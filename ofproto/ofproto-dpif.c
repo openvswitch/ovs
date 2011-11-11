@@ -164,6 +164,8 @@ static void bundle_wait(struct ofbundle *);
 static void stp_run(struct ofproto_dpif *ofproto);
 static void stp_wait(struct ofproto_dpif *ofproto);
 
+static bool ofbundle_includes_vlan(const struct ofbundle *, uint16_t vlan);
+
 struct action_xlate_ctx {
 /* action_xlate_ctx_init() initializes these members. */
 
@@ -4385,6 +4387,58 @@ input_vid_to_vlan(const struct ofbundle *in_bundle, uint16_t vid)
     }
 }
 
+/* Checks whether a packet with the given 'vid' may ingress on 'in_bundle'.
+ * If so, returns true.  Otherwise, returns false and, if 'warn' is true, logs
+ * a warning.
+ *
+ * 'vid' should be the VID obtained from the 802.1Q header that was received as
+ * part of a packet (specify 0 if there was no 802.1Q header), in the range
+ * 0...4095. */
+static bool
+input_vid_is_valid(uint16_t vid, struct ofbundle *in_bundle, bool warn)
+{
+    switch (in_bundle->vlan_mode) {
+    case PORT_VLAN_ACCESS:
+        if (vid) {
+            if (warn) {
+                static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+                VLOG_WARN_RL(&rl, "bridge %s: dropping VLAN %"PRIu16" tagged "
+                             "packet received on port %s configured as VLAN "
+                             "%"PRIu16" access port",
+                             in_bundle->ofproto->up.name, vid,
+                             in_bundle->name, in_bundle->vlan);
+            }
+            return false;
+        }
+        return true;
+
+    case PORT_VLAN_NATIVE_UNTAGGED:
+    case PORT_VLAN_NATIVE_TAGGED:
+        if (!vid) {
+            /* Port must always carry its native VLAN. */
+            return true;
+        }
+        /* Fall through. */
+    case PORT_VLAN_TRUNK:
+        if (!ofbundle_includes_vlan(in_bundle, vid)) {
+            if (warn) {
+                static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+                VLOG_WARN_RL(&rl, "bridge %s: dropping VLAN %"PRIu16" packet "
+                             "received on port %s not configured for trunking "
+                             "VLAN %"PRIu16,
+                             in_bundle->ofproto->up.name, vid,
+                             in_bundle->name, vid);
+            }
+            return false;
+        }
+        return true;
+
+    default:
+        NOT_REACHED();
+    }
+
+}
+
 /* Given 'vlan', the VLAN that a packet belongs to, and
  * 'out_bundle', a bundle on which the packet is to be output, returns the VID
  * that should be included in the 802.1Q header.  (If the return value is 0,
@@ -4686,57 +4740,6 @@ compose_actions(struct action_xlate_ctx *ctx, uint16_t vlan,
     dst_set_free(&set);
 }
 
-/* Returns the effective vlan of a packet, taking into account both the
- * 802.1Q header and implicitly tagged ports.  A value of 0 indicates that
- * the packet is untagged and -1 indicates it has an invalid header and
- * should be dropped. */
-static int
-flow_get_vlan(struct ofproto_dpif *ofproto, const struct flow *flow,
-              struct ofbundle *in_bundle, bool have_packet)
-{
-    int vlan = vlan_tci_to_vid(flow->vlan_tci);
-    if (vlan) {
-        if (in_bundle->vlan_mode == PORT_VLAN_ACCESS) {
-            /* Drop tagged packet on access port */
-            if (have_packet) {
-                static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
-                VLOG_WARN_RL(&rl, "bridge %s: dropping VLAN %d tagged "
-                             "packet received on port %s configured with "
-                             "implicit VLAN %"PRIu16,
-                             ofproto->up.name, vlan,
-                             in_bundle->name, in_bundle->vlan);
-            }
-            return -1;
-        } else if (ofbundle_includes_vlan(in_bundle, vlan)) {
-            return vlan;
-        } else {
-            /* Drop packets from a VLAN not member of the trunk */
-            if (have_packet) {
-                static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
-                VLOG_WARN_RL(&rl, "bridge %s: dropping VLAN %d tagged "
-                             "packet received on port %s not configured for "
-                             "trunking VLAN %d",
-                             ofproto->up.name, vlan, in_bundle->name, vlan);
-            }
-            return -1;
-        }
-    } else {
-        if (flow->dl_type == htons(ETH_TYPE_VLAN) &&
-            !(flow->vlan_tci & htons(VLAN_CFI))) {
-            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
-            VLOG_WARN_RL(&rl, "bridge %s: dropping packet with partial "
-                         "VLAN tag received on port %s",
-                         ofproto->up.name, in_bundle->name);
-            return -1;
-        }
-        if (in_bundle->vlan_mode != PORT_VLAN_TRUNK) {
-            return in_bundle->vlan;
-        } else {
-            return ofbundle_includes_vlan(in_bundle, 0) ? 0 : -1;
-        }
-    }
-}
-
 /* A VM broadcasts a gratuitous ARP to indicate that it has resumed after
  * migration.  Older Citrix-patched Linux DomU used gratuitous ARP replies to
  * indicate this; newer upstream kernels use gratuitous ARP requests. */
@@ -4787,7 +4790,7 @@ update_learning_table(struct ofproto_dpif *ofproto,
     }
 }
 
-/* Determines whether packets in 'flow' within 'br' should be forwarded or
+/* Determines whether packets in 'flow' within 'ofproto' should be forwarded or
  * dropped.  Returns true if they may be forwarded, false if they should be
  * dropped.
  *
@@ -4797,12 +4800,12 @@ update_learning_table(struct ofproto_dpif *ofproto,
  * way, 'have_packet' only affects logging (there is no point in logging errors
  * during revalidation).
  *
- * Sets '*in_portp' to the input port.  This will be a null pointer if
+ * Sets '*in_bundlep' to the input bundle.  This will be a null pointer if
  * flow->in_port does not designate a known input port (in which case
  * is_admissible() returns false).
  *
  * When returning true, sets '*vlanp' to the effective VLAN of the input
- * packet, as returned by flow_get_vlan().
+ * packet, as returned by input_vid_to_vlan().
  *
  * May also add tags to '*tags', although the current implementation only does
  * so in one special case.
@@ -4814,7 +4817,10 @@ is_admissible(struct ofproto_dpif *ofproto, const struct flow *flow,
 {
     struct ofport_dpif *in_port;
     struct ofbundle *in_bundle;
+    uint16_t vid;
     int vlan;
+
+    *vlanp = -1;
 
     /* Find the port and bundle for the received packet. */
     in_port = get_ofp_port(ofproto, flow->in_port);
@@ -4839,13 +4845,23 @@ is_admissible(struct ofproto_dpif *ofproto, const struct flow *flow,
                          "port %"PRIu16,
                          ofproto->up.name, flow->in_port);
         }
-        *vlanp = -1;
         return false;
     }
-    *vlanp = vlan = flow_get_vlan(ofproto, flow, in_bundle, have_packet);
-    if (vlan < 0) {
+
+    if (flow->dl_type == htons(ETH_TYPE_VLAN) &&
+        !(flow->vlan_tci & htons(VLAN_CFI))) {
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+        VLOG_WARN_RL(&rl, "bridge %s: dropping packet with partial "
+                     "VLAN tag received on port %s",
+                     ofproto->up.name, in_bundle->name);
+        return -1;
+    }
+
+    vid = vlan_tci_to_vid(flow->vlan_tci);
+    if (!input_vid_is_valid(vid, in_bundle, have_packet)) {
         return false;
     }
+    *vlanp = vlan = input_vid_to_vlan(in_bundle, vid);
 
     /* Drop frames for reserved multicast addresses only if forward_bpdu
      * option is absent. */
