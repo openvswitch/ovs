@@ -37,6 +37,7 @@
 #include "dynamic-string.h"
 #include "netdev.h"
 #include "odp-util.h"
+#include "ofpbuf.h"
 #include "shash.h"
 #include "sset.h"
 #include "timeval.h"
@@ -692,6 +693,30 @@ do_help(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
     usage();
 }
+
+/* Undocumented commands for unit testing. */
+
+static void
+do_parse_actions(int argc, char *argv[])
+{
+    int i;
+
+    for (i = 1; i < argc; i++) {
+        struct ofpbuf actions;
+        struct ds s;
+
+        ofpbuf_init(&actions, 0);
+        run(odp_actions_from_string(argv[i], NULL, &actions),
+            "odp_actions_from_string");
+
+        ds_init(&s);
+        format_odp_actions(&s, actions.data, actions.size);
+        puts(ds_cstr(&s));
+        ds_destroy(&s);
+
+        ofpbuf_uninit(&actions);
+    }
+}
 
 static const struct command all_commands[] = {
     { "add-dp", 1, INT_MAX, do_add_dp },
@@ -704,5 +729,9 @@ static const struct command all_commands[] = {
     { "dump-flows", 1, 1, do_dump_flows },
     { "del-flows", 1, 1, do_del_flows },
     { "help", 0, INT_MAX, do_help },
+
+    /* Undocumented commands for testing. */
+    { "parse-actions", 1, INT_MAX, do_parse_actions },
+
     { NULL, 0, 0, NULL },
 };

@@ -59,8 +59,11 @@ odp_port_to_ofp_port(uint16_t odp_port)
         return odp_port;
     }
 }
+
 void format_odp_actions(struct ds *, const struct nlattr *odp_actions,
                         size_t actions_len);
+int odp_actions_from_string(const char *, const struct shash *port_names,
+                            struct ofpbuf *odp_actions);
 
 /* Upper bound on the length of a nlattr-formatted flow key.  The longest
  * nlattr-formatted flow key would be:

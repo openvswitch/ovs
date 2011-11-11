@@ -19,6 +19,7 @@
 #include "odp-util.h"
 #include <errno.h>
 #include <inttypes.h>
+#include <math.h>
 #include <netinet/in.h>
 #include <netinet/icmp6.h>
 #include <stdlib.h>
@@ -38,15 +39,18 @@
 
 VLOG_DEFINE_THIS_MODULE(odp_util);
 
-static int parse_odp_key_attr(const char *, const struct shash *port_names,
-                              struct ofpbuf *);
-
 /* The interface between userspace and kernel uses an "OVS_*" prefix.
  * Since this is fairly non-specific for the OVS userspace components,
  * "ODP_*" (Open vSwitch Datapath) is used as the prefix for
  * interactions with the datapath.
  */
 
+/* The set of characters that may separate one action or one key attribute
+ * from another. */
+static const char *delimiters = ", \t\r\n";
+
+static int parse_odp_key_attr(const char *, const struct shash *port_names,
+                              struct ofpbuf *);
 static void format_odp_key_attr(const struct nlattr *a, struct ds *ds);
 
 /* Returns one the following for the action with the given OVS_ACTION_ATTR_*
@@ -110,6 +114,21 @@ ovs_key_attr_to_string(enum ovs_key_attr attr)
                  (unsigned int) attr);
         return unknown_attr;
     }
+}
+
+static enum ovs_key_attr
+ovs_key_attr_from_string(const char *s, size_t len)
+{
+    enum ovs_key_attr attr;
+
+    for (attr = 0; attr <= OVS_KEY_ATTR_MAX; attr++) {
+        const char *attr_name = ovs_key_attr_to_string(attr);
+        if (strlen(attr_name) == len && !memcmp(s, attr_name, len)) {
+            return attr;
+        }
+    }
+
+    return OVS_KEY_ATTR_UNSPEC;
 }
 
 static void
@@ -284,6 +303,218 @@ format_odp_actions(struct ds *ds, const struct nlattr *actions,
     } else {
         ds_put_cstr(ds, "drop");
     }
+}
+
+static int
+parse_odp_action(const char *s, const struct shash *port_names,
+                 struct ofpbuf *actions)
+{
+    /* Many of the sscanf calls in this function use oversized destination
+     * fields because some sscanf() implementations truncate the range of %i
+     * directives, so that e.g. "%"SCNi16 interprets input of "0xfedc" as a
+     * value of 0x7fff.  The other alternatives are to allow only a single
+     * radix (e.g. decimal or hexadecimal) or to write more sophisticated
+     * parsers.
+     *
+     * The tun_id parser has to use an alternative approach because there is no
+     * type larger than 64 bits. */
+
+    {
+        unsigned long long int port;
+        int n = -1;
+
+        if (sscanf(s, "%lli%n", &port, &n) > 0 && n > 0) {
+            nl_msg_put_u32(actions, OVS_ACTION_ATTR_OUTPUT, port);
+            return n;
+        }
+    }
+
+    if (port_names) {
+        int len = strcspn(s, delimiters);
+        struct shash_node *node;
+
+        node = shash_find_len(port_names, s, len);
+        if (node) {
+            nl_msg_put_u32(actions, OVS_ACTION_ATTR_OUTPUT,
+                           (uintptr_t) node->data);
+            return len;
+        }
+    }
+
+    {
+        unsigned long long int pid;
+        unsigned long long int length;
+        unsigned long long int ifindex;
+        char userdata_s[32];
+        int n_output;
+        int vid, pcp;
+        int n = -1;
+
+        if (sscanf(s, "userspace(pid=%lli)%n", &pid, &n) > 0 && n > 0) {
+            odp_put_userspace_action(pid, NULL, actions);
+            return n;
+        } else if (sscanf(s, "userspace(pid=%lli,controller,length=%lli)%n",
+                          &pid, &length, &n) > 0 && n > 0) {
+            struct user_action_cookie cookie;
+
+            cookie.type = USER_ACTION_COOKIE_CONTROLLER;
+            cookie.n_output = 0;
+            cookie.vlan_tci = htons(0);
+            cookie.data = length;
+            odp_put_userspace_action(pid, &cookie, actions);
+            return n;
+        } else if (sscanf(s, "userspace(pid=%lli,sFlow,n_output=%i,vid=%i,"
+                          "pcp=%i,ifindex=%lli)%n", &pid, &n_output,
+                          &vid, &pcp, &ifindex, &n) > 0 && n > 0) {
+            struct user_action_cookie cookie;
+            uint16_t tci;
+
+            tci = vid | (pcp << VLAN_PCP_SHIFT);
+            if (tci) {
+                tci |= VLAN_CFI;
+            }
+
+            cookie.type = USER_ACTION_COOKIE_SFLOW;
+            cookie.n_output = n_output;
+            cookie.vlan_tci = htons(tci);
+            cookie.data = ifindex;
+            odp_put_userspace_action(pid, &cookie, actions);
+            return n;
+        } else if (sscanf(s, "userspace(pid=%lli,userdata="
+                          "%31[x0123456789abcdefABCDEF])%n", &pid, userdata_s,
+                          &n) > 0 && n > 0) {
+            struct user_action_cookie cookie;
+            uint64_t userdata;
+
+            userdata = strtoull(userdata_s, NULL, 0);
+            memcpy(&cookie, &userdata, sizeof cookie);
+            odp_put_userspace_action(pid, &cookie, actions);
+            return n;
+        }
+    }
+
+    if (!strncmp(s, "set(", 4)) {
+        size_t start_ofs;
+        int retval;
+
+        start_ofs = nl_msg_start_nested(actions, OVS_ACTION_ATTR_SET);
+        retval = parse_odp_key_attr(s + 4, port_names, actions);
+        if (retval < 0) {
+            return retval;
+        }
+        if (s[retval + 4] != ')') {
+            return -EINVAL;
+        }
+        nl_msg_end_nested(actions, start_ofs);
+        return retval + 5;
+    }
+
+    if (!strncmp(s, "push(", 5)) {
+        size_t start_ofs;
+        int retval;
+
+        start_ofs = nl_msg_start_nested(actions, OVS_ACTION_ATTR_PUSH);
+        retval = parse_odp_key_attr(s + 5, port_names, actions);
+        if (retval < 0) {
+            return retval;
+        }
+        if (s[retval + 5] != ')') {
+            return -EINVAL;
+        }
+        nl_msg_end_nested(actions, start_ofs);
+        return retval + 6;
+    }
+
+    if (!strncmp(s, "pop(", 4)) {
+        enum ovs_key_attr key;
+        size_t len;
+
+        len = strcspn(s + 4, ")");
+        key = ovs_key_attr_from_string(s + 4, len);
+        if (key == OVS_KEY_ATTR_UNSPEC || s[4 + len] != ')') {
+            return -EINVAL;
+        }
+        nl_msg_put_u16(actions, OVS_ACTION_ATTR_POP, key);
+        return len + 5;
+    }
+
+    {
+        double percentage;
+        int n = -1;
+
+        if (sscanf(s, "sample(sample=%lf%%,actions(%n", &percentage, &n) > 0
+            && percentage >= 0. && percentage <= 100.0
+            && n > 0) {
+            size_t sample_ofs, actions_ofs;
+            double probability;
+
+            probability = floor(UINT32_MAX * (percentage / 100.0) + .5);
+            sample_ofs = nl_msg_start_nested(actions, OVS_ACTION_ATTR_SAMPLE);
+            nl_msg_put_u32(actions, OVS_SAMPLE_ATTR_PROBABILITY,
+                           (probability <= 0 ? 0
+                            : probability >= UINT32_MAX ? UINT32_MAX
+                            : probability));
+
+            actions_ofs = nl_msg_start_nested(actions,
+                                              OVS_SAMPLE_ATTR_ACTIONS);
+            for (;;) {
+                int retval;
+
+                s += strspn(s, delimiters);
+                if (s[n] == ')') {
+                    break;
+                }
+
+                retval = parse_odp_action(s + n, port_names, actions);
+                if (retval < 0) {
+                    return retval;
+                }
+                n += retval;
+
+            }
+            nl_msg_end_nested(actions, actions_ofs);
+            nl_msg_end_nested(actions, sample_ofs);
+
+            return s[n + 1] == ')' ? n + 2 : -EINVAL;
+        }
+    }
+
+    return -EINVAL;
+}
+
+/* Parses the string representation of datapath actions, in the format output
+ * by format_odp_action().  Returns 0 if successful, otherwise a positive errno
+ * value.  On success, the ODP actions are appended to 'actions' as a series of
+ * Netlink attributes.  On failure, no data is appended to 'actions'.  Either
+ * way, 'actions''s data might be reallocated. */
+int
+odp_actions_from_string(const char *s, const struct shash *port_names,
+                        struct ofpbuf *actions)
+{
+    size_t old_size;
+
+    if (!strcasecmp(s, "drop")) {
+        return 0;
+    }
+
+    old_size = actions->size;
+    for (;;) {
+        int retval;
+
+        s += strspn(s, delimiters);
+        if (!*s) {
+            return 0;
+        }
+
+        retval = parse_odp_action(s, port_names, actions);
+        if (retval < 0 || !strchr(delimiters, s[retval])) {
+            actions->size = old_size;
+            return -retval;
+        }
+        s += retval;
+    }
+
+    return 0;
 }
 
 /* Returns the correct length of the payload for a flow key attribute of the
@@ -914,7 +1145,7 @@ odp_flow_key_from_string(const char *s, const struct shash *port_names,
     for (;;) {
         int retval;
 
-        s += strspn(s, ", \t\r\n");
+        s += strspn(s, delimiters);
         if (!*s) {
             return 0;
         }
