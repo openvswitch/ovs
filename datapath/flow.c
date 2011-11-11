@@ -844,12 +844,11 @@ void flow_tbl_remove(struct flow_table *table, struct sw_flow *flow)
 
 /* The size of the argument for each %OVS_KEY_ATTR_* Netlink attribute.  */
 const u32 ovs_key_lens[OVS_KEY_ATTR_MAX + 1] = {
-	[OVS_KEY_ATTR_PRIORITY] = 4,
-	[OVS_KEY_ATTR_TUN_ID] = 8,
-	[OVS_KEY_ATTR_IN_PORT] = 4,
+	[OVS_KEY_ATTR_PRIORITY] = sizeof(u32),
+	[OVS_KEY_ATTR_IN_PORT] = sizeof(u32),
 	[OVS_KEY_ATTR_ETHERNET] = sizeof(struct ovs_key_ethernet),
 	[OVS_KEY_ATTR_8021Q] = sizeof(struct ovs_key_8021q),
-	[OVS_KEY_ATTR_ETHERTYPE] = 2,
+	[OVS_KEY_ATTR_ETHERTYPE] = sizeof(__be16),
 	[OVS_KEY_ATTR_IPV4] = sizeof(struct ovs_key_ipv4),
 	[OVS_KEY_ATTR_IPV6] = sizeof(struct ovs_key_ipv6),
 	[OVS_KEY_ATTR_TCP] = sizeof(struct ovs_key_tcp),
@@ -858,6 +857,9 @@ const u32 ovs_key_lens[OVS_KEY_ATTR_MAX + 1] = {
 	[OVS_KEY_ATTR_ICMPV6] = sizeof(struct ovs_key_icmpv6),
 	[OVS_KEY_ATTR_ARP] = sizeof(struct ovs_key_arp),
 	[OVS_KEY_ATTR_ND] = sizeof(struct ovs_key_nd),
+
+	/* Not upstream. */
+	[OVS_KEY_ATTR_TUN_ID] = sizeof(__be64),
 };
 
 /**
