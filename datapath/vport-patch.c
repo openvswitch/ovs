@@ -148,7 +148,7 @@ static struct vport *patch_create(const struct vport_parms *parms)
 	if (err)
 		goto error_free_patchconf;
 
-	vport_gen_rand_ether_addr(patchconf->eth_addr);
+	random_ether_addr(patchconf->eth_addr);
 
 	rcu_assign_pointer(patch_vport->patchconf, patchconf);
 

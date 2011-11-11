@@ -11,7 +11,6 @@
 
 #include "vport.h"
 
-void vport_gen_rand_ether_addr(u8 *addr);
 unsigned vport_gen_get_dev_flags(const struct vport *);
 int vport_gen_is_running(const struct vport *);
 unsigned char vport_gen_get_operstate(const struct vport *);

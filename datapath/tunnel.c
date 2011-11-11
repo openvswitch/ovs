@@ -1457,7 +1457,7 @@ struct vport *tnl_create(const struct vport_parms *parms,
 		goto error_free_vport;
 	}
 
-	vport_gen_rand_ether_addr(mutable->eth_addr);
+	random_ether_addr(mutable->eth_addr);
 
 	get_random_bytes(&initial_frag_id, sizeof(int));
 	atomic_set(&tnl_vport->frag_id, initial_frag_id);
