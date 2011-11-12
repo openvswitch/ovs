@@ -124,8 +124,8 @@ static int set_eth_addr(struct sk_buff *skb,
 	if (unlikely(err))
 		return err;
 
-	memcpy(eth_hdr(skb)->h_source, eth_key->eth_src, ETH_HLEN);
-	memcpy(eth_hdr(skb)->h_dest, eth_key->eth_dst, ETH_HLEN);
+	memcpy(eth_hdr(skb)->h_source, eth_key->eth_src, ETH_ALEN);
+	memcpy(eth_hdr(skb)->h_dest, eth_key->eth_dst, ETH_ALEN);
 
 	return 0;
 }
