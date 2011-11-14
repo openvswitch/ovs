@@ -783,7 +783,7 @@ struct ofproto_class {
      *
      * Returns 0 if successful, otherwise an OpenFlow error code (as returned
      * by ofp_mkerr()). */
-    int (*rule_execute)(struct rule *rule, struct flow *flow,
+    int (*rule_execute)(struct rule *rule, const struct flow *flow,
                         struct ofpbuf *packet);
 
     /* When ->rule_modify_actions() is called, the caller has already replaced

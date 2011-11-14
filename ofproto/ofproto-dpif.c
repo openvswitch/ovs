@@ -302,8 +302,8 @@ static void facet_account(struct ofproto_dpif *, struct facet *);
 
 static bool facet_is_controller_flow(struct facet *);
 
-static void flow_push_stats(const struct rule_dpif *,
-                            struct flow *, uint64_t packets, uint64_t bytes,
+static void flow_push_stats(const struct rule_dpif *, const struct flow *,
+                            uint64_t packets, uint64_t bytes,
                             long long int used);
 
 static uint32_t rule_calculate_tag(const struct flow *,
@@ -3343,7 +3343,7 @@ push_resubmit(struct action_xlate_ctx *ctx, struct rule_dpif *rule)
  * 'rule''s actions. */
 static void
 flow_push_stats(const struct rule_dpif *rule,
-                struct flow *flow, uint64_t packets, uint64_t bytes,
+                const struct flow *flow, uint64_t packets, uint64_t bytes,
                 long long int used)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(rule->up.ofproto);
@@ -3501,7 +3501,8 @@ rule_get_stats(struct rule *rule_, uint64_t *packets, uint64_t *bytes)
 }
 
 static int
-rule_execute(struct rule *rule_, struct flow *flow, struct ofpbuf *packet)
+rule_execute(struct rule *rule_, const struct flow *flow,
+             struct ofpbuf *packet)
 {
     struct rule_dpif *rule = rule_dpif_cast(rule_);
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(rule->up.ofproto);
