@@ -986,6 +986,26 @@
       </column>
     </group>
 
+    <group title="Port Statistics">
+      <p>
+        Key-value pairs that report port statistics.
+      </p>
+      <group title="Statistics: STP transmit and receive counters">
+        <column name="statistics" key="stp_tx_count">
+          Number of STP BPDUs sent on this port by the spanning
+          tree library.
+        </column>
+        <column name="statistics" key="stp_rx_count">
+          Number of STP BPDUs received on this port and accepted by the
+          spanning tree library.
+        </column>
+        <column name="statistics" key="stp_error_count">
+          Number of bad STP BPDUs received on this port.  Bad BPDUs
+          include runt packets and those with an unexpected protocol ID.
+        </column>
+      </group>
+    </group>
+
     <group title="Common Columns">
       The overall purpose of these columns is described under <code>Common
       Columns</code> at the beginning of this document.

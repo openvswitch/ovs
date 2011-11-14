@@ -94,6 +94,9 @@ struct ofproto_port_stp_status {
     enum stp_state state;
     unsigned int sec_in_state;
     enum stp_role role;
+    int tx_count;               /* Number of BPDUs transmitted. */
+    int rx_count;               /* Number of valid BPDUs received. */
+    int error_count;            /* Number of bad BPDUs received. */
 };
 
 /* How the switch should act if the controller cannot be contacted. */

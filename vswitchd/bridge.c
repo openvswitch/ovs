@@ -240,6 +240,7 @@ bridge_init(const char *remote)
     ovsdb_idl_omit(idl, &ovsrec_bridge_col_external_ids);
 
     ovsdb_idl_omit_alert(idl, &ovsrec_port_col_status);
+    ovsdb_idl_omit_alert(idl, &ovsrec_port_col_statistics);
     ovsdb_idl_omit(idl, &ovsrec_port_col_external_ids);
     ovsdb_idl_omit(idl, &ovsrec_port_col_fake_bridge);
 
@@ -1598,7 +1599,9 @@ port_refresh_stp_status(struct port *port)
     struct ofproto *ofproto = port->bridge->ofproto;
     struct iface *iface;
     struct ofproto_port_stp_status status;
-    char *keys[4], *values[4];
+    char *keys[4];
+    char *str_values[4];
+    int64_t int_values[3];
     size_t i;
 
     if (port_is_synthetic(port)) {
@@ -1619,23 +1622,37 @@ port_refresh_stp_status(struct port *port)
 
     if (!status.enabled) {
         ovsrec_port_set_status(port->cfg, NULL, NULL, 0);
+        ovsrec_port_set_statistics(port->cfg, NULL, NULL, 0);
         return;
     }
 
-    keys[0]  = "stp_port_id";
-    values[0] = xasprintf(STP_PORT_ID_FMT, status.port_id);
+    /* Set Status column. */
+    keys[0] = "stp_port_id";
+    str_values[0] = xasprintf(STP_PORT_ID_FMT, status.port_id);
     keys[1] = "stp_state";
-    values[1] = xstrdup(stp_state_name(status.state));
+    str_values[1] = xstrdup(stp_state_name(status.state));
     keys[2] = "stp_sec_in_state";
-    values[2] = xasprintf("%u", status.sec_in_state);
+    str_values[2] = xasprintf("%u", status.sec_in_state);
     keys[3] = "stp_role";
-    values[3] = xstrdup(stp_role_name(status.role));
+    str_values[3] = xstrdup(stp_role_name(status.role));
 
-    ovsrec_port_set_status(port->cfg, keys, values, ARRAY_SIZE(values));
+    ovsrec_port_set_status(port->cfg, keys, str_values,
+                           ARRAY_SIZE(str_values));
 
-    for (i = 0; i < ARRAY_SIZE(values); i++) {
-        free(values[i]);
+    for (i = 0; i < ARRAY_SIZE(str_values); i++) {
+        free(str_values[i]);
     }
+
+    /* Set Statistics column. */
+    keys[0] = "stp_tx_count";
+    int_values[0] = status.tx_count;
+    keys[1] = "stp_rx_count";
+    int_values[1] = status.rx_count;
+    keys[2] = "stp_error_count";
+    int_values[2] = status.error_count;
+
+    ovsrec_port_set_statistics(port->cfg, keys, int_values,
+                               ARRAY_SIZE(int_values));
 }
 
 static bool
