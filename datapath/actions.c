@@ -96,7 +96,7 @@ static int pop_vlan(struct sk_buff *skb)
 	return 0;
 }
 
-static int push_vlan(struct sk_buff *skb, const struct ovs_key_8021q *q_key)
+static int push_vlan(struct sk_buff *skb, const struct ovs_action_push_vlan *vlan)
 {
 	if (unlikely(vlan_tx_tag_present(skb))) {
 		u16 current_tag;
@@ -112,7 +112,7 @@ static int push_vlan(struct sk_buff *skb, const struct ovs_key_8021q *q_key)
 					+ ETH_HLEN, VLAN_HLEN, 0));
 
 	}
-	__vlan_hwaccel_put_tag(skb, ntohs(q_key->q_tci));
+	__vlan_hwaccel_put_tag(skb, ntohs(vlan->vlan_tci));
 	return 0;
 }
 
@@ -368,15 +368,13 @@ static int do_execute_actions(struct datapath *dp, struct sk_buff *skb,
 			output_userspace(dp, skb, a);
 			break;
 
-		case OVS_ACTION_ATTR_PUSH:
-			/* Only supported push action is on vlan tag. */
-			err = push_vlan(skb, nla_data(nla_data(a)));
+		case OVS_ACTION_ATTR_PUSH_VLAN:
+			err = push_vlan(skb, nla_data(a));
 			if (unlikely(err)) /* skb already freed. */
 				return err;
 			break;
 
-		case OVS_ACTION_ATTR_POP:
-			/* Only supported pop action is on vlan tag. */
+		case OVS_ACTION_ATTR_POP_VLAN:
 			err = pop_vlan(skb);
 			break;
 

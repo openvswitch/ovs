@@ -125,84 +125,84 @@ for tuple in \
         "br0 none 0 drop" \
         "br0 0    0 drop" \
         "br0 0    1 drop" \
-        "br0 10   0 p1,p5,p6,p7,p8,pop(vlan),p2" \
-        "br0 10   1 p1,p5,p6,p7,p8,pop(vlan),push(vlan(vid=0,pcp=1)),p2" \
+        "br0 10   0 p1,p5,p6,p7,p8,pop_vlan,p2" \
+        "br0 10   1 p1,p5,p6,p7,p8,pop_vlan,push_vlan(vid=0,pcp=1),p2" \
         "br0 11   0 p5,p7" \
         "br0 11   1 p5,p7" \
-        "br0 12   0 p1,p5,p6,pop(vlan),p3,p4,p7,p8" \
-        "br0 12   1 p1,p5,p6,pop(vlan),push(vlan(vid=0,pcp=1)),p3,p4,p7,p8" \
+        "br0 12   0 p1,p5,p6,pop_vlan,p3,p4,p7,p8" \
+        "br0 12   1 p1,p5,p6,pop_vlan,push_vlan(vid=0,pcp=1),p3,p4,p7,p8" \
         "p1  none 0 drop" \
         "p1  0    0 drop" \
         "p1  0    1 drop" \
-        "p1  10   0 br0,p5,p6,p7,p8,pop(vlan),p2" \
-        "p1  10   1 br0,p5,p6,p7,p8,pop(vlan),push(vlan(vid=0,pcp=1)),p2" \
+        "p1  10   0 br0,p5,p6,p7,p8,pop_vlan,p2" \
+        "p1  10   1 br0,p5,p6,p7,p8,pop_vlan,push_vlan(vid=0,pcp=1),p2" \
         "p1  11   0 drop" \
         "p1  11   1 drop" \
-        "p1  12   0 br0,p5,p6,pop(vlan),p3,p4,p7,p8" \
-        "p1  12   1 br0,p5,p6,pop(vlan),push(vlan(vid=0,pcp=1)),p3,p4,p7,p8" \
-        "p2  none 0 push(vlan(vid=10,pcp=0)),br0,p1,p5,p6,p7,p8" \
-        "p2  0    0 pop(vlan),push(vlan(vid=10,pcp=0)),br0,p1,p5,p6,p7,p8" \
-        "p2  0    1 pop(vlan),push(vlan(vid=10,pcp=1)),br0,p1,p5,p6,p7,p8" \
+        "p1  12   0 br0,p5,p6,pop_vlan,p3,p4,p7,p8" \
+        "p1  12   1 br0,p5,p6,pop_vlan,push_vlan(vid=0,pcp=1),p3,p4,p7,p8" \
+        "p2  none 0 push_vlan(vid=10,pcp=0),br0,p1,p5,p6,p7,p8" \
+        "p2  0    0 pop_vlan,push_vlan(vid=10,pcp=0),br0,p1,p5,p6,p7,p8" \
+        "p2  0    1 pop_vlan,push_vlan(vid=10,pcp=1),br0,p1,p5,p6,p7,p8" \
         "p2  10   0 drop" \
         "p2  10   1 drop" \
         "p2  11   0 drop" \
         "p2  11   1 drop" \
         "p2  12   0 drop" \
         "p2  12   1 drop" \
-        "p3  none 0 p4,p7,p8,push(vlan(vid=12,pcp=0)),br0,p1,p5,p6" \
-        "p3  0    0 p4,p7,p8,pop(vlan),push(vlan(vid=12,pcp=0)),br0,p1,p5,p6" \
-        "p3  0    1 p4,p7,p8,pop(vlan),push(vlan(vid=12,pcp=1)),br0,p1,p5,p6" \
+        "p3  none 0 p4,p7,p8,push_vlan(vid=12,pcp=0),br0,p1,p5,p6" \
+        "p3  0    0 p4,p7,p8,pop_vlan,push_vlan(vid=12,pcp=0),br0,p1,p5,p6" \
+        "p3  0    1 p4,p7,p8,pop_vlan,push_vlan(vid=12,pcp=1),br0,p1,p5,p6" \
         "p3  10   0 drop" \
         "p3  10   1 drop" \
         "p3  11   0 drop" \
         "p3  11   1 drop" \
         "p3  12   0 drop" \
         "p3  12   1 drop" \
-        "p4  none 0 p3,p7,p8,push(vlan(vid=12,pcp=0)),br0,p1,p5,p6" \
-        "p4  0    0 p3,p7,p8,pop(vlan),push(vlan(vid=12,pcp=0)),br0,p1,p5,p6" \
-        "p4  0    1 p3,p7,p8,pop(vlan),push(vlan(vid=12,pcp=1)),br0,p1,p5,p6" \
+        "p4  none 0 p3,p7,p8,push_vlan(vid=12,pcp=0),br0,p1,p5,p6" \
+        "p4  0    0 p3,p7,p8,pop_vlan,push_vlan(vid=12,pcp=0),br0,p1,p5,p6" \
+        "p4  0    1 p3,p7,p8,pop_vlan,push_vlan(vid=12,pcp=1),br0,p1,p5,p6" \
         "p4  10   0 drop" \
         "p4  10   1 drop" \
         "p4  11   0 drop" \
         "p4  11   1 drop" \
         "p4  12   0 drop" \
         "p4  12   1 drop" \
-        "p5  none 0 p2,push(vlan(vid=10,pcp=0)),br0,p1,p6,p7,p8" \
-        "p5  0    0 p2,pop(vlan),push(vlan(vid=10,pcp=0)),br0,p1,p6,p7,p8" \
-        "p5  0    1 p2,pop(vlan),push(vlan(vid=10,pcp=1)),br0,p1,p6,p7,p8" \
-        "p5  10   0 br0,p1,p6,p7,p8,pop(vlan),p2" \
-        "p5  10   1 br0,p1,p6,p7,p8,pop(vlan),push(vlan(vid=0,pcp=1)),p2" \
+        "p5  none 0 p2,push_vlan(vid=10,pcp=0),br0,p1,p6,p7,p8" \
+        "p5  0    0 p2,pop_vlan,push_vlan(vid=10,pcp=0),br0,p1,p6,p7,p8" \
+        "p5  0    1 p2,pop_vlan,push_vlan(vid=10,pcp=1),br0,p1,p6,p7,p8" \
+        "p5  10   0 br0,p1,p6,p7,p8,pop_vlan,p2" \
+        "p5  10   1 br0,p1,p6,p7,p8,pop_vlan,push_vlan(vid=0,pcp=1),p2" \
         "p5  11   0 br0,p7" \
         "p5  11   1 br0,p7" \
-        "p5  12   0 br0,p1,p6,pop(vlan),p3,p4,p7,p8" \
-        "p5  12   1 br0,p1,p6,pop(vlan),push(vlan(vid=0,pcp=1)),p3,p4,p7,p8" \
-        "p6  none 0 p2,push(vlan(vid=10,pcp=0)),br0,p1,p5,p7,p8" \
-        "p6  0    0 p2,pop(vlan),push(vlan(vid=10,pcp=0)),br0,p1,p5,p7,p8" \
-        "p6  0    1 p2,pop(vlan),push(vlan(vid=10,pcp=1)),br0,p1,p5,p7,p8" \
-        "p6  10   0 br0,p1,p5,p7,p8,pop(vlan),p2" \
-        "p6  10   1 br0,p1,p5,p7,p8,pop(vlan),push(vlan(vid=0,pcp=1)),p2" \
+        "p5  12   0 br0,p1,p6,pop_vlan,p3,p4,p7,p8" \
+        "p5  12   1 br0,p1,p6,pop_vlan,push_vlan(vid=0,pcp=1),p3,p4,p7,p8" \
+        "p6  none 0 p2,push_vlan(vid=10,pcp=0),br0,p1,p5,p7,p8" \
+        "p6  0    0 p2,pop_vlan,push_vlan(vid=10,pcp=0),br0,p1,p5,p7,p8" \
+        "p6  0    1 p2,pop_vlan,push_vlan(vid=10,pcp=1),br0,p1,p5,p7,p8" \
+        "p6  10   0 br0,p1,p5,p7,p8,pop_vlan,p2" \
+        "p6  10   1 br0,p1,p5,p7,p8,pop_vlan,push_vlan(vid=0,pcp=1),p2" \
         "p6  11   0 drop" \
         "p6  11   1 drop" \
-        "p6  12   0 br0,p1,p5,pop(vlan),p3,p4,p7,p8" \
-        "p6  12   1 br0,p1,p5,pop(vlan),push(vlan(vid=0,pcp=1)),p3,p4,p7,p8" \
-        "p7  none 0 p3,p4,p8,push(vlan(vid=12,pcp=0)),br0,p1,p5,p6" \
-        "p7  0    0 p3,p4,p8,pop(vlan),push(vlan(vid=12,pcp=0)),br0,p1,p5,p6" \
-        "p7  0    1 p3,p4,p8,pop(vlan),push(vlan(vid=12,pcp=1)),br0,p1,p5,p6" \
-        "p7  10   0 br0,p1,p5,p6,p8,pop(vlan),p2" \
-        "p7  10   1 br0,p1,p5,p6,p8,pop(vlan),push(vlan(vid=0,pcp=1)),p2" \
+        "p6  12   0 br0,p1,p5,pop_vlan,p3,p4,p7,p8" \
+        "p6  12   1 br0,p1,p5,pop_vlan,push_vlan(vid=0,pcp=1),p3,p4,p7,p8" \
+        "p7  none 0 p3,p4,p8,push_vlan(vid=12,pcp=0),br0,p1,p5,p6" \
+        "p7  0    0 p3,p4,p8,pop_vlan,push_vlan(vid=12,pcp=0),br0,p1,p5,p6" \
+        "p7  0    1 p3,p4,p8,pop_vlan,push_vlan(vid=12,pcp=1),br0,p1,p5,p6" \
+        "p7  10   0 br0,p1,p5,p6,p8,pop_vlan,p2" \
+        "p7  10   1 br0,p1,p5,p6,p8,pop_vlan,push_vlan(vid=0,pcp=1),p2" \
         "p7  11   0 br0,p5" \
         "p7  11   1 br0,p5" \
-        "p7  12   0 br0,p1,p5,p6,pop(vlan),p3,p4,p8" \
-        "p7  12   1 br0,p1,p5,p6,pop(vlan),push(vlan(vid=0,pcp=1)),p3,p4,p8" \
-        "p8  none 0 p3,p4,p7,push(vlan(vid=12,pcp=0)),br0,p1,p5,p6" \
-        "p8  0    0 p3,p4,p7,pop(vlan),push(vlan(vid=12,pcp=0)),br0,p1,p5,p6" \
-        "p8  0    1 p3,p4,p7,pop(vlan),push(vlan(vid=12,pcp=1)),br0,p1,p5,p6" \
-        "p8  10   0 br0,p1,p5,p6,p7,pop(vlan),p2" \
-        "p8  10   1 br0,p1,p5,p6,p7,pop(vlan),push(vlan(vid=0,pcp=1)),p2" \
+        "p7  12   0 br0,p1,p5,p6,pop_vlan,p3,p4,p8" \
+        "p7  12   1 br0,p1,p5,p6,pop_vlan,push_vlan(vid=0,pcp=1),p3,p4,p8" \
+        "p8  none 0 p3,p4,p7,push_vlan(vid=12,pcp=0),br0,p1,p5,p6" \
+        "p8  0    0 p3,p4,p7,pop_vlan,push_vlan(vid=12,pcp=0),br0,p1,p5,p6" \
+        "p8  0    1 p3,p4,p7,pop_vlan,push_vlan(vid=12,pcp=1),br0,p1,p5,p6" \
+        "p8  10   0 br0,p1,p5,p6,p7,pop_vlan,p2" \
+        "p8  10   1 br0,p1,p5,p6,p7,pop_vlan,push_vlan(vid=0,pcp=1),p2" \
         "p8  11   0 drop" \
         "p8  11   1 drop" \
-        "p8  12   0 br0,p1,p5,p6,pop(vlan),p3,p4,p7" \
-        "p8  12   1 br0,p1,p5,p6,pop(vlan),push(vlan(vid=0,pcp=1)),p3,p4,p7"
+        "p8  12   0 br0,p1,p5,p6,pop_vlan,p3,p4,p7" \
+        "p8  12   1 br0,p1,p5,p6,pop_vlan,push_vlan(vid=0,pcp=1),p3,p4,p7"
 do
   set $tuple
   in_port=$1
@@ -214,7 +214,7 @@ do
   if test $vlan = none; then
     flow="in_port($n_in_port),eth(src=50:54:00:00:00:01,dst=ff:ff:ff:ff:ff:ff),eth_type(0xabcd)"
   else
-    flow="in_port($n_in_port),eth(src=50:54:00:00:00:01,dst=ff:ff:ff:ff:ff:ff),vlan(vid=$vlan,pcp=$pcp),eth_type(0xabcd)"
+    flow="in_port($n_in_port),eth(src=50:54:00:00:00:01,dst=ff:ff:ff:ff:ff:ff),eth_type(0x8100),vlan(vid=$vlan,pcp=$pcp),encap(eth_type(0xabcd))"
   fi
 
   AT_CHECK([ovs-appctl ofproto/trace br0 "$flow"], [0], [stdout])

@@ -1274,10 +1274,11 @@ execute_set_action(struct ofpbuf *packet, const struct nlattr *a)
         break;
 
      case OVS_KEY_ATTR_UNSPEC:
+     case OVS_KEY_ATTR_ENCAP:
      case OVS_KEY_ATTR_ETHERTYPE:
      case OVS_KEY_ATTR_IPV6:
      case OVS_KEY_ATTR_IN_PORT:
-     case OVS_KEY_ATTR_8021Q:
+     case OVS_KEY_ATTR_VLAN:
      case OVS_KEY_ATTR_ICMP:
      case OVS_KEY_ATTR_ICMPV6:
      case OVS_KEY_ATTR_ARP:
@@ -1298,8 +1299,7 @@ dp_netdev_execute_actions(struct dp_netdev *dp,
     unsigned int left;
 
     NL_ATTR_FOR_EACH_UNSAFE (a, left, actions, actions_len) {
-        const struct nlattr *nested;
-        const struct ovs_key_8021q *q_key;
+        const struct ovs_action_push_vlan *vlan;
         int type = nl_attr_type(a);
 
         switch ((enum ovs_action_attr) type) {
@@ -1311,15 +1311,12 @@ dp_netdev_execute_actions(struct dp_netdev *dp,
             dp_netdev_action_userspace(dp, packet, key, a);
             break;
 
-        case OVS_ACTION_ATTR_PUSH:
-            nested = nl_attr_get(a);
-            assert(nl_attr_type(nested) == OVS_KEY_ATTR_8021Q);
-            q_key = nl_attr_get_unspec(nested, sizeof(*q_key));
-            eth_push_vlan(packet, q_key->q_tci);
+        case OVS_ACTION_ATTR_PUSH_VLAN:
+            vlan = nl_attr_get(a);
+            eth_push_vlan(packet, vlan->vlan_tci);
             break;
 
-        case OVS_ACTION_ATTR_POP:
-            assert(nl_attr_get_u16(a) == OVS_KEY_ATTR_8021Q);
+        case OVS_ACTION_ATTR_POP_VLAN:
             dp_netdev_pop_vlan(packet);
             break;
 

@@ -264,10 +264,11 @@ struct ovs_flow_stats {
 
 enum ovs_key_attr {
 	OVS_KEY_ATTR_UNSPEC,
+	OVS_KEY_ATTR_ENCAP,	/* Nested set of encapsulated attributes. */
 	OVS_KEY_ATTR_PRIORITY,  /* u32 skb->priority */
 	OVS_KEY_ATTR_IN_PORT,   /* u32 OVS dp port number */
 	OVS_KEY_ATTR_ETHERNET,  /* struct ovs_key_ethernet */
-	OVS_KEY_ATTR_8021Q,     /* struct ovs_key_8021q */
+	OVS_KEY_ATTR_VLAN,	/* be16 VLAN TCI */
 	OVS_KEY_ATTR_ETHERTYPE,	/* be16 Ethernet type */
 	OVS_KEY_ATTR_IPV4,      /* struct ovs_key_ipv4 */
 	OVS_KEY_ATTR_IPV6,      /* struct ovs_key_ipv6 */
@@ -304,11 +305,6 @@ enum ovs_frag_type {
 struct ovs_key_ethernet {
 	__u8	 eth_src[6];
 	__u8	 eth_dst[6];
-};
-
-struct ovs_key_8021q {
-	__be16 q_tpid;
-	__be16 q_tci;
 };
 
 struct ovs_key_ipv4 {
@@ -441,34 +437,48 @@ enum ovs_userspace_attr {
 #define OVS_USERSPACE_ATTR_MAX (__OVS_USERSPACE_ATTR_MAX - 1)
 
 /**
+ * struct ovs_action_push_vlan - %OVS_ACTION_ATTR_PUSH_VLAN action argument.
+ * @vlan_tpid: Tag protocol identifier (TPID) to push.
+ * @vlan_tci: Tag control identifier (TCI) to push.  The CFI bit must not be
+ * set.
+ *
+ * The @vlan_tpid value is typically %ETH_P_8021Q.  The only acceptable TPID
+ * values are those that the kernel module also parses as 802.1Q headers, to
+ * prevent %OVS_ACTION_ATTR_PUSH_VLAN followed by %OVS_ACTION_ATTR_POP_VLAN
+ * from having surprising results.
+ */
+struct ovs_action_push_vlan {
+	__be16 vlan_tpid;	/* 802.1Q TPID. */
+	__be16 vlan_tci;	/* 802.1Q TCI (VLAN ID and priority). */
+};
+
+/**
  * enum ovs_action_attr - Action types.
  *
  * @OVS_ACTION_ATTR_OUTPUT: Output packet to port.
  * @OVS_ACTION_ATTR_USERSPACE: Send packet to userspace according to nested
  * %OVS_USERSPACE_ATTR_* attributes.
- * @OVS_ACTION_ATTR_PUSH: Push header onto head of packet.  The single nested
- * %OVS_KEY_ATTR_* attribute specifies a header to push and its value, e.g.  a
- * nested attribute of type %OVS_KEY_ATTR_8021Q, with struct ovs_key_8021q as
- * argument, would push a VLAN header on the front of the packet.
- * @OVS_ACTION_ATTR_POP: Pop header according to %OVS_KEY_ATTR_ sent as
- * attribute data, e.g. %OVS_KEY_ATTR_8021Q as argument pops an outer VLAN
- * header.
- * @OVS_ACTION_ATTR_SET: Replaces the contents of an existing header.
- * The argument takes the same form as %OVS_ACTION_ATTR_PUSH.
+ * @OVS_ACTION_ATTR_SET: Replaces the contents of an existing header.  The
+ * single nested %OVS_KEY_ATTR_* attribute specifies a header to modify and its
+ * value.
+ * @OVS_ACTION_ATTR_PUSH_VLAN: Push a new outermost 802.1Q header onto the
+ * packet.
+ * @OVS_ACTION_ATTR_POP_VLAN: Pop the outermost 802.1Q header off the packet.
  * @OVS_ACTION_ATTR_SAMPLE: Probabilitically executes actions, as specified in
  * the nested %OVS_SAMPLE_ATTR_* attributes.
  *
- * Only a single field can be set with a single %OVS_ACTION_ATTR_{SET,PUSH}.
- * Not all fields are modifiable.
+ * Only a single header can be set with a single %OVS_ACTION_ATTR_SET.  Not all
+ * fields within a header are modifiable, e.g. the IPv4 protocol and fragment
+ * type may not be changed.
  */
 
 enum ovs_action_attr {
 	OVS_ACTION_ATTR_UNSPEC,
 	OVS_ACTION_ATTR_OUTPUT,	      /* u32 port number. */
 	OVS_ACTION_ATTR_USERSPACE,    /* Nested OVS_USERSPACE_ATTR_*. */
-	OVS_ACTION_ATTR_PUSH,         /* One nested OVS_KEY_ATTR_*. */
-	OVS_ACTION_ATTR_POP,          /* u16 OVS_KEY_ATTR_*. */
 	OVS_ACTION_ATTR_SET,          /* One nested OVS_KEY_ATTR_*. */
+	OVS_ACTION_ATTR_PUSH_VLAN,    /* struct ovs_action_push_vlan. */
+	OVS_ACTION_ATTR_POP_VLAN,     /* No argument. */
 	OVS_ACTION_ATTR_SAMPLE,       /* Nested OVS_SAMPLE_ATTR_*. */
 	__OVS_ACTION_ATTR_MAX
 };

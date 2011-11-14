@@ -41,6 +41,7 @@ openvswitch_headers = \
 	vport-netdev.h
 
 openvswitch_extras = \
+	README \
 	CAPWAP.txt
 
 dist_sources = $(foreach module,$(dist_modules),$($(module)_sources))

@@ -524,10 +524,9 @@ static int validate_sample(const struct nlattr *attr,
 	return validate_actions(actions, key, depth + 1);
 }
 
-static int validate_action_key(const struct nlattr *a,
-				const struct sw_flow_key *flow_key)
+static int validate_set(const struct nlattr *a,
+			const struct sw_flow_key *flow_key)
 {
-	int act_type = nla_type(a);
 	const struct nlattr *ovs_key = nla_data(a);
 	int key_type = nla_type(ovs_key);
 
@@ -539,27 +538,15 @@ static int validate_action_key(const struct nlattr *a,
 	    nla_len(ovs_key) != ovs_key_lens[key_type])
 		return -EINVAL;
 
-#define ACTION(act, key)	(((act) << 8) | (key))
-
-	switch (ACTION(act_type, key_type)) {
+	switch (key_type) {
 	const struct ovs_key_ipv4 *ipv4_key;
-	const struct ovs_key_8021q *q_key;
 
-	case ACTION(OVS_ACTION_ATTR_SET, OVS_KEY_ATTR_PRIORITY):
-	case ACTION(OVS_ACTION_ATTR_SET, OVS_KEY_ATTR_TUN_ID):
-	case ACTION(OVS_ACTION_ATTR_SET, OVS_KEY_ATTR_ETHERNET):
+	case OVS_KEY_ATTR_PRIORITY:
+	case OVS_KEY_ATTR_TUN_ID:
+	case OVS_KEY_ATTR_ETHERNET:
 		break;
 
-	case ACTION(OVS_ACTION_ATTR_PUSH, OVS_KEY_ATTR_8021Q):
-		q_key = nla_data(ovs_key);
-		if (q_key->q_tpid != htons(ETH_P_8021Q))
-			return -EINVAL;
-
-		if (q_key->q_tci & htons(VLAN_TAG_PRESENT))
-			return -EINVAL;
-		break;
-
-	case ACTION(OVS_ACTION_ATTR_SET, OVS_KEY_ATTR_IPV4):
+	case OVS_KEY_ATTR_IPV4:
 		if (flow_key->eth.type != htons(ETH_P_IP))
 			return -EINVAL;
 
@@ -575,7 +562,7 @@ static int validate_action_key(const struct nlattr *a,
 
 		break;
 
-	case ACTION(OVS_ACTION_ATTR_SET, OVS_KEY_ATTR_TCP):
+	case OVS_KEY_ATTR_TCP:
 		if (flow_key->ip.proto != IPPROTO_TCP)
 			return -EINVAL;
 
@@ -584,7 +571,7 @@ static int validate_action_key(const struct nlattr *a,
 
 		break;
 
-	case ACTION(OVS_ACTION_ATTR_SET, OVS_KEY_ATTR_UDP):
+	case OVS_KEY_ATTR_UDP:
 		if (flow_key->ip.proto != IPPROTO_UDP)
 			return -EINVAL;
 
@@ -595,7 +582,7 @@ static int validate_action_key(const struct nlattr *a,
 	default:
 		return -EINVAL;
 	}
-#undef ACTION
+
 	return 0;
 }
 
@@ -632,13 +619,14 @@ static int validate_actions(const struct nlattr *attr,
 	nla_for_each_nested(a, attr, rem) {
 		/* Expected argument lengths, (u32)-1 for variable length. */
 		static const u32 action_lens[OVS_ACTION_ATTR_MAX + 1] = {
-			[OVS_ACTION_ATTR_OUTPUT] = 4,
+			[OVS_ACTION_ATTR_OUTPUT] = sizeof(u32),
 			[OVS_ACTION_ATTR_USERSPACE] = (u32)-1,
-			[OVS_ACTION_ATTR_PUSH] = (u32)-1,
-			[OVS_ACTION_ATTR_POP] = 2,
+			[OVS_ACTION_ATTR_PUSH_VLAN] = sizeof(struct ovs_action_push_vlan),
+			[OVS_ACTION_ATTR_POP_VLAN] = 0,
 			[OVS_ACTION_ATTR_SET] = (u32)-1,
 			[OVS_ACTION_ATTR_SAMPLE] = (u32)-1
 		};
+		const struct ovs_action_push_vlan *vlan;
 		int type = nla_type(a);
 
 		if (type > OVS_ACTION_ATTR_MAX ||
@@ -662,14 +650,19 @@ static int validate_actions(const struct nlattr *attr,
 			break;
 
 
-		case OVS_ACTION_ATTR_POP:
-			if (nla_get_u16(a) != OVS_KEY_ATTR_8021Q)
+		case OVS_ACTION_ATTR_POP_VLAN:
+			break;
+
+		case OVS_ACTION_ATTR_PUSH_VLAN:
+			vlan = nla_data(a);
+			if (vlan->vlan_tpid != htons(ETH_P_8021Q))
+				return -EINVAL;
+			if (vlan->vlan_tci & htons(VLAN_TAG_PRESENT))
 				return -EINVAL;
 			break;
 
 		case OVS_ACTION_ATTR_SET:
-		case OVS_ACTION_ATTR_PUSH:
-			err = validate_action_key(a, key);
+			err = validate_set(a, key);
 			if (err)
 				return err;
 			break;

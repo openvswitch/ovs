@@ -844,10 +844,11 @@ void flow_tbl_remove(struct flow_table *table, struct sw_flow *flow)
 
 /* The size of the argument for each %OVS_KEY_ATTR_* Netlink attribute.  */
 const u32 ovs_key_lens[OVS_KEY_ATTR_MAX + 1] = {
+	[OVS_KEY_ATTR_ENCAP] = 0,
 	[OVS_KEY_ATTR_PRIORITY] = sizeof(u32),
 	[OVS_KEY_ATTR_IN_PORT] = sizeof(u32),
 	[OVS_KEY_ATTR_ETHERNET] = sizeof(struct ovs_key_ethernet),
-	[OVS_KEY_ATTR_8021Q] = sizeof(struct ovs_key_8021q),
+	[OVS_KEY_ATTR_VLAN] = sizeof(__be16),
 	[OVS_KEY_ATTR_ETHERTYPE] = sizeof(__be16),
 	[OVS_KEY_ATTR_IPV4] = sizeof(struct ovs_key_ipv4),
 	[OVS_KEY_ATTR_IPV6] = sizeof(struct ovs_key_ipv6),
@@ -968,25 +969,12 @@ static int ipv6_flow_from_nlattrs(struct sw_flow_key *swkey, int *key_len,
 	return 0;
 }
 
-/**
- * flow_from_nlattrs - parses Netlink attributes into a flow key.
- * @swkey: receives the extracted flow key.
- * @key_lenp: number of bytes used in @swkey.
- * @attr: Netlink attribute holding nested %OVS_KEY_ATTR_* Netlink attribute
- * sequence.
- */
-int flow_from_nlattrs(struct sw_flow_key *swkey, int *key_lenp,
-		      const struct nlattr *attr)
+static int parse_flow_nlattrs(const struct nlattr *attr,
+			      const struct nlattr *a[], u64 *attrsp)
 {
-	const struct nlattr *a[OVS_KEY_ATTR_MAX + 1];
-	const struct ovs_key_ethernet *eth_key;
 	const struct nlattr *nla;
-	int key_len;
 	u64 attrs;
 	int rem;
-
-	memset(swkey, 0, sizeof(struct sw_flow_key));
-	key_len = SW_FLOW_KEY_OFFSET(eth);
 
 	attrs = 0;
 	nla_for_each_nested(nla, attr, rem) {
@@ -1000,6 +988,33 @@ int flow_from_nlattrs(struct sw_flow_key *swkey, int *key_lenp,
 	}
 	if (rem)
 		return -EINVAL;
+
+	*attrsp = attrs;
+	return 0;
+}
+
+/**
+ * flow_from_nlattrs - parses Netlink attributes into a flow key.
+ * @swkey: receives the extracted flow key.
+ * @key_lenp: number of bytes used in @swkey.
+ * @attr: Netlink attribute holding nested %OVS_KEY_ATTR_* Netlink attribute
+ * sequence.
+ */
+int flow_from_nlattrs(struct sw_flow_key *swkey, int *key_lenp,
+		      const struct nlattr *attr)
+{
+	const struct nlattr *a[OVS_KEY_ATTR_MAX + 1];
+	const struct ovs_key_ethernet *eth_key;
+	int key_len;
+	u64 attrs;
+	int err;
+
+	memset(swkey, 0, sizeof(struct sw_flow_key));
+	key_len = SW_FLOW_KEY_OFFSET(eth);
+
+	err = parse_flow_nlattrs(attr, a, &attrs);
+	if (err)
+		return err;
 
 	/* Metadata attributes. */
 	if (attrs & (1 << OVS_KEY_ATTR_PRIORITY)) {
@@ -1030,18 +1045,18 @@ int flow_from_nlattrs(struct sw_flow_key *swkey, int *key_lenp,
 	memcpy(swkey->eth.src, eth_key->eth_src, ETH_ALEN);
 	memcpy(swkey->eth.dst, eth_key->eth_dst, ETH_ALEN);
 
-	if (attrs & (1 << OVS_KEY_ATTR_8021Q)) {
-		const struct ovs_key_8021q *q_key;
-
-		q_key = nla_data(a[OVS_KEY_ATTR_8021Q]);
-		/* Only standard 0x8100 VLANs currently supported. */
-		if (q_key->q_tpid != htons(ETH_P_8021Q))
+	if (attrs == ((1 << OVS_KEY_ATTR_VLAN) |
+		      (1 << OVS_KEY_ATTR_ETHERTYPE) |
+		      (1 << OVS_KEY_ATTR_ENCAP)) &&
+	    nla_get_be16(a[OVS_KEY_ATTR_ETHERTYPE]) == htons(ETH_P_8021Q)) {
+		swkey->eth.tci = nla_get_be16(a[OVS_KEY_ATTR_VLAN]);
+		if (swkey->eth.tci & htons(VLAN_TAG_PRESENT))
 			return -EINVAL;
-		if (q_key->q_tci & htons(VLAN_TAG_PRESENT))
-			return -EINVAL;
-		swkey->eth.tci = q_key->q_tci | htons(VLAN_TAG_PRESENT);
+		swkey->eth.tci |= htons(VLAN_TAG_PRESENT);
 
-		attrs &= ~(1 << OVS_KEY_ATTR_8021Q);
+		err = parse_flow_nlattrs(a[OVS_KEY_ATTR_ENCAP], a, &attrs);
+		if (err)
+			return err;
 	}
 
 	if (attrs & (1 << OVS_KEY_ATTR_ETHERTYPE)) {
@@ -1072,7 +1087,7 @@ int flow_from_nlattrs(struct sw_flow_key *swkey, int *key_lenp,
 		swkey->ipv4.addr.dst = ipv4_key->ipv4_dst;
 
 		if (swkey->ip.frag != OVS_FRAG_TYPE_LATER) {
-			int err = ipv4_flow_from_nlattrs(swkey, &key_len, a, &attrs);
+			err = ipv4_flow_from_nlattrs(swkey, &key_len, a, &attrs);
 			if (err)
 				return err;
 		}
@@ -1098,7 +1113,7 @@ int flow_from_nlattrs(struct sw_flow_key *swkey, int *key_lenp,
 		       sizeof(swkey->ipv6.addr.dst));
 
 		if (swkey->ip.frag != OVS_FRAG_TYPE_LATER) {
-			int err = ipv6_flow_from_nlattrs(swkey, &key_len, a, &attrs);
+			err = ipv6_flow_from_nlattrs(swkey, &key_len, a, &attrs);
 			if (err)
 				return err;
 		}
@@ -1181,7 +1196,7 @@ int flow_metadata_from_nlattrs(u32 *priority, u16 *in_port, __be64 *tun_id,
 int flow_to_nlattrs(const struct sw_flow_key *swkey, struct sk_buff *skb)
 {
 	struct ovs_key_ethernet *eth_key;
-	struct nlattr *nla;
+	struct nlattr *nla, *encap;
 
 	if (swkey->phy.priority)
 		NLA_PUT_U32(skb, OVS_KEY_ATTR_PRIORITY, swkey->phy.priority);
@@ -1200,15 +1215,16 @@ int flow_to_nlattrs(const struct sw_flow_key *swkey, struct sk_buff *skb)
 	memcpy(eth_key->eth_dst, swkey->eth.dst, ETH_ALEN);
 
 	if (swkey->eth.tci != htons(0)) {
-		struct ovs_key_8021q q_key;
-
-		q_key.q_tpid = htons(ETH_P_8021Q);
-		q_key.q_tci = swkey->eth.tci & ~htons(VLAN_TAG_PRESENT);
-		NLA_PUT(skb, OVS_KEY_ATTR_8021Q, sizeof(q_key), &q_key);
+		NLA_PUT_BE16(skb, OVS_KEY_ATTR_ETHERTYPE, htons(ETH_P_8021Q));
+		NLA_PUT_BE16(skb, OVS_KEY_ATTR_VLAN,
+			     swkey->eth.tci & ~htons(VLAN_TAG_PRESENT));
+		encap = nla_nest_start(skb, OVS_KEY_ATTR_ENCAP);
+	} else {
+		encap = NULL;
 	}
 
 	if (swkey->eth.type == htons(ETH_P_802_2))
-		return 0;
+		goto unencap;
 
 	NLA_PUT_BE16(skb, OVS_KEY_ATTR_ETHERTYPE, swkey->eth.type);
 
@@ -1325,6 +1341,10 @@ int flow_to_nlattrs(const struct sw_flow_key *swkey, struct sk_buff *skb)
 			}
 		}
 	}
+
+unencap:
+	if (encap)
+		nla_nest_end(skb, encap);
 
 	return 0;
 
