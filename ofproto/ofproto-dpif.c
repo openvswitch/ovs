@@ -1110,6 +1110,7 @@ get_stp_port_status(struct ofport *ofport_,
     s->state = stp_port_get_state(sp);
     s->sec_in_state = (time_msec() - ofport->stp_state_entered) / 1000;
     s->role = stp_port_get_role(sp);
+    stp_port_get_counts(sp, &s->tx_count, &s->rx_count, &s->error_count);
 
     return 0;
 }

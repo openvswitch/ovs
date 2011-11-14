@@ -1,6 +1,6 @@
 {"name": "Open_vSwitch",
- "version": "6.2.0",
- "cksum": "145151998 15203",
+ "version": "6.3.0",
+ "cksum": "1659474737 15341",
  "tables": {
    "Open_vSwitch": {
      "columns": {
@@ -149,6 +149,9 @@
          "type": "boolean"},
        "status": {
          "type": {"key": "string", "value": "string", "min": 0, "max": "unlimited"},
+         "ephemeral": true},
+       "statistics": {
+         "type": {"key": "string", "value": "integer", "min": 0, "max": "unlimited"},
          "ephemeral": true},
        "other_config": {
          "type": {"key": "string", "value": "string", "min": 0, "max": "unlimited"}},

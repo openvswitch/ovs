@@ -93,6 +93,10 @@ struct stp_port {
     struct stp_timer forward_delay_timer; /* 8.5.6.2: State change timer. */
     struct stp_timer hold_timer;        /* 8.5.6.3: BPDU rate limit timer. */
 
+    int tx_count;                   /* Number of BPDUs transmitted. */
+    int rx_count;                   /* Number of valid BPDUs received. */
+    int error_count;                /* Number of bad BPDUs received. */
+
     bool state_changed;
 };
 
@@ -562,6 +566,7 @@ stp_received_bpdu(struct stp_port *p, const void *bpdu, size_t bpdu_size)
 
     if (bpdu_size < sizeof(struct stp_bpdu_header)) {
         VLOG_WARN("%s: received runt %zu-byte BPDU", stp->name, bpdu_size);
+        p->error_count++;
         return;
     }
 
@@ -569,6 +574,7 @@ stp_received_bpdu(struct stp_port *p, const void *bpdu, size_t bpdu_size)
     if (header->protocol_id != htons(STP_PROTOCOL_ID)) {
         VLOG_WARN("%s: received BPDU with unexpected protocol ID %"PRIu16,
                   stp->name, ntohs(header->protocol_id));
+        p->error_count++;
         return;
     }
     if (header->protocol_version != STP_PROTOCOL_VERSION) {
@@ -581,6 +587,7 @@ stp_received_bpdu(struct stp_port *p, const void *bpdu, size_t bpdu_size)
         if (bpdu_size < sizeof(struct stp_config_bpdu)) {
             VLOG_WARN("%s: received config BPDU with invalid size %zu",
                       stp->name, bpdu_size);
+            p->error_count++;
             return;
         }
         stp_received_config_bpdu(stp, p, bpdu);
@@ -590,6 +597,7 @@ stp_received_bpdu(struct stp_port *p, const void *bpdu, size_t bpdu_size)
         if (bpdu_size != sizeof(struct stp_tcn_bpdu)) {
             VLOG_WARN("%s: received TCN BPDU with invalid size %zu",
                       stp->name, bpdu_size);
+            p->error_count++;
             return;
         }
         stp_received_tcn_bpdu(stp, p);
@@ -598,8 +606,10 @@ stp_received_bpdu(struct stp_port *p, const void *bpdu, size_t bpdu_size)
     default:
         VLOG_WARN("%s: received BPDU of unexpected type %"PRIu8,
                   stp->name, header->bpdu_type);
+        p->error_count++;
         return;
     }
+    p->rx_count++;
 }
 
 /* Returns the STP entity in which 'p' is nested. */
@@ -665,6 +675,15 @@ stp_port_get_role(const struct stp_port *p)
     } else {
         return STP_ROLE_ALTERNATE;
     }
+}
+
+/* Retrieves BPDU transmit and receive counts for 'p'. */
+void stp_port_get_counts(const struct stp_port *p,
+                         int *tx_count, int *rx_count, int *error_count)
+{
+    *tx_count = p->tx_count;
+    *rx_count = p->rx_count;
+    *error_count = p->error_count;
 }
 
 /* Disables STP on port 'p'. */
@@ -1185,6 +1204,7 @@ stp_initialize_port(struct stp_port *p, enum stp_state state)
     stp_stop_timer(&p->message_age_timer);
     stp_stop_timer(&p->forward_delay_timer);
     stp_stop_timer(&p->hold_timer);
+    p->tx_count = p->rx_count = p->error_count = 0;
 }
 
 static void
@@ -1299,4 +1319,5 @@ stp_send_bpdu(struct stp_port *p, const void *bpdu, size_t bpdu_size)
     llc->llc_cntl = STP_LLC_CNTL;
 
     p->stp->send_bpdu(pkt, stp_port_no(p), p->stp->aux);
+    p->tx_count++;
 }
