@@ -18,3 +18,6 @@
 #     system memory pressure in extraordinary situations, such as multiple
 #     concurrent VM import operations.
 # VSWITCHD_MLOCKALL=yes
+
+# BRCOMPAT: If 'yes' compatibility mode will be enabled.
+# BRCOMPAT=yes

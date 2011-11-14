@@ -45,6 +45,9 @@ start () {
     if test X"$VSWITCHD_MLOCKALL" != X; then
 	set "$@" --mlockall="$VSWITCHD_MLOCKALL"
     fi
+    if test X"$BRCOMPAT" = Xyes; then
+	set "$@" --brcompat
+    fi
     "$@"
 
     $ovs_ctl --protocol=gre enable-protocol
