@@ -373,8 +373,8 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
      * iface"s according to 'ovs_cfg', with only very minimal configuration
      * otherwise.
      *
-     * This is purely an update to bridge data structures.  Nothing is pushed
-     * down to ofproto or lower layers. */
+     * This is mostly an update to bridge data structures.  Very little is
+     * pushed down to ofproto or lower layers. */
     add_del_bridges(ovs_cfg);
     HMAP_FOR_EACH (br, node, &all_bridges) {
         bridge_add_del_ports(br);
@@ -2189,8 +2189,7 @@ bridge_add_del_ports(struct bridge *br)
     }
 
     /* Get rid of deleted ports.
-     * Get rid of deleted interfaces on ports that still exist.
-     * Update 'cfg' of ports that still exist. */
+     * Get rid of deleted interfaces on ports that still exist. */
     HMAP_FOR_EACH_SAFE (port, next, hmap_node, &br->ports) {
         port->cfg = shash_find_data(&new_ports, port->name);
         if (!port->cfg) {
