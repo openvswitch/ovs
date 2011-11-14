@@ -1042,24 +1042,6 @@ dpif_netdev_wait(struct dpif *dpif)
 }
 
 static void
-dp_netdev_pop_vlan(struct ofpbuf *packet)
-{
-    struct vlan_eth_header *veh = packet->l2;
-    if (packet->size >= sizeof *veh
-        && veh->veth_type == htons(ETH_TYPE_VLAN)) {
-        struct eth_header tmp;
-
-        memcpy(tmp.eth_dst, veh->veth_dst, ETH_ADDR_LEN);
-        memcpy(tmp.eth_src, veh->veth_src, ETH_ADDR_LEN);
-        tmp.eth_type = veh->veth_next_type;
-
-        ofpbuf_pull(packet, VLAN_HEADER_LEN);
-        packet->l2 = (char*)packet->l2 + VLAN_HEADER_LEN;
-        memcpy(packet->data, &tmp, sizeof tmp);
-    }
-}
-
-static void
 dp_netdev_set_dl(struct ofpbuf *packet, const struct ovs_key_ethernet *eth_key)
 {
     struct eth_header *eh = packet->l2;
@@ -1325,7 +1307,7 @@ dp_netdev_execute_actions(struct dp_netdev *dp,
             break;
 
         case OVS_ACTION_ATTR_POP_VLAN:
-            dp_netdev_pop_vlan(packet);
+            eth_pop_vlan(packet);
             break;
 
         case OVS_ACTION_ATTR_SET:

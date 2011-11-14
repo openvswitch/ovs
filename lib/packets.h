@@ -132,6 +132,7 @@ void compose_benign_packet(struct ofpbuf *, const char *tag,
                            const uint8_t eth_src[ETH_ADDR_LEN]);
 
 void eth_push_vlan(struct ofpbuf *, ovs_be16 tci);
+void eth_pop_vlan(struct ofpbuf *);
 
 /* Example:
  *

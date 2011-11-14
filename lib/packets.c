@@ -100,6 +100,27 @@ eth_push_vlan(struct ofpbuf *packet, ovs_be16 tci)
     packet->l2 = packet->data;
 }
 
+/* Removes outermost VLAN header (if any is present) from 'packet'.
+ *
+ * 'packet->l2' must initially point to 'packet''s Ethernet header. */
+void
+eth_pop_vlan(struct ofpbuf *packet)
+{
+    struct vlan_eth_header *veh = packet->l2;
+    if (packet->size >= sizeof *veh
+        && veh->veth_type == htons(ETH_TYPE_VLAN)) {
+        struct eth_header tmp;
+
+        memcpy(tmp.eth_dst, veh->veth_dst, ETH_ADDR_LEN);
+        memcpy(tmp.eth_src, veh->veth_src, ETH_ADDR_LEN);
+        tmp.eth_type = veh->veth_next_type;
+
+        ofpbuf_pull(packet, VLAN_HEADER_LEN);
+        packet->l2 = (char*)packet->l2 + VLAN_HEADER_LEN;
+        memcpy(packet->data, &tmp, sizeof tmp);
+    }
+}
+
 /* Given the IP netmask 'netmask', returns the number of bits of the IP address
  * that it specifies, that is, the number of 1-bits in 'netmask'.  'netmask'
  * must be a CIDR netmask (see ip_is_cidr()). */
