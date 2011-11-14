@@ -78,8 +78,6 @@ struct nl_sock
  * Initialized by nl_sock_create(). */
 static int max_iovs;
 
-static int alloc_pid(uint32_t *);
-static void free_pid(uint32_t);
 static int nl_sock_cow__(struct nl_sock *);
 
 /* Creates a new netlink socket for the given netlink 'protocol'
@@ -90,6 +88,7 @@ nl_sock_create(int protocol, struct nl_sock **sockp)
 {
     struct nl_sock *sock;
     struct sockaddr_nl local, remote;
+    socklen_t local_size;
     int retval = 0;
 
     if (!max_iovs) {
@@ -130,34 +129,31 @@ nl_sock_create(int protocol, struct nl_sock **sockp)
     }
     sock->rcvbuf = retval;
 
-    retval = alloc_pid(&sock->pid);
-    if (retval) {
-        goto error;
-    }
-
-    /* Bind local address as our selected pid. */
-    memset(&local, 0, sizeof local);
-    local.nl_family = AF_NETLINK;
-    local.nl_pid = sock->pid;
-    if (bind(sock->fd, (struct sockaddr *) &local, sizeof local) < 0) {
-        VLOG_ERR("bind(%"PRIu32"): %s", sock->pid, strerror(errno));
-        goto error_free_pid;
-    }
-
-    /* Bind remote address as the kernel (pid 0). */
+    /* Connect to kernel (pid 0) as remote address. */
     memset(&remote, 0, sizeof remote);
     remote.nl_family = AF_NETLINK;
     remote.nl_pid = 0;
     if (connect(sock->fd, (struct sockaddr *) &remote, sizeof remote) < 0) {
         VLOG_ERR("connect(0): %s", strerror(errno));
-        goto error_free_pid;
+        goto error;
     }
+
+    /* Obtain pid assigned by kernel. */
+    local_size = sizeof local;
+    if (getsockname(sock->fd, (struct sockaddr *) &local, &local_size) < 0) {
+        VLOG_ERR("getsockname: %s", strerror(errno));
+        goto error;
+    }
+    if (local_size < sizeof local || local.nl_family != AF_NETLINK) {
+        VLOG_ERR("getsockname returned bad Netlink name");
+        retval = EINVAL;
+        goto error;
+    }
+    sock->pid = local.nl_pid;
 
     *sockp = sock;
     return 0;
 
-error_free_pid:
-    free_pid(sock->pid);
 error:
     if (retval == 0) {
         retval = errno;
@@ -190,7 +186,6 @@ nl_sock_destroy(struct nl_sock *sock)
             sock->dump = NULL;
         } else {
             close(sock->fd);
-            free_pid(sock->pid);
             free(sock);
         }
     }
@@ -1055,54 +1050,6 @@ nl_lookup_genl_family(const char *name, int *number)
     return *number > 0 ? 0 : -*number;
 }
 
-/* Netlink PID.
- *
- * Every Netlink socket must be bound to a unique 32-bit PID.  By convention,
- * programs that have a single Netlink socket use their Unix process ID as PID,
- * and programs with multiple Netlink sockets add a unique per-socket
- * identifier in the bits above the Unix process ID.
- *
- * The kernel has Netlink PID 0.
- */
-
-/* Parameters for how many bits in the PID should come from the Unix process ID
- * and how many unique per-socket. */
-#define SOCKET_BITS 10
-#define MAX_SOCKETS (1u << SOCKET_BITS)
-
-#define PROCESS_BITS (32 - SOCKET_BITS)
-#define MAX_PROCESSES (1u << PROCESS_BITS)
-#define PROCESS_MASK ((uint32_t) (MAX_PROCESSES - 1))
-
-/* Bit vector of unused socket identifiers. */
-static uint32_t avail_sockets[ROUND_UP(MAX_SOCKETS, 32)];
-
-/* Allocates and returns a new Netlink PID. */
-static int
-alloc_pid(uint32_t *pid)
-{
-    int i;
-
-    for (i = 0; i < MAX_SOCKETS; i++) {
-        if ((avail_sockets[i / 32] & (1u << (i % 32))) == 0) {
-            avail_sockets[i / 32] |= 1u << (i % 32);
-            *pid = (getpid() & PROCESS_MASK) | (i << PROCESS_BITS);
-            return 0;
-        }
-    }
-    VLOG_ERR("netlink pid space exhausted");
-    return ENOBUFS;
-}
-
-/* Makes the specified 'pid' available for reuse. */
-static void
-free_pid(uint32_t pid)
-{
-    int sock = pid >> PROCESS_BITS;
-    assert(avail_sockets[sock / 32] & (1u << (sock % 32)));
-    avail_sockets[sock / 32] &= ~(1u << (sock % 32));
-}
-
 static void
 nlmsghdr_to_string(const struct nlmsghdr *h, int protocol, struct ds *ds)
 {
@@ -1151,10 +1098,8 @@ nlmsghdr_to_string(const struct nlmsghdr *h, int protocol, struct ds *ds)
     if (flags_left) {
         ds_put_format(ds, "[OTHER:%"PRIx16"]", flags_left);
     }
-    ds_put_format(ds, ", seq=%"PRIx32", pid=%"PRIu32"(%d:%d))",
-                  h->nlmsg_seq, h->nlmsg_pid,
-                  (int) (h->nlmsg_pid & PROCESS_MASK),
-                  (int) (h->nlmsg_pid >> PROCESS_BITS));
+    ds_put_format(ds, ", seq=%"PRIx32", pid=%"PRIu32,
+                  h->nlmsg_seq, h->nlmsg_pid);
 }
 
 static char *
