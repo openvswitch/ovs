@@ -115,9 +115,14 @@ unixctl_command_register(const char *name, const char *args,
         unixctl_cb_func *cb, void *aux)
 {
     struct unixctl_command *command;
+    struct unixctl_command *lookup = shash_find_data(&commands, name);
 
-    assert(!shash_find_data(&commands, name)
-           || shash_find_data(&commands, name) == cb);
+    assert(!lookup || lookup->cb == cb);
+
+    if (lookup) {
+        return;
+    }
+
     command = xmalloc(sizeof *command);
     command->args = args;
     command->cb = cb;
