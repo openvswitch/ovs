@@ -192,7 +192,6 @@ static void stp_update_bridge_timers(struct stp *);
 
 static int clamp(int x, int min, int max);
 static int ms_to_timer(int ms);
-static int ms_to_timer_remainder(int ms);
 static int timer_to_ms(int timer);
 static void stp_start_timer(struct stp_timer *, int value);
 static void stp_stop_timer(struct stp_timer *);
@@ -281,7 +280,7 @@ stp_tick(struct stp *stp, int ms)
      * are called too frequently. */
     ms = clamp(ms, 0, INT_MAX - 1000) + stp->elapsed_remainder;
     elapsed = ms_to_timer(ms);
-    stp->elapsed_remainder = ms_to_timer_remainder(ms);
+    stp->elapsed_remainder = ms - timer_to_ms(elapsed);
     if (!elapsed) {
         return;
     }
@@ -1251,14 +1250,6 @@ static int
 ms_to_timer(int ms)
 {
     return ms * 0x100 / 1000;
-}
-
-/* Returns the number of leftover milliseconds when 'ms' is converted to STP
- * timer ticks. */
-static int
-ms_to_timer_remainder(int ms)
-{
-    return ms * 0x100 % 1000;
 }
 
 /* Returns the number of whole milliseconds in 'timer' STP timer ticks.  There
