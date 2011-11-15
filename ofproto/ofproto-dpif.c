@@ -1035,7 +1035,7 @@ update_stp_port_state(struct ofport_dpif *ofport)
         ofport->stp_state = state;
         ofport->stp_state_entered = time_msec();
 
-        if (fwd_change) {
+        if (fwd_change && ofport->bundle) {
             bundle_update(ofport->bundle);
         }
 
