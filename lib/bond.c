@@ -1001,11 +1001,7 @@ bond_unixctl_show(struct unixctl_conn *conn,
             ds_put_format(&ds, "\thash %d: %"PRIu64" kB load\n",
                           hash, be->tx_bytes / 1024);
 
-            if (bond->balance != BM_SLB) {
-                continue;
-            }
-
-            /* XXX How can we list the MACs assigned to hashes? */
+            /* XXX How can we list the MACs assigned to hashes of SLB bonds? */
         }
     }
     unixctl_command_reply(conn, 200, ds_cstr(&ds));
