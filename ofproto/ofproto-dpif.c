@@ -3638,7 +3638,7 @@ commit_vlan_action(struct action_xlate_ctx *ctx, ovs_be16 new_tci)
         struct ovs_action_push_vlan vlan;
 
         vlan.vlan_tpid = htons(ETH_TYPE_VLAN);
-        vlan.vlan_tci = new_tci & ~htons(VLAN_CFI);
+        vlan.vlan_tci = new_tci;
         nl_msg_put_unspec(ctx->odp_actions, OVS_ACTION_ATTR_PUSH_VLAN,
                           &vlan, sizeof vlan);
     }
@@ -4719,6 +4719,14 @@ flow_get_vlan(struct ofproto_dpif *ofproto, const struct flow *flow,
             return -1;
         }
     } else {
+        if (flow->dl_type == htons(ETH_TYPE_VLAN) &&
+            !(flow->vlan_tci & htons(VLAN_CFI))) {
+            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+            VLOG_WARN_RL(&rl, "bridge %s: dropping packet with partial "
+                         "VLAN tag received on port %s",
+                         ofproto->up.name, in_bundle->name);
+            return -1;
+        }
         if (in_bundle->vlan_mode != PORT_VLAN_TRUNK) {
             return in_bundle->vlan;
         } else {

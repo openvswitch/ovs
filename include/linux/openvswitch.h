@@ -439,8 +439,8 @@ enum ovs_userspace_attr {
 /**
  * struct ovs_action_push_vlan - %OVS_ACTION_ATTR_PUSH_VLAN action argument.
  * @vlan_tpid: Tag protocol identifier (TPID) to push.
- * @vlan_tci: Tag control identifier (TCI) to push.  The CFI bit must not be
- * set.
+ * @vlan_tci: Tag control identifier (TCI) to push.  The CFI bit must be set
+ * (but it will not be set in the 802.1Q header that is pushed).
  *
  * The @vlan_tpid value is typically %ETH_P_8021Q.  The only acceptable TPID
  * values are those that the kernel module also parses as 802.1Q headers, to

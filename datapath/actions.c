@@ -112,7 +112,7 @@ static int push_vlan(struct sk_buff *skb, const struct ovs_action_push_vlan *vla
 					+ ETH_HLEN, VLAN_HLEN, 0));
 
 	}
-	__vlan_hwaccel_put_tag(skb, ntohs(vlan->vlan_tci));
+	__vlan_hwaccel_put_tag(skb, ntohs(vlan->vlan_tci) & ~VLAN_TAG_PRESENT);
 	return 0;
 }
 

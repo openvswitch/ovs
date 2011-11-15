@@ -145,6 +145,41 @@ not understand the "vlan" key will not see either of those attributes
 and therefore will not misinterpret them.  (Also, the outer eth_type
 is still 0x8100, not changed to 0x0800.)
 
+Handling malformed packets
+--------------------------
+
+Don't drop packets in the kernel for malformed protocol headers, bad
+checksums, etc.  This would prevent userspace from implementing a
+simple Ethernet switch that forwards every packet.
+
+Instead, in such a case, include an attribute with "empty" content.
+It doesn't matter if the empty content could be valid protocol values,
+as long as those values are rarely seen in practice, because userspace
+can always forward all packets with those values to userspace and
+handle them individually.
+
+For example, consider a packet that contains an IP header that
+indicates protocol 6 for TCP, but which is truncated just after the IP
+header, so that the TCP header is missing.  The flow key for this
+packet would include a tcp attribute with all-zero src and dst, like
+this:
+
+    eth(...), eth_type(0x0800), ip(proto=6, ...), tcp(src=0, dst=0)
+
+As another example, consider a packet with an Ethernet type of 0x8100,
+indicating that a VLAN TCI should follow, but which is truncated just
+after the Ethernet type.  The flow key for this packet would include
+an all-zero-bits vlan and an empty encap attribute, like this:
+
+    eth(...), eth_type(0x8100), vlan(0), encap()
+
+Unlike a TCP packet with source and destination ports 0, an
+all-zero-bits VLAN TCI is not that rare, so the CFI bit (aka
+VLAN_TAG_PRESENT inside the kernel) is ordinarily set in a vlan
+attribute expressly to allow this situation to be distinguished.
+Thus, the flow key in this second example unambiguously indicates a
+missing or malformed VLAN TCI.
+
 Other rules
 -----------
 

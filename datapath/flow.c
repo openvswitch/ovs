@@ -480,6 +480,9 @@ static int parse_vlan(struct sk_buff *skb, struct sw_flow_key *key)
 	};
 	struct qtag_prefix *qp;
 
+	if (unlikely(skb->len < sizeof(struct qtag_prefix) + sizeof(__be16)))
+		return 0;
+
 	if (unlikely(!pskb_may_pull(skb, sizeof(struct qtag_prefix) +
 					 sizeof(__be16))))
 		return -ENOMEM;
@@ -1045,18 +1048,35 @@ int flow_from_nlattrs(struct sw_flow_key *swkey, int *key_lenp,
 	memcpy(swkey->eth.src, eth_key->eth_src, ETH_ALEN);
 	memcpy(swkey->eth.dst, eth_key->eth_dst, ETH_ALEN);
 
-	if (attrs == ((1 << OVS_KEY_ATTR_VLAN) |
-		      (1 << OVS_KEY_ATTR_ETHERTYPE) |
-		      (1 << OVS_KEY_ATTR_ENCAP)) &&
+	if (attrs & (1u << OVS_KEY_ATTR_ETHERTYPE) &&
 	    nla_get_be16(a[OVS_KEY_ATTR_ETHERTYPE]) == htons(ETH_P_8021Q)) {
-		swkey->eth.tci = nla_get_be16(a[OVS_KEY_ATTR_VLAN]);
-		if (swkey->eth.tci & htons(VLAN_TAG_PRESENT))
-			return -EINVAL;
-		swkey->eth.tci |= htons(VLAN_TAG_PRESENT);
+		const struct nlattr *encap;
+		__be16 tci;
 
-		err = parse_flow_nlattrs(a[OVS_KEY_ATTR_ENCAP], a, &attrs);
-		if (err)
-			return err;
+		if (attrs != ((1 << OVS_KEY_ATTR_VLAN) |
+			      (1 << OVS_KEY_ATTR_ETHERTYPE) |
+			      (1 << OVS_KEY_ATTR_ENCAP)))
+			return -EINVAL;
+
+		encap = a[OVS_KEY_ATTR_ENCAP];
+		tci = nla_get_be16(a[OVS_KEY_ATTR_VLAN]);
+		if (tci & htons(VLAN_TAG_PRESENT)) {
+			swkey->eth.tci = tci;
+
+			err = parse_flow_nlattrs(encap, a, &attrs);
+			if (err)
+				return err;
+		} else if (!tci) {
+			/* Corner case for truncated 802.1Q header. */
+			if (nla_len(encap))
+				return -EINVAL;
+
+			swkey->eth.type = htons(ETH_P_8021Q);
+			*key_lenp = key_len;
+			return 0;
+		} else {
+			return -EINVAL;
+		}
 	}
 
 	if (attrs & (1 << OVS_KEY_ATTR_ETHERTYPE)) {
@@ -1214,11 +1234,12 @@ int flow_to_nlattrs(const struct sw_flow_key *swkey, struct sk_buff *skb)
 	memcpy(eth_key->eth_src, swkey->eth.src, ETH_ALEN);
 	memcpy(eth_key->eth_dst, swkey->eth.dst, ETH_ALEN);
 
-	if (swkey->eth.tci != htons(0)) {
+	if (swkey->eth.tci || swkey->eth.type == htons(ETH_P_8021Q)) {
 		NLA_PUT_BE16(skb, OVS_KEY_ATTR_ETHERTYPE, htons(ETH_P_8021Q));
-		NLA_PUT_BE16(skb, OVS_KEY_ATTR_VLAN,
-			     swkey->eth.tci & ~htons(VLAN_TAG_PRESENT));
+		NLA_PUT_BE16(skb, OVS_KEY_ATTR_VLAN, swkey->eth.tci);
 		encap = nla_nest_start(skb, OVS_KEY_ATTR_ENCAP);
+		if (!swkey->eth.tci)
+			goto unencap;
 	} else {
 		encap = NULL;
 	}

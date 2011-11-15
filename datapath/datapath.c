@@ -657,7 +657,7 @@ static int validate_actions(const struct nlattr *attr,
 			vlan = nla_data(a);
 			if (vlan->vlan_tpid != htons(ETH_P_8021Q))
 				return -EINVAL;
-			if (vlan->vlan_tci & htons(VLAN_TAG_PRESENT))
+			if (!(vlan->vlan_tci & htons(VLAN_TAG_PRESENT)))
 				return -EINVAL;
 			break;
 

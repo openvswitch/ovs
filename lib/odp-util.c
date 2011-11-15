@@ -198,6 +198,17 @@ format_odp_userspace_action(struct ds *ds, const struct nlattr *attr)
 }
 
 static void
+format_vlan_tci(struct ds *ds, ovs_be16 vlan_tci)
+{
+    ds_put_format(ds, "vid=%"PRIu16",pcp=%d",
+                  vlan_tci_to_vid(vlan_tci),
+                  vlan_tci_to_pcp(vlan_tci));
+    if (!(vlan_tci & htons(VLAN_CFI))) {
+        ds_put_cstr(ds, ",cfi=0");
+    }
+}
+
+static void
 format_odp_action(struct ds *ds, const struct nlattr *a)
 {
     int expected_len;
@@ -230,9 +241,8 @@ format_odp_action(struct ds *ds, const struct nlattr *a)
         if (vlan->vlan_tpid != htons(ETH_TYPE_VLAN)) {
             ds_put_format(ds, "tpid=0x%04"PRIx16",", ntohs(vlan->vlan_tpid));
         }
-        ds_put_format(ds, "vid=%"PRIu16",pcp=%d)",
-                      vlan_tci_to_vid(vlan->vlan_tci),
-                      vlan_tci_to_pcp(vlan->vlan_tci));
+        format_vlan_tci(ds, vlan->vlan_tci);
+        ds_put_char(ds, ')');
         break;
     case OVS_ACTION_ATTR_POP_VLAN:
         ds_put_cstr(ds, "pop_vlan");
@@ -395,9 +405,9 @@ format_odp_key_attr(const struct nlattr *a, struct ds *ds)
         break;
 
     case OVS_KEY_ATTR_VLAN:
-        ds_put_format(ds, "(vid=%"PRIu16",pcp=%d)",
-                      vlan_tci_to_vid(nl_attr_get_be16(a)),
-                      vlan_tci_to_pcp(nl_attr_get_be16(a)));
+        ds_put_char(ds, '(');
+        format_vlan_tci(ds, nl_attr_get_be16(a));
+        ds_put_char(ds, ')');
         break;
 
     case OVS_KEY_ATTR_ETHERTYPE:
@@ -616,13 +626,23 @@ parse_odp_key_attr(const char *s, struct ofpbuf *key)
     {
         uint16_t vid;
         int pcp;
+        int cfi;
         int n = -1;
 
         if ((sscanf(s, "vlan(vid=%"SCNi16",pcp=%i)%n", &vid, &pcp, &n) > 0
              && n > 0)) {
             nl_msg_put_be16(key, OVS_KEY_ATTR_VLAN,
                             htons((vid << VLAN_VID_SHIFT) |
-                                  (pcp << VLAN_PCP_SHIFT)));
+                                  (pcp << VLAN_PCP_SHIFT) |
+                                  VLAN_CFI));
+            return n;
+        } else if ((sscanf(s, "vlan(vid=%"SCNi16",pcp=%i,cfi=%i)%n",
+                           &vid, &pcp, &cfi, &n) > 0
+             && n > 0)) {
+            nl_msg_put_be16(key, OVS_KEY_ATTR_VLAN,
+                            htons((vid << VLAN_VID_SHIFT) |
+                                  (pcp << VLAN_PCP_SHIFT) |
+                                  (cfi ? VLAN_CFI : 0)));
             return n;
         }
     }
@@ -920,11 +940,13 @@ odp_flow_key_from_flow(struct ofpbuf *buf, const struct flow *flow)
     memcpy(eth_key->eth_src, flow->dl_src, ETH_ADDR_LEN);
     memcpy(eth_key->eth_dst, flow->dl_dst, ETH_ADDR_LEN);
 
-    if (flow->vlan_tci != htons(0)) {
+    if (flow->vlan_tci != htons(0) || flow->dl_type == htons(ETH_TYPE_VLAN)) {
         nl_msg_put_be16(buf, OVS_KEY_ATTR_ETHERTYPE, htons(ETH_TYPE_VLAN));
-        nl_msg_put_be16(buf, OVS_KEY_ATTR_VLAN,
-                        flow->vlan_tci & ~htons(VLAN_CFI));
+        nl_msg_put_be16(buf, OVS_KEY_ATTR_VLAN, flow->vlan_tci);
         encap = nl_msg_start_nested(buf, OVS_KEY_ATTR_ENCAP);
+        if (flow->vlan_tci == htons(0)) {
+            goto unencap;
+        }
     } else {
         encap = 0;
     }
@@ -1198,27 +1220,47 @@ odp_flow_key_to_flow(const struct nlattr *key, size_t key_len,
     }
     expected_attrs |= UINT64_C(1) << OVS_KEY_ATTR_ETHERNET;
 
-    if ((present_attrs & ~expected_attrs)
-        == ((UINT64_C(1) << OVS_KEY_ATTR_ETHERTYPE) |
-            (UINT64_C(1) << OVS_KEY_ATTR_VLAN) |
-            (UINT64_C(1) << OVS_KEY_ATTR_ENCAP))
+    if (present_attrs & (UINT64_C(1) << OVS_KEY_ATTR_ETHERTYPE)
         && (nl_attr_get_be16(attrs[OVS_KEY_ATTR_ETHERTYPE])
             == htons(ETH_TYPE_VLAN))) {
-        const struct nlattr *encap = attrs[OVS_KEY_ATTR_ENCAP];
-        const struct nlattr *vlan = attrs[OVS_KEY_ATTR_VLAN];
+        /* The Ethernet type is 0x8100 so there must be a VLAN tag
+         * and encapsulated protocol information. */
+        const struct nlattr *encap;
+        __be16 tci;
+        int error;
 
-        flow->vlan_tci = nl_attr_get_be16(vlan);
-        if (flow->vlan_tci & htons(VLAN_CFI)) {
-            return EINVAL;
-        }
-        flow->vlan_tci |= htons(VLAN_CFI);
-
-        error = parse_flow_nlattrs(nl_attr_get(encap), nl_attr_get_size(encap),
-                                   attrs, &present_attrs);
+        expected_attrs |= ((UINT64_C(1) << OVS_KEY_ATTR_ETHERTYPE) |
+                           (UINT64_C(1) << OVS_KEY_ATTR_VLAN) |
+                           (UINT64_C(1) << OVS_KEY_ATTR_ENCAP));
+        error = check_expectations(present_attrs, expected_attrs,
+                                   key, key_len);
         if (error) {
             return error;
         }
-        expected_attrs = 0;
+
+        encap = attrs[OVS_KEY_ATTR_ENCAP];
+        tci = nl_attr_get_be16(attrs[OVS_KEY_ATTR_VLAN]);
+        if (tci & htons(VLAN_CFI)) {
+            flow->vlan_tci = tci;
+
+            error = parse_flow_nlattrs(nl_attr_get(encap),
+                                       nl_attr_get_size(encap),
+                                       attrs, &present_attrs);
+            if (error) {
+                return error;
+            }
+            expected_attrs = 0;
+        } else if (tci == htons(0)) {
+            /* Corner case for a truncated 802.1Q header. */
+            if (nl_attr_get_size(encap)) {
+                return EINVAL;
+            }
+
+            flow->dl_type = htons(ETH_TYPE_VLAN);
+            return 0;
+        } else {
+            return EINVAL;
+        }
     }
 
     if (present_attrs & (UINT64_C(1) << OVS_KEY_ATTR_ETHERTYPE)) {
