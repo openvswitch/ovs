@@ -203,7 +203,8 @@ OVSDB_CHECK_POSITIVE([evaluating conditions on integers],
       [["i", ">=", 1]],
       [["i", ">", 1]],
       [["i", "includes", 1]],
-      [["i", "excludes", 1]]]' \
+      [["i", "excludes", 1]],
+      [["i", ">", 0], ["i", "<", 2]]]' \
     '[{"i": 0},
       {"i": 1},
       {"i": 2}']]],
@@ -214,7 +215,8 @@ condition  3: T-T
 condition  4: -TT
 condition  5: --T
 condition  6: -T-
-condition  7: T-T], [condition])
+condition  7: T-T
+condition  8: -T-], [condition])
 
 OVSDB_CHECK_POSITIVE([evaluating conditions on reals],
   [[evaluate-conditions \
@@ -226,7 +228,8 @@ OVSDB_CHECK_POSITIVE([evaluating conditions on reals],
       [["r", ">=", 5.0]],
       [["r", ">", 5.0]],
       [["r", "includes", 5.0]],
-      [["r", "excludes", 5.0]]]' \
+      [["r", "excludes", 5.0]],
+      [["r", "!=", 0], ["r", "!=", 5.1]]]' \
     '[{"r": 0},
       {"r": 5.0},
       {"r": 5.1}']]],
@@ -237,7 +240,8 @@ condition  3: T-T
 condition  4: -TT
 condition  5: --T
 condition  6: -T-
-condition  7: T-T], [condition])
+condition  7: T-T
+condition  8: -T-], [condition])
 
 OVSDB_CHECK_POSITIVE([evaluating conditions on booleans],
   [[evaluate-conditions \
@@ -249,7 +253,8 @@ OVSDB_CHECK_POSITIVE([evaluating conditions on booleans],
       [["b", "==", false]],
       [["b", "!=", false]],
       [["b", "includes", false]],
-      [["b", "excludes", false]]]' \
+      [["b", "excludes", false]],
+      [["b", "==", true], ["b", "==", false]]]' \
     '[{"b": true},
       {"b": false}']]],
   [condition  0: T-
@@ -259,7 +264,8 @@ condition  3: -T
 condition  4: -T
 condition  5: T-
 condition  6: -T
-condition  7: T-], [condition])
+condition  7: T-
+condition  8: --], [condition])
 
 OVSDB_CHECK_POSITIVE([evaluating conditions on strings],
   [[evaluate-conditions \
@@ -271,7 +277,8 @@ OVSDB_CHECK_POSITIVE([evaluating conditions on strings],
       [["s", "==", "foo"]],
       [["s", "!=", "foo"]],
       [["s", "includes", "foo"]],
-      [["s", "excludes", "foo"]]]' \
+      [["s", "excludes", "foo"]],
+      [["s", "!=", "foo"], ["s", "!=", ""]]]' \
     '[{"s": ""},
       {"s": "foo"},
       {"s": "xxx"}']]],
@@ -282,7 +289,8 @@ condition  3: -TT
 condition  4: -T-
 condition  5: T-T
 condition  6: -T-
-condition  7: T-T], [condition])
+condition  7: T-T
+condition  8: --T], [condition])
 
 OVSDB_CHECK_POSITIVE([evaluating conditions on UUIDs],
   [[evaluate-conditions \
@@ -294,7 +302,9 @@ OVSDB_CHECK_POSITIVE([evaluating conditions on UUIDs],
       [["u", "==", ["uuid", "06151f9d-62d6-4f59-8504-e9765107faa9"]]],
       [["u", "!=", ["uuid", "06151f9d-62d6-4f59-8504-e9765107faa9"]]],
       [["u", "includes", ["uuid", "06151f9d-62d6-4f59-8504-e9765107faa9"]]],
-      [["u", "excludes", ["uuid", "06151f9d-62d6-4f59-8504-e9765107faa9"]]]]' \
+      [["u", "excludes", ["uuid", "06151f9d-62d6-4f59-8504-e9765107faa9"]]],
+      [["u", "!=", ["uuid", "06151f9d-62d6-4f59-8504-e9765107faa9"]],
+       ["u", "!=", ["uuid", "cb160ed6-92a6-4503-a6aa-a09a09e01f0d"]]]]' \
     '[{"u": ["uuid", "8a1dbdb8-416f-4ce9-affa-3332691714b6"]},
       {"u": ["uuid", "06151f9d-62d6-4f59-8504-e9765107faa9"]},
       {"u": ["uuid", "00000000-0000-0000-0000-000000000000"]}']]],
@@ -305,7 +315,8 @@ condition  3: -TT
 condition  4: -T-
 condition  5: T-T
 condition  6: -T-
-condition  7: T-T], [condition])
+condition  7: T-T
+condition  8: T-T], [condition])
 
 OVSDB_CHECK_POSITIVE([evaluating conditions on sets],
   [[evaluate-conditions \
@@ -341,7 +352,9 @@ OVSDB_CHECK_POSITIVE([evaluating conditions on sets],
       [["i", "excludes", ["set", [2]]]],
       [["i", "excludes", ["set", [2, 0]]]],
       [["i", "excludes", ["set", [2, 1]]]],
-      [["i", "excludes", ["set", [2, 1, 0]]]]]' \
+      [["i", "excludes", ["set", [2, 1, 0]]]],
+      [["i", "includes", ["set", [0]]],
+       ["i", "includes", ["set", [1]]]]]' \
     '[{"i": ["set", []]},
       {"i": ["set", [0]]},
       {"i": ["set", [1]]},
@@ -382,7 +395,8 @@ condition 27: T---T ---
 condition 28: TTTT- ---
 condition 29: T-T-- ---
 condition 30: TT--- ---
-condition 31: T---- ---], [condition])
+condition 31: T---- ---
+condition 32: ---T- --T], [condition])
 
 # This is the same as the "set" test except that it adds values,
 # all of which always match.
@@ -423,7 +437,9 @@ OVSDB_CHECK_POSITIVE([evaluating conditions on maps (1)],
       [["i", "excludes", ["map", [[2, true]]]]],
       [["i", "excludes", ["map", [[2, true], [0, true]]]]],
       [["i", "excludes", ["map", [[2, true], [1, false]]]]],
-      [["i", "excludes", ["map", [[2, true], [1, false], [0, true]]]]]]' \
+      [["i", "excludes", ["map", [[2, true], [1, false], [0, true]]]]],
+      [["i", "includes", ["map", [[0, true]]]],
+       ["i", "includes", ["map", [[1, false]]]]]]' \
     '[{"i": ["map", []]},
       {"i": ["map", [[0, true]]]},
       {"i": ["map", [[1, false]]]},
@@ -464,7 +480,8 @@ condition 27: T---T ---
 condition 28: TTTT- ---
 condition 29: T-T-- ---
 condition 30: TT--- ---
-condition 31: T---- ---], [condition])
+condition 31: T---- ---
+condition 32: ---T- --T], [condition])
 
 # This is the same as the "set" test except that it adds values,
 # and those values don't always match.
@@ -505,7 +522,9 @@ OVSDB_CHECK_POSITIVE([evaluating conditions on maps (2)],
       [["i", "excludes", ["map", [[2, true]]]]],
       [["i", "excludes", ["map", [[2, true], [0, true]]]]],
       [["i", "excludes", ["map", [[2, true], [1, false]]]]],
-      [["i", "excludes", ["map", [[2, true], [1, false], [0, true]]]]]]' \
+      [["i", "excludes", ["map", [[2, true], [1, false], [0, true]]]]],
+      [["i", "includes", ["map", [[0, true]]]],
+       ["i", "includes", ["map", [[1, false]]]]]]' \
     '[{"i": ["map", []]},
       {"i": ["map", [[0, true]]]},
       {"i": ["map", [[0, false]]]},
@@ -555,4 +574,5 @@ condition 27: T-T-T --TT- --T--
 condition 28: TTTTT TT-T- T----
 condition 29: T-TTT ---T- -----
 condition 30: TTT-T -T-T- T----
-condition 31: T-T-T ---T- -----], [condition])
+condition 31: T-T-T ---T- -----
+condition 32: ----- T---- ---T-], [condition])
