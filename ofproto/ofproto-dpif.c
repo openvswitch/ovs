@@ -497,7 +497,7 @@ static int expire(struct ofproto_dpif *);
 static void send_netflow_active_timeouts(struct ofproto_dpif *);
 
 /* Utilities. */
-static int send_packet(struct ofproto_dpif *, uint32_t odp_port,
+static int send_packet(const struct ofport_dpif *,
                        const struct ofpbuf *packet);
 static size_t
 compose_sflow_action(const struct ofproto_dpif *, struct ofpbuf *odp_actions,
@@ -1020,8 +1020,7 @@ send_bpdu_cb(struct ofpbuf *pkt, int port_num, void *ofproto_)
             VLOG_WARN_RL(&rl, "%s: cannot send BPDU on port %d "
                          "with unknown MAC", ofproto->up.name, port_num);
         } else {
-            send_packet(ofproto_dpif_cast(ofport->up.ofproto),
-                        ofport->odp_port, pkt);
+            send_packet(ofport, pkt);
         }
     }
     ofpbuf_delete(pkt);
@@ -1694,8 +1693,7 @@ send_pdu_cb(void *port_, const void *pdu, size_t pdu_size)
                                  pdu_size);
         memcpy(packet_pdu, pdu, pdu_size);
 
-        send_packet(ofproto_dpif_cast(port->up.ofproto), port->odp_port,
-                    &packet);
+        send_packet(port, &packet);
         ofpbuf_uninit(&packet);
     } else {
         VLOG_ERR_RL(&rl, "port %s: cannot obtain Ethernet address of iface "
@@ -1721,8 +1719,7 @@ bundle_send_learning_packets(struct ofbundle *bundle)
             learning_packet = bond_compose_learning_packet(bundle->bond, e->mac,
                                                            e->vlan,
                                                            (void **)&port);
-            ret = send_packet(ofproto_dpif_cast(port->up.ofproto),
-                              port->odp_port, learning_packet);
+            ret = send_packet(port, learning_packet);
             ofpbuf_delete(learning_packet);
             if (ret) {
                 error = ret;
@@ -2045,8 +2042,7 @@ port_run(struct ofport_dpif *ofport)
 
             ofpbuf_init(&packet, 0);
             cfm_compose_ccm(ofport->cfm, &packet, ofport->up.opp.hw_addr);
-            send_packet(ofproto_dpif_cast(ofport->up.ofproto),
-                        ofport->odp_port, &packet);
+            send_packet(ofport, &packet);
             ofpbuf_uninit(&packet);
         }
 
@@ -3682,12 +3678,13 @@ rule_modify_actions(struct rule *rule_)
     complete_operation(rule);
 }
 
-/* Sends 'packet' out of port 'odp_port' within 'ofproto'.
+/* Sends 'packet' out 'ofport'.
  * Returns 0 if successful, otherwise a positive errno value. */
 static int
-send_packet(struct ofproto_dpif *ofproto, uint32_t odp_port,
-            const struct ofpbuf *packet)
+send_packet(const struct ofport_dpif *ofport, const struct ofpbuf *packet)
 {
+    const struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofport->up.ofproto);
+    uint16_t odp_port = ofport->odp_port;
     struct ofpbuf key, odp_actions;
     struct odputil_keybuf keybuf;
     struct flow flow;
