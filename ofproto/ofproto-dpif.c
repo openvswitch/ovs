@@ -236,15 +236,14 @@ static struct ofpbuf *xlate_actions(struct action_xlate_ctx *,
 /* An exact-match instantiation of an OpenFlow flow.
  *
  * A facet associates a "struct flow", which represents the Open vSwitch
- * userspace idea of an exact-match flow, with a set of datapath actions.
- *
- * A facet contains one or more subfacets.  Each subfacet tracks the datapath's
- * idea of the exact-match flow equivalent to the facet.  When the kernel
- * module (or other dpif implementation) and Open vSwitch userspace agree on
- * the definition of a flow key, there is exactly one subfacet per facet.  If
- * the dpif implementation supports more-specific flow matching than userspace,
- * however, a facet can have more than one subfacet, each of which corresponds
- * to some distinction in flow that userspace simply doesn't understand.
+ * userspace idea of an exact-match flow, with one or more subfacets.  Each
+ * subfacet tracks the datapath's idea of the exact-match flow equivalent to
+ * the facet.  When the kernel module (or other dpif implementation) and Open
+ * vSwitch userspace agree on the definition of a flow key, there is exactly
+ * one subfacet per facet.  If the dpif implementation supports more-specific
+ * flow matching than userspace, however, a facet can have more than one
+ * subfacet, each of which corresponds to some distinction in flow that
+ * userspace simply doesn't understand.
  *
  * Flow expiration works in terms of subfacets, so a facet must have at least
  * one subfacet or it will never expire, leaking memory. */
@@ -285,12 +284,15 @@ struct facet {
     uint64_t accounted_bytes;    /* Bytes processed by facet_account(). */
     struct netflow_flow nf_flow; /* Per-flow NetFlow tracking data. */
 
-    /* Datapath actions. */
+    /* Properties of datapath actions.
+     *
+     * Every subfacet has its own actions because actions can differ slightly
+     * between splintered and non-splintered subfacets due to the VLAN tag
+     * being initially different (present vs. absent).  All of them have these
+     * properties in common so we just store one copy of them here. */
     bool may_install;            /* Reassess actions for every packet? */
     bool has_learn;              /* Actions include NXAST_LEARN? */
     bool has_normal;             /* Actions output to OFPP_NORMAL? */
-    size_t actions_len;          /* Number of bytes in actions[]. */
-    struct nlattr *actions;      /* Datapath actions. */
     tag_type tags;               /* Tags that would require revalidation. */
 };
 
@@ -311,8 +313,6 @@ static bool execute_controller_action(struct ofproto_dpif *,
 
 static void facet_flush_stats(struct ofproto_dpif *, struct facet *);
 
-static void facet_make_actions(struct ofproto_dpif *, struct facet *,
-                               const struct ofpbuf *packet);
 static void facet_update_time(struct ofproto_dpif *, struct facet *,
                               long long int used);
 static void facet_reset_counters(struct facet *);
@@ -321,7 +321,7 @@ static void facet_account(struct ofproto_dpif *, struct facet *);
 
 static bool facet_is_controller_flow(struct facet *);
 
-/* A dpif flow associated with a facet.
+/* A dpif flow and actions associated with a facet.
  *
  * See also the large comment on struct facet. */
 struct subfacet {
@@ -344,6 +344,13 @@ struct subfacet {
     uint64_t dp_packet_count;   /* Last known packet count in the datapath. */
     uint64_t dp_byte_count;     /* Last known byte count in the datapath. */
 
+    /* Datapath actions.
+     *
+     * These should be essentially identical for every subfacet in a facet, but
+     * may differ in trivial ways due to VLAN splinters. */
+    size_t actions_len;         /* Number of bytes in actions[]. */
+    struct nlattr *actions;     /* Datapath actions. */
+
     bool installed;             /* Installed in datapath? */
 };
 
@@ -362,6 +369,8 @@ static void subfacet_update_time(struct ofproto_dpif *, struct subfacet *,
                                  long long int used);
 static void subfacet_update_stats(struct ofproto_dpif *, struct subfacet *,
                                   const struct dpif_flow_stats *);
+static void subfacet_make_actions(struct ofproto_dpif *, struct subfacet *,
+                                  const struct ofpbuf *packet);
 static int subfacet_install(struct ofproto_dpif *, struct subfacet *,
                             const struct nlattr *actions, size_t actions_len,
                             struct dpif_flow_stats *);
@@ -2379,12 +2388,12 @@ handle_flow_miss(struct ofproto_dpif *ofproto, struct flow_miss *miss,
             send_packet_in_miss(ofproto, packet, flow, true);
         }
 
-        if (!facet->may_install) {
-            facet_make_actions(ofproto, facet, packet);
+        if (!facet->may_install || !subfacet->actions) {
+            subfacet_make_actions(ofproto, subfacet, packet);
         }
         if (!execute_controller_action(ofproto, &facet->flow,
-                                       facet->actions, facet->actions_len,
-                                       packet)) {
+                                       subfacet->actions,
+                                       subfacet->actions_len, packet)) {
             struct flow_miss_op *op = &ops[(*n_ops)++];
             struct dpif_execute *execute = &op->dpif_op.execute;
 
@@ -2394,9 +2403,9 @@ handle_flow_miss(struct ofproto_dpif *ofproto, struct flow_miss *miss,
             execute->key_len = miss->key_len;
             execute->actions
                 = (facet->may_install
-                   ? facet->actions
-                   : xmemdup(facet->actions, facet->actions_len));
-            execute->actions_len = facet->actions_len;
+                   ? subfacet->actions
+                   : xmemdup(subfacet->actions, subfacet->actions_len));
+            execute->actions_len = subfacet->actions_len;
             execute->packet = packet;
         }
     }
@@ -2410,8 +2419,8 @@ handle_flow_miss(struct ofproto_dpif *ofproto, struct flow_miss *miss,
         put->flags = DPIF_FP_CREATE | DPIF_FP_MODIFY;
         put->key = miss->key;
         put->key_len = miss->key_len;
-        put->actions = facet->actions;
-        put->actions_len = facet->actions_len;
+        put->actions = subfacet->actions;
+        put->actions_len = subfacet->actions_len;
         put->stats = NULL;
     }
 }
@@ -2492,7 +2501,7 @@ handle_miss_upcalls(struct ofproto_dpif *ofproto, struct dpif_upcall *upcalls,
         switch (op->dpif_op.type) {
         case DPIF_OP_EXECUTE:
             execute = &op->dpif_op.execute;
-            if (op->subfacet->facet->actions != execute->actions) {
+            if (op->subfacet->actions != execute->actions) {
                 free((struct nlattr *) execute->actions);
             }
             ofpbuf_delete((struct ofpbuf *) execute->packet);
@@ -2812,9 +2821,6 @@ rule_expire(struct rule_dpif *rule)
  * 'flow' exists in 'ofproto' and that 'flow' is the best match for 'rule' in
  * the ofproto's classifier table.
  *
- * The facet will initially have no ODP actions.  The caller should fix that
- * by calling facet_make_actions().
- *
  * The facet will initially have no subfacets.  The caller should create (at
  * least) one subfacet with subfacet_create(). */
 static struct facet *
@@ -2839,7 +2845,6 @@ facet_create(struct rule_dpif *rule, const struct flow *flow)
 static void
 facet_free(struct facet *facet)
 {
-    free(facet->actions);
     free(facet);
 }
 
@@ -2921,37 +2926,11 @@ facet_remove(struct ofproto_dpif *ofproto, struct facet *facet)
     facet_free(facet);
 }
 
-/* Composes the datapath actions for 'facet' based on its rule's actions. */
-static void
-facet_make_actions(struct ofproto_dpif *p, struct facet *facet,
-                   const struct ofpbuf *packet)
-{
-    const struct rule_dpif *rule = facet->rule;
-    struct ofpbuf *odp_actions;
-    struct action_xlate_ctx ctx;
-
-    action_xlate_ctx_init(&ctx, p, &facet->flow, packet);
-    odp_actions = xlate_actions(&ctx, rule->up.actions, rule->up.n_actions);
-    facet->tags = ctx.tags;
-    facet->may_install = ctx.may_set_up_flow;
-    facet->has_learn = ctx.has_learn;
-    facet->has_normal = ctx.has_normal;
-    facet->nf_flow.output_iface = ctx.nf_output_iface;
-
-    if (facet->actions_len != odp_actions->size
-        || memcmp(facet->actions, odp_actions->data, odp_actions->size)) {
-        free(facet->actions);
-        facet->actions_len = odp_actions->size;
-        facet->actions = xmemdup(odp_actions->data, odp_actions->size);
-    }
-
-    ofpbuf_delete(odp_actions);
-}
-
 static void
 facet_account(struct ofproto_dpif *ofproto, struct facet *facet)
 {
     uint64_t n_bytes;
+    struct subfacet *subfacet;
     const struct nlattr *a;
     unsigned int left;
     ovs_be16 vlan_tci;
@@ -2982,9 +2961,15 @@ facet_account(struct ofproto_dpif *ofproto, struct facet *facet)
      * as a basis.  We also need to track the actual VLAN on which the packet
      * is going to be sent to ensure that it matches the one passed to
      * bond_choose_output_slave().  (Otherwise, we will account to the wrong
-     * hash bucket.) */
+     * hash bucket.)
+     *
+     * We use the actions from an arbitrary subfacet because they should all
+     * be equally valid for our purpose. */
+    subfacet = CONTAINER_OF(list_front(&facet->subfacets),
+                            struct subfacet, list_node);
     vlan_tci = facet->flow.vlan_tci;
-    NL_ATTR_FOR_EACH_UNSAFE (a, left, facet->actions, facet->actions_len) {
+    NL_ATTR_FOR_EACH_UNSAFE (a, left,
+                             subfacet->actions, subfacet->actions_len) {
         const struct ovs_action_push_vlan *vlan;
         struct ofport_dpif *port;
 
@@ -3113,12 +3098,17 @@ facet_lookup_valid(struct ofproto_dpif *ofproto, const struct flow *flow)
 static bool
 facet_revalidate(struct ofproto_dpif *ofproto, struct facet *facet)
 {
+    struct actions {
+        struct nlattr *odp_actions;
+        size_t actions_len;
+    };
+    struct actions *new_actions;
+
     struct action_xlate_ctx ctx;
-    struct ofpbuf *odp_actions;
     struct rule_dpif *new_rule;
     struct subfacet *subfacet;
     bool actions_changed;
-    bool flush_stats;
+    int i;
 
     COVERAGE_INC(facet_revalidate);
 
@@ -3135,19 +3125,25 @@ facet_revalidate(struct ofproto_dpif *ofproto, struct facet *facet)
      * We do not modify any 'facet' state yet, because we might need to, e.g.,
      * emit a NetFlow expiration and, if so, we need to have the old state
      * around to properly compose it. */
-    action_xlate_ctx_init(&ctx, ofproto, &facet->flow, NULL);
-    odp_actions = xlate_actions(&ctx,
-                                new_rule->up.actions, new_rule->up.n_actions);
-    actions_changed = (facet->actions_len != odp_actions->size
-                       || memcmp(facet->actions, odp_actions->data,
-                                 facet->actions_len));
 
     /* If the datapath actions changed or the installability changed,
      * then we need to talk to the datapath. */
-    flush_stats = false;
+    i = 0;
+    new_actions = NULL;
+    memset(&ctx, 0, sizeof ctx);
     LIST_FOR_EACH (subfacet, list_node, &facet->subfacets) {
-        bool should_install = (ctx.may_set_up_flow
-                               && subfacet->key_fitness != ODP_FIT_TOO_LITTLE);
+        struct ofpbuf *odp_actions;
+        bool should_install;
+
+        action_xlate_ctx_init(&ctx, ofproto, &facet->flow, NULL);
+        odp_actions = xlate_actions(&ctx, new_rule->up.actions,
+                                    new_rule->up.n_actions);
+        actions_changed = (subfacet->actions_len != odp_actions->size
+                           || memcmp(subfacet->actions, odp_actions->data,
+                                     subfacet->actions_len));
+
+        should_install = (ctx.may_set_up_flow
+                          && subfacet->key_fitness != ODP_FIT_TOO_LITTLE);
         if (actions_changed || should_install != subfacet->installed) {
             if (should_install) {
                 struct dpif_flow_stats stats;
@@ -3158,10 +3154,20 @@ facet_revalidate(struct ofproto_dpif *ofproto, struct facet *facet)
             } else {
                 subfacet_uninstall(ofproto, subfacet);
             }
-            flush_stats = true;
+
+            if (!new_actions) {
+                new_actions = xcalloc(list_size(&facet->subfacets),
+                                      sizeof *new_actions);
+            }
+            new_actions[i].odp_actions = xmemdup(odp_actions->data,
+                                                 odp_actions->size);
+            new_actions[i].actions_len = odp_actions->size;
         }
+
+        ofpbuf_delete(odp_actions);
+        i++;
     }
-    if (flush_stats) {
+    if (new_actions) {
         facet_flush_stats(ofproto, facet);
     }
 
@@ -3171,10 +3177,17 @@ facet_revalidate(struct ofproto_dpif *ofproto, struct facet *facet)
     facet->may_install = ctx.may_set_up_flow;
     facet->has_learn = ctx.has_learn;
     facet->has_normal = ctx.has_normal;
-    if (actions_changed) {
-        free(facet->actions);
-        facet->actions_len = odp_actions->size;
-        facet->actions = xmemdup(odp_actions->data, odp_actions->size);
+    if (new_actions) {
+        i = 0;
+        LIST_FOR_EACH (subfacet, list_node, &facet->subfacets) {
+            if (new_actions[i].odp_actions) {
+                free(subfacet->actions);
+                subfacet->actions = new_actions[i].odp_actions;
+                subfacet->actions_len = new_actions[i].actions_len;
+            }
+            i++;
+        }
+        free(new_actions);
     }
     if (facet->rule != new_rule) {
         COVERAGE_INC(facet_changed_rule);
@@ -3184,8 +3197,6 @@ facet_revalidate(struct ofproto_dpif *ofproto, struct facet *facet)
         facet->used = new_rule->up.created;
         facet->rs_used = facet->used;
     }
-
-    ofpbuf_delete(odp_actions);
 
     return true;
 }
@@ -3300,7 +3311,11 @@ subfacet_find__(struct ofproto_dpif *ofproto,
 
 /* Searches 'facet' (within 'ofproto') for a subfacet with the specified
  * 'key_fitness', 'key', and 'key_len'.  Returns the existing subfacet if
- * there is one, otherwise creates and returns a new subfacet.  */
+ * there is one, otherwise creates and returns a new subfacet.
+ *
+ * If the returned subfacet is new, then subfacet->actions will be NULL, in
+ * which case the caller must populate the actions with
+ * subfacet_make_actions(). */
 static struct subfacet *
 subfacet_create(struct ofproto_dpif *ofproto, struct facet *facet,
                 enum odp_key_fitness key_fitness,
@@ -3356,6 +3371,7 @@ subfacet_destroy__(struct ofproto_dpif *ofproto, struct subfacet *subfacet)
     hmap_remove(&ofproto->subfacets, &subfacet->hmap_node);
     list_remove(&subfacet->list_node);
     free(subfacet->key);
+    free(subfacet->actions);
     free(subfacet);
 }
 
@@ -3385,6 +3401,34 @@ subfacet_get_key(struct subfacet *subfacet, struct odputil_keybuf *keybuf,
     } else {
         ofpbuf_use_const(key, subfacet->key, subfacet->key_len);
     }
+}
+
+/* Composes the datapath actions for 'subfacet' based on its rule's actions. */
+static void
+subfacet_make_actions(struct ofproto_dpif *p, struct subfacet *subfacet,
+                      const struct ofpbuf *packet)
+{
+    struct facet *facet = subfacet->facet;
+    const struct rule_dpif *rule = facet->rule;
+    struct ofpbuf *odp_actions;
+    struct action_xlate_ctx ctx;
+
+    action_xlate_ctx_init(&ctx, p, &facet->flow, packet);
+    odp_actions = xlate_actions(&ctx, rule->up.actions, rule->up.n_actions);
+    facet->tags = ctx.tags;
+    facet->may_install = ctx.may_set_up_flow;
+    facet->has_learn = ctx.has_learn;
+    facet->has_normal = ctx.has_normal;
+    facet->nf_flow.output_iface = ctx.nf_output_iface;
+
+    if (subfacet->actions_len != odp_actions->size
+        || memcmp(subfacet->actions, odp_actions->data, odp_actions->size)) {
+        free(subfacet->actions);
+        subfacet->actions_len = odp_actions->size;
+        subfacet->actions = xmemdup(odp_actions->data, odp_actions->size);
+    }
+
+    ofpbuf_delete(odp_actions);
 }
 
 /* Updates 'subfacet''s datapath flow, setting its actions to 'actions_len'
@@ -5295,8 +5339,8 @@ send_active_timeout(struct ofproto_dpif *ofproto, struct facet *facet)
             if (subfacet->installed) {
                 struct dpif_flow_stats stats;
 
-                subfacet_install(ofproto, subfacet, facet->actions,
-                                 facet->actions_len, &stats);
+                subfacet_install(ofproto, subfacet, subfacet->actions,
+                                 subfacet->actions_len, &stats);
                 subfacet_update_stats(ofproto, subfacet, &stats);
             }
         }
