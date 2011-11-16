@@ -148,7 +148,7 @@ parse_ipv6(struct ofpbuf *packet, struct flow *flow)
     flow->ipv6_dst = nh->ip6_dst;
 
     tc_flow = get_unaligned_be32(&nh->ip6_flow);
-    flow->nw_tos = ntohl(tc_flow) >> 4;
+    flow->nw_tos = ntohl(tc_flow) >> 20;
     flow->ipv6_label = tc_flow & htonl(IPV6_LABEL_MASK);
     flow->nw_ttl = nh->ip6_hlim;
     flow->nw_proto = IPPROTO_NONE;
