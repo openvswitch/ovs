@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010 Nicira Networks
+/* Copyright (c) 2009, 2010, 2011 Nicira Networks
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -217,6 +217,54 @@ ovsdb_condition_to_json(const struct ovsdb_condition *cnd)
     return json_array_create(clauses, cnd->n_clauses);
 }
 
+static bool
+ovsdb_clause_evaluate(const struct ovsdb_row *row,
+                      const struct ovsdb_clause *c)
+{
+    const struct ovsdb_datum *field = &row->fields[c->column->index];
+    const struct ovsdb_datum *arg = &c->arg;
+    const struct ovsdb_type *type = &c->column->type;
+
+    if (ovsdb_type_is_scalar(type)) {
+        int cmp = ovsdb_atom_compare_3way(&field->keys[0], &arg->keys[0],
+                                          type->key.type);
+        switch (c->function) {
+        case OVSDB_F_LT:
+            return cmp < 0;
+        case OVSDB_F_LE:
+            return cmp <= 0;
+        case OVSDB_F_EQ:
+        case OVSDB_F_INCLUDES:
+            return cmp == 0;
+        case OVSDB_F_NE:
+        case OVSDB_F_EXCLUDES:
+            return cmp != 0;
+        case OVSDB_F_GE:
+            return cmp >= 0;
+        case OVSDB_F_GT:
+            return cmp > 0;
+        }
+    } else {
+        switch (c->function) {
+        case OVSDB_F_EQ:
+            return ovsdb_datum_equals(field, arg, type);
+        case OVSDB_F_NE:
+            return !ovsdb_datum_equals(field, arg, type);
+        case OVSDB_F_INCLUDES:
+            return ovsdb_datum_includes_all(arg, field, type);
+        case OVSDB_F_EXCLUDES:
+            return ovsdb_datum_excludes_all(arg, field, type);
+        case OVSDB_F_LT:
+        case OVSDB_F_LE:
+        case OVSDB_F_GE:
+        case OVSDB_F_GT:
+            NOT_REACHED();
+        }
+    }
+
+    NOT_REACHED();
+}
+
 bool
 ovsdb_condition_evaluate(const struct ovsdb_row *row,
                          const struct ovsdb_condition *cnd)
@@ -224,48 +272,9 @@ ovsdb_condition_evaluate(const struct ovsdb_row *row,
     size_t i;
 
     for (i = 0; i < cnd->n_clauses; i++) {
-        const struct ovsdb_clause *c = &cnd->clauses[i];
-        const struct ovsdb_datum *field = &row->fields[c->column->index];
-        const struct ovsdb_datum *arg = &cnd->clauses[i].arg;
-        const struct ovsdb_type *type = &c->column->type;
-
-        if (ovsdb_type_is_scalar(type)) {
-            int cmp = ovsdb_atom_compare_3way(&field->keys[0], &arg->keys[0],
-                                              type->key.type);
-            switch (c->function) {
-            case OVSDB_F_LT:
-                return cmp < 0;
-            case OVSDB_F_LE:
-                return cmp <= 0;
-            case OVSDB_F_EQ:
-            case OVSDB_F_INCLUDES:
-                return cmp == 0;
-            case OVSDB_F_NE:
-            case OVSDB_F_EXCLUDES:
-                return cmp != 0;
-            case OVSDB_F_GE:
-                return cmp >= 0;
-            case OVSDB_F_GT:
-                return cmp > 0;
-            }
-        } else {
-            switch (c->function) {
-            case OVSDB_F_EQ:
-                return ovsdb_datum_equals(field, arg, type);
-            case OVSDB_F_NE:
-                return !ovsdb_datum_equals(field, arg, type);
-            case OVSDB_F_INCLUDES:
-                return ovsdb_datum_includes_all(arg, field, type);
-            case OVSDB_F_EXCLUDES:
-                return ovsdb_datum_excludes_all(arg, field, type);
-            case OVSDB_F_LT:
-            case OVSDB_F_LE:
-            case OVSDB_F_GE:
-            case OVSDB_F_GT:
-                NOT_REACHED();
-            }
+        if (!ovsdb_clause_evaluate(row, &cnd->clauses[i])) {
+            return false;
         }
-        NOT_REACHED();
     }
 
     return true;
