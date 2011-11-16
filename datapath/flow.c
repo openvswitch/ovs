@@ -846,8 +846,8 @@ void flow_tbl_remove(struct flow_table *table, struct sw_flow *flow)
 }
 
 /* The size of the argument for each %OVS_KEY_ATTR_* Netlink attribute.  */
-const u32 ovs_key_lens[OVS_KEY_ATTR_MAX + 1] = {
-	[OVS_KEY_ATTR_ENCAP] = 0,
+const int ovs_key_lens[OVS_KEY_ATTR_MAX + 1] = {
+	[OVS_KEY_ATTR_ENCAP] = -1,
 	[OVS_KEY_ATTR_PRIORITY] = sizeof(u32),
 	[OVS_KEY_ATTR_IN_PORT] = sizeof(u32),
 	[OVS_KEY_ATTR_ETHERNET] = sizeof(struct ovs_key_ethernet),
@@ -982,10 +982,15 @@ static int parse_flow_nlattrs(const struct nlattr *attr,
 	attrs = 0;
 	nla_for_each_nested(nla, attr, rem) {
 		u16 type = nla_type(nla);
+		int expected_len;
 
-		if (type > OVS_KEY_ATTR_MAX || attrs & (1ULL << type) ||
-		    nla_len(nla) != ovs_key_lens[type])
+		if (type > OVS_KEY_ATTR_MAX || attrs & (1ULL << type))
 			return -EINVAL;
+
+		expected_len = ovs_key_lens[type];
+		if (nla_len(nla) != expected_len && expected_len != -1)
+			return -EINVAL;
+
 		attrs |= 1ULL << type;
 		a[type] = nla;
 	}
@@ -1187,7 +1192,7 @@ int flow_metadata_from_nlattrs(u32 *priority, u16 *in_port, __be64 *tun_id,
 	nla_for_each_nested(nla, attr, rem) {
 		int type = nla_type(nla);
 
-		if (type <= OVS_KEY_ATTR_MAX && ovs_key_lens[type] != 0) {
+		if (type <= OVS_KEY_ATTR_MAX && ovs_key_lens[type] > 0) {
 			if (nla_len(nla) != ovs_key_lens[type])
 				return -EINVAL;
 
