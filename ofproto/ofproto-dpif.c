@@ -1682,7 +1682,7 @@ mirror_update_dups(struct ofproto_dpif *ofproto)
         for (j = i + 1; j < MAX_MIRRORS; j++) {
             struct ofmirror *m2 = ofproto->mirrors[j];
 
-            if (m1->out == m2->out && m1->out_vlan == m2->out_vlan) {
+            if (m2 && m1->out == m2->out && m1->out_vlan == m2->out_vlan) {
                 m1->dup_mirrors |= MIRROR_MASK_C(1) << j;
                 m2->dup_mirrors |= m1->dup_mirrors;
             }
