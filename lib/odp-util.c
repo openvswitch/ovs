@@ -86,7 +86,6 @@ ovs_key_attr_to_string(enum ovs_key_attr attr)
     case OVS_KEY_ATTR_UNSPEC: return "unspec";
     case OVS_KEY_ATTR_ENCAP: return "encap";
     case OVS_KEY_ATTR_PRIORITY: return "priority";
-    case OVS_KEY_ATTR_TUN_ID: return "tun_id";
     case OVS_KEY_ATTR_IN_PORT: return "in_port";
     case OVS_KEY_ATTR_ETHERNET: return "eth";
     case OVS_KEY_ATTR_VLAN: return "vlan";
@@ -99,6 +98,7 @@ ovs_key_attr_to_string(enum ovs_key_attr attr)
     case OVS_KEY_ATTR_ICMPV6: return "icmpv6";
     case OVS_KEY_ATTR_ARP: return "arp";
     case OVS_KEY_ATTR_ND: return "nd";
+    case OVS_KEY_ATTR_TUN_ID: return "tun_id";
 
     case __OVS_KEY_ATTR_MAX:
     default:
