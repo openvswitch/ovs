@@ -95,7 +95,7 @@ static int queue_userspace_packet(int dp_ifindex, struct sk_buff *,
 				  const struct dp_upcall_info *);
 
 /* Must be called with rcu_read_lock, genl_mutex, or RTNL lock. */
-struct datapath *get_dp(int dp_ifindex)
+static struct datapath *get_dp(int dp_ifindex)
 {
 	struct datapath *dp = NULL;
 	struct net_device *dev;
@@ -111,7 +111,6 @@ struct datapath *get_dp(int dp_ifindex)
 
 	return dp;
 }
-EXPORT_SYMBOL_GPL(get_dp);
 
 /* Must be called with genl_mutex. */
 static struct flow_table *get_table_protected(struct datapath *dp)

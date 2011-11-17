@@ -140,7 +140,6 @@ void dp_detach_port(struct vport *);
 int dp_upcall(struct datapath *, struct sk_buff *,
 	      const struct dp_upcall_info *);
 
-struct datapath *get_dp(int dp_idx);
 const char *dp_name(const struct datapath *dp);
 struct sk_buff *ovs_vport_cmd_build_info(struct vport *, u32 pid, u32 seq,
 					 u8 cmd);
