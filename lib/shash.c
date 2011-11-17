@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010 Nicira Networks.
+ * Copyright (c) 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,7 +20,8 @@
 #include "hash.h"
 
 static struct shash_node *shash_find__(const struct shash *,
-                                       const char *name, size_t hash);
+                                       const char *name, size_t name_len,
+                                       size_t hash);
 
 static size_t
 hash_name(const char *name)
@@ -156,7 +157,7 @@ shash_replace(struct shash *sh, const char *name, const void *data)
     size_t hash = hash_name(name);
     struct shash_node *node;
 
-    node = shash_find__(sh, name, hash);
+    node = shash_find__(sh, name, strlen(name), hash);
     if (!node) {
         shash_add_nocopy__(sh, xstrdup(name), data, hash);
         return NULL;
@@ -189,12 +190,13 @@ shash_steal(struct shash *sh, struct shash_node *node)
 }
 
 static struct shash_node *
-shash_find__(const struct shash *sh, const char *name, size_t hash)
+shash_find__(const struct shash *sh, const char *name, size_t name_len,
+             size_t hash)
 {
     struct shash_node *node;
 
     HMAP_FOR_EACH_WITH_HASH (node, node, hash, &sh->map) {
-        if (!strcmp(node->name, name)) {
+        if (!strncmp(node->name, name, name_len) && !node->name[name_len]) {
             return node;
         }
     }
@@ -205,7 +207,15 @@ shash_find__(const struct shash *sh, const char *name, size_t hash)
 struct shash_node *
 shash_find(const struct shash *sh, const char *name)
 {
-    return shash_find__(sh, name, hash_name(name));
+    return shash_find__(sh, name, strlen(name), hash_name(name));
+}
+
+/* Finds and returns a shash_node within 'sh' that has the given 'name' that is
+ * exactly 'len' bytes long.  Returns NULL if no node in 'sh' has that name. */
+struct shash_node *
+shash_find_len(const struct shash *sh, const char *name, size_t len)
+{
+    return shash_find__(sh, name, len, hash_bytes(name, len, 0));
 }
 
 void *
@@ -326,7 +336,8 @@ smap_equal(const struct shash *a, const struct shash *b)
 
     SHASH_FOR_EACH (a_node, a) {
         uint32_t hash = a_node->node.hash;
-        struct shash_node *b_node = shash_find__(b, a_node->name, hash);
+        size_t len = strlen(a_node->name);
+        struct shash_node *b_node = shash_find__(b, a_node->name, len, hash);
         if (!b_node || strcmp(a_node->data, b_node->data)) {
             return false;
         }

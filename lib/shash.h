@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010 Nicira Networks.
+ * Copyright (c) 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -58,6 +58,7 @@ void *shash_replace(struct shash *, const char *, const void *data);
 void shash_delete(struct shash *, struct shash_node *);
 char *shash_steal(struct shash *, struct shash_node *);
 struct shash_node *shash_find(const struct shash *, const char *);
+struct shash_node *shash_find_len(const struct shash *, const char *, size_t);
 void *shash_find_data(const struct shash *, const char *);
 void *shash_find_and_delete(struct shash *, const char *);
 void *shash_find_and_delete_assert(struct shash *, const char *);
