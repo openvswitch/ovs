@@ -848,7 +848,8 @@ do_normalize_actions(int argc, char *argv[])
         int n = -1;
 
         if (sscanf(argv[i], "%15[^=]=%d%n", name, &number, &n) > 0 && n > 0) {
-            shash_add(&port_names, name, (void *) number);
+            uintptr_t n = number;
+            shash_add(&port_names, name, (void *) n);
         } else {
             ovs_fatal(0, "%s: expected NAME=NUMBER", argv[i]);
         }
