@@ -437,17 +437,28 @@ static int queue_userspace_packet(int dp_ifindex, struct sk_buff *skb,
 				  const struct dp_upcall_info *upcall_info)
 {
 	struct ovs_header *upcall;
+	struct sk_buff *nskb = NULL;
 	struct sk_buff *user_skb; /* to be queued to userspace */
 	struct nlattr *nla;
 	unsigned int len;
 	int err;
 
-	err = vlan_deaccel_tag(skb);
-	if (unlikely(err))
-		return err;
+	if (vlan_tx_tag_present(skb)) {
+		nskb = skb_clone(skb, GFP_ATOMIC);
+		if (!nskb)
+			return -ENOMEM;
+		
+		err = vlan_deaccel_tag(nskb);
+		if (err)
+			return err;
 
-	if (nla_attr_size(skb->len) > USHRT_MAX)
-		return -EFBIG;
+		skb = nskb;
+	}
+
+	if (nla_attr_size(skb->len) > USHRT_MAX) {
+		err = -EFBIG;
+		goto out;
+	}
 
 	len = sizeof(struct ovs_header);
 	len += nla_total_size(skb->len);
@@ -456,8 +467,10 @@ static int queue_userspace_packet(int dp_ifindex, struct sk_buff *skb,
 		len += nla_total_size(8);
 
 	user_skb = genlmsg_new(len, GFP_ATOMIC);
-	if (!user_skb)
-		return -ENOMEM;
+	if (!user_skb) {
+		err = -ENOMEM;
+		goto out;
+	}
 
 	upcall = genlmsg_put(user_skb, 0, 0, &dp_packet_genl_family,
 			     0, upcall_info->cmd);
@@ -475,7 +488,11 @@ static int queue_userspace_packet(int dp_ifindex, struct sk_buff *skb,
 
 	skb_copy_and_csum_dev(skb, nla_data(nla));
 
-	return genlmsg_unicast(&init_net, user_skb, upcall_info->pid);
+	err = genlmsg_unicast(&init_net, user_skb, upcall_info->pid);
+
+out:
+	kfree_skb(nskb);
+	return err;
 }
 
 /* Called with genl_mutex. */
