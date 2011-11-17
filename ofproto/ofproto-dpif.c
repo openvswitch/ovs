@@ -4617,14 +4617,12 @@ output_mirrors(struct action_xlate_ctx *ctx,
 {
     struct ofproto_dpif *ofproto = ctx->ofproto;
     mirror_mask_t mirrors;
-    uint16_t flow_vid;
 
     mirrors = in_bundle->src_mirrors | dst_mirrors;
     if (!mirrors) {
         return;
     }
 
-    flow_vid = vlan_tci_to_vid(ctx->flow.vlan_tci);
     while (mirrors) {
         struct ofmirror *m;
 
