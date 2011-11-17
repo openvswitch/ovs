@@ -220,8 +220,10 @@ do
   AT_CHECK([ovs-appctl ofproto/trace br0 "$flow"], [0], [stdout])
   actual=`tail -1 stdout | sed 's/Datapath actions: //'`
 
-  AT_CHECK([echo "in_port=$in_port vlan=$vlan"
-            $PERL $srcdir/compare-odp-actions.pl "$expected" "$actual" br0=$br0 p1=$p1 p2=$p2 p3=$p3 p4=$p4 p5=$p5 p6=$p6 p7=$p7 p8=$p8], [0], [ignore])
+  echo "in_port=$in_port vlan=$vlan"
+  AT_CHECK([ovs-dpctl normalize-actions "$flow" "$expected" br0=$br0 p1=$p1 p2=$p2 p3=$p3 p4=$p4 p5=$p5 p6=$p6 p7=$p7 p8=$p8], [0], [stdout])
+  mv stdout expout
+  AT_CHECK([ovs-dpctl normalize-actions "$flow" "$actual" br0=$br0 p1=$p1 p2=$p2 p3=$p3 p4=$p4 p5=$p5 p6=$p6 p7=$p7 p8=$p8], [0], [expout])
 done
 
 OVS_VSWITCHD_STOP

@@ -58,7 +58,6 @@ TESTSUITE_AT = \
 	tests/vlog.at
 TESTSUITE = $(srcdir)/tests/testsuite
 DISTCLEANFILES += tests/atconfig tests/atlocal
-EXTRA_DIST += tests/compare-odp-actions.pl
 
 AUTOTEST_PATH = utilities:vswitchd:ovsdb:tests
 

@@ -16,6 +16,7 @@
 
 #include <config.h>
 #include <arpa/inet.h>
+#include <assert.h>
 #include <errno.h>
 #include <getopt.h>
 #include <inttypes.h>
@@ -35,9 +36,12 @@
 #include "dirs.h"
 #include "dpif.h"
 #include "dynamic-string.h"
+#include "flow.h"
 #include "netdev.h"
+#include "netlink.h"
 #include "odp-util.h"
 #include "ofpbuf.h"
+#include "packets.h"
 #include "shash.h"
 #include "sset.h"
 #include "timeval.h"
@@ -48,6 +52,12 @@ VLOG_DEFINE_THIS_MODULE(dpctl);
 
 /* -s, --statistics: Print port statistics? */
 static bool print_statistics;
+
+/* -m, --more: Output verbosity.
+ *
+ * So far only undocumented commands honor this option, so we don't document
+ * the option itself. */
+static int verbosity;
 
 static const struct command all_commands[];
 
@@ -73,6 +83,7 @@ parse_options(int argc, char *argv[])
     };
     static struct option long_options[] = {
         {"statistics", no_argument, NULL, 's'},
+        {"more", no_argument, NULL, 'm'},
         {"timeout", required_argument, NULL, 't'},
         {"help", no_argument, NULL, 'h'},
         {"version", no_argument, NULL, 'V'},
@@ -93,6 +104,10 @@ parse_options(int argc, char *argv[])
         switch (c) {
         case 's':
             print_statistics = true;
+            break;
+
+        case 'm':
+            verbosity++;
             break;
 
         case 't':
@@ -718,6 +733,201 @@ do_parse_actions(int argc, char *argv[])
     }
 }
 
+struct actions_for_flow {
+    struct hmap_node hmap_node;
+    struct flow flow;
+    struct ofpbuf actions;
+};
+
+static struct actions_for_flow *
+get_actions_for_flow(struct hmap *actions_per_flow, const struct flow *flow)
+{
+    uint32_t hash = flow_hash(flow, 0);
+    struct actions_for_flow *af;
+
+    HMAP_FOR_EACH_WITH_HASH (af, hmap_node, hash, actions_per_flow) {
+        if (flow_equal(&af->flow, flow)) {
+            return af;
+        }
+    }
+
+    af = xmalloc(sizeof *af);
+    af->flow = *flow;
+    ofpbuf_init(&af->actions, 0);
+    hmap_insert(actions_per_flow, &af->hmap_node, hash);
+    return af;
+}
+
+static int
+compare_actions_for_flow(const void *a_, const void *b_)
+{
+    struct actions_for_flow *const *a = a_;
+    struct actions_for_flow *const *b = b_;
+
+    return flow_compare_3way(&(*a)->flow, &(*b)->flow);
+}
+
+static int
+compare_output_actions(const void *a_, const void *b_)
+{
+    const struct nlattr *a = a_;
+    const struct nlattr *b = b_;
+    uint32_t a_port = nl_attr_get_u32(a);
+    uint32_t b_port = nl_attr_get_u32(b);
+
+    return a_port < b_port ? -1 : a_port > b_port;
+}
+
+static void
+sort_output_actions__(struct nlattr *first, struct nlattr *end)
+{
+    size_t bytes = (uint8_t *) end - (uint8_t *) first;
+    size_t n = bytes / NL_A_U32_SIZE;
+
+    assert(bytes % NL_A_U32_SIZE == 0);
+    qsort(first, n, NL_A_U32_SIZE, compare_output_actions);
+}
+
+static void
+sort_output_actions(struct nlattr *actions, size_t length)
+{
+    struct nlattr *first_output = NULL;
+    struct nlattr *a;
+    int left;
+
+    NL_ATTR_FOR_EACH (a, left, actions, length) {
+        if (nl_attr_type(a) == OVS_ACTION_ATTR_OUTPUT) {
+            if (!first_output) {
+                first_output = a;
+            }
+        } else {
+            if (first_output) {
+                sort_output_actions__(first_output, a);
+                first_output = NULL;
+            }
+        }
+    }
+    if (first_output) {
+        uint8_t *end = (uint8_t *) actions + length;
+        sort_output_actions__(first_output, (struct nlattr *) end);
+    }
+}
+
+/* usage: "ovs-dpctl normalize-actions FLOW ACTIONS" where FLOW and ACTIONS
+ * have the syntax used by "ovs-dpctl dump-flows".
+ *
+ * This command prints ACTIONS in a format that shows what happens for each
+ * VLAN, independent of the order of the ACTIONS.  For example, there is more
+ * than one way to output a packet on VLANs 9 and 11, but this command will
+ * print the same output for any form.
+ *
+ * The idea here generalizes beyond VLANs (e.g. to setting other fields) but
+ * so far the implementation only covers VLANs. */
+static void
+do_normalize_actions(int argc, char *argv[])
+{
+    struct shash port_names;
+    struct ofpbuf keybuf;
+    struct flow flow;
+    struct ofpbuf odp_actions;
+    struct hmap actions_per_flow;
+    struct actions_for_flow **afs;
+    struct actions_for_flow *af;
+    struct nlattr *a;
+    size_t n_afs;
+    struct ds s;
+    int left;
+    int i;
+
+    ds_init(&s);
+
+    shash_init(&port_names);
+    for (i = 3; i < argc; i++) {
+        char name[16];
+        int number;
+        int n = -1;
+
+        if (sscanf(argv[i], "%15[^=]=%d%n", name, &number, &n) > 0 && n > 0) {
+            shash_add(&port_names, name, (void *) number);
+        } else {
+            ovs_fatal(0, "%s: expected NAME=NUMBER", argv[i]);
+        }
+    }
+
+    /* Parse flow key. */
+    ofpbuf_init(&keybuf, 0);
+    run(odp_flow_key_from_string(argv[1], &port_names, &keybuf),
+        "odp_flow_key_from_string");
+
+    ds_clear(&s);
+    odp_flow_key_format(keybuf.data, keybuf.size, &s);
+    printf("input flow: %s\n", ds_cstr(&s));
+
+    run(odp_flow_key_to_flow(keybuf.data, keybuf.size, &flow),
+        "odp_flow_key_to_flow");
+    ofpbuf_uninit(&keybuf);
+
+    /* Parse actions. */
+    ofpbuf_init(&odp_actions, 0);
+    run(odp_actions_from_string(argv[2], &port_names, &odp_actions),
+        "odp_actions_from_string");
+
+    if (verbosity) {
+        ds_clear(&s);
+        format_odp_actions(&s, odp_actions.data, odp_actions.size);
+        printf("input actions: %s\n", ds_cstr(&s));
+    }
+
+    hmap_init(&actions_per_flow);
+    NL_ATTR_FOR_EACH (a, left, odp_actions.data, odp_actions.size) {
+        if (nl_attr_type(a) == OVS_ACTION_ATTR_POP_VLAN) {
+            flow.vlan_tci = htons(0);
+            continue;
+        }
+
+        if (nl_attr_type(a) == OVS_ACTION_ATTR_PUSH_VLAN) {
+            const struct ovs_action_push_vlan *push;
+
+            push = nl_attr_get_unspec(a, sizeof *push);
+            flow.vlan_tci = push->vlan_tci;
+            continue;
+        }
+
+        af = get_actions_for_flow(&actions_per_flow, &flow);
+        nl_msg_put_unspec(&af->actions, nl_attr_type(a),
+                          nl_attr_get(a), nl_attr_get_size(a));
+    }
+
+    n_afs = hmap_count(&actions_per_flow);
+    afs = xmalloc(n_afs * sizeof *afs);
+    i = 0;
+    HMAP_FOR_EACH (af, hmap_node, &actions_per_flow) {
+        afs[i++] = af;
+    }
+    assert(i == n_afs);
+
+    qsort(afs, n_afs, sizeof *afs, compare_actions_for_flow);
+
+    for (i = 0; i < n_afs; i++) {
+        const struct actions_for_flow *af = afs[i];
+
+        sort_output_actions(af->actions.data, af->actions.size);
+
+        if (af->flow.vlan_tci != htons(0)) {
+            printf("vlan(vid=%"PRIu16",pcp=%d): ",
+                   vlan_tci_to_vid(af->flow.vlan_tci),
+                   vlan_tci_to_pcp(af->flow.vlan_tci));
+        } else {
+            printf("no vlan: ");
+        }
+
+        ds_clear(&s);
+        format_odp_actions(&s, af->actions.data, af->actions.size);
+        puts(ds_cstr(&s));
+    }
+    ds_destroy(&s);
+}
+
 static const struct command all_commands[] = {
     { "add-dp", 1, INT_MAX, do_add_dp },
     { "del-dp", 1, 1, do_del_dp },
@@ -732,6 +942,7 @@ static const struct command all_commands[] = {
 
     /* Undocumented commands for testing. */
     { "parse-actions", 1, INT_MAX, do_parse_actions },
+    { "normalize-actions", 2, INT_MAX, do_normalize_actions },
 
     { NULL, 0, 0, NULL },
 };

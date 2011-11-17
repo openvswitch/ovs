@@ -116,21 +116,6 @@ ovs_key_attr_to_string(enum ovs_key_attr attr)
     }
 }
 
-static enum ovs_key_attr
-ovs_key_attr_from_string(const char *s, size_t len)
-{
-    enum ovs_key_attr attr;
-
-    for (attr = 0; attr <= OVS_KEY_ATTR_MAX; attr++) {
-        const char *attr_name = ovs_key_attr_to_string(attr);
-        if (strlen(attr_name) == len && !memcmp(s, attr_name, len)) {
-            return attr;
-        }
-    }
-
-    return OVS_KEY_ATTR_UNSPEC;
-}
-
 static void
 format_generic_odp_action(struct ds *ds, const struct nlattr *a)
 {
@@ -409,33 +394,35 @@ parse_odp_action(const char *s, const struct shash *port_names,
         return retval + 5;
     }
 
-    if (!strncmp(s, "push(", 5)) {
-        size_t start_ofs;
-        int retval;
+    {
+        struct ovs_action_push_vlan push;
+        int tpid = ETH_TYPE_VLAN;
+        int vid, pcp;
+        int cfi = 1;
+        int n = -1;
 
-        start_ofs = nl_msg_start_nested(actions, OVS_ACTION_ATTR_PUSH);
-        retval = parse_odp_key_attr(s + 5, port_names, actions);
-        if (retval < 0) {
-            return retval;
+        if ((sscanf(s, "push_vlan(vid=%i,pcp=%i)%n", &vid, &pcp, &n) > 0
+             && n > 0)
+            || (sscanf(s, "push_vlan(vid=%i,pcp=%i,cfi=%i)%n",
+                       &vid, &pcp, &cfi, &n) > 0 && n > 0)
+            || (sscanf(s, "push_vlan(tpid=%i,vid=%i,pcp=%i)%n",
+                       &tpid, &vid, &pcp, &n) > 0 && n > 0)
+            || (sscanf(s, "push_vlan(tpid=%i,vid=%i,pcp=%i,cfi=%i)%n",
+                       &tpid, &vid, &pcp, &cfi, &n) > 0 && n > 0)) {
+            push.vlan_tpid = htons(tpid);
+            push.vlan_tci = htons((vid << VLAN_VID_SHIFT)
+                                  | (pcp << VLAN_PCP_SHIFT)
+                                  | (cfi ? VLAN_CFI : 0));
+            nl_msg_put_unspec(actions, OVS_ACTION_ATTR_PUSH_VLAN,
+                              &push, sizeof push);
+
+            return n;
         }
-        if (s[retval + 5] != ')') {
-            return -EINVAL;
-        }
-        nl_msg_end_nested(actions, start_ofs);
-        return retval + 6;
     }
 
-    if (!strncmp(s, "pop(", 4)) {
-        enum ovs_key_attr key;
-        size_t len;
-
-        len = strcspn(s + 4, ")");
-        key = ovs_key_attr_from_string(s + 4, len);
-        if (key == OVS_KEY_ATTR_UNSPEC || s[4 + len] != ')') {
-            return -EINVAL;
-        }
-        nl_msg_put_u16(actions, OVS_ACTION_ATTR_POP, key);
-        return len + 5;
+    if (!strncmp(s, "pop_vlan", 8)) {
+        nl_msg_put_flag(actions, OVS_ACTION_ATTR_POP_VLAN);
+        return 8;
     }
 
     {
@@ -1107,7 +1094,7 @@ parse_odp_key_attr(const char *s, const struct shash *port_names,
                 break;
             }
 
-            retval = parse_odp_key_attr(s, key);
+            retval = parse_odp_key_attr(s, port_names, key);
             if (retval < 0) {
                 return retval;
             }
