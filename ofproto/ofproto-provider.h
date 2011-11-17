@@ -965,6 +965,17 @@ struct ofproto_class {
     int (*get_stp_port_status)(struct ofport *ofport,
                                struct ofproto_port_stp_status *s);
 
+    /* Registers meta-data associated with the 'n_qdscp' Qualities of Service
+     * 'queues' attached to 'ofport'.  This data is not intended to be
+     * sufficient to implement QoS.  Instead, providers may use this
+     * information to implement features which require knowledge of what queues
+     * exist on a port, and some basic information about them.
+     *
+     * EOPNOTSUPP as a return value indicates that this ofproto_class does not
+     * support QoS, as does a null pointer. */
+    int (*set_queues)(struct ofport *ofport,
+                      const struct ofproto_port_queue *queues, size_t n_qdscp);
+
     /* If 's' is nonnull, this function registers a "bundle" associated with
      * client data pointer 'aux' in 'ofproto'.  A bundle is the same concept as
      * a Port in OVSDB, that is, it consists of one or more "slave" devices

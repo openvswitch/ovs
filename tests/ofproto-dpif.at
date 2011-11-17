@@ -62,6 +62,33 @@ AT_CHECK([tail -1 stdout], [0],
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([ofproto-dpif - DSCP])
+dnl This test assumes port p1 is allocated OpenFlow port number 1.
+OVS_VSWITCHD_START([add-port br0 p1 -- set Interface p1 type=dummy])
+AT_DATA([flows.txt], [dnl
+actions=output:65534,enqueue:1:1,enqueue:1:2,enqueue:1:2,enqueue:1:1,output:1,mod_nw_tos:0,output:1,output:65534
+])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+AT_CHECK([ovs-vsctl -- \
+        set Port p1 qos=@newqos --\
+        --id=@newqos create QoS type=linux-htb queues=1=@q1,2=@q2 --\
+        --id=@q1 create Queue dscp=1 --\
+        --id=@q2 create Queue dscp=2], [0], [ignore])
+AT_CHECK([ovs-appctl ofproto/trace br0 'in_port(9),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=1.1.1.1,dst=2.2.2.2,proto=1,tos=0xff,ttl=128,frag=no),icmp(type=8,code=0)'], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0],
+  [Datapath actions: dnl
+0,dnl
+set(ipv4(src=1.1.1.1,dst=2.2.2.2,proto=1,tos=0x7,ttl=128,frag=no)),set(priority(1)),1,dnl
+set(ipv4(src=1.1.1.1,dst=2.2.2.2,proto=1,tos=0xb,ttl=128,frag=no)),set(priority(2)),1,dnl
+1,dnl
+set(ipv4(src=1.1.1.1,dst=2.2.2.2,proto=1,tos=0x7,ttl=128,frag=no)),set(priority(1)),1,dnl
+set(ipv4(src=1.1.1.1,dst=2.2.2.2,proto=1,tos=0xff,ttl=128,frag=no)),set(priority(0)),1,dnl
+set(ipv4(src=1.1.1.1,dst=2.2.2.2,proto=1,tos=0x3,ttl=128,frag=no)),1,dnl
+0
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([ofproto-dpif - output/flood flags])
 dnl This test assumes that OpenFlow port numbers are allocated in order
 dnl starting from one.  It does not necessarily require that they are allocated

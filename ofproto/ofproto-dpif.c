@@ -325,6 +325,18 @@ struct ofport_dpif {
     struct stp_port *stp_port;  /* Spanning Tree Protocol, if any. */
     enum stp_state stp_state;   /* Always STP_DISABLED if STP not in use. */
     long long int stp_state_entered;
+
+    struct hmap priorities;     /* Map of attached 'priority_to_dscp's. */
+};
+
+/* Node in 'ofport_dpif''s 'priorities' map.  Used to maintain a map from
+ * 'priority' (the datapath's term for QoS queue) to the dscp bits which all
+ * traffic egressing the 'ofport' with that priority should be marked with. */
+struct priority_to_dscp {
+    struct hmap_node hmap_node; /* Node in 'ofport_dpif''s 'priorities' map. */
+    uint32_t priority;          /* Priority of this queue (see struct flow). */
+
+    uint8_t dscp;               /* DSCP bits to mark outgoing traffic with. */
 };
 
 static struct ofport_dpif *
@@ -337,6 +349,7 @@ ofport_dpif_cast(const struct ofport *ofport)
 static void port_run(struct ofport_dpif *);
 static void port_wait(struct ofport_dpif *);
 static int set_cfm(struct ofport *, const struct cfm_settings *);
+static void ofport_clear_priorities(struct ofport_dpif *);
 
 struct dpif_completion {
     struct list list_node;
@@ -800,6 +813,7 @@ port_construct(struct ofport *port_)
     port->may_enable = true;
     port->stp_port = NULL;
     port->stp_state = STP_DISABLED;
+    hmap_init(&port->priorities);
 
     if (ofproto->sflow) {
         dpif_sflow_add_port(ofproto->sflow, port->odp_port,
@@ -821,6 +835,9 @@ port_destruct(struct ofport *port_)
     if (ofproto->sflow) {
         dpif_sflow_del_port(ofproto->sflow, port->odp_port);
     }
+
+    ofport_clear_priorities(port);
+    hmap_destroy(&port->priorities);
 }
 
 static void
@@ -1170,6 +1187,82 @@ stp_process_packet(const struct ofport_dpif *ofport,
     if (ofpbuf_try_pull(&payload, ETH_HEADER_LEN + LLC_HEADER_LEN)) {
         stp_received_bpdu(sp, payload.data, payload.size);
     }
+}
+
+static struct priority_to_dscp *
+get_priority(const struct ofport_dpif *ofport, uint32_t priority)
+{
+    struct priority_to_dscp *pdscp;
+    uint32_t hash;
+
+    hash = hash_int(priority, 0);
+    HMAP_FOR_EACH_IN_BUCKET (pdscp, hmap_node, hash, &ofport->priorities) {
+        if (pdscp->priority == priority) {
+            return pdscp;
+        }
+    }
+    return NULL;
+}
+
+static void
+ofport_clear_priorities(struct ofport_dpif *ofport)
+{
+    struct priority_to_dscp *pdscp, *next;
+
+    HMAP_FOR_EACH_SAFE (pdscp, next, hmap_node, &ofport->priorities) {
+        hmap_remove(&ofport->priorities, &pdscp->hmap_node);
+        free(pdscp);
+    }
+}
+
+static int
+set_queues(struct ofport *ofport_,
+           const struct ofproto_port_queue *qdscp_list,
+           size_t n_qdscp)
+{
+    struct ofport_dpif *ofport = ofport_dpif_cast(ofport_);
+    struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofport->up.ofproto);
+    struct hmap new = HMAP_INITIALIZER(&new);
+    size_t i;
+
+    for (i = 0; i < n_qdscp; i++) {
+        struct priority_to_dscp *pdscp;
+        uint32_t priority;
+        uint8_t dscp;
+
+        dscp = (qdscp_list[i].dscp << 2) & IP_DSCP_MASK;
+        if (dpif_queue_to_priority(ofproto->dpif, qdscp_list[i].queue,
+                                   &priority)) {
+            continue;
+        }
+
+        pdscp = get_priority(ofport, priority);
+        if (pdscp) {
+            hmap_remove(&ofport->priorities, &pdscp->hmap_node);
+        } else {
+            pdscp = xmalloc(sizeof *pdscp);
+            pdscp->priority = priority;
+            pdscp->dscp = dscp;
+            ofproto->need_revalidate = true;
+        }
+
+        if (pdscp->dscp != dscp) {
+            pdscp->dscp = dscp;
+            ofproto->need_revalidate = true;
+        }
+
+        hmap_insert(&new, &pdscp->hmap_node, hash_int(pdscp->priority, 0));
+    }
+
+    if (!hmap_is_empty(&ofport->priorities)) {
+        ofport_clear_priorities(ofport);
+        ofproto->need_revalidate = true;
+    }
+
+    hmap_swap(&new, &ofport->priorities);
+    hmap_destroy(&new);
+
+    return 0;
 }
 
 /* Bundles. */
@@ -3775,11 +3868,20 @@ compose_output_action__(struct action_xlate_ctx *ctx, uint16_t ofp_port,
 {
     const struct ofport_dpif *ofport = get_ofp_port(ctx->ofproto, ofp_port);
     uint16_t odp_port = ofp_port_to_odp_port(ofp_port);
+    uint8_t flow_nw_tos = ctx->flow.nw_tos;
 
     if (ofport) {
+        struct priority_to_dscp *pdscp;
+
         if (ofport->up.opp.config & htonl(OFPPC_NO_FWD)
             || (check_stp && !stp_forward_in_state(ofport->stp_state))) {
             return;
+        }
+
+        pdscp = get_priority(ofport, ctx->flow.priority);
+        if (pdscp) {
+            ctx->flow.nw_tos &= ~IP_DSCP_MASK;
+            ctx->flow.nw_tos |= pdscp->dscp;
         }
     } else {
         /* We may not have an ofport record for this port, but it doesn't hurt
@@ -3792,6 +3894,7 @@ compose_output_action__(struct action_xlate_ctx *ctx, uint16_t ofp_port,
     ctx->sflow_odp_port = odp_port;
     ctx->sflow_n_outputs++;
     ctx->nf_output_iface = ofp_port;
+    ctx->flow.nw_tos = flow_nw_tos;
 }
 
 static void
@@ -5378,6 +5481,7 @@ const struct ofproto_class ofproto_dpif_class = {
     get_stp_status,
     set_stp_port,
     get_stp_port_status,
+    set_queues,
     bundle_set,
     bundle_remove,
     mirror_set,

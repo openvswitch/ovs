@@ -2959,6 +2959,10 @@ iface_delete_queues(unsigned int queue_id,
 static void
 iface_configure_qos(struct iface *iface, const struct ovsrec_qos *qos)
 {
+    struct ofpbuf queues_buf;
+
+    ofpbuf_init(&queues_buf, 0);
+
     if (!qos || qos->type[0] == '\0' || qos->n_queues < 1) {
         netdev_set_qos(iface->netdev, NULL, NULL);
     } else {
@@ -2989,6 +2993,15 @@ iface_configure_qos(struct iface *iface, const struct ovsrec_qos *qos)
                 queue_zero = true;
             }
 
+            if (queue->n_dscp == 1) {
+                struct ofproto_port_queue *port_queue;
+
+                port_queue = ofpbuf_put_uninit(&queues_buf,
+                                               sizeof *port_queue);
+                port_queue->queue = queue_id;
+                port_queue->dscp = queue->dscp[0];
+            }
+
             shash_from_ovs_idl_map(queue->key_other_config,
                                    queue->value_other_config,
                                    queue->n_other_config, &details);
@@ -3004,9 +3017,19 @@ iface_configure_qos(struct iface *iface, const struct ovsrec_qos *qos)
         }
     }
 
+    if (iface->ofp_port >= 0) {
+        const struct ofproto_port_queue *port_queues = queues_buf.data;
+        size_t n_queues = queues_buf.size / sizeof *port_queues;
+
+        ofproto_port_set_queues(iface->port->bridge->ofproto, iface->ofp_port,
+                                port_queues, n_queues);
+    }
+
     netdev_set_policing(iface->netdev,
                         iface->cfg->ingress_policing_rate,
                         iface->cfg->ingress_policing_burst);
+
+    ofpbuf_uninit(&queues_buf);
 }
 
 static void

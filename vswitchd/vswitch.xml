@@ -1842,6 +1842,15 @@
     Service (QoS) features.  May be referenced by <ref column="queues"
     table="QoS"/> column in <ref table="QoS"/> table.</p>
 
+    <column name="dscp">
+      If set, Open vSwitch will mark all traffic egressing this
+      <ref table="Queue"/> with the given DSCP bits.  Traffic egressing the
+      default <ref table="Queue"/> is only marked if it was explicitly selected
+      as the <ref table="Queue"/> at the time the packet was output.  If unset,
+      the DSCP bits of traffic egressing this <ref table="Queue"/> will remain
+      unchanged.
+    </column>
+
     <group title="Configuration for min-rate QoS">
       <p>
         These key-value pairs are defined for <ref table="QoS"/> <ref

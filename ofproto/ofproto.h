@@ -99,6 +99,11 @@ struct ofproto_port_stp_status {
     int error_count;            /* Number of bad BPDUs received. */
 };
 
+struct ofproto_port_queue {
+    uint32_t queue;             /* Queue ID. */
+    uint8_t dscp;               /* DSCP bits (e.g. [0, 63]). */
+};
+
 /* How the switch should act if the controller cannot be contacted. */
 enum ofproto_fail_mode {
     OFPROTO_FAIL_SECURE,        /* Preserve flow table. */
@@ -219,6 +224,9 @@ int ofproto_port_set_stp(struct ofproto *, uint16_t ofp_port,
                          const struct ofproto_port_stp_settings *);
 int ofproto_port_get_stp_status(struct ofproto *, uint16_t ofp_port,
                                 struct ofproto_port_stp_status *);
+int ofproto_port_set_queues(struct ofproto *, uint16_t ofp_port,
+                            const struct ofproto_port_queue *,
+                            size_t n_queues);
 
 /* The behaviour of the port regarding VLAN handling */
 enum port_vlan_mode {

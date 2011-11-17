@@ -603,6 +603,33 @@ ofproto_port_get_stp_status(struct ofproto *ofproto, uint16_t ofp_port,
             : EOPNOTSUPP);
 }
 
+/* Queue DSCP configuration. */
+
+/* Registers meta-data associated with the 'n_qdscp' Qualities of Service
+ * 'queues' attached to 'ofport'.  This data is not intended to be sufficient
+ * to implement QoS.  Instead, it is used to implement features which require
+ * knowledge of what queues exist on a port, and some basic information about
+ * them.
+ *
+ * Returns 0 if successful, otherwise a positive errno value. */
+int
+ofproto_port_set_queues(struct ofproto *ofproto, uint16_t ofp_port,
+                        const struct ofproto_port_queue *queues,
+                        size_t n_queues)
+{
+    struct ofport *ofport = ofproto_get_port(ofproto, ofp_port);
+
+    if (!ofport) {
+        VLOG_WARN("%s: cannot set queues on nonexistent port %"PRIu16,
+                  ofproto->name, ofp_port);
+        return ENODEV;
+    }
+
+    return (ofproto->ofproto_class->set_queues
+            ? ofproto->ofproto_class->set_queues(ofport, queues, n_queues)
+            : EOPNOTSUPP);
+}
+
 /* Connectivity Fault Management configuration. */
 
 /* Clears the CFM configuration from 'ofp_port' on 'ofproto'. */
