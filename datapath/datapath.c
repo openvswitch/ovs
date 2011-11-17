@@ -2039,7 +2039,7 @@ static int __init dp_init(void)
 
 	BUILD_BUG_ON(sizeof(struct ovs_skb_cb) > sizeof(dummy_skb->cb));
 
-	pr_info("Open vSwitch %s, built "__DATE__" "__TIME__"\n",
+	pr_info("Open vSwitch switching datapath %s, built "__DATE__" "__TIME__"\n",
 		VERSION BUILDNR);
 
 	err = tnl_init();
