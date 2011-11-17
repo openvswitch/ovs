@@ -412,12 +412,9 @@ static struct ofport_dpif *get_odp_port(struct ofproto_dpif *,
 static void update_learning_table(struct ofproto_dpif *,
                                   const struct flow *, int vlan,
                                   struct ofbundle *);
-static bool is_admissible(struct ofproto_dpif *, const struct flow *,
-                          bool have_packet, tag_type *, int *vlanp,
-                          struct ofbundle **in_bundlep);
-
 /* Upcalls. */
 #define FLOW_MISS_MAX_BATCH 50
+
 static void handle_upcall(struct ofproto_dpif *, struct dpif_upcall *);
 static void handle_miss_upcalls(struct ofproto_dpif *,
                                 struct dpif_upcall *, size_t n);
@@ -4374,21 +4371,6 @@ xlate_actions(struct action_xlate_ctx *ctx,
 
 /* OFPP_NORMAL implementation. */
 
-struct dst {
-    struct ofport_dpif *port;
-    uint16_t vid;
-};
-
-struct dst_set {
-    struct dst builtin[32];
-    struct dst *dsts;
-    size_t n, allocated;
-};
-
-static void dst_set_init(struct dst_set *);
-static void dst_set_add(struct dst_set *, const struct dst *);
-static void dst_set_free(struct dst_set *);
-
 static struct ofport_dpif *ofbundle_get_a_port(const struct ofbundle *);
 
 /* Given 'vid', the VID obtained from the 802.1Q header that was received as
@@ -4495,20 +4477,34 @@ output_vlan_to_vid(const struct ofbundle *out_bundle, uint16_t vlan)
     }
 }
 
-static bool
-set_dst(struct action_xlate_ctx *ctx, struct dst *dst,
-        const struct ofbundle *in_bundle, const struct ofbundle *out_bundle)
+static void
+output_normal(struct action_xlate_ctx *ctx, const struct ofbundle *out_bundle,
+              uint16_t vlan)
 {
-    uint16_t vlan;
+    struct ofport_dpif *port;
+    uint16_t vid;
+    ovs_be16 tci;
 
-    vlan = input_vid_to_vlan(in_bundle, vlan_tci_to_vid(ctx->flow.vlan_tci));
-    dst->vid = output_vlan_to_vid(out_bundle, vlan);
+    vid = output_vlan_to_vid(out_bundle, vlan);
+    if (!out_bundle->bond) {
+        port = ofbundle_get_a_port(out_bundle);
+    } else {
+        port = bond_choose_output_slave(out_bundle->bond, &ctx->flow,
+                                        vid, &ctx->tags);
+        if (!port) {
+            /* No slaves enabled, so drop packet. */
+            return;
+        }
+    }
 
-    dst->port = (!out_bundle->bond
-                 ? ofbundle_get_a_port(out_bundle)
-                 : bond_choose_output_slave(out_bundle->bond, &ctx->flow,
-                                            dst->vid, &ctx->tags));
-    return dst->port != NULL;
+    tci = htons(vid) | (ctx->flow.vlan_tci & htons(VLAN_PCP_MASK));
+    if (tci) {
+        tci |= htons(VLAN_CFI);
+    }
+    commit_vlan_action(ctx, tci);
+
+    compose_output_action(ctx, port->odp_port);
+    ctx->nf_output_iface = port->odp_port;
 }
 
 static int
@@ -4516,41 +4512,6 @@ mirror_mask_ffs(mirror_mask_t mask)
 {
     BUILD_ASSERT_DECL(sizeof(unsigned int) >= sizeof(mask));
     return ffs(mask);
-}
-
-static void
-dst_set_init(struct dst_set *set)
-{
-    set->dsts = set->builtin;
-    set->n = 0;
-    set->allocated = ARRAY_SIZE(set->builtin);
-}
-
-static void
-dst_set_add(struct dst_set *set, const struct dst *dst)
-{
-    if (set->n >= set->allocated) {
-        size_t new_allocated;
-        struct dst *new_dsts;
-
-        new_allocated = set->allocated * 2;
-        new_dsts = xmalloc(new_allocated * sizeof *new_dsts);
-        memcpy(new_dsts, set->dsts, set->n * sizeof *new_dsts);
-
-        dst_set_free(set);
-
-        set->dsts = new_dsts;
-        set->allocated = new_allocated;
-    }
-    set->dsts[set->n++] = *dst;
-}
-
-static void
-dst_set_free(struct dst_set *set)
-{
-    if (set->dsts != set->builtin) {
-        free(set->dsts);
-    }
 }
 
 static bool
@@ -4574,12 +4535,12 @@ ofbundle_get_a_port(const struct ofbundle *bundle)
                         struct ofport_dpif, bundle_node);
 }
 
-static void
+static mirror_mask_t
 compose_dsts(struct action_xlate_ctx *ctx, uint16_t vlan,
              const struct ofbundle *in_bundle,
-             const struct ofbundle *out_bundle, struct dst_set *set)
+             const struct ofbundle *out_bundle)
 {
-    struct dst dst;
+    mirror_mask_t dst_mirrors = 0;
 
     if (out_bundle == OFBUNDLE_FLOOD) {
         struct ofbundle *bundle;
@@ -4588,16 +4549,18 @@ compose_dsts(struct action_xlate_ctx *ctx, uint16_t vlan,
             if (bundle != in_bundle
                 && ofbundle_includes_vlan(bundle, vlan)
                 && bundle->floodable
-                && !bundle->mirror_out
-                && set_dst(ctx, &dst, in_bundle, bundle)) {
-                dst_set_add(set, &dst);
+                && !bundle->mirror_out) {
+                output_normal(ctx, bundle, vlan);
+                dst_mirrors |= bundle->dst_mirrors;
             }
         }
         ctx->nf_output_iface = NF_OUT_FLOOD;
-    } else if (out_bundle && set_dst(ctx, &dst, in_bundle, out_bundle)) {
-        dst_set_add(set, &dst);
-        ctx->nf_output_iface = dst.port->odp_port;
+    } else if (out_bundle) {
+        output_normal(ctx, out_bundle, vlan);
+        dst_mirrors = out_bundle->dst_mirrors;
     }
+
+    return dst_mirrors;
 }
 
 static bool
@@ -4648,20 +4611,15 @@ eth_dst_may_rspan(const uint8_t dst[ETH_ADDR_LEN])
 }
 
 static void
-compose_mirror_dsts(struct action_xlate_ctx *ctx,
-                    uint16_t vlan, const struct ofbundle *in_bundle,
-                    struct dst_set *set)
+output_mirrors(struct action_xlate_ctx *ctx,
+               uint16_t vlan, const struct ofbundle *in_bundle,
+               mirror_mask_t dst_mirrors)
 {
     struct ofproto_dpif *ofproto = ctx->ofproto;
     mirror_mask_t mirrors;
     uint16_t flow_vid;
-    size_t i;
 
-    mirrors = in_bundle->src_mirrors;
-    for (i = 0; i < set->n; i++) {
-        mirrors |= set->dsts[i].port->bundle->dst_mirrors;
-    }
-
+    mirrors = in_bundle->src_mirrors | dst_mirrors;
     if (!mirrors) {
         return;
     }
@@ -4669,7 +4627,6 @@ compose_mirror_dsts(struct action_xlate_ctx *ctx,
     flow_vid = vlan_tci_to_vid(ctx->flow.vlan_tci);
     while (mirrors) {
         struct ofmirror *m;
-        struct dst dst;
 
         m = ofproto->mirrors[mirror_mask_ffs(mirrors) - 1];
 
@@ -4680,82 +4637,19 @@ compose_mirror_dsts(struct action_xlate_ctx *ctx,
 
         mirrors &= ~m->dup_mirrors;
         if (m->out) {
-            if (set_dst(ctx, &dst, in_bundle, m->out)) {
-                dst_set_add(set, &dst);
-            }
+            output_normal(ctx, m->out, vlan);
         } else if (eth_dst_may_rspan(ctx->flow.dl_dst)
                    && vlan != m->out_vlan) {
             struct ofbundle *bundle;
 
             HMAP_FOR_EACH (bundle, hmap_node, &ofproto->bundles) {
                 if (ofbundle_includes_vlan(bundle, m->out_vlan)
-                    && !bundle->mirror_out
-                    && set_dst(ctx, &dst, in_bundle, bundle))
-                {
-                    /* set_dst() got dst->vid from the input packet's VLAN,
-                     * not from m->out_vlan, so recompute it. */
-                    dst.vid = output_vlan_to_vid(bundle, m->out_vlan);
-
-                    if (bundle == in_bundle && dst.vid == flow_vid) {
-                        /* Don't send out input port on same VLAN. */
-                        continue;
-                    }
-                    dst_set_add(set, &dst);
+                    && !bundle->mirror_out) {
+                    output_normal(ctx, bundle, m->out_vlan);
                 }
             }
         }
     }
-}
-
-static void
-compose_actions(struct action_xlate_ctx *ctx, uint16_t vlan,
-                const struct ofbundle *in_bundle,
-                const struct ofbundle *out_bundle)
-{
-    uint16_t initial_vid, cur_vid;
-    const struct dst *dst;
-    struct dst_set set;
-
-    dst_set_init(&set);
-    compose_dsts(ctx, vlan, in_bundle, out_bundle, &set);
-    compose_mirror_dsts(ctx, vlan, in_bundle, &set);
-    if (!set.n) {
-        dst_set_free(&set);
-        return;
-    }
-
-    /* Output all the packets we can without having to change the VLAN. */
-    commit_odp_actions(ctx);
-    initial_vid = vlan_tci_to_vid(ctx->flow.vlan_tci);
-    for (dst = set.dsts; dst < &set.dsts[set.n]; dst++) {
-        if (dst->vid != initial_vid) {
-            continue;
-        }
-        compose_output_action(ctx, dst->port->odp_port);
-    }
-
-    /* Then output the rest. */
-    cur_vid = initial_vid;
-    for (dst = set.dsts; dst < &set.dsts[set.n]; dst++) {
-        if (dst->vid == initial_vid) {
-            continue;
-        }
-        if (dst->vid != cur_vid) {
-            ovs_be16 tci;
-
-            tci = htons(dst->vid);
-            tci |= ctx->flow.vlan_tci & htons(VLAN_PCP_MASK);
-            if (tci) {
-                tci |= htons(VLAN_CFI);
-            }
-            commit_vlan_action(ctx, tci);
-
-            cur_vid = dst->vid;
-        }
-        compose_output_action(ctx, dst->port->odp_port);
-    }
-
-    dst_set_free(&set);
 }
 
 /* A VM broadcasts a gratuitous ARP to indicate that it has resumed after
@@ -4808,93 +4702,59 @@ update_learning_table(struct ofproto_dpif *ofproto,
     }
 }
 
+static struct ofport_dpif *
+lookup_input_bundle(struct ofproto_dpif *ofproto, uint16_t in_port, bool warn)
+{
+    struct ofport_dpif *ofport;
+
+    /* Find the port and bundle for the received packet. */
+    ofport = get_ofp_port(ofproto, in_port);
+    if (ofport && ofport->bundle) {
+        return ofport;
+    }
+
+    /* Odd.  A few possible reasons here:
+     *
+     * - We deleted a port but there are still a few packets queued up
+     *   from it.
+     *
+     * - Someone externally added a port (e.g. "ovs-dpctl add-if") that
+     *   we don't know about.
+     *
+     * - The ofproto client didn't configure the port as part of a bundle.
+     */
+    if (warn) {
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+
+        VLOG_WARN_RL(&rl, "bridge %s: received packet on unknown "
+                     "port %"PRIu16, ofproto->up.name, in_port);
+    }
+    return NULL;
+}
+
 /* Determines whether packets in 'flow' within 'ofproto' should be forwarded or
  * dropped.  Returns true if they may be forwarded, false if they should be
  * dropped.
  *
- * If 'have_packet' is true, it indicates that the caller is processing a
- * received packet.  If 'have_packet' is false, then the caller is just
- * revalidating an existing flow because configuration has changed.  Either
- * way, 'have_packet' only affects logging (there is no point in logging errors
- * during revalidation).
+ * 'in_port' must be the ofport_dpif that corresponds to flow->in_port.
+ * 'in_port' must be part of a bundle (e.g. in_port->bundle must be nonnull).
  *
- * Sets '*in_bundlep' to the input bundle.  This will be a null pointer if
- * flow->in_port does not designate a known input port (in which case
- * is_admissible() returns false).
- *
- * When returning true, sets '*vlanp' to the effective VLAN of the input
- * packet, as returned by input_vid_to_vlan().
+ * 'vlan' must be the VLAN that corresponds to flow->vlan_tci on 'in_port', as
+ * returned by input_vid_to_vlan().  It must be a valid VLAN for 'in_port', as
+ * checked by input_vid_is_valid().
  *
  * May also add tags to '*tags', although the current implementation only does
  * so in one special case.
  */
 static bool
 is_admissible(struct ofproto_dpif *ofproto, const struct flow *flow,
-              bool have_packet,
-              tag_type *tags, int *vlanp, struct ofbundle **in_bundlep)
+              struct ofport_dpif *in_port, uint16_t vlan, tag_type *tags)
 {
-    struct ofport_dpif *in_port;
-    struct ofbundle *in_bundle;
-    uint16_t vid;
-    int vlan;
+    struct ofbundle *in_bundle = in_port->bundle;
 
-    *vlanp = -1;
-
-    /* Find the port and bundle for the received packet. */
-    in_port = get_ofp_port(ofproto, flow->in_port);
-    *in_bundlep = in_bundle = in_port ? in_port->bundle : NULL;
-    if (!in_port || !in_bundle) {
-        /* No interface?  Something fishy... */
-        if (have_packet) {
-            /* Odd.  A few possible reasons here:
-             *
-             * - We deleted a port but there are still a few packets queued up
-             *   from it.
-             *
-             * - Someone externally added a port (e.g. "ovs-dpctl add-if") that
-             *   we don't know about.
-             *
-             * - Packet arrived on the local port but the local port is not
-             *   part of a bundle.
-             */
-            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
-
-            VLOG_WARN_RL(&rl, "bridge %s: received packet on unknown "
-                         "port %"PRIu16,
-                         ofproto->up.name, flow->in_port);
-        }
-        return false;
-    }
-
-    if (flow->dl_type == htons(ETH_TYPE_VLAN) &&
-        !(flow->vlan_tci & htons(VLAN_CFI))) {
-        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
-        VLOG_WARN_RL(&rl, "bridge %s: dropping packet with partial "
-                     "VLAN tag received on port %s",
-                     ofproto->up.name, in_bundle->name);
-        return -1;
-    }
-
-    vid = vlan_tci_to_vid(flow->vlan_tci);
-    if (!input_vid_is_valid(vid, in_bundle, have_packet)) {
-        return false;
-    }
-    *vlanp = vlan = input_vid_to_vlan(in_bundle, vid);
-
-    /* Drop frames for reserved multicast addresses only if forward_bpdu
-     * option is absent. */
+    /* Drop frames for reserved multicast addresses
+     * only if forward_bpdu option is absent. */
     if (eth_addr_is_reserved(flow->dl_dst) && !ofproto->up.forward_bpdu) {
-        return false;
-    }
-
-    /* Drop frames on bundles reserved for mirroring. */
-    if (in_bundle->mirror_out) {
-        if (have_packet) {
-            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
-            VLOG_WARN_RL(&rl, "bridge %s: dropping packet received on port "
-                         "%s, which is reserved exclusively for mirroring",
-                         ofproto->up.name, in_bundle->name);
-        }
         return false;
     }
 
@@ -4926,18 +4786,60 @@ is_admissible(struct ofproto_dpif *ofproto, const struct flow *flow,
 static void
 xlate_normal(struct action_xlate_ctx *ctx)
 {
+    mirror_mask_t dst_mirrors = 0;
+    struct ofport_dpif *in_port;
     struct ofbundle *in_bundle;
     struct ofbundle *out_bundle;
     struct mac_entry *mac;
-    int vlan;
+    uint16_t vlan;
+    uint16_t vid;
 
     ctx->has_normal = true;
 
-    /* Check whether we should drop packets in this flow. */
-    if (!is_admissible(ctx->ofproto, &ctx->flow, ctx->packet != NULL,
-                       &ctx->tags, &vlan, &in_bundle)) {
-        out_bundle = NULL;
-        goto done;
+    /* Obtain in_port from ctx->flow.in_port.
+     *
+     * lookup_input_bundle() also ensures that in_port belongs to a bundle. */
+    in_port = lookup_input_bundle(ctx->ofproto, ctx->flow.in_port,
+                                  ctx->packet != NULL);
+    if (!in_port) {
+        return;
+    }
+    in_bundle = in_port->bundle;
+
+    /* Drop malformed frames. */
+    if (ctx->flow.dl_type == htons(ETH_TYPE_VLAN) &&
+        !(ctx->flow.vlan_tci & htons(VLAN_CFI))) {
+        if (ctx->packet != NULL) {
+            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+            VLOG_WARN_RL(&rl, "bridge %s: dropping packet with partial "
+                         "VLAN tag received on port %s",
+                         ctx->ofproto->up.name, in_bundle->name);
+        }
+        return;
+    }
+
+    /* Drop frames on bundles reserved for mirroring. */
+    if (in_bundle->mirror_out) {
+        if (ctx->packet != NULL) {
+            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+            VLOG_WARN_RL(&rl, "bridge %s: dropping packet received on port "
+                         "%s, which is reserved exclusively for mirroring",
+                         ctx->ofproto->up.name, in_bundle->name);
+        }
+        return;
+    }
+
+    /* Check VLAN. */
+    vid = vlan_tci_to_vid(ctx->flow.vlan_tci);
+    if (!input_vid_is_valid(vid, in_bundle, ctx->packet != NULL)) {
+        return;
+    }
+    vlan = input_vid_to_vlan(in_bundle, vid);
+
+    /* Check other admissibility requirements. */
+    if (!is_admissible(ctx->ofproto, &ctx->flow, in_port, vlan, &ctx->tags)) {
+        output_mirrors(ctx, vlan, in_bundle, 0);
+        return;
     }
 
     /* Learn source MAC. */
@@ -4963,14 +4865,10 @@ xlate_normal(struct action_xlate_ctx *ctx)
     }
 
     /* Don't send packets out their input bundles. */
-    if (in_bundle == out_bundle) {
-        out_bundle = NULL;
+    if (in_bundle != out_bundle) {
+        dst_mirrors = compose_dsts(ctx, vlan, in_bundle, out_bundle);
     }
-
-done:
-    if (in_bundle) {
-        compose_actions(ctx, vlan, in_bundle, out_bundle);
-    }
+    output_mirrors(ctx, vlan, in_bundle, dst_mirrors);
 }
 
 /* Optimized flow revalidation.
