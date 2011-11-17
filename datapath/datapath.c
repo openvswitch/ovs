@@ -249,7 +249,7 @@ static void destroy_dp_rcu(struct rcu_head *rcu)
 {
 	struct datapath *dp = container_of(rcu, struct datapath, rcu);
 
-	flow_tbl_destroy(dp->table);
+	flow_tbl_destroy((__force struct flow_table *)dp->table);
 	free_percpu(dp->stats_percpu);
 	kobject_put(&dp->ifobj);
 }

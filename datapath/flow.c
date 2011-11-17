@@ -288,15 +288,15 @@ struct sw_flow *flow_alloc(void)
 	return flow;
 }
 
-static struct hlist_head __rcu *find_bucket(struct flow_table * table, u32 hash)
+static struct hlist_head *find_bucket(struct flow_table *table, u32 hash)
 {
 	return flex_array_get(table->buckets,
 				(hash & (table->n_buckets - 1)));
 }
 
-static struct flex_array  __rcu *alloc_buckets(unsigned int n_buckets)
+static struct flex_array *alloc_buckets(unsigned int n_buckets)
 {
-	struct flex_array  __rcu *buckets;
+	struct flex_array *buckets;
 	int i, err;
 
 	buckets = flex_array_alloc(sizeof(struct hlist_head *),
