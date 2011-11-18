@@ -116,6 +116,8 @@ rm \
     $RPM_BUILD_ROOT/usr/sbin/ovs-bugtool \
     $RPM_BUILD_ROOT/usr/bin/ovs-controller \
     $RPM_BUILD_ROOT/usr/bin/ovs-pki \
+    $RPM_BUILD_ROOT/usr/bin/ovs-test \
+    $RPM_BUILD_ROOT/usr/share/man/man8/ovs-test.8 \
     $RPM_BUILD_ROOT/usr/share/man/man1/ovs-benchmark.1 \
     $RPM_BUILD_ROOT/usr/share/man/man8/ovs-bugtool.8 \
     $RPM_BUILD_ROOT/usr/share/man/man8/ovs-controller.8 \
