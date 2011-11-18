@@ -1261,7 +1261,7 @@ static int ovs_dp_cmd_fill_info(struct datapath *dp, struct sk_buff *skb,
 				u32 pid, u32 seq, u32 flags, u8 cmd)
 {
 	struct ovs_header *ovs_header;
-	struct nlattr *nla;
+	struct ovs_dp_stats dp_stats;
 	int err;
 
 	ovs_header = genlmsg_put(skb, pid, seq, &dp_datapath_genl_family,
@@ -1277,10 +1277,8 @@ static int ovs_dp_cmd_fill_info(struct datapath *dp, struct sk_buff *skb,
 	if (err)
 		goto nla_put_failure;
 
-	nla = nla_reserve(skb, OVS_DP_ATTR_STATS, sizeof(struct ovs_dp_stats));
-	if (!nla)
-		goto nla_put_failure;
-	get_dp_stats(dp, nla_data(nla));
+	get_dp_stats(dp, &dp_stats);
+	NLA_PUT(skb, OVS_DP_ATTR_STATS, sizeof(struct ovs_dp_stats), &dp_stats);
 
 	return genlmsg_end(skb, ovs_header);
 
@@ -1604,7 +1602,7 @@ static int ovs_vport_cmd_fill_info(struct vport *vport, struct sk_buff *skb,
 				   u32 pid, u32 seq, u32 flags, u8 cmd)
 {
 	struct ovs_header *ovs_header;
-	struct nlattr *nla;
+	struct ovs_vport_stats vport_stats;
 	int err;
 
 	ovs_header = genlmsg_put(skb, pid, seq, &dp_vport_genl_family,
@@ -1619,12 +1617,9 @@ static int ovs_vport_cmd_fill_info(struct vport *vport, struct sk_buff *skb,
 	NLA_PUT_STRING(skb, OVS_VPORT_ATTR_NAME, vport->ops->get_name(vport));
 	NLA_PUT_U32(skb, OVS_VPORT_ATTR_UPCALL_PID, vport->upcall_pid);
 
-	nla = nla_reserve(skb, OVS_VPORT_ATTR_STATS,
-			  sizeof(struct ovs_vport_stats));
-	if (!nla)
-		goto nla_put_failure;
-
-	vport_get_stats(vport, nla_data(nla));
+	vport_get_stats(vport, &vport_stats);
+	NLA_PUT(skb, OVS_VPORT_ATTR_STATS, sizeof(struct ovs_vport_stats),
+		&vport_stats);
 
 	NLA_PUT(skb, OVS_VPORT_ATTR_ADDRESS, ETH_ALEN,
 		vport->ops->get_addr(vport));
