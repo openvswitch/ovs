@@ -3775,6 +3775,13 @@ commit_odp_actions(struct action_xlate_ctx *ctx)
 static void
 compose_output_action(struct action_xlate_ctx *ctx, uint16_t odp_port)
 {
+    uint16_t ofp_port = odp_port_to_ofp_port(odp_port);
+    const struct ofport_dpif *ofport = get_ofp_port(ctx->ofproto, ofp_port);
+
+    if (ofport && ofport->up.opp.config & htonl(OFPPC_NO_FWD)) {
+        return;
+    }
+
     nl_msg_put_u32(ctx->odp_actions, OVS_ACTION_ATTR_OUTPUT, odp_port);
     ctx->sflow_odp_port = odp_port;
     ctx->sflow_n_outputs++;
@@ -3786,19 +3793,14 @@ add_output_action(struct action_xlate_ctx *ctx, uint16_t ofp_port)
     const struct ofport_dpif *ofport = get_ofp_port(ctx->ofproto, ofp_port);
     uint16_t odp_port = ofp_port_to_odp_port(ofp_port);
 
-    if (ofport) {
-        if (ofport->up.opp.config & htonl(OFPPC_NO_FWD)
-                || !stp_forward_in_state(ofport->stp_state)) {
-            /* Forwarding disabled on port. */
-            return;
-        }
-    } else {
-        /*
-         * We don't have an ofport record for this port, but it doesn't hurt to
-         * allow forwarding to it anyhow.  Maybe such a port will appear later
-         * and we're pre-populating the flow table.
-         */
+    if (ofport && !stp_forward_in_state(ofport->stp_state)) {
+        /* Forwarding disabled on port. */
+        return;
     }
+
+    /* We may not have an ofport record for this port, but it doesn't hurt to
+     * allow forwarding to it anyhow.  Maybe such a port will appear later and
+     * we're pre-populating the flow table.  */
 
     commit_odp_actions(ctx);
     compose_output_action(ctx, odp_port);
@@ -3874,16 +3876,20 @@ xlate_resubmit_table(struct action_xlate_ctx *ctx,
 }
 
 static void
-flood_packets(struct action_xlate_ctx *ctx, ovs_be32 mask)
+flood_packets(struct action_xlate_ctx *ctx, bool all)
 {
     struct ofport_dpif *ofport;
 
     commit_odp_actions(ctx);
     HMAP_FOR_EACH (ofport, up.hmap_node, &ctx->ofproto->up.ports) {
         uint16_t ofp_port = ofport->up.ofp_port;
-        if (ofp_port != ctx->flow.in_port
-                && !(ofport->up.opp.config & mask)
-                && stp_forward_in_state(ofport->stp_state)) {
+
+        if (ofp_port == ctx->flow.in_port) {
+            continue;
+        }
+
+        if (all || (!(ofport->up.opp.config & htonl(OFPPC_NO_FLOOD))
+                    && stp_forward_in_state(ofport->stp_state))) {
             compose_output_action(ctx, ofport->odp_port);
         }
     }
@@ -3922,10 +3928,10 @@ xlate_output_action__(struct action_xlate_ctx *ctx,
         xlate_normal(ctx);
         break;
     case OFPP_FLOOD:
-        flood_packets(ctx,  htonl(OFPPC_NO_FLOOD));
+        flood_packets(ctx,  false);
         break;
     case OFPP_ALL:
-        flood_packets(ctx, htonl(0));
+        flood_packets(ctx, true);
         break;
     case OFPP_CONTROLLER:
         commit_odp_actions(ctx);
