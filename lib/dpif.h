@@ -40,6 +40,7 @@ struct dpif_class;
 
 int dp_register_provider(const struct dpif_class *);
 int dp_unregister_provider(const char *type);
+void dp_blacklist_provider(const char *type);
 void dp_enumerate_types(struct sset *types);
 const char *dpif_normalize_type(const char *);
 

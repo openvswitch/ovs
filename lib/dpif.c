@@ -68,6 +68,7 @@ struct registered_dpif_class {
     int refcount;
 };
 static struct shash dpif_classes = SHASH_INITIALIZER(&dpif_classes);
+static struct sset dpif_blacklist = SSET_INITIALIZER(&dpif_blacklist);
 
 /* Rate limit for individual messages going to or from the datapath, output at
  * DBG level.  This is very high because, if these are enabled, it is because
@@ -107,6 +108,12 @@ int
 dp_register_provider(const struct dpif_class *new_class)
 {
     struct registered_dpif_class *registered_class;
+
+    if (sset_contains(&dpif_blacklist, new_class->type)) {
+        VLOG_DBG("attempted to register blacklisted provider: %s",
+                 new_class->type);
+        return EINVAL;
+    }
 
     if (shash_find(&dpif_classes, new_class->type)) {
         VLOG_WARN("attempted to register duplicate datapath provider: %s",
@@ -149,6 +156,14 @@ dp_unregister_provider(const char *type)
     free(registered_class);
 
     return 0;
+}
+
+/* Blacklists a provider.  Causes future calls of dp_register_provider() with
+ * a dpif_class which implements 'type' to fail. */
+void
+dp_blacklist_provider(const char *type)
+{
+    sset_add(&dpif_blacklist, type);
 }
 
 /* Clears 'types' and enumerates the types of all currently registered datapath

@@ -3,11 +3,7 @@ m4_define([STRIP_DURATION], [[sed 's/\bduration=[0-9.]*s/duration=?s/']])
 m4_define([TESTABLE_LOG], [-vPATTERN:ANY:'%c|%p|%m'])
 
 m4_define([OVS_VSWITCHD_START],
-  [dnl Skip this test if running as root.  Otherwise ovs-vswitchd will tear
-   dnl down any existing datapaths if the kernel module is loaded.
-   AT_SKIP_IF([test "`id -u`" = 0])
-
-   OVS_RUNDIR=$PWD; export OVS_RUNDIR
+  [OVS_RUNDIR=$PWD; export OVS_RUNDIR
    OVS_LOGDIR=$PWD; export OVS_LOGDIR
    OVS_SYSCONFDIR=$PWD; export OVS_SYSCONFDIR
    trap 'kill `cat ovsdb-server.pid ovs-vswitchd.pid`' 0
@@ -26,7 +22,7 @@ m4_define([OVS_VSWITCHD_START],
    AT_CHECK([ovs-vsctl --no-wait init])
 
    dnl Start ovs-vswitchd.
-   AT_CHECK([ovs-vswitchd --detach --pidfile --enable-dummy --log-file], [0], [], [stderr])
+   AT_CHECK([ovs-vswitchd --detach --pidfile --enable-dummy --disable-system --log-file], [0], [], [stderr])
    AT_CAPTURE_FILE([ovs-vswitchd.log])
    AT_CHECK([[sed < stderr '
 /vlog|INFO|opened log file/d
