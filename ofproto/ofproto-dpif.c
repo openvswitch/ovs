@@ -5325,7 +5325,7 @@ ofproto_dpif_unixctl_init(void)
     unixctl_command_register("fdb/flush", "bridge", ofproto_unixctl_fdb_flush,
                              NULL);
     unixctl_command_register("fdb/show", "bridge", ofproto_unixctl_fdb_show,
-                             NULL); 
+                             NULL);
     unixctl_command_register("ofproto/clog", "", ofproto_dpif_clog, NULL);
     unixctl_command_register("ofproto/unclog", "", ofproto_dpif_unclog, NULL);
 }
