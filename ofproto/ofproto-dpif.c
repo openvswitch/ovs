@@ -1230,8 +1230,7 @@ bundle_update(struct ofbundle *bundle)
 
     bundle->floodable = true;
     LIST_FOR_EACH (port, bundle_node, &bundle->ports) {
-        if (port->up.opp.config & htonl(OFPPC_NO_FLOOD)
-                    || !stp_forward_in_state(port->stp_state)) {
+        if (port->up.opp.config & htonl(OFPPC_NO_FLOOD)) {
             bundle->floodable = false;
             break;
         }
@@ -1278,8 +1277,7 @@ bundle_add_port(struct ofbundle *bundle, uint32_t ofp_port,
 
         port->bundle = bundle;
         list_push_back(&bundle->ports, &port->bundle_node);
-        if (port->up.opp.config & htonl(OFPPC_NO_FLOOD)
-                    || !stp_forward_in_state(port->stp_state)) {
+        if (port->up.opp.config & htonl(OFPPC_NO_FLOOD)) {
             bundle->floodable = false;
         }
     }
@@ -3773,10 +3771,10 @@ commit_odp_actions(struct action_xlate_ctx *ctx)
 }
 
 static void
-compose_output_action(struct action_xlate_ctx *ctx, uint16_t odp_port)
+force_compose_output_action(struct action_xlate_ctx *ctx, uint16_t ofp_port)
 {
-    uint16_t ofp_port = odp_port_to_ofp_port(odp_port);
     const struct ofport_dpif *ofport = get_ofp_port(ctx->ofproto, ofp_port);
+    uint16_t odp_port = ofp_port_to_odp_port(ofp_port);
 
     if (ofport && ofport->up.opp.config & htonl(OFPPC_NO_FWD)) {
         return;
@@ -3788,10 +3786,9 @@ compose_output_action(struct action_xlate_ctx *ctx, uint16_t odp_port)
 }
 
 static void
-add_output_action(struct action_xlate_ctx *ctx, uint16_t ofp_port)
+compose_output_action(struct action_xlate_ctx *ctx, uint16_t ofp_port)
 {
-    const struct ofport_dpif *ofport = get_ofp_port(ctx->ofproto, ofp_port);
-    uint16_t odp_port = ofp_port_to_odp_port(ofp_port);
+    struct ofport_dpif *ofport = get_ofp_port(ctx->ofproto, ofp_port);
 
     if (ofport && !stp_forward_in_state(ofport->stp_state)) {
         /* Forwarding disabled on port. */
@@ -3801,9 +3798,14 @@ add_output_action(struct action_xlate_ctx *ctx, uint16_t ofp_port)
     /* We may not have an ofport record for this port, but it doesn't hurt to
      * allow forwarding to it anyhow.  Maybe such a port will appear later and
      * we're pre-populating the flow table.  */
+    force_compose_output_action(ctx, ofp_port);
+}
 
+static void
+commit_output_action(struct action_xlate_ctx *ctx, uint16_t ofp_port)
+{
     commit_odp_actions(ctx);
-    compose_output_action(ctx, odp_port);
+    compose_output_action(ctx, ofp_port);
     ctx->nf_output_iface = ofp_port;
 }
 
@@ -3888,9 +3890,10 @@ flood_packets(struct action_xlate_ctx *ctx, bool all)
             continue;
         }
 
-        if (all || (!(ofport->up.opp.config & htonl(OFPPC_NO_FLOOD))
-                    && stp_forward_in_state(ofport->stp_state))) {
-            compose_output_action(ctx, ofport->odp_port);
+        if (all) {
+            force_compose_output_action(ctx, ofp_port);
+        } else if (!(ofport->up.opp.config & htonl(OFPPC_NO_FLOOD))) {
+            compose_output_action(ctx, ofp_port);
         }
     }
 
@@ -3919,7 +3922,7 @@ xlate_output_action__(struct action_xlate_ctx *ctx,
 
     switch (port) {
     case OFPP_IN_PORT:
-        add_output_action(ctx, ctx->flow.in_port);
+        commit_output_action(ctx, ctx->flow.in_port);
         break;
     case OFPP_TABLE:
         xlate_table_action(ctx, ctx->flow.in_port, ctx->table_id);
@@ -3938,13 +3941,13 @@ xlate_output_action__(struct action_xlate_ctx *ctx,
         compose_controller_action(ctx, max_len);
         break;
     case OFPP_LOCAL:
-        add_output_action(ctx, OFPP_LOCAL);
+        commit_output_action(ctx, OFPP_LOCAL);
         break;
     case OFPP_NONE:
         break;
     default:
         if (port != ctx->flow.in_port) {
-            add_output_action(ctx, port);
+            commit_output_action(ctx, port);
         }
         break;
     }
@@ -4006,7 +4009,7 @@ xlate_enqueue_action(struct action_xlate_ctx *ctx,
     /* Add datapath actions. */
     flow_priority = ctx->flow.priority;
     ctx->flow.priority = priority;
-    add_output_action(ctx, ofp_port);
+    commit_output_action(ctx, ofp_port);
     ctx->flow.priority = flow_priority;
 
     /* Update NetFlow output port. */
@@ -4369,7 +4372,7 @@ xlate_actions(struct action_xlate_ctx *ctx,
             if (ctx->packet
                 && connmgr_msg_in_hook(ctx->ofproto->up.connmgr, &ctx->flow,
                                        ctx->packet)) {
-                compose_output_action(ctx, OVSP_LOCAL);
+                compose_output_action(ctx, OFPP_LOCAL);
             }
         }
         fix_sflow_action(ctx);
@@ -4515,7 +4518,7 @@ output_normal(struct action_xlate_ctx *ctx, const struct ofbundle *out_bundle,
     }
     commit_vlan_action(ctx, tci);
 
-    compose_output_action(ctx, port->odp_port);
+    compose_output_action(ctx, port->up.ofp_port);
     ctx->nf_output_iface = port->up.ofp_port;
 }
 
