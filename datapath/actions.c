@@ -50,8 +50,7 @@ static int make_writable(struct sk_buff *skb, int write_len)
 /* remove VLAN header from packet and update csum accrodingly. */
 static int __pop_vlan_tci(struct sk_buff *skb, __be16 *current_tci)
 {
-	struct ethhdr *eh;
-	struct vlan_ethhdr *veth;
+	struct vlan_hdr *vhdr;
 	int err;
 
 	err = make_writable(skb, VLAN_ETH_HLEN);
@@ -62,15 +61,15 @@ static int __pop_vlan_tci(struct sk_buff *skb, __be16 *current_tci)
 		skb->csum = csum_sub(skb->csum, csum_partial(skb->data
 					+ ETH_HLEN, VLAN_HLEN, 0));
 
-	veth = (struct vlan_ethhdr *) skb->data;
-	*current_tci = veth->h_vlan_TCI;
+	vhdr = (struct vlan_hdr *)(skb->data + ETH_HLEN);
+	*current_tci = vhdr->h_vlan_TCI;
 
 	memmove(skb->data + VLAN_HLEN, skb->data, 2 * ETH_ALEN);
+	__skb_pull(skb, VLAN_HLEN);
 
-	eh = (struct ethhdr *)__skb_pull(skb, VLAN_HLEN);
-
-	skb->protocol = eh->h_proto;
+	vlan_set_encap_proto(skb, vhdr);
 	skb->mac_header += VLAN_HLEN;
+	skb_reset_mac_len(skb);
 
 	return 0;
 }
