@@ -251,6 +251,7 @@ struct ofproto_bundle_settings {
     enum port_vlan_mode vlan_mode; /* Selects mode for vlan and trunks */
     int vlan;                   /* VLAN VID, except for PORT_VLAN_TRUNK. */
     unsigned long *trunks;      /* vlan_bitmap, except for PORT_VLAN_ACCESS. */
+    bool use_priority_tags;     /* Use 802.1p tag for frames in VLAN 0? */
 
     struct bond_settings *bond; /* Must be nonnull iff if n_slaves > 1. */
     uint32_t *bond_stable_ids;  /* Array of n_slaves elements. */

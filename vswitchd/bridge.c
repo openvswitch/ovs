@@ -546,6 +546,8 @@ port_configure(struct port *port)
             s.vlan_mode = PORT_VLAN_TRUNK;
         }
     }
+    s.use_priority_tags = !strcmp("true", get_port_other_config(
+                                      cfg, "priority-tags", ""));
 
     /* Get LACP settings. */
     s.lacp = port_configure_lacp(port, &lacp_settings);

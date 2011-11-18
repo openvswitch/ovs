@@ -145,6 +145,7 @@ struct ofbundle {
                                  * NULL if all VLANs are trunked. */
     struct lacp *lacp;          /* LACP if LACP is enabled, otherwise NULL. */
     struct bond *bond;          /* Nonnull iff more than one port. */
+    bool use_priority_tags;     /* Use 802.1p tag for frames in VLAN 0? */
 
     /* Status. */
     bool floodable;             /* True if no port has OFPPC_NO_FLOOD set. */
@@ -1364,6 +1365,7 @@ bundle_set(struct ofproto *ofproto_, void *aux,
         bundle->vlan_mode = PORT_VLAN_TRUNK;
         bundle->vlan = -1;
         bundle->trunks = NULL;
+        bundle->use_priority_tags = s->use_priority_tags;
         bundle->lacp = NULL;
         bundle->bond = NULL;
 
@@ -1422,8 +1424,10 @@ bundle_set(struct ofproto *ofproto_, void *aux,
     }
 
     /* Set VLAN tagging mode */
-    if (s->vlan_mode != bundle->vlan_mode) {
+    if (s->vlan_mode != bundle->vlan_mode
+        || s->use_priority_tags != bundle->use_priority_tags) {
         bundle->vlan_mode = s->vlan_mode;
+        bundle->use_priority_tags = s->use_priority_tags;
         need_flush = true;
     }
 
@@ -4497,9 +4501,12 @@ output_normal(struct action_xlate_ctx *ctx, const struct ofbundle *out_bundle,
         }
     }
 
-    tci = htons(vid) | (ctx->flow.vlan_tci & htons(VLAN_PCP_MASK));
-    if (tci) {
-        tci |= htons(VLAN_CFI);
+    tci = htons(vid);
+    if (tci || out_bundle->use_priority_tags) {
+        tci |= ctx->flow.vlan_tci & htons(VLAN_PCP_MASK);
+        if (tci) {
+            tci |= htons(VLAN_CFI);
+        }
     }
     commit_vlan_action(ctx, tci);
 

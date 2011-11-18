@@ -609,8 +609,7 @@
             VLAN).  A packet that ingresses on a trunk port is in the VLAN
             specified in its 802.1Q header, or VLAN 0 if the packet has no
             802.1Q header.  A packet that egresses through a trunk port will
-            have a 802.1Q header if it has a nonzero VLAN ID (or a nonzero
-            802.1Q priority).
+            have an 802.1Q header if it has a nonzero VLAN ID.
           </p>
 
           <p>
@@ -623,14 +622,14 @@
         <dd>
           <p>
             An access port carries packets on exactly one VLAN specified in the
-            <ref column="tag"/> column.  Packets ingressing and egressing on an
-            access port have no 802.1Q header.
+            <ref column="tag"/> column.  Packets egressing on an access port
+            have no 802.1Q header.
           </p>
 
           <p>
-            Any packet with an 802.1Q header that ingresses on an access port
-            is dropped, regardless of whether the VLAN ID in the header is the
-            access port's VLAN ID.
+            Any packet with an 802.1Q header with a nonzero VLAN ID that
+            ingresses on an access port is dropped, regardless of whether the
+            VLAN ID in the header is the access port's VLAN ID.
           </p>
         </dd>
 
@@ -646,7 +645,7 @@
         <dd>
           A native-untagged port resembles a native-tagged port, with the
           exception that a packet that egresses on a native-untagged port in
-          the native VLAN not have an 802.1Q header.
+          the native VLAN will not have an 802.1Q header.
         </dd>
       </dl>
       <p>
@@ -689,6 +688,34 @@
           A native-tagged or native-untagged port always trunks its native
           VLAN, regardless of whether <ref column="trunks"/> includes that
           VLAN.
+        </p>
+      </column>
+
+      <column name="other_config" key="priority-tags"
+              type='{"type": "boolean"}'>
+        <p>
+          An 802.1Q header contains two important pieces of information: a VLAN
+          ID and a priority.  A frame with a zero VLAN ID, called a
+          ``priority-tagged'' frame, is supposed to be treated the same way as
+          a frame without an 802.1Q header at all (except for the priority).
+        </p>
+
+        <p>
+          However, some network elements ignore any frame that has 802.1Q
+          header at all, even when the VLAN ID is zero.  Therefore, by default
+          Open vSwitch does not output priority-tagged frames, instead omitting
+          the 802.1Q header entirely if the VLAN ID is zero.  Set this key to
+          <code>true</code> to enable priority-tagged frames on a port.
+        </p>
+
+        <p>
+          Regardless of this setting, Open vSwitch omits the 802.1Q header on
+          output if both the VLAN ID and priority would be zero.
+        </p>
+
+        <p>
+          All frames output to native-tagged ports have a nonzero VLAN ID, so
+          this setting is not meaningful on native-tagged ports.
         </p>
       </column>
     </group>
