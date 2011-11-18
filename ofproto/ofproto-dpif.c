@@ -3977,7 +3977,7 @@ static void
 xlate_enqueue_action(struct action_xlate_ctx *ctx,
                      const struct ofp_action_enqueue *oae)
 {
-    uint16_t ofp_port, odp_port;
+    uint16_t ofp_port;
     uint32_t flow_priority, priority;
     int error;
 
@@ -3996,12 +3996,11 @@ xlate_enqueue_action(struct action_xlate_ctx *ctx,
     } else if (ofp_port == ctx->flow.in_port) {
         return;
     }
-    odp_port = ofp_port_to_odp_port(ofp_port);
 
     /* Add datapath actions. */
     flow_priority = ctx->flow.priority;
     ctx->flow.priority = priority;
-    add_output_action(ctx, odp_port);
+    add_output_action(ctx, ofp_port);
     ctx->flow.priority = flow_priority;
 
     /* Update NetFlow output port. */
