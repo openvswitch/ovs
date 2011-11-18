@@ -4641,11 +4641,26 @@ compose_mirror_dsts(struct action_xlate_ctx *ctx,
 }
 
 static void
+compose_dst_output_action(struct action_xlate_ctx *ctx, const struct dst *dst)
+{
+    ovs_be16 tci;
+
+    tci = htons(dst->vid);
+    if (tci) {
+        tci |= ctx->flow.vlan_tci & htons(VLAN_PCP_MASK);
+        tci |= htons(VLAN_CFI);
+    }
+    commit_vlan_action(ctx, tci);
+
+    compose_output_action(ctx, dst->port->odp_port);
+}
+
+static void
 compose_actions(struct action_xlate_ctx *ctx, uint16_t vlan,
                 const struct ofbundle *in_bundle,
                 const struct ofbundle *out_bundle)
 {
-    uint16_t initial_vid, cur_vid;
+    uint16_t initial_vid;
     const struct dst *dst;
     struct dst_set set;
 
@@ -4661,31 +4676,16 @@ compose_actions(struct action_xlate_ctx *ctx, uint16_t vlan,
     commit_odp_actions(ctx);
     initial_vid = vlan_tci_to_vid(ctx->flow.vlan_tci);
     for (dst = set.dsts; dst < &set.dsts[set.n]; dst++) {
-        if (dst->vid != initial_vid) {
-            continue;
+        if (dst->vid == initial_vid) {
+            compose_dst_output_action(ctx, dst);
         }
-        compose_output_action(ctx, dst->port->odp_port);
     }
 
     /* Then output the rest. */
-    cur_vid = initial_vid;
     for (dst = set.dsts; dst < &set.dsts[set.n]; dst++) {
-        if (dst->vid == initial_vid) {
-            continue;
+        if (dst->vid != initial_vid) {
+            compose_dst_output_action(ctx, dst);
         }
-        if (dst->vid != cur_vid) {
-            ovs_be16 tci;
-
-            tci = htons(dst->vid);
-            tci |= ctx->flow.vlan_tci & htons(VLAN_PCP_MASK);
-            if (tci) {
-                tci |= htons(VLAN_CFI);
-            }
-            commit_vlan_action(ctx, tci);
-
-            cur_vid = dst->vid;
-        }
-        compose_output_action(ctx, dst->port->odp_port);
     }
 
     dst_set_free(&set);
