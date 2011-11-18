@@ -4006,7 +4006,7 @@ xlate_enqueue_action(struct action_xlate_ctx *ctx,
 
     /* Update NetFlow output port. */
     if (ctx->nf_output_iface == NF_OUT_DROP) {
-        ctx->nf_output_iface = odp_port;
+        ctx->nf_output_iface = ofp_port;
     } else if (ctx->nf_output_iface != NF_OUT_FLOOD) {
         ctx->nf_output_iface = NF_OUT_MULTI;
     }
@@ -4511,7 +4511,7 @@ output_normal(struct action_xlate_ctx *ctx, const struct ofbundle *out_bundle,
     commit_vlan_action(ctx, tci);
 
     compose_output_action(ctx, port->odp_port);
-    ctx->nf_output_iface = port->odp_port;
+    ctx->nf_output_iface = port->up.ofp_port;
 }
 
 static int
