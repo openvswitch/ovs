@@ -43,21 +43,20 @@ static int dp_device_event(struct notifier_block *unused, unsigned long event,
 	switch (event) {
 	case NETDEV_UNREGISTER:
 		if (!is_internal_dev(dev)) {
-			struct sk_buff *reply;
+			struct sk_buff *notify;
 
-			reply = ovs_vport_cmd_build_info(vport, 0, 0,
-							 OVS_VPORT_CMD_DEL);
+			notify = ovs_vport_cmd_build_info(vport, 0, 0,
+							  OVS_VPORT_CMD_DEL);
 			dp_detach_port(vport);
-			if (IS_ERR(reply)) {
+			if (IS_ERR(notify)) {
 				netlink_set_err(INIT_NET_GENL_SOCK, 0,
 						dp_vport_multicast_group.id,
-						PTR_ERR(reply));
+						PTR_ERR(notify));
 				break;
 			}
 
-			genl_notify(reply, dev_net(dev), 0,
-				    dp_vport_multicast_group.id, NULL,
-				    GFP_KERNEL);
+			genlmsg_multicast(notify, 0, dp_vport_multicast_group.id,
+					  GFP_KERNEL);
 		}
 		break;
 
