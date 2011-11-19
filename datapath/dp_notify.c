@@ -24,11 +24,10 @@
 #include "vport-netdev.h"
 
 static int dp_device_event(struct notifier_block *unused, unsigned long event,
-		void *ptr)
+			   void *ptr)
 {
 	struct net_device *dev = ptr;
 	struct vport *vport;
-	struct datapath *dp;
 
 	if (is_internal_dev(dev))
 		vport = internal_dev_get_vport(dev);
@@ -37,8 +36,6 @@ static int dp_device_event(struct notifier_block *unused, unsigned long event,
 
 	if (!vport)
 		return NOTIFY_DONE;
-
-	dp = vport->dp;
 
 	switch (event) {
 	case NETDEV_UNREGISTER:
@@ -67,6 +64,7 @@ static int dp_device_event(struct notifier_block *unused, unsigned long event,
 		}
 		break;
 	}
+
 	return NOTIFY_DONE;
 }
 
