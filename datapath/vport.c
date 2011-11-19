@@ -376,14 +376,14 @@ void vport_get_stats(struct vport *vport, struct ovs_vport_stats *stats)
 	for_each_possible_cpu(i) {
 		const struct vport_percpu_stats *percpu_stats;
 		struct vport_percpu_stats local_stats;
-		unsigned seqcount;
+		unsigned int start;
 
 		percpu_stats = per_cpu_ptr(vport->percpu_stats, i);
 
 		do {
-			seqcount = read_seqcount_begin(&percpu_stats->seqlock);
+			start = u64_stats_fetch_begin_bh(&percpu_stats->sync);
 			local_stats = *percpu_stats;
-		} while (read_seqcount_retry(&percpu_stats->seqlock, seqcount));
+		} while (u64_stats_fetch_retry_bh(&percpu_stats->sync, start));
 
 		stats->rx_bytes		+= local_stats.rx_bytes;
 		stats->rx_packets	+= local_stats.rx_packets;
@@ -444,10 +444,10 @@ void vport_receive(struct vport *vport, struct sk_buff *skb)
 
 	stats = per_cpu_ptr(vport->percpu_stats, smp_processor_id());
 
-	write_seqcount_begin(&stats->seqlock);
+	u64_stats_update_begin(&stats->sync);
 	stats->rx_packets++;
 	stats->rx_bytes += skb->len;
-	write_seqcount_end(&stats->seqlock);
+	u64_stats_update_end(&stats->sync);
 
 	if (!(vport->ops->flags & VPORT_F_FLOW))
 		OVS_CB(skb)->flow = NULL;
@@ -476,10 +476,10 @@ int vport_send(struct vport *vport, struct sk_buff *skb)
 
 		stats = per_cpu_ptr(vport->percpu_stats, smp_processor_id());
 
-		write_seqcount_begin(&stats->seqlock);
+		u64_stats_update_begin(&stats->sync);
 		stats->tx_packets++;
 		stats->tx_bytes += sent;
-		write_seqcount_end(&stats->seqlock);
+		u64_stats_update_end(&stats->sync);
 	}
 	return sent;
 }

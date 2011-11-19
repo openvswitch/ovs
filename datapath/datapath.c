@@ -335,10 +335,9 @@ void dp_process_received_packet(struct vport *p, struct sk_buff *skb)
 
 out:
 	/* Update datapath statistics. */
-
-	write_seqcount_begin(&stats->seqlock);
+	u64_stats_update_begin(&stats->sync);
 	(*stats_counter)++;
-	write_seqcount_end(&stats->seqlock);
+	u64_stats_update_end(&stats->sync);
 }
 
 static struct genl_family dp_packet_genl_family = {
@@ -381,9 +380,9 @@ int dp_upcall(struct datapath *dp, struct sk_buff *skb,
 err:
 	stats = per_cpu_ptr(dp->stats_percpu, smp_processor_id());
 
-	write_seqcount_begin(&stats->seqlock);
+	u64_stats_update_begin(&stats->sync);
 	stats->n_lost++;
-	write_seqcount_end(&stats->seqlock);
+	u64_stats_update_end(&stats->sync);
 
 	return err;
 }
@@ -836,14 +835,14 @@ static void get_dp_stats(struct datapath *dp, struct ovs_dp_stats *stats)
 	for_each_possible_cpu(i) {
 		const struct dp_stats_percpu *percpu_stats;
 		struct dp_stats_percpu local_stats;
-		unsigned seqcount;
+		unsigned int start;
 
 		percpu_stats = per_cpu_ptr(dp->stats_percpu, i);
 
 		do {
-			seqcount = read_seqcount_begin(&percpu_stats->seqlock);
+			start = u64_stats_fetch_begin_bh(&percpu_stats->sync);
 			local_stats = *percpu_stats;
-		} while (read_seqcount_retry(&percpu_stats->seqlock, seqcount));
+		} while (u64_stats_fetch_retry_bh(&percpu_stats->sync, start));
 
 		stats->n_hit += local_stats.n_hit;
 		stats->n_missed += local_stats.n_missed;

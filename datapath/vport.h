@@ -21,9 +21,9 @@
 
 #include <linux/list.h>
 #include <linux/openvswitch.h>
-#include <linux/seqlock.h>
 #include <linux/skbuff.h>
 #include <linux/spinlock.h>
+#include <linux/u64_stats_sync.h>
 
 #include "datapath.h"
 
@@ -56,7 +56,7 @@ struct vport_percpu_stats {
 	u64 rx_packets;
 	u64 tx_bytes;
 	u64 tx_packets;
-	seqcount_t seqlock;
+	struct u64_stats_sync sync;
 };
 
 struct vport_err_stats {

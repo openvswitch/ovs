@@ -23,8 +23,8 @@
 #include <linux/kernel.h>
 #include <linux/mutex.h>
 #include <linux/netdevice.h>
-#include <linux/seqlock.h>
 #include <linux/skbuff.h>
+#include <linux/u64_stats_sync.h>
 #include <linux/version.h>
 
 #include "checksum.h"
@@ -54,7 +54,7 @@ struct dp_stats_percpu {
 	u64 n_hit;
 	u64 n_missed;
 	u64 n_lost;
-	seqcount_t seqlock;
+	struct u64_stats_sync sync;
 };
 
 /**
