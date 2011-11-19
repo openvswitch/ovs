@@ -113,12 +113,6 @@ static struct datapath *get_dp(int dp_ifindex)
 }
 
 /* Must be called with rcu_read_lock or RTNL lock. */
-static struct vport *get_vport_protected(struct datapath *dp, u16 port_no)
-{
-	return rcu_dereference_rtnl(dp->ports[port_no]);
-}
-
-/* Must be called with rcu_read_lock or RTNL lock. */
 const char *dp_name(const struct datapath *dp)
 {
 	struct vport *vport = rcu_dereference_rtnl(dp->ports[OVSP_LOCAL]);
@@ -132,7 +126,7 @@ static int get_dpifindex(struct datapath *dp)
 
 	rcu_read_lock();
 
-	local = get_vport_protected(dp, OVSP_LOCAL);
+	local = rcu_dereference(dp->ports[OVSP_LOCAL]);
 	if (local)
 		ifindex = local->ops->get_ifindex(local);
 	else
@@ -1421,7 +1415,7 @@ static int ovs_dp_cmd_new(struct sk_buff *skb, struct genl_info *info)
 	return 0;
 
 err_destroy_local_port:
-	dp_detach_port(get_vport_protected(dp, OVSP_LOCAL));
+	dp_detach_port(rtnl_dereference(dp->ports[OVSP_LOCAL]));
 err_destroy_percpu:
 	free_percpu(dp->stats_percpu);
 err_destroy_table:
@@ -1465,7 +1459,7 @@ static int ovs_dp_cmd_del(struct sk_buff *skb, struct genl_info *info)
 
 	dp_sysfs_del_dp(dp);
 	list_del(&dp->list_node);
-	dp_detach_port(get_vport_protected(dp, OVSP_LOCAL));
+	dp_detach_port(rtnl_dereference(dp->ports[OVSP_LOCAL]));
 
 	/* rtnl_unlock() will wait until all the references to devices that
 	 * are pending unregistration have been dropped.  We do it here to
@@ -1696,7 +1690,7 @@ static struct vport *lookup_vport(struct ovs_header *ovs_header,
 		if (!dp)
 			return ERR_PTR(-ENODEV);
 
-		vport = get_vport_protected(dp, port_no);
+		vport = rcu_dereference_rtnl(dp->ports[port_no]);
 		if (!vport)
 			return ERR_PTR(-ENOENT);
 		return vport;
@@ -1752,7 +1746,7 @@ static int ovs_vport_cmd_new(struct sk_buff *skb, struct genl_info *info)
 		if (port_no >= DP_MAX_PORTS)
 			goto exit_unlock;
 
-		vport = get_vport_protected(dp, port_no);
+		vport = rtnl_dereference(dp->ports[port_no]);
 		err = -EBUSY;
 		if (vport)
 			goto exit_unlock;
@@ -1762,7 +1756,7 @@ static int ovs_vport_cmd_new(struct sk_buff *skb, struct genl_info *info)
 				err = -EFBIG;
 				goto exit_unlock;
 			}
-			vport = get_vport_protected(dp, port_no);
+			vport = rtnl_dereference(dp->ports[port_no]);
 			if (!vport)
 				break;
 		}
@@ -1939,7 +1933,7 @@ static int ovs_vport_cmd_dump(struct sk_buff *skb, struct netlink_callback *cb)
 	for (port_no = cb->args[0]; port_no < DP_MAX_PORTS; port_no++) {
 		struct vport *vport;
 
-		vport = get_vport_protected(dp, port_no);
+		vport = rcu_dereference(dp->ports[port_no]);
 		if (!vport)
 			continue;
 
