@@ -9,6 +9,16 @@ successful deployment.  The end of this document contains contact
 information that can be used to let us know how we can make Open vSwitch
 more generally useful.
 
+OpenFlow
+========
+
+The OpenFlow 1.0 specification requires the output port of the OFPAT_ENQUEUE
+action to "refer to a valid physical port (i.e. < OFPP_MAX) or OFPP_IN_PORT".
+Although OFPP_LOCAL is not less than OFPP_MAX, it is an 'internal' port which
+can have QoS applied to it in Linux.  Since we allow the OFPAT_ENQUEUE to apply
+to 'internal' ports whose port numbers are less than OFPP_MAX, we interpret
+OFPP_LOCAL as a physical port and support OFPAT_ENQUEUE on it as well.
+
 
 Multiple Table Support
 ======================

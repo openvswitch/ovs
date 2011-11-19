@@ -2211,7 +2211,8 @@ validate_actions(const union ofp_action *actions, size_t n_actions,
 
         case OFPUTIL_OFPAT_ENQUEUE:
             port = ntohs(((const struct ofp_action_enqueue *) a)->port);
-            if (port >= max_ports && port != OFPP_IN_PORT) {
+            if (port >= max_ports && port != OFPP_IN_PORT
+                && port != OFPP_LOCAL) {
                 error = ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_OUT_PORT);
             }
             break;
