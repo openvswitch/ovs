@@ -12,4 +12,12 @@ static inline int lockdep_genl_is_held(void)
 }
 #endif
 
+/* This is also not upstream yet. */
+#ifndef genl_dereference
+#include <linux/rcupdate.h>
+
+#define genl_dereference(p)					\
+	rcu_dereference_protected(p, lockdep_genl_is_held())
+#endif
+
 #endif /* linux/genetlink.h wrapper */

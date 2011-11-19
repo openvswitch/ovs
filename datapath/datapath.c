@@ -112,12 +112,6 @@ static struct datapath *get_dp(int dp_ifindex)
 	return dp;
 }
 
-/* Must be called with genl_mutex. */
-static struct flow_table *get_table_protected(struct datapath *dp)
-{
-	return rcu_dereference_protected(dp->table, lockdep_genl_is_held());
-}
-
 /* Must be called with rcu_read_lock or RTNL lock. */
 static struct vport *get_vport_protected(struct datapath *dp, u16 port_no)
 {
@@ -505,7 +499,7 @@ static int flush_flows(int dp_ifindex)
 	if (!dp)
 		return -ENODEV;
 
-	old_table = get_table_protected(dp);
+	old_table = genl_dereference(dp->table);
 	new_table = flow_tbl_alloc(TBL_MIN_BUCKETS);
 	if (!new_table)
 		return -ENOMEM;
@@ -827,7 +821,7 @@ static struct genl_ops dp_packet_genl_ops[] = {
 static void get_dp_stats(struct datapath *dp, struct ovs_dp_stats *stats)
 {
 	int i;
-	struct flow_table *table = get_table_protected(dp);
+	struct flow_table *table = genl_dereference(dp->table);
 
 	stats->n_flows = flow_tbl_count(table);
 
@@ -1015,7 +1009,7 @@ static int ovs_flow_cmd_new_or_set(struct sk_buff *skb, struct genl_info *info)
 	if (!dp)
 		goto error;
 
-	table = get_table_protected(dp);
+	table = genl_dereference(dp->table);
 	flow = flow_tbl_lookup(table, &key, key_len);
 	if (!flow) {
 		struct sw_flow_actions *acts;
@@ -1033,7 +1027,7 @@ static int ovs_flow_cmd_new_or_set(struct sk_buff *skb, struct genl_info *info)
 			if (!IS_ERR(new_table)) {
 				rcu_assign_pointer(dp->table, new_table);
 				flow_tbl_deferred_destroy(table);
-				table = get_table_protected(dp);
+				table = genl_dereference(dp->table);
 			}
 		}
 
@@ -1142,7 +1136,7 @@ static int ovs_flow_cmd_get(struct sk_buff *skb, struct genl_info *info)
 	if (!dp)
 		return -ENODEV;
 
-	table = get_table_protected(dp);
+	table = genl_dereference(dp->table);
 	flow = flow_tbl_lookup(table, &key, key_len);
 	if (!flow)
 		return -ENOENT;
@@ -1177,7 +1171,7 @@ static int ovs_flow_cmd_del(struct sk_buff *skb, struct genl_info *info)
 	if (!dp)
 		return -ENODEV;
 
-	table = get_table_protected(dp);
+	table = genl_dereference(dp->table);
 	flow = flow_tbl_lookup(table, &key, key_len);
 	if (!flow)
 		return -ENOENT;
@@ -1203,10 +1197,13 @@ static int ovs_flow_cmd_dump(struct sk_buff *skb, struct netlink_callback *cb)
 {
 	struct ovs_header *ovs_header = genlmsg_data(nlmsg_data(cb->nlh));
 	struct datapath *dp;
+	struct flow_table *table;
 
 	dp = get_dp(ovs_header->dp_ifindex);
 	if (!dp)
 		return -ENODEV;
+
+	table = genl_dereference(dp->table);
 
 	for (;;) {
 		struct sw_flow *flow;
@@ -1214,7 +1211,7 @@ static int ovs_flow_cmd_dump(struct sk_buff *skb, struct netlink_callback *cb)
 
 		bucket = cb->args[0];
 		obj = cb->args[1];
-		flow = flow_tbl_next(get_table_protected(dp), &bucket, &obj);
+		flow = flow_tbl_next(table, &bucket, &obj);
 		if (!flow)
 			break;
 
@@ -1428,7 +1425,7 @@ err_destroy_local_port:
 err_destroy_percpu:
 	free_percpu(dp->stats_percpu);
 err_destroy_table:
-	flow_tbl_destroy(get_table_protected(dp));
+	flow_tbl_destroy(genl_dereference(dp->table));
 err_free_dp:
 	kfree(dp);
 err_put_module:
