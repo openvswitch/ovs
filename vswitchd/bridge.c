@@ -78,6 +78,7 @@ struct mirror {
     struct hmap_node hmap_node; /* In struct bridge's "mirrors" hmap. */
     struct bridge *bridge;
     char *name;
+    const struct ovsrec_mirror *cfg;
 };
 
 struct port {
@@ -192,7 +193,8 @@ static void bridge_configure_mirrors(struct bridge *);
 static struct mirror *mirror_create(struct bridge *,
                                     const struct ovsrec_mirror *);
 static void mirror_destroy(struct mirror *);
-static bool mirror_configure(struct mirror *, const struct ovsrec_mirror *);
+static bool mirror_configure(struct mirror *);
+static void mirror_refresh_stats(struct mirror *);
 
 static void iface_configure_lacp(struct iface *, struct lacp_slave_settings *);
 static struct iface *iface_create(struct port *port,
@@ -291,6 +293,7 @@ bridge_init(const char *remote)
     ovsdb_idl_omit(idl, &ovsrec_queue_col_external_ids);
 
     ovsdb_idl_omit(idl, &ovsrec_mirror_col_external_ids);
+    ovsdb_idl_omit_alert(idl, &ovsrec_mirror_col_statistics);
 
     ovsdb_idl_omit(idl, &ovsrec_netflow_col_external_ids);
 
@@ -1870,6 +1873,7 @@ bridge_run(void)
             txn = ovsdb_idl_txn_create(idl);
             HMAP_FOR_EACH (br, node, &all_bridges) {
                 struct port *port;
+                struct mirror *m;
 
                 HMAP_FOR_EACH (port, hmap_node, &br->ports) {
                     struct iface *iface;
@@ -1879,6 +1883,11 @@ bridge_run(void)
                         iface_refresh_status(iface);
                     }
                 }
+
+                HMAP_FOR_EACH (m, hmap_node, &br->mirrors) {
+                    mirror_refresh_stats(m);
+                }
+
             }
             refresh_system_stats(cfg);
             refresh_controller_status();
@@ -3145,7 +3154,8 @@ bridge_configure_mirrors(struct bridge *br)
         if (!m) {
             m = mirror_create(br, cfg);
         }
-        if (!mirror_configure(m, cfg)) {
+        m->cfg = cfg;
+        if (!mirror_configure(m)) {
             mirror_destroy(m);
         }
     }
@@ -3211,8 +3221,9 @@ mirror_collect_ports(struct mirror *m,
 }
 
 static bool
-mirror_configure(struct mirror *m, const struct ovsrec_mirror *cfg)
+mirror_configure(struct mirror *m)
 {
+    const struct ovsrec_mirror *cfg = m->cfg;
     struct ofproto_mirror_settings s;
 
     /* Set name. */
@@ -3554,4 +3565,32 @@ add_vlan_splinter_ports(struct bridge *br,
             }
         }
     }
+}
+
+static void
+mirror_refresh_stats(struct mirror *m)
+{
+    struct ofproto *ofproto = m->bridge->ofproto;
+    uint64_t tx_packets, tx_bytes;
+    char *keys[2];
+    int64_t values[2];
+    size_t stat_cnt = 0;
+
+    if (ofproto_mirror_get_stats(ofproto, m, &tx_packets, &tx_bytes)) {
+        ovsrec_mirror_set_statistics(m->cfg, NULL, NULL, 0);
+        return;
+    }
+
+    if (tx_packets != UINT64_MAX) {
+        keys[stat_cnt] = "tx_packets";
+        values[stat_cnt] = tx_packets;
+        stat_cnt++;
+    }
+    if (tx_bytes != UINT64_MAX) {
+        keys[stat_cnt] = "tx_bytes";
+        values[stat_cnt] = tx_bytes;
+        stat_cnt++;
+    }
+
+    ovsrec_mirror_set_statistics(m->cfg, keys, values, stat_cnt);
 }

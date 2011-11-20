@@ -1027,6 +1027,16 @@ struct ofproto_class {
     int (*mirror_set)(struct ofproto *ofproto, void *aux,
                       const struct ofproto_mirror_settings *s);
 
+    /* Retrieves statistics from mirror associated with client data
+     * pointer 'aux' in 'ofproto'.  Stores packet and byte counts in
+     * 'packets' and 'bytes', respectively.  If a particular counter is
+     * not supported, the appropriate argument is set to UINT64_MAX.
+     *
+     * EOPNOTSUPP as a return value indicates that this ofproto_class does not
+     * support retrieving mirror statistics. */
+    int (*mirror_get_stats)(struct ofproto *ofproto, void *aux,
+                            uint64_t *packets, uint64_t *bytes);
+
     /* Configures the VLANs whose bits are set to 1 in 'flood_vlans' as VLANs
      * on which all packets are flooded, instead of using MAC learning.  If
      * 'flood_vlans' is NULL, then MAC learning applies to all VLANs.

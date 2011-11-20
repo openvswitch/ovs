@@ -304,6 +304,8 @@ struct ofproto_mirror_settings {
 int ofproto_mirror_register(struct ofproto *, void *aux,
                             const struct ofproto_mirror_settings *);
 int ofproto_mirror_unregister(struct ofproto *, void *aux);
+int ofproto_mirror_get_stats(struct ofproto *, void *aux,
+                             uint64_t *packets, uint64_t *bytes);
 
 int ofproto_set_flood_vlans(struct ofproto *, unsigned long *flood_vlans);
 bool ofproto_is_mirror_output_bundle(const struct ofproto *, void *aux);

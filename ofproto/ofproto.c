@@ -745,6 +745,23 @@ ofproto_mirror_unregister(struct ofproto *ofproto, void *aux)
     return ofproto_mirror_register(ofproto, aux, NULL);
 }
 
+/* Retrieves statistics from mirror associated with client data pointer
+ * 'aux' in 'ofproto'.  Stores packet and byte counts in 'packets' and
+ * 'bytes', respectively.  If a particular counters is not supported,
+ * the appropriate argument is set to UINT64_MAX. */
+int
+ofproto_mirror_get_stats(struct ofproto *ofproto, void *aux,
+                         uint64_t *packets, uint64_t *bytes)
+{
+    if (!ofproto->ofproto_class->mirror_get_stats) {
+        *packets = *bytes = UINT64_MAX;
+        return EOPNOTSUPP;
+    }
+
+    return ofproto->ofproto_class->mirror_get_stats(ofproto, aux,
+                                                    packets, bytes);
+}
+
 /* Configures the VLANs whose bits are set to 1 in 'flood_vlans' as VLANs on
  * which all packets are flooded, instead of using MAC learning.  If
  * 'flood_vlans' is NULL, then MAC learning applies to all VLANs.

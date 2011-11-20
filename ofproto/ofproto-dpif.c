@@ -134,9 +134,16 @@ struct ofmirror {
     struct ofbundle *out;       /* Output port or NULL. */
     int out_vlan;               /* Output VLAN or -1. */
     mirror_mask_t dup_mirrors;  /* Bitmap of mirrors with the same output. */
+
+    /* Counters. */
+    int64_t packet_count;       /* Number of packets sent. */
+    int64_t byte_count;         /* Number of bytes sent. */
 };
 
 static void mirror_destroy(struct ofmirror *);
+static void update_mirror_stats(struct ofproto_dpif *ofproto,
+                                mirror_mask_t mirrors,
+                                uint64_t packets, uint64_t bytes);
 
 /* A group of one or more OpenFlow ports. */
 #define OFBUNDLE_FLOOD ((struct ofbundle *) 1)
@@ -213,6 +220,7 @@ struct action_xlate_ctx {
     bool has_learn;             /* Actions include NXAST_LEARN? */
     bool has_normal;            /* Actions output to OFPP_NORMAL? */
     uint16_t nf_output_iface;   /* Output interface index for NetFlow. */
+    mirror_mask_t mirrors;      /* Bitmap of associated mirrors. */
 
 /* xlate_actions() initializes and uses these members, but the client has no
  * reason to look at them. */
@@ -276,9 +284,9 @@ struct facet {
     uint64_t byte_count;         /* Number of bytes received. */
 
     /* Resubmit statistics. */
-    uint64_t rs_packet_count;    /* Packets pushed to resubmit children. */
-    uint64_t rs_byte_count;      /* Bytes pushed to resubmit children. */
-    long long int rs_used;       /* Used time pushed to resubmit children. */
+    uint64_t prev_packet_count;  /* Number of packets from last stats push. */
+    uint64_t prev_byte_count;    /* Number of bytes from last stats push. */
+    long long int prev_used;     /* Used time from last stats push. */
 
     /* Accounting. */
     uint64_t accounted_bytes;    /* Bytes processed by facet_account(). */
@@ -294,6 +302,7 @@ struct facet {
     bool has_learn;              /* Actions include NXAST_LEARN? */
     bool has_normal;             /* Actions output to OFPP_NORMAL? */
     tag_type tags;               /* Tags that would require revalidation. */
+    mirror_mask_t mirrors;       /* Bitmap of dependent mirrors. */
 };
 
 static struct facet *facet_create(struct rule_dpif *, const struct flow *);
@@ -2035,6 +2044,24 @@ mirror_destroy(struct ofmirror *mirror)
 }
 
 static int
+mirror_get_stats(struct ofproto *ofproto_, void *aux,
+                 uint64_t *packets, uint64_t *bytes)
+{
+    struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
+    struct ofmirror *mirror = mirror_lookup(ofproto, aux);
+
+    if (!mirror) {
+        *packets = *bytes = UINT64_MAX;
+        return 0;
+    }
+
+    *packets = mirror->packet_count;
+    *bytes = mirror->byte_count;
+
+    return 0;
+}
+
+static int
 set_flood_vlans(struct ofproto *ofproto_, unsigned long *flood_vlans)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
@@ -3271,6 +3298,7 @@ facet_revalidate(struct ofproto_dpif *ofproto, struct facet *facet)
     facet->may_install = ctx.may_set_up_flow;
     facet->has_learn = ctx.has_learn;
     facet->has_normal = ctx.has_normal;
+    facet->mirrors = ctx.mirrors;
     if (new_actions) {
         i = 0;
         LIST_FOR_EACH (subfacet, list_node, &facet->subfacets) {
@@ -3289,7 +3317,7 @@ facet_revalidate(struct ofproto_dpif *ofproto, struct facet *facet)
         list_push_back(&new_rule->facets, &facet->list_node);
         facet->rule = new_rule;
         facet->used = new_rule->up.created;
-        facet->rs_used = facet->used;
+        facet->prev_used = facet->used;
     }
 
     return true;
@@ -3315,30 +3343,33 @@ facet_reset_counters(struct facet *facet)
 {
     facet->packet_count = 0;
     facet->byte_count = 0;
-    facet->rs_packet_count = 0;
-    facet->rs_byte_count = 0;
+    facet->prev_packet_count = 0;
+    facet->prev_byte_count = 0;
     facet->accounted_bytes = 0;
 }
 
 static void
 facet_push_stats(struct facet *facet)
 {
-    uint64_t rs_packets, rs_bytes;
+    uint64_t new_packets, new_bytes;
 
-    assert(facet->packet_count >= facet->rs_packet_count);
-    assert(facet->byte_count >= facet->rs_byte_count);
-    assert(facet->used >= facet->rs_used);
+    assert(facet->packet_count >= facet->prev_packet_count);
+    assert(facet->byte_count >= facet->prev_byte_count);
+    assert(facet->used >= facet->prev_used);
 
-    rs_packets = facet->packet_count - facet->rs_packet_count;
-    rs_bytes = facet->byte_count - facet->rs_byte_count;
+    new_packets = facet->packet_count - facet->prev_packet_count;
+    new_bytes = facet->byte_count - facet->prev_byte_count;
 
-    if (rs_packets || rs_bytes || facet->used > facet->rs_used) {
-        facet->rs_packet_count = facet->packet_count;
-        facet->rs_byte_count = facet->byte_count;
-        facet->rs_used = facet->used;
+    if (new_packets || new_bytes || facet->used > facet->prev_used) {
+        facet->prev_packet_count = facet->packet_count;
+        facet->prev_byte_count = facet->byte_count;
+        facet->prev_used = facet->used;
 
         flow_push_stats(facet->rule, &facet->flow,
-                        rs_packets, rs_bytes, facet->used);
+                        new_packets, new_bytes, facet->used);
+
+        update_mirror_stats(ofproto_dpif_cast(facet->rule->up.ofproto),
+                            facet->mirrors, new_packets, new_bytes);
     }
 }
 
@@ -3362,7 +3393,7 @@ push_resubmit(struct action_xlate_ctx *ctx, struct rule_dpif *rule)
 }
 
 /* Pushes flow statistics to the rules which 'flow' resubmits into given
- * 'rule''s actions. */
+ * 'rule''s actions and mirrors. */
 static void
 flow_push_stats(const struct rule_dpif *rule,
                 const struct flow *flow, uint64_t packets, uint64_t bytes,
@@ -3516,6 +3547,7 @@ subfacet_make_actions(struct ofproto_dpif *p, struct subfacet *subfacet,
     facet->has_learn = ctx.has_learn;
     facet->has_normal = ctx.has_normal;
     facet->nf_flow.output_iface = ctx.nf_output_iface;
+    facet->mirrors = ctx.mirrors;
 
     if (subfacet->actions_len != odp_actions->size
         || memcmp(subfacet->actions, odp_actions->data, odp_actions->size)) {
@@ -4700,6 +4732,7 @@ xlate_actions(struct action_xlate_ctx *ctx,
     ctx->has_learn = false;
     ctx->has_normal = false;
     ctx->nf_output_iface = NF_OUT_DROP;
+    ctx->mirrors = 0;
     ctx->recurse = 0;
     ctx->original_priority = ctx->flow.priority;
     ctx->table_id = 0;
@@ -5017,6 +5050,7 @@ output_mirrors(struct action_xlate_ctx *ctx,
         }
 
         mirrors &= ~m->dup_mirrors;
+        ctx->mirrors |= m->dup_mirrors;
         if (m->out) {
             output_normal(ctx, m->out, vlan);
         } else if (eth_dst_may_rspan(ctx->flow.dl_dst)
@@ -5030,6 +5064,34 @@ output_mirrors(struct action_xlate_ctx *ctx,
                 }
             }
         }
+    }
+}
+
+static void
+update_mirror_stats(struct ofproto_dpif *ofproto, mirror_mask_t mirrors,
+                    uint64_t packets, uint64_t bytes)
+{
+    if (!mirrors) {
+        return;
+    }
+
+    for (; mirrors; mirrors &= mirrors - 1) {
+        struct ofmirror *m;
+
+        m = ofproto->mirrors[mirror_mask_ffs(mirrors) - 1];
+
+        if (!m) {
+            /* In normal circumstances 'm' will not be NULL.  However,
+             * if mirrors are reconfigured, we can temporarily get out
+             * of sync in facet_revalidate().  We could "correct" the
+             * mirror list before reaching here, but doing that would
+             * not properly account the traffic stats we've currently
+             * accumulated for previous mirror configuration. */
+            continue;
+        }
+
+        m->packet_count += packets;
+        m->byte_count += bytes;
     }
 }
 
@@ -5964,6 +6026,7 @@ const struct ofproto_class ofproto_dpif_class = {
     bundle_set,
     bundle_remove,
     mirror_set,
+    mirror_get_stats,
     set_flood_vlans,
     is_mirror_output_bundle,
     forward_bpdu_changed,
