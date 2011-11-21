@@ -3049,11 +3049,13 @@ is_admissible(struct bridge *br, const struct flow *flow, bool have_packet,
          * to the exception is if we locked the learning table to avoid
          * reflections on bond slaves.  If this is the case, just drop the
          * packet now. */
-        src_idx = mac_learning_lookup(br->ml, flow->dl_src, vlan,
-                                      &is_grat_arp_locked);
-        if (src_idx != -1 && src_idx != in_port->port_idx &&
-            (!is_gratuitous_arp(flow) || is_grat_arp_locked)) {
+        if (in_port->bond_mode != BM_AB) {
+            src_idx = mac_learning_lookup(br->ml, flow->dl_src, vlan,
+                                          &is_grat_arp_locked);
+            if (src_idx != -1 && src_idx != in_port->port_idx &&
+                (!is_gratuitous_arp(flow) || is_grat_arp_locked)) {
                 return false;
+            }
         }
     }
 
