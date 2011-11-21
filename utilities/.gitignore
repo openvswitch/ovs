@@ -21,6 +21,8 @@
 /ovs-pki
 /ovs-pki-cgi
 /ovs-pki.8
+/ovs-test
+/ovs-test.8
 /ovs-tcpundump
 /ovs-tcpundump.1
 /ovs-vlan-bug-workaround
