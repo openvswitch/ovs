@@ -81,6 +81,13 @@ system.
 Disables the interface.  This is equivalent to ``ifconfig down'' on a Unix
 system.
 .
+.IP \fBforward\fR
+Allows forwarding of traffic on this interface.  This is the default posture
+for all ports.
+.
+.IP \fBnoforward\fR
+Disallows forwarding of traffic on this interface.
+.
 .IP \fBflood\fR
 When a \fIflood\fR action is specified, traffic will be sent out this
 interface.  This is the default posture for monitored ports.

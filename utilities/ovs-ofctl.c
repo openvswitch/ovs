@@ -839,6 +839,11 @@ do_mod_port(int argc OVS_UNUSED, char *argv[])
     } else if (!strcasecmp(argv[3], "noflood")) {
         opm->mask |= htonl(OFPPC_NO_FLOOD);
         opm->config |= htonl(OFPPC_NO_FLOOD);
+    } else if (!strcasecmp(argv[3], "forward")) {
+        opm->mask |= htonl(OFPPC_NO_FWD);
+    } else if (!strcasecmp(argv[3], "noforward")) {
+        opm->mask |= htonl(OFPPC_NO_FWD);
+        opm->config |= htonl(OFPPC_NO_FWD);
     } else {
         ovs_fatal(0, "unknown mod-port command '%s'", argv[3]);
     }
