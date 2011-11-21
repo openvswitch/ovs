@@ -935,6 +935,44 @@ flow_hash_fields_valid(enum nx_hash_fields fields)
         || fields == NX_HASH_FIELDS_SYMMETRIC_L4;
 }
 
+/* Sets the VLAN VID that 'flow' matches to 'vid', which is interpreted as an
+ * OpenFlow 1.0 "dl_vlan" value:
+ *
+ *      - If it is in the range 0...4095, 'flow->vlan_tci' is set to match
+ *        that VLAN.  Any existing PCP match is unchanged (it becomes 0 if
+ *        'flow' previously matched packets without a VLAN header).
+ *
+ *      - If it is OFP_VLAN_NONE, 'flow->vlan_tci' is set to match a packet
+ *        without a VLAN tag.
+ *
+ *      - Other values of 'vid' should not be used. */
+void
+flow_set_vlan_vid(struct flow *flow, ovs_be16 vid)
+{
+    if (vid == htons(OFP_VLAN_NONE)) {
+        flow->vlan_tci = htons(0);
+    } else {
+        vid &= htons(VLAN_VID_MASK);
+        flow->vlan_tci &= ~htons(VLAN_VID_MASK);
+        flow->vlan_tci |= htons(VLAN_CFI) | vid;
+    }
+}
+
+/* Sets the VLAN PCP that 'flow' matches to 'pcp', which should be in the
+ * range 0...7.
+ *
+ * This function has no effect on the VLAN ID that 'flow' matches.
+ *
+ * After calling this function, 'flow' will not match packets without a VLAN
+ * header. */
+void
+flow_set_vlan_pcp(struct flow *flow, uint8_t pcp)
+{
+    pcp &= 0x07;
+    flow->vlan_tci &= ~htons(VLAN_PCP_MASK);
+    flow->vlan_tci |= htons((pcp << VLAN_PCP_SHIFT) | VLAN_CFI);
+}
+
 /* Puts into 'b' a packet that flow_extract() would parse as having the given
  * 'flow'.
  *
