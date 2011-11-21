@@ -908,6 +908,14 @@ dpif_netdev_recv_set_mask(struct dpif *dpif, int listen_mask)
     return 0;
 }
 
+static int
+dpif_netdev_queue_to_priority(const struct dpif *dpif OVS_UNUSED,
+                              uint32_t queue_id, uint32_t *priority)
+{
+    *priority = queue_id;
+    return 0;
+}
+
 static struct dp_netdev_queue *
 find_nonempty_queue(struct dpif *dpif)
 {
@@ -1366,7 +1374,7 @@ const struct dpif_class dpif_netdev_class = {
     NULL,                       /* operate */
     dpif_netdev_recv_get_mask,
     dpif_netdev_recv_set_mask,
-    NULL,                       /* queue_to_priority */
+    dpif_netdev_queue_to_priority,
     dpif_netdev_recv,
     dpif_netdev_recv_wait,
     dpif_netdev_recv_purge,
