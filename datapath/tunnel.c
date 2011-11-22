@@ -143,7 +143,7 @@ static void free_cache(struct tnl_cache *cache)
 	if (!cache)
 		return;
 
-	flow_put(cache->flow);
+	ovs_flow_put(cache->flow);
 	ip_rt_put(cache->rt);
 	kfree(cache);
 }
@@ -299,9 +299,9 @@ static struct vport *port_table_lookup(struct port_lookup_key *key,
 	return NULL;
 }
 
-struct vport *tnl_find_port(__be32 saddr, __be32 daddr, __be64 key,
-			    int tunnel_type,
-			    const struct tnl_mutable_config **mutable)
+struct vport *ovs_tnl_find_port(__be32 saddr, __be32 daddr, __be64 key,
+				int tunnel_type,
+				const struct tnl_mutable_config **mutable)
 {
 	struct port_lookup_key lookup;
 	struct vport *vport;
@@ -399,7 +399,7 @@ static void ecn_decapsulate(struct sk_buff *skb, u8 tos)
 }
 
 /**
- *	tnl_rcv - ingress point for generic tunnel code
+ *	ovs_tnl_rcv - ingress point for generic tunnel code
  *
  * @vport: port this packet was received on
  * @skb: received packet
@@ -413,7 +413,7 @@ static void ecn_decapsulate(struct sk_buff *skb, u8 tos)
  * - skb->csum does not include the inner Ethernet header.
  * - The layer pointers are undefined.
  */
-void tnl_rcv(struct vport *vport, struct sk_buff *skb, u8 tos)
+void ovs_tnl_rcv(struct vport *vport, struct sk_buff *skb, u8 tos)
 {
 	struct ethhdr *eh;
 
@@ -438,7 +438,7 @@ void tnl_rcv(struct vport *vport, struct sk_buff *skb, u8 tos)
 		return;
 	}
 
-	vport_receive(vport, skb);
+	ovs_vport_receive(vport, skb);
 }
 
 static bool check_ipv4_address(__be32 addr)
@@ -607,9 +607,9 @@ static void ipv6_build_icmp(struct sk_buff *skb, struct sk_buff *nskb,
 }
 #endif /* IPv6 */
 
-bool tnl_frag_needed(struct vport *vport,
-		     const struct tnl_mutable_config *mutable,
-		     struct sk_buff *skb, unsigned int mtu, __be64 flow_key)
+bool ovs_tnl_frag_needed(struct vport *vport,
+			 const struct tnl_mutable_config *mutable,
+			 struct sk_buff *skb, unsigned int mtu, __be64 flow_key)
 {
 	unsigned int eth_hdr_len = ETH_HLEN;
 	unsigned int total_length = 0, header_length = 0, payload_length;
@@ -709,7 +709,7 @@ bool tnl_frag_needed(struct vport *vport,
 		return false;
 	}
 
-	vport_receive(vport, nskb);
+	ovs_vport_receive(vport, nskb);
 
 	return true;
 }
@@ -756,8 +756,8 @@ static bool check_mtu(struct sk_buff *skb,
 			mtu = max(mtu, IP_MIN_MTU);
 
 			if (packet_length > mtu &&
-			    tnl_frag_needed(vport, mutable, skb, mtu,
-					    OVS_CB(skb)->tun_id))
+			    ovs_tnl_frag_needed(vport, mutable, skb, mtu,
+						OVS_CB(skb)->tun_id))
 				return false;
 		}
 	}
@@ -773,8 +773,8 @@ static bool check_mtu(struct sk_buff *skb,
 			mtu = max(mtu, IPV6_MIN_MTU);
 
 			if (packet_length > mtu &&
-			    tnl_frag_needed(vport, mutable, skb, mtu,
-					    OVS_CB(skb)->tun_id))
+			    ovs_tnl_frag_needed(vport, mutable, skb, mtu,
+						OVS_CB(skb)->tun_id))
 				return false;
 		}
 	}
@@ -830,7 +830,7 @@ static bool check_cache_valid(const struct tnl_cache *cache,
 		hh->hh_lock.sequence == cache->hh_seq &&
 #endif
 		mutable->seq == cache->mutable_seq &&
-		(!is_internal_dev(rt_dst(cache->rt).dev) ||
+		(!ovs_is_internal_dev(rt_dst(cache->rt).dev) ||
 		(cache->flow && !cache->flow->dead));
 }
 
@@ -945,7 +945,7 @@ static struct tnl_cache *build_cache(struct vport *vport,
 	cache->expiration = jiffies + tnl_vport->cache_exp_interval;
 #endif
 
-	if (is_internal_dev(rt_dst(rt).dev)) {
+	if (ovs_is_internal_dev(rt_dst(rt).dev)) {
 		struct sw_flow_key flow_key;
 		struct vport *dst_vport;
 		struct sk_buff *skb;
@@ -953,7 +953,7 @@ static struct tnl_cache *build_cache(struct vport *vport,
 		int flow_key_len;
 		struct sw_flow *flow;
 
-		dst_vport = internal_dev_get_vport(rt_dst(rt).dev);
+		dst_vport = ovs_internal_dev_get_vport(rt_dst(rt).dev);
 		if (!dst_vport)
 			goto done;
 
@@ -964,18 +964,18 @@ static struct tnl_cache *build_cache(struct vport *vport,
 		__skb_put(skb, cache->len);
 		memcpy(skb->data, get_cached_header(cache), cache->len);
 
-		err = flow_extract(skb, dst_vport->port_no, &flow_key,
-				   &flow_key_len);
+		err = ovs_flow_extract(skb, dst_vport->port_no, &flow_key,
+				       &flow_key_len);
 
 		consume_skb(skb);
 		if (err)
 			goto done;
 
-		flow = flow_tbl_lookup(rcu_dereference(dst_vport->dp->table),
-					 &flow_key, flow_key_len);
+		flow = ovs_flow_tbl_lookup(rcu_dereference(dst_vport->dp->table),
+					   &flow_key, flow_key_len);
 		if (flow) {
 			cache->flow = flow;
-			flow_hold(flow);
+			ovs_flow_hold(flow);
 		}
 	}
 
@@ -1151,11 +1151,11 @@ free_frags:
 	 * dropped so just free the rest.  This may help improve the congestion
 	 * that caused the first packet to be dropped.
 	 */
-	tnl_free_linked_skbs(skb);
+	ovs_tnl_free_linked_skbs(skb);
 	return sent_len;
 }
 
-int tnl_send(struct vport *vport, struct sk_buff *skb)
+int ovs_tnl_send(struct vport *vport, struct sk_buff *skb)
 {
 	struct tnl_vport *tnl_vport = tnl_vport_priv(vport);
 	const struct tnl_mutable_config *mutable = rcu_dereference(tnl_vport->mutable);
@@ -1302,7 +1302,7 @@ int tnl_send(struct vport *vport, struct sk_buff *skb)
 			int orig_len = skb->len - cache->len;
 			struct vport *cache_vport;
 
-			cache_vport = internal_dev_get_vport(rt_dst(rt).dev);
+			cache_vport = ovs_internal_dev_get_vport(rt_dst(rt).dev);
 			skb->protocol = htons(ETH_P_IP);
 			iph = ip_hdr(skb);
 			iph->tot_len = htons(skb->len - skb_network_offset(skb));
@@ -1315,7 +1315,7 @@ int tnl_send(struct vport *vport, struct sk_buff *skb)
 				}
 
 				OVS_CB(skb)->flow = cache->flow;
-				vport_receive(cache_vport, skb);
+				ovs_vport_receive(cache_vport, skb);
 				sent_len += orig_len;
 			} else {
 				int xmit_err;
@@ -1334,14 +1334,14 @@ next:
 	}
 
 	if (unlikely(sent_len == 0))
-		vport_record_error(vport, VPORT_E_TX_DROPPED);
+		ovs_vport_record_error(vport, VPORT_E_TX_DROPPED);
 
 	goto out;
 
 error_free:
-	tnl_free_linked_skbs(skb);
+	ovs_tnl_free_linked_skbs(skb);
 error:
-	vport_record_error(vport, err);
+	ovs_vport_record_error(vport, err);
 out:
 	dst_release(unattached_dst);
 	return sent_len;
@@ -1439,9 +1439,9 @@ static int tnl_set_config(struct nlattr *options, const struct tnl_ops *tnl_ops,
 	return 0;
 }
 
-struct vport *tnl_create(const struct vport_parms *parms,
-			 const struct vport_ops *vport_ops,
-			 const struct tnl_ops *tnl_ops)
+struct vport *ovs_tnl_create(const struct vport_parms *parms,
+			     const struct vport_ops *vport_ops,
+			     const struct tnl_ops *tnl_ops)
 {
 	struct vport *vport;
 	struct tnl_vport *tnl_vport;
@@ -1449,7 +1449,7 @@ struct vport *tnl_create(const struct vport_parms *parms,
 	int initial_frag_id;
 	int err;
 
-	vport = vport_alloc(sizeof(struct tnl_vport), vport_ops, parms);
+	vport = ovs_vport_alloc(sizeof(struct tnl_vport), vport_ops, parms);
 	if (IS_ERR(vport)) {
 		err = PTR_ERR(vport);
 		goto error;
@@ -1491,12 +1491,12 @@ error_free_mutable:
 	free_mutable_rtnl(mutable);
 	kfree(mutable);
 error_free_vport:
-	vport_free(vport);
+	ovs_vport_free(vport);
 error:
 	return ERR_PTR(err);
 }
 
-int tnl_set_options(struct vport *vport, struct nlattr *options)
+int ovs_tnl_set_options(struct vport *vport, struct nlattr *options)
 {
 	struct tnl_vport *tnl_vport = tnl_vport_priv(vport);
 	const struct tnl_mutable_config *old_mutable;
@@ -1533,7 +1533,7 @@ error:
 	return err;
 }
 
-int tnl_get_options(const struct vport *vport, struct sk_buff *skb)
+int ovs_tnl_get_options(const struct vport *vport, struct sk_buff *skb)
 {
 	const struct tnl_vport *tnl_vport = tnl_vport_priv(vport);
 	const struct tnl_mutable_config *mutable = rcu_dereference_rtnl(tnl_vport->mutable);
@@ -1565,10 +1565,10 @@ static void free_port_rcu(struct rcu_head *rcu)
 
 	free_cache((struct tnl_cache __force *)tnl_vport->cache);
 	kfree((struct tnl_mutable __force *)tnl_vport->mutable);
-	vport_free(tnl_vport_to_vport(tnl_vport));
+	ovs_vport_free(tnl_vport_to_vport(tnl_vport));
 }
 
-void tnl_destroy(struct vport *vport)
+void ovs_tnl_destroy(struct vport *vport)
 {
 	struct tnl_vport *tnl_vport = tnl_vport_priv(vport);
 	struct tnl_mutable_config *mutable;
@@ -1579,7 +1579,7 @@ void tnl_destroy(struct vport *vport)
 	call_rcu(&tnl_vport->rcu, free_port_rcu);
 }
 
-int tnl_set_addr(struct vport *vport, const unsigned char *addr)
+int ovs_tnl_set_addr(struct vport *vport, const unsigned char *addr)
 {
 	struct tnl_vport *tnl_vport = tnl_vport_priv(vport);
 	struct tnl_mutable_config *old_mutable, *mutable;
@@ -1597,19 +1597,19 @@ int tnl_set_addr(struct vport *vport, const unsigned char *addr)
 	return 0;
 }
 
-const char *tnl_get_name(const struct vport *vport)
+const char *ovs_tnl_get_name(const struct vport *vport)
 {
 	const struct tnl_vport *tnl_vport = tnl_vport_priv(vport);
 	return tnl_vport->name;
 }
 
-const unsigned char *tnl_get_addr(const struct vport *vport)
+const unsigned char *ovs_tnl_get_addr(const struct vport *vport)
 {
 	const struct tnl_vport *tnl_vport = tnl_vport_priv(vport);
 	return rcu_dereference_rtnl(tnl_vport->mutable)->eth_addr;
 }
 
-void tnl_free_linked_skbs(struct sk_buff *skb)
+void ovs_tnl_free_linked_skbs(struct sk_buff *skb)
 {
 	while (skb) {
 		struct sk_buff *next = skb->next;
@@ -1618,7 +1618,7 @@ void tnl_free_linked_skbs(struct sk_buff *skb)
 	}
 }
 
-int tnl_init(void)
+int ovs_tnl_init(void)
 {
 	int i;
 
@@ -1633,7 +1633,7 @@ int tnl_init(void)
 	return 0;
 }
 
-void tnl_exit(void)
+void ovs_tnl_exit(void)
 {
 	int i;
 

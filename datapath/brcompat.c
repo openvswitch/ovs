@@ -517,7 +517,7 @@ static int __init brc_init(void)
 	brioctl_set(brc_ioctl_deviceless_stub);
 
 	/* Set the openvswitch_mod device ioctl handler */
-	dp_ioctl_hook = brc_dev_ioctl;
+	ovs_dp_ioctl_hook = brc_dev_ioctl;
 
 	/* Randomize the initial sequence number.  This is not a security
 	 * feature; it only helps avoid crossed wires between userspace and
@@ -548,7 +548,7 @@ error:
 static void brc_cleanup(void)
 {
 	/* Unregister ioctl hooks */
-	dp_ioctl_hook = NULL;
+	ovs_dp_ioctl_hook = NULL;
 	brioctl_set(NULL);
 
 	genl_unregister_family(&brc_genl_family);

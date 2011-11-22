@@ -32,22 +32,22 @@ struct vport_parms;
 
 /* The following definitions are for users of the vport subsytem: */
 
-int vport_init(void);
-void vport_exit(void);
+int ovs_vport_init(void);
+void ovs_vport_exit(void);
 
-struct vport *vport_add(const struct vport_parms *);
-void vport_del(struct vport *);
+struct vport *ovs_vport_add(const struct vport_parms *);
+void ovs_vport_del(struct vport *);
 
-struct vport *vport_locate(const char *name);
+struct vport *ovs_vport_locate(const char *name);
 
-int vport_set_addr(struct vport *, const unsigned char *);
-void vport_set_stats(struct vport *, struct ovs_vport_stats *);
-void vport_get_stats(struct vport *, struct ovs_vport_stats *);
+int ovs_vport_set_addr(struct vport *, const unsigned char *);
+void ovs_vport_set_stats(struct vport *, struct ovs_vport_stats *);
+void ovs_vport_get_stats(struct vport *, struct ovs_vport_stats *);
 
-int vport_set_options(struct vport *, struct nlattr *options);
-int vport_get_options(const struct vport *, struct sk_buff *);
+int ovs_vport_set_options(struct vport *, struct nlattr *options);
+int ovs_vport_get_options(const struct vport *, struct sk_buff *);
 
-int vport_send(struct vport *, struct sk_buff *);
+int ovs_vport_send(struct vport *, struct sk_buff *);
 
 /* The following definitions are for implementers of vport devices: */
 
@@ -124,7 +124,7 @@ struct vport_parms {
 	enum ovs_vport_type type;
 	struct nlattr *options;
 
-	/* For vport_alloc(). */
+	/* For ovs_vport_alloc(). */
 	struct datapath *dp;
 	u16 port_no;
 	u32 upcall_pid;
@@ -141,7 +141,7 @@ struct vport_parms {
  * not set and initialzation fails then no vports of this type can be created.
  * @exit: Called at module unload.
  * @create: Create a new vport configured as specified.  On success returns
- * a new vport allocated with vport_alloc(), otherwise an ERR_PTR() value.
+ * a new vport allocated with ovs_vport_alloc(), otherwise an ERR_PTR() value.
  * @destroy: Destroys a vport.  Must call vport_free() on the vport but not
  * before an RCU grace period has elapsed.
  * @set_options: Modify the configuration of an existing vport.  May be %NULL
@@ -205,9 +205,9 @@ enum vport_err_type {
 	VPORT_E_TX_ERROR,
 };
 
-struct vport *vport_alloc(int priv_size, const struct vport_ops *,
-			  const struct vport_parms *);
-void vport_free(struct vport *);
+struct vport *ovs_vport_alloc(int priv_size, const struct vport_ops *,
+			      const struct vport_parms *);
+void ovs_vport_free(struct vport *);
 
 #define VPORT_ALIGN 8
 
@@ -240,15 +240,15 @@ static inline struct vport *vport_from_priv(const void *priv)
 	return (struct vport *)(priv - ALIGN(sizeof(struct vport), VPORT_ALIGN));
 }
 
-void vport_receive(struct vport *, struct sk_buff *);
-void vport_record_error(struct vport *, enum vport_err_type err_type);
+void ovs_vport_receive(struct vport *, struct sk_buff *);
+void ovs_vport_record_error(struct vport *, enum vport_err_type err_type);
 
 /* List of statically compiled vport implementations.  Don't forget to also
  * add yours to the list at the top of vport.c. */
-extern const struct vport_ops netdev_vport_ops;
-extern const struct vport_ops internal_vport_ops;
-extern const struct vport_ops patch_vport_ops;
-extern const struct vport_ops gre_vport_ops;
-extern const struct vport_ops capwap_vport_ops;
+extern const struct vport_ops ovs_netdev_vport_ops;
+extern const struct vport_ops ovs_internal_vport_ops;
+extern const struct vport_ops ovs_patch_vport_ops;
+extern const struct vport_ops ovs_gre_vport_ops;
+extern const struct vport_ops ovs_capwap_vport_ops;
 
 #endif /* vport.h */

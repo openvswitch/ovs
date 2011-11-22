@@ -111,7 +111,7 @@ static bool icmphdr_ok(struct sk_buff *skb)
 				  sizeof(struct icmphdr));
 }
 
-u64 flow_used_time(unsigned long flow_jiffies)
+u64 ovs_flow_used_time(unsigned long flow_jiffies)
 {
 	struct timespec cur_ts;
 	u64 cur_ms, idle_ms;
@@ -234,7 +234,7 @@ static bool icmp6hdr_ok(struct sk_buff *skb)
 #define TCP_FLAGS_OFFSET 13
 #define TCP_FLAG_MASK 0x3f
 
-void flow_used(struct sw_flow *flow, struct sk_buff *skb)
+void ovs_flow_used(struct sw_flow *flow, struct sk_buff *skb)
 {
 	u8 tcp_flags = 0;
 
@@ -252,7 +252,7 @@ void flow_used(struct sw_flow *flow, struct sk_buff *skb)
 	spin_unlock(&flow->lock);
 }
 
-struct sw_flow_actions *flow_actions_alloc(const struct nlattr *actions)
+struct sw_flow_actions *ovs_flow_actions_alloc(const struct nlattr *actions)
 {
 	int actions_len = nla_len(actions);
 	struct sw_flow_actions *sfa;
@@ -272,7 +272,7 @@ struct sw_flow_actions *flow_actions_alloc(const struct nlattr *actions)
 	return sfa;
 }
 
-struct sw_flow *flow_alloc(void)
+struct sw_flow *ovs_flow_alloc(void)
 {
 	struct sw_flow *flow;
 
@@ -322,7 +322,7 @@ static void free_buckets(struct flex_array *buckets)
 	flex_array_free(buckets);
 }
 
-struct flow_table *flow_tbl_alloc(int new_size)
+struct flow_table *ovs_flow_tbl_alloc(int new_size)
 {
 	struct flow_table *table = kmalloc(sizeof(*table), GFP_KERNEL);
 
@@ -344,10 +344,10 @@ struct flow_table *flow_tbl_alloc(int new_size)
 static void flow_free(struct sw_flow *flow)
 {
 	flow->dead = true;
-	flow_put(flow);
+	ovs_flow_put(flow);
 }
 
-void flow_tbl_destroy(struct flow_table *table)
+void ovs_flow_tbl_destroy(struct flow_table *table)
 {
 	int i;
 
@@ -373,10 +373,10 @@ static void flow_tbl_destroy_rcu_cb(struct rcu_head *rcu)
 {
 	struct flow_table *table = container_of(rcu, struct flow_table, rcu);
 
-	flow_tbl_destroy(table);
+	ovs_flow_tbl_destroy(table);
 }
 
-void flow_tbl_deferred_destroy(struct flow_table *table)
+void ovs_flow_tbl_deferred_destroy(struct flow_table *table)
 {
 	if (!table)
 		return;
@@ -384,7 +384,7 @@ void flow_tbl_deferred_destroy(struct flow_table *table)
 	call_rcu(&table->rcu, flow_tbl_destroy_rcu_cb);
 }
 
-struct sw_flow *flow_tbl_next(struct flow_table *table, u32 *bucket, u32 *last)
+struct sw_flow *ovs_flow_tbl_next(struct flow_table *table, u32 *bucket, u32 *last)
 {
 	struct sw_flow *flow;
 	struct hlist_head *head;
@@ -409,13 +409,13 @@ struct sw_flow *flow_tbl_next(struct flow_table *table, u32 *bucket, u32 *last)
 	return NULL;
 }
 
-struct flow_table *flow_tbl_expand(struct flow_table *table)
+struct flow_table *ovs_flow_tbl_expand(struct flow_table *table)
 {
 	struct flow_table *new_table;
 	int n_buckets = table->n_buckets * 2;
 	int i;
 
-	new_table = flow_tbl_alloc(n_buckets);
+	new_table = ovs_flow_tbl_alloc(n_buckets);
 	if (!new_table)
 		return ERR_PTR(-ENOMEM);
 
@@ -428,35 +428,35 @@ struct flow_table *flow_tbl_expand(struct flow_table *table)
 
 		hlist_for_each_entry_safe(flow, n, pos, head, hash_node) {
 			hlist_del_init_rcu(&flow->hash_node);
-			flow_tbl_insert(new_table, flow);
+			ovs_flow_tbl_insert(new_table, flow);
 		}
 	}
 
 	return new_table;
 }
 
-/* RCU callback used by flow_deferred_free. */
+/* RCU callback used by ovs_flow_deferred_free. */
 static void rcu_free_flow_callback(struct rcu_head *rcu)
 {
 	struct sw_flow *flow = container_of(rcu, struct sw_flow, rcu);
 
 	flow->dead = true;
-	flow_put(flow);
+	ovs_flow_put(flow);
 }
 
 /* Schedules 'flow' to be freed after the next RCU grace period.
  * The caller must hold rcu_read_lock for this to be sensible. */
-void flow_deferred_free(struct sw_flow *flow)
+void ovs_flow_deferred_free(struct sw_flow *flow)
 {
 	call_rcu(&flow->rcu, rcu_free_flow_callback);
 }
 
-void flow_hold(struct sw_flow *flow)
+void ovs_flow_hold(struct sw_flow *flow)
 {
 	atomic_inc(&flow->refcnt);
 }
 
-void flow_put(struct sw_flow *flow)
+void ovs_flow_put(struct sw_flow *flow)
 {
 	if (unlikely(!flow))
 		return;
@@ -467,7 +467,7 @@ void flow_put(struct sw_flow *flow)
 	}
 }
 
-/* RCU callback used by flow_deferred_free_acts. */
+/* RCU callback used by ovs_flow_deferred_free_acts. */
 static void rcu_free_acts_callback(struct rcu_head *rcu)
 {
 	struct sw_flow_actions *sf_acts = container_of(rcu,
@@ -477,7 +477,7 @@ static void rcu_free_acts_callback(struct rcu_head *rcu)
 
 /* Schedules 'sf_acts' to be freed after the next RCU grace period.
  * The caller must hold rcu_read_lock for this to be sensible. */
-void flow_deferred_free_acts(struct sw_flow_actions *sf_acts)
+void ovs_flow_deferred_free_acts(struct sw_flow_actions *sf_acts)
 {
 	call_rcu(&sf_acts->rcu, rcu_free_acts_callback);
 }
@@ -621,7 +621,7 @@ out:
 }
 
 /**
- * flow_extract - extracts a flow key from an Ethernet frame.
+ * ovs_flow_extract - extracts a flow key from an Ethernet frame.
  * @skb: sk_buff that contains the frame, with skb->data pointing to the
  * Ethernet header
  * @in_port: port number on which @skb was received.
@@ -644,7 +644,7 @@ out:
  *      of a correct length, otherwise the same as skb->network_header.
  *      For other key->dl_type values it is left untouched.
  */
-int flow_extract(struct sk_buff *skb, u16 in_port, struct sw_flow_key *key,
+int ovs_flow_extract(struct sk_buff *skb, u16 in_port, struct sw_flow_key *key,
 		 int *key_lenp)
 {
 	int error = 0;
@@ -811,12 +811,12 @@ out:
 	return error;
 }
 
-u32 flow_hash(const struct sw_flow_key *key, int key_len)
+u32 ovs_flow_hash(const struct sw_flow_key *key, int key_len)
 {
 	return jhash2((u32 *)key, DIV_ROUND_UP(key_len, sizeof(u32)), hash_seed);
 }
 
-struct sw_flow *flow_tbl_lookup(struct flow_table *table,
+struct sw_flow *ovs_flow_tbl_lookup(struct flow_table *table,
 				struct sw_flow_key *key, int key_len)
 {
 	struct sw_flow *flow;
@@ -824,7 +824,7 @@ struct sw_flow *flow_tbl_lookup(struct flow_table *table,
 	struct hlist_head *head;
 	u32 hash;
 
-	hash = flow_hash(key, key_len);
+	hash = ovs_flow_hash(key, key_len);
 
 	head = find_bucket(table, hash);
 	hlist_for_each_entry_rcu(flow, n, head, hash_node) {
@@ -837,7 +837,7 @@ struct sw_flow *flow_tbl_lookup(struct flow_table *table,
 	return NULL;
 }
 
-void flow_tbl_insert(struct flow_table *table, struct sw_flow *flow)
+void ovs_flow_tbl_insert(struct flow_table *table, struct sw_flow *flow)
 {
 	struct hlist_head *head;
 
@@ -846,7 +846,7 @@ void flow_tbl_insert(struct flow_table *table, struct sw_flow *flow)
 	table->count++;
 }
 
-void flow_tbl_remove(struct flow_table *table, struct sw_flow *flow)
+void ovs_flow_tbl_remove(struct flow_table *table, struct sw_flow *flow)
 {
 	if (!hlist_unhashed(&flow->hash_node)) {
 		hlist_del_init_rcu(&flow->hash_node);
@@ -1012,13 +1012,13 @@ static int parse_flow_nlattrs(const struct nlattr *attr,
 }
 
 /**
- * flow_from_nlattrs - parses Netlink attributes into a flow key.
+ * ovs_flow_from_nlattrs - parses Netlink attributes into a flow key.
  * @swkey: receives the extracted flow key.
  * @key_lenp: number of bytes used in @swkey.
  * @attr: Netlink attribute holding nested %OVS_KEY_ATTR_* Netlink attribute
  * sequence.
  */
-int flow_from_nlattrs(struct sw_flow_key *swkey, int *key_lenp,
+int ovs_flow_from_nlattrs(struct sw_flow_key *swkey, int *key_lenp,
 		      const struct nlattr *attr)
 {
 	const struct nlattr *a[OVS_KEY_ATTR_MAX + 1];
@@ -1178,7 +1178,7 @@ int flow_from_nlattrs(struct sw_flow_key *swkey, int *key_lenp,
 }
 
 /**
- * flow_metadata_from_nlattrs - parses Netlink attributes into a flow key.
+ * ovs_flow_metadata_from_nlattrs - parses Netlink attributes into a flow key.
  * @in_port: receives the extracted input port.
  * @tun_id: receives the extracted tunnel ID.
  * @key: Netlink attribute holding nested %OVS_KEY_ATTR_* Netlink attribute
@@ -1189,8 +1189,8 @@ int flow_from_nlattrs(struct sw_flow_key *swkey, int *key_lenp,
  * get the metadata, that is, the parts of the flow key that cannot be
  * extracted from the packet itself.
  */
-int flow_metadata_from_nlattrs(u32 *priority, u16 *in_port, __be64 *tun_id,
-			       const struct nlattr *attr)
+int ovs_flow_metadata_from_nlattrs(u32 *priority, u16 *in_port, __be64 *tun_id,
+				   const struct nlattr *attr)
 {
 	const struct nlattr *nla;
 	int rem;
@@ -1228,7 +1228,7 @@ int flow_metadata_from_nlattrs(u32 *priority, u16 *in_port, __be64 *tun_id,
 	return 0;
 }
 
-int flow_to_nlattrs(const struct sw_flow_key *swkey, struct sk_buff *skb)
+int ovs_flow_to_nlattrs(const struct sw_flow_key *swkey, struct sk_buff *skb)
 {
 	struct ovs_key_ethernet *eth_key;
 	struct nlattr *nla, *encap;
@@ -1390,7 +1390,7 @@ nla_put_failure:
 
 /* Initializes the flow module.
  * Returns zero if successful or a negative error code. */
-int flow_init(void)
+int ovs_flow_init(void)
 {
 	flow_cache = kmem_cache_create("sw_flow", sizeof(struct sw_flow), 0,
 					0, NULL);
@@ -1403,7 +1403,7 @@ int flow_init(void)
 }
 
 /* Uninitializes the flow module. */
-void flow_exit(void)
+void ovs_flow_exit(void)
 {
 	kmem_cache_destroy(flow_cache);
 }

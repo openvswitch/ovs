@@ -191,12 +191,12 @@ static ssize_t brport_store(struct kobject *kobj,
 		return -EPERM;
 
 	pr_warning("%s: xxx writing port parms not supported yet!\n",
-		   dp_name(p->dp));
+		   ovs_dp_name(p->dp));
 
 	return ret;
 }
 
-struct sysfs_ops brport_sysfs_ops = {
+struct sysfs_ops ovs_brport_sysfs_ops = {
 	.show = brport_show,
 	.store = brport_store,
 };
@@ -206,7 +206,7 @@ struct sysfs_ops brport_sysfs_ops = {
  * Creates a brport subdirectory with bridge attributes.
  * Puts symlink in bridge's brport subdirectory
  */
-int dp_sysfs_add_if(struct vport *p)
+int ovs_dp_sysfs_add_if(struct vport *p)
 {
 	struct datapath *dp = p->dp;
 	struct vport *local_port = rtnl_dereference(dp->ports[OVSP_LOCAL]);
@@ -254,7 +254,7 @@ err:
 	return err;
 }
 
-int dp_sysfs_del_if(struct vport *p)
+int ovs_dp_sysfs_del_if(struct vport *p)
 {
 	if (p->linkname[0]) {
 		sysfs_remove_link(&p->dp->ifobj, p->linkname);

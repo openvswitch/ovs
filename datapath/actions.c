@@ -254,7 +254,7 @@ static int do_output(struct datapath *dp, struct sk_buff *skb, int out_port)
 		return -ENODEV;
 	}
 
-	vport_send(vport, skb);
+	ovs_vport_send(vport, skb);
 	return 0;
 }
 
@@ -283,7 +283,7 @@ static int output_userspace(struct datapath *dp, struct sk_buff *skb,
 		}
 	}
 
-	return dp_upcall(dp, skb, &upcall);
+	return ovs_dp_upcall(dp, skb, &upcall);
 }
 
 static int sample(struct datapath *dp, struct sk_buff *skb,
@@ -426,13 +426,13 @@ static int loop_suppress(struct datapath *dp, struct sw_flow_actions *actions)
 {
 	if (net_ratelimit())
 		pr_warn("%s: flow looped %d times, dropping\n",
-				dp_name(dp), MAX_LOOPS);
+				ovs_dp_name(dp), MAX_LOOPS);
 	actions->actions_len = 0;
 	return -ELOOP;
 }
 
 /* Execute a list of actions against 'skb'. */
-int execute_actions(struct datapath *dp, struct sk_buff *skb)
+int ovs_execute_actions(struct datapath *dp, struct sk_buff *skb)
 {
 	struct sw_flow_actions *acts = rcu_dereference(OVS_CB(skb)->flow->sf_acts);
 	struct loop_counter *loop;

@@ -131,18 +131,18 @@ struct dp_upcall_info {
 	u32 pid;
 };
 
-extern struct notifier_block dp_device_notifier;
-extern struct genl_multicast_group dp_vport_multicast_group;
-extern int (*dp_ioctl_hook)(struct net_device *dev, struct ifreq *rq, int cmd);
+extern struct notifier_block ovs_dp_device_notifier;
+extern struct genl_multicast_group ovs_dp_vport_multicast_group;
+extern int (*ovs_dp_ioctl_hook)(struct net_device *dev, struct ifreq *rq, int cmd);
 
-void dp_process_received_packet(struct vport *, struct sk_buff *);
-void dp_detach_port(struct vport *);
-int dp_upcall(struct datapath *, struct sk_buff *,
-	      const struct dp_upcall_info *);
+void ovs_dp_process_received_packet(struct vport *, struct sk_buff *);
+void ovs_dp_detach_port(struct vport *);
+int ovs_dp_upcall(struct datapath *, struct sk_buff *,
+		  const struct dp_upcall_info *);
 
-const char *dp_name(const struct datapath *dp);
+const char *ovs_dp_name(const struct datapath *dp);
 struct sk_buff *ovs_vport_cmd_build_info(struct vport *, u32 pid, u32 seq,
 					 u8 cmd);
 
-int execute_actions(struct datapath *dp, struct sk_buff *skb);
+int ovs_execute_actions(struct datapath *dp, struct sk_buff *skb);
 #endif /* datapath.h */

@@ -22,7 +22,7 @@
 #include "datapath.h"
 #include "vport.h"
 
-int is_internal_dev(const struct net_device *);
-struct vport *internal_dev_get_vport(struct net_device *);
+int ovs_is_internal_dev(const struct net_device *);
+struct vport *ovs_internal_dev_get_vport(struct net_device *);
 
 #endif /* vport-internal_dev.h */

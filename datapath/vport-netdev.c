@@ -57,7 +57,7 @@ static rx_handler_result_t netdev_frame_hook(struct sk_buff **pskb)
 	if (unlikely(skb->pkt_type == PACKET_LOOPBACK))
 		return RX_HANDLER_PASS;
 
-	vport = netdev_get_vport(skb->dev);
+	vport = ovs_netdev_get_vport(skb->dev);
 
 	netdev_port_receive(vport, skb);
 
@@ -130,8 +130,8 @@ static struct vport *netdev_create(const struct vport_parms *parms)
 	struct netdev_vport *netdev_vport;
 	int err;
 
-	vport = vport_alloc(sizeof(struct netdev_vport),
-			    &netdev_vport_ops, parms);
+	vport = ovs_vport_alloc(sizeof(struct netdev_vport),
+				&ovs_netdev_vport_ops, parms);
 	if (IS_ERR(vport)) {
 		err = PTR_ERR(vport);
 		goto error;
@@ -147,7 +147,7 @@ static struct vport *netdev_create(const struct vport_parms *parms)
 
 	if (netdev_vport->dev->flags & IFF_LOOPBACK ||
 	    netdev_vport->dev->type != ARPHRD_ETHER ||
-	    is_internal_dev(netdev_vport->dev)) {
+	    ovs_is_internal_dev(netdev_vport->dev)) {
 		err = -EINVAL;
 		goto error_put;
 	}
@@ -168,7 +168,7 @@ static struct vport *netdev_create(const struct vport_parms *parms)
 error_put:
 	dev_put(netdev_vport->dev);
 error_free_vport:
-	vport_free(vport);
+	ovs_vport_free(vport);
 error:
 	return ERR_PTR(err);
 }
@@ -184,10 +184,10 @@ static void netdev_destroy(struct vport *vport)
 	synchronize_rcu();
 
 	dev_put(netdev_vport->dev);
-	vport_free(vport);
+	ovs_vport_free(vport);
 }
 
-int netdev_set_addr(struct vport *vport, const unsigned char *addr)
+int ovs_netdev_set_addr(struct vport *vport, const unsigned char *addr)
 {
 	struct netdev_vport *netdev_vport = netdev_vport_priv(vport);
 	struct sockaddr sa;
@@ -198,49 +198,49 @@ int netdev_set_addr(struct vport *vport, const unsigned char *addr)
 	return dev_set_mac_address(netdev_vport->dev, &sa);
 }
 
-const char *netdev_get_name(const struct vport *vport)
+const char *ovs_netdev_get_name(const struct vport *vport)
 {
 	const struct netdev_vport *netdev_vport = netdev_vport_priv(vport);
 	return netdev_vport->dev->name;
 }
 
-const unsigned char *netdev_get_addr(const struct vport *vport)
+const unsigned char *ovs_netdev_get_addr(const struct vport *vport)
 {
 	const struct netdev_vport *netdev_vport = netdev_vport_priv(vport);
 	return netdev_vport->dev->dev_addr;
 }
 
-struct kobject *netdev_get_kobj(const struct vport *vport)
+struct kobject *ovs_netdev_get_kobj(const struct vport *vport)
 {
 	const struct netdev_vport *netdev_vport = netdev_vport_priv(vport);
 	return &netdev_vport->dev->NETDEV_DEV_MEMBER.kobj;
 }
 
-unsigned netdev_get_dev_flags(const struct vport *vport)
+unsigned ovs_netdev_get_dev_flags(const struct vport *vport)
 {
 	const struct netdev_vport *netdev_vport = netdev_vport_priv(vport);
 	return dev_get_flags(netdev_vport->dev);
 }
 
-int netdev_is_running(const struct vport *vport)
+int ovs_netdev_is_running(const struct vport *vport)
 {
 	const struct netdev_vport *netdev_vport = netdev_vport_priv(vport);
 	return netif_running(netdev_vport->dev);
 }
 
-unsigned char netdev_get_operstate(const struct vport *vport)
+unsigned char ovs_netdev_get_operstate(const struct vport *vport)
 {
 	const struct netdev_vport *netdev_vport = netdev_vport_priv(vport);
 	return netdev_vport->dev->operstate;
 }
 
-int netdev_get_ifindex(const struct vport *vport)
+int ovs_netdev_get_ifindex(const struct vport *vport)
 {
 	const struct netdev_vport *netdev_vport = netdev_vport_priv(vport);
 	return netdev_vport->dev->ifindex;
 }
 
-int netdev_get_mtu(const struct vport *vport)
+int ovs_netdev_get_mtu(const struct vport *vport)
 {
 	const struct netdev_vport *netdev_vport = netdev_vport_priv(vport);
 	return netdev_vport->dev->mtu;
@@ -270,7 +270,7 @@ static void netdev_port_receive(struct vport *vport, struct sk_buff *skb)
 	}
 	vlan_copy_skb_tci(skb);
 
-	vport_receive(vport, skb);
+	ovs_vport_receive(vport, skb);
 }
 
 static unsigned packet_length(const struct sk_buff *skb)
@@ -305,7 +305,7 @@ static int netdev_send(struct vport *vport, struct sk_buff *skb)
 	if (unlikely(packet_length(skb) > mtu && !skb_is_gso(skb))) {
 		if (net_ratelimit())
 			pr_warn("%s: dropped over-mtu packet: %d > %d\n",
-				dp_name(vport->dp), packet_length(skb), mtu);
+				ovs_dp_name(vport->dp), packet_length(skb), mtu);
 		goto error;
 	}
 
@@ -378,12 +378,12 @@ tag:
 
 error:
 	kfree_skb(skb);
-	vport_record_error(vport, VPORT_E_TX_DROPPED);
+	ovs_vport_record_error(vport, VPORT_E_TX_DROPPED);
 	return 0;
 }
 
 /* Returns null if this device is not attached to a datapath. */
-struct vport *netdev_get_vport(struct net_device *dev)
+struct vport *ovs_netdev_get_vport(struct net_device *dev)
 {
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,36)
 #if IFF_BRIDGE_PORT != IFF_OVS_DATAPATH
@@ -399,22 +399,22 @@ struct vport *netdev_get_vport(struct net_device *dev)
 #endif
 }
 
-const struct vport_ops netdev_vport_ops = {
+const struct vport_ops ovs_netdev_vport_ops = {
 	.type		= OVS_VPORT_TYPE_NETDEV,
 	.flags          = VPORT_F_REQUIRED,
 	.init		= netdev_init,
 	.exit		= netdev_exit,
 	.create		= netdev_create,
 	.destroy	= netdev_destroy,
-	.set_addr	= netdev_set_addr,
-	.get_name	= netdev_get_name,
-	.get_addr	= netdev_get_addr,
-	.get_kobj	= netdev_get_kobj,
-	.get_dev_flags	= netdev_get_dev_flags,
-	.is_running	= netdev_is_running,
-	.get_operstate	= netdev_get_operstate,
-	.get_ifindex	= netdev_get_ifindex,
-	.get_mtu	= netdev_get_mtu,
+	.set_addr	= ovs_netdev_set_addr,
+	.get_name	= ovs_netdev_get_name,
+	.get_addr	= ovs_netdev_get_addr,
+	.get_kobj	= ovs_netdev_get_kobj,
+	.get_dev_flags	= ovs_netdev_get_dev_flags,
+	.is_running	= ovs_netdev_is_running,
+	.get_operstate	= ovs_netdev_get_operstate,
+	.get_ifindex	= ovs_netdev_get_ifindex,
+	.get_mtu	= ovs_netdev_get_mtu,
 	.send		= netdev_send,
 };
 

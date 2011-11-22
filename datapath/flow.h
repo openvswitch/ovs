@@ -126,22 +126,22 @@ struct arp_eth_header {
 	unsigned char       ar_tip[4];		/* target IP address        */
 } __packed;
 
-int flow_init(void);
-void flow_exit(void);
+int ovs_flow_init(void);
+void ovs_flow_exit(void);
 
-struct sw_flow *flow_alloc(void);
-void flow_deferred_free(struct sw_flow *);
+struct sw_flow *ovs_flow_alloc(void);
+void ovs_flow_deferred_free(struct sw_flow *);
 
-struct sw_flow_actions *flow_actions_alloc(const struct nlattr *);
-void flow_deferred_free_acts(struct sw_flow_actions *);
+struct sw_flow_actions *ovs_flow_actions_alloc(const struct nlattr *);
+void ovs_flow_deferred_free_acts(struct sw_flow_actions *);
 
-void flow_hold(struct sw_flow *);
-void flow_put(struct sw_flow *);
+void ovs_flow_hold(struct sw_flow *);
+void ovs_flow_put(struct sw_flow *);
 
-int flow_extract(struct sk_buff *, u16 in_port, struct sw_flow_key *,
-		 int *key_lenp);
-void flow_used(struct sw_flow *, struct sk_buff *);
-u64 flow_used_time(unsigned long flow_jiffies);
+int ovs_flow_extract(struct sk_buff *, u16 in_port, struct sw_flow_key *,
+		     int *key_lenp);
+void ovs_flow_used(struct sw_flow *, struct sk_buff *);
+u64 ovs_flow_used_time(unsigned long flow_jiffies);
 
 /* Upper bound on the length of a nlattr-formatted flow key.  The longest
  * nlattr-formatted flow key would be:
@@ -162,11 +162,11 @@ u64 flow_used_time(unsigned long flow_jiffies);
  */
 #define FLOW_BUFSIZE 144
 
-int flow_to_nlattrs(const struct sw_flow_key *, struct sk_buff *);
-int flow_from_nlattrs(struct sw_flow_key *swkey, int *key_lenp,
+int ovs_flow_to_nlattrs(const struct sw_flow_key *, struct sk_buff *);
+int ovs_flow_from_nlattrs(struct sw_flow_key *swkey, int *key_lenp,
 		      const struct nlattr *);
-int flow_metadata_from_nlattrs(u32 *priority, u16 *in_port, __be64 *tun_id,
-			       const struct nlattr *);
+int ovs_flow_metadata_from_nlattrs(u32 *priority, u16 *in_port, __be64 *tun_id,
+				   const struct nlattr *);
 
 #define TBL_MIN_BUCKETS		1024
 
@@ -176,27 +176,27 @@ struct flow_table {
 	struct rcu_head rcu;
 };
 
-static inline int flow_tbl_count(struct flow_table *table)
+static inline int ovs_flow_tbl_count(struct flow_table *table)
 {
 	return table->count;
 }
 
-static inline int flow_tbl_need_to_expand(struct flow_table *table)
+static inline int ovs_flow_tbl_need_to_expand(struct flow_table *table)
 {
 	return (table->count > table->n_buckets);
 }
 
-struct sw_flow *flow_tbl_lookup(struct flow_table *table,
-				struct sw_flow_key *key,    int len);
-void flow_tbl_destroy(struct flow_table *table);
-void flow_tbl_deferred_destroy(struct flow_table *table);
-struct flow_table *flow_tbl_alloc(int new_size);
-struct flow_table *flow_tbl_expand(struct flow_table *table);
-void flow_tbl_insert(struct flow_table *table, struct sw_flow *flow);
-void flow_tbl_remove(struct flow_table *table, struct sw_flow *flow);
-u32 flow_hash(const struct sw_flow_key *key, int key_len);
+struct sw_flow *ovs_flow_tbl_lookup(struct flow_table *table,
+				    struct sw_flow_key *key, int len);
+void ovs_flow_tbl_destroy(struct flow_table *table);
+void ovs_flow_tbl_deferred_destroy(struct flow_table *table);
+struct flow_table *ovs_flow_tbl_alloc(int new_size);
+struct flow_table *ovs_flow_tbl_expand(struct flow_table *table);
+void ovs_flow_tbl_insert(struct flow_table *table, struct sw_flow *flow);
+void ovs_flow_tbl_remove(struct flow_table *table, struct sw_flow *flow);
+u32 ovs_flow_hash(const struct sw_flow_key *key, int key_len);
 
-struct sw_flow *flow_tbl_next(struct flow_table *table, u32 *bucket, u32 *idx);
+struct sw_flow *ovs_flow_tbl_next(struct flow_table *table, u32 *bucket, u32 *idx);
 extern const int ovs_key_lens[OVS_KEY_ATTR_MAX + 1];
 
 #endif /* flow.h */

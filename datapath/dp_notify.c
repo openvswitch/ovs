@@ -29,38 +29,38 @@ static int dp_device_event(struct notifier_block *unused, unsigned long event,
 	struct net_device *dev = ptr;
 	struct vport *vport;
 
-	if (is_internal_dev(dev))
-		vport = internal_dev_get_vport(dev);
+	if (ovs_is_internal_dev(dev))
+		vport = ovs_internal_dev_get_vport(dev);
 	else
-		vport = netdev_get_vport(dev);
+		vport = ovs_netdev_get_vport(dev);
 
 	if (!vport)
 		return NOTIFY_DONE;
 
 	switch (event) {
 	case NETDEV_UNREGISTER:
-		if (!is_internal_dev(dev)) {
+		if (!ovs_is_internal_dev(dev)) {
 			struct sk_buff *notify;
 
 			notify = ovs_vport_cmd_build_info(vport, 0, 0,
 							  OVS_VPORT_CMD_DEL);
-			dp_detach_port(vport);
+			ovs_dp_detach_port(vport);
 			if (IS_ERR(notify)) {
 				netlink_set_err(INIT_NET_GENL_SOCK, 0,
-						dp_vport_multicast_group.id,
+						ovs_dp_vport_multicast_group.id,
 						PTR_ERR(notify));
 				break;
 			}
 
-			genlmsg_multicast(notify, 0, dp_vport_multicast_group.id,
+			genlmsg_multicast(notify, 0, ovs_dp_vport_multicast_group.id,
 					  GFP_KERNEL);
 		}
 		break;
 
 	case NETDEV_CHANGENAME:
 		if (vport->port_no != OVSP_LOCAL) {
-			dp_sysfs_del_if(vport);
-			dp_sysfs_add_if(vport);
+			ovs_dp_sysfs_del_if(vport);
+			ovs_dp_sysfs_add_if(vport);
 		}
 		break;
 	}
@@ -68,6 +68,6 @@ static int dp_device_event(struct notifier_block *unused, unsigned long event,
 	return NOTIFY_DONE;
 }
 
-struct notifier_block dp_device_notifier = {
+struct notifier_block ovs_dp_device_notifier = {
 	.notifier_call = dp_device_event
 };

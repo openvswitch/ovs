@@ -242,33 +242,32 @@ struct tnl_vport {
 #endif
 };
 
-struct vport *tnl_create(const struct vport_parms *, const struct vport_ops *,
-			 const struct tnl_ops *);
-void tnl_destroy(struct vport *);
+struct vport *ovs_tnl_create(const struct vport_parms *, const struct vport_ops *,
+			     const struct tnl_ops *);
+void ovs_tnl_destroy(struct vport *);
 
-int tnl_set_options(struct vport *, struct nlattr *);
-int tnl_get_options(const struct vport *, struct sk_buff *);
+int ovs_tnl_set_options(struct vport *, struct nlattr *);
+int ovs_tnl_get_options(const struct vport *, struct sk_buff *);
 
-int tnl_set_addr(struct vport *vport, const unsigned char *addr);
-const char *tnl_get_name(const struct vport *vport);
-const unsigned char *tnl_get_addr(const struct vport *vport);
-int tnl_send(struct vport *vport, struct sk_buff *skb);
-void tnl_rcv(struct vport *vport, struct sk_buff *skb, u8 tos);
+int ovs_tnl_set_addr(struct vport *vport, const unsigned char *addr);
+const char *ovs_tnl_get_name(const struct vport *vport);
+const unsigned char *ovs_tnl_get_addr(const struct vport *vport);
+int ovs_tnl_send(struct vport *vport, struct sk_buff *skb);
+void ovs_tnl_rcv(struct vport *vport, struct sk_buff *skb, u8 tos);
 
-struct vport *tnl_find_port(__be32 saddr, __be32 daddr, __be64 key,
-			    int tunnel_type,
-			    const struct tnl_mutable_config **mutable);
-bool tnl_frag_needed(struct vport *vport,
-		     const struct tnl_mutable_config *mutable,
-		     struct sk_buff *skb, unsigned int mtu, __be64 flow_key);
-void tnl_free_linked_skbs(struct sk_buff *skb);
+struct vport *ovs_tnl_find_port(__be32 saddr, __be32 daddr, __be64 key,
+				int tunnel_type,
+				const struct tnl_mutable_config **mutable);
+bool ovs_tnl_frag_needed(struct vport *vport,
+			 const struct tnl_mutable_config *mutable,
+			 struct sk_buff *skb, unsigned int mtu, __be64 flow_key);
+void ovs_tnl_free_linked_skbs(struct sk_buff *skb);
 
-int tnl_init(void);
-void tnl_exit(void);
+int ovs_tnl_init(void);
+void ovs_tnl_exit(void);
 static inline struct tnl_vport *tnl_vport_priv(const struct vport *vport)
 {
 	return vport_priv(vport);
 }
-
 
 #endif /* tunnel.h */

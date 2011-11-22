@@ -21,8 +21,8 @@
 
 #include "vport.h"
 
-unsigned vport_gen_get_dev_flags(const struct vport *);
-int vport_gen_is_running(const struct vport *);
-unsigned char vport_gen_get_operstate(const struct vport *);
+unsigned ovs_vport_gen_get_dev_flags(const struct vport *);
+int ovs_vport_gen_is_running(const struct vport *);
+unsigned char ovs_vport_gen_get_operstate(const struct vport *);
 
 #endif /* vport-generic.h */
