@@ -65,9 +65,6 @@ void poll_block(void);
 /* Cancel a file descriptor callback or event. */
 void poll_cancel(struct poll_waiter *);
 
-/* Checks whether the file descriptor caused a wakeup. */
-short int poll_fd_woke(int fd);
-
 #ifdef  __cplusplus
 }
 #endif

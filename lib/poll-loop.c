@@ -62,15 +62,6 @@ static int timeout = -1;
 /* Location where waiter created. */
 static const char *timeout_where;
 
-/* Array of file descriptors from last run of poll_block(). */
-static struct pollfd *pollfds;
-
-/* Allocated size of pollfds. */
-static size_t max_pollfds;
-
-/* Current number of elements in pollfds. */
-static int n_pollfds;
-
 static struct poll_waiter *new_waiter(int fd, short int events,
                                       const char *where);
 
@@ -219,8 +210,11 @@ log_wakeup(const char *where, const struct pollfd *pollfd, int timeout)
 void
 poll_block(void)
 {
+    static struct pollfd *pollfds;
+    static size_t max_pollfds;
+
     struct poll_waiter *pw, *next;
-    int n_waiters;
+    int n_waiters, n_pollfds;
     int retval;
 
     /* Register fatal signal events before actually doing any real work for
@@ -280,25 +274,6 @@ poll_cancel(struct poll_waiter *pw)
         list_remove(&pw->node);
         free(pw);
     }
-}
-
-/* Checks whether the given file descriptor caused the poll loop to wake up
- * in the previous iteration.  If it did, returns a bitmask of the events
- * that caused the wakeup.  Otherwise returns 0;
- */
-short int
-poll_fd_woke(int fd)
-{
-    int i;
-    short int events = 0;
-
-    for (i = 0; i < n_pollfds; i++) {
-        if (pollfds[i].fd == fd) {
-            events |= pollfds[i].revents;
-        }
-    }
-
-    return events;
 }
 
 /* Creates and returns a new poll_waiter for 'fd' and 'events'. */

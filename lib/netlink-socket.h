@@ -60,7 +60,6 @@ int nl_sock_transact(struct nl_sock *, const struct ofpbuf *request,
 int nl_sock_drain(struct nl_sock *);
 
 void nl_sock_wait(const struct nl_sock *, short int events);
-short int nl_sock_woke(const struct nl_sock *);
 
 uint32_t nl_sock_pid(const struct nl_sock *);
 
