@@ -31,6 +31,7 @@
 #include <poll.h>
 #include <stdlib.h>
 #include <strings.h>
+#include <sys/epoll.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -140,6 +141,7 @@ struct dpif_linux {
     struct nl_sock *upcall_socks[N_UPCALL_SOCKS];
     uint32_t ready_mask;        /* 1-bit for each sock with unread messages. */
     unsigned int listen_mask;   /* Mask of DPIF_UC_* bits. */
+    int epoll_fd;               /* epoll fd that includes the upcall socks. */
 
     /* Change notification. */
     struct sset changed_ports;  /* Ports that have changed. */
@@ -274,6 +276,7 @@ open_dpif(const struct dpif_linux_dp *dp, struct dpif **dpifp)
     dpif = xzalloc(sizeof *dpif);
     dpif->port_notifier = nln_notifier_create(nln, dpif_linux_port_changed,
                                               dpif);
+    dpif->epoll_fd = -1;
 
     dpif_init(&dpif->dpif, &dpif_linux_class, dp->name,
               dp->dp_ifindex, dp->dp_ifindex);
@@ -294,6 +297,10 @@ destroy_upcall_socks(struct dpif_linux *dpif)
 {
     int i;
 
+    if (dpif->epoll_fd >= 0) {
+        close(dpif->epoll_fd);
+        dpif->epoll_fd = -1;
+    }
     for (i = 0; i < N_UPCALL_SOCKS; i++) {
         nl_sock_destroy(dpif->upcall_socks[i]);
         dpif->upcall_socks[i] = NULL;
@@ -1005,9 +1012,25 @@ dpif_linux_recv_set_mask(struct dpif *dpif_, int listen_mask)
         int i;
         int error;
 
+        dpif->epoll_fd = epoll_create(N_UPCALL_SOCKS);
+        if (dpif->epoll_fd < 0) {
+            return errno;
+        }
+
         for (i = 0; i < N_UPCALL_SOCKS; i++) {
+            struct epoll_event event;
+
             error = nl_sock_create(NETLINK_GENERIC, &dpif->upcall_socks[i]);
             if (error) {
+                destroy_upcall_socks(dpif);
+                return error;
+            }
+
+            event.events = EPOLLIN;
+            event.data.u32 = i;
+            if (epoll_ctl(dpif->epoll_fd, EPOLL_CTL_ADD,
+                          nl_sock_fd(dpif->upcall_socks[i]), &event) < 0) {
+                error = errno;
                 destroy_upcall_socks(dpif);
                 return error;
             }
@@ -1100,36 +1123,24 @@ dpif_linux_recv(struct dpif *dpif_, struct dpif_upcall *upcall)
     }
 
     if (!dpif->ready_mask) {
-        struct pollfd pfds[N_UPCALL_SOCKS];
+        struct epoll_event events[N_UPCALL_SOCKS];
         int retval;
         int i;
 
-        for (i = 0; i < N_UPCALL_SOCKS; i++) {
-            pfds[i].fd = nl_sock_fd(dpif->upcall_socks[i]);
-            pfds[i].events = POLLIN;
-            pfds[i].revents = 0;
-        }
-
         do {
-            retval = poll(pfds, N_UPCALL_SOCKS, 0);
+            retval = epoll_wait(dpif->epoll_fd, events, N_UPCALL_SOCKS, 0);
         } while (retval < 0 && errno == EINTR);
         if (retval < 0) {
             static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
-            VLOG_WARN_RL(&rl, "poll failed (%s)", strerror(errno));
-        } else if (!retval) {
-            return EAGAIN;
+            VLOG_WARN_RL(&rl, "epoll_wait failed (%s)", strerror(errno));
         }
 
-        for (i = 0; i < N_UPCALL_SOCKS; i++) {
-            if (pfds[i].revents) {
-                dpif->ready_mask |= 1u << i;
-            }
+        for (i = 0; i < retval; i++) {
+            dpif->ready_mask |= 1u << events[i].data.u32;
         }
-
-        assert(dpif->ready_mask);
     }
 
-    do {
+    while (dpif->ready_mask) {
         int indx = ffs(dpif->ready_mask) - 1;
         struct nl_sock *upcall_sock = dpif->upcall_socks[indx];
 
@@ -1163,7 +1174,7 @@ dpif_linux_recv(struct dpif *dpif_, struct dpif_upcall *upcall)
                 return error;
             }
         }
-    } while (dpif->ready_mask);
+    }
 
     return EAGAIN;
 }
@@ -1172,15 +1183,12 @@ static void
 dpif_linux_recv_wait(struct dpif *dpif_)
 {
     struct dpif_linux *dpif = dpif_linux_cast(dpif_);
-    int i;
 
     if (!dpif->listen_mask) {
        return;
     }
 
-    for (i = 0; i < N_UPCALL_SOCKS; i++) {
-        nl_sock_wait(dpif->upcall_socks[i], POLLIN);
-    }
+    poll_fd_wait(dpif->epoll_fd, POLLIN);
 }
 
 static void
