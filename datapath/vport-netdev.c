@@ -72,7 +72,7 @@ static struct sk_buff *netdev_frame_hook(struct sk_buff *skb)
 	if (unlikely(skb->pkt_type == PACKET_LOOPBACK))
 		return skb;
 
-	vport = netdev_get_vport(skb->dev);
+	vport = ovs_netdev_get_vport(skb->dev);
 
 	netdev_port_receive(vport, skb);
 
