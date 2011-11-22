@@ -854,14 +854,6 @@ nl_sock_wait(const struct nl_sock *sock, short int events)
     poll_fd_wait(sock->fd, events);
 }
 
-/* Checks whether this socket caused a wakeup in the previous run of the poll
- * loop. */
-short int
-nl_sock_woke(const struct nl_sock *sock)
-{
-    return poll_fd_woke(sock->fd);
-}
-
 /* Returns the PID associated with this socket. */
 uint32_t
 nl_sock_pid(const struct nl_sock *sock)
