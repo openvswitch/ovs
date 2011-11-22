@@ -3654,27 +3654,26 @@ commit_set_ether_addr_action(const struct flow *flow, struct flow *base,
 }
 
 static void
-commit_vlan_action(struct action_xlate_ctx *ctx, ovs_be16 new_tci)
+commit_vlan_action(const struct flow *flow, struct flow *base,
+                   struct ofpbuf *odp_actions)
 {
-    struct flow *base = &ctx->base_flow;
-
-    if (base->vlan_tci == new_tci) {
+    if (base->vlan_tci == flow->vlan_tci) {
         return;
     }
 
     if (base->vlan_tci & htons(VLAN_CFI)) {
-        nl_msg_put_flag(ctx->odp_actions, OVS_ACTION_ATTR_POP_VLAN);
+        nl_msg_put_flag(odp_actions, OVS_ACTION_ATTR_POP_VLAN);
     }
 
-    if (new_tci & htons(VLAN_CFI)) {
+    if (flow->vlan_tci & htons(VLAN_CFI)) {
         struct ovs_action_push_vlan vlan;
 
         vlan.vlan_tpid = htons(ETH_TYPE_VLAN);
-        vlan.vlan_tci = new_tci;
-        nl_msg_put_unspec(ctx->odp_actions, OVS_ACTION_ATTR_PUSH_VLAN,
+        vlan.vlan_tci = flow->vlan_tci;
+        nl_msg_put_unspec(odp_actions, OVS_ACTION_ATTR_PUSH_VLAN,
                           &vlan, sizeof vlan);
     }
-    base->vlan_tci = new_tci;
+    base->vlan_tci = flow->vlan_tci;
 }
 
 static void
@@ -3764,49 +3763,41 @@ commit_odp_actions(struct action_xlate_ctx *ctx)
 
     commit_set_tun_id_action(flow, base, odp_actions);
     commit_set_ether_addr_action(flow, base, odp_actions);
-    commit_vlan_action(ctx, flow->vlan_tci);
+    commit_vlan_action(flow, base, odp_actions);
     commit_set_nw_action(flow, base, odp_actions);
     commit_set_port_action(flow, base, odp_actions);
     commit_set_priority_action(flow, base, odp_actions);
 }
 
 static void
-force_compose_output_action(struct action_xlate_ctx *ctx, uint16_t ofp_port)
+compose_output_action__(struct action_xlate_ctx *ctx, uint16_t ofp_port,
+                        bool check_stp)
 {
     const struct ofport_dpif *ofport = get_ofp_port(ctx->ofproto, ofp_port);
     uint16_t odp_port = ofp_port_to_odp_port(ofp_port);
 
-    if (ofport && ofport->up.opp.config & htonl(OFPPC_NO_FWD)) {
-        return;
+    if (ofport) {
+        if (ofport->up.opp.config & htonl(OFPPC_NO_FWD)
+            || (check_stp && !stp_forward_in_state(ofport->stp_state))) {
+            return;
+        }
+    } else {
+        /* We may not have an ofport record for this port, but it doesn't hurt
+         * to allow forwarding to it anyhow.  Maybe such a port will appear
+         * later and we're pre-populating the flow table.  */
     }
 
+    commit_odp_actions(ctx);
     nl_msg_put_u32(ctx->odp_actions, OVS_ACTION_ATTR_OUTPUT, odp_port);
     ctx->sflow_odp_port = odp_port;
     ctx->sflow_n_outputs++;
+    ctx->nf_output_iface = ofp_port;
 }
 
 static void
 compose_output_action(struct action_xlate_ctx *ctx, uint16_t ofp_port)
 {
-    struct ofport_dpif *ofport = get_ofp_port(ctx->ofproto, ofp_port);
-
-    if (ofport && !stp_forward_in_state(ofport->stp_state)) {
-        /* Forwarding disabled on port. */
-        return;
-    }
-
-    /* We may not have an ofport record for this port, but it doesn't hurt to
-     * allow forwarding to it anyhow.  Maybe such a port will appear later and
-     * we're pre-populating the flow table.  */
-    force_compose_output_action(ctx, ofp_port);
-}
-
-static void
-commit_output_action(struct action_xlate_ctx *ctx, uint16_t ofp_port)
-{
-    commit_odp_actions(ctx);
-    compose_output_action(ctx, ofp_port);
-    ctx->nf_output_iface = ofp_port;
+    compose_output_action__(ctx, ofp_port, true);
 }
 
 static void
@@ -3891,7 +3882,7 @@ flood_packets(struct action_xlate_ctx *ctx, bool all)
         }
 
         if (all) {
-            force_compose_output_action(ctx, ofp_port);
+            compose_output_action__(ctx, ofp_port, false);
         } else if (!(ofport->up.opp.config & htonl(OFPPC_NO_FLOOD))) {
             compose_output_action(ctx, ofp_port);
         }
@@ -3905,6 +3896,7 @@ compose_controller_action(struct action_xlate_ctx *ctx, int len)
 {
     struct user_action_cookie cookie;
 
+    commit_odp_actions(ctx);
     cookie.type = USER_ACTION_COOKIE_CONTROLLER;
     cookie.data = len;
     cookie.n_output = 0;
@@ -3922,7 +3914,7 @@ xlate_output_action__(struct action_xlate_ctx *ctx,
 
     switch (port) {
     case OFPP_IN_PORT:
-        commit_output_action(ctx, ctx->flow.in_port);
+        compose_output_action(ctx, ctx->flow.in_port);
         break;
     case OFPP_TABLE:
         xlate_table_action(ctx, ctx->flow.in_port, ctx->table_id);
@@ -3937,17 +3929,16 @@ xlate_output_action__(struct action_xlate_ctx *ctx,
         flood_packets(ctx, true);
         break;
     case OFPP_CONTROLLER:
-        commit_odp_actions(ctx);
         compose_controller_action(ctx, max_len);
         break;
     case OFPP_LOCAL:
-        commit_output_action(ctx, OFPP_LOCAL);
+        compose_output_action(ctx, OFPP_LOCAL);
         break;
     case OFPP_NONE:
         break;
     default:
         if (port != ctx->flow.in_port) {
-            commit_output_action(ctx, port);
+            compose_output_action(ctx, port);
         }
         break;
     }
@@ -4009,7 +4000,7 @@ xlate_enqueue_action(struct action_xlate_ctx *ctx,
     /* Add datapath actions. */
     flow_priority = ctx->flow.priority;
     ctx->flow.priority = priority;
-    commit_output_action(ctx, ofp_port);
+    compose_output_action(ctx, ofp_port);
     ctx->flow.priority = flow_priority;
 
     /* Update NetFlow output port. */
@@ -4495,7 +4486,7 @@ output_normal(struct action_xlate_ctx *ctx, const struct ofbundle *out_bundle,
 {
     struct ofport_dpif *port;
     uint16_t vid;
-    ovs_be16 tci;
+    ovs_be16 tci, old_tci;
 
     vid = output_vlan_to_vid(out_bundle, vlan);
     if (!out_bundle->bond) {
@@ -4509,6 +4500,7 @@ output_normal(struct action_xlate_ctx *ctx, const struct ofbundle *out_bundle,
         }
     }
 
+    old_tci = ctx->flow.vlan_tci;
     tci = htons(vid);
     if (tci || out_bundle->use_priority_tags) {
         tci |= ctx->flow.vlan_tci & htons(VLAN_PCP_MASK);
@@ -4516,10 +4508,10 @@ output_normal(struct action_xlate_ctx *ctx, const struct ofbundle *out_bundle,
             tci |= htons(VLAN_CFI);
         }
     }
-    commit_vlan_action(ctx, tci);
+    ctx->flow.vlan_tci = tci;
 
     compose_output_action(ctx, port->up.ofp_port);
-    ctx->nf_output_iface = port->up.ofp_port;
+    ctx->flow.vlan_tci = old_tci;
 }
 
 static int
