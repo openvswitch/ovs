@@ -3698,9 +3698,9 @@ commit_set_nw_action(const struct flow *flow, struct flow *base,
 
     ipv4_key.ipv4_src = base->nw_src = flow->nw_src;
     ipv4_key.ipv4_dst = base->nw_dst = flow->nw_dst;
+    ipv4_key.ipv4_tos = base->nw_tos = flow->nw_tos;
+    ipv4_key.ipv4_ttl = base->nw_ttl = flow->nw_ttl;
     ipv4_key.ipv4_proto = base->nw_proto;
-    ipv4_key.ipv4_tos = flow->nw_tos;
-    ipv4_key.ipv4_ttl = flow->nw_ttl;
     ipv4_key.ipv4_frag = (base->nw_frag == 0 ? OVS_FRAG_TYPE_NONE
                           : base->nw_frag == FLOW_NW_FRAG_ANY
                           ? OVS_FRAG_TYPE_FIRST : OVS_FRAG_TYPE_LATER);
