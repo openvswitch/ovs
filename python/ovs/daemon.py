@@ -245,13 +245,19 @@ def _fork_and_wait_for_startup():
                 break
         if len(s) != 1:
             retval, status = _waitpid(pid, 0)
-            if (retval == pid and
-                os.WIFEXITED(status) and os.WEXITSTATUS(status)):
-                # Child exited with an error.  Convey the same error to
-                # our parent process as a courtesy.
-                sys.exit(os.WEXITSTATUS(status))
+            if retval == pid:
+                if os.WIFEXITED(status) and os.WEXITSTATUS(status):
+                    # Child exited with an error.  Convey the same error to
+                    # our parent process as a courtesy.
+                    sys.exit(os.WEXITSTATUS(status))
+                else:
+                    sys.stderr.write("fork child failed to signal "
+                                     "startup (%s)\n"
+                                     % ovs.process.status_msg(status))
             else:
-                sys.stderr.write("fork child failed to signal startup\n")
+                assert retval < 0
+                sys.stderr.write("waitpid failed (%s)\n"
+                                 % os.strerror(-retval))
                 sys.exit(1)
 
         os.close(rfd)
