@@ -1289,30 +1289,39 @@ unencap:
     }
 }
 
+uint32_t
+odp_flow_key_hash(const struct nlattr *key, size_t key_len)
+{
+    BUILD_ASSERT_DECL(!(NLA_ALIGNTO % sizeof(uint32_t)));
+    return hash_words((const uint32_t *) key, key_len / sizeof(uint32_t), 0);
+}
+
 static void
 log_odp_key_attributes(struct vlog_rate_limit *rl, const char *title,
-                       uint32_t attrs,
+                       uint64_t attrs, int out_of_range_attr,
                        const struct nlattr *key, size_t key_len)
 {
     struct ds s;
     int i;
 
-    if (VLOG_DROP_WARN(rl)) {
+    if (VLOG_DROP_DBG(rl)) {
         return;
     }
 
     ds_init(&s);
-    ds_put_format(&s, "%s:", title);
-    for (i = 0; i < 32; i++) {
-        if (attrs & (1u << i)) {
+    for (i = 0; i < 64; i++) {
+        if (attrs & (UINT64_C(1) << i)) {
             ds_put_format(&s, " %s", ovs_key_attr_to_string(i));
         }
+    }
+    if (out_of_range_attr) {
+        ds_put_format(&s, " %d (and possibly others)", out_of_range_attr);
     }
 
     ds_put_cstr(&s, ": ");
     odp_flow_key_format(key, key_len, &s);
 
-    VLOG_WARN("%s", ds_cstr(&s));
+    VLOG_DBG("%s:%s", title, ds_cstr(&s));
     ds_destroy(&s);
 }
 
@@ -1322,8 +1331,7 @@ odp_to_ovs_frag(uint8_t odp_frag, struct flow *flow)
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 
     if (odp_frag > OVS_FRAG_TYPE_LATER) {
-        VLOG_ERR_RL(&rl, "invalid frag %"PRIu8" in flow key",
-                    odp_frag);
+        VLOG_ERR_RL(&rl, "invalid frag %"PRIu8" in flow key", odp_frag);
         return false;
     }
 
@@ -1336,51 +1344,55 @@ odp_to_ovs_frag(uint8_t odp_frag, struct flow *flow)
     return true;
 }
 
-static int
+static bool
 parse_flow_nlattrs(const struct nlattr *key, size_t key_len,
-                   const struct nlattr *attrs[], uint64_t *present_attrsp)
+                   const struct nlattr *attrs[], uint64_t *present_attrsp,
+                   int *out_of_range_attrp)
 {
-    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(10, 10);
     const struct nlattr *nla;
     uint64_t present_attrs;
     size_t left;
 
     present_attrs = 0;
+    *out_of_range_attrp = 0;
     NL_ATTR_FOR_EACH (nla, left, key, key_len) {
         uint16_t type = nl_attr_type(nla);
         size_t len = nl_attr_get_size(nla);
         int expected_len = odp_flow_key_attr_len(type);
 
-        if (len != expected_len && expected_len != -2) {
-            if (expected_len == -1) {
-                VLOG_ERR_RL(&rl, "unknown attribute %"PRIu16" in flow key",
-                            type);
-            } else {
-                VLOG_ERR_RL(&rl, "attribute %s has length %zu but should have "
-                            "length %d", ovs_key_attr_to_string(type),
-                            len, expected_len);
-            }
-            return EINVAL;
-        } else if (present_attrs & (UINT64_C(1) << type)) {
-            VLOG_ERR_RL(&rl, "duplicate %s attribute in flow key",
-                        ovs_key_attr_to_string(type));
-            return EINVAL;
+        if (len != expected_len && expected_len >= 0) {
+            VLOG_ERR_RL(&rl, "attribute %s has length %zu but should have "
+                        "length %d", ovs_key_attr_to_string(type),
+                        len, expected_len);
+            return false;
         }
 
-        present_attrs |= UINT64_C(1) << type;
-        attrs[type] = nla;
+        if (type >= CHAR_BIT * sizeof present_attrs) {
+            *out_of_range_attrp = type;
+        } else {
+            if (present_attrs & (UINT64_C(1) << type)) {
+                VLOG_ERR_RL(&rl, "duplicate %s attribute in flow key",
+                            ovs_key_attr_to_string(type));
+                return false;
+            }
+
+            present_attrs |= UINT64_C(1) << type;
+            attrs[type] = nla;
+        }
     }
     if (left) {
         VLOG_ERR_RL(&rl, "trailing garbage in flow key");
-        return EINVAL;
+        return false;
     }
 
     *present_attrsp = present_attrs;
-    return 0;
+    return true;
 }
 
-static int
-check_expectations(uint64_t present_attrs, uint64_t expected_attrs,
+static enum odp_key_fitness
+check_expectations(uint64_t present_attrs, int out_of_range_attr,
+                   uint64_t expected_attrs,
                    const struct nlattr *key, size_t key_len)
 {
     uint64_t missing_attrs;
@@ -1388,133 +1400,51 @@ check_expectations(uint64_t present_attrs, uint64_t expected_attrs,
 
     missing_attrs = expected_attrs & ~present_attrs;
     if (missing_attrs) {
-        static struct vlog_rate_limit miss_rl = VLOG_RATE_LIMIT_INIT(10, 10);
-        log_odp_key_attributes(&miss_rl, "expected but not present",
-                               missing_attrs, key, key_len);
-        return EINVAL;
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(10, 10);
+        log_odp_key_attributes(&rl, "expected but not present",
+                               missing_attrs, 0, key, key_len);
+        return ODP_FIT_TOO_LITTLE;
     }
 
     extra_attrs = present_attrs & ~expected_attrs;
-    if (extra_attrs) {
-        static struct vlog_rate_limit extra_rl = VLOG_RATE_LIMIT_INIT(10, 10);
-        log_odp_key_attributes(&extra_rl, "present but not expected",
-                               extra_attrs, key, key_len);
-        return EINVAL;
+    if (extra_attrs || out_of_range_attr) {
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(10, 10);
+        log_odp_key_attributes(&rl, "present but not expected",
+                               extra_attrs, out_of_range_attr, key, key_len);
+        return ODP_FIT_TOO_MUCH;
     }
 
-    return 0;
+    return ODP_FIT_PERFECT;
 }
 
-/* Converts the 'key_len' bytes of OVS_KEY_ATTR_* attributes in 'key' to a flow
- * structure in 'flow'.  Returns 0 if successful, otherwise EINVAL. */
-int
-odp_flow_key_to_flow(const struct nlattr *key, size_t key_len,
-                     struct flow *flow)
+static bool
+parse_ethertype(const struct nlattr *attrs[OVS_KEY_ATTR_MAX + 1],
+                uint64_t present_attrs, uint64_t *expected_attrs,
+                struct flow *flow)
 {
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
-    const struct nlattr *attrs[OVS_KEY_ATTR_MAX + 1];
-    uint64_t expected_attrs;
-    uint64_t present_attrs;
-    int error;
-
-    memset(flow, 0, sizeof *flow);
-
-    error = parse_flow_nlattrs(key, key_len, attrs, &present_attrs);
-    if (error) {
-        return error;
-    }
-
-    expected_attrs = 0;
-
-    if (present_attrs & (UINT64_C(1) << OVS_KEY_ATTR_PRIORITY)) {
-        flow->priority = nl_attr_get_u32(attrs[OVS_KEY_ATTR_PRIORITY]);
-        expected_attrs |= UINT64_C(1) << OVS_KEY_ATTR_PRIORITY;
-    }
-
-    if (present_attrs & (UINT64_C(1) << OVS_KEY_ATTR_TUN_ID)) {
-        flow->tun_id = nl_attr_get_be64(attrs[OVS_KEY_ATTR_TUN_ID]);
-        expected_attrs |= UINT64_C(1) << OVS_KEY_ATTR_TUN_ID;
-    }
-
-    if (present_attrs & (UINT64_C(1) << OVS_KEY_ATTR_IN_PORT)) {
-        uint32_t in_port = nl_attr_get_u32(attrs[OVS_KEY_ATTR_IN_PORT]);
-        if (in_port >= UINT16_MAX || in_port >= OFPP_MAX) {
-            VLOG_ERR_RL(&rl, "in_port %"PRIu32" out of supported range",
-                        in_port);
-            return EINVAL;
-        }
-        flow->in_port = odp_port_to_ofp_port(in_port);
-        expected_attrs |= UINT64_C(1) << OVS_KEY_ATTR_IN_PORT;
-    } else {
-        flow->in_port = OFPP_NONE;
-    }
-
-    if (present_attrs & (UINT64_C(1) << OVS_KEY_ATTR_ETHERNET)) {
-        const struct ovs_key_ethernet *eth_key;
-
-        eth_key = nl_attr_get(attrs[OVS_KEY_ATTR_ETHERNET]);
-        memcpy(flow->dl_src, eth_key->eth_src, ETH_ADDR_LEN);
-        memcpy(flow->dl_dst, eth_key->eth_dst, ETH_ADDR_LEN);
-    } else {
-        VLOG_ERR_RL(&rl, "missing Ethernet attribute in flow key");
-        return EINVAL;
-    }
-    expected_attrs |= UINT64_C(1) << OVS_KEY_ATTR_ETHERNET;
-
-    if (present_attrs & (UINT64_C(1) << OVS_KEY_ATTR_ETHERTYPE)
-        && (nl_attr_get_be16(attrs[OVS_KEY_ATTR_ETHERTYPE])
-            == htons(ETH_TYPE_VLAN))) {
-        /* The Ethernet type is 0x8100 so there must be a VLAN tag
-         * and encapsulated protocol information. */
-        const struct nlattr *encap;
-        __be16 tci;
-        int error;
-
-        expected_attrs |= ((UINT64_C(1) << OVS_KEY_ATTR_ETHERTYPE) |
-                           (UINT64_C(1) << OVS_KEY_ATTR_VLAN) |
-                           (UINT64_C(1) << OVS_KEY_ATTR_ENCAP));
-        error = check_expectations(present_attrs, expected_attrs,
-                                   key, key_len);
-        if (error) {
-            return error;
-        }
-
-        encap = attrs[OVS_KEY_ATTR_ENCAP];
-        tci = nl_attr_get_be16(attrs[OVS_KEY_ATTR_VLAN]);
-        if (tci & htons(VLAN_CFI)) {
-            flow->vlan_tci = tci;
-
-            error = parse_flow_nlattrs(nl_attr_get(encap),
-                                       nl_attr_get_size(encap),
-                                       attrs, &present_attrs);
-            if (error) {
-                return error;
-            }
-            expected_attrs = 0;
-        } else if (tci == htons(0)) {
-            /* Corner case for a truncated 802.1Q header. */
-            if (nl_attr_get_size(encap)) {
-                return EINVAL;
-            }
-
-            flow->dl_type = htons(ETH_TYPE_VLAN);
-            return 0;
-        } else {
-            return EINVAL;
-        }
-    }
 
     if (present_attrs & (UINT64_C(1) << OVS_KEY_ATTR_ETHERTYPE)) {
         flow->dl_type = nl_attr_get_be16(attrs[OVS_KEY_ATTR_ETHERTYPE]);
         if (ntohs(flow->dl_type) < 1536) {
             VLOG_ERR_RL(&rl, "invalid Ethertype %"PRIu16" in flow key",
                         ntohs(flow->dl_type));
-            return EINVAL;
+            return false;
         }
-        expected_attrs |= UINT64_C(1) << OVS_KEY_ATTR_ETHERTYPE;
+        *expected_attrs |= UINT64_C(1) << OVS_KEY_ATTR_ETHERTYPE;
     } else {
         flow->dl_type = htons(FLOW_DL_TYPE_NONE);
     }
+    return true;
+}
+
+static enum odp_key_fitness
+parse_l3_onward(const struct nlattr *attrs[OVS_KEY_ATTR_MAX + 1],
+                uint64_t present_attrs, int out_of_range_attr,
+                uint64_t expected_attrs, struct flow *flow,
+                const struct nlattr *key, size_t key_len)
+{
+    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 
     if (flow->dl_type == htons(ETH_TYPE_IP)) {
         expected_attrs |= UINT64_C(1) << OVS_KEY_ATTR_IPV4;
@@ -1528,7 +1458,7 @@ odp_flow_key_to_flow(const struct nlattr *key, size_t key_len,
             flow->nw_tos = ipv4_key->ipv4_tos;
             flow->nw_ttl = ipv4_key->ipv4_ttl;
             if (!odp_to_ovs_frag(ipv4_key->ipv4_frag, flow)) {
-                return EINVAL;
+                return ODP_FIT_ERROR;
             }
         }
     } else if (flow->dl_type == htons(ETH_TYPE_IPV6)) {
@@ -1544,7 +1474,7 @@ odp_flow_key_to_flow(const struct nlattr *key, size_t key_len,
             flow->nw_tos = ipv6_key->ipv6_tclass;
             flow->nw_ttl = ipv6_key->ipv6_hlimit;
             if (!odp_to_ovs_frag(ipv6_key->ipv6_frag, flow)) {
-                return EINVAL;
+                return ODP_FIT_ERROR;
             }
         }
     } else if (flow->dl_type == htons(ETH_TYPE_ARP)) {
@@ -1558,7 +1488,7 @@ odp_flow_key_to_flow(const struct nlattr *key, size_t key_len,
             if (arp_key->arp_op & htons(0xff00)) {
                 VLOG_ERR_RL(&rl, "unsupported ARP opcode %"PRIu16" in flow "
                             "key", ntohs(arp_key->arp_op));
-                return EINVAL;
+                return ODP_FIT_ERROR;
             }
             flow->nw_proto = ntohs(arp_key->arp_op);
             memcpy(flow->arp_sha, arp_key->arp_sha, ETH_ADDR_LEN);
@@ -1628,7 +1558,146 @@ odp_flow_key_to_flow(const struct nlattr *key, size_t key_len,
         }
     }
 
-    return check_expectations(present_attrs, expected_attrs, key, key_len);
+    return check_expectations(present_attrs, out_of_range_attr, expected_attrs,
+                              key, key_len);
+}
+
+/* Parse 802.1Q header then encapsulated L3 attributes. */
+static enum odp_key_fitness
+parse_8021q_onward(const struct nlattr *attrs[OVS_KEY_ATTR_MAX + 1],
+                   uint64_t present_attrs, int out_of_range_attr,
+                   uint64_t expected_attrs, struct flow *flow,
+                   const struct nlattr *key, size_t key_len)
+{
+    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+
+    const struct nlattr *encap
+        = (present_attrs & (UINT64_C(1) << OVS_KEY_ATTR_ENCAP)
+           ? attrs[OVS_KEY_ATTR_ENCAP] : NULL);
+    enum odp_key_fitness encap_fitness;
+    enum odp_key_fitness fitness;
+    ovs_be16 tci;
+
+    /* Calulate fitness of outer attributes. */
+    expected_attrs |= ((UINT64_C(1) << OVS_KEY_ATTR_VLAN) |
+                       (UINT64_C(1) << OVS_KEY_ATTR_ENCAP));
+    fitness = check_expectations(present_attrs, out_of_range_attr,
+                                 expected_attrs, key, key_len);
+
+    /* Get the VLAN TCI value. */
+    if (!(present_attrs & (UINT64_C(1) << OVS_KEY_ATTR_VLAN))) {
+        return ODP_FIT_TOO_LITTLE;
+    }
+    tci = nl_attr_get_be16(attrs[OVS_KEY_ATTR_VLAN]);
+    if (tci == htons(0)) {
+        /* Corner case for a truncated 802.1Q header. */
+        if (fitness == ODP_FIT_PERFECT && nl_attr_get_size(encap)) {
+            return ODP_FIT_TOO_MUCH;
+        }
+        return fitness;
+    } else if (!(tci & htons(VLAN_CFI))) {
+        VLOG_ERR_RL(&rl, "OVS_KEY_ATTR_VLAN 0x%04"PRIx16" is nonzero "
+                    "but CFI bit is not set", ntohs(tci));
+        return ODP_FIT_ERROR;
+    }
+
+    /* Set vlan_tci.
+     * Remove the TPID from dl_type since it's not the real Ethertype.  */
+    flow->vlan_tci = tci;
+    flow->dl_type = htons(0);
+
+    /* Now parse the encapsulated attributes. */
+    if (!parse_flow_nlattrs(nl_attr_get(encap), nl_attr_get_size(encap),
+                            attrs, &present_attrs, &out_of_range_attr)) {
+        return ODP_FIT_ERROR;
+    }
+    expected_attrs = 0;
+
+    if (!parse_ethertype(attrs, present_attrs, &expected_attrs, flow)) {
+        return ODP_FIT_ERROR;
+    }
+    encap_fitness = parse_l3_onward(attrs, present_attrs, out_of_range_attr,
+                                    expected_attrs, flow, key, key_len);
+
+    /* The overall fitness is the worse of the outer and inner attributes. */
+    return MAX(fitness, encap_fitness);
+}
+
+/* Converts the 'key_len' bytes of OVS_KEY_ATTR_* attributes in 'key' to a flow
+ * structure in 'flow'.  Returns an ODP_FIT_* value that indicates how well
+ * 'key' fits our expectations for what a flow key should contain.
+ *
+ * This function doesn't take the packet itself as an argument because none of
+ * the currently understood OVS_KEY_ATTR_* attributes require it.  Currently,
+ * it is always possible to infer which additional attribute(s) should appear
+ * by looking at the attributes for lower-level protocols, e.g. if the network
+ * protocol in OVS_KEY_ATTR_IPV4 or OVS_KEY_ATTR_IPV6 is IPPROTO_TCP then we
+ * know that a OVS_KEY_ATTR_TCP attribute must appear and that otherwise it
+ * must be absent. */
+enum odp_key_fitness
+odp_flow_key_to_flow(const struct nlattr *key, size_t key_len,
+                     struct flow *flow)
+{
+    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+    const struct nlattr *attrs[OVS_KEY_ATTR_MAX + 1];
+    uint64_t expected_attrs;
+    uint64_t present_attrs;
+    int out_of_range_attr;
+
+    memset(flow, 0, sizeof *flow);
+
+    /* Parse attributes. */
+    if (!parse_flow_nlattrs(key, key_len, attrs, &present_attrs,
+                            &out_of_range_attr)) {
+        return ODP_FIT_ERROR;
+    }
+    expected_attrs = 0;
+
+    /* Metadata. */
+    if (present_attrs & (UINT64_C(1) << OVS_KEY_ATTR_PRIORITY)) {
+        flow->priority = nl_attr_get_u32(attrs[OVS_KEY_ATTR_PRIORITY]);
+        expected_attrs |= UINT64_C(1) << OVS_KEY_ATTR_PRIORITY;
+    }
+
+    if (present_attrs & (UINT64_C(1) << OVS_KEY_ATTR_TUN_ID)) {
+        flow->tun_id = nl_attr_get_be64(attrs[OVS_KEY_ATTR_TUN_ID]);
+        expected_attrs |= UINT64_C(1) << OVS_KEY_ATTR_TUN_ID;
+    }
+
+    if (present_attrs & (UINT64_C(1) << OVS_KEY_ATTR_IN_PORT)) {
+        uint32_t in_port = nl_attr_get_u32(attrs[OVS_KEY_ATTR_IN_PORT]);
+        if (in_port >= UINT16_MAX || in_port >= OFPP_MAX) {
+            VLOG_ERR_RL(&rl, "in_port %"PRIu32" out of supported range",
+                        in_port);
+            return ODP_FIT_ERROR;
+        }
+        flow->in_port = odp_port_to_ofp_port(in_port);
+        expected_attrs |= UINT64_C(1) << OVS_KEY_ATTR_IN_PORT;
+    } else {
+        flow->in_port = OFPP_NONE;
+    }
+
+    /* Ethernet header. */
+    if (present_attrs & (UINT64_C(1) << OVS_KEY_ATTR_ETHERNET)) {
+        const struct ovs_key_ethernet *eth_key;
+
+        eth_key = nl_attr_get(attrs[OVS_KEY_ATTR_ETHERNET]);
+        memcpy(flow->dl_src, eth_key->eth_src, ETH_ADDR_LEN);
+        memcpy(flow->dl_dst, eth_key->eth_dst, ETH_ADDR_LEN);
+    }
+    expected_attrs |= UINT64_C(1) << OVS_KEY_ATTR_ETHERNET;
+
+    /* Get Ethertype or 802.1Q TPID or FLOW_DL_TYPE_NONE. */
+    if (!parse_ethertype(attrs, present_attrs, &expected_attrs, flow)) {
+        return ODP_FIT_ERROR;
+    }
+
+    if (flow->dl_type == htons(ETH_TYPE_VLAN)) {
+        return parse_8021q_onward(attrs, present_attrs, out_of_range_attr,
+                                  expected_attrs, flow, key, key_len);
+    }
+    return parse_l3_onward(attrs, present_attrs, out_of_range_attr,
+                           expected_attrs, flow, key, key_len);
 }
 
 /* Appends an OVS_ACTION_ATTR_USERSPACE action to 'odp_actions' that specifies

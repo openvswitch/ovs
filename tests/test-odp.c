@@ -22,6 +22,7 @@
 #include "flow.h"
 #include "odp-util.h"
 #include "ofpbuf.h"
+#include "vlog.h"
 
 int
 main(void)
@@ -29,7 +30,9 @@ main(void)
     struct ds in;
 
     ds_init(&in);
+    vlog_set_levels_from_string("odp_util:console:dbg");
     while (!ds_get_line(&in, stdin)) {
+        enum odp_key_fitness fitness;
         struct ofpbuf odp_key;
         struct flow flow;
         struct ds out;
@@ -59,8 +62,20 @@ main(void)
         }
 
         /* Convert odp_key to flow. */
-        error = odp_flow_key_to_flow(odp_key.data, odp_key.size, &flow);
-        if (error) {
+        fitness = odp_flow_key_to_flow(odp_key.data, odp_key.size, &flow);
+        switch (fitness) {
+        case ODP_FIT_PERFECT:
+            break;
+
+        case ODP_FIT_TOO_LITTLE:
+            printf("ODP_FIT_TOO_LITTLE: ");
+            break;
+
+        case ODP_FIT_TOO_MUCH:
+            printf("ODP_FIT_TOO_MUCH: ");
+            break;
+
+        case ODP_FIT_ERROR:
             printf("odp_flow_key_to_flow: error\n");
             goto next;
         }

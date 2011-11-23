@@ -96,7 +96,24 @@ int odp_flow_key_from_string(const char *s, const struct shash *port_names,
                              struct ofpbuf *);
 
 void odp_flow_key_from_flow(struct ofpbuf *, const struct flow *);
-int odp_flow_key_to_flow(const struct nlattr *, size_t, struct flow *);
+
+uint32_t odp_flow_key_hash(const struct nlattr *, size_t);
+
+/* How well a kernel-provided flow key (a sequence of OVS_KEY_ATTR_*
+ * attributes) matches OVS userspace expectations.
+ *
+ * These values are arranged so that greater values are "more important" than
+ * lesser ones.  In particular, a single flow key can fit the descriptions for
+ * both ODP_FIT_TOO_LITTLE and ODP_FIT_TOO_MUCH.  Such a key is treated as
+ * ODP_FIT_TOO_LITTLE. */
+enum odp_key_fitness {
+    ODP_FIT_PERFECT,            /* The key had exactly the fields we expect. */
+    ODP_FIT_TOO_MUCH,           /* The key had fields we don't understand. */
+    ODP_FIT_TOO_LITTLE,         /* The key lacked fields we expected to see. */
+    ODP_FIT_ERROR,              /* The key was invalid. */
+};
+enum odp_key_fitness odp_flow_key_to_flow(const struct nlattr *, size_t,
+                                          struct flow *);
 
 enum user_action_cookie_type {
     USER_ACTION_COOKIE_UNSPEC,
