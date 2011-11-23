@@ -1876,11 +1876,11 @@
     </group>
   </table>
 
-  <table name="Mirror" title="Port mirroring (SPAN/RSPAN/ERSPAN).">
+  <table name="Mirror" title="Port mirroring.">
     <p>A port mirror within a <ref table="Bridge"/>.</p>
     <p>A port mirror configures a bridge to send selected frames to special
     ``mirrored'' ports, in addition to their normal destinations.  Mirroring
-    traffic may also be referred to as SPAN, RSPAN, or ERSPAN, depending on how
+    traffic may also be referred to as SPAN or RSPAN, depending on how
     the mirrored traffic is sent.</p>
 
     <column name="name">
@@ -1927,8 +1927,8 @@
         will be discarded.</p>
         <p>
           The output port may be any kind of port supported by Open vSwitch.
-          It may be, for example, a physical port (sometimes called SPAN), or a
-          GRE tunnel (sometimes called ERSPAN).
+          It may be, for example, a physical port (sometimes called SPAN) or a
+          GRE tunnel.
         </p>
       </column>
 
