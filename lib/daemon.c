@@ -250,16 +250,21 @@ fork_and_wait_for_startup(int *fdp)
                 retval = waitpid(pid, &status, 0);
             } while (retval == -1 && errno == EINTR);
 
-            if (retval == pid
-                && WIFEXITED(status)
-                && WEXITSTATUS(status)) {
-                /* Child exited with an error.  Convey the same error to
-                 * our parent process as a courtesy. */
-                exit(WEXITSTATUS(status));
+            if (retval == pid) {
+                if (WIFEXITED(status) && WEXITSTATUS(status)) {
+                    /* Child exited with an error.  Convey the same error
+                     * to our parent process as a courtesy. */
+                    exit(WEXITSTATUS(status));
+                } else {
+                    char *status_msg = process_status_msg(status);
+                    VLOG_FATAL("fork child died before signaling startup (%s)",
+                               status_msg);
+                }
+            } else if (retval < 0) {
+                VLOG_FATAL("waitpid failed (%s)", strerror(errno));
+            } else {
+                NOT_REACHED();
             }
-
-            VLOG_FATAL("fork child failed to signal startup (%s)",
-                       strerror(errno));
         }
         close(fds[0]);
         *fdp = -1;
