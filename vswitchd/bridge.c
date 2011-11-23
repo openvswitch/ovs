@@ -1184,25 +1184,24 @@ bridge_add_ofproto_ports(struct bridge *br)
 }
 
 static const char *
-get_ovsrec_key_value(const struct ovsdb_idl_row *row,
-                     const struct ovsdb_idl_column *column,
-                     const char *key)
+get_ovsrec_key_value(char **keys, char **values, size_t n, const char *key)
 {
-    const struct ovsdb_datum *datum;
-    union ovsdb_atom atom;
-    unsigned int idx;
+    size_t i;
 
-    datum = ovsdb_idl_get(row, column, OVSDB_TYPE_STRING, OVSDB_TYPE_STRING);
-    atom.string = (char *) key;
-    idx = ovsdb_datum_find_key(datum, &atom, OVSDB_TYPE_STRING);
-    return idx == UINT_MAX ? NULL : datum->values[idx].string;
+    for (i = 0; i < n; i++) {
+        if (!strcmp(keys[i], key)) {
+            return values[i];
+        }
+    }
+    return NULL;
 }
 
 static const char *
 bridge_get_other_config(const struct ovsrec_bridge *br_cfg, const char *key)
 {
-    return get_ovsrec_key_value(&br_cfg->header_,
-                                &ovsrec_bridge_col_other_config, key);
+    return get_ovsrec_key_value(br_cfg->key_other_config,
+                                br_cfg->value_other_config,
+                                br_cfg->n_other_config, key);
 }
 
 /* Set Flow eviction threshold */
@@ -1663,8 +1662,9 @@ enable_system_stats(const struct ovsrec_open_vswitch *cfg)
     const char *enable;
 
     /* Use other-config:enable-system-stats by preference. */
-    enable = get_ovsrec_key_value(&cfg->header_,
-                                  &ovsrec_open_vswitch_col_other_config,
+    enable = get_ovsrec_key_value(cfg->key_other_config,
+                                  cfg->value_other_config,
+                                  cfg->n_other_config,
                                   "enable-statistics");
     if (enable) {
         return !strcmp(enable, "true");
@@ -2438,8 +2438,9 @@ get_port_other_config(const struct ovsrec_port *port, const char *key,
 {
     const char *value;
 
-    value = get_ovsrec_key_value(&port->header_, &ovsrec_port_col_other_config,
-                                 key);
+    value = get_ovsrec_key_value(port->key_other_config,
+                                 port->value_other_config,
+                                 port->n_other_config, key);
     return value ? value : default_value;
 }
 
@@ -2449,8 +2450,9 @@ get_interface_other_config(const struct ovsrec_interface *iface,
 {
     const char *value;
 
-    value = get_ovsrec_key_value(&iface->header_,
-                                 &ovsrec_interface_col_other_config, key);
+    value = get_ovsrec_key_value(iface->key_other_config,
+                                 iface->value_other_config,
+                                 iface->n_other_config, key);
     return value ? value : default_value;
 }
 
