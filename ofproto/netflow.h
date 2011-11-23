@@ -60,7 +60,9 @@ void netflow_destroy(struct netflow *);
 int netflow_set_options(struct netflow *, const struct netflow_options *);
 void netflow_expire(struct netflow *, struct netflow_flow *,
                     struct ofexpired *);
-void netflow_run(struct netflow *);
+
+bool netflow_run(struct netflow *);
+void netflow_wait(struct netflow *);
 
 void netflow_flow_init(struct netflow_flow *);
 void netflow_flow_clear(struct netflow_flow *);

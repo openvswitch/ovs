@@ -436,6 +436,9 @@ static void handle_miss_upcalls(struct ofproto_dpif *,
 /* Flow expiration. */
 static int expire(struct ofproto_dpif *);
 
+/* NetFlow. */
+static void send_netflow_active_timeouts(struct ofproto_dpif *);
+
 /* Utilities. */
 static int send_packet(struct ofproto_dpif *, uint32_t odp_port,
                        const struct ofpbuf *packet);
@@ -641,7 +644,9 @@ run(struct ofproto *ofproto_)
     }
 
     if (ofproto->netflow) {
-        netflow_run(ofproto->netflow);
+        if (netflow_run(ofproto->netflow)) {
+            send_netflow_active_timeouts(ofproto);
+        }
     }
     if (ofproto->sflow) {
         dpif_sflow_run(ofproto->sflow);
@@ -704,6 +709,9 @@ wait(struct ofproto *ofproto_)
     HMAP_FOR_EACH (bundle, hmap_node, &ofproto->bundles) {
         bundle_wait(bundle);
     }
+    if (ofproto->netflow) {
+        netflow_wait(ofproto->netflow);
+    }
     mac_learning_wait(ofproto->ml);
     stp_wait(ofproto);
     if (ofproto->need_revalidate) {
@@ -765,24 +773,6 @@ get_tables(struct ofproto *ofproto_, struct ofp_table_stats *ots)
     put_32aligned_be64(&ots->lookup_count, htonll(s.n_hit + s.n_missed));
     put_32aligned_be64(&ots->matched_count,
                        htonll(s.n_hit + ofproto->n_matches));
-}
-
-static int
-set_netflow(struct ofproto *ofproto_,
-            const struct netflow_options *netflow_options)
-{
-    struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
-
-    if (netflow_options) {
-        if (!ofproto->netflow) {
-            ofproto->netflow = netflow_create();
-        }
-        return netflow_set_options(ofproto->netflow, netflow_options);
-    } else {
-        netflow_destroy(ofproto->netflow);
-        ofproto->netflow = NULL;
-        return 0;
-    }
 }
 
 static struct ofport *
@@ -2699,36 +2689,12 @@ facet_max_idle(const struct ofproto_dpif *ofproto)
 }
 
 static void
-facet_active_timeout(struct ofproto_dpif *ofproto, struct facet *facet)
-{
-    if (ofproto->netflow && !facet_is_controller_flow(facet) &&
-        netflow_active_timeout_expired(ofproto->netflow, &facet->nf_flow)) {
-        struct ofexpired expired;
-
-        if (facet->installed) {
-            struct dpif_flow_stats stats;
-
-            facet_put__(ofproto, facet, facet->actions, facet->actions_len,
-                        &stats);
-            facet_update_stats(ofproto, facet, &stats);
-        }
-
-        expired.flow = facet->flow;
-        expired.packet_count = facet->packet_count;
-        expired.byte_count = facet->byte_count;
-        expired.used = facet->used;
-        netflow_expire(ofproto->netflow, &facet->nf_flow, &expired);
-    }
-}
-
-static void
 expire_facets(struct ofproto_dpif *ofproto, int dp_max_idle)
 {
     long long int cutoff = time_msec() - dp_max_idle;
     struct facet *facet, *next_facet;
 
     HMAP_FOR_EACH_SAFE (facet, next_facet, hmap_node, &ofproto->facets) {
-        facet_active_timeout(ofproto, facet);
         if (facet->used < cutoff) {
             facet_remove(ofproto, facet);
         }
@@ -5139,6 +5105,26 @@ packet_out(struct ofproto *ofproto_, struct ofpbuf *packet,
     }
     return error;
 }
+
+/* NetFlow. */
+
+static int
+set_netflow(struct ofproto *ofproto_,
+            const struct netflow_options *netflow_options)
+{
+    struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
+
+    if (netflow_options) {
+        if (!ofproto->netflow) {
+            ofproto->netflow = netflow_create();
+        }
+        return netflow_set_options(ofproto->netflow, netflow_options);
+    } else {
+        netflow_destroy(ofproto->netflow);
+        ofproto->netflow = NULL;
+        return 0;
+    }
+}
 
 static void
 get_netflow_ids(const struct ofproto *ofproto_,
@@ -5147,6 +5133,39 @@ get_netflow_ids(const struct ofproto *ofproto_,
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
 
     dpif_get_netflow_ids(ofproto->dpif, engine_type, engine_id);
+}
+
+static void
+send_active_timeout(struct ofproto_dpif *ofproto, struct facet *facet)
+{
+    if (!facet_is_controller_flow(facet) &&
+        netflow_active_timeout_expired(ofproto->netflow, &facet->nf_flow)) {
+        struct ofexpired expired;
+
+        if (facet->installed) {
+            struct dpif_flow_stats stats;
+
+            facet_put__(ofproto, facet, facet->actions, facet->actions_len,
+                        &stats);
+            facet_update_stats(ofproto, facet, &stats);
+        }
+
+        expired.flow = facet->flow;
+        expired.packet_count = facet->packet_count;
+        expired.byte_count = facet->byte_count;
+        expired.used = facet->used;
+        netflow_expire(ofproto->netflow, &facet->nf_flow, &expired);
+    }
+}
+
+static void
+send_netflow_active_timeouts(struct ofproto_dpif *ofproto)
+{
+    struct facet *facet;
+
+    HMAP_FOR_EACH (facet, hmap_node, &ofproto->facets) {
+        send_active_timeout(ofproto, facet);
+    }
 }
 
 static struct ofproto_dpif *
