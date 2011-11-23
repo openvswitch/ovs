@@ -12,6 +12,9 @@ post-v1.3.0
        - Added ability to modify ECN bits in IPv4.
        - Added ability to modify TTL in IPv4.
     - ovs-vswitchd:
+       - Don't require the "normal" action to use mirrors.  Traffic will
+         now be properly mirrored for any flows, regardless of their
+         actions.
        - Track packet and byte statistics sent on mirrors.
     - ovs-appctl:
       - New "fdb/flush" command to flush bridge's MAC learning table.

@@ -724,10 +724,7 @@ ofproto_bundle_unregister(struct ofproto *ofproto, void *aux)
 
 /* Registers a mirror associated with client data pointer 'aux' in 'ofproto'.
  * If 'aux' is already registered then this function updates its configuration
- * to 's'.  Otherwise, this function registers a new mirror.
- *
- * Mirrors affect only the treatment of packets output to the OFPP_NORMAL
- * port.  */
+ * to 's'.  Otherwise, this function registers a new mirror. */
 int
 ofproto_mirror_register(struct ofproto *ofproto, void *aux,
                         const struct ofproto_mirror_settings *s)

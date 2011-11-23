@@ -1020,10 +1020,10 @@ struct ofproto_class {
      * 'ofproto' associated with client data pointer 'aux'.  If no such mirror
      * has been registered, this has no effect.
      *
-     * This function affects only the behavior of the OFPP_NORMAL action.  An
-     * implementation that does not support it at all may set it to NULL or
-     * return EOPNOTSUPP.  An implementation that supports only a subset of the
-     * functionality should implement what it can and return 0. */
+     * An implementation that does not support mirroring at all may set
+     * it to NULL or return EOPNOTSUPP.  An implementation that supports
+     * only a subset of the functionality should implement what it can
+     * and return 0. */
     int (*mirror_set)(struct ofproto *ofproto, void *aux,
                       const struct ofproto_mirror_settings *s);
 

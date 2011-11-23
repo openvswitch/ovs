@@ -145,8 +145,6 @@ static void update_mirror_stats(struct ofproto_dpif *ofproto,
                                 mirror_mask_t mirrors,
                                 uint64_t packets, uint64_t bytes);
 
-/* A group of one or more OpenFlow ports. */
-#define OFBUNDLE_FLOOD ((struct ofbundle *) 1)
 struct ofbundle {
     struct ofproto_dpif *ofproto; /* Owning ofproto. */
     struct hmap_node hmap_node; /* In struct ofproto's "bundles" hmap. */
@@ -178,6 +176,8 @@ static void bundle_destroy(struct ofbundle *);
 static void bundle_del_port(struct ofport_dpif *);
 static void bundle_run(struct ofbundle *);
 static void bundle_wait(struct ofbundle *);
+static struct ofport_dpif *lookup_input_bundle(struct ofproto_dpif *,
+                                               uint16_t in_port, bool warn);
 
 static void stp_run(struct ofproto_dpif *ofproto);
 static void stp_wait(struct ofproto_dpif *ofproto);
@@ -559,6 +559,8 @@ static int send_packet(const struct ofport_dpif *, struct ofpbuf *packet);
 static size_t
 compose_sflow_action(const struct ofproto_dpif *, struct ofpbuf *odp_actions,
                      const struct flow *, uint32_t odp_port);
+static void add_mirror_actions(struct action_xlate_ctx *ctx,
+                               const struct flow *flow);
 /* Global variables. */
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 
@@ -4723,6 +4725,8 @@ static struct ofpbuf *
 xlate_actions(struct action_xlate_ctx *ctx,
               const union ofp_action *in, size_t n_in)
 {
+    struct flow orig_flow = ctx->flow;
+
     COVERAGE_INC(ofproto_dpif_xlate);
 
     ctx->odp_actions = ofpbuf_new(512);
@@ -4775,6 +4779,7 @@ xlate_actions(struct action_xlate_ctx *ctx,
                 compose_output_action(ctx, OFPP_LOCAL);
             }
         }
+        add_mirror_actions(ctx, &orig_flow);
         fix_sflow_action(ctx);
     }
 
@@ -4951,34 +4956,6 @@ ofbundle_get_a_port(const struct ofbundle *bundle)
                         struct ofport_dpif, bundle_node);
 }
 
-static mirror_mask_t
-compose_dsts(struct action_xlate_ctx *ctx, uint16_t vlan,
-             const struct ofbundle *in_bundle,
-             const struct ofbundle *out_bundle)
-{
-    mirror_mask_t dst_mirrors = 0;
-
-    if (out_bundle == OFBUNDLE_FLOOD) {
-        struct ofbundle *bundle;
-
-        HMAP_FOR_EACH (bundle, hmap_node, &ctx->ofproto->bundles) {
-            if (bundle != in_bundle
-                && ofbundle_includes_vlan(bundle, vlan)
-                && bundle->floodable
-                && !bundle->mirror_out) {
-                output_normal(ctx, bundle, vlan);
-                dst_mirrors |= bundle->dst_mirrors;
-            }
-        }
-        ctx->nf_output_iface = NF_OUT_FLOOD;
-    } else if (out_bundle) {
-        output_normal(ctx, out_bundle, vlan);
-        dst_mirrors = out_bundle->dst_mirrors;
-    }
-
-    return dst_mirrors;
-}
-
 static bool
 vlan_is_mirrored(const struct ofmirror *m, int vlan)
 {
@@ -5027,17 +5004,67 @@ eth_dst_may_rspan(const uint8_t dst[ETH_ADDR_LEN])
 }
 
 static void
-output_mirrors(struct action_xlate_ctx *ctx,
-               uint16_t vlan, const struct ofbundle *in_bundle,
-               mirror_mask_t dst_mirrors)
+add_mirror_actions(struct action_xlate_ctx *ctx, const struct flow *orig_flow)
 {
     struct ofproto_dpif *ofproto = ctx->ofproto;
     mirror_mask_t mirrors;
+    struct ofport_dpif *in_port;
+    struct ofbundle *in_bundle;
+    uint16_t vlan;
+    uint16_t vid;
+    const struct nlattr *a;
+    size_t left;
 
-    mirrors = in_bundle->src_mirrors | dst_mirrors;
+    /* Obtain in_port from orig_flow.in_port.
+     *
+     * lookup_input_bundle() also ensures that in_port belongs to a bundle. */
+    in_port = lookup_input_bundle(ctx->ofproto, orig_flow->in_port,
+                                  ctx->packet != NULL);
+    if (!in_port) {
+        return;
+    }
+    in_bundle = in_port->bundle;
+    mirrors = in_bundle->src_mirrors;
+
+    /* Drop frames on bundles reserved for mirroring. */
+    if (in_bundle->mirror_out) {
+        if (ctx->packet != NULL) {
+            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+            VLOG_WARN_RL(&rl, "bridge %s: dropping packet received on port "
+                         "%s, which is reserved exclusively for mirroring",
+                         ctx->ofproto->up.name, in_bundle->name);
+        }
+        return;
+    }
+
+    /* Check VLAN. */
+    vid = vlan_tci_to_vid(orig_flow->vlan_tci);
+    if (!input_vid_is_valid(vid, in_bundle, ctx->packet != NULL)) {
+        return;
+    }
+    vlan = input_vid_to_vlan(in_bundle, vid);
+
+    /* Look at the output ports to check for destination selections. */
+
+    NL_ATTR_FOR_EACH (a, left, ctx->odp_actions->data,
+                      ctx->odp_actions->size) {
+        enum ovs_action_attr type = nl_attr_type(a);
+        struct ofport_dpif *ofport;
+
+        if (type != OVS_ACTION_ATTR_OUTPUT) {
+            continue;
+        }
+
+        ofport = get_odp_port(ofproto, nl_attr_get_u32(a));
+        mirrors |= ofport ? ofport->bundle->dst_mirrors : 0;
+    }
+
     if (!mirrors) {
         return;
     }
+
+    /* Restore the original packet before adding the mirror actions. */
+    ctx->flow = *orig_flow;
 
     while (mirrors) {
         struct ofmirror *m;
@@ -5053,7 +5080,7 @@ output_mirrors(struct action_xlate_ctx *ctx,
         ctx->mirrors |= m->dup_mirrors;
         if (m->out) {
             output_normal(ctx, m->out, vlan);
-        } else if (eth_dst_may_rspan(ctx->flow.dl_dst)
+        } else if (eth_dst_may_rspan(orig_flow->dl_dst)
                    && vlan != m->out_vlan) {
             struct ofbundle *bundle;
 
@@ -5229,10 +5256,8 @@ is_admissible(struct ofproto_dpif *ofproto, const struct flow *flow,
 static void
 xlate_normal(struct action_xlate_ctx *ctx)
 {
-    mirror_mask_t dst_mirrors = 0;
     struct ofport_dpif *in_port;
     struct ofbundle *in_bundle;
-    struct ofbundle *out_bundle;
     struct mac_entry *mac;
     uint16_t vlan;
     uint16_t vid;
@@ -5281,7 +5306,6 @@ xlate_normal(struct action_xlate_ctx *ctx)
 
     /* Check other admissibility requirements. */
     if (!is_admissible(ctx->ofproto, &ctx->flow, in_port, vlan, &ctx->tags)) {
-        output_mirrors(ctx, vlan, in_bundle, 0);
         return;
     }
 
@@ -5294,7 +5318,9 @@ xlate_normal(struct action_xlate_ctx *ctx)
     mac = mac_learning_lookup(ctx->ofproto->ml, ctx->flow.dl_dst, vlan,
                               &ctx->tags);
     if (mac) {
-        out_bundle = mac->port.p;
+        if (mac->port.p != in_bundle) {
+            output_normal(ctx, mac->port.p, vlan);
+        }
     } else if (!ctx->packet && !eth_addr_is_multicast(ctx->flow.dl_dst)) {
         /* If we are revalidating but don't have a learning entry then eject
          * the flow.  Installing a flow that floods packets opens up a window
@@ -5304,14 +5330,18 @@ xlate_normal(struct action_xlate_ctx *ctx)
         ctx->may_set_up_flow = false;
         return;
     } else {
-        out_bundle = OFBUNDLE_FLOOD;
-    }
+        struct ofbundle *bundle;
 
-    /* Don't send packets out their input bundles. */
-    if (in_bundle != out_bundle) {
-        dst_mirrors = compose_dsts(ctx, vlan, in_bundle, out_bundle);
+        HMAP_FOR_EACH (bundle, hmap_node, &ctx->ofproto->bundles) {
+            if (bundle != in_bundle
+                && ofbundle_includes_vlan(bundle, vlan)
+                && bundle->floodable
+                && !bundle->mirror_out) {
+                output_normal(ctx, bundle, vlan);
+            }
+        }
+        ctx->nf_output_iface = NF_OUT_FLOOD;
     }
-    output_mirrors(ctx, vlan, in_bundle, dst_mirrors);
 }
 
 /* Optimized flow revalidation.

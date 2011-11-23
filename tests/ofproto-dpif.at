@@ -376,3 +376,280 @@ AT_CHECK([tail -1 stdout], [0],
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
+
+
+AT_SETUP([ofproto-dpif - mirroring, select_all])
+OVS_VSWITCHD_START
+AT_CHECK([ovs-vsctl \
+        add-port br0 p1 -- set Interface p1 type=dummy --\
+        add-port br0 p2 -- set Interface p2 type=dummy --\
+        add-port br0 p3 -- set Interface p3 type=dummy --\
+        set Bridge br0 mirrors=@m --\
+        --id=@p3 get Port p3 --\
+        --id=@m create Mirror name=mymirror \
+        select_all=true output_port=@p3 ], [0], [stdout])
+AT_CHECK([perl $srcdir/uuidfilt.pl stdout], [0], [dnl
+<0>
+])
+
+AT_CHECK(
+  [ovs-vsctl \
+        -- get Interface p1 ofport \
+        -- get Interface p2 ofport \
+        -- get Interface p3 ofport],
+  [0], [stdout])
+set `cat stdout`
+p1=$1 p2=$2 p3=$3
+
+AT_DATA([flows.txt], [dnl
+in_port=1 actions=output:2
+in_port=2 actions=output:1
+])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+flow="in_port($p1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)"
+AT_CHECK([ovs-appctl ofproto/trace br0 "$flow"], [0], [stdout])
+AT_CHECK_UNQUOTED([tail -1 stdout], [0],
+  [Datapath actions: $p2,$p3
+])
+
+flow="in_port($p2),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)"
+AT_CHECK([ovs-appctl ofproto/trace br0 "$flow"], [0], [stdout])
+AT_CHECK_UNQUOTED([tail -1 stdout], [0],
+  [Datapath actions: $p1,$p3
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+
+AT_SETUP([ofproto-dpif - mirroring, select_src])
+OVS_VSWITCHD_START
+AT_CHECK([ovs-vsctl \
+        add-port br0 p1 -- set Interface p1 type=dummy --\
+        add-port br0 p2 -- set Interface p2 type=dummy --\
+        add-port br0 p3 -- set Interface p3 type=dummy --\
+        set Bridge br0 mirrors=@m --\
+        --id=@p1 get Port p1 -- --id=@p3 get Port p3 --\
+        --id=@m create Mirror name=mymirror \
+        select_src_port=@p1 output_port=@p3 ], [0], [stdout])
+AT_CHECK([perl $srcdir/uuidfilt.pl stdout], [0], [dnl
+<0>
+])
+
+AT_CHECK(
+  [ovs-vsctl \
+        -- get Interface p1 ofport \
+        -- get Interface p2 ofport \
+        -- get Interface p3 ofport],
+  [0], [stdout])
+set `cat stdout`
+p1=$1 p2=$2 p3=$3
+
+AT_DATA([flows.txt], [dnl
+in_port=1 actions=output:2
+in_port=2 actions=output:1
+])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+flow="in_port($p1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)"
+AT_CHECK([ovs-appctl ofproto/trace br0 "$flow"], [0], [stdout])
+AT_CHECK_UNQUOTED([tail -1 stdout], [0],
+  [Datapath actions: $p2,$p3
+])
+
+flow="in_port($p2),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)"
+AT_CHECK([ovs-appctl ofproto/trace br0 "$flow"], [0], [stdout])
+AT_CHECK_UNQUOTED([tail -1 stdout], [0],
+  [Datapath actions: $p1
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+
+AT_SETUP([ofproto-dpif - mirroring, select_dst])
+OVS_VSWITCHD_START
+AT_CHECK([ovs-vsctl \
+        add-port br0 p1 -- set Interface p1 type=dummy --\
+        add-port br0 p2 -- set Interface p2 type=dummy --\
+        add-port br0 p3 -- set Interface p3 type=dummy --\
+        set Bridge br0 mirrors=@m --\
+        --id=@p2 get Port p2 -- --id=@p3 get Port p3 --\
+        --id=@m create Mirror name=mymirror \
+        select_dst_port=@p2 output_port=@p3 ], [0], [stdout])
+AT_CHECK([perl $srcdir/uuidfilt.pl stdout], [0], [dnl
+<0>
+])
+
+AT_CHECK(
+  [ovs-vsctl \
+        -- get Interface p1 ofport \
+        -- get Interface p2 ofport \
+        -- get Interface p3 ofport],
+  [0], [stdout])
+set `cat stdout`
+p1=$1 p2=$2 p3=$3
+
+AT_DATA([flows.txt], [dnl
+in_port=1 actions=output:2
+in_port=2 actions=output:1
+])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+flow="in_port($p1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)"
+AT_CHECK([ovs-appctl ofproto/trace br0 "$flow"], [0], [stdout])
+AT_CHECK_UNQUOTED([tail -1 stdout], [0],
+  [Datapath actions: $p2,$p3
+])
+
+flow="in_port($p2),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)"
+AT_CHECK([ovs-appctl ofproto/trace br0 "$flow"], [0], [stdout])
+AT_CHECK_UNQUOTED([tail -1 stdout], [0],
+  [Datapath actions: $p1
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+
+AT_SETUP([ofproto-dpif - mirroring, select_vlan])
+OVS_VSWITCHD_START
+AT_CHECK([ovs-vsctl \
+        add-port br0 p1 -- set Interface p1 type=dummy --\
+        add-port br0 p2 -- set Interface p2 type=dummy --\
+        add-port br0 p3 -- set Interface p3 type=dummy --\
+        set Bridge br0 mirrors=@m --\
+        --id=@p2 get Port p2 -- --id=@p3 get Port p3 --\
+        --id=@m create Mirror name=mymirror \
+        select_all=true select_vlan=11 output_port=@p3 ], [0], [stdout])
+AT_CHECK([perl $srcdir/uuidfilt.pl stdout], [0], [dnl
+<0>
+])
+
+AT_CHECK(
+  [ovs-vsctl \
+        -- get Interface p1 ofport \
+        -- get Interface p2 ofport \
+        -- get Interface p3 ofport],
+  [0], [stdout])
+set `cat stdout`
+p1=$1 p2=$2 p3=$3
+
+AT_DATA([flows.txt], [dnl
+in_port=1, actions=output:2
+])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+flow="in_port($p1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)"
+AT_CHECK([ovs-appctl ofproto/trace br0 "$flow"], [0], [stdout])
+AT_CHECK_UNQUOTED([tail -1 stdout], [0],
+  [Datapath actions: $p2
+])
+
+flow="in_port($p1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x8100),vlan(vid=10,pcp=0),encap(eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0))"
+AT_CHECK([ovs-appctl ofproto/trace br0 "$flow"], [0], [stdout])
+AT_CHECK_UNQUOTED([tail -1 stdout], [0],
+  [Datapath actions: $p2
+])
+
+flow="in_port($p1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x8100),vlan(vid=11,pcp=0),encap(eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0))"
+AT_CHECK([ovs-appctl ofproto/trace br0 "$flow"], [0], [stdout])
+AT_CHECK_UNQUOTED([tail -1 stdout], [0],
+  [Datapath actions: $p2,$p3
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+
+AT_SETUP([ofproto-dpif - mirroring, output_port])
+OVS_VSWITCHD_START
+AT_CHECK([ovs-vsctl \
+        add-port br0 p1 -- set Interface p1 type=dummy --\
+        add-port br0 p2 -- set Interface p2 type=dummy --\
+        add-port br0 p3 -- set Interface p3 type=dummy --\
+        set Bridge br0 mirrors=@m --\
+        --id=@p3 get Port p3 --\
+        --id=@m create Mirror name=mymirror \
+        select_all=true output_port=@p3 ], [0], [stdout])
+AT_CHECK([perl $srcdir/uuidfilt.pl stdout], [0], [dnl
+<0>
+])
+
+AT_CHECK(
+  [ovs-vsctl \
+        -- get Interface p1 ofport \
+        -- get Interface p2 ofport \
+        -- get Interface p3 ofport],
+  [0], [stdout])
+set `cat stdout`
+p1=$1 p2=$2 p3=$3
+
+AT_DATA([flows.txt], [dnl
+in_port=1 actions=mod_vlan_vid:17,output:2
+in_port=2 actions=output:1
+])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+flow="in_port($p1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)"
+AT_CHECK([ovs-appctl ofproto/trace br0 "$flow"], [0], [stdout])
+AT_CHECK_UNQUOTED([tail -1 stdout], [0],
+  [Datapath actions: push_vlan(vid=17,pcp=0),$p2,pop_vlan,$p3
+])
+
+flow="in_port($p2),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)"
+AT_CHECK([ovs-appctl ofproto/trace br0 "$flow"], [0], [stdout])
+AT_CHECK_UNQUOTED([tail -1 stdout], [0],
+  [Datapath actions: $p1,$p3
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+
+AT_SETUP([ofproto-dpif - mirroring, output_vlan])
+OVS_VSWITCHD_START
+AT_CHECK([ovs-vsctl \
+        add-port br0 p1 -- set Interface p1 type=dummy --\
+        add-port br0 p2 -- set Interface p2 type=dummy --\
+        set Bridge br0 mirrors=@m --\
+        --id=@m create Mirror name=mymirror \
+        select_all=true output_vlan=12 ], [0], [stdout])
+AT_CHECK([perl $srcdir/uuidfilt.pl stdout], [0], [dnl
+<0>
+])
+
+AT_CHECK(
+  [ovs-vsctl \
+        -- get Interface p1 ofport \
+        -- get Interface p2 ofport],
+  [0], [stdout])
+set `cat stdout`
+br0=0 p1=$1 p2=$2
+
+AT_DATA([flows.txt], [dnl
+in_port=1 actions=output:2
+in_port=2 actions=mod_vlan_vid:17,output:1
+])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+flow="in_port($p1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)"
+AT_CHECK([ovs-appctl ofproto/trace br0 "$flow"], [0], [stdout])
+actual=`tail -1 stdout | sed 's/Datapath actions: //'`
+
+expected="$p2,push_vlan(vid=12,pcp=0),$br0,$p1,$p2"
+AT_CHECK([ovs-dpctl normalize-actions "$flow" "$expected" br0=$br0 p1=$p1 p2=$p2], [0], [stdout])
+mv stdout expout
+AT_CHECK([ovs-dpctl normalize-actions "$flow" "$actual" br0=$br0 p1=$p1 p2=$p2], [0], [expout])
+
+flow="in_port($p2),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)"
+AT_CHECK([ovs-appctl ofproto/trace br0 "$flow"], [0], [stdout])
+actual=`tail -1 stdout | sed 's/Datapath actions: //'`
+
+expected="push_vlan(vid=17,pcp=0),$p1,pop_vlan,push_vlan(vid=12,pcp=0),$br0,$p1,$p2"
+AT_CHECK([ovs-dpctl normalize-actions "$flow" "$expected" br0=$br0 p1=$p1 p2=$p2], [0], [stdout])
+mv stdout expout
+AT_CHECK([ovs-dpctl normalize-actions "$flow" "$actual" br0=$br0 p1=$p1 p2=$p2], [0], [expout])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
