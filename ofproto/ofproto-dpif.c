@@ -229,7 +229,7 @@ struct action_xlate_ctx {
 
 static void action_xlate_ctx_init(struct action_xlate_ctx *,
                                   struct ofproto_dpif *, const struct flow *,
-                                  const struct ofpbuf *);
+                                  ovs_be16 initial_tci, const struct ofpbuf *);
 static struct ofpbuf *xlate_actions(struct action_xlate_ctx *,
                                     const union ofp_action *in, size_t n_in);
 
@@ -352,12 +352,17 @@ struct subfacet {
     struct nlattr *actions;     /* Datapath actions. */
 
     bool installed;             /* Installed in datapath? */
+
+    /* This value is normally the same as ->facet->flow.vlan_tci.  Only VLAN
+     * splinters can cause it to differ.  This value should be removed when
+     * the VLAN splinters feature is no longer needed.  */
+    ovs_be16 initial_tci;       /* Initial VLAN TCI value. */
 };
 
 static struct subfacet *subfacet_create(struct ofproto_dpif *, struct facet *,
                                         enum odp_key_fitness,
                                         const struct nlattr *key,
-                                        size_t key_len);
+                                        size_t key_len, ovs_be16 initial_tci);
 static struct subfacet *subfacet_find(struct ofproto_dpif *,
                                       const struct nlattr *key, size_t key_len,
                                       const struct flow *);
@@ -2217,6 +2222,7 @@ struct flow_miss {
     enum odp_key_fitness key_fitness;
     const struct nlattr *key;
     size_t key_len;
+    ovs_be16 initial_tci;
     struct list packets;
 };
 
@@ -2306,7 +2312,8 @@ process_special(struct ofproto_dpif *ofproto, const struct flow *flow,
 static struct flow_miss *
 flow_miss_create(struct hmap *todo, const struct flow *flow,
                  enum odp_key_fitness key_fitness,
-                 const struct nlattr *key, size_t key_len)
+                 const struct nlattr *key, size_t key_len,
+                 ovs_be16 initial_tci)
 {
     uint32_t hash = flow_hash(flow, 0);
     struct flow_miss *miss;
@@ -2323,6 +2330,7 @@ flow_miss_create(struct hmap *todo, const struct flow *flow,
     miss->key_fitness = key_fitness;
     miss->key = key;
     miss->key_len = key_len;
+    miss->initial_tci = initial_tci;
     list_init(&miss->packets);
     return miss;
 }
@@ -2368,7 +2376,8 @@ handle_flow_miss(struct ofproto_dpif *ofproto, struct flow_miss *miss,
     }
 
     subfacet = subfacet_create(ofproto, facet,
-                               miss->key_fitness, miss->key, miss->key_len);
+                               miss->key_fitness, miss->key, miss->key_len,
+                               miss->initial_tci);
 
     LIST_FOR_EACH_SAFE (packet, next_packet, list_node, &miss->packets) {
         list_remove(&packet->list_node);
@@ -2425,6 +2434,22 @@ handle_flow_miss(struct ofproto_dpif *ofproto, struct flow_miss *miss,
     }
 }
 
+static enum odp_key_fitness
+ofproto_dpif_extract_flow_key(const struct ofproto_dpif *ofproto OVS_UNUSED,
+                              const struct nlattr *key, size_t key_len,
+                              struct flow *flow, ovs_be16 *initial_tci)
+{
+    enum odp_key_fitness fitness;
+
+    fitness = odp_flow_key_to_flow(key, key_len, flow);
+    if (fitness == ODP_FIT_ERROR) {
+        return fitness;
+    }
+    *initial_tci = flow->vlan_tci;
+
+    return fitness;
+}
+
 static void
 handle_miss_upcalls(struct ofproto_dpif *ofproto, struct dpif_upcall *upcalls,
                     size_t n_upcalls)
@@ -2450,11 +2475,14 @@ handle_miss_upcalls(struct ofproto_dpif *ofproto, struct dpif_upcall *upcalls,
     for (upcall = upcalls; upcall < &upcalls[n_upcalls]; upcall++) {
         enum odp_key_fitness fitness;
         struct flow_miss *miss;
+        ovs_be16 initial_tci;
         struct flow flow;
 
         /* Obtain metadata and check userspace/kernel agreement on flow match,
          * then set 'flow''s header pointers. */
-        fitness = odp_flow_key_to_flow(upcall->key, upcall->key_len, &flow);
+        fitness = ofproto_dpif_extract_flow_key(ofproto,
+                                                upcall->key, upcall->key_len,
+                                                &flow, &initial_tci);
         if (fitness == ODP_FIT_ERROR) {
             continue;
         }
@@ -2470,7 +2498,7 @@ handle_miss_upcalls(struct ofproto_dpif *ofproto, struct dpif_upcall *upcalls,
 
         /* Add other packets to a to-do list. */
         miss = flow_miss_create(&todo, &flow, fitness,
-                                upcall->key, upcall->key_len);
+                                upcall->key, upcall->key_len, initial_tci);
         list_push_back(&miss->packets, &upcall->packet->list_node);
     }
 
@@ -2521,21 +2549,28 @@ static void
 handle_userspace_upcall(struct ofproto_dpif *ofproto,
                         struct dpif_upcall *upcall)
 {
-    struct flow flow;
     struct user_action_cookie cookie;
+    enum odp_key_fitness fitness;
+    ovs_be16 initial_tci;
+    struct flow flow;
 
     memcpy(&cookie, &upcall->userdata, sizeof(cookie));
 
+    fitness = ofproto_dpif_extract_flow_key(ofproto, upcall->key,
+                                            upcall->key_len, &flow,
+                                            &initial_tci);
+    if (fitness == ODP_FIT_ERROR) {
+        return;
+    }
+
     if (cookie.type == USER_ACTION_COOKIE_SFLOW) {
         if (ofproto->sflow) {
-            odp_flow_key_to_flow(upcall->key, upcall->key_len, &flow);
-            dpif_sflow_received(ofproto->sflow, upcall->packet, &flow, &cookie);
+            dpif_sflow_received(ofproto->sflow, upcall->packet, &flow,
+                                &cookie);
         }
         ofpbuf_delete(upcall->packet);
-
     } else if (cookie.type == USER_ACTION_COOKIE_CONTROLLER) {
         COVERAGE_INC(ofproto_dpif_ctlr_action);
-        odp_flow_key_to_flow(upcall->key, upcall->key_len, &flow);
         send_packet_in_action(ofproto, upcall->packet, upcall->userdata,
                               &flow, false);
     } else {
@@ -2947,7 +2982,8 @@ facet_account(struct ofproto_dpif *ofproto, struct facet *facet)
     if (facet->has_learn || facet->has_normal) {
         struct action_xlate_ctx ctx;
 
-        action_xlate_ctx_init(&ctx, ofproto, &facet->flow, NULL);
+        action_xlate_ctx_init(&ctx, ofproto, &facet->flow,
+                              facet->flow.vlan_tci, NULL);
         ctx.may_learn = true;
         ofpbuf_delete(xlate_actions(&ctx, facet->rule->up.actions,
                                     facet->rule->up.n_actions));
@@ -3135,7 +3171,8 @@ facet_revalidate(struct ofproto_dpif *ofproto, struct facet *facet)
         struct ofpbuf *odp_actions;
         bool should_install;
 
-        action_xlate_ctx_init(&ctx, ofproto, &facet->flow, NULL);
+        action_xlate_ctx_init(&ctx, ofproto, &facet->flow,
+                              subfacet->initial_tci, NULL);
         odp_actions = xlate_actions(&ctx, new_rule->up.actions,
                                     new_rule->up.n_actions);
         actions_changed = (subfacet->actions_len != odp_actions->size
@@ -3281,7 +3318,7 @@ flow_push_stats(const struct rule_dpif *rule,
     push.bytes = bytes;
     push.used = used;
 
-    action_xlate_ctx_init(&push.ctx, ofproto, flow, NULL);
+    action_xlate_ctx_init(&push.ctx, ofproto, flow, flow->vlan_tci, NULL);
     push.ctx.resubmit_hook = push_resubmit;
     ofpbuf_delete(xlate_actions(&push.ctx,
                                 rule->up.actions, rule->up.n_actions));
@@ -3319,7 +3356,7 @@ subfacet_find__(struct ofproto_dpif *ofproto,
 static struct subfacet *
 subfacet_create(struct ofproto_dpif *ofproto, struct facet *facet,
                 enum odp_key_fitness key_fitness,
-                const struct nlattr *key, size_t key_len)
+                const struct nlattr *key, size_t key_len, ovs_be16 initial_tci)
 {
     uint32_t key_hash = odp_flow_key_hash(key, key_len);
     struct subfacet *subfacet;
@@ -3346,6 +3383,7 @@ subfacet_create(struct ofproto_dpif *ofproto, struct facet *facet,
         subfacet->key_len = key_len;
     }
     subfacet->installed = false;
+    subfacet->initial_tci = initial_tci;
 
     return subfacet;
 }
@@ -3413,7 +3451,8 @@ subfacet_make_actions(struct ofproto_dpif *p, struct subfacet *subfacet,
     struct ofpbuf *odp_actions;
     struct action_xlate_ctx ctx;
 
-    action_xlate_ctx_init(&ctx, p, &facet->flow, packet);
+    action_xlate_ctx_init(&ctx, p, &facet->flow, subfacet->initial_tci,
+                          packet);
     odp_actions = xlate_actions(&ctx, rule->up.actions, rule->up.n_actions);
     facet->tags = ctx.tags;
     facet->may_install = ctx.may_set_up_flow;
@@ -3690,7 +3729,7 @@ rule_execute(struct rule *rule_, const struct flow *flow,
     struct ofpbuf *odp_actions;
     size_t size;
 
-    action_xlate_ctx_init(&ctx, ofproto, flow, packet);
+    action_xlate_ctx_init(&ctx, ofproto, flow, flow->vlan_tci, packet);
     odp_actions = xlate_actions(&ctx, rule->up.actions, rule->up.n_actions);
     size = packet->size;
     if (execute_odp_actions(ofproto, flow, odp_actions->data,
@@ -4562,10 +4601,13 @@ do_xlate_actions(const union ofp_action *in, size_t n_in,
 static void
 action_xlate_ctx_init(struct action_xlate_ctx *ctx,
                       struct ofproto_dpif *ofproto, const struct flow *flow,
-                      const struct ofpbuf *packet)
+                      ovs_be16 initial_tci, const struct ofpbuf *packet)
 {
     ctx->ofproto = ofproto;
     ctx->flow = *flow;
+    ctx->base_flow = ctx->flow;
+    ctx->base_flow.tun_id = 0;
+    ctx->base_flow.vlan_tci = initial_tci;
     ctx->packet = packet;
     ctx->may_learn = packet != NULL;
     ctx->resubmit_hook = NULL;
@@ -4586,8 +4628,6 @@ xlate_actions(struct action_xlate_ctx *ctx,
     ctx->nf_output_iface = NF_OUT_DROP;
     ctx->recurse = 0;
     ctx->original_priority = ctx->flow.priority;
-    ctx->base_flow = ctx->flow;
-    ctx->base_flow.tun_id = 0;
     ctx->table_id = 0;
     ctx->exit = false;
 
@@ -5289,7 +5329,7 @@ packet_out(struct ofproto *ofproto_, struct ofpbuf *packet,
         ofpbuf_use_stack(&key, &keybuf, sizeof keybuf);
         odp_flow_key_from_flow(&key, flow);
 
-        action_xlate_ctx_init(&ctx, ofproto, flow, packet);
+        action_xlate_ctx_init(&ctx, ofproto, flow, flow->vlan_tci, packet);
         odp_actions = xlate_actions(&ctx, ofp_actions, n_ofp_actions);
         dpif_execute(ofproto->dpif, key.data, key.size,
                      odp_actions->data, odp_actions->size, packet);
@@ -5492,6 +5532,7 @@ ofproto_unixctl_trace(struct unixctl_conn *conn, const char *args_,
     struct ofpbuf odp_key;
     struct ofpbuf *packet;
     struct rule_dpif *rule;
+    ovs_be16 initial_tci;
     struct ds result;
     struct flow flow;
     char *s;
@@ -5501,6 +5542,17 @@ ofproto_unixctl_trace(struct unixctl_conn *conn, const char *args_,
     ds_init(&result);
 
     dpname = strtok_r(args, " ", &save_ptr);
+    if (!dpname) {
+        unixctl_command_reply(conn, 501, "Bad command syntax");
+        goto exit;
+    }
+
+    ofproto = ofproto_dpif_lookup(dpname);
+    if (!ofproto) {
+        unixctl_command_reply(conn, 501, "Unknown ofproto (use ofproto/list "
+                              "for help)");
+        goto exit;
+    }
     arg1 = strtok_r(NULL, " ", &save_ptr);
     arg2 = strtok_r(NULL, " ", &save_ptr);
     arg3 = strtok_r(NULL, " ", &save_ptr);
@@ -5518,8 +5570,10 @@ ofproto_unixctl_trace(struct unixctl_conn *conn, const char *args_,
         }
 
         /* Convert odp_key to flow. */
-        error = odp_flow_key_to_flow(odp_key.data, odp_key.size, &flow);
-        if (error) {
+        error = ofproto_dpif_extract_flow_key(ofproto, odp_key.data,
+                                              odp_key.size, &flow,
+                                              &initial_tci);
+        if (error == ODP_FIT_ERROR) {
             unixctl_command_reply(conn, 501, "Invalid flow");
             goto exit;
         }
@@ -5558,15 +5612,9 @@ ofproto_unixctl_trace(struct unixctl_conn *conn, const char *args_,
         free(s);
 
         flow_extract(packet, priority, tun_id, in_port, &flow);
+        initial_tci = flow.vlan_tci;
     } else {
         unixctl_command_reply(conn, 501, "Bad command syntax");
-        goto exit;
-    }
-
-    ofproto = ofproto_dpif_lookup(dpname);
-    if (!ofproto) {
-        unixctl_command_reply(conn, 501, "Unknown ofproto (use ofproto/list "
-                              "for help)");
         goto exit;
     }
 
@@ -5582,7 +5630,7 @@ ofproto_unixctl_trace(struct unixctl_conn *conn, const char *args_,
 
         trace.result = &result;
         trace.flow = flow;
-        action_xlate_ctx_init(&trace.ctx, ofproto, &flow, packet);
+        action_xlate_ctx_init(&trace.ctx, ofproto, &flow, initial_tci, packet);
         trace.ctx.resubmit_hook = trace_resubmit;
         odp_actions = xlate_actions(&trace.ctx,
                                     rule->up.actions, rule->up.n_actions);
