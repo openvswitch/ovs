@@ -27,7 +27,7 @@
  *
  * This structure should be treated as opaque by implementation. */
 struct stream {
-    struct stream_class *class;
+    const struct stream_class *class;
     int state;
     int error;
     ovs_be32 remote_ip;
@@ -37,8 +37,8 @@ struct stream {
     char *name;
 };
 
-void stream_init(struct stream *, struct stream_class *, int connect_status,
-                 const char *name);
+void stream_init(struct stream *, const struct stream_class *,
+                 int connect_status, const char *name);
 void stream_set_remote_ip(struct stream *, ovs_be32 remote_ip);
 void stream_set_remote_port(struct stream *, ovs_be16 remote_port);
 void stream_set_local_ip(struct stream *, ovs_be32 local_ip);
@@ -130,11 +130,11 @@ struct stream_class {
  *
  * This structure should be treated as opaque by stream implementations. */
 struct pstream {
-    struct pstream_class *class;
+    const struct pstream_class *class;
     char *name;
 };
 
-void pstream_init(struct pstream *, struct pstream_class *, const char *name);
+void pstream_init(struct pstream *, const struct pstream_class *, const char *name);
 static inline void pstream_assert_class(const struct pstream *pstream,
                                         const struct pstream_class *class)
 {
@@ -177,13 +177,13 @@ struct pstream_class {
 };
 
 /* Active and passive stream classes. */
-extern struct stream_class tcp_stream_class;
-extern struct pstream_class ptcp_pstream_class;
-extern struct stream_class unix_stream_class;
-extern struct pstream_class punix_pstream_class;
+extern const struct stream_class tcp_stream_class;
+extern const struct pstream_class ptcp_pstream_class;
+extern const struct stream_class unix_stream_class;
+extern const struct pstream_class punix_pstream_class;
 #ifdef HAVE_OPENSSL
-extern struct stream_class ssl_stream_class;
-extern struct pstream_class pssl_pstream_class;
+extern const struct stream_class ssl_stream_class;
+extern const struct pstream_class pssl_pstream_class;
 #endif
 
 #endif /* stream-provider.h */

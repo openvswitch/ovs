@@ -752,7 +752,7 @@ ssl_wait(struct stream *stream, enum stream_wait_type wait)
     }
 }
 
-struct stream_class ssl_stream_class = {
+const struct stream_class ssl_stream_class = {
     "ssl",                      /* name */
     ssl_open,                   /* open */
     ssl_close,                  /* close */
@@ -772,7 +772,7 @@ struct pssl_pstream
     int fd;
 };
 
-struct pstream_class pssl_pstream_class;
+const struct pstream_class pssl_pstream_class;
 
 static struct pssl_pstream *
 pssl_pstream_cast(struct pstream *pstream)
@@ -857,7 +857,7 @@ pssl_wait(struct pstream *pstream)
     poll_fd_wait(pssl->fd, POLLIN);
 }
 
-struct pstream_class pssl_pstream_class = {
+const struct pstream_class pssl_pstream_class = {
     "pssl",
     pssl_open,
     pssl_close,

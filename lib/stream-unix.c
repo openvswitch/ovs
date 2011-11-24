@@ -63,7 +63,7 @@ unix_open(const char *name, char *suffix, struct stream **streamp)
                          bind_path, streamp);
 }
 
-struct stream_class unix_stream_class = {
+const struct stream_class unix_stream_class = {
     "unix",                     /* name */
     unix_open,                  /* open */
     NULL,                       /* close */
@@ -119,7 +119,7 @@ punix_accept(int fd, const struct sockaddr *sa, size_t sa_len,
     return new_fd_stream(name, fd, 0, NULL, streamp);
 }
 
-struct pstream_class punix_pstream_class = {
+const struct pstream_class punix_pstream_class = {
     "punix",
     punix_open,
     NULL,

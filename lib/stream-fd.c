@@ -45,7 +45,7 @@ struct stream_fd
     char *unlink_path;
 };
 
-static struct stream_class stream_fd_class;
+static const struct stream_class stream_fd_class;
 
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(10, 25);
 
@@ -154,7 +154,7 @@ fd_wait(struct stream *stream, enum stream_wait_type wait)
     }
 }
 
-static struct stream_class stream_fd_class = {
+static const struct stream_class stream_fd_class = {
     "fd",                       /* name */
     NULL,                       /* open */
     fd_close,                   /* close */

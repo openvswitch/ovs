@@ -49,7 +49,7 @@ enum stream_state {
     SCS_DISCONNECTED            /* Connection failed or connection closed. */
 };
 
-static struct stream_class *stream_classes[] = {
+static const struct stream_class *stream_classes[] = {
     &tcp_stream_class,
     &unix_stream_class,
 #ifdef HAVE_OPENSSL
@@ -57,7 +57,7 @@ static struct stream_class *stream_classes[] = {
 #endif
 };
 
-static struct pstream_class *pstream_classes[] = {
+static const struct pstream_class *pstream_classes[] = {
     &ptcp_pstream_class,
     &punix_pstream_class,
 #ifdef HAVE_OPENSSL
@@ -73,7 +73,7 @@ check_stream_classes(void)
     size_t i;
 
     for (i = 0; i < ARRAY_SIZE(stream_classes); i++) {
-        struct stream_class *class = stream_classes[i];
+        const struct stream_class *class = stream_classes[i];
         assert(class->name != NULL);
         assert(class->open != NULL);
         if (class->close || class->recv || class->send || class->run
@@ -88,7 +88,7 @@ check_stream_classes(void)
     }
 
     for (i = 0; i < ARRAY_SIZE(pstream_classes); i++) {
-        struct pstream_class *class = pstream_classes[i];
+        const struct pstream_class *class = pstream_classes[i];
         assert(class->name != NULL);
         assert(class->listen != NULL);
         if (class->close || class->accept || class->wait) {
@@ -154,7 +154,7 @@ stream_usage(const char *name, bool active, bool passive,
  * a null pointer into '*classp' if 'name' is in the wrong form or if no such
  * class exists. */
 static int
-stream_lookup_class(const char *name, struct stream_class **classp)
+stream_lookup_class(const char *name, const struct stream_class **classp)
 {
     size_t prefix_len;
     size_t i;
@@ -167,7 +167,7 @@ stream_lookup_class(const char *name, struct stream_class **classp)
         return EAFNOSUPPORT;
     }
     for (i = 0; i < ARRAY_SIZE(stream_classes); i++) {
-        struct stream_class *class = stream_classes[i];
+        const struct stream_class *class = stream_classes[i];
         if (strlen(class->name) == prefix_len
             && !memcmp(class->name, name, prefix_len)) {
             *classp = class;
@@ -182,7 +182,7 @@ stream_lookup_class(const char *name, struct stream_class **classp)
 int
 stream_verify_name(const char *name)
 {
-    struct stream_class *class;
+    const struct stream_class *class;
     return stream_lookup_class(name, &class);
 }
 
@@ -196,7 +196,7 @@ stream_verify_name(const char *name)
 int
 stream_open(const char *name, struct stream **streamp)
 {
-    struct stream_class *class;
+    const struct stream_class *class;
     struct stream *stream;
     char *suffix_copy;
     int error;
@@ -457,7 +457,7 @@ stream_send_wait(struct stream *stream)
  * a null pointer into '*classp' if 'name' is in the wrong form or if no such
  * class exists. */
 static int
-pstream_lookup_class(const char *name, struct pstream_class **classp)
+pstream_lookup_class(const char *name, const struct pstream_class **classp)
 {
     size_t prefix_len;
     size_t i;
@@ -470,7 +470,7 @@ pstream_lookup_class(const char *name, struct pstream_class **classp)
         return EAFNOSUPPORT;
     }
     for (i = 0; i < ARRAY_SIZE(pstream_classes); i++) {
-        struct pstream_class *class = pstream_classes[i];
+        const struct pstream_class *class = pstream_classes[i];
         if (strlen(class->name) == prefix_len
             && !memcmp(class->name, name, prefix_len)) {
             *classp = class;
@@ -485,7 +485,7 @@ pstream_lookup_class(const char *name, struct pstream_class **classp)
 int
 pstream_verify_name(const char *name)
 {
-    struct pstream_class *class;
+    const struct pstream_class *class;
     return pstream_lookup_class(name, &class);
 }
 
@@ -499,7 +499,7 @@ pstream_verify_name(const char *name)
 int
 pstream_open(const char *name, struct pstream **pstreamp)
 {
-    struct pstream_class *class;
+    const struct pstream_class *class;
     struct pstream *pstream;
     char *suffix_copy;
     int error;
@@ -613,7 +613,7 @@ pstream_wait(struct pstream *pstream)
  *
  * The caller retains ownership of 'name'. */
 void
-stream_init(struct stream *stream, struct stream_class *class,
+stream_init(struct stream *stream, const struct stream_class *class,
             int connect_status, const char *name)
 {
     memset(stream, 0, sizeof *stream);
@@ -651,7 +651,7 @@ stream_set_local_port(struct stream *stream, ovs_be16 port)
 }
 
 void
-pstream_init(struct pstream *pstream, struct pstream_class *class,
+pstream_init(struct pstream *pstream, const struct pstream_class *class,
             const char *name)
 {
     pstream->class = class;

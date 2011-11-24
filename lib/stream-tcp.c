@@ -84,7 +84,7 @@ tcp_open(const char *name, char *suffix, struct stream **streamp)
     }
 }
 
-struct stream_class tcp_stream_class = {
+const struct stream_class tcp_stream_class = {
     "tcp",                      /* name */
     tcp_open,                   /* open */
     NULL,                       /* close */
@@ -134,7 +134,7 @@ ptcp_accept(int fd, const struct sockaddr *sa, size_t sa_len,
     return new_tcp_stream(name, fd, 0, sin, streamp);
 }
 
-struct pstream_class ptcp_pstream_class = {
+const struct pstream_class ptcp_pstream_class = {
     "ptcp",
     ptcp_open,
     NULL,
