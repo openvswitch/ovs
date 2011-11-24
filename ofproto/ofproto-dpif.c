@@ -392,11 +392,21 @@ struct ofport_dpif {
     uint32_t bond_stable_id;    /* stable_id to use as bond slave, or 0. */
     bool may_enable;            /* May be enabled in bonds. */
 
+    /* Spanning tree. */
     struct stp_port *stp_port;  /* Spanning Tree Protocol, if any. */
     enum stp_state stp_state;   /* Always STP_DISABLED if STP not in use. */
     long long int stp_state_entered;
 
     struct hmap priorities;     /* Map of attached 'priority_to_dscp's. */
+
+    /* Linux VLAN device support (e.g. "eth0.10" for VLAN 10.)
+     *
+     * This is deprecated.  It is only for compatibility with broken device
+     * drivers in old versions of Linux that do not properly support VLANs when
+     * VLAN devices are not used.  When broken device drivers are no longer in
+     * widespread use, we will delete these interfaces. */
+    uint16_t realdev_ofp_port;
+    int vlandev_vid;
 };
 
 /* Node in 'ofport_dpif''s 'priorities' map.  Used to maintain a map from
@@ -408,6 +418,27 @@ struct priority_to_dscp {
 
     uint8_t dscp;               /* DSCP bits to mark outgoing traffic with. */
 };
+
+/* Linux VLAN device support (e.g. "eth0.10" for VLAN 10.)
+ *
+ * This is deprecated.  It is only for compatibility with broken device drivers
+ * in old versions of Linux that do not properly support VLANs when VLAN
+ * devices are not used.  When broken device drivers are no longer in
+ * widespread use, we will delete these interfaces. */
+struct vlan_splinter {
+    struct hmap_node realdev_vid_node;
+    struct hmap_node vlandev_node;
+    uint16_t realdev_ofp_port;
+    uint16_t vlandev_ofp_port;
+    int vid;
+};
+
+static uint32_t vsp_realdev_to_vlandev(const struct ofproto_dpif *,
+                                       uint32_t realdev, ovs_be16 vlan_tci);
+static uint16_t vsp_vlandev_to_realdev(const struct ofproto_dpif *,
+                                       uint16_t vlandev, int *vid);
+static void vsp_remove(struct ofport_dpif *);
+static void vsp_add(struct ofport_dpif *, uint16_t realdev_ofp_port, int vid);
 
 static struct ofport_dpif *
 ofport_dpif_cast(const struct ofport *ofport)
@@ -473,6 +504,10 @@ struct ofproto_dpif {
     /* Spanning tree. */
     struct stp *stp;
     long long int stp_last_tick;
+
+    /* VLAN splinters. */
+    struct hmap realdev_vid_map; /* (realdev,vid) -> vlandev. */
+    struct hmap vlandev_map;     /* vlandev -> (realdev,vid). */
 };
 
 /* Defer flow mod completion until "ovs-appctl ofproto/unclog"?  (Useful only
@@ -511,8 +546,7 @@ static int expire(struct ofproto_dpif *);
 static void send_netflow_active_timeouts(struct ofproto_dpif *);
 
 /* Utilities. */
-static int send_packet(const struct ofport_dpif *,
-                       const struct ofpbuf *packet);
+static int send_packet(const struct ofport_dpif *, struct ofpbuf *packet);
 static size_t
 compose_sflow_action(const struct ofproto_dpif *, struct ofpbuf *odp_actions,
                      const struct flow *, uint32_t odp_port);
@@ -623,6 +657,9 @@ construct(struct ofproto *ofproto_, int *n_tablesp)
 
     ofproto->has_bundle_action = false;
 
+    hmap_init(&ofproto->vlandev_map);
+    hmap_init(&ofproto->realdev_vid_map);
+
     *n_tablesp = N_TABLES;
     return 0;
 }
@@ -669,6 +706,9 @@ destruct(struct ofproto *ofproto_)
 
     hmap_destroy(&ofproto->facets);
     hmap_destroy(&ofproto->subfacets);
+
+    hmap_destroy(&ofproto->vlandev_map);
+    hmap_destroy(&ofproto->realdev_vid_map);
 
     dpif_close(ofproto->dpif);
 }
@@ -881,6 +921,8 @@ port_construct(struct ofport *port_)
     port->stp_port = NULL;
     port->stp_state = STP_DISABLED;
     hmap_init(&port->priorities);
+    port->realdev_ofp_port = 0;
+    port->vlandev_vid = 0;
 
     if (ofproto->sflow) {
         dpif_sflow_add_port(ofproto->sflow, port->odp_port,
@@ -2435,17 +2477,32 @@ handle_flow_miss(struct ofproto_dpif *ofproto, struct flow_miss *miss,
 }
 
 static enum odp_key_fitness
-ofproto_dpif_extract_flow_key(const struct ofproto_dpif *ofproto OVS_UNUSED,
+ofproto_dpif_extract_flow_key(const struct ofproto_dpif *ofproto,
                               const struct nlattr *key, size_t key_len,
                               struct flow *flow, ovs_be16 *initial_tci)
 {
     enum odp_key_fitness fitness;
+    uint16_t realdev;
+    int vid;
 
     fitness = odp_flow_key_to_flow(key, key_len, flow);
     if (fitness == ODP_FIT_ERROR) {
         return fitness;
     }
     *initial_tci = flow->vlan_tci;
+
+    realdev = vsp_vlandev_to_realdev(ofproto, flow->in_port, &vid);
+    if (realdev) {
+        /* Cause the flow to be processed as if it came in on the real device
+         * with the VLAN device's VLAN ID. */
+        flow->in_port = realdev;
+        flow->vlan_tci = htons((vid & VLAN_VID_MASK) | VLAN_CFI);
+
+        /* Let the caller know that we can't reproduce 'key' from 'flow'. */
+        if (fitness == ODP_FIT_PERFECT) {
+            fitness = ODP_FIT_TOO_MUCH;
+        }
+    }
 
     return fitness;
 }
@@ -3762,18 +3819,26 @@ rule_modify_actions(struct rule *rule_)
 }
 
 /* Sends 'packet' out 'ofport'.
+ * May modify 'packet'.
  * Returns 0 if successful, otherwise a positive errno value. */
 static int
-send_packet(const struct ofport_dpif *ofport, const struct ofpbuf *packet)
+send_packet(const struct ofport_dpif *ofport, struct ofpbuf *packet)
 {
     const struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofport->up.ofproto);
-    uint16_t odp_port = ofport->odp_port;
     struct ofpbuf key, odp_actions;
     struct odputil_keybuf keybuf;
+    uint16_t odp_port;
     struct flow flow;
     int error;
 
     flow_extract((struct ofpbuf *) packet, 0, 0, 0, &flow);
+    odp_port = vsp_realdev_to_vlandev(ofproto, ofport->odp_port,
+                                      flow.vlan_tci);
+    if (odp_port != ofport->odp_port) {
+        eth_pop_vlan(packet);
+        flow.vlan_tci = htons(0);
+    }
+
     ofpbuf_use_stack(&key, &keybuf, sizeof keybuf);
     odp_flow_key_from_flow(&key, &flow);
 
@@ -4066,7 +4131,9 @@ compose_output_action__(struct action_xlate_ctx *ctx, uint16_t ofp_port,
 {
     const struct ofport_dpif *ofport = get_ofp_port(ctx->ofproto, ofp_port);
     uint16_t odp_port = ofp_port_to_odp_port(ofp_port);
+    ovs_be16 flow_vlan_tci = ctx->flow.vlan_tci;
     uint8_t flow_nw_tos = ctx->flow.nw_tos;
+    uint16_t out_port;
 
     if (ofport) {
         struct priority_to_dscp *pdscp;
@@ -4087,11 +4154,18 @@ compose_output_action__(struct action_xlate_ctx *ctx, uint16_t ofp_port,
          * later and we're pre-populating the flow table.  */
     }
 
+    out_port = vsp_realdev_to_vlandev(ctx->ofproto, odp_port,
+                                      ctx->flow.vlan_tci);
+    if (out_port != odp_port) {
+        ctx->flow.vlan_tci = htons(0);
+    }
     commit_odp_actions(ctx);
-    nl_msg_put_u32(ctx->odp_actions, OVS_ACTION_ATTR_OUTPUT, odp_port);
+    nl_msg_put_u32(ctx->odp_actions, OVS_ACTION_ATTR_OUTPUT, out_port);
+
     ctx->sflow_odp_port = odp_port;
     ctx->sflow_n_outputs++;
     ctx->nf_output_iface = ofp_port;
+    ctx->flow.vlan_tci = flow_vlan_tci;
     ctx->flow.nw_tos = flow_nw_tos;
 }
 
@@ -5696,6 +5770,148 @@ ofproto_dpif_unixctl_init(void)
     unixctl_command_register("ofproto/unclog", "", ofproto_dpif_unclog, NULL);
 }
 
+/* Linux VLAN device support (e.g. "eth0.10" for VLAN 10.)
+ *
+ * This is deprecated.  It is only for compatibility with broken device drivers
+ * in old versions of Linux that do not properly support VLANs when VLAN
+ * devices are not used.  When broken device drivers are no longer in
+ * widespread use, we will delete these interfaces. */
+
+static int
+set_realdev(struct ofport *ofport_, uint16_t realdev_ofp_port, int vid)
+{
+    struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofport_->ofproto);
+    struct ofport_dpif *ofport = ofport_dpif_cast(ofport_);
+
+    if (realdev_ofp_port == ofport->realdev_ofp_port
+        && vid == ofport->vlandev_vid) {
+        return 0;
+    }
+
+    ofproto->need_revalidate = true;
+
+    if (ofport->realdev_ofp_port) {
+        vsp_remove(ofport);
+    }
+    if (realdev_ofp_port && ofport->bundle) {
+        /* vlandevs are enslaved to their realdevs, so they are not allowed to
+         * themselves be part of a bundle. */
+        bundle_set(ofport->up.ofproto, ofport->bundle, NULL);
+    }
+
+    ofport->realdev_ofp_port = realdev_ofp_port;
+    ofport->vlandev_vid = vid;
+
+    if (realdev_ofp_port) {
+        vsp_add(ofport, realdev_ofp_port, vid);
+    }
+
+    return 0;
+}
+
+static uint32_t
+hash_realdev_vid(uint16_t realdev_ofp_port, int vid)
+{
+    return hash_2words(realdev_ofp_port, vid);
+}
+
+static uint32_t
+vsp_realdev_to_vlandev(const struct ofproto_dpif *ofproto,
+                       uint32_t realdev_odp_port, ovs_be16 vlan_tci)
+{
+    if (!hmap_is_empty(&ofproto->realdev_vid_map)) {
+        uint16_t realdev_ofp_port = odp_port_to_ofp_port(realdev_odp_port);
+        int vid = vlan_tci_to_vid(vlan_tci);
+        const struct vlan_splinter *vsp;
+
+        HMAP_FOR_EACH_WITH_HASH (vsp, realdev_vid_node,
+                                 hash_realdev_vid(realdev_ofp_port, vid),
+                                 &ofproto->realdev_vid_map) {
+            if (vsp->realdev_ofp_port == realdev_ofp_port
+                && vsp->vid == vid) {
+                return ofp_port_to_odp_port(vsp->vlandev_ofp_port);
+            }
+        }
+    }
+    return realdev_odp_port;
+}
+
+static struct vlan_splinter *
+vlandev_find(const struct ofproto_dpif *ofproto, uint16_t vlandev_ofp_port)
+{
+    struct vlan_splinter *vsp;
+
+    HMAP_FOR_EACH_WITH_HASH (vsp, vlandev_node, hash_int(vlandev_ofp_port, 0),
+                             &ofproto->vlandev_map) {
+        if (vsp->vlandev_ofp_port == vlandev_ofp_port) {
+            return vsp;
+        }
+    }
+
+    return NULL;
+}
+
+static uint16_t
+vsp_vlandev_to_realdev(const struct ofproto_dpif *ofproto,
+                   uint16_t vlandev_ofp_port, int *vid)
+{
+    if (!hmap_is_empty(&ofproto->vlandev_map)) {
+        const struct vlan_splinter *vsp;
+
+        vsp = vlandev_find(ofproto, vlandev_ofp_port);
+        if (vsp) {
+            if (vid) {
+                *vid = vsp->vid;
+            }
+            return vsp->realdev_ofp_port;
+        }
+    }
+    return 0;
+}
+
+static void
+vsp_remove(struct ofport_dpif *port)
+{
+    struct ofproto_dpif *ofproto = ofproto_dpif_cast(port->up.ofproto);
+    struct vlan_splinter *vsp;
+
+    vsp = vlandev_find(ofproto, port->up.ofp_port);
+    if (vsp) {
+        hmap_remove(&ofproto->vlandev_map, &vsp->vlandev_node);
+        hmap_remove(&ofproto->realdev_vid_map, &vsp->realdev_vid_node);
+        free(vsp);
+
+        port->realdev_ofp_port = 0;
+    } else {
+        VLOG_ERR("missing vlan device record");
+    }
+}
+
+static void
+vsp_add(struct ofport_dpif *port, uint16_t realdev_ofp_port, int vid)
+{
+    struct ofproto_dpif *ofproto = ofproto_dpif_cast(port->up.ofproto);
+
+    if (!vsp_vlandev_to_realdev(ofproto, port->up.ofp_port, NULL)
+        && (vsp_realdev_to_vlandev(ofproto, realdev_ofp_port, htons(vid))
+            == realdev_ofp_port)) {
+        struct vlan_splinter *vsp;
+
+        vsp = xmalloc(sizeof *vsp);
+        hmap_insert(&ofproto->vlandev_map, &vsp->vlandev_node,
+                    hash_int(port->up.ofp_port, 0));
+        hmap_insert(&ofproto->realdev_vid_map, &vsp->realdev_vid_node,
+                    hash_realdev_vid(realdev_ofp_port, vid));
+        vsp->realdev_ofp_port = realdev_ofp_port;
+        vsp->vlandev_ofp_port = port->up.ofp_port;
+        vsp->vid = vid;
+
+        port->realdev_ofp_port = realdev_ofp_port;
+    } else {
+        VLOG_ERR("duplicate vlan device record");
+    }
+}
+
 const struct ofproto_class ofproto_dpif_class = {
     enumerate_types,
     enumerate_names,
@@ -5751,4 +5967,5 @@ const struct ofproto_class ofproto_dpif_class = {
     set_flood_vlans,
     is_mirror_output_bundle,
     forward_bpdu_changed,
+    set_realdev,
 };

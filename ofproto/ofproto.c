@@ -21,6 +21,7 @@
 #include <inttypes.h>
 #include <stdbool.h>
 #include <stdlib.h>
+#include "bitmap.h"
 #include "byte-order.h"
 #include "classifier.h"
 #include "connmgr.h"
@@ -337,6 +338,8 @@ ofproto_create(const char *datapath_name, const char *datapath_type,
     list_init(&ofproto->pending);
     ofproto->n_pending = 0;
     hmap_init(&ofproto->deletions);
+    ofproto->vlan_bitmap = NULL;
+    ofproto->vlans_changed = false;
 
     error = ofproto->ofproto_class->construct(ofproto, &n_tables);
     if (error) {
@@ -833,6 +836,8 @@ ofproto_destroy__(struct ofproto *ofproto)
     free(ofproto->tables);
 
     hmap_destroy(&ofproto->deletions);
+
+    free(ofproto->vlan_bitmap);
 
     ofproto->ofproto_class->dealloc(ofproto);
 }
@@ -1394,6 +1399,9 @@ ofproto_port_unregister(struct ofproto *ofproto, uint16_t ofp_port)
 {
     struct ofport *port = ofproto_get_port(ofproto, ofp_port);
     if (port) {
+        if (port->ofproto->ofproto_class->set_realdev) {
+            port->ofproto->ofproto_class->set_realdev(port, 0, 0);
+        }
         if (port->ofproto->ofproto_class->set_stp_port) {
             port->ofproto->ofproto_class->set_stp_port(port, NULL);
         }
@@ -3098,7 +3106,8 @@ ofoperation_complete(struct ofoperation *op, int error)
 {
     struct ofopgroup *group = op->group;
     struct rule *rule = op->rule;
-    struct classifier *table = &rule->ofproto->tables[rule->table_id];
+    struct ofproto *ofproto = rule->ofproto;
+    struct classifier *table = &ofproto->tables[rule->table_id];
 
     assert(rule->pending == op);
     assert(op->status < 0);
@@ -3129,6 +3138,15 @@ ofoperation_complete(struct ofoperation *op, int error)
         if (!error) {
             if (op->victim) {
                 ofproto_rule_destroy__(op->victim);
+            }
+            if (!(rule->cr.wc.vlan_tci_mask & htons(VLAN_VID_MASK))
+                && ofproto->vlan_bitmap) {
+                uint16_t vid = vlan_tci_to_vid(rule->cr.flow.vlan_tci);
+
+                if (!bitmap_is_set(ofproto->vlan_bitmap, vid)) {
+                    bitmap_set1(ofproto->vlan_bitmap, vid);
+                    ofproto->vlans_changed = true;
+                }
             }
         } else {
             if (op->victim) {
@@ -3241,4 +3259,87 @@ ofproto_unixctl_init(void)
     registered = true;
 
     unixctl_command_register("ofproto/list", "", ofproto_unixctl_list, NULL);
+}
+
+/* Linux VLAN device support (e.g. "eth0.10" for VLAN 10.)
+ *
+ * This is deprecated.  It is only for compatibility with broken device drivers
+ * in old versions of Linux that do not properly support VLANs when VLAN
+ * devices are not used.  When broken device drivers are no longer in
+ * widespread use, we will delete these interfaces. */
+
+/* Sets a 1-bit in the 4096-bit 'vlan_bitmap' for each VLAN ID that is matched
+ * (exactly) by an OpenFlow rule in 'ofproto'. */
+void
+ofproto_get_vlan_usage(struct ofproto *ofproto, unsigned long int *vlan_bitmap)
+{
+    const struct classifier *cls;
+
+    free(ofproto->vlan_bitmap);
+    ofproto->vlan_bitmap = bitmap_allocate(4096);
+    ofproto->vlans_changed = false;
+
+    OFPROTO_FOR_EACH_TABLE (cls, ofproto) {
+        const struct cls_table *table;
+
+        HMAP_FOR_EACH (table, hmap_node, &cls->tables) {
+            if (!(table->wc.vlan_tci_mask & htons(VLAN_VID_MASK))) {
+                const struct cls_rule *rule;
+
+                HMAP_FOR_EACH (rule, hmap_node, &table->rules) {
+                    uint16_t vid = vlan_tci_to_vid(rule->flow.vlan_tci);
+                    bitmap_set1(vlan_bitmap, vid);
+                    bitmap_set1(ofproto->vlan_bitmap, vid);
+                }
+            }
+        }
+    }
+}
+
+/* Returns true if new VLANs have come into use by the flow table since the
+ * last call to ofproto_get_vlan_usage().
+ *
+ * We don't track when old VLANs stop being used. */
+bool
+ofproto_has_vlan_usage_changed(const struct ofproto *ofproto)
+{
+    return ofproto->vlans_changed;
+}
+
+/* Configures a VLAN splinter binding between the ports identified by OpenFlow
+ * port numbers 'vlandev_ofp_port' and 'realdev_ofp_port'.  If
+ * 'realdev_ofp_port' is nonzero, then the VLAN device is enslaved to the real
+ * device as a VLAN splinter for VLAN ID 'vid'.  If 'realdev_ofp_port' is zero,
+ * then the VLAN device is un-enslaved. */
+int
+ofproto_port_set_realdev(struct ofproto *ofproto, uint16_t vlandev_ofp_port,
+                         uint16_t realdev_ofp_port, int vid)
+{
+    struct ofport *ofport;
+    int error;
+
+    assert(vlandev_ofp_port != realdev_ofp_port);
+
+    ofport = ofproto_get_port(ofproto, vlandev_ofp_port);
+    if (!ofport) {
+        VLOG_WARN("%s: cannot set realdev on nonexistent port %"PRIu16,
+                  ofproto->name, vlandev_ofp_port);
+        return EINVAL;
+    }
+
+    if (!ofproto->ofproto_class->set_realdev) {
+        if (!vlandev_ofp_port) {
+            return 0;
+        }
+        VLOG_WARN("%s: vlan splinters not supported", ofproto->name);
+        return EOPNOTSUPP;
+    }
+
+    error = ofproto->ofproto_class->set_realdev(ofport, realdev_ofp_port, vid);
+    if (error) {
+        VLOG_WARN("%s: setting realdev on port %"PRIu16" (%s) failed (%s)",
+                  ofproto->name, vlandev_ofp_port,
+                  netdev_get_name(ofport->netdev), strerror(error));
+    }
+    return error;
 }

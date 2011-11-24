@@ -69,6 +69,15 @@ struct ofproto {
     struct list pending;        /* List of "struct ofopgroup"s. */
     unsigned int n_pending;     /* list_size(&pending). */
     struct hmap deletions;      /* All OFOPERATION_DELETE "ofoperation"s. */
+
+    /* Linux VLAN device support (e.g. "eth0.10" for VLAN 10.)
+     *
+     * This is deprecated.  It is only for compatibility with broken device
+     * drivers in old versions of Linux that do not properly support VLANs when
+     * VLAN devices are not used.  When broken device drivers are no longer in
+     * widespread use, we will delete these interfaces. */
+    unsigned long int *vlan_bitmap; /* 4096-bit bitmap of in-use VLANs. */
+    bool vlans_changed;             /* True if new VLANs are in use. */
 };
 
 struct ofproto *ofproto_lookup(const char *name);
@@ -1035,6 +1044,25 @@ struct ofproto_class {
     /* When the configuration option of forward_bpdu changes, this function
      * will be invoked. */
     void (*forward_bpdu_changed)(struct ofproto *ofproto);
+
+/* Linux VLAN device support (e.g. "eth0.10" for VLAN 10.)
+ *
+ * This is deprecated.  It is only for compatibility with broken device drivers
+ * in old versions of Linux that do not properly support VLANs when VLAN
+ * devices are not used.  When broken device drivers are no longer in
+ * widespread use, we will delete these interfaces. */
+
+    /* If 'realdev_ofp_port' is nonzero, then this function configures 'ofport'
+     * as a VLAN splinter port for VLAN 'vid', associated with the real device
+     * that has OpenFlow port number 'realdev_ofp_port'.
+     *
+     * If 'realdev_ofp_port' is zero, then this function deconfigures 'ofport'
+     * as a VLAN splinter port.
+     *
+     * This function should be NULL if a an implementation does not support
+     * it. */
+    int (*set_realdev)(struct ofport *ofport,
+                       uint16_t realdev_ofp_port, int vid);
 };
 
 extern const struct ofproto_class ofproto_dpif_class;

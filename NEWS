@@ -1,5 +1,10 @@
 post-v1.3.0
 ------------------------
+    - New "VLAN splinters" feature to work around buggy device drivers
+      in old Linux versions.  (This feature is deprecated.  When
+      broken device drivers are no longer in widespread use, we will
+      delete this feature.)  See ovs-vswitchd.conf.db(5) for more
+      information.
     - OpenFlow:
        - Added ability to match on IPv6 flow label through NXM.
        - Added ability to match on ECN bits in IPv4 and IPv6 through NXM.
