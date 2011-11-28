@@ -28,7 +28,9 @@
 #include <linux/pkt_sched.h>
 #include <linux/rtnetlink.h>
 #include <linux/sockios.h>
+#include <poll.h>
 #include <stdlib.h>
+#include <strings.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -63,6 +65,7 @@ BUILD_ASSERT_DECL(IS_POW2(LRU_MAX_PORTS));
 
 enum { N_UPCALL_SOCKS = 16 };
 BUILD_ASSERT_DECL(IS_POW2(N_UPCALL_SOCKS));
+BUILD_ASSERT_DECL(N_UPCALL_SOCKS <= 32); /* We use a 32-bit word as a mask. */
 
 /* This ethtool flag was introduced in Linux 2.6.24, so it might be
  * missing if we have old headers. */
@@ -135,8 +138,8 @@ struct dpif_linux {
 
     /* Upcall messages. */
     struct nl_sock *upcall_socks[N_UPCALL_SOCKS];
-    int last_read_upcall;
-    unsigned int listen_mask;
+    uint32_t ready_mask;        /* 1-bit for each sock with unread messages. */
+    unsigned int listen_mask;   /* Mask of DPIF_UC_* bits. */
 
     /* Change notification. */
     struct sset changed_ports;  /* Ports that have changed. */
@@ -1009,6 +1012,8 @@ dpif_linux_recv_set_mask(struct dpif *dpif_, int listen_mask)
                 return error;
             }
         }
+
+        dpif->ready_mask = 0;
     }
 
     dpif->listen_mask = listen_mask;
@@ -1088,24 +1093,51 @@ static int
 dpif_linux_recv(struct dpif *dpif_, struct dpif_upcall *upcall)
 {
     struct dpif_linux *dpif = dpif_linux_cast(dpif_);
-    int i;
     int read_tries = 0;
 
     if (!dpif->listen_mask) {
        return EAGAIN;
     }
 
-    for (i = 0; i < N_UPCALL_SOCKS; i++) {
-        struct nl_sock *upcall_sock;
-        int dp_ifindex;
+    if (!dpif->ready_mask) {
+        struct pollfd pfds[N_UPCALL_SOCKS];
+        int retval;
+        int i;
 
-        dpif->last_read_upcall = (dpif->last_read_upcall + 1) &
-                                 (N_UPCALL_SOCKS - 1);
-        upcall_sock = dpif->upcall_socks[dpif->last_read_upcall];
+        for (i = 0; i < N_UPCALL_SOCKS; i++) {
+            pfds[i].fd = nl_sock_fd(dpif->upcall_socks[i]);
+            pfds[i].events = POLLIN;
+            pfds[i].revents = 0;
+        }
 
+        do {
+            retval = poll(pfds, N_UPCALL_SOCKS, 0);
+        } while (retval < 0 && errno == EINTR);
+        if (retval < 0) {
+            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
+            VLOG_WARN_RL(&rl, "poll failed (%s)", strerror(errno));
+        } else if (!retval) {
+            return EAGAIN;
+        }
+
+        for (i = 0; i < N_UPCALL_SOCKS; i++) {
+            if (pfds[i].revents) {
+                dpif->ready_mask |= 1u << i;
+            }
+        }
+
+        assert(dpif->ready_mask);
+    }
+
+    do {
+        int indx = ffs(dpif->ready_mask) - 1;
+        struct nl_sock *upcall_sock = dpif->upcall_socks[indx];
+
+        dpif->ready_mask &= ~(1u << indx);
 
         for (;;) {
             struct ofpbuf *buf;
+            int dp_ifindex;
             int error;
 
             if (++read_tries > 50) {
@@ -1131,7 +1163,7 @@ dpif_linux_recv(struct dpif *dpif_, struct dpif_upcall *upcall)
                 return error;
             }
         }
-    }
+    } while (dpif->ready_mask);
 
     return EAGAIN;
 }
