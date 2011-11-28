@@ -6,6 +6,11 @@ the extracted tag.  Drivers are supposed to only enable stripping if a
 \fBvlan_group\fR is registered but not all of them do that.
 .
 .IP \(bu
+On receive, some drivers handle priority tagged packets specially and
+don't pass the tag onto the network stack at all, so Open vSwitch
+never has a chance to see it.
+.
+.IP \(bu
 Some drivers size their receive buffers based on whether a
 \fBvlan_group\fR is enabled, meaning that a maximum size packet with a
 VLAN tag will not fit if no \fBvlan_group\fR is configured.
