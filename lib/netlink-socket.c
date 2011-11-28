@@ -854,6 +854,19 @@ nl_sock_wait(const struct nl_sock *sock, short int events)
     poll_fd_wait(sock->fd, events);
 }
 
+/* Returns the underlying fd for 'sock', for use in "poll()"-like operations
+ * that can't use nl_sock_wait().
+ *
+ * It's a little tricky to use the returned fd correctly, because nl_sock does
+ * "copy on write" to allow a single nl_sock to be used for notifications,
+ * transactions, and dumps.  If 'sock' is used only for notifications and
+ * transactions (and never for dump) then the usage is safe. */
+int
+nl_sock_fd(const struct nl_sock *sock)
+{
+    return sock->fd;
+}
+
 /* Returns the PID associated with this socket. */
 uint32_t
 nl_sock_pid(const struct nl_sock *sock)
