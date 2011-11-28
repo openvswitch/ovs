@@ -1763,12 +1763,27 @@ refresh_cfm_stats(void)
     }
 }
 
+/* Performs periodic activity required by bridges that needs to be done with
+ * the least possible latency.
+ *
+ * It makes sense to call this function a couple of times per poll loop, to
+ * provide a significant performance boost on some benchmarks with ofprotos
+ * that use the ofproto-dpif implementation. */
+void
+bridge_run_fast(void)
+{
+    struct bridge *br;
+
+    HMAP_FOR_EACH (br, node, &all_bridges) {
+        ofproto_run_fast(br->ofproto);
+    }
+}
+
 void
 bridge_run(void)
 {
     const struct ovsrec_open_vswitch *cfg;
 
-    bool datapath_destroyed;
     bool database_changed;
     struct bridge *br;
 
@@ -1791,15 +1806,8 @@ bridge_run(void)
     cfg = ovsrec_open_vswitch_first(idl);
 
     /* Let each bridge do the work that it needs to do. */
-    datapath_destroyed = false;
     HMAP_FOR_EACH (br, node, &all_bridges) {
-        int error = ofproto_run(br->ofproto);
-        if (error) {
-            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
-            VLOG_ERR_RL(&rl, "bridge %s: datapath was destroyed externally, "
-                        "forcing reconfiguration", br->name);
-            datapath_destroyed = true;
-        }
+        ofproto_run(br->ofproto);
     }
 
     /* Re-configure SSL.  We do this on every trip through the main loop,
@@ -1815,7 +1823,7 @@ bridge_run(void)
         stream_ssl_set_ca_cert_file(ssl->ca_cert, ssl->bootstrap_ca_cert);
     }
 
-    if (database_changed || datapath_destroyed) {
+    if (database_changed) {
         if (cfg) {
             struct ovsdb_idl_txn *txn = ovsdb_idl_txn_create(idl);
 

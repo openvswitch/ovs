@@ -1,4 +1,4 @@
-/* Copyright (c) 2008, 2009, 2010 Nicira Networks
+/* Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@ void bridge_init(const char *remote);
 void bridge_exit(void);
 
 void bridge_run(void);
+void bridge_run_fast(void);
 void bridge_wait(void);
 
 #endif /* bridge.h */

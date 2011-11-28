@@ -582,17 +582,10 @@ destruct(struct ofproto *ofproto_)
 }
 
 static int
-run(struct ofproto *ofproto_)
+run_fast(struct ofproto *ofproto_)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
-    struct ofport_dpif *ofport;
-    struct ofbundle *bundle;
     unsigned int work;
-
-    if (!clogged) {
-        complete_operations(ofproto);
-    }
-    dpif_run(ofproto->dpif);
 
     /* Handle one or more batches of upcalls, until there's nothing left to do
      * or until we do a fixed total amount of work.
@@ -606,13 +599,30 @@ run(struct ofproto *ofproto_)
     work = 0;
     while (work < FLOW_MISS_MAX_BATCH) {
         int retval = handle_upcalls(ofproto, FLOW_MISS_MAX_BATCH - work);
-        if (retval < 0) {
+        if (retval <= 0) {
             return -retval;
-        } else if (!retval) {
-            break;
-        } else {
-            work += retval;
         }
+        work += retval;
+    }
+    return 0;
+}
+
+static int
+run(struct ofproto *ofproto_)
+{
+    struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
+    struct ofport_dpif *ofport;
+    struct ofbundle *bundle;
+    int error;
+
+    if (!clogged) {
+        complete_operations(ofproto);
+    }
+    dpif_run(ofproto->dpif);
+
+    error = run_fast(ofproto_);
+    if (error) {
+        return error;
     }
 
     if (timer_expired(&ofproto->next_expiration)) {
@@ -2351,9 +2361,6 @@ handle_upcalls(struct ofproto_dpif *ofproto, unsigned int max_batch)
 
         error = dpif_recv(ofproto->dpif, upcall);
         if (error) {
-            if (error == ENODEV && n_misses == 0) {
-                return -ENODEV;
-            }
             break;
         }
 
@@ -5394,6 +5401,7 @@ const struct ofproto_class ofproto_dpif_class = {
     destruct,
     dealloc,
     run,
+    run_fast,
     wait,
     flush,
     get_features,
