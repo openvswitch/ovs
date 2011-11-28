@@ -332,11 +332,16 @@ struct ofproto_class {
      *   - Call ofproto_rule_expire() for each OpenFlow flow that has reached
      *     its hard_timeout or idle_timeout, to expire the flow.
      *
-     * Returns 0 if successful, otherwise a positive errno value.  The ENODEV
-     * return value specifically means that the datapath underlying 'ofproto'
-     * has been destroyed (externally, e.g. by an admin running ovs-dpctl).
-     */
+     * Returns 0 if successful, otherwise a positive errno value. */
     int (*run)(struct ofproto *ofproto);
+
+    /* Performs periodic activity required by 'ofproto' that needs to be done
+     * with the least possible latency.
+     *
+     * This is run multiple times per main loop.  An ofproto provider may
+     * implement it or not, according to whether it provides a performance
+     * boost for that ofproto implementation. */
+    int (*run_fast)(struct ofproto *ofproto);
 
     /* Causes the poll loop to wake up when 'ofproto''s 'run' function needs to
      * be called, e.g. by calling the timer or fd waiting functions in

@@ -92,7 +92,9 @@ main(int argc, char *argv[])
         if (signal_poll(sighup)) {
             vlog_reopen_log_file();
         }
+        bridge_run_fast();
         bridge_run();
+        bridge_run_fast();
         unixctl_server_run(unixctl);
         netdev_run();
 

@@ -1110,6 +1110,8 @@ dpif_recv(struct dpif *dpif, struct dpif_upcall *upcall)
 
         ds_destroy(&flow);
         free(packet);
+    } else if (error && error != EAGAIN) {
+        log_operation(dpif, "recv", error);
     }
     return error;
 }

@@ -908,14 +908,8 @@ ofproto_run(struct ofproto *p)
     int error;
 
     error = p->ofproto_class->run(p);
-    if (error == ENODEV) {
-        /* Someone destroyed the datapath behind our back.  The caller
-         * better destroy us and give up, because we're just going to
-         * spin from here on out. */
-        static struct vlog_rate_limit rl2 = VLOG_RATE_LIMIT_INIT(1, 5);
-        VLOG_ERR_RL(&rl2, "%s: datapath was destroyed externally",
-                    p->name);
-        return ENODEV;
+    if (error && error != EAGAIN) {
+        VLOG_ERR_RL(&rl, "%s: run failed (%s)", p->name, strerror(error));
     }
 
     if (p->ofproto_class->port_poll) {
@@ -951,7 +945,26 @@ ofproto_run(struct ofproto *p)
         NOT_REACHED();
     }
 
-    return 0;
+    return error;
+}
+
+/* Performs periodic activity required by 'ofproto' that needs to be done
+ * with the least possible latency.
+ *
+ * It makes sense to call this function a couple of times per poll loop, to
+ * provide a significant performance boost on some benchmarks with the
+ * ofproto-dpif implementation. */
+int
+ofproto_run_fast(struct ofproto *p)
+{
+    int error;
+
+    error = p->ofproto_class->run_fast ? p->ofproto_class->run_fast(p) : 0;
+    if (error && error != EAGAIN) {
+        VLOG_ERR_RL(&rl, "%s: fastpath run failed (%s)",
+                    p->name, strerror(error));
+    }
+    return error;
 }
 
 void
