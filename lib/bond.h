@@ -26,6 +26,7 @@
 struct flow;
 struct netdev;
 struct ofpbuf;
+enum lacp_status;
 
 /* How flows are balanced among bond slaves. */
 enum bond_mode {
@@ -68,7 +69,7 @@ void bond_slave_register(struct bond *, void *slave_,
 void bond_slave_set_netdev(struct bond *, void *slave_, struct netdev *);
 void bond_slave_unregister(struct bond *, const void *slave);
 
-void bond_run(struct bond *, struct tag_set *, bool lacp_negotiated);
+void bond_run(struct bond *, struct tag_set *, enum lacp_status);
 void bond_wait(struct bond *);
 
 void bond_slave_set_may_enable(struct bond *, void *slave_, bool may_enable);

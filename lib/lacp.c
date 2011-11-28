@@ -301,12 +301,17 @@ lacp_process_packet(struct lacp *lacp, const void *slave_,
     }
 }
 
-/* Returns true if 'lacp' has successfully negotiated with its partner.  False
- * if 'lacp' is NULL. */
-bool
-lacp_negotiated(const struct lacp *lacp)
+/* Returns the lacp_status of the given 'lacp' object (which may be NULL). */
+enum lacp_status
+lacp_status(const struct lacp *lacp)
 {
-    return lacp ? lacp->negotiated : false;
+    if (!lacp) {
+        return LACP_DISABLED;
+    } else if (lacp->negotiated) {
+        return LACP_NEGOTIATED;
+    } else {
+        return LACP_CONFIGURED;
+    }
 }
 
 /* Registers 'slave_' as subordinate to 'lacp'.  This should be called at least
@@ -384,12 +389,8 @@ lacp_slave_may_enable(const struct lacp *lacp, const void *slave_)
         struct slave *slave = slave_lookup(lacp, slave_);
 
         /* The slave may be enabled if it's attached to an aggregator and its
-         * partner is synchronized.  The only exception is defaulted slaves.
-         * They are not required to have synchronized partners because they
-         * have no partners at all.  They will only be attached if negotiations
-         * failed on all slaves in the bond. */
-        return slave->attached && (slave->partner.state & LACP_STATE_SYNC
-                                   || slave->status == LACP_DEFAULTED);
+         * partner is synchronized.*/
+        return slave->attached && (slave->partner.state & LACP_STATE_SYNC);
     } else {
         return true;
     }
@@ -504,14 +505,13 @@ lacp_update_attached(struct lacp *lacp)
     HMAP_FOR_EACH (slave, node, &lacp->slaves) {
         struct lacp_info pri;
 
-        slave->attached = true;
+        slave->attached = false;
 
         /* XXX: In the future allow users to configure the expected system ID.
          * For now just special case loopback. */
         if (eth_addr_equals(slave->partner.sys_id, slave->lacp->sys_id)) {
             VLOG_WARN_RL(&rl, "slave %s: Loopback detected. Slave is "
                          "connected to its own bond", slave->name);
-            slave->attached = false;
             continue;
         }
 
@@ -519,6 +519,7 @@ lacp_update_attached(struct lacp *lacp)
             continue;
         }
 
+        slave->attached = true;
         slave_get_priority(slave, &pri);
 
         if (!lead || memcmp(&pri, &lead_pri, sizeof pri) < 0) {
@@ -531,8 +532,7 @@ lacp_update_attached(struct lacp *lacp)
 
     if (lead) {
         HMAP_FOR_EACH (slave, node, &lacp->slaves) {
-            if (slave->status == LACP_DEFAULTED
-                || lead->partner.key != slave->partner.key
+            if (lead->partner.key != slave->partner.key
                 || !eth_addr_equals(lead->partner.sys_id,
                                     slave->partner.sys_id)) {
                 slave->attached = false;

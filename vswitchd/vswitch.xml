@@ -757,8 +757,7 @@
 
       <p>
         The following modes require the upstream switch to support 802.3ad with
-        successful LACP negotiation.  If LACP negotiation fails then
-        <code>balance-slb</code> style flow hashing is used as a fallback:
+        successful LACP negotiation:
       </p>
 
       <dl>
@@ -861,8 +860,9 @@
           connected to.  <code>active</code> ports are allowed to initiate LACP
           negotiations.  <code>passive</code> ports are allowed to participate
           in LACP negotiations initiated by a remote switch, but not allowed to
-          initiate such negotiations themselves.  Defaults to <code>off</code>
-          if unset.
+          initiate such negotiations themselves.  If LACP is enabled on a port
+          whose partner switch does not support LACP, the bond will be
+          disabled.  Defaults to <code>off</code> if unset.
         </column>
 
         <column name="other_config" key="lacp-system-id">

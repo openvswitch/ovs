@@ -1879,7 +1879,7 @@ bundle_run(struct ofbundle *bundle)
         }
 
         bond_run(bundle->bond, &bundle->ofproto->revalidate_set,
-                 lacp_negotiated(bundle->lacp));
+                 lacp_status(bundle->lacp));
         if (bond_should_send_learning_packets(bundle->bond)) {
             bundle_send_learning_packets(bundle);
         }

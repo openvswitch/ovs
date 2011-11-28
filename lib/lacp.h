@@ -29,6 +29,12 @@ enum lacp_time {
     LACP_TIME_CUSTOM                  /* Nonstandard custom mode. */
 };
 
+enum lacp_status {
+    LACP_NEGOTIATED,                  /* Successful LACP negotations. */
+    LACP_CONFIGURED,                  /* LACP is enabled but not negotiated. */
+    LACP_DISABLED                     /* LACP is not enabled. */
+};
+
 struct lacp_settings {
     char *name;                       /* Name (for debugging). */
     uint8_t id[ETH_ADDR_LEN];         /* System ID. Must be nonzero. */
@@ -48,7 +54,7 @@ bool lacp_is_active(const struct lacp *);
 
 void lacp_process_packet(struct lacp *, const void *slave,
                          const struct ofpbuf *packet);
-bool lacp_negotiated(const struct lacp *);
+enum lacp_status lacp_status(const struct lacp *);
 
 struct lacp_slave_settings {
     char *name;                       /* Name (for debugging). */

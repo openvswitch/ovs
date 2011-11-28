@@ -1,6 +1,8 @@
 post-v1.5.0
 ------------------------
     - bonding
+        - LACP bonds no longer fall back to balance-slb when negotiations fail.
+          Instead they drop traffic.
         - The default bond_mode changed from SLB to active-backup, to protect
           unsuspecting users from the significant risks of SLB bonds (which are
           documented in vswitchd/INTERNALS).

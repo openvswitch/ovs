@@ -103,7 +103,7 @@ bond_mode: active-backup
 bond-hash-basis: 0
 updelay: 0 ms
 downdelay: 0 ms
-lacp_negotiated: true
+lacp_status: negotiated
 
 slave p1: disabled
 	may_enable: false

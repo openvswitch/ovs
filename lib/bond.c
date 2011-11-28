@@ -26,6 +26,7 @@
 #include "dynamic-string.h"
 #include "flow.h"
 #include "hmap.h"
+#include "lacp.h"
 #include "list.h"
 #include "netdev.h"
 #include "odp-util.h"
@@ -92,7 +93,7 @@ struct bond {
     struct bond_slave *active_slave;
     tag_type no_slaves_tag;     /* Tag for flows when all slaves disabled. */
     int updelay, downdelay;     /* Delay before slave goes up/down, in ms. */
-    bool lacp_negotiated;       /* LACP negotiations were successful. */
+    enum lacp_status lacp_status; /* Status of LACP negotiations. */
     bool bond_revalidate;       /* True if flows need revalidation. */
     uint32_t basis;             /* Basis for flow hash function. */
 
@@ -122,7 +123,6 @@ static void bond_enable_slave(struct bond_slave *, bool enable,
                               struct tag_set *);
 static void bond_link_status_update(struct bond_slave *, struct tag_set *);
 static void bond_choose_active_slave(struct bond *, struct tag_set *);
-static bool bond_is_tcp_hash(const struct bond *);
 static unsigned int bond_hash_src(const uint8_t mac[ETH_ADDR_LEN],
                                   uint16_t vlan, uint32_t basis);
 static unsigned int bond_hash_tcp(const struct flow *, uint16_t vlan,
@@ -402,13 +402,12 @@ bond_slave_set_may_enable(struct bond *bond, void *slave_, bool may_enable)
  *
  * The caller should check bond_should_send_learning_packets() afterward. */
 void
-bond_run(struct bond *bond, struct tag_set *tags, bool lacp_negotiated)
+bond_run(struct bond *bond, struct tag_set *tags, enum lacp_status lacp_status)
 {
     struct bond_slave *slave;
-    bool is_tcp_hash = bond_is_tcp_hash(bond);
 
-    if (bond->lacp_negotiated != lacp_negotiated) {
-        bond->lacp_negotiated = lacp_negotiated;
+    if (bond->lacp_status != lacp_status) {
+        bond->lacp_status = lacp_status;
         bond->bond_revalidate = true;
     }
 
@@ -425,10 +424,6 @@ bond_run(struct bond *bond, struct tag_set *tags, bool lacp_negotiated)
     if (time_msec() >= bond->next_fake_iface_update) {
         bond_update_fake_slave_stats(bond);
         bond->next_fake_iface_update = time_msec() + 1000;
-    }
-
-    if (is_tcp_hash != bond_is_tcp_hash(bond)) {
-        bond->bond_revalidate = true;
     }
 
     if (bond->bond_revalidate) {
@@ -488,8 +483,9 @@ bond_wait(struct bond *bond)
 static bool
 may_send_learning_packets(const struct bond *bond)
 {
-    return !bond->lacp_negotiated && bond->balance != BM_AB &&
-           bond->active_slave;
+    return bond->lacp_status == LACP_DISABLED
+        && bond->balance != BM_AB
+        && bond->active_slave;
 }
 
 /* Returns true if 'bond' needs the client to send out packets to assist with
@@ -566,9 +562,14 @@ bond_check_admissibility(struct bond *bond, const void *slave_,
      * assume the remote switch is aware of the bond and will "do the right
      * thing".  However, as a precaution we drop packets on disabled slaves
      * because no correctly implemented partner switch should be sending
-     * packets to them. */
-    if (bond->lacp_negotiated) {
-        return slave->enabled ? BV_ACCEPT : BV_DROP;
+     * packets to them.
+     *
+     * If LACP is configured, but LACP negotiations have been unsuccessful, we
+     * drop all incoming traffic. */
+    switch (bond->lacp_status) {
+    case LACP_NEGOTIATED: return slave->enabled ? BV_ACCEPT : BV_DROP;
+    case LACP_CONFIGURED: return BV_DROP;
+    case LACP_DISABLED: break;
     }
 
     /* Drop all multicast packets on inactive slaves. */
@@ -595,10 +596,11 @@ bond_check_admissibility(struct bond *bond, const void *slave_,
         return BV_ACCEPT;
 
     case BM_TCP:
-        /* TCP balancing has degraded to SLB (otherwise the
-         * bond->lacp_negotiated check above would have processed this).
-         *
-         * Fall through. */
+        /* TCP balanced bonds require successful LACP negotiated. Based on the
+         * above check, LACP is off on this bond.  Therfore, we drop all
+         * incoming traffic. */
+        return BV_DROP;
+
     case BM_SLB:
         /* Drop all packets for which we have learned a different input port,
          * because we probably sent the packet on one slave and got it back on
@@ -950,11 +952,6 @@ bond_print_details(struct ds *ds, const struct bond *bond)
     ds_put_format(ds, "bond_mode: %s\n",
                   bond_mode_to_string(bond->balance));
 
-    if (bond->balance != BM_AB) {
-        ds_put_format(ds, "bond-hash-algorithm: %s\n",
-                      bond_is_tcp_hash(bond) ? "balance-tcp" : "balance-slb");
-    }
-
     ds_put_format(ds, "bond-hash-basis: %"PRIu32"\n", bond->basis);
 
     ds_put_format(ds, "updelay: %d ms\n", bond->updelay);
@@ -965,8 +962,21 @@ bond_print_details(struct ds *ds, const struct bond *bond)
                       bond->next_rebalance - time_msec());
     }
 
-    ds_put_format(ds, "lacp_negotiated: %s\n",
-                  bond->lacp_negotiated ? "true" : "false");
+    ds_put_cstr(ds, "lacp_status: ");
+    switch (bond->lacp_status) {
+    case LACP_NEGOTIATED:
+        ds_put_cstr(ds, "negotiated\n");
+        break;
+    case LACP_CONFIGURED:
+        ds_put_cstr(ds, "configured\n");
+        break;
+    case LACP_DISABLED:
+        ds_put_cstr(ds, "off\n");
+        break;
+    default:
+        ds_put_cstr(ds, "<unknown>\n");
+        break;
+    }
 
     HMAP_FOR_EACH (slave, hmap_node, &bond->slaves) {
         shash_add(&slave_shash, slave->name, slave);
@@ -1305,7 +1315,7 @@ bond_link_status_update(struct bond_slave *slave, struct tag_set *tags)
             VLOG_INFO_RL(&rl, "interface %s: will not be %s",
                          slave->name, up ? "disabled" : "enabled");
         } else {
-            int delay = (bond->lacp_negotiated ? 0
+            int delay = (bond->lacp_status != LACP_DISABLED ? 0
                          : up ? bond->updelay : bond->downdelay);
             slave->delay_expires = time_msec() + delay;
             if (delay) {
@@ -1322,13 +1332,6 @@ bond_link_status_update(struct bond_slave *slave, struct tag_set *tags)
     if (time_msec() >= slave->delay_expires) {
         bond_enable_slave(slave, up, tags);
     }
-}
-
-static bool
-bond_is_tcp_hash(const struct bond *bond)
-{
-    return (bond->balance == BM_TCP && bond->lacp_negotiated)
-        || bond->balance == BM_STABLE;
 }
 
 static unsigned int
@@ -1352,9 +1355,9 @@ bond_hash_tcp(const struct flow *flow, uint16_t vlan, uint32_t basis)
 static unsigned int
 bond_hash(const struct bond *bond, const struct flow *flow, uint16_t vlan)
 {
-    assert(bond->balance != BM_AB);
+    assert(bond->balance == BM_TCP || bond->balance == BM_SLB);
 
-    return (bond_is_tcp_hash(bond)
+    return (bond->balance == BM_TCP
             ? bond_hash_tcp(flow, vlan, bond->basis)
             : bond_hash_src(flow->dl_src, vlan, bond->basis));
 }
@@ -1381,7 +1384,7 @@ choose_stb_slave(const struct bond *bond, const struct flow *flow,
 
     best = NULL;
     best_hash = 0;
-    flow_hash = bond_hash(bond, flow, vlan);
+    flow_hash = bond_hash_tcp(flow, vlan, bond->basis);
     HMAP_FOR_EACH (slave, hmap_node, &bond->slaves) {
         if (slave->enabled) {
             uint32_t hash;
@@ -1403,14 +1406,26 @@ choose_output_slave(const struct bond *bond, const struct flow *flow,
 {
     struct bond_entry *e;
 
+    if (bond->lacp_status == LACP_CONFIGURED) {
+        /* LACP has been configured on this bond but negotiations were
+         * unsuccussful.  Drop all traffic. */
+        return NULL;
+    }
+
     switch (bond->balance) {
     case BM_AB:
         return bond->active_slave;
 
     case BM_STABLE:
         return choose_stb_slave(bond, flow, vlan);
-    case BM_SLB:
+
     case BM_TCP:
+        if (bond->lacp_status != LACP_NEGOTIATED) {
+            /* Must have LACP negotiations for TCP balanced bonds. */
+            return NULL;
+        }
+        /* Fall Through. */
+    case BM_SLB:
         e = lookup_bond_entry(bond, flow, vlan);
         if (!e->slave || !e->slave->enabled) {
             e->slave = CONTAINER_OF(hmap_random_node(&bond->slaves),
