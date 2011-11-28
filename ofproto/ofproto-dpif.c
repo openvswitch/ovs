@@ -4027,165 +4027,6 @@ fix_sflow_action(struct action_xlate_ctx *ctx)
 }
 
 static void
-commit_set_action(struct ofpbuf *odp_actions, enum ovs_key_attr key_type,
-                  const void *key, size_t key_size)
-{
-    size_t offset = nl_msg_start_nested(odp_actions, OVS_ACTION_ATTR_SET);
-    nl_msg_put_unspec(odp_actions, key_type, key, key_size);
-    nl_msg_end_nested(odp_actions, offset);
-}
-
-static void
-commit_set_tun_id_action(const struct flow *flow, struct flow *base,
-                         struct ofpbuf *odp_actions)
-{
-    if (base->tun_id == flow->tun_id) {
-        return;
-    }
-    base->tun_id = flow->tun_id;
-
-    commit_set_action(odp_actions, OVS_KEY_ATTR_TUN_ID,
-                      &base->tun_id, sizeof(base->tun_id));
-}
-
-static void
-commit_set_ether_addr_action(const struct flow *flow, struct flow *base,
-                             struct ofpbuf *odp_actions)
-{
-    struct ovs_key_ethernet eth_key;
-
-    if (eth_addr_equals(base->dl_src, flow->dl_src) &&
-        eth_addr_equals(base->dl_dst, flow->dl_dst)) {
-        return;
-    }
-
-    memcpy(base->dl_src, flow->dl_src, ETH_ADDR_LEN);
-    memcpy(base->dl_dst, flow->dl_dst, ETH_ADDR_LEN);
-
-    memcpy(eth_key.eth_src, base->dl_src, ETH_ADDR_LEN);
-    memcpy(eth_key.eth_dst, base->dl_dst, ETH_ADDR_LEN);
-
-    commit_set_action(odp_actions, OVS_KEY_ATTR_ETHERNET,
-                      &eth_key, sizeof(eth_key));
-}
-
-static void
-commit_vlan_action(const struct flow *flow, struct flow *base,
-                   struct ofpbuf *odp_actions)
-{
-    if (base->vlan_tci == flow->vlan_tci) {
-        return;
-    }
-
-    if (base->vlan_tci & htons(VLAN_CFI)) {
-        nl_msg_put_flag(odp_actions, OVS_ACTION_ATTR_POP_VLAN);
-    }
-
-    if (flow->vlan_tci & htons(VLAN_CFI)) {
-        struct ovs_action_push_vlan vlan;
-
-        vlan.vlan_tpid = htons(ETH_TYPE_VLAN);
-        vlan.vlan_tci = flow->vlan_tci;
-        nl_msg_put_unspec(odp_actions, OVS_ACTION_ATTR_PUSH_VLAN,
-                          &vlan, sizeof vlan);
-    }
-    base->vlan_tci = flow->vlan_tci;
-}
-
-static void
-commit_set_nw_action(const struct flow *flow, struct flow *base,
-                     struct ofpbuf *odp_actions)
-{
-    struct ovs_key_ipv4 ipv4_key;
-
-    if (base->dl_type != htons(ETH_TYPE_IP) ||
-        !base->nw_src || !base->nw_dst) {
-        return;
-    }
-
-    if (base->nw_src == flow->nw_src &&
-        base->nw_dst == flow->nw_dst &&
-        base->nw_tos == flow->nw_tos &&
-        base->nw_ttl == flow->nw_ttl &&
-        base->nw_frag == flow->nw_frag) {
-        return;
-    }
-
-    ipv4_key.ipv4_src = base->nw_src = flow->nw_src;
-    ipv4_key.ipv4_dst = base->nw_dst = flow->nw_dst;
-    ipv4_key.ipv4_tos = base->nw_tos = flow->nw_tos;
-    ipv4_key.ipv4_ttl = base->nw_ttl = flow->nw_ttl;
-    ipv4_key.ipv4_proto = base->nw_proto;
-    ipv4_key.ipv4_frag = (base->nw_frag == 0 ? OVS_FRAG_TYPE_NONE
-                          : base->nw_frag == FLOW_NW_FRAG_ANY
-                          ? OVS_FRAG_TYPE_FIRST : OVS_FRAG_TYPE_LATER);
-
-    commit_set_action(odp_actions, OVS_KEY_ATTR_IPV4,
-                      &ipv4_key, sizeof(ipv4_key));
-}
-
-static void
-commit_set_port_action(const struct flow *flow, struct flow *base,
-                       struct ofpbuf *odp_actions)
-{
-    if (!base->tp_src || !base->tp_dst) {
-        return;
-    }
-
-    if (base->tp_src == flow->tp_src &&
-        base->tp_dst == flow->tp_dst) {
-        return;
-    }
-
-    if (flow->nw_proto == IPPROTO_TCP) {
-        struct ovs_key_tcp port_key;
-
-        port_key.tcp_src = base->tp_src = flow->tp_src;
-        port_key.tcp_dst = base->tp_dst = flow->tp_dst;
-
-        commit_set_action(odp_actions, OVS_KEY_ATTR_TCP,
-                          &port_key, sizeof(port_key));
-
-    } else if (flow->nw_proto == IPPROTO_UDP) {
-        struct ovs_key_udp port_key;
-
-        port_key.udp_src = base->tp_src = flow->tp_src;
-        port_key.udp_dst = base->tp_dst = flow->tp_dst;
-
-        commit_set_action(odp_actions, OVS_KEY_ATTR_UDP,
-                          &port_key, sizeof(port_key));
-    }
-}
-
-static void
-commit_set_priority_action(const struct flow *flow, struct flow *base,
-                           struct ofpbuf *odp_actions)
-{
-    if (base->priority == flow->priority) {
-        return;
-    }
-    base->priority = flow->priority;
-
-    commit_set_action(odp_actions, OVS_KEY_ATTR_PRIORITY,
-                      &base->priority, sizeof(base->priority));
-}
-
-static void
-commit_odp_actions(struct action_xlate_ctx *ctx)
-{
-    const struct flow *flow = &ctx->flow;
-    struct flow *base = &ctx->base_flow;
-    struct ofpbuf *odp_actions = ctx->odp_actions;
-
-    commit_set_tun_id_action(flow, base, odp_actions);
-    commit_set_ether_addr_action(flow, base, odp_actions);
-    commit_vlan_action(flow, base, odp_actions);
-    commit_set_nw_action(flow, base, odp_actions);
-    commit_set_port_action(flow, base, odp_actions);
-    commit_set_priority_action(flow, base, odp_actions);
-}
-
-static void
 compose_output_action__(struct action_xlate_ctx *ctx, uint16_t ofp_port,
                         bool check_stp)
 {
@@ -4219,7 +4060,7 @@ compose_output_action__(struct action_xlate_ctx *ctx, uint16_t ofp_port,
     if (out_port != odp_port) {
         ctx->flow.vlan_tci = htons(0);
     }
-    commit_odp_actions(ctx);
+    commit_odp_actions(&ctx->flow, &ctx->base_flow, ctx->odp_actions);
     nl_msg_put_u32(ctx->odp_actions, OVS_ACTION_ATTR_OUTPUT, out_port);
 
     ctx->sflow_odp_port = odp_port;
@@ -4330,7 +4171,7 @@ compose_controller_action(struct action_xlate_ctx *ctx, int len)
 {
     struct user_action_cookie cookie;
 
-    commit_odp_actions(ctx);
+    commit_odp_actions(&ctx->flow, &ctx->base_flow, ctx->odp_actions);
     cookie.type = USER_ACTION_COOKIE_CONTROLLER;
     cookie.data = len;
     cookie.n_output = 0;

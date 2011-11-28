@@ -136,4 +136,7 @@ BUILD_ASSERT_DECL(sizeof(struct user_action_cookie) == 8);
 size_t odp_put_userspace_action(uint32_t pid,
                                 const struct user_action_cookie *,
                                 struct ofpbuf *odp_actions);
+
+void commit_odp_actions(const struct flow *, struct flow *base,
+                        struct ofpbuf *odp_actions);
 #endif /* odp-util.h */
