@@ -4308,7 +4308,6 @@ flood_packets(struct action_xlate_ctx *ctx, bool all)
 {
     struct ofport_dpif *ofport;
 
-    commit_odp_actions(ctx);
     HMAP_FOR_EACH (ofport, up.hmap_node, &ctx->ofproto->up.ports) {
         uint16_t ofp_port = ofport->up.ofp_port;
 
