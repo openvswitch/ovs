@@ -407,7 +407,10 @@ bond_run(struct bond *bond, struct tag_set *tags, bool lacp_negotiated)
     struct bond_slave *slave;
     bool is_tcp_hash = bond_is_tcp_hash(bond);
 
-    bond->lacp_negotiated = lacp_negotiated;
+    if (bond->lacp_negotiated != lacp_negotiated) {
+        bond->lacp_negotiated = lacp_negotiated;
+        bond->bond_revalidate = true;
+    }
 
     /* Enable slaves based on link status and LACP feedback. */
     HMAP_FOR_EACH (slave, hmap_node, &bond->slaves) {
