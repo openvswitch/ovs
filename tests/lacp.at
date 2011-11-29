@@ -1,0 +1,101 @@
+AT_BANNER([lacp])
+
+AT_SETUP([lacp - config])
+OVS_VSWITCHD_START([\
+        add-port br0 p1 --\
+        set Port p1 lacp=active --\
+        set Interface p1 type=dummy ])
+
+AT_CHECK([ovs-appctl lacp/show], [0], [stdout])
+AT_CHECK([cat stdout], [0], [dnl
+---- p1 ----
+	status: active negotiated
+	sys_id: aa:55:aa:55:00:00
+	sys_priority: 65535
+	aggregation key: 1
+	lacp_time: slow
+
+slave: p1: expired attached
+	port_id: 1
+	port_priority: 65535
+
+	actor sys_id: aa:55:aa:55:00:00
+	actor sys_priority: 65535
+	actor port_id: 1
+	actor port_priority: 65535
+	actor key: 1
+	actor state: activity synchronized collecting distributing expired
+
+	partner sys_id: 00:00:00:00:00:00
+	partner sys_priority: 0
+	partner port_id: 0
+	partner port_priority: 0
+	partner key: 0
+	partner state: timeout
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([lacp - config])
+OVS_VSWITCHD_START([dnl
+        add-bond br0 bond p1 p2 --\
+        set Port bond lacp=active \
+            other_config:lacp-time="fast" \
+            other_config:lacp-system-id=11:22:33:44:55:66 \
+            other_config:lacp-system-priority=54321 --\
+        set Interface p1 type=dummy \
+            other_config:lacp-port-id=11 \
+            other_config:lacp-port-priority=111 \
+            other_config:lacp-aggregation-key=3333 --\
+        set Interface p2 type=dummy \
+            other_config:lacp-port-id=22 \
+            other_config:lacp-port-priority=222 \
+            other_config:lacp-aggregation-key=3333 ])
+
+AT_CHECK([ovs-appctl lacp/show], [0], [stdout])
+AT_CHECK([sed -e 's/aggregation key:.*/aggregation key: <omitted>/' < stdout], [0], [dnl
+---- bond ----
+	status: active negotiated
+	sys_id: 11:22:33:44:55:66
+	sys_priority: 54321
+	aggregation key: <omitted>
+	lacp_time: fast
+
+slave: p1: expired attached
+	port_id: 11
+	port_priority: 111
+
+	actor sys_id: 11:22:33:44:55:66
+	actor sys_priority: 54321
+	actor port_id: 11
+	actor port_priority: 111
+	actor key: 3333
+	actor state: activity timeout aggregation synchronized collecting distributing expired
+
+	partner sys_id: 00:00:00:00:00:00
+	partner sys_priority: 0
+	partner port_id: 0
+	partner port_priority: 0
+	partner key: 0
+	partner state: timeout
+
+slave: p2: expired attached
+	port_id: 22
+	port_priority: 222
+
+	actor sys_id: 11:22:33:44:55:66
+	actor sys_priority: 54321
+	actor port_id: 22
+	actor port_priority: 222
+	actor key: 3333
+	actor state: activity timeout aggregation synchronized collecting distributing expired
+
+	partner sys_id: 00:00:00:00:00:00
+	partner sys_priority: 0
+	partner port_id: 0
+	partner port_priority: 0
+	partner key: 0
+	partner state: timeout
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP

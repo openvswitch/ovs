@@ -38,6 +38,7 @@ m4_define([OVS_WAIT_WHILE], [OVS_WAIT([if $1; then :; else exit 0; fi], [$2])])
 m4_include([tests/ovsdb-macros.at])
 m4_include([tests/ofproto-macros.at])
 
+m4_include([tests/lacp.at])
 m4_include([tests/library.at])
 m4_include([tests/bundle.at])
 m4_include([tests/classifier.at])
