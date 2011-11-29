@@ -2662,7 +2662,6 @@ port_configure_lacp(struct port *port, struct lacp_settings *s)
                                                  "lacp-heartbeat",
                                                  "false"), "true");
 
-
     lacp_time = get_port_other_config(port->cfg, "lacp-time", "slow");
     custom_time = atoi(lacp_time);
     if (!strcmp(lacp_time, "fast")) {
