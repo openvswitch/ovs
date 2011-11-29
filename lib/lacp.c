@@ -726,35 +726,35 @@ static void
 ds_put_lacp_state(struct ds *ds, uint8_t state)
 {
     if (state & LACP_STATE_ACT) {
-        ds_put_cstr(ds, "activity ");
+        ds_put_cstr(ds, " activity");
     }
 
     if (state & LACP_STATE_TIME) {
-        ds_put_cstr(ds, "timeout ");
+        ds_put_cstr(ds, " timeout");
     }
 
     if (state & LACP_STATE_AGG) {
-        ds_put_cstr(ds, "aggregation ");
+        ds_put_cstr(ds, " aggregation");
     }
 
     if (state & LACP_STATE_SYNC) {
-        ds_put_cstr(ds, "synchronized ");
+        ds_put_cstr(ds, " synchronized");
     }
 
     if (state & LACP_STATE_COL) {
-        ds_put_cstr(ds, "collecting ");
+        ds_put_cstr(ds, " collecting");
     }
 
     if (state & LACP_STATE_DIST) {
-        ds_put_cstr(ds, "distributing ");
+        ds_put_cstr(ds, " distributing");
     }
 
     if (state & LACP_STATE_DEF) {
-        ds_put_cstr(ds, "defaulted ");
+        ds_put_cstr(ds, " defaulted");
     }
 
     if (state & LACP_STATE_EXP) {
-        ds_put_cstr(ds, "expired ");
+        ds_put_cstr(ds, " expired");
     }
 }
 
@@ -832,7 +832,7 @@ lacp_print_details(struct ds *ds, struct lacp *lacp)
                       ntohs(actor.port_priority));
         ds_put_format(ds, "\tactor key: %u\n",
                       ntohs(actor.key));
-        ds_put_cstr(ds, "\tactor state: ");
+        ds_put_cstr(ds, "\tactor state:");
         ds_put_lacp_state(ds, actor.state);
         ds_put_cstr(ds, "\n\n");
 
@@ -846,7 +846,7 @@ lacp_print_details(struct ds *ds, struct lacp *lacp)
                       ntohs(slave->partner.port_priority));
         ds_put_format(ds, "\tpartner key: %u\n",
                       ntohs(slave->partner.key));
-        ds_put_cstr(ds, "\tpartner state: ");
+        ds_put_cstr(ds, "\tpartner state:");
         ds_put_lacp_state(ds, slave->partner.state);
         ds_put_cstr(ds, "\n");
     }
