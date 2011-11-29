@@ -224,6 +224,8 @@ lacp_destroy(struct lacp *lacp)
 void
 lacp_configure(struct lacp *lacp, const struct lacp_settings *s)
 {
+    assert(!eth_addr_is_zero(s->id));
+
     if (!lacp->name || strcmp(s->name, lacp->name)) {
         free(lacp->name);
         lacp->name = xstrdup(s->name);

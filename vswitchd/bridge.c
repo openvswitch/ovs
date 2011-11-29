@@ -2677,6 +2677,11 @@ port_configure_lacp(struct port *port, struct lacp_settings *s)
         memcpy(s->id, port->bridge->ea, ETH_ADDR_LEN);
     }
 
+    if (eth_addr_is_zero(s->id)) {
+        VLOG_WARN("port %s: Invalid zero LACP system ID.", port->name);
+        return NULL;
+    }
+
     /* Prefer bondable links if unspecified. */
     priority = atoi(get_port_other_config(port->cfg, "lacp-system-priority",
                                           "0"));
