@@ -25,6 +25,7 @@
 #include "ofpbuf.h"
 #include "packets.h"
 #include "poll-loop.h"
+#include "shash.h"
 #include "timer.h"
 #include "timeval.h"
 #include "unixctl.h"
@@ -761,7 +762,11 @@ ds_put_lacp_state(struct ds *ds, uint8_t state)
 static void
 lacp_print_details(struct ds *ds, struct lacp *lacp)
 {
+    struct shash slave_shash = SHASH_INITIALIZER(&slave_shash);
+    const struct shash_node **sorted_slaves = NULL;
+
     struct slave *slave;
+    int i;
 
     ds_put_format(ds, "---- %s ----\n", lacp->name);
     ds_put_format(ds, "\tstatus: %s", lacp->active ? "active" : "passive");
@@ -799,9 +804,15 @@ lacp_print_details(struct ds *ds, struct lacp *lacp)
     }
 
     HMAP_FOR_EACH (slave, node, &lacp->slaves) {
+        shash_add(&slave_shash, slave->name, slave);
+    }
+    sorted_slaves = shash_sort(&slave_shash);
+
+    for (i = 0; i < shash_count(&slave_shash); i++) {
         char *status;
         struct lacp_info actor;
 
+        slave = sorted_slaves[i]->data;
         slave_get_actor(slave, &actor);
         switch (slave->status) {
         case LACP_CURRENT:
@@ -850,6 +861,9 @@ lacp_print_details(struct ds *ds, struct lacp *lacp)
         ds_put_lacp_state(ds, slave->partner.state);
         ds_put_cstr(ds, "\n");
     }
+
+    shash_destroy(&slave_shash);
+    free(sorted_slaves);
 }
 
 static void
