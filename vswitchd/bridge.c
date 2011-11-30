@@ -2660,7 +2660,7 @@ enable_lacp(struct port *port, bool *activep)
 static struct lacp_settings *
 port_configure_lacp(struct port *port, struct lacp_settings *s)
 {
-    const char *lacp_time;
+    const char *lacp_time, *system_id;
     long long int custom_time;
     int priority;
 
@@ -2669,7 +2669,13 @@ port_configure_lacp(struct port *port, struct lacp_settings *s)
     }
 
     s->name = port->name;
-    memcpy(s->id, port->bridge->ea, ETH_ADDR_LEN);
+
+    system_id = get_port_other_config(port->cfg, "lacp-system-id", NULL);
+    if (!system_id
+        || sscanf(system_id, ETH_ADDR_SCAN_FMT,
+                  ETH_ADDR_SCAN_ARGS(s->id)) != ETH_ADDR_SCAN_COUNT) {
+        memcpy(s->id, port->bridge->ea, ETH_ADDR_LEN);
+    }
 
     /* Prefer bondable links if unspecified. */
     priority = atoi(get_port_other_config(port->cfg, "lacp-system-priority",
