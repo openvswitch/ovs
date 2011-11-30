@@ -373,8 +373,7 @@ static struct subfacet *subfacet_create(struct ofproto_dpif *, struct facet *,
                                         const struct nlattr *key,
                                         size_t key_len, ovs_be16 initial_tci);
 static struct subfacet *subfacet_find(struct ofproto_dpif *,
-                                      const struct nlattr *key, size_t key_len,
-                                      const struct flow *);
+                                      const struct nlattr *key, size_t key_len);
 static void subfacet_destroy(struct ofproto_dpif *, struct subfacet *);
 static void subfacet_destroy__(struct ofproto_dpif *, struct subfacet *);
 static void subfacet_reset_dp_stats(struct subfacet *,
@@ -2785,16 +2784,9 @@ update_stats(struct ofproto_dpif *p)
 
     dpif_flow_dump_start(&dump, p->dpif);
     while (dpif_flow_dump_next(&dump, &key, &key_len, NULL, NULL, &stats)) {
-        enum odp_key_fitness fitness;
         struct subfacet *subfacet;
-        struct flow flow;
 
-        fitness = odp_flow_key_to_flow(key, key_len, &flow);
-        if (fitness == ODP_FIT_ERROR) {
-            continue;
-        }
-
-        subfacet = subfacet_find(p, key, key_len, &flow);
+        subfacet = subfacet_find(p, key, key_len);
         if (subfacet && subfacet->installed) {
             struct facet *facet = subfacet->facet;
 
@@ -2818,9 +2810,18 @@ update_stats(struct ofproto_dpif *p)
             facet_account(p, facet);
             facet_push_stats(facet);
         } else {
+            if (!VLOG_DROP_WARN(&rl)) {
+                struct ds s;
+
+                ds_init(&s);
+                odp_flow_key_format(key, key_len, &s);
+                VLOG_WARN("unexpected flow from datapath %s", ds_cstr(&s));
+                ds_destroy(&s);
+            }
+
+            COVERAGE_INC(facet_unexpected);
             /* There's a flow in the datapath that we know nothing about, or a
              * flow that shouldn't be installed but was anyway.  Delete it. */
-            COVERAGE_INC(facet_unexpected);
             dpif_flow_del(p->dpif, key, key_len, NULL);
         }
     }
@@ -3511,12 +3512,18 @@ subfacet_create(struct ofproto_dpif *ofproto, struct facet *facet,
  * 'flow'.  Returns the subfacet if one exists, otherwise NULL. */
 static struct subfacet *
 subfacet_find(struct ofproto_dpif *ofproto,
-              const struct nlattr *key, size_t key_len,
-              const struct flow *flow)
+              const struct nlattr *key, size_t key_len)
 {
     uint32_t key_hash = odp_flow_key_hash(key, key_len);
+    enum odp_key_fitness fitness;
+    struct flow flow;
 
-    return subfacet_find__(ofproto, key, key_len, key_hash, flow);
+    fitness = odp_flow_key_to_flow(key, key_len, &flow);
+    if (fitness == ODP_FIT_ERROR) {
+        return NULL;
+    }
+
+    return subfacet_find__(ofproto, key, key_len, key_hash, &flow);
 }
 
 /* Uninstalls 'subfacet' from the datapath, if it is installed, removes it from
