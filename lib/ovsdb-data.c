@@ -1687,6 +1687,9 @@ ovsdb_datum_includes_all(const struct ovsdb_datum *a,
 {
     size_t i;
 
+    if (a->n > b->n) {
+        return false;
+    }
     for (i = 0; i < a->n; i++) {
         if (ovsdb_datum_find(a, i, b, type) == UINT_MAX) {
             return false;
