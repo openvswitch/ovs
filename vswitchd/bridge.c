@@ -28,6 +28,7 @@
 #include "dynamic-string.h"
 #include "hash.h"
 #include "hmap.h"
+#include "hmapx.h"
 #include "jsonrpc.h"
 #include "lacp.h"
 #include "list.h"
@@ -444,6 +445,10 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
     HMAP_FOR_EACH (br, node, &all_bridges) {
         struct port *port;
 
+        /* We need the datapath ID early to allow LACP ports to use it as the
+         * default system ID. */
+        bridge_configure_datapath_id(br);
+
         HMAP_FOR_EACH (port, hmap_node, &br->ports) {
             struct iface *iface;
 
@@ -456,7 +461,6 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
             }
         }
         bridge_configure_mirrors(br);
-        bridge_configure_datapath_id(br);
         bridge_configure_flow_eviction_threshold(br);
         bridge_configure_forward_bpdu(br);
         bridge_configure_remotes(br, managers, n_managers);
@@ -1278,10 +1282,12 @@ static void
 bridge_pick_local_hw_addr(struct bridge *br, uint8_t ea[ETH_ADDR_LEN],
                           struct iface **hw_addr_iface)
 {
+    struct hmapx mirror_output_ports;
     const char *hwaddr;
     struct port *port;
     bool found_addr = false;
     int error;
+    int i;
 
     *hw_addr_iface = NULL;
 
@@ -1298,6 +1304,18 @@ bridge_pick_local_hw_addr(struct bridge *br, uint8_t ea[ETH_ADDR_LEN],
         }
     }
 
+    /* Mirror output ports don't participate in picking the local hardware
+     * address.  ofproto can't help us find out whether a given port is a
+     * mirror output because we haven't configured mirrors yet, so we need to
+     * accumulate them ourselves. */
+    hmapx_init(&mirror_output_ports);
+    for (i = 0; i < br->cfg->n_mirrors; i++) {
+        struct ovsrec_mirror *m = br->cfg->mirrors[i];
+        if (m->output_port) {
+            hmapx_add(&mirror_output_ports, m->output_port);
+        }
+    }
+
     /* Otherwise choose the minimum non-local MAC address among all of the
      * interfaces. */
     HMAP_FOR_EACH (port, hmap_node, &br->ports) {
@@ -1306,7 +1324,7 @@ bridge_pick_local_hw_addr(struct bridge *br, uint8_t ea[ETH_ADDR_LEN],
         struct iface *iface;
 
         /* Mirror output ports don't participate. */
-        if (ofproto_is_mirror_output_bundle(br->ofproto, port)) {
+        if (hmapx_contains(&mirror_output_ports, port->cfg)) {
             continue;
         }
 
@@ -1369,6 +1387,8 @@ bridge_pick_local_hw_addr(struct bridge *br, uint8_t ea[ETH_ADDR_LEN],
         VLOG_WARN("bridge %s: using default bridge Ethernet "
                   "address "ETH_ADDR_FMT, br->name, ETH_ADDR_ARGS(ea));
     }
+
+    hmapx_destroy(&mirror_output_ports);
 }
 
 /* Choose and returns the datapath ID for bridge 'br' given that the bridge
