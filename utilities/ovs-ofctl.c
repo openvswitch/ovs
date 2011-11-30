@@ -187,10 +187,10 @@ usage(void)
            "  replace-flows SWITCH FILE   replace flows with those in FILE\n"
            "  monitor SWITCH [MISSLEN]    print packets received from SWITCH\n"
            "\nFor OpenFlow switches and controllers:\n"
-           "  probe VCONN                 probe whether VCONN is up\n"
-           "  ping VCONN [N]              latency of N-byte echos\n"
-           "  benchmark VCONN N COUNT     bandwidth of COUNT N-byte echos\n"
-           "where each SWITCH is an active OpenFlow connection method.\n",
+           "  probe TARGET                probe whether TARGET is up\n"
+           "  ping TARGET [N]             latency of N-byte echos\n"
+           "  benchmark TARGET N COUNT    bandwidth of COUNT N-byte echos\n"
+           "where SWITCH or TARGET is an active OpenFlow connection method.\n",
            program_name, program_name);
     vconn_usage(true, false, false);
     vlog_usage();
