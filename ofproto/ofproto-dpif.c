@@ -2573,6 +2573,7 @@ handle_miss_upcalls(struct ofproto_dpif *ofproto, struct dpif_upcall *upcalls,
                                                 upcall->key, upcall->key_len,
                                                 &flow, &initial_tci);
         if (fitness == ODP_FIT_ERROR) {
+            ofpbuf_delete(upcall->packet);
             continue;
         }
         flow_extract(upcall->packet, flow.priority, flow.tun_id,
@@ -2649,6 +2650,7 @@ handle_userspace_upcall(struct ofproto_dpif *ofproto,
                                             upcall->key_len, &flow,
                                             &initial_tci);
     if (fitness == ODP_FIT_ERROR) {
+        ofpbuf_delete(upcall->packet);
         return;
     }
 
@@ -2664,6 +2666,7 @@ handle_userspace_upcall(struct ofproto_dpif *ofproto,
                               &flow, false);
     } else {
         VLOG_WARN_RL(&rl, "invalid user cookie : 0x%"PRIx64, upcall->userdata);
+        ofpbuf_delete(upcall->packet);
     }
 }
 
