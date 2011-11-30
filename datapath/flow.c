@@ -212,8 +212,8 @@ static int parse_ipv6hdr(struct sk_buff *skb, struct sw_flow_key *key,
 	key->ip.tos = ipv6_get_dsfield(nh);
 	key->ip.ttl = nh->hop_limit;
 	key->ipv6.label = *(__be32 *)nh & htonl(IPV6_FLOWINFO_FLOWLABEL);
-	ipv6_addr_copy(&key->ipv6.addr.src, &nh->saddr);
-	ipv6_addr_copy(&key->ipv6.addr.dst, &nh->daddr);
+	key->ipv6.addr.src = nh->saddr;
+	key->ipv6.addr.dst = nh->daddr;
 
 	payload_ofs = skip_exthdr(skb, payload_ofs, &nexthdr, &key->ip.frag);
 	if (unlikely(payload_ofs < 0))
@@ -572,7 +572,7 @@ static int parse_icmpv6(struct sk_buff *skb, struct sw_flow_key *key,
 		}
 
 		nd = (struct nd_msg *)skb_transport_header(skb);
-		ipv6_addr_copy(&key->ipv6.nd.target, &nd->target);
+		key->ipv6.nd.target = nd->target;
 		key_len = SW_FLOW_KEY_OFFSET(ipv6.nd);
 
 		icmp_len -= sizeof(*nd);

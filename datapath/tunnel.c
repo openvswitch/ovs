@@ -587,8 +587,8 @@ static void ipv6_build_icmp(struct sk_buff *skb, struct sk_buff *nskb,
 					      + payload_length);
 	ipv6h->nexthdr		=	NEXTHDR_ICMP;
 	ipv6h->hop_limit	=	IPV6_DEFAULT_HOPLIMIT;
-	ipv6_addr_copy(&ipv6h->daddr, &old_ipv6h->saddr);
-	ipv6_addr_copy(&ipv6h->saddr, &old_ipv6h->daddr);
+	ipv6h->daddr		=	old_ipv6h->saddr;
+	ipv6h->saddr		=	old_ipv6h->daddr;
 
 	/* ICMPv6 */
 	icmp6h->icmp6_type	=	ICMPV6_PKT_TOOBIG;
