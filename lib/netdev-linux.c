@@ -534,13 +534,9 @@ netdev_linux_cache_cb(const struct rtnetlink_link_change *change,
     }
 }
 
-/* Creates system and internal devices. */
 static int
-netdev_linux_create(const struct netdev_class *class, const char *name,
-                    struct netdev_dev **netdev_devp)
+cache_notifier_ref(void)
 {
-    struct netdev_dev_linux *netdev_dev;
-
     if (!cache_notifier_refcount) {
         assert(!netdev_linux_cache_notifier);
 
@@ -552,6 +548,33 @@ netdev_linux_create(const struct netdev_class *class, const char *name,
         }
     }
     cache_notifier_refcount++;
+
+    return 0;
+}
+
+static void
+cache_notifier_unref(void)
+{
+    assert(cache_notifier_refcount > 0);
+    if (!--cache_notifier_refcount) {
+        assert(netdev_linux_cache_notifier);
+        rtnetlink_link_notifier_destroy(netdev_linux_cache_notifier);
+        netdev_linux_cache_notifier = NULL;
+    }
+}
+
+/* Creates system and internal devices. */
+static int
+netdev_linux_create(const struct netdev_class *class, const char *name,
+                    struct netdev_dev **netdev_devp)
+{
+    struct netdev_dev_linux *netdev_dev;
+    int error;
+
+    error = cache_notifier_ref();
+    if (error) {
+        return error;
+    }
 
     netdev_dev = xzalloc(sizeof *netdev_dev);
     netdev_dev->change_seq = 1;
@@ -581,12 +604,17 @@ netdev_linux_create_tap(const struct netdev_class *class OVS_UNUSED,
     netdev_dev = xzalloc(sizeof *netdev_dev);
     state = &netdev_dev->state.tap;
 
+    error = cache_notifier_ref();
+    if (error) {
+        goto error;
+    }
+
     /* Open tap device. */
     state->fd = open(tap_dev, O_RDWR);
     if (state->fd < 0) {
         error = errno;
         VLOG_WARN("opening \"%s\" failed: %s", tap_dev, strerror(error));
-        goto error;
+        goto error_unref_notifier;
     }
 
     /* Create tap device. */
@@ -596,19 +624,21 @@ netdev_linux_create_tap(const struct netdev_class *class OVS_UNUSED,
         VLOG_WARN("%s: creating tap device failed: %s", name,
                   strerror(errno));
         error = errno;
-        goto error;
+        goto error_unref_notifier;
     }
 
     /* Make non-blocking. */
     error = set_nonblocking(state->fd);
     if (error) {
-        goto error;
+        goto error_unref_notifier;
     }
 
     netdev_dev_init(&netdev_dev->netdev_dev, name, &netdev_tap_class);
     *netdev_devp = &netdev_dev->netdev_dev;
     return 0;
 
+error_unref_notifier:
+    cache_notifier_unref();
 error:
     free(netdev_dev);
     return error;
@@ -635,21 +665,12 @@ netdev_linux_destroy(struct netdev_dev *netdev_dev_)
         netdev_dev->tc->ops->tc_destroy(netdev_dev->tc);
     }
 
-    if (class == &netdev_linux_class || class == &netdev_internal_class) {
-        cache_notifier_refcount--;
-
-        if (!cache_notifier_refcount) {
-            assert(netdev_linux_cache_notifier);
-            rtnetlink_link_notifier_destroy(netdev_linux_cache_notifier);
-            netdev_linux_cache_notifier = NULL;
-        }
-    } else if (class == &netdev_tap_class) {
+    if (class == &netdev_tap_class) {
         destroy_tap(netdev_dev);
-    } else {
-        NOT_REACHED();
     }
-
     free(netdev_dev);
+
+    cache_notifier_unref();
 }
 
 static int
