@@ -621,6 +621,17 @@ learn_format(const struct nx_action_learn *learn, struct ds *s)
                 union mf_value value;
                 uint8_t *bytes = (uint8_t *) &value;
 
+                if (src_value_bytes > dst_field->n_bytes) {
+                    /* The destination field is an odd number of bytes, which
+                     * got rounded up to a multiple of 2 to be put into the
+                     * learning action.  Skip over the leading byte, which
+                     * should be zero anyway.  Otherwise the memcpy() below
+                     * will overrun the start of 'value'. */
+                    int diff = src_value_bytes - dst_field->n_bytes;
+                    src_value += diff;
+                    src_value_bytes -= diff;
+                }
+
                 memset(&value, 0, sizeof value);
                 memcpy(&bytes[dst_field->n_bytes - src_value_bytes],
                        src_value, src_value_bytes);
