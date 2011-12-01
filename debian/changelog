@@ -1,3 +1,32 @@
+openvswitch (1.4.0-1) unstable; urgency=low
+  [ Open vSwitch team ]
+  * New upstream version
+    - New "VLAN splinters" feature to work around buggy device drivers
+      in old Linux versions.  (This feature is deprecated.  When
+      broken device drivers are no longer in widespread use, we will
+      delete this feature.)  See ovs-vswitchd.conf.db(5) for more
+      information.
+    - OpenFlow:
+       - Added ability to match on IPv6 flow label through NXM.
+       - Added ability to match on ECN bits in IPv4 and IPv6 through NXM.
+       - Added ability to match on TTL in IPv4 and IPv6 through NXM.
+       - Added ability to modify ECN bits in IPv4.
+       - Added ability to modify TTL in IPv4.
+    - ovs-vswitchd:
+       - Don't require the "normal" action to use mirrors.  Traffic will
+         now be properly mirrored for any flows, regardless of their
+         actions.
+       - Track packet and byte statistics sent on mirrors.
+    - ovs-appctl:
+      - New "fdb/flush" command to flush bridge's MAC learning table.
+    - ovs-test:
+      - A new distributed testing tool that allows one to diagnose performance
+        and connectivity issues. This tool currently is not included in RH or
+        Xen packages.
+    - RHEL packaging now supports integration with Red Hat network scripts.
+
+ -- Open vSwitch team <dev@openvswitch.org>  Mon, xx xxx xxxx 23:36:00 +0000
+
 openvswitch (1.3.0-1) unstable; urgency=low
   [ Open vSwitch team ]
   * New upstream version

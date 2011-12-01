@@ -1,4 +1,4 @@
-post-v1.3.0
+v1.4.0 - xx xxx xxxx
 ------------------------
     - New "VLAN splinters" feature to work around buggy device drivers
       in old Linux versions.  (This feature is deprecated.  When
