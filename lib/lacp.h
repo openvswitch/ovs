@@ -24,19 +24,19 @@
 /* LACP Protocol Implementation. */
 
 enum lacp_time {
-    LACP_TIME_FAST,
-    LACP_TIME_SLOW,
-    LACP_TIME_CUSTOM
+    LACP_TIME_FAST,                   /* LACP fast mode. */
+    LACP_TIME_SLOW,                   /* LACP slow mode. */
+    LACP_TIME_CUSTOM                  /* Nonstandard custom mode. */
 };
 
 struct lacp_settings {
-    char *name;
-    uint8_t id[ETH_ADDR_LEN];
-    uint16_t priority;
-    bool active;
-    enum lacp_time lacp_time;
-    long long int custom_time;
-    bool heartbeat;
+    char *name;                       /* Name (for debugging). */
+    uint8_t id[ETH_ADDR_LEN];         /* System ID. Must be nonzero. */
+    uint16_t priority;                /* System priority. */
+    bool active;                      /* Active or passive mode? */
+    enum lacp_time lacp_time;         /* Probe rate. */
+    long long int custom_time;        /* Probe interval if LACP_TIME_CUSTOM. */
+    bool heartbeat;                   /* Heartbeat mode. */
 };
 
 void lacp_init(void);
@@ -51,10 +51,10 @@ void lacp_process_packet(struct lacp *, const void *slave,
 bool lacp_negotiated(const struct lacp *);
 
 struct lacp_slave_settings {
-    char *name;
-    uint16_t id;
-    uint16_t priority;
-    uint16_t key;
+    char *name;                       /* Name (for debugging). */
+    uint16_t id;                      /* Port ID. */
+    uint16_t priority;                /* Port priority. */
+    uint16_t key;                     /* Aggregation key. */
 };
 
 void lacp_slave_register(struct lacp *, void *slave_,
