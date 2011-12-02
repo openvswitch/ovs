@@ -906,7 +906,8 @@ bond_lookup_slave(struct bond *bond, const char *slave_name)
 
 static void
 bond_unixctl_list(struct unixctl_conn *conn,
-                  const char *args OVS_UNUSED, void *aux OVS_UNUSED)
+                  int argc OVS_UNUSED, const char *argv[] OVS_UNUSED,
+                  void *aux OVS_UNUSED)
 {
     struct ds ds = DS_EMPTY_INITIALIZER;
     const struct bond *bond;
@@ -935,13 +936,14 @@ bond_unixctl_list(struct unixctl_conn *conn,
 
 static void
 bond_unixctl_show(struct unixctl_conn *conn,
-                  const char *args, void *aux OVS_UNUSED)
+                  int argc OVS_UNUSED, const char *argv[],
+                  void *aux OVS_UNUSED)
 {
     struct ds ds = DS_EMPTY_INITIALIZER;
     const struct bond_slave *slave;
     const struct bond *bond;
 
-    bond = bond_find(args);
+    bond = bond_find(argv[1]);
     if (!bond) {
         unixctl_command_reply(conn, 501, "no such bond");
         return;
@@ -1009,25 +1011,17 @@ bond_unixctl_show(struct unixctl_conn *conn,
 }
 
 static void
-bond_unixctl_migrate(struct unixctl_conn *conn, const char *args_,
+bond_unixctl_migrate(struct unixctl_conn *conn,
+                     int argc OVS_UNUSED, const char *argv[],
                      void *aux OVS_UNUSED)
 {
-    char *args = (char *) args_;
-    char *save_ptr = NULL;
-    char *bond_s, *hash_s, *slave_s;
+    const char *bond_s = argv[1];
+    const char *hash_s = argv[2];
+    const char *slave_s = argv[3];
     struct bond *bond;
     struct bond_slave *slave;
     struct bond_entry *entry;
     int hash;
-
-    bond_s = strtok_r(args, " ", &save_ptr);
-    hash_s = strtok_r(NULL, " ", &save_ptr);
-    slave_s = strtok_r(NULL, " ", &save_ptr);
-    if (!slave_s) {
-        unixctl_command_reply(conn, 501,
-                              "usage: bond/migrate BOND HASH SLAVE");
-        return;
-    }
 
     bond = bond_find(bond_s);
     if (!bond) {
@@ -1066,22 +1060,14 @@ bond_unixctl_migrate(struct unixctl_conn *conn, const char *args_,
 }
 
 static void
-bond_unixctl_set_active_slave(struct unixctl_conn *conn, const char *args_,
+bond_unixctl_set_active_slave(struct unixctl_conn *conn,
+                              int argc OVS_UNUSED, const char *argv[],
                               void *aux OVS_UNUSED)
 {
-    char *args = (char *) args_;
-    char *save_ptr = NULL;
-    char *bond_s, *slave_s;
+    const char *bond_s = argv[1];
+    const char *slave_s = argv[2];
     struct bond *bond;
     struct bond_slave *slave;
-
-    bond_s = strtok_r(args, " ", &save_ptr);
-    slave_s = strtok_r(NULL, " ", &save_ptr);
-    if (!slave_s) {
-        unixctl_command_reply(conn, 501,
-                              "usage: bond/set-active-slave BOND SLAVE");
-        return;
-    }
 
     bond = bond_find(bond_s);
     if (!bond) {
@@ -1114,23 +1100,12 @@ bond_unixctl_set_active_slave(struct unixctl_conn *conn, const char *args_,
 }
 
 static void
-enable_slave(struct unixctl_conn *conn, const char *args_, bool enable)
+enable_slave(struct unixctl_conn *conn, const char *argv[], bool enable)
 {
-    char *args = (char *) args_;
-    char *save_ptr = NULL;
-    char *bond_s, *slave_s;
+    const char *bond_s = argv[1];
+    const char *slave_s = argv[2];
     struct bond *bond;
     struct bond_slave *slave;
-
-    bond_s = strtok_r(args, " ", &save_ptr);
-    slave_s = strtok_r(NULL, " ", &save_ptr);
-    if (!slave_s) {
-        char *usage = xasprintf("usage: bond/%s-slave BOND SLAVE",
-                                enable ? "enable" : "disable");
-        unixctl_command_reply(conn, 501, usage);
-        free(usage);
-        return;
-    }
 
     bond = bond_find(bond_s);
     if (!bond) {
@@ -1149,35 +1124,33 @@ enable_slave(struct unixctl_conn *conn, const char *args_, bool enable)
 }
 
 static void
-bond_unixctl_enable_slave(struct unixctl_conn *conn, const char *args,
+bond_unixctl_enable_slave(struct unixctl_conn *conn,
+                          int argc OVS_UNUSED, const char *argv[],
                           void *aux OVS_UNUSED)
 {
-    enable_slave(conn, args, true);
+    enable_slave(conn, argv, true);
 }
 
 static void
-bond_unixctl_disable_slave(struct unixctl_conn *conn, const char *args,
+bond_unixctl_disable_slave(struct unixctl_conn *conn,
+                           int argc OVS_UNUSED, const char *argv[],
                            void *aux OVS_UNUSED)
 {
-    enable_slave(conn, args, false);
+    enable_slave(conn, argv, false);
 }
 
 static void
-bond_unixctl_hash(struct unixctl_conn *conn, const char *args_,
+bond_unixctl_hash(struct unixctl_conn *conn, int argc, const char *argv[],
                   void *aux OVS_UNUSED)
 {
-    char *args = (char *) args_;
+    const char *mac_s = argv[1];
+    const char *vlan_s = argc > 2 ? argv[2] : NULL;
+    const char *basis_s = argc > 3 ? argv[3] : NULL;
     uint8_t mac[ETH_ADDR_LEN];
     uint8_t hash;
     char *hash_cstr;
     unsigned int vlan;
     uint32_t basis;
-    char *mac_s, *vlan_s, *basis_s;
-    char *save_ptr = NULL;
-
-    mac_s  = strtok_r(args, " ", &save_ptr);
-    vlan_s = strtok_r(NULL, " ", &save_ptr);
-    basis_s = strtok_r(NULL, " ", &save_ptr);
 
     if (vlan_s) {
         if (sscanf(vlan_s, "%u", &vlan) != 1) {
@@ -1212,17 +1185,18 @@ bond_unixctl_hash(struct unixctl_conn *conn, const char *args_,
 void
 bond_init(void)
 {
-    unixctl_command_register("bond/list", "", bond_unixctl_list, NULL);
-    unixctl_command_register("bond/show", "port", bond_unixctl_show, NULL);
-    unixctl_command_register("bond/migrate", "port hash slave",
+    unixctl_command_register("bond/list", "", 0, 0, bond_unixctl_list, NULL);
+    unixctl_command_register("bond/show", "port", 1, 1,
+                             bond_unixctl_show, NULL);
+    unixctl_command_register("bond/migrate", "port hash slave", 3, 3,
                              bond_unixctl_migrate, NULL);
-    unixctl_command_register("bond/set-active-slave", "port slave",
+    unixctl_command_register("bond/set-active-slave", "port slave", 2, 2,
                              bond_unixctl_set_active_slave, NULL);
-    unixctl_command_register("bond/enable-slave", "port slave",
+    unixctl_command_register("bond/enable-slave", "port slave", 2, 2,
                              bond_unixctl_enable_slave, NULL);
-    unixctl_command_register("bond/disable-slave", "port slave",
+    unixctl_command_register("bond/disable-slave", "port slave", 2, 2,
                              bond_unixctl_disable_slave, NULL);
-    unixctl_command_register("bond/hash", "mac [vlan] [basis]",
+    unixctl_command_register("bond/hash", "mac [vlan] [basis]", 1, 3,
                              bond_unixctl_hash, NULL);
 }
 

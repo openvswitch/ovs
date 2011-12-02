@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010 Nicira Networks.
+ * Copyright (c) 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -48,8 +48,8 @@ struct coverage_counter *coverage_counters[] = {
 static unsigned int epoch;
 
 static void
-coverage_unixctl_log(struct unixctl_conn *conn, const char *args OVS_UNUSED,
-                     void *aux OVS_UNUSED)
+coverage_unixctl_log(struct unixctl_conn *conn, int argc OVS_UNUSED,
+                     const char *argv[] OVS_UNUSED, void *aux OVS_UNUSED)
 {
     coverage_log(VLL_WARN, false);
     unixctl_command_reply(conn, 200, NULL);
@@ -58,7 +58,8 @@ coverage_unixctl_log(struct unixctl_conn *conn, const char *args OVS_UNUSED,
 void
 coverage_init(void)
 {
-    unixctl_command_register("coverage/log", "", coverage_unixctl_log, NULL);
+    unixctl_command_register("coverage/log", "", 0, 0,
+                             coverage_unixctl_log, NULL);
 }
 
 /* Sorts coverage counters in descending order by count, within equal counts

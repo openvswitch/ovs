@@ -309,10 +309,11 @@ bridge_init(const char *remote)
     ovsdb_idl_omit(idl, &ovsrec_ssl_col_external_ids);
 
     /* Register unixctl commands. */
-    unixctl_command_register("qos/show", "interface", qos_unixctl_show, NULL);
-    unixctl_command_register("bridge/dump-flows", "bridge",
+    unixctl_command_register("qos/show", "interface", 1, 1,
+                             qos_unixctl_show, NULL);
+    unixctl_command_register("bridge/dump-flows", "bridge", 1, 1,
                              bridge_unixctl_dump_flows, NULL);
-    unixctl_command_register("bridge/reconnect", "[bridge]",
+    unixctl_command_register("bridge/reconnect", "[bridge]", 0, 1,
                              bridge_unixctl_reconnect, NULL);
     lacp_init();
     bond_init();
@@ -2034,8 +2035,8 @@ qos_unixctl_show_cb(unsigned int queue_id,
 }
 
 static void
-qos_unixctl_show(struct unixctl_conn *conn,
-                 const char *args, void *aux OVS_UNUSED)
+qos_unixctl_show(struct unixctl_conn *conn, int argc OVS_UNUSED,
+                 const char *argv[], void *aux OVS_UNUSED)
 {
     struct ds ds = DS_EMPTY_INITIALIZER;
     struct shash sh = SHASH_INITIALIZER(&sh);
@@ -2045,7 +2046,7 @@ qos_unixctl_show(struct unixctl_conn *conn,
     struct qos_unixctl_show_cbdata data;
     int error;
 
-    iface = iface_find(args);
+    iface = iface_find(argv[1]);
     if (!iface) {
         unixctl_command_reply(conn, 501, "no such interface");
         return;
@@ -2144,13 +2145,13 @@ bridge_lookup(const char *name)
 /* Handle requests for a listing of all flows known by the OpenFlow
  * stack, including those normally hidden. */
 static void
-bridge_unixctl_dump_flows(struct unixctl_conn *conn,
-                          const char *args, void *aux OVS_UNUSED)
+bridge_unixctl_dump_flows(struct unixctl_conn *conn, int argc OVS_UNUSED,
+                          const char *argv[], void *aux OVS_UNUSED)
 {
     struct bridge *br;
     struct ds results;
 
-    br = bridge_lookup(args);
+    br = bridge_lookup(argv[1]);
     if (!br) {
         unixctl_command_reply(conn, 501, "Unknown bridge");
         return;
@@ -2167,12 +2168,12 @@ bridge_unixctl_dump_flows(struct unixctl_conn *conn,
  * connections and reconnect.  If BRIDGE is not specified, then all bridges
  * drop their controller connections and reconnect. */
 static void
-bridge_unixctl_reconnect(struct unixctl_conn *conn,
-                         const char *args, void *aux OVS_UNUSED)
+bridge_unixctl_reconnect(struct unixctl_conn *conn, int argc,
+                         const char *argv[], void *aux OVS_UNUSED)
 {
     struct bridge *br;
-    if (args[0] != '\0') {
-        br = bridge_lookup(args);
+    if (argc > 1) {
+        br = bridge_lookup(argv[1]);
         if (!br) {
             unixctl_command_reply(conn, 501, "Unknown bridge");
             return;

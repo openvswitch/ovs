@@ -48,7 +48,8 @@ COVERAGE_DEFINE(unixctl_received);
 COVERAGE_DEFINE(unixctl_replied);
 
 struct unixctl_command {
-    const char *args;
+    const char *usage;
+    int min_args, max_args;
     unixctl_cb_func *cb;
     void *aux;
 };
@@ -82,8 +83,8 @@ static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 5);
 static struct shash commands = SHASH_INITIALIZER(&commands);
 
 static void
-unixctl_help(struct unixctl_conn *conn, const char *args OVS_UNUSED,
-             void *aux OVS_UNUSED)
+unixctl_help(struct unixctl_conn *conn, int argc OVS_UNUSED,
+             const char *argv[] OVS_UNUSED, void *aux OVS_UNUSED)
 {
     struct ds ds = DS_EMPTY_INITIALIZER;
     const struct shash_node **nodes = shash_sort(&commands);
@@ -95,7 +96,7 @@ unixctl_help(struct unixctl_conn *conn, const char *args OVS_UNUSED,
         const struct shash_node *node = nodes[i];
         const struct unixctl_command *command = node->data;
         
-        ds_put_format(&ds, "  %-23s%s\n", node->name, command->args);
+        ds_put_format(&ds, "  %-23s%s\n", node->name, command->usage);
     }
     free(nodes);
 
@@ -104,15 +105,27 @@ unixctl_help(struct unixctl_conn *conn, const char *args OVS_UNUSED,
 }
 
 static void
-unixctl_version(struct unixctl_conn *conn, const char *args OVS_UNUSED,
-                void *aux OVS_UNUSED)
+unixctl_version(struct unixctl_conn *conn, int argc OVS_UNUSED,
+                const char *argv[] OVS_UNUSED, void *aux OVS_UNUSED)
 {
     unixctl_command_reply(conn, 200, get_program_version());
 }
 
+/* Registers a unixctl command with the given 'name'.  'usage' describes the
+ * arguments to the command; it is used only for presentation to the user in
+ * "help" output.
+ *
+ * 'cb' is called when the command is received.  It is passed the actual set of
+ * arguments, as a text string, plus a copy of 'aux'.  Normally 'cb' should
+ * call unixctl_command_reply() before it returns, but if the command cannot be
+ * handled immediately then it can defer the reply until later.  A given
+ * connection can only process a single request at a time, so
+ * unixctl_command_reply() must be called eventually to avoid blocking that
+ * connection. */
 void
-unixctl_command_register(const char *name, const char *args,
-        unixctl_cb_func *cb, void *aux)
+unixctl_command_register(const char *name, const char *usage,
+                         int min_args, int max_args,
+                         unixctl_cb_func *cb, void *aux)
 {
     struct unixctl_command *command;
     struct unixctl_command *lookup = shash_find_data(&commands, name);
@@ -124,7 +137,9 @@ unixctl_command_register(const char *name, const char *args,
     }
 
     command = xmalloc(sizeof *command);
-    command->args = args;
+    command->usage = usage;
+    command->min_args = min_args;
+    command->max_args = max_args;
     command->cb = cb;
     command->aux = aux;
     shash_add(&commands, name, command);
@@ -215,8 +230,8 @@ unixctl_server_create(const char *path, struct unixctl_server **serverp)
         return 0;
     }
 
-    unixctl_command_register("help", "", unixctl_help, NULL);
-    unixctl_command_register("version", "", unixctl_version, NULL);
+    unixctl_command_register("help", "", 0, 0, unixctl_help, NULL);
+    unixctl_command_register("version", "", 0, 0, unixctl_version, NULL);
 
     server = xmalloc(sizeof *server);
     list_init(&server->conns);
@@ -301,26 +316,43 @@ static void
 process_command(struct unixctl_conn *conn, char *s)
 {
     struct unixctl_command *command;
-    size_t name_len;
-    char *name, *args;
+    struct svec argv;
 
     COVERAGE_INC(unixctl_received);
     conn->state = S_PROCESS;
 
-    name = s;
-    name_len = strcspn(name, " ");
-    args = name + name_len;
-    args += strspn(args, " ");
-    name[name_len] = '\0';
+    svec_init(&argv);
+    svec_parse_words(&argv, s);
+    svec_terminate(&argv);
 
-    command = shash_find_data(&commands, name);
-    if (command) {
-        command->cb(conn, args, command->aux);
+    if (argv.n == 0) {
+        unixctl_command_reply(conn, 400, "missing command name in request");
     } else {
-        char *msg = xasprintf("\"%s\" is not a valid command", name);
-        unixctl_command_reply(conn, 400, msg);
-        free(msg);
+        const char *name = argv.names[0];
+        char *error;
+
+        command = shash_find_data(&commands, name);
+        if (!command) {
+            error = xasprintf("\"%s\" is not a valid command", name);
+        } else if (argv.n - 1 < command->min_args) {
+            error = xasprintf("\"%s\" command requires at least %d arguments",
+                              name, command->min_args);
+        } else if (argv.n - 1 > command->max_args) {
+            error = xasprintf("\"%s\" command takes at most %d arguments",
+                              name, command->max_args);
+        } else {
+            error = NULL;
+            command->cb(conn, argv.n, (const char **) argv.names,
+                        command->aux);
+        }
+
+        if (error) {
+            unixctl_command_reply(conn, 400, error);
+            free(error);
+        }
     }
+
+    svec_destroy(&argv);
 }
 
 static int

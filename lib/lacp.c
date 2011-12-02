@@ -136,8 +136,7 @@ static bool slave_may_tx(const struct slave *);
 static struct slave *slave_lookup(const struct lacp *, const void *slave);
 static bool info_tx_equal(struct lacp_info *, struct lacp_info *);
 
-static void lacp_unixctl_show(struct unixctl_conn *, const char *args,
-                              void *aux);
+static unixctl_cb_func lacp_unixctl_show;
 
 /* Populates 'pdu' with a LACP PDU comprised of 'actor' and 'partner'. */
 static void
@@ -188,7 +187,8 @@ parse_lacp_packet(const struct ofpbuf *b)
 void
 lacp_init(void)
 {
-    unixctl_command_register("lacp/show", "[port]", lacp_unixctl_show, NULL);
+    unixctl_command_register("lacp/show", "[port]", 0, 1,
+                             lacp_unixctl_show, NULL);
 }
 
 /* Creates a LACP object. */
@@ -869,14 +869,14 @@ lacp_print_details(struct ds *ds, struct lacp *lacp)
 }
 
 static void
-lacp_unixctl_show(struct unixctl_conn *conn,
-                  const char *args, void *aux OVS_UNUSED)
+lacp_unixctl_show(struct unixctl_conn *conn, int argc, const char *argv[],
+                  void *aux OVS_UNUSED)
 {
     struct ds ds = DS_EMPTY_INITIALIZER;
     struct lacp *lacp;
 
-    if (strlen(args)) {
-        lacp = lacp_find(args);
+    if (argc > 1) {
+        lacp = lacp_find(argv[1]);
         if (!lacp) {
             unixctl_command_reply(conn, 501, "no such lacp object");
             return;

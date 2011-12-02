@@ -3277,8 +3277,8 @@ ofproto_lookup(const char *name)
 }
 
 static void
-ofproto_unixctl_list(struct unixctl_conn *conn, const char *arg OVS_UNUSED,
-                     void *aux OVS_UNUSED)
+ofproto_unixctl_list(struct unixctl_conn *conn, int argc OVS_UNUSED,
+                     const char *argv[] OVS_UNUSED, void *aux OVS_UNUSED)
 {
     struct ofproto *ofproto;
     struct ds results;
@@ -3300,7 +3300,8 @@ ofproto_unixctl_init(void)
     }
     registered = true;
 
-    unixctl_command_register("ofproto/list", "", ofproto_unixctl_list, NULL);
+    unixctl_command_register("ofproto/list", "", 0, 0,
+                             ofproto_unixctl_list, NULL);
 }
 
 /* Linux VLAN device support (e.g. "eth0.10" for VLAN 10.)

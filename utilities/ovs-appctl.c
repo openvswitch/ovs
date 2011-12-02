@@ -26,6 +26,7 @@
 #include "daemon.h"
 #include "dirs.h"
 #include "dynamic-string.h"
+#include "process.h"
 #include "timeval.h"
 #include "unixctl.h"
 #include "util.h"
@@ -39,10 +40,9 @@ main(int argc, char *argv[])
 {
     struct unixctl_client *client;
     const char *target;
-    struct ds request;
     int code, error;
+    char *request;
     char *reply;
-    int i;
 
     set_program_name(argv[0]);
 
@@ -50,17 +50,10 @@ main(int argc, char *argv[])
     target = parse_command_line(argc, argv);
     client = connect_to_target(target);
 
-    /* Compose request. */
-    ds_init(&request);
-    for (i = optind; i < argc; i++) {
-        if (i != optind) {
-            ds_put_char(&request, ' ');
-        }
-        ds_put_cstr(&request, argv[i]);
-    }
-
     /* Transact request and process reply. */
-    error = unixctl_client_transact(client, ds_cstr(&request), &code, &reply);
+    request = process_escape_args(argv + optind);
+    error = unixctl_client_transact(client, request, &code, &reply);
+    free(request);
     if (error) {
         ovs_fatal(error, "%s: transaction error", target);
     }
@@ -73,7 +66,6 @@ main(int argc, char *argv[])
 
     unixctl_client_destroy(client);
     free(reply);
-    ds_destroy(&request);
 
     return 0;
 }

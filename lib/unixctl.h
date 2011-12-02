@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -40,8 +40,9 @@ const char *unixctl_client_target(const struct unixctl_client *);
 /* Command registration. */
 struct unixctl_conn;
 typedef void unixctl_cb_func(struct unixctl_conn *,
-                             const char *args, void *aux);
-void unixctl_command_register(const char *name, const char *args,
+                             int argc, const char *argv[], void *aux);
+void unixctl_command_register(const char *name, const char *usage,
+                              int min_args, int max_args,
                               unixctl_cb_func *cb, void *aux);
 void unixctl_command_reply(struct unixctl_conn *, int code,
                            const char *body);

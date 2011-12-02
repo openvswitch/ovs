@@ -5569,12 +5569,12 @@ ofproto_dpif_lookup(const char *name)
 }
 
 static void
-ofproto_unixctl_fdb_flush(struct unixctl_conn *conn,
-                         const char *args, void *aux OVS_UNUSED)
+ofproto_unixctl_fdb_flush(struct unixctl_conn *conn, int argc OVS_UNUSED,
+                          const char *argv[], void *aux OVS_UNUSED)
 {
     const struct ofproto_dpif *ofproto;
 
-    ofproto = ofproto_dpif_lookup(args);
+    ofproto = ofproto_dpif_lookup(argv[1]);
     if (!ofproto) {
         unixctl_command_reply(conn, 501, "no such bridge");
         return;
@@ -5585,14 +5585,14 @@ ofproto_unixctl_fdb_flush(struct unixctl_conn *conn,
 }
 
 static void
-ofproto_unixctl_fdb_show(struct unixctl_conn *conn,
-                         const char *args, void *aux OVS_UNUSED)
+ofproto_unixctl_fdb_show(struct unixctl_conn *conn, int argc OVS_UNUSED,
+                         const char *argv[], void *aux OVS_UNUSED)
 {
     struct ds ds = DS_EMPTY_INITIALIZER;
     const struct ofproto_dpif *ofproto;
     const struct mac_entry *e;
 
-    ofproto = ofproto_dpif_lookup(args);
+    ofproto = ofproto_dpif_lookup(argv[1]);
     if (!ofproto) {
         unixctl_command_reply(conn, 501, "no such bridge");
         return;
@@ -5678,12 +5678,10 @@ trace_resubmit(struct action_xlate_ctx *ctx, struct rule_dpif *rule)
 }
 
 static void
-ofproto_unixctl_trace(struct unixctl_conn *conn, const char *args_,
+ofproto_unixctl_trace(struct unixctl_conn *conn, int argc, const char *argv[],
                       void *aux OVS_UNUSED)
 {
-    char *dpname, *arg1, *arg2, *arg3, *arg4;
-    char *args = xstrdup(args_);
-    char *save_ptr = NULL;
+    const char *dpname = argv[1];
     struct ofproto_dpif *ofproto;
     struct ofpbuf odp_key;
     struct ofpbuf *packet;
@@ -5697,29 +5695,21 @@ ofproto_unixctl_trace(struct unixctl_conn *conn, const char *args_,
     ofpbuf_init(&odp_key, 0);
     ds_init(&result);
 
-    dpname = strtok_r(args, " ", &save_ptr);
-    if (!dpname) {
-        unixctl_command_reply(conn, 501, "Bad command syntax");
-        goto exit;
-    }
-
     ofproto = ofproto_dpif_lookup(dpname);
     if (!ofproto) {
         unixctl_command_reply(conn, 501, "Unknown ofproto (use ofproto/list "
                               "for help)");
         goto exit;
     }
-    arg1 = strtok_r(NULL, " ", &save_ptr);
-    arg2 = strtok_r(NULL, " ", &save_ptr);
-    arg3 = strtok_r(NULL, " ", &save_ptr);
-    arg4 = strtok_r(NULL, "", &save_ptr); /* Get entire rest of line. */
-    if (dpname && arg1 && (!arg2 || !strcmp(arg2, "-generate")) && !arg3) {
+    if (argc == 3 || (argc == 4 && !strcmp(argv[3], "-generate"))) {
         /* ofproto/trace dpname flow [-generate] */
+        const char *flow_s = argv[2];
+        const char *generate_s = argv[3];
         int error;
 
         /* Convert string to datapath key. */
         ofpbuf_init(&odp_key, 0);
-        error = odp_flow_key_from_string(arg1, NULL, &odp_key);
+        error = odp_flow_key_from_string(flow_s, NULL, &odp_key);
         if (error) {
             unixctl_command_reply(conn, 501, "Bad flow syntax");
             goto exit;
@@ -5735,24 +5725,22 @@ ofproto_unixctl_trace(struct unixctl_conn *conn, const char *args_,
         }
 
         /* Generate a packet, if requested. */
-        if (arg2) {
+        if (generate_s) {
             packet = ofpbuf_new(0);
             flow_compose(packet, &flow);
         }
-    } else if (dpname && arg1 && arg2 && arg3 && arg4) {
+    } else if (argc == 6) {
         /* ofproto/trace dpname priority tun_id in_port packet */
-        uint16_t in_port;
-        ovs_be64 tun_id;
-        uint32_t priority;
+        const char *priority_s = argv[2];
+        const char *tun_id_s = argv[3];
+        const char *in_port_s = argv[4];
+        const char *packet_s = argv[5];
+        uint16_t in_port = ofp_port_to_odp_port(atoi(in_port_s));
+        ovs_be64 tun_id = htonll(strtoull(tun_id_s, NULL, 0));
+        uint32_t priority = atoi(priority_s);
 
-        priority = atoi(arg1);
-        tun_id = htonll(strtoull(arg2, NULL, 0));
-        in_port = ofp_port_to_odp_port(atoi(arg3));
-
-        packet = ofpbuf_new(strlen(args) / 2);
-        arg4 = ofpbuf_put_hex(packet, arg4, NULL);
-        arg4 += strspn(arg4, " ");
-        if (*arg4 != '\0') {
+        packet = ofpbuf_new(strlen(packet_s) / 2);
+        if (ofpbuf_put_hex(packet, packet_s, NULL)[0] != '\0') {
             unixctl_command_reply(conn, 501, "Trailing garbage in command");
             goto exit;
         }
@@ -5813,20 +5801,19 @@ exit:
     ds_destroy(&result);
     ofpbuf_delete(packet);
     ofpbuf_uninit(&odp_key);
-    free(args);
 }
 
 static void
-ofproto_dpif_clog(struct unixctl_conn *conn OVS_UNUSED,
-                  const char *args_ OVS_UNUSED, void *aux OVS_UNUSED)
+ofproto_dpif_clog(struct unixctl_conn *conn OVS_UNUSED, int argc OVS_UNUSED,
+                  const char *argv[] OVS_UNUSED, void *aux OVS_UNUSED)
 {
     clogged = true;
     unixctl_command_reply(conn, 200, NULL);
 }
 
 static void
-ofproto_dpif_unclog(struct unixctl_conn *conn OVS_UNUSED,
-                    const char *args_ OVS_UNUSED, void *aux OVS_UNUSED)
+ofproto_dpif_unclog(struct unixctl_conn *conn OVS_UNUSED, int argc OVS_UNUSED,
+                    const char *argv[] OVS_UNUSED, void *aux OVS_UNUSED)
 {
     clogged = false;
     unixctl_command_reply(conn, 200, NULL);
@@ -5841,15 +5828,18 @@ ofproto_dpif_unixctl_init(void)
     }
     registered = true;
 
-    unixctl_command_register("ofproto/trace",
-                      "bridge {tun_id in_port packet | odp_flow [-generate]}",
-                      ofproto_unixctl_trace, NULL);
-    unixctl_command_register("fdb/flush", "bridge", ofproto_unixctl_fdb_flush,
-                             NULL);
-    unixctl_command_register("fdb/show", "bridge", ofproto_unixctl_fdb_show,
-                             NULL);
-    unixctl_command_register("ofproto/clog", "", ofproto_dpif_clog, NULL);
-    unixctl_command_register("ofproto/unclog", "", ofproto_dpif_unclog, NULL);
+    unixctl_command_register(
+        "ofproto/trace",
+        "bridge {tun_id in_port packet | odp_flow [-generate]}",
+        2, 4, ofproto_unixctl_trace, NULL);
+    unixctl_command_register("fdb/flush", "bridge", 1, 1,
+                             ofproto_unixctl_fdb_flush, NULL);
+    unixctl_command_register("fdb/show", "bridge", 1, 1,
+                             ofproto_unixctl_fdb_show, NULL);
+    unixctl_command_register("ofproto/clog", "", 0, 0,
+                             ofproto_dpif_clog, NULL);
+    unixctl_command_register("ofproto/unclog", "", 0, 0,
+                             ofproto_dpif_unclog, NULL);
 }
 
 /* Linux VLAN device support (e.g. "eth0.10" for VLAN 10.)

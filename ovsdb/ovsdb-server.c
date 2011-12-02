@@ -135,10 +135,10 @@ main(int argc, char *argv[])
 
     daemonize_complete();
 
-    unixctl_command_register("exit", "", ovsdb_server_exit, &exiting);
-    unixctl_command_register("ovsdb-server/compact", "",
+    unixctl_command_register("exit", "", 0, 0, ovsdb_server_exit, &exiting);
+    unixctl_command_register("ovsdb-server/compact", "", 0, 0,
                              ovsdb_server_compact, file);
-    unixctl_command_register("ovsdb-server/reconnect", "",
+    unixctl_command_register("ovsdb-server/reconnect", "", 0, 0,
                              ovsdb_server_reconnect, jsonrpc);
 
     exiting = false;
@@ -612,7 +612,8 @@ reconfigure_from_db(struct ovsdb_jsonrpc_server *jsonrpc,
 }
 
 static void
-ovsdb_server_exit(struct unixctl_conn *conn, const char *args OVS_UNUSED,
+ovsdb_server_exit(struct unixctl_conn *conn, int argc OVS_UNUSED,
+                  const char *argv[] OVS_UNUSED,
                   void *exiting_)
 {
     bool *exiting = exiting_;
@@ -621,8 +622,8 @@ ovsdb_server_exit(struct unixctl_conn *conn, const char *args OVS_UNUSED,
 }
 
 static void
-ovsdb_server_compact(struct unixctl_conn *conn, const char *args OVS_UNUSED,
-                     void *file_)
+ovsdb_server_compact(struct unixctl_conn *conn, int argc OVS_UNUSED,
+                     const char *argv[] OVS_UNUSED, void *file_)
 {
     struct ovsdb_file *file = file_;
     struct ovsdb_error *error;
@@ -642,8 +643,8 @@ ovsdb_server_compact(struct unixctl_conn *conn, const char *args OVS_UNUSED,
 /* "ovsdb-server/reconnect": makes ovsdb-server drop all of its JSON-RPC
  * connections and reconnect. */
 static void
-ovsdb_server_reconnect(struct unixctl_conn *conn, const char *args OVS_UNUSED,
-                       void *jsonrpc_)
+ovsdb_server_reconnect(struct unixctl_conn *conn, int argc OVS_UNUSED,
+                       const char *argv[] OVS_UNUSED, void *jsonrpc_)
 {
     struct ovsdb_jsonrpc_server *jsonrpc = jsonrpc_;
 

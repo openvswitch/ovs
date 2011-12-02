@@ -82,7 +82,7 @@ main(int argc, char *argv[])
     if (retval) {
         exit(EXIT_FAILURE);
     }
-    unixctl_command_register("exit", "", ovs_vswitchd_exit, &exiting);
+    unixctl_command_register("exit", "", 0, 0, ovs_vswitchd_exit, &exiting);
 
     bridge_init(remote);
     free(remote);
@@ -234,8 +234,8 @@ usage(void)
 }
 
 static void
-ovs_vswitchd_exit(struct unixctl_conn *conn, const char *args OVS_UNUSED,
-                  void *exiting_)
+ovs_vswitchd_exit(struct unixctl_conn *conn, int argc OVS_UNUSED,
+                  const char *argv[] OVS_UNUSED, void *exiting_)
 {
     bool *exiting = exiting_;
     *exiting = true;

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010 Nicira Networks.
+ * Copyright (c) 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -112,8 +112,8 @@ stress_set(struct stress_option *option, unsigned int period, bool random)
 }
 
 static void
-stress_unixctl_list(struct unixctl_conn *conn, const char *args,
-                    void *aux OVS_UNUSED)
+stress_unixctl_list(struct unixctl_conn *conn, int argc OVS_UNUSED,
+                    const char *argv[] OVS_UNUSED, void *aux OVS_UNUSED)
 {
     int i, found = 0;
     struct ds results;
@@ -126,7 +126,7 @@ stress_unixctl_list(struct unixctl_conn *conn, const char *args,
                   "RECOMMENDED", "MINIMUM", "MAXIMUM", "DEFAULT");
     for (i = 0; i < n_stress_options; i++) {
         struct stress_option *option = stress_options[i];
-        if (!*args || strstr(option->name, args)) {
+        if (!argv[1] || strstr(option->name, argv[1])) {
             ds_put_format(&results, "\n%s (%s)\n",
                           option->name, option->description);
             if (option->period) {
@@ -162,49 +162,42 @@ stress_unixctl_list(struct unixctl_conn *conn, const char *args,
 }
 
 static void
-stress_unixctl_enable(struct unixctl_conn *conn, const char *args OVS_UNUSED,
-                      void *aux OVS_UNUSED)
+stress_unixctl_enable(struct unixctl_conn *conn, int argc OVS_UNUSED,
+                      const char *argv[] OVS_UNUSED, void *aux OVS_UNUSED)
 {
     stress_enable(true);
     unixctl_command_reply(conn, 200, "");
 }
 
 static void
-stress_unixctl_disable(struct unixctl_conn *conn, const char *args OVS_UNUSED,
-                       void *aux OVS_UNUSED)
+stress_unixctl_disable(struct unixctl_conn *conn, int argc OVS_UNUSED,
+                       const char *argv[] OVS_UNUSED, void *aux OVS_UNUSED)
 {
     stress_enable(false);
     unixctl_command_reply(conn, 200, "");
 }
 
 static void
-stress_unixctl_set(struct unixctl_conn *conn, const char *args_,
-                   void *aux OVS_UNUSED)
+stress_unixctl_set(struct unixctl_conn *conn, int argc OVS_UNUSED,
+                   const char *argv[], void *aux OVS_UNUSED)
 {
     int code = 404;
-    char *args = xstrdup(args_);
-    char *save_ptr = NULL;
-    char *option_name;
-    char *option_val;
+    const char *option_name = argv[1];
+    const char *option_val = argv[2];
+    int i;
 
-    option_name = strtok_r(args, " ", &save_ptr);
-    option_val = strtok_r(NULL, " ", &save_ptr);
-    if (option_val) {
-        int i;
-        for (i = 0; i < n_stress_options; i++) {
-            struct stress_option *option = stress_options[i];
-            if (!strcmp(option_name, option->name)) {
-                unsigned int period = strtoul(option_val, NULL, 0);
-                bool random = strstr(args_, "random");
+    for (i = 0; i < n_stress_options; i++) {
+        struct stress_option *option = stress_options[i];
+        if (!strcmp(option_name, option->name)) {
+            unsigned int period = strtoul(option_val, NULL, 0);
+            bool random = !strcmp(argv[3], "random");
 
-                stress_set(option, period, random);
-                code = 200;
-                break;
-            }
+            stress_set(option, period, random);
+            code = 200;
+            break;
         }
     }
     unixctl_command_reply(conn, code, "");
-    free(args);
 }
 
 /* Exposes ovs-appctl access to the stress options.
@@ -215,10 +208,12 @@ stress_unixctl_set(struct unixctl_conn *conn, const char *args_,
 void
 stress_init_command(void)
 {
-    unixctl_command_register("stress/list", "", stress_unixctl_list, NULL);
+    unixctl_command_register("stress/list", "", 0, 1,
+                             stress_unixctl_list, NULL);
     unixctl_command_register("stress/set", "option period [random | periodic]",
-                             stress_unixctl_set, NULL);
-    unixctl_command_register("stress/enable", "", stress_unixctl_enable, NULL);
-    unixctl_command_register("stress/disable", "",
+                             2, 3, stress_unixctl_set, NULL);
+    unixctl_command_register("stress/enable", "", 0, 0,
+                             stress_unixctl_enable, NULL);
+    unixctl_command_register("stress/disable", "", 0, 0,
                              stress_unixctl_disable, NULL);
 }

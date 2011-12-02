@@ -122,8 +122,7 @@ struct remote_mp {
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
 static struct hmap all_cfms = HMAP_INITIALIZER(&all_cfms);
 
-static void cfm_unixctl_show(struct unixctl_conn *, const char *args,
-                             void *aux);
+static unixctl_cb_func cfm_unixctl_show;
 
 static const uint8_t *
 cfm_ccm_addr(const struct cfm *cfm)
@@ -233,7 +232,7 @@ lookup_remote_mp(const struct cfm *cfm, uint64_t mpid)
 void
 cfm_init(void)
 {
-    unixctl_command_register("cfm/show", "[interface]", cfm_unixctl_show,
+    unixctl_command_register("cfm/show", "[interface]", 0, 1, cfm_unixctl_show,
                              NULL);
 }
 
@@ -598,14 +597,14 @@ cfm_print_details(struct ds *ds, const struct cfm *cfm)
 }
 
 static void
-cfm_unixctl_show(struct unixctl_conn *conn,
-                 const char *args, void *aux OVS_UNUSED)
+cfm_unixctl_show(struct unixctl_conn *conn, int argc, const char *argv[],
+                 void *aux OVS_UNUSED)
 {
     struct ds ds = DS_EMPTY_INITIALIZER;
     const struct cfm *cfm;
 
-    if (strlen(args)) {
-        cfm = cfm_find(args);
+    if (argc > 1) {
+        cfm = cfm_find(argv[1]);
         if (!cfm) {
             unixctl_command_reply(conn, 501, "no such CFM object");
             return;
