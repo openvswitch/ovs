@@ -538,6 +538,7 @@ static bool ipv6_should_icmp(struct sk_buff *skb)
 	int addr_type;
 	int payload_off = (u8 *)(old_ipv6h + 1) - skb->data;
 	u8 nexthdr = ipv6_hdr(skb)->nexthdr;
+	__be16 frag_off;
 
 	/* Check source address is valid. */
 	addr_type = ipv6_addr_type(&old_ipv6h->saddr);
@@ -549,7 +550,7 @@ static bool ipv6_should_icmp(struct sk_buff *skb)
 		return false;
 
 	/* Don't respond to ICMP error messages. */
-	payload_off = ipv6_skip_exthdr(skb, payload_off, &nexthdr);
+	payload_off = ipv6_skip_exthdr(skb, payload_off, &nexthdr, &frag_off);
 	if (payload_off < 0)
 		return false;
 

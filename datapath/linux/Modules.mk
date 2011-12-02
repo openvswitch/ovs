@@ -1,6 +1,7 @@
 openvswitch_sources += \
 	linux/compat/addrconf_core-openvswitch.c \
 	linux/compat/dev-openvswitch.c \
+	linux/compat/exthdrs_core.c \
 	linux/compat/flex_array.c \
 	linux/compat/genetlink-openvswitch.c \
 	linux/compat/ip_output-openvswitch.c \

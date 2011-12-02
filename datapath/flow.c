@@ -128,66 +128,6 @@ u64 ovs_flow_used_time(unsigned long flow_jiffies)
 	(offsetof(struct sw_flow_key, field) +	\
 	 FIELD_SIZEOF(struct sw_flow_key, field))
 
-/**
- * skip_exthdr - skip any IPv6 extension headers
- * @skb: skbuff to parse
- * @start: offset of first extension header
- * @nexthdrp: Initially, points to the type of the extension header at @start.
- * This function updates it to point to the extension header at the final
- * offset.
- * @frag: Points to the @frag member in a &struct sw_flow_key.  This
- * function sets an appropriate %OVS_FRAG_TYPE_* value.
- *
- * This is based on ipv6_skip_exthdr() but adds the updates to *@frag.
- *
- * When there is more than one fragment header, this version reports whether
- * the final fragment header that it examines is a first fragment.
- *
- * Returns the final payload offset, or -1 on error.
- */
-static int skip_exthdr(const struct sk_buff *skb, int start, u8 *nexthdrp,
-		       u8 *frag)
-{
-	u8 nexthdr = *nexthdrp;
-
-	while (ipv6_ext_hdr(nexthdr)) {
-		struct ipv6_opt_hdr _hdr, *hp;
-		int hdrlen;
-
-		if (nexthdr == NEXTHDR_NONE)
-			return -1;
-		hp = skb_header_pointer(skb, start, sizeof(_hdr), &_hdr);
-		if (hp == NULL)
-			return -1;
-		if (nexthdr == NEXTHDR_FRAGMENT) {
-			__be16 _frag_off, *fp;
-			fp = skb_header_pointer(skb,
-						start+offsetof(struct frag_hdr,
-							       frag_off),
-						sizeof(_frag_off),
-						&_frag_off);
-			if (fp == NULL)
-				return -1;
-
-			if (ntohs(*fp) & ~0x7) {
-				*frag = OVS_FRAG_TYPE_LATER;
-				break;
-			}
-			*frag = OVS_FRAG_TYPE_FIRST;
-			hdrlen = 8;
-		} else if (nexthdr == NEXTHDR_AUTH)
-			hdrlen = (hp->hdrlen+2)<<2;
-		else
-			hdrlen = ipv6_optlen(hp);
-
-		nexthdr = hp->nexthdr;
-		start += hdrlen;
-	}
-
-	*nexthdrp = nexthdr;
-	return start;
-}
-
 static int parse_ipv6hdr(struct sk_buff *skb, struct sw_flow_key *key,
 			 int *key_lenp)
 {
@@ -196,6 +136,7 @@ static int parse_ipv6hdr(struct sk_buff *skb, struct sw_flow_key *key,
 	int payload_ofs;
 	struct ipv6hdr *nh;
 	uint8_t nexthdr;
+	__be16 frag_off;
 	int err;
 
 	*key_lenp = SW_FLOW_KEY_OFFSET(ipv6.label);
@@ -215,9 +156,16 @@ static int parse_ipv6hdr(struct sk_buff *skb, struct sw_flow_key *key,
 	key->ipv6.addr.src = nh->saddr;
 	key->ipv6.addr.dst = nh->daddr;
 
-	payload_ofs = skip_exthdr(skb, payload_ofs, &nexthdr, &key->ip.frag);
+	payload_ofs = ipv6_skip_exthdr(skb, payload_ofs, &nexthdr, &frag_off);
 	if (unlikely(payload_ofs < 0))
 		return -EINVAL;
+
+	if (frag_off) {
+		if (frag_off & htons(~0x7))
+			key->ip.frag = OVS_FRAG_TYPE_LATER;
+		else
+			key->ip.frag = OVS_FRAG_TYPE_FIRST;
+	}
 
 	nh_len = payload_ofs - nh_ofs;
 	skb_set_transport_header(skb, nh_ofs + nh_len);
