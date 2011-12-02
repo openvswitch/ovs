@@ -395,8 +395,8 @@ static int queue_gso_packets(int dp_ifindex, struct sk_buff *skb,
 			break;
 
 		if (skb == segs && skb_shinfo(skb)->gso_type & SKB_GSO_UDP) {
-			/* The initial flow key extracted by flow_extract() in
-			 * this case is for a first fragment, so we need to
+			/* The initial flow key extracted by ovs_flow_extract()
+			 * in this case is for a first fragment, so we need to
 			 * properly mark later fragments.
 			 */
 			later_key = *upcall_info->key;
@@ -1796,7 +1796,6 @@ static int ovs_vport_cmd_new(struct sk_buff *skb, struct genl_info *info)
 	}
 	genl_notify(reply, genl_info_net(info), info->snd_pid,
 		    ovs_dp_vport_multicast_group.id, info->nlhdr, GFP_KERNEL);
-
 
 exit_unlock:
 	rtnl_unlock();
