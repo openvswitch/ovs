@@ -172,6 +172,9 @@ struct netdev_class {
      * packet, otherwise a negative errno value.  Returns -EAGAIN immediately
      * if no packet is ready to be received.
      *
+     * Returns -EMSGSIZE, and discards the packet, if the received packet is
+     * longer than 'size' bytes.
+     *
      * This function can only be expected to return a packet if ->listen() has
      * been called successfully.
      *

@@ -802,8 +802,11 @@ netdev_linux_recv(struct netdev *netdev_, void *data, size_t size)
     }
 
     for (;;) {
-        ssize_t retval = read(netdev->fd, data, size);
-        if (retval >= 0) {
+        ssize_t retval = recv(netdev->fd, data, size, MSG_TRUNC);
+        if (retval > size) {
+            /* Received packet was longer than supplied buffer. */
+            return -EMSGSIZE;
+        } else if (retval >= 0) {
             return retval;
         } else if (errno != EINTR) {
             if (errno != EAGAIN) {
