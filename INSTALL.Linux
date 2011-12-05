@@ -46,9 +46,9 @@ INSTALL.userspace for more information.
       bridge") before starting the datapath.
 
       For optional support of ingress policing, you must enable kernel
-      configuration options NET_CLS_ACT, NET_CLS_U32, NET_SCH_INGRESS,
-      and NET_ACT_POLICE, either built-in or as modules.
-      (NET_CLS_POLICE is obsolete and not needed.)
+      configuration options NET_CLS_BASIC, NET_SCH_INGRESS, and
+      NET_ACT_POLICE, either built-in or as modules.  (NET_CLS_POLICE is
+      obsolete and not needed.)
 
       If GRE tunneling is being used it is recommended that the kernel
       be compiled with IPv6 support (CONFIG_IPV6).  This allows for

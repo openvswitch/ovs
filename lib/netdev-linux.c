@@ -30,6 +30,7 @@
 #include <linux/types.h>
 #include <linux/ethtool.h>
 #include <linux/mii.h>
+#include <linux/pkt_cls.h>
 #include <linux/pkt_sched.h>
 #include <linux/rtnetlink.h>
 #include <linux/sockios.h>
@@ -326,6 +327,9 @@ static unsigned int tc_buffer_per_jiffy(unsigned int rate);
 static struct tcmsg *tc_make_request(const struct netdev *, int type,
                                      unsigned int flags, struct ofpbuf *);
 static int tc_transact(struct ofpbuf *request, struct ofpbuf **replyp);
+static int tc_add_del_ingress_qdisc(struct netdev *netdev, bool add);
+static int tc_add_policer(struct netdev *netdev, int kbits_rate,
+                          int kbits_burst);
 
 static int tc_parse_qdisc(const struct ofpbuf *, const char **kind,
                           struct nlattr **options);
@@ -1564,50 +1568,8 @@ netdev_linux_set_advertisements(struct netdev *netdev, uint32_t advertise)
                                    ETHTOOL_SSET, "ETHTOOL_SSET");
 }
 
-#define POLICE_ADD_CMD "/sbin/tc qdisc add dev %s handle ffff: ingress"
-#define POLICE_CONFIG_CMD "/sbin/tc filter add dev %s parent ffff: protocol ip prio 50 u32 match ip src 0.0.0.0/0 police rate %dkbit burst %dk mtu 65535 drop flowid :1"
-
-/* Remove ingress policing from 'netdev'.  Returns 0 if successful, otherwise a
- * positive errno value.
- *
- * This function is equivalent to running
- *     /sbin/tc qdisc del dev %s handle ffff: ingress
- * but it is much, much faster.
- */
-static int
-netdev_linux_remove_policing(struct netdev *netdev)
-{
-    struct netdev_dev_linux *netdev_dev =
-        netdev_dev_linux_cast(netdev_get_dev(netdev));
-    const char *netdev_name = netdev_get_name(netdev);
-
-    struct ofpbuf request;
-    struct tcmsg *tcmsg;
-    int error;
-
-    tcmsg = tc_make_request(netdev, RTM_DELQDISC, 0, &request);
-    if (!tcmsg) {
-        return ENODEV;
-    }
-    tcmsg->tcm_handle = tc_make_handle(0xffff, 0);
-    tcmsg->tcm_parent = TC_H_INGRESS;
-    nl_msg_put_string(&request, TCA_KIND, "ingress");
-    nl_msg_put_unspec(&request, TCA_OPTIONS, NULL, 0);
-
-    error = tc_transact(&request, NULL);
-    if (error && error != ENOENT && error != EINVAL) {
-        VLOG_WARN_RL(&rl, "%s: removing policing failed: %s",
-                     netdev_name, strerror(error));
-        return error;
-    }
-
-    netdev_dev->kbits_rate = 0;
-    netdev_dev->kbits_burst = 0;
-    netdev_dev->cache_valid |= VALID_POLICING;
-    return 0;
-}
-
-/* Attempts to set input rate limiting (policing) policy. */
+/* Attempts to set input rate limiting (policing) policy.  Returns 0 if
+ * successful, otherwise a positive errno value. */
 static int
 netdev_linux_set_policing(struct netdev *netdev,
                           uint32_t kbits_rate, uint32_t kbits_burst)
@@ -1615,7 +1577,7 @@ netdev_linux_set_policing(struct netdev *netdev,
     struct netdev_dev_linux *netdev_dev =
         netdev_dev_linux_cast(netdev_get_dev(netdev));
     const char *netdev_name = netdev_get_name(netdev);
-    char command[1024];
+    int error;
 
     COVERAGE_INC(netdev_set_policing);
 
@@ -1630,26 +1592,33 @@ netdev_linux_set_policing(struct netdev *netdev,
         return 0;
     }
 
-    netdev_linux_remove_policing(netdev);
-    if (kbits_rate) {
-        snprintf(command, sizeof(command), POLICE_ADD_CMD, netdev_name);
-        if (system(command) != 0) {
-            VLOG_WARN_RL(&rl, "%s: problem adding policing", netdev_name);
-            return -1;
-        }
-
-        snprintf(command, sizeof(command), POLICE_CONFIG_CMD, netdev_name,
-                kbits_rate, kbits_burst);
-        if (system(command) != 0) {
-            VLOG_WARN_RL(&rl, "%s: problem configuring policing",
-                    netdev_name);
-            return -1;
-        }
-
-        netdev_dev->kbits_rate = kbits_rate;
-        netdev_dev->kbits_burst = kbits_burst;
-        netdev_dev->cache_valid |= VALID_POLICING;
+    /* Remove any existing ingress qdisc. */
+    error = tc_add_del_ingress_qdisc(netdev, false);
+    if (error) {
+        VLOG_WARN_RL(&rl, "%s: removing policing failed: %s",
+                     netdev_name, strerror(error));
+        return error;
     }
+
+    if (kbits_rate) {
+        error = tc_add_del_ingress_qdisc(netdev, true);
+        if (error) {
+            VLOG_WARN_RL(&rl, "%s: adding policing qdisc failed: %s",
+                         netdev_name, strerror(error));
+            return error;
+        }
+
+        error = tc_add_policer(netdev, kbits_rate, kbits_burst);
+        if (error){
+            VLOG_WARN_RL(&rl, "%s: adding policing action failed: %s",
+                    netdev_name, strerror(error));
+            return error;
+        }
+    }
+
+    netdev_dev->kbits_rate = kbits_rate;
+    netdev_dev->kbits_burst = kbits_burst;
+    netdev_dev->cache_valid |= VALID_POLICING;
 
     return 0;
 }
@@ -3489,6 +3458,107 @@ tc_transact(struct ofpbuf *request, struct ofpbuf **replyp)
     int error = nl_sock_transact(rtnl_sock, request, replyp);
     ofpbuf_uninit(request);
     return error;
+}
+
+/* Adds or deletes a root ingress qdisc on 'netdev'.  We use this for
+ * policing configuration.
+ *
+ * This function is equivalent to running the following when 'add' is true:
+ *     /sbin/tc qdisc add dev <devname> handle ffff: ingress
+ *
+ * This function is equivalent to running the following when 'add' is false:
+ *     /sbin/tc qdisc del dev <devname> handle ffff: ingress
+ *
+ * The configuration and stats may be seen with the following command:
+ *     /sbin/tc -s qdisc show dev <devname>
+ *
+ * Returns 0 if successful, otherwise a positive errno value.
+ */
+static int
+tc_add_del_ingress_qdisc(struct netdev *netdev, bool add)
+{
+    struct ofpbuf request;
+    struct tcmsg *tcmsg;
+    int error;
+    int type = add ? RTM_NEWQDISC : RTM_DELQDISC;
+    int flags = add ? NLM_F_EXCL | NLM_F_CREATE : 0;
+
+    tcmsg = tc_make_request(netdev, type, flags, &request);
+    if (!tcmsg) {
+        return ENODEV;
+    }
+    tcmsg->tcm_handle = tc_make_handle(0xffff, 0);
+    tcmsg->tcm_parent = TC_H_INGRESS;
+    nl_msg_put_string(&request, TCA_KIND, "ingress");
+    nl_msg_put_unspec(&request, TCA_OPTIONS, NULL, 0);
+
+    error = tc_transact(&request, NULL);
+    if (error) {
+        /* If we're deleting the qdisc, don't worry about some of the
+         * error conditions. */
+        if (!add && (error == ENOENT || error == EINVAL)) {
+            return 0;
+        }
+        return error;
+    }
+
+    return 0;
+}
+
+/* Adds a policer to 'netdev' with a rate of 'kbits_rate' and a burst size
+ * of 'kbits_burst'.
+ *
+ * This function is equivalent to running:
+ *     /sbin/tc filter add dev <devname> parent ffff: protocol all prio 49
+ *              basic police rate <kbits_rate>kbit burst <kbits_burst>k
+ *              mtu 65535 drop
+ *
+ * The configuration and stats may be seen with the following command:
+ *     /sbin/tc -s filter show <devname> eth0 parent ffff:
+ *
+ * Returns 0 if successful, otherwise a positive errno value.
+ */
+static int
+tc_add_policer(struct netdev *netdev, int kbits_rate, int kbits_burst)
+{
+    struct tc_police tc_police;
+    struct ofpbuf request;
+    struct tcmsg *tcmsg;
+    size_t basic_offset;
+    size_t police_offset;
+    int error;
+    int mtu = 65535;
+
+    memset(&tc_police, 0, sizeof tc_police);
+    tc_police.action = TC_POLICE_SHOT;
+    tc_police.mtu = mtu;
+    tc_fill_rate(&tc_police.rate, kbits_rate/8 * 1000, mtu);
+    tc_police.burst = tc_bytes_to_ticks(tc_police.rate.rate,
+                                        kbits_burst * 1024);
+
+    tcmsg = tc_make_request(netdev, RTM_NEWTFILTER,
+                            NLM_F_EXCL | NLM_F_CREATE, &request);
+    if (!tcmsg) {
+        return ENODEV;
+    }
+    tcmsg->tcm_parent = tc_make_handle(0xffff, 0);
+    tcmsg->tcm_info = tc_make_handle(49,
+                                     (OVS_FORCE uint16_t) htons(ETH_P_ALL));
+
+    nl_msg_put_string(&request, TCA_KIND, "basic");
+    basic_offset = nl_msg_start_nested(&request, TCA_OPTIONS);
+    police_offset = nl_msg_start_nested(&request, TCA_BASIC_POLICE);
+    nl_msg_put_unspec(&request, TCA_POLICE_TBF, &tc_police, sizeof tc_police);
+    tc_put_rtab(&request, TCA_POLICE_RATE, &tc_police.rate);
+    nl_msg_end_nested(&request, police_offset);
+    nl_msg_end_nested(&request, basic_offset);
+
+    error = tc_transact(&request, NULL);
+    if (error) {
+        return error;
+    }
+
+    return 0;
 }
 
 static void
