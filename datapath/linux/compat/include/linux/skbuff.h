@@ -239,7 +239,7 @@ static inline struct page *skb_frag_page(const skb_frag_t *frag)
 }
 #endif
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,0,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,40)
 static inline void skb_reset_mac_len(struct sk_buff *skb)
 {
 	skb->mac_len = skb->network_header - skb->mac_header;
