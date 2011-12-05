@@ -86,8 +86,7 @@ def update(session, args):
 
     bton = {}
 
-    for n in session.xenapi.network.get_all():
-        rec = session.xenapi.network.get_record(n)
+    for rec in session.xenapi.network.get_all_records().values():
         try:
             bton[rec['bridge']] = rec
         except KeyError:
@@ -100,10 +99,9 @@ def update(session, args):
     host_mgmt_device = None
     pool_mgmt_macs = {}
     if new_controller:
-        for n in session.xenapi.PIF.get_all():
-            rec = session.xenapi.PIF.get_record(n)
-            if rec.get('management', False):
-                pool_mgmt_macs[rec.get('MAC')] = rec.get('device')
+        recs = session.xenapi.PIF.get_all_records_where('field "management"="true"')
+        for rec in recs:
+            pool_mgmt_macs[rec.get('MAC')] = rec.get('device')
 
     dib_changed = False
     fail_mode_changed = False
