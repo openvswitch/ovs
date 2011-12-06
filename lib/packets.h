@@ -134,6 +134,8 @@ void compose_benign_packet(struct ofpbuf *, const char *tag,
 void eth_push_vlan(struct ofpbuf *, ovs_be16 tci);
 void eth_pop_vlan(struct ofpbuf *);
 
+const char *eth_from_hex(const char *hex, struct ofpbuf **packetp);
+
 /* Example:
  *
  * uint8_t mac[ETH_ADDR_LEN];

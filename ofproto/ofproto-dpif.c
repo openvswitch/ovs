@@ -5738,15 +5738,11 @@ ofproto_unixctl_trace(struct unixctl_conn *conn, int argc, const char *argv[],
         uint16_t in_port = ofp_port_to_odp_port(atoi(in_port_s));
         ovs_be64 tun_id = htonll(strtoull(tun_id_s, NULL, 0));
         uint32_t priority = atoi(priority_s);
+        const char *msg;
 
-        packet = ofpbuf_new(strlen(packet_s) / 2);
-        if (ofpbuf_put_hex(packet, packet_s, NULL)[0] != '\0') {
-            unixctl_command_reply(conn, 501, "Trailing garbage in command");
-            goto exit;
-        }
-        if (packet->size < ETH_HEADER_LEN) {
-            unixctl_command_reply(conn, 501,
-                                  "Packet data too short for Ethernet");
+        msg = eth_from_hex(packet_s, &packet);
+        if (msg) {
+            unixctl_command_reply(conn, 501, msg);
             goto exit;
         }
 

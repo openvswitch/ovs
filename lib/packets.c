@@ -121,6 +121,31 @@ eth_pop_vlan(struct ofpbuf *packet)
     }
 }
 
+/* Converts hex digits in 'hex' to an Ethernet packet in '*packetp'.  The
+ * caller must free '*packetp'.  On success, returns NULL.  On failure, returns
+ * an error message and stores NULL in '*packetp'. */
+const char *
+eth_from_hex(const char *hex, struct ofpbuf **packetp)
+{
+    struct ofpbuf *packet;
+
+    packet = *packetp = ofpbuf_new(strlen(hex) / 2);
+
+    if (ofpbuf_put_hex(packet, hex, NULL)[0] != '\0') {
+        ofpbuf_delete(packet);
+        *packetp = NULL;
+        return "Trailing garbage in packet data";
+    }
+
+    if (packet->size < ETH_HEADER_LEN) {
+        ofpbuf_delete(packet);
+        *packetp = NULL;
+        return "Packet data too short for Ethernet";
+    }
+
+    return NULL;
+}
+
 /* Given the IP netmask 'netmask', returns the number of bits of the IP address
  * that it specifies, that is, the number of 1-bits in 'netmask'.  'netmask'
  * must be a CIDR netmask (see ip_is_cidr()). */
