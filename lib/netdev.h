@@ -131,6 +131,7 @@ int netdev_set_advertisements(struct netdev *, uint32_t advertise);
 int netdev_get_in4(const struct netdev *, struct in_addr *address,
                    struct in_addr *netmask);
 int netdev_set_in4(struct netdev *, struct in_addr addr, struct in_addr mask);
+int netdev_get_in4_by_name(const char *device_name, struct in_addr *in4);
 int netdev_get_in6(const struct netdev *, struct in6_addr *);
 int netdev_add_router(struct netdev *, struct in_addr router);
 int netdev_get_next_hop(const struct netdev *, const struct in_addr *host,

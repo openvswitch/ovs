@@ -18,6 +18,7 @@
 #include <config.h>
 #include "ofproto-dpif-sflow.h"
 #include <inttypes.h>
+#include <net/if.h>
 #include <stdlib.h>
 #include "collectors.h"
 #include "compiler.h"
@@ -30,6 +31,7 @@
 #include "ofproto.h"
 #include "packets.h"
 #include "poll-loop.h"
+#include "route-table.h"
 #include "sflow_api.h"
 #include "socket-util.h"
 #include "timeval.h"
@@ -223,25 +225,35 @@ sflow_agent_get_counters(void *ds_, SFLPoller *poller,
  * The sFlow agent address should be a local IP address that is persistent and
  * reachable over the network, if possible.  The IP address associated with
  * 'agent_device' is used if it has one, and otherwise 'control_ip', the IP
- * address used to talk to the controller. */
+ * address used to talk to the controller.  If the agent device is not
+ * specified then it is figured out by taking a look at the routing table based
+ * on 'targets'. */
 static bool
-sflow_choose_agent_address(const char *agent_device, const char *control_ip,
+sflow_choose_agent_address(const char *agent_device,
+                           const struct sset *targets,
+                           const char *control_ip,
                            SFLAddress *agent_addr)
 {
+    const char *target;
     struct in_addr in4;
 
     memset(agent_addr, 0, sizeof *agent_addr);
     agent_addr->type = SFLADDRESSTYPE_IP_V4;
 
     if (agent_device) {
-        struct netdev *netdev;
+        if (!netdev_get_in4_by_name(agent_device, &in4)) {
+            goto success;
+        }
+    }
 
-        if (!netdev_open(agent_device, "system", &netdev)) {
-            int error = netdev_get_in4(netdev, &in4, NULL);
-            netdev_close(netdev);
-            if (!error) {
-                goto success;
-            }
+    SSET_FOR_EACH (target, targets) {
+        struct sockaddr_in sin;
+        char name[IFNAMSIZ];
+
+        if (inet_parse_active(target, SFL_DEFAULT_COLLECTOR_PORT, &sin)
+            && route_table_get_name(sin.sin_addr.s_addr, name)
+            && !netdev_get_in4_by_name(name, &in4)) {
+            goto success;
         }
     }
 
@@ -289,6 +301,8 @@ dpif_sflow_create(struct dpif *dpif)
     ds->next_tick = time_now() + 1;
     hmap_init(&ds->ports);
     ds->probability = 0;
+    route_table_register();
+
     return ds;
 }
 
@@ -307,6 +321,7 @@ dpif_sflow_destroy(struct dpif_sflow *ds)
     if (ds) {
         struct dpif_sflow_port *dsp, *next;
 
+        route_table_unregister();
         dpif_sflow_clear(ds);
         HMAP_FOR_EACH_SAFE (dsp, next, hmap_node, &ds->ports) {
             dpif_sflow_del_port__(ds, dsp);
@@ -430,19 +445,20 @@ dpif_sflow_set_options(struct dpif_sflow *ds,
         }
     }
 
+    /* Choose agent IP address and agent device (if not yet setup) */
+    if (!sflow_choose_agent_address(options->agent_device,
+                                    &options->targets,
+                                    options->control_ip, &agentIP)) {
+        dpif_sflow_clear(ds);
+        return;
+    }
+
     /* Avoid reconfiguring if options didn't change. */
     if (!options_changed) {
         return;
     }
     ofproto_sflow_options_destroy(ds->options);
     ds->options = ofproto_sflow_options_clone(options);
-
-    /* Choose agent IP address. */
-    if (!sflow_choose_agent_address(options->agent_device,
-                                    options->control_ip, &agentIP)) {
-        dpif_sflow_clear(ds);
-        return;
-    }
 
     /* Create agent. */
     VLOG_INFO("creating sFlow agent %d", options->sub_id);
@@ -572,6 +588,7 @@ dpif_sflow_run(struct dpif_sflow *ds)
 {
     if (dpif_sflow_is_enabled(ds)) {
         time_t now = time_now();
+        route_table_run();
         if (now >= ds->next_tick) {
             sfl_agent_tick(ds->sflow_agent, time_wall());
             ds->next_tick = now + 1;

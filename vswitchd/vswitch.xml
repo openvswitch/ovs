@@ -2771,10 +2771,12 @@
 
     <column name="agent">
       Name of the network device whose IP address should be reported as the
-      ``agent address'' to collectors.  If not specified, the IP address
+      ``agent address'' to collectors.  If not specified, the agent device is
+      figured from the first target address and the routing table.  If the
+      routing table does not contain a route to the target, the IP address
       defaults to the <ref table="Controller" column="local_ip"/> in the
       collector's <ref table="Controller"/>.  If an agent IP address cannot be
-      determined either way, sFlow is disabled.
+      determined any of these ways, sFlow is disabled.
     </column>
 
     <column name="header">

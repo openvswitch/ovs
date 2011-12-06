@@ -20,6 +20,8 @@ v1.4.0 - xx xxx xxxx
          now be properly mirrored for any flows, regardless of their
          actions.
        - Track packet and byte statistics sent on mirrors.
+       - The sFlow implementation can now usually infer the correct agent
+         device instead of having to be told explicitly.
     - ovs-appctl:
       - New "fdb/flush" command to flush bridge's MAC learning table.
     - ovs-test:

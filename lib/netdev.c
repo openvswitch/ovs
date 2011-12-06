@@ -692,6 +692,26 @@ netdev_set_in4(struct netdev *netdev, struct in_addr addr, struct in_addr mask)
             : EOPNOTSUPP);
 }
 
+/* Obtains ad IPv4 address from device name and save the address in
+ * in4.  Returns 0 if successful, otherwise a positive errno value.
+ */
+int
+netdev_get_in4_by_name(const char *device_name, struct in_addr *in4)
+{
+    struct netdev *netdev;
+    int error;
+
+    error = netdev_open(device_name, "system", &netdev);
+    if (error) {
+        in4->s_addr = htonl(0);
+        return error;
+    }
+
+    error = netdev_get_in4(netdev, in4, NULL);
+    netdev_close(netdev);
+    return error;
+}
+
 /* Adds 'router' as a default IP gateway for the TCP/IP stack that corresponds
  * to 'netdev'. */
 int
