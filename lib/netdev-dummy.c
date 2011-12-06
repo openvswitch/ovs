@@ -20,10 +20,16 @@
 
 #include <errno.h>
 
+#include "flow.h"
 #include "list.h"
 #include "netdev-provider.h"
+#include "odp-util.h"
+#include "ofp-print.h"
+#include "ofpbuf.h"
 #include "packets.h"
+#include "poll-loop.h"
 #include "shash.h"
+#include "unixctl.h"
 #include "vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(netdev_dummy);
@@ -35,11 +41,18 @@ struct netdev_dev_dummy {
     struct netdev_stats stats;
     enum netdev_flags flags;
     unsigned int change_seq;
+
+    struct list devs;           /* List of child "netdev_dummy"s. */
 };
 
 struct netdev_dummy {
     struct netdev netdev;
+    struct list node;           /* In netdev_dev_dummy's "devs" list. */
+    struct list recv_queue;
+    bool listening;
 };
+
+static struct shash dummy_netdev_devs = SHASH_INITIALIZER(&dummy_netdev_devs);
 
 static int netdev_dummy_create(const struct netdev_class *, const char *,
                                struct netdev_dev **);
@@ -84,6 +97,9 @@ netdev_dummy_create(const struct netdev_class *class, const char *name,
     netdev_dev->mtu = 1500;
     netdev_dev->flags = 0;
     netdev_dev->change_seq = 1;
+    list_init(&netdev_dev->devs);
+
+    shash_add(&dummy_netdev_devs, name, netdev_dev);
 
     n++;
 
@@ -97,18 +113,24 @@ netdev_dummy_destroy(struct netdev_dev *netdev_dev_)
 {
     struct netdev_dev_dummy *netdev_dev = netdev_dev_dummy_cast(netdev_dev_);
 
+    shash_find_and_delete(&dummy_netdev_devs,
+                          netdev_dev_get_name(netdev_dev_));
     free(netdev_dev);
 }
 
 static int
 netdev_dummy_open(struct netdev_dev *netdev_dev_, struct netdev **netdevp)
 {
+    struct netdev_dev_dummy *netdev_dev = netdev_dev_dummy_cast(netdev_dev_);
     struct netdev_dummy *netdev;
 
     netdev = xmalloc(sizeof *netdev);
     netdev_init(&netdev->netdev, netdev_dev_);
+    list_init(&netdev->recv_queue);
+    netdev->listening = false;
 
     *netdevp = &netdev->netdev;
+    list_push_back(&netdev_dev->devs, &netdev->node);
     return 0;
 }
 
@@ -116,23 +138,55 @@ static void
 netdev_dummy_close(struct netdev *netdev_)
 {
     struct netdev_dummy *netdev = netdev_dummy_cast(netdev_);
+    list_remove(&netdev->node);
+    ofpbuf_list_delete(&netdev->recv_queue);
     free(netdev);
 }
 
 static int
-netdev_dummy_listen(struct netdev *netdev_ OVS_UNUSED)
+netdev_dummy_listen(struct netdev *netdev_)
 {
-    /* It's OK to listen on a dummy device.  It just never receives any
-     * packets. */
+    struct netdev_dummy *netdev = netdev_dummy_cast(netdev_);
+    netdev->listening = true;
     return 0;
 }
 
 static int
-netdev_dummy_recv(struct netdev *netdev_ OVS_UNUSED,
-                  void *buffer OVS_UNUSED, size_t size OVS_UNUSED)
+netdev_dummy_recv(struct netdev *netdev_, void *buffer, size_t size)
 {
-    /* A dummy device never receives any packets. */
-    return -EAGAIN;
+    struct netdev_dummy *netdev = netdev_dummy_cast(netdev_);
+    struct ofpbuf *packet;
+
+    if (list_is_empty(&netdev->recv_queue)) {
+        return -EAGAIN;
+    }
+
+    packet = ofpbuf_from_list(list_pop_front(&netdev->recv_queue));
+    if (packet->size > size) {
+        return -EMSGSIZE;
+    }
+
+    memcpy(buffer, packet->data, packet->size);
+    ofpbuf_delete(packet);
+
+    return packet->size;
+}
+
+static void
+netdev_dummy_recv_wait(struct netdev *netdev_)
+{
+    struct netdev_dummy *netdev = netdev_dummy_cast(netdev_);
+    if (!list_is_empty(&netdev->recv_queue)) {
+        poll_immediate_wake();
+    }
+}
+
+static int
+netdev_dummy_drain(struct netdev *netdev_)
+{
+    struct netdev_dummy *netdev = netdev_dummy_cast(netdev_);
+    ofpbuf_list_delete(&netdev->recv_queue);
+    return 0;
 }
 
 static int
@@ -256,10 +310,10 @@ static const struct netdev_class dummy_class = {
     netdev_dummy_open,
     netdev_dummy_close,
 
-    netdev_dummy_listen,        /* listen */
-    netdev_dummy_recv,          /* recv */
-    NULL,                       /* recv_wait */
-    NULL,                       /* drain */
+    netdev_dummy_listen,
+    netdev_dummy_recv,
+    netdev_dummy_recv_wait,
+    netdev_dummy_drain,
 
     NULL,                       /* send */
     NULL,                       /* send_wait */
@@ -303,8 +357,93 @@ static const struct netdev_class dummy_class = {
     netdev_dummy_change_seq
 };
 
+static struct ofpbuf *
+eth_from_packet_or_flow(const char *s)
+{
+    enum odp_key_fitness fitness;
+    struct ofpbuf *packet;
+    struct ofpbuf odp_key;
+    struct flow flow;
+    int error;
+
+    if (!eth_from_hex(s, &packet)) {
+        return packet;
+    }
+
+    /* Convert string to datapath key.
+     *
+     * It would actually be nicer to parse an OpenFlow-like flow key here, but
+     * the code for that currently calls exit() on parse error.  We have to
+     * settle for parsing a datapath key for now.
+     */
+    ofpbuf_init(&odp_key, 0);
+    error = odp_flow_key_from_string(s, NULL, &odp_key);
+    if (error) {
+        ofpbuf_uninit(&odp_key);
+        return NULL;
+    }
+
+    /* Convert odp_key to flow. */
+    fitness = odp_flow_key_to_flow(odp_key.data, odp_key.size, &flow);
+    if (fitness == ODP_FIT_ERROR) {
+        ofpbuf_uninit(&odp_key);
+        return NULL;
+    }
+
+    packet = ofpbuf_new(0);
+    flow_compose(packet, &flow);
+
+    ofpbuf_uninit(&odp_key);
+    return packet;
+}
+
+static void
+netdev_dummy_receive(struct unixctl_conn *conn,
+                     int argc, const char *argv[], void *aux OVS_UNUSED)
+{
+    struct netdev_dev_dummy *dummy_dev;
+    int n_listeners;
+    int i;
+
+    dummy_dev = shash_find_data(&dummy_netdev_devs, argv[1]);
+    if (!dummy_dev) {
+        unixctl_command_reply(conn, 501, "no such dummy netdev");
+        return;
+    }
+
+    n_listeners = 0;
+    for (i = 2; i < argc; i++) {
+        struct netdev_dummy *dev;
+        struct ofpbuf *packet;
+
+        packet = eth_from_packet_or_flow(argv[i]);
+        if (!packet) {
+            unixctl_command_reply(conn, 501, "bad packet syntax");
+            return;
+        }
+
+        n_listeners = 0;
+        LIST_FOR_EACH (dev, node, &dummy_dev->devs) {
+            if (dev->listening) {
+                struct ofpbuf *copy = ofpbuf_clone(packet);
+                list_push_back(&dev->recv_queue, &copy->list_node);
+                n_listeners++;
+            }
+        }
+        ofpbuf_delete(packet);
+    }
+
+    if (!n_listeners) {
+        unixctl_command_reply(conn, 202, "packets queued but nobody listened");
+    } else {
+        unixctl_command_reply(conn, 200, "success");
+    }
+}
+
 void
 netdev_dummy_register(void)
 {
     netdev_register_provider(&dummy_class);
+    unixctl_command_register("netdev-dummy/receive", "NAME PACKET|FLOW...",
+                             2, INT_MAX, netdev_dummy_receive, NULL);
 }

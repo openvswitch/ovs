@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010 Nicira Networks.
+ * Copyright (c) 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,4 +28,5 @@ dummy_enable(void)
 {
     netdev_dummy_register();
     dpif_dummy_register();
+    timeval_dummy_register();
 }
