@@ -1244,8 +1244,8 @@ get_stats_via_vport(const struct netdev *netdev_,
 
         error = netdev_vport_get_stats(netdev_, stats);
         if (error) {
-            VLOG_WARN_RL(&rl, "%s: obtaining netdev stats via vport failed %d",
-                         netdev_get_name(netdev_), error);
+            VLOG_WARN_RL(&rl, "%s: obtaining netdev stats via vport failed "
+                         "(%s)", netdev_get_name(netdev_), strerror(error));
         }
         netdev_dev->have_vport_stats = !error;
         netdev_dev->cache_valid |= VALID_HAVE_VPORT_STATS;
