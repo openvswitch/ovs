@@ -185,8 +185,10 @@ struct vport *vport_alloc(int priv_size, const struct vport_ops *ops, const stru
 	kobject_init(&vport->kobj, &brport_ktype);
 
 	vport->percpu_stats = alloc_percpu(struct vport_percpu_stats);
-	if (!vport->percpu_stats)
+	if (!vport->percpu_stats) {
+		kfree(vport);
 		return ERR_PTR(-ENOMEM);
+	}
 
 	spin_lock_init(&vport->stats_lock);
 
