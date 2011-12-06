@@ -662,7 +662,7 @@ inet_open_passive(int style, const char *target, int default_port,
     unsigned int yes = 1;
 
     if (!inet_parse_passive(target, default_port, &sin)) {
-        return EAFNOSUPPORT;
+        return -EAFNOSUPPORT;
     }
 
     /* Create non-blocking socket, set SO_REUSEADDR. */
@@ -670,7 +670,7 @@ inet_open_passive(int style, const char *target, int default_port,
     if (fd < 0) {
         error = errno;
         VLOG_ERR("%s: socket: %s", target, strerror(error));
-        return error;
+        return -error;
     }
     error = set_nonblocking(fd);
     if (error) {
@@ -705,6 +705,7 @@ inet_open_passive(int style, const char *target, int default_port,
             goto error;
         }
         if (sin.sin_family != AF_INET || sin_len != sizeof sin) {
+            error = EAFNOSUPPORT;
             VLOG_ERR("%s: getsockname: invalid socket name", target);
             goto error;
         }
@@ -715,7 +716,7 @@ inet_open_passive(int style, const char *target, int default_port,
 
 error:
     close(fd);
-    return error;
+    return -error;
 }
 
 /* Returns a readable and writable fd for /dev/null, if successful, otherwise
