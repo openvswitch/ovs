@@ -978,7 +978,7 @@ struct nx_action_bundle {
     ovs_be16 type;              /* OFPAT_VENDOR. */
     ovs_be16 len;               /* Length including slaves. */
     ovs_be32 vendor;            /* NX_VENDOR_ID. */
-    ovs_be16 subtype;           /* NXAST_BUNDLE. */
+    ovs_be16 subtype;           /* NXAST_BUNDLE or NXAST_BUNDLE_LOAD. */
 
     /* Slave choice algorithm to apply to hash value. */
     ovs_be16 algorithm;         /* One of NX_BD_ALG_*. */
