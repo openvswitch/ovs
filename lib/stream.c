@@ -757,7 +757,7 @@ stream_guess_content(const uint8_t *data, ssize_t size)
             return STREAM_SSL;
         case PAIR('{', '"'):
             return STREAM_JSONRPC;
-        case PAIR(OFP_VERSION, OFPT_HELLO):
+        case PAIR(OFP10_VERSION, OFPT_HELLO):
             return STREAM_OPENFLOW;
         }
     }

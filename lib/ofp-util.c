@@ -869,7 +869,7 @@ enum ofputil_protocol
 ofputil_protocol_from_ofp_version(int version)
 {
     switch (version) {
-    case OFP_VERSION: return OFPUTIL_P_OF10;
+    case OFP10_VERSION: return OFPUTIL_P_OF10;
     default: return 0;
     }
 }
@@ -2094,7 +2094,7 @@ ofputil_encode_packet_in(const struct ofputil_packet_in *pin,
 
         packet = ofpbuf_new(send_len + header_len);
         opi = ofpbuf_put_zeros(packet, header_len);
-        opi->header.version = OFP_VERSION;
+        opi->header.version = OFP10_VERSION;
         opi->header.type = OFPT_PACKET_IN;
         opi->total_len = htons(pin->total_len);
         opi->in_port = htons(pin->fmd.in_port);
@@ -2131,7 +2131,7 @@ ofputil_encode_packet_in(const struct ofputil_packet_in *pin,
         ofpbuf_put(packet, pin->packet, send_len);
 
         npi = packet->data;
-        npi->nxh.header.version = OFP_VERSION;
+        npi->nxh.header.version = OFP10_VERSION;
         npi->nxh.header.type = OFPT_VENDOR;
         npi->nxh.vendor = htonl(NX_VENDOR_ID);
         npi->nxh.subtype = htonl(NXT_PACKET_IN);
@@ -2352,7 +2352,7 @@ put_openflow_xid(size_t openflow_len, uint8_t type, ovs_be32 xid,
     assert(openflow_len <= UINT16_MAX);
 
     oh = ofpbuf_put_uninit(buffer, openflow_len);
-    oh->version = OFP_VERSION;
+    oh->version = OFP10_VERSION;
     oh->type = type;
     oh->length = htons(openflow_len);
     oh->xid = xid;
@@ -2557,7 +2557,7 @@ make_flow_mod(uint16_t command, const struct cls_rule *rule,
     size_t size = sizeof *ofm + actions_len;
     struct ofpbuf *out = ofpbuf_new(size);
     ofm = ofpbuf_put_zeros(out, sizeof *ofm);
-    ofm->header.version = OFP_VERSION;
+    ofm->header.version = OFP10_VERSION;
     ofm->header.type = OFPT_FLOW_MOD;
     ofm->header.length = htons(size);
     ofm->cookie = 0;
@@ -2634,7 +2634,7 @@ make_echo_request(void)
     struct ofp_header *rq;
     struct ofpbuf *out = ofpbuf_new(sizeof *rq);
     rq = ofpbuf_put_uninit(out, sizeof *rq);
-    rq->version = OFP_VERSION;
+    rq->version = OFP10_VERSION;
     rq->type = OFPT_ECHO_REQUEST;
     rq->length = htons(sizeof *rq);
     rq->xid = htonl(0);

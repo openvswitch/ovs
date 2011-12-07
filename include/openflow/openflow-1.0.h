@@ -19,37 +19,7 @@
 #ifndef OPENFLOW_OPENFLOW10_H
 #define OPENFLOW_OPENFLOW10_H 1
 
-#include "openvswitch/types.h"
-
-#ifdef SWIG
-#define OFP_ASSERT(EXPR)        /* SWIG can't handle OFP_ASSERT. */
-#elif !defined(__cplusplus)
-/* Build-time assertion for use in a declaration context. */
-#define OFP_ASSERT(EXPR)                                                \
-        extern int (*build_assert(void))[ sizeof(struct {               \
-                    unsigned int build_assert_failed : (EXPR) ? 1 : -1; })]
-#else /* __cplusplus */
-#include <boost/static_assert.hpp>
-#define OFP_ASSERT BOOST_STATIC_ASSERT
-#endif /* __cplusplus */
-
-/* Version number:
- * Non-experimental versions released: 0x01
- * Experimental versions released: 0x81 -- 0x99
- */
-/* The most significant bit being set in the version field indicates an
- * experimental OpenFlow version.
- */
-#define OFP_VERSION   0x01
-#define OFP10_VERSION 0x01
-
-#define OFP_MAX_TABLE_NAME_LEN 32
-#define OFP_MAX_PORT_NAME_LEN  16
-
-#define OFP_TCP_PORT  6633
-#define OFP_SSL_PORT  6633
-
-#define OFP_ETH_ALEN 6          /* Bytes in an Ethernet address. */
+#include "openflow/openflow-common.h"
 
 /* Port numbering.  Physical ports are numbered starting from 1. */
 enum ofp_port {
@@ -113,7 +83,7 @@ enum ofp_type {
 
 /* Header on all OpenFlow packets. */
 struct ofp_header {
-    uint8_t version;    /* OFP_VERSION. */
+    uint8_t version;    /* An OpenFlow version number, e.g. OFP10_VERSION. */
     uint8_t type;       /* One of the OFPT_ constants. */
     ovs_be16 length;    /* Length including this ofp_header. */
     ovs_be32 xid;       /* Transaction id associated with this packet.

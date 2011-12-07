@@ -18,5 +18,6 @@
 #define OPENFLOW_OPENFLOW_H 1
 
 #include "openflow/openflow-1.0.h"
+#include "openflow/openflow-1.1.h"
 
 #endif /* openflow/openflow.h */

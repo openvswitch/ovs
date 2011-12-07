@@ -159,7 +159,7 @@ parse_options(int argc, char *argv[], char **unixctl_pathp)
             usage();
 
         case 'V':
-            ovs_print_version(OFP_VERSION, OFP_VERSION);
+            ovs_print_version(OFP10_VERSION, OFP10_VERSION);
             exit(EXIT_SUCCESS);
 
         case OPT_MLOCKALL:

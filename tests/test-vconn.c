@@ -147,7 +147,7 @@ test_refuse_connection(int argc OVS_UNUSED, char *argv[])
                       : EPROTO);
 
     fpv_create(type, &fpv);
-    CHECK_ERRNO(vconn_open(fpv.vconn_name, OFP_VERSION, &vconn), 0);
+    CHECK_ERRNO(vconn_open(fpv.vconn_name, OFP10_VERSION, &vconn), 0);
     fpv_close(&fpv);
     vconn_run(vconn);
     CHECK_ERRNO(vconn_connect(vconn), expected_error);
@@ -171,7 +171,7 @@ test_accept_then_close(int argc OVS_UNUSED, char *argv[])
                       : EPROTO);
 
     fpv_create(type, &fpv);
-    CHECK_ERRNO(vconn_open(fpv.vconn_name, OFP_VERSION, &vconn), 0);
+    CHECK_ERRNO(vconn_open(fpv.vconn_name, OFP10_VERSION, &vconn), 0);
     vconn_run(vconn);
     stream_close(fpv_accept(&fpv));
     fpv_close(&fpv);
@@ -192,7 +192,7 @@ test_read_hello(int argc OVS_UNUSED, char *argv[])
     struct stream *stream;
 
     fpv_create(type, &fpv);
-    CHECK_ERRNO(vconn_open(fpv.vconn_name, OFP_VERSION, &vconn), 0);
+    CHECK_ERRNO(vconn_open(fpv.vconn_name, OFP10_VERSION, &vconn), 0);
     vconn_run(vconn);
     stream = fpv_accept(&fpv);
     fpv_destroy(&fpv);
@@ -202,7 +202,7 @@ test_read_hello(int argc OVS_UNUSED, char *argv[])
 
        retval = stream_recv(stream, &hello, sizeof hello);
        if (retval == sizeof hello) {
-           CHECK(hello.version, OFP_VERSION);
+           CHECK(hello.version, OFP10_VERSION);
            CHECK(hello.type, OFPT_HELLO);
            CHECK(ntohs(hello.length), sizeof hello);
            break;
@@ -238,7 +238,7 @@ test_send_hello(const char *type, const void *out, size_t out_size,
     size_t n_sent;
 
     fpv_create(type, &fpv);
-    CHECK_ERRNO(vconn_open(fpv.vconn_name, OFP_VERSION, &vconn), 0);
+    CHECK_ERRNO(vconn_open(fpv.vconn_name, OFP10_VERSION, &vconn), 0);
     vconn_run(vconn);
     stream = fpv_accept(&fpv);
     fpv_destroy(&fpv);
@@ -268,7 +268,7 @@ test_send_hello(const char *type, const void *out, size_t out_size,
            struct ofp_header hello;
            int retval = stream_recv(stream, &hello, sizeof hello);
            if (retval == sizeof hello) {
-               CHECK(hello.version, OFP_VERSION);
+               CHECK(hello.version, OFP10_VERSION);
                CHECK(hello.type, OFPT_HELLO);
                CHECK(ntohs(hello.length), sizeof hello);
                read_hello = true;
@@ -318,7 +318,7 @@ test_send_plain_hello(int argc OVS_UNUSED, char *argv[])
     const char *type = argv[1];
     struct ofp_header hello;
 
-    hello.version = OFP_VERSION;
+    hello.version = OFP10_VERSION;
     hello.type = OFPT_HELLO;
     hello.length = htons(sizeof hello);
     hello.xid = htonl(0x12345678);
@@ -335,7 +335,7 @@ test_send_long_hello(int argc OVS_UNUSED, char *argv[])
     struct ofp_header hello;
     char buffer[sizeof hello * 2];
 
-    hello.version = OFP_VERSION;
+    hello.version = OFP10_VERSION;
     hello.type = OFPT_HELLO;
     hello.length = htons(sizeof buffer);
     hello.xid = htonl(0x12345678);
@@ -352,7 +352,7 @@ test_send_echo_hello(int argc OVS_UNUSED, char *argv[])
     const char *type = argv[1];
     struct ofp_header echo;
 
-    echo.version = OFP_VERSION;
+    echo.version = OFP10_VERSION;
     echo.type = OFPT_ECHO_REQUEST;
     echo.length = htons(sizeof echo);
     echo.xid = htonl(0x89abcdef);
@@ -379,7 +379,7 @@ test_send_invalid_version_hello(int argc OVS_UNUSED, char *argv[])
     const char *type = argv[1];
     struct ofp_header hello;
 
-    hello.version = OFP_VERSION - 1;
+    hello.version = OFP10_VERSION - 1;
     hello.type = OFPT_HELLO;
     hello.length = htons(sizeof hello);
     hello.xid = htonl(0x12345678);

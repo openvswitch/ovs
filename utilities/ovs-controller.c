@@ -115,7 +115,7 @@ main(int argc, char *argv[])
         const char *name = argv[i];
         struct vconn *vconn;
 
-        retval = vconn_open(name, OFP_VERSION, &vconn);
+        retval = vconn_open(name, OFP10_VERSION, &vconn);
         if (!retval) {
             if (n_switches >= MAX_SWITCHES) {
                 ovs_fatal(0, "max %d switch connections", n_switches);
@@ -156,7 +156,7 @@ main(int argc, char *argv[])
         for (i = 0; i < n_listeners && n_switches < MAX_SWITCHES; ) {
             struct vconn *new_vconn;
 
-            retval = pvconn_accept(listeners[i], OFP_VERSION, &new_vconn);
+            retval = pvconn_accept(listeners[i], OFP10_VERSION, &new_vconn);
             if (!retval || retval == EAGAIN) {
                 if (!retval) {
                     new_switch(&switches[n_switches++], new_vconn);
@@ -376,7 +376,7 @@ parse_options(int argc, char *argv[])
             usage();
 
         case 'V':
-            ovs_print_version(OFP_VERSION, OFP_VERSION);
+            ovs_print_version(OFP10_VERSION, OFP10_VERSION);
             exit(EXIT_SUCCESS);
 
         VLOG_OPTION_HANDLERS

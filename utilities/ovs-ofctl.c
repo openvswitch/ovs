@@ -168,7 +168,7 @@ parse_options(int argc, char *argv[])
             usage();
 
         case 'V':
-            ovs_print_version(OFP_VERSION, OFP_VERSION);
+            ovs_print_version(OFP10_VERSION, OFP10_VERSION);
             exit(EXIT_SUCCESS);
 
         case OPT_STRICT:
@@ -277,7 +277,7 @@ open_vconn_socket(const char *name, struct vconn **vconnp)
 {
     char *vconn_name = xasprintf("unix:%s", name);
     VLOG_DBG("connecting to %s", vconn_name);
-    run(vconn_open_block(vconn_name, OFP_VERSION, vconnp),
+    run(vconn_open_block(vconn_name, OFP10_VERSION, vconnp),
         "connecting to %s", vconn_name);
     free(vconn_name);
 }
@@ -301,7 +301,7 @@ open_vconn__(const char *name, const char *default_suffix,
     free(datapath_type);
 
     if (strchr(name, ':')) {
-        run(vconn_open_block(name, OFP_VERSION, vconnp),
+        run(vconn_open_block(name, OFP10_VERSION, vconnp),
             "connecting to %s", name);
     } else if (!stat(name, &s) && S_ISSOCK(s.st_mode)) {
         open_vconn_socket(name, vconnp);

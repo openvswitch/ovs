@@ -275,7 +275,7 @@ connmgr_run(struct connmgr *mgr,
         struct vconn *vconn;
         int retval;
 
-        retval = pvconn_accept(ofservice->pvconn, OFP_VERSION, &vconn);
+        retval = pvconn_accept(ofservice->pvconn, OFP10_VERSION, &vconn);
         if (!retval) {
             struct rconn *rconn;
             char *name;
@@ -298,7 +298,7 @@ connmgr_run(struct connmgr *mgr,
         struct vconn *vconn;
         int retval;
 
-        retval = pvconn_accept(mgr->snoops[i], OFP_VERSION, &vconn);
+        retval = pvconn_accept(mgr->snoops[i], OFP10_VERSION, &vconn);
         if (!retval) {
             add_snooper(mgr, vconn);
         } else if (retval != EAGAIN) {
