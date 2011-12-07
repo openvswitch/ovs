@@ -20,13 +20,16 @@
 #include <errno.h>
 #include <poll.h>
 #include <signal.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/time.h>
 #include <sys/resource.h>
 #include <unistd.h>
 #include "coverage.h"
+#include "dummy.h"
 #include "fatal-signal.h"
 #include "signals.h"
+#include "unixctl.h"
 #include "util.h"
 #include "vlog.h"
 
@@ -48,6 +51,9 @@ static volatile sig_atomic_t monotonic_tick = true;
 static struct timespec wall_time;
 static struct timespec monotonic_time;
 
+/* Fixed monotonic time offset, for use by unit tests. */
+static struct timespec warp_offset;
+
 /* Time at which to die with SIGALRM (if not TIME_MIN). */
 static time_t deadline = TIME_MIN;
 
@@ -62,6 +68,8 @@ static void unblock_sigalrm(const sigset_t *);
 static void log_poll_interval(long long int last_wakeup);
 static struct rusage *get_recent_rusage(void);
 static void refresh_rusage(void);
+static void timespec_add(struct timespec *sum,
+                         const struct timespec *a, const struct timespec *b);
 
 /* Initializes the timetracking module.
  *
@@ -180,6 +188,7 @@ refresh_monotonic(void)
         refresh_wall_if_ticked();
         monotonic_time = wall_time;
     }
+    timespec_add(&monotonic_time, &monotonic_time, &warp_offset);
 
     monotonic_tick = false;
 }
@@ -408,6 +417,23 @@ timeval_diff_msec(const struct timeval *a, const struct timeval *b)
 }
 
 static void
+timespec_add(struct timespec *sum,
+             const struct timespec *a,
+             const struct timespec *b)
+{
+    struct timespec tmp;
+
+    tmp.tv_sec = a->tv_sec + b->tv_sec;
+    tmp.tv_nsec = a->tv_nsec + b->tv_nsec;
+    if (tmp.tv_nsec >= 1000 * 1000 * 1000) {
+        tmp.tv_nsec -= 1000 * 1000 * 1000;
+        tmp.tv_sec++;
+    }
+
+    *sum = tmp;
+}
+
+static void
 log_poll_interval(long long int last_wakeup)
 {
     static unsigned int mean_interval; /* In 16ths of a millisecond. */
@@ -521,4 +547,32 @@ int
 get_cpu_usage(void)
 {
     return cpu_usage;
+}
+
+/* Unixctl interface. */
+
+static void
+timeval_warp_cb(struct unixctl_conn *conn,
+                int argc OVS_UNUSED, const char *argv[], void *aux OVS_UNUSED)
+{
+    struct timespec ts;
+    int msecs;
+
+    msecs = atoi(argv[1]);
+    if (msecs <= 0) {
+        unixctl_command_reply(conn, 501, "invalid MSECS");
+        return;
+    }
+
+    ts.tv_sec = msecs / 1000;
+    ts.tv_nsec = (msecs % 1000) * 1000 * 1000;
+    timespec_add(&warp_offset, &warp_offset, &ts);
+    unixctl_command_reply(conn, 200, "warped");
+}
+
+void
+timeval_dummy_register(void)
+{
+    unixctl_command_register("time/warp", "MSECS", 1, 1,
+                             timeval_warp_cb, NULL);
 }
