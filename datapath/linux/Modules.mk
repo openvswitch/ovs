@@ -60,6 +60,7 @@ openvswitch_headers += \
 	linux/compat/include/net/netlink.h \
 	linux/compat/include/net/protocol.h \
 	linux/compat/include/net/route.h \
+	linux/compat/include/net/ipv6.h \
 	linux/compat/genetlink.inc
 
 both_modules += brcompat
