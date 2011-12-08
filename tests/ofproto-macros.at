@@ -2,6 +2,14 @@ m4_define([STRIP_XIDS], [[sed 's/ (xid=0x[0-9a-fA-F]*)//']])
 m4_define([STRIP_DURATION], [[sed 's/\bduration=[0-9.]*s/duration=?s/']])
 m4_define([TESTABLE_LOG], [-vPATTERN:ANY:'%c|%p|%m'])
 
+# OVS_VSWITCHD_START([vsctl-args], [vsctl-output])
+#
+# Creates a database and starts ovsdb-server, starts ovs-vswitchd
+# connected to that database, calls ovs-vsctl to create a bridge named
+# br0 with predictable settings, passing 'vsctl-args' as additional
+# commands to ovs-vsctl.  If 'vsctl-args' causes ovs-vsctl to provide
+# output (e.g. because it includes "create" commands) then 'vsctl-output'
+# specifies the expected output after filtering through uuidfilt.pl.
 m4_define([OVS_VSWITCHD_START],
   [OVS_RUNDIR=$PWD; export OVS_RUNDIR
    OVS_LOGDIR=$PWD; export OVS_LOGDIR
@@ -31,7 +39,7 @@ m4_define([OVS_VSWITCHD_START],
 /ofproto|INFO|datapath ID changed to fedcba9876543210/d']])
 
    dnl Add bridges, ports, etc.
-   AT_CHECK([ovs-vsctl -- add-br br0 -- set bridge br0 datapath-type=dummy other-config:datapath-id=fedcba9876543210 other-config:hwaddr=aa:55:aa:55:00:00 fail-mode=secure -- $1])
+   AT_CHECK([ovs-vsctl -- add-br br0 -- set bridge br0 datapath-type=dummy other-config:datapath-id=fedcba9876543210 other-config:hwaddr=aa:55:aa:55:00:00 fail-mode=secure -- $1 m4_if([$2], [], [], [| perl $srcdir/uuidfilt.pl])], [0], [$2])
 ])
 
 m4_define([OVS_VSWITCHD_STOP],
