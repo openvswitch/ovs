@@ -2453,6 +2453,8 @@ handle_flow_miss(struct ofproto_dpif *ofproto, struct flow_miss *miss,
                                miss->initial_tci);
 
     LIST_FOR_EACH_SAFE (packet, next_packet, list_node, &miss->packets) {
+        struct dpif_flow_stats stats;
+
         list_remove(&packet->list_node);
         ofproto->n_matches++;
 
@@ -2473,6 +2475,12 @@ handle_flow_miss(struct ofproto_dpif *ofproto, struct flow_miss *miss,
         if (!facet->may_install || !subfacet->actions) {
             subfacet_make_actions(ofproto, subfacet, packet);
         }
+
+        /* Credit statistics to subfacet for this packet.  We must do this now
+         * because execute_controller_action() below may destroy 'packet'. */
+        dpif_flow_stats_extract(&facet->flow, packet, &stats);
+        subfacet_update_stats(ofproto, subfacet, &stats);
+
         if (!execute_controller_action(ofproto, &facet->flow,
                                        subfacet->actions,
                                        subfacet->actions_len, packet, true)) {
