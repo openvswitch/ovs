@@ -508,6 +508,8 @@ struct ofproto_dpif {
     struct list completions;
 
     bool has_bundle_action; /* True when the first bundle action appears. */
+    struct netdev_stats stats; /* To account packets generated and consumed in
+                                * userspace. */
 
     /* Spanning tree. */
     struct stp *stp;
@@ -668,6 +670,7 @@ construct(struct ofproto *ofproto_, int *n_tablesp)
     hmap_init(&ofproto->realdev_vid_map);
 
     *n_tablesp = N_TABLES;
+    memset(&ofproto->stats, 0, sizeof ofproto->stats);
     return 0;
 }
 
@@ -2209,6 +2212,63 @@ port_del(struct ofproto *ofproto_, uint16_t ofp_port)
     return error;
 }
 
+static int
+port_get_stats(const struct ofport *ofport_, struct netdev_stats *stats)
+{
+    struct ofport_dpif *ofport = ofport_dpif_cast(ofport_);
+    int error;
+
+    error = netdev_get_stats(ofport->up.netdev, stats);
+
+    if (!error && ofport->odp_port == OVSP_LOCAL) {
+        struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofport->up.ofproto);
+
+        /* ofproto->stats.tx_packets represents packets that we created
+         * internally and sent to some port (e.g. packets sent with
+         * send_packet()).  Account for them as if they had come from
+         * OFPP_LOCAL and got forwarded. */
+
+        if (stats->rx_packets != UINT64_MAX) {
+            stats->rx_packets += ofproto->stats.tx_packets;
+        }
+
+        if (stats->rx_bytes != UINT64_MAX) {
+            stats->rx_bytes += ofproto->stats.tx_bytes;
+        }
+
+        /* ofproto->stats.rx_packets represents packets that were received on
+         * some port and we processed internally and dropped (e.g. STP).
+         * Account fro them as if they had been forwarded to OFPP_LOCAL. */
+
+        if (stats->tx_packets != UINT64_MAX) {
+            stats->tx_packets += ofproto->stats.rx_packets;
+        }
+
+        if (stats->tx_bytes != UINT64_MAX) {
+            stats->tx_bytes += ofproto->stats.rx_bytes;
+        }
+    }
+
+    return error;
+}
+
+/* Account packets for LOCAL port. */
+static void
+ofproto_update_local_port_stats(const struct ofproto *ofproto_,
+                                size_t tx_size, size_t rx_size)
+{
+    struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
+
+    if (rx_size) {
+        ofproto->stats.rx_packets++;
+        ofproto->stats.rx_bytes += rx_size;
+    }
+    if (tx_size) {
+        ofproto->stats.tx_packets++;
+        ofproto->stats.tx_bytes += tx_size;
+    }
+}
+
 struct port_dump_state {
     struct dpif_port_dump dump;
     bool done;
@@ -2580,6 +2640,8 @@ handle_miss_upcalls(struct ofproto_dpif *ofproto, struct dpif_upcall *upcalls,
 
         /* Handle 802.1ag, LACP, and STP specially. */
         if (process_special(ofproto, &flow, upcall->packet)) {
+            ofproto_update_local_port_stats(&ofproto->up,
+                                            0, upcall->packet->size);
             ofpbuf_delete(upcall->packet);
             ofproto->n_matches++;
             continue;
@@ -3926,6 +3988,7 @@ send_packet(const struct ofport_dpif *ofport, struct ofpbuf *packet)
         VLOG_WARN_RL(&rl, "%s: failed to send packet on port %"PRIu32" (%s)",
                      ofproto->up.name, odp_port, strerror(error));
     }
+    ofproto_update_local_port_stats(ofport->up.ofproto, packet->size, 0);
     return error;
 }
 
@@ -5903,6 +5966,7 @@ const struct ofproto_class ofproto_dpif_class = {
     port_query_by_name,
     port_add,
     port_del,
+    port_get_stats,
     port_dump_start,
     port_dump_next,
     port_dump_done,

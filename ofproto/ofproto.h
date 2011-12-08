@@ -37,7 +37,9 @@ struct cfm_settings;
 struct cls_rule;
 struct netdev;
 struct ofproto;
+struct ofport;
 struct shash;
+struct netdev_stats;
 
 struct ofproto_controller_info {
     bool is_connected;
@@ -187,6 +189,7 @@ int ofproto_port_dump_done(struct ofproto_port_dump *);
 
 int ofproto_port_add(struct ofproto *, struct netdev *, uint16_t *ofp_portp);
 int ofproto_port_del(struct ofproto *, uint16_t ofp_port);
+int ofproto_port_get_stats(const struct ofport *, struct netdev_stats *stats);
 
 int ofproto_port_query_by_name(const struct ofproto *, const char *devname,
                                struct ofproto_port *);

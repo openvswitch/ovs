@@ -1478,6 +1478,21 @@ ofproto_get_port(const struct ofproto *ofproto, uint16_t ofp_port)
     return NULL;
 }
 
+int
+ofproto_port_get_stats(const struct ofport *port, struct netdev_stats *stats)
+{
+    struct ofproto *ofproto = port->ofproto;
+    int error;
+
+    if (ofproto->ofproto_class->port_get_stats) {
+        error = ofproto->ofproto_class->port_get_stats(port, stats);
+    } else {
+        error = EOPNOTSUPP;
+    }
+
+    return error;
+}
+
 static void
 update_port(struct ofproto *ofproto, const char *name)
 {
@@ -1950,7 +1965,7 @@ append_port_stat(struct ofport *port, struct list *replies)
     /* Intentionally ignore return value, since errors will set
      * 'stats' to all-1s, which is correct for OpenFlow, and
      * netdev_get_stats() will log errors. */
-    netdev_get_stats(port->netdev, &stats);
+    ofproto_port_get_stats(port, &stats);
 
     ops = ofputil_append_stats_reply(sizeof *ops, replies);
     ops->port_no = port->opp.port_no;

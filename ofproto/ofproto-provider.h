@@ -494,6 +494,10 @@ struct ofproto_class {
      * convenient. */
     int (*port_del)(struct ofproto *ofproto, uint16_t ofp_port);
 
+    /* Get port stats */
+    int (*port_get_stats)(const struct ofport *port,
+                          struct netdev_stats *stats);
+
     /* Port iteration functions.
      *
      * The client might not be entirely in control of the ports within an
