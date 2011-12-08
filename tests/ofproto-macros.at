@@ -27,8 +27,6 @@ m4_define([OVS_VSWITCHD_START],
    AT_CHECK([[sed < stderr '
 /vlog|INFO|opened log file/d
 /reconnect|INFO|/d
-/dpif_linux|ERR|Generic Netlink family.*does not exist/d
-/dpif|WARN|failed to enumerate system datapaths: No such file or directory/d
 /ofproto|INFO|using datapath ID/d
 /ofproto|INFO|datapath ID changed to fedcba9876543210/d']])
 
