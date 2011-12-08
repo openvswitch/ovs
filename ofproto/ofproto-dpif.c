@@ -941,8 +941,7 @@ port_construct(struct ofport *port_)
     port->vlandev_vid = 0;
 
     if (ofproto->sflow) {
-        dpif_sflow_add_port(ofproto->sflow, port->odp_port,
-                            netdev_get_name(port->up.netdev));
+        dpif_sflow_add_port(ofproto->sflow, port_);
     }
 
     return 0;
@@ -1005,8 +1004,7 @@ set_sflow(struct ofproto *ofproto_,
 
             ds = ofproto->sflow = dpif_sflow_create(ofproto->dpif);
             HMAP_FOR_EACH (ofport, up.hmap_node, &ofproto->up.ports) {
-                dpif_sflow_add_port(ds, ofport->odp_port,
-                                    netdev_get_name(ofport->up.netdev));
+                dpif_sflow_add_port(ds, &ofport->up);
             }
             ofproto->need_revalidate = true;
         }

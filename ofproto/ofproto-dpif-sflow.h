@@ -26,6 +26,7 @@ struct dpif;
 struct dpif_upcall;
 struct flow;
 struct ofproto_sflow_options;
+struct ofport;
 
 struct dpif_sflow *dpif_sflow_create(struct dpif *);
 uint32_t dpif_sflow_get_probability(const struct dpif_sflow *);
@@ -36,8 +37,7 @@ void dpif_sflow_set_options(struct dpif_sflow *,
 void dpif_sflow_clear(struct dpif_sflow *);
 bool dpif_sflow_is_enabled(const struct dpif_sflow *);
 
-void dpif_sflow_add_port(struct dpif_sflow *, uint16_t ovs_port,
-                         const char *netdev_name);
+void dpif_sflow_add_port(struct dpif_sflow *ds, struct ofport *ofport);
 void dpif_sflow_del_port(struct dpif_sflow *, uint16_t ovs_port);
 
 void dpif_sflow_run(struct dpif_sflow *);

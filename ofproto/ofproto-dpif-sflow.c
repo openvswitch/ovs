@@ -37,14 +37,14 @@
 #include "timeval.h"
 #include "vlog.h"
 #include "lib/odp-util.h"
+#include "ofproto-provider.h"
 
 VLOG_DEFINE_THIS_MODULE(sflow);
 
 struct dpif_sflow_port {
     struct hmap_node hmap_node; /* In struct dpif_sflow's "ports" hmap. */
-    struct netdev *netdev;      /* Underlying network device, for stats. */
     SFLDataSource_instance dsi; /* sFlow library's notion of port number. */
-    uint16_t odp_port;          /* Datapath port number. */
+    struct ofport *ofport;      /* To retrive port stats. */
 };
 
 struct dpif_sflow {
@@ -147,7 +147,7 @@ dpif_sflow_find_port(const struct dpif_sflow *ds, uint16_t odp_port)
 
     HMAP_FOR_EACH_IN_BUCKET (dsp, hmap_node,
                              hash_int(odp_port, 0), &ds->ports) {
-        if (dsp->odp_port == odp_port) {
+        if (ofp_port_to_odp_port(dsp->ofport->ofp_port) == odp_port) {
             return dsp;
         }
     }
@@ -175,7 +175,7 @@ sflow_agent_get_counters(void *ds_, SFLPoller *poller,
     counters = &elem.counterBlock.generic;
     counters->ifIndex = SFL_DS_INDEX(poller->dsi);
     counters->ifType = 6;
-    if (!netdev_get_features(dsp->netdev, &current, NULL, NULL, NULL)) {
+    if (!netdev_get_features(dsp->ofport->netdev, &current, NULL, NULL, NULL)) {
         /* The values of ifDirection come from MAU MIB (RFC 2668): 0 = unknown,
            1 = full-duplex, 2 = half-duplex, 3 = in, 4=out */
         counters->ifSpeed = netdev_features_to_bps(current);
@@ -185,9 +185,9 @@ sflow_agent_get_counters(void *ds_, SFLPoller *poller,
         counters->ifSpeed = 100000000;
         counters->ifDirection = 0;
     }
-    if (!netdev_get_flags(dsp->netdev, &flags) && flags & NETDEV_UP) {
+    if (!netdev_get_flags(dsp->ofport->netdev, &flags) && flags & NETDEV_UP) {
         counters->ifStatus = 1; /* ifAdminStatus up. */
-        if (netdev_get_carrier(dsp->netdev)) {
+        if (netdev_get_carrier(dsp->ofport->netdev)) {
             counters->ifStatus |= 2; /* ifOperStatus us. */
         }
     } else {
@@ -199,7 +199,7 @@ sflow_agent_get_counters(void *ds_, SFLPoller *poller,
        2. Does the multicast counter include broadcasts?
        3. Does the rx_packets counter include multicasts/broadcasts?
     */
-    netdev_get_stats(dsp->netdev, &stats);
+    ofproto_port_get_stats(dsp->ofport, &stats);
     counters->ifInOctets = stats.rx_bytes;
     counters->ifInUcastPkts = stats.rx_packets;
     counters->ifInMulticastPkts = stats.multicast;
@@ -332,14 +332,14 @@ dpif_sflow_destroy(struct dpif_sflow *ds)
 }
 
 static void
-dpif_sflow_add_poller(struct dpif_sflow *ds,
-                      struct dpif_sflow_port *dsp, uint16_t odp_port)
+dpif_sflow_add_poller(struct dpif_sflow *ds, struct dpif_sflow_port *dsp)
 {
     SFLPoller *poller = sfl_agent_addPoller(ds->sflow_agent, &dsp->dsi, ds,
                                             sflow_agent_get_counters);
     sfl_poller_set_sFlowCpInterval(poller, ds->options->polling_interval);
     sfl_poller_set_sFlowCpReceiver(poller, RECEIVER_INDEX);
-    sfl_poller_set_bridgePort(poller, odp_port);
+    sfl_poller_set_bridgePort(poller,
+                              ofp_port_to_odp_port(dsp->ofport->ofp_port));
 }
 
 static void
@@ -352,38 +352,27 @@ dpif_sflow_add_sampler(struct dpif_sflow *ds, struct dpif_sflow_port *dsp)
 }
 
 void
-dpif_sflow_add_port(struct dpif_sflow *ds, uint16_t odp_port,
-                    const char *netdev_name)
+dpif_sflow_add_port(struct dpif_sflow *ds, struct ofport *ofport)
 {
     struct dpif_sflow_port *dsp;
-    struct netdev *netdev;
+    uint16_t odp_port = ofp_port_to_odp_port(ofport->ofp_port);
     uint32_t ifindex;
-    int error;
 
     dpif_sflow_del_port(ds, odp_port);
 
-    /* Open network device. */
-    error = netdev_open(netdev_name, "system", &netdev);
-    if (error) {
-        VLOG_WARN_RL(&rl, "failed to open network device \"%s\": %s",
-                     netdev_name, strerror(error));
-        return;
-    }
-
     /* Add to table of ports. */
     dsp = xmalloc(sizeof *dsp);
-    dsp->netdev = netdev;
-    ifindex = netdev_get_ifindex(netdev);
+    ifindex = netdev_get_ifindex(ofport->netdev);
     if (ifindex <= 0) {
         ifindex = (ds->sflow_agent->subId << 16) + odp_port;
     }
+    dsp->ofport = ofport;
     SFL_DS_SET(dsp->dsi, 0, ifindex, 0);
-    dsp->odp_port = odp_port;
     hmap_insert(&ds->ports, &dsp->hmap_node, hash_int(odp_port, 0));
 
     /* Add poller and sampler. */
     if (ds->sflow_agent) {
-        dpif_sflow_add_poller(ds, dsp, odp_port);
+        dpif_sflow_add_poller(ds, dsp);
         dpif_sflow_add_sampler(ds, dsp);
     }
 }
@@ -395,7 +384,6 @@ dpif_sflow_del_port__(struct dpif_sflow *ds, struct dpif_sflow_port *dsp)
         sfl_agent_removePoller(ds->sflow_agent, &dsp->dsi);
         sfl_agent_removeSampler(ds->sflow_agent, &dsp->dsi);
     }
-    netdev_close(dsp->netdev);
     hmap_remove(&ds->ports, &dsp->hmap_node);
     free(dsp);
 }
@@ -487,7 +475,7 @@ dpif_sflow_set_options(struct dpif_sflow *ds,
 
     /* Add samplers and pollers for the currently known ports. */
     HMAP_FOR_EACH (dsp, hmap_node, &ds->ports) {
-        dpif_sflow_add_poller(ds, dsp, dsp->odp_port);
+        dpif_sflow_add_poller(ds, dsp);
         dpif_sflow_add_sampler(ds, dsp);
     }
 }
@@ -523,7 +511,7 @@ dpif_sflow_received(struct dpif_sflow *ds, struct ofpbuf *packet,
     }
     fs.input = SFL_DS_INDEX(in_dsp->dsi);
 
-    error = netdev_get_stats(in_dsp->netdev, &stats);
+    error = ofproto_port_get_stats(in_dsp->ofport, &stats);
     if (error) {
         VLOG_WARN_RL(&rl, "netdev get-stats error %s", strerror(error));
         return;
