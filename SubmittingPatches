@@ -98,6 +98,52 @@ authorship in the repository.  If others contributed to the patch, but
 are not the main authors, then please credit them as part of the
 description (e.g. "Thanks to Bob J. User for reporting this bug.").
 
+Please sign off on the patch as a submitter, and be sure to have the
+author(s) sign off for patches that you did not author.
+
+Simply include your name and email address as the last line of the commit
+messge before any comments (and author too, if that is not you):
+
+Signed-off-by: Author Name <author.name@email.address...>
+Signed-off-by: Submitter Name <submitter.name@email.address...>
+
+By doing this, you are agreeing to the Developer's Certificate of Origin
+(see below for more details).
+
+Developer's Certificate of Origin
+---------------------------------
+
+To help track the author of a patch as well as the submission chain,
+and be clear that the developer has authority to submit a patch for
+inclusion in openvswitch please sign off your work.  The sign off
+certifies the following:
+
+    Developer's Certificate of Origin 1.1
+
+    By making a contribution to this project, I certify that:
+
+    (a) The contribution was created in whole or in part by me and I
+        have the right to submit it under the open source license
+        indicated in the file; or
+
+    (b) The contribution is based upon previous work that, to the best
+        of my knowledge, is covered under an appropriate open source
+        license and I have the right under that license to submit that
+        work with modifications, whether created in whole or in part
+        by me, under the same open source license (unless I am
+        permitted to submit under a different license), as indicated
+        in the file; or
+
+    (c) The contribution was provided directly to me by some other
+        person who certified (a), (b) or (c) and I have not modified
+        it.
+
+    (d) I understand and agree that this project and the contribution
+        are public and that a record of the contribution (including all
+        personal information I submit with it, including my sign-off) is
+        maintained indefinitely and may be redistributed consistent with
+        this project or the open source license(s) involved.
+
 Comments
 --------
 
@@ -133,88 +179,33 @@ vSwitch.  Use Linux kernel coding style for Linux kernel code.
 Example
 -------
 
-From 632d136c7b108cd3d39a2e64fe6230e23977caf8 Mon Sep 17 00:00:00 2001
-From: Ben Pfaff <blp@nicira.com>
-Date: Mon, 6 Jul 2009 10:17:54 -0700
-Subject: [PATCH] vswitch: Remove restriction on datapath names.
+From fa29a1c2c17682879e79a21bb0cdd5bbe67fa7c0 Mon Sep 17 00:00:00 2001
+From: Jesse Gross <jesse@nicira.com>
+Date: Thu, 8 Dec 2011 13:17:24 -0800
+Subject: [PATCH] datapath: Alphabetize include/net/ipv6.h compat header.
 
-Commit f4b96c92c "vswitch: Disallow bridges named "dpN" or "nl:N"" disabled
-naming bridges "dpN" because the vswitchd code made the bad assumption that
-the bridge's local port has the same name as the bridge, which was not
-true (at the time) for bridges named dpN.  Now that assumption has been
-eliminated, so this commit eliminates the restriction too.
-
-This change is also a cleanup in that it eliminates one form of the
-vswitch's dependence on specifics of the dpif implementation.
+Signed-off-by: Jesse Gross <jesse@nicira.com>
 ---
- vswitchd/bridge.c               |   23 +++++------------------
- vswitchd/ovs-vswitchd.conf.5.in |    3 +--
- 2 files changed, 6 insertions(+), 20 deletions(-)
+ datapath/linux/Modules.mk |    2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
 
-diff --git a/vswitchd/bridge.c b/vswitchd/bridge.c
-index 32647ea..00cffbc 100644
---- a/vswitchd/bridge.c
-+++ b/vswitchd/bridge.c
-@@ -351,32 +351,19 @@ bridge_configure_ssl(void)
- void
- bridge_reconfigure(void)
- {
--    struct svec old_br, new_br, raw_new_br;
-+    struct svec old_br, new_br;
-     struct bridge *br, *next;
-     size_t i, j;
+diff --git a/datapath/linux/Modules.mk b/datapath/linux/Modules.mk
+index fdd952e..f6cb88e 100644
+--- a/datapath/linux/Modules.mk
++++ b/datapath/linux/Modules.mk
+@@ -56,11 +56,11 @@ openvswitch_headers += \
+ 	linux/compat/include/net/dst.h \
+ 	linux/compat/include/net/genetlink.h \
+ 	linux/compat/include/net/ip.h \
++	linux/compat/include/net/ipv6.h \
+ 	linux/compat/include/net/net_namespace.h \
+ 	linux/compat/include/net/netlink.h \
+ 	linux/compat/include/net/protocol.h \
+ 	linux/compat/include/net/route.h \
+-	linux/compat/include/net/ipv6.h \
+ 	linux/compat/genetlink.inc
  
-     COVERAGE_INC(bridge_reconfigure);
- 
--    /* Collect old bridges. */
-+    /* Collect old and new bridges. */
-     svec_init(&old_br);
-+    svec_init(&new_br);
-     LIST_FOR_EACH (br, struct bridge, node, &all_bridges) {
-         svec_add(&old_br, br->name);
-     }
--
--    /* Collect new bridges. */
--    svec_init(&raw_new_br);
--    cfg_get_subsections(&raw_new_br, "bridge");
--    svec_init(&new_br);
--    for (i = 0; i < raw_new_br.n; i++) {
--        const char *name = raw_new_br.names[i];
--        if (!strncmp(name, "dp", 2) && isdigit((unsigned char)name[2])) {
--            VLOG_ERR("%s is not a valid bridge name (bridges may not be "
--                     "named \"dp\" followed by a digit)", name);
--        } else {
--            svec_add(&new_br, name);
--        }
--    }
--    svec_destroy(&raw_new_br);
-+    cfg_get_subsections(&new_br, "bridge");
- 
-     /* Get rid of deleted bridges and add new bridges. */
-     svec_sort(&old_br);
-@@ -793,7 +780,7 @@ bridge_create(const char *name)
-     br = xzalloc(sizeof *br);
- 
-     error = dpif_create(name, &br->dpif);
--    if (error == EEXIST) {
-+    if (error == EEXIST || error == EBUSY) {
-         error = dpif_open(name, &br->dpif);
-         if (error) {
-             VLOG_ERR("datapath %s already exists but cannot be opened: %s",
-diff --git a/vswitchd/ovs-vswitchd.conf.5.in b/vswitchd/ovs-vswitchd.conf.5.in
-index 5483ad5..d82a08a 100644
---- a/vswitchd/ovs-vswitchd.conf.5.in
-+++ b/vswitchd/ovs-vswitchd.conf.5.in
-@@ -50,8 +50,7 @@ configure \fBovs\-vswitchd\fR.
- .SS "Bridge Configuration"
- A bridge (switch) with a given \fIname\fR is configured by specifying
- the names of its network devices as values for key
--\fBbridge.\fIname\fB.port\fR.  (The specified \fIname\fR may not begin
--with \fBdp\fR followed by a digit.)
-+\fBbridge.\fIname\fB.port\fR.
- .PP
- The names given on \fBbridge.\fIname\fB.port\fR must be the names of
- existing network devices, except for ``internal ports.''  An internal
+ both_modules += brcompat
 -- 
-1.6.3.3
+1.7.7.3
 
