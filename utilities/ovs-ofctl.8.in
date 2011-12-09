@@ -146,7 +146,7 @@ Prints to the console aggregate statistics for flows in
 \fIswitch\fR's tables that match \fIflows\fR.  If \fIflows\fR is omitted, 
 the statistics are aggregated across all flows in the switch's flow
 tables.  See \fBFlow Syntax\fR, below, for the syntax of \fIflows\fR.
-The output format is descrbed in \fBTable Entry Output\fR.
+The output format is described in \fBTable Entry Output\fR.
 .
 .IP "\fBqueue\-stats \fIswitch \fR[\fIport \fR[\fIqueue\fR]]"
 Prints to the console statistics for the specified \fIqueue\fR on
