@@ -35,16 +35,19 @@ make %{_smp_mflags}
 %install
 rm -rf $RPM_BUILD_ROOT
 make install DESTDIR=$RPM_BUILD_ROOT
-for base in \
-	etc_init.d_openvswitch \
-	etc_logrotate.d_openvswitch \
-	etc_sysconfig_network-scripts_ifup-ovs \
-	etc_sysconfig_network-scripts_ifdown-ovs \
-	usr_share_openvswitch_scripts_sysconfig.template; do
-    dst=$RPM_BUILD_ROOT/$(echo $base | sed 's,_,/,g')
-    install -d -m755 "$(dirname $dst)"
-    install rhel/$base "$dst"
-done
+
+rhel_cp() {
+ base=$1
+ mode=$2
+ dst=$RPM_BUILD_ROOT/$(echo $base | sed 's,_,/,g')
+ install -D -m $mode rhel/$base $dst
+}
+rhel_cp etc_init.d_openvswitch 0755
+rhel_cp etc_logrotate.d_openvswitch 0644
+rhel_cp etc_sysconfig_network-scripts_ifup-ovs 0755
+rhel_cp etc_sysconfig_network-scripts_ifdown-ovs 0755
+rhel_cp usr_share_openvswitch_scripts_sysconfig.template 0644
+
 docdir=$RPM_BUILD_ROOT/usr/share/doc/openvswitch-%{version}
 install -d -m755 "$docdir"
 install -m 0644 rhel/README.RHEL "$docdir"
@@ -103,7 +106,7 @@ exit 0
 %files
 %defattr(-,root,root)
 /etc/init.d/openvswitch
-/etc/logrotate.d/openvswitch
+%config(noreplace) /etc/logrotate.d/openvswitch
 /etc/sysconfig/network-scripts/ifup-ovs
 /etc/sysconfig/network-scripts/ifdown-ovs
 /etc/openvswitch/bugtool-plugins/*
