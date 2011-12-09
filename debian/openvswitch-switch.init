@@ -25,7 +25,7 @@
 
 (test -x /usr/sbin/ovs-vswitchd && test -x /usr/sbin/ovsdb-server) || exit 0
 
-. /usr/share/openvswitch/scripts/ovs-lib.sh
+. /usr/share/openvswitch/scripts/ovs-lib
 test -e /etc/default/openvswitch-switch && . /etc/default/openvswitch-switch
 
 if test X"$BRCOMPAT" = Xyes && test ! -x /usr/sbin/ovs-brcompatd; then

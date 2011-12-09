@@ -17,7 +17,7 @@ case $0 in
     */*) dir0=`echo "$0" | sed 's,/[^/]*$,,'` ;;
     *) dir0=./ ;;
 esac
-. "$dir0/ovs-lib.sh" || exit 1
+. "$dir0/ovs-lib" || exit 1
 
 for dir in "$sbindir" "$bindir" /sbin /bin /usr/sbin /usr/bin; do
     case :$PATH: in

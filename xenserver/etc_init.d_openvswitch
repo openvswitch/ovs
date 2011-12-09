@@ -27,7 +27,7 @@
 # Short-Description: Open vSwitch switch
 ### END INIT INFO
 
-. /usr/share/openvswitch/scripts/ovs-lib.sh || exit 1
+. /usr/share/openvswitch/scripts/ovs-lib || exit 1
 . /etc/xensource-inventory
 test -e /etc/sysconfig/openvswitch && . /etc/sysconfig/openvswitch
 
