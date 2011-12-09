@@ -1026,6 +1026,7 @@ dpif_linux_recv_set_mask(struct dpif *dpif_, int listen_mask)
                 return error;
             }
 
+            memset(&event, 0, sizeof event);
             event.events = EPOLLIN;
             event.data.u32 = i;
             if (epoll_ctl(dpif->epoll_fd, EPOLL_CTL_ADD,
