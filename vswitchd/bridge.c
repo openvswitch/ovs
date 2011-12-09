@@ -3405,6 +3405,10 @@ collect_splinter_vlans(const struct ovsrec_open_vswitch *ovs_cfg)
     struct bridge *br;
     size_t i;
 
+    /* Free space allocated for synthesized ports and interfaces, since we're
+     * in the process of reconstructing all of them. */
+    free_registered_blocks();
+
     splinter_vlans = NULL;
     sset_init(&splinter_ifaces);
     for (i = 0; i < ovs_cfg->n_bridges; i++) {
@@ -3571,8 +3575,6 @@ add_vlan_splinter_ports(struct bridge *br,
                         struct shash *ports)
 {
     size_t i;
-
-    free_registered_blocks();
 
     /* We iterate through 'br->cfg->ports' instead of 'ports' here because
      * we're modifying 'ports'. */
