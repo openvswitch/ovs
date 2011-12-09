@@ -243,7 +243,9 @@ lacp_configure(struct lacp *lacp, const struct lacp_settings *s)
 
     lacp->active = s->active;
     lacp->lacp_time = s->lacp_time;
-    lacp->custom_time = MAX(TIME_UPDATE_INTERVAL, s->custom_time);
+    lacp->custom_time = (s->lacp_time == LACP_TIME_CUSTOM
+                         ? MAX(TIME_UPDATE_INTERVAL, s->custom_time)
+                         : 0);
 }
 
 /* Returns true if 'lacp' is configured in active mode, false if 'lacp' is
