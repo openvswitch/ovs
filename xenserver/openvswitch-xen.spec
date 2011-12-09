@@ -337,7 +337,7 @@ exit 0
 /usr/share/openvswitch/scripts/ovs-bugtool-*
 /usr/share/openvswitch/scripts/ovs-save
 /usr/share/openvswitch/scripts/ovs-ctl
-/usr/share/openvswitch/scripts/ovs-lib.sh
+/usr/share/openvswitch/scripts/ovs-lib
 /usr/share/openvswitch/vswitch.ovsschema
 /usr/sbin/ovs-vlan-bug-workaround
 /usr/sbin/ovs-vswitchd

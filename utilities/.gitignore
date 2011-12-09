@@ -12,7 +12,7 @@
 /ovs-ctl
 /ovs-dpctl
 /ovs-dpctl.8
-/ovs-lib.sh
+/ovs-lib
 /ovs-ofctl
 /ovs-ofctl.8
 /ovs-parse-leaks

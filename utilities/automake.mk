@@ -14,11 +14,11 @@ bin_SCRIPTS += \
 endif
 noinst_SCRIPTS += utilities/ovs-pki-cgi
 scripts_SCRIPTS += utilities/ovs-ctl utilities/ovs-save
-scripts_DATA += utilities/ovs-lib.sh
+scripts_DATA += utilities/ovs-lib
 
 EXTRA_DIST += \
 	utilities/ovs-ctl.in \
-	utilities/ovs-lib.sh.in \
+	utilities/ovs-lib.in \
 	utilities/ovs-parse-leaks.in \
 	utilities/ovs-pcap.in \
 	utilities/ovs-pki-cgi.in \
@@ -49,7 +49,7 @@ DISTCLEANFILES += \
 	utilities/ovs-benchmark.1 \
 	utilities/ovs-controller.8 \
 	utilities/ovs-dpctl.8 \
-	utilities/ovs-lib.sh \
+	utilities/ovs-lib \
 	utilities/ovs-ofctl.8 \
 	utilities/ovs-parse-leaks \
 	utilities/ovs-pcap \
