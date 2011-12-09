@@ -1049,6 +1049,28 @@ above table, overrides \fBovs\-ofctl\fR's default choice of flow
 format.  If a command cannot work as requested using the requested
 flow format, \fBovs\-ofctl\fR will report a fatal error.
 .
+.
+.IP "\fB\-P \fIformat\fR"
+.IQ "\fB\-\-packet\-in\-format=\fIformat\fR"
+\fBovs\-ofctl\fR supports the following packet_in formats, in order of
+increasing capability:
+.RS
+.IP "\fBopenflow10\fR"
+This is the standard OpenFlow 1.0 packet in format. It should be supported by
+all OpenFlow switches.
+.
+.IP "\fBnxm\fR (Nicira Extended Match)"
+This packet_in format includes flow metadata encoded using the NXM format.
+.
+.RE
+.IP
+Usually, \fBovs\-ofctl\fR prefers the \fBnxm\fR packet_in format, but will
+allow the switch to choose its default if \fBnxm\fR is unsupported.  When
+\fIformat\fR is one of the formats listed in the above table, \fBovs\-ofctl\fR
+will insist on the selected format.  If the switch does not support the
+requested format, \fBovs\-ofctl\fR will report a fatal error.  This option only
+affects the \fBmonitor\fR and \fBsnoop\fR commands.
+.
 .IP "\fB\-m\fR"
 .IQ "\fB\-\-more\fR"
 Increases the verbosity of OpenFlow messages printed and logged by

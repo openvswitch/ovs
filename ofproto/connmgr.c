@@ -48,6 +48,7 @@ struct ofconn {
     struct rconn *rconn;        /* OpenFlow connection. */
     enum ofconn_type type;      /* Type. */
     enum nx_flow_format flow_format; /* Currently selected flow format. */
+    enum nx_packet_in_format packet_in_format; /* OFPT_PACKET_IN format. */
     bool flow_mod_table_id;     /* NXT_FLOW_MOD_TABLE_ID enabled? */
 
     /* Asynchronous flow table operation support. */
@@ -769,6 +770,25 @@ ofconn_set_flow_format(struct ofconn *ofconn, enum nx_flow_format flow_format)
     ofconn->flow_format = flow_format;
 }
 
+/* Returns the currently configured packet in format for 'ofconn', one of
+ * NXPIF_*.
+ *
+ * The default, if no other format has been set, is NXPIF_OPENFLOW10. */
+enum nx_packet_in_format
+ofconn_get_packet_in_format(struct ofconn *ofconn)
+{
+    return ofconn->packet_in_format;
+}
+
+/* Sets the packet in format for 'ofconn' to 'packet_in_format' (one of
+ * NXPIF_*). */
+void
+ofconn_set_packet_in_format(struct ofconn *ofconn,
+                            enum nx_packet_in_format packet_in_format)
+{
+    ofconn->packet_in_format = packet_in_format;
+}
+
 /* Returns true if the NXT_FLOW_MOD_TABLE_ID extension is enabled, false
  * otherwise.
  *
@@ -906,6 +926,7 @@ ofconn_create(struct connmgr *mgr, struct rconn *rconn, enum ofconn_type type)
     ofconn->rconn = rconn;
     ofconn->type = type;
     ofconn->flow_format = NXFF_OPENFLOW10;
+    ofconn->packet_in_format = NXPIF_OPENFLOW10;
     ofconn->flow_mod_table_id = false;
     list_init(&ofconn->opgroups);
     ofconn->role = NX_ROLE_OTHER;
@@ -1212,7 +1233,8 @@ schedule_packet_in(struct ofconn *ofconn, struct ofputil_packet_in pin,
      * immediately call into do_send_packet_in() or it might buffer it for a
      * while (until a later call to pinsched_run()). */
     pinsched_send(ofconn->schedulers[pin.reason == OFPR_NO_MATCH ? 0 : 1],
-                  flow->in_port, ofputil_encode_packet_in(&pin),
+                  flow->in_port,
+                  ofputil_encode_packet_in(&pin, ofconn->packet_in_format),
                   do_send_packet_in, ofconn);
 }
 

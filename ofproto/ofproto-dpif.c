@@ -214,6 +214,9 @@ struct action_xlate_ctx {
      * we are just revalidating. */
     bool may_learn;
 
+    /* Cookie of the currently matching rule, or 0. */
+    ovs_be64 cookie;
+
     /* If nonnull, called just before executing a resubmit action.
      *
      * This is normally null so the client has to set it manually after
@@ -247,7 +250,8 @@ struct action_xlate_ctx {
 
 static void action_xlate_ctx_init(struct action_xlate_ctx *,
                                   struct ofproto_dpif *, const struct flow *,
-                                  ovs_be16 initial_tci, const struct ofpbuf *);
+                                  ovs_be16 initial_tci, ovs_be64 cookie,
+                                  const struct ofpbuf *);
 static struct ofpbuf *xlate_actions(struct action_xlate_ctx *,
                                     const union ofp_action *in, size_t n_in);
 
@@ -2415,6 +2419,10 @@ send_packet_in_miss(struct ofproto_dpif *ofproto, struct ofpbuf *packet,
     pin.packet_len = packet->size;
     pin.total_len = packet->size;
     pin.reason = OFPR_NO_MATCH;
+
+    pin.table_id = 0;
+    pin.cookie = 0;
+
     pin.buffer_id = 0;          /* not yet known */
     pin.send_len = 0;           /* not used for flow table misses */
 
@@ -3196,7 +3204,8 @@ facet_account(struct ofproto_dpif *ofproto, struct facet *facet)
         struct action_xlate_ctx ctx;
 
         action_xlate_ctx_init(&ctx, ofproto, &facet->flow,
-                              facet->flow.vlan_tci, NULL);
+                              facet->flow.vlan_tci,
+                              facet->rule->up.flow_cookie, NULL);
         ctx.may_learn = true;
         ofpbuf_delete(xlate_actions(&ctx, facet->rule->up.actions,
                                     facet->rule->up.n_actions));
@@ -3385,7 +3394,8 @@ facet_revalidate(struct ofproto_dpif *ofproto, struct facet *facet)
         bool should_install;
 
         action_xlate_ctx_init(&ctx, ofproto, &facet->flow,
-                              subfacet->initial_tci, NULL);
+                              subfacet->initial_tci, new_rule->up.flow_cookie,
+                              NULL);
         odp_actions = xlate_actions(&ctx, new_rule->up.actions,
                                     new_rule->up.n_actions);
         actions_changed = (subfacet->actions_len != odp_actions->size
@@ -3535,7 +3545,8 @@ flow_push_stats(const struct rule_dpif *rule,
     push.bytes = bytes;
     push.used = used;
 
-    action_xlate_ctx_init(&push.ctx, ofproto, flow, flow->vlan_tci, NULL);
+    action_xlate_ctx_init(&push.ctx, ofproto, flow, flow->vlan_tci,
+                          rule->up.flow_cookie, NULL);
     push.ctx.resubmit_hook = push_resubmit;
     ofpbuf_delete(xlate_actions(&push.ctx,
                                 rule->up.actions, rule->up.n_actions));
@@ -3677,7 +3688,7 @@ subfacet_make_actions(struct ofproto_dpif *p, struct subfacet *subfacet,
     struct action_xlate_ctx ctx;
 
     action_xlate_ctx_init(&ctx, p, &facet->flow, subfacet->initial_tci,
-                          packet);
+                          rule->up.flow_cookie, packet);
     odp_actions = xlate_actions(&ctx, rule->up.actions, rule->up.n_actions);
     facet->tags = ctx.tags;
     facet->may_install = ctx.may_set_up_flow;
@@ -3955,7 +3966,8 @@ rule_execute(struct rule *rule_, const struct flow *flow,
     struct ofpbuf *odp_actions;
     size_t size;
 
-    action_xlate_ctx_init(&ctx, ofproto, flow, flow->vlan_tci, packet);
+    action_xlate_ctx_init(&ctx, ofproto, flow, flow->vlan_tci,
+                          rule->up.flow_cookie, packet);
     odp_actions = xlate_actions(&ctx, rule->up.actions, rule->up.n_actions);
     size = packet->size;
     if (execute_odp_actions(ofproto, flow, odp_actions->data,
@@ -4225,8 +4237,12 @@ xlate_table_action(struct action_xlate_ctx *ctx,
         }
 
         if (rule) {
+            ovs_be64 old_cookie = ctx->cookie;
+
             ctx->recurse++;
+            ctx->cookie = rule->up.flow_cookie;
             do_xlate_actions(rule->up.actions, rule->up.n_actions, ctx);
+            ctx->cookie = old_cookie;
             ctx->recurse--;
         }
 
@@ -4323,6 +4339,9 @@ execute_controller_action(struct action_xlate_ctx *ctx, int len)
     pin.packet = packet->data;
     pin.packet_len = packet->size;
     pin.reason = OFPR_ACTION;
+    pin.table_id = ctx->table_id;
+    pin.cookie = ctx->cookie;
+
     pin.buffer_id = 0;
     pin.send_len = len;
     pin.total_len = packet->size;
@@ -4728,13 +4747,15 @@ do_xlate_actions(const union ofp_action *in, size_t n_in,
 static void
 action_xlate_ctx_init(struct action_xlate_ctx *ctx,
                       struct ofproto_dpif *ofproto, const struct flow *flow,
-                      ovs_be16 initial_tci, const struct ofpbuf *packet)
+                      ovs_be16 initial_tci, ovs_be64 cookie,
+                      const struct ofpbuf *packet)
 {
     ctx->ofproto = ofproto;
     ctx->flow = *flow;
     ctx->base_flow = ctx->flow;
     ctx->base_flow.tun_id = 0;
     ctx->base_flow.vlan_tci = initial_tci;
+    ctx->cookie = cookie;
     ctx->packet = packet;
     ctx->may_learn = packet != NULL;
     ctx->resubmit_hook = NULL;
@@ -5520,7 +5541,7 @@ packet_out(struct ofproto *ofproto_, struct ofpbuf *packet,
         ofpbuf_use_stack(&key, &keybuf, sizeof keybuf);
         odp_flow_key_from_flow(&key, flow);
 
-        action_xlate_ctx_init(&ctx, ofproto, flow, flow->vlan_tci, packet);
+        action_xlate_ctx_init(&ctx, ofproto, flow, flow->vlan_tci, 0, packet);
         odp_actions = xlate_actions(&ctx, ofp_actions, n_ofp_actions);
         dpif_execute(ofproto->dpif, key.data, key.size,
                      odp_actions->data, odp_actions->size, packet);
@@ -5810,7 +5831,8 @@ ofproto_unixctl_trace(struct unixctl_conn *conn, int argc, const char *argv[],
 
         trace.result = &result;
         trace.flow = flow;
-        action_xlate_ctx_init(&trace.ctx, ofproto, &flow, initial_tci, packet);
+        action_xlate_ctx_init(&trace.ctx, ofproto, &flow, initial_tci,
+                              rule->up.flow_cookie, packet);
         trace.ctx.resubmit_hook = trace_resubmit;
         odp_actions = xlate_actions(&trace.ctx,
                                     rule->up.actions, rule->up.n_actions);

@@ -77,6 +77,8 @@ enum ofputil_msg_code {
     OFPUTIL_NXT_FLOW_MOD_TABLE_ID,
     OFPUTIL_NXT_FLOW_MOD,
     OFPUTIL_NXT_FLOW_REMOVED,
+    OFPUTIL_NXT_SET_PACKET_IN_FORMAT,
+    OFPUTIL_NXT_PACKET_IN,
 
     /* NXST_* stat requests. */
     OFPUTIL_NXST_FLOW_REQUEST,
@@ -123,6 +125,12 @@ int ofputil_flow_format_from_string(const char *);
 enum nx_flow_format ofputil_min_flow_format(const struct cls_rule *);
 
 struct ofpbuf *ofputil_make_set_flow_format(enum nx_flow_format);
+
+/* PACKET_IN. */
+bool ofputil_packet_in_format_is_valid(enum nx_packet_in_format);
+int ofputil_packet_in_format_from_string(const char *);
+const char *ofputil_packet_in_format_to_string(enum nx_packet_in_format);
+struct ofpbuf *ofputil_make_set_packet_in_format(enum nx_packet_in_format);
 
 /* NXT_FLOW_MOD_TABLE_ID extension. */
 struct ofpbuf *ofputil_make_flow_mod_table_id(bool flow_mod_table_id);
@@ -218,6 +226,8 @@ struct ofputil_packet_in {
     size_t packet_len;
 
     uint8_t reason;             /* One of OFPR_*. */
+    uint8_t table_id;
+    ovs_be64 cookie;
 
     uint32_t buffer_id;
     int send_len;
@@ -228,7 +238,10 @@ struct ofputil_packet_in {
 
 int ofputil_decode_packet_in(struct ofputil_packet_in *,
                              const struct ofp_header *);
-struct ofpbuf *ofputil_encode_packet_in(const struct ofputil_packet_in *);
+struct ofpbuf *ofputil_encode_packet_in(const struct ofputil_packet_in *,
+                                        enum nx_packet_in_format);
+int ofputil_decode_packet_in(struct ofputil_packet_in *pi,
+                             const struct ofp_header *oh);
 
 /* OpenFlow protocol utility functions. */
 void *make_openflow(size_t openflow_len, uint8_t type, struct ofpbuf **);

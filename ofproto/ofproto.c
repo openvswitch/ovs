@@ -2863,6 +2863,29 @@ handle_nxt_set_flow_format(struct ofconn *ofconn, const struct ofp_header *oh)
 }
 
 static int
+handle_nxt_set_packet_in_format(struct ofconn *ofconn,
+                                const struct ofp_header *oh)
+{
+    const struct nxt_set_packet_in_format *msg;
+    uint32_t format;
+
+    msg = (const struct nxt_set_packet_in_format *) oh;
+    format = ntohl(msg->format);
+    if (format != NXFF_OPENFLOW10 && format != NXPIF_NXM) {
+        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_EPERM);
+    }
+
+    if (format != ofconn_get_packet_in_format(ofconn)
+        && ofconn_has_pending_opgroups(ofconn)) {
+        /* Avoid sending async message in surprsing packet in format. */
+        return OFPROTO_POSTPONE;
+    }
+
+    ofconn_set_packet_in_format(ofconn, format);
+    return 0;
+}
+
+static int
 handle_barrier_request(struct ofconn *ofconn, const struct ofp_header *oh)
 {
     struct ofp_header *ob;
@@ -2929,6 +2952,9 @@ handle_openflow__(struct ofconn *ofconn, const struct ofpbuf *msg)
     case OFPUTIL_NXT_SET_FLOW_FORMAT:
         return handle_nxt_set_flow_format(ofconn, oh);
 
+    case OFPUTIL_NXT_SET_PACKET_IN_FORMAT:
+        return handle_nxt_set_packet_in_format(ofconn, oh);
+
     case OFPUTIL_NXT_FLOW_MOD:
         return handle_flow_mod(ofconn, oh);
 
@@ -2972,6 +2998,7 @@ handle_openflow__(struct ofconn *ofconn, const struct ofpbuf *msg)
     case OFPUTIL_OFPST_AGGREGATE_REPLY:
     case OFPUTIL_NXT_ROLE_REPLY:
     case OFPUTIL_NXT_FLOW_REMOVED:
+    case OFPUTIL_NXT_PACKET_IN:
     case OFPUTIL_NXST_FLOW_REPLY:
     case OFPUTIL_NXST_AGGREGATE_REPLY:
     default:

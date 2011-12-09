@@ -363,6 +363,14 @@ ofputil_decode_vendor(const struct ofp_header *oh, size_t length,
           NXT_SET_FLOW_FORMAT, "NXT_SET_FLOW_FORMAT",
           sizeof(struct nxt_set_flow_format), 0 },
 
+        { OFPUTIL_NXT_SET_PACKET_IN_FORMAT,
+          NXT_SET_PACKET_IN_FORMAT, "NXT_SET_PACKET_IN_FORMAT",
+          sizeof(struct nxt_set_packet_in_format), 0 },
+
+        { OFPUTIL_NXT_PACKET_IN,
+          NXT_PACKET_IN, "NXT_PACKET_IN",
+          sizeof(struct nxt_packet_in), 1 },
+
         { OFPUTIL_NXT_FLOW_MOD,
           NXT_FLOW_MOD, "NXT_FLOW_MOD",
           sizeof(struct nx_flow_mod), 8 },
@@ -839,6 +847,39 @@ ofputil_flow_format_from_string(const char *s)
             : -1);
 }
 
+bool
+ofputil_packet_in_format_is_valid(enum nx_packet_in_format packet_in_format)
+{
+    switch (packet_in_format) {
+    case NXPIF_OPENFLOW10:
+    case NXPIF_NXM:
+        return true;
+    }
+
+    return false;
+}
+
+const char *
+ofputil_packet_in_format_to_string(enum nx_packet_in_format packet_in_format)
+{
+    switch (packet_in_format) {
+    case NXPIF_OPENFLOW10:
+        return "openflow10";
+    case NXPIF_NXM:
+        return "nxm";
+    default:
+        NOT_REACHED();
+    }
+}
+
+int
+ofputil_packet_in_format_from_string(const char *s)
+{
+    return (!strcmp(s, "openflow10") ? NXPIF_OPENFLOW10
+            : !strcmp(s, "nxm") ? NXPIF_NXM
+            : -1);
+}
+
 static bool
 regs_fully_wildcarded(const struct flow_wildcards *wc)
 {
@@ -923,6 +964,18 @@ ofputil_make_set_flow_format(enum nx_flow_format flow_format)
 
     sff = make_nxmsg(sizeof *sff, NXT_SET_FLOW_FORMAT, &msg);
     sff->format = htonl(flow_format);
+
+    return msg;
+}
+
+struct ofpbuf *
+ofputil_make_set_packet_in_format(enum nx_packet_in_format packet_in_format)
+{
+    struct nxt_set_packet_in_format *spif;
+    struct ofpbuf *msg;
+
+    spif = make_nxmsg(sizeof *spif, NXT_SET_PACKET_IN_FORMAT, &msg);
+    spif->format = htonl(packet_in_format);
 
     return msg;
 }
@@ -1564,6 +1617,42 @@ ofputil_decode_packet_in(struct ofputil_packet_in *pin,
         pin->reason = opi->reason;
         pin->buffer_id = ntohl(opi->buffer_id);
         pin->total_len = ntohs(opi->total_len);
+    } else if (code == OFPUTIL_NXT_PACKET_IN) {
+        const struct nxt_packet_in *npi;
+        struct cls_rule rule;
+        struct ofpbuf b;
+        int error;
+
+        ofpbuf_use_const(&b, oh, ntohs(oh->length));
+
+        npi = ofpbuf_pull(&b, sizeof *npi);
+        error = nx_pull_match_loose(&b, ntohs(npi->match_len), 0, &rule, NULL,
+                              NULL);
+        if (error) {
+            return error;
+        }
+
+        if (!ofpbuf_try_pull(&b, 2)) {
+            return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
+        }
+
+        pin->packet = b.data;
+        pin->packet_len = b.size;
+        pin->reason = npi->reason;
+        pin->table_id = npi->table_id;
+        pin->cookie = npi->cookie;
+
+        pin->fmd.in_port = rule.flow.in_port;
+
+        pin->fmd.tun_id = rule.flow.tun_id;
+        pin->fmd.tun_id_mask = rule.wc.tun_id_mask;
+
+        memcpy(pin->fmd.regs, rule.flow.regs, sizeof pin->fmd.regs);
+        memcpy(pin->fmd.reg_masks, rule.wc.reg_masks,
+               sizeof pin->fmd.reg_masks);
+
+        pin->buffer_id = ntohl(npi->buffer_id);
+        pin->total_len = ntohs(npi->total_len);
     } else {
         NOT_REACHED();
     }
@@ -1571,30 +1660,76 @@ ofputil_decode_packet_in(struct ofputil_packet_in *pin,
     return 0;
 }
 
-/* Converts abstract ofputil_packet_in 'pin' into an OFPT_PACKET_IN message
- * and returns the message. */
+/* Converts abstract ofputil_packet_in 'pin' into a PACKET_IN message
+ * in the format specified by 'packet_in_format'.  */
 struct ofpbuf *
-ofputil_encode_packet_in(const struct ofputil_packet_in *pin)
+ofputil_encode_packet_in(const struct ofputil_packet_in *pin,
+                         enum nx_packet_in_format packet_in_format)
 {
-    struct ofp_packet_in opi;
-    struct ofpbuf *rw_packet;
-
-    rw_packet = ofpbuf_clone_data_with_headroom(
-        pin->packet, MIN(pin->send_len, pin->packet_len),
-        offsetof(struct ofp_packet_in, data));
+    size_t send_len = MIN(pin->send_len, pin->packet_len);
+    struct ofpbuf *packet;
 
     /* Add OFPT_PACKET_IN. */
-    memset(&opi, 0, sizeof opi);
-    opi.header.version = OFP_VERSION;
-    opi.header.type = OFPT_PACKET_IN;
-    opi.total_len = htons(pin->packet_len);
-    opi.in_port = htons(pin->fmd.in_port);
-    opi.reason = pin->reason;
-    opi.buffer_id = htonl(pin->buffer_id);
-    ofpbuf_push(rw_packet, &opi, offsetof(struct ofp_packet_in, data));
-    update_openflow_length(rw_packet);
+    if (packet_in_format == NXPIF_OPENFLOW10) {
+        size_t header_len = offsetof(struct ofp_packet_in, data);
+        struct ofp_packet_in *opi;
 
-    return rw_packet;
+        packet = ofpbuf_new(send_len + header_len);
+        opi = ofpbuf_put_zeros(packet, header_len);
+        opi->header.version = OFP_VERSION;
+        opi->header.type = OFPT_PACKET_IN;
+        opi->total_len = htons(pin->total_len);
+        opi->in_port = htons(pin->fmd.in_port);
+        opi->reason = pin->reason;
+        opi->buffer_id = htonl(pin->buffer_id);
+
+        ofpbuf_put(packet, pin->packet, send_len);
+    } else if (packet_in_format == NXPIF_NXM) {
+        struct nxt_packet_in *npi;
+        struct cls_rule rule;
+        size_t match_len;
+        size_t i;
+
+        /* Estimate of required PACKET_IN length includes the NPI header, space
+         * for the match (2 times sizeof the metadata seems like enough), 2
+         * bytes for padding, and the packet length. */
+        packet = ofpbuf_new(sizeof *npi + sizeof(struct flow_metadata) * 2
+                            + 2 + send_len);
+
+        cls_rule_init_catchall(&rule, 0);
+        cls_rule_set_tun_id_masked(&rule, pin->fmd.tun_id,
+                                   pin->fmd.tun_id_mask);
+
+        for (i = 0; i < FLOW_N_REGS; i++) {
+            cls_rule_set_reg_masked(&rule, i, pin->fmd.regs[i],
+                                    pin->fmd.reg_masks[i]);
+        }
+
+        cls_rule_set_in_port(&rule, pin->fmd.in_port);
+
+        ofpbuf_put_zeros(packet, sizeof *npi);
+        match_len = nx_put_match(packet, &rule, 0, 0);
+        ofpbuf_put_zeros(packet, 2);
+        ofpbuf_put(packet, pin->packet, send_len);
+
+        npi = packet->data;
+        npi->nxh.header.version = OFP_VERSION;
+        npi->nxh.header.type = OFPT_VENDOR;
+        npi->nxh.vendor = htonl(NX_VENDOR_ID);
+        npi->nxh.subtype = htonl(NXT_PACKET_IN);
+
+        npi->buffer_id = htonl(pin->buffer_id);
+        npi->total_len = htons(pin->total_len);
+        npi->reason = pin->reason;
+        npi->table_id = pin->table_id;
+        npi->cookie = pin->cookie;
+        npi->match_len = htons(match_len);
+    } else {
+        NOT_REACHED();
+    }
+    update_openflow_length(packet);
+
+    return packet;
 }
 
 /* Returns a string representing the message type of 'type'.  The string is the

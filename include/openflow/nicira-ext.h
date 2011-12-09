@@ -162,7 +162,11 @@ enum nicira_type {
     /* Use the upper 8 bits of the 'command' member in struct ofp_flow_mod to
      * designate the table to which a flow is to be added?  See the big comment
      * on struct nxt_flow_mod_table_id for more information. */
-    NXT_FLOW_MOD_TABLE_ID = 15
+    NXT_FLOW_MOD_TABLE_ID = 15,
+
+    /* Alternative PACKET_IN message formats. */
+    NXT_SET_PACKET_IN_FORMAT = 16, /* Set Packet In format. */
+    NXT_PACKET_IN = 17             /* Nicira Packet In. */
 };
 
 /* Header for Nicira vendor stats request and reply messages. */
@@ -245,6 +249,67 @@ struct nxt_flow_mod_table_id {
     uint8_t pad[7];
 };
 OFP_ASSERT(sizeof(struct nxt_flow_mod_table_id) == 24);
+
+enum nx_packet_in_format {
+    NXPIF_OPENFLOW10 = 0,       /* Standard OpenFlow 1.0 compatible. */
+    NXPIF_NXM = 1               /* Nicira Extended. */
+};
+
+/* NXT_SET_PACKET_IN_FORMAT request. */
+struct nxt_set_packet_in_format {
+    struct nicira_header nxh;
+    ovs_be32 format;            /* One of NXPIF_*. */
+};
+OFP_ASSERT(sizeof(struct nxt_set_packet_in_format) == 20);
+
+/* NXT_PACKET_IN (analogous to OFPT_PACKET_IN).
+ *
+ * The NXT_PACKET_IN format is intended to model the OpenFlow-1.2 PACKET_IN
+ * with some minor tweaks.  Most notably NXT_PACKET_IN includes the cookie of
+ * the rule which triggered the NXT_PACKET_IN message, and the match fields are
+ * in NXM format.
+ *
+ * The match fields in the NXT_PACKET_IN are intended to contain flow
+ * processing metadata collected at the time the NXT_PACKET_IN message was
+ * triggered.  It is minimally required to contain the NXM_OF_IN_PORT of the
+ * packet, but may include other NXM headers such as flow registers.  The match
+ * fields are allowed to contain non-metadata (e.g. NXM_OF_ETH_SRC etc).
+ * However, this information can typically be found in the packet directly, so
+ * it may be redundant.
+ *
+ * Whereas in most cases a controller can expect to only get back NXM fields
+ * that it set up itself (e.g. flow dumps will ordinarily report only NXM
+ * fields from flows that the controller added), NXT_PACKET_IN messages might
+ * contain fields that the controller does not understand, because the switch
+ * might support fields (new registers, new protocols, etc.) that the
+ * controller does not.  The controller must prepared to tolerate these.
+ *
+ * The 'cookie' and 'table_id' fields have no meaning when 'reason' is
+ * OFPR_NO_MATCH.  In this case they should be set to 0. */
+struct nxt_packet_in {
+    struct nicira_header nxh;
+    ovs_be32 buffer_id;       /* ID assigned by datapath. */
+    ovs_be16 total_len;       /* Full length of frame. */
+    uint8_t reason;           /* Reason packet is sent (one of OFPR_*). */
+    uint8_t table_id;         /* ID of the table that was looked up. */
+    ovs_be64 cookie;          /* Cookie of the rule that was looked up. */
+    ovs_be16 match_len;       /* Size of nx_match. */
+    uint8_t pad[6];           /* Align to 64-bits. */
+    /* Followed by:
+     *   - Exactly match_len (possibly 0) bytes containing the nx_match, then
+     *   - Exactly (match_len + 7)/8*8 - match_len (between 0 and 7) bytes of
+     *     all-zero bytes, then
+     *   - Exactly 2 all-zero padding bytes, then
+     *   - An Ethernet frame whose length is inferred from nxh.header.length.
+     *
+     * The padding bytes preceding the Ethernet frame ensure that the IP
+     * header (if any) following the Ethernet header is 32-bit aligned. */
+
+    /* uint8_t nxm_fields[...]; */ /* Match. */
+    /* uint8_t pad[2]; */          /* Align to 64 bit + 16 bit. */
+    /* uint8_t data[0]; */         /* Ethernet frame. */
+};
+OFP_ASSERT(sizeof(struct nxt_packet_in) == 40);
 
 /* Configures the "role" of the sending controller.  The default role is:
  *

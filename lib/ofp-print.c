@@ -92,6 +92,14 @@ ofp_print_packet_in(struct ds *string, const struct ofp_header *oh,
         return;
     }
 
+    if (pin.table_id) {
+        ds_put_format(string, " table_id=%"PRIu8, pin.table_id);
+    }
+
+    if (pin.cookie) {
+        ds_put_format(string, " cookie=0x%"PRIx64, ntohll(pin.cookie));
+    }
+
     ds_put_format(string, " total_len=%"PRIu16" in_port=", pin.total_len);
     ofputil_format_port(pin.fmd.in_port, string);
 
@@ -1265,6 +1273,20 @@ ofp_print_nxt_set_flow_format(struct ds *string,
 }
 
 static void
+ofp_print_nxt_set_packet_in_format(struct ds *string,
+                                   const struct nxt_set_packet_in_format *nspf)
+{
+    uint32_t format = ntohl(nspf->format);
+
+    ds_put_cstr(string, " format=");
+    if (ofputil_packet_in_format_is_valid(format)) {
+        ds_put_cstr(string, ofputil_packet_in_format_to_string(format));
+    } else {
+        ds_put_format(string, "%"PRIu32, format);
+    }
+}
+
+static void
 ofp_to_string__(const struct ofp_header *oh,
                 const struct ofputil_msg_type *type, struct ds *string,
                 int verbosity)
@@ -1311,6 +1333,7 @@ ofp_to_string__(const struct ofp_header *oh,
         break;
 
     case OFPUTIL_OFPT_PACKET_IN:
+    case OFPUTIL_NXT_PACKET_IN:
         ofp_print_packet_in(string, msg, verbosity);
         break;
 
@@ -1412,6 +1435,10 @@ ofp_to_string__(const struct ofp_header *oh,
 
     case OFPUTIL_NXT_SET_FLOW_FORMAT:
         ofp_print_nxt_set_flow_format(string, msg);
+        break;
+
+    case OFPUTIL_NXT_SET_PACKET_IN_FORMAT:
+        ofp_print_nxt_set_packet_in_format(string, msg);
         break;
 
     case OFPUTIL_NXT_FLOW_MOD:

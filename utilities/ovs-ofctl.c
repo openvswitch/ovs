@@ -68,6 +68,11 @@ static bool readd;
  * particular flow format or -1 to let ovs-ofctl choose intelligently. */
 static int preferred_flow_format = -1;
 
+/* -P, --packet-in-format: Packet IN format to use in monitor and snoop
+ * commands.  Either one of NXPIF_* to force a particular packet_in format, or
+ * -1 to let ovs-ofctl choose the default. */
+static int preferred_packet_in_format = -1;
+
 /* -m, --more: Additional verbosity for ofp-print functions. */
 static int verbosity;
 
@@ -100,6 +105,7 @@ parse_options(int argc, char *argv[])
         {"strict", no_argument, NULL, OPT_STRICT},
         {"readd", no_argument, NULL, OPT_READD},
         {"flow-format", required_argument, NULL, 'F'},
+        {"packet-in-format", required_argument, NULL, 'P'},
         {"more", no_argument, NULL, 'm'},
         {"help", no_argument, NULL, 'h'},
         {"version", no_argument, NULL, 'V'},
@@ -134,6 +140,14 @@ parse_options(int argc, char *argv[])
             preferred_flow_format = ofputil_flow_format_from_string(optarg);
             if (preferred_flow_format < 0) {
                 ovs_fatal(0, "unknown flow format `%s'", optarg);
+            }
+            break;
+
+        case 'P':
+            preferred_packet_in_format =
+                ofputil_packet_in_format_from_string(optarg);
+            if (preferred_packet_in_format < 0) {
+                ovs_fatal(0, "unknown packet-in format `%s'", optarg);
             }
             break;
 
@@ -207,6 +221,7 @@ usage(void)
            "  --strict                    use strict match for flow commands\n"
            "  --readd                     replace flows that haven't changed\n"
            "  -F, --flow-format=FORMAT    force particular flow format\n"
+           "  -P, --packet-in-format=FRMT force particular packet in format\n"
            "  -m, --more                  be more verbose printing OpenFlow\n"
            "  -t, --timeout=SECS          give up after SECS seconds\n"
            "  -h, --help                  display this help message\n"
@@ -768,11 +783,40 @@ do_del_flows(int argc, char *argv[])
 }
 
 static void
+set_packet_in_format(struct vconn *vconn,
+                     enum nx_packet_in_format packet_in_format)
+{
+    struct ofpbuf *spif = ofputil_make_set_packet_in_format(packet_in_format);
+    transact_noreply(vconn, spif);
+    VLOG_DBG("%s: using user-specified packet in format %s",
+             vconn_get_name(vconn),
+             ofputil_packet_in_format_to_string(packet_in_format));
+}
+
+static void
 monitor_vconn(struct vconn *vconn)
 {
     struct unixctl_server *server;
     bool exiting = false;
     int error, fd;
+
+    if (preferred_packet_in_format >= 0) {
+        set_packet_in_format(vconn, preferred_packet_in_format);
+    } else {
+        struct ofpbuf *spif, *reply;
+
+        spif = ofputil_make_set_packet_in_format(NXPIF_NXM);
+        run(vconn_transact_noreply(vconn, spif, &reply),
+            "talking to %s", vconn_get_name(vconn));
+        if (reply) {
+            char *s = ofp_to_string(reply->data, reply->size, 2);
+            VLOG_DBG("%s: failed to set packet in format to nxm, controller"
+                     " replied: %s. Falling back to the switch default.",
+                     vconn_get_name(vconn), s);
+            free(s);
+            ofpbuf_delete(reply);
+        }
+    }
 
     /* Daemonization will close stderr but we really want to keep it, so make a
      * copy. */
