@@ -109,7 +109,6 @@ exit 0
 %config(noreplace) /etc/logrotate.d/openvswitch
 /etc/sysconfig/network-scripts/ifup-ovs
 /etc/sysconfig/network-scripts/ifdown-ovs
-/etc/openvswitch/bugtool-plugins/*
 /usr/bin/ovs-appctl
 /usr/bin/ovs-benchmark
 /usr/bin/ovs-dpctl
@@ -144,6 +143,7 @@ exit 0
 /usr/share/man/man8/ovs-vlan-test.8.gz
 /usr/share/man/man8/ovs-vsctl.8.gz
 /usr/share/man/man8/ovs-vswitchd.8.gz
+/usr/share/openvswitch/bugtool-plugins/
 /usr/share/openvswitch/python/
 /usr/share/openvswitch/scripts/ovs-bugtool-*
 /usr/share/openvswitch/scripts/ovs-ctl

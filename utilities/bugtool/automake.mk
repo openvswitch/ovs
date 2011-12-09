@@ -18,7 +18,7 @@ bugtool_scripts = \
 	utilities/bugtool/ovs-bugtool-ovsdb-dump
 scripts_SCRIPTS += $(bugtool_scripts)
 
-bugtoolpluginsdir = $(sysconfdir)/openvswitch/bugtool-plugins
+bugtoolpluginsdir = $(pkgdatadir)/bugtool-plugins
 INSTALL_DATA_LOCAL += bugtool-install-data-local
 bugtool-install-data-local:
 	for plugin in $(bugtool_plugins); do \

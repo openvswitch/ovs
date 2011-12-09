@@ -108,7 +108,7 @@ install python/compat/uuid.py $RPM_BUILD_ROOT/usr/share/openvswitch/python
 install python/compat/argparse.py $RPM_BUILD_ROOT/usr/share/openvswitch/python
 
 install -d -m 755 $RPM_BUILD_ROOT/etc/xensource/bugtool
-mv $RPM_BUILD_ROOT/etc/openvswitch/bugtool-plugins/* $RPM_BUILD_ROOT/etc/xensource/bugtool
+mv $RPM_BUILD_ROOT/usr/share/openvswitch/bugtool-plugins/* $RPM_BUILD_ROOT/etc/xensource/bugtool
 
 # Get rid of stuff we don't want to make RPM happy.
 rm \
