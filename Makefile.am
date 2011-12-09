@@ -59,6 +59,7 @@ dist_pkgdata_DATA =
 dist_pkgdata_SCRIPTS =
 dist_sbin_SCRIPTS =
 dist_scripts_SCRIPTS =
+dist_scripts_DATA =
 INSTALL_DATA_LOCAL =
 UNINSTALL_LOCAL =
 man_MANS =
@@ -74,6 +75,7 @@ OVSIDL_BUILT =
 pkgdata_DATA =
 sbin_SCRIPTS =
 scripts_SCRIPTS =
+scripts_DATA =
 SUFFIXES =
 check_DATA =
 
