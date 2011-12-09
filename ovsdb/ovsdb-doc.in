@@ -312,7 +312,8 @@ Purpose
 
     if erFile:
         s += """
-.if !'\*[.T]'ascii' \{
+.\\" check if in troff mode (TTY)
+.if t \{
 .bp
 .SH "TABLE RELATIONSHIPS"
 .PP
