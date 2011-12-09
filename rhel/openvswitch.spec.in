@@ -47,7 +47,7 @@ for base in \
 done
 docdir=$RPM_BUILD_ROOT/usr/share/doc/openvswitch-%{version}
 install -d -m755 "$docdir"
-install rhel/README.RHEL "$docdir"
+install -m 0644 rhel/README.RHEL "$docdir"
 install python/compat/uuid.py $RPM_BUILD_ROOT/usr/share/openvswitch/python
 install python/compat/argparse.py $RPM_BUILD_ROOT/usr/share/openvswitch/python
 
