@@ -38,7 +38,7 @@ openvswitch (1.3.0-1) unstable; urgency=low
       "trunk", "native-tagged" and "native-untagged".
     - test-openflowd has been removed.  Please use ovs-vswitchd instead.
 
- -- Open vSwitch team <dev@openvswitch.org>  Mon, xx xxx xxxx 23:36:00 +0000
+ -- Open vSwitch team <dev@openvswitch.org>  Fri, 09 Dec 2011 10:50:00 +0000
 
 openvswitch (1.2.0-1) unstable; urgency=low
 
