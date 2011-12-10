@@ -1,5 +1,9 @@
-/* Copyright (c) 2002-2009 InMon Corp. Licensed under the terms of the InMon sFlow licence: */
-/* http://www.inmon.com/technology/sflowlicense.txt */
+/* Copyright (c) 2002-2009 InMon Corp. Licensed under the terms of either the
+ *   Sun Industry Standards Source License 1.1, that is available at:
+ *    http://host-sflow.sourceforge.net/sissl.html
+ * or the InMon sFlow License, that is available at:
+ *    http://www.inmon.com/technology/sflowlicense.txt
+ */
 
 #ifndef SFLOW_H
 #define SFLOW_H 1
