@@ -74,9 +74,12 @@ License:
   version 2 can be found in `/usr/share/common-licenses/GPL-2'
 
 * The following components are dual-licensed under the
-  GNU General Public Licence version 3 and the Apache Licence Version 2.0.
+  GNU General Public Licence version 2 and the Apache Licence Version 2.0.
 
-	include/openvswitch/
+	include/linux/openvswitch.h
+	include/openvswitch/brcompat-netlink.h
+	include/openvswitch/datapath-compat.h
+	include/openvswitch/tunnel.h
 
   On Debian systems, the complete text of the GNU General Public Licence
   version 2 can be found in `/usr/share/common-licenses/GPL-2'.
