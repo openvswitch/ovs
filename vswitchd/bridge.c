@@ -505,17 +505,8 @@ port_configure(struct port *port)
 
     /* Get VLAN tag. */
     s.vlan = -1;
-    if (cfg->tag) {
-        if (list_is_short(&port->ifaces)) {
-            if (*cfg->tag >= 0 && *cfg->tag <= 4095) {
-                s.vlan = *cfg->tag;
-            }
-        } else {
-            /* It's possible that bonded, VLAN-tagged ports make sense.  Maybe
-             * they even work as-is.  But they have not been tested. */
-            VLOG_WARN("port %s: VLAN tags not supported on bonded ports",
-                      port->name);
-        }
+    if (cfg->tag && *cfg->tag >= 0 && *cfg->tag <= 4095) {
+        s.vlan = *cfg->tag;
     }
 
     /* Get VLAN trunks. */
