@@ -16,7 +16,7 @@ Upstream Copyright Holders:
 License:
 
 * The following components are licensed under the
-  GNU Lesser General Public Licence version 2.1 only
+  GNU Lesser General Public License version 2.1 only
   with the exception clause below as a pre-amble.
 
 	xenserver/etc_xensource_scripts_vif
@@ -30,7 +30,7 @@ License:
 	  They do not appear in any binary packages.
 
   On Debian systems, the complete text of the
-  GNU Lesser General Public Licence version 2.1 can be found in
+  GNU Lesser General Public License version 2.1 can be found in
   `/usr/share/common-licenses/LGPL-2.1'
 
   The exception clause pre-amble reads:
@@ -50,7 +50,7 @@ License:
   Public License.
 
 * The following components are licensed under the
-  GNU Lesser General Public Licence version 2.1.
+  GNU Lesser General Public License version 2.1.
 
 	utilities/bugtool/ovs-bugtool
 	utilities/bugtool/ovs-bugtool-cfm-show
@@ -62,26 +62,26 @@ License:
 	utilities/bugtool/plugins/system-configuration/openvswitch.xml
 
   On Debian systems, the complete text of the
-  GNU Lesser General Public Licence version 2.1 can be found in
+  GNU Lesser General Public License version 2.1 can be found in
   `/usr/share/common-licenses/LGPL-2.1'
 
-* The following component is licensed under the GNU General Public Licence
+* The following component is licensed under the GNU General Public License
   version 2.
 
 	datapath/
 
-  On Debian systems, the complete text of the GNU General Public Licence
+  On Debian systems, the complete text of the GNU General Public License
   version 2 can be found in `/usr/share/common-licenses/GPL-2'
 
 * The following components are dual-licensed under the
-  GNU General Public Licence version 2 and the Apache Licence Version 2.0.
+  GNU General Public License version 2 and the Apache License Version 2.0.
 
 	include/linux/openvswitch.h
 	include/openvswitch/brcompat-netlink.h
 	include/openvswitch/datapath-compat.h
 	include/openvswitch/tunnel.h
 
-  On Debian systems, the complete text of the GNU General Public Licence
+  On Debian systems, the complete text of the GNU General Public License
   version 2 can be found in `/usr/share/common-licenses/GPL-2'.
   On Debian systems, the complete text of the Apache License version 2.0
   can be found in '/usr/share/common-licenses/Apache-2.0'.
@@ -104,7 +104,7 @@ License:
   The full text of each license is also appended to the end of this
   file.
 
-* The following components are licenced under the
+* The following components are licensed under the
   Python Software Foundation License Version 2.
 
 	python/compat/uuid.py
