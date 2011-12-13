@@ -4993,7 +4993,9 @@ add_mirror_actions(struct action_xlate_ctx *ctx, const struct flow *orig_flow)
         }
 
         ofport = get_odp_port(ofproto, nl_attr_get_u32(a));
-        mirrors |= ofport ? ofport->bundle->dst_mirrors : 0;
+        if (ofport && ofport->bundle) {
+            mirrors |= ofport->bundle->dst_mirrors;
+        }
     }
 
     if (!mirrors) {
