@@ -87,8 +87,8 @@ reader can see it for himself.
 
 If the patch refers to a commit already in the Open vSwitch
 repository, please include both the commit number and the subject of
-the patch, e.g. 'commit 632d136c "vswitch: Remove restriction on
-datapath names."'.
+the patch, e.g. 'commit 632d136c (vswitch: Remove restriction on
+datapath names.)'.
 
 If you, the person sending the patch, did not write the patch
 yourself, then the very first line of the body should take the form
