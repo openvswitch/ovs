@@ -32,6 +32,7 @@
 #include "ofpbuf.h"
 #include "packets.h"
 #include "poll-loop.h"
+#include "shash.h"
 #include "tag.h"
 #include "timeval.h"
 #include "unixctl.h"
@@ -937,7 +938,10 @@ bond_unixctl_list(struct unixctl_conn *conn,
 static void
 bond_print_details(struct ds *ds, const struct bond *bond)
 {
+    struct shash slave_shash = SHASH_INITIALIZER(&slave_shash);
+    const struct shash_node **sorted_slaves = NULL;
     const struct bond_slave *slave;
+    int i;
 
     ds_put_format(ds, "---- %s ----\n", bond->name);
     ds_put_format(ds, "bond_mode: %s\n",
@@ -962,7 +966,14 @@ bond_print_details(struct ds *ds, const struct bond *bond)
                   bond->lacp_negotiated ? "true" : "false");
 
     HMAP_FOR_EACH (slave, hmap_node, &bond->slaves) {
+        shash_add(&slave_shash, slave->name, slave);
+    }
+    sorted_slaves = shash_sort(&slave_shash);
+
+    for (i = 0; i < shash_count(&slave_shash); i++) {
         struct bond_entry *be;
+
+        slave = sorted_slaves[i]->data;
 
         /* Basic info. */
         ds_put_format(ds, "\nslave %s: %s\n",
@@ -997,6 +1008,8 @@ bond_print_details(struct ds *ds, const struct bond *bond)
             /* XXX How can we list the MACs assigned to hashes of SLB bonds? */
         }
     }
+    shash_destroy(&slave_shash);
+    free(sorted_slaves);
     ds_put_cstr(ds, "\n");
 }
 
