@@ -6,8 +6,7 @@ OVS_VSWITCHD_START([\
         set Port p1 lacp=active --\
         set Interface p1 type=dummy ])
 
-AT_CHECK([ovs-appctl lacp/show], [0], [stdout])
-AT_CHECK([cat stdout], [0], [dnl
+AT_CHECK([ovs-appctl lacp/show], [0], [dnl
 ---- p1 ----
 	status: active negotiated
 	sys_id: aa:55:aa:55:00:00
@@ -33,13 +32,15 @@ slave: p1: expired attached
 	partner key: 0
 	partner state: timeout
 ])
+AT_CHECK([ovs-appctl bond/show])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
-AT_SETUP([lacp - config])
+AT_SETUP([lacp - multi port config])
 OVS_VSWITCHD_START([dnl
         add-bond br0 bond p1 p2 --\
         set Port bond lacp=active \
+            bond_mode=active-backup \
             other_config:lacp-time="fast" \
             other_config:lacp-system-id=11:22:33:44:55:66 \
             other_config:lacp-system-priority=54321 --\
@@ -96,6 +97,21 @@ slave: p2: expired attached
 	partner port_priority: 0
 	partner key: 0
 	partner state: timeout
+])
+AT_CHECK([ovs-appctl bond/show], [0], [dnl
+---- bond ----
+bond_mode: active-backup
+bond-hash-basis: 0
+updelay: 0 ms
+downdelay: 0 ms
+lacp_negotiated: true
+
+slave p1: disabled
+	may_enable: false
+
+slave p2: disabled
+	may_enable: false
+
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
