@@ -346,9 +346,9 @@ priority:0,tunnel:0,in_port:0000,tci(vlan:80,pcp:0) mac(80:81:81:81:81:81->82:82
 ])
 
 AT_CHECK([ovs-ofctl dump-flows br0 | STRIP_DURATION | sort], [0], [dnl
- cookie=0x0, duration=?s, table=0, n_packets=1, n_bytes=60, dl_src=10:11:11:11:11:11 actions=CONTROLLER:65535
+ cookie=0x0, duration=?s, table=0, n_packets=3, n_bytes=180, dl_src=10:11:11:11:11:11 actions=CONTROLLER:65535
  cookie=0x1, duration=?s, table=0, n_packets=2, n_bytes=120, dl_src=20:22:22:22:22:22 actions=CONTROLLER:65535,resubmit:80
- cookie=0x2, duration=?s, table=0, n_packets=1, n_bytes=60, dl_src=30:33:33:33:33:33 actions=mod_vlan_vid:15,CONTROLLER:65535
+ cookie=0x2, duration=?s, table=0, n_packets=3, n_bytes=180, dl_src=30:33:33:33:33:33 actions=mod_vlan_vid:15,CONTROLLER:65535
  cookie=0x3, duration=?s, table=0, n_packets=2, n_bytes=120, in_port=80 actions=mod_vlan_vid:80,CONTROLLER:65535,resubmit:81
  cookie=0x4, duration=?s, table=0, n_packets=2, n_bytes=120, in_port=81 actions=mod_dl_src:80:81:81:81:81:81,CONTROLLER:65535,resubmit:82
  cookie=0x5, duration=?s, table=0, n_packets=2, n_bytes=120, in_port=82 actions=mod_dl_dst:82:82:82:82:82:82,CONTROLLER:65535,resubmit:83

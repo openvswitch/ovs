@@ -189,9 +189,7 @@ format_odp_userspace_action(struct ds *ds, const struct nlattr *attr)
 
         memcpy(&cookie, &userdata, sizeof cookie);
 
-        if (cookie.type == USER_ACTION_COOKIE_CONTROLLER) {
-            ds_put_format(ds, ",controller,length=%"PRIu32, cookie.data);
-        } else if (cookie.type == USER_ACTION_COOKIE_SFLOW) {
+        if (cookie.type == USER_ACTION_COOKIE_SFLOW) {
             ds_put_format(ds, ",sFlow,n_output=%"PRIu8","
                           "vid=%"PRIu16",pcp=%"PRIu8",ifindex=%"PRIu32,
                           cookie.n_output, vlan_tci_to_vid(cookie.vlan_tci),
@@ -328,7 +326,6 @@ parse_odp_action(const char *s, const struct shash *port_names,
 
     {
         unsigned long long int pid;
-        unsigned long long int length;
         unsigned long long int ifindex;
         char userdata_s[32];
         int n_output;
@@ -337,16 +334,6 @@ parse_odp_action(const char *s, const struct shash *port_names,
 
         if (sscanf(s, "userspace(pid=%lli)%n", &pid, &n) > 0 && n > 0) {
             odp_put_userspace_action(pid, NULL, actions);
-            return n;
-        } else if (sscanf(s, "userspace(pid=%lli,controller,length=%lli)%n",
-                          &pid, &length, &n) > 0 && n > 0) {
-            struct user_action_cookie cookie;
-
-            cookie.type = USER_ACTION_COOKIE_CONTROLLER;
-            cookie.n_output = 0;
-            cookie.vlan_tci = htons(0);
-            cookie.data = length;
-            odp_put_userspace_action(pid, &cookie, actions);
             return n;
         } else if (sscanf(s, "userspace(pid=%lli,sFlow,n_output=%i,vid=%i,"
                           "pcp=%i,ifindex=%lli)%n", &pid, &n_output,

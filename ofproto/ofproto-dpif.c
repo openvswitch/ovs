@@ -324,12 +324,6 @@ static struct facet *facet_lookup_valid(struct ofproto_dpif *,
                                         const struct flow *);
 static bool facet_revalidate(struct ofproto_dpif *, struct facet *);
 
-static bool execute_controller_action(struct ofproto_dpif *,
-                                      const struct flow *,
-                                      const struct nlattr *odp_actions,
-                                      size_t actions_len,
-                                      struct ofpbuf *packet);
-
 static void facet_flush_stats(struct ofproto_dpif *, struct facet *);
 
 static void facet_update_time(struct ofproto_dpif *, struct facet *,
@@ -2432,37 +2426,6 @@ send_packet_in_miss(struct ofproto_dpif *ofproto, struct ofpbuf *packet,
     connmgr_send_packet_in(ofproto->up.connmgr, &pin, flow);
 }
 
-/* Sends an OFPT_PACKET_IN message for 'packet' of type OFPR_ACTION to each
- * OpenFlow controller as necessary according to their individual
- * configurations.
- *
- * 'send_len' should be the number of bytes of 'packet' to send to the
- * controller, as specified in the action that caused the packet to be sent. */
-static void
-send_packet_in_action(struct ofproto_dpif *ofproto, struct ofpbuf *packet,
-                      uint64_t userdata, const struct flow *flow)
-{
-    struct ofputil_packet_in pin;
-    struct user_action_cookie cookie;
-
-    memcpy(&cookie, &userdata, sizeof(cookie));
-
-    pin.packet = packet->data;
-    pin.packet_len = packet->size;
-    pin.total_len = packet->size;
-    pin.reason = OFPR_ACTION;
-    pin.buffer_id = 0;          /* not yet known */
-    pin.send_len = cookie.data;
-
-    flow_get_metadata(flow, &pin.fmd);
-
-    /* Metadata may not be accurate at this time. */
-    memset(pin.fmd.reg_masks, 0, sizeof pin.fmd.reg_masks);
-    pin.fmd.tun_id_mask = 0;
-
-    connmgr_send_packet_in(ofproto->up.connmgr, &pin, flow);
-}
-
 static bool
 process_special(struct ofproto_dpif *ofproto, const struct flow *flow,
                 const struct ofpbuf *packet)
@@ -2563,6 +2526,8 @@ handle_flow_miss(struct ofproto_dpif *ofproto, struct flow_miss *miss,
 
     LIST_FOR_EACH_SAFE (packet, next_packet, list_node, &miss->packets) {
         struct dpif_flow_stats stats;
+        struct flow_miss_op *op;
+        struct dpif_execute *execute;
 
         list_remove(&packet->list_node);
         ofproto->n_matches++;
@@ -2585,38 +2550,30 @@ handle_flow_miss(struct ofproto_dpif *ofproto, struct flow_miss *miss,
             subfacet_make_actions(ofproto, subfacet, packet);
         }
 
-        /* Credit statistics to subfacet for this packet.  We must do this now
-         * because execute_controller_action() below may destroy 'packet'. */
         dpif_flow_stats_extract(&facet->flow, packet, &stats);
         subfacet_update_stats(ofproto, subfacet, &stats);
 
-        if (!execute_controller_action(ofproto, &facet->flow,
-                                       subfacet->actions,
-                                       subfacet->actions_len, packet)
-            && subfacet->actions_len > 0) {
-            struct flow_miss_op *op = &ops[(*n_ops)++];
-            struct dpif_execute *execute = &op->dpif_op.execute;
-
-            if (flow->vlan_tci != subfacet->initial_tci) {
-                /* This packet was received on a VLAN splinter port.  We added
-                 * a VLAN to the packet to make the packet resemble the flow,
-                 * but the actions were composed assuming that the packet
-                 * contained no VLAN.  So, we must remove the VLAN header from
-                 * the packet before trying to execute the actions. */
-                eth_pop_vlan(packet);
-            }
-
-            op->subfacet = subfacet;
-            execute->type = DPIF_OP_EXECUTE;
-            execute->key = miss->key;
-            execute->key_len = miss->key_len;
-            execute->actions
-                = (facet->may_install
-                   ? subfacet->actions
-                   : xmemdup(subfacet->actions, subfacet->actions_len));
-            execute->actions_len = subfacet->actions_len;
-            execute->packet = packet;
+        if (flow->vlan_tci != subfacet->initial_tci) {
+            /* This packet was received on a VLAN splinter port.  We added
+             * a VLAN to the packet to make the packet resemble the flow,
+             * but the actions were composed assuming that the packet
+             * contained no VLAN.  So, we must remove the VLAN header from
+             * the packet before trying to execute the actions. */
+            eth_pop_vlan(packet);
         }
+
+        op = &ops[(*n_ops)++];
+        execute = &op->dpif_op.execute;
+        op->subfacet = subfacet;
+        execute->type = DPIF_OP_EXECUTE;
+        execute->key = miss->key;
+        execute->key_len = miss->key_len;
+        execute->actions = (facet->may_install
+                            ? subfacet->actions
+                            : xmemdup(subfacet->actions,
+                                      subfacet->actions_len));
+        execute->actions_len = subfacet->actions_len;
+        execute->packet = packet;
     }
 
     if (facet->may_install && subfacet->key_fitness != ODP_FIT_TOO_LITTLE) {
@@ -2822,10 +2779,6 @@ handle_userspace_upcall(struct ofproto_dpif *ofproto,
             dpif_sflow_received(ofproto->sflow, upcall->packet, &flow,
                                 &cookie);
         }
-    } else if (cookie.type == USER_ACTION_COOKIE_CONTROLLER) {
-        COVERAGE_INC(ofproto_dpif_ctlr_action);
-        send_packet_in_action(ofproto, upcall->packet, upcall->userdata,
-                              &flow);
     } else {
         VLOG_WARN_RL(&rl, "invalid user cookie : 0x%"PRIx64, upcall->userdata);
     }
@@ -3162,35 +3115,6 @@ facet_free(struct facet *facet)
     free(facet);
 }
 
-/* If the 'actions_len' bytes of actions in 'odp_actions' are just a single
- * OVS_ACTION_ATTR_USERSPACE action, executes it internally and returns true.
- * Otherwise, returns false without doing anything. */
-static bool
-execute_controller_action(struct ofproto_dpif *ofproto,
-                          const struct flow *flow,
-                          const struct nlattr *odp_actions, size_t actions_len,
-                          struct ofpbuf *packet)
-{
-    if (actions_len
-        && odp_actions->nla_type == OVS_ACTION_ATTR_USERSPACE
-        && NLA_ALIGN(odp_actions->nla_len) == actions_len) {
-        /* As an optimization, avoid a round-trip from userspace to kernel to
-         * userspace.  This also avoids possibly filling up kernel packet
-         * buffers along the way.
-         *
-         * This optimization will not accidentally catch sFlow
-         * OVS_ACTION_ATTR_USERSPACE actions, since those are encapsulated
-         * inside OVS_ACTION_ATTR_SAMPLE. */
-        const struct nlattr *nla;
-
-        nla = nl_attr_find_nested(odp_actions, OVS_USERSPACE_ATTR_USERDATA);
-        send_packet_in_action(ofproto, packet, nl_attr_get_u64(nla), flow);
-        return true;
-    } else {
-        return false;
-    }
-}
-
 /* Executes, within 'ofproto', the 'n_actions' actions in 'actions' on
  * 'packet', which arrived on 'in_port'.
  *
@@ -3203,12 +3127,6 @@ execute_odp_actions(struct ofproto_dpif *ofproto, const struct flow *flow,
     struct odputil_keybuf keybuf;
     struct ofpbuf key;
     int error;
-
-    if (execute_controller_action(ofproto, flow, odp_actions, actions_len,
-                                  packet)) {
-        ofpbuf_delete(packet);
-        return true;
-    }
 
     ofpbuf_use_stack(&key, &keybuf, sizeof keybuf);
     odp_flow_key_from_flow(&key, flow);
@@ -4359,16 +4277,59 @@ flood_packets(struct action_xlate_ctx *ctx, bool all)
 }
 
 static void
-compose_controller_action(struct action_xlate_ctx *ctx, int len)
+execute_controller_action(struct action_xlate_ctx *ctx, int len)
 {
-    struct user_action_cookie cookie;
+    struct ofputil_packet_in pin;
+    struct ofpbuf *packet;
 
-    commit_odp_actions(&ctx->flow, &ctx->base_flow, ctx->odp_actions);
-    cookie.type = USER_ACTION_COOKIE_CONTROLLER;
-    cookie.data = len;
-    cookie.n_output = 0;
-    cookie.vlan_tci = 0;
-    put_userspace_action(ctx->ofproto, ctx->odp_actions, &ctx->flow, &cookie);
+    ctx->may_set_up_flow = false;
+    if (!ctx->packet) {
+        return;
+    }
+
+    packet = ofpbuf_clone(ctx->packet);
+
+    if (packet->l2 && packet->l3) {
+        struct eth_header *eh;
+
+        eth_pop_vlan(packet);
+        eh = packet->l2;
+        assert(eh->eth_type == ctx->flow.dl_type);
+        memcpy(eh->eth_src, ctx->flow.dl_src, sizeof eh->eth_src);
+        memcpy(eh->eth_dst, ctx->flow.dl_dst, sizeof eh->eth_dst);
+
+        if (ctx->flow.vlan_tci & htons(VLAN_CFI)) {
+            eth_push_vlan(packet, ctx->flow.vlan_tci);
+        }
+
+        if (packet->l4) {
+            if (ctx->flow.dl_type == htons(ETH_TYPE_IP)) {
+                packet_set_ipv4(packet, ctx->flow.nw_src, ctx->flow.nw_dst,
+                                ctx->flow.nw_tos, ctx->flow.nw_ttl);
+            }
+
+            if (packet->l7) {
+                if (ctx->flow.nw_proto == IPPROTO_TCP) {
+                    packet_set_tcp_port(packet, ctx->flow.tp_src,
+                                        ctx->flow.tp_dst);
+                } else if (ctx->flow.nw_proto == IPPROTO_UDP) {
+                    packet_set_udp_port(packet, ctx->flow.tp_src,
+                                        ctx->flow.tp_dst);
+                }
+            }
+        }
+    }
+
+    pin.packet = packet->data;
+    pin.packet_len = packet->size;
+    pin.reason = OFPR_ACTION;
+    pin.buffer_id = 0;
+    pin.send_len = len;
+    pin.total_len = packet->size;
+    flow_get_metadata(&ctx->flow, &pin.fmd);
+
+    connmgr_send_packet_in(ctx->ofproto->up.connmgr, &pin, &ctx->flow);
+    ofpbuf_delete(packet);
 }
 
 static void
@@ -4396,7 +4357,7 @@ xlate_output_action__(struct action_xlate_ctx *ctx,
         flood_packets(ctx, true);
         break;
     case OFPP_CONTROLLER:
-        compose_controller_action(ctx, max_len);
+        execute_controller_action(ctx, max_len);
         break;
     case OFPP_LOCAL:
         compose_output_action(ctx, OFPP_LOCAL);

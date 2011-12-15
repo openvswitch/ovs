@@ -117,7 +117,6 @@ enum odp_key_fitness odp_flow_key_to_flow(const struct nlattr *, size_t,
 
 enum user_action_cookie_type {
     USER_ACTION_COOKIE_UNSPEC,
-    USER_ACTION_COOKIE_CONTROLLER,   /* Packet for controller. */
     USER_ACTION_COOKIE_SFLOW,        /* Packet for sFlow sampling. */
 };
 
