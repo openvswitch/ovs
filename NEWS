@@ -29,6 +29,13 @@ v1.4.0 - xx xxx xxxx
         and connectivity issues. This tool currently is not included in RH or
         Xen packages.
     - RHEL packaging now supports integration with Red Hat network scripts.
+    - bonding:
+      - Post 1.4.*, OVS will be changing the default bond mode from balance-slb
+        to active-backup.  SLB bonds carry significant risks with them
+        (documented vswitchd/INTERNALS) which we want to prevent unsuspecting
+        users from running into.  Users are advised to update any scripts or
+        configuration which may be negatively impacted by explicitly setting
+        the bond mode which they want to use.
 
 
 v1.3.0 - xx xxx xxxx
