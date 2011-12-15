@@ -935,57 +935,48 @@ bond_unixctl_list(struct unixctl_conn *conn,
 }
 
 static void
-bond_unixctl_show(struct unixctl_conn *conn,
-                  int argc OVS_UNUSED, const char *argv[],
-                  void *aux OVS_UNUSED)
+bond_print_details(struct ds *ds, const struct bond *bond)
 {
-    struct ds ds = DS_EMPTY_INITIALIZER;
     const struct bond_slave *slave;
-    const struct bond *bond;
 
-    bond = bond_find(argv[1]);
-    if (!bond) {
-        unixctl_command_reply(conn, 501, "no such bond");
-        return;
-    }
-
-    ds_put_format(&ds, "bond_mode: %s\n",
+    ds_put_format(ds, "---- %s ----\n", bond->name);
+    ds_put_format(ds, "bond_mode: %s\n",
                   bond_mode_to_string(bond->balance));
 
     if (bond->balance != BM_AB) {
-        ds_put_format(&ds, "bond-hash-algorithm: %s\n",
+        ds_put_format(ds, "bond-hash-algorithm: %s\n",
                       bond_is_tcp_hash(bond) ? "balance-tcp" : "balance-slb");
     }
 
-    ds_put_format(&ds, "bond-hash-basis: %"PRIu32"\n", bond->basis);
+    ds_put_format(ds, "bond-hash-basis: %"PRIu32"\n", bond->basis);
 
-    ds_put_format(&ds, "updelay: %d ms\n", bond->updelay);
-    ds_put_format(&ds, "downdelay: %d ms\n", bond->downdelay);
+    ds_put_format(ds, "updelay: %d ms\n", bond->updelay);
+    ds_put_format(ds, "downdelay: %d ms\n", bond->downdelay);
 
     if (bond_is_balanced(bond)) {
-        ds_put_format(&ds, "next rebalance: %lld ms\n",
+        ds_put_format(ds, "next rebalance: %lld ms\n",
                       bond->next_rebalance - time_msec());
     }
 
-    ds_put_format(&ds, "lacp_negotiated: %s\n",
+    ds_put_format(ds, "lacp_negotiated: %s\n",
                   bond->lacp_negotiated ? "true" : "false");
 
     HMAP_FOR_EACH (slave, hmap_node, &bond->slaves) {
         struct bond_entry *be;
 
         /* Basic info. */
-        ds_put_format(&ds, "\nslave %s: %s\n",
+        ds_put_format(ds, "\nslave %s: %s\n",
                       slave->name, slave->enabled ? "enabled" : "disabled");
         if (slave == bond->active_slave) {
-            ds_put_cstr(&ds, "\tactive slave\n");
+            ds_put_cstr(ds, "\tactive slave\n");
         }
         if (slave->delay_expires != LLONG_MAX) {
-            ds_put_format(&ds, "\t%s expires in %lld ms\n",
+            ds_put_format(ds, "\t%s expires in %lld ms\n",
                           slave->enabled ? "downdelay" : "updelay",
                           slave->delay_expires - time_msec());
         }
 
-        ds_put_format(&ds, "\tmay_enable: %s\n",
+        ds_put_format(ds, "\tmay_enable: %s\n",
                       slave->may_enable ? "true" : "false");
 
         if (!bond_is_balanced(bond)) {
@@ -1000,12 +991,38 @@ bond_unixctl_show(struct unixctl_conn *conn,
                 continue;
             }
 
-            ds_put_format(&ds, "\thash %d: %"PRIu64" kB load\n",
+            ds_put_format(ds, "\thash %d: %"PRIu64" kB load\n",
                           hash, be->tx_bytes / 1024);
 
             /* XXX How can we list the MACs assigned to hashes of SLB bonds? */
         }
     }
+    ds_put_cstr(ds, "\n");
+}
+
+static void
+bond_unixctl_show(struct unixctl_conn *conn,
+                  int argc, const char *argv[],
+                  void *aux OVS_UNUSED)
+{
+    struct ds ds = DS_EMPTY_INITIALIZER;
+
+    if (argc > 1) {
+        const struct bond *bond = bond_find(argv[1]);
+
+        if (!bond) {
+            unixctl_command_reply(conn, 501, "no such bond");
+            return;
+        }
+        bond_print_details(&ds, bond);
+    } else {
+        const struct bond *bond;
+
+        HMAP_FOR_EACH (bond, hmap_node, &all_bonds) {
+            bond_print_details(&ds, bond);
+        }
+    }
+
     unixctl_command_reply(conn, 200, ds_cstr(&ds));
     ds_destroy(&ds);
 }
@@ -1186,8 +1203,8 @@ void
 bond_init(void)
 {
     unixctl_command_register("bond/list", "", 0, 0, bond_unixctl_list, NULL);
-    unixctl_command_register("bond/show", "port", 1, 1,
-                             bond_unixctl_show, NULL);
+    unixctl_command_register("bond/show", "[port]", 0, 1, bond_unixctl_show,
+                             NULL);
     unixctl_command_register("bond/migrate", "port hash slave", 3, 3,
                              bond_unixctl_migrate, NULL);
     unixctl_command_register("bond/set-active-slave", "port slave", 2, 2,

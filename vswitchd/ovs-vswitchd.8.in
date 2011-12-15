@@ -150,15 +150,15 @@ value are then assigned to a single slave.
 .IP "\fBbond/list\fR"
 Lists all of the bonds, and their slaves, on each bridge.
 .
-.IP "\fBbond/show\fR \fIport\fR"
-Lists all of the bond-specific information about the given bonded
-\fIport\fR: updelay, downdelay, time until the next rebalance.  Also
-lists information about each slave: whether it is enabled or disabled,
-the time to completion of an updelay or downdelay if one is in
-progress, whether it is the active slave, the MAC hashes assigned to
-the slave, and the MAC learning table entries that hash to each MAC.
-Any LACP information related to this bond may be found using the
-\fBlacp/show\fR command.
+.IP "\fBbond/show\fR [\fIport\fR]"
+Lists all of the bond-specific information (updelay, downdelay, time
+until the next rebalance) about the given bonded \fIport\fR, or all
+bonded ports if no \fIport\fR is given.  Also lists information about
+each slave: whether it is enabled or disabled, the time to completion
+of an updelay or downdelay if one is in progress, whether it is the
+active slave, the hashes assigned to the slave.  Any LACP information
+related to this bond may be found using the \fBlacp/show\fR command.
+.
 .IP "\fBbond/migrate\fR \fIport\fR \fIhash\fR \fIslave\fR"
 Only valid for SLB bonds.  Assigns a given MAC hash to a new slave.
 \fIport\fR specifies the bond port, \fIhash\fR the MAC hash to be
