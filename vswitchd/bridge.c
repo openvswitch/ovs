@@ -2664,9 +2664,14 @@ port_configure_lacp(struct port *port, struct lacp_settings *s)
     s->name = port->name;
 
     system_id = get_port_other_config(port->cfg, "lacp-system-id", NULL);
-    if (!system_id
-        || sscanf(system_id, ETH_ADDR_SCAN_FMT,
-                  ETH_ADDR_SCAN_ARGS(s->id)) != ETH_ADDR_SCAN_COUNT) {
+    if (system_id) {
+        if (sscanf(system_id, ETH_ADDR_SCAN_FMT,
+                   ETH_ADDR_SCAN_ARGS(s->id)) != ETH_ADDR_SCAN_COUNT) {
+            VLOG_WARN("port %s: LACP system ID (%s) must be an Ethernet"
+                      " address.", port->name, system_id);
+            return NULL;
+        }
+    } else {
         memcpy(s->id, port->bridge->ea, ETH_ADDR_LEN);
     }
 
