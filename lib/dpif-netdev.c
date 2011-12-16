@@ -458,7 +458,8 @@ answer_port_query(const struct dp_netdev_port *port,
                   struct dpif_port *dpif_port)
 {
     dpif_port->name = xstrdup(netdev_get_name(port->netdev));
-    dpif_port->type = xstrdup(port->internal ? "internal" : "system");
+    dpif_port->type = xstrdup(port->internal ? "internal"
+                              : netdev_get_type(port->netdev));
     dpif_port->port_no = port->port_no;
 }
 
@@ -550,7 +551,8 @@ dpif_netdev_port_dump_next(const struct dpif *dpif, void *state_,
             free(state->name);
             state->name = xstrdup(netdev_get_name(port->netdev));
             dpif_port->name = state->name;
-            dpif_port->type = port->internal ? "internal" : "system";
+            dpif_port->type = (char *) (port->internal ? "internal"
+                                        : netdev_get_type(port->netdev));
             dpif_port->port_no = port->port_no;
             state->port_no = port_no + 1;
             return 0;
