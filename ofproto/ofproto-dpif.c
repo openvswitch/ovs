@@ -318,7 +318,7 @@ static bool execute_controller_action(struct ofproto_dpif *,
                                       const struct flow *,
                                       const struct nlattr *odp_actions,
                                       size_t actions_len,
-                                      struct ofpbuf *packet);
+                                      struct ofpbuf *packet, bool clone);
 
 static void facet_flush_stats(struct ofproto_dpif *, struct facet *);
 
@@ -2475,7 +2475,7 @@ handle_flow_miss(struct ofproto_dpif *ofproto, struct flow_miss *miss,
         }
         if (!execute_controller_action(ofproto, &facet->flow,
                                        subfacet->actions,
-                                       subfacet->actions_len, packet)) {
+                                       subfacet->actions_len, packet, true)) {
             struct flow_miss_op *op = &ops[(*n_ops)++];
             struct dpif_execute *execute = &op->dpif_op.execute;
 
@@ -2999,11 +2999,17 @@ facet_free(struct facet *facet)
     free(facet);
 }
 
+/* If the 'actions_len' bytes of actions in 'odp_actions' are just a single
+ * OVS_ACTION_ATTR_USERSPACE action, executes it internally and returns true.
+ * Otherwise, returns false without doing anything.
+ *
+ * If 'clone' is true, the caller always retains ownership of 'packet'.
+ * Otherwise, ownership is transferred to this function if it returns true. */
 static bool
 execute_controller_action(struct ofproto_dpif *ofproto,
                           const struct flow *flow,
                           const struct nlattr *odp_actions, size_t actions_len,
-                          struct ofpbuf *packet)
+                          struct ofpbuf *packet, bool clone)
 {
     if (actions_len
         && odp_actions->nla_type == OVS_ACTION_ATTR_USERSPACE
@@ -3019,7 +3025,7 @@ execute_controller_action(struct ofproto_dpif *ofproto,
 
         nla = nl_attr_find_nested(odp_actions, OVS_USERSPACE_ATTR_USERDATA);
         send_packet_in_action(ofproto, packet, nl_attr_get_u64(nla), flow,
-                              false);
+                              clone);
         return true;
     } else {
         return false;
@@ -3040,7 +3046,7 @@ execute_odp_actions(struct ofproto_dpif *ofproto, const struct flow *flow,
     int error;
 
     if (execute_controller_action(ofproto, flow, odp_actions, actions_len,
-                                  packet)) {
+                                  packet, false)) {
         return true;
     }
 
