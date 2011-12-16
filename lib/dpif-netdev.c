@@ -1053,109 +1053,6 @@ dp_netdev_set_dl(struct ofpbuf *packet, const struct ovs_key_ethernet *eth_key)
 }
 
 static void
-dp_netdev_set_ip_addr(struct ofpbuf *packet, ovs_be32 *addr, ovs_be32 new_addr)
-{
-    struct ip_header *nh = packet->l3;
-
-    if (nh->ip_proto == IPPROTO_TCP && packet->l7) {
-        struct tcp_header *th = packet->l4;
-        th->tcp_csum = recalc_csum32(th->tcp_csum, *addr, new_addr);
-    } else if (nh->ip_proto == IPPROTO_UDP && packet->l7) {
-        struct udp_header *uh = packet->l4;
-        if (uh->udp_csum) {
-            uh->udp_csum = recalc_csum32(uh->udp_csum, *addr, new_addr);
-            if (!uh->udp_csum) {
-                uh->udp_csum = htons(0xffff);
-            }
-        }
-    }
-    nh->ip_csum = recalc_csum32(nh->ip_csum, *addr, new_addr);
-    *addr = new_addr;
-}
-
-static void
-dp_netdev_set_ip_tos(struct ip_header *nh, uint8_t new_tos)
-{
-    uint8_t *field = &nh->ip_tos;
-
-    nh->ip_csum = recalc_csum16(nh->ip_csum, htons((uint16_t)*field),
-			            htons((uint16_t) new_tos));
-    *field = new_tos;
-}
-
-static void
-dp_netdev_set_ip_ttl(struct ip_header *nh, uint8_t new_ttl)
-{
-    uint8_t *field = &nh->ip_ttl;
-
-    nh->ip_csum = recalc_csum16(nh->ip_csum, htons(*field << 8),
-			            htons(new_ttl << 8));
-    *field = new_ttl;
-}
-
-static void
-dp_netdev_set_ipv4(struct ofpbuf *packet, const struct ovs_key_ipv4 *ipv4_key)
-{
-    struct ip_header *nh = packet->l3;
-
-    if (nh->ip_src != ipv4_key->ipv4_src) {
-        dp_netdev_set_ip_addr(packet, &nh->ip_src, ipv4_key->ipv4_src);
-    }
-    if (nh->ip_dst != ipv4_key->ipv4_dst) {
-        dp_netdev_set_ip_addr(packet, &nh->ip_dst, ipv4_key->ipv4_dst);
-    }
-    if (nh->ip_tos != ipv4_key->ipv4_tos) {
-        dp_netdev_set_ip_tos(nh, ipv4_key->ipv4_tos);
-    }
-    if (nh->ip_ttl != ipv4_key->ipv4_ttl) {
-        dp_netdev_set_ip_ttl(nh, ipv4_key->ipv4_ttl);
-    }
-}
-
-static void
-dp_netdev_set_port(ovs_be16 *port, ovs_be16 new_port, ovs_be16 *csum)
-{
-    *csum = recalc_csum16(*csum, *port, new_port);
-    *port = new_port;
-}
-
-static void
-dp_netdev_set_tcp_port(struct ofpbuf *packet, const struct ovs_key_tcp *tcp_key)
-{
-    struct tcp_header *th = packet->l4;
-
-    if (th->tcp_src != tcp_key->tcp_src) {
-        dp_netdev_set_port(&th->tcp_src, tcp_key->tcp_src, &th->tcp_csum);
-    }
-    if (th->tcp_dst != tcp_key->tcp_dst) {
-        dp_netdev_set_port(&th->tcp_dst, tcp_key->tcp_dst, &th->tcp_csum);
-    }
-}
-
-static void
-dp_netdev_set_udp_port(struct ofpbuf *packet, const struct ovs_key_udp *udp_key)
-{
-    struct udp_header *uh = packet->l4;
-
-    if (uh->udp_csum) {
-        if (uh->udp_src != udp_key->udp_src) {
-            dp_netdev_set_port(&uh->udp_src, udp_key->udp_src, &uh->udp_csum);
-        }
-
-        if (uh->udp_dst != udp_key->udp_dst) {
-            dp_netdev_set_port(&uh->udp_dst, udp_key->udp_dst, &uh->udp_csum);
-        }
-
-        if (!uh->udp_csum) {
-            uh->udp_csum = htons(0xffff);
-        }
-    } else {
-        uh->udp_src = udp_key->udp_src;
-        uh->udp_dst = udp_key->udp_dst;
-    }
-}
-
-static void
 dp_netdev_output_port(struct dp_netdev *dp, struct ofpbuf *packet,
                       uint16_t out_port)
 {
@@ -1249,6 +1146,10 @@ static void
 execute_set_action(struct ofpbuf *packet, const struct nlattr *a)
 {
     enum ovs_key_attr type = nl_attr_type(a);
+    const struct ovs_key_ipv4 *ipv4_key;
+    const struct ovs_key_tcp *tcp_key;
+    const struct ovs_key_udp *udp_key;
+
     switch (type) {
     case OVS_KEY_ATTR_TUN_ID:
     case OVS_KEY_ATTR_PRIORITY:
@@ -1261,18 +1162,19 @@ execute_set_action(struct ofpbuf *packet, const struct nlattr *a)
         break;
 
     case OVS_KEY_ATTR_IPV4:
-        dp_netdev_set_ipv4(packet,
-                   nl_attr_get_unspec(a, sizeof(struct ovs_key_ipv4)));
+        ipv4_key = nl_attr_get_unspec(a, sizeof(struct ovs_key_ipv4));
+        packet_set_ipv4(packet, ipv4_key->ipv4_src, ipv4_key->ipv4_dst,
+                        ipv4_key->ipv4_tos, ipv4_key->ipv4_ttl);
         break;
 
     case OVS_KEY_ATTR_TCP:
-        dp_netdev_set_tcp_port(packet,
-                   nl_attr_get_unspec(a, sizeof(struct ovs_key_tcp)));
+        tcp_key = nl_attr_get_unspec(a, sizeof(struct ovs_key_tcp));
+        packet_set_tcp_port(packet, tcp_key->tcp_src, tcp_key->tcp_dst);
         break;
 
      case OVS_KEY_ATTR_UDP:
-        dp_netdev_set_udp_port(packet,
-                   nl_attr_get_unspec(a, sizeof(struct ovs_key_udp)));
+        udp_key = nl_attr_get_unspec(a, sizeof(struct ovs_key_udp));
+        packet_set_udp_port(packet, udp_key->udp_src, udp_key->udp_dst);
         break;
 
      case OVS_KEY_ATTR_UNSPEC:

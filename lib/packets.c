@@ -22,6 +22,7 @@
 #include <netinet/in.h>
 #include <stdlib.h>
 #include "byte-order.h"
+#include "csum.h"
 #include "dynamic-string.h"
 #include "ofpbuf.h"
 
@@ -376,4 +377,104 @@ snap_compose(struct ofpbuf *b, const uint8_t eth_dst[ETH_ADDR_LEN],
     llc_snap->snap.snap_type = htons(snap_type);
 
     return payload;
+}
+
+static void
+packet_set_ipv4_addr(struct ofpbuf *packet, ovs_be32 *addr, ovs_be32 new_addr)
+{
+    struct ip_header *nh = packet->l3;
+
+    if (nh->ip_proto == IPPROTO_TCP && packet->l7) {
+        struct tcp_header *th = packet->l4;
+
+        th->tcp_csum = recalc_csum32(th->tcp_csum, *addr, new_addr);
+    } else if (nh->ip_proto == IPPROTO_UDP && packet->l7) {
+        struct udp_header *uh = packet->l4;
+
+        if (uh->udp_csum) {
+            uh->udp_csum = recalc_csum32(uh->udp_csum, *addr, new_addr);
+            if (!uh->udp_csum) {
+                uh->udp_csum = htons(0xffff);
+            }
+        }
+    }
+    nh->ip_csum = recalc_csum32(nh->ip_csum, *addr, new_addr);
+    *addr = new_addr;
+}
+
+/* Modifies the IPv4 header fields of 'packet' to be consistent with 'src',
+ * 'dst', 'tos', and 'ttl'.  Updates 'packet''s L4 checksums as appropriate.
+ * 'packet' must contain a valid IPv4 packet with correctly populated l[347]
+ * markers. */
+void
+packet_set_ipv4(struct ofpbuf *packet, ovs_be32 src, ovs_be32 dst,
+                uint8_t tos, uint8_t ttl)
+{
+    struct ip_header *nh = packet->l3;
+
+    if (nh->ip_src != src) {
+        packet_set_ipv4_addr(packet, &nh->ip_src, src);
+    }
+
+    if (nh->ip_dst != dst) {
+        packet_set_ipv4_addr(packet, &nh->ip_dst, dst);
+    }
+
+    if (nh->ip_tos != tos) {
+        uint8_t *field = &nh->ip_tos;
+
+        nh->ip_csum = recalc_csum16(nh->ip_csum, htons((uint16_t) *field),
+                                    htons((uint16_t) tos));
+        *field = tos;
+    }
+
+    if (nh->ip_ttl != ttl) {
+        uint8_t *field = &nh->ip_ttl;
+
+        nh->ip_csum = recalc_csum16(nh->ip_csum, htons(*field << 8),
+                                    htons(ttl << 8));
+        *field = ttl;
+    }
+}
+
+static void
+packet_set_port(ovs_be16 *port, ovs_be16 new_port, ovs_be16 *csum)
+{
+    if (*port != new_port) {
+        *csum = recalc_csum16(*csum, *port, new_port);
+        *port = new_port;
+    }
+}
+
+/* Sets the TCP source and destination port ('src' and 'dst' respectively) of
+ * the TCP header contained in 'packet'.  'packet' must be a valid TCP packet
+ * with its l4 marker properly populated. */
+void
+packet_set_tcp_port(struct ofpbuf *packet, ovs_be16 src, ovs_be16 dst)
+{
+    struct tcp_header *th = packet->l4;
+
+    packet_set_port(&th->tcp_src, src, &th->tcp_csum);
+    packet_set_port(&th->tcp_dst, dst, &th->tcp_csum);
+}
+
+/* Sets the UDP source and destination port ('src' and 'dst' respectively) of
+ * the UDP header contained in 'packet'.  'packet' must be a valid UDP packet
+ * with its l4 marker properly populated. */
+void
+packet_set_udp_port(struct ofpbuf *packet, ovs_be16 src, ovs_be16 dst)
+{
+    struct udp_header *uh = packet->l4;
+
+    if (uh->udp_csum) {
+        packet_set_port(&uh->udp_src, src, &uh->udp_csum);
+        packet_set_port(&uh->udp_dst, dst, &uh->udp_csum);
+
+        if (!uh->udp_csum) {
+            uh->udp_csum = htons(0xffff);
+        }
+    } else {
+        uh->udp_src = src;
+        uh->udp_dst = dst;
+    }
 }

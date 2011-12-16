@@ -463,5 +463,9 @@ void *eth_compose(struct ofpbuf *, const uint8_t eth_dst[ETH_ADDR_LEN],
 void *snap_compose(struct ofpbuf *, const uint8_t eth_dst[ETH_ADDR_LEN],
                    const uint8_t eth_src[ETH_ADDR_LEN],
                    unsigned int oui, uint16_t snap_type, size_t size);
+void packet_set_ipv4(struct ofpbuf *, ovs_be32 src, ovs_be32 dst, uint8_t tos,
+                     uint8_t ttl);
+void packet_set_tcp_port(struct ofpbuf *, ovs_be16 src, ovs_be16 dst);
+void packet_set_udp_port(struct ofpbuf *, ovs_be16 src, ovs_be16 dst);
 
 #endif /* packets.h */
