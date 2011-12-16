@@ -653,3 +653,127 @@ AT_CHECK([ovs-dpctl normalize-actions "$flow" "$actual" br0=$br0 p1=$p1 p2=$p2],
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP
+
+m4_define([OFPROTO_TRACE],
+  [flow="$2"
+   AT_CHECK([ovs-appctl ofproto/trace $1 "$flow" $3], [0], [stdout])
+   actual=`tail -1 stdout | sed 's/Datapath actions: //'`
+   expected="$4"
+   AT_CHECK([ovs-dpctl normalize-actions "$flow" "$expected" $5],
+     [0], [stdout])
+   mv stdout expout
+   AT_CHECK([ovs-dpctl normalize-actions "$flow" "$actual" $5],
+     [0], [expout])])
+
+AT_SETUP([ofproto-dpif - MAC learning])
+OVS_VSWITCHD_START(
+  [set bridge br0 fail-mode=standalone -- \
+   add-port br0 p1 -- set Interface p1 type=dummy -- \
+   add-port br0 p2 -- set Interface p2 type=dummy -- \
+   add-port br0 p3 -- set Interface p3 type=dummy])
+
+AT_CHECK(
+  [ovs-vsctl \
+        -- get Interface p1 ofport \
+        -- get Interface p2 ofport \
+        -- get Interface p3 ofport],
+  [0], [stdout])
+set `cat stdout`
+br0=0 p1=$1 p2=$2 p3=$3
+arp='eth_type(0x0806),arp(sip=192.168.0.1,tip=192.168.0.2,op=1,sha=50:54:00:00:00:05,tha=00:00:00:00:00:00)'
+
+# Trace an ARP packet arriving on p3, to create a MAC learning entry.
+OFPROTO_TRACE(
+  [br0],
+  [in_port($p3),eth(src=50:54:00:00:00:05,dst=ff:ff:ff:ff:ff:ff),$arp],
+  [-generate],
+  [$br0,$p1,$p2],
+  [br0=$br0 p1=$p1 p2=$p2 p3=$p3])
+
+# Check for the MAC learning entry.
+AT_CHECK_UNQUOTED([ovs-appctl fdb/show br0 | sed 's/[[0-9]]$/?/'], [0], [dnl
+ port  VLAN  MAC                Age
+    $p3     0  50:54:00:00:00:05    ?
+])
+
+# Trace a packet arrival destined for the learned MAC.
+# (This will also learn a MAC.)
+OFPROTO_TRACE(
+  [br0],
+  [in_port($p1),eth(src=50:54:00:00:00:06,dst=50:54:00:00:00:05),$arp],
+  [-generate],
+  [$p3],
+  [br0=$br0 p1=$p1 p2=$p2 p3=$p3])
+
+# Check for both MAC learning entries.
+AT_CHECK_UNQUOTED([ovs-appctl fdb/show br0 | sed 's/[[0-9]]$/?/'], [0], [dnl
+ port  VLAN  MAC                Age
+    $p3     0  50:54:00:00:00:05    ?
+    $p1     0  50:54:00:00:00:06    ?
+])
+
+# Trace a packet arrival that updates the first learned MAC entry.
+OFPROTO_TRACE(
+  [br0],
+  [in_port($p2),eth(src=50:54:00:00:00:05,dst=ff:ff:ff:ff:ff:ff),$arp],
+  [-generate],
+  [$br0,$p1,$p3],
+  [br0=$br0 p1=$p1 p2=$p2 p3=$p3])
+
+# Check that the MAC learning entry was updated.
+AT_CHECK_UNQUOTED([ovs-appctl fdb/show br0 | sed 's/[[0-9]]$/?/'], [0], [dnl
+ port  VLAN  MAC                Age
+    $p1     0  50:54:00:00:00:06    ?
+    $p2     0  50:54:00:00:00:05    ?
+])
+
+# Add another bridge.
+AT_CHECK(
+  [ovs-vsctl \
+     -- add-br br1 \
+     -- set bridge br1 datapath-type=dummy \
+     -- add-port br1 p4 -- set interface p4 type=dummy \
+     -- add-port br1 p5 -- set interface p5 type=dummy])
+AT_CHECK(
+  [ovs-vsctl \
+        -- get Interface p4 ofport \
+        -- get Interface p5 ofport],
+  [0], [stdout])
+set `cat stdout`
+br1=0 p4=$1 p5=$2
+
+# Trace some packet arrivals in br1 to create MAC learning entries there too.
+OFPROTO_TRACE(
+  [br1],
+  [in_port($p4),eth(src=50:54:00:00:00:06,dst=ff:ff:ff:ff:ff:ff),$arp],
+  [-generate],
+  [$br1,$p5],
+  [br1=$br1 p4=$p4 p5=$p5])
+OFPROTO_TRACE(
+  [br1],
+  [in_port($p5),eth(src=50:54:00:00:00:07,dst=ff:ff:ff:ff:ff:ff),$arp],
+  [-generate],
+  [$br1,$p4],
+  [br1=$br1 p4=$p4 p5=$p5])
+
+# Check that the MAC learning entries were added.
+AT_CHECK_UNQUOTED([ovs-appctl fdb/show br1 | sed 's/[[0-9]]$/?/'], [0], [dnl
+ port  VLAN  MAC                Age
+    $p4     0  50:54:00:00:00:06    ?
+    $p5     0  50:54:00:00:00:07    ?
+])
+
+# Delete port p1 and see that its MAC learning entry disappeared, and
+# that the MAC learning entry for the same MAC was also deleted from br1.
+AT_CHECK([ovs-vsctl del-port p1])
+AT_CHECK_UNQUOTED([ovs-appctl fdb/show br0 | sed 's/[[0-9]]$/?/'], [0], [dnl
+ port  VLAN  MAC                Age
+    $p2     0  50:54:00:00:00:05    ?
+])
+AT_CHECK_UNQUOTED([ovs-appctl fdb/show br1 | sed 's/[[0-9]]$/?/'], [0], [dnl
+ port  VLAN  MAC                Age
+    $p5     0  50:54:00:00:00:07    ?
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP

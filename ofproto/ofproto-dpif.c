@@ -477,6 +477,7 @@ struct table_dpif {
 };
 
 struct ofproto_dpif {
+    struct hmap_node all_ofproto_dpifs_node; /* In 'all_ofproto_dpifs'. */
     struct ofproto up;
     struct dpif *dpif;
     int max_ports;
@@ -523,6 +524,9 @@ struct ofproto_dpif {
 /* Defer flow mod completion until "ovs-appctl ofproto/unclog"?  (Useful only
  * for debugging the asynchronous flow_mod implementation.) */
 static bool clogged;
+
+/* All existing ofproto_dpif instances, indexed by ->up.name. */
+static struct hmap all_ofproto_dpifs = HMAP_INITIALIZER(&all_ofproto_dpifs);
 
 static void ofproto_dpif_unixctl_init(void);
 
@@ -669,6 +673,9 @@ construct(struct ofproto *ofproto_, int *n_tablesp)
     hmap_init(&ofproto->vlandev_map);
     hmap_init(&ofproto->realdev_vid_map);
 
+    hmap_insert(&all_ofproto_dpifs, &ofproto->all_ofproto_dpifs_node,
+                hash_string(ofproto->up.name, 0));
+
     *n_tablesp = N_TABLES;
     memset(&ofproto->stats, 0, sizeof ofproto->stats);
     return 0;
@@ -694,6 +701,7 @@ destruct(struct ofproto *ofproto_)
     struct classifier *table;
     int i;
 
+    hmap_remove(&all_ofproto_dpifs, &ofproto->all_ofproto_dpifs_node);
     complete_operations(ofproto);
 
     OFPROTO_FOR_EACH_TABLE (table, &ofproto->up) {
@@ -1389,10 +1397,17 @@ set_queues(struct ofport *ofport_,
 
 /* Bundles. */
 
-/* Expires all MAC learning entries associated with 'port' and forces ofproto
- * to revalidate every flow. */
+/* Expires all MAC learning entries associated with 'bundle' and forces its
+ * ofproto to revalidate every flow.
+ *
+ * Normally MAC learning entries are removed only from the ofproto associated
+ * with 'bundle', but if 'all_ofprotos' is true, then the MAC learning entries
+ * are removed from every ofproto.  When patch ports and SLB bonds are in use
+ * and a VM migration happens and the gratuitous ARPs are somehow lost, this
+ * avoids a MAC_ENTRY_IDLE_TIME delay before the migrated VM can communicate
+ * with the host from which it migrated. */
 static void
-bundle_flush_macs(struct ofbundle *bundle)
+bundle_flush_macs(struct ofbundle *bundle, bool all_ofprotos)
 {
     struct ofproto_dpif *ofproto = bundle->ofproto;
     struct mac_learning *ml = ofproto->ml;
@@ -1401,6 +1416,23 @@ bundle_flush_macs(struct ofbundle *bundle)
     ofproto->need_revalidate = true;
     LIST_FOR_EACH_SAFE (mac, next_mac, lru_node, &ml->lrus) {
         if (mac->port.p == bundle) {
+            if (all_ofprotos) {
+                struct ofproto_dpif *o;
+
+                HMAP_FOR_EACH (o, all_ofproto_dpifs_node, &all_ofproto_dpifs) {
+                    if (o != ofproto) {
+                        struct mac_entry *e;
+
+                        e = mac_learning_lookup(o->ml, mac->mac, mac->vlan,
+                                                NULL);
+                        if (e) {
+                            tag_set_add(&o->revalidate_set, e->tag);
+                            mac_learning_expire(o->ml, e);
+                        }
+                    }
+                }
+            }
+
             mac_learning_expire(ml, mac);
         }
     }
@@ -1534,7 +1566,7 @@ bundle_destroy(struct ofbundle *bundle)
         bundle_del_port(port);
     }
 
-    bundle_flush_macs(bundle);
+    bundle_flush_macs(bundle, true);
     hmap_remove(&ofproto->bundles, &bundle->hmap_node);
     free(bundle->name);
     free(bundle->trunks);
@@ -1722,7 +1754,7 @@ bundle_set(struct ofproto *ofproto_, void *aux,
     /* If we changed something that would affect MAC learning, un-learn
      * everything on this port and force flow revalidation. */
     if (need_flush) {
-        bundle_flush_macs(bundle);
+        bundle_flush_macs(bundle, false);
     }
 
     return 0;
@@ -5511,10 +5543,15 @@ send_netflow_active_timeouts(struct ofproto_dpif *ofproto)
 static struct ofproto_dpif *
 ofproto_dpif_lookup(const char *name)
 {
-    struct ofproto *ofproto = ofproto_lookup(name);
-    return (ofproto && ofproto->ofproto_class == &ofproto_dpif_class
-            ? ofproto_dpif_cast(ofproto)
-            : NULL);
+    struct ofproto_dpif *ofproto;
+
+    HMAP_FOR_EACH_WITH_HASH (ofproto, all_ofproto_dpifs_node,
+                             hash_string(name, 0), &all_ofproto_dpifs) {
+        if (!strcmp(ofproto->up.name, name)) {
+            return ofproto;
+        }
+    }
+    return NULL;
 }
 
 static void
