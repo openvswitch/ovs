@@ -55,7 +55,8 @@ long long int time_wall_msec(void);
 void time_timespec(struct timespec *);
 void time_wall_timespec(struct timespec *);
 void time_alarm(unsigned int secs);
-int time_poll(struct pollfd *, int n_pollfds, int timeout);
+int time_poll(struct pollfd *, int n_pollfds, long long int timeout_when,
+              int *elapsed);
 
 long long int timespec_to_msec(const struct timespec *);
 long long int timeval_to_msec(const struct timeval *);

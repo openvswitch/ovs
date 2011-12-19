@@ -269,16 +269,21 @@ time_alarm(unsigned int secs)
 
 /* Like poll(), except:
  *
+ *      - The timeout is specified as an absolute time, as defined by
+ *        time_msec(), instead of a duration.
+ *
  *      - On error, returns a negative error code (instead of setting errno).
  *
  *      - If interrupted by a signal, retries automatically until the original
- *        'timeout' expires.  (Because of this property, this function will
+ *        timeout is reached.  (Because of this property, this function will
  *        never return -EINTR.)
  *
  *      - As a side effect, refreshes the current time (like time_refresh()).
- */
+ *
+ * Stores the number of milliseconds elapsed during poll in '*elapsed'. */
 int
-time_poll(struct pollfd *pollfds, int n_pollfds, int timeout)
+time_poll(struct pollfd *pollfds, int n_pollfds, long long int timeout_when,
+          int *elapsed)
 {
     static long long int last_wakeup;
     long long int start;
@@ -292,12 +297,15 @@ time_poll(struct pollfd *pollfds, int n_pollfds, int timeout)
     start = time_msec();
     blocked = false;
     for (;;) {
+        long long int now = time_msec();
         int time_left;
-        if (timeout > 0) {
-            long long int elapsed = time_msec() - start;
-            time_left = timeout >= elapsed ? timeout - elapsed : 0;
+
+        if (now >= timeout_when) {
+            time_left = 0;
+        } else if ((unsigned long long int) timeout_when - now > INT_MAX) {
+            time_left = INT_MAX;
         } else {
-            time_left = timeout;
+            time_left = timeout_when - now;
         }
 
         retval = poll(pollfds, n_pollfds, time_left);
@@ -319,6 +327,7 @@ time_poll(struct pollfd *pollfds, int n_pollfds, int timeout)
     }
     last_wakeup = time_msec();
     refresh_rusage();
+    *elapsed = last_wakeup - start;
     return retval;
 }
 
