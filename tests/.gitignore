@@ -22,6 +22,7 @@
 /test-list
 /test-lockfile
 /test-multipath
+/test-netflow
 /test-odp
 /test-ovsdb
 /test-packets
