@@ -758,3 +758,131 @@ AT_CHECK_UNQUOTED([ovs-appctl fdb/show br1 | sed 's/[[0-9]]$/?/'], [0], [dnl
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP
+
+dnl Test that basic NetFlow reports flow statistics correctly:
+dnl - The initial packet of a flow are correctly accounted.
+dnl - Later packets within a flow are correctly accounted.
+dnl - Flow actions changing (in this case, due to MAC learning)
+dnl   cause a record to be sent.
+AT_SETUP([ofproto-dpif - NetFlow flow expiration])
+
+AT_SKIP_IF([test "x$RANDOM" = x])
+NETFLOW_PORT=`expr 32767 + \( $RANDOM % 32767 \)`
+
+OVS_VSWITCHD_START(
+  [set Bridge br0 fail-mode=standalone -- \
+   add-port br0 p1 -- set Interface p1 type=dummy -- \
+   add-port br0 p2 -- set Interface p2 type=dummy -- \
+   set Bridge br0 netflow=@nf -- \
+   --id=@nf create NetFlow targets=\"127.0.0.1:$NETFLOW_PORT\" \
+     engine_id=1 engine_type=2 active_timeout=30 \
+     add-id-to-interface=false], [<0>
+])
+
+AT_CHECK([test-netflow --detach --pidfile $NETFLOW_PORT:127.0.0.1 > netflow.log])AT_CAPTURE_FILE([netflow.log])
+
+for delay in 1000 30000; do
+    ovs-appctl netdev-dummy/receive p1 'in_port(2),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'
+    ovs-appctl netdev-dummy/receive p2 'in_port(1),eth(src=50:54:00:00:00:07,dst=50:54:00:00:00:05),eth_type(0x0800),ipv4(src=192.168.0.2,dst=192.168.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=0,code=0)'
+
+    ovs-appctl time/warp $delay
+done
+
+OVS_VSWITCHD_STOP
+ovs-appctl -t test-netflow exit
+
+AT_CHECK([[sed -e 's/, uptime [0-9]*//
+s/, now [0-9.]*//
+s/time \([0-9]*\)\.\.\.\1/time <moment>/
+s/time [0-9]*\.\.\.[0-9]*/time <range>/
+' netflow.log]], [0],
+  [header: v5, seq 0, engine 2,1
+rec: 192.168.0.1 > 192.168.0.2, if 1 > 65535, 1 pkts, 60 bytes, ICMP 8:0, time <moment>
+
+header: v5, seq 1, engine 2,1
+rec: 192.168.0.2 > 192.168.0.1, if 2 > 1, 2 pkts, 120 bytes, ICMP 0:0, time <range>
+rec: 192.168.0.1 > 192.168.0.2, if 1 > 2, 1 pkts, 60 bytes, ICMP 8:0, time <moment>
+])
+AT_CLEANUP
+
+dnl Test that basic NetFlow reports active expirations correctly.
+AT_SETUP([ofproto-dpif - NetFlow active expiration])
+
+AT_SKIP_IF([test "x$RANDOM" = x])
+NETFLOW_PORT=`expr 32767 + \( $RANDOM % 32767 \)`
+
+OVS_VSWITCHD_START(
+  [set Bridge br0 fail-mode=standalone -- \
+   add-port br0 p1 -- set Interface p1 type=dummy -- \
+   add-port br0 p2 -- set Interface p2 type=dummy -- \
+   set Bridge br0 netflow=@nf -- \
+   --id=@nf create NetFlow targets=\"127.0.0.1:$NETFLOW_PORT\" \
+     engine_id=1 engine_type=2 active_timeout=10 \
+     add-id-to-interface=false], [<0>
+])
+
+AT_CHECK([test-netflow --detach --pidfile $NETFLOW_PORT:127.0.0.1 > netflow.log])AT_CAPTURE_FILE([netflow.log])
+
+n=1
+while test $n -le 60; do
+    n=`expr $n + 1`
+
+    ovs-appctl netdev-dummy/receive p1 'in_port(2),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=1234,dst=80)'
+    ovs-appctl netdev-dummy/receive p2 'in_port(1),eth(src=50:54:00:00:00:07,dst=50:54:00:00:00:05),eth_type(0x0800),ipv4(src=192.168.0.2,dst=192.168.0.1,proto=6,tos=0,ttl=64,frag=no),tcp(src=80,dst=1234)'
+
+    ovs-appctl time/warp 1000
+done
+
+ovs-appctl time/warp 10000
+
+OVS_VSWITCHD_STOP
+ovs-appctl -t test-netflow exit
+
+# Count the number of reported packets:
+# - From source to destination before MAC learning kicks in (just one).
+# - From source to destination after that.
+# - From destination to source.
+n_learn=0
+n_in=0
+n_out=0
+n_other=0
+n_recs=0
+none=0
+while read line; do
+    pkts=`echo "$line" | sed 's/.*, \([[0-9]]*\) pkts,.*/\1/'`
+    case $pkts in
+         [[0-9]]*) ;;
+	 *) continue ;;
+    esac
+
+    case $line in
+        "rec: 192.168.0.1 > 192.168.0.2, if 1 > 65535, "*" pkts, "*" bytes, TCP 1234 > 80, time "*)
+            counter=n_learn
+	    ;;
+	"rec: 192.168.0.1 > 192.168.0.2, if 1 > 2, "*" pkts, "*" bytes, TCP 1234 > 80, time "*)
+	    counter=n_in
+	    ;;
+	"rec: 192.168.0.2 > 192.168.0.1, if 2 > 1, "*" pkts, "*" bytes, TCP 80 > 1234, time "*)
+	    counter=n_out
+	    ;;
+	*)
+	    counter=n_other
+	    ;;
+    esac
+    eval $counter=\`expr \$$counter + \$pkts\`
+    n_recs=`expr $n_recs + 1`
+done < netflow.log
+
+# There should be exactly 1 MAC learning packet,
+# exactly 59 other packets in that direction,
+# and exactly 60 packets in the other direction.
+AT_CHECK([echo $n_learn $n_in $n_out $n_other], [0], [1 59 60 0
+])
+
+# There should be 1 expiration for MAC learning,
+# at least 5 active and a final expiration in one direction,
+# and at least 5 active and a final expiration in the other direction.
+echo $n_recs
+AT_CHECK([test $n_recs -ge 13])
+
+AT_CLEANUP

@@ -261,6 +261,10 @@ noinst_PROGRAMS += tests/test-stp
 tests_test_stp_SOURCES = tests/test-stp.c
 tests_test_stp_LDADD = lib/libopenvswitch.a
 
+noinst_PROGRAMS += tests/test-netflow
+tests_test_netflow_SOURCES = tests/test-netflow.c
+tests_test_netflow_LDADD = lib/libopenvswitch.a
+
 noinst_PROGRAMS += tests/test-unix-socket
 tests_test_unix_socket_SOURCES = tests/test-unix-socket.c
 tests_test_unix_socket_LDADD = lib/libopenvswitch.a
