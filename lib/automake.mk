@@ -85,6 +85,7 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/netdev-provider.h \
 	lib/netdev.c \
 	lib/netdev.h \
+	lib/netflow.h \
 	lib/netlink.c \
 	lib/netlink.h \
 	lib/nx-match.c \

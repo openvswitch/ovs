@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef NETFLOW_H
-#define NETFLOW_H 1
+#ifndef OFPROTO_NETFLOW_H
+#define OFPROTO_NETFLOW_H 1
 
 #include <stdint.h>
 #include "flow.h"
