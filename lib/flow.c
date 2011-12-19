@@ -1020,6 +1020,7 @@ flow_compose(struct ofpbuf *b, const struct flow *flow)
                 b->l4 = tcp = ofpbuf_put_zeros(b, sizeof *tcp);
                 tcp->tcp_src = flow->tp_src;
                 tcp->tcp_dst = flow->tp_dst;
+                tcp->tcp_ctl = TCP_CTL(0, 5);
             } else if (flow->nw_proto == IPPROTO_UDP) {
                 struct udp_header *udp;
 
@@ -1034,6 +1035,9 @@ flow_compose(struct ofpbuf *b, const struct flow *flow)
                 icmp->icmp_code = ntohs(flow->tp_dst);
             }
         }
+
+        ip->ip_tot_len = htons((uint8_t *) b->data + b->size
+                               - (uint8_t *) b->l3);
     } else if (flow->dl_type == htons(ETH_TYPE_IPV6)) {
         /* XXX */
     } else if (flow->dl_type == htons(ETH_TYPE_ARP)) {
