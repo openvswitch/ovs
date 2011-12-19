@@ -23,6 +23,7 @@
 #include <sys/types.h>
 #include "openvswitch/types.h"
 #include "vlog.h"
+#include "socket-util.h"
 
 struct pstream;
 struct stream;
@@ -75,7 +76,11 @@ int pstream_open_with_default_ports(const char *name,
                                     uint16_t default_ptcp_port,
                                     uint16_t default_pssl_port,
                                     struct pstream **);
-
+bool stream_parse_target_with_default_ports(const char *target,
+                                           uint16_t default_tcp_port,
+                                           uint16_t default_ssl_port,
+                                           struct sockaddr_in *sin);
+
 /* Error reporting. */
 
 enum stream_content_type {

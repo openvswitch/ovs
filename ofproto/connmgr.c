@@ -587,14 +587,16 @@ update_in_band_remotes(struct connmgr *mgr)
     /* Add all the remotes. */
     HMAP_FOR_EACH (ofconn, hmap_node, &mgr->controllers) {
         struct sockaddr_in *sin = &addrs[n_addrs];
+        const char *target = rconn_get_target(ofconn->rconn);
 
         if (ofconn->band == OFPROTO_OUT_OF_BAND) {
             continue;
         }
 
-        sin->sin_addr.s_addr = rconn_get_remote_ip(ofconn->rconn);
-        if (sin->sin_addr.s_addr) {
-            sin->sin_port = rconn_get_remote_port(ofconn->rconn);
+        if (stream_parse_target_with_default_ports(target,
+                                                   OFP_TCP_PORT,
+                                                   OFP_SSL_PORT,
+                                                   sin)) {
             n_addrs++;
         }
     }
