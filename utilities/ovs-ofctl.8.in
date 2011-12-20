@@ -1054,11 +1054,22 @@ flow format, \fBovs\-ofctl\fR will report a fatal error.
 Increases the verbosity of OpenFlow messages printed and logged by
 \fBovs\-ofctl\fR commands.  Specify this option more than once to
 increase verbosity further.
+.
+.ds DD \
+\fBovs\-ofctl\fR detaches only when executing the \fBmonitor\fR or \
+\fBsnoop\fR commands.
+.so lib/daemon.man
 .SS "Public Key Infrastructure Options"
 .so lib/ssl.man
 .so lib/vlog.man
 .so lib/common.man
 .
+.SH "RUNTIME MANAGEMENT COMMANDS"
+\fBovs\-appctl\fR(8) can send commands to a running \fBovs\-ofctl\fR process.
+The currently supported commands only apply when executing the \fBmonitor\fR or
+\fBsnoop\fR commands and are described below.
+.IP "\fBexit\fR"
+Causes \fBovs\-ofctl\fR to gracefully terminate.
 .SH EXAMPLES
 .
 The following examples assume that \fBovs\-vswitchd\fR has a bridge

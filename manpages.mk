@@ -121,11 +121,13 @@ lib/vlog.man:
 utilities/ovs-ofctl.8: \
 	utilities/ovs-ofctl.8.in \
 	lib/common.man \
+	lib/daemon.man \
 	lib/ssl.man \
 	lib/vconn-active.man \
 	lib/vlog.man
 utilities/ovs-ofctl.8.in:
 lib/common.man:
+lib/daemon.man:
 lib/ssl.man:
 lib/vconn-active.man:
 lib/vlog.man:

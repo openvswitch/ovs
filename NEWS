@@ -3,6 +3,8 @@ port-v1.4.0
     - OpenFlow:
         - Added support for querying, modifying, and deleting flows
           based on flow cookie when using NXM.
+    - ovs-ofctl:
+        - Added daemonization support to the monitor and snoop commands.
 
 
 v1.4.0 - xx xxx xxxx

@@ -30,6 +30,7 @@
 #include "byte-order.h"
 #include "classifier.h"
 #include "command-line.h"
+#include "daemon.h"
 #include "compiler.h"
 #include "dirs.h"
 #include "dynamic-string.h"
@@ -43,9 +44,11 @@
 #include "ofproto/ofproto.h"
 #include "openflow/nicira-ext.h"
 #include "openflow/openflow.h"
+#include "poll-loop.h"
 #include "random.h"
 #include "stream-ssl.h"
 #include "timeval.h"
+#include "unixctl.h"
 #include "util.h"
 #include "vconn.h"
 #include "vlog.h"
@@ -87,6 +90,7 @@ parse_options(int argc, char *argv[])
     enum {
         OPT_STRICT = UCHAR_MAX + 1,
         OPT_READD,
+        DAEMON_OPTION_ENUMS,
         VLOG_OPTION_ENUMS
     };
     static struct option long_options[] = {
@@ -97,6 +101,7 @@ parse_options(int argc, char *argv[])
         {"more", no_argument, NULL, 'm'},
         {"help", no_argument, NULL, 'h'},
         {"version", no_argument, NULL, 'V'},
+        DAEMON_LONG_OPTIONS,
         VLOG_LONG_OPTIONS,
         STREAM_SSL_LONG_OPTIONS,
         {NULL, 0, NULL, 0},
@@ -149,6 +154,7 @@ parse_options(int argc, char *argv[])
             readd = true;
             break;
 
+        DAEMON_OPTION_HANDLERS
         VLOG_OPTION_HANDLERS
         STREAM_SSL_OPTION_HANDLERS
 
@@ -193,6 +199,7 @@ usage(void)
            "where SWITCH or TARGET is an active OpenFlow connection method.\n",
            program_name, program_name);
     vconn_usage(true, false, false);
+    daemon_usage();
     vlog_usage();
     printf("\nOther options:\n"
            "  --strict                    use strict match for flow commands\n"
@@ -203,6 +210,15 @@ usage(void)
            "  -h, --help                  display this help message\n"
            "  -V, --version               display version information\n");
     exit(EXIT_SUCCESS);
+}
+
+static void
+ofctl_exit(struct unixctl_conn *conn, int argc OVS_UNUSED,
+           const char *argv[] OVS_UNUSED, void *exiting_)
+{
+    bool *exiting = exiting_;
+    *exiting = true;
+    unixctl_command_reply(conn, 200, "");
 }
 
 static void run(int retval, const char *message, ...)
@@ -752,11 +768,51 @@ do_del_flows(int argc, char *argv[])
 static void
 monitor_vconn(struct vconn *vconn)
 {
+    struct unixctl_server *server;
+    bool exiting = false;
+    int error, fd;
+
+    /* Daemonization will close stderr but we really want to keep it, so make a
+     * copy. */
+    fd = dup(STDERR_FILENO);
+
+    daemonize_start();
+    error = unixctl_server_create(NULL, &server);
+    if (error) {
+        ovs_fatal(error, "failed to create unixctl server");
+    }
+    unixctl_command_register("exit", "", 0, 0, ofctl_exit, &exiting);
+    daemonize_complete();
+
+    /* Now get stderr back. */
+    dup2(fd, STDERR_FILENO);
+
     for (;;) {
         struct ofpbuf *b;
-        run(vconn_recv_block(vconn, &b), "vconn_recv");
-        ofp_print(stderr, b->data, b->size, verbosity + 2);
-        ofpbuf_delete(b);
+        int retval;
+
+        unixctl_server_run(server);
+
+        for (;;) {
+            retval = vconn_recv(vconn, &b);
+            if (retval == EAGAIN) {
+                break;
+            }
+
+            run(retval, "vconn_recv");
+            ofp_print(stderr, b->data, b->size, verbosity + 2);
+            ofpbuf_delete(b);
+        }
+
+        if (exiting) {
+            break;
+        }
+
+        vconn_run(vconn);
+        vconn_run_wait(vconn);
+        vconn_recv_wait(vconn);
+        unixctl_server_wait(server);
+        poll_block();
     }
 }
 
