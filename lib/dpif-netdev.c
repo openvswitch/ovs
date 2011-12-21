@@ -1137,11 +1137,21 @@ dp_netdev_set_udp_port(struct ofpbuf *packet, const struct ovs_key_udp *udp_key)
 {
     struct udp_header *uh = packet->l4;
 
-    if (uh->udp_src != udp_key->udp_src) {
-        dp_netdev_set_port(&uh->udp_src, udp_key->udp_src, &uh->udp_csum);
-    }
-    if (uh->udp_dst != udp_key->udp_dst) {
-        dp_netdev_set_port(&uh->udp_dst, udp_key->udp_dst, &uh->udp_csum);
+    if (uh->udp_csum) {
+        if (uh->udp_src != udp_key->udp_src) {
+            dp_netdev_set_port(&uh->udp_src, udp_key->udp_src, &uh->udp_csum);
+        }
+
+        if (uh->udp_dst != udp_key->udp_dst) {
+            dp_netdev_set_port(&uh->udp_dst, udp_key->udp_dst, &uh->udp_csum);
+        }
+
+        if (!uh->udp_csum) {
+            uh->udp_csum = htons(0xffff);
+        }
+    } else {
+        uh->udp_src = udp_key->udp_src;
+        uh->udp_dst = udp_key->udp_dst;
     }
 }
 
