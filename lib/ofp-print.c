@@ -60,6 +60,19 @@ ofp_packet_to_string(const void *data, size_t len)
     ofpbuf_use_const(&buf, data, len);
     flow_extract(&buf, 0, 0, 0, &flow);
     flow_format(&ds, &flow);
+
+    if (buf.l7) {
+        if (flow.nw_proto == IPPROTO_TCP) {
+            struct tcp_header *th = buf.l4;
+            ds_put_format(&ds, " tcp_csum:%"PRIx16,
+                          ntohs(th->tcp_csum));
+        } else if (flow.nw_proto == IPPROTO_UDP) {
+            struct udp_header *uh = buf.l4;
+            ds_put_format(&ds, " udp_csum:%"PRIx16,
+                          ntohs(uh->udp_csum));
+        }
+    }
+
     ds_put_char(&ds, '\n');
 
     return ds_cstr(&ds);

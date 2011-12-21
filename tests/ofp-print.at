@@ -233,7 +233,7 @@ c0 a8 00 02 27 2f 00 00 78 50 cc 5b 57 af 42 1e \
 50 00 02 00 26 e8 00 00 00 00 00 00 00 00 \
 "], [0], [dnl
 OFPT_PACKET_IN (xid=0x0): total_len=60 in_port=3 data_len=60 buffer=0x00000111
-priority:0,tunnel:0,in_port:0000,tci(0) mac(50:54:00:00:00:05->50:54:00:00:00:06) type:0800 proto:6 tos:0 ttl:64 ip(192.168.0.1->192.168.0.2) port(10031->0)
+priority:0,tunnel:0,in_port:0000,tci(0) mac(50:54:00:00:00:05->50:54:00:00:00:06) type:0800 proto:6 tos:0 ttl:64 ip(192.168.0.1->192.168.0.2) port(10031->0) tcp_csum:26e8
 ])
 AT_CLEANUP
 
