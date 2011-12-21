@@ -33,6 +33,7 @@
 #include "pktbuf.h"
 #include "rconn.h"
 #include "shash.h"
+#include "stream.h"
 #include "timeval.h"
 #include "vconn.h"
 #include "vlog.h"

@@ -40,6 +40,7 @@
 #include "sha1.h"
 #include "shash.h"
 #include "socket-util.h"
+#include "stream.h"
 #include "stream-ssl.h"
 #include "sset.h"
 #include "system-stats.h"
