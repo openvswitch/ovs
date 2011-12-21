@@ -57,7 +57,7 @@ struct flow {
     struct in6_addr ipv6_src;   /* IPv6 source address. */
     struct in6_addr ipv6_dst;   /* IPv6 destination address. */
     struct in6_addr nd_target;  /* IPv6 neighbor discovery (ND) target. */
-    uint32_t priority;          /* Packet priority for QoS. */
+    uint32_t skb_priority;      /* Packet priority for QoS. */
     uint32_t regs[FLOW_N_REGS]; /* Registers. */
     ovs_be32 nw_src;            /* IPv4 source address. */
     ovs_be32 nw_dst;            /* IPv4 destination address. */

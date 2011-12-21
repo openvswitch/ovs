@@ -1163,8 +1163,8 @@ odp_flow_key_from_flow(struct ofpbuf *buf, const struct flow *flow)
     struct ovs_key_ethernet *eth_key;
     size_t encap;
 
-    if (flow->priority) {
-        nl_msg_put_u32(buf, OVS_KEY_ATTR_PRIORITY, flow->priority);
+    if (flow->skb_priority) {
+        nl_msg_put_u32(buf, OVS_KEY_ATTR_PRIORITY, flow->skb_priority);
     }
 
     if (flow->tun_id != htonll(0)) {
@@ -1655,7 +1655,7 @@ odp_flow_key_to_flow(const struct nlattr *key, size_t key_len,
 
     /* Metadata. */
     if (present_attrs & (UINT64_C(1) << OVS_KEY_ATTR_PRIORITY)) {
-        flow->priority = nl_attr_get_u32(attrs[OVS_KEY_ATTR_PRIORITY]);
+        flow->skb_priority = nl_attr_get_u32(attrs[OVS_KEY_ATTR_PRIORITY]);
         expected_attrs |= UINT64_C(1) << OVS_KEY_ATTR_PRIORITY;
     }
 
@@ -1859,13 +1859,13 @@ static void
 commit_set_priority_action(const struct flow *flow, struct flow *base,
                            struct ofpbuf *odp_actions)
 {
-    if (base->priority == flow->priority) {
+    if (base->skb_priority == flow->skb_priority) {
         return;
     }
-    base->priority = flow->priority;
+    base->skb_priority = flow->skb_priority;
 
     commit_set_action(odp_actions, OVS_KEY_ATTR_PRIORITY,
-                      &base->priority, sizeof(base->priority));
+                      &base->skb_priority, sizeof(base->skb_priority));
 }
 
 /* If any of the flow key data that ODP actions can modify are different in

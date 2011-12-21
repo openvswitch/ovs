@@ -312,7 +312,9 @@ invalid:
 
 }
 
-/* Initializes 'flow' members from 'packet', 'tun_id', and 'ofp_in_port'.
+/* Initializes 'flow' members from 'packet', 'skb_priority', 'tun_id', and
+ * 'ofp_in_port'.
+ *
  * Initializes 'packet' header pointers as follows:
  *
  *    - packet->l2 to the start of the Ethernet header.
@@ -328,7 +330,7 @@ invalid:
  *      present and has a correct length, and otherwise NULL.
  */
 void
-flow_extract(struct ofpbuf *packet, uint32_t priority, ovs_be64 tun_id,
+flow_extract(struct ofpbuf *packet, uint32_t skb_priority, ovs_be64 tun_id,
              uint16_t ofp_in_port, struct flow *flow)
 {
     struct ofpbuf b = *packet;
@@ -339,7 +341,7 @@ flow_extract(struct ofpbuf *packet, uint32_t priority, ovs_be64 tun_id,
     memset(flow, 0, sizeof *flow);
     flow->tun_id = tun_id;
     flow->in_port = ofp_in_port;
-    flow->priority = priority;
+    flow->skb_priority = skb_priority;
 
     packet->l2 = b.data;
     packet->l3 = NULL;
@@ -502,7 +504,7 @@ flow_zero_wildcards(struct flow *flow, const struct flow_wildcards *wildcards)
     if (wc & FWW_ND_TARGET) {
         memset(&flow->nd_target, 0, sizeof flow->nd_target);
     }
-    flow->priority = 0;
+    flow->skb_priority = 0;
 }
 
 char *
@@ -519,7 +521,7 @@ flow_format(struct ds *ds, const struct flow *flow)
     ds_put_format(ds, "priority%"PRIu32
                       ":tunnel%#"PRIx64
                       ":in_port%04"PRIx16,
-                      flow->priority,
+                      flow->skb_priority,
                       ntohll(flow->tun_id),
                       flow->in_port);
 

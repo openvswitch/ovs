@@ -227,7 +227,7 @@ struct action_xlate_ctx {
 
     int recurse;                /* Recursion level, via xlate_table_action. */
     struct flow base_flow;      /* Flow at the last commit. */
-    uint32_t original_priority; /* Priority when packet arrived. */
+    uint32_t orig_skb_priority; /* Priority when packet arrived. */
     uint8_t table_id;           /* OpenFlow table ID where flow was found. */
     uint32_t sflow_n_outputs;   /* Number of output ports. */
     uint16_t sflow_odp_port;    /* Output port for composing sFlow action. */
@@ -2673,7 +2673,7 @@ handle_miss_upcalls(struct ofproto_dpif *ofproto, struct dpif_upcall *upcalls,
             ofpbuf_delete(upcall->packet);
             continue;
         }
-        flow_extract(upcall->packet, flow.priority, flow.tun_id,
+        flow_extract(upcall->packet, flow.skb_priority, flow.tun_id,
                      flow.in_port, &flow);
 
         /* Handle 802.1ag, LACP, and STP specially. */
@@ -4161,7 +4161,7 @@ compose_output_action__(struct action_xlate_ctx *ctx, uint16_t ofp_port,
             return;
         }
 
-        pdscp = get_priority(ofport, ctx->flow.priority);
+        pdscp = get_priority(ofport, ctx->flow.skb_priority);
         if (pdscp) {
             ctx->flow.nw_tos &= ~IP_DSCP_MASK;
             ctx->flow.nw_tos |= pdscp->dscp;
@@ -4390,10 +4390,10 @@ xlate_enqueue_action(struct action_xlate_ctx *ctx,
     }
 
     /* Add datapath actions. */
-    flow_priority = ctx->flow.priority;
-    ctx->flow.priority = priority;
+    flow_priority = ctx->flow.skb_priority;
+    ctx->flow.skb_priority = priority;
     compose_output_action(ctx, ofp_port);
-    ctx->flow.priority = flow_priority;
+    ctx->flow.skb_priority = flow_priority;
 
     /* Update NetFlow output port. */
     if (ctx->nf_output_iface == NF_OUT_DROP) {
@@ -4418,7 +4418,7 @@ xlate_set_queue_action(struct action_xlate_ctx *ctx,
         return;
     }
 
-    ctx->flow.priority = priority;
+    ctx->flow.skb_priority = priority;
 }
 
 struct xlate_reg_state {
@@ -4616,7 +4616,7 @@ do_xlate_actions(const union ofp_action *in, size_t n_in,
             break;
 
         case OFPUTIL_NXAST_POP_QUEUE:
-            ctx->flow.priority = ctx->original_priority;
+            ctx->flow.skb_priority = ctx->orig_skb_priority;
             break;
 
         case OFPUTIL_NXAST_REG_MOVE:
@@ -4721,7 +4721,7 @@ xlate_actions(struct action_xlate_ctx *ctx,
     ctx->nf_output_iface = NF_OUT_DROP;
     ctx->mirrors = 0;
     ctx->recurse = 0;
-    ctx->original_priority = ctx->flow.priority;
+    ctx->orig_skb_priority = ctx->flow.skb_priority;
     ctx->table_id = 0;
     ctx->exit = false;
 
