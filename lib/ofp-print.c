@@ -49,58 +49,19 @@ static void ofp_print_error(struct ds *, int error);
 
 
 /* Returns a string that represents the contents of the Ethernet frame in the
- * 'len' bytes starting at 'data' to 'stream' as output by tcpdump.
- *
- * The caller must free the returned string.
- *
- * This starts and kills a tcpdump subprocess so it's quite expensive. */
+ * 'len' bytes starting at 'data'.  The caller must free the returned string.*/
 char *
 ofp_packet_to_string(const void *data, size_t len)
 {
     struct ds ds = DS_EMPTY_INITIALIZER;
     struct ofpbuf buf;
-
-    char command[128];
-    FILE *pcap;
-    FILE *tcpdump;
-    int status;
-    int c;
+    struct flow flow;
 
     ofpbuf_use_const(&buf, data, len);
+    flow_extract(&buf, 0, 0, 0, &flow);
+    flow_format(&ds, &flow);
+    ds_put_char(&ds, '\n');
 
-    pcap = tmpfile();
-    if (!pcap) {
-        ovs_error(errno, "tmpfile");
-        return xstrdup("<error>");
-    }
-    pcap_write_header(pcap);
-    pcap_write(pcap, &buf);
-    fflush(pcap);
-    if (ferror(pcap)) {
-        ovs_error(errno, "error writing temporary file");
-    }
-    rewind(pcap);
-
-    snprintf(command, sizeof command, "/usr/sbin/tcpdump -t -e -n -r /dev/fd/%d 2>/dev/null",
-             fileno(pcap));
-    tcpdump = popen(command, "r");
-    fclose(pcap);
-    if (!tcpdump) {
-        ovs_error(errno, "exec(\"%s\")", command);
-        return xstrdup("<error>");
-    }
-
-    while ((c = getc(tcpdump)) != EOF) {
-        ds_put_char(&ds, c);
-    }
-
-    status = pclose(tcpdump);
-    if (WIFEXITED(status)) {
-        if (WEXITSTATUS(status))
-            ovs_error(0, "tcpdump exited with status %d", WEXITSTATUS(status));
-    } else if (WIFSIGNALED(status)) {
-        ovs_error(0, "tcpdump exited with signal %d", WTERMSIG(status));
-    }
     return ds_cstr(&ds);
 }
 
@@ -134,15 +95,6 @@ ofp_print_packet_in(struct ds *string, const struct ofp_packet_in *op,
     ds_put_char(string, '\n');
 
     if (verbosity > 0) {
-        struct flow flow;
-        struct ofpbuf packet;
-
-        ofpbuf_use_const(&packet, op->data, data_len);
-        flow_extract(&packet, 0, 0, ntohs(op->in_port), &flow);
-        flow_format(string, &flow);
-        ds_put_char(string, '\n');
-    }
-    if (verbosity > 1) {
         char *packet = ofp_packet_to_string(op->data, data_len);
         ds_put_cstr(string, packet);
         free(packet);
@@ -1589,10 +1541,7 @@ ofp_print(FILE *stream, const void *oh, size_t len, int verbosity)
 }
 
 /* Dumps the contents of the Ethernet frame in the 'len' bytes starting at
- * 'data' to 'stream' using tcpdump.  'total_len' specifies the full length of
- * the Ethernet frame (of which 'len' bytes were captured).
- *
- * This starts and kills a tcpdump subprocess so it's quite expensive. */
+ * 'data' to 'stream'. */
 void
 ofp_print_packet(FILE *stream, const void *data, size_t len)
 {

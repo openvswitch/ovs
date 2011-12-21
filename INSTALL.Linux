@@ -117,11 +117,6 @@ following software:
       iproute2 (part of all major distributions and available at
       http://www.linux-foundation.org/en/Net:Iproute2).
 
-    - For debugging purposes, Open vSwitch expects that "tcpdump" is
-      installed as /usr/sbin/tcpdump.  If tcpdump is not installed, or
-      if it is installed in a different location, then some Open
-      vSwitch log messages will not be as detailed.
-
 You should ensure that /dev/urandom exists.  To support TAP devices,
 you must also ensure that /dev/net/tun exists.
 
