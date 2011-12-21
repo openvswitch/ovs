@@ -26,8 +26,8 @@ v1.3.0 - 09 Dec 2011
         via "ip_frag" in ovs-ofctl).
       - New ovs-ofctl "get-frags" and "set-frags" commands to get and set
         fragment handling policy.
-    - CAPWAP tunneling now supports an extension to transport a 64-key.  By
-      default it remains compatible with the old version and other
+    - CAPWAP tunneling now supports an extension to transport a 64-bit key.
+      By default it remains compatible with the old version and other
       standards-based implementations.
     - Flow setups are now processed in a round-robin manner across ports
       to prevent any single client from monopolizing the CPU and conducting
