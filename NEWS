@@ -38,7 +38,7 @@ v1.4.0 - xx xxx xxxx
         the bond mode which they want to use.
 
 
-v1.3.0 - xx xxx xxxx
+v1.3.0 - 09 Dec 2011
 ------------------------
     - OpenFlow:
       - Added an OpenFlow extension which allows the "output" action to accept
