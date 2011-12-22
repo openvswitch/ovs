@@ -1193,13 +1193,13 @@ schedule_packet_in(struct ofconn *ofconn, struct ofputil_packet_in pin,
     } else if (!ofconn->pktbuf) {
         pin.buffer_id = UINT32_MAX;
     } else {
-        pin.buffer_id = pktbuf_save(ofconn->pktbuf, pin.packet->data,
-                                    pin.packet->size, flow->in_port);
+        pin.buffer_id = pktbuf_save(ofconn->pktbuf, pin.packet, pin.packet_len,
+                                    flow->in_port);
     }
 
     /* Figure out how much of the packet to send. */
     if (pin.reason == OFPR_NO_MATCH) {
-        pin.send_len = pin.packet->size;
+        pin.send_len = pin.packet_len;
     } else {
         /* Caller should have initialized 'send_len' to 'max_len' specified in
          * struct ofp_action_output. */

@@ -2417,7 +2417,8 @@ send_packet_in_miss(struct ofproto_dpif *ofproto, struct ofpbuf *packet,
 {
     struct ofputil_packet_in pin;
 
-    pin.packet = packet;
+    pin.packet = packet->data;
+    pin.packet_len = packet->size;
     pin.in_port = flow->in_port;
     pin.reason = OFPR_NO_MATCH;
     pin.buffer_id = 0;          /* not yet known */
@@ -2440,7 +2441,8 @@ send_packet_in_action(struct ofproto_dpif *ofproto, struct ofpbuf *packet,
 
     memcpy(&cookie, &userdata, sizeof(cookie));
 
-    pin.packet = packet;
+    pin.packet = packet->data;
+    pin.packet_len = packet->size;
     pin.in_port = flow->in_port;
     pin.reason = OFPR_ACTION;
     pin.buffer_id = 0;          /* not yet known */

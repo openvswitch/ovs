@@ -1547,19 +1547,18 @@ ofputil_encode_flow_removed(const struct ofputil_flow_removed *fr,
 struct ofpbuf *
 ofputil_encode_packet_in(const struct ofputil_packet_in *pin)
 {
-    int total_len = pin->packet->size;
     struct ofp_packet_in opi;
     struct ofpbuf *rw_packet;
 
     rw_packet = ofpbuf_clone_data_with_headroom(
-        pin->packet->data, MIN(pin->send_len, pin->packet->size),
+        pin->packet, MIN(pin->send_len, pin->packet_len),
         offsetof(struct ofp_packet_in, data));
 
     /* Add OFPT_PACKET_IN. */
     memset(&opi, 0, sizeof opi);
     opi.header.version = OFP_VERSION;
     opi.header.type = OFPT_PACKET_IN;
-    opi.total_len = htons(total_len);
+    opi.total_len = htons(pin->packet_len);
     opi.in_port = htons(pin->in_port);
     opi.reason = pin->reason;
     opi.buffer_id = htonl(pin->buffer_id);

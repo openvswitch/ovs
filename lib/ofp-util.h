@@ -214,7 +214,9 @@ struct ofpbuf *ofputil_encode_flow_removed(const struct ofputil_flow_removed *,
 
 /* Abstract packet-in message. */
 struct ofputil_packet_in {
-    struct ofpbuf *packet;
+    const void *packet;
+    size_t packet_len;
+
     uint16_t in_port;
     uint8_t reason;             /* One of OFPR_*. */
 
