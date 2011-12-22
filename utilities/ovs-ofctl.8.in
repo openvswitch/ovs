@@ -499,7 +499,7 @@ will report a fatal error.
 .IP \fBvlan_tci=\fItci\fR[\fB/\fImask\fR]
 Matches modified VLAN TCI \fItci\fR.  If \fImask\fR is omitted,
 \fItci\fR is the exact VLAN TCI to match; if \fImask\fR is specified,
-then a 1-bit in \fItci\fR indicates that the corresponding bit in
+then a 1-bit in \fImask\fR indicates that the corresponding bit in
 \fItci\fR must match exactly, and a 0-bit wildcards that bit.  Both
 \fItci\fR and \fImask\fR are 16-bit values that are decimal by
 default; use a \fB0x\fR prefix to specify them in hexadecimal.
