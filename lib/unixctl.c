@@ -96,7 +96,7 @@ unixctl_help(struct unixctl_conn *conn, int argc OVS_UNUSED,
         const struct shash_node *node = nodes[i];
         const struct unixctl_command *command = node->data;
         
-        ds_put_format(&ds, "  %-23s%s\n", node->name, command->usage);
+        ds_put_format(&ds, "  %-23s %s\n", node->name, command->usage);
     }
     free(nodes);
 
