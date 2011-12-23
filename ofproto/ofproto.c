@@ -2081,8 +2081,9 @@ next_matching_table(struct ofproto *ofproto,
  * Returns 0 on success, otherwise an OpenFlow error code. */
 static int
 collect_rules_loose(struct ofproto *ofproto, uint8_t table_id,
-                    const struct cls_rule *match, uint16_t out_port,
-                    struct list *rules)
+                    const struct cls_rule *match,
+                    ovs_be64 cookie, ovs_be64 cookie_mask,
+                    uint16_t out_port, struct list *rules)
 {
     struct classifier *cls;
     int error;
@@ -2102,7 +2103,8 @@ collect_rules_loose(struct ofproto *ofproto, uint8_t table_id,
             if (rule->pending) {
                 return OFPROTO_POSTPONE;
             }
-            if (!rule_is_hidden(rule) && rule_has_out_port(rule, out_port)) {
+            if (!rule_is_hidden(rule) && rule_has_out_port(rule, out_port)
+                    && !((rule->flow_cookie ^ cookie) & cookie_mask)) {
                 list_push_back(rules, &rule->ofproto_node);
             }
         }
@@ -2123,8 +2125,9 @@ collect_rules_loose(struct ofproto *ofproto, uint8_t table_id,
  * Returns 0 on success, otherwise an OpenFlow error code. */
 static int
 collect_rules_strict(struct ofproto *ofproto, uint8_t table_id,
-                     const struct cls_rule *match, uint16_t out_port,
-                     struct list *rules)
+                     const struct cls_rule *match,
+                     ovs_be64 cookie, ovs_be64 cookie_mask,
+                     uint16_t out_port, struct list *rules)
 {
     struct classifier *cls;
     int error;
@@ -2143,7 +2146,8 @@ collect_rules_strict(struct ofproto *ofproto, uint8_t table_id,
             if (rule->pending) {
                 return OFPROTO_POSTPONE;
             }
-            if (!rule_is_hidden(rule) && rule_has_out_port(rule, out_port)) {
+            if (!rule_is_hidden(rule) && rule_has_out_port(rule, out_port)
+                    && !((rule->flow_cookie ^ cookie) & cookie_mask)) {
                 list_push_back(rules, &rule->ofproto_node);
             }
         }
@@ -2168,6 +2172,7 @@ handle_flow_stats_request(struct ofconn *ofconn,
     }
 
     error = collect_rules_loose(ofproto, fsr.table_id, &fsr.match,
+                                fsr.cookie, fsr.cookie_mask,
                                 fsr.out_port, &rules);
     if (error) {
         return error;
@@ -2298,6 +2303,7 @@ handle_aggregate_stats_request(struct ofconn *ofconn,
     }
 
     error = collect_rules_loose(ofproto, request.table_id, &request.match,
+                                request.cookie, request.cookie_mask,
                                 request.out_port, &rules);
     if (error) {
         return error;
@@ -2593,8 +2599,9 @@ modify_flows_loose(struct ofproto *ofproto, struct ofconn *ofconn,
     struct list rules;
     int error;
 
-    error = collect_rules_loose(ofproto, fm->table_id, &fm->cr, OFPP_NONE,
-                                &rules);
+    error = collect_rules_loose(ofproto, fm->table_id, &fm->cr,
+                                fm->cookie, fm->cookie_mask,
+                                OFPP_NONE, &rules);
     return (error ? error
             : list_is_empty(&rules) ? add_flow(ofproto, ofconn, fm, request)
             : modify_flows__(ofproto, ofconn, fm, request, &rules));
@@ -2613,8 +2620,9 @@ modify_flow_strict(struct ofproto *ofproto, struct ofconn *ofconn,
     struct list rules;
     int error;
 
-    error = collect_rules_strict(ofproto, fm->table_id, &fm->cr, OFPP_NONE,
-                                 &rules);
+    error = collect_rules_strict(ofproto, fm->table_id, &fm->cr,
+                                 fm->cookie, fm->cookie_mask,
+                                 OFPP_NONE, &rules);
     return (error ? error
             : list_is_empty(&rules) ? add_flow(ofproto, ofconn, fm, request)
             : list_is_singleton(&rules) ? modify_flows__(ofproto, ofconn,
@@ -2656,8 +2664,9 @@ delete_flows_loose(struct ofproto *ofproto, struct ofconn *ofconn,
     struct list rules;
     int error;
 
-    error = collect_rules_loose(ofproto, fm->table_id, &fm->cr, fm->out_port,
-                                &rules);
+    error = collect_rules_loose(ofproto, fm->table_id, &fm->cr,
+                                fm->cookie, fm->cookie_mask,
+                                fm->out_port, &rules);
     return (error ? error
             : !list_is_empty(&rules) ? delete_flows__(ofproto, ofconn, request,
                                                       &rules)
@@ -2673,8 +2682,9 @@ delete_flow_strict(struct ofproto *ofproto, struct ofconn *ofconn,
     struct list rules;
     int error;
 
-    error = collect_rules_strict(ofproto, fm->table_id, &fm->cr, fm->out_port,
-                                 &rules);
+    error = collect_rules_strict(ofproto, fm->table_id, &fm->cr,
+                                 fm->cookie, fm->cookie_mask,
+                                 fm->out_port, &rules);
     return (error ? error
             : list_is_singleton(&rules) ? delete_flows__(ofproto, ofconn,
                                                          request, &rules)

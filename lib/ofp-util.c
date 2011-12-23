@@ -987,6 +987,7 @@ ofputil_decode_flow_mod(struct ofputil_flow_mod *fm,
 
         /* Translate the message. */
         fm->cookie = ofm->cookie;
+        fm->cookie_mask = htonll(UINT64_MAX);
         command = ntohs(ofm->command);
         fm->idle_timeout = ntohs(ofm->idle_timeout);
         fm->hard_timeout = ntohs(ofm->hard_timeout);
@@ -1001,7 +1002,7 @@ ofputil_decode_flow_mod(struct ofputil_flow_mod *fm,
         /* Dissect the message. */
         nfm = ofpbuf_pull(&b, sizeof *nfm);
         error = nx_pull_match(&b, ntohs(nfm->match_len), ntohs(nfm->priority),
-                              &fm->cr);
+                              &fm->cr, &fm->cookie, &fm->cookie_mask);
         if (error) {
             return error;
         }
@@ -1011,8 +1012,18 @@ ofputil_decode_flow_mod(struct ofputil_flow_mod *fm,
         }
 
         /* Translate the message. */
-        fm->cookie = nfm->cookie;
         command = ntohs(nfm->command);
+        if (command == OFPFC_ADD) {
+            if (fm->cookie_mask) {
+                /* The "NXM_NX_COOKIE*" matches are not valid for flow
+                 * additions.  Additions must use the "cookie" field of
+                 * the "nx_flow_mod" structure. */
+                return ofp_mkerr(OFPET_BAD_REQUEST, NXBRC_NXM_INVALID);
+            } else {
+                fm->cookie = nfm->cookie;
+                fm->cookie_mask = htonll(UINT64_MAX);
+            }
+        }
         fm->idle_timeout = ntohs(nfm->idle_timeout);
         fm->hard_timeout = ntohs(nfm->hard_timeout);
         fm->buffer_id = ntohl(nfm->buffer_id);
@@ -1071,11 +1082,16 @@ ofputil_encode_flow_mod(const struct ofputil_flow_mod *fm,
 
         msg = ofpbuf_new(sizeof *nfm + NXM_TYPICAL_LEN + actions_len);
         put_nxmsg(sizeof *nfm, NXT_FLOW_MOD, msg);
-        match_len = nx_put_match(msg, &fm->cr);
-
         nfm = msg->data;
-        nfm->cookie = fm->cookie;
         nfm->command = htons(command);
+        if (command == OFPFC_ADD) {
+            nfm->cookie = fm->cookie;
+            match_len = nx_put_match(msg, &fm->cr, 0, 0);
+        } else {
+            nfm->cookie = 0;
+            match_len = nx_put_match(msg, &fm->cr,
+                                     fm->cookie, fm->cookie_mask);
+        }
         nfm->idle_timeout = htons(fm->idle_timeout);
         nfm->hard_timeout = htons(fm->hard_timeout);
         nfm->priority = htons(fm->cr.priority);
@@ -1104,6 +1120,7 @@ ofputil_decode_ofpst_flow_request(struct ofputil_flow_stats_request *fsr,
     ofputil_cls_rule_from_match(&ofsr->match, 0, &fsr->match);
     fsr->out_port = ntohs(ofsr->out_port);
     fsr->table_id = ofsr->table_id;
+    fsr->cookie = fsr->cookie_mask = htonll(0);
 
     return 0;
 }
@@ -1120,7 +1137,8 @@ ofputil_decode_nxst_flow_request(struct ofputil_flow_stats_request *fsr,
     ofpbuf_use_const(&b, oh, ntohs(oh->length));
 
     nfsr = ofpbuf_pull(&b, sizeof *nfsr);
-    error = nx_pull_match(&b, ntohs(nfsr->match_len), 0, &fsr->match);
+    error = nx_pull_match(&b, ntohs(nfsr->match_len), 0, &fsr->match,
+                          &fsr->cookie, &fsr->cookie_mask);
     if (error) {
         return error;
     }
@@ -1194,7 +1212,8 @@ ofputil_encode_flow_stats_request(const struct ofputil_flow_stats_request *fsr,
 
         subtype = fsr->aggregate ? NXST_AGGREGATE : NXST_FLOW;
         ofputil_make_stats_request(sizeof *nfsr, OFPST_VENDOR, subtype, &msg);
-        match_len = nx_put_match(msg, &fsr->match);
+        match_len = nx_put_match(msg, &fsr->match,
+                                 fsr->cookie, fsr->cookie_mask);
 
         nfsr = msg->data;
         nfsr->out_port = htons(fsr->out_port);
@@ -1290,7 +1309,8 @@ ofputil_decode_flow_stats_reply(struct ofputil_flow_stats *fs,
                          "claims invalid length %zu", match_len, length);
             return EINVAL;
         }
-        if (nx_pull_match(msg, match_len, ntohs(nfs->priority), &fs->rule)) {
+        if (nx_pull_match(msg, match_len, ntohs(nfs->priority), &fs->rule,
+                          NULL, NULL)) {
             return EINVAL;
         }
 
@@ -1374,7 +1394,7 @@ ofputil_append_flow_stats_reply(const struct ofputil_flow_stats *fs,
         nfs->priority = htons(fs->rule.priority);
         nfs->idle_timeout = htons(fs->idle_timeout);
         nfs->hard_timeout = htons(fs->hard_timeout);
-        nfs->match_len = htons(nx_put_match(msg, &fs->rule));
+        nfs->match_len = htons(nx_put_match(msg, &fs->rule, 0, 0));
         memset(nfs->pad2, 0, sizeof nfs->pad2);
         nfs->cookie = fs->cookie;
         nfs->packet_count = htonll(fs->packet_count);
@@ -1453,7 +1473,7 @@ ofputil_decode_flow_removed(struct ofputil_flow_removed *fr,
 
         nfr = ofpbuf_pull(&b, sizeof *nfr);
         error = nx_pull_match(&b, ntohs(nfr->match_len), ntohs(nfr->priority),
-                              &fr->rule);
+                              &fr->rule, NULL, NULL);
         if (error) {
             return error;
         }
@@ -1503,7 +1523,7 @@ ofputil_encode_flow_removed(const struct ofputil_flow_removed *fr,
         int match_len;
 
         make_nxmsg_xid(sizeof *nfr, NXT_FLOW_REMOVED, htonl(0), &msg);
-        match_len = nx_put_match(msg, &fr->rule);
+        match_len = nx_put_match(msg, &fr->rule, 0, 0);
 
         nfr = msg->data;
         nfr->cookie = fr->cookie;

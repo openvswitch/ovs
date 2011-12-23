@@ -488,7 +488,6 @@ parse_ofp_str(struct ofputil_flow_mod *fm, int command, const char *str_,
     enum {
         F_OUT_PORT = 1 << 0,
         F_ACTIONS = 1 << 1,
-        F_COOKIE = 1 << 2,
         F_TIMEOUT = 1 << 3,
         F_PRIORITY = 1 << 4
     } fields;
@@ -503,7 +502,7 @@ parse_ofp_str(struct ofputil_flow_mod *fm, int command, const char *str_,
         break;
 
     case OFPFC_ADD:
-        fields = F_ACTIONS | F_COOKIE | F_TIMEOUT | F_PRIORITY;
+        fields = F_ACTIONS | F_TIMEOUT | F_PRIORITY;
         break;
 
     case OFPFC_DELETE:
@@ -515,11 +514,11 @@ parse_ofp_str(struct ofputil_flow_mod *fm, int command, const char *str_,
         break;
 
     case OFPFC_MODIFY:
-        fields = F_ACTIONS | F_COOKIE;
+        fields = F_ACTIONS;
         break;
 
     case OFPFC_MODIFY_STRICT:
-        fields = F_ACTIONS | F_COOKIE | F_PRIORITY;
+        fields = F_ACTIONS | F_PRIORITY;
         break;
 
     default:
@@ -528,6 +527,7 @@ parse_ofp_str(struct ofputil_flow_mod *fm, int command, const char *str_,
 
     cls_rule_init_catchall(&fm->cr, OFP_DEFAULT_PRIORITY);
     fm->cookie = htonll(0);
+    fm->cookie_mask = htonll(0);
     fm->table_id = 0xff;
     fm->command = command;
     fm->idle_timeout = OFP_FLOW_PERMANENT;
@@ -576,7 +576,18 @@ parse_ofp_str(struct ofputil_flow_mod *fm, int command, const char *str_,
                 fm->idle_timeout = str_to_u16(value, name);
             } else if (fields & F_TIMEOUT && !strcmp(name, "hard_timeout")) {
                 fm->hard_timeout = str_to_u16(value, name);
-            } else if (fields & F_COOKIE && !strcmp(name, "cookie")) {
+            } else if (!strcmp(name, "cookie")) {
+                char *mask = strchr(value, '/');
+                if (mask) {
+                    if (command == OFPFC_ADD) {
+                        ofp_fatal(str_, verbose, "flow additions cannot use "
+                                  "a cookie mask");
+                    }
+                    *mask = '\0';
+                    fm->cookie_mask = htonll(str_to_u64(mask+1));
+                } else {
+                    fm->cookie_mask = htonll(UINT64_MAX);
+                }
                 fm->cookie = htonll(str_to_u64(value));
             } else if (mf_from_name(name)) {
                 parse_field(mf_from_name(name), value, &fm->cr);
@@ -625,6 +636,9 @@ parse_ofp_flow_mod_str(struct list *packets, enum nx_flow_format *cur_format,
     parse_ofp_str(&fm, command, string, verbose);
 
     min_format = ofputil_min_flow_format(&fm.cr);
+    if (command != OFPFC_ADD && fm.cookie_mask != htonll(0)) {
+        min_format = NXFF_NXM;
+    }
     next_format = MAX(*cur_format, min_format);
     if (next_format != *cur_format) {
         struct ofpbuf *sff = ofputil_make_set_flow_format(next_format);
@@ -678,6 +692,8 @@ parse_ofp_flow_stats_request_str(struct ofputil_flow_stats_request *fsr,
 
     parse_ofp_str(&fm, -1, string, false);
     fsr->aggregate = aggregate;
+    fsr->cookie = fm.cookie;
+    fsr->cookie_mask = fm.cookie_mask;
     fsr->match = fm.cr;
     fsr->out_port = fm.out_port;
     fsr->table_id = fm.table_id;

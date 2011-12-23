@@ -113,3 +113,91 @@ AT_CHECK([ovs-ofctl -F openflow10 dump-flows br0 | STRIP_XIDS], [0], [OFPST_FLOW
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
+
+AT_SETUP([ofproto - dump flows with cookie])
+OVS_VSWITCHD_START
+AT_CHECK([ovs-ofctl add-flow br0 cookie=0x1,in_port=1,actions=0])
+AT_CHECK([ovs-ofctl add-flow br0 cookie=0x2,in_port=2,actions=0])
+AT_CHECK([ovs-ofctl add-flow br0 cookie=0x3,in_port=3,actions=0])
+AT_CHECK([ovs-ofctl dump-flows br0 | STRIP_XIDS | STRIP_DURATION | sort], [0], [dnl
+ cookie=0x1, duration=?s, table=0, n_packets=0, n_bytes=0, in_port=1 actions=output:0
+ cookie=0x2, duration=?s, table=0, n_packets=0, n_bytes=0, in_port=2 actions=output:0
+ cookie=0x3, duration=?s, table=0, n_packets=0, n_bytes=0, in_port=3 actions=output:0
+NXST_FLOW reply:
+])
+AT_CHECK([ovs-ofctl dump-aggregate br0 table=0 | STRIP_XIDS], [0], [dnl
+NXST_AGGREGATE reply: packet_count=0 byte_count=0 flow_count=3
+])
+AT_CHECK([ovs-ofctl dump-flows br0 cookie=0x3 | STRIP_XIDS | STRIP_DURATION | sort], [0], [dnl
+ cookie=0x3, duration=?s, table=0, n_packets=0, n_bytes=0, in_port=3 actions=output:0
+NXST_FLOW reply:
+])
+AT_CHECK([ovs-ofctl dump-aggregate br0 cookie=0x3 | STRIP_XIDS], [0], [dnl
+NXST_AGGREGATE reply: packet_count=0 byte_count=0 flow_count=1
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto - dump flows with cookie mask])
+OVS_VSWITCHD_START
+AT_CHECK([ovs-ofctl add-flow br0 cookie=0x1,in_port=1,actions=0])
+AT_CHECK([ovs-ofctl add-flow br0 cookie=0x2,in_port=2,actions=0])
+AT_CHECK([ovs-ofctl add-flow br0 cookie=0x3,in_port=3,actions=0])
+AT_CHECK([ovs-ofctl dump-flows br0 | STRIP_XIDS | STRIP_DURATION | sort], [0], [dnl
+ cookie=0x1, duration=?s, table=0, n_packets=0, n_bytes=0, in_port=1 actions=output:0
+ cookie=0x2, duration=?s, table=0, n_packets=0, n_bytes=0, in_port=2 actions=output:0
+ cookie=0x3, duration=?s, table=0, n_packets=0, n_bytes=0, in_port=3 actions=output:0
+NXST_FLOW reply:
+])
+AT_CHECK([ovs-ofctl dump-aggregate br0 table=0 | STRIP_XIDS], [0], [dnl
+NXST_AGGREGATE reply: packet_count=0 byte_count=0 flow_count=3
+])
+AT_CHECK([ovs-ofctl dump-flows br0 cookie=0x3/0x1 | STRIP_XIDS | STRIP_DURATION | sort], [0], [dnl
+ cookie=0x1, duration=?s, table=0, n_packets=0, n_bytes=0, in_port=1 actions=output:0
+ cookie=0x3, duration=?s, table=0, n_packets=0, n_bytes=0, in_port=3 actions=output:0
+NXST_FLOW reply:
+])
+AT_CHECK([ovs-ofctl dump-aggregate br0 cookie=0x3/0x1 | STRIP_XIDS], [0], [dnl
+NXST_AGGREGATE reply: packet_count=0 byte_count=0 flow_count=2
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto - del flows with cookie])
+OVS_VSWITCHD_START
+AT_CHECK([ovs-ofctl add-flow br0 cookie=0x1,in_port=1,actions=0])
+AT_CHECK([ovs-ofctl add-flow br0 cookie=0x2,in_port=2,actions=0])
+AT_CHECK([ovs-ofctl add-flow br0 cookie=0x3,in_port=3,actions=0])
+AT_CHECK([ovs-ofctl dump-flows br0 | STRIP_XIDS | STRIP_DURATION | sort], [0], [dnl
+ cookie=0x1, duration=?s, table=0, n_packets=0, n_bytes=0, in_port=1 actions=output:0
+ cookie=0x2, duration=?s, table=0, n_packets=0, n_bytes=0, in_port=2 actions=output:0
+ cookie=0x3, duration=?s, table=0, n_packets=0, n_bytes=0, in_port=3 actions=output:0
+NXST_FLOW reply:
+])
+AT_CHECK([ovs-ofctl del-flows br0 cookie=0x3])
+AT_CHECK([ovs-ofctl dump-flows br0 | STRIP_XIDS | STRIP_DURATION | sort], [0], [dnl
+ cookie=0x1, duration=?s, table=0, n_packets=0, n_bytes=0, in_port=1 actions=output:0
+ cookie=0x2, duration=?s, table=0, n_packets=0, n_bytes=0, in_port=2 actions=output:0
+NXST_FLOW reply:
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto - del flows with cookie mask])
+OVS_VSWITCHD_START
+AT_CHECK([ovs-ofctl add-flow br0 cookie=0x1,in_port=1,actions=0])
+AT_CHECK([ovs-ofctl add-flow br0 cookie=0x2,in_port=2,actions=0])
+AT_CHECK([ovs-ofctl add-flow br0 cookie=0x3,in_port=3,actions=0])
+AT_CHECK([ovs-ofctl dump-flows br0 | STRIP_XIDS | STRIP_DURATION | sort], [0], [dnl
+ cookie=0x1, duration=?s, table=0, n_packets=0, n_bytes=0, in_port=1 actions=output:0
+ cookie=0x2, duration=?s, table=0, n_packets=0, n_bytes=0, in_port=2 actions=output:0
+ cookie=0x3, duration=?s, table=0, n_packets=0, n_bytes=0, in_port=3 actions=output:0
+NXST_FLOW reply:
+])
+AT_CHECK([ovs-ofctl del-flows br0 cookie=0x3/0x1])
+AT_CHECK([ovs-ofctl dump-flows br0 | STRIP_XIDS | STRIP_DURATION | sort], [0], [dnl
+ cookie=0x2, duration=?s, table=0, n_packets=0, n_bytes=0, in_port=2 actions=output:0
+NXST_FLOW reply:
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP

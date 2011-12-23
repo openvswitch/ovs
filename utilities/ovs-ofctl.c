@@ -586,6 +586,9 @@ do_dump_flows__(int argc, char *argv[], bool aggregate)
 
     open_vconn(argv[1], &vconn);
     min_flow_format = ofputil_min_flow_format(&fsr.match);
+    if (fsr.cookie_mask != htonll(0)) {
+        min_flow_format = NXFF_NXM;
+    }
     flow_format = negotiate_highest_flow_format(vconn, min_flow_format);
     request = ofputil_encode_flow_stats_request(&fsr, flow_format);
     dump_stats_transaction(argv[1], request);
@@ -1455,6 +1458,7 @@ do_parse_nx_match(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
     while (!ds_get_line(&in, stdin)) {
         struct ofpbuf nx_match;
         struct cls_rule rule;
+        ovs_be64 cookie, cookie_mask;
         int match_len;
         int error;
         char *s;
@@ -1478,14 +1482,15 @@ do_parse_nx_match(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
         match_len = nx_match_from_string(ds_cstr(&in), &nx_match);
 
         /* Convert nx_match to cls_rule. */
-        error = nx_pull_match(&nx_match, match_len, 0, &rule);
+        error = nx_pull_match(&nx_match, match_len, 0, &rule,
+                              &cookie, &cookie_mask);
         if (!error) {
             char *out;
 
             /* Convert cls_rule back to nx_match. */
             ofpbuf_uninit(&nx_match);
             ofpbuf_init(&nx_match, 0);
-            match_len = nx_put_match(&nx_match, &rule);
+            match_len = nx_put_match(&nx_match, &rule, cookie, cookie_mask);
 
             /* Convert nx_match to string. */
             out = nx_match_to_string(nx_match.data, match_len);

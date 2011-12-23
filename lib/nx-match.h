@@ -35,8 +35,9 @@ struct nx_action_reg_move;
  */
 
 int nx_pull_match(struct ofpbuf *, unsigned int match_len, uint16_t priority,
-                  struct cls_rule *);
-int nx_put_match(struct ofpbuf *, const struct cls_rule *);
+                  struct cls_rule *, ovs_be64 *cookie, ovs_be64 *cookie_mask);
+int nx_put_match(struct ofpbuf *, const struct cls_rule *,
+                 ovs_be64 cookie, ovs_be64 cookie_mask);
 
 char *nx_match_to_string(const uint8_t *, unsigned int match_len);
 int nx_match_from_string(const char *, struct ofpbuf *);

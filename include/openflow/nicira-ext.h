@@ -1641,6 +1641,22 @@ OFP_ASSERT(sizeof(struct nx_action_output_reg) == 24);
  * Masking: Not maskable. */
 #define NXM_NX_IP_TTL      NXM_HEADER  (0x0001, 29, 1)
 
+/* Flow cookie.
+ *
+ * This may be used to gain the OpenFlow 1.1-like ability to restrict
+ * certain NXM-based Flow Mod and Flow Stats Request messages to flows
+ * with specific cookies.  See the "nx_flow_mod" and "nx_flow_stats_request"
+ * structure definitions for more details.  This match is otherwise not
+ * allowed.
+ *
+ * Prereqs: None.
+ *
+ * Format: 64-bit integer in network byte order.
+ *
+ * Masking: Arbitrary masks. */
+#define NXM_NX_COOKIE     NXM_HEADER  (0x0001, 30, 8)
+#define NXM_NX_COOKIE_W   NXM_HEADER_W(0x0001, 30, 8)
+
 /* ## --------------------- ## */
 /* ## Requests and replies. ## */
 /* ## --------------------- ## */
@@ -1659,7 +1675,14 @@ struct nxt_set_flow_format {
 };
 OFP_ASSERT(sizeof(struct nxt_set_flow_format) == 20);
 
-/* NXT_FLOW_MOD (analogous to OFPT_FLOW_MOD). */
+/* NXT_FLOW_MOD (analogous to OFPT_FLOW_MOD).
+ *
+ * It is possible to limit flow deletions and modifications to certain
+ * cookies by using the NXM_NX_COOKIE and NXM_NX_COOKIE_W matches.  For
+ * these commands, the "cookie" field is always ignored.  Flow additions
+ * make use of the "cookie" field and ignore any NXM_NX_COOKIE*
+ * definitions.
+ */
 struct nx_flow_mod {
     struct nicira_header nxh;
     ovs_be64 cookie;              /* Opaque controller-issued identifier. */
@@ -1708,7 +1731,11 @@ struct nx_flow_removed {
 OFP_ASSERT(sizeof(struct nx_flow_removed) == 56);
 
 /* Nicira vendor stats request of type NXST_FLOW (analogous to OFPST_FLOW
- * request). */
+ * request).
+ *
+ * It is possible to limit matches to certain cookies by using the
+ * NXM_NX_COOKIE and NXM_NX_COOKIE_W matches.
+ */
 struct nx_flow_stats_request {
     struct nicira_stats_msg nsm;
     ovs_be16 out_port;        /* Require matching entries to include this

@@ -131,6 +131,7 @@ struct ofpbuf *ofputil_make_flow_mod_table_id(bool flow_mod_table_id);
 struct ofputil_flow_mod {
     struct cls_rule cr;
     ovs_be64 cookie;
+    ovs_be64 cookie_mask;
     uint8_t table_id;
     uint16_t command;
     uint16_t idle_timeout;
@@ -152,6 +153,8 @@ struct ofpbuf *ofputil_encode_flow_mod(const struct ofputil_flow_mod *,
 struct ofputil_flow_stats_request {
     bool aggregate;             /* Aggregate results? */
     struct cls_rule match;
+    ovs_be64 cookie;
+    ovs_be64 cookie_mask;
     uint16_t out_port;
     uint8_t table_id;
 };

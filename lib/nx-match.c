@@ -96,12 +96,23 @@ nx_entry_ok(const void *p, unsigned int match_len)
     return header;
 }
 
+/* Parses the nx_match formatted match description in 'b' with length
+ * 'match_len'.  The results are stored in 'rule', which is initialized
+ * with 'priority'.  If 'cookie' and 'cookie_mask' contain valid
+ * pointers, then the cookie and mask will be stored in them if a
+ * "NXM_NX_COOKIE*" match is defined.  Otherwise, 0 is stored in both.
+ *
+ * Returns 0 if successful, otherwise an OpenFlow error code.
+ */
 int
 nx_pull_match(struct ofpbuf *b, unsigned int match_len, uint16_t priority,
-              struct cls_rule *rule)
+              struct cls_rule *rule,
+              ovs_be64 *cookie, ovs_be64 *cookie_mask)
 {
     uint32_t header;
     uint8_t *p;
+
+    assert((cookie != NULL) == (cookie_mask != NULL));
 
     p = ofpbuf_try_pull(b, ROUND_UP(match_len, 8));
     if (!p) {
@@ -112,6 +123,9 @@ nx_pull_match(struct ofpbuf *b, unsigned int match_len, uint16_t priority,
     }
 
     cls_rule_init_catchall(rule, priority);
+    if (cookie) {
+        *cookie = *cookie_mask = htonll(0);
+    }
     while ((header = nx_entry_ok(p, match_len)) != 0) {
         unsigned length = NXM_LENGTH(header);
         const struct mf_field *mf;
@@ -144,6 +158,23 @@ nx_pull_match(struct ofpbuf *b, unsigned int match_len, uint16_t priority,
                     error = 0;
                     mf_set(mf, &value, &mask, rule);
                 }
+            }
+        }
+
+        /* Check if the match is for a cookie rather than a classifier rule. */
+        if ((header == NXM_NX_COOKIE || header == NXM_NX_COOKIE_W) && cookie) {
+            if (*cookie_mask) {
+                error = NXM_DUP_TYPE;
+            } else {
+                unsigned int width = sizeof *cookie;
+
+                memcpy(cookie, p + 4, width);
+                if (NXM_HASMASK(header)) {
+                    memcpy(cookie_mask, p + 4 + width, width);
+                } else {
+                    *cookie_mask = htonll(UINT64_MAX);
+                }
+                error = 0;
             }
         }
 
@@ -367,7 +398,9 @@ nxm_put_frag(struct ofpbuf *b, const struct cls_rule *cr)
 
 /* Appends to 'b' the nx_match format that expresses 'cr' (except for
  * 'cr->priority', because priority is not part of nx_match), plus enough
- * zero bytes to pad the nx_match out to a multiple of 8.
+ * zero bytes to pad the nx_match out to a multiple of 8.  For Flow Mod
+ * and Flow Stats Requests messages, a 'cookie' and 'cookie_mask' may be
+ * supplied.  Otherwise, 'cookie_mask' should be zero.
  *
  * This function can cause 'b''s data to be reallocated.
  *
@@ -376,7 +409,8 @@ nxm_put_frag(struct ofpbuf *b, const struct cls_rule *cr)
  * If 'cr' is a catch-all rule that matches every packet, then this function
  * appends nothing to 'b' and returns 0. */
 int
-nx_put_match(struct ofpbuf *b, const struct cls_rule *cr)
+nx_put_match(struct ofpbuf *b, const struct cls_rule *cr,
+             ovs_be64 cookie, ovs_be64 cookie_mask)
 {
     const flow_wildcards_t wc = cr->wc.wildcards;
     const struct flow *flow = &cr->flow;
@@ -556,6 +590,9 @@ nx_put_match(struct ofpbuf *b, const struct cls_rule *cr)
                     htonl(flow->regs[i]), htonl(cr->wc.reg_masks[i]));
     }
 
+    /* Cookie. */
+    nxm_put_64m(b, NXM_NX_COOKIE, cookie, cookie_mask);
+
     match_len = b->size - start_len;
     ofpbuf_put_zeros(b, ROUND_UP(match_len, 8) - match_len);
     return match_len;
@@ -625,6 +662,10 @@ format_nxm_field_name(struct ds *s, uint32_t header)
         if (NXM_HASMASK(header)) {
             ds_put_cstr(s, "_W");
         }
+    } else if (header == NXM_NX_COOKIE) {
+        ds_put_cstr(s, "NXM_NX_COOKIE");
+    } else if (header == NXM_NX_COOKIE_W) {
+        ds_put_cstr(s, "NXM_NX_COOKIE_W");
     } else {
         ds_put_format(s, "%d:%d", NXM_VENDOR(header), NXM_FIELD(header));
     }
@@ -641,6 +682,7 @@ parse_nxm_field_name(const char *name, int name_len)
     if (wild) {
         name_len -= 2;
     }
+
     for (i = 0; i < MFF_N_IDS; i++) {
         const struct mf_field *mf = mf_from_id(i);
 
@@ -652,6 +694,15 @@ parse_nxm_field_name(const char *name, int name_len)
             } else if (mf->maskable != MFM_NONE) {
                 return NXM_MAKE_WILD_HEADER(mf->nxm_header);
             }
+        }
+    }
+
+    if (!strncmp("NXM_NX_COOKIE", name, name_len)
+                && (name_len == strlen("NXM_NX_COOKIE"))) {
+        if (!wild) {
+            return NXM_NX_COOKIE;
+        } else {
+            return NXM_NX_COOKIE_W;
         }
     }
 
