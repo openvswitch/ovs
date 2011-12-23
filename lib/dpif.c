@@ -962,7 +962,7 @@ dpif_execute(struct dpif *dpif,
 
     if (!(error ? VLOG_DROP_WARN(&error_rl) : VLOG_DROP_DBG(&dpmsg_rl))) {
         struct ds ds = DS_EMPTY_INITIALIZER;
-        char *packet = ofp_packet_to_string(buf->data, buf->size, buf->size);
+        char *packet = ofp_packet_to_string(buf->data, buf->size);
         ds_put_format(&ds, "%s: execute ", dpif_name(dpif));
         format_odp_actions(&ds, actions, actions_len);
         if (error) {
@@ -1098,7 +1098,6 @@ dpif_recv(struct dpif *dpif, struct dpif_upcall *upcall)
         char *packet;
 
         packet = ofp_packet_to_string(upcall->packet->data,
-                                      upcall->packet->size,
                                       upcall->packet->size);
 
         ds_init(&flow);

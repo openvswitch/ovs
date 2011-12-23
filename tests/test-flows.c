@@ -78,7 +78,7 @@ main(int argc OVS_UNUSED, char *argv[])
             errors++;
             printf("mismatch on packet #%d (1-based).\n", n);
             printf("Packet:\n");
-            ofp_print_packet(stdout, packet->data, packet->size, packet->size);
+            ofp_print_packet(stdout, packet->data, packet->size);
             ovs_hex_dump(stdout, packet->data, packet->size, 0, true);
             cls_rule_print(&rule);
             printf("Expected flow:\n%s\n", exp_s);

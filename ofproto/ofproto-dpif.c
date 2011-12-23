@@ -5825,7 +5825,7 @@ ofproto_unixctl_trace(struct unixctl_conn *conn, int argc, const char *argv[],
         }
 
         ds_put_cstr(&result, "Packet: ");
-        s = ofp_packet_to_string(packet->data, packet->size, packet->size);
+        s = ofp_packet_to_string(packet->data, packet->size);
         ds_put_cstr(&result, s);
         free(s);
 

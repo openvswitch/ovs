@@ -50,14 +50,12 @@ static void ofp_print_error(struct ds *, int error);
 
 /* Returns a string that represents the contents of the Ethernet frame in the
  * 'len' bytes starting at 'data' to 'stream' as output by tcpdump.
- * 'total_len' specifies the full length of the Ethernet frame (of which 'len'
- * bytes were captured).
  *
  * The caller must free the returned string.
  *
  * This starts and kills a tcpdump subprocess so it's quite expensive. */
 char *
-ofp_packet_to_string(const void *data, size_t len, size_t total_len OVS_UNUSED)
+ofp_packet_to_string(const void *data, size_t len)
 {
     struct ds ds = DS_EMPTY_INITIALIZER;
     struct ofpbuf buf;
@@ -145,8 +143,7 @@ ofp_print_packet_in(struct ds *string, const struct ofp_packet_in *op,
         ds_put_char(string, '\n');
     }
     if (verbosity > 1) {
-        char *packet = ofp_packet_to_string(op->data, data_len,
-                                            ntohs(op->total_len));
+        char *packet = ofp_packet_to_string(op->data, data_len);
         ds_put_cstr(string, packet);
         free(packet);
     }
@@ -403,7 +400,7 @@ ofp_print_packet_out(struct ds *string, const struct ofp_packet_out *opo,
         ds_put_format(string, " data_len=%d", data_len);
         if (verbosity > 0 && len > sizeof *opo) {
             char *packet = ofp_packet_to_string(
-                    (uint8_t *)opo->actions + actions_len, data_len, data_len);
+                    (uint8_t *) opo->actions + actions_len, data_len);
             ds_put_char(string, '\n');
             ds_put_cstr(string, packet);
             free(packet);
@@ -1597,7 +1594,7 @@ ofp_print(FILE *stream, const void *oh, size_t len, int verbosity)
  *
  * This starts and kills a tcpdump subprocess so it's quite expensive. */
 void
-ofp_print_packet(FILE *stream, const void *data, size_t len, size_t total_len)
+ofp_print_packet(FILE *stream, const void *data, size_t len)
 {
-    print_and_free(stream, ofp_packet_to_string(data, len, total_len));
+    print_and_free(stream, ofp_packet_to_string(data, len));
 }
