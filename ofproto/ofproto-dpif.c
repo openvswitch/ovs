@@ -5355,14 +5355,6 @@ xlate_normal(struct action_xlate_ctx *ctx)
         if (mac->port.p != in_bundle) {
             output_normal(ctx, mac->port.p, vlan);
         }
-    } else if (!ctx->packet && !eth_addr_is_multicast(ctx->flow.dl_dst)) {
-        /* If we are revalidating but don't have a learning entry then eject
-         * the flow.  Installing a flow that floods packets opens up a window
-         * of time where we could learn from a packet reflected on a bond and
-         * blackhole packets before the learning table is updated to reflect
-         * the correct port. */
-        ctx->may_set_up_flow = false;
-        return;
     } else {
         struct ofbundle *bundle;
 
