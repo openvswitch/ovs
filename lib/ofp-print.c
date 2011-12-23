@@ -79,36 +79,43 @@ ofp_packet_to_string(const void *data, size_t len)
 }
 
 static void
-ofp_print_packet_in(struct ds *string, const struct ofp_packet_in *op,
+ofp_print_packet_in(struct ds *string, const struct ofp_header *oh,
                     int verbosity)
 {
-    size_t len = ntohs(op->header.length);
-    size_t data_len;
+    struct ofputil_packet_in pin;
+    int error;
 
-    ds_put_format(string, " total_len=%"PRIu16" in_port=",
-                  ntohs(op->total_len));
-    ofputil_format_port(ntohs(op->in_port), string);
+    error = ofputil_decode_packet_in(&pin, oh);
+    if (error) {
+        ofp_print_error(string, error);
+        return;
+    }
 
-    if (op->reason == OFPR_ACTION)
+    ds_put_format(string, " total_len=%"PRIu16" in_port=", pin.total_len);
+    ofputil_format_port(pin.in_port, string);
+
+    if (pin.reason == OFPR_ACTION) {
         ds_put_cstr(string, " (via action)");
-    else if (op->reason != OFPR_NO_MATCH)
-        ds_put_format(string, " (***reason %"PRIu8"***)", op->reason);
+    } else if (pin.reason != OFPR_NO_MATCH) {
+        ds_put_format(string, " (***reason %"PRIu8"***)", pin.reason);
+    }
 
-    data_len = len - offsetof(struct ofp_packet_in, data);
-    ds_put_format(string, " data_len=%zu", data_len);
-    if (op->buffer_id == htonl(UINT32_MAX)) {
+    ds_put_format(string, " data_len=%zu", pin.packet_len);
+    if (pin.buffer_id == UINT32_MAX) {
         ds_put_format(string, " (unbuffered)");
-        if (ntohs(op->total_len) != data_len)
+        if (pin.total_len != pin.packet_len) {
             ds_put_format(string, " (***total_len != data_len***)");
+        }
     } else {
-        ds_put_format(string, " buffer=0x%08"PRIx32, ntohl(op->buffer_id));
-        if (ntohs(op->total_len) < data_len)
+        ds_put_format(string, " buffer=0x%08"PRIx32, pin.buffer_id);
+        if (pin.total_len < pin.packet_len) {
             ds_put_format(string, " (***total_len < data_len***)");
+        }
     }
     ds_put_char(string, '\n');
 
     if (verbosity > 0) {
-        char *packet = ofp_packet_to_string(op->data, data_len);
+        char *packet = ofp_packet_to_string(pin.packet, pin.packet_len);
         ds_put_cstr(string, packet);
         free(packet);
     }

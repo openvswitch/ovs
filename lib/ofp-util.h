@@ -222,8 +222,11 @@ struct ofputil_packet_in {
 
     uint32_t buffer_id;
     int send_len;
+    uint16_t total_len;         /* Full length of frame. */
 };
 
+int ofputil_decode_packet_in(struct ofputil_packet_in *,
+                             const struct ofp_header *);
 struct ofpbuf *ofputil_encode_packet_in(const struct ofputil_packet_in *);
 
 /* OpenFlow protocol utility functions. */

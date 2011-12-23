@@ -1542,6 +1542,35 @@ ofputil_encode_flow_removed(const struct ofputil_flow_removed *fr,
     return msg;
 }
 
+int
+ofputil_decode_packet_in(struct ofputil_packet_in *pin,
+                         const struct ofp_header *oh)
+{
+    const struct ofputil_msg_type *type;
+    enum ofputil_msg_code code;
+
+    ofputil_decode_msg_type(oh, &type);
+    code = ofputil_msg_type_code(type);
+    memset(pin, 0, sizeof *pin);
+
+    if (code == OFPUTIL_OFPT_PACKET_IN) {
+        const struct ofp_packet_in *opi = (const struct ofp_packet_in *) oh;
+
+        pin->packet = opi->data;
+        pin->packet_len = ntohs(opi->header.length)
+            - offsetof(struct ofp_packet_in, data);
+
+        pin->in_port = ntohs(opi->in_port);
+        pin->reason = opi->reason;
+        pin->buffer_id = ntohl(opi->buffer_id);
+        pin->total_len = ntohs(opi->total_len);
+    } else {
+        NOT_REACHED();
+    }
+
+    return 0;
+}
+
 /* Converts abstract ofputil_packet_in 'pin' into an OFPT_PACKET_IN message
  * and returns the message. */
 struct ofpbuf *
