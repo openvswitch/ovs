@@ -2413,7 +2413,7 @@ struct flow_miss {
 };
 
 struct flow_miss_op {
-    union dpif_op dpif_op;
+    struct dpif_op dpif_op;
     struct subfacet *subfacet;
 };
 
@@ -2587,9 +2587,9 @@ handle_flow_miss(struct ofproto_dpif *ofproto, struct flow_miss *miss,
         }
 
         op = &ops[(*n_ops)++];
-        execute = &op->dpif_op.execute;
+        execute = &op->dpif_op.u.execute;
         op->subfacet = subfacet;
-        execute->type = DPIF_OP_EXECUTE;
+        op->dpif_op.type = DPIF_OP_EXECUTE;
         execute->key = miss->key;
         execute->key_len = miss->key_len;
         execute->actions = (facet->may_install
@@ -2602,10 +2602,10 @@ handle_flow_miss(struct ofproto_dpif *ofproto, struct flow_miss *miss,
 
     if (facet->may_install && subfacet->key_fitness != ODP_FIT_TOO_LITTLE) {
         struct flow_miss_op *op = &ops[(*n_ops)++];
-        struct dpif_flow_put *put = &op->dpif_op.flow_put;
+        struct dpif_flow_put *put = &op->dpif_op.u.flow_put;
 
         op->subfacet = subfacet;
-        put->type = DPIF_OP_FLOW_PUT;
+        op->dpif_op.type = DPIF_OP_FLOW_PUT;
         put->flags = DPIF_FP_CREATE | DPIF_FP_MODIFY;
         put->key = miss->key;
         put->key_len = miss->key_len;
@@ -2687,7 +2687,7 @@ handle_miss_upcalls(struct ofproto_dpif *ofproto, struct dpif_upcall *upcalls,
     struct dpif_upcall *upcall;
     struct flow_miss *miss, *next_miss;
     struct flow_miss_op flow_miss_ops[FLOW_MISS_MAX_BATCH * 2];
-    union dpif_op *dpif_ops[FLOW_MISS_MAX_BATCH * 2];
+    struct dpif_op *dpif_ops[FLOW_MISS_MAX_BATCH * 2];
     struct hmap todo;
     size_t n_ops;
     size_t i;
@@ -2758,11 +2758,10 @@ handle_miss_upcalls(struct ofproto_dpif *ofproto, struct dpif_upcall *upcalls,
     for (i = 0; i < n_ops; i++) {
         struct flow_miss_op *op = &flow_miss_ops[i];
         struct dpif_execute *execute;
-        struct dpif_flow_put *put;
 
         switch (op->dpif_op.type) {
         case DPIF_OP_EXECUTE:
-            execute = &op->dpif_op.execute;
+            execute = &op->dpif_op.u.execute;
             if (op->subfacet->actions != execute->actions) {
                 free((struct nlattr *) execute->actions);
             }
@@ -2770,8 +2769,7 @@ handle_miss_upcalls(struct ofproto_dpif *ofproto, struct dpif_upcall *upcalls,
             break;
 
         case DPIF_OP_FLOW_PUT:
-            put = &op->dpif_op.flow_put;
-            if (!put->error) {
+            if (!op->dpif_op.error) {
                 op->subfacet->installed = true;
             }
             break;

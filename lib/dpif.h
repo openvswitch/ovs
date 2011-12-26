@@ -181,8 +181,6 @@ enum dpif_op_type {
 };
 
 struct dpif_flow_put {
-    enum dpif_op_type type;         /* Always DPIF_OP_FLOW_PUT. */
-
     /* Input. */
     enum dpif_flow_put_flags flags; /* DPIF_FP_*. */
     const struct nlattr *key;       /* Flow to put. */
@@ -192,30 +190,26 @@ struct dpif_flow_put {
 
     /* Output. */
     struct dpif_flow_stats *stats;  /* Optional flow statistics. */
-    int error;                      /* 0 or positive errno value. */
 };
 
 struct dpif_execute {
-    enum dpif_op_type type;         /* Always DPIF_OP_EXECUTE. */
-
-    /* Input. */
     const struct nlattr *key;       /* Partial flow key (only for metadata). */
     size_t key_len;                 /* Length of 'key' in bytes. */
     const struct nlattr *actions;   /* Actions to execute on packet. */
     size_t actions_len;             /* Length of 'actions' in bytes. */
     const struct ofpbuf *packet;    /* Packet to execute. */
-
-    /* Output. */
-    int error;                      /* 0 or positive errno value. */
 };
 
-union dpif_op {
+struct dpif_op {
     enum dpif_op_type type;
-    struct dpif_flow_put flow_put;
-    struct dpif_execute execute;
+    int error;
+    union {
+        struct dpif_flow_put flow_put;
+        struct dpif_execute execute;
+    } u;
 };
 
-void dpif_operate(struct dpif *, union dpif_op **ops, size_t n_ops);
+void dpif_operate(struct dpif *, struct dpif_op **ops, size_t n_ops);
 
 /* Upcalls. */
 

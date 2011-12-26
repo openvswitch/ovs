@@ -984,7 +984,7 @@ dpif_execute(struct dpif *dpif,
  * This function exists because some datapaths can perform batched operations
  * faster than individual operations. */
 void
-dpif_operate(struct dpif *dpif, union dpif_op **ops, size_t n_ops)
+dpif_operate(struct dpif *dpif, struct dpif_op **ops, size_t n_ops)
 {
     size_t i;
 
@@ -994,25 +994,25 @@ dpif_operate(struct dpif *dpif, union dpif_op **ops, size_t n_ops)
     }
 
     for (i = 0; i < n_ops; i++) {
-        union dpif_op *op = ops[i];
+        struct dpif_op *op = ops[i];
         struct dpif_flow_put *put;
         struct dpif_execute *execute;
 
         switch (op->type) {
         case DPIF_OP_FLOW_PUT:
-            put = &op->flow_put;
-            put->error = dpif_flow_put(dpif, put->flags,
-                                       put->key, put->key_len,
-                                       put->actions, put->actions_len,
-                                       put->stats);
+            put = &op->u.flow_put;
+            op->error = dpif_flow_put(dpif, put->flags,
+                                      put->key, put->key_len,
+                                      put->actions, put->actions_len,
+                                      put->stats);
             break;
 
         case DPIF_OP_EXECUTE:
-            execute = &op->execute;
-            execute->error = dpif_execute(dpif, execute->key, execute->key_len,
-                                          execute->actions,
-                                          execute->actions_len,
-                                          execute->packet);
+            execute = &op->u.execute;
+            op->error = dpif_execute(dpif, execute->key, execute->key_len,
+                                     execute->actions,
+                                     execute->actions_len,
+                                     execute->packet);
             break;
 
         default:

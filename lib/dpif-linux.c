@@ -873,7 +873,7 @@ dpif_linux_execute(struct dpif *dpif_,
 }
 
 static void
-dpif_linux_operate(struct dpif *dpif_, union dpif_op **ops, size_t n_ops)
+dpif_linux_operate(struct dpif *dpif_, struct dpif_op **ops, size_t n_ops)
 {
     struct dpif_linux *dpif = dpif_linux_cast(dpif_);
     struct nl_transaction **txnsp;
@@ -883,10 +883,10 @@ dpif_linux_operate(struct dpif *dpif_, union dpif_op **ops, size_t n_ops)
     txns = xmalloc(n_ops * sizeof *txns);
     for (i = 0; i < n_ops; i++) {
         struct nl_transaction *txn = &txns[i];
-        union dpif_op *op = ops[i];
+        struct dpif_op *op = ops[i];
 
         if (op->type == DPIF_OP_FLOW_PUT) {
-            struct dpif_flow_put *put = &op->flow_put;
+            struct dpif_flow_put *put = &op->u.flow_put;
             struct dpif_linux_flow request;
 
             dpif_linux_init_flow_put(dpif_, put->flags, put->key, put->key_len,
@@ -898,7 +898,7 @@ dpif_linux_operate(struct dpif *dpif_, union dpif_op **ops, size_t n_ops)
             txn->request = ofpbuf_new(1024);
             dpif_linux_flow_to_ofpbuf(&request, txn->request);
         } else if (op->type == DPIF_OP_EXECUTE) {
-            struct dpif_execute *execute = &op->execute;
+            struct dpif_execute *execute = &op->u.execute;
 
             txn->request = dpif_linux_encode_execute(
                 dpif->dp_ifindex, execute->key, execute->key_len,
@@ -919,10 +919,10 @@ dpif_linux_operate(struct dpif *dpif_, union dpif_op **ops, size_t n_ops)
 
     for (i = 0; i < n_ops; i++) {
         struct nl_transaction *txn = &txns[i];
-        union dpif_op *op = ops[i];
+        struct dpif_op *op = ops[i];
 
         if (op->type == DPIF_OP_FLOW_PUT) {
-            struct dpif_flow_put *put = &op->flow_put;
+            struct dpif_flow_put *put = &op->u.flow_put;
             int error = txn->error;
 
             if (!error && put->stats) {
@@ -933,11 +933,9 @@ dpif_linux_operate(struct dpif *dpif_, union dpif_op **ops, size_t n_ops)
                     dpif_linux_flow_get_stats(&reply, put->stats);
                 }
             }
-            put->error = error;
+            op->error = error;
         } else if (op->type == DPIF_OP_EXECUTE) {
-            struct dpif_execute *execute = &op->execute;
-
-            execute->error = txn->error;
+            op->error = txn->error;
         } else {
             NOT_REACHED();
         }

@@ -299,7 +299,7 @@ struct dpif_class {
      *
      * This function is optional.  It is only worthwhile to implement it if
      * 'dpif' can perform operations in batch faster than individually. */
-    void (*operate)(struct dpif *dpif, union dpif_op **ops, size_t n_ops);
+    void (*operate)(struct dpif *dpif, struct dpif_op **ops, size_t n_ops);
 
     /* Enables or disables receiving packets with dpif_recv() for 'dpif'.
      * Turning packet receive off and then back on is allowed to change Netlink
