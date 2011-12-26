@@ -992,6 +992,20 @@ dpif_operate(struct dpif *dpif, struct dpif_op **ops, size_t n_ops)
 
     if (dpif->dpif_class->operate) {
         dpif->dpif_class->operate(dpif, ops, n_ops);
+
+        for (i = 0; i < n_ops; i++) {
+            struct dpif_op *op = ops[i];
+
+            switch (op->type) {
+            case DPIF_OP_FLOW_PUT:
+                log_flow_put_message(dpif, &op->u.flow_put, op->error);
+                break;
+
+            case DPIF_OP_EXECUTE:
+                log_execute_message(dpif, &op->u.execute, op->error);
+                break;
+            }
+        }
         return;
     }
 
