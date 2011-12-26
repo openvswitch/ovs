@@ -745,29 +745,26 @@ clear_stats(struct dp_netdev_flow *flow)
 }
 
 static int
-dpif_netdev_flow_put(struct dpif *dpif, enum dpif_flow_put_flags flags,
-                    const struct nlattr *nl_key, size_t nl_key_len,
-                    const struct nlattr *actions, size_t actions_len,
-                    struct dpif_flow_stats *stats)
+dpif_netdev_flow_put(struct dpif *dpif, const struct dpif_flow_put *put)
 {
     struct dp_netdev *dp = get_dp_netdev(dpif);
     struct dp_netdev_flow *flow;
     struct flow key;
     int error;
 
-    error = dpif_netdev_flow_from_nlattrs(nl_key, nl_key_len, &key);
+    error = dpif_netdev_flow_from_nlattrs(put->key, put->key_len, &key);
     if (error) {
         return error;
     }
 
     flow = dp_netdev_lookup_flow(dp, &key);
     if (!flow) {
-        if (flags & DPIF_FP_CREATE) {
+        if (put->flags & DPIF_FP_CREATE) {
             if (hmap_count(&dp->flow_table) < MAX_FLOWS) {
-                if (stats) {
-                    memset(stats, 0, sizeof *stats);
+                if (put->stats) {
+                    memset(put->stats, 0, sizeof *put->stats);
                 }
-                return add_flow(dpif, &key, actions, actions_len);
+                return add_flow(dpif, &key, put->actions, put->actions_len);
             } else {
                 return EFBIG;
             }
@@ -775,13 +772,13 @@ dpif_netdev_flow_put(struct dpif *dpif, enum dpif_flow_put_flags flags,
             return ENOENT;
         }
     } else {
-        if (flags & DPIF_FP_MODIFY) {
-            int error = set_flow_actions(flow, actions, actions_len);
+        if (put->flags & DPIF_FP_MODIFY) {
+            int error = set_flow_actions(flow, put->actions, put->actions_len);
             if (!error) {
-                if (stats) {
-                    get_dpif_flow_stats(flow, stats);
+                if (put->stats) {
+                    get_dpif_flow_stats(flow, put->stats);
                 }
-                if (flags & DPIF_FP_ZERO_STATS) {
+                if (put->flags & DPIF_FP_ZERO_STATS) {
                     clear_stats(flow);
                 }
             }
@@ -894,30 +891,29 @@ dpif_netdev_flow_dump_done(const struct dpif *dpif OVS_UNUSED, void *state_)
 }
 
 static int
-dpif_netdev_execute(struct dpif *dpif,
-                    const struct nlattr *key_attrs, size_t key_len,
-                    const struct nlattr *actions, size_t actions_len,
-                    const struct ofpbuf *packet)
+dpif_netdev_execute(struct dpif *dpif, const struct dpif_execute *execute)
 {
     struct dp_netdev *dp = get_dp_netdev(dpif);
     struct ofpbuf copy;
     struct flow key;
     int error;
 
-    if (packet->size < ETH_HEADER_LEN || packet->size > UINT16_MAX) {
+    if (execute->packet->size < ETH_HEADER_LEN ||
+        execute->packet->size > UINT16_MAX) {
         return EINVAL;
     }
 
     /* Make a deep copy of 'packet', because we might modify its data. */
-    ofpbuf_init(&copy, DP_NETDEV_HEADROOM + packet->size);
+    ofpbuf_init(&copy, DP_NETDEV_HEADROOM + execute->packet->size);
     ofpbuf_reserve(&copy, DP_NETDEV_HEADROOM);
-    ofpbuf_put(&copy, packet->data, packet->size);
+    ofpbuf_put(&copy, execute->packet->data, execute->packet->size);
 
     flow_extract(&copy, 0, 0, -1, &key);
-    error = dpif_netdev_flow_from_nlattrs(key_attrs, key_len, &key);
+    error = dpif_netdev_flow_from_nlattrs(execute->key, execute->key_len,
+                                          &key);
     if (!error) {
         dp_netdev_execute_actions(dp, &copy, &key,
-                                  actions, actions_len);
+                                  execute->actions, execute->actions_len);
     }
 
     ofpbuf_uninit(&copy);

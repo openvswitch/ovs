@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -87,6 +87,10 @@ static void log_flow_message(const struct dpif *dpif, int error,
 static void log_operation(const struct dpif *, const char *operation,
                           int error);
 static bool should_log_flow_message(int error);
+static void log_flow_put_message(struct dpif *, const struct dpif_flow_put *,
+                                 int error);
+static void log_execute_message(struct dpif *, const struct dpif_execute *,
+                                int error);
 
 static void
 dp_initialize(void)
@@ -764,6 +768,23 @@ dpif_flow_get(const struct dpif *dpif,
     return error;
 }
 
+static int
+dpif_flow_put__(struct dpif *dpif, const struct dpif_flow_put *put)
+{
+    int error;
+
+    COVERAGE_INC(dpif_flow_put);
+    assert(!(put->flags & ~(DPIF_FP_CREATE | DPIF_FP_MODIFY
+                            | DPIF_FP_ZERO_STATS)));
+
+    error = dpif->dpif_class->flow_put(dpif, put);
+    if (error && put->stats) {
+        memset(put->stats, 0, sizeof *put->stats);
+    }
+    log_flow_put_message(dpif, put, error);
+    return error;
+}
+
 /* Adds or modifies a flow in 'dpif'.  The flow is specified by the Netlink
  * attributes with types OVS_KEY_ATTR_* in the 'key_len' bytes starting at
  * 'key'.  The associated actions are specified by the Netlink attributes with
@@ -790,35 +811,15 @@ dpif_flow_put(struct dpif *dpif, enum dpif_flow_put_flags flags,
               const struct nlattr *actions, size_t actions_len,
               struct dpif_flow_stats *stats)
 {
-    int error;
+    struct dpif_flow_put put;
 
-    COVERAGE_INC(dpif_flow_put);
-    assert(!(flags & ~(DPIF_FP_CREATE | DPIF_FP_MODIFY | DPIF_FP_ZERO_STATS)));
-
-    error = dpif->dpif_class->flow_put(dpif, flags, key, key_len,
-                                       actions, actions_len, stats);
-    if (error && stats) {
-        memset(stats, 0, sizeof *stats);
-    }
-    if (should_log_flow_message(error)) {
-        struct ds s;
-
-        ds_init(&s);
-        ds_put_cstr(&s, "put");
-        if (flags & DPIF_FP_CREATE) {
-            ds_put_cstr(&s, "[create]");
-        }
-        if (flags & DPIF_FP_MODIFY) {
-            ds_put_cstr(&s, "[modify]");
-        }
-        if (flags & DPIF_FP_ZERO_STATS) {
-            ds_put_cstr(&s, "[zero]");
-        }
-        log_flow_message(dpif, error, ds_cstr(&s), key, key_len, stats,
-                         actions, actions_len);
-        ds_destroy(&s);
-    }
-    return error;
+    put.flags = flags;
+    put.key = key;
+    put.key_len = key_len;
+    put.actions = actions;
+    put.actions_len = actions_len;
+    put.stats = stats;
+    return dpif_flow_put__(dpif, &put);
 }
 
 /* Deletes a flow from 'dpif' and returns 0, or returns ENOENT if 'dpif' does
@@ -938,6 +939,23 @@ dpif_flow_dump_done(struct dpif_flow_dump *dump)
     return dump->error == EOF ? 0 : dump->error;
 }
 
+static int
+dpif_execute__(struct dpif *dpif, const struct dpif_execute *execute)
+{
+    int error;
+
+    COVERAGE_INC(dpif_execute);
+    if (execute->actions_len > 0) {
+        error = dpif->dpif_class->execute(dpif, execute);
+    } else {
+        error = 0;
+    }
+
+    log_execute_message(dpif, execute, error);
+
+    return error;
+}
+
 /* Causes 'dpif' to perform the 'actions_len' bytes of actions in 'actions' on
  * the Ethernet frame specified in 'packet' taken from the flow specified in
  * the 'key_len' bytes of 'key'.  ('key' is mostly redundant with 'packet', but
@@ -951,30 +969,14 @@ dpif_execute(struct dpif *dpif,
              const struct nlattr *actions, size_t actions_len,
              const struct ofpbuf *buf)
 {
-    int error;
+    struct dpif_execute execute;
 
-    COVERAGE_INC(dpif_execute);
-    if (actions_len > 0) {
-        error = dpif->dpif_class->execute(dpif, key, key_len,
-                                          actions, actions_len, buf);
-    } else {
-        error = 0;
-    }
-
-    if (!(error ? VLOG_DROP_WARN(&error_rl) : VLOG_DROP_DBG(&dpmsg_rl))) {
-        struct ds ds = DS_EMPTY_INITIALIZER;
-        char *packet = ofp_packet_to_string(buf->data, buf->size);
-        ds_put_format(&ds, "%s: execute ", dpif_name(dpif));
-        format_odp_actions(&ds, actions, actions_len);
-        if (error) {
-            ds_put_format(&ds, " failed (%s)", strerror(error));
-        }
-        ds_put_format(&ds, " on packet %s", packet);
-        vlog(THIS_MODULE, error ? VLL_WARN : VLL_DBG, "%s", ds_cstr(&ds));
-        ds_destroy(&ds);
-        free(packet);
-    }
-    return error;
+    execute.key = key;
+    execute.key_len = key_len;
+    execute.actions = actions;
+    execute.actions_len = actions_len;
+    execute.packet = buf;
+    return dpif_execute__(dpif, &execute);
 }
 
 /* Executes each of the 'n_ops' operations in 'ops' on 'dpif', in the order in
@@ -995,24 +997,14 @@ dpif_operate(struct dpif *dpif, struct dpif_op **ops, size_t n_ops)
 
     for (i = 0; i < n_ops; i++) {
         struct dpif_op *op = ops[i];
-        struct dpif_flow_put *put;
-        struct dpif_execute *execute;
 
         switch (op->type) {
         case DPIF_OP_FLOW_PUT:
-            put = &op->u.flow_put;
-            op->error = dpif_flow_put(dpif, put->flags,
-                                      put->key, put->key_len,
-                                      put->actions, put->actions_len,
-                                      put->stats);
+            op->error = dpif_flow_put__(dpif, &op->u.flow_put);
             break;
 
         case DPIF_OP_EXECUTE:
-            execute = &op->u.execute;
-            op->error = dpif_execute(dpif, execute->key, execute->key_len,
-                                     execute->actions,
-                                     execute->actions_len,
-                                     execute->packet);
+            op->error = dpif_execute__(dpif, &op->u.execute);
             break;
 
         default:
@@ -1219,4 +1211,51 @@ log_flow_message(const struct dpif *dpif, int error, const char *operation,
     }
     vlog(THIS_MODULE, flow_message_log_level(error), "%s", ds_cstr(&ds));
     ds_destroy(&ds);
+}
+
+static void
+log_flow_put_message(struct dpif *dpif, const struct dpif_flow_put *put,
+                     int error)
+{
+    if (should_log_flow_message(error)) {
+        struct ds s;
+
+        ds_init(&s);
+        ds_put_cstr(&s, "put");
+        if (put->flags & DPIF_FP_CREATE) {
+            ds_put_cstr(&s, "[create]");
+        }
+        if (put->flags & DPIF_FP_MODIFY) {
+            ds_put_cstr(&s, "[modify]");
+        }
+        if (put->flags & DPIF_FP_ZERO_STATS) {
+            ds_put_cstr(&s, "[zero]");
+        }
+        log_flow_message(dpif, error, ds_cstr(&s),
+                         put->key, put->key_len, put->stats,
+                         put->actions, put->actions_len);
+        ds_destroy(&s);
+    }
+}
+
+static void
+log_execute_message(struct dpif *dpif, const struct dpif_execute *execute,
+                    int error)
+{
+    if (!(error ? VLOG_DROP_WARN(&error_rl) : VLOG_DROP_DBG(&dpmsg_rl))) {
+        struct ds ds = DS_EMPTY_INITIALIZER;
+        char *packet;
+
+        packet = ofp_packet_to_string(execute->packet->data,
+                                      execute->packet->size);
+        ds_put_format(&ds, "%s: execute ", dpif_name(dpif));
+        format_odp_actions(&ds, execute->actions, execute->actions_len);
+        if (error) {
+            ds_put_format(&ds, " failed (%s)", strerror(error));
+        }
+        ds_put_format(&ds, " on packet %s", packet);
+        vlog(THIS_MODULE, error ? VLL_WARN : VLL_DBG, "%s", ds_cstr(&ds));
+        ds_destroy(&ds);
+        free(packet);
+    }
 }

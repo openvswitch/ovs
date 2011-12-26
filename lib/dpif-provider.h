@@ -210,30 +210,28 @@ struct dpif_class {
                     struct ofpbuf **actionsp, struct dpif_flow_stats *stats);
 
     /* Adds or modifies a flow in 'dpif'.  The flow is specified by the Netlink
-     * attributes with types OVS_KEY_ATTR_* in the 'key_len' bytes starting at
-     * 'key'.  The associated actions are specified by the Netlink attributes
-     * with types OVS_ACTION_ATTR_* in the 'actions_len' bytes starting at
-     * 'actions'.
+     * attributes with types OVS_KEY_ATTR_* in the 'put->key_len' bytes
+     * starting at 'put->key'.  The associated actions are specified by the
+     * Netlink attributes with types OVS_ACTION_ATTR_* in the
+     * 'put->actions_len' bytes starting at 'put->actions'.
      *
      * - If the flow's key does not exist in 'dpif', then the flow will be
-     *   added if 'flags' includes DPIF_FP_CREATE.  Otherwise the operation
-     *   will fail with ENOENT.
+     *   added if 'put->flags' includes DPIF_FP_CREATE.  Otherwise the
+     *   operation will fail with ENOENT.
      *
-     *   If the operation succeeds, then 'stats', if nonnull, must be zeroed.
+     *   If the operation succeeds, then 'put->stats', if nonnull, must be
+     *   zeroed.
      *
      * - If the flow's key does exist in 'dpif', then the flow's actions will
-     *   be updated if 'flags' includes DPIF_FP_MODIFY.  Otherwise the
+     *   be updated if 'put->flags' includes DPIF_FP_MODIFY.  Otherwise the
      *   operation will fail with EEXIST.  If the flow's actions are updated,
-     *   then its statistics will be zeroed if 'flags' includes
+     *   then its statistics will be zeroed if 'put->flags' includes
      *   DPIF_FP_ZERO_STATS, and left as-is otherwise.
      *
-     *   If the operation succeeds, then 'stats', if nonnull, must be set to
-     *   the flow's statistics before the update.
+     *   If the operation succeeds, then 'put->stats', if nonnull, must be set
+     *   to the flow's statistics before the update.
      */
-    int (*flow_put)(struct dpif *dpif, enum dpif_flow_put_flags flags,
-                    const struct nlattr *key, size_t key_len,
-                    const struct nlattr *actions, size_t actions_len,
-                    struct dpif_flow_stats *stats);
+    int (*flow_put)(struct dpif *dpif, const struct dpif_flow_put *put);
 
     /* Deletes a flow from 'dpif' and returns 0, or returns ENOENT if 'dpif'
      * does not contain such a flow.  The flow is specified by the Netlink
@@ -283,15 +281,13 @@ struct dpif_class {
      * successful call to the 'flow_dump_start' function for 'dpif'.  */
     int (*flow_dump_done)(const struct dpif *dpif, void *state);
 
-    /* Performs the 'actions_len' bytes of actions in 'actions' on the Ethernet
-     * frame specified in 'packet' taken from the flow specified in the
-     * 'key_len' bytes of 'key'.  ('key' is mostly redundant with 'packet', but
-     * it contains some metadata that cannot be recovered from 'packet', such
-     * as tun_id and in_port.) */
-    int (*execute)(struct dpif *dpif,
-                   const struct nlattr *key, size_t key_len,
-                   const struct nlattr *actions, size_t actions_len,
-                   const struct ofpbuf *packet);
+    /* Performs the 'execute->actions_len' bytes of actions in
+     * 'execute->actions' on the Ethernet frame specified in 'execute->packet'
+     * taken from the flow specified in the 'execute->key_len' bytes of
+     * 'execute->key'.  ('execute->key' is mostly redundant with
+     * 'execute->packet', but it contains some metadata that cannot be
+     * recovered from 'execute->packet', such as tun_id and in_port.) */
+    int (*execute)(struct dpif *dpif, const struct dpif_execute *execute);
 
     /* Executes each of the 'n_ops' operations in 'ops' on 'dpif', in the order
      * in which they are specified, placing each operation's results in the

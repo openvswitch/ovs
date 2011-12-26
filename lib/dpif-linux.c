@@ -657,9 +657,7 @@ dpif_linux_flow_get(const struct dpif *dpif_,
 }
 
 static void
-dpif_linux_init_flow_put(struct dpif *dpif_, enum dpif_flow_put_flags flags,
-                         const struct nlattr *key, size_t key_len,
-                         const struct nlattr *actions, size_t actions_len,
+dpif_linux_init_flow_put(struct dpif *dpif_, const struct dpif_flow_put *put,
                          struct dpif_linux_flow *request)
 {
     static struct nlattr dummy_action;
@@ -667,37 +665,33 @@ dpif_linux_init_flow_put(struct dpif *dpif_, enum dpif_flow_put_flags flags,
     struct dpif_linux *dpif = dpif_linux_cast(dpif_);
 
     dpif_linux_flow_init(request);
-    request->cmd = (flags & DPIF_FP_CREATE
+    request->cmd = (put->flags & DPIF_FP_CREATE
                     ? OVS_FLOW_CMD_NEW : OVS_FLOW_CMD_SET);
     request->dp_ifindex = dpif->dp_ifindex;
-    request->key = key;
-    request->key_len = key_len;
+    request->key = put->key;
+    request->key_len = put->key_len;
     /* Ensure that OVS_FLOW_ATTR_ACTIONS will always be included. */
-    request->actions = actions ? actions : &dummy_action;
-    request->actions_len = actions_len;
-    if (flags & DPIF_FP_ZERO_STATS) {
+    request->actions = put->actions ? put->actions : &dummy_action;
+    request->actions_len = put->actions_len;
+    if (put->flags & DPIF_FP_ZERO_STATS) {
         request->clear = true;
     }
-    request->nlmsg_flags = flags & DPIF_FP_MODIFY ? 0 : NLM_F_CREATE;
+    request->nlmsg_flags = put->flags & DPIF_FP_MODIFY ? 0 : NLM_F_CREATE;
 }
 
 static int
-dpif_linux_flow_put(struct dpif *dpif_, enum dpif_flow_put_flags flags,
-                    const struct nlattr *key, size_t key_len,
-                    const struct nlattr *actions, size_t actions_len,
-                    struct dpif_flow_stats *stats)
+dpif_linux_flow_put(struct dpif *dpif_, const struct dpif_flow_put *put)
 {
     struct dpif_linux_flow request, reply;
     struct ofpbuf *buf;
     int error;
 
-    dpif_linux_init_flow_put(dpif_, flags, key, key_len, actions, actions_len,
-                             &request);
+    dpif_linux_init_flow_put(dpif_, put, &request);
     error = dpif_linux_flow_transact(&request,
-                                     stats ? &reply : NULL,
-                                     stats ? &buf : NULL);
-    if (!error && stats) {
-        dpif_linux_flow_get_stats(&reply, stats);
+                                     put->stats ? &reply : NULL,
+                                     put->stats ? &buf : NULL);
+    if (!error && put->stats) {
+        dpif_linux_flow_get_stats(&reply, put->stats);
         ofpbuf_delete(buf);
     }
     return error;
@@ -821,39 +815,35 @@ dpif_linux_flow_dump_done(const struct dpif *dpif OVS_UNUSED, void *state_)
 
 static struct ofpbuf *
 dpif_linux_encode_execute(int dp_ifindex,
-                          const struct nlattr *key, size_t key_len,
-                          const struct nlattr *actions, size_t actions_len,
-                          const struct ofpbuf *packet)
+                          const struct dpif_execute *d_exec)
 {
-    struct ovs_header *execute;
+    struct ovs_header *k_exec;
     struct ofpbuf *buf;
 
-    buf = ofpbuf_new(128 + actions_len + packet->size);
+    buf = ofpbuf_new(128 + d_exec->actions_len + d_exec->packet->size);
 
     nl_msg_put_genlmsghdr(buf, 0, ovs_packet_family, NLM_F_REQUEST,
                           OVS_PACKET_CMD_EXECUTE, OVS_PACKET_VERSION);
 
-    execute = ofpbuf_put_uninit(buf, sizeof *execute);
-    execute->dp_ifindex = dp_ifindex;
+    k_exec = ofpbuf_put_uninit(buf, sizeof *k_exec);
+    k_exec->dp_ifindex = dp_ifindex;
 
-    nl_msg_put_unspec(buf, OVS_PACKET_ATTR_PACKET, packet->data, packet->size);
-    nl_msg_put_unspec(buf, OVS_PACKET_ATTR_KEY, key, key_len);
-    nl_msg_put_unspec(buf, OVS_PACKET_ATTR_ACTIONS, actions, actions_len);
+    nl_msg_put_unspec(buf, OVS_PACKET_ATTR_PACKET,
+                      d_exec->packet->data, d_exec->packet->size);
+    nl_msg_put_unspec(buf, OVS_PACKET_ATTR_KEY, d_exec->key, d_exec->key_len);
+    nl_msg_put_unspec(buf, OVS_PACKET_ATTR_ACTIONS,
+                      d_exec->actions, d_exec->actions_len);
 
     return buf;
 }
 
 static int
-dpif_linux_execute__(int dp_ifindex, const struct nlattr *key, size_t key_len,
-                     const struct nlattr *actions, size_t actions_len,
-                     const struct ofpbuf *packet)
+dpif_linux_execute__(int dp_ifindex, const struct dpif_execute *execute)
 {
     struct ofpbuf *request;
     int error;
 
-    request = dpif_linux_encode_execute(dp_ifindex,
-                                        key, key_len, actions, actions_len,
-                                        packet);
+    request = dpif_linux_encode_execute(dp_ifindex, execute);
     error = nl_sock_transact(genl_sock, request, NULL);
     ofpbuf_delete(request);
 
@@ -861,15 +851,11 @@ dpif_linux_execute__(int dp_ifindex, const struct nlattr *key, size_t key_len,
 }
 
 static int
-dpif_linux_execute(struct dpif *dpif_,
-                   const struct nlattr *key, size_t key_len,
-                   const struct nlattr *actions, size_t actions_len,
-                   const struct ofpbuf *packet)
+dpif_linux_execute(struct dpif *dpif_, const struct dpif_execute *execute)
 {
     struct dpif_linux *dpif = dpif_linux_cast(dpif_);
 
-    return dpif_linux_execute__(dpif->dp_ifindex, key, key_len,
-                                actions, actions_len, packet);
+    return dpif_linux_execute__(dpif->dp_ifindex, execute);
 }
 
 static void
@@ -889,9 +875,7 @@ dpif_linux_operate(struct dpif *dpif_, struct dpif_op **ops, size_t n_ops)
             struct dpif_flow_put *put = &op->u.flow_put;
             struct dpif_linux_flow request;
 
-            dpif_linux_init_flow_put(dpif_, put->flags, put->key, put->key_len,
-                                     put->actions, put->actions_len,
-                                     &request);
+            dpif_linux_init_flow_put(dpif_, put, &request);
             if (put->stats) {
                 request.nlmsg_flags |= NLM_F_ECHO;
             }
@@ -900,9 +884,8 @@ dpif_linux_operate(struct dpif *dpif_, struct dpif_op **ops, size_t n_ops)
         } else if (op->type == DPIF_OP_EXECUTE) {
             struct dpif_execute *execute = &op->u.execute;
 
-            txn->request = dpif_linux_encode_execute(
-                dpif->dp_ifindex, execute->key, execute->key_len,
-                execute->actions, execute->actions_len, execute->packet);
+            txn->request = dpif_linux_encode_execute(dpif->dp_ifindex,
+                                                     execute);
         } else {
             NOT_REACHED();
         }
@@ -1285,6 +1268,7 @@ dpif_linux_vport_send(int dp_ifindex, uint32_t port_no,
 {
     struct ofpbuf actions, key, packet;
     struct odputil_keybuf keybuf;
+    struct dpif_execute execute;
     struct flow flow;
     uint64_t action;
 
@@ -1297,8 +1281,12 @@ dpif_linux_vport_send(int dp_ifindex, uint32_t port_no,
     ofpbuf_use_stack(&actions, &action, sizeof action);
     nl_msg_put_u32(&actions, OVS_ACTION_ATTR_OUTPUT, port_no);
 
-    return dpif_linux_execute__(dp_ifindex, key.data, key.size,
-                                actions.data, actions.size, &packet);
+    execute.key = key.data;
+    execute.key_len = key.size;
+    execute.actions = actions.data;
+    execute.actions_len = actions.size;
+    execute.packet = &packet;
+    return dpif_linux_execute__(dp_ifindex, &execute);
 }
 
 static bool
