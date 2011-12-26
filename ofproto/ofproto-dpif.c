@@ -2573,7 +2573,8 @@ handle_flow_miss(struct ofproto_dpif *ofproto, struct flow_miss *miss,
 
         if (!execute_controller_action(ofproto, &facet->flow,
                                        subfacet->actions,
-                                       subfacet->actions_len, packet, true)) {
+                                       subfacet->actions_len, packet, true)
+            && subfacet->actions_len > 0) {
             struct flow_miss_op *op = &ops[(*n_ops)++];
             struct dpif_execute *execute = &op->dpif_op.execute;
 
