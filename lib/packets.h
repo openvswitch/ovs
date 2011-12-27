@@ -331,11 +331,23 @@ struct ip_header {
 };
 BUILD_ASSERT_DECL(IP_HEADER_LEN == sizeof(struct ip_header));
 
-#define ICMP_HEADER_LEN 4
+#define ICMP_HEADER_LEN 8
 struct icmp_header {
     uint8_t icmp_type;
     uint8_t icmp_code;
     ovs_be16 icmp_csum;
+    union {
+        struct {
+            ovs_be16 id;
+            ovs_be16 seq;
+        } echo;
+        struct {
+            ovs_be16 empty;
+            ovs_be16 mtu;
+        } frag;
+        ovs_be32 gateway;
+    } icmp_fields;
+    uint8_t icmp_data[0];
 };
 BUILD_ASSERT_DECL(ICMP_HEADER_LEN == sizeof(struct icmp_header));
 
