@@ -2577,6 +2577,15 @@ handle_flow_miss(struct ofproto_dpif *ofproto, struct flow_miss *miss,
             struct flow_miss_op *op = &ops[(*n_ops)++];
             struct dpif_execute *execute = &op->dpif_op.execute;
 
+            if (flow->vlan_tci != subfacet->initial_tci) {
+                /* This packet was received on a VLAN splinter port.  We added
+                 * a VLAN to the packet to make the packet resemble the flow,
+                 * but the actions were composed assuming that the packet
+                 * contained no VLAN.  So, we must remove the VLAN header from
+                 * the packet before trying to execute the actions. */
+                eth_pop_vlan(packet);
+            }
+
             op->subfacet = subfacet;
             execute->type = DPIF_OP_EXECUTE;
             execute->key = miss->key;
@@ -2605,10 +2614,27 @@ handle_flow_miss(struct ofproto_dpif *ofproto, struct flow_miss *miss,
     }
 }
 
+/* Like odp_flow_key_to_flow(), this function converts the 'key_len' bytes of
+ * OVS_KEY_ATTR_* attributes in 'key' to a flow structure in 'flow' and returns
+ * an ODP_FIT_* value that indicates how well 'key' fits our expectations for
+ * what a flow key should contain.
+ *
+ * This function also includes some logic to help make VLAN splinters
+ * transparent to the rest of the upcall processing logic.  In particular, if
+ * the extracted in_port is a VLAN splinter port, it replaces flow->in_port by
+ * the "real" port, sets flow->vlan_tci correctly for the VLAN of the VLAN
+ * splinter port, and pushes a VLAN header onto 'packet' (if it is nonnull).
+ *
+ * Sets '*initial_tci' to the VLAN TCI with which the packet was really
+ * received, that is, the actual VLAN TCI extracted by odp_flow_key_to_flow().
+ * (This differs from the value returned in flow->vlan_tci only for packets
+ * received on VLAN splinters.)
+ */
 static enum odp_key_fitness
 ofproto_dpif_extract_flow_key(const struct ofproto_dpif *ofproto,
                               const struct nlattr *key, size_t key_len,
-                              struct flow *flow, ovs_be16 *initial_tci)
+                              struct flow *flow, ovs_be16 *initial_tci,
+                              struct ofpbuf *packet)
 {
     enum odp_key_fitness fitness;
     uint16_t realdev;
@@ -2626,6 +2652,23 @@ ofproto_dpif_extract_flow_key(const struct ofproto_dpif *ofproto,
          * with the VLAN device's VLAN ID. */
         flow->in_port = realdev;
         flow->vlan_tci = htons((vid & VLAN_VID_MASK) | VLAN_CFI);
+        if (packet) {
+            /* Make the packet resemble the flow, so that it gets sent to an
+             * OpenFlow controller properly, so that it looks correct for
+             * sFlow, and so that flow_extract() will get the correct vlan_tci
+             * if it is called on 'packet'.
+             *
+             * The allocated space inside 'packet' probably also contains
+             * 'key', that is, both 'packet' and 'key' are probably part of a
+             * struct dpif_upcall (see the large comment on that structure
+             * definition), so pushing data on 'packet' is in general not a
+             * good idea since it could overwrite 'key' or free it as a side
+             * effect.  However, it's OK in this special case because we know
+             * that 'packet' is inside a Netlink attribute: pushing 4 bytes
+             * will just overwrite the 4-byte "struct nlattr", which is fine
+             * since we don't need that header anymore. */
+            eth_push_vlan(packet, flow->vlan_tci);
+        }
 
         /* Let the caller know that we can't reproduce 'key' from 'flow'. */
         if (fitness == ODP_FIT_PERFECT) {
@@ -2668,7 +2711,8 @@ handle_miss_upcalls(struct ofproto_dpif *ofproto, struct dpif_upcall *upcalls,
          * then set 'flow''s header pointers. */
         fitness = ofproto_dpif_extract_flow_key(ofproto,
                                                 upcall->key, upcall->key_len,
-                                                &flow, &initial_tci);
+                                                &flow, &initial_tci,
+                                                upcall->packet);
         if (fitness == ODP_FIT_ERROR) {
             ofpbuf_delete(upcall->packet);
             continue;
@@ -2747,7 +2791,7 @@ handle_userspace_upcall(struct ofproto_dpif *ofproto,
 
     fitness = ofproto_dpif_extract_flow_key(ofproto, upcall->key,
                                             upcall->key_len, &flow,
-                                            &initial_tci);
+                                            &initial_tci, upcall->packet);
     if (fitness == ODP_FIT_ERROR) {
         ofpbuf_delete(upcall->packet);
         return;
@@ -5718,7 +5762,7 @@ ofproto_unixctl_trace(struct unixctl_conn *conn, int argc, const char *argv[],
         /* Convert odp_key to flow. */
         error = ofproto_dpif_extract_flow_key(ofproto, odp_key.data,
                                               odp_key.size, &flow,
-                                              &initial_tci);
+                                              &initial_tci, NULL);
         if (error == ODP_FIT_ERROR) {
             unixctl_command_reply(conn, 501, "Invalid flow");
             goto exit;
