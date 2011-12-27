@@ -144,8 +144,8 @@ bundle_check(const struct nx_action_bundle *nab, int max_ports,
         error = ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_ARGUMENT);
     }
 
-    if (subtype == NXAST_BUNDLE_LOAD) {
-        error = nxm_dst_check(nab->dst, nab->ofs_nbits, 16, flow) || error;
+    if (subtype == NXAST_BUNDLE_LOAD && !error) {
+        error = nxm_dst_check(nab->dst, nab->ofs_nbits, 16, flow);
     }
 
     if (slaves_size < n_slaves * sizeof(ovs_be16)) {
