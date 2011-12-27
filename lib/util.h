@@ -203,6 +203,7 @@ char *abs_file_name(const char *dir, const char *file_name);
 
 void ignore(bool x OVS_UNUSED);
 int log_2_floor(uint32_t);
+int log_2_ceil(uint32_t);
 int ctz(uint32_t);
 
 bool is_all_zeros(const uint8_t *, size_t);
