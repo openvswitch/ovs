@@ -664,6 +664,14 @@ log_2_floor(uint32_t n)
 #endif
 }
 
+/* Given a 32 bit word 'n', calculates ceil(log_2('n')).  It is an error to
+ * call this function with 'n' == 0. */
+int
+log_2_ceil(uint32_t n)
+{
+    return log_2_floor(n) + !IS_POW2(n);
+}
+
 /* Returns the number of trailing 0-bits in 'n', or 32 if 'n' is 0. */
 int
 ctz(uint32_t n)

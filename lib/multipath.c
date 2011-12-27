@@ -38,7 +38,7 @@ enum ofperr
 multipath_check(const struct nx_action_multipath *mp, const struct flow *flow)
 {
     uint32_t n_links = ntohs(mp->max_link) + 1;
-    size_t min_n_bits = log_2_floor(n_links) + 1;
+    size_t min_n_bits = log_2_ceil(n_links);
     int ofs = nxm_decode_ofs(mp->ofs_nbits);
     int n_bits = nxm_decode_n_bits(mp->ofs_nbits);
     enum ofperr error;
