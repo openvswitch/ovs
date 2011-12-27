@@ -152,8 +152,8 @@ bundle_check(const struct nx_action_bundle *nab, int max_ports,
             VLOG_WARN_RL(&rl, "bundle_load action requires at least 16 bit "
                          "destination.");
             error = ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_ARGUMENT);
-        } else {
-            error = nxm_dst_check(nab->dst, ofs, n_bits, flow) || error;
+        } else if (!error) {
+            error = nxm_dst_check(nab->dst, ofs, n_bits, flow);
         }
     }
 
