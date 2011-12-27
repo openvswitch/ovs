@@ -129,7 +129,7 @@ ofpbuf_new_with_headroom(size_t size, size_t headroom)
 struct ofpbuf *
 ofpbuf_clone(const struct ofpbuf *buffer)
 {
-    return ofpbuf_clone_data(buffer->data, buffer->size);
+    return ofpbuf_clone_with_headroom(buffer, 0);
 }
 
 /* Creates and returns a new ofpbuf whose data are copied from 'buffer'.   The
@@ -137,8 +137,27 @@ ofpbuf_clone(const struct ofpbuf *buffer)
 struct ofpbuf *
 ofpbuf_clone_with_headroom(const struct ofpbuf *buffer, size_t headroom)
 {
-    return ofpbuf_clone_data_with_headroom(buffer->data, buffer->size,
-                                           headroom);
+    struct ofpbuf *new_buffer;
+    uintptr_t data_delta;
+
+    new_buffer = ofpbuf_clone_data_with_headroom(buffer->data, buffer->size,
+                                                 headroom);
+    data_delta = (char *) new_buffer->data - (char *) buffer->data;
+
+    if (buffer->l2) {
+        new_buffer->l2 = (char *) buffer->l2 + data_delta;
+    }
+    if (buffer->l3) {
+        new_buffer->l3 = (char *) buffer->l3 + data_delta;
+    }
+    if (buffer->l4) {
+        new_buffer->l4 = (char *) buffer->l4 + data_delta;
+    }
+    if (buffer->l7) {
+        new_buffer->l7 = (char *) buffer->l7 + data_delta;
+    }
+
+    return new_buffer;
 }
 
 /* Creates and returns a new ofpbuf that initially contains a copy of the
