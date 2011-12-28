@@ -22,6 +22,7 @@
 
 #include "dynamic-string.h"
 #include "multipath.h"
+#include "meta-flow.h"
 #include "nx-match.h"
 #include "ofpbuf.h"
 #include "ofp-errors.h"
@@ -94,8 +95,11 @@ bundle_execute_load(const struct nx_action_bundle *nab, struct flow *flow,
                     bool (*slave_enabled)(uint16_t ofp_port, void *aux),
                     void *aux)
 {
-    nxm_reg_load(nab->dst, nab->ofs_nbits,
-                 bundle_execute(nab, flow, slave_enabled, aux), flow);
+    struct mf_subfield dst;
+
+    nxm_decode(&dst, nab->dst, nab->ofs_nbits);
+    mf_set_subfield_value(&dst, bundle_execute(nab, flow, slave_enabled, aux),
+                          flow);
 }
 
 /* Checks that 'nab' specifies a bundle action which is supported by this
@@ -146,15 +150,15 @@ bundle_check(const struct nx_action_bundle *nab, int max_ports,
     }
 
     if (subtype == NXAST_BUNDLE_LOAD) {
-        int ofs = nxm_decode_ofs(nab->ofs_nbits);
-        int n_bits = nxm_decode_n_bits(nab->ofs_nbits);
+        struct mf_subfield dst;
 
-        if (n_bits < 16) {
+        nxm_decode(&dst, nab->dst, nab->ofs_nbits);
+        if (dst.n_bits < 16) {
             VLOG_WARN_RL(&rl, "bundle_load action requires at least 16 bit "
                          "destination.");
             error = OFPERR_OFPBAC_BAD_ARGUMENT;
         } else if (!error) {
-            error = nxm_dst_check(nab->dst, ofs, n_bits, flow);
+            error = mf_check_dst(&dst, flow);
         }
     }
 
@@ -192,7 +196,7 @@ bundle_check(const struct nx_action_bundle *nab, int max_ports,
 static void
 bundle_parse__(struct ofpbuf *b, const char *s, char **save_ptr,
                const char *fields, const char *basis, const char *algorithm,
-               const char *slave_type, const char *dst,
+               const char *slave_type, const char *dst_s,
                const char *slave_delim)
 {
     enum ofputil_action_code code;
@@ -208,7 +212,7 @@ bundle_parse__(struct ofpbuf *b, const char *s, char **save_ptr,
                    s, slave_delim);
     }
 
-    code = dst ? OFPUTIL_NXAST_BUNDLE_LOAD : OFPUTIL_NXAST_BUNDLE;
+    code = dst_s ? OFPUTIL_NXAST_BUNDLE_LOAD : OFPUTIL_NXAST_BUNDLE;
     b->l2 = ofputil_put_action(code, b);
 
     n_slaves = 0;
@@ -259,14 +263,12 @@ bundle_parse__(struct ofpbuf *b, const char *s, char **save_ptr,
         ovs_fatal(0, "%s: unknown slave_type `%s'", s, slave_type);
     }
 
-    if (dst) {
-        uint32_t reg;
-        int ofs, n_bits;
+    if (dst_s) {
+        struct mf_subfield dst;
 
-        nxm_parse_field_bits(dst, &reg, &ofs, &n_bits);
-
-        nab->dst = htonl(reg);
-        nab->ofs_nbits = nxm_encode_ofs_nbits(ofs, n_bits);
+        mf_parse_subfield(&dst, dst_s);
+        nab->dst = htonl(dst.field->nxm_header);
+        nab->ofs_nbits = nxm_encode_ofs_nbits(dst.ofs, dst.n_bits);
     }
 
     b->l2 = NULL;
@@ -359,9 +361,10 @@ bundle_format(const struct nx_action_bundle *nab, struct ds *s)
                   ntohs(nab->basis), algorithm, slave_type);
 
     if (nab->subtype == htons(NXAST_BUNDLE_LOAD)) {
-        nxm_format_field_bits(s, ntohl(nab->dst),
-                              nxm_decode_ofs(nab->ofs_nbits),
-                              nxm_decode_n_bits(nab->ofs_nbits));
+        struct mf_subfield dst;
+
+        nxm_decode(&dst, nab->dst, nab->ofs_nbits);
+        mf_format_subfield(&dst, s);
         ds_put_cstr(s, ",");
     }
 

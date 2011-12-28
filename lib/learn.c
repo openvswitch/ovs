@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 Nicira Networks.
+ * Copyright (c) 2011, 2012 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -57,6 +57,14 @@ get_bits(int n_bits, const void **p)
         value = (value << 16) | ntohs(get_be16(p));
     }
     return value;
+}
+
+static void
+get_subfield(int n_bits, const void **p, struct mf_subfield *sf)
+{
+    sf->field = mf_from_nxm_header(ntohl(get_be32(p)));
+    sf->ofs = ntohs(get_be16(p));
+    sf->n_bits = n_bits;
 }
 
 static unsigned int
@@ -143,10 +151,10 @@ learn_check(const struct nx_action_learn *learn, const struct flow *flow)
 
         /* Check the source. */
         if (src_type == NX_LEARN_SRC_FIELD) {
-            ovs_be32 src_field = get_be32(&p);
-            int src_ofs = ntohs(get_be16(&p));
+            struct mf_subfield src;
 
-            error = nxm_src_check(src_field, src_ofs, n_bits, flow);
+            get_subfield(n_bits, &p, &src);
+            error = mf_check_src(&src, flow);
             if (error) {
                 return error;
             }
@@ -157,20 +165,19 @@ learn_check(const struct nx_action_learn *learn, const struct flow *flow)
 
         /* Check the destination. */
         if (dst_type == NX_LEARN_DST_MATCH || dst_type == NX_LEARN_DST_LOAD) {
-            ovs_be32 dst_field = get_be32(&p);
-            int dst_ofs = ntohs(get_be16(&p));
+            struct mf_subfield dst;
 
+            get_subfield(n_bits, &p, &dst);
             error = (dst_type == NX_LEARN_DST_LOAD
-                     ? nxm_dst_check(dst_field, dst_ofs, n_bits, &rule.flow)
-                     : nxm_src_check(dst_field, dst_ofs, n_bits, &rule.flow));
+                     ? mf_check_dst(&dst, &rule.flow)
+                     : mf_check_src(&dst, &rule.flow));
             if (error) {
                 return error;
             }
 
             if (dst_type == NX_LEARN_DST_MATCH
                 && src_type == NX_LEARN_SRC_IMMEDIATE) {
-                mf_set_subfield(mf_from_nxm_header(ntohl(dst_field)), value,
-                                dst_ofs, n_bits, &rule);
+                mf_set_subfield(&dst, value, &rule);
             }
         }
     }
@@ -210,38 +217,32 @@ learn_execute(const struct nx_action_learn *learn, const struct flow *flow,
         uint64_t value;
 
         struct nx_action_reg_load *load;
-        ovs_be32 dst_field;
-        int dst_ofs;
+        struct mf_subfield dst;
 
         if (!header) {
             break;
         }
 
         if (src_type == NX_LEARN_SRC_FIELD) {
-            ovs_be32 src_field = get_be32(&p);
-            int src_ofs = ntohs(get_be16(&p));
+            struct mf_subfield src;
 
-            value = nxm_read_field_bits(src_field,
-                                        nxm_encode_ofs_nbits(src_ofs, n_bits),
-                                        flow);
+            get_subfield(n_bits, &p, &src);
+            value = mf_get_subfield(&src, flow);
         } else {
             value = get_bits(n_bits, &p);
         }
 
         switch (dst_type) {
         case NX_LEARN_DST_MATCH:
-            dst_field = get_be32(&p);
-            dst_ofs = ntohs(get_be16(&p));
-            mf_set_subfield(mf_from_nxm_header(ntohl(dst_field)), value,
-                            dst_ofs, n_bits, &fm->cr);
+            get_subfield(n_bits, &p, &dst);
+            mf_set_subfield(&dst, value, &fm->cr);
             break;
 
         case NX_LEARN_DST_LOAD:
-            dst_field = get_be32(&p);
-            dst_ofs = ntohs(get_be16(&p));
+            get_subfield(n_bits, &p, &dst);
             load = ofputil_put_NXAST_REG_LOAD(&actions);
-            load->ofs_nbits = nxm_encode_ofs_nbits(dst_ofs, n_bits);
-            load->dst = dst_field;
+            load->ofs_nbits = nxm_encode_ofs_nbits(dst.ofs, dst.n_bits);
+            load->dst = htonl(dst.field->nxm_header);
             load->value = htonll(value);
             break;
 
@@ -283,19 +284,18 @@ struct learn_spec {
     int n_bits;
 
     int src_type;
-    const struct mf_field *src;
-    int src_ofs;
+    struct mf_subfield src;
     uint8_t src_imm[sizeof(union mf_value)];
 
     int dst_type;
-    const struct mf_field *dst;
-    int dst_ofs;
+    struct mf_subfield dst;
 };
 
 static void
 learn_parse_spec(const char *orig, char *name, char *value,
                  struct learn_spec *spec)
 {
+    memset(spec, 0, sizeof *spec);
     if (mf_from_name(name)) {
         const struct mf_field *dst = mf_from_name(name);
         union mf_value imm;
@@ -308,49 +308,36 @@ learn_parse_spec(const char *orig, char *name, char *value,
 
         spec->n_bits = dst->n_bits;
         spec->src_type = NX_LEARN_SRC_IMMEDIATE;
-        spec->src = NULL;
-        spec->src_ofs = 0;
         memcpy(spec->src_imm, &imm, dst->n_bytes);
         spec->dst_type = NX_LEARN_DST_MATCH;
-        spec->dst = dst;
-        spec->dst_ofs = 0;
+        spec->dst.field = dst;
+        spec->dst.ofs = 0;
+        spec->dst.n_bits = dst->n_bits;
     } else if (strchr(name, '[')) {
-        uint32_t src_header, dst_header;
-        int src_ofs, dst_ofs;
-        int n_bits;
-
         /* Parse destination and check prerequisites. */
-        if (nxm_parse_field_bits(name, &dst_header, &dst_ofs,
-                                 &n_bits)[0] != '\0') {
+        if (mf_parse_subfield(&spec->dst, name)[0] != '\0') {
             ovs_fatal(0, "%s: syntax error after NXM field name `%s'",
                       orig, name);
         }
 
         /* Parse source and check prerequisites. */
         if (value[0] != '\0') {
-            int src_nbits;
-
-            if (nxm_parse_field_bits(value, &src_header, &src_ofs,
-                                     &src_nbits)[0] != '\0') {
+            if (mf_parse_subfield(&spec->src, value)[0] != '\0') {
                 ovs_fatal(0, "%s: syntax error after NXM field name `%s'",
                           orig, value);
             }
-            if (src_nbits != n_bits) {
-                ovs_fatal(0, "%s: bit widths of %s (%d) and %s (%d) differ",
-                          orig, name, dst_header, value, dst_header);
+            if (spec->src.n_bits != spec->dst.n_bits) {
+                ovs_fatal(0, "%s: bit widths of %s (%u) and %s (%u) differ",
+                          orig, name, spec->src.n_bits, value,
+                          spec->dst.n_bits);
             }
         } else {
-            src_header = dst_header;
-            src_ofs = dst_ofs;
+            spec->src = spec->dst;
         }
 
-        spec->n_bits = n_bits;
+        spec->n_bits = spec->src.n_bits;
         spec->src_type = NX_LEARN_SRC_FIELD;
-        spec->src = mf_from_nxm_header(src_header);
-        spec->src_ofs = src_ofs;
         spec->dst_type = NX_LEARN_DST_MATCH;
-        spec->dst = mf_from_nxm_header(dst_header);
-        spec->dst_ofs = 0;
     } else if (!strcmp(name, "load")) {
         if (value[strcspn(value, "[-")] == '-') {
             struct nx_action_reg_load load;
@@ -365,14 +352,11 @@ learn_parse_spec(const char *orig, char *name, char *value,
 
             spec->n_bits = nbits;
             spec->src_type = NX_LEARN_SRC_IMMEDIATE;
-            spec->src = NULL;
-            spec->src_ofs = 0;
             for (i = 0; i < imm_bytes; i++) {
                 spec->src_imm[i] = imm >> ((imm_bytes - i - 1) * 8);
             }
             spec->dst_type = NX_LEARN_DST_LOAD;
-            spec->dst = mf_from_nxm_header(ntohl(load.dst));
-            spec->dst_ofs = nxm_decode_ofs(load.ofs_nbits);
+            nxm_decode(&spec->dst, load.dst, load.ofs_nbits);
         } else {
             struct nx_action_reg_move move;
 
@@ -380,28 +364,21 @@ learn_parse_spec(const char *orig, char *name, char *value,
 
             spec->n_bits = ntohs(move.n_bits);
             spec->src_type = NX_LEARN_SRC_FIELD;
-            spec->src = mf_from_nxm_header(ntohl(move.src));
-            spec->src_ofs = ntohs(move.src_ofs);
+            nxm_decode_discrete(&spec->src,
+                                move.src, move.src_ofs, move.n_bits);
             spec->dst_type = NX_LEARN_DST_LOAD;
-            spec->dst = mf_from_nxm_header(ntohl(move.dst));
-            spec->dst_ofs = ntohs(move.dst_ofs);
+            nxm_decode_discrete(&spec->dst,
+                                move.dst, move.dst_ofs, move.n_bits);
         }
     } else if (!strcmp(name, "output")) {
-        uint32_t header;
-        int ofs, n_bits;
-
-        if (nxm_parse_field_bits(value, &header, &ofs, &n_bits)[0] != '\0') {
+        if (mf_parse_subfield(&spec->src, value)[0] != '\0') {
             ovs_fatal(0, "%s: syntax error after NXM field name `%s'",
                       orig, name);
         }
 
-        spec->n_bits = n_bits;
+        spec->n_bits = spec->src.n_bits;
         spec->src_type = NX_LEARN_SRC_FIELD;
-        spec->src = mf_from_nxm_header(header);
-        spec->src_ofs = ofs;
         spec->dst_type = NX_LEARN_DST_OUTPUT;
-        spec->dst = NULL;
-        spec->dst_ofs = 0;
     } else {
         ovs_fatal(0, "%s: unknown keyword %s", orig, name);
     }
@@ -452,29 +429,29 @@ learn_parse(struct ofpbuf *b, char *arg, const struct flow *flow)
 
             /* Check prerequisites. */
             if (spec.src_type == NX_LEARN_SRC_FIELD
-                && !mf_are_prereqs_ok(spec.src, flow)) {
+                && !mf_are_prereqs_ok(spec.src.field, flow)) {
                 ovs_fatal(0, "%s: cannot specify source field %s because "
                           "prerequisites are not satisfied",
-                          orig, spec.src->name);
+                          orig, spec.src.field->name);
             }
             if ((spec.dst_type == NX_LEARN_DST_MATCH
                  || spec.dst_type == NX_LEARN_DST_LOAD)
-                && !mf_are_prereqs_ok(spec.dst, &rule.flow)) {
+                && !mf_are_prereqs_ok(spec.dst.field, &rule.flow)) {
                 ovs_fatal(0, "%s: cannot specify destination field %s because "
                           "prerequisites are not satisfied",
-                          orig, spec.dst->name);
+                          orig, spec.dst.field->name);
             }
 
             /* Update 'rule' to allow for satisfying destination
              * prerequisites. */
             if (spec.src_type == NX_LEARN_SRC_IMMEDIATE
                 && spec.dst_type == NX_LEARN_DST_MATCH
-                && spec.dst_ofs == 0
-                && spec.n_bits == spec.dst->n_bytes * 8) {
+                && spec.dst.ofs == 0
+                && spec.n_bits == spec.dst.field->n_bytes * 8) {
                 union mf_value imm;
 
-                memcpy(&imm, spec.src_imm, spec.dst->n_bytes);
-                mf_set_value(spec.dst, &imm, &rule);
+                memcpy(&imm, spec.src_imm, spec.dst.field->n_bytes);
+                mf_set_value(spec.dst.field, &imm, &rule);
             }
 
             /* Output the flow_mod_spec. */
@@ -486,13 +463,13 @@ learn_parse(struct ofpbuf *b, char *arg, const struct flow *flow)
                 }
                 ofpbuf_put(b, spec.src_imm, n_bytes);
             } else {
-                put_u32(b, spec.src->nxm_header);
-                put_u16(b, spec.src_ofs);
+                put_u32(b, spec.src.field->nxm_header);
+                put_u16(b, spec.src.ofs);
             }
             if (spec.dst_type == NX_LEARN_DST_MATCH ||
                 spec.dst_type == NX_LEARN_DST_LOAD) {
-                put_u32(b, spec.dst->nxm_header);
-                put_u16(b, spec.dst_ofs);
+                put_u32(b, spec.dst.field->nxm_header);
+                put_u16(b, spec.dst.ofs);
             } else {
                 assert(spec.dst_type == NX_LEARN_DST_OUTPUT);
             }
@@ -555,15 +532,12 @@ learn_format(const struct nx_action_learn *learn, struct ds *s)
         int n_bits = header & NX_LEARN_N_BITS_MASK;
 
         int src_type = header & NX_LEARN_SRC_MASK;
-        uint32_t src_header;
-        int src_ofs;
+        struct mf_subfield src;
         const uint8_t *src_value;
         int src_value_bytes;
 
         int dst_type = header & NX_LEARN_DST_MASK;
-        uint32_t dst_header;
-        int dst_ofs;
-        const struct mf_field *dst_field;
+        struct mf_subfield dst;
 
         enum ofperr error;
         int i;
@@ -589,13 +563,13 @@ learn_format(const struct nx_action_learn *learn, struct ds *s)
 
         /* Get the source. */
         if (src_type == NX_LEARN_SRC_FIELD) {
-            src_header = ntohl(get_be32(&p));
-            src_ofs = ntohs(get_be16(&p));
+            get_subfield(n_bits, &p, &src);
             src_value_bytes = 0;
             src_value = NULL;
         } else {
-            src_header = 0;
-            src_ofs = 0;
+            src.field = NULL;
+            src.ofs = 0;
+            src.n_bits = 0;
             src_value_bytes = 2 * DIV_ROUND_UP(n_bits, 16);
             src_value = p;
             p = (const void *) ((const uint8_t *) p + src_value_bytes);
@@ -603,41 +577,39 @@ learn_format(const struct nx_action_learn *learn, struct ds *s)
 
         /* Get the destination. */
         if (dst_type == NX_LEARN_DST_MATCH || dst_type == NX_LEARN_DST_LOAD) {
-            dst_header = ntohl(get_be32(&p));
-            dst_field = mf_from_nxm_header(dst_header);
-            dst_ofs = ntohs(get_be16(&p));
+            get_subfield(n_bits, &p, &dst);
         } else {
-            dst_header = 0;
-            dst_field = NULL;
-            dst_ofs = 0;
+            dst.field = NULL;
+            dst.ofs = 0;
+            dst.n_bits = 0;
         }
 
         ds_put_char(s, ',');
 
         switch (src_type | dst_type) {
         case NX_LEARN_SRC_IMMEDIATE | NX_LEARN_DST_MATCH:
-            if (dst_field && dst_ofs == 0 && n_bits == dst_field->n_bits) {
+            if (dst.field && dst.ofs == 0 && n_bits == dst.field->n_bits) {
                 union mf_value value;
                 uint8_t *bytes = (uint8_t *) &value;
 
-                if (src_value_bytes > dst_field->n_bytes) {
+                if (src_value_bytes > dst.field->n_bytes) {
                     /* The destination field is an odd number of bytes, which
                      * got rounded up to a multiple of 2 to be put into the
                      * learning action.  Skip over the leading byte, which
                      * should be zero anyway.  Otherwise the memcpy() below
                      * will overrun the start of 'value'. */
-                    int diff = src_value_bytes - dst_field->n_bytes;
+                    int diff = src_value_bytes - dst.field->n_bytes;
                     src_value += diff;
                     src_value_bytes -= diff;
                 }
 
                 memset(&value, 0, sizeof value);
-                memcpy(&bytes[dst_field->n_bytes - src_value_bytes],
+                memcpy(&bytes[dst.field->n_bytes - src_value_bytes],
                        src_value, src_value_bytes);
-                ds_put_format(s, "%s=", dst_field->name);
-                mf_format(dst_field, &value, NULL, s);
+                ds_put_format(s, "%s=", dst.field->name);
+                mf_format(dst.field, &value, NULL, s);
             } else {
-                nxm_format_field_bits(s, dst_header, dst_ofs, n_bits);
+                mf_format_subfield(&dst, s);
                 ds_put_cstr(s, "=0x");
                 for (i = 0; i < src_value_bytes; i++) {
                     ds_put_format(s, "%02"PRIx8, src_value[i]);
@@ -646,10 +618,10 @@ learn_format(const struct nx_action_learn *learn, struct ds *s)
             break;
 
         case NX_LEARN_SRC_FIELD | NX_LEARN_DST_MATCH:
-            nxm_format_field_bits(s, dst_header, dst_ofs, n_bits);
-            if (src_header != dst_header || src_ofs != dst_ofs) {
+            mf_format_subfield(&dst, s);
+            if (src.field != dst.field || src.ofs != dst.ofs) {
                 ds_put_char(s, '=');
-                nxm_format_field_bits(s, src_header, src_ofs, n_bits);
+                mf_format_subfield(&src, s);
             }
             break;
 
@@ -659,19 +631,19 @@ learn_format(const struct nx_action_learn *learn, struct ds *s)
                 ds_put_format(s, "%02"PRIx8, src_value[i]);
             }
             ds_put_cstr(s, "->");
-            nxm_format_field_bits(s, dst_header, dst_ofs, n_bits);
+            mf_format_subfield(&dst, s);
             break;
 
         case NX_LEARN_SRC_FIELD | NX_LEARN_DST_LOAD:
             ds_put_cstr(s, "load:");
-            nxm_format_field_bits(s, src_header, src_ofs, n_bits);
+            mf_format_subfield(&src, s);
             ds_put_cstr(s, "->");
-            nxm_format_field_bits(s, dst_header, dst_ofs, n_bits);
+            mf_format_subfield(&dst, s);
             break;
 
         case NX_LEARN_SRC_FIELD | NX_LEARN_DST_OUTPUT:
             ds_put_cstr(s, "output:");
-            nxm_format_field_bits(s, src_header, src_ofs, n_bits);
+            mf_format_subfield(&src, s);
             break;
         }
     }

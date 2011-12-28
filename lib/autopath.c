@@ -22,6 +22,7 @@
 #include <stdlib.h>
 
 #include "flow.h"
+#include "meta-flow.h"
 #include "nx-match.h"
 #include "ofp-errors.h"
 #include "ofp-util.h"
@@ -36,23 +37,26 @@ void
 autopath_execute(const struct nx_action_autopath *ap, struct flow *flow,
                  uint16_t ofp_port)
 {
-    nxm_reg_load(ap->dst, ap->ofs_nbits, ofp_port, flow);
+    struct mf_subfield dst;
+
+    nxm_decode(&dst, ap->dst, ap->ofs_nbits);
+    mf_set_subfield_value(&dst, ofp_port, flow);
 }
 
 void
 autopath_parse(struct nx_action_autopath *ap, const char *s_)
 {
     char *s;
-    uint32_t reg;
-    int id_int, ofs, n_bits;
-    char *id_str, *dst, *save_ptr;
+    char *id_str, *dst_s, *save_ptr;
+    struct mf_subfield dst;
+    int id_int;
 
     s = xstrdup(s_);
     save_ptr = NULL;
     id_str = strtok_r(s, ", ", &save_ptr);
-    dst = strtok_r(NULL, ", ", &save_ptr);
+    dst_s = strtok_r(NULL, ", ", &save_ptr);
 
-    if (!dst) {
+    if (!dst_s) {
         ovs_fatal(0, "%s: not enough arguments to autopath action", s_);
     }
 
@@ -62,16 +66,17 @@ autopath_parse(struct nx_action_autopath *ap, const char *s_)
                   "1 to %"PRIu32, s_, id_int, UINT32_MAX);
     }
 
-    nxm_parse_field_bits(dst, &reg, &ofs, &n_bits);
-    if (n_bits < 16) {
+    mf_parse_subfield(&dst, dst_s);
+    if (dst.n_bits < 16) {
         ovs_fatal(0, "%s: %d-bit destination field has %u possible values, "
-                  "less than required 65536", s_, n_bits, 1u << n_bits);
+                  "less than required 65536",
+                  s_, dst.n_bits, 1u << dst.n_bits);
     }
 
     ofputil_init_NXAST_AUTOPATH(ap);
     ap->id = htonl(id_int);
-    ap->ofs_nbits = nxm_encode_ofs_nbits(ofs, n_bits);
-    ap->dst = htonl(reg);
+    ap->ofs_nbits = nxm_encode_ofs_nbits(dst.ofs, dst.n_bits);
+    ap->dst = htonl(dst.field->nxm_header);
 
     free(s);
 }
@@ -79,14 +84,14 @@ autopath_parse(struct nx_action_autopath *ap, const char *s_)
 enum ofperr
 autopath_check(const struct nx_action_autopath *ap, const struct flow *flow)
 {
-    int n_bits = nxm_decode_n_bits(ap->ofs_nbits);
-    int ofs = nxm_decode_ofs(ap->ofs_nbits);
+    struct mf_subfield dst;
 
-    if (n_bits < 16) {
+    nxm_decode(&dst, ap->dst, ap->ofs_nbits);
+    if (dst.n_bits < 16) {
         VLOG_WARN("at least 16 bit destination is required for autopath "
                   "action.");
         return OFPERR_OFPBAC_BAD_ARGUMENT;
     }
 
-    return nxm_dst_check(ap->dst, ofs, n_bits, flow);
+    return mf_check_dst(&dst, flow);
 }

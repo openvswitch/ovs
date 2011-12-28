@@ -34,6 +34,7 @@
 #include "lacp.h"
 #include "learn.h"
 #include "mac-learning.h"
+#include "meta-flow.h"
 #include "multipath.h"
 #include "netdev.h"
 #include "netlink.h"
@@ -4568,9 +4569,11 @@ static void
 xlate_output_reg_action(struct action_xlate_ctx *ctx,
                         const struct nx_action_output_reg *naor)
 {
+    struct mf_subfield src;
     uint64_t ofp_port;
 
-    ofp_port = nxm_read_field_bits(naor->src, naor->ofs_nbits, &ctx->flow);
+    nxm_decode(&src, naor->src, naor->ofs_nbits);
+    ofp_port = mf_get_subfield(&src, &ctx->flow);
 
     if (ofp_port <= UINT16_MAX) {
         xlate_output_action__(ctx, ofp_port, ntohs(naor->max_len));

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 Nicira Networks.
+ * Copyright (c) 2011, 2012 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@
 #include <netinet/in.h>
 #include <netinet/ip6.h>
 #include "flow.h"
+#include "ofp-errors.h"
 #include "packets.h"
 
 struct cls_rule;
@@ -198,6 +199,13 @@ union mf_value {
     struct in6_addr ipv6;
 };
 
+/* Part of a field. */
+struct mf_subfield {
+    const struct mf_field *field;
+    unsigned int ofs;           /* Bit offset. */
+    unsigned int n_bits;        /* Number of bits. */
+};
+
 /* Finding mf_fields. */
 const struct mf_field *mf_from_id(enum mf_field_id);
 const struct mf_field *mf_from_name(const char *name);
@@ -230,12 +238,24 @@ void mf_get(const struct mf_field *, const struct cls_rule *,
 void mf_set(const struct mf_field *,
             const union mf_value *value, const union mf_value *mask,
             struct cls_rule *);
-void mf_set_subfield(const struct mf_field *, uint64_t value, unsigned int ofs,
-                     unsigned int n_bits, struct cls_rule *);
 
 void mf_set_wild(const struct mf_field *, struct cls_rule *);
 
 void mf_random_value(const struct mf_field *, union mf_value *value);
+
+/* Subfields. */
+void mf_set_subfield(const struct mf_subfield *, uint64_t value,
+                     struct cls_rule *);
+void mf_set_subfield_value(const struct mf_subfield *, uint64_t value,
+                           struct flow *);
+uint64_t mf_get_subfield(const struct mf_subfield *, const struct flow *);
+
+void mf_format_subfield(const struct mf_subfield *, struct ds *);
+char *mf_parse_subfield__(struct mf_subfield *sf, const char **s);
+const char *mf_parse_subfield(struct mf_subfield *, const char *);
+
+enum ofperr mf_check_src(const struct mf_subfield *, const struct flow *);
+enum ofperr mf_check_dst(const struct mf_subfield *, const struct flow *);
 
 /* Parsing and formatting. */
 char *mf_parse(const struct mf_field *, const char *,

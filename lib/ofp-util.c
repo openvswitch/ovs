@@ -29,6 +29,7 @@
 #include "dynamic-string.h"
 #include "learn.h"
 #include "multipath.h"
+#include "meta-flow.h"
 #include "nx-match.h"
 #include "ofp-errors.h"
 #include "ofp-util.h"
@@ -2320,6 +2321,7 @@ static enum ofperr
 check_output_reg(const struct nx_action_output_reg *naor,
                  const struct flow *flow)
 {
+    struct mf_subfield src;
     size_t i;
 
     for (i = 0; i < sizeof naor->zero; i++) {
@@ -2328,8 +2330,8 @@ check_output_reg(const struct nx_action_output_reg *naor,
         }
     }
 
-    return nxm_src_check(naor->src, nxm_decode_ofs(naor->ofs_nbits),
-                         nxm_decode_n_bits(naor->ofs_nbits), flow);
+    nxm_decode(&src, naor->src, naor->ofs_nbits);
+    return mf_check_src(&src, flow);
 }
 
 enum ofperr

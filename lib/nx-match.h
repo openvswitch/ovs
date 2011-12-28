@@ -26,6 +26,7 @@
 struct cls_rule;
 struct ds;
 struct flow;
+struct mf_subfield;
 struct ofpbuf;
 struct nx_action_reg_load;
 struct nx_action_reg_move;
@@ -47,37 +48,24 @@ int nx_put_match(struct ofpbuf *, const struct cls_rule *,
 char *nx_match_to_string(const uint8_t *, unsigned int match_len);
 int nx_match_from_string(const char *, struct ofpbuf *);
 
-uint64_t nxm_read_field_bits(ovs_be32 header, ovs_be16 ofs_nbits,
-                             const struct flow *);
-
 void nxm_parse_reg_move(struct nx_action_reg_move *, const char *);
 void nxm_parse_reg_load(struct nx_action_reg_load *, const char *);
 
 void nxm_format_reg_move(const struct nx_action_reg_move *, struct ds *);
 void nxm_format_reg_load(const struct nx_action_reg_load *, struct ds *);
 
-int nxm_check_reg_move(const struct nx_action_reg_move *, const struct flow *);
+enum ofperr nxm_check_reg_move(const struct nx_action_reg_move *,
+                               const struct flow *);
 enum ofperr nxm_check_reg_load(const struct nx_action_reg_load *,
                                const struct flow *);
-enum ofperr nxm_src_check(ovs_be32 src, unsigned int ofs, unsigned int n_bits,
-                          const struct flow *);
-enum ofperr nxm_dst_check(ovs_be32 dst, unsigned int ofs, unsigned int n_bits,
-                          const struct flow *);
 
 void nxm_execute_reg_move(const struct nx_action_reg_move *, struct flow *);
 void nxm_execute_reg_load(const struct nx_action_reg_load *, struct flow *);
-void nxm_reg_load(ovs_be32 dst, ovs_be16 ofs_nbits, uint64_t src_data,
-                  struct flow *);
 
 int nxm_field_bytes(uint32_t header);
 int nxm_field_bits(uint32_t header);
 
-const char *nxm_parse_field_bits(const char *s,
-                                 uint32_t *headerp, int *ofsp, int *n_bitsp);
-void nxm_format_field_bits(struct ds *, uint32_t header, int ofs, int n_bits);
-
-/* Dealing with the 'ofs_nbits' members of struct nx_action_reg_load and struct
- * nx_action_multipath. */
+/* Dealing with the 'ofs_nbits' members in several Nicira extensions. */
 
 static inline ovs_be16
 nxm_encode_ofs_nbits(int ofs, int n_bits)
@@ -96,6 +84,10 @@ nxm_decode_n_bits(ovs_be16 ofs_nbits)
 {
     return (ntohs(ofs_nbits) & 0x3f) + 1;
 }
+
+void nxm_decode(struct mf_subfield *, ovs_be32 header, ovs_be16 ofs_nbits);
+void nxm_decode_discrete(struct mf_subfield *, ovs_be32 header,
+                         ovs_be16 ofs, ovs_be16 n_bits);
 
 /* Upper bound on the length of an nx_match.  The longest nx_match (an
  * IPV6 neighbor discovery message using 5 registers) would be:

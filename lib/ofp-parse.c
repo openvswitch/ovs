@@ -151,14 +151,13 @@ parse_output(struct ofpbuf *b, char *arg)
 {
     if (strchr(arg, '[')) {
         struct nx_action_output_reg *naor;
-        int ofs, n_bits;
-        uint32_t src;
+        struct mf_subfield src;
 
-        nxm_parse_field_bits(arg, &src, &ofs, &n_bits);
+        mf_parse_subfield(&src, arg);
 
         naor = ofputil_put_NXAST_OUTPUT_REG(b);
-        naor->ofs_nbits = nxm_encode_ofs_nbits(ofs, n_bits);
-        naor->src = htonl(src);
+        naor->ofs_nbits = nxm_encode_ofs_nbits(src.ofs, src.n_bits);
+        naor->src = htonl(src.field->nxm_header);
         naor->max_len = htons(UINT16_MAX);
     } else {
         put_output_action(b, str_to_u32(arg));

@@ -794,97 +794,40 @@ nx_match_from_string(const char *s, struct ofpbuf *b)
     return match_len;
 }
 
-const char *
-nxm_parse_field_bits(const char *s, uint32_t *headerp, int *ofsp, int *n_bitsp)
-{
-    const char *full_s = s;
-    const char *name;
-    uint32_t header;
-    int start, end;
-    int name_len;
-    int width;
-
-    name = s;
-    name_len = strcspn(s, "[");
-    if (s[name_len] != '[') {
-        ovs_fatal(0, "%s: missing [ looking for field name", full_s);
-    }
-
-    header = parse_nxm_field_name(name, name_len);
-    if (!header) {
-        ovs_fatal(0, "%s: unknown field `%.*s'", full_s, name_len, s);
-    }
-    width = nxm_field_bits(header);
-
-    s += name_len;
-    if (sscanf(s, "[%d..%d]", &start, &end) == 2) {
-        /* Nothing to do. */
-    } else if (sscanf(s, "[%d]", &start) == 1) {
-        end = start;
-    } else if (!strncmp(s, "[]", 2)) {
-        start = 0;
-        end = width - 1;
-    } else {
-        ovs_fatal(0, "%s: syntax error expecting [] or [<bit>] or "
-                  "[<start>..<end>]", full_s);
-    }
-    s = strchr(s, ']') + 1;
-
-    if (start > end) {
-        ovs_fatal(0, "%s: starting bit %d is after ending bit %d",
-                  full_s, start, end);
-    } else if (start >= width) {
-        ovs_fatal(0, "%s: starting bit %d is not valid because field is only "
-                  "%d bits wide", full_s, start, width);
-    } else if (end >= width){
-        ovs_fatal(0, "%s: ending bit %d is not valid because field is only "
-                  "%d bits wide", full_s, end, width);
-    }
-
-    *headerp = header;
-    *ofsp = start;
-    *n_bitsp = end - start + 1;
-
-    return s;
-}
-
 void
 nxm_parse_reg_move(struct nx_action_reg_move *move, const char *s)
 {
     const char *full_s = s;
-    uint32_t src, dst;
-    int src_ofs, dst_ofs;
-    int src_n_bits, dst_n_bits;
+    struct mf_subfield src, dst;
 
-    s = nxm_parse_field_bits(s, &src, &src_ofs, &src_n_bits);
+    s = mf_parse_subfield(&src, s);
     if (strncmp(s, "->", 2)) {
         ovs_fatal(0, "%s: missing `->' following source", full_s);
     }
     s += 2;
-    s = nxm_parse_field_bits(s, &dst, &dst_ofs, &dst_n_bits);
+    s = mf_parse_subfield(&dst, s);
     if (*s != '\0') {
         ovs_fatal(0, "%s: trailing garbage following destination", full_s);
     }
 
-    if (src_n_bits != dst_n_bits) {
+    if (src.n_bits != dst.n_bits) {
         ovs_fatal(0, "%s: source field is %d bits wide but destination is "
-                  "%d bits wide", full_s, src_n_bits, dst_n_bits);
+                  "%d bits wide", full_s, src.n_bits, dst.n_bits);
     }
 
     ofputil_init_NXAST_REG_MOVE(move);
-    move->n_bits = htons(src_n_bits);
-    move->src_ofs = htons(src_ofs);
-    move->dst_ofs = htons(dst_ofs);
-    move->src = htonl(src);
-    move->dst = htonl(dst);
+    move->n_bits = htons(src.n_bits);
+    move->src_ofs = htons(src.ofs);
+    move->dst_ofs = htons(dst.ofs);
+    move->src = htonl(src.field->nxm_header);
+    move->dst = htonl(dst.field->nxm_header);
 }
 
 void
 nxm_parse_reg_load(struct nx_action_reg_load *load, const char *s)
 {
     const char *full_s = s;
-    uint32_t dst;
-    int ofs, n_bits;
+    struct mf_subfield dst;
     uint64_t value;
 
     value = strtoull(s, (char **) &s, 0);
@@ -892,151 +835,85 @@ nxm_parse_reg_load(struct nx_action_reg_load *load, const char *s)
         ovs_fatal(0, "%s: missing `->' following value", full_s);
     }
     s += 2;
-    s = nxm_parse_field_bits(s, &dst, &ofs, &n_bits);
+    s = mf_parse_subfield(&dst, s);
     if (*s != '\0') {
         ovs_fatal(0, "%s: trailing garbage following destination", full_s);
     }
 
-    if (n_bits < 64 && (value >> n_bits) != 0) {
-        ovs_fatal(0, "%s: value %"PRIu64" does not fit into %d bits",
-                  full_s, value, n_bits);
+    if (dst.n_bits < 64 && (value >> dst.n_bits) != 0) {
+        ovs_fatal(0, "%s: value %"PRIu64" does not fit into %u bits",
+                  full_s, value, dst.n_bits);
     }
 
     ofputil_init_NXAST_REG_LOAD(load);
-    load->ofs_nbits = nxm_encode_ofs_nbits(ofs, n_bits);
-    load->dst = htonl(dst);
+    load->ofs_nbits = nxm_encode_ofs_nbits(dst.ofs, dst.n_bits);
+    load->dst = htonl(dst.field->nxm_header);
     load->value = htonll(value);
 }
 
 /* nxm_format_reg_move(), nxm_format_reg_load(). */
 
 void
-nxm_format_field_bits(struct ds *s, uint32_t header, int ofs, int n_bits)
-{
-    format_nxm_field_name(s, header);
-    if (ofs == 0 && n_bits == nxm_field_bits(header)) {
-        ds_put_cstr(s, "[]");
-    } else if (n_bits == 1) {
-        ds_put_format(s, "[%d]", ofs);
-    } else {
-        ds_put_format(s, "[%d..%d]", ofs, ofs + n_bits - 1);
-    }
-}
-
-void
 nxm_format_reg_move(const struct nx_action_reg_move *move, struct ds *s)
 {
-    int n_bits = ntohs(move->n_bits);
-    int src_ofs = ntohs(move->src_ofs);
-    int dst_ofs = ntohs(move->dst_ofs);
-    uint32_t src = ntohl(move->src);
-    uint32_t dst = ntohl(move->dst);
+    struct mf_subfield src, dst;
+
+    nxm_decode_discrete(&src, move->src, move->src_ofs, move->n_bits);
+    nxm_decode_discrete(&dst, move->dst, move->dst_ofs, move->n_bits);
 
     ds_put_format(s, "move:");
-    nxm_format_field_bits(s, src, src_ofs, n_bits);
+    mf_format_subfield(&src, s);
     ds_put_cstr(s, "->");
-    nxm_format_field_bits(s, dst, dst_ofs, n_bits);
+    mf_format_subfield(&dst, s);
 }
 
 void
 nxm_format_reg_load(const struct nx_action_reg_load *load, struct ds *s)
 {
-    int ofs = nxm_decode_ofs(load->ofs_nbits);
-    int n_bits = nxm_decode_n_bits(load->ofs_nbits);
-    uint32_t dst = ntohl(load->dst);
-    uint64_t value = ntohll(load->value);
+    struct mf_subfield dst;
 
-    ds_put_format(s, "load:%#"PRIx64"->", value);
-    nxm_format_field_bits(s, dst, ofs, n_bits);
+    ds_put_format(s, "load:%#"PRIx64"->", ntohll(load->value));
+
+    nxm_decode(&dst, load->dst, load->ofs_nbits);
+    mf_format_subfield(&dst, s);
 }
 
 /* nxm_check_reg_move(), nxm_check_reg_load(). */
 
-static bool
-field_ok(const struct mf_field *mf, const struct flow *flow, int size)
-{
-    return (mf
-            && mf_are_prereqs_ok(mf, flow)
-            && size <= nxm_field_bits(mf->nxm_header));
-}
-
-int
+enum ofperr
 nxm_check_reg_move(const struct nx_action_reg_move *action,
                    const struct flow *flow)
 {
-    int src_ofs, dst_ofs, n_bits;
+    struct mf_subfield src;
+    struct mf_subfield dst;
     int error;
 
-    n_bits = ntohs(action->n_bits);
-    src_ofs = ntohs(action->src_ofs);
-    dst_ofs = ntohs(action->dst_ofs);
-
-    error = nxm_src_check(action->src, src_ofs, n_bits, flow);
+    nxm_decode_discrete(&src, action->src, action->src_ofs, action->n_bits);
+    error = mf_check_src(&src, flow);
     if (error) {
         return error;
     }
 
-    return nxm_dst_check(action->dst, dst_ofs, n_bits, flow);
-}
-
-/* Given a flow, checks that the source field represented by 'src_header'
- * in the range ['ofs', 'ofs' + 'n_bits') is valid. */
-enum ofperr
-nxm_src_check(ovs_be32 src_header_, unsigned int ofs, unsigned int n_bits,
-              const struct flow *flow)
-{
-    uint32_t src_header = ntohl(src_header_);
-    const struct mf_field *src = mf_from_nxm_header(src_header);
-
-    if (!n_bits) {
-        VLOG_WARN_RL(&rl, "zero bit source field");
-    } else if (NXM_HASMASK(src_header) || !field_ok(src, flow, ofs + n_bits)) {
-        VLOG_WARN_RL(&rl, "invalid source field");
-    } else {
-        return 0;
-    }
-
-    return OFPERR_OFPBAC_BAD_ARGUMENT;
-}
-
-/* Given a flow, checks that the destination field represented by 'dst_header'
- * in the range ['ofs', 'ofs' + 'n_bits') is valid. */
-enum ofperr
-nxm_dst_check(ovs_be32 dst_header_, unsigned int ofs, unsigned int n_bits,
-              const struct flow *flow)
-{
-    uint32_t dst_header = ntohl(dst_header_);
-    const struct mf_field *dst = mf_from_nxm_header(dst_header);
-
-    if (!n_bits) {
-        VLOG_WARN_RL(&rl, "zero bit destination field");
-    } else if (NXM_HASMASK(dst_header) || !field_ok(dst, flow, ofs + n_bits)) {
-        VLOG_WARN_RL(&rl, "invalid destination field");
-    } else if (!dst->writable) {
-        VLOG_WARN_RL(&rl, "destination field is not writable");
-    } else {
-        return 0;
-    }
-
-    return OFPERR_OFPBAC_BAD_ARGUMENT;
+    nxm_decode_discrete(&dst, action->dst, action->dst_ofs, action->n_bits);
+    return mf_check_dst(&dst, flow);
 }
 
 enum ofperr
 nxm_check_reg_load(const struct nx_action_reg_load *action,
                    const struct flow *flow)
 {
-    unsigned int ofs = nxm_decode_ofs(action->ofs_nbits);
-    unsigned int n_bits = nxm_decode_n_bits(action->ofs_nbits);
+    struct mf_subfield dst;
     enum ofperr error;
 
-    error = nxm_dst_check(action->dst, ofs, n_bits, flow);
+    nxm_decode(&dst, action->dst, action->ofs_nbits);
+    error = mf_check_dst(&dst, flow);
     if (error) {
         return error;
     }
 
     /* Reject 'action' if a bit numbered 'n_bits' or higher is set to 1 in
      * action->value. */
-    if (n_bits < 64 && ntohll(action->value) >> n_bits) {
+    if (dst.n_bits < 64 && ntohll(action->value) >> dst.n_bits) {
         return OFPERR_OFPBAC_BAD_ARGUMENT;
     }
 
@@ -1045,64 +922,72 @@ nxm_check_reg_load(const struct nx_action_reg_load *action,
 
 /* nxm_execute_reg_move(), nxm_execute_reg_load(). */
 
-/* Returns the value of the NXM field corresponding to 'header' at 'ofs_nbits'
- * in 'flow'. */
-uint64_t
-nxm_read_field_bits(ovs_be32 header, ovs_be16 ofs_nbits,
-                    const struct flow *flow)
-{
-    const struct mf_field *field = mf_from_nxm_header(ntohl(header));
-    union mf_value value;
-    union mf_value bits;
-
-    mf_get_value(field, flow, &value);
-    bits.be64 = htonll(0);
-    bitwise_copy(&value, field->n_bytes, nxm_decode_ofs(ofs_nbits),
-                 &bits, sizeof bits.be64, 0,
-                 nxm_decode_n_bits(ofs_nbits));
-    return ntohll(bits.be64);
-}
-
 void
 nxm_execute_reg_move(const struct nx_action_reg_move *action,
                      struct flow *flow)
 {
-    const struct mf_field *src = mf_from_nxm_header(ntohl(action->src));
-    const struct mf_field *dst = mf_from_nxm_header(ntohl(action->dst));
+    struct mf_subfield src, dst;
     union mf_value src_value;
     union mf_value dst_value;
 
-    mf_get_value(dst, flow, &dst_value);
-    mf_get_value(src, flow, &src_value);
-    bitwise_copy(&src_value, src->n_bytes, ntohs(action->src_ofs),
-                 &dst_value, dst->n_bytes, ntohs(action->dst_ofs),
-                 ntohs(action->n_bits));
-    mf_set_flow_value(dst, &dst_value, flow);
+    nxm_decode_discrete(&src, action->src, action->src_ofs, action->n_bits);
+    nxm_decode_discrete(&dst, action->dst, action->dst_ofs, action->n_bits);
+
+    mf_get_value(dst.field, flow, &dst_value);
+    mf_get_value(src.field, flow, &src_value);
+    bitwise_copy(&src_value, src.field->n_bytes, src.ofs,
+                 &dst_value, dst.field->n_bytes, dst.ofs,
+                 src.n_bits);
+    mf_set_flow_value(dst.field, &dst_value, flow);
 }
 
 void
 nxm_execute_reg_load(const struct nx_action_reg_load *action,
                      struct flow *flow)
 {
-    nxm_reg_load(action->dst, action->ofs_nbits, ntohll(action->value), flow);
+    struct mf_subfield dst;
+
+    nxm_decode(&dst, action->dst, action->ofs_nbits);
+    mf_set_subfield_value(&dst, ntohll(action->value), flow);
 }
 
-/* Calculates ofs and n_bits from the given 'ofs_nbits' parameter, and copies
- * 'src_data'[0:n_bits] to 'dst_header'[ofs:ofs+n_bits] in the given 'flow'. */
+/* Initializes 'sf->field' with the field corresponding to the given NXM
+ * 'header' and 'sf->ofs' and 'sf->n_bits' decoded from 'ofs_nbits' with
+ * nxm_decode_ofs() and nxm_decode_n_bits(), respectively.
+ *
+ * Afterward, 'sf' might be invalid in a few different ways:
+ *
+ *   - 'sf->field' will be NULL if 'header' is unknown.
+ *
+ *   - 'sf->ofs' and 'sf->n_bits' might exceed the width of sf->field.
+ *
+ * The caller should call mf_check_src() or mf_check_dst() to check for these
+ * problems. */
 void
-nxm_reg_load(ovs_be32 dst_header, ovs_be16 ofs_nbits, uint64_t src_data,
-             struct flow *flow)
+nxm_decode(struct mf_subfield *sf, ovs_be32 header, ovs_be16 ofs_nbits)
 {
-    const struct mf_field *dst = mf_from_nxm_header(ntohl(dst_header));
-    int n_bits = nxm_decode_n_bits(ofs_nbits);
-    int dst_ofs = nxm_decode_ofs(ofs_nbits);
-    union mf_value dst_value;
-    union mf_value src_value;
+    sf->field = mf_from_nxm_header(ntohl(header));
+    sf->ofs = nxm_decode_ofs(ofs_nbits);
+    sf->n_bits = nxm_decode_n_bits(ofs_nbits);
+}
 
-    mf_get_value(dst, flow, &dst_value);
-    src_value.be64 = htonll(src_data);
-    bitwise_copy(&src_value, sizeof src_value.be64, 0,
-                 &dst_value, dst->n_bytes, dst_ofs,
-                 n_bits);
-    mf_set_flow_value(dst, &dst_value, flow);
+/* Initializes 'sf->field' with the field corresponding to the given NXM
+ * 'header' and 'sf->ofs' and 'sf->n_bits' from 'ofs' and 'n_bits',
+ * respectively.
+ *
+ * Afterward, 'sf' might be invalid in a few different ways:
+ *
+ *   - 'sf->field' will be NULL if 'header' is unknown.
+ *
+ *   - 'sf->ofs' and 'sf->n_bits' might exceed the width of sf->field.
+ *
+ * The caller should call mf_check_src() or mf_check_dst() to check for these
+ * problems. */
+void
+nxm_decode_discrete(struct mf_subfield *sf, ovs_be32 header,
+                    ovs_be16 ofs, ovs_be16 n_bits)
+{
+    sf->field = mf_from_nxm_header(ntohl(header));
+    sf->ofs = ntohs(ofs);
+    sf->n_bits = ntohs(n_bits);
 }

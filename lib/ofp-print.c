@@ -33,6 +33,7 @@
 #include "flow.h"
 #include "learn.h"
 #include "multipath.h"
+#include "meta-flow.h"
 #include "nx-match.h"
 #include "ofp-errors.h"
 #include "ofp-util.h"
@@ -187,6 +188,7 @@ ofp_print_action(struct ds *s, const union ofp_action *a,
     const struct nx_action_multipath *nam;
     const struct nx_action_autopath *naa;
     const struct nx_action_output_reg *naor;
+    struct mf_subfield subfield;
     uint16_t port;
 
     switch (code) {
@@ -319,9 +321,8 @@ ofp_print_action(struct ds *s, const union ofp_action *a,
     case OFPUTIL_NXAST_AUTOPATH:
         naa = (const struct nx_action_autopath *)a;
         ds_put_format(s, "autopath(%u,", ntohl(naa->id));
-        nxm_format_field_bits(s, ntohl(naa->dst),
-                              nxm_decode_ofs(naa->ofs_nbits),
-                              nxm_decode_n_bits(naa->ofs_nbits));
+        nxm_decode(&subfield, naa->dst, naa->ofs_nbits);
+        mf_format_subfield(&subfield, s);
         ds_put_char(s, ')');
         break;
 
@@ -333,9 +334,8 @@ ofp_print_action(struct ds *s, const union ofp_action *a,
     case OFPUTIL_NXAST_OUTPUT_REG:
         naor = (const struct nx_action_output_reg *) a;
         ds_put_cstr(s, "output:");
-        nxm_format_field_bits(s, ntohl(naor->src),
-                              nxm_decode_ofs(naor->ofs_nbits),
-                              nxm_decode_n_bits(naor->ofs_nbits));
+        nxm_decode(&subfield, naor->src, naor->ofs_nbits);
+        mf_format_subfield(&subfield, s);
         break;
 
     case OFPUTIL_NXAST_LEARN:

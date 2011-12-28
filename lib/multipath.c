@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010, 2011 Nicira Networks.
+ * Copyright (c) 2010, 2011, 2012 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@
 #include <sys/types.h>
 #include <netinet/in.h>
 #include "dynamic-string.h"
+#include "meta-flow.h"
 #include "nx-match.h"
 #include "ofp-errors.h"
 #include "ofp-util.h"
@@ -39,11 +40,11 @@ multipath_check(const struct nx_action_multipath *mp, const struct flow *flow)
 {
     uint32_t n_links = ntohs(mp->max_link) + 1;
     size_t min_n_bits = log_2_ceil(n_links);
-    int ofs = nxm_decode_ofs(mp->ofs_nbits);
-    int n_bits = nxm_decode_n_bits(mp->ofs_nbits);
+    struct mf_subfield dst;
     enum ofperr error;
 
-    error = nxm_dst_check(mp->dst, ofs, n_bits, flow);
+    nxm_decode(&dst, mp->dst, mp->ofs_nbits);
+    error = mf_check_dst(&dst, flow);
     if (error) {
         return error;
     }
@@ -56,7 +57,7 @@ multipath_check(const struct nx_action_multipath *mp, const struct flow *flow)
                && mp->algorithm != htons(NX_MP_ALG_ITER_HASH)) {
         VLOG_WARN_RL(&rl, "unsupported algorithm %"PRIu16,
                      ntohs(mp->algorithm));
-    } else if (n_bits < min_n_bits) {
+    } else if (dst.n_bits < min_n_bits) {
         VLOG_WARN_RL(&rl, "multipath action requires at least %zu bits for "
                      "%"PRIu32" links", min_n_bits, n_links);
     } else {
@@ -80,8 +81,10 @@ multipath_execute(const struct nx_action_multipath *mp, struct flow *flow)
     uint16_t link = multipath_algorithm(hash, ntohs(mp->algorithm),
                                         ntohs(mp->max_link) + 1,
                                         ntohl(mp->arg));
+    struct mf_subfield dst;
 
-    nxm_reg_load(mp->dst, mp->ofs_nbits, link, flow);
+    nxm_decode(&dst, mp->dst, mp->ofs_nbits);
+    mf_set_subfield_value(&dst, link, flow);
 }
 
 static uint16_t
@@ -166,9 +169,8 @@ multipath_parse(struct nx_action_multipath *mp, const char *s_)
 {
     char *s = xstrdup(s_);
     char *save_ptr = NULL;
-    char *fields, *basis, *algorithm, *n_links_str, *arg, *dst;
-    uint32_t header;
-    int ofs, n_bits;
+    char *fields, *basis, *algorithm, *n_links_str, *arg, *dst_s;
+    struct mf_subfield dst;
     int n_links;
 
     fields = strtok_r(s, ", ", &save_ptr);
@@ -176,8 +178,8 @@ multipath_parse(struct nx_action_multipath *mp, const char *s_)
     algorithm = strtok_r(NULL, ", ", &save_ptr);
     n_links_str = strtok_r(NULL, ", ", &save_ptr);
     arg = strtok_r(NULL, ", ", &save_ptr);
-    dst = strtok_r(NULL, ", ", &save_ptr);
-    if (!dst) {
+    dst_s = strtok_r(NULL, ", ", &save_ptr);
+    if (!dst_s) {
         ovs_fatal(0, "%s: not enough arguments to multipath action", s_);
     }
 
@@ -209,14 +211,14 @@ multipath_parse(struct nx_action_multipath *mp, const char *s_)
     mp->max_link = htons(n_links - 1);
     mp->arg = htonl(atoi(arg));
 
-    nxm_parse_field_bits(dst, &header, &ofs, &n_bits);
-    if (n_bits < 16 && n_links > (1u << n_bits)) {
+    mf_parse_subfield(&dst, dst_s);
+    if (dst.n_bits < 16 && n_links > (1u << dst.n_bits)) {
         ovs_fatal(0, "%s: %d-bit destination field has %u possible values, "
                   "less than specified n_links %d",
-                  s_, n_bits, 1u << n_bits, n_links);
+                  s_, dst.n_bits, 1u << dst.n_bits, n_links);
     }
-    mp->ofs_nbits = nxm_encode_ofs_nbits(ofs, n_bits);
-    mp->dst = htonl(header);
+    mp->ofs_nbits = nxm_encode_ofs_nbits(dst.ofs, dst.n_bits);
+    mp->dst = htonl(dst.field->nxm_header);
 
     free(s);
 }
@@ -228,6 +230,8 @@ multipath_format(const struct nx_action_multipath *mp, struct ds *s)
 
     uint16_t mp_fields    = ntohs(mp->fields);
     uint16_t mp_algorithm = ntohs(mp->algorithm);
+
+    struct mf_subfield dst;
 
     fields = flow_hash_fields_to_str(mp_fields);
 
@@ -251,7 +255,7 @@ multipath_format(const struct nx_action_multipath *mp, struct ds *s)
     ds_put_format(s, "multipath(%s,%"PRIu16",%s,%d,%"PRIu16",",
                   fields, ntohs(mp->basis), algorithm, ntohs(mp->max_link) + 1,
                   ntohl(mp->arg));
-    nxm_format_field_bits(s, ntohl(mp->dst), nxm_decode_ofs(mp->ofs_nbits),
-                          nxm_decode_n_bits(mp->ofs_nbits));
+    nxm_decode(&dst, mp->dst, mp->ofs_nbits);
+    mf_format_subfield(&dst, s);
     ds_put_char(s, ')');
 }

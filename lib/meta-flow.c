@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 Nicira Networks.
+ * Copyright (c) 2011, 2012 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,12 +26,16 @@
 
 #include "classifier.h"
 #include "dynamic-string.h"
+#include "ofp-errors.h"
 #include "ofp-util.h"
 #include "packets.h"
 #include "random.h"
 #include "shash.h"
 #include "socket-util.h"
 #include "unaligned.h"
+#include "vlog.h"
+
+VLOG_DEFINE_THIS_MODULE(meta_flow);
 
 #define MF_FIELD_SIZES(MEMBER)                  \
     sizeof ((union mf_value *)0)->MEMBER,       \
@@ -393,6 +397,10 @@ struct nxm_field {
 };
 
 static struct hmap all_nxm_fields = HMAP_INITIALIZER(&all_nxm_fields);
+
+/* Rate limit for parse errors.  These always indicate a bug in an OpenFlow
+ * controller and so there's not much point in showing a lot of them. */
+static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 
 /* Returns the field with the given 'id'. */
 const struct mf_field *
@@ -1621,77 +1629,53 @@ mf_set(const struct mf_field *mf,
     }
 }
 
-/* Makes a subfield starting at bit offset 'ofs' and continuing for 'n_bits' in
- * 'rule''s field 'mf' exactly match the 'n_bits' least-significant bits of
- * 'x'.
- *
- * Example: suppose that 'mf' is originally the following 2-byte field in
- * 'rule':
- *
- *     value == 0xe00a == 2#1110000000001010
- *      mask == 0xfc3f == 2#1111110000111111
- *
- * The call mf_set_subfield(mf, 0x55, 8, 7, rule) would have the following
- * effect (note that 0x55 is 2#1010101):
- *
- *     value == 0xd50a == 2#1101010100001010
- *      mask == 0xff3f == 2#1111111100111111
- *
- * The caller is responsible for ensuring that the result will be a valid
- * wildcard pattern for 'mf'.  The caller is responsible for ensuring that
- * 'rule' meets 'mf''s prerequisites. */
-void
-mf_set_subfield(const struct mf_field *mf, uint64_t x, unsigned int ofs,
-                unsigned int n_bits, struct cls_rule *rule)
+static enum ofperr
+mf_check__(const struct mf_subfield *sf, const struct flow *flow,
+           const char *type)
 {
-    if (ofs == 0 && mf->n_bytes * 8 == n_bits) {
-        union mf_value value;
-        int i;
-
-        for (i = mf->n_bytes - 1; i >= 0; i--) {
-            ((uint8_t *) &value)[i] = x;
-            x >>= 8;
-        }
-        mf_set_value(mf, &value, rule);
+    if (!sf->field) {
+        VLOG_WARN_RL(&rl, "unknown %s field", type);
+    } else if (!sf->n_bits) {
+        VLOG_WARN_RL(&rl, "zero bit %s field %s", type, sf->field->name);
+    } else if (sf->ofs >= sf->field->n_bits) {
+        VLOG_WARN_RL(&rl, "bit offset %d exceeds %d-bit width of %s field %s",
+                     sf->ofs, sf->field->n_bits, type, sf->field->name);
+    } else if (sf->ofs + sf->n_bits > sf->field->n_bits) {
+        VLOG_WARN_RL(&rl, "bit offset %d and width %d exceeds %d-bit width "
+                     "of %s field %s", sf->ofs, sf->n_bits,
+                     sf->field->n_bits, type, sf->field->name);
+    } else if (flow && !mf_are_prereqs_ok(sf->field, flow)) {
+        VLOG_WARN_RL(&rl, "%s field %s lacks correct prerequisites",
+                     type, sf->field->name);
     } else {
-        union mf_value value, mask;
-        uint8_t *vp, *mp;
-        unsigned int byte_ofs;
-
-        mf_get(mf, rule, &value, &mask);
-
-        byte_ofs = mf->n_bytes - ofs / 8;
-        vp = &((uint8_t *) &value)[byte_ofs];
-        mp = &((uint8_t *) &mask)[byte_ofs];
-        if (ofs % 8) {
-            unsigned int chunk = MIN(8 - ofs % 8, n_bits);
-            uint8_t chunk_mask = ((1 << chunk) - 1) << (ofs % 8);
-
-            *--vp &= ~chunk_mask;
-            *vp   |= chunk_mask & (x << (ofs % 8));
-            *--mp |= chunk_mask;
-
-            x >>= chunk;
-            n_bits -= chunk;
-            ofs += chunk;
-        }
-        while (n_bits >= 8) {
-            *--vp = x;
-            *--mp = 0xff;
-            x >>= 8;
-            n_bits -= 8;
-            ofs += 8;
-        }
-        if (n_bits) {
-            uint8_t chunk_mask = (1 << n_bits) - 1;
-
-            *--vp &= ~chunk_mask;
-            *vp   |= chunk_mask & x;
-            *--mp |= chunk_mask;
-        }
-
-        mf_set(mf, &value, &mask, rule);
+        return 0;
     }
+
+    return OFPERR_OFPBAC_BAD_ARGUMENT;
+}
+
+/* Checks whether 'sf' is valid for reading a subfield out of 'flow'.  Returns
+ * 0 if so, otherwise an OpenFlow error code (e.g. as returned by
+ * ofp_mkerr()).  */
+enum ofperr
+mf_check_src(const struct mf_subfield *sf, const struct flow *flow)
+{
+    return mf_check__(sf, flow, "source");
+}
+
+/* Checks whether 'sf' is valid for writing a subfield into 'flow'.  Returns 0
+ * if so, otherwise an OpenFlow error code (e.g. as returned by
+ * ofp_mkerr()). */
+enum ofperr
+mf_check_dst(const struct mf_subfield *sf, const struct flow *flow)
+{
+    int error = mf_check__(sf, flow, "destination");
+    if (!error && !sf->field->writable) {
+        VLOG_WARN_RL(&rl, "destination field %s is not writable",
+                     sf->field->name);
+        return OFPERR_OFPBAC_BAD_ARGUMENT;
+    }
+    return error;
 }
 
 /* Copies the value and wildcard bit pattern for 'mf' from 'rule' into the
@@ -2140,4 +2124,223 @@ mf_format(const struct mf_field *mf,
     default:
         NOT_REACHED();
     }
+}
+
+/* Makes a subfield starting at bit offset 'ofs' and continuing for 'n_bits' in
+ * 'rule''s field 'mf' exactly match the 'n_bits' least-significant bits of
+ * 'x'.
+ *
+ * Example: suppose that 'mf' is originally the following 2-byte field in
+ * 'rule':
+ *
+ *     value == 0xe00a == 2#1110000000001010
+ *      mask == 0xfc3f == 2#1111110000111111
+ *
+ * The call mf_set_subfield(mf, 0x55, 8, 7, rule) would have the following
+ * effect (note that 0x55 is 2#1010101):
+ *
+ *     value == 0xd50a == 2#1101010100001010
+ *      mask == 0xff3f == 2#1111111100111111
+ *
+ * The caller is responsible for ensuring that the result will be a valid
+ * wildcard pattern for 'mf'.  The caller is responsible for ensuring that
+ * 'rule' meets 'mf''s prerequisites. */
+void
+mf_set_subfield(const struct mf_subfield *sf, uint64_t x,
+                struct cls_rule *rule)
+{
+    const struct mf_field *field = sf->field;
+    unsigned int n_bits = sf->n_bits;
+    unsigned int ofs = sf->ofs;
+
+    if (ofs == 0 && field->n_bytes * 8 == n_bits) {
+        union mf_value value;
+        int i;
+
+        for (i = field->n_bytes - 1; i >= 0; i--) {
+            ((uint8_t *) &value)[i] = x;
+            x >>= 8;
+        }
+        mf_set_value(field, &value, rule);
+    } else {
+        union mf_value value, mask;
+        uint8_t *vp = (uint8_t *) &value;
+        uint8_t *mp = (uint8_t *) &mask;
+
+        mf_get(field, rule, &value, &mask);
+        bitwise_put(x,          vp, field->n_bytes, ofs, n_bits);
+        bitwise_put(UINT64_MAX, mp, field->n_bytes, ofs, n_bits);
+        mf_set(field, &value, &mask, rule);
+    }
+}
+
+/* Similar to mf_set_subfield() but modifies only a flow, not a cls_rule. */
+void
+mf_set_subfield_value(const struct mf_subfield *sf, uint64_t x,
+                      struct flow *flow)
+{
+    const struct mf_field *field = sf->field;
+    unsigned int n_bits = sf->n_bits;
+    unsigned int ofs = sf->ofs;
+    union mf_value value;
+
+    if (ofs == 0 && field->n_bytes * 8 == n_bits) {
+        int i;
+
+        for (i = field->n_bytes - 1; i >= 0; i--) {
+            ((uint8_t *) &value)[i] = x;
+            x >>= 8;
+        }
+        mf_set_flow_value(field, &value, flow);
+    } else {
+        mf_get_value(field, flow, &value);
+        bitwise_put(x, &value, field->n_bytes, ofs, n_bits);
+        mf_set_flow_value(field, &value, flow);
+    }
+}
+
+/* Returns the value of 'sf' within 'flow'.  'sf' must be valid for reading
+ * 'flow', e.g. as checked by mf_check_src() and sf->n_bits must be 64 or
+ * less. */
+uint64_t
+mf_get_subfield(const struct mf_subfield *sf, const struct flow *flow)
+{
+    union mf_value value;
+
+    mf_get_value(sf->field, flow, &value);
+    return bitwise_get(&value, sf->field->n_bytes, sf->ofs, sf->n_bits);
+}
+
+/* Formats 'sf' into 's' in a format normally acceptable to
+ * mf_parse_subfield().  (It won't be acceptable if sf->field is NULL or if
+ * sf->field has no NXM name.) */
+void
+mf_format_subfield(const struct mf_subfield *sf, struct ds *s)
+{
+    if (!sf->field) {
+        ds_put_cstr(s, "<unknown>");
+    } else if (sf->field->nxm_name) {
+        ds_put_cstr(s, sf->field->nxm_name);
+    } else if (sf->field->nxm_header) {
+        uint32_t header = sf->field->nxm_header;
+        ds_put_format(s, "%d:%d", NXM_VENDOR(header), NXM_FIELD(header));
+    } else {
+        ds_put_cstr(s, sf->field->name);
+    }
+
+    if (sf->ofs == 0 && sf->n_bits == sf->field->n_bits) {
+        ds_put_cstr(s, "[]");
+    } else if (sf->n_bits == 1) {
+        ds_put_format(s, "[%d]", sf->ofs);
+    } else {
+        ds_put_format(s, "[%d..%d]", sf->ofs, sf->ofs + sf->n_bits - 1);
+    }
+}
+
+static const struct mf_field *
+mf_parse_subfield_name(const char *name, int name_len, bool *wild)
+{
+    int i;
+
+    *wild = name_len > 2 && !memcmp(&name[name_len - 2], "_W", 2);
+    if (*wild) {
+        name_len -= 2;
+    }
+
+    for (i = 0; i < MFF_N_IDS; i++) {
+        const struct mf_field *mf = mf_from_id(i);
+
+        if (mf->nxm_name
+            && !strncmp(mf->nxm_name, name, name_len)
+            && mf->nxm_name[name_len] == '\0') {
+            return mf;
+        }
+    }
+
+    return NULL;
+}
+
+/* Parses a subfield from the beginning of '*sp' into 'sf'.  If successful,
+ * returns NULL and advances '*sp' to the first byte following the parsed
+ * string.  On failure, returns a malloc()'d error message, does not modify
+ * '*sp', and does not properly initialize 'sf'.
+ *
+ * The syntax parsed from '*sp' takes the form "header[start..end]" where
+ * 'header' is the name of an NXM field and 'start' and 'end' are (inclusive)
+ * bit indexes.  "..end" may be omitted to indicate a single bit.  "start..end"
+ * may both be omitted (the [] are still required) to indicate an entire
+ * field. */
+char *
+mf_parse_subfield__(struct mf_subfield *sf, const char **sp)
+{
+    const struct mf_field *field;
+    const char *name;
+    int start, end;
+    const char *s;
+    int name_len;
+    bool wild;
+
+    s = *sp;
+    name = s;
+    name_len = strcspn(s, "[");
+    if (s[name_len] != '[') {
+        return xasprintf("%s: missing [ looking for field name", *sp);
+    }
+
+    field = mf_parse_subfield_name(name, name_len, &wild);
+    if (!field) {
+        return xasprintf("%s: unknown field `%.*s'", *sp, name_len, s);
+    }
+
+    s += name_len;
+    if (sscanf(s, "[%d..%d]", &start, &end) == 2) {
+        /* Nothing to do. */
+    } else if (sscanf(s, "[%d]", &start) == 1) {
+        end = start;
+    } else if (!strncmp(s, "[]", 2)) {
+        start = 0;
+        end = field->n_bits - 1;
+    } else {
+        return xasprintf("%s: syntax error expecting [] or [<bit>] or "
+                         "[<start>..<end>]", *sp);
+    }
+    s = strchr(s, ']') + 1;
+
+    if (start > end) {
+        return xasprintf("%s: starting bit %d is after ending bit %d",
+                         *sp, start, end);
+    } else if (start >= field->n_bits) {
+        return xasprintf("%s: starting bit %d is not valid because field is "
+                         "only %d bits wide", *sp, start, field->n_bits);
+    } else if (end >= field->n_bits){
+        return xasprintf("%s: ending bit %d is not valid because field is "
+                         "only %d bits wide", *sp, end, field->n_bits);
+    }
+
+    sf->field = field;
+    sf->ofs = start;
+    sf->n_bits = end - start + 1;
+
+    *sp = s;
+    return NULL;
+}
+
+/* Parses a subfield from the beginning of 's' into 'sf'.  Returns the first
+ * byte in 's' following the parsed string.
+ *
+ * Exits with an error message if 's' has incorrect syntax.
+ *
+ * The syntax parsed from 's' takes the form "header[start..end]" where
+ * 'header' is the name of an NXM field and 'start' and 'end' are (inclusive)
+ * bit indexes.  "..end" may be omitted to indicate a single bit.  "start..end"
+ * may both be omitted (the [] are still required) to indicate an entire
+ * field.  */
+const char *
+mf_parse_subfield(struct mf_subfield *sf, const char *s)
+{
+    char *msg = mf_parse_subfield__(sf, &s);
+    if (msg) {
+        ovs_fatal(0, "%s", msg);
+    }
+    return s;
 }
