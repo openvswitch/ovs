@@ -24,6 +24,9 @@ openvswitch (1.4.0-1) unstable; urgency=low
         and connectivity issues. This tool currently is not included in RH or
         Xen packages.
     - RHEL packaging now supports integration with Red Hat network scripts.
+    - Debian: Depend on python (>= 2.7) | python-argparse instead of
+              python-argparse to avoid pulling in python2.6
+              (closes: #653645)
 
  -- Open vSwitch team <dev@openvswitch.org>  Mon, xx xxx xxxx 23:36:00 +0000
 
