@@ -1180,6 +1180,7 @@ read_flows_from_switch(struct vconn *vconn, enum nx_flow_format flow_format,
     cls_rule_init_catchall(&fsr.match, 0);
     fsr.out_port = OFPP_NONE;
     fsr.table_id = 0xff;
+    fsr.cookie = fsr.cookie_mask = htonll(0);
     request = ofputil_encode_flow_stats_request(&fsr, flow_format);
     send_xid = ((struct ofp_header *) request->data)->xid;
     send_openflow_buffer(vconn, request);
