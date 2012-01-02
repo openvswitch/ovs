@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011 Nicira Networks.
+ * Copyright (c) 2009, 2010, 2011, 2012 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1816,11 +1816,15 @@ bundle_send_learning_packets(struct ofbundle *bundle)
         if (e->port.p != bundle) {
             struct ofpbuf *learning_packet;
             struct ofport_dpif *port;
+            void *port_void;
             int ret;
 
-            learning_packet = bond_compose_learning_packet(bundle->bond, e->mac,
-                                                           e->vlan,
-                                                           (void **)&port);
+            /* The assignment to "port" is unnecessary but makes "grep"ing for
+             * struct ofport_dpif more effective. */
+            learning_packet = bond_compose_learning_packet(bundle->bond,
+                                                           e->mac, e->vlan,
+                                                           &port_void);
+            port = port_void;
             ret = send_packet(port, learning_packet);
             ofpbuf_delete(learning_packet);
             if (ret) {
