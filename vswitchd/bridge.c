@@ -1,4 +1,4 @@
-/* Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks
+/* Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira Networks
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -268,6 +268,7 @@ static void bridge_reconfigure_one(struct bridge *);
 static void bridge_reconfigure_remotes(struct bridge *,
                                        const struct sockaddr_in *managers,
                                        size_t n_managers);
+static void bridge_reconfigure_remotes_late(struct bridge *);
 static void bridge_get_all_ifaces(const struct bridge *, struct shash *ifaces);
 static void bridge_fetch_dp_ifaces(struct bridge *);
 static void bridge_flush(struct bridge *);
@@ -930,6 +931,7 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
         HMAP_FOR_EACH (iface, dp_ifidx_node, &br->ifaces) {
             iface_update_cfm(iface);
         }
+        bridge_reconfigure_remotes_late(br);
     }
 
     free(managers);
@@ -2109,13 +2111,23 @@ bridge_reconfigure_remotes(struct bridge *br,
     if (had_primary != ofproto_has_primary_controller(br->ofproto)) {
         ofproto_flush_flows(br->ofproto);
     }
+}
 
+/* Does configuration of remotes that must happen after all of the ports and
+ * interfaces are fully configured, that is, when flow translation can be
+ * expected to succeed.  (This is because ofproto_add_flow() immediately
+ * re-translates any existing facets for the rule that it replaces, if any.)
+ * In particular, it must be called after port_update_bonding(), to ensure that
+ * 'bond_hash' is non-NULL for bonded ports. */
+static void
+bridge_reconfigure_remotes_late(struct bridge *br)
+{
     /* If there are no controllers and the bridge is in standalone
      * mode, set up a flow that matches every packet and directs
      * them to OFPP_NORMAL (which goes to us).  Otherwise, the
      * switch is in secure mode and we won't pass any traffic until
      * a controller has been defined and it tells us to do so. */
-    if (!n_controllers
+    if (!bridge_get_controllers(br, NULL)
         && ofproto_get_fail_mode(br->ofproto) == OFPROTO_FAIL_STANDALONE) {
         union ofp_action action;
         struct cls_rule rule;
