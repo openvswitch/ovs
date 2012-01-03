@@ -17,6 +17,7 @@
 #ifndef PKTBUF_H
 #define PKTBUF_H 1
 
+#include <stddef.h>
 #include <stdint.h>
 
 struct pktbuf;
@@ -26,7 +27,8 @@ int pktbuf_capacity(void);
 
 struct pktbuf *pktbuf_create(void);
 void pktbuf_destroy(struct pktbuf *);
-uint32_t pktbuf_save(struct pktbuf *, struct ofpbuf *buffer, uint16_t in_port);
+uint32_t pktbuf_save(struct pktbuf *, const void *buffer, size_t buffer_size,
+                     uint16_t in_port);
 uint32_t pktbuf_get_null(void);
 int pktbuf_retrieve(struct pktbuf *, uint32_t id, struct ofpbuf **bufferp,
                     uint16_t *in_port);

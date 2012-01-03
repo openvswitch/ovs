@@ -92,8 +92,9 @@ make_id(unsigned int buffer_idx, unsigned int cookie)
 }
 
 /* Attempts to allocate an OpenFlow packet buffer id within 'pb'.  The packet
- * buffer will store a copy of 'buffer' and the port number 'in_port', which
- * should be the datapath port number on which 'buffer' was received.
+ * buffer will store a copy of 'buffer_size' bytes in 'buffer' and the port
+ * number 'in_port', which should be the OpenFlow port number on which 'buffer'
+ * was received.
  *
  * If successful, returns the packet buffer id (a number other than
  * UINT32_MAX).  pktbuf_retrieve() can later be used to retrieve the buffer and
@@ -102,7 +103,8 @@ make_id(unsigned int buffer_idx, unsigned int cookie)
  *
  * The caller retains ownership of 'buffer'. */
 uint32_t
-pktbuf_save(struct pktbuf *pb, struct ofpbuf *buffer, uint16_t in_port)
+pktbuf_save(struct pktbuf *pb, const void *buffer, size_t buffer_size,
+            uint16_t in_port)
 {
     struct packet *p = &pb->packets[pb->buffer_idx];
     pb->buffer_idx = (pb->buffer_idx + 1) & PKTBUF_MASK;
@@ -117,9 +119,10 @@ pktbuf_save(struct pktbuf *pb, struct ofpbuf *buffer, uint16_t in_port)
     if (++p->cookie >= COOKIE_MAX) {
         p->cookie = 0;
     }
-    p->buffer = ofpbuf_new_with_headroom(buffer->size,
-                                         sizeof(struct ofp_packet_in));
-    ofpbuf_put(p->buffer, buffer->data, buffer->size);
+    p->buffer = ofpbuf_clone_data_with_headroom(buffer, buffer_size,
+                                                sizeof(struct ofp_packet_in));
+
+
     p->timeout = time_msec() + OVERWRITE_MSECS;
     p->in_port = in_port;
     return make_id(p - pb->packets, p->cookie);

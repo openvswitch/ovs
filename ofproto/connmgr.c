@@ -1210,7 +1210,8 @@ schedule_packet_in(struct ofconn *ofconn, struct ofputil_packet_in pin,
     } else if (!ofconn->pktbuf) {
         pin.buffer_id = UINT32_MAX;
     } else {
-        pin.buffer_id = pktbuf_save(ofconn->pktbuf, pin.packet, flow->in_port);
+        pin.buffer_id = pktbuf_save(ofconn->pktbuf, pin.packet->data,
+                                    pin.packet->size, flow->in_port);
     }
 
     /* Figure out how much of the packet to send. */
