@@ -222,8 +222,7 @@ struct ofputil_packet_in {
     int send_len;
 };
 
-struct ofpbuf *ofputil_encode_packet_in(const struct ofputil_packet_in *,
-                                        struct ofpbuf *rw_packet);
+struct ofpbuf *ofputil_encode_packet_in(const struct ofputil_packet_in *);
 
 /* OpenFlow protocol utility functions. */
 void *make_openflow(size_t openflow_len, uint8_t type, struct ofpbuf **);

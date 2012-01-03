@@ -1096,7 +1096,7 @@ ofconn_send(const struct ofconn *ofconn, struct ofpbuf *msg,
 /* Sending asynchronous messages. */
 
 static void schedule_packet_in(struct ofconn *, struct ofputil_packet_in,
-                               const struct flow *, struct ofpbuf *rw_packet);
+                               const struct flow *);
 
 /* Sends an OFPT_PORT_STATUS message with 'opp' and 'reason' to appropriate
  * controllers managed by 'mgr'. */
@@ -1151,31 +1151,18 @@ connmgr_send_flow_removed(struct connmgr *mgr,
 }
 
 /* Given 'pin', sends an OFPT_PACKET_IN message to each OpenFlow controller as
- * necessary according to their individual configurations.
- *
- * 'rw_packet' may be NULL.  Otherwise, 'rw_packet' must contain the same data
- * as pin->packet.  (rw_packet == pin->packet is also valid.)  Ownership of
- * 'rw_packet' is transferred to this function. */
+ * necessary according to their individual configurations. */
 void
 connmgr_send_packet_in(struct connmgr *mgr,
                        const struct ofputil_packet_in *pin,
-                       const struct flow *flow, struct ofpbuf *rw_packet)
+                       const struct flow *flow)
 {
-    struct ofconn *ofconn, *prev;
+    struct ofconn *ofconn;
 
-    prev = NULL;
     LIST_FOR_EACH (ofconn, node, &mgr->all_conns) {
         if (ofconn_receives_async_msgs(ofconn)) {
-            if (prev) {
-                schedule_packet_in(prev, *pin, flow, NULL);
-            }
-            prev = ofconn;
+            schedule_packet_in(ofconn, *pin, flow);
         }
-    }
-    if (prev) {
-        schedule_packet_in(prev, *pin, flow, rw_packet);
-    } else {
-        ofpbuf_delete(rw_packet);
     }
 }
 
@@ -1191,14 +1178,10 @@ do_send_packet_in(struct ofpbuf *ofp_packet_in, void *ofconn_)
 
 /* Takes 'pin', whose packet has the flow specified by 'flow', composes an
  * OpenFlow packet-in message from it, and passes it to 'ofconn''s packet
- * scheduler for sending.
- *
- * 'rw_packet' may be NULL.  Otherwise, 'rw_packet' must contain the same data
- * as pin->packet.  (rw_packet == pin->packet is also valid.)  Ownership of
- * 'rw_packet' is transferred to this function. */
+ * scheduler for sending. */
 static void
 schedule_packet_in(struct ofconn *ofconn, struct ofputil_packet_in pin,
-                   const struct flow *flow, struct ofpbuf *rw_packet)
+                   const struct flow *flow)
 {
     struct connmgr *mgr = ofconn->connmgr;
 
@@ -1229,7 +1212,7 @@ schedule_packet_in(struct ofconn *ofconn, struct ofputil_packet_in pin,
      * immediately call into do_send_packet_in() or it might buffer it for a
      * while (until a later call to pinsched_run()). */
     pinsched_send(ofconn->schedulers[pin.reason == OFPR_NO_MATCH ? 0 : 1],
-                  flow->in_port, ofputil_encode_packet_in(&pin, rw_packet),
+                  flow->in_port, ofputil_encode_packet_in(&pin),
                   do_send_packet_in, ofconn);
 }
 

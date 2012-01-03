@@ -1543,34 +1543,17 @@ ofputil_encode_flow_removed(const struct ofputil_flow_removed *fr,
 }
 
 /* Converts abstract ofputil_packet_in 'pin' into an OFPT_PACKET_IN message
- * and returns the message.
- *
- * If 'rw_packet' is NULL, the caller takes ownership of the newly allocated
- * returned ofpbuf.
- *
- * If 'rw_packet' is nonnull, then it must contain the same data as
- * pin->packet.  'rw_packet' is allowed to be the same ofpbuf as pin->packet.
- * It is modified in-place into an OFPT_PACKET_IN message according to 'pin',
- * and then ofputil_encode_packet_in() returns 'rw_packet'.  If 'rw_packet' has
- * enough headroom to insert a "struct ofp_packet_in", this is more efficient
- * than ofputil_encode_packet_in() because it does not copy the packet
- * payload. */
+ * and returns the message. */
 struct ofpbuf *
-ofputil_encode_packet_in(const struct ofputil_packet_in *pin,
-                        struct ofpbuf *rw_packet)
+ofputil_encode_packet_in(const struct ofputil_packet_in *pin)
 {
     int total_len = pin->packet->size;
     struct ofp_packet_in opi;
+    struct ofpbuf *rw_packet;
 
-    if (rw_packet) {
-        if (pin->send_len < rw_packet->size) {
-            rw_packet->size = pin->send_len;
-        }
-    } else {
-        rw_packet = ofpbuf_clone_data_with_headroom(
-            pin->packet->data, MIN(pin->send_len, pin->packet->size),
-            offsetof(struct ofp_packet_in, data));
-    }
+    rw_packet = ofpbuf_clone_data_with_headroom(
+        pin->packet->data, MIN(pin->send_len, pin->packet->size),
+        offsetof(struct ofp_packet_in, data));
 
     /* Add OFPT_PACKET_IN. */
     memset(&opi, 0, sizeof opi);

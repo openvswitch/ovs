@@ -328,7 +328,7 @@ static bool execute_controller_action(struct ofproto_dpif *,
                                       const struct flow *,
                                       const struct nlattr *odp_actions,
                                       size_t actions_len,
-                                      struct ofpbuf *packet, bool clone);
+                                      struct ofpbuf *packet);
 
 static void facet_flush_stats(struct ofproto_dpif *, struct facet *);
 
@@ -2410,13 +2410,10 @@ struct flow_miss_op {
 
 /* Sends an OFPT_PACKET_IN message for 'packet' of type OFPR_NO_MATCH to each
  * OpenFlow controller as necessary according to their individual
- * configurations.
- *
- * If 'clone' is true, the caller retains ownership of 'packet'.  Otherwise,
- * ownership is transferred to this function. */
+ * configurations. */
 static void
 send_packet_in_miss(struct ofproto_dpif *ofproto, struct ofpbuf *packet,
-                    const struct flow *flow, bool clone)
+                    const struct flow *flow)
 {
     struct ofputil_packet_in pin;
 
@@ -2425,8 +2422,7 @@ send_packet_in_miss(struct ofproto_dpif *ofproto, struct ofpbuf *packet,
     pin.reason = OFPR_NO_MATCH;
     pin.buffer_id = 0;          /* not yet known */
     pin.send_len = 0;           /* not used for flow table misses */
-    connmgr_send_packet_in(ofproto->up.connmgr, &pin, flow,
-                           clone ? NULL : packet);
+    connmgr_send_packet_in(ofproto->up.connmgr, &pin, flow);
 }
 
 /* Sends an OFPT_PACKET_IN message for 'packet' of type OFPR_ACTION to each
@@ -2434,13 +2430,10 @@ send_packet_in_miss(struct ofproto_dpif *ofproto, struct ofpbuf *packet,
  * configurations.
  *
  * 'send_len' should be the number of bytes of 'packet' to send to the
- * controller, as specified in the action that caused the packet to be sent.
- *
- * If 'clone' is true, the caller retains ownership of 'upcall->packet'.
- * Otherwise, ownership is transferred to this function. */
+ * controller, as specified in the action that caused the packet to be sent. */
 static void
 send_packet_in_action(struct ofproto_dpif *ofproto, struct ofpbuf *packet,
-                      uint64_t userdata, const struct flow *flow, bool clone)
+                      uint64_t userdata, const struct flow *flow)
 {
     struct ofputil_packet_in pin;
     struct user_action_cookie cookie;
@@ -2452,8 +2445,7 @@ send_packet_in_action(struct ofproto_dpif *ofproto, struct ofpbuf *packet,
     pin.reason = OFPR_ACTION;
     pin.buffer_id = 0;          /* not yet known */
     pin.send_len = cookie.data;
-    connmgr_send_packet_in(ofproto->up.connmgr, &pin, flow,
-                           clone ? NULL : packet);
+    connmgr_send_packet_in(ofproto->up.connmgr, &pin, flow);
 }
 
 static bool
@@ -2540,10 +2532,8 @@ handle_flow_miss(struct ofproto_dpif *ofproto, struct flow_miss *miss,
                              flow->in_port);
             }
 
-            LIST_FOR_EACH_SAFE (packet, next_packet, list_node,
-                                &miss->packets) {
-                list_remove(&packet->list_node);
-                send_packet_in_miss(ofproto, packet, flow, false);
+            LIST_FOR_EACH (packet, list_node, &miss->packets) {
+                send_packet_in_miss(ofproto, packet, flow);
             }
 
             return;
@@ -2573,7 +2563,7 @@ handle_flow_miss(struct ofproto_dpif *ofproto, struct flow_miss *miss,
              *
              * See the top-level comment in fail-open.c for more information.
              */
-            send_packet_in_miss(ofproto, packet, flow, true);
+            send_packet_in_miss(ofproto, packet, flow);
         }
 
         if (!facet->may_install || !subfacet->actions) {
@@ -2587,7 +2577,7 @@ handle_flow_miss(struct ofproto_dpif *ofproto, struct flow_miss *miss,
 
         if (!execute_controller_action(ofproto, &facet->flow,
                                        subfacet->actions,
-                                       subfacet->actions_len, packet, true)
+                                       subfacet->actions_len, packet)
             && subfacet->actions_len > 0) {
             struct flow_miss_op *op = &ops[(*n_ops)++];
             struct dpif_execute *execute = &op->dpif_op.execute;
@@ -2817,15 +2807,14 @@ handle_userspace_upcall(struct ofproto_dpif *ofproto,
             dpif_sflow_received(ofproto->sflow, upcall->packet, &flow,
                                 &cookie);
         }
-        ofpbuf_delete(upcall->packet);
     } else if (cookie.type == USER_ACTION_COOKIE_CONTROLLER) {
         COVERAGE_INC(ofproto_dpif_ctlr_action);
         send_packet_in_action(ofproto, upcall->packet, upcall->userdata,
-                              &flow, false);
+                              &flow);
     } else {
         VLOG_WARN_RL(&rl, "invalid user cookie : 0x%"PRIx64, upcall->userdata);
-        ofpbuf_delete(upcall->packet);
     }
+    ofpbuf_delete(upcall->packet);
 }
 
 static int
@@ -3160,15 +3149,12 @@ facet_free(struct facet *facet)
 
 /* If the 'actions_len' bytes of actions in 'odp_actions' are just a single
  * OVS_ACTION_ATTR_USERSPACE action, executes it internally and returns true.
- * Otherwise, returns false without doing anything.
- *
- * If 'clone' is true, the caller always retains ownership of 'packet'.
- * Otherwise, ownership is transferred to this function if it returns true. */
+ * Otherwise, returns false without doing anything. */
 static bool
 execute_controller_action(struct ofproto_dpif *ofproto,
                           const struct flow *flow,
                           const struct nlattr *odp_actions, size_t actions_len,
-                          struct ofpbuf *packet, bool clone)
+                          struct ofpbuf *packet)
 {
     if (actions_len
         && odp_actions->nla_type == OVS_ACTION_ATTR_USERSPACE
@@ -3183,8 +3169,7 @@ execute_controller_action(struct ofproto_dpif *ofproto,
         const struct nlattr *nla;
 
         nla = nl_attr_find_nested(odp_actions, OVS_USERSPACE_ATTR_USERDATA);
-        send_packet_in_action(ofproto, packet, nl_attr_get_u64(nla), flow,
-                              clone);
+        send_packet_in_action(ofproto, packet, nl_attr_get_u64(nla), flow);
         return true;
     } else {
         return false;
@@ -3205,7 +3190,8 @@ execute_odp_actions(struct ofproto_dpif *ofproto, const struct flow *flow,
     int error;
 
     if (execute_controller_action(ofproto, flow, odp_actions, actions_len,
-                                  packet, false)) {
+                                  packet)) {
+        ofpbuf_delete(packet);
         return true;
     }
 
