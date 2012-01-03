@@ -1808,6 +1808,11 @@
 
       <ul>
         <li>
+          The VLAN is the <ref table="Port" column="tag"/> value in any <ref
+          table="Port"/> record.
+        </li>
+
+        <li>
           The VLAN is listed within the <ref table="Port" column="trunks"/>
           column of the <ref table="Port"/> record of an interface on which
           VLAN splinters are enabled.
