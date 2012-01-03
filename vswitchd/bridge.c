@@ -1,4 +1,4 @@
-/* Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks
+/* Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira Networks
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -3410,8 +3410,9 @@ collect_splinter_vlans(const struct ovsrec_open_vswitch *ovs_cfg)
      * in the process of reconstructing all of them. */
     free_registered_blocks();
 
-    splinter_vlans = NULL;
+    splinter_vlans = bitmap_allocate(4096);
     sset_init(&splinter_ifaces);
+    vlan_splinters_enabled_anywhere = false;
     for (i = 0; i < ovs_cfg->n_bridges; i++) {
         struct ovsrec_bridge *br_cfg = ovs_cfg->bridges[i];
         size_t j;
@@ -3424,21 +3425,22 @@ collect_splinter_vlans(const struct ovsrec_open_vswitch *ovs_cfg)
                 struct ovsrec_interface *iface_cfg = port_cfg->interfaces[k];
 
                 if (vlan_splinters_is_enabled(iface_cfg)) {
+                    vlan_splinters_enabled_anywhere = true;
                     sset_add(&splinter_ifaces, iface_cfg->name);
-
-                    if (!splinter_vlans) {
-                        splinter_vlans = bitmap_allocate(4096);
-                    }
                     vlan_bitmap_from_array__(port_cfg->trunks,
                                              port_cfg->n_trunks,
                                              splinter_vlans);
                 }
             }
+
+            if (port_cfg->tag && *port_cfg->tag > 0 && *port_cfg->tag < 4095) {
+                bitmap_set1(splinter_vlans, *port_cfg->tag);
+            }
         }
     }
 
-    vlan_splinters_enabled_anywhere = splinter_vlans != NULL;
-    if (!splinter_vlans) {
+    if (!vlan_splinters_enabled_anywhere) {
+        free(splinter_vlans);
         sset_destroy(&splinter_ifaces);
         return NULL;
     }
