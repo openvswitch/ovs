@@ -96,18 +96,10 @@ nx_entry_ok(const void *p, unsigned int match_len)
     return header;
 }
 
-/* Parses the nx_match formatted match description in 'b' with length
- * 'match_len'.  The results are stored in 'rule', which is initialized
- * with 'priority'.  If 'cookie' and 'cookie_mask' contain valid
- * pointers, then the cookie and mask will be stored in them if a
- * "NXM_NX_COOKIE*" match is defined.  Otherwise, 0 is stored in both.
- *
- * Returns 0 if successful, otherwise an OpenFlow error code.
- */
-int
-nx_pull_match(struct ofpbuf *b, unsigned int match_len, uint16_t priority,
-              struct cls_rule *rule,
-              ovs_be64 *cookie, ovs_be64 *cookie_mask)
+static int
+nx_pull_match__(struct ofpbuf *b, unsigned int match_len, bool strict,
+                uint16_t priority, struct cls_rule *rule,
+                ovs_be64 *cookie, ovs_be64 *cookie_mask)
 {
     uint32_t header;
     uint8_t *p;
@@ -126,14 +118,19 @@ nx_pull_match(struct ofpbuf *b, unsigned int match_len, uint16_t priority,
     if (cookie) {
         *cookie = *cookie_mask = htonll(0);
     }
-    while ((header = nx_entry_ok(p, match_len)) != 0) {
-        unsigned length = NXM_LENGTH(header);
+    for (;
+         (header = nx_entry_ok(p, match_len)) != 0;
+         p += 4 + NXM_LENGTH(header), match_len -= 4 + NXM_LENGTH(header)) {
         const struct mf_field *mf;
         int error;
 
         mf = mf_from_nxm_header(header);
         if (!mf) {
-            error = NXM_BAD_TYPE;
+            if (strict) {
+                error = NXM_BAD_TYPE;
+            } else {
+                continue;
+            }
         } else if (!mf_are_prereqs_ok(mf, &rule->flow)) {
             error = NXM_BAD_PREREQ;
         } else if (!mf_is_all_wild(mf, &rule->wc)) {
@@ -190,12 +187,38 @@ nx_pull_match(struct ofpbuf *b, unsigned int match_len, uint16_t priority,
 
             return error;
         }
-
-        p += 4 + length;
-        match_len -= 4 + length;
     }
 
     return match_len ? NXM_INVALID : 0;
+}
+
+/* Parses the nx_match formatted match description in 'b' with length
+ * 'match_len'.  The results are stored in 'rule', which is initialized with
+ * 'priority'.  If 'cookie' and 'cookie_mask' contain valid pointers, then the
+ * cookie and mask will be stored in them if a "NXM_NX_COOKIE*" match is
+ * defined.  Otherwise, 0 is stored in both.
+ *
+ * Fails with an error when encountering unknown NXM headers.
+ *
+ * Returns 0 if successful, otherwise an OpenFlow error code. */
+int
+nx_pull_match(struct ofpbuf *b, unsigned int match_len,
+              uint16_t priority, struct cls_rule *rule,
+              ovs_be64 *cookie, ovs_be64 *cookie_mask)
+{
+    return nx_pull_match__(b, match_len, true, priority, rule, cookie,
+                           cookie_mask);
+}
+
+/* Behaves the same as nx_pull_match() with one exception.  Skips over unknown
+ * NXM headers instead of failing with an error when they are encountered. */
+int
+nx_pull_match_loose(struct ofpbuf *b, unsigned int match_len,
+                    uint16_t priority, struct cls_rule *rule,
+                    ovs_be64 *cookie, ovs_be64 *cookie_mask)
+{
+    return nx_pull_match__(b, match_len, false, priority, rule, cookie,
+                           cookie_mask);
 }
 
 /* nx_put_match() and helpers.

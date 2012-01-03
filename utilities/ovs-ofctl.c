@@ -55,7 +55,9 @@
 
 VLOG_DEFINE_THIS_MODULE(ofctl);
 
-/* --strict: Use strict matching for flow mod commands? */
+/* --strict: Use strict matching for flow mod commands?  Additionally governs
+ * use of nx_pull_match() instead of nx_pull_match_loose() in parse-nx-match.
+ */
 static bool strict;
 
 /* --readd: If ture, on replace-flows, re-add even flows that have not changed
@@ -1539,8 +1541,14 @@ do_parse_nx_match(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
         match_len = nx_match_from_string(ds_cstr(&in), &nx_match);
 
         /* Convert nx_match to cls_rule. */
-        error = nx_pull_match(&nx_match, match_len, 0, &rule,
-                              &cookie, &cookie_mask);
+        if (strict) {
+            error = nx_pull_match(&nx_match, match_len, 0, &rule,
+                                  &cookie, &cookie_mask);
+        } else {
+            error = nx_pull_match_loose(&nx_match, match_len, 0, &rule,
+                                        &cookie, &cookie_mask);
+        }
+
         if (!error) {
             char *out;
 

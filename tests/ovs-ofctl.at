@@ -370,7 +370,7 @@ NXM_NX_REG0_W(a0e0d050/f0f0f0f0)
 00011e04(12345678)
 00011f08(12345678/12345678)
 ])
-AT_CHECK([ovs-ofctl parse-nx-match < nx-match.txt], [0], [dnl
+AT_CHECK([ovs-ofctl --strict parse-nx-match < nx-match.txt], [0], [dnl
 <any>
 
 # in port
@@ -562,6 +562,21 @@ NXM_NX_REG0(12345678)
 NXM_NX_REG0_W(12345678/12345678)
 nx_pull_match() returned error 44010101 (type OFPET_BAD_REQUEST, code NXBRC_NXM_BAD_TYPE)
 nx_pull_match() returned error 44010101 (type OFPET_BAD_REQUEST, code NXBRC_NXM_BAD_TYPE)
+])
+AT_CLEANUP
+
+AT_SETUP([ovs-ofctl parse-nx-match loose])
+AT_KEYWORDS([nx-match])
+AT_DATA([nx-match.txt], [dnl
+NXM_OF_IN_PORT(0001), 01020304(1111/2222), NXM_OF_ETH_TYPE(0800)
+])
+
+AT_CHECK([ovs-ofctl --strict parse-nx-match < nx-match.txt], [0], [dnl
+nx_pull_match() returned error 44010101 (type OFPET_BAD_REQUEST, code NXBRC_NXM_BAD_TYPE)
+])
+
+AT_CHECK([ovs-ofctl parse-nx-match < nx-match.txt], [0], [dnl
+NXM_OF_IN_PORT(0001), NXM_OF_ETH_TYPE(0800)
 ])
 AT_CLEANUP
 
