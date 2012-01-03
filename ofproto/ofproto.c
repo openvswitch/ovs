@@ -1655,8 +1655,10 @@ set_internal_devs_mtu(struct ofproto *p)
 static void
 ofproto_rule_destroy__(struct rule *rule)
 {
-    free(rule->actions);
-    rule->ofproto->ofproto_class->rule_dealloc(rule);
+    if (rule) {
+        free(rule->actions);
+        rule->ofproto->ofproto_class->rule_dealloc(rule);
+    }
 }
 
 /* This function allows an ofproto implementation to destroy any rules that
@@ -3284,9 +3286,7 @@ ofoperation_complete(struct ofoperation *op, enum ofperr error)
     switch (op->type) {
     case OFOPERATION_ADD:
         if (!error) {
-            if (op->victim) {
-                ofproto_rule_destroy__(op->victim);
-            }
+            ofproto_rule_destroy__(op->victim);
             if ((rule->cr.wc.vlan_tci_mask & htons(VLAN_VID_MASK))
                 == htons(VLAN_VID_MASK)) {
                 if (ofproto->vlan_bitmap) {
