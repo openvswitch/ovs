@@ -995,7 +995,7 @@ flow_compose(struct ofpbuf *b, const struct flow *flow)
     }
 
     if (flow->vlan_tci & htons(VLAN_CFI)) {
-        eth_push_vlan(b, flow->vlan_tci & ~htons(VLAN_CFI));
+        eth_push_vlan(b, flow->vlan_tci);
     }
 
     if (flow->dl_type == htons(ETH_TYPE_IP)) {

@@ -77,7 +77,7 @@ compose_benign_packet(struct ofpbuf *b, const char *tag, uint16_t snap_type,
 }
 
 /* Insert VLAN header according to given TCI. Packet passed must be Ethernet
- * packet.
+ * packet.  Ignores the CFI bit of 'tci' using 0 instead.
  *
  * Also sets 'packet->l2' to point to the new Ethernet header. */
 void
@@ -91,7 +91,7 @@ eth_push_vlan(struct ofpbuf *packet, ovs_be16 tci)
     memcpy(tmp.veth_dst, eh->eth_dst, ETH_ADDR_LEN);
     memcpy(tmp.veth_src, eh->eth_src, ETH_ADDR_LEN);
     tmp.veth_type = htons(ETH_TYPE_VLAN);
-    tmp.veth_tci = tci;
+    tmp.veth_tci = tci & htons(~VLAN_CFI);
     tmp.veth_next_type = eh->eth_type;
 
     veh = ofpbuf_push_uninit(packet, VLAN_HEADER_LEN);

@@ -1315,7 +1315,7 @@ dp_netdev_execute_actions(struct dp_netdev *dp,
 
         case OVS_ACTION_ATTR_PUSH_VLAN:
             vlan = nl_attr_get(a);
-            eth_push_vlan(packet, vlan->vlan_tci & ~htons(VLAN_CFI));
+            eth_push_vlan(packet, vlan->vlan_tci);
             break;
 
         case OVS_ACTION_ATTR_POP_VLAN:
