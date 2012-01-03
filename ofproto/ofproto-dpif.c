@@ -176,8 +176,8 @@ static void bundle_destroy(struct ofbundle *);
 static void bundle_del_port(struct ofport_dpif *);
 static void bundle_run(struct ofbundle *);
 static void bundle_wait(struct ofbundle *);
-static struct ofport_dpif *lookup_input_bundle(struct ofproto_dpif *,
-                                               uint16_t in_port, bool warn);
+static struct ofbundle *lookup_input_bundle(struct ofproto_dpif *,
+                                            uint16_t in_port, bool warn);
 
 static void stp_run(struct ofproto_dpif *ofproto);
 static void stp_wait(struct ofproto_dpif *ofproto);
@@ -4974,22 +4974,17 @@ add_mirror_actions(struct action_xlate_ctx *ctx, const struct flow *orig_flow)
 {
     struct ofproto_dpif *ofproto = ctx->ofproto;
     mirror_mask_t mirrors;
-    struct ofport_dpif *in_port;
     struct ofbundle *in_bundle;
     uint16_t vlan;
     uint16_t vid;
     const struct nlattr *a;
     size_t left;
 
-    /* Obtain in_port from orig_flow.in_port.
-     *
-     * lookup_input_bundle() also ensures that in_port belongs to a bundle. */
-    in_port = lookup_input_bundle(ctx->ofproto, orig_flow->in_port,
-                                  ctx->packet != NULL);
-    if (!in_port) {
+    in_bundle = lookup_input_bundle(ctx->ofproto, orig_flow->in_port,
+                                    ctx->packet != NULL);
+    if (!in_bundle) {
         return;
     }
-    in_bundle = in_port->bundle;
     mirrors = in_bundle->src_mirrors;
 
     /* Drop frames on bundles reserved for mirroring. */
@@ -5140,7 +5135,7 @@ update_learning_table(struct ofproto_dpif *ofproto,
     }
 }
 
-static struct ofport_dpif *
+static struct ofbundle *
 lookup_input_bundle(struct ofproto_dpif *ofproto, uint16_t in_port, bool warn)
 {
     struct ofport_dpif *ofport;
@@ -5148,7 +5143,7 @@ lookup_input_bundle(struct ofproto_dpif *ofproto, uint16_t in_port, bool warn)
     /* Find the port and bundle for the received packet. */
     ofport = get_ofp_port(ofproto, in_port);
     if (ofport && ofport->bundle) {
-        return ofport;
+        return ofport->bundle;
     }
 
     /* Odd.  A few possible reasons here:
@@ -5232,15 +5227,14 @@ xlate_normal(struct action_xlate_ctx *ctx)
 
     ctx->has_normal = true;
 
-    /* Obtain in_port from ctx->flow.in_port.
-     *
-     * lookup_input_bundle() also ensures that in_port belongs to a bundle. */
-    in_port = lookup_input_bundle(ctx->ofproto, ctx->flow.in_port,
+    in_bundle = lookup_input_bundle(ctx->ofproto, ctx->flow.in_port,
                                   ctx->packet != NULL);
-    if (!in_port) {
+    if (!in_bundle) {
         return;
     }
-    in_bundle = in_port->bundle;
+
+    /* We know 'in_port' exists, since lookup_input_bundle() succeeded. */
+    in_port = get_ofp_port(ctx->ofproto, ctx->flow.in_port);
 
     /* Drop malformed frames. */
     if (ctx->flow.dl_type == htons(ETH_TYPE_VLAN) &&
