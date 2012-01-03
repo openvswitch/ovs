@@ -179,6 +179,16 @@ static void bundle_wait(struct ofbundle *);
 static struct ofbundle *lookup_input_bundle(struct ofproto_dpif *,
                                             uint16_t in_port, bool warn);
 
+/* A controller may use OFPP_NONE as the ingress port to indicate that
+ * it did not arrive on a "real" port.  'ofpp_none_bundle' exists for
+ * when an input bundle is needed for validation (e.g., mirroring or
+ * OFPP_NORMAL processing).  It is not connected to an 'ofproto' or have
+ * any 'port' structs, so care must be taken when dealing with it. */
+static struct ofbundle ofpp_none_bundle = {
+    .name      = "OFPP_NONE",
+    .vlan_mode = PORT_VLAN_TRUNK
+};
+
 static void stp_run(struct ofproto_dpif *ofproto);
 static void stp_wait(struct ofproto_dpif *ofproto);
 
@@ -4792,6 +4802,11 @@ input_vid_to_vlan(const struct ofbundle *in_bundle, uint16_t vid)
 static bool
 input_vid_is_valid(uint16_t vid, struct ofbundle *in_bundle, bool warn)
 {
+    /* Allow any VID on the OFPP_NONE port. */
+    if (in_bundle == &ofpp_none_bundle) {
+        return true;
+    }
+
     switch (in_bundle->vlan_mode) {
     case PORT_VLAN_ACCESS:
         if (vid) {
@@ -5105,6 +5120,11 @@ update_learning_table(struct ofproto_dpif *ofproto,
 {
     struct mac_entry *mac;
 
+    /* Don't learn the OFPP_NONE port. */
+    if (in_bundle == &ofpp_none_bundle) {
+        return;
+    }
+
     if (!mac_learning_may_learn(ofproto->ml, flow->dl_src, vlan)) {
         return;
     }
@@ -5139,6 +5159,12 @@ static struct ofbundle *
 lookup_input_bundle(struct ofproto_dpif *ofproto, uint16_t in_port, bool warn)
 {
     struct ofport_dpif *ofport;
+
+    /* Special-case OFPP_NONE, which a controller may use as the ingress
+     * port for traffic that it is sourcing. */
+    if (in_port == OFPP_NONE) {
+        return &ofpp_none_bundle;
+    }
 
     /* Find the port and bundle for the received packet. */
     ofport = get_ofp_port(ofproto, in_port);
@@ -5233,7 +5259,8 @@ xlate_normal(struct action_xlate_ctx *ctx)
         return;
     }
 
-    /* We know 'in_port' exists, since lookup_input_bundle() succeeded. */
+    /* We know 'in_port' exists unless it is "ofpp_none_bundle",
+     * since lookup_input_bundle() succeeded. */
     in_port = get_ofp_port(ctx->ofproto, ctx->flow.in_port);
 
     /* Drop malformed frames. */
@@ -5267,7 +5294,8 @@ xlate_normal(struct action_xlate_ctx *ctx)
     vlan = input_vid_to_vlan(in_bundle, vid);
 
     /* Check other admissibility requirements. */
-    if (!is_admissible(ctx->ofproto, &ctx->flow, in_port, vlan, &ctx->tags)) {
+    if (in_port &&
+         !is_admissible(ctx->ofproto, &ctx->flow, in_port, vlan, &ctx->tags)) {
         return;
     }
 

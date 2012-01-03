@@ -466,6 +466,39 @@ AT_CHECK_UNQUOTED([tail -1 stdout], [0],
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([ofproto-dpif - mirroring, OFPP_NONE ingress port])
+OVS_VSWITCHD_START
+AT_CHECK([ovs-vsctl \
+        add-port br0 p1 -- set Interface p1 type=dummy --\
+        add-port br0 p2 -- set Interface p2 type=dummy --\
+        set Bridge br0 mirrors=@m --\
+        --id=@p2 get Port p2 --\
+        --id=@m create Mirror name=mymirror \
+        select_all=true output_port=@p2 ], [0], [stdout])
+AT_CHECK([perl $srcdir/uuidfilt.pl stdout], [0], [dnl
+<0>
+])
+
+AT_CHECK(
+  [ovs-vsctl \
+        -- get Interface p1 ofport \
+        -- get Interface p2 ofport],
+  [0], [stdout])
+set `cat stdout`
+p1=$1 p2=$2
+
+AT_CHECK([ovs-ofctl add-flow br0 action=output:1])
+
+# "in_port" defaults to OFPP_NONE if it's not specified.
+flow="eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)"
+AT_CHECK([ovs-appctl ofproto/trace br0 "$flow"], [0], [stdout])
+AT_CHECK_UNQUOTED([tail -1 stdout], [0],
+  [Datapath actions: $p1,$p2
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 
 AT_SETUP([ofproto-dpif - mirroring, select_dst])
 OVS_VSWITCHD_START
