@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011 Nicira Networks.
+ * Copyright (c) 2009, 2010, 2011, 2012 Nicira Networks.
  * Copyright (c) 2010 Jean Tourrilhes - HP-Labs.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -3191,12 +3191,16 @@ ofoperation_complete(struct ofoperation *op, int error)
             if (op->victim) {
                 ofproto_rule_destroy__(op->victim);
             }
-            if (!(rule->cr.wc.vlan_tci_mask & htons(VLAN_VID_MASK))
-                && ofproto->vlan_bitmap) {
-                uint16_t vid = vlan_tci_to_vid(rule->cr.flow.vlan_tci);
+            if ((rule->cr.wc.vlan_tci_mask & htons(VLAN_VID_MASK))
+                == htons(VLAN_VID_MASK)) {
+                if (ofproto->vlan_bitmap) {
+                    uint16_t vid = vlan_tci_to_vid(rule->cr.flow.vlan_tci);
 
-                if (!bitmap_is_set(ofproto->vlan_bitmap, vid)) {
-                    bitmap_set1(ofproto->vlan_bitmap, vid);
+                    if (!bitmap_is_set(ofproto->vlan_bitmap, vid)) {
+                        bitmap_set1(ofproto->vlan_bitmap, vid);
+                        ofproto->vlans_changed = true;
+                    }
+                } else {
                     ofproto->vlans_changed = true;
                 }
             }
@@ -3336,7 +3340,8 @@ ofproto_get_vlan_usage(struct ofproto *ofproto, unsigned long int *vlan_bitmap)
         const struct cls_table *table;
 
         HMAP_FOR_EACH (table, hmap_node, &cls->tables) {
-            if (!(table->wc.vlan_tci_mask & htons(VLAN_VID_MASK))) {
+            if ((table->wc.vlan_tci_mask & htons(VLAN_VID_MASK))
+                == htons(VLAN_VID_MASK)) {
                 const struct cls_rule *rule;
 
                 HMAP_FOR_EACH (rule, hmap_node, &table->rules) {
