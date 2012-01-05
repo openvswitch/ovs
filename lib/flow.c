@@ -507,6 +507,19 @@ flow_zero_wildcards(struct flow *flow, const struct flow_wildcards *wildcards)
     flow->skb_priority = 0;
 }
 
+/* Initializes 'fmd' with the metadata found in 'flow'. */
+void
+flow_get_metadata(const struct flow *flow, struct flow_metadata *fmd)
+{
+    fmd->tun_id = flow->tun_id;
+    fmd->tun_id_mask = htonll(UINT64_MAX);
+
+    memcpy(fmd->regs, flow->regs, sizeof fmd->regs);
+    memset(fmd->reg_masks, 0xff, sizeof fmd->reg_masks);
+
+    fmd->in_port = flow->in_port;
+}
+
 char *
 flow_to_string(const struct flow *flow)
 {

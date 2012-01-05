@@ -78,6 +78,19 @@ struct flow {
     uint8_t reserved[6];        /* Reserved for 64-bit packing. */
 };
 
+/* Represents the metadata fields of struct flow.  The masks are used to
+ * indicate which metadata fields are relevant in a given context.  Typically
+ * they will be all 1 or all 0. */
+struct flow_metadata {
+    ovs_be64 tun_id;                 /* Encapsulating tunnel ID. */
+    ovs_be64 tun_id_mask;            /* 1-bit in each significant tun_id bit.*/
+
+    uint32_t regs[FLOW_N_REGS];      /* Registers. */
+    uint32_t reg_masks[FLOW_N_REGS]; /* 1-bit in each significant regs bit. */
+
+    uint16_t in_port;                /* OpenFlow port or zero. */
+};
+
 /* Assert that there are FLOW_SIG_SIZE bytes of significant data in "struct
  * flow", followed by FLOW_PAD_SIZE bytes of padding. */
 #define FLOW_SIG_SIZE (110 + FLOW_N_REGS * 4)
@@ -92,6 +105,7 @@ BUILD_ASSERT_DECL(FLOW_SIG_SIZE == 130 && FLOW_WC_SEQ == 7);
 void flow_extract(struct ofpbuf *, uint32_t priority, ovs_be64 tun_id,
                   uint16_t in_port, struct flow *);
 void flow_zero_wildcards(struct flow *, const struct flow_wildcards *);
+void flow_get_metadata(const struct flow *, struct flow_metadata *);
 
 char *flow_to_string(const struct flow *);
 void flow_format(struct ds *, const struct flow *);

@@ -1560,7 +1560,7 @@ ofputil_decode_packet_in(struct ofputil_packet_in *pin,
         pin->packet_len = ntohs(opi->header.length)
             - offsetof(struct ofp_packet_in, data);
 
-        pin->in_port = ntohs(opi->in_port);
+        pin->fmd.in_port = ntohs(opi->in_port);
         pin->reason = opi->reason;
         pin->buffer_id = ntohl(opi->buffer_id);
         pin->total_len = ntohs(opi->total_len);
@@ -1588,7 +1588,7 @@ ofputil_encode_packet_in(const struct ofputil_packet_in *pin)
     opi.header.version = OFP_VERSION;
     opi.header.type = OFPT_PACKET_IN;
     opi.total_len = htons(pin->packet_len);
-    opi.in_port = htons(pin->in_port);
+    opi.in_port = htons(pin->fmd.in_port);
     opi.reason = pin->reason;
     opi.buffer_id = htonl(pin->buffer_id);
     ofpbuf_push(rw_packet, &opi, offsetof(struct ofp_packet_in, data));

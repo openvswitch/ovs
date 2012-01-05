@@ -84,6 +84,7 @@ ofp_print_packet_in(struct ds *string, const struct ofp_header *oh,
 {
     struct ofputil_packet_in pin;
     int error;
+    int i;
 
     error = ofputil_decode_packet_in(&pin, oh);
     if (error) {
@@ -92,7 +93,23 @@ ofp_print_packet_in(struct ds *string, const struct ofp_header *oh,
     }
 
     ds_put_format(string, " total_len=%"PRIu16" in_port=", pin.total_len);
-    ofputil_format_port(pin.in_port, string);
+    ofputil_format_port(pin.fmd.in_port, string);
+
+    if (pin.fmd.tun_id_mask) {
+        ds_put_format(string, " tun_id=0x%"PRIx64, ntohll(pin.fmd.tun_id));
+        if (pin.fmd.tun_id_mask != htonll(UINT64_MAX)) {
+            ds_put_format(string, "/0x%"PRIx64, ntohll(pin.fmd.tun_id_mask));
+        }
+    }
+
+    for (i = 0; i < FLOW_N_REGS; i++) {
+        if (pin.fmd.reg_masks[i]) {
+            ds_put_format(string, " reg%d=0x%"PRIx32, i, pin.fmd.regs[i]);
+            if (pin.fmd.reg_masks[i] != UINT32_MAX) {
+                ds_put_format(string, "/0x%"PRIx32, pin.fmd.reg_masks[i]);
+            }
+        }
+    }
 
     if (pin.reason == OFPR_ACTION) {
         ds_put_cstr(string, " (via action)");

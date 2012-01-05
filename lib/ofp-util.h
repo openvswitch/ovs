@@ -217,12 +217,13 @@ struct ofputil_packet_in {
     const void *packet;
     size_t packet_len;
 
-    uint16_t in_port;
     uint8_t reason;             /* One of OFPR_*. */
 
     uint32_t buffer_id;
     int send_len;
     uint16_t total_len;         /* Full length of frame. */
+
+    struct flow_metadata fmd;   /* Metadata at creation time. */
 };
 
 int ofputil_decode_packet_in(struct ofputil_packet_in *,

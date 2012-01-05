@@ -2420,10 +2420,15 @@ send_packet_in_miss(struct ofproto_dpif *ofproto, struct ofpbuf *packet,
     pin.packet = packet->data;
     pin.packet_len = packet->size;
     pin.total_len = packet->size;
-    pin.in_port = flow->in_port;
     pin.reason = OFPR_NO_MATCH;
     pin.buffer_id = 0;          /* not yet known */
     pin.send_len = 0;           /* not used for flow table misses */
+
+    flow_get_metadata(flow, &pin.fmd);
+
+    /* Registers aren't meaningful on a miss. */
+    memset(pin.fmd.reg_masks, 0, sizeof pin.fmd.reg_masks);
+
     connmgr_send_packet_in(ofproto->up.connmgr, &pin, flow);
 }
 
@@ -2445,10 +2450,16 @@ send_packet_in_action(struct ofproto_dpif *ofproto, struct ofpbuf *packet,
     pin.packet = packet->data;
     pin.packet_len = packet->size;
     pin.total_len = packet->size;
-    pin.in_port = flow->in_port;
     pin.reason = OFPR_ACTION;
     pin.buffer_id = 0;          /* not yet known */
     pin.send_len = cookie.data;
+
+    flow_get_metadata(flow, &pin.fmd);
+
+    /* Metadata may not be accurate at this time. */
+    memset(pin.fmd.reg_masks, 0, sizeof pin.fmd.reg_masks);
+    pin.fmd.tun_id_mask = 0;
+
     connmgr_send_packet_in(ofproto->up.connmgr, &pin, flow);
 }
 
