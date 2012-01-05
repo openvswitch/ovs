@@ -54,6 +54,7 @@
 #include "checksum.h"
 #include "datapath.h"
 #include "flow.h"
+#include "genl_exec.h"
 #include "vlan.h"
 #include "tunnel.h"
 #include "vport-internal_dev.h"
@@ -2049,9 +2050,13 @@ static int __init dp_init(void)
 	pr_info("Open vSwitch switching datapath %s, built "__DATE__" "__TIME__"\n",
 		VERSION BUILDNR);
 
-	err = ovs_tnl_init();
+	err = genl_exec_init();
 	if (err)
 		goto error;
+
+	err = ovs_tnl_init();
+	if (err)
+		goto error_genl_exec;
 
 	err = ovs_flow_init();
 	if (err)
@@ -2079,6 +2084,8 @@ error_flow_exit:
 	ovs_flow_exit();
 error_tnl_exit:
 	ovs_tnl_exit();
+error_genl_exec:
+	genl_exec_exit();
 error:
 	return err;
 }
@@ -2091,6 +2098,7 @@ static void dp_cleanup(void)
 	ovs_vport_exit();
 	ovs_flow_exit();
 	ovs_tnl_exit();
+	genl_exec_exit();
 }
 
 module_init(dp_init);

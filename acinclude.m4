@@ -230,6 +230,8 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
                   [OVS_DEFINE([HAVE_SKB_DST_ACCESSOR_FUNCS])])
   OVS_GREP_IFELSE([$KSRC/include/linux/skbuff.h], 
                   [skb_copy_from_linear_data_offset])
+  OVS_GREP_IFELSE([$KSRC/include/linux/skbuff.h],
+                  [skb_reset_tail_pointer])
   OVS_GREP_IFELSE([$KSRC/include/linux/skbuff.h], [skb_cow_head])
   OVS_GREP_IFELSE([$KSRC/include/linux/skbuff.h], [skb_transport_header],
                   [OVS_DEFINE([HAVE_SKBUFF_HEADER_HELPERS])])
