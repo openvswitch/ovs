@@ -2054,9 +2054,13 @@ static int __init dp_init(void)
 	if (err)
 		goto error;
 
-	err = ovs_tnl_init();
+	err = ovs_workqueues_init();
 	if (err)
 		goto error_genl_exec;
+
+	err = ovs_tnl_init();
+	if (err)
+		goto error_wq;
 
 	err = ovs_flow_init();
 	if (err)
@@ -2084,6 +2088,8 @@ error_flow_exit:
 	ovs_flow_exit();
 error_tnl_exit:
 	ovs_tnl_exit();
+error_wq:
+	ovs_workqueues_exit();
 error_genl_exec:
 	genl_exec_exit();
 error:
@@ -2098,6 +2104,7 @@ static void dp_cleanup(void)
 	ovs_vport_exit();
 	ovs_flow_exit();
 	ovs_tnl_exit();
+	ovs_workqueues_exit();
 	genl_exec_exit();
 }
 

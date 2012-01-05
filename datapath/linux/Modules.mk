@@ -9,7 +9,8 @@ openvswitch_sources += \
 	linux/compat/netdevice.c \
 	linux/compat/reciprocal_div.c \
 	linux/compat/skbuff-openvswitch.c \
-	linux/compat/time.c
+	linux/compat/time.c	\
+	linux/compat/workqueue.c
 openvswitch_headers += \
 	linux/compat/include/linux/compiler.h \
 	linux/compat/include/linux/compiler-gcc.h \
