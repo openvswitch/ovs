@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010, 2011 Nicira Networks.
+ * Copyright (c) 2010, 2011, 2012 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -467,12 +467,11 @@ cmd_rate(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
         }
 
         now = time_in_msec();
-        if (now >= prev + 10) {
+        if (now >= prev + 1000) {
             long long int elapsed = now - start;
-            printf("%.3f s elapsed, %u OK, %u failed, avg %.1f/s     \r",
+            printf("%.3f s elapsed, %u OK, %u failed, avg %.1f/s\n",
                    elapsed / 1000.0, completed - failures, failures,
                    completed / (elapsed / 1000.0));
-            fflush(stdout);
             prev = now;
 
             if (timeout && elapsed > timeout * 1000LL) {
