@@ -62,6 +62,34 @@ AT_CHECK([tail -1 stdout], [0],
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([ofproto-dpif - output, OFPP_NONE ingress port])
+OVS_VSWITCHD_START(
+       [add-port br0 p1 -- set Interface p1 type=dummy --\
+        add-port br0 p2 -- set Interface p2 type=dummy])
+
+AT_CHECK(
+  [ovs-vsctl \
+        -- get Interface p1 ofport \
+        -- get Interface p2 ofport],
+  [0], [stdout])
+set `cat stdout`
+br0=0 p1=$1 p2=$2
+
+AT_CHECK([ovs-ofctl add-flow br0 action=normal])
+
+# "in_port" defaults to OFPP_NONE if it's not specified.
+flow="eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)"
+AT_CHECK([ovs-appctl ofproto/trace br0 "$flow"], [0], [stdout])
+actual=`tail -1 stdout | sed 's/Datapath actions: //'`
+
+expected="$br0,$p1,$p2"
+AT_CHECK([ovs-dpctl normalize-actions "$flow" "$expected" br0=$br0 p1=$p1 p2=$p2], [0], [stdout])
+mv stdout expout
+AT_CHECK([ovs-dpctl normalize-actions "$flow" "$actual" br0=$br0 p1=$p1 p2=$p2], [0], [expout])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([ofproto-dpif - DSCP])
 dnl This test assumes port p1 is allocated OpenFlow port number 1.
 OVS_VSWITCHD_START([add-port br0 p1 -- set Interface p1 type=dummy])
