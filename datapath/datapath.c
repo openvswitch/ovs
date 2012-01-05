@@ -64,6 +64,10 @@
 #error Kernels before 2.6.18 or after 3.2 are not supported by this version of Open vSwitch.
 #endif
 
+#define REHASH_FLOW_INTERVAL (10 * 60 * HZ)
+static void rehash_flow_table(struct work_struct *work);
+static DECLARE_DELAYED_WORK(rehash_flow_wq, rehash_flow_table);
+
 int (*ovs_dp_ioctl_hook)(struct net_device *dev, struct ifreq *rq, int cmd);
 EXPORT_SYMBOL(ovs_dp_ioctl_hook);
 
@@ -2040,6 +2044,29 @@ error:
 	return err;
 }
 
+static int __rehash_flow_table(void *dummy)
+{
+	struct datapath *dp;
+
+	list_for_each_entry(dp, &dps, list_node) {
+		struct flow_table *old_table = genl_dereference(dp->table);
+		struct flow_table *new_table;
+
+		new_table = ovs_flow_tbl_rehash(old_table);
+		if (!IS_ERR(new_table)) {
+			rcu_assign_pointer(dp->table, new_table);
+			ovs_flow_tbl_deferred_destroy(old_table);
+		}
+	}
+	return 0;
+}
+
+static void rehash_flow_table(struct work_struct *work)
+{
+	genl_exec(__rehash_flow_table, NULL);
+	schedule_delayed_work(&rehash_flow_wq, REHASH_FLOW_INTERVAL);
+}
+
 static int __init dp_init(void)
 {
 	struct sk_buff *dummy_skb;
@@ -2078,6 +2105,8 @@ static int __init dp_init(void)
 	if (err < 0)
 		goto error_unreg_notifier;
 
+	schedule_delayed_work(&rehash_flow_wq, REHASH_FLOW_INTERVAL);
+
 	return 0;
 
 error_unreg_notifier:
@@ -2098,6 +2127,7 @@ error:
 
 static void dp_cleanup(void)
 {
+	cancel_delayed_work_sync(&rehash_flow_wq);
 	rcu_barrier();
 	dp_unregister_genl(ARRAY_SIZE(dp_genl_families));
 	unregister_netdevice_notifier(&ovs_dp_device_notifier);

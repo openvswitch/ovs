@@ -96,7 +96,7 @@ struct sw_flow_key {
 
 struct sw_flow {
 	struct rcu_head rcu;
-	struct hlist_node  hash_node;
+	struct hlist_node hash_node[2];
 	u32 hash;
 
 	struct sw_flow_key key;
@@ -174,6 +174,9 @@ struct flow_table {
 	struct flex_array *buckets;
 	unsigned int count, n_buckets;
 	struct rcu_head rcu;
+	int node_ver;
+	u32 hash_seed;
+	bool keep_flows;
 };
 
 static inline int ovs_flow_tbl_count(struct flow_table *table)
@@ -192,6 +195,7 @@ void ovs_flow_tbl_destroy(struct flow_table *table);
 void ovs_flow_tbl_deferred_destroy(struct flow_table *table);
 struct flow_table *ovs_flow_tbl_alloc(int new_size);
 struct flow_table *ovs_flow_tbl_expand(struct flow_table *table);
+struct flow_table *ovs_flow_tbl_rehash(struct flow_table *table);
 void ovs_flow_tbl_insert(struct flow_table *table, struct sw_flow *flow);
 void ovs_flow_tbl_remove(struct flow_table *table, struct sw_flow *flow);
 u32 ovs_flow_hash(const struct sw_flow_key *key, int key_len);
