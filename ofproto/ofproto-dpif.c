@@ -3231,12 +3231,25 @@ facet_remove(struct ofproto_dpif *ofproto, struct facet *facet)
 {
     struct subfacet *subfacet, *next_subfacet;
 
+    assert(!list_is_empty(&facet->subfacets));
+
+    /* First uninstall all of the subfacets to get final statistics. */
+    LIST_FOR_EACH (subfacet, list_node, &facet->subfacets) {
+        subfacet_uninstall(ofproto, subfacet);
+    }
+
+    /* Flush the final stats to the rule.
+     *
+     * This might require us to have at least one subfacet around so that we
+     * can use its actions for accounting in facet_account(), which is why we
+     * have uninstalled but not yet destroyed the subfacets. */
+    facet_flush_stats(ofproto, facet);
+
+    /* Now we're really all done so destroy everything. */
     LIST_FOR_EACH_SAFE (subfacet, next_subfacet, list_node,
                         &facet->subfacets) {
         subfacet_destroy__(ofproto, subfacet);
     }
-
-    facet_flush_stats(ofproto, facet);
     hmap_remove(&ofproto->facets, &facet->hmap_node);
     list_remove(&facet->list_node);
     facet_free(facet);
@@ -3711,9 +3724,11 @@ subfacet_destroy(struct ofproto_dpif *ofproto, struct subfacet *subfacet)
 {
     struct facet *facet = subfacet->facet;
 
-    subfacet_destroy__(ofproto, subfacet);
-    if (list_is_empty(&facet->subfacets)) {
+    if (list_is_singleton(&facet->subfacets)) {
+        /* facet_remove() needs at least one subfacet (it will remove it). */
         facet_remove(ofproto, facet);
+    } else {
+        subfacet_destroy__(ofproto, subfacet);
     }
 }
 
