@@ -124,9 +124,8 @@ ID that persists from one run to another (stored in a file).  When
 another string is specified \fBovs\-ctl\fR uses it literally.
 .
 .PP
-On systems that have the \fBlsb_release\fR program, \fBovs\-ctl\fR
-chooses reasonable defaults for the following options.  Other systems
-should specify values:
+The following options should be specified if the defaults are not
+suitable:
 .
 .IP "\fB\-\-system\-type=\fItype\fR"
 .IQ "\fB\-\-system\-version=\fIversion\fR"
@@ -135,6 +134,11 @@ Sets the value to store in the \fBsystem-type\fR and
 \fBOpen_vSwitch\fR table.  Remote managers may use these values to
 determine the kind of system to which they are connected (primarily
 for display to human administrators).
+.IP
+When not specified, \fBovs\-ctl\fR uses values from the optional
+\fBsystem\-type.conf\fR and \fBsystem\-version.conf\fR files(see section
+\fBFILES\fR) or it uses the \fBlsb_release\fR program, if present, to
+provide reasonable defaults.
 .
 .PP
 The following options are also likely to be useful:
@@ -399,6 +403,11 @@ location).
 .IP "\fIsysconfdir\fB/openvswitch/system-id.conf\fR"
 The persistent system UUID created and read by
 \fB\-\-system\-id=random\fR.
+.
+.IP "\fIsysconfdir\fB/openvswitch/system\-type.conf\fR"
+.IQ "\fIsysconfdir\fB/openvswitch/system\-version.conf\fR"
+The \fBsystem\-type\fR  and \fBsystem\-version\fR values stored in the database's
+\fBOpen_vSwitch\fR table when not specified as a command-line option.
 .
 .SH "EXAMPLE"
 .
