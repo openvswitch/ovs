@@ -399,11 +399,13 @@ def update_ipsec(ipsec, interfaces, new_interfaces):
         orig_vals = interfaces.get(name)
         if orig_vals:
             # Configuration for this host already exists.  Check if it's
-            # changed.
-            if vals == orig_vals:
-                continue
-            else:
+            # changed.  We use set difference, since we want to ignore
+            # any local additions to "orig_vals" that we've made
+            # (e.g. the "peer_cert_file" key).
+            if set(vals.items()) - set(orig_vals.items()):
                 ipsec.del_entry(vals["local_ip"], vals["remote_ip"])
+            else:
+                continue
 
         try:
             ipsec.add_entry(vals["local_ip"], vals["remote_ip"], vals)
