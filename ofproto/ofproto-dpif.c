@@ -2548,7 +2548,6 @@ handle_flow_miss(struct ofproto_dpif *ofproto, struct flow_miss *miss,
         struct flow_miss_op *op;
         struct dpif_execute *execute;
 
-        list_remove(&packet->list_node);
         ofproto->n_matches++;
 
         if (facet->rule->up.cr.priority == FAIL_OPEN_PRIORITY) {
@@ -2572,6 +2571,12 @@ handle_flow_miss(struct ofproto_dpif *ofproto, struct flow_miss *miss,
         dpif_flow_stats_extract(&facet->flow, packet, &stats);
         subfacet_update_stats(subfacet, &stats);
 
+        if (!subfacet->actions_len) {
+            /* No actions to execute, so skip talking to the dpif. */
+            continue;
+        }
+
+        list_remove(&packet->list_node);
         if (flow->vlan_tci != subfacet->initial_tci) {
             /* This packet was received on a VLAN splinter port.  We added
              * a VLAN to the packet to make the packet resemble the flow,
