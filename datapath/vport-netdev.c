@@ -386,7 +386,7 @@ error:
 struct vport *ovs_netdev_get_vport(struct net_device *dev)
 {
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,36)
-#if IFF_BRIDGE_PORT != IFF_OVS_DATAPATH
+#if IFF_OVS_DATAPATH != 0
 	if (likely(dev->priv_flags & IFF_OVS_DATAPATH))
 #else
 	if (likely(rcu_access_pointer(dev->rx_handler) == netdev_frame_hook))

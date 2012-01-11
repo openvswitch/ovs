@@ -14,10 +14,8 @@
 #define IFF_TX_SKB_SHARING 0
 #endif
 
-#if LINUX_VERSION_CODE == KERNEL_VERSION(2,6,36)
-#define IFF_OVS_DATAPATH IFF_BRIDGE_PORT
-#elif LINUX_VERSION_CODE < KERNEL_VERSION(2,6,36)
-#define IFF_OVS_DATAPATH 0		/* no-op flag */
+#ifndef IFF_OVS_DATAPATH
+#define IFF_OVS_DATAPATH 0
 #endif
 
 #endif
