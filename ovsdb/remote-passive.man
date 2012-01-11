@@ -1,13 +1,13 @@
 .IP "\fBpssl:\fIport\fR[\fB:\fIip\fR]"
 Listen on the given SSL \fIport\fR for a connection.  By default,
-\fB\*(PN\fR listens for connections to any local IP address, but
+connections are not bound to a particular local IP address, but
 specifying \fIip\fR limits connections to those from the given
 \fIip\fR.  The \fB\-\-private\-key\fR, \fB\-\-certificate\fR, and
 \fB\-\-ca\-cert\fR options are mandatory when this form is used.
 .
 .IP "\fBptcp:\fIport\fR[\fB:\fIip\fR]"
 Listen on the given TCP \fIport\fR for a connection.  By default,
-\fB\*(PN\fR listens for connections to any local IP address, but
+connections are not bound to a particular local IP address, but
 \fIip\fR may be specified to listen only for connections to the given
 \fIip\fR.
 .
