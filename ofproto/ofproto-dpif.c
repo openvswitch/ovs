@@ -5534,15 +5534,24 @@ packet_out(struct ofproto *ofproto_, struct ofpbuf *packet,
                              ofproto->max_ports);
     if (!error) {
         struct odputil_keybuf keybuf;
-        struct action_xlate_ctx ctx;
         struct ofpbuf *odp_actions;
+        struct ofproto_push push;
         struct ofpbuf key;
 
         ofpbuf_use_stack(&key, &keybuf, sizeof keybuf);
         odp_flow_key_from_flow(&key, flow);
 
-        action_xlate_ctx_init(&ctx, ofproto, flow, flow->vlan_tci, 0, packet);
-        odp_actions = xlate_actions(&ctx, ofp_actions, n_ofp_actions);
+        action_xlate_ctx_init(&push.ctx, ofproto, flow, flow->vlan_tci, 0,
+                              packet);
+
+        /* Ensure that resubmits in 'ofp_actions' get accounted to their
+         * matching rules. */
+        push.packets = 1;
+        push.bytes = packet->size;
+        push.used = time_msec();
+        push.ctx.resubmit_hook = push_resubmit;
+
+        odp_actions = xlate_actions(&push.ctx, ofp_actions, n_ofp_actions);
         dpif_execute(ofproto->dpif, key.data, key.size,
                      odp_actions->data, odp_actions->size, packet);
         ofpbuf_delete(odp_actions);
