@@ -12,28 +12,28 @@
 ovsdb\-tool \- Open vSwitch database management utility
 .
 .SH SYNOPSIS
-\fBovsdb\-tool \fR[\fIoptions\fR] \fBcreate\fI db schema\fR
+\fBovsdb\-tool \fR[\fIoptions\fR] \fBcreate \fR[\fIdb\fR [\fIschema\fR]]
 .br
-\fBovsdb\-tool \fR[\fIoptions\fR] \fBcompact \fIdb \fR[\fItarget\fR]
+\fBovsdb\-tool \fR[\fIoptions\fR] \fBcompact \fR[\fIdb\fR [\fItarget\fR]]
 .br
-\fBovsdb\-tool \fR[\fIoptions\fR] \fBconvert\fI db schema
-\fR[\fItarget\fR]
+\fBovsdb\-tool \fR[\fIoptions\fR] \fBconvert \fR[\fIdb\fR [\fIschema
+\fR[\fItarget\fR]]]
 .br
-\fBovsdb\-tool \fR[\fIoptions\fR] \fBneeds\-conversion\fI db schema\fR
+\fBovsdb\-tool \fR[\fIoptions\fR] \fBneeds\-conversion \fR[\fIdb\fR [\fIschema\fR]]
 .br
-\fBovsdb\-tool \fR[\fIoptions\fR] \fBdb\-version\fI db\fR
+\fBovsdb\-tool \fR[\fIoptions\fR] \fBdb\-version \fR[\fIdb\fR]
 .br
-\fBovsdb\-tool \fR[\fIoptions\fR] \fBschema\-version\fI schema\fR
+\fBovsdb\-tool \fR[\fIoptions\fR] \fBschema\-version \fR[\fIschema\fR]
 .br
-\fBovsdb\-tool \fR[\fIoptions\fR] \fBdb\-cksum\fI db\fR
+\fBovsdb\-tool \fR[\fIoptions\fR] \fBdb\-cksum \fR[\fIdb\fR]
 .br
-\fBovsdb\-tool \fR[\fIoptions\fR] \fBschema\-cksum\fI schema\fR
+\fBovsdb\-tool \fR[\fIoptions\fR] \fBschema\-cksum \fR[\fIschema\fR]
 .br
-\fBovsdb\-tool \fR[\fIoptions\fR] \fBquery\fI db transaction\fR
+\fBovsdb\-tool \fR[\fIoptions\fR] \fBquery \fR[\fIdb\fR] \fItransaction\fR
 .br
-\fBovsdb\-tool \fR[\fIoptions\fR] \fBtransact\fI db transaction\fR
+\fBovsdb\-tool \fR[\fIoptions\fR] \fBtransact \fR[\fIdb\fR] \fItransaction\fR
 .br
-\fBovsdb\-tool \fR[\fIoptions\fR] [\fB\-m\fR | \fB\-\-more\fR]... \fBshow\-log\fI db\fR
+\fBovsdb\-tool \fR[\fIoptions\fR] [\fB\-m\fR | \fB\-\-more\fR]... \fBshow\-log \fR[\fIdb\fR]
 .br
 \fBovsdb\-tool help\fR
 .so lib/vlog-syn.man
@@ -147,6 +147,10 @@ record.
 .so lib/vlog.man
 .SS "Other Options"
 .so lib/common.man
+.SH "FILES"
+The default \fIdb\fR is \fB@sysconfdir@/openvswitch/conf.db\fR.  The
+default \fIschema\fR is \fB@pkgdatadir@/vswitch.ovsschema\fR.  The
+\fBhelp\fR command also displays these defaults.
 .SH "SEE ALSO"
 .
 \fBovsdb\-server\fR(1),

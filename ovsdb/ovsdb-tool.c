@@ -25,6 +25,7 @@
 #include "column.h"
 #include "command-line.h"
 #include "compiler.h"
+#include "dirs.h"
 #include "dynamic-string.h"
 #include "file.h"
 #include "lockfile.h"
@@ -48,6 +49,9 @@ static const struct command all_commands[];
 
 static void usage(void) NO_RETURN;
 static void parse_options(int argc, char *argv[]);
+
+static const char *default_db(void);
+static const char *default_schema(void);
 
 int
 main(int argc, char *argv[])
@@ -110,23 +114,45 @@ usage(void)
 {
     printf("%s: Open vSwitch database management utility\n"
            "usage: %s [OPTIONS] COMMAND [ARG...]\n"
-           "  create DB SCHEMA   create DB with the given SCHEMA\n"
-           "  compact DB [DST]   compact DB in-place (or to DST)\n"
-           "  convert DB SCHEMA [DST]   convert DB to SCHEMA (to DST)\n"
-           "  db-version DB      report version of schema used by DB\n"
-           "  db-cksum DB        report checksum of schema used by DB\n"
-           "  schema-version SCHEMA  report SCHEMA's schema version\n"
-           "  schema-cksum SCHEMA  report SCHEMA's checksum\n"
-           "  query DB TRNS      execute read-only transaction on DB\n"
-           "  transact DB TRNS   execute read/write transaction on DB\n"
-           "  show-log DB        prints information about DB's log entries\n",
-           program_name, program_name);
+           "  create [DB [SCHEMA]]    create DB with the given SCHEMA\n"
+           "  compact [DB [DST]]      compact DB in-place (or to DST)\n"
+           "  convert [DB [SCHEMA [DST]]]   convert DB to SCHEMA (to DST)\n"
+           "  db-version [DB]         report version of schema used by DB\n"
+           "  db-cksum [DB]           report checksum of schema used by DB\n"
+           "  schema-version [SCHEMA] report SCHEMA's schema version\n"
+           "  schema-cksum [SCHEMA]   report SCHEMA's checksum\n"
+           "  query [DB] TRNS         execute read-only transaction on DB\n"
+           "  transact [DB] TRNS      execute read/write transaction on DB\n"
+           "  [-m]... show-log [DB]   print DB's log entries\n"
+           "The default DB is %s.\n"
+           "The default SCHEMA is %s.\n",
+           program_name, program_name, default_db(), default_schema());
     vlog_usage();
     printf("\nOther options:\n"
            "  -m, --more                  increase show-log verbosity\n"
            "  -h, --help                  display this help message\n"
            "  -V, --version               display version information\n");
     exit(EXIT_SUCCESS);
+}
+
+static const char *
+default_db(void)
+{
+    static char *db;
+    if (!db) {
+        db = xasprintf("%s/conf.db", ovs_sysconfdir());
+    }
+    return db;
+}
+
+static const char *
+default_schema(void)
+{
+    static char *schema;
+    if (!schema) {
+        schema = xasprintf("%s/vswitch.ovsschema", ovs_pkgdatadir());
+    }
+    return schema;
 }
 
 static struct json *
@@ -157,10 +183,10 @@ check_ovsdb_error(struct ovsdb_error *error)
 }
 
 static void
-do_create(int argc OVS_UNUSED, char *argv[])
+do_create(int argc, char *argv[])
 {
-    const char *db_file_name = argv[1];
-    const char *schema_file_name = argv[2];
+    const char *db_file_name = argc >= 2 ? argv[1] : default_db();
+    const char *schema_file_name = argc >= 3 ? argv[2] : default_schema();
     struct ovsdb_schema *schema;
     struct ovsdb_log *log;
     struct json *json;
@@ -229,29 +255,34 @@ compact_or_convert(const char *src_name, const char *dst_name,
 }
 
 static void
-do_compact(int argc OVS_UNUSED, char *argv[])
+do_compact(int argc, char *argv[])
 {
-    compact_or_convert(argv[1], argv[2], NULL,
+    const char *db = argc >= 2 ? argv[1] : default_db();
+    const char *target = argc >= 3 ? argv[2] : NULL;
+
+    compact_or_convert(db, target, NULL,
                        "compacted by ovsdb-tool "VERSION BUILDNR);
 }
 
 static void
-do_convert(int argc OVS_UNUSED, char *argv[])
+do_convert(int argc, char *argv[])
 {
-    const char *schema_file_name = argv[2];
+    const char *db = argc >= 2 ? argv[1] : default_db();
+    const char *schema = argc >= 3 ? argv[2] : default_schema();
+    const char *target = argc >= 4 ? argv[3] : NULL;
     struct ovsdb_schema *new_schema;
 
-    check_ovsdb_error(ovsdb_schema_from_file(schema_file_name, &new_schema));
-    compact_or_convert(argv[1], argv[3], new_schema,
+    check_ovsdb_error(ovsdb_schema_from_file(schema, &new_schema));
+    compact_or_convert(db, target, new_schema,
                        "converted by ovsdb-tool "VERSION BUILDNR);
     ovsdb_schema_destroy(new_schema);
 }
 
 static void
-do_needs_conversion(int argc OVS_UNUSED, char *argv[])
+do_needs_conversion(int argc, char *argv[])
 {
-    const char *db_file_name = argv[1];
-    const char *schema_file_name = argv[2];
+    const char *db_file_name = argc >= 2 ? argv[1] : default_db();
+    const char *schema_file_name = argc >= 3 ? argv[2] : default_schema();
     struct ovsdb_schema *schema1, *schema2;
 
     check_ovsdb_error(ovsdb_file_read_schema(db_file_name, &schema1));
@@ -262,9 +293,9 @@ do_needs_conversion(int argc OVS_UNUSED, char *argv[])
 }
 
 static void
-do_db_version(int argc OVS_UNUSED, char *argv[])
+do_db_version(int argc, char *argv[])
 {
-    const char *db_file_name = argv[1];
+    const char *db_file_name = argc >= 2 ? argv[1] : default_db();
     struct ovsdb_schema *schema;
 
     check_ovsdb_error(ovsdb_file_read_schema(db_file_name, &schema));
@@ -275,7 +306,7 @@ do_db_version(int argc OVS_UNUSED, char *argv[])
 static void
 do_db_cksum(int argc OVS_UNUSED, char *argv[])
 {
-    const char *db_file_name = argv[1];
+    const char *db_file_name = argc >= 2 ? argv[1] : default_db();
     struct ovsdb_schema *schema;
 
     check_ovsdb_error(ovsdb_file_read_schema(db_file_name, &schema));
@@ -284,9 +315,9 @@ do_db_cksum(int argc OVS_UNUSED, char *argv[])
 }
 
 static void
-do_schema_version(int argc OVS_UNUSED, char *argv[])
+do_schema_version(int argc, char *argv[])
 {
-    const char *schema_file_name = argv[1];
+    const char *schema_file_name = argc >= 2 ? argv[1] : default_schema();
     struct ovsdb_schema *schema;
 
     check_ovsdb_error(ovsdb_schema_from_file(schema_file_name, &schema));
@@ -295,9 +326,9 @@ do_schema_version(int argc OVS_UNUSED, char *argv[])
 }
 
 static void
-do_schema_cksum(int argc OVS_UNUSED, char *argv[])
+do_schema_cksum(int argc, char *argv[])
 {
-    const char *schema_file_name = argv[1];
+    const char *schema_file_name = argc >= 2 ? argv[1] : default_schema();
     struct ovsdb_schema *schema;
 
     check_ovsdb_error(ovsdb_schema_from_file(schema_file_name, &schema));
@@ -306,8 +337,10 @@ do_schema_cksum(int argc OVS_UNUSED, char *argv[])
 }
 
 static void
-transact(bool read_only, const char *db_file_name, const char *transaction)
+transact(bool read_only, int argc, char *argv[])
 {
+    const char *db_file_name = argc >= 3 ? argv[1] : default_db();
+    const char *transaction = argv[argc - 1];
     struct json *request, *result;
     struct ovsdb *db;
 
@@ -322,15 +355,15 @@ transact(bool read_only, const char *db_file_name, const char *transaction)
 }
 
 static void
-do_query(int argc OVS_UNUSED, char *argv[])
+do_query(int argc, char *argv[])
 {
-    transact(true, argv[1], argv[2]);
+    transact(true, argc, argv);
 }
 
 static void
-do_transact(int argc OVS_UNUSED, char *argv[])
+do_transact(int argc, char *argv[])
 {
-    transact(false, argv[1], argv[2]);
+    transact(false, argc, argv);
 }
 
 static void
@@ -444,9 +477,9 @@ print_db_changes(struct shash *tables, struct shash *names,
 }
 
 static void
-do_show_log(int argc OVS_UNUSED, char *argv[])
+do_show_log(int argc, char *argv[])
 {
-    const char *db_file_name = argv[1];
+    const char *db_file_name = argc >= 2 ? argv[1] : default_db();
     struct shash names;
     struct ovsdb_log *log;
     struct ovsdb_schema *schema;
@@ -507,17 +540,17 @@ do_help(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 }
 
 static const struct command all_commands[] = {
-    { "create", 2, 2, do_create },
-    { "compact", 1, 2, do_compact },
-    { "convert", 2, 3, do_convert },
-    { "needs-conversion", 2, 2, do_needs_conversion },
-    { "db-version", 1, 1, do_db_version },
-    { "db-cksum", 1, 1, do_db_cksum },
-    { "schema-version", 1, 1, do_schema_version },
-    { "schema-cksum", 1, 1, do_schema_cksum },
-    { "query", 2, 2, do_query },
-    { "transact", 2, 2, do_transact },
-    { "show-log", 1, 1, do_show_log },
+    { "create", 0, 2, do_create },
+    { "compact", 0, 2, do_compact },
+    { "convert", 0, 3, do_convert },
+    { "needs-conversion", 0, 2, do_needs_conversion },
+    { "db-version", 0, 1, do_db_version },
+    { "db-cksum", 0, 1, do_db_cksum },
+    { "schema-version", 0, 1, do_schema_version },
+    { "schema-cksum", 0, 1, do_schema_cksum },
+    { "query", 1, 2, do_query },
+    { "transact", 1, 2, do_transact },
+    { "show-log", 0, 1, do_show_log },
     { "help", 0, INT_MAX, do_help },
     { NULL, 0, 0, NULL },
 };

@@ -9,6 +9,8 @@ post-v1.4.0
     - ovs-vsctl:
         - The "find" command supports new set relational operators
           {=}, {!=}, {<}, {>}, {<=}, and {>=}.
+    - ovsdb-tool now uses the typical database and schema installation
+      directories as defaults.
 
 
 v1.4.0 - xx xxx xxxx
