@@ -1956,8 +1956,9 @@
 
     <group title="Configuration for linux-htb QoS">
       <p>
-        These key-value pairs are defined for <ref table="QoS"/> <ref
-        table="QoS" column="type"/> of <code>linux-htb</code>.
+        <ref table="QoS"/> <ref table="QoS" column="type"/>
+        <code>linux-htb</code> may use <code>queue_id</code>s less than 61440.
+        It has the following key-value pairs defined.
       </p>
       
       <column name="other_config" key="min-rate"
@@ -1992,8 +1993,9 @@
 
     <group title="Configuration for linux-hfsc QoS">
       <p>
-        These key-value pairs are defined for <ref table="QoS"/> <ref
-        table="QoS" column="type"/> of <code>linux-hfsc</code>.
+        <ref table="QoS"/> <ref table="QoS" column="type"/>
+        <code>linux-hfsc</code> may use <code>queue_id</code>s less than 61440.
+        It has the following key-value pairs defined.
       </p>
       
       <column name="other_config" key="min-rate"
