@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2007, 2008, 2009, 2010, 2011 Nicira Networks.
+ * Copyright (c) 2007, 2008, 2009, 2010, 2011, 2012 Nicira Networks.
  * Distributed under the terms of the GNU GPL version 2.
  *
  * Significant portions of this file may be copied from parts of the Linux
@@ -1578,9 +1578,8 @@ static int odp_dp_cmd_dump(struct sk_buff *skb, struct netlink_callback *cb)
 	int i = 0;
 
 	list_for_each_entry (dp, &dps, list_node) {
-		if (i < skip)
-			continue;
-		if (odp_dp_cmd_fill_info(dp, skb, NETLINK_CB(cb->skb).pid,
+		if (i >= skip &&
+		    odp_dp_cmd_fill_info(dp, skb, NETLINK_CB(cb->skb).pid,
 					 cb->nlh->nlmsg_seq, NLM_F_MULTI,
 					 ODP_DP_CMD_NEW) < 0)
 			break;
