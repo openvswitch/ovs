@@ -1153,6 +1153,7 @@ execute_set_action(struct ofpbuf *packet, const struct nlattr *a)
     switch (type) {
     case OVS_KEY_ATTR_TUN_ID:
     case OVS_KEY_ATTR_PRIORITY:
+    case OVS_KEY_ATTR_IPV6:
         /* not implemented */
         break;
 
@@ -1180,7 +1181,6 @@ execute_set_action(struct ofpbuf *packet, const struct nlattr *a)
      case OVS_KEY_ATTR_UNSPEC:
      case OVS_KEY_ATTR_ENCAP:
      case OVS_KEY_ATTR_ETHERTYPE:
-     case OVS_KEY_ATTR_IPV6:
      case OVS_KEY_ATTR_IN_PORT:
      case OVS_KEY_ATTR_VLAN:
      case OVS_KEY_ATTR_ICMP:

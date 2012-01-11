@@ -1136,11 +1136,11 @@ odp_flow_key_from_string(const char *s, const struct shash *port_names,
 }
 
 static uint8_t
-ovs_to_odp_frag(uint8_t ovs_frag)
+ovs_to_odp_frag(uint8_t nw_frag)
 {
-    return (ovs_frag & FLOW_NW_FRAG_LATER ? OVS_FRAG_TYPE_LATER
-            : ovs_frag & FLOW_NW_FRAG_ANY ? OVS_FRAG_TYPE_FIRST
-            : OVS_FRAG_TYPE_NONE);
+    return (nw_frag == 0 ? OVS_FRAG_TYPE_NONE
+          : nw_frag == FLOW_NW_FRAG_ANY ? OVS_FRAG_TYPE_FIRST
+          : OVS_FRAG_TYPE_LATER);
 }
 
 /* Appends a representation of 'flow' as OVS_KEY_ATTR_* attributes to 'buf'. */
@@ -1778,15 +1778,10 @@ commit_vlan_action(const struct flow *flow, struct flow *base,
 }
 
 static void
-commit_set_nw_action(const struct flow *flow, struct flow *base,
+commit_set_ipv4_action(const struct flow *flow, struct flow *base,
                      struct ofpbuf *odp_actions)
 {
     struct ovs_key_ipv4 ipv4_key;
-
-    if (base->dl_type != htons(ETH_TYPE_IP) ||
-        !base->nw_src || !base->nw_dst) {
-        return;
-    }
 
     if (base->nw_src == flow->nw_src &&
         base->nw_dst == flow->nw_dst &&
@@ -1801,12 +1796,56 @@ commit_set_nw_action(const struct flow *flow, struct flow *base,
     ipv4_key.ipv4_tos = base->nw_tos = flow->nw_tos;
     ipv4_key.ipv4_ttl = base->nw_ttl = flow->nw_ttl;
     ipv4_key.ipv4_proto = base->nw_proto;
-    ipv4_key.ipv4_frag = (base->nw_frag == 0 ? OVS_FRAG_TYPE_NONE
-                          : base->nw_frag == FLOW_NW_FRAG_ANY
-                          ? OVS_FRAG_TYPE_FIRST : OVS_FRAG_TYPE_LATER);
+    ipv4_key.ipv4_frag = ovs_to_odp_frag(base->nw_frag);
 
     commit_set_action(odp_actions, OVS_KEY_ATTR_IPV4,
                       &ipv4_key, sizeof(ipv4_key));
+}
+
+static void
+commit_set_ipv6_action(const struct flow *flow, struct flow *base,
+                       struct ofpbuf *odp_actions)
+{
+    struct ovs_key_ipv6 ipv6_key;
+
+    if (ipv6_addr_equals(&base->ipv6_src, &flow->ipv6_src) &&
+        ipv6_addr_equals(&base->ipv6_dst, &flow->ipv6_dst) &&
+        base->ipv6_label == flow->ipv6_label &&
+        base->nw_tos == flow->nw_tos &&
+        base->nw_ttl == flow->nw_ttl &&
+        base->nw_frag == flow->nw_frag) {
+        return;
+    }
+
+    base->ipv6_src = flow->ipv6_src;
+    memcpy(&ipv6_key.ipv6_src, &base->ipv6_src, sizeof(ipv6_key.ipv6_src));
+    base->ipv6_dst = flow->ipv6_dst;
+    memcpy(&ipv6_key.ipv6_dst, &base->ipv6_dst, sizeof(ipv6_key.ipv6_dst));
+
+    ipv6_key.ipv6_label = base->ipv6_label = flow->ipv6_label;
+    ipv6_key.ipv6_tclass = base->nw_tos = flow->nw_tos;
+    ipv6_key.ipv6_hlimit = base->nw_ttl = flow->nw_ttl;
+    ipv6_key.ipv6_proto = base->nw_proto;
+    ipv6_key.ipv6_frag = ovs_to_odp_frag(base->nw_frag);
+
+    commit_set_action(odp_actions, OVS_KEY_ATTR_IPV6,
+                      &ipv6_key, sizeof(ipv6_key));
+}
+
+static void
+commit_set_nw_action(const struct flow *flow, struct flow *base,
+                     struct ofpbuf *odp_actions)
+{
+    /* Check if flow really have an IP header. */
+    if (!flow->nw_proto) {
+        return;
+    }
+
+    if (base->dl_type == htons(ETH_TYPE_IP)) {
+        commit_set_ipv4_action(flow, base, odp_actions);
+    } else if (base->dl_type == htons(ETH_TYPE_IPV6)) {
+        commit_set_ipv6_action(flow, base, odp_actions);
+    }
 }
 
 static void

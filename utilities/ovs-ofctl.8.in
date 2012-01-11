@@ -737,7 +737,7 @@ Sets the TCP or UDP source port to \fIport\fR.
 Sets the TCP or UDP destination port to \fIport\fR.
 .
 .IP \fBmod_nw_tos\fB:\fItos\fR
-Sets the IP ToS/DSCP field to \fItos\fR.  Valid values are between 0 and
+Sets the IPv4 ToS/DSCP field to \fItos\fR.  Valid values are between 0 and
 255, inclusive.  Note that the two lower reserved bits are never
 modified.
 .
