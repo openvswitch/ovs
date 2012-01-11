@@ -2619,10 +2619,9 @@ missing_operator_error(const char *arg, const char **allowed_operators,
  *      - If 'valuep' is nonnull, an operator followed by a value string.  The
  *        allowed operators are the 'n_allowed' string in 'allowed_operators',
  *        or just "=" if 'n_allowed' is 0.  If 'operatorp' is nonnull, then the
- *        operator is stored into '*operatorp' (one of the pointers from
- *        'allowed_operators' is stored; nothing is malloc()'d).  The value is
- *        stored as a malloc()'d string into '*valuep', or NULL if no value is
- *        present in 'arg'.
+ *        index of the operator within 'allowed_operators' is stored into
+ *        '*operatorp'.  The value is stored as a malloc()'d string into
+ *        '*valuep', or NULL if no value is present in 'arg'.
  *
  * On success, returns NULL.  On failure, returned a malloc()'d string error
  * message and stores NULL into all of the nonnull output arguments. */
@@ -2630,7 +2629,7 @@ static char * WARN_UNUSED_RESULT
 parse_column_key_value(const char *arg,
                        const struct vsctl_table_class *table,
                        const struct ovsdb_idl_column **columnp, char **keyp,
-                       const char **operatorp,
+                       int *operatorp,
                        const char **allowed_operators, size_t n_allowed,
                        char **valuep)
 {
@@ -2671,9 +2670,9 @@ parse_column_key_value(const char *arg,
 
     /* Parse value string. */
     if (valuep) {
-        const char *best;
         size_t best_len;
         size_t i;
+        int best;
 
         if (!allowed_operators) {
             static const char *equals = "=";
@@ -2681,7 +2680,7 @@ parse_column_key_value(const char *arg,
             n_allowed = 1;
         }
 
-        best = NULL;
+        best = -1;
         best_len = 0;
         for (i = 0; i < n_allowed; i++) {
             const char *op = allowed_operators[i];
@@ -2689,10 +2688,10 @@ parse_column_key_value(const char *arg,
 
             if (op_len > best_len && !strncmp(op, p, op_len) && p[op_len]) {
                 best_len = op_len;
-                best = op;
+                best = i;
             }
         }
-        if (!best) {
+        if (best < 0) {
             error = missing_operator_error(arg, allowed_operators, n_allowed);
             goto error;
         }
@@ -2718,7 +2717,7 @@ error:
         free(*valuep);
         *valuep = NULL;
         if (operatorp) {
-            *operatorp = NULL;
+            *operatorp = -1;
         }
     }
     return error;
@@ -3401,22 +3400,86 @@ cmd_destroy(struct vsctl_context *ctx)
     }
 }
 
+#define RELOPS                                  \
+    RELOP(RELOP_EQ,     "=")                    \
+    RELOP(RELOP_NE,     "!=")                   \
+    RELOP(RELOP_LT,     "<")                    \
+    RELOP(RELOP_GT,     ">")                    \
+    RELOP(RELOP_LE,     "<=")                   \
+    RELOP(RELOP_GE,     ">=")                   \
+    RELOP(RELOP_SET_EQ, "{=}")                  \
+    RELOP(RELOP_SET_NE, "{!=}")                 \
+    RELOP(RELOP_SET_LT, "{<}")                  \
+    RELOP(RELOP_SET_GT, "{>}")                  \
+    RELOP(RELOP_SET_LE, "{<=}")                 \
+    RELOP(RELOP_SET_GE, "{>=}")
+
+enum relop {
+#define RELOP(ENUM, STRING) ENUM,
+    RELOPS
+#undef RELOP
+};
+
+static bool
+is_set_operator(enum relop op)
+{
+    return (op == RELOP_SET_EQ || op == RELOP_SET_NE ||
+            op == RELOP_SET_LT || op == RELOP_SET_GT ||
+            op == RELOP_SET_LE || op == RELOP_SET_GE);
+}
+
+static bool
+evaluate_relop(const struct ovsdb_datum *a, const struct ovsdb_datum *b,
+               const struct ovsdb_type *type, enum relop op)
+{
+    switch (op) {
+    case RELOP_EQ:
+    case RELOP_SET_EQ:
+        return ovsdb_datum_compare_3way(a, b, type) == 0;
+    case RELOP_NE:
+    case RELOP_SET_NE:
+        return ovsdb_datum_compare_3way(a, b, type) != 0;
+    case RELOP_LT:
+        return ovsdb_datum_compare_3way(a, b, type) < 0;
+    case RELOP_GT:
+        return ovsdb_datum_compare_3way(a, b, type) > 0;
+    case RELOP_LE:
+        return ovsdb_datum_compare_3way(a, b, type) <= 0;
+    case RELOP_GE:
+        return ovsdb_datum_compare_3way(a, b, type) >= 0;
+
+    case RELOP_SET_LT:
+        return b->n > a->n && ovsdb_datum_includes_all(a, b, type);
+    case RELOP_SET_GT:
+        return a->n > b->n && ovsdb_datum_includes_all(b, a, type);
+    case RELOP_SET_LE:
+        return ovsdb_datum_includes_all(a, b, type);
+    case RELOP_SET_GE:
+        return ovsdb_datum_includes_all(b, a, type);
+
+    default:
+        NOT_REACHED();
+    }
+}
+
 static bool
 is_condition_satisfied(const struct vsctl_table_class *table,
                        const struct ovsdb_idl_row *row, const char *arg,
                        struct ovsdb_symbol_table *symtab)
 {
     static const char *operators[] = {
-        "=", "!=", "<", ">", "<=", ">="
+#define RELOP(ENUM, STRING) STRING,
+        RELOPS
+#undef RELOP
     };
 
     const struct ovsdb_idl_column *column;
     const struct ovsdb_datum *have_datum;
     char *key_string, *value_string;
-    const char *operator;
-    unsigned int idx;
+    struct ovsdb_type type;
+    int operator;
+    bool retval;
     char *error;
-    int cmp = 0;
 
     error = parse_column_key_value(arg, table, &column, &key_string,
                                    &operator, operators, ARRAY_SIZE(operators),
@@ -3426,9 +3489,14 @@ is_condition_satisfied(const struct vsctl_table_class *table,
         vsctl_fatal("%s: missing value", arg);
     }
 
+    type = column->type;
+    type.n_max = UINT_MAX;
+
     have_datum = ovsdb_idl_read(row, column);
     if (key_string) {
-        union ovsdb_atom want_key, want_value;
+        union ovsdb_atom want_key;
+        struct ovsdb_datum b;
+        unsigned int idx;
 
         if (column->type.value.type == OVSDB_TYPE_VOID) {
             vsctl_fatal("cannot specify key to check for non-map column %s",
@@ -3437,41 +3505,45 @@ is_condition_satisfied(const struct vsctl_table_class *table,
 
         die_if_error(ovsdb_atom_from_string(&want_key, &column->type.key,
                                             key_string, symtab));
-        die_if_error(ovsdb_atom_from_string(&want_value, &column->type.value,
-                                            value_string, symtab));
+
+        type.key = type.value;
+        type.value.type = OVSDB_TYPE_VOID;
+        die_if_error(ovsdb_datum_from_string(&b, &type, value_string, symtab));
 
         idx = ovsdb_datum_find_key(have_datum,
                                    &want_key, column->type.key.type);
-        if (idx != UINT_MAX) {
-            cmp = ovsdb_atom_compare_3way(&have_datum->values[idx],
-                                          &want_value,
-                                          column->type.value.type);
+        if (idx == UINT_MAX && !is_set_operator(operator)) {
+            retval = false;
+        } else {
+            struct ovsdb_datum a;
+
+            if (idx != UINT_MAX) {
+                a.n = 1;
+                a.keys = &have_datum->values[idx];
+                a.values = NULL;
+            } else {
+                a.n = 0;
+                a.keys = NULL;
+                a.values = NULL;
+            }
+
+            retval = evaluate_relop(&a, &b, &type, operator);
         }
 
         ovsdb_atom_destroy(&want_key, column->type.key.type);
-        ovsdb_atom_destroy(&want_value, column->type.value.type);
     } else {
         struct ovsdb_datum want_datum;
 
         die_if_error(ovsdb_datum_from_string(&want_datum, &column->type,
                                              value_string, symtab));
-        idx = 0;
-        cmp = ovsdb_datum_compare_3way(have_datum, &want_datum,
-                                       &column->type);
+        retval = evaluate_relop(have_datum, &want_datum, &type, operator);
         ovsdb_datum_destroy(&want_datum, &column->type);
     }
 
     free(key_string);
     free(value_string);
 
-    return (idx == UINT_MAX ? false
-            : !strcmp(operator, "=") ? cmp == 0
-            : !strcmp(operator, "!=") ? cmp != 0
-            : !strcmp(operator, "<") ? cmp < 0
-            : !strcmp(operator, ">") ? cmp > 0
-            : !strcmp(operator, "<=") ? cmp <= 0
-            : !strcmp(operator, ">=") ? cmp >= 0
-            : (abort(), 0));
+    return retval;
 }
 
 static void

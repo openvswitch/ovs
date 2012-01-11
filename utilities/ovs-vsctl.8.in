@@ -573,11 +573,56 @@ alphabetical order by column name.
 .IP "[\fB\-\-columns=\fIcolumn\fR[\fB,\fIcolumn\fR]...] \fBfind \fItable \fR[\fIcolumn\fR[\fB:\fIkey\fR]\fB=\fIvalue\fR]..."
 Lists the data in each record in \fItable\fR whose \fIcolumn\fR equals
 \fIvalue\fR or, if \fIkey\fR is specified, whose \fIcolumn\fR contains
-a \fIkey\fR with the specified \fIvalue\fR.  Any of the operators
-\fB!=\fR, \fB<\fR, \fB>\fR, \fB<=\fR, or \fB>=\fR may be substituted
-for \fB=\fR to test for inequality, less than, greater than, less than
-or equal to, or greater than or equal to, respectively.  (Don't forget
-to escape \fB<\fR or \fB>\fR from interpretation by the shell.)
+a \fIkey\fR with the specified \fIvalue\fR.  The following operators
+may be used where \fB=\fR is written in the syntax summary:
+.RS
+.IP "\fB= != < > <= >=\fR"
+Selects records in which \fIcolumn\fR[\fB:\fIkey\fR] equals, does not
+equal, is less than, is greater than, is less than or equal to, or is
+greater than or equal to \fIvalue\fR, respectively.
+.IP
+Consider \fIcolumn\fR[\fB:\fIkey\fR] and \fIvalue\fR as sets of
+elements.  Identical sets are considered equal.  Otherwise, if the
+sets have different numbers of elements, then the set with more
+elements is considered to be larger.  Otherwise, consider a element
+from each set pairwise, in increasing order within each set.  The
+first pair that differs determines the result.  (For a column that
+contains key-value pairs, first all the keys are compared, and values
+are considered only if the two sets contain identical keys.)
+.IP "\fB{=} {!=}\fR"
+Test for set equality or inequality, respectively.
+.IP "\fB{<=}\fR"
+Selects records in which \fIcolumn\fR[\fB:\fIkey\fR] is a subset of
+\fIvalue\fR.  For example, \fBflood-vlans{<=}1,2\fR selects records in
+which the \fBflood-vlans\fR column is the empty set or contains 1 or 2
+or both.
+.IP "\fB{<}\fR"
+Selects records in which \fIcolumn\fR[\fB:\fIkey\fR] is a proper
+subset of \fIvalue\fR.  For example, \fBflood-vlans{<}1,2\fR selects
+records in which the \fBflood-vlans\fR column is the empty set or
+contains 1 or 2 but not both.
+.IP "\fB{>=} {>}\fR"
+Same as \fB{<=}\fR and \fB{<}\fR, respectively, except that the
+relationship is reversed.  For example, \fBflood-vlans{>=}1,2\fR
+selects records in which the \fBflood-vlans\fR column contains both 1
+and 2.
+.RE
+.IP
+For arithmetic operators (\fB= != < > <= >=\fR), when \fIkey\fR is
+specified but a particular record's \fIcolumn\fR does not contain
+\fIkey\fR, the record is always omitted from the results.  Thus, the
+condition \fBother-config:mtu!=1500\fR matches records that have a
+\fBmtu\fR key whose value is not 1500, but not those that lack an
+\fBmtu\fR key.
+.IP
+For the set operators, when \fIkey\fR is specified but a particular
+record's \fIcolumn\fR does not contain \fIkey\fR, the comparison is
+done against an empty set.  Thus, the condition
+\fBother-config:mtu{!=}1500\fR matches records that have a \fBmtu\fR
+key whose value is not 1500 and those that lack an \fBmtu\fR key.
+.IP
+Don't forget to escape \fB<\fR or \fB>\fR from interpretation by the
+shell.
 .IP
 If \fB\-\-columns\fR is specified, only the requested columns are
 listed, in the specified order.  Otherwise all columns are listed, in

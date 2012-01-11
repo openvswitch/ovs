@@ -692,7 +692,7 @@ AT_CHECK([RUN_OVS_VSCTL([set b br0 'datapath_id:y>=z'])],
   [1], [], [ovs-vsctl: datapath_id:y>=z: argument does not end in "=" followed by a value.
 ], [OVS_VSCTL_CLEANUP])
 AT_CHECK([RUN_OVS_VSCTL([wait-until b br0 datapath_id:y,z])], 
-  [1], [], [ovs-vsctl: datapath_id:y,z: argument does not end in "=", "!=", "<", ">", "<=", or ">=" followed by a value.
+  [1], [], [ovs-vsctl: datapath_id:y,z: argument does not end in "=", "!=", "<", ">", "<=", ">=", "{=}", "{!=}", "{<}", "{>}", "{<=}", or "{>=}" followed by a value.
 ], [OVS_VSCTL_CLEANUP])
 AT_CHECK([RUN_OVS_VSCTL([get b br0 datapath_id::])], 
   [1], [], [ovs-vsctl: datapath_id::: trailing garbage ":" in argument
@@ -728,6 +728,140 @@ AT_CHECK([RUN_OVS_VSCTL([destroy b br2])],
   [1], [], [ovs-vsctl: no row "br2" in table Bridge
 ], [OVS_VSCTL_CLEANUP])
 OVS_VSCTL_CLEANUP
+AT_CLEANUP
+
+AT_SETUP([database commands -- conditions])
+AT_KEYWORDS([ovs-vsctl])
+trap 'kill `cat pid`' 0
+OVS_VSCTL_SETUP
+AT_CHECK(
+  [RUN_OVS_VSCTL_TOGETHER(
+     [add-br br0],
+     [add-br br1], [set bridge br1 flood_vlans=0 other-config:x='""'],
+     [add-br br2], [set bridge br2 flood_vlans=1 other-config:x=y],
+     [add-br br3], [set bridge br3 flood_vlans=0,1 other-config:x=z],
+     [add-br br4], [set bridge br4 flood_vlans=2],
+     [add-br br5], [set bridge br5 flood_vlans=0,2],
+     [add-br br6], [set bridge br6 flood_vlans=1,2],
+     [add-br br7], [set bridge br7 flood_vlans=0,1,2])], [0], [
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+])
+m4_define([VSCTL_CHECK_FIND],
+  [AT_CHECK([ovs-vsctl --bare --timeout=5 --no-wait -vreconnect:ANY:emer --db=unix:socket -- --columns=name find bridge '$1' | sort | xargs echo], [0], [$2
+])])
+
+# Arithmetic relational operators without keys.
+VSCTL_CHECK_FIND([flood_vlans=0], [br1])
+VSCTL_CHECK_FIND([flood_vlans=1], [br2])
+VSCTL_CHECK_FIND([flood_vlans=0,2], [br5])
+VSCTL_CHECK_FIND([flood_vlans=0,1,2], [br7])
+VSCTL_CHECK_FIND([flood_vlans=3], [])
+
+VSCTL_CHECK_FIND([flood_vlans!=0], [br0 br2 br3 br4 br5 br6 br7])
+VSCTL_CHECK_FIND([flood_vlans!=1], [br0 br1 br3 br4 br5 br6 br7])
+VSCTL_CHECK_FIND([flood_vlans!=0,2], [br0 br1 br2 br3 br4 br6 br7])
+VSCTL_CHECK_FIND([flood_vlans!=0,1,2], [br0 br1 br2 br3 br4 br5 br6])
+VSCTL_CHECK_FIND([flood_vlans!=3], [br0 br1 br2 br3 br4 br5 br6 br7])
+
+VSCTL_CHECK_FIND([flood_vlans<2], [br0 br1 br2])
+VSCTL_CHECK_FIND([flood_vlans<0,2], [br0 br1 br2 br3 br4])
+VSCTL_CHECK_FIND([flood_vlans>1], [br3 br4 br5 br6 br7])
+VSCTL_CHECK_FIND([flood_vlans>0,1], [br5 br6 br7])
+VSCTL_CHECK_FIND([flood_vlans<=2], [br0 br1 br2 br4])
+VSCTL_CHECK_FIND([flood_vlans<=0,2], [br0 br1 br2 br3 br4 br5])
+VSCTL_CHECK_FIND([flood_vlans>=1], [br2 br3 br4 br5 br6 br7])
+VSCTL_CHECK_FIND([flood_vlans>=0,1], [br3 br5 br6 br7])
+
+# Set relational operators without keys.
+VSCTL_CHECK_FIND([flood_vlans{=}0], [br1])
+VSCTL_CHECK_FIND([flood_vlans{=}1], [br2])
+VSCTL_CHECK_FIND([flood_vlans{=}0,2], [br5])
+VSCTL_CHECK_FIND([flood_vlans{=}0,1,2], [br7])
+VSCTL_CHECK_FIND([flood_vlans{=}3], [])
+
+VSCTL_CHECK_FIND([flood_vlans{!=}0], [br0 br2 br3 br4 br5 br6 br7])
+VSCTL_CHECK_FIND([flood_vlans{!=}1], [br0 br1 br3 br4 br5 br6 br7])
+VSCTL_CHECK_FIND([flood_vlans{!=}0,2], [br0 br1 br2 br3 br4 br6 br7])
+VSCTL_CHECK_FIND([flood_vlans{!=}0,1,2], [br0 br1 br2 br3 br4 br5 br6])
+VSCTL_CHECK_FIND([flood_vlans{!=}3], [br0 br1 br2 br3 br4 br5 br6 br7])
+
+VSCTL_CHECK_FIND([flood_vlans{<}[[]]], [])
+VSCTL_CHECK_FIND([flood_vlans{<=}[[]]], [br0])
+VSCTL_CHECK_FIND([flood_vlans{<}0], [br0])
+VSCTL_CHECK_FIND([flood_vlans{<=}0], [br0 br1])
+VSCTL_CHECK_FIND([flood_vlans{<}1,2], [br0 br2 br4])
+VSCTL_CHECK_FIND([flood_vlans{<=}1,2], [br0 br2 br4 br6])
+
+VSCTL_CHECK_FIND([flood_vlans{>}[[]]], [br1 br2 br3 br4 br5 br6 br7])
+VSCTL_CHECK_FIND([flood_vlans{>=}[[]]], [br0 br1 br2 br3 br4 br5 br6 br7])
+VSCTL_CHECK_FIND([flood_vlans{>}0], [br3 br5 br7])
+VSCTL_CHECK_FIND([flood_vlans{>=}0], [br1 br3 br5 br7])
+VSCTL_CHECK_FIND([flood_vlans{>}0,2], [br7])
+VSCTL_CHECK_FIND([flood_vlans{>=}1,2], [br6 br7])
+VSCTL_CHECK_FIND([flood_vlans{>=}0,2], [br5 br7])
+
+# Arithmetic relational operators with keys.
+VSCTL_CHECK_FIND([other-config:x=""], [br1])
+VSCTL_CHECK_FIND([other-config:x=y], [br2])
+VSCTL_CHECK_FIND([other-config:x=z], [br3])
+
+VSCTL_CHECK_FIND([other-config:x!=""], [br2 br3])
+VSCTL_CHECK_FIND([other-config:x!=y], [br1 br3])
+VSCTL_CHECK_FIND([other-config:x!=z], [br1 br2])
+
+VSCTL_CHECK_FIND([other-config:x>y], [br3])
+VSCTL_CHECK_FIND([other-config:x>=y], [br2 br3])
+VSCTL_CHECK_FIND([other-config:x<y], [br1])
+VSCTL_CHECK_FIND([other-config:x<=y], [br1 br2])
+
+# Set relational operators with keys.
+VSCTL_CHECK_FIND([other-config:x{=}[[]]], [br0 br4 br5 br6 br7])
+VSCTL_CHECK_FIND([other-config:x{=}""], [br1])
+VSCTL_CHECK_FIND([other-config:x{=}y], [br2])
+VSCTL_CHECK_FIND([other-config:x{=}z], [br3])
+
+VSCTL_CHECK_FIND([other-config:x{!=}[[]]], [br1 br2 br3])
+VSCTL_CHECK_FIND([other-config:x{!=}""], [br0 br2 br3 br4 br5 br6 br7])
+VSCTL_CHECK_FIND([other-config:x{!=}y], [br0 br1 br3 br4 br5 br6 br7])
+VSCTL_CHECK_FIND([other-config:x{!=}z], [br0 br1 br2 br4 br5 br6 br7])
+
+VSCTL_CHECK_FIND([other-config:x{<=}[[]]], [br0 br4 br5 br6 br7])
+VSCTL_CHECK_FIND([other-config:x{<=}x], [br0 br4 br5 br6 br7])
+VSCTL_CHECK_FIND([other-config:x{<=}""], [br0 br1 br4 br5 br6 br7])
+VSCTL_CHECK_FIND([other-config:x{<=}y], [br0 br2 br4 br5 br6 br7])
+VSCTL_CHECK_FIND([other-config:x{<=}z], [br0 br3 br4 br5 br6 br7])
+VSCTL_CHECK_FIND([other-config:x{<=}x,y,z], [br0 br2 br3 br4 br5 br6 br7])
+
+VSCTL_CHECK_FIND([other-config:x{<}[[]]], [])
+VSCTL_CHECK_FIND([other-config:x{<}x], [br0 br4 br5 br6 br7])
+VSCTL_CHECK_FIND([other-config:x{<}""], [br0 br4 br5 br6 br7])
+VSCTL_CHECK_FIND([other-config:x{<}y], [br0 br4 br5 br6 br7])
+VSCTL_CHECK_FIND([other-config:x{<}z], [br0 br4 br5 br6 br7])
+
+VSCTL_CHECK_FIND([other-config:x{>=}[[]]], [br0 br1 br2 br3 br4 br5 br6 br7])
+VSCTL_CHECK_FIND([other-config:x{>=}x], [])
+VSCTL_CHECK_FIND([other-config:x{>=}""], [br1])
+VSCTL_CHECK_FIND([other-config:x{>=}y], [br2])
+VSCTL_CHECK_FIND([other-config:x{>=}z], [br3])
+
+VSCTL_CHECK_FIND([other-config:x{>}[[]]], [br1 br2 br3])
+VSCTL_CHECK_FIND([other-config:x{>}x], [])
+VSCTL_CHECK_FIND([other-config:x{>}""], [])
+VSCTL_CHECK_FIND([other-config:x{>}y], [])
+VSCTL_CHECK_FIND([other-config:x{>}z], [])
 AT_CLEANUP
 
 AT_SETUP([database commands -- wait-until immediately true])

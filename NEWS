@@ -6,6 +6,9 @@ port-v1.4.0
         - Added new NXM_PACKET_IN format.
     - ovs-ofctl:
         - Added daemonization support to the monitor and snoop commands.
+    - ovs-vsctl:
+        - The "find" command supports new set relational operators
+          {=}, {!=}, {<}, {>}, {<=}, and {>=}.
 
 
 v1.4.0 - xx xxx xxxx
