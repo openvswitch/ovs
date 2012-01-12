@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -81,9 +81,6 @@ static struct facility facilities[VLF_N_FACILITIES] = {
     VLOG_FACILITIES
 #undef VLOG_FACILITY
 };
-
-/* Time at which vlog was initialized, in milliseconds. */
-static long long int boot_time;
 
 /* VLF_FILE configuration. */
 static char *log_file_name;
@@ -480,7 +477,6 @@ vlog_init(void)
 
     openlog(program_name, LOG_NDELAY, LOG_DAEMON);
 
-    boot_time = time_msec();
     now = time_wall();
     if (now < 0) {
         struct tm tm;
@@ -639,7 +635,7 @@ format_log_message(const struct vlog_module *module, enum vlog_level level,
             ds_put_format(s, "%ld", (long int) getpid());
             break;
         case 'r':
-            ds_put_format(s, "%lld", time_msec() - boot_time);
+            ds_put_format(s, "%lld", time_msec() - time_boot_msec());
             break;
         default:
             ds_put_char(s, p[-1]);

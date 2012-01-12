@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -64,6 +64,8 @@ long long int timeval_to_msec(const struct timeval *);
 void xgettimeofday(struct timeval *);
 
 int get_cpu_usage(void);
+
+long long int time_boot_msec(void);
 
 #ifdef  __cplusplus
 }

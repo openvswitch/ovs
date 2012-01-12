@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -51,6 +51,9 @@ static volatile sig_atomic_t monotonic_tick = true;
 static struct timespec wall_time;
 static struct timespec monotonic_time;
 
+/* The monotonic time at which the time module was initialized. */
+static long long int boot_time;
+
 /* Fixed monotonic time offset, for use by unit tests. */
 static struct timespec warp_offset;
 
@@ -71,10 +74,7 @@ static void refresh_rusage(void);
 static void timespec_add(struct timespec *sum,
                          const struct timespec *a, const struct timespec *b);
 
-/* Initializes the timetracking module.
- *
- * It is not necessary to call this function directly, because other time
- * functions will call it automatically, but it doesn't hurt. */
+/* Initializes the timetracking module, if not already initialized. */
 static void
 time_init(void)
 {
@@ -95,6 +95,7 @@ time_init(void)
 
     set_up_signal(SA_RESTART);
     set_up_timer();
+    boot_time = time_msec();
 }
 
 static void
@@ -400,6 +401,15 @@ long long int
 timeval_to_msec(const struct timeval *tv)
 {
     return (long long int) tv->tv_sec * 1000 + tv->tv_usec / 1000;
+}
+
+/* Returns the monotonic time at which the "time" module was initialized, in
+ * milliseconds(). */
+long long int
+time_boot_msec(void)
+{
+    time_init();
+    return boot_time;
 }
 
 void
