@@ -102,7 +102,7 @@ Please sign off on the patch as a submitter, and be sure to have the
 author(s) sign off for patches that you did not author.
 
 Simply include your name and email address as the last line of the commit
-messge before any comments (and author too, if that is not you):
+message before any comments (and author too, if that is not you):
 
 Signed-off-by: Author Name <author.name@email.address...>
 Signed-off-by: Submitter Name <submitter.name@email.address...>
