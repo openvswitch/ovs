@@ -1,4 +1,4 @@
-/* Copyright (c) 2011 Nicira Networks.
+/* Copyright (c) 2011, 2012 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@
 #include "multipath.h"
 #include "nx-match.h"
 #include "ofpbuf.h"
+#include "ofp-errors.h"
 #include "ofp-util.h"
 #include "openflow/nicira-ext.h"
 #include "vlog.h"
@@ -100,8 +101,8 @@ bundle_execute_load(const struct nx_action_bundle *nab, struct flow *flow,
 /* Checks that 'nab' specifies a bundle action which is supported by this
  * bundle module.  Uses the 'max_ports' parameter to validate each port using
  * ofputil_check_output_port().  Returns 0 if 'nab' is supported, otherwise an
- * OpenFlow error code (as returned by ofp_mkerr()). */
-int
+ * OFPERR_* error code. */
+enum ofperr
 bundle_check(const struct nx_action_bundle *nab, int max_ports,
              const struct flow *flow)
 {
@@ -109,7 +110,7 @@ bundle_check(const struct nx_action_bundle *nab, int max_ports,
     uint16_t n_slaves, fields, algorithm, subtype;
     uint32_t slave_type;
     size_t slaves_size, i;
-    int error;
+    enum ofperr error;
 
     subtype = ntohs(nab->subtype);
     n_slaves = ntohs(nab->n_slaves);
@@ -118,7 +119,7 @@ bundle_check(const struct nx_action_bundle *nab, int max_ports,
     slave_type = ntohl(nab->slave_type);
     slaves_size = ntohs(nab->len) - sizeof *nab;
 
-    error = ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_ARGUMENT);
+    error = OFPERR_OFPBAC_BAD_ARGUMENT;
     if (!flow_hash_fields_valid(fields)) {
         VLOG_WARN_RL(&rl, "unsupported fields %"PRIu16, fields);
     } else if (n_slaves > BUNDLE_MAX_SLAVES) {
@@ -135,13 +136,13 @@ bundle_check(const struct nx_action_bundle *nab, int max_ports,
     for (i = 0; i < sizeof(nab->zero); i++) {
         if (nab->zero[i]) {
             VLOG_WARN_RL(&rl, "reserved field is nonzero");
-            error = ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_ARGUMENT);
+            error = OFPERR_OFPBAC_BAD_ARGUMENT;
         }
     }
 
     if (subtype == NXAST_BUNDLE && (nab->ofs_nbits || nab->dst)) {
         VLOG_WARN_RL(&rl, "bundle action has nonzero reserved fields");
-        error = ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_ARGUMENT);
+        error = OFPERR_OFPBAC_BAD_ARGUMENT;
     }
 
     if (subtype == NXAST_BUNDLE_LOAD) {
@@ -151,7 +152,7 @@ bundle_check(const struct nx_action_bundle *nab, int max_ports,
         if (n_bits < 16) {
             VLOG_WARN_RL(&rl, "bundle_load action requires at least 16 bit "
                          "destination.");
-            error = ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_ARGUMENT);
+            error = OFPERR_OFPBAC_BAD_ARGUMENT;
         } else if (!error) {
             error = nxm_dst_check(nab->dst, ofs, n_bits, flow);
         }
@@ -162,13 +163,14 @@ bundle_check(const struct nx_action_bundle *nab, int max_ports,
                      "allocated for slaves.  %zu bytes are required for "
                      "%"PRIu16" slaves.", subtype, slaves_size,
                      n_slaves * sizeof(ovs_be16), n_slaves);
-        error = ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_LEN);
+        error = OFPERR_OFPBAC_BAD_LEN;
     }
 
     for (i = 0; i < n_slaves; i++) {
         uint16_t ofp_port = bundle_get_slave(nab, i);
-        int ofputil_error = ofputil_check_output_port(ofp_port, max_ports);
+        enum ofperr ofputil_error;
 
+        ofputil_error = ofputil_check_output_port(ofp_port, max_ports);
         if (ofputil_error) {
             VLOG_WARN_RL(&rl, "invalid slave %"PRIu16, ofp_port);
             error = ofputil_error;
@@ -179,7 +181,7 @@ bundle_check(const struct nx_action_bundle *nab, int max_ports,
          * seem to be a real-world use-case for supporting it. */
         if (ofp_port == OFPP_CONTROLLER) {
             VLOG_WARN_RL(&rl, "unsupported controller slave");
-            error = ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_OUT_PORT);
+            error = OFPERR_OFPBAC_BAD_OUT_PORT;
         }
     }
 

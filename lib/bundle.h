@@ -21,6 +21,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "ofp-errors.h"
 #include "openflow/nicira-ext.h"
 #include "openvswitch/types.h"
 
@@ -38,8 +39,8 @@ uint16_t bundle_execute(const struct nx_action_bundle *, const struct flow *,
 void bundle_execute_load(const struct nx_action_bundle *, struct flow *,
                          bool (*slave_enabled)(uint16_t ofp_port, void *aux),
                          void *aux);
-int bundle_check(const struct nx_action_bundle *, int max_ports,
-                 const struct flow *);
+enum ofperr bundle_check(const struct nx_action_bundle *, int max_ports,
+                         const struct flow *);
 void bundle_parse(struct ofpbuf *, const char *);
 void bundle_parse_load(struct ofpbuf *b, const char *);
 void bundle_format(const struct nx_action_bundle *, struct ds *);

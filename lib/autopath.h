@@ -18,6 +18,7 @@
 #define AUTOPATH_H 1
 
 #include <stdint.h>
+#include "ofp-errors.h"
 
 struct flow;
 struct nx_action_autopath;
@@ -29,6 +30,7 @@ struct nx_action_autopath;
 void autopath_execute(const struct nx_action_autopath *, struct flow *,
                       uint16_t ofp_port);
 void autopath_parse(struct nx_action_autopath *, const char *);
-int autopath_check(const struct nx_action_autopath *, const struct flow *);
+enum ofperr autopath_check(const struct nx_action_autopath *,
+                           const struct flow *);
 
 #endif /* autopath.h */

@@ -22,6 +22,7 @@
 #include "dynamic-string.h"
 #include "meta-flow.h"
 #include "nx-match.h"
+#include "ofp-errors.h"
 #include "ofp-util.h"
 #include "ofpbuf.h"
 #include "openflow/openflow.h"
@@ -81,7 +82,7 @@ learn_min_len(uint16_t header)
     return min_len;
 }
 
-static int
+static enum ofperr
 learn_check_header(uint16_t header, size_t len)
 {
     int src_type = header & NX_LEARN_SRC_MASK;
@@ -94,12 +95,12 @@ learn_check_header(uint16_t header, size_t len)
          src_type == NX_LEARN_SRC_FIELD)) {
         /* OK. */
     } else {
-        return ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_ARGUMENT);
+        return OFPERR_OFPBAC_BAD_ARGUMENT;
     }
 
     /* Check that the arguments don't overrun the end of the action. */
     if (len < learn_min_len(header)) {
-        return ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_LEN);
+        return OFPERR_OFPBAC_BAD_LEN;
     }
 
     return 0;
@@ -107,7 +108,7 @@ learn_check_header(uint16_t header, size_t len)
 
 /* Checks that 'learn' (which must be at least 'sizeof *learn' bytes long) is a
  * valid action on 'flow'. */
-int
+enum ofperr
 learn_check(const struct nx_action_learn *learn, const struct flow *flow)
 {
     struct cls_rule rule;
@@ -118,7 +119,7 @@ learn_check(const struct nx_action_learn *learn, const struct flow *flow)
     if (learn->flags & ~htons(OFPFF_SEND_FLOW_REM)
         || !is_all_zeros(learn->pad, sizeof learn->pad)
         || learn->table_id == 0xff) {
-        return ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_ARGUMENT);
+        return OFPERR_OFPBAC_BAD_ARGUMENT;
     }
 
     end = (char *) learn + ntohs(learn->len);
@@ -128,8 +129,8 @@ learn_check(const struct nx_action_learn *learn, const struct flow *flow)
         int src_type = header & NX_LEARN_SRC_MASK;
         int dst_type = header & NX_LEARN_DST_MASK;
 
+        enum ofperr error;
         uint64_t value;
-        int error;
 
         if (!header) {
             break;
@@ -158,7 +159,6 @@ learn_check(const struct nx_action_learn *learn, const struct flow *flow)
         if (dst_type == NX_LEARN_DST_MATCH || dst_type == NX_LEARN_DST_LOAD) {
             ovs_be32 dst_field = get_be32(&p);
             int dst_ofs = ntohs(get_be16(&p));
-            int error;
 
             error = (dst_type == NX_LEARN_DST_LOAD
                      ? nxm_dst_check(dst_field, dst_ofs, n_bits, &rule.flow)
@@ -175,7 +175,7 @@ learn_check(const struct nx_action_learn *learn, const struct flow *flow)
         }
     }
     if (!is_all_zeros(p, (char *) end - (char *) p)) {
-        return ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_ARGUMENT);
+        return OFPERR_OFPBAC_BAD_ARGUMENT;
     }
 
     return 0;
@@ -412,9 +412,9 @@ learn_parse(struct ofpbuf *b, char *arg, const struct flow *flow)
 {
     char *orig = xstrdup(arg);
     char *name, *value;
+    enum ofperr error;
     size_t learn_ofs;
     size_t len;
-    int error;
 
     struct nx_action_learn *learn;
     struct cls_rule rule;
@@ -512,8 +512,7 @@ learn_parse(struct ofpbuf *b, char *arg, const struct flow *flow)
     /* In theory the above should have caught any errors, but... */
     error = learn_check(learn, flow);
     if (error) {
-        char *msg = ofputil_error_to_string(error);
-        ovs_fatal(0, "%s: %s", orig, msg);
+        ovs_fatal(0, "%s: %s", orig, ofperr_to_string(error));
     }
     free(orig);
 }
@@ -566,7 +565,7 @@ learn_format(const struct nx_action_learn *learn, struct ds *s)
         int dst_ofs;
         const struct mf_field *dst_field;
 
-        int error;
+        enum ofperr error;
         int i;
 
         if (!header) {
@@ -574,11 +573,11 @@ learn_format(const struct nx_action_learn *learn, struct ds *s)
         }
 
         error = learn_check_header(header, (char *) end - (char *) p);
-        if (error == ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_ARGUMENT)) {
+        if (error == OFPERR_OFPBAC_BAD_ARGUMENT) {
             ds_put_format(s, ",***bad flow_mod_spec header %"PRIx16"***)",
                           header);
             return;
-        } else if (error == ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_LEN)) {
+        } else if (error == OFPERR_OFPBAC_BAD_LEN) {
             ds_put_format(s, ",***flow_mod_spec at offset %td is %u bytes "
                           "long but only %td bytes are left***)",
                           (char *) p - (char *) (learn + 1) - 2,

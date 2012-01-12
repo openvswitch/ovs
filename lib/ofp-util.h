@@ -90,15 +90,16 @@ enum ofputil_msg_code {
 };
 
 struct ofputil_msg_type;
-int ofputil_decode_msg_type(const struct ofp_header *,
-                            const struct ofputil_msg_type **);
-int ofputil_decode_msg_type_partial(const struct ofp_header *, size_t length,
+enum ofperr ofputil_decode_msg_type(const struct ofp_header *,
                                     const struct ofputil_msg_type **);
+enum ofperr ofputil_decode_msg_type_partial(const struct ofp_header *,
+                                            size_t length,
+                                            const struct ofputil_msg_type **);
 enum ofputil_msg_code ofputil_msg_type_code(const struct ofputil_msg_type *);
 const char *ofputil_msg_type_name(const struct ofputil_msg_type *);
 
 /* Port numbers. */
-int ofputil_check_output_port(uint16_t ofp_port, int max_ports);
+enum ofperr ofputil_check_output_port(uint16_t ofp_port, int max_ports);
 bool ofputil_port_from_string(const char *, uint16_t *port);
 void ofputil_format_port(uint16_t port, struct ds *);
 
@@ -151,8 +152,9 @@ struct ofputil_flow_mod {
     size_t n_actions;
 };
 
-int ofputil_decode_flow_mod(struct ofputil_flow_mod *,
-                            const struct ofp_header *, bool flow_mod_table_id);
+enum ofperr ofputil_decode_flow_mod(struct ofputil_flow_mod *,
+                                    const struct ofp_header *,
+                                    bool flow_mod_table_id);
 struct ofpbuf *ofputil_encode_flow_mod(const struct ofputil_flow_mod *,
                                        enum nx_flow_format,
                                        bool flow_mod_table_id);
@@ -167,8 +169,8 @@ struct ofputil_flow_stats_request {
     uint8_t table_id;
 };
 
-int ofputil_decode_flow_stats_request(struct ofputil_flow_stats_request *,
-                                      const struct ofp_header *);
+enum ofperr ofputil_decode_flow_stats_request(
+    struct ofputil_flow_stats_request *, const struct ofp_header *);
 struct ofpbuf *ofputil_encode_flow_stats_request(
     const struct ofputil_flow_stats_request *, enum nx_flow_format);
 
@@ -215,8 +217,8 @@ struct ofputil_flow_removed {
     uint64_t byte_count;        /* Byte count, UINT64_MAX if unknown. */
 };
 
-int ofputil_decode_flow_removed(struct ofputil_flow_removed *,
-                                const struct ofp_header *);
+enum ofperr ofputil_decode_flow_removed(struct ofputil_flow_removed *,
+                                        const struct ofp_header *);
 struct ofpbuf *ofputil_encode_flow_removed(const struct ofputil_flow_removed *,
                                            enum nx_flow_format);
 
@@ -418,160 +420,16 @@ ofputil_action_is_valid(const union ofp_action *a, size_t n_actions)
          ((LEFT) -= ntohs((ITER)->header.len) / sizeof(union ofp_action), \
           (ITER) = ofputil_action_next(ITER)))
 
-int validate_actions(const union ofp_action *, size_t n_actions,
-                     const struct flow *, int max_ports);
+enum ofperr validate_actions(const union ofp_action *, size_t n_actions,
+                             const struct flow *, int max_ports);
 bool action_outputs_to_port(const union ofp_action *, ovs_be16 port);
 
-int ofputil_pull_actions(struct ofpbuf *, unsigned int actions_len,
-                         union ofp_action **, size_t *);
+enum ofperr ofputil_pull_actions(struct ofpbuf *, unsigned int actions_len,
+                                 union ofp_action **, size_t *);
 
 bool ofputil_actions_equal(const union ofp_action *a, size_t n_a,
                            const union ofp_action *b, size_t n_b);
 union ofp_action *ofputil_actions_clone(const union ofp_action *, size_t n);
-
-/* OpenFlow vendors.
- *
- * These functions map OpenFlow 32-bit vendor IDs (as used in struct
- * ofp_vendor_header) into 4-bit values to embed in an "int".  The 4-bit values
- * are only used internally in Open vSwitch and never appear on the wire, so
- * particular codes used are not important.
- */
-
-/* Vendor error numbers currently used in Open vSwitch. */
-#define OFPUTIL_VENDORS                                     \
-    /*             vendor name              vendor value */ \
-    OFPUTIL_VENDOR(OFPUTIL_VENDOR_OPENFLOW, 0x00000000)     \
-    OFPUTIL_VENDOR(OFPUTIL_VENDOR_NICIRA,   NX_VENDOR_ID)
-
-/* OFPUTIL_VENDOR_* definitions. */
-enum ofputil_vendor_codes {
-#define OFPUTIL_VENDOR(NAME, VENDOR_ID) NAME,
-    OFPUTIL_VENDORS
-    OFPUTIL_N_VENDORS
-#undef OFPUTIL_VENDOR
-};
-
-/* Error codes.
- *
- * We embed system errno values and OpenFlow standard and vendor extension
- * error codes into a single 31-bit space using the following encoding.
- * (Bit 31 is unused and assumed 0 to avoid negative "int" values.)
- *
- *   30                                                   0
- *  +------------------------------------------------------+
- *  |                           0                          |  success
- *  +------------------------------------------------------+
- *
- *   30 29                                                0
- *  +--+---------------------------------------------------+
- *  | 0|                    errno value                    |  errno value
- *  +--+---------------------------------------------------+
- *
- *   30 29   26 25            16 15                       0
- *  +--+-------+----------------+--------------------------+
- *  | 1|   0   |      type      |           code           |  standard OpenFlow
- *  +--+-------+----------------+--------------------------+  error
- *
- *   30 29   26 25            16 15                       0
- *  +--+-------+----------------+--------------------------+  Nicira
- *  | 1| vendor|      type      |           code           |  NXET_VENDOR
- *  +--+-------+----------------+--------------------------+  error extension
- *
- * C and POSIX say that errno values are positive.  We assume that they are
- * less than 2**29.  They are actually less than 65536 on at least Linux,
- * FreeBSD, OpenBSD, and Windows.
- *
- * The 'vendor' field holds one of the OFPUTIL_VENDOR_* codes defined above.
- * It must be nonzero.
- *
- * Negative values are not defined.
- */
-
-/* Currently 4 bits are allocated to the "vendor" field.  Make sure that all
- * the vendor codes can fit. */
-BUILD_ASSERT_DECL(OFPUTIL_N_VENDORS <= 16);
-
-/* These are macro versions of the functions defined below.  The macro versions
- * are intended for use in contexts where function calls are not allowed,
- * e.g. static initializers and case labels. */
-#define OFP_MKERR(TYPE, CODE) ((1 << 30) | ((TYPE) << 16) | (CODE))
-#define OFP_MKERR_VENDOR(VENDOR, TYPE, CODE) \
-        ((1 << 30) | ((VENDOR) << 26) | ((TYPE) << 16) | (CODE))
-#define OFP_MKERR_NICIRA(TYPE, CODE) \
-        OFP_MKERR_VENDOR(OFPUTIL_VENDOR_NICIRA, TYPE, CODE)
-
-/* Returns the standard OpenFlow error with the specified 'type' and 'code' as
- * an integer. */
-static inline int
-ofp_mkerr(uint16_t type, uint16_t code)
-{
-    return OFP_MKERR(type, code);
-}
-
-/* Returns the OpenFlow vendor error with the specified 'vendor', 'type', and
- * 'code' as an integer.  'vendor' must be an OFPUTIL_VENDOR_* constant. */
-static inline int
-ofp_mkerr_vendor(uint8_t vendor, uint16_t type, uint16_t code)
-{
-    assert(vendor < OFPUTIL_N_VENDORS);
-    return OFP_MKERR_VENDOR(vendor, type, code);
-}
-
-/* Returns the OpenFlow vendor error with Nicira as vendor, with the specific
- * 'type' and 'code', as an integer. */
-static inline int
-ofp_mkerr_nicira(uint16_t type, uint16_t code)
-{
-    return OFP_MKERR_NICIRA(type, code);
-}
-
-/* Returns true if 'error' encodes an OpenFlow standard or vendor extension
- * error codes as documented above. */
-static inline bool
-is_ofp_error(int error)
-{
-    return (error & (1 << 30)) != 0;
-}
-
-/* Returns true if 'error' appears to be a system errno value. */
-static inline bool
-is_errno(int error)
-{
-    return !is_ofp_error(error);
-}
-
-/* Returns the "vendor" part of the OpenFlow error code 'error' (which must be
- * in the format explained above).  This is normally one of the
- * OFPUTIL_VENDOR_* constants.  Returns OFPUTIL_VENDOR_OPENFLOW (0) for a
- * standard OpenFlow error. */
-static inline uint8_t
-get_ofp_err_vendor(int error)
-{
-    return (error >> 26) & 0xf;
-}
-
-/* Returns the "type" part of the OpenFlow error code 'error' (which must be in
- * the format explained above). */
-static inline uint16_t
-get_ofp_err_type(int error)
-{
-    return (error >> 16) & 0x3ff;
-}
-
-/* Returns the "code" part of the OpenFlow error code 'error' (which must be in
- * the format explained above). */
-static inline uint16_t
-get_ofp_err_code(int error)
-{
-    return error & 0xffff;
-}
-
-struct ofpbuf *ofputil_encode_error_msg(int error, const struct ofp_header *);
-int ofputil_decode_error_msg(const struct ofp_header *, size_t *payload_ofs);
-
-/* String versions of errors. */
-void ofputil_format_error(struct ds *, int error);
-char *ofputil_error_to_string(int error);
 
 /* Handy utility for parsing flows and actions. */
 bool ofputil_parse_key_value(char **stringp, char **keyp, char **valuep);

@@ -155,8 +155,7 @@ pktbuf_get_null(void)
 }
 
 /* Attempts to retrieve a saved packet with the given 'id' from 'pb'.  Returns
- * 0 if successful, otherwise an OpenFlow error code constructed with
- * ofp_mkerr().
+ * 0 if successful, otherwise an OpenFlow error code.
  *
  * On success, ordinarily stores the buffered packet in '*bufferp' and the
  * datapath port number on which the packet was received in '*in_port'.  The
@@ -170,13 +169,13 @@ pktbuf_get_null(void)
  * headroom.
  *
  * On failure, stores NULL in in '*bufferp' and UINT16_MAX in '*in_port'. */
-int
+enum ofperr
 pktbuf_retrieve(struct pktbuf *pb, uint32_t id, struct ofpbuf **bufferp,
                 uint16_t *in_port)
 {
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 20);
     struct packet *p;
-    int error;
+    enum ofperr error;
 
     if (id == UINT32_MAX) {
         error = 0;
@@ -186,7 +185,7 @@ pktbuf_retrieve(struct pktbuf *pb, uint32_t id, struct ofpbuf **bufferp,
     if (!pb) {
         VLOG_WARN_RL(&rl, "attempt to send buffered packet via connection "
                      "without buffers");
-        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BUFFER_UNKNOWN);
+        return OFPERR_OFPBRC_BUFFER_UNKNOWN;
     }
 
     p = &pb->packets[id & PKTBUF_MASK];
@@ -203,13 +202,13 @@ pktbuf_retrieve(struct pktbuf *pb, uint32_t id, struct ofpbuf **bufferp,
         } else {
             COVERAGE_INC(pktbuf_reuse_error);
             VLOG_WARN_RL(&rl, "attempt to reuse buffer %08"PRIx32, id);
-            error = ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BUFFER_EMPTY);
+            error = OFPERR_OFPBRC_BUFFER_EMPTY;
         }
     } else if (id >> PKTBUF_BITS != COOKIE_MAX) {
         COVERAGE_INC(pktbuf_buffer_unknown);
         VLOG_WARN_RL(&rl, "cookie mismatch: %08"PRIx32" != %08"PRIx32,
                      id, (id & PKTBUF_MASK) | (p->cookie << PKTBUF_BITS));
-        error = ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BUFFER_UNKNOWN);
+        error = OFPERR_OFPBRC_BUFFER_UNKNOWN;
     } else {
         COVERAGE_INC(pktbuf_null_cookie);
         VLOG_INFO_RL(&rl, "Received null cookie %08"PRIx32" (this is normal "

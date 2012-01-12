@@ -12,6 +12,15 @@ idRe = "[a-zA-Z_][a-zA-Z_0-9]*"
 tokenRe = "#?" + idRe + "|[0-9]+|."
 inComment = False
 inDirective = False
+
+def getLine():
+    global line
+    global lineNumber
+    line = inputFile.readline()
+    lineNumber += 1
+    if line == "":
+        fatal("unexpected end of input")
+
 def getToken():
     global token
     global line
@@ -58,7 +67,7 @@ def getToken():
                 return False
 
 def fatal(msg):
-    sys.stderr.write("%s:%d: error at \"%s\": %s\n" % (fileName, lineNumber, token, msg))
+    sys.stderr.write("%s:%d: %s\n" % (fileName, lineNumber, msg))
     sys.exit(1)
 
 def skipDirective():
@@ -124,13 +133,21 @@ This program reads the header files specified on the command line and
 outputs a C source file for translating OpenFlow error codes into
 strings, for use as lib/ofp-errors.c in the Open vSwitch source tree.
 
-This program is specialized for reading include/openflow/openflow.h
-and include/openflow/nicira-ext.h.  It will not work on arbitrary
-header files without extensions.''' % {"argv0": argv0}
+This program is specialized for reading lib/ofp-errors.h.  It will not
+work on arbitrary header files without extensions.\
+''' % {"argv0": argv0}
     sys.exit(0)
 
 def extract_ofp_errors(filenames):
     error_types = {}
+
+    comments = []
+    names = []
+    domain = {}
+    reverse = {}
+    for domain_name in ("OF1.0", "OF1.1", "NX1.0", "NX1.1"):
+        domain[domain_name] = {}
+        reverse[domain_name] = {}
 
     global fileName
     for fileName in filenames:
@@ -138,81 +155,157 @@ def extract_ofp_errors(filenames):
         global lineNumber
         inputFile = open(fileName)
         lineNumber = 0
-        while getToken():
-            if token in ("#ifdef", "#ifndef", "#include",
-                         "#endif", "#elif", "#else", '#define'):
-                skipDirective()
-            elif match('enum'):
-                forceId()
-                enum_tag = token
-                getToken()
 
-                forceMatch("{")
+        while True:
+            getLine()
+            if re.match('enum ofperr', line):
+                break
 
-                constants = []
-                while isId(token):
-                    constants.append(token)
-                    getToken()
-                    if match('='):
-                        while token != ',' and token != '}':
-                            getToken()
-                    match(',')
+        while True:
+            getLine()
+            if line.startswith('/*') or not line or line.isspace():
+                continue
+            elif re.match('}', line):
+                break
 
-                forceMatch('}')
+            m = re.match('\s+/\* ((?:.(?!\.  ))+.)\.  (.*)$', line)
+            if not m:
+                fatal("unexpected syntax between errors")
 
-                if enum_tag == "ofp_error_type":
-                    error_types = {}
-                    for error_type in constants:
-                        error_types[error_type] = []
-                elif enum_tag == 'nx_vendor_code':
-                    pass
-                elif enum_tag.endswith('_code'):
-                    error_type = 'OFPET_%s' % '_'.join(enum_tag.split('_')[1:-1]).upper()
-                    if error_type not in error_types:
-                        fatal("enum %s looks like an error code enumeration but %s is unknown" % (enum_tag, error_type))
-                    error_types[error_type] += constants
-            elif token in ('struct', 'union'):
-                getToken()
-                forceId()
-                getToken()
-                forceMatch('{')
-                while not match('}'):
-                    getToken()
-            elif match('OFP_ASSERT') or match('BOOST_STATIC_ASSERT'):
-                while token != ';':
-                    getToken()
-            else:
-                fatal("parse error")
+            dsts, comment = m.groups()
+
+            comment.rstrip()
+            while not comment.endswith('*/'):
+                getLine()
+                if line.startswith('/*') or not line or line.isspace():
+                    fatal("unexpected syntax within error")
+                comment += ' %s' % line.lstrip('* \t').rstrip(' \t\r\n')
+            comment = comment[:-2].rstrip()
+
+            getLine()
+            m = re.match('\s+(?:OFPERR_((?:OFP|NX)[A-Z0-9_]+))(\s*=\s*OFPERR_OFS)?,',
+                         line)
+            if not m:
+                fatal("syntax error expecting enum value")
+
+            enum = m.group(1)
+
+            comments.append(comment)
+            names.append(enum)
+
+            for dst in dsts.split(', '):
+                m = re.match(r'([A-Z0-9.]+)\((\d+)(?:,(\d+))?\)$', dst)
+                if not m:
+                    fatal("%s: syntax error in destination" % dst)
+                targets = m.group(1)
+                type_ = int(m.group(2))
+                if m.group(3):
+                    code = int(m.group(3))
+                else:
+                    code = None
+
+                target_map = {"OF":    ("OF1.0", "OF1.1"),
+                              "OF1.0": ("OF1.0",),
+                              "OF1.1": ("OF1.1",),
+                              "NX":    ("OF1.0", "OF1.1"),
+                              "NX1.0": ("OF1.0",),
+                              "NX1.1": ("OF1.1",)}
+                if targets not in target_map:
+                    fatal("%s: unknown error domain" % target)
+                for target in target_map[targets]:
+                    if type_ not in domain[target]:
+                        domain[target][type_] = {}
+                    if code in domain[target][type_]:
+                        fatal("%s: duplicate assignment in domain" % dst)
+                    domain[target][type_][code] = enum
+                    reverse[target][enum] = (type_, code)
+
         inputFile.close()
 
-    print "/* -*- buffer-read-only: t -*- */"
-    print "#include <config.h>"
-    print '#include "ofp-errors.h"'
-    print "#include <inttypes.h>"
-    print "#include <stdio.h>"
-    for fileName in sys.argv[1:]:
-        print '#include "%s"' % fileName
-    print '#include "type-props.h"'
-
-    for error_type, constants in sorted(error_types.items()):
-        tag = 'ofp_%s_code' % re.sub('^OFPET_', '', error_type).lower()
-        print_enum(tag, constants, "static ")
-    print_enum("ofp_error_type", error_types.keys(), "")
-    print """
-const char *
-ofp_error_code_to_string(uint16_t type, uint16_t code)
-{
-    switch (type) {\
-"""
-    for error_type in error_types:
-        tag = 'ofp_%s_code' % re.sub('^OFPET_', '', error_type).lower()
-        print "    case %s:" % error_type
-        print "        return %s_to_string(code);" % tag
     print """\
+/* Generated automatically; do not modify!     -*- buffer-read-only: t -*- */
+
+#define OFPERR_N_ERRORS %d
+
+struct ofperr_domain {
+    const char *name;
+    uint8_t version;
+    enum ofperr (*decode)(uint16_t type, uint16_t code);
+    enum ofperr (*decode_type)(uint16_t type);
+    struct pair errors[OFPERR_N_ERRORS];
+};
+
+static const char *error_names[OFPERR_N_ERRORS] = {
+%s
+};
+
+static const char *error_comments[OFPERR_N_ERRORS] = {
+%s
+};\
+""" % (len(names),
+       '\n'.join('    "%s",' % name for name in names),
+       '\n'.join('    "%s",' % re.sub(r'(["\\])', r'\\\1', comment)
+                 for comment in comments))
+
+    def output_domain(map, name, description, version):
+        print """
+static enum ofperr
+%s_decode(uint16_t type, uint16_t code)
+{
+    switch ((type << 16) | code) {""" % name
+        for enum in names:
+            if enum not in map:
+                continue
+            type_, code = map[enum]
+            if code is None:
+                continue
+            print "    case (%d << 16) | %d:" % (type_, code)
+            print "        return OFPERR_%s;" % enum
+        print """\
     }
-    return NULL;
-}\
-"""
+
+    return 0;
+}
+
+static enum ofperr
+%s_decode_type(uint16_t type)
+{
+    switch (type) {""" % name
+        for enum in names:
+            if enum not in map:
+                continue
+            type_, code = map[enum]
+            if code is not None:
+                continue
+            print "    case %d:" % type_
+            print "        return OFPERR_%s;" % enum
+        print """\
+    }
+
+    return 0;
+}"""
+
+        print """
+const struct ofperr_domain %s = {
+    "%s",
+    %d,
+    %s_decode,
+    %s_decode_type,
+    {""" % (name, description, version, name, name)
+        for enum in names:
+            if enum in map:
+                type_, code = map[enum]
+                if code == None:
+                    code = -1
+            else:
+                type_ = code = -1
+            print "        { %2d, %3d }, /* %s */" % (type_, code, enum)
+        print """\
+    },
+};"""
+
+    output_domain(reverse["OF1.0"], "ofperr_of10", "OpenFlow 1.0", 0x01)
+    output_domain(reverse["OF1.1"], "ofperr_of11", "OpenFlow 1.1", 0x02)
 
 if __name__ == '__main__':
     if '--help' in sys.argv:

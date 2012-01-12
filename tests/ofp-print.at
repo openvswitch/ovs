@@ -16,9 +16,11 @@ AT_CLEANUP
 
 AT_SETUP([wrong OpenFlow version])
 AT_KEYWORDS([ofp-print])
-AT_CHECK([ovs-ofctl ofp-print aabbccddeeff0011], [0], [dnl
-Bad OpenFlow version 170:
-00000000  aa bb cc dd ee ff 00 11-                        |........        |
+AT_CHECK([ovs-ofctl '-vPATTERN:console:%c|%p|%m' ofp-print 00bb0008eeff0011],
+  [0], [dnl
+***decode error: OFPBRC_BAD_TYPE***
+00000000  00 bb 00 08 ee ff 00 11-                        |........        |
+], [ofp_util|WARN|received OpenFlow message of unknown type 187
 ])
 AT_CLEANUP
 
@@ -55,28 +57,63 @@ OFPT_HELLO (xid=0x0):
 ])
 AT_CLEANUP
 
-AT_SETUP([OFPT_ERROR with type OFPET_HELLO_FAILED])
+AT_SETUP([OFPT_ERROR with type OFPET_HELLO_FAILED - OF1.0])
 AT_KEYWORDS([ofp-print])
 AT_CHECK([ovs-ofctl ofp-print 010100170000000000000001657874726120646174610a], [0], [dnl
-OFPT_ERROR (xid=0x0): type OFPET_HELLO_FAILED, code OFPHFC_EPERM
+OFPT_ERROR (xid=0x0): OFPHFC_EPERM
 extra data\012
 ])
 AT_CLEANUP
 
-AT_SETUP([OFPT_ERROR with type OFPET_BAD_REQUEST])
+AT_SETUP([OFPT_ERROR with type OFPET_HELLO_FAILED - OF1.1])
+AT_KEYWORDS([ofp-print])
+AT_CHECK([ovs-ofctl ofp-print 020100170000000000000001657874726120646174610a], [0], [dnl
+OFPT_ERROR (xid=0x0): OFPHFC_EPERM
+extra data\012
+])
+AT_CLEANUP
+
+AT_SETUP([OFPT_ERROR with type OFPET_BAD_REQUEST - OF1.0])
 AT_KEYWORDS([ofp-print])
 AT_CHECK([ovs-ofctl ofp-print 01010014000000000001000601bbccddeeff0011], [0], [dnl
-OFPT_ERROR (xid=0x0): type OFPET_BAD_REQUEST, code OFPBRC_BAD_LEN
+OFPT_ERROR (xid=0x0): OFPBRC_BAD_LEN
 (***truncated to 8 bytes from 52445***)
 00000000  01 bb cc dd ee ff 00 11-                        |........        |
 ])
 AT_CLEANUP
 
-AT_SETUP([OFPT_ERROR with code NXBRC_NXM_BAD_PREREQ])
+AT_SETUP([OFPT_ERROR with code NXBRC_NXM_BAD_PREREQ - OF1.0])
 AT_KEYWORDS([ofp-print])
 AT_CHECK([ovs-ofctl ofp-print '0101001c55555555 b0c20000 0000232000010104 0102000811111111'], [0], [dnl
-OFPT_ERROR (xid=0x55555555): type OFPET_BAD_REQUEST, code NXBRC_NXM_BAD_PREREQ
+OFPT_ERROR (xid=0x55555555): NXBRC_NXM_BAD_PREREQ
 OFPT_ECHO_REQUEST (xid=0x11111111): 0 bytes of payload
+])
+AT_CLEANUP
+
+AT_SETUP([OFPT_ERROR with code NXBRC_NXM_BAD_PREREQ - OF1.1])
+AT_KEYWORDS([ofp-print])
+AT_CHECK([ovs-ofctl ofp-print '0201001c55555555 b0c20000 0000232000010104 0102000811111111'], [0], [dnl
+OFPT_ERROR (xid=0x55555555): NXBRC_NXM_BAD_PREREQ
+OFPT_ECHO_REQUEST (xid=0x11111111): 0 bytes of payload
+])
+AT_CLEANUP
+
+dnl Error type 3, code 1 is OFPFMFC_OVERLAP in OF1.0
+dnl and OFPBIC_UNSUP_INST in OF1.1, so check that value in both versions.
+AT_SETUP([OFPT_ERROR with type OFPFMFC_OVERLAP - OF1.0])
+AT_KEYWORDS([ofp-print])
+AT_CHECK([ovs-ofctl ofp-print 01010014000000000003000101bbccddeeff0011], [0], [dnl
+OFPT_ERROR (xid=0x0): OFPFMFC_OVERLAP
+(***truncated to 8 bytes from 52445***)
+00000000  01 bb cc dd ee ff 00 11-                        |........        |
+])
+AT_CLEANUP
+AT_SETUP([OFPT_ERROR with type OFPBIC_UNSUP_INST - OF1.1])
+AT_KEYWORDS([ofp-print])
+AT_CHECK([ovs-ofctl ofp-print 02010014000000000003000102bbccddeeff0011], [0], [dnl
+OFPT_ERROR (xid=0x0): OFPBIC_UNSUP_INST
+(***truncated to 8 bytes from 52445***)
+00000000  02 bb cc dd ee ff 00 11-                        |........        |
 ])
 AT_CLEANUP
 
@@ -180,7 +217,7 @@ ff fe 50 54 00 00 00 01 62 72 30 00 00 00 00 00 \
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 \
 00 00 02 08 00 00 02 8f 00 00 02 8f \
 "], [0], [dnl
-***decode error: type OFPET_BAD_REQUEST, code OFPBRC_BAD_LEN***
+***decode error: OFPBRC_BAD_LEN***
 00000000  01 06 00 dc 00 00 00 01-00 00 50 54 00 00 00 01 |..........PT....|
 00000010  00 00 01 00 02 00 00 00-00 00 00 87 00 00 0f ff |................|
 00000020  ff fe 50 54 00 00 00 01-62 72 30 00 00 00 00 00 |..PT....br0.....|

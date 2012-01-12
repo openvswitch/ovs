@@ -37,6 +37,7 @@
 #include "netlink.h"
 #include "nx-match.h"
 #include "odp-util.h"
+#include "ofp-errors.h"
 #include "ofp-parse.h"
 #include "ofp-print.h"
 #include "ofp-util.h"
@@ -1562,8 +1563,8 @@ do_parse_nx_match(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
         struct ofpbuf nx_match;
         struct cls_rule rule;
         ovs_be64 cookie, cookie_mask;
+        enum ofperr error;
         int match_len;
-        int error;
         char *s;
 
         /* Delete comments, skip blank lines. */
@@ -1606,8 +1607,8 @@ do_parse_nx_match(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
             puts(out);
             free(out);
         } else {
-            printf("nx_pull_match() returned error %x (%s)\n", error,
-                   ofputil_error_to_string(error));
+            printf("nx_pull_match() returned error %s\n",
+                   ofperr_get_name(error));
         }
 
         ofpbuf_uninit(&nx_match);

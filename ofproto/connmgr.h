@@ -19,6 +19,7 @@
 
 #include "hmap.h"
 #include "list.h"
+#include "ofp-errors.h"
 #include "ofproto.h"
 #include "openflow/nicira-ext.h"
 #include "openvswitch/types.h"
@@ -97,10 +98,10 @@ void ofconn_set_miss_send_len(struct ofconn *, int miss_send_len);
 void ofconn_send_reply(const struct ofconn *, struct ofpbuf *);
 void ofconn_send_replies(const struct ofconn *, struct list *);
 void ofconn_send_error(const struct ofconn *, const struct ofp_header *request,
-                       int error);
+                       enum ofperr);
 
-int ofconn_pktbuf_retrieve(struct ofconn *, uint32_t id,
-                           struct ofpbuf **bufferp, uint16_t *in_port);
+enum ofperr ofconn_pktbuf_retrieve(struct ofconn *, uint32_t id,
+                                   struct ofpbuf **bufferp, uint16_t *in_port);
 
 bool ofconn_has_pending_opgroups(const struct ofconn *);
 void ofconn_add_opgroup(struct ofconn *, struct list *);

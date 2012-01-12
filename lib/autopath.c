@@ -23,6 +23,7 @@
 
 #include "flow.h"
 #include "nx-match.h"
+#include "ofp-errors.h"
 #include "ofp-util.h"
 #include "openflow/nicira-ext.h"
 #include "vlog.h"
@@ -75,7 +76,7 @@ autopath_parse(struct nx_action_autopath *ap, const char *s_)
     free(s);
 }
 
-int
+enum ofperr
 autopath_check(const struct nx_action_autopath *ap, const struct flow *flow)
 {
     int n_bits = nxm_decode_n_bits(ap->ofs_nbits);
@@ -84,7 +85,7 @@ autopath_check(const struct nx_action_autopath *ap, const struct flow *flow)
     if (n_bits < 16) {
         VLOG_WARN("at least 16 bit destination is required for autopath "
                   "action.");
-        return ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_ARGUMENT);
+        return OFPERR_OFPBAC_BAD_ARGUMENT;
     }
 
     return nxm_dst_check(ap->dst, ofs, n_bits, flow);

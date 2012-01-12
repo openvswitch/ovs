@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010, 2011 Nicira Networks.
+ * Copyright (c) 2010, 2011, 2012 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@
 #include <sys/types.h>
 #include <netinet/in.h>
 #include "openvswitch/types.h"
+#include "ofp-errors.h"
 
 struct cls_rule;
 struct ds;
@@ -34,11 +35,12 @@ struct nx_action_reg_move;
  * See include/openflow/nicira-ext.h for NXM specification.
  */
 
-int nx_pull_match(struct ofpbuf *, unsigned int match_len, uint16_t priority,
-                  struct cls_rule *, ovs_be64 *cookie, ovs_be64 *cookie_mask);
-int nx_pull_match_loose(struct ofpbuf *, unsigned int match_len,
-                        uint16_t priority, struct cls_rule *,
-                        ovs_be64 *cookie, ovs_be64 *cookie_mask);
+enum ofperr nx_pull_match(struct ofpbuf *, unsigned int match_len,
+                          uint16_t priority, struct cls_rule *,
+                          ovs_be64 *cookie, ovs_be64 *cookie_mask);
+enum ofperr nx_pull_match_loose(struct ofpbuf *, unsigned int match_len,
+                                uint16_t priority, struct cls_rule *,
+                                ovs_be64 *cookie, ovs_be64 *cookie_mask);
 int nx_put_match(struct ofpbuf *, const struct cls_rule *,
                  ovs_be64 cookie, ovs_be64 cookie_mask);
 
@@ -55,11 +57,12 @@ void nxm_format_reg_move(const struct nx_action_reg_move *, struct ds *);
 void nxm_format_reg_load(const struct nx_action_reg_load *, struct ds *);
 
 int nxm_check_reg_move(const struct nx_action_reg_move *, const struct flow *);
-int nxm_check_reg_load(const struct nx_action_reg_load *, const struct flow *);
-int nxm_src_check(ovs_be32 src, unsigned int ofs, unsigned int n_bits,
-                  const struct flow *);
-int nxm_dst_check(ovs_be32 dst, unsigned int ofs, unsigned int n_bits,
-                  const struct flow *);
+enum ofperr nxm_check_reg_load(const struct nx_action_reg_load *,
+                               const struct flow *);
+enum ofperr nxm_src_check(ovs_be32 src, unsigned int ofs, unsigned int n_bits,
+                          const struct flow *);
+enum ofperr nxm_dst_check(ovs_be32 dst, unsigned int ofs, unsigned int n_bits,
+                          const struct flow *);
 
 void nxm_execute_reg_move(const struct nx_action_reg_move *, struct flow *);
 void nxm_execute_reg_load(const struct nx_action_reg_load *, struct flow *);

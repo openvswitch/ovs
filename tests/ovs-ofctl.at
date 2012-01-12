@@ -394,7 +394,7 @@ NXM_OF_IN_PORT(0012), NXM_OF_ETH_TYPE(0800)
 
 # vlan tci
 NXM_OF_VLAN_TCI(f009)
-nx_pull_match() returned error 44010105 (type OFPET_BAD_REQUEST, code NXBRC_NXM_DUP_TYPE)
+nx_pull_match() returned error NXBRC_NXM_DUP_TYPE
 NXM_OF_VLAN_TCI(0000)
 NXM_OF_VLAN_TCI(3123)
 NXM_OF_VLAN_TCI(0123)
@@ -404,114 +404,114 @@ NXM_OF_VLAN_TCI_W(0000/e000)
 
 # IP TOS
 NXM_OF_ETH_TYPE(0800), NXM_OF_IP_TOS(f0)
-nx_pull_match() returned error 44010102 (type OFPET_BAD_REQUEST, code NXBRC_NXM_BAD_VALUE)
-nx_pull_match() returned error 44010104 (type OFPET_BAD_REQUEST, code NXBRC_NXM_BAD_PREREQ)
+nx_pull_match() returned error NXBRC_NXM_BAD_VALUE
+nx_pull_match() returned error NXBRC_NXM_BAD_PREREQ
 
 # IP ECN
 NXM_OF_ETH_TYPE(0800), NXM_NX_IP_ECN(03)
-nx_pull_match() returned error 44010102 (type OFPET_BAD_REQUEST, code NXBRC_NXM_BAD_VALUE)
-nx_pull_match() returned error 44010104 (type OFPET_BAD_REQUEST, code NXBRC_NXM_BAD_PREREQ)
+nx_pull_match() returned error NXBRC_NXM_BAD_VALUE
+nx_pull_match() returned error NXBRC_NXM_BAD_PREREQ
 
 # IP protocol
 NXM_OF_ETH_TYPE(0800), NXM_OF_IP_PROTO(01)
 NXM_OF_ETH_TYPE(0800), NXM_OF_IP_PROTO(05)
-nx_pull_match() returned error 44010104 (type OFPET_BAD_REQUEST, code NXBRC_NXM_BAD_PREREQ)
+nx_pull_match() returned error NXBRC_NXM_BAD_PREREQ
 
 # IP TTL
 NXM_OF_ETH_TYPE(0800), NXM_NX_IP_TTL(80)
 NXM_OF_ETH_TYPE(86dd), NXM_NX_IP_TTL(ff)
-nx_pull_match() returned error 44010104 (type OFPET_BAD_REQUEST, code NXBRC_NXM_BAD_PREREQ)
+nx_pull_match() returned error NXBRC_NXM_BAD_PREREQ
 
 # IP source
 NXM_OF_ETH_TYPE(0800), NXM_OF_IP_SRC(ac100014)
 NXM_OF_ETH_TYPE(0800), NXM_OF_IP_SRC_W(c0a80000/ffff0000)
-nx_pull_match() returned error 44010104 (type OFPET_BAD_REQUEST, code NXBRC_NXM_BAD_PREREQ)
-nx_pull_match() returned error 44010104 (type OFPET_BAD_REQUEST, code NXBRC_NXM_BAD_PREREQ)
+nx_pull_match() returned error NXBRC_NXM_BAD_PREREQ
+nx_pull_match() returned error NXBRC_NXM_BAD_PREREQ
 
 # IP destination
 NXM_OF_ETH_TYPE(0800), NXM_OF_IP_DST(ac100014)
 NXM_OF_ETH_TYPE(0800), NXM_OF_IP_DST_W(c0a80000/ffff0000)
-nx_pull_match() returned error 44010104 (type OFPET_BAD_REQUEST, code NXBRC_NXM_BAD_PREREQ)
-nx_pull_match() returned error 44010104 (type OFPET_BAD_REQUEST, code NXBRC_NXM_BAD_PREREQ)
+nx_pull_match() returned error NXBRC_NXM_BAD_PREREQ
+nx_pull_match() returned error NXBRC_NXM_BAD_PREREQ
 
 # TCP source port
 NXM_OF_ETH_TYPE(0800), NXM_OF_IP_PROTO(06), NXM_OF_TCP_SRC(4231)
-nx_pull_match() returned error 44010104 (type OFPET_BAD_REQUEST, code NXBRC_NXM_BAD_PREREQ)
+nx_pull_match() returned error NXBRC_NXM_BAD_PREREQ
 
 # TCP destination port
 NXM_OF_ETH_TYPE(0800), NXM_OF_IP_PROTO(06), NXM_OF_TCP_DST(4231)
-nx_pull_match() returned error 44010104 (type OFPET_BAD_REQUEST, code NXBRC_NXM_BAD_PREREQ)
+nx_pull_match() returned error NXBRC_NXM_BAD_PREREQ
 
 # UDP source port
 NXM_OF_ETH_TYPE(0800), NXM_OF_IP_PROTO(11), NXM_OF_UDP_SRC(8732)
-nx_pull_match() returned error 44010104 (type OFPET_BAD_REQUEST, code NXBRC_NXM_BAD_PREREQ)
+nx_pull_match() returned error NXBRC_NXM_BAD_PREREQ
 
 # UDP destination port
 NXM_OF_ETH_TYPE(0800), NXM_OF_IP_PROTO(11), NXM_OF_UDP_DST(1782)
-nx_pull_match() returned error 44010104 (type OFPET_BAD_REQUEST, code NXBRC_NXM_BAD_PREREQ)
+nx_pull_match() returned error NXBRC_NXM_BAD_PREREQ
 
 # ICMP type
 NXM_OF_ETH_TYPE(0800), NXM_OF_IP_PROTO(01), NXM_OF_ICMP_TYPE(12)
-nx_pull_match() returned error 44010104 (type OFPET_BAD_REQUEST, code NXBRC_NXM_BAD_PREREQ)
+nx_pull_match() returned error NXBRC_NXM_BAD_PREREQ
 
 # ICMP code
 NXM_OF_ETH_TYPE(0800), NXM_OF_IP_PROTO(01), NXM_OF_ICMP_CODE(12)
-nx_pull_match() returned error 44010104 (type OFPET_BAD_REQUEST, code NXBRC_NXM_BAD_PREREQ)
-nx_pull_match() returned error 44010104 (type OFPET_BAD_REQUEST, code NXBRC_NXM_BAD_PREREQ)
-nx_pull_match() returned error 44010104 (type OFPET_BAD_REQUEST, code NXBRC_NXM_BAD_PREREQ)
+nx_pull_match() returned error NXBRC_NXM_BAD_PREREQ
+nx_pull_match() returned error NXBRC_NXM_BAD_PREREQ
+nx_pull_match() returned error NXBRC_NXM_BAD_PREREQ
 
 # ARP opcode
 NXM_OF_ETH_TYPE(0806), NXM_OF_ARP_OP(0001)
-nx_pull_match() returned error 44010102 (type OFPET_BAD_REQUEST, code NXBRC_NXM_BAD_VALUE)
-nx_pull_match() returned error 44010104 (type OFPET_BAD_REQUEST, code NXBRC_NXM_BAD_PREREQ)
-nx_pull_match() returned error 44010104 (type OFPET_BAD_REQUEST, code NXBRC_NXM_BAD_PREREQ)
-nx_pull_match() returned error 44010105 (type OFPET_BAD_REQUEST, code NXBRC_NXM_DUP_TYPE)
+nx_pull_match() returned error NXBRC_NXM_BAD_VALUE
+nx_pull_match() returned error NXBRC_NXM_BAD_PREREQ
+nx_pull_match() returned error NXBRC_NXM_BAD_PREREQ
+nx_pull_match() returned error NXBRC_NXM_DUP_TYPE
 
 # ARP source protocol address
 NXM_OF_ETH_TYPE(0806), NXM_OF_ARP_SPA(ac100014)
 NXM_OF_ETH_TYPE(0806), NXM_OF_ARP_SPA_W(c0a81200/ffffff00)
-nx_pull_match() returned error 44010104 (type OFPET_BAD_REQUEST, code NXBRC_NXM_BAD_PREREQ)
-nx_pull_match() returned error 44010104 (type OFPET_BAD_REQUEST, code NXBRC_NXM_BAD_PREREQ)
+nx_pull_match() returned error NXBRC_NXM_BAD_PREREQ
+nx_pull_match() returned error NXBRC_NXM_BAD_PREREQ
 
 # ARP destination protocol address
 NXM_OF_ETH_TYPE(0806), NXM_OF_ARP_TPA(ac100014)
 NXM_OF_ETH_TYPE(0806), NXM_OF_ARP_TPA_W(c0a81200/ffffff00)
-nx_pull_match() returned error 44010104 (type OFPET_BAD_REQUEST, code NXBRC_NXM_BAD_PREREQ)
-nx_pull_match() returned error 44010104 (type OFPET_BAD_REQUEST, code NXBRC_NXM_BAD_PREREQ)
+nx_pull_match() returned error NXBRC_NXM_BAD_PREREQ
+nx_pull_match() returned error NXBRC_NXM_BAD_PREREQ
 
 # ARP source hardware address
 NXM_OF_ETH_TYPE(0806), NXM_NX_ARP_SHA(0002e30f80a4)
-nx_pull_match() returned error 44010104 (type OFPET_BAD_REQUEST, code NXBRC_NXM_BAD_PREREQ)
-nx_pull_match() returned error 44010104 (type OFPET_BAD_REQUEST, code NXBRC_NXM_BAD_PREREQ)
+nx_pull_match() returned error NXBRC_NXM_BAD_PREREQ
+nx_pull_match() returned error NXBRC_NXM_BAD_PREREQ
 
 # ARP destination hardware address
 NXM_OF_ETH_TYPE(0806), NXM_NX_ARP_THA(0002e30f80a4)
-nx_pull_match() returned error 44010104 (type OFPET_BAD_REQUEST, code NXBRC_NXM_BAD_PREREQ)
-nx_pull_match() returned error 44010104 (type OFPET_BAD_REQUEST, code NXBRC_NXM_BAD_PREREQ)
+nx_pull_match() returned error NXBRC_NXM_BAD_PREREQ
+nx_pull_match() returned error NXBRC_NXM_BAD_PREREQ
 
 # IPv6 source
 NXM_OF_ETH_TYPE(86dd), NXM_NX_IPV6_SRC(20010db83c4d00010002000300040005)
-nx_pull_match() returned error 44010104 (type OFPET_BAD_REQUEST, code NXBRC_NXM_BAD_PREREQ)
+nx_pull_match() returned error NXBRC_NXM_BAD_PREREQ
 NXM_OF_ETH_TYPE(86dd), NXM_NX_IPV6_SRC_W(20010db83c4d00010000000000000000/ffffffffffffffff0000000000000000)
-nx_pull_match() returned error 44010104 (type OFPET_BAD_REQUEST, code NXBRC_NXM_BAD_PREREQ)
+nx_pull_match() returned error NXBRC_NXM_BAD_PREREQ
 
 # IPv6 destination
 NXM_OF_ETH_TYPE(86dd), NXM_NX_IPV6_DST(20010db83c4d00010002000300040005)
-nx_pull_match() returned error 44010104 (type OFPET_BAD_REQUEST, code NXBRC_NXM_BAD_PREREQ)
+nx_pull_match() returned error NXBRC_NXM_BAD_PREREQ
 NXM_OF_ETH_TYPE(86dd), NXM_NX_IPV6_DST_W(20010db83c4d00010000000000000000/ffffffffffffffff0000000000000000)
-nx_pull_match() returned error 44010104 (type OFPET_BAD_REQUEST, code NXBRC_NXM_BAD_PREREQ)
+nx_pull_match() returned error NXBRC_NXM_BAD_PREREQ
 
 # ND source hardware address
 NXM_OF_ETH_TYPE(86dd), NXM_OF_IP_PROTO(3a), NXM_NX_ICMPV6_TYPE(87), NXM_NX_ND_TARGET(20010db83c4d00010002000300040005), NXM_NX_ND_SLL(0002e30f80a4)
-nx_pull_match() returned error 44010104 (type OFPET_BAD_REQUEST, code NXBRC_NXM_BAD_PREREQ)
-nx_pull_match() returned error 44010104 (type OFPET_BAD_REQUEST, code NXBRC_NXM_BAD_PREREQ)
-nx_pull_match() returned error 44010104 (type OFPET_BAD_REQUEST, code NXBRC_NXM_BAD_PREREQ)
+nx_pull_match() returned error NXBRC_NXM_BAD_PREREQ
+nx_pull_match() returned error NXBRC_NXM_BAD_PREREQ
+nx_pull_match() returned error NXBRC_NXM_BAD_PREREQ
 
 # ND destination hardware address
 NXM_OF_ETH_TYPE(86dd), NXM_OF_IP_PROTO(3a), NXM_NX_ICMPV6_TYPE(88), NXM_NX_ND_TARGET(20010db83c4d00010002000300040005), NXM_NX_ND_TLL(0002e30f80a4)
-nx_pull_match() returned error 44010104 (type OFPET_BAD_REQUEST, code NXBRC_NXM_BAD_PREREQ)
-nx_pull_match() returned error 44010104 (type OFPET_BAD_REQUEST, code NXBRC_NXM_BAD_PREREQ)
-nx_pull_match() returned error 44010104 (type OFPET_BAD_REQUEST, code NXBRC_NXM_BAD_PREREQ)
+nx_pull_match() returned error NXBRC_NXM_BAD_PREREQ
+nx_pull_match() returned error NXBRC_NXM_BAD_PREREQ
+nx_pull_match() returned error NXBRC_NXM_BAD_PREREQ
 
 # IPv4 fragments.
 NXM_OF_ETH_TYPE(0800), NXM_NX_IP_FRAG(00)
@@ -524,7 +524,7 @@ NXM_OF_ETH_TYPE(0800), NXM_NX_IP_FRAG_W(00/02)
 NXM_OF_ETH_TYPE(0800), NXM_NX_IP_FRAG_W(01/01)
 NXM_OF_ETH_TYPE(0800), NXM_NX_IP_FRAG_W(02/02)
 NXM_OF_ETH_TYPE(0800), NXM_NX_IP_FRAG(03)
-nx_pull_match() returned error 44010102 (type OFPET_BAD_REQUEST, code NXBRC_NXM_BAD_VALUE)
+nx_pull_match() returned error NXBRC_NXM_BAD_VALUE
 
 # IPv6 fragments.
 NXM_OF_ETH_TYPE(86dd), NXM_NX_IP_FRAG(00)
@@ -537,7 +537,7 @@ NXM_OF_ETH_TYPE(86dd), NXM_NX_IP_FRAG_W(00/02)
 NXM_OF_ETH_TYPE(86dd), NXM_NX_IP_FRAG_W(01/01)
 NXM_OF_ETH_TYPE(86dd), NXM_NX_IP_FRAG_W(02/02)
 NXM_OF_ETH_TYPE(86dd), NXM_NX_IP_FRAG(03)
-nx_pull_match() returned error 44010102 (type OFPET_BAD_REQUEST, code NXBRC_NXM_BAD_VALUE)
+nx_pull_match() returned error NXBRC_NXM_BAD_VALUE
 
 # Flow cookie.
 NXM_NX_COOKIE(00000000abcdef01)
@@ -552,7 +552,7 @@ NXM_NX_REG0(acebdf56)
 NXM_NX_REG0_W(a0e0d050/f0f0f0f0)
 
 # Invalid field number.
-nx_pull_match() returned error 44010101 (type OFPET_BAD_REQUEST, code NXBRC_NXM_BAD_TYPE)
+nx_pull_match() returned error NXBRC_NXM_BAD_TYPE
 
 # Unimplemented registers.
 #
@@ -560,8 +560,8 @@ nx_pull_match() returned error 44010101 (type OFPET_BAD_REQUEST, code NXBRC_NXM_
 # registers are implemented.
 NXM_NX_REG0(12345678)
 NXM_NX_REG0_W(12345678/12345678)
-nx_pull_match() returned error 44010101 (type OFPET_BAD_REQUEST, code NXBRC_NXM_BAD_TYPE)
-nx_pull_match() returned error 44010101 (type OFPET_BAD_REQUEST, code NXBRC_NXM_BAD_TYPE)
+nx_pull_match() returned error NXBRC_NXM_BAD_TYPE
+nx_pull_match() returned error NXBRC_NXM_BAD_TYPE
 ])
 AT_CLEANUP
 
@@ -572,7 +572,7 @@ NXM_OF_IN_PORT(0001), 01020304(1111/2222), NXM_OF_ETH_TYPE(0800)
 ])
 
 AT_CHECK([ovs-ofctl --strict parse-nx-match < nx-match.txt], [0], [dnl
-nx_pull_match() returned error 44010101 (type OFPET_BAD_REQUEST, code NXBRC_NXM_BAD_TYPE)
+nx_pull_match() returned error NXBRC_NXM_BAD_TYPE
 ])
 
 AT_CHECK([ovs-ofctl parse-nx-match < nx-match.txt], [0], [dnl

@@ -23,6 +23,7 @@
 #include "cfm.h"
 #include "classifier.h"
 #include "list.h"
+#include "ofp-errors.h"
 #include "shash.h"
 #include "timeval.h"
 
@@ -140,7 +141,7 @@ rule_from_cls_rule(const struct cls_rule *cls_rule)
 void ofproto_rule_expire(struct rule *, uint8_t reason);
 void ofproto_rule_destroy(struct rule *);
 
-void ofoperation_complete(struct ofoperation *, int status);
+void ofoperation_complete(struct ofoperation *, enum ofperr);
 struct rule *ofoperation_get_victim(struct ofoperation *);
 
 /* ofproto class structure, to be defined by each ofproto implementation.
@@ -235,7 +236,7 @@ struct rule *ofoperation_get_victim(struct ofoperation *);
  *
  * Most of these functions return 0 if they are successful or a positive error
  * code on failure.  Depending on the function, valid error codes are either
- * errno values or OpenFlow error codes constructed with ofp_mkerr().
+ * errno values or OFPERR_* OpenFlow error codes.
  *
  * Most of these functions are expected to execute synchronously, that is, to
  * block as necessary to obtain a result.  Thus, these functions may return
@@ -624,7 +625,7 @@ struct ofproto_class {
 
     /* Chooses an appropriate table for 'cls_rule' within 'ofproto'.  On
      * success, stores the table ID into '*table_idp' and returns 0.  On
-     * failure, returns an OpenFlow error code (as returned by ofp_mkerr()).
+     * failure, returns an OpenFlow error code.
      *
      * The choice of table should be a function of 'cls_rule' and 'ofproto''s
      * datapath capabilities.  It should not depend on the flows already in
@@ -636,9 +637,9 @@ struct ofproto_class {
      * should choose one arbitrarily (but deterministically).
      *
      * If this function is NULL then table 0 is always chosen. */
-    int (*rule_choose_table)(const struct ofproto *ofproto,
-                             const struct cls_rule *cls_rule,
-                             uint8_t *table_idp);
+    enum ofperr (*rule_choose_table)(const struct ofproto *ofproto,
+                                     const struct cls_rule *cls_rule,
+                                     uint8_t *table_idp);
 
     /* Life-cycle functions for a "struct rule" (see "Life Cycle" above).
      *
@@ -749,8 +750,8 @@ struct ofproto_class {
      *
      *       * Call ofoperation_complete() and return 0.
      *
-     *       * Return an OpenFlow error code (as returned by ofp_mkerr()).  (Do
-     *         not call ofoperation_complete() in this case.)
+     *       * Return an OpenFlow error code.  (Do not call
+     *         ofoperation_complete() in this case.)
      *
      *     Either way, ->rule_destruct() will not be called for 'rule', but
      *     ->rule_dealloc() will be.
@@ -775,7 +776,7 @@ struct ofproto_class {
      *
      * Rule destruction must not fail. */
     struct rule *(*rule_alloc)(void);
-    int (*rule_construct)(struct rule *rule);
+    enum ofperr (*rule_construct)(struct rule *rule);
     void (*rule_destruct)(struct rule *rule);
     void (*rule_dealloc)(struct rule *rule);
 
@@ -799,10 +800,9 @@ struct ofproto_class {
      *
      * The statistics for 'packet' should be included in 'rule'.
      *
-     * Returns 0 if successful, otherwise an OpenFlow error code (as returned
-     * by ofp_mkerr()). */
-    int (*rule_execute)(struct rule *rule, const struct flow *flow,
-                        struct ofpbuf *packet);
+     * Returns 0 if successful, otherwise an OpenFlow error code. */
+    enum ofperr (*rule_execute)(struct rule *rule, const struct flow *flow,
+                                struct ofpbuf *packet);
 
     /* When ->rule_modify_actions() is called, the caller has already replaced
      * the OpenFlow actions in 'rule' by a new set.  (The original actions are
@@ -866,8 +866,7 @@ struct ofproto_class {
      *
      * This function must validate that the 'n_actions' elements in 'actions'
      * are well-formed OpenFlow actions that can be correctly implemented by
-     * the datapath.  If not, then it should return an OpenFlow error code (as
-     * returned by ofp_mkerr()).
+     * the datapath.  If not, then it should return an OpenFlow error code.
      *
      * 'flow' reflects the flow information for 'packet'.  All of the
      * information in 'flow' is extracted from 'packet', except for
@@ -877,12 +876,11 @@ struct ofproto_class {
      * 'packet' is not matched against the OpenFlow flow table, so its
      * statistics should not be included in OpenFlow flow statistics.
      *
-     * Returns 0 if successful, otherwise an OpenFlow error code (as returned
-     * by ofp_mkerr()). */
-    int (*packet_out)(struct ofproto *ofproto, struct ofpbuf *packet,
-                      const struct flow *flow,
-                      const union ofp_action *actions,
-                      size_t n_actions);
+     * Returns 0 if successful, otherwise an OpenFlow error code. */
+    enum ofperr (*packet_out)(struct ofproto *ofproto, struct ofpbuf *packet,
+                              const struct flow *flow,
+                              const union ofp_action *actions,
+                              size_t n_actions);
 
 /* ## ------------------------- ## */
 /* ## OFPP_NORMAL configuration ## */
@@ -1095,10 +1093,11 @@ int ofproto_class_unregister(const struct ofproto_class *);
  *
  * ofproto.c also uses this value internally for additional (similar) purposes.
  *
- * This particular value is a good choice because it is negative (so it won't
- * collide with any errno value or any value returned by ofp_mkerr()) and large
- * (so it won't accidentally collide with EOF or a negative errno value). */
-enum { OFPROTO_POSTPONE = -100000 };
+ * This particular value is a good choice because it is large, so that it does
+ * not collide with any errno value, but not large enough to collide with an
+ * OFPERR_* value. */
+enum { OFPROTO_POSTPONE = 1 << 16 };
+BUILD_ASSERT_DECL(OFPROTO_POSTPONE < OFPERR_OFS);
 
 int ofproto_flow_mod(struct ofproto *, const struct ofputil_flow_mod *);
 void ofproto_add_flow(struct ofproto *, const struct cls_rule *,

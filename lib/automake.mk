@@ -278,13 +278,12 @@ lib/dirs.c: lib/dirs.c.in Makefile
 	     > lib/dirs.c.tmp
 	mv lib/dirs.c.tmp lib/dirs.c
 
-$(srcdir)/lib/ofp-errors.c: \
-	include/openflow/openflow.h include/openflow/nicira-ext.h \
-	build-aux/extract-ofp-errors
-	cd $(srcdir)/include && \
-	$(PYTHON) ../build-aux/extract-ofp-errors \
-		openflow/openflow.h openflow/nicira-ext.h > ../lib/ofp-errors.c
-EXTRA_DIST += build-aux/extract-ofp-errors
+$(srcdir)/lib/ofp-errors.inc: \
+	lib/ofp-errors.h $(srcdir)/build-aux/extract-ofp-errors
+	$(PYTHON) $(srcdir)/build-aux/extract-ofp-errors \
+		$(srcdir)/lib/ofp-errors.h > $@.tmp && mv $@.tmp $@
+lib/ofp-errors.c: lib/ofp-errors.inc
+EXTRA_DIST += build-aux/extract-ofp-errors lib/ofp-errors.inc
 
 INSTALL_DATA_LOCAL += lib-install-data-local
 lib-install-data-local:

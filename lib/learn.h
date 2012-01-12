@@ -17,6 +17,8 @@
 #ifndef LEARN_H
 #define LEARN_H 1
 
+#include "ofp-errors.h"
+
 struct ds;
 struct flow;
 struct ofpbuf;
@@ -28,7 +30,7 @@ struct nx_action_learn;
  * See include/openflow/nicira-ext.h for NXAST_LEARN specification.
  */
 
-int learn_check(const struct nx_action_learn *, const struct flow *);
+enum ofperr learn_check(const struct nx_action_learn *, const struct flow *);
 void learn_execute(const struct nx_action_learn *, const struct flow *,
                    struct ofputil_flow_mod *);
 

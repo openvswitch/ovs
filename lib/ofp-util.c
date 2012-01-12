@@ -289,10 +289,10 @@ struct ofputil_msg_category {
     const char *name;           /* e.g. "OpenFlow message" */
     const struct ofputil_msg_type *types;
     size_t n_types;
-    int missing_error;          /* ofp_mkerr() value for missing type. */
+    enum ofperr missing_error;  /* Error value for missing type. */
 };
 
-static int
+static enum ofperr
 ofputil_check_length(const struct ofputil_msg_type *type, unsigned int size)
 {
     switch (type->extra_multiple) {
@@ -301,7 +301,7 @@ ofputil_check_length(const struct ofputil_msg_type *type, unsigned int size)
             VLOG_WARN_RL(&bad_ofmsg_rl, "received %s with incorrect "
                          "length %u (expected length %u)",
                          type->name, size, type->min_size);
-            return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
+            return OFPERR_OFPBRC_BAD_LEN;
         }
         return 0;
 
@@ -310,7 +310,7 @@ ofputil_check_length(const struct ofputil_msg_type *type, unsigned int size)
             VLOG_WARN_RL(&bad_ofmsg_rl, "received %s with incorrect "
                          "length %u (expected length at least %u bytes)",
                          type->name, size, type->min_size);
-            return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
+            return OFPERR_OFPBRC_BAD_LEN;
         }
         return 0;
 
@@ -322,13 +322,13 @@ ofputil_check_length(const struct ofputil_msg_type *type, unsigned int size)
                          "by an integer multiple of %u bytes)",
                          type->name, size,
                          type->min_size, type->extra_multiple);
-            return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
+            return OFPERR_OFPBRC_BAD_LEN;
         }
         return 0;
     }
 }
 
-static int
+static enum ofperr
 ofputil_lookup_openflow_message(const struct ofputil_msg_category *cat,
                                 uint8_t version, uint32_t value,
                                 const struct ofputil_msg_type **typep)
@@ -348,7 +348,7 @@ ofputil_lookup_openflow_message(const struct ofputil_msg_category *cat,
     return cat->missing_error;
 }
 
-static int
+static enum ofperr
 ofputil_decode_vendor(const struct ofp_header *oh, size_t length,
                       const struct ofputil_msg_type **typep)
 {
@@ -389,7 +389,7 @@ ofputil_decode_vendor(const struct ofp_header *oh, size_t length,
     static const struct ofputil_msg_category nxt_category = {
         "Nicira extension message",
         nxt_messages, ARRAY_SIZE(nxt_messages),
-        OFP_MKERR(OFPET_BAD_REQUEST, OFPBRC_BAD_SUBTYPE)
+        OFPERR_OFPBRC_BAD_SUBTYPE
     };
 
     const struct ofp_vendor_header *ovh;
@@ -399,14 +399,14 @@ ofputil_decode_vendor(const struct ofp_header *oh, size_t length,
         if (length == ntohs(oh->length)) {
             VLOG_WARN_RL(&bad_ofmsg_rl, "truncated vendor message");
         }
-        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
+        return OFPERR_OFPBRC_BAD_LEN;
     }
 
     ovh = (const struct ofp_vendor_header *) oh;
     if (ovh->vendor != htonl(NX_VENDOR_ID)) {
         VLOG_WARN_RL(&bad_ofmsg_rl, "received vendor message for unknown "
                      "vendor %"PRIx32, ntohl(ovh->vendor));
-        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_VENDOR);
+        return OFPERR_OFPBRC_BAD_VENDOR;
     }
 
     if (length < sizeof(struct nicira_header)) {
@@ -416,7 +416,7 @@ ofputil_decode_vendor(const struct ofp_header *oh, size_t length,
                          ntohs(ovh->header.length),
                          sizeof(struct nicira_header));
         }
-        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
+        return OFPERR_OFPBRC_BAD_LEN;
     }
 
     nh = (const struct nicira_header *) oh;
@@ -424,7 +424,7 @@ ofputil_decode_vendor(const struct ofp_header *oh, size_t length,
                                            ntohl(nh->subtype), typep);
 }
 
-static int
+static enum ofperr
 check_nxstats_msg(const struct ofp_header *oh, size_t length)
 {
     const struct ofp_stats_msg *osm = (const struct ofp_stats_msg *) oh;
@@ -434,27 +434,27 @@ check_nxstats_msg(const struct ofp_header *oh, size_t length)
         if (length == ntohs(oh->length)) {
             VLOG_WARN_RL(&bad_ofmsg_rl, "truncated vendor stats message");
         }
-        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
+        return OFPERR_OFPBRC_BAD_LEN;
     }
 
     memcpy(&vendor, osm + 1, sizeof vendor);
     if (vendor != htonl(NX_VENDOR_ID)) {
         VLOG_WARN_RL(&bad_ofmsg_rl, "received vendor stats message for "
                      "unknown vendor %"PRIx32, ntohl(vendor));
-        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_VENDOR);
+        return OFPERR_OFPBRC_BAD_VENDOR;
     }
 
     if (length < sizeof(struct nicira_stats_msg)) {
         if (length == ntohs(osm->header.length)) {
             VLOG_WARN_RL(&bad_ofmsg_rl, "truncated Nicira stats message");
         }
-        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
+        return OFPERR_OFPBRC_BAD_LEN;
     }
 
     return 0;
 }
 
-static int
+static enum ofperr
 ofputil_decode_nxst_request(const struct ofp_header *oh, size_t length,
                             const struct ofputil_msg_type **typep)
 {
@@ -471,11 +471,11 @@ ofputil_decode_nxst_request(const struct ofp_header *oh, size_t length,
     static const struct ofputil_msg_category nxst_request_category = {
         "Nicira extension statistics request",
         nxst_requests, ARRAY_SIZE(nxst_requests),
-        OFP_MKERR(OFPET_BAD_REQUEST, OFPBRC_BAD_SUBTYPE)
+        OFPERR_OFPBRC_BAD_SUBTYPE
     };
 
     const struct nicira_stats_msg *nsm;
-    int error;
+    enum ofperr error;
 
     error = check_nxstats_msg(oh, length);
     if (error) {
@@ -487,7 +487,7 @@ ofputil_decode_nxst_request(const struct ofp_header *oh, size_t length,
                                            ntohl(nsm->subtype), typep);
 }
 
-static int
+static enum ofperr
 ofputil_decode_nxst_reply(const struct ofp_header *oh, size_t length,
                           const struct ofputil_msg_type **typep)
 {
@@ -504,11 +504,11 @@ ofputil_decode_nxst_reply(const struct ofp_header *oh, size_t length,
     static const struct ofputil_msg_category nxst_reply_category = {
         "Nicira extension statistics reply",
         nxst_replies, ARRAY_SIZE(nxst_replies),
-        OFP_MKERR(OFPET_BAD_REQUEST, OFPBRC_BAD_SUBTYPE)
+        OFPERR_OFPBRC_BAD_SUBTYPE
     };
 
     const struct nicira_stats_msg *nsm;
-    int error;
+    enum ofperr error;
 
     error = check_nxstats_msg(oh, length);
     if (error) {
@@ -520,20 +520,20 @@ ofputil_decode_nxst_reply(const struct ofp_header *oh, size_t length,
                                            ntohl(nsm->subtype), typep);
 }
 
-static int
+static enum ofperr
 check_stats_msg(const struct ofp_header *oh, size_t length)
 {
     if (length < sizeof(struct ofp_stats_msg)) {
         if (length == ntohs(oh->length)) {
             VLOG_WARN_RL(&bad_ofmsg_rl, "truncated stats message");
         }
-        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
+        return OFPERR_OFPBRC_BAD_LEN;
     }
 
     return 0;
 }
 
-static int
+static enum ofperr
 ofputil_decode_ofpst_request(const struct ofp_header *oh, size_t length,
                              const struct ofputil_msg_type **typep)
 {
@@ -570,11 +570,11 @@ ofputil_decode_ofpst_request(const struct ofp_header *oh, size_t length,
     static const struct ofputil_msg_category ofpst_request_category = {
         "OpenFlow statistics",
         ofpst_requests, ARRAY_SIZE(ofpst_requests),
-        OFP_MKERR(OFPET_BAD_REQUEST, OFPBRC_BAD_STAT)
+        OFPERR_OFPBRC_BAD_STAT
     };
 
     const struct ofp_stats_msg *request = (const struct ofp_stats_msg *) oh;
-    int error;
+    enum ofperr error;
 
     error = check_stats_msg(oh, length);
     if (error) {
@@ -590,7 +590,7 @@ ofputil_decode_ofpst_request(const struct ofp_header *oh, size_t length,
     return error;
 }
 
-static int
+static enum ofperr
 ofputil_decode_ofpst_reply(const struct ofp_header *oh, size_t length,
                            const struct ofputil_msg_type **typep)
 {
@@ -627,11 +627,11 @@ ofputil_decode_ofpst_reply(const struct ofp_header *oh, size_t length,
     static const struct ofputil_msg_category ofpst_reply_category = {
         "OpenFlow statistics",
         ofpst_replies, ARRAY_SIZE(ofpst_replies),
-        OFP_MKERR(OFPET_BAD_REQUEST, OFPBRC_BAD_STAT)
+        OFPERR_OFPBRC_BAD_STAT
     };
 
     const struct ofp_stats_msg *reply = (const struct ofp_stats_msg *) oh;
-    int error;
+    enum ofperr error;
 
     error = check_stats_msg(oh, length);
     if (error) {
@@ -646,7 +646,7 @@ ofputil_decode_ofpst_reply(const struct ofp_header *oh, size_t length,
     return error;
 }
 
-static int
+static enum ofperr
 ofputil_decode_msg_type__(const struct ofp_header *oh, size_t length,
                           const struct ofputil_msg_type **typep)
 {
@@ -655,7 +655,7 @@ ofputil_decode_msg_type__(const struct ofp_header *oh, size_t length,
           OFPT_HELLO, "OFPT_HELLO",
           sizeof(struct ofp_hello), 1 },
 
-        { OFPUTIL_OFPT_ERROR, OFP10_VERSION,
+        { OFPUTIL_OFPT_ERROR, 0,
           OFPT_ERROR, "OFPT_ERROR",
           sizeof(struct ofp_error_msg), 1 },
 
@@ -735,10 +735,10 @@ ofputil_decode_msg_type__(const struct ofp_header *oh, size_t length,
     static const struct ofputil_msg_category ofpt_category = {
         "OpenFlow message",
         ofpt_messages, ARRAY_SIZE(ofpt_messages),
-        OFP_MKERR(OFPET_BAD_REQUEST, OFPBRC_BAD_TYPE)
+        OFPERR_OFPBRC_BAD_TYPE
     };
 
-    int error;
+    enum ofperr error;
 
     error = ofputil_lookup_openflow_message(&ofpt_category, oh->version,
                                             oh->type, typep);
@@ -762,22 +762,21 @@ ofputil_decode_msg_type__(const struct ofp_header *oh, size_t length,
     return error;
 }
 
-/* Decodes the message type represented by 'oh'.  Returns 0 if successful or
- * an OpenFlow error code constructed with ofp_mkerr() on failure.  Either
- * way, stores in '*typep' a type structure that can be inspected with the
- * ofputil_msg_type_*() functions.
+/* Decodes the message type represented by 'oh'.  Returns 0 if successful or an
+ * OpenFlow error code on failure.  Either way, stores in '*typep' a type
+ * structure that can be inspected with the ofputil_msg_type_*() functions.
  *
  * oh->length must indicate the correct length of the message (and must be at
  * least sizeof(struct ofp_header)).
  *
  * Success indicates that 'oh' is at least as long as the minimum-length
  * message of its type. */
-int
+enum ofperr
 ofputil_decode_msg_type(const struct ofp_header *oh,
                         const struct ofputil_msg_type **typep)
 {
     size_t length = ntohs(oh->length);
-    int error;
+    enum ofperr error;
 
     error = ofputil_decode_msg_type__(oh, length, typep);
     if (!error) {
@@ -791,18 +790,17 @@ ofputil_decode_msg_type(const struct ofp_header *oh,
 
 /* Decodes the message type represented by 'oh', of which only the first
  * 'length' bytes are available.  Returns 0 if successful or an OpenFlow error
- * code constructed with ofp_mkerr() on failure.  Either way, stores in
- * '*typep' a type structure that can be inspected with the
- * ofputil_msg_type_*() functions.  */
-int
+ * code on failure.  Either way, stores in '*typep' a type structure that can
+ * be inspected with the ofputil_msg_type_*() functions.  */
+enum ofperr
 ofputil_decode_msg_type_partial(const struct ofp_header *oh, size_t length,
                                 const struct ofputil_msg_type **typep)
 {
-    int error;
+    enum ofperr error;
 
     error = (length >= sizeof *oh
              ? ofputil_decode_msg_type__(oh, length, typep)
-             : ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN));
+             : OFPERR_OFPBRC_BAD_LEN);
     if (error) {
         *typep = &ofputil_invalid_type;
     }
@@ -1005,7 +1003,7 @@ ofputil_make_flow_mod_table_id(bool flow_mod_table_id)
  * enabled, false otherwise.
  *
  * Does not validate the flow_mod actions. */
-int
+enum ofperr
 ofputil_decode_flow_mod(struct ofputil_flow_mod *fm,
                         const struct ofp_header *oh, bool flow_mod_table_id)
 {
@@ -1020,7 +1018,7 @@ ofputil_decode_flow_mod(struct ofputil_flow_mod *fm,
         /* Standard OpenFlow flow_mod. */
         const struct ofp_flow_mod *ofm;
         uint16_t priority;
-        int error;
+        enum ofperr error;
 
         /* Dissect the message. */
         ofm = ofpbuf_pull(&b, sizeof *ofm);
@@ -1054,7 +1052,7 @@ ofputil_decode_flow_mod(struct ofputil_flow_mod *fm,
     } else if (ofputil_msg_type_code(type) == OFPUTIL_NXT_FLOW_MOD) {
         /* Nicira extended flow_mod. */
         const struct nx_flow_mod *nfm;
-        int error;
+        enum ofperr error;
 
         /* Dissect the message. */
         nfm = ofpbuf_pull(&b, sizeof *nfm);
@@ -1075,7 +1073,7 @@ ofputil_decode_flow_mod(struct ofputil_flow_mod *fm,
                 /* The "NXM_NX_COOKIE*" matches are not valid for flow
                  * additions.  Additions must use the "cookie" field of
                  * the "nx_flow_mod" structure. */
-                return ofp_mkerr(OFPET_BAD_REQUEST, NXBRC_NXM_INVALID);
+                return OFPERR_NXBRC_NXM_INVALID;
             } else {
                 fm->cookie = nfm->cookie;
                 fm->cookie_mask = htonll(UINT64_MAX);
@@ -1165,7 +1163,7 @@ ofputil_encode_flow_mod(const struct ofputil_flow_mod *fm,
     return msg;
 }
 
-static int
+static enum ofperr
 ofputil_decode_ofpst_flow_request(struct ofputil_flow_stats_request *fsr,
                                   const struct ofp_header *oh,
                                   bool aggregate)
@@ -1182,14 +1180,14 @@ ofputil_decode_ofpst_flow_request(struct ofputil_flow_stats_request *fsr,
     return 0;
 }
 
-static int
+static enum ofperr
 ofputil_decode_nxst_flow_request(struct ofputil_flow_stats_request *fsr,
                                  const struct ofp_header *oh,
                                  bool aggregate)
 {
     const struct nx_flow_stats_request *nfsr;
     struct ofpbuf b;
-    int error;
+    enum ofperr error;
 
     ofpbuf_use_const(&b, oh, ntohs(oh->length));
 
@@ -1200,7 +1198,7 @@ ofputil_decode_nxst_flow_request(struct ofputil_flow_stats_request *fsr,
         return error;
     }
     if (b.size) {
-        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
+        return OFPERR_OFPBRC_BAD_LEN;
     }
 
     fsr->aggregate = aggregate;
@@ -1213,7 +1211,7 @@ ofputil_decode_nxst_flow_request(struct ofputil_flow_stats_request *fsr,
 /* Converts an OFPST_FLOW, OFPST_AGGREGATE, NXST_FLOW, or NXST_AGGREGATE
  * request 'oh', into an abstract flow_stats_request in 'fsr'.  Returns 0 if
  * successful, otherwise an OpenFlow error code. */
-int
+enum ofperr
 ofputil_decode_flow_stats_request(struct ofputil_flow_stats_request *fsr,
                                   const struct ofp_header *oh)
 {
@@ -1499,7 +1497,7 @@ ofputil_encode_aggregate_stats_reply(
 /* Converts an OFPT_FLOW_REMOVED or NXT_FLOW_REMOVED message 'oh' into an
  * abstract ofputil_flow_removed in 'fr'.  Returns 0 if successful, otherwise
  * an OpenFlow error code. */
-int
+enum ofperr
 ofputil_decode_flow_removed(struct ofputil_flow_removed *fr,
                             const struct ofp_header *oh)
 {
@@ -1535,7 +1533,7 @@ ofputil_decode_flow_removed(struct ofputil_flow_removed *fr,
             return error;
         }
         if (b.size) {
-            return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
+            return OFPERR_OFPBRC_BAD_LEN;
         }
 
         fr->cookie = nfr->cookie;
@@ -1637,7 +1635,7 @@ ofputil_decode_packet_in(struct ofputil_packet_in *pin,
         }
 
         if (!ofpbuf_try_pull(&b, 2)) {
-            return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
+            return OFPERR_OFPBRC_BAD_LEN;
         }
 
         pin->packet = b.data;
@@ -2225,8 +2223,8 @@ ofputil_frag_handling_from_string(const char *s, enum ofp_config_flags *flags)
 
 /* Checks that 'port' is a valid output port for the OFPAT_OUTPUT action, given
  * that the switch will never have more than 'max_ports' ports.  Returns 0 if
- * 'port' is valid, otherwise an ofp_mkerr() return code. */
-int
+ * 'port' is valid, otherwise an OpenFlow return code. */
+enum ofperr
 ofputil_check_output_port(uint16_t port, int max_ports)
 {
     switch (port) {
@@ -2243,7 +2241,7 @@ ofputil_check_output_port(uint16_t port, int max_ports)
         if (port < max_ports) {
             return 0;
         }
-        return ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_OUT_PORT);
+        return OFPERR_OFPBAC_BAD_OUT_PORT;
     }
 }
 
@@ -2309,16 +2307,16 @@ ofputil_format_port(uint16_t port, struct ds *s)
     ds_put_cstr(s, name);
 }
 
-static int
+static enum ofperr
 check_resubmit_table(const struct nx_action_resubmit *nar)
 {
     if (nar->pad[0] || nar->pad[1] || nar->pad[2]) {
-        return ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_ARGUMENT);
+        return OFPERR_OFPBAC_BAD_ARGUMENT;
     }
     return 0;
 }
 
-static int
+static enum ofperr
 check_output_reg(const struct nx_action_output_reg *naor,
                  const struct flow *flow)
 {
@@ -2326,7 +2324,7 @@ check_output_reg(const struct nx_action_output_reg *naor,
 
     for (i = 0; i < sizeof naor->zero; i++) {
         if (naor->zero[i]) {
-            return ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_ARGUMENT);
+            return OFPERR_OFPBAC_BAD_ARGUMENT;
         }
     }
 
@@ -2334,7 +2332,7 @@ check_output_reg(const struct nx_action_output_reg *naor,
                          nxm_decode_n_bits(naor->ofs_nbits), flow);
 }
 
-int
+enum ofperr
 validate_actions(const union ofp_action *actions, size_t n_actions,
                  const struct flow *flow, int max_ports)
 {
@@ -2342,20 +2340,16 @@ validate_actions(const union ofp_action *actions, size_t n_actions,
     size_t left;
 
     OFPUTIL_ACTION_FOR_EACH (a, left, actions, n_actions) {
+        enum ofperr error;
         uint16_t port;
-        int error;
         int code;
 
         code = ofputil_decode_action(a);
         if (code < 0) {
-            char *msg;
-
             error = -code;
-            msg = ofputil_error_to_string(error);
             VLOG_WARN_RL(&bad_ofmsg_rl,
                          "action decoding error at offset %td (%s)",
-                         (a - actions) * sizeof *a, msg);
-            free(msg);
+                         (a - actions) * sizeof *a, ofperr_get_name(error));
 
             return error;
         }
@@ -2369,13 +2363,13 @@ validate_actions(const union ofp_action *actions, size_t n_actions,
 
         case OFPUTIL_OFPAT_SET_VLAN_VID:
             if (a->vlan_vid.vlan_vid & ~htons(0xfff)) {
-                error = ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_ARGUMENT);
+                error = OFPERR_OFPBAC_BAD_ARGUMENT;
             }
             break;
 
         case OFPUTIL_OFPAT_SET_VLAN_PCP:
             if (a->vlan_pcp.vlan_pcp & ~7) {
-                error = ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_ARGUMENT);
+                error = OFPERR_OFPBAC_BAD_ARGUMENT;
             }
             break;
 
@@ -2383,7 +2377,7 @@ validate_actions(const union ofp_action *actions, size_t n_actions,
             port = ntohs(((const struct ofp_action_enqueue *) a)->port);
             if (port >= max_ports && port != OFPP_IN_PORT
                 && port != OFPP_LOCAL) {
-                error = ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_OUT_PORT);
+                error = OFPERR_OFPBAC_BAD_OUT_PORT;
             }
             break;
 
@@ -2446,17 +2440,15 @@ validate_actions(const union ofp_action *actions, size_t n_actions,
         }
 
         if (error) {
-            char *msg = ofputil_error_to_string(error);
             VLOG_WARN_RL(&bad_ofmsg_rl, "bad action at offset %td (%s)",
-                         (a - actions) * sizeof *a, msg);
-            free(msg);
+                         (a - actions) * sizeof *a, ofperr_get_name(error));
             return error;
         }
     }
     if (left) {
         VLOG_WARN_RL(&bad_ofmsg_rl, "bad action format at offset %zu",
                      (n_actions - left) * sizeof *a);
-        return ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_LEN);
+        return OFPERR_OFPBAC_BAD_LEN;
     }
     return 0;
 }
@@ -2468,11 +2460,11 @@ struct ofputil_action {
 };
 
 static const struct ofputil_action action_bad_type
-    = { -OFP_MKERR(OFPET_BAD_ACTION, OFPBAC_BAD_TYPE),   0, UINT_MAX };
+    = { -OFPERR_OFPBAC_BAD_TYPE,   0, UINT_MAX };
 static const struct ofputil_action action_bad_len
-    = { -OFP_MKERR(OFPET_BAD_ACTION, OFPBAC_BAD_LEN),    0, UINT_MAX };
+    = { -OFPERR_OFPBAC_BAD_LEN,    0, UINT_MAX };
 static const struct ofputil_action action_bad_vendor
-    = { -OFP_MKERR(OFPET_BAD_ACTION, OFPBAC_BAD_VENDOR), 0, UINT_MAX };
+    = { -OFPERR_OFPBAC_BAD_VENDOR, 0, UINT_MAX };
 
 static const struct ofputil_action *
 ofputil_decode_ofpat_action(const union ofp_action *a)
@@ -2523,8 +2515,8 @@ ofputil_decode_nxast_action(const union ofp_action *a)
 }
 
 /* Parses 'a' to determine its type.  Returns a nonnegative OFPUTIL_OFPAT_* or
- * OFPUTIL_NXAST_* constant if successful, otherwise a negative OpenFlow error
- * code (as returned by ofp_mkerr()).
+ * OFPUTIL_NXAST_* constant if successful, otherwise a negative OFPERR_* error
+ * code.
  *
  * The caller must have already verified that 'a''s length is correct (that is,
  * a->header.len is nonzero and a multiple of sizeof(union ofp_action) and no
@@ -2544,7 +2536,7 @@ ofputil_decode_action(const union ofp_action *a)
         switch (ntohl(a->vendor.vendor)) {
         case NX_VENDOR_ID:
             if (len < sizeof(struct nx_action_header)) {
-                return -ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_LEN);
+                return -OFPERR_OFPBAC_BAD_LEN;
             }
             action = ofputil_decode_nxast_action(a);
             break;
@@ -2556,7 +2548,7 @@ ofputil_decode_action(const union ofp_action *a)
 
     return (len >= action->min_len && len <= action->max_len
             ? action->code
-            : -ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_LEN));
+            : -OFPERR_OFPBAC_BAD_LEN);
 }
 
 /* Parses 'a' and returns its type as an OFPUTIL_OFPAT_* or OFPUTIL_NXAST_*
@@ -2783,207 +2775,6 @@ ofputil_normalize_rule(struct cls_rule *rule, enum nx_flow_format flow_format)
     }
 }
 
-static uint32_t
-vendor_code_to_id(uint8_t code)
-{
-    switch (code) {
-#define OFPUTIL_VENDOR(NAME, VENDOR_ID) case NAME: return VENDOR_ID;
-        OFPUTIL_VENDORS
-#undef OFPUTIL_VENDOR
-    default:
-        return UINT32_MAX;
-    }
-}
-
-static int
-vendor_id_to_code(uint32_t id)
-{
-    switch (id) {
-#define OFPUTIL_VENDOR(NAME, VENDOR_ID) case VENDOR_ID: return NAME;
-        OFPUTIL_VENDORS
-#undef OFPUTIL_VENDOR
-    default:
-        return -1;
-    }
-}
-
-/* Creates and returns an OpenFlow message of type OFPT_ERROR with the error
- * information taken from 'error', whose encoding must be as described in the
- * large comment in ofp-util.h.  If 'oh' is nonnull, then the error will use
- * oh->xid as its transaction ID, and it will include up to the first 64 bytes
- * of 'oh'.
- *
- * Returns NULL if 'error' is not an OpenFlow error code. */
-struct ofpbuf *
-ofputil_encode_error_msg(int error, const struct ofp_header *oh)
-{
-    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
-
-    struct ofpbuf *buf;
-    const void *data;
-    size_t len;
-    uint8_t vendor;
-    uint16_t type;
-    uint16_t code;
-    ovs_be32 xid;
-
-    if (!is_ofp_error(error)) {
-        /* We format 'error' with strerror() here since it seems likely to be
-         * a system errno value. */
-        VLOG_WARN_RL(&rl, "invalid OpenFlow error code %d (%s)",
-                     error, strerror(error));
-        return NULL;
-    }
-
-    if (oh) {
-        xid = oh->xid;
-        data = oh;
-        len = ntohs(oh->length);
-        if (len > 64) {
-            len = 64;
-        }
-    } else {
-        xid = 0;
-        data = NULL;
-        len = 0;
-    }
-
-    vendor = get_ofp_err_vendor(error);
-    type = get_ofp_err_type(error);
-    code = get_ofp_err_code(error);
-    if (vendor == OFPUTIL_VENDOR_OPENFLOW) {
-        struct ofp_error_msg *oem;
-
-        oem = make_openflow_xid(len + sizeof *oem, OFPT_ERROR, xid, &buf);
-        oem->type = htons(type);
-        oem->code = htons(code);
-    } else {
-        struct ofp_error_msg *oem;
-        struct nx_vendor_error *nve;
-        uint32_t vendor_id;
-
-        vendor_id = vendor_code_to_id(vendor);
-        if (vendor_id == UINT32_MAX) {
-            VLOG_WARN_RL(&rl, "error %x contains invalid vendor code %d",
-                         error, vendor);
-            return NULL;
-        }
-
-        oem = make_openflow_xid(len + sizeof *oem + sizeof *nve,
-                                OFPT_ERROR, xid, &buf);
-        oem->type = htons(NXET_VENDOR);
-        oem->code = htons(NXVC_VENDOR_ERROR);
-
-        nve = (struct nx_vendor_error *)oem->data;
-        nve->vendor = htonl(vendor_id);
-        nve->type = htons(type);
-        nve->code = htons(code);
-    }
-
-    if (len) {
-        buf->size -= len;
-        ofpbuf_put(buf, data, len);
-    }
-
-    return buf;
-}
-
-/* Decodes 'oh', which should be an OpenFlow OFPT_ERROR message, and returns an
- * Open vSwitch internal error code in the format described in the large
- * comment in ofp-util.h.
- *
- * If 'payload_ofs' is nonnull, on success '*payload_ofs' is set to the offset
- * to the payload starting from 'oh' and on failure it is set to 0. */
-int
-ofputil_decode_error_msg(const struct ofp_header *oh, size_t *payload_ofs)
-{
-    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
-
-    const struct ofp_error_msg *oem;
-    uint16_t type, code;
-    struct ofpbuf b;
-    int vendor;
-
-    if (payload_ofs) {
-        *payload_ofs = 0;
-    }
-    if (oh->type != OFPT_ERROR) {
-        return EPROTO;
-    }
-
-    ofpbuf_use_const(&b, oh, ntohs(oh->length));
-    oem = ofpbuf_try_pull(&b, sizeof *oem);
-    if (!oem) {
-        return EPROTO;
-    }
-
-    type = ntohs(oem->type);
-    code = ntohs(oem->code);
-    if (type == NXET_VENDOR && code == NXVC_VENDOR_ERROR) {
-        const struct nx_vendor_error *nve = ofpbuf_try_pull(&b, sizeof *nve);
-        if (!nve) {
-            return EPROTO;
-        }
-
-        vendor = vendor_id_to_code(ntohl(nve->vendor));
-        if (vendor < 0) {
-            VLOG_WARN_RL(&rl, "error contains unknown vendor ID %#"PRIx32,
-                         ntohl(nve->vendor));
-            return EPROTO;
-        }
-        type = ntohs(nve->type);
-        code = ntohs(nve->code);
-    } else {
-        vendor = OFPUTIL_VENDOR_OPENFLOW;
-    }
-
-    if (type >= 1024) {
-        VLOG_WARN_RL(&rl, "error contains type %"PRIu16" greater than "
-                     "supported maximum value 1023", type);
-        return EPROTO;
-    }
-
-    if (payload_ofs) {
-        *payload_ofs = (uint8_t *) b.data - (uint8_t *) oh;
-    }
-    return ofp_mkerr_vendor(vendor, type, code);
-}
-
-void
-ofputil_format_error(struct ds *s, int error)
-{
-    if (is_errno(error)) {
-        ds_put_cstr(s, strerror(error));
-    } else {
-        uint16_t type = get_ofp_err_type(error);
-        uint16_t code = get_ofp_err_code(error);
-        const char *type_s = ofp_error_type_to_string(type);
-        const char *code_s = ofp_error_code_to_string(type, code);
-
-        ds_put_format(s, "type ");
-        if (type_s) {
-            ds_put_cstr(s, type_s);
-        } else {
-            ds_put_format(s, "%"PRIu16, type);
-        }
-
-        ds_put_cstr(s, ", code ");
-        if (code_s) {
-            ds_put_cstr(s, code_s);
-        } else {
-            ds_put_format(s, "%"PRIu16, code);
-        }
-    }
-}
-
-char *
-ofputil_error_to_string(int error)
-{
-    struct ds s = DS_EMPTY_INITIALIZER;
-    ofputil_format_error(&s, error);
-    return ds_steal_cstr(&s);
-}
-
 /* Attempts to pull 'actions_len' bytes from the front of 'b'.  Returns 0 if
  * successful, otherwise an OpenFlow error.
  *
@@ -2995,7 +2786,7 @@ ofputil_error_to_string(int error)
  * do so, with validate_actions()).  The caller is also responsible for making
  * sure that 'b->data' is initially aligned appropriately for "union
  * ofp_action". */
-int
+enum ofperr
 ofputil_pull_actions(struct ofpbuf *b, unsigned int actions_len,
                      union ofp_action **actionsp, size_t *n_actionsp)
 {
@@ -3019,7 +2810,7 @@ ofputil_pull_actions(struct ofpbuf *b, unsigned int actions_len,
 error:
     *actionsp = NULL;
     *n_actionsp = 0;
-    return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
+    return OFPERR_OFPBRC_BAD_LEN;
 }
 
 bool

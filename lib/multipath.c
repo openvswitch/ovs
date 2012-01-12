@@ -23,6 +23,7 @@
 #include <netinet/in.h>
 #include "dynamic-string.h"
 #include "nx-match.h"
+#include "ofp-errors.h"
 #include "ofp-util.h"
 #include "openflow/nicira-ext.h"
 #include "packets.h"
@@ -33,14 +34,14 @@ VLOG_DEFINE_THIS_MODULE(multipath);
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 
 /* multipath_check(). */
-int
+enum ofperr
 multipath_check(const struct nx_action_multipath *mp, const struct flow *flow)
 {
     uint32_t n_links = ntohs(mp->max_link) + 1;
     size_t min_n_bits = log_2_floor(n_links) + 1;
     int ofs = nxm_decode_ofs(mp->ofs_nbits);
     int n_bits = nxm_decode_n_bits(mp->ofs_nbits);
-    int error;
+    enum ofperr error;
 
     error = nxm_dst_check(mp->dst, ofs, n_bits, flow);
     if (error) {
@@ -62,7 +63,7 @@ multipath_check(const struct nx_action_multipath *mp, const struct flow *flow)
         return 0;
     }
 
-    return ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_ARGUMENT);
+    return OFPERR_OFPBAC_BAD_ARGUMENT;
 }
 
 /* multipath_execute(). */

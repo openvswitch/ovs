@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010, 2011 Nicira Networks.
+ * Copyright (c) 2010, 2011, 2012 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@
 #include "classifier.h"
 #include "dynamic-string.h"
 #include "meta-flow.h"
+#include "ofp-errors.h"
 #include "ofp-util.h"
 #include "ofpbuf.h"
 #include "openflow/nicira-ext.h"
@@ -35,16 +36,6 @@ VLOG_DEFINE_THIS_MODULE(nx_match);
 /* Rate limit for nx_match parse errors.  These always indicate a bug in the
  * peer and so there's not much point in showing a lot of them. */
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
-
-enum {
-    NXM_INVALID = OFP_MKERR_NICIRA(OFPET_BAD_REQUEST, NXBRC_NXM_INVALID),
-    NXM_BAD_TYPE = OFP_MKERR_NICIRA(OFPET_BAD_REQUEST, NXBRC_NXM_BAD_TYPE),
-    NXM_BAD_VALUE = OFP_MKERR_NICIRA(OFPET_BAD_REQUEST, NXBRC_NXM_BAD_VALUE),
-    NXM_BAD_MASK = OFP_MKERR_NICIRA(OFPET_BAD_REQUEST, NXBRC_NXM_BAD_MASK),
-    NXM_BAD_PREREQ = OFP_MKERR_NICIRA(OFPET_BAD_REQUEST, NXBRC_NXM_BAD_PREREQ),
-    NXM_DUP_TYPE = OFP_MKERR_NICIRA(OFPET_BAD_REQUEST, NXBRC_NXM_DUP_TYPE),
-    BAD_ARGUMENT = OFP_MKERR(OFPET_BAD_ACTION, OFPBAC_BAD_ARGUMENT)
-};
 
 /* Returns the width of the data for a field with the given 'header', in
  * bytes. */
@@ -96,7 +87,7 @@ nx_entry_ok(const void *p, unsigned int match_len)
     return header;
 }
 
-static int
+static enum ofperr
 nx_pull_match__(struct ofpbuf *b, unsigned int match_len, bool strict,
                 uint16_t priority, struct cls_rule *rule,
                 ovs_be64 *cookie, ovs_be64 *cookie_mask)
@@ -111,7 +102,7 @@ nx_pull_match__(struct ofpbuf *b, unsigned int match_len, bool strict,
         VLOG_DBG_RL(&rl, "nx_match length %u, rounded up to a "
                     "multiple of 8, is longer than space in message (max "
                     "length %zu)", match_len, b->size);
-        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
+        return OFPERR_OFPBRC_BAD_LEN;
     }
 
     cls_rule_init_catchall(rule, priority);
@@ -122,26 +113,26 @@ nx_pull_match__(struct ofpbuf *b, unsigned int match_len, bool strict,
          (header = nx_entry_ok(p, match_len)) != 0;
          p += 4 + NXM_LENGTH(header), match_len -= 4 + NXM_LENGTH(header)) {
         const struct mf_field *mf;
-        int error;
+        enum ofperr error;
 
         mf = mf_from_nxm_header(header);
         if (!mf) {
             if (strict) {
-                error = NXM_BAD_TYPE;
+                error = OFPERR_NXBRC_NXM_BAD_TYPE;
             } else {
                 continue;
             }
         } else if (!mf_are_prereqs_ok(mf, &rule->flow)) {
-            error = NXM_BAD_PREREQ;
+            error = OFPERR_NXBRC_NXM_BAD_PREREQ;
         } else if (!mf_is_all_wild(mf, &rule->wc)) {
-            error = NXM_DUP_TYPE;
+            error = OFPERR_NXBRC_NXM_DUP_TYPE;
         } else {
             unsigned int width = mf->n_bytes;
             union mf_value value;
 
             memcpy(&value, p + 4, width);
             if (!mf_is_value_valid(mf, &value)) {
-                error = NXM_BAD_VALUE;
+                error = OFPERR_NXBRC_NXM_BAD_VALUE;
             } else if (!NXM_HASMASK(header)) {
                 error = 0;
                 mf_set_value(mf, &value, rule);
@@ -150,7 +141,7 @@ nx_pull_match__(struct ofpbuf *b, unsigned int match_len, bool strict,
 
                 memcpy(&mask, p + 4 + width, width);
                 if (!mf_is_mask_valid(mf, &mask)) {
-                    error = NXM_BAD_MASK;
+                    error = OFPERR_NXBRC_NXM_BAD_MASK;
                 } else {
                     error = 0;
                     mf_set(mf, &value, &mask, rule);
@@ -161,7 +152,7 @@ nx_pull_match__(struct ofpbuf *b, unsigned int match_len, bool strict,
         /* Check if the match is for a cookie rather than a classifier rule. */
         if ((header == NXM_NX_COOKIE || header == NXM_NX_COOKIE_W) && cookie) {
             if (*cookie_mask) {
-                error = NXM_DUP_TYPE;
+                error = OFPERR_NXBRC_NXM_DUP_TYPE;
             } else {
                 unsigned int width = sizeof *cookie;
 
@@ -176,20 +167,17 @@ nx_pull_match__(struct ofpbuf *b, unsigned int match_len, bool strict,
         }
 
         if (error) {
-            char *msg = ofputil_error_to_string(error);
             VLOG_DBG_RL(&rl, "bad nxm_entry %#08"PRIx32" (vendor=%"PRIu32", "
                         "field=%"PRIu32", hasmask=%"PRIu32", len=%"PRIu32"), "
                         "(%s)", header,
                         NXM_VENDOR(header), NXM_FIELD(header),
                         NXM_HASMASK(header), NXM_LENGTH(header),
-                        msg);
-            free(msg);
-
+                        ofperr_to_string(error));
             return error;
         }
     }
 
-    return match_len ? NXM_INVALID : 0;
+    return match_len ? OFPERR_NXBRC_NXM_INVALID : 0;
 }
 
 /* Parses the nx_match formatted match description in 'b' with length
@@ -201,7 +189,7 @@ nx_pull_match__(struct ofpbuf *b, unsigned int match_len, bool strict,
  * Fails with an error when encountering unknown NXM headers.
  *
  * Returns 0 if successful, otherwise an OpenFlow error code. */
-int
+enum ofperr
 nx_pull_match(struct ofpbuf *b, unsigned int match_len,
               uint16_t priority, struct cls_rule *rule,
               ovs_be64 *cookie, ovs_be64 *cookie_mask)
@@ -212,7 +200,7 @@ nx_pull_match(struct ofpbuf *b, unsigned int match_len,
 
 /* Behaves the same as nx_pull_match() with one exception.  Skips over unknown
  * NXM headers instead of failing with an error when they are encountered. */
-int
+enum ofperr
 nx_pull_match_loose(struct ofpbuf *b, unsigned int match_len,
                     uint16_t priority, struct cls_rule *rule,
                     ovs_be64 *cookie, ovs_be64 *cookie_mask)
@@ -992,7 +980,7 @@ nxm_check_reg_move(const struct nx_action_reg_move *action,
 
 /* Given a flow, checks that the source field represented by 'src_header'
  * in the range ['ofs', 'ofs' + 'n_bits') is valid. */
-int
+enum ofperr
 nxm_src_check(ovs_be32 src_header_, unsigned int ofs, unsigned int n_bits,
               const struct flow *flow)
 {
@@ -1007,12 +995,12 @@ nxm_src_check(ovs_be32 src_header_, unsigned int ofs, unsigned int n_bits,
         return 0;
     }
 
-    return BAD_ARGUMENT;
+    return OFPERR_OFPBAC_BAD_ARGUMENT;
 }
 
 /* Given a flow, checks that the destination field represented by 'dst_header'
  * in the range ['ofs', 'ofs' + 'n_bits') is valid. */
-int
+enum ofperr
 nxm_dst_check(ovs_be32 dst_header_, unsigned int ofs, unsigned int n_bits,
               const struct flow *flow)
 {
@@ -1029,16 +1017,16 @@ nxm_dst_check(ovs_be32 dst_header_, unsigned int ofs, unsigned int n_bits,
         return 0;
     }
 
-    return BAD_ARGUMENT;
+    return OFPERR_OFPBAC_BAD_ARGUMENT;
 }
 
-int
+enum ofperr
 nxm_check_reg_load(const struct nx_action_reg_load *action,
                    const struct flow *flow)
 {
     unsigned int ofs = nxm_decode_ofs(action->ofs_nbits);
     unsigned int n_bits = nxm_decode_n_bits(action->ofs_nbits);
-    int error;
+    enum ofperr error;
 
     error = nxm_dst_check(action->dst, ofs, n_bits, flow);
     if (error) {
@@ -1048,7 +1036,7 @@ nxm_check_reg_load(const struct nx_action_reg_load *action,
     /* Reject 'action' if a bit numbered 'n_bits' or higher is set to 1 in
      * action->value. */
     if (n_bits < 64 && ntohll(action->value) >> n_bits) {
-        return BAD_ARGUMENT;
+        return OFPERR_OFPBAC_BAD_ARGUMENT;
     }
 
     return 0;

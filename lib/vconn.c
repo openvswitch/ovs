@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,6 +27,7 @@
 #include "dynamic-string.h"
 #include "fatal-signal.h"
 #include "flow.h"
+#include "ofp-errors.h"
 #include "ofp-print.h"
 #include "ofp-util.h"
 #include "ofpbuf.h"
@@ -442,7 +443,6 @@ vcs_recv_hello(struct vconn *vconn)
 static void
 vcs_send_error(struct vconn *vconn)
 {
-    struct ofp_error_msg *error;
     struct ofpbuf *b;
     char s[128];
     int retval;
@@ -450,11 +450,8 @@ vcs_send_error(struct vconn *vconn)
     snprintf(s, sizeof s, "We support versions 0x%02x to 0x%02x inclusive but "
              "you support no later than version 0x%02"PRIx8".",
              vconn->min_version, OFP_VERSION, vconn->version);
-    error = make_openflow(sizeof *error, OFPT_ERROR, &b);
-    error->type = htons(OFPET_HELLO_FAILED);
-    error->code = htons(OFPHFC_INCOMPATIBLE);
-    ofpbuf_put(b, s, strlen(s));
-    update_openflow_length(b);
+    b = ofperr_encode_hello(OFPERR_OFPHFC_INCOMPATIBLE,
+                            ofperr_domain_from_version(vconn->version), s);
     retval = do_send(vconn, b);
     if (retval) {
         ofpbuf_delete(b);

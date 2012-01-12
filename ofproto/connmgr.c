@@ -844,24 +844,22 @@ ofconn_send_replies(const struct ofconn *ofconn, struct list *replies)
     }
 }
 
-/* Sends 'error', which should be an OpenFlow error created with
- * e.g. ofp_mkerr(), on 'ofconn', as a reply to 'request'.  Only at most the
+/* Sends 'error' on 'ofconn', as a reply to 'request'.  Only at most the
  * first 64 bytes of 'request' are used. */
 void
 ofconn_send_error(const struct ofconn *ofconn,
-                  const struct ofp_header *request, int error)
+                  const struct ofp_header *request, enum ofperr error)
 {
-    struct ofpbuf *msg;
+    struct ofpbuf *reply;
 
-    msg = ofputil_encode_error_msg(error, request);
-    if (msg) {
+    reply = ofperr_encode_reply(error, request);
+    if (reply) {
         static struct vlog_rate_limit err_rl = VLOG_RATE_LIMIT_INIT(10, 10);
 
         if (!VLOG_DROP_INFO(&err_rl)) {
             const struct ofputil_msg_type *type;
             const char *type_name;
             size_t request_len;
-            char *error_s;
 
             request_len = ntohs(request->length);
             type_name = (!ofputil_decode_msg_type_partial(request,
@@ -870,17 +868,16 @@ ofconn_send_error(const struct ofconn *ofconn,
                          ? ofputil_msg_type_name(type)
                          : "invalid");
 
-            error_s = ofputil_error_to_string(error);
             VLOG_INFO("%s: sending %s error reply to %s message",
-                      rconn_get_name(ofconn->rconn), error_s, type_name);
-            free(error_s);
+                      rconn_get_name(ofconn->rconn), ofperr_to_string(error),
+                      type_name);
         }
-        ofconn_send_reply(ofconn, msg);
+        ofconn_send_reply(ofconn, reply);
     }
 }
 
 /* Same as pktbuf_retrieve(), using the pktbuf owned by 'ofconn'. */
-int
+enum ofperr
 ofconn_pktbuf_retrieve(struct ofconn *ofconn, uint32_t id,
                        struct ofpbuf **bufferp, uint16_t *in_port)
 {

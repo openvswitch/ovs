@@ -31,6 +31,7 @@
 #include "hmap.h"
 #include "netdev.h"
 #include "nx-match.h"
+#include "ofp-errors.h"
 #include "ofp-print.h"
 #include "ofp-util.h"
 #include "ofpbuf.h"
@@ -136,13 +137,13 @@ static void ofproto_rule_send_removed(struct rule *, uint8_t reason);
 
 static void ofopgroup_destroy(struct ofopgroup *);
 
-static int add_flow(struct ofproto *, struct ofconn *,
-                    const struct ofputil_flow_mod *,
-                    const struct ofp_header *);
+static enum ofperr add_flow(struct ofproto *, struct ofconn *,
+                            const struct ofputil_flow_mod *,
+                            const struct ofp_header *);
 
 static bool handle_openflow(struct ofconn *, struct ofpbuf *);
-static int handle_flow_mod__(struct ofproto *, struct ofconn *,
-                             const struct ofputil_flow_mod *,
+static enum ofperr handle_flow_mod__(struct ofproto *, struct ofconn *,
+                                     const struct ofputil_flow_mod *,
                              const struct ofp_header *);
 
 static void update_port(struct ofproto *, const char *devname);
@@ -1191,9 +1192,8 @@ ofproto_add_flow(struct ofproto *ofproto, const struct cls_rule *cls_rule,
 }
 
 /* Executes the flow modification specified in 'fm'.  Returns 0 on success, an
- * OpenFlow error code as encoded by ofp_mkerr() on failure, or
- * OFPROTO_POSTPONE if the operation cannot be initiated now but may be retried
- * later.
+ * OFPERR_* OpenFlow error code on failure, or OFPROTO_POSTPONE if the
+ * operation cannot be initiated now but may be retried later.
  *
  * This is a helper function for in-band control and fail-open. */
 int
@@ -1702,14 +1702,14 @@ rule_is_hidden(const struct rule *rule)
     return rule->cr.priority > UINT16_MAX;
 }
 
-static int
+static enum ofperr
 handle_echo_request(struct ofconn *ofconn, const struct ofp_header *oh)
 {
     ofconn_send_reply(ofconn, make_echo_reply(oh));
     return 0;
 }
 
-static int
+static enum ofperr
 handle_features_request(struct ofconn *ofconn, const struct ofp_header *oh)
 {
     struct ofproto *ofproto = ofconn_get_ofproto(ofconn);
@@ -1741,7 +1741,7 @@ handle_features_request(struct ofconn *ofconn, const struct ofp_header *oh)
     return 0;
 }
 
-static int
+static enum ofperr
 handle_get_config_request(struct ofconn *ofconn, const struct ofp_header *oh)
 {
     struct ofproto *ofproto = ofconn_get_ofproto(ofconn);
@@ -1757,7 +1757,7 @@ handle_get_config_request(struct ofconn *ofconn, const struct ofp_header *oh)
     return 0;
 }
 
-static int
+static enum ofperr
 handle_set_config(struct ofconn *ofconn, const struct ofp_switch_config *osc)
 {
     struct ofproto *ofproto = ofconn_get_ofproto(ofconn);
@@ -1786,20 +1786,22 @@ handle_set_config(struct ofconn *ofconn, const struct ofp_switch_config *osc)
 }
 
 /* Checks whether 'ofconn' is a slave controller.  If so, returns an OpenFlow
- * error message code (composed with ofp_mkerr()) for the caller to propagate
- * upward.  Otherwise, returns 0. */
-static int
-reject_slave_controller(const struct ofconn *ofconn)
+ * error message code for the caller to propagate upward.  Otherwise, returns
+ * 0.
+ *
+ * The log message mentions 'msg_type'. */
+static enum ofperr
+reject_slave_controller(struct ofconn *ofconn)
 {
     if (ofconn_get_type(ofconn) == OFCONN_PRIMARY
         && ofconn_get_role(ofconn) == NX_ROLE_SLAVE) {
-        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_EPERM);
+        return OFPERR_OFPBRC_EPERM;
     } else {
         return 0;
     }
 }
 
-static int
+static enum ofperr
 handle_packet_out(struct ofconn *ofconn, const struct ofp_header *oh)
 {
     struct ofproto *p = ofconn_get_ofproto(ofconn);
@@ -1809,8 +1811,8 @@ handle_packet_out(struct ofconn *ofconn, const struct ofp_header *oh)
     struct ofpbuf request;
     struct flow flow;
     size_t n_ofp_actions;
+    enum ofperr error;
     uint16_t in_port;
-    int error;
 
     COVERAGE_INC(ofproto_packet_out);
 
@@ -1850,7 +1852,7 @@ handle_packet_out(struct ofconn *ofconn, const struct ofp_header *oh)
      * above) are valid. */
     in_port = ntohs(opo->in_port);
     if (in_port >= OFPP_MAX && in_port != OFPP_LOCAL && in_port != OFPP_NONE) {
-        return ofp_mkerr_nicira(OFPET_BAD_REQUEST, NXBRC_BAD_IN_PORT);
+        return OFPERR_NXBRC_BAD_IN_PORT;
     }
 
     /* Send out packet. */
@@ -1884,7 +1886,7 @@ update_port_config(struct ofport *port, ovs_be32 config, ovs_be32 mask)
     }
 }
 
-static int
+static enum ofperr
 handle_port_mod(struct ofconn *ofconn, const struct ofp_header *oh)
 {
     struct ofproto *p = ofconn_get_ofproto(ofconn);
@@ -1899,9 +1901,9 @@ handle_port_mod(struct ofconn *ofconn, const struct ofp_header *oh)
 
     port = ofproto_get_port(p, ntohs(opm->port_no));
     if (!port) {
-        return ofp_mkerr(OFPET_PORT_MOD_FAILED, OFPPMFC_BAD_PORT);
+        return OFPERR_OFPPMFC_BAD_PORT;
     } else if (memcmp(port->opp.hw_addr, opm->hw_addr, OFP_ETH_ALEN)) {
-        return ofp_mkerr(OFPET_PORT_MOD_FAILED, OFPPMFC_BAD_HW_ADDR);
+        return OFPERR_OFPPMFC_BAD_HW_ADDR;
     } else {
         update_port_config(port, opm->config, opm->mask);
         if (opm->advertise) {
@@ -1911,7 +1913,7 @@ handle_port_mod(struct ofconn *ofconn, const struct ofp_header *oh)
     return 0;
 }
 
-static int
+static enum ofperr
 handle_desc_stats_request(struct ofconn *ofconn,
                           const struct ofp_stats_msg *request)
 {
@@ -1930,7 +1932,7 @@ handle_desc_stats_request(struct ofconn *ofconn,
     return 0;
 }
 
-static int
+static enum ofperr
 handle_table_stats_request(struct ofconn *ofconn,
                            const struct ofp_stats_msg *request)
 {
@@ -1984,7 +1986,7 @@ append_port_stat(struct ofport *port, struct list *replies)
     put_32aligned_be64(&ops->collisions, htonll(stats.collisions));
 }
 
-static int
+static enum ofperr
 handle_port_stats_request(struct ofconn *ofconn,
                           const struct ofp_port_stats_request *psr)
 {
@@ -2018,12 +2020,12 @@ calc_flow_duration__(long long int start, uint32_t *sec, uint32_t *nsec)
 
 /* Checks whether 'table_id' is 0xff or a valid table ID in 'ofproto'.  Returns
  * 0 if 'table_id' is OK, otherwise an OpenFlow error code.  */
-static int
+static enum ofperr
 check_table_id(const struct ofproto *ofproto, uint8_t table_id)
 {
     return (table_id == 0xff || table_id < ofproto->n_tables
             ? 0
-            : ofp_mkerr_nicira(OFPET_BAD_REQUEST, NXBRC_BAD_TABLE_ID));
+            : OFPERR_NXBRC_BAD_TABLE_ID);
 
 }
 
@@ -2079,14 +2081,14 @@ next_matching_table(struct ofproto *ofproto,
  * Hidden rules are always omitted.
  *
  * Returns 0 on success, otherwise an OpenFlow error code. */
-static int
+static enum ofperr
 collect_rules_loose(struct ofproto *ofproto, uint8_t table_id,
                     const struct cls_rule *match,
                     ovs_be64 cookie, ovs_be64 cookie_mask,
                     uint16_t out_port, struct list *rules)
 {
     struct classifier *cls;
-    int error;
+    enum ofperr error;
 
     error = check_table_id(ofproto, table_id);
     if (error) {
@@ -2123,7 +2125,7 @@ collect_rules_loose(struct ofproto *ofproto, uint8_t table_id,
  * Hidden rules are always omitted.
  *
  * Returns 0 on success, otherwise an OpenFlow error code. */
-static int
+static enum ofperr
 collect_rules_strict(struct ofproto *ofproto, uint8_t table_id,
                      const struct cls_rule *match,
                      ovs_be64 cookie, ovs_be64 cookie_mask,
@@ -2155,7 +2157,7 @@ collect_rules_strict(struct ofproto *ofproto, uint8_t table_id,
     return 0;
 }
 
-static int
+static enum ofperr
 handle_flow_stats_request(struct ofconn *ofconn,
                           const struct ofp_stats_msg *osm)
 {
@@ -2164,7 +2166,7 @@ handle_flow_stats_request(struct ofconn *ofconn,
     struct list replies;
     struct list rules;
     struct rule *rule;
-    int error;
+    enum ofperr error;
 
     error = ofputil_decode_flow_stats_request(&fsr, &osm->header);
     if (error) {
@@ -2284,7 +2286,7 @@ ofproto_port_get_cfm_remote_mpids(const struct ofproto *ofproto,
             : -1);
 }
 
-static int
+static enum ofperr
 handle_aggregate_stats_request(struct ofconn *ofconn,
                                const struct ofp_stats_msg *osm)
 {
@@ -2295,7 +2297,7 @@ handle_aggregate_stats_request(struct ofconn *ofconn,
     struct ofpbuf *reply;
     struct list rules;
     struct rule *rule;
-    int error;
+    enum ofperr error;
 
     error = ofputil_decode_flow_stats_request(&request, &osm->header);
     if (error) {
@@ -2392,7 +2394,7 @@ handle_queue_stats_for_port(struct ofport *port, uint32_t queue_id,
     }
 }
 
-static int
+static enum ofperr
 handle_queue_stats_request(struct ofconn *ofconn,
                            const struct ofp_queue_stats_request *qsr)
 {
@@ -2419,7 +2421,7 @@ handle_queue_stats_request(struct ofconn *ofconn,
         }
     } else {
         ofpbuf_list_delete(&cbdata.replies);
-        return ofp_mkerr(OFPET_QUEUE_OP_FAILED, OFPQOFC_BAD_PORT);
+        return OFPERR_OFPQOFC_BAD_PORT;
     }
     ofconn_send_replies(ofconn, &cbdata.replies);
 
@@ -2451,12 +2453,12 @@ is_flow_deletion_pending(const struct ofproto *ofproto,
  *
  * Adds the flow specified by 'ofm', which is followed by 'n_actions'
  * ofp_actions, to the ofproto's flow table.  Returns 0 on success, an OpenFlow
- * error code as encoded by ofp_mkerr() on failure, or OFPROTO_POSTPONE if the
- * operation cannot be initiated now but may be retried later.
+ * error code on failure, or OFPROTO_POSTPONE if the operation cannot be
+ * initiated now but may be retried later.
  *
  * 'ofconn' is used to retrieve the packet buffer specified in ofm->buffer_id,
  * if any. */
-static int
+static enum ofperr
 add_flow(struct ofproto *ofproto, struct ofconn *ofconn,
          const struct ofputil_flow_mod *fm, const struct ofp_header *request)
 {
@@ -2488,13 +2490,13 @@ add_flow(struct ofproto *ofproto, struct ofconn *ofconn,
     } else if (fm->table_id < ofproto->n_tables) {
         table = &ofproto->tables[fm->table_id];
     } else {
-        return ofp_mkerr_nicira(OFPET_FLOW_MOD_FAILED, NXFMFC_BAD_TABLE_ID);
+        return OFPERR_NXFMFC_BAD_TABLE_ID;
     }
 
     /* Check for overlap, if requested. */
     if (fm->flags & OFPFF_CHECK_OVERLAP
         && classifier_rule_overlaps(table, &fm->cr)) {
-        return ofp_mkerr(OFPET_FLOW_MOD_FAILED, OFPFMFC_OVERLAP);
+        return OFPERR_OFPFMFC_OVERLAP;
     }
 
     /* Serialize against pending deletion. */
@@ -2558,7 +2560,7 @@ add_flow(struct ofproto *ofproto, struct ofconn *ofconn,
  * if any.
  *
  * Returns 0 on success, otherwise an OpenFlow error code. */
-static int
+static enum ofperr
 modify_flows__(struct ofproto *ofproto, struct ofconn *ofconn,
                const struct ofputil_flow_mod *fm,
                const struct ofp_header *request, struct list *rules)
@@ -2586,12 +2588,12 @@ modify_flows__(struct ofproto *ofproto, struct ofconn *ofconn,
     return 0;
 }
 
-/* Implements OFPFC_MODIFY.  Returns 0 on success or an OpenFlow error code as
- * encoded by ofp_mkerr() on failure.
+/* Implements OFPFC_MODIFY.  Returns 0 on success or an OpenFlow error code on
+ * failure.
  *
  * 'ofconn' is used to retrieve the packet buffer specified in fm->buffer_id,
  * if any. */
-static int
+static enum ofperr
 modify_flows_loose(struct ofproto *ofproto, struct ofconn *ofconn,
                    const struct ofputil_flow_mod *fm,
                    const struct ofp_header *request)
@@ -2608,11 +2610,11 @@ modify_flows_loose(struct ofproto *ofproto, struct ofconn *ofconn,
 }
 
 /* Implements OFPFC_MODIFY_STRICT.  Returns 0 on success or an OpenFlow error
- * code as encoded by ofp_mkerr() on failure.
+ * code on failure.
  *
  * 'ofconn' is used to retrieve the packet buffer specified in fm->buffer_id,
  * if any. */
-static int
+static enum ofperr
 modify_flow_strict(struct ofproto *ofproto, struct ofconn *ofconn,
                    const struct ofputil_flow_mod *fm,
                    const struct ofp_header *request)
@@ -2635,7 +2637,7 @@ modify_flow_strict(struct ofproto *ofproto, struct ofconn *ofconn,
 /* Deletes the rules listed in 'rules'.
  *
  * Returns 0 on success, otherwise an OpenFlow error code. */
-static int
+static enum ofperr
 delete_flows__(struct ofproto *ofproto, struct ofconn *ofconn,
                const struct ofp_header *request, struct list *rules)
 {
@@ -2656,13 +2658,13 @@ delete_flows__(struct ofproto *ofproto, struct ofconn *ofconn,
 }
 
 /* Implements OFPFC_DELETE. */
-static int
+static enum ofperr
 delete_flows_loose(struct ofproto *ofproto, struct ofconn *ofconn,
                    const struct ofputil_flow_mod *fm,
                    const struct ofp_header *request)
 {
     struct list rules;
-    int error;
+    enum ofperr error;
 
     error = collect_rules_loose(ofproto, fm->table_id, &fm->cr,
                                 fm->cookie, fm->cookie_mask,
@@ -2674,13 +2676,13 @@ delete_flows_loose(struct ofproto *ofproto, struct ofconn *ofconn,
 }
 
 /* Implements OFPFC_DELETE_STRICT. */
-static int
+static enum ofperr
 delete_flow_strict(struct ofproto *ofproto, struct ofconn *ofconn,
                    const struct ofputil_flow_mod *fm,
                    const struct ofp_header *request)
 {
     struct list rules;
-    int error;
+    enum ofperr error;
 
     error = collect_rules_strict(ofproto, fm->table_id, &fm->cr,
                                  fm->cookie, fm->cookie_mask,
@@ -2734,11 +2736,11 @@ ofproto_rule_expire(struct rule *rule, uint8_t reason)
     ofopgroup_submit(group);
 }
 
-static int
+static enum ofperr
 handle_flow_mod(struct ofconn *ofconn, const struct ofp_header *oh)
 {
     struct ofputil_flow_mod fm;
-    int error;
+    enum ofperr error;
 
     error = reject_slave_controller(ofconn);
     if (error) {
@@ -2756,13 +2758,13 @@ handle_flow_mod(struct ofconn *ofconn, const struct ofp_header *oh)
     if (fm.flags & OFPFF_EMERG) {
         /* There isn't a good fit for an error code, so just state that the
          * flow table is full. */
-        return ofp_mkerr(OFPET_FLOW_MOD_FAILED, OFPFMFC_ALL_TABLES_FULL);
+        return OFPERR_OFPFMFC_ALL_TABLES_FULL;
     }
 
     return handle_flow_mod__(ofconn_get_ofproto(ofconn), ofconn, &fm, oh);
 }
 
-static int
+static enum ofperr
 handle_flow_mod__(struct ofproto *ofproto, struct ofconn *ofconn,
                   const struct ofputil_flow_mod *fm,
                   const struct ofp_header *oh)
@@ -2793,11 +2795,11 @@ handle_flow_mod__(struct ofproto *ofproto, struct ofconn *ofconn,
             VLOG_WARN_RL(&rl, "flow_mod has explicit table_id but "
                          "flow_mod_table_id extension is not enabled");
         }
-        return ofp_mkerr(OFPET_FLOW_MOD_FAILED, OFPFMFC_BAD_COMMAND);
+        return OFPERR_OFPFMFC_BAD_COMMAND;
     }
 }
 
-static int
+static enum ofperr
 handle_role_request(struct ofconn *ofconn, const struct ofp_header *oh)
 {
     struct nx_role_request *nrr = (struct nx_role_request *) oh;
@@ -2806,13 +2808,13 @@ handle_role_request(struct ofconn *ofconn, const struct ofp_header *oh)
     uint32_t role;
 
     if (ofconn_get_type(ofconn) != OFCONN_PRIMARY) {
-        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_EPERM);
+        return OFPERR_OFPBRC_EPERM;
     }
 
     role = ntohl(nrr->role);
     if (role != NX_ROLE_OTHER && role != NX_ROLE_MASTER
         && role != NX_ROLE_SLAVE) {
-        return ofp_mkerr_nicira(OFPET_BAD_REQUEST, NXBRC_BAD_ROLE);
+        return OFPERR_NXBRC_BAD_ROLE;
     }
 
     if (ofconn_get_role(ofconn) != role
@@ -2829,7 +2831,7 @@ handle_role_request(struct ofconn *ofconn, const struct ofp_header *oh)
     return 0;
 }
 
-static int
+static enum ofperr
 handle_nxt_flow_mod_table_id(struct ofconn *ofconn,
                              const struct ofp_header *oh)
 {
@@ -2840,7 +2842,7 @@ handle_nxt_flow_mod_table_id(struct ofconn *ofconn,
     return 0;
 }
 
-static int
+static enum ofperr
 handle_nxt_set_flow_format(struct ofconn *ofconn, const struct ofp_header *oh)
 {
     const struct nx_set_flow_format *msg
@@ -2849,7 +2851,7 @@ handle_nxt_set_flow_format(struct ofconn *ofconn, const struct ofp_header *oh)
 
     format = ntohl(msg->format);
     if (format != NXFF_OPENFLOW10 && format != NXFF_NXM) {
-        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_EPERM);
+        return OFPERR_OFPBRC_EPERM;
     }
 
     if (format != ofconn_get_flow_format(ofconn)
@@ -2862,7 +2864,7 @@ handle_nxt_set_flow_format(struct ofconn *ofconn, const struct ofp_header *oh)
     return 0;
 }
 
-static int
+static enum ofperr
 handle_nxt_set_packet_in_format(struct ofconn *ofconn,
                                 const struct ofp_header *oh)
 {
@@ -2872,7 +2874,7 @@ handle_nxt_set_packet_in_format(struct ofconn *ofconn,
     msg = (const struct nx_set_packet_in_format *) oh;
     format = ntohl(msg->format);
     if (format != NXFF_OPENFLOW10 && format != NXPIF_NXM) {
-        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_EPERM);
+        return OFPERR_OFPBRC_EPERM;
     }
 
     if (format != ofconn_get_packet_in_format(ofconn)
@@ -2885,7 +2887,7 @@ handle_nxt_set_packet_in_format(struct ofconn *ofconn,
     return 0;
 }
 
-static int
+static enum ofperr
 handle_barrier_request(struct ofconn *ofconn, const struct ofp_header *oh)
 {
     struct ofp_header *ob;
@@ -2900,12 +2902,12 @@ handle_barrier_request(struct ofconn *ofconn, const struct ofp_header *oh)
     return 0;
 }
 
-static int
+static enum ofperr
 handle_openflow__(struct ofconn *ofconn, const struct ofpbuf *msg)
 {
     const struct ofp_header *oh = msg->data;
     const struct ofputil_msg_type *type;
-    int error;
+    enum ofperr error;
 
     error = ofputil_decode_msg_type(oh, &type);
     if (error) {
@@ -3003,9 +3005,9 @@ handle_openflow__(struct ofconn *ofconn, const struct ofpbuf *msg)
     case OFPUTIL_NXST_AGGREGATE_REPLY:
     default:
         if (oh->type == OFPT_STATS_REQUEST || oh->type == OFPT_STATS_REPLY) {
-            return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_STAT);
+            return OFPERR_OFPBRC_BAD_STAT;
         } else {
-            return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_TYPE);
+            return OFPERR_OFPBRC_BAD_TYPE;
         }
     }
 }
@@ -3151,8 +3153,7 @@ ofoperation_destroy(struct ofoperation *op)
 }
 
 /* Indicates that 'op' completed with status 'error', which is either 0 to
- * indicate success or an OpenFlow error code (constructed with
- * e.g. ofp_mkerr()).
+ * indicate success or an OpenFlow error code on failure.
  *
  * If 'error' is 0, indicating success, the operation will be committed
  * permanently to the flow table.  There is one interesting subcase:
@@ -3181,7 +3182,7 @@ ofoperation_destroy(struct ofoperation *op)
  * Please see the large comment in ofproto/ofproto-provider.h titled
  * "Asynchronous Operation Support" for more information. */
 void
-ofoperation_complete(struct ofoperation *op, int error)
+ofoperation_complete(struct ofoperation *op, enum ofperr error)
 {
     struct ofopgroup *group = op->group;
     struct rule *rule = op->rule;
@@ -3190,7 +3191,6 @@ ofoperation_complete(struct ofoperation *op, int error)
 
     assert(rule->pending == op);
     assert(op->status < 0);
-    assert(error >= 0);
 
     if (!error
         && !group->error

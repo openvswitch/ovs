@@ -29,6 +29,7 @@
 #include "hmap.h"
 #include "mac-learning.h"
 #include "ofpbuf.h"
+#include "ofp-errors.h"
 #include "ofp-parse.h"
 #include "ofp-print.h"
 #include "ofp-util.h"

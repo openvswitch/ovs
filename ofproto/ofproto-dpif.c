@@ -3872,14 +3872,14 @@ rule_dealloc(struct rule *rule_)
     free(rule);
 }
 
-static int
+static enum ofperr
 rule_construct(struct rule *rule_)
 {
     struct rule_dpif *rule = rule_dpif_cast(rule_);
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(rule->up.ofproto);
     struct rule_dpif *victim;
     uint8_t table_id;
-    int error;
+    enum ofperr error;
 
     error = validate_actions(rule->up.actions, rule->up.n_actions,
                              &rule->up.cr.flow, ofproto->max_ports);
@@ -3956,7 +3956,7 @@ rule_get_stats(struct rule *rule_, uint64_t *packets, uint64_t *bytes)
     }
 }
 
-static int
+static enum ofperr
 rule_execute(struct rule *rule_, const struct flow *flow,
              struct ofpbuf *packet)
 {
@@ -3987,7 +3987,7 @@ rule_modify_actions(struct rule *rule_)
 {
     struct rule_dpif *rule = rule_dpif_cast(rule_);
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(rule->up.ofproto);
-    int error;
+    enum ofperr error;
 
     error = validate_actions(rule->up.actions, rule->up.n_actions,
                              &rule->up.cr.flow, ofproto->max_ports);
@@ -4535,9 +4535,8 @@ xlate_learn_action(struct action_xlate_ctx *ctx,
 
     error = ofproto_flow_mod(&ctx->ofproto->up, &fm);
     if (error && !VLOG_DROP_WARN(&rl)) {
-        char *msg = ofputil_error_to_string(error);
-        VLOG_WARN("learning action failed to modify flow table (%s)", msg);
-        free(msg);
+        VLOG_WARN("learning action failed to modify flow table (%s)",
+                  ofperr_get_name(error));
     }
 
     free(fm.actions);
@@ -5521,16 +5520,16 @@ set_frag_handling(struct ofproto *ofproto_,
     }
 }
 
-static int
+static enum ofperr
 packet_out(struct ofproto *ofproto_, struct ofpbuf *packet,
            const struct flow *flow,
            const union ofp_action *ofp_actions, size_t n_ofp_actions)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
-    int error;
+    enum ofperr error;
 
     if (flow->in_port >= ofproto->max_ports && flow->in_port < OFPP_MAX) {
-        return ofp_mkerr_nicira(OFPET_BAD_REQUEST, NXBRC_BAD_IN_PORT);
+        return OFPERR_NXBRC_BAD_IN_PORT;
     }
 
     error = validate_actions(ofp_actions, n_ofp_actions, flow,

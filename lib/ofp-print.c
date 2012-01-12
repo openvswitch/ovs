@@ -34,6 +34,7 @@
 #include "learn.h"
 #include "multipath.h"
 #include "nx-match.h"
+#include "ofp-errors.h"
 #include "ofp-util.h"
 #include "ofpbuf.h"
 #include "openflow/openflow.h"
@@ -45,7 +46,7 @@
 #include "util.h"
 
 static void ofp_print_queue_name(struct ds *string, uint32_t port);
-static void ofp_print_error(struct ds *, int error);
+static void ofp_print_error(struct ds *, enum ofperr);
 
 
 /* Returns a string that represents the contents of the Ethernet frame in the
@@ -746,7 +747,7 @@ ofp_print_flow_mod(struct ds *s, const struct ofp_header *oh,
 {
     struct ofputil_flow_mod fm;
     bool need_priority;
-    int error;
+    enum ofperr error;
 
     error = ofputil_decode_flow_mod(&fm, oh, true);
     if (error) {
@@ -845,7 +846,7 @@ static void
 ofp_print_flow_removed(struct ds *string, const struct ofp_header *oh)
 {
     struct ofputil_flow_removed fr;
-    int error;
+    enum ofperr error;
 
     error = ofputil_decode_flow_removed(&fr, oh);
     if (error) {
@@ -896,14 +897,12 @@ ofp_print_port_mod(struct ds *string, const struct ofp_port_mod *opm)
 }
 
 static void
-ofp_print_error(struct ds *string, int error)
+ofp_print_error(struct ds *string, enum ofperr error)
 {
     if (string->length) {
         ds_put_char(string, ' ');
     }
-    ds_put_cstr(string, "***decode error: ");
-    ofputil_format_error(string, error);
-    ds_put_cstr(string, "***\n");
+    ds_put_format(string, "***decode error: %s***\n", ofperr_get_name(error));
 }
 
 static void
@@ -912,32 +911,26 @@ ofp_print_error_msg(struct ds *string, const struct ofp_error_msg *oem)
     size_t len = ntohs(oem->header.length);
     size_t payload_ofs, payload_len;
     const void *payload;
-    int error;
+    enum ofperr error;
     char *s;
 
-    error = ofputil_decode_error_msg(&oem->header, &payload_ofs);
-    if (!is_ofp_error(error)) {
-        ofp_print_error(string, error);
+    error = ofperr_decode_msg(&oem->header, &payload_ofs);
+    if (!error) {
+        ds_put_cstr(string, "***decode error***");
         ds_put_hex_dump(string, oem->data, len - sizeof *oem, 0, true);
         return;
     }
 
-    ds_put_char(string, ' ');
-    ofputil_format_error(string, error);
-    ds_put_char(string, '\n');
+    ds_put_format(string, " %s\n", ofperr_get_name(error));
 
     payload = (const uint8_t *) oem + payload_ofs;
     payload_len = len - payload_ofs;
-    switch (get_ofp_err_type(error)) {
-    case OFPET_HELLO_FAILED:
+    if (error == OFPERR_OFPHFC_INCOMPATIBLE || error == OFPERR_OFPHFC_EPERM) {
         ds_put_printable(string, payload, payload_len);
-        break;
-
-    default:
+    } else {
         s = ofp_to_string(payload, payload_len, 1);
         ds_put_cstr(string, s);
         free(s);
-        break;
     }
 }
 
@@ -976,7 +969,7 @@ ofp_print_flow_stats_request(struct ds *string,
                              const struct ofp_stats_msg *osm)
 {
     struct ofputil_flow_stats_request fsr;
-    int error;
+    enum ofperr error;
 
     error = ofputil_decode_flow_stats_request(&fsr, &osm->header);
     if (error) {
@@ -1467,9 +1460,6 @@ ofp_to_string(const void *oh_, size_t len, int verbosity)
     } else if (len < sizeof(struct ofp_header)) {
         ds_put_format(&string, "OpenFlow packet too short (only %zu bytes):\n",
                       len);
-    } else if (oh->version != OFP_VERSION) {
-        ds_put_format(&string, "Bad OpenFlow version %"PRIu8":\n",
-                      oh->version);
     } else if (ntohs(oh->length) > len) {
         ds_put_format(&string,
                       "(***truncated to %zu bytes from %"PRIu16"***)\n",
@@ -1480,7 +1470,7 @@ ofp_to_string(const void *oh_, size_t len, int verbosity)
                       ntohs(oh->length), len);
     } else {
         const struct ofputil_msg_type *type;
-        int error;
+        enum ofperr error;
 
         error = ofputil_decode_msg_type(oh, &type);
         if (!error) {

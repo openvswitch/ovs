@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010 Nicira Networks.
+ * Copyright (c) 2010, 2011 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
 #define MULTIPATH_H 1
 
 #include <stdint.h>
+#include "ofp-errors.h"
 
 struct ds;
 struct flow;
@@ -29,7 +30,8 @@ struct nx_action_reg_move;
  * See include/openflow/nicira-ext.h for NXAST_MULTIPATH specification.
  */
 
-int multipath_check(const struct nx_action_multipath *, const struct flow *);
+enum ofperr multipath_check(const struct nx_action_multipath *,
+                            const struct flow *);
 void multipath_execute(const struct nx_action_multipath *, struct flow *);
 
 void multipath_parse(struct nx_action_multipath *, const char *);
