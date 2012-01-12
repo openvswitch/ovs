@@ -790,7 +790,7 @@
 
       <column name="bond_mode">
         <p>The type of bonding used for a bonded port.  Defaults to
-        <code>balance-slb</code> if unset.
+        <code>active-backup</code> if unset.
         </p>
       </column>
 

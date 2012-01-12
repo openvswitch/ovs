@@ -1,5 +1,9 @@
 post-v1.5.0
 ------------------------
+    - bonding
+        - The default bond_mode changed from SLB to active-backup, to protect
+          unsuspecting users from the significant risks of SLB bonds (which are
+          documented in vswitchd/INTERNALS).
 
 
 v1.5.0 - xx xxx xxxx

@@ -2746,7 +2746,7 @@ port_configure_bond(struct port *port, struct bond_settings *s,
     size_t i;
 
     s->name = port->name;
-    s->balance = BM_SLB;
+    s->balance = BM_AB;
     if (port->cfg->bond_mode) {
         if (!bond_mode_from_string(&s->balance, port->cfg->bond_mode)) {
             VLOG_WARN("port %s: unknown bond_mode %s, defaulting to %s",
@@ -2756,11 +2756,11 @@ port_configure_bond(struct port *port, struct bond_settings *s,
     } else {
         static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
 
-        /* XXX: Post version 1.4.*, change the default bond_mode to
-         * active-backup.  Until then, warn that the change is imminent. */
+        /* XXX: Post version 1.5.*, the default bond_mode changed from SLB to
+         * active-backup. At some point we should remove this warning. */
         VLOG_WARN_RL(&rl, "port %s: Using the default bond_mode %s. Note that"
-                     " in future versions, the default bond_mode is expected"
-                     " to change to active-backup", port->name,
+                     " in previous versions, the default bond_mode was"
+                     " balance-slb", port->name,
                      bond_mode_to_string(s->balance));
     }
     if (s->balance == BM_SLB && port->bridge->cfg->n_flood_vlans) {
