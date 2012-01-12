@@ -67,14 +67,6 @@ OVS_VSWITCHD_START(
        [add-port br0 p1 -- set Interface p1 type=dummy --\
         add-port br0 p2 -- set Interface p2 type=dummy])
 
-AT_CHECK(
-  [ovs-vsctl \
-        -- get Interface p1 ofport \
-        -- get Interface p2 ofport],
-  [0], [stdout])
-set `cat stdout`
-br0=0 p1=$1 p2=$2
-
 AT_CHECK([ovs-ofctl add-flow br0 action=normal])
 
 # "in_port" defaults to OFPP_NONE if it's not specified.
@@ -82,16 +74,15 @@ flow="eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src
 AT_CHECK([ovs-appctl ofproto/trace br0 "$flow"], [0], [stdout])
 actual=`tail -1 stdout | sed 's/Datapath actions: //'`
 
-expected="$br0,$p1,$p2"
-AT_CHECK([ovs-dpctl normalize-actions "$flow" "$expected" br0=$br0 p1=$p1 p2=$p2], [0], [stdout])
+expected="0,1,2"
+AT_CHECK([ovs-dpctl normalize-actions "$flow" "$expected"], [0], [stdout])
 mv stdout expout
-AT_CHECK([ovs-dpctl normalize-actions "$flow" "$actual" br0=$br0 p1=$p1 p2=$p2], [0], [expout])
+AT_CHECK([ovs-dpctl normalize-actions "$flow" "$actual"], [0], [expout])
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([ofproto-dpif - DSCP])
-dnl This test assumes port p1 is allocated OpenFlow port number 1.
 OVS_VSWITCHD_START([add-port br0 p1 -- set Interface p1 type=dummy])
 AT_DATA([flows.txt], [dnl
 actions=output:65534,enqueue:1:1,enqueue:1:2,enqueue:1:2,enqueue:1:1,output:1,mod_nw_tos:0,output:1,output:65534
@@ -118,11 +109,6 @@ OVS_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([ofproto-dpif - output/flood flags])
-dnl This test assumes that OpenFlow port numbers are allocated in order
-dnl starting from one.  It does not necessarily require that they are allocated
-dnl in the same order that they are named in the database.  Just that the
-dnl following command guarantees OpenFlow port 65534, and ports 1-7 exist in
-dnl the bridge.
 OVS_VSWITCHD_START([dnl
         add-port br0 p1 -- set Interface p1 type=dummy --\
         add-port br0 p2 -- set Interface p2 type=dummy --\
@@ -384,105 +370,91 @@ OVS_VSWITCHD_START(
    set Interface p7 type=dummy -- \
    set Interface p8 type=dummy --])
 
-AT_CHECK(
-  [ovs-vsctl \
-        -- get Interface p1 ofport \
-        -- get Interface p2 ofport \
-        -- get Interface p3 ofport \
-        -- get Interface p4 ofport \
-        -- get Interface p5 ofport \
-        -- get Interface p6 ofport \
-        -- get Interface p7 ofport \
-        -- get Interface p8 ofport],
-  [0], [stdout])
-set `cat stdout`
-br0=0 p1=$1 p2=$2 p3=$3 p4=$4 p5=$5 p6=$6 p7=$7 p8=$8
-
-dnl Each of these specifies an in_port, a VLAN VID (or "none"), a VLAN
-dnl PCP (used if the VID isn't "none") and the expected set of datapath
+dnl Each of these specifies an in_port by number, a VLAN VID (or "none"),
+dnl a VLAN PCP (used if the VID isn't "none") and the expected set of datapath
 dnl actions.
 for tuple in \
-        "br0 none 0 drop" \
-        "br0 0    0 drop" \
-        "br0 0    1 drop" \
-        "br0 10   0 p1,p5,p6,p7,p8,pop_vlan,p2" \
-        "br0 10   1 p1,p5,p6,p7,p8,pop_vlan,p2" \
-        "br0 11   0 p5,p7" \
-        "br0 11   1 p5,p7" \
-        "br0 12   0 p1,p5,p6,pop_vlan,p3,p4,p7,p8" \
-        "br0 12   1 p1,p5,p6,pop_vlan,p4,p7,push_vlan(vid=0,pcp=1),p3,p8" \
-        "p1  none 0 drop" \
-        "p1  0    0 drop" \
-        "p1  0    1 drop" \
-        "p1  10   0 br0,p5,p6,p7,p8,pop_vlan,p2" \
-        "p1  10   1 br0,p5,p6,p7,p8,pop_vlan,p2" \
-        "p1  11   0 drop" \
-        "p1  11   1 drop" \
-        "p1  12   0 br0,p5,p6,pop_vlan,p3,p4,p7,p8" \
-        "p1  12   1 br0,p5,p6,pop_vlan,p4,p7,push_vlan(vid=0,pcp=1),p3,p8" \
-        "p2  none 0 push_vlan(vid=10,pcp=0),br0,p1,p5,p6,p7,p8" \
-        "p2  0    0 pop_vlan,push_vlan(vid=10,pcp=0),br0,p1,p5,p6,p7,p8" \
-        "p2  0    1 pop_vlan,push_vlan(vid=10,pcp=1),br0,p1,p5,p6,p7,p8" \
-        "p2  10   0 drop" \
-        "p2  10   1 drop" \
-        "p2  11   0 drop" \
-        "p2  11   1 drop" \
-        "p2  12   0 drop" \
-        "p2  12   1 drop" \
-        "p3  none 0 p4,p7,p8,push_vlan(vid=12,pcp=0),br0,p1,p5,p6" \
-        "p3  0    0 pop_vlan,p4,p7,p8,push_vlan(vid=12,pcp=0),br0,p1,p5,p6" \
-        "p3  0    1 p8,pop_vlan,p4,p7,push_vlan(vid=12,pcp=1),br0,p1,p5,p6" \
-        "p3  10   0 drop" \
-        "p3  10   1 drop" \
-        "p3  11   0 drop" \
-        "p3  11   1 drop" \
-        "p3  12   0 drop" \
-        "p3  12   1 drop" \
-        "p4  none 0 p3,p7,p8,push_vlan(vid=12,pcp=0),br0,p1,p5,p6" \
-        "p4  0    0 pop_vlan,p3,p7,p8,push_vlan(vid=12,pcp=0),br0,p1,p5,p6" \
-        "p4  0    1 p3,p8,pop_vlan,p7,push_vlan(vid=12,pcp=1),br0,p1,p5,p6" \
-        "p4  10   0 drop" \
-        "p4  10   1 drop" \
-        "p4  11   0 drop" \
-        "p4  11   1 drop" \
-        "p4  12   0 drop" \
-        "p4  12   1 drop" \
-        "p5  none 0 p2,push_vlan(vid=10,pcp=0),br0,p1,p6,p7,p8" \
-        "p5  0    0 pop_vlan,p2,push_vlan(vid=10,pcp=0),br0,p1,p6,p7,p8" \
-        "p5  0    1 pop_vlan,p2,push_vlan(vid=10,pcp=1),br0,p1,p6,p7,p8" \
-        "p5  10   0 br0,p1,p6,p7,p8,pop_vlan,p2" \
-        "p5  10   1 br0,p1,p6,p7,p8,pop_vlan,p2" \
-        "p5  11   0 br0,p7" \
-        "p5  11   1 br0,p7" \
-        "p5  12   0 br0,p1,p6,pop_vlan,p3,p4,p7,p8" \
-        "p5  12   1 br0,p1,p6,pop_vlan,p4,p7,push_vlan(vid=0,pcp=1),p3,p8" \
-        "p6  none 0 p2,push_vlan(vid=10,pcp=0),br0,p1,p5,p7,p8" \
-        "p6  0    0 pop_vlan,p2,push_vlan(vid=10,pcp=0),br0,p1,p5,p7,p8" \
-        "p6  0    1 pop_vlan,p2,push_vlan(vid=10,pcp=1),br0,p1,p5,p7,p8" \
-        "p6  10   0 br0,p1,p5,p7,p8,pop_vlan,p2" \
-        "p6  10   1 br0,p1,p5,p7,p8,pop_vlan,p2" \
-        "p6  11   0 drop" \
-        "p6  11   1 drop" \
-        "p6  12   0 br0,p1,p5,pop_vlan,p3,p4,p7,p8" \
-        "p6  12   1 br0,p1,p5,pop_vlan,p4,p7,push_vlan(vid=0,pcp=1),p3,p8" \
-        "p7  none 0 p3,p4,p8,push_vlan(vid=12,pcp=0),br0,p1,p5,p6" \
-        "p7  0    0 pop_vlan,p3,p4,p8,push_vlan(vid=12,pcp=0),br0,p1,p5,p6" \
-        "p7  0    1 p3,p8,pop_vlan,p4,push_vlan(vid=12,pcp=1),br0,p1,p5,p6" \
-        "p7  10   0 br0,p1,p5,p6,p8,pop_vlan,p2" \
-        "p7  10   1 br0,p1,p5,p6,p8,pop_vlan,p2" \
-        "p7  11   0 br0,p5" \
-        "p7  11   1 br0,p5" \
-        "p7  12   0 br0,p1,p5,p6,pop_vlan,p3,p4,p8" \
-        "p7  12   1 br0,p1,p5,p6,pop_vlan,p4,push_vlan(vid=0,pcp=1),p3,p8" \
-        "p8  none 0 p3,p4,p7,push_vlan(vid=12,pcp=0),br0,p1,p5,p6" \
-        "p8  0    0 pop_vlan,p3,p4,p7,push_vlan(vid=12,pcp=0),br0,p1,p5,p6" \
-        "p8  0    1 p3,pop_vlan,p4,p7,push_vlan(vid=12,pcp=1),br0,p1,p5,p6" \
-        "p8  10   0 br0,p1,p5,p6,p7,pop_vlan,p2" \
-        "p8  10   1 br0,p1,p5,p6,p7,pop_vlan,p2" \
-        "p8  11   0 drop" \
-        "p8  11   1 drop" \
-        "p8  12   0 br0,p1,p5,p6,pop_vlan,p3,p4,p7" \
-        "p8  12   1 br0,p1,p5,p6,pop_vlan,p4,p7,push_vlan(vid=0,pcp=1),p3"
+        "0 none 0 drop" \
+        "0 0    0 drop" \
+        "0 0    1 drop" \
+        "0 10   0 1,5,6,7,8,pop_vlan,2" \
+        "0 10   1 1,5,6,7,8,pop_vlan,2" \
+        "0 11   0 5,7" \
+        "0 11   1 5,7" \
+        "0 12   0 1,5,6,pop_vlan,3,4,7,8" \
+        "0 12   1 1,5,6,pop_vlan,4,7,push_vlan(vid=0,pcp=1),3,8" \
+        "1  none 0 drop" \
+        "1  0    0 drop" \
+        "1  0    1 drop" \
+        "1  10   0 0,5,6,7,8,pop_vlan,2" \
+        "1  10   1 0,5,6,7,8,pop_vlan,2" \
+        "1  11   0 drop" \
+        "1  11   1 drop" \
+        "1  12   0 0,5,6,pop_vlan,3,4,7,8" \
+        "1  12   1 0,5,6,pop_vlan,4,7,push_vlan(vid=0,pcp=1),3,8" \
+        "2  none 0 push_vlan(vid=10,pcp=0),0,1,5,6,7,8" \
+        "2  0    0 pop_vlan,push_vlan(vid=10,pcp=0),0,1,5,6,7,8" \
+        "2  0    1 pop_vlan,push_vlan(vid=10,pcp=1),0,1,5,6,7,8" \
+        "2  10   0 drop" \
+        "2  10   1 drop" \
+        "2  11   0 drop" \
+        "2  11   1 drop" \
+        "2  12   0 drop" \
+        "2  12   1 drop" \
+        "3  none 0 4,7,8,push_vlan(vid=12,pcp=0),0,1,5,6" \
+        "3  0    0 pop_vlan,4,7,8,push_vlan(vid=12,pcp=0),0,1,5,6" \
+        "3  0    1 8,pop_vlan,4,7,push_vlan(vid=12,pcp=1),0,1,5,6" \
+        "3  10   0 drop" \
+        "3  10   1 drop" \
+        "3  11   0 drop" \
+        "3  11   1 drop" \
+        "3  12   0 drop" \
+        "3  12   1 drop" \
+        "4  none 0 3,7,8,push_vlan(vid=12,pcp=0),0,1,5,6" \
+        "4  0    0 pop_vlan,3,7,8,push_vlan(vid=12,pcp=0),0,1,5,6" \
+        "4  0    1 3,8,pop_vlan,7,push_vlan(vid=12,pcp=1),0,1,5,6" \
+        "4  10   0 drop" \
+        "4  10   1 drop" \
+        "4  11   0 drop" \
+        "4  11   1 drop" \
+        "4  12   0 drop" \
+        "4  12   1 drop" \
+        "5  none 0 2,push_vlan(vid=10,pcp=0),0,1,6,7,8" \
+        "5  0    0 pop_vlan,2,push_vlan(vid=10,pcp=0),0,1,6,7,8" \
+        "5  0    1 pop_vlan,2,push_vlan(vid=10,pcp=1),0,1,6,7,8" \
+        "5  10   0 0,1,6,7,8,pop_vlan,2" \
+        "5  10   1 0,1,6,7,8,pop_vlan,2" \
+        "5  11   0 0,7" \
+        "5  11   1 0,7" \
+        "5  12   0 0,1,6,pop_vlan,3,4,7,8" \
+        "5  12   1 0,1,6,pop_vlan,4,7,push_vlan(vid=0,pcp=1),3,8" \
+        "6  none 0 2,push_vlan(vid=10,pcp=0),0,1,5,7,8" \
+        "6  0    0 pop_vlan,2,push_vlan(vid=10,pcp=0),0,1,5,7,8" \
+        "6  0    1 pop_vlan,2,push_vlan(vid=10,pcp=1),0,1,5,7,8" \
+        "6  10   0 0,1,5,7,8,pop_vlan,2" \
+        "6  10   1 0,1,5,7,8,pop_vlan,2" \
+        "6  11   0 drop" \
+        "6  11   1 drop" \
+        "6  12   0 0,1,5,pop_vlan,3,4,7,8" \
+        "6  12   1 0,1,5,pop_vlan,4,7,push_vlan(vid=0,pcp=1),3,8" \
+        "7  none 0 3,4,8,push_vlan(vid=12,pcp=0),0,1,5,6" \
+        "7  0    0 pop_vlan,3,4,8,push_vlan(vid=12,pcp=0),0,1,5,6" \
+        "7  0    1 3,8,pop_vlan,4,push_vlan(vid=12,pcp=1),0,1,5,6" \
+        "7  10   0 0,1,5,6,8,pop_vlan,2" \
+        "7  10   1 0,1,5,6,8,pop_vlan,2" \
+        "7  11   0 0,5" \
+        "7  11   1 0,5" \
+        "7  12   0 0,1,5,6,pop_vlan,3,4,8" \
+        "7  12   1 0,1,5,6,pop_vlan,4,push_vlan(vid=0,pcp=1),3,8" \
+        "8  none 0 3,4,7,push_vlan(vid=12,pcp=0),0,1,5,6" \
+        "8  0    0 pop_vlan,3,4,7,push_vlan(vid=12,pcp=0),0,1,5,6" \
+        "8  0    1 3,pop_vlan,4,7,push_vlan(vid=12,pcp=1),0,1,5,6" \
+        "8  10   0 0,1,5,6,7,pop_vlan,2" \
+        "8  10   1 0,1,5,6,7,pop_vlan,2" \
+        "8  11   0 drop" \
+        "8  11   1 drop" \
+        "8  12   0 0,1,5,6,pop_vlan,3,4,7" \
+        "8  12   1 0,1,5,6,pop_vlan,4,7,push_vlan(vid=0,pcp=1),3"
 do
   set $tuple
   in_port=$1
@@ -490,11 +462,10 @@ do
   pcp=$3
   expected=$4
 
-  eval n_in_port=\$$in_port
   if test $vlan = none; then
-    flow="in_port($n_in_port),eth(src=50:54:00:00:00:01,dst=ff:ff:ff:ff:ff:ff),eth_type(0xabcd)"
+    flow="in_port($in_port),eth(src=50:54:00:00:00:01,dst=ff:ff:ff:ff:ff:ff),eth_type(0xabcd)"
   else
-    flow="in_port($n_in_port),eth(src=50:54:00:00:00:01,dst=ff:ff:ff:ff:ff:ff),eth_type(0x8100),vlan(vid=$vlan,pcp=$pcp),encap(eth_type(0xabcd))"
+    flow="in_port($in_port),eth(src=50:54:00:00:00:01,dst=ff:ff:ff:ff:ff:ff),eth_type(0x8100),vlan(vid=$vlan,pcp=$pcp),encap(eth_type(0xabcd))"
   fi
 
   echo "----------------------------------------------------------------------"
@@ -503,9 +474,9 @@ do
   AT_CHECK([ovs-appctl ofproto/trace br0 "$flow"], [0], [stdout])
   actual=`tail -1 stdout | sed 's/Datapath actions: //'`
 
-  AT_CHECK([ovs-dpctl normalize-actions "$flow" "$expected" br0=$br0 p1=$p1 p2=$p2 p3=$p3 p4=$p4 p5=$p5 p6=$p6 p7=$p7 p8=$p8], [0], [stdout])
+  AT_CHECK([ovs-dpctl normalize-actions "$flow" "$expected"], [0], [stdout])
   mv stdout expout
-  AT_CHECK([ovs-dpctl normalize-actions "$flow" "$actual" br0=$br0 p1=$p1 p2=$p2 p3=$p3 p4=$p4 p5=$p5 p6=$p6 p7=$p7 p8=$p8], [0], [expout])
+  AT_CHECK([ovs-dpctl normalize-actions "$flow" "$actual"], [0], [expout])
 done
 
 OVS_VSWITCHD_STOP
@@ -586,31 +557,22 @@ OVS_VSWITCHD_START(
         select_all=true output_port=@p3], [<0>
 ])
 
-AT_CHECK(
-  [ovs-vsctl \
-        -- get Interface p1 ofport \
-        -- get Interface p2 ofport \
-        -- get Interface p3 ofport],
-  [0], [stdout])
-set `cat stdout`
-p1=$1 p2=$2 p3=$3
-
 AT_DATA([flows.txt], [dnl
 in_port=1 actions=output:2
 in_port=2 actions=output:1
 ])
 AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 
-flow="in_port($p1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)"
+flow="in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)"
 AT_CHECK([ovs-appctl ofproto/trace br0 "$flow"], [0], [stdout])
 AT_CHECK_UNQUOTED([tail -1 stdout], [0],
-  [Datapath actions: $p2,$p3
+  [Datapath actions: 2,3
 ])
 
-flow="in_port($p2),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)"
+flow="in_port(2),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)"
 AT_CHECK([ovs-appctl ofproto/trace br0 "$flow"], [0], [stdout])
 AT_CHECK_UNQUOTED([tail -1 stdout], [0],
-  [Datapath actions: $p1,$p3
+  [Datapath actions: 1,3
 ])
 
 OVS_VSWITCHD_STOP
@@ -628,31 +590,22 @@ OVS_VSWITCHD_START(
         select_src_port=@p1 output_port=@p3], [<0>
 ])
 
-AT_CHECK(
-  [ovs-vsctl \
-        -- get Interface p1 ofport \
-        -- get Interface p2 ofport \
-        -- get Interface p3 ofport],
-  [0], [stdout])
-set `cat stdout`
-p1=$1 p2=$2 p3=$3
-
 AT_DATA([flows.txt], [dnl
 in_port=1 actions=output:2
 in_port=2 actions=output:1
 ])
 AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 
-flow="in_port($p1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)"
+flow="in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)"
 AT_CHECK([ovs-appctl ofproto/trace br0 "$flow"], [0], [stdout])
 AT_CHECK_UNQUOTED([tail -1 stdout], [0],
-  [Datapath actions: $p2,$p3
+  [Datapath actions: 2,3
 ])
 
-flow="in_port($p2),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)"
+flow="in_port(2),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)"
 AT_CHECK([ovs-appctl ofproto/trace br0 "$flow"], [0], [stdout])
 AT_CHECK_UNQUOTED([tail -1 stdout], [0],
-  [Datapath actions: $p1
+  [Datapath actions: 1
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -667,21 +620,13 @@ OVS_VSWITCHD_START(
         select_all=true output_port=@p2], [<0>
 ])
 
-AT_CHECK(
-  [ovs-vsctl \
-        -- get Interface p1 ofport \
-        -- get Interface p2 ofport],
-  [0], [stdout])
-set `cat stdout`
-p1=$1 p2=$2
-
 AT_CHECK([ovs-ofctl add-flow br0 action=output:1])
 
 # "in_port" defaults to OFPP_NONE if it's not specified.
 flow="eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)"
 AT_CHECK([ovs-appctl ofproto/trace br0 "$flow"], [0], [stdout])
 AT_CHECK_UNQUOTED([tail -1 stdout], [0],
-  [Datapath actions: $p1,$p2
+  [Datapath actions: 1,2
 ])
 
 OVS_VSWITCHD_STOP
@@ -699,31 +644,22 @@ OVS_VSWITCHD_START(
         select_dst_port=@p2 output_port=@p3], [<0>
 ])
 
-AT_CHECK(
-  [ovs-vsctl \
-        -- get Interface p1 ofport \
-        -- get Interface p2 ofport \
-        -- get Interface p3 ofport],
-  [0], [stdout])
-set `cat stdout`
-p1=$1 p2=$2 p3=$3
-
 AT_DATA([flows.txt], [dnl
 in_port=1 actions=output:2
 in_port=2 actions=output:1
 ])
 AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 
-flow="in_port($p1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)"
+flow="in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)"
 AT_CHECK([ovs-appctl ofproto/trace br0 "$flow"], [0], [stdout])
 AT_CHECK_UNQUOTED([tail -1 stdout], [0],
-  [Datapath actions: $p2,$p3
+  [Datapath actions: 2,3
 ])
 
-flow="in_port($p2),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)"
+flow="in_port(2),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)"
 AT_CHECK([ovs-appctl ofproto/trace br0 "$flow"], [0], [stdout])
 AT_CHECK_UNQUOTED([tail -1 stdout], [0],
-  [Datapath actions: $p1
+  [Datapath actions: 1
 ])
 
 OVS_VSWITCHD_STOP
@@ -741,36 +677,27 @@ OVS_VSWITCHD_START(
         select_all=true select_vlan=11 output_port=@p3], [<0>
 ])
 
-AT_CHECK(
-  [ovs-vsctl \
-        -- get Interface p1 ofport \
-        -- get Interface p2 ofport \
-        -- get Interface p3 ofport],
-  [0], [stdout])
-set `cat stdout`
-p1=$1 p2=$2 p3=$3
-
 AT_DATA([flows.txt], [dnl
 in_port=1, actions=output:2
 ])
 AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 
-flow="in_port($p1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)"
+flow="in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)"
 AT_CHECK([ovs-appctl ofproto/trace br0 "$flow"], [0], [stdout])
 AT_CHECK_UNQUOTED([tail -1 stdout], [0],
-  [Datapath actions: $p2
+  [Datapath actions: 2
 ])
 
-flow="in_port($p1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x8100),vlan(vid=10,pcp=0),encap(eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0))"
+flow="in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x8100),vlan(vid=10,pcp=0),encap(eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0))"
 AT_CHECK([ovs-appctl ofproto/trace br0 "$flow"], [0], [stdout])
 AT_CHECK_UNQUOTED([tail -1 stdout], [0],
-  [Datapath actions: $p2
+  [Datapath actions: 2
 ])
 
-flow="in_port($p1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x8100),vlan(vid=11,pcp=0),encap(eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0))"
+flow="in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x8100),vlan(vid=11,pcp=0),encap(eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0))"
 AT_CHECK([ovs-appctl ofproto/trace br0 "$flow"], [0], [stdout])
 AT_CHECK_UNQUOTED([tail -1 stdout], [0],
-  [Datapath actions: $p2,$p3
+  [Datapath actions: 2,3
 ])
 
 OVS_VSWITCHD_STOP
@@ -788,31 +715,22 @@ OVS_VSWITCHD_START(
         select_all=true output_port=@p3], [<0>
 ])
 
-AT_CHECK(
-  [ovs-vsctl \
-        -- get Interface p1 ofport \
-        -- get Interface p2 ofport \
-        -- get Interface p3 ofport],
-  [0], [stdout])
-set `cat stdout`
-p1=$1 p2=$2 p3=$3
-
 AT_DATA([flows.txt], [dnl
 in_port=1 actions=mod_vlan_vid:17,output:2
 in_port=2 actions=output:1
 ])
 AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 
-flow="in_port($p1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)"
+flow="in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)"
 AT_CHECK([ovs-appctl ofproto/trace br0 "$flow"], [0], [stdout])
 AT_CHECK_UNQUOTED([tail -1 stdout], [0],
-  [Datapath actions: push_vlan(vid=17,pcp=0),$p2,pop_vlan,$p3
+  [Datapath actions: push_vlan(vid=17,pcp=0),2,pop_vlan,3
 ])
 
-flow="in_port($p2),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)"
+flow="in_port(2),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)"
 AT_CHECK([ovs-appctl ofproto/trace br0 "$flow"], [0], [stdout])
 AT_CHECK_UNQUOTED([tail -1 stdout], [0],
-  [Datapath actions: $p1,$p3
+  [Datapath actions: 1,3
 ])
 
 OVS_VSWITCHD_STOP
@@ -827,37 +745,29 @@ OVS_VSWITCHD_START(
         select_all=true output_vlan=12], [<0>
 ])
 
-AT_CHECK(
-  [ovs-vsctl \
-        -- get Interface p1 ofport \
-        -- get Interface p2 ofport],
-  [0], [stdout])
-set `cat stdout`
-br0=0 p1=$1 p2=$2
-
 AT_DATA([flows.txt], [dnl
 in_port=1 actions=output:2
 in_port=2 actions=mod_vlan_vid:17,output:1
 ])
 AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 
-flow="in_port($p1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)"
+flow="in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)"
 AT_CHECK([ovs-appctl ofproto/trace br0 "$flow"], [0], [stdout])
 actual=`tail -1 stdout | sed 's/Datapath actions: //'`
 
-expected="$p2,push_vlan(vid=12,pcp=0),$br0,$p1,$p2"
-AT_CHECK([ovs-dpctl normalize-actions "$flow" "$expected" br0=$br0 p1=$p1 p2=$p2], [0], [stdout])
+expected="2,push_vlan(vid=12,pcp=0),0,1,2"
+AT_CHECK([ovs-dpctl normalize-actions "$flow" "$expected"], [0], [stdout])
 mv stdout expout
-AT_CHECK([ovs-dpctl normalize-actions "$flow" "$actual" br0=$br0 p1=$p1 p2=$p2], [0], [expout])
+AT_CHECK([ovs-dpctl normalize-actions "$flow" "$actual"], [0], [expout])
 
-flow="in_port($p2),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)"
+flow="in_port(2),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)"
 AT_CHECK([ovs-appctl ofproto/trace br0 "$flow"], [0], [stdout])
 actual=`tail -1 stdout | sed 's/Datapath actions: //'`
 
-expected="push_vlan(vid=17,pcp=0),$p1,pop_vlan,push_vlan(vid=12,pcp=0),$br0,$p1,$p2"
-AT_CHECK([ovs-dpctl normalize-actions "$flow" "$expected" br0=$br0 p1=$p1 p2=$p2], [0], [stdout])
+expected="push_vlan(vid=17,pcp=0),1,pop_vlan,push_vlan(vid=12,pcp=0),0,1,2"
+AT_CHECK([ovs-dpctl normalize-actions "$flow" "$expected"], [0], [stdout])
 mv stdout expout
-AT_CHECK([ovs-dpctl normalize-actions "$flow" "$actual" br0=$br0 p1=$p1 p2=$p2], [0], [expout])
+AT_CHECK([ovs-dpctl normalize-actions "$flow" "$actual"], [0], [expout])
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -880,59 +790,48 @@ OVS_VSWITCHD_START(
    add-port br0 p2 -- set Interface p2 type=dummy -- \
    add-port br0 p3 -- set Interface p3 type=dummy])
 
-AT_CHECK(
-  [ovs-vsctl \
-        -- get Interface p1 ofport \
-        -- get Interface p2 ofport \
-        -- get Interface p3 ofport],
-  [0], [stdout])
-set `cat stdout`
-br0=0 p1=$1 p2=$2 p3=$3
 arp='eth_type(0x0806),arp(sip=192.168.0.1,tip=192.168.0.2,op=1,sha=50:54:00:00:00:05,tha=00:00:00:00:00:00)'
 
 # Trace an ARP packet arriving on p3, to create a MAC learning entry.
 OFPROTO_TRACE(
   [br0],
-  [in_port($p3),eth(src=50:54:00:00:00:05,dst=ff:ff:ff:ff:ff:ff),$arp],
+  [in_port(3),eth(src=50:54:00:00:00:05,dst=ff:ff:ff:ff:ff:ff),$arp],
   [-generate],
-  [$br0,$p1,$p2],
-  [br0=$br0 p1=$p1 p2=$p2 p3=$p3])
+  [0,1,2])
 
 # Check for the MAC learning entry.
 AT_CHECK_UNQUOTED([ovs-appctl fdb/show br0 | sed 's/[[0-9]]$/?/'], [0], [dnl
  port  VLAN  MAC                Age
-    $p3     0  50:54:00:00:00:05    ?
+    3     0  50:54:00:00:00:05    ?
 ])
 
 # Trace a packet arrival destined for the learned MAC.
 # (This will also learn a MAC.)
 OFPROTO_TRACE(
   [br0],
-  [in_port($p1),eth(src=50:54:00:00:00:06,dst=50:54:00:00:00:05),$arp],
+  [in_port(1),eth(src=50:54:00:00:00:06,dst=50:54:00:00:00:05),$arp],
   [-generate],
-  [$p3],
-  [br0=$br0 p1=$p1 p2=$p2 p3=$p3])
+  [3])
 
 # Check for both MAC learning entries.
 AT_CHECK_UNQUOTED([ovs-appctl fdb/show br0 | sed 's/[[0-9]]$/?/'], [0], [dnl
  port  VLAN  MAC                Age
-    $p3     0  50:54:00:00:00:05    ?
-    $p1     0  50:54:00:00:00:06    ?
+    3     0  50:54:00:00:00:05    ?
+    1     0  50:54:00:00:00:06    ?
 ])
 
 # Trace a packet arrival that updates the first learned MAC entry.
 OFPROTO_TRACE(
   [br0],
-  [in_port($p2),eth(src=50:54:00:00:00:05,dst=ff:ff:ff:ff:ff:ff),$arp],
+  [in_port(2),eth(src=50:54:00:00:00:05,dst=ff:ff:ff:ff:ff:ff),$arp],
   [-generate],
-  [$br0,$p1,$p3],
-  [br0=$br0 p1=$p1 p2=$p2 p3=$p3])
+  [0,1,3])
 
 # Check that the MAC learning entry was updated.
 AT_CHECK_UNQUOTED([ovs-appctl fdb/show br0 | sed 's/[[0-9]]$/?/'], [0], [dnl
  port  VLAN  MAC                Age
-    $p1     0  50:54:00:00:00:06    ?
-    $p2     0  50:54:00:00:00:05    ?
+    1     0  50:54:00:00:00:06    ?
+    2     0  50:54:00:00:00:05    ?
 ])
 
 # Add another bridge.
@@ -942,33 +841,24 @@ AT_CHECK(
      -- set bridge br1 datapath-type=dummy \
      -- add-port br1 p4 -- set interface p4 type=dummy \
      -- add-port br1 p5 -- set interface p5 type=dummy])
-AT_CHECK(
-  [ovs-vsctl \
-        -- get Interface p4 ofport \
-        -- get Interface p5 ofport],
-  [0], [stdout])
-set `cat stdout`
-br1=0 p4=$1 p5=$2
 
 # Trace some packet arrivals in br1 to create MAC learning entries there too.
 OFPROTO_TRACE(
   [br1],
-  [in_port($p4),eth(src=50:54:00:00:00:06,dst=ff:ff:ff:ff:ff:ff),$arp],
+  [in_port(4),eth(src=50:54:00:00:00:06,dst=ff:ff:ff:ff:ff:ff),$arp],
   [-generate],
-  [$br1,$p5],
-  [br1=$br1 p4=$p4 p5=$p5])
+  [0,5])
 OFPROTO_TRACE(
   [br1],
-  [in_port($p5),eth(src=50:54:00:00:00:07,dst=ff:ff:ff:ff:ff:ff),$arp],
+  [in_port(5),eth(src=50:54:00:00:00:07,dst=ff:ff:ff:ff:ff:ff),$arp],
   [-generate],
-  [$br1,$p4],
-  [br1=$br1 p4=$p4 p5=$p5])
+  [0,4])
 
 # Check that the MAC learning entries were added.
 AT_CHECK_UNQUOTED([ovs-appctl fdb/show br1 | sed 's/[[0-9]]$/?/'], [0], [dnl
  port  VLAN  MAC                Age
-    $p4     0  50:54:00:00:00:06    ?
-    $p5     0  50:54:00:00:00:07    ?
+    4     0  50:54:00:00:00:06    ?
+    5     0  50:54:00:00:00:07    ?
 ])
 
 # Delete port p1 and see that its MAC learning entry disappeared, and
@@ -976,11 +866,11 @@ AT_CHECK_UNQUOTED([ovs-appctl fdb/show br1 | sed 's/[[0-9]]$/?/'], [0], [dnl
 AT_CHECK([ovs-vsctl del-port p1])
 AT_CHECK_UNQUOTED([ovs-appctl fdb/show br0 | sed 's/[[0-9]]$/?/'], [0], [dnl
  port  VLAN  MAC                Age
-    $p2     0  50:54:00:00:00:05    ?
+    2     0  50:54:00:00:00:05    ?
 ])
 AT_CHECK_UNQUOTED([ovs-appctl fdb/show br1 | sed 's/[[0-9]]$/?/'], [0], [dnl
  port  VLAN  MAC                Age
-    $p5     0  50:54:00:00:00:07    ?
+    5     0  50:54:00:00:00:07    ?
 ])
 
 OVS_VSWITCHD_STOP

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011 Nicira Networks.
+ * Copyright (c) 2009, 2010, 2011, 2012 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -371,18 +371,50 @@ do_add_port(struct dp_netdev *dp, const char *devname, const char *type,
 }
 
 static int
+choose_port(struct dpif *dpif, struct netdev *netdev)
+{
+    struct dp_netdev *dp = get_dp_netdev(dpif);
+    int port_no;
+
+    if (dpif->dpif_class == &dpif_dummy_class) {
+        /* If the port name contains a number, try to assign that port number.
+         * This can make writing unit tests easier because port numbers are
+         * predictable. */
+        const char *p;
+
+        for (p = netdev_get_name(netdev); *p != '\0'; p++) {
+            if (isdigit((unsigned char) *p)) {
+                port_no = strtol(p, NULL, 10);
+                if (port_no > 0 && port_no < MAX_PORTS
+                    && !dp->ports[port_no]) {
+                    return port_no;
+                }
+                break;
+            }
+        }
+    }
+
+    for (port_no = 0; port_no < MAX_PORTS; port_no++) {
+        if (!dp->ports[port_no]) {
+            return port_no;
+        }
+    }
+
+    return -1;
+}
+
+static int
 dpif_netdev_port_add(struct dpif *dpif, struct netdev *netdev,
                      uint16_t *port_nop)
 {
     struct dp_netdev *dp = get_dp_netdev(dpif);
     int port_no;
 
-    for (port_no = 0; port_no < MAX_PORTS; port_no++) {
-        if (!dp->ports[port_no]) {
-            *port_nop = port_no;
-            return do_add_port(dp, netdev_get_name(netdev),
-                               netdev_get_type(netdev), port_no);
-        }
+    port_no = choose_port(dpif, netdev);
+    if (port_no >= 0) {
+        *port_nop = port_no;
+        return do_add_port(dp, netdev_get_name(netdev),
+                           netdev_get_type(netdev), port_no);
     }
     return EFBIG;
 }
