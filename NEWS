@@ -1,4 +1,8 @@
-post-v1.4.0
+post-v1.5.0
+------------------------
+
+
+v1.5.0 - xx xxx xxxx
 ------------------------
     - OpenFlow:
         - Added support for querying, modifying, and deleting flows
