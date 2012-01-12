@@ -2833,8 +2833,8 @@ static int
 handle_nxt_flow_mod_table_id(struct ofconn *ofconn,
                              const struct ofp_header *oh)
 {
-    const struct nxt_flow_mod_table_id *msg
-        = (const struct nxt_flow_mod_table_id *) oh;
+    const struct nx_flow_mod_table_id *msg
+        = (const struct nx_flow_mod_table_id *) oh;
 
     ofconn_set_flow_mod_table_id(ofconn, msg->set != 0);
     return 0;
@@ -2843,8 +2843,8 @@ handle_nxt_flow_mod_table_id(struct ofconn *ofconn,
 static int
 handle_nxt_set_flow_format(struct ofconn *ofconn, const struct ofp_header *oh)
 {
-    const struct nxt_set_flow_format *msg
-        = (const struct nxt_set_flow_format *) oh;
+    const struct nx_set_flow_format *msg
+        = (const struct nx_set_flow_format *) oh;
     uint32_t format;
 
     format = ntohl(msg->format);
@@ -2866,10 +2866,10 @@ static int
 handle_nxt_set_packet_in_format(struct ofconn *ofconn,
                                 const struct ofp_header *oh)
 {
-    const struct nxt_set_packet_in_format *msg;
+    const struct nx_set_packet_in_format *msg;
     uint32_t format;
 
-    msg = (const struct nxt_set_packet_in_format *) oh;
+    msg = (const struct nx_set_packet_in_format *) oh;
     format = ntohl(msg->format);
     if (format != NXFF_OPENFLOW10 && format != NXPIF_NXM) {
         return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_EPERM);

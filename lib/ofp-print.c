@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1253,14 +1253,14 @@ ofp_print_nxt_role_message(struct ds *string,
 
 static void
 ofp_print_nxt_flow_mod_table_id(struct ds *string,
-                                const struct nxt_flow_mod_table_id *nfmti)
+                                const struct nx_flow_mod_table_id *nfmti)
 {
     ds_put_format(string, " %s", nfmti->set ? "enable" : "disable");
 }
 
 static void
 ofp_print_nxt_set_flow_format(struct ds *string,
-                              const struct nxt_set_flow_format *nsff)
+                              const struct nx_set_flow_format *nsff)
 {
     uint32_t format = ntohl(nsff->format);
 
@@ -1274,7 +1274,7 @@ ofp_print_nxt_set_flow_format(struct ds *string,
 
 static void
 ofp_print_nxt_set_packet_in_format(struct ds *string,
-                                   const struct nxt_set_packet_in_format *nspf)
+                                   const struct nx_set_packet_in_format *nspf)
 {
     uint32_t format = ntohl(nspf->format);
 

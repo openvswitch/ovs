@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -361,15 +361,15 @@ ofputil_decode_vendor(const struct ofp_header *oh, size_t length,
 
         { OFPUTIL_NXT_SET_FLOW_FORMAT,
           NXT_SET_FLOW_FORMAT, "NXT_SET_FLOW_FORMAT",
-          sizeof(struct nxt_set_flow_format), 0 },
+          sizeof(struct nx_set_flow_format), 0 },
 
         { OFPUTIL_NXT_SET_PACKET_IN_FORMAT,
           NXT_SET_PACKET_IN_FORMAT, "NXT_SET_PACKET_IN_FORMAT",
-          sizeof(struct nxt_set_packet_in_format), 0 },
+          sizeof(struct nx_set_packet_in_format), 0 },
 
         { OFPUTIL_NXT_PACKET_IN,
           NXT_PACKET_IN, "NXT_PACKET_IN",
-          sizeof(struct nxt_packet_in), 1 },
+          sizeof(struct nx_packet_in), 1 },
 
         { OFPUTIL_NXT_FLOW_MOD,
           NXT_FLOW_MOD, "NXT_FLOW_MOD",
@@ -381,7 +381,7 @@ ofputil_decode_vendor(const struct ofp_header *oh, size_t length,
 
         { OFPUTIL_NXT_FLOW_MOD_TABLE_ID,
           NXT_FLOW_MOD_TABLE_ID, "NXT_FLOW_MOD_TABLE_ID",
-          sizeof(struct nxt_flow_mod_table_id), 0 },
+          sizeof(struct nx_flow_mod_table_id), 0 },
     };
 
     static const struct ofputil_msg_category nxt_category = {
@@ -959,7 +959,7 @@ ofputil_min_flow_format(const struct cls_rule *rule)
 struct ofpbuf *
 ofputil_make_set_flow_format(enum nx_flow_format flow_format)
 {
-    struct nxt_set_flow_format *sff;
+    struct nx_set_flow_format *sff;
     struct ofpbuf *msg;
 
     sff = make_nxmsg(sizeof *sff, NXT_SET_FLOW_FORMAT, &msg);
@@ -971,7 +971,7 @@ ofputil_make_set_flow_format(enum nx_flow_format flow_format)
 struct ofpbuf *
 ofputil_make_set_packet_in_format(enum nx_packet_in_format packet_in_format)
 {
-    struct nxt_set_packet_in_format *spif;
+    struct nx_set_packet_in_format *spif;
     struct ofpbuf *msg;
 
     spif = make_nxmsg(sizeof *spif, NXT_SET_PACKET_IN_FORMAT, &msg);
@@ -985,7 +985,7 @@ ofputil_make_set_packet_in_format(enum nx_packet_in_format packet_in_format)
 struct ofpbuf *
 ofputil_make_flow_mod_table_id(bool flow_mod_table_id)
 {
-    struct nxt_flow_mod_table_id *nfmti;
+    struct nx_flow_mod_table_id *nfmti;
     struct ofpbuf *msg;
 
     nfmti = make_nxmsg(sizeof *nfmti, NXT_FLOW_MOD_TABLE_ID, &msg);
@@ -1618,7 +1618,7 @@ ofputil_decode_packet_in(struct ofputil_packet_in *pin,
         pin->buffer_id = ntohl(opi->buffer_id);
         pin->total_len = ntohs(opi->total_len);
     } else if (code == OFPUTIL_NXT_PACKET_IN) {
-        const struct nxt_packet_in *npi;
+        const struct nx_packet_in *npi;
         struct cls_rule rule;
         struct ofpbuf b;
         int error;
@@ -1685,7 +1685,7 @@ ofputil_encode_packet_in(const struct ofputil_packet_in *pin,
 
         ofpbuf_put(packet, pin->packet, send_len);
     } else if (packet_in_format == NXPIF_NXM) {
-        struct nxt_packet_in *npi;
+        struct nx_packet_in *npi;
         struct cls_rule rule;
         size_t match_len;
         size_t i;

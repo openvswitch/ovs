@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira Networks
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -161,7 +161,7 @@ enum nicira_type {
 
     /* Use the upper 8 bits of the 'command' member in struct ofp_flow_mod to
      * designate the table to which a flow is to be added?  See the big comment
-     * on struct nxt_flow_mod_table_id for more information. */
+     * on struct nx_flow_mod_table_id for more information. */
     NXT_FLOW_MOD_TABLE_ID = 15,
 
     /* Alternative PACKET_IN message formats. */
@@ -241,14 +241,14 @@ enum nx_hash_fields {
  *      matches, then it is modified or deleted; if flows in more than one
  *      table match, then none is modified or deleted.
  */
-struct nxt_flow_mod_table_id {
+struct nx_flow_mod_table_id {
     struct ofp_header header;
     uint32_t vendor;            /* NX_VENDOR_ID. */
     uint32_t subtype;           /* NXT_FLOW_MOD_TABLE_ID. */
     uint8_t set;                /* Nonzero to enable, zero to disable. */
     uint8_t pad[7];
 };
-OFP_ASSERT(sizeof(struct nxt_flow_mod_table_id) == 24);
+OFP_ASSERT(sizeof(struct nx_flow_mod_table_id) == 24);
 
 enum nx_packet_in_format {
     NXPIF_OPENFLOW10 = 0,       /* Standard OpenFlow 1.0 compatible. */
@@ -256,11 +256,11 @@ enum nx_packet_in_format {
 };
 
 /* NXT_SET_PACKET_IN_FORMAT request. */
-struct nxt_set_packet_in_format {
+struct nx_set_packet_in_format {
     struct nicira_header nxh;
     ovs_be32 format;            /* One of NXPIF_*. */
 };
-OFP_ASSERT(sizeof(struct nxt_set_packet_in_format) == 20);
+OFP_ASSERT(sizeof(struct nx_set_packet_in_format) == 20);
 
 /* NXT_PACKET_IN (analogous to OFPT_PACKET_IN).
  *
@@ -286,7 +286,7 @@ OFP_ASSERT(sizeof(struct nxt_set_packet_in_format) == 20);
  *
  * The 'cookie' and 'table_id' fields have no meaning when 'reason' is
  * OFPR_NO_MATCH.  In this case they should be set to 0. */
-struct nxt_packet_in {
+struct nx_packet_in {
     struct nicira_header nxh;
     ovs_be32 buffer_id;       /* ID assigned by datapath. */
     ovs_be16 total_len;       /* Full length of frame. */
@@ -309,7 +309,7 @@ struct nxt_packet_in {
     /* uint8_t pad[2]; */          /* Align to 64 bit + 16 bit. */
     /* uint8_t data[0]; */         /* Ethernet frame. */
 };
-OFP_ASSERT(sizeof(struct nxt_packet_in) == 40);
+OFP_ASSERT(sizeof(struct nx_packet_in) == 40);
 
 /* Configures the "role" of the sending controller.  The default role is:
  *
@@ -1732,13 +1732,13 @@ enum nx_flow_format {
 };
 
 /* NXT_SET_FLOW_FORMAT request. */
-struct nxt_set_flow_format {
+struct nx_set_flow_format {
     struct ofp_header header;
     ovs_be32 vendor;            /* NX_VENDOR_ID. */
     ovs_be32 subtype;           /* NXT_SET_FLOW_FORMAT. */
     ovs_be32 format;            /* One of NXFF_*. */
 };
-OFP_ASSERT(sizeof(struct nxt_set_flow_format) == 20);
+OFP_ASSERT(sizeof(struct nx_set_flow_format) == 20);
 
 /* NXT_FLOW_MOD (analogous to OFPT_FLOW_MOD).
  *
