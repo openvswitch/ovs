@@ -41,6 +41,7 @@
  * experimental OpenFlow version.
  */
 #define OFP_VERSION   0x01
+#define OFP10_VERSION 0x01
 
 #define OFP_MAX_TABLE_NAME_LEN 32
 #define OFP_MAX_PORT_NAME_LEN  16

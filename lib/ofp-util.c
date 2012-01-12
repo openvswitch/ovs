@@ -271,6 +271,7 @@ alloc_xid(void)
 
 struct ofputil_msg_type {
     enum ofputil_msg_code code; /* OFPUTIL_*. */
+    uint8_t ofp_version;        /* An OpenFlow version or 0 for "any". */
     uint32_t value;             /* OFPT_*, OFPST_*, NXT_*, or NXST_*. */
     const char *name;           /* e.g. "OFPT_FLOW_REMOVED". */
     unsigned int min_size;      /* Minimum total message size in bytes. */
@@ -281,7 +282,7 @@ struct ofputil_msg_type {
 
 /* Represents a malformed OpenFlow message. */
 static const struct ofputil_msg_type ofputil_invalid_type = {
-    OFPUTIL_MSG_INVALID, 0, "OFPUTIL_MSG_INVALID", 0, 0
+    OFPUTIL_MSG_INVALID, 0, 0, "OFPUTIL_MSG_INVALID", 0, 0
 };
 
 struct ofputil_msg_category {
@@ -329,13 +330,14 @@ ofputil_check_length(const struct ofputil_msg_type *type, unsigned int size)
 
 static int
 ofputil_lookup_openflow_message(const struct ofputil_msg_category *cat,
-                                uint32_t value,
+                                uint8_t version, uint32_t value,
                                 const struct ofputil_msg_type **typep)
 {
     const struct ofputil_msg_type *type;
 
     for (type = cat->types; type < &cat->types[cat->n_types]; type++) {
-        if (type->value == value) {
+        if (type->value == value
+            && (!type->ofp_version || version == type->ofp_version)) {
             *typep = type;
             return 0;
         }
@@ -351,35 +353,35 @@ ofputil_decode_vendor(const struct ofp_header *oh, size_t length,
                       const struct ofputil_msg_type **typep)
 {
     static const struct ofputil_msg_type nxt_messages[] = {
-        { OFPUTIL_NXT_ROLE_REQUEST,
+        { OFPUTIL_NXT_ROLE_REQUEST, OFP10_VERSION,
           NXT_ROLE_REQUEST, "NXT_ROLE_REQUEST",
           sizeof(struct nx_role_request), 0 },
 
-        { OFPUTIL_NXT_ROLE_REPLY,
+        { OFPUTIL_NXT_ROLE_REPLY, OFP10_VERSION,
           NXT_ROLE_REPLY, "NXT_ROLE_REPLY",
           sizeof(struct nx_role_request), 0 },
 
-        { OFPUTIL_NXT_SET_FLOW_FORMAT,
+        { OFPUTIL_NXT_SET_FLOW_FORMAT, OFP10_VERSION,
           NXT_SET_FLOW_FORMAT, "NXT_SET_FLOW_FORMAT",
           sizeof(struct nx_set_flow_format), 0 },
 
-        { OFPUTIL_NXT_SET_PACKET_IN_FORMAT,
+        { OFPUTIL_NXT_SET_PACKET_IN_FORMAT, OFP10_VERSION,
           NXT_SET_PACKET_IN_FORMAT, "NXT_SET_PACKET_IN_FORMAT",
           sizeof(struct nx_set_packet_in_format), 0 },
 
-        { OFPUTIL_NXT_PACKET_IN,
+        { OFPUTIL_NXT_PACKET_IN, OFP10_VERSION,
           NXT_PACKET_IN, "NXT_PACKET_IN",
           sizeof(struct nx_packet_in), 1 },
 
-        { OFPUTIL_NXT_FLOW_MOD,
+        { OFPUTIL_NXT_FLOW_MOD, OFP10_VERSION,
           NXT_FLOW_MOD, "NXT_FLOW_MOD",
           sizeof(struct nx_flow_mod), 8 },
 
-        { OFPUTIL_NXT_FLOW_REMOVED,
+        { OFPUTIL_NXT_FLOW_REMOVED, OFP10_VERSION,
           NXT_FLOW_REMOVED, "NXT_FLOW_REMOVED",
           sizeof(struct nx_flow_removed), 8 },
 
-        { OFPUTIL_NXT_FLOW_MOD_TABLE_ID,
+        { OFPUTIL_NXT_FLOW_MOD_TABLE_ID, OFP10_VERSION,
           NXT_FLOW_MOD_TABLE_ID, "NXT_FLOW_MOD_TABLE_ID",
           sizeof(struct nx_flow_mod_table_id), 0 },
     };
@@ -418,8 +420,8 @@ ofputil_decode_vendor(const struct ofp_header *oh, size_t length,
     }
 
     nh = (const struct nicira_header *) oh;
-    return ofputil_lookup_openflow_message(&nxt_category, ntohl(nh->subtype),
-                                           typep);
+    return ofputil_lookup_openflow_message(&nxt_category, oh->version,
+                                           ntohl(nh->subtype), typep);
 }
 
 static int
@@ -457,11 +459,11 @@ ofputil_decode_nxst_request(const struct ofp_header *oh, size_t length,
                             const struct ofputil_msg_type **typep)
 {
     static const struct ofputil_msg_type nxst_requests[] = {
-        { OFPUTIL_NXST_FLOW_REQUEST,
+        { OFPUTIL_NXST_FLOW_REQUEST, OFP10_VERSION,
           NXST_FLOW, "NXST_FLOW request",
           sizeof(struct nx_flow_stats_request), 8 },
 
-        { OFPUTIL_NXST_AGGREGATE_REQUEST,
+        { OFPUTIL_NXST_AGGREGATE_REQUEST, OFP10_VERSION,
           NXST_AGGREGATE, "NXST_AGGREGATE request",
           sizeof(struct nx_aggregate_stats_request), 8 },
     };
@@ -481,7 +483,7 @@ ofputil_decode_nxst_request(const struct ofp_header *oh, size_t length,
     }
 
     nsm = (struct nicira_stats_msg *) oh;
-    return ofputil_lookup_openflow_message(&nxst_request_category,
+    return ofputil_lookup_openflow_message(&nxst_request_category, oh->version,
                                            ntohl(nsm->subtype), typep);
 }
 
@@ -490,11 +492,11 @@ ofputil_decode_nxst_reply(const struct ofp_header *oh, size_t length,
                           const struct ofputil_msg_type **typep)
 {
     static const struct ofputil_msg_type nxst_replies[] = {
-        { OFPUTIL_NXST_FLOW_REPLY,
+        { OFPUTIL_NXST_FLOW_REPLY, OFP10_VERSION,
           NXST_FLOW, "NXST_FLOW reply",
           sizeof(struct nicira_stats_msg), 8 },
 
-        { OFPUTIL_NXST_AGGREGATE_REPLY,
+        { OFPUTIL_NXST_AGGREGATE_REPLY, OFP10_VERSION,
           NXST_AGGREGATE, "NXST_AGGREGATE reply",
           sizeof(struct nx_aggregate_stats_reply), 0 },
     };
@@ -514,7 +516,7 @@ ofputil_decode_nxst_reply(const struct ofp_header *oh, size_t length,
     }
 
     nsm = (struct nicira_stats_msg *) oh;
-    return ofputil_lookup_openflow_message(&nxst_reply_category,
+    return ofputil_lookup_openflow_message(&nxst_reply_category, oh->version,
                                            ntohl(nsm->subtype), typep);
 }
 
@@ -536,31 +538,31 @@ ofputil_decode_ofpst_request(const struct ofp_header *oh, size_t length,
                              const struct ofputil_msg_type **typep)
 {
     static const struct ofputil_msg_type ofpst_requests[] = {
-        { OFPUTIL_OFPST_DESC_REQUEST,
+        { OFPUTIL_OFPST_DESC_REQUEST, OFP10_VERSION,
           OFPST_DESC, "OFPST_DESC request",
           sizeof(struct ofp_stats_msg), 0 },
 
-        { OFPUTIL_OFPST_FLOW_REQUEST,
+        { OFPUTIL_OFPST_FLOW_REQUEST, OFP10_VERSION,
           OFPST_FLOW, "OFPST_FLOW request",
           sizeof(struct ofp_flow_stats_request), 0 },
 
-        { OFPUTIL_OFPST_AGGREGATE_REQUEST,
+        { OFPUTIL_OFPST_AGGREGATE_REQUEST, OFP10_VERSION,
           OFPST_AGGREGATE, "OFPST_AGGREGATE request",
           sizeof(struct ofp_flow_stats_request), 0 },
 
-        { OFPUTIL_OFPST_TABLE_REQUEST,
+        { OFPUTIL_OFPST_TABLE_REQUEST, OFP10_VERSION,
           OFPST_TABLE, "OFPST_TABLE request",
           sizeof(struct ofp_stats_msg), 0 },
 
-        { OFPUTIL_OFPST_PORT_REQUEST,
+        { OFPUTIL_OFPST_PORT_REQUEST, OFP10_VERSION,
           OFPST_PORT, "OFPST_PORT request",
           sizeof(struct ofp_port_stats_request), 0 },
 
-        { OFPUTIL_OFPST_QUEUE_REQUEST,
+        { OFPUTIL_OFPST_QUEUE_REQUEST, OFP10_VERSION,
           OFPST_QUEUE, "OFPST_QUEUE request",
           sizeof(struct ofp_queue_stats_request), 0 },
 
-        { 0,
+        { 0, 0,
           OFPST_VENDOR, "OFPST_VENDOR request",
           sizeof(struct ofp_vendor_stats_msg), 1 },
     };
@@ -580,7 +582,8 @@ ofputil_decode_ofpst_request(const struct ofp_header *oh, size_t length,
     }
 
     error = ofputil_lookup_openflow_message(&ofpst_request_category,
-                                            ntohs(request->type), typep);
+                                            oh->version, ntohs(request->type),
+                                            typep);
     if (!error && request->type == htons(OFPST_VENDOR)) {
         error = ofputil_decode_nxst_request(oh, length, typep);
     }
@@ -592,31 +595,31 @@ ofputil_decode_ofpst_reply(const struct ofp_header *oh, size_t length,
                            const struct ofputil_msg_type **typep)
 {
     static const struct ofputil_msg_type ofpst_replies[] = {
-        { OFPUTIL_OFPST_DESC_REPLY,
+        { OFPUTIL_OFPST_DESC_REPLY, OFP10_VERSION,
           OFPST_DESC, "OFPST_DESC reply",
           sizeof(struct ofp_desc_stats), 0 },
 
-        { OFPUTIL_OFPST_FLOW_REPLY,
+        { OFPUTIL_OFPST_FLOW_REPLY, OFP10_VERSION,
           OFPST_FLOW, "OFPST_FLOW reply",
           sizeof(struct ofp_stats_msg), 1 },
 
-        { OFPUTIL_OFPST_AGGREGATE_REPLY,
+        { OFPUTIL_OFPST_AGGREGATE_REPLY, OFP10_VERSION,
           OFPST_AGGREGATE, "OFPST_AGGREGATE reply",
           sizeof(struct ofp_aggregate_stats_reply), 0 },
 
-        { OFPUTIL_OFPST_TABLE_REPLY,
+        { OFPUTIL_OFPST_TABLE_REPLY, OFP10_VERSION,
           OFPST_TABLE, "OFPST_TABLE reply",
           sizeof(struct ofp_stats_msg), sizeof(struct ofp_table_stats) },
 
-        { OFPUTIL_OFPST_PORT_REPLY,
+        { OFPUTIL_OFPST_PORT_REPLY, OFP10_VERSION,
           OFPST_PORT, "OFPST_PORT reply",
           sizeof(struct ofp_stats_msg), sizeof(struct ofp_port_stats) },
 
-        { OFPUTIL_OFPST_QUEUE_REPLY,
+        { OFPUTIL_OFPST_QUEUE_REPLY, OFP10_VERSION,
           OFPST_QUEUE, "OFPST_QUEUE reply",
           sizeof(struct ofp_stats_msg), sizeof(struct ofp_queue_stats) },
 
-        { 0,
+        { 0, 0,
           OFPST_VENDOR, "OFPST_VENDOR reply",
           sizeof(struct ofp_vendor_stats_msg), 1 },
     };
@@ -635,7 +638,7 @@ ofputil_decode_ofpst_reply(const struct ofp_header *oh, size_t length,
         return error;
     }
 
-    error = ofputil_lookup_openflow_message(&ofpst_reply_category,
+    error = ofputil_lookup_openflow_message(&ofpst_reply_category, oh->version,
                                            ntohs(reply->type), typep);
     if (!error && reply->type == htons(OFPST_VENDOR)) {
         error = ofputil_decode_nxst_reply(oh, length, typep);
@@ -648,83 +651,83 @@ ofputil_decode_msg_type__(const struct ofp_header *oh, size_t length,
                           const struct ofputil_msg_type **typep)
 {
     static const struct ofputil_msg_type ofpt_messages[] = {
-        { OFPUTIL_OFPT_HELLO,
+        { OFPUTIL_OFPT_HELLO, OFP10_VERSION,
           OFPT_HELLO, "OFPT_HELLO",
           sizeof(struct ofp_hello), 1 },
 
-        { OFPUTIL_OFPT_ERROR,
+        { OFPUTIL_OFPT_ERROR, OFP10_VERSION,
           OFPT_ERROR, "OFPT_ERROR",
           sizeof(struct ofp_error_msg), 1 },
 
-        { OFPUTIL_OFPT_ECHO_REQUEST,
+        { OFPUTIL_OFPT_ECHO_REQUEST, OFP10_VERSION,
           OFPT_ECHO_REQUEST, "OFPT_ECHO_REQUEST",
           sizeof(struct ofp_header), 1 },
 
-        { OFPUTIL_OFPT_ECHO_REPLY,
+        { OFPUTIL_OFPT_ECHO_REPLY, OFP10_VERSION,
           OFPT_ECHO_REPLY, "OFPT_ECHO_REPLY",
           sizeof(struct ofp_header), 1 },
 
-        { OFPUTIL_OFPT_FEATURES_REQUEST,
+        { OFPUTIL_OFPT_FEATURES_REQUEST, OFP10_VERSION,
           OFPT_FEATURES_REQUEST, "OFPT_FEATURES_REQUEST",
           sizeof(struct ofp_header), 0 },
 
-        { OFPUTIL_OFPT_FEATURES_REPLY,
+        { OFPUTIL_OFPT_FEATURES_REPLY, OFP10_VERSION,
           OFPT_FEATURES_REPLY, "OFPT_FEATURES_REPLY",
           sizeof(struct ofp_switch_features), sizeof(struct ofp_phy_port) },
 
-        { OFPUTIL_OFPT_GET_CONFIG_REQUEST,
+        { OFPUTIL_OFPT_GET_CONFIG_REQUEST, OFP10_VERSION,
           OFPT_GET_CONFIG_REQUEST, "OFPT_GET_CONFIG_REQUEST",
           sizeof(struct ofp_header), 0 },
 
-        { OFPUTIL_OFPT_GET_CONFIG_REPLY,
+        { OFPUTIL_OFPT_GET_CONFIG_REPLY, OFP10_VERSION,
           OFPT_GET_CONFIG_REPLY, "OFPT_GET_CONFIG_REPLY",
           sizeof(struct ofp_switch_config), 0 },
 
-        { OFPUTIL_OFPT_SET_CONFIG,
+        { OFPUTIL_OFPT_SET_CONFIG, OFP10_VERSION,
           OFPT_SET_CONFIG, "OFPT_SET_CONFIG",
           sizeof(struct ofp_switch_config), 0 },
 
-        { OFPUTIL_OFPT_PACKET_IN,
+        { OFPUTIL_OFPT_PACKET_IN, OFP10_VERSION,
           OFPT_PACKET_IN, "OFPT_PACKET_IN",
           offsetof(struct ofp_packet_in, data), 1 },
 
-        { OFPUTIL_OFPT_FLOW_REMOVED,
+        { OFPUTIL_OFPT_FLOW_REMOVED, OFP10_VERSION,
           OFPT_FLOW_REMOVED, "OFPT_FLOW_REMOVED",
           sizeof(struct ofp_flow_removed), 0 },
 
-        { OFPUTIL_OFPT_PORT_STATUS,
+        { OFPUTIL_OFPT_PORT_STATUS, OFP10_VERSION,
           OFPT_PORT_STATUS, "OFPT_PORT_STATUS",
           sizeof(struct ofp_port_status), 0 },
 
-        { OFPUTIL_OFPT_PACKET_OUT,
+        { OFPUTIL_OFPT_PACKET_OUT, OFP10_VERSION,
           OFPT_PACKET_OUT, "OFPT_PACKET_OUT",
           sizeof(struct ofp_packet_out), 1 },
 
-        { OFPUTIL_OFPT_FLOW_MOD,
+        { OFPUTIL_OFPT_FLOW_MOD, OFP10_VERSION,
           OFPT_FLOW_MOD, "OFPT_FLOW_MOD",
           sizeof(struct ofp_flow_mod), 1 },
 
-        { OFPUTIL_OFPT_PORT_MOD,
+        { OFPUTIL_OFPT_PORT_MOD, OFP10_VERSION,
           OFPT_PORT_MOD, "OFPT_PORT_MOD",
           sizeof(struct ofp_port_mod), 0 },
 
-        { 0,
+        { 0, OFP10_VERSION,
           OFPT_STATS_REQUEST, "OFPT_STATS_REQUEST",
           sizeof(struct ofp_stats_msg), 1 },
 
-        { 0,
+        { 0, OFP10_VERSION,
           OFPT_STATS_REPLY, "OFPT_STATS_REPLY",
           sizeof(struct ofp_stats_msg), 1 },
 
-        { OFPUTIL_OFPT_BARRIER_REQUEST,
+        { OFPUTIL_OFPT_BARRIER_REQUEST, OFP10_VERSION,
           OFPT_BARRIER_REQUEST, "OFPT_BARRIER_REQUEST",
           sizeof(struct ofp_header), 0 },
 
-        { OFPUTIL_OFPT_BARRIER_REPLY,
+        { OFPUTIL_OFPT_BARRIER_REPLY, OFP10_VERSION,
           OFPT_BARRIER_REPLY, "OFPT_BARRIER_REPLY",
           sizeof(struct ofp_header), 0 },
 
-        { 0,
+        { 0, 0,
           OFPT_VENDOR, "OFPT_VENDOR",
           sizeof(struct ofp_vendor_header), 1 },
     };
@@ -737,7 +740,8 @@ ofputil_decode_msg_type__(const struct ofp_header *oh, size_t length,
 
     int error;
 
-    error = ofputil_lookup_openflow_message(&ofpt_category, oh->type, typep);
+    error = ofputil_lookup_openflow_message(&ofpt_category, oh->version,
+                                            oh->type, typep);
     if (!error) {
         switch (oh->type) {
         case OFPT_VENDOR:
