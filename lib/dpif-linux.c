@@ -140,7 +140,6 @@ struct dpif_linux {
     /* Upcall messages. */
     struct nl_sock *upcall_socks[N_UPCALL_SOCKS];
     uint32_t ready_mask;        /* 1-bit for each sock with unread messages. */
-    unsigned int listen_mask;   /* Mask of DPIF_UC_* bits. */
     int epoll_fd;               /* epoll fd that includes the upcall socks. */
 
     /* Change notification. */
@@ -171,9 +170,7 @@ static int dpif_linux_init(void);
 static void open_dpif(const struct dpif_linux_dp *, struct dpif **);
 static bool dpif_linux_nln_parse(struct ofpbuf *, void *);
 static void dpif_linux_port_changed(const void *vport, void *dpif);
-static uint32_t dpif_linux_port_get_pid__(const struct dpif *,
-                                          uint16_t port_no,
-                                          enum dpif_upcall_type);
+static uint32_t dpif_linux_port_get_pid(const struct dpif *, uint16_t port_no);
 
 static void dpif_linux_vport_to_ofpbuf(const struct dpif_linux_vport *,
                                        struct ofpbuf *);
@@ -404,8 +401,7 @@ dpif_linux_port_add(struct dpif *dpif_, struct netdev *netdev,
         uint32_t upcall_pid;
 
         request.port_no = dpif_linux_pop_port(dpif);
-        upcall_pid = dpif_linux_port_get_pid__(dpif_, request.port_no,
-                                               DPIF_UC_MISS);
+        upcall_pid = dpif_linux_port_get_pid(dpif_, request.port_no);
         request.upcall_pid = &upcall_pid;
         error = dpif_linux_vport_transact(&request, &reply, &buf);
 
@@ -488,23 +484,16 @@ dpif_linux_get_max_ports(const struct dpif *dpif OVS_UNUSED)
 }
 
 static uint32_t
-dpif_linux_port_get_pid__(const struct dpif *dpif_, uint16_t port_no,
-                          enum dpif_upcall_type upcall_type)
+dpif_linux_port_get_pid(const struct dpif *dpif_, uint16_t port_no)
 {
     struct dpif_linux *dpif = dpif_linux_cast(dpif_);
 
-    if (!(dpif->listen_mask & (1u << upcall_type))) {
+    if (dpif->epoll_fd < 0) {
         return 0;
     } else {
         int idx = port_no & (N_UPCALL_SOCKS - 1);
         return nl_sock_pid(dpif->upcall_socks[idx]);
     }
-}
-
-static uint32_t
-dpif_linux_port_get_pid(const struct dpif *dpif, uint16_t port_no)
-{
-    return dpif_linux_port_get_pid__(dpif, port_no, DPIF_UC_ACTION);
 }
 
 static int
@@ -959,14 +948,6 @@ dpif_linux_operate(struct dpif *dpif_, union dpif_op **ops, size_t n_ops)
     free(txns);
 }
 
-static int
-dpif_linux_recv_get_mask(const struct dpif *dpif_, int *listen_mask)
-{
-    struct dpif_linux *dpif = dpif_linux_cast(dpif_);
-    *listen_mask = dpif->listen_mask;
-    return 0;
-}
-
 static void
 set_upcall_pids(struct dpif *dpif_)
 {
@@ -976,8 +957,7 @@ set_upcall_pids(struct dpif *dpif_)
     int error;
 
     DPIF_PORT_FOR_EACH (&port, &port_dump, &dpif->dpif) {
-        uint32_t upcall_pid = dpif_linux_port_get_pid__(dpif_, port.port_no,
-                                                        DPIF_UC_MISS);
+        uint32_t upcall_pid = dpif_linux_port_get_pid(dpif_, port.port_no);
         struct dpif_linux_vport vport_request;
 
         dpif_linux_vport_init(&vport_request);
@@ -998,17 +978,17 @@ set_upcall_pids(struct dpif *dpif_)
 }
 
 static int
-dpif_linux_recv_set_mask(struct dpif *dpif_, int listen_mask)
+dpif_linux_recv_set(struct dpif *dpif_, bool enable)
 {
     struct dpif_linux *dpif = dpif_linux_cast(dpif_);
 
-    if (listen_mask == dpif->listen_mask) {
+    if ((dpif->epoll_fd >= 0) == enable) {
         return 0;
     }
 
-    if (!listen_mask) {
+    if (!enable) {
         destroy_upcall_socks(dpif);
-    } else if (!dpif->listen_mask) {
+    } else {
         int i;
         int error;
 
@@ -1040,7 +1020,6 @@ dpif_linux_recv_set_mask(struct dpif *dpif_, int listen_mask)
         dpif->ready_mask = 0;
     }
 
-    dpif->listen_mask = listen_mask;
     set_upcall_pids(dpif_);
 
     return 0;
@@ -1119,7 +1098,7 @@ dpif_linux_recv(struct dpif *dpif_, struct dpif_upcall *upcall)
     struct dpif_linux *dpif = dpif_linux_cast(dpif_);
     int read_tries = 0;
 
-    if (!dpif->listen_mask) {
+    if (dpif->epoll_fd < 0) {
        return EAGAIN;
     }
 
@@ -1164,9 +1143,7 @@ dpif_linux_recv(struct dpif *dpif_, struct dpif_upcall *upcall)
             }
 
             error = parse_odp_packet(buf, upcall, &dp_ifindex);
-            if (!error
-                && dp_ifindex == dpif->dp_ifindex
-                && dpif->listen_mask & (1u << upcall->type)) {
+            if (!error && dp_ifindex == dpif->dp_ifindex) {
                 return 0;
             }
 
@@ -1185,7 +1162,7 @@ dpif_linux_recv_wait(struct dpif *dpif_)
 {
     struct dpif_linux *dpif = dpif_linux_cast(dpif_);
 
-    if (!dpif->listen_mask) {
+    if (dpif->epoll_fd < 0) {
        return;
     }
 
@@ -1198,7 +1175,7 @@ dpif_linux_recv_purge(struct dpif *dpif_)
     struct dpif_linux *dpif = dpif_linux_cast(dpif_);
     int i;
 
-    if (!dpif->listen_mask) {
+    if (dpif->epoll_fd < 0) {
        return;
     }
 
@@ -1236,8 +1213,7 @@ const struct dpif_class dpif_linux_class = {
     dpif_linux_flow_dump_done,
     dpif_linux_execute,
     dpif_linux_operate,
-    dpif_linux_recv_get_mask,
-    dpif_linux_recv_set_mask,
+    dpif_linux_recv_set,
     dpif_linux_queue_to_priority,
     dpif_linux_recv,
     dpif_linux_recv_wait,

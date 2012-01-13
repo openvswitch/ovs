@@ -638,9 +638,7 @@ construct(struct ofproto *ofproto_, int *n_tablesp)
     dpif_flow_flush(ofproto->dpif);
     dpif_recv_purge(ofproto->dpif);
 
-    error = dpif_recv_set_mask(ofproto->dpif,
-                               ((1u << DPIF_UC_MISS) |
-                                (1u << DPIF_UC_ACTION)));
+    error = dpif_recv_set(ofproto->dpif, true);
     if (error) {
         VLOG_ERR("failed to listen on datapath %s: %s", name, strerror(error));
         dpif_close(ofproto->dpif);

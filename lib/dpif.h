@@ -245,8 +245,7 @@ struct dpif_upcall {
     uint64_t userdata;          /* Argument to OVS_ACTION_ATTR_USERSPACE. */
 };
 
-int dpif_recv_get_mask(const struct dpif *, int *listen_mask);
-int dpif_recv_set_mask(struct dpif *, int listen_mask);
+int dpif_recv_set(struct dpif *, bool enable);
 int dpif_recv(struct dpif *, struct dpif_upcall *);
 void dpif_recv_purge(struct dpif *);
 void dpif_recv_wait(struct dpif *);

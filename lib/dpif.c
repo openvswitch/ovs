@@ -1033,54 +1033,24 @@ dpif_upcall_type_to_string(enum dpif_upcall_type type)
     }
 }
 
-static bool OVS_UNUSED
-is_valid_listen_mask(int listen_mask)
-{
-    return !(listen_mask & ~((1u << DPIF_UC_MISS) |
-                             (1u << DPIF_UC_ACTION)));
-}
-
-/* Retrieves 'dpif''s "listen mask" into '*listen_mask'.  A 1-bit of value 2**X
- * set in '*listen_mask' indicates that dpif_recv() will receive messages of
- * the type (from "enum dpif_upcall_type") with value X.  Returns 0 if
- * successful, otherwise a positive errno value. */
-int
-dpif_recv_get_mask(const struct dpif *dpif, int *listen_mask)
-{
-    int error = dpif->dpif_class->recv_get_mask(dpif, listen_mask);
-    if (error) {
-        *listen_mask = 0;
-    }
-    assert(is_valid_listen_mask(*listen_mask));
-    log_operation(dpif, "recv_get_mask", error);
-    return error;
-}
-
-/* Sets 'dpif''s "listen mask" to 'listen_mask'.  A 1-bit of value 2**X set in
- * '*listen_mask' requests that dpif_recv() will receive messages of the type
- * (from "enum dpif_upcall_type") with value X.  Returns 0 if successful,
- * otherwise a positive errno value.
+/* Enables or disables receiving packets with dpif_recv() on 'dpif'.  Returns 0
+ * if successful, otherwise a positive errno value.
  *
- * Turning DPIF_UC_ACTION off and then back on may change the Netlink PID
+ * Turning packet receive off and then back on may change the Netlink PID
  * assignments returned by dpif_port_get_pid().  If the client does this, it
  * must update all of the flows that have OVS_ACTION_ATTR_USERSPACE actions
  * using the new PID assignment. */
 int
-dpif_recv_set_mask(struct dpif *dpif, int listen_mask)
+dpif_recv_set(struct dpif *dpif, bool enable)
 {
-    int error;
-
-    assert(is_valid_listen_mask(listen_mask));
-
-    error = dpif->dpif_class->recv_set_mask(dpif, listen_mask);
-    log_operation(dpif, "recv_set_mask", error);
+    int error = dpif->dpif_class->recv_set(dpif, enable);
+    log_operation(dpif, "recv_set", error);
     return error;
 }
 
 /* Polls for an upcall from 'dpif'.  If successful, stores the upcall into
- * '*upcall'.  Only upcalls of the types selected with dpif_recv_set_mask()
- * member function will ordinarily be received (but if a message type is
- * enabled and then later disabled, some stragglers might pop up).
+ * '*upcall'.  Should only be called if dpif_recv_set() has been used to enable
+ * receiving packets on 'dpif'.
  *
  * The caller takes ownership of the data that 'upcall' points to.
  * 'upcall->key' and 'upcall->actions' (if nonnull) point into data owned by

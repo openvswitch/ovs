@@ -301,21 +301,11 @@ struct dpif_class {
      * 'dpif' can perform operations in batch faster than individually. */
     void (*operate)(struct dpif *dpif, union dpif_op **ops, size_t n_ops);
 
-    /* Retrieves 'dpif''s "listen mask" into '*listen_mask'.  A 1-bit of value
-     * 2**X set in '*listen_mask' indicates that 'dpif' will receive messages
-     * of the type (from "enum dpif_upcall_type") with value X when its 'recv'
-     * function is called. */
-    int (*recv_get_mask)(const struct dpif *dpif, int *listen_mask);
-
-    /* Sets 'dpif''s "listen mask" to 'listen_mask'.  A 1-bit of value 2**X set
-     * in '*listen_mask' requests that 'dpif' will receive messages of the type
-     * (from "enum dpif_upcall_type") with value X when its 'recv' function is
-     * called.
-     *
-     * Turning DPIF_UC_ACTION off and then back on is allowed to change Netlink
+    /* Enables or disables receiving packets with dpif_recv() for 'dpif'.
+     * Turning packet receive off and then back on is allowed to change Netlink
      * PID assignments (see ->port_get_pid()).  The client is responsible for
      * updating flows as necessary if it does this. */
-    int (*recv_set_mask)(struct dpif *dpif, int listen_mask);
+    int (*recv_set)(struct dpif *dpif, bool enable);
 
     /* Translates OpenFlow queue ID 'queue_id' (in host byte order) into a
      * priority value used for setting packet priority. */
@@ -323,8 +313,8 @@ struct dpif_class {
                              uint32_t *priority);
 
     /* Polls for an upcall from 'dpif'.  If successful, stores the upcall into
-     * '*upcall'.  Only upcalls of the types selected with the set_listen_mask
-     * member function should be received.
+     * '*upcall'.  Should only be called if 'recv_set' has been used to enable
+     * receiving packets from 'dpif'.
      *
      * The caller takes ownership of the data that 'upcall' points to.
      * 'upcall->key' and 'upcall->actions' (if nonnull) point into data owned

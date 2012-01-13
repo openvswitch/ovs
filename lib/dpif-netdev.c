@@ -123,7 +123,6 @@ struct dp_netdev_flow {
 struct dpif_netdev {
     struct dpif dpif;
     struct dp_netdev *dp;
-    int listen_mask;
     unsigned int dp_serial;
 };
 
@@ -178,7 +177,6 @@ create_dpif_netdev(struct dp_netdev *dp)
     dpif = xmalloc(sizeof *dpif);
     dpif_init(&dpif->dpif, dp->class, dp->name, netflow_id >> 8, netflow_id);
     dpif->dp = dp;
-    dpif->listen_mask = 0;
     dpif->dp_serial = dp->serial;
 
     return &dpif->dpif;
@@ -927,18 +925,8 @@ dpif_netdev_execute(struct dpif *dpif,
 }
 
 static int
-dpif_netdev_recv_get_mask(const struct dpif *dpif, int *listen_mask)
+dpif_netdev_recv_set(struct dpif *dpif OVS_UNUSED, bool enable OVS_UNUSED)
 {
-    struct dpif_netdev *dpif_netdev = dpif_netdev_cast(dpif);
-    *listen_mask = dpif_netdev->listen_mask;
-    return 0;
-}
-
-static int
-dpif_netdev_recv_set_mask(struct dpif *dpif, int listen_mask)
-{
-    struct dpif_netdev *dpif_netdev = dpif_netdev_cast(dpif);
-    dpif_netdev->listen_mask = listen_mask;
     return 0;
 }
 
@@ -953,14 +941,12 @@ dpif_netdev_queue_to_priority(const struct dpif *dpif OVS_UNUSED,
 static struct dp_netdev_queue *
 find_nonempty_queue(struct dpif *dpif)
 {
-    struct dpif_netdev *dpif_netdev = dpif_netdev_cast(dpif);
     struct dp_netdev *dp = get_dp_netdev(dpif);
-    int mask = dpif_netdev->listen_mask;
     int i;
 
     for (i = 0; i < N_QUEUES; i++) {
         struct dp_netdev_queue *q = &dp->queues[i];
-        if (q->head != q->tail && mask & (1u << i)) {
+        if (q->head != q->tail) {
             return q;
         }
     }
@@ -1300,8 +1286,7 @@ const struct dpif_class dpif_netdev_class = {
     dpif_netdev_flow_dump_done,
     dpif_netdev_execute,
     NULL,                       /* operate */
-    dpif_netdev_recv_get_mask,
-    dpif_netdev_recv_set_mask,
+    dpif_netdev_recv_set,
     dpif_netdev_queue_to_priority,
     dpif_netdev_recv,
     dpif_netdev_recv_wait,
