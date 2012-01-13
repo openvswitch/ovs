@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010, 2011 Nicira Networks.
+ * Copyright (c) 2010, 2011, 2012 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -156,6 +156,7 @@ netdev_dummy_recv(struct netdev *netdev_, void *buffer, size_t size)
 {
     struct netdev_dummy *netdev = netdev_dummy_cast(netdev_);
     struct ofpbuf *packet;
+    size_t packet_size;
 
     if (list_is_empty(&netdev->recv_queue)) {
         return -EAGAIN;
@@ -165,11 +166,12 @@ netdev_dummy_recv(struct netdev *netdev_, void *buffer, size_t size)
     if (packet->size > size) {
         return -EMSGSIZE;
     }
+    packet_size = packet->size;
 
     memcpy(buffer, packet->data, packet->size);
     ofpbuf_delete(packet);
 
-    return packet->size;
+    return packet_size;
 }
 
 static void
