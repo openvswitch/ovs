@@ -102,8 +102,14 @@ struct ofport {
 
 void ofproto_port_set_state(struct ofport *, ovs_be32 state);
 
+enum oftable_flags {
+    OFTABLE_HIDDEN = 1 << 0,   /* Hide from most OpenFlow operations. */
+    OFTABLE_READONLY = 1 << 1  /* Don't allow OpenFlow to change this table. */
+};
+
 /* A flow table within a "struct ofproto". */
 struct oftable {
+    enum oftable_flags flags;
     struct classifier cls;      /* Contains "struct rule"s. */
 };
 

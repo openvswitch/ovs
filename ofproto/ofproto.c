@@ -135,6 +135,8 @@ static void oftable_substitute_rule(struct rule *old, struct rule *new);
 /* rule. */
 static void ofproto_rule_destroy__(struct rule *);
 static void ofproto_rule_send_removed(struct rule *, uint8_t reason);
+static bool rule_is_modifiable(const struct rule *);
+static bool rule_is_hidden(const struct rule *);
 
 /* ofport. */
 static void ofport_destroy__(struct ofport *);
@@ -828,6 +830,10 @@ ofproto_flush__(struct ofproto *ofproto)
     OFPROTO_FOR_EACH_TABLE (table, ofproto) {
         struct rule *rule, *next_rule;
         struct cls_cursor cursor;
+
+        if (table->flags & OFTABLE_HIDDEN) {
+            continue;
+        }
 
         cls_cursor_init(&cursor, &table->cls, NULL);
         CLS_CURSOR_FOR_EACH_SAFE (rule, next_rule, cr, &cursor) {
@@ -1718,6 +1724,18 @@ rule_is_hidden(const struct rule *rule)
 {
     return rule->cr.priority > UINT16_MAX;
 }
+
+static enum oftable_flags
+rule_get_flags(const struct rule *rule)
+{
+    return rule->ofproto->tables[rule->table_id].flags;
+}
+
+static bool
+rule_is_modifiable(const struct rule *rule)
+{
+    return !(rule_get_flags(rule) & OFTABLE_READONLY);
+}
 
 static enum ofperr
 handle_echo_request(struct ofconn *ofconn, const struct ofp_header *oh)
@@ -2054,10 +2072,26 @@ check_table_id(const struct ofproto *ofproto, uint8_t table_id)
 }
 
 static struct oftable *
+next_visible_table(struct ofproto *ofproto, uint8_t table_id)
+{
+    struct oftable *table;
+
+    for (table = &ofproto->tables[table_id];
+         table < &ofproto->tables[ofproto->n_tables];
+         table++) {
+        if (!(table->flags & OFTABLE_HIDDEN)) {
+            return table;
+        }
+    }
+
+    return NULL;
+}
+
+static struct oftable *
 first_matching_table(struct ofproto *ofproto, uint8_t table_id)
 {
     if (table_id == 0xff) {
-        return &ofproto->tables[0];
+        return next_visible_table(ofproto, 0);
     } else if (table_id < ofproto->n_tables) {
         return &ofproto->tables[table_id];
     } else {
@@ -2069,18 +2103,19 @@ static struct oftable *
 next_matching_table(struct ofproto *ofproto,
                     struct oftable *table, uint8_t table_id)
 {
-    return (table_id == 0xff && table < &ofproto->tables[ofproto->n_tables - 1]
-            ? table + 1
+    return (table_id == 0xff
+            ? next_visible_table(ofproto, (table - ofproto->tables) + 1)
             : NULL);
 }
 
 /* Assigns TABLE to each oftable, in turn, that matches TABLE_ID in OFPROTO:
  *
  *   - If TABLE_ID is 0xff, this iterates over every classifier table in
- *     OFPROTO.
+ *     OFPROTO, skipping tables marked OFTABLE_HIDDEN.
  *
  *   - If TABLE_ID is the number of a table in OFPROTO, then the loop iterates
- *     only once, for that table.
+ *     only once, for that table.  (This can be used to access tables marked
+ *     OFTABLE_HIDDEN.)
  *
  *   - Otherwise, TABLE_ID isn't valid for OFPROTO, so the loop won't be
  *     entered at all.  (Perhaps you should have validated TABLE_ID with
@@ -2517,6 +2552,10 @@ add_flow(struct ofproto *ofproto, struct ofconn *ofconn,
         return OFPERR_NXFMFC_BAD_TABLE_ID;
     }
 
+    if (table->flags & OFTABLE_READONLY) {
+        return OFPERR_OFPBRC_EPERM;
+    }
+
     /* Check for overlap, if requested. */
     if (fm->flags & OFPFF_CHECK_OVERLAP
         && classifier_rule_overlaps(&table->cls, &fm->cr)) {
@@ -2549,7 +2588,9 @@ add_flow(struct ofproto *ofproto, struct ofconn *ofconn,
 
     /* Insert new rule. */
     victim = oftable_replace_rule(rule);
-    if (victim && victim->pending) {
+    if (victim && !rule_is_modifiable(victim)) {
+        error = OFPERR_OFPBRC_EPERM;
+    } else if (victim && victim->pending) {
         error = OFPROTO_POSTPONE;
     } else {
         group = ofopgroup_create(ofproto, ofconn, request, fm->buffer_id);
@@ -2587,9 +2628,18 @@ modify_flows__(struct ofproto *ofproto, struct ofconn *ofconn,
 {
     struct ofopgroup *group;
     struct rule *rule;
+    enum ofperr error;
 
     group = ofopgroup_create(ofproto, ofconn, request, fm->buffer_id);
+    error = OFPERR_OFPBRC_EPERM;
     LIST_FOR_EACH (rule, ofproto_node, rules) {
+        if (rule_is_modifiable(rule)) {
+            /* At least one rule is modifiable, don't report EPERM error. */
+            error = 0;
+        } else {
+            continue;
+        }
+
         if (!ofputil_actions_equal(fm->actions, fm->n_actions,
                                    rule->actions, rule->n_actions)) {
             ofoperation_create(group, rule, OFOPERATION_MODIFY);
@@ -2605,7 +2655,7 @@ modify_flows__(struct ofproto *ofproto, struct ofconn *ofconn,
     }
     ofopgroup_submit(group);
 
-    return 0;
+    return error;
 }
 
 /* Implements OFPFC_MODIFY.  Returns 0 on success or an OpenFlow error code on
@@ -3321,6 +3371,7 @@ pick_fallback_dpid(void)
 static void
 oftable_init(struct oftable *table)
 {
+    memset(table, 0, sizeof *table);
     classifier_init(&table->cls);
 }
 
