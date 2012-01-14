@@ -11,6 +11,9 @@ post-v1.5.0
     - Logging to console and file will have UTC timestamp as a default for all
       the daemons. An example of the default format is 2012-01-27T16:35:17Z.
       ovs-appctl can be used to change the default format as before.
+    - ofproto-provider interface:
+        - "struct rule" has a new member "used" that ofproto implementations
+          should maintain by updating with ofproto_rule_update_used().
 
 
 v1.5.0 - xx xxx xxxx

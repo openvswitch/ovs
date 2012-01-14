@@ -2580,7 +2580,7 @@ add_flow(struct ofproto *ofproto, struct ofconn *ofconn,
     rule->cr = fm->cr;
     rule->pending = NULL;
     rule->flow_cookie = fm->cookie;
-    rule->created = rule->modified = time_msec();
+    rule->created = rule->modified = rule->used = time_msec();
     rule->idle_timeout = fm->idle_timeout;
     rule->hard_timeout = fm->hard_timeout;
     rule->table_id = table - ofproto->tables;
@@ -2783,6 +2783,14 @@ ofproto_rule_send_removed(struct rule *rule, uint8_t reason)
                                                  &fr.byte_count);
 
     connmgr_send_flow_removed(rule->ofproto->connmgr, &fr);
+}
+
+void
+ofproto_rule_update_used(struct rule *rule, long long int used)
+{
+    if (used > rule->used) {
+        rule->used = used;
+    }
 }
 
 /* Sends an OpenFlow "flow removed" message with the given 'reason' (either

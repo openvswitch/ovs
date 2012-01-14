@@ -136,8 +136,9 @@ struct rule {
 
     long long int created;       /* Creation time. */
     long long int modified;      /* Time of last modification. */
-    uint16_t idle_timeout;       /* In seconds from time of last use. */
-    uint16_t hard_timeout;       /* In seconds from last modification. */
+    long long int used;          /* Last use; time created if never used. */
+    uint16_t hard_timeout;       /* In seconds from ->modified. */
+    uint16_t idle_timeout;       /* In seconds from ->used. */
     uint8_t table_id;            /* Index in ofproto's 'tables' array. */
     bool send_flow_removed;      /* Send a flow removed message? */
 
@@ -151,6 +152,7 @@ rule_from_cls_rule(const struct cls_rule *cls_rule)
     return cls_rule ? CONTAINER_OF(cls_rule, struct rule, cr) : NULL;
 }
 
+void ofproto_rule_update_used(struct rule *, long long int used);
 void ofproto_rule_expire(struct rule *, uint8_t reason);
 void ofproto_rule_destroy(struct rule *);
 

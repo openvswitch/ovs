@@ -76,8 +76,6 @@ struct ofproto_dpif;
 struct rule_dpif {
     struct rule up;
 
-    long long int used;         /* Time last used; time created if not used. */
-
     /* These statistics:
      *
      *   - Do include packets and bytes from facets that have been deleted or
@@ -3088,7 +3086,7 @@ rule_expire(struct rule_dpif *rule)
         && now > rule->up.modified + rule->up.hard_timeout * 1000) {
         reason = OFPRR_HARD_TIMEOUT;
     } else if (rule->up.idle_timeout && list_is_empty(&rule->facets)
-               && now > rule->used + rule->up.idle_timeout * 1000) {
+               && now > rule->up.used + rule->up.idle_timeout * 1000) {
         reason = OFPRR_IDLE_TIMEOUT;
     } else {
         return;
@@ -3611,9 +3609,7 @@ facet_update_time(struct facet *facet, long long int used)
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(facet->rule->up.ofproto);
     if (used > facet->used) {
         facet->used = used;
-        if (used > facet->rule->used) {
-            facet->rule->used = used;
-        }
+        ofproto_rule_update_used(&facet->rule->up, used);
         netflow_flow_update_time(ofproto->netflow, &facet->nf_flow, used);
     }
 }
@@ -3668,7 +3664,7 @@ push_resubmit(struct action_xlate_ctx *ctx, struct rule_dpif *rule)
     if (rule) {
         rule->packet_count += push->packets;
         rule->byte_count += push->bytes;
-        rule->used = MAX(push->used, rule->used);
+        ofproto_rule_update_used(&rule->up, push->used);
     }
 }
 
@@ -4034,7 +4030,6 @@ rule_construct(struct rule *rule_)
         return error;
     }
 
-    rule->used = rule->up.created;
     rule->packet_count = 0;
     rule->byte_count = 0;
 
@@ -4118,10 +4113,10 @@ rule_execute(struct rule *rule_, const struct flow *flow,
     size = packet->size;
     if (execute_odp_actions(ofproto, flow, odp_actions->data,
                             odp_actions->size, packet)) {
-        rule->used = time_msec();
+        ofproto_rule_update_used(&rule->up, time_msec());
         rule->packet_count++;
         rule->byte_count += size;
-        flow_push_stats(rule, flow, 1, size, rule->used);
+        flow_push_stats(rule, flow, 1, size, rule->up.used);
     }
     ofpbuf_delete(odp_actions);
 
