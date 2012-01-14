@@ -558,8 +558,10 @@ follow the syntax for the column's key type and value type,
 respectively.  When multiple pairs are present (separated by spaces or
 a comma), duplicate keys are not allowed, and again the order is not
 important.  Duplicate values are allowed.  An empty map is represented
-as \fB{}\fR, and curly braces may be optionally enclose non-empty maps
-as well.
+as \fB{}\fR.  Curly braces may optionally enclose non-empty maps as
+well (but use quotes to prevent the shell from expanding
+\fBother-config={0=x,1=y}\fR into \fBother-config=0=x
+other-config=1=y\fR, which may not have the desired effect).
 .
 .ST "Database Command Syntax"
 .IP "[\fB\-\-columns=\fIcolumn\fR[\fB,\fIcolumn\fR]...] \fBlist \fItable \fR[\fIrecord\fR]..."
