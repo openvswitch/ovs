@@ -55,6 +55,7 @@ typedef uint64_t stp_identifier;
 
 /* Basic STP functionality. */
 #define STP_MAX_PORTS 255
+void stp_init(void);
 struct stp *stp_create(const char *name, stp_identifier bridge_id,
                        void (*send_bpdu)(struct ofpbuf *bpdu, int port_no,
                                          void *aux),

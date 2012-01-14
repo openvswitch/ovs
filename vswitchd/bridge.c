@@ -319,6 +319,7 @@ bridge_init(const char *remote)
     lacp_init();
     bond_init();
     cfm_init();
+    stp_init();
 }
 
 void

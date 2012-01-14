@@ -29,6 +29,7 @@
 #include "byte-order.h"
 #include "ofpbuf.h"
 #include "packets.h"
+#include "unixctl.h"
 #include "util.h"
 #include "vlog.h"
 
@@ -101,6 +102,8 @@ struct stp_port {
 };
 
 struct stp {
+    struct list node;               /* Node in all_stps list. */
+
     /* Static bridge data. */
     char *name;                     /* Human-readable name for log messages. */
     stp_identifier bridge_id;       /* 8.5.3.7: This bridge. */
@@ -136,6 +139,8 @@ struct stp {
     void (*send_bpdu)(struct ofpbuf *bpdu, int port_no, void *aux);
     void *aux;
 };
+
+static struct list all_stps = LIST_INITIALIZER(&all_stps);
 
 #define FOR_EACH_ENABLED_PORT(PORT, STP)                        \
     for ((PORT) = stp_next_enabled_port((STP), (STP)->ports);   \
@@ -199,6 +204,15 @@ static void stp_stop_timer(struct stp_timer *);
 static bool stp_timer_expired(struct stp_timer *, int elapsed, int timeout);
 
 static void stp_send_bpdu(struct stp_port *, const void *, size_t);
+static void stp_unixctl_tcn(struct unixctl_conn *, int argc,
+                            const char *argv[], void *aux);
+
+void
+stp_init(void)
+{
+    unixctl_command_register("stp/tcn", "[bridge]", 0, 1, stp_unixctl_tcn,
+                             NULL);
+}
 
 /* Creates and returns a new STP instance that initially has no ports enabled.
  *
@@ -256,6 +270,7 @@ stp_create(const char *name, stp_identifier bridge_id,
         p->path_cost = 19;      /* Recommended default for 100 Mb/s link. */
         stp_initialize_port(p, STP_DISABLED);
     }
+    list_push_back(&all_stps, &stp->node);
     return stp;
 }
 
@@ -264,6 +279,7 @@ void
 stp_destroy(struct stp *stp)
 {
     if (stp) {
+        list_remove(&stp->node);
         free(stp->name);
         free(stp);
     }
@@ -1327,4 +1343,42 @@ stp_send_bpdu(struct stp_port *p, const void *bpdu, size_t bpdu_size)
 
     p->stp->send_bpdu(pkt, stp_port_no(p), p->stp->aux);
     p->tx_count++;
+}
+
+/* Unixctl. */
+
+static struct stp *
+stp_find(const char *name)
+{
+    struct stp *stp;
+
+    LIST_FOR_EACH (stp, node, &all_stps) {
+        if (!strcmp(stp->name, name)) {
+            return stp;
+        }
+    }
+    return NULL;
+}
+
+static void
+stp_unixctl_tcn(struct unixctl_conn *conn, int argc,
+                const char *argv[], void *aux OVS_UNUSED)
+{
+    if (argc > 1) {
+        struct stp *stp = stp_find(argv[1]);
+
+        if (!stp) {
+            unixctl_command_reply(conn, 501, "no such stp object");
+            return;
+        }
+        stp_topology_change_detection(stp);
+    } else {
+        struct stp *stp;
+
+        LIST_FOR_EACH (stp, node, &all_stps) {
+            stp_topology_change_detection(stp);
+        }
+    }
+
+    unixctl_command_reply(conn, 200, "OK");
 }
