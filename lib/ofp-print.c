@@ -120,10 +120,19 @@ ofp_print_packet_in(struct ds *string, const struct ofp_header *oh,
         }
     }
 
-    if (pin.reason == OFPR_ACTION) {
+    switch (pin.reason) {
+    case OFPR_NO_MATCH:
+        ds_put_cstr(string, " (via no_match)");
+        break;
+    case OFPR_ACTION:
         ds_put_cstr(string, " (via action)");
-    } else if (pin.reason != OFPR_NO_MATCH) {
+        break;
+    case OFPR_INVALID_TTL:
+        ds_put_cstr(string, " (via invalid_ttl)");
+        break;
+    default:
         ds_put_format(string, " (***reason %"PRIu8"***)", pin.reason);
+        break;
     }
 
     ds_put_format(string, " data_len=%zu", pin.packet_len);
@@ -331,6 +340,10 @@ ofp_print_action(struct ds *s, const union ofp_action *a,
 
     case OFPUTIL_NXAST_LEARN:
         learn_format((const struct nx_action_learn *) a, s);
+        break;
+
+    case OFPUTIL_NXAST_DEC_TTL:
+        ds_put_cstr(s, "dec_ttl");
         break;
 
     case OFPUTIL_NXAST_EXIT:
@@ -599,12 +612,17 @@ ofp_print_switch_features(struct ds *string,
 static void
 ofp_print_switch_config(struct ds *string, const struct ofp_switch_config *osc)
 {
-    uint16_t flags;
+    enum ofp_config_flags flags;
 
     flags = ntohs(osc->flags);
 
     ds_put_format(string, " frags=%s", ofputil_frag_handling_to_string(flags));
     flags &= ~OFPC_FRAG_MASK;
+
+    if (flags & OFPC_INVALID_TTL_TO_CONTROLLER) {
+        ds_put_format(string, " invalid_ttl_to_controller");
+        flags &= ~OFPC_INVALID_TTL_TO_CONTROLLER;
+    }
 
     if (flags) {
         ds_put_format(string, " ***unknown flags 0x%04"PRIx16"***", flags);

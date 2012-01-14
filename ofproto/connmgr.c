@@ -71,6 +71,8 @@ struct ofconn {
 
     /* type == OFCONN_PRIMARY only. */
     enum nx_role role;           /* Role. */
+    bool invalid_ttl_to_controller; /* Send packets with invalid TTL
+                                       to the controller. */
     struct hmap_node hmap_node;  /* In struct connmgr's "controllers" map. */
     enum ofproto_band band;      /* In-band or out-of-band? */
 };
@@ -754,6 +756,18 @@ ofconn_set_role(struct ofconn *ofconn, enum nx_role role)
     ofconn->role = role;
 }
 
+void
+ofconn_set_invalid_ttl_to_controller(struct ofconn *ofconn, bool val)
+{
+    ofconn->invalid_ttl_to_controller = val;
+}
+
+bool
+ofconn_get_invalid_ttl_to_controller(struct ofconn *ofconn)
+{
+    return ofconn->invalid_ttl_to_controller;
+}
+
 /* Returns the currently configured flow format for 'ofconn', one of NXFF_*.
  *
  * The default, if no other format has been set, is NXFF_OPENFLOW10. */
@@ -931,6 +945,7 @@ ofconn_create(struct connmgr *mgr, struct rconn *rconn, enum ofconn_type type)
     ofconn->pktbuf = NULL;
     ofconn->miss_send_len = 0;
     ofconn->reply_counter = rconn_packet_counter_create ();
+    ofconn->invalid_ttl_to_controller = false;
     return ofconn;
 }
 
@@ -1054,11 +1069,9 @@ ofconn_wait(struct ofconn *ofconn, bool handling_openflow)
 
 /* Returns true if 'ofconn' should receive asynchronous messages. */
 static bool
-ofconn_receives_async_msgs(const struct ofconn *ofconn)
+ofconn_receives_async_msgs__(const struct ofconn *ofconn)
 {
-    if (!rconn_is_connected(ofconn->rconn)) {
-        return false;
-    } else if (ofconn->type == OFCONN_PRIMARY) {
+    if (ofconn->type == OFCONN_PRIMARY) {
         /* Primary controllers always get asynchronous messages unless they
          * have configured themselves as "slaves".  */
         return ofconn->role != NX_ROLE_SLAVE;
@@ -1066,6 +1079,29 @@ ofconn_receives_async_msgs(const struct ofconn *ofconn)
         /* Service connections don't get asynchronous messages unless they have
          * explicitly asked for them by setting a nonzero miss send length. */
         return ofconn->miss_send_len > 0;
+    }
+}
+
+static bool
+ofconn_receives_async_msgs(const struct ofconn *ofconn)
+{
+    if (!rconn_is_connected(ofconn->rconn)) {
+        return false;
+    } else {
+        return ofconn_receives_async_msgs__(ofconn);
+    }
+}
+
+static bool
+ofconn_interested_in_packet(const struct ofconn *ofconn,
+                            const struct ofputil_packet_in *pin)
+{
+    if (!rconn_is_connected(ofconn->rconn)) {
+        return false;
+    } else if (pin->reason == OFPR_INVALID_TTL) {
+        return ofconn->invalid_ttl_to_controller;
+    } else {
+        return ofconn_receives_async_msgs__(ofconn);
     }
 }
 
@@ -1178,7 +1214,7 @@ connmgr_send_packet_in(struct connmgr *mgr,
     struct ofconn *ofconn;
 
     LIST_FOR_EACH (ofconn, node, &mgr->all_conns) {
-        if (ofconn_receives_async_msgs(ofconn)) {
+        if (ofconn_interested_in_packet(ofconn, pin)) {
             schedule_packet_in(ofconn, *pin, flow);
         }
     }

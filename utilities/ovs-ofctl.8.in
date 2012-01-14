@@ -243,7 +243,7 @@ If a switch has no controller configured, or if
 the configured controller is disconnected, no traffic is sent, so
 monitoring will not show any traffic.
 .
-.IP "\fBmonitor \fIswitch\fR [\fImiss-len\fR]"
+.IP "\fBmonitor \fIswitch\fR [\fImiss-len\fR] [\fIinvalid_ttl\fR]"
 Connects to \fIswitch\fR and prints to the console all OpenFlow
 messages received.  Usually, \fIswitch\fR should specify the name of a
 bridge in the \fBovs\-vswitchd\fR database.
@@ -256,6 +256,13 @@ does not send these and other asynchronous messages to an
 specified on this argument.  (Thus, if \fImiss\-len\fR is not
 specified, very little traffic will ordinarily be printed.)
 .IP
+.IP
+If \fBinvalid_ttl\fR is passed, \fBovs\-ofctl\fR sends an OpenFlow ``set
+configuration'' message at connection setup time that requests
+\fIINVALID_TTL_TO_CONTROLLER\fR, so that \fBovs\-ofctl monitor\fR can
+receive ``packets-in'' messages when TTL reaches zero on \fBdec_ttl\fR action.
+.IP
+
 This command may be useful for debugging switch or controller
 implementations.
 .
@@ -777,6 +784,16 @@ OpenFlow implementations do not support queuing at all.
 .IP \fBpop_queue\fR
 Restores the queue to the value it was before any \fBset_queue\fR
 actions were applied.
+.
+.IP \fBdec_ttl\fR
+Decrement TTL of IPv4 packet or hop limit of IPv6 packet.  If the
+TTL or hop limit is initially zero, no decrement occurs.  Instead,
+a ``packet-in'' message with reason code \fBOFPR_INVALID_TTL\fR is
+sent to each connected controller that has enabled receiving them,
+if any.  Processing the current set of actions then stops.
+However, if the current set of actions was reached through
+``resubmit'' then remaining actions in outer levels resume
+processing.
 .
 .IP \fBnote:\fR[\fIhh\fR]...
 Does nothing at all.  Any number of bytes represented as hex digits

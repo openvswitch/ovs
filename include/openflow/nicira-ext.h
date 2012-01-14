@@ -361,7 +361,8 @@ enum nx_action_subtype {
     NXAST_RESUBMIT_TABLE,       /* struct nx_action_resubmit */
     NXAST_OUTPUT_REG,           /* struct nx_action_output_reg */
     NXAST_LEARN,                /* struct nx_action_learn */
-    NXAST_EXIT                  /* struct nx_action_header */
+    NXAST_EXIT,                 /* struct nx_action_header */
+    NXAST_DEC_TTL,              /* struct nx_action_header */
 };
 
 /* Header for Nicira-defined actions. */

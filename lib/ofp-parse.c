@@ -364,6 +364,10 @@ parse_named_action(enum ofputil_action_code code, const struct flow *flow,
     case OFPUTIL_NXAST_EXIT:
         ofputil_put_NXAST_EXIT(b);
         break;
+
+    case OFPUTIL_NXAST_DEC_TTL:
+        ofputil_put_NXAST_DEC_TTL(b);
+        break;
     }
 }
 

@@ -136,7 +136,11 @@ enum ofp_config_flags {
     OFPC_FRAG_DROP     = 1,  /* Drop fragments. */
     OFPC_FRAG_REASM    = 2,  /* Reassemble (only if OFPC_IP_REASM set). */
     OFPC_FRAG_NX_MATCH = 3,  /* Make first fragments available for matching. */
-    OFPC_FRAG_MASK     = 3
+    OFPC_FRAG_MASK     = 3,
+
+    /* TTL processing - applicable for IP and MPLS packets. */
+    OFPC_INVALID_TTL_TO_CONTROLLER = 1 << 2, /* Send packets with invalid TTL
+                                                to the controller. */
 };
 
 /* Switch configuration. */
@@ -289,7 +293,8 @@ OFP_ASSERT(sizeof(struct ofp_port_mod) == 32);
 /* Why is this packet being sent to the controller? */
 enum ofp_packet_in_reason {
     OFPR_NO_MATCH,          /* No matching flow. */
-    OFPR_ACTION             /* Action explicitly output to controller. */
+    OFPR_ACTION,            /* Action explicitly output to controller. */
+    OFPR_INVALID_TTL        /* Packet has invalid TTL. */
 };
 
 /* Packet received on port (datapath -> controller). */

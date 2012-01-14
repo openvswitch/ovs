@@ -1746,11 +1746,16 @@ handle_get_config_request(struct ofconn *ofconn, const struct ofp_header *oh)
 {
     struct ofproto *ofproto = ofconn_get_ofproto(ofconn);
     struct ofp_switch_config *osc;
+    enum ofp_config_flags flags;
     struct ofpbuf *buf;
 
     /* Send reply. */
     osc = make_openflow_xid(sizeof *osc, OFPT_GET_CONFIG_REPLY, oh->xid, &buf);
-    osc->flags = htons(ofproto->frag_handling);
+    flags = ofproto->frag_handling;
+    if (ofconn_get_invalid_ttl_to_controller(ofconn)) {
+        flags |= OFPC_INVALID_TTL_TO_CONTROLLER;
+    }
+    osc->flags = htons(flags);
     osc->miss_send_len = htons(ofconn_get_miss_send_len(ofconn));
     ofconn_send_reply(ofconn, buf);
 
@@ -1779,6 +1784,8 @@ handle_set_config(struct ofconn *ofconn, const struct ofp_switch_config *osc)
             }
         }
     }
+    ofconn_set_invalid_ttl_to_controller(ofconn,
+			 (flags & OFPC_INVALID_TTL_TO_CONTROLLER));
 
     ofconn_set_miss_send_len(ofconn, ntohs(osc->miss_send_len));
 

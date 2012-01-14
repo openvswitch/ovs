@@ -8,6 +8,7 @@ v1.5.0 - xx xxx xxxx
         - Added support for querying, modifying, and deleting flows
           based on flow cookie when using NXM.
         - Added new NXM_PACKET_IN format.
+        - Added new NXAST_DEC_TTL action.
     - ovs-ofctl:
         - Added daemonization support to the monitor and snoop commands.
     - ovs-vsctl:

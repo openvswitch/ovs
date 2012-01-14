@@ -794,6 +794,35 @@ set_packet_in_format(struct vconn *vconn,
              ofputil_packet_in_format_to_string(packet_in_format));
 }
 
+static int
+monitor_set_invalid_ttl_to_controller(struct vconn *vconn)
+{
+    struct ofp_switch_config config;
+    enum ofp_config_flags flags;
+
+    fetch_switch_config(vconn, &config);
+    flags = ntohs(config.flags);
+    if (!(flags & OFPC_INVALID_TTL_TO_CONTROLLER)) {
+        /* Set the invalid ttl config. */
+        flags |= OFPC_INVALID_TTL_TO_CONTROLLER;
+
+        config.flags = htons(flags);
+        set_switch_config(vconn, &config);
+
+        /* Then retrieve the configuration to see if it really took.  OpenFlow
+         * doesn't define error reporting for bad modes, so this is all we can
+         * do. */
+        fetch_switch_config(vconn, &config);
+        flags = ntohs(config.flags);
+        if (!(flags & OFPC_INVALID_TTL_TO_CONTROLLER)) {
+            ovs_fatal(0, "setting invalid_ttl_to_controller failed (this "
+                      "switch probably doesn't support mode)");
+            return -EOPNOTSUPP;
+        }
+    }
+    return 0;
+}
+
 static void
 monitor_vconn(struct vconn *vconn)
 {
@@ -875,6 +904,11 @@ do_monitor(int argc, char *argv[])
         fetch_switch_config(vconn, &config);
         config.miss_send_len = htons(atoi(argv[2]));
         set_switch_config(vconn, &config);
+    }
+    if (argc > 3) {
+        if (!strcmp(argv[3], "invalid_ttl")) {
+            monitor_set_invalid_ttl_to_controller(vconn);
+        }
     }
     monitor_vconn(vconn);
 }
@@ -1634,7 +1668,7 @@ do_ofp_print(int argc, char *argv[])
 
 static const struct command all_commands[] = {
     { "show", 1, 1, do_show },
-    { "monitor", 1, 2, do_monitor },
+    { "monitor", 1, 3, do_monitor },
     { "snoop", 1, 1, do_snoop },
     { "dump-desc", 1, 1, do_dump_desc },
     { "dump-tables", 1, 1, do_dump_tables },

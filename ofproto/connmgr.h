@@ -92,6 +92,9 @@ void ofconn_set_packet_in_format(struct ofconn *, enum nx_packet_in_format);
 bool ofconn_get_flow_mod_table_id(const struct ofconn *);
 void ofconn_set_flow_mod_table_id(struct ofconn *, bool enable);
 
+void ofconn_set_invalid_ttl_to_controller(struct ofconn *, bool);
+bool ofconn_get_invalid_ttl_to_controller(struct ofconn *);
+
 int ofconn_get_miss_send_len(const struct ofconn *);
 void ofconn_set_miss_send_len(struct ofconn *, int miss_send_len);
 

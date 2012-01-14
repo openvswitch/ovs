@@ -4291,7 +4291,8 @@ flood_packets(struct action_xlate_ctx *ctx, bool all)
 }
 
 static void
-execute_controller_action(struct action_xlate_ctx *ctx, int len)
+execute_controller_action(struct action_xlate_ctx *ctx, int len,
+                          enum ofp_packet_in_reason reason)
 {
     struct ofputil_packet_in pin;
     struct ofpbuf *packet;
@@ -4336,7 +4337,7 @@ execute_controller_action(struct action_xlate_ctx *ctx, int len)
 
     pin.packet = packet->data;
     pin.packet_len = packet->size;
-    pin.reason = OFPR_ACTION;
+    pin.reason = reason;
     pin.table_id = ctx->table_id;
     pin.cookie = ctx->cookie;
 
@@ -4347,6 +4348,25 @@ execute_controller_action(struct action_xlate_ctx *ctx, int len)
 
     connmgr_send_packet_in(ctx->ofproto->up.connmgr, &pin, &ctx->flow);
     ofpbuf_delete(packet);
+}
+
+static bool
+compose_dec_ttl(struct action_xlate_ctx *ctx)
+{
+    if (ctx->flow.dl_type != htons(ETH_TYPE_IP) &&
+        ctx->flow.dl_type != htons(ETH_TYPE_IPV6)) {
+        return false;
+    }
+
+    if (ctx->flow.nw_ttl > 1) {
+        ctx->flow.nw_ttl--;
+        return false;
+    } else {
+        execute_controller_action(ctx, UINT16_MAX, OFPR_INVALID_TTL);
+
+        /* Stop processing for current table. */
+        return true;
+    }
 }
 
 static void
@@ -4374,7 +4394,7 @@ xlate_output_action__(struct action_xlate_ctx *ctx,
         flood_packets(ctx, true);
         break;
     case OFPP_CONTROLLER:
-        execute_controller_action(ctx, max_len);
+        execute_controller_action(ctx, max_len, OFPR_ACTION);
         break;
     case OFPP_LOCAL:
         compose_output_action(ctx, OFPP_LOCAL);
@@ -4730,12 +4750,19 @@ do_xlate_actions(const union ofp_action *in, size_t n_in,
             }
             break;
 
+        case OFPUTIL_NXAST_DEC_TTL:
+            if (compose_dec_ttl(ctx)) {
+                goto out;
+            }
+            break;
+
         case OFPUTIL_NXAST_EXIT:
             ctx->exit = true;
             break;
         }
     }
 
+out:
     /* We've let OFPP_NORMAL and the learning action look at the packet,
      * so drop it now if forwarding is disabled. */
     if (port && !stp_forward_in_state(port->stp_state)) {
@@ -4799,6 +4826,9 @@ xlate_actions(struct action_xlate_ctx *ctx,
         case OFPC_FRAG_NX_MATCH:
             /* Nothing to do. */
             break;
+
+        case OFPC_INVALID_TTL_TO_CONTROLLER:
+            NOT_REACHED();
         }
     }
 
