@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011 Nicira Networks.
+ * Copyright (c) 2009, 2010, 2011, 2012 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1685,6 +1685,24 @@ odp_flow_key_to_flow(const struct nlattr *key, size_t key_len,
     }
     return parse_l3_onward(attrs, present_attrs, out_of_range_attr,
                            expected_attrs, flow, key, key_len);
+}
+
+/* Returns 'fitness' as a string, for use in debug messages. */
+const char *
+odp_key_fitness_to_string(enum odp_key_fitness fitness)
+{
+    switch (fitness) {
+    case ODP_FIT_PERFECT:
+        return "OK";
+    case ODP_FIT_TOO_MUCH:
+        return "too_much";
+    case ODP_FIT_TOO_LITTLE:
+        return "too_little";
+    case ODP_FIT_ERROR:
+        return "error";
+    default:
+        return "<unknown>";
+    }
 }
 
 /* Appends an OVS_ACTION_ATTR_USERSPACE action to 'odp_actions' that specifies

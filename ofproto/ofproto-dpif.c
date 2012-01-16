@@ -327,6 +327,7 @@ static struct facet *facet_find(struct ofproto_dpif *, const struct flow *);
 static struct facet *facet_lookup_valid(struct ofproto_dpif *,
                                         const struct flow *);
 static bool facet_revalidate(struct facet *);
+static bool facet_check_consistency(struct facet *);
 
 static void facet_flush_stats(struct facet *);
 
@@ -382,6 +383,8 @@ static struct subfacet *subfacet_find(struct ofproto_dpif *,
                                       const struct nlattr *key, size_t key_len);
 static void subfacet_destroy(struct subfacet *);
 static void subfacet_destroy__(struct subfacet *);
+static void subfacet_get_key(struct subfacet *, struct odputil_keybuf *,
+                             struct ofpbuf *key);
 static void subfacet_reset_dp_stats(struct subfacet *,
                                     struct dpif_flow_stats *);
 static void subfacet_update_time(struct subfacet *, long long int used);
@@ -817,6 +820,19 @@ run(struct ofproto *ofproto_)
             if (revalidate_all
                 || tag_set_intersects(&revalidate_set, facet->tags)) {
                 facet_revalidate(facet);
+            }
+        }
+    }
+
+    /* Check the consistency of a random facet, to aid debugging. */
+    if (!hmap_is_empty(&ofproto->facets) && !ofproto->need_revalidate) {
+        struct facet *facet;
+
+        facet = CONTAINER_OF(hmap_random_node(&ofproto->facets),
+                             struct facet, hmap_node);
+        if (!tag_set_intersects(&ofproto->revalidate_set, facet->tags)) {
+            if (!facet_check_consistency(facet)) {
+                ofproto->need_revalidate = true;
             }
         }
     }
@@ -3337,6 +3353,117 @@ facet_lookup_valid(struct ofproto_dpif *ofproto, const struct flow *flow)
     }
 
     return facet;
+}
+
+static bool
+facet_check_consistency(struct facet *facet)
+{
+    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 15);
+
+    struct ofproto_dpif *ofproto = ofproto_dpif_cast(facet->rule->up.ofproto);
+
+    struct rule_dpif *rule;
+    struct subfacet *subfacet;
+    bool ok;
+
+    /* Check the rule for consistency. */
+    rule = rule_dpif_lookup(ofproto, &facet->flow, 0);
+    if (!rule) {
+        if (!VLOG_DROP_WARN(&rl)) {
+            char *s = flow_to_string(&facet->flow);
+            VLOG_WARN("%s: facet should not exist", s);
+            free(s);
+        }
+        return false;
+    } else if (rule != facet->rule) {
+        struct ds s;
+
+        ds_init(&s);
+        flow_format(&s, &facet->flow);
+        ds_put_format(&s, ": facet associated with wrong rule (was "
+                      "table=%"PRIu8",", facet->rule->up.table_id);
+        cls_rule_format(&facet->rule->up.cr, &s);
+        ds_put_format(&s, ") (should have been table=%"PRIu8",",
+                      rule->up.table_id);
+        cls_rule_format(&rule->up.cr, &s);
+        ds_put_char(&s, ')');
+
+        VLOG_WARN("%s", ds_cstr(&s));
+        ds_destroy(&s);
+
+        ok = false;
+    } else {
+        ok = true;
+    }
+
+    /* Check the datapath actions for consistency. */
+    LIST_FOR_EACH (subfacet, list_node, &facet->subfacets) {
+        struct action_xlate_ctx ctx;
+        struct ofpbuf *odp_actions;
+        bool actions_changed;
+        bool should_install;
+
+        action_xlate_ctx_init(&ctx, ofproto, &facet->flow,
+                              subfacet->initial_tci, rule->up.flow_cookie,
+                              NULL);
+        odp_actions = xlate_actions(&ctx, rule->up.actions,
+                                    rule->up.n_actions);
+
+        should_install = (ctx.may_set_up_flow
+                          && subfacet->key_fitness != ODP_FIT_TOO_LITTLE);
+        if (!should_install && !subfacet->installed) {
+            /* The actions for uninstallable flows may vary from one packet to
+             * the next, so don't compare the actions. */
+            goto next;
+        }
+
+        actions_changed = (subfacet->actions_len != odp_actions->size
+                           || memcmp(subfacet->actions, odp_actions->data,
+                                     subfacet->actions_len));
+        if (should_install != subfacet->installed || actions_changed) {
+            struct odputil_keybuf keybuf;
+            struct ofpbuf key;
+            struct ds s;
+
+            ok = false;
+
+            ds_init(&s);
+            subfacet_get_key(subfacet, &keybuf, &key);
+            odp_flow_key_format(key.data, key.size, &s);
+
+            ds_put_cstr(&s, ": inconsistency in subfacet");
+            if (should_install != subfacet->installed) {
+                enum odp_key_fitness fitness = subfacet->key_fitness;
+
+                ds_put_format(&s, " (should%s have been installed)",
+                              should_install ? "" : " not");
+                ds_put_format(&s, " (may_set_up_flow=%s, fitness=%s)",
+                              ctx.may_set_up_flow ? "true" : "false",
+                              odp_key_fitness_to_string(fitness));
+            }
+            if (actions_changed) {
+                ds_put_cstr(&s, " (actions were: ");
+                format_odp_actions(&s, subfacet->actions,
+                                   subfacet->actions_len);
+                ds_put_cstr(&s, ") (correct actions: ");
+                format_odp_actions(&s, odp_actions->data,
+                                   odp_actions->size);
+                ds_put_char(&s, ')');
+            } else {
+                ds_put_cstr(&s, " (actions: ");
+                format_odp_actions(&s, subfacet->actions,
+                                   subfacet->actions_len);
+                ds_put_char(&s, ')');
+            }
+            VLOG_WARN("%s", ds_cstr(&s));
+            ds_destroy(&s);
+        }
+
+    next:
+        ofpbuf_delete(odp_actions);
+    }
+
+    return ok;
 }
 
 /* Re-searches the classifier for 'facet':
@@ -5921,6 +6048,57 @@ ofproto_dpif_unclog(struct unixctl_conn *conn OVS_UNUSED, int argc OVS_UNUSED,
     unixctl_command_reply(conn, 200, NULL);
 }
 
+/* Runs a self-check of flow translations in 'ofproto'.  Appends a message to
+ * 'reply' describing the results. */
+static void
+ofproto_dpif_self_check__(struct ofproto_dpif *ofproto, struct ds *reply)
+{
+    struct facet *facet;
+    int errors;
+
+    errors = 0;
+    HMAP_FOR_EACH (facet, hmap_node, &ofproto->facets) {
+        if (!facet_check_consistency(facet)) {
+            errors++;
+        }
+    }
+    if (errors) {
+        ofproto->need_revalidate = true;
+    }
+
+    if (errors) {
+        ds_put_format(reply, "%s: self-check failed (%d errors)\n",
+                      ofproto->up.name, errors);
+    } else {
+        ds_put_format(reply, "%s: self-check passed\n", ofproto->up.name);
+    }
+}
+
+static void
+ofproto_dpif_self_check(struct unixctl_conn *conn,
+                        int argc, const char *argv[], void *aux OVS_UNUSED)
+{
+    struct ds reply = DS_EMPTY_INITIALIZER;
+    struct ofproto_dpif *ofproto;
+
+    if (argc > 1) {
+        ofproto = ofproto_dpif_lookup(argv[1]);
+        if (!ofproto) {
+            unixctl_command_reply(conn, 501, "Unknown ofproto (use "
+                                  "ofproto/list for help)");
+            return;
+        }
+        ofproto_dpif_self_check__(ofproto, &reply);
+    } else {
+        HMAP_FOR_EACH (ofproto, all_ofproto_dpifs_node, &all_ofproto_dpifs) {
+            ofproto_dpif_self_check__(ofproto, &reply);
+        }
+    }
+
+    unixctl_command_reply(conn, 200, ds_cstr(&reply));
+    ds_destroy(&reply);
+}
+
 static void
 ofproto_dpif_unixctl_init(void)
 {
@@ -5942,6 +6120,8 @@ ofproto_dpif_unixctl_init(void)
                              ofproto_dpif_clog, NULL);
     unixctl_command_register("ofproto/unclog", "", 0, 0,
                              ofproto_dpif_unclog, NULL);
+    unixctl_command_register("ofproto/self-check", "[bridge]", 0, 1,
+                             ofproto_dpif_self_check, NULL);
 }
 
 /* Linux VLAN device support (e.g. "eth0.10" for VLAN 10.)

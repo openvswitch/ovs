@@ -64,3 +64,10 @@ This form of \fBofproto/trace\fR cannot determine the complete set of
 datapath actions in some corner cases.  If the results say that this
 is the case, rerun \fBofproto/trace\fR supplying a packet in the flow
 to get complete results.
+.IP "\fBofproto/self\-check\fR [\fIswitch\fR]"
+Runs an internal consistency check on \fIswitch\fR, if specified,
+otherwise on all ofproto instances, and responds with a brief summary
+of the results.  If the summary reports any errors, then the Open
+vSwitch logs should contain more detailed information.  Please pass
+along errors reported by this command to the Open vSwitch developers
+as bugs.
