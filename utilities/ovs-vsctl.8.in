@@ -785,6 +785,12 @@ access port for VLAN 10, and configure it with an IP address:
 .IP
 .B "ifconfig vlan10 192.168.0.123"
 .
+.PP
+Add a GRE tunnel port \fBgre0\fR to remote IP address 1.2.3.4 to
+bridge \fBbr0\fR:
+.IP
+.B "ovs\-vsctl add\-port br0 gre0 \-\- set Interface gre0 type=gre options:remote_ip=1.2.3.4"
+.
 .SS "Port Mirroring"
 .PP
 Mirror all packets received or sent on \fBeth0\fR or \fBeth1\fR onto
