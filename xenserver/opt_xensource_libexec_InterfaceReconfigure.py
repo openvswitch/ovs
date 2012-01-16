@@ -508,9 +508,8 @@ class DatabaseCache(object):
                 host = session.xenapi.host.get_by_uuid(inventory['INSTALLATION_UUID'])
 
                 self.__get_pif_records_from_xapi(session, host)
-
-                self.__get_tunnel_records_from_xapi(session)
                 self.__get_pool_records_from_xapi(session)
+                self.__get_tunnel_records_from_xapi(session)
                 self.__get_vlan_records_from_xapi(session)
                 self.__get_bond_records_from_xapi(session)
                 self.__get_network_records_from_xapi(session)
@@ -576,9 +575,11 @@ class DatabaseCache(object):
         for (ref,rec) in self.__pools.items():
             self.__to_xml(xml, xml.documentElement, _POOL_XML_TAG, ref, rec, _POOL_ATTRS)
 
-        f = open(cache_file, 'w')
+        temp_file = cache_file + ".%d" % os.getpid()
+        f = open(temp_file, 'w')
         f.write(xml.toprettyxml())
         f.close()
+        os.rename(temp_file, cache_file)
 
     def get_pif_by_uuid(self, uuid):
         pifs = map(lambda (ref,rec): ref,
