@@ -50,6 +50,7 @@ import syslog
 import traceback
 import re
 import random
+import syslog
 
 management_pif = None
 
@@ -144,10 +145,11 @@ def netdev_remap_name(pif, already_renamed=[]):
         return None
 
     def rename_netdev(old_name, new_name):
-        log("Changing the name of %s to %s" % (old_name, new_name))
-        run_command(['/sbin/ifconfig', old_name, 'down'])
-        if not run_command(['/sbin/ip', 'link', 'set', old_name, 'name', new_name]):
-            raise Error("Could not rename %s to %s" % (old_name, new_name))
+        raise Error("Trying to rename %s to %s - This functionality has been removed" % (old_name, new_name))
+        # log("Changing the name of %s to %s" % (old_name, new_name))
+        # run_command(['/sbin/ifconfig', old_name, 'down'])
+        # if not run_command(['/sbin/ip', 'link', 'set', old_name, 'name', new_name]):
+        #     raise Error("Could not rename %s to %s" % (old_name, new_name))
 
     pifrec = db().get_pif_record(pif)
     device = pifrec['device']
@@ -197,7 +199,11 @@ def ifup(netdev):
     """Bring up a network interface"""
     if not os.path.exists(root_prefix() + "/etc/sysconfig/network-scripts/ifcfg-%s" % netdev):
         raise Error("ifup: device %s exists but ifcfg-%s does not" % (netdev,netdev))
+    d = os.getenv("DHCLIENTARGS","")
+    if os.path.exists("/etc/firstboot.d/data/firstboot_in_progress"):
+        os.putenv("DHCLIENTARGS", d + " -T 240 " )
     run_command(["/sbin/ifup", netdev])
+    os.putenv("DHCLIENTARGS", d )
 
 #
 #
@@ -269,6 +275,7 @@ def ipdev_open_ifcfg(pif):
     f.write("XEMANAGED=yes\n")
     f.write("DEVICE=%s\n" % ipdev)
     f.write("ONBOOT=no\n")
+    f.write("NOZEROCONF=yes\n")
 
     return f
 
@@ -355,6 +362,10 @@ def ipdev_configure_network(pif, dp):
     # master, it is implicit that we should bring down that master.
 
     pifs_on_host = [p for p in db().get_all_pifs() if not p in pif_get_bond_masters(pif)]
+
+    # now prune out bond slaves as they are not connected to the IP 
+    # stack and so cannot be used as gateway or DNS devices.
+    pifs_on_host = [ p for p in pifs_on_host if len(pif_get_bond_masters(p)) == 0]
 
     # loop through all the pifs on this host looking for one with
     #   other-config:peerdns = true, and one with
