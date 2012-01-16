@@ -52,6 +52,10 @@ insert_openvswitch_mod_if_required () {
 }
 
 insert_brcompat_mod_if_required () {
+    if test -e /sys/module/bridge; then
+        log_warning_msg "bridge module is loaded, not loading brcompat_mod"
+        return 1
+    fi
     test -e /sys/module/brcompat_mod && return 0
     action "Inserting brcompat module" modprobe brcompat_mod
 }
