@@ -1296,6 +1296,10 @@ stp_run(struct ofproto_dpif *ofproto)
                 update_stp_port_state(ofport);
             }
         }
+
+        if (stp_check_and_reset_fdb_flush(ofproto->stp)) {
+            mac_learning_flush(ofproto->ml, &ofproto->revalidate_set);
+        }
     }
 }
 

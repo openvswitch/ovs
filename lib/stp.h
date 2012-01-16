@@ -76,6 +76,7 @@ int stp_get_root_path_cost(const struct stp *);
 int stp_get_hello_time(const struct stp *);
 int stp_get_max_age(const struct stp *);
 int stp_get_forward_delay(const struct stp *);
+bool stp_check_and_reset_fdb_flush(struct stp *);
 
 /* Obtaining STP ports. */
 struct stp_port *stp_get_port(struct stp *, int port_no);

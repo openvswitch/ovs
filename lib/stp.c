@@ -131,6 +131,7 @@ struct stp {
     struct stp_port ports[STP_MAX_PORTS];
 
     /* Interface to client. */
+    bool fdb_needs_flush;          /* MAC learning tables needs flushing. */
     struct stp_port *first_changed_port;
     void (*send_bpdu)(struct ofpbuf *bpdu, int port_no, void *aux);
     void *aux;
@@ -446,6 +447,17 @@ int
 stp_get_forward_delay(const struct stp *stp)
 {
     return timer_to_ms(stp->bridge_forward_delay);
+}
+
+/* Returns true if something has happened to 'stp' which necessitates flushing
+ * the client's MAC learning table.  Calling this function resets 'stp' so that
+ * future calls will return false until flushing is required again. */
+bool
+stp_check_and_reset_fdb_flush(struct stp *stp)
+{
+    bool needs_flush = stp->fdb_needs_flush;
+    stp->fdb_needs_flush = false;
+    return needs_flush;
 }
 
 /* Returns the port in 'stp' with index 'port_no', which must be between 0 and
@@ -1047,6 +1059,7 @@ stp_topology_change_detection(struct stp *stp)
         stp_transmit_tcn(stp);
         stp_start_timer(&stp->tcn_timer, 0);
     }
+    stp->fdb_needs_flush = true;
     stp->topology_change_detected = true;
 }
 
@@ -1094,6 +1107,9 @@ stp_received_config_bpdu(struct stp *stp, struct stp_port *p,
                 stp_config_bpdu_generation(stp);
                 if (config->flags & STP_CONFIG_TOPOLOGY_CHANGE_ACK) {
                     stp_topology_change_acknowledged(stp);
+                }
+                if (config->flags & STP_CONFIG_TOPOLOGY_CHANGE) {
+                    stp->fdb_needs_flush = true;
                 }
             }
         } else if (stp_is_designated_port(p)) {
