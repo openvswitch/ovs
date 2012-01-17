@@ -1,6 +1,5 @@
 /*
- * Copyright (c) 2009, 2011 Nicira Networks.
- * Distributed under the terms of the GNU GPL version 2.
+ * Copyright (c) 2007-2012 Nicira Networks.
  *
  * Significant portions of this file may be copied from parts of the Linux
  * kernel, by Linus Torvalds and others.
@@ -548,3 +547,12 @@ module_exit(brc_cleanup);
 MODULE_DESCRIPTION("Open vSwitch bridge compatibility");
 MODULE_AUTHOR("Nicira Networks");
 MODULE_LICENSE("GPL");
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,36)
+/*
+ * In kernels 2.6.36 and later, Open vSwitch can safely coexist with
+ * the Linux bridge module, but it does not make sense to load both bridge and
+ * brcompat_mod, so this prevents it.
+ */
+BRIDGE_MUTUAL_EXCLUSION;
+#endif
