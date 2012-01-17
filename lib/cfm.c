@@ -117,9 +117,10 @@ struct remote_mp {
     bool rdi;            /* Remote Defect Indicator. Indicates remote_mp isn't
                             receiving CCMs that it's expecting to. */
     bool opup;           /* Operational State. */
+    uint32_t seq;        /* Most recently received sequence number. */
 };
 
-static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
+static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(20, 30);
 static struct hmap all_cfms = HMAP_INITIALIZER(&all_cfms);
 
 static unixctl_cb_func cfm_unixctl_show;
@@ -280,6 +281,7 @@ cfm_run(struct cfm *cfm)
     if (timer_expired(&cfm->fault_timer)) {
         long long int interval = cfm_fault_interval(cfm);
         struct remote_mp *rmp, *rmp_next;
+        bool old_cfm_fault = cfm->fault;
 
         cfm->fault = cfm->unexpected_recv;
         cfm->unexpected_recv = false;
@@ -322,6 +324,11 @@ cfm_run(struct cfm *cfm)
 
         if (hmap_is_empty(&cfm->remote_mps)) {
             cfm->fault = true;
+        }
+
+        if (old_cfm_fault != cfm->fault) {
+            VLOG_INFO_RL(&rl, "%s: CFM fault status changed to %s",
+                         cfm->name, cfm->fault ? "true" : "false");
         }
 
         timer_set_duration(&cfm->fault_timer, interval);
@@ -474,6 +481,7 @@ cfm_process_heartbeat(struct cfm *cfm, const struct ofpbuf *p)
 
         struct remote_mp *rmp;
         uint64_t ccm_mpid;
+        uint32_t ccm_seq;
         bool ccm_opdown;
 
         if (cfm->extended) {
@@ -483,6 +491,7 @@ cfm_process_heartbeat(struct cfm *cfm, const struct ofpbuf *p)
             ccm_mpid = ntohs(ccm->mpid);
             ccm_opdown = false;
         }
+        ccm_seq = ntohl(ccm->seq);
 
         if (ccm_interval != cfm->ccm_interval) {
             VLOG_WARN_RL(&rl, "%s: received a CCM with an invalid interval"
@@ -500,7 +509,7 @@ cfm_process_heartbeat(struct cfm *cfm, const struct ofpbuf *p)
         rmp = lookup_remote_mp(cfm, ccm_mpid);
         if (!rmp) {
             if (hmap_count(&cfm->remote_mps) < CFM_MAX_RMPS) {
-                rmp = xmalloc(sizeof *rmp);
+                rmp = xzalloc(sizeof *rmp);
                 hmap_insert(&cfm->remote_mps, &rmp->node, hash_mpid(ccm_mpid));
             } else {
                 cfm->unexpected_recv = true;
@@ -511,16 +520,24 @@ cfm_process_heartbeat(struct cfm *cfm, const struct ofpbuf *p)
             }
         }
 
+        VLOG_DBG("%s: received CCM (seq %"PRIu32") (mpid %"PRIu64")"
+                 " (interval %"PRIu8") (RDI %s)", cfm->name, ccm_seq,
+                 ccm_mpid, ccm_interval, ccm_rdi ? "true" : "false");
+
         if (rmp) {
+            if (rmp->seq && ccm_seq != (rmp->seq + 1)) {
+                VLOG_WARN_RL(&rl, "%s: (mpid %"PRIu64") detected sequence"
+                             " numbers which indicate possible connectivity"
+                             " problems (previous %"PRIu32") (current %"PRIu32
+                             ")", cfm->name, ccm_mpid, rmp->seq, ccm_seq);
+            }
+
             rmp->mpid = ccm_mpid;
             rmp->recv = true;
+            rmp->seq = ccm_seq;
             rmp->rdi = ccm_rdi;
             rmp->opup = !ccm_opdown;
         }
-
-        VLOG_DBG("%s: received CCM (seq %"PRIu32") (mpid %"PRIu64")"
-                 " (interval %"PRIu8") (RDI %s)", cfm->name, ntohl(ccm->seq),
-                 ccm_mpid, ccm_interval, ccm_rdi ? "true" : "false");
     }
 }
 
