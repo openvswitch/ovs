@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010, 2011 Nicira Networks.
+ * Copyright (c) 2010, 2011, 2012 Nicira Networks.
  * Distributed under the terms of the GNU GPL version 2.
  *
  * Significant portions of this file may be copied from parts of the Linux
@@ -409,19 +409,10 @@ const struct vport_ops netdev_vport_ops = {
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,36)
 /*
- * In kernels earlier than 2.6.36, Open vSwitch cannot safely coexist with
- * the Linux bridge module on any released version of Linux, because there
- * is only a single bridge hook function and only a single br_port member
- * in struct net_device.
- *
- * Declaring and exporting this symbol enforces mutual exclusion.  The bridge
- * module also exports the same symbol, so the module loader will refuse to
- * load both modules at the same time (e.g. "bridge: exports duplicate symbol
- * br_should_route_hook (owned by openvswitch_mod)").
- *
- * The use of "typeof" here avoids the need to track changes in the type of
- * br_should_route_hook over various kernel versions.
+ * In kernels earlier than 2.6.36, Open vSwitch cannot safely coexist with the
+ * Linux bridge module, because there is only a single bridge hook function and
+ * only a single br_port member in struct net_device, so this prevents loading
+ * both bridge and openvswitch_mod at the same time.
  */
-typeof(br_should_route_hook) br_should_route_hook;
-EXPORT_SYMBOL(br_should_route_hook);
+BRIDGE_MUTUAL_EXCLUSION;
 #endif
