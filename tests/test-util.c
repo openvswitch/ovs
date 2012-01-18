@@ -102,6 +102,47 @@ check_bitwise_copy(void)
     }
 }
 
+static void
+check_bitwise_zero(void)
+{
+    unsigned int n_loops;
+    int dst_ofs;
+    int n_bits;
+
+    n_loops = 0;
+    for (n_bits = 0; n_bits <= 64; n_bits++) {
+        for (dst_ofs = 0; dst_ofs < 64 - n_bits; dst_ofs++) {
+            ovs_be64 dst = htonll(random_uint64());
+            ovs_be64 orig_dst = dst;
+            ovs_be64 expect;
+
+            if (n_bits == 64) {
+                expect = htonll(0);
+            } else {
+                uint64_t mask = (UINT64_C(1) << n_bits) - 1;
+                expect = orig_dst & ~htonll(mask << dst_ofs);
+            }
+
+            bitwise_zero(&dst, sizeof dst, dst_ofs, n_bits);
+            if (expect != dst) {
+                fprintf(stderr,"bitwise_zero(0x%016"PRIx64",8,%d, %d) "
+                        "yielded 0x%016"PRIx64" "
+                        "instead of the expected 0x%016"PRIx64"\n",
+                        ntohll(orig_dst), dst_ofs,
+                        n_bits,
+                        ntohll(dst), ntohll(expect));
+                abort();
+            }
+
+            n_loops++;
+        }
+    }
+
+    if (n_loops != 64 * (64 + 1) / 2) {
+        abort();
+    }
+}
+
 int
 main(void)
 {
@@ -126,6 +167,8 @@ main(void)
     check_ctz(0, 32);
 
     check_bitwise_copy();
+
+    check_bitwise_zero();
 
     return 0;
 }
