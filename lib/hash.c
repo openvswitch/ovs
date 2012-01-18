@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2012 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,7 +30,7 @@ hash_words(const uint32_t *p, size_t n, uint32_t basis)
         a += p[0];
         b += p[1];
         c += p[2];
-        HASH_MIX(a, b, c);
+        hash_mix(&a, &b, &c);
         n -= 3;
         p += 3;
     }
@@ -44,7 +44,7 @@ hash_words(const uint32_t *p, size_t n, uint32_t basis)
         /* fall through */
     case 1:
         a += p[0];
-        HASH_FINAL(a, b, c);
+        hash_final(&a, &b, &c);
         /* fall through */
     case 0:
         break;
@@ -59,7 +59,7 @@ hash_3words(uint32_t a, uint32_t b, uint32_t c)
     a += 0xdeadbeef;
     b += 0xdeadbeef;
     c += 0xdeadbeef;
-    HASH_FINAL(a, b, c);
+    hash_final(&a, &b, &c);
     return c;
 }
 
@@ -85,7 +85,7 @@ hash_bytes(const void *p_, size_t n, uint32_t basis)
         a += tmp[0];
         b += tmp[1];
         c += tmp[2];
-        HASH_MIX(a, b, c);
+        hash_mix(&a, &b, &c);
         n -= sizeof tmp;
         p += sizeof tmp;
     }
@@ -96,7 +96,7 @@ hash_bytes(const void *p_, size_t n, uint32_t basis)
         a += tmp[0];
         b += tmp[1];
         c += tmp[2];
-        HASH_FINAL(a, b, c);
+        hash_final(&a, &b, &c);
     }
 
     return c;

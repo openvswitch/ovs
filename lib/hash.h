@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2012 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,28 +29,34 @@ extern "C" {
 /* This is the public domain lookup3 hash by Bob Jenkins from
  * http://burtleburtle.net/bob/c/lookup3.c, modified for style. */
 
-#define HASH_ROT(x, k) (((x) << (k)) | ((x) >> (32 - (k))))
+static inline uint32_t
+hash_rot(uint32_t x, int k)
+{
+    return (x << k) | (x >> (32 - k));
+}
 
-#define HASH_MIX(a, b, c)                       \
-    do {                                        \
-      a -= c; a ^= HASH_ROT(c,  4); c += b;     \
-      b -= a; b ^= HASH_ROT(a,  6); a += c;     \
-      c -= b; c ^= HASH_ROT(b,  8); b += a;     \
-      a -= c; a ^= HASH_ROT(c, 16); c += b;     \
-      b -= a; b ^= HASH_ROT(a, 19); a += c;     \
-      c -= b; c ^= HASH_ROT(b,  4); b += a;     \
-    } while (0)
+static inline void
+hash_mix(uint32_t *a, uint32_t *b, uint32_t *c)
+{
+      *a -= *c; *a ^= hash_rot(*c,  4); *c += *b;
+      *b -= *a; *b ^= hash_rot(*a,  6); *a += *c;
+      *c -= *b; *c ^= hash_rot(*b,  8); *b += *a;
+      *a -= *c; *a ^= hash_rot(*c, 16); *c += *b;
+      *b -= *a; *b ^= hash_rot(*a, 19); *a += *c;
+      *c -= *b; *c ^= hash_rot(*b,  4); *b += *a;
+}
 
-#define HASH_FINAL(a, b, c)                     \
-    do {                                        \
-      c ^= b; c -= HASH_ROT(b, 14);             \
-      a ^= c; a -= HASH_ROT(c, 11);             \
-      b ^= a; b -= HASH_ROT(a, 25);             \
-      c ^= b; c -= HASH_ROT(b, 16);             \
-      a ^= c; a -= HASH_ROT(c,  4);             \
-      b ^= a; b -= HASH_ROT(a, 14);             \
-      c ^= b; c -= HASH_ROT(b, 24);             \
-    } while (0)
+static inline void
+hash_final(uint32_t *a, uint32_t *b, uint32_t *c)
+{
+      *c ^= *b; *c -= hash_rot(*b, 14);
+      *a ^= *c; *a -= hash_rot(*c, 11);
+      *b ^= *a; *b -= hash_rot(*a, 25);
+      *c ^= *b; *c -= hash_rot(*b, 16);
+      *a ^= *c; *a -= hash_rot(*c,  4);
+      *b ^= *a; *b -= hash_rot(*a, 14);
+      *c ^= *b; *c -= hash_rot(*b, 24);
+}
 
 uint32_t hash_words(const uint32_t *, size_t n_word, uint32_t basis);
 uint32_t hash_2words(uint32_t, uint32_t);
@@ -87,7 +93,7 @@ static inline uint32_t hash_boolean(bool x, uint32_t basis)
 {
     const uint32_t P0 = 0xc2b73583;   /* This is hash_int(1, 0). */
     const uint32_t P1 = 0xe90f1258;   /* This is hash_int(2, 0). */
-    return (x ? P0 : P1) ^ HASH_ROT(basis, 1);
+    return (x ? P0 : P1) ^ hash_rot(basis, 1);
 }
 
 static inline uint32_t hash_double(double x, uint32_t basis)
