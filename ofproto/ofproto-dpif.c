@@ -3367,6 +3367,7 @@ facet_check_consistency(struct facet *facet)
 
     struct rule_dpif *rule;
     struct subfacet *subfacet;
+    bool may_log = false;
     bool ok;
 
     /* Check the rule for consistency. */
@@ -3379,22 +3380,24 @@ facet_check_consistency(struct facet *facet)
         }
         return false;
     } else if (rule != facet->rule) {
-        struct ds s;
-
-        ds_init(&s);
-        flow_format(&s, &facet->flow);
-        ds_put_format(&s, ": facet associated with wrong rule (was "
-                      "table=%"PRIu8",", facet->rule->up.table_id);
-        cls_rule_format(&facet->rule->up.cr, &s);
-        ds_put_format(&s, ") (should have been table=%"PRIu8",",
-                      rule->up.table_id);
-        cls_rule_format(&rule->up.cr, &s);
-        ds_put_char(&s, ')');
-
-        VLOG_WARN("%s", ds_cstr(&s));
-        ds_destroy(&s);
-
+        may_log = !VLOG_DROP_WARN(&rl);
         ok = false;
+        if (may_log) {
+            struct ds s;
+
+            ds_init(&s);
+            flow_format(&s, &facet->flow);
+            ds_put_format(&s, ": facet associated with wrong rule (was "
+                          "table=%"PRIu8",", facet->rule->up.table_id);
+            cls_rule_format(&facet->rule->up.cr, &s);
+            ds_put_format(&s, ") (should have been table=%"PRIu8",",
+                          rule->up.table_id);
+            cls_rule_format(&rule->up.cr, &s);
+            ds_put_char(&s, ')');
+
+            VLOG_WARN("%s", ds_cstr(&s));
+            ds_destroy(&s);
+        }
     } else {
         ok = true;
     }
@@ -3424,42 +3427,47 @@ facet_check_consistency(struct facet *facet)
                            || memcmp(subfacet->actions, odp_actions->data,
                                      subfacet->actions_len));
         if (should_install != subfacet->installed || actions_changed) {
-            struct odputil_keybuf keybuf;
-            struct ofpbuf key;
-            struct ds s;
-
-            ok = false;
-
-            ds_init(&s);
-            subfacet_get_key(subfacet, &keybuf, &key);
-            odp_flow_key_format(key.data, key.size, &s);
-
-            ds_put_cstr(&s, ": inconsistency in subfacet");
-            if (should_install != subfacet->installed) {
-                enum odp_key_fitness fitness = subfacet->key_fitness;
-
-                ds_put_format(&s, " (should%s have been installed)",
-                              should_install ? "" : " not");
-                ds_put_format(&s, " (may_set_up_flow=%s, fitness=%s)",
-                              ctx.may_set_up_flow ? "true" : "false",
-                              odp_key_fitness_to_string(fitness));
+            if (ok) {
+                may_log = !VLOG_DROP_WARN(&rl);
+                ok = false;
             }
-            if (actions_changed) {
-                ds_put_cstr(&s, " (actions were: ");
-                format_odp_actions(&s, subfacet->actions,
-                                   subfacet->actions_len);
-                ds_put_cstr(&s, ") (correct actions: ");
-                format_odp_actions(&s, odp_actions->data,
-                                   odp_actions->size);
-                ds_put_char(&s, ')');
-            } else {
-                ds_put_cstr(&s, " (actions: ");
-                format_odp_actions(&s, subfacet->actions,
-                                   subfacet->actions_len);
-                ds_put_char(&s, ')');
+
+            if (may_log) {
+                struct odputil_keybuf keybuf;
+                struct ofpbuf key;
+                struct ds s;
+
+                ds_init(&s);
+                subfacet_get_key(subfacet, &keybuf, &key);
+                odp_flow_key_format(key.data, key.size, &s);
+
+                ds_put_cstr(&s, ": inconsistency in subfacet");
+                if (should_install != subfacet->installed) {
+                    enum odp_key_fitness fitness = subfacet->key_fitness;
+
+                    ds_put_format(&s, " (should%s have been installed)",
+                                  should_install ? "" : " not");
+                    ds_put_format(&s, " (may_set_up_flow=%s, fitness=%s)",
+                                  ctx.may_set_up_flow ? "true" : "false",
+                                  odp_key_fitness_to_string(fitness));
+                }
+                if (actions_changed) {
+                    ds_put_cstr(&s, " (actions were: ");
+                    format_odp_actions(&s, subfacet->actions,
+                                       subfacet->actions_len);
+                    ds_put_cstr(&s, ") (correct actions: ");
+                    format_odp_actions(&s, odp_actions->data,
+                                       odp_actions->size);
+                    ds_put_char(&s, ')');
+                } else {
+                    ds_put_cstr(&s, " (actions: ");
+                    format_odp_actions(&s, subfacet->actions,
+                                       subfacet->actions_len);
+                    ds_put_char(&s, ')');
+                }
+                VLOG_WARN("%s", ds_cstr(&s));
+                ds_destroy(&s);
             }
-            VLOG_WARN("%s", ds_cstr(&s));
-            ds_destroy(&s);
         }
 
     next:
