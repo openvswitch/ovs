@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 Nicira Networks.
+ * Copyright (c) 2011, 2012 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "byte-order.h"
 #include "random.h"
 #include "util.h"
 
@@ -40,6 +41,63 @@ check_ctz(uint32_t x, int n)
     if (ctz(x) != n) {
         fprintf(stderr, "ctz(%"PRIu32") is %d but should be %d\n",
                 x, ctz(x), n);
+        abort();
+    }
+}
+
+/* Returns the sum of the squares of the first 'n' positive integers. */
+static unsigned int
+sum_of_squares(int n)
+{
+    return n * (n + 1) * (2 * n + 1) / 6;
+}
+
+static void
+check_bitwise_copy(void)
+{
+    unsigned int n_loops;
+    int src_ofs;
+    int dst_ofs;
+    int n_bits;
+
+    n_loops = 0;
+    for (n_bits = 0; n_bits <= 64; n_bits++) {
+        for (src_ofs = 0; src_ofs < 64 - n_bits; src_ofs++) {
+            for (dst_ofs = 0; dst_ofs < 64 - n_bits; dst_ofs++) {
+                ovs_be64 src = htonll(random_uint64());
+                ovs_be64 dst = htonll(random_uint64());
+                ovs_be64 orig_dst = dst;
+                ovs_be64 expect;
+
+                if (n_bits == 64) {
+                    expect = dst;
+                } else {
+                    uint64_t mask = (UINT64_C(1) << n_bits) - 1;
+                    expect = orig_dst & ~htonll(mask << dst_ofs);
+                    expect |= htonll(((ntohll(src) >> src_ofs) & mask)
+                                     << dst_ofs);
+                }
+
+                bitwise_copy(&src, sizeof src, src_ofs,
+                             &dst, sizeof dst, dst_ofs,
+                             n_bits);
+                if (expect != dst) {
+                    fprintf(stderr,"copy_bits(0x%016"PRIx64",8,%d, "
+                            "0x%016"PRIx64",8,%d, %d) yielded 0x%016"PRIx64" "
+                            "instead of the expected 0x%016"PRIx64"\n",
+                            ntohll(src), src_ofs,
+                            ntohll(orig_dst), dst_ofs,
+                            n_bits,
+                            ntohll(dst), ntohll(expect));
+                    abort();
+                }
+
+                n_loops++;
+            }
+        }
+    }
+
+    if (n_loops != sum_of_squares(64)) {
         abort();
     }
 }
@@ -66,6 +124,8 @@ main(void)
     /* Check ctz(0).
      * (log_2_floor(0) is undefined.) */
     check_ctz(0, 32);
+
+    check_bitwise_copy();
 
     return 0;
 }

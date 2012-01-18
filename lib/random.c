@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -98,6 +98,18 @@ random_uint32(void)
 {
     random_init();
     return random_next();
+}
+
+uint64_t
+random_uint64(void)
+{
+    uint64_t x;
+
+    random_init();
+
+    x = random_next();
+    x |= (uint64_t) random_next() << 32;
+    return x;
 }
 
 int

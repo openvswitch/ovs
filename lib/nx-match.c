@@ -29,6 +29,7 @@
 #include "openflow/nicira-ext.h"
 #include "packets.h"
 #include "unaligned.h"
+#include "util.h"
 #include "vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(nx_match);
@@ -1043,59 +1044,6 @@ nxm_check_reg_load(const struct nx_action_reg_load *action,
 }
 
 /* nxm_execute_reg_move(), nxm_execute_reg_load(). */
-
-static void
-bitwise_copy(const void *src_, unsigned int src_len, unsigned int src_ofs,
-             void *dst_, unsigned int dst_len, unsigned int dst_ofs,
-             unsigned int n_bits)
-{
-    const uint8_t *src = src_;
-    uint8_t *dst = dst_;
-
-    src += src_len - (src_ofs / 8 + 1);
-    src_ofs %= 8;
-
-    dst += dst_len - (dst_ofs / 8 + 1);
-    dst_ofs %= 8;
-
-    if (src_ofs == 0 && dst_ofs == 0) {
-        unsigned int n_bytes = n_bits / 8;
-        if (n_bytes) {
-            dst -= n_bytes - 1;
-            src -= n_bytes - 1;
-            memcpy(dst, src, n_bytes);
-
-            n_bits %= 8;
-            src--;
-            dst--;
-        }
-        if (n_bits) {
-            uint8_t mask = (1 << n_bits) - 1;
-            *dst = (*dst & ~mask) | (*src & mask);
-        }
-    } else {
-        while (n_bits > 0) {
-            unsigned int max_copy = 8 - MAX(src_ofs, dst_ofs);
-            unsigned int chunk = MIN(n_bits, max_copy);
-            uint8_t mask = ((1 << chunk) - 1) << dst_ofs;
-
-            *dst &= ~mask;
-            *dst |= ((*src >> src_ofs) << dst_ofs) & mask;
-
-            src_ofs += chunk;
-            if (src_ofs == 8) {
-                src--;
-                src_ofs = 0;
-            }
-            dst_ofs += chunk;
-            if (dst_ofs == 8) {
-                dst--;
-                dst_ofs = 0;
-            }
-            n_bits -= chunk;
-        }
-    }
-}
 
 /* Returns the value of the NXM field corresponding to 'header' at 'ofs_nbits'
  * in 'flow'. */

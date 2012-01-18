@@ -208,6 +208,14 @@ int ctz(uint32_t);
 
 bool is_all_zeros(const uint8_t *, size_t);
 bool is_all_ones(const uint8_t *, size_t);
+void bitwise_copy(const void *src, unsigned int src_len, unsigned int src_ofs,
+                  void *dst, unsigned int dst_len, unsigned int dst_ofs,
+                  unsigned int n_bits);
+void bitwise_put(uint64_t value,
+                 void *dst, unsigned int dst_len, unsigned int dst_ofs,
+                 unsigned int n_bits);
+uint64_t bitwise_get(const void *src, unsigned int src_len,
+                     unsigned int src_ofs, unsigned int n_bits);
 
 #ifdef  __cplusplus
 }

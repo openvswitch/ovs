@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,7 +25,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include "byte-order.h"
 #include "coverage.h"
+#include "openvswitch/types.h"
 #include "vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(util);
@@ -733,3 +735,119 @@ is_all_ones(const uint8_t *p, size_t n)
     return true;
 }
 
+/* Copies 'n_bits' bits starting from bit 'src_ofs' in 'src' to the 'n_bits'
+ * starting from bit 'dst_ofs' in 'dst'.  'src' is 'src_len' bytes long and
+ * 'dst' is 'dst_len' bytes long.
+ *
+ * If you consider all of 'src' to be a single unsigned integer in network byte
+ * order, then bit N is the bit with value 2**N.  That is, bit 0 is the bit
+ * with value 1 in src[src_len - 1], bit 1 is the bit with value 2, bit 2 is
+ * the bit with value 4, ..., bit 8 is the bit with value 1 in src[src_len -
+ * 2], and so on.  Similarly for 'dst'.
+ *
+ * Required invariants:
+ *   src_ofs + n_bits <= src_len * 8
+ *   dst_ofs + n_bits <= dst_len * 8
+ *   'src' and 'dst' must not overlap.
+ */
+void
+bitwise_copy(const void *src_, unsigned int src_len, unsigned int src_ofs,
+             void *dst_, unsigned int dst_len, unsigned int dst_ofs,
+             unsigned int n_bits)
+{
+    const uint8_t *src = src_;
+    uint8_t *dst = dst_;
+
+    src += src_len - (src_ofs / 8 + 1);
+    src_ofs %= 8;
+
+    dst += dst_len - (dst_ofs / 8 + 1);
+    dst_ofs %= 8;
+
+    if (src_ofs == 0 && dst_ofs == 0) {
+        unsigned int n_bytes = n_bits / 8;
+        if (n_bytes) {
+            dst -= n_bytes - 1;
+            src -= n_bytes - 1;
+            memcpy(dst, src, n_bytes);
+
+            n_bits %= 8;
+            src--;
+            dst--;
+        }
+        if (n_bits) {
+            uint8_t mask = (1 << n_bits) - 1;
+            *dst = (*dst & ~mask) | (*src & mask);
+        }
+    } else {
+        while (n_bits > 0) {
+            unsigned int max_copy = 8 - MAX(src_ofs, dst_ofs);
+            unsigned int chunk = MIN(n_bits, max_copy);
+            uint8_t mask = ((1 << chunk) - 1) << dst_ofs;
+
+            *dst &= ~mask;
+            *dst |= ((*src >> src_ofs) << dst_ofs) & mask;
+
+            src_ofs += chunk;
+            if (src_ofs == 8) {
+                src--;
+                src_ofs = 0;
+            }
+            dst_ofs += chunk;
+            if (dst_ofs == 8) {
+                dst--;
+                dst_ofs = 0;
+            }
+            n_bits -= chunk;
+        }
+    }
+}
+
+/* Copies the 'n_bits' low-order bits of 'value' into the 'n_bits' bits
+ * starting at bit 'dst_ofs' in 'dst', which is 'dst_len' bytes long.
+ *
+ * If you consider all of 'dst' to be a single unsigned integer in network byte
+ * order, then bit N is the bit with value 2**N.  That is, bit 0 is the bit
+ * with value 1 in dst[dst_len - 1], bit 1 is the bit with value 2, bit 2 is
+ * the bit with value 4, ..., bit 8 is the bit with value 1 in dst[dst_len -
+ * 2], and so on.
+ *
+ * Required invariants:
+ *   dst_ofs + n_bits <= dst_len * 8
+ *   n_bits <= 64
+ */
+void
+bitwise_put(uint64_t value,
+            void *dst, unsigned int dst_len, unsigned int dst_ofs,
+            unsigned int n_bits)
+{
+    ovs_be64 n_value = htonll(value);
+    bitwise_copy(&n_value, sizeof n_value, 0,
+                 dst, dst_len, dst_ofs,
+                 n_bits);
+}
+
+/* Returns the value of the 'n_bits' bits starting at bit 'src_ofs' in 'src',
+ * which is 'src_len' bytes long.
+ *
+ * If you consider all of 'src' to be a single unsigned integer in network byte
+ * order, then bit N is the bit with value 2**N.  That is, bit 0 is the bit
+ * with value 1 in src[src_len - 1], bit 1 is the bit with value 2, bit 2 is
+ * the bit with value 4, ..., bit 8 is the bit with value 1 in src[src_len -
+ * 2], and so on.
+ *
+ * Required invariants:
+ *   src_ofs + n_bits <= src_len * 8
+ *   n_bits <= 64
+ */
+uint64_t
+bitwise_get(const void *src, unsigned int src_len,
+            unsigned int src_ofs, unsigned int n_bits)
+{
+    ovs_be64 value = htonll(0);
+
+    bitwise_copy(src, src_len, src_ofs,
+                 &value, sizeof value, 0,
+                 n_bits);
+    return ntohll(value);
+}

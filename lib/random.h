@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2012 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,6 +27,7 @@ void random_bytes(void *, size_t);
 uint8_t random_uint8(void);
 uint16_t random_uint16(void);
 uint32_t random_uint32(void);
+uint64_t random_uint64(void);
 int random_range(int max);
 
 #endif /* random.h */
