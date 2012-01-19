@@ -29,6 +29,7 @@
 #include "packets.h"
 #include "poll-loop.h"
 #include "shash.h"
+#include "sset.h"
 #include "unixctl.h"
 #include "vlog.h"
 
@@ -443,9 +444,28 @@ netdev_dummy_receive(struct unixctl_conn *conn,
 }
 
 void
-netdev_dummy_register(void)
+netdev_dummy_register(bool override)
 {
-    netdev_register_provider(&dummy_class);
     unixctl_command_register("netdev-dummy/receive", "NAME PACKET|FLOW...",
                              2, INT_MAX, netdev_dummy_receive, NULL);
+
+    if (override) {
+        struct sset types;
+        const char *type;
+
+        sset_init(&types);
+        netdev_enumerate_types(&types);
+        SSET_FOR_EACH (type, &types) {
+            if (!netdev_unregister_provider(type)) {
+                struct netdev_class *class;
+
+                class = xmalloc(sizeof *class);
+                *class = dummy_class;
+                class->type = xstrdup(type);
+                netdev_register_provider(class);
+            }
+        }
+        sset_destroy(&types);
+    }
+    netdev_register_provider(&dummy_class);
 }

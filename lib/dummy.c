@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010, 2011 Nicira Networks.
+ * Copyright (c) 2010, 2011, 2012 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,11 +22,16 @@
  * testing.  A client program might call this function if it is designed
  * specifically for testing or the user enables it on the command line.
  *
+ * If 'override' is false, then "dummy" dpif and netdev classes will be
+ * created.  If 'override' is true, then in addition all existing dpif and
+ * netdev classes will be deleted and replaced by dummy classes.
+ *
  * There is no strong reason why dummy devices shouldn't always be enabled. */
 void
-dummy_enable(void)
+dummy_enable(bool override)
 {
-    netdev_dummy_register();
-    dpif_dummy_register();
+    netdev_dummy_register(override);
+    dpif_dummy_register(override);
     timeval_dummy_register();
 }
+

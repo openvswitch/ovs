@@ -1,4 +1,4 @@
-/* Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks
+/* Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira Networks
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -137,7 +137,7 @@ parse_options(int argc, char *argv[])
         STREAM_SSL_LONG_OPTIONS,
         {"peer-ca-cert", required_argument, NULL, OPT_PEER_CA_CERT},
         {"bootstrap-ca-cert", required_argument, NULL, OPT_BOOTSTRAP_CA_CERT},
-        {"enable-dummy", no_argument, NULL, OPT_ENABLE_DUMMY},
+        {"enable-dummy", optional_argument, NULL, OPT_ENABLE_DUMMY},
         {"disable-system", no_argument, NULL, OPT_DISABLE_SYSTEM},
         {NULL, 0, NULL, 0},
     };
@@ -183,7 +183,7 @@ parse_options(int argc, char *argv[])
             break;
 
         case OPT_ENABLE_DUMMY:
-            dummy_enable();
+            dummy_enable(optarg && !strcmp(optarg, "override"));
             break;
 
         case OPT_DISABLE_SYSTEM:

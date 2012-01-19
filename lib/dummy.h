@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010, 2011 Nicira Networks.
+ * Copyright (c) 2010, 2011, 2012 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,12 +17,14 @@
 #ifndef DUMMY_H
 #define DUMMY_H 1
 
+#include <stdbool.h>
+
 /* For client programs to call directly to enable dummy support. */
-void dummy_enable(void);
+void dummy_enable(bool override);
 
 /* Implementation details. */
-void dpif_dummy_register(void);
-void netdev_dummy_register(void);
+void dpif_dummy_register(bool override);
+void netdev_dummy_register(bool override);
 void timeval_dummy_register(void);
 
 #endif /* dummy.h */

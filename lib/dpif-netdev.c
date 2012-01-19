@@ -49,6 +49,7 @@
 #include "poll-loop.h"
 #include "random.h"
 #include "shash.h"
+#include "sset.h"
 #include "timeval.h"
 #include "util.h"
 #include "vlog.h"
@@ -100,7 +101,7 @@ struct dp_netdev_port {
     int port_no;                /* Index into dp_netdev's 'ports'. */
     struct list node;           /* Element in dp_netdev's 'port_list'. */
     struct netdev *netdev;
-    bool internal;              /* Internal port? */
+    char *type;                 /* Port type as requested by user. */
 };
 
 /* A flow in dp_netdev's 'flow_table'. */
@@ -150,8 +151,6 @@ static void dp_netdev_execute_actions(struct dp_netdev *,
                                       struct ofpbuf *, struct flow *,
                                       const struct nlattr *actions,
                                       size_t actions_len);
-
-static struct dpif_class dpif_dummy_class;
 
 static struct dpif_netdev *
 dpif_netdev_cast(const struct dpif *dpif)
@@ -309,28 +308,17 @@ do_add_port(struct dp_netdev *dp, const char *devname, const char *type,
 {
     struct dp_netdev_port *port;
     struct netdev *netdev;
-    bool internal;
+    const char *open_type;
     int mtu;
     int error;
 
     /* XXX reject devices already in some dp_netdev. */
-    if (type[0] == '\0' || !strcmp(type, "system") || !strcmp(type, "dummy")) {
-        internal = false;
-    } else if (!strcmp(type, "internal")) {
-        internal = true;
-    } else {
-        VLOG_WARN("%s: unsupported port type %s", devname, type);
-        return EINVAL;
-    }
 
     /* Open and validate network device. */
-    if (dp->class == &dpif_dummy_class) {
-        type = "dummy";
-    } else if (internal) {
-        type = "tap";
-    }
-
-    error = netdev_open(devname, type, &netdev);
+    open_type = (strcmp(type, "internal") ? type
+                 : dp->class != &dpif_netdev_class ? "dummy"
+                 : "tap");
+    error = netdev_open(devname, open_type, &netdev);
     if (error) {
         return error;
     }
@@ -354,7 +342,7 @@ do_add_port(struct dp_netdev *dp, const char *devname, const char *type,
     port = xmalloc(sizeof *port);
     port->port_no = port_no;
     port->netdev = netdev;
-    port->internal = internal;
+    port->type = xstrdup(type);
 
     error = netdev_get_mtu(netdev, &mtu);
     if (!error) {
@@ -374,7 +362,7 @@ choose_port(struct dpif *dpif, struct netdev *netdev)
     struct dp_netdev *dp = get_dp_netdev(dpif);
     int port_no;
 
-    if (dpif->dpif_class == &dpif_dummy_class) {
+    if (dpif->dpif_class != &dpif_netdev_class) {
         /* If the port name contains a number, try to assign that port number.
          * This can make writing unit tests easier because port numbers are
          * predictable. */
@@ -476,6 +464,7 @@ do_del_port(struct dp_netdev *dp, uint16_t port_no)
 
     name = xstrdup(netdev_get_name(port->netdev));
     netdev_close(port->netdev);
+    free(port->type);
 
     free(name);
     free(port);
@@ -488,8 +477,7 @@ answer_port_query(const struct dp_netdev_port *port,
                   struct dpif_port *dpif_port)
 {
     dpif_port->name = xstrdup(netdev_get_name(port->netdev));
-    dpif_port->type = xstrdup(port->internal ? "internal"
-                              : netdev_get_type(port->netdev));
+    dpif_port->type = xstrdup(port->type);
     dpif_port->port_no = port->port_no;
 }
 
@@ -581,8 +569,7 @@ dpif_netdev_port_dump_next(const struct dpif *dpif, void *state_,
             free(state->name);
             state->name = xstrdup(netdev_get_name(port->netdev));
             dpif_port->name = state->name;
-            dpif_port->type = (char *) (port->internal ? "internal"
-                                        : netdev_get_type(port->netdev));
+            dpif_port->type = port->type;
             dpif_port->port_no = port->port_no;
             state->port_no = port_no + 1;
             return 0;
@@ -1289,12 +1276,33 @@ const struct dpif_class dpif_netdev_class = {
     dpif_netdev_recv_purge,
 };
 
-void
-dpif_dummy_register(void)
+static void
+dpif_dummy_register__(const char *type)
 {
-    if (!dpif_dummy_class.type) {
-        dpif_dummy_class = dpif_netdev_class;
-        dpif_dummy_class.type = "dummy";
-        dp_register_provider(&dpif_dummy_class);
+    struct dpif_class *class;
+
+    class = xmalloc(sizeof *class);
+    *class = dpif_netdev_class;
+    class->type = xstrdup(type);
+    dp_register_provider(class);
+}
+
+void
+dpif_dummy_register(bool override)
+{
+    if (override) {
+        struct sset types;
+        const char *type;
+
+        sset_init(&types);
+        dp_enumerate_types(&types);
+        SSET_FOR_EACH (type, &types) {
+            if (!dp_unregister_provider(type)) {
+                dpif_dummy_register__(type);
+            }
+        }
+        sset_destroy(&types);
     }
+
+    dpif_dummy_register__("dummy");
 }
