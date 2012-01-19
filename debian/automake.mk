@@ -9,6 +9,7 @@ EXTRA_DIST += \
 	debian/openvswitch-brcompat.install \
 	debian/openvswitch-brcompat.manpages \
 	debian/openvswitch-brcompat.postinst \
+	debian/openvswitch-brcompat.postrm \
 	debian/openvswitch-common.dirs \
 	debian/openvswitch-common.install \
 	debian/openvswitch-common.manpages \
@@ -28,6 +29,7 @@ EXTRA_DIST += \
 	debian/openvswitch-ipsec.init \
 	debian/openvswitch-ipsec.install \
 	debian/openvswitch-pki.postinst \
+	debian/openvswitch-pki.postrm \
 	debian/openvswitch-switch.README.Debian \
 	debian/openvswitch-switch.dirs \
 	debian/openvswitch-switch.init \
