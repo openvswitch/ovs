@@ -1,5 +1,5 @@
 #!/bin/sh
-# postrm script for openvswitch-switch
+# postrm script for openvswitch-brcompat
 #
 # see: dh_installdeb(1)
 
@@ -21,11 +21,7 @@ set -e
 
 case "$1" in
     purge)
-        rm -f /etc/openvswitch/conf.db
-        rm -f /etc/openvswitch/.conf.db.~lock~
-        rm -f /etc/default/openvswitch-switch
-        rm -f /var/log/openvswitch/ovs-vswitchd.log* || true
-        rm -f /var/log/openvswitch/ovsdb-server.log* || true
+        rm -f /var/log/openvswitch/ovs-brcompatd.log* || true
         ;;
 
     remove|upgrade|failed-upgrade|abort-install|abort-upgrade|disappear)
