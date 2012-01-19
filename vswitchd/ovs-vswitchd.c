@@ -55,12 +55,13 @@ VLOG_DEFINE_THIS_MODULE(vswitchd);
 
 static unixctl_cb_func ovs_vswitchd_exit;
 
-static char *parse_options(int argc, char *argv[]);
+static char *parse_options(int argc, char *argv[], char **unixctl_path);
 static void usage(void) NO_RETURN;
 
 int
 main(int argc, char *argv[])
 {
+    char *unixctl_path = NULL;
     struct unixctl_server *unixctl;
     struct signal *sighup;
     char *remote;
@@ -70,7 +71,7 @@ main(int argc, char *argv[])
     proctitle_init(argc, argv);
     set_program_name(argv[0]);
     stress_init_command();
-    remote = parse_options(argc, argv);
+    remote = parse_options(argc, argv, &unixctl_path);
     signal(SIGPIPE, SIG_IGN);
     sighup = signal_register(SIGHUP);
     process_init();
@@ -78,7 +79,7 @@ main(int argc, char *argv[])
 
     daemonize_start();
 
-    retval = unixctl_server_create(NULL, &unixctl);
+    retval = unixctl_server_create(unixctl_path, &unixctl);
     if (retval) {
         exit(EXIT_FAILURE);
     }
@@ -115,11 +116,12 @@ main(int argc, char *argv[])
 }
 
 static char *
-parse_options(int argc, char *argv[])
+parse_options(int argc, char *argv[], char **unixctl_pathp)
 {
     enum {
         OPT_PEER_CA_CERT = UCHAR_MAX + 1,
         OPT_MLOCKALL,
+        OPT_UNIXCTL,
         VLOG_OPTION_ENUMS,
         LEAK_CHECKER_OPTION_ENUMS,
         OPT_BOOTSTRAP_CA_CERT,
@@ -131,6 +133,7 @@ parse_options(int argc, char *argv[])
         {"help",        no_argument, NULL, 'h'},
         {"version",     no_argument, NULL, 'V'},
         {"mlockall",    no_argument, NULL, OPT_MLOCKALL},
+        {"unixctl",     required_argument, NULL, OPT_UNIXCTL},
         DAEMON_LONG_OPTIONS,
         VLOG_LONG_OPTIONS,
         LEAK_CHECKER_LONG_OPTIONS,
@@ -167,6 +170,10 @@ parse_options(int argc, char *argv[])
 #else
             VLOG_ERR("mlockall not supported on this system");
 #endif
+            break;
+
+        case OPT_UNIXCTL:
+            *unixctl_pathp = optarg;
             break;
 
         VLOG_OPTION_HANDLERS
@@ -227,6 +234,7 @@ usage(void)
     daemon_usage();
     vlog_usage();
     printf("\nOther options:\n"
+           "  --unixctl=SOCKET        override default control socket name\n"
            "  -h, --help              display this help message\n"
            "  -V, --version           display version information\n");
     leak_checker_usage();
