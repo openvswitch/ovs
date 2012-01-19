@@ -5592,7 +5592,7 @@ static void
 ofproto_unixctl_fdb_flush(struct unixctl_conn *conn,
                          const char *args, void *aux OVS_UNUSED)
 {
-    const struct ofproto_dpif *ofproto;
+    struct ofproto_dpif *ofproto;
 
     ofproto = ofproto_dpif_lookup(args);
     if (!ofproto) {
@@ -5600,6 +5600,7 @@ ofproto_unixctl_fdb_flush(struct unixctl_conn *conn,
         return;
     }
     mac_learning_flush(ofproto->ml);
+    ofproto->need_revalidate = true;
 
     unixctl_command_reply(conn, 200, "table successfully flushed");
 }
