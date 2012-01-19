@@ -105,7 +105,7 @@ static struct rule_dpif *rule_dpif_cast(const struct rule *rule)
 static struct rule_dpif *rule_dpif_lookup(struct ofproto_dpif *,
                                           const struct flow *, uint8_t table);
 
-static void flow_push_stats(const struct rule_dpif *, const struct flow *,
+static void flow_push_stats(struct rule_dpif *, const struct flow *,
                             uint64_t packets, uint64_t bytes,
                             long long int used);
 
@@ -213,8 +213,8 @@ struct action_xlate_ctx {
      * we are just revalidating. */
     bool may_learn;
 
-    /* Cookie of the currently matching rule, or 0. */
-    ovs_be64 cookie;
+    /* The rule that we are currently translating, or NULL. */
+    struct rule_dpif *rule;
 
     /* If nonnull, called just before executing a resubmit action.
      *
@@ -249,7 +249,7 @@ struct action_xlate_ctx {
 
 static void action_xlate_ctx_init(struct action_xlate_ctx *,
                                   struct ofproto_dpif *, const struct flow *,
-                                  ovs_be16 initial_tci, ovs_be64 cookie,
+                                  ovs_be16 initial_tci, struct rule_dpif *,
                                   const struct ofpbuf *);
 static struct ofpbuf *xlate_actions(struct action_xlate_ctx *,
                                     const union ofp_action *in, size_t n_in);
@@ -3223,7 +3223,7 @@ facet_account(struct facet *facet)
 
         action_xlate_ctx_init(&ctx, ofproto, &facet->flow,
                               facet->flow.vlan_tci,
-                              facet->rule->up.flow_cookie, NULL);
+                              facet->rule, NULL);
         ctx.may_learn = true;
         ofpbuf_delete(xlate_actions(&ctx, facet->rule->up.actions,
                                     facet->rule->up.n_actions));
@@ -3413,8 +3413,7 @@ facet_check_consistency(struct facet *facet)
         bool should_install;
 
         action_xlate_ctx_init(&ctx, ofproto, &facet->flow,
-                              subfacet->initial_tci, rule->up.flow_cookie,
-                              NULL);
+                              subfacet->initial_tci, rule, NULL);
         odp_actions = xlate_actions(&ctx, rule->up.actions,
                                     rule->up.n_actions);
 
@@ -3533,8 +3532,7 @@ facet_revalidate(struct facet *facet)
         bool should_install;
 
         action_xlate_ctx_init(&ctx, ofproto, &facet->flow,
-                              subfacet->initial_tci, new_rule->up.flow_cookie,
-                              NULL);
+                              subfacet->initial_tci, new_rule, NULL);
         odp_actions = xlate_actions(&ctx, new_rule->up.actions,
                                     new_rule->up.n_actions);
         actions_changed = (subfacet->actions_len != odp_actions->size
@@ -3671,7 +3669,7 @@ push_resubmit(struct action_xlate_ctx *ctx, struct rule_dpif *rule)
 /* Pushes flow statistics to the rules which 'flow' resubmits into given
  * 'rule''s actions and mirrors. */
 static void
-flow_push_stats(const struct rule_dpif *rule,
+flow_push_stats(struct rule_dpif *rule,
                 const struct flow *flow, uint64_t packets, uint64_t bytes,
                 long long int used)
 {
@@ -3682,8 +3680,8 @@ flow_push_stats(const struct rule_dpif *rule,
     push.bytes = bytes;
     push.used = used;
 
-    action_xlate_ctx_init(&push.ctx, ofproto, flow, flow->vlan_tci,
-                          rule->up.flow_cookie, NULL);
+    action_xlate_ctx_init(&push.ctx, ofproto, flow, flow->vlan_tci, rule,
+                          NULL);
     push.ctx.resubmit_hook = push_resubmit;
     ofpbuf_delete(xlate_actions(&push.ctx,
                                 rule->up.actions, rule->up.n_actions));
@@ -3822,13 +3820,13 @@ static void
 subfacet_make_actions(struct subfacet *subfacet, const struct ofpbuf *packet)
 {
     struct facet *facet = subfacet->facet;
-    const struct rule_dpif *rule = facet->rule;
+    struct rule_dpif *rule = facet->rule;
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(rule->up.ofproto);
     struct ofpbuf *odp_actions;
     struct action_xlate_ctx ctx;
 
     action_xlate_ctx_init(&ctx, ofproto, &facet->flow, subfacet->initial_tci,
-                          rule->up.flow_cookie, packet);
+                          rule, packet);
     odp_actions = xlate_actions(&ctx, rule->up.actions, rule->up.n_actions);
     facet->tags = ctx.tags;
     facet->may_install = ctx.may_set_up_flow;
@@ -4108,7 +4106,7 @@ rule_execute(struct rule *rule_, const struct flow *flow,
     size_t size;
 
     action_xlate_ctx_init(&ctx, ofproto, flow, flow->vlan_tci,
-                          rule->up.flow_cookie, packet);
+                          rule, packet);
     odp_actions = xlate_actions(&ctx, rule->up.actions, rule->up.n_actions);
     size = packet->size;
     if (execute_odp_actions(ofproto, flow, odp_actions->data,
@@ -4378,12 +4376,12 @@ xlate_table_action(struct action_xlate_ctx *ctx,
         }
 
         if (rule) {
-            ovs_be64 old_cookie = ctx->cookie;
+            struct rule_dpif *old_rule = ctx->rule;
 
             ctx->recurse++;
-            ctx->cookie = rule->up.flow_cookie;
+            ctx->rule = rule;
             do_xlate_actions(rule->up.actions, rule->up.n_actions, ctx);
-            ctx->cookie = old_cookie;
+            ctx->rule = old_rule;
             ctx->recurse--;
         }
 
@@ -4482,7 +4480,7 @@ execute_controller_action(struct action_xlate_ctx *ctx, int len,
     pin.packet_len = packet->size;
     pin.reason = reason;
     pin.table_id = ctx->table_id;
-    pin.cookie = ctx->cookie;
+    pin.cookie = ctx->rule ? ctx->rule->up.flow_cookie : 0;
 
     pin.buffer_id = 0;
     pin.send_len = len;
@@ -4919,7 +4917,7 @@ out:
 static void
 action_xlate_ctx_init(struct action_xlate_ctx *ctx,
                       struct ofproto_dpif *ofproto, const struct flow *flow,
-                      ovs_be16 initial_tci, ovs_be64 cookie,
+                      ovs_be16 initial_tci, struct rule_dpif *rule,
                       const struct ofpbuf *packet)
 {
     ctx->ofproto = ofproto;
@@ -4927,7 +4925,7 @@ action_xlate_ctx_init(struct action_xlate_ctx *ctx,
     ctx->base_flow = ctx->flow;
     ctx->base_flow.tun_id = 0;
     ctx->base_flow.vlan_tci = initial_tci;
-    ctx->cookie = cookie;
+    ctx->rule = rule;
     ctx->packet = packet;
     ctx->may_learn = packet != NULL;
     ctx->resubmit_hook = NULL;
@@ -5716,7 +5714,7 @@ packet_out(struct ofproto *ofproto_, struct ofpbuf *packet,
         ofpbuf_use_stack(&key, &keybuf, sizeof keybuf);
         odp_flow_key_from_flow(&key, flow);
 
-        action_xlate_ctx_init(&push.ctx, ofproto, flow, flow->vlan_tci, 0,
+        action_xlate_ctx_init(&push.ctx, ofproto, flow, flow->vlan_tci, NULL,
                               packet);
 
         /* Ensure that resubmits in 'ofp_actions' get accounted to their
@@ -6022,7 +6020,7 @@ ofproto_unixctl_trace(struct unixctl_conn *conn, int argc, const char *argv[],
         trace.result = &result;
         trace.flow = flow;
         action_xlate_ctx_init(&trace.ctx, ofproto, &flow, initial_tci,
-                              rule->up.flow_cookie, packet);
+                              rule, packet);
         trace.ctx.resubmit_hook = trace_resubmit;
         odp_actions = xlate_actions(&trace.ctx,
                                     rule->up.actions, rule->up.n_actions);
