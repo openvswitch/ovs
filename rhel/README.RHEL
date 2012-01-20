@@ -70,7 +70,7 @@ DEVICE=eth0
 ONBOOT=yes
 DEVICETYPE=ovs
 TYPE=OVSPort
-OVS_BRIDGE=internet
+OVS_BRIDGE=ovsbridge0
 BOOTPROTO=none
 HOTPLUG=no
 
