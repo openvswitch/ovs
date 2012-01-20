@@ -101,10 +101,11 @@ static struct sk_buff *gre_update_header(const struct vport *vport,
 					       - GRE_HEADER_SECTION);
 
 	/* Work backwards over the options so the checksum is last. */
-	if (mutable->flags & TNL_F_OUT_KEY_ACTION) {
+	if (mutable->flags & TNL_F_OUT_KEY_ACTION)
 		*options = be64_get_low32(OVS_CB(skb)->tun_id);
+
+	if (mutable->out_key || mutable->flags & TNL_F_OUT_KEY_ACTION)
 		options--;
-	}
 
 	if (mutable->flags & TNL_F_CSUM)
 		*(__sum16 *)options = csum_fold(skb_checksum(skb,
