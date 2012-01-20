@@ -6114,7 +6114,7 @@ ofproto_dpif_unixctl_init(void)
     unixctl_command_register(
         "ofproto/trace",
         "bridge {tun_id in_port packet | odp_flow [-generate]}",
-        2, 4, ofproto_unixctl_trace, NULL);
+        2, 5, ofproto_unixctl_trace, NULL);
     unixctl_command_register("fdb/flush", "bridge", 1, 1,
                              ofproto_unixctl_fdb_flush, NULL);
     unixctl_command_register("fdb/show", "bridge", 1, 1,
