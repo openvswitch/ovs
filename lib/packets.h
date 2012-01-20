@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,6 +29,7 @@
 
 struct ofpbuf;
 struct ds;
+struct flow;
 
 bool dpid_from_string(const char *s, uint64_t *dpidp);
 
@@ -467,5 +468,7 @@ void packet_set_ipv4(struct ofpbuf *, ovs_be32 src, ovs_be32 dst, uint8_t tos,
                      uint8_t ttl);
 void packet_set_tcp_port(struct ofpbuf *, ovs_be16 src, ovs_be16 dst);
 void packet_set_udp_port(struct ofpbuf *, ovs_be16 src, ovs_be16 dst);
+
+uint8_t packet_get_tcp_flags(const struct ofpbuf *, const struct flow *);
 
 #endif /* packets.h */

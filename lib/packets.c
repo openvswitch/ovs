@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011 Nicira Networks.
+ * Copyright (c) 2009, 2010, 2011, 2012 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@
 #include <stdlib.h>
 #include "byte-order.h"
 #include "csum.h"
+#include "flow.h"
 #include "dynamic-string.h"
 #include "ofpbuf.h"
 
@@ -476,5 +477,22 @@ packet_set_udp_port(struct ofpbuf *packet, ovs_be16 src, ovs_be16 dst)
     } else {
         uh->udp_src = src;
         uh->udp_dst = dst;
+    }
+}
+
+/* If 'packet' is a TCP packet, returns the TCP flags.  Otherwise, returns 0.
+ *
+ * 'flow' must be the flow corresponding to 'packet' and 'packet''s header
+ * pointers must be properly initialized (e.g. with flow_extract()). */
+uint8_t
+packet_get_tcp_flags(const struct ofpbuf *packet, const struct flow *flow)
+{
+    /* XXX IPv6? */
+    if (flow->dl_type == htons(ETH_TYPE_IP) && packet->l4
+        && flow->nw_proto == IPPROTO_TCP && packet->l7) {
+        const struct tcp_header *tcp = packet->l4;
+        return TCP_FLAGS(tcp->tcp_ctl);
+    } else {
+        return 0;
     }
 }

@@ -679,14 +679,7 @@ dpif_flow_stats_extract(const struct flow *flow, const struct ofpbuf *packet,
                         struct dpif_flow_stats *stats)
 {
     memset(stats, 0, sizeof(*stats));
-
-    if ((flow->dl_type == htons(ETH_TYPE_IP)) && packet->l4) {
-        if ((flow->nw_proto == IPPROTO_TCP) && packet->l7) {
-            struct tcp_header *tcp = packet->l4;
-            stats->tcp_flags = TCP_FLAGS(tcp->tcp_ctl);
-        }
-    }
-
+    stats->tcp_flags = packet_get_tcp_flags(packet, flow);
     stats->n_bytes = packet->size;
     stats->n_packets = 1;
 }
