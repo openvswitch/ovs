@@ -138,7 +138,7 @@ command.  The plugin script does roughly the following:
           configuration to a known state.  One effect of emer-reset is
           to deconfigure any manager from the OVS database.
 
-        * If XAPI is configured for a manger, configures the OVS
+        * If XAPI is configured for a manager, configures the OVS
           manager to match with "ovs-vsctl set-manager".
 
 The Open vSwitch boot sequence only configures an OVS configuration
