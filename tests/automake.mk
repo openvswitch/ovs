@@ -8,6 +8,7 @@ TESTSUITE_AT = \
 	tests/testsuite.at \
 	tests/ovsdb-macros.at \
 	tests/library.at \
+	tests/heap.at \
 	tests/bundle.at \
 	tests/classifier.at \
 	tests/check-structs.at \
@@ -82,6 +83,7 @@ lcov_wrappers = \
 	tests/lcov/test-file_name \
 	tests/lcov/test-flows \
 	tests/lcov/test-hash \
+	tests/lcov/test-heap \
 	tests/lcov/test-hmap \
 	tests/lcov/test-json \
 	tests/lcov/test-jsonrpc \
@@ -138,6 +140,7 @@ valgrind_wrappers = \
 	tests/valgrind/test-file_name \
 	tests/valgrind/test-flows \
 	tests/valgrind/test-hash \
+	tests/valgrind/test-heap \
 	tests/valgrind/test-hmap \
 	tests/valgrind/test-json \
 	tests/valgrind/test-jsonrpc \
@@ -224,6 +227,10 @@ dist_check_SCRIPTS = tests/flowgen.pl
 noinst_PROGRAMS += tests/test-hash
 tests_test_hash_SOURCES = tests/test-hash.c
 tests_test_hash_LDADD = lib/libopenvswitch.a
+
+noinst_PROGRAMS += tests/test-heap
+tests_test_heap_SOURCES = tests/test-heap.c
+tests_test_heap_LDADD = lib/libopenvswitch.a
 
 noinst_PROGRAMS += tests/test-hmap
 tests_test_hmap_SOURCES = tests/test-hmap.c

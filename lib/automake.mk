@@ -1,4 +1,4 @@
-# Copyright (C) 2009, 2010, 2011 Nicira Networks, Inc.
+# Copyright (C) 2009, 2010, 2011, 2012 Nicira Networks, Inc.
 #
 # Copying and distribution of this file, with or without modification,
 # are permitted in any medium without royalty provided the copyright
@@ -45,6 +45,8 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/dpif-provider.h \
 	lib/dpif.c \
 	lib/dpif.h \
+	lib/heap.c \
+	lib/heap.h \
 	lib/dynamic-string.c \
 	lib/dynamic-string.h \
 	lib/entropy.c \

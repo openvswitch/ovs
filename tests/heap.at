@@ -1,0 +1,13 @@
+AT_BANNER([heap library])
+
+m4_define([TEST_HEAP],
+  [AT_SETUP([heap library -- m4_bpatsubst([$1], [-], [ ])])
+   AT_CHECK([test-heap $1])
+   AT_CLEANUP])
+
+TEST_HEAP([insert-delete-same-order])
+TEST_HEAP([insert-delete-reverse-order])
+TEST_HEAP([insert-delete-every-order])
+TEST_HEAP([insert-delete-same-order-with-dups])
+TEST_HEAP([raw-insert])
+TEST_HEAP([raw-delete])

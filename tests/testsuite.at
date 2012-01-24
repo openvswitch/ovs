@@ -1,6 +1,6 @@
 AT_INIT
 
-AT_COPYRIGHT([Copyright (c) 2009, 2010, 2011 Nicira Networks.
+AT_COPYRIGHT([Copyright (c) 2009, 2010, 2011, 2012 Nicira Networks.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -40,6 +40,7 @@ m4_include([tests/ofproto-macros.at])
 
 m4_include([tests/lacp.at])
 m4_include([tests/library.at])
+m4_include([tests/heap.at])
 m4_include([tests/bundle.at])
 m4_include([tests/classifier.at])
 m4_include([tests/check-structs.at])

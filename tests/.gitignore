@@ -16,6 +16,7 @@
 /test-file_name
 /test-flows
 /test-hash
+/test-heap
 /test-hmap
 /test-json
 /test-jsonrpc
