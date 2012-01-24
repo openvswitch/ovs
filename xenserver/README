@@ -118,17 +118,6 @@ scripts are located in ../utilities/bugtool:
 
         Script to dump tc class configuration for all network interfaces.
 
-To install, build the Open vSwitch RPM with a command like this:
-
-        rpmbuild -D "openvswitch_version $full_version" \
-                -D "xen_version $XENKERNEL" \
-                -D "build_number --with-build-number=$buildnr" \
-                -bb openvswitch-xen.spec
-
-Then, "rpm -U" the resulting Open vSwitch package on the XenServer hosts in
-question and reboot them.  (The openvswitch-dbg package that is also
-produced need not be installed, but it is harmless to do so.)
-
 ----------------------------------------------------------------------
 Copyright (C) 2009, 2010, 2011 Nicira Networks, Inc.
 
