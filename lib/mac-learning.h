@@ -22,6 +22,8 @@
 #include "packets.h"
 #include "tag.h"
 
+struct mac_learning;
+
 #define MAC_HASH_BITS 10
 #define MAC_HASH_MASK (MAC_HASH_SIZE - 1)
 #define MAC_HASH_SIZE (1u << MAC_HASH_BITS)
@@ -29,7 +31,7 @@
 #define MAC_MAX 2048
 
 /* Time, in seconds, before expiring a mac_entry due to inactivity. */
-#define MAC_ENTRY_IDLE_TIME 300
+#define MAC_ENTRY_DEFAULT_IDLE_TIME 300
 
 /* Time, in seconds, to lock an entry updated by a gratuitous ARP to avoid
  * relearning based on a reflection from a bond slave. */
@@ -53,7 +55,7 @@ struct mac_entry {
     tag_type tag;               /* Tag for this learning entry. */
 };
 
-int mac_entry_age(const struct mac_entry *);
+int mac_entry_age(const struct mac_learning *, const struct mac_entry *);
 
 /* MAC learning table. */
 struct mac_learning {
@@ -64,12 +66,14 @@ struct mac_learning {
     struct mac_entry entries[MAC_MAX]; /* All entries. */
     uint32_t secret;            /* Secret for randomizing hash table. */
     unsigned long *flood_vlans; /* Bitmap of learning disabled VLANs. */
+    unsigned int idle_time;     /* Max age before deleting an entry. */
 };
 
-struct mac_learning *mac_learning_create(void);
+struct mac_learning *mac_learning_create(unsigned int idle_time);
 void mac_learning_destroy(struct mac_learning *);
 bool mac_learning_set_flood_vlans(struct mac_learning *,
                                   unsigned long *bitmap);
+void mac_learning_set_idle_time(struct mac_learning *, unsigned int idle_time);
 tag_type mac_learning_learn(struct mac_learning *,
                             const uint8_t src[ETH_ADDR_LEN], uint16_t vlan,
                             uint16_t src_port, enum grat_arp_lock_type

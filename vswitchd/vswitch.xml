@@ -437,6 +437,12 @@
             does not have QoS configured, or if the port does not have a queue
             with the specified ID, the default queue is used instead.
           </dd>
+          <dt><code>mac-aging-time</code></dt>
+          <dd>
+            A positive integer specifying the maximum number of seconds to
+            retain a MAC learning entry for which no packets have been seen.
+            The default is currently 300 seconds (5 minutes).
+          </dd>
         </dl>
       </column>
     </group>

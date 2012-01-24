@@ -1584,7 +1584,8 @@ bridge_unixctl_fdb_show(struct unixctl_conn *conn,
         }
         ds_put_format(&ds, "%5d  %4d  "ETH_ADDR_FMT"  %3d\n",
                       br->ports[e->port]->ifaces[0]->dp_ifidx,
-                      e->vlan, ETH_ADDR_ARGS(e->mac), mac_entry_age(e));
+                      e->vlan, ETH_ADDR_ARGS(e->mac),
+                      mac_entry_age(br->ml, e));
     }
     unixctl_command_reply(conn, 200, ds_cstr(&ds));
     ds_destroy(&ds);
@@ -1714,7 +1715,7 @@ bridge_create(const struct ovsrec_bridge *br_cfg)
 
     br->name = xstrdup(br_cfg->name);
     br->cfg = br_cfg;
-    br->ml = mac_learning_create();
+    br->ml = mac_learning_create(MAC_ENTRY_DEFAULT_IDLE_TIME);
     eth_addr_nicira_random(br->default_ea);
 
     hmap_init(&br->ifaces);
@@ -1867,6 +1868,8 @@ bridge_reconfigure_one(struct bridge *br)
     struct svec snoops, old_snoops;
     struct shash_node *node;
     enum ofproto_fail_mode fail_mode;
+    const char *idle_time_str;
+    int idle_time;
     size_t i;
 
     /* Collect old ports. */
@@ -1945,6 +1948,13 @@ bridge_reconfigure_one(struct bridge *br)
         ofproto_flush_flows(br->ofproto);
     }
     ofproto_set_fail_mode(br->ofproto, fail_mode);
+
+    /* Set the MAC learning aging timeout. */
+    idle_time_str = bridge_get_other_config(br->cfg, "mac-aging-time");
+    idle_time = (idle_time_str && atoi(idle_time_str)
+                 ? atoi(idle_time_str)
+                 : MAC_ENTRY_DEFAULT_IDLE_TIME);
+    mac_learning_set_idle_time(br->ml, idle_time);
 
     /* Delete all flows if we're switching from connected to standalone or vice
      * versa.  (XXX Should we delete all flows if we are switching from one

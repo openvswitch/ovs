@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011 Nicira Networks.
+ * Copyright (c) 2009, 2010, 2011, 2012 Nicira Networks.
  * Copyright (c) 2010 Jean Tourrilhes - HP-Labs.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -515,7 +515,7 @@ ofproto_create(const char *datapath, const char *datapath_type,
     } else {
         p->ofhooks = &default_ofhooks;
         p->aux = p;
-        p->ml = mac_learning_create();
+        p->ml = mac_learning_create(MAC_ENTRY_DEFAULT_IDLE_TIME);
     }
 
     /* Pick final datapath ID. */
