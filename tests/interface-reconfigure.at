@@ -735,6 +735,7 @@ AT_CHECK([cat etc/sysconfig/network-scripts/ifcfg-xenbr2], [0],
 XEMANAGED=yes
 DEVICE=xenbr2
 ONBOOT=no
+NOZEROCONF=yes
 TYPE=Ethernet
 BOOTPROTO=dhcp
 PERSISTENT_DHCLIENT=yes
@@ -805,6 +806,7 @@ AT_CHECK([cat etc/sysconfig/network-scripts/ifcfg-xapi3], [0],
 XEMANAGED=yes
 DEVICE=xapi3
 ONBOOT=no
+NOZEROCONF=yes
 TYPE=Ethernet
 BOOTPROTO=none
 MTU=1500
@@ -894,6 +896,7 @@ AT_CHECK([cat etc/sysconfig/network-scripts/ifcfg-xapi1], [0],
 XEMANAGED=yes
 DEVICE=xapi1
 ONBOOT=no
+NOZEROCONF=yes
 TYPE=Ethernet
 BOOTPROTO=none
 MTU=1500
@@ -985,6 +988,7 @@ AT_CHECK([cat etc/sysconfig/network-scripts/ifcfg-xapi2], [0],
 XEMANAGED=yes
 DEVICE=xapi2
 ONBOOT=no
+NOZEROCONF=yes
 TYPE=Ethernet
 BOOTPROTO=none
 MTU=1500
