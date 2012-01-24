@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,7 +27,7 @@
 #define MAC_MAX 2048
 
 /* Time, in seconds, before expiring a mac_entry due to inactivity. */
-#define MAC_ENTRY_IDLE_TIME 60
+#define MAC_ENTRY_IDLE_TIME 300
 
 /* Time, in seconds, to lock an entry updated by a gratuitous ARP to avoid
  * relearning based on a reflection from a bond slave. */
