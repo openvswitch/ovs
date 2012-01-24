@@ -1,6 +1,6 @@
 # Spec file for Open vSwitch.
 
-# Copyright (C) 2009, 2010, 2011 Nicira Networks, Inc.
+# Copyright (C) 2009, 2010, 2011, 2012 Nicira Networks, Inc.
 #
 # Copying and distribution of this file, with or without modification,
 # are permitted in any medium without royalty provided the copyright
@@ -129,6 +129,74 @@ install -d -m 755 $RPM_BUILD_ROOT/var/lib/openvswitch
 rm -rf $RPM_BUILD_ROOT
 
 %post
+# A list of Citrix XenServer scripts that we might need to replace
+# with our own versions.
+scripts="
+    /etc/xensource/scripts/vif
+    /opt/xensource/libexec/InterfaceReconfigure.py
+    /opt/xensource/libexec/InterfaceReconfigureBridge.py
+    /opt/xensource/libexec/InterfaceReconfigureVswitch.py
+    /opt/xensource/libexec/interface-reconfigure"
+
+# Calculate into $md5sums a comma-separated set of md5sums of the
+# Citrix XenServer scripts that we might need to replace.  We might be
+# upgrading an older version of the package that moved the files out
+# of the way, so we need to look for the files in those out-of-the-way
+# locations first.
+md5sums=
+for script in $scripts; do
+    b=$(basename "$script")
+    if test -e /usr/lib/openvswitch/xs-saved/"$b"; then
+        f=/usr/lib/openvswitch/xs-saved/"$b"
+    elif test -e /usr/lib/openvswitch/xs-original/"$b"; then
+        f=/usr/lib/openvswitch/xs-original/"$b"
+    elif test -e "$script" && test ! -h "$script"; then
+        f=$script
+    else
+        printf "\n$script: not found\n"
+        f=/dev/null
+    fi
+    md5sums="$md5sums,$(md5sum $f | awk '{print $1}')"
+done
+md5sums=${md5sums#,}
+
+# Now check the md5sums against the known sets of md5sums:
+#
+#   - If they are known to be a version of XenServer scripts that we should
+#     replace, we replace them (by putting $scripts into $replace_files).
+#
+#   - Otherwise, we guess that it's better not to replace them, because the
+#     improvements that our versions of the scripts provide are minimal, so
+#     it's better to avoid possibly breaking any changes made upstream by
+#     Citrix.
+case $md5sums in
+    cf09a68d9f8b434e79a4c83b01a3bb4b,395866df1b0b20c12c4dd2f7de0ecdb4,9d493545ae81463239d3162cbc798852,862d0939b441de9264a900628e950fe9,21f85db25599d7f026cd489385d58aa6)
+        keep_files=
+        replace_files=$scripts
+        printf "\nVerified host scripts from XenServer 6.0.0.\n"
+        ;;
+        
+    c5f48246577a17cf1b971fb5ce4e920b,2e2c912f86f9c536c89adc34ff3c2b2b,28d3ff72d72bdec4f37d70699f5edb76,67e1d0af16fc1ddf10009c5c063ad2ba,24bae6906d182ba47668174f8e480cc6)
+        keep_files=
+        replace_files=$scripts
+        printf "\nVerified host scripts from XenServer 5.6-FP1.\n"
+        ;;
+
+    *)
+        keep_files=$scripts
+        replace_files=
+        cat <<EOF
+
+The host scripts on this machine are not those of any supported
+version of XenServer.  On XenServer earlier than 5.6-FP1, your Open
+vSwitch installation will not work.  On XenServer 5.6-FP1 or later,
+Open vSwitch is not verified to work, which could lead to unexpected
+behavior.
+
+EOF
+        ;;
+esac
+
 if grep -F net.ipv4.conf.all.arp_filter /etc/sysctl.conf >/dev/null 2>&1; then :; else
     cat >>/etc/sysctl.conf <<EOF
 # This works around an issue in xhad, which binds to a particular
@@ -184,13 +252,7 @@ fi
 # Replace XenServer files by our versions.
 mkdir -p /usr/lib/openvswitch/xs-saved \
     || printf "Could not create script backup directory.\n"
-for f in \
-    /opt/xensource/libexec/interface-reconfigure \
-    /opt/xensource/libexec/InterfaceReconfigure.py \
-    /opt/xensource/libexec/InterfaceReconfigureBridge.py \
-    /opt/xensource/libexec/InterfaceReconfigureVswitch.py \
-    /etc/xensource/scripts/vif
-do
+for f in $replace_files; do
     s=$(basename "$f")
     t=$(readlink "$f")
     if [ -f "$f" ] && [ "$t" != "/usr/share/openvswitch/scripts/$s" ]; then
@@ -205,10 +267,7 @@ done
 # provided by OVS. Any time a replacement script is removed from OVS,
 # it should be added here to ensure correct reversion from old versions of
 # OVS that don't clean up dangling symlinks during the uninstall phase.
-for orig in \
-    /usr/sbin/brctl \
-    /usr/sbin/xen-bugtool
-do
+for orig in /usr/sbin/brctl /usr/sbin/xen-bugtool $keep_files; do
     saved=/usr/lib/openvswitch/xs-saved/$(basename "$orig")
     [ -e "$saved" ] && mv -f "$saved" "$orig"
 done
