@@ -705,7 +705,7 @@ destruct(struct ofproto *ofproto_)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
     struct rule_dpif *rule, *next_rule;
-    struct classifier *table;
+    struct oftable *table;
     int i;
 
     hmap_remove(&all_ofproto_dpifs, &ofproto->all_ofproto_dpifs_node);
@@ -714,7 +714,7 @@ destruct(struct ofproto *ofproto_)
     OFPROTO_FOR_EACH_TABLE (table, &ofproto->up) {
         struct cls_cursor cursor;
 
-        cls_cursor_init(&cursor, table, NULL);
+        cls_cursor_init(&cursor, &table->cls, NULL);
         CLS_CURSOR_FOR_EACH_SAFE (rule, next_rule, up.cr, &cursor) {
             ofproto_rule_destroy(&rule->up);
         }
@@ -2870,7 +2870,7 @@ static int
 expire(struct ofproto_dpif *ofproto)
 {
     struct rule_dpif *rule, *next_rule;
-    struct classifier *table;
+    struct oftable *table;
     int dp_max_idle;
 
     /* Update stats for each flow in the datapath. */
@@ -2884,7 +2884,7 @@ expire(struct ofproto_dpif *ofproto)
     OFPROTO_FOR_EACH_TABLE (table, &ofproto->up) {
         struct cls_cursor cursor;
 
-        cls_cursor_init(&cursor, table, NULL);
+        cls_cursor_init(&cursor, &table->cls, NULL);
         CLS_CURSOR_FOR_EACH_SAFE (rule, next_rule, up.cr, &cursor) {
             rule_expire(rule);
         }
@@ -3974,7 +3974,7 @@ rule_dpif_lookup(struct ofproto_dpif *ofproto, const struct flow *flow,
         return NULL;
     }
 
-    cls = &ofproto->up.tables[table_id];
+    cls = &ofproto->up.tables[table_id].cls;
     if (flow->nw_frag & FLOW_NW_FRAG_ANY
         && ofproto->up.frag_handling == OFPC_FRAG_NORMAL) {
         /* For OFPC_NORMAL frag_handling, we must pretend that transport ports
@@ -5618,13 +5618,13 @@ static void
 table_update_taggable(struct ofproto_dpif *ofproto, uint8_t table_id)
 {
     struct table_dpif *table = &ofproto->tables[table_id];
-    const struct classifier *cls = &ofproto->up.tables[table_id];
+    const struct oftable *oftable = &ofproto->up.tables[table_id];
     struct cls_table *catchall, *other;
     struct cls_table *t;
 
     catchall = other = NULL;
 
-    switch (hmap_count(&cls->tables)) {
+    switch (hmap_count(&oftable->cls.tables)) {
     case 0:
         /* We could tag this OpenFlow table but it would make the logic a
          * little harder and it's a corner case that doesn't seem worth it
@@ -5633,7 +5633,7 @@ table_update_taggable(struct ofproto_dpif *ofproto, uint8_t table_id)
 
     case 1:
     case 2:
-        HMAP_FOR_EACH (t, hmap_node, &cls->tables) {
+        HMAP_FOR_EACH (t, hmap_node, &oftable->cls.tables) {
             if (cls_table_is_catchall(t)) {
                 catchall = t;
             } else if (!other) {

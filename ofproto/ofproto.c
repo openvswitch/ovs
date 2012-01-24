@@ -124,19 +124,27 @@ static void ofoperation_create(struct ofopgroup *, struct rule *,
                                enum ofoperation_type);
 static void ofoperation_destroy(struct ofoperation *);
 
-static void ofport_destroy__(struct ofport *);
-static void ofport_destroy(struct ofport *);
+/* oftable. */
+static void oftable_init(struct oftable *);
+static void oftable_destroy(struct oftable *);
 
-static uint64_t pick_datapath_id(const struct ofproto *);
-static uint64_t pick_fallback_dpid(void);
+static void oftable_remove_rule(struct rule *);
+static struct rule *oftable_replace_rule(struct rule *);
+static void oftable_substitute_rule(struct rule *old, struct rule *new);
 
-static void ofproto_destroy__(struct ofproto *);
-
+/* rule. */
 static void ofproto_rule_destroy__(struct rule *);
 static void ofproto_rule_send_removed(struct rule *, uint8_t reason);
 
-static void ofopgroup_destroy(struct ofopgroup *);
+/* ofport. */
+static void ofport_destroy__(struct ofport *);
+static void ofport_destroy(struct ofport *);
 
+static void update_port(struct ofproto *, const char *devname);
+static int init_ports(struct ofproto *);
+static void reinit_ports(struct ofproto *);
+
+/* OpenFlow. */
 static enum ofperr add_flow(struct ofproto *, struct ofconn *,
                             const struct ofputil_flow_mod *,
                             const struct ofp_header *);
@@ -144,13 +152,15 @@ static enum ofperr add_flow(struct ofproto *, struct ofconn *,
 static bool handle_openflow(struct ofconn *, struct ofpbuf *);
 static enum ofperr handle_flow_mod__(struct ofproto *, struct ofconn *,
                                      const struct ofputil_flow_mod *,
-                             const struct ofp_header *);
+                                     const struct ofp_header *);
 
-static void update_port(struct ofproto *, const char *devname);
-static int init_ports(struct ofproto *);
-static void reinit_ports(struct ofproto *);
+/* ofproto. */
+static uint64_t pick_datapath_id(const struct ofproto *);
+static uint64_t pick_fallback_dpid(void);
+static void ofproto_destroy__(struct ofproto *);
 static void set_internal_devs_mtu(struct ofproto *);
 
+/* unixctl. */
 static void ofproto_unixctl_init(void);
 
 /* All registered ofproto classes, in probe order. */
@@ -287,8 +297,8 @@ ofproto_create(const char *datapath_name, const char *datapath_type,
                struct ofproto **ofprotop)
 {
     const struct ofproto_class *class;
-    struct classifier *table;
     struct ofproto *ofproto;
+    struct oftable *table;
     int n_tables;
     int error;
 
@@ -354,7 +364,7 @@ ofproto_create(const char *datapath_name, const char *datapath_type,
     ofproto->n_tables = n_tables;
     ofproto->tables = xmalloc(n_tables * sizeof *ofproto->tables);
     OFPROTO_FOR_EACH_TABLE (table, ofproto) {
-        classifier_init(table);
+        oftable_init(table);
     }
 
     ofproto->datapath_id = pick_datapath_id(ofproto);
@@ -799,8 +809,8 @@ ofproto_get_snoops(const struct ofproto *ofproto, struct sset *snoops)
 static void
 ofproto_flush__(struct ofproto *ofproto)
 {
-    struct classifier *table;
     struct ofopgroup *group;
+    struct oftable *table;
 
     if (ofproto->ofproto_class->flush) {
         ofproto->ofproto_class->flush(ofproto);
@@ -811,11 +821,11 @@ ofproto_flush__(struct ofproto *ofproto)
         struct rule *rule, *next_rule;
         struct cls_cursor cursor;
 
-        cls_cursor_init(&cursor, table, NULL);
+        cls_cursor_init(&cursor, &table->cls, NULL);
         CLS_CURSOR_FOR_EACH_SAFE (rule, next_rule, cr, &cursor) {
             if (!rule->pending) {
                 ofoperation_create(group, rule, OFOPERATION_DELETE);
-                classifier_remove(table, &rule->cr);
+                oftable_remove_rule(rule);
                 ofproto->ofproto_class->rule_destruct(rule);
             }
         }
@@ -826,7 +836,7 @@ ofproto_flush__(struct ofproto *ofproto)
 static void
 ofproto_destroy__(struct ofproto *ofproto)
 {
-    struct classifier *table;
+    struct oftable *table;
 
     assert(list_is_empty(&ofproto->pending));
     assert(!ofproto->n_pending);
@@ -845,8 +855,7 @@ ofproto_destroy__(struct ofproto *ofproto)
     shash_destroy(&ofproto->port_by_name);
 
     OFPROTO_FOR_EACH_TABLE (table, ofproto) {
-        assert(classifier_is_empty(table));
-        classifier_destroy(table);
+        oftable_destroy(table);
     }
     free(ofproto->tables);
 
@@ -1177,7 +1186,7 @@ ofproto_add_flow(struct ofproto *ofproto, const struct cls_rule *cls_rule,
     const struct rule *rule;
 
     rule = rule_from_cls_rule(classifier_find_rule_exactly(
-                                    &ofproto->tables[0], cls_rule));
+                                    &ofproto->tables[0].cls, cls_rule));
     if (!rule || !ofputil_actions_equal(rule->actions, rule->n_actions,
                                         actions, n_actions)) {
         struct ofputil_flow_mod fm;
@@ -1212,7 +1221,7 @@ ofproto_delete_flow(struct ofproto *ofproto, const struct cls_rule *target)
     struct rule *rule;
 
     rule = rule_from_cls_rule(classifier_find_rule_exactly(
-                                  &ofproto->tables[0], target));
+                                  &ofproto->tables[0].cls, target));
     if (!rule) {
         /* No such rule -> success. */
         return true;
@@ -1224,7 +1233,7 @@ ofproto_delete_flow(struct ofproto *ofproto, const struct cls_rule *target)
         /* Initiate deletion -> success. */
         struct ofopgroup *group = ofopgroup_create_unattached(ofproto);
         ofoperation_create(group, rule, OFOPERATION_DELETE);
-        classifier_remove(&ofproto->tables[rule->table_id], &rule->cr);
+        oftable_remove_rule(rule);
         rule->ofproto->ofproto_class->rule_destruct(rule);
         ofopgroup_submit(group);
         return true;
@@ -1648,7 +1657,7 @@ void
 ofproto_rule_destroy(struct rule *rule)
 {
     assert(!rule->pending);
-    classifier_remove(&rule->ofproto->tables[rule->table_id], &rule->cr);
+    oftable_remove_rule(rule);
     ofproto_rule_destroy__(rule);
 }
 
@@ -1956,7 +1965,7 @@ handle_table_stats_request(struct ofconn *ofconn,
         sprintf(ots[i].name, "table%zu", i);
         ots[i].wildcards = htonl(OFPFW_ALL);
         ots[i].max_entries = htonl(1000000); /* An arbitrary big number. */
-        ots[i].active_count = htonl(classifier_count(&p->tables[i]));
+        ots[i].active_count = htonl(classifier_count(&p->tables[i].cls));
     }
 
     p->ofproto_class->get_tables(p, ots);
@@ -2036,7 +2045,7 @@ check_table_id(const struct ofproto *ofproto, uint8_t table_id)
 
 }
 
-static struct classifier *
+static struct oftable *
 first_matching_table(struct ofproto *ofproto, uint8_t table_id)
 {
     if (table_id == 0xff) {
@@ -2048,17 +2057,16 @@ first_matching_table(struct ofproto *ofproto, uint8_t table_id)
     }
 }
 
-static struct classifier *
+static struct oftable *
 next_matching_table(struct ofproto *ofproto,
-                    struct classifier *cls, uint8_t table_id)
+                    struct oftable *table, uint8_t table_id)
 {
-    return (table_id == 0xff && cls != &ofproto->tables[ofproto->n_tables - 1]
-            ? cls + 1
+    return (table_id == 0xff && table < &ofproto->tables[ofproto->n_tables - 1]
+            ? table + 1
             : NULL);
 }
 
-/* Assigns CLS to each classifier table, in turn, that matches TABLE_ID in
- * OFPROTO:
+/* Assigns TABLE to each oftable, in turn, that matches TABLE_ID in OFPROTO:
  *
  *   - If TABLE_ID is 0xff, this iterates over every classifier table in
  *     OFPROTO.
@@ -2072,10 +2080,10 @@ next_matching_table(struct ofproto *ofproto,
  *
  * All parameters are evaluated multiple times.
  */
-#define FOR_EACH_MATCHING_TABLE(CLS, TABLE_ID, OFPROTO)         \
-    for ((CLS) = first_matching_table(OFPROTO, TABLE_ID);       \
-         (CLS) != NULL;                                         \
-         (CLS) = next_matching_table(OFPROTO, CLS, TABLE_ID))
+#define FOR_EACH_MATCHING_TABLE(TABLE, TABLE_ID, OFPROTO)         \
+    for ((TABLE) = first_matching_table(OFPROTO, TABLE_ID);       \
+         (TABLE) != NULL;                                         \
+         (TABLE) = next_matching_table(OFPROTO, TABLE, TABLE_ID))
 
 /* Searches 'ofproto' for rules in table 'table_id' (or in all tables, if
  * 'table_id' is 0xff) that match 'match' in the "loose" way required for
@@ -2094,7 +2102,7 @@ collect_rules_loose(struct ofproto *ofproto, uint8_t table_id,
                     ovs_be64 cookie, ovs_be64 cookie_mask,
                     uint16_t out_port, struct list *rules)
 {
-    struct classifier *cls;
+    struct oftable *table;
     enum ofperr error;
 
     error = check_table_id(ofproto, table_id);
@@ -2103,11 +2111,11 @@ collect_rules_loose(struct ofproto *ofproto, uint8_t table_id,
     }
 
     list_init(rules);
-    FOR_EACH_MATCHING_TABLE (cls, table_id, ofproto) {
+    FOR_EACH_MATCHING_TABLE (table, table_id, ofproto) {
         struct cls_cursor cursor;
         struct rule *rule;
 
-        cls_cursor_init(&cursor, cls, match);
+        cls_cursor_init(&cursor, &table->cls, match);
         CLS_CURSOR_FOR_EACH (rule, cr, &cursor) {
             if (rule->pending) {
                 return OFPROTO_POSTPONE;
@@ -2138,7 +2146,7 @@ collect_rules_strict(struct ofproto *ofproto, uint8_t table_id,
                      ovs_be64 cookie, ovs_be64 cookie_mask,
                      uint16_t out_port, struct list *rules)
 {
-    struct classifier *cls;
+    struct oftable *table;
     int error;
 
     error = check_table_id(ofproto, table_id);
@@ -2147,10 +2155,11 @@ collect_rules_strict(struct ofproto *ofproto, uint8_t table_id,
     }
 
     list_init(rules);
-    FOR_EACH_MATCHING_TABLE (cls, table_id, ofproto) {
+    FOR_EACH_MATCHING_TABLE (table, table_id, ofproto) {
         struct rule *rule;
 
-        rule = rule_from_cls_rule(classifier_find_rule_exactly(cls, match));
+        rule = rule_from_cls_rule(classifier_find_rule_exactly(&table->cls,
+                                                               match));
         if (rule) {
             if (rule->pending) {
                 return OFPROTO_POSTPONE;
@@ -2240,13 +2249,13 @@ flow_stats_ds(struct rule *rule, struct ds *results)
 void
 ofproto_get_all_flows(struct ofproto *p, struct ds *results)
 {
-    struct classifier *cls;
+    struct oftable *table;
 
-    OFPROTO_FOR_EACH_TABLE (cls, p) {
+    OFPROTO_FOR_EACH_TABLE (table, p) {
         struct cls_cursor cursor;
         struct rule *rule;
 
-        cls_cursor_init(&cursor, cls, NULL);
+        cls_cursor_init(&cursor, &table->cls, NULL);
         CLS_CURSOR_FOR_EACH (rule, cr, &cursor) {
             flow_stats_ds(rule, results);
         }
@@ -2469,7 +2478,7 @@ static enum ofperr
 add_flow(struct ofproto *ofproto, struct ofconn *ofconn,
          const struct ofputil_flow_mod *fm, const struct ofp_header *request)
 {
-    struct classifier *table;
+    struct oftable *table;
     struct ofopgroup *group;
     struct rule *victim;
     struct rule *rule;
@@ -2502,7 +2511,7 @@ add_flow(struct ofproto *ofproto, struct ofconn *ofconn,
 
     /* Check for overlap, if requested. */
     if (fm->flags & OFPFF_CHECK_OVERLAP
-        && classifier_rule_overlaps(table, &fm->cr)) {
+        && classifier_rule_overlaps(&table->cls, &fm->cr)) {
         return OFPERR_OFPFMFC_OVERLAP;
     }
 
@@ -2531,7 +2540,7 @@ add_flow(struct ofproto *ofproto, struct ofconn *ofconn,
     rule->n_actions = fm->n_actions;
 
     /* Insert new rule. */
-    victim = rule_from_cls_rule(classifier_replace(table, &rule->cr));
+    victim = oftable_replace_rule(rule);
     if (victim && victim->pending) {
         error = OFPROTO_POSTPONE;
     } else {
@@ -2548,11 +2557,7 @@ add_flow(struct ofproto *ofproto, struct ofconn *ofconn,
 
     /* Back out if an error occurred. */
     if (error) {
-        if (victim) {
-            classifier_replace(table, &victim->cr);
-        } else {
-            classifier_remove(table, &rule->cr);
-        }
+        oftable_substitute_rule(rule, victim);
         ofproto_rule_destroy__(rule);
     }
     return error;
@@ -2656,7 +2661,7 @@ delete_flows__(struct ofproto *ofproto, struct ofconn *ofconn,
         ofproto_rule_send_removed(rule, OFPRR_DELETE);
 
         ofoperation_create(group, rule, OFOPERATION_DELETE);
-        classifier_remove(&ofproto->tables[rule->table_id], &rule->cr);
+        oftable_remove_rule(rule);
         rule->ofproto->ofproto_class->rule_destruct(rule);
     }
     ofopgroup_submit(group);
@@ -2738,7 +2743,7 @@ ofproto_rule_expire(struct rule *rule, uint8_t reason)
 
     group = ofopgroup_create_unattached(ofproto);
     ofoperation_create(group, rule, OFOPERATION_DELETE);
-    classifier_remove(&ofproto->tables[rule->table_id], &rule->cr);
+    oftable_remove_rule(rule);
     rule->ofproto->ofproto_class->rule_destruct(rule);
     ofopgroup_submit(group);
 }
@@ -3194,7 +3199,6 @@ ofoperation_complete(struct ofoperation *op, enum ofperr error)
     struct ofopgroup *group = op->group;
     struct rule *rule = op->rule;
     struct ofproto *ofproto = rule->ofproto;
-    struct classifier *table = &ofproto->tables[rule->table_id];
 
     assert(rule->pending == op);
     assert(op->status < 0);
@@ -3239,12 +3243,7 @@ ofoperation_complete(struct ofoperation *op, enum ofperr error)
                 }
             }
         } else {
-            if (op->victim) {
-                classifier_replace(table, &op->victim->cr);
-                op->victim = NULL;
-            } else {
-                classifier_remove(table, &rule->cr);
-            }
+            oftable_substitute_rule(rule, op->victim);
             ofproto_rule_destroy__(rule);
         }
         op->victim = NULL;
@@ -3308,6 +3307,58 @@ pick_fallback_dpid(void)
     return eth_addr_to_uint64(ea);
 }
 
+/* oftables. */
+
+/* Initializes 'table'. */
+static void
+oftable_init(struct oftable *table)
+{
+    classifier_init(&table->cls);
+}
+
+/* Destroys 'table'.
+ *
+ * The caller is responsible for freeing 'table' itself. */
+static void
+oftable_destroy(struct oftable *table)
+{
+    assert(classifier_is_empty(&table->cls));
+    classifier_destroy(&table->cls);
+}
+
+/* Removes 'rule' from the oftable that contains it. */
+static void
+oftable_remove_rule(struct rule *rule)
+{
+    struct ofproto *ofproto = rule->ofproto;
+    struct oftable *table = &ofproto->tables[rule->table_id];
+
+    classifier_remove(&table->cls, &rule->cr);
+}
+
+/* Inserts 'rule' into its oftable.  Removes any existing rule from 'rule''s
+ * oftable that has an identical cls_rule.  Returns the rule that was removed,
+ * if any, and otherwise NULL. */
+static struct rule *
+oftable_replace_rule(struct rule *rule)
+{
+    struct ofproto *ofproto = rule->ofproto;
+    struct oftable *table = &ofproto->tables[rule->table_id];
+
+    return rule_from_cls_rule(classifier_replace(&table->cls, &rule->cr));
+}
+
+/* Removes 'old' from its oftable then, if 'new' is nonnull, inserts 'new'. */
+static void
+oftable_substitute_rule(struct rule *old, struct rule *new)
+{
+    if (new) {
+        oftable_replace_rule(new);
+    } else {
+        oftable_remove_rule(old);
+    }
+}
+
 /* unixctl commands. */
 
 struct ofproto *
@@ -3364,16 +3415,16 @@ ofproto_unixctl_init(void)
 void
 ofproto_get_vlan_usage(struct ofproto *ofproto, unsigned long int *vlan_bitmap)
 {
-    const struct classifier *cls;
+    const struct oftable *oftable;
 
     free(ofproto->vlan_bitmap);
     ofproto->vlan_bitmap = bitmap_allocate(4096);
     ofproto->vlans_changed = false;
 
-    OFPROTO_FOR_EACH_TABLE (cls, ofproto) {
+    OFPROTO_FOR_EACH_TABLE (oftable, ofproto) {
         const struct cls_table *table;
 
-        HMAP_FOR_EACH (table, hmap_node, &cls->tables) {
+        HMAP_FOR_EACH (table, hmap_node, &oftable->cls.tables) {
             if ((table->wc.vlan_tci_mask & htons(VLAN_VID_MASK))
                 == htons(VLAN_VID_MASK)) {
                 const struct cls_rule *rule;

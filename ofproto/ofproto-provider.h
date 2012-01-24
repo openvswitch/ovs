@@ -59,7 +59,7 @@ struct ofproto {
     struct shash port_by_name;
 
     /* Flow tables. */
-    struct classifier *tables;  /* Each classifier contains "struct rule"s. */
+    struct oftable *tables;
     int n_tables;
 
     /* OpenFlow connections. */
@@ -84,14 +84,6 @@ struct ofproto {
 struct ofproto *ofproto_lookup(const char *name);
 struct ofport *ofproto_get_port(const struct ofproto *, uint16_t ofp_port);
 
-/* Assigns CLS to each classifier table, in turn, in OFPROTO.
- *
- * All parameters are evaluated multiple times. */
-#define OFPROTO_FOR_EACH_TABLE(CLS, OFPROTO)                \
-    for ((CLS) = (OFPROTO)->tables;                         \
-         (CLS) < &(OFPROTO)->tables[(OFPROTO)->n_tables];   \
-         (CLS)++)
-
 /* An OpenFlow port within a "struct ofproto".
  *
  * With few exceptions, ofproto implementations may look at these fields but
@@ -107,6 +99,19 @@ struct ofport {
 };
 
 void ofproto_port_set_state(struct ofport *, ovs_be32 state);
+
+/* A flow table within a "struct ofproto". */
+struct oftable {
+    struct classifier cls;      /* Contains "struct rule"s. */
+};
+
+/* Assigns TABLE to each oftable, in turn, in OFPROTO.
+ *
+ * All parameters are evaluated multiple times. */
+#define OFPROTO_FOR_EACH_TABLE(TABLE, OFPROTO)              \
+    for ((TABLE) = (OFPROTO)->tables;                       \
+         (TABLE) < &(OFPROTO)->tables[(OFPROTO)->n_tables]; \
+         (TABLE)++)
 
 /* An OpenFlow flow within a "struct ofproto".
  *
