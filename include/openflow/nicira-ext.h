@@ -67,64 +67,6 @@ struct nx_vendor_error {
     /* Followed by at least the first 64 bytes of the failed request. */
 };
 
-/* Specific Nicira extension error numbers.
- *
- * These are the "code" values used in nx_vendor_error.  So far, the "type"
- * values in nx_vendor_error are the same as those in ofp_error_msg.  That is,
- * at Nicira so far we've only needed additional vendor-specific 'code' values,
- * so we're using the existing 'type' values to avoid having to invent new ones
- * that duplicate the current ones' meanings. */
-
-/* Additional "code" values for OFPET_BAD_REQUEST. */
-enum nx_bad_request_code {
-/* Nicira Extended Match (NXM) errors. */
-
-    /* Generic error code used when there is an error in an NXM sent to the
-     * switch.  The switch may use one of the more specific error codes below,
-     * if there is an appropriate one, to simplify debugging, but it is not
-     * required to do so. */
-    NXBRC_NXM_INVALID = 0x100,
-
-    /* The nxm_type, or nxm_type taken in combination with nxm_hasmask or
-     * nxm_length or both, is invalid or not implemented. */
-    NXBRC_NXM_BAD_TYPE = 0x101,
-
-    /* Invalid nxm_value. */
-    NXBRC_NXM_BAD_VALUE = 0x102,
-
-    /* Invalid nxm_mask. */
-    NXBRC_NXM_BAD_MASK = 0x103,
-
-    /* A prerequisite was not met. */
-    NXBRC_NXM_BAD_PREREQ = 0x104,
-
-    /* A given nxm_type was specified more than once. */
-    NXBRC_NXM_DUP_TYPE = 0x105,
-
-/* Other errors. */
-
-    /* A request specified a nonexistent table ID.  (But NXFMFC_BAD_TABLE_ID is
-     * used instead, when it is appropriate, because that is such a special
-     * case.) */
-    NXBRC_BAD_TABLE_ID = 0x200,
-
-    /* NXT_ROLE_REQUEST specified an invalid role. */
-    NXBRC_BAD_ROLE = 0x201,
-
-    /* The in_port in an ofp_packet_out request is invalid. */
-    NXBRC_BAD_IN_PORT = 0x202
-};
-
-/* Additional "code" values for OFPET_FLOW_MOD_FAILED. */
-enum nx_flow_mod_failed_code {
-    /* Generic hardware error. */
-    NXFMFC_HARDWARE = 0x100,
-
-    /* A nonexistent table ID was specified in the "command" field of struct
-     * ofp_flow_mod, when the nxt_flow_mod_table_id extension is enabled. */
-    NXFMFC_BAD_TABLE_ID = 0x101
-};
-
 /* Nicira vendor requests and replies. */
 
 /* Header for Nicira vendor requests and replies. */
