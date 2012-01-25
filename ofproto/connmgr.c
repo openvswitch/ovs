@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011 Nicira Networks.
+ * Copyright (c) 2009, 2010, 2011, 2012 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,13 +43,25 @@ static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 
 /* An OpenFlow connection. */
 struct ofconn {
-    struct connmgr *connmgr;    /* Connection's manager. */
+/* Configuration that persists from one connection to the next. */
+
     struct list node;           /* In struct connmgr's "all_conns" list. */
+    struct hmap_node hmap_node; /* In struct connmgr's "controllers" map. */
+
+    struct connmgr *connmgr;    /* Connection's manager. */
     struct rconn *rconn;        /* OpenFlow connection. */
     enum ofconn_type type;      /* Type. */
+    enum ofproto_band band;     /* In-band or out-of-band? */
+
+/* State that should be cleared from one connection to the next. */
+
+    /* OpenFlow state. */
+    enum nx_role role;           /* Role. */
     enum nx_flow_format flow_format; /* Currently selected flow format. */
     enum nx_packet_in_format packet_in_format; /* OFPT_PACKET_IN format. */
     bool flow_mod_table_id;     /* NXT_FLOW_MOD_TABLE_ID enabled? */
+    bool invalid_ttl_to_controller; /* Send packets with invalid TTL
+                                       to the controller. */
 
     /* Asynchronous flow table operation support. */
     struct list opgroups;       /* Contains pending "ofopgroups", if any. */
@@ -68,18 +80,12 @@ struct ofconn {
      * requests.  */
 #define OFCONN_REPLY_MAX 100
     struct rconn_packet_counter *reply_counter;
-
-    /* type == OFCONN_PRIMARY only. */
-    enum nx_role role;           /* Role. */
-    bool invalid_ttl_to_controller; /* Send packets with invalid TTL
-                                       to the controller. */
-    struct hmap_node hmap_node;  /* In struct connmgr's "controllers" map. */
-    enum ofproto_band band;      /* In-band or out-of-band? */
 };
 
 static struct ofconn *ofconn_create(struct connmgr *, struct rconn *,
                                     enum ofconn_type);
 static void ofconn_destroy(struct ofconn *);
+static void ofconn_flush(struct ofconn *);
 
 static void ofconn_reconfigure(struct ofconn *,
                                const struct ofproto_controller *);
@@ -554,7 +560,6 @@ add_controller(struct connmgr *mgr, const char *target)
 
     ofconn = ofconn_create(mgr, rconn_create(5, 8), OFCONN_PRIMARY);
     ofconn->pktbuf = pktbuf_create();
-    ofconn->miss_send_len = OFP_DEFAULT_MISS_SEND_LEN;
     rconn_connect(ofconn->rconn, target, name);
     hmap_insert(&mgr->controllers, &ofconn->hmap_node, hash_string(target, 0));
 
@@ -931,38 +936,66 @@ ofconn_get_target(const struct ofconn *ofconn)
 static struct ofconn *
 ofconn_create(struct connmgr *mgr, struct rconn *rconn, enum ofconn_type type)
 {
-    struct ofconn *ofconn = xzalloc(sizeof *ofconn);
+    struct ofconn *ofconn;
+
+    ofconn = xzalloc(sizeof *ofconn);
     ofconn->connmgr = mgr;
     list_push_back(&mgr->all_conns, &ofconn->node);
     ofconn->rconn = rconn;
     ofconn->type = type;
-    ofconn->flow_format = NXFF_OPENFLOW10;
-    ofconn->packet_in_format = NXPIF_OPENFLOW10;
-    ofconn->flow_mod_table_id = false;
+
     list_init(&ofconn->opgroups);
-    ofconn->role = NX_ROLE_OTHER;
-    ofconn->packet_in_counter = rconn_packet_counter_create ();
-    ofconn->pktbuf = NULL;
-    ofconn->miss_send_len = 0;
-    ofconn->reply_counter = rconn_packet_counter_create ();
-    ofconn->invalid_ttl_to_controller = false;
+
+    ofconn_flush(ofconn);
+
     return ofconn;
 }
 
-/* Disassociates 'ofconn' from all of the ofopgroups that it initiated that
- * have not yet completed.  (Those ofopgroups will still run to completion in
- * the usual way, but any errors that they run into will not be reported on any
- * OpenFlow channel.)
- *
- * Also discards any blocked operation on 'ofconn'. */
+/* Clears all of the state in 'ofconn' that should not persist from one
+ * connection to the next. */
 static void
 ofconn_flush(struct ofconn *ofconn)
 {
+    int i;
+
+    ofconn->role = NX_ROLE_OTHER;
+    ofconn->flow_format = NXFF_OPENFLOW10;
+    ofconn->packet_in_format = NXPIF_OPENFLOW10;
+    ofconn->flow_mod_table_id = false;
+
+    /* Disassociate 'ofconn' from all of the ofopgroups that it initiated that
+     * have not yet completed.  (Those ofopgroups will still run to completion
+     * in the usual way, but any errors that they run into will not be reported
+     * on any OpenFlow channel.)
+     *
+     * Also discard any blocked operation on 'ofconn'. */
     while (!list_is_empty(&ofconn->opgroups)) {
         list_init(list_pop_front(&ofconn->opgroups));
     }
     ofpbuf_delete(ofconn->blocked);
     ofconn->blocked = NULL;
+
+    rconn_packet_counter_destroy(ofconn->packet_in_counter);
+    ofconn->packet_in_counter = rconn_packet_counter_create();
+    for (i = 0; i < N_SCHEDULERS; i++) {
+        if (ofconn->schedulers[i]) {
+            int rate, burst;
+
+            pinsched_get_limits(ofconn->schedulers[i], &rate, &burst);
+            pinsched_destroy(ofconn->schedulers[i]);
+            ofconn->schedulers[i] = pinsched_create(rate, burst);
+        }
+    }
+    if (ofconn->pktbuf) {
+        pktbuf_destroy(ofconn->pktbuf);
+        ofconn->pktbuf = pktbuf_create();
+    }
+    ofconn->miss_send_len = (ofconn->type == OFCONN_PRIMARY
+                             ? OFP_DEFAULT_MISS_SEND_LEN
+                             : 0);
+
+    rconn_packet_counter_destroy(ofconn->reply_counter);
+    ofconn->reply_counter = rconn_packet_counter_create();
 }
 
 static void
