@@ -2445,23 +2445,29 @@
 
     <group title="OpenFlow Rate Limiting">
       <column name="controller_rate_limit">
-        <p>The maximum rate at which packets in unknown flows will be
-        forwarded to the OpenFlow controller, in packets per second.  This
-        feature prevents a single bridge from overwhelming the controller.
-        If not specified, the default is implementation-specific.</p>
-        <p>In addition, when a high rate triggers rate-limiting, Open
-        vSwitch queues controller packets for each port and transmits
-        them to the controller at the configured rate.  The number of
-        queued packets is limited by
-        the <ref column="controller_burst_limit"/> value.  The packet
-        queue is shared fairly among the ports on a bridge.</p><p>Open
-        vSwitch maintains two such packet rate-limiters per bridge.
-        One of these applies to packets sent up to the controller
-        because they do not correspond to any flow.  The other applies
-        to packets sent up to the controller by request through flow
-        actions. When both rate-limiters are filled with packets, the
-        actual rate that packets are sent to the controller is up to
-        twice the specified rate.</p>
+        <p>
+          The maximum rate at which the switch will forward packets to the
+          OpenFlow controller, in packets per second.  This feature prevents a
+          single bridge from overwhelming the controller.  If not specified,
+          the default is implementation-specific.
+        </p>
+
+        <p>
+          In addition, when a high rate triggers rate-limiting, Open vSwitch
+          queues controller packets for each port and transmits them to the
+          controller at the configured rate.  The <ref
+          column="controller_burst_limit"/> value limits the number of queued
+          packets.  Ports on a bridge share the packet queue fairly.
+        </p>
+
+        <p>
+          Open vSwitch maintains two such packet rate-limiters per bridge: one
+          for packets sent up to the controller because they do not correspond
+          to any flow, and the other for packets sent up to the controller by
+          request through flow actions. When both rate-limiters are filled with
+          packets, the actual rate that packets are sent to the controller is
+          up to twice the specified rate.
+        </p>
       </column>
 
       <column name="controller_burst_limit">
