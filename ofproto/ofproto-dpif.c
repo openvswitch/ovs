@@ -1193,7 +1193,7 @@ update_stp_port_state(struct ofport_dpif *ofport)
         if (stp_learn_in_state(ofport->stp_state)
                 != stp_learn_in_state(state)) {
             /* xxx Learning action flows should also be flushed. */
-            mac_learning_flush(ofproto->ml);
+            mac_learning_flush(ofproto->ml, &ofproto->revalidate_set);
         }
         fwd_change = stp_forward_in_state(ofport->stp_state)
                         != stp_forward_in_state(state);
@@ -2064,7 +2064,7 @@ mirror_set(struct ofproto *ofproto_, void *aux,
     }
 
     ofproto->need_revalidate = true;
-    mac_learning_flush(ofproto->ml);
+    mac_learning_flush(ofproto->ml, &ofproto->revalidate_set);
     mirror_update_dups(ofproto);
 
     return 0;
@@ -2083,7 +2083,7 @@ mirror_destroy(struct ofmirror *mirror)
 
     ofproto = mirror->ofproto;
     ofproto->need_revalidate = true;
-    mac_learning_flush(ofproto->ml);
+    mac_learning_flush(ofproto->ml, &ofproto->revalidate_set);
 
     mirror_bit = MIRROR_MASK_C(1) << mirror->idx;
     HMAP_FOR_EACH (bundle, hmap_node, &ofproto->bundles) {
@@ -2126,8 +2126,7 @@ set_flood_vlans(struct ofproto *ofproto_, unsigned long *flood_vlans)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
     if (mac_learning_set_flood_vlans(ofproto->ml, flood_vlans)) {
-        ofproto->need_revalidate = true;
-        mac_learning_flush(ofproto->ml);
+        mac_learning_flush(ofproto->ml, &ofproto->revalidate_set);
     }
     return 0;
 }
@@ -5823,12 +5822,10 @@ ofproto_unixctl_fdb_flush(struct unixctl_conn *conn, int argc,
             unixctl_command_reply(conn, 501, "no such bridge");
             return;
         }
-        mac_learning_flush(ofproto->ml);
-        ofproto->need_revalidate = true;
+        mac_learning_flush(ofproto->ml, &ofproto->revalidate_set);
     } else {
         HMAP_FOR_EACH (ofproto, all_ofproto_dpifs_node, &all_ofproto_dpifs) {
-            mac_learning_flush(ofproto->ml);
-            ofproto->need_revalidate = true;
+            mac_learning_flush(ofproto->ml, &ofproto->revalidate_set);
         }
     }
 

@@ -260,14 +260,18 @@ mac_learning_expire(struct mac_learning *ml, struct mac_entry *e)
     free(e);
 }
 
-/* Expires all the mac-learning entries in 'ml'.  The tags in 'ml' are
- * discarded, so the client is responsible for revalidating any flows that
- * depend on 'ml', if necessary. */
+/* Expires all the mac-learning entries in 'ml'.  If not NULL, the tags in 'ml'
+ * are added to 'tags'.  Otherwise the tags in 'ml' are discarded.  The client
+ * is responsible for revalidating any flows that depend on 'ml', if
+ * necessary. */
 void
-mac_learning_flush(struct mac_learning *ml)
+mac_learning_flush(struct mac_learning *ml, struct tag_set *tags)
 {
     struct mac_entry *e;
     while (get_lru(ml, &e)){
+        if (tags) {
+            tag_set_add(tags, e->tag);
+        }
         mac_learning_expire(ml, e);
     }
     hmap_shrink(&ml->table);
