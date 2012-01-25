@@ -836,7 +836,22 @@ ofp_print_flow_mod(struct ds *s, const struct ofp_header *oh,
         ds_put_format(s, "buf:0x%"PRIx32" ", fm.buffer_id);
     }
     if (fm.flags != 0) {
-        ds_put_format(s, "flags:0x%"PRIx16" ", fm.flags);
+        uint16_t flags = fm.flags;
+
+        if (flags & OFPFF_SEND_FLOW_REM) {
+            ds_put_cstr(s, "send_flow_rem ");
+        }
+        if (flags & OFPFF_CHECK_OVERLAP) {
+            ds_put_cstr(s, "check_overlap ");
+        }
+        if (flags & OFPFF_EMERG) {
+            ds_put_cstr(s, "emerg ");
+        }
+
+        flags &= ~(OFPFF_SEND_FLOW_REM | OFPFF_CHECK_OVERLAP | OFPFF_EMERG);
+        if (flags) {
+            ds_put_format(s, "flags:0x%"PRIx16" ", flags);
+        }
     }
 
     ofp_print_actions(s, fm.actions, fm.n_actions);

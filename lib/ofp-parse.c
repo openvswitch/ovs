@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010, 2011 Nicira Networks.
+ * Copyright (c) 2010, 2011, 2012 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -492,7 +492,8 @@ parse_ofp_str(struct ofputil_flow_mod *fm, int command, const char *str_,
         F_OUT_PORT = 1 << 0,
         F_ACTIONS = 1 << 1,
         F_TIMEOUT = 1 << 3,
-        F_PRIORITY = 1 << 4
+        F_PRIORITY = 1 << 4,
+        F_FLAGS = 1 << 5,
     } fields;
     char *string = xstrdup(str_);
     char *save_ptr = NULL;
@@ -505,7 +506,7 @@ parse_ofp_str(struct ofputil_flow_mod *fm, int command, const char *str_,
         break;
 
     case OFPFC_ADD:
-        fields = F_ACTIONS | F_TIMEOUT | F_PRIORITY;
+        fields = F_ACTIONS | F_TIMEOUT | F_PRIORITY | F_FLAGS;
         break;
 
     case OFPFC_DELETE:
@@ -517,11 +518,11 @@ parse_ofp_str(struct ofputil_flow_mod *fm, int command, const char *str_,
         break;
 
     case OFPFC_MODIFY:
-        fields = F_ACTIONS | F_TIMEOUT | F_PRIORITY;
+        fields = F_ACTIONS | F_TIMEOUT | F_PRIORITY | F_FLAGS;
         break;
 
     case OFPFC_MODIFY_STRICT:
-        fields = F_ACTIONS | F_TIMEOUT | F_PRIORITY;
+        fields = F_ACTIONS | F_TIMEOUT | F_PRIORITY | F_FLAGS;
         break;
 
     default:
@@ -561,6 +562,10 @@ parse_ofp_str(struct ofputil_flow_mod *fm, int command, const char *str_,
             if (p->nw_proto) {
                 cls_rule_set_nw_proto(&fm->cr, p->nw_proto);
             }
+        } else if (fields & F_FLAGS && !strcmp(name, "send_flow_rem")) {
+            fm->flags |= OFPFF_SEND_FLOW_REM;
+        } else if (fields & F_FLAGS && !strcmp(name, "check_overlap")) {
+            fm->flags |= OFPFF_CHECK_OVERLAP;
         } else {
             char *value;
 

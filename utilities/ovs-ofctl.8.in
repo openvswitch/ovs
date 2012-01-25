@@ -1054,7 +1054,7 @@ support the following additional options.  These options affect only
 new flows.  Thus, for \fBadd\-flow\fR and \fBadd\-flows\fR, these
 options are always significant, but for \fBmod\-flows\fR they are
 significant only if the command creates a new flow, that is, their
-values do not update existing flows.
+values do not update or affect existing flows.
 .
 .IP "\fBidle_timeout=\fIseconds\fR"
 Causes the flow to expire after the given number of seconds of
@@ -1065,6 +1065,16 @@ due to inactivity.
 Causes the flow to expire after the given number of seconds,
 regardless of activity.  A value of 0 (the default) gives the flow no
 hard expiration deadline.
+.
+.IP "\fBsend_flow_rem\fR"
+Marks the flow with a flag that causes the switch to generate a ``flow
+removed'' message and send it to interested controllers when the flow
+later expires or is removed.
+.
+.IP "\fBcheck_overlap\fR"
+Forces the switch to check that the flow match does not overlap that
+of any different flow with the same priority in the same table.  (This
+check is expensive so it is best to avoid it.)
 .
 .PP
 The \fBdump\-flows\fR, \fBdump\-aggregate\fR, \fBdel\-flow\fR 
