@@ -1068,6 +1068,8 @@ stp_set_port_state(struct stp_port *p, enum stp_state state)
 static void
 stp_topology_change_detection(struct stp *stp)
 {
+    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+
     if (stp_is_root_bridge(stp)) {
         stp->topology_change = true;
         stp_start_timer(&stp->topology_change_timer, 0);
@@ -1077,6 +1079,7 @@ stp_topology_change_detection(struct stp *stp)
     }
     stp->fdb_needs_flush = true;
     stp->topology_change_detected = true;
+    VLOG_INFO_RL(&rl, "%s: detected topology change.", stp->name);
 }
 
 static void

@@ -25,6 +25,7 @@
 #include <stdlib.h>
 #include "ofpbuf.h"
 #include "packets.h"
+#include "vlog.h"
 
 struct bpdu {
     int port_no;
@@ -439,6 +440,9 @@ main(int argc, char *argv[])
     struct test_case *tc;
     FILE *input_file;
     int i;
+
+    vlog_set_pattern(VLF_CONSOLE, "%c|%p|%m");
+    vlog_set_levels(NULL, VLF_SYSLOG, VLL_OFF);
 
     if (argc != 2) {
         ovs_fatal(0, "usage: test-stp INPUT.STP\n");

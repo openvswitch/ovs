@@ -15,7 +15,13 @@ check 2 = F:10 B
 check 3 = F:5 F
 check 4 = F:5 B
 ])
-AT_CHECK([test-stp test-stp-ieee802.1d-1998])
+AT_CHECK([test-stp test-stp-ieee802.1d-1998], [0], [], [dnl
+stp|INFO|stp42: detected topology change.
+stp|INFO|stp42: detected topology change.
+stp|INFO|stp97: detected topology change.
+stp|INFO|stp97: detected topology change.
+stp|INFO|stp97: detected topology change.
+])
 AT_CLEANUP
 
 AT_SETUP([STP example from IEEE 802.1D-2004 figures 17.4 and 17.5])
@@ -52,7 +58,13 @@ check 5 = F:20 B F F
 check 6 = F:20 B F F
 check 7 = F:20 B F B
 ])
-AT_CHECK([test-stp test-stp-ieee802.1d-2004-fig17.4])
+AT_CHECK([test-stp test-stp-ieee802.1d-2004-fig17.4], [0], [], [dnl
+stp|INFO|stp111: detected topology change.
+stp|INFO|stp111: detected topology change.
+stp|INFO|stp111: detected topology change.
+stp|INFO|stp111: detected topology change.
+stp|INFO|stp222: detected topology change.
+])
 AT_CLEANUP
 
 AT_SETUP([STP example from IEEE 802.1D-2004 figure 17.6])
@@ -72,7 +84,13 @@ check 3 = F:30 F B
 check 4 = F:20 F F
 check 5 = F:10 F F
 ])
-AT_CHECK([test-stp test-stp-ieee802.1d-2004-fig17.6])
+AT_CHECK([test-stp test-stp-ieee802.1d-2004-fig17.6], [0], [], [dnl
+stp|INFO|stp111: detected topology change.
+stp|INFO|stp111: detected topology change.
+stp|INFO|stp111: detected topology change.
+stp|INFO|stp222: detected topology change.
+stp|INFO|stp222: detected topology change.
+])
 AT_CLEANUP
 
 AT_SETUP([STP example from IEEE 802.1D-2004 figure 17.7])
@@ -95,7 +113,13 @@ check 0 = root
 check 1 = F F:10 F F F F F F
 check 2 = F:20 D F F F F F F
 ])
-AT_CHECK([test-stp test-stp-ieee802.1d-2004-fig17.7])
+AT_CHECK([test-stp test-stp-ieee802.1d-2004-fig17.7], [0], [], [dnl
+stp|INFO|stpaa: detected topology change.
+stp|INFO|stp111: detected topology change.
+stp|INFO|stp111: detected topology change.
+stp|INFO|stp111: detected topology change.
+stp|INFO|stp111: detected topology change.
+])
 AT_CLEANUP
 
 AT_SETUP([STP.io.1.1: Link Failure])
@@ -128,7 +152,13 @@ run 1000
 check 0 = root
 check 1 = D D F:10
 ])
-AT_CHECK([test-stp test-stp-iol-io-1.1])
+AT_CHECK([test-stp test-stp-iol-io-1.1], [0], [], [dnl
+stp|INFO|stp111: detected topology change.
+stp|INFO|stp111: detected topology change.
+stp|INFO|stp111: detected topology change.
+stp|INFO|stp222: detected topology change.
+stp|INFO|stp111: detected topology change.
+])
 AT_CLEANUP
 
 AT_SETUP([STP.io.1.2: Repeated Network])
@@ -148,7 +178,11 @@ run 1000
 check 0 = rootid:0x111 F B
 check 1 = rootid:0x111 B F:10
 ])
-AT_CHECK([test-stp test-stp-iol-io-1.2])
+AT_CHECK([test-stp test-stp-iol-io-1.2], [0], [], [dnl
+stp|INFO|stp111: detected topology change.
+stp|INFO|stp222: detected topology change.
+stp|INFO|stp111: detected topology change.
+])
 AT_CLEANUP
 
 AT_SETUP([STP.io.1.4: Network Initialization])
@@ -168,7 +202,13 @@ check 1 = F:10 F F
 check 2 = F:10 B F
 check 3 = F:10 B B
 ])
-AT_CHECK([test-stp test-stp-iol-io-1.4])
+AT_CHECK([test-stp test-stp-iol-io-1.4], [0], [], [dnl
+stp|INFO|stp111: detected topology change.
+stp|INFO|stp111: detected topology change.
+stp|INFO|stp111: detected topology change.
+stp|INFO|stp222: detected topology change.
+stp|INFO|stp222: detected topology change.
+])
 AT_CLEANUP
 
 AT_SETUP([STP.io.1.5: Topology Change])
@@ -215,7 +255,13 @@ check 1 = F:10 B F F
 check 2 = B F:10 F F
 check 3 = B F:20 B B
 ])
-AT_CHECK([test-stp test-stp-iol-io-1.5])
+AT_CHECK([test-stp test-stp-iol-io-1.5], [0], [], [dnl
+stp|INFO|stp111: detected topology change.
+stp|INFO|stp111: detected topology change.
+stp|INFO|stp111: detected topology change.
+stp|INFO|stp111: detected topology change.
+stp|INFO|stp222: detected topology change.
+])
 AT_CLEANUP
 
 AT_SETUP([STP.op.1.1 and STP.op.1.2])
@@ -244,7 +290,13 @@ check 0 = Li Li Li Li Li Li
 run 1000
 check 0 = F F F F F F
 ])
-AT_CHECK([test-stp test-stp-iol-op-1.4])
+AT_CHECK([test-stp test-stp-iol-op-1.4], [0], [], [dnl
+stp|INFO|stp123: detected topology change.
+stp|INFO|stp123: detected topology change.
+stp|INFO|stp123: detected topology change.
+stp|INFO|stp123: detected topology change.
+stp|INFO|stp123: detected topology change.
+])
 AT_CLEANUP
 
 AT_SETUP([STP.op.3.1: Root Bridge Selection: Root ID Values])
@@ -262,7 +314,9 @@ run 1000
 check 0 = rootid:0x111 root
 check 1 = rootid:0x111 F:10
 ])
-AT_CHECK([test-stp test-stp-iol-op-3.1])
+AT_CHECK([test-stp test-stp-iol-op-3.1], [0], [], [dnl
+stp|INFO|stp111: detected topology change.
+])
 AT_CLEANUP
 
 AT_SETUP([STP.op.3.3: Root Bridge Selection: Bridge ID Values])
@@ -280,7 +334,12 @@ check 0 = rootid:0x333^0x6000 root
 check 1 = rootid:0x333^0x6000 F:20
 check 2 = rootid:0x333^0x6000 F:10 F
 ])
-AT_CHECK([test-stp test-stp-iol-op-3.3])
+AT_CHECK([test-stp test-stp-iol-op-3.3], [0], [], [dnl
+stp|INFO|stp333: detected topology change.
+stp|INFO|stp111: detected topology change.
+stp|INFO|stp111: detected topology change.
+stp|INFO|stp333: detected topology change.
+])
 AT_CLEANUP
 
 AT_SETUP([STP.op.3.3: Root Bridge Selection: Bridge ID Values])
@@ -298,5 +357,10 @@ check 0 = rootid:0x333^0x6000 root
 check 1 = rootid:0x333^0x6000 F:20
 check 2 = rootid:0x333^0x6000 F:10 F
 ])
-AT_CHECK([test-stp test-stp-iol-op-3.4])
+AT_CHECK([test-stp test-stp-iol-op-3.4], [0], [], [dnl
+stp|INFO|stp333: detected topology change.
+stp|INFO|stp111: detected topology change.
+stp|INFO|stp111: detected topology change.
+stp|INFO|stp333: detected topology change.
+])
 AT_CLEANUP
