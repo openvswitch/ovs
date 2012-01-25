@@ -1030,6 +1030,10 @@ netdev_linux_set_mtu(const struct netdev *netdev_, int mtu)
     struct ifreq ifr;
     int error;
 
+    if (netdev_dev->cache_valid & VALID_MTU &&
+        netdev_dev->mtu == mtu) {
+        return 0;
+    }
     ifr.ifr_mtu = mtu;
     error = netdev_linux_do_ioctl(netdev_get_name(netdev_), &ifr,
                                   SIOCSIFMTU, "SIOCSIFMTU");
