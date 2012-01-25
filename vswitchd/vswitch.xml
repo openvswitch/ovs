@@ -1942,19 +1942,6 @@
       unchanged.
     </column>
 
-    <group title="Configuration for min-rate QoS">
-      <p>
-        These key-value pairs are defined for <ref table="QoS"/> <ref
-        table="QoS" column="type"/> of <code>min-rate</code>.
-      </p>
-      
-      <column name="other_config" key="min-rate"
-              type='{"type": "integer", "minInteger": 12000}'>
-        Minimum guaranteed bandwidth, in bit/s.  Required.  The floor value is
-        1500 bytes/s (12,000 bit/s).
-      </column>
-    </group>
-
     <group title="Configuration for linux-htb QoS">
       <p>
         <ref table="QoS"/> <ref table="QoS" column="type"/>
