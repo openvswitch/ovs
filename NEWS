@@ -25,6 +25,9 @@ post-v1.5.0
       table, with configurable policy for evicting flows upon
       overflow.  See the Flow_Table table in ovs-vswitch.conf.db(5)
       for more information.
+    - New "enable-async-messages" column in the Controller table.  If set to
+      false, OpenFlow connections to the controller will initially have all
+      asynchronous messages disabled, overriding normal OpenFlow behavior.
     - ofproto-provider interface:
         - "struct rule" has a new member "used" that ofproto implementations
           should maintain by updating with ofproto_rule_update_used().

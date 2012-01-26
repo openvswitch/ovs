@@ -2489,7 +2489,26 @@
       </column>
     </group>
 
-    <group title="OpenFlow Rate Limiting">
+    <group title="Asynchronous Message Configuration">
+      <p>
+        OpenFlow switches send certain messages to controllers spontanenously,
+        that is, not in response to any request from the controller.  These
+        messages are called ``asynchronous messages.''  These columns allow
+        asynchronous messages to be limited or disabled to ensure the best use
+        of network resources.
+      </p>
+
+      <column name="enable_async_messages">
+        The OpenFlow protocol enables asynchronous messages at time of
+        connection establishment, which means that a controller can receive
+        asynchronous messages, potentially many of them, even if it turns them
+        off immediately after connecting.  Set this column to
+        <code>false</code> to change Open vSwitch behavior to disable, by
+        default, all asynchronous messages.  The controller can use the
+        <code>NXT_SET_ASYNC_CONFIG</code> Nicira extension to OpenFlow to turn
+        on any messages that it does want to receive, if any.
+      </column>
+
       <column name="controller_rate_limit">
         <p>
           The maximum rate at which the switch will forward packets to the

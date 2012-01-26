@@ -2328,6 +2328,7 @@ bridge_ofproto_controller_for_mgmt(const struct bridge *br,
     oc->band = OFPROTO_OUT_OF_BAND;
     oc->rate_limit = 0;
     oc->burst_limit = 0;
+    oc->enable_async_msgs = true;
 }
 
 /* Converts ovsrec_controller 'c' into an ofproto_controller in 'oc'.  */
@@ -2343,6 +2344,8 @@ bridge_ofproto_controller_from_ovsrec(const struct ovsrec_controller *c,
     oc->rate_limit = c->controller_rate_limit ? *c->controller_rate_limit : 0;
     oc->burst_limit = (c->controller_burst_limit
                        ? *c->controller_burst_limit : 0);
+    oc->enable_async_msgs = (!c->enable_async_messages
+                             || *c->enable_async_messages);
 }
 
 /* Configures the IP stack for 'br''s local interface properly according to the

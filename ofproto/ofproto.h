@@ -121,7 +121,8 @@ struct ofproto_controller {
     char *target;               /* e.g. "tcp:127.0.0.1" */
     int max_backoff;            /* Maximum reconnection backoff, in seconds. */
     int probe_interval;         /* Max idle time before probing, in seconds. */
-    enum ofproto_band band;      /* In-band or out-of-band? */
+    enum ofproto_band band;     /* In-band or out-of-band? */
+    bool enable_async_msgs;     /* Initially enable asynchronous messages? */
 
     /* OpenFlow packet-in rate-limiting. */
     int rate_limit;             /* Max packet-in rate in packets per second. */

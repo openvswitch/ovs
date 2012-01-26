@@ -52,6 +52,7 @@ struct ofconn {
     struct rconn *rconn;        /* OpenFlow connection. */
     enum ofconn_type type;      /* Type. */
     enum ofproto_band band;     /* In-band or out-of-band? */
+    bool enable_async_msgs;     /* Initially enable async messages? */
 
 /* State that should be cleared from one connection to the next. */
 
@@ -88,7 +89,7 @@ struct ofconn {
 };
 
 static struct ofconn *ofconn_create(struct connmgr *, struct rconn *,
-                                    enum ofconn_type);
+                                    enum ofconn_type, bool enable_async_msgs);
 static void ofconn_destroy(struct ofconn *);
 static void ofconn_flush(struct ofconn *);
 
@@ -120,6 +121,7 @@ struct ofservice {
     int probe_interval;         /* Max idle time before probing, in seconds. */
     int rate_limit;             /* Max packet-in rate in packets per second. */
     int burst_limit;            /* Limit on accumulating packet credits. */
+    bool enable_async_msgs;     /* Initially enable async messages? */
 };
 
 static void ofservice_reconfigure(struct ofservice *,
@@ -283,7 +285,8 @@ connmgr_run(struct connmgr *mgr,
             rconn_connect_unreliably(rconn, vconn, name);
             free(name);
 
-            ofconn = ofconn_create(mgr, rconn, OFCONN_SERVICE);
+            ofconn = ofconn_create(mgr, rconn, OFCONN_SERVICE,
+                                   ofservice->enable_async_msgs);
             ofconn_set_rate_limit(ofconn, ofservice->rate_limit,
                                   ofservice->burst_limit);
         } else if (retval != EAGAIN) {
@@ -561,7 +564,7 @@ add_controller(struct connmgr *mgr, const char *target)
     char *name = ofconn_make_name(mgr, target);
     struct ofconn *ofconn;
 
-    ofconn = ofconn_create(mgr, rconn_create(5, 8), OFCONN_PRIMARY);
+    ofconn = ofconn_create(mgr, rconn_create(5, 8), OFCONN_PRIMARY, true);
     ofconn->pktbuf = pktbuf_create();
     rconn_connect(ofconn->rconn, target, name);
     hmap_insert(&mgr->controllers, &ofconn->hmap_node, hash_string(target, 0));
@@ -953,7 +956,8 @@ ofconn_get_target(const struct ofconn *ofconn)
 }
 
 static struct ofconn *
-ofconn_create(struct connmgr *mgr, struct rconn *rconn, enum ofconn_type type)
+ofconn_create(struct connmgr *mgr, struct rconn *rconn, enum ofconn_type type,
+              bool enable_async_msgs)
 {
     struct ofconn *ofconn;
 
@@ -962,6 +966,7 @@ ofconn_create(struct connmgr *mgr, struct rconn *rconn, enum ofconn_type type)
     list_push_back(&mgr->all_conns, &ofconn->node);
     ofconn->rconn = rconn;
     ofconn->type = type;
+    ofconn->enable_async_msgs = enable_async_msgs;
 
     list_init(&ofconn->opgroups);
 
@@ -975,8 +980,6 @@ ofconn_create(struct connmgr *mgr, struct rconn *rconn, enum ofconn_type type)
 static void
 ofconn_flush(struct ofconn *ofconn)
 {
-    uint32_t *master = ofconn->master_async_config;
-    uint32_t *slave = ofconn->slave_async_config;
     int i;
 
     ofconn->role = NX_ROLE_OTHER;
@@ -1018,23 +1021,33 @@ ofconn_flush(struct ofconn *ofconn)
     rconn_packet_counter_destroy(ofconn->reply_counter);
     ofconn->reply_counter = rconn_packet_counter_create();
 
-    /* "master" and "other" roles get all asynchronous messages by default,
-     * except that the controller needs to enable nonstandard "packet-in"
-     * reasons itself. */
-    master[OAM_PACKET_IN] = (1u << OFPR_NO_MATCH) | (1u << OFPR_ACTION);
-    master[OAM_PORT_STATUS] = ((1u << OFPPR_ADD)
-                               | (1u << OFPPR_DELETE)
-                               | (1u << OFPPR_MODIFY));
-    master[OAM_FLOW_REMOVED] = ((1u << OFPRR_IDLE_TIMEOUT)
-                                | (1u << OFPRR_HARD_TIMEOUT)
-                                | (1u << OFPRR_DELETE));
+    if (ofconn->enable_async_msgs) {
+        uint32_t *master = ofconn->master_async_config;
+        uint32_t *slave = ofconn->slave_async_config;
 
-    /* "slave" role gets port status updates by default. */
-    slave[OAM_PACKET_IN] = 0;
-    slave[OAM_PORT_STATUS] = ((1u << OFPPR_ADD)
-                              | (1u << OFPPR_DELETE)
-                              | (1u << OFPPR_MODIFY));
-    slave[OAM_FLOW_REMOVED] = 0;
+        /* "master" and "other" roles get all asynchronous messages by default,
+         * except that the controller needs to enable nonstandard "packet-in"
+         * reasons itself. */
+        master[OAM_PACKET_IN] = (1u << OFPR_NO_MATCH) | (1u << OFPR_ACTION);
+        master[OAM_PORT_STATUS] = ((1u << OFPPR_ADD)
+                                   | (1u << OFPPR_DELETE)
+                                   | (1u << OFPPR_MODIFY));
+        master[OAM_FLOW_REMOVED] = ((1u << OFPRR_IDLE_TIMEOUT)
+                                    | (1u << OFPRR_HARD_TIMEOUT)
+                                    | (1u << OFPRR_DELETE));
+
+        /* "slave" role gets port status updates by default. */
+        slave[OAM_PACKET_IN] = 0;
+        slave[OAM_PORT_STATUS] = ((1u << OFPPR_ADD)
+                                  | (1u << OFPPR_DELETE)
+                                  | (1u << OFPPR_MODIFY));
+        slave[OAM_FLOW_REMOVED] = 0;
+    } else {
+        memset(ofconn->master_async_config, 0,
+               sizeof ofconn->master_async_config);
+        memset(ofconn->slave_async_config, 0,
+               sizeof ofconn->slave_async_config);
+    }
 }
 
 static void
@@ -1597,6 +1610,7 @@ ofservice_reconfigure(struct ofservice *ofservice,
     ofservice->probe_interval = c->probe_interval;
     ofservice->rate_limit = c->rate_limit;
     ofservice->burst_limit = c->burst_limit;
+    ofservice->enable_async_msgs = c->enable_async_msgs;
 }
 
 /* Finds and returns the ofservice within 'mgr' that has the given

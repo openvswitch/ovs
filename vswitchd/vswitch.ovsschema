@@ -1,6 +1,6 @@
 {"name": "Open_vSwitch",
- "version": "6.6.0",
- "cksum": "3676036878 16515",
+ "version": "6.7.0",
+ "cksum": "1451320369 16635",
  "tables": {
    "Open_vSwitch": {
      "columns": {
@@ -388,6 +388,9 @@
                   "min": 0, "max": 1}},
        "local_gateway": {
          "type": {"key": {"type": "string"},
+                  "min": 0, "max": 1}},
+       "enable_async_messages": {
+         "type": {"key": {"type": "boolean"},
                   "min": 0, "max": 1}},
        "controller_rate_limit": {
          "type": {"key": {"type": "integer",
