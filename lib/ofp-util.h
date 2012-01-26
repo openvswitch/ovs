@@ -313,6 +313,8 @@ struct ofpbuf *make_packet_in(uint32_t buffer_id, uint16_t in_port,
 struct ofpbuf *make_echo_request(void);
 struct ofpbuf *make_echo_reply(const struct ofp_header *rq);
 
+struct ofpbuf *ofputil_encode_barrier_request(void);
+
 const char *ofputil_frag_handling_to_string(enum ofp_config_flags);
 bool ofputil_frag_handling_from_string(const char *, enum ofp_config_flags *);
 
