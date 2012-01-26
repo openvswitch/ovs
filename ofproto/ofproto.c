@@ -3062,10 +3062,6 @@ handle_role_request(struct ofconn *ofconn, const struct ofp_header *oh)
     struct ofpbuf *buf;
     uint32_t role;
 
-    if (ofconn_get_type(ofconn) != OFCONN_PRIMARY) {
-        return OFPERR_OFPBRC_EPERM;
-    }
-
     role = ntohl(nrr->role);
     if (role != NX_ROLE_OTHER && role != NX_ROLE_MASTER
         && role != NX_ROLE_SLAVE) {
