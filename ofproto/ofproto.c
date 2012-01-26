@@ -2880,7 +2880,7 @@ handle_nxt_set_packet_in_format(struct ofconn *ofconn,
 
     msg = (const struct nx_set_packet_in_format *) oh;
     format = ntohl(msg->format);
-    if (format != NXFF_OPENFLOW10 && format != NXPIF_NXM) {
+    if (format != NXPIF_OPENFLOW10 && format != NXPIF_NXM) {
         return OFPERR_OFPBRC_EPERM;
     }
 
