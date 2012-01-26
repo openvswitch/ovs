@@ -45,6 +45,7 @@
 #include "ofproto/ofproto.h"
 #include "openflow/nicira-ext.h"
 #include "openflow/openflow.h"
+#include "packets.h"
 #include "poll-loop.h"
 #include "random.h"
 #include "stream-ssl.h"
@@ -209,6 +210,8 @@ usage(void)
            "  del-flows SWITCH [FLOW]     delete matching FLOWs\n"
            "  replace-flows SWITCH FILE   replace flows with those in FILE\n"
            "  diff-flows SOURCE1 SOURCE2  compare flows from two sources\n"
+           "  packet-out SWITCH IN_PORT ACTIONS PACKET...\n"
+           "                              execute ACTIONS on PACKET\n"
            "  monitor SWITCH [MISSLEN] [invalid_ttl]\n"
            "                              print packets received from SWITCH\n"
            "  snoop SWITCH                snoop on SWITCH and its controller\n"
@@ -954,6 +957,43 @@ do_probe(int argc OVS_UNUSED, char *argv[])
 }
 
 static void
+do_packet_out(int argc, char *argv[])
+{
+    struct ofputil_packet_out po;
+    struct ofpbuf actions;
+    struct vconn *vconn;
+    int i;
+
+    ofpbuf_init(&actions, sizeof(union ofp_action));
+    parse_ofp_actions(argv[3], &actions);
+
+    po.buffer_id = UINT32_MAX;
+    po.in_port = (!strcasecmp(argv[2], "none") ? OFPP_NONE
+                  : !strcasecmp(argv[2], "local") ? OFPP_LOCAL
+                  : str_to_port_no(argv[1], argv[2]));
+    po.actions = actions.data;
+    po.n_actions = actions.size / sizeof(union ofp_action);
+
+    open_vconn(argv[1], &vconn);
+    for (i = 4; i < argc; i++) {
+        struct ofpbuf *packet, *opo;
+        const char *error_msg;
+
+        error_msg = eth_from_hex(argv[i], &packet);
+        if (error_msg) {
+            ovs_fatal(0, "%s", error_msg);
+        }
+
+        po.packet = packet->data;
+        po.packet_len = packet->size;
+        opo = ofputil_encode_packet_out(&po);
+        transact_noreply(vconn, opo);
+        ofpbuf_delete(packet);
+    }
+    vconn_close(vconn);
+}
+
+static void
 do_mod_port(int argc OVS_UNUSED, char *argv[])
 {
     struct ofp_port_mod *opm;
@@ -1682,6 +1722,7 @@ static const struct command all_commands[] = {
     { "del-flows", 1, 2, do_del_flows },
     { "replace-flows", 2, 2, do_replace_flows },
     { "diff-flows", 2, 2, do_diff_flows },
+    { "packet-out", 4, INT_MAX, do_packet_out },
     { "dump-ports", 1, 2, do_dump_ports },
     { "mod-port", 3, 3, do_mod_port },
     { "get-frags", 1, 1, do_get_frags },

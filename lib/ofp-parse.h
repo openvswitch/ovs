@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010, 2011 Nicira Networks.
+ * Copyright (c) 2010, 2011, 2012 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -41,5 +41,8 @@ bool parse_ofp_flow_mod_file(struct list *packets,
 
 void parse_ofp_flow_stats_request_str(struct ofputil_flow_stats_request *,
                                       bool aggregate, char *string);
+
+
+void parse_ofp_actions(const char *, struct ofpbuf *actions);
 
 #endif /* ofp-parse.h */

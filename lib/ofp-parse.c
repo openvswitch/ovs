@@ -625,6 +625,19 @@ parse_ofp_str(struct ofputil_flow_mod *fm, int command, const char *str_,
     free(string);
 }
 
+/* Parses 's' as a set of OpenFlow actions and appends the actions to
+ * 'actions'.
+ *
+ * Prints an error on stderr and aborts the program if 's' syntax is
+ * invalid. */
+void
+parse_ofp_actions(const char *s_, struct ofpbuf *actions)
+{
+    char *s = xstrdup(s_);
+    str_to_action(NULL, s, actions);
+    free(s);
+}
+
 /* Parses 'string' as an OFPT_FLOW_MOD or NXT_FLOW_MOD with command 'command'
  * (one of OFPFC_*) and appends the parsed OpenFlow message to 'packets'.
  * '*cur_format' should initially contain the flow format currently configured

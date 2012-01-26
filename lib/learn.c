@@ -384,6 +384,17 @@ learn_parse_spec(const char *orig, char *name, char *value,
     }
 }
 
+/* Parses 'arg' as a set of arguments to the "learn" action and appends a
+ * matching NXAST_LEARN action to 'b'.  The format parsed is described in
+ * ovs-ofctl(8).
+ *
+ * Prints an error on stderr and aborts the program if 'arg' syntax is invalid.
+ *
+ * If 'flow' is nonnull, then it should be the flow from a cls_rule that is
+ * the matching rule for the learning action.  This helps to better validate
+ * the action's arguments.
+ *
+ * Modifies 'arg'. */
 void
 learn_parse(struct ofpbuf *b, char *arg, const struct flow *flow)
 {
@@ -429,7 +440,7 @@ learn_parse(struct ofpbuf *b, char *arg, const struct flow *flow)
 
             /* Check prerequisites. */
             if (spec.src_type == NX_LEARN_SRC_FIELD
-                && !mf_are_prereqs_ok(spec.src.field, flow)) {
+                && flow && !mf_are_prereqs_ok(spec.src.field, flow)) {
                 ovs_fatal(0, "%s: cannot specify source field %s because "
                           "prerequisites are not satisfied",
                           orig, spec.src.field->name);
@@ -487,9 +498,11 @@ learn_parse(struct ofpbuf *b, char *arg, const struct flow *flow)
     learn->len = htons(b->size - learn_ofs);
 
     /* In theory the above should have caught any errors, but... */
-    error = learn_check(learn, flow);
-    if (error) {
-        ovs_fatal(0, "%s: %s", orig, ofperr_to_string(error));
+    if (flow) {
+        error = learn_check(learn, flow);
+        if (error) {
+            ovs_fatal(0, "%s: %s", orig, ofperr_to_string(error));
+        }
     }
     free(orig);
 }
