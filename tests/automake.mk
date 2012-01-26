@@ -70,6 +70,7 @@ check-local: tests/atconfig tests/atlocal $(TESTSUITE)
 
 lcov_wrappers = \
 	tests/lcov/ovs-appctl \
+	tests/lcov/ovs-ofctl \
 	tests/lcov/ovs-vsctl \
 	tests/lcov/ovs-vswitchd \
 	tests/lcov/ovsdb-client \
@@ -127,6 +128,7 @@ check-lcov: all tests/atconfig tests/atlocal $(TESTSUITE) $(lcov_wrappers)
 
 valgrind_wrappers = \
 	tests/valgrind/ovs-appctl \
+	tests/valgrind/ovs-ofctl \
 	tests/valgrind/ovs-vsctl \
 	tests/valgrind/ovs-vswitchd \
 	tests/valgrind/ovsdb-client \
