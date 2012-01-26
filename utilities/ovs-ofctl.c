@@ -24,6 +24,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <sys/fcntl.h>
 #include <sys/stat.h>
 #include <sys/time.h>
 
@@ -903,6 +904,24 @@ ofctl_send(struct unixctl_conn *conn, int argc,
 }
 
 static void
+ofctl_set_output_file(struct unixctl_conn *conn, int argc OVS_UNUSED,
+                      const char *argv[], void *aux OVS_UNUSED)
+{
+    int fd;
+
+    fd = open(argv[1], O_CREAT | O_TRUNC | O_WRONLY, 0666);
+    if (fd < 0) {
+        unixctl_command_reply(conn, 501, strerror(errno));
+        return;
+    }
+
+    fflush(stderr);
+    dup2(fd, STDERR_FILENO);
+    close(fd);
+    unixctl_command_reply(conn, 200, "");
+}
+
+static void
 monitor_vconn(struct vconn *vconn)
 {
     struct unixctl_server *server;
@@ -918,6 +937,8 @@ monitor_vconn(struct vconn *vconn)
     unixctl_command_register("exit", "", 0, 0, ofctl_exit, &exiting);
     unixctl_command_register("ofctl/send", "OFMSG...", 1, INT_MAX,
                              ofctl_send, vconn);
+    unixctl_command_register("ofctl/set-output-file", "FILE", 1, 1,
+                             ofctl_set_output_file, NULL);
     daemonize_complete();
 
     for (;;) {

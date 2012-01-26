@@ -1207,6 +1207,11 @@ process.  The supported commands are listed below.
 Causes \fBovs\-ofctl\fR to gracefully terminate.  This command applies
 only when executing the \fBmonitor\fR or \fBsnoop\fR commands.
 .
+.IP "\fBofctl/set\-output\-file \fIfile\fR"
+Causes all subsequent output to go to \fIfile\fR instead of stderr.
+This command applies only when executing the \fBmonitor\fR or
+\fBsnoop\fR commands.
+.
 .IP "\fBofctl/send \fIofmsg\fR..."
 Sends each \fIofmsg\fR, specified as a sequence of hex digits that
 express an OpenFlow message, on the OpenFlow connection.  This command
