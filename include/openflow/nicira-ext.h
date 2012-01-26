@@ -276,6 +276,7 @@ struct nx_role_request {
     struct nicira_header nxh;
     ovs_be32 role;              /* One of NX_ROLE_*. */
 };
+OFP_ASSERT(sizeof(struct nx_role_request) == 20);
 
 enum nx_role {
     NX_ROLE_OTHER,              /* Default role, full access. */
