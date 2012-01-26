@@ -46,7 +46,8 @@ struct bond_settings {
 
     /* Balancing configuration. */
     enum bond_mode balance;
-    int rebalance_interval;     /* Milliseconds between rebalances. */
+    int rebalance_interval;     /* Milliseconds between rebalances.
+                                   Zero to disable rebalancing. */
 
     /* Link status detection. */
     int up_delay;               /* ms before enabling an up slave. */

@@ -246,7 +246,11 @@ bond_reconfigure(struct bond *bond, const struct bond_settings *s)
 
     bond->updelay = s->up_delay;
     bond->downdelay = s->down_delay;
-    bond->rebalance_interval = s->rebalance_interval;
+
+    if (bond->rebalance_interval != s->rebalance_interval) {
+        bond->rebalance_interval = s->rebalance_interval;
+        revalidate = true;
+    }
 
     if (bond->balance != s->balance) {
         bond->balance = s->balance;
@@ -648,7 +652,8 @@ bond_choose_output_slave(struct bond *bond, const struct flow *flow,
 static bool
 bond_is_balanced(const struct bond *bond)
 {
-    return bond->balance == BM_SLB || bond->balance == BM_TCP;
+    return bond->rebalance_interval
+        && (bond->balance == BM_SLB || bond->balance == BM_TCP);
 }
 
 /* Notifies 'bond' that 'n_bytes' bytes were sent in 'flow' within 'vlan'. */
@@ -1376,15 +1381,13 @@ lookup_bond_entry(const struct bond *bond, const struct flow *flow,
  * more complex implementations and require the use of memory.  This may need
  * to be reimplemented if it becomes a performance bottleneck. */
 static struct bond_slave *
-choose_stb_slave(const struct bond *bond, const struct flow *flow,
-                 uint16_t vlan)
+choose_stb_slave(const struct bond *bond, uint32_t flow_hash)
 {
     struct bond_slave *best, *slave;
-    uint32_t best_hash, flow_hash;
+    uint32_t best_hash;
 
     best = NULL;
     best_hash = 0;
-    flow_hash = bond_hash_tcp(flow, vlan, bond->basis);
     HMAP_FOR_EACH (slave, hmap_node, &bond->slaves) {
         if (slave->enabled) {
             uint32_t hash;
@@ -1417,7 +1420,7 @@ choose_output_slave(const struct bond *bond, const struct flow *flow,
         return bond->active_slave;
 
     case BM_STABLE:
-        return choose_stb_slave(bond, flow, vlan);
+        return choose_stb_slave(bond, bond_hash_tcp(flow, vlan, bond->basis));
 
     case BM_TCP:
         if (bond->lacp_status != LACP_NEGOTIATED) {
@@ -1426,6 +1429,9 @@ choose_output_slave(const struct bond *bond, const struct flow *flow,
         }
         /* Fall Through. */
     case BM_SLB:
+        if (!bond_is_balanced(bond)) {
+            return choose_stb_slave(bond, bond_hash(bond, flow, vlan));
+        }
         e = lookup_bond_entry(bond, flow, vlan);
         if (!e->slave || !e->slave->enabled) {
             e->slave = CONTAINER_OF(hmap_random_node(&bond->slaves),

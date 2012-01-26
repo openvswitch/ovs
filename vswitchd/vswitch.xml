@@ -918,11 +918,13 @@
         </p>
 
         <column name="other_config" key="bond-rebalance-interval"
-                type='{"type": "integer", "minInteger": 1000, "maxInteger": 10000}'>
-          For an SLB bonded port, the number of milliseconds between successive
-          attempts to rebalance the bond, that is, to move source MACs and
-          their flows from one interface on the bond to another in an attempt
-          to keep usage of each interface roughly equal.
+                type='{"type": "integer", "minInteger": 0, "maxInteger": 10000}'>
+          For a load balanced bonded port, the number of milliseconds between
+          successive attempts to rebalance the bond, that is, to move flows
+          from one interface on the bond to another in an attempt to keep usage
+          of each interface roughly equal.  If zero, load balancing is disabled
+          on the bond (carrier status changes still cause flows to move).  If
+          less than 1000ms, the rebalance interval will be 1000ms.
         </column>
       </group>
 

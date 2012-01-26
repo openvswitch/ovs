@@ -2790,7 +2790,7 @@ port_configure_bond(struct port *port, struct bond_settings *s,
     s->basis = atoi(get_port_other_config(port->cfg, "bond-hash-basis", "0"));
     s->rebalance_interval = atoi(
         get_port_other_config(port->cfg, "bond-rebalance-interval", "10000"));
-    if (s->rebalance_interval < 1000) {
+    if (s->rebalance_interval && s->rebalance_interval < 1000) {
         s->rebalance_interval = 1000;
     }
 
