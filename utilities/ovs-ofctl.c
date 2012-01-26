@@ -903,6 +903,37 @@ ofctl_send(struct unixctl_conn *conn, int argc,
     ds_destroy(&reply);
 }
 
+struct barrier_aux {
+    struct vconn *vconn;        /* OpenFlow connection for sending barrier. */
+    struct unixctl_conn *conn;  /* Connection waiting for barrier response. */
+};
+
+static void
+ofctl_barrier(struct unixctl_conn *conn, int argc OVS_UNUSED,
+              const char *argv[] OVS_UNUSED, void *aux_)
+{
+    struct barrier_aux *aux = aux_;
+    struct ofpbuf *msg;
+    int error;
+
+    if (aux->conn) {
+        unixctl_command_reply(conn, 501, "already waiting for barrier reply");
+        return;
+    }
+
+    msg = ofputil_encode_barrier_request();
+    fprintf(stderr, "send: ");
+    ofp_print(stderr, msg->data, msg->size, verbosity);
+
+    error = vconn_send_block(aux->vconn, msg);
+    if (error) {
+        ofpbuf_delete(msg);
+        unixctl_command_reply(conn, 501, strerror(error));
+    } else {
+        aux->conn = conn;
+    }
+}
+
 static void
 ofctl_set_output_file(struct unixctl_conn *conn, int argc OVS_UNUSED,
                       const char *argv[], void *aux OVS_UNUSED)
@@ -924,6 +955,7 @@ ofctl_set_output_file(struct unixctl_conn *conn, int argc OVS_UNUSED,
 static void
 monitor_vconn(struct vconn *vconn)
 {
+    struct barrier_aux barrier_aux = { vconn, NULL };
     struct unixctl_server *server;
     bool exiting = false;
     int error;
@@ -937,6 +969,8 @@ monitor_vconn(struct vconn *vconn)
     unixctl_command_register("exit", "", 0, 0, ofctl_exit, &exiting);
     unixctl_command_register("ofctl/send", "OFMSG...", 1, INT_MAX,
                              ofctl_send, vconn);
+    unixctl_command_register("ofctl/barrier", "", 0, 0,
+                             ofctl_barrier, &barrier_aux);
     unixctl_command_register("ofctl/set-output-file", "FILE", 1, 1,
                              ofctl_set_output_file, NULL);
     daemonize_complete();
@@ -948,14 +982,22 @@ monitor_vconn(struct vconn *vconn)
         unixctl_server_run(server);
 
         for (;;) {
+            uint8_t msg_type;
+
             retval = vconn_recv(vconn, &b);
             if (retval == EAGAIN) {
                 break;
             }
+            msg_type = ((const struct ofp_header *) b->data)->type;
 
             run(retval, "vconn_recv");
             ofp_print(stderr, b->data, b->size, verbosity + 2);
             ofpbuf_delete(b);
+
+            if (barrier_aux.conn && msg_type == OFPT_BARRIER_REPLY) {
+                unixctl_command_reply(barrier_aux.conn, 200, "");
+                barrier_aux.conn = NULL;
+            }
         }
 
         if (exiting) {

@@ -1217,6 +1217,11 @@ Sends each \fIofmsg\fR, specified as a sequence of hex digits that
 express an OpenFlow message, on the OpenFlow connection.  This command
 is useful only when executing the \fBmonitor\fR command.
 .
+.IP "\fBofctl/barrier\fR"
+Sends an OpenFlow barrier request on the OpenFlow connection and waits
+for a reply.  This command is useful only for the \fBmonitor\fR
+command.
+.
 .SH EXAMPLES
 .
 The following examples assume that \fBovs\-vswitchd\fR has a bridge
