@@ -61,7 +61,7 @@ VLOG_DEFINE_THIS_MODULE(ofctl);
  */
 static bool strict;
 
-/* --readd: If ture, on replace-flows, re-add even flows that have not changed
+/* --readd: If true, on replace-flows, re-add even flows that have not changed
  * (to reset flow counters). */
 static bool readd;
 
