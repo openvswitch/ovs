@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -830,24 +830,6 @@ monitor_vconn(struct vconn *vconn)
     bool exiting = false;
     int error, fd;
 
-    if (preferred_packet_in_format >= 0) {
-        set_packet_in_format(vconn, preferred_packet_in_format);
-    } else {
-        struct ofpbuf *spif, *reply;
-
-        spif = ofputil_make_set_packet_in_format(NXPIF_NXM);
-        run(vconn_transact_noreply(vconn, spif, &reply),
-            "talking to %s", vconn_get_name(vconn));
-        if (reply) {
-            char *s = ofp_to_string(reply->data, reply->size, 2);
-            VLOG_DBG("%s: failed to set packet in format to nxm, controller"
-                     " replied: %s. Falling back to the switch default.",
-                     vconn_get_name(vconn), s);
-            free(s);
-            ofpbuf_delete(reply);
-        }
-    }
-
     /* Daemonization will close stderr but we really want to keep it, so make a
      * copy. */
     fd = dup(STDERR_FILENO);
@@ -910,6 +892,24 @@ do_monitor(int argc, char *argv[])
             monitor_set_invalid_ttl_to_controller(vconn);
         }
     }
+    if (preferred_packet_in_format >= 0) {
+        set_packet_in_format(vconn, preferred_packet_in_format);
+    } else {
+        struct ofpbuf *spif, *reply;
+
+        spif = ofputil_make_set_packet_in_format(NXPIF_NXM);
+        run(vconn_transact_noreply(vconn, spif, &reply),
+            "talking to %s", vconn_get_name(vconn));
+        if (reply) {
+            char *s = ofp_to_string(reply->data, reply->size, 2);
+            VLOG_DBG("%s: failed to set packet in format to nxm, controller"
+                     " replied: %s. Falling back to the switch default.",
+                     vconn_get_name(vconn), s);
+            free(s);
+            ofpbuf_delete(reply);
+        }
+    }
+
     monitor_vconn(vconn);
 }
 
