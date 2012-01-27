@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 
 #include <config.h>
 #include "daemon.h"
+#include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <signal.h>
@@ -60,6 +61,10 @@ static int daemonize_fd = -1;
 /* --monitor: Should a supervisory process monitor the daemon and restart it if
  * it dies due to an error signal? */
 static bool monitor;
+
+/* For each of the standard file descriptors, whether to replace it by
+ * /dev/null (if false) or keep it for the daemon to use (if true). */
+static bool save_fds[3];
 
 static void check_already_running(void);
 static int lock_pidfile(FILE *, int command);
@@ -140,6 +145,20 @@ void
 daemon_set_monitor(void)
 {
     monitor = true;
+}
+
+/* A daemon doesn't normally have any use for the file descriptors for stdin,
+ * stdout, and stderr after it detaches.  To keep these file descriptors from
+ * e.g. holding an SSH session open, by default detaching replaces each of
+ * these file descriptors by /dev/null.  But a few daemons expect the user to
+ * redirect stdout or stderr to a file, in which case it is desirable to keep
+ * these file descriptors.  This function, therefore, disables replacing 'fd'
+ * by /dev/null when the daemon detaches. */
+void
+daemon_save_fd(int fd)
+{
+    assert(fd == STDIN_FILENO || fd == STDOUT_FILENO || fd == STDERR_FILENO);
+    save_fds[fd] = true;
 }
 
 /* If a pidfile has been configured, creates it and stores the running
@@ -402,16 +421,21 @@ monitor_daemon(pid_t daemon_pid)
     program_name = saved_program_name;
 }
 
-/* Close stdin, stdout, stderr.  If we're started from e.g. an SSH session,
- * then this keeps us from holding that session open artificially. */
+/* Close standard file descriptors (except any that the client has requested we
+ * leave open by calling daemon_save_fd()).  If we're started from e.g. an SSH
+ * session, then this keeps us from holding that session open artificially. */
 static void
 close_standard_fds(void)
 {
     int null_fd = get_null_fd();
     if (null_fd >= 0) {
-        dup2(null_fd, STDIN_FILENO);
-        dup2(null_fd, STDOUT_FILENO);
-        dup2(null_fd, STDERR_FILENO);
+        int fd;
+
+        for (fd = 0; fd < 3; fd++) {
+            if (!save_fds[fd]) {
+                dup2(null_fd, fd);
+            }
+        }
     }
 
     /* Disable logging to stderr to avoid wasting CPU time. */

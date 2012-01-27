@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011 Nicira Networks.
+ * Copyright (c) 2009, 2010, 2011, 2012 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -733,12 +733,8 @@ do_monitor(struct jsonrpc *rpc, const char *database,
             monitor_print(msg->result, table, &columns, true);
             fflush(stdout);
             if (get_detach()) {
-                /* daemonize() closes the standard file descriptors.  We output
-                 * to stdout, so we need to save and restore STDOUT_FILENO. */
-                int fd = dup(STDOUT_FILENO);
+                daemon_save_fd(STDOUT_FILENO);
                 daemonize();
-                dup2(fd, STDOUT_FILENO);
-                close(fd);
             }
         } else if (msg->type == JSONRPC_NOTIFY
                    && !strcmp(msg->method, "update")) {

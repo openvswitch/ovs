@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -64,6 +64,7 @@ bool is_chdir_enabled(void);
 void set_detach(void);
 bool get_detach(void);
 void daemon_set_monitor(void);
+void daemon_save_fd(int fd);
 void daemonize(void);
 void daemonize_start(void);
 void daemonize_complete(void);

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 Nicira Networks.
+ * Copyright (c) 2011, 2012 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -190,7 +190,6 @@ main(int argc, char *argv[])
     bool exiting = false;
     int error;
     int sock;
-    int fd;
     int n;
 
     proctitle_init(argc, argv);
@@ -208,10 +207,7 @@ main(int argc, char *argv[])
         ovs_fatal(0, "%s: failed to open (%s)", argv[1], strerror(-sock));
     }
 
-    /* Daemonization will close stdout but we really want to keep it, so make a
-     * copy. */
-    fd = dup(STDOUT_FILENO);
-
+    daemon_save_fd(STDOUT_FILENO);
     daemonize_start();
 
     error = unixctl_server_create(NULL, &server);
@@ -221,9 +217,6 @@ main(int argc, char *argv[])
     unixctl_command_register("exit", "", 0, 0, test_netflow_exit, &exiting);
 
     daemonize_complete();
-
-    /* Now get stdout back. */
-    dup2(fd, STDOUT_FILENO);
 
     ofpbuf_init(&buf, MAX_RECV);
     n = 0;

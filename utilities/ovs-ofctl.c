@@ -831,12 +831,9 @@ monitor_vconn(struct vconn *vconn)
 {
     struct unixctl_server *server;
     bool exiting = false;
-    int error, fd;
+    int error;
 
-    /* Daemonization will close stderr but we really want to keep it, so make a
-     * copy. */
-    fd = dup(STDERR_FILENO);
-
+    daemon_save_fd(STDERR_FILENO);
     daemonize_start();
     error = unixctl_server_create(NULL, &server);
     if (error) {
@@ -844,9 +841,6 @@ monitor_vconn(struct vconn *vconn)
     }
     unixctl_command_register("exit", "", 0, 0, ofctl_exit, &exiting);
     daemonize_complete();
-
-    /* Now get stderr back. */
-    dup2(fd, STDERR_FILENO);
 
     for (;;) {
         struct ofpbuf *b;
