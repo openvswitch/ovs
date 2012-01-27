@@ -699,6 +699,8 @@ flow_wildcards_combine(struct flow_wildcards *dst,
 {
     int i;
 
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 7);
+
     dst->wildcards = src1->wildcards | src2->wildcards;
     dst->tun_id_mask = src1->tun_id_mask & src2->tun_id_mask;
     dst->nw_src_mask = src1->nw_src_mask & src2->nw_src_mask;
@@ -732,6 +734,8 @@ flow_wildcards_equal(const struct flow_wildcards *a,
 {
     int i;
 
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 7);
+
     if (a->wildcards != b->wildcards
         || a->tun_id_mask != b->tun_id_mask
         || a->nw_src_mask != b->nw_src_mask
@@ -759,6 +763,8 @@ flow_wildcards_has_extra(const struct flow_wildcards *a,
 {
     int i;
     struct in6_addr ipv6_masked;
+
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 7);
 
     for (i = 0; i < FLOW_N_REGS; i++) {
         if ((a->reg_masks[i] & b->reg_masks[i]) != b->reg_masks[i]) {
