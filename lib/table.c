@@ -480,8 +480,10 @@ table_print_json__(const struct table *table, const struct table_style *style)
             const struct cell *cell = table_cell__(table, y, x);
             if (cell->text) {
                 json_array_add(row, json_string_create(cell->text));
-            } else {
+            } else if (cell->json) {
                 json_array_add(row, json_clone(cell->json));
+            } else {
+                json_array_add(row, json_null_create());
             }
         }
         json_array_add(data, row);
