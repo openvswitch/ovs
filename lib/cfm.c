@@ -90,6 +90,9 @@ struct cfm {
     bool opup;             /* Operational State. */
     bool remote_opup;      /* Remote Operational State. */
 
+    int fault_override;    /* Manual override of 'fault' status.
+                              Ignored if negative. */
+
     uint32_t seq;          /* The sequence number of our last CCM. */
     uint8_t ccm_interval;  /* The CCM transmission interval. */
     int ccm_interval_ms;   /* 'ccm_interval' in milliseconds. */
@@ -123,6 +126,7 @@ static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
 static struct hmap all_cfms = HMAP_INITIALIZER(&all_cfms);
 
 static unixctl_cb_func cfm_unixctl_show;
+static unixctl_cb_func cfm_unixctl_set_fault;
 
 static const uint8_t *
 cfm_ccm_addr(const struct cfm *cfm)
@@ -234,6 +238,8 @@ cfm_init(void)
 {
     unixctl_command_register("cfm/show", "[interface]", 0, 1, cfm_unixctl_show,
                              NULL);
+    unixctl_command_register("cfm/set-fault", "[interface] normal|false|true",
+                             1, 2, cfm_unixctl_set_fault, NULL);
 }
 
 /* Allocates a 'cfm' object called 'name'.  'cfm' should be initialized by
@@ -249,6 +255,7 @@ cfm_create(const char *name)
     cfm_generate_maid(cfm);
     hmap_insert(&all_cfms, &cfm->hmap_node, hash_string(cfm->name, 0));
     cfm->remote_opup = true;
+    cfm->fault_override = -1;
     return cfm;
 }
 
@@ -529,6 +536,9 @@ cfm_process_heartbeat(struct cfm *cfm, const struct ofpbuf *p)
 bool
 cfm_get_fault(const struct cfm *cfm)
 {
+    if (cfm->fault_override >= 0) {
+        return cfm->fault_override;
+    }
     return cfm->fault;
 }
 
@@ -572,9 +582,10 @@ cfm_print_details(struct ds *ds, const struct cfm *cfm)
     struct remote_mp *rmp;
 
     ds_put_format(ds, "---- %s ----\n", cfm->name);
-    ds_put_format(ds, "MPID %"PRIu64":%s%s%s\n", cfm->mpid,
+    ds_put_format(ds, "MPID %"PRIu64":%s%s%s%s\n", cfm->mpid,
                   cfm->extended ? " extended" : "",
-                  cfm->fault ? " fault" : "",
+                  cfm_get_fault(cfm) ? " fault" : "",
+                  cfm->fault_override >= 0 ? " fault_override" : "",
                   cfm->unexpected_recv ? " unexpected_recv" : "");
 
     ds_put_format(ds, "\topstate: %s\n", cfm->opup ? "up" : "down");
@@ -618,4 +629,39 @@ cfm_unixctl_show(struct unixctl_conn *conn, int argc, const char *argv[],
 
     unixctl_command_reply(conn, 200, ds_cstr(&ds));
     ds_destroy(&ds);
+}
+
+static void
+cfm_unixctl_set_fault(struct unixctl_conn *conn, int argc, const char *argv[],
+                      void *aux OVS_UNUSED)
+{
+    const char *fault_str = argv[argc - 1];
+    int fault_override;
+    struct cfm *cfm;
+
+    if (!strcasecmp("true", fault_str)) {
+        fault_override = 1;
+    } else if (!strcasecmp("false", fault_str)) {
+        fault_override = 0;
+    } else if (!strcasecmp("normal", fault_str)) {
+        fault_override = -1;
+    } else {
+        unixctl_command_reply(conn, 501, "unknown fault string");
+        return;
+    }
+
+    if (argc > 2) {
+        cfm = cfm_find(argv[1]);
+        if (!cfm) {
+            unixctl_command_reply(conn, 501, "no such CFM object");
+            return;
+        }
+        cfm->fault_override = fault_override;
+    } else {
+        HMAP_FOR_EACH (cfm, hmap_node, &all_cfms) {
+            cfm->fault_override = fault_override;
+        }
+    }
+
+    unixctl_command_reply(conn, 200, "OK");
 }
