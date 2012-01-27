@@ -173,13 +173,19 @@ ds_put_printable(struct ds *ds, const char *s, size_t n)
     }
 }
 
+/* Writes the current time to 'string' based on 'template'.
+ * The current time is either localtime or UTC based on 'utc'. */
 void
-ds_put_strftime(struct ds *ds, const char *template, const struct tm *tm)
+ds_put_strftime(struct ds *ds, const char *template, bool utc)
 {
-    if (!tm) {
-        time_t now = time_wall();
+    const struct tm *tm;
+    time_t now = time_wall();
+    if (utc) {
+        tm = gmtime(&now);
+    } else {
         tm = localtime(&now);
     }
+
     for (;;) {
         size_t avail = ds->string ? ds->allocated - ds->length + 1 : 0;
         size_t used = strftime(&ds->string[ds->length], avail, template, tm);

@@ -6,6 +6,9 @@ post-v1.5.0
         - The default bond_mode changed from SLB to active-backup, to protect
           unsuspecting users from the significant risks of SLB bonds (which are
           documented in vswitchd/INTERNALS).
+    - Logging to console and file will have UTC timestamp as a default for all
+      the daemons. An example of the default format is 2012-01-27T16:35:17Z.
+      ovs-appctl can be used to change the default format as before.
 
 
 v1.5.0 - xx xxx xxxx

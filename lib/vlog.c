@@ -610,7 +610,11 @@ format_log_message(const struct vlog_module *module, enum vlog_level level,
             break;
         case 'd':
             p = fetch_braces(p, "%Y-%m-%d %H:%M:%S", tmp, sizeof tmp);
-            ds_put_strftime(s, tmp, NULL);
+            ds_put_strftime(s, tmp, false);
+            break;
+        case 'D':
+            p = fetch_braces(p, "%Y-%m-%d %H:%M:%S", tmp, sizeof tmp);
+            ds_put_strftime(s, tmp, true);
             break;
         case 'm':
             /* Format user-supplied log message and trim trailing new-lines. */

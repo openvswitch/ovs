@@ -139,6 +139,13 @@ The current date and time in ISO 8601 format (YYYY\-MM\-DD HH:MM:SS).
 The current date and time in the specified \fIformat\fR, which takes
 the same format as the \fItemplate\fR argument to \fBstrftime\fR(3).
 .
+.IP \fB%D\fR
+The current UTC date and time in ISO 8601 format (YYYY\-MM\-DD HH:MM:SS).
+.
+.IP \fB%D{\fIformat\fB}\fR
+The current UTC date and time in the specified \fIformat\fR, which takes
+the same format as the \fItemplate\fR argument to \fBstrftime\fR(3).
+.
 .IP \fB%m\fR
 The message being logged.
 .
@@ -184,8 +191,8 @@ width.  (A field wider than \fIwidth\fR is not truncated to fit.)
 .RE
 .
 .IP
-The default pattern for console and file output is \fB%d{%b %d
-%H:%M:%S}|%05N|%c|%p|%m\fR; for syslog output, \fB%05N|%c|%p|%m\fR.
+The default pattern for console and file output is \fB%D{%Y-%m-%dT
+%H:%M:%SZ}|%05N|%c|%p|%m\fR; for syslog output, \fB%05N|%c|%p|%m\fR.
 .
 .IP "\fBvlog/reopen\fR"
 Causes the daemon to close and reopen its log file.  (This
