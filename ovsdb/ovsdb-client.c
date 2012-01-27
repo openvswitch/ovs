@@ -64,6 +64,9 @@ struct ovsdb_client_command {
                     int argc, char *argv[]);
 };
 
+/* --timestamp: Print a timestamp before each update on "monitor" command? */
+static bool timestamp;
+
 /* Format for table output. */
 static struct table_style table_style = TABLE_STYLE_DEFAULT;
 
@@ -160,6 +163,7 @@ parse_options(int argc, char *argv[])
 {
     enum {
         OPT_BOOTSTRAP_CA_CERT = UCHAR_MAX + 1,
+        OPT_TIMESTAMP,
         DAEMON_OPTION_ENUMS,
         TABLE_OPTION_ENUMS
     };
@@ -167,6 +171,7 @@ parse_options(int argc, char *argv[])
         {"verbose", optional_argument, NULL, 'v'},
         {"help", no_argument, NULL, 'h'},
         {"version", no_argument, NULL, 'V'},
+        {"timestamp", no_argument, NULL, OPT_TIMESTAMP},
         DAEMON_LONG_OPTIONS,
 #ifdef HAVE_OPENSSL
         {"bootstrap-ca-cert", required_argument, NULL, OPT_BOOTSTRAP_CA_CERT},
@@ -205,6 +210,10 @@ parse_options(int argc, char *argv[])
 
         case OPT_BOOTSTRAP_CA_CERT:
             stream_ssl_set_ca_cert_file(optarg, true);
+            break;
+
+        case OPT_TIMESTAMP:
+            timestamp = true;
             break;
 
         case '?':
@@ -256,7 +265,8 @@ usage(void)
            "                              (\"table\", \"html\", \"csv\", "
            "or \"json\")\n"
            "  --no-headings               omit table heading row\n"
-           "  --pretty                    pretty-print JSON in output");
+           "  --pretty                    pretty-print JSON in output\n"
+           "  --timestamp                 timestamp \"monitor\" output");
     daemon_usage();
     vlog_usage();
     printf("\nOther options:\n"
@@ -532,6 +542,7 @@ monitor_print(struct json *table_updates,
     size_t i;
 
     table_init(&t);
+    table_set_timestamp(&t, timestamp);
 
     if (table_updates->type != JSON_OBJECT) {
         ovs_error(0, "<table-updates> is not object");

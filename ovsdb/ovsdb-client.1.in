@@ -40,6 +40,7 @@ ovsdb\-client \- command-line interface to \fBovsdb-server\fR(1)
 [\fB\-\-pretty\fR]
 [\fB\-\-bare\fR]
 [\fB\-\-no\-heading\fR]
+[\fB\-\-timestamp\fR]
 .so lib/daemon-syn.man
 .so lib/vlog-syn.man
 .so lib/ssl-syn.man
@@ -136,6 +137,12 @@ The following options controlling output formatting:
 .
 .ds TD (default)
 .so lib/table.man
+.
+.IP "\fB\-\-timestamp\fR"
+For the \fB\-\-monitor\fR command, adds a timestamp to each table
+update.  Most output formats add the timestamp on a line of its own
+just above the table.  The JSON output format puts the timestamp in a
+member of the top-level JSON object named \fBtime\fR.
 .
 .SS "Daemon Options"
 The daemon options apply only to the \fBmonitor\fR command.  With any

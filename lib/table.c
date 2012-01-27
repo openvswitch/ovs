@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011 Nicira Networks.
+ * Copyright (c) 2009, 2010, 2011, 2012 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@
 #include "json.h"
 #include "ovsdb-data.h"
 #include "ovsdb-error.h"
+#include "timeval.h"
 #include "util.h"
 
 struct column {
@@ -123,6 +124,14 @@ table_set_caption(struct table *table, char *caption)
     table->caption = caption;
 }
 
+/* Turns printing a timestamp along with 'table' on or off, according to
+ * 'timestamp'.  */
+void
+table_set_timestamp(struct table *table, bool timestamp)
+{
+    table->timestamp = timestamp;
+}
+
 /* Adds a new column to 'table' just to the right of any existing column, with
  * 'heading' as a title for the column.  'heading' must be a valid printf()
  * format specifier.
@@ -212,6 +221,24 @@ table_print_table_line__(struct ds *line)
 }
 
 static void
+table_format_timestamp__(char *s, size_t size)
+{
+    time_t now = time_wall();
+    strftime(s, size, "%Y-%m-%d %H:%M:%S", localtime(&now));
+}
+
+static void
+table_print_timestamp__(const struct table *table)
+{
+    if (table->timestamp) {
+        char s[32];
+
+        table_format_timestamp__(s, sizeof s);
+        puts(s);
+    }
+}
+
+static void
 table_print_table__(const struct table *table, const struct table_style *style)
 {
     static int n = 0;
@@ -222,6 +249,8 @@ table_print_table__(const struct table *table, const struct table_style *style)
     if (n++ > 0) {
         putchar('\n');
     }
+
+    table_print_timestamp__(table);
 
     if (table->caption) {
         puts(table->caption);
@@ -285,6 +314,8 @@ table_print_list__(const struct table *table, const struct table_style *style)
     if (n++ > 0) {
         putchar('\n');
     }
+
+    table_print_timestamp__(table);
 
     if (table->caption) {
         puts(table->caption);
@@ -357,6 +388,8 @@ table_print_html__(const struct table *table, const struct table_style *style)
 {
     size_t x, y;
 
+    table_print_timestamp__(table);
+
     fputs("<table border=1>\n", stdout);
 
     if (table->caption) {
@@ -427,6 +460,8 @@ table_print_csv__(const struct table *table, const struct table_style *style)
         putchar('\n');
     }
 
+    table_print_timestamp__(table);
+
     if (table->caption) {
         puts(table->caption);
     }
@@ -464,6 +499,12 @@ table_print_json__(const struct table *table, const struct table_style *style)
     json = json_object_create();
     if (table->caption) {
         json_object_put_string(json, "caption", table->caption);
+    }
+    if (table->timestamp) {
+        char s[32];
+
+        table_format_timestamp__(s, sizeof s);
+        json_object_put_string(json, "time", s);
     }
 
     headings = json_array_create_empty();

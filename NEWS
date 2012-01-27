@@ -20,6 +20,9 @@ post-v1.5.0
           should maintain by updating with ofproto_rule_update_used().
     - The default MAC learning timeout has been increased from 60 seconds
       to 300 seconds.  The MAC learning timeout is now configurable.
+    - ovsdb-client:
+        - The new option --timestamp causes the "monitor" command to print
+          a timestamp with every update.
 
 
 v1.5.0 - xx xxx xxxx

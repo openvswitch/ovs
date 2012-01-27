@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011 Nicira Networks.
+ * Copyright (c) 2009, 2010, 2011, 2012 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,11 +32,13 @@ struct table {
     size_t n_rows, allocated_rows;
     size_t current_column;
     char *caption;
+    bool timestamp;
 };
 
 void table_init(struct table *);
 void table_destroy(struct table *);
 void table_set_caption(struct table *, char *caption);
+void table_set_timestamp(struct table *, bool timestamp);
 
 void table_add_column(struct table *, const char *heading, ...)
     PRINTF_FORMAT(2, 3);
