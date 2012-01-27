@@ -35,7 +35,7 @@ as text strings.
 .RE
 .
 .IP "\fB\-d \fIformat\fR"
-.IP "\fB\-\-data=\fIformat\fR"
+.IQ "\fB\-\-data=\fIformat\fR"
 Sets the formatting for cells within output tables.  The following
 types of \fIformat\fR are available:
 .RS
