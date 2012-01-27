@@ -1069,7 +1069,7 @@ allow the switch to choose its default if \fBnxm\fR is unsupported.  When
 \fIformat\fR is one of the formats listed in the above table, \fBovs\-ofctl\fR
 will insist on the selected format.  If the switch does not support the
 requested format, \fBovs\-ofctl\fR will report a fatal error.  This option only
-affects the \fBmonitor\fR and \fBsnoop\fR commands.
+affects the \fBmonitor\fR command.
 .
 .IP "\fB\-m\fR"
 .IQ "\fB\-\-more\fR"
