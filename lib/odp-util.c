@@ -278,10 +278,16 @@ format_odp_actions(struct ds *ds, const struct nlattr *actions,
             format_odp_action(ds, a);
         }
         if (left) {
+            int i;
+
             if (left == actions_len) {
                 ds_put_cstr(ds, "<empty>");
             }
-            ds_put_format(ds, ",***%u leftover bytes***", left);
+            ds_put_format(ds, ",***%u leftover bytes*** (", left);
+            for (i = 0; i < left; i++) {
+                ds_put_format(ds, "%02x", ((const uint8_t *) a)[i]);
+            }
+            ds_put_char(ds, ')');
         }
     } else {
         ds_put_cstr(ds, "drop");
@@ -727,10 +733,16 @@ odp_flow_key_format(const struct nlattr *key, size_t key_len, struct ds *ds)
             format_odp_key_attr(a, ds);
         }
         if (left) {
+            int i;
+            
             if (left == key_len) {
                 ds_put_cstr(ds, "<empty>");
             }
-            ds_put_format(ds, ",***%u leftover bytes***", left);
+            ds_put_format(ds, ",***%u leftover bytes*** (", left);
+            for (i = 0; i < left; i++) {
+                ds_put_format(ds, "%02x", ((const uint8_t *) a)[i]);
+            }
+            ds_put_char(ds, ')');
         }
     } else {
         ds_put_cstr(ds, "<empty>");
