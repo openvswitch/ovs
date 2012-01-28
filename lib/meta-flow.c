@@ -290,7 +290,7 @@ static const struct mf_field mf_fields[MFF_N_IDS] = {
     {
         MFF_TCP_SRC, "tcp_src", "tp_src",
         MF_FIELD_SIZES(be16),
-        MFM_NONE, FWW_TP_SRC,
+        MFM_FULLY, 0,
         MFS_DECIMAL,
         MFP_TCP,
         true,
@@ -298,7 +298,7 @@ static const struct mf_field mf_fields[MFF_N_IDS] = {
     }, {
         MFF_TCP_DST, "tcp_dst", "tp_dst",
         MF_FIELD_SIZES(be16),
-        MFM_NONE, FWW_TP_DST,
+        MFM_FULLY, 0,
         MFS_DECIMAL,
         MFP_TCP,
         true,
@@ -308,7 +308,7 @@ static const struct mf_field mf_fields[MFF_N_IDS] = {
     {
         MFF_UDP_SRC, "udp_src", NULL,
         MF_FIELD_SIZES(be16),
-        MFM_NONE, FWW_TP_SRC,
+        MFM_FULLY, 0,
         MFS_DECIMAL,
         MFP_UDP,
         true,
@@ -316,7 +316,7 @@ static const struct mf_field mf_fields[MFF_N_IDS] = {
     }, {
         MFF_UDP_DST, "udp_dst", NULL,
         MF_FIELD_SIZES(be16),
-        MFM_NONE, FWW_TP_DST,
+        MFM_FULLY, 0,
         MFS_DECIMAL,
         MFP_UDP,
         true,
@@ -326,7 +326,7 @@ static const struct mf_field mf_fields[MFF_N_IDS] = {
     {
         MFF_ICMPV4_TYPE, "icmp_type", NULL,
         MF_FIELD_SIZES(u8),
-        MFM_NONE, FWW_TP_SRC,
+        MFM_NONE, 0,
         MFS_DECIMAL,
         MFP_ICMPV4,
         false,
@@ -334,7 +334,7 @@ static const struct mf_field mf_fields[MFF_N_IDS] = {
     }, {
         MFF_ICMPV4_CODE, "icmp_code", NULL,
         MF_FIELD_SIZES(u8),
-        MFM_NONE, FWW_TP_DST,
+        MFM_NONE, 0,
         MFS_DECIMAL,
         MFP_ICMPV4,
         false,
@@ -344,7 +344,7 @@ static const struct mf_field mf_fields[MFF_N_IDS] = {
     {
         MFF_ICMPV6_TYPE, "icmpv6_type", NULL,
         MF_FIELD_SIZES(u8),
-        MFM_NONE, FWW_TP_SRC,
+        MFM_NONE, 0,
         MFS_DECIMAL,
         MFP_ICMPV6,
         false,
@@ -352,7 +352,7 @@ static const struct mf_field mf_fields[MFF_N_IDS] = {
     }, {
         MFF_ICMPV6_CODE, "icmpv6_code", NULL,
         MF_FIELD_SIZES(u8),
-        MFM_NONE, FWW_TP_DST,
+        MFM_NONE, 0,
         MFS_DECIMAL,
         MFP_ICMPV6,
         false,
@@ -509,14 +509,6 @@ mf_is_all_wild(const struct mf_field *mf, const struct flow_wildcards *wc)
     case MFF_ARP_OP:
     case MFF_ARP_SHA:
     case MFF_ARP_THA:
-    case MFF_TCP_SRC:
-    case MFF_TCP_DST:
-    case MFF_UDP_SRC:
-    case MFF_UDP_DST:
-    case MFF_ICMPV4_TYPE:
-    case MFF_ICMPV4_CODE:
-    case MFF_ICMPV6_TYPE:
-    case MFF_ICMPV6_CODE:
     case MFF_ND_TARGET:
     case MFF_ND_SLL:
     case MFF_ND_TLL:
@@ -575,6 +567,17 @@ mf_is_all_wild(const struct mf_field *mf, const struct flow_wildcards *wc)
     case MFF_ARP_TPA:
         return !wc->nw_dst_mask;
 
+    case MFF_TCP_SRC:
+    case MFF_UDP_SRC:
+    case MFF_ICMPV4_TYPE:
+    case MFF_ICMPV6_TYPE:
+        return !wc->tp_src_mask;
+    case MFF_TCP_DST:
+    case MFF_UDP_DST:
+    case MFF_ICMPV4_CODE:
+    case MFF_ICMPV6_CODE:
+        return !wc->tp_dst_mask;
+
     case MFF_N_IDS:
     default:
         NOT_REACHED();
@@ -603,14 +606,6 @@ mf_get_mask(const struct mf_field *mf, const struct flow_wildcards *wc,
     case MFF_ARP_OP:
     case MFF_ARP_SHA:
     case MFF_ARP_THA:
-    case MFF_TCP_SRC:
-    case MFF_TCP_DST:
-    case MFF_UDP_SRC:
-    case MFF_UDP_DST:
-    case MFF_ICMPV4_TYPE:
-    case MFF_ICMPV4_CODE:
-    case MFF_ICMPV6_TYPE:
-    case MFF_ICMPV6_CODE:
     case MFF_ND_TARGET:
     case MFF_ND_SLL:
     case MFF_ND_TLL:
@@ -681,6 +676,24 @@ mf_get_mask(const struct mf_field *mf, const struct flow_wildcards *wc,
         break;
     case MFF_ARP_TPA:
         mask->be32 = wc->nw_dst_mask;
+        break;
+
+    case MFF_TCP_SRC:
+    case MFF_UDP_SRC:
+        mask->be16 = wc->tp_src_mask;
+        break;
+    case MFF_TCP_DST:
+    case MFF_UDP_DST:
+        mask->be16 = wc->tp_dst_mask;
+        break;
+
+    case MFF_ICMPV4_TYPE:
+    case MFF_ICMPV6_TYPE:
+        mask->u8 = ntohs(wc->tp_src_mask);
+        break;
+    case MFF_ICMPV4_CODE:
+    case MFF_ICMPV6_CODE:
+        mask->u8 = ntohs(wc->tp_dst_mask);
         break;
 
     case MFF_N_IDS:
@@ -1485,7 +1498,7 @@ mf_set_wild(const struct mf_field *mf, struct cls_rule *rule)
     case MFF_UDP_SRC:
     case MFF_ICMPV4_TYPE:
     case MFF_ICMPV6_TYPE:
-        rule->wc.wildcards |= FWW_TP_SRC;
+        rule->wc.tp_src_mask = htons(0);
         rule->flow.tp_src = htons(0);
         break;
 
@@ -1493,7 +1506,7 @@ mf_set_wild(const struct mf_field *mf, struct cls_rule *rule)
     case MFF_UDP_DST:
     case MFF_ICMPV4_CODE:
     case MFF_ICMPV6_CODE:
-        rule->wc.wildcards |= FWW_TP_DST;
+        rule->wc.tp_dst_mask = htons(0);
         rule->flow.tp_dst = htons(0);
         break;
 
@@ -1546,10 +1559,6 @@ mf_set(const struct mf_field *mf,
     case MFF_ARP_OP:
     case MFF_ARP_SHA:
     case MFF_ARP_THA:
-    case MFF_TCP_SRC:
-    case MFF_TCP_DST:
-    case MFF_UDP_SRC:
-    case MFF_UDP_DST:
     case MFF_ICMPV4_TYPE:
     case MFF_ICMPV4_CODE:
     case MFF_ICMPV6_TYPE:
@@ -1621,6 +1630,16 @@ mf_set(const struct mf_field *mf,
 
     case MFF_ARP_TPA:
         cls_rule_set_nw_dst_masked(rule, value->be32, mask->be32);
+        break;
+
+    case MFF_TCP_SRC:
+    case MFF_UDP_SRC:
+        cls_rule_set_tp_src_masked(rule, value->be16, mask->be16);
+        break;
+
+    case MFF_TCP_DST:
+    case MFF_UDP_DST:
+        cls_rule_set_tp_dst_masked(rule, value->be16, mask->be16);
         break;
 
     case MFF_N_IDS:

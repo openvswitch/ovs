@@ -78,9 +78,7 @@ ofputil_netmask_to_wcbits(ovs_be32 netmask)
     WC_INVARIANT_BIT(DL_SRC) \
     WC_INVARIANT_BIT(DL_DST) \
     WC_INVARIANT_BIT(DL_TYPE) \
-    WC_INVARIANT_BIT(NW_PROTO) \
-    WC_INVARIANT_BIT(TP_SRC) \
-    WC_INVARIANT_BIT(TP_DST)
+    WC_INVARIANT_BIT(NW_PROTO)
 
 /* Verify that all of the invariant bits (as defined on WC_INVARIANT_LIST)
  * actually have the same names and values. */
@@ -102,7 +100,7 @@ static const flow_wildcards_t WC_INVARIANTS = 0
 void
 ofputil_wildcard_from_openflow(uint32_t ofpfw, struct flow_wildcards *wc)
 {
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 7);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 8);
 
     /* Initialize most of rule->wc. */
     flow_wildcards_init_catchall(wc);
@@ -120,6 +118,13 @@ ofputil_wildcard_from_openflow(uint32_t ofpfw, struct flow_wildcards *wc)
 
     wc->nw_src_mask = ofputil_wcbits_to_netmask(ofpfw >> OFPFW_NW_SRC_SHIFT);
     wc->nw_dst_mask = ofputil_wcbits_to_netmask(ofpfw >> OFPFW_NW_DST_SHIFT);
+
+    if (!(ofpfw & OFPFW_TP_SRC)) {
+        wc->tp_src_mask = htons(UINT16_MAX);
+    }
+    if (!(ofpfw & OFPFW_TP_DST)) {
+        wc->tp_dst_mask = htons(UINT16_MAX);
+    }
 
     if (ofpfw & OFPFW_DL_DST) {
         /* OpenFlow 1.0 OFPFW_DL_DST covers the whole Ethernet destination, but
@@ -199,6 +204,12 @@ ofputil_cls_rule_to_match(const struct cls_rule *rule, struct ofp_match *match)
     ofpfw |= ofputil_netmask_to_wcbits(wc->nw_dst_mask) << OFPFW_NW_DST_SHIFT;
     if (wc->wildcards & FWW_NW_DSCP) {
         ofpfw |= OFPFW_NW_TOS;
+    }
+    if (!wc->tp_src_mask) {
+        ofpfw |= OFPFW_TP_SRC;
+    }
+    if (!wc->tp_dst_mask) {
+        ofpfw |= OFPFW_TP_DST;
     }
 
     /* Translate VLANs. */
@@ -905,7 +916,7 @@ ofputil_min_flow_format(const struct cls_rule *rule)
 {
     const struct flow_wildcards *wc = &rule->wc;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 7);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 8);
 
     /* Only NXM supports separately wildcards the Ethernet multicast bit. */
     if (!(wc->wildcards & FWW_DL_DST) != !(wc->wildcards & FWW_ETH_MCAST)) {
@@ -950,6 +961,12 @@ ofputil_min_flow_format(const struct cls_rule *rule)
 
     /* Only NXM supports matching IP TTL/hop limit. */
     if (!(wc->wildcards & FWW_NW_TTL)) {
+        return NXFF_NXM;
+    }
+
+    /* Only NXM supports bitwise matching on transport port. */
+    if ((wc->tp_src_mask && wc->tp_src_mask != htons(UINT16_MAX)) ||
+        (wc->tp_dst_mask && wc->tp_dst_mask != htons(UINT16_MAX))) {
         return NXFF_NXM;
     }
 
@@ -2735,7 +2752,7 @@ ofputil_normalize_rule(struct cls_rule *rule, enum nx_flow_format flow_format)
         wc.nw_src_mask = wc.nw_dst_mask = htonl(0);
     }
     if (!(may_match & MAY_TP_ADDR)) {
-        wc.wildcards |= FWW_TP_SRC | FWW_TP_DST;
+        wc.tp_src_mask = wc.tp_dst_mask = htons(0);
     }
     if (!(may_match & MAY_NW_PROTO)) {
         wc.wildcards |= FWW_NW_PROTO;

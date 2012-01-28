@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011 Nicira Networks.
+ * Copyright (c) 2009, 2010, 2011, 2012 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -50,8 +50,8 @@
     CLS_FIELD(FWW_IN_PORT,                in_port,     IN_PORT)     \
     CLS_FIELD(0,                          vlan_tci,    VLAN_TCI)    \
     CLS_FIELD(FWW_DL_TYPE,                dl_type,     DL_TYPE)     \
-    CLS_FIELD(FWW_TP_SRC,                 tp_src,      TP_SRC)      \
-    CLS_FIELD(FWW_TP_DST,                 tp_dst,      TP_DST)      \
+    CLS_FIELD(0,                          tp_src,      TP_SRC)      \
+    CLS_FIELD(0,                          tp_dst,      TP_DST)      \
     CLS_FIELD(FWW_DL_SRC,                 dl_src,      DL_SRC)      \
     CLS_FIELD(FWW_DL_DST | FWW_ETH_MCAST, dl_dst,      DL_DST)      \
     CLS_FIELD(FWW_NW_PROTO,               nw_proto,    NW_PROTO)    \
@@ -198,6 +198,10 @@ match(const struct cls_rule *wild, const struct flow *fixed)
             eq = !((fixed->nw_src ^ wild->flow.nw_src) & wild->wc.nw_src_mask);
         } else if (f_idx == CLS_F_IDX_NW_DST) {
             eq = !((fixed->nw_dst ^ wild->flow.nw_dst) & wild->wc.nw_dst_mask);
+        } else if (f_idx == CLS_F_IDX_TP_SRC) {
+            eq = !((fixed->tp_src ^ wild->flow.tp_src) & wild->wc.tp_src_mask);
+        } else if (f_idx == CLS_F_IDX_TP_DST) {
+            eq = !((fixed->tp_dst ^ wild->flow.tp_dst) & wild->wc.tp_dst_mask);
         } else if (f_idx == CLS_F_IDX_VLAN_TCI) {
             eq = !((fixed->vlan_tci ^ wild->flow.vlan_tci)
                    & wild->wc.vlan_tci_mask);
@@ -463,6 +467,10 @@ make_rule(int wc_fields, unsigned int priority, int value_pat)
             rule->cls_rule.wc.nw_src_mask = htonl(UINT32_MAX);
         } else if (f_idx == CLS_F_IDX_NW_DST) {
             rule->cls_rule.wc.nw_dst_mask = htonl(UINT32_MAX);
+        } else if (f_idx == CLS_F_IDX_TP_SRC) {
+            rule->cls_rule.wc.tp_src_mask = htons(UINT16_MAX);
+        } else if (f_idx == CLS_F_IDX_TP_DST) {
+            rule->cls_rule.wc.tp_dst_mask = htons(UINT16_MAX);
         } else if (f_idx == CLS_F_IDX_VLAN_TCI) {
             rule->cls_rule.wc.vlan_tci_mask = htons(UINT16_MAX);
         } else if (f_idx == CLS_F_IDX_TUN_ID) {

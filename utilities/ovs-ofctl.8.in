@@ -443,12 +443,74 @@ above).
 .IQ \fBtp_dst=\fIport\fR
 When \fBdl_type\fR and \fBnw_proto\fR specify TCP or UDP, \fBtp_src\fR
 and \fBtp_dst\fR match the UDP or TCP source or destination port
-\fIport\fR, respectively. which is specified as a decimal number
+\fIport\fR, respectively, which is specified as a decimal number
 between 0 and 65535, inclusive (e.g. 80 to match packets originating
 from a HTTP server).
 .IP
 When \fBdl_type\fR and \fBnw_proto\fR take other values, the values of
 these settings are ignored (see \fBFlow Syntax\fR above).
+.
+.IP \fBtp_src=\fIport\fB/\fImask\fR
+.IQ \fBtp_dst=\fIport\fB/\fImask\fR
+Bitwise match on TCP (or UDP) source or destination port,
+respectively.  The \fIport\fR and \fImask\fR are 16-bit numbers
+written in decimal or in hexadecimal prefixed by \fB0x\fR.  Each 1-bit
+in \fImask\fR requires that the corresponding bit in \fIport\fR must
+match.  Each 0-bit in \fImask\fR causes the corresponding bit to be
+ignored.
+.IP
+Bitwise matches on transport ports are rarely useful in isolation, but
+a group of them can be used to reduce the number of flows required to
+match on a range of transport ports.  For example, suppose that the
+goal is to match TCP source ports 1000 to 1999, inclusive.  One way is
+to insert 1001 flows, each of which matches on a single source port.
+Another way is to look at the binary representations of 1000 and 1999,
+as follows:
+.br
+.B "01111101000"
+.br
+.B "11111001111"
+.br
+and then to transform those into a series of bitwise matches that
+accomplish the same results:
+.br
+.B "01111101xxx"
+.br
+.B "0111111xxxx"
+.br
+.B "10xxxxxxxxx"
+.br
+.B "110xxxxxxxx"
+.br
+.B "1110xxxxxxx"
+.br
+.B "11110xxxxxx"
+.br
+.B "1111100xxxx"
+.br
+which become the following when written in the syntax required by
+\fBovs\-ofctl\fR:
+.br
+.B "tcp,tp_src=0x03e8/0xfff8"
+.br
+.B "tcp,tp_src=0x03f0/0xfff0"
+.br
+.B "tcp,tp_src=0x0400/0xfe00"
+.br
+.B "tcp,tp_src=0x0600/0xff00"
+.br
+.B "tcp,tp_src=0x0700/0xff80"
+.br
+.B "tcp,tp_src=0x0780/0xffc0"
+.br
+.B "tcp,tp_src=0x07c0/0xfff0"
+.IP
+Only Open vSwitch 1.6 and later supports bitwise matching on transport
+ports.
+.IP
+Like the exact-match forms of \fBtp_src\fR and \fBtp_dst\fR described
+above, the bitwise match forms apply only when When \fBdl_type\fR and
+\fBnw_proto\fR specify TCP or UDP.
 .
 .IP \fBicmp_type=\fItype\fR
 .IQ \fBicmp_code=\fIcode\fR

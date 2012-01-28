@@ -10,7 +10,7 @@ tcp,nw_src=192.168.0.3,tp_dst=80 actions=set_queue:37,output:1
 udp,nw_src=192.168.0.3,tp_dst=53 actions=pop_queue,output:1
 cookie=0x123456789abcdef hard_timeout=10 priority=60000 actions=controller
 actions=note:41.42.43,note:00.01.02.03.04.05.06.07,note
-tun_id=0x1234,cookie=0x5678,actions=flood
+tcp,tp_src=0x1230/0xfff0,tun_id=0x1234,cookie=0x5678,actions=flood
 actions=set_tunnel:0x1234,set_tunnel64:0x9876,set_tunnel:0x123456789
 actions=multipath(eth_src, 50, hrw, 12, 0, NXM_NX_REG0[0..3]),multipath(symmetric_l4, 1024, iter_hash, 5000, 5050, NXM_NX_REG0[0..12])
 table=1,actions=drop
@@ -40,7 +40,7 @@ OFPT_FLOW_MOD: ADD udp,nw_src=192.168.0.3,tp_dst=53 actions=pop_queue,output:1
 OFPT_FLOW_MOD: ADD priority=60000 cookie:0x123456789abcdef hard:10 actions=CONTROLLER:65535
 OFPT_FLOW_MOD: ADD actions=note:41.42.43.00.00.00,note:00.01.02.03.04.05.06.07.00.00.00.00.00.00,note:00.00.00.00.00.00
 NXT_SET_FLOW_FORMAT: format=nxm
-NXT_FLOW_MOD: ADD tun_id=0x1234 cookie:0x5678 actions=FLOOD
+NXT_FLOW_MOD: ADD tcp,tun_id=0x1234,tp_src=0x1230/0xfff0 cookie:0x5678 actions=FLOOD
 NXT_FLOW_MOD: ADD actions=set_tunnel:0x1234,set_tunnel64:0x9876,set_tunnel64:0x123456789
 NXT_FLOW_MOD: ADD actions=multipath(eth_src,50,hrw,12,0,NXM_NX_REG0[0..3]),multipath(symmetric_l4,1024,iter_hash,5000,5050,NXM_NX_REG0[0..12])
 NXT_FLOW_MOD_TABLE_ID: enable
@@ -243,18 +243,22 @@ NXM_OF_ETH_TYPE(0806) NXM_OF_IP_DST_W(C0D80000/FFFF0000)
 
 # TCP source port
 NXM_OF_ETH_TYPE(0800) NXM_OF_IP_PROTO(06) NXM_OF_TCP_SRC(4231)
+NXM_OF_ETH_TYPE(0800) NXM_OF_IP_PROTO(06) NXM_OF_TCP_SRC_W(5050/F0F0)
 NXM_OF_ETH_TYPE(0800) NXM_OF_IP_PROTO(07) NXM_OF_TCP_SRC(4231)
 
 # TCP destination port
 NXM_OF_ETH_TYPE(0800) NXM_OF_IP_PROTO(06) NXM_OF_TCP_DST(4231)
+NXM_OF_ETH_TYPE(0800) NXM_OF_IP_PROTO(06) NXM_OF_TCP_DST_W(FDE0/FFF0)
 NXM_OF_ETH_TYPE(0800) NXM_OF_IP_PROTO(07) NXM_OF_TCP_DST(4231)
 
 # UDP source port
 NXM_OF_ETH_TYPE(0800) NXM_OF_IP_PROTO(11) NXM_OF_UDP_SRC(8732)
+NXM_OF_ETH_TYPE(0800) NXM_OF_IP_PROTO(11) NXM_OF_UDP_SRC_W(0132/01FF)
 NXM_OF_ETH_TYPE(0800) NXM_OF_IP_PROTO(06) NXM_OF_UDP_SRC(7823)
 
 # UDP destination port
 NXM_OF_ETH_TYPE(0800) NXM_OF_IP_PROTO(11) NXM_OF_UDP_DST(1782)
+NXM_OF_ETH_TYPE(0800) NXM_OF_IP_PROTO(11) NXM_OF_UDP_DST_W(5005/F00F)
 NXM_OF_ETH_TYPE(0800) NXM_OF_IP_PROTO(02) NXM_OF_UDP_DST(1293)
 
 # ICMP type
@@ -436,18 +440,22 @@ nx_pull_match() returned error NXBRC_NXM_BAD_PREREQ
 
 # TCP source port
 NXM_OF_ETH_TYPE(0800), NXM_OF_IP_PROTO(06), NXM_OF_TCP_SRC(4231)
+NXM_OF_ETH_TYPE(0800), NXM_OF_IP_PROTO(06), NXM_OF_TCP_SRC_W(5050/f0f0)
 nx_pull_match() returned error NXBRC_NXM_BAD_PREREQ
 
 # TCP destination port
 NXM_OF_ETH_TYPE(0800), NXM_OF_IP_PROTO(06), NXM_OF_TCP_DST(4231)
+NXM_OF_ETH_TYPE(0800), NXM_OF_IP_PROTO(06), NXM_OF_TCP_DST_W(fde0/fff0)
 nx_pull_match() returned error NXBRC_NXM_BAD_PREREQ
 
 # UDP source port
 NXM_OF_ETH_TYPE(0800), NXM_OF_IP_PROTO(11), NXM_OF_UDP_SRC(8732)
+NXM_OF_ETH_TYPE(0800), NXM_OF_IP_PROTO(11), NXM_OF_UDP_SRC_W(0132/01ff)
 nx_pull_match() returned error NXBRC_NXM_BAD_PREREQ
 
 # UDP destination port
 NXM_OF_ETH_TYPE(0800), NXM_OF_IP_PROTO(11), NXM_OF_UDP_DST(1782)
+NXM_OF_ETH_TYPE(0800), NXM_OF_IP_PROTO(11), NXM_OF_UDP_DST_W(5005/f00f)
 nx_pull_match() returned error NXBRC_NXM_BAD_PREREQ
 
 # ICMP type

@@ -1398,9 +1398,12 @@ OFP_ASSERT(sizeof(struct nx_action_output_reg) == 24);
  *
  * Format: 16-bit integer in network byte order.
  *
- * Masking: Not maskable. */
+ * Masking: Fully maskable, in Open vSwitch 1.6 and later.  Not maskable, in
+ *   earlier versions. */
 #define NXM_OF_TCP_SRC    NXM_HEADER  (0x0000,  9, 2)
+#define NXM_OF_TCP_SRC_W  NXM_HEADER_W(0x0000,  9, 2)
 #define NXM_OF_TCP_DST    NXM_HEADER  (0x0000, 10, 2)
+#define NXM_OF_TCP_DST_W  NXM_HEADER_W(0x0000, 10, 2)
 
 /* The source or destination port in the UDP header.
  *
@@ -1410,9 +1413,12 @@ OFP_ASSERT(sizeof(struct nx_action_output_reg) == 24);
  *
  * Format: 16-bit integer in network byte order.
  *
- * Masking: Not maskable. */
+ * Masking: Fully maskable, in Open vSwitch 1.6 and later.  Not maskable, in
+ *   earlier versions. */
 #define NXM_OF_UDP_SRC    NXM_HEADER  (0x0000, 11, 2)
+#define NXM_OF_UDP_SRC_W  NXM_HEADER_W(0x0000, 11, 2)
 #define NXM_OF_UDP_DST    NXM_HEADER  (0x0000, 12, 2)
+#define NXM_OF_UDP_DST_W  NXM_HEADER_W(0x0000, 12, 2)
 
 /* The type or code in the ICMP header.
  *

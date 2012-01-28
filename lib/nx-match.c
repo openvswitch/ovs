@@ -433,24 +433,16 @@ nxm_put_ip(struct ofpbuf *b, const struct cls_rule *cr,
         nxm_put_8(b, NXM_OF_IP_PROTO, flow->nw_proto);
 
         if (flow->nw_proto == IPPROTO_TCP) {
-            if (!(wc & FWW_TP_SRC)) {
-                nxm_put_16(b, NXM_OF_TCP_SRC, flow->tp_src);
-            }
-            if (!(wc & FWW_TP_DST)) {
-                nxm_put_16(b, NXM_OF_TCP_DST, flow->tp_dst);
-            }
+            nxm_put_16m(b, NXM_OF_TCP_SRC, flow->tp_src, cr->wc.tp_src_mask);
+            nxm_put_16m(b, NXM_OF_TCP_DST, flow->tp_dst, cr->wc.tp_dst_mask);
         } else if (flow->nw_proto == IPPROTO_UDP) {
-            if (!(wc & FWW_TP_SRC)) {
-                nxm_put_16(b, NXM_OF_UDP_SRC, flow->tp_src);
-            }
-            if (!(wc & FWW_TP_DST)) {
-                nxm_put_16(b, NXM_OF_UDP_DST, flow->tp_dst);
-            }
+            nxm_put_16m(b, NXM_OF_UDP_SRC, flow->tp_src, cr->wc.tp_src_mask);
+            nxm_put_16m(b, NXM_OF_UDP_DST, flow->tp_dst, cr->wc.tp_dst_mask);
         } else if (flow->nw_proto == icmp_proto) {
-            if (!(wc & FWW_TP_SRC)) {
+            if (cr->wc.tp_src_mask) {
                 nxm_put_8(b, icmp_type, ntohs(flow->tp_src));
             }
-            if (!(wc & FWW_TP_DST)) {
+            if (cr->wc.tp_dst_mask) {
                 nxm_put_8(b, icmp_code, ntohs(flow->tp_dst));
             }
         }
@@ -479,7 +471,7 @@ nx_put_match(struct ofpbuf *b, const struct cls_rule *cr,
     int match_len;
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 7);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 8);
 
     /* Metadata. */
     if (!(wc & FWW_IN_PORT)) {

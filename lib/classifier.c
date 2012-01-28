@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011 Nicira Networks.
+ * Copyright (c) 2009, 2010, 2011, 2012 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -252,15 +252,27 @@ cls_rule_set_dl_vlan_pcp(struct cls_rule *rule, uint8_t dl_vlan_pcp)
 void
 cls_rule_set_tp_src(struct cls_rule *rule, ovs_be16 tp_src)
 {
-    rule->wc.wildcards &= ~FWW_TP_SRC;
-    rule->flow.tp_src = tp_src;
+    cls_rule_set_tp_src_masked(rule, tp_src, htons(UINT16_MAX));
+}
+
+void
+cls_rule_set_tp_src_masked(struct cls_rule *rule, ovs_be16 port, ovs_be16 mask)
+{
+    rule->flow.tp_src = port & mask;
+    rule->wc.tp_src_mask = mask;
 }
 
 void
 cls_rule_set_tp_dst(struct cls_rule *rule, ovs_be16 tp_dst)
 {
-    rule->wc.wildcards &= ~FWW_TP_DST;
-    rule->flow.tp_dst = tp_dst;
+    cls_rule_set_tp_dst_masked(rule, tp_dst, htons(UINT16_MAX));
+}
+
+void
+cls_rule_set_tp_dst_masked(struct cls_rule *rule, ovs_be16 port, ovs_be16 mask)
+{
+    rule->flow.tp_dst = port & mask;
+    rule->wc.tp_dst_mask = mask;
 }
 
 void
@@ -340,15 +352,13 @@ cls_rule_set_nw_frag_masked(struct cls_rule *rule,
 void
 cls_rule_set_icmp_type(struct cls_rule *rule, uint8_t icmp_type)
 {
-    rule->wc.wildcards &= ~FWW_TP_SRC;
-    rule->flow.tp_src = htons(icmp_type);
+    cls_rule_set_tp_src(rule, htons(icmp_type));
 }
 
 void
 cls_rule_set_icmp_code(struct cls_rule *rule, uint8_t icmp_code)
 {
-    rule->wc.wildcards &= ~FWW_TP_DST;
-    rule->flow.tp_dst = htons(icmp_code);
+    cls_rule_set_tp_dst(rule, htons(icmp_code));
 }
 
 void
@@ -452,6 +462,23 @@ format_ipv6_netmask(struct ds *s, const char *name,
     }
 }
 
+
+static void
+format_be16_masked(struct ds *s, const char *name,
+                   ovs_be16 value, ovs_be16 mask)
+{
+    if (mask != htons(0)) {
+        ds_put_format(s, "%s=", name);
+        if (mask == htons(UINT16_MAX)) {
+            ds_put_format(s, "%"PRIu16, ntohs(value));
+        } else {
+            ds_put_format(s, "0x%"PRIx16"/0x%"PRIx16,
+                          ntohs(value), ntohs(mask));
+        }
+        ds_put_char(s, ',');
+    }
+}
+
 void
 cls_rule_format(const struct cls_rule *rule, struct ds *s)
 {
@@ -464,7 +491,7 @@ cls_rule_format(const struct cls_rule *rule, struct ds *s)
 
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 7);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 8);
 
     if (rule->priority != OFP_DEFAULT_PRIORITY) {
         ds_put_format(s, "priority=%d,", rule->priority);
@@ -637,19 +664,11 @@ cls_rule_format(const struct cls_rule *rule, struct ds *s)
         break;
     }
     if (f->nw_proto == IPPROTO_ICMP) {
-        if (!(w & FWW_TP_SRC)) {
-            ds_put_format(s, "icmp_type=%"PRIu16",", ntohs(f->tp_src));
-        }
-        if (!(w & FWW_TP_DST)) {
-            ds_put_format(s, "icmp_code=%"PRIu16",", ntohs(f->tp_dst));
-        }
+        format_be16_masked(s, "icmp_type", f->tp_src, wc->tp_src_mask);
+        format_be16_masked(s, "icmp_code", f->tp_dst, wc->tp_dst_mask);
     } else if (f->nw_proto == IPPROTO_ICMPV6) {
-        if (!(w & FWW_TP_SRC)) {
-            ds_put_format(s, "icmp_type=%"PRIu16",", ntohs(f->tp_src));
-        }
-        if (!(w & FWW_TP_DST)) {
-            ds_put_format(s, "icmp_code=%"PRIu16",", ntohs(f->tp_dst));
-        }
+        format_be16_masked(s, "icmp_type", f->tp_src, wc->tp_src_mask);
+        format_be16_masked(s, "icmp_code", f->tp_dst, wc->tp_dst_mask);
         if (!(w & FWW_ND_TARGET)) {
             ds_put_cstr(s, "nd_target=");
             print_ipv6_addr(s, &f->nd_target);
@@ -664,12 +683,8 @@ cls_rule_format(const struct cls_rule *rule, struct ds *s)
                     ETH_ADDR_ARGS(f->arp_tha));
         }
    } else {
-        if (!(w & FWW_TP_SRC)) {
-            ds_put_format(s, "tp_src=%"PRIu16",", ntohs(f->tp_src));
-        }
-        if (!(w & FWW_TP_DST)) {
-            ds_put_format(s, "tp_dst=%"PRIu16",", ntohs(f->tp_dst));
-        }
+        format_be16_masked(s, "tp_src", f->tp_src, wc->tp_src_mask);
+        format_be16_masked(s, "tp_dst", f->tp_dst, wc->tp_dst_mask);
     }
 
     if (s->length > start_len && ds_last(s) == ',') {
@@ -1149,7 +1164,7 @@ flow_equal_except(const struct flow *a, const struct flow *b,
     const flow_wildcards_t wc = wildcards->wildcards;
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 7);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 8);
 
     for (i = 0; i < FLOW_N_REGS; i++) {
         if ((a->regs[i] ^ b->regs[i]) & wildcards->reg_masks[i]) {
@@ -1163,8 +1178,8 @@ flow_equal_except(const struct flow *a, const struct flow *b,
             && (wc & FWW_IN_PORT || a->in_port == b->in_port)
             && !((a->vlan_tci ^ b->vlan_tci) & wildcards->vlan_tci_mask)
             && (wc & FWW_DL_TYPE || a->dl_type == b->dl_type)
-            && (wc & FWW_TP_SRC || a->tp_src == b->tp_src)
-            && (wc & FWW_TP_DST || a->tp_dst == b->tp_dst)
+            && !((a->tp_src ^ b->tp_src) & wildcards->tp_src_mask)
+            && !((a->tp_dst ^ b->tp_dst) & wildcards->tp_dst_mask)
             && (wc & FWW_DL_SRC || eth_addr_equals(a->dl_src, b->dl_src))
             && (wc & FWW_DL_DST
                 || (!((a->dl_dst[0] ^ b->dl_dst[0]) & 0xfe)

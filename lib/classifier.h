@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011 Nicira Networks.
+ * Copyright (c) 2009, 2010, 2011, 2012 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -110,7 +110,11 @@ void cls_rule_set_dl_vlan(struct cls_rule *, ovs_be16);
 void cls_rule_set_any_pcp(struct cls_rule *);
 void cls_rule_set_dl_vlan_pcp(struct cls_rule *, uint8_t);
 void cls_rule_set_tp_src(struct cls_rule *, ovs_be16);
+void cls_rule_set_tp_src_masked(struct cls_rule *,
+                                ovs_be16 port, ovs_be16 mask);
 void cls_rule_set_tp_dst(struct cls_rule *, ovs_be16);
+void cls_rule_set_tp_dst_masked(struct cls_rule *,
+                                ovs_be16 port, ovs_be16 mask);
 void cls_rule_set_nw_proto(struct cls_rule *, uint8_t);
 void cls_rule_set_nw_src(struct cls_rule *, ovs_be32);
 void cls_rule_set_nw_src_masked(struct cls_rule *, ovs_be32 ip, ovs_be32 mask);
