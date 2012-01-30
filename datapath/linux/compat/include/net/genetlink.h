@@ -101,6 +101,10 @@ static inline int genlmsg_multicast_flags(struct sk_buff *skb, u32 pid,
 }
 #endif /* linux kernel < 2.6.19 */
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,32)
+#define genlmsg_multicast_netns(net, skb, pid, grp, flags) \
+		genlmsg_multicast(skb, pid, grp, flags)
+#endif
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,20)
 

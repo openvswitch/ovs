@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2007-2011 Nicira Networks.
+ * Copyright (c) 2007-2012 Nicira Networks.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of version 2 of the GNU General Public
@@ -28,11 +28,11 @@
 
 #include "checksum.h"
 #include "compat.h"
-#include "flow.h"
 #include "dp_sysfs.h"
+#include "flow.h"
+#include "tunnel.h"
 #include "vlan.h"
-
-struct vport;
+#include "vport.h"
 
 #define DP_MAX_PORTS 1024
 #define SAMPLE_ACTION_DEPTH 3
@@ -68,6 +68,7 @@ struct dp_stats_percpu {
  * @port_list: List of all ports in @ports in arbitrary order.  RTNL required
  * to iterate or modify.
  * @stats_percpu: Per-CPU datapath statistics.
+ * @net: Reference to net namespace.
  *
  * Context: See the comment on locking at the top of datapath.c for additional
  * locking information.
@@ -86,6 +87,11 @@ struct datapath {
 
 	/* Stats. */
 	struct dp_stats_percpu __percpu *stats_percpu;
+
+#ifdef CONFIG_NET_NS
+	/* Network namespace ref. */
+	struct net *net;
+#endif
 };
 
 /**
@@ -129,6 +135,29 @@ struct dp_upcall_info {
 	const struct nlattr *userdata;
 	u32 pid;
 };
+
+/**
+ * struct ovs_net - Per net-namespace data for ovs.
+ * @dps: List of datapaths to enable dumping them all out.
+ * Protected by genl_mutex.
+ * @vport_net: Per network namespace data for vport.
+ */
+struct ovs_net {
+	struct list_head dps;
+	struct vport_net vport_net;
+};
+
+extern int ovs_net_id;
+
+static inline struct net *ovs_dp_get_net(struct datapath *dp)
+{
+	return read_pnet(&dp->net);
+}
+
+static inline void ovs_dp_set_net(struct datapath *dp, struct net *net)
+{
+	write_pnet(&dp->net, net);
+}
 
 extern struct notifier_block ovs_dp_device_notifier;
 extern struct genl_multicast_group ovs_dp_vport_multicast_group;

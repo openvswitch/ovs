@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2007-2011 Nicira Networks.
+ * Copyright (c) 2007-2012 Nicira Networks.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of version 2 of the GNU General Public
@@ -203,7 +203,7 @@ static void do_setup(struct net_device *netdev)
 	netdev->tx_queue_len = 0;
 
 	netdev->features = NETIF_F_LLTX | NETIF_F_SG | NETIF_F_FRAGLIST |
-				NETIF_F_HIGHDMA | NETIF_F_HW_CSUM | NETIF_F_TSO;
+			   NETIF_F_HIGHDMA | NETIF_F_HW_CSUM | NETIF_F_TSO;
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,27)
 	netdev->vlan_features = netdev->features;
@@ -239,8 +239,13 @@ static struct vport *internal_dev_create(const struct vport_parms *parms)
 		goto error_free_vport;
 	}
 
+	dev_net_set(netdev_vport->dev, ovs_dp_get_net(vport->dp));
 	internal_dev = internal_dev_priv(netdev_vport->dev);
 	internal_dev->vport = vport;
+
+	/* Restrict bridge port to current netns. */
+	if (vport->port_no == OVSP_LOCAL)
+		netdev_vport->dev->features |= NETIF_F_NETNS_LOCAL;
 
 	err = register_netdevice(netdev_vport->dev);
 	if (err)

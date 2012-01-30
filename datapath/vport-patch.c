@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2007-2011 Nicira Networks.
+ * Copyright (c) 2007-2012 Nicira Networks.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of version 2 of the GNU General Public
@@ -16,10 +16,11 @@
  * 02110-1301, USA
  */
 
-#include <linux/dcache.h>
 #include <linux/kernel.h>
+#include <linux/jhash.h>
 #include <linux/list.h>
 #include <linux/rtnetlink.h>
+#include <net/net_namespace.h>
 
 #include "compat.h"
 #include "datapath.h"
@@ -49,7 +50,7 @@ struct patch_vport {
 static struct hlist_head *peer_table;
 #define PEER_HASH_BUCKETS 256
 
-static void update_peers(const char *name, struct vport *);
+static void update_peers(struct net *, const char *name, struct vport *);
 
 static struct patch_vport *patch_vport_priv(const struct vport *vport)
 {
@@ -74,9 +75,9 @@ static void assign_config_rcu(struct vport *vport,
 	call_rcu(&old_config->rcu, free_config);
 }
 
-static struct hlist_head *hash_bucket(const char *name)
+static struct hlist_head *hash_bucket(struct net *net, const char *name)
 {
-	unsigned int hash = full_name_hash(name, strlen(name));
+	unsigned int hash = jhash(name, strlen(name), (unsigned long) net);
 	return &peer_table[hash & (PEER_HASH_BUCKETS - 1)];
 }
 
@@ -135,6 +136,7 @@ static struct vport *patch_create(const struct vport_parms *parms)
 	struct patch_vport *patch_vport;
 	const char *peer_name;
 	struct patch_config *patchconf;
+	struct net *net = ovs_dp_get_net(parms->dp);
 	int err;
 
 	vport = ovs_vport_alloc(sizeof(struct patch_vport),
@@ -163,9 +165,9 @@ static struct vport *patch_create(const struct vport_parms *parms)
 	rcu_assign_pointer(patch_vport->patchconf, patchconf);
 
 	peer_name = patchconf->peer_name;
-	hlist_add_head(&patch_vport->hash_node, hash_bucket(peer_name));
-	rcu_assign_pointer(patch_vport->peer, ovs_vport_locate(peer_name));
-	update_peers(patch_vport->name, vport);
+	hlist_add_head(&patch_vport->hash_node, hash_bucket(net, peer_name));
+	rcu_assign_pointer(patch_vport->peer, ovs_vport_locate(net, peer_name));
+	update_peers(net, patch_vport->name, vport);
 
 	return vport;
 
@@ -190,7 +192,7 @@ static void patch_destroy(struct vport *vport)
 {
 	struct patch_vport *patch_vport = patch_vport_priv(vport);
 
-	update_peers(patch_vport->name, NULL);
+	update_peers(ovs_dp_get_net(vport->dp), patch_vport->name, NULL);
 	hlist_del(&patch_vport->hash_node);
 	call_rcu(&patch_vport->rcu, free_port_rcu);
 }
@@ -216,28 +218,31 @@ static int patch_set_options(struct vport *vport, struct nlattr *options)
 
 	hlist_del(&patch_vport->hash_node);
 
-	rcu_assign_pointer(patch_vport->peer, ovs_vport_locate(patchconf->peer_name));
-	hlist_add_head(&patch_vport->hash_node, hash_bucket(patchconf->peer_name));
+	rcu_assign_pointer(patch_vport->peer,
+		ovs_vport_locate(ovs_dp_get_net(vport->dp), patchconf->peer_name));
+
+	hlist_add_head(&patch_vport->hash_node,
+		       hash_bucket(ovs_dp_get_net(vport->dp), patchconf->peer_name));
 
 	return 0;
-
 error_free:
 	kfree(patchconf);
 error:
 	return err;
 }
 
-static void update_peers(const char *name, struct vport *vport)
+static void update_peers(struct net *net, const char *name, struct vport *vport)
 {
-	struct hlist_head *bucket = hash_bucket(name);
+	struct hlist_head *bucket = hash_bucket(ovs_dp_get_net(vport->dp), name);
 	struct patch_vport *peer_vport;
 	struct hlist_node *node;
 
 	hlist_for_each_entry(peer_vport, node, bucket, hash_node) {
+		struct vport *curr_vport = vport_from_priv(peer_vport);
 		const char *peer_name;
 
 		peer_name = rtnl_dereference(peer_vport->patchconf)->peer_name;
-		if (!strcmp(peer_name, name))
+		if (!strcmp(peer_name, name) && net_eq(ovs_dp_get_net(curr_vport->dp), net))
 			rcu_assign_pointer(peer_vport->peer, vport);
 	}
 }

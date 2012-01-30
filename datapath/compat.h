@@ -73,4 +73,12 @@ static inline void skb_clear_rxhash(struct sk_buff *skb)
 	typeof(br_should_route_hook) br_should_route_hook;	\
 	EXPORT_SYMBOL(br_should_route_hook)
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,32)
+#define GENL_SOCK(net) (genl_sock)
+#define SET_NETNSOK
+#else
+#define GENL_SOCK(net) ((net)->genl_sock)
+#define SET_NETNSOK    .netnsok = true,
+#endif
+
 #endif /* compat.h */

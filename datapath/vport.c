@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2007-2011 Nicira Networks.
+ * Copyright (c) 2007-2012 Nicira Networks.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of version 2 of the GNU General Public
@@ -16,10 +16,10 @@
  * 02110-1301, USA
  */
 
-#include <linux/dcache.h>
 #include <linux/etherdevice.h>
 #include <linux/if.h>
 #include <linux/if_vlan.h>
+#include <linux/jhash.h>
 #include <linux/kernel.h>
 #include <linux/list.h>
 #include <linux/mutex.h>
@@ -28,7 +28,9 @@
 #include <linux/rtnetlink.h>
 #include <linux/compat.h>
 #include <linux/version.h>
+#include <net/net_namespace.h>
 
+#include "datapath.h"
 #include "vport.h"
 #include "vport-internal_dev.h"
 
@@ -119,9 +121,9 @@ void ovs_vport_exit(void)
 	kfree(dev_table);
 }
 
-static struct hlist_head *hash_bucket(const char *name)
+static struct hlist_head *hash_bucket(struct net *net, const char *name)
 {
-	unsigned int hash = full_name_hash(name, strlen(name));
+	unsigned int hash = jhash(name, strlen(name), (unsigned long) net);
 	return &dev_table[hash & (VPORT_HASH_BUCKETS - 1)];
 }
 
@@ -132,14 +134,15 @@ static struct hlist_head *hash_bucket(const char *name)
  *
  * Must be called with RTNL or RCU read lock.
  */
-struct vport *ovs_vport_locate(const char *name)
+struct vport *ovs_vport_locate(struct net *net, const char *name)
 {
-	struct hlist_head *bucket = hash_bucket(name);
+	struct hlist_head *bucket = hash_bucket(net, name);
 	struct vport *vport;
 	struct hlist_node *node;
 
 	hlist_for_each_entry_rcu(vport, node, bucket, hash_node)
-		if (!strcmp(name, vport->ops->get_name(vport)))
+		if (!strcmp(name, vport->ops->get_name(vport)) &&
+		    net_eq(ovs_dp_get_net(vport->dp), net))
 			return vport;
 
 	return NULL;
@@ -241,14 +244,17 @@ struct vport *ovs_vport_add(const struct vport_parms *parms)
 
 	for (i = 0; i < n_vport_types; i++) {
 		if (vport_ops_list[i]->type == parms->type) {
+			struct hlist_head *bucket;
+
 			vport = vport_ops_list[i]->create(parms);
 			if (IS_ERR(vport)) {
 				err = PTR_ERR(vport);
 				goto out;
 			}
 
-			hlist_add_head_rcu(&vport->hash_node,
-					   hash_bucket(vport->ops->get_name(vport)));
+			bucket = hash_bucket(ovs_dp_get_net(vport->dp),
+					     vport->ops->get_name(vport));
+			hlist_add_head_rcu(&vport->hash_node, bucket);
 			return vport;
 		}
 	}

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2007-2011 Nicira Networks.
+ * Copyright (c) 2007-2012 Nicira Networks.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of version 2 of the GNU General Public
@@ -20,15 +20,20 @@
 #define VPORT_H 1
 
 #include <linux/list.h>
+#include <linux/netlink.h>
 #include <linux/openvswitch.h>
 #include <linux/skbuff.h>
 #include <linux/spinlock.h>
 #include <linux/u64_stats_sync.h>
 
-#include "datapath.h"
+#include "vport-capwap.h"
 
 struct vport;
 struct vport_parms;
+
+struct vport_net {
+	struct capwap_net capwap;
+};
 
 /* The following definitions are for users of the vport subsytem: */
 
@@ -38,7 +43,7 @@ void ovs_vport_exit(void);
 struct vport *ovs_vport_add(const struct vport_parms *);
 void ovs_vport_del(struct vport *);
 
-struct vport *ovs_vport_locate(const char *name);
+struct vport *ovs_vport_locate(struct net *net, const char *name);
 
 int ovs_vport_set_addr(struct vport *, const unsigned char *);
 void ovs_vport_set_stats(struct vport *, struct ovs_vport_stats *);

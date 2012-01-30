@@ -38,6 +38,7 @@ openvswitch_headers = \
 	tunnel.h \
 	vlan.h \
 	vport.h \
+	vport-capwap.h \
 	vport-generic.h \
 	vport-internal_dev.h \
 	vport-netdev.h

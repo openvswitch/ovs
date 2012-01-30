@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2007-2011 Nicira Networks.
+ * Copyright (c) 2007-2012 Nicira Networks.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of version 2 of the GNU General Public
@@ -20,6 +20,8 @@
 #define TUNNEL_H 1
 
 #include <linux/version.h>
+#include <net/net_namespace.h>
+#include <net/netns/generic.h>
 
 #include "flow.h"
 #include "openvswitch/tunnel.h"
@@ -58,12 +60,16 @@
 /**
  * struct port_lookup_key - Tunnel port key, used as hash table key.
  * @in_key: Key to match on input, 0 for wildcard.
+ * @net: Network namespace of the port.
  * @saddr: IPv4 source address to match, 0 to accept any source address.
  * @daddr: IPv4 destination of tunnel.
  * @tunnel_type: Set of TNL_T_* flags that define lookup.
  */
 struct port_lookup_key {
 	__be64 in_key;
+#ifdef CONFIG_NET_NS
+	struct net *net;
+#endif
 	__be32 saddr;
 	__be32 daddr;
 	u32    tunnel_type;
@@ -71,6 +77,16 @@ struct port_lookup_key {
 
 #define PORT_KEY_LEN	(offsetof(struct port_lookup_key, tunnel_type) + \
 			 FIELD_SIZEOF(struct port_lookup_key, tunnel_type))
+
+static inline struct net *port_key_get_net(const struct port_lookup_key *key)
+{
+	return read_pnet(&key->net);
+}
+
+static inline void port_key_set_net(struct port_lookup_key *key, struct net *net)
+{
+	write_pnet(&key->net, net);
+}
 
 /**
  * struct tnl_mutable_config - modifiable configuration for a tunnel.
@@ -255,8 +271,8 @@ const unsigned char *ovs_tnl_get_addr(const struct vport *vport);
 int ovs_tnl_send(struct vport *vport, struct sk_buff *skb);
 void ovs_tnl_rcv(struct vport *vport, struct sk_buff *skb, u8 tos);
 
-struct vport *ovs_tnl_find_port(__be32 saddr, __be32 daddr, __be64 key,
-				int tunnel_type,
+struct vport *ovs_tnl_find_port(struct net *net, __be32 saddr, __be32 daddr,
+				__be64 key, int tunnel_type,
 				const struct tnl_mutable_config **mutable);
 bool ovs_tnl_frag_needed(struct vport *vport,
 			 const struct tnl_mutable_config *mutable,

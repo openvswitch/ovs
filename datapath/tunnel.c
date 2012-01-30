@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2007-2011 Nicira Networks.
+ * Copyright (c) 2007-2012 Nicira Networks.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of version 2 of the GNU General Public
@@ -15,6 +15,8 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
  * 02110-1301, USA
  */
+
+#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
 #include <linux/if_arp.h>
 #include <linux/if_ether.h>
@@ -169,7 +171,7 @@ static void free_mutable_rtnl(struct tnl_mutable_config *mutable)
 	ASSERT_RTNL();
 	if (ipv4_is_multicast(mutable->key.daddr) && mutable->mlink) {
 		struct in_device *in_dev;
-		in_dev = inetdev_by_index(&init_net, mutable->mlink);
+		in_dev = inetdev_by_index(port_key_get_net(&mutable->key), mutable->mlink);
 		if (in_dev)
 			ip_mc_dec_group(in_dev, mutable->key.daddr);
 	}
@@ -299,14 +301,15 @@ static struct vport *port_table_lookup(struct port_lookup_key *key,
 	return NULL;
 }
 
-struct vport *ovs_tnl_find_port(__be32 saddr, __be32 daddr, __be64 key,
-				int tunnel_type,
+struct vport *ovs_tnl_find_port(struct net *net, __be32 saddr, __be32 daddr,
+				__be64 key, int tunnel_type,
 				const struct tnl_mutable_config **mutable)
 {
 	struct port_lookup_key lookup;
 	struct vport *vport;
 	bool is_multicast = ipv4_is_multicast(saddr);
 
+	port_key_set_net(&lookup, net);
 	lookup.saddr = saddr;
 	lookup.daddr = daddr;
 
@@ -811,6 +814,13 @@ static void *get_cached_header(const struct tnl_cache *cache)
 	return (void *)cache + ALIGN(sizeof(struct tnl_cache), CACHE_DATA_ALIGN);
 }
 
+#ifdef HAVE_RT_GENID
+static inline int rt_genid(struct net *net)
+{
+	return atomic_read(&net->ipv4.rt_genid);
+}
+#endif
+
 static bool check_cache_valid(const struct tnl_cache *cache,
 			      const struct tnl_mutable_config *mutable)
 {
@@ -825,7 +835,7 @@ static bool check_cache_valid(const struct tnl_cache *cache,
 		time_before(jiffies, cache->expiration) &&
 #endif
 #ifdef HAVE_RT_GENID
-		atomic_read(&init_net.ipv4.rt_genid) == cache->rt->rt_genid &&
+		rt_genid(dev_net(rt_dst(cache->rt).dev)) == cache->rt->rt_genid &&
 #endif
 #ifdef HAVE_HH_SEQ
 		hh->hh_lock.sequence == cache->hh_seq &&
@@ -858,7 +868,7 @@ static void cache_cleaner(struct work_struct *work)
 	for (i = 0; i < PORT_TABLE_SIZE; i++) {
 		struct hlist_node *n;
 		struct hlist_head *bucket;
-		struct tnl_vport  *tnl_vport;
+		struct tnl_vport *tnl_vport;
 
 		bucket = &port_table[i];
 		hlist_for_each_entry_rcu(tnl_vport, n, bucket, hash_node)
@@ -1000,7 +1010,7 @@ static struct rtable *__find_route(const struct tnl_mutable_config *mutable,
 			    .proto = ipproto };
 	struct rtable *rt;
 
-	if (unlikely(ip_route_output_key(&init_net, &rt, &fl)))
+	if (unlikely(ip_route_output_key(port_key_get_net(&mutable->key), &rt, &fl)))
 		return ERR_PTR(-EADDRNOTAVAIL);
 
 	return rt;
@@ -1010,7 +1020,7 @@ static struct rtable *__find_route(const struct tnl_mutable_config *mutable,
 			     .flowi4_tos = tos,
 			     .flowi4_proto = ipproto };
 
-	return ip_route_output_key(&init_net, &fl);
+	return ip_route_output_key(port_key_get_net(&mutable->key), &fl);
 #endif
 }
 
@@ -1360,7 +1370,8 @@ static const struct nla_policy tnl_policy[OVS_TUNNEL_ATTR_MAX + 1] = {
 
 /* Sets OVS_TUNNEL_ATTR_* fields in 'mutable', which must initially be
  * zeroed. */
-static int tnl_set_config(struct nlattr *options, const struct tnl_ops *tnl_ops,
+static int tnl_set_config(struct net *net, struct nlattr *options,
+			  const struct tnl_ops *tnl_ops,
 			  const struct vport *cur_vport,
 			  struct tnl_mutable_config *mutable)
 {
@@ -1381,6 +1392,7 @@ static int tnl_set_config(struct nlattr *options, const struct tnl_ops *tnl_ops,
 
 	mutable->flags = nla_get_u32(a[OVS_TUNNEL_ATTR_FLAGS]) & TNL_F_PUBLIC;
 
+	port_key_set_net(&mutable->key, net);
 	mutable->key.daddr = nla_get_be32(a[OVS_TUNNEL_ATTR_DST_IPV4]);
 	if (a[OVS_TUNNEL_ATTR_SRC_IPV4]) {
 		if (ipv4_is_multicast(mutable->key.daddr))
@@ -1472,7 +1484,8 @@ struct vport *ovs_tnl_create(const struct vport_parms *parms,
 	get_random_bytes(&initial_frag_id, sizeof(int));
 	atomic_set(&tnl_vport->frag_id, initial_frag_id);
 
-	err = tnl_set_config(parms->options, tnl_ops, NULL, mutable);
+	err = tnl_set_config(ovs_dp_get_net(parms->dp), parms->options, tnl_ops,
+			     NULL, mutable);
 	if (err)
 		goto error_free_mutable;
 
@@ -1516,7 +1529,8 @@ int ovs_tnl_set_options(struct vport *vport, struct nlattr *options)
 	memcpy(mutable->eth_addr, old_mutable->eth_addr, ETH_ALEN);
 
 	/* Parse the others configured by userspace. */
-	err = tnl_set_config(options, tnl_vport->tnl_ops, vport, mutable);
+	err = tnl_set_config(ovs_dp_get_net(vport->dp), options, tnl_vport->tnl_ops,
+			     vport, mutable);
 	if (err)
 		goto error_free;
 
@@ -1624,7 +1638,7 @@ int ovs_tnl_init(void)
 	int i;
 
 	port_table = kmalloc(PORT_TABLE_SIZE * sizeof(struct hlist_head *),
-			GFP_KERNEL);
+			     GFP_KERNEL);
 	if (!port_table)
 		return -ENOMEM;
 
@@ -1636,19 +1650,5 @@ int ovs_tnl_init(void)
 
 void ovs_tnl_exit(void)
 {
-	int i;
-
-	for (i = 0; i < PORT_TABLE_SIZE; i++) {
-		struct tnl_vport *tnl_vport;
-		struct hlist_head *hash_head;
-		struct hlist_node *n;
-
-		hash_head = &port_table[i];
-		hlist_for_each_entry(tnl_vport, n, hash_head, hash_node) {
-			BUG();
-			goto out;
-		}
-	}
-out:
 	kfree(port_table);
 }

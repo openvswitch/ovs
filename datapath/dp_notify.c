@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2007-2011 Nicira Networks.
+ * Copyright (c) 2007-2012 Nicira Networks.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of version 2 of the GNU General Public
@@ -46,14 +46,15 @@ static int dp_device_event(struct notifier_block *unused, unsigned long event,
 							  OVS_VPORT_CMD_DEL);
 			ovs_dp_detach_port(vport);
 			if (IS_ERR(notify)) {
-				netlink_set_err(INIT_NET_GENL_SOCK, 0,
+				netlink_set_err(GENL_SOCK(ovs_dp_get_net(vport->dp)), 0,
 						ovs_dp_vport_multicast_group.id,
 						PTR_ERR(notify));
 				break;
 			}
 
-			genlmsg_multicast(notify, 0, ovs_dp_vport_multicast_group.id,
-					  GFP_KERNEL);
+			genlmsg_multicast_netns(ovs_dp_get_net(vport->dp), notify, 0,
+						ovs_dp_vport_multicast_group.id,
+						GFP_KERNEL);
 		}
 		break;
 

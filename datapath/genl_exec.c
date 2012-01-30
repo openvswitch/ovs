@@ -100,6 +100,8 @@ int genl_exec(genl_exec_func_t func, void *data)
 
 	genl_exec_function = func;
 	genl_exec_data = data;
+
+	/* There is no need to send msg to current namespace. */
 	ret = genlmsg_unicast(&init_net, genlmsg_skb, 0);
 
 	if (!ret) {

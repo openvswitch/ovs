@@ -50,9 +50,10 @@ static DECLARE_COMPLETION(brc_done); /* Userspace signaled operation done? */
 static struct sk_buff *brc_reply;    /* Reply from userspace. */
 static u32 brc_seq;		     /* Sequence number for current op. */
 
-static struct sk_buff *brc_send_command(struct sk_buff *,
+static struct sk_buff *brc_send_command(struct net *,
+					struct sk_buff *,
 					struct nlattr **attrs);
-static int brc_send_simple_command(struct sk_buff *);
+static int brc_send_simple_command(struct net *, struct sk_buff *);
 
 static struct sk_buff *brc_make_request(int op, const char *bridge,
 					const char *port)
@@ -74,13 +75,13 @@ error:
 	return NULL;
 }
 
-static int brc_send_simple_command(struct sk_buff *request)
+static int brc_send_simple_command(struct net *net, struct sk_buff *request)
 {
 	struct nlattr *attrs[BRC_GENL_A_MAX + 1];
 	struct sk_buff *reply;
 	int error;
 
-	reply = brc_send_command(request, attrs);
+	reply = brc_send_command(net, request, attrs);
 	if (IS_ERR(reply))
 		return PTR_ERR(reply);
 
@@ -89,7 +90,7 @@ static int brc_send_simple_command(struct sk_buff *request)
 	return -error;
 }
 
-static int brc_add_del_bridge(char __user *uname, int add)
+static int brc_add_del_bridge(struct net *net, char __user *uname, int add)
 {
 	struct sk_buff *request;
 	char name[IFNAMSIZ];
@@ -106,10 +107,11 @@ static int brc_add_del_bridge(char __user *uname, int add)
 	if (!request)
 		return -ENOMEM;
 
-	return brc_send_simple_command(request);
+	return brc_send_simple_command(net, request);
 }
 
-static int brc_get_indices(int op, const char *br_name,
+static int brc_get_indices(struct net *net,
+			   int op, const char *br_name,
 			   int __user *uindices, int n)
 {
 	struct nlattr *attrs[BRC_GENL_A_MAX + 1];
@@ -127,7 +129,7 @@ static int brc_get_indices(int op, const char *br_name,
 	if (!request)
 		return -ENOMEM;
 
-	reply = brc_send_command(request, attrs);
+	reply = brc_send_command(net, request, attrs);
 	ret = PTR_ERR(reply);
 	if (IS_ERR(reply))
 		goto exit;
@@ -155,13 +157,13 @@ exit:
 }
 
 /* Called with br_ioctl_mutex. */
-static int brc_get_bridges(int __user *uindices, int n)
+static int brc_get_bridges(struct net *net, int __user *uindices, int n)
 {
-	return brc_get_indices(BRC_GENL_C_GET_BRIDGES, NULL, uindices, n);
+	return brc_get_indices(net, BRC_GENL_C_GET_BRIDGES, NULL, uindices, n);
 }
 
 /* Legacy deviceless bridge ioctl's.  Called with br_ioctl_mutex. */
-static int old_deviceless(void __user *uarg)
+static int old_deviceless(struct net *net, void __user *uarg)
 {
 	unsigned long args[3];
 
@@ -170,12 +172,12 @@ static int old_deviceless(void __user *uarg)
 
 	switch (args[0]) {
 	case BRCTL_GET_BRIDGES:
-		return brc_get_bridges((int __user *)args[1], args[2]);
+		return brc_get_bridges(net, (int __user *)args[1], args[2]);
 
 	case BRCTL_ADD_BRIDGE:
-		return brc_add_del_bridge((void __user *)args[1], 1);
+		return brc_add_del_bridge(net, (void __user *)args[1], 1);
 	case BRCTL_DEL_BRIDGE:
-		return brc_add_del_bridge((void __user *)args[1], 0);
+		return brc_add_del_bridge(net, (void __user *)args[1], 0);
 	}
 
 	return -EOPNOTSUPP;
@@ -185,19 +187,21 @@ static int old_deviceless(void __user *uarg)
 static int
 #if LINUX_VERSION_CODE <= KERNEL_VERSION(2,6,23)
 brc_ioctl_deviceless_stub(unsigned int cmd, void __user *uarg)
+{
+	struct net *net = NULL;
 #else
 brc_ioctl_deviceless_stub(struct net *net, unsigned int cmd, void __user *uarg)
-#endif
 {
+#endif
 	switch (cmd) {
 	case SIOCGIFBR:
 	case SIOCSIFBR:
-		return old_deviceless(uarg);
+		return old_deviceless(net, uarg);
 
 	case SIOCBRADDBR:
-		return brc_add_del_bridge(uarg, 1);
+		return brc_add_del_bridge(net, uarg, 1);
 	case SIOCBRDELBR:
-		return brc_add_del_bridge(uarg, 0);
+		return brc_add_del_bridge(net, uarg, 0);
 	}
 
 	return -EOPNOTSUPP;
@@ -212,7 +216,7 @@ static int brc_add_del_port(struct net_device *dev, int port_ifindex, int add)
 	if (!capable(CAP_NET_ADMIN))
 		return -EPERM;
 
-	port = __dev_get_by_index(&init_net, port_ifindex);
+	port = __dev_get_by_index(dev_net(dev), port_ifindex);
 	if (!port)
 		return -EINVAL;
 
@@ -224,7 +228,7 @@ static int brc_add_del_port(struct net_device *dev, int port_ifindex, int add)
 		return -ENOMEM;
 
 	rtnl_unlock();
-	err = brc_send_simple_command(request);
+	err = brc_send_simple_command(dev_net(dev), request);
 	rtnl_lock();
 
 	return err;
@@ -255,7 +259,7 @@ static int brc_get_port_list(struct net_device *dev, int __user *uindices,
 	int retval;
 
 	rtnl_unlock();
-	retval = brc_get_indices(BRC_GENL_C_GET_PORTS, dev->name,
+	retval = brc_get_indices(dev_net(dev), BRC_GENL_C_GET_PORTS, dev->name,
 				 uindices, num);
 	rtnl_lock();
 
@@ -288,7 +292,7 @@ static int brc_get_fdb_entries(struct net_device *dev, void __user *userbuf,
 	NLA_PUT_U64(request, BRC_GENL_A_FDB_SKIP, offset);
 
 	rtnl_unlock();
-	reply = brc_send_command(request, attrs);
+	reply = brc_send_command(dev_net(dev), request, attrs);
 	retval = PTR_ERR(reply);
 	if (IS_ERR(reply))
 		goto exit;
@@ -378,6 +382,7 @@ static struct genl_family brc_genl_family = {
 	.name = BRC_GENL_FAMILY_NAME,
 	.version = 1,
 	.maxattr = BRC_GENL_A_MAX,
+	 SET_NETNSOK
 };
 
 static int brc_genl_query(struct sk_buff *skb, struct genl_info *info)
@@ -456,7 +461,8 @@ static struct genl_ops brc_genl_ops[] = {
 	},
 };
 
-static struct sk_buff *brc_send_command(struct sk_buff *request,
+static struct sk_buff *brc_send_command(struct net *net,
+					struct sk_buff *request,
 					struct nlattr **attrs)
 {
 	unsigned long int flags;
@@ -475,7 +481,8 @@ static struct sk_buff *brc_send_command(struct sk_buff *request,
 	nlmsg_end(request, nlmsg_hdr(request));
 
 	/* Send message. */
-	error = genlmsg_multicast(request, 0, brc_mc_group.id, GFP_KERNEL);
+	error = genlmsg_multicast_netns(net, request, 0,
+					brc_mc_group.id, GFP_KERNEL);
 	if (error < 0)
 		goto error;
 

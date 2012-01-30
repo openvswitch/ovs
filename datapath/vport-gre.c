@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2007-2011 Nicira Networks.
+ * Copyright (c) 2007-2012 Nicira Networks.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of version 2 of the GNU General Public
@@ -29,6 +29,7 @@
 #include <net/ip.h>
 #include <net/protocol.h>
 
+#include "datapath.h"
 #include "tunnel.h"
 #include "vport.h"
 #include "vport-generic.h"
@@ -206,8 +207,8 @@ static void gre_err(struct sk_buff *skb, u32 info)
 	if (tunnel_hdr_len < 0)
 		return;
 
-	vport = ovs_tnl_find_port(iph->saddr, iph->daddr, key, TNL_T_PROTO_GRE,
-				  &mutable);
+	vport = ovs_tnl_find_port(dev_net(skb->dev), iph->saddr, iph->daddr, key,
+				  TNL_T_PROTO_GRE, &mutable);
 	if (!vport)
 		return;
 
@@ -343,8 +344,8 @@ static int gre_rcv(struct sk_buff *skb)
 		goto error;
 
 	iph = ip_hdr(skb);
-	vport = ovs_tnl_find_port(iph->daddr, iph->saddr, key, TNL_T_PROTO_GRE,
-				  &mutable);
+	vport = ovs_tnl_find_port(dev_net(skb->dev), iph->daddr, iph->saddr, key,
+				  TNL_T_PROTO_GRE, &mutable);
 	if (unlikely(!vport)) {
 		icmp_send(skb, ICMP_DEST_UNREACH, ICMP_PORT_UNREACH, 0);
 		goto error;
@@ -382,6 +383,9 @@ static struct vport *gre_create(const struct vport_parms *parms)
 static const struct net_protocol gre_protocol_handlers = {
 	.handler	=	gre_rcv,
 	.err_handler	=	gre_err,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,32)
+	.netns_ok	=	1,
+#endif
 };
 
 static int gre_init(void)
