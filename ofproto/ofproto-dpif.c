@@ -2537,7 +2537,6 @@ handle_flow_miss(struct ofproto_dpif *ofproto, struct flow_miss *miss,
         struct flow_miss_op *op;
         struct dpif_execute *execute;
 
-        list_remove(&packet->list_node);
         ofproto->n_matches++;
 
         if (facet->rule->up.cr.priority == FAIL_OPEN_PRIORITY) {
