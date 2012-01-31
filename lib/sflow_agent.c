@@ -453,7 +453,7 @@ void sfl_agent_resetReceiver(SFLAgent *agent, SFLReceiver *receiver)
 void sfl_agent_error(SFLAgent *agent, char *modName, char *msg)
 {
     char errm[MAX_ERRMSG_LEN];
-    sprintf(errm, "sfl_agent_error: %s: %s\n", modName, msg);
+    snprintf(errm, sizeof errm, "sfl_agent_error: %s: %s\n", modName, msg);
     if(agent->errorFn) (*agent->errorFn)(agent->magic, agent, errm);
     else {
 	fprintf(stderr, "%s\n", errm);
@@ -469,7 +469,7 @@ void sfl_agent_error(SFLAgent *agent, char *modName, char *msg)
 void sfl_agent_sysError(SFLAgent *agent, char *modName, char *msg)
 {
     char errm[MAX_ERRMSG_LEN];
-    sprintf(errm, "sfl_agent_sysError: %s: %s (errno = %d - %s)\n", modName, msg, errno, strerror(errno));
+    snprintf(errm, sizeof errm, "sfl_agent_sysError: %s: %s (errno = %d - %s)\n", modName, msg, errno, strerror(errno));
     if(agent->errorFn) (*agent->errorFn)(agent->magic, agent, errm);
     else {
 	fprintf(stderr, "%s\n", errm);
