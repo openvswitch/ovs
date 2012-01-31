@@ -188,6 +188,8 @@ static inline bool skb_warn_if_lro(const struct sk_buff *skb)
 #endif
 
 #ifndef HAVE_SKB_FRAG_PAGE
+#include <linux/mm.h>
+
 static inline struct page *skb_frag_page(const skb_frag_t *frag)
 {
 	return frag->page;
