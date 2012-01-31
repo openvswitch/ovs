@@ -46,7 +46,7 @@ openvswitch (1.4.0-1) unstable; urgency=low
               python-argparse to avoid pulling in python2.6
               (closes: #653645)
 
- -- Open vSwitch team <dev@openvswitch.org>  Mon, xx xxx xxxx 23:36:00 +0000
+ -- Open vSwitch team <dev@openvswitch.org>  Mon, 30 Jan 2012 23:36:00 +0000
 
 openvswitch (1.3.0-1) unstable; urgency=low
   [ Open vSwitch team ]
