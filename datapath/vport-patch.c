@@ -233,7 +233,7 @@ error:
 
 static void update_peers(struct net *net, const char *name, struct vport *vport)
 {
-	struct hlist_head *bucket = hash_bucket(ovs_dp_get_net(vport->dp), name);
+	struct hlist_head *bucket = hash_bucket(net, name);
 	struct patch_vport *peer_vport;
 	struct hlist_node *node;
 
