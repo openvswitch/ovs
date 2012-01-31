@@ -675,7 +675,7 @@ dpif_port_poll_wait(const struct dpif *dpif)
  * arguments must have been initialized through a call to flow_extract().
  */
 void
-dpif_flow_stats_extract(const struct flow *flow, struct ofpbuf *packet,
+dpif_flow_stats_extract(const struct flow *flow, const struct ofpbuf *packet,
                         struct dpif_flow_stats *stats)
 {
     memset(stats, 0, sizeof(*stats));

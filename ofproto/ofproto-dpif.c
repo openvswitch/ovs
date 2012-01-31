@@ -2424,7 +2424,7 @@ struct flow_miss_op {
  * OpenFlow controller as necessary according to their individual
  * configurations. */
 static void
-send_packet_in_miss(struct ofproto_dpif *ofproto, struct ofpbuf *packet,
+send_packet_in_miss(struct ofproto_dpif *ofproto, const struct ofpbuf *packet,
                     const struct flow *flow)
 {
     struct ofputil_packet_in pin;
