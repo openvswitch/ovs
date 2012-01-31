@@ -1,5 +1,6 @@
 v1.4.0 - xx xxx xxxx
 ------------------------
+    - Compatible with Open vSwitch kernel module included in Linux 3.3.
     - New "VLAN splinters" feature to work around buggy device drivers
       in old Linux versions.  (This feature is deprecated.  When
       broken device drivers are no longer in widespread use, we will
