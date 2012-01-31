@@ -62,6 +62,18 @@ IPADDR=A.B.C.D
 NETMASK=X.Y.Z.0
 HOTPLUG=no
 
+Enable DHCP on the bridge:
+* Needs OVSBOOTPROTO instead of BOOTPROTO.
+* All the interfaces that can reach the DHCP server
+as a comma separated list in OVSDHCPINTERFACES.
+
+DEVICE=ovsbridge0
+ONBOOT=yes
+DEVICETYPE=ovs
+TYPE=OVSBridge
+OVSBOOTPROTO="dhcp"
+OVSDHCPINTERFACES="eth0"
+HOTPLUG=no
 
 Adding physical eth0 to ovsbridge0 described above:
 
