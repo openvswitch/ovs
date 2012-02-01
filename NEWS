@@ -1,3 +1,9 @@
+v1.4.1 - xx xxx xxx
+------------------------
+    - The default MAC learning timeout has been increased from 60 seconds
+      to 300 seconds.  The MAC learning timeout is now configurable.
+
+
 v1.4.0 - 30 Jan 2012
 ------------------------
     - Compatible with Open vSwitch kernel module included in Linux 3.3.

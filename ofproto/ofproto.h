@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011 Nicira Networks.
+ * Copyright (c) 2009, 2010, 2011, 2012 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -202,6 +202,7 @@ void ofproto_set_extra_in_band_remotes(struct ofproto *,
 void ofproto_set_in_band_queue(struct ofproto *, int queue_id);
 void ofproto_set_flow_eviction_threshold(struct ofproto *, unsigned threshold);
 void ofproto_set_forward_bpdu(struct ofproto *, bool forward_bpdu);
+void ofproto_set_mac_idle_time(struct ofproto *, unsigned idle_time);
 void ofproto_set_desc(struct ofproto *,
                       const char *mfr_desc, const char *hw_desc,
                       const char *sw_desc, const char *serial_desc,
