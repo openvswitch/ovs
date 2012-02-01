@@ -3687,6 +3687,8 @@ flow_push_stats(struct rule_dpif *rule,
     push.bytes = bytes;
     push.used = used;
 
+    ofproto_rule_update_used(&rule->up, used);
+
     action_xlate_ctx_init(&push.ctx, ofproto, flow, flow->vlan_tci, rule,
                           NULL);
     push.ctx.resubmit_hook = push_resubmit;
@@ -4118,10 +4120,9 @@ rule_execute(struct rule *rule_, const struct flow *flow,
     size = packet->size;
     if (execute_odp_actions(ofproto, flow, odp_actions->data,
                             odp_actions->size, packet)) {
-        ofproto_rule_update_used(&rule->up, time_msec());
         rule->packet_count++;
         rule->byte_count += size;
-        flow_push_stats(rule, flow, 1, size, rule->up.used);
+        flow_push_stats(rule, flow, 1, size, time_msec());
     }
     ofpbuf_delete(odp_actions);
 
