@@ -72,9 +72,9 @@ AT_CHECK([tail -1 stdout], [0], [Datapath actions: 2,0,1
 ])
 
 # Check for the MAC learning entry.
-AT_CHECK([ovs-ofctl dump-flows br0 table=1 | STRIP_XIDS | STRIP_DURATION | sort], [0], [dnl
- cookie=0x0, duration=?s, table=1, n_packets=0, n_bytes=0, hard_timeout=60,vlan_tci=0x0000/0x0fff,dl_dst=50:54:00:00:00:05 actions=output:3
- cookie=0x0, duration=?s, table=1, n_packets=0, n_bytes=0, priority=0 actions=FLOOD
+AT_CHECK([ovs-ofctl dump-flows br0 table=1 | ofctl_strip | sort], [0], [dnl
+ table=1, hard_timeout=60,vlan_tci=0x0000/0x0fff,dl_dst=50:54:00:00:00:05 actions=output:3
+ table=1, priority=0 actions=FLOOD
 NXST_FLOW reply:
 ])
 
@@ -85,10 +85,10 @@ AT_CHECK([tail -1 stdout], [0], [Datapath actions: 3
 ])
 
 # Check for both MAC learning entries.
-AT_CHECK([ovs-ofctl dump-flows br0 table=1 | STRIP_XIDS | STRIP_DURATION | sort], [0], [dnl
- cookie=0x0, duration=?s, table=1, n_packets=0, n_bytes=0, hard_timeout=60,vlan_tci=0x0000/0x0fff,dl_dst=50:54:00:00:00:05 actions=output:3
- cookie=0x0, duration=?s, table=1, n_packets=0, n_bytes=0, hard_timeout=60,vlan_tci=0x0000/0x0fff,dl_dst=50:54:00:00:00:06 actions=output:1
- cookie=0x0, duration=?s, table=1, n_packets=0, n_bytes=0, priority=0 actions=FLOOD
+AT_CHECK([ovs-ofctl dump-flows br0 table=1 | ofctl_strip |sort], [0], [dnl
+ table=1, hard_timeout=60,vlan_tci=0x0000/0x0fff,dl_dst=50:54:00:00:00:05 actions=output:3
+ table=1, hard_timeout=60,vlan_tci=0x0000/0x0fff,dl_dst=50:54:00:00:00:06 actions=output:1
+ table=1, priority=0 actions=FLOOD
 NXST_FLOW reply:
 ])
 
@@ -98,10 +98,10 @@ AT_CHECK([tail -1 stdout], [0], [Datapath actions: 3,0,1
 ])
 
 # Check that the MAC learning entry was updated.
-AT_CHECK([ovs-ofctl dump-flows br0 table=1 | STRIP_XIDS | STRIP_DURATION | sort], [0], [dnl
- cookie=0x0, duration=?s, table=1, n_packets=0, n_bytes=0, hard_timeout=60,vlan_tci=0x0000/0x0fff,dl_dst=50:54:00:00:00:05 actions=output:2
- cookie=0x0, duration=?s, table=1, n_packets=0, n_bytes=0, hard_timeout=60,vlan_tci=0x0000/0x0fff,dl_dst=50:54:00:00:00:06 actions=output:1
- cookie=0x0, duration=?s, table=1, n_packets=0, n_bytes=0, priority=0 actions=FLOOD
+AT_CHECK([ovs-ofctl dump-flows br0 table=1 | ofctl_strip | sort], [0], [dnl
+ table=1, hard_timeout=60,vlan_tci=0x0000/0x0fff,dl_dst=50:54:00:00:00:05 actions=output:2
+ table=1, hard_timeout=60,vlan_tci=0x0000/0x0fff,dl_dst=50:54:00:00:00:06 actions=output:1
+ table=1, priority=0 actions=FLOOD
 NXST_FLOW reply:
 ])
 OVS_VSWITCHD_STOP

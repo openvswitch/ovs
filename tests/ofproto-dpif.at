@@ -363,18 +363,18 @@ NXT_PACKET_IN (xid=0x0): table_id=7 cookie=0x9 total_len=64 in_port=1 tun_id=0x6
 priority:0,tunnel:0,in_port:0000,tci(vlan:80,pcp:0) mac(80:81:81:81:81:81->82:82:82:82:82:82) type:0800 proto:17 tos:0 ttl:0 ip(83.83.83.83->84.84.84.84) port(85->86) udp_csum:43a1
 ])
 
-AT_CHECK([ovs-ofctl dump-flows br0 | STRIP_DURATION | sort], [0], [dnl
- cookie=0x0, duration=?s, table=0, n_packets=3, n_bytes=180, dl_src=10:11:11:11:11:11 actions=CONTROLLER:65535
- cookie=0x1, duration=?s, table=0, n_packets=2, n_bytes=120, dl_src=20:22:22:22:22:22 actions=CONTROLLER:65535,resubmit(80,1)
- cookie=0x2, duration=?s, table=0, n_packets=3, n_bytes=180, dl_src=30:33:33:33:33:33 actions=mod_vlan_vid:15,CONTROLLER:65535
- cookie=0x3, duration=?s, table=1, n_packets=2, n_bytes=120, in_port=80 actions=load:0x1->NXM_NX_REG0[[]],mod_vlan_vid:80,CONTROLLER:65535,resubmit(81,2)
- cookie=0x4, duration=?s, table=2, n_packets=2, n_bytes=120, in_port=81 actions=load:0x2->NXM_NX_REG1[[]],mod_dl_src:80:81:81:81:81:81,CONTROLLER:65535,resubmit(82,3)
- cookie=0x5, duration=?s, table=3, n_packets=2, n_bytes=120, in_port=82 actions=load:0x3->NXM_NX_REG2[[]],mod_dl_dst:82:82:82:82:82:82,CONTROLLER:65535,resubmit(83,4)
- cookie=0x6, duration=?s, table=4, n_packets=2, n_bytes=120, in_port=83 actions=load:0x4->NXM_NX_REG3[[]],mod_nw_src:83.83.83.83,CONTROLLER:65535,resubmit(84,5)
- cookie=0x7, duration=?s, table=5, n_packets=2, n_bytes=120, in_port=84 actions=load:0x5->NXM_NX_REG4[[]],load:0x6->NXM_NX_TUN_ID[[]],mod_nw_dst:84.84.84.84,CONTROLLER:65535,resubmit(85,6)
- cookie=0x8, duration=?s, table=6, n_packets=2, n_bytes=120, in_port=85 actions=mod_tp_src:85,CONTROLLER:65535,resubmit(86,7)
- cookie=0x9, duration=?s, table=7, n_packets=2, n_bytes=120, in_port=86 actions=mod_tp_dst:86,CONTROLLER:65535,CONTROLLER:65535
-NXST_FLOW reply (xid=0x4):
+AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | sort], [0], [dnl
+ cookie=0x1, n_packets=2, n_bytes=120, dl_src=20:22:22:22:22:22 actions=CONTROLLER:65535,resubmit(80,1)
+ cookie=0x2, n_packets=3, n_bytes=180, dl_src=30:33:33:33:33:33 actions=mod_vlan_vid:15,CONTROLLER:65535
+ cookie=0x3, table=1, n_packets=2, n_bytes=120, in_port=80 actions=load:0x1->NXM_NX_REG0[[]],mod_vlan_vid:80,CONTROLLER:65535,resubmit(81,2)
+ cookie=0x4, table=2, n_packets=2, n_bytes=120, in_port=81 actions=load:0x2->NXM_NX_REG1[[]],mod_dl_src:80:81:81:81:81:81,CONTROLLER:65535,resubmit(82,3)
+ cookie=0x5, table=3, n_packets=2, n_bytes=120, in_port=82 actions=load:0x3->NXM_NX_REG2[[]],mod_dl_dst:82:82:82:82:82:82,CONTROLLER:65535,resubmit(83,4)
+ cookie=0x6, table=4, n_packets=2, n_bytes=120, in_port=83 actions=load:0x4->NXM_NX_REG3[[]],mod_nw_src:83.83.83.83,CONTROLLER:65535,resubmit(84,5)
+ cookie=0x7, table=5, n_packets=2, n_bytes=120, in_port=84 actions=load:0x5->NXM_NX_REG4[[]],load:0x6->NXM_NX_TUN_ID[[]],mod_nw_dst:84.84.84.84,CONTROLLER:65535,resubmit(85,6)
+ cookie=0x8, table=6, n_packets=2, n_bytes=120, in_port=85 actions=mod_tp_src:85,CONTROLLER:65535,resubmit(86,7)
+ cookie=0x9, table=7, n_packets=2, n_bytes=120, in_port=86 actions=mod_tp_dst:86,CONTROLLER:65535,CONTROLLER:65535
+ n_packets=3, n_bytes=180, dl_src=10:11:11:11:11:11 actions=CONTROLLER:65535
+NXST_FLOW reply:
 ])
 
 OVS_VSWITCHD_STOP

@@ -603,9 +603,9 @@ dnl for regression against bug #4566.
 AT_SETUP([ovs-ofctl -F option with flow_mods])
 OVS_VSWITCHD_START
 AT_CHECK([ovs-ofctl -F nxm add-flow br0 tun_id=0x12345678,actions=drop])
-AT_CHECK([ovs-ofctl dump-flows br0 | STRIP_XIDS | STRIP_DURATION], [0], [dnl
+AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip], [0], [dnl
 NXST_FLOW reply:
- cookie=0x0, duration=?s, table=0, n_packets=0, n_bytes=0, tun_id=0x12345678 actions=drop
+ tun_id=0x12345678 actions=drop
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -615,9 +615,9 @@ dnl (If it isn't, then dump-flows will show the register match.)
 AT_SETUP([ovs-ofctl dump-flows honors -F option])
 OVS_VSWITCHD_START
 AT_CHECK([ovs-ofctl add-flow br0 reg0=0x12345,actions=drop])
-AT_CHECK([ovs-ofctl -F openflow10 dump-flows br0 | STRIP_XIDS | STRIP_DURATION], [0], [dnl
+AT_CHECK([ovs-ofctl -F openflow10 dump-flows br0 | ofctl_strip], [0], [dnl
 OFPST_FLOW reply:
- cookie=0x0, duration=?s, table=0, n_packets=0, n_bytes=0, actions=drop
+ actions=drop
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
