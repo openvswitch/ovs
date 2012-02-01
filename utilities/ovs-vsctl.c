@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011 Nicira Networks.
+ * Copyright (c) 2009, 2010, 2011, 2012 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -2338,6 +2338,10 @@ static const struct vsctl_table_class tables[] = {
      {{&ovsrec_table_bridge,
        &ovsrec_bridge_col_name,
        &ovsrec_bridge_col_sflow},
+      {NULL, NULL, NULL}}},
+
+    {&ovsrec_table_flow_table,
+     {{&ovsrec_table_flow_table, &ovsrec_flow_table_col_name, NULL},
       {NULL, NULL, NULL}}},
 
     {NULL, {{NULL, NULL, NULL}, {NULL, NULL, NULL}}}

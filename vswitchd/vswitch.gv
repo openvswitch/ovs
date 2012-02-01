@@ -8,6 +8,7 @@ digraph Open_vSwitch {
 	Bridge -> Mirror [label="mirrors*"];
 	Bridge -> Port [label="ports*"];
 	Bridge -> Controller [label="controller*"];
+	Bridge -> Flow_Table [label="flow_tables value*"];
 	Bridge -> NetFlow [label="netflow?"];
 	QoS [style=bold];
 	QoS -> Queue [label="queues value*"];
@@ -18,6 +19,7 @@ digraph Open_vSwitch {
 	Open_vSwitch -> SSL [label="ssl?"];
 	Open_vSwitch -> Manager [label="manager_options*"];
 	Controller [];
+	Flow_Table [];
 	Queue [style=bold];
 	SSL [];
 	Manager [];

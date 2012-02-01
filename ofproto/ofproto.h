@@ -217,7 +217,6 @@ int ofproto_set_stp(struct ofproto *, const struct ofproto_stp_settings *);
 int ofproto_get_stp_status(struct ofproto *, struct ofproto_stp_status *);
 
 /* Configuration of ports. */
-
 void ofproto_port_unregister(struct ofproto *, uint16_t ofp_port);
 
 void ofproto_port_clear_cfm(struct ofproto *, uint16_t ofp_port);
@@ -313,6 +312,27 @@ int ofproto_mirror_get_stats(struct ofproto *, void *aux,
 
 int ofproto_set_flood_vlans(struct ofproto *, unsigned long *flood_vlans);
 bool ofproto_is_mirror_output_bundle(const struct ofproto *, void *aux);
+
+/* Configuration of OpenFlow tables. */
+struct ofproto_table_settings {
+    char *name;                 /* Name exported via OpenFlow or NULL. */
+    unsigned int max_flows;     /* Maximum number of flows or UINT_MAX. */
+
+    /* These members determine the handling of an attempt to add a flow that
+     * would cause the table to have more than 'max_flows' flows.
+     *
+     * If 'groups' is NULL, overflows will be rejected with an error.
+     *
+     * If 'groups' is nonnull, an overflow will cause a flow to be removed.
+     * The flow to be removed is chosen to give fairness among groups
+     * distinguished by different values for the subfields within 'groups'. */
+    struct mf_subfield *groups;
+    size_t n_groups;
+};
+
+int ofproto_get_n_tables(const struct ofproto *);
+void ofproto_configure_table(struct ofproto *, int table_id,
+                             const struct ofproto_table_settings *);
 
 /* Configuration querying. */
 bool ofproto_has_snoops(const struct ofproto *);

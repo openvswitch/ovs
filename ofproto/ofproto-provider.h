@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011 Nicira Networks.
+ * Copyright (c) 2009, 2010, 2011, 2012 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@
 #include "ofproto/ofproto.h"
 #include "cfm.h"
 #include "classifier.h"
+#include "heap.h"
 #include "list.h"
 #include "ofp-errors.h"
 #include "shash.h"
@@ -111,6 +112,33 @@ enum oftable_flags {
 struct oftable {
     enum oftable_flags flags;
     struct classifier cls;      /* Contains "struct rule"s. */
+    char *name;                 /* Table name exposed via OpenFlow, or NULL. */
+
+    /* Maximum number of flows or UINT_MAX if there is no limit besides any
+     * limit imposed by resource limitations. */
+    unsigned int max_flows;
+
+    /* These members determine the handling of an attempt to add a flow that
+     * would cause the table to have more than 'max_flows' flows.
+     *
+     * If 'eviction_fields' is NULL, overflows will be rejected with an error.
+     *
+     * If 'eviction_fields' is nonnull (regardless of whether n_eviction_fields
+     * is nonzero), an overflow will cause a flow to be removed.  The flow to
+     * be removed is chosen to give fairness among groups distinguished by
+     * different values for the subfields within 'groups'. */
+    struct mf_subfield *eviction_fields;
+    size_t n_eviction_fields;
+
+    /* Eviction groups.
+     *
+     * When a flow is added that would cause the table to have more than
+     * 'max_flows' flows, and 'eviction_fields' is nonnull, these groups are
+     * used to decide which rule to evict: the rule is chosen from the eviction
+     * group that contains the greatest number of rules.*/
+    uint32_t eviction_group_id_basis;
+    struct hmap eviction_groups_by_id;
+    struct heap eviction_groups_by_size;
 };
 
 /* Assigns TABLE to each oftable, in turn, in OFPROTO.
@@ -141,6 +169,11 @@ struct rule {
     uint16_t idle_timeout;       /* In seconds from ->used. */
     uint8_t table_id;            /* Index in ofproto's 'tables' array. */
     bool send_flow_removed;      /* Send a flow removed message? */
+
+    /* Eviction groups. */
+    bool evictable;              /* If false, prevents eviction. */
+    struct heap_node evg_node;   /* In eviction_group's "rules" heap. */
+    struct eviction_group *eviction_group; /* NULL if not in any group. */
 
     union ofp_action *actions;   /* OpenFlow actions. */
     int n_actions;               /* Number of elements in actions[]. */

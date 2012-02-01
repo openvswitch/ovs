@@ -29,6 +29,7 @@
 #include "dynamic-string.h"
 #include "hash.h"
 #include "hmap.h"
+#include "meta-flow.h"
 #include "netdev.h"
 #include "nx-match.h"
 #include "ofp-errors.h"
@@ -42,6 +43,7 @@
 #include "pinsched.h"
 #include "pktbuf.h"
 #include "poll-loop.h"
+#include "random.h"
 #include "shash.h"
 #include "sset.h"
 #include "timeval.h"
@@ -63,6 +65,7 @@ COVERAGE_DEFINE(ofproto_update_port);
 
 enum ofproto_state {
     S_OPENFLOW,                 /* Processing OpenFlow commands. */
+    S_EVICT,                    /* Evicting flows from over-limit tables. */
     S_FLUSH,                    /* Deleting all flow table rules. */
 };
 
@@ -128,15 +131,42 @@ static void ofoperation_destroy(struct ofoperation *);
 static void oftable_init(struct oftable *);
 static void oftable_destroy(struct oftable *);
 
+static void oftable_set_name(struct oftable *, const char *name);
+
+static void oftable_disable_eviction(struct oftable *);
+static void oftable_enable_eviction(struct oftable *,
+                                    const struct mf_subfield *fields,
+                                    size_t n_fields);
+
 static void oftable_remove_rule(struct rule *);
 static struct rule *oftable_replace_rule(struct rule *);
 static void oftable_substitute_rule(struct rule *old, struct rule *new);
 
-/* rule. */
-static void ofproto_rule_destroy__(struct rule *);
-static void ofproto_rule_send_removed(struct rule *, uint8_t reason);
-static bool rule_is_modifiable(const struct rule *);
-static bool rule_is_hidden(const struct rule *);
+/* A set of rules within a single OpenFlow table (oftable) that have the same
+ * values for the oftable's eviction_fields.  A rule to be evicted, when one is
+ * needed, is taken from the eviction group that contains the greatest number
+ * of rules.
+ *
+ * An oftable owns any number of eviction groups, each of which contains any
+ * number of rules.
+ *
+ * Membership in an eviction group is imprecise, based on the hash of the
+ * oftable's eviction_fields (in the eviction_group's id_node.hash member).
+ * That is, if two rules have different eviction_fields, but those
+ * eviction_fields hash to the same value, then they will belong to the same
+ * eviction_group anyway.
+ *
+ * (When eviction is not enabled on an oftable, we don't track any eviction
+ * groups, to save time and space.) */
+struct eviction_group {
+    struct hmap_node id_node;   /* In oftable's "eviction_groups_by_id". */
+    struct heap_node size_node; /* In oftable's "eviction_groups_by_size". */
+    struct heap rules;          /* Contains "struct rule"s. */
+};
+
+static struct rule *choose_rule_to_evict(struct oftable *);
+static void ofproto_evict(struct ofproto *);
+static uint32_t rule_eviction_priority(struct rule *);
 
 /* ofport. */
 static void ofport_destroy__(struct ofport *);
@@ -146,11 +176,17 @@ static void update_port(struct ofproto *, const char *devname);
 static int init_ports(struct ofproto *);
 static void reinit_ports(struct ofproto *);
 
+/* rule. */
+static void ofproto_rule_destroy__(struct rule *);
+static void ofproto_rule_send_removed(struct rule *, uint8_t reason);
+static bool rule_is_modifiable(const struct rule *);
+static bool rule_is_hidden(const struct rule *);
+
 /* OpenFlow. */
 static enum ofperr add_flow(struct ofproto *, struct ofconn *,
                             const struct ofputil_flow_mod *,
                             const struct ofp_header *);
-
+static void delete_flow__(struct rule *, struct ofopgroup *);
 static bool handle_openflow(struct ofconn *, struct ofpbuf *);
 static enum ofperr handle_flow_mod__(struct ofproto *, struct ofconn *,
                                      const struct ofputil_flow_mod *,
@@ -804,6 +840,59 @@ ofproto_is_mirror_output_bundle(const struct ofproto *ofproto, void *aux)
             : false);
 }
 
+/* Configuration of OpenFlow tables. */
+
+/* Returns the number of OpenFlow tables in 'ofproto'. */
+int
+ofproto_get_n_tables(const struct ofproto *ofproto)
+{
+    return ofproto->n_tables;
+}
+
+/* Configures the OpenFlow table in 'ofproto' with id 'table_id' with the
+ * settings from 's'.  'table_id' must be in the range 0 through the number of
+ * OpenFlow tables in 'ofproto' minus 1, inclusive.
+ *
+ * For read-only tables, only the name may be configured. */
+void
+ofproto_configure_table(struct ofproto *ofproto, int table_id,
+                        const struct ofproto_table_settings *s)
+{
+    struct oftable *table;
+
+    assert(table_id >= 0 && table_id < ofproto->n_tables);
+    table = &ofproto->tables[table_id];
+
+    oftable_set_name(table, s->name);
+
+    if (table->flags & OFTABLE_READONLY) {
+        return;
+    }
+
+    if (s->groups) {
+        oftable_enable_eviction(table, s->groups, s->n_groups);
+    } else {
+        oftable_disable_eviction(table);
+    }
+
+    table->max_flows = s->max_flows;
+    if (classifier_count(&table->cls) > table->max_flows
+        && table->eviction_fields) {
+        /* 'table' contains more flows than allowed.  We might not be able to
+         * evict them right away because of the asynchronous nature of flow
+         * table changes.  Schedule eviction for later. */
+        switch (ofproto->state) {
+        case S_OPENFLOW:
+            ofproto->state = S_EVICT;
+            break;
+        case S_EVICT:
+        case S_FLUSH:
+            /* We're already deleting flows, nothing more to do. */
+            break;
+        }
+    }
+}
+
 bool
 ofproto_has_snoops(const struct ofproto *ofproto)
 {
@@ -950,10 +1039,17 @@ ofproto_run(struct ofproto *p)
         }
     }
 
-
     switch (p->state) {
     case S_OPENFLOW:
         connmgr_run(p->connmgr, handle_openflow);
+        break;
+
+    case S_EVICT:
+        connmgr_run(p->connmgr, NULL);
+        ofproto_evict(p);
+        if (list_is_empty(&p->pending) && hmap_is_empty(&p->deletions)) {
+            p->state = S_OPENFLOW;
+        }
         break;
 
     case S_FLUSH:
@@ -1012,6 +1108,7 @@ ofproto_wait(struct ofproto *p)
         connmgr_wait(p->connmgr, true);
         break;
 
+    case S_EVICT:
     case S_FLUSH:
         connmgr_wait(p->connmgr, false);
         if (list_is_empty(&p->pending) && hmap_is_empty(&p->deletions)) {
@@ -1248,7 +1345,7 @@ ofproto_delete_flow(struct ofproto *ofproto, const struct cls_rule *target)
         struct ofopgroup *group = ofopgroup_create_unattached(ofproto);
         ofoperation_create(group, rule, OFOPERATION_DELETE);
         oftable_remove_rule(rule);
-        rule->ofproto->ofproto_class->rule_destruct(rule);
+        ofproto->ofproto_class->rule_destruct(rule);
         ofopgroup_submit(group);
         return true;
     }
@@ -1998,6 +2095,18 @@ handle_table_stats_request(struct ofconn *ofconn,
 
     p->ofproto_class->get_tables(p, ots);
 
+    for (i = 0; i < p->n_tables; i++) {
+        const struct oftable *table = &p->tables[i];
+
+        if (table->name) {
+            ovs_strzcpy(ots[i].name, table->name, sizeof ots[i].name);
+        }
+
+        if (table->max_flows < ntohl(ots[i].max_entries)) {
+            ots[i].max_entries = htonl(table->max_flows);
+        }
+    }
+
     ofconn_send_reply(ofconn, msg);
     return 0;
 }
@@ -2587,6 +2696,8 @@ add_flow(struct ofproto *ofproto, struct ofconn *ofconn,
     rule->send_flow_removed = (fm->flags & OFPFF_SEND_FLOW_REM) != 0;
     rule->actions = ofputil_actions_clone(fm->actions, fm->n_actions);
     rule->n_actions = fm->n_actions;
+    rule->evictable = true;
+    rule->eviction_group = NULL;
 
     /* Insert new rule. */
     victim = oftable_replace_rule(rule);
@@ -2595,6 +2706,27 @@ add_flow(struct ofproto *ofproto, struct ofconn *ofconn,
     } else if (victim && victim->pending) {
         error = OFPROTO_POSTPONE;
     } else {
+        struct rule *evict;
+
+        if (classifier_count(&table->cls) > table->max_flows) {
+            bool was_evictable;
+
+            was_evictable = rule->evictable;
+            rule->evictable = false;
+            evict = choose_rule_to_evict(table);
+            rule->evictable = was_evictable;
+
+            if (!evict) {
+                error = OFPERR_OFPFMFC_ALL_TABLES_FULL;
+                goto exit;
+            } else if (evict->pending) {
+                error = OFPROTO_POSTPONE;
+                goto exit;
+            }
+        } else {
+            evict = NULL;
+        }
+
         group = ofopgroup_create(ofproto, ofconn, request, fm->buffer_id);
         ofoperation_create(group, rule, OFOPERATION_ADD);
         rule->pending->victim = victim;
@@ -2602,10 +2734,13 @@ add_flow(struct ofproto *ofproto, struct ofconn *ofconn,
         error = ofproto->ofproto_class->rule_construct(rule);
         if (error) {
             ofoperation_destroy(rule->pending);
+        } else if (evict) {
+            delete_flow__(evict, group);
         }
         ofopgroup_submit(group);
     }
 
+exit:
     /* Back out if an error occurred. */
     if (error) {
         oftable_substitute_rule(rule, victim);
@@ -2649,7 +2784,7 @@ modify_flows__(struct ofproto *ofproto, struct ofconn *ofconn,
             rule->pending->n_actions = rule->n_actions;
             rule->actions = ofputil_actions_clone(fm->actions, fm->n_actions);
             rule->n_actions = fm->n_actions;
-            rule->ofproto->ofproto_class->rule_modify_actions(rule);
+            ofproto->ofproto_class->rule_modify_actions(rule);
         } else {
             rule->modified = time_msec();
         }
@@ -2706,6 +2841,18 @@ modify_flow_strict(struct ofproto *ofproto, struct ofconn *ofconn,
 
 /* OFPFC_DELETE implementation. */
 
+static void
+delete_flow__(struct rule *rule, struct ofopgroup *group)
+{
+    struct ofproto *ofproto = rule->ofproto;
+
+    ofproto_rule_send_removed(rule, OFPRR_DELETE);
+
+    ofoperation_create(group, rule, OFOPERATION_DELETE);
+    oftable_remove_rule(rule);
+    ofproto->ofproto_class->rule_destruct(rule);
+}
+
 /* Deletes the rules listed in 'rules'.
  *
  * Returns 0 on success, otherwise an OpenFlow error code. */
@@ -2718,11 +2865,7 @@ delete_flows__(struct ofproto *ofproto, struct ofconn *ofconn,
 
     group = ofopgroup_create(ofproto, ofconn, request, UINT32_MAX);
     LIST_FOR_EACH_SAFE (rule, next, ofproto_node, rules) {
-        ofproto_rule_send_removed(rule, OFPRR_DELETE);
-
-        ofoperation_create(group, rule, OFOPERATION_DELETE);
-        oftable_remove_rule(rule);
-        rule->ofproto->ofproto_class->rule_destruct(rule);
+        delete_flow__(rule, group);
     }
     ofopgroup_submit(group);
 
@@ -2789,7 +2932,13 @@ void
 ofproto_rule_update_used(struct rule *rule, long long int used)
 {
     if (used > rule->used) {
+        struct eviction_group *evg = rule->eviction_group;
+
         rule->used = used;
+        if (evg) {
+            heap_change(&evg->rules, &rule->evg_node,
+                        rule_eviction_priority(rule));
+        }
     }
 }
 
@@ -2812,7 +2961,7 @@ ofproto_rule_expire(struct rule *rule, uint8_t reason)
     group = ofopgroup_create_unattached(ofproto);
     ofoperation_create(group, rule, OFOPERATION_DELETE);
     oftable_remove_rule(rule);
-    rule->ofproto->ofproto_class->rule_destruct(rule);
+    ofproto->ofproto_class->rule_destruct(rule);
     ofopgroup_submit(group);
 }
 
@@ -3372,6 +3521,253 @@ pick_fallback_dpid(void)
     return eth_addr_to_uint64(ea);
 }
 
+/* Table overflow policy. */
+
+/* Chooses and returns a rule to evict from 'table'.  Returns NULL if the table
+ * is not configured to evict rules or if the table contains no evictable
+ * rules.  (Rules with 'evictable' set to false or with no timeouts are not
+ * evictable.) */
+static struct rule *
+choose_rule_to_evict(struct oftable *table)
+{
+    struct eviction_group *evg;
+
+    if (!table->eviction_fields) {
+        return NULL;
+    }
+
+    /* In the common case, the outer and inner loops here will each be entered
+     * exactly once:
+     *
+     *   - The inner loop normally "return"s in its first iteration.  If the
+     *     eviction group has any evictable rules, then it always returns in
+     *     some iteration.
+     *
+     *   - The outer loop only iterates more than once if the largest eviction
+     *     group has no evictable rules.
+     *
+     *   - The outer loop can exit only if table's 'max_flows' is all filled up
+     *     by unevictable rules'. */
+    HEAP_FOR_EACH (evg, size_node, &table->eviction_groups_by_size) {
+        struct rule *rule;
+
+        HEAP_FOR_EACH (rule, evg_node, &evg->rules) {
+            if (rule->evictable) {
+                return rule;
+            }
+        }
+    }
+
+    return NULL;
+}
+
+/* Searches 'ofproto' for tables that have more flows than their configured
+ * maximum and that have flow eviction enabled, and evicts as many flows as
+ * necessary and currently feasible from them.
+ *
+ * This triggers only when an OpenFlow table has N flows in it and then the
+ * client configures a maximum number of flows less than N. */
+static void
+ofproto_evict(struct ofproto *ofproto)
+{
+    struct ofopgroup *group;
+    struct oftable *table;
+
+    group = ofopgroup_create_unattached(ofproto);
+    OFPROTO_FOR_EACH_TABLE (table, ofproto) {
+        while (classifier_count(&table->cls) > table->max_flows
+               && table->eviction_fields) {
+            struct rule *rule;
+
+            rule = choose_rule_to_evict(table);
+            if (!rule || rule->pending) {
+                break;
+            }
+
+            ofoperation_create(group, rule, OFOPERATION_DELETE);
+            oftable_remove_rule(rule);
+            ofproto->ofproto_class->rule_destruct(rule);
+        }
+    }
+    ofopgroup_submit(group);
+}
+
+/* Eviction groups. */
+
+/* Returns the priority to use for an eviction_group that contains 'n_rules'
+ * rules.  The priority contains low-order random bits to ensure that eviction
+ * groups with the same number of rules are prioritized randomly. */
+static uint32_t
+eviction_group_priority(size_t n_rules)
+{
+    uint16_t size = MIN(UINT16_MAX, n_rules);
+    return (size << 16) | random_uint16();
+}
+
+/* Updates 'evg', an eviction_group within 'table', following a change that
+ * adds or removes rules in 'evg'. */
+static void
+eviction_group_resized(struct oftable *table, struct eviction_group *evg)
+{
+    heap_change(&table->eviction_groups_by_size, &evg->size_node,
+                eviction_group_priority(heap_count(&evg->rules)));
+}
+
+/* Destroys 'evg', an eviction_group within 'table':
+ *
+ *   - Removes all the rules, if any, from 'evg'.  (It doesn't destroy the
+ *     rules themselves, just removes them from the eviction group.)
+ *
+ *   - Removes 'evg' from 'table'.
+ *
+ *   - Frees 'evg'. */
+static void
+eviction_group_destroy(struct oftable *table, struct eviction_group *evg)
+{
+    while (!heap_is_empty(&evg->rules)) {
+        struct rule *rule;
+
+        rule = CONTAINER_OF(heap_pop(&evg->rules), struct rule, evg_node);
+        rule->eviction_group = NULL;
+    }
+    hmap_remove(&table->eviction_groups_by_id, &evg->id_node);
+    heap_remove(&table->eviction_groups_by_size, &evg->size_node);
+    heap_destroy(&evg->rules);
+    free(evg);
+}
+
+/* Removes 'rule' from its eviction group, if any. */
+static void
+eviction_group_remove_rule(struct rule *rule)
+{
+    if (rule->eviction_group) {
+        struct oftable *table = &rule->ofproto->tables[rule->table_id];
+        struct eviction_group *evg = rule->eviction_group;
+
+        rule->eviction_group = NULL;
+        heap_remove(&evg->rules, &rule->evg_node);
+        if (heap_is_empty(&evg->rules)) {
+            eviction_group_destroy(table, evg);
+        } else {
+            eviction_group_resized(table, evg);
+        }
+    }
+}
+
+/* Hashes the 'rule''s values for the eviction_fields of 'rule''s table, and
+ * returns the hash value. */
+static uint32_t
+eviction_group_hash_rule(struct rule *rule)
+{
+    struct oftable *table = &rule->ofproto->tables[rule->table_id];
+    const struct mf_subfield *sf;
+    uint32_t hash;
+
+    hash = table->eviction_group_id_basis;
+    for (sf = table->eviction_fields;
+         sf < &table->eviction_fields[table->n_eviction_fields];
+         sf++)
+    {
+        if (mf_are_prereqs_ok(sf->field, &rule->cr.flow)) {
+            union mf_value value;
+
+            mf_get_value(sf->field, &rule->cr.flow, &value);
+            if (sf->ofs) {
+                bitwise_zero(&value, sf->field->n_bytes, 0, sf->ofs);
+            }
+            if (sf->ofs + sf->n_bits < sf->field->n_bytes * 8) {
+                unsigned int start = sf->ofs + sf->n_bits;
+                bitwise_zero(&value, sf->field->n_bytes, start,
+                             sf->field->n_bytes * 8 - start);
+            }
+            hash = hash_bytes(&value, sf->field->n_bytes, hash);
+        } else {
+            hash = hash_int(hash, 0);
+        }
+    }
+
+    return hash;
+}
+
+/* Returns an eviction group within 'table' with the given 'id', creating one
+ * if necessary. */
+static struct eviction_group *
+eviction_group_find(struct oftable *table, uint32_t id)
+{
+    struct eviction_group *evg;
+
+    HMAP_FOR_EACH_WITH_HASH (evg, id_node, id, &table->eviction_groups_by_id) {
+        return evg;
+    }
+
+    evg = xmalloc(sizeof *evg);
+    hmap_insert(&table->eviction_groups_by_id, &evg->id_node, id);
+    heap_insert(&table->eviction_groups_by_size, &evg->size_node,
+                eviction_group_priority(0));
+    heap_init(&evg->rules);
+
+    return evg;
+}
+
+/* Returns an eviction priority for 'rule'.  The return value should be
+ * interpreted so that higher priorities make a rule more attractive candidates
+ * for eviction. */
+static uint32_t
+rule_eviction_priority(struct rule *rule)
+{
+    long long int hard_expiration;
+    long long int idle_expiration;
+    long long int expiration;
+    uint32_t expiration_offset;
+
+    /* Calculate time of expiration. */
+    hard_expiration = (rule->hard_timeout
+                       ? rule->modified + rule->hard_timeout * 1000
+                       : LLONG_MAX);
+    idle_expiration = (rule->idle_timeout
+                       ? rule->used + rule->idle_timeout * 1000
+                       : LLONG_MAX);
+    expiration = MIN(hard_expiration, idle_expiration);
+    if (expiration == LLONG_MAX) {
+        return 0;
+    }
+
+    /* Calculate the time of expiration as a number of (approximate) seconds
+     * after program startup.
+     *
+     * This should work OK for program runs that last UINT32_MAX seconds or
+     * less.  Therefore, please restart OVS at least once every 136 years. */
+    expiration_offset = (expiration >> 10) - (time_boot_msec() >> 10);
+
+    /* Invert the expiration offset because we're using a max-heap. */
+    return UINT32_MAX - expiration_offset;
+}
+
+/* Adds 'rule' to an appropriate eviction group for its oftable's
+ * configuration.  Does nothing if 'rule''s oftable doesn't have eviction
+ * enabled, or if 'rule' is a permanent rule (one that will never expire on its
+ * own).
+ *
+ * The caller must ensure that 'rule' is not already in an eviction group. */
+static void
+eviction_group_add_rule(struct rule *rule)
+{
+    struct ofproto *ofproto = rule->ofproto;
+    struct oftable *table = &ofproto->tables[rule->table_id];
+
+    if (table->eviction_fields
+        && (rule->hard_timeout || rule->idle_timeout)) {
+        struct eviction_group *evg;
+
+        evg = eviction_group_find(table, eviction_group_hash_rule(rule));
+
+        rule->eviction_group = evg;
+        heap_insert(&evg->rules, &rule->evg_node,
+                    rule_eviction_priority(rule));
+        eviction_group_resized(table, evg);
+    }
+}
+
 /* oftables. */
 
 /* Initializes 'table'. */
@@ -3382,14 +3778,96 @@ oftable_init(struct oftable *table)
     classifier_init(&table->cls);
 }
 
-/* Destroys 'table'.
+/* Destroys 'table', including its classifier and eviction groups.
  *
  * The caller is responsible for freeing 'table' itself. */
 static void
 oftable_destroy(struct oftable *table)
 {
     assert(classifier_is_empty(&table->cls));
+    oftable_disable_eviction(table);
     classifier_destroy(&table->cls);
+    free(table->name);
+}
+
+/* Changes the name of 'table' to 'name'.  If 'name' is NULL or the empty
+ * string, then 'table' will use its default name.
+ *
+ * This only affects the name exposed for a table exposed through the OpenFlow
+ * OFPST_TABLE (as printed by "ovs-ofctl dump-tables"). */
+static void
+oftable_set_name(struct oftable *table, const char *name)
+{
+    if (name && name[0]) {
+        int len = strnlen(name, OFP_MAX_TABLE_NAME_LEN);
+        if (!table->name || strncmp(name, table->name, len)) {
+            free(table->name);
+            table->name = xmemdup0(name, len);
+        }
+    } else {
+        free(table->name);
+        table->name = NULL;
+    }
+}
+
+/* oftables support a choice of two policies when adding a rule would cause the
+ * number of flows in the table to exceed the configured maximum number: either
+ * they can refuse to add the new flow or they can evict some existing flow.
+ * This function configures the former policy on 'table'. */
+static void
+oftable_disable_eviction(struct oftable *table)
+{
+    if (table->eviction_fields) {
+        struct eviction_group *evg, *next;
+
+        HMAP_FOR_EACH_SAFE (evg, next, id_node,
+                            &table->eviction_groups_by_id) {
+            eviction_group_destroy(table, evg);
+        }
+        hmap_destroy(&table->eviction_groups_by_id);
+        heap_destroy(&table->eviction_groups_by_size);
+
+        free(table->eviction_fields);
+        table->eviction_fields = NULL;
+        table->n_eviction_fields = 0;
+    }
+}
+
+/* oftables support a choice of two policies when adding a rule would cause the
+ * number of flows in the table to exceed the configured maximum number: either
+ * they can refuse to add the new flow or they can evict some existing flow.
+ * This function configures the latter policy on 'table', with fairness based
+ * on the values of the 'n_fields' fields specified in 'fields'.  (Specifying
+ * 'n_fields' as 0 disables fairness.) */
+static void
+oftable_enable_eviction(struct oftable *table,
+                        const struct mf_subfield *fields, size_t n_fields)
+{
+    struct cls_cursor cursor;
+    struct rule *rule;
+
+    if (table->eviction_fields
+        && n_fields == table->n_eviction_fields
+        && (!n_fields
+            || !memcmp(fields, table->eviction_fields,
+                       n_fields * sizeof *fields))) {
+        /* No change. */
+        return;
+    }
+
+    oftable_disable_eviction(table);
+
+    table->n_eviction_fields = n_fields;
+    table->eviction_fields = xmemdup(fields, n_fields * sizeof *fields);
+
+    table->eviction_group_id_basis = random_uint32();
+    hmap_init(&table->eviction_groups_by_id);
+    heap_init(&table->eviction_groups_by_size);
+
+    cls_cursor_init(&cursor, &table->cls, NULL);
+    CLS_CURSOR_FOR_EACH (rule, cr, &cursor) {
+        eviction_group_add_rule(rule);
+    }
 }
 
 /* Removes 'rule' from the oftable that contains it. */
@@ -3400,6 +3878,7 @@ oftable_remove_rule(struct rule *rule)
     struct oftable *table = &ofproto->tables[rule->table_id];
 
     classifier_remove(&table->cls, &rule->cr);
+    eviction_group_remove_rule(rule);
 }
 
 /* Inserts 'rule' into its oftable.  Removes any existing rule from 'rule''s
@@ -3410,8 +3889,14 @@ oftable_replace_rule(struct rule *rule)
 {
     struct ofproto *ofproto = rule->ofproto;
     struct oftable *table = &ofproto->tables[rule->table_id];
+    struct rule *victim;
 
-    return rule_from_cls_rule(classifier_replace(&table->cls, &rule->cr));
+    victim = rule_from_cls_rule(classifier_replace(&table->cls, &rule->cr));
+    if (victim) {
+        eviction_group_remove_rule(victim);
+    }
+    eviction_group_add_rule(rule);
+    return victim;
 }
 
 /* Removes 'old' from its oftable then, if 'new' is nonnull, inserts 'new'. */

@@ -573,6 +573,7 @@ datapath_type       : ""
 external_ids        : {}
 fail_mode           : []
 flood_vlans         : []
+flow_tables         : {}
 mirrors             : []
 name                : "br0"
 netflow             : []
@@ -1019,6 +1020,7 @@ datapath_type       : ""
 external_ids        : {}
 fail_mode           : []
 flood_vlans         : []
+flow_tables         : {}
 mirrors             : []
 name                : "br0"
 netflow             : []

@@ -1,6 +1,6 @@
 {"name": "Open_vSwitch",
- "version": "6.4.0",
- "cksum": "923041702 15687",
+ "version": "6.5.0",
+ "cksum": "2847700438 16419",
  "tables": {
    "Open_vSwitch": {
      "columns": {
@@ -99,7 +99,14 @@
          "type": {"key": {"type": "integer",
                           "minInteger": 0,
                           "maxInteger": 4095},
-                  "min": 0, "max": 4096}}},
+                  "min": 0, "max": 4096}},
+       "flow_tables": {
+         "type": {"key": {"type": "integer",
+                          "minInteger": 0,
+                          "maxInteger": 254},
+                  "value": {"type": "uuid",
+                            "refTable": "Flow_Table"},
+                  "min": 0, "max": "unlimited"}}},
      "indexes": [["name"]]},
    "Port": {
      "columns": {
@@ -236,6 +243,19 @@
          "type": {"key": "integer", "min": 0, "max": 1},
          "ephemeral": true}},
      "indexes": [["name"]]},
+   "Flow_Table": {
+     "columns": {
+       "name": {
+	 "type": {"key": "string", "min": 0, "max": 1}},
+       "flow_limit": {
+	 "type": {"key": {"type": "integer", "minInteger": 0},
+		  "min": 0, "max": 1}},
+       "overflow_policy": {
+	 "type": {"key": {"type": "string",
+			  "enum": ["set", ["refuse", "evict"]]},
+		  "min": 0, "max": 1}},
+       "groups": {
+	 "type": {"key": "string", "min": 0, "max": "unlimited"}}}},
    "QoS": {
      "columns": {
        "type": {

@@ -486,6 +486,9 @@ A bridge port.  Records may be identified by port name.
 .IP "\fBInterface\fR"
 A network device attached to a port.  Records may be identified by
 name.
+.IP "\fBFlow_Table\fR"
+Configuration for a particular OpenFlow flow table.  Records may be
+identified by name.
 .IP "\fBQoS\fR"
 Quality-of-service configuration for a \fBPort\fR.  Records may be
 identified by port name.

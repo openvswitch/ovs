@@ -388,6 +388,11 @@
         </p>
       </column>
 
+      <column name="flow_tables">
+        Configuration for OpenFlow tables.  Each pair maps from an OpenFlow
+        table ID to configuration for that table.
+      </column>
+
       <column name="fail_mode">
         <p>When a controller is configured, it is, ordinarily, responsible
         for setting up all flows on the switch.  Thus, if the connection to
@@ -1868,6 +1873,99 @@
       <column name="other_config"/>
       <column name="external_ids"/>
     </group>
+  </table>
+
+  <table name="Flow_Table" title="OpenFlow table configuration">
+    <p>Configuration for a particular OpenFlow table.</p>
+
+    <column name="name">
+      The table's name.  Set this column to change the name that controllers
+      will receive when they request table statistics, e.g. <code>ovs-ofctl
+      dump-tables</code>.  The name does not affect switch behavior.
+    </column>
+
+    <column name="flow_limit">
+      If set, limits the number of flows that may be added to the table.  Open
+      vSwitch may limit the number of flows in a table for other reasons,
+      e.g. due to hardware limitations or for resource availability or
+      performance reasons.
+    </column>
+
+    <column name="overflow_policy">
+      <p>
+        Controls the switch's behavior when an OpenFlow flow table modification
+        request would add flows in excess of <ref column="flow_limit"/>.  The
+        supported values are:
+      </p>
+
+      <dl>
+        <dt><code>refuse</code></dt>
+        <dd>
+          Refuse to add the flow or flows.  This is also the default policy
+          when <ref column="overflow_policy"/> is unset.
+        </dd>
+
+        <dt><code>evict</code></dt>
+        <dd>
+          Delete the flow that will expire soonest.  See <ref column="groups"/>
+          for details.
+        </dd>
+      </dl>
+    </column>
+
+    <column name="groups">
+      <p>
+        When <ref column="overflow_policy"/> is <code>evict</code>, this
+        controls how flows are chosen for eviction when the flow table would
+        otherwise exceed <ref column="flow_limit"/> flows.  Its value is a set
+        of NXM fields or sub-fields, each of which takes one of the forms
+        <code><var>field</var>[]</code> or
+        <code><var>field</var>[<var>start</var>..<var>end</var>]</code>,
+        e.g. <code>NXM_OF_IN_PORT[]</code>.  Please see
+        <code>nicira-ext.h</code> for a complete list of NXM field names.
+      </p>
+
+      <p>
+        When a flow must be evicted due to overflow, the flow to evict is
+        chosen through an approximation of the following algorithm:
+      </p>
+
+      <ol>
+        <li>
+          Divide the flows in the table into groups based on the values of the
+          specified fields or subfields, so that all of the flows in a given
+          group have the same values for those fields.  If a flow does not
+          specify a given field, that field's value is treated as 0.
+        </li>
+
+        <li>
+          Consider the flows in the largest group, that is, the group that
+          contains the greatest number of flows.  If two or more groups all
+          have the same largest number of flows, consider the flows in all of
+          those groups.
+        </li>
+
+        <li>
+          Among the flows under consideration, choose the flow that expires
+          soonest for eviction.
+        </li>
+      </ol>
+
+      <p>
+        The eviction process only considers flows that have an idle timeout or
+        a hard timeout.  That is, eviction never deletes permanent flows.
+        (Permanent flows do count against <ref column="flow_limit"/>.
+      </p>
+
+      <p>
+        Open vSwitch ignores any invalid or unknown field specifications.
+      </p>
+
+      <p>
+        When <ref column="overflow_policy"/> is not <code>evict</code>, this
+        column has no effect.
+      </p>
+    </column>
   </table>
 
   <table name="QoS" title="Quality of Service configuration">

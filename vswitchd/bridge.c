@@ -32,6 +32,7 @@
 #include "jsonrpc.h"
 #include "lacp.h"
 #include "list.h"
+#include "meta-flow.h"
 #include "netdev.h"
 #include "ofp-print.h"
 #include "ofpbuf.h"
@@ -158,6 +159,7 @@ static void bridge_configure_netflow(struct bridge *);
 static void bridge_configure_forward_bpdu(struct bridge *);
 static void bridge_configure_sflow(struct bridge *, int *sflow_bridge_number);
 static void bridge_configure_stp(struct bridge *);
+static void bridge_configure_tables(struct bridge *);
 static void bridge_configure_remotes(struct bridge *,
                                      const struct sockaddr_in *managers,
                                      size_t n_managers);
@@ -470,6 +472,7 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
         bridge_configure_netflow(br);
         bridge_configure_sflow(br, &sflow_bridge_number);
         bridge_configure_stp(br);
+        bridge_configure_tables(br);
     }
     free(managers);
 
@@ -2471,6 +2474,66 @@ bridge_configure_remotes(struct bridge *br,
                                              ovs_rundir(), br->name));
         ofproto_set_snoops(br->ofproto, &snoops);
         sset_destroy(&snoops);
+    }
+}
+
+static void
+bridge_configure_tables(struct bridge *br)
+{
+    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+    int n_tables;
+    int i, j;
+
+    n_tables = ofproto_get_n_tables(br->ofproto);
+    j = 0;
+    for (i = 0; i < n_tables; i++) {
+        struct ofproto_table_settings s;
+
+        s.name = NULL;
+        s.max_flows = UINT_MAX;
+        s.groups = NULL;
+        s.n_groups = 0;
+
+        if (j < br->cfg->n_flow_tables && i == br->cfg->key_flow_tables[j]) {
+            struct ovsrec_flow_table *cfg = br->cfg->value_flow_tables[j++];
+
+            s.name = cfg->name;
+            if (cfg->n_flow_limit && *cfg->flow_limit < UINT_MAX) {
+                s.max_flows = *cfg->flow_limit;
+            }
+            if (cfg->overflow_policy
+                && !strcmp(cfg->overflow_policy, "evict")) {
+                size_t k;
+
+                s.groups = xmalloc(cfg->n_groups * sizeof *s.groups);
+                for (k = 0; k < cfg->n_groups; k++) {
+                    const char *string = cfg->groups[k];
+                    char *msg;
+
+                    msg = mf_parse_subfield__(&s.groups[k], &string);
+                    if (msg) {
+                        VLOG_WARN_RL(&rl, "bridge %s table %d: error parsing "
+                                     "'groups' (%s)", br->name, i, msg);
+                        free(msg);
+                    } else if (*string) {
+                        VLOG_WARN_RL(&rl, "bridge %s table %d: 'groups' "
+                                     "element '%s' contains trailing garbage",
+                                     br->name, i, cfg->groups[k]);
+                    } else {
+                        s.n_groups++;
+                    }
+                }
+            }
+        }
+
+        ofproto_configure_table(br->ofproto, i, &s);
+
+        free(s.groups);
+    }
+    for (; j < br->cfg->n_flow_tables; j++) {
+        VLOG_WARN_RL(&rl, "bridge %s: ignoring configuration for flow table "
+                     "%"PRId64" not supported by this datapath", br->name,
+                     br->cfg->key_flow_tables[j]);
     }
 }
 

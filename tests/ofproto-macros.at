@@ -1,3 +1,19 @@
+m4_divert_push([PREPARE_TESTS])
+[
+# Strips out uninteresting parts of ovs-ofctl output, as well as parts
+# that vary from one run to another.
+ofctl_strip () {
+    sed '
+s/ (xid=0x[0-9a-fA-F]*)//
+s/ duration=[0-9.]*s,//
+s/ cookie=0x0,//
+s/ table=0,//
+s/ n_packets=0,//
+s/ n_bytes=0,//
+'
+}]
+m4_divert_pop([PREPARE_TESTS])
+
 m4_define([STRIP_XIDS], [[sed 's/ (xid=0x[0-9a-fA-F]*)//']])
 m4_define([STRIP_DURATION], [[sed 's/\bduration=[0-9.]*s/duration=?s/']])
 m4_define([TESTABLE_LOG], [-vPATTERN:ANY:'%c|%p|%m'])

@@ -4730,6 +4730,7 @@ do_xlate_actions(const union ofp_action *in, size_t n_in,
 {
     const struct ofport_dpif *port;
     const union ofp_action *ia;
+    bool was_evictable = true;
     size_t left;
 
     port = get_ofp_port(ctx->ofproto, ctx->flow.in_port);
@@ -4738,6 +4739,11 @@ do_xlate_actions(const union ofp_action *in, size_t n_in,
         return;
     }
 
+    if (ctx->rule) {
+        /* Don't let the rule we're working on get evicted underneath us. */
+        was_evictable = ctx->rule->up.evictable;
+        ctx->rule->up.evictable = false;
+    }
     OFPUTIL_ACTION_FOR_EACH_UNSAFE (ia, left, in, n_in) {
         const struct ofp_action_dl_addr *oada;
         const struct nx_action_resubmit *nar;
@@ -4911,6 +4917,9 @@ out:
     if (port && !stp_forward_in_state(port->stp_state)) {
         ofpbuf_clear(ctx->odp_actions);
         add_sflow_action(ctx);
+    }
+    if (ctx->rule) {
+        ctx->rule->up.evictable = was_evictable;
     }
 }
 
