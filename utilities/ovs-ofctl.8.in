@@ -1014,7 +1014,7 @@ unique flow entry, which begins with some common information:
 .IP \fBduration\fR
 The number of seconds the entry has been in the table.
 .
-.IP \fBtable_id\fR
+.IP \fBtable\fR
 The table that contains the flow.  When a packet arrives, the switch 
 begins searching for an entry at the lowest numbered table.  Tables are 
 numbered as shown by the \fBdump\-tables\fR command.
