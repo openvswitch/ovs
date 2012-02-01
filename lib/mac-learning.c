@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,12 +37,12 @@ VLOG_DEFINE_THIS_MODULE(mac_learning);
 COVERAGE_DEFINE(mac_learning_learned);
 COVERAGE_DEFINE(mac_learning_expired);
 
-/* Returns the number of seconds since 'e' was last learned. */
+/* Returns the number of seconds since 'e' (within 'ml') was last learned. */
 int
-mac_entry_age(const struct mac_entry *e)
+mac_entry_age(const struct mac_learning *ml, const struct mac_entry *e)
 {
     time_t remaining = e->expires - time_now();
-    return MAC_ENTRY_IDLE_TIME - remaining;
+    return ml->idle_time - remaining;
 }
 
 static uint32_t
@@ -98,9 +98,18 @@ get_lru(struct mac_learning *ml, struct mac_entry **e)
     }
 }
 
-/* Creates and returns a new MAC learning table. */
+static unsigned int
+normalize_idle_time(unsigned int idle_time)
+{
+    return (idle_time < 15 ? 15
+            : idle_time > 3600 ? 3600
+            : idle_time);
+}
+
+/* Creates and returns a new MAC learning table with an initial MAC aging
+ * timeout of 'idle_time' seconds. */
 struct mac_learning *
-mac_learning_create(void)
+mac_learning_create(unsigned int idle_time)
 {
     struct mac_learning *ml;
 
@@ -109,6 +118,7 @@ mac_learning_create(void)
     hmap_init(&ml->table);
     ml->secret = random_uint32();
     ml->flood_vlans = NULL;
+    ml->idle_time = normalize_idle_time(idle_time);
     return ml;
 }
 
@@ -143,6 +153,23 @@ mac_learning_set_flood_vlans(struct mac_learning *ml,
         bitmap_free(ml->flood_vlans);
         ml->flood_vlans = vlan_bitmap_clone(bitmap);
         return true;
+    }
+}
+
+/* Changes the MAC aging timeout of 'ml' to 'idle_time' seconds. */
+void
+mac_learning_set_idle_time(struct mac_learning *ml, unsigned int idle_time)
+{
+    idle_time = normalize_idle_time(idle_time);
+    if (idle_time != ml->idle_time) {
+        struct mac_entry *e;
+        int delta;
+
+        delta = (int) idle_time - (int) ml->idle_time;
+        LIST_FOR_EACH (e, lru_node, &ml->lrus) {
+            e->expires += delta;
+        }
+        ml->idle_time = idle_time;
     }
 }
 
@@ -199,7 +226,7 @@ mac_learning_insert(struct mac_learning *ml,
 
     /* Mark 'e' as recently used. */
     list_push_back(&ml->lrus, &e->lru_node);
-    e->expires = time_now() + MAC_ENTRY_IDLE_TIME;
+    e->expires = time_now() + ml->idle_time;
 
     return e;
 }

@@ -651,7 +651,7 @@ construct(struct ofproto *ofproto_, int *n_tablesp)
     ofproto->sflow = NULL;
     ofproto->stp = NULL;
     hmap_init(&ofproto->bundles);
-    ofproto->ml = mac_learning_create();
+    ofproto->ml = mac_learning_create(MAC_ENTRY_DEFAULT_IDLE_TIME);
     for (i = 0; i < MAX_MIRRORS; i++) {
         ofproto->mirrors[i] = NULL;
     }
@@ -2135,6 +2135,13 @@ forward_bpdu_changed(struct ofproto *ofproto_)
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
     /* Revalidate cached flows whenever forward_bpdu option changes. */
     ofproto->need_revalidate = true;
+}
+
+static void
+set_mac_idle_time(struct ofproto *ofproto_, unsigned int idle_time)
+{
+    struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
+    mac_learning_set_idle_time(ofproto->ml, idle_time);
 }
 
 /* Ports. */
@@ -5684,7 +5691,8 @@ ofproto_unixctl_fdb_show(struct unixctl_conn *conn, int argc OVS_UNUSED,
         struct ofbundle *bundle = e->port.p;
         ds_put_format(&ds, "%5d  %4d  "ETH_ADDR_FMT"  %3d\n",
                       ofbundle_get_a_port(bundle)->odp_port,
-                      e->vlan, ETH_ADDR_ARGS(e->mac), mac_entry_age(e));
+                      e->vlan, ETH_ADDR_ARGS(e->mac),
+                      mac_entry_age(ofproto->ml, e));
     }
     unixctl_command_reply(conn, 200, ds_cstr(&ds));
     ds_destroy(&ds);
@@ -6120,5 +6128,6 @@ const struct ofproto_class ofproto_dpif_class = {
     set_flood_vlans,
     is_mirror_output_bundle,
     forward_bpdu_changed,
+    set_mac_idle_time,
     set_realdev,
 };

@@ -32,6 +32,7 @@
 #include "jsonrpc.h"
 #include "lacp.h"
 #include "list.h"
+#include "mac-learning.h"
 #include "netdev.h"
 #include "ofp-print.h"
 #include "ofpbuf.h"
@@ -156,6 +157,7 @@ static void bridge_configure_datapath_id(struct bridge *);
 static void bridge_configure_flow_eviction_threshold(struct bridge *);
 static void bridge_configure_netflow(struct bridge *);
 static void bridge_configure_forward_bpdu(struct bridge *);
+static void bridge_configure_mac_idle_time(struct bridge *);
 static void bridge_configure_sflow(struct bridge *, int *sflow_bridge_number);
 static void bridge_configure_stp(struct bridge *);
 static void bridge_configure_remotes(struct bridge *,
@@ -465,6 +467,7 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
         bridge_configure_mirrors(br);
         bridge_configure_flow_eviction_threshold(br);
         bridge_configure_forward_bpdu(br);
+        bridge_configure_mac_idle_time(br);
         bridge_configure_remotes(br, managers, n_managers);
         bridge_configure_netflow(br);
         bridge_configure_sflow(br, &sflow_bridge_number);
@@ -1269,6 +1272,20 @@ bridge_configure_forward_bpdu(struct bridge *br)
         forward_bpdu = true;
     }
     ofproto_set_forward_bpdu(br->ofproto, forward_bpdu);
+}
+
+/* Set MAC aging time for 'br'. */
+static void
+bridge_configure_mac_idle_time(struct bridge *br)
+{
+    const char *idle_time_str;
+    int idle_time;
+
+    idle_time_str = bridge_get_other_config(br->cfg, "mac-aging-time");
+    idle_time = (idle_time_str && atoi(idle_time_str)
+                 ? atoi(idle_time_str)
+                 : MAC_ENTRY_DEFAULT_IDLE_TIME);
+    ofproto_set_mac_idle_time(br->ofproto, idle_time);
 }
 
 static void

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -96,7 +96,9 @@ lswitch_create(struct rconn *rconn, const struct lswitch_config *cfg)
     sw->max_idle = cfg->max_idle;
     sw->datapath_id = 0;
     sw->last_features_request = time_now() - 1;
-    sw->ml = cfg->mode == LSW_LEARN ? mac_learning_create() : NULL;
+    sw->ml = (cfg->mode == LSW_LEARN
+              ? mac_learning_create(MAC_ENTRY_DEFAULT_IDLE_TIME)
+              : NULL);
     sw->action_normal = cfg->mode == LSW_NORMAL;
 
     flow_wildcards_init_exact(&sw->wc);
