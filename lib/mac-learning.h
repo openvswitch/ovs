@@ -24,10 +24,12 @@
 #include "tag.h"
 #include "timeval.h"
 
+struct mac_learning;
+
 #define MAC_MAX 2048
 
 /* Time, in seconds, before expiring a mac_entry due to inactivity. */
-#define MAC_ENTRY_IDLE_TIME 300
+#define MAC_ENTRY_DEFAULT_IDLE_TIME 300
 
 /* Time, in seconds, to lock an entry updated by a gratuitous ARP to avoid
  * relearning based on a reflection from a bond slave. */
@@ -50,7 +52,7 @@ struct mac_entry {
     } port;
 };
 
-int mac_entry_age(const struct mac_entry *);
+int mac_entry_age(const struct mac_learning *, const struct mac_entry *);
 
 /* Returns true if mac_learning_insert() just created 'mac' and the caller has
  * not yet properly initialized it. */
@@ -80,10 +82,11 @@ struct mac_learning {
                                    front, most recently used at the back. */
     uint32_t secret;            /* Secret for randomizing hash table. */
     unsigned long *flood_vlans; /* Bitmap of learning disabled VLANs. */
+    unsigned int idle_time;     /* Max age before deleting an entry. */
 };
 
 /* Basics. */
-struct mac_learning *mac_learning_create(void);
+struct mac_learning *mac_learning_create(unsigned int idle_time);
 void mac_learning_destroy(struct mac_learning *);
 
 void mac_learning_run(struct mac_learning *, struct tag_set *);
@@ -92,6 +95,7 @@ void mac_learning_wait(struct mac_learning *);
 /* Configuration. */
 bool mac_learning_set_flood_vlans(struct mac_learning *,
                                   const unsigned long *bitmap);
+void mac_learning_set_idle_time(struct mac_learning *, unsigned int idle_time);
 
 /* Learning. */
 bool mac_learning_may_learn(const struct mac_learning *,

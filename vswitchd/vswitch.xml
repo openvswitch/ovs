@@ -558,6 +558,26 @@
         should be enabled.  Default is disabled, set to
         <code>true</code> to enable.
       </column>
+
+      <column name="other_config" key="mac-aging-time"
+              type='{"type": "integer", "minInteger": 1}'>
+        <p>
+          The maximum number of seconds to retain a MAC learning entry for
+          which no packets have been seen.  The default is currently 300
+          seconds (5 minutes).  The value, if specified, is forced into a
+          reasonable range, currently 15 to 3600 seconds.
+        </p>
+
+        <p>
+          A short MAC aging time allows a network to more quickly detect that a
+          host is no longer connected to a switch port.  However, it also makes
+          it more likely that packets will be flooded unnecessarily, when they
+          are addressed to a connected host that rarely transmits packets.  To
+          reduce the incidence of unnecessary flooding, use a MAC aging time
+          longer than the maximum interval at which a host will ordinarily
+          transmit packets.
+        </p>
+      </column>
     </group>
 
     <group title="Bridge Status">

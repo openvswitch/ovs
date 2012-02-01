@@ -503,6 +503,16 @@ ofproto_set_forward_bpdu(struct ofproto *ofproto, bool forward_bpdu)
     }
 }
 
+/* Sets the MAC aging timeout for the OFPP_NORMAL action on 'ofproto' to
+ * 'idle_time', in seconds. */
+void
+ofproto_set_mac_idle_time(struct ofproto *ofproto, unsigned idle_time)
+{
+    if (ofproto->ofproto_class->set_mac_idle_time) {
+        ofproto->ofproto_class->set_mac_idle_time(ofproto, idle_time);
+    }
+}
+
 void
 ofproto_set_desc(struct ofproto *p,
                  const char *mfr_desc, const char *hw_desc,

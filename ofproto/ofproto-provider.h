@@ -1107,6 +1107,10 @@ struct ofproto_class {
      * will be invoked. */
     void (*forward_bpdu_changed)(struct ofproto *ofproto);
 
+    /* Sets the MAC aging timeout for the OFPP_NORMAL action to 'idle_time',
+     * in seconds. */
+    void (*set_mac_idle_time)(struct ofproto *ofproto, unsigned int idle_time);
+
 /* Linux VLAN device support (e.g. "eth0.10" for VLAN 10.)
  *
  * This is deprecated.  It is only for compatibility with broken device drivers
