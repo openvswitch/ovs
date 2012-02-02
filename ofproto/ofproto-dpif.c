@@ -3110,7 +3110,7 @@ rule_expire(struct rule_dpif *rule)
     if (rule->up.hard_timeout
         && now > rule->up.modified + rule->up.hard_timeout * 1000) {
         reason = OFPRR_HARD_TIMEOUT;
-    } else if (rule->up.idle_timeout && list_is_empty(&rule->facets)
+    } else if (rule->up.idle_timeout
                && now > rule->up.used + rule->up.idle_timeout * 1000) {
         reason = OFPRR_IDLE_TIMEOUT;
     } else {
