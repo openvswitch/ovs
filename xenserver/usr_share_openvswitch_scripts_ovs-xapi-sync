@@ -1,5 +1,5 @@
 #!/usr/bin/python
-# Copyright (c) 2009, 2010, 2011 Nicira Networks
+# Copyright (c) 2009, 2010, 2011, 2012 Nicira Networks
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -256,7 +256,7 @@ def main():
     signal.signal(signal.SIGHUP, handler)
 
     bridges = {}                # Map from bridge name to xs_network_uuids
-    interfaces = {}             # Map from interface name to xs-vif-uuid
+    iface_ids = {}              # Map from xs-vif-uuid to iface-id
     while True:
         if not force_run and not idl.run():
             poller = ovs.poller.Poller()
@@ -267,7 +267,7 @@ def main():
         if force_run:
             vlog.info("Forced to re-run as the result of a SIGHUP")
             bridges = {}
-            interfaces = {}
+            iface_ids = {}
             force_run = False
 
         txn = ovs.db.idl.Transaction(idl)
@@ -290,7 +290,7 @@ def main():
         for row in idl.tables["Interface"].rows.itervalues():
             iface_by_name[row.name] = row
 
-        new_interfaces = {}
+        new_iface_ids = {}
         for row in idl.tables["Interface"].rows.itervalues():
             # Match up paired vif and tap devices.
             if row.name.startswith("vif"):
@@ -311,17 +311,20 @@ def main():
                 for k in keys:
                     set_external_id(row, k, vif.external_ids.get(k))
 
-            # If it's a new interface or its xs-vif-uuid has changed, then
-            # obtain the iface-id from XAPI.
+            # Map from xs-vif-uuid to iface-id.
             #
             # (A tap's xs-vif-uuid comes from its vif.  That falls out
             # naturally from the copy loop above.)
-            new_xvu = row.external_ids.get("xs-vif-uuid", "")
-            old_xvu = interfaces.get(row.name)
-            if old_xvu != new_xvu:
-                iface_id = get_iface_id(row.name, new_xvu)
-                if iface_id and row.external_ids.get("iface-id") != iface_id:
-                    set_external_id(row, "iface-id", iface_id)
+            xvu = row.external_ids.get("xs-vif-uuid")
+            if xvu:
+                iface_id = (new_iface_ids.get(xvu)
+                            or iface_ids.get(xvu)
+                            or get_iface_id(row.name, xvu))
+                new_iface_ids[xvu] = iface_id
+            else:
+                # No xs-vif-uuid therefore no iface-id.
+                iface_id = None
+            set_external_id(row, "iface-id", iface_id)
 
             # When there's a vif and a tap, the tap is active (used for
             # traffic).  When there's just a vif, the vif is active.
@@ -336,9 +339,7 @@ def main():
                 set_external_id(vif, "iface-status", "active")
             else:
                 set_external_id(row, "iface-status", None)
-
-            new_interfaces[row.name] = new_xvu
-        interfaces = new_interfaces
+        iface_ids = new_iface_ids
 
         txn.commit_block()
 
