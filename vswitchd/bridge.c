@@ -3218,6 +3218,8 @@ iface_configure_cfm(struct iface *iface)
                                                  "0"));
     s.ccm_vlan = atoi(get_interface_other_config(iface->cfg, "cfm_ccm_vlan",
                                                  "0"));
+    s.ccm_pcp = atoi(get_interface_other_config(iface->cfg, "cfm_ccm_pcp",
+                                                "0"));
     if (s.interval <= 0) {
         s.interval = 1000;
     }

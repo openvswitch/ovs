@@ -26,6 +26,7 @@ post-v1.5.0
     - ovsdb-client:
         - The new option --timestamp causes the "monitor" command to print
           a timestamp with every update.
+    - CFM module CCM broadcasts can now be tagged with an 802.1p priority.
 
 
 v1.5.0 - xx xxx xxxx

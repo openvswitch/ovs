@@ -30,6 +30,7 @@ struct cfm_settings {
     bool extended;              /* Run in extended mode. */
     bool opup;                  /* Operational State. */
     uint16_t ccm_vlan;          /* CCM Vlan tag. Zero if none. */
+    uint8_t ccm_pcp;            /* CCM Priority. Zero if none. */
 };
 
 void cfm_init(void);

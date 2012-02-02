@@ -1742,6 +1742,15 @@
         with the given value.
       </column>
 
+      <column name="other_config" key="cfm_ccm_pcp"
+        type='{"type": "integer", "minInteger": 1, "maxInteger": 7}'>
+        When set, the CFM module will apply a VLAN tag to all CCMs it generates
+        with the given PCP value.  The VLAN ID of the tag is governed by the
+        value of <ref column="other_config" key="cfm_ccm_vlan"/>. If
+        <ref column="other_config" key="cfm_ccm_vlan"/> is unset, a VLAN ID of
+        zero is used.
+      </column>
+
     </group>
 
     <group title="Bonding Configuration">
