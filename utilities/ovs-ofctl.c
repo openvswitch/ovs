@@ -447,6 +447,8 @@ fetch_switch_config(struct vconn *vconn, struct ofp_switch_config *config_)
 
     config = reply->data;
     *config_ = *config;
+
+    ofpbuf_delete(reply);
 }
 
 static void
@@ -869,6 +871,8 @@ monitor_vconn(struct vconn *vconn)
         unixctl_server_wait(server);
         poll_block();
     }
+    vconn_close(vconn);
+    unixctl_server_destroy(server);
 }
 
 static void
