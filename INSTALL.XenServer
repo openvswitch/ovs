@@ -10,30 +10,51 @@ These instructions have been tested with XenServer 5.6 FP1.
 Building Open vSwitch for XenServer
 -----------------------------------
 
-The recommended build environment to build RPMs for Citrix XenServer
-is the DDK VM available from Citrix.  If you are building from an Open
-vSwitch distribution tarball, this VM has all the tools that you will
-need.  If you are building from an Open vSwitch Git tree, then you
-will need to first create a distribution tarball elsewhere, by running
-"./boot.sh; ./configure; make dist" in the Git tree, because the DDK
-VM does not include Autoconf or Automake that are required to
-bootstrap the Open vSwitch distribution.
+You may build from an Open vSwitch distribution tarball or from an
+Open vSwitch Git tree.  The recommended build environment to build
+RPMs for Citrix XenServer is the DDK VM available from Citrix.
 
-Once you have a distribution tarball, copy it into
-/usr/src/redhat/SOURCES inside the VM.  Then execute the following:
+1. If you are building from an Open vSwitch Git tree, then you will
+   need to first create a distribution tarball by running "./boot.sh;
+   ./configure; make dist" in the Git tree.  You cannot run this in
+   the DDK VM, because it lacks tools that are necessary to bootstrap
+   the Open vSwitch distribution.  Instead, you must run this on a
+   machine that has the tools listed in INSTALL.Linux as prerequisites
+   for building from a Git tree.
+
+2. Copy the distribution tarball into /usr/src/redhat/SOURCES inside
+   the DDK VM.
+
+3. In the DDK VM, unpack the distribution tarball into a temporary
+   directory and "cd" into the root of the distribution tarball.
+
+4. To build Open vSwitch userspace, run:
+
+       rpmbuild -bb xenserver/openvswitch-xen.spec
+
+   This produces three RPMs in /usr/src/redhat/RPMS/i386:
+   "openvswitch", "openvswitch-modules-xen", and
+   "openvswitch-debuginfo".
+
+Build Parameters
+----------------
+
+openvswitch-xen.spec needs to know a number of pieces of information
+about the XenServer kernel.  Usually, it can figure these out for
+itself, but if it does not do it correctly then you can specify them
+yourself as parameters to the build.  Thus, the final "rpmbuild" step
+above can be elaborated as:
 
    VERSION=<Open vSwitch version>
    KERNEL_NAME=<Xen Kernel name>
    KERNEL_VERSION=<Xen Kernel version>
    KERNEL_FLAVOR=<Xen Kernel flavor(suffix) >
-   cd /tmp
-   tar xfz /usr/src/redhat/SOURCES/openvswitch-$VERSION.tar.gz
    rpmbuild \
         -D "openvswitch_version $VERSION" \
         -D "kernel_name $KERNEL_NAME" \
         -D "kernel_version $KERNEL_VERSION" \
         -D "kernel_flavor $KERNEL_FLAVOR" \
-        -bb openvswitch-$VERSION/xenserver/openvswitch-xen.spec
+        -bb xenserver/openvswitch-xen.spec
 
 where:
 
@@ -51,10 +72,6 @@ where:
     <Xen Kernel flavor (suffix) > is either "xen" or "kdump".
     The "xen" flavor is the main running kernel flavor and the "kdump" flavor is
     the crashdump kernel flavor. Commonly, one would specify "xen" here.
-
-Three RPMs will be output into /usr/src/redhat/RPMS/i386, whose names begin
-with "openvswitch", "openvswitch-modules-xen" (if building for kernel_flavor=xen),
-and "openvswitch-debuginfo".
 
 Installing Open vSwitch for XenServer
 -------------------------------------

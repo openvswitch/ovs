@@ -1,4 +1,4 @@
-# Copyright (C) 2009, 2010, 2011 Nicira Networks, Inc.
+# Copyright (C) 2009, 2010, 2011, 2012 Nicira Networks, Inc.
 #
 # Copying and distribution of this file, with or without modification,
 # are permitted in any medium without royalty provided the copyright
@@ -17,6 +17,7 @@ EXTRA_DIST += \
 	xenserver/etc_xapi.d_plugins_openvswitch-cfg-update \
 	xenserver/etc_xensource_scripts_vif \
 	xenserver/openvswitch-xen.spec \
+	xenserver/openvswitch-xen.spec.in \
 	xenserver/opt_xensource_libexec_InterfaceReconfigure.py \
 	xenserver/opt_xensource_libexec_InterfaceReconfigureBridge.py \
 	xenserver/opt_xensource_libexec_InterfaceReconfigureVswitch.py \
@@ -24,3 +25,8 @@ EXTRA_DIST += \
 	xenserver/usr_lib_xsconsole_plugins-base_XSFeatureVSwitch.py \
 	xenserver/usr_share_openvswitch_scripts_ovs-xapi-sync \
 	xenserver/usr_share_openvswitch_scripts_sysconfig.template
+
+$(srcdir)/xenserver/openvswitch-xen.spec: xenserver/openvswitch-xen.spec.in $(top_builddir)/config.status
+  ($(ro_shell) && sed -e 's,[@]VERSION[@],$(VERSION),g') \
+    < $(srcdir)/xenserver/$(@F).in > $(@F).tmp || exit 1; \
+  if cmp -s $(@F).tmp $@; then touch $@; rm $(@F).tmp; else mv $(@F).tmp $@; fi
