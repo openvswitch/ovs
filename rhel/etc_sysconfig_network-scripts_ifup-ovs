@@ -37,11 +37,8 @@ case "$TYPE" in
 	OVSBridge)
 		ovs-vsctl -- --may-exist add-br "$DEVICE" $OVS_OPTIONS ${OVS_EXTRA+-- $OVS_EXTRA}
 		if [ "${OVSBOOTPROTO}" = "dhcp" ] && [ -n "${OVSINTF}" ]; then
-			case ${OVSDHCPINTERFACES} in
-				${OVSINTF#ifcfg-} | \
-				"${OVSINTF#ifcfg-},"* | \
-				*",${OVSINTF#ifcfg-}" | \
-				*",${OVSINTF#ifcfg-},"*)
+			case ,${OVSDHCPINTERFACES}, in
+				*,${OVSINTF#ifcfg-},*)
 					BOOTPROTO=dhcp ${OTHERSCRIPT} ${CONFIG}
 				;;
 			esac
