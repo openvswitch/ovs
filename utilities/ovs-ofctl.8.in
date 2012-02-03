@@ -463,7 +463,7 @@ Bitwise matches on transport ports are rarely useful in isolation, but
 a group of them can be used to reduce the number of flows required to
 match on a range of transport ports.  For example, suppose that the
 goal is to match TCP source ports 1000 to 1999, inclusive.  One way is
-to insert 1001 flows, each of which matches on a single source port.
+to insert 1000 flows, each of which matches on a single source port.
 Another way is to look at the binary representations of 1000 and 1999,
 as follows:
 .br
@@ -509,7 +509,7 @@ Only Open vSwitch 1.6 and later supports bitwise matching on transport
 ports.
 .IP
 Like the exact-match forms of \fBtp_src\fR and \fBtp_dst\fR described
-above, the bitwise match forms apply only when When \fBdl_type\fR and
+above, the bitwise match forms apply only when \fBdl_type\fR and
 \fBnw_proto\fR specify TCP or UDP.
 .
 .IP \fBicmp_type=\fItype\fR
