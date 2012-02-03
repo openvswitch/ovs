@@ -1,2 +1,2 @@
-usr/share/openvswitch/python/ovstest usr/lib/python2.4/site-packages/
+usr/share/openvswitch/python/ovstest usr/lib/python2.6/dist-packages/
 usr/bin/ovs-test
