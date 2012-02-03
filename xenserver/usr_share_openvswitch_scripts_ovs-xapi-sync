@@ -25,7 +25,6 @@
 import argparse
 import os
 import signal
-import subprocess
 import sys
 import time
 
@@ -34,13 +33,11 @@ import XenAPI
 import ovs.dirs
 from ovs.db import error
 from ovs.db import types
-import ovs.util
 import ovs.daemon
 import ovs.db.idl
 
 root_prefix = ''                # Prefix for absolute file names, for testing.
 vlog = ovs.vlog.Vlog("ovs-xapi-sync")
-vsctl = "/usr/bin/ovs-vsctl"
 session = None
 force_run = False
 
@@ -114,13 +111,6 @@ def get_iface_id(if_name, xs_vif_uuid):
     except XenAPI.Failure:
         vlog.warn("Could not find XAPI entry for VIF %s" % if_name)
         return xs_vif_uuid
-
-
-def call_vsctl(args):
-    cmd = [vsctl, "--timeout=30", "-vANY:console:off"] + args
-    exitcode = subprocess.call(cmd)
-    if exitcode != 0:
-        vlog.warn("Couldn't call ovs-vsctl")
 
 
 def set_or_delete(d, key, value):
