@@ -915,8 +915,8 @@ dnl - Flow actions changing (in this case, due to MAC learning)
 dnl   cause a record to be sent.
 AT_SETUP([ofproto-dpif - NetFlow flow expiration])
 
-AT_SKIP_IF([test "x$RANDOM" = x])
-NETFLOW_PORT=`expr 32767 + \( $RANDOM % 32767 \)`
+AT_CHECK([perl $srcdir/choose-port.pl], [0], [stdout])
+NETFLOW_PORT=`cat stdout`
 
 OVS_VSWITCHD_START(
   [set Bridge br0 fail-mode=standalone -- \
@@ -957,8 +957,8 @@ AT_CLEANUP
 dnl Test that basic NetFlow reports active expirations correctly.
 AT_SETUP([ofproto-dpif - NetFlow active expiration])
 
-AT_SKIP_IF([test "x$RANDOM" = x])
-NETFLOW_PORT=`expr 32767 + \( $RANDOM % 32767 \)`
+AT_CHECK([perl $srcdir/choose-port.pl], [0], [stdout])
+NETFLOW_PORT=`cat stdout`
 
 OVS_VSWITCHD_START(
   [set Bridge br0 fail-mode=standalone -- \

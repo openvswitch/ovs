@@ -334,6 +334,8 @@ noinst_PROGRAMS += tests/test-byte-order
 tests_test_byte_order_SOURCES = tests/test-byte-order.c
 tests_test_byte_order_LDADD = lib/libopenvswitch.a
 
+EXTRA_DIST += tests/choose-port.pl
+
 # Python tests.
 EXTRA_DIST += \
 	tests/test-daemon.py \
