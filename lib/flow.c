@@ -895,7 +895,7 @@ flow_hash_symmetric_l4(const struct flow *flow, uint32_t basis)
         };
         ovs_be16 eth_type;
         ovs_be16 vlan_tci;
-        ovs_be16 tp_addr;
+        ovs_be16 tp_port;
         uint8_t eth_addr[ETH_ADDR_LEN];
         uint8_t ip_proto;
     } fields;
@@ -915,7 +915,7 @@ flow_hash_symmetric_l4(const struct flow *flow, uint32_t basis)
         fields.ipv4_addr = flow->nw_src ^ flow->nw_dst;
         fields.ip_proto = flow->nw_proto;
         if (fields.ip_proto == IPPROTO_TCP) {
-            fields.tp_addr = flow->tp_src ^ flow->tp_dst;
+            fields.tp_port = flow->tp_src ^ flow->tp_dst;
         }
     } else if (fields.eth_type == htons(ETH_TYPE_IPV6)) {
         const uint8_t *a = &flow->ipv6_src.s6_addr[0];
@@ -927,7 +927,7 @@ flow_hash_symmetric_l4(const struct flow *flow, uint32_t basis)
         }
         fields.ip_proto = flow->nw_proto;
         if (fields.ip_proto == IPPROTO_TCP) {
-            fields.tp_addr = flow->tp_src ^ flow->tp_dst;
+            fields.tp_port = flow->tp_src ^ flow->tp_dst;
         }
     }
     return hash_bytes(&fields, sizeof fields, basis);
