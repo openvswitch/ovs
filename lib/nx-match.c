@@ -408,6 +408,55 @@ nxm_put_frag(struct ofpbuf *b, const struct cls_rule *cr)
     }
 }
 
+static void
+nxm_put_ip(struct ofpbuf *b, const struct cls_rule *cr,
+           uint8_t icmp_proto, uint32_t icmp_type, uint32_t icmp_code)
+{
+    const flow_wildcards_t wc = cr->wc.wildcards;
+    const struct flow *flow = &cr->flow;
+
+    nxm_put_frag(b, cr);
+
+    if (!(wc & FWW_NW_DSCP)) {
+        nxm_put_8(b, NXM_OF_IP_TOS, flow->nw_tos & IP_DSCP_MASK);
+    }
+
+    if (!(wc & FWW_NW_ECN)) {
+        nxm_put_8(b, NXM_NX_IP_ECN, flow->nw_tos & IP_ECN_MASK);
+    }
+
+    if (!(wc & FWW_NW_TTL)) {
+        nxm_put_8(b, NXM_NX_IP_TTL, flow->nw_ttl);
+    }
+
+    if (!(wc & FWW_NW_PROTO)) {
+        nxm_put_8(b, NXM_OF_IP_PROTO, flow->nw_proto);
+
+        if (flow->nw_proto == IPPROTO_TCP) {
+            if (!(wc & FWW_TP_SRC)) {
+                nxm_put_16(b, NXM_OF_TCP_SRC, flow->tp_src);
+            }
+            if (!(wc & FWW_TP_DST)) {
+                nxm_put_16(b, NXM_OF_TCP_DST, flow->tp_dst);
+            }
+        } else if (flow->nw_proto == IPPROTO_UDP) {
+            if (!(wc & FWW_TP_SRC)) {
+                nxm_put_16(b, NXM_OF_UDP_SRC, flow->tp_src);
+            }
+            if (!(wc & FWW_TP_DST)) {
+                nxm_put_16(b, NXM_OF_UDP_DST, flow->tp_dst);
+            }
+        } else if (flow->nw_proto == icmp_proto) {
+            if (!(wc & FWW_TP_SRC)) {
+                nxm_put_8(b, icmp_type, ntohs(flow->tp_src));
+            }
+            if (!(wc & FWW_TP_DST)) {
+                nxm_put_8(b, icmp_code, ntohs(flow->tp_dst));
+            }
+        }
+    }
+}
+
 /* Appends to 'b' the nx_match format that expresses 'cr' (except for
  * 'cr->priority', because priority is not part of nx_match), plus enough
  * zero bytes to pad the nx_match out to a multiple of 8.  For Flow Mod
@@ -456,126 +505,34 @@ nx_put_match(struct ofpbuf *b, const struct cls_rule *cr,
         /* IP. */
         nxm_put_32m(b, NXM_OF_IP_SRC, flow->nw_src, cr->wc.nw_src_mask);
         nxm_put_32m(b, NXM_OF_IP_DST, flow->nw_dst, cr->wc.nw_dst_mask);
-        nxm_put_frag(b, cr);
-
-        if (!(wc & FWW_NW_DSCP)) {
-            nxm_put_8(b, NXM_OF_IP_TOS, flow->nw_tos & IP_DSCP_MASK);
-        }
-
-        if (!(wc & FWW_NW_ECN)) {
-            nxm_put_8(b, NXM_NX_IP_ECN, flow->nw_tos & IP_ECN_MASK);
-        }
-
-        if (!(wc & FWW_NW_TTL)) {
-            nxm_put_8(b, NXM_NX_IP_TTL, flow->nw_ttl);
-        }
-
-        if (!(wc & FWW_NW_PROTO)) {
-            nxm_put_8(b, NXM_OF_IP_PROTO, flow->nw_proto);
-            switch (flow->nw_proto) {
-                /* TCP. */
-            case IPPROTO_TCP:
-                if (!(wc & FWW_TP_SRC)) {
-                    nxm_put_16(b, NXM_OF_TCP_SRC, flow->tp_src);
-                }
-                if (!(wc & FWW_TP_DST)) {
-                    nxm_put_16(b, NXM_OF_TCP_DST, flow->tp_dst);
-                }
-                break;
-
-                /* UDP. */
-            case IPPROTO_UDP:
-                if (!(wc & FWW_TP_SRC)) {
-                    nxm_put_16(b, NXM_OF_UDP_SRC, flow->tp_src);
-                }
-                if (!(wc & FWW_TP_DST)) {
-                    nxm_put_16(b, NXM_OF_UDP_DST, flow->tp_dst);
-                }
-                break;
-
-                /* ICMP. */
-            case IPPROTO_ICMP:
-                if (!(wc & FWW_TP_SRC)) {
-                    nxm_put_8(b, NXM_OF_ICMP_TYPE, ntohs(flow->tp_src));
-                }
-                if (!(wc & FWW_TP_DST)) {
-                    nxm_put_8(b, NXM_OF_ICMP_CODE, ntohs(flow->tp_dst));
-                }
-                break;
-            }
-        }
+        nxm_put_ip(b, cr, IPPROTO_ICMP, NXM_OF_ICMP_TYPE, NXM_OF_ICMP_CODE);
     } else if (!(wc & FWW_DL_TYPE) && flow->dl_type == htons(ETH_TYPE_IPV6)) {
         /* IPv6. */
         nxm_put_ipv6(b, NXM_NX_IPV6_SRC, &flow->ipv6_src,
                 &cr->wc.ipv6_src_mask);
         nxm_put_ipv6(b, NXM_NX_IPV6_DST, &flow->ipv6_dst,
                 &cr->wc.ipv6_dst_mask);
-        nxm_put_frag(b, cr);
+        nxm_put_ip(b, cr,
+                   IPPROTO_ICMPV6, NXM_NX_ICMPV6_TYPE, NXM_NX_ICMPV6_CODE);
 
         if (!(wc & FWW_IPV6_LABEL)) {
             nxm_put_32(b, NXM_NX_IPV6_LABEL, flow->ipv6_label);
         }
 
-        if (!(wc & FWW_NW_DSCP)) {
-            nxm_put_8(b, NXM_OF_IP_TOS, flow->nw_tos & IP_DSCP_MASK);
-        }
-
-        if (!(wc & FWW_NW_ECN)) {
-            nxm_put_8(b, NXM_NX_IP_ECN, flow->nw_tos & IP_ECN_MASK);
-        }
-
-        if (!(wc & FWW_NW_TTL)) {
-            nxm_put_8(b, NXM_NX_IP_TTL, flow->nw_ttl);
-        }
-
-        if (!(wc & FWW_NW_PROTO)) {
-            nxm_put_8(b, NXM_OF_IP_PROTO, flow->nw_proto);
-            switch (flow->nw_proto) {
-                /* TCP. */
-            case IPPROTO_TCP:
-                if (!(wc & FWW_TP_SRC)) {
-                    nxm_put_16(b, NXM_OF_TCP_SRC, flow->tp_src);
-                }
-                if (!(wc & FWW_TP_DST)) {
-                    nxm_put_16(b, NXM_OF_TCP_DST, flow->tp_dst);
-                }
-                break;
-
-                /* UDP. */
-            case IPPROTO_UDP:
-                if (!(wc & FWW_TP_SRC)) {
-                    nxm_put_16(b, NXM_OF_UDP_SRC, flow->tp_src);
-                }
-                if (!(wc & FWW_TP_DST)) {
-                    nxm_put_16(b, NXM_OF_UDP_DST, flow->tp_dst);
-                }
-                break;
-
-                /* ICMPv6. */
-            case IPPROTO_ICMPV6:
-                if (!(wc & FWW_TP_SRC)) {
-                    nxm_put_8(b, NXM_NX_ICMPV6_TYPE, ntohs(flow->tp_src));
-
-                    if (flow->tp_src == htons(ND_NEIGHBOR_SOLICIT) ||
-                        flow->tp_src == htons(ND_NEIGHBOR_ADVERT)) {
-                        if (!(wc & FWW_ND_TARGET)) {
-                            nxm_put_ipv6(b, NXM_NX_ND_TARGET, &flow->nd_target,
-                                         &in6addr_exact);
-                        }
-                        if (!(wc & FWW_ARP_SHA)
-                            && flow->tp_src == htons(ND_NEIGHBOR_SOLICIT)) {
-                            nxm_put_eth(b, NXM_NX_ND_SLL, flow->arp_sha);
-                        }
-                        if (!(wc & FWW_ARP_THA)
-                            && flow->tp_src == htons(ND_NEIGHBOR_ADVERT)) {
-                            nxm_put_eth(b, NXM_NX_ND_TLL, flow->arp_tha);
-                        }
-                    }
-                }
-                if (!(wc & FWW_TP_DST)) {
-                    nxm_put_8(b, NXM_NX_ICMPV6_CODE, ntohs(flow->tp_dst));
-                }
-                break;
+        if (flow->nw_proto == IPPROTO_ICMPV6
+            && (flow->tp_src == htons(ND_NEIGHBOR_SOLICIT) ||
+                flow->tp_src == htons(ND_NEIGHBOR_ADVERT))) {
+            if (!(wc & FWW_ND_TARGET)) {
+                nxm_put_ipv6(b, NXM_NX_ND_TARGET, &flow->nd_target,
+                             &in6addr_exact);
+            }
+            if (!(wc & FWW_ARP_SHA)
+                && flow->tp_src == htons(ND_NEIGHBOR_SOLICIT)) {
+                nxm_put_eth(b, NXM_NX_ND_SLL, flow->arp_sha);
+            }
+            if (!(wc & FWW_ARP_THA)
+                && flow->tp_src == htons(ND_NEIGHBOR_ADVERT)) {
+                nxm_put_eth(b, NXM_NX_ND_TLL, flow->arp_tha);
             }
         }
     } else if (!(wc & FWW_DL_TYPE) && flow->dl_type == htons(ETH_TYPE_ARP)) {
