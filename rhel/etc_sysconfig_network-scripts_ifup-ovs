@@ -37,8 +37,8 @@ case "$TYPE" in
 	OVSBridge)
 		ovs-vsctl -- --may-exist add-br "$DEVICE" $OVS_OPTIONS ${OVS_EXTRA+-- $OVS_EXTRA}
 		if [ "${OVSBOOTPROTO}" = "dhcp" ] && [ -n "${OVSINTF}" ]; then
-			case ,${OVSDHCPINTERFACES}, in
-				*,${OVSINTF#ifcfg-},*)
+			case " ${OVSDHCPINTERFACES} " in
+				*" ${OVSINTF} "*)
 					BOOTPROTO=dhcp ${OTHERSCRIPT} ${CONFIG}
 				;;
 			esac
@@ -51,7 +51,7 @@ case "$TYPE" in
 		/sbin/ifup "$OVS_BRIDGE"
 		${OTHERSCRIPT} ${CONFIG} ${2}
 		ovs-vsctl -- --may-exist add-port "$OVS_BRIDGE" "$DEVICE" $OVS_OPTIONS ${OVS_EXTRA+-- $OVS_EXTRA}
-		OVSINTF=${CONFIG} /sbin/ifup "$OVS_BRIDGE"
+		OVSINTF=${DEVICE} /sbin/ifup "$OVS_BRIDGE"
 		;;
 	OVSIntPort)
 		/sbin/ifup "$OVS_BRIDGE"
@@ -65,7 +65,7 @@ case "$TYPE" in
 		done
 		ovs-vsctl -- --fake-iface add-bond "$OVS_BRIDGE" "$DEVICE" ${BOND_IFACES} $OVS_OPTIONS ${OVS_EXTRA+-- $OVS_EXTRA}
 		${OTHERSCRIPT} ${CONFIG} ${2}
-		OVSINTF=${CONFIG} /sbin/ifup "$OVS_BRIDGE"
+		OVSINTF=${DEVICE} /sbin/ifup "$OVS_BRIDGE"
 		;;
 	*)
 		echo $"Invalid OVS interface type $TYPE"

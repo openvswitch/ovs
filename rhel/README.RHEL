@@ -65,7 +65,7 @@ HOTPLUG=no
 Enable DHCP on the bridge:
 * Needs OVSBOOTPROTO instead of BOOTPROTO.
 * All the interfaces that can reach the DHCP server
-as a comma separated list in OVSDHCPINTERFACES.
+as a space separated list in OVSDHCPINTERFACES.
 
 DEVICE=ovsbridge0
 ONBOOT=yes
