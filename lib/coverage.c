@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011 Nicira Networks.
+ * Copyright (c) 2009, 2010, 2011, 2012 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@
 #include <stdlib.h>
 #include "dynamic-string.h"
 #include "hash.h"
+#include "timeval.h"
 #include "unixctl.h"
 #include "util.h"
 #include "vlog.h"
@@ -123,12 +124,20 @@ coverage_hit(uint32_t hash)
     static uint32_t hit[HIT_BITS / BITS_PER_WORD];
     BUILD_ASSERT_DECL(IS_POW2(HIT_BITS));
 
+    static long long int next_clear = LLONG_MIN;
+
     unsigned int bit_index = hash & (HIT_BITS - 1);
     unsigned int word_index = bit_index / BITS_PER_WORD;
     unsigned int word_mask = 1u << (bit_index % BITS_PER_WORD);
 
+    /* Expire coverage hash suppression once a day. */
+    if (time_msec() >= next_clear) {
+        memset(hit, 0, sizeof hit);
+        next_clear = time_msec() + 60 * 60 * 24 * 1000LL;
+    }
+
     if (hit[word_index] & word_mask) {
- return true;
+        return true;
     } else {
         hit[word_index] |= word_mask;
         return false;
