@@ -20,6 +20,77 @@ to 'internal' ports whose port numbers are less than OFPP_MAX, we interpret
 OFPP_LOCAL as a physical port and support OFPAT_ENQUEUE on it as well.
 
 
+OFPT_FLOW_MOD
+=============
+
+The OpenFlow 1.0 specification for the behavior of OFPT_FLOW_MOD is
+confusing.  The following table summarizes the Open vSwitch
+implementation of its behavior in the following categories:
+
+    - "match on priority": Whether the flow_mod acts only on flows
+      whose priority matches that included in the flow_mod message.
+
+    - "match on out_port": Whether the flow_mod acts only on flows
+      that output to the out_port included in the flow_mod message (if
+      out_port is not OFPP_NONE).
+
+    - "updates flow_cookie": Whether the flow_mod changes the
+      flow_cookie of the flow or flows that it matches to the
+      flow_cookie included in the flow_mod message.
+
+    - "updates OFPFF_ flags": Whether the flow_mod changes the
+      OFPFF_SEND_FLOW_REM flag of the flow or flows that it matches to
+      the setting included in the flags of the flow_mod message.
+
+    - "honors OFPFF_CHECK_OVERLAP": Whether the OFPFF_CHECK_OVERLAP
+      flag in the flow_mod is significant.
+
+    - "updates idle_timeout" and "updates hard_timeout": Whether the
+      idle_timeout and hard_timeout in the flow_mod, respectively,
+      have an effect on the flow or flows matched by the flow_mod.
+
+    - "updates idle timer": Whether the flow_mod resets the per-flow
+      timer that measures how long a flow has been idle.
+
+    - "updates hard timer": Whether the flow_mod resets the per-flow
+      timer that measures how long it has been since a flow was
+      modified.
+
+    - "zeros counters": Whether the flow_mod resets per-flow packet
+      and byte counters to zero.
+
+    - "sends flow_removed message": Whether the flow_mod generates a
+      flow_removed message for the flow or flows that it affects.
+
+An entry labeled "yes" means that the flow mod type does have the
+indicated behavior, "---" means that it does not, an empty cell means
+that the property is not applicable, and other values are explained
+below the table.
+
+                                          MODIFY          DELETE
+                             ADD  MODIFY  STRICT  DELETE  STRICT
+                             ===  ======  ======  ======  ======
+match on priority           ---    ---     yes     ---     yes
+match on out_port           ---    ---     ---     yes     yes
+updates flow_cookie          yes    yes     yes
+updates OFPFF_SEND_FLOW_REM  yes     +       +
+honors OFPFF_CHECK_OVERLAP   yes     +       +
+updates idle_timeout         yes     +       +
+updates hard_timeout         yes     +       +
+resets idle timer            yes     +       +
+resets hard timer            yes    yes     yes
+zeros counters               yes     +       +
+sends flow_removed message   ---    ---     ---      %       %
+
+(+) "modify" and "modify-strict" only take these actions when they
+    create a new flow, not when they update an existing flow.
+
+(%) "delete" and "delete_strict" generates a flow_removed message if
+    the deleted flow or flows have the OFPFF_SEND_FLOW_REM flag set.
+    (Each controller can separately control whether it wants to
+    receive the generated messages.)
+
+
 Multiple Table Support
 ======================
 
