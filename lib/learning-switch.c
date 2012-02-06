@@ -410,6 +410,8 @@ process_packet_in(struct lswitch *sw, struct rconn *rconn,
     struct ofp_action_header actions[2];
     size_t actions_len;
 
+    struct ofputil_packet_out po;
+
     size_t pkt_ofs, pkt_len;
     struct ofpbuf pkt;
     struct flow flow;
@@ -458,6 +460,19 @@ process_packet_in(struct lswitch *sw, struct rconn *rconn,
     }
     assert(actions_len <= sizeof actions);
 
+    /* Prepare packet_out in case we need one. */
+    po.buffer_id = ntohl(opi->buffer_id);
+    if (po.buffer_id == UINT32_MAX) {
+        po.packet = pkt.data;
+        po.packet_len = pkt.size;
+    } else {
+        po.packet = NULL;
+        po.packet_len = 0;
+    }
+    po.in_port = in_port;
+    po.actions = (union ofp_action *) actions;
+    po.n_actions = actions_len / sizeof *actions;
+
     /* Send the packet, and possibly the whole flow, to the output port. */
     if (sw->max_idle >= 0 && (!sw->ml || out_port != OFPP_FLOOD)) {
         struct ofpbuf *buffer;
@@ -473,17 +488,13 @@ process_packet_in(struct lswitch *sw, struct rconn *rconn,
 
         /* If the switch didn't buffer the packet, we need to send a copy. */
         if (ntohl(opi->buffer_id) == UINT32_MAX && actions_len > 0) {
-            queue_tx(sw, rconn,
-                     make_packet_out(&pkt, UINT32_MAX, in_port,
-                                     actions, actions_len / sizeof *actions));
+            queue_tx(sw, rconn, ofputil_encode_packet_out(&po));
         }
     } else {
         /* We don't know that MAC, or we don't set up flows.  Send along the
          * packet without setting up a flow. */
         if (ntohl(opi->buffer_id) != UINT32_MAX || actions_len > 0) {
-            queue_tx(sw, rconn,
-                     make_packet_out(&pkt, ntohl(opi->buffer_id), in_port,
-                                     actions, actions_len / sizeof *actions));
+            queue_tx(sw, rconn, ofputil_encode_packet_out(&po));
         }
     }
 }

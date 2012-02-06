@@ -388,36 +388,31 @@ static void
 ofp_print_packet_out(struct ds *string, const struct ofp_packet_out *opo,
                      int verbosity)
 {
-    size_t len = ntohs(opo->header.length);
-    size_t actions_len = ntohs(opo->actions_len);
+    struct ofputil_packet_out po;
+    enum ofperr error;
 
-    ds_put_cstr(string, " in_port=");
-    ofputil_format_port(ntohs(opo->in_port), string);
-
-    ds_put_format(string, " actions_len=%zu ", actions_len);
-    if (actions_len > (ntohs(opo->header.length) - sizeof *opo)) {
-        ds_put_format(string, "***packet too short for action length***\n");
+    error = ofputil_decode_packet_out(&po, opo);
+    if (error) {
+        ofp_print_error(string, error);
         return;
     }
-    if (actions_len % sizeof(union ofp_action)) {
-        ds_put_format(string, "***action length not a multiple of %zu***\n",
-                      sizeof(union ofp_action));
-    }
-    ofp_print_actions(string, (const union ofp_action *) opo->actions,
-                      actions_len / sizeof(union ofp_action));
 
-    if (ntohl(opo->buffer_id) == UINT32_MAX) {
-        int data_len = len - sizeof *opo - actions_len;
-        ds_put_format(string, " data_len=%d", data_len);
-        if (verbosity > 0 && len > sizeof *opo) {
-            char *packet = ofp_packet_to_string(
-                    (uint8_t *) opo->actions + actions_len, data_len);
+    ds_put_cstr(string, " in_port=");
+    ofputil_format_port(po.in_port, string);
+
+    ds_put_char(string, ' ');
+    ofp_print_actions(string, po.actions, po.n_actions);
+
+    if (po.buffer_id == UINT32_MAX) {
+        ds_put_format(string, " data_len=%d", po.packet_len);
+        if (verbosity > 0 && po.packet_len > 0) {
+            char *packet = ofp_packet_to_string(po.packet, po.packet_len);
             ds_put_char(string, '\n');
             ds_put_cstr(string, packet);
             free(packet);
         }
     } else {
-        ds_put_format(string, " buffer=0x%08"PRIx32, ntohl(opo->buffer_id));
+        ds_put_format(string, " buffer=0x%08"PRIx32, po.buffer_id);
     }
     ds_put_char(string, '\n');
 }

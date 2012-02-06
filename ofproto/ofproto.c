@@ -1953,17 +1953,13 @@ reject_slave_controller(struct ofconn *ofconn)
 }
 
 static enum ofperr
-handle_packet_out(struct ofconn *ofconn, const struct ofp_header *oh)
+handle_packet_out(struct ofconn *ofconn, const struct ofp_packet_out *opo)
 {
     struct ofproto *p = ofconn_get_ofproto(ofconn);
-    struct ofp_packet_out *opo;
-    struct ofpbuf payload, *buffer;
-    union ofp_action *ofp_actions;
-    struct ofpbuf request;
+    struct ofputil_packet_out po;
+    struct ofpbuf *payload;
     struct flow flow;
-    size_t n_ofp_actions;
     enum ofperr error;
-    uint16_t in_port;
 
     COVERAGE_INC(ofproto_packet_out);
 
@@ -1972,45 +1968,28 @@ handle_packet_out(struct ofconn *ofconn, const struct ofp_header *oh)
         return error;
     }
 
-    /* Get ofp_packet_out. */
-    ofpbuf_use_const(&request, oh, ntohs(oh->length));
-    opo = ofpbuf_pull(&request, offsetof(struct ofp_packet_out, actions));
-
-    /* Get actions. */
-    error = ofputil_pull_actions(&request, ntohs(opo->actions_len),
-                                 &ofp_actions, &n_ofp_actions);
+    /* Decode message. */
+    error = ofputil_decode_packet_out(&po, opo);
     if (error) {
         return error;
     }
 
     /* Get payload. */
-    if (opo->buffer_id != htonl(UINT32_MAX)) {
-        error = ofconn_pktbuf_retrieve(ofconn, ntohl(opo->buffer_id),
-                                       &buffer, NULL);
-        if (error || !buffer) {
+    if (po.buffer_id != UINT32_MAX) {
+        error = ofconn_pktbuf_retrieve(ofconn, po.buffer_id, &payload, NULL);
+        if (error || !payload) {
             return error;
         }
-        payload = *buffer;
     } else {
-        payload = request;
-        buffer = NULL;
-    }
-
-    /* Get in_port and partially validate it.
-     *
-     * We don't know what range of ports the ofproto actually implements, but
-     * we do know that only certain reserved ports (numbered OFPP_MAX and
-     * above) are valid. */
-    in_port = ntohs(opo->in_port);
-    if (in_port >= OFPP_MAX && in_port != OFPP_LOCAL && in_port != OFPP_NONE) {
-        return OFPERR_NXBRC_BAD_IN_PORT;
+        payload = xmalloc(sizeof *payload);
+        ofpbuf_use_const(payload, po.packet, po.packet_len);
     }
 
     /* Send out packet. */
-    flow_extract(&payload, 0, 0, in_port, &flow);
-    error = p->ofproto_class->packet_out(p, &payload, &flow,
-                                         ofp_actions, n_ofp_actions);
-    ofpbuf_delete(buffer);
+    flow_extract(payload, 0, 0, po.in_port, &flow);
+    error = p->ofproto_class->packet_out(p, payload, &flow,
+                                         po.actions, po.n_actions);
+    ofpbuf_delete(payload);
 
     return error;
 }
@@ -3180,7 +3159,7 @@ handle_openflow__(struct ofconn *ofconn, const struct ofpbuf *msg)
         return handle_set_config(ofconn, msg->data);
 
     case OFPUTIL_OFPT_PACKET_OUT:
-        return handle_packet_out(ofconn, oh);
+        return handle_packet_out(ofconn, msg->data);
 
     case OFPUTIL_OFPT_PORT_MOD:
         return handle_port_mod(ofconn, oh);

@@ -315,7 +315,7 @@ b9 7c c0 a8 00 02 c0 a8 00 01 00 00 2b 60 00 00 \
 00 00 6a 4f 2b 58 50 14 00 00 6d 75 00 00 00 00 \
 00 00 00 00 \
 "], [0], [dnl
-OFPT_PACKET_OUT (xid=0x0): in_port=1 actions_len=8 actions=output:3 buffer=0x00000114
+OFPT_PACKET_OUT (xid=0x0): in_port=1 actions=output:3 buffer=0x00000114
 ])
 AT_CLEANUP
 

@@ -249,6 +249,20 @@ struct ofpbuf *ofputil_encode_packet_in(const struct ofputil_packet_in *,
 int ofputil_decode_packet_in(struct ofputil_packet_in *pi,
                              const struct ofp_header *oh);
 
+/* Abstract packet-out message. */
+struct ofputil_packet_out {
+    const void *packet;         /* Packet data, if buffer_id == UINT32_MAX. */
+    size_t packet_len;          /* Length of packet data in bytes. */
+    uint32_t buffer_id;         /* Buffer id or UINT32_MAX if no buffer. */
+    uint16_t in_port;           /* Packet's input port or OFPP_NONE. */
+    union ofp_action *actions;  /* Actions. */
+    size_t n_actions;           /* Number of elements in 'actions' array. */
+};
+
+enum ofperr ofputil_decode_packet_out(struct ofputil_packet_out *,
+                                      const struct ofp_packet_out *);
+struct ofpbuf *ofputil_encode_packet_out(const struct ofputil_packet_out *);
+
 /* OpenFlow protocol utility functions. */
 void *make_openflow(size_t openflow_len, uint8_t type, struct ofpbuf **);
 void *make_nxmsg(size_t openflow_len, uint32_t subtype, struct ofpbuf **);
@@ -296,14 +310,6 @@ struct ofpbuf *make_add_simple_flow(const struct cls_rule *,
 struct ofpbuf *make_packet_in(uint32_t buffer_id, uint16_t in_port,
                               uint8_t reason,
                               const struct ofpbuf *payload, int max_send_len);
-struct ofpbuf *make_packet_out(const struct ofpbuf *packet, uint32_t buffer_id,
-                               uint16_t in_port,
-                               const struct ofp_action_header *,
-                               size_t n_actions);
-struct ofpbuf *make_buffered_packet_out(uint32_t buffer_id,
-                                        uint16_t in_port, uint16_t out_port);
-struct ofpbuf *make_unbuffered_packet_out(const struct ofpbuf *packet,
-                                          uint16_t in_port, uint16_t out_port);
 struct ofpbuf *make_echo_request(void);
 struct ofpbuf *make_echo_reply(const struct ofp_header *rq);
 

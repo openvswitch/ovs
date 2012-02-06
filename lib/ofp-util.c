@@ -1780,6 +1780,70 @@ ofputil_encode_packet_in(const struct ofputil_packet_in *pin,
     return packet;
 }
 
+enum ofperr
+ofputil_decode_packet_out(struct ofputil_packet_out *po,
+                          const struct ofp_packet_out *opo)
+{
+    enum ofperr error;
+    struct ofpbuf b;
+
+    po->buffer_id = ntohl(opo->buffer_id);
+    po->in_port = ntohs(opo->in_port);
+    if (po->in_port >= OFPP_MAX && po->in_port != OFPP_LOCAL
+        && po->in_port != OFPP_NONE) {
+        VLOG_WARN_RL(&bad_ofmsg_rl, "packet-out has bad input port %#"PRIx16,
+                     po->in_port);
+        return OFPERR_NXBRC_BAD_IN_PORT;
+    }
+
+    ofpbuf_use_const(&b, opo, ntohs(opo->header.length));
+    ofpbuf_pull(&b, sizeof *opo);
+
+    error = ofputil_pull_actions(&b, ntohs(opo->actions_len),
+                                 &po->actions, &po->n_actions);
+    if (error) {
+        return error;
+    }
+
+    if (po->buffer_id == UINT32_MAX) {
+        po->packet = b.data;
+        po->packet_len = b.size;
+    } else {
+        po->packet = NULL;
+        po->packet_len = 0;
+    }
+
+    return 0;
+}
+
+struct ofpbuf *
+ofputil_encode_packet_out(const struct ofputil_packet_out *po)
+{
+    struct ofp_packet_out *opo;
+    size_t actions_len;
+    struct ofpbuf *msg;
+    size_t size;
+
+    actions_len = po->n_actions * sizeof *po->actions;
+    size = sizeof *opo + actions_len;
+    if (po->buffer_id == UINT32_MAX) {
+        size += po->packet_len;
+    }
+
+    msg = ofpbuf_new(size);
+    opo = put_openflow(sizeof *opo, OFPT_PACKET_OUT, msg);
+    opo->buffer_id = htonl(po->buffer_id);
+    opo->in_port = htons(po->in_port);
+    opo->actions_len = htons(actions_len);
+    ofpbuf_put(msg, po->actions, actions_len);
+    if (po->buffer_id == UINT32_MAX) {
+        ofpbuf_put(msg, po->packet, po->packet_len);
+    }
+    update_openflow_length(msg);
+
+    return msg;
+}
+
 /* Returns a string representing the message type of 'type'.  The string is the
  * enumeration constant for the type, e.g. "OFPT_HELLO".  For statistics
  * messages, the constant is followed by "request" or "reply",
@@ -2156,59 +2220,6 @@ make_packet_in(uint32_t buffer_id, uint16_t in_port, uint8_t reason,
     update_openflow_length(buf);
 
     return buf;
-}
-
-struct ofpbuf *
-make_packet_out(const struct ofpbuf *packet, uint32_t buffer_id,
-                uint16_t in_port,
-                const struct ofp_action_header *actions, size_t n_actions)
-{
-    size_t actions_len = n_actions * sizeof *actions;
-    struct ofp_packet_out *opo;
-    size_t size = sizeof *opo + actions_len + (packet ? packet->size : 0);
-    struct ofpbuf *out = ofpbuf_new(size);
-
-    opo = ofpbuf_put_uninit(out, sizeof *opo);
-    opo->header.version = OFP_VERSION;
-    opo->header.type = OFPT_PACKET_OUT;
-    opo->header.length = htons(size);
-    opo->header.xid = htonl(0);
-    opo->buffer_id = htonl(buffer_id);
-    opo->in_port = htons(in_port);
-    opo->actions_len = htons(actions_len);
-    ofpbuf_put(out, actions, actions_len);
-    if (packet) {
-        ofpbuf_put(out, packet->data, packet->size);
-    }
-    return out;
-}
-
-struct ofpbuf *
-make_unbuffered_packet_out(const struct ofpbuf *packet,
-                           uint16_t in_port, uint16_t out_port)
-{
-    struct ofp_action_output action;
-    action.type = htons(OFPAT_OUTPUT);
-    action.len = htons(sizeof action);
-    action.port = htons(out_port);
-    return make_packet_out(packet, UINT32_MAX, in_port,
-                           (struct ofp_action_header *) &action, 1);
-}
-
-struct ofpbuf *
-make_buffered_packet_out(uint32_t buffer_id,
-                         uint16_t in_port, uint16_t out_port)
-{
-    if (out_port != OFPP_NONE) {
-        struct ofp_action_output action;
-        action.type = htons(OFPAT_OUTPUT);
-        action.len = htons(sizeof action);
-        action.port = htons(out_port);
-        return make_packet_out(NULL, buffer_id, in_port,
-                               (struct ofp_action_header *) &action, 1);
-    } else {
-        return make_packet_out(NULL, buffer_id, in_port, NULL, 0);
-    }
 }
 
 /* Creates and returns an OFPT_ECHO_REQUEST message with an empty payload. */

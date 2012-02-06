@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -450,13 +450,15 @@ OFP_ASSERT(sizeof(union ofp_action) == 8);
 /* Send packet (controller -> datapath). */
 struct ofp_packet_out {
     struct ofp_header header;
-    ovs_be32 buffer_id;           /* ID assigned by datapath (-1 if none). */
+    ovs_be32 buffer_id;           /* ID assigned by datapath or UINT32_MAX. */
     ovs_be16 in_port;             /* Packet's input port (OFPP_NONE if none). */
     ovs_be16 actions_len;         /* Size of action array in bytes. */
-    struct ofp_action_header actions[0]; /* Actions. */
-    /* uint8_t data[0]; */        /* Packet data.  The length is inferred
-                                     from the length field in the header.
-                                     (Only meaningful if buffer_id == -1.) */
+    /* Followed by:
+     *   - Exactly 'actions_len' bytes (possibly 0 bytes, and always a multiple
+     *     of 8) containing actions.
+     *   - If 'buffer_id' == UINT32_MAX, packet data to fill out the remainder
+     *     of the message length.
+     */
 };
 OFP_ASSERT(sizeof(struct ofp_packet_out) == 16);
 
