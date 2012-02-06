@@ -517,11 +517,11 @@ parse_ofp_str(struct ofputil_flow_mod *fm, int command, const char *str_,
         break;
 
     case OFPFC_MODIFY:
-        fields = F_ACTIONS;
+        fields = F_ACTIONS | F_TIMEOUT | F_PRIORITY;
         break;
 
     case OFPFC_MODIFY_STRICT:
-        fields = F_ACTIONS | F_PRIORITY;
+        fields = F_ACTIONS | F_TIMEOUT | F_PRIORITY;
         break;
 
     default:

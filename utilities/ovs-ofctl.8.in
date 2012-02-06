@@ -1034,7 +1034,11 @@ The following additional field sets the priority for flows added by
 the \fBadd\-flow\fR and \fBadd\-flows\fR commands.  For
 \fBmod\-flows\fR and \fBdel\-flows\fR when \fB\-\-strict\fR is
 specified, priority must match along with the rest of the flow
-specification.  Other commands do not allow priority to be specified.
+specification.  For \fBmod\-flows\fR without \fB\-\-strict\fR,
+priority is only significant if the command creates a new flow, that
+is, non-strict \fBmod\-flows\fR does not match on priority and will
+not change the priority of existing flows.  Other commands do not
+allow priority to be specified.
 .
 .IP \fBpriority=\fIvalue\fR
 The priority at which a wildcarded entry will match in comparison to
@@ -1045,14 +1049,17 @@ priority value of 65535.  When adding a flow, if the field is not specified,
 the flow's priority will default to 32768.
 .
 .PP
-The \fBadd\-flow\fR and \fBadd\-flows\fR commands support additional
-optional fields:
+The \fBadd\-flow\fR, \fBadd\-flows\fR, and \fBmod\-flows\fR commands
+support the following additional options.  These options affect only
+new flows.  Thus, for \fBadd\-flow\fR and \fBadd\-flows\fR, these
+options are always significant, but for \fBmod\-flows\fR they are
+significant only if the command creates a new flow, that is, their
+values do not update existing flows.
 .
-.TP
-\fBidle_timeout=\fIseconds\fR
+.IP "\fBidle_timeout=\fIseconds\fR"
 Causes the flow to expire after the given number of seconds of
-inactivity.  A value of 0 (the default) prevents a flow from expiring due to
-inactivity.
+inactivity.  A value of 0 (the default) prevents a flow from expiring
+due to inactivity.
 .
 .IP \fBhard_timeout=\fIseconds\fR
 Causes the flow to expire after the given number of seconds,
