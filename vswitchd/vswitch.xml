@@ -1699,6 +1699,43 @@
         </p>
       </column>
 
+      <column name="cfm_fault_status" key="recv">
+        Indicates a CFM fault was triggered due to a lack of CCMs received on
+        the <ref table="Interface"/>.
+      </column>
+
+      <column name="cfm_fault_status" key="rdi">
+        Indicates a CFM fault was triggered due to the reception of a CCM with
+        the RDI bit flagged.  Endpoints set the RDI bit in their CCMs when they
+        are not receiving CCMs themselves.  This typically indicates a
+        unidirectional connectivity failure.
+      </column>
+
+      <column name="cfm_fault_status" key="maid">
+        Indicates a CFM fault was triggered due to the reception of a CCM with
+        a MAID other than the one Open vSwitch uses.  CFM broadcasts are tagged
+        with an identification number in addition to the MPID called the MAID.
+        Open vSwitch only supports receiving CCM broadcasts tagged with the
+        MAID it uses internally.
+      </column>
+
+      <column name="cfm_fault_status" key="loopback">
+        Indicates a CFM fault was triggered due to the reception of a CCM
+        advertising the same MPID configured in the <ref column="cfm_mpid"/>
+        column of this <ref table="Interface"/>.  This may indicate a loop in
+        the network.
+      </column>
+
+      <column name="cfm_fault_status" key="overflow">
+        Indicates a CFM fault was triggered because the CFM module received
+        CCMs from more remote endpoints than it can keep track of.
+      </column>
+
+      <column name="cfm_fault_status" key="override">
+        Indicates a CFM fault was manually triggered by an administrator using
+        an <code>ovs-appctl</code> command.
+      </column>
+
       <column name="cfm_remote_mpids">
         When CFM is properly configured, Open vSwitch will occasionally
         receive CCM broadcasts.  These broadcasts contain the MPID of the

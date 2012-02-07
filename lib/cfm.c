@@ -85,8 +85,8 @@ struct cfm {
 
     uint64_t mpid;
     bool extended;         /* Extended mode. */
-    bool fault;            /* Indicates connectivity fault. */
-    bool unexpected_recv;  /* Received an unexpected CCM. */
+    int fault;             /* Connectivity fault status. */
+    int recv_fault;        /* Bit mask of faults occuring on receive. */
     bool opup;             /* Operational State. */
     bool remote_opup;      /* Remote Operational State. */
 
@@ -134,6 +134,36 @@ static const uint8_t *
 cfm_ccm_addr(const struct cfm *cfm)
 {
     return cfm->extended ? eth_addr_ccm_x : eth_addr_ccm;
+}
+
+/* Returns the string representation of the given cfm_fault_reason 'reason'. */
+const char *
+cfm_fault_reason_to_str(int reason) {
+    switch (reason) {
+#define CFM_FAULT_REASON(NAME, STR) case CFM_FAULT_##NAME: return #STR;
+        CFM_FAULT_REASONS
+#undef CFM_FAULT_REASON
+    default: return "<unknown>";
+    }
+}
+
+static void
+ds_put_cfm_fault(struct ds *ds, int fault)
+{
+    size_t length = ds->length;
+    int i;
+
+    for (i = 0; i < CFM_FAULT_N_REASONS; i++) {
+        int reason = 1 << i;
+
+        if (fault & reason) {
+            ds_put_format(ds, "%s ", cfm_fault_reason_to_str(reason));
+        }
+    }
+
+    if (ds->length > length) {
+        ds_truncate(ds, ds->length - 1);
+    }
 }
 
 static void
@@ -291,8 +321,8 @@ cfm_run(struct cfm *cfm)
         struct remote_mp *rmp, *rmp_next;
         bool old_cfm_fault = cfm->fault;
 
-        cfm->fault = cfm->unexpected_recv;
-        cfm->unexpected_recv = false;
+        cfm->fault = cfm->recv_fault;
+        cfm->recv_fault = 0;
 
         cfm->rmps_array_len = 0;
         free(cfm->rmps_array);
@@ -313,13 +343,13 @@ cfm_run(struct cfm *cfm)
                 if (rmp->mpid == cfm->mpid) {
                     VLOG_WARN_RL(&rl,"%s: received CCM with local MPID"
                                  " %"PRIu64, cfm->name, rmp->mpid);
-                    cfm->fault = true;
+                    cfm->fault |= CFM_FAULT_LOOPBACK;
                 }
 
                 if (rmp->rdi) {
                     VLOG_DBG("%s: RDI bit flagged from RMP %"PRIu64, cfm->name,
                              rmp->mpid);
-                    cfm->fault = true;
+                    cfm->fault |= CFM_FAULT_RDI;
                 }
 
                 if (!rmp->opup) {
@@ -331,12 +361,16 @@ cfm_run(struct cfm *cfm)
         }
 
         if (hmap_is_empty(&cfm->remote_mps)) {
-            cfm->fault = true;
+            cfm->fault |= CFM_FAULT_RECV;
         }
 
         if (old_cfm_fault != cfm->fault) {
-            VLOG_INFO_RL(&rl, "%s: CFM fault status changed to %s",
-                         cfm->name, cfm->fault ? "true" : "false");
+            struct ds ds = DS_EMPTY_INITIALIZER;
+
+            ds_put_cfm_fault(&ds, cfm->fault);
+            VLOG_INFO_RL(&rl, "%s: CFM fault status changed: %s", cfm->name,
+                         ds_cstr_ro(&ds));
+            ds_destroy(&ds);
         }
 
         timer_set_duration(&cfm->fault_timer, interval);
@@ -481,7 +515,7 @@ cfm_process_heartbeat(struct cfm *cfm, const struct ofpbuf *p)
      * bonds. Furthermore, faults can be maliciously triggered by crafting
      * invalid CCMs. */
     if (memcmp(ccm->maid, cfm->maid, sizeof ccm->maid)) {
-        cfm->unexpected_recv = true;
+        cfm->recv_fault |= CFM_FAULT_MAID;
         VLOG_WARN_RL(&rl, "%s: Received unexpected remote MAID from MAC "
                      ETH_ADDR_FMT, cfm->name, ETH_ADDR_ARGS(eth->eth_src));
     } else {
@@ -522,7 +556,7 @@ cfm_process_heartbeat(struct cfm *cfm, const struct ofpbuf *p)
                 rmp = xzalloc(sizeof *rmp);
                 hmap_insert(&cfm->remote_mps, &rmp->node, hash_mpid(ccm_mpid));
             } else {
-                cfm->unexpected_recv = true;
+                cfm->recv_fault |= CFM_FAULT_OVERFLOW;
                 VLOG_WARN_RL(&rl,
                              "%s: dropped CCM with MPID %"PRIu64" from MAC "
                              ETH_ADDR_FMT, cfm->name, ccm_mpid,
@@ -551,13 +585,14 @@ cfm_process_heartbeat(struct cfm *cfm, const struct ofpbuf *p)
     }
 }
 
-/* Gets the fault status of 'cfm'.  Returns true when 'cfm' has detected
- * connectivity problems, false otherwise. */
-bool
+/* Gets the fault status of 'cfm'.  Returns a bit mask of 'cfm_fault_reason's
+ * indicating the cause of the connectivity fault, or zero if there is no
+ * fault. */
+int
 cfm_get_fault(const struct cfm *cfm)
 {
     if (cfm->fault_override >= 0) {
-        return cfm->fault_override;
+        return cfm->fault_override ? CFM_FAULT_OVERRIDE : 0;
     }
     return cfm->fault;
 }
@@ -602,11 +637,16 @@ cfm_print_details(struct ds *ds, const struct cfm *cfm)
     struct remote_mp *rmp;
 
     ds_put_format(ds, "---- %s ----\n", cfm->name);
-    ds_put_format(ds, "MPID %"PRIu64":%s%s%s%s\n", cfm->mpid,
+    ds_put_format(ds, "MPID %"PRIu64":%s%s\n", cfm->mpid,
                   cfm->extended ? " extended" : "",
-                  cfm_get_fault(cfm) ? " fault" : "",
-                  cfm->fault_override >= 0 ? " fault_override" : "",
-                  cfm->unexpected_recv ? " unexpected_recv" : "");
+                  cfm->fault_override >= 0 ? " fault_override" : "");
+
+
+    if (cfm_get_fault(cfm)) {
+        ds_put_cstr(ds, "\tfault: ");
+        ds_put_cfm_fault(ds, cfm_get_fault(cfm));
+        ds_put_cstr(ds, "\n");
+    }
 
     ds_put_format(ds, "\topstate: %s\n", cfm->opup ? "up" : "down");
     ds_put_format(ds, "\tremote_opstate: %s\n",

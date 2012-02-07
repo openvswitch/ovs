@@ -961,9 +961,10 @@ struct ofproto_class {
      * support CFM, as does a null pointer. */
     int (*set_cfm)(struct ofport *ofport, const struct cfm_settings *s);
 
-    /* Checks the fault status of CFM configured on 'ofport'.  Returns 1 if CFM
-     * is faulted (generally indicating a connectivity problem), 0 if CFM is
-     * not faulted, or -1 if CFM is not enabled on 'port'
+    /* Checks the fault status of CFM configured on 'ofport'.  Returns a
+     * bitmask of 'cfm_fault_reason's to indicate a CFM fault (generally
+     * indicating a connectivity problem).  Returns zero if CFM is not faulted,
+     * and -1 if CFM is not enabled on 'port'.
      *
      * This function may be a null pointer if the ofproto implementation does
      * not support CFM. */
