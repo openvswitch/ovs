@@ -2174,9 +2174,10 @@ handle_port_stats_request(struct ofconn *ofconn,
 }
 
 static void
-calc_flow_duration__(long long int start, uint32_t *sec, uint32_t *nsec)
+calc_flow_duration__(long long int start, long long int now,
+                     uint32_t *sec, uint32_t *nsec)
 {
-    long long int msecs = time_msec() - start;
+    long long int msecs = now - start;
     *sec = msecs / 1000;
     *nsec = (msecs % 1000) * (1000 * 1000);
 }
@@ -2337,6 +2338,16 @@ collect_rules_strict(struct ofproto *ofproto, uint8_t table_id,
     return 0;
 }
 
+/* Returns 'age_ms' (a duration in milliseconds), converted to seconds and
+ * forced into the range of a uint16_t. */
+static int
+age_secs(long long int age_ms)
+{
+    return (age_ms < 0 ? 0
+            : age_ms >= UINT16_MAX * 1000 ? UINT16_MAX
+            : (unsigned int) age_ms / 1000);
+}
+
 static enum ofperr
 handle_flow_stats_request(struct ofconn *ofconn,
                           const struct ofp_stats_msg *osm)
@@ -2362,15 +2373,18 @@ handle_flow_stats_request(struct ofconn *ofconn,
 
     ofputil_start_stats_reply(osm, &replies);
     LIST_FOR_EACH (rule, ofproto_node, &rules) {
+        long long int now = time_msec();
         struct ofputil_flow_stats fs;
 
         fs.rule = rule->cr;
         fs.cookie = rule->flow_cookie;
         fs.table_id = rule->table_id;
-        calc_flow_duration__(rule->created, &fs.duration_sec,
+        calc_flow_duration__(rule->created, now, &fs.duration_sec,
                              &fs.duration_nsec);
         fs.idle_timeout = rule->idle_timeout;
         fs.hard_timeout = rule->hard_timeout;
+        fs.idle_age = age_secs(now - rule->used);
+        fs.hard_age = age_secs(now - rule->modified);
         ofproto->ofproto_class->rule_get_stats(rule, &fs.packet_count,
                                                &fs.byte_count);
         fs.actions = rule->actions;
@@ -2930,7 +2944,8 @@ ofproto_rule_send_removed(struct rule *rule, uint8_t reason)
     fr.rule = rule->cr;
     fr.cookie = rule->flow_cookie;
     fr.reason = reason;
-    calc_flow_duration__(rule->created, &fr.duration_sec, &fr.duration_nsec);
+    calc_flow_duration__(rule->created, time_msec(),
+                         &fr.duration_sec, &fr.duration_nsec);
     fr.idle_timeout = rule->idle_timeout;
     rule->ofproto->ofproto_class->rule_get_stats(rule, &fr.packet_count,
                                                  &fr.byte_count);
@@ -3198,6 +3213,10 @@ handle_openflow__(struct ofconn *ofconn, const struct ofpbuf *msg)
 
     case OFPUTIL_NXT_FLOW_MOD:
         return handle_flow_mod(ofconn, oh);
+
+    case OFPUTIL_NXT_FLOW_AGE:
+        /* Nothing to do. */
+        return 0;
 
         /* Statistics requests. */
     case OFPUTIL_OFPST_DESC_REQUEST:

@@ -798,7 +798,7 @@ AT_CHECK([ovs-ofctl ofp-print "\
 a8 00 02 00 00 0c 01 06 00 00 12 02 09 e7 00 00 \
 14 02 00 00 00 00 00 00 00 00 00 08 00 01 00 00 \
 00 88 00 00 00 00 00 03 32 11 62 00 ff ff 00 05 \
-00 00 00 4c 00 00 00 00 00 00 00 00 00 00 00 00 \
+00 00 00 4c 00 03 00 00 00 00 00 00 00 00 00 00 \
 00 00 00 00 00 00 00 01 00 00 00 00 00 00 00 3c \
 00 00 00 02 00 03 00 00 02 06 50 54 00 00 00 06 \
 00 00 04 06 50 54 00 00 00 05 00 00 06 02 08 00 \
@@ -806,7 +806,7 @@ a8 00 02 00 00 0c 01 06 00 00 12 02 09 e7 00 00 \
 a8 00 01 00 00 10 04 c0 a8 00 02 00 00 0c 01 06 \
 00 00 12 02 09 e4 00 00 14 02 00 00 00 00 00 00 \
 00 00 00 08 00 01 00 00 00 88 00 00 00 00 00 02 \
-33 f9 aa 00 ff ff 00 05 00 00 00 4c 00 00 00 00 \
+33 f9 aa 00 ff ff 00 05 00 00 00 4c 00 05 00 00 \
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 \
 00 00 00 00 00 00 00 3c 00 00 00 02 00 01 00 00 \
 02 06 50 54 00 00 00 05 00 00 04 06 50 54 00 00 \
@@ -815,7 +815,7 @@ a8 00 01 00 00 10 04 c0 a8 00 02 00 00 0c 01 06 \
 a8 00 01 00 00 0c 01 06 00 00 12 02 00 00 00 00 \
 14 02 09 e5 00 00 00 00 00 00 00 08 00 03 00 00 \
 00 88 00 00 00 00 00 04 2d 0f a5 00 ff ff 00 05 \
-00 00 00 4c 00 00 00 00 00 00 00 00 00 00 00 00 \
+00 00 00 4c 00 01 00 00 00 00 00 00 00 00 00 00 \
 00 00 00 00 00 00 00 01 00 00 00 00 00 00 00 3c \
 00 00 00 02 00 03 00 00 02 06 50 54 00 00 00 06 \
 00 00 04 06 50 54 00 00 00 05 00 00 06 02 08 00 \
@@ -823,7 +823,7 @@ a8 00 01 00 00 0c 01 06 00 00 12 02 00 00 00 00 \
 a8 00 01 00 00 10 04 c0 a8 00 02 00 00 0c 01 06 \
 00 00 12 02 09 e3 00 00 14 02 00 00 00 00 00 00 \
 00 00 00 08 00 01 00 00 00 88 00 00 00 00 00 02 \
-34 73 bc 00 ff ff 00 05 00 00 00 4c 00 00 00 00 \
+34 73 bc 00 ff ff 00 05 00 0a 00 4c 00 03 00 03 \
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 \
 00 00 00 00 00 00 00 3c 00 00 00 02 00 03 00 00 \
 02 06 50 54 00 00 00 06 00 00 04 06 50 54 00 00 \
@@ -920,10 +920,10 @@ ff ff 00 18 00 00 23 20 00 07 00 1f 00 01 00 04 \
 "], [0],
 [[NXST_FLOW reply (xid=0x4):
  cookie=0x0, duration=1.048s, table=0, n_packets=1, n_bytes=60, idle_timeout=5,priority=65535,tcp,in_port=3,vlan_tci=0x0000,dl_src=50:54:00:00:00:05,dl_dst=50:54:00:00:00:06,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,tp_src=2535,tp_dst=0 actions=output:1
- cookie=0x0, duration=3.84s, table=0, n_packets=1, n_bytes=60, idle_timeout=5,priority=65535,tcp,in_port=3,vlan_tci=0x0000,dl_src=50:54:00:00:00:05,dl_dst=50:54:00:00:00:06,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,tp_src=2532,tp_dst=0 actions=output:1
- cookie=0x0, duration=2.872s, table=0, n_packets=1, n_bytes=60, idle_timeout=5,priority=65535,tcp,in_port=1,vlan_tci=0x0000,dl_src=50:54:00:00:00:06,dl_dst=50:54:00:00:00:05,nw_src=192.168.0.2,nw_dst=192.168.0.1,nw_tos=0,tp_src=0,tp_dst=2533 actions=output:3
- cookie=0x0, duration=4.756s, table=0, n_packets=1, n_bytes=60, idle_timeout=5,priority=65535,tcp,in_port=3,vlan_tci=0x0000,dl_src=50:54:00:00:00:05,dl_dst=50:54:00:00:00:06,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,tp_src=2531,tp_dst=0 actions=output:1
- cookie=0x0, duration=2.88s, table=0, n_packets=1, n_bytes=60, idle_timeout=5,priority=65535,tcp,in_port=3,vlan_tci=0x0000,dl_src=50:54:00:00:00:05,dl_dst=50:54:00:00:00:06,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,tp_src=2533,tp_dst=0 actions=output:1
+ cookie=0x0, duration=3.84s, table=0, n_packets=1, n_bytes=60, idle_timeout=5,idle_age=2,priority=65535,tcp,in_port=3,vlan_tci=0x0000,dl_src=50:54:00:00:00:05,dl_dst=50:54:00:00:00:06,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,tp_src=2532,tp_dst=0 actions=output:1
+ cookie=0x0, duration=2.872s, table=0, n_packets=1, n_bytes=60, idle_timeout=5,idle_age=4,priority=65535,tcp,in_port=1,vlan_tci=0x0000,dl_src=50:54:00:00:00:06,dl_dst=50:54:00:00:00:05,nw_src=192.168.0.2,nw_dst=192.168.0.1,nw_tos=0,tp_src=0,tp_dst=2533 actions=output:3
+ cookie=0x0, duration=4.756s, table=0, n_packets=1, n_bytes=60, idle_timeout=5,idle_age=0,priority=65535,tcp,in_port=3,vlan_tci=0x0000,dl_src=50:54:00:00:00:05,dl_dst=50:54:00:00:00:06,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,tp_src=2531,tp_dst=0 actions=output:1
+ cookie=0x0, duration=2.88s, table=0, n_packets=1, n_bytes=60, idle_timeout=5,hard_timeout=10,idle_age=2,priority=65535,tcp,in_port=3,vlan_tci=0x0000,dl_src=50:54:00:00:00:05,dl_dst=50:54:00:00:00:06,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,tp_src=2533,tp_dst=0 actions=output:1
  cookie=0x0, duration=5.672s, table=0, n_packets=1, n_bytes=60, idle_timeout=5,priority=65535,tcp,in_port=3,vlan_tci=0x0000,dl_src=50:54:00:00:00:05,dl_dst=50:54:00:00:00:06,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,tp_src=2530,tp_dst=0 actions=output:1
  cookie=0x0, duration=1.04s, table=0, n_packets=1, n_bytes=60, idle_timeout=5,priority=65535,tcp,in_port=1,vlan_tci=0x0000,dl_src=50:54:00:00:00:06,dl_dst=50:54:00:00:00:05,nw_src=192.168.0.2,nw_dst=192.168.0.1,nw_tos=0,tp_src=0,tp_dst=2535 actions=output:3
  cookie=0x0, duration=1.952s, table=0, n_packets=1, n_bytes=60, idle_timeout=5,priority=65535,tcp,in_port=1,vlan_tci=0x0000,dl_src=50:54:00:00:00:06,dl_dst=50:54:00:00:00:05,nw_src=192.168.0.2,nw_dst=192.168.0.1,nw_tos=0,tp_src=0,tp_dst=2534 actions=output:3

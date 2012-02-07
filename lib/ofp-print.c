@@ -1022,7 +1022,7 @@ ofp_print_flow_stats_reply(struct ds *string, const struct ofp_header *oh)
         struct ofputil_flow_stats fs;
         int retval;
 
-        retval = ofputil_decode_flow_stats_reply(&fs, &b);
+        retval = ofputil_decode_flow_stats_reply(&fs, &b, true);
         if (retval) {
             if (retval != EOF) {
                 ds_put_cstr(string, " ***parse error***");
@@ -1043,6 +1043,12 @@ ofp_print_flow_stats_reply(struct ds *string, const struct ofp_header *oh)
         }
         if (fs.hard_timeout != OFP_FLOW_PERMANENT) {
             ds_put_format(string, "hard_timeout=%"PRIu16",", fs.hard_timeout);
+        }
+        if (fs.idle_age >= 0) {
+            ds_put_format(string, "idle_age=%d,", fs.idle_age);
+        }
+        if (fs.hard_age >= 0 && fs.hard_age != fs.duration_sec) {
+            ds_put_format(string, "hard_age=%d,", fs.hard_age);
         }
 
         cls_rule_format(&fs.rule, string);
@@ -1453,6 +1459,9 @@ ofp_to_string__(const struct ofp_header *oh,
         ofp_print_nxt_set_packet_in_format(string, msg);
         break;
 
+        break;
+
+    case OFPUTIL_NXT_FLOW_AGE:
         break;
 
     case OFPUTIL_NXST_AGGREGATE_REPLY:

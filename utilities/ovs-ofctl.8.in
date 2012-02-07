@@ -1071,19 +1071,13 @@ If set, a matching flow must include an output action to \fIport\fR.
 .
 The \fBdump\-tables\fR and \fBdump\-aggregate\fR commands print information 
 about the entries in a datapath's tables.  Each line of output is a 
-unique flow entry, which begins with some common information:
+flow entry as described in \fBFlow Syntax\fR, above, plus some
+additional fields:
 .
-.IP \fBduration\fR
-The number of seconds the entry has been in the table.
-.
-.IP \fBtable\fR
-The table that contains the flow.  When a packet arrives, the switch 
-begins searching for an entry at the lowest numbered table.  Tables are 
-numbered as shown by the \fBdump\-tables\fR command.
-.
-.IP \fBpriority\fR
-The priority of the entry in relation to other entries within the same
-table.  A higher value will match before a lower one.
+.IP \fBduration=\fIsecs\fR
+The time, in seconds, that the entry has been in the table.
+\fIsecs\fR includes as much precision as the switch provides, possibly
+to nanosecond resolution.
 .
 .IP \fBn_packets\fR
 The number of packets that have matched the entry.
@@ -1092,9 +1086,23 @@ The number of packets that have matched the entry.
 The total number of bytes from packets that have matched the entry.
 .
 .PP
-The rest of the line consists of a description of the flow entry as 
-described in \fBFlow Syntax\fR, above.
+The following additional fields are included only if the switch is
+Open vSwitch 1.6 or later and the NXM flow format is used to dump the
+flow (see the description of the \fB\-\-flow-format\fR option below).
+The values of these additional fields are approximations only and in
+particular \fBidle_age\fR will sometimes become nonzero even for busy
+flows.
 .
+.IP \fBhard_age=\fIsecs\fR
+The integer number of seconds since the flow was added or modified.
+\fBhard_age\fR is displayed only if it differs from the integer part
+of \fBduration\fR.  (This is separate from \fBduration\fR because
+\fBmod\-flows\fR restarts the \fBhard_timeout\fR timer without zeroing
+\fBduration\fR.)
+.
+.IP \fBidle_age=\fIsecs\fR
+The integer number of seconds that have passed without any packets
+passing through the flow.
 .
 .SH OPTIONS
 .TP

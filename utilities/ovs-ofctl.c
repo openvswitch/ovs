@@ -1354,7 +1354,7 @@ read_flows_from_switch(struct vconn *vconn, enum nx_flow_format flow_format,
                 struct ofputil_flow_stats fs;
                 int retval;
 
-                retval = ofputil_decode_flow_stats_reply(&fs, reply);
+                retval = ofputil_decode_flow_stats_reply(&fs, reply, false);
                 if (retval) {
                     if (retval != EOF) {
                         ovs_fatal(0, "parse error in reply");

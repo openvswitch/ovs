@@ -396,6 +396,10 @@ ofputil_decode_vendor(const struct ofp_header *oh, size_t length,
         { OFPUTIL_NXT_FLOW_MOD_TABLE_ID, OFP10_VERSION,
           NXT_FLOW_MOD_TABLE_ID, "NXT_FLOW_MOD_TABLE_ID",
           sizeof(struct nx_flow_mod_table_id), 0 },
+
+        { OFPUTIL_NXT_FLOW_AGE, OFP10_VERSION,
+          NXT_FLOW_AGE, "NXT_FLOW_AGE",
+          sizeof(struct nicira_header), 0 },
     };
 
     static const struct ofputil_msg_category nxt_category = {
@@ -1307,11 +1311,18 @@ ofputil_encode_flow_stats_request(const struct ofputil_flow_stats_request *fsr,
  * iterates through the replies.  The caller must initially leave 'msg''s layer
  * pointers null and not modify them between calls.
  *
+ * Most switches don't send the values needed to populate fs->idle_age and
+ * fs->hard_age, so those members will usually be set to 0.  If the switch from
+ * which 'msg' originated is known to implement NXT_FLOW_AGE, then pass
+ * 'flow_age_extension' as true so that the contents of 'msg' determine the
+ * 'idle_age' and 'hard_age' members in 'fs'.
+ *
  * Returns 0 if successful, EOF if no replies were left in this 'msg',
  * otherwise a positive errno value. */
 int
 ofputil_decode_flow_stats_reply(struct ofputil_flow_stats *fs,
-                                struct ofpbuf *msg)
+                                struct ofpbuf *msg,
+                                bool flow_age_extension)
 {
     const struct ofputil_msg_type *type;
     int code;
@@ -1362,6 +1373,8 @@ ofputil_decode_flow_stats_reply(struct ofputil_flow_stats *fs,
         fs->duration_nsec = ntohl(ofs->duration_nsec);
         fs->idle_timeout = ntohs(ofs->idle_timeout);
         fs->hard_timeout = ntohs(ofs->hard_timeout);
+        fs->idle_age = -1;
+        fs->hard_age = -1;
         fs->packet_count = ntohll(get_32aligned_be64(&ofs->packet_count));
         fs->byte_count = ntohll(get_32aligned_be64(&ofs->byte_count));
     } else if (code == OFPUTIL_NXST_FLOW_REPLY) {
@@ -1399,6 +1412,16 @@ ofputil_decode_flow_stats_reply(struct ofputil_flow_stats *fs,
         fs->duration_nsec = ntohl(nfs->duration_nsec);
         fs->idle_timeout = ntohs(nfs->idle_timeout);
         fs->hard_timeout = ntohs(nfs->hard_timeout);
+        fs->idle_age = -1;
+        fs->hard_age = -1;
+        if (flow_age_extension) {
+            if (nfs->idle_age) {
+                fs->idle_age = ntohs(nfs->idle_age) - 1;
+            }
+            if (nfs->hard_age) {
+                fs->hard_age = ntohs(nfs->hard_age) - 1;
+            }
+        }
         fs->packet_count = ntohll(nfs->packet_count);
         fs->byte_count = ntohll(nfs->byte_count);
     } else {
@@ -1467,8 +1490,13 @@ ofputil_append_flow_stats_reply(const struct ofputil_flow_stats *fs,
         nfs->priority = htons(fs->rule.priority);
         nfs->idle_timeout = htons(fs->idle_timeout);
         nfs->hard_timeout = htons(fs->hard_timeout);
+        nfs->idle_age = htons(fs->idle_age < 0 ? 0
+                              : fs->idle_age < UINT16_MAX ? fs->idle_age + 1
+                              : UINT16_MAX);
+        nfs->hard_age = htons(fs->hard_age < 0 ? 0
+                              : fs->hard_age < UINT16_MAX ? fs->hard_age + 1
+                              : UINT16_MAX);
         nfs->match_len = htons(nx_put_match(msg, &fs->rule, 0, 0));
-        memset(nfs->pad2, 0, sizeof nfs->pad2);
         nfs->cookie = fs->cookie;
         nfs->packet_count = htonll(fs->packet_count);
         nfs->byte_count = htonll(fs->byte_count);

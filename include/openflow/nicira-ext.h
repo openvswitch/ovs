@@ -108,7 +108,12 @@ enum nicira_type {
 
     /* Alternative PACKET_IN message formats. */
     NXT_SET_PACKET_IN_FORMAT = 16, /* Set Packet In format. */
-    NXT_PACKET_IN = 17             /* Nicira Packet In. */
+    NXT_PACKET_IN = 17,            /* Nicira Packet In. */
+
+    /* Are the idle_age and hard_age members in struct nx_flow_stats supported?
+     * If so, the switch does not reply to this message (which consists only of
+     * a "struct nicira_header").  If not, the switch sends an error reply. */
+    NXT_FLOW_AGE = 18,
 };
 
 /* Header for Nicira vendor stats request and reply messages. */
@@ -1770,7 +1775,27 @@ struct nx_flow_stats_request {
 OFP_ASSERT(sizeof(struct nx_flow_stats_request) == 32);
 
 /* Body for Nicira vendor stats reply of type NXST_FLOW (analogous to
- * OFPST_FLOW reply). */
+ * OFPST_FLOW reply).
+ *
+ * The values of 'idle_age' and 'hard_age' are only meaningful when talking to
+ * a switch that implements the NXT_FLOW_AGE extension.  Zero means that the
+ * true value is unknown, perhaps because hardware does not track the value.
+ * (Zero is also the value that one should ordinarily expect to see talking to
+ * a switch that does not implement NXT_FLOW_AGE, since those switches zero the
+ * padding bytes that these fields replaced.)  A nonzero value X represents X-1
+ * seconds.  A value of 65535 represents 65534 or more seconds.
+ *
+ * 'idle_age' is the number of seconds that the flow has been idle, that is,
+ * the number of seconds since a packet passed through the flow.  'hard_age' is
+ * the number of seconds since the flow was last modified (e.g. OFPFC_MODIFY or
+ * OFPFC_MODIFY_STRICT).  (The 'duration_*' fields are the elapsed time since
+ * the flow was added, regardless of subsequent modifications.)
+ *
+ * For a flow with an idle or hard timeout, 'idle_age' or 'hard_age',
+ * respectively, will ordinarily be smaller than the timeout, but flow
+ * expiration times are only approximate and so one must be prepared to
+ * tolerate expirations that occur somewhat early or late.
+ */
 struct nx_flow_stats {
     ovs_be16 length;          /* Length of this entry. */
     uint8_t table_id;         /* ID of table flow came from. */
@@ -1783,7 +1808,8 @@ struct nx_flow_stats {
     ovs_be16 idle_timeout;    /* Number of seconds idle before expiration. */
     ovs_be16 hard_timeout;    /* Number of seconds before expiration. */
     ovs_be16 match_len;       /* Length of nx_match. */
-    uint8_t pad2[4];          /* Align to 64 bits. */
+    ovs_be16 idle_age;        /* Seconds since last packet, plus one. */
+    ovs_be16 hard_age;        /* Seconds since last modification, plus one. */
     ovs_be64 cookie;          /* Opaque controller-issued identifier. */
     ovs_be64 packet_count;    /* Number of packets, UINT64_MAX if unknown. */
     ovs_be64 byte_count;      /* Number of bytes, UINT64_MAX if unknown. */

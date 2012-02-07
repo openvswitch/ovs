@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -79,6 +79,7 @@ enum ofputil_msg_code {
     OFPUTIL_NXT_FLOW_REMOVED,
     OFPUTIL_NXT_SET_PACKET_IN_FORMAT,
     OFPUTIL_NXT_PACKET_IN,
+    OFPUTIL_NXT_FLOW_AGE,
 
     /* NXST_* stat requests. */
     OFPUTIL_NXST_FLOW_REQUEST,
@@ -183,6 +184,8 @@ struct ofputil_flow_stats {
     uint32_t duration_nsec;
     uint16_t idle_timeout;
     uint16_t hard_timeout;
+    int idle_age;               /* Seconds since last packet, -1 if unknown. */
+    int hard_age;               /* Seconds since last change, -1 if unknown. */
     uint64_t packet_count;      /* Packet count, UINT64_MAX if unknown. */
     uint64_t byte_count;        /* Byte count, UINT64_MAX if unknown. */
     union ofp_action *actions;
@@ -190,7 +193,8 @@ struct ofputil_flow_stats {
 };
 
 int ofputil_decode_flow_stats_reply(struct ofputil_flow_stats *,
-                                    struct ofpbuf *msg);
+                                    struct ofpbuf *msg,
+                                    bool flow_age_extension);
 void ofputil_append_flow_stats_reply(const struct ofputil_flow_stats *,
                                      struct list *replies);
 

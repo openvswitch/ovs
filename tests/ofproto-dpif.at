@@ -1035,3 +1035,93 @@ echo $n_recs
 AT_CHECK([test $n_recs -ge 13])
 
 AT_CLEANUP
+
+AT_SETUP([idle_age and hard_age increase over time])
+OVS_VSWITCHD_START
+
+# get_ages DURATION HARD IDLE
+#
+# Fetch the flow duration, hard age, and idle age into the variables
+# whose names are given as arguments.  Rounds DURATION down to the
+# nearest integer.  If hard_age doesn't appear in the output, sets
+# HARD to "none".  If idle_age doesn't appear in the output, sets IDLE
+# to 0.
+get_ages () {
+    AT_CHECK([ovs-ofctl dump-flows br0], [0], [stdout])
+
+    duration=`sed -n 's/.*duration=\([[0-9]]*\)\(\.[[0-9]]*\)\{0,1\}s.*/\1/p' stdout`
+    AT_CHECK([[expr X"$duration" : 'X[0-9][0-9]*$']], [0], [ignore])
+    AS_VAR_COPY([$1], [duration])
+
+    hard=`sed -n 's/.*hard_age=\([[0-9]]*\),.*/\1/p' stdout`
+    if test X"$hard" = X; then
+        hard=none
+    else
+        AT_CHECK([[expr X"$hard" : 'X[0-9][0-9]*$']], [0], [ignore])
+    fi
+    AS_VAR_COPY([$2], [hard])
+
+    idle=`sed -n 's/.*idle_age=\([[0-9]]*\),.*/\1/p' stdout`
+    if test X"$idle" = X; then
+        idle=0
+    else
+        AT_CHECK([[expr X"$idle" : 'X[0-9][0-9]*$']], [0], [ignore])
+    fi
+    AS_VAR_COPY([$3], [idle])
+}
+
+# Add a flow and get its initial hard and idle age.
+AT_CHECK([ovs-ofctl add-flow br0 hard_timeout=199,idle_timeout=188,actions=drop])
+get_ages duration1 hard1 idle1
+
+# Warp time forward by 10 seconds, then modify the flow's actions.
+ovs-appctl time/warp 10000
+get_ages duration2 hard2 idle2
+AT_CHECK([ovs-ofctl mod-flows br0 actions=flood])
+
+# Warp time forward by 10 seconds.
+ovs-appctl time/warp 10000
+get_ages duration3 hard3 idle3
+
+# Warp time forward 10 more seconds, then pass some packets through the flow,
+# then warp forward a few more times because idle times are only updated
+# occasionally.
+ovs-appctl time/warp 10000
+ovs-appctl netdev-dummy/receive br0 'in_port(0),eth(src=50:54:00:00:00:07,dst=50:54:00:00:00:05),eth_type(0x0800),ipv4(src=192.168.0.2,dst=192.168.0.1,proto=6,tos=0,ttl=64,frag=no),tcp(src=80,dst=1234)'
+ovs-appctl time/warp 1000
+ovs-appctl time/warp 1000
+ovs-appctl time/warp 1000
+get_ages duration4 hard4 idle4
+
+printf "duration: %4s => %4s => %4s => %4s\n" $duration1 $duration2 $duration3 $duration4
+printf "hard_age: %4s => %4s => %4s => %4s\n" $hard1 $hard2 $hard3 $hard4
+printf "idle_age: %4s => %4s => %4s => %4s\n" $idle1 $idle2 $idle3 $idle4
+
+# Duration should increase steadily over time.
+AT_CHECK([test $duration1 -lt $duration2])
+AT_CHECK([test $duration2 -lt $duration3])
+AT_CHECK([test $duration3 -lt $duration4])
+
+# Hard age should be "none" initially because it's the same as flow_duration,
+# then it should increase.
+AT_CHECK([test $hard1 = none])
+AT_CHECK([test $hard2 = none])
+AT_CHECK([test $hard3 != none])
+AT_CHECK([test $hard4 != none])
+AT_CHECK([test $hard3 -lt $hard4])
+
+# Idle age should increase from 1 to 2 to 3, then decrease.
+AT_CHECK([test $idle1 -lt $idle2])
+AT_CHECK([test $idle2 -lt $idle3])
+AT_CHECK([test $idle3 -gt $idle4])
+
+# Check some invariant relationships.
+AT_CHECK([test $duration1 = $idle1])
+AT_CHECK([test $duration2 = $idle2])
+AT_CHECK([test $duration3 = $idle3])
+AT_CHECK([test $idle3 -gt $hard3])
+AT_CHECK([test $idle4 -lt $hard4])
+AT_CHECK([test $hard4 -lt $duration4])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
