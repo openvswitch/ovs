@@ -1362,6 +1362,7 @@ ofp_to_string__(const struct ofp_header *oh,
         break;
 
     case OFPUTIL_OFPT_FLOW_MOD:
+    case OFPUTIL_NXT_FLOW_MOD:
         ofp_print_flow_mod(string, msg, code, verbosity);
         break;
 
@@ -1452,8 +1453,6 @@ ofp_to_string__(const struct ofp_header *oh,
         ofp_print_nxt_set_packet_in_format(string, msg);
         break;
 
-    case OFPUTIL_NXT_FLOW_MOD:
-        ofp_print_flow_mod(string, msg, code, verbosity);
         break;
 
     case OFPUTIL_NXST_AGGREGATE_REPLY:
