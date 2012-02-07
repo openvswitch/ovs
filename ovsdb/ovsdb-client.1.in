@@ -139,7 +139,7 @@ The following options controlling output formatting:
 .so lib/table.man
 .
 .IP "\fB\-\-timestamp\fR"
-For the \fB\-\-monitor\fR command, adds a timestamp to each table
+For the \fBmonitor\fR command, adds a timestamp to each table
 update.  Most output formats add the timestamp on a line of its own
 just above the table.  The JSON output format puts the timestamp in a
 member of the top-level JSON object named \fBtime\fR.
