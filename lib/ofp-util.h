@@ -248,6 +248,10 @@ int ofputil_decode_packet_in(struct ofputil_packet_in *,
 struct ofpbuf *ofputil_encode_packet_in(const struct ofputil_packet_in *,
                                         enum nx_packet_in_format);
 
+const char *ofputil_packet_in_reason_to_string(enum ofp_packet_in_reason);
+bool ofputil_packet_in_reason_from_string(const char *,
+                                          enum ofp_packet_in_reason *);
+
 /* Abstract packet-out message. */
 struct ofputil_packet_out {
     const void *packet;         /* Packet data, if buffer_id == UINT32_MAX. */

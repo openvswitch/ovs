@@ -1784,6 +1784,41 @@ ofputil_encode_packet_in(const struct ofputil_packet_in *pin,
     return packet;
 }
 
+const char *
+ofputil_packet_in_reason_to_string(enum ofp_packet_in_reason reason)
+{
+    static char s[INT_STRLEN(int) + 1];
+
+    switch (reason) {
+    case OFPR_NO_MATCH:
+        return "no_match";
+    case OFPR_ACTION:
+        return "action";
+    case OFPR_INVALID_TTL:
+        return "invalid_ttl";
+
+    case OFPR_N_REASONS:
+    default:
+        sprintf(s, "%d", (int) reason);
+        return s;
+    }
+}
+
+bool
+ofputil_packet_in_reason_from_string(const char *s,
+                                     enum ofp_packet_in_reason *reason)
+{
+    int i;
+
+    for (i = 0; i < OFPR_N_REASONS; i++) {
+        if (!strcasecmp(s, ofputil_packet_in_reason_to_string(i))) {
+            *reason = i;
+            return true;
+        }
+    }
+    return false;
+}
+
 enum ofperr
 ofputil_decode_packet_out(struct ofputil_packet_out *po,
                           const struct ofp_packet_out *opo)

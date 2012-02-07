@@ -294,7 +294,8 @@ OFP_ASSERT(sizeof(struct ofp_port_mod) == 32);
 enum ofp_packet_in_reason {
     OFPR_NO_MATCH,          /* No matching flow. */
     OFPR_ACTION,            /* Action explicitly output to controller. */
-    OFPR_INVALID_TTL        /* Packet has invalid TTL. */
+    OFPR_INVALID_TTL,       /* Packet has invalid TTL. */
+    OFPR_N_REASONS
 };
 
 /* Packet received on port (datapath -> controller). */
