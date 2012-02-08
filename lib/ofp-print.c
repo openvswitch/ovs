@@ -1459,8 +1459,6 @@ ofp_to_string__(const struct ofp_header *oh,
         ofp_print_nxt_set_packet_in_format(string, msg);
         break;
 
-        break;
-
     case OFPUTIL_NXT_FLOW_AGE:
         break;
 
