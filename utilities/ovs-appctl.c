@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -82,11 +82,11 @@ Common commands:\n\
   help               List commands supported by the target\n\
   version            Print version of the target\n\
   vlog/list          List current logging levels\n\
-  vlog/set MODULE[:FACILITY[:LEVEL]]\n\
-      Set MODULE and FACILITY log level to LEVEL\n\
-      MODULE may be any valid module name or 'ANY'\n\
-      FACILITY may be 'syslog', 'console', 'file', or 'ANY' (default)\n\
-      LEVEL may be 'off', 'emer', 'err', 'warn', 'info', or 'dbg' (default)\n\
+  vlog/set [SPEC]\n\
+      Set log levels as detailed in SPEC, which may include:\n\
+      A valid module name (all modules, by default)\n\
+      'syslog', 'console', 'file' (all facilities, by default))\n\
+      'off', 'emer', 'err', 'warn', 'info', or 'dbg' ('dbg', bydefault)\n\
   vlog/reopen        Make the program reopen its log file\n\
 Other options:\n\
   -h, --help         Print this helpful information\n\

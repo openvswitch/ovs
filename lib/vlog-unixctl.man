@@ -1,28 +1,39 @@
 .SS "VLOG COMMANDS"
 These commands manage \fB\*(PN\fR's logging settings.
-.IP "\fBvlog/set\fR \fImodule\fR[\fB:\fIfacility\fR[\fB:\fIlevel\fR]]"
-Sets the logging level for \fImodule\fR in \fIfacility\fR to
-\fIlevel\fR:
+.IP "\fBvlog/set\fR [\fIspec\fR]"
+Sets logging levels.  Without any \fIspec\fR, sets the log level for
+every module and facility to \fBdbg\fR.  Otherwise, \fIspec\fR is a
+list of words separated by spaces or commas or colons, up to one from
+each category below:
 .
 .RS
 .IP \(bu
-\fImodule\fR may be any valid module name (as displayed by the
-\fB\-\-list\fR action on \fBovs\-appctl\fR(8)), or the special name
-\fBANY\fR to set the logging levels for all modules.
+A valid module name, as displayed by the \fBvlog/list\fR command on
+\fBovs\-appctl\fR(8), limits the log level change to the specified
+module.
 .
 .IP \(bu
-\fIfacility\fR may be \fBsyslog\fR, \fBconsole\fR, or \fBfile\fR to
-set the levels for logging to the system log, the console, or a file
-respectively, or \fBANY\fR to set the logging levels for both
-facilities.  If it is omitted, \fIfacility\fR defaults to \fBANY\fR.
-.IP
-The log level for the \fBfile\fR facility has no effect unless
-\fB\*(PN\fR was invoked with the \fB\-\-log\-file\fR option.
+\fBsyslog\fR, \fBconsole\fR, or \fBfile\fR, to limit the log level
+change to only to the system log, to the console, or to a file,
+respectively.
+.
 .IP \(bu 
-\fIlevel\fR must be one of \fBoff\fR, \fBemer\fR, \fBerr\fR, \fBwarn\fR,
-\fBinfo\fR, or
-\fBdbg\fR, designating the minimum severity of a message for it to be
-logged.  If it is omitted, \fIlevel\fR defaults to \fBdbg\fR.
+\fBoff\fR, \fBemer\fR, \fBerr\fR, \fBwarn\fR, \fBinfo\fR, or
+\fBdbg\fR, to control the log level.  Messages of the given severity
+or higher will be logged, and messages of lower severity will be
+filtered out.  \fBoff\fR filters out all messages.  See
+\fBovs\-appctl\fR(8) for a definition of each log level.
+.RE
+.
+.IP
+Case is not significant within \fIspec\fR.
+.IP
+Regardless of the log levels set for \fBfile\fR, logging to a file
+will not take place unless \fB\*(PN\fR was invoked with the
+\fB\-\-log\-file\fR option.
+.IP
+For compatibility with older versions of OVS, \fBany\fR is accepted as
+a word but has no effect.
 .RE
 .IP "\fBvlog/set PATTERN:\fIfacility\fB:\fIpattern\fR"
 Sets the log pattern for \fIfacility\fR to \fIpattern\fR.  Refer to

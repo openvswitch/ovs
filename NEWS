@@ -27,9 +27,13 @@ v1.6.0 - xx xxx xxxx
     - When QoS settings for an interface do not configure a default queue
       (queue 0), Open vSwitch now uses a default configuration for that
       queue, instead of dropping all packets as in previous versions.
-    - Logging to console and file will have UTC timestamp as a default for all
-      the daemons. An example of the default format is 2012-01-27T16:35:17Z.
-      ovs-appctl can be used to change the default format as before.
+    - Logging:
+        - Logging to console and file will have UTC timestamp as a default for
+          all the daemons. An example of the default format is
+          2012-01-27T16:35:17Z.  ovs-appctl can be used to change the default
+          format as before.
+        - The syntax of commands and options to set log levels was simplified,
+          to make it easier to remember.
     - New support for limiting the number of flows in an OpenFlow flow
       table, with configurable policy for evicting flows upon
       overflow.  See the Flow_Table table in ovs-vswitch.conf.db(5)

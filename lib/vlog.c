@@ -341,69 +341,78 @@ vlog_reopen_log_file(void)
     return vlog_set_log_file(log_file_name);
 }
 
-/* Set debugging levels:
- *
- *  mod[:facility[:level]] mod2[:facility[:level]] ...
- *
- * Return null if successful, otherwise an error message that the caller must
- * free().
- */
+/* Set debugging levels.  Returns null if successful, otherwise an error
+ * message that the caller must free(). */
 char *
 vlog_set_levels_from_string(const char *s_)
 {
-    char *save_ptr = NULL;
     char *s = xstrdup(s_);
-    char *module, *facility;
+    char *save_ptr = NULL;
+    char *msg = NULL;
+    char *word;
 
-    for (module = strtok_r(s, ": \t", &save_ptr); module != NULL;
-         module = strtok_r(NULL, ": \t", &save_ptr)) {
-        struct vlog_module *e_module;
-        enum vlog_facility e_facility;
+    word = strtok_r(s, " ,:\t", &save_ptr);
+    if (word && !strcasecmp(word, "PATTERN")) {
+        enum vlog_facility facility;
 
-        facility = strtok_r(NULL, ":", &save_ptr);
-
-        if (!facility || !strcasecmp(facility, "ANY")) {
-            e_facility = VLF_ANY_FACILITY;
-        } else {
-            e_facility = vlog_get_facility_val(facility);
-            if (e_facility >= VLF_N_FACILITIES) {
-                char *msg = xasprintf("unknown facility \"%s\"", facility);
-                free(s);
-                return msg;
-            }
+        word = strtok_r(NULL, " ,:\t", &save_ptr);
+        if (!word) {
+            msg = xstrdup("missing facility");
+            goto exit;
         }
 
-        if (!strcasecmp(module, "PATTERN")) {
-            vlog_set_pattern(e_facility, save_ptr);
-            break;
-        } else {
-            char *level;
-            enum vlog_level e_level;
+        facility = (!strcasecmp(word, "ANY")
+                    ? VLF_ANY_FACILITY
+                    : vlog_get_facility_val(word));
+        if (facility == VLF_N_FACILITIES) {
+            msg = xasprintf("unknown facility \"%s\"", word);
+            goto exit;
+        }
+        vlog_set_pattern(facility, save_ptr);
+    } else {
+        struct vlog_module *module = NULL;
+        enum vlog_level level = VLL_N_LEVELS;
+        enum vlog_facility facility = VLF_N_FACILITIES;
 
-            if (!strcasecmp(module, "ANY")) {
-                e_module = NULL;
-            } else {
-                e_module = vlog_module_from_name(module);
-                if (!e_module) {
-                    char *msg = xasprintf("unknown module \"%s\"", module);
-                    free(s);
-                    return msg;
+        for (; word != NULL; word = strtok_r(NULL, " ,:\t", &save_ptr)) {
+            if (!strcasecmp(word, "ANY")) {
+                continue;
+            } else if (vlog_get_facility_val(word) != VLF_N_FACILITIES) {
+                if (facility != VLF_N_FACILITIES) {
+                    msg = xstrdup("cannot specify multiple facilities");
+                    goto exit;
                 }
+                facility = vlog_get_facility_val(word);
+            } else if (vlog_get_level_val(word) != VLL_N_LEVELS) {
+                if (level != VLL_N_LEVELS) {
+                    msg = xstrdup("cannot specify multiple levels");
+                    goto exit;
+                }
+                level = vlog_get_level_val(word);
+            } else if (vlog_module_from_name(word)) {
+                if (module) {
+                    msg = xstrdup("cannot specify multiple modules");
+                    goto exit;
+                }
+                module = vlog_module_from_name(word);
+            } else {
+                msg = xasprintf("no facility, level, or module \"%s\"", word);
+                goto exit;
             }
-
-            level = strtok_r(NULL, ":", &save_ptr);
-            e_level = level ? vlog_get_level_val(level) : VLL_DBG;
-            if (e_level >= VLL_N_LEVELS) {
-                char *msg = xasprintf("unknown level \"%s\"", level);
-                free(s);
-                return msg;
-            }
-
-            vlog_set_levels(e_module, e_facility, e_level);
         }
+
+        if (facility == VLF_N_FACILITIES) {
+            facility = VLF_ANY_FACILITY;
+        }
+        if (level == VLL_N_LEVELS) {
+            level = VLL_DBG;
+        }
+        vlog_set_levels(module, facility, level);
     }
+
+exit:
     free(s);
-    return NULL;
+    return msg;
 }
 
 /* If 'arg' is null, configure maximum verbosity.  Otherwise, sets
@@ -488,7 +497,7 @@ vlog_init(void)
     }
 
     unixctl_command_register(
-        "vlog/set", "{module[:facility[:level]] | PATTERN:facility:pattern}",
+        "vlog/set", "{spec | PATTERN:facility:pattern}",
         1, INT_MAX, vlog_unixctl_set, NULL);
     unixctl_command_register("vlog/list", "", 0, 0, vlog_unixctl_list, NULL);
     unixctl_command_register("vlog/reopen", "", 0, 0,
@@ -808,7 +817,7 @@ void
 vlog_usage(void)
 {
     printf("\nLogging options:\n"
-           "  -v, --verbose=MODULE[:FACILITY[:LEVEL]]  set logging levels\n"
+           "  -v, --verbose=[SPEC]    set logging levels\n"
            "  -v, --verbose           set maximum verbosity level\n"
            "  --log-file[=FILE]       enable logging to specified FILE\n"
            "                          (default: %s/%s.log)\n",

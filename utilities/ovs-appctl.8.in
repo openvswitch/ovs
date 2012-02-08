@@ -72,26 +72,26 @@ Displays the version and compilation date of the target.
 .SS LOGGING COMMANDS
 Open vSwitch has several log levels.  The highest-severity log level is:
 .
-.IP "\fBOFF\fR"
+.IP "\fBoff\fR"
 No message is ever logged at this level, so setting a logging
-facility's log level to \fBOFF\fR disables logging to that facility.
+facility's log level to \fBoff\fR disables logging to that facility.
 .
 .PP
 The following log levels, in order of descending severity, are
 available:
 .
-.IP "\fBEMER\fR"
+.IP "\fBemer\fR"
 A major failure forced a process to abort.
-.IP "\fBERR\fR"
+.IP "\fBerr\fR"
 A high-level operation or a subsystem failed.  Attention is
 warranted.
-.IP "\fBWARN\fR"
+.IP "\fBwarn\fR"
 A low-level operation failed, but higher-level subsystems may be able
 to recover.
-.IP "\fBINFO\fR"
+.IP "\fBinfo\fR"
 Information that may be useful in retrospect when investigating
 a problem.
-.IP "\fBDBG\fR"
+.IP "\fBdbg\fR"
 Information useful only to someone with intricate knowledge of the
 system, or that would commonly cause too-voluminous log output.  Log
 messages at this level are not logged by default.
@@ -102,20 +102,39 @@ and adjusting log levels.
 .IP "\fBvlog/list\fR"
 Lists the known logging modules and their current levels.
 .
-.IP "\fBvlog/set\fR \fImodule\fR[\fB:\fIfacility\fR[\fB:\fIlevel\fR]]"
-Sets the logging level for \fImodule\fR in \fIfacility\fR to
-\fIlevel\fR.  The \fImodule\fR may be any valid module name (as
-displayed by the \fB\-\-list\fR option) or the special name \fBANY\fR to
-set the logging levels for all modules.  The \fIfacility\fR may be
-\fBsyslog\fR, \fBconsole\fR or \fBfile\fR to set the levels for logging to
-the system log, console or a file, respectively, or \fBANY\fR to set the
-logging levels for all facilities.  If it is omitted,
-\fIfacility\fR defaults to \fBANY\fR. Regardless of the log levels set for
-\fBfile\fR, logging to a file will not take place unless the target application
-was invoked with the \fB\-\-logfile\fR option. The \fIlevel\fR must be one of
+.IP "\fBvlog/set\fR [\fIspec\fR]"
+Sets logging levels.  Without any \fIspec\fR, sets the log level for
+every module and facility to \fBdbg\fR.  Otherwise, \fIspec\fR is a
+list of words separated by spaces or commas or colons, up to one from
+each category below:
+.
+.RS
+.IP \(bu
+A valid module name, as displayed by the \fBvlog/list\fR command on
+\fBovs\-appctl\fR(8), limits the log level change to the specified
+module.
+.
+.IP \(bu
+\fBsyslog\fR, \fBconsole\fR, or \fBfile\fR, to limit the log level
+change to only to the system log, to the console, or to a file,
+respectively.
+.
+.IP \(bu 
 \fBoff\fR, \fBemer\fR, \fBerr\fR, \fBwarn\fR, \fBinfo\fR, or
-\fBdbg\fR, designating the minimum severity of a message for it to be logged.
-If it is omitted, \fIlevel\fR defaults to \fBdbg\fR.
+\fBdbg\fR, to control the log level.  Messages of the given severity
+or higher will be logged, and messages of lower severity will be
+filtered out.  \fBoff\fR filters out all messages.
+.RE
+.
+.IP
+Case is not significant within \fIspec\fR.
+.IP
+Regardless of the log levels set for \fBfile\fR, logging to a file
+will not take place unless the target application was invoked with the
+\fB\-\-log\-file\fR option.
+.IP
+For compatibility with older versions of OVS, \fBany\fR is accepted as
+a word but has no effect.
 .
 .IP "\fBvlog/set PATTERN:\fIfacility\fB:\fIpattern\fR"
 Sets the log pattern for \fIfacility\fR to \fIpattern\fR.  Each time a
