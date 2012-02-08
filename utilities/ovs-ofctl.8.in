@@ -1202,6 +1202,10 @@ will insist on the selected format.  If the switch does not support the
 requested format, \fBovs\-ofctl\fR will report a fatal error.  This option only
 affects the \fBmonitor\fR command.
 .
+.IP "\fB\-\-timestamp\fR"
+Print a timestamp before each received packet.  This option only
+affects the \fBmonitor\fR and \fBsnoop\fR commands.
+.
 .IP "\fB\-m\fR"
 .IQ "\fB\-\-more\fR"
 Increases the verbosity of OpenFlow messages printed and logged by

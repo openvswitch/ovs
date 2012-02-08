@@ -79,6 +79,10 @@ static int preferred_packet_in_format = -1;
 /* -m, --more: Additional verbosity for ofp-print functions. */
 static int verbosity;
 
+/* --timestamp: Print a timestamp before each received packet on "monitor" and
+ * "snoop" command? */
+static bool timestamp;
+
 static const struct command all_commands[];
 
 static void usage(void) NO_RETURN;
@@ -100,6 +104,7 @@ parse_options(int argc, char *argv[])
     enum {
         OPT_STRICT = UCHAR_MAX + 1,
         OPT_READD,
+        OPT_TIMESTAMP,
         DAEMON_OPTION_ENUMS,
         VLOG_OPTION_ENUMS
     };
@@ -110,6 +115,7 @@ parse_options(int argc, char *argv[])
         {"flow-format", required_argument, NULL, 'F'},
         {"packet-in-format", required_argument, NULL, 'P'},
         {"more", no_argument, NULL, 'm'},
+        {"timestamp", no_argument, NULL, OPT_TIMESTAMP},
         {"help", no_argument, NULL, 'h'},
         {"version", no_argument, NULL, 'V'},
         DAEMON_LONG_OPTIONS,
@@ -173,6 +179,10 @@ parse_options(int argc, char *argv[])
             readd = true;
             break;
 
+        case OPT_TIMESTAMP:
+            timestamp = true;
+            break;
+
         DAEMON_OPTION_HANDLERS
         VLOG_OPTION_HANDLERS
         STREAM_SSL_OPTION_HANDLERS
@@ -231,6 +241,7 @@ usage(void)
            "  -F, --flow-format=FORMAT    force particular flow format\n"
            "  -P, --packet-in-format=FRMT force particular packet in format\n"
            "  -m, --more                  be more verbose printing OpenFlow\n"
+           "  --timestamp                 (monitor, snoop) print timestamps\n"
            "  -t, --timeout=SECS          give up after SECS seconds\n"
            "  -h, --help                  display this help message\n"
            "  -V, --version               display version information\n");
@@ -991,6 +1002,13 @@ monitor_vconn(struct vconn *vconn)
             msg_type = ((const struct ofp_header *) b->data)->type;
 
             run(retval, "vconn_recv");
+            if (timestamp) {
+                time_t now = time_wall();
+                char s[32];
+
+                strftime(s, sizeof s, "%Y-%m-%d %H:%M:%S: ", localtime(&now));
+                fputs(s, stderr);
+            }
             ofp_print(stderr, b->data, b->size, verbosity + 2);
             ofpbuf_delete(b);
 
