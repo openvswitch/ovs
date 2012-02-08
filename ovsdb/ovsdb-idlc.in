@@ -27,8 +27,6 @@ def constify(cType, const):
 
 def cMembers(prefix, columnName, column, const):
     type = column.type
-    if is_optional_bool(type):
-        const = True
     if type.n_min == 1 and type.n_max == 1:
         singleton = True
         pointer = ''
@@ -167,10 +165,6 @@ def printEnum(members):
     print "    %s" % members[-1]
     print "};"
 
-def is_optional_bool(type):
-    return (type.key.type == ovs.db.types.BooleanType and not type.value
-            and type.n_min == 0 and type.n_max == 1)
-
 def printCIDLSource(schemaFile):
     schema = parseSchema(schemaFile)
     prefix = schema.idlPrefix
@@ -183,6 +177,13 @@ def printCIDLSource(schemaFile):
 #include <limits.h>
 #include "ovsdb-data.h"
 #include "ovsdb-error.h"
+
+#ifdef __CHECKER__
+/* Sparse dislikes sizeof(bool) ("warning: expression using sizeof bool"). */
+enum { sizeof_bool = 1 };
+#else
+enum { sizeof_bool = sizeof(bool) };
+#endif
 
 static bool inited;
 ''' % schema.idlHeader
@@ -221,23 +222,7 @@ static void
                 keyVar = "row->%s" % columnName
                 valueVar = None
 
-            if is_optional_bool(type):
-                # Special case for an optional bool.  This is only here because
-                # sparse does not like the "normal" case below ("warning:
-                # expression using sizeof bool").
-                print
-                print "    assert(inited);"
-                print "    if (datum->n >= 1) {"
-                print "        static const bool false_value = false;"
-                print "        static const bool true_value = true;"
-                print
-                print "        row->n_%s = 1;" % columnName
-                print "        %s = datum->keys[0].boolean ? &true_value : &false_value;" % keyVar
-                print "    } else {"
-                print "        row->n_%s = 0;" % columnName
-                print "        %s = NULL;" % keyVar
-                print "    }"
-            elif (type.n_min == 1 and type.n_max == 1) or type.is_optional_pointer():
+            if (type.n_min == 1 and type.n_max == 1) or type.is_optional_pointer():
                 print
                 print "    assert(inited);"
                 print "    if (datum->n >= 1) {"
@@ -289,9 +274,24 @@ static void
                 else:
                     indent = "        "
                 print "%sif (!row->n_%s) {" % (indent, columnName)
-                print "%s    %s = xmalloc(%s * sizeof *%s);" % (indent, keyVar, nMax, keyVar)
+
+                # Special case for boolean types.  This is only here because
+                # sparse does not like the "normal" case ("warning: expression
+                # using sizeof bool").
+                if type.key.type == ovs.db.types.BooleanType:
+                    sizeof = "sizeof_bool"
+                else:
+                    sizeof = "sizeof *%s" % keyVar
+                print "%s    %s = xmalloc(%s * %s);" % (indent, keyVar, nMax,
+                                                        sizeof)
                 if valueVar:
-                    print "%s    %s = xmalloc(%s * sizeof *%s);" % (indent, valueVar, nMax, valueVar)
+                    # Special case for boolean types (see above).
+                    if type.value.type == ovs.db.types.BooleanType:
+                        sizeof = " * sizeof_bool"
+                    else:
+                        sizeof = "sizeof *%s" % valueVar
+                    print "%s    %s = xmalloc(%s * %s);" % (indent, valueVar,
+                                                            nMax, sizeof)
                 print "%s}" % indent
                 print "%s%s[row->n_%s] = %s;" % (indent, keyVar, columnName, keySrc)
                 if valueVar:
