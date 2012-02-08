@@ -467,7 +467,7 @@
         on bridges.  Bond, internal, and mirror ports are not supported
         and will not participate in the spanning tree.
       </column>
- 
+
       <column name="other_config" key="stp-system-id">
         The bridge's STP identifier (the lower 48 bits of the bridge-id)
         in the form
@@ -1169,7 +1169,7 @@
           <dt><code>ipsec_gre</code></dt>
           <dd>
             An Ethernet over RFC 2890 Generic Routing Encapsulation over IPv4
-            IPsec tunnel.  
+            IPsec tunnel.
           </dd>
 
           <dt><code>capwap</code></dt>
@@ -1297,7 +1297,7 @@
         from the inner packet if it is IPv4 or IPv6 (otherwise it will be the
         system default, typically 64).  Default is the system default TTL.
       </column>
-      
+
       <column name="options" key="df_inherit" type='{"type": "boolean"}'>
         Optional.  If enabled, the Don't Fragment bit will be copied from the
         inner IP headers (those of the encapsulated traffic) to the outer
@@ -1563,7 +1563,7 @@
           Total number of receive errors, greater than or equal to the sum of
           the above.
         </column>
-      </group>              
+      </group>
       <group title="Statistics: Transmit errors">
         <column name="statistics" key="tx_dropped">
           Number of packets dropped by TX.
@@ -2039,7 +2039,7 @@
         The <code>linux-htb</code> and <code>linux-hfsc</code> classes support
         the following key-value pair:
       </p>
-      
+
       <column name="other_config" key="max-rate" type='{"type": "integer"}'>
         Maximum rate shared by all queued traffic, in bit/s.  Optional.  If not
         specified, for physical interfaces, the default is the link rate.  For
@@ -2077,7 +2077,7 @@
         <code>linux-htb</code> may use <code>queue_id</code>s less than 61440.
         It has the following key-value pairs defined.
       </p>
-      
+
       <column name="other_config" key="min-rate"
               type='{"type": "integer", "minInteger": 1}'>
         Minimum guaranteed bandwidth, in bit/s.
@@ -2114,12 +2114,12 @@
         <code>linux-hfsc</code> may use <code>queue_id</code>s less than 61440.
         It has the following key-value pairs defined.
       </p>
-      
+
       <column name="other_config" key="min-rate"
               type='{"type": "integer", "minInteger": 1}'>
         Minimum guaranteed bandwidth, in bit/s.
       </column>
-      
+
       <column name="other_config" key="max-rate"
               type='{"type": "integer", "minInteger": 1}'>
         Maximum allowed bandwidth, in bit/s.  Optional.  If specified, the
@@ -2576,14 +2576,14 @@
           human consumption.
         </p>
       </column>
-      
+
       <column name="status" key="sec_since_connect"
               type='{"type": "integer", "minInteger": 0}'>
         The amount of time since this controller last successfully connected to
         the switch (in seconds).  Value is empty if controller has never
         successfully connected.
       </column>
-      
+
       <column name="status" key="sec_since_disconnect"
               type='{"type": "integer", "minInteger": 1}'>
         The amount of time since this controller last disconnected from
