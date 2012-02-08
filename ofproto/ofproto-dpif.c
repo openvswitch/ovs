@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011 Nicira Networks.
+ * Copyright (c) 2009, 2010, 2011, 2012 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -3945,11 +3945,9 @@ xlate_output_action__(struct action_xlate_ctx *ctx,
         commit_odp_actions(ctx);
         compose_controller_action(ctx, max_len);
         break;
-    case OFPP_LOCAL:
-        add_output_action(ctx, OFPP_LOCAL);
-        break;
     case OFPP_NONE:
         break;
+    case OFPP_LOCAL:
     default:
         if (port != ctx->flow.in_port) {
             add_output_action(ctx, port);
