@@ -4338,11 +4338,9 @@ xlate_output_action__(struct action_xlate_ctx *ctx,
     case OFPP_CONTROLLER:
         compose_controller_action(ctx, max_len);
         break;
-    case OFPP_LOCAL:
-        compose_output_action(ctx, OFPP_LOCAL);
-        break;
     case OFPP_NONE:
         break;
+    case OFPP_LOCAL:
     default:
         if (port != ctx->flow.in_port) {
             compose_output_action(ctx, port);

@@ -105,6 +105,7 @@ OVS_VSWITCHD_START([dnl
         add-port br0 p7 -- set Interface p7 type=dummy ])
 
 AT_DATA([flows.txt], [dnl
+in_port=local actions=local,flood
 in_port=1 actions=flood
 in_port=2 actions=all
 in_port=3 actions=output:65534,output:1,output:2,output:3,output:4,output:5,output:6,output:7
@@ -113,6 +114,16 @@ in_port=4 actions=enqueue:65534:1,enqueue:1:1,enqueue:2:1,enqueue:3:2,enqueue:4:
 AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 AT_CHECK([ovs-ofctl mod-port br0 5 noforward])
 AT_CHECK([ovs-ofctl mod-port br0 6 noflood])
+
+AT_CHECK([ovs-appctl ofproto/trace br0 'in_port(0),eth(src=00:00:00:00:00:01,dst=00:00:00:00:00:02),eth_type(0x0900)'], [0], [stdout])
+AT_CHECK([tail -1 stdout \
+| sed -e 's/Datapath actions: //' | tr ',' '\n' | sort], [0], [dnl
+1
+2
+3
+4
+7
+])
 
 AT_CHECK([ovs-appctl ofproto/trace br0 'in_port(1),eth(src=00:00:00:00:00:01,dst=00:00:00:00:00:02),eth_type(0x0900)'], [0], [stdout])
 AT_CHECK([tail -1 stdout \
