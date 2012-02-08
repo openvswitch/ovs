@@ -1,7 +1,12 @@
-.TP
-\fB\-h\fR, \fB\-\-help\fR
+.de IQ
+.  br
+.  ns
+.  IP "\\$1"
+..
+.IP "\fB\-h\fR"
+.IQ "\fB\-\-help\fR"
 Prints a brief help message to the console.
 .
-.TP
-\fB\-V\fR, \fB\-\-version\fR
+.IP "\fB\-V\fR"
+.IQ "\fB\-\-version\fR"
 Prints version information to the console.

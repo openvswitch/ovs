@@ -1,3 +1,8 @@
+.de IQ
+.  br
+.  ns
+.  IP "\\$1"
+..
 .TH ovs\-test 1 "October 2011" "Open vSwitch" "Open vSwitch Manual"
 .
 .SH NAME
@@ -53,13 +58,14 @@ interface that he originally intended to test.
 .
 .SH OPTIONS
 .
-.TP
-\fB\-s\fR, \fB\-\-server\fR \fIport\fR
+.IP "\fB\-s \fIport\fR"
+.IQ "\fB\-\-server\fR \fIport\fR"
 Run in server mode and wait for a client to establish XML RPC Control
 Connection on TCP \fIport\fR. It is recommended to have ethtool installed on
 the server so that it could retrieve information about NIC driver.
-.TP
-\fB\-c\fR, \fB\-\-client\fR \fIserver1\fR \fIserver2\fR
+.
+.IP "\fB\-c \fIserver1\fR \fIserver2\fR"
+.IQ "\fB\-\-client \fIserver1\fR \fIserver2\fR"
 Run in client mode and schedule tests between \fIserver1\fR and \fIserver2\fR,
 where each \fIserver\fR must be given in following format -
 ControlIP[:ControlPort][,TestIP[:TestPort]]. If TestIP is omitted then
@@ -68,8 +74,9 @@ TCP port where server will listen for incoming XML/RPC control
 connections to schedule tests (by default it is 15531). TestPort
 is port which will be used by server to listen for test traffic
 (by default it is 15532).
-.TP
-\fB\-b\fR, \fB\-\-bandwidth\fR \fIbandwidth\fR
+.
+.IP "\fB\-b \fIbandwidth\fR"
+.IQ "\fB\-\-bandwidth\fR \fIbandwidth\fR"
 Target bandwidth for UDP tests. The \fIbandwidth\fR must be given in bits per
 second. It is possible to use postfix M or K to alter the target bandwidth
 magnitude.
@@ -105,8 +112,6 @@ client will use TCP port 15531 to establish control channel).
 .IP
 .B ovs\-test -c 1.2.3.4 1.2.3.5
 .
-.TP
-
 .SH SEE ALSO
 .
 .BR ovs\-vswitchd (8),

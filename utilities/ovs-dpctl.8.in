@@ -1,3 +1,8 @@
+.de IQ
+.  br
+.  ns
+.  IP "\\$1"
+..
 .TH ovs\-dpctl 8 "August 2009" "Open vSwitch" "Open vSwitch Manual"
 .ds PN ovs\-dpctl
 .
@@ -115,11 +120,13 @@ not OpenFlow flow entries.  By deleting them, the process that set them
 up may be confused about their disappearance.
 .
 .SH OPTIONS
-.IP "\fB\-s\fR, \fB\-\-statistics\fR"
+.IP "\fB\-s\fR"
+.IQ "\fB\-\-statistics\fR"
 Causes the \fBshow\fR command to print packet and byte counters for
 each port within the datapaths that it shows.
-.TP
-\fB\-t\fR, \fB\-\-timeout=\fIsecs\fR
+.
+.IP "\fB\-t\fR"
+.IQ "\fB\-\-timeout=\fIsecs\fR"
 Limits \fBovs\-dpctl\fR runtime to approximately \fIsecs\fR seconds.  If
 the timeout expires, \fBovs\-dpctl\fR will exit with a \fBSIGALRM\fR
 signal.

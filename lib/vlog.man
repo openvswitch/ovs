@@ -1,5 +1,10 @@
-.TP
-\fB\-v\fImodule\fR[\fB:\fIfacility\fR[\fB:\fIlevel\fR]], \fB\-\-verbose=\fImodule\fR[\fB:\fIfacility\fR[\fB:\fIlevel\fR]]
+.de IQ
+.  br
+.  ns
+.  IP "\\$1"
+..
+.IP "\fB\-v\fImodule\fR[\fB:\fIfacility\fR[\fB:\fIlevel\fR]]"
+.IQ "\fB\-\-verbose=\fImodule\fR[\fB:\fIfacility\fR[\fB:\fIlevel\fR]]"
 .
 Sets the logging level for \fImodule\fR in \fIfacility\fR to
 \fIlevel\fR:
@@ -28,13 +33,13 @@ logged.  If it is omitted, \fIlevel\fR defaults to \fBdbg\fR.  See
 \fBovs\-appctl\fR(8) for a definition of each log level.
 .RE
 .
-.TP
-\fB\-v\fR, \fB\-\-verbose\fR
+.IP "\fB\-v\fR"
+.IQ "\fB\-\-verbose\fR"
 Sets the maximum logging verbosity level, equivalent to
 \fB\-\-verbose=ANY:ANY:dbg\fR.
 .
-.TP
-\fB\-vPATTERN:\fIfacility\fB:\fIpattern\fR, \fB\-\-verbose=PATTERN:\fIfacility\fB:\fIpattern\fR
+.IP "\fB\-vPATTERN:\fIfacility\fB:\fIpattern\fR"
+.IQ "\fB\-\-verbose=PATTERN:\fIfacility\fB:\fIpattern\fR"
 Sets the log pattern for \fIfacility\fR to \fIpattern\fR.  Refer to
 \fBovs\-appctl\fR(8) for a description of the valid syntax for \fIpattern\fR.
 .

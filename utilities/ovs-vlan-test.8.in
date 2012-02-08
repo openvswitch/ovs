@@ -1,3 +1,8 @@
+.de IQ
+.  br
+.  ns
+.  IP "\\$1"
+..
 .TH ovs\-vlan\-test 1 "December 2010" "Open vSwitch" "Open vSwitch Manual"
 .
 .SH NAME
@@ -43,8 +48,8 @@ test against a single \fBovs\-vlan\-test\fR server concurrently.
 .
 .SH OPTIONS
 .
-.TP
-\fB\-s\fR, \fB\-\-server\fR
+.IP "\fB\-s\fR"
+.IQ "\fB\-\-server\fR"
 Run in server mode.
 .
 .so lib/common.man
@@ -81,8 +86,6 @@ Run an \fBovs\-vlan\-test\fR client with a control server located at
 .IP
 .B ovs\-vlan\-test 172.16.0.142:8080 1.2.3.4
 .
-.TP
-
 .SH SEE ALSO
 .
 .BR ovs\-vswitchd (8),

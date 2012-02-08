@@ -1,3 +1,8 @@
+.de IQ
+.  br
+.  ns
+.  IP "\\$1"
+..
 .TH ovs\-pki 8 "May 2008" "Open vSwitch" "Open vSwitch Manual"
 
 .SH NAME
@@ -270,8 +275,8 @@ older than \fIAGE\fR, which must in one of the forms \fIN\fBs\fR,
 \fIN\fBmin\fR, \fIN\fBh\fR, \fIN\fBday\fR.  The default is \fB1day\fR.
 
 .SH OPTIONS
-.TP
-\fB\-k\fR \fItype\fR | \fB\-\^\-key=\fItype\fR
+.IP "\fB\-k\fR \fItype\fR"
+.IQ "\fB\-\^\-key=\fItype\fR"
 For the \fBinit\fR command, sets the public key algorithm to use for
 the new PKI hierarchy.  For the \fBreq\fR and \fBreq+sign\fR commands,
 sets the public key algorithm to use for the key to be generated,
@@ -280,8 +285,8 @@ commands, the value has no effect.
 
 The \fItype\fR may be \fBrsa\fR (the default) or \fBdsa\fR.
 
-.TP
-\fB\-B\fR \fInbits\fR | \fB\-\^\-bits=\fInbits\fR
+.IP "\fB\-B\fR \fInbits\fR"
+.IQ "\fB\-\^\-bits=\fInbits\fR"
 Sets the number of bits in the key to be generated.  When RSA keys are
 in use, this option affects only the \fBinit\fR, \fBreq\fR, and
 \fBreq+sign\fR commands, and the same value should be given each time.
@@ -290,37 +295,37 @@ command.
 
 The value must be at least 1024.  The default is 2048.
 
-.TP
-\fB\-D\fR \fIfile\fR | \fB\-\^\-dsaparam=\fIfile\fR
+.IP "\fB\-D\fR \fIfile\fR"
+.IQ "\fB\-\^\-dsaparam=\fIfile\fR"
 Specifies an alternate location for the \fBdsaparam.pem\fR file
 required by the \fBreq\fR and \fBreq+sign\fR commands.  This option
 affects only these commands, and only when DSA keys are used.
 
 The default is \fBdsaparam.pem\fR under the PKI hierarchy.
 
-.TP
-\fB\-b\fR | \fB\-\^\-batch\fR
+.IP "\fB\-b\fR"
+.IQ "\fB\-\^\-batch\fR"
 Suppresses the interactive verification of fingerprints that the
 \fBsign\fR and \fBapprove\fR commands by default require.
 
-.TP
-\fB\-d\fR \fIdir\fR | \fB\-\^\-dir=\fR\fIdir\fR
+.IP "\fB\-d\fR \fIdir\fR"
+.IQ "\fB\-\^\-dir=\fR\fIdir\fR"
 Specifies the location of the PKI hierarchy to be used or created by
 the command (default: \fB@PKIDIR@\fR).  All commands, except \fBreq\fR,
 need access to a PKI hierarchy.
 
-.TP
-\fB\-f\fR | \fB\-\^\-force\fR
+.IP "\fB\-f\fR"
+.IQ "\fB\-\^\-force\fR"
 By default, \fBovs\-pki\fR will not overwrite existing files or
 directories.  This option overrides this behavior.
 
-.TP
-\fB\-l\fR \fIfile\fR | \fB\-\^\-log=\fIfile\fR
+.IP "\fB\-l\fR \fIfile\fR"
+.IQ "\fB\-\^\-log=\fIfile\fR"
 Sets the log file to \fIfile\fR.  Default:
 \fB@LOGDIR@/ovs\-pki.log\fR.
 
-.TP
-\fB\-h\fR | \fB\-\^\-help\fR
+.IP "\fB\-h\fR"
+.IQ "\fB\-\^\-help\fR"
 Prints a help usage message and exits.
 
 .SH "SEE ALSO"
