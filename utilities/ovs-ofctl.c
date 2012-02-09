@@ -831,6 +831,77 @@ monitor_set_invalid_ttl_to_controller(struct vconn *vconn)
     return 0;
 }
 
+/* Converts hex digits in 'hex' to an OpenFlow message in '*msgp'.  The
+ * caller must free '*msgp'.  On success, returns NULL.  On failure, returns
+ * an error message and stores NULL in '*msgp'. */
+static const char *
+openflow_from_hex(const char *hex, struct ofpbuf **msgp)
+{
+    struct ofp_header *oh;
+    struct ofpbuf *msg;
+
+    msg = ofpbuf_new(strlen(hex) / 2);
+    *msgp = NULL;
+
+    if (ofpbuf_put_hex(msg, hex, NULL)[0] != '\0') {
+        ofpbuf_delete(msg);
+        return "Trailing garbage in hex data";
+    }
+
+    if (msg->size < sizeof(struct ofp_header)) {
+        ofpbuf_delete(msg);
+        return "Message too short for OpenFlow";
+    }
+
+    oh = msg->data;
+    if (msg->size != ntohs(oh->length)) {
+        ofpbuf_delete(msg);
+        return "Message size does not match length in OpenFlow header";
+    }
+
+    *msgp = msg;
+    return NULL;
+}
+
+static void
+ofctl_send(struct unixctl_conn *conn, int argc,
+           const char *argv[], void *vconn_)
+{
+    struct vconn *vconn = vconn_;
+    struct ds reply;
+    bool ok;
+    int i;
+
+    ok = true;
+    ds_init(&reply);
+    for (i = 1; i < argc; i++) {
+        const char *error_msg;
+        struct ofpbuf *msg;
+        int error;
+
+        error_msg = openflow_from_hex(argv[i], &msg);
+        if (error_msg) {
+            ds_put_format(&reply, "%s\n", error_msg);
+            ok = false;
+            continue;
+        }
+
+        fprintf(stderr, "send: ");
+        ofp_print(stderr, msg->data, msg->size, verbosity);
+
+        error = vconn_send_block(vconn, msg);
+        if (error) {
+            ofpbuf_delete(msg);
+            ds_put_format(&reply, "%s\n", strerror(error));
+            ok = false;
+        } else {
+            ds_put_cstr(&reply, "sent\n");
+        }
+    }
+    unixctl_command_reply(conn, ok ? 200 : 501, ds_cstr(&reply));
+    ds_destroy(&reply);
+}
+
 static void
 monitor_vconn(struct vconn *vconn)
 {
@@ -845,6 +916,8 @@ monitor_vconn(struct vconn *vconn)
         ovs_fatal(error, "failed to create unixctl server");
     }
     unixctl_command_register("exit", "", 0, 0, ofctl_exit, &exiting);
+    unixctl_command_register("ofctl/send", "OFMSG...", 1, INT_MAX,
+                             ofctl_send, vconn);
     daemonize_complete();
 
     for (;;) {

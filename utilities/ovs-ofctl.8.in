@@ -1200,11 +1200,18 @@ increase verbosity further.
 .so lib/common.man
 .
 .SH "RUNTIME MANAGEMENT COMMANDS"
-\fBovs\-appctl\fR(8) can send commands to a running \fBovs\-ofctl\fR process.
-The currently supported commands only apply when executing the \fBmonitor\fR or
-\fBsnoop\fR commands and are described below.
+\fBovs\-appctl\fR(8) can send commands to a running \fBovs\-ofctl\fR
+process.  The supported commands are listed below.
+.
 .IP "\fBexit\fR"
-Causes \fBovs\-ofctl\fR to gracefully terminate.
+Causes \fBovs\-ofctl\fR to gracefully terminate.  This command applies
+only when executing the \fBmonitor\fR or \fBsnoop\fR commands.
+.
+.IP "\fBofctl/send \fIofmsg\fR..."
+Sends each \fIofmsg\fR, specified as a sequence of hex digits that
+express an OpenFlow message, on the OpenFlow connection.  This command
+is useful only when executing the \fBmonitor\fR command.
+.
 .SH EXAMPLES
 .
 The following examples assume that \fBovs\-vswitchd\fR has a bridge
