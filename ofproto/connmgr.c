@@ -60,8 +60,6 @@ struct ofconn {
     enum nx_flow_format flow_format; /* Currently selected flow format. */
     enum nx_packet_in_format packet_in_format; /* OFPT_PACKET_IN format. */
     bool flow_mod_table_id;     /* NXT_FLOW_MOD_TABLE_ID enabled? */
-    bool invalid_ttl_to_controller; /* Send packets with invalid TTL
-                                       to the controller. */
 
     /* Asynchronous flow table operation support. */
     struct list opgroups;       /* Contains pending "ofopgroups", if any. */
@@ -80,6 +78,13 @@ struct ofconn {
      * requests.  */
 #define OFCONN_REPLY_MAX 100
     struct rconn_packet_counter *reply_counter;
+
+    /* Asynchronous message configuration in each possible roles.
+     *
+     * A 1-bit enables sending an asynchronous message for one possible reason
+     * that the message might be generated, a 0-bit disables it. */
+    uint32_t master_async_config[OAM_N_TYPES]; /* master, other */
+    uint32_t slave_async_config[OAM_N_TYPES];  /* slave */
 };
 
 static struct ofconn *ofconn_create(struct connmgr *, struct rconn *,
@@ -99,8 +104,6 @@ static const char *ofconn_get_target(const struct ofconn *);
 static char *ofconn_make_name(const struct connmgr *, const char *target);
 
 static void ofconn_set_rate_limit(struct ofconn *, int rate, int burst);
-
-static bool ofconn_receives_async_msgs(const struct ofconn *);
 
 static void ofconn_send(const struct ofconn *, struct ofpbuf *,
                         struct rconn_packet_counter *);
@@ -762,15 +765,21 @@ ofconn_set_role(struct ofconn *ofconn, enum nx_role role)
 }
 
 void
-ofconn_set_invalid_ttl_to_controller(struct ofconn *ofconn, bool val)
+ofconn_set_invalid_ttl_to_controller(struct ofconn *ofconn, bool enable)
 {
-    ofconn->invalid_ttl_to_controller = val;
+    uint32_t bit = 1u << OFPR_INVALID_TTL;
+    if (enable) {
+        ofconn->master_async_config[OAM_PACKET_IN] |= bit;
+    } else {
+        ofconn->master_async_config[OAM_PACKET_IN] &= ~bit;
+    }
 }
 
 bool
 ofconn_get_invalid_ttl_to_controller(struct ofconn *ofconn)
 {
-    return ofconn->invalid_ttl_to_controller;
+    uint32_t bit = 1u << OFPR_INVALID_TTL;
+    return (ofconn->master_async_config[OAM_PACKET_IN] & bit) != 0;
 }
 
 /* Returns the currently configured flow format for 'ofconn', one of NXFF_*.
@@ -838,6 +847,16 @@ void
 ofconn_set_miss_send_len(struct ofconn *ofconn, int miss_send_len)
 {
     ofconn->miss_send_len = miss_send_len;
+}
+
+void
+ofconn_set_async_config(struct ofconn *ofconn,
+                        const uint32_t master_masks[OAM_N_TYPES],
+                        const uint32_t slave_masks[OAM_N_TYPES])
+{
+    size_t size = sizeof ofconn->master_async_config;
+    memcpy(ofconn->master_async_config, master_masks, size);
+    memcpy(ofconn->slave_async_config, slave_masks, size);
 }
 
 /* Sends 'msg' on 'ofconn', accounting it as a reply.  (If there is a
@@ -956,6 +975,8 @@ ofconn_create(struct connmgr *mgr, struct rconn *rconn, enum ofconn_type type)
 static void
 ofconn_flush(struct ofconn *ofconn)
 {
+    uint32_t *master = ofconn->master_async_config;
+    uint32_t *slave = ofconn->slave_async_config;
     int i;
 
     ofconn->role = NX_ROLE_OTHER;
@@ -996,6 +1017,24 @@ ofconn_flush(struct ofconn *ofconn)
 
     rconn_packet_counter_destroy(ofconn->reply_counter);
     ofconn->reply_counter = rconn_packet_counter_create();
+
+    /* "master" and "other" roles get all asynchronous messages by default,
+     * except that the controller needs to enable nonstandard "packet-in"
+     * reasons itself. */
+    master[OAM_PACKET_IN] = (1u << OFPR_NO_MATCH) | (1u << OFPR_ACTION);
+    master[OAM_PORT_STATUS] = ((1u << OFPPR_ADD)
+                               | (1u << OFPPR_DELETE)
+                               | (1u << OFPPR_MODIFY));
+    master[OAM_FLOW_REMOVED] = ((1u << OFPRR_IDLE_TIMEOUT)
+                                | (1u << OFPRR_HARD_TIMEOUT)
+                                | (1u << OFPRR_DELETE));
+
+    /* "slave" role gets port status updates by default. */
+    slave[OAM_PACKET_IN] = 0;
+    slave[OAM_PORT_STATUS] = ((1u << OFPPR_ADD)
+                              | (1u << OFPPR_DELETE)
+                              | (1u << OFPPR_MODIFY));
+    slave[OAM_FLOW_REMOVED] = 0;
 }
 
 static void
@@ -1100,42 +1139,42 @@ ofconn_wait(struct ofconn *ofconn, bool handling_openflow)
     }
 }
 
-/* Returns true if 'ofconn' should receive asynchronous messages. */
+/* Returns true if 'ofconn' should receive asynchronous messages of the given
+ * OAM_* 'type' and 'reason', which should be a OFPR_* value for OAM_PACKET_IN,
+ * a OFPPR_* value for OAM_PORT_STATUS, or an OFPRR_* value for
+ * OAM_FLOW_REMOVED.  Returns false if the message should not be sent on
+ * 'ofconn'. */
 static bool
-ofconn_receives_async_msgs__(const struct ofconn *ofconn)
+ofconn_receives_async_msg(const struct ofconn *ofconn,
+                          enum ofconn_async_msg_type type,
+                          unsigned int reason)
 {
-    if (ofconn->type == OFCONN_PRIMARY) {
-        /* Primary controllers always get asynchronous messages unless they
-         * have configured themselves as "slaves".  */
-        return ofconn->role != NX_ROLE_SLAVE;
-    } else {
+    const uint32_t *async_config;
+
+    assert(reason < 32);
+    assert((unsigned int) type < OAM_N_TYPES);
+
+    if (!rconn_is_connected(ofconn->rconn)) {
+        return false;
+    }
+
+    /* Keep the following code in sync with the documentation in the
+     * "Asynchronous Messages" section in DESIGN. */
+
+    if (ofconn->type == OFCONN_SERVICE && !ofconn->miss_send_len) {
         /* Service connections don't get asynchronous messages unless they have
          * explicitly asked for them by setting a nonzero miss send length. */
-        return ofconn->miss_send_len > 0;
-    }
-}
-
-static bool
-ofconn_receives_async_msgs(const struct ofconn *ofconn)
-{
-    if (!rconn_is_connected(ofconn->rconn)) {
         return false;
-    } else {
-        return ofconn_receives_async_msgs__(ofconn);
     }
-}
 
-static bool
-ofconn_interested_in_packet(const struct ofconn *ofconn,
-                            const struct ofputil_packet_in *pin)
-{
-    if (!rconn_is_connected(ofconn->rconn)) {
+    async_config = (ofconn->role == NX_ROLE_SLAVE
+                    ? ofconn->slave_async_config
+                    : ofconn->master_async_config);
+    if (!(async_config[type] & (1u << reason))) {
         return false;
-    } else if (pin->reason == OFPR_INVALID_TTL) {
-        return ofconn->invalid_ttl_to_controller;
-    } else {
-        return ofconn_receives_async_msgs__(ofconn);
     }
+
+    return true;
 }
 
 /* Returns a human-readable name for an OpenFlow connection between 'mgr' and
@@ -1195,20 +1234,15 @@ connmgr_send_port_status(struct connmgr *mgr, const struct ofp_phy_port *opp,
     struct ofconn *ofconn;
 
     LIST_FOR_EACH (ofconn, node, &mgr->all_conns) {
-        struct ofp_port_status *ops;
-        struct ofpbuf *b;
+        if (ofconn_receives_async_msg(ofconn, OAM_PORT_STATUS, reason)) {
+            struct ofp_port_status *ops;
+            struct ofpbuf *b;
 
-        /* Primary controllers, even slaves, should always get port status
-           updates.  Otherwise obey ofconn_receives_async_msgs(). */
-        if (ofconn->type != OFCONN_PRIMARY
-            && !ofconn_receives_async_msgs(ofconn)) {
-            continue;
+            ops = make_openflow_xid(sizeof *ops, OFPT_PORT_STATUS, 0, &b);
+            ops->reason = reason;
+            ops->desc = *opp;
+            ofconn_send(ofconn, b, NULL);
         }
-
-        ops = make_openflow_xid(sizeof *ops, OFPT_PORT_STATUS, 0, &b);
-        ops->reason = reason;
-        ops->desc = *opp;
-        ofconn_send(ofconn, b, NULL);
     }
 }
 
@@ -1221,19 +1255,17 @@ connmgr_send_flow_removed(struct connmgr *mgr,
     struct ofconn *ofconn;
 
     LIST_FOR_EACH (ofconn, node, &mgr->all_conns) {
-        struct ofpbuf *msg;
+        if (ofconn_receives_async_msg(ofconn, OAM_FLOW_REMOVED, fr->reason)) {
+            struct ofpbuf *msg;
 
-        if (!ofconn_receives_async_msgs(ofconn)) {
-            continue;
+            /* Account flow expirations as replies to OpenFlow requests.  That
+             * works because preventing OpenFlow requests from being processed
+             * also prevents new flows from being added (and expiring).  (It
+             * also prevents processing OpenFlow requests that would not add
+             * new flows, so it is imperfect.) */
+            msg = ofputil_encode_flow_removed(fr, ofconn->flow_format);
+            ofconn_send_reply(ofconn, msg);
         }
-
-        /* Account flow expirations as replies to OpenFlow requests.  That
-         * works because preventing OpenFlow requests from being processed also
-         * prevents new flows from being added (and expiring).  (It also
-         * prevents processing OpenFlow requests that would not add new flows,
-         * so it is imperfect.) */
-        msg = ofputil_encode_flow_removed(fr, ofconn->flow_format);
-        ofconn_send_reply(ofconn, msg);
     }
 }
 
@@ -1247,7 +1279,7 @@ connmgr_send_packet_in(struct connmgr *mgr,
     struct ofconn *ofconn;
 
     LIST_FOR_EACH (ofconn, node, &mgr->all_conns) {
-        if (ofconn_interested_in_packet(ofconn, pin)) {
+        if (ofconn_receives_async_msg(ofconn, OAM_PACKET_IN, pin->reason)) {
             schedule_packet_in(ofconn, *pin, flow);
         }
     }

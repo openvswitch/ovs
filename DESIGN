@@ -9,8 +9,53 @@ successful deployment.  The end of this document contains contact
 information that can be used to let us know how we can make Open vSwitch
 more generally useful.
 
-OpenFlow
-========
+Asynchronous Messages
+=====================
+
+Over time, Open vSwitch has added many knobs that control whether a
+given controller receives OpenFlow asynchronous messages.  This
+section describes how all of these features interact.
+
+First, a service controller never receives any asynchronous messages
+unless it explicitly configures a miss_send_len greater than zero with
+an OFPT_SET_CONFIG message.
+
+Second, OFPT_FLOW_REMOVED and NXT_FLOW_REMOVED messages are generated
+only if the flow that was removed had the OFPFF_SEND_FLOW_REM flag
+set.
+
+Finally, Open vSwitch consults a per-connection table indexed by the
+message type, reason code, and current role.  The following table
+shows how this table is initialized by default when an OpenFlow
+connection is made.  An entry labeled "yes" means that the message is
+sent, an entry labeled "---" means that the message is suppressed.
+
+                                             master/
+  message and reason code                     other     slave
+  ----------------------------------------   -------    -----
+  OFPT_PACKET_IN / NXT_PACKET_IN
+    OFPR_NO_MATCH                              yes       ---
+    OFPR_ACTION                                yes       ---
+    OFPR_INVALID_TTL                           ---       ---
+
+  OFPT_FLOW_REMOVED / NXT_FLOW_REMOVED
+    OFPRR_IDLE_TIMEOUT                         yes       ---
+    OFPRR_HARD_TIMEOUT                         yes       ---
+    OFPRR_DELETE                               yes       ---
+
+  OFPT_PORT_STATUS
+    OFPPR_ADD                                  yes       yes
+    OFPPR_DELETE                               yes       yes
+    OFPPR_MODIFY                               yes       yes
+
+The NXT_SET_ASYNC_CONFIG message directly sets all of the values in
+this table for the current connection.  The
+OFPC_INVALID_TTL_TO_CONTROLLER bit in the OFPT_SET_CONFIG message
+controls the setting for OFPR_INVALID_TTL for the "master" role.
+
+
+OFPAT_ENQUEUE
+=============
 
 The OpenFlow 1.0 specification requires the output port of the OFPAT_ENQUEUE
 action to "refer to a valid physical port (i.e. < OFPP_MAX) or OFPP_IN_PORT".

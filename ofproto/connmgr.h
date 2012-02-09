@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011 Nicira Networks.
+ * Copyright (c) 2009, 2010, 2011, 2012 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -51,6 +51,14 @@ enum ofconn_type {
     OFCONN_SERVICE              /* A service connection, e.g. "ovs-ofctl". */
 };
 
+/* The type of an OpenFlow asynchronous message. */
+enum ofconn_async_msg_type {
+    OAM_PACKET_IN,              /* OFPT_PACKET_IN or NXT_PACKET_IN. */
+    OAM_PORT_STATUS,            /* OFPT_PORT_STATUS. */
+    OAM_FLOW_REMOVED,           /* OFPT_FLOW_REMOVED or NXT_FLOW_REMOVED. */
+    OAM_N_TYPES
+};
+
 /* Basics. */
 struct connmgr *connmgr_create(struct ofproto *ofproto,
                                const char *dpif_name, const char *local_name);
@@ -97,6 +105,10 @@ bool ofconn_get_invalid_ttl_to_controller(struct ofconn *);
 
 int ofconn_get_miss_send_len(const struct ofconn *);
 void ofconn_set_miss_send_len(struct ofconn *, int miss_send_len);
+
+void ofconn_set_async_config(struct ofconn *,
+                             const uint32_t master_masks[OAM_N_TYPES],
+                             const uint32_t slave_masks[OAM_N_TYPES]);
 
 void ofconn_send_reply(const struct ofconn *, struct ofpbuf *);
 void ofconn_send_replies(const struct ofconn *, struct list *);

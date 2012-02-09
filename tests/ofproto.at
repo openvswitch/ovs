@@ -174,6 +174,7 @@ AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | sort], [0], [dnl
  cookie=0x3, in_port=3 actions=output:0
 NXST_FLOW reply:
 ])
+
 AT_CHECK([ovs-ofctl del-flows br0 cookie=0x3])
 AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | sort], [0], [dnl
  cookie=0x1, in_port=1 actions=output:0
@@ -420,4 +421,90 @@ AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | sort], [0], [dnl
 NXST_FLOW reply:
 ])
 OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto - asynchronous message control])
+OVS_VSWITCHD_START
+AT_CHECK([ovs-ofctl -P openflow10 monitor br0 --detach --no-chdir --pidfile])
+check_async () {
+    printf '\n\n--- check_async %d ---\n\n\n' $1
+    shift
+
+    ovs-appctl -t ovs-ofctl ofctl/set-output-file monitor.log
+    : > expout
+
+    # OFPT_PACKET_IN, OFPR_ACTION
+    ovs-ofctl -v packet-out br0 none controller '0001020304050010203040501234'
+    if test X"$1" = X"OFPR_ACTION"; then shift;
+        echo >>expout "OFPT_PACKET_IN: total_len=14 in_port=NONE (via action) data_len=14 (unbuffered)
+priority:0,tunnel:0,in_port:0000,tci(0) mac(00:10:20:30:40:50->00:01:02:03:04:05) type:1234 proto:0 tos:0 ttl:0 ip(0.0.0.0->0.0.0.0)"
+    fi
+
+    # OFPT_PACKET_IN, OFPR_INVALID_TTL
+    ovs-ofctl packet-out br0 none dec_ttl '002583dfb4000026b98cb0f908004500003fb7e200000011339bac11370dac100002d7730035002b8f6d86fb0100000100000000000006626c702d7873066e696369726103636f6d00000f00'
+    if test X"$1" = X"OFPR_INVALID_TTL"; then shift;
+        echo >>expout "OFPT_PACKET_IN: total_len=76 in_port=NONE (via invalid_ttl) data_len=76 (unbuffered)
+priority:0,tunnel:0,in_port:0000,tci(0) mac(00:26:b9:8c:b0:f9->00:25:83:df:b4:00) type:0800 proto:17 tos:0 ttl:0 ip(172.17.55.13->172.16.0.2) port(55155->53) udp_csum:8f6d"
+    fi
+
+    # OFPT_PORT_STATUS, OFPPR_ADD
+    ovs-vsctl add-port br0 test -- set Interface test type=dummy
+    if test X"$1" = X"OFPPR_ADD"; then shift;
+        echo >>expout "OFPT_PORT_STATUS: ADD: 1(test): addr:aa:55:aa:55:00:0x
+     config:     PORT_DOWN
+     state:      LINK_DOWN"
+    fi
+
+    # OFPT_PORT_STATUS, OFPPR_DELETE
+    ovs-vsctl del-port br0 test
+    if test X"$1" = X"OFPPR_DELETE"; then shift;
+        echo >>expout "OFPT_PORT_STATUS: DEL: 1(test): addr:aa:55:aa:55:00:0x
+     config:     PORT_DOWN
+     state:      LINK_DOWN"
+    fi
+
+    # OFPT_FLOW_REMOVED, OFPRR_DELETE
+    ovs-ofctl add-flow br0 send_flow_rem,actions=drop
+    ovs-ofctl --strict del-flows br0 ''
+    if test X"$1" = X"OFPRR_DELETE"; then shift;
+        echo >>expout "OFPT_FLOW_REMOVED:  reason=delete"
+    fi
+    AT_FAIL_IF([test X"$1" != X])
+
+    ovs-appctl -t ovs-ofctl ofctl/barrier
+    echo >>expout "send: OFPT_BARRIER_REQUEST:
+OFPT_BARRIER_REPLY:"
+
+    AT_CHECK(
+      [[sed '
+s/ (xid=0x[0-9a-fA-F]*)//
+s/ *duration.*//
+s/00:0.$/00:0x/' < monitor.log]],
+      [0], [expout])
+}
+
+# It's a service connection so initially there should be no async messages.
+check_async 1
+
+# Set miss_send_len to 128, turning on packet-outs for our service connection.
+ovs-appctl -t ovs-ofctl ofctl/send 0109000c0123456700000080
+check_async 2 OFPR_ACTION OFPPR_ADD OFPPR_DELETE OFPRR_DELETE
+
+# Set miss_send_len to 128 and enable invalid_ttl.
+ovs-appctl -t ovs-ofctl ofctl/send 0109000c0123456700040080
+check_async 3 OFPR_ACTION OFPR_INVALID_TTL OFPPR_ADD OFPPR_DELETE OFPRR_DELETE
+
+# Become slave, which should disable everything except port status.
+ovs-appctl -t ovs-ofctl ofctl/send 0104001400000002000023200000000a00000002
+check_async 4 OFPPR_ADD OFPPR_DELETE
+
+# Use NXT_SET_ASYNC_CONFIG to enable a patchwork of asynchronous messages.
+ovs-appctl -t ovs-ofctl ofctl/send 01040028000000020000232000000013000000020000000500000005000000020000000200000005
+check_async 5 OFPR_INVALID_TTL OFPPR_DELETE OFPRR_DELETE
+
+# Become master.
+ovs-appctl -t ovs-ofctl ofctl/send 0104001400000002000023200000000a00000001
+check_async 6 OFPR_ACTION OFPPR_ADD
+
+ovs-appctl -t ovs-ofctl exit
 AT_CLEANUP

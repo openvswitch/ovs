@@ -80,6 +80,24 @@ ofp_packet_to_string(const void *data, size_t len)
     return ds_cstr(&ds);
 }
 
+static const char *
+ofp_packet_in_reason_to_string(enum ofp_packet_in_reason reason)
+{
+    static char s[32];
+
+    switch (reason) {
+    case OFPR_NO_MATCH:
+        return "no_match";
+    case OFPR_ACTION:
+        return "action";
+    case OFPR_INVALID_TTL:
+        return "invalid_ttl";
+    default:
+        sprintf(s, "%d", (int) reason);
+        return s;
+    }
+}
+
 static void
 ofp_print_packet_in(struct ds *string, const struct ofp_header *oh,
                     int verbosity)
@@ -121,20 +139,8 @@ ofp_print_packet_in(struct ds *string, const struct ofp_header *oh,
         }
     }
 
-    switch (pin.reason) {
-    case OFPR_NO_MATCH:
-        ds_put_cstr(string, " (via no_match)");
-        break;
-    case OFPR_ACTION:
-        ds_put_cstr(string, " (via action)");
-        break;
-    case OFPR_INVALID_TTL:
-        ds_put_cstr(string, " (via invalid_ttl)");
-        break;
-    default:
-        ds_put_format(string, " (***reason %"PRIu8"***)", pin.reason);
-        break;
-    }
+    ds_put_format(string, " (via %s)",
+                  ofp_packet_in_reason_to_string(pin.reason));
 
     ds_put_format(string, " data_len=%zu", pin.packet_len);
     if (pin.buffer_id == UINT32_MAX) {
@@ -870,6 +876,24 @@ ofp_print_duration(struct ds *string, unsigned int sec, unsigned int nsec)
     ds_put_char(string, 's');
 }
 
+static const char *
+ofp_flow_removed_reason_to_string(enum ofp_flow_removed_reason reason)
+{
+    static char s[32];
+
+    switch (reason) {
+    case OFPRR_IDLE_TIMEOUT:
+        return "idle";
+    case OFPRR_HARD_TIMEOUT:
+        return "hard";
+    case OFPRR_DELETE:
+        return "delete";
+    default:
+        sprintf(s, "%d", (int) reason);
+        return s;
+    }
+}
+
 static void
 ofp_print_flow_removed(struct ds *string, const struct ofp_header *oh)
 {
@@ -885,21 +909,8 @@ ofp_print_flow_removed(struct ds *string, const struct ofp_header *oh)
     ds_put_char(string, ' ');
     cls_rule_format(&fr.rule, string);
 
-    ds_put_cstr(string, " reason=");
-    switch (fr.reason) {
-    case OFPRR_IDLE_TIMEOUT:
-        ds_put_cstr(string, "idle");
-        break;
-    case OFPRR_HARD_TIMEOUT:
-        ds_put_cstr(string, "hard");
-        break;
-    case OFPRR_DELETE:
-        ds_put_cstr(string, "delete");
-        break;
-    default:
-        ds_put_format(string, "**%"PRIu8"**", fr.reason);
-        break;
-    }
+    ds_put_format(string, " reason=%s",
+                  ofp_flow_removed_reason_to_string(fr.reason));
 
     if (fr.cookie != htonll(0)) {
         ds_put_format(string, " cookie:0x%"PRIx64, ntohll(fr.cookie));
@@ -1313,6 +1324,75 @@ ofp_print_nxt_set_packet_in_format(struct ds *string,
     }
 }
 
+static const char *
+ofp_port_reason_to_string(enum ofp_port_reason reason)
+{
+    static char s[32];
+
+    switch (reason) {
+    case OFPPR_ADD:
+        return "add";
+
+    case OFPPR_DELETE:
+        return "delete";
+
+    case OFPPR_MODIFY:
+        return "modify";
+
+    default:
+        sprintf(s, "%d", (int) reason);
+        return s;
+    }
+}
+
+static void
+ofp_print_nxt_set_async_config(struct ds *string,
+                               const struct nx_async_config *nac)
+{
+    int i;
+
+    for (i = 0; i < 2; i++) {
+        int j;
+
+        ds_put_format(string, "\n %s:\n", i == 0 ? "master" : "slave");
+
+        ds_put_cstr(string, "       PACKET_IN:");
+        for (j = 0; j < 32; j++) {
+            if (nac->packet_in_mask[i] & htonl(1u << j)) {
+                ds_put_format(string, " %s",
+                              ofp_packet_in_reason_to_string(j));
+            }
+        }
+        if (!nac->packet_in_mask[i]) {
+            ds_put_cstr(string, " (off)");
+        }
+        ds_put_char(string, '\n');
+
+        ds_put_cstr(string, "     PORT_STATUS:");
+        for (j = 0; j < 32; j++) {
+            if (nac->port_status_mask[i] & htonl(1u << j)) {
+                ds_put_format(string, " %s", ofp_port_reason_to_string(j));
+            }
+        }
+        if (!nac->port_status_mask[i]) {
+            ds_put_cstr(string, " (off)");
+        }
+        ds_put_char(string, '\n');
+
+        ds_put_cstr(string, "    FLOW_REMOVED:");
+        for (j = 0; j < 32; j++) {
+            if (nac->flow_removed_mask[i] & htonl(1u << j)) {
+                ds_put_format(string, " %s",
+                              ofp_flow_removed_reason_to_string(j));
+            }
+        }
+        if (!nac->flow_removed_mask[i]) {
+            ds_put_cstr(string, " (off)");
+        }
+        ds_put_char(string, '\n');
+    }
+}
+
 static void
 ofp_to_string__(const struct ofp_header *oh,
                 const struct ofputil_msg_type *type, struct ds *string,
@@ -1470,6 +1550,10 @@ ofp_to_string__(const struct ofp_header *oh,
         break;
 
     case OFPUTIL_NXT_FLOW_AGE:
+        break;
+
+    case OFPUTIL_NXT_SET_ASYNC_CONFIG:
+        ofp_print_nxt_set_async_config(string, msg);
         break;
 
     case OFPUTIL_NXST_AGGREGATE_REPLY:

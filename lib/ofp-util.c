@@ -400,6 +400,10 @@ ofputil_decode_vendor(const struct ofp_header *oh, size_t length,
         { OFPUTIL_NXT_FLOW_AGE, OFP10_VERSION,
           NXT_FLOW_AGE, "NXT_FLOW_AGE",
           sizeof(struct nicira_header), 0 },
+
+        { OFPUTIL_NXT_SET_ASYNC_CONFIG, OFP10_VERSION,
+          NXT_SET_ASYNC_CONFIG, "NXT_SET_ASYNC_CONFIG",
+          sizeof(struct nx_async_config), 0 },
     };
 
     static const struct ofputil_msg_category nxt_category = {

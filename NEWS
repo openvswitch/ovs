@@ -11,6 +11,13 @@ post-v1.5.0
     - OpenFlow:
         - Added support for bitwise matching on TCP and UDP ports.
           See ovs-ofctl(8) for more information.
+        - NXM flow dumps now include times elapsed toward idle and hard
+          timeouts.
+        - Added an OpenFlow extension NXT_SET_ASYNC_CONFIG that allows
+          controllers more precise control over which OpenFlow messages they
+          receive asynchronously.
+    - The default MAC learning timeout has been increased from 60 seconds
+      to 300 seconds.  The MAC learning timeout is now configurable.
     - Logging to console and file will have UTC timestamp as a default for all
       the daemons. An example of the default format is 2012-01-27T16:35:17Z.
       ovs-appctl can be used to change the default format as before.
@@ -18,13 +25,9 @@ post-v1.5.0
       table, with configurable policy for evicting flows upon
       overflow.  See the Flow_Table table in ovs-vswitch.conf.db(5)
       for more information.
-    - OpenFlow:
-      - NXM flow dumps now include times elapsed toward idle and hard timeouts.
     - ofproto-provider interface:
         - "struct rule" has a new member "used" that ofproto implementations
           should maintain by updating with ofproto_rule_update_used().
-    - The default MAC learning timeout has been increased from 60 seconds
-      to 300 seconds.  The MAC learning timeout is now configurable.
     - ovsdb-client:
         - The new option --timestamp causes the "monitor" command to print
           a timestamp with every update.

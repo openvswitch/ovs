@@ -3118,6 +3118,26 @@ handle_nxt_set_packet_in_format(struct ofconn *ofconn,
 }
 
 static enum ofperr
+handle_nxt_set_async_config(struct ofconn *ofconn, const struct ofp_header *oh)
+{
+    const struct nx_async_config *msg = (const struct nx_async_config *) oh;
+    uint32_t master[OAM_N_TYPES];
+    uint32_t slave[OAM_N_TYPES];
+
+    master[OAM_PACKET_IN] = ntohl(msg->packet_in_mask[0]);
+    master[OAM_PORT_STATUS] = ntohl(msg->port_status_mask[0]);
+    master[OAM_FLOW_REMOVED] = ntohl(msg->flow_removed_mask[0]);
+
+    slave[OAM_PACKET_IN] = ntohl(msg->packet_in_mask[1]);
+    slave[OAM_PORT_STATUS] = ntohl(msg->port_status_mask[1]);
+    slave[OAM_FLOW_REMOVED] = ntohl(msg->flow_removed_mask[1]);
+
+    ofconn_set_async_config(ofconn, master, slave);
+
+    return 0;
+}
+
+static enum ofperr
 handle_barrier_request(struct ofconn *ofconn, const struct ofp_header *oh)
 {
     struct ofp_header *ob;
@@ -3193,6 +3213,9 @@ handle_openflow__(struct ofconn *ofconn, const struct ofpbuf *msg)
     case OFPUTIL_NXT_FLOW_AGE:
         /* Nothing to do. */
         return 0;
+
+    case OFPUTIL_NXT_SET_ASYNC_CONFIG:
+        return handle_nxt_set_async_config(ofconn, oh);
 
         /* Statistics requests. */
     case OFPUTIL_OFPST_DESC_REQUEST:

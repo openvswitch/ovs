@@ -80,6 +80,7 @@ enum ofputil_msg_code {
     OFPUTIL_NXT_SET_PACKET_IN_FORMAT,
     OFPUTIL_NXT_PACKET_IN,
     OFPUTIL_NXT_FLOW_AGE,
+    OFPUTIL_NXT_SET_ASYNC_CONFIG,
 
     /* NXST_* stat requests. */
     OFPUTIL_NXST_FLOW_REQUEST,

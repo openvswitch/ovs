@@ -114,6 +114,8 @@ enum nicira_type {
      * If so, the switch does not reply to this message (which consists only of
      * a "struct nicira_header").  If not, the switch sends an error reply. */
     NXT_FLOW_AGE = 18,
+
+    NXT_SET_ASYNC_CONFIG = 19,  /* struct nx_async_config. */
 };
 
 /* Header for Nicira vendor stats request and reply messages. */
@@ -288,6 +290,28 @@ enum nx_role {
     NX_ROLE_MASTER,             /* Full access, at most one. */
     NX_ROLE_SLAVE               /* Read-only access. */
 };
+
+/* NXT_SET_ASYNC_CONFIG.
+ *
+ * Sent by a controller, this message configures the asynchronous messages that
+ * the controller wants to receive.  Element 0 in each array specifies messages
+ * of interest when the controller has an "other" or "master" role; element 1,
+ * when the controller has a "slave" role.
+ *
+ * Each array element is a bitmask in which a 0-bit disables receiving a
+ * particular message and a 1-bit enables receiving it.  Each bit controls the
+ * message whose 'reason' corresponds to the bit index.  For example, the bit
+ * with value 1<<2 == 4 in port_status_mask[1] determines whether the
+ * controller will receive OFPT_PORT_STATUS messages with reason OFPPR_MODIFY
+ * (value 2) when the controller has a "slave" role.
+ */
+struct nx_async_config {
+    struct nicira_header nxh;
+    ovs_be32 packet_in_mask[2];    /* Bitmasks of OFPR_* values. */
+    ovs_be32 port_status_mask[2];  /* Bitmasks of OFPRR_* values. */
+    ovs_be32 flow_removed_mask[2]; /* Bitmasks of OFPPR_* values. */
+};
+OFP_ASSERT(sizeof(struct nx_async_config) == 40);
 
 /* Nicira vendor flow actions. */
 
