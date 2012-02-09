@@ -185,22 +185,27 @@ def columnGroupToNroff(table, groupXml):
                     type_ = column.type.value
 
                 nameNroff = "%s : %s" % (name, key)
-                typeNroff = "optional %s" % column.type.value.toEnglish()
-                if (column.type.value.type == ovs.db.types.StringType and
-                    type_.type == ovs.db.types.BooleanType):
-                    # This is a little more explicit and helpful than
-                    # "containing a boolean"
-                    typeNroff += r", either \fBtrue\fR or \fBfalse\fR"
+
+                if column.type.value:
+                    typeNroff = "optional %s" % column.type.value.toEnglish()
+                    if (column.type.value.type == ovs.db.types.StringType and
+                        type_.type == ovs.db.types.BooleanType):
+                        # This is a little more explicit and helpful than
+                        # "containing a boolean"
+                        typeNroff += r", either \fBtrue\fR or \fBfalse\fR"
+                    else:
+                        if type_.type != column.type.value.type:
+                            type_english = type_.toEnglish()
+                            if type_english[0] in 'aeiou':
+                                typeNroff += ", containing an %s" % type_english
+                            else:
+                                typeNroff += ", containing a %s" % type_english
+                        constraints = (
+                            type_.constraintsToEnglish(escapeNroffLiteral))
+                        if constraints:
+                            typeNroff += ", %s" % constraints
                 else:
-                    if type_.type != column.type.value.type:
-                        type_english = type_.toEnglish()
-                        if type_english[0] in 'aeiou':
-                            typeNroff += ", containing an %s" % type_english
-                        else:
-                            typeNroff += ", containing a %s" % type_english
-                    constraints = type_.constraintsToEnglish(escapeNroffLiteral)
-                    if constraints:
-                        typeNroff += ", %s" % constraints
+                    typeNroff = "none"
             else:
                 nameNroff = name
                 typeNroff = typeAndConstraintsToNroff(column)
