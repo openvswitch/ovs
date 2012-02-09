@@ -266,6 +266,7 @@ lswitch_process_packet(struct lswitch *sw, struct rconn *rconn,
     case OFPUTIL_NXT_FLOW_REMOVED:
     case OFPUTIL_NXT_FLOW_AGE:
     case OFPUTIL_NXT_SET_ASYNC_CONFIG:
+    case OFPUTIL_NXT_SET_CONTROLLER_ID:
     case OFPUTIL_NXST_FLOW_REQUEST:
     case OFPUTIL_NXST_AGGREGATE_REQUEST:
     case OFPUTIL_NXST_FLOW_REPLY:

@@ -22,6 +22,8 @@ v1.6.0 - xx xxx xxxx
           receive asynchronously.
         - New "fin_timeout" action.
         - Added "fin_timeout" support to "learn" action.
+        - New Nicira action NXAST_CONTROLLER that offers additional features
+          over output to OFPP_CONTROLLER.
     - The default MAC learning timeout has been increased from 60 seconds
       to 300 seconds.  The MAC learning timeout is now configurable.
     - When QoS settings for an interface do not configure a default queue

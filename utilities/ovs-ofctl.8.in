@@ -756,11 +756,35 @@ tree protocol).
 Outputs the packet on all switch physical ports other than the port on
 which it was received.
 .
-.IP \fBcontroller\fR:\fImax_len\fR
+.IP \fBcontroller(\fIkey\fB=\fIvalue\fR...\fB)
 Sends the packet to the OpenFlow controller as a ``packet in''
-message.  If \fImax_len\fR is a number, then it specifies the maximum
-number of bytes that should be sent.  If \fImax_len\fR is \fBALL\fR or
-omitted, then the entire packet is sent.
+message.  The supported key-value pairs are:
+.RS
+.IP "\fBmax_len=\fInbytes\fR"
+Limit to \fInbytes\fR the number of bytes of the packet to send to
+the controller.  By default the entire packet is sent.
+.IP "\fBreason=\fIreason\fR"
+Specify \fIreason\fR as the reason for sending the message in the
+``packet in'' message.  The supported reasons are \fBaction\fR (the
+default), \fBno_match\fR, and \fBinvalid_ttl\fR.
+.IP "\fBid=\fIcontroller-id\fR"
+Specify \fIcontroller-id\fR, a 16-bit integer, as the connection ID of
+the OpenFlow controller or controllers to which the ``packet in''
+message should be sent.  The default is zero.  Zero is also the
+default connection ID for each controller connection, and a given
+controller connection will only have a nonzero connection ID if its
+controller uses the \fBNXT_SET_CONTROLLER_ID\fR Nicira extension to
+OpenFlow.
+.RE
+Any \fIreason\fR other than \fBaction\fR and any nonzero
+\fIcontroller-id\fR uses a Nicira vendor extension that, as of this
+writing, is only known to be implemented by Open vSwitch (version 1.6
+or later).
+.
+.IP \fBcontroller\fR
+.IQ \fBcontroller\fR[\fB:\fInbytes\fR]
+Shorthand for \fBcontroller()\fR or
+\fBcontroller(max_len=\fInbytes\fB)\fR, respectively.
 .
 .IP \fBlocal\fR
 Outputs the packet on the ``local port,'' which corresponds to the

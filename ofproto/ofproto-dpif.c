@@ -2456,6 +2456,7 @@ send_packet_in_miss(struct ofproto_dpif *ofproto, const struct ofpbuf *packet,
     pin.packet_len = packet->size;
     pin.total_len = packet->size;
     pin.reason = OFPR_NO_MATCH;
+    pin.controller_id = 0;
 
     pin.table_id = 0;
     pin.cookie = 0;
@@ -4465,7 +4466,8 @@ flood_packets(struct action_xlate_ctx *ctx, bool all)
 
 static void
 execute_controller_action(struct action_xlate_ctx *ctx, int len,
-                          enum ofp_packet_in_reason reason)
+                          enum ofp_packet_in_reason reason,
+                          uint16_t controller_id)
 {
     struct ofputil_packet_in pin;
     struct ofpbuf *packet;
@@ -4511,6 +4513,7 @@ execute_controller_action(struct action_xlate_ctx *ctx, int len,
     pin.packet = packet->data;
     pin.packet_len = packet->size;
     pin.reason = reason;
+    pin.controller_id = controller_id;
     pin.table_id = ctx->table_id;
     pin.cookie = ctx->rule ? ctx->rule->up.flow_cookie : 0;
 
@@ -4535,7 +4538,7 @@ compose_dec_ttl(struct action_xlate_ctx *ctx)
         ctx->flow.nw_ttl--;
         return false;
     } else {
-        execute_controller_action(ctx, UINT16_MAX, OFPR_INVALID_TTL);
+        execute_controller_action(ctx, UINT16_MAX, OFPR_INVALID_TTL, 0);
 
         /* Stop processing for current table. */
         return true;
@@ -4567,7 +4570,7 @@ xlate_output_action__(struct action_xlate_ctx *ctx,
         flood_packets(ctx, true);
         break;
     case OFPP_CONTROLLER:
-        execute_controller_action(ctx, max_len, OFPR_ACTION);
+        execute_controller_action(ctx, max_len, OFPR_ACTION, 0);
         break;
     case OFPP_NONE:
         break;
@@ -4805,6 +4808,7 @@ do_xlate_actions(const union ofp_action *in, size_t n_in,
         const struct nx_action_autopath *naa;
         const struct nx_action_bundle *nab;
         const struct nx_action_output_reg *naor;
+        const struct nx_action_controller *nac;
         enum ofputil_action_code code;
         ovs_be64 tun_id;
 
@@ -4964,6 +4968,12 @@ do_xlate_actions(const union ofp_action *in, size_t n_in,
         case OFPUTIL_NXAST_FIN_TIMEOUT:
             ctx->has_fin_timeout = true;
             xlate_fin_timeout(ctx, (const struct nx_action_fin_timeout *) ia);
+            break;
+
+        case OFPUTIL_NXAST_CONTROLLER:
+            nac = (const struct nx_action_controller *) ia;
+            execute_controller_action(ctx, ntohs(nac->max_len), nac->reason,
+                                      ntohs(nac->controller_id));
             break;
         }
     }

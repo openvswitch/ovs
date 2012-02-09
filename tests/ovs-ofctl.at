@@ -28,6 +28,7 @@ actions=resubmit:1,resubmit(2),resubmit(,3),resubmit(2,3)
 send_flow_rem,actions=output:1,output:NXM_NX_REG0[],output:2,output:NXM_NX_REG1[16..31],output:3
 check_overlap,actions=output:1,exit,output:2
 actions=fin_timeout(idle_timeout=5,hard_timeout=15)
+actions=controller(max_len=123,reason=invalid_ttl,id=555)
 ]])
 
 AT_CHECK([ovs-ofctl parse-flows flows.txt
@@ -60,6 +61,7 @@ NXT_FLOW_MOD: ADD table:255 actions=resubmit:1,resubmit:2,resubmit(,3),resubmit(
 NXT_FLOW_MOD: ADD table:255 send_flow_rem actions=output:1,output:NXM_NX_REG0[],output:2,output:NXM_NX_REG1[16..31],output:3
 NXT_FLOW_MOD: ADD table:255 check_overlap actions=output:1,exit,output:2
 NXT_FLOW_MOD: ADD table:255 actions=fin_timeout(idle_timeout=5,hard_timeout=15)
+NXT_FLOW_MOD: ADD table:255 actions=controller(reason=invalid_ttl,max_len=123,id=555)
 ]])
 AT_CLEANUP
 

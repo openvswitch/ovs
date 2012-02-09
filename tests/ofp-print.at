@@ -728,6 +728,16 @@ NXT_SET_ASYNC_CONFIG (xid=0x0):
 ])
 AT_CLEANUP
 
+AT_SETUP([NXT_SET_CONTROLLER_ID])
+AT_KEYWORDS([ofp-print])
+AT_CHECK([ovs-ofctl ofp-print "\
+01 04 00 18 00 00 00 03 00 00 23 20 00 00 00 14 \
+00 00 00 00 00 00 00 7b \
+"], [0], [dnl
+NXT_SET_CONTROLLER_ID (xid=0x3): id=123
+])
+AT_CLEANUP
+
 AT_SETUP([NXT_SET_FLOW_FORMAT])
 AT_KEYWORDS([ofp-print])
 AT_CHECK([ovs-ofctl ofp-print "\

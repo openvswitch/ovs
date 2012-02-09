@@ -73,6 +73,7 @@ struct ofconn {
     struct pinsched *schedulers[N_SCHEDULERS];
     struct pktbuf *pktbuf;         /* OpenFlow packet buffers. */
     int miss_send_len;             /* Bytes to send of buffered packets. */
+    uint16_t controller_id;     /* Connection controller ID. */
 
     /* Number of OpenFlow messages queued on 'rconn' as replies to OpenFlow
      * requests, and the maximum number before we stop reading OpenFlow
@@ -820,6 +821,16 @@ ofconn_set_packet_in_format(struct ofconn *ofconn,
     ofconn->packet_in_format = packet_in_format;
 }
 
+/* Sets the controller connection ID for 'ofconn' to 'controller_id'.
+ *
+ * The connection controller ID is used for OFPP_CONTROLLER and
+ * NXAST_CONTROLLER actions.  See "struct nx_action_controller" for details. */
+void
+ofconn_set_controller_id(struct ofconn *ofconn, uint16_t controller_id)
+{
+    ofconn->controller_id = controller_id;
+}
+
 /* Returns true if the NXT_FLOW_MOD_TABLE_ID extension is enabled, false
  * otherwise.
  *
@@ -1017,6 +1028,7 @@ ofconn_flush(struct ofconn *ofconn)
     ofconn->miss_send_len = (ofconn->type == OFCONN_PRIMARY
                              ? OFP_DEFAULT_MISS_SEND_LEN
                              : 0);
+    ofconn->controller_id = 0;
 
     rconn_packet_counter_destroy(ofconn->reply_counter);
     ofconn->reply_counter = rconn_packet_counter_create();
@@ -1292,7 +1304,8 @@ connmgr_send_packet_in(struct connmgr *mgr,
     struct ofconn *ofconn;
 
     LIST_FOR_EACH (ofconn, node, &mgr->all_conns) {
-        if (ofconn_receives_async_msg(ofconn, OAM_PACKET_IN, pin->reason)) {
+        if (ofconn_receives_async_msg(ofconn, OAM_PACKET_IN, pin->reason)
+            && ofconn->controller_id == pin->controller_id) {
             schedule_packet_in(ofconn, *pin, flow);
         }
     }

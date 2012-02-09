@@ -268,6 +268,48 @@ parse_fin_timeout(struct ofpbuf *b, char *arg)
 }
 
 static void
+parse_controller(struct ofpbuf *b, char *arg)
+{
+    enum ofp_packet_in_reason reason = OFPR_ACTION;
+    uint16_t controller_id = 0;
+    uint16_t max_len = UINT16_MAX;
+
+    if (!arg[0]) {
+        /* Use defaults. */
+    } else if (strspn(arg, "0123456789") == strlen(arg)) {
+        max_len = str_to_u16(arg, "max_len");
+    } else {
+        char *name, *value;
+
+        while (ofputil_parse_key_value(&arg, &name, &value)) {
+            if (!strcmp(name, "reason")) {
+                if (!ofputil_packet_in_reason_from_string(value, &reason)) {
+                    ovs_fatal(0, "unknown reason \"%s\"", value);
+                }
+            } else if (!strcmp(name, "max_len")) {
+                max_len = str_to_u16(value, "max_len");
+            } else if (!strcmp(name, "id")) {
+                controller_id = str_to_u16(value, "id");
+            } else {
+                ovs_fatal(0, "unknown key \"%s\" parsing controller action",
+                          name);
+            }
+        }
+    }
+
+    if (reason == OFPR_ACTION && controller_id == 0) {
+        put_output_action(b, OFPP_CONTROLLER)->max_len = htons(max_len);
+    } else {
+        struct nx_action_controller *nac;
+
+        nac = ofputil_put_NXAST_CONTROLLER(b);
+        nac->max_len = htons(max_len);
+        nac->reason = reason;
+        nac->controller_id = htons(controller_id);
+    }
+}
+
+static void
 parse_named_action(enum ofputil_action_code code, const struct flow *flow,
                    struct ofpbuf *b, char *arg)
 {
@@ -389,6 +431,10 @@ parse_named_action(enum ofputil_action_code code, const struct flow *flow,
     case OFPUTIL_NXAST_FIN_TIMEOUT:
         parse_fin_timeout(b, arg);
         break;
+
+    case OFPUTIL_NXAST_CONTROLLER:
+        parse_controller(b, arg);
+        break;
     }
 }
 
@@ -418,17 +464,6 @@ str_to_action(const struct flow *flow, char *str, struct ofpbuf *b)
                           "actions");
             }
             break;
-        } else if (!strcasecmp(act, "CONTROLLER")) {
-            struct ofp_action_output *oao;
-            oao = put_output_action(b, OFPP_CONTROLLER);
-
-            /* Unless a numeric argument is specified, we send the whole
-             * packet to the controller. */
-            if (arg[0] && (strspn(arg, "0123456789") == strlen(arg))) {
-               oao->max_len = htons(str_to_u32(arg));
-            } else {
-                oao->max_len = htons(UINT16_MAX);
-            }
         } else if (ofputil_port_from_string(act, &port)) {
             put_output_action(b, port);
         } else {

@@ -81,6 +81,7 @@ enum ofputil_msg_code {
     OFPUTIL_NXT_PACKET_IN,
     OFPUTIL_NXT_FLOW_AGE,
     OFPUTIL_NXT_SET_ASYNC_CONFIG,
+    OFPUTIL_NXT_SET_CONTROLLER_ID,
 
     /* NXST_* stat requests. */
     OFPUTIL_NXST_FLOW_REQUEST,
@@ -233,6 +234,7 @@ struct ofputil_packet_in {
     size_t packet_len;
 
     enum ofp_packet_in_reason reason;    /* One of OFPRR_*. */
+    uint16_t controller_id;              /* Controller ID to send to. */
     uint8_t table_id;
     ovs_be64 cookie;
 

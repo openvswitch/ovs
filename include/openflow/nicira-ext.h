@@ -116,6 +116,7 @@ enum nicira_type {
     NXT_FLOW_AGE = 18,
 
     NXT_SET_ASYNC_CONFIG = 19,  /* struct nx_async_config. */
+    NXT_SET_CONTROLLER_ID = 20, /* struct nx_controller_id. */
 };
 
 /* Header for Nicira vendor stats request and reply messages. */
@@ -336,6 +337,7 @@ enum nx_action_subtype {
     NXAST_EXIT,                 /* struct nx_action_header */
     NXAST_DEC_TTL,              /* struct nx_action_header */
     NXAST_FIN_TIMEOUT,          /* struct nx_action_fin_timeout */
+    NXAST_CONTROLLER,           /* struct nx_action_controller */
 };
 
 /* Header for Nicira-defined actions. */
@@ -1921,5 +1923,45 @@ struct nx_aggregate_stats_reply {
     uint8_t pad[4];            /* Align to 64 bits. */
 };
 OFP_ASSERT(sizeof(struct nx_aggregate_stats_reply) == 48);
+
+/* NXT_SET_CONTROLLER_ID.
+ *
+ * Each OpenFlow controller connection has a 16-bit identifier that is
+ * initially 0.  This message changes the connection's ID to 'id'.
+ *
+ * Controller connection IDs need not be unique.
+ *
+ * The NXAST_CONTROLLER action is the only current user of controller
+ * connection IDs. */
+struct nx_controller_id {
+    struct nicira_header nxh;
+    uint8_t zero[6];            /* Must be zero. */
+    ovs_be16 controller_id;     /* New controller connection ID. */
+};
+OFP_ASSERT(sizeof(struct nx_controller_id) == 24);
+
+/* Action structure for NXAST_CONTROLLER.
+ *
+ * This generalizes using OFPAT_OUTPUT to send a packet to OFPP_CONTROLLER.  In
+ * addition to the 'max_len' that OFPAT_OUTPUT supports, it also allows
+ * specifying:
+ *
+ *    - 'reason': The reason code to use in the ofp_packet_in or nx_packet_in.
+ *
+ *    - 'controller_id': The ID of the controller connection to which the
+ *      ofp_packet_in should be sent.  The ofp_packet_in or nx_packet_in is
+ *      sent only to controllers that have the specified controller connection
+ *      ID.  See "struct nx_controller_id" for more information. */
+struct nx_action_controller {
+    ovs_be16 type;                  /* OFPAT_VENDOR. */
+    ovs_be16 len;                   /* Length is 16. */
+    ovs_be32 vendor;                /* NX_VENDOR_ID. */
+    ovs_be16 subtype;               /* NXAST_CONTROLLER. */
+    ovs_be16 max_len;               /* Maximum length to send to controller. */
+    ovs_be16 controller_id;         /* Controller ID to send packet-in. */
+    uint8_t reason;                 /* enum ofp_packet_in_reason (OFPR_*). */
+    uint8_t zero;                   /* Must be zero. */
+};
+OFP_ASSERT(sizeof(struct nx_action_controller) == 16);
 
 #endif /* openflow/nicira-ext.h */

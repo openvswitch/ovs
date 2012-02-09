@@ -433,14 +433,21 @@ check_async () {
     ovs-appctl -t ovs-ofctl ofctl/set-output-file monitor.log
     : > expout
 
-    # OFPT_PACKET_IN, OFPR_ACTION
+    # OFPT_PACKET_IN, OFPR_ACTION (controller_id=0)
     ovs-ofctl -v packet-out br0 none controller '0001020304050010203040501234'
     if test X"$1" = X"OFPR_ACTION"; then shift;
         echo >>expout "OFPT_PACKET_IN: total_len=14 in_port=NONE (via action) data_len=14 (unbuffered)
 priority:0,tunnel:0,in_port:0000,tci(0) mac(00:10:20:30:40:50->00:01:02:03:04:05) type:1234 proto:0 tos:0 ttl:0 ip(0.0.0.0->0.0.0.0)"
     fi
 
-    # OFPT_PACKET_IN, OFPR_INVALID_TTL
+    # OFPT_PACKET_IN, OFPR_NO_MATCH (controller_id=123)
+    ovs-ofctl -v packet-out br0 none 'controller(reason=no_match,id=123)' '0001020304050010203040501234'
+    if test X"$1" = X"OFPR_NO_MATCH"; then shift;
+        echo >>expout "OFPT_PACKET_IN: total_len=14 in_port=NONE (via no_match) data_len=14 (unbuffered)
+priority:0,tunnel:0,in_port:0000,tci(0) mac(00:10:20:30:40:50->00:01:02:03:04:05) type:1234 proto:0 tos:0 ttl:0 ip(0.0.0.0->0.0.0.0)"
+    fi
+
+    # OFPT_PACKET_IN, OFPR_INVALID_TTL (controller_id=0)
     ovs-ofctl packet-out br0 none dec_ttl '002583dfb4000026b98cb0f908004500003fb7e200000011339bac11370dac100002d7730035002b8f6d86fb0100000100000000000006626c702d7873066e696369726103636f6d00000f00'
     if test X"$1" = X"OFPR_INVALID_TTL"; then shift;
         echo >>expout "OFPT_PACKET_IN: total_len=76 in_port=NONE (via invalid_ttl) data_len=76 (unbuffered)
@@ -502,9 +509,16 @@ check_async 4 OFPPR_ADD OFPPR_DELETE
 ovs-appctl -t ovs-ofctl ofctl/send 01040028000000020000232000000013000000020000000500000005000000020000000200000005
 check_async 5 OFPR_INVALID_TTL OFPPR_DELETE OFPRR_DELETE
 
+# Set controller ID 123.
+ovs-appctl -t ovs-ofctl ofctl/send 01040018000000030000232000000014000000000000007b
+check_async 6 OFPR_NO_MATCH OFPPR_DELETE OFPRR_DELETE
+
+# Restore controller ID 0.
+ovs-appctl -t ovs-ofctl ofctl/send 010400180000000300002320000000140000000000000000
+
 # Become master.
 ovs-appctl -t ovs-ofctl ofctl/send 0104001400000002000023200000000a00000001
-check_async 6 OFPR_ACTION OFPPR_ADD
+check_async 7 OFPR_ACTION OFPPR_ADD
 
 ovs-appctl -t ovs-ofctl exit
 AT_CLEANUP

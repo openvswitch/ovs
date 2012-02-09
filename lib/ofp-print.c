@@ -177,6 +177,7 @@ ofp_print_action(struct ds *s, const union ofp_action *a,
     const struct nx_action_autopath *naa;
     const struct nx_action_output_reg *naor;
     const struct nx_action_fin_timeout *naft;
+    const struct nx_action_controller *nac;
     struct mf_subfield subfield;
     uint16_t port;
 
@@ -349,6 +350,23 @@ ofp_print_action(struct ds *s, const union ofp_action *a,
         if (naft->fin_hard_timeout) {
             ds_put_format(s, "hard_timeout=%"PRIu16",",
                           ntohs(naft->fin_hard_timeout));
+        }
+        ds_chomp(s, ',');
+        ds_put_char(s, ')');
+        break;
+
+    case OFPUTIL_NXAST_CONTROLLER:
+        nac = (const struct nx_action_controller *) a;
+        ds_put_cstr(s, "controller(");
+        if (nac->reason != OFPR_ACTION) {
+            ds_put_format(s, "reason=%s,",
+                          ofputil_packet_in_reason_to_string(nac->reason));
+        }
+        if (nac->max_len != htons(UINT16_MAX)) {
+            ds_put_format(s, "max_len=%"PRIu16",", ntohs(nac->max_len));
+        }
+        if (nac->controller_id != htons(0)) {
+            ds_put_format(s, "id=%"PRIu16",", ntohs(nac->controller_id));
         }
         ds_chomp(s, ',');
         ds_put_char(s, ')');
@@ -1392,6 +1410,13 @@ ofp_print_nxt_set_async_config(struct ds *string,
 }
 
 static void
+ofp_print_nxt_set_controller_id(struct ds *string,
+                                const struct nx_controller_id *nci)
+{
+    ds_put_format(string, " id=%"PRIu16, ntohs(nci->controller_id));
+}
+
+static void
 ofp_to_string__(const struct ofp_header *oh,
                 const struct ofputil_msg_type *type, struct ds *string,
                 int verbosity)
@@ -1548,6 +1573,10 @@ ofp_to_string__(const struct ofp_header *oh,
         break;
 
     case OFPUTIL_NXT_FLOW_AGE:
+        break;
+
+    case OFPUTIL_NXT_SET_CONTROLLER_ID:
+        ofp_print_nxt_set_controller_id(string, msg);
         break;
 
     case OFPUTIL_NXT_SET_ASYNC_CONFIG:

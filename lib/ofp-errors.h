@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -123,6 +123,9 @@ enum ofperr {
     /* NX(1,514).  The in_port in an ofp_packet_out request is invalid. */
     OFPERR_NXBRC_BAD_IN_PORT,
 
+    /* NX(1,515).  Must-be-zero field had nonzero value. */
+    OFPERR_NXBRC_MUST_BE_ZERO,
+
 /* ## ---------------- ## */
 /* ## OFPET_BAD_ACTION ## */
 /* ## ---------------- ## */
@@ -169,6 +172,9 @@ enum ofperr {
 
     /* OF1.1(2,12).  Actions uses an unsupported tag/encap. */
     OFPERR_OFPBAC_BAD_TAG,
+
+    /* NX(2,256).  Must-be-zero action argument had nonzero value. */
+    OFPERR_NXBAC_MUST_BE_ZERO,
 
 /* ## --------------------- ## */
 /* ## OFPET_BAD_INSTRUCTION ## */

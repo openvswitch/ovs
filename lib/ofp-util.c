@@ -404,6 +404,10 @@ ofputil_decode_vendor(const struct ofp_header *oh, size_t length,
         { OFPUTIL_NXT_SET_ASYNC_CONFIG, OFP10_VERSION,
           NXT_SET_ASYNC_CONFIG, "NXT_SET_ASYNC_CONFIG",
           sizeof(struct nx_async_config), 0 },
+
+        { OFPUTIL_NXT_SET_CONTROLLER_ID, OFP10_VERSION,
+          NXT_SET_CONTROLLER_ID, "NXT_SET_CONTROLLER_ID",
+          sizeof(struct nx_controller_id), 0 },
     };
 
     static const struct ofputil_msg_category nxt_category = {
@@ -2525,6 +2529,12 @@ validate_actions(const union ofp_action *actions, size_t n_actions,
 
         case OFPUTIL_NXAST_LEARN:
             error = learn_check((const struct nx_action_learn *) a, flow);
+            break;
+
+        case OFPUTIL_NXAST_CONTROLLER:
+            if (((const struct nx_action_controller *) a)->zero) {
+                error = OFPERR_NXBAC_MUST_BE_ZERO;
+            }
             break;
 
         case OFPUTIL_OFPAT_STRIP_VLAN:

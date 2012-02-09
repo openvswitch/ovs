@@ -3138,6 +3138,21 @@ handle_nxt_set_async_config(struct ofconn *ofconn, const struct ofp_header *oh)
 }
 
 static enum ofperr
+handle_nxt_set_controller_id(struct ofconn *ofconn,
+                             const struct ofp_header *oh)
+{
+    const struct nx_controller_id *nci;
+
+    nci = (const struct nx_controller_id *) oh;
+    if (!is_all_zeros(nci->zero, sizeof nci->zero)) {
+        return OFPERR_NXBRC_MUST_BE_ZERO;
+    }
+
+    ofconn_set_controller_id(ofconn, ntohs(nci->controller_id));
+    return 0;
+}
+
+static enum ofperr
 handle_barrier_request(struct ofconn *ofconn, const struct ofp_header *oh)
 {
     struct ofp_header *ob;
@@ -3206,6 +3221,9 @@ handle_openflow__(struct ofconn *ofconn, const struct ofpbuf *msg)
 
     case OFPUTIL_NXT_SET_PACKET_IN_FORMAT:
         return handle_nxt_set_packet_in_format(ofconn, oh);
+
+    case OFPUTIL_NXT_SET_CONTROLLER_ID:
+        return handle_nxt_set_controller_id(ofconn, oh);
 
     case OFPUTIL_NXT_FLOW_MOD:
         return handle_flow_mod(ofconn, oh);
