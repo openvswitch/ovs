@@ -410,7 +410,7 @@ ofp_print_packet_out(struct ds *string, const struct ofp_packet_out *opo,
     ofp_print_actions(string, po.actions, po.n_actions);
 
     if (po.buffer_id == UINT32_MAX) {
-        ds_put_format(string, " data_len=%d", po.packet_len);
+        ds_put_format(string, " data_len=%zu", po.packet_len);
         if (verbosity > 0 && po.packet_len > 0) {
             char *packet = ofp_packet_to_string(po.packet, po.packet_len);
             ds_put_char(string, '\n');
