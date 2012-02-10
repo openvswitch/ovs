@@ -40,6 +40,7 @@ ovs_be32 vconn_get_remote_ip(const struct vconn *);
 ovs_be16 vconn_get_remote_port(const struct vconn *);
 ovs_be32 vconn_get_local_ip(const struct vconn *);
 ovs_be16 vconn_get_local_port(const struct vconn *);
+int vconn_get_version(const struct vconn *);
 int vconn_connect(struct vconn *);
 int vconn_recv(struct vconn *, struct ofpbuf **);
 int vconn_send(struct vconn *, struct ofpbuf *);

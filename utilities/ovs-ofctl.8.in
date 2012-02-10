@@ -1177,33 +1177,55 @@ passing through the flow.
 \fB\-\-strict\fR
 Uses strict matching when running flow modification commands.
 .
-.IP "\fB\-F \fIformat\fR"
-.IQ "\fB\-\-flow\-format=\fIformat\fR"
-\fBovs\-ofctl\fR supports the following flow formats, in order of
-increasing capability:
+.IP "\fB\-F \fIformat\fR[\fB,\fIformat\fR...]"
+.IQ "\fB\-\-flow\-format=\fIformat\fR[\fB,\fIformat\fR...]"
+\fBovs\-ofctl\fR supports the following individual flow formats, any
+number of which may be listed as \fIformat\fR:
 .RS
-.IP "\fBopenflow10\fR"
-This is the standard OpenFlow 1.0 flow format.  It should be supported
-by all OpenFlow switches.
+.IP "\fBOpenFlow10\-table_id\fR"
+This is the standard OpenFlow 1.0 flow format.  All OpenFlow switches
+and all versions of Open vSwitch support this flow format.
 .
-.IP "\fBnxm\fR (Nicira Extended Match)"
+.IP "\fBOpenFlow10+table_id\fR"
+This is the standard OpenFlow 1.0 flow format plus a Nicira extension
+that allows \fBovs\-ofctl\fR to specify the flow table in which a
+particular flow should be placed.  Open vSwitch 1.2 and later supports
+this flow format.
+.
+.IP "\fBNXM\-table_id\fR (Nicira Extended Match)"
 This Nicira extension to OpenFlow is flexible and extensible.  It
 supports all of the Nicira flow extensions, such as \fBtun_id\fR and
-registers.
-.RE
-.IP
-Usually, \fBovs\-ofctl\fR picks the correct format automatically.  For
-commands that modify the flow table, \fBovs\-ofctl\fR by default uses
-the most widely supported flow format that supports the flows being
-added.  For commands that query the flow table, \fBovs\-ofctl\fR by
-default queries and uses the most advanced format supported by the
-switch.
-.IP
-This option, where \fIformat\fR is one of the formats listed in the
-above table, overrides \fBovs\-ofctl\fR's default choice of flow
-format.  If a command cannot work as requested using the requested
-flow format, \fBovs\-ofctl\fR will report a fatal error.
+registers.  Open vSwitch 1.1 and later supports this flow format.
 .
+.IP "\fBNXM+table_id\fR (Nicira Extended Match)"
+This combines Nicira Extended match with the ability to place a flow
+in a specific table.  Open vSwitch 1.2 and later supports this flow
+format.
+.RE
+.
+.IP
+\fBovs\-ofctl\fR also supports the following abbreviations for
+collections of flow formats:
+.RS
+.IP "\fBany\fR"
+Any supported flow format.
+.IP "\fBOpenFlow10\fR"
+\fBOpenFlow10\-table_id\fR or \fBOpenFlow10+table_id\fR.
+.IP "\fBNXM\fR"
+\fBNXM\-table_id\fR or \fBNXM+table_id\fR.
+.RE
+.
+.IP
+For commands that modify the flow table, \fBovs\-ofctl\fR by default
+negotiates the most widely supported flow format that supports the
+flows being added.  For commands that query the flow table,
+\fBovs\-ofctl\fR by default uses the most advanced format supported by
+the switch.
+.IP
+This option, where \fIformat\fR is a comma-separated list of one or
+more of the formats listed above, limits \fBovs\-ofctl\fR's choice of
+flow format.  If a command cannot work as requested using one of the
+specified flow formats, \fBovs\-ofctl\fR will report a fatal error.
 .
 .IP "\fB\-P \fIformat\fR"
 .IQ "\fB\-\-packet\-in\-format=\fIformat\fR"

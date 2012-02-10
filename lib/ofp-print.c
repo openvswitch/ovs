@@ -784,7 +784,7 @@ ofp_print_flow_mod(struct ds *s, const struct ofp_header *oh,
     bool need_priority;
     enum ofperr error;
 
-    error = ofputil_decode_flow_mod(&fm, oh, true);
+    error = ofputil_decode_flow_mod(&fm, oh, OFPUTIL_P_OF10_TID);
     if (error) {
         ofp_print_error(s, error);
         return;
@@ -1319,8 +1319,8 @@ ofp_print_nxt_set_flow_format(struct ds *string,
     uint32_t format = ntohl(nsff->format);
 
     ds_put_cstr(string, " format=");
-    if (ofputil_flow_format_is_valid(format)) {
-        ds_put_cstr(string, ofputil_flow_format_to_string(format));
+    if (ofputil_nx_flow_format_is_valid(format)) {
+        ds_put_cstr(string, ofputil_nx_flow_format_to_string(format));
     } else {
         ds_put_format(string, "%"PRIu32, format);
     }

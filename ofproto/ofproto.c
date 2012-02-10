@@ -2981,8 +2981,7 @@ handle_flow_mod(struct ofconn *ofconn, const struct ofp_header *oh)
         return error;
     }
 
-    error = ofputil_decode_flow_mod(&fm, oh,
-                                    ofconn_get_flow_mod_table_id(ofconn));
+    error = ofputil_decode_flow_mod(&fm, oh, ofconn_get_protocol(ofconn));
     if (error) {
         return error;
     }
@@ -3067,8 +3066,12 @@ handle_nxt_flow_mod_table_id(struct ofconn *ofconn,
 {
     const struct nx_flow_mod_table_id *msg
         = (const struct nx_flow_mod_table_id *) oh;
+    enum ofputil_protocol cur, next;
 
-    ofconn_set_flow_mod_table_id(ofconn, msg->set != 0);
+    cur = ofconn_get_protocol(ofconn);
+    next = ofputil_protocol_set_tid(cur, msg->set != 0);
+    ofconn_set_protocol(ofconn, next);
+
     return 0;
 }
 
@@ -3077,20 +3080,22 @@ handle_nxt_set_flow_format(struct ofconn *ofconn, const struct ofp_header *oh)
 {
     const struct nx_set_flow_format *msg
         = (const struct nx_set_flow_format *) oh;
-    uint32_t format;
+    enum ofputil_protocol cur, next;
+    enum ofputil_protocol next_base;
 
-    format = ntohl(msg->format);
-    if (format != NXFF_OPENFLOW10 && format != NXFF_NXM) {
+    next_base = ofputil_nx_flow_format_to_protocol(ntohl(msg->format));
+    if (!next_base) {
         return OFPERR_OFPBRC_EPERM;
     }
 
-    if (format != ofconn_get_flow_format(ofconn)
-        && ofconn_has_pending_opgroups(ofconn)) {
-        /* Avoid sending async messages in surprising flow format. */
+    cur = ofconn_get_protocol(ofconn);
+    next = ofputil_protocol_set_base(cur, next_base);
+    if (cur != next && ofconn_has_pending_opgroups(ofconn)) {
+        /* Avoid sending async messages in surprising protocol. */
         return OFPROTO_POSTPONE;
     }
 
-    ofconn_set_flow_format(ofconn, format);
+    ofconn_set_protocol(ofconn, next);
     return 0;
 }
 

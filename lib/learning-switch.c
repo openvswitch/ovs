@@ -139,17 +139,46 @@ lswitch_create(struct rconn *rconn, const struct lswitch_config *cfg)
     send_features_request(sw, rconn);
 
     if (cfg->default_flows) {
-        const struct ofpbuf *b;
+        enum ofputil_protocol usable_protocols;
+        enum ofputil_protocol protocol;
+        struct ofpbuf *msg = NULL;
+        int ofp_version;
+        int error = 0;
+        size_t i;
 
-        LIST_FOR_EACH (b, list_node, cfg->default_flows) {
-            struct ofpbuf *copy = ofpbuf_clone(b);
-            int error = rconn_send(rconn, copy, NULL);
-            if (error) {
-                VLOG_INFO_RL(&rl, "%s: failed to queue default flows (%s)",
-                             rconn_get_name(rconn), strerror(error));
-                ofpbuf_delete(copy);
-                break;
+        /* Figure out the initial protocol on the connection. */
+        ofp_version = rconn_get_version(rconn);
+        protocol = ofputil_protocol_from_ofp_version(ofp_version);
+
+        /* If the initial protocol isn't good enough for default_flows, then
+         * pick one that will work and encode messages to set up that
+         * protocol.
+         *
+         * This could be improved by actually negotiating a mutually acceptable
+         * flow format with the switch, but that would require an asynchronous
+         * state machine.  This version ought to work fine in practice. */
+        usable_protocols = ofputil_flow_mod_usable_protocols(
+            cfg->default_flows, cfg->n_default_flows);
+        if (!(protocol & usable_protocols)) {
+            enum ofputil_protocol want = rightmost_1bit(usable_protocols);
+            while (!error) {
+                msg = ofputil_encode_set_protocol(protocol, want, &protocol);
+                if (!msg) {
+                    break;
+                }
+                error = rconn_send(rconn, msg, NULL);
             }
+        }
+
+        for (i = 0; !error && i < cfg->n_default_flows; i++) {
+            msg = ofputil_encode_flow_mod(&cfg->default_flows[i], protocol);
+            error = rconn_send(rconn, msg, NULL);
+        }
+
+        if (error) {
+            VLOG_INFO_RL(&rl, "%s: failed to queue default flows (%s)",
+                         rconn_get_name(rconn), strerror(error));
+            ofpbuf_delete(msg);
         }
     }
 

@@ -67,9 +67,9 @@ static bool strict;
  * (to reset flow counters). */
 static bool readd;
 
-/* -F, --flow-format: Flow format to use.  Either one of NXFF_* to force a
- * particular flow format or -1 to let ovs-ofctl choose intelligently. */
-static int preferred_flow_format = -1;
+/* -F, --flow-format: Allowed protocols.  By default, any protocol is
+ * allowed. */
+static enum ofputil_protocol allowed_protocols = OFPUTIL_P_ANY;
 
 /* -P, --packet-in-format: Packet IN format to use in monitor and snoop
  * commands.  Either one of NXPIF_* to force a particular packet_in format, or
@@ -146,9 +146,9 @@ parse_options(int argc, char *argv[])
             break;
 
         case 'F':
-            preferred_flow_format = ofputil_flow_format_from_string(optarg);
-            if (preferred_flow_format < 0) {
-                ovs_fatal(0, "unknown flow format `%s'", optarg);
+            allowed_protocols = ofputil_protocols_from_string(optarg);
+            if (!allowed_protocols) {
+                ovs_fatal(0, "%s: invalid flow format(s)", optarg);
             }
             break;
 
@@ -282,12 +282,14 @@ open_vconn_socket(const char *name, struct vconn **vconnp)
     free(vconn_name);
 }
 
-static void
+static enum ofputil_protocol
 open_vconn__(const char *name, const char *default_suffix,
              struct vconn **vconnp)
 {
     char *datapath_name, *datapath_type, *socket_name;
+    enum ofputil_protocol protocol;
     char *bridge_path;
+    int ofp_version;
     struct stat s;
 
     bridge_path = xasprintf("%s/%s.%s", ovs_rundir(), name, default_suffix);
@@ -317,9 +319,17 @@ open_vconn__(const char *name, const char *default_suffix,
 
     free(bridge_path);
     free(socket_name);
+
+    ofp_version = vconn_get_version(*vconnp);
+    protocol = ofputil_protocol_from_ofp_version(ofp_version);
+    if (!protocol) {
+        ovs_fatal(0, "%s: unsupported OpenFlow version 0x%02x",
+                  name, ofp_version);
+    }
+    return protocol;
 }
 
-static void
+static enum ofputil_protocol
 open_vconn(const char *name, struct vconn **vconnp)
 {
     return open_vconn__(name, "mgmt", vconnp);
@@ -564,87 +574,74 @@ str_to_port_no(const char *vconn_name, const char *port_name)
 }
 
 static bool
-try_set_flow_format(struct vconn *vconn, enum nx_flow_format flow_format)
+try_set_protocol(struct vconn *vconn, enum ofputil_protocol want,
+                 enum ofputil_protocol *cur)
 {
-    struct ofpbuf *sff, *reply;
+    for (;;) {
+        struct ofpbuf *request, *reply;
+        enum ofputil_protocol next;
 
-    sff = ofputil_make_set_flow_format(flow_format);
-    run(vconn_transact_noreply(vconn, sff, &reply),
-        "talking to %s", vconn_get_name(vconn));
-    if (reply) {
-        char *s = ofp_to_string(reply->data, reply->size, 2);
-        VLOG_DBG("%s: failed to set flow format %s, controller replied: %s",
-                 vconn_get_name(vconn),
-                 ofputil_flow_format_to_string(flow_format),
-                 s);
-        free(s);
-        ofpbuf_delete(reply);
-        return false;
+        request = ofputil_encode_set_protocol(*cur, want, &next);
+        if (!request) {
+            return true;
+        }
+
+        run(vconn_transact_noreply(vconn, request, &reply),
+            "talking to %s", vconn_get_name(vconn));
+        if (reply) {
+            char *s = ofp_to_string(reply->data, reply->size, 2);
+            VLOG_DBG("%s: failed to set protocol, switch replied: %s",
+                     vconn_get_name(vconn), s);
+            free(s);
+            ofpbuf_delete(reply);
+            return false;
+        }
+
+        *cur = next;
     }
-    return true;
 }
 
-static void
-set_flow_format(struct vconn *vconn, enum nx_flow_format flow_format)
+static enum ofputil_protocol
+set_protocol_for_flow_dump(struct vconn *vconn,
+                           enum ofputil_protocol cur_protocol,
+                           enum ofputil_protocol usable_protocols)
 {
-    struct ofpbuf *sff = ofputil_make_set_flow_format(flow_format);
-    transact_noreply(vconn, sff);
-    VLOG_DBG("%s: using user-specified flow format %s",
-             vconn_get_name(vconn),
-             ofputil_flow_format_to_string(flow_format));
-}
+    char *usable_s;
+    int i;
 
-static enum nx_flow_format
-negotiate_highest_flow_format(struct vconn *vconn,
-                              enum nx_flow_format min_format)
-{
-    if (preferred_flow_format != -1) {
-        if (preferred_flow_format < min_format) {
-            ovs_fatal(0, "%s: cannot use requested flow format %s for "
-                      "specified flow", vconn_get_name(vconn),
-                      ofputil_flow_format_to_string(min_format));
+    for (i = 0; i < ofputil_n_flow_dump_protocols; i++) {
+        enum ofputil_protocol f = ofputil_flow_dump_protocols[i];
+        if (f & usable_protocols & allowed_protocols
+            && try_set_protocol(vconn, f, &cur_protocol)) {
+            return f;
         }
+    }
 
-        set_flow_format(vconn, preferred_flow_format);
-        return preferred_flow_format;
+    usable_s = ofputil_protocols_to_string(usable_protocols);
+    if (usable_protocols & allowed_protocols) {
+        ovs_fatal(0, "switch does not support any of the usable flow "
+                  "formats (%s)", usable_s);
     } else {
-        enum nx_flow_format flow_format;
-
-        if (try_set_flow_format(vconn, NXFF_NXM)) {
-            flow_format = NXFF_NXM;
-        } else {
-            flow_format = NXFF_OPENFLOW10;
-        }
-
-        if (flow_format < min_format) {
-            ovs_fatal(0, "%s: cannot use switch's most advanced flow format "
-                      "%s for specified flow", vconn_get_name(vconn),
-                      ofputil_flow_format_to_string(min_format));
-        }
-
-        VLOG_DBG("%s: negotiated flow format %s", vconn_get_name(vconn),
-                 ofputil_flow_format_to_string(flow_format));
-        return flow_format;
+        char *allowed_s = ofputil_protocols_to_string(allowed_protocols);
+        ovs_fatal(0, "none of the usable flow formats (%s) is among the "
+                  "allowed flow formats (%s)", usable_s, allowed_s);
     }
 }
 
 static void
 do_dump_flows__(int argc, char *argv[], bool aggregate)
 {
-    enum nx_flow_format min_flow_format, flow_format;
+    enum ofputil_protocol usable_protocols, protocol;
     struct ofputil_flow_stats_request fsr;
     struct ofpbuf *request;
     struct vconn *vconn;
 
     parse_ofp_flow_stats_request_str(&fsr, aggregate, argc > 2 ? argv[2] : "");
+    usable_protocols = ofputil_flow_stats_request_usable_protocols(&fsr);
 
-    open_vconn(argv[1], &vconn);
-    min_flow_format = ofputil_min_flow_format(&fsr.match);
-    if (fsr.cookie_mask != htonll(0)) {
-        min_flow_format = NXFF_NXM;
-    }
-    flow_format = negotiate_highest_flow_format(vconn, min_flow_format);
-    request = ofputil_encode_flow_stats_request(&fsr, flow_format);
+    protocol = open_vconn(argv[1], &vconn);
+    protocol = set_protocol_for_flow_dump(vconn, protocol, usable_protocols);
+    request = ofputil_encode_flow_stats_request(&fsr, protocol);
     dump_stats_transaction(argv[1], request);
     vconn_close(vconn);
 }
@@ -685,122 +682,110 @@ do_queue_stats(int argc, char *argv[])
     dump_stats_transaction(argv[1], request);
 }
 
-/* Sets up the flow format for a vconn that will be used to modify the flow
- * table.  Returns the flow format used, after possibly adding an OpenFlow
- * request to 'requests'.
- *
- * If 'preferred_flow_format' is -1, returns NXFF_OPENFLOW10 without modifying
- * 'requests', since NXFF_OPENFLOW10 is the default flow format for any
- * OpenFlow connection.
- *
- * If 'preferred_flow_format' is a specific format, adds a request to set that
- * format to 'requests' and returns the format. */
-static enum nx_flow_format
-set_initial_format_for_flow_mod(struct list *requests)
+static enum ofputil_protocol
+open_vconn_for_flow_mod(const char *remote,
+                        const struct ofputil_flow_mod *fms, size_t n_fms,
+                        struct vconn **vconnp)
 {
-    if (preferred_flow_format < 0) {
-        return NXFF_OPENFLOW10;
-    } else {
-        struct ofpbuf *sff;
+    enum ofputil_protocol usable_protocols;
+    enum ofputil_protocol cur_protocol;
+    char *usable_s;
+    int i;
 
-        sff = ofputil_make_set_flow_format(preferred_flow_format);
-        list_push_back(requests, &sff->list_node);
-        return preferred_flow_format;
+    /* Figure out what flow formats will work. */
+    usable_protocols = ofputil_flow_mod_usable_protocols(fms, n_fms);
+    if (!(usable_protocols & allowed_protocols)) {
+        char *allowed_s = ofputil_protocols_to_string(allowed_protocols);
+        usable_s = ofputil_protocols_to_string(usable_protocols);
+        ovs_fatal(0, "none of the usable flow formats (%s) is among the "
+                  "allowed flow formats (%s)", usable_s, allowed_s);
     }
+
+    /* If the initial flow format is allowed and usable, keep it. */
+    cur_protocol = open_vconn(remote, vconnp);
+    if (usable_protocols & allowed_protocols & cur_protocol) {
+        return cur_protocol;
+    }
+
+    /* Otherwise try each flow format in turn. */
+    for (i = 0; i < sizeof(enum ofputil_protocol) * CHAR_BIT; i++) {
+        enum ofputil_protocol f = 1 << i;
+
+        if (f != cur_protocol
+            && f & usable_protocols & allowed_protocols
+            && try_set_protocol(*vconnp, f, &cur_protocol)) {
+            return f;
+        }
+    }
+
+    usable_s = ofputil_protocols_to_string(usable_protocols);
+    ovs_fatal(0, "switch does not support any of the usable flow "
+              "formats (%s)", usable_s);
 }
 
-/* Checks that 'flow_format' is acceptable as a flow format after a flow_mod
- * operation, given the global 'preferred_flow_format'. */
 static void
-check_final_format_for_flow_mod(enum nx_flow_format flow_format)
+do_flow_mod__(const char *remote, struct ofputil_flow_mod *fms, size_t n_fms)
 {
-    if (preferred_flow_format >= 0 && flow_format > preferred_flow_format) {
-        ovs_fatal(0, "flow cannot be expressed in flow format %s "
-                  "(flow format %s or better is required)",
-                  ofputil_flow_format_to_string(preferred_flow_format),
-                  ofputil_flow_format_to_string(flow_format));
-    }
-}
-
-static void
-do_flow_mod_file__(int argc OVS_UNUSED, char *argv[], uint16_t command)
-{
-    enum nx_flow_format flow_format;
-    bool flow_mod_table_id;
-    struct list requests;
+    enum ofputil_protocol protocol;
     struct vconn *vconn;
-    FILE *file;
+    size_t i;
 
-    file = !strcmp(argv[2], "-") ? stdin : fopen(argv[2], "r");
-    if (file == NULL) {
-        ovs_fatal(errno, "%s: open", argv[2]);
-    }
+    protocol = open_vconn_for_flow_mod(remote, fms, n_fms, &vconn);
 
-    list_init(&requests);
-    flow_format = set_initial_format_for_flow_mod(&requests);
-    flow_mod_table_id = false;
+    for (i = 0; i < n_fms; i++) {
+        struct ofputil_flow_mod *fm = &fms[i];
 
-    open_vconn(argv[1], &vconn);
-    while (parse_ofp_flow_mod_file(&requests, &flow_format, &flow_mod_table_id,
-                                   file, command)) {
-        check_final_format_for_flow_mod(flow_format);
-        transact_multiple_noreply(vconn, &requests);
+        transact_noreply(vconn, ofputil_encode_flow_mod(fm, protocol));
+        free(fm->actions);
     }
     vconn_close(vconn);
-
-    if (file != stdin) {
-        fclose(file);
-    }
 }
 
 static void
-do_flow_mod__(int argc, char *argv[], uint16_t command)
+do_flow_mod_file(int argc OVS_UNUSED, char *argv[], uint16_t command)
 {
-    enum nx_flow_format flow_format;
-    bool flow_mod_table_id;
-    struct list requests;
-    struct vconn *vconn;
+    struct ofputil_flow_mod *fms = NULL;
+    size_t n_fms = 0;
 
+    parse_ofp_flow_mod_file(argv[2], command, &fms, &n_fms);
+    do_flow_mod__(argv[1], fms, n_fms);
+    free(fms);
+}
+
+static void
+do_flow_mod(int argc, char *argv[], uint16_t command)
+{
     if (argc > 2 && !strcmp(argv[2], "-")) {
-        do_flow_mod_file__(argc, argv, command);
-        return;
+        do_flow_mod_file(argc, argv, command);
+    } else {
+        struct ofputil_flow_mod fm;
+        parse_ofp_flow_mod_str(&fm, argc > 2 ? argv[2] : "", command, false);
+        do_flow_mod__(argv[1], &fm, 1);
     }
-
-    list_init(&requests);
-    flow_format = set_initial_format_for_flow_mod(&requests);
-    flow_mod_table_id = false;
-
-    parse_ofp_flow_mod_str(&requests, &flow_format, &flow_mod_table_id,
-                           argc > 2 ? argv[2] : "", command, false);
-    check_final_format_for_flow_mod(flow_format);
-
-    open_vconn(argv[1], &vconn);
-    transact_multiple_noreply(vconn, &requests);
-    vconn_close(vconn);
 }
 
 static void
 do_add_flow(int argc, char *argv[])
 {
-    do_flow_mod__(argc, argv, OFPFC_ADD);
+    do_flow_mod(argc, argv, OFPFC_ADD);
 }
 
 static void
 do_add_flows(int argc, char *argv[])
 {
-    do_flow_mod_file__(argc, argv, OFPFC_ADD);
+    do_flow_mod_file(argc, argv, OFPFC_ADD);
 }
 
 static void
 do_mod_flows(int argc, char *argv[])
 {
-    do_flow_mod__(argc, argv, strict ? OFPFC_MODIFY_STRICT : OFPFC_MODIFY);
+    do_flow_mod(argc, argv, strict ? OFPFC_MODIFY_STRICT : OFPFC_MODIFY);
 }
 
 static void
 do_del_flows(int argc, char *argv[])
 {
-    do_flow_mod__(argc, argv, strict ? OFPFC_DELETE_STRICT : OFPFC_DELETE);
+    do_flow_mod(argc, argv, strict ? OFPFC_DELETE_STRICT : OFPFC_DELETE);
 }
 
 static void
@@ -1456,12 +1441,12 @@ fte_insert(struct classifier *cls, const struct cls_rule *rule,
 }
 
 /* Reads the flows in 'filename' as flow table entries in 'cls' for the version
- * with the specified 'index'.  Returns the minimum flow format required to
- * represent the flows that were read. */
-static enum nx_flow_format
+ * with the specified 'index'.  Returns the flow formats able to represent the
+ * flows that were read. */
+static enum ofputil_protocol
 read_flows_from_file(const char *filename, struct classifier *cls, int index)
 {
-    enum nx_flow_format min_flow_format;
+    enum ofputil_protocol usable_protocols;
     struct ds s;
     FILE *file;
 
@@ -1471,11 +1456,10 @@ read_flows_from_file(const char *filename, struct classifier *cls, int index)
     }
 
     ds_init(&s);
-    min_flow_format = NXFF_OPENFLOW10;
+    usable_protocols = OFPUTIL_P_ANY;
     while (!ds_get_preprocessed_line(&s, file)) {
         struct fte_version *version;
         struct ofputil_flow_mod fm;
-        enum nx_flow_format min_ff;
 
         parse_ofp_str(&fm, OFPFC_ADD, ds_cstr(&s), true);
 
@@ -1487,9 +1471,7 @@ read_flows_from_file(const char *filename, struct classifier *cls, int index)
         version->actions = fm.actions;
         version->n_actions = fm.n_actions;
 
-        min_ff = ofputil_min_flow_format(&fm.cr);
-        min_flow_format = MAX(min_flow_format, min_ff);
-        check_final_format_for_flow_mod(min_flow_format);
+        usable_protocols &= ofputil_usable_protocols(&fm.cr);
 
         fte_insert(cls, &fm.cr, version, index);
     }
@@ -1499,14 +1481,15 @@ read_flows_from_file(const char *filename, struct classifier *cls, int index)
         fclose(file);
     }
 
-    return min_flow_format;
+    return usable_protocols;
 }
 
 /* Reads the OpenFlow flow table from 'vconn', which has currently active flow
- * format 'flow_format', and adds them as flow table entries in 'cls' for the
+ * format 'protocol', and adds them as flow table entries in 'cls' for the
  * version with the specified 'index'. */
 static void
-read_flows_from_switch(struct vconn *vconn, enum nx_flow_format flow_format,
+read_flows_from_switch(struct vconn *vconn,
+                       enum ofputil_protocol protocol,
                        struct classifier *cls, int index)
 {
     struct ofputil_flow_stats_request fsr;
@@ -1519,7 +1502,7 @@ read_flows_from_switch(struct vconn *vconn, enum nx_flow_format flow_format,
     fsr.out_port = OFPP_NONE;
     fsr.table_id = 0xff;
     fsr.cookie = fsr.cookie_mask = htonll(0);
-    request = ofputil_encode_flow_stats_request(&fsr, flow_format);
+    request = ofputil_encode_flow_stats_request(&fsr, protocol);
     send_xid = ((struct ofp_header *) request->data)->xid;
     send_openflow_buffer(vconn, request);
 
@@ -1583,7 +1566,7 @@ read_flows_from_switch(struct vconn *vconn, enum nx_flow_format flow_format,
 
 static void
 fte_make_flow_mod(const struct fte *fte, int index, uint16_t command,
-                  enum nx_flow_format flow_format, struct list *packets)
+                  enum ofputil_protocol protocol, struct list *packets)
 {
     const struct fte_version *version = fte->versions[index];
     struct ofputil_flow_mod fm;
@@ -1607,7 +1590,7 @@ fte_make_flow_mod(const struct fte *fte, int index, uint16_t command,
         fm.n_actions = 0;
     }
 
-    ofm = ofputil_encode_flow_mod(&fm, flow_format, false);
+    ofm = ofputil_encode_flow_mod(&fm, protocol);
     list_push_back(packets, &ofm->list_node);
 }
 
@@ -1615,7 +1598,7 @@ static void
 do_replace_flows(int argc OVS_UNUSED, char *argv[])
 {
     enum { FILE_IDX = 0, SWITCH_IDX = 1 };
-    enum nx_flow_format min_flow_format, flow_format;
+    enum ofputil_protocol usable_protocols, protocol;
     struct cls_cursor cursor;
     struct classifier cls;
     struct list requests;
@@ -1623,11 +1606,12 @@ do_replace_flows(int argc OVS_UNUSED, char *argv[])
     struct fte *fte;
 
     classifier_init(&cls);
-    min_flow_format = read_flows_from_file(argv[2], &cls, FILE_IDX);
+    usable_protocols = read_flows_from_file(argv[2], &cls, FILE_IDX);
 
-    open_vconn(argv[1], &vconn);
-    flow_format = negotiate_highest_flow_format(vconn, min_flow_format);
-    read_flows_from_switch(vconn, flow_format, &cls, SWITCH_IDX);
+    protocol = open_vconn(argv[1], &vconn);
+    protocol = set_protocol_for_flow_dump(vconn, protocol, usable_protocols);
+
+    read_flows_from_switch(vconn, protocol, &cls, SWITCH_IDX);
 
     list_init(&requests);
 
@@ -1639,7 +1623,7 @@ do_replace_flows(int argc OVS_UNUSED, char *argv[])
 
         if (sw_ver && !file_ver) {
             fte_make_flow_mod(fte, SWITCH_IDX, OFPFC_DELETE_STRICT,
-                              flow_format, &requests);
+                              protocol, &requests);
         }
     }
 
@@ -1652,8 +1636,7 @@ do_replace_flows(int argc OVS_UNUSED, char *argv[])
 
         if (file_ver
             && (readd || !sw_ver || !fte_version_equals(sw_ver, file_ver))) {
-            fte_make_flow_mod(fte, FILE_IDX, OFPFC_ADD, flow_format,
-                              &requests);
+            fte_make_flow_mod(fte, FILE_IDX, OFPFC_ADD, protocol, &requests);
         }
     }
     transact_multiple_noreply(vconn, &requests);
@@ -1671,12 +1654,12 @@ read_flows_from_source(const char *source, struct classifier *cls, int index)
         || (!strchr(source, ':') && !stat(source, &s))) {
         read_flows_from_file(source, cls, index);
     } else {
-        enum nx_flow_format flow_format;
+        enum ofputil_protocol protocol;
         struct vconn *vconn;
 
-        open_vconn(source, &vconn);
-        flow_format = negotiate_highest_flow_format(vconn, NXFF_OPENFLOW10);
-        read_flows_from_switch(vconn, flow_format, cls, index);
+        protocol = open_vconn(source, &vconn);
+        protocol = set_protocol_for_flow_dump(vconn, protocol, OFPUTIL_P_ANY);
+        read_flows_from_switch(vconn, protocol, cls, index);
         vconn_close(vconn);
     }
 }
@@ -1724,14 +1707,40 @@ do_diff_flows(int argc OVS_UNUSED, char *argv[])
 /* Undocumented commands for unit testing. */
 
 static void
-print_packet_list(struct list *packets)
+do_parse_flows__(struct ofputil_flow_mod *fms, size_t n_fms)
 {
-    struct ofpbuf *packet, *next;
+    enum ofputil_protocol usable_protocols;
+    enum ofputil_protocol protocol = 0;
+    char *usable_s;
+    size_t i;
 
-    LIST_FOR_EACH_SAFE (packet, next, list_node, packets) {
-        ofp_print(stdout, packet->data, packet->size, verbosity);
-        list_remove(&packet->list_node);
-        ofpbuf_delete(packet);
+    usable_protocols = ofputil_flow_mod_usable_protocols(fms, n_fms);
+    usable_s = ofputil_protocols_to_string(usable_protocols);
+    printf("usable protocols: %s\n", usable_s);
+    free(usable_s);
+
+    if (!(usable_protocols & allowed_protocols)) {
+        ovs_fatal(0, "no usable protocol");
+    }
+    for (i = 0; i < sizeof(enum ofputil_protocol) * CHAR_BIT; i++) {
+        protocol = 1 << i;
+        if (protocol & usable_protocols & allowed_protocols) {
+            break;
+        }
+    }
+    assert(IS_POW2(protocol));
+
+    printf("chosen protocol: %s\n", ofputil_protocol_to_string(protocol));
+
+    for (i = 0; i < n_fms; i++) {
+        struct ofputil_flow_mod *fm = &fms[i];
+        struct ofpbuf *msg;
+
+        msg = ofputil_encode_flow_mod(fm, protocol);
+        ofp_print(stdout, msg->data, msg->size, verbosity);
+        ofpbuf_delete(msg);
+
+        free(fm->actions);
     }
 }
 
@@ -1740,20 +1749,10 @@ print_packet_list(struct list *packets)
 static void
 do_parse_flow(int argc OVS_UNUSED, char *argv[])
 {
-    enum nx_flow_format flow_format;
-    bool flow_mod_table_id;
-    struct list packets;
+    struct ofputil_flow_mod fm;
 
-    flow_format = NXFF_OPENFLOW10;
-    if (preferred_flow_format > 0) {
-        flow_format = preferred_flow_format;
-    }
-    flow_mod_table_id = false;
-
-    list_init(&packets);
-    parse_ofp_flow_mod_str(&packets, &flow_format, &flow_mod_table_id,
-                           argv[1], OFPFC_ADD, false);
-    print_packet_list(&packets);
+    parse_ofp_flow_mod_str(&fm, argv[1], OFPFC_ADD, false);
+    do_parse_flows__(&fm, 1);
 }
 
 /* "parse-flows FILENAME": reads the named file as a sequence of flows (like
@@ -1761,28 +1760,12 @@ do_parse_flow(int argc OVS_UNUSED, char *argv[])
 static void
 do_parse_flows(int argc OVS_UNUSED, char *argv[])
 {
-    enum nx_flow_format flow_format;
-    bool flow_mod_table_id;
-    struct list packets;
-    FILE *file;
+    struct ofputil_flow_mod *fms = NULL;
+    size_t n_fms = 0;
 
-    file = fopen(argv[1], "r");
-    if (file == NULL) {
-        ovs_fatal(errno, "%s: open", argv[1]);
-    }
-
-    flow_format = NXFF_OPENFLOW10;
-    if (preferred_flow_format > 0) {
-        flow_format = preferred_flow_format;
-    }
-    flow_mod_table_id = false;
-
-    list_init(&packets);
-    while (parse_ofp_flow_mod_file(&packets, &flow_format, &flow_mod_table_id,
-                                   file, OFPFC_ADD)) {
-        print_packet_list(&packets);
-    }
-    fclose(file);
+    parse_ofp_flow_mod_file(argv[1], OFPFC_ADD, &fms, &n_fms);
+    do_parse_flows__(fms, n_fms);
+    free(fms);
 }
 
 /* "parse-nx-match": reads a series of nx_match specifications as strings from

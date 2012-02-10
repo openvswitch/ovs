@@ -78,9 +78,9 @@ static uint32_t default_queue = UINT32_MAX;
 /* -Q, --port-queue: map from port name to port number (cast to void *). */
 static struct shash port_queues = SHASH_INITIALIZER(&port_queues);
 
-/* --with-flows: Flows to send to switch, or an empty list not to send any
- * default flows. */
-static struct list default_flows = LIST_INITIALIZER(&default_flows);
+/* --with-flows: Flows to send to switch. */
+static struct ofputil_flow_mod *default_flows;
+static size_t n_default_flows;
 
 /* --unixctl: Name of unixctl socket, or null to use the default. */
 static char *unixctl_path = NULL;
@@ -230,7 +230,8 @@ new_switch(struct switch_ *sw, struct vconn *vconn)
                 : LSW_FLOOD);
     cfg.wildcards = wildcards;
     cfg.max_idle = set_up_flows ? max_idle : -1;
-    cfg.default_flows = &default_flows;
+    cfg.default_flows = default_flows;
+    cfg.n_default_flows = n_default_flows;
     cfg.default_queue = default_queue;
     cfg.port_queues = &port_queues;
     sw->lswitch = lswitch_create(sw->rconn, &cfg);
@@ -256,29 +257,6 @@ do_switching(struct switch_ *sw)
     return (!rconn_is_alive(sw->rconn) ? EOF
             : rconn_packets_sent(sw->rconn) != packets_sent ? 0
             : EAGAIN);
-}
-
-static void
-read_flow_file(const char *name)
-{
-    enum nx_flow_format flow_format;
-    bool flow_mod_table_id;
-    FILE *stream;
-
-    stream = fopen(optarg, "r");
-    if (!stream) {
-        ovs_fatal(errno, "%s: open", name);
-    }
-
-    flow_format = NXFF_OPENFLOW10;
-    flow_mod_table_id = false;
-    while (parse_ofp_flow_mod_file(&default_flows,
-                                   &flow_format, &flow_mod_table_id,
-                                   stream, OFPFC_ADD)) {
-        continue;
-    }
-
-    fclose(stream);
 }
 
 static void
@@ -386,7 +364,8 @@ parse_options(int argc, char *argv[])
             break;
 
         case OPT_WITH_FLOWS:
-            read_flow_file(optarg);
+            parse_ofp_flow_mod_file(optarg, OFPFC_ADD, &default_flows,
+                                    &n_default_flows);
             break;
 
         case OPT_UNIXCTL:

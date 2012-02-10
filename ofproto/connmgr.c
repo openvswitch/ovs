@@ -58,9 +58,8 @@ struct ofconn {
 
     /* OpenFlow state. */
     enum nx_role role;           /* Role. */
-    enum nx_flow_format flow_format; /* Currently selected flow format. */
+    enum ofputil_protocol protocol; /* Current protocol variant. */
     enum nx_packet_in_format packet_in_format; /* OFPT_PACKET_IN format. */
-    bool flow_mod_table_id;     /* NXT_FLOW_MOD_TABLE_ID enabled? */
 
     /* Asynchronous flow table operation support. */
     struct list opgroups;       /* Contains pending "ofopgroups", if any. */
@@ -786,20 +785,23 @@ ofconn_get_invalid_ttl_to_controller(struct ofconn *ofconn)
     return (ofconn->master_async_config[OAM_PACKET_IN] & bit) != 0;
 }
 
-/* Returns the currently configured flow format for 'ofconn', one of NXFF_*.
+/* Returns the currently configured protocol for 'ofconn', one of OFPUTIL_P_*.
  *
- * The default, if no other format has been set, is NXFF_OPENFLOW10. */
-enum nx_flow_format
-ofconn_get_flow_format(struct ofconn *ofconn)
+ * The default, if no other format has been set, is OFPUTIL_P_OPENFLOW10. */
+enum ofputil_protocol
+ofconn_get_protocol(struct ofconn *ofconn)
 {
-    return ofconn->flow_format;
+    return ofconn->protocol;
 }
 
-/* Sets the flow format for 'ofconn' to 'flow_format' (one of NXFF_*). */
+/* Sets the protocol for 'ofconn' to 'protocol' (one of OFPUTIL_P_*).
+ *
+ * (This doesn't actually send anything to accomplish this.  Presumably the
+ * caller already did that.) */
 void
-ofconn_set_flow_format(struct ofconn *ofconn, enum nx_flow_format flow_format)
+ofconn_set_protocol(struct ofconn *ofconn, enum ofputil_protocol protocol)
 {
-    ofconn->flow_format = flow_format;
+    ofconn->protocol = protocol;
 }
 
 /* Returns the currently configured packet in format for 'ofconn', one of
@@ -829,24 +831,6 @@ void
 ofconn_set_controller_id(struct ofconn *ofconn, uint16_t controller_id)
 {
     ofconn->controller_id = controller_id;
-}
-
-/* Returns true if the NXT_FLOW_MOD_TABLE_ID extension is enabled, false
- * otherwise.
- *
- * By default the extension is not enabled. */
-bool
-ofconn_get_flow_mod_table_id(const struct ofconn *ofconn)
-{
-    return ofconn->flow_mod_table_id;
-}
-
-/* Enables or disables (according to 'enable') the NXT_FLOW_MOD_TABLE_ID
- * extension on 'ofconn'. */
-void
-ofconn_set_flow_mod_table_id(struct ofconn *ofconn, bool enable)
-{
-    ofconn->flow_mod_table_id = enable;
 }
 
 /* Returns the default miss send length for 'ofconn'. */
@@ -994,9 +978,8 @@ ofconn_flush(struct ofconn *ofconn)
     int i;
 
     ofconn->role = NX_ROLE_OTHER;
-    ofconn->flow_format = NXFF_OPENFLOW10;
+    ofconn->protocol = OFPUTIL_P_OF10;
     ofconn->packet_in_format = NXPIF_OPENFLOW10;
-    ofconn->flow_mod_table_id = false;
 
     /* Disassociate 'ofconn' from all of the ofopgroups that it initiated that
      * have not yet completed.  (Those ofopgroups will still run to completion
@@ -1289,7 +1272,7 @@ connmgr_send_flow_removed(struct connmgr *mgr,
              * also prevents new flows from being added (and expiring).  (It
              * also prevents processing OpenFlow requests that would not add
              * new flows, so it is imperfect.) */
-            msg = ofputil_encode_flow_removed(fr, ofconn->flow_format);
+            msg = ofputil_encode_flow_removed(fr, ofconn->protocol);
             ofconn_send_reply(ofconn, msg);
         }
     }

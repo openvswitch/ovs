@@ -838,39 +838,248 @@ ofputil_msg_type_code(const struct ofputil_msg_type *type)
     return type->code;
 }
 
-/* Flow formats. */
+/* Protocols. */
 
-bool
-ofputil_flow_format_is_valid(enum nx_flow_format flow_format)
+struct proto_abbrev {
+    enum ofputil_protocol protocol;
+    const char *name;
+};
+
+/* Most users really don't care about some of the differences between
+ * protocols.  These abbreviations help with that. */
+static const struct proto_abbrev proto_abbrevs[] = {
+    { OFPUTIL_P_ANY,      "any" },
+    { OFPUTIL_P_OF10_ANY, "OpenFlow10" },
+    { OFPUTIL_P_NXM_ANY,  "NXM" },
+};
+#define N_PROTO_ABBREVS ARRAY_SIZE(proto_abbrevs)
+
+enum ofputil_protocol ofputil_flow_dump_protocols[] = {
+    OFPUTIL_P_NXM,
+    OFPUTIL_P_OF10,
+};
+size_t ofputil_n_flow_dump_protocols = ARRAY_SIZE(ofputil_flow_dump_protocols);
+
+/* Returns the ofputil_protocol that is initially in effect on an OpenFlow
+ * connection that has negotiated the given 'version'.  'version' should
+ * normally be an 8-bit OpenFlow version identifier (e.g. 0x01 for OpenFlow
+ * 1.0, 0x02 for OpenFlow 1.1).  Returns 0 if 'version' is not supported or
+ * outside the valid range.  */
+enum ofputil_protocol
+ofputil_protocol_from_ofp_version(int version)
 {
-    switch (flow_format) {
-    case NXFF_OPENFLOW10:
-    case NXFF_NXM:
-        return true;
+    switch (version) {
+    case OFP_VERSION: return OFPUTIL_P_OF10;
+    default: return 0;
     }
-
-    return false;
 }
 
-const char *
-ofputil_flow_format_to_string(enum nx_flow_format flow_format)
+/* Returns true if 'protocol' is a single OFPUTIL_P_* value, false
+ * otherwise. */
+bool
+ofputil_protocol_is_valid(enum ofputil_protocol protocol)
 {
-    switch (flow_format) {
-    case NXFF_OPENFLOW10:
-        return "openflow10";
-    case NXFF_NXM:
-        return "nxm";
+    return protocol & OFPUTIL_P_ANY && is_pow2(protocol);
+}
+
+/* Returns the equivalent of 'protocol' with the Nicira flow_mod_table_id
+ * extension turned on or off if 'enable' is true or false, respectively.
+ *
+ * This extension is only useful for protocols whose "standard" version does
+ * not allow specific tables to be modified.  In particular, this is true of
+ * OpenFlow 1.0.  In later versions of OpenFlow, a flow_mod request always
+ * specifies a table ID and so there is no need for such an extension.  When
+ * 'protocol' is such a protocol that doesn't need a flow_mod_table_id
+ * extension, this function just returns its 'protocol' argument unchanged
+ * regardless of the value of 'enable'.  */
+enum ofputil_protocol
+ofputil_protocol_set_tid(enum ofputil_protocol protocol, bool enable)
+{
+    switch (protocol) {
+    case OFPUTIL_P_OF10:
+    case OFPUTIL_P_OF10_TID:
+        return enable ? OFPUTIL_P_OF10_TID : OFPUTIL_P_OF10;
+
+    case OFPUTIL_P_NXM:
+    case OFPUTIL_P_NXM_TID:
+        return enable ? OFPUTIL_P_NXM_TID : OFPUTIL_P_NXM;
+
     default:
         NOT_REACHED();
     }
 }
 
-int
-ofputil_flow_format_from_string(const char *s)
+/* Returns the "base" version of 'protocol'.  That is, if 'protocol' includes
+ * some extension to a standard protocol version, the return value is the
+ * standard version of that protocol without any extension.  If 'protocol' is a
+ * standard protocol version, returns 'protocol' unchanged. */
+enum ofputil_protocol
+ofputil_protocol_to_base(enum ofputil_protocol protocol)
 {
-    return (!strcmp(s, "openflow10") ? NXFF_OPENFLOW10
-            : !strcmp(s, "nxm") ? NXFF_NXM
-            : -1);
+    return ofputil_protocol_set_tid(protocol, false);
+}
+
+/* Returns 'new_base' with any extensions taken from 'cur'. */
+enum ofputil_protocol
+ofputil_protocol_set_base(enum ofputil_protocol cur,
+                          enum ofputil_protocol new_base)
+{
+    bool tid = (cur & OFPUTIL_P_TID) != 0;
+
+    switch (new_base) {
+    case OFPUTIL_P_OF10:
+    case OFPUTIL_P_OF10_TID:
+        return ofputil_protocol_set_tid(OFPUTIL_P_OF10, tid);
+
+    case OFPUTIL_P_NXM:
+    case OFPUTIL_P_NXM_TID:
+        return ofputil_protocol_set_tid(OFPUTIL_P_NXM, tid);
+
+    default:
+        NOT_REACHED();
+    }
+}
+
+/* Returns a string form of 'protocol', if a simple form exists (that is, if
+ * 'protocol' is either a single protocol or it is a combination of protocols
+ * that have a single abbreviation).  Otherwise, returns NULL. */
+const char *
+ofputil_protocol_to_string(enum ofputil_protocol protocol)
+{
+    const struct proto_abbrev *p;
+
+    /* Use a "switch" statement for single-bit names so that we get a compiler
+     * warning if we forget any. */
+    switch (protocol) {
+    case OFPUTIL_P_NXM:
+        return "NXM-table_id";
+
+    case OFPUTIL_P_NXM_TID:
+        return "NXM+table_id";
+
+    case OFPUTIL_P_OF10:
+        return "OpenFlow10-table_id";
+
+    case OFPUTIL_P_OF10_TID:
+        return "OpenFlow10+table_id";
+    }
+
+    /* Check abbreviations. */
+    for (p = proto_abbrevs; p < &proto_abbrevs[N_PROTO_ABBREVS]; p++) {
+        if (protocol == p->protocol) {
+            return p->name;
+        }
+    }
+
+    return NULL;
+}
+
+/* Returns a string that represents 'protocols'.  The return value might be a
+ * comma-separated list if 'protocols' doesn't have a simple name.  The return
+ * value is "none" if 'protocols' is 0.
+ *
+ * The caller must free the returned string (with free()). */
+char *
+ofputil_protocols_to_string(enum ofputil_protocol protocols)
+{
+    struct ds s;
+
+    assert(!(protocols & ~OFPUTIL_P_ANY));
+    if (protocols == 0) {
+        return xstrdup("none");
+    }
+
+    ds_init(&s);
+    while (protocols) {
+        const struct proto_abbrev *p;
+        int i;
+
+        if (s.length) {
+            ds_put_char(&s, ',');
+        }
+
+        for (p = proto_abbrevs; p < &proto_abbrevs[N_PROTO_ABBREVS]; p++) {
+            if ((protocols & p->protocol) == p->protocol) {
+                ds_put_cstr(&s, p->name);
+                protocols &= ~p->protocol;
+                goto match;
+            }
+        }
+
+        for (i = 0; i < CHAR_BIT * sizeof(enum ofputil_protocol); i++) {
+            enum ofputil_protocol bit = 1u << i;
+
+            if (protocols & bit) {
+                ds_put_cstr(&s, ofputil_protocol_to_string(bit));
+                protocols &= ~bit;
+                goto match;
+            }
+        }
+        NOT_REACHED();
+
+    match: ;
+    }
+    return ds_steal_cstr(&s);
+}
+
+static enum ofputil_protocol
+ofputil_protocol_from_string__(const char *s, size_t n)
+{
+    const struct proto_abbrev *p;
+    int i;
+
+    for (i = 0; i < CHAR_BIT * sizeof(enum ofputil_protocol); i++) {
+        enum ofputil_protocol bit = 1u << i;
+        const char *name = ofputil_protocol_to_string(bit);
+
+        if (name && n == strlen(name) && !strncasecmp(s, name, n)) {
+            return bit;
+        }
+    }
+
+    for (p = proto_abbrevs; p < &proto_abbrevs[N_PROTO_ABBREVS]; p++) {
+        if (n == strlen(p->name) && !strncasecmp(s, p->name, n)) {
+            return p->protocol;
+        }
+    }
+
+    return 0;
+}
+
+/* Returns the nonempty set of protocols represented by 's', which can be a
+ * single protocol name or abbreviation or a comma-separated list of them.
+ *
+ * Aborts the program with an error message if 's' is invalid. */
+enum ofputil_protocol
+ofputil_protocols_from_string(const char *s)
+{
+    const char *orig_s = s;
+    enum ofputil_protocol protocols;
+
+    protocols = 0;
+    while (*s) {
+        enum ofputil_protocol p;
+        size_t n;
+
+        n = strcspn(s, ",");
+        if (n == 0) {
+            s++;
+            continue;
+        }
+
+        p = ofputil_protocol_from_string__(s, n);
+        if (!p) {
+            ovs_fatal(0, "%.*s: unknown flow protocol", (int) n, s);
+        }
+        protocols |= p;
+
+        s += n;
+    }
+
+    if (!protocols) {
+        ovs_fatal(0, "%s: no flow protocol specified", orig_s);
+    }
+    return protocols;
 }
 
 bool
@@ -919,12 +1128,12 @@ regs_fully_wildcarded(const struct flow_wildcards *wc)
     return true;
 }
 
-/* Returns the minimum nx_flow_format to use for sending 'rule' to a switch
- * (e.g. to add or remove a flow).  Only NXM can handle tunnel IDs, registers,
- * or fixing the Ethernet multicast bit.  Otherwise, it's better to use
- * NXFF_OPENFLOW10 for backward compatibility. */
-enum nx_flow_format
-ofputil_min_flow_format(const struct cls_rule *rule)
+/* Returns a bit-mask of ofputil_protocols that can be used for sending 'rule'
+ * to a switch (e.g. to add or remove a flow).  Only NXM can handle tunnel IDs,
+ * registers, or fixing the Ethernet multicast bit.  Otherwise, it's better to
+ * use OpenFlow 1.0 protocol for backward compatibility. */
+enum ofputil_protocol
+ofputil_usable_protocols(const struct cls_rule *rule)
 {
     const struct flow_wildcards *wc = &rule->wc;
 
@@ -932,72 +1141,159 @@ ofputil_min_flow_format(const struct cls_rule *rule)
 
     /* Only NXM supports separately wildcards the Ethernet multicast bit. */
     if (!(wc->wildcards & FWW_DL_DST) != !(wc->wildcards & FWW_ETH_MCAST)) {
-        return NXFF_NXM;
+        return OFPUTIL_P_NXM_ANY;
     }
 
     /* Only NXM supports matching ARP hardware addresses. */
     if (!(wc->wildcards & FWW_ARP_SHA) || !(wc->wildcards & FWW_ARP_THA)) {
-        return NXFF_NXM;
+        return OFPUTIL_P_NXM_ANY;
     }
 
     /* Only NXM supports matching IPv6 traffic. */
     if (!(wc->wildcards & FWW_DL_TYPE)
             && (rule->flow.dl_type == htons(ETH_TYPE_IPV6))) {
-        return NXFF_NXM;
+        return OFPUTIL_P_NXM_ANY;
     }
 
     /* Only NXM supports matching registers. */
     if (!regs_fully_wildcarded(wc)) {
-        return NXFF_NXM;
+        return OFPUTIL_P_NXM_ANY;
     }
 
     /* Only NXM supports matching tun_id. */
     if (wc->tun_id_mask != htonll(0)) {
-        return NXFF_NXM;
+        return OFPUTIL_P_NXM_ANY;
     }
 
     /* Only NXM supports matching fragments. */
     if (wc->nw_frag_mask) {
-        return NXFF_NXM;
+        return OFPUTIL_P_NXM_ANY;
     }
 
     /* Only NXM supports matching IPv6 flow label. */
     if (!(wc->wildcards & FWW_IPV6_LABEL)) {
-        return NXFF_NXM;
+        return OFPUTIL_P_NXM_ANY;
     }
 
     /* Only NXM supports matching IP ECN bits. */
     if (!(wc->wildcards & FWW_NW_ECN)) {
-        return NXFF_NXM;
+        return OFPUTIL_P_NXM_ANY;
     }
 
     /* Only NXM supports matching IP TTL/hop limit. */
     if (!(wc->wildcards & FWW_NW_TTL)) {
-        return NXFF_NXM;
+        return OFPUTIL_P_NXM_ANY;
     }
 
     /* Only NXM supports bitwise matching on transport port. */
     if ((wc->tp_src_mask && wc->tp_src_mask != htons(UINT16_MAX)) ||
         (wc->tp_dst_mask && wc->tp_dst_mask != htons(UINT16_MAX))) {
-        return NXFF_NXM;
+        return OFPUTIL_P_NXM_ANY;
     }
 
     /* Other formats can express this rule. */
-    return NXFF_OPENFLOW10;
+    return OFPUTIL_P_ANY;
 }
 
-/* Returns an OpenFlow message that can be used to set the flow format to
- * 'flow_format'.  */
+/* Returns an OpenFlow message that, sent on an OpenFlow connection whose
+ * protocol is 'current', at least partly transitions the protocol to 'want'.
+ * Stores in '*next' the protocol that will be in effect on the OpenFlow
+ * connection if the switch processes the returned message correctly.  (If
+ * '*next != want' then the caller will have to iterate.)
+ *
+ * If 'current == want', returns NULL and stores 'current' in '*next'. */
 struct ofpbuf *
-ofputil_make_set_flow_format(enum nx_flow_format flow_format)
+ofputil_encode_set_protocol(enum ofputil_protocol current,
+                            enum ofputil_protocol want,
+                            enum ofputil_protocol *next)
+{
+    enum ofputil_protocol cur_base, want_base;
+    bool cur_tid, want_tid;
+
+    cur_base = ofputil_protocol_to_base(current);
+    want_base = ofputil_protocol_to_base(want);
+    if (cur_base != want_base) {
+        *next = ofputil_protocol_set_base(current, want_base);
+
+        switch (want_base) {
+        case OFPUTIL_P_NXM:
+            return ofputil_encode_nx_set_flow_format(NXFF_NXM);
+
+        case OFPUTIL_P_OF10:
+            return ofputil_encode_nx_set_flow_format(NXFF_OPENFLOW10);
+
+        case OFPUTIL_P_OF10_TID:
+        case OFPUTIL_P_NXM_TID:
+            NOT_REACHED();
+        }
+    }
+
+    cur_tid = (current & OFPUTIL_P_TID) != 0;
+    want_tid = (want & OFPUTIL_P_TID) != 0;
+    if (cur_tid != want_tid) {
+        *next = ofputil_protocol_set_tid(current, want_tid);
+        return ofputil_make_flow_mod_table_id(want_tid);
+    }
+
+    assert(current == want);
+
+    *next = current;
+    return NULL;
+}
+
+/* Returns an NXT_SET_FLOW_FORMAT message that can be used to set the flow
+ * format to 'nxff'.  */
+struct ofpbuf *
+ofputil_encode_nx_set_flow_format(enum nx_flow_format nxff)
 {
     struct nx_set_flow_format *sff;
     struct ofpbuf *msg;
 
+    assert(ofputil_nx_flow_format_is_valid(nxff));
+
     sff = make_nxmsg(sizeof *sff, NXT_SET_FLOW_FORMAT, &msg);
-    sff->format = htonl(flow_format);
+    sff->format = htonl(nxff);
 
     return msg;
+}
+
+/* Returns the base protocol if 'flow_format' is a valid NXFF_* value, false
+ * otherwise. */
+enum ofputil_protocol
+ofputil_nx_flow_format_to_protocol(enum nx_flow_format flow_format)
+{
+    switch (flow_format) {
+    case NXFF_OPENFLOW10:
+        return OFPUTIL_P_OF10;
+
+    case NXFF_NXM:
+        return OFPUTIL_P_NXM;
+
+    default:
+        return 0;
+    }
+}
+
+/* Returns true if 'flow_format' is a valid NXFF_* value, false otherwise. */
+bool
+ofputil_nx_flow_format_is_valid(enum nx_flow_format flow_format)
+{
+    return ofputil_nx_flow_format_to_protocol(flow_format) != 0;
+}
+
+/* Returns a string version of 'flow_format', which must be a valid NXFF_*
+ * value. */
+const char *
+ofputil_nx_flow_format_to_string(enum nx_flow_format flow_format)
+{
+    switch (flow_format) {
+    case NXFF_OPENFLOW10:
+        return "openflow10";
+    case NXFF_NXM:
+        return "nxm";
+    default:
+        NOT_REACHED();
+    }
 }
 
 struct ofpbuf *
@@ -1029,13 +1325,11 @@ ofputil_make_flow_mod_table_id(bool flow_mod_table_id)
  * flow_mod in 'fm'.  Returns 0 if successful, otherwise an OpenFlow error
  * code.
  *
- * 'flow_mod_table_id' should be true if the NXT_FLOW_MOD_TABLE_ID extension is
- * enabled, false otherwise.
- *
  * Does not validate the flow_mod actions. */
 enum ofperr
 ofputil_decode_flow_mod(struct ofputil_flow_mod *fm,
-                        const struct ofp_header *oh, bool flow_mod_table_id)
+                        const struct ofp_header *oh,
+                        enum ofputil_protocol protocol)
 {
     const struct ofputil_msg_type *type;
     uint16_t command;
@@ -1068,7 +1362,7 @@ ofputil_decode_flow_mod(struct ofputil_flow_mod *fm,
 
         /* Translate the rule. */
         ofputil_cls_rule_from_match(&ofm->match, priority, &fm->cr);
-        ofputil_normalize_rule(&fm->cr, NXFF_OPENFLOW10);
+        ofputil_normalize_rule(&fm->cr);
 
         /* Translate the message. */
         fm->cookie = ofm->cookie;
@@ -1118,7 +1412,7 @@ ofputil_decode_flow_mod(struct ofputil_flow_mod *fm,
         NOT_REACHED();
     }
 
-    if (flow_mod_table_id) {
+    if (protocol & OFPUTIL_P_TID) {
         fm->command = command & 0xff;
         fm->table_id = command >> 8;
     } else {
@@ -1130,26 +1424,28 @@ ofputil_decode_flow_mod(struct ofputil_flow_mod *fm,
 }
 
 /* Converts 'fm' into an OFPT_FLOW_MOD or NXT_FLOW_MOD message according to
- * 'flow_format' and returns the message.
+ * 'protocol' and returns the message.
  *
  * 'flow_mod_table_id' should be true if the NXT_FLOW_MOD_TABLE_ID extension is
  * enabled, false otherwise. */
 struct ofpbuf *
 ofputil_encode_flow_mod(const struct ofputil_flow_mod *fm,
-                        enum nx_flow_format flow_format,
-                        bool flow_mod_table_id)
+                        enum ofputil_protocol protocol)
 {
     size_t actions_len = fm->n_actions * sizeof *fm->actions;
+    struct ofp_flow_mod *ofm;
+    struct nx_flow_mod *nfm;
     struct ofpbuf *msg;
     uint16_t command;
+    int match_len;
 
-    command = (flow_mod_table_id
+    command = (protocol & OFPUTIL_P_TID
                ? (fm->command & 0xff) | (fm->table_id << 8)
                : fm->command);
 
-    if (flow_format == NXFF_OPENFLOW10) {
-        struct ofp_flow_mod *ofm;
-
+    switch (protocol) {
+    case OFPUTIL_P_OF10:
+    case OFPUTIL_P_OF10_TID:
         msg = ofpbuf_new(sizeof *ofm + actions_len);
         ofm = put_openflow(sizeof *ofm, OFPT_FLOW_MOD, msg);
         ofputil_cls_rule_to_match(&fm->cr, &ofm->match);
@@ -1161,10 +1457,10 @@ ofputil_encode_flow_mod(const struct ofputil_flow_mod *fm,
         ofm->buffer_id = htonl(fm->buffer_id);
         ofm->out_port = htons(fm->out_port);
         ofm->flags = htons(fm->flags);
-    } else if (flow_format == NXFF_NXM) {
-        struct nx_flow_mod *nfm;
-        int match_len;
+        break;
 
+    case OFPUTIL_P_NXM:
+    case OFPUTIL_P_NXM_TID:
         msg = ofpbuf_new(sizeof *nfm + NXM_TYPICAL_LEN + actions_len);
         put_nxmsg(sizeof *nfm, NXT_FLOW_MOD, msg);
         nfm = msg->data;
@@ -1184,13 +1480,44 @@ ofputil_encode_flow_mod(const struct ofputil_flow_mod *fm,
         nfm->out_port = htons(fm->out_port);
         nfm->flags = htons(fm->flags);
         nfm->match_len = htons(match_len);
-    } else {
+        break;
+
+    default:
         NOT_REACHED();
     }
 
     ofpbuf_put(msg, fm->actions, actions_len);
     update_openflow_length(msg);
     return msg;
+}
+
+/* Returns a bitmask with a 1-bit for each protocol that could be used to
+ * send all of the 'n_fm's flow table modification requests in 'fms', and a
+ * 0-bit for each protocol that is inadequate.
+ *
+ * (The return value will have at least one 1-bit.) */
+enum ofputil_protocol
+ofputil_flow_mod_usable_protocols(const struct ofputil_flow_mod *fms,
+                                  size_t n_fms)
+{
+    enum ofputil_protocol usable_protocols;
+    size_t i;
+
+    usable_protocols = OFPUTIL_P_ANY;
+    for (i = 0; i < n_fms; i++) {
+        const struct ofputil_flow_mod *fm = &fms[i];
+
+        usable_protocols &= ofputil_usable_protocols(&fm->cr);
+        if (fm->table_id != 0xff) {
+            usable_protocols &= OFPUTIL_P_TID;
+        }
+        if (fm->command != OFPFC_ADD && fm->cookie_mask != htonll(0)) {
+            usable_protocols &= OFPUTIL_P_NXM_ANY;
+        }
+    }
+    assert(usable_protocols);
+
+    return usable_protocols;
 }
 
 static enum ofperr
@@ -1274,14 +1601,16 @@ ofputil_decode_flow_stats_request(struct ofputil_flow_stats_request *fsr,
 
 /* Converts abstract flow_stats_request 'fsr' into an OFPST_FLOW,
  * OFPST_AGGREGATE, NXST_FLOW, or NXST_AGGREGATE request 'oh' according to
- * 'flow_format', and returns the message. */
+ * 'protocol', and returns the message. */
 struct ofpbuf *
 ofputil_encode_flow_stats_request(const struct ofputil_flow_stats_request *fsr,
-                                  enum nx_flow_format flow_format)
+                                  enum ofputil_protocol protocol)
 {
     struct ofpbuf *msg;
 
-    if (flow_format == NXFF_OPENFLOW10) {
+    switch (protocol) {
+    case OFPUTIL_P_OF10:
+    case OFPUTIL_P_OF10_TID: {
         struct ofp_flow_stats_request *ofsr;
         int type;
 
@@ -1290,7 +1619,11 @@ ofputil_encode_flow_stats_request(const struct ofputil_flow_stats_request *fsr,
         ofputil_cls_rule_to_match(&fsr->match, &ofsr->match);
         ofsr->table_id = fsr->table_id;
         ofsr->out_port = htons(fsr->out_port);
-    } else if (flow_format == NXFF_NXM) {
+        break;
+    }
+
+    case OFPUTIL_P_NXM:
+    case OFPUTIL_P_NXM_TID: {
         struct nx_flow_stats_request *nfsr;
         int match_len;
         int subtype;
@@ -1304,11 +1637,31 @@ ofputil_encode_flow_stats_request(const struct ofputil_flow_stats_request *fsr,
         nfsr->out_port = htons(fsr->out_port);
         nfsr->match_len = htons(match_len);
         nfsr->table_id = fsr->table_id;
-    } else {
+        break;
+    }
+
+    default:
         NOT_REACHED();
     }
 
     return msg;
+}
+
+/* Returns a bitmask with a 1-bit for each protocol that could be used to
+ * accurately encode 'fsr', and a 0-bit for each protocol that is inadequate.
+ *
+ * (The return value will have at least one 1-bit.) */
+enum ofputil_protocol
+ofputil_flow_stats_request_usable_protocols(
+    const struct ofputil_flow_stats_request *fsr)
+{
+    enum ofputil_protocol usable_protocols;
+
+    usable_protocols = ofputil_usable_protocols(&fsr->match);
+    if (fsr->cookie_mask != htonll(0)) {
+        usable_protocols &= OFPUTIL_P_NXM_ANY;
+    }
+    return usable_protocols;
 }
 
 /* Converts an OFPST_FLOW or NXST_FLOW reply in 'msg' into an abstract
@@ -1516,7 +1869,7 @@ ofputil_append_flow_stats_reply(const struct ofputil_flow_stats *fs,
 }
 
 /* Converts abstract ofputil_aggregate_stats 'stats' into an OFPST_AGGREGATE or
- * NXST_AGGREGATE reply according to 'flow_format', and returns the message. */
+ * NXST_AGGREGATE reply according to 'protocol', and returns the message. */
 struct ofpbuf *
 ofputil_encode_aggregate_stats_reply(
     const struct ofputil_aggregate_stats *stats,
@@ -1605,15 +1958,17 @@ ofputil_decode_flow_removed(struct ofputil_flow_removed *fr,
 }
 
 /* Converts abstract ofputil_flow_removed 'fr' into an OFPT_FLOW_REMOVED or
- * NXT_FLOW_REMOVED message 'oh' according to 'flow_format', and returns the
+ * NXT_FLOW_REMOVED message 'oh' according to 'protocol', and returns the
  * message. */
 struct ofpbuf *
 ofputil_encode_flow_removed(const struct ofputil_flow_removed *fr,
-                            enum nx_flow_format flow_format)
+                            enum ofputil_protocol protocol)
 {
     struct ofpbuf *msg;
 
-    if (flow_format == NXFF_OPENFLOW10) {
+    switch (protocol) {
+    case OFPUTIL_P_OF10:
+    case OFPUTIL_P_OF10_TID: {
         struct ofp_flow_removed *ofr;
 
         ofr = make_openflow_xid(sizeof *ofr, OFPT_FLOW_REMOVED, htonl(0),
@@ -1627,7 +1982,11 @@ ofputil_encode_flow_removed(const struct ofputil_flow_removed *fr,
         ofr->idle_timeout = htons(fr->idle_timeout);
         ofr->packet_count = htonll(unknown_to_zero(fr->packet_count));
         ofr->byte_count = htonll(unknown_to_zero(fr->byte_count));
-    } else if (flow_format == NXFF_NXM) {
+        break;
+    }
+
+    case OFPUTIL_P_NXM:
+    case OFPUTIL_P_NXM_TID: {
         struct nx_flow_removed *nfr;
         int match_len;
 
@@ -1644,7 +2003,10 @@ ofputil_encode_flow_removed(const struct ofputil_flow_removed *fr,
         nfr->match_len = htons(match_len);
         nfr->packet_count = htonll(fr->packet_count);
         nfr->byte_count = htonll(fr->byte_count);
-    } else {
+        break;
+    }
+
+    default:
         NOT_REACHED();
     }
 
@@ -2793,12 +3155,9 @@ action_outputs_to_port(const union ofp_action *action, ovs_be16 port)
  *       example, Open vSwitch does not understand SCTP, an L4 protocol, so the
  *       L4 fields tp_src and tp_dst must be wildcarded if 'rule' specifies an
  *       SCTP flow.
- *
- * 'flow_format' specifies the format of the flow as received or as intended to
- * be sent.  This is important for IPv6 and ARP, for which NXM supports more
- * detailed matching. */
+ */
 void
-ofputil_normalize_rule(struct cls_rule *rule, enum nx_flow_format flow_format)
+ofputil_normalize_rule(struct cls_rule *rule)
 {
     enum {
         MAY_NW_ADDR     = 1 << 0, /* nw_src, nw_dst */
@@ -2821,8 +3180,7 @@ ofputil_normalize_rule(struct cls_rule *rule, enum nx_flow_format flow_format)
             rule->flow.nw_proto == IPPROTO_ICMP) {
             may_match |= MAY_TP_ADDR;
         }
-    } else if (rule->flow.dl_type == htons(ETH_TYPE_IPV6)
-               && flow_format == NXFF_NXM) {
+    } else if (rule->flow.dl_type == htons(ETH_TYPE_IPV6)) {
         may_match = MAY_NW_PROTO | MAY_IPVx | MAY_IPV6;
         if (rule->flow.nw_proto == IPPROTO_TCP ||
             rule->flow.nw_proto == IPPROTO_UDP) {
@@ -2836,10 +3194,7 @@ ofputil_normalize_rule(struct cls_rule *rule, enum nx_flow_format flow_format)
             }
         }
     } else if (rule->flow.dl_type == htons(ETH_TYPE_ARP)) {
-        may_match = MAY_NW_PROTO | MAY_NW_ADDR;
-        if (flow_format == NXFF_NXM) {
-            may_match |= MAY_ARP_SHA | MAY_ARP_THA;
-        }
+        may_match = MAY_NW_PROTO | MAY_NW_ADDR | MAY_ARP_SHA | MAY_ARP_THA;
     } else {
         may_match = 0;
     }

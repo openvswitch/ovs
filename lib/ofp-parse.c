@@ -696,70 +696,49 @@ parse_ofp_actions(const char *s_, struct ofpbuf *actions)
 }
 
 /* Parses 'string' as an OFPT_FLOW_MOD or NXT_FLOW_MOD with command 'command'
- * (one of OFPFC_*) and appends the parsed OpenFlow message to 'packets'.
- * '*cur_format' should initially contain the flow format currently configured
- * on the connection; this function will add a message to change the flow
- * format and update '*cur_format', if this is necessary to add the parsed
- * flow. */
+ * (one of OFPFC_*) into 'fm'. */
 void
-parse_ofp_flow_mod_str(struct list *packets, enum nx_flow_format *cur_format,
-                       bool *flow_mod_table_id, const char *string,
+parse_ofp_flow_mod_str(struct ofputil_flow_mod *fm, const char *string,
                        uint16_t command, bool verbose)
 {
-    enum nx_flow_format min_format, next_format;
     struct cls_rule rule_copy;
-    struct ofpbuf *ofm;
-    struct ofputil_flow_mod fm;
 
-    parse_ofp_str(&fm, command, string, verbose);
-
-    min_format = ofputil_min_flow_format(&fm.cr);
-    if (command != OFPFC_ADD && fm.cookie_mask != htonll(0)) {
-        min_format = NXFF_NXM;
-    }
-    next_format = MAX(*cur_format, min_format);
-    if (next_format != *cur_format) {
-        struct ofpbuf *sff = ofputil_make_set_flow_format(next_format);
-        list_push_back(packets, &sff->list_node);
-        *cur_format = next_format;
-    }
+    parse_ofp_str(fm, command, string, verbose);
 
     /* Normalize a copy of the rule.  This ensures that non-normalized flows
      * get logged but doesn't affect what gets sent to the switch, so that the
      * switch can do whatever it likes with the flow. */
-    rule_copy = fm.cr;
-    ofputil_normalize_rule(&rule_copy, next_format);
-
-    if (fm.table_id != 0xff && !*flow_mod_table_id) {
-        struct ofpbuf *sff = ofputil_make_flow_mod_table_id(true);
-        list_push_back(packets, &sff->list_node);
-        *flow_mod_table_id = true;
-    }
-
-    ofm = ofputil_encode_flow_mod(&fm, *cur_format, *flow_mod_table_id);
-    list_push_back(packets, &ofm->list_node);
+    rule_copy = fm->cr;
+    ofputil_normalize_rule(&rule_copy);
 }
 
-/* Similar to parse_ofp_flow_mod_str(), except that the string is read from
- * 'stream' and the command is always OFPFC_ADD.  Returns false if end-of-file
- * is reached before reading a flow, otherwise true. */
-bool
-parse_ofp_flow_mod_file(struct list *packets,
-                        enum nx_flow_format *cur, bool *flow_mod_table_id,
-                        FILE *stream, uint16_t command)
+void
+parse_ofp_flow_mod_file(const char *file_name, uint16_t command,
+                        struct ofputil_flow_mod **fms, size_t *n_fms)
 {
+    size_t allocated_fms;
+    FILE *stream;
     struct ds s;
-    bool ok;
 
+    stream = !strcmp(file_name, "-") ? stdin : fopen(file_name, "r");
+    if (stream == NULL) {
+        ovs_fatal(errno, "%s: open", file_name);
+    }
+
+    allocated_fms = *n_fms;
     ds_init(&s);
-    ok = ds_get_preprocessed_line(&s, stream) == 0;
-    if (ok) {
-        parse_ofp_flow_mod_str(packets, cur, flow_mod_table_id,
-                               ds_cstr(&s), command, true);
+    while (!ds_get_preprocessed_line(&s, stream)) {
+        if (*n_fms >= allocated_fms) {
+            *fms = x2nrealloc(*fms, &allocated_fms, sizeof **fms);
+        }
+        parse_ofp_flow_mod_str(&(*fms)[*n_fms], ds_cstr(&s), command, false);
+        *n_fms += 1;
     }
     ds_destroy(&s);
 
-    return ok;
+    if (stream != stdin) {
+        fclose(stream);
+    }
 }
 
 void

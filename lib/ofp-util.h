@@ -111,24 +111,74 @@ void ofputil_format_port(uint16_t port, struct ds *);
 ovs_be32 ofputil_wcbits_to_netmask(int wcbits);
 int ofputil_netmask_to_wcbits(ovs_be32 netmask);
 
+/* Protocols.
+ *
+ * These are arranged from most portable to least portable, or alternatively
+ * from least powerful to most powerful.  Formats earlier on the list are more
+ * likely to be understood for the purpose of making requests, but formats
+ * later on the list are more likely to accurately describe a flow within a
+ * switch.
+ *
+ * On any given OpenFlow connection, a single protocol is in effect at any
+ * given time.  These values use separate bits only because that makes it easy
+ * to test whether a particular protocol is within a given set of protocols and
+ * to implement set union and intersection.
+ */
+enum ofputil_protocol {
+    /* OpenFlow 1.0-based protocols. */
+    OFPUTIL_P_OF10     = 1 << 0, /* OpenFlow 1.0 flow format. */
+    OFPUTIL_P_OF10_TID = 1 << 1, /* OF1.0 + flow_mod_table_id extension. */
+#define OFPUTIL_P_OF10_ANY (OFPUTIL_P_OF10 | OFPUTIL_P_OF10_TID)
+
+    /* OpenFlow 1.0 with NXM-based flow formats. */
+    OFPUTIL_P_NXM      = 1 << 2, /* Nicira extended match. */
+    OFPUTIL_P_NXM_TID  = 1 << 3, /* NXM + flow_mod_table_id extension. */
+#define OFPUTIL_P_NXM_ANY (OFPUTIL_P_NXM | OFPUTIL_P_NXM_TID)
+
+    /* All protocols. */
+#define OFPUTIL_P_ANY (OFPUTIL_P_OF10_ANY | OFPUTIL_P_NXM_ANY)
+
+    /* Protocols in which a specific table may be specified in flow_mods. */
+#define OFPUTIL_P_TID (OFPUTIL_P_OF10_TID | OFPUTIL_P_NXM_TID)
+};
+
+/* Protocols to use for flow dumps, from most to least preferred. */
+extern enum ofputil_protocol ofputil_flow_dump_protocols[];
+extern size_t ofputil_n_flow_dump_protocols;
+
+enum ofputil_protocol ofputil_protocol_from_ofp_version(int version);
+bool ofputil_protocol_is_valid(enum ofputil_protocol);
+enum ofputil_protocol ofputil_protocol_set_tid(enum ofputil_protocol,
+                                               bool enable);
+enum ofputil_protocol ofputil_protocol_to_base(enum ofputil_protocol);
+enum ofputil_protocol ofputil_protocol_set_base(
+    enum ofputil_protocol cur, enum ofputil_protocol new_base);
+
+const char *ofputil_protocol_to_string(enum ofputil_protocol);
+char *ofputil_protocols_to_string(enum ofputil_protocol);
+enum ofputil_protocol ofputil_protocols_from_string(const char *);
+enum ofputil_protocol ofputil_usable_protocols(const struct cls_rule *);
+
+struct ofpbuf *ofputil_encode_set_protocol(enum ofputil_protocol current,
+                                           enum ofputil_protocol want,
+                                           enum ofputil_protocol *next);
+
+/* nx_flow_format */
+struct ofpbuf *ofputil_encode_nx_set_flow_format(enum nx_flow_format);
+enum ofputil_protocol ofputil_nx_flow_format_to_protocol(enum nx_flow_format);
+bool ofputil_nx_flow_format_is_valid(enum nx_flow_format);
+const char *ofputil_nx_flow_format_to_string(enum nx_flow_format);
+
 /* Work with OpenFlow 1.0 ofp_match. */
 void ofputil_wildcard_from_openflow(uint32_t ofpfw, struct flow_wildcards *);
 void ofputil_cls_rule_from_match(const struct ofp_match *,
                                  unsigned int priority, struct cls_rule *);
-void ofputil_normalize_rule(struct cls_rule *, enum nx_flow_format);
+void ofputil_normalize_rule(struct cls_rule *);
 void ofputil_cls_rule_to_match(const struct cls_rule *, struct ofp_match *);
 
 /* dl_type translation between OpenFlow and 'struct flow' format. */
 ovs_be16 ofputil_dl_type_to_openflow(ovs_be16 flow_dl_type);
 ovs_be16 ofputil_dl_type_from_openflow(ovs_be16 ofp_dl_type);
-
-/* Flow formats. */
-bool ofputil_flow_format_is_valid(enum nx_flow_format);
-const char *ofputil_flow_format_to_string(enum nx_flow_format);
-int ofputil_flow_format_from_string(const char *);
-enum nx_flow_format ofputil_min_flow_format(const struct cls_rule *);
-
-struct ofpbuf *ofputil_make_set_flow_format(enum nx_flow_format);
 
 /* PACKET_IN. */
 bool ofputil_packet_in_format_is_valid(enum nx_packet_in_format);
@@ -139,7 +189,7 @@ struct ofpbuf *ofputil_make_set_packet_in_format(enum nx_packet_in_format);
 /* NXT_FLOW_MOD_TABLE_ID extension. */
 struct ofpbuf *ofputil_make_flow_mod_table_id(bool flow_mod_table_id);
 
-/* Flow format independent flow_mod. */
+/* Protocol-independent flow_mod. */
 struct ofputil_flow_mod {
     struct cls_rule cr;
     ovs_be64 cookie;
@@ -157,12 +207,14 @@ struct ofputil_flow_mod {
 
 enum ofperr ofputil_decode_flow_mod(struct ofputil_flow_mod *,
                                     const struct ofp_header *,
-                                    bool flow_mod_table_id);
+                                    enum ofputil_protocol);
 struct ofpbuf *ofputil_encode_flow_mod(const struct ofputil_flow_mod *,
-                                       enum nx_flow_format,
-                                       bool flow_mod_table_id);
+                                       enum ofputil_protocol);
 
-/* Flow stats or aggregate stats request, independent of flow format. */
+enum ofputil_protocol ofputil_flow_mod_usable_protocols(
+    const struct ofputil_flow_mod *fms, size_t n_fms);
+
+/* Flow stats or aggregate stats request, independent of protocol. */
 struct ofputil_flow_stats_request {
     bool aggregate;             /* Aggregate results? */
     struct cls_rule match;
@@ -175,9 +227,11 @@ struct ofputil_flow_stats_request {
 enum ofperr ofputil_decode_flow_stats_request(
     struct ofputil_flow_stats_request *, const struct ofp_header *);
 struct ofpbuf *ofputil_encode_flow_stats_request(
-    const struct ofputil_flow_stats_request *, enum nx_flow_format);
+    const struct ofputil_flow_stats_request *, enum ofputil_protocol);
+enum ofputil_protocol ofputil_flow_stats_request_usable_protocols(
+    const struct ofputil_flow_stats_request *);
 
-/* Flow stats reply, independent of flow format. */
+/* Flow stats reply, independent of protocol. */
 struct ofputil_flow_stats {
     struct cls_rule rule;
     ovs_be64 cookie;
@@ -200,7 +254,7 @@ int ofputil_decode_flow_stats_reply(struct ofputil_flow_stats *,
 void ofputil_append_flow_stats_reply(const struct ofputil_flow_stats *,
                                      struct list *replies);
 
-/* Aggregate stats reply, independent of flow format. */
+/* Aggregate stats reply, independent of protocol. */
 struct ofputil_aggregate_stats {
     uint64_t packet_count;      /* Packet count, UINT64_MAX if unknown. */
     uint64_t byte_count;        /* Byte count, UINT64_MAX if unknown. */
@@ -211,7 +265,7 @@ struct ofpbuf *ofputil_encode_aggregate_stats_reply(
     const struct ofputil_aggregate_stats *stats,
     const struct ofp_stats_msg *request);
 
-/* Flow removed message, independent of flow format. */
+/* Flow removed message, independent of protocol. */
 struct ofputil_flow_removed {
     struct cls_rule rule;
     ovs_be64 cookie;
@@ -226,7 +280,7 @@ struct ofputil_flow_removed {
 enum ofperr ofputil_decode_flow_removed(struct ofputil_flow_removed *,
                                         const struct ofp_header *);
 struct ofpbuf *ofputil_encode_flow_removed(const struct ofputil_flow_removed *,
-                                           enum nx_flow_format);
+                                           enum ofputil_protocol);
 
 /* Abstract packet-in message. */
 struct ofputil_packet_in {

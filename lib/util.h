@@ -78,6 +78,20 @@ extern const char *program_name;
 /* Returns true if X is a power of 2, otherwise false. */
 #define IS_POW2(X) ((X) && !((X) & ((X) - 1)))
 
+static inline bool
+is_pow2(uintmax_t x)
+{
+    return IS_POW2(x);
+}
+
+/* Returns the rightmost 1-bit in 'x' (e.g. 01011000 => 00001000), or 0 if 'x'
+ * is 0. */
+static inline uintmax_t
+rightmost_1bit(uintmax_t x)
+{
+    return x & -x;
+}
+
 #ifndef MIN
 #define MIN(X, Y) ((X) < (Y) ? (X) : (Y))
 #endif

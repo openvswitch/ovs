@@ -22,9 +22,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
-#include "openflow/nicira-ext.h"
 
-struct list;
 struct ofpbuf;
 struct ofputil_flow_mod;
 struct ofputil_flow_stats_request;
@@ -32,12 +30,10 @@ struct ofputil_flow_stats_request;
 void parse_ofp_str(struct ofputil_flow_mod *, int command, const char *str_,
                    bool verbose);
 
-void parse_ofp_flow_mod_str(struct list *packets,
-                            enum nx_flow_format *cur, bool *flow_mod_table_id,
-                            const char *string, uint16_t command, bool verbose);
-bool parse_ofp_flow_mod_file(struct list *packets,
-                             enum nx_flow_format *cur, bool *flow_mod_table_id,
-                             FILE *, uint16_t command);
+void parse_ofp_flow_mod_str(struct ofputil_flow_mod *, const char *string,
+                            uint16_t command, bool verbose);
+void parse_ofp_flow_mod_file(const char *file_name, uint16_t command,
+                             struct ofputil_flow_mod **fms, size_t *n_fms);
 
 void parse_ofp_flow_stats_request_str(struct ofputil_flow_stats_request *,
                                       bool aggregate, const char *string);

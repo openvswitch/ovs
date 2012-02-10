@@ -353,6 +353,17 @@ vconn_get_local_port(const struct vconn *vconn)
     return vconn->local_port;
 }
 
+/* Returns the OpenFlow version negotiated with the peer, or -1 if version
+ * negotiation is not yet complete.
+ *
+ * A vconn that has successfully connected (that is, vconn_connect() or
+ * vconn_send() or vconn_recv() has returned 0) always negotiated a version. */
+int
+vconn_get_version(const struct vconn *vconn)
+{
+    return vconn->version;
+}
+
 static void
 vcs_connecting(struct vconn *vconn)
 {
@@ -471,7 +482,7 @@ vconn_connect(struct vconn *vconn)
 {
     enum vconn_state last_state;
 
-    assert(vconn->min_version >= 0);
+    assert(vconn->min_version > 0);
     do {
         last_state = vconn->state;
         switch (vconn->state) {
@@ -538,14 +549,14 @@ do_recv(struct vconn *vconn, struct ofpbuf **msgp)
         }
 
         oh = ofpbuf_at_assert(*msgp, 0, sizeof *oh);
-        if (oh->version != vconn->version
+        if ((oh->version != vconn->version || oh->version == 0)
             && oh->type != OFPT_HELLO
             && oh->type != OFPT_ERROR
             && oh->type != OFPT_ECHO_REQUEST
             && oh->type != OFPT_ECHO_REPLY
             && oh->type != OFPT_VENDOR)
         {
-            if (vconn->version < 0) {
+            if (vconn->version == 0) {
                 VLOG_ERR_RL(&bad_ofmsg_rl,
                             "%s: received OpenFlow message type %"PRIu8" "
                             "before version negotiation complete",
@@ -995,8 +1006,8 @@ vconn_init(struct vconn *vconn, struct vconn_class *class, int connect_status,
                     : !connect_status ? VCS_SEND_HELLO
                     : VCS_DISCONNECTED);
     vconn->error = connect_status;
-    vconn->version = -1;
-    vconn->min_version = -1;
+    vconn->version = 0;
+    vconn->min_version = 0;
     vconn->remote_ip = 0;
     vconn->remote_port = 0;
     vconn->local_ip = 0;

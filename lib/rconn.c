@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -729,6 +729,14 @@ ovs_be16
 rconn_get_local_port(const struct rconn *rconn)
 {
     return rconn->vconn ? vconn_get_local_port(rconn->vconn) : 0;
+}
+
+/* Returns the OpenFlow version negotiated with the peer, or -1 if there is
+ * currently no connection or if version negotiation is not yet complete. */
+int
+rconn_get_version(const struct rconn *rconn)
+{
+    return rconn->vconn ? vconn_get_version(rconn->vconn) : -1;
 }
 
 /* Returns the total number of packets successfully received by the underlying

@@ -46,10 +46,10 @@ struct lswitch_config {
      * OFP_FLOW_PERMANENT: Set up permanent flows. */
     int max_idle;
 
-    /* Optionally, a list of one or more "struct ofpbuf"s containing OpenFlow
-     * messages to send to the switch at time of connection.  Presumably these
-     * will be OFPT_FLOW_MOD requests to set up the flow table. */
-    const struct list *default_flows;
+    /* Optional "flow mod" requests to send to the switch at connection time,
+     * to set up the flow table. */
+    const struct ofputil_flow_mod *default_flows;
+    size_t n_default_flows;
 
     /* The OpenFlow queue to use by default.  Use UINT32_MAX to avoid
      * specifying a particular queue. */
