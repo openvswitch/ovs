@@ -25,7 +25,7 @@ Description: Open vSwitch datapath module source - module-assistant version
 
 Package: openvswitch-datapath-dkms
 Architecture: all
-Depends: dkms (>= 1.95), make, ${misc:Depends}
+Depends: dkms (>= 1.95), make, libc6-dev, ${misc:Depends}
 Description: Open vSwitch datapath module source - DKMS version
  This package provides the Open vSwitch datapath module source code
  that is needed by openvswitch-switch.  DKMS can built the kernel
