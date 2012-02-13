@@ -1,18 +1,18 @@
-dnl IFR_SETUP
-dnl
-dnl Creates a directory tree for use with "interface-reconfigure --root-dir".
-m4_define([IFR_SETUP], 
-  [[for script in \
-        interface-reconfigure \
-        InterfaceReconfigure.py \
-        InterfaceReconfigureBridge.py \
-        InterfaceReconfigureVswitch.py
-    do
-        cp $top_srcdir/xenserver/opt_xensource_libexec_$script $script
-    done
+m4_divert_push([PREPARE_TESTS])
+[
+# Creates a directory tree for use with "interface-reconfigure --root-dir".
+ifr_setup () {
+    for script in \
+            interface-reconfigure \
+            InterfaceReconfigure.py \
+            InterfaceReconfigureBridge.py \
+            InterfaceReconfigureVswitch.py
+        do
+            cp $top_srcdir/xenserver/opt_xensource_libexec_$script $script
+        done
 
-    mkdir -p etc
-    cat > etc/xensource-inventory <<EOF
+        mkdir -p etc
+        cat > etc/xensource-inventory <<EOF
 PRODUCT_BRAND='XenServer'
 PRODUCT_NAME='xenenterprise'
 PRODUCT_VERSION='5.5.0'
@@ -29,30 +29,30 @@ DOM0_MEM='752'
 MANAGEMENT_INTERFACE='xenbr2'
 EOF
 
-    mkdir -p etc/xensource
-    echo vswitch > etc/xensource/network.conf
+        mkdir -p etc/xensource
+        echo vswitch > etc/xensource/network.conf
 
-    for utility in \
-        sbin/ethtool \
-        sbin/ifconfig \
-        sbin/ifdown \
-        sbin/ifup \
-        sbin/ip \
-        sbin/update-issue \
-        sbin/vconfig \
-        usr/sbin/brctl \
-        usr/sbin/ovs-vlan-bug-workaround
-    do
-        mkdir -p `dirname $utility`
-        cat > $utility <<'EOF'
+        for utility in \
+            sbin/ethtool \
+            sbin/ifconfig \
+            sbin/ifdown \
+            sbin/ifup \
+            sbin/ip \
+            sbin/update-issue \
+            sbin/vconfig \
+            usr/sbin/brctl \
+            usr/sbin/ovs-vlan-bug-workaround
+        do
+            mkdir -p `dirname $utility`
+            cat > $utility <<'EOF'
 #! /bin/sh
 echo ${0} ${*} >&2
 EOF
-        chmod +x $utility
-    done
+            chmod +x $utility
+        done
 
-    mkdir -p usr/bin
-    cat > usr/bin/ovs-vsctl <<'EOF'
+        mkdir -p usr/bin
+        cat > usr/bin/ovs-vsctl <<'EOF'
 #! /bin/sh
 echo ${0} ${*} >&2
 
@@ -70,44 +70,44 @@ while test ${#} -ge 4; do
     shift
 done
 EOF
-    chmod +x usr/bin/ovs-vsctl
+        chmod +x usr/bin/ovs-vsctl
 
-    cat > usr/bin/ovs-ofctl <<'EOF'
+        cat > usr/bin/ovs-ofctl <<'EOF'
 #! /bin/sh
 echo ${0} ${*} >&2
 
 # Check that the flow is properly formed.
 ovs-ofctl parse-flow "${3}" >/dev/null
 EOF
-    chmod +x usr/bin/ovs-ofctl
+        chmod +x usr/bin/ovs-ofctl
 
-    mkdir -p etc/sysconfig/network-scripts
-    configure_netdev () {
-        mkdir -p sys/class/net/${1}
-        echo ${2} > sys/class/net/${1}/address
-        echo ${3} > sys/class/net/${1}/tx_queue_len
-        if test ${1} = eth1; then
-            # No VLAN acceleration.
-            echo 0x829 > sys/class/net/${1}/features
-        else
-            # Supports VLAN acceleration.
-            echo 0x10b89 > sys/class/net/${1}/features
-        fi
-        mkdir sys/class/net/${1}/device
-        ln -s ../../../bus/pci/drivers/e1000 sys/class/net/${1}/device/driver
+        mkdir -p etc/sysconfig/network-scripts
+        configure_netdev () {
+            mkdir -p sys/class/net/${1}
+            echo ${2} > sys/class/net/${1}/address
+            echo ${3} > sys/class/net/${1}/tx_queue_len
+            if test ${1} = eth1; then
+                # No VLAN acceleration.
+                echo 0x829 > sys/class/net/${1}/features
+            else
+                # Supports VLAN acceleration.
+                echo 0x10b89 > sys/class/net/${1}/features
+            fi
+            mkdir sys/class/net/${1}/device
+            ln -s ../../../bus/pci/drivers/e1000 sys/class/net/${1}/device/driver
 
-        : >> etc/sysconfig/network-scripts/ifcfg-${1}
-    }
+            : >> etc/sysconfig/network-scripts/ifcfg-${1}
+        }
 
-    configure_netdev lo   00:00:00:00:00:00 0
-    configure_netdev eth0 00:22:19:22:4b:af 1000
-    configure_netdev eth1 00:22:19:22:4b:b1 1000
-    configure_netdev eth2 00:15:17:a0:29:80 1000
-    configure_netdev eth3 00:15:17:a0:29:81 1000
-    configure_netdev eth4 00:1b:21:29:ce:51 1000
+        configure_netdev lo   00:00:00:00:00:00 0
+        configure_netdev eth0 00:22:19:22:4b:af 1000
+        configure_netdev eth1 00:22:19:22:4b:b1 1000
+        configure_netdev eth2 00:15:17:a0:29:80 1000
+        configure_netdev eth3 00:15:17:a0:29:81 1000
+        configure_netdev eth4 00:1b:21:29:ce:51 1000
 
-    mkdir -p var/xapi
-    cat > var/xapi/network.dbcache <<'EOF'
+        mkdir -p var/xapi
+        cat > var/xapi/network.dbcache <<'EOF'
 <?xml version="1.0" ?>
 <xenserver-network-configuration>
 	<pif ref="OpaqueRef:e0955887-571f-17fc-a971-61c1ec7d81b6">
@@ -679,21 +679,27 @@ EOF
         </pool>
 </xenserver-network-configuration>
 EOF
-]])
+}
 
-m4_define([IFR_RUN], [./interface-reconfigure --root-prefix=$PWD --no-syslog])
+ifr_run () {
+    ./interface-reconfigure --root-prefix=$PWD --no-syslog "$@"
+}
 
-m4_define([IFR_FILTER], [sed -n -e "s,$PWD,,g" -e 's/ -- /\
-    /g' -e '/^Running command:/!p' stderr])
+ifr_filter () {
+    sed -n -e "s,$PWD,,g" -e 's/ -- /\
+    /g' -e '/^Running command:/!p' stderr
+}]
+m4_divert_pop([PREPARE_TESTS])
+
 
 AT_BANNER([interface-reconfigure])
 
 AT_SETUP([non-VLAN, non-bond])
 AT_KEYWORDS([interface-reconfigure])
-IFR_SETUP
+ifr_setup
 
-AT_CHECK([IFR_RUN --force xenbr2 up], [0], [], [stderr])
-AT_CHECK([IFR_FILTER], [0], [[Force interface xenbr2 up
+AT_CHECK([ifr_run --force xenbr2 up], [0], [], [stderr])
+AT_CHECK([ifr_filter], [0], [[Force interface xenbr2 up
 Loading xapi database cache from /var/xapi/network.dbcache
 Configured for Vswitch datapath
 action_up: xenbr2
@@ -746,8 +752,8 @@ MTU=1500
 # interface-reconfigure to take it back down.
 AT_CHECK([configure_netdev xenbr2 00:15:17:a0:29:80 0])
 
-AT_CHECK([IFR_RUN --force xenbr2 down], [0], [], [stderr])
-AT_CHECK([IFR_FILTER], [0], [[Force interface xenbr2 down
+AT_CHECK([ifr_run --force xenbr2 down], [0], [], [stderr])
+AT_CHECK([ifr_filter], [0], [[Force interface xenbr2 down
 Loading xapi database cache from /var/xapi/network.dbcache
 Configured for Vswitch datapath
 action_down: xenbr2
@@ -765,10 +771,10 @@ AT_CLEANUP
 
 AT_SETUP([VLAN, non-bond])
 AT_KEYWORDS([interface-reconfigure])
-IFR_SETUP
+ifr_setup
 
-AT_CHECK([IFR_RUN --force xapi3 up], [0], [], [stderr])
-AT_CHECK([IFR_FILTER], [0], [[Force interface xapi3 up
+AT_CHECK([ifr_run --force xapi3 up], [0], [], [stderr])
+AT_CHECK([ifr_filter], [0], [[Force interface xapi3 up
 Loading xapi database cache from /var/xapi/network.dbcache
 Configured for Vswitch datapath
 action_up: xapi3
@@ -816,8 +822,8 @@ MTU=1500
 # interface-reconfigure to take it back down.
 AT_CHECK([configure_netdev xapi3 00:23:20:AC:AF:02 0])
 
-AT_CHECK([IFR_RUN --force xapi3 down], [0], [], [stderr])
-AT_CHECK([IFR_FILTER], [0], [[Force interface xapi3 down
+AT_CHECK([ifr_run --force xapi3 down], [0], [], [stderr])
+AT_CHECK([ifr_filter], [0], [[Force interface xapi3 down
 Loading xapi database cache from /var/xapi/network.dbcache
 Configured for Vswitch datapath
 action_down: xapi3
@@ -838,7 +844,7 @@ AT_CLEANUP
 
 AT_SETUP([Bond, non-VLAN])
 AT_KEYWORDS([interface-reconfigure])
-IFR_SETUP
+ifr_setup
 
 # Pretend that bond0 exists, even though it would really be created by
 # a "create-bond" call in an ovs-vsctl invocation within
@@ -847,8 +853,8 @@ IFR_SETUP
 # exist" after it thinks it created bond0.
 AT_CHECK([configure_netdev bond0 00:23:20:e6:39:75 0])
 
-AT_CHECK([IFR_RUN --force xapi1 up], [0], [], [stderr])
-AT_CHECK([IFR_FILTER], [0], [[Force interface xapi1 up
+AT_CHECK([ifr_run --force xapi1 up], [0], [], [stderr])
+AT_CHECK([ifr_filter], [0], [[Force interface xapi1 up
 Loading xapi database cache from /var/xapi/network.dbcache
 Configured for Vswitch datapath
 action_up: xapi1
@@ -906,8 +912,8 @@ MTU=1500
 # interface-reconfigure to take it back down.
 AT_CHECK([configure_netdev xapi1 00:22:19:22:4B:AF 0])
 
-AT_CHECK([IFR_RUN --force xapi1 down], [0], [], [stderr])
-AT_CHECK([IFR_FILTER], [0], [[Force interface xapi1 down
+AT_CHECK([ifr_run --force xapi1 down], [0], [], [stderr])
+AT_CHECK([ifr_filter], [0], [[Force interface xapi1 down
 Loading xapi database cache from /var/xapi/network.dbcache
 Configured for Vswitch datapath
 action_down: xapi1
@@ -926,7 +932,7 @@ AT_CLEANUP
 
 AT_SETUP([VLAN on bond])
 AT_KEYWORDS([interface-reconfigure])
-IFR_SETUP
+ifr_setup
 
 # Pretend that bond0 exists, even though it would really be created by
 # a "create-bond" call in an ovs-vsctl invocation within
@@ -935,8 +941,8 @@ IFR_SETUP
 # exist" after it thinks it created bond0.
 AT_CHECK([configure_netdev bond0 00:23:20:e6:39:75 0])
 
-AT_CHECK([IFR_RUN --force xapi2 up], [0], [], [stderr])
-AT_CHECK([IFR_FILTER], [0], [[Force interface xapi2 up
+AT_CHECK([ifr_run --force xapi2 up], [0], [], [stderr])
+AT_CHECK([ifr_filter], [0], [[Force interface xapi2 up
 Loading xapi database cache from /var/xapi/network.dbcache
 Configured for Vswitch datapath
 action_up: xapi2
@@ -998,8 +1004,8 @@ MTU=1500
 # interface-reconfigure to take it back down.
 AT_CHECK([configure_netdev xapi2 00:23:20:A4:71:C2 0])
 
-AT_CHECK([IFR_RUN --force xapi2 down], [0], [], [stderr])
-AT_CHECK([IFR_FILTER], [0], [[Force interface xapi2 down
+AT_CHECK([ifr_run --force xapi2 down], [0], [], [stderr])
+AT_CHECK([ifr_filter], [0], [[Force interface xapi2 down
 Loading xapi database cache from /var/xapi/network.dbcache
 Configured for Vswitch datapath
 action_down: xapi2
