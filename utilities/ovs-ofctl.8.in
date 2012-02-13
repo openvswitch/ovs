@@ -680,14 +680,6 @@ extension) will have a nonzero tunnel ID.  If \fImask\fR is omitted,
 specified, then a 1-bit in \fImask\fR indicates that the corresponding
 bit in \fItunnel-id\fR must match exactly, and a 0-bit wildcards that
 bit.
-.IP
-In an attempt to be compatible with more switches, \fBovs\-ofctl\fR will
-prefer to use the ``tunnel ID from cookie'' Nicira extension to NXM.
-The use of this extension comes with three caveats: the top 32 bits of
-the \fBcookie\fR (see below) are used for \fItunnel-id\fR and thus
-unavailable for other use, specifying \fBtun_id\fR on \fBdump\-flows\fR
-or \fBdump\-aggregate\fR has no effect, and \fImask\fR is not supported.
-If any of these caveats apply, \fBovs-ofctl\fR will use NXM.
 .
 .IP "\fBreg\fIidx\fB=\fIvalue\fR[\fB/\fImask\fR]"
 Matches \fIvalue\fR either exactly or with optional \fImask\fR in
