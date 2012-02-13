@@ -18,22 +18,32 @@ AT_TESTED([ovs-vswitchd])
 AT_TESTED([ovs-vsctl])
 AT_TESTED([perl])
 
+m4_divert_push([PREPARE_TESTS])
+[
+ovs_wait () {
+    # First try a quick sleep, so that the test completes very quickly
+    # in the normal case.  POSIX doesn't require fractional times to
+    # work, so this might not work.
+    sleep 0.1
+    ovs_wait_cond && exit 0
+    # Then wait up to 10 seconds.
+    for d in 0 1 2 3 4 5 6 7 8 9; do
+        sleep 1
+        ovs_wait_cond && exit 0
+    done
+    exit 1
+}
+]
+m4_divert_pop([PREPARE_TESTS])
+
 m4_define([OVS_WAIT],
   [AT_CHECK(
-    [# First try a quick sleep, so that the test completes very quickly
-     # in the normal case.  POSIX doesn't require fractional times to
-     # work, so this might not work.
-     sleep 0.1
-     $1
-     # Then wait up to 10 seconds.
-     for d in 0 1 2 3 4 5 6 7 8 9; do
-       sleep 1
-       $1
-     done
-     exit 1], [0], [ignore], [ignore], [$2])])
-
-m4_define([OVS_WAIT_UNTIL], [OVS_WAIT([if $1; then exit 0; fi], [$2])])
-m4_define([OVS_WAIT_WHILE], [OVS_WAIT([if $1; then :; else exit 0; fi], [$2])])
+     [ovs_wait_cond () { $1
+}
+ovs_wait], [0], [ignore], [ignore], [$2])])
+m4_define([OVS_WAIT_UNTIL], [OVS_WAIT([$1], [$2])])
+m4_define([OVS_WAIT_WHILE],
+  [OVS_WAIT([if $1; then return 1; else return 0; fi], [$2])])
 
 m4_include([tests/ovsdb-macros.at])
 m4_include([tests/ofproto-macros.at])
