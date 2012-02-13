@@ -1,6 +1,6 @@
 PACKAGE_NAME="openvswitch"
 PACKAGE_VERSION="__VERSION__"
-MAKE="./configure --with-linux=/lib/modules/`uname -r`/build ; make -C datapath/linux"
+MAKE="./configure --with-linux=/lib/modules/`uname -r`/build && make -C datapath/linux"
 BUILT_MODULE_NAME[0]=openvswitch_mod
 BUILT_MODULE_NAME[1]=brcompat_mod
 BUILT_MODULE_LOCATION[0]=datapath/linux/
