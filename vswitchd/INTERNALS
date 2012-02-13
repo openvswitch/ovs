@@ -69,8 +69,6 @@ probably provide a way to disable or configure it in other scenarios.)
 Bond Packet Input
 -----------------
 
-Bond packet input processing takes place in process_flow().
-
 Bonding accepts unicast packets on any bond slave.  This can
 occasionally cause packet duplication for the first few packets sent
 to a given MAC, if the physical switch attached to the bond is
