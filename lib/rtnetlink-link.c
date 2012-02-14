@@ -63,7 +63,7 @@ rtnetlink_link_parse(struct ofpbuf *buf,
         change->nlmsg_type     = nlmsg->nlmsg_type;
         change->ifi_index      = ifinfo->ifi_index;
         change->ifname         = nl_attr_get_string(attrs[IFLA_IFNAME]);
-        change->running        = ifinfo->ifi_flags & IFF_RUNNING;
+        change->ifi_flags      = ifinfo->ifi_flags;
         change->master_ifindex = (attrs[IFLA_MASTER]
                                   ? nl_attr_get_u32(attrs[IFLA_MASTER])
                                   : 0);

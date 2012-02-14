@@ -368,7 +368,7 @@ struct netdev_dev_linux {
     struct in_addr address, netmask;
     struct in6_addr in6;
     int mtu;
-    bool carrier;
+    int ifi_flags;
     long long int carrier_resets;
     uint32_t kbits_rate;        /* Policing data. */
     uint32_t kbits_burst;
@@ -506,10 +506,10 @@ netdev_linux_cache_cb(const struct rtnetlink_link_change *change,
             if (is_netdev_linux_class(netdev_class)) {
                 dev = netdev_dev_linux_cast(base_dev);
 
-                if (dev->carrier != change->running) {
-                    dev->carrier = change->running;
+                if ((dev->ifi_flags ^ change->ifi_flags) & IFF_RUNNING) {
                     dev->carrier_resets++;
                 }
+                dev->ifi_flags = change->ifi_flags;
 
                 netdev_dev_linux_changed(dev);
             }
@@ -521,17 +521,15 @@ netdev_linux_cache_cb(const struct rtnetlink_link_change *change,
         shash_init(&device_shash);
         netdev_dev_get_devices(&netdev_linux_class, &device_shash);
         SHASH_FOR_EACH (node, &device_shash) {
-            bool carrier;
             int flags;
 
             dev = node->data;
 
             get_flags(&dev->netdev_dev, &flags);
-            carrier = (flags & IFF_RUNNING) != 0;
-            if (dev->carrier != carrier) {
-                dev->carrier = carrier;
+            if ((dev->ifi_flags ^ flags) & IFF_RUNNING) {
                 dev->carrier_resets++;
             }
+            dev->ifi_flags = flags;
 
             netdev_dev_linux_changed(dev);
         }
@@ -575,7 +573,6 @@ netdev_linux_create(const struct netdev_class *class, const char *name,
 {
     struct netdev_dev_linux *netdev_dev;
     int error;
-    int flags;
 
     error = cache_notifier_ref();
     if (error) {
@@ -585,8 +582,7 @@ netdev_linux_create(const struct netdev_class *class, const char *name,
     netdev_dev = xzalloc(sizeof *netdev_dev);
     netdev_dev->change_seq = 1;
     netdev_dev_init(&netdev_dev->netdev_dev, name, class);
-    get_flags(&netdev_dev->netdev_dev, &flags);
-    netdev_dev->carrier = (flags & IFF_RUNNING) != 0;
+    get_flags(&netdev_dev->netdev_dev, &netdev_dev->ifi_flags);
 
     *netdev_devp = &netdev_dev->netdev_dev;
     return 0;
@@ -1069,7 +1065,7 @@ netdev_linux_get_carrier(const struct netdev *netdev_, bool *carrier)
     if (netdev_dev->miimon_interval > 0) {
         *carrier = netdev_dev->miimon;
     } else {
-        *carrier = netdev_dev->carrier;
+        *carrier = (netdev_dev->ifi_flags & IFF_RUNNING) != 0;
     }
 
     return 0;
@@ -2216,16 +2212,17 @@ static int
 netdev_linux_update_flags(struct netdev *netdev, enum netdev_flags off,
                           enum netdev_flags on, enum netdev_flags *old_flagsp)
 {
+    struct netdev_dev_linux *netdev_dev;
     int old_flags, new_flags;
-    int error;
+    int error = 0;
 
-    error = get_flags(netdev_get_dev(netdev), &old_flags);
-    if (!error) {
-        *old_flagsp = iff_to_nd_flags(old_flags);
-        new_flags = (old_flags & ~nd_to_iff_flags(off)) | nd_to_iff_flags(on);
-        if (new_flags != old_flags) {
-            error = set_flags(netdev, new_flags);
-        }
+    netdev_dev = netdev_dev_linux_cast(netdev_get_dev(netdev));
+    old_flags = netdev_dev->ifi_flags;
+    *old_flagsp = iff_to_nd_flags(old_flags);
+    new_flags = (old_flags & ~nd_to_iff_flags(off)) | nd_to_iff_flags(on);
+    if (new_flags != old_flags) {
+        error = set_flags(netdev, new_flags);
+        get_flags(&netdev_dev->netdev_dev, &netdev_dev->ifi_flags);
     }
     return error;
 }
