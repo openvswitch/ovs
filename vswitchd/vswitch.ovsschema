@@ -1,6 +1,6 @@
 {"name": "Open_vSwitch",
- "version": "6.7.0",
- "cksum": "1451320369 16635",
+ "version": "6.8.0",
+ "cksum": "1404093776 16263",
  "tables": {
    "Open_vSwitch": {
      "columns": {
@@ -25,11 +25,6 @@
          "type": "integer"},
        "cur_cfg": {
          "type": "integer"},
-       "capabilities": {
-         "type": {"key": "string",
-                  "value": {"type": "uuid",
-                            "refTable": "Capability"},
-                  "min": 0, "max": "unlimited"}},
        "statistics": {
          "type": {"key": "string", "value": "string", "min": 0, "max": "unlimited"},
          "ephemeral": true},
@@ -47,11 +42,6 @@
                   "min": 0, "max": 1}}},
      "isRoot": true,
      "maxRows": 1},
-   "Capability": {
-     "columns": {
-       "details": {
-         "type": {"key": "string", "value": "string",
-                  "min": 0, "max": "unlimited"}}}},
    "Bridge": {
      "columns": {
        "name": {

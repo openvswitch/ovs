@@ -15,7 +15,6 @@ digraph Open_vSwitch {
 	sFlow [];
 	Open_vSwitch [style=bold];
 	Open_vSwitch -> Bridge [label="bridges*"];
-	Open_vSwitch -> Capability [label="capabilities value*"];
 	Open_vSwitch -> SSL [label="ssl?"];
 	Open_vSwitch -> Manager [label="manager_options*"];
 	Controller [];
@@ -23,7 +22,6 @@ digraph Open_vSwitch {
 	Queue [style=bold];
 	SSL [];
 	Manager [];
-	Capability [];
 	Mirror [];
 	Mirror -> Port [style=dotted, constraint=false, label="select_src_port*"];
 	Mirror -> Port [style=dotted, constraint=false, label="output_port?"];

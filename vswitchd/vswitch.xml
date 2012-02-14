@@ -87,14 +87,6 @@
         configuration changes.
       </column>
 
-      <column name="capabilities">
-        Describes functionality supported by the hardware and software platform
-        on which this Open vSwitch is based.  Clients should not modify this
-        column.  See the <ref table="Capability"/> description for defined
-        capability categories and the meaning of associated
-        <ref table="Capability"/> records.
-      </column>
-
       <group title="Statistics">
         <p>
           The <code>statistics</code> column contains key-value pairs that
@@ -2039,10 +2031,8 @@
     references it.</p>
 
     <column name="type">
-      <p>The type of QoS to implement.  The <ref table="Open_vSwitch"
-      column="capabilities"/> column in the <ref table="Open_vSwitch"/> table
-      identifies the types that a switch actually supports.  The currently
-      defined types are listed below:</p>
+      <p>The type of QoS to implement. The currently defined types are
+      listed below:</p>
       <dl>
         <dt><code>linux-htb</code></dt>
         <dd>
@@ -3008,48 +2998,6 @@
 
       <column name="external_ids"/>
     </group>
-  </table>
-
-  <table name="Capability">
-    <p>Records in this table describe functionality supported by the hardware
-    and software platform on which this Open vSwitch is based.  Clients
-    should not modify this table.</p>
-
-    <p>A record in this table is meaningful only if it is referenced by the
-    <ref table="Open_vSwitch" column="capabilities"/> column in the
-    <ref table="Open_vSwitch"/> table.  The key used to reference it, called
-    the record's ``category,'' determines the meanings of the
-    <ref column="details"/> column.  The following general forms of
-    categories are currently defined:</p>
-
-    <dl>
-      <dt><code>qos-<var>type</var></code></dt>
-      <dd><var>type</var> is supported as the value for
-      <ref column="type" table="QoS"/> in the <ref table="QoS"/> table.
-      </dd>
-    </dl>
-
-    <column name="details">
-      <p>Key-value pairs that describe capabilities.  The meaning of the pairs
-      depends on the category key that the <ref table="Open_vSwitch"
-      column="capabilities"/> column in the <ref table="Open_vSwitch"/> table
-      uses to reference this record, as described above.</p>
-
-      <p>The presence of a record for category <code>qos-<var>type</var></code>
-      indicates that the switch supports <var>type</var> as the value of
-      the <ref table="QoS" column="type"/> column in the <ref table="QoS"/>
-      table.  The following key-value pairs are defined to further describe
-      QoS capabilities:</p>
-
-      <dl>
-        <dt><code>n-queues</code></dt>
-        <dd>Number of supported queues, as a positive integer.  Keys in the
-        <ref table="QoS" column="queues"/> column for <ref table="QoS"/>
-        records whose <ref table="QoS" column="type"/> value
-        equals <var>type</var> must range between 0 and this value minus one,
-        inclusive.</dd>
-      </dl>
-    </column>
   </table>
 
 </database>
