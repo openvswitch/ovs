@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011 Nicira Networks.
+ * Copyright (c) 2009, 2010, 2011, 2012 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -483,12 +483,18 @@ netdev_linux_wait(void)
 }
 
 static void
-netdev_dev_linux_changed(struct netdev_dev_linux *dev)
+netdev_dev_linux_changed(struct netdev_dev_linux *dev, unsigned int ifi_flags)
 {
     dev->change_seq++;
     if (!dev->change_seq) {
         dev->change_seq++;
     }
+
+    if ((dev->ifi_flags ^ ifi_flags) & IFF_RUNNING) {
+        dev->carrier_resets++;
+    }
+    dev->ifi_flags = ifi_flags;
+
     dev->cache_valid = 0;
 }
 
@@ -505,13 +511,7 @@ netdev_linux_cache_cb(const struct rtnetlink_link_change *change,
 
             if (is_netdev_linux_class(netdev_class)) {
                 dev = netdev_dev_linux_cast(base_dev);
-
-                if ((dev->ifi_flags ^ change->ifi_flags) & IFF_RUNNING) {
-                    dev->carrier_resets++;
-                }
-                dev->ifi_flags = change->ifi_flags;
-
-                netdev_dev_linux_changed(dev);
+                netdev_dev_linux_changed(dev, change->ifi_flags);
             }
         }
     } else {
@@ -526,12 +526,7 @@ netdev_linux_cache_cb(const struct rtnetlink_link_change *change,
             dev = node->data;
 
             get_flags(&dev->netdev_dev, &flags);
-            if ((dev->ifi_flags ^ flags) & IFF_RUNNING) {
-                dev->carrier_resets++;
-            }
-            dev->ifi_flags = flags;
-
-            netdev_dev_linux_changed(dev);
+            netdev_dev_linux_changed(dev, flags);
         }
         shash_destroy(&device_shash);
     }
@@ -1171,7 +1166,7 @@ netdev_linux_miimon_run(void)
         netdev_linux_get_miimon(dev->netdev_dev.name, &miimon);
         if (miimon != dev->miimon) {
             dev->miimon = miimon;
-            netdev_dev_linux_changed(dev);
+            netdev_dev_linux_changed(dev, dev->ifi_flags);
         }
 
         timer_set_duration(&dev->miimon_timer, dev->miimon_interval);
