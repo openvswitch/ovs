@@ -403,7 +403,7 @@ static int netdev_linux_do_ioctl(const char *name, struct ifreq *, int cmd,
                                  const char *cmd_name);
 static int netdev_linux_get_ipv4(const struct netdev *, struct in_addr *,
                                  int cmd, const char *cmd_name);
-static int get_flags(const struct netdev *, int *flagsp);
+static int get_flags(const struct netdev_dev *, int *flagsp);
 static int set_flags(struct netdev *, int flags);
 static int do_get_ifindex(const char *netdev_name);
 static int get_ifindex(const struct netdev *, int *ifindexp);
@@ -415,7 +415,6 @@ static int set_etheraddr(const char *netdev_name, int hwaddr_family,
                          const uint8_t[ETH_ADDR_LEN]);
 static int get_stats_via_netlink(int ifindex, struct netdev_stats *stats);
 static int get_stats_via_proc(const char *netdev_name, struct netdev_stats *stats);
-static int get_carrier_via_sysfs(const char *name, bool *carrier);
 static int af_packet_sock(void);
 static void netdev_linux_miimon_run(void);
 static void netdev_linux_miimon_wait(void);
@@ -523,10 +522,12 @@ netdev_linux_cache_cb(const struct rtnetlink_link_change *change,
         netdev_dev_get_devices(&netdev_linux_class, &device_shash);
         SHASH_FOR_EACH (node, &device_shash) {
             bool carrier;
+            int flags;
 
             dev = node->data;
 
-            get_carrier_via_sysfs(node->name, &carrier);
+            get_flags(&dev->netdev_dev, &flags);
+            carrier = (flags & IFF_RUNNING) != 0;
             if (dev->carrier != carrier) {
                 dev->carrier = carrier;
                 dev->carrier_resets++;
@@ -574,6 +575,7 @@ netdev_linux_create(const struct netdev_class *class, const char *name,
 {
     struct netdev_dev_linux *netdev_dev;
     int error;
+    int flags;
 
     error = cache_notifier_ref();
     if (error) {
@@ -583,7 +585,8 @@ netdev_linux_create(const struct netdev_class *class, const char *name,
     netdev_dev = xzalloc(sizeof *netdev_dev);
     netdev_dev->change_seq = 1;
     netdev_dev_init(&netdev_dev->netdev_dev, name, class);
-    get_carrier_via_sysfs(name, &netdev_dev->carrier);
+    get_flags(&netdev_dev->netdev_dev, &flags);
+    netdev_dev->carrier = (flags & IFF_RUNNING) != 0;
 
     *netdev_devp = &netdev_dev->netdev_dev;
     return 0;
@@ -2216,7 +2219,7 @@ netdev_linux_update_flags(struct netdev *netdev, enum netdev_flags off,
     int old_flags, new_flags;
     int error;
 
-    error = get_flags(netdev, &old_flags);
+    error = get_flags(netdev_get_dev(netdev), &old_flags);
     if (!error) {
         *old_flagsp = iff_to_nd_flags(old_flags);
         new_flags = (old_flags & ~nd_to_iff_flags(off)) | nd_to_iff_flags(on);
@@ -4218,66 +4221,17 @@ get_stats_via_proc(const char *netdev_name, struct netdev_stats *stats)
 }
 
 static int
-get_carrier_via_sysfs(const char *name, bool *carrier)
-{
-    char line[8];
-    int retval;
-
-    int error = 0;
-    char *fn = NULL;
-    int fd = -1;
-
-    *carrier = false;
-
-    fn = xasprintf("/sys/class/net/%s/carrier", name);
-    fd = open(fn, O_RDONLY);
-    if (fd < 0) {
-        error = errno;
-        VLOG_WARN_RL(&rl, "%s: open failed: %s", fn, strerror(error));
-        goto exit;
-    }
-
-    retval = read(fd, line, sizeof line);
-    if (retval < 0) {
-        error = errno;
-        if (error == EINVAL) {
-            /* This is the normal return value when we try to check carrier if
-             * the network device is not up. */
-        } else {
-            VLOG_WARN_RL(&rl, "%s: read failed: %s", fn, strerror(error));
-        }
-        goto exit;
-    } else if (retval == 0) {
-        error = EPROTO;
-        VLOG_WARN_RL(&rl, "%s: unexpected end of file", fn);
-        goto exit;
-    }
-
-    if (line[0] != '0' && line[0] != '1') {
-        error = EPROTO;
-        VLOG_WARN_RL(&rl, "%s: value is %c (expected 0 or 1)", fn, line[0]);
-        goto exit;
-    }
-    *carrier = line[0] != '0';
-    error = 0;
-
-exit:
-    if (fd >= 0) {
-        close(fd);
-    }
-    free(fn);
-    return error;
-}
-
-static int
-get_flags(const struct netdev *netdev, int *flags)
+get_flags(const struct netdev_dev *dev, int *flags)
 {
     struct ifreq ifr;
     int error;
 
-    error = netdev_linux_do_ioctl(netdev_get_name(netdev), &ifr, SIOCGIFFLAGS,
+    *flags = 0;
+    error = netdev_linux_do_ioctl(dev->name, &ifr, SIOCGIFFLAGS,
                                   "SIOCGIFFLAGS");
-    *flags = ifr.ifr_flags;
+    if (!error) {
+        *flags = ifr.ifr_flags;
+    }
     return error;
 }
 
