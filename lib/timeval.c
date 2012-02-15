@@ -572,7 +572,7 @@ timeval_stop_cb(struct unixctl_conn *conn,
                  void *aux OVS_UNUSED)
 {
     time_stopped = true;
-    unixctl_command_reply(conn, 200, NULL);
+    unixctl_command_reply(conn, NULL);
 }
 
 /* "time/warp MSECS" advances the current monotonic time by the specified
@@ -589,7 +589,7 @@ timeval_warp_cb(struct unixctl_conn *conn,
 
     msecs = atoi(argv[1]);
     if (msecs <= 0) {
-        unixctl_command_reply(conn, 501, "invalid MSECS");
+        unixctl_command_reply_error(conn, "invalid MSECS");
         return;
     }
 
@@ -597,7 +597,7 @@ timeval_warp_cb(struct unixctl_conn *conn,
     ts.tv_nsec = (msecs % 1000) * 1000 * 1000;
     timespec_add(&warp_offset, &warp_offset, &ts);
     timespec_add(&monotonic_time, &monotonic_time, &ts);
-    unixctl_command_reply(conn, 200, "warped");
+    unixctl_command_reply(conn, "warped");
 }
 
 void

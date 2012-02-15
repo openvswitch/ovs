@@ -878,7 +878,7 @@ lacp_unixctl_show(struct unixctl_conn *conn, int argc, const char *argv[],
     if (argc > 1) {
         lacp = lacp_find(argv[1]);
         if (!lacp) {
-            unixctl_command_reply(conn, 501, "no such lacp object");
+            unixctl_command_reply_error(conn, "no such lacp object");
             return;
         }
         lacp_print_details(&ds, lacp);
@@ -888,6 +888,6 @@ lacp_unixctl_show(struct unixctl_conn *conn, int argc, const char *argv[],
         }
     }
 
-    unixctl_command_reply(conn, 200, ds_cstr(&ds));
+    unixctl_command_reply(conn, ds_cstr(&ds));
     ds_destroy(&ds);
 }

@@ -243,7 +243,7 @@ ofctl_exit(struct unixctl_conn *conn, int argc OVS_UNUSED,
 {
     bool *exiting = exiting_;
     *exiting = true;
-    unixctl_command_reply(conn, 200, "");
+    unixctl_command_reply(conn, NULL);
 }
 
 static void run(int retval, const char *message, ...)
@@ -899,7 +899,12 @@ ofctl_send(struct unixctl_conn *conn, int argc,
             ds_put_cstr(&reply, "sent\n");
         }
     }
-    unixctl_command_reply(conn, ok ? 200 : 501, ds_cstr(&reply));
+
+    if (ok) {
+        unixctl_command_reply(conn, ds_cstr(&reply));
+    } else {
+        unixctl_command_reply_error(conn, ds_cstr(&reply));
+    }
     ds_destroy(&reply);
 }
 
@@ -917,7 +922,7 @@ ofctl_barrier(struct unixctl_conn *conn, int argc OVS_UNUSED,
     int error;
 
     if (aux->conn) {
-        unixctl_command_reply(conn, 501, "already waiting for barrier reply");
+        unixctl_command_reply_error(conn, "already waiting for barrier reply");
         return;
     }
 
@@ -925,7 +930,7 @@ ofctl_barrier(struct unixctl_conn *conn, int argc OVS_UNUSED,
     error = vconn_send_block(aux->vconn, msg);
     if (error) {
         ofpbuf_delete(msg);
-        unixctl_command_reply(conn, 501, strerror(error));
+        unixctl_command_reply_error(conn, strerror(error));
     } else {
         aux->conn = conn;
     }
@@ -939,14 +944,14 @@ ofctl_set_output_file(struct unixctl_conn *conn, int argc OVS_UNUSED,
 
     fd = open(argv[1], O_CREAT | O_TRUNC | O_WRONLY, 0666);
     if (fd < 0) {
-        unixctl_command_reply(conn, 501, strerror(errno));
+        unixctl_command_reply_error(conn, strerror(errno));
         return;
     }
 
     fflush(stderr);
     dup2(fd, STDERR_FILENO);
     close(fd);
-    unixctl_command_reply(conn, 200, "");
+    unixctl_command_reply(conn, NULL);
 }
 
 static void
@@ -992,7 +997,7 @@ monitor_vconn(struct vconn *vconn)
             ofpbuf_delete(b);
 
             if (barrier_aux.conn && msg_type == OFPT_BARRIER_REPLY) {
-                unixctl_command_reply(barrier_aux.conn, 200, "");
+                unixctl_command_reply(barrier_aux.conn, NULL);
                 barrier_aux.conn = NULL;
             }
         }

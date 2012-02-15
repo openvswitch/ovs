@@ -247,5 +247,5 @@ ovs_vswitchd_exit(struct unixctl_conn *conn, int argc OVS_UNUSED,
 {
     bool *exiting = exiting_;
     *exiting = true;
-    unixctl_command_reply(conn, 200, NULL);
+    unixctl_command_reply(conn, NULL);
 }

@@ -5888,7 +5888,7 @@ ofproto_unixctl_fdb_flush(struct unixctl_conn *conn, int argc,
     if (argc > 1) {
         ofproto = ofproto_dpif_lookup(argv[1]);
         if (!ofproto) {
-            unixctl_command_reply(conn, 501, "no such bridge");
+            unixctl_command_reply_error(conn, "no such bridge");
             return;
         }
         mac_learning_flush(ofproto->ml, &ofproto->revalidate_set);
@@ -5898,7 +5898,7 @@ ofproto_unixctl_fdb_flush(struct unixctl_conn *conn, int argc,
         }
     }
 
-    unixctl_command_reply(conn, 200, "table successfully flushed");
+    unixctl_command_reply(conn, "table successfully flushed");
 }
 
 static void
@@ -5911,7 +5911,7 @@ ofproto_unixctl_fdb_show(struct unixctl_conn *conn, int argc OVS_UNUSED,
 
     ofproto = ofproto_dpif_lookup(argv[1]);
     if (!ofproto) {
-        unixctl_command_reply(conn, 501, "no such bridge");
+        unixctl_command_reply_error(conn, "no such bridge");
         return;
     }
 
@@ -5923,7 +5923,7 @@ ofproto_unixctl_fdb_show(struct unixctl_conn *conn, int argc OVS_UNUSED,
                       e->vlan, ETH_ADDR_ARGS(e->mac),
                       mac_entry_age(ofproto->ml, e));
     }
-    unixctl_command_reply(conn, 200, ds_cstr(&ds));
+    unixctl_command_reply(conn, ds_cstr(&ds));
     ds_destroy(&ds);
 }
 
@@ -6015,8 +6015,8 @@ ofproto_unixctl_trace(struct unixctl_conn *conn, int argc, const char *argv[],
 
     ofproto = ofproto_dpif_lookup(dpname);
     if (!ofproto) {
-        unixctl_command_reply(conn, 501, "Unknown ofproto (use ofproto/list "
-                              "for help)");
+        unixctl_command_reply_error(conn, "Unknown ofproto (use ofproto/list "
+                                    "for help)");
         goto exit;
     }
     if (argc == 3 || (argc == 4 && !strcmp(argv[3], "-generate"))) {
@@ -6029,7 +6029,7 @@ ofproto_unixctl_trace(struct unixctl_conn *conn, int argc, const char *argv[],
         ofpbuf_init(&odp_key, 0);
         error = odp_flow_key_from_string(flow_s, NULL, &odp_key);
         if (error) {
-            unixctl_command_reply(conn, 501, "Bad flow syntax");
+            unixctl_command_reply_error(conn, "Bad flow syntax");
             goto exit;
         }
 
@@ -6038,7 +6038,7 @@ ofproto_unixctl_trace(struct unixctl_conn *conn, int argc, const char *argv[],
                                               odp_key.size, &flow,
                                               &initial_tci, NULL);
         if (error == ODP_FIT_ERROR) {
-            unixctl_command_reply(conn, 501, "Invalid flow");
+            unixctl_command_reply_error(conn, "Invalid flow");
             goto exit;
         }
 
@@ -6060,7 +6060,7 @@ ofproto_unixctl_trace(struct unixctl_conn *conn, int argc, const char *argv[],
 
         msg = eth_from_hex(packet_s, &packet);
         if (msg) {
-            unixctl_command_reply(conn, 501, msg);
+            unixctl_command_reply_error(conn, msg);
             goto exit;
         }
 
@@ -6072,7 +6072,7 @@ ofproto_unixctl_trace(struct unixctl_conn *conn, int argc, const char *argv[],
         flow_extract(packet, priority, tun_id, in_port, &flow);
         initial_tci = flow.vlan_tci;
     } else {
-        unixctl_command_reply(conn, 501, "Bad command syntax");
+        unixctl_command_reply_error(conn, "Bad command syntax");
         goto exit;
     }
 
@@ -6112,7 +6112,7 @@ ofproto_unixctl_trace(struct unixctl_conn *conn, int argc, const char *argv[],
         }
     }
 
-    unixctl_command_reply(conn, 200, ds_cstr(&result));
+    unixctl_command_reply(conn, ds_cstr(&result));
 
 exit:
     ds_destroy(&result);
@@ -6125,7 +6125,7 @@ ofproto_dpif_clog(struct unixctl_conn *conn OVS_UNUSED, int argc OVS_UNUSED,
                   const char *argv[] OVS_UNUSED, void *aux OVS_UNUSED)
 {
     clogged = true;
-    unixctl_command_reply(conn, 200, NULL);
+    unixctl_command_reply(conn, NULL);
 }
 
 static void
@@ -6133,7 +6133,7 @@ ofproto_dpif_unclog(struct unixctl_conn *conn OVS_UNUSED, int argc OVS_UNUSED,
                     const char *argv[] OVS_UNUSED, void *aux OVS_UNUSED)
 {
     clogged = false;
-    unixctl_command_reply(conn, 200, NULL);
+    unixctl_command_reply(conn, NULL);
 }
 
 /* Runs a self-check of flow translations in 'ofproto'.  Appends a message to
@@ -6172,8 +6172,8 @@ ofproto_dpif_self_check(struct unixctl_conn *conn,
     if (argc > 1) {
         ofproto = ofproto_dpif_lookup(argv[1]);
         if (!ofproto) {
-            unixctl_command_reply(conn, 501, "Unknown ofproto (use "
-                                  "ofproto/list for help)");
+            unixctl_command_reply_error(conn, "Unknown ofproto (use "
+                                        "ofproto/list for help)");
             return;
         }
         ofproto_dpif_self_check__(ofproto, &reply);
@@ -6183,7 +6183,7 @@ ofproto_dpif_self_check(struct unixctl_conn *conn,
         }
     }
 
-    unixctl_command_reply(conn, 200, ds_cstr(&reply));
+    unixctl_command_reply(conn, ds_cstr(&reply));
     ds_destroy(&reply);
 }
 

@@ -410,7 +410,7 @@ netdev_dummy_receive(struct unixctl_conn *conn,
 
     dummy_dev = shash_find_data(&dummy_netdev_devs, argv[1]);
     if (!dummy_dev) {
-        unixctl_command_reply(conn, 501, "no such dummy netdev");
+        unixctl_command_reply_error(conn, "no such dummy netdev");
         return;
     }
 
@@ -421,7 +421,7 @@ netdev_dummy_receive(struct unixctl_conn *conn,
 
         packet = eth_from_packet_or_flow(argv[i]);
         if (!packet) {
-            unixctl_command_reply(conn, 501, "bad packet syntax");
+            unixctl_command_reply_error(conn, "bad packet syntax");
             return;
         }
 
@@ -437,9 +437,9 @@ netdev_dummy_receive(struct unixctl_conn *conn,
     }
 
     if (!n_listeners) {
-        unixctl_command_reply(conn, 202, "packets queued but nobody listened");
+        unixctl_command_reply(conn, "packets queued but nobody listened");
     } else {
-        unixctl_command_reply(conn, 200, "success");
+        unixctl_command_reply(conn, "success");
     }
 }
 

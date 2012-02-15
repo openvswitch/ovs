@@ -83,13 +83,13 @@ man_MANS += \
 dist_man_MANS += utilities/ovs-ctl.8
 
 utilities_ovs_appctl_SOURCES = utilities/ovs-appctl.c
-utilities_ovs_appctl_LDADD = lib/libopenvswitch.a
+utilities_ovs_appctl_LDADD = lib/libopenvswitch.a $(SSL_LIBS)
 
 utilities_ovs_controller_SOURCES = utilities/ovs-controller.c
 utilities_ovs_controller_LDADD = lib/libopenvswitch.a $(SSL_LIBS)
 
 utilities_ovs_dpctl_SOURCES = utilities/ovs-dpctl.c
-utilities_ovs_dpctl_LDADD = lib/libopenvswitch.a
+utilities_ovs_dpctl_LDADD = lib/libopenvswitch.a $(SSL_LIBS)
 
 utilities_ovs_ofctl_SOURCES = utilities/ovs-ofctl.c
 utilities_ovs_ofctl_LDADD = \
@@ -103,15 +103,15 @@ utilities_ovs_vsctl_LDADD = lib/libopenvswitch.a $(SSL_LIBS)
 if HAVE_NETLINK
 sbin_PROGRAMS += utilities/ovs-vlan-bug-workaround
 utilities_ovs_vlan_bug_workaround_SOURCES = utilities/ovs-vlan-bug-workaround.c
-utilities_ovs_vlan_bug_workaround_LDADD = lib/libopenvswitch.a
+utilities_ovs_vlan_bug_workaround_LDADD = lib/libopenvswitch.a $(SSL_LIBS)
 
 noinst_PROGRAMS += utilities/nlmon
 utilities_nlmon_SOURCES = utilities/nlmon.c
-utilities_nlmon_LDADD = lib/libopenvswitch.a
+utilities_nlmon_LDADD = lib/libopenvswitch.a $(SSL_LIBS)
 endif
 
 bin_PROGRAMS += utilities/ovs-benchmark
 utilities_ovs_benchmark_SOURCES = utilities/ovs-benchmark.c
-utilities_ovs_benchmark_LDADD = lib/libopenvswitch.a
+utilities_ovs_benchmark_LDADD = lib/libopenvswitch.a $(SSL_LIBS)
 
 include utilities/bugtool/automake.mk

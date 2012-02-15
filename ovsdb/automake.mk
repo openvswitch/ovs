@@ -36,7 +36,7 @@ MAN_FRAGMENTS += \
 # ovsdb-tool
 bin_PROGRAMS += ovsdb/ovsdb-tool
 ovsdb_ovsdb_tool_SOURCES = ovsdb/ovsdb-tool.c
-ovsdb_ovsdb_tool_LDADD = ovsdb/libovsdb.a lib/libopenvswitch.a
+ovsdb_ovsdb_tool_LDADD = ovsdb/libovsdb.a lib/libopenvswitch.a $(SSL_LIBS)
 # ovsdb-tool.1
 man_MANS += ovsdb/ovsdb-tool.1
 DISTCLEANFILES += ovsdb/ovsdb-tool.1

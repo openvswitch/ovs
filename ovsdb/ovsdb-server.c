@@ -618,7 +618,7 @@ ovsdb_server_exit(struct unixctl_conn *conn, int argc OVS_UNUSED,
 {
     bool *exiting = exiting_;
     *exiting = true;
-    unixctl_command_reply(conn, 200, NULL);
+    unixctl_command_reply(conn, NULL);
 }
 
 static void
@@ -631,11 +631,11 @@ ovsdb_server_compact(struct unixctl_conn *conn, int argc OVS_UNUSED,
     VLOG_INFO("compacting database by user request");
     error = ovsdb_file_compact(file);
     if (!error) {
-        unixctl_command_reply(conn, 200, NULL);
+        unixctl_command_reply(conn, NULL);
     } else {
         char *s = ovsdb_error_to_string(error);
         ovsdb_error_destroy(error);
-        unixctl_command_reply(conn, 503, s);
+        unixctl_command_reply_error(conn, s);
         free(s);
     }
 }
@@ -649,7 +649,7 @@ ovsdb_server_reconnect(struct unixctl_conn *conn, int argc OVS_UNUSED,
     struct ovsdb_jsonrpc_server *jsonrpc = jsonrpc_;
 
     ovsdb_jsonrpc_server_reconnect(jsonrpc);
-    unixctl_command_reply(conn, 200, NULL);
+    unixctl_command_reply(conn, NULL);
 }
 
 static void

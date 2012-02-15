@@ -219,27 +219,27 @@ $(srcdir)/package.m4: $(top_srcdir)/configure.ac
 
 noinst_PROGRAMS += tests/test-aes128
 tests_test_aes128_SOURCES = tests/test-aes128.c
-tests_test_aes128_LDADD = lib/libopenvswitch.a
+tests_test_aes128_LDADD = lib/libopenvswitch.a $(SSL_LIBS)
 
 noinst_PROGRAMS += tests/test-bundle
 tests_test_bundle_SOURCES = tests/test-bundle.c
-tests_test_bundle_LDADD = lib/libopenvswitch.a
+tests_test_bundle_LDADD = lib/libopenvswitch.a $(SSL_LIBS)
 
 noinst_PROGRAMS += tests/test-classifier
 tests_test_classifier_SOURCES = tests/test-classifier.c
-tests_test_classifier_LDADD = lib/libopenvswitch.a
+tests_test_classifier_LDADD = lib/libopenvswitch.a $(SSL_LIBS)
 
 noinst_PROGRAMS += tests/test-csum
 tests_test_csum_SOURCES = tests/test-csum.c
-tests_test_csum_LDADD = lib/libopenvswitch.a
+tests_test_csum_LDADD = lib/libopenvswitch.a $(SSL_LIBS)
 
 noinst_PROGRAMS += tests/test-file_name
 tests_test_file_name_SOURCES = tests/test-file_name.c
-tests_test_file_name_LDADD = lib/libopenvswitch.a
+tests_test_file_name_LDADD = lib/libopenvswitch.a $(SSL_LIBS)
 
 noinst_PROGRAMS += tests/test-flows
 tests_test_flows_SOURCES = tests/test-flows.c
-tests_test_flows_LDADD = lib/libopenvswitch.a
+tests_test_flows_LDADD = lib/libopenvswitch.a $(SSL_LIBS)
 dist_check_SCRIPTS = tests/flowgen.pl
 
 noinst_PROGRAMS += tests/test-hash
@@ -248,15 +248,15 @@ tests_test_hash_LDADD = lib/libopenvswitch.a
 
 noinst_PROGRAMS += tests/test-heap
 tests_test_heap_SOURCES = tests/test-heap.c
-tests_test_heap_LDADD = lib/libopenvswitch.a
+tests_test_heap_LDADD = lib/libopenvswitch.a $(SSL_LIBS)
 
 noinst_PROGRAMS += tests/test-hmap
 tests_test_hmap_SOURCES = tests/test-hmap.c
-tests_test_hmap_LDADD = lib/libopenvswitch.a
+tests_test_hmap_LDADD = lib/libopenvswitch.a $(SSL_LIBS)
 
 noinst_PROGRAMS += tests/test-json
 tests_test_json_SOURCES = tests/test-json.c
-tests_test_json_LDADD = lib/libopenvswitch.a
+tests_test_json_LDADD = lib/libopenvswitch.a $(SSL_LIBS)
 
 noinst_PROGRAMS += tests/test-jsonrpc
 tests_test_jsonrpc_SOURCES = tests/test-jsonrpc.c
@@ -268,35 +268,35 @@ tests_test_list_LDADD = lib/libopenvswitch.a
 
 noinst_PROGRAMS += tests/test-lockfile
 tests_test_lockfile_SOURCES = tests/test-lockfile.c
-tests_test_lockfile_LDADD = lib/libopenvswitch.a
+tests_test_lockfile_LDADD = lib/libopenvswitch.a $(SSL_LIBS)
 
 noinst_PROGRAMS += tests/test-multipath
 tests_test_multipath_SOURCES = tests/test-multipath.c
-tests_test_multipath_LDADD = lib/libopenvswitch.a
+tests_test_multipath_LDADD = lib/libopenvswitch.a $(SSL_LIBS)
 
 noinst_PROGRAMS += tests/test-packets
 tests_test_packets_SOURCES = tests/test-packets.c
-tests_test_packets_LDADD = lib/libopenvswitch.a
+tests_test_packets_LDADD = lib/libopenvswitch.a $(SSL_LIBS)
 
 noinst_PROGRAMS += tests/test-random
 tests_test_random_SOURCES = tests/test-random.c
-tests_test_random_LDADD = lib/libopenvswitch.a
+tests_test_random_LDADD = lib/libopenvswitch.a $(SSL_LIBS)
 
 noinst_PROGRAMS += tests/test-stp
 tests_test_stp_SOURCES = tests/test-stp.c
-tests_test_stp_LDADD = lib/libopenvswitch.a
+tests_test_stp_LDADD = lib/libopenvswitch.a $(SSL_LIBS)
 
 noinst_PROGRAMS += tests/test-netflow
 tests_test_netflow_SOURCES = tests/test-netflow.c
-tests_test_netflow_LDADD = lib/libopenvswitch.a
+tests_test_netflow_LDADD = lib/libopenvswitch.a $(SSL_LIBS)
 
 noinst_PROGRAMS += tests/test-unix-socket
 tests_test_unix_socket_SOURCES = tests/test-unix-socket.c
-tests_test_unix_socket_LDADD = lib/libopenvswitch.a
+tests_test_unix_socket_LDADD = lib/libopenvswitch.a $(SSL_LIBS)
 
 noinst_PROGRAMS += tests/test-odp
 tests_test_odp_SOURCES = tests/test-odp.c
-tests_test_odp_LDADD = lib/libopenvswitch.a
+tests_test_odp_LDADD = lib/libopenvswitch.a $(SSL_LIBS)
 
 noinst_PROGRAMS += tests/test-ovsdb
 tests_test_ovsdb_SOURCES = \
@@ -318,15 +318,15 @@ tests/idltest.c: tests/idltest.h
 
 noinst_PROGRAMS += tests/test-reconnect
 tests_test_reconnect_SOURCES = tests/test-reconnect.c
-tests_test_reconnect_LDADD = lib/libopenvswitch.a
+tests_test_reconnect_LDADD = lib/libopenvswitch.a $(SSL_LIBS)
 
 noinst_PROGRAMS += tests/test-sha1
 tests_test_sha1_SOURCES = tests/test-sha1.c
-tests_test_sha1_LDADD = lib/libopenvswitch.a
+tests_test_sha1_LDADD = lib/libopenvswitch.a $(SSL_LIBS)
 
 noinst_PROGRAMS += tests/test-timeval
 tests_test_timeval_SOURCES = tests/test-timeval.c
-tests_test_timeval_LDADD = lib/libopenvswitch.a
+tests_test_timeval_LDADD = lib/libopenvswitch.a $(SSL_LIBS)
 
 noinst_PROGRAMS += tests/test-strtok_r
 tests_test_strtok_r_SOURCES = tests/test-strtok_r.c
@@ -336,11 +336,11 @@ tests_test_type_props_SOURCES = tests/test-type-props.c
 
 noinst_PROGRAMS += tests/test-util
 tests_test_util_SOURCES = tests/test-util.c
-tests_test_util_LDADD = lib/libopenvswitch.a
+tests_test_util_LDADD = lib/libopenvswitch.a $(SSL_LIBS)
 
 noinst_PROGRAMS += tests/test-uuid
 tests_test_uuid_SOURCES = tests/test-uuid.c
-tests_test_uuid_LDADD = lib/libopenvswitch.a
+tests_test_uuid_LDADD = lib/libopenvswitch.a $(SSL_LIBS)
 
 noinst_PROGRAMS += tests/test-vconn
 tests_test_vconn_SOURCES = tests/test-vconn.c
