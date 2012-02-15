@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2011 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2011, 2012 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -40,8 +40,6 @@ void ofp_print_match(struct ds *, const struct ofp_match *, int verbosity);
 char *ofp_to_string(const void *, size_t, int verbosity);
 char *ofp_match_to_string(const struct ofp_match *, int verbosity);
 char *ofp_packet_to_string(const void *data, size_t len);
-char *ofp_message_type_to_string(uint8_t type);
-
 
 #ifdef  __cplusplus
 }
