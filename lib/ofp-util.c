@@ -767,16 +767,19 @@ ofputil_decode_msg_type__(const struct ofp_header *oh, size_t length,
     error = ofputil_lookup_openflow_message(&ofpt_category, oh->version,
                                             oh->type, typep);
     if (!error) {
-        switch (oh->type) {
-        case OFPT_VENDOR:
+        switch ((oh->version << 8) | oh->type) {
+        case (OFP10_VERSION << 8) | OFPT_VENDOR:
+        case (OFP11_VERSION << 8) | OFPT_VENDOR:
             error = ofputil_decode_vendor(oh, length, typep);
             break;
 
-        case OFPT10_STATS_REQUEST:
+        case (OFP10_VERSION << 8) | OFPT10_STATS_REQUEST:
+        case (OFP11_VERSION << 8) | OFPT11_STATS_REQUEST:
             error = ofputil_decode_ofpst_request(oh, length, typep);
             break;
 
-        case OFPT10_STATS_REPLY:
+        case (OFP10_VERSION << 8) | OFPT10_STATS_REPLY:
+        case (OFP11_VERSION << 8) | OFPT11_STATS_REPLY:
             error = ofputil_decode_ofpst_reply(oh, length, typep);
 
         default:
