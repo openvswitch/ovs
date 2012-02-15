@@ -3167,7 +3167,7 @@ handle_barrier_request(struct ofconn *ofconn, const struct ofp_header *oh)
         return OFPROTO_POSTPONE;
     }
 
-    ob = make_openflow_xid(sizeof *ob, OFPT_BARRIER_REPLY, oh->xid, &buf);
+    ob = make_openflow_xid(sizeof *ob, OFPT10_BARRIER_REPLY, oh->xid, &buf);
     ofconn_send_reply(ofconn, buf);
     return 0;
 }
@@ -3284,11 +3284,10 @@ handle_openflow__(struct ofconn *ofconn, const struct ofpbuf *msg)
     case OFPUTIL_NXST_FLOW_REPLY:
     case OFPUTIL_NXST_AGGREGATE_REPLY:
     default:
-        if (oh->type == OFPT_STATS_REQUEST || oh->type == OFPT_STATS_REPLY) {
-            return OFPERR_OFPBRC_BAD_STAT;
-        } else {
-            return OFPERR_OFPBRC_BAD_TYPE;
-        }
+        return (oh->type == OFPT10_STATS_REQUEST ||
+                oh->type == OFPT10_STATS_REPLY
+                ? OFPERR_OFPBRC_BAD_STAT
+                : OFPERR_OFPBRC_BAD_TYPE);
     }
 }
 

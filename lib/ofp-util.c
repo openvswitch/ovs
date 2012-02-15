@@ -724,31 +724,31 @@ ofputil_decode_msg_type__(const struct ofp_header *oh, size_t length,
           sizeof(struct ofp_port_status), 0 },
 
         { OFPUTIL_OFPT_PACKET_OUT, OFP10_VERSION,
-          OFPT_PACKET_OUT, "OFPT_PACKET_OUT",
+          OFPT10_PACKET_OUT, "OFPT_PACKET_OUT",
           sizeof(struct ofp_packet_out), 1 },
 
         { OFPUTIL_OFPT_FLOW_MOD, OFP10_VERSION,
-          OFPT_FLOW_MOD, "OFPT_FLOW_MOD",
+          OFPT10_FLOW_MOD, "OFPT_FLOW_MOD",
           sizeof(struct ofp_flow_mod), 1 },
 
         { OFPUTIL_OFPT_PORT_MOD, OFP10_VERSION,
-          OFPT_PORT_MOD, "OFPT_PORT_MOD",
+          OFPT10_PORT_MOD, "OFPT_PORT_MOD",
           sizeof(struct ofp_port_mod), 0 },
 
         { 0, OFP10_VERSION,
-          OFPT_STATS_REQUEST, "OFPT_STATS_REQUEST",
+          OFPT10_STATS_REQUEST, "OFPT_STATS_REQUEST",
           sizeof(struct ofp_stats_msg), 1 },
 
         { 0, OFP10_VERSION,
-          OFPT_STATS_REPLY, "OFPT_STATS_REPLY",
+          OFPT10_STATS_REPLY, "OFPT_STATS_REPLY",
           sizeof(struct ofp_stats_msg), 1 },
 
         { OFPUTIL_OFPT_BARRIER_REQUEST, OFP10_VERSION,
-          OFPT_BARRIER_REQUEST, "OFPT_BARRIER_REQUEST",
+          OFPT10_BARRIER_REQUEST, "OFPT_BARRIER_REQUEST",
           sizeof(struct ofp_header), 0 },
 
         { OFPUTIL_OFPT_BARRIER_REPLY, OFP10_VERSION,
-          OFPT_BARRIER_REPLY, "OFPT_BARRIER_REPLY",
+          OFPT10_BARRIER_REPLY, "OFPT_BARRIER_REPLY",
           sizeof(struct ofp_header), 0 },
 
         { 0, 0,
@@ -772,11 +772,11 @@ ofputil_decode_msg_type__(const struct ofp_header *oh, size_t length,
             error = ofputil_decode_vendor(oh, length, typep);
             break;
 
-        case OFPT_STATS_REQUEST:
+        case OFPT10_STATS_REQUEST:
             error = ofputil_decode_ofpst_request(oh, length, typep);
             break;
 
-        case OFPT_STATS_REPLY:
+        case OFPT10_STATS_REPLY:
             error = ofputil_decode_ofpst_reply(oh, length, typep);
 
         default:
@@ -1447,7 +1447,7 @@ ofputil_encode_flow_mod(const struct ofputil_flow_mod *fm,
     case OFPUTIL_P_OF10:
     case OFPUTIL_P_OF10_TID:
         msg = ofpbuf_new(sizeof *ofm + actions_len);
-        ofm = put_openflow(sizeof *ofm, OFPT_FLOW_MOD, msg);
+        ofm = put_openflow(sizeof *ofm, OFPT10_FLOW_MOD, msg);
         ofputil_cls_rule_to_match(&fm->cr, &ofm->match);
         ofm->cookie = fm->cookie;
         ofm->command = htons(command);
@@ -2236,7 +2236,7 @@ ofputil_encode_packet_out(const struct ofputil_packet_out *po)
     }
 
     msg = ofpbuf_new(size);
-    opo = put_openflow(sizeof *opo, OFPT_PACKET_OUT, msg);
+    opo = put_openflow(sizeof *opo, OFPT10_PACKET_OUT, msg);
     opo->buffer_id = htonl(po->buffer_id);
     opo->in_port = htons(po->in_port);
     opo->actions_len = htons(actions_len);
@@ -2427,7 +2427,7 @@ ofputil_make_stats_request(size_t openflow_len, uint16_t ofpst_type,
     struct ofpbuf *msg;
 
     msg = *bufferp = ofpbuf_new(openflow_len);
-    put_stats__(alloc_xid(), OFPT_STATS_REQUEST,
+    put_stats__(alloc_xid(), OFPT10_STATS_REQUEST,
                 htons(ofpst_type), htonl(nxst_subtype), msg);
     ofpbuf_padto(msg, openflow_len);
 
@@ -2437,9 +2437,9 @@ ofputil_make_stats_request(size_t openflow_len, uint16_t ofpst_type,
 static void
 put_stats_reply__(const struct ofp_stats_msg *request, struct ofpbuf *msg)
 {
-    assert(request->header.type == OFPT_STATS_REQUEST ||
-           request->header.type == OFPT_STATS_REPLY);
-    put_stats__(request->header.xid, OFPT_STATS_REPLY, request->type,
+    assert(request->header.type == OFPT10_STATS_REQUEST ||
+           request->header.type == OFPT10_STATS_REPLY);
+    put_stats__(request->header.xid, OFPT10_STATS_REPLY, request->type,
                 (request->type != htons(OFPST_VENDOR)
                  ? htonl(0)
                  : ((const struct nicira_stats_msg *) request)->subtype),
@@ -2521,7 +2521,7 @@ ofputil_append_stats_reply(size_t len, struct list *replies)
 const void *
 ofputil_stats_body(const struct ofp_header *oh)
 {
-    assert(oh->type == OFPT_STATS_REQUEST || oh->type == OFPT_STATS_REPLY);
+    assert(oh->type == OFPT10_STATS_REQUEST || oh->type == OFPT10_STATS_REPLY);
     return (const struct ofp_stats_msg *) oh + 1;
 }
 
@@ -2529,7 +2529,7 @@ ofputil_stats_body(const struct ofp_header *oh)
 size_t
 ofputil_stats_body_len(const struct ofp_header *oh)
 {
-    assert(oh->type == OFPT_STATS_REQUEST || oh->type == OFPT_STATS_REPLY);
+    assert(oh->type == OFPT10_STATS_REQUEST || oh->type == OFPT10_STATS_REPLY);
     return ntohs(oh->length) - sizeof(struct ofp_stats_msg);
 }
 
@@ -2537,7 +2537,7 @@ ofputil_stats_body_len(const struct ofp_header *oh)
 const void *
 ofputil_nxstats_body(const struct ofp_header *oh)
 {
-    assert(oh->type == OFPT_STATS_REQUEST || oh->type == OFPT_STATS_REPLY);
+    assert(oh->type == OFPT10_STATS_REQUEST || oh->type == OFPT10_STATS_REPLY);
     return ((const struct nicira_stats_msg *) oh) + 1;
 }
 
@@ -2545,7 +2545,7 @@ ofputil_nxstats_body(const struct ofp_header *oh)
 size_t
 ofputil_nxstats_body_len(const struct ofp_header *oh)
 {
-    assert(oh->type == OFPT_STATS_REQUEST || oh->type == OFPT_STATS_REPLY);
+    assert(oh->type == OFPT10_STATS_REQUEST || oh->type == OFPT10_STATS_REPLY);
     return ntohs(oh->length) - sizeof(struct nicira_stats_msg);
 }
 
@@ -2558,7 +2558,7 @@ make_flow_mod(uint16_t command, const struct cls_rule *rule,
     struct ofpbuf *out = ofpbuf_new(size);
     ofm = ofpbuf_put_zeros(out, sizeof *ofm);
     ofm->header.version = OFP10_VERSION;
-    ofm->header.type = OFPT_FLOW_MOD;
+    ofm->header.type = OFPT10_FLOW_MOD;
     ofm->header.length = htons(size);
     ofm->cookie = 0;
     ofm->priority = htons(MIN(rule->priority, UINT16_MAX));
@@ -2658,7 +2658,7 @@ ofputil_encode_barrier_request(void)
 {
     struct ofpbuf *msg;
 
-    make_openflow(sizeof(struct ofp_header), OFPT_BARRIER_REQUEST, &msg);
+    make_openflow(sizeof(struct ofp_header), OFPT10_BARRIER_REQUEST, &msg);
     return msg;
 }
 

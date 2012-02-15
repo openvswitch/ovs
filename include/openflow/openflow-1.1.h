@@ -1,4 +1,4 @@
-/* Copyright (c) 2008, 2011 The Board of Trustees of The Leland Stanford
+/* Copyright (c) 2008, 2011, 2012 The Board of Trustees of The Leland Stanford
  * Junior University
  *
  * We are making the OpenFlow specification and associated documentation
@@ -69,5 +69,28 @@
  */
 #define OFPP11_MAX    0xffffff00
 #define OFPP11_OFFSET (OFPP11_MAX - OFPP_MAX)
+
+/* OpenFlow 1.1 specific message types, in addition to the common message
+ * types. */
+enum ofp11_type {
+    /* Controller command messages. */
+    OFPT11_PACKET_OUT = 13,     /* Controller/switch message */
+    OFPT11_FLOW_MOD,            /* Controller/switch message */
+    OFPT11_GROUP_MOD,           /* Controller/switch message */
+    OFPT11_PORT_MOD,            /* Controller/switch message */
+    OFPT11_TABLE_MOD,           /* Controller/switch message */
+
+    /* Statistics messages. */
+    OFPT11_STATS_REQUEST,       /* Controller/switch message */
+    OFPT11_STATS_REPLY,         /* Controller/switch message */
+
+    /* Barrier messages. */
+    OFPT11_BARRIER_REQUEST,     /* Controller/switch message */
+    OFPT11_BARRIER_REPLY,       /* Controller/switch message */
+
+    /* Queue Configuration messages. */
+    OFPT11_QUEUE_GET_CONFIG_REQUEST,  /* Controller/switch message */
+    OFPT11_QUEUE_GET_CONFIG_REPLY,    /* Controller/switch message */
+};
 
 #endif /* openflow/openflow-1.1.h */

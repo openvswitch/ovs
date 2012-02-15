@@ -82,4 +82,26 @@
 
 #define OFP_ETH_ALEN 6          /* Bytes in an Ethernet address. */
 
+/* Common OpenFlow message types. */
+enum ofp_type {
+    /* Immutable messages. */
+    OFPT_HELLO,               /* Symmetric message */
+    OFPT_ERROR,               /* Symmetric message */
+    OFPT_ECHO_REQUEST,        /* Symmetric message */
+    OFPT_ECHO_REPLY,          /* Symmetric message */
+    OFPT_VENDOR,              /* Symmetric message */
+
+    /* Switch configuration messages. */
+    OFPT_FEATURES_REQUEST,    /* Controller/switch message */
+    OFPT_FEATURES_REPLY,      /* Controller/switch message */
+    OFPT_GET_CONFIG_REQUEST,  /* Controller/switch message */
+    OFPT_GET_CONFIG_REPLY,    /* Controller/switch message */
+    OFPT_SET_CONFIG,          /* Controller/switch message */
+
+    /* Asynchronous messages. */
+    OFPT_PACKET_IN,           /* Async message */
+    OFPT_FLOW_REMOVED,        /* Async message */
+    OFPT_PORT_STATUS,         /* Async message */
+};
+
 #endif /* openflow/openflow-common.h */

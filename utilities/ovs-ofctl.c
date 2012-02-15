@@ -340,7 +340,7 @@ alloc_stats_request(size_t rq_len, uint16_t type, struct ofpbuf **bufferp)
 {
     struct ofp_stats_msg *rq;
 
-    rq = make_openflow(rq_len, OFPT_STATS_REQUEST, bufferp);
+    rq = make_openflow(rq_len, OFPT10_STATS_REQUEST, bufferp);
     rq->type = htons(type);
     rq->flags = htons(0);
     return rq;
@@ -1003,7 +1003,7 @@ monitor_vconn(struct vconn *vconn)
             ofp_print(stderr, b->data, b->size, verbosity + 2);
             ofpbuf_delete(b);
 
-            if (barrier_aux.conn && msg_type == OFPT_BARRIER_REPLY) {
+            if (barrier_aux.conn && msg_type == OFPT10_BARRIER_REPLY) {
                 unixctl_command_reply(barrier_aux.conn, NULL);
                 barrier_aux.conn = NULL;
             }
@@ -1148,7 +1148,8 @@ do_mod_port(int argc OVS_UNUSED, char *argv[])
 
     fetch_ofp_phy_port(argv[1], argv[2], &opp);
 
-    opm = make_openflow(sizeof(struct ofp_port_mod), OFPT_PORT_MOD, &request);
+    opm = make_openflow(sizeof(struct ofp_port_mod), OFPT10_PORT_MOD,
+                        &request);
     opm->port_no = opp.port_no;
     memcpy(opm->hw_addr, opp.hw_addr, sizeof opm->hw_addr);
     opm->config = htonl(0);

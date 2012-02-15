@@ -43,42 +43,25 @@ enum ofp_port {
     OFPP_NONE       = 0xffff   /* Not associated with a physical port. */
 };
 
-enum ofp_type {
-    /* Immutable messages. */
-    OFPT_HELLO,               /* Symmetric message */
-    OFPT_ERROR,               /* Symmetric message */
-    OFPT_ECHO_REQUEST,        /* Symmetric message */
-    OFPT_ECHO_REPLY,          /* Symmetric message */
-    OFPT_VENDOR,              /* Symmetric message */
-
-    /* Switch configuration messages. */
-    OFPT_FEATURES_REQUEST,    /* Controller/switch message */
-    OFPT_FEATURES_REPLY,      /* Controller/switch message */
-    OFPT_GET_CONFIG_REQUEST,  /* Controller/switch message */
-    OFPT_GET_CONFIG_REPLY,    /* Controller/switch message */
-    OFPT_SET_CONFIG,          /* Controller/switch message */
-
-    /* Asynchronous messages. */
-    OFPT_PACKET_IN,           /* Async message */
-    OFPT_FLOW_REMOVED,        /* Async message */
-    OFPT_PORT_STATUS,         /* Async message */
-
+/* OpenFlow 1.0 specific message types, in addition to the common message
+ * types. */
+enum ofp10_type {
     /* Controller command messages. */
-    OFPT_PACKET_OUT,          /* Controller/switch message */
-    OFPT_FLOW_MOD,            /* Controller/switch message */
-    OFPT_PORT_MOD,            /* Controller/switch message */
+    OFPT10_PACKET_OUT = 13,     /* Controller/switch message */
+    OFPT10_FLOW_MOD,            /* Controller/switch message */
+    OFPT10_PORT_MOD,            /* Controller/switch message */
 
     /* Statistics messages. */
-    OFPT_STATS_REQUEST,       /* Controller/switch message */
-    OFPT_STATS_REPLY,         /* Controller/switch message */
+    OFPT10_STATS_REQUEST,       /* Controller/switch message */
+    OFPT10_STATS_REPLY,         /* Controller/switch message */
 
     /* Barrier messages. */
-    OFPT_BARRIER_REQUEST,     /* Controller/switch message */
-    OFPT_BARRIER_REPLY,       /* Controller/switch message */
+    OFPT10_BARRIER_REQUEST,     /* Controller/switch message */
+    OFPT10_BARRIER_REPLY,       /* Controller/switch message */
 
     /* Queue Configuration messages. */
-    OFPT_QUEUE_GET_CONFIG_REQUEST,  /* Controller/switch message */
-    OFPT_QUEUE_GET_CONFIG_REPLY     /* Controller/switch message */
+    OFPT10_QUEUE_GET_CONFIG_REQUEST,  /* Controller/switch message */
+    OFPT10_QUEUE_GET_CONFIG_REPLY     /* Controller/switch message */
 };
 
 /* Header on all OpenFlow packets. */
