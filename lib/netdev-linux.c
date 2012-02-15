@@ -368,7 +368,7 @@ struct netdev_dev_linux {
     struct in_addr address, netmask;
     struct in6_addr in6;
     int mtu;
-    int ifi_flags;
+    unsigned int ifi_flags;
     long long int carrier_resets;
     uint32_t kbits_rate;        /* Policing data. */
     uint32_t kbits_burst;
@@ -403,8 +403,8 @@ static int netdev_linux_do_ioctl(const char *name, struct ifreq *, int cmd,
                                  const char *cmd_name);
 static int netdev_linux_get_ipv4(const struct netdev *, struct in_addr *,
                                  int cmd, const char *cmd_name);
-static int get_flags(const struct netdev_dev *, int *flagsp);
-static int set_flags(struct netdev *, int flags);
+static int get_flags(const struct netdev_dev *, unsigned int *flags);
+static int set_flags(struct netdev *, unsigned int flags);
 static int do_get_ifindex(const char *netdev_name);
 static int get_ifindex(const struct netdev *, int *ifindexp);
 static int do_set_addr(struct netdev *netdev,
@@ -521,7 +521,7 @@ netdev_linux_cache_cb(const struct rtnetlink_link_change *change,
         shash_init(&device_shash);
         netdev_dev_get_devices(&netdev_linux_class, &device_shash);
         SHASH_FOR_EACH (node, &device_shash) {
-            int flags;
+            unsigned int flags;
 
             dev = node->data;
 
@@ -4218,7 +4218,7 @@ get_stats_via_proc(const char *netdev_name, struct netdev_stats *stats)
 }
 
 static int
-get_flags(const struct netdev_dev *dev, int *flags)
+get_flags(const struct netdev_dev *dev, unsigned int *flags)
 {
     struct ifreq ifr;
     int error;
@@ -4233,7 +4233,7 @@ get_flags(const struct netdev_dev *dev, int *flags)
 }
 
 static int
-set_flags(struct netdev *netdev, int flags)
+set_flags(struct netdev *netdev, unsigned int flags)
 {
     struct ifreq ifr;
 
