@@ -1424,8 +1424,18 @@ ofp_to_string__(const struct ofp_header *oh,
     enum ofputil_msg_code code;
     const void *msg = oh;
 
-    ds_put_format(string, "%s (xid=0x%"PRIx32"):",
-                  ofputil_msg_type_name(type), ntohl(oh->xid));
+    ds_put_cstr(string, ofputil_msg_type_name(type));
+    switch (oh->version) {
+    case OFP10_VERSION:
+        break;
+    case OFP11_VERSION:
+        ds_put_cstr(string, " (OF1.1)");
+        break;
+    default:
+        ds_put_format(string, " (OF 0x%02"PRIx8")", oh->version);
+        break;
+    }
+    ds_put_format(string, " (xid=0x%"PRIx32"):", ntohl(oh->xid));
 
     code = ofputil_msg_type_code(type);
     switch (code) {
