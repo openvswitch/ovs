@@ -102,6 +102,9 @@ enum ofputil_msg_code ofputil_msg_type_code(const struct ofputil_msg_type *);
 const char *ofputil_msg_type_name(const struct ofputil_msg_type *);
 
 /* Port numbers. */
+enum ofperr ofputil_port_from_ofp11(ovs_be32 ofp11_port, uint16_t *ofp10_port);
+ovs_be32 ofputil_port_to_ofp11(uint16_t ofp10_port);
+
 enum ofperr ofputil_check_output_port(uint16_t ofp_port, int max_ports);
 bool ofputil_port_from_string(const char *, uint16_t *port);
 void ofputil_format_port(uint16_t port, struct ds *);

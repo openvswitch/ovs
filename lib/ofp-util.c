@@ -2692,6 +2692,44 @@ ofputil_frag_handling_from_string(const char *s, enum ofp_config_flags *flags)
     return true;
 }
 
+/* Converts the OpenFlow 1.1+ port number 'ofp11_port' into an OpenFlow 1.0
+ * port number and stores the latter in '*ofp10_port', for the purpose of
+ * decoding OpenFlow 1.1+ protocol messages.  Returns 0 if successful,
+ * otherwise an OFPERR_* number.
+ *
+ * See the definition of OFP11_MAX for an explanation of the mapping. */
+enum ofperr
+ofputil_port_from_ofp11(ovs_be32 ofp11_port, uint16_t *ofp10_port)
+{
+    uint32_t ofp11_port_h = ntohl(ofp11_port);
+
+    if (ofp11_port_h < OFPP_MAX) {
+        *ofp10_port = ofp11_port_h;
+        return 0;
+    } else if (ofp11_port_h >= OFPP11_MAX) {
+        *ofp10_port = ofp11_port_h - OFPP11_OFFSET;
+        return 0;
+    } else {
+        VLOG_WARN_RL(&bad_ofmsg_rl, "port %"PRIu32" is outside the supported "
+                     "range 0 through %d or 0x%"PRIx32" through 0x%"PRIx32,
+                     ofp11_port_h, OFPP_MAX - 1,
+                     (uint32_t) OFPP11_MAX, UINT32_MAX);
+        return OFPERR_OFPBAC_BAD_OUT_PORT;
+    }
+}
+
+/* Returns the OpenFlow 1.1+ port number equivalent to the OpenFlow 1.0 port
+ * number 'ofp10_port', for encoding OpenFlow 1.1+ protocol messages.
+ *
+ * See the definition of OFP11_MAX for an explanation of the mapping. */
+ovs_be32
+ofputil_port_to_ofp11(uint16_t ofp10_port)
+{
+    return htonl(ofp10_port < OFPP_MAX
+                 ? ofp10_port
+                 : ofp10_port + OFPP11_OFFSET);
+}
+
 /* Checks that 'port' is a valid output port for the OFPAT_OUTPUT action, given
  * that the switch will never have more than 'max_ports' ports.  Returns 0 if
  * 'port' is valid, otherwise an OpenFlow return code. */

@@ -54,6 +54,20 @@
 
 #include "openflow/openflow-common.h"
 
-/* Nothing here yet. */
+/* OpenFlow 1.1 uses 32-bit port numbers.  Open vSwitch, for now, uses OpenFlow
+ * 1.0 port numbers internally.  We map them to OpenFlow 1.0 as follows:
+ *
+ * OF1.1                    <=>  OF1.0
+ * -----------------------       ---------------
+ * 0x00000000...0x0000feff  <=>  0x0000...0xfeff  "physical" ports
+ * 0x0000ff00...0xfffffeff  <=>  not supported
+ * 0xffffff00...0xffffffff  <=>  0xff00...0xffff  "reserved" OFPP_* ports
+ *
+ * OFPP11_OFFSET is the value that must be added or subtracted to convert
+ * an OpenFlow 1.0 reserved port number to or from, respectively, the
+ * corresponding OpenFlow 1.1 reserved port number.
+ */
+#define OFPP11_MAX    0xffffff00
+#define OFPP11_OFFSET (OFPP11_MAX - OFPP_MAX)
 
 #endif /* openflow/openflow-1.1.h */
