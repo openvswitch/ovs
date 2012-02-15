@@ -15,6 +15,19 @@ openvswitch (1.5.0-1) unstable; urgency=low
 
  -- Open vSwitch team <dev@openvswitch.org>  Mon, xx xxx xxxx 23:36:00 +0000
 
+openvswitch (1.4.0-2) unstable; urgency=low
+
+  * Use explicit DKMS variable for kernel source directory
+    - 0001-debian-Fix-dependencies-for-openvswitch-datapath-dkm.patch
+    - 0002-debian-Look-in-lib-modules-instead-of-usr-src-for-DK.patch
+    - 0001-debian-Use-provided-kernel-source-dir.patch
+    - 0001-debian-Do-not-run-make-if-configure-fails-during-DKM.patch
+    - (closes: #659685)
+  * Don't install Python modules for obsolete Python versions
+    - 0001-debian-Don-t-install-Python-modules-for-obsolete-Pyt.patch
+
+ -- Simon Horman <horms@debian.org>  Tue, 14 Feb 2012 11:43:13 +0900
+
 openvswitch (1.4.0-1) unstable; urgency=low
   [ Open vSwitch team ]
   * New upstream version
