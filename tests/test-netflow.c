@@ -312,5 +312,5 @@ test_netflow_exit(struct unixctl_conn *conn,
 {
     bool *exiting = exiting_;
     *exiting = true;
-    unixctl_command_reply(conn, 200, "");
+    unixctl_command_reply(conn, NULL);
 }

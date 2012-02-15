@@ -439,12 +439,12 @@ vlog_unixctl_set(struct unixctl_conn *conn, int argc, const char *argv[],
     for (i = 1; i < argc; i++) {
         char *msg = vlog_set_levels_from_string(argv[i]);
         if (msg) {
-            unixctl_command_reply(conn, 501, msg);
+            unixctl_command_reply_error(conn, msg);
             free(msg);
             return;
         }
     }
-    unixctl_command_reply(conn, 202, NULL);
+    unixctl_command_reply(conn, NULL);
 }
 
 static void
@@ -452,7 +452,7 @@ vlog_unixctl_list(struct unixctl_conn *conn, int argc OVS_UNUSED,
                   const char *argv[] OVS_UNUSED, void *aux OVS_UNUSED)
 {
     char *msg = vlog_get_levels();
-    unixctl_command_reply(conn, 200, msg);
+    unixctl_command_reply(conn, msg);
     free(msg);
 }
 
@@ -463,12 +463,12 @@ vlog_unixctl_reopen(struct unixctl_conn *conn, int argc OVS_UNUSED,
     if (log_file_name) {
         int error = vlog_reopen_log_file();
         if (error) {
-            unixctl_command_reply(conn, 503, strerror(errno));
+            unixctl_command_reply_error(conn, strerror(errno));
         } else {
-            unixctl_command_reply(conn, 202, NULL);
+            unixctl_command_reply(conn, NULL);
         }
     } else {
-        unixctl_command_reply(conn, 403, "Logging to file not configured");
+        unixctl_command_reply_error(conn, "Logging to file not configured");
     }
 }
 

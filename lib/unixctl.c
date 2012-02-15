@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,30 +17,19 @@
 #include <config.h>
 #include "unixctl.h"
 #include <assert.h>
-#include <ctype.h>
 #include <errno.h>
-#include <poll.h>
-#include <stdlib.h>
-#include <string.h>
-#include <sys/socket.h>
-#include <sys/stat.h>
 #include <unistd.h>
 #include "coverage.h"
 #include "dirs.h"
 #include "dynamic-string.h"
-#include "fatal-signal.h"
+#include "json.h"
+#include "jsonrpc.h"
 #include "list.h"
-#include "ofpbuf.h"
 #include "poll-loop.h"
 #include "shash.h"
-#include "socket-util.h"
+#include "stream.h"
 #include "svec.h"
-#include "util.h"
 #include "vlog.h"
-
-#ifndef SCM_CREDENTIALS
-#include <time.h>
-#endif
 
 VLOG_DEFINE_THIS_MODULE(unixctl);
 
@@ -56,26 +45,17 @@ struct unixctl_command {
 
 struct unixctl_conn {
     struct list node;
-    int fd;
+    struct jsonrpc *rpc;
 
-    enum { S_RECV, S_PROCESS, S_SEND } state;
-    struct ofpbuf in;
-    struct ds out;
-    size_t out_pos;
+    /* Only one request can be in progress at a time.  While the request is
+     * being processed, 'request_id' is populated, otherwise it is null. */
+    struct json *request_id;   /* ID of the currently active request. */
 };
 
 /* Server for control connection. */
 struct unixctl_server {
-    char *path;
-    int fd;
+    struct pstream *listener;
     struct list conns;
-};
-
-/* Client for control connection. */
-struct unixctl_client {
-    char *connect_path;
-    char *bind_path;
-    FILE *stream;
 };
 
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 5);
@@ -95,12 +75,12 @@ unixctl_help(struct unixctl_conn *conn, int argc OVS_UNUSED,
     for (i = 0; i < shash_count(&commands); i++) {
         const struct shash_node *node = nodes[i];
         const struct unixctl_command *command = node->data;
-        
+
         ds_put_format(&ds, "  %-23s %s\n", node->name, command->usage);
     }
     free(nodes);
 
-    unixctl_command_reply(conn, 214, ds_cstr(&ds));
+    unixctl_command_reply(conn, ds_cstr(&ds));
     ds_destroy(&ds);
 }
 
@@ -108,7 +88,7 @@ static void
 unixctl_version(struct unixctl_conn *conn, int argc OVS_UNUSED,
                 const char *argv[] OVS_UNUSED, void *aux OVS_UNUSED)
 {
-    unixctl_command_reply(conn, 200, get_program_version());
+    unixctl_command_reply(conn, get_program_version());
 }
 
 /* Registers a unixctl command with the given 'name'.  'usage' describes the
@@ -117,11 +97,11 @@ unixctl_version(struct unixctl_conn *conn, int argc OVS_UNUSED,
  *
  * 'cb' is called when the command is received.  It is passed the actual set of
  * arguments, as a text string, plus a copy of 'aux'.  Normally 'cb' should
- * call unixctl_command_reply() before it returns, but if the command cannot be
- * handled immediately then it can defer the reply until later.  A given
- * connection can only process a single request at a time, so
- * unixctl_command_reply() must be called eventually to avoid blocking that
- * connection. */
+ * reply by calling unixctl_command_reply() or unixctl_command_reply_error()
+ * before it returns, but if the command cannot be handled immediately then it
+ * can defer the reply until later.  A given connection can only process a
+ * single request at a time, so a reply must be made eventually to avoid
+ * blocking that connection. */
 void
 unixctl_command_register(const char *name, const char *usage,
                          int min_args, int max_args,
@@ -145,57 +125,57 @@ unixctl_command_register(const char *name, const char *usage,
     shash_add(&commands, name, command);
 }
 
-static const char *
-translate_reply_code(int code)
+static void
+unixctl_command_reply__(struct unixctl_conn *conn,
+                        bool success, const char *body)
 {
-    switch (code) {
-    case 200: return "OK";
-    case 201: return "Created";
-    case 202: return "Accepted";
-    case 204: return "No Content";
-    case 211: return "System Status";
-    case 214: return "Help";
-    case 400: return "Bad Request";
-    case 401: return "Unauthorized";
-    case 403: return "Forbidden";
-    case 404: return "Not Found";
-    case 500: return "Internal Server Error";
-    case 501: return "Invalid Argument";
-    case 503: return "Service Unavailable";
-    default: return "Unknown";
-    }
-}
-
-void
-unixctl_command_reply(struct unixctl_conn *conn,
-                      int code, const char *body)
-{
-    struct ds *out = &conn->out;
+    struct json *body_json;
+    struct jsonrpc_msg *reply;
 
     COVERAGE_INC(unixctl_replied);
-    assert(conn->state == S_PROCESS);
-    conn->state = S_SEND;
-    conn->out_pos = 0;
+    assert(conn->request_id);
 
-    ds_clear(out);
-    ds_put_format(out, "%03d %s\n", code, translate_reply_code(code));
-    if (body) {
-        const char *p;
-        for (p = body; *p != '\0'; ) {
-            size_t n = strcspn(p, "\n");
-
-            if (*p == '.') {
-                ds_put_char(out, '.');
-            }
-            ds_put_buffer(out, p, n);
-            ds_put_char(out, '\n');
-            p += n;
-            if (*p == '\n') {
-                p++;
-            }
-        }
+    if (!body) {
+        body = "";
     }
-    ds_put_cstr(out, ".\n");
+
+    if (body[0] && body[strlen(body) - 1] != '\n') {
+        body_json = json_string_create_nocopy(xasprintf("%s\n", body));
+    } else {
+        body_json = json_string_create(body);
+    }
+
+    if (success) {
+        reply = jsonrpc_create_reply(body_json, conn->request_id);
+    } else {
+        reply = jsonrpc_create_error(body_json, conn->request_id);
+    }
+
+    /* If jsonrpc_send() returns an error, the run loop will take care of the
+     * problem eventually. */
+    jsonrpc_send(conn->rpc, reply);
+    json_destroy(conn->request_id);
+    conn->request_id = NULL;
+}
+
+/* Replies to the active unixctl connection 'conn'.  'result' is sent to the
+ * client indicating the command was processed successfully.  Only one call to
+ * unixctl_command_reply() or unixctl_command_reply_error() may be made per
+ * request. */
+void
+unixctl_command_reply(struct unixctl_conn *conn, const char *result)
+{
+    unixctl_command_reply__(conn, true, result);
+}
+
+/* Replies to the active unixctl connection 'conn'. 'error' is sent to the
+ * client indicating an error occured processing the command.  Only one call to
+ * unixctl_command_reply() or unixctl_command_reply_error() may be made per
+ * request. */
+void
+unixctl_command_reply_error(struct unixctl_conn *conn, const char *error)
+{
+    unixctl_command_reply__(conn, false, error);
 }
 
 /* Creates a unixctl server listening on 'path', which may be:
@@ -223,229 +203,135 @@ int
 unixctl_server_create(const char *path, struct unixctl_server **serverp)
 {
     struct unixctl_server *server;
+    struct pstream *listener;
+    char *punix_path;
     int error;
 
+    *serverp = NULL;
     if (path && !strcmp(path, "none")) {
-        *serverp = NULL;
         return 0;
+    }
+
+    if (path) {
+        char *abs_path = abs_file_name(ovs_rundir(), path);
+        punix_path = xasprintf("punix:%s", abs_path);
+        free(abs_path);
+    } else {
+        punix_path = xasprintf("punix:%s/%s.%ld.ctl", ovs_rundir(),
+                               program_name, (long int) getpid());
+    }
+
+    error = pstream_open(punix_path, &listener);
+    free(punix_path);
+    punix_path = NULL;
+
+    if (error) {
+        ovs_error(error, "could not initialize control socket %s", path);
+        return error;
     }
 
     unixctl_command_register("help", "", 0, 0, unixctl_help, NULL);
     unixctl_command_register("version", "", 0, 0, unixctl_version, NULL);
 
     server = xmalloc(sizeof *server);
+    server->listener = listener;
     list_init(&server->conns);
-
-    if (path) {
-        server->path = abs_file_name(ovs_rundir(), path);
-    } else {
-        server->path = xasprintf("%s/%s.%ld.ctl", ovs_rundir(),
-                                 program_name, (long int) getpid());
-    }
-
-    server->fd = make_unix_socket(SOCK_STREAM, true, false, server->path,
-                                  NULL);
-    if (server->fd < 0) {
-        error = -server->fd;
-        ovs_error(error, "could not initialize control socket %s",
-                  server->path);
-        goto error;
-    }
-
-    if (chmod(server->path, S_IRUSR | S_IWUSR) < 0) {
-        error = errno;
-        ovs_error(error, "failed to chmod control socket %s", server->path);
-        goto error;
-    }
-
-    if (listen(server->fd, 10) < 0) {
-        error = errno;
-        ovs_error(error, "Failed to listen on control socket %s",
-                  server->path);
-        goto error;
-    }
-
     *serverp = server;
     return 0;
-
-error:
-    if (server->fd >= 0) {
-        close(server->fd);
-    }
-    free(server->path);
-    free(server);
-    *serverp = NULL;
-    return error;
 }
 
 static void
-new_connection(struct unixctl_server *server, int fd)
+process_command(struct unixctl_conn *conn, struct jsonrpc_msg *request)
 {
-    struct unixctl_conn *conn;
+    char *error = NULL;
 
-    set_nonblocking(fd);
-
-    conn = xmalloc(sizeof *conn);
-    list_push_back(&server->conns, &conn->node);
-    conn->fd = fd;
-    conn->state = S_RECV;
-    ofpbuf_init(&conn->in, 128);
-    ds_init(&conn->out);
-    conn->out_pos = 0;
-}
-
-static int
-run_connection_output(struct unixctl_conn *conn)
-{
-    while (conn->out_pos < conn->out.length) {
-        size_t bytes_written;
-        int error;
-
-        error = write_fully(conn->fd, conn->out.string + conn->out_pos,
-                            conn->out.length - conn->out_pos, &bytes_written);
-        conn->out_pos += bytes_written;
-        if (error) {
-            return error;
-        }
-    }
-    conn->state = S_RECV;
-    return 0;
-}
-
-static void
-process_command(struct unixctl_conn *conn, char *s)
-{
     struct unixctl_command *command;
-    struct svec argv;
+    struct json_array *params;
 
     COVERAGE_INC(unixctl_received);
-    conn->state = S_PROCESS;
+    conn->request_id = json_clone(request->id);
 
-    svec_init(&argv);
-    svec_parse_words(&argv, s);
-    svec_terminate(&argv);
-
-    if (argv.n == 0) {
-        unixctl_command_reply(conn, 400, "missing command name in request");
+    params = json_array(request->params);
+    command = shash_find_data(&commands, request->method);
+    if (!command) {
+        error = xasprintf("\"%s\" is not a valid command", request->method);
+    } else if (params->n < command->min_args) {
+        error = xasprintf("\"%s\" command requires at least %d arguments",
+                          request->method, command->min_args);
+    } else if (params->n > command->max_args) {
+        error = xasprintf("\"%s\" command takes at most %d arguments",
+                          request->method, command->max_args);
     } else {
-        const char *name = argv.names[0];
-        char *error;
+        struct svec argv = SVEC_EMPTY_INITIALIZER;
+        int  i;
 
-        command = shash_find_data(&commands, name);
-        if (!command) {
-            error = xasprintf("\"%s\" is not a valid command", name);
-        } else if (argv.n - 1 < command->min_args) {
-            error = xasprintf("\"%s\" command requires at least %d arguments",
-                              name, command->min_args);
-        } else if (argv.n - 1 > command->max_args) {
-            error = xasprintf("\"%s\" command takes at most %d arguments",
-                              name, command->max_args);
-        } else {
-            error = NULL;
+        svec_add(&argv, request->method);
+        for (i = 0; i < params->n; i++) {
+            if (params->elems[i]->type != JSON_STRING) {
+                error = xasprintf("\"%s\" command has non-string argument",
+                                  request->method);
+                break;
+            }
+            svec_add(&argv, json_string(params->elems[i]));
+        }
+        svec_terminate(&argv);
+
+        if (!error) {
             command->cb(conn, argv.n, (const char **) argv.names,
                         command->aux);
         }
 
-        if (error) {
-            unixctl_command_reply(conn, 400, error);
-            free(error);
-        }
+        svec_destroy(&argv);
     }
 
-    svec_destroy(&argv);
-}
-
-static int
-run_connection_input(struct unixctl_conn *conn)
-{
-    for (;;) {
-        size_t bytes_read;
-        char *newline;
-        int error;
-
-        newline = memchr(conn->in.data, '\n', conn->in.size);
-        if (newline) {
-            char *command = conn->in.data;
-            size_t n = newline - command + 1;
-
-            if (n > 0 && newline[-1] == '\r') {
-                newline--;
-            }
-            *newline = '\0';
-
-            process_command(conn, command);
-
-            ofpbuf_pull(&conn->in, n);
-            if (!conn->in.size) {
-                ofpbuf_clear(&conn->in);
-            }
-            return 0;
-        }
-
-        ofpbuf_prealloc_tailroom(&conn->in, 128);
-        error = read_fully(conn->fd, ofpbuf_tail(&conn->in),
-                           ofpbuf_tailroom(&conn->in), &bytes_read);
-        conn->in.size += bytes_read;
-        if (conn->in.size > 65536) {
-            VLOG_WARN_RL(&rl, "excess command length, killing connection");
-            return EPROTO;
-        }
-        if (error) {
-            if (error == EAGAIN || error == EWOULDBLOCK) {
-                if (!bytes_read) {
-                    return EAGAIN;
-                }
-            } else {
-                if (error != EOF || conn->in.size != 0) {
-                    VLOG_WARN_RL(&rl, "read failed: %s",
-                                 (error == EOF
-                                  ? "connection dropped mid-command"
-                                  : strerror(error)));
-                }
-                return error;
-            }
-        }
+    if (error) {
+        unixctl_command_reply_error(conn, error);
+        free(error);
     }
 }
 
 static int
 run_connection(struct unixctl_conn *conn)
 {
-    int old_state;
-    do {
-        int error;
+    int error, i;
 
-        old_state = conn->state;
-        switch (conn->state) {
-        case S_RECV:
-            error = run_connection_input(conn);
+    jsonrpc_run(conn->rpc);
+    error = jsonrpc_get_status(conn->rpc);
+    if (error || jsonrpc_get_backlog(conn->rpc)) {
+        return error;
+    }
+
+    for (i = 0; i < 10; i++) {
+        struct jsonrpc_msg *msg;
+
+        if (error || conn->request_id) {
             break;
-
-        case S_PROCESS:
-            error = 0;
-            break;
-
-        case S_SEND:
-            error = run_connection_output(conn);
-            break;
-
-        default:
-            NOT_REACHED();
         }
-        if (error) {
-            return error;
+
+        jsonrpc_recv(conn->rpc, &msg);
+        if (msg) {
+            if (msg->type == JSONRPC_REQUEST) {
+                process_command(conn, msg);
+            } else {
+                VLOG_WARN_RL(&rl, "%s: received unexpected %s message",
+                             jsonrpc_get_name(conn->rpc),
+                             jsonrpc_msg_type_to_string(msg->type));
+                error = EINVAL;
+            }
+            jsonrpc_msg_destroy(msg);
         }
-    } while (conn->state != old_state);
-    return 0;
+        error = error ? error : jsonrpc_get_status(conn->rpc);
+    }
+
+    return error;
 }
 
 static void
 kill_connection(struct unixctl_conn *conn)
 {
     list_remove(&conn->node);
-    ofpbuf_uninit(&conn->in);
-    ds_destroy(&conn->out);
-    close(conn->fd);
+    jsonrpc_close(conn->rpc);
+    json_destroy(conn->request_id);
     free(conn);
 }
 
@@ -460,14 +346,21 @@ unixctl_server_run(struct unixctl_server *server)
     }
 
     for (i = 0; i < 10; i++) {
-        int fd = accept(server->fd, NULL, NULL);
-        if (fd < 0) {
-            if (errno != EAGAIN && errno != EWOULDBLOCK) {
-                VLOG_WARN_RL(&rl, "accept failed: %s", strerror(errno));
-            }
+        struct stream *stream;
+        int error;
+
+        error = pstream_accept(server->listener, &stream);
+        if (!error) {
+            struct unixctl_conn *conn = xzalloc(sizeof *conn);
+            list_push_back(&server->conns, &conn->node);
+            conn->rpc = jsonrpc_open(stream);
+        } else if (error == EAGAIN) {
             break;
+        } else {
+            VLOG_WARN_RL(&rl, "%s: accept failed: %s",
+                         pstream_get_name(server->listener),
+                         strerror(error));
         }
-        new_connection(server, fd);
     }
 
     LIST_FOR_EACH_SAFE (conn, next, node, &server->conns) {
@@ -487,12 +380,11 @@ unixctl_server_wait(struct unixctl_server *server)
         return;
     }
 
-    poll_fd_wait(server->fd, POLLIN);
+    pstream_wait(server->listener);
     LIST_FOR_EACH (conn, node, &server->conns) {
-        if (conn->state == S_RECV) {
-            poll_fd_wait(conn->fd, POLLIN);
-        } else if (conn->state == S_SEND) {
-            poll_fd_wait(conn->fd, POLLOUT);
+        jsonrpc_wait(conn->rpc);
+        if (!jsonrpc_get_backlog(conn->rpc)) {
+            jsonrpc_recv_wait(conn->rpc);
         }
     }
 }
@@ -508,151 +400,92 @@ unixctl_server_destroy(struct unixctl_server *server)
             kill_connection(conn);
         }
 
-        close(server->fd);
-        fatal_signal_unlink_file_now(server->path);
-        free(server->path);
+        pstream_close(server->listener);
         free(server);
     }
 }
 
-/* Connects to a Vlog server socket.  'path' should be the name of a Vlog
- * server socket.  If it does not start with '/', it will be prefixed with
- * the rundir (e.g. /usr/local/var/run/openvswitch).
+/* Connects to a unixctl server socket.  'path' should be the name of a unixctl
+ * server socket.  If it does not start with '/', it will be prefixed with the
+ * rundir (e.g. /usr/local/var/run/openvswitch).
  *
  * Returns 0 if successful, otherwise a positive errno value.  If successful,
- * sets '*clientp' to the new unixctl_client, otherwise to NULL. */
+ * sets '*client' to the new jsonrpc, otherwise to NULL. */
 int
-unixctl_client_create(const char *path, struct unixctl_client **clientp)
+unixctl_client_create(const char *path, struct jsonrpc **client)
 {
-    static int counter;
-    struct unixctl_client *client;
+    char *abs_path, *unix_path;
+    struct stream *stream;
     int error;
-    int fd = -1;
 
-    /* Determine location. */
-    client = xmalloc(sizeof *client);
-    client->connect_path = abs_file_name(ovs_rundir(), path);
-    client->bind_path = xasprintf("/tmp/vlog.%ld.%d",
-                                  (long int) getpid(), counter++);
+    *client = NULL;
 
-    /* Open socket. */
-    fd = make_unix_socket(SOCK_STREAM, false, false,
-                          client->bind_path, client->connect_path);
-    if (fd < 0) {
-        error = -fd;
-        goto error;
+    abs_path = abs_file_name(ovs_rundir(), path);
+    unix_path = xasprintf("unix:%s", abs_path);
+    error = stream_open_block(stream_open(unix_path, &stream), &stream);
+    free(unix_path);
+    free(abs_path);
+
+    if (error) {
+        VLOG_WARN("failed to connect to %s", path);
+        return error;
     }
 
-    /* Bind socket to stream. */
-    client->stream = fdopen(fd, "r+");
-    if (!client->stream) {
-        error = errno;
-        VLOG_WARN("%s: fdopen failed (%s)",
-                  client->connect_path, strerror(error));
-        goto error;
-    }
-    *clientp = client;
+    *client = jsonrpc_open(stream);
     return 0;
-
-error:
-    if (fd >= 0) {
-        close(fd);
-    }
-    free(client->connect_path);
-    free(client->bind_path);
-    free(client);
-    *clientp = NULL;
-    return error;
 }
 
-/* Destroys 'client'. */
-void
-unixctl_client_destroy(struct unixctl_client *client)
-{
-    if (client) {
-        fatal_signal_unlink_file_now(client->bind_path);
-        free(client->bind_path);
-        free(client->connect_path);
-        fclose(client->stream);
-        free(client);
-    }
-}
-
-/* Sends 'request' to the server socket and waits for a reply.  Returns 0 if
- * successful, otherwise to a positive errno value.  If successful, sets
- * '*reply' to the reply, which the caller must free, otherwise to NULL. */
+/* Executes 'command' on the server with an argument vector 'argv' containing
+ * 'argc' elements.  If successfully communicated with the server, returns 0
+ * and sets '*result', or '*err' (not both) to the result or error the server
+ * returned.  Otherwise, sets '*result' and '*err' to NULL and returns a
+ * positive errno value.  The caller is responsible for freeing '*result' or
+ * '*err' if not NULL. */
 int
-unixctl_client_transact(struct unixctl_client *client,
-                        const char *request,
-                        int *reply_code, char **reply_body)
+unixctl_client_transact(struct jsonrpc *client, const char *command, int argc,
+                        char *argv[], char **result, char **err)
 {
-    struct ds line = DS_EMPTY_INITIALIZER;
-    struct ds reply = DS_EMPTY_INITIALIZER;
-    int error;
+    struct jsonrpc_msg *request, *reply;
+    struct json **json_args, *params;
+    int error, i;
 
-    /* Send 'request' to server.  Add a new-line if 'request' didn't end in
-     * one. */
-    fputs(request, client->stream);
-    if (request[0] == '\0' || request[strlen(request) - 1] != '\n') {
-        putc('\n', client->stream);
+    *result = NULL;
+    *err = NULL;
+
+    json_args = xmalloc(argc * sizeof *json_args);
+    for (i = 0; i < argc; i++) {
+        json_args[i] = json_string_create(argv[i]);
     }
-    if (ferror(client->stream)) {
-        VLOG_WARN("error sending request to %s: %s",
-                  client->connect_path, strerror(errno));
-        return errno;
+    params = json_array_create(json_args, argc);
+    request = jsonrpc_create_request(command, params, NULL);
+
+    error = jsonrpc_transact_block(client, request, &reply);
+    if (error) {
+        VLOG_WARN("error communicating with %s: %s", jsonrpc_get_name(client),
+                  strerror(error));
+        return error;
     }
 
-    /* Wait for response. */
-    *reply_code = -1;
-    for (;;) {
-        const char *s;
-
-        error = ds_get_line(&line, client->stream);
-        if (error) {
-            VLOG_WARN("error reading reply from %s: %s",
-                      client->connect_path,
-                      ovs_retval_to_string(error));
-            goto error;
-        }
-
-        s = ds_cstr(&line);
-        if (*reply_code == -1) {
-            if (!isdigit((unsigned char)s[0])
-                    || !isdigit((unsigned char)s[1])
-                    || !isdigit((unsigned char)s[2])) {
-                VLOG_WARN("reply from %s does not start with 3-digit code",
-                          client->connect_path);
-                error = EPROTO;
-                goto error;
-            }
-            sscanf(s, "%3d", reply_code);
+    if (reply->error) {
+        if (reply->error->type == JSON_STRING) {
+            *err = xstrdup(json_string(reply->error));
         } else {
-            if (s[0] == '.') {
-                if (s[1] == '\0') {
-                    break;
-                }
-                s++;
-            }
-            ds_put_cstr(&reply, s);
-            ds_put_char(&reply, '\n');
+            VLOG_WARN("%s: unexpected error type in JSON RPC reply: %s",
+                      jsonrpc_get_name(client),
+                      json_type_to_string(reply->error->type));
+            error = EINVAL;
+        }
+    } else if (reply->result) {
+        if (reply->result->type == JSON_STRING) {
+            *result = xstrdup(json_string(reply->result));
+        } else {
+            VLOG_WARN("%s: unexpected result type in JSON rpc reply: %s",
+                      jsonrpc_get_name(client),
+                      json_type_to_string(reply->result->type));
+            error = EINVAL;
         }
     }
-    *reply_body = ds_cstr(&reply);
-    ds_destroy(&line);
-    return 0;
 
-error:
-    ds_destroy(&line);
-    ds_destroy(&reply);
-    *reply_code = 0;
-    *reply_body = NULL;
-    return error == EOF ? EPROTO : error;
-}
-
-/* Returns the path of the server socket to which 'client' is connected.  The
- * caller must not modify or free the returned string. */
-const char *
-unixctl_client_target(const struct unixctl_client *client)
-{
-    return client->connect_path;
+    jsonrpc_msg_destroy(reply);
+    return error;
 }

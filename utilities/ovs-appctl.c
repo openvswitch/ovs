@@ -26,6 +26,7 @@
 #include "daemon.h"
 #include "dirs.h"
 #include "dynamic-string.h"
+#include "jsonrpc.h"
 #include "process.h"
 #include "timeval.h"
 #include "unixctl.h"
@@ -33,16 +34,17 @@
 
 static void usage(void);
 static const char *parse_command_line(int argc, char *argv[]);
-static struct unixctl_client *connect_to_target(const char *target);
+static struct jsonrpc *connect_to_target(const char *target);
 
 int
 main(int argc, char *argv[])
 {
-    struct unixctl_client *client;
+    char *cmd_result, *cmd_error;
+    struct jsonrpc *client;
+    char *cmd, **cmd_argv;
     const char *target;
-    int code, error;
-    char *request;
-    char *reply;
+    int cmd_argc;
+    int error;
 
     set_program_name(argv[0]);
 
@@ -51,22 +53,28 @@ main(int argc, char *argv[])
     client = connect_to_target(target);
 
     /* Transact request and process reply. */
-    request = process_escape_args(argv + optind);
-    error = unixctl_client_transact(client, request, &code, &reply);
-    free(request);
+    cmd = argv[optind++];
+    cmd_argc = argc - optind;
+    cmd_argv = cmd_argc ? argv + optind : NULL;
+    error = unixctl_client_transact(client, cmd, cmd_argc, cmd_argv,
+                                    &cmd_result, &cmd_error);
     if (error) {
         ovs_fatal(error, "%s: transaction error", target);
     }
-    if (code / 100 != 2) {
-        fputs(reply, stderr);
-        ovs_error(0, "%s: server returned reply code %03d", target, code);
+
+    if (cmd_error) {
+        fputs(cmd_error, stderr);
+        ovs_error(0, "%s: server returned an error", target);
         exit(2);
+    } else if (cmd_result) {
+        fputs(cmd_result, stdout);
+    } else {
+        NOT_REACHED();
     }
-    fputs(reply, stdout);
 
-    unixctl_client_destroy(client);
-    free(reply);
-
+    jsonrpc_close(client);
+    free(cmd_result);
+    free(cmd_error);
     return 0;
 }
 
@@ -159,10 +167,10 @@ parse_command_line(int argc, char *argv[])
     return target ? target : "ovs-vswitchd";
 }
 
-static struct unixctl_client *
+static struct jsonrpc *
 connect_to_target(const char *target)
 {
-    struct unixctl_client *client;
+    struct jsonrpc *client;
     char *socket_name;
     int error;
 

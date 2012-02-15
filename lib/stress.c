@@ -154,9 +154,9 @@ stress_unixctl_list(struct unixctl_conn *conn, int argc OVS_UNUSED,
         }
     }
     if (found) {
-        unixctl_command_reply(conn, 200, ds_cstr(&results));
+        unixctl_command_reply(conn, ds_cstr(&results));
     } else {
-        unixctl_command_reply(conn, 404, "");
+        unixctl_command_reply_error(conn, NULL);
     }
     ds_destroy(&results);
 }
@@ -166,7 +166,7 @@ stress_unixctl_enable(struct unixctl_conn *conn, int argc OVS_UNUSED,
                       const char *argv[] OVS_UNUSED, void *aux OVS_UNUSED)
 {
     stress_enable(true);
-    unixctl_command_reply(conn, 200, "");
+    unixctl_command_reply(conn, NULL);
 }
 
 static void
@@ -174,14 +174,13 @@ stress_unixctl_disable(struct unixctl_conn *conn, int argc OVS_UNUSED,
                        const char *argv[] OVS_UNUSED, void *aux OVS_UNUSED)
 {
     stress_enable(false);
-    unixctl_command_reply(conn, 200, "");
+    unixctl_command_reply(conn, NULL);
 }
 
 static void
 stress_unixctl_set(struct unixctl_conn *conn, int argc OVS_UNUSED,
                    const char *argv[], void *aux OVS_UNUSED)
 {
-    int code = 404;
     const char *option_name = argv[1];
     const char *option_val = argv[2];
     int i;
@@ -193,11 +192,12 @@ stress_unixctl_set(struct unixctl_conn *conn, int argc OVS_UNUSED,
             bool random = !strcmp(argv[3], "random");
 
             stress_set(option, period, random);
-            code = 200;
-            break;
+            unixctl_command_reply(conn, NULL);
+            return;
         }
     }
-    unixctl_command_reply(conn, code, "");
+
+    unixctl_command_reply_error(conn, NULL);
 }
 
 /* Exposes ovs-appctl access to the stress options.

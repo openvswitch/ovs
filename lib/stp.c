@@ -1371,7 +1371,7 @@ stp_unixctl_tcn(struct unixctl_conn *conn, int argc,
         struct stp *stp = stp_find(argv[1]);
 
         if (!stp) {
-            unixctl_command_reply(conn, 501, "no such stp object");
+            unixctl_command_reply_error(conn, "no such stp object");
             return;
         }
         stp_topology_change_detection(stp);
@@ -1383,5 +1383,5 @@ stp_unixctl_tcn(struct unixctl_conn *conn, int argc,
         }
     }
 
-    unixctl_command_reply(conn, 200, "OK");
+    unixctl_command_reply(conn, "OK");
 }

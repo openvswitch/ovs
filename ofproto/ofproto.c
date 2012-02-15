@@ -3983,7 +3983,7 @@ ofproto_unixctl_list(struct unixctl_conn *conn, int argc OVS_UNUSED,
     HMAP_FOR_EACH (ofproto, hmap_node, &all_ofprotos) {
         ds_put_format(&results, "%s\n", ofproto->name);
     }
-    unixctl_command_reply(conn, 200, ds_cstr(&results));
+    unixctl_command_reply(conn, ds_cstr(&results));
     ds_destroy(&results);
 }
 

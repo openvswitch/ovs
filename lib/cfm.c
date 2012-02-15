@@ -677,7 +677,7 @@ cfm_unixctl_show(struct unixctl_conn *conn, int argc, const char *argv[],
     if (argc > 1) {
         cfm = cfm_find(argv[1]);
         if (!cfm) {
-            unixctl_command_reply(conn, 501, "no such CFM object");
+            unixctl_command_reply_error(conn, "no such CFM object");
             return;
         }
         cfm_print_details(&ds, cfm);
@@ -687,7 +687,7 @@ cfm_unixctl_show(struct unixctl_conn *conn, int argc, const char *argv[],
         }
     }
 
-    unixctl_command_reply(conn, 200, ds_cstr(&ds));
+    unixctl_command_reply(conn, ds_cstr(&ds));
     ds_destroy(&ds);
 }
 
@@ -706,14 +706,14 @@ cfm_unixctl_set_fault(struct unixctl_conn *conn, int argc, const char *argv[],
     } else if (!strcasecmp("normal", fault_str)) {
         fault_override = -1;
     } else {
-        unixctl_command_reply(conn, 501, "unknown fault string");
+        unixctl_command_reply_error(conn, "unknown fault string");
         return;
     }
 
     if (argc > 2) {
         cfm = cfm_find(argv[1]);
         if (!cfm) {
-            unixctl_command_reply(conn, 501, "no such CFM object");
+            unixctl_command_reply_error(conn, "no such CFM object");
             return;
         }
         cfm->fault_override = fault_override;
@@ -723,5 +723,5 @@ cfm_unixctl_set_fault(struct unixctl_conn *conn, int argc, const char *argv[],
         }
     }
 
-    unixctl_command_reply(conn, 200, "OK");
+    unixctl_command_reply(conn, "OK");
 }

@@ -53,7 +53,7 @@ coverage_unixctl_log(struct unixctl_conn *conn, int argc OVS_UNUSED,
                      const char *argv[] OVS_UNUSED, void *aux OVS_UNUSED)
 {
     coverage_log(VLL_WARN, false);
-    unixctl_command_reply(conn, 200, NULL);
+    unixctl_command_reply(conn, NULL);
 }
 
 void

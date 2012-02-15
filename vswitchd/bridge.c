@@ -2084,7 +2084,7 @@ qos_unixctl_show(struct unixctl_conn *conn, int argc OVS_UNUSED,
 
     iface = iface_find(argv[1]);
     if (!iface) {
-        unixctl_command_reply(conn, 501, "no such interface");
+        unixctl_command_reply_error(conn, "no such interface");
         return;
     }
 
@@ -2104,10 +2104,10 @@ qos_unixctl_show(struct unixctl_conn *conn, int argc OVS_UNUSED,
         if (error) {
             ds_put_format(&ds, "failed to dump queues: %s", strerror(error));
         }
-        unixctl_command_reply(conn, 200, ds_cstr(&ds));
+        unixctl_command_reply(conn, ds_cstr(&ds));
     } else {
         ds_put_format(&ds, "QoS not configured on %s\n", iface->name);
-        unixctl_command_reply(conn, 501, ds_cstr(&ds));
+        unixctl_command_reply_error(conn, ds_cstr(&ds));
     }
 
     shash_destroy_free_data(&sh);
@@ -2189,14 +2189,14 @@ bridge_unixctl_dump_flows(struct unixctl_conn *conn, int argc OVS_UNUSED,
 
     br = bridge_lookup(argv[1]);
     if (!br) {
-        unixctl_command_reply(conn, 501, "Unknown bridge");
+        unixctl_command_reply_error(conn, "Unknown bridge");
         return;
     }
 
     ds_init(&results);
     ofproto_get_all_flows(br->ofproto, &results);
 
-    unixctl_command_reply(conn, 200, ds_cstr(&results));
+    unixctl_command_reply(conn, ds_cstr(&results));
     ds_destroy(&results);
 }
 
@@ -2211,7 +2211,7 @@ bridge_unixctl_reconnect(struct unixctl_conn *conn, int argc,
     if (argc > 1) {
         br = bridge_lookup(argv[1]);
         if (!br) {
-            unixctl_command_reply(conn, 501, "Unknown bridge");
+            unixctl_command_reply_error(conn,  "Unknown bridge");
             return;
         }
         ofproto_reconnect_controllers(br->ofproto);
@@ -2220,7 +2220,7 @@ bridge_unixctl_reconnect(struct unixctl_conn *conn, int argc,
             ofproto_reconnect_controllers(br->ofproto);
         }
     }
-    unixctl_command_reply(conn, 200, NULL);
+    unixctl_command_reply(conn, NULL);
 }
 
 static size_t

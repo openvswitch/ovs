@@ -941,7 +941,7 @@ bond_unixctl_list(struct unixctl_conn *conn,
         }
         ds_put_char(&ds, '\n');
     }
-    unixctl_command_reply(conn, 200, ds_cstr(&ds));
+    unixctl_command_reply(conn, ds_cstr(&ds));
     ds_destroy(&ds);
 }
 
@@ -1042,7 +1042,7 @@ bond_unixctl_show(struct unixctl_conn *conn,
         const struct bond *bond = bond_find(argv[1]);
 
         if (!bond) {
-            unixctl_command_reply(conn, 501, "no such bond");
+            unixctl_command_reply_error(conn, "no such bond");
             return;
         }
         bond_print_details(&ds, bond);
@@ -1054,7 +1054,7 @@ bond_unixctl_show(struct unixctl_conn *conn,
         }
     }
 
-    unixctl_command_reply(conn, 200, ds_cstr(&ds));
+    unixctl_command_reply(conn, ds_cstr(&ds));
     ds_destroy(&ds);
 }
 
@@ -1073,30 +1073,30 @@ bond_unixctl_migrate(struct unixctl_conn *conn,
 
     bond = bond_find(bond_s);
     if (!bond) {
-        unixctl_command_reply(conn, 501, "no such bond");
+        unixctl_command_reply_error(conn, "no such bond");
         return;
     }
 
     if (bond->balance != BM_SLB) {
-        unixctl_command_reply(conn, 501, "not an SLB bond");
+        unixctl_command_reply_error(conn, "not an SLB bond");
         return;
     }
 
     if (strspn(hash_s, "0123456789") == strlen(hash_s)) {
         hash = atoi(hash_s) & BOND_MASK;
     } else {
-        unixctl_command_reply(conn, 501, "bad hash");
+        unixctl_command_reply_error(conn, "bad hash");
         return;
     }
 
     slave = bond_lookup_slave(bond, slave_s);
     if (!slave) {
-        unixctl_command_reply(conn, 501, "no such slave");
+        unixctl_command_reply_error(conn, "no such slave");
         return;
     }
 
     if (!slave->enabled) {
-        unixctl_command_reply(conn, 501, "cannot migrate to disabled slave");
+        unixctl_command_reply_error(conn, "cannot migrate to disabled slave");
         return;
     }
 
@@ -1104,7 +1104,7 @@ bond_unixctl_migrate(struct unixctl_conn *conn,
     tag_set_add(&bond->unixctl_tags, entry->tag);
     entry->slave = slave;
     entry->tag = tag_create_random();
-    unixctl_command_reply(conn, 200, "migrated");
+    unixctl_command_reply(conn, "migrated");
 }
 
 static void
@@ -1119,18 +1119,18 @@ bond_unixctl_set_active_slave(struct unixctl_conn *conn,
 
     bond = bond_find(bond_s);
     if (!bond) {
-        unixctl_command_reply(conn, 501, "no such bond");
+        unixctl_command_reply_error(conn, "no such bond");
         return;
     }
 
     slave = bond_lookup_slave(bond, slave_s);
     if (!slave) {
-        unixctl_command_reply(conn, 501, "no such slave");
+        unixctl_command_reply_error(conn, "no such slave");
         return;
     }
 
     if (!slave->enabled) {
-        unixctl_command_reply(conn, 501, "cannot make disabled slave active");
+        unixctl_command_reply_error(conn, "cannot make disabled slave active");
         return;
     }
 
@@ -1141,9 +1141,9 @@ bond_unixctl_set_active_slave(struct unixctl_conn *conn,
         VLOG_INFO("bond %s: active interface is now %s",
                   bond->name, slave->name);
         bond->send_learning_packets = true;
-        unixctl_command_reply(conn, 200, "done");
+        unixctl_command_reply(conn, "done");
     } else {
-        unixctl_command_reply(conn, 200, "no change");
+        unixctl_command_reply(conn, "no change");
     }
 }
 
@@ -1157,18 +1157,18 @@ enable_slave(struct unixctl_conn *conn, const char *argv[], bool enable)
 
     bond = bond_find(bond_s);
     if (!bond) {
-        unixctl_command_reply(conn, 501, "no such bond");
+        unixctl_command_reply_error(conn, "no such bond");
         return;
     }
 
     slave = bond_lookup_slave(bond, slave_s);
     if (!slave) {
-        unixctl_command_reply(conn, 501, "no such slave");
+        unixctl_command_reply_error(conn, "no such slave");
         return;
     }
 
     bond_enable_slave(slave, enable, &bond->unixctl_tags);
-    unixctl_command_reply(conn, 200, enable ? "enabled" : "disabled");
+    unixctl_command_reply(conn, enable ? "enabled" : "disabled");
 }
 
 static void
@@ -1202,7 +1202,7 @@ bond_unixctl_hash(struct unixctl_conn *conn, int argc, const char *argv[],
 
     if (vlan_s) {
         if (sscanf(vlan_s, "%u", &vlan) != 1) {
-            unixctl_command_reply(conn, 501, "invalid vlan");
+            unixctl_command_reply_error(conn, "invalid vlan");
             return;
         }
     } else {
@@ -1211,7 +1211,7 @@ bond_unixctl_hash(struct unixctl_conn *conn, int argc, const char *argv[],
 
     if (basis_s) {
         if (sscanf(basis_s, "%"PRIu32, &basis) != 1) {
-            unixctl_command_reply(conn, 501, "invalid basis");
+            unixctl_command_reply_error(conn, "invalid basis");
             return;
         }
     } else {
@@ -1223,10 +1223,10 @@ bond_unixctl_hash(struct unixctl_conn *conn, int argc, const char *argv[],
         hash = bond_hash_src(mac, vlan, basis) & BOND_MASK;
 
         hash_cstr = xasprintf("%u", hash);
-        unixctl_command_reply(conn, 200, hash_cstr);
+        unixctl_command_reply(conn, hash_cstr);
         free(hash_cstr);
     } else {
-        unixctl_command_reply(conn, 501, "invalid mac");
+        unixctl_command_reply_error(conn, "invalid mac");
     }
 }
 
