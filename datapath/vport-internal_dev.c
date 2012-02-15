@@ -87,6 +87,9 @@ static int internal_dev_mac_addr(struct net_device *dev, void *p)
 
 	if (!is_valid_ether_addr(addr->sa_data))
 		return -EADDRNOTAVAIL;
+#ifdef NET_ADDR_RANDOM
+	dev->addr_assign_type &= ~NET_ADDR_RANDOM;
+#endif
 	memcpy(dev->dev_addr, addr->sa_data, dev->addr_len);
 	return 0;
 }
@@ -213,7 +216,7 @@ static void do_setup(struct net_device *netdev)
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,39)
 	netdev->hw_features = netdev->features & ~NETIF_F_LLTX;
 #endif
-	random_ether_addr(netdev->dev_addr);
+	eth_hw_addr_random(netdev);
 }
 
 static struct vport *internal_dev_create(const struct vport_parms *parms)

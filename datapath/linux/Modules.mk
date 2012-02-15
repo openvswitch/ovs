@@ -18,6 +18,7 @@ openvswitch_headers += \
 	linux/compat/include/linux/cpumask.h \
 	linux/compat/include/linux/dmi.h \
 	linux/compat/include/linux/err.h \
+	linux/compat/include/linux/etherdevice.h \
 	linux/compat/include/linux/flex_array.h \
 	linux/compat/include/linux/genetlink.h \
 	linux/compat/include/linux/icmp.h \
