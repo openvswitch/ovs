@@ -250,6 +250,24 @@ parse_note(struct ofpbuf *b, const char *arg)
 }
 
 static void
+parse_fin_timeout(struct ofpbuf *b, char *arg)
+{
+    struct nx_action_fin_timeout *naft;
+    char *key, *value;
+
+    naft = ofputil_put_NXAST_FIN_TIMEOUT(b);
+    while (ofputil_parse_key_value(&arg, &key, &value)) {
+        if (!strcmp(key, "idle_timeout")) {
+            naft->fin_idle_timeout = htons(str_to_u16(value, key));
+        } else if (!strcmp(key, "hard_timeout")) {
+            naft->fin_hard_timeout = htons(str_to_u16(value, key));
+        } else {
+            ovs_fatal(0, "invalid key '%s' in 'fin_timeout' argument", key);
+        }
+    }
+}
+
+static void
 parse_named_action(enum ofputil_action_code code, const struct flow *flow,
                    struct ofpbuf *b, char *arg)
 {
@@ -366,6 +384,10 @@ parse_named_action(enum ofputil_action_code code, const struct flow *flow,
 
     case OFPUTIL_NXAST_DEC_TTL:
         ofputil_put_NXAST_DEC_TTL(b);
+        break;
+
+    case OFPUTIL_NXAST_FIN_TIMEOUT:
+        parse_fin_timeout(b, arg);
         break;
     }
 }

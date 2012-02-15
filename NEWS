@@ -16,6 +16,8 @@ post-v1.5.0
         - Added an OpenFlow extension NXT_SET_ASYNC_CONFIG that allows
           controllers more precise control over which OpenFlow messages they
           receive asynchronously.
+        - New "fin_timeout" action.
+        - Added "fin_timeout" support to "learn" action.
     - The default MAC learning timeout has been increased from 60 seconds
       to 300 seconds.  The MAC learning timeout is now configurable.
     - Logging to console and file will have UTC timestamp as a default for all

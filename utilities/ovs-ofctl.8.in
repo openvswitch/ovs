@@ -956,6 +956,11 @@ specified.
 These key-value pairs have the same meaning as in the usual
 \fBovs\-ofctl\fR flow syntax.
 .
+.IP \fBfin_idle_timeout=\fIseconds\fR
+.IQ \fBfin_hard_timeout=\fIseconds\fR
+Adds a \fBfin_timeout\fR action with the specified arguments to the
+new flow.  This feature was added in Open vSwitch 1.5.90.
+.
 .IP \fBtable=\fInumber\fR
 The table in which the new flow should be inserted.  Specify a decimal
 number between 0 and 254.  The default, if \fBtable\fR is unspecified,
@@ -1006,6 +1011,27 @@ with no match criteria.  (This is why the default \fBtable\fR is 1, to
 keep the learned flows separate from the primary flow table 0.)
 .RE
 .
+.IP "\fBfin_timeout(\fIargument\fR[\fB,\fIargument\fR]\fB)"
+This action changes the idle timeout or hard timeout, or both, of this
+OpenFlow rule when the rule matches a TCP packet with the FIN or RST
+flag.  When such a packet is observed, the action reduces the rule's
+timeouts to those specified on the action.  If the rule's existing
+timeout is already shorter than the one that the action specifies,
+then that timeout is unaffected.
+.IP
+\fIargument\fR takes the following forms:
+.RS
+.IP "\fBidle_timeout=\fIseconds\fR"
+Causes the flow to expire after the given number of seconds of
+inactivity.
+.
+.IP "\fBhard_timeout=\fIseconds\fR"
+Causes the flow to expire after the given number of seconds,
+regardless of activity.  (\fIseconds\fR specifies time since the
+flow's creation, not since the receipt of the FIN or RST.)
+.RE
+.IP
+This action was added in Open vSwitch 1.5.90.
 .IP "\fBexit\fR"
 This action causes Open vSwitch to immediately halt execution of further
 actions.  Those actions which have already been executed are unaffected.  Any

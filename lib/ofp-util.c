@@ -2508,6 +2508,7 @@ validate_actions(const union ofp_action *actions, size_t n_actions,
         case OFPUTIL_NXAST_SET_TUNNEL64:
         case OFPUTIL_NXAST_EXIT:
         case OFPUTIL_NXAST_DEC_TTL:
+        case OFPUTIL_NXAST_FIN_TIMEOUT:
             break;
         }
 

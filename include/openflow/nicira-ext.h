@@ -335,6 +335,7 @@ enum nx_action_subtype {
     NXAST_LEARN,                /* struct nx_action_learn */
     NXAST_EXIT,                 /* struct nx_action_header */
     NXAST_DEC_TTL,              /* struct nx_action_header */
+    NXAST_FIN_TIMEOUT,          /* struct nx_action_fin_timeout */
 };
 
 /* Header for Nicira-defined actions. */
@@ -802,6 +803,13 @@ enum nx_mp_algorithm {
  * prepared to handle this by flooding (which can be implemented as a
  * low-priority flow).
  *
+ * If a learned flow matches a single TCP stream with a relatively long
+ * timeout, one may make the best of resource constraints by setting
+ * 'fin_idle_timeout' or 'fin_hard_timeout' (both measured in seconds), or
+ * both, to shorter timeouts.  When either of these is specified as a nonzero
+ * value, OVS adds a NXAST_FIN_TIMEOUT action, with the specified timeouts, to
+ * the learned flow.
+ *
  * Examples
  * --------
  *
@@ -905,7 +913,9 @@ struct nx_action_learn {
     ovs_be64 cookie;            /* Cookie for new flow. */
     ovs_be16 flags;             /* Either 0 or OFPFF_SEND_FLOW_REM. */
     uint8_t table_id;           /* Table to insert flow entry. */
-    uint8_t pad[5];             /* Must be zero. */
+    uint8_t pad;                /* Must be zero. */
+    ovs_be16 fin_idle_timeout;  /* Idle timeout after FIN, if nonzero. */
+    ovs_be16 fin_hard_timeout;  /* Hard timeout after FIN, if nonzero. */
     /* Followed by a sequence of flow_mod_spec elements, as described above,
      * until the end of the action is reached. */
 };
@@ -922,6 +932,40 @@ OFP_ASSERT(sizeof(struct nx_action_learn) == 32);
 #define NX_LEARN_DST_OUTPUT    (2 << 11) /* Add OFPAT_OUTPUT action. */
 #define NX_LEARN_DST_RESERVED  (3 << 11) /* Not yet defined. */
 #define NX_LEARN_DST_MASK      (3 << 11)
+
+/* Action structure for NXAST_FIN_TIMEOUT.
+ *
+ * This action changes the idle timeout or hard timeout, or both, of this
+ * OpenFlow rule when the rule matches a TCP packet with the FIN or RST flag.
+ * When such a packet is observed, the action reduces the rule's idle timeout
+ * to 'fin_idle_timeout' and its hard timeout to 'fin_hard_timeout'.  This
+ * action has no effect on an existing timeout that is already shorter than the
+ * one that the action specifies.  A 'fin_idle_timeout' or 'fin_hard_timeout'
+ * of zero has no effect on the respective timeout.
+ *
+ * 'fin_idle_timeout' and 'fin_hard_timeout' are measured in seconds.
+ * 'fin_hard_timeout' specifies time since the flow's creation, not since the
+ * receipt of the FIN or RST.
+ *
+ * This is useful for quickly discarding learned TCP flows that otherwise will
+ * take a long time to expire.
+ *
+ * This action is intended for use with an OpenFlow rule that matches only a
+ * single TCP flow.  If the rule matches multiple TCP flows (e.g. it wildcards
+ * all TCP traffic, or all TCP traffic to a particular port), then any FIN or
+ * RST in any of those flows will cause the entire OpenFlow rule to expire
+ * early, which is not normally desirable.
+ */
+struct nx_action_fin_timeout {
+    ovs_be16 type;              /* OFPAT_VENDOR. */
+    ovs_be16 len;               /* 16. */
+    ovs_be32 vendor;            /* NX_VENDOR_ID. */
+    ovs_be16 subtype;           /* NXAST_FIN_TIMEOUT. */
+    ovs_be16 fin_idle_timeout;  /* New idle timeout, if nonzero. */
+    ovs_be16 fin_hard_timeout;  /* New hard timeout, if nonzero. */
+    ovs_be16 pad;               /* Must be zero. */
+};
+OFP_ASSERT(sizeof(struct nx_action_fin_timeout) == 16);
 
 /* Action structure for NXAST_AUTOPATH.
  *

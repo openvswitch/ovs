@@ -352,6 +352,9 @@ bool ofputil_frag_handling_from_string(const char *, enum ofp_config_flags *);
  * OFPUTIL_NXAST_BUNDLE_LOAD
  * OFPUTIL_NXAST_RESUBMIT_TABLE
  * OFPUTIL_NXAST_OUTPUT_REG
+ * OFPUTIL_NXAST_LEARN
+ * OFPUTIL_NXAST_DEC_TTL
+ * OFPUTIL_NXAST_FIN_TIMEOUT
  *
  * (The above list helps developers who want to "grep" for these definitions.)
  */

@@ -37,4 +37,5 @@ NXAST_ACTION(NXAST_OUTPUT_REG,     nx_action_output_reg,   0, NULL)
 NXAST_ACTION(NXAST_LEARN,          nx_action_learn,        1, "learn")
 NXAST_ACTION(NXAST_EXIT,           nx_action_header,       0, "exit")
 NXAST_ACTION(NXAST_DEC_TTL,        nx_action_header,       0, "dec_ttl")
+NXAST_ACTION(NXAST_FIN_TIMEOUT,    nx_action_fin_timeout,  0, "fin_timeout")
 #undef NXAST_ACTION

@@ -1136,3 +1136,40 @@ AT_CHECK([test $hard4 -lt $duration4])
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP
+
+AT_SETUP([ofproto-dpif - fin_timeout])
+OVS_VSWITCHD_START
+AT_DATA([flows.txt], [dnl
+in_port=1 actions=output:2
+in_port=2 actions=mod_vlan_vid:17,output:1
+])
+AT_CHECK([ovs-ofctl add-flow br0 'idle_timeout=60,actions=fin_timeout(idle_timeout=5)'])
+AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip], [0],
+[NXST_FLOW reply:
+ idle_timeout=60, actions=fin_timeout(idle_timeout=5)
+])
+# Check that a TCP SYN packet does not change the timeout.  (Because
+# flow stats updates are mainly what implements the fin_timeout
+# feature, we warp forward a couple of times to ensure that flow stats
+# run before re-checking the flow table.)
+AT_CHECK([ovs-appctl netdev-dummy/receive br0 0021853763af0026b98cb0f908004500003c2e2440004006465dac11370dac11370b828b0016751e267b00000000a00216d017360000020405b40402080a2d25085f0000000001030307], [0], [success
+])
+AT_CHECK([ovs-appctl time/warp 1000 && ovs-appctl time/warp 1000], [0], [warped
+warped
+])
+AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip], [0],
+[NXST_FLOW reply:
+ n_packets=1, n_bytes=74, idle_timeout=60, actions=fin_timeout(idle_timeout=5)
+])
+# Check that a TCP FIN packet does change the timeout.
+AT_CHECK([ovs-appctl netdev-dummy/receive br0 0021853763af0026b98cb0f90800451000342e3e40004006463bac11370dac11370b828b0016751e319dfc96399b801100717ae800000101080a2d250a9408579588], [0], [success
+])
+AT_CHECK([ovs-appctl time/warp 1000 && ovs-appctl time/warp 1000], [0], [warped
+warped
+])
+AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip], [0],
+[NXST_FLOW reply:
+ n_packets=2, n_bytes=140, idle_timeout=5, actions=fin_timeout(idle_timeout=5)
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP

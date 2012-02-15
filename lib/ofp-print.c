@@ -194,6 +194,7 @@ ofp_print_action(struct ds *s, const union ofp_action *a,
     const struct nx_action_multipath *nam;
     const struct nx_action_autopath *naa;
     const struct nx_action_output_reg *naor;
+    const struct nx_action_fin_timeout *naft;
     struct mf_subfield subfield;
     uint16_t port;
 
@@ -354,6 +355,21 @@ ofp_print_action(struct ds *s, const union ofp_action *a,
 
     case OFPUTIL_NXAST_EXIT:
         ds_put_cstr(s, "exit");
+        break;
+
+    case OFPUTIL_NXAST_FIN_TIMEOUT:
+        naft = (const struct nx_action_fin_timeout *) a;
+        ds_put_cstr(s, "fin_timeout(");
+        if (naft->fin_idle_timeout) {
+            ds_put_format(s, "idle_timeout=%"PRIu16",",
+                          ntohs(naft->fin_idle_timeout));
+        }
+        if (naft->fin_hard_timeout) {
+            ds_put_format(s, "hard_timeout=%"PRIu16",",
+                          ntohs(naft->fin_hard_timeout));
+        }
+        ds_chomp(s, ',');
+        ds_put_char(s, ')');
         break;
 
     default:

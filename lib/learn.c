@@ -125,7 +125,7 @@ learn_check(const struct nx_action_learn *learn, const struct flow *flow)
     cls_rule_init_catchall(&rule, 0);
 
     if (learn->flags & ~htons(OFPFF_SEND_FLOW_REM)
-        || !is_all_zeros(learn->pad, sizeof learn->pad)
+        || learn->pad
         || learn->table_id == 0xff) {
         return OFPERR_OFPBAC_BAD_ARGUMENT;
     }
@@ -208,6 +208,14 @@ learn_execute(const struct nx_action_learn *learn, const struct flow *flow,
     fm->n_actions = 0;
 
     ofpbuf_init(&actions, 64);
+
+    if (learn->fin_idle_timeout || learn->fin_hard_timeout) {
+        struct nx_action_fin_timeout *naft;
+
+        naft = ofputil_put_NXAST_FIN_TIMEOUT(&actions);
+        naft->fin_idle_timeout = learn->fin_idle_timeout;
+        naft->fin_hard_timeout = learn->fin_hard_timeout;
+    }
 
     for (p = learn + 1, end = (char *) learn + ntohs(learn->len); p != end; ) {
         uint16_t header = ntohs(get_be16(&p));
@@ -431,6 +439,10 @@ learn_parse(struct ofpbuf *b, char *arg, const struct flow *flow)
             learn->idle_timeout = htons(atoi(value));
         } else if (!strcmp(name, "hard_timeout")) {
             learn->hard_timeout = htons(atoi(value));
+        } else if (!strcmp(name, "fin_idle_timeout")) {
+            learn->fin_idle_timeout = htons(atoi(value));
+        } else if (!strcmp(name, "fin_hard_timeout")) {
+            learn->fin_hard_timeout = htons(atoi(value));
         } else if (!strcmp(name, "cookie")) {
             learn->cookie = htonll(strtoull(value, NULL, 0));
         } else {
@@ -522,6 +534,14 @@ learn_format(const struct nx_action_learn *learn, struct ds *s)
     if (learn->hard_timeout != htons(OFP_FLOW_PERMANENT)) {
         ds_put_format(s, ",hard_timeout=%"PRIu16, ntohs(learn->hard_timeout));
     }
+    if (learn->fin_idle_timeout) {
+        ds_put_format(s, ",fin_idle_timeout=%"PRIu16,
+                      ntohs(learn->fin_idle_timeout));
+    }
+    if (learn->fin_hard_timeout) {
+        ds_put_format(s, ",fin_hard_timeout=%"PRIu16,
+                      ntohs(learn->fin_hard_timeout));
+    }
     if (learn->priority != htons(OFP_DEFAULT_PRIORITY)) {
         ds_put_format(s, ",priority=%"PRIu16, ntohs(learn->priority));
     }
@@ -535,7 +555,7 @@ learn_format(const struct nx_action_learn *learn, struct ds *s)
     if (learn->cookie != htonll(0)) {
         ds_put_format(s, ",cookie=0x%"PRIx64, ntohll(learn->cookie));
     }
-    if (!is_all_zeros(learn->pad, sizeof learn->pad)) {
+    if (learn->pad != 0) {
         ds_put_cstr(s, ",***nonzero pad***");
     }
 

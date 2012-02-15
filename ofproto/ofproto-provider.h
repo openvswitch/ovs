@@ -841,9 +841,10 @@ struct ofproto_class {
      * 'flow' reflects the flow information for 'packet'.  All of the
      * information in 'flow' is extracted from 'packet', except for
      * flow->tun_id and flow->in_port, which are assigned the correct values
-     * for the incoming packet.  The register values are zeroed.
+     * for the incoming packet.  The register values are zeroed.  'packet''s
+     * header pointers (e.g. packet->l3) are appropriately initialized.
      *
-     * The statistics for 'packet' should be included in 'rule'.
+     * The implementation should add the statistics for 'packet' into 'rule'.
      *
      * Returns 0 if successful, otherwise an OpenFlow error code. */
     enum ofperr (*rule_execute)(struct rule *rule, const struct flow *flow,

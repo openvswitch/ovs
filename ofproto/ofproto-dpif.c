@@ -216,6 +216,11 @@ struct action_xlate_ctx {
     /* The rule that we are currently translating, or NULL. */
     struct rule_dpif *rule;
 
+    /* Union of the set of TCP flags seen so far in this flow.  (Used only by
+     * NXAST_FIN_TIMEOUT.  Set to zero to avoid updating updating rules'
+     * timeouts.) */
+    uint8_t tcp_flags;
+
     /* If nonnull, called just before executing a resubmit action.
      *
      * This is normally null so the client has to set it manually after
@@ -231,6 +236,7 @@ struct action_xlate_ctx {
                                  * be reassessed for every packet. */
     bool has_learn;             /* Actions include NXAST_LEARN? */
     bool has_normal;            /* Actions output to OFPP_NORMAL? */
+    bool has_fin_timeout;       /* Actions include NXAST_FIN_TIMEOUT? */
     uint16_t nf_output_iface;   /* Output interface index for NetFlow. */
     mirror_mask_t mirrors;      /* Bitmap of associated mirrors. */
 
@@ -250,7 +256,7 @@ struct action_xlate_ctx {
 static void action_xlate_ctx_init(struct action_xlate_ctx *,
                                   struct ofproto_dpif *, const struct flow *,
                                   ovs_be16 initial_tci, struct rule_dpif *,
-                                  const struct ofpbuf *);
+                                  uint8_t tcp_flags, const struct ofpbuf *);
 static struct ofpbuf *xlate_actions(struct action_xlate_ctx *,
                                     const union ofp_action *in, size_t n_in);
 
@@ -304,6 +310,7 @@ struct facet {
     /* Accounting. */
     uint64_t accounted_bytes;    /* Bytes processed by facet_account(). */
     struct netflow_flow nf_flow; /* Per-flow NetFlow tracking data. */
+    uint8_t tcp_flags;           /* TCP flags seen for this 'rule'. */
 
     /* Properties of datapath actions.
      *
@@ -314,6 +321,7 @@ struct facet {
     bool may_install;            /* Reassess actions for every packet? */
     bool has_learn;              /* Actions include NXAST_LEARN? */
     bool has_normal;             /* Actions output to OFPP_NORMAL? */
+    bool has_fin_timeout;        /* Actions include NXAST_FIN_TIMEOUT? */
     tag_type tags;               /* Tags that would require revalidation. */
     mirror_mask_t mirrors;       /* Bitmap of dependent mirrors. */
 };
@@ -2954,6 +2962,8 @@ update_stats(struct ofproto_dpif *p)
             subfacet->dp_packet_count = stats->n_packets;
             subfacet->dp_byte_count = stats->n_bytes;
 
+            facet->tcp_flags |= stats->tcp_flags;
+
             subfacet_update_time(subfacet, stats->used);
             facet_account(facet);
             facet_push_stats(facet);
@@ -3225,12 +3235,14 @@ facet_account(struct facet *facet)
     /* Feed information from the active flows back into the learning table to
      * ensure that table is always in sync with what is actually flowing
      * through the datapath. */
-    if (facet->has_learn || facet->has_normal) {
+    if (facet->has_learn || facet->has_normal
+        || (facet->has_fin_timeout
+            && facet->tcp_flags & (TCP_FIN | TCP_RST))) {
         struct action_xlate_ctx ctx;
 
         action_xlate_ctx_init(&ctx, ofproto, &facet->flow,
                               facet->flow.vlan_tci,
-                              facet->rule, NULL);
+                              facet->rule, facet->tcp_flags, NULL);
         ctx.may_learn = true;
         ofpbuf_delete(xlate_actions(&ctx, facet->rule->up.actions,
                                     facet->rule->up.n_actions));
@@ -3324,6 +3336,7 @@ facet_flush_stats(struct facet *facet)
     facet_reset_counters(facet);
 
     netflow_flow_clear(&facet->nf_flow);
+    facet->tcp_flags = 0;
 }
 
 /* Searches 'ofproto''s table of facets for one exactly equal to 'flow'.
@@ -3420,7 +3433,7 @@ facet_check_consistency(struct facet *facet)
         bool should_install;
 
         action_xlate_ctx_init(&ctx, ofproto, &facet->flow,
-                              subfacet->initial_tci, rule, NULL);
+                              subfacet->initial_tci, rule, 0, NULL);
         odp_actions = xlate_actions(&ctx, rule->up.actions,
                                     rule->up.n_actions);
 
@@ -3539,7 +3552,7 @@ facet_revalidate(struct facet *facet)
         bool should_install;
 
         action_xlate_ctx_init(&ctx, ofproto, &facet->flow,
-                              subfacet->initial_tci, new_rule, NULL);
+                              subfacet->initial_tci, new_rule, 0, NULL);
         odp_actions = xlate_actions(&ctx, new_rule->up.actions,
                                     new_rule->up.n_actions);
         actions_changed = (subfacet->actions_len != odp_actions->size
@@ -3581,6 +3594,7 @@ facet_revalidate(struct facet *facet)
     facet->may_install = ctx.may_set_up_flow;
     facet->has_learn = ctx.has_learn;
     facet->has_normal = ctx.has_normal;
+    facet->has_fin_timeout = ctx.has_fin_timeout;
     facet->mirrors = ctx.mirrors;
     if (new_actions) {
         i = 0;
@@ -3690,7 +3704,7 @@ flow_push_stats(struct rule_dpif *rule,
     ofproto_rule_update_used(&rule->up, used);
 
     action_xlate_ctx_init(&push.ctx, ofproto, flow, flow->vlan_tci, rule,
-                          NULL);
+                          0, NULL);
     push.ctx.resubmit_hook = push_resubmit;
     ofpbuf_delete(xlate_actions(&push.ctx,
                                 rule->up.actions, rule->up.n_actions));
@@ -3835,12 +3849,13 @@ subfacet_make_actions(struct subfacet *subfacet, const struct ofpbuf *packet)
     struct action_xlate_ctx ctx;
 
     action_xlate_ctx_init(&ctx, ofproto, &facet->flow, subfacet->initial_tci,
-                          rule, packet);
+                          rule, 0, packet);
     odp_actions = xlate_actions(&ctx, rule->up.actions, rule->up.n_actions);
     facet->tags = ctx.tags;
     facet->may_install = ctx.may_set_up_flow;
     facet->has_learn = ctx.has_learn;
     facet->has_normal = ctx.has_normal;
+    facet->has_fin_timeout = ctx.has_fin_timeout;
     facet->nf_flow.output_iface = ctx.nf_output_iface;
     facet->mirrors = ctx.mirrors;
 
@@ -3960,6 +3975,7 @@ subfacet_update_stats(struct subfacet *subfacet,
         subfacet_update_time(subfacet, stats->used);
         facet->packet_count += stats->n_packets;
         facet->byte_count += stats->n_bytes;
+        facet->tcp_flags |= stats->tcp_flags;
         facet_push_stats(facet);
         netflow_flow_update_flags(&facet->nf_flow, stats->tcp_flags);
     }
@@ -4115,7 +4131,7 @@ rule_execute(struct rule *rule_, const struct flow *flow,
     size_t size;
 
     action_xlate_ctx_init(&ctx, ofproto, flow, flow->vlan_tci,
-                          rule, packet);
+                          rule, packet_get_tcp_flags(packet, flow), packet);
     odp_actions = xlate_actions(&ctx, rule->up.actions, rule->up.n_actions);
     size = packet->size;
     if (execute_odp_actions(ofproto, flow, odp_actions->data,
@@ -4709,6 +4725,28 @@ xlate_learn_action(struct action_xlate_ctx *ctx,
     free(fm.actions);
 }
 
+/* Reduces '*timeout' to no more than 'max'.  A value of zero in either case
+ * means "infinite". */
+static void
+reduce_timeout(uint16_t max, uint16_t *timeout)
+{
+    if (max && (!*timeout || *timeout > max)) {
+        *timeout = max;
+    }
+}
+
+static void
+xlate_fin_timeout(struct action_xlate_ctx *ctx,
+                  const struct nx_action_fin_timeout *naft)
+{
+    if (ctx->tcp_flags & (TCP_FIN | TCP_RST) && ctx->rule) {
+        struct rule_dpif *rule = ctx->rule;
+
+        reduce_timeout(ntohs(naft->fin_idle_timeout), &rule->up.idle_timeout);
+        reduce_timeout(ntohs(naft->fin_hard_timeout), &rule->up.hard_timeout);
+    }
+}
+
 static bool
 may_receive(const struct ofport_dpif *port, struct action_xlate_ctx *ctx)
 {
@@ -4914,6 +4952,11 @@ do_xlate_actions(const union ofp_action *in, size_t n_in,
         case OFPUTIL_NXAST_EXIT:
             ctx->exit = true;
             break;
+
+        case OFPUTIL_NXAST_FIN_TIMEOUT:
+            ctx->has_fin_timeout = true;
+            xlate_fin_timeout(ctx, (const struct nx_action_fin_timeout *) ia);
+            break;
         }
     }
 
@@ -4933,7 +4976,7 @@ static void
 action_xlate_ctx_init(struct action_xlate_ctx *ctx,
                       struct ofproto_dpif *ofproto, const struct flow *flow,
                       ovs_be16 initial_tci, struct rule_dpif *rule,
-                      const struct ofpbuf *packet)
+                      uint8_t tcp_flags, const struct ofpbuf *packet)
 {
     ctx->ofproto = ofproto;
     ctx->flow = *flow;
@@ -4943,6 +4986,7 @@ action_xlate_ctx_init(struct action_xlate_ctx *ctx,
     ctx->rule = rule;
     ctx->packet = packet;
     ctx->may_learn = packet != NULL;
+    ctx->tcp_flags = tcp_flags;
     ctx->resubmit_hook = NULL;
 }
 
@@ -4960,6 +5004,7 @@ xlate_actions(struct action_xlate_ctx *ctx,
     ctx->may_set_up_flow = true;
     ctx->has_learn = false;
     ctx->has_normal = false;
+    ctx->has_fin_timeout = false;
     ctx->nf_output_iface = NF_OUT_DROP;
     ctx->mirrors = 0;
     ctx->recurse = 0;
@@ -5730,7 +5775,7 @@ packet_out(struct ofproto *ofproto_, struct ofpbuf *packet,
         odp_flow_key_from_flow(&key, flow);
 
         action_xlate_ctx_init(&push.ctx, ofproto, flow, flow->vlan_tci, NULL,
-                              packet);
+                              packet_get_tcp_flags(packet, flow), packet);
 
         /* Ensure that resubmits in 'ofp_actions' get accounted to their
          * matching rules. */
@@ -6032,11 +6077,13 @@ ofproto_unixctl_trace(struct unixctl_conn *conn, int argc, const char *argv[],
     if (rule) {
         struct ofproto_trace trace;
         struct ofpbuf *odp_actions;
+        uint8_t tcp_flags;
 
+        tcp_flags = packet ? packet_get_tcp_flags(packet, &flow) : 0;
         trace.result = &result;
         trace.flow = flow;
         action_xlate_ctx_init(&trace.ctx, ofproto, &flow, initial_tci,
-                              rule, packet);
+                              rule, tcp_flags, packet);
         trace.ctx.resubmit_hook = trace_resubmit;
         odp_actions = xlate_actions(&trace.ctx,
                                     rule->up.actions, rule->up.n_actions);
