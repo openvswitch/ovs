@@ -30,6 +30,7 @@
 #include "learn.h"
 #include "multipath.h"
 #include "meta-flow.h"
+#include "netdev.h"
 #include "nx-match.h"
 #include "ofp-errors.h"
 #include "ofp-util.h"
@@ -2222,6 +2223,37 @@ ofputil_decode_packet_out(struct ofputil_packet_out *po,
     }
 
     return 0;
+}
+
+/* ofputil_phy_port */
+
+/* NETDEV_F_* to and from OFPPF_* and OFPPF10_*. */
+BUILD_ASSERT_DECL((int) NETDEV_F_10MB_HD    == OFPPF_10MB_HD);  /* bit 0 */
+BUILD_ASSERT_DECL((int) NETDEV_F_10MB_FD    == OFPPF_10MB_FD);  /* bit 1 */
+BUILD_ASSERT_DECL((int) NETDEV_F_100MB_HD   == OFPPF_100MB_HD); /* bit 2 */
+BUILD_ASSERT_DECL((int) NETDEV_F_100MB_FD   == OFPPF_100MB_FD); /* bit 3 */
+BUILD_ASSERT_DECL((int) NETDEV_F_1GB_HD     == OFPPF_1GB_HD);   /* bit 4 */
+BUILD_ASSERT_DECL((int) NETDEV_F_1GB_FD     == OFPPF_1GB_FD);   /* bit 5 */
+BUILD_ASSERT_DECL((int) NETDEV_F_10GB_FD    == OFPPF_10GB_FD);  /* bit 6 */
+
+/* NETDEV_F_ bits 11...15 are OFPPF10_ bits 7...11: */
+BUILD_ASSERT_DECL((int) NETDEV_F_COPPER == (OFPPF_COPPER << 4));
+BUILD_ASSERT_DECL((int) NETDEV_F_FIBER == (OFPPF_FIBER << 4));
+BUILD_ASSERT_DECL((int) NETDEV_F_AUTONEG == (OFPPF_AUTONEG << 4));
+BUILD_ASSERT_DECL((int) NETDEV_F_PAUSE == (OFPPF_PAUSE << 4));
+BUILD_ASSERT_DECL((int) NETDEV_F_PAUSE_ASYM == (OFPPF_PAUSE_ASYM << 4));
+
+enum netdev_features
+ofputil_netdev_port_features_from_ofp10(ovs_be32 ofp10_)
+{
+    uint32_t ofp10 = ntohl(ofp10_);
+    return (ofp10 & 0x7f) | ((ofp10 & 0xf80) << 4);
+}
+
+ovs_be32
+ofputil_netdev_port_features_to_ofp10(enum netdev_features features)
+{
+    return htonl((features & 0x7f) | ((features & 0xf800) >> 4));
 }
 
 struct ofpbuf *

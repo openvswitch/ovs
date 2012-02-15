@@ -308,20 +308,23 @@ struct netdev_class {
 
     /* Stores the features supported by 'netdev' into each of '*current',
      * '*advertised', '*supported', and '*peer'.  Each value is a bitmap of
-     * "enum ofp_port_features" bits, in host byte order.
+     * NETDEV_F_* bits.
      *
      * This function may be set to null if it would always return EOPNOTSUPP.
      */
     int (*get_features)(const struct netdev *netdev,
-                        uint32_t *current, uint32_t *advertised,
-                        uint32_t *supported, uint32_t *peer);
+                        enum netdev_features *current,
+                        enum netdev_features *advertised,
+                        enum netdev_features *supported,
+                        enum netdev_features *peer);
 
     /* Set the features advertised by 'netdev' to 'advertise', which is a
-     * bitmap of "enum ofp_port_features" bits, in host byte order.
+     * set of NETDEV_F_* bits.
      *
      * This function may be set to null for a network device that does not
      * support configuring advertisements. */
-    int (*set_advertisements)(struct netdev *netdev, uint32_t advertise);
+    int (*set_advertisements)(struct netdev *netdev,
+                              enum netdev_features advertise);
 
     /* Attempts to set input rate limiting (policing) policy, such that up to
      * 'kbits_rate' kbps of traffic is accepted, with a maximum accumulative

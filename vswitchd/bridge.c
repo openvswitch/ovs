@@ -846,7 +846,7 @@ port_configure_stp(const struct ofproto *ofproto, struct port *port,
     if (config_str) {
         port_s->path_cost = strtoul(config_str, NULL, 10);
     } else {
-        uint32_t current;
+        enum netdev_features current;
 
         if (netdev_get_features(iface->netdev, &current, NULL, NULL, NULL)) {
             /* Couldn't get speed, so assume 100Mb/s. */
@@ -1483,8 +1483,8 @@ iface_refresh_status(struct iface *iface)
 {
     struct shash sh;
 
+    enum netdev_features current;
     enum netdev_flags flags;
-    uint32_t current;
     int64_t bps;
     int mtu;
     int64_t mtu_64;

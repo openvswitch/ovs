@@ -23,6 +23,7 @@
 #include <stdint.h>
 #include "classifier.h"
 #include "flow.h"
+#include "netdev.h"
 #include "openflow/nicira-ext.h"
 #include "openvswitch/types.h"
 
@@ -324,6 +325,10 @@ struct ofputil_packet_out {
 enum ofperr ofputil_decode_packet_out(struct ofputil_packet_out *,
                                       const struct ofp_packet_out *);
 struct ofpbuf *ofputil_encode_packet_out(const struct ofputil_packet_out *);
+
+/* OFPFF_* bits. */
+enum netdev_features ofputil_netdev_port_features_from_ofp10(ovs_be32 ofp10);
+ovs_be32 ofputil_netdev_port_features_to_ofp10(enum netdev_features);
 
 /* OpenFlow protocol utility functions. */
 void *make_openflow(size_t openflow_len, uint8_t type, struct ofpbuf **);

@@ -1399,14 +1399,17 @@ netdev_internal_get_stats(const struct netdev *netdev_,
 
 /* Stores the features supported by 'netdev' into each of '*current',
  * '*advertised', '*supported', and '*peer' that are non-null.  Each value is a
- * bitmap of "enum ofp_port_features" bits, in host byte order.  Returns 0 if
- * successful, otherwise a positive errno value. */
+ * bitmap of NETDEV_* bits.  Returns 0 if successful, otherwise a positive
+ * errno value. */
 static int
 netdev_linux_get_features(const struct netdev *netdev,
-                          uint32_t *current, uint32_t *advertised,
-                          uint32_t *supported, uint32_t *peer)
+                          enum netdev_features *current,
+                          enum netdev_features *advertised,
+                          enum netdev_features *supported,
+                          enum netdev_features *peer)
 {
     struct ethtool_cmd ecmd;
+    uint32_t speed;
     int error;
 
     memset(&ecmd, 0, sizeof ecmd);
@@ -1419,102 +1422,109 @@ netdev_linux_get_features(const struct netdev *netdev,
     /* Supported features. */
     *supported = 0;
     if (ecmd.supported & SUPPORTED_10baseT_Half) {
-        *supported |= OFPPF_10MB_HD;
+        *supported |= NETDEV_F_10MB_HD;
     }
     if (ecmd.supported & SUPPORTED_10baseT_Full) {
-        *supported |= OFPPF_10MB_FD;
+        *supported |= NETDEV_F_10MB_FD;
     }
     if (ecmd.supported & SUPPORTED_100baseT_Half)  {
-        *supported |= OFPPF_100MB_HD;
+        *supported |= NETDEV_F_100MB_HD;
     }
     if (ecmd.supported & SUPPORTED_100baseT_Full) {
-        *supported |= OFPPF_100MB_FD;
+        *supported |= NETDEV_F_100MB_FD;
     }
     if (ecmd.supported & SUPPORTED_1000baseT_Half) {
-        *supported |= OFPPF_1GB_HD;
+        *supported |= NETDEV_F_1GB_HD;
     }
     if (ecmd.supported & SUPPORTED_1000baseT_Full) {
-        *supported |= OFPPF_1GB_FD;
+        *supported |= NETDEV_F_1GB_FD;
     }
     if (ecmd.supported & SUPPORTED_10000baseT_Full) {
-        *supported |= OFPPF_10GB_FD;
+        *supported |= NETDEV_F_10GB_FD;
     }
     if (ecmd.supported & SUPPORTED_TP) {
-        *supported |= OFPPF_COPPER;
+        *supported |= NETDEV_F_COPPER;
     }
     if (ecmd.supported & SUPPORTED_FIBRE) {
-        *supported |= OFPPF_FIBER;
+        *supported |= NETDEV_F_FIBER;
     }
     if (ecmd.supported & SUPPORTED_Autoneg) {
-        *supported |= OFPPF_AUTONEG;
+        *supported |= NETDEV_F_AUTONEG;
     }
     if (ecmd.supported & SUPPORTED_Pause) {
-        *supported |= OFPPF_PAUSE;
+        *supported |= NETDEV_F_PAUSE;
     }
     if (ecmd.supported & SUPPORTED_Asym_Pause) {
-        *supported |= OFPPF_PAUSE_ASYM;
+        *supported |= NETDEV_F_PAUSE_ASYM;
     }
 
     /* Advertised features. */
     *advertised = 0;
     if (ecmd.advertising & ADVERTISED_10baseT_Half) {
-        *advertised |= OFPPF_10MB_HD;
+        *advertised |= NETDEV_F_10MB_HD;
     }
     if (ecmd.advertising & ADVERTISED_10baseT_Full) {
-        *advertised |= OFPPF_10MB_FD;
+        *advertised |= NETDEV_F_10MB_FD;
     }
     if (ecmd.advertising & ADVERTISED_100baseT_Half) {
-        *advertised |= OFPPF_100MB_HD;
+        *advertised |= NETDEV_F_100MB_HD;
     }
     if (ecmd.advertising & ADVERTISED_100baseT_Full) {
-        *advertised |= OFPPF_100MB_FD;
+        *advertised |= NETDEV_F_100MB_FD;
     }
     if (ecmd.advertising & ADVERTISED_1000baseT_Half) {
-        *advertised |= OFPPF_1GB_HD;
+        *advertised |= NETDEV_F_1GB_HD;
     }
     if (ecmd.advertising & ADVERTISED_1000baseT_Full) {
-        *advertised |= OFPPF_1GB_FD;
+        *advertised |= NETDEV_F_1GB_FD;
     }
     if (ecmd.advertising & ADVERTISED_10000baseT_Full) {
-        *advertised |= OFPPF_10GB_FD;
+        *advertised |= NETDEV_F_10GB_FD;
     }
     if (ecmd.advertising & ADVERTISED_TP) {
-        *advertised |= OFPPF_COPPER;
+        *advertised |= NETDEV_F_COPPER;
     }
     if (ecmd.advertising & ADVERTISED_FIBRE) {
-        *advertised |= OFPPF_FIBER;
+        *advertised |= NETDEV_F_FIBER;
     }
     if (ecmd.advertising & ADVERTISED_Autoneg) {
-        *advertised |= OFPPF_AUTONEG;
+        *advertised |= NETDEV_F_AUTONEG;
     }
     if (ecmd.advertising & ADVERTISED_Pause) {
-        *advertised |= OFPPF_PAUSE;
+        *advertised |= NETDEV_F_PAUSE;
     }
     if (ecmd.advertising & ADVERTISED_Asym_Pause) {
-        *advertised |= OFPPF_PAUSE_ASYM;
+        *advertised |= NETDEV_F_PAUSE_ASYM;
     }
 
     /* Current settings. */
-    if (ecmd.speed == SPEED_10) {
-        *current = ecmd.duplex ? OFPPF_10MB_FD : OFPPF_10MB_HD;
-    } else if (ecmd.speed == SPEED_100) {
-        *current = ecmd.duplex ? OFPPF_100MB_FD : OFPPF_100MB_HD;
-    } else if (ecmd.speed == SPEED_1000) {
-        *current = ecmd.duplex ? OFPPF_1GB_FD : OFPPF_1GB_HD;
-    } else if (ecmd.speed == SPEED_10000) {
-        *current = OFPPF_10GB_FD;
+    speed = (ecmd.speed_hi << 16) | ecmd.speed;
+    if (speed == SPEED_10) {
+        *current = ecmd.duplex ? NETDEV_F_10MB_FD : NETDEV_F_10MB_HD;
+    } else if (speed == SPEED_100) {
+        *current = ecmd.duplex ? NETDEV_F_100MB_FD : NETDEV_F_100MB_HD;
+    } else if (speed == SPEED_1000) {
+        *current = ecmd.duplex ? NETDEV_F_1GB_FD : NETDEV_F_1GB_HD;
+    } else if (speed == SPEED_10000) {
+        *current = NETDEV_F_10GB_FD;
+    } else if (speed == 40000) {
+        *current = NETDEV_F_40GB_FD;
+    } else if (speed == 100000) {
+        *current = NETDEV_F_100GB_FD;
+    } else if (speed == 1000000) {
+        *current = NETDEV_F_1TB_FD;
     } else {
         *current = 0;
     }
 
     if (ecmd.port == PORT_TP) {
-        *current |= OFPPF_COPPER;
+        *current |= NETDEV_F_COPPER;
     } else if (ecmd.port == PORT_FIBRE) {
-        *current |= OFPPF_FIBER;
+        *current |= NETDEV_F_FIBER;
     }
 
     if (ecmd.autoneg) {
-        *current |= OFPPF_AUTONEG;
+        *current |= NETDEV_F_AUTONEG;
     }
 
     /* Peer advertisements. */
@@ -1525,7 +1535,8 @@ netdev_linux_get_features(const struct netdev *netdev,
 
 /* Set the features advertised by 'netdev' to 'advertise'. */
 static int
-netdev_linux_set_advertisements(struct netdev *netdev, uint32_t advertise)
+netdev_linux_set_advertisements(struct netdev *netdev,
+                                enum netdev_features advertise)
 {
     struct ethtool_cmd ecmd;
     int error;
@@ -1538,40 +1549,40 @@ netdev_linux_set_advertisements(struct netdev *netdev, uint32_t advertise)
     }
 
     ecmd.advertising = 0;
-    if (advertise & OFPPF_10MB_HD) {
+    if (advertise & NETDEV_F_10MB_HD) {
         ecmd.advertising |= ADVERTISED_10baseT_Half;
     }
-    if (advertise & OFPPF_10MB_FD) {
+    if (advertise & NETDEV_F_10MB_FD) {
         ecmd.advertising |= ADVERTISED_10baseT_Full;
     }
-    if (advertise & OFPPF_100MB_HD) {
+    if (advertise & NETDEV_F_100MB_HD) {
         ecmd.advertising |= ADVERTISED_100baseT_Half;
     }
-    if (advertise & OFPPF_100MB_FD) {
+    if (advertise & NETDEV_F_100MB_FD) {
         ecmd.advertising |= ADVERTISED_100baseT_Full;
     }
-    if (advertise & OFPPF_1GB_HD) {
+    if (advertise & NETDEV_F_1GB_HD) {
         ecmd.advertising |= ADVERTISED_1000baseT_Half;
     }
-    if (advertise & OFPPF_1GB_FD) {
+    if (advertise & NETDEV_F_1GB_FD) {
         ecmd.advertising |= ADVERTISED_1000baseT_Full;
     }
-    if (advertise & OFPPF_10GB_FD) {
+    if (advertise & NETDEV_F_10GB_FD) {
         ecmd.advertising |= ADVERTISED_10000baseT_Full;
     }
-    if (advertise & OFPPF_COPPER) {
+    if (advertise & NETDEV_F_COPPER) {
         ecmd.advertising |= ADVERTISED_TP;
     }
-    if (advertise & OFPPF_FIBER) {
+    if (advertise & NETDEV_F_FIBER) {
         ecmd.advertising |= ADVERTISED_FIBRE;
     }
-    if (advertise & OFPPF_AUTONEG) {
+    if (advertise & NETDEV_F_AUTONEG) {
         ecmd.advertising |= ADVERTISED_Autoneg;
     }
-    if (advertise & OFPPF_PAUSE) {
+    if (advertise & NETDEV_F_PAUSE) {
         ecmd.advertising |= ADVERTISED_Pause;
     }
-    if (advertise & OFPPF_PAUSE_ASYM) {
+    if (advertise & NETDEV_F_PAUSE_ASYM) {
         ecmd.advertising |= ADVERTISED_Asym_Pause;
     }
     return netdev_linux_do_ethtool(netdev_get_name(netdev), &ecmd,

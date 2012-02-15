@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011 Nicira Networks.
+ * Copyright (c) 2009, 2010, 2011, 2012 Nicira Networks.
  * Copyright (c) 2009 InMon Corp.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -160,11 +160,11 @@ sflow_agent_get_counters(void *ds_, SFLPoller *poller,
 {
     struct dpif_sflow *ds = ds_;
     SFLCounters_sample_element elem;
+    enum netdev_features current;
     struct dpif_sflow_port *dsp;
     SFLIf_counters *counters;
     struct netdev_stats stats;
     enum netdev_flags flags;
-    uint32_t current;
 
     dsp = dpif_sflow_find_port(ds, poller->bridgePort);
     if (!dsp) {

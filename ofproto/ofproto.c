@@ -1402,7 +1402,7 @@ reinit_ports(struct ofproto *p)
 static struct netdev *
 ofport_open(const struct ofproto_port *ofproto_port, struct ofp_phy_port *opp)
 {
-    uint32_t curr, advertised, supported, peer;
+    enum netdev_features curr, advertised, supported, peer;
     enum netdev_flags flags;
     struct netdev *netdev;
     int error;
@@ -1424,10 +1424,10 @@ ofport_open(const struct ofproto_port *ofproto_port, struct ofp_phy_port *opp)
     ovs_strzcpy(opp->name, ofproto_port->name, sizeof opp->name);
     opp->config = flags & NETDEV_UP ? 0 : htonl(OFPPC_PORT_DOWN);
     opp->state = netdev_get_carrier(netdev) ? 0 : htonl(OFPPS_LINK_DOWN);
-    opp->curr = htonl(curr);
-    opp->advertised = htonl(advertised);
-    opp->supported = htonl(supported);
-    opp->peer = htonl(peer);
+    opp->curr = ofputil_netdev_port_features_to_ofp10(curr);
+    opp->advertised = ofputil_netdev_port_features_to_ofp10(advertised);
+    opp->supported = ofputil_netdev_port_features_to_ofp10(supported);
+    opp->peer = ofputil_netdev_port_features_to_ofp10(peer);
 
     return netdev;
 }
@@ -2037,7 +2037,10 @@ handle_port_mod(struct ofconn *ofconn, const struct ofp_header *oh)
     } else {
         update_port_config(port, opm->config, opm->mask);
         if (opm->advertise) {
-            netdev_set_advertisements(port->netdev, ntohl(opm->advertise));
+            enum netdev_features adv;
+
+            adv = ofputil_netdev_port_features_from_ofp10(opm->advertise);
+            netdev_set_advertisements(port->netdev, adv);
         }
     }
     return 0;

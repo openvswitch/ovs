@@ -576,13 +576,17 @@ netdev_get_ifindex(const struct netdev *netdev)
  * cases this function will always return EOPNOTSUPP. */
 int
 netdev_get_features(const struct netdev *netdev,
-                    uint32_t *current, uint32_t *advertised,
-                    uint32_t *supported, uint32_t *peer)
+                    enum netdev_features *current,
+                    enum netdev_features *advertised,
+                    enum netdev_features *supported,
+                    enum netdev_features *peer)
 {
     int (*get_features)(const struct netdev *netdev,
-                        uint32_t *current, uint32_t *advertised,
-                        uint32_t *supported, uint32_t *peer);
-    uint32_t dummy[4];
+                        enum netdev_features *current,
+                        enum netdev_features *advertised,
+                        enum netdev_features *supported,
+                        enum netdev_features *peer);
+    enum netdev_features dummy[4];
     int error;
 
     if (!current) {
@@ -608,39 +612,47 @@ netdev_get_features(const struct netdev *netdev,
     return error;
 }
 
-/* Returns the maximum speed of a network connection that has the "enum
- * ofp_port_features" bits in 'features', in bits per second.  If no bits that
- * indicate a speed are set in 'features', assumes 100Mbps. */
+/* Returns the maximum speed of a network connection that has the NETDEV_F_*
+ * bits in 'features', in bits per second.  If no bits that indicate a speed
+ * are set in 'features', assumes 100Mbps. */
 uint64_t
-netdev_features_to_bps(uint32_t features)
+netdev_features_to_bps(enum netdev_features features)
 {
     enum {
-        F_10000MB = OFPPF_10GB_FD,
-        F_1000MB = OFPPF_1GB_HD | OFPPF_1GB_FD,
-        F_100MB = OFPPF_100MB_HD | OFPPF_100MB_FD,
-        F_10MB = OFPPF_10MB_HD | OFPPF_10MB_FD
+        F_1000000MB = NETDEV_F_1TB_FD,
+        F_100000MB = NETDEV_F_100GB_FD,
+        F_40000MB = NETDEV_F_40GB_FD,
+        F_10000MB = NETDEV_F_10GB_FD,
+        F_1000MB = NETDEV_F_1GB_HD | NETDEV_F_1GB_FD,
+        F_100MB = NETDEV_F_100MB_HD | NETDEV_F_100MB_FD,
+        F_10MB = NETDEV_F_10MB_HD | NETDEV_F_10MB_FD
     };
 
-    return (  features & F_10000MB  ? UINT64_C(10000000000)
-            : features & F_1000MB   ? UINT64_C(1000000000)
-            : features & F_100MB    ? UINT64_C(100000000)
-            : features & F_10MB     ? UINT64_C(10000000)
-                                    : UINT64_C(100000000));
+    return (  features & F_1000000MB ? UINT64_C(1000000000000)
+            : features & F_100000MB  ? UINT64_C(100000000000)
+            : features & F_40000MB   ? UINT64_C(40000000000)
+            : features & F_10000MB   ? UINT64_C(10000000000)
+            : features & F_1000MB    ? UINT64_C(1000000000)
+            : features & F_100MB     ? UINT64_C(100000000)
+            : features & F_10MB      ? UINT64_C(10000000)
+                                     : UINT64_C(100000000));
 }
 
-/* Returns true if any of the "enum ofp_port_features" bits that indicate a
- * full-duplex link are set in 'features', otherwise false. */
+/* Returns true if any of the NETDEV_F_* bits that indicate a full-duplex link
+ * are set in 'features', otherwise false. */
 bool
-netdev_features_is_full_duplex(uint32_t features)
+netdev_features_is_full_duplex(enum netdev_features features)
 {
-    return (features & (OFPPF_10MB_FD | OFPPF_100MB_FD | OFPPF_1GB_FD
-                        | OFPPF_10GB_FD)) != 0;
+    return (features & (NETDEV_F_10MB_FD | NETDEV_F_100MB_FD | NETDEV_F_1GB_FD
+                        | NETDEV_F_10GB_FD | NETDEV_F_40GB_FD
+                        | NETDEV_F_100GB_FD | NETDEV_F_1TB_FD)) != 0;
 }
 
 /* Set the features advertised by 'netdev' to 'advertise'.  Returns 0 if
  * successful, otherwise a positive errno value. */
 int
-netdev_set_advertisements(struct netdev *netdev, uint32_t advertise)
+netdev_set_advertisements(struct netdev *netdev,
+                          enum netdev_features advertise)
 {
     return (netdev_get_dev(netdev)->netdev_class->set_advertisements
             ? netdev_get_dev(netdev)->netdev_class->set_advertisements(
