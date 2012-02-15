@@ -100,7 +100,7 @@ def update(session, args):
     pool_mgmt_macs = {}
     if new_controller:
         recs = session.xenapi.PIF.get_all_records_where('field "management"="true"')
-        for rec in recs:
+        for rec in recs.itervalues():
             pool_mgmt_macs[rec.get('MAC')] = rec.get('device')
 
     dib_changed = False
