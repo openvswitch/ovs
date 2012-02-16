@@ -353,9 +353,11 @@ jsonrpc_transact_block(struct jsonrpc *rpc, struct jsonrpc_msg *request,
     if (!error) {
         for (;;) {
             error = jsonrpc_recv_block(rpc, &reply);
-            if (error
-                || (reply->type == JSONRPC_REPLY
-                    && json_equal(id, reply->id))) {
+            if (error) {
+                break;
+            }
+            if ((reply->type == JSONRPC_REPLY || reply->type == JSONRPC_ERROR)
+                && json_equal(id, reply->id)) {
                 break;
             }
             jsonrpc_msg_destroy(reply);

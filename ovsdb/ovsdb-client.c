@@ -275,6 +275,21 @@ usage(void)
     exit(EXIT_SUCCESS);
 }
 
+static void
+check_txn(int error, struct jsonrpc_msg **reply_)
+{
+    struct jsonrpc_msg *reply = *reply_;
+
+    if (error) {
+        ovs_fatal(error, "transaction failed");
+    }
+
+    if (reply->error) {
+        ovs_fatal(error, "transaction returned error: %s",
+                  json_to_string(reply->error, table_style.json_flags));
+    }
+}
+
 static struct json *
 parse_json(const char *s)
 {
@@ -342,16 +357,12 @@ fetch_schema(struct jsonrpc *rpc, const char *database)
 {
     struct jsonrpc_msg *request, *reply;
     struct ovsdb_schema *schema;
-    int error;
 
     request = jsonrpc_create_request("get_schema",
                                      json_array_create_1(
                                          json_string_create(database)),
                                      NULL);
-    error = jsonrpc_transact_block(rpc, request, &reply);
-    if (error) {
-        ovs_fatal(error, "transaction failed");
-    }
+    check_txn(jsonrpc_transact_block(rpc, request, &reply), &reply);
     check_ovsdb_error(ovsdb_schema_from_json(reply->result, &schema));
     jsonrpc_msg_destroy(reply);
 
@@ -362,16 +373,12 @@ static void
 fetch_dbs(struct jsonrpc *rpc, struct sset *dbs)
 {
     struct jsonrpc_msg *request, *reply;
-    int error;
     size_t i;
 
     request = jsonrpc_create_request("list_dbs", json_array_create_empty(),
                                      NULL);
-    error = jsonrpc_transact_block(rpc, request, &reply);
-    if (error) {
-        ovs_fatal(error, "transaction failed");
-    }
 
+    check_txn(jsonrpc_transact_block(rpc, request, &reply), &reply);
     if (reply->result->type != JSON_ARRAY) {
         ovs_fatal(0, "list_dbs response is not array");
     }
@@ -485,19 +492,11 @@ do_transact(struct jsonrpc *rpc, const char *database OVS_UNUSED,
 {
     struct jsonrpc_msg *request, *reply;
     struct json *transaction;
-    int error;
 
     transaction = parse_json(argv[0]);
 
     request = jsonrpc_create_request("transact", transaction, NULL);
-    error = jsonrpc_transact_block(rpc, request, &reply);
-    if (error) {
-        ovs_fatal(error, "transaction failed");
-    }
-    if (reply->error) {
-        ovs_fatal(error, "transaction returned error: %s",
-                  json_to_string(reply->error, table_style.json_flags));
-    }
+    check_txn(jsonrpc_transact_block(rpc, request, &reply), &reply);
     print_json(reply->result);
     putchar('\n');
     jsonrpc_msg_destroy(reply);
@@ -898,7 +897,6 @@ do_dump(struct jsonrpc *rpc, const char *database,
     struct jsonrpc_msg *request, *reply;
     struct ovsdb_schema *schema;
     struct json *transaction;
-    int error;
 
     const struct shash_node **tables;
     size_t n_tables;
@@ -935,10 +933,7 @@ do_dump(struct jsonrpc *rpc, const char *database,
 
     /* Send request, get reply. */
     request = jsonrpc_create_request("transact", transaction, NULL);
-    error = jsonrpc_transact_block(rpc, request, &reply);
-    if (error) {
-        ovs_fatal(error, "transaction failed");
-    }
+    check_txn(jsonrpc_transact_block(rpc, request, &reply), &reply);
 
     /* Print database contents. */
     if (reply->result->type != JSON_ARRAY
