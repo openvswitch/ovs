@@ -917,18 +917,18 @@ get_features(struct ofproto *ofproto_ OVS_UNUSED,
              bool *arp_match_ip, uint32_t *actions)
 {
     *arp_match_ip = true;
-    *actions = ((1u << OFPAT_OUTPUT) |
-                (1u << OFPAT_SET_VLAN_VID) |
-                (1u << OFPAT_SET_VLAN_PCP) |
-                (1u << OFPAT_STRIP_VLAN) |
-                (1u << OFPAT_SET_DL_SRC) |
-                (1u << OFPAT_SET_DL_DST) |
-                (1u << OFPAT_SET_NW_SRC) |
-                (1u << OFPAT_SET_NW_DST) |
-                (1u << OFPAT_SET_NW_TOS) |
-                (1u << OFPAT_SET_TP_SRC) |
-                (1u << OFPAT_SET_TP_DST) |
-                (1u << OFPAT_ENQUEUE));
+    *actions = ((1u << OFPAT10_OUTPUT) |
+                (1u << OFPAT10_SET_VLAN_VID) |
+                (1u << OFPAT10_SET_VLAN_PCP) |
+                (1u << OFPAT10_STRIP_VLAN) |
+                (1u << OFPAT10_SET_DL_SRC) |
+                (1u << OFPAT10_SET_DL_DST) |
+                (1u << OFPAT10_SET_NW_SRC) |
+                (1u << OFPAT10_SET_NW_DST) |
+                (1u << OFPAT10_SET_NW_TOS) |
+                (1u << OFPAT10_SET_TP_SRC) |
+                (1u << OFPAT10_SET_TP_DST) |
+                (1u << OFPAT10_ENQUEUE));
 }
 
 static void
@@ -4818,44 +4818,44 @@ do_xlate_actions(const union ofp_action *in, size_t n_in,
 
         code = ofputil_decode_action_unsafe(ia);
         switch (code) {
-        case OFPUTIL_OFPAT_OUTPUT:
+        case OFPUTIL_OFPAT10_OUTPUT:
             xlate_output_action(ctx, &ia->output);
             break;
 
-        case OFPUTIL_OFPAT_SET_VLAN_VID:
+        case OFPUTIL_OFPAT10_SET_VLAN_VID:
             ctx->flow.vlan_tci &= ~htons(VLAN_VID_MASK);
             ctx->flow.vlan_tci |= ia->vlan_vid.vlan_vid | htons(VLAN_CFI);
             break;
 
-        case OFPUTIL_OFPAT_SET_VLAN_PCP:
+        case OFPUTIL_OFPAT10_SET_VLAN_PCP:
             ctx->flow.vlan_tci &= ~htons(VLAN_PCP_MASK);
             ctx->flow.vlan_tci |= htons(
                 (ia->vlan_pcp.vlan_pcp << VLAN_PCP_SHIFT) | VLAN_CFI);
             break;
 
-        case OFPUTIL_OFPAT_STRIP_VLAN:
+        case OFPUTIL_OFPAT10_STRIP_VLAN:
             ctx->flow.vlan_tci = htons(0);
             break;
 
-        case OFPUTIL_OFPAT_SET_DL_SRC:
+        case OFPUTIL_OFPAT10_SET_DL_SRC:
             oada = ((struct ofp_action_dl_addr *) ia);
             memcpy(ctx->flow.dl_src, oada->dl_addr, ETH_ADDR_LEN);
             break;
 
-        case OFPUTIL_OFPAT_SET_DL_DST:
+        case OFPUTIL_OFPAT10_SET_DL_DST:
             oada = ((struct ofp_action_dl_addr *) ia);
             memcpy(ctx->flow.dl_dst, oada->dl_addr, ETH_ADDR_LEN);
             break;
 
-        case OFPUTIL_OFPAT_SET_NW_SRC:
+        case OFPUTIL_OFPAT10_SET_NW_SRC:
             ctx->flow.nw_src = ia->nw_addr.nw_addr;
             break;
 
-        case OFPUTIL_OFPAT_SET_NW_DST:
+        case OFPUTIL_OFPAT10_SET_NW_DST:
             ctx->flow.nw_dst = ia->nw_addr.nw_addr;
             break;
 
-        case OFPUTIL_OFPAT_SET_NW_TOS:
+        case OFPUTIL_OFPAT10_SET_NW_TOS:
             /* OpenFlow 1.0 only supports IPv4. */
             if (ctx->flow.dl_type == htons(ETH_TYPE_IP)) {
                 ctx->flow.nw_tos &= ~IP_DSCP_MASK;
@@ -4863,15 +4863,15 @@ do_xlate_actions(const union ofp_action *in, size_t n_in,
             }
             break;
 
-        case OFPUTIL_OFPAT_SET_TP_SRC:
+        case OFPUTIL_OFPAT10_SET_TP_SRC:
             ctx->flow.tp_src = ia->tp_port.tp_port;
             break;
 
-        case OFPUTIL_OFPAT_SET_TP_DST:
+        case OFPUTIL_OFPAT10_SET_TP_DST:
             ctx->flow.tp_dst = ia->tp_port.tp_port;
             break;
 
-        case OFPUTIL_OFPAT_ENQUEUE:
+        case OFPUTIL_OFPAT10_ENQUEUE:
             xlate_enqueue_action(ctx, (const struct ofp_action_enqueue *) ia);
             break;
 

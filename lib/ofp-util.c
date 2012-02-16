@@ -2633,7 +2633,7 @@ make_add_simple_flow(const struct cls_rule *rule,
         struct ofpbuf *buffer;
 
         buffer = make_add_flow(rule, buffer_id, idle_timeout, sizeof *oao);
-        ofputil_put_OFPAT_OUTPUT(buffer)->port = htons(out_port);
+        ofputil_put_OFPAT10_OUTPUT(buffer)->port = htons(out_port);
         return buffer;
     } else {
         return make_add_flow(rule, buffer_id, idle_timeout, 0);
@@ -2765,7 +2765,7 @@ ofputil_port_to_ofp11(uint16_t ofp10_port)
                  : ofp10_port + OFPP11_OFFSET);
 }
 
-/* Checks that 'port' is a valid output port for the OFPAT_OUTPUT action, given
+/* Checks that 'port' is a valid output port for the OFPAT10_OUTPUT action, given
  * that the switch will never have more than 'max_ports' ports.  Returns 0 if
  * 'port' is valid, otherwise an OpenFlow return code. */
 enum ofperr
@@ -2901,24 +2901,24 @@ validate_actions(const union ofp_action *actions, size_t n_actions,
 
         error = 0;
         switch ((enum ofputil_action_code) code) {
-        case OFPUTIL_OFPAT_OUTPUT:
+        case OFPUTIL_OFPAT10_OUTPUT:
             error = ofputil_check_output_port(ntohs(a->output.port),
                                               max_ports);
             break;
 
-        case OFPUTIL_OFPAT_SET_VLAN_VID:
+        case OFPUTIL_OFPAT10_SET_VLAN_VID:
             if (a->vlan_vid.vlan_vid & ~htons(0xfff)) {
                 error = OFPERR_OFPBAC_BAD_ARGUMENT;
             }
             break;
 
-        case OFPUTIL_OFPAT_SET_VLAN_PCP:
+        case OFPUTIL_OFPAT10_SET_VLAN_PCP:
             if (a->vlan_pcp.vlan_pcp & ~7) {
                 error = OFPERR_OFPBAC_BAD_ARGUMENT;
             }
             break;
 
-        case OFPUTIL_OFPAT_ENQUEUE:
+        case OFPUTIL_OFPAT10_ENQUEUE:
             port = ntohs(((const struct ofp_action_enqueue *) a)->port);
             if (port >= max_ports && port != OFPP_IN_PORT
                 && port != OFPP_LOCAL) {
@@ -2972,14 +2972,14 @@ validate_actions(const union ofp_action *actions, size_t n_actions,
             }
             break;
 
-        case OFPUTIL_OFPAT_STRIP_VLAN:
-        case OFPUTIL_OFPAT_SET_NW_SRC:
-        case OFPUTIL_OFPAT_SET_NW_DST:
-        case OFPUTIL_OFPAT_SET_NW_TOS:
-        case OFPUTIL_OFPAT_SET_TP_SRC:
-        case OFPUTIL_OFPAT_SET_TP_DST:
-        case OFPUTIL_OFPAT_SET_DL_SRC:
-        case OFPUTIL_OFPAT_SET_DL_DST:
+        case OFPUTIL_OFPAT10_STRIP_VLAN:
+        case OFPUTIL_OFPAT10_SET_NW_SRC:
+        case OFPUTIL_OFPAT10_SET_NW_DST:
+        case OFPUTIL_OFPAT10_SET_NW_TOS:
+        case OFPUTIL_OFPAT10_SET_TP_SRC:
+        case OFPUTIL_OFPAT10_SET_TP_DST:
+        case OFPUTIL_OFPAT10_SET_DL_SRC:
+        case OFPUTIL_OFPAT10_SET_DL_DST:
         case OFPUTIL_NXAST_RESUBMIT:
         case OFPUTIL_NXAST_SET_TUNNEL:
         case OFPUTIL_NXAST_SET_QUEUE:
@@ -3022,10 +3022,10 @@ static const struct ofputil_action action_bad_vendor
 static const struct ofputil_action *
 ofputil_decode_ofpat_action(const union ofp_action *a)
 {
-    enum ofp_action_type type = ntohs(a->type);
+    enum ofp10_action_type type = ntohs(a->type);
 
     switch (type) {
-#define OFPAT_ACTION(ENUM, STRUCT, NAME)                    \
+#define OFPAT10_ACTION(ENUM, STRUCT, NAME)                    \
         case ENUM: {                                        \
             static const struct ofputil_action action = {   \
                 OFPUTIL_##ENUM,                             \
@@ -3036,7 +3036,7 @@ ofputil_decode_ofpat_action(const union ofp_action *a)
         }
 #include "ofp-util.def"
 
-    case OFPAT_VENDOR:
+    case OFPAT10_VENDOR:
     default:
         return &action_bad_type;
     }
@@ -3067,7 +3067,7 @@ ofputil_decode_nxast_action(const union ofp_action *a)
     }
 }
 
-/* Parses 'a' to determine its type.  Returns a nonnegative OFPUTIL_OFPAT_* or
+/* Parses 'a' to determine its type.  Returns a nonnegative OFPUTIL_OFPAT10_* or
  * OFPUTIL_NXAST_* constant if successful, otherwise a negative OFPERR_* error
  * code.
  *
@@ -3083,7 +3083,7 @@ ofputil_decode_action(const union ofp_action *a)
     const struct ofputil_action *action;
     uint16_t len = ntohs(a->header.len);
 
-    if (a->type != htons(OFPAT_VENDOR)) {
+    if (a->type != htons(OFPAT10_VENDOR)) {
         action = ofputil_decode_ofpat_action(a);
     } else {
         switch (ntohl(a->vendor.vendor)) {
@@ -3104,7 +3104,7 @@ ofputil_decode_action(const union ofp_action *a)
             : -OFPERR_OFPBAC_BAD_LEN);
 }
 
-/* Parses 'a' and returns its type as an OFPUTIL_OFPAT_* or OFPUTIL_NXAST_*
+/* Parses 'a' and returns its type as an OFPUTIL_OFPAT10_* or OFPUTIL_NXAST_*
  * constant.  The caller must have already validated that 'a' is a valid action
  * understood by Open vSwitch (e.g. by a previous successful call to
  * ofputil_decode_action()). */
@@ -3113,7 +3113,7 @@ ofputil_decode_action_unsafe(const union ofp_action *a)
 {
     const struct ofputil_action *action;
 
-    if (a->type != htons(OFPAT_VENDOR)) {
+    if (a->type != htons(OFPAT10_VENDOR)) {
         action = ofputil_decode_ofpat_action(a);
     } else {
         action = ofputil_decode_nxast_action(a);
@@ -3123,7 +3123,7 @@ ofputil_decode_action_unsafe(const union ofp_action *a)
 }
 
 /* Returns the 'enum ofputil_action_code' corresponding to 'name' (e.g. if
- * 'name' is "output" then the return value is OFPUTIL_OFPAT_OUTPUT), or -1 if
+ * 'name' is "output" then the return value is OFPUTIL_OFPAT10_OUTPUT), or -1 if
  * 'name' is not the name of any action.
  *
  * ofp-util.def lists the mapping from names to action. */
@@ -3131,7 +3131,7 @@ int
 ofputil_action_code_from_name(const char *name)
 {
     static const char *names[OFPUTIL_N_ACTIONS] = {
-#define OFPAT_ACTION(ENUM, STRUCT, NAME)             NAME,
+#define OFPAT10_ACTION(ENUM, STRUCT, NAME)             NAME,
 #define NXAST_ACTION(ENUM, STRUCT, EXTENSIBLE, NAME) NAME,
 #include "ofp-util.def"
     };
@@ -3155,7 +3155,7 @@ void *
 ofputil_put_action(enum ofputil_action_code code, struct ofpbuf *buf)
 {
     switch (code) {
-#define OFPAT_ACTION(ENUM, STRUCT, NAME)                    \
+#define OFPAT10_ACTION(ENUM, STRUCT, NAME)                    \
     case OFPUTIL_##ENUM: return ofputil_put_##ENUM(buf);
 #define NXAST_ACTION(ENUM, STRUCT, EXTENSIBLE, NAME)        \
     case OFPUTIL_##ENUM: return ofputil_put_##ENUM(buf);
@@ -3164,7 +3164,7 @@ ofputil_put_action(enum ofputil_action_code code, struct ofpbuf *buf)
     NOT_REACHED();
 }
 
-#define OFPAT_ACTION(ENUM, STRUCT, NAME)                        \
+#define OFPAT10_ACTION(ENUM, STRUCT, NAME)                        \
     void                                                        \
     ofputil_init_##ENUM(struct STRUCT *s)                       \
     {                                                           \
@@ -3185,7 +3185,7 @@ ofputil_put_action(enum ofputil_action_code code, struct ofpbuf *buf)
     ofputil_init_##ENUM(struct STRUCT *s)                       \
     {                                                           \
         memset(s, 0, sizeof *s);                                \
-        s->type = htons(OFPAT_VENDOR);                          \
+        s->type = htons(OFPAT10_VENDOR);                        \
         s->len = htons(sizeof *s);                              \
         s->vendor = htonl(NX_VENDOR_ID);                        \
         s->subtype = htons(ENUM);                               \
@@ -3205,9 +3205,9 @@ bool
 action_outputs_to_port(const union ofp_action *action, ovs_be16 port)
 {
     switch (ntohs(action->type)) {
-    case OFPAT_OUTPUT:
+    case OFPAT10_OUTPUT:
         return action->output.port == port;
-    case OFPAT_ENQUEUE:
+    case OFPAT10_ENQUEUE:
         return ((const struct ofp_action_enqueue *) action)->port == port;
     default:
         return false;

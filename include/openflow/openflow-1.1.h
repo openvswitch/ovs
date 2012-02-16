@@ -93,4 +93,36 @@ enum ofp11_type {
     OFPT11_QUEUE_GET_CONFIG_REPLY,    /* Controller/switch message */
 };
 
+enum ofp11_action_type {
+    OFPAT11_OUTPUT,           /* Output to switch port. */
+    OFPAT11_SET_VLAN_VID,     /* Set the 802.1q VLAN id. */
+    OFPAT11_SET_VLAN_PCP,     /* Set the 802.1q priority. */
+    OFPAT11_SET_DL_SRC,       /* Ethernet source address. */
+    OFPAT11_SET_DL_DST,       /* Ethernet destination address. */
+    OFPAT11_SET_NW_SRC,       /* IP source address. */
+    OFPAT11_SET_NW_DST,       /* IP destination address. */
+    OFPAT11_SET_NW_TOS,       /* IP ToS (DSCP field, 6 bits). */
+    OFPAT11_SET_NW_ECN,       /* IP ECN (2 bits). */
+    OFPAT11_SET_TP_SRC,       /* TCP/UDP/SCTP source port. */
+    OFPAT11_SET_TP_DST,       /* TCP/UDP/SCTP destination port. */
+    OFPAT11_COPY_TTL_OUT,     /* Copy TTL "outwards" -- from next-to-outermost
+                                 to outermost */
+    OFPAT11_COPY_TTL_IN,      /* Copy TTL "inwards" -- from outermost to
+                               next-to-outermost */
+    OFPAT11_SET_MPLS_LABEL,   /* MPLS label */
+    OFPAT11_SET_MPLS_TC,      /* MPLS TC */
+    OFPAT11_SET_MPLS_TTL,     /* MPLS TTL */
+    OFPAT11_DEC_MPLS_TTL,     /* Decrement MPLS TTL */
+
+    OFPAT11_PUSH_VLAN,        /* Push a new VLAN tag */
+    OFPAT11_POP_VLAN,         /* Pop the outer VLAN tag */
+    OFPAT11_PUSH_MPLS,        /* Push a new MPLS tag */
+    OFPAT11_POP_MPLS,         /* Pop the outer MPLS tag */
+    OFPAT11_SET_QUEUE,        /* Set queue id when outputting to a port */
+    OFPAT11_GROUP,            /* Apply group. */
+    OFPAT11_SET_NW_TTL,       /* IP TTL. */
+    OFPAT11_DEC_NW_TTL,       /* Decrement IP TTL. */
+    OFPAT11_EXPERIMENTER = 0xffff
+};
+
 #endif /* openflow/openflow-1.1.h */

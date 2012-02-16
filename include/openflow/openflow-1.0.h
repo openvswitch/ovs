@@ -268,28 +268,28 @@ struct ofp_packet_in {
 };
 OFP_ASSERT(sizeof(struct ofp_packet_in) == 20);
 
-enum ofp_action_type {
-    OFPAT_OUTPUT,           /* Output to switch port. */
-    OFPAT_SET_VLAN_VID,     /* Set the 802.1q VLAN id. */
-    OFPAT_SET_VLAN_PCP,     /* Set the 802.1q priority. */
-    OFPAT_STRIP_VLAN,       /* Strip the 802.1q header. */
-    OFPAT_SET_DL_SRC,       /* Ethernet source address. */
-    OFPAT_SET_DL_DST,       /* Ethernet destination address. */
-    OFPAT_SET_NW_SRC,       /* IP source address. */
-    OFPAT_SET_NW_DST,       /* IP destination address. */
-    OFPAT_SET_NW_TOS,       /* IP ToS (DSCP field, 6 bits). */
-    OFPAT_SET_TP_SRC,       /* TCP/UDP source port. */
-    OFPAT_SET_TP_DST,       /* TCP/UDP destination port. */
-    OFPAT_ENQUEUE,          /* Output to queue. */
-    OFPAT_VENDOR = 0xffff
+enum ofp10_action_type {
+    OFPAT10_OUTPUT,             /* Output to switch port. */
+    OFPAT10_SET_VLAN_VID,       /* Set the 802.1q VLAN id. */
+    OFPAT10_SET_VLAN_PCP,       /* Set the 802.1q priority. */
+    OFPAT10_STRIP_VLAN,         /* Strip the 802.1q header. */
+    OFPAT10_SET_DL_SRC,         /* Ethernet source address. */
+    OFPAT10_SET_DL_DST,         /* Ethernet destination address. */
+    OFPAT10_SET_NW_SRC,         /* IP source address. */
+    OFPAT10_SET_NW_DST,         /* IP destination address. */
+    OFPAT10_SET_NW_TOS,         /* IP ToS (DSCP field, 6 bits). */
+    OFPAT10_SET_TP_SRC,         /* TCP/UDP source port. */
+    OFPAT10_SET_TP_DST,         /* TCP/UDP destination port. */
+    OFPAT10_ENQUEUE,            /* Output to queue. */
+    OFPAT10_VENDOR = 0xffff
 };
 
-/* Action structure for OFPAT_OUTPUT, which sends packets out 'port'.
+/* Action structure for OFPAT10_OUTPUT, which sends packets out 'port'.
  * When the 'port' is the OFPP_CONTROLLER, 'max_len' indicates the max
  * number of bytes to send.  A 'max_len' of zero means no bytes of the
  * packet should be sent. */
 struct ofp_action_output {
-    ovs_be16 type;                  /* OFPAT_OUTPUT. */
+    ovs_be16 type;                  /* OFPAT10_OUTPUT. */
     ovs_be16 len;                   /* Length is 8. */
     ovs_be16 port;                  /* Output port. */
     ovs_be16 max_len;               /* Max length to send to controller. */
@@ -301,62 +301,62 @@ OFP_ASSERT(sizeof(struct ofp_action_output) == 8);
  * set. */
 #define OFP_VLAN_NONE      0xffff
 
-/* Action structure for OFPAT_SET_VLAN_VID. */
+/* Action structure for OFPAT10_SET_VLAN_VID. */
 struct ofp_action_vlan_vid {
-    ovs_be16 type;                  /* OFPAT_SET_VLAN_VID. */
+    ovs_be16 type;                  /* OFPAT10_SET_VLAN_VID. */
     ovs_be16 len;                   /* Length is 8. */
     ovs_be16 vlan_vid;              /* VLAN id. */
     uint8_t pad[2];
 };
 OFP_ASSERT(sizeof(struct ofp_action_vlan_vid) == 8);
 
-/* Action structure for OFPAT_SET_VLAN_PCP. */
+/* Action structure for OFPAT10_SET_VLAN_PCP. */
 struct ofp_action_vlan_pcp {
-    ovs_be16 type;                  /* OFPAT_SET_VLAN_PCP. */
+    ovs_be16 type;                  /* OFPAT10_SET_VLAN_PCP. */
     ovs_be16 len;                   /* Length is 8. */
     uint8_t vlan_pcp;               /* VLAN priority. */
     uint8_t pad[3];
 };
 OFP_ASSERT(sizeof(struct ofp_action_vlan_pcp) == 8);
 
-/* Action structure for OFPAT_SET_DL_SRC/DST. */
+/* Action structure for OFPAT10_SET_DL_SRC/DST. */
 struct ofp_action_dl_addr {
-    ovs_be16 type;                  /* OFPAT_SET_DL_SRC/DST. */
+    ovs_be16 type;                  /* OFPAT10_SET_DL_SRC/DST. */
     ovs_be16 len;                   /* Length is 16. */
     uint8_t dl_addr[OFP_ETH_ALEN];  /* Ethernet address. */
     uint8_t pad[6];
 };
 OFP_ASSERT(sizeof(struct ofp_action_dl_addr) == 16);
 
-/* Action structure for OFPAT_SET_NW_SRC/DST. */
+/* Action structure for OFPAT10_SET_NW_SRC/DST. */
 struct ofp_action_nw_addr {
-    ovs_be16 type;                  /* OFPAT_SET_TW_SRC/DST. */
+    ovs_be16 type;                  /* OFPAT10_SET_TW_SRC/DST. */
     ovs_be16 len;                   /* Length is 8. */
     ovs_be32 nw_addr;               /* IP address. */
 };
 OFP_ASSERT(sizeof(struct ofp_action_nw_addr) == 8);
 
-/* Action structure for OFPAT_SET_NW_TOS. */
+/* Action structure for OFPAT10_SET_NW_TOS. */
 struct ofp_action_nw_tos {
-    ovs_be16 type;                  /* OFPAT_SET_TW_TOS. */
+    ovs_be16 type;                  /* OFPAT10_SET_TW_TOS. */
     ovs_be16 len;                   /* Length is 8. */
     uint8_t nw_tos;                 /* IP TOS (DSCP field, 6 bits). */
     uint8_t pad[3];
 };
 OFP_ASSERT(sizeof(struct ofp_action_nw_tos) == 8);
 
-/* Action structure for OFPAT_SET_TP_SRC/DST. */
+/* Action structure for OFPAT10_SET_TP_SRC/DST. */
 struct ofp_action_tp_port {
-    ovs_be16 type;                  /* OFPAT_SET_TP_SRC/DST. */
+    ovs_be16 type;                  /* OFPAT10_SET_TP_SRC/DST. */
     ovs_be16 len;                   /* Length is 8. */
     ovs_be16 tp_port;               /* TCP/UDP port. */
     uint8_t pad[2];
 };
 OFP_ASSERT(sizeof(struct ofp_action_tp_port) == 8);
 
-/* Action header for OFPAT_VENDOR. The rest of the body is vendor-defined. */
+/* Action header for OFPAT10_VENDOR. The rest of the body is vendor-defined. */
 struct ofp_action_vendor_header {
-    ovs_be16 type;                  /* OFPAT_VENDOR. */
+    ovs_be16 type;                  /* OFPAT10_VENDOR. */
     ovs_be16 len;                   /* Length is a multiple of 8. */
     ovs_be32 vendor;                /* Vendor ID, which takes the same form
                                        as in "struct ofp_vendor_header". */
@@ -367,7 +367,7 @@ OFP_ASSERT(sizeof(struct ofp_action_vendor_header) == 8);
  * header and any padding used to make the action 64-bit aligned.
  * NB: The length of an action *must* always be a multiple of eight. */
 struct ofp_action_header {
-    ovs_be16 type;                  /* One of OFPAT_*. */
+    ovs_be16 type;                  /* One of OFPAT10_*. */
     ovs_be16 len;                   /* Length of action, including this
                                        header.  This is the length of action,
                                        including any padding to make it
@@ -376,9 +376,9 @@ struct ofp_action_header {
 };
 OFP_ASSERT(sizeof(struct ofp_action_header) == 8);
 
-/* OFPAT_ENQUEUE action struct: send packets to given queue on port. */
+/* OFPAT10_ENQUEUE action struct: send packets to given queue on port. */
 struct ofp_action_enqueue {
-    ovs_be16 type;            /* OFPAT_ENQUEUE. */
+    ovs_be16 type;            /* OFPAT10_ENQUEUE. */
     ovs_be16 len;             /* Len is 16. */
     ovs_be16 port;            /* Port that queue belongs. Should
                                  refer to a valid physical port

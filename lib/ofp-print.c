@@ -182,7 +182,7 @@ ofp_print_action(struct ds *s, const union ofp_action *a,
     uint16_t port;
 
     switch (code) {
-    case OFPUTIL_OFPAT_OUTPUT:
+    case OFPUTIL_OFPAT10_OUTPUT:
         port = ntohs(a->output.port);
         if (port < OFPP_MAX) {
             ds_put_format(s, "output:%"PRIu16, port);
@@ -198,55 +198,55 @@ ofp_print_action(struct ds *s, const union ofp_action *a,
         }
         break;
 
-    case OFPUTIL_OFPAT_ENQUEUE:
+    case OFPUTIL_OFPAT10_ENQUEUE:
         oae = (const struct ofp_action_enqueue *) a;
         ds_put_format(s, "enqueue:");
         ofputil_format_port(ntohs(oae->port), s);
         ds_put_format(s, "q%"PRIu32, ntohl(oae->queue_id));
         break;
 
-    case OFPUTIL_OFPAT_SET_VLAN_VID:
+    case OFPUTIL_OFPAT10_SET_VLAN_VID:
         ds_put_format(s, "mod_vlan_vid:%"PRIu16,
                       ntohs(a->vlan_vid.vlan_vid));
         break;
 
-    case OFPUTIL_OFPAT_SET_VLAN_PCP:
+    case OFPUTIL_OFPAT10_SET_VLAN_PCP:
         ds_put_format(s, "mod_vlan_pcp:%"PRIu8, a->vlan_pcp.vlan_pcp);
         break;
 
-    case OFPUTIL_OFPAT_STRIP_VLAN:
+    case OFPUTIL_OFPAT10_STRIP_VLAN:
         ds_put_cstr(s, "strip_vlan");
         break;
 
-    case OFPUTIL_OFPAT_SET_DL_SRC:
+    case OFPUTIL_OFPAT10_SET_DL_SRC:
         oada = (const struct ofp_action_dl_addr *) a;
         ds_put_format(s, "mod_dl_src:"ETH_ADDR_FMT,
                       ETH_ADDR_ARGS(oada->dl_addr));
         break;
 
-    case OFPUTIL_OFPAT_SET_DL_DST:
+    case OFPUTIL_OFPAT10_SET_DL_DST:
         oada = (const struct ofp_action_dl_addr *) a;
         ds_put_format(s, "mod_dl_dst:"ETH_ADDR_FMT,
                       ETH_ADDR_ARGS(oada->dl_addr));
         break;
 
-    case OFPUTIL_OFPAT_SET_NW_SRC:
+    case OFPUTIL_OFPAT10_SET_NW_SRC:
         ds_put_format(s, "mod_nw_src:"IP_FMT, IP_ARGS(&a->nw_addr.nw_addr));
         break;
 
-    case OFPUTIL_OFPAT_SET_NW_DST:
+    case OFPUTIL_OFPAT10_SET_NW_DST:
         ds_put_format(s, "mod_nw_dst:"IP_FMT, IP_ARGS(&a->nw_addr.nw_addr));
         break;
 
-    case OFPUTIL_OFPAT_SET_NW_TOS:
+    case OFPUTIL_OFPAT10_SET_NW_TOS:
         ds_put_format(s, "mod_nw_tos:%d", a->nw_tos.nw_tos);
         break;
 
-    case OFPUTIL_OFPAT_SET_TP_SRC:
+    case OFPUTIL_OFPAT10_SET_TP_SRC:
         ds_put_format(s, "mod_tp_src:%d", ntohs(a->tp_port.tp_port));
         break;
 
-    case OFPUTIL_OFPAT_SET_TP_DST:
+    case OFPUTIL_OFPAT10_SET_TP_DST:
         ds_put_format(s, "mod_tp_dst:%d", ntohs(a->tp_port.tp_port));
         break;
 

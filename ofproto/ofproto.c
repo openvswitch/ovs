@@ -1864,7 +1864,7 @@ handle_features_request(struct ofconn *ofconn, const struct ofp_header *oh)
     uint32_t actions;
 
     ofproto->ofproto_class->get_features(ofproto, &arp_match_ip, &actions);
-    assert(actions & (1 << OFPAT_OUTPUT)); /* sanity check */
+    assert(actions & (1 << OFPAT10_OUTPUT)); /* sanity check */
 
     osf = make_openflow_xid(sizeof *osf, OFPT_FEATURES_REPLY, oh->xid, &buf);
     osf->datapath_id = htonll(ofproto->datapath_id);

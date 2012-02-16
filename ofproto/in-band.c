@@ -412,7 +412,7 @@ in_band_run(struct in_band *ib)
     struct in_band_rule *rule, *next;
 
     memset(&actions, 0, sizeof actions);
-    actions.oa.output.type = htons(OFPAT_OUTPUT);
+    actions.oa.output.type = htons(OFPAT10_OUTPUT);
     actions.oa.output.len = htons(sizeof actions.oa);
     actions.oa.output.port = htons(OFPP_NORMAL);
     actions.oa.output.max_len = htons(0);
@@ -420,7 +420,7 @@ in_band_run(struct in_band *ib)
         a = &actions.oa;
         na = sizeof actions.oa / sizeof(union ofp_action);
     } else {
-        actions.nxsq.type = htons(OFPAT_VENDOR);
+        actions.nxsq.type = htons(OFPAT10_VENDOR);
         actions.nxsq.len = htons(sizeof actions.nxsq);
         actions.nxsq.vendor = htonl(NX_VENDOR_ID);
         actions.nxsq.subtype = htons(NXAST_SET_QUEUE);

@@ -124,7 +124,7 @@ put_output_action(struct ofpbuf *b, uint16_t port)
 {
     struct ofp_action_output *oao;
 
-    oao = ofputil_put_OFPAT_OUTPUT(b);
+    oao = ofputil_put_OFPAT10_OUTPUT(b);
     oao->port = htons(port);
     return oao;
 }
@@ -141,7 +141,7 @@ parse_enqueue(struct ofpbuf *b, char *arg)
         ovs_fatal(0, "\"enqueue\" syntax is \"enqueue:PORT:QUEUE\"");
     }
 
-    oae = ofputil_put_OFPAT_ENQUEUE(b);
+    oae = ofputil_put_OFPAT10_ENQUEUE(b);
     oae->port = htons(str_to_u32(port));
     oae->queue_id = htonl(str_to_u32(queue));
 }
@@ -320,47 +320,47 @@ parse_named_action(enum ofputil_action_code code, const struct flow *flow,
     struct ofp_action_tp_port *oata;
 
     switch (code) {
-    case OFPUTIL_OFPAT_OUTPUT:
+    case OFPUTIL_OFPAT10_OUTPUT:
         parse_output(b, arg);
         break;
 
-    case OFPUTIL_OFPAT_SET_VLAN_VID:
-        oavv = ofputil_put_OFPAT_SET_VLAN_VID(b);
+    case OFPUTIL_OFPAT10_SET_VLAN_VID:
+        oavv = ofputil_put_OFPAT10_SET_VLAN_VID(b);
         oavv->vlan_vid = htons(str_to_u32(arg));
         break;
 
-    case OFPUTIL_OFPAT_SET_VLAN_PCP:
-        oavp = ofputil_put_OFPAT_SET_VLAN_PCP(b);
+    case OFPUTIL_OFPAT10_SET_VLAN_PCP:
+        oavp = ofputil_put_OFPAT10_SET_VLAN_PCP(b);
         oavp->vlan_pcp = str_to_u32(arg);
         break;
 
-    case OFPUTIL_OFPAT_STRIP_VLAN:
-        ofputil_put_OFPAT_STRIP_VLAN(b);
+    case OFPUTIL_OFPAT10_STRIP_VLAN:
+        ofputil_put_OFPAT10_STRIP_VLAN(b);
         break;
 
-    case OFPUTIL_OFPAT_SET_DL_SRC:
-    case OFPUTIL_OFPAT_SET_DL_DST:
+    case OFPUTIL_OFPAT10_SET_DL_SRC:
+    case OFPUTIL_OFPAT10_SET_DL_DST:
         oada = ofputil_put_action(code, b);
         str_to_mac(arg, oada->dl_addr);
         break;
 
-    case OFPUTIL_OFPAT_SET_NW_SRC:
-    case OFPUTIL_OFPAT_SET_NW_DST:
+    case OFPUTIL_OFPAT10_SET_NW_SRC:
+    case OFPUTIL_OFPAT10_SET_NW_DST:
         oana = ofputil_put_action(code, b);
         str_to_ip(arg, &oana->nw_addr);
         break;
 
-    case OFPUTIL_OFPAT_SET_NW_TOS:
-        ofputil_put_OFPAT_SET_NW_TOS(b)->nw_tos = str_to_u32(arg);
+    case OFPUTIL_OFPAT10_SET_NW_TOS:
+        ofputil_put_OFPAT10_SET_NW_TOS(b)->nw_tos = str_to_u32(arg);
         break;
 
-    case OFPUTIL_OFPAT_SET_TP_SRC:
-    case OFPUTIL_OFPAT_SET_TP_DST:
+    case OFPUTIL_OFPAT10_SET_TP_SRC:
+    case OFPUTIL_OFPAT10_SET_TP_DST:
         oata = ofputil_put_action(code, b);
         oata->tp_port = htons(str_to_u32(arg));
         break;
 
-    case OFPUTIL_OFPAT_ENQUEUE:
+    case OFPUTIL_OFPAT10_ENQUEUE:
         parse_enqueue(b, arg);
         break;
 

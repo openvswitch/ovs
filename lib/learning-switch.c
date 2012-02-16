@@ -471,7 +471,7 @@ process_packet_in(struct lswitch *sw, struct rconn *rconn,
         struct ofp_action_output oao;
 
         memset(&oao, 0, sizeof oao);
-        oao.type = htons(OFPAT_OUTPUT);
+        oao.type = htons(OFPAT10_OUTPUT);
         oao.len = htons(sizeof oao);
         oao.port = htons(out_port);
 
@@ -481,7 +481,7 @@ process_packet_in(struct lswitch *sw, struct rconn *rconn,
         struct ofp_action_enqueue oae;
 
         memset(&oae, 0, sizeof oae);
-        oae.type = htons(OFPAT_ENQUEUE);
+        oae.type = htons(OFPAT10_ENQUEUE);
         oae.len = htons(sizeof oae);
         oae.port = htons(out_port);
         oae.queue_id = htonl(queue_id);

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -216,7 +216,7 @@ fail_open_flushed(struct fail_open *fo)
         /* Set up a flow that matches every packet and directs them to
          * OFPP_NORMAL. */
         memset(&action, 0, sizeof action);
-        action.type = htons(OFPAT_OUTPUT);
+        action.type = htons(OFPAT10_OUTPUT);
         action.output.len = htons(sizeof action);
         action.output.port = htons(OFPP_NORMAL);
 

@@ -255,7 +255,7 @@ learn_execute(const struct nx_action_learn *learn, const struct flow *flow,
             break;
 
         case NX_LEARN_DST_OUTPUT:
-            ofputil_put_OFPAT_OUTPUT(&actions)->port = htons(value);
+            ofputil_put_OFPAT10_OUTPUT(&actions)->port = htons(value);
             break;
         }
     }

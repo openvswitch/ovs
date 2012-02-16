@@ -1560,7 +1560,7 @@ connmgr_flushed(struct connmgr *mgr)
         struct cls_rule rule;
 
         memset(&action, 0, sizeof action);
-        action.type = htons(OFPAT_OUTPUT);
+        action.type = htons(OFPAT10_OUTPUT);
         action.output.len = htons(sizeof action);
         action.output.port = htons(OFPP_NORMAL);
         cls_rule_init_catchall(&rule, 0);

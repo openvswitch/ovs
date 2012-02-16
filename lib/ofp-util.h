@@ -389,21 +389,21 @@ bool ofputil_frag_handling_from_string(const char *, enum ofp_config_flags *);
 
 /* The type of an action.
  *
- * For each implemented OFPAT_* and NXAST_* action type, there is a
+ * For each implemented OFPAT10_* and NXAST_* action type, there is a
  * corresponding constant prefixed with OFPUTIL_, e.g.:
  *
- * OFPUTIL_OFPAT_OUTPUT
- * OFPUTIL_OFPAT_SET_VLAN_VID
- * OFPUTIL_OFPAT_SET_VLAN_PCP
- * OFPUTIL_OFPAT_STRIP_VLAN
- * OFPUTIL_OFPAT_SET_DL_SRC
- * OFPUTIL_OFPAT_SET_DL_DST
- * OFPUTIL_OFPAT_SET_NW_SRC
- * OFPUTIL_OFPAT_SET_NW_DST
- * OFPUTIL_OFPAT_SET_NW_TOS
- * OFPUTIL_OFPAT_SET_TP_SRC
- * OFPUTIL_OFPAT_SET_TP_DST
- * OFPUTIL_OFPAT_ENQUEUE
+ * OFPUTIL_OFPAT10_OUTPUT
+ * OFPUTIL_OFPAT10_SET_VLAN_VID
+ * OFPUTIL_OFPAT10_SET_VLAN_PCP
+ * OFPUTIL_OFPAT10_STRIP_VLAN
+ * OFPUTIL_OFPAT10_SET_DL_SRC
+ * OFPUTIL_OFPAT10_SET_DL_DST
+ * OFPUTIL_OFPAT10_SET_NW_SRC
+ * OFPUTIL_OFPAT10_SET_NW_DST
+ * OFPUTIL_OFPAT10_SET_NW_TOS
+ * OFPUTIL_OFPAT10_SET_TP_SRC
+ * OFPUTIL_OFPAT10_SET_TP_DST
+ * OFPUTIL_OFPAT10_ENQUEUE
  * OFPUTIL_NXAST_RESUBMIT
  * OFPUTIL_NXAST_SET_TUNNEL
  * OFPUTIL_NXAST_SET_QUEUE
@@ -425,14 +425,14 @@ bool ofputil_frag_handling_from_string(const char *, enum ofp_config_flags *);
  * (The above list helps developers who want to "grep" for these definitions.)
  */
 enum ofputil_action_code {
-#define OFPAT_ACTION(ENUM, STRUCT, NAME)             OFPUTIL_##ENUM,
+#define OFPAT10_ACTION(ENUM, STRUCT, NAME)             OFPUTIL_##ENUM,
 #define NXAST_ACTION(ENUM, STRUCT, EXTENSIBLE, NAME) OFPUTIL_##ENUM,
 #include "ofp-util.def"
 };
 
 /* The number of values of "enum ofputil_action_code". */
 enum {
-#define OFPAT_ACTION(ENUM, STRUCT, NAME)             + 1
+#define OFPAT10_ACTION(ENUM, STRUCT, NAME)             + 1
 #define NXAST_ACTION(ENUM, STRUCT, EXTENSIBLE, NAME) + 1
     OFPUTIL_N_ACTIONS = 0
 #include "ofp-util.def"
@@ -460,7 +460,7 @@ void *ofputil_put_action(enum ofputil_action_code, struct ofpbuf *buf);
  *     Appends a new 'action', of length 'sizeof(struct <STRUCT>)', to 'buf',
  *     initializes it with ofputil_init_<ENUM>(), and returns it.
  */
-#define OFPAT_ACTION(ENUM, STRUCT, NAME)                \
+#define OFPAT10_ACTION(ENUM, STRUCT, NAME)              \
     void ofputil_init_##ENUM(struct STRUCT *);          \
     struct STRUCT *ofputil_put_##ENUM(struct ofpbuf *);
 #define NXAST_ACTION(ENUM, STRUCT, EXTENSIBLE, NAME)    \
