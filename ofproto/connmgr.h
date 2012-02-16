@@ -29,6 +29,7 @@ struct ofconn;
 struct ofopgroup;
 struct ofputil_flow_removed;
 struct ofputil_packet_in;
+struct ofputil_phy_port;
 struct sset;
 
 /* ofproto supports two kinds of OpenFlow connections:
@@ -123,8 +124,8 @@ void ofconn_remove_opgroup(struct ofconn *, struct list *,
                            const struct ofp_header *request, int error);
 
 /* Sending asynchronous messages. */
-void connmgr_send_port_status(struct connmgr *, const struct ofp_phy_port *,
-                              uint8_t reason);
+void connmgr_send_port_status(struct connmgr *,
+                              const struct ofputil_phy_port *, uint8_t reason);
 void connmgr_send_flow_removed(struct connmgr *,
                                const struct ofputil_flow_removed *);
 void connmgr_send_packet_in(struct connmgr *, const struct ofputil_packet_in *,

@@ -510,19 +510,20 @@ do_dump_tables(int argc OVS_UNUSED, char *argv[])
     dump_trivial_stats_transaction(argv[1], OFPST_TABLE);
 }
 
-/* Opens a connection to 'vconn_name', fetches the ofp_phy_port structure for
+/* Opens a connection to 'vconn_name', fetches the port structure for
  * 'port_name' (which may be a port name or number), and copies it into
  * '*oppp'. */
 static void
-fetch_ofp_phy_port(const char *vconn_name, const char *port_name,
-                   struct ofp_phy_port *oppp)
+fetch_ofputil_phy_port(const char *vconn_name, const char *port_name,
+                       struct ofputil_phy_port *pp)
 {
+    struct ofputil_switch_features features;
+    const struct ofp_switch_features *osf;
     struct ofpbuf *request, *reply;
-    struct ofp_switch_features *osf;
     unsigned int port_no;
     struct vconn *vconn;
-    int n_ports;
-    int port_idx;
+    enum ofperr error;
+    struct ofpbuf b;
 
     /* Try to interpret the argument as a port number. */
     if (!str_to_uint(port_name, 10, &port_no)) {
@@ -539,15 +540,16 @@ fetch_ofp_phy_port(const char *vconn_name, const char *port_name,
         ovs_fatal(0, "%s: received too-short features reply (only %zu bytes)",
                   vconn_name, reply->size);
     }
-    n_ports = (reply->size - sizeof *osf) / sizeof *osf->ports;
+    error = ofputil_decode_switch_features(osf, &features, &b);
+    if (error) {
+        ovs_fatal(0, "%s: failed to decode features reply (%s)",
+                  vconn_name, ofperr_to_string(error));
+    }
 
-    for (port_idx = 0; port_idx < n_ports; port_idx++) {
-        const struct ofp_phy_port *opp = &osf->ports[port_idx];
-
+    while (!ofputil_pull_switch_features_port(&b, pp)) {
         if (port_no != UINT_MAX
-            ? htons(port_no) == opp->port_no
-            : !strncmp(opp->name, port_name, sizeof opp->name)) {
-            *oppp = *opp;
+            ? port_no == pp->port_no
+            : !strcmp(pp->name, port_name)) {
             ofpbuf_delete(reply);
             vconn_close(vconn);
             return;
@@ -566,10 +568,10 @@ str_to_port_no(const char *vconn_name, const char *port_name)
     if (str_to_uint(port_name, 10, &port_no)) {
         return port_no;
     } else {
-        struct ofp_phy_port opp;
+        struct ofputil_phy_port pp;
 
-        fetch_ofp_phy_port(vconn_name, port_name, &opp);
-        return ntohs(opp.port_no);
+        fetch_ofputil_phy_port(vconn_name, port_name, &pp);
+        return pp.port_no;
     }
 }
 
@@ -1141,42 +1143,40 @@ do_packet_out(int argc, char *argv[])
 static void
 do_mod_port(int argc OVS_UNUSED, char *argv[])
 {
-    struct ofp_port_mod *opm;
-    struct ofp_phy_port opp;
-    struct ofpbuf *request;
+    enum ofputil_protocol protocol;
+    struct ofputil_port_mod pm;
+    struct ofputil_phy_port pp;
     struct vconn *vconn;
 
-    fetch_ofp_phy_port(argv[1], argv[2], &opp);
+    fetch_ofputil_phy_port(argv[1], argv[2], &pp);
 
-    opm = make_openflow(sizeof(struct ofp_port_mod), OFPT10_PORT_MOD,
-                        &request);
-    opm->port_no = opp.port_no;
-    memcpy(opm->hw_addr, opp.hw_addr, sizeof opm->hw_addr);
-    opm->config = htonl(0);
-    opm->mask = htonl(0);
-    opm->advertise = htonl(0);
+    pm.port_no = pp.port_no;
+    memcpy(pm.hw_addr, pp.hw_addr, ETH_ADDR_LEN);
+    pm.config = 0;
+    pm.mask = 0;
+    pm.advertise = 0;
 
     if (!strcasecmp(argv[3], "up")) {
-        opm->mask |= htonl(OFPPC_PORT_DOWN);
+        pm.mask |= OFPUTIL_PC_PORT_DOWN;
     } else if (!strcasecmp(argv[3], "down")) {
-        opm->mask |= htonl(OFPPC_PORT_DOWN);
-        opm->config |= htonl(OFPPC_PORT_DOWN);
+        pm.mask |= OFPUTIL_PC_PORT_DOWN;
+        pm.config |= OFPUTIL_PC_PORT_DOWN;
     } else if (!strcasecmp(argv[3], "flood")) {
-        opm->mask |= htonl(OFPPC_NO_FLOOD);
+        pm.mask |= OFPUTIL_PC_NO_FLOOD;
     } else if (!strcasecmp(argv[3], "noflood")) {
-        opm->mask |= htonl(OFPPC_NO_FLOOD);
-        opm->config |= htonl(OFPPC_NO_FLOOD);
+        pm.mask |= OFPUTIL_PC_NO_FLOOD;
+        pm.config |= OFPUTIL_PC_NO_FLOOD;
     } else if (!strcasecmp(argv[3], "forward")) {
-        opm->mask |= htonl(OFPPC_NO_FWD);
+        pm.mask |= OFPUTIL_PC_NO_FWD;
     } else if (!strcasecmp(argv[3], "noforward")) {
-        opm->mask |= htonl(OFPPC_NO_FWD);
-        opm->config |= htonl(OFPPC_NO_FWD);
+        pm.mask |= OFPUTIL_PC_NO_FWD;
+        pm.config |= OFPUTIL_PC_NO_FWD;
     } else {
         ovs_fatal(0, "unknown mod-port command '%s'", argv[3]);
     }
 
-    open_vconn(argv[1], &vconn);
-    transact_noreply(vconn, request);
+    protocol = open_vconn(argv[1], &vconn);
+    transact_noreply(vconn, ofputil_encode_port_mod(&pm, protocol));
     vconn_close(vconn);
 }
 

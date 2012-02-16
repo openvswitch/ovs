@@ -1400,9 +1400,9 @@ reinit_ports(struct ofproto *p)
 /* Opens and returns a netdev for 'ofproto_port', or a null pointer if the
  * netdev cannot be opened.  On success, also fills in 'opp'.  */
 static struct netdev *
-ofport_open(const struct ofproto_port *ofproto_port, struct ofp_phy_port *opp)
+ofport_open(const struct ofproto_port *ofproto_port,
+            struct ofputil_phy_port *pp)
 {
-    enum netdev_features curr, advertised, supported, peer;
     enum netdev_flags flags;
     struct netdev *netdev;
     int error;
@@ -1416,36 +1416,36 @@ ofport_open(const struct ofproto_port *ofproto_port, struct ofp_phy_port *opp)
         return NULL;
     }
 
+    pp->port_no = ofproto_port->ofp_port;
+    netdev_get_etheraddr(netdev, pp->hw_addr);
+    ovs_strlcpy(pp->name, ofproto_port->name, sizeof pp->name);
     netdev_get_flags(netdev, &flags);
-    netdev_get_features(netdev, &curr, &advertised, &supported, &peer);
-
-    opp->port_no = htons(ofproto_port->ofp_port);
-    netdev_get_etheraddr(netdev, opp->hw_addr);
-    ovs_strzcpy(opp->name, ofproto_port->name, sizeof opp->name);
-    opp->config = flags & NETDEV_UP ? 0 : htonl(OFPPC_PORT_DOWN);
-    opp->state = netdev_get_carrier(netdev) ? 0 : htonl(OFPPS_LINK_DOWN);
-    opp->curr = ofputil_netdev_port_features_to_ofp10(curr);
-    opp->advertised = ofputil_netdev_port_features_to_ofp10(advertised);
-    opp->supported = ofputil_netdev_port_features_to_ofp10(supported);
-    opp->peer = ofputil_netdev_port_features_to_ofp10(peer);
+    pp->config = flags & NETDEV_UP ? 0 : OFPUTIL_PC_PORT_DOWN;
+    pp->state = netdev_get_carrier(netdev) ? 0 : OFPUTIL_PS_LINK_DOWN;
+    netdev_get_features(netdev, &pp->curr, &pp->advertised,
+                        &pp->supported, &pp->peer);
+    pp->curr_speed = netdev_features_to_bps(pp->curr);
+    pp->max_speed = netdev_features_to_bps(pp->supported);
 
     return netdev;
 }
 
 /* Returns true if most fields of 'a' and 'b' are equal.  Differences in name,
- * port number, and 'config' bits other than OFPPC_PORT_DOWN are
+ * port number, and 'config' bits other than OFPUTIL_PS_LINK_DOWN are
  * disregarded. */
 static bool
-ofport_equal(const struct ofp_phy_port *a, const struct ofp_phy_port *b)
+ofport_equal(const struct ofputil_phy_port *a,
+             const struct ofputil_phy_port *b)
 {
-    BUILD_ASSERT_DECL(sizeof *a == 48); /* Detect ofp_phy_port changes. */
-    return (!memcmp(a->hw_addr, b->hw_addr, sizeof a->hw_addr)
+    return (eth_addr_equals(a->hw_addr, b->hw_addr)
             && a->state == b->state
-            && !((a->config ^ b->config) & htonl(OFPPC_PORT_DOWN))
+            && !((a->config ^ b->config) & OFPUTIL_PC_PORT_DOWN)
             && a->curr == b->curr
             && a->advertised == b->advertised
             && a->supported == b->supported
-            && a->peer == b->peer);
+            && a->peer == b->peer
+            && a->curr_speed == b->curr_speed
+            && a->max_speed == b->max_speed);
 }
 
 /* Adds an ofport to 'p' initialized based on the given 'netdev' and 'opp'.
@@ -1453,7 +1453,7 @@ ofport_equal(const struct ofp_phy_port *a, const struct ofp_phy_port *b)
  * one with the same name or port number). */
 static void
 ofport_install(struct ofproto *p,
-               struct netdev *netdev, const struct ofp_phy_port *opp)
+               struct netdev *netdev, const struct ofputil_phy_port *pp)
 {
     const char *netdev_name = netdev_get_name(netdev);
     struct ofport *ofport;
@@ -1469,8 +1469,8 @@ ofport_install(struct ofproto *p,
     ofport->ofproto = p;
     ofport->netdev = netdev;
     ofport->change_seq = netdev_change_seq(netdev);
-    ofport->opp = *opp;
-    ofport->ofp_port = ntohs(opp->port_no);
+    ofport->pp = *pp;
+    ofport->ofp_port = pp->port_no;
 
     /* Add port to 'p'. */
     hmap_insert(&p->ports, &ofport->hmap_node, hash_int(ofport->ofp_port, 0));
@@ -1488,7 +1488,7 @@ ofport_install(struct ofproto *p,
     if (error) {
         goto error;
     }
-    connmgr_send_port_status(p->connmgr, opp, OFPPR_ADD);
+    connmgr_send_port_status(p->connmgr, pp, OFPPR_ADD);
     return;
 
 error:
@@ -1505,7 +1505,7 @@ error:
 static void
 ofport_remove(struct ofport *ofport)
 {
-    connmgr_send_port_status(ofport->ofproto->connmgr, &ofport->opp,
+    connmgr_send_port_status(ofport->ofproto->connmgr, &ofport->pp,
                              OFPPR_DELETE);
     ofport_destroy(ofport);
 }
@@ -1521,32 +1521,34 @@ ofport_remove_with_name(struct ofproto *ofproto, const char *name)
     }
 }
 
-/* Updates 'port' with new 'opp' description.
+/* Updates 'port' with new 'pp' description.
  *
  * Does not handle a name or port number change.  The caller must implement
  * such a change as a delete followed by an add.  */
 static void
-ofport_modified(struct ofport *port, struct ofp_phy_port *opp)
+ofport_modified(struct ofport *port, struct ofputil_phy_port *pp)
 {
-    memcpy(port->opp.hw_addr, opp->hw_addr, ETH_ADDR_LEN);
-    port->opp.config = ((port->opp.config & ~htonl(OFPPC_PORT_DOWN))
-                        | (opp->config & htonl(OFPPC_PORT_DOWN)));
-    port->opp.state = opp->state;
-    port->opp.curr = opp->curr;
-    port->opp.advertised = opp->advertised;
-    port->opp.supported = opp->supported;
-    port->opp.peer = opp->peer;
+    memcpy(port->pp.hw_addr, pp->hw_addr, ETH_ADDR_LEN);
+    port->pp.config = ((port->pp.config & ~OFPUTIL_PC_PORT_DOWN)
+                        | (pp->config & OFPUTIL_PC_PORT_DOWN));
+    port->pp.state = pp->state;
+    port->pp.curr = pp->curr;
+    port->pp.advertised = pp->advertised;
+    port->pp.supported = pp->supported;
+    port->pp.peer = pp->peer;
+    port->pp.curr_speed = pp->curr_speed;
+    port->pp.max_speed = pp->max_speed;
 
-    connmgr_send_port_status(port->ofproto->connmgr, &port->opp, OFPPR_MODIFY);
+    connmgr_send_port_status(port->ofproto->connmgr, &port->pp, OFPPR_MODIFY);
 }
 
 /* Update OpenFlow 'state' in 'port' and notify controller. */
 void
-ofproto_port_set_state(struct ofport *port, ovs_be32 state)
+ofproto_port_set_state(struct ofport *port, enum ofputil_port_state state)
 {
-    if (port->opp.state != state) {
-        port->opp.state = state;
-        connmgr_send_port_status(port->ofproto->connmgr, &port->opp,
+    if (port->pp.state != state) {
+        port->pp.state = state;
+        connmgr_send_port_status(port->ofproto->connmgr, &port->pp,
                                  OFPPR_MODIFY);
     }
 }
@@ -1627,7 +1629,7 @@ static void
 update_port(struct ofproto *ofproto, const char *name)
 {
     struct ofproto_port ofproto_port;
-    struct ofp_phy_port opp;
+    struct ofputil_phy_port pp;
     struct netdev *netdev;
     struct ofport *port;
 
@@ -1635,7 +1637,7 @@ update_port(struct ofproto *ofproto, const char *name)
 
     /* Fetch 'name''s location and properties from the datapath. */
     netdev = (!ofproto_port_query_by_name(ofproto, name, &ofproto_port)
-              ? ofport_open(&ofproto_port, &opp)
+              ? ofport_open(&ofproto_port, &pp)
               : NULL);
     if (netdev) {
         port = ofproto_get_port(ofproto, ofproto_port.ofp_port);
@@ -1644,8 +1646,8 @@ update_port(struct ofproto *ofproto, const char *name)
             int dev_mtu;
 
             /* 'name' hasn't changed location.  Any properties changed? */
-            if (!ofport_equal(&port->opp, &opp)) {
-                ofport_modified(port, &opp);
+            if (!ofport_equal(&port->pp, &pp)) {
+                ofport_modified(port, &pp);
             }
 
             /* If this is a non-internal port and the MTU changed, check
@@ -1676,7 +1678,7 @@ update_port(struct ofproto *ofproto, const char *name)
                 ofport_remove(port);
             }
             ofport_remove_with_name(ofproto, name);
-            ofport_install(ofproto, netdev, &opp);
+            ofport_install(ofproto, netdev, &pp);
         }
     } else {
         /* Any port named 'name' is gone now. */
@@ -1700,12 +1702,12 @@ init_ports(struct ofproto *p)
             VLOG_WARN_RL(&rl, "ignoring duplicate device %s in datapath",
                          ofproto_port.name);
         } else {
-            struct ofp_phy_port opp;
+            struct ofputil_phy_port pp;
             struct netdev *netdev;
 
-            netdev = ofport_open(&ofproto_port, &opp);
+            netdev = ofport_open(&ofproto_port, &pp);
             if (netdev) {
-                ofport_install(p, netdev, &opp);
+                ofport_install(p, netdev, &pp);
             }
         }
     }
@@ -1857,31 +1859,31 @@ static enum ofperr
 handle_features_request(struct ofconn *ofconn, const struct ofp_header *oh)
 {
     struct ofproto *ofproto = ofconn_get_ofproto(ofconn);
-    struct ofp_switch_features *osf;
-    struct ofpbuf *buf;
+    struct ofputil_switch_features features;
     struct ofport *port;
     bool arp_match_ip;
-    uint32_t actions;
+    struct ofpbuf *b;
 
-    ofproto->ofproto_class->get_features(ofproto, &arp_match_ip, &actions);
-    assert(actions & (1 << OFPAT10_OUTPUT)); /* sanity check */
+    ofproto->ofproto_class->get_features(ofproto, &arp_match_ip,
+                                         &features.actions);
+    assert(features.actions & OFPUTIL_A_OUTPUT); /* sanity check */
 
-    osf = make_openflow_xid(sizeof *osf, OFPT_FEATURES_REPLY, oh->xid, &buf);
-    osf->datapath_id = htonll(ofproto->datapath_id);
-    osf->n_buffers = htonl(pktbuf_capacity());
-    osf->n_tables = ofproto->n_tables;
-    osf->capabilities = htonl(OFPC_FLOW_STATS | OFPC_TABLE_STATS |
-                              OFPC_PORT_STATS | OFPC_QUEUE_STATS);
+    features.datapath_id = ofproto->datapath_id;
+    features.n_buffers = pktbuf_capacity();
+    features.n_tables = ofproto->n_tables;
+    features.capabilities = (OFPUTIL_C_FLOW_STATS | OFPUTIL_C_TABLE_STATS |
+                             OFPUTIL_C_PORT_STATS | OFPUTIL_C_QUEUE_STATS);
     if (arp_match_ip) {
-        osf->capabilities |= htonl(OFPC_ARP_MATCH_IP);
+        features.capabilities |= OFPUTIL_C_ARP_MATCH_IP;
     }
-    osf->actions = htonl(actions);
 
+    b = ofputil_encode_switch_features(&features, ofconn_get_protocol(ofconn),
+                                       oh->xid);
     HMAP_FOR_EACH (port, hmap_node, &ofproto->ports) {
-        ofpbuf_put(buf, &port->opp, sizeof port->opp);
+        ofputil_put_switch_features_port(&port->pp, b);
     }
 
-    ofconn_send_reply(ofconn, buf);
+    ofconn_send_reply(ofconn, b);
     return 0;
 }
 
@@ -1995,23 +1997,25 @@ handle_packet_out(struct ofconn *ofconn, const struct ofp_packet_out *opo)
 }
 
 static void
-update_port_config(struct ofport *port, ovs_be32 config, ovs_be32 mask)
+update_port_config(struct ofport *port,
+                   enum ofputil_port_config config,
+                   enum ofputil_port_config mask)
 {
-    ovs_be32 old_config = port->opp.config;
+    enum ofputil_port_config old_config = port->pp.config;
+    enum ofputil_port_config toggle;
 
-    mask &= config ^ port->opp.config;
-    if (mask & htonl(OFPPC_PORT_DOWN)) {
-        if (config & htonl(OFPPC_PORT_DOWN)) {
+    toggle = (config ^ port->pp.config) & mask;
+    if (toggle & OFPUTIL_PC_PORT_DOWN) {
+        if (config & OFPUTIL_PC_PORT_DOWN) {
             netdev_turn_flags_off(port->netdev, NETDEV_UP, true);
         } else {
             netdev_turn_flags_on(port->netdev, NETDEV_UP, true);
         }
+        toggle &= ~OFPUTIL_PC_PORT_DOWN;
     }
 
-    port->opp.config ^= mask & (htonl(OFPPC_NO_RECV | OFPPC_NO_RECV_STP |
-                                      OFPPC_NO_FLOOD | OFPPC_NO_FWD |
-                                      OFPPC_NO_PACKET_IN));
-    if (port->opp.config != old_config) {
+    port->pp.config ^= toggle;
+    if (port->pp.config != old_config) {
         port->ofproto->ofproto_class->port_reconfigured(port, old_config);
     }
 }
@@ -2020,27 +2024,29 @@ static enum ofperr
 handle_port_mod(struct ofconn *ofconn, const struct ofp_header *oh)
 {
     struct ofproto *p = ofconn_get_ofproto(ofconn);
-    const struct ofp_port_mod *opm = (const struct ofp_port_mod *) oh;
+    struct ofputil_port_mod pm;
     struct ofport *port;
-    int error;
+    enum ofperr error;
 
     error = reject_slave_controller(ofconn);
     if (error) {
         return error;
     }
 
-    port = ofproto_get_port(p, ntohs(opm->port_no));
+    error = ofputil_decode_port_mod(oh, &pm);
+    if (error) {
+        return error;
+    }
+
+    port = ofproto_get_port(p, pm.port_no);
     if (!port) {
         return OFPERR_OFPPMFC_BAD_PORT;
-    } else if (memcmp(port->opp.hw_addr, opm->hw_addr, OFP_ETH_ALEN)) {
+    } else if (!eth_addr_equals(port->pp.hw_addr, pm.hw_addr)) {
         return OFPERR_OFPPMFC_BAD_HW_ADDR;
     } else {
-        update_port_config(port, opm->config, opm->mask);
-        if (opm->advertise) {
-            enum netdev_features adv;
-
-            adv = ofputil_netdev_port_features_from_ofp10(opm->advertise);
-            netdev_set_advertisements(port->netdev, adv);
+        update_port_config(port, pm.config, pm.mask);
+        if (pm.advertise) {
+            netdev_set_advertisements(port->netdev, pm.advertise);
         }
     }
     return 0;
@@ -2115,7 +2121,7 @@ append_port_stat(struct ofport *port, struct list *replies)
     ofproto_port_get_stats(port, &stats);
 
     ops = ofputil_append_stats_reply(sizeof *ops, replies);
-    ops->port_no = port->opp.port_no;
+    ops->port_no = htons(port->pp.port_no);
     memset(ops->pad, 0, sizeof ops->pad);
     put_32aligned_be64(&ops->rx_packets, htonll(stats.rx_packets));
     put_32aligned_be64(&ops->tx_packets, htonll(stats.tx_packets));
@@ -2536,7 +2542,7 @@ put_queue_stats(struct queue_stats_cbdata *cbdata, uint32_t queue_id,
     struct ofp_queue_stats *reply;
 
     reply = ofputil_append_stats_reply(sizeof *reply, &cbdata->replies);
-    reply->port_no = cbdata->ofport->opp.port_no;
+    reply->port_no = htons(cbdata->ofport->pp.port_no);
     memset(reply->pad, 0, sizeof reply->pad);
     reply->queue_id = htonl(queue_id);
     put_32aligned_be64(&reply->tx_bytes, htonll(stats->tx_bytes));

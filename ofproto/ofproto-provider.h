@@ -25,6 +25,7 @@
 #include "heap.h"
 #include "list.h"
 #include "ofp-errors.h"
+#include "ofp-util.h"
 #include "shash.h"
 #include "timeval.h"
 
@@ -95,13 +96,13 @@ struct ofport {
     struct ofproto *ofproto;    /* The ofproto that contains this port. */
     struct hmap_node hmap_node; /* In struct ofproto's "ports" hmap. */
     struct netdev *netdev;
-    struct ofp_phy_port opp;
+    struct ofputil_phy_port pp;
     uint16_t ofp_port;          /* OpenFlow port number. */
     unsigned int change_seq;
     int mtu;
 };
 
-void ofproto_port_set_state(struct ofport *, ovs_be32 state);
+void ofproto_port_set_state(struct ofport *, enum ofputil_port_state);
 
 enum oftable_flags {
     OFTABLE_HIDDEN = 1 << 0,   /* Hide from most OpenFlow operations. */
@@ -411,14 +412,10 @@ struct ofproto_class {
      * otherwise.
      *
      * The implementation should store in '*actions' a bitmap of the supported
-     * OpenFlow actions: the bit with value (1 << n) should be set to 1 if the
-     * implementation supports the action with value 'n', and to 0 otherwise.
-     * For example, if the implementation supports the OFPAT_OUTPUT and
-     * OFPAT_ENQUEUE actions, but no others, it would set '*actions' to (1 <<
-     * OFPAT_OUTPUT) | (1 << OFPAT_ENQUEUE).  Vendor actions are not included
-     * in '*actions'. */
+     * OpenFlow actions.  Vendor actions are not included in '*actions'. */
     void (*get_features)(struct ofproto *ofproto,
-                         bool *arp_match_ip, uint32_t *actions);
+                         bool *arp_match_ip,
+                         enum ofputil_action_bitmap *actions);
 
     /* Helper for the OpenFlow OFPST_TABLE statistics request.
      *
@@ -504,15 +501,16 @@ struct ofproto_class {
      * function may use a null pointer. */
     void (*port_modified)(struct ofport *ofport);
 
-    /* Called after an OpenFlow OFPT_PORT_MOD request changes a port's
-     * configuration.  'ofport->opp.config' contains the new configuration.
-     * 'old_config' contains the previous configuration.
+    /* Called after an OpenFlow request changes a port's configuration.
+     * 'ofport->pp.config' contains the new configuration.  'old_config'
+     * contains the previous configuration.
      *
-     * The caller implements OFPPC_PORT_DOWN using netdev functions to turn
-     * NETDEV_UP on and off, so this function doesn't have to do anything for
-     * that bit (and it won't be called if that is the only bit that
+     * The caller implements OFPUTIL_PC_PORT_DOWN using netdev functions to
+     * turn NETDEV_UP on and off, so this function doesn't have to do anything
+     * for that bit (and it won't be called if that is the only bit that
      * changes). */
-    void (*port_reconfigured)(struct ofport *ofport, ovs_be32 old_config);
+    void (*port_reconfigured)(struct ofport *ofport,
+                              enum ofputil_port_config old_config);
 
     /* Looks up a port named 'devname' in 'ofproto'.  On success, initializes
      * '*port' appropriately.

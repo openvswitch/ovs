@@ -104,4 +104,94 @@ enum ofp_type {
     OFPT_PORT_STATUS,         /* Async message */
 };
 
+/* Header on all OpenFlow packets. */
+struct ofp_header {
+    uint8_t version;    /* An OpenFlow version number, e.g. OFP10_VERSION. */
+    uint8_t type;       /* One of the OFPT_ constants. */
+    ovs_be16 length;    /* Length including this ofp_header. */
+    ovs_be32 xid;       /* Transaction id associated with this packet.
+                           Replies use the same id as was in the request
+                           to facilitate pairing. */
+};
+OFP_ASSERT(sizeof(struct ofp_header) == 8);
+
+/* Common flags to indicate behavior of the physical port.  These flags are
+ * used in ofp_port to describe the current configuration.  They are used in
+ * the ofp_port_mod message to configure the port's behavior.
+ */
+enum ofp_port_config {
+    OFPPC_PORT_DOWN    = 1 << 0,  /* Port is administratively down. */
+
+    OFPPC_NO_RECV      = 1 << 2,  /* Drop all packets received by port. */
+    OFPPC_NO_FWD       = 1 << 5,  /* Drop packets forwarded to port. */
+    OFPPC_NO_PACKET_IN = 1 << 6   /* Do not send packet-in msgs for port. */
+};
+
+/* Common current state of the physical port.  These are not configurable from
+ * the controller.
+ */
+enum ofp_port_state {
+    OFPPS_LINK_DOWN    = 1 << 0,  /* No physical link present. */
+};
+
+/* Common features of physical ports available in a datapath. */
+enum ofp_port_features {
+    OFPPF_10MB_HD    = 1 << 0,  /* 10 Mb half-duplex rate support. */
+    OFPPF_10MB_FD    = 1 << 1,  /* 10 Mb full-duplex rate support. */
+    OFPPF_100MB_HD   = 1 << 2,  /* 100 Mb half-duplex rate support. */
+    OFPPF_100MB_FD   = 1 << 3,  /* 100 Mb full-duplex rate support. */
+    OFPPF_1GB_HD     = 1 << 4,  /* 1 Gb half-duplex rate support. */
+    OFPPF_1GB_FD     = 1 << 5,  /* 1 Gb full-duplex rate support. */
+    OFPPF_10GB_FD    = 1 << 6,  /* 10 Gb full-duplex rate support. */
+};
+
+/* Switch features. */
+struct ofp_switch_features {
+    struct ofp_header header;
+    ovs_be64 datapath_id;   /* Datapath unique ID.  The lower 48-bits are for
+                               a MAC address, while the upper 16-bits are
+                               implementer-defined. */
+
+    ovs_be32 n_buffers;     /* Max packets buffered at once. */
+
+    uint8_t n_tables;       /* Number of tables supported by datapath. */
+    uint8_t pad[3];         /* Align to 64-bits. */
+
+    /* Features. */
+    ovs_be32 capabilities;  /* OFPC_*, OFPC10_*, OFPC11_*. */
+    ovs_be32 actions;       /* Bitmap of supported "ofp_action_type"s. */
+
+    /* Followed by an array of struct ofp10_phy_port or struct ofp11_port
+     * structures.  The number is inferred from header.length. */
+};
+OFP_ASSERT(sizeof(struct ofp_switch_features) == 32);
+
+/* Common capabilities supported by the datapath (struct ofp_switch_features,
+ * member capabilities). */
+enum ofp_capabilities {
+    OFPC_FLOW_STATS     = 1 << 0,  /* Flow statistics. */
+    OFPC_TABLE_STATS    = 1 << 1,  /* Table statistics. */
+    OFPC_PORT_STATS     = 1 << 2,  /* Port statistics. */
+    OFPC_IP_REASM       = 1 << 5,  /* Can reassemble IP fragments. */
+    OFPC_QUEUE_STATS    = 1 << 6,  /* Queue statistics. */
+    OFPC_ARP_MATCH_IP   = 1 << 7   /* Match IP addresses in ARP
+                                      pkts. */
+};
+
+/* What changed about the physical port */
+enum ofp_port_reason {
+    OFPPR_ADD,              /* The port was added. */
+    OFPPR_DELETE,           /* The port was removed. */
+    OFPPR_MODIFY            /* Some attribute of the port has changed. */
+};
+
+/* A physical port has changed in the datapath */
+struct ofp_port_status {
+    struct ofp_header header;
+    uint8_t reason;          /* One of OFPPR_*. */
+    uint8_t pad[7];          /* Align to 64-bits. */
+    /* Followed by struct ofp10_phy_port or struct ofp11_port.  */
+};
+OFP_ASSERT(sizeof(struct ofp_port_status) == 16);
+
 #endif /* openflow/openflow-common.h */

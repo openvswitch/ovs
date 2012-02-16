@@ -161,7 +161,7 @@ struct ofbundle {
     bool use_priority_tags;     /* Use 802.1p tag for frames in VLAN 0? */
 
     /* Status. */
-    bool floodable;             /* True if no port has OFPPC_NO_FLOOD set. */
+    bool floodable;          /* True if no port has OFPUTIL_PC_NO_FLOOD set. */
 
     /* Port mirroring info. */
     mirror_mask_t src_mirrors;  /* Mirrors triggered when packet received. */
@@ -914,21 +914,21 @@ flush(struct ofproto *ofproto_)
 
 static void
 get_features(struct ofproto *ofproto_ OVS_UNUSED,
-             bool *arp_match_ip, uint32_t *actions)
+             bool *arp_match_ip, enum ofputil_action_bitmap *actions)
 {
     *arp_match_ip = true;
-    *actions = ((1u << OFPAT10_OUTPUT) |
-                (1u << OFPAT10_SET_VLAN_VID) |
-                (1u << OFPAT10_SET_VLAN_PCP) |
-                (1u << OFPAT10_STRIP_VLAN) |
-                (1u << OFPAT10_SET_DL_SRC) |
-                (1u << OFPAT10_SET_DL_DST) |
-                (1u << OFPAT10_SET_NW_SRC) |
-                (1u << OFPAT10_SET_NW_DST) |
-                (1u << OFPAT10_SET_NW_TOS) |
-                (1u << OFPAT10_SET_TP_SRC) |
-                (1u << OFPAT10_SET_TP_DST) |
-                (1u << OFPAT10_ENQUEUE));
+    *actions = (OFPUTIL_A_OUTPUT |
+                OFPUTIL_A_SET_VLAN_VID |
+                OFPUTIL_A_SET_VLAN_PCP |
+                OFPUTIL_A_STRIP_VLAN |
+                OFPUTIL_A_SET_DL_SRC |
+                OFPUTIL_A_SET_DL_DST |
+                OFPUTIL_A_SET_NW_SRC |
+                OFPUTIL_A_SET_NW_DST |
+                OFPUTIL_A_SET_NW_TOS |
+                OFPUTIL_A_SET_TP_SRC |
+                OFPUTIL_A_SET_TP_DST |
+                OFPUTIL_A_ENQUEUE);
 }
 
 static void
@@ -1012,17 +1012,17 @@ port_modified(struct ofport *port_)
 }
 
 static void
-port_reconfigured(struct ofport *port_, ovs_be32 old_config)
+port_reconfigured(struct ofport *port_, enum ofputil_port_config old_config)
 {
     struct ofport_dpif *port = ofport_dpif_cast(port_);
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(port->up.ofproto);
-    ovs_be32 changed = old_config ^ port->up.opp.config;
+    enum ofputil_port_config changed = old_config ^ port->up.pp.config;
 
-    if (changed & htonl(OFPPC_NO_RECV | OFPPC_NO_RECV_STP |
-                        OFPPC_NO_FWD | OFPPC_NO_FLOOD)) {
+    if (changed & (OFPUTIL_PC_NO_RECV | OFPUTIL_PC_NO_RECV_STP |
+                   OFPUTIL_PC_NO_FWD | OFPUTIL_PC_NO_FLOOD)) {
         ofproto->need_revalidate = true;
 
-        if (changed & htonl(OFPPC_NO_FLOOD) && port->bundle) {
+        if (changed & OFPUTIL_PC_NO_FLOOD && port->bundle) {
             bundle_update(port->bundle);
         }
     }
@@ -1199,7 +1199,7 @@ update_stp_port_state(struct ofport_dpif *ofport)
 
     /* Update state. */
     if (ofport->stp_state != state) {
-        ovs_be32 of_state;
+        enum ofputil_port_state of_state;
         bool fwd_change;
 
         VLOG_DBG_RL(&rl, "port %s: STP state changed from %s to %s",
@@ -1223,12 +1223,12 @@ update_stp_port_state(struct ofport_dpif *ofport)
         }
 
         /* Update the STP state bits in the OpenFlow port description. */
-        of_state = (ofport->up.opp.state & htonl(~OFPPS_STP_MASK))
-                         | htonl(state == STP_LISTENING ? OFPPS_STP_LISTEN
-                               : state == STP_LEARNING ? OFPPS_STP_LEARN
-                               : state == STP_FORWARDING ? OFPPS_STP_FORWARD
-                               : state == STP_BLOCKING ?  OFPPS_STP_BLOCK
-                               : 0);
+        of_state = ofport->up.pp.state & ~OFPUTIL_PS_STP_MASK;
+        of_state |= (state == STP_LISTENING ? OFPUTIL_PS_STP_LISTEN
+                     : state == STP_LEARNING ? OFPUTIL_PS_STP_LEARN
+                     : state == STP_FORWARDING ? OFPUTIL_PS_STP_FORWARD
+                     : state == STP_BLOCKING ?  OFPUTIL_PS_STP_BLOCK
+                     : 0);
         ofproto_port_set_state(&ofport->up, of_state);
     }
 }
@@ -1516,7 +1516,8 @@ bundle_update(struct ofbundle *bundle)
 
     bundle->floodable = true;
     LIST_FOR_EACH (port, bundle_node, &bundle->ports) {
-        if (port->up.opp.config & htonl(OFPPC_NO_FLOOD)) {
+        if (port->up.pp.config & OFPUTIL_PC_NO_FLOOD
+            || !stp_forward_in_state(port->stp_state)) {
             bundle->floodable = false;
             break;
         }
@@ -1563,7 +1564,8 @@ bundle_add_port(struct ofbundle *bundle, uint32_t ofp_port,
 
         port->bundle = bundle;
         list_push_back(&bundle->ports, &port->bundle_node);
-        if (port->up.opp.config & htonl(OFPPC_NO_FLOOD)) {
+        if (port->up.pp.config & OFPUTIL_PC_NO_FLOOD
+            || !stp_forward_in_state(port->stp_state)) {
             bundle->floodable = false;
         }
     }
@@ -2210,7 +2212,7 @@ port_run(struct ofport_dpif *ofport)
             struct ofpbuf packet;
 
             ofpbuf_init(&packet, 0);
-            cfm_compose_ccm(ofport->cfm, &packet, ofport->up.opp.hw_addr);
+            cfm_compose_ccm(ofport->cfm, &packet, ofport->up.pp.hw_addr);
             send_packet(ofport, &packet);
             ofpbuf_uninit(&packet);
         }
@@ -2543,10 +2545,10 @@ handle_flow_miss(struct ofproto_dpif *ofproto, struct flow_miss *miss,
 
         rule = rule_dpif_lookup(ofproto, flow, 0);
         if (!rule) {
-            /* Don't send a packet-in if OFPPC_NO_PACKET_IN asserted. */
+            /* Don't send a packet-in if OFPUTIL_PC_NO_PACKET_IN asserted. */
             struct ofport_dpif *port = get_ofp_port(ofproto, flow->in_port);
             if (port) {
-                if (port->up.opp.config & htonl(OFPPC_NO_PACKET_IN)) {
+                if (port->up.pp.config & OFPUTIL_PC_NO_PACKET_IN) {
                     COVERAGE_INC(ofproto_dpif_no_packet_in);
                     /* XXX install 'drop' flow entry */
                     return;
@@ -4333,7 +4335,7 @@ compose_output_action__(struct action_xlate_ctx *ctx, uint16_t ofp_port,
     if (ofport) {
         struct priority_to_dscp *pdscp;
 
-        if (ofport->up.opp.config & htonl(OFPPC_NO_FWD)
+        if (ofport->up.pp.config & OFPUTIL_PC_NO_FWD
             || (check_stp && !stp_forward_in_state(ofport->stp_state))) {
             return;
         }
@@ -4456,7 +4458,7 @@ flood_packets(struct action_xlate_ctx *ctx, bool all)
 
         if (all) {
             compose_output_action__(ctx, ofp_port, false);
-        } else if (!(ofport->up.opp.config & htonl(OFPPC_NO_FLOOD))) {
+        } else if (!(ofport->up.pp.config & OFPUTIL_PC_NO_FLOOD)) {
             compose_output_action(ctx, ofp_port);
         }
     }
@@ -4761,9 +4763,9 @@ xlate_fin_timeout(struct action_xlate_ctx *ctx,
 static bool
 may_receive(const struct ofport_dpif *port, struct action_xlate_ctx *ctx)
 {
-    if (port->up.opp.config & (eth_addr_equals(ctx->flow.dl_dst, eth_addr_stp)
-                               ? htonl(OFPPC_NO_RECV_STP)
-                               : htonl(OFPPC_NO_RECV))) {
+    if (port->up.pp.config & (eth_addr_equals(ctx->flow.dl_dst, eth_addr_stp)
+                              ? OFPUTIL_PC_NO_RECV_STP
+                              : OFPUTIL_PC_NO_RECV)) {
         return false;
     }
 

@@ -77,8 +77,8 @@ static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(30, 300);
 static void queue_tx(struct lswitch *, struct rconn *, struct ofpbuf *);
 static void send_features_request(struct lswitch *, struct rconn *);
 
-static void process_switch_features(struct lswitch *,
-                                    struct ofp_switch_features *);
+static enum ofperr process_switch_features(struct lswitch *,
+                                           struct ofp_switch_features *);
 static void process_packet_in(struct lswitch *, struct rconn *,
                               const struct ofp_packet_in *);
 static void process_echo_request(struct lswitch *, struct rconn *,
@@ -347,27 +347,32 @@ queue_tx(struct lswitch *sw, struct rconn *rconn, struct ofpbuf *b)
     }
 }
 
-static void
+static enum ofperr
 process_switch_features(struct lswitch *sw, struct ofp_switch_features *osf)
 {
-    size_t n_ports;
-    size_t i;
+    struct ofputil_switch_features features;
+    struct ofputil_phy_port port;
+    enum ofperr error;
+    struct ofpbuf b;
 
-    sw->datapath_id = ntohll(osf->datapath_id);
+    error = ofputil_decode_switch_features(osf, &features, &b);
+    if (error) {
+        VLOG_ERR("received invalid switch feature reply (%s)",
+                 ofperr_to_string(error));
+        return error;
+    }
 
-    n_ports = (ntohs(osf->header.length) - sizeof *osf) / sizeof *osf->ports;
-    for (i = 0; i < n_ports; i++) {
-        struct ofp_phy_port *opp = &osf->ports[i];
-        struct lswitch_port *lp;
+    sw->datapath_id = features.datapath_id;
 
-        opp->name[OFP_MAX_PORT_NAME_LEN - 1] = '\0';
-        lp = shash_find_data(&sw->queue_names, opp->name);
+    while (!ofputil_pull_switch_features_port(&b, &port)) {
+        struct lswitch_port *lp = shash_find_data(&sw->queue_names, port.name);
         if (lp && hmap_node_is_null(&lp->hmap_node)) {
-            lp->port_no = ntohs(opp->port_no);
+            lp->port_no = port.port_no;
             hmap_insert(&sw->queue_numbers, &lp->hmap_node,
                         hash_int(lp->port_no, 0));
         }
     }
+    return 0;
 }
 
 static uint16_t

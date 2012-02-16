@@ -28,8 +28,8 @@
 #include "classifier.h"
 #include "dynamic-string.h"
 #include "learn.h"
-#include "multipath.h"
 #include "meta-flow.h"
+#include "multipath.h"
 #include "netdev.h"
 #include "nx-match.h"
 #include "ofp-errors.h"
@@ -698,7 +698,10 @@ ofputil_decode_msg_type__(const struct ofp_header *oh, size_t length,
 
         { OFPUTIL_OFPT_FEATURES_REPLY, OFP10_VERSION,
           OFPT_FEATURES_REPLY, "OFPT_FEATURES_REPLY",
-          sizeof(struct ofp_switch_features), sizeof(struct ofp_phy_port) },
+          sizeof(struct ofp_switch_features), sizeof(struct ofp10_phy_port) },
+        { OFPUTIL_OFPT_FEATURES_REPLY, OFP11_VERSION,
+          OFPT_FEATURES_REPLY, "OFPT_FEATURES_REPLY",
+          sizeof(struct ofp_switch_features), sizeof(struct ofp11_port) },
 
         { OFPUTIL_OFPT_GET_CONFIG_REQUEST, OFP10_VERSION,
           OFPT_GET_CONFIG_REQUEST, "OFPT_GET_CONFIG_REQUEST",
@@ -722,7 +725,10 @@ ofputil_decode_msg_type__(const struct ofp_header *oh, size_t length,
 
         { OFPUTIL_OFPT_PORT_STATUS, OFP10_VERSION,
           OFPT_PORT_STATUS, "OFPT_PORT_STATUS",
-          sizeof(struct ofp_port_status), 0 },
+          sizeof(struct ofp_port_status) + sizeof(struct ofp10_phy_port), 0 },
+        { OFPUTIL_OFPT_PORT_STATUS, OFP11_VERSION,
+          OFPT_PORT_STATUS, "OFPT_PORT_STATUS",
+          sizeof(struct ofp_port_status) + sizeof(struct ofp11_port), 0 },
 
         { OFPUTIL_OFPT_PACKET_OUT, OFP10_VERSION,
           OFPT10_PACKET_OUT, "OFPT_PACKET_OUT",
@@ -734,7 +740,10 @@ ofputil_decode_msg_type__(const struct ofp_header *oh, size_t length,
 
         { OFPUTIL_OFPT_PORT_MOD, OFP10_VERSION,
           OFPT10_PORT_MOD, "OFPT_PORT_MOD",
-          sizeof(struct ofp_port_mod), 0 },
+          sizeof(struct ofp10_port_mod), 0 },
+        { OFPUTIL_OFPT_PORT_MOD, OFP11_VERSION,
+          OFPT11_PORT_MOD, "OFPT_PORT_MOD",
+          sizeof(struct ofp11_port_mod), 0 },
 
         { 0, OFP10_VERSION,
           OFPT10_STATS_REQUEST, "OFPT_STATS_REQUEST",
@@ -876,6 +885,22 @@ ofputil_protocol_from_ofp_version(int version)
     case OFP10_VERSION: return OFPUTIL_P_OF10;
     default: return 0;
     }
+}
+
+/* Returns the OpenFlow protocol version number (e.g. OFP10_VERSION or
+ * OFP11_VERSION) that corresponds to 'protocol'. */
+uint8_t
+ofputil_protocol_to_ofp_version(enum ofputil_protocol protocol)
+{
+    switch (protocol) {
+    case OFPUTIL_P_OF10:
+    case OFPUTIL_P_OF10_TID:
+    case OFPUTIL_P_NXM:
+    case OFPUTIL_P_NXM_TID:
+        return OFP10_VERSION;
+    }
+
+    NOT_REACHED();
 }
 
 /* Returns true if 'protocol' is a single OFPUTIL_P_* value, false
@@ -2237,23 +2262,509 @@ BUILD_ASSERT_DECL((int) NETDEV_F_1GB_FD     == OFPPF_1GB_FD);   /* bit 5 */
 BUILD_ASSERT_DECL((int) NETDEV_F_10GB_FD    == OFPPF_10GB_FD);  /* bit 6 */
 
 /* NETDEV_F_ bits 11...15 are OFPPF10_ bits 7...11: */
-BUILD_ASSERT_DECL((int) NETDEV_F_COPPER == (OFPPF_COPPER << 4));
-BUILD_ASSERT_DECL((int) NETDEV_F_FIBER == (OFPPF_FIBER << 4));
-BUILD_ASSERT_DECL((int) NETDEV_F_AUTONEG == (OFPPF_AUTONEG << 4));
-BUILD_ASSERT_DECL((int) NETDEV_F_PAUSE == (OFPPF_PAUSE << 4));
-BUILD_ASSERT_DECL((int) NETDEV_F_PAUSE_ASYM == (OFPPF_PAUSE_ASYM << 4));
+BUILD_ASSERT_DECL((int) NETDEV_F_COPPER == (OFPPF10_COPPER << 4));
+BUILD_ASSERT_DECL((int) NETDEV_F_FIBER == (OFPPF10_FIBER << 4));
+BUILD_ASSERT_DECL((int) NETDEV_F_AUTONEG == (OFPPF10_AUTONEG << 4));
+BUILD_ASSERT_DECL((int) NETDEV_F_PAUSE == (OFPPF10_PAUSE << 4));
+BUILD_ASSERT_DECL((int) NETDEV_F_PAUSE_ASYM == (OFPPF10_PAUSE_ASYM << 4));
 
-enum netdev_features
-ofputil_netdev_port_features_from_ofp10(ovs_be32 ofp10_)
+static enum netdev_features
+netdev_port_features_from_ofp10(ovs_be32 ofp10_)
 {
     uint32_t ofp10 = ntohl(ofp10_);
     return (ofp10 & 0x7f) | ((ofp10 & 0xf80) << 4);
 }
 
-ovs_be32
-ofputil_netdev_port_features_to_ofp10(enum netdev_features features)
+static ovs_be32
+netdev_port_features_to_ofp10(enum netdev_features features)
 {
     return htonl((features & 0x7f) | ((features & 0xf800) >> 4));
+}
+
+BUILD_ASSERT_DECL((int) NETDEV_F_10MB_HD    == OFPPF_10MB_HD);     /* bit 0 */
+BUILD_ASSERT_DECL((int) NETDEV_F_10MB_FD    == OFPPF_10MB_FD);     /* bit 1 */
+BUILD_ASSERT_DECL((int) NETDEV_F_100MB_HD   == OFPPF_100MB_HD);    /* bit 2 */
+BUILD_ASSERT_DECL((int) NETDEV_F_100MB_FD   == OFPPF_100MB_FD);    /* bit 3 */
+BUILD_ASSERT_DECL((int) NETDEV_F_1GB_HD     == OFPPF_1GB_HD);      /* bit 4 */
+BUILD_ASSERT_DECL((int) NETDEV_F_1GB_FD     == OFPPF_1GB_FD);      /* bit 5 */
+BUILD_ASSERT_DECL((int) NETDEV_F_10GB_FD    == OFPPF_10GB_FD);     /* bit 6 */
+BUILD_ASSERT_DECL((int) NETDEV_F_40GB_FD    == OFPPF11_40GB_FD);   /* bit 7 */
+BUILD_ASSERT_DECL((int) NETDEV_F_100GB_FD   == OFPPF11_100GB_FD);  /* bit 8 */
+BUILD_ASSERT_DECL((int) NETDEV_F_1TB_FD     == OFPPF11_1TB_FD);    /* bit 9 */
+BUILD_ASSERT_DECL((int) NETDEV_F_OTHER      == OFPPF11_OTHER);     /* bit 10 */
+BUILD_ASSERT_DECL((int) NETDEV_F_COPPER     == OFPPF11_COPPER);    /* bit 11 */
+BUILD_ASSERT_DECL((int) NETDEV_F_FIBER      == OFPPF11_FIBER);     /* bit 12 */
+BUILD_ASSERT_DECL((int) NETDEV_F_AUTONEG    == OFPPF11_AUTONEG);   /* bit 13 */
+BUILD_ASSERT_DECL((int) NETDEV_F_PAUSE      == OFPPF11_PAUSE);     /* bit 14 */
+BUILD_ASSERT_DECL((int) NETDEV_F_PAUSE_ASYM == OFPPF11_PAUSE_ASYM);/* bit 15 */
+
+static enum netdev_features
+netdev_port_features_from_ofp11(ovs_be32 ofp11)
+{
+    return ntohl(ofp11) & 0xffff;
+}
+
+static ovs_be32
+netdev_port_features_to_ofp11(enum netdev_features features)
+{
+    return htonl(features & 0xffff);
+}
+
+static enum ofperr
+ofputil_decode_ofp10_phy_port(struct ofputil_phy_port *pp,
+                              const struct ofp10_phy_port *opp)
+{
+    memset(pp, 0, sizeof *pp);
+
+    pp->port_no = ntohs(opp->port_no);
+    memcpy(pp->hw_addr, opp->hw_addr, OFP_ETH_ALEN);
+    ovs_strlcpy(pp->name, opp->name, OFP_MAX_PORT_NAME_LEN);
+
+    pp->config = ntohl(opp->config) & OFPPC10_ALL;
+    pp->state = ntohl(opp->state) & OFPPS10_ALL;
+
+    pp->curr = netdev_port_features_from_ofp10(opp->curr);
+    pp->advertised = netdev_port_features_from_ofp10(opp->advertised);
+    pp->supported = netdev_port_features_from_ofp10(opp->supported);
+    pp->peer = netdev_port_features_from_ofp10(opp->peer);
+
+    pp->curr_speed = netdev_features_to_bps(pp->curr) / 1000;
+    pp->max_speed = netdev_features_to_bps(pp->supported) / 1000;
+
+    return 0;
+}
+
+static enum ofperr
+ofputil_decode_ofp11_port(struct ofputil_phy_port *pp,
+                          const struct ofp11_port *op)
+{
+    enum ofperr error;
+
+    memset(pp, 0, sizeof *pp);
+
+    error = ofputil_port_from_ofp11(op->port_no, &pp->port_no);
+    if (error) {
+        return error;
+    }
+    memcpy(pp->hw_addr, op->hw_addr, OFP_ETH_ALEN);
+    ovs_strlcpy(pp->name, op->name, OFP_MAX_PORT_NAME_LEN);
+
+    pp->config = ntohl(op->config) & OFPPC11_ALL;
+    pp->state = ntohl(op->state) & OFPPC11_ALL;
+
+    pp->curr = netdev_port_features_from_ofp11(op->curr);
+    pp->advertised = netdev_port_features_from_ofp11(op->advertised);
+    pp->supported = netdev_port_features_from_ofp11(op->supported);
+    pp->peer = netdev_port_features_from_ofp11(op->peer);
+
+    pp->curr_speed = ntohl(op->curr_speed);
+    pp->max_speed = ntohl(op->max_speed);
+
+    return 0;
+}
+
+static int
+ofputil_pull_phy_port(uint8_t ofp_version, struct ofpbuf *b,
+                      struct ofputil_phy_port *pp)
+{
+    if (ofp_version == OFP10_VERSION) {
+        const struct ofp10_phy_port *opp = ofpbuf_try_pull(b, sizeof *opp);
+        return opp ? ofputil_decode_ofp10_phy_port(pp, opp) : EOF;
+    } else {
+        const struct ofp11_port *op = ofpbuf_try_pull(b, sizeof *op);
+        return op ? ofputil_decode_ofp11_port(pp, op) : EOF;
+    }
+}
+
+static void
+ofputil_encode_ofp10_phy_port(const struct ofputil_phy_port *pp,
+                              struct ofp10_phy_port *opp)
+{
+    memset(opp, 0, sizeof *opp);
+
+    opp->port_no = htons(pp->port_no);
+    memcpy(opp->hw_addr, pp->hw_addr, ETH_ADDR_LEN);
+    ovs_strlcpy(opp->name, pp->name, OFP_MAX_PORT_NAME_LEN);
+
+    opp->config = htonl(pp->config & OFPPC10_ALL);
+    opp->state = htonl(pp->state & OFPPS10_ALL);
+
+    opp->curr = netdev_port_features_to_ofp10(pp->curr);
+    opp->advertised = netdev_port_features_to_ofp10(pp->advertised);
+    opp->supported = netdev_port_features_to_ofp10(pp->supported);
+    opp->peer = netdev_port_features_to_ofp10(pp->peer);
+}
+
+static void
+ofputil_encode_ofp11_port(const struct ofputil_phy_port *pp,
+                          struct ofp11_port *op)
+{
+    memset(op, 0, sizeof *op);
+
+    op->port_no = ofputil_port_to_ofp11(pp->port_no);
+    memcpy(op->hw_addr, pp->hw_addr, ETH_ADDR_LEN);
+    ovs_strlcpy(op->name, pp->name, OFP_MAX_PORT_NAME_LEN);
+
+    op->config = htonl(pp->config & OFPPC11_ALL);
+    op->state = htonl(pp->state & OFPPS11_ALL);
+
+    op->curr = netdev_port_features_to_ofp11(pp->curr);
+    op->advertised = netdev_port_features_to_ofp11(pp->advertised);
+    op->supported = netdev_port_features_to_ofp11(pp->supported);
+    op->peer = netdev_port_features_to_ofp11(pp->peer);
+
+    op->curr_speed = htonl(pp->curr_speed);
+    op->max_speed = htonl(pp->max_speed);
+}
+
+static void
+ofputil_put_phy_port(uint8_t ofp_version, const struct ofputil_phy_port *pp,
+                     struct ofpbuf *b)
+{
+    if (ofp_version == OFP10_VERSION) {
+        struct ofp10_phy_port *opp;
+        if (b->size + sizeof *opp <= UINT16_MAX) {
+            opp = ofpbuf_put_uninit(b, sizeof *opp);
+            ofputil_encode_ofp10_phy_port(pp, opp);
+        }
+    } else {
+        struct ofp11_port *op;
+        if (b->size + sizeof *op <= UINT16_MAX) {
+            op = ofpbuf_put_uninit(b, sizeof *op);
+            ofputil_encode_ofp11_port(pp, op);
+        }
+    }
+}
+
+/* ofputil_switch_features */
+
+#define OFPC_COMMON (OFPC_FLOW_STATS | OFPC_TABLE_STATS | OFPC_PORT_STATS | \
+                     OFPC_IP_REASM | OFPC_QUEUE_STATS | OFPC_ARP_MATCH_IP)
+BUILD_ASSERT_DECL((int) OFPUTIL_C_FLOW_STATS == OFPC_FLOW_STATS);
+BUILD_ASSERT_DECL((int) OFPUTIL_C_TABLE_STATS == OFPC_TABLE_STATS);
+BUILD_ASSERT_DECL((int) OFPUTIL_C_PORT_STATS == OFPC_PORT_STATS);
+BUILD_ASSERT_DECL((int) OFPUTIL_C_IP_REASM == OFPC_IP_REASM);
+BUILD_ASSERT_DECL((int) OFPUTIL_C_QUEUE_STATS == OFPC_QUEUE_STATS);
+BUILD_ASSERT_DECL((int) OFPUTIL_C_ARP_MATCH_IP == OFPC_ARP_MATCH_IP);
+
+struct ofputil_action_bit_translation {
+    enum ofputil_action_bitmap ofputil_bit;
+    int of_bit;
+};
+
+static const struct ofputil_action_bit_translation of10_action_bits[] = {
+    { OFPUTIL_A_OUTPUT,       OFPAT10_OUTPUT },
+    { OFPUTIL_A_SET_VLAN_VID, OFPAT10_SET_VLAN_VID },
+    { OFPUTIL_A_SET_VLAN_PCP, OFPAT10_SET_VLAN_PCP },
+    { OFPUTIL_A_STRIP_VLAN,   OFPAT10_STRIP_VLAN },
+    { OFPUTIL_A_SET_DL_SRC,   OFPAT10_SET_DL_SRC },
+    { OFPUTIL_A_SET_DL_DST,   OFPAT10_SET_DL_DST },
+    { OFPUTIL_A_SET_NW_SRC,   OFPAT10_SET_NW_SRC },
+    { OFPUTIL_A_SET_NW_DST,   OFPAT10_SET_NW_DST },
+    { OFPUTIL_A_SET_NW_TOS,   OFPAT10_SET_NW_TOS },
+    { OFPUTIL_A_SET_TP_SRC,   OFPAT10_SET_TP_SRC },
+    { OFPUTIL_A_SET_TP_DST,   OFPAT10_SET_TP_DST },
+    { OFPUTIL_A_ENQUEUE,      OFPAT10_ENQUEUE },
+    { 0, 0 },
+};
+
+static const struct ofputil_action_bit_translation of11_action_bits[] = {
+    { OFPUTIL_A_OUTPUT,         OFPAT11_OUTPUT },
+    { OFPUTIL_A_SET_VLAN_VID,   OFPAT11_SET_VLAN_VID },
+    { OFPUTIL_A_SET_VLAN_PCP,   OFPAT11_SET_VLAN_PCP },
+    { OFPUTIL_A_SET_DL_SRC,     OFPAT11_SET_DL_SRC },
+    { OFPUTIL_A_SET_DL_DST,     OFPAT11_SET_DL_DST },
+    { OFPUTIL_A_SET_NW_SRC,     OFPAT11_SET_NW_SRC },
+    { OFPUTIL_A_SET_NW_DST,     OFPAT11_SET_NW_DST },
+    { OFPUTIL_A_SET_NW_TOS,     OFPAT11_SET_NW_TOS },
+    { OFPUTIL_A_SET_NW_ECN,     OFPAT11_SET_NW_ECN },
+    { OFPUTIL_A_SET_TP_SRC,     OFPAT11_SET_TP_SRC },
+    { OFPUTIL_A_SET_TP_DST,     OFPAT11_SET_TP_DST },
+    { OFPUTIL_A_COPY_TTL_OUT,   OFPAT11_COPY_TTL_OUT },
+    { OFPUTIL_A_COPY_TTL_IN,    OFPAT11_COPY_TTL_IN },
+    { OFPUTIL_A_SET_MPLS_LABEL, OFPAT11_SET_MPLS_LABEL },
+    { OFPUTIL_A_SET_MPLS_TC,    OFPAT11_SET_MPLS_TC },
+    { OFPUTIL_A_SET_MPLS_TTL,   OFPAT11_SET_MPLS_TTL },
+    { OFPUTIL_A_DEC_MPLS_TTL,   OFPAT11_DEC_MPLS_TTL },
+    { OFPUTIL_A_PUSH_VLAN,      OFPAT11_PUSH_VLAN },
+    { OFPUTIL_A_POP_VLAN,       OFPAT11_POP_VLAN },
+    { OFPUTIL_A_PUSH_MPLS,      OFPAT11_PUSH_MPLS },
+    { OFPUTIL_A_POP_MPLS,       OFPAT11_POP_MPLS },
+    { OFPUTIL_A_SET_QUEUE,      OFPAT11_SET_QUEUE },
+    { OFPUTIL_A_GROUP,          OFPAT11_GROUP },
+    { OFPUTIL_A_SET_NW_TTL,     OFPAT11_SET_NW_TTL },
+    { OFPUTIL_A_DEC_NW_TTL,     OFPAT11_DEC_NW_TTL },
+    { 0, 0 },
+};
+
+static enum ofputil_action_bitmap
+decode_action_bits(ovs_be32 of_actions,
+                   const struct ofputil_action_bit_translation *x)
+{
+    enum ofputil_action_bitmap ofputil_actions;
+
+    ofputil_actions = 0;
+    for (; x->ofputil_bit; x++) {
+        if (of_actions & htonl(1u << x->of_bit)) {
+            ofputil_actions |= x->ofputil_bit;
+        }
+    }
+    return ofputil_actions;
+}
+
+/* Decodes an OpenFlow 1.0 or 1.1 "switch_features" structure 'osf' into an
+ * abstract representation in '*features'.  Initializes '*b' to iterate over
+ * the OpenFlow port structures following 'osf' with later calls to
+ * ofputil_pull_switch_features_port().  Returns 0 if successful, otherwise an
+ * OFPERR_* value.  */
+enum ofperr
+ofputil_decode_switch_features(const struct ofp_switch_features *osf,
+                               struct ofputil_switch_features *features,
+                               struct ofpbuf *b)
+{
+    ofpbuf_use_const(b, osf, ntohs(osf->header.length));
+    ofpbuf_pull(b, sizeof *osf);
+    b->l2 = (struct ofputil_switch_features *) osf;
+
+    features->datapath_id = ntohll(osf->datapath_id);
+    features->n_buffers = ntohl(osf->n_buffers);
+    features->n_tables = osf->n_tables;
+
+    features->capabilities = ntohl(osf->capabilities) & OFPC_COMMON;
+    if (osf->header.version == OFP10_VERSION) {
+        if (b->size % sizeof(struct ofp10_phy_port)) {
+            return OFPERR_OFPBRC_BAD_LEN;
+        }
+
+        if (osf->capabilities & htonl(OFPC10_STP)) {
+            features->capabilities |= OFPUTIL_C_STP;
+        }
+        features->actions = decode_action_bits(osf->actions, of10_action_bits);
+    } else if (osf->header.version == OFP11_VERSION) {
+        if (b->size % sizeof(struct ofp11_port)) {
+            return OFPERR_OFPBRC_BAD_LEN;
+        }
+
+        if (osf->capabilities & htonl(OFPC11_GROUP_STATS)) {
+            features->capabilities |= OFPUTIL_C_GROUP_STATS;
+        }
+        features->actions = decode_action_bits(osf->actions, of11_action_bits);
+    } else {
+        return OFPERR_OFPBRC_BAD_VERSION;
+    }
+
+    return 0;
+}
+
+/* Given a buffer 'b' that was initialized by a previous successful call to
+ * ofputil_decode_switch_features(), tries to decode an OpenFlow port structure
+ * following the main switch features information.  If successful, initializes
+ * '*pp' with an abstract representation of the port and returns 0.  If no
+ * ports remained to be decoded, returns EOF.  On an error, returns a positive
+ * OFPERR_* value.  */
+int
+ofputil_pull_switch_features_port(struct ofpbuf *b,
+                                  struct ofputil_phy_port *pp)
+{
+    const struct ofp_switch_features *osf = b->l2;
+    return ofputil_pull_phy_port(osf->header.version, b, pp);
+}
+
+/* Returns the number of OpenFlow port structures that follow the main switch
+ * features information in '*osf'.  The return value is only guaranteed to be
+ * accurate if '*osf' is well-formed, that is, if
+ * ofputil_decode_switch_features() can process '*osf' successfully. */
+size_t
+ofputil_count_phy_ports(const struct ofp_switch_features *osf)
+{
+    size_t ports_len = ntohs(osf->header.length) - sizeof *osf;
+    return (osf->header.version == OFP10_VERSION
+            ? ports_len / sizeof(struct ofp10_phy_port)
+            : ports_len / sizeof(struct ofp11_port));
+}
+
+static ovs_be32
+encode_action_bits(enum ofputil_action_bitmap ofputil_actions,
+                   const struct ofputil_action_bit_translation *x)
+{
+    uint32_t of_actions;
+
+    of_actions = 0;
+    for (; x->ofputil_bit; x++) {
+        if (ofputil_actions & x->ofputil_bit) {
+            of_actions |= 1 << x->of_bit;
+        }
+    }
+    return htonl(of_actions);
+}
+
+/* Returns a buffer owned by the caller that encodes 'features' in the format
+ * required by 'protocol' with the given 'xid'.  The caller should append port
+ * information to the buffer with subsequent calls to
+ * ofputil_put_switch_features_port(). */
+struct ofpbuf *
+ofputil_encode_switch_features(const struct ofputil_switch_features *features,
+                               enum ofputil_protocol protocol, ovs_be32 xid)
+{
+    struct ofp_switch_features *osf;
+    struct ofpbuf *b;
+
+    osf = make_openflow_xid(sizeof *osf, OFPT_FEATURES_REPLY, xid, &b);
+    osf->header.version = ofputil_protocol_to_ofp_version(protocol);
+    osf->datapath_id = htonll(features->datapath_id);
+    osf->n_buffers = htonl(features->n_buffers);
+    osf->n_tables = features->n_tables;
+
+    osf->capabilities = htonl(features->capabilities & OFPC_COMMON);
+    if (osf->header.version == OFP10_VERSION) {
+        if (features->capabilities & OFPUTIL_C_STP) {
+            osf->capabilities |= htonl(OFPC10_STP);
+        }
+        osf->actions = encode_action_bits(features->actions, of10_action_bits);
+    } else {
+        if (features->capabilities & OFPUTIL_C_GROUP_STATS) {
+            osf->capabilities |= htonl(OFPC11_GROUP_STATS);
+        }
+        osf->actions = encode_action_bits(features->actions, of11_action_bits);
+    }
+
+    return b;
+}
+
+/* Encodes 'pp' into the format required by the switch_features message already
+ * in 'b', which should have been returned by ofputil_encode_switch_features(),
+ * and appends the encoded version to 'b'. */
+void
+ofputil_put_switch_features_port(const struct ofputil_phy_port *pp,
+                                 struct ofpbuf *b)
+{
+    const struct ofp_switch_features *osf = b->data;
+
+    ofputil_put_phy_port(osf->header.version, pp, b);
+}
+
+/* ofputil_port_status */
+
+/* Decodes the OpenFlow "port status" message in '*ops' into an abstract form
+ * in '*ps'.  Returns 0 if successful, otherwise an OFPERR_* value. */
+enum ofperr
+ofputil_decode_port_status(const struct ofp_port_status *ops,
+                           struct ofputil_port_status *ps)
+{
+    struct ofpbuf b;
+    int retval;
+
+    if (ops->reason != OFPPR_ADD &&
+        ops->reason != OFPPR_DELETE &&
+        ops->reason != OFPPR_MODIFY) {
+        return OFPERR_NXBRC_BAD_REASON;
+    }
+    ps->reason = ops->reason;
+
+    ofpbuf_use_const(&b, ops, ntohs(ops->header.length));
+    ofpbuf_pull(&b, sizeof *ops);
+    retval = ofputil_pull_phy_port(ops->header.version, &b, &ps->desc);
+    assert(retval != EOF);
+    return retval;
+}
+
+/* Converts the abstract form of a "port status" message in '*ps' into an
+ * OpenFlow message suitable for 'protocol', and returns that encoded form in
+ * a buffer owned by the caller. */
+struct ofpbuf *
+ofputil_encode_port_status(const struct ofputil_port_status *ps,
+                           enum ofputil_protocol protocol)
+{
+    struct ofp_port_status *ops;
+    struct ofpbuf *b;
+
+    b = ofpbuf_new(sizeof *ops + sizeof(struct ofp11_port));
+    ops = put_openflow_xid(sizeof *ops, OFPT_PORT_STATUS, htonl(0), b);
+    ops->header.version = ofputil_protocol_to_ofp_version(protocol);
+    ops->reason = ps->reason;
+    ofputil_put_phy_port(ops->header.version, &ps->desc, b);
+    update_openflow_length(b);
+    return b;
+}
+
+/* ofputil_port_mod */
+
+/* Decodes the OpenFlow "port mod" message in '*oh' into an abstract form in
+ * '*pm'.  Returns 0 if successful, otherwise an OFPERR_* value. */
+enum ofperr
+ofputil_decode_port_mod(const struct ofp_header *oh,
+                        struct ofputil_port_mod *pm)
+{
+    if (oh->version == OFP10_VERSION) {
+        const struct ofp10_port_mod *opm = (const struct ofp10_port_mod *) oh;
+
+        if (oh->length != htons(sizeof *opm)) {
+            return OFPERR_OFPBRC_BAD_LEN;
+        }
+
+        pm->port_no = ntohs(opm->port_no);
+        memcpy(pm->hw_addr, opm->hw_addr, ETH_ADDR_LEN);
+        pm->config = ntohl(opm->config) & OFPPC10_ALL;
+        pm->mask = ntohl(opm->mask) & OFPPC10_ALL;
+        pm->advertise = netdev_port_features_from_ofp10(opm->advertise);
+    } else if (oh->version == OFP11_VERSION) {
+        const struct ofp11_port_mod *opm = (const struct ofp11_port_mod *) oh;
+        enum ofperr error;
+
+        if (oh->length != htons(sizeof *opm)) {
+            return OFPERR_OFPBRC_BAD_LEN;
+        }
+
+        error = ofputil_port_from_ofp11(opm->port_no, &pm->port_no);
+        if (error) {
+            return error;
+        }
+
+        memcpy(pm->hw_addr, opm->hw_addr, ETH_ADDR_LEN);
+        pm->config = ntohl(opm->config) & OFPPC11_ALL;
+        pm->mask = ntohl(opm->mask) & OFPPC11_ALL;
+        pm->advertise = netdev_port_features_from_ofp11(opm->advertise);
+    } else {
+        return OFPERR_OFPBRC_BAD_VERSION;
+    }
+
+    pm->config &= pm->mask;
+    return 0;
+}
+
+/* Converts the abstract form of a "port mod" message in '*pm' into an OpenFlow
+ * message suitable for 'protocol', and returns that encoded form in a buffer
+ * owned by the caller. */
+struct ofpbuf *
+ofputil_encode_port_mod(const struct ofputil_port_mod *pm,
+                        enum ofputil_protocol protocol)
+{
+    uint8_t ofp_version = ofputil_protocol_to_ofp_version(protocol);
+    struct ofpbuf *b;
+
+    if (ofp_version == OFP10_VERSION) {
+        struct ofp10_port_mod *opm;
+
+        opm = make_openflow(sizeof *opm, OFPT10_PORT_MOD, &b);
+        opm->port_no = htons(pm->port_no);
+        memcpy(opm->hw_addr, pm->hw_addr, ETH_ADDR_LEN);
+        opm->config = htonl(pm->config & OFPPC10_ALL);
+        opm->mask = htonl(pm->mask & OFPPC10_ALL);
+        opm->advertise = netdev_port_features_to_ofp10(pm->advertise);
+    } else if (ofp_version == OFP11_VERSION) {
+        struct ofp11_port_mod *opm;
+
+        opm = make_openflow(sizeof *opm, OFPT11_PORT_MOD, &b);
+        opm->port_no = htonl(pm->port_no);
+        memcpy(opm->hw_addr, pm->hw_addr, ETH_ADDR_LEN);
+        opm->config = htonl(pm->config & OFPPC11_ALL);
+        opm->mask = htonl(pm->mask & OFPPC11_ALL);
+        opm->advertise = netdev_port_features_to_ofp11(pm->advertise);
+    } else {
+        NOT_REACHED();
+    }
+
+    return b;
 }
 
 struct ofpbuf *

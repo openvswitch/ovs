@@ -93,6 +93,82 @@ enum ofp11_type {
     OFPT11_QUEUE_GET_CONFIG_REPLY,    /* Controller/switch message */
 };
 
+/* OpenFlow 1.1 port config flags are just the common flags. */
+#define OFPPC11_ALL \
+    (OFPPC_PORT_DOWN | OFPPC_NO_RECV | OFPPC_NO_FWD | OFPPC_NO_PACKET_IN)
+
+/* OpenFlow 1.1 specific current state of the physical port.  These are not
+ * configurable from the controller.
+ */
+enum ofp11_port_state {
+    OFPPS11_BLOCKED      = 1 << 1,  /* Port is blocked */
+    OFPPS11_LIVE         = 1 << 2,  /* Live for Fast Failover Group. */
+#define OFPPS11_ALL (OFPPS_LINK_DOWN | OFPPS11_BLOCKED | OFPPS11_LIVE)
+};
+
+/* OpenFlow 1.1 specific features of ports available in a datapath. */
+enum ofp11_port_features {
+    OFPPF11_40GB_FD    = 1 << 7,  /* 40 Gb full-duplex rate support. */
+    OFPPF11_100GB_FD   = 1 << 8,  /* 100 Gb full-duplex rate support. */
+    OFPPF11_1TB_FD     = 1 << 9,  /* 1 Tb full-duplex rate support. */
+    OFPPF11_OTHER      = 1 << 10, /* Other rate, not in the list. */
+
+    OFPPF11_COPPER     = 1 << 11, /* Copper medium. */
+    OFPPF11_FIBER      = 1 << 12, /* Fiber medium. */
+    OFPPF11_AUTONEG    = 1 << 13, /* Auto-negotiation. */
+    OFPPF11_PAUSE      = 1 << 14, /* Pause. */
+    OFPPF11_PAUSE_ASYM = 1 << 15  /* Asymmetric pause. */
+#define OFPPF11_ALL ((1 << 16) - 1)
+};
+
+/* Description of a port */
+struct ofp11_port {
+    ovs_be32 port_no;
+    uint8_t pad[4];
+    uint8_t hw_addr[OFP_ETH_ALEN];
+    uint8_t pad2[2];                  /* Align to 64 bits. */
+    char name[OFP_MAX_PORT_NAME_LEN]; /* Null-terminated */
+
+    ovs_be32 config;        /* Bitmap of OFPPC_* flags. */
+    ovs_be32 state;         /* Bitmap of OFPPS_* and OFPPS11_* flags. */
+
+    /* Bitmaps of OFPPF_* and OFPPF11_* that describe features.  All bits
+     * zeroed if unsupported or unavailable. */
+    ovs_be32 curr;          /* Current features. */
+    ovs_be32 advertised;    /* Features being advertised by the port. */
+    ovs_be32 supported;     /* Features supported by the port. */
+    ovs_be32 peer;          /* Features advertised by peer. */
+
+    ovs_be32 curr_speed;    /* Current port bitrate in kbps. */
+    ovs_be32 max_speed;     /* Max port bitrate in kbps */
+};
+
+/* Modify behavior of the physical port */
+struct ofp11_port_mod {
+    struct ofp_header header;
+    ovs_be32 port_no;
+    uint8_t pad[4];
+    uint8_t hw_addr[OFP_ETH_ALEN]; /* The hardware address is not
+                                      configurable.  This is used to
+                                      sanity-check the request, so it must
+                                      be the same as returned in an
+                                      ofp11_port struct. */
+    uint8_t pad2[2];        /* Pad to 64 bits. */
+    ovs_be32 config;        /* Bitmap of OFPPC_* flags. */
+    ovs_be32 mask;          /* Bitmap of OFPPC_* flags to be changed. */
+
+    ovs_be32 advertise;     /* Bitmap of OFPPF_* and OFPPF11_*.  Zero all bits
+                               to prevent any action taking place. */
+    uint8_t pad3[4];        /* Pad to 64 bits. */
+};
+OFP_ASSERT(sizeof(struct ofp11_port_mod) == 40);
+
+/* OpenFlow 1.1 specific capabilities supported by the datapath (struct
+ * ofp_switch_features, member capabilities). */
+enum ofp11_capabilities {
+    OFPC11_GROUP_STATS    = 1 << 3,  /* Group statistics. */
+};
+
 enum ofp11_action_type {
     OFPAT11_OUTPUT,           /* Output to switch port. */
     OFPAT11_SET_VLAN_VID,     /* Set the 802.1q VLAN id. */

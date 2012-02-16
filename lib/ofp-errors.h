@@ -126,6 +126,9 @@ enum ofperr {
     /* NX(1,515).  Must-be-zero field had nonzero value. */
     OFPERR_NXBRC_MUST_BE_ZERO,
 
+    /* NX(1,516).  The reason in an ofp_port_status message is not valid. */
+    OFPERR_NXBRC_BAD_REASON,
+
 /* ## ---------------- ## */
 /* ## OFPET_BAD_ACTION ## */
 /* ## ---------------- ## */

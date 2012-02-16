@@ -64,17 +64,6 @@ enum ofp10_type {
     OFPT10_QUEUE_GET_CONFIG_REPLY     /* Controller/switch message */
 };
 
-/* Header on all OpenFlow packets. */
-struct ofp_header {
-    uint8_t version;    /* An OpenFlow version number, e.g. OFP10_VERSION. */
-    uint8_t type;       /* One of the OFPT_ constants. */
-    ovs_be16 length;    /* Length including this ofp_header. */
-    ovs_be32 xid;       /* Transaction id associated with this packet.
-                           Replies use the same id as was in the request
-                           to facilitate pairing. */
-};
-OFP_ASSERT(sizeof(struct ofp_header) == 8);
-
 /* OFPT_HELLO.  This message has an empty body, but implementations must
  * ignore any data included in the body, to allow for future extensions. */
 struct ofp_hello {
@@ -105,134 +94,80 @@ struct ofp_switch_config {
 };
 OFP_ASSERT(sizeof(struct ofp_switch_config) == 12);
 
-/* Capabilities supported by the datapath. */
-enum ofp_capabilities {
-    OFPC_FLOW_STATS     = 1 << 0,  /* Flow statistics. */
-    OFPC_TABLE_STATS    = 1 << 1,  /* Table statistics. */
-    OFPC_PORT_STATS     = 1 << 2,  /* Port statistics. */
-    OFPC_STP            = 1 << 3,  /* 802.1d spanning tree. */
-    OFPC_RESERVED       = 1 << 4,  /* Reserved, must not be set. */
-    OFPC_IP_REASM       = 1 << 5,  /* Can reassemble IP fragments. */
-    OFPC_QUEUE_STATS    = 1 << 6,  /* Queue statistics. */
-    OFPC_ARP_MATCH_IP   = 1 << 7   /* Match IP addresses in ARP
-                                      pkts. */
+/* OpenFlow 1.0 specific capabilities supported by the datapath (struct
+ * ofp_switch_features, member capabilities). */
+enum ofp10_capabilities {
+    OFPC10_STP            = 1 << 3,  /* 802.1d spanning tree. */
+    OFPC10_RESERVED       = 1 << 4,  /* Reserved, must not be set. */
 };
 
-/* Flags to indicate behavior of the physical port.  These flags are
- * used in ofp_phy_port to describe the current configuration.  They are
- * used in the ofp_port_mod message to configure the port's behavior.
+/* OpenFlow 1.0 specific flags to indicate behavior of the physical port.
+ * These flags are used in ofp10_phy_port to describe the current
+ * configuration.  They are used in the ofp10_port_mod message to configure the
+ * port's behavior.
  */
-enum ofp_port_config {
-    OFPPC_PORT_DOWN    = 1 << 0,  /* Port is administratively down. */
-
-    OFPPC_NO_STP       = 1 << 1,  /* Disable 802.1D spanning tree on port. */
-    OFPPC_NO_RECV      = 1 << 2,  /* Drop all packets except 802.1D
-                                     spanning tree packets. */
-    OFPPC_NO_RECV_STP  = 1 << 3,  /* Drop received 802.1D STP packets. */
-    OFPPC_NO_FLOOD     = 1 << 4,  /* Do not include this port when flooding. */
-    OFPPC_NO_FWD       = 1 << 5,  /* Drop packets forwarded to port. */
-    OFPPC_NO_PACKET_IN = 1 << 6   /* Do not send packet-in msgs for port. */
+enum ofp10_port_config {
+    OFPPC10_NO_STP       = 1 << 1, /* Disable 802.1D spanning tree on port. */
+    OFPPC10_NO_RECV_STP  = 1 << 3, /* Drop received 802.1D STP packets. */
+    OFPPC10_NO_FLOOD     = 1 << 4, /* Do not include port when flooding. */
+#define OFPPC10_ALL (OFPPC_PORT_DOWN | OFPPC10_NO_STP | OFPPC_NO_RECV | \
+                     OFPPC10_NO_RECV_STP | OFPPC10_NO_FLOOD | OFPPC_NO_FWD | \
+                     OFPPC_NO_PACKET_IN)
 };
 
-/* Current state of the physical port.  These are not configurable from
- * the controller.
+/* OpenFlow 1.0 specific current state of the physical port.  These are not
+ * configurable from the controller.
  */
-enum ofp_port_state {
-    OFPPS_LINK_DOWN   = 1 << 0, /* No physical link present. */
-
-    /* The OFPPS_STP_* bits have no effect on switch operation.  The
+enum ofp10_port_state {
+    /* The OFPPS10_STP_* bits have no effect on switch operation.  The
      * controller must adjust OFPPC_NO_RECV, OFPPC_NO_FWD, and
      * OFPPC_NO_PACKET_IN appropriately to fully implement an 802.1D spanning
      * tree. */
-    OFPPS_STP_LISTEN  = 0 << 8, /* Not learning or relaying frames. */
-    OFPPS_STP_LEARN   = 1 << 8, /* Learning but not relaying frames. */
-    OFPPS_STP_FORWARD = 2 << 8, /* Learning and relaying frames. */
-    OFPPS_STP_BLOCK   = 3 << 8, /* Not part of spanning tree. */
-    OFPPS_STP_MASK    = 3 << 8  /* Bit mask for OFPPS_STP_* values. */
+    OFPPS10_STP_LISTEN  = 0 << 8, /* Not learning or relaying frames. */
+    OFPPS10_STP_LEARN   = 1 << 8, /* Learning but not relaying frames. */
+    OFPPS10_STP_FORWARD = 2 << 8, /* Learning and relaying frames. */
+    OFPPS10_STP_BLOCK   = 3 << 8, /* Not part of spanning tree. */
+    OFPPS10_STP_MASK    = 3 << 8  /* Bit mask for OFPPS10_STP_* values. */
+
+#define OFPPS10_ALL (OFPPS_LINK_DOWN | OFPPS10_STP_MASK)
 };
 
-/* Features of physical ports available in a datapath. */
-enum ofp_port_features {
-    OFPPF_10MB_HD    = 1 << 0,  /* 10 Mb half-duplex rate support. */
-    OFPPF_10MB_FD    = 1 << 1,  /* 10 Mb full-duplex rate support. */
-    OFPPF_100MB_HD   = 1 << 2,  /* 100 Mb half-duplex rate support. */
-    OFPPF_100MB_FD   = 1 << 3,  /* 100 Mb full-duplex rate support. */
-    OFPPF_1GB_HD     = 1 << 4,  /* 1 Gb half-duplex rate support. */
-    OFPPF_1GB_FD     = 1 << 5,  /* 1 Gb full-duplex rate support. */
-    OFPPF_10GB_FD    = 1 << 6,  /* 10 Gb full-duplex rate support. */
-    OFPPF_COPPER     = 1 << 7,  /* Copper medium. */
-    OFPPF_FIBER      = 1 << 8,  /* Fiber medium. */
-    OFPPF_AUTONEG    = 1 << 9,  /* Auto-negotiation. */
-    OFPPF_PAUSE      = 1 << 10, /* Pause. */
-    OFPPF_PAUSE_ASYM = 1 << 11  /* Asymmetric pause. */
+/* OpenFlow 1.0 specific features of physical ports available in a datapath. */
+enum ofp10_port_features {
+    OFPPF10_COPPER     = 1 << 7,  /* Copper medium. */
+    OFPPF10_FIBER      = 1 << 8,  /* Fiber medium. */
+    OFPPF10_AUTONEG    = 1 << 9,  /* Auto-negotiation. */
+    OFPPF10_PAUSE      = 1 << 10, /* Pause. */
+    OFPPF10_PAUSE_ASYM = 1 << 11  /* Asymmetric pause. */
 };
 
 /* Description of a physical port */
-struct ofp_phy_port {
+struct ofp10_phy_port {
     ovs_be16 port_no;
     uint8_t hw_addr[OFP_ETH_ALEN];
     char name[OFP_MAX_PORT_NAME_LEN]; /* Null-terminated */
 
-    ovs_be32 config;        /* Bitmap of OFPPC_* flags. */
-    ovs_be32 state;         /* Bitmap of OFPPS_* flags. */
+    ovs_be32 config;        /* Bitmap of OFPPC_* and OFPPC10_* flags. */
+    ovs_be32 state;         /* Bitmap of OFPPS_* and OFPPS10_* flags. */
 
-    /* Bitmaps of OFPPF_* that describe features.  All bits zeroed if
-     * unsupported or unavailable. */
+    /* Bitmaps of OFPPF_* and OFPPF10_* that describe features.  All bits
+     * zeroed if unsupported or unavailable. */
     ovs_be32 curr;          /* Current features. */
     ovs_be32 advertised;    /* Features being advertised by the port. */
     ovs_be32 supported;     /* Features supported by the port. */
     ovs_be32 peer;          /* Features advertised by peer. */
 };
-OFP_ASSERT(sizeof(struct ofp_phy_port) == 48);
-
-/* Switch features. */
-struct ofp_switch_features {
-    struct ofp_header header;
-    ovs_be64 datapath_id;   /* Datapath unique ID.  The lower 48-bits are for
-                               a MAC address, while the upper 16-bits are
-                               implementer-defined. */
-
-    ovs_be32 n_buffers;     /* Max packets buffered at once. */
-
-    uint8_t n_tables;       /* Number of tables supported by datapath. */
-    uint8_t pad[3];         /* Align to 64-bits. */
-
-    /* Features. */
-    ovs_be32 capabilities;  /* Bitmap of support "ofp_capabilities". */
-    ovs_be32 actions;       /* Bitmap of supported "ofp_action_type"s. */
-
-    /* Port info.*/
-    struct ofp_phy_port ports[0];  /* Port definitions.  The number of ports
-                                      is inferred from the length field in
-                                      the header. */
-};
-OFP_ASSERT(sizeof(struct ofp_switch_features) == 32);
-
-/* What changed about the physical port */
-enum ofp_port_reason {
-    OFPPR_ADD,              /* The port was added. */
-    OFPPR_DELETE,           /* The port was removed. */
-    OFPPR_MODIFY            /* Some attribute of the port has changed. */
-};
-
-/* A physical port has changed in the datapath */
-struct ofp_port_status {
-    struct ofp_header header;
-    uint8_t reason;          /* One of OFPPR_*. */
-    uint8_t pad[7];          /* Align to 64-bits. */
-    struct ofp_phy_port desc;
-};
-OFP_ASSERT(sizeof(struct ofp_port_status) == 64);
+OFP_ASSERT(sizeof(struct ofp10_phy_port) == 48);
 
 /* Modify behavior of the physical port */
-struct ofp_port_mod {
+struct ofp10_port_mod {
     struct ofp_header header;
     ovs_be16 port_no;
     uint8_t hw_addr[OFP_ETH_ALEN]; /* The hardware address is not
                                       configurable.  This is used to
                                       sanity-check the request, so it must
                                       be the same as returned in an
-                                      ofp_phy_port struct. */
+                                      ofp10_phy_port struct. */
 
     ovs_be32 config;        /* Bitmap of OFPPC_* flags. */
     ovs_be32 mask;          /* Bitmap of OFPPC_* flags to be changed. */
@@ -241,7 +176,7 @@ struct ofp_port_mod {
                                bits to prevent any action taking place. */
     uint8_t pad[4];         /* Pad to 64-bits. */
 };
-OFP_ASSERT(sizeof(struct ofp_port_mod) == 32);
+OFP_ASSERT(sizeof(struct ofp10_port_mod) == 32);
 
 /* Why is this packet being sent to the controller? */
 enum ofp_packet_in_reason {

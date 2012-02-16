@@ -151,6 +151,8 @@ extern enum ofputil_protocol ofputil_flow_dump_protocols[];
 extern size_t ofputil_n_flow_dump_protocols;
 
 enum ofputil_protocol ofputil_protocol_from_ofp_version(int version);
+uint8_t ofputil_protocol_to_ofp_version(enum ofputil_protocol);
+
 bool ofputil_protocol_is_valid(enum ofputil_protocol);
 enum ofputil_protocol ofputil_protocol_set_tid(enum ofputil_protocol,
                                                bool enable);
@@ -326,9 +328,144 @@ enum ofperr ofputil_decode_packet_out(struct ofputil_packet_out *,
                                       const struct ofp_packet_out *);
 struct ofpbuf *ofputil_encode_packet_out(const struct ofputil_packet_out *);
 
-/* OFPFF_* bits. */
-enum netdev_features ofputil_netdev_port_features_from_ofp10(ovs_be32 ofp10);
-ovs_be32 ofputil_netdev_port_features_to_ofp10(enum netdev_features);
+enum ofputil_port_config {
+    /* OpenFlow 1.0 and 1.1 share these values for these port config bits. */
+    OFPUTIL_PC_PORT_DOWN    = 1 << 0, /* Port is administratively down. */
+    OFPUTIL_PC_NO_RECV      = 1 << 2, /* Drop all packets received by port. */
+    OFPUTIL_PC_NO_FWD       = 1 << 5, /* Drop packets forwarded to port. */
+    OFPUTIL_PC_NO_PACKET_IN = 1 << 6, /* No send packet-in msgs for port. */
+    /* OpenFlow 1.0 only. */
+    OFPUTIL_PC_NO_STP       = 1 << 1, /* No 802.1D spanning tree for port. */
+    OFPUTIL_PC_NO_RECV_STP  = 1 << 3, /* Drop received 802.1D STP packets. */
+    OFPUTIL_PC_NO_FLOOD     = 1 << 4, /* Do not include port when flooding. */
+    /* There are no OpenFlow 1.1-only bits. */
+};
+
+enum ofputil_port_state {
+    /* OpenFlow 1.0 and 1.1 share this values for these port state bits. */
+    OFPUTIL_PS_LINK_DOWN   = 1 << 0, /* No physical link present. */
+    /* OpenFlow 1.1 only. */
+    OFPUTIL_PS_BLOCKED     = 1 << 1, /* Port is blocked */
+    OFPUTIL_PS_LIVE        = 1 << 2, /* Live for Fast Failover Group. */
+    /* OpenFlow 1.0 only. */
+    OFPUTIL_PS_STP_LISTEN  = 0 << 8, /* Not learning or relaying frames. */
+    OFPUTIL_PS_STP_LEARN   = 1 << 8, /* Learning but not relaying frames. */
+    OFPUTIL_PS_STP_FORWARD = 2 << 8, /* Learning and relaying frames. */
+    OFPUTIL_PS_STP_BLOCK   = 3 << 8, /* Not part of spanning tree. */
+    OFPUTIL_PS_STP_MASK    = 3 << 8  /* Bit mask for OFPPS10_STP_* values. */
+};
+
+/* Abstract ofp10_phy_port or ofp11_port. */
+struct ofputil_phy_port {
+    uint16_t port_no;
+    uint8_t hw_addr[OFP_ETH_ALEN];
+    char name[OFP_MAX_PORT_NAME_LEN];
+    enum ofputil_port_config config;
+    enum ofputil_port_state state;
+
+    /* NETDEV_F_* feature bitmasks. */
+    enum netdev_features curr;       /* Current features. */
+    enum netdev_features advertised; /* Features advertised by the port. */
+    enum netdev_features supported;  /* Features supported by the port. */
+    enum netdev_features peer;       /* Features advertised by peer. */
+
+    /* Speed. */
+    uint32_t curr_speed;        /* Current speed, in kbps. */
+    uint32_t max_speed;         /* Maximum supported speed, in kbps. */
+};
+
+enum ofputil_capabilities {
+    /* OpenFlow 1.0 and 1.1 share these values for these capabilities. */
+    OFPUTIL_C_FLOW_STATS     = 1 << 0,  /* Flow statistics. */
+    OFPUTIL_C_TABLE_STATS    = 1 << 1,  /* Table statistics. */
+    OFPUTIL_C_PORT_STATS     = 1 << 2,  /* Port statistics. */
+    OFPUTIL_C_IP_REASM       = 1 << 5,  /* Can reassemble IP fragments. */
+    OFPUTIL_C_QUEUE_STATS    = 1 << 6,  /* Queue statistics. */
+    OFPUTIL_C_ARP_MATCH_IP   = 1 << 7,  /* Match IP addresses in ARP pkts. */
+
+    /* OpenFlow 1.0 only. */
+    OFPUTIL_C_STP            = 1 << 3,  /* 802.1d spanning tree. */
+
+    /* OpenFlow 1.1 only. */
+    OFPUTIL_C_GROUP_STATS    = 1 << 4,  /* Group statistics. */
+};
+
+enum ofputil_action_bitmap {
+    OFPUTIL_A_OUTPUT         = 1 << 0,
+    OFPUTIL_A_SET_VLAN_VID   = 1 << 1,
+    OFPUTIL_A_SET_VLAN_PCP   = 1 << 2,
+    OFPUTIL_A_STRIP_VLAN     = 1 << 3,
+    OFPUTIL_A_SET_DL_SRC     = 1 << 4,
+    OFPUTIL_A_SET_DL_DST     = 1 << 5,
+    OFPUTIL_A_SET_NW_SRC     = 1 << 6,
+    OFPUTIL_A_SET_NW_DST     = 1 << 7,
+    OFPUTIL_A_SET_NW_ECN     = 1 << 8,
+    OFPUTIL_A_SET_NW_TOS     = 1 << 9,
+    OFPUTIL_A_SET_TP_SRC     = 1 << 10,
+    OFPUTIL_A_SET_TP_DST     = 1 << 11,
+    OFPUTIL_A_ENQUEUE        = 1 << 12,
+    OFPUTIL_A_COPY_TTL_OUT   = 1 << 13,
+    OFPUTIL_A_COPY_TTL_IN    = 1 << 14,
+    OFPUTIL_A_SET_MPLS_LABEL = 1 << 15,
+    OFPUTIL_A_SET_MPLS_TC    = 1 << 16,
+    OFPUTIL_A_SET_MPLS_TTL   = 1 << 17,
+    OFPUTIL_A_DEC_MPLS_TTL   = 1 << 18,
+    OFPUTIL_A_PUSH_VLAN      = 1 << 19,
+    OFPUTIL_A_POP_VLAN       = 1 << 20,
+    OFPUTIL_A_PUSH_MPLS      = 1 << 21,
+    OFPUTIL_A_POP_MPLS       = 1 << 22,
+    OFPUTIL_A_SET_QUEUE      = 1 << 23,
+    OFPUTIL_A_GROUP          = 1 << 24,
+    OFPUTIL_A_SET_NW_TTL     = 1 << 25,
+    OFPUTIL_A_DEC_NW_TTL     = 1 << 26,
+};
+
+/* Abstract ofp_switch_features. */
+struct ofputil_switch_features {
+    uint64_t datapath_id;       /* Datapath unique ID. */
+    uint32_t n_buffers;         /* Max packets buffered at once. */
+    uint8_t n_tables;           /* Number of tables supported by datapath. */
+    enum ofputil_capabilities capabilities;
+    enum ofputil_action_bitmap actions;
+};
+
+enum ofperr ofputil_decode_switch_features(const struct ofp_switch_features *,
+                                           struct ofputil_switch_features *,
+                                           struct ofpbuf *);
+int ofputil_pull_switch_features_port(struct ofpbuf *,
+                                      struct ofputil_phy_port *);
+size_t ofputil_count_phy_ports(const struct ofp_switch_features *);
+
+struct ofpbuf *ofputil_encode_switch_features(
+    const struct ofputil_switch_features *, enum ofputil_protocol,
+    ovs_be32 xid);
+void ofputil_put_switch_features_port(const struct ofputil_phy_port *,
+                                      struct ofpbuf *);
+
+/* Abstract ofp_port_status. */
+struct ofputil_port_status {
+    enum ofp_port_reason reason;
+    struct ofputil_phy_port desc;
+};
+
+enum ofperr ofputil_decode_port_status(const struct ofp_port_status *,
+                                       struct ofputil_port_status *);
+struct ofpbuf *ofputil_encode_port_status(const struct ofputil_port_status *,
+                                          enum ofputil_protocol);
+
+/* Abstract ofp_port_mod. */
+struct ofputil_port_mod {
+    uint16_t port_no;
+    uint8_t hw_addr[OFP_ETH_ALEN];
+    enum ofputil_port_config config;
+    enum ofputil_port_config mask;
+    enum netdev_features advertise;
+};
+
+enum ofperr ofputil_decode_port_mod(const struct ofp_header *,
+                                    struct ofputil_port_mod *);
+struct ofpbuf *ofputil_encode_port_mod(const struct ofputil_port_mod *,
+                                       enum ofputil_protocol);
 
 /* OpenFlow protocol utility functions. */
 void *make_openflow(size_t openflow_len, uint8_t type, struct ofpbuf **);

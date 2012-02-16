@@ -1236,21 +1236,21 @@ static void schedule_packet_in(struct ofconn *, struct ofputil_packet_in,
 /* Sends an OFPT_PORT_STATUS message with 'opp' and 'reason' to appropriate
  * controllers managed by 'mgr'. */
 void
-connmgr_send_port_status(struct connmgr *mgr, const struct ofp_phy_port *opp,
-                         uint8_t reason)
+connmgr_send_port_status(struct connmgr *mgr,
+                         const struct ofputil_phy_port *pp, uint8_t reason)
 {
     /* XXX Should limit the number of queued port status change messages. */
+    struct ofputil_port_status ps;
     struct ofconn *ofconn;
 
+    ps.reason = reason;
+    ps.desc = *pp;
     LIST_FOR_EACH (ofconn, node, &mgr->all_conns) {
         if (ofconn_receives_async_msg(ofconn, OAM_PORT_STATUS, reason)) {
-            struct ofp_port_status *ops;
-            struct ofpbuf *b;
+            struct ofpbuf *msg;
 
-            ops = make_openflow_xid(sizeof *ops, OFPT_PORT_STATUS, 0, &b);
-            ops->reason = reason;
-            ops->desc = *opp;
-            ofconn_send(ofconn, b, NULL);
+            msg = ofputil_encode_port_status(&ps, ofconn->protocol);
+            ofconn_send(ofconn, msg, NULL);
         }
     }
 }

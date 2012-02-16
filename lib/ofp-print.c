@@ -34,6 +34,7 @@
 #include "learn.h"
 #include "multipath.h"
 #include "meta-flow.h"
+#include "netdev.h"
 #include "nx-match.h"
 #include "ofp-errors.h"
 #include "ofp-util.h"
@@ -443,37 +444,38 @@ ofp_print_packet_out(struct ds *string, const struct ofp_packet_out *opo,
 static int
 compare_ports(const void *a_, const void *b_)
 {
-    const struct ofp_phy_port *a = a_;
-    const struct ofp_phy_port *b = b_;
-    uint16_t ap = ntohs(a->port_no);
-    uint16_t bp = ntohs(b->port_no);
+    const struct ofputil_phy_port *a = a_;
+    const struct ofputil_phy_port *b = b_;
+    uint16_t ap = a->port_no;
+    uint16_t bp = b->port_no;
 
     return ap < bp ? -1 : ap > bp;
 }
 
-struct bit_name {
-    uint32_t bit;
-    const char *name;
-};
-
 static void
 ofp_print_bit_names(struct ds *string, uint32_t bits,
-                    const struct bit_name bit_names[])
+                    const char *(*bit_to_name)(uint32_t bit))
 {
     int n = 0;
+    int i;
 
     if (!bits) {
         ds_put_cstr(string, "0");
         return;
     }
 
-    for (; bits && bit_names->name; bit_names++) {
-        if (bits & bit_names->bit) {
-            if (n++) {
-                ds_put_char(string, ' ');
+    for (i = 0; i < 32; i++) {
+        uint32_t bit = UINT32_C(1) << i;
+
+        if (bits & bit) {
+            const char *name = bit_to_name(bit);
+            if (name) {
+                if (n++) {
+                    ds_put_char(string, ' ');
+                }
+                ds_put_cstr(string, name);
+                bits &= ~bit;
             }
-            ds_put_cstr(string, bit_names->name);
-            bits &= ~bit_names->bit;
         }
     }
 
@@ -485,55 +487,90 @@ ofp_print_bit_names(struct ds *string, uint32_t bits,
     }
 }
 
-static void
-ofp_print_port_features(struct ds *string, uint32_t features)
+static const char *
+netdev_feature_to_name(uint32_t bit)
 {
-    static const struct bit_name feature_bits[] = {
-        { OFPPF_10MB_HD,    "10MB-HD" },
-        { OFPPF_10MB_FD,    "10MB-FD" },
-        { OFPPF_100MB_HD,   "100MB-HD" },
-        { OFPPF_100MB_FD,   "100MB-FD" },
-        { OFPPF_1GB_HD,     "1GB-HD" },
-        { OFPPF_1GB_FD,     "1GB-FD" },
-        { OFPPF_10GB_FD,    "10GB-FD" },
-        { OFPPF_COPPER,     "COPPER" },
-        { OFPPF_FIBER,      "FIBER" },
-        { OFPPF_AUTONEG,    "AUTO_NEG" },
-        { OFPPF_PAUSE,      "AUTO_PAUSE" },
-        { OFPPF_PAUSE_ASYM, "AUTO_PAUSE_ASYM" },
-        { 0,                NULL },
-    };
+    enum netdev_features f = bit;
 
-    ofp_print_bit_names(string, features, feature_bits);
-    ds_put_char(string, '\n');
+    switch (f) {
+    case NETDEV_F_10MB_HD:    return "10MB-HD";
+    case NETDEV_F_10MB_FD:    return "10MB-FD";
+    case NETDEV_F_100MB_HD:   return "100MB-HD";
+    case NETDEV_F_100MB_FD:   return "100MB-FD";
+    case NETDEV_F_1GB_HD:     return "1GB-HD";
+    case NETDEV_F_1GB_FD:     return "1GB-FD";
+    case NETDEV_F_10GB_FD:    return "10GB-FD";
+    case NETDEV_F_40GB_FD:    return "40GB-FD";
+    case NETDEV_F_100GB_FD:   return "100GB-FD";
+    case NETDEV_F_1TB_FD:     return "1TB-FD";
+    case NETDEV_F_OTHER:      return "OTHER";
+    case NETDEV_F_COPPER:     return "COPPER";
+    case NETDEV_F_FIBER:      return "FIBER";
+    case NETDEV_F_AUTONEG:    return "AUTO_NEG";
+    case NETDEV_F_PAUSE:      return "AUTO_PAUSE";
+    case NETDEV_F_PAUSE_ASYM: return "AUTO_PAUSE_ASYM";
+    }
+
+    return NULL;
 }
 
 static void
-ofp_print_port_config(struct ds *string, uint32_t config)
+ofp_print_port_features(struct ds *string, enum netdev_features features)
 {
-    static const struct bit_name config_bits[] = {
-        { OFPPC_PORT_DOWN,    "PORT_DOWN" },
-        { OFPPC_NO_STP,       "NO_STP" },
-        { OFPPC_NO_RECV,      "NO_RECV" },
-        { OFPPC_NO_RECV_STP,  "NO_RECV_STP" },
-        { OFPPC_NO_FLOOD,     "NO_FLOOD" },
-        { OFPPC_NO_FWD,       "NO_FWD" },
-        { OFPPC_NO_PACKET_IN, "NO_PACKET_IN" },
-        { 0,                  NULL },
-    };
-
-    ofp_print_bit_names(string, config, config_bits);
+    ofp_print_bit_names(string, features, netdev_feature_to_name);
     ds_put_char(string, '\n');
 }
 
-static void
-ofp_print_port_state(struct ds *string, uint32_t state)
+static const char *
+ofputil_port_config_to_name(uint32_t bit)
 {
-    static const struct bit_name state_bits[] = {
-        { OFPPS_LINK_DOWN, "LINK_DOWN" },
-        { 0,               NULL },
-    };
-    uint32_t stp_state;
+    enum ofputil_port_config pc = bit;
+
+    switch (pc) {
+    case OFPUTIL_PC_PORT_DOWN:    return "PORT_DOWN";
+    case OFPUTIL_PC_NO_STP:       return "NO_STP";
+    case OFPUTIL_PC_NO_RECV:      return "NO_RECV";
+    case OFPUTIL_PC_NO_RECV_STP:  return "NO_RECV_STP";
+    case OFPUTIL_PC_NO_FLOOD:     return "NO_FLOOD";
+    case OFPUTIL_PC_NO_FWD:       return "NO_FWD";
+    case OFPUTIL_PC_NO_PACKET_IN: return "NO_PACKET_IN";
+    }
+
+    return NULL;
+}
+
+static void
+ofp_print_port_config(struct ds *string, enum ofputil_port_config config)
+{
+    ofp_print_bit_names(string, config, ofputil_port_config_to_name);
+    ds_put_char(string, '\n');
+}
+
+static const char *
+ofputil_port_state_to_name(uint32_t bit)
+{
+    enum ofputil_port_state ps = bit;
+
+    switch (ps) {
+    case OFPUTIL_PS_LINK_DOWN: return "LINK_DOWN";
+    case OFPUTIL_PS_BLOCKED:   return "BLOCKED";
+    case OFPUTIL_PS_LIVE:      return "LIVE";
+
+    case OFPUTIL_PS_STP_LISTEN:
+    case OFPUTIL_PS_STP_LEARN:
+    case OFPUTIL_PS_STP_FORWARD:
+    case OFPUTIL_PS_STP_BLOCK:
+        /* Handled elsewhere. */
+        return NULL;
+    }
+
+    return NULL;
+}
+
+static void
+ofp_print_port_state(struct ds *string, enum ofputil_port_state state)
+{
+    enum ofputil_port_state stp_state;
 
     /* The STP state is a 2-bit field so it doesn't fit in with the bitmask
      * pattern.  We have to special case it.
@@ -542,25 +579,26 @@ ofp_print_port_state(struct ds *string, uint32_t state)
      * talking to OVS, so we'd always print STP_LISTEN in that case.
      * Therefore, we don't print anything at all if the value is STP_LISTEN, to
      * avoid confusing users. */
-    stp_state = state & OFPPS_STP_MASK;
+    stp_state = state & OFPUTIL_PS_STP_MASK;
     if (stp_state) {
-        ds_put_cstr(string, (stp_state == OFPPS_STP_LEARN ? "STP_LEARN"
-                             : stp_state == OFPPS_STP_FORWARD ? "STP_FORWARD"
-                             : "STP_BLOCK"));
-        state &= ~OFPPS_STP_MASK;
+        ds_put_cstr(string,
+                    (stp_state == OFPUTIL_PS_STP_LEARN ? "STP_LEARN"
+                     : stp_state == OFPUTIL_PS_STP_FORWARD ? "STP_FORWARD"
+                     : "STP_BLOCK"));
+        state &= ~OFPUTIL_PS_STP_MASK;
         if (state) {
-            ofp_print_bit_names(string, state, state_bits);
+            ofp_print_bit_names(string, state, ofputil_port_state_to_name);
         }
     } else {
-        ofp_print_bit_names(string, state, state_bits);
+        ofp_print_bit_names(string, state, ofputil_port_state_to_name);
     }
     ds_put_char(string, '\n');
 }
 
 static void
-ofp_print_phy_port(struct ds *string, const struct ofp_phy_port *port)
+ofp_print_phy_port(struct ds *string, const struct ofputil_phy_port *port)
 {
-    char name[OFP_MAX_PORT_NAME_LEN];
+    char name[sizeof port->name];
     int j;
 
     memcpy(name, port->name, sizeof name);
@@ -572,58 +610,141 @@ ofp_print_phy_port(struct ds *string, const struct ofp_phy_port *port)
     name[j] = '\0';
 
     ds_put_char(string, ' ');
-    ofputil_format_port(ntohs(port->port_no), string);
+    ofputil_format_port(port->port_no, string);
     ds_put_format(string, "(%s): addr:"ETH_ADDR_FMT"\n",
                   name, ETH_ADDR_ARGS(port->hw_addr));
 
     ds_put_cstr(string, "     config:     ");
-    ofp_print_port_config(string, ntohl(port->config));
+    ofp_print_port_config(string, port->config);
 
     ds_put_cstr(string, "     state:      ");
-    ofp_print_port_state(string, ntohl(port->state));
+    ofp_print_port_state(string, port->state);
 
     if (port->curr) {
         ds_put_format(string, "     current:    ");
-        ofp_print_port_features(string, ntohl(port->curr));
+        ofp_print_port_features(string, port->curr);
     }
     if (port->advertised) {
         ds_put_format(string, "     advertised: ");
-        ofp_print_port_features(string, ntohl(port->advertised));
+        ofp_print_port_features(string, port->advertised);
     }
     if (port->supported) {
         ds_put_format(string, "     supported:  ");
-        ofp_print_port_features(string, ntohl(port->supported));
+        ofp_print_port_features(string, port->supported);
     }
     if (port->peer) {
         ds_put_format(string, "     peer:       ");
-        ofp_print_port_features(string, ntohl(port->peer));
+        ofp_print_port_features(string, port->peer);
     }
+    ds_put_format(string, "     speed: %"PRIu32" Mbps now, "
+                  "%"PRIu32" Mbps max\n",
+                  port->curr_speed / UINT32_C(1000),
+                  port->max_speed / UINT32_C(1000));
+}
+
+static const char *
+ofputil_capabilities_to_name(uint32_t bit)
+{
+    enum ofputil_capabilities capabilities = bit;
+
+    switch (capabilities) {
+    case OFPUTIL_C_FLOW_STATS:   return "FLOW_STATS";
+    case OFPUTIL_C_TABLE_STATS:  return "TABLE_STATS";
+    case OFPUTIL_C_PORT_STATS:   return "PORT_STATS";
+    case OFPUTIL_C_IP_REASM:     return "IP_REASM";
+    case OFPUTIL_C_QUEUE_STATS:  return "QUEUE_STATS";
+    case OFPUTIL_C_ARP_MATCH_IP: return "ARP_MATCH_IP";
+    case OFPUTIL_C_STP:          return "STP";
+    case OFPUTIL_C_GROUP_STATS:  return "GROUP_STATS";
+    }
+
+    return NULL;
+}
+
+static const char *
+ofputil_action_bitmap_to_name(uint32_t bit)
+{
+    enum ofputil_action_bitmap action = bit;
+
+    switch (action) {
+    case OFPUTIL_A_OUTPUT:         return "OUTPUT";
+    case OFPUTIL_A_SET_VLAN_VID:   return "SET_VLAN_VID";
+    case OFPUTIL_A_SET_VLAN_PCP:   return "SET_VLAN_PCP";
+    case OFPUTIL_A_STRIP_VLAN:     return "STRIP_VLAN";
+    case OFPUTIL_A_SET_DL_SRC:     return "SET_DL_SRC";
+    case OFPUTIL_A_SET_DL_DST:     return "SET_DL_DST";
+    case OFPUTIL_A_SET_NW_SRC:     return "SET_NW_SRC";
+    case OFPUTIL_A_SET_NW_DST:     return "SET_NW_DST";
+    case OFPUTIL_A_SET_NW_ECN:     return "SET_NW_ECN";
+    case OFPUTIL_A_SET_NW_TOS:     return "SET_NW_TOS";
+    case OFPUTIL_A_SET_TP_SRC:     return "SET_TP_SRC";
+    case OFPUTIL_A_SET_TP_DST:     return "SET_TP_DST";
+    case OFPUTIL_A_ENQUEUE:        return "ENQUEUE";
+    case OFPUTIL_A_COPY_TTL_OUT:   return "COPY_TTL_OUT";
+    case OFPUTIL_A_COPY_TTL_IN:    return "COPY_TTL_IN";
+    case OFPUTIL_A_SET_MPLS_LABEL: return "SET_MPLS_LABEL";
+    case OFPUTIL_A_SET_MPLS_TC:    return "SET_MPLS_TC";
+    case OFPUTIL_A_SET_MPLS_TTL:   return "SET_MPLS_TTL";
+    case OFPUTIL_A_DEC_MPLS_TTL:   return "DEC_MPLS_TTL";
+    case OFPUTIL_A_PUSH_VLAN:      return "PUSH_VLAN";
+    case OFPUTIL_A_POP_VLAN:       return "POP_VLAN";
+    case OFPUTIL_A_PUSH_MPLS:      return "PUSH_MPLS";
+    case OFPUTIL_A_POP_MPLS:       return "POP_MPLS";
+    case OFPUTIL_A_SET_QUEUE:      return "SET_QUEUE";
+    case OFPUTIL_A_GROUP:          return "GROUP";
+    case OFPUTIL_A_SET_NW_TTL:     return "SET_NW_TTL";
+    case OFPUTIL_A_DEC_NW_TTL:     return "DEC_NW_TTL";
+    }
+
+    return NULL;
 }
 
 static void
 ofp_print_switch_features(struct ds *string,
                           const struct ofp_switch_features *osf)
 {
-    size_t len = ntohs(osf->header.length);
-    struct ofp_phy_port *port_list;
-    int n_ports;
-    int i;
+    struct ofputil_switch_features features;
+    struct ofputil_phy_port *ports;
+    enum ofperr error;
+    struct ofpbuf b;
+    size_t n_ports;
+    size_t i;
 
-    ds_put_format(string, " ver:0x%x, dpid:%016"PRIx64"\n",
-            osf->header.version, ntohll(osf->datapath_id));
-    ds_put_format(string, "n_tables:%d, n_buffers:%d\n", osf->n_tables,
-            ntohl(osf->n_buffers));
-    ds_put_format(string, "features: capabilities:%#x, actions:%#x\n",
-           ntohl(osf->capabilities), ntohl(osf->actions));
-
-    n_ports = (len - sizeof *osf) / sizeof *osf->ports;
-
-    port_list = xmemdup(osf->ports, len - sizeof *osf);
-    qsort(port_list, n_ports, sizeof *port_list, compare_ports);
-    for (i = 0; i < n_ports; i++) {
-        ofp_print_phy_port(string, &port_list[i]);
+    error = ofputil_decode_switch_features(osf, &features, &b);
+    if (error) {
+        ofp_print_error(string, error);
+        return;
     }
-    free(port_list);
+
+    ds_put_format(string, " dpid:%016"PRIx64"\n", features.datapath_id);
+    ds_put_format(string, "n_tables:%"PRIu8", n_buffers:%"PRIu32"\n",
+                  features.n_tables, features.n_buffers);
+
+    ds_put_cstr(string, "capabilities: ");
+    ofp_print_bit_names(string, features.capabilities,
+                        ofputil_capabilities_to_name);
+    ds_put_char(string, '\n');
+
+    ds_put_cstr(string, "actions: ");
+    ofp_print_bit_names(string, features.actions,
+                        ofputil_action_bitmap_to_name);
+    ds_put_char(string, '\n');
+
+    n_ports = ofputil_count_phy_ports(osf);
+
+    ports = xmalloc(n_ports * sizeof *ports);
+    for (i = 0; i < n_ports; i++) {
+        error = ofputil_pull_switch_features_port(&b, &ports[i]);
+        if (error) {
+            ofp_print_error(string, error);
+            return;
+        }
+    }
+    qsort(ports, n_ports, sizeof *ports, compare_ports);
+    for (i = 0; i < n_ports; i++) {
+        ofp_print_phy_port(string, &ports[i]);
+    }
+    free(ports);
 }
 
 static void
@@ -938,14 +1059,29 @@ ofp_print_flow_removed(struct ds *string, const struct ofp_header *oh)
 }
 
 static void
-ofp_print_port_mod(struct ds *string, const struct ofp_port_mod *opm)
+ofp_print_port_mod(struct ds *string, const struct ofp_header *oh)
 {
-    ds_put_format(string, "port: %d: addr:"ETH_ADDR_FMT", config: %#x, mask:%#x\n",
-            ntohs(opm->port_no), ETH_ADDR_ARGS(opm->hw_addr),
-            ntohl(opm->config), ntohl(opm->mask));
+    struct ofputil_port_mod pm;
+    enum ofperr error;
+
+    error = ofputil_decode_port_mod(oh, &pm);
+    if (error) {
+        ofp_print_error(string, error);
+        return;
+    }
+
+    ds_put_format(string, "port: %"PRIu16": addr:"ETH_ADDR_FMT"\n",
+                  pm.port_no, ETH_ADDR_ARGS(pm.hw_addr));
+
+    ds_put_format(string, "     config: ");
+    ofp_print_port_config(string, pm.config);
+
+    ds_put_format(string, "     mask:   ");
+    ofp_print_port_config(string, pm.mask);
+
     ds_put_format(string, "     advertise: ");
-    if (opm->advertise) {
-        ofp_print_port_features(string, ntohl(opm->advertise));
+    if (pm.advertise) {
+        ofp_print_port_features(string, pm.advertise);
     } else {
         ds_put_format(string, "UNCHANGED\n");
     }
@@ -992,15 +1128,24 @@ ofp_print_error_msg(struct ds *string, const struct ofp_error_msg *oem)
 static void
 ofp_print_port_status(struct ds *string, const struct ofp_port_status *ops)
 {
-    if (ops->reason == OFPPR_ADD) {
+    struct ofputil_port_status ps;
+    enum ofperr error;
+
+    error = ofputil_decode_port_status(ops, &ps);
+    if (error) {
+        ofp_print_error(string, error);
+        return;
+    }
+
+    if (ps.reason == OFPPR_ADD) {
         ds_put_format(string, " ADD:");
-    } else if (ops->reason == OFPPR_DELETE) {
+    } else if (ps.reason == OFPPR_DELETE) {
         ds_put_format(string, " DEL:");
-    } else if (ops->reason == OFPPR_MODIFY) {
+    } else if (ps.reason == OFPPR_MODIFY) {
         ds_put_format(string, " MOD:");
     }
 
-    ofp_print_phy_port(string, &ops->desc);
+    ofp_print_phy_port(string, &ps.desc);
 }
 
 static void

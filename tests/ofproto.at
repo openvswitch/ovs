@@ -10,12 +10,14 @@ AT_SETUP([ofproto - feature request, config request])
 OVS_VSWITCHD_START
 AT_CHECK([ovs-ofctl -vANY:ANY:WARN show br0], [0], [stdout])
 AT_CHECK([STRIP_XIDS stdout], [0], [dnl
-OFPT_FEATURES_REPLY: ver:0x1, dpid:fedcba9876543210
+OFPT_FEATURES_REPLY: dpid:fedcba9876543210
 n_tables:255, n_buffers:256
-features: capabilities:0xc7, actions:0xfff
+capabilities: FLOW_STATS TABLE_STATS PORT_STATS QUEUE_STATS ARP_MATCH_IP
+actions: OUTPUT SET_VLAN_VID SET_VLAN_PCP STRIP_VLAN SET_DL_SRC SET_DL_DST SET_NW_SRC SET_NW_DST SET_NW_TOS SET_TP_SRC SET_TP_DST ENQUEUE
  LOCAL(br0): addr:aa:55:aa:55:00:00
      config:     PORT_DOWN
      state:      LINK_DOWN
+     speed: 100 Mbps now, 100 Mbps max
 OFPT_GET_CONFIG_REPLY: frags=normal miss_send_len=0
 ])
 OVS_VSWITCHD_STOP
@@ -58,12 +60,14 @@ do
     AT_CHECK([ovs-ofctl -vANY:ANY:WARN mod-port br0 br0 $command])
     AT_CHECK([ovs-ofctl -vANY:ANY:WARN show br0], [0], [stdout])
     AT_CHECK_UNQUOTED([STRIP_XIDS stdout], [0], [dnl
-OFPT_FEATURES_REPLY: ver:0x1, dpid:fedcba9876543210
+OFPT_FEATURES_REPLY: dpid:fedcba9876543210
 n_tables:255, n_buffers:256
-features: capabilities:0xc7, actions:0xfff
+capabilities: FLOW_STATS TABLE_STATS PORT_STATS QUEUE_STATS ARP_MATCH_IP
+actions: OUTPUT SET_VLAN_VID SET_VLAN_PCP STRIP_VLAN SET_DL_SRC SET_DL_DST SET_NW_SRC SET_NW_DST SET_NW_TOS SET_TP_SRC SET_TP_DST ENQUEUE
  LOCAL(br0): addr:aa:55:aa:55:00:00
      config:     $config
      state:      $state
+     speed: 100 Mbps now, 100 Mbps max
 OFPT_GET_CONFIG_REPLY: frags=normal miss_send_len=0
 ])
 done
@@ -459,7 +463,8 @@ priority:0,tunnel:0,in_port:0000,tci(0) mac(00:26:b9:8c:b0:f9->00:25:83:df:b4:00
     if test X"$1" = X"OFPPR_ADD"; then shift;
         echo >>expout "OFPT_PORT_STATUS: ADD: 1(test): addr:aa:55:aa:55:00:0x
      config:     PORT_DOWN
-     state:      LINK_DOWN"
+     state:      LINK_DOWN
+     speed: 100 Mbps now, 100 Mbps max"
     fi
 
     # OFPT_PORT_STATUS, OFPPR_DELETE
@@ -467,7 +472,8 @@ priority:0,tunnel:0,in_port:0000,tci(0) mac(00:26:b9:8c:b0:f9->00:25:83:df:b4:00
     if test X"$1" = X"OFPPR_DELETE"; then shift;
         echo >>expout "OFPT_PORT_STATUS: DEL: 1(test): addr:aa:55:aa:55:00:0x
      config:     PORT_DOWN
-     state:      LINK_DOWN"
+     state:      LINK_DOWN
+     speed: 100 Mbps now, 100 Mbps max"
     fi
 
     # OFPT_FLOW_REMOVED, OFPRR_DELETE
