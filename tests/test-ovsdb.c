@@ -1916,7 +1916,7 @@ do_idl(int argc, char *argv[])
             substitute_uuids(json, symtab);
             request = jsonrpc_create_request("transact", json, NULL);
             error = jsonrpc_transact_block(rpc, request, &reply);
-            if (error) {
+            if (error || reply->error) {
                 ovs_fatal(error, "jsonrpc transaction failed");
             }
             printf("%03d: ", step++);
