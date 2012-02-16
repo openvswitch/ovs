@@ -1,6 +1,6 @@
 # -*- autoconf -*-
 
-# Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
+# Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira Networks.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -98,16 +98,23 @@ AC_DEFUN([OVS_CHECK_LINUX], [
     else
       KSRC=$KBUILD
       if test ! -e $KSRC/include/linux/kernel.h; then
-	case `echo "$KBUILD" | sed 's,/*$,,'` in # (
-	  */build)
-	    KSRC=`echo "$KBUILD" | sed 's,/build/*$,/source,'`
-	    ;; # (
-	  *)
-	    KSRC=`(cd $KBUILD && pwd -P) | sed 's,-[[^-]]*$,-common,'`
-	    ;;
-	esac
+        # Debian kernel build Makefiles tend to include a line of the form:
+        # MAKEARGS := -C /usr/src/linux-headers-3.2.0-1-common O=/usr/src/linux-headers-3.2.0-1-486
+        # First try to extract the source directory from this line.
+        KSRC=`sed -n 's/.*-C \([[^ ]]*\).*/\1/p' "$KBUILD"/Makefile`
+        if test ! -e "$KSRC"/include/linux/kernel.h; then
+          # Didn't work.  Fall back to name-based heuristics that used to work.
+          case `echo "$KBUILD" | sed 's,/*$,,'` in # (
+            */build)
+              KSRC=`echo "$KBUILD" | sed 's,/build/*$,/source,'`
+              ;; # (
+            *)
+              KSRC=`(cd $KBUILD && pwd -P) | sed 's,-[[^-]]*$,-common,'`
+              ;;
+          esac
+        fi
       fi
-      if test ! -e $KSRC/include/linux/kernel.h; then
+      if test ! -e "$KSRC"/include/linux/kernel.h; then
         AC_MSG_ERROR([cannot find source directory (please use --with-linux-source)])
       fi
     fi
