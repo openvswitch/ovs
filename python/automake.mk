@@ -28,9 +28,11 @@ ovs_pyfiles = \
 	python/ovs/socket_util.py \
 	python/ovs/stream.py \
 	python/ovs/timeval.py \
+	python/ovs/unixctl.py \
+	python/ovs/util.py \
 	python/ovs/version.py \
-	python/ovs/vlog.py \
-	python/ovs/util.py
+	python/ovs/vlog.py
+
 PYFILES = $(ovs_pyfiles) python/ovs/dirs.py $(ovstest_pyfiles)
 EXTRA_DIST += $(PYFILES)
 PYCOV_CLEAN_FILES += $(PYFILES:.py=.py,cover)
