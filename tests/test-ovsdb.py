@@ -375,6 +375,11 @@ def do_idl(schema_file, remote, *commands):
                 sys.stderr.write("jsonrpc transaction failed: %s"
                                  % os.strerror(error))
                 sys.exit(1)
+            elif reply.error is not None:
+                sys.stderr.write("jsonrpc transaction failed: %s"
+                                 % reply.error)
+                sys.exit(1)
+
             sys.stdout.write("%03d: " % step)
             sys.stdout.flush()
             step += 1
