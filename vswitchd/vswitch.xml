@@ -1902,8 +1902,17 @@
       supported range of queue numbers depend on <ref column="type"/>.  The
       queue numbers are the same as the <code>queue_id</code> used in
       OpenFlow in <code>struct ofp_action_enqueue</code> and other
-      structures.  Queue 0 is used by OpenFlow output actions that do not
-      specify a specific queue.</p>
+      structures.</p>
+
+      <p>
+        Queue 0 is the ``default queue.''  It is used by OpenFlow output
+        actions when no specific queue has been set.  Ordinarily <ref
+        column="queues"/> should include a configuration for queue 0.  When no
+        configuration for queue 0 is present, a default configuration is used.
+        (Before version 1.6, Open vSwitch would leave queue 0 unconfigured in
+        this case.  With some queuing disciplines, this dropped all packets
+        destined for the default queue.)
+      </p>
     </column>
 
     <group title="Configuration for linux-htb and linux-hfsc">
