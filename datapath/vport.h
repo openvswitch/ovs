@@ -84,6 +84,7 @@ struct vport_err_stats {
  * @upcall_pid: The Netlink port to use for packets received on this port that
  * miss the flow table.
  * @hash_node: Element in @dev_table hash table in vport.c.
+ * @dp_hash_node: Element in @datapath->ports hash table in datapath.c.
  * @ops: Class structure.
  * @percpu_stats: Points to per-CPU statistics used and maintained by vport
  * @stats_lock: Protects @err_stats and @offset_stats.
@@ -101,6 +102,7 @@ struct vport {
 	u32 upcall_pid;
 
 	struct hlist_node hash_node;
+	struct hlist_node dp_hash_node;
 	const struct vport_ops *ops;
 
 	struct vport_percpu_stats __percpu *percpu_stats;

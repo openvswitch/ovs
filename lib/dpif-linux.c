@@ -59,10 +59,7 @@
 #include "vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(dpif_linux);
-
-enum { LRU_MAX_PORTS = 1024 };
-enum { LRU_MASK = LRU_MAX_PORTS - 1};
-BUILD_ASSERT_DECL(IS_POW2(LRU_MAX_PORTS));
+enum { MAX_PORTS = USHRT_MAX };
 
 enum { N_UPCALL_SOCKS = 16 };
 BUILD_ASSERT_DECL(IS_POW2(N_UPCALL_SOCKS));
@@ -147,11 +144,8 @@ struct dpif_linux {
     struct nln_notifier *port_notifier;
     bool change_error;
 
-    /* Queue of unused ports. */
-    unsigned long *lru_bitmap;
-    uint16_t lru_ports[LRU_MAX_PORTS];
-    size_t lru_head;
-    size_t lru_tail;
+    /* Port number allocation. */
+    uint16_t alloc_port_no;
 };
 
 static struct vlog_rate_limit error_rl = VLOG_RATE_LIMIT_INIT(9999, 5);
@@ -182,29 +176,6 @@ dpif_linux_cast(const struct dpif *dpif)
 {
     dpif_assert_class(dpif, &dpif_linux_class);
     return CONTAINER_OF(dpif, struct dpif_linux, dpif);
-}
-
-static void
-dpif_linux_push_port(struct dpif_linux *dp, uint16_t port)
-{
-    if (port < LRU_MAX_PORTS && !bitmap_is_set(dp->lru_bitmap, port)) {
-        bitmap_set1(dp->lru_bitmap, port);
-        dp->lru_ports[dp->lru_head++ & LRU_MASK] = port;
-    }
-}
-
-static uint32_t
-dpif_linux_pop_port(struct dpif_linux *dp)
-{
-    uint16_t port;
-
-    if (dp->lru_head == dp->lru_tail) {
-        return UINT32_MAX;
-    }
-
-    port = dp->lru_ports[dp->lru_tail++ & LRU_MASK];
-    bitmap_set0(dp->lru_bitmap, port);
-    return port;
 }
 
 static int
@@ -268,7 +239,6 @@ static void
 open_dpif(const struct dpif_linux_dp *dp, struct dpif **dpifp)
 {
     struct dpif_linux *dpif;
-    int i;
 
     dpif = xzalloc(sizeof *dpif);
     dpif->port_notifier = nln_notifier_create(nln, dpif_linux_port_changed,
@@ -281,12 +251,6 @@ open_dpif(const struct dpif_linux_dp *dp, struct dpif **dpifp)
     dpif->dp_ifindex = dp->dp_ifindex;
     sset_init(&dpif->changed_ports);
     *dpifp = &dpif->dpif;
-
-    dpif->lru_bitmap = bitmap_allocate(LRU_MAX_PORTS);
-    bitmap_set1(dpif->lru_bitmap, OVSP_LOCAL);
-    for (i = 1; i < LRU_MAX_PORTS; i++) {
-        dpif_linux_push_port(dpif, i);
-    }
 }
 
 static void
@@ -312,7 +276,6 @@ dpif_linux_close(struct dpif *dpif_)
     nln_notifier_destroy(dpif->port_notifier);
     destroy_upcall_socks(dpif);
     sset_destroy(&dpif->changed_ports);
-    free(dpif->lru_bitmap);
     free(dpif);
 }
 
@@ -372,7 +335,7 @@ dpif_linux_port_add(struct dpif *dpif_, struct netdev *netdev,
     struct dpif_linux_vport request, reply;
     const struct ofpbuf *options;
     struct ofpbuf *buf;
-    int error;
+    int error, i = 0, max_ports = MAX_PORTS;
 
     dpif_linux_vport_init(&request);
     request.cmd = OVS_VPORT_CMD_NEW;
@@ -400,7 +363,7 @@ dpif_linux_port_add(struct dpif *dpif_, struct netdev *netdev,
     do {
         uint32_t upcall_pid;
 
-        request.port_no = dpif_linux_pop_port(dpif);
+        request.port_no = ++dpif->alloc_port_no;
         upcall_pid = dpif_linux_port_get_pid(dpif_, request.port_no);
         request.upcall_pid = &upcall_pid;
         error = dpif_linux_vport_transact(&request, &reply, &buf);
@@ -409,9 +372,14 @@ dpif_linux_port_add(struct dpif *dpif_, struct netdev *netdev,
             *port_nop = reply.port_no;
             VLOG_DBG("%s: assigning port %"PRIu32" to netlink pid %"PRIu32,
                      dpif_name(dpif_), request.port_no, upcall_pid);
+        } else if (error == EFBIG) {
+            /* Older datapath has lower limit. */
+            max_ports = dpif->alloc_port_no;
+            dpif->alloc_port_no = 0;
         }
+
         ofpbuf_delete(buf);
-    } while (request.port_no != UINT32_MAX
+    } while ((i++ < max_ports)
              && (error == EBUSY || error == EFBIG));
 
     return error;
@@ -430,9 +398,6 @@ dpif_linux_port_del(struct dpif *dpif_, uint16_t port_no)
     vport.port_no = port_no;
     error = dpif_linux_vport_transact(&vport, NULL, NULL);
 
-    if (!error) {
-        dpif_linux_push_port(dpif, port_no);
-    }
     return error;
 }
 
@@ -478,9 +443,7 @@ dpif_linux_port_query_by_name(const struct dpif *dpif, const char *devname,
 static int
 dpif_linux_get_max_ports(const struct dpif *dpif OVS_UNUSED)
 {
-    /* If the datapath increases its range of supported ports, then it should
-     * start reporting that. */
-    return 1024;
+    return MAX_PORTS;
 }
 
 static uint32_t
@@ -510,8 +473,6 @@ dpif_linux_flow_flush(struct dpif *dpif_)
 
 struct dpif_linux_port_state {
     struct nl_dump dump;
-    unsigned long *port_bitmap; /* Ports in the datapath. */
-    bool complete;              /* Dump completed without error. */
 };
 
 static int
@@ -523,8 +484,6 @@ dpif_linux_port_dump_start(const struct dpif *dpif_, void **statep)
     struct ofpbuf *buf;
 
     *statep = state = xmalloc(sizeof *state);
-    state->port_bitmap = bitmap_allocate(LRU_MAX_PORTS);
-    state->complete = false;
 
     dpif_linux_vport_init(&request);
     request.cmd = OVS_DP_CMD_GET;
@@ -548,17 +507,12 @@ dpif_linux_port_dump_next(const struct dpif *dpif OVS_UNUSED, void *state_,
     int error;
 
     if (!nl_dump_next(&state->dump, &buf)) {
-        state->complete = true;
         return EOF;
     }
 
     error = dpif_linux_vport_from_ofpbuf(&vport, &buf);
     if (error) {
         return error;
-    }
-
-    if (vport.port_no < LRU_MAX_PORTS) {
-        bitmap_set1(state->port_bitmap, vport.port_no);
     }
 
     dpif_port->name = (char *) vport.name;
@@ -568,23 +522,11 @@ dpif_linux_port_dump_next(const struct dpif *dpif OVS_UNUSED, void *state_,
 }
 
 static int
-dpif_linux_port_dump_done(const struct dpif *dpif_, void *state_)
+dpif_linux_port_dump_done(const struct dpif *dpif_ OVS_UNUSED, void *state_)
 {
-    struct dpif_linux *dpif = dpif_linux_cast(dpif_);
     struct dpif_linux_port_state *state = state_;
     int error = nl_dump_done(&state->dump);
 
-    if (state->complete) {
-        uint16_t i;
-
-        for (i = 0; i < LRU_MAX_PORTS; i++) {
-            if (!bitmap_is_set(state->port_bitmap, i)) {
-                dpif_linux_push_port(dpif, i);
-            }
-        }
-    }
-
-    free(state->port_bitmap);
     free(state);
     return error;
 }

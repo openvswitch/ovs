@@ -192,6 +192,7 @@ struct vport *ovs_vport_alloc(int priv_size, const struct vport_ops *ops,
 	vport->port_no = parms->port_no;
 	vport->upcall_pid = parms->upcall_pid;
 	vport->ops = ops;
+	INIT_HLIST_NODE(&vport->dp_hash_node);
 
 	/* Initialize kobject for bridge.  This will be added as
 	 * /sys/class/net/<devname>/brport later, if sysfs is enabled. */

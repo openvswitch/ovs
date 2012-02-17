@@ -209,7 +209,7 @@ struct sysfs_ops ovs_brport_sysfs_ops = {
 int ovs_dp_sysfs_add_if(struct vport *p)
 {
 	struct datapath *dp = p->dp;
-	struct vport *local_port = rtnl_dereference(dp->ports[OVSP_LOCAL]);
+	struct vport *local_port = ovs_vport_rtnl(dp, OVSP_LOCAL);
 	struct brport_attribute **a;
 	int err;
 

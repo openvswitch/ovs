@@ -44,7 +44,7 @@ struct sw_flow_key {
 	struct {
 		__be64	tun_id;		/* Encapsulating tunnel ID. */
 		u32	priority;	/* Packet QoS priority. */
-		u16	in_port;	/* Input switch port (or USHRT_MAX). */
+		u16	in_port;	/* Input switch port (or DP_MAX_PORTS). */
 	} phy;
 	struct {
 		u8     src[ETH_ALEN];	/* Ethernet source address. */
@@ -168,6 +168,7 @@ int ovs_flow_from_nlattrs(struct sw_flow_key *swkey, int *key_lenp,
 int ovs_flow_metadata_from_nlattrs(u32 *priority, u16 *in_port, __be64 *tun_id,
 				   const struct nlattr *);
 
+#define MAX_ACTIONS_BUFSIZE	(16 * 1024)
 #define TBL_MIN_BUCKETS		1024
 
 struct flow_table {

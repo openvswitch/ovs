@@ -362,7 +362,7 @@ static struct attribute_group bridge_group = {
  */
 int ovs_dp_sysfs_add_dp(struct datapath *dp)
 {
-	struct vport *vport = rtnl_dereference(dp->ports[OVSP_LOCAL]);
+	struct vport *vport = ovs_vport_rtnl(dp, OVSP_LOCAL);
 	struct kobject *kobj = vport->ops->get_kobj(vport);
 	int err;
 
@@ -398,7 +398,7 @@ int ovs_dp_sysfs_add_dp(struct datapath *dp)
 
 int ovs_dp_sysfs_del_dp(struct datapath *dp)
 {
-	struct vport *vport = rtnl_dereference(dp->ports[OVSP_LOCAL]);
+	struct vport *vport = ovs_vport_rtnl(dp, OVSP_LOCAL);
 	struct kobject *kobj = vport->ops->get_kobj(vport);
 
 #ifdef CONFIG_NET_NS

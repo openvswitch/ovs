@@ -203,10 +203,7 @@ struct sw_flow_actions *ovs_flow_actions_alloc(const struct nlattr *actions)
 	int actions_len = nla_len(actions);
 	struct sw_flow_actions *sfa;
 
-	/* At least DP_MAX_PORTS actions are required to be able to flood a
-	 * packet to every port.  Factor of 2 allows for setting VLAN tags,
-	 * etc. */
-	if (actions_len > 2 * DP_MAX_PORTS * nla_total_size(4))
+	if (actions_len > MAX_ACTIONS_BUFSIZE)
 		return ERR_PTR(-EINVAL);
 
 	sfa = kmalloc(sizeof(*sfa) + actions_len, GFP_KERNEL);
@@ -1020,7 +1017,7 @@ int ovs_flow_from_nlattrs(struct sw_flow_key *swkey, int *key_lenp,
 		swkey->phy.in_port = in_port;
 		attrs &= ~(1 << OVS_KEY_ATTR_IN_PORT);
 	} else {
-		swkey->phy.in_port = USHRT_MAX;
+		swkey->phy.in_port = DP_MAX_PORTS;
 	}
 
 	if (attrs & (1ULL << OVS_KEY_ATTR_TUN_ID)) {
@@ -1169,7 +1166,7 @@ int ovs_flow_metadata_from_nlattrs(u32 *priority, u16 *in_port, __be64 *tun_id,
 	const struct nlattr *nla;
 	int rem;
 
-	*in_port = USHRT_MAX;
+	*in_port = DP_MAX_PORTS;
 	*tun_id = 0;
 	*priority = 0;
 
@@ -1213,7 +1210,7 @@ int ovs_flow_to_nlattrs(const struct sw_flow_key *swkey, struct sk_buff *skb)
 	if (swkey->phy.tun_id != cpu_to_be64(0))
 		NLA_PUT_BE64(skb, OVS_KEY_ATTR_TUN_ID, swkey->phy.tun_id);
 
-	if (swkey->phy.in_port != USHRT_MAX)
+	if (swkey->phy.in_port != DP_MAX_PORTS)
 		NLA_PUT_U32(skb, OVS_KEY_ATTR_IN_PORT, swkey->phy.in_port);
 
 	nla = nla_reserve(skb, OVS_KEY_ATTR_ETHERNET, sizeof(*eth_key));

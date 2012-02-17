@@ -34,7 +34,9 @@
 #include "vlan.h"
 #include "vport.h"
 
-#define DP_MAX_PORTS 1024
+#define DP_MAX_PORTS		USHRT_MAX
+#define DP_VPORT_HASH_BUCKETS	1024
+
 #define SAMPLE_ACTION_DEPTH 3
 
 /**
@@ -63,10 +65,8 @@ struct dp_stats_percpu {
  * @ifobj: Represents /sys/class/net/<devname>/brif.  Protected by RTNL.
  * @n_flows: Number of flows currently in flow table.
  * @table: Current flow table.  Protected by genl_lock and RCU.
- * @ports: Map from port number to &struct vport.  %OVSP_LOCAL port
- * always exists, other ports may be %NULL.  Protected by RTNL and RCU.
- * @port_list: List of all ports in @ports in arbitrary order.  RTNL required
- * to iterate or modify.
+ * @ports: Hash table for ports.  %OVSP_LOCAL port always exists.  Protected by
+ * RTNL and RCU.
  * @stats_percpu: Per-CPU datapath statistics.
  * @net: Reference to net namespace.
  *
@@ -82,8 +82,7 @@ struct datapath {
 	struct flow_table __rcu *table;
 
 	/* Switch ports. */
-	struct vport __rcu *ports[DP_MAX_PORTS];
-	struct list_head port_list;
+	struct hlist_head *ports;
 
 	/* Stats. */
 	struct dp_stats_percpu __percpu *stats_percpu;
@@ -157,6 +156,26 @@ static inline struct net *ovs_dp_get_net(struct datapath *dp)
 static inline void ovs_dp_set_net(struct datapath *dp, struct net *net)
 {
 	write_pnet(&dp->net, net);
+}
+
+struct vport *ovs_lookup_vport(const struct datapath *dp, u16 port_no);
+
+static inline struct vport *ovs_vport_rcu(const struct datapath *dp, int port_no)
+{
+	WARN_ON_ONCE(!rcu_read_lock_held());
+	return ovs_lookup_vport(dp, port_no);
+}
+
+static inline struct vport *ovs_vport_rtnl_rcu(const struct datapath *dp, int port_no)
+{
+	WARN_ON_ONCE(!rcu_read_lock_held() && !rtnl_is_locked());
+	return ovs_lookup_vport(dp, port_no);
+}
+
+static inline struct vport *ovs_vport_rtnl(const struct datapath *dp, int port_no)
+{
+	ASSERT_RTNL();
+	return ovs_lookup_vport(dp, port_no);
 }
 
 extern struct notifier_block ovs_dp_device_notifier;
