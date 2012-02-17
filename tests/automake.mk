@@ -24,6 +24,7 @@ TESTSUITE_AT = \
 	tests/vconn.at \
 	tests/file_name.at \
 	tests/aes128.at \
+	tests/unixctl-py.at \
 	tests/uuid.at \
 	tests/json.at \
 	tests/jsonrpc.at \
@@ -353,12 +354,14 @@ EXTRA_DIST += tests/choose-port.pl
 
 # Python tests.
 CHECK_PYFILES = \
+	tests/appctl.py \
 	tests/test-daemon.py \
 	tests/test-json.py \
 	tests/test-jsonrpc.py \
 	tests/test-ovsdb.py \
 	tests/test-reconnect.py \
 	tests/MockXenAPI.py \
+	tests/test-unixctl.py \
 	tests/test-vlog.py
 EXTRA_DIST += $(CHECK_PYFILES)
 PYCOV_CLEAN_FILES += $(CHECK_PYFILES:.py=.py,cover) .coverage
