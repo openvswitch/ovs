@@ -301,7 +301,10 @@ class Connection(object):
         reply = None
         while not error:
             error, reply = self.recv_block()
-            if reply and reply.type == Message.T_REPLY and reply.id == id_:
+            if (reply
+                and (reply.type == Message.T_REPLY
+                     or reply.type == Message.T_ERROR)
+                and reply.id == id_):
                 break
         return error, reply
 
