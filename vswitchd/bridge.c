@@ -3198,9 +3198,12 @@ iface_configure_qos(struct iface *iface, const struct ovsrec_qos *qos)
         if (!queue_zero) {
             static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
             VLOG_WARN_RL(&rl, "interface %s: QoS configured without a default "
-                         "queue (queue 0).  Packets not directed to a "
-                         "correctly configured queue may be dropped.",
+                         "queue (queue 0).  Using default configuration.",
                          iface->name);
+
+            shash_init(&details);
+            netdev_set_queue(iface->netdev, 0, &details);
+            shash_destroy(&details);
         }
     }
 
