@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@
 #include "timeval.h"
 #include "util.h"
 
+/* Initializes 'ds' as an empty string buffer. */
 void
 ds_init(struct ds *ds)
 {
@@ -31,12 +32,16 @@ ds_init(struct ds *ds)
     ds->allocated = 0;
 }
 
+/* Sets 'ds''s length to 0, effectively clearing any existing content.  Does
+ * not free any memory. */
 void
 ds_clear(struct ds *ds)
 {
     ds->length = 0;
 }
 
+/* Reduces 'ds''s length to no more than 'new_length'.  (If its length is
+ * already 'new_length' or less, does nothing.)  */
 void
 ds_truncate(struct ds *ds, size_t new_length)
 {
@@ -46,6 +51,9 @@ ds_truncate(struct ds *ds, size_t new_length)
     }
 }
 
+/* Ensures that at least 'min_length + 1' bytes (including space for a null
+ * terminator) are allocated for ds->string, allocating or reallocating memory
+ * as necessary. */
 void
 ds_reserve(struct ds *ds, size_t min_length)
 {
@@ -56,6 +64,9 @@ ds_reserve(struct ds *ds, size_t min_length)
     }
 }
 
+/* Appends space for 'n' bytes to the end of 'ds->string', increasing
+ * 'ds->length' by the same amount, and returns the first appended byte.  The
+ * caller should fill in all 'n' bytes starting at the return value. */
 char *
 ds_put_uninit(struct ds *ds, size_t n)
 {

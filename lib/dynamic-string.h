@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,6 +26,13 @@
 
 struct tm;
 
+/* A "dynamic string", that is, a buffer that can be used to construct a
+ * string across a series of operations that extend or modify it.
+ *
+ * The 'string' member does not always point to a null-terminated string.
+ * Initially it is NULL, and even when it is nonnull, some operations do not
+ * ensure that it is null-terminated.  Use ds_cstr() to ensure that memory is
+ * allocated for the string and that it is null-terminated. */
 struct ds {
     char *string;       /* Null-terminated string. */
     size_t length;      /* Bytes used, not including null terminator. */
