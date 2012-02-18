@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010 Nicira Networks.
+ * Copyright (c) 2009, 2010, 2012 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -47,7 +47,6 @@ void jsonrpc_close(struct jsonrpc *);
 void jsonrpc_run(struct jsonrpc *);
 void jsonrpc_wait(struct jsonrpc *);
 
-void jsonrpc_error(struct jsonrpc *, int error);
 int jsonrpc_get_status(const struct jsonrpc *);
 size_t jsonrpc_get_backlog(const struct jsonrpc *);
 const char *jsonrpc_get_name(const struct jsonrpc *);

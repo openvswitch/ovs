@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011 Nicira Networks.
+ * Copyright (c) 2009, 2010, 2011, 2012 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -55,6 +55,7 @@ static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 5);
 
 static void jsonrpc_received(struct jsonrpc *);
 static void jsonrpc_cleanup(struct jsonrpc *);
+static void jsonrpc_error(struct jsonrpc *, int error);
 
 /* This is just the same as stream_open() except that it uses the default
  * JSONRPC ports if none is specified. */
@@ -396,7 +397,7 @@ jsonrpc_received(struct jsonrpc *rpc)
     rpc->received = msg;
 }
 
-void
+static void
 jsonrpc_error(struct jsonrpc *rpc, int error)
 {
     assert(error);
