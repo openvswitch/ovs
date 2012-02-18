@@ -654,11 +654,11 @@ AT_CHECK([RUN_OVS_VSCTL([add-br br1])],
 AT_CHECK([RUN_OVS_VSCTL([set-controller br1 tcp:127.0.0.1])], 
   [0], [ignore], [], [OVS_VSCTL_CLEANUP])
 AT_CHECK([
-    RUN_OVS_VSCTL_TOGETHER([--id=@n create n targets='"1.2.3.4:567"'],
+    RUN_OVS_VSCTL_TOGETHER([--id=@n create netflow targets='"1.2.3.4:567"'],
                            [set bridge br0 netflow=@n])],
   [0], [stdout], [], [OVS_VSCTL_CLEANUP])
 cp stdout netflow-uuid
-AT_CHECK([RUN_OVS_VSCTL([list n `cat netflow-uuid`])],
+AT_CHECK([RUN_OVS_VSCTL([list netflow `cat netflow-uuid`])],
   [0], [stdout], [], [OVS_VSCTL_CLEANUP])
 AT_CHECK([perl $srcdir/uuidfilt.pl netflow-uuid stdout], [0], 
   [[<0>
@@ -719,10 +719,10 @@ AT_CHECK([RUN_OVS_VSCTL([set c br1 connection-mode:x=y])],
 AT_CHECK([RUN_OVS_VSCTL([add b br1 datapath_id x y])], 
   [1], [], [ovs-vsctl: "add" operation would put 2 values in column datapath_id of table Bridge but the maximum number is 1
 ], [OVS_VSCTL_CLEANUP])
-AT_CHECK([RUN_OVS_VSCTL([remove n `cat netflow-uuid` targets '"1.2.3.4:567"'])], 
+AT_CHECK([RUN_OVS_VSCTL([remove netflow `cat netflow-uuid` targets '"1.2.3.4:567"'])], 
   [1], [], [ovs-vsctl: "remove" operation would put 0 values in column targets of table NetFlow but the minimum number is 1
 ], [OVS_VSCTL_CLEANUP])
-AT_CHECK([RUN_OVS_VSCTL([clear n `cat netflow-uuid` targets])], 
+AT_CHECK([RUN_OVS_VSCTL([clear netflow `cat netflow-uuid` targets])], 
   [1], [], [ovs-vsctl: "clear" operation cannot be applied to column targets of table NetFlow, which is not allowed to be empty
 ], [OVS_VSCTL_CLEANUP])
 AT_CHECK([RUN_OVS_VSCTL([destroy b br2])], 
