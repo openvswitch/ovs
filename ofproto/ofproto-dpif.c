@@ -190,6 +190,8 @@ static struct ofbundle ofpp_none_bundle = {
 
 static void stp_run(struct ofproto_dpif *ofproto);
 static void stp_wait(struct ofproto_dpif *ofproto);
+static int set_stp_port(struct ofport *,
+                        const struct ofproto_port_stp_settings *);
 
 static bool ofbundle_includes_vlan(const struct ofbundle *, uint16_t vlan);
 
@@ -1155,6 +1157,12 @@ set_stp(struct ofproto *ofproto_, const struct ofproto_stp_settings *s)
         stp_set_max_age(ofproto->stp, s->max_age);
         stp_set_forward_delay(ofproto->stp, s->fwd_delay);
     }  else {
+        struct ofport *ofport;
+
+        HMAP_FOR_EACH (ofport, hmap_node, &ofproto->up.ports) {
+            set_stp_port(ofport, NULL);
+        }
+
         stp_destroy(ofproto->stp);
         ofproto->stp = NULL;
     }
