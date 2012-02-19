@@ -5984,6 +5984,18 @@ trace_format_regs(struct ds *result, int level, const char *title,
 }
 
 static void
+trace_format_odp(struct ds *result, int level, const char *title,
+                 struct ofproto_trace *trace)
+{
+    struct ofpbuf *odp_actions = trace->ctx.odp_actions;
+
+    ds_put_char_multiple(result, '\t', level);
+    ds_put_format(result, "%s: ", title);
+    format_odp_actions(result, odp_actions->data, odp_actions->size);
+    ds_put_char(result, '\n');
+}
+
+static void
 trace_resubmit(struct action_xlate_ctx *ctx, struct rule_dpif *rule)
 {
     struct ofproto_trace *trace = CONTAINER_OF(ctx, struct ofproto_trace, ctx);
@@ -5992,6 +6004,7 @@ trace_resubmit(struct action_xlate_ctx *ctx, struct rule_dpif *rule)
     ds_put_char(result, '\n');
     trace_format_flow(result, ctx->recurse + 1, "Resubmitted flow", trace);
     trace_format_regs(result, ctx->recurse + 1, "Resubmitted regs", trace);
+    trace_format_odp(result,  ctx->recurse + 1, "Resubmitted  odp", trace);
     trace_format_rule(result, ctx->table_id, ctx->recurse + 1, rule);
 }
 
