@@ -1152,7 +1152,7 @@ enable_slave(struct unixctl_conn *conn, const char *args_, bool enable)
     }
 
     bond_enable_slave(slave, enable, &bond->unixctl_tags);
-    unixctl_command_reply(conn, 501, enable ? "enabled" : "disabled");
+    unixctl_command_reply(conn, 200, enable ? "enabled" : "disabled");
 }
 
 static void
