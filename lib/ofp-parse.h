@@ -34,13 +34,13 @@ void parse_ofp_str(struct ofputil_flow_mod *, int command, const char *str_,
 
 void parse_ofp_flow_mod_str(struct list *packets,
                             enum nx_flow_format *cur, bool *flow_mod_table_id,
-                            char *string, uint16_t command, bool verbose);
+                            const char *string, uint16_t command, bool verbose);
 bool parse_ofp_flow_mod_file(struct list *packets,
                              enum nx_flow_format *cur, bool *flow_mod_table_id,
                              FILE *, uint16_t command);
 
 void parse_ofp_flow_stats_request_str(struct ofputil_flow_stats_request *,
-                                      bool aggregate, char *string);
+                                      bool aggregate, const char *string);
 
 
 void parse_ofp_actions(const char *, struct ofpbuf *actions);

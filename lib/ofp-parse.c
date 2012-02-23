@@ -668,8 +668,8 @@ parse_ofp_actions(const char *s_, struct ofpbuf *actions)
  * flow. */
 void
 parse_ofp_flow_mod_str(struct list *packets, enum nx_flow_format *cur_format,
-                       bool *flow_mod_table_id, char *string, uint16_t command,
-                       bool verbose)
+                       bool *flow_mod_table_id, const char *string,
+                       uint16_t command, bool verbose)
 {
     enum nx_flow_format min_format, next_format;
     struct cls_rule rule_copy;
@@ -729,7 +729,7 @@ parse_ofp_flow_mod_file(struct list *packets,
 
 void
 parse_ofp_flow_stats_request_str(struct ofputil_flow_stats_request *fsr,
-                                 bool aggregate, char *string)
+                                 bool aggregate, const char *string)
 {
     struct ofputil_flow_mod fm;
 
