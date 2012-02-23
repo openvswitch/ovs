@@ -247,8 +247,6 @@ int ofputil_decode_packet_in(struct ofputil_packet_in *,
                              const struct ofp_header *);
 struct ofpbuf *ofputil_encode_packet_in(const struct ofputil_packet_in *,
                                         enum nx_packet_in_format);
-int ofputil_decode_packet_in(struct ofputil_packet_in *pi,
-                             const struct ofp_header *oh);
 
 /* Abstract packet-out message. */
 struct ofputil_packet_out {
