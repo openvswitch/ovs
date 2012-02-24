@@ -1,4 +1,8 @@
-post-v1.5.0
+post-v1.6.0
+------------------------
+
+
+v1.6.0 - xx xxx xxxx
 ------------------------
     - bonding
         - LACP bonds no longer fall back to balance-slb when negotiations fail.

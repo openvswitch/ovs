@@ -1,9 +1,55 @@
-openvswitch (1.5.90-1) unstable; urgency=low
+openvswitch (1.6.90-1) unstable; urgency=low
   [ Open vSwitch team ]
   * New upstream version
     - Nothing yet!  Try NEWS...
 
- -- Open vSwitch team <dev@openvswitch.org>  Wed, 15 Feb 2012 11:12:52 +0900
+ -- Open vSwitch team <dev@openvswitch.org>  Fri, 24 Feb 2012 11:12:52 +0900
+
+openvswitch (1.6.0-1) unstable; urgency=low
+  [ Open vSwitch team ]
+  * New upstream version
+    - bonding
+        - LACP bonds no longer fall back to balance-slb when negotiations fail.
+          Instead they drop traffic.
+        - The default bond_mode changed from SLB to active-backup, to protect
+          unsuspecting users from the significant risks of SLB bonds (which are
+          documented in vswitchd/INTERNALS).
+        - Load balancing can be disabled by setting the bond-rebalance-interval
+          to zero.
+    - OpenFlow:
+        - Added support for bitwise matching on TCP and UDP ports.
+          See ovs-ofctl(8) for more information.
+        - NXM flow dumps now include times elapsed toward idle and hard
+          timeouts.
+        - Added an OpenFlow extension NXT_SET_ASYNC_CONFIG that allows
+          controllers more precise control over which OpenFlow messages they
+          receive asynchronously.
+        - New "fin_timeout" action.
+        - Added "fin_timeout" support to "learn" action.
+    - The default MAC learning timeout has been increased from 60 seconds
+      to 300 seconds.  The MAC learning timeout is now configurable.
+    - When QoS settings for an interface do not configure a default queue
+      (queue 0), Open vSwitch now uses a default configuration for that
+      queue, instead of dropping all packets as in previous versions.
+    - Logging to console and file will have UTC timestamp as a default for all
+      the daemons. An example of the default format is 2012-01-27T16:35:17Z.
+      ovs-appctl can be used to change the default format as before.
+    - New support for limiting the number of flows in an OpenFlow flow
+      table, with configurable policy for evicting flows upon
+      overflow.  See the Flow_Table table in ovs-vswitch.conf.db(5)
+      for more information.
+    - New "enable-async-messages" column in the Controller table.  If set to
+      false, OpenFlow connections to the controller will initially have all
+      asynchronous messages disabled, overriding normal OpenFlow behavior.
+    - ofproto-provider interface:
+        - "struct rule" has a new member "used" that ofproto implementations
+          should maintain by updating with ofproto_rule_update_used().
+    - ovsdb-client:
+        - The new option --timestamp causes the "monitor" command to print
+          a timestamp with every update.
+    - CFM module CCM broadcasts can now be tagged with an 802.1p priority.
+
+ -- Open vSwitch team <dev@openvswitch.org>  Fri, 24 Feb 2012 11:12:48 +0900
 
 openvswitch (1.5.0-1) unstable; urgency=low
   [ Open vSwitch team ]
