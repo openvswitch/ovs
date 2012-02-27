@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -458,7 +458,7 @@ error:
         error = EPROTO;
     }
     if (bind_path) {
-        fatal_signal_remove_file_to_unlink(bind_path);
+        fatal_signal_unlink_file_now(bind_path);
     }
     close(fd);
     return -error;
