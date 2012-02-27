@@ -1,4 +1,4 @@
-# Copyright (c) 2010, 2011 Nicira Networks
+# Copyright (c) 2010, 2011, 2012 Nicira Networks
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -27,7 +27,6 @@ vlog = ovs.vlog.Vlog("stream")
 class Stream(object):
     """Bidirectional byte stream.  Currently only Unix domain sockets
     are implemented."""
-    n_unix_sockets = 0
 
     # States.
     __S_CONNECTING = 0
@@ -46,10 +45,9 @@ class Stream(object):
         False."""
         return name.startswith("unix:")
 
-    def __init__(self, socket, name, bind_path, status):
+    def __init__(self, socket, name, status):
         self.socket = socket
         self.name = name
-        self.bind_path = bind_path
         if status == errno.EAGAIN:
             self.state = Stream.__S_CONNECTING
         elif status == 0:
@@ -76,18 +74,15 @@ class Stream(object):
         if not Stream.is_valid_name(name):
             return errno.EAFNOSUPPORT, None
 
-        Stream.n_unix_sockets += 1
-        bind_path = "/tmp/stream-unix.%d.%d" % (os.getpid(),
-                                                Stream.n_unix_sockets)
         connect_path = name[5:]
         error, sock = ovs.socket_util.make_unix_socket(socket.SOCK_STREAM,
-                                                       True, bind_path,
+                                                       True, None,
                                                        connect_path)
         if error:
             return error, None
         else:
             status = ovs.socket_util.check_connection_completion(sock)
-            return 0, Stream(sock, name, bind_path, status)
+            return 0, Stream(sock, name, status)
 
     @staticmethod
     def open_block((error, stream)):
@@ -117,9 +112,6 @@ class Stream(object):
 
     def close(self):
         self.socket.close()
-        if self.bind_path is not None:
-            ovs.fatal_signal.unlink_file_now(self.bind_path)
-            self.bind_path = None
 
     def __scs_connecting(self):
         retval = ovs.socket_util.check_connection_completion(self.socket)
@@ -288,7 +280,7 @@ class PassiveStream(object):
             try:
                 sock, addr = self.socket.accept()
                 ovs.socket_util.set_nonblocking(sock)
-                return 0, Stream(sock, "unix:%s" % addr, None, 0)
+                return 0, Stream(sock, "unix:%s" % addr, 0)
             except socket.error, e:
                 error = ovs.socket_util.get_exception_errno(e)
                 if error != errno.EAGAIN:

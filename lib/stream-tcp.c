@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2012 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -58,7 +58,7 @@ new_tcp_stream(const char *name, int fd, int connect_status,
         return errno;
     }
 
-    retval = new_fd_stream(name, fd, connect_status, NULL, streamp);
+    retval = new_fd_stream(name, fd, connect_status, streamp);
     if (!retval) {
         struct stream *stream = *streamp;
         stream_set_remote_ip(stream, remote->sin_addr.s_addr);

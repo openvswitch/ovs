@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2012 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -42,7 +42,6 @@ struct stream_fd
 {
     struct stream stream;
     int fd;
-    char *unlink_path;
 };
 
 static const struct stream_class stream_fd_class;
@@ -55,21 +54,17 @@ static void maybe_unlink_and_free(char *path);
  * and stores a pointer to the stream in '*streamp'.  Initial connection status
  * 'connect_status' is interpreted as described for stream_init().
  *
- * When '*streamp' is closed, then 'unlink_path' (if nonnull) will be passed to
- * fatal_signal_unlink_file_now() and then freed with free().
- *
  * Returns 0 if successful, otherwise a positive errno value.  (The current
  * implementation never fails.) */
 int
 new_fd_stream(const char *name, int fd, int connect_status,
-              char *unlink_path, struct stream **streamp)
+              struct stream **streamp)
 {
     struct stream_fd *s;
 
     s = xmalloc(sizeof *s);
     stream_init(&s->stream, &stream_fd_class, connect_status, name);
     s->fd = fd;
-    s->unlink_path = unlink_path;
     *streamp = &s->stream;
     return 0;
 }
@@ -86,7 +81,6 @@ fd_close(struct stream *stream)
 {
     struct stream_fd *s = stream_fd_cast(stream);
     close(s->fd);
-    maybe_unlink_and_free(s->unlink_path);
     free(s);
 }
 
