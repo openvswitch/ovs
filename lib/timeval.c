@@ -54,8 +54,9 @@ static struct timespec monotonic_time;
 /* The monotonic time at which the time module was initialized. */
 static long long int boot_time;
 
-/* Fixed monotonic time offset, for use by unit tests. */
-static struct timespec warp_offset;
+/* features for use by unit tests. */
+static struct timespec warp_offset; /* Offset added to monotonic_time. */
+static bool time_stopped;           /* Disables real-time updates, if true. */
 
 /* Time at which to die with SIGALRM (if not TIME_MIN). */
 static time_t deadline = TIME_MIN;
@@ -183,15 +184,17 @@ refresh_monotonic(void)
 {
     time_init();
 
-    if (monotonic_clock == CLOCK_MONOTONIC) {
-        clock_gettime(monotonic_clock, &monotonic_time);
-    } else {
-        refresh_wall_if_ticked();
-        monotonic_time = wall_time;
-    }
-    timespec_add(&monotonic_time, &monotonic_time, &warp_offset);
+    if (!time_stopped) {
+        if (monotonic_clock == CLOCK_MONOTONIC) {
+            clock_gettime(monotonic_clock, &monotonic_time);
+        } else {
+            refresh_wall_if_ticked();
+            monotonic_time = wall_time;
+        }
+        timespec_add(&monotonic_time, &monotonic_time, &warp_offset);
 
-    monotonic_tick = false;
+        monotonic_tick = false;
+    }
 }
 
 /* Forces a refresh of the current time from the kernel.  It is not usually
@@ -561,6 +564,22 @@ get_cpu_usage(void)
 
 /* Unixctl interface. */
 
+/* "time/stop" stops the monotonic time returned by e.g. time_msec() from
+ * advancing, except due to later calls to "time/warp". */
+static void
+timeval_stop_cb(struct unixctl_conn *conn,
+                 int argc OVS_UNUSED, const char *argv[] OVS_UNUSED,
+                 void *aux OVS_UNUSED)
+{
+    time_stopped = true;
+    unixctl_command_reply(conn, NULL);
+}
+
+/* "time/warp MSECS" advances the current monotonic time by the specified
+ * number of milliseconds.  Unless "time/stop" has also been executed, the
+ * monotonic clock continues to tick forward at the normal rate afterward.
+ *
+ * Does not affect wall clock readings. */
 static void
 timeval_warp_cb(struct unixctl_conn *conn,
                 int argc OVS_UNUSED, const char *argv[], void *aux OVS_UNUSED)
@@ -577,12 +596,14 @@ timeval_warp_cb(struct unixctl_conn *conn,
     ts.tv_sec = msecs / 1000;
     ts.tv_nsec = (msecs % 1000) * 1000 * 1000;
     timespec_add(&warp_offset, &warp_offset, &ts);
+    timespec_add(&monotonic_time, &monotonic_time, &ts);
     unixctl_command_reply(conn, "warped");
 }
 
 void
 timeval_dummy_register(void)
 {
+    unixctl_command_register("time/stop", "", 0, 0, timeval_stop_cb, NULL);
     unixctl_command_register("time/warp", "MSECS", 1, 1,
                              timeval_warp_cb, NULL);
 }
