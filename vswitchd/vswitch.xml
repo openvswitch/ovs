@@ -2061,9 +2061,11 @@
 
       <p>
         Queue 0 is the ``default queue.''  It is used by OpenFlow output
-        actions when no specific queue has been set.  Ordinarily <ref
-        column="queues"/> should include a configuration for queue 0.  When no
-        configuration for queue 0 is present, a default configuration is used.
+        actions when no specific queue has been set.  When no configuration for
+        queue 0 is present, it is automatically configured as if a <ref
+        table="Queue"/> record with empty <ref table="Queue" column="dscp"/>
+        and <ref table="Queue" column="other_config"/> columns had been
+        specified.
         (Before version 1.6, Open vSwitch would leave queue 0 unconfigured in
         this case.  With some queuing disciplines, this dropped all packets
         destined for the default queue.)
