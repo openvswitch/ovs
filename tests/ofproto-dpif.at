@@ -951,6 +951,7 @@ OVS_VSWITCHD_START(
 
 AT_CHECK([test-netflow --detach --pidfile $NETFLOW_PORT:127.0.0.1 > netflow.log])AT_CAPTURE_FILE([netflow.log])
 
+AT_CHECK([ovs-appctl time/stop])
 n=1
 while test $n -le 60; do
     n=`expr $n + 1`
