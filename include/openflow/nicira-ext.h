@@ -1758,9 +1758,7 @@ enum nx_flow_format {
 
 /* NXT_SET_FLOW_FORMAT request. */
 struct nx_set_flow_format {
-    struct ofp_header header;
-    ovs_be32 vendor;            /* NX_VENDOR_ID. */
-    ovs_be32 subtype;           /* NXT_SET_FLOW_FORMAT. */
+    struct nicira_header nxh;
     ovs_be32 format;            /* One of NXFF_*. */
 };
 OFP_ASSERT(sizeof(struct nx_set_flow_format) == 20);
