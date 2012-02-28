@@ -418,9 +418,15 @@ dpif_linux_port_query__(const struct dpif *dpif, uint32_t port_no,
 
     error = dpif_linux_vport_transact(&request, &reply, &buf);
     if (!error) {
-        dpif_port->name = xstrdup(reply.name);
-        dpif_port->type = xstrdup(netdev_vport_get_netdev_type(&reply));
-        dpif_port->port_no = reply.port_no;
+        if (reply.dp_ifindex != request.dp_ifindex) {
+            /* A query by name reported that 'port_name' is in some datapath
+             * other than 'dpif', but the caller wants to know about 'dpif'. */
+            error = ENODEV;
+        } else {
+            dpif_port->name = xstrdup(reply.name);
+            dpif_port->type = xstrdup(netdev_vport_get_netdev_type(&reply));
+            dpif_port->port_no = reply.port_no;
+        }
         ofpbuf_delete(buf);
     }
     return error;
