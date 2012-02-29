@@ -1,6 +1,6 @@
 #! /bin/sh
 #
-# Copyright (C) 2011 Nicira Networks, Inc.
+# Copyright (C) 2011, 2012 Nicira Networks, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -86,6 +86,7 @@ case $1 in
         ;;
     status)
         ovs_ctl status
+        exit $?
         ;;
     force-reload-kmod)
         start force-reload-kmod
