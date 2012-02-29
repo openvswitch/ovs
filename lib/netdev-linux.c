@@ -114,7 +114,7 @@ enum {
     VALID_IN6               = 1 << 3,
     VALID_MTU               = 1 << 4,
     VALID_POLICING          = 1 << 5,
-    VALID_HAVE_VPORT_STATS  = 1 << 6
+    VALID_VPORT_STAT_ERROR  = 1 << 6
 };
 
 struct tap_state {
@@ -372,7 +372,8 @@ struct netdev_dev_linux {
     long long int carrier_resets;
     uint32_t kbits_rate;        /* Policing data. */
     uint32_t kbits_burst;
-    bool have_vport_stats;
+    int vport_stats_error;      /* Cached error code from vport_get_stats().
+                                   0 or an errno value. */
     struct tc *tc;
 
     union {
@@ -1236,8 +1237,8 @@ get_stats_via_vport(const struct netdev *netdev_,
     struct netdev_dev_linux *netdev_dev =
                                 netdev_dev_linux_cast(netdev_get_dev(netdev_));
 
-    if (netdev_dev->have_vport_stats ||
-        !(netdev_dev->cache_valid & VALID_HAVE_VPORT_STATS)) {
+    if (!netdev_dev->vport_stats_error ||
+        !(netdev_dev->cache_valid & VALID_VPORT_STAT_ERROR)) {
         int error;
 
         error = netdev_vport_get_stats(netdev_, stats);
@@ -1245,8 +1246,8 @@ get_stats_via_vport(const struct netdev *netdev_,
             VLOG_WARN_RL(&rl, "%s: obtaining netdev stats via vport failed "
                          "(%s)", netdev_get_name(netdev_), strerror(error));
         }
-        netdev_dev->have_vport_stats = !error;
-        netdev_dev->cache_valid |= VALID_HAVE_VPORT_STATS;
+        netdev_dev->vport_stats_error = error;
+        netdev_dev->cache_valid |= VALID_VPORT_STAT_ERROR;
     }
 }
 
@@ -1295,14 +1296,14 @@ netdev_linux_get_stats(const struct netdev *netdev_,
     error = netdev_linux_sys_get_stats(netdev_, &dev_stats);
 
     if (error) {
-        if (!netdev_dev->have_vport_stats) {
+        if (netdev_dev->vport_stats_error) {
             return error;
         } else {
             return 0;
         }
     }
 
-    if (!netdev_dev->have_vport_stats) {
+    if (netdev_dev->vport_stats_error) {
         /* stats not available from OVS then use ioctl stats. */
         *stats = dev_stats;
     } else {
@@ -1330,7 +1331,7 @@ netdev_linux_get_stats(const struct netdev *netdev_,
 /* Retrieves current device stats for 'netdev-tap' netdev or
  * netdev-internal. */
 static int
-netdev_pseudo_get_stats(const struct netdev *netdev_,
+netdev_tap_get_stats(const struct netdev *netdev_,
                         struct netdev_stats *stats)
 {
     struct netdev_dev_linux *netdev_dev =
@@ -1342,7 +1343,7 @@ netdev_pseudo_get_stats(const struct netdev *netdev_,
 
     error = netdev_linux_sys_get_stats(netdev_, &dev_stats);
     if (error) {
-        if (!netdev_dev->have_vport_stats) {
+        if (netdev_dev->vport_stats_error) {
             return error;
         } else {
             return 0;
@@ -1355,7 +1356,7 @@ netdev_pseudo_get_stats(const struct netdev *netdev_,
      * them back here. This does not apply if we are getting stats from the
      * vport layer because it always tracks stats from the perspective of the
      * switch. */
-    if (!netdev_dev->have_vport_stats) {
+    if (netdev_dev->vport_stats_error) {
         *stats = dev_stats;
         swap_uint64(&stats->rx_packets, &stats->tx_packets);
         swap_uint64(&stats->rx_bytes, &stats->tx_bytes);
@@ -1383,6 +1384,17 @@ netdev_pseudo_get_stats(const struct netdev *netdev_,
         stats->collisions          += dev_stats.collisions;
     }
     return 0;
+}
+
+static int
+netdev_internal_get_stats(const struct netdev *netdev_,
+                          struct netdev_stats *stats)
+{
+    struct netdev_dev_linux *netdev_dev =
+                                netdev_dev_linux_cast(netdev_get_dev(netdev_));
+
+    get_stats_via_vport(netdev_, stats);
+    return netdev_dev->vport_stats_error;
 }
 
 /* Stores the features supported by 'netdev' into each of '*current',
@@ -2302,14 +2314,14 @@ const struct netdev_class netdev_tap_class =
     NETDEV_LINUX_CLASS(
         "tap",
         netdev_linux_create_tap,
-        netdev_pseudo_get_stats,
+        netdev_tap_get_stats,
         NULL);                  /* set_stats */
 
 const struct netdev_class netdev_internal_class =
     NETDEV_LINUX_CLASS(
         "internal",
         netdev_linux_create,
-        netdev_pseudo_get_stats,
+        netdev_internal_get_stats,
         netdev_vport_set_stats);
 
 /* HTB traffic control class. */
