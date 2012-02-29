@@ -30,7 +30,9 @@ ovs_pyfiles = \
 	python/ovs/timeval.py \
 	python/ovs/vlog.py \
 	python/ovs/util.py
-EXTRA_DIST += $(ovs_pyfiles) python/ovs/dirs.py $(ovstest_pyfiles)
+PYFILES = $(ovs_pyfiles) python/ovs/dirs.py $(ovstest_pyfiles)
+EXTRA_DIST += $(PYFILES)
+PYCOV_CLEAN_FILES += $(PYFILES:.py=.py,cover)
 
 if HAVE_PYTHON
 nobase_pkgdata_DATA = $(ovs_pyfiles) $(ovstest_pyfiles)

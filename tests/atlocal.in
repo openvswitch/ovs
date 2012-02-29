@@ -2,7 +2,10 @@
 HAVE_OPENSSL='@HAVE_OPENSSL@'
 HAVE_PYTHON='@HAVE_PYTHON@'
 PERL='@PERL@'
-PYTHON='@PYTHON@'
+
+if test x"$PYTHON" = x; then
+    PYTHON='@PYTHON@'
+fi
 
 PYTHONPATH=$abs_top_srcdir/python:$abs_top_builddir/tests:$PYTHONPATH
 export PYTHONPATH
@@ -16,5 +19,5 @@ if test $HAVE_PYTHON = yes; then
     else
         PYTHONPATH=$PYTHONPATH:$abs_top_srcdir/python/compat
         export PYTHONPATH
-   fi
+    fi
 fi

@@ -29,6 +29,7 @@ BUILT_SOURCES =
 CLEANFILES =
 CLEAN_LOCAL =
 DISTCLEANFILES =
+PYCOV_CLEAN_FILES = build-aux/check-structs,cover
 EXTRA_DIST = \
 	CodingStyle \
 	DESIGN \
@@ -114,6 +115,11 @@ SUFFIXES += .in
 	    chmod +x $@.tmp; \
 	fi
 	mv $@.tmp $@
+
+.PHONY: clean-pycov
+clean-pycov:
+	cd $(srcdir) && rm -f $(PYCOV_CLEAN_FILES)
+CLEAN_LOCAL += clean-pycov
 
 # If we're checked out from a Git repository, make sure that every
 # file that is in Git is distributed.

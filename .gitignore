@@ -11,9 +11,11 @@
 *.pyc
 *.so
 *~
+*,cover
 .#*
 .*.cmd
 .*.swp
+.coverage
 .deps
 .dirstamp
 .libs
