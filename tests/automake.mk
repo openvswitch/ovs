@@ -66,6 +66,21 @@ AUTOTEST_PATH = utilities:vswitchd:ovsdb:tests
 check-local: tests/atconfig tests/atlocal $(TESTSUITE)
 	$(SHELL) '$(TESTSUITE)' -C tests AUTOTEST_PATH=$(AUTOTEST_PATH) $(TESTSUITEFLAGS)
 
+# Python Coverage support.
+# Requires coverage.py http://nedbatchelder.com/code/coverage/.
+
+COVERAGE = coverage
+COVERAGE_FILE='$(abs_srcdir)/.coverage'
+check-pycov: all tests/atconfig tests/atlocal $(TESTSUITE) clean-pycov
+	COVERAGE_FILE=$(COVERAGE_FILE) PYTHON='$(COVERAGE) run -p' $(SHELL) '$(TESTSUITE)' -C tests AUTOTEST_PATH=$(AUTOTEST_PATH) $(TESTSUITEFLAGS)
+	@cd $(srcdir) && $(COVERAGE) combine && COVERAGE_FILE=$(COVERAGE_FILE) $(COVERAGE) annotate
+	@echo
+	@echo '----------------------------------------------------------------------'
+	@echo 'Annotated coverage source has the ",cover" extension.'
+	@echo '----------------------------------------------------------------------'
+	@echo
+	@COVERAGE_FILE=$(COVERAGE_FILE) $(COVERAGE) report
+
 # lcov support
 
 lcov_wrappers = \
@@ -337,7 +352,7 @@ tests_test_byte_order_LDADD = lib/libopenvswitch.a
 EXTRA_DIST += tests/choose-port.pl
 
 # Python tests.
-EXTRA_DIST += \
+CHECK_PYFILES = \
 	tests/test-daemon.py \
 	tests/test-json.py \
 	tests/test-jsonrpc.py \
@@ -345,6 +360,8 @@ EXTRA_DIST += \
 	tests/test-reconnect.py \
 	tests/MockXenAPI.py \
 	tests/test-vlog.py
+EXTRA_DIST += $(CHECK_PYFILES)
+PYCOV_CLEAN_FILES += $(CHECK_PYFILES:.py=.py,cover) .coverage
 
 if HAVE_OPENSSL
 TESTPKI_FILES = \
