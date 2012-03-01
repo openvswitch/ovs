@@ -43,6 +43,16 @@ case `cat /etc/xensource/network.conf` in
         ;;
 esac
 
+start_ovs_xapi_sync () {
+    if daemon_is_running ovs-xapi-sync; then
+	log_success_msg "ovs-xapi-sync is already running"
+    else
+	PYTHONPATH=/usr/share/openvswitch/python \
+            /usr/share/openvswitch/scripts/ovs-xapi-sync \
+            --log-file --pidfile --detach --monitor unix:/var/run/openvswitch/db.sock
+    fi
+}
+
 start () {
     set $ovs_ctl ${1-start}
     set "$@" --system-id="$INSTALLATION_UUID"
@@ -68,13 +78,7 @@ start () {
     fi
     "$@"
 
-    if daemon_is_running ovs-xapi-sync; then
-	log_success_msg "ovs-xapi-sync is already running"
-    else
-	PYTHONPATH=/usr/share/openvswitch/python \
-            /usr/share/openvswitch/scripts/ovs-xapi-sync \
-            --log-file --pidfile --detach --monitor unix:/var/run/openvswitch/db.sock
-    fi
+    start_ovs_xapi_sync
 
     $ovs_ctl --protocol=gre enable-protocol
 
@@ -91,6 +95,9 @@ force_reload_kmod () {
 	action "Stopping HA daemon" ha_stop_daemon
 	action "Starting HA daemon" ha_start_daemon
     fi
+
+    action "Stopping ovs-xapi-sync" stop_daemon ovs-xapi-sync
+    action "Starting ovs-xapi-sync" start_ovs_xapi_sync
 }
 
 stop () {
