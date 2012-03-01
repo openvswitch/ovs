@@ -1,4 +1,4 @@
-# Copyright (c) 2009, 2010, 2011 Nicira Networks
+# Copyright (c) 2009, 2010, 2011, 2012 Nicira Networks
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -88,7 +88,13 @@ class Idl:
         purpose of the return value of Idl.run() and Idl.change_seqno.  This is
         useful for columns that the IDL's client will write but not read.
 
+        As a convenience to users, 'schema' may also be an instance of the
+        SchemaHelper class.
+
         The IDL uses and modifies 'schema' directly."""
+
+        if isinstance(schema, SchemaHelper):
+            schema = schema.get_idl_schema()
 
         self.tables = schema.tables
         self._db = schema
@@ -1073,3 +1079,69 @@ class Transaction(object):
 
         insert.real = uuid_
         return True
+
+
+class SchemaHelper(object):
+    """IDL Schema helper.
+
+    This class encapsulates the logic required to generate schemas suitable
+    for creating 'ovs.db.idl.Idl' objects.  Clients should register columns
+    they are interested in using register_columns().  When finished, the
+    get_idl_schema() function may be called.
+
+    The location on disk of the schema used may be found in the
+    'schema_location' variable."""
+
+    def __init__(self, location=None):
+        """Creates a new Schema object."""
+
+        if location is None:
+            location = "%s/vswitch.ovsschema" % ovs.dirs.PKGDATADIR
+
+        self.schema_location = location
+        self._tables = {}
+
+    def register_columns(self, table, columns):
+        """Registers interest in the given 'columns' of 'table'.  Future calls
+        to get_idl_schema() will include 'table':column for each column in
+        'columns'. This function automatically avoids adding duplicate entries
+        to the schema.
+
+        'table' must be a string.
+        'columns' must be a list of strings.
+        """
+
+        assert type(table) is str
+        assert type(columns) is list
+
+        columns = set(columns) | self._tables.get(table, set())
+        self._tables[table] = columns
+
+    def get_idl_schema(self):
+        """Gets a schema appropriate for the creation of an 'ovs.db.id.IDL'
+        object based on columns registered using the register_columns()
+        function."""
+
+        schema = ovs.db.schema.DbSchema.from_json(
+            ovs.json.from_file(self.schema_location))
+        schema_tables = {}
+        for table, columns in self._tables.iteritems():
+            schema_tables[table] = (
+                self._keep_table_columns(schema, table, columns))
+
+        schema.tables = schema_tables
+        return schema
+
+    def _keep_table_columns(self, schema, table_name, columns):
+        assert table_name in schema.tables
+        table = schema.tables[table_name]
+
+        new_columns = {}
+        for column_name in columns:
+            assert type(column_name) is str
+            assert column_name in table.columns
+
+            new_columns[column_name] = table.columns[column_name]
+
+        table.columns = new_columns
+        return table
