@@ -270,9 +270,8 @@ def main():
                 # New bridge.
                 update_fail_mode(row)
                 update_in_band_mgmt(row)
-            if new_xnu != old_xnu:
-                # New bridge or bridge's xs-network-uuids has changed.
-                update_bridge_id(row)
+
+            update_bridge_id(row)
             new_bridges[row.name] = new_xnu
         bridges = new_bridges
 
