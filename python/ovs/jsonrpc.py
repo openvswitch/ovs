@@ -1,4 +1,4 @@
-# Copyright (c) 2010, 2011 Nicira Networks
+# Copyright (c) 2010, 2011, 2012 Nicira Networks
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,9 +20,10 @@ import ovs.poller
 import ovs.reconnect
 import ovs.stream
 import ovs.timeval
+import ovs.util
 import ovs.vlog
 
-EOF = -1
+EOF = ovs.util.EOF
 vlog = ovs.vlog.Vlog("jsonrpc")
 
 
