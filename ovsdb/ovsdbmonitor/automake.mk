@@ -28,7 +28,7 @@ EXTRA_DIST += \
 	ovsdb/ovsdbmonitor/ovsdbmonitor.in
 MAN_ROOTS += ovsdb/ovsdbmonitor/ovsdbmonitor.1
 
-ovsdbmonitordir = ${pkgdatadir}/ovsdbmonitor
+ovsdbmonitordir = ${datadir}/ovsdbmonitor
 if BUILD_OVSDBMONITOR
 noinst_SCRIPTS += ovsdb/ovsdbmonitor/ovsdbmonitor
 ovsdbmonitor_DATA = $(ovsdbmonitor_pyfiles)
