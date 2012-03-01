@@ -1,4 +1,4 @@
-# Copyright (c) 2010, 2011 Nicira Networks
+# Copyright (c) 2010, 2011, 2012 Nicira Networks
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,13 +15,14 @@
 import os
 
 import ovs.vlog
+import ovs.util
 
 # Values returned by Reconnect.run()
 CONNECT = 'connect'
 DISCONNECT = 'disconnect'
 PROBE = 'probe'
 
-EOF = -1
+EOF = ovs.util.EOF
 vlog = ovs.vlog.Vlog("reconnect")
 
 
