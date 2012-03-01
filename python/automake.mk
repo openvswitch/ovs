@@ -28,6 +28,7 @@ ovs_pyfiles = \
 	python/ovs/socket_util.py \
 	python/ovs/stream.py \
 	python/ovs/timeval.py \
+	python/ovs/version.py \
 	python/ovs/vlog.py \
 	python/ovs/util.py
 PYFILES = $(ovs_pyfiles) python/ovs/dirs.py $(ovstest_pyfiles)
@@ -56,3 +57,10 @@ install-data-local: ovs-install-data-local
 UNINSTALL_LOCAL += ovs-uninstall-local
 ovs-uninstall-local:
 	rm -f $(DESTDIR)$(pkgdatadir)/python/ovs/dirs.py
+
+ALL_LOCAL += $(srcdir)/python/ovs/version.py
+$(srcdir)/python/ovs/version.py: config.status
+	$(ro_shell) > $@.tmp
+	echo 'VERSION = "$(VERSION)"' >> $@.tmp
+	echo 'BUILDNR = "$(BUILDNR)"' >> $@.tmp
+	mv $@.tmp $@
