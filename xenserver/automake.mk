@@ -27,6 +27,6 @@ EXTRA_DIST += \
 	xenserver/usr_share_openvswitch_scripts_sysconfig.template
 
 $(srcdir)/xenserver/openvswitch-xen.spec: xenserver/openvswitch-xen.spec.in $(top_builddir)/config.status
-  ($(ro_shell) && sed -e 's,[@]VERSION[@],$(VERSION),g') \
-    < $(srcdir)/xenserver/$(@F).in > $(@F).tmp || exit 1; \
-  if cmp -s $(@F).tmp $@; then touch $@; rm $(@F).tmp; else mv $(@F).tmp $@; fi
+	($(ro_shell) && sed -e 's,[@]VERSION[@],$(VERSION),g') \
+		< $(srcdir)/xenserver/$(@F).in > $(@F).tmp || exit 1; \
+	if cmp -s $(@F).tmp $@; then touch $@; rm $(@F).tmp; else mv $(@F).tmp $@; fi
