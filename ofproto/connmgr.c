@@ -978,7 +978,6 @@ ofconn_reconfigure(struct ofconn *ofconn, const struct ofproto_controller *c)
     int probe_interval;
 
     ofconn->band = c->band;
-    ofconn->enable_async_msgs = c->enable_async_msgs;
 
     rconn_set_max_backoff(ofconn->rconn, c->max_backoff);
 
