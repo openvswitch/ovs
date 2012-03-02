@@ -4,7 +4,7 @@ HAVE_PYTHON='@HAVE_PYTHON@'
 PERL='@PERL@'
 PYTHON='@PYTHON@'
 
-PYTHONPATH=$PYTHONPATH:$abs_top_srcdir/python:$abs_top_builddir/tests
+PYTHONPATH=$abs_top_srcdir/python:$abs_top_builddir/tests:$PYTHONPATH
 export PYTHONPATH
 
 PYTHONIOENCODING=utf_8
