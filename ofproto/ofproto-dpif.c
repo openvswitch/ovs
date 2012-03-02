@@ -416,6 +416,7 @@ struct ofport_dpif {
     tag_type tag;               /* Tag associated with this port. */
     uint32_t bond_stable_id;    /* stable_id to use as bond slave, or 0. */
     bool may_enable;            /* May be enabled in bonds. */
+    long long int carrier_seq;  /* Carrier status changes. */
 
     /* Spanning tree. */
     struct stp_port *stp_port;  /* Spanning Tree Protocol, if any. */
@@ -976,6 +977,7 @@ port_construct(struct ofport *port_)
     hmap_init(&port->priorities);
     port->realdev_ofp_port = 0;
     port->vlandev_vid = 0;
+    port->carrier_seq = netdev_get_carrier_resets(port->up.netdev);
 
     if (ofproto->sflow) {
         dpif_sflow_add_port(ofproto->sflow, port_);
@@ -2203,7 +2205,11 @@ ofproto_port_from_dpif_port(struct ofproto_port *ofproto_port,
 static void
 port_run(struct ofport_dpif *ofport)
 {
+    long long int carrier_seq = netdev_get_carrier_resets(ofport->up.netdev);
+    bool carrier_changed = carrier_seq != ofport->carrier_seq;
     bool enable = netdev_get_carrier(ofport->up.netdev);
+
+    ofport->carrier_seq = carrier_seq;
 
     if (ofport->cfm) {
         cfm_run(ofport->cfm);
@@ -2223,6 +2229,9 @@ port_run(struct ofport_dpif *ofport)
 
     if (ofport->bundle) {
         enable = enable && lacp_slave_may_enable(ofport->bundle->lacp, ofport);
+        if (carrier_changed) {
+            lacp_slave_carrier_changed(ofport->bundle->lacp, ofport);
+        }
     }
 
     if (ofport->may_enable != enable) {

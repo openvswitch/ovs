@@ -368,14 +368,16 @@ lacp_slave_unregister(struct lacp *lacp, const void *slave_)
 }
 
 /* This function should be called whenever the carrier status of 'slave_' has
- * changed. */
+ * changed.  If 'lacp' is null, this function has no effect.*/
 void
 lacp_slave_carrier_changed(const struct lacp *lacp, const void *slave_)
 {
-    struct slave *slave = slave_lookup(lacp, slave_);
+    if (lacp) {
+        struct slave *slave = slave_lookup(lacp, slave_);
 
-    if (slave->status == LACP_CURRENT || slave->lacp->active) {
-        slave_set_expired(slave);
+        if (slave->status == LACP_CURRENT || slave->lacp->active) {
+            slave_set_expired(slave);
+        }
     }
 }
 
