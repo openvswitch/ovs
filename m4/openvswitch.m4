@@ -1,6 +1,6 @@
 # -*- autoconf -*-
 
-# Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
+# Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira Networks.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -106,9 +106,9 @@ AC_DEFUN([OVS_CHECK_PKIDIR],
   [AC_ARG_WITH(
      [pkidir], 
      AC_HELP_STRING([--with-pkidir=DIR], 
-                    [PKI hierarchy directory [[DATADIR/openvswitch/pki]]]),
+                    [PKI hierarchy directory [[LOCALSTATEDIR/lib/openvswitch/pki]]]),
      [PKIDIR=$withval],
-     [PKIDIR='${pkgdatadir}/pki'])
+     [PKIDIR='${localstatedir}/lib/openvswitch/pki'])
    AC_SUBST([PKIDIR])])
 
 dnl Checks for the directory in which to store pidfiles.
