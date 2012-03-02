@@ -1,0 +1,7 @@
+[Desktop Entry]
+Name=Open vSwitch DB Monitor
+Comment=Monitor and troubleshoot local or remote Open vSwitch instances
+Exec=ovsdbmonitor
+Terminal=false
+Type=Application
+Categories=System;Monitor;

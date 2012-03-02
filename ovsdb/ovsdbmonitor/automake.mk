@@ -25,13 +25,16 @@ EXTRA_DIST += \
 	ovsdb/ovsdbmonitor/HostWindow.ui \
 	ovsdb/ovsdbmonitor/LogWindow.ui \
 	ovsdb/ovsdbmonitor/MainWindow.ui \
-	ovsdb/ovsdbmonitor/ovsdbmonitor.in
+	ovsdb/ovsdbmonitor/ovsdbmonitor.in \
+	ovsdb/ovsdbmonitor/ovsdbmonitor.desktop
 MAN_ROOTS += ovsdb/ovsdbmonitor/ovsdbmonitor.1
 
 ovsdbmonitordir = ${datadir}/ovsdbmonitor
+desktopdir = ${datadir}/applications
 if BUILD_OVSDBMONITOR
 noinst_SCRIPTS += ovsdb/ovsdbmonitor/ovsdbmonitor
 ovsdbmonitor_DATA = $(ovsdbmonitor_pyfiles)
+desktop_DATA = ovsdb/ovsdbmonitor/ovsdbmonitor.desktop
 install-exec-hook:
 	sed -e '/NOINSTALL/d' < ovsdb/ovsdbmonitor/ovsdbmonitor > ovsdb/ovsdbmonitor/ovsdbmonitor.tmp
 	chmod +x ovsdb/ovsdbmonitor/ovsdbmonitor.tmp
