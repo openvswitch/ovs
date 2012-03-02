@@ -125,7 +125,7 @@ following software:
 You should ensure that /dev/urandom exists.  To support TAP devices,
 you must also ensure that /dev/net/tun exists.
 
-To run the ovsdmonitor tool, the machine must also have the following
+To run the ovsdbmonitor tool, the machine must also have the following
 software:
 
     - Python 2.x, for x >= 4.
