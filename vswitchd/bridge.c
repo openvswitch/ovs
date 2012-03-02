@@ -438,8 +438,12 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
      * has at least one iface, every "struct iface" has a valid ofp_port and
      * netdev. */
     HMAP_FOR_EACH_SAFE (br, next, node, &all_bridges) {
-        if (!br->ofproto && !bridge_add_ofprotos(br)) {
-            bridge_destroy(br);
+        if (!br->ofproto) {
+            if (bridge_add_ofprotos(br)) {
+                bridge_del_ofproto_ports(br);
+            } else {
+                bridge_destroy(br);
+            }
         }
     }
     HMAP_FOR_EACH (br, node, &all_bridges) {
