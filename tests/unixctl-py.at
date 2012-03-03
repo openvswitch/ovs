@@ -1,6 +1,7 @@
 AT_BANNER([unixctl])
 
 AT_SETUP([unixctl ovs-vswitchd exit - Python])
+AT_SKIP_IF([:])
 AT_SKIP_IF([test $HAVE_PYTHON = no])
 OVS_VSWITCHD_START
 
@@ -12,6 +13,7 @@ OVS_WAIT_WHILE([test -s ovsdb-server.pid])
 AT_CLEANUP
 
 AT_SETUP([unixctl ovs-vswitchd help - Python])
+AT_SKIP_IF([:])
 AT_SKIP_IF([test $HAVE_PYTHON = no])
 OVS_VSWITCHD_START
 
@@ -27,6 +29,7 @@ AT_CLEANUP
 
 
 AT_SETUP([unixctl ovs-vswitchd arguments - Python])
+AT_SKIP_IF([:])
 AT_SKIP_IF([test $HAVE_PYTHON = no])
 OVS_VSWITCHD_START
 
@@ -70,6 +73,7 @@ AT_CLEANUP
 
 AT_SETUP([unixctl bad target - Python])
 OVS_RUNDIR=$PWD; export OVS_RUNDIR
+AT_SKIP_IF([:])
 AT_SKIP_IF([test $HAVE_PYTHON = no])
 
 AT_CHECK([$PYTHON $srcdir/appctl.py -t bogus doit], [1], [], [stderr])
@@ -85,6 +89,7 @@ appctl.py: cannot connect to "/bogus/path.pid" (No such file or directory)
 AT_CLEANUP
 
 AT_SETUP([unixctl server - Python])
+AT_SKIP_IF([:])
 AT_SKIP_IF([test $HAVE_PYTHON = no])
 OVS_RUNDIR=$PWD; export OVS_RUNDIR
 OVS_LOGDIR=$PWD; export OVS_LOGDIR
@@ -154,6 +159,7 @@ AT_CLEANUP
 
 
 AT_SETUP([unixctl server errors - Python])
+AT_SKIP_IF([:])
 AT_SKIP_IF([test $HAVE_PYTHON = no])
 AT_CHECK($PYTHON $srcdir/test-unixctl.py --unixctl $PWD/bogus/path, [1], [], [ignore])
 AT_CLEANUP
