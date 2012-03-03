@@ -37,11 +37,19 @@ from ovs.db import types
 import ovs.util
 import ovs.daemon
 import ovs.db.idl
+import ovs.unixctl
 import ovs.vlog
 
 vlog = ovs.vlog.Vlog("ovs-monitor-ipsec")
 root_prefix = ''                # Prefix for absolute file names, for testing.
 setkey = "/usr/sbin/setkey"
+exiting = False
+
+
+def unixctl_exit(conn, unused_argv, unused_aux):
+    global exiting
+    exiting = True
+    conn.reply(None)
 
 
 # Class to configure the racoon daemon, which handles IKE negotiation
@@ -447,12 +455,22 @@ def main():
 
     ovs.daemon.daemonize()
 
+    ovs.unixctl.command_register("exit", "", 0, 0, unixctl_exit, None)
+    error, unixctl_server = ovs.unixctl.UnixctlServer.create(None)
+    if error:
+        ovs.util.ovs_fatal(error, "could not create unixctl server", vlog)
+
     ipsec = IPsec()
 
     interfaces = {}
     while True:
+        unixctl_server.run()
+        if exiting:
+            break
+
         if not idl.run():
             poller = ovs.poller.Poller()
+            unixctl_server.wait(poller)
             idl.wait(poller)
             poller.block()
             continue
@@ -498,6 +516,9 @@ def main():
         if interfaces != new_interfaces:
             update_ipsec(ipsec, interfaces, new_interfaces)
             interfaces = new_interfaces
+
+    unixctl_server.close()
+    idl.close()
 
 
 if __name__ == '__main__':
