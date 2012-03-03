@@ -205,32 +205,6 @@ def update_in_band_mgmt(row):
         row.other_config = other_config
 
 
-def keep_table_columns(schema, table_name, columns):
-    table = schema.tables.get(table_name)
-    if not table:
-        raise error.Error("schema has no %s table" % table_name)
-
-    new_columns = {}
-    for column_name in columns:
-        column = table.columns.get(column_name)
-        if not column:
-            raise error.Error("%s table schema lacks %s column"
-                              % (table_name, column_name))
-        new_columns[column_name] = column
-    table.columns = new_columns
-    return table
-
-
-def prune_schema(schema):
-    new_tables = {}
-    new_tables["Bridge"] = keep_table_columns(
-        schema, "Bridge", ("name", "external_ids", "other_config",
-                           "fail_mode"))
-    new_tables["Interface"] = keep_table_columns(
-        schema, "Interface", ("name", "external_ids"))
-    schema.tables = new_tables
-
-
 def main():
     global flush_cache
 
@@ -248,10 +222,11 @@ def main():
     ovs.daemon.handle_args(args)
 
     remote = args.database
-    schema_file = "%s/vswitch.ovsschema" % ovs.dirs.PKGDATADIR
-    schema = ovs.db.schema.DbSchema.from_json(ovs.json.from_file(schema_file))
-    prune_schema(schema)
-    idl = ovs.db.idl.Idl(remote, schema)
+    schema_helper = ovs.db.idl.SchemaHelper()
+    schema_helper.register_columns("Bridge", ["name", "external_ids",
+                                              "other_config", "fail_mode"])
+    schema_helper.register_columns("Interface", ["name", "external_ids"])
+    idl = ovs.db.idl.Idl(remote, schema_helper)
 
     ovs.daemon.daemonize()
 

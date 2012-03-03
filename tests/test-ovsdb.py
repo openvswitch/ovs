@@ -320,8 +320,9 @@ def idl_set(idl, commands, step):
 
 
 def do_idl(schema_file, remote, *commands):
-    schema = ovs.db.schema.DbSchema.from_json(ovs.json.from_file(schema_file))
-    idl = ovs.db.idl.Idl(remote, schema)
+    schema_helper = ovs.db.idl.SchemaHelper(schema_file)
+    schema_helper.register_all()
+    idl = ovs.db.idl.Idl(remote, schema_helper)
 
     if commands:
         error, stream = ovs.stream.Stream.open_block(

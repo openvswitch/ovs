@@ -352,49 +352,6 @@ class IPsec:
             self.entries.remove(remote_ip)
 
 
-def keep_table_columns(schema, table_name, column_types):
-    table = schema.tables.get(table_name)
-    if not table:
-        raise error.Error("schema has no %s table" % table_name)
-
-    new_columns = {}
-    for column_name, column_type in column_types.iteritems():
-        column = table.columns.get(column_name)
-        if not column:
-            raise error.Error("%s table schema lacks %s column"
-                              % (table_name, column_name))
-        if column.type != column_type:
-            raise error.Error("%s column in %s table has type \"%s\", "
-                              "expected type \"%s\""
-                              % (column_name, table_name,
-                                 column.type.toEnglish(),
-                                 column_type.toEnglish()))
-        new_columns[column_name] = column
-    table.columns = new_columns
-    return table
-
-
-def prune_schema(schema):
-    string_type = types.Type(types.BaseType(types.StringType))
-    optional_ssl_type = types.Type(types.BaseType(types.UuidType,
-        ref_table_name='SSL'), None, 0, 1)
-    string_map_type = types.Type(types.BaseType(types.StringType),
-                                 types.BaseType(types.StringType),
-                                 0, sys.maxint)
-
-    new_tables = {}
-    new_tables["Interface"] = keep_table_columns(
-        schema, "Interface", {"name": string_type,
-                              "type": string_type,
-                              "options": string_map_type})
-    new_tables["Open_vSwitch"] = keep_table_columns(
-        schema, "Open_vSwitch", {"ssl": optional_ssl_type})
-    new_tables["SSL"] = keep_table_columns(
-        schema, "SSL", {"certificate": string_type,
-                        "private_key": string_type})
-    schema.tables = new_tables
-
-
 def update_ipsec(ipsec, interfaces, new_interfaces):
     for name, vals in interfaces.iteritems():
         if name not in new_interfaces:
@@ -448,10 +405,11 @@ def main():
         root_prefix = args.root_prefix
 
     remote = args.database
-    schema_file = "%s/vswitch.ovsschema" % ovs.dirs.PKGDATADIR
-    schema = ovs.db.schema.DbSchema.from_json(ovs.json.from_file(schema_file))
-    prune_schema(schema)
-    idl = ovs.db.idl.Idl(remote, schema)
+    schema_helper = ovs.db.idl.SchemaHelper()
+    schema_helper.register_columns("Interface", ["name", "type", "options"])
+    schema_helper.register_columns("Open_vSwitch", ["ssl"])
+    schema_helper.register_columns("SSL", ["certificate", "private_key"])
+    idl = ovs.db.idl.Idl(remote, schema_helper)
 
     ovs.daemon.daemonize()
 

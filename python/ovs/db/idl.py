@@ -93,8 +93,8 @@ class Idl:
 
         The IDL uses and modifies 'schema' directly."""
 
-        if isinstance(schema, SchemaHelper):
-            schema = schema.get_idl_schema()
+        assert isinstance(schema, SchemaHelper)
+        schema = schema.get_idl_schema()
 
         self.tables = schema.tables
         self._db = schema
@@ -1100,6 +1100,7 @@ class SchemaHelper(object):
 
         self.schema_location = location
         self._tables = {}
+        self._all = False
 
     def register_columns(self, table, columns):
         """Registers interest in the given 'columns' of 'table'.  Future calls
@@ -1117,6 +1118,10 @@ class SchemaHelper(object):
         columns = set(columns) | self._tables.get(table, set())
         self._tables[table] = columns
 
+    def register_all(self):
+        """Registers interest in every column of every table."""
+        self._all = True
+
     def get_idl_schema(self):
         """Gets a schema appropriate for the creation of an 'ovs.db.id.IDL'
         object based on columns registered using the register_columns()
@@ -1124,12 +1129,14 @@ class SchemaHelper(object):
 
         schema = ovs.db.schema.DbSchema.from_json(
             ovs.json.from_file(self.schema_location))
-        schema_tables = {}
-        for table, columns in self._tables.iteritems():
-            schema_tables[table] = (
-                self._keep_table_columns(schema, table, columns))
 
-        schema.tables = schema_tables
+        if not self._all:
+            schema_tables = {}
+            for table, columns in self._tables.iteritems():
+                schema_tables[table] = (
+                    self._keep_table_columns(schema, table, columns))
+
+            schema.tables = schema_tables
         return schema
 
     def _keep_table_columns(self, schema, table_name, columns):
