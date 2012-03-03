@@ -35,10 +35,18 @@ from ovs.db import error
 from ovs.db import types
 import ovs.daemon
 import ovs.db.idl
+import ovs.unixctl
 
 vlog = ovs.vlog.Vlog("ovs-xapi-sync")
 session = None
 force_run = False
+exiting = False
+
+
+def unixctl_exit(conn, unused_argv, unused_aux):
+    global exiting
+    exiting = True
+    conn.reply(None)
 
 
 # Set up a session to interact with XAPI.
@@ -248,6 +256,11 @@ def main():
 
     ovs.daemon.daemonize()
 
+    ovs.unixctl.command_register("exit", "", 0, 0, unixctl_exit, None)
+    error, unixctl_server = ovs.unixctl.UnixctlServer.create(None)
+    if error:
+        ovs.util.ovs_fatal(error, "could not create unixctl server", vlog)
+
     # This daemon is usually started before XAPI, but to complete our
     # tasks, we need it.  Wait here until it's up.
     cookie_file = args.root_prefix + "/var/run/xapi_init_complete.cookie"
@@ -261,9 +274,14 @@ def main():
     vm_ids = {}                 # Map from xs-vm-uuid to vm-id
     seqno = idl.change_seqno    # Sequence number when we last processed the db
     while True:
+        unixctl_server.run()
+        if exiting:
+            break;
+
         idl.run()
         if not force_run and seqno == idl.change_seqno:
             poller = ovs.poller.Poller()
+            unixctl_server.wait(poller)
             idl.wait(poller)
             poller.block()
             continue
@@ -367,6 +385,9 @@ def main():
         vm_ids = new_vm_ids
 
         txn.commit_block()
+
+    unixctl_server.close()
+    idl.close()
 
 
 if __name__ == '__main__':
