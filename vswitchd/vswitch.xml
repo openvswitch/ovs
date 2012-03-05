@@ -1857,6 +1857,12 @@
           VLAN splinters increase kernel and userspace memory overhead, so do
           not use them unless they are needed.
         </p>
+
+        <p>
+          VLAN splinters do not support 802.1p priority tags.  Received
+          priorities will appear to be 0, regardless of their actual values,
+          and priorities on transmitted packets will also be cleared to 0.
+        </p>
       </column>
     </group>
 
