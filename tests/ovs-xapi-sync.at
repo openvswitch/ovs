@@ -51,7 +51,7 @@ AT_CHECK([ovs_vsctl \
                 -- set Interface vif1.0 'external-ids={attached-mac="00:11:22:33:44:55", xs-network-uuid="9b66c68b-a74e-4d34-89a5-20a8ab352d1e", xs-vif-uuid="6ab1b260-398e-49ba-827b-c7696108964c", xs-vm-uuid="fcb8a3f6-dc04-41d2-8b8a-55afd2b755b8"'}])
 OVS_WAIT_UNTIL([ovs_vsctl get interface vif1.0 external-ids:iface-id >/dev/null 2>&1])
 AT_CHECK([ovs_vsctl get interface vif1.0 external-ids], [0],
-  [{attached-mac="00:11:22:33:44:55", iface-id="custom iface ID", iface-status=active, xs-network-uuid="9b66c68b-a74e-4d34-89a5-20a8ab352d1e", xs-vif-uuid="6ab1b260-398e-49ba-827b-c7696108964c", xs-vm-uuid="fcb8a3f6-dc04-41d2-8b8a-55afd2b755b8"}
+  [{attached-mac="00:11:22:33:44:55", iface-id="custom iface ID", iface-status=active, vm-id="custom vm ID", xs-network-uuid="9b66c68b-a74e-4d34-89a5-20a8ab352d1e", xs-vif-uuid="6ab1b260-398e-49ba-827b-c7696108964c", xs-vm-uuid="fcb8a3f6-dc04-41d2-8b8a-55afd2b755b8"}
 ])
 
 # Add corresponding tap and check daemon's work.
@@ -60,15 +60,15 @@ OVS_WAIT_UNTIL([ovs_vsctl get interface tap1.0 external-ids:iface-id >/dev/null 
 AT_CHECK([ovs_vsctl \
                 -- get interface vif1.0 external-ids \
                 -- get interface tap1.0 external-ids], [0],
-  [{attached-mac="00:11:22:33:44:55", iface-id="custom iface ID", iface-status=inactive, xs-network-uuid="9b66c68b-a74e-4d34-89a5-20a8ab352d1e", xs-vif-uuid="6ab1b260-398e-49ba-827b-c7696108964c", xs-vm-uuid="fcb8a3f6-dc04-41d2-8b8a-55afd2b755b8"}
-{attached-mac="00:11:22:33:44:55", iface-id="custom iface ID", iface-status=active, xs-network-uuid="9b66c68b-a74e-4d34-89a5-20a8ab352d1e", xs-vif-uuid="6ab1b260-398e-49ba-827b-c7696108964c", xs-vm-uuid="fcb8a3f6-dc04-41d2-8b8a-55afd2b755b8"}
+  [{attached-mac="00:11:22:33:44:55", iface-id="custom iface ID", iface-status=inactive, vm-id="custom vm ID", xs-network-uuid="9b66c68b-a74e-4d34-89a5-20a8ab352d1e", xs-vif-uuid="6ab1b260-398e-49ba-827b-c7696108964c", xs-vm-uuid="fcb8a3f6-dc04-41d2-8b8a-55afd2b755b8"}
+{attached-mac="00:11:22:33:44:55", iface-id="custom iface ID", iface-status=active, vm-id="custom vm ID", xs-network-uuid="9b66c68b-a74e-4d34-89a5-20a8ab352d1e", xs-vif-uuid="6ab1b260-398e-49ba-827b-c7696108964c", xs-vm-uuid="fcb8a3f6-dc04-41d2-8b8a-55afd2b755b8"}
 ])
 
 # Remove corresponding tap and check daemon's work.
 AT_CHECK([ovs_vsctl del-port tap1.0])
 OVS_WAIT_UNTIL([test `ovs_vsctl get interface vif1.0 external-ids:iface-status` = active])
 AT_CHECK([ovs_vsctl get interface vif1.0 external-ids], [0],
-  [{attached-mac="00:11:22:33:44:55", iface-id="custom iface ID", iface-status=active, xs-network-uuid="9b66c68b-a74e-4d34-89a5-20a8ab352d1e", xs-vif-uuid="6ab1b260-398e-49ba-827b-c7696108964c", xs-vm-uuid="fcb8a3f6-dc04-41d2-8b8a-55afd2b755b8"}
+  [{attached-mac="00:11:22:33:44:55", iface-id="custom iface ID", iface-status=active, vm-id="custom vm ID", xs-network-uuid="9b66c68b-a74e-4d34-89a5-20a8ab352d1e", xs-vif-uuid="6ab1b260-398e-49ba-827b-c7696108964c", xs-vm-uuid="fcb8a3f6-dc04-41d2-8b8a-55afd2b755b8"}
 ])
 
 AT_CLEANUP

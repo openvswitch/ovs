@@ -1847,6 +1847,11 @@
         The virtual network to which this interface is attached.
       </column>
 
+      <column name="external_ids" key="vm-id">
+        The VM to which this interface belongs. On XenServer, this will be the
+        same as <ref column="external_ids" key="xs-vm-uuid"/>.
+      </column>
+
       <column name="external_ids" key="xs-vm-uuid">
         The VM to which this interface belongs.
       </column>
