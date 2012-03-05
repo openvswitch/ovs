@@ -113,6 +113,30 @@ def get_iface_id(if_name, xs_vif_uuid):
         return xs_vif_uuid
 
 
+# By default, the "vm-id" external id in the Interface table is the
+# same as "xs-vm-uuid".  This may be overridden by defining a
+# "nicira-vm-id" key in the "other_config" field of the VM
+# record of XAPI.
+def get_vm_id(if_name, xs_vm_uuid):
+    if not if_name.startswith("vif") and not if_name.startswith("tap"):
+        # Treat whatever was passed into 'xs_vm_uuid' as a default
+        # value for non-VIFs.
+        return xs_vm_uuid
+
+    if not init_session():
+        vlog.warn("Failed to get vm id for interface id %s because"
+                " XAPI session could not be initialized" % if_name)
+        return xs_vm_uuid
+
+    try:
+        vm = session.xenapi.VM.get_by_uuid(xs_vm_uuid)
+        rec = session.xenapi.VM.get_record(vm)
+        return rec['other_config'].get('nicira-vm-id', xs_vm_uuid)
+    except XenAPI.Failure:
+        vlog.warn("Could not find XAPI entry for VIF %s" % if_name)
+        return xs_vm_uuid
+
+
 def set_or_delete(d, key, value):
     if value is None:
         if key in d:
@@ -247,6 +271,7 @@ def main():
 
     bridges = {}                # Map from bridge name to xs_network_uuids
     iface_ids = {}              # Map from xs-vif-uuid to iface-id
+    vm_ids = {}                 # Map from xs-vm-uuid to vm-id
     while True:
         if not force_run and not idl.run():
             poller = ovs.poller.Poller()
@@ -258,6 +283,7 @@ def main():
             vlog.info("Forced to re-run as the result of a SIGHUP")
             bridges = {}
             iface_ids = {}
+            vm_ids = {}
             force_run = False
 
         txn = ovs.db.idl.Transaction(idl)
@@ -280,6 +306,7 @@ def main():
             iface_by_name[row.name] = row
 
         new_iface_ids = {}
+        new_vm_ids = {}
         for row in idl.tables["Interface"].rows.itervalues():
             # Match up paired vif and tap devices.
             if row.name.startswith("vif"):
@@ -315,6 +342,17 @@ def main():
                 iface_id = None
             set_external_id(row, "iface-id", iface_id)
 
+            # Map from xs-vm-uuid to vm-id.
+            xvmu = row.external_ids.get("xs-vm-uuid")
+            if xvmu:
+                vm_id = (new_vm_ids.get(xvmu)
+                         or vm_ids.get(xvmu)
+                         or get_vm_id(row.name, xvmu))
+                new_vm_ids[xvmu] = vm_id
+            else:
+                vm_id = None
+            set_external_id(row, "vm-id", vm_id)
+
             # When there's a vif and a tap, the tap is active (used for
             # traffic).  When there's just a vif, the vif is active.
             #
@@ -329,6 +367,7 @@ def main():
             else:
                 set_external_id(row, "iface-status", None)
         iface_ids = new_iface_ids
+        vm_ids = new_vm_ids
 
         txn.commit_block()
 

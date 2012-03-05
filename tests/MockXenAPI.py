@@ -30,6 +30,7 @@ class XenAPI(object):
         self.network = Network()
         self.pool = Pool()
         self.VIF = VIF()
+        self.VM = VM()
 
     def login_with_password(self, unused_username, unused_password):
         pass
@@ -87,3 +88,11 @@ class VIF(Table):
 
     def __init__(self):
         Table.__init__(self, VIF.__records)
+
+class VM(Table):
+    __records = ({"uuid": "fcb8a3f6-dc04-41d2-8b8a-55afd2b755b8",
+                  "other_config":
+                      {"nicira-vm-id": "custom vm ID"}},)
+
+    def __init__(self):
+        Table.__init__(self, VM.__records)
