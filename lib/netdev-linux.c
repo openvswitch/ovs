@@ -1589,7 +1589,6 @@ netdev_linux_set_policing(struct netdev *netdev,
     const char *netdev_name = netdev_get_name(netdev);
     int error;
 
-    COVERAGE_INC(netdev_set_policing);
 
     kbits_burst = (!kbits_rate ? 0       /* Force to 0 if no rate specified. */
                    : !kbits_burst ? 1000 /* Default to 1000 kbits if 0. */
@@ -1602,6 +1601,7 @@ netdev_linux_set_policing(struct netdev *netdev,
         return 0;
     }
 
+    COVERAGE_INC(netdev_set_policing);
     /* Remove any existing ingress qdisc. */
     error = tc_add_del_ingress_qdisc(netdev, false);
     if (error) {
