@@ -36,7 +36,6 @@ from ovs.db import types
 import ovs.daemon
 import ovs.db.idl
 
-root_prefix = ''                # Prefix for absolute file names, for testing.
 vlog = ovs.vlog.Vlog("ovs-xapi-sync")
 session = None
 force_run = False
@@ -239,7 +238,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("database", metavar="DATABASE",
             help="A socket on which ovsdb-server is listening.")
-    parser.add_argument("--root-prefix", metavar="DIR",
+    parser.add_argument("--root-prefix", metavar="DIR", default='',
                         help="Use DIR as alternate root directory"
                         " (for testing).")
 
@@ -248,10 +247,6 @@ def main():
     args = parser.parse_args()
     ovs.vlog.handle_args(args)
     ovs.daemon.handle_args(args)
-
-    global root_prefix
-    if args.root_prefix:
-        root_prefix = args.root_prefix
 
     remote = args.database
     schema_file = "%s/vswitch.ovsschema" % ovs.dirs.PKGDATADIR
@@ -263,7 +258,7 @@ def main():
 
     # This daemon is usually started before XAPI, but to complete our
     # tasks, we need it.  Wait here until it's up.
-    cookie_file = root_prefix + "/var/run/xapi_init_complete.cookie"
+    cookie_file = args.root_prefix + "/var/run/xapi_init_complete.cookie"
     while not os.path.exists(cookie_file):
         time.sleep(1)
 
