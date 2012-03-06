@@ -120,10 +120,9 @@ case $1 in
         ;;
     reload|force-reload)
         # The main OVS daemons keep up-to-date, but ovs-xapi-sync needs help.
-        pidfile=/var/run/openvswitch/ovs-xapi-sync.pid
-        if test -e "$pidfile"; then
-            pid=`cat "$pidfile"`
-            action "Configuring Open vSwitch external IDs" kill -HUP $pid
+        if daemon_is_running ovs-xapi-sync; then
+            action "Configuring Open vSwitch external IDs" \
+                ovs-appctl -t ovs-xapi-sync flush-cache
         fi
         ;;
     status)

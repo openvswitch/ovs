@@ -24,7 +24,6 @@
 
 import argparse
 import os
-import signal
 import sys
 import time
 
@@ -39,13 +38,19 @@ import ovs.unixctl
 
 vlog = ovs.vlog.Vlog("ovs-xapi-sync")
 session = None
-force_run = False
+flush_cache = False
 exiting = False
 
 
 def unixctl_exit(conn, unused_argv, unused_aux):
     global exiting
     exiting = True
+    conn.reply(None)
+
+
+def unixctl_flush_cache(conn, unused_argv, unused_aux):
+    global flush_cache
+    flush_cache = True
     conn.reply(None)
 
 
@@ -226,14 +231,8 @@ def prune_schema(schema):
     schema.tables = new_tables
 
 
-def handler(signum, _):
-    global force_run
-    if (signum == signal.SIGHUP):
-        force_run = True
-
-
 def main():
-    global force_run
+    global flush_cache
 
     parser = argparse.ArgumentParser()
     parser.add_argument("database", metavar="DATABASE",
@@ -257,6 +256,8 @@ def main():
     ovs.daemon.daemonize()
 
     ovs.unixctl.command_register("exit", "", 0, 0, unixctl_exit, None)
+    ovs.unixctl.command_register("flush-cache", "", 0, 0, unixctl_flush_cache,
+                                 None)
     error, unixctl_server = ovs.unixctl.UnixctlServer.create(None)
     if error:
         ovs.util.ovs_fatal(error, "could not create unixctl server", vlog)
@@ -266,8 +267,6 @@ def main():
     cookie_file = args.root_prefix + "/var/run/xapi_init_complete.cookie"
     while not os.path.exists(cookie_file):
         time.sleep(1)
-
-    signal.signal(signal.SIGHUP, handler)
 
     bridges = {}                # Map from bridge name to nicira-bridge-id
     iface_ids = {}              # Map from xs-vif-uuid to iface-id
@@ -279,19 +278,19 @@ def main():
             break;
 
         idl.run()
-        if not force_run and seqno == idl.change_seqno:
+        if not flush_cache and seqno == idl.change_seqno:
             poller = ovs.poller.Poller()
             unixctl_server.wait(poller)
             idl.wait(poller)
             poller.block()
             continue
 
-        if force_run:
-            vlog.info("Forced to re-run as the result of a SIGHUP")
+        if flush_cache:
+            vlog.info("Flushing cache as the result of unixctl.")
             bridges = {}
             iface_ids = {}
             vm_ids = {}
-            force_run = False
+            flush_cache = False
         seqno = idl.change_seqno
 
         txn = ovs.db.idl.Transaction(idl)
