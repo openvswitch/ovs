@@ -10,6 +10,7 @@ openvswitch_sources += \
 	linux/compat/skbuff-openvswitch.c \
 	linux/compat/time.c
 openvswitch_headers += \
+	linux/compat/include/linux/checksum.h \
 	linux/compat/include/linux/compiler.h \
 	linux/compat/include/linux/compiler-gcc.h \
 	linux/compat/include/linux/cpumask.h \
