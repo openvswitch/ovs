@@ -1,4 +1,4 @@
-# Copyright (c) 2010 Nicira Networks
+# Copyright (c) 2010, 2012 Nicira Networks
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -69,11 +69,11 @@ def make_unix_socket(style, nonblock, bind_path, connect_path):
         return 0, sock
     except socket.error, e:
         sock.close()
-        try:
-            os.unlink(bind_path)
-        except OSError, e:
-            pass
         if bind_path is not None:
+            try:
+                os.unlink(bind_path)
+            except OSError, e:
+                pass
             ovs.fatal_signal.add_file_to_unlink(bind_path)
         return get_exception_errno(e), None
 
