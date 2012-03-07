@@ -1,7 +1,11 @@
 AT_BANNER([OVSDB -- execution])
 
-m4_define([ORDINAL_SCHEMA],
-  [[{"name": "ordinals",
+m4_divert_push([PREPARE_TESTS])
+[
+
+ordinal_schema () {
+    cat <<'EOF'
+    {"name": "ordinals",
      "tables": {
        "ordinals": {
          "columns": {
@@ -9,10 +13,13 @@ m4_define([ORDINAL_SCHEMA],
            "name": {"type": "string"}},
          "indexes": [["number"]]}},
      "version": "5.1.3",
-     "cksum": "12345678 9"}]])
+     "cksum": "12345678 9"}
+EOF
+}
 
-m4_define([CONSTRAINT_SCHEMA],
-  [[{"name": "constraints",
+constraint_schema () {
+    cat << 'EOF'
+    {"name": "constraints",
      "tables": {
        "a": {
          "columns": {
@@ -33,10 +40,13 @@ m4_define([CONSTRAINT_SCHEMA],
          "columns": {
            "positive": {"type": {"key": {"type": "integer",
                                          "minInteger": 1}}}},
-         "maxRows": 1}}}]])
+         "maxRows": 1}}}
+EOF
+}
 
-m4_define([WEAK_SCHEMA],
-  [[{"name": "weak",
+weak_schema () {
+    cat <<'EOF'
+    {"name": "weak",
      "tables": {
        "a": {
          "columns": {
@@ -57,10 +67,13 @@ m4_define([WEAK_SCHEMA],
            "b2a": {"type": {"key": {"type": "uuid",
                                     "refTable": "a",
                                     "refType": "weak"},
-                            "min": 0, "max": "unlimited"}}}}}}]])
+                            "min": 0, "max": "unlimited"}}}}}}
+EOF
+}
 
-m4_define([GC_SCHEMA],
-  [[{"name": "gc",
+gc_schema () {
+    cat <<'EOF'
+    {"name": "gc",
      "tables": {
        "root": {
          "columns": {
@@ -95,7 +108,11 @@ m4_define([GC_SCHEMA],
                                      "refTable": "a",
                                      "refType": "weak"},
                              "min": 0, "max": "unlimited"}}},
-         "isRoot": false}}}]])
+         "isRoot": false}}}
+EOF
+}
+]
+m4_divert_pop([PREPARE_TESTS])
 
 # OVSDB_CHECK_EXECUTION(TITLE, SCHEMA, TRANSACTIONS, OUTPUT, [KEYWORDS])
 #
@@ -109,16 +126,16 @@ m4_define([GC_SCHEMA],
 # same marker.
 #
 # TITLE is provided to AT_SETUP and KEYWORDS to AT_KEYWORDS.
-m4_define([OVSDB_CHECK_EXECUTION], 
+m4_define([OVSDB_CHECK_EXECUTION],
   [AT_SETUP([$1])
    AT_KEYWORDS([ovsdb execute execution positive $5])
-   AT_CHECK([test-ovsdb execute '$2' m4_foreach([txn], [$3], [ 'txn'])],
+   AT_CHECK([test-ovsdb execute "`$2`" m4_foreach([txn], [$3], [ 'txn'])],
      [0], [stdout], [])
    AT_CHECK([perl $srcdir/uuidfilt.pl stdout], [0], [$4])
    AT_CLEANUP])
 
 OVSDB_CHECK_EXECUTION([uuid-name must be <id>],
-  [CONSTRAINT_SCHEMA],
+  [constraint_schema],
   [[[["constraints",
       {"op": "insert",
        "table": "a",
@@ -128,7 +145,7 @@ OVSDB_CHECK_EXECUTION([uuid-name must be <id>],
 ]])
 
 OVSDB_CHECK_EXECUTION([named-uuid must be <id>],
-  [CONSTRAINT_SCHEMA],
+  [constraint_schema],
   [[[["constraints",
       {"op": "insert",
        "table": "a",
@@ -137,7 +154,7 @@ OVSDB_CHECK_EXECUTION([named-uuid must be <id>],
 ]])
 
 OVSDB_CHECK_EXECUTION([duplicate uuid-name not allowed],
-  [ORDINAL_SCHEMA],
+  [ordinal_schema],
   [[[["ordinals",
       {"op": "insert",
        "table": "ordinals",
@@ -154,7 +171,7 @@ m4_define([EXECUTION_EXAMPLES], [
 dnl At one point the "commit" code ignored new rows with all-default values,
 dnl so this checks for that problem.
 OVSDB_CHECK_EXECUTION([insert default row, query table],
-  [ORDINAL_SCHEMA], 
+  [ordinal_schema],
   [[[["ordinals",
       {"op": "insert",
        "table": "ordinals",
@@ -168,7 +185,7 @@ OVSDB_CHECK_EXECUTION([insert default row, query table],
 ]])
 
 OVSDB_CHECK_EXECUTION([insert row, query table],
-  [ORDINAL_SCHEMA], 
+  [ordinal_schema],
   [[[["ordinals",
       {"op": "insert",
        "table": "ordinals",
@@ -182,7 +199,7 @@ OVSDB_CHECK_EXECUTION([insert row, query table],
 ]])
 
 OVSDB_CHECK_EXECUTION([insert rows, query by value],
-  [ORDINAL_SCHEMA],
+  [ordinal_schema],
   [[[["ordinals",
       {"op": "insert",
        "table": "ordinals",
@@ -206,7 +223,7 @@ OVSDB_CHECK_EXECUTION([insert rows, query by value],
 ]])
 
 OVSDB_CHECK_EXECUTION([insert rows, query by named-uuid],
-  [ORDINAL_SCHEMA],
+  [ordinal_schema],
   [[[["ordinals",
       {"op": "insert",
        "table": "ordinals",
@@ -226,7 +243,7 @@ OVSDB_CHECK_EXECUTION([insert rows, query by named-uuid],
 ]])
 
 OVSDB_CHECK_EXECUTION([insert rows, update rows by value],
-  [ORDINAL_SCHEMA],
+  [ordinal_schema],
   [[[["ordinals",
       {"op": "insert",
        "table": "ordinals",
@@ -254,7 +271,7 @@ OVSDB_CHECK_EXECUTION([insert rows, update rows by value],
 ]])
 
 OVSDB_CHECK_EXECUTION([insert rows, mutate rows],
-  [ORDINAL_SCHEMA],
+  [ordinal_schema],
   [[[["ordinals",
       {"op": "insert",
        "table": "ordinals",
@@ -282,7 +299,7 @@ OVSDB_CHECK_EXECUTION([insert rows, mutate rows],
 ]])
 
 OVSDB_CHECK_EXECUTION([insert rows, delete by named-uuid],
-  [ORDINAL_SCHEMA],
+  [ordinal_schema],
   [[[["ordinals",
       {"op": "insert",
        "table": "ordinals",
@@ -303,7 +320,7 @@ OVSDB_CHECK_EXECUTION([insert rows, delete by named-uuid],
 ]])
 
 OVSDB_CHECK_EXECUTION([insert rows, delete rows by value],
-  [ORDINAL_SCHEMA],
+  [ordinal_schema],
   [[[["ordinals",
       {"op": "insert",
        "table": "ordinals",
@@ -329,7 +346,7 @@ OVSDB_CHECK_EXECUTION([insert rows, delete rows by value],
 ]])
 
 OVSDB_CHECK_EXECUTION([insert rows, delete by (non-matching) value],
-  [ORDINAL_SCHEMA],
+  [ordinal_schema],
   [[[["ordinals",
       {"op": "insert",
        "table": "ordinals",
@@ -356,7 +373,7 @@ OVSDB_CHECK_EXECUTION([insert rows, delete by (non-matching) value],
 ]])
 
 OVSDB_CHECK_EXECUTION([insert rows, delete all],
-  [ORDINAL_SCHEMA],
+  [ordinal_schema],
   [[[["ordinals",
       {"op": "insert",
        "table": "ordinals",
@@ -377,7 +394,7 @@ OVSDB_CHECK_EXECUTION([insert rows, delete all],
 ]])
 
 OVSDB_CHECK_EXECUTION([insert row, query table, commit],
-  [ORDINAL_SCHEMA],
+  [ordinal_schema],
   [[[["ordinals",
       {"op": "insert",
        "table": "ordinals",
@@ -391,7 +408,7 @@ OVSDB_CHECK_EXECUTION([insert row, query table, commit],
 ]])
 
 OVSDB_CHECK_EXECUTION([insert row, query table, commit durably],
-  [ORDINAL_SCHEMA],
+  [ordinal_schema],
   [[[["ordinals",
       {"op": "insert",
        "table": "ordinals",
@@ -405,7 +422,7 @@ OVSDB_CHECK_EXECUTION([insert row, query table, commit durably],
 ]])
 
 OVSDB_CHECK_EXECUTION([equality wait with correct rows],
-  [ORDINAL_SCHEMA],
+  [ordinal_schema],
   [[[["ordinals",
       {"op": "insert",
        "table": "ordinals",
@@ -425,7 +442,7 @@ OVSDB_CHECK_EXECUTION([equality wait with correct rows],
 ]])
 
 OVSDB_CHECK_EXECUTION([equality wait with extra row],
-  [ORDINAL_SCHEMA],
+  [ordinal_schema],
   [[[["ordinals",
       {"op": "insert",
        "table": "ordinals",
@@ -446,7 +463,7 @@ OVSDB_CHECK_EXECUTION([equality wait with extra row],
 ]])
 
 OVSDB_CHECK_EXECUTION([equality wait with missing row],
-  [ORDINAL_SCHEMA],
+  [ordinal_schema],
   [[[["ordinals",
       {"op": "insert",
        "table": "ordinals",
@@ -465,7 +482,7 @@ OVSDB_CHECK_EXECUTION([equality wait with missing row],
 ]])
 
 OVSDB_CHECK_EXECUTION([inequality wait with correct rows],
-  [ORDINAL_SCHEMA],
+  [ordinal_schema],
   [[[["ordinals",
       {"op": "insert",
        "table": "ordinals",
@@ -485,7 +502,7 @@ OVSDB_CHECK_EXECUTION([inequality wait with correct rows],
 ]])
 
 OVSDB_CHECK_EXECUTION([inequality wait with extra row],
-  [ORDINAL_SCHEMA],
+  [ordinal_schema],
   [[[["ordinals",
       {"op": "insert",
        "table": "ordinals",
@@ -506,7 +523,7 @@ OVSDB_CHECK_EXECUTION([inequality wait with extra row],
 ]])
 
 OVSDB_CHECK_EXECUTION([inequality wait with missing row],
-  [ORDINAL_SCHEMA],
+  [ordinal_schema],
   [[[["ordinals",
       {"op": "insert",
        "table": "ordinals",
@@ -525,7 +542,7 @@ OVSDB_CHECK_EXECUTION([inequality wait with missing row],
 ]])
 
 OVSDB_CHECK_EXECUTION([insert and update constraints],
-  [CONSTRAINT_SCHEMA],
+  [constraint_schema],
   [[[["constraints",
       {"op": "insert",
        "table": "constrained",
@@ -555,7 +572,7 @@ OVSDB_CHECK_EXECUTION([insert and update constraints],
 ]])
 
 OVSDB_CHECK_EXECUTION([index uniqueness checking],
-  [ORDINAL_SCHEMA],
+  [ordinal_schema],
 dnl Insert initial row.
   [[[["ordinals",
       {"op": "insert",
@@ -637,7 +654,7 @@ dnl collide (only) with their previous values (succeeds).
 ]])
 
 OVSDB_CHECK_EXECUTION([referential integrity -- simple],
-  [CONSTRAINT_SCHEMA],
+  [constraint_schema],
   [[[["constraints",
       {"op": "insert",
        "table": "b",
@@ -701,7 +718,7 @@ dnl Check that "mutate" honors number-of-elements constraints on sets and maps.
 ]])
 
 OVSDB_CHECK_EXECUTION([referential integrity -- mutual references],
-  [CONSTRAINT_SCHEMA],
+  [constraint_schema],
   [[[["constraints",
       {"op": "insert",
        "table": "a",
@@ -753,7 +770,7 @@ OVSDB_CHECK_EXECUTION([referential integrity -- mutual references],
 ]])
 
 OVSDB_CHECK_EXECUTION([weak references],
-  [WEAK_SCHEMA],
+  [weak_schema],
   [[[["weak",
       {"op": "insert",
        "table": "a",
@@ -892,7 +909,7 @@ OVSDB_CHECK_EXECUTION([weak references],
 ]])
 
 OVSDB_CHECK_EXECUTION([garbage collection],
-  [GC_SCHEMA],
+  [gc_schema],
   [dnl Check that inserting a row without any references is a no-op.
    [[["gc",
       {"op": "insert",

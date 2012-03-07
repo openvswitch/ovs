@@ -16,8 +16,7 @@ AT_BANNER([OVSDB -- ovsdb-tool])
 m4_define([OVSDB_CHECK_EXECUTION], 
   [AT_SETUP([$1])
    AT_KEYWORDS([ovsdb file positive $5])
-   AT_DATA([schema], [$2
-])
+   $2 > schema
    touch .db.~lock~
    AT_CHECK([ovsdb-tool create db schema], [0], [stdout], [ignore])
    m4_foreach([txn], [$3], 
@@ -31,8 +30,7 @@ EXECUTION_EXAMPLES
 
 AT_SETUP([transaction comments])
 AT_KEYWORDS([ovsdb file positive])
-AT_DATA([schema], [ORDINAL_SCHEMA
-])
+ordinal_schema > schema
 touch .db.~lock~
 AT_CHECK([ovsdb-tool create db schema], [0], [], [ignore])
 AT_CHECK([[ovsdb-tool transact db '
@@ -50,8 +48,7 @@ AT_CLEANUP
 
 AT_SETUP([ovsdb-tool compact])
 AT_KEYWORDS([ovsdb file positive])
-AT_DATA([schema], [ORDINAL_SCHEMA
-])
+ordinal_schema > schema
 touch .db.~lock~
 AT_CHECK([ovsdb-tool create db schema], [0], [], [ignore])
 dnl Do a bunch of random transactions that put crap in the database log.
@@ -144,8 +141,7 @@ AT_CLEANUP
 
 AT_SETUP([ovsdb-tool convert -- removing a column])
 AT_KEYWORDS([ovsdb file positive])
-AT_DATA([schema], [ORDINAL_SCHEMA
-])
+ordinal_schema > schema
 AT_DATA([new-schema], 
   [[{"name": "ordinals",
      "tables": {
@@ -216,8 +212,7 @@ AT_DATA([schema],
          "columns": {
            "number": {"type": "integer"}}}}}
 ]])
-AT_DATA([new-schema], [ORDINAL_SCHEMA
-])
+ordinal_schema > new-schema
 touch .db.~lock~
 AT_CHECK([ovsdb-tool create db schema], [0], [], [ignore])
 dnl Put some data in the database.
@@ -273,16 +268,14 @@ AT_CLEANUP
 
 AT_SETUP([ovsdb-tool schema-version])
 AT_KEYWORDS([ovsdb file positive])
-AT_DATA([schema], [ORDINAL_SCHEMA
-])
+ordinal_schema > schema
 AT_CHECK([ovsdb-tool schema-version schema], [0], [5.1.3
 ])
 AT_CLEANUP
 
 AT_SETUP([ovsdb-tool db-version])
 AT_KEYWORDS([ovsdb file positive])
-AT_DATA([schema], [ORDINAL_SCHEMA
-])
+ordinal_schema > schema
 touch .db.~lock~
 AT_CHECK([ovsdb-tool create db schema], [0], [], [ignore])
 AT_CHECK([ovsdb-tool db-version db], [0], [5.1.3
@@ -291,16 +284,14 @@ AT_CLEANUP
 
 AT_SETUP([ovsdb-tool schema-cksum])
 AT_KEYWORDS([ovsdb file positive])
-AT_DATA([schema], [ORDINAL_SCHEMA
-])
+ordinal_schema > schema
 AT_CHECK([ovsdb-tool schema-cksum schema], [0], [12345678 9
 ])
 AT_CLEANUP
 
 AT_SETUP([ovsdb-tool db-cksum])
 AT_KEYWORDS([ovsdb file positive])
-AT_DATA([schema], [ORDINAL_SCHEMA
-])
+ordinal_schema > schema
 touch .db.~lock~
 AT_CHECK([ovsdb-tool create db schema], [0], [], [ignore])
 AT_CHECK([ovsdb-tool db-cksum db], [0], [12345678 9
@@ -309,8 +300,7 @@ AT_CLEANUP
 
 AT_SETUP([ovsdb-tool needs-conversion (no conversion needed)])
 AT_KEYWORDS([ovsdb file positive])
-AT_DATA([schema], [ORDINAL_SCHEMA
-])
+ordinal_schema > schema
 touch .db.~lock~
 AT_CHECK([ovsdb-tool create db schema], [0], [], [ignore])
 AT_CHECK([ovsdb-tool needs-conversion db schema], [0], [no
@@ -319,8 +309,7 @@ AT_CLEANUP
 
 AT_SETUP([ovsdb-tool needs-conversion (conversion needed)])
 AT_KEYWORDS([ovsdb file positive])
-AT_DATA([schema], [ORDINAL_SCHEMA
-])
+ordinal_schema > schema
 touch .db.~lock~
 AT_CHECK([ovsdb-tool create db schema], [0], [], [ignore])
 sed 's/5\.1\.3/5.1.4/' < schema > schema2
