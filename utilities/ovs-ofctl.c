@@ -1004,9 +1004,8 @@ monitor_vconn(struct vconn *vconn)
             if (retval == EAGAIN) {
                 break;
             }
-            msg_type = ((const struct ofp_header *) b->data)->type;
-
             run(retval, "vconn_recv");
+
             if (timestamp) {
                 time_t now = time_wall();
                 char s[32];
@@ -1014,6 +1013,8 @@ monitor_vconn(struct vconn *vconn)
                 strftime(s, sizeof s, "%Y-%m-%d %H:%M:%S: ", localtime(&now));
                 fputs(s, stderr);
             }
+
+            msg_type = ((const struct ofp_header *) b->data)->type;
             ofp_print(stderr, b->data, b->size, verbosity + 2);
             ofpbuf_delete(b);
 
