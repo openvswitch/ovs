@@ -39,6 +39,10 @@ def unixctl_echo_error(conn, argv, aux):
     conn.reply_error(str(argv))
 
 
+def unixctl_block(conn, unused_argv, unused_aux):
+    pass
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Open vSwitch unixctl test program for Python")
@@ -61,6 +65,7 @@ def main():
                                  "aux_echo")
     ovs.unixctl.command_register("echo_error", "[arg ...]", 1, 2,
                                  unixctl_echo_error, "aux_echo_error")
+    ovs.unixctl.command_register("block", "", 0, 0, unixctl_block, None)
     ovs.daemon.daemonize_complete()
 
     vlog.info("Entering run loop.")

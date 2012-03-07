@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import argparse
+import signal
 import sys
 
 import ovs.daemon
@@ -45,7 +46,12 @@ def main():
                         help="Command to run.")
     parser.add_argument("argv", metavar="ARG", nargs="*",
                         help="Arguments to the command.")
+    parser.add_argument("-T", "--timeout", metavar="SECS",
+                        help="wait at most SECS seconds for a response")
     args = parser.parse_args()
+
+    if args.timeout:
+        signal.alarm(int(args.timeout))
 
     ovs.vlog.Vlog.init()
     target = args.target

@@ -97,6 +97,7 @@ Common commands:\n\
       'off', 'emer', 'err', 'warn', 'info', or 'dbg' ('dbg', bydefault)\n\
   vlog/reopen        Make the program reopen its log file\n\
 Other options:\n\
+  --timeout=SECS     wait at most SECS seconds for a response\n\
   -h, --help         Print this helpful information\n\
   -V, --version      Display ovs-appctl version information\n",
            program_name, program_name);
@@ -111,6 +112,7 @@ parse_command_line(int argc, char *argv[])
         {"execute", no_argument, NULL, 'e'},
         {"help", no_argument, NULL, 'h'},
         {"version", no_argument, NULL, 'V'},
+        {"timeout", required_argument, NULL, 'T'},
         {NULL, 0, NULL, 0},
     };
     const char *target;
@@ -145,6 +147,10 @@ parse_command_line(int argc, char *argv[])
 
         case 'h':
             usage();
+            break;
+
+        case 'T':
+            time_alarm(atoi(optarg));
             break;
 
         case 'V':
