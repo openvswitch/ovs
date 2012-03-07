@@ -64,5 +64,8 @@ ALL_LOCAL += $(srcdir)/python/ovs/version.py
 $(srcdir)/python/ovs/version.py: config.status
 	$(ro_shell) > $@.tmp
 	echo 'VERSION = "$(VERSION)"' >> $@.tmp
-	echo 'BUILDNR = "$(BUILDNR)"' >> $@.tmp
+	if [ "$(BUILDNR)" != "0" ]; \
+	    then echo 'BUILDNR = "+build$(BUILDNR)"' >> $@.tmp; \
+	    else echo 'BUILDNR = ""' >> $@.tmp; \
+	fi;
 	mv $@.tmp $@

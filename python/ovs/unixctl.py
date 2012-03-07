@@ -57,9 +57,9 @@ def _unixctl_help(conn, unused_argv, unused_aux):
 
 def _unixctl_version(conn, unused_argv, unused_aux):
     assert isinstance(conn, UnixctlConnection)
-    version = "%s (Open vSwitch) %s %s" % (ovs.util.PROGRAM_NAME,
-                                           ovs.version.VERSION,
-                                           ovs.version.BUILDNR)
+    version = "%s (Open vSwitch) %s%s" % (ovs.util.PROGRAM_NAME,
+                                          ovs.version.VERSION,
+                                          ovs.version.BUILDNR)
     conn.reply(version)
 
 

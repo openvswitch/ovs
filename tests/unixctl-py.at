@@ -109,7 +109,7 @@ The available commands are:
 mv stdout expout
 AT_CHECK([PYAPPCTL -t test-unixctl.py help], [0], [expout])
 
-AT_CHECK([echo "test-unixctl.py (Open vSwitch) $VERSION $BUILDNR" > expout])
+AT_CHECK([ovs-vsctl --version | sed 's/ovs-vsctl/test-unixctl.py/' | head -1 > expout])
 AT_CHECK([APPCTL -t test-unixctl.py version], [0], [expout])
 AT_CHECK([PYAPPCTL -t test-unixctl.py version], [0], [expout])
 
