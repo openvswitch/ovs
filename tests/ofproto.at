@@ -485,8 +485,7 @@ priority:0,tunnel:0,in_port:0000,tci(0) mac(00:26:b9:8c:b0:f9->00:25:83:df:b4:00
     AT_FAIL_IF([test X"$1" != X])
 
     ovs-appctl -t ovs-ofctl ofctl/barrier
-    echo >>expout "send: OFPT_BARRIER_REQUEST:
-OFPT_BARRIER_REPLY:"
+    echo >>expout "OFPT_BARRIER_REPLY:"
 
     AT_CHECK(
       [[sed '
