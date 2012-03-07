@@ -6,7 +6,7 @@
 /addrconf_core-openvswitch.c
 /brc_sysfs_dp.c
 /brc_sysfs_if.c
-/brcompat.c
+/brcompat_main.c
 /checksum.c
 /dev-openvswitch.c
 /dp_sysfs_dp.c
