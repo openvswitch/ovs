@@ -922,9 +922,6 @@ ofctl_barrier(struct unixctl_conn *conn, int argc OVS_UNUSED,
     }
 
     msg = ofputil_encode_barrier_request();
-    fprintf(stderr, "send: ");
-    ofp_print(stderr, msg->data, msg->size, verbosity);
-
     error = vconn_send_block(aux->vconn, msg);
     if (error) {
         ofpbuf_delete(msg);
