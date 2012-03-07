@@ -223,7 +223,9 @@ struct action_xlate_ctx {
      * timeouts.) */
     uint8_t tcp_flags;
 
-    /* If nonnull, called just before executing a resubmit action.
+    /* If nonnull, called just before executing a resubmit action.  In
+     * addition, disables logging of traces when the recursion depth is
+     * exceeded.
      *
      * This is normally null so the client has to set it manually after
      * calling action_xlate_ctx_init(). */
@@ -246,6 +248,7 @@ struct action_xlate_ctx {
  * reason to look at them. */
 
     int recurse;                /* Recursion level, via xlate_table_action. */
+    bool max_resubmit_trigger;  /* Recursed too deeply during translation. */
     struct flow base_flow;      /* Flow at the last commit. */
     uint32_t orig_skb_priority; /* Priority when packet arrived. */
     uint8_t table_id;           /* OpenFlow table ID where flow was found. */
@@ -559,6 +562,9 @@ static struct ofport_dpif *get_ofp_port(struct ofproto_dpif *,
                                         uint16_t ofp_port);
 static struct ofport_dpif *get_odp_port(struct ofproto_dpif *,
                                         uint32_t odp_port);
+static void ofproto_trace(struct ofproto_dpif *, const struct flow *,
+                          const struct ofpbuf *, ovs_be16 initial_tci,
+                          struct ds *);
 
 /* Packet processing. */
 static void update_learning_table(struct ofproto_dpif *,
@@ -4435,6 +4441,7 @@ xlate_table_action(struct action_xlate_ctx *ctx,
 
         VLOG_ERR_RL(&recurse_rl, "resubmit actions recursed over %d times",
                     MAX_RESUBMIT_RECURSION);
+        ctx->max_resubmit_trigger = true;
     }
 }
 
@@ -5037,6 +5044,7 @@ xlate_actions(struct action_xlate_ctx *ctx,
     ctx->nf_output_iface = NF_OUT_DROP;
     ctx->mirrors = 0;
     ctx->recurse = 0;
+    ctx->max_resubmit_trigger = false;
     ctx->orig_skb_priority = ctx->flow.skb_priority;
     ctx->table_id = 0;
     ctx->exit = false;
@@ -5068,8 +5076,23 @@ xlate_actions(struct action_xlate_ctx *ctx,
         ctx->may_set_up_flow = false;
         return ctx->odp_actions;
     } else {
+        static struct vlog_rate_limit trace_rl = VLOG_RATE_LIMIT_INIT(1, 1);
+        struct flow original_flow = ctx->flow;
+        ovs_be16 initial_tci = ctx->base_flow.vlan_tci;
+
         add_sflow_action(ctx);
         do_xlate_actions(in, n_in, ctx);
+
+        if (ctx->max_resubmit_trigger && !ctx->resubmit_hook
+            && !VLOG_DROP_ERR(&trace_rl)) {
+            struct ds ds = DS_EMPTY_INITIALIZER;
+
+            ofproto_trace(ctx->ofproto, &original_flow, ctx->packet,
+                          initial_tci, &ds);
+            VLOG_ERR("Trace triggered by excessive resubmit recursion:\n%s",
+                     ds_cstr(&ds));
+            ds_destroy(&ds);
+        }
 
         if (!connmgr_may_set_up_flow(ctx->ofproto->up.connmgr, &ctx->flow,
                                      ctx->odp_actions->data,
@@ -5948,7 +5971,7 @@ ofproto_unixctl_fdb_show(struct unixctl_conn *conn, int argc OVS_UNUSED,
     ds_destroy(&ds);
 }
 
-struct ofproto_trace {
+struct trace_ctx {
     struct action_xlate_ctx ctx;
     struct flow flow;
     struct ds *result;
@@ -5977,7 +6000,7 @@ trace_format_rule(struct ds *result, uint8_t table_id, int level,
 
 static void
 trace_format_flow(struct ds *result, int level, const char *title,
-                 struct ofproto_trace *trace)
+                 struct trace_ctx *trace)
 {
     ds_put_char_multiple(result, '\t', level);
     ds_put_format(result, "%s: ", title);
@@ -5992,7 +6015,7 @@ trace_format_flow(struct ds *result, int level, const char *title,
 
 static void
 trace_format_regs(struct ds *result, int level, const char *title,
-                  struct ofproto_trace *trace)
+                  struct trace_ctx *trace)
 {
     size_t i;
 
@@ -6006,7 +6029,7 @@ trace_format_regs(struct ds *result, int level, const char *title,
 
 static void
 trace_format_odp(struct ds *result, int level, const char *title,
-                 struct ofproto_trace *trace)
+                 struct trace_ctx *trace)
 {
     struct ofpbuf *odp_actions = trace->ctx.odp_actions;
 
@@ -6019,7 +6042,7 @@ trace_format_odp(struct ds *result, int level, const char *title,
 static void
 trace_resubmit(struct action_xlate_ctx *ctx, struct rule_dpif *rule)
 {
-    struct ofproto_trace *trace = CONTAINER_OF(ctx, struct ofproto_trace, ctx);
+    struct trace_ctx *trace = CONTAINER_OF(ctx, struct trace_ctx, ctx);
     struct ds *result = trace->result;
 
     ds_put_char(result, '\n');
@@ -6037,7 +6060,6 @@ ofproto_unixctl_trace(struct unixctl_conn *conn, int argc, const char *argv[],
     struct ofproto_dpif *ofproto;
     struct ofpbuf odp_key;
     struct ofpbuf *packet;
-    struct rule_dpif *rule;
     ovs_be16 initial_tci;
     struct ds result;
     struct flow flow;
@@ -6110,48 +6132,57 @@ ofproto_unixctl_trace(struct unixctl_conn *conn, int argc, const char *argv[],
         goto exit;
     }
 
-    ds_put_cstr(&result, "Flow: ");
-    flow_format(&result, &flow);
-    ds_put_char(&result, '\n');
-
-    rule = rule_dpif_lookup(ofproto, &flow, 0);
-    trace_format_rule(&result, 0, 0, rule);
-    if (rule) {
-        struct ofproto_trace trace;
-        struct ofpbuf *odp_actions;
-        uint8_t tcp_flags;
-
-        tcp_flags = packet ? packet_get_tcp_flags(packet, &flow) : 0;
-        trace.result = &result;
-        trace.flow = flow;
-        action_xlate_ctx_init(&trace.ctx, ofproto, &flow, initial_tci,
-                              rule, tcp_flags, packet);
-        trace.ctx.resubmit_hook = trace_resubmit;
-        odp_actions = xlate_actions(&trace.ctx,
-                                    rule->up.actions, rule->up.n_actions);
-
-        ds_put_char(&result, '\n');
-        trace_format_flow(&result, 0, "Final flow", &trace);
-        ds_put_cstr(&result, "Datapath actions: ");
-        format_odp_actions(&result, odp_actions->data, odp_actions->size);
-        ofpbuf_delete(odp_actions);
-
-        if (!trace.ctx.may_set_up_flow) {
-            if (packet) {
-                ds_put_cstr(&result, "\nThis flow is not cachable.");
-            } else {
-                ds_put_cstr(&result, "\nThe datapath actions are incomplete--"
-                            "for complete actions, please supply a packet.");
-            }
-        }
-    }
-
+    ofproto_trace(ofproto, &flow, packet, initial_tci, &result);
     unixctl_command_reply(conn, ds_cstr(&result));
 
 exit:
     ds_destroy(&result);
     ofpbuf_delete(packet);
     ofpbuf_uninit(&odp_key);
+}
+
+static void
+ofproto_trace(struct ofproto_dpif *ofproto, const struct flow *flow,
+              const struct ofpbuf *packet, ovs_be16 initial_tci,
+              struct ds *ds)
+{
+    struct rule_dpif *rule;
+
+    ds_put_cstr(ds, "Flow: ");
+    flow_format(ds, flow);
+    ds_put_char(ds, '\n');
+
+    rule = rule_dpif_lookup(ofproto, flow, 0);
+    trace_format_rule(ds, 0, 0, rule);
+    if (rule) {
+        struct trace_ctx trace;
+        struct ofpbuf *odp_actions;
+        uint8_t tcp_flags;
+
+        tcp_flags = packet ? packet_get_tcp_flags(packet, flow) : 0;
+        trace.result = ds;
+        trace.flow = *flow;
+        action_xlate_ctx_init(&trace.ctx, ofproto, flow, initial_tci,
+                              rule, tcp_flags, packet);
+        trace.ctx.resubmit_hook = trace_resubmit;
+        odp_actions = xlate_actions(&trace.ctx,
+                                    rule->up.actions, rule->up.n_actions);
+
+        ds_put_char(ds, '\n');
+        trace_format_flow(ds, 0, "Final flow", &trace);
+        ds_put_cstr(ds, "Datapath actions: ");
+        format_odp_actions(ds, odp_actions->data, odp_actions->size);
+        ofpbuf_delete(odp_actions);
+
+        if (!trace.ctx.may_set_up_flow) {
+            if (packet) {
+                ds_put_cstr(ds, "\nThis flow is not cachable.");
+            } else {
+                ds_put_cstr(ds, "\nThe datapath actions are incomplete--"
+                            "for complete actions, please supply a packet.");
+            }
+        }
+    }
 }
 
 static void
