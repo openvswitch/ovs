@@ -70,11 +70,7 @@ def make_unix_socket(style, nonblock, bind_path, connect_path):
     except socket.error, e:
         sock.close()
         if bind_path is not None:
-            try:
-                os.unlink(bind_path)
-            except OSError, e:
-                pass
-            ovs.fatal_signal.add_file_to_unlink(bind_path)
+            ovs.fatal_signal.unlink_file_now(bind_path)
         return get_exception_errno(e), None
 
 
