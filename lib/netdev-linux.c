@@ -1498,7 +1498,7 @@ netdev_linux_get_features(const struct netdev *netdev,
     }
 
     /* Current settings. */
-    speed = (ecmd.speed_hi << 16) | ecmd.speed;
+    speed = ecmd.speed;
     if (speed == SPEED_10) {
         *current = ecmd.duplex ? NETDEV_F_10MB_FD : NETDEV_F_10MB_HD;
     } else if (speed == SPEED_100) {
