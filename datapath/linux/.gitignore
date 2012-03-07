@@ -4,8 +4,6 @@
 /Module.markers
 /actions.c
 /addrconf_core-openvswitch.c
-/brc_sysfs_dp.c
-/brc_sysfs_if.c
 /brcompat_main.c
 /checksum.c
 /dev-openvswitch.c
@@ -14,16 +12,19 @@
 /datapath.c
 /dp_dev.c
 /dp_notify.c
+/exthdrs_core.c
 /flex_array.c
 /flow.c
 /genetlink-brcompat.c
 /genetlink-openvswitch.c
+/genl_exec.c
 /ip_output-openvswitch.c
 /kcompat.h
 /kmemdup.c
 /loop_counter.c
 /modules.order
 /netdevice.c
+/net_namespace.c
 /random32.c
 /reciprocal_div.c
 /skbuff-openvswitch.c
@@ -39,3 +40,4 @@
 /vport-netdev.c
 /vport-patch.c
 /vport.c
+/workqueue.c
