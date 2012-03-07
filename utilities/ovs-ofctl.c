@@ -988,9 +988,9 @@ monitor_vconn(struct vconn *vconn)
             if (retval == EAGAIN) {
                 break;
             }
-            msg_type = ((const struct ofp_header *) b->data)->type;
-
             run(retval, "vconn_recv");
+
+            msg_type = ((const struct ofp_header *) b->data)->type;
             ofp_print(stderr, b->data, b->size, verbosity + 2);
             ofpbuf_delete(b);
 
