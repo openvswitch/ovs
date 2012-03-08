@@ -797,7 +797,11 @@ netdev_linux_recv(struct netdev *netdev_, void *data, size_t size)
     }
 
     for (;;) {
-        ssize_t retval = recv(netdev->fd, data, size, MSG_TRUNC);
+        ssize_t retval;
+
+        retval = (netdev_->netdev_dev->netdev_class == &netdev_tap_class
+                  ? read(netdev->fd, data, size)
+                  : recv(netdev->fd, data, size, MSG_TRUNC));
         if (retval >= 0) {
             return retval <= size ? retval : -EMSGSIZE;
         } else if (errno != EINTR) {
