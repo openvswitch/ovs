@@ -430,6 +430,7 @@ check_async () {
     printf '\n\n--- check_async %d ---\n\n\n' $1
     shift
 
+    ovs-appctl -t ovs-ofctl ofctl/barrier
     ovs-appctl -t ovs-ofctl ofctl/set-output-file monitor.log
     : > expout
 
