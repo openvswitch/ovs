@@ -1565,6 +1565,12 @@ OFP_ASSERT(sizeof(struct nx_action_output_reg) == 24);
 #define NXM_NX_REG3_W     NXM_HEADER_W(0x0001, 3, 4)
 #define NXM_NX_REG4       NXM_HEADER  (0x0001, 4, 4)
 #define NXM_NX_REG4_W     NXM_HEADER_W(0x0001, 4, 4)
+#define NXM_NX_REG5       NXM_HEADER  (0x0001, 5, 4)
+#define NXM_NX_REG5_W     NXM_HEADER_W(0x0001, 5, 4)
+#define NXM_NX_REG6       NXM_HEADER  (0x0001, 6, 4)
+#define NXM_NX_REG6_W     NXM_HEADER_W(0x0001, 6, 4)
+#define NXM_NX_REG7       NXM_HEADER  (0x0001, 7, 4)
+#define NXM_NX_REG7_W     NXM_HEADER_W(0x0001, 7, 4)
 
 /* Tunnel ID.
  *

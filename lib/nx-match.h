@@ -20,6 +20,7 @@
 #include <stdint.h>
 #include <sys/types.h>
 #include <netinet/in.h>
+#include "flow.h"
 #include "openvswitch/types.h"
 #include "ofp-errors.h"
 
@@ -89,6 +90,7 @@ void nxm_decode(struct mf_subfield *, ovs_be32 header, ovs_be16 ofs_nbits);
 void nxm_decode_discrete(struct mf_subfield *, ovs_be32 header,
                          ovs_be16 ofs, ovs_be16 n_bits);
 
+BUILD_ASSERT_DECL(FLOW_WC_SEQ == 9);
 /* Upper bound on the length of an nx_match.  The longest nx_match (an
  * IPV6 neighbor discovery message using 5 registers) would be:
  *
@@ -116,9 +118,12 @@ void nxm_decode_discrete(struct mf_subfield *, ovs_be32 header,
  *  NXM_NX_REG_W(2)     4       4     4     12
  *  NXM_NX_REG_W(3)     4       4     4     12
  *  NXM_NX_REG_W(4)     4       4     4     12
+ *  NXM_NX_REG_W(5)     4       4     4     12
+ *  NXM_NX_REG_W(6)     4       4     4     12
+ *  NXM_NX_REG_W(7)     4       4     4     12
  *  NXM_NX_TUN_ID_W     4       8     8     20
  *  -------------------------------------------
- *  total                                  275
+ *  total                                  311
  *
  * So this value is conservative.
  */

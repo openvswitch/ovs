@@ -91,6 +91,15 @@ static const struct mf_field mf_fields[MFF_N_IDS] = {
     REGISTER(4),
 #endif
 #if FLOW_N_REGS > 5
+    REGISTER(5),
+#endif
+#if FLOW_N_REGS > 6
+    REGISTER(6),
+#endif
+#if FLOW_N_REGS > 7
+    REGISTER(7),
+#endif
+#if FLOW_N_REGS > 8
 #error
 #endif
 
@@ -534,6 +543,15 @@ mf_is_all_wild(const struct mf_field *mf, const struct flow_wildcards *wc)
     case MFF_REG4:
 #endif
 #if FLOW_N_REGS > 5
+    case MFF_REG5:
+#endif
+#if FLOW_N_REGS > 6
+    case MFF_REG6:
+#endif
+#if FLOW_N_REGS > 7
+    case MFF_REG7:
+#endif
+#if FLOW_N_REGS > 8
 #error
 #endif
         return !wc->reg_masks[mf->id - MFF_REG0];
@@ -633,6 +651,15 @@ mf_get_mask(const struct mf_field *mf, const struct flow_wildcards *wc,
     case MFF_REG4:
 #endif
 #if FLOW_N_REGS > 5
+    case MFF_REG5:
+#endif
+#if FLOW_N_REGS > 6
+    case MFF_REG6:
+#endif
+#if FLOW_N_REGS > 7
+    case MFF_REG7:
+#endif
+#if FLOW_N_REGS > 8
 #error
 #endif
         mask->be32 = htonl(wc->reg_masks[mf->id - MFF_REG0]);
@@ -824,6 +851,15 @@ mf_is_value_valid(const struct mf_field *mf, const union mf_value *value)
     case MFF_REG4:
 #endif
 #if FLOW_N_REGS > 5
+    case MFF_REG5:
+#endif
+#if FLOW_N_REGS > 6
+    case MFF_REG6:
+#endif
+#if FLOW_N_REGS > 7
+    case MFF_REG7:
+#endif
+#if FLOW_N_REGS > 8
 #error
 #endif
     case MFF_ETH_SRC:
@@ -909,6 +945,15 @@ mf_get_value(const struct mf_field *mf, const struct flow *flow,
     case MFF_REG4:
 #endif
 #if FLOW_N_REGS > 5
+    case MFF_REG5:
+#endif
+#if FLOW_N_REGS > 6
+    case MFF_REG6:
+#endif
+#if FLOW_N_REGS > 7
+    case MFF_REG7:
+#endif
+#if FLOW_N_REGS > 8
 #error
 #endif
         value->be32 = htonl(flow->regs[mf->id - MFF_REG0]);
@@ -1068,6 +1113,15 @@ mf_set_value(const struct mf_field *mf,
     case MFF_REG4:
 #endif
 #if FLOW_N_REGS > 5
+    case MFF_REG5:
+#endif
+#if FLOW_N_REGS > 6
+    case MFF_REG6:
+#endif
+#if FLOW_N_REGS > 7
+    case MFF_REG7:
+#endif
+#if FLOW_N_REGS > 8
 #error
 #endif
 #if FLOW_N_REGS > 0
@@ -1229,6 +1283,15 @@ mf_set_flow_value(const struct mf_field *mf,
     case MFF_REG4:
 #endif
 #if FLOW_N_REGS > 5
+    case MFF_REG5:
+#endif
+#if FLOW_N_REGS > 6
+    case MFF_REG6:
+#endif
+#if FLOW_N_REGS > 7
+    case MFF_REG7:
+#endif
+#if FLOW_N_REGS > 8
 #error
 #endif
 #if FLOW_N_REGS > 0
@@ -1397,6 +1460,21 @@ mf_set_wild(const struct mf_field *mf, struct cls_rule *rule)
         break;
 #endif
 #if FLOW_N_REGS > 5
+    case MFF_REG5:
+        cls_rule_set_reg_masked(rule, 5, 0, 0);
+        break;
+#endif
+#if FLOW_N_REGS > 6
+    case MFF_REG6:
+        cls_rule_set_reg_masked(rule, 6, 0, 0);
+        break;
+#endif
+#if FLOW_N_REGS > 7
+    case MFF_REG7:
+        cls_rule_set_reg_masked(rule, 7, 0, 0);
+        break;
+#endif
+#if FLOW_N_REGS > 8
 #error
 #endif
 
@@ -1588,6 +1666,15 @@ mf_set(const struct mf_field *mf,
     case MFF_REG4:
 #endif
 #if FLOW_N_REGS > 5
+    case MFF_REG5:
+#endif
+#if FLOW_N_REGS > 6
+    case MFF_REG6:
+#endif
+#if FLOW_N_REGS > 7
+    case MFF_REG7:
+#endif
+#if FLOW_N_REGS > 8
 #error
 #endif
         cls_rule_set_reg_masked(rule, mf->id - MFF_REG0,
@@ -1732,6 +1819,15 @@ mf_random_value(const struct mf_field *mf, union mf_value *value)
     case MFF_REG4:
 #endif
 #if FLOW_N_REGS > 5
+    case MFF_REG5:
+#endif
+#if FLOW_N_REGS > 6
+    case MFF_REG6:
+#endif
+#if FLOW_N_REGS > 7
+    case MFF_REG7:
+#endif
+#if FLOW_N_REGS > 8
 #error
 #endif
     case MFF_ETH_SRC:
