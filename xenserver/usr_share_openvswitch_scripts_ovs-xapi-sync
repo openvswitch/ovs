@@ -272,8 +272,10 @@ def main():
     bridges = {}                # Map from bridge name to xs_network_uuids
     iface_ids = {}              # Map from xs-vif-uuid to iface-id
     vm_ids = {}                 # Map from xs-vm-uuid to vm-id
+    seqno = idl.change_seqno    # Sequence number when we last processed the db
     while True:
-        if not force_run and not idl.run():
+        idl.run()
+        if not force_run and seqno == idl.change_seqno:
             poller = ovs.poller.Poller()
             idl.wait(poller)
             poller.block()
@@ -285,6 +287,7 @@ def main():
             iface_ids = {}
             vm_ids = {}
             force_run = False
+        seqno = idl.change_seqno
 
         txn = ovs.db.idl.Transaction(idl)
 
