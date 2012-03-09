@@ -1,8 +1,8 @@
 PACKAGE_NAME="openvswitch"
 PACKAGE_VERSION="__VERSION__"
 MAKE="./configure --with-linux='${kernel_source_dir}' && make -C datapath/linux"
-BUILT_MODULE_NAME[0]=openvswitch_mod
-BUILT_MODULE_NAME[1]=brcompat_mod
+BUILT_MODULE_NAME[0]=openvswitch
+BUILT_MODULE_NAME[1]=brcompat
 BUILT_MODULE_LOCATION[0]=datapath/linux/
 BUILT_MODULE_LOCATION[1]=datapath/linux/
 DEST_MODULE_LOCATION[0]=/kernel/drivers/net/openvswitch/

@@ -49,7 +49,7 @@ License: ASL 2.0
 Release: 1
 Source: openvswitch-%{openvswitch_version}.tar.gz
 Buildroot: /tmp/openvswitch-xen-rpm
-Requires: openvswitch_mod.ko.%{module_abi_version}
+Requires: openvswitch.ko.%{module_abi_version}
 
 %description
 Open vSwitch provides standard network bridging functions augmented with
@@ -60,7 +60,7 @@ traffic.
 Summary: Open vSwitch kernel module
 Group: System Environment/Kernel
 License: GPLv2
-Provides: %{name}-modules-%{kernel_flavor} = %{kernel_version}, openvswitch_mod.ko.%{module_abi_version}
+Provides: %{name}-modules-%{kernel_flavor} = %{kernel_version}, openvswitch.ko.%{module_abi_version}
 Requires: kernel-%{kernel_name} = %{kernel_version}
 
 %description %{module_package}
@@ -448,5 +448,5 @@ exit 0
 %exclude /usr/share/openvswitch/python/ovs/db/*.py[co]
 
 %files %{module_package}
-/lib/modules/%{xen_version}/extra/openvswitch/openvswitch_mod.ko
-%exclude /lib/modules/%{xen_version}/extra/openvswitch/brcompat_mod.ko
+/lib/modules/%{xen_version}/extra/openvswitch/openvswitch.ko
+%exclude /lib/modules/%{xen_version}/extra/openvswitch/brcompat.ko

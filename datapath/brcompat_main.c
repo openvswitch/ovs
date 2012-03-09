@@ -523,7 +523,7 @@ static int __init brc_init(void)
 	/* Set the bridge ioctl handler */
 	brioctl_set(brc_ioctl_deviceless_stub);
 
-	/* Set the openvswitch_mod device ioctl handler */
+	/* Set the openvswitch device ioctl handler */
 	ovs_dp_ioctl_hook = brc_dev_ioctl;
 
 	/* Randomize the initial sequence number.  This is not a security
@@ -572,7 +572,7 @@ MODULE_LICENSE("GPL");
 /*
  * In kernels 2.6.36 and later, Open vSwitch can safely coexist with
  * the Linux bridge module, but it does not make sense to load both bridge and
- * brcompat_mod, so this prevents it.
+ * brcompat, so this prevents it.
  */
 BRIDGE_MUTUAL_EXCLUSION;
 #endif

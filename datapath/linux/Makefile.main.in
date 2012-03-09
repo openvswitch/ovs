@@ -29,7 +29,7 @@ check: all
 installcheck:
 mostlyclean:
 clean:
-	rm -f *.o *.ko *_mod.* Module.symvers *.cmd kcompat.h.new
+	rm -f *.o *.ko *.mod.* Module.symvers *.cmd kcompat.h.new
 	for d in $(build_links); do if test -h $$d; then rm $$d; fi; done
 distclean: clean
 	rm -f kcompat.h

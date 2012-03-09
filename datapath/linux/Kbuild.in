@@ -24,10 +24,10 @@ EXTRA_CFLAGS += -include $(builddir)/kcompat.h
 # right place, even though it's conceptually incorrect.
 NOSTDINC_FLAGS += -I$(top_srcdir)/include -I$(srcdir)/compat -I$(srcdir)/compat/include
 
-obj-m := $(patsubst %,%_mod.o,$(build_modules))
+obj-m := $(patsubst %,%.o,$(build_modules))
 
 define module_template
-$(1)_mod-y = $$(notdir $$(patsubst %.c,%.o,$($(1)_sources)))
+$(1)-y = $$(notdir $$(patsubst %.c,%.o,$($(1)_sources)))
 endef
 
 $(foreach module,$(build_modules),$(eval $(call module_template,$(module))))

@@ -31,14 +31,15 @@ done
 ## ----- ##
 
 insert_openvswitch_mod_if_required () {
-    # If openvswitch_mod is already loaded then we're done.
-    test -e /sys/module/openvswitch_mod && return 0
+    # If openvswitch is already loaded then we're done.
+    test -e /sys/module/openvswitch -o -e /sys/module/openvswitch_mod && \
+     return 0
 
-    # Load openvswitch_mod.  If that's successful then we're done.
-    action "Inserting openvswitch module" modprobe openvswitch_mod && return 0
+    # Load openvswitch.  If that's successful then we're done.
+    action "Inserting openvswitch module" modprobe openvswitch && return 0
 
     # If the bridge module is loaded, then that might be blocking
-    # openvswitch_mod.  Try to unload it, if there are no bridges.
+    # openvswitch.  Try to unload it, if there are no bridges.
     test -e /sys/module/bridge || return 1
     bridges=`echo /sys/class/net/*/bridge | sed 's,/sys/class/net/,,g;s,/bridge,,g'`
     if test "$bridges" != "*"; then
@@ -47,17 +48,17 @@ insert_openvswitch_mod_if_required () {
     fi
     action "removing bridge module" rmmod bridge || return 1
 
-    # Try loading openvswitch_mod again.
-    action "Inserting openvswitch module" modprobe openvswitch_mod
+    # Try loading openvswitch again.
+    action "Inserting openvswitch module" modprobe openvswitch
 }
 
 insert_brcompat_mod_if_required () {
     if test -e /sys/module/bridge; then
-        log_warning_msg "bridge module is loaded, not loading brcompat_mod"
+        log_warning_msg "bridge module is loaded, not loading brcompat"
         return 1
     fi
-    test -e /sys/module/brcompat_mod && return 0
-    action "Inserting brcompat module" modprobe brcompat_mod
+    test -e /sys/module/brcompat -o -e /sys/module/brcompat_mod && return 0
+    action "Inserting brcompat module" modprobe brcompat
 }
 
 insert_mod_if_required () {
@@ -286,11 +287,16 @@ force_reload_kmod () {
         action "Removing datapath: $dp" ovs-dpctl del-dp "$dp"
     done
 
+    # try both old and new names in case this is post upgrade
     if test -e /sys/module/brcompat_mod; then
         action "Removing brcompat module" rmmod brcompat_mod
+    elif test -e /sys/module/brcompat; then
+        action "Removing brcompat module" rmmod brcompat
     fi
     if test -e /sys/module/openvswitch_mod; then
         action "Removing openvswitch module" rmmod openvswitch_mod
+    elif test -e /sys/module/openvswitch; then
+        action "Removing openvswitch module" rmmod openvswitch
     fi
 
     start

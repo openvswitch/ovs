@@ -105,7 +105,7 @@ When Open vSwitch is installed on XenServer, its startup script
 /etc/init.d/openvswitch runs early in boot.  It does roughly the
 following:
 
-        * Loads the OVS kernel module, openvswitch_mod.
+        * Loads the OVS kernel module, openvswitch.
 
         * Starts ovsdb-server, the OVS configuration database.
 

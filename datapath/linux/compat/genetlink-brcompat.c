@@ -1,5 +1,5 @@
 /* We fix grp->id to 32 so that it doesn't collide with any of the multicast
- * groups selected by openvswitch_mod, which uses groups 16 through 31.
+ * groups selected by openvswitch, which uses groups 16 through 31.
  * Collision isn't fatal--multicast listeners should check that the family is
  * the one that they want and discard others--but it wastes time and memory to
  * receive unwanted messages. */

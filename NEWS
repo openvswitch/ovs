@@ -1,5 +1,7 @@
 post-v1.6.0
 ------------------------
+    - kernel modules are renamed. openvswitch_mod.ko is now
+      openvswitch.ko and brcompat_mod.ko is now brcompat.ko.
 
 
 v1.6.0 - xx xxx xxxx

@@ -36,7 +36,7 @@ to find it.
 .so lib/leak-checker.man
 .
 .SH NOTES
-\fBovs\-brcompatd\fR requires the \fBbrcompat_mod.ko\fR kernel module to be
+\fBovs\-brcompatd\fR requires the \fBbrcompat.ko\fR kernel module to be
 loaded.
 .SH "SEE ALSO"
 .BR ovs\-appctl (8),

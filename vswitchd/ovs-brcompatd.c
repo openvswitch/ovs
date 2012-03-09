@@ -456,7 +456,7 @@ handle_fdb_query_cmd(struct ofpbuf *buffer)
     uint32_t seq;
     int error;
 
-    /* Parse the command received from brcompat_mod. */
+    /* Parse the command received from brcompat. */
     error = parse_command(buffer, &seq, &linux_name, NULL, &count, &skip);
     if (error) {
         return error;

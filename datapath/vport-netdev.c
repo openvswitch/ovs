@@ -423,7 +423,7 @@ const struct vport_ops ovs_netdev_vport_ops = {
  * In kernels earlier than 2.6.36, Open vSwitch cannot safely coexist with the
  * Linux bridge module, because there is only a single bridge hook function and
  * only a single br_port member in struct net_device, so this prevents loading
- * both bridge and openvswitch_mod at the same time.
+ * both bridge and openvswitch at the same time.
  */
 BRIDGE_MUTUAL_EXCLUSION;
 #endif

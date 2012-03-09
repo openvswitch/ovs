@@ -194,16 +194,16 @@ Prerequisites section, follow the procedure below to build.
 
 6. If you built kernel modules, you may load them with "insmod", e.g.:
 
-      % insmod datapath/linux/openvswitch_mod.ko
+      % insmod datapath/linux/openvswitch.ko
 
    You may need to specify a full path to insmod, e.g. /sbin/insmod.
    To verify that the modules have been loaded, run "/sbin/lsmod" and
-   check that openvswitch_mod is listed.
+   check that openvswitch is listed.
 
    If the "insmod" operation fails, look at the last few kernel log
    messages (e.g. with "dmesg | tail"):
 
-      - The message "openvswitch_mod: exports duplicate symbol
+      - The message "openvswitch: exports duplicate symbol
         br_should_route_hook (owned by bridge)" means that the bridge
         module is loaded.  Run "/sbin/rmmod bridge" to remove it.
 
@@ -212,7 +212,7 @@ Prerequisites section, follow the procedure below to build.
         the kernel, rather than as a module.  Open vSwitch does not
         support this configuration (see "Build Requirements", above).
 
-      - The message "openvswitch_mod: exports duplicate symbol
+      - The message "openvswitch: exports duplicate symbol
         dp_ioctl_hook (owned by ofdatapath)" means that the ofdatapath
         module from the OpenFlow reference implementation is loaded.
         Run "/sbin/rmmod ofdatapath" to remove it.  (You might have to
@@ -222,10 +222,10 @@ Prerequisites section, follow the procedure below to build.
 
       - Otherwise, the most likely problem is that Open vSwitch was
         built for a kernel different from the one into which you are
-        trying to load it.  Run "modinfo" on openvswitch_mod.ko and on
+        trying to load it.  Run "modinfo" on openvswitch.ko and on
         a module built for the running kernel, e.g.:
 
-           % /sbin/modinfo openvswitch_mod.ko
+           % /sbin/modinfo openvswitch.ko
            % /sbin/modinfo /lib/modules/`uname -r`/kernel/net/bridge/bridge.ko
 
         Compare the "vermagic" lines output by the two commands.  If
@@ -235,7 +235,7 @@ Prerequisites section, follow the procedure below to build.
         module loading, please include the output from the "dmesg" and
         "modinfo" commands mentioned above.
 
-   There is an optional module parameter to openvswitch_mod.ko called
+   There is an optional module parameter to openvswitch.ko called
    vlan_tso that enables TCP segmentation offload over VLANs on NICs
    that support it. Many drivers do not expose support for TSO on VLANs
    in a way that Open vSwitch can use but there is no way to detect
