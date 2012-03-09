@@ -24,6 +24,8 @@
 # Default-Start:     2 3 4 5
 # Default-Stop:      0 1 6
 # Short-Description: Open vSwitch GRE-over-IPsec daemon
+# Description:       The ovs-monitor-ipsec script provides support for encrypting GRE
+#                    tunnels with IPsec.
 ### END INIT INFO
 
 PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin

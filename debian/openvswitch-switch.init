@@ -21,6 +21,8 @@
 # Default-Start:     2 3 4 5
 # Default-Stop:      0 1 6
 # Short-Description: Open vSwitch switch
+# Description:       openvswitch-switch provides the userspace components and utilities for
+#                    the Open vSwitch kernel-based switch.
 ### END INIT INFO
 
 (test -x /usr/sbin/ovs-vswitchd && test -x /usr/sbin/ovsdb-server) || exit 0

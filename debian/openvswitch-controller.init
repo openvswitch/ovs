@@ -27,6 +27,8 @@
 # Default-Start:     2 3 4 5
 # Default-Stop:      0 1 6
 # Short-Description: Open vSwitch controller
+# Description:       The Open vSwitch controller enables OpenFlow switches that connect to it
+#                    to act as MAC-learning Ethernet switches.
 ### END INIT INFO
 
 PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
