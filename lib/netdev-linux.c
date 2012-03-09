@@ -381,6 +381,7 @@ struct netdev_dev_linux {
     int ether_addr_error;       /* Cached error code from set/get etheraddr. */
     int netdev_policing_error;  /* Cached error code from set policing. */
     int get_features_error;     /* Cached error code from ETHTOOL_GSET. */
+    int get_ifindex_error;      /* Cached error code from SIOCGIFINDEX. */
 
     uint32_t current;           /* Cached from ETHTOOL_GSET. */
     uint32_t advertised;        /* Cached from ETHTOOL_GSET. */
@@ -543,6 +544,7 @@ netdev_dev_linux_update(struct netdev_dev_linux *dev,
         /* Keep drv-info */
         netdev_dev_linux_changed(dev, change->ifi_flags, VALID_DRVINFO);
 
+        /* Update netdev from rtnl-change msg. */
         if (change->mtu) {
             dev->mtu = change->mtu;
             dev->cache_valid |= VALID_MTU;
@@ -554,6 +556,10 @@ netdev_dev_linux_update(struct netdev_dev_linux *dev,
             dev->cache_valid |= VALID_ETHERADDR;
             dev->ether_addr_error = 0;
         }
+
+        dev->ifindex = change->ifi_index;
+        dev->cache_valid |= VALID_IFINDEX;
+        dev->get_ifindex_error = 0;
 
     } else {
         netdev_dev_linux_changed(dev, change->ifi_flags, 0);
@@ -4395,17 +4401,22 @@ get_ifindex(const struct netdev *netdev_, int *ifindexp)
 {
     struct netdev_dev_linux *netdev_dev =
                                 netdev_dev_linux_cast(netdev_get_dev(netdev_));
-    *ifindexp = 0;
+
     if (!(netdev_dev->cache_valid & VALID_IFINDEX)) {
         int ifindex = do_get_ifindex(netdev_get_name(netdev_));
+
         if (ifindex < 0) {
-            return -ifindex;
+            netdev_dev->get_ifindex_error = -ifindex;
+            netdev_dev->ifindex = 0;
+        } else {
+            netdev_dev->get_ifindex_error = 0;
+            netdev_dev->ifindex = ifindex;
         }
         netdev_dev->cache_valid |= VALID_IFINDEX;
-        netdev_dev->ifindex = ifindex;
     }
+
     *ifindexp = netdev_dev->ifindex;
-    return 0;
+    return netdev_dev->get_ifindex_error;
 }
 
 static int
