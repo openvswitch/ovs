@@ -275,9 +275,9 @@ def docsToNroff(schemaFile, xmlFile, erFile, title=None):
 .  I "\\$1"
 .  RE
 ..
-''' % (title, d.strftime("%B %Y"))
-
-    s += '.SH "%s DATABASE"\n' % schema.name
+.SH NAME
+%s \- %s database schema
+''' % (title, d.strftime("%B %Y"), textToNroff(title), schema.name)
 
     tables = ""
     introNodes = []
