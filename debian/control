@@ -8,7 +8,7 @@ Build-Depends:
  libssl-dev, pkg-config (>= 0.21), bzip2, openssl,
  python-all (>= 2.6.6-3~), procps, python-qt4,
  python-zopeinterface, python-twisted-conch
-Standards-Version: 3.9.2
+Standards-Version: 3.9.3
 Homepage: http://openvswitch.org/
 
 Package: openvswitch-datapath-source
@@ -31,7 +31,7 @@ Description: Open vSwitch datapath module source - module-assistant version
 
 Package: openvswitch-datapath-dkms
 Architecture: all
-Depends: dkms (>= 1.95), make, libc6-dev, ${misc:Depends}
+Depends: dkms (>= 1.95), make, libc6-dev, ${misc:Depends}, ${python:Depends}
 Description: Open vSwitch datapath module source - DKMS version
  Open vSwitch is a production quality, multilayer, software-based, Ethernet
  virtual switch. It is designed to enable massive network automation through
