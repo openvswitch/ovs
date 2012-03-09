@@ -58,7 +58,7 @@ The default period, used when stress options have been enabled (with
 \fBstress/enable\fR) but this particular stress option has not been
 specifically configured (with \fBstress/set\fR).  It is \fBdisabled\fR
 if the option is disabled by default.  It is nonzero for options that
-can be left on at low levels without noticable impact to the end user.
+can be left on at low levels without noticeable impact to the end user.
 .RE
 .
 .IP "\fBstress/set \fIoption\fR \fIperiod\fR [\fBrandom\fR|\fBperiodic\fR]"
