@@ -18,6 +18,8 @@
 #define RTNETLINK_LINK_H 1
 
 #include <stdbool.h>
+#include <stdint.h>
+#include <linux/if_ether.h>
 
 struct ofpbuf;
 struct nln_notifier;
@@ -38,6 +40,7 @@ struct rtnetlink_link_change {
     const char *ifname;         /* Name of network device. */
     int master_ifindex;         /* Ifindex of datapath master (0 if none). */
     int mtu;                    /* Current MTU. */
+    uint8_t addr[ETH_ALEN];
     unsigned int ifi_flags;     /* Flags of network device. */
 };
 
