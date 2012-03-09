@@ -72,6 +72,7 @@ clean:
 	rm -rf _debian
 	[ ! -f Makefile ] || $(MAKE) distclean
 	dh_clean 
+	rm -f python/ovs/*.pyc python/ovs/db/*.pyc
 
 install: install-indep install-arch
 install-indep: build-indep
