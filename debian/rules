@@ -31,6 +31,12 @@ else
 CFLAGS += -O2
 endif
 
+ifeq ($(BUILD_NUMBER),0)
+BUILD_NUMBER_OPTION =
+else
+BUILD_NUMBER_OPTION = --with-build-number=$(BUILD_NUMBER)
+endif
+
 configure: configure-stamp
 configure-stamp:
 	dh_testdir
@@ -41,7 +47,7 @@ configure-stamp:
 	cd _debian && ( \
 		test -e Makefile || \
 		../configure --prefix=/usr --localstatedir=/var --enable-ssl \
-			--sysconfdir=/etc --with-build-number=$(BUILD_NUMBER) \
+			--sysconfdir=/etc $(BUILD_NUMBER_OPTION) \
 			CFLAGS="$(CFLAGS)" $(DATAPATH_CONFIGURE_OPTS))
 	touch configure-stamp
 
