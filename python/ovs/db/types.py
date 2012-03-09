@@ -1,4 +1,4 @@
-# Copyright (c) 2009, 2010, 2011 Nicira Networks
+# Copyright (c) 2009, 2010, 2011, 2012 Nicira Networks
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -282,7 +282,8 @@ class BaseType(object):
         else:
             return self.type.to_string()
 
-    def constraintsToEnglish(self, escapeLiteral=returnUnchanged):
+    def constraintsToEnglish(self, escapeLiteral=returnUnchanged,
+                             escapeNumber=returnUnchanged):
         if self.enum:
             literals = [value.toEnglish(escapeLiteral)
                         for value in self.enum.values]
@@ -294,20 +295,23 @@ class BaseType(object):
                                                     literals[-1])
         elif self.min is not None and self.max is not None:
             if self.type == IntegerType:
-                english = 'in range %s to %s' % (commafy(self.min),
-                                                 commafy(self.max))
+                english = 'in range %s to %s' % (
+                    escapeNumber(commafy(self.min)),
+                    escapeNumber(commafy(self.max)))
             else:
-                english = 'in range %g to %g' % (self.min, self.max)
+                english = 'in range %s to %s' % (
+                    escapeNumber("%g" % self.min),
+                    escapeNumber("%g" % self.max))
         elif self.min is not None:
             if self.type == IntegerType:
-                english = 'at least %s' % commafy(self.min)
+                english = 'at least %s' % escapeNumber(commafy(self.min))
             else:
-                english = 'at least %g' % self.min
+                english = 'at least %s' % escapeNumber("%g" % self.min)
         elif self.max is not None:
             if self.type == IntegerType:
-                english = 'at most %s' % commafy(self.max)
+                english = 'at most %s' % escapeNumber(commafy(self.max))
             else:
-                english = 'at most %g' % self.max
+                english = 'at most %s' % escapeNumber("%g" % self.max)
         elif self.min_length != 0 and self.max_length != sys.maxint:
             if self.min_length == self.max_length:
                 english = ('exactly %s characters long'
@@ -537,9 +541,11 @@ class Type(object):
                     plural = keyName + "s"
                 return "set of %s%s" % (quantity, plural)
 
-    def constraintsToEnglish(self, escapeLiteral=returnUnchanged):
+    def constraintsToEnglish(self, escapeLiteral=returnUnchanged,
+                             escapeNumber=returnUnchanged):
         constraints = []
-        keyConstraints = self.key.constraintsToEnglish(escapeLiteral)
+        keyConstraints = self.key.constraintsToEnglish(escapeLiteral,
+                                                       escapeNumber)
         if keyConstraints:
             if self.value:
                 constraints.append('key %s' % keyConstraints)
@@ -547,7 +553,8 @@ class Type(object):
                 constraints.append(keyConstraints)
 
         if self.value:
-            valueConstraints = self.value.constraintsToEnglish(escapeLiteral)
+            valueConstraints = self.value.constraintsToEnglish(escapeLiteral,
+                                                               escapeNumber)
             if valueConstraints:
                 constraints.append('value %s' % valueConstraints)
 
