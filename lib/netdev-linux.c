@@ -376,6 +376,8 @@ struct netdev_dev_linux {
     uint32_t kbits_burst;
     int vport_stats_error;      /* Cached error code from vport_get_stats().
                                    0 or an errno value. */
+    int netdev_mtu_error;       /* Cached error code from SIOCGIFMTU or SIOCSIFMTU. */
+
     struct ethtool_drvinfo drvinfo;  /* Cached from ETHTOOL_GDRVINFO. */
     struct tc *tc;
 
@@ -532,6 +534,13 @@ netdev_dev_linux_update(struct netdev_dev_linux *dev,
     if (change->nlmsg_type == RTM_NEWLINK) {
         /* Keep drv-info */
         netdev_dev_linux_changed(dev, change->ifi_flags, VALID_DRVINFO);
+
+        if (change->mtu) {
+            dev->mtu = change->mtu;
+            dev->cache_valid |= VALID_MTU;
+            dev->netdev_mtu_error = 0;
+        }
+
     } else {
         netdev_dev_linux_changed(dev, change->ifi_flags, 0);
     }
@@ -1046,14 +1055,16 @@ netdev_linux_get_mtu(const struct netdev *netdev_, int *mtup)
 
         error = netdev_linux_do_ioctl(netdev_get_name(netdev_), &ifr,
                                       SIOCGIFMTU, "SIOCGIFMTU");
-        if (error) {
-            return error;
-        }
+
+        netdev_dev->netdev_mtu_error = error;
         netdev_dev->mtu = ifr.ifr_mtu;
         netdev_dev->cache_valid |= VALID_MTU;
     }
-    *mtup = netdev_dev->mtu;
-    return 0;
+
+    if (!netdev_dev->netdev_mtu_error) {
+        *mtup = netdev_dev->mtu;
+    }
+    return netdev_dev->netdev_mtu_error;
 }
 
 /* Sets the maximum size of transmitted (MTU) for given device using linux
@@ -1067,20 +1078,24 @@ netdev_linux_set_mtu(const struct netdev *netdev_, int mtu)
     struct ifreq ifr;
     int error;
 
-    if (netdev_dev->cache_valid & VALID_MTU &&
-        netdev_dev->mtu == mtu) {
-        return 0;
+    if (netdev_dev->cache_valid & VALID_MTU) {
+        if (netdev_dev->netdev_mtu_error) {
+            return netdev_dev->netdev_mtu_error;
+        }
+        if (netdev_dev->mtu == mtu) {
+            return 0;
+        }
+        netdev_dev->cache_valid &= ~VALID_MTU;
     }
     ifr.ifr_mtu = mtu;
     error = netdev_linux_do_ioctl(netdev_get_name(netdev_), &ifr,
                                   SIOCSIFMTU, "SIOCSIFMTU");
-    if (error) {
-        return error;
+    if (!error || error == ENODEV) {
+        netdev_dev->netdev_mtu_error = error;
+        netdev_dev->mtu = ifr.ifr_mtu;
+        netdev_dev->cache_valid |= VALID_MTU;
     }
-
-    netdev_dev->mtu = ifr.ifr_mtu;
-    netdev_dev->cache_valid |= VALID_MTU;
-    return 0;
+    return error;
 }
 
 /* Returns the ifindex of 'netdev', if successful, as a positive number.
