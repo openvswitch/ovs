@@ -97,6 +97,16 @@ install-indep: build-indep
 	# Prepare dkms.conf from the dkms.conf.in template
 	sed "s/__VERSION__/$(DEB_UPSTREAM_VERSION)/g" debian/dkms.conf.in > debian/$(pdkms)/usr/src/$(PACKAGE)-$(DEB_UPSTREAM_VERSION)/dkms.conf
 
+	# We don't need the debian folder in there, just upstream sources...
+	rm -rf debian/$(pdkms)/usr/src/$(PACKAGE)-$(DEB_UPSTREAM_VERSION)/debian
+	# We don't need the rhel stuff in there either
+	rm -rf debian/$(pdkms)/usr/src/$(PACKAGE)-$(DEB_UPSTREAM_VERSION)/rhel
+	# And we should also clean useless license files, which are already
+	# descriped in our debian/copyright anyway.
+	rm -f debian/$(pdkms)/usr/src/$(PACKAGE)-$(DEB_UPSTREAM_VERSION)/COPYING \
+		debian/$(pdkms)/usr/src/$(PACKAGE)-$(DEB_UPSTREAM_VERSION)/ovsdb/ovsdbmonitor/COPYING \
+		debian/$(pdkms)/usr/src/$(PACKAGE)-$(DEB_UPSTREAM_VERSION)/xenserver/LICENSE
+
 install-arch: build-arch
 	dh_testdir
 	dh_testroot
