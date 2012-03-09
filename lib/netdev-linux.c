@@ -383,10 +383,10 @@ struct netdev_dev_linux {
     int get_features_error;     /* Cached error code from ETHTOOL_GSET. */
     int get_ifindex_error;      /* Cached error code from SIOCGIFINDEX. */
 
-    uint32_t current;           /* Cached from ETHTOOL_GSET. */
-    uint32_t advertised;        /* Cached from ETHTOOL_GSET. */
-    uint32_t supported;         /* Cached from ETHTOOL_GSET. */
-    uint32_t peer;              /* Cached from ETHTOOL_GSET. */
+    enum netdev_features current;    /* Cached from ETHTOOL_GSET. */
+    enum netdev_features advertised; /* Cached from ETHTOOL_GSET. */
+    enum netdev_features supported;  /* Cached from ETHTOOL_GSET. */
+    enum netdev_features peer;       /* Cached from ETHTOOL_GSET. */
 
     struct ethtool_drvinfo drvinfo;  /* Cached from ETHTOOL_GDRVINFO. */
     struct tc *tc;
@@ -1626,8 +1626,10 @@ out:
  * errno value. */
 static int
 netdev_linux_get_features(const struct netdev *netdev_,
-                          uint32_t *current, uint32_t *advertised,
-                          uint32_t *supported, uint32_t *peer)
+                          enum netdev_features *current,
+                          enum netdev_features *advertised,
+                          enum netdev_features *supported,
+                          enum netdev_features *peer)
 {
     struct netdev_dev_linux *netdev_dev =
                                 netdev_dev_linux_cast(netdev_get_dev(netdev_));
@@ -2656,7 +2658,7 @@ htb_parse_qdisc_details__(struct netdev *netdev,
     max_rate_s = shash_find_data(details, "max-rate");
     hc->max_rate = max_rate_s ? strtoull(max_rate_s, NULL, 10) / 8 : 0;
     if (!hc->max_rate) {
-        uint32_t current;
+        enum netdev_features current;
 
         netdev_get_features(netdev, &current, NULL, NULL, NULL);
         hc->max_rate = netdev_features_to_bps(current) / 8;
@@ -3135,7 +3137,7 @@ hfsc_parse_qdisc_details__(struct netdev *netdev, const struct shash *details,
     max_rate   = max_rate_s ? strtoull(max_rate_s, NULL, 10) / 8 : 0;
 
     if (!max_rate) {
-        uint32_t current;
+        enum netdev_features current;
 
         netdev_get_features(netdev, &current, NULL, NULL, NULL);
         max_rate = netdev_features_to_bps(current) / 8;

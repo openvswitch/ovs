@@ -604,7 +604,8 @@ netdev_get_features(const struct netdev *netdev,
 
     get_features = netdev_get_dev(netdev)->netdev_class->get_features;
     error = get_features
-                    ? get_features(netdev, current, advertised, supported, peer)
+                    ? get_features(netdev, current, advertised, supported,
+                                   peer)
                     : EOPNOTSUPP;
     if (error) {
         *current = *advertised = *supported = *peer = 0;
