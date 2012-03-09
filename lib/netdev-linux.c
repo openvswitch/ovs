@@ -117,6 +117,7 @@ enum {
     VALID_POLICING          = 1 << 5,
     VALID_VPORT_STAT_ERROR  = 1 << 6,
     VALID_DRVINFO           = 1 << 7,
+    VALID_FEATURES          = 1 << 8,
 };
 
 struct tap_state {
@@ -379,6 +380,12 @@ struct netdev_dev_linux {
     int netdev_mtu_error;       /* Cached error code from SIOCGIFMTU or SIOCSIFMTU. */
     int ether_addr_error;       /* Cached error code from set/get etheraddr. */
     int netdev_policing_error;  /* Cached error code from set policing. */
+    int get_features_error;     /* Cached error code from ETHTOOL_GSET. */
+
+    uint32_t current;           /* Cached from ETHTOOL_GSET. */
+    uint32_t advertised;        /* Cached from ETHTOOL_GSET. */
+    uint32_t supported;         /* Cached from ETHTOOL_GSET. */
+    uint32_t peer;              /* Cached from ETHTOOL_GSET. */
 
     struct ethtool_drvinfo drvinfo;  /* Cached from ETHTOOL_GDRVINFO. */
     struct tc *tc;
@@ -1473,140 +1480,161 @@ netdev_internal_get_stats(const struct netdev *netdev_,
     return netdev_dev->vport_stats_error;
 }
 
-/* Stores the features supported by 'netdev' into each of '*current',
- * '*advertised', '*supported', and '*peer' that are non-null.  Each value is a
- * bitmap of NETDEV_* bits.  Returns 0 if successful, otherwise a positive
- * errno value. */
-static int
-netdev_linux_get_features(const struct netdev *netdev,
-                          enum netdev_features *current,
-                          enum netdev_features *advertised,
-                          enum netdev_features *supported,
-                          enum netdev_features *peer)
+static void
+netdev_linux_read_features(struct netdev_dev_linux *netdev_dev)
 {
     struct ethtool_cmd ecmd;
     uint32_t speed;
     int error;
 
+    if (netdev_dev->cache_valid & VALID_FEATURES) {
+        return;
+    }
+
     memset(&ecmd, 0, sizeof ecmd);
-    error = netdev_linux_do_ethtool(netdev_get_name(netdev), &ecmd,
+    error = netdev_linux_do_ethtool(netdev_dev->netdev_dev.name, &ecmd,
                                     ETHTOOL_GSET, "ETHTOOL_GSET");
     if (error) {
-        return error;
+        goto out;
     }
 
     /* Supported features. */
-    *supported = 0;
+    netdev_dev->supported = 0;
     if (ecmd.supported & SUPPORTED_10baseT_Half) {
-        *supported |= NETDEV_F_10MB_HD;
+        netdev_dev->supported |= NETDEV_F_10MB_HD;
     }
     if (ecmd.supported & SUPPORTED_10baseT_Full) {
-        *supported |= NETDEV_F_10MB_FD;
+        netdev_dev->supported |= NETDEV_F_10MB_FD;
     }
     if (ecmd.supported & SUPPORTED_100baseT_Half)  {
-        *supported |= NETDEV_F_100MB_HD;
+        netdev_dev->supported |= NETDEV_F_100MB_HD;
     }
     if (ecmd.supported & SUPPORTED_100baseT_Full) {
-        *supported |= NETDEV_F_100MB_FD;
+        netdev_dev->supported |= NETDEV_F_100MB_FD;
     }
     if (ecmd.supported & SUPPORTED_1000baseT_Half) {
-        *supported |= NETDEV_F_1GB_HD;
+        netdev_dev->supported |= NETDEV_F_1GB_HD;
     }
     if (ecmd.supported & SUPPORTED_1000baseT_Full) {
-        *supported |= NETDEV_F_1GB_FD;
+        netdev_dev->supported |= NETDEV_F_1GB_FD;
     }
     if (ecmd.supported & SUPPORTED_10000baseT_Full) {
-        *supported |= NETDEV_F_10GB_FD;
+        netdev_dev->supported |= NETDEV_F_10GB_FD;
     }
     if (ecmd.supported & SUPPORTED_TP) {
-        *supported |= NETDEV_F_COPPER;
+        netdev_dev->supported |= NETDEV_F_COPPER;
     }
     if (ecmd.supported & SUPPORTED_FIBRE) {
-        *supported |= NETDEV_F_FIBER;
+        netdev_dev->supported |= NETDEV_F_FIBER;
     }
     if (ecmd.supported & SUPPORTED_Autoneg) {
-        *supported |= NETDEV_F_AUTONEG;
+        netdev_dev->supported |= NETDEV_F_AUTONEG;
     }
     if (ecmd.supported & SUPPORTED_Pause) {
-        *supported |= NETDEV_F_PAUSE;
+        netdev_dev->supported |= NETDEV_F_PAUSE;
     }
     if (ecmd.supported & SUPPORTED_Asym_Pause) {
-        *supported |= NETDEV_F_PAUSE_ASYM;
+        netdev_dev->supported |= NETDEV_F_PAUSE_ASYM;
     }
 
     /* Advertised features. */
-    *advertised = 0;
+    netdev_dev->advertised = 0;
     if (ecmd.advertising & ADVERTISED_10baseT_Half) {
-        *advertised |= NETDEV_F_10MB_HD;
+        netdev_dev->advertised |= NETDEV_F_10MB_HD;
     }
     if (ecmd.advertising & ADVERTISED_10baseT_Full) {
-        *advertised |= NETDEV_F_10MB_FD;
+        netdev_dev->advertised |= NETDEV_F_10MB_FD;
     }
     if (ecmd.advertising & ADVERTISED_100baseT_Half) {
-        *advertised |= NETDEV_F_100MB_HD;
+        netdev_dev->advertised |= NETDEV_F_100MB_HD;
     }
     if (ecmd.advertising & ADVERTISED_100baseT_Full) {
-        *advertised |= NETDEV_F_100MB_FD;
+        netdev_dev->advertised |= NETDEV_F_100MB_FD;
     }
     if (ecmd.advertising & ADVERTISED_1000baseT_Half) {
-        *advertised |= NETDEV_F_1GB_HD;
+        netdev_dev->advertised |= NETDEV_F_1GB_HD;
     }
     if (ecmd.advertising & ADVERTISED_1000baseT_Full) {
-        *advertised |= NETDEV_F_1GB_FD;
+        netdev_dev->advertised |= NETDEV_F_1GB_FD;
     }
     if (ecmd.advertising & ADVERTISED_10000baseT_Full) {
-        *advertised |= NETDEV_F_10GB_FD;
+        netdev_dev->advertised |= NETDEV_F_10GB_FD;
     }
     if (ecmd.advertising & ADVERTISED_TP) {
-        *advertised |= NETDEV_F_COPPER;
+        netdev_dev->advertised |= NETDEV_F_COPPER;
     }
     if (ecmd.advertising & ADVERTISED_FIBRE) {
-        *advertised |= NETDEV_F_FIBER;
+        netdev_dev->advertised |= NETDEV_F_FIBER;
     }
     if (ecmd.advertising & ADVERTISED_Autoneg) {
-        *advertised |= NETDEV_F_AUTONEG;
+        netdev_dev->advertised |= NETDEV_F_AUTONEG;
     }
     if (ecmd.advertising & ADVERTISED_Pause) {
-        *advertised |= NETDEV_F_PAUSE;
+        netdev_dev->advertised |= NETDEV_F_PAUSE;
     }
     if (ecmd.advertising & ADVERTISED_Asym_Pause) {
-        *advertised |= NETDEV_F_PAUSE_ASYM;
+        netdev_dev->advertised |= NETDEV_F_PAUSE_ASYM;
     }
 
     /* Current settings. */
     speed = ecmd.speed;
     if (speed == SPEED_10) {
-        *current = ecmd.duplex ? NETDEV_F_10MB_FD : NETDEV_F_10MB_HD;
+        netdev_dev->current = ecmd.duplex ? NETDEV_F_10MB_FD : NETDEV_F_10MB_HD;
     } else if (speed == SPEED_100) {
-        *current = ecmd.duplex ? NETDEV_F_100MB_FD : NETDEV_F_100MB_HD;
+        netdev_dev->current = ecmd.duplex ? NETDEV_F_100MB_FD : NETDEV_F_100MB_HD;
     } else if (speed == SPEED_1000) {
-        *current = ecmd.duplex ? NETDEV_F_1GB_FD : NETDEV_F_1GB_HD;
+        netdev_dev->current = ecmd.duplex ? NETDEV_F_1GB_FD : NETDEV_F_1GB_HD;
     } else if (speed == SPEED_10000) {
-        *current = NETDEV_F_10GB_FD;
+        netdev_dev->current = NETDEV_F_10GB_FD;
     } else if (speed == 40000) {
-        *current = NETDEV_F_40GB_FD;
+        netdev_dev->current = NETDEV_F_40GB_FD;
     } else if (speed == 100000) {
-        *current = NETDEV_F_100GB_FD;
+        netdev_dev->current = NETDEV_F_100GB_FD;
     } else if (speed == 1000000) {
-        *current = NETDEV_F_1TB_FD;
+        netdev_dev->current = NETDEV_F_1TB_FD;
     } else {
-        *current = 0;
+        netdev_dev->current = 0;
     }
 
     if (ecmd.port == PORT_TP) {
-        *current |= NETDEV_F_COPPER;
+        netdev_dev->current |= NETDEV_F_COPPER;
     } else if (ecmd.port == PORT_FIBRE) {
-        *current |= NETDEV_F_FIBER;
+        netdev_dev->current |= NETDEV_F_FIBER;
     }
 
     if (ecmd.autoneg) {
-        *current |= NETDEV_F_AUTONEG;
+        netdev_dev->current |= NETDEV_F_AUTONEG;
     }
 
     /* Peer advertisements. */
-    *peer = 0;                  /* XXX */
+    netdev_dev->peer = 0;                  /* XXX */
 
-    return 0;
+out:
+    netdev_dev->cache_valid |= VALID_FEATURES;
+    netdev_dev->get_features_error = error;
+}
+
+/* Stores the features supported by 'netdev' into each of '*current',
+ * '*advertised', '*supported', and '*peer' that are non-null.  Each value is a
+ * bitmap of NETDEV_* bits.  Returns 0 if successful, otherwise a positive
+ * errno value. */
+static int
+netdev_linux_get_features(const struct netdev *netdev_,
+                          uint32_t *current, uint32_t *advertised,
+                          uint32_t *supported, uint32_t *peer)
+{
+    struct netdev_dev_linux *netdev_dev =
+                                netdev_dev_linux_cast(netdev_get_dev(netdev_));
+
+    netdev_linux_read_features(netdev_dev);
+
+    if (!netdev_dev->get_features_error) {
+        *current = netdev_dev->current;
+        *advertised = netdev_dev->advertised;
+        *supported = netdev_dev->supported;
+        *peer = netdev_dev->peer;
+    }
+    return netdev_dev->get_features_error;
 }
 
 /* Set the features advertised by 'netdev' to 'advertise'. */
@@ -2341,7 +2369,7 @@ netdev_linux_change_seq(const struct netdev *netdev)
 }
 
 #define NETDEV_LINUX_CLASS(NAME, CREATE, GET_STATS, SET_STATS,  \
-                           GET_STATUS)                          \
+                           GET_FEATURES, GET_STATUS)            \
 {                                                               \
     NAME,                                                       \
                                                                 \
@@ -2376,7 +2404,7 @@ netdev_linux_change_seq(const struct netdev *netdev)
     GET_STATS,                                                  \
     SET_STATS,                                                  \
                                                                 \
-    netdev_linux_get_features,                                  \
+    GET_FEATURES,                                               \
     netdev_linux_set_advertisements,                            \
                                                                 \
     netdev_linux_set_policing,                                  \
@@ -2410,6 +2438,7 @@ const struct netdev_class netdev_linux_class =
         netdev_linux_create,
         netdev_linux_get_stats,
         NULL,                    /* set_stats */
+        netdev_linux_get_features,
         netdev_linux_get_status);
 
 const struct netdev_class netdev_tap_class =
@@ -2418,6 +2447,7 @@ const struct netdev_class netdev_tap_class =
         netdev_linux_create_tap,
         netdev_tap_get_stats,
         NULL,                   /* set_stats */
+        netdev_linux_get_features,
         netdev_linux_get_status);
 
 const struct netdev_class netdev_internal_class =
@@ -2426,6 +2456,7 @@ const struct netdev_class netdev_internal_class =
         netdev_linux_create,
         netdev_internal_get_stats,
         netdev_vport_set_stats,
+        NULL,                  /* get_features */
         netdev_internal_get_status);
 
 /* HTB traffic control class. */
