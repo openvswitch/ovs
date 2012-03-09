@@ -144,7 +144,8 @@ def blockXmlToNroff(nodes, para='.PP'):
 
 def typeAndConstraintsToNroff(column):
     type = column.type.toEnglish(escapeNroffLiteral)
-    constraints = column.type.constraintsToEnglish(escapeNroffLiteral)
+    constraints = column.type.constraintsToEnglish(escapeNroffLiteral,
+                                                   textToNroff)
     if constraints:
         type += ", " + constraints
     if column.unique:
@@ -187,7 +188,8 @@ def columnGroupToNroff(table, groupXml):
                 nameNroff = "%s : %s" % (name, key)
 
                 if column.type.value:
-                    typeNroff = "optional %s" % column.type.value.toEnglish()
+                    typeNroff = "optional %s" % column.type.value.toEnglish(
+                        escapeNroffLiteral)
                     if (column.type.value.type == ovs.db.types.StringType and
                         type_.type == ovs.db.types.BooleanType):
                         # This is a little more explicit and helpful than
@@ -201,7 +203,8 @@ def columnGroupToNroff(table, groupXml):
                             else:
                                 typeNroff += ", containing a %s" % type_english
                         constraints = (
-                            type_.constraintsToEnglish(escapeNroffLiteral))
+                            type_.constraintsToEnglish(escapeNroffLiteral,
+                                                       textToNroff))
                         if constraints:
                             typeNroff += ", %s" % constraints
                 else:
