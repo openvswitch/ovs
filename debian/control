@@ -215,7 +215,7 @@ Description: Open vSwitch graphical monitoring tool
 
 Package: openvswitch-test
 Architecture: all
-Depends: ${misc:Depends}, python-twisted-web, python (>= 2.7) | python-argparse
+Depends: ${misc:Depends}, ${python:Depends}, python-twisted-web, python (>= 2.7) | python-argparse
 Description: Open vSwitch test package
  Open vSwitch is a production quality, multilayer, software-based, Ethernet
  virtual switch. It is designed to enable massive network automation through
