@@ -378,6 +378,7 @@ struct netdev_dev_linux {
                                    0 or an errno value. */
     int netdev_mtu_error;       /* Cached error code from SIOCGIFMTU or SIOCSIFMTU. */
     int ether_addr_error;       /* Cached error code from set/get etheraddr. */
+    int netdev_policing_error;  /* Cached error code from set policing. */
 
     struct ethtool_drvinfo drvinfo;  /* Cached from ETHTOOL_GDRVINFO. */
     struct tc *tc;
@@ -1669,11 +1670,17 @@ netdev_linux_set_policing(struct netdev *netdev,
                    : !kbits_burst ? 1000 /* Default to 1000 kbits if 0. */
                    : kbits_burst);       /* Stick with user-specified value. */
 
-    if (netdev_dev->cache_valid & VALID_POLICING
-        && netdev_dev->kbits_rate == kbits_rate
-        && netdev_dev->kbits_burst == kbits_burst) {
-        /* Assume that settings haven't changed since we last set them. */
-        return 0;
+    if (netdev_dev->cache_valid & VALID_POLICING) {
+        if (netdev_dev->netdev_policing_error) {
+            return netdev_dev->netdev_policing_error;
+        }
+
+        if (netdev_dev->kbits_rate == kbits_rate &&
+            netdev_dev->kbits_burst == kbits_burst) {
+            /* Assume that settings haven't changed since we last set them. */
+            return 0;
+        }
+        netdev_dev->cache_valid &= ~VALID_POLICING;
     }
 
     COVERAGE_INC(netdev_set_policing);
@@ -1682,7 +1689,7 @@ netdev_linux_set_policing(struct netdev *netdev,
     if (error) {
         VLOG_WARN_RL(&rl, "%s: removing policing failed: %s",
                      netdev_name, strerror(error));
-        return error;
+        goto out;
     }
 
     if (kbits_rate) {
@@ -1690,22 +1697,26 @@ netdev_linux_set_policing(struct netdev *netdev,
         if (error) {
             VLOG_WARN_RL(&rl, "%s: adding policing qdisc failed: %s",
                          netdev_name, strerror(error));
-            return error;
+            goto out;
         }
 
         error = tc_add_policer(netdev, kbits_rate, kbits_burst);
         if (error){
             VLOG_WARN_RL(&rl, "%s: adding policing action failed: %s",
                     netdev_name, strerror(error));
-            return error;
+            goto out;
         }
     }
 
     netdev_dev->kbits_rate = kbits_rate;
     netdev_dev->kbits_burst = kbits_burst;
-    netdev_dev->cache_valid |= VALID_POLICING;
 
-    return 0;
+out:
+    if (!error || error == ENODEV) {
+        netdev_dev->netdev_policing_error = error;
+        netdev_dev->cache_valid |= VALID_POLICING;
+    }
+    return error;
 }
 
 static int
