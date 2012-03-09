@@ -216,10 +216,12 @@ path certificate "%s";
 
         # The peer's certificate comes to us in PEM format as a string.
         # Write that string to a file for Racoon to use.
-        f = open(root_prefix + vals["peer_cert_file"], "w")
+        peer_cert_file = "%s/ovs-%s.pem" % (self.cert_dir, host)
+        f = open(root_prefix + peer_cert_file, "w")
         f.write(vals["peer_cert"])
         f.close()
 
+        vals["peer_cert_file"] = peer_cert_file
 
         self.cert_hosts[host] = vals
         self.commit()
@@ -487,11 +489,8 @@ def main():
                         vlog.warn("no valid SSL entry for %s" % name)
                         continue
 
-                    peer_cert_name = "ovs-%s.pem" % (options.get("remote_ip"))
                     entry["certificate"] = ssl_cert[0]
                     entry["private_key"] = ssl_cert[1]
-                    entry["peer_cert_file"] = (Racoon.cert_dir + "/" +
-                                                            peer_cert_name)
 
                 new_interfaces[name] = entry
 
