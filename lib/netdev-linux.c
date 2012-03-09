@@ -79,6 +79,7 @@ COVERAGE_DEFINE(netdev_get_ifindex);
 COVERAGE_DEFINE(netdev_get_hwaddr);
 COVERAGE_DEFINE(netdev_set_hwaddr);
 COVERAGE_DEFINE(netdev_ethtool);
+
 
 /* These were introduced in Linux 2.6.14, so they might be missing if we have
  * old headers. */
@@ -114,7 +115,8 @@ enum {
     VALID_IN6               = 1 << 3,
     VALID_MTU               = 1 << 4,
     VALID_POLICING          = 1 << 5,
-    VALID_VPORT_STAT_ERROR  = 1 << 6
+    VALID_VPORT_STAT_ERROR  = 1 << 6,
+    VALID_DRVINFO           = 1 << 7,
 };
 
 struct tap_state {
@@ -374,6 +376,7 @@ struct netdev_dev_linux {
     uint32_t kbits_burst;
     int vport_stats_error;      /* Cached error code from vport_get_stats().
                                    0 or an errno value. */
+    struct ethtool_drvinfo drvinfo;  /* Cached from ETHTOOL_GDRVINFO. */
     struct tc *tc;
 
     union {
@@ -483,8 +486,31 @@ netdev_linux_wait(void)
     netdev_linux_miimon_wait();
 }
 
+static int
+netdev_linux_get_drvinfo(struct netdev_dev_linux *netdev_dev)
+{
+
+    int error;
+
+    if (netdev_dev->cache_valid & VALID_DRVINFO) {
+        return 0;
+    }
+
+    memset(&netdev_dev->drvinfo, 0, sizeof netdev_dev->drvinfo);
+    error = netdev_linux_do_ethtool(netdev_dev->netdev_dev.name,
+                                    (struct ethtool_cmd *)&netdev_dev->drvinfo,
+                                    ETHTOOL_GDRVINFO,
+                                    "ETHTOOL_GDRVINFO");
+    if (!error) {
+        netdev_dev->cache_valid |= VALID_DRVINFO;
+    }
+    return error;
+}
+
 static void
-netdev_dev_linux_changed(struct netdev_dev_linux *dev, unsigned int ifi_flags)
+netdev_dev_linux_changed(struct netdev_dev_linux *dev,
+                         unsigned int ifi_flags,
+                         unsigned int mask)
 {
     dev->change_seq++;
     if (!dev->change_seq) {
@@ -496,7 +522,19 @@ netdev_dev_linux_changed(struct netdev_dev_linux *dev, unsigned int ifi_flags)
     }
     dev->ifi_flags = ifi_flags;
 
-    dev->cache_valid = 0;
+    dev->cache_valid &= mask;
+}
+
+static void
+netdev_dev_linux_update(struct netdev_dev_linux *dev,
+                         const struct rtnetlink_link_change *change)
+{
+    if (change->nlmsg_type == RTM_NEWLINK) {
+        /* Keep drv-info */
+        netdev_dev_linux_changed(dev, change->ifi_flags, VALID_DRVINFO);
+    } else {
+        netdev_dev_linux_changed(dev, change->ifi_flags, 0);
+    }
 }
 
 static void
@@ -512,7 +550,7 @@ netdev_linux_cache_cb(const struct rtnetlink_link_change *change,
 
             if (is_netdev_linux_class(netdev_class)) {
                 dev = netdev_dev_linux_cast(base_dev);
-                netdev_dev_linux_changed(dev, change->ifi_flags);
+                netdev_dev_linux_update(dev, change);
             }
         }
     } else {
@@ -527,7 +565,7 @@ netdev_linux_cache_cb(const struct rtnetlink_link_change *change,
             dev = node->data;
 
             get_flags(&dev->netdev_dev, &flags);
-            netdev_dev_linux_changed(dev, flags);
+            netdev_dev_linux_changed(dev, flags, 0);
         }
         shash_destroy(&device_shash);
     }
@@ -1171,7 +1209,7 @@ netdev_linux_miimon_run(void)
         netdev_linux_get_miimon(dev->netdev_dev.name, &miimon);
         if (miimon != dev->miimon) {
             dev->miimon = miimon;
-            netdev_dev_linux_changed(dev, dev->ifi_flags);
+            netdev_dev_linux_changed(dev, dev->ifi_flags, 0);
         }
 
         timer_set_duration(&dev->miimon_timer, dev->miimon_interval);
@@ -2155,21 +2193,24 @@ netdev_linux_get_next_hop(const struct in_addr *host, struct in_addr *next_hop,
 static int
 netdev_linux_get_status(const struct netdev *netdev, struct shash *sh)
 {
-    struct ethtool_drvinfo drvinfo;
     int error;
+    struct netdev_dev_linux *netdev_dev =
+                                netdev_dev_linux_cast(netdev_get_dev(netdev));
 
-    memset(&drvinfo, 0, sizeof drvinfo);
-    error = netdev_linux_do_ethtool(netdev_get_name(netdev),
-                                    (struct ethtool_cmd *)&drvinfo,
-                                    ETHTOOL_GDRVINFO,
-                                    "ETHTOOL_GDRVINFO");
+    error = netdev_linux_get_drvinfo(netdev_dev);
     if (!error) {
-        shash_add(sh, "driver_name", xstrdup(drvinfo.driver));
-        shash_add(sh, "driver_version", xstrdup(drvinfo.version));
-        shash_add(sh, "firmware_version", xstrdup(drvinfo.fw_version));
+        shash_add(sh, "driver_name", xstrdup(netdev_dev->drvinfo.driver));
+        shash_add(sh, "driver_version", xstrdup(netdev_dev->drvinfo.version));
+        shash_add(sh, "firmware_version", xstrdup(netdev_dev->drvinfo.fw_version));
     }
-
     return error;
+}
+
+static int
+netdev_internal_get_status(const struct netdev *netdev OVS_UNUSED, struct shash *sh)
+{
+    shash_add(sh, "driver_name", xstrdup("openvswitch"));
+    return 0;
 }
 
 /* Looks up the ARP table entry for 'ip' on 'netdev'.  If one exists and can be
@@ -2255,7 +2296,8 @@ netdev_linux_change_seq(const struct netdev *netdev)
     return netdev_dev_linux_cast(netdev_get_dev(netdev))->change_seq;
 }
 
-#define NETDEV_LINUX_CLASS(NAME, CREATE, GET_STATS, SET_STATS)  \
+#define NETDEV_LINUX_CLASS(NAME, CREATE, GET_STATS, SET_STATS,  \
+                           GET_STATUS)                          \
 {                                                               \
     NAME,                                                       \
                                                                 \
@@ -2310,7 +2352,7 @@ netdev_linux_change_seq(const struct netdev *netdev)
     netdev_linux_get_in6,                                       \
     netdev_linux_add_router,                                    \
     netdev_linux_get_next_hop,                                  \
-    netdev_linux_get_status,                                    \
+    GET_STATUS,                                                 \
     netdev_linux_arp_lookup,                                    \
                                                                 \
     netdev_linux_update_flags,                                  \
@@ -2323,21 +2365,24 @@ const struct netdev_class netdev_linux_class =
         "system",
         netdev_linux_create,
         netdev_linux_get_stats,
-        NULL);                  /* set_stats */
+        NULL,                    /* set_stats */
+        netdev_linux_get_status);
 
 const struct netdev_class netdev_tap_class =
     NETDEV_LINUX_CLASS(
         "tap",
         netdev_linux_create_tap,
         netdev_tap_get_stats,
-        NULL);                  /* set_stats */
+        NULL,                   /* set_stats */
+        netdev_linux_get_status);
 
 const struct netdev_class netdev_internal_class =
     NETDEV_LINUX_CLASS(
         "internal",
         netdev_linux_create,
         netdev_internal_get_stats,
-        netdev_vport_set_stats);
+        netdev_vport_set_stats,
+        netdev_internal_get_status);
 
 /* HTB traffic control class. */
 
