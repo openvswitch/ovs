@@ -37,6 +37,7 @@ struct rtnetlink_link_change {
     /* Extracted from Netlink attributes. */
     const char *ifname;         /* Name of network device. */
     int master_ifindex;         /* Ifindex of datapath master (0 if none). */
+    int mtu;                    /* Current MTU. */
     unsigned int ifi_flags;     /* Flags of network device. */
 };
 

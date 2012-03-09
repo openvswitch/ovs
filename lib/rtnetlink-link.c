@@ -45,6 +45,7 @@ rtnetlink_link_parse(struct ofpbuf *buf,
     static const struct nl_policy policy[] = {
         [IFLA_IFNAME] = { .type = NL_A_STRING, .optional = false },
         [IFLA_MASTER] = { .type = NL_A_U32,    .optional = true },
+        [IFLA_MTU]    = { .type = NL_A_U32,    .optional = true },
     };
 
     static struct nlattr *attrs[ARRAY_SIZE(policy)];
@@ -67,6 +68,10 @@ rtnetlink_link_parse(struct ofpbuf *buf,
         change->master_ifindex = (attrs[IFLA_MASTER]
                                   ? nl_attr_get_u32(attrs[IFLA_MASTER])
                                   : 0);
+        change->mtu            = (attrs[IFLA_MTU]
+                                  ? nl_attr_get_u32(attrs[IFLA_MTU])
+                                  : 0);
+
     }
 
     return parsed;
