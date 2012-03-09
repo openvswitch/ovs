@@ -377,6 +377,7 @@ struct netdev_dev_linux {
     int vport_stats_error;      /* Cached error code from vport_get_stats().
                                    0 or an errno value. */
     int netdev_mtu_error;       /* Cached error code from SIOCGIFMTU or SIOCSIFMTU. */
+    int ether_addr_error;       /* Cached error code from set/get etheraddr. */
 
     struct ethtool_drvinfo drvinfo;  /* Cached from ETHTOOL_GDRVINFO. */
     struct tc *tc;
@@ -417,8 +418,7 @@ static int do_set_addr(struct netdev *netdev,
                        int ioctl_nr, const char *ioctl_name,
                        struct in_addr addr);
 static int get_etheraddr(const char *netdev_name, uint8_t ea[ETH_ADDR_LEN]);
-static int set_etheraddr(const char *netdev_name, int hwaddr_family,
-                         const uint8_t[ETH_ADDR_LEN]);
+static int set_etheraddr(const char *netdev_name, const uint8_t[ETH_ADDR_LEN]);
 static int get_stats_via_netlink(int ifindex, struct netdev_stats *stats);
 static int get_stats_via_proc(const char *netdev_name, struct netdev_stats *stats);
 static int af_packet_sock(void);
@@ -539,6 +539,12 @@ netdev_dev_linux_update(struct netdev_dev_linux *dev,
             dev->mtu = change->mtu;
             dev->cache_valid |= VALID_MTU;
             dev->netdev_mtu_error = 0;
+        }
+
+        if (!eth_addr_is_zero(change->addr)) {
+            memcpy(dev->etheraddr, change->addr, ETH_ADDR_LEN);
+            dev->cache_valid |= VALID_ETHERADDR;
+            dev->ether_addr_error = 0;
         }
 
     } else {
@@ -1008,37 +1014,49 @@ netdev_linux_set_etheraddr(struct netdev *netdev_,
                                 netdev_dev_linux_cast(netdev_get_dev(netdev_));
     int error;
 
-    if (!(netdev_dev->cache_valid & VALID_ETHERADDR)
-        || !eth_addr_equals(netdev_dev->etheraddr, mac)) {
-        error = set_etheraddr(netdev_get_name(netdev_), ARPHRD_ETHER, mac);
+    if (netdev_dev->cache_valid & VALID_ETHERADDR) {
+        if (netdev_dev->ether_addr_error) {
+            return netdev_dev->ether_addr_error;
+        }
+        if (eth_addr_equals(netdev_dev->etheraddr, mac)) {
+            return 0;
+        }
+        netdev_dev->cache_valid &= ~VALID_ETHERADDR;
+    }
+
+    error = set_etheraddr(netdev_get_name(netdev_), mac);
+    if (!error || error == ENODEV) {
+        netdev_dev->ether_addr_error = error;
+        netdev_dev->cache_valid |= VALID_ETHERADDR;
         if (!error) {
-            netdev_dev->cache_valid |= VALID_ETHERADDR;
             memcpy(netdev_dev->etheraddr, mac, ETH_ADDR_LEN);
         }
-    } else {
-        error = 0;
     }
+
     return error;
 }
 
-/* Returns a pointer to 'netdev''s MAC address.  The caller must not modify or
- * free the returned buffer. */
+/* Copies 'netdev''s MAC address to 'mac' which is passed as param. */
 static int
 netdev_linux_get_etheraddr(const struct netdev *netdev_,
                            uint8_t mac[ETH_ADDR_LEN])
 {
     struct netdev_dev_linux *netdev_dev =
                                 netdev_dev_linux_cast(netdev_get_dev(netdev_));
+
     if (!(netdev_dev->cache_valid & VALID_ETHERADDR)) {
         int error = get_etheraddr(netdev_get_name(netdev_),
                                   netdev_dev->etheraddr);
-        if (error) {
-            return error;
-        }
+
+        netdev_dev->ether_addr_error = error;
         netdev_dev->cache_valid |= VALID_ETHERADDR;
     }
-    memcpy(mac, netdev_dev->etheraddr, ETH_ADDR_LEN);
-    return 0;
+
+    if (!netdev_dev->ether_addr_error) {
+        memcpy(mac, netdev_dev->etheraddr, ETH_ADDR_LEN);
+    }
+
+    return netdev_dev->ether_addr_error;
 }
 
 /* Returns the maximum size of transmitted (and received) packets on 'netdev',
@@ -4385,14 +4403,14 @@ get_etheraddr(const char *netdev_name, uint8_t ea[ETH_ADDR_LEN])
 }
 
 static int
-set_etheraddr(const char *netdev_name, int hwaddr_family,
+set_etheraddr(const char *netdev_name,
               const uint8_t mac[ETH_ADDR_LEN])
 {
     struct ifreq ifr;
 
     memset(&ifr, 0, sizeof ifr);
     ovs_strzcpy(ifr.ifr_name, netdev_name, sizeof ifr.ifr_name);
-    ifr.ifr_hwaddr.sa_family = hwaddr_family;
+    ifr.ifr_hwaddr.sa_family = ARPHRD_ETHER;
     memcpy(ifr.ifr_hwaddr.sa_data, mac, ETH_ADDR_LEN);
     COVERAGE_INC(netdev_set_hwaddr);
     if (ioctl(af_inet_sock, SIOCSIFHWADDR, &ifr) < 0) {
