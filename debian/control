@@ -5,7 +5,7 @@ Maintainer: Open vSwitch developers <dev@openvswitch.org>
 Uploaders: Ben Pfaff <pfaffben@debian.org>, Simon Horman <horms@debian.org>
 Build-Depends:
  debhelper (>= 8), autoconf (>= 2.64), automake (>= 1.10) | automake1.10, 
- libssl-dev, pkg-config (>= 0.21), po-debconf, bzip2, openssl,
+ libssl-dev, pkg-config (>= 0.21), bzip2, openssl,
  python-all (>= 2.6.6-3~), procps, python-qt4,
  python-zopeinterface, python-twisted-conch
 Standards-Version: 3.9.2
