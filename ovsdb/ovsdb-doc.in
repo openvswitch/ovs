@@ -16,9 +16,9 @@ argv0 = sys.argv[0]
 def textToNroff(s, font=r'\fR'):
     def escape(match):
         c = match.group(0)
-        if c == '-':
-            if font == r'\fB':
-                return r'\-'
+        if c.startswith('-'):
+            if c != '-' or font == r'\fB':
+                return '\\' + c
             else:
                 return '-'
         if c == '\\':
@@ -31,7 +31,7 @@ def textToNroff(s, font=r'\fR'):
             raise error.Error("bad escape")
 
     # Escape - \ " ' as needed by nroff.
-    s = re.sub('([-"\'\\\\])', escape, s)
+    s = re.sub('(-[0-9]|[-"\'\\\\])', escape, s)
     if s.startswith('.'):
         s = '\\' + s
     return s
