@@ -42,7 +42,7 @@ import ovs.vlog
 
 vlog = ovs.vlog.Vlog("ovs-monitor-ipsec")
 root_prefix = ''                # Prefix for absolute file names, for testing.
-setkey = "/usr/sbin/setkey"
+SETKEY = "/usr/sbin/setkey"
 exiting = False
 
 
@@ -266,11 +266,11 @@ class IPsec:
 
     def call_setkey(self, cmds):
         try:
-            p = subprocess.Popen([root_prefix + setkey, "-c"],
+            p = subprocess.Popen([root_prefix + SETKEY, "-c"],
                                  stdin=subprocess.PIPE,
                                  stdout=subprocess.PIPE)
         except:
-            vlog.err("could not call %s%s" % (root_prefix, setkey))
+            vlog.err("could not call %s%s" % (root_prefix, SETKEY))
             sys.exit(1)
 
         # xxx It is safer to pass the string into the communicate()
