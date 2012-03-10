@@ -3226,6 +3226,7 @@ iface_configure_cfm(struct iface *iface)
 {
     const struct ovsrec_interface *cfg = iface->cfg;
     const char *extended_str, *opstate_str;
+    const char *cfm_ccm_vlan;
     struct cfm_settings s;
 
     if (!cfg->n_cfm_mpid) {
@@ -3236,12 +3237,20 @@ iface_configure_cfm(struct iface *iface)
     s.mpid = *cfg->cfm_mpid;
     s.interval = atoi(get_interface_other_config(iface->cfg, "cfm_interval",
                                                  "0"));
-    s.ccm_vlan = atoi(get_interface_other_config(iface->cfg, "cfm_ccm_vlan",
-                                                 "0"));
+    cfm_ccm_vlan = get_interface_other_config(iface->cfg, "cfm_ccm_vlan", "0");
     s.ccm_pcp = atoi(get_interface_other_config(iface->cfg, "cfm_ccm_pcp",
                                                 "0"));
     if (s.interval <= 0) {
         s.interval = 1000;
+    }
+
+    if (!strcasecmp("random", cfm_ccm_vlan)) {
+        s.ccm_vlan = CFM_RANDOM_VLAN;
+    } else {
+        s.ccm_vlan = atoi(cfm_ccm_vlan);
+        if (s.ccm_vlan == CFM_RANDOM_VLAN) {
+            s.ccm_vlan = 0;
+        }
     }
 
     extended_str = get_interface_other_config(iface->cfg, "cfm_extended",

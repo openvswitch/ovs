@@ -24,6 +24,8 @@
 struct flow;
 struct ofpbuf;
 
+#define CFM_RANDOM_VLAN UINT16_MAX
+
 #define CFM_FAULT_REASONS                  \
     CFM_FAULT_REASON(RECV, recv)           \
     CFM_FAULT_REASON(RDI, rdi)             \
@@ -51,7 +53,8 @@ struct cfm_settings {
     int interval;               /* The requested transmission interval. */
     bool extended;              /* Run in extended mode. */
     bool opup;                  /* Operational State. */
-    uint16_t ccm_vlan;          /* CCM Vlan tag. Zero if none. */
+    uint16_t ccm_vlan;          /* CCM Vlan tag. Zero if none.
+                                   CFM_RANDOM_VLAN if random. */
     uint8_t ccm_pcp;            /* CCM Priority. Zero if none. */
 };
 

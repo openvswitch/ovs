@@ -30,6 +30,7 @@
 #include "ofpbuf.h"
 #include "packets.h"
 #include "poll-loop.h"
+#include "random.h"
 #include "timer.h"
 #include "timeval.h"
 #include "unixctl.h"
@@ -96,7 +97,8 @@ struct cfm {
     uint32_t seq;          /* The sequence number of our last CCM. */
     uint8_t ccm_interval;  /* The CCM transmission interval. */
     int ccm_interval_ms;   /* 'ccm_interval' in milliseconds. */
-    uint16_t ccm_vlan;     /* Vlan tag of CCM PDUs. */
+    uint16_t ccm_vlan;     /* Vlan tag of CCM PDUs.  CFM_RANDOM_VLAN if
+                              random. */
     uint8_t ccm_pcp;       /* Priority of CCM PDUs. */
     uint8_t maid[CCM_MAID_LEN]; /* The MAID of this CFM. */
 
@@ -391,13 +393,19 @@ void
 cfm_compose_ccm(struct cfm *cfm, struct ofpbuf *packet,
                 uint8_t eth_src[ETH_ADDR_LEN])
 {
+    uint16_t ccm_vlan;
     struct ccm *ccm;
 
     timer_set_duration(&cfm->tx_timer, cfm->ccm_interval_ms);
     eth_compose(packet, cfm_ccm_addr(cfm), eth_src, ETH_TYPE_CFM, sizeof *ccm);
 
-    if (cfm->ccm_vlan || cfm->ccm_pcp) {
-        uint16_t tci = cfm->ccm_vlan | (cfm->ccm_pcp << VLAN_PCP_SHIFT);
+    ccm_vlan = (cfm->ccm_vlan != CFM_RANDOM_VLAN
+                ? cfm->ccm_vlan
+                : random_uint16());
+    ccm_vlan = ccm_vlan & VLAN_VID_MASK;
+
+    if (ccm_vlan || cfm->ccm_pcp) {
+        uint16_t tci = ccm_vlan | (cfm->ccm_pcp << VLAN_PCP_SHIFT);
         eth_push_vlan(packet, htons(tci));
     }
 
@@ -455,7 +463,7 @@ cfm_configure(struct cfm *cfm, const struct cfm_settings *s)
     interval = ms_to_ccm_interval(s->interval);
     interval_ms = ccm_interval_to_ms(interval);
 
-    cfm->ccm_vlan = s->ccm_vlan & VLAN_VID_MASK;
+    cfm->ccm_vlan = s->ccm_vlan;
     cfm->ccm_pcp = s->ccm_pcp & (VLAN_PCP_MASK >> VLAN_PCP_SHIFT);
     if (cfm->extended && interval_ms != s->interval) {
         interval = 0;

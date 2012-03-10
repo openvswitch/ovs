@@ -1766,7 +1766,8 @@
       <column name="other_config" key="cfm_ccm_vlan"
         type='{"type": "integer", "minInteger": 1, "maxInteger": 4095}'>
         When set, the CFM module will apply a VLAN tag to all CCMs it generates
-        with the given value.
+        with the given value.  May be the string <code>random</code> in which
+        case each CCM will be tagged with a different randomly generated VLAN.
       </column>
 
       <column name="other_config" key="cfm_ccm_pcp"
