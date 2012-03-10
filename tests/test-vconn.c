@@ -82,14 +82,15 @@ fpv_create(const char *type, struct fake_pvconn *fpv)
         bind_path = xasprintf("fake-pvconn.%d", unix_count++);
         fpv->pvconn_name = xasprintf("punix:%s", bind_path);
         fpv->vconn_name = xasprintf("unix:%s", bind_path);
-        CHECK_ERRNO(pstream_open(fpv->pvconn_name, &fpv->pstream), 0);
+        CHECK_ERRNO(pstream_open(fpv->pvconn_name, &fpv->pstream,
+                                 DSCP_DEFAULT), 0);
         free(bind_path);
     } else if (!strcmp(type, "tcp") || !strcmp(type, "ssl")) {
         char *s, *port, *save_ptr = NULL;
         char *open_name;
 
         open_name = xasprintf("p%s:0:127.0.0.1", type);
-        CHECK_ERRNO(pstream_open(open_name, &fpv->pstream), 0);
+        CHECK_ERRNO(pstream_open(open_name, &fpv->pstream, DSCP_DEFAULT), 0);
 
         /* Extract bound port number from pstream name. */
         s = xstrdup(pstream_get_name(fpv->pstream));
@@ -147,7 +148,8 @@ test_refuse_connection(int argc OVS_UNUSED, char *argv[])
                       : EPROTO);
 
     fpv_create(type, &fpv);
-    CHECK_ERRNO(vconn_open(fpv.vconn_name, OFP10_VERSION, &vconn), 0);
+    CHECK_ERRNO(vconn_open(fpv.vconn_name, OFP10_VERSION, &vconn,
+                           DSCP_DEFAULT), 0);
     fpv_close(&fpv);
     vconn_run(vconn);
     CHECK_ERRNO(vconn_connect(vconn), expected_error);
@@ -171,7 +173,8 @@ test_accept_then_close(int argc OVS_UNUSED, char *argv[])
                       : EPROTO);
 
     fpv_create(type, &fpv);
-    CHECK_ERRNO(vconn_open(fpv.vconn_name, OFP10_VERSION, &vconn), 0);
+    CHECK_ERRNO(vconn_open(fpv.vconn_name, OFP10_VERSION, &vconn,
+                           DSCP_DEFAULT), 0);
     vconn_run(vconn);
     stream_close(fpv_accept(&fpv));
     fpv_close(&fpv);
@@ -192,7 +195,8 @@ test_read_hello(int argc OVS_UNUSED, char *argv[])
     struct stream *stream;
 
     fpv_create(type, &fpv);
-    CHECK_ERRNO(vconn_open(fpv.vconn_name, OFP10_VERSION, &vconn), 0);
+    CHECK_ERRNO(vconn_open(fpv.vconn_name, OFP10_VERSION, &vconn,
+                           DSCP_DEFAULT), 0);
     vconn_run(vconn);
     stream = fpv_accept(&fpv);
     fpv_destroy(&fpv);
@@ -238,7 +242,8 @@ test_send_hello(const char *type, const void *out, size_t out_size,
     size_t n_sent;
 
     fpv_create(type, &fpv);
-    CHECK_ERRNO(vconn_open(fpv.vconn_name, OFP10_VERSION, &vconn), 0);
+    CHECK_ERRNO(vconn_open(fpv.vconn_name, OFP10_VERSION, &vconn,
+                           DSCP_DEFAULT), 0);
     vconn_run(vconn);
     stream = fpv_accept(&fpv);
     fpv_destroy(&fpv);

@@ -221,7 +221,7 @@ unixctl_server_create(const char *path, struct unixctl_server **serverp)
                                program_name, (long int) getpid());
     }
 
-    error = pstream_open(punix_path, &listener);
+    error = pstream_open(punix_path, &listener, DSCP_INVALID);
     if (error) {
         ovs_error(error, "could not initialize control socket %s", punix_path);
         goto exit;
@@ -422,7 +422,8 @@ unixctl_client_create(const char *path, struct jsonrpc **client)
 
     abs_path = abs_file_name(ovs_rundir(), path);
     unix_path = xasprintf("unix:%s", abs_path);
-    error = stream_open_block(stream_open(unix_path, &stream), &stream);
+    error = stream_open_block(stream_open(unix_path, &stream, DSCP_DEFAULT),
+                              &stream);
     free(unix_path);
     free(abs_path);
 

@@ -63,7 +63,8 @@ collectors_create(const struct sset *targets, uint16_t default_port,
         int error;
         int fd;
 
-        error = inet_open_active(SOCK_DGRAM, name, default_port, NULL, &fd);
+        error = inet_open_active(SOCK_DGRAM, name, default_port, NULL, &fd,
+                                 DSCP_INVALID);
         if (fd >= 0) {
             c->fds[c->n_fds++] = fd;
         } else {

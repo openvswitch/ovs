@@ -1,6 +1,6 @@
 {"name": "Open_vSwitch",
  "version": "6.8.0",
- "cksum": "1404093776 16263",
+ "cksum": "4106006492 16485",
  "tables": {
    "Open_vSwitch": {
      "columns": {
@@ -390,6 +390,8 @@
          "type": {"key": {"type": "integer",
                           "minInteger": 25},
                   "min": 0, "max": 1}},
+       "other_config": {
+         "type": {"key": "string", "value": "string", "min": 0, "max": "unlimited"}},
        "external_ids": {
          "type": {"key": "string", "value": "string",
                   "min": 0, "max": "unlimited"}},
@@ -418,6 +420,8 @@
          "type": {"key": {"type": "string",
                   "enum": ["set", ["in-band", "out-of-band"]]},
                   "min": 0, "max": 1}},
+       "other_config": {
+         "type": {"key": "string", "value": "string", "min": 0, "max": "unlimited"}},
        "external_ids": {
          "type": {"key": "string", "value": "string",
                   "min": 0, "max": "unlimited"}},

@@ -22,6 +22,7 @@
 
 #include <stdbool.h>
 #include <stddef.h>
+#include "openvswitch/types.h"
 
 struct json;
 struct jsonrpc_msg;
@@ -38,8 +39,8 @@ struct stream;
 #define JSONRPC_TCP_PORT 6632
 #define JSONRPC_SSL_PORT 6632
 
-int jsonrpc_stream_open(const char *name, struct stream **);
-int jsonrpc_pstream_open(const char *name, struct pstream **);
+int jsonrpc_stream_open(const char *name, struct stream **, uint8_t dscp);
+int jsonrpc_pstream_open(const char *name, struct pstream **, uint8_t dscp);
 
 struct jsonrpc *jsonrpc_open(struct stream *);
 void jsonrpc_close(struct jsonrpc *);
@@ -123,5 +124,7 @@ void jsonrpc_session_set_max_backoff(struct jsonrpc_session *,
                                      int max_backofF);
 void jsonrpc_session_set_probe_interval(struct jsonrpc_session *,
                                         int probe_interval);
+void jsonrpc_session_set_dscp(struct jsonrpc_session *,
+                              uint8_t dscp);
 
 #endif /* jsonrpc.h */

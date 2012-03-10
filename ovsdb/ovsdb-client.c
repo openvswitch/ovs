@@ -306,11 +306,12 @@ open_jsonrpc(const char *server)
     struct stream *stream;
     int error;
 
-    error = stream_open_block(jsonrpc_stream_open(server, &stream), &stream);
+    error = stream_open_block(jsonrpc_stream_open(server, &stream,
+                              DSCP_DEFAULT), &stream);
     if (error == EAFNOSUPPORT) {
         struct pstream *pstream;
 
-        error = jsonrpc_pstream_open(server, &pstream);
+        error = jsonrpc_pstream_open(server, &pstream, DSCP_DEFAULT);
         if (error) {
             ovs_fatal(error, "failed to connect or listen to \"%s\"", server);
         }

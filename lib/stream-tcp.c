@@ -38,7 +38,7 @@ VLOG_DEFINE_THIS_MODULE(stream_tcp);
 
 static int
 new_tcp_stream(const char *name, int fd, int connect_status,
-              const struct sockaddr_in *remote, struct stream **streamp)
+               const struct sockaddr_in *remote, struct stream **streamp)
 {
     struct sockaddr_in local;
     socklen_t local_len = sizeof local;
@@ -70,12 +70,12 @@ new_tcp_stream(const char *name, int fd, int connect_status,
 }
 
 static int
-tcp_open(const char *name, char *suffix, struct stream **streamp)
+tcp_open(const char *name, char *suffix, struct stream **streamp, uint8_t dscp)
 {
     struct sockaddr_in sin;
     int fd, error;
 
-    error = inet_open_active(SOCK_STREAM, suffix, 0, &sin, &fd);
+    error = inet_open_active(SOCK_STREAM, suffix, 0, &sin, &fd, dscp);
     if (fd >= 0) {
         return new_tcp_stream(name, fd, error, &sin, streamp);
     } else {
@@ -102,13 +102,14 @@ static int ptcp_accept(int fd, const struct sockaddr *sa, size_t sa_len,
                        struct stream **streamp);
 
 static int
-ptcp_open(const char *name OVS_UNUSED, char *suffix, struct pstream **pstreamp)
+ptcp_open(const char *name OVS_UNUSED, char *suffix, struct pstream **pstreamp,
+          uint8_t dscp)
 {
     struct sockaddr_in sin;
     char bound_name[128];
     int fd;
 
-    fd = inet_open_passive(SOCK_STREAM, suffix, -1, &sin);
+    fd = inet_open_passive(SOCK_STREAM, suffix, -1, &sin, dscp);
     if (fd < 0) {
         return -fd;
     }

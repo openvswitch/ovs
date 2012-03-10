@@ -544,10 +544,13 @@ exit:
  * and stores -1 into '*fdp'.
  *
  * If 'sinp' is non-null, then on success the target address is stored into
- * '*sinp'. */
+ * '*sinp'.
+ *
+ * 'dscp'  If not DSCP_INVALID, its value becomes the DSCP bits in the IP
+ * headers for the new connection. */
 int
 inet_open_active(int style, const char *target, uint16_t default_port,
-                 struct sockaddr_in *sinp, int *fdp)
+                 struct sockaddr_in *sinp, int *fdp, uint8_t dscp)
 {
     struct sockaddr_in sin;
     int fd = -1;
@@ -569,6 +572,17 @@ inet_open_active(int style, const char *target, uint16_t default_port,
     error = set_nonblocking(fd);
     if (error) {
         goto exit_close;
+    }
+
+    /* The socket options set here ensure that the TOS bits are set during
+     * the connection establishment.  If set after connect(), the handshake
+     * SYN frames will be sent with a TOS of 0. */
+    if (dscp != DSCP_INVALID) {
+        if (setsockopt(fd, IPPROTO_IP, IP_TOS, &dscp, sizeof dscp)) {
+            VLOG_ERR("%s: socket: %s", target, strerror(errno));
+            error = errno;
+            goto exit;
+        }
     }
 
     /* Connect. */
@@ -663,10 +677,13 @@ exit:
  * negative errno value.
  *
  * If 'sinp' is non-null, then on success the bound address is stored into
- * '*sinp'. */
+ * '*sinp'.
+ *
+ * 'dscp'  If not DSCP_INVALID, its value becomes the DSCP bits in the IP
+ * headers for the new connection. */
 int
 inet_open_passive(int style, const char *target, int default_port,
-                  struct sockaddr_in *sinp)
+                  struct sockaddr_in *sinp, uint8_t dscp)
 {
     struct sockaddr_in sin;
     int fd = 0, error;
@@ -699,6 +716,17 @@ inet_open_passive(int style, const char *target, int default_port,
         error = errno;
         VLOG_ERR("%s: bind: %s", target, strerror(error));
         goto error;
+    }
+
+    /* The socket options set here ensure that the TOS bits are set during
+     * the connection establishment.  If set after connect(), the handshake
+     * SYN frames will be sent with a TOS of 0. */
+    if (dscp != DSCP_INVALID) {
+        if (setsockopt(fd, IPPROTO_IP, IP_TOS, &dscp, sizeof dscp)) {
+            VLOG_ERR("%s: socket: %s", target, strerror(errno));
+            error = errno;
+            goto error;
+        }
     }
 
     /* Listen. */

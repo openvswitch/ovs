@@ -319,13 +319,45 @@ get_datum(struct ovsdb_row *row, const char *column_name,
     return &row->fields[column->index];
 }
 
+/* This function is used to read the string-string key-values from a map.
+ * Returns the true if the 'key' is found and returns the "value"  associated
+ * with the 'key' in 'stringp', else returns false. */
+static bool
+read_map_string_column(const struct ovsdb_row *row, const char *column_name,
+                       const char **stringp, const char *key)
+{
+    const struct ovsdb_datum *datum;
+    union ovsdb_atom *atom_key = NULL, *atom_value = NULL;
+    size_t i;
+
+    datum = get_datum((struct ovsdb_row *) row, column_name, OVSDB_TYPE_STRING,
+                      OVSDB_TYPE_STRING, UINT_MAX);
+
+    if (!datum) {
+        *stringp = NULL;
+        return false;
+    }
+
+    for (i = 0; i < datum->n; i++) {
+        atom_key = &datum->keys[i];
+        if (!strcmp(atom_key->string, key)){
+            atom_value = &datum->values[i];
+            break;
+        }
+    }
+
+    *stringp = atom_value ? atom_value->string : NULL;
+    return atom_value != NULL;
+}
+
 static const union ovsdb_atom *
 read_column(const struct ovsdb_row *row, const char *column_name,
             enum ovsdb_atomic_type type)
 {
     const struct ovsdb_datum *datum;
 
-    datum = get_datum((struct ovsdb_row *) row, column_name, type, OVSDB_TYPE_VOID, 1);
+    datum = get_datum((struct ovsdb_row *) row, column_name, type, OVSDB_TYPE_VOID,
+                      1);
     return datum && datum->n ? datum->keys : NULL;
 }
 
@@ -395,6 +427,21 @@ write_string_string_column(struct ovsdb_row *row, const char *column_name,
     ovsdb_datum_sort_assert(datum, column->type.key.type);
 }
 
+/* Get the other config for the manager from the database. */
+static void
+manager_get_other_config(const struct ovsdb_row *row,
+                         struct ovsdb_jsonrpc_options *options)
+{
+    const char *temp_string;
+
+    /* Retrieve the configs and store in the options. */
+    if (read_map_string_column(row, "other_config", &temp_string, "dscp")) {
+        options->dscp = atoi(temp_string);
+    } else {
+        options->dscp = DSCP_DEFAULT;
+    }
+}
+
 /* Adds a remote and options to 'remotes', based on the Manager table row in
  * 'row'. */
 static void
@@ -418,6 +465,8 @@ add_manager_options(struct shash *remotes, const struct ovsdb_row *row)
     if (read_integer_column(row, "inactivity_probe", &probe_interval)) {
         options->probe_interval = probe_interval;
     }
+
+    manager_get_other_config(row, options);
 }
 
 static void

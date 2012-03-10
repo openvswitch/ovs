@@ -194,7 +194,7 @@ stream_verify_name(const char *name)
  * stores a pointer to the new connection in '*streamp', otherwise a null
  * pointer.  */
 int
-stream_open(const char *name, struct stream **streamp)
+stream_open(const char *name, struct stream **streamp, uint8_t dscp)
 {
     const struct stream_class *class;
     struct stream *stream;
@@ -211,7 +211,7 @@ stream_open(const char *name, struct stream **streamp)
 
     /* Call class's "open" function. */
     suffix_copy = xstrdup(strchr(name, ':') + 1);
-    error = class->open(name, suffix_copy, &stream);
+    error = class->open(name, suffix_copy, &stream, dscp);
     free(suffix_copy);
     if (error) {
         goto error;
@@ -497,7 +497,7 @@ pstream_verify_name(const char *name)
  * stores a pointer to the new connection in '*pstreamp', otherwise a null
  * pointer.  */
 int
-pstream_open(const char *name, struct pstream **pstreamp)
+pstream_open(const char *name, struct pstream **pstreamp, uint8_t dscp)
 {
     const struct pstream_class *class;
     struct pstream *pstream;
@@ -514,7 +514,7 @@ pstream_open(const char *name, struct pstream **pstreamp)
 
     /* Call class's "open" function. */
     suffix_copy = xstrdup(strchr(name, ':') + 1);
-    error = class->listen(name, suffix_copy, &pstream);
+    error = class->listen(name, suffix_copy, &pstream, dscp);
     free(suffix_copy);
     if (error) {
         goto error;
@@ -682,7 +682,8 @@ int
 stream_open_with_default_ports(const char *name_,
                                uint16_t default_tcp_port,
                                uint16_t default_ssl_port,
-                               struct stream **streamp)
+                               struct stream **streamp,
+                               uint8_t dscp)
 {
     char *name;
     int error;
@@ -694,7 +695,7 @@ stream_open_with_default_ports(const char *name_,
     } else {
         name = xstrdup(name_);
     }
-    error = stream_open(name, streamp);
+    error = stream_open(name, streamp, dscp);
     free(name);
 
     return error;
@@ -707,7 +708,8 @@ int
 pstream_open_with_default_ports(const char *name_,
                                 uint16_t default_ptcp_port,
                                 uint16_t default_pssl_port,
-                                struct pstream **pstreamp)
+                                struct pstream **pstreamp,
+                                uint8_t dscp)
 {
     char *name;
     int error;
@@ -719,7 +721,7 @@ pstream_open_with_default_ports(const char *name_,
     } else {
         name = xstrdup(name_);
     }
-    error = pstream_open(name, pstreamp);
+    error = pstream_open(name, pstreamp, dscp);
     free(name);
 
     return error;

@@ -78,13 +78,13 @@ vconn_stream_new(struct stream *stream, int connect_status)
  * Returns 0 if successful, otherwise a positive errno value. */
 static int
 vconn_stream_open(const char *name, char *suffix OVS_UNUSED,
-                  struct vconn **vconnp)
+                  struct vconn **vconnp, uint8_t dscp)
 {
     struct stream *stream;
     int error;
 
     error = stream_open_with_default_ports(name, OFP_TCP_PORT, OFP_SSL_PORT,
-                                           &stream);
+                                           &stream, dscp);
     if (!error) {
         error = stream_connect(stream);
         if (!error || error == EAGAIN) {
@@ -311,14 +311,14 @@ pvconn_pstream_cast(struct pvconn *pvconn)
  * implementation never fails.) */
 static int
 pvconn_pstream_listen(const char *name, char *suffix OVS_UNUSED,
-                      struct pvconn **pvconnp)
+                      struct pvconn **pvconnp, uint8_t dscp)
 {
     struct pvconn_pstream *ps;
     struct pstream *pstream;
     int error;
 
     error = pstream_open_with_default_ports(name, OFP_TCP_PORT, OFP_SSL_PORT,
-                                            &pstream);
+                                            &pstream, dscp);
     if (error) {
         return error;
     }

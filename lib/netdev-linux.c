@@ -26,7 +26,6 @@
 #include <linux/gen_stats.h>
 #include <linux/if_ether.h>
 #include <linux/if_tun.h>
-#include <linux/ip.h>
 #include <linux/types.h>
 #include <linux/ethtool.h>
 #include <linux/mii.h>

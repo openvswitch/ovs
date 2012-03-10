@@ -204,8 +204,8 @@ want_to_poll_events(int want)
 
 static int
 new_ssl_stream(const char *name, int fd, enum session_type type,
-              enum ssl_state state, const struct sockaddr_in *remote,
-              struct stream **streamp)
+               enum ssl_state state, const struct sockaddr_in *remote,
+               struct stream **streamp)
 {
     struct sockaddr_in local;
     socklen_t local_len = sizeof local;
@@ -307,7 +307,7 @@ ssl_stream_cast(struct stream *stream)
 }
 
 static int
-ssl_open(const char *name, char *suffix, struct stream **streamp)
+ssl_open(const char *name, char *suffix, struct stream **streamp, uint8_t dscp)
 {
     struct sockaddr_in sin;
     int error, fd;
@@ -317,7 +317,8 @@ ssl_open(const char *name, char *suffix, struct stream **streamp)
         return error;
     }
 
-    error = inet_open_active(SOCK_STREAM, suffix, OFP_SSL_PORT, &sin, &fd);
+    error = inet_open_active(SOCK_STREAM, suffix, OFP_SSL_PORT, &sin, &fd,
+                             dscp);
     if (fd >= 0) {
         int state = error ? STATE_TCP_CONNECTING : STATE_SSL_CONNECTING;
         return new_ssl_stream(name, fd, CLIENT, state, &sin, streamp);
@@ -782,7 +783,8 @@ pssl_pstream_cast(struct pstream *pstream)
 }
 
 static int
-pssl_open(const char *name OVS_UNUSED, char *suffix, struct pstream **pstreamp)
+pssl_open(const char *name OVS_UNUSED, char *suffix, struct pstream **pstreamp,
+          uint8_t dscp)
 {
     struct pssl_pstream *pssl;
     struct sockaddr_in sin;
@@ -795,7 +797,7 @@ pssl_open(const char *name OVS_UNUSED, char *suffix, struct pstream **pstreamp)
         return retval;
     }
 
-    fd = inet_open_passive(SOCK_STREAM, suffix, OFP_SSL_PORT, &sin);
+    fd = inet_open_passive(SOCK_STREAM, suffix, OFP_SSL_PORT, &sin, dscp);
     if (fd < 0) {
         return -fd;
     }
@@ -847,7 +849,7 @@ pssl_accept(struct pstream *pstream, struct stream **new_streamp)
         sprintf(strchr(name, '\0'), ":%"PRIu16, ntohs(sin.sin_port));
     }
     return new_ssl_stream(name, new_fd, SERVER, STATE_SSL_CONNECTING, &sin,
-                         new_streamp);
+                          new_streamp);
 }
 
 static void

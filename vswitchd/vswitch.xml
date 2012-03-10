@@ -2659,11 +2659,34 @@
       </column>
     </group>
 
+    <group title="Connection Parameters">
+      <p>
+        Additional configuration for a connection between the controller
+        and the Open vSwitch.
+      </p>
+
+      <column name="other_config" key="dscp"
+                type='{"type": "integer"}'>
+        The Differentiated Service Code Point (DSCP) is specified in the IP
+        header. They are specified using 6 bits in the Type of Service (TOS)
+        field in the IP header. DSCP provides a mechanism to classify the
+        network traffic and provide the Quality of Service (QoS) on IP
+        networks.
+        The DSCP value passed is used when establishing the connection between
+        the controller and the Open vSwitch.  The connection must be reset
+        for the new DSCP values to take effect.  If no value is
+        specified, a default value of 192 is chosen for connection
+        establishment.  Valid DSCP values must have their lower 2 bits set to 0.
+      </column>
+    </group>
+
+
     <group title="Common Columns">
       The overall purpose of these columns is described under <code>Common
       Columns</code> at the beginning of this document.
 
       <column name="external_ids"/>
+      <column name="other_config"/>
     </group>
   </table>
 
@@ -2883,11 +2906,33 @@
       </column>
     </group>
 
+    <group title="Connection Parameters">
+      <p>
+        Additional configuration for a connection between the manager
+        and the Open vSwitch Database.
+      </p>
+
+      <column name="other_config" key="dscp"
+                type='{"type": "integer"}'>
+        The Differentiated Service Code Point (DSCP) is specified in the IP
+        header. They are specified using 6 bits in the Type of Service (TOS)
+        field in the IP header. DSCP provides a mechanism to classify the
+        network traffic and provide the Quality of Service (QoS) on IP
+        networks.
+        The DSCP value passed when establishing the connection between
+        the manager and the Open vSwitch Database.  The connection must be
+        reset for the new DSCP values to take effect.  If no value is
+        specified, a default value of 192 is chosen for connection
+        establishment.  Valid DSCP values must have their lower 2 bits set to 0.
+      </column>
+    </group>
+
     <group title="Common Columns">
       The overall purpose of these columns is described under <code>Common
       Columns</code> at the beginning of this document.
 
       <column name="external_ids"/>
+      <column name="other_config"/>
     </group>
   </table>
 

@@ -60,19 +60,20 @@ static void jsonrpc_error(struct jsonrpc *, int error);
 /* This is just the same as stream_open() except that it uses the default
  * JSONRPC ports if none is specified. */
 int
-jsonrpc_stream_open(const char *name, struct stream **streamp)
+jsonrpc_stream_open(const char *name, struct stream **streamp, uint8_t dscp)
 {
     return stream_open_with_default_ports(name, JSONRPC_TCP_PORT,
-                                          JSONRPC_SSL_PORT, streamp);
+                                          JSONRPC_SSL_PORT, streamp,
+                                          dscp);
 }
 
 /* This is just the same as pstream_open() except that it uses the default
  * JSONRPC ports if none is specified. */
 int
-jsonrpc_pstream_open(const char *name, struct pstream **pstreamp)
+jsonrpc_pstream_open(const char *name, struct pstream **pstreamp, uint8_t dscp)
 {
     return pstream_open_with_default_ports(name, JSONRPC_TCP_PORT,
-                                           JSONRPC_SSL_PORT, pstreamp);
+                                           JSONRPC_SSL_PORT, pstreamp, dscp);
 }
 
 /* Returns a new JSON-RPC stream that uses 'stream' for input and output.  The
@@ -825,12 +826,14 @@ jsonrpc_session_connect(struct jsonrpc_session *s)
 
     jsonrpc_session_disconnect(s);
     if (!reconnect_is_passive(s->reconnect)) {
-        error = jsonrpc_stream_open(name, &s->stream);
+        error = jsonrpc_stream_open(name, &s->stream,
+                                    reconnect_get_dscp(s->reconnect));
         if (!error) {
             reconnect_connecting(s->reconnect, time_msec());
         }
     } else {
-        error = s->pstream ? 0 : jsonrpc_pstream_open(name, &s->pstream);
+        error = s->pstream ? 0 : jsonrpc_pstream_open(name, &s->pstream,
+                                        reconnect_get_dscp(s->reconnect));
         if (!error) {
             reconnect_listening(s->reconnect, time_msec());
         }
@@ -1040,4 +1043,11 @@ jsonrpc_session_set_probe_interval(struct jsonrpc_session *s,
                                    int probe_interval)
 {
     reconnect_set_probe_interval(s->reconnect, probe_interval);
+}
+
+void
+jsonrpc_session_set_dscp(struct jsonrpc_session *s,
+                         uint8_t dscp)
+{
+    reconnect_set_dscp(s->reconnect, dscp);
 }

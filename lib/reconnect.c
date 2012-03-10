@@ -54,6 +54,8 @@ struct reconnect {
     bool passive;
     enum vlog_level info;       /* Used for informational messages. */
 
+    uint8_t dscp;
+
     /* State. */
     enum state state;
     long long int state_entered;
@@ -186,6 +188,14 @@ reconnect_get_probe_interval(const struct reconnect *fsm)
     return fsm->probe_interval;
 }
 
+/* Returns the dscp value used for establishing the connection between the
+ * manager and the database. */
+uint8_t
+reconnect_get_dscp(const struct reconnect *fsm)
+{
+    return fsm->dscp;
+}
+
 /* Limits the maximum number of times that 'fsm' will ask the client to try to
  * reconnect to 'max_tries'.  UINT_MAX (the default) means an unlimited number
  * of tries.
@@ -243,6 +253,14 @@ void
 reconnect_set_probe_interval(struct reconnect *fsm, int probe_interval)
 {
     fsm->probe_interval = probe_interval ? MAX(1000, probe_interval) : 0;
+}
+
+/* Sets the dscp value to be used for establishing a connection between the
+ * manager and the database. */
+void
+reconnect_set_dscp(struct reconnect *fsm, uint8_t dscp)
+{
+    fsm->dscp = dscp;
 }
 
 /* Returns true if 'fsm' is in passive mode, false if 'fsm' is in active mode

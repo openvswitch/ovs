@@ -121,6 +121,7 @@ struct rconn {
      * attempt to the next. */
     ovs_be32 local_ip, remote_ip;
     ovs_be16 remote_port;
+    uint8_t dscp;
 
     /* Messages sent or received are copied to the monitor connections. */
 #define MAX_MONITORS 8
@@ -160,7 +161,7 @@ static bool rconn_logging_connection_attempts__(const struct rconn *);
  * The new rconn is initially unconnected.  Use rconn_connect() or
  * rconn_connect_unreliably() to connect it. */
 struct rconn *
-rconn_create(int probe_interval, int max_backoff)
+rconn_create(int probe_interval, int max_backoff, uint8_t dscp)
 {
     struct rconn *rc = xzalloc(sizeof *rc);
 
@@ -194,6 +195,7 @@ rconn_create(int probe_interval, int max_backoff)
     rc->total_time_connected = 0;
 
     rconn_set_probe_interval(rc, probe_interval);
+    rconn_set_dscp(rc, dscp);
 
     rc->n_monitors = 0;
 
@@ -216,6 +218,12 @@ int
 rconn_get_max_backoff(const struct rconn *rc)
 {
     return rc->max_backoff;
+}
+
+void
+rconn_set_dscp(struct rconn *rc, uint8_t dscp)
+{
+    rc->dscp = dscp;
 }
 
 void
@@ -335,7 +343,7 @@ reconnect(struct rconn *rc)
         VLOG_INFO("%s: connecting...", rc->name);
     }
     rc->n_attempted_connections++;
-    retval = vconn_open(rc->target, OFP10_VERSION, &rc->vconn);
+    retval = vconn_open(rc->target, OFP10_VERSION, &rc->vconn, rc->dscp);
     if (!retval) {
         rc->remote_ip = vconn_get_remote_ip(rc->vconn);
         rc->local_ip = vconn_get_local_ip(rc->vconn);

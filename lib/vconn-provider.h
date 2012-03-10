@@ -62,6 +62,10 @@ struct vconn_class {
      * useful for error messages but must not be modified.
      *
      * 'suffix' is a copy of 'name' following the colon and may be modified.
+     * 'dscp' is the DSCP value that the new connection should use in the IP
+     * packets it sends.  (If no DSCP value should be set in the packet, dscp
+     * will be set to DSCP_INVALID.  If no DSCP value is specified, DSCP_DEFAULT
+     * value will be applied.)
      *
      * Returns 0 if successful, otherwise a positive errno value.  If
      * successful, stores a pointer to the new connection in '*vconnp'.
@@ -70,7 +74,8 @@ struct vconn_class {
      * If the connection cannot be completed immediately, it should return
      * EAGAIN (not EINPROGRESS, as returned by the connect system call) and
      * continue the connection in the background. */
-    int (*open)(const char *name, char *suffix, struct vconn **vconnp);
+    int (*open)(const char *name, char *suffix, struct vconn **vconnp,
+                uint8_t dscp);
 
     /* Closes 'vconn' and frees associated memory. */
     void (*close)(struct vconn *vconn);
@@ -149,6 +154,10 @@ struct pvconn_class {
      * is useful for error messages but must not be modified.
      *
      * 'suffix' is a copy of 'name' following the colon and may be modified.
+     * 'dscp' is the DSCP value that the new connection should use in the IP
+     * packets it sends.  (If no DSCP value should be set in the packet, dscp
+     * will be set to DSCP_INVALID.  If no DSCP value is specified, DSCP_DEFAULT
+     * value will be applied.)
      *
      * Returns 0 if successful, otherwise a positive errno value.  If
      * successful, stores a pointer to the new connection in '*pvconnp'.
@@ -157,7 +166,8 @@ struct pvconn_class {
      * completed immediately, it should return EAGAIN (not EINPROGRESS, as
      * returned by the connect system call) and continue the connection in the
      * background. */
-    int (*listen)(const char *name, char *suffix, struct pvconn **pvconnp);
+    int (*listen)(const char *name, char *suffix, struct pvconn **pvconnp,
+                  uint8_t dscp);
 
     /* Closes 'pvconn' and frees associated memory. */
     void (*close)(struct pvconn *pvconn);

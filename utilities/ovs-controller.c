@@ -40,6 +40,7 @@
 #include "util.h"
 #include "vconn.h"
 #include "vlog.h"
+#include "socket-util.h"
 
 VLOG_DEFINE_THIS_MODULE(controller);
 
@@ -115,7 +116,7 @@ main(int argc, char *argv[])
         const char *name = argv[i];
         struct vconn *vconn;
 
-        retval = vconn_open(name, OFP10_VERSION, &vconn);
+        retval = vconn_open(name, OFP10_VERSION, &vconn, DSCP_DEFAULT);
         if (!retval) {
             if (n_switches >= MAX_SWITCHES) {
                 ovs_fatal(0, "max %d switch connections", n_switches);
@@ -124,7 +125,7 @@ main(int argc, char *argv[])
             continue;
         } else if (retval == EAFNOSUPPORT) {
             struct pvconn *pvconn;
-            retval = pvconn_open(name, &pvconn);
+            retval = pvconn_open(name, &pvconn, DSCP_DEFAULT);
             if (!retval) {
                 if (n_listeners >= MAX_LISTENERS) {
                     ovs_fatal(0, "max %d passive connections", n_listeners);
@@ -222,7 +223,7 @@ new_switch(struct switch_ *sw, struct vconn *vconn)
 {
     struct lswitch_config cfg;
 
-    sw->rconn = rconn_create(60, 0);
+    sw->rconn = rconn_create(60, 0, DSCP_DEFAULT);
     rconn_connect_unreliably(sw->rconn, vconn, NULL);
 
     cfg.mode = (action_normal ? LSW_NORMAL

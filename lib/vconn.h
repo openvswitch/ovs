@@ -33,7 +33,8 @@ void vconn_usage(bool active, bool passive, bool bootstrap);
 
 /* Active vconns: virtual connections to OpenFlow devices. */
 int vconn_verify_name(const char *name);
-int vconn_open(const char *name, int min_version, struct vconn **);
+int vconn_open(const char *name, int min_version,
+               struct vconn **, uint8_t dscp);
 void vconn_close(struct vconn *);
 const char *vconn_get_name(const struct vconn *);
 ovs_be32 vconn_get_remote_ip(const struct vconn *);
@@ -69,7 +70,7 @@ void vconn_send_wait(struct vconn *);
 
 /* Passive vconns: virtual listeners for incoming OpenFlow connections. */
 int pvconn_verify_name(const char *name);
-int pvconn_open(const char *name, struct pvconn **);
+int pvconn_open(const char *name, struct pvconn **, uint8_t dscp);
 const char *pvconn_get_name(const struct pvconn *);
 void pvconn_close(struct pvconn *);
 int pvconn_accept(struct pvconn *, int min_version, struct vconn **);

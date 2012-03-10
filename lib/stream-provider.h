@@ -40,6 +40,7 @@ struct stream {
 void stream_init(struct stream *, const struct stream_class *,
                  int connect_status, const char *name);
 void stream_set_remote_ip(struct stream *, ovs_be32 remote_ip);
+void stream_set_dscp(struct stream *, uint8_t dscp);
 void stream_set_remote_port(struct stream *, ovs_be16 remote_port);
 void stream_set_local_ip(struct stream *, ovs_be32 local_ip);
 void stream_set_local_port(struct stream *, ovs_be16 local_port);
@@ -58,6 +59,10 @@ struct stream_class {
      * messages but must not be modified.
      *
      * 'suffix' is a copy of 'name' following the colon and may be modified.
+     * 'dscp' is the DSCP value that the new connection should use in the IP
+     * packets it sends.  (If no DSCP value should be set in the packet, dscp
+     * will be set to DSCP_INVALID.  If no DSCP value is specified, DSCP_DEFAULT
+     * value will be applied.)
      *
      * Returns 0 if successful, otherwise a positive errno value.  If
      * successful, stores a pointer to the new connection in '*streamp'.
@@ -66,7 +71,8 @@ struct stream_class {
      * If the connection cannot be completed immediately, it should return
      * EAGAIN (not EINPROGRESS, as returned by the connect system call) and
      * continue the connection in the background. */
-    int (*open)(const char *name, char *suffix, struct stream **streamp);
+    int (*open)(const char *name, char *suffix, struct stream **streamp,
+                uint8_t dscp);
 
     /* Closes 'stream' and frees associated memory. */
     void (*close)(struct stream *stream);
@@ -150,6 +156,10 @@ struct pstream_class {
      * useful for error messages but must not be modified.
      *
      * 'suffix' is a copy of 'name' following the colon and may be modified.
+     * 'dscp' is the DSCP value that the new connection should use in the IP
+     * packets it sends.  (If no DSCP value should be set in the packet, dscp
+     * will be set to DSCP_INVALID.  If no DSCP value is specified, DSCP_DEFAULT
+     * value will be applied.)
      *
      * Returns 0 if successful, otherwise a positive errno value.  If
      * successful, stores a pointer to the new connection in '*pstreamp'.
@@ -158,7 +168,8 @@ struct pstream_class {
      * completed immediately, it should return EAGAIN (not EINPROGRESS, as
      * returned by the connect system call) and continue the connection in the
      * background. */
-    int (*listen)(const char *name, char *suffix, struct pstream **pstreamp);
+    int (*listen)(const char *name, char *suffix, struct pstream **pstreamp,
+                  uint8_t dscp);
 
     /* Closes 'pstream' and frees associated memory. */
     void (*close)(struct pstream *pstream);

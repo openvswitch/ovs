@@ -122,11 +122,12 @@ struct ofservice {
     int rate_limit;             /* Max packet-in rate in packets per second. */
     int burst_limit;            /* Limit on accumulating packet credits. */
     bool enable_async_msgs;     /* Initially enable async messages? */
+    uint8_t dscp;               /* DSCP Value for controller connection */
 };
 
 static void ofservice_reconfigure(struct ofservice *,
                                   const struct ofproto_controller *);
-static int ofservice_create(struct connmgr *, const char *target);
+static int ofservice_create(struct connmgr *, const char *target, uint8_t dscp);
 static void ofservice_destroy(struct connmgr *, struct ofservice *);
 static struct ofservice *ofservice_lookup(struct connmgr *,
                                           const char *target);
@@ -280,7 +281,8 @@ connmgr_run(struct connmgr *mgr,
             struct rconn *rconn;
             char *name;
 
-            rconn = rconn_create(ofservice->probe_interval, 0);
+            /* Passing default value for creation of the rconn */
+            rconn = rconn_create(ofservice->probe_interval, 0, ofservice->dscp);
             name = ofconn_make_name(mgr, vconn_get_name(vconn));
             rconn_connect_unreliably(rconn, vconn, name);
             free(name);
@@ -358,7 +360,7 @@ connmgr_retry(struct connmgr *mgr)
 
 /* OpenFlow configuration. */
 
-static void add_controller(struct connmgr *, const char *target);
+static void add_controller(struct connmgr *, const char *target, uint8_t dscp);
 static struct ofconn *find_controller_by_target(struct connmgr *,
                                                 const char *target);
 static void update_fail_open(struct connmgr *);
@@ -465,11 +467,11 @@ connmgr_set_controllers(struct connmgr *mgr,
 
         if (!vconn_verify_name(c->target)) {
             if (!find_controller_by_target(mgr, c->target)) {
-                add_controller(mgr, c->target);
+                add_controller(mgr, c->target, c->dscp);
             }
         } else if (!pvconn_verify_name(c->target)) {
             if (!ofservice_lookup(mgr, c->target)) {
-                ofservice_create(mgr, c->target);
+                ofservice_create(mgr, c->target, c->dscp);
             }
         } else {
             VLOG_WARN_RL(&rl, "%s: unsupported controller \"%s\"",
@@ -559,12 +561,12 @@ connmgr_has_snoops(const struct connmgr *mgr)
 /* Creates a new controller for 'target' in 'mgr'.  update_controller() needs
  * to be called later to finish the new ofconn's configuration. */
 static void
-add_controller(struct connmgr *mgr, const char *target)
+add_controller(struct connmgr *mgr, const char *target, uint8_t dscp)
 {
     char *name = ofconn_make_name(mgr, target);
     struct ofconn *ofconn;
 
-    ofconn = ofconn_create(mgr, rconn_create(5, 8), OFCONN_PRIMARY, true);
+    ofconn = ofconn_create(mgr, rconn_create(5, 8, dscp), OFCONN_PRIMARY, true);
     ofconn->pktbuf = pktbuf_create();
     rconn_connect(ofconn->rconn, target, name);
     hmap_insert(&mgr->controllers, &ofconn->hmap_node, hash_string(target, 0));
@@ -672,7 +674,7 @@ set_pvconns(struct pvconn ***pvconnsp, size_t *n_pvconnsp,
         struct pvconn *pvconn;
         int error;
 
-        error = pvconn_open(name, &pvconn);
+        error = pvconn_open(name, &pvconn, DSCP_INVALID);
         if (!error) {
             pvconns[n_pvconns++] = pvconn;
         } else {
@@ -1551,13 +1553,13 @@ connmgr_flushed(struct connmgr *mgr)
  * ofservice_reconfigure() must be called to fully configure the new
  * ofservice. */
 static int
-ofservice_create(struct connmgr *mgr, const char *target)
+ofservice_create(struct connmgr *mgr, const char *target, uint8_t dscp)
 {
     struct ofservice *ofservice;
     struct pvconn *pvconn;
     int error;
 
-    error = pvconn_open(target, &pvconn);
+    error = pvconn_open(target, &pvconn, dscp);
     if (error) {
         return error;
     }
@@ -1585,6 +1587,7 @@ ofservice_reconfigure(struct ofservice *ofservice,
     ofservice->rate_limit = c->rate_limit;
     ofservice->burst_limit = c->burst_limit;
     ofservice->enable_async_msgs = c->enable_async_msgs;
+    ofservice->dscp = c->dscp;
 }
 
 /* Finds and returns the ofservice within 'mgr' that has the given

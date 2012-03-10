@@ -202,7 +202,7 @@ main(int argc, char *argv[])
     }
     target = argv[optind];
 
-    sock = inet_open_passive(SOCK_DGRAM, target, 0, NULL);
+    sock = inet_open_passive(SOCK_DGRAM, target, 0, NULL, DSCP_INVALID);
     if (sock < 0) {
         ovs_fatal(0, "%s: failed to open (%s)", argv[1], strerror(-sock));
     }

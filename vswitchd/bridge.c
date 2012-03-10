@@ -215,7 +215,6 @@ static void iface_refresh_cfm_stats(struct iface *);
 static void iface_refresh_stats(struct iface *);
 static void iface_refresh_status(struct iface *);
 static bool iface_is_synthetic(const struct iface *);
-
 static void shash_from_ovs_idl_map(char **keys, char **values, size_t n,
                                    struct shash *);
 static void shash_to_ovs_idl_map(struct shash *,
@@ -2337,6 +2336,8 @@ static void
 bridge_ofproto_controller_from_ovsrec(const struct ovsrec_controller *c,
                                       struct ofproto_controller *oc)
 {
+    const char *config_str;
+
     oc->target = c->target;
     oc->max_backoff = c->max_backoff ? *c->max_backoff / 1000 : 8;
     oc->probe_interval = c->inactivity_probe ? *c->inactivity_probe / 1000 : 5;
@@ -2347,6 +2348,12 @@ bridge_ofproto_controller_from_ovsrec(const struct ovsrec_controller *c,
                        ? *c->controller_burst_limit : 0);
     oc->enable_async_msgs = (!c->enable_async_messages
                              || *c->enable_async_messages);
+    config_str = ovsrec_controller_get_other_config_value(c, "dscp", NULL);
+    if (config_str) {
+        oc->dscp = atoi(config_str);
+    } else {
+        oc->dscp = DSCP_DEFAULT;
+    }
 }
 
 /* Configures the IP stack for 'br''s local interface properly according to the
@@ -3273,6 +3280,7 @@ iface_is_synthetic(const struct iface *iface)
 {
     return ovsdb_idl_row_is_synthetic(&iface->cfg->header_);
 }
+
 
 /* Port mirroring. */
 

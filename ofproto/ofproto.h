@@ -127,6 +127,8 @@ struct ofproto_controller {
     /* OpenFlow packet-in rate-limiting. */
     int rate_limit;             /* Max packet-in rate in packets per second. */
     int burst_limit;            /* Limit on accumulating packet credits. */
+
+    uint8_t dscp;               /* DSCP value for controller connection. */
 };
 
 #define DEFAULT_MFR_DESC "Nicira Networks, Inc."

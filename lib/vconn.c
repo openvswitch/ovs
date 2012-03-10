@@ -38,6 +38,7 @@
 #include "random.h"
 #include "util.h"
 #include "vlog.h"
+#include "socket-util.h"
 
 VLOG_DEFINE_THIS_MODULE(vconn);
 
@@ -219,7 +220,8 @@ vconn_verify_name(const char *name)
  * stores a pointer to the new connection in '*vconnp', otherwise a null
  * pointer.  */
 int
-vconn_open(const char *name, int min_version, struct vconn **vconnp)
+vconn_open(const char *name, int min_version, struct vconn **vconnp,
+           uint8_t dscp)
 {
     struct vconn_class *class;
     struct vconn *vconn;
@@ -237,7 +239,7 @@ vconn_open(const char *name, int min_version, struct vconn **vconnp)
 
     /* Call class's "open" function. */
     suffix_copy = xstrdup(strchr(name, ':') + 1);
-    error = class->open(name, suffix_copy, &vconn);
+    error = class->open(name, suffix_copy, &vconn, dscp);
     free(suffix_copy);
     if (error) {
         goto error;
@@ -282,7 +284,7 @@ vconn_open_block(const char *name, int min_version, struct vconn **vconnp)
 
     fatal_signal_run();
 
-    error = vconn_open(name, min_version, &vconn);
+    error = vconn_open(name, min_version, &vconn, DSCP_DEFAULT);
     if (!error) {
         while ((error = vconn_connect(vconn)) == EAGAIN) {
             vconn_run(vconn);
@@ -899,7 +901,7 @@ pvconn_verify_name(const char *name)
  * stores a pointer to the new connection in '*pvconnp', otherwise a null
  * pointer.  */
 int
-pvconn_open(const char *name, struct pvconn **pvconnp)
+pvconn_open(const char *name, struct pvconn **pvconnp, uint8_t dscp)
 {
     struct pvconn_class *class;
     struct pvconn *pvconn;
@@ -916,7 +918,7 @@ pvconn_open(const char *name, struct pvconn **pvconnp)
 
     /* Call class's "open" function. */
     suffix_copy = xstrdup(strchr(name, ':') + 1);
-    error = class->listen(name, suffix_copy, &pvconn);
+    error = class->listen(name, suffix_copy, &pvconn, dscp);
     free(suffix_copy);
     if (error) {
         goto error;

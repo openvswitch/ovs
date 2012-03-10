@@ -23,6 +23,7 @@
 #include <netinet/in.h>
 #include <stdbool.h>
 #include "openvswitch/types.h"
+#include <netinet/ip.h>
 
 int set_nonblocking(int fd);
 int get_max_fds(void);
@@ -46,12 +47,12 @@ int get_null_fd(void);
 bool inet_parse_active(const char *target, uint16_t default_port,
                        struct sockaddr_in *sinp);
 int inet_open_active(int style, const char *target, uint16_t default_port,
-                    struct sockaddr_in *sinp, int *fdp);
+		     struct sockaddr_in *sinp, int *fdp, uint8_t dscp);
 
 bool inet_parse_passive(const char *target, int default_port,
                         struct sockaddr_in *sinp);
 int inet_open_passive(int style, const char *target, int default_port,
-                      struct sockaddr_in *sinp);
+                      struct sockaddr_in *sinp, uint8_t dscp);
 
 int read_fully(int fd, void *, size_t, size_t *bytes_read);
 int write_fully(int fd, const void *, size_t, size_t *bytes_written);
@@ -62,5 +63,15 @@ int get_mtime(const char *file_name, struct timespec *mtime);
 void xpipe(int fds[2]);
 
 char *describe_fd(int fd);
+
+/* Default value of dscp bits for connection between controller and manager.
+ * Value of IPTOS_PREC_INTERNETCONTROL = 0xc0 which is defined
+ * in <netinet/ip.h> is used.  */
+#define DSCP_DEFAULT IPTOS_PREC_INTERNETCONTROL
+
+/* Invalid dscp value.  If the dscp value will not be used, the dscp value
+ * passed must be invalid.  Set to 0xFF as the TOS bits passed can only be
+ * 6 bits. */
+#define DSCP_INVALID 0xFF
 
 #endif /* socket-util.h */

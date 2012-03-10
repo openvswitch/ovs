@@ -40,7 +40,8 @@ VLOG_DEFINE_THIS_MODULE(stream_unix);
 /* Active UNIX socket. */
 
 static int
-unix_open(const char *name, char *suffix, struct stream **streamp)
+unix_open(const char *name, char *suffix, struct stream **streamp,
+          uint8_t dscp OVS_UNUSED)
 {
     const char *connect_path = suffix;
     int fd;
@@ -73,7 +74,7 @@ static int punix_accept(int fd, const struct sockaddr *sa, size_t sa_len,
 
 static int
 punix_open(const char *name OVS_UNUSED, char *suffix,
-           struct pstream **pstreamp)
+           struct pstream **pstreamp, uint8_t dscp OVS_UNUSED)
 {
     int fd, error;
 

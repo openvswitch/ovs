@@ -98,7 +98,9 @@ struct ovsdb_jsonrpc_remote {
 };
 
 static struct ovsdb_jsonrpc_remote *ovsdb_jsonrpc_server_add_remote(
-    struct ovsdb_jsonrpc_server *, const char *name);
+    struct ovsdb_jsonrpc_server *, const char *name,
+    const struct ovsdb_jsonrpc_options *options
+);
 static void ovsdb_jsonrpc_server_del_remote(struct shash_node *);
 
 struct ovsdb_jsonrpc_server *
@@ -156,7 +158,7 @@ ovsdb_jsonrpc_server_set_remotes(struct ovsdb_jsonrpc_server *svr,
 
         remote = shash_find_data(&svr->remotes, node->name);
         if (!remote) {
-            remote = ovsdb_jsonrpc_server_add_remote(svr, node->name);
+            remote = ovsdb_jsonrpc_server_add_remote(svr, node->name, options);
             if (!remote) {
                 continue;
             }
@@ -168,13 +170,14 @@ ovsdb_jsonrpc_server_set_remotes(struct ovsdb_jsonrpc_server *svr,
 
 static struct ovsdb_jsonrpc_remote *
 ovsdb_jsonrpc_server_add_remote(struct ovsdb_jsonrpc_server *svr,
-                                const char *name)
+                                const char *name,
+                                const struct ovsdb_jsonrpc_options *options)
 {
     struct ovsdb_jsonrpc_remote *remote;
     struct pstream *listener;
     int error;
 
-    error = jsonrpc_pstream_open(name, &listener);
+    error = jsonrpc_pstream_open(name, &listener, options->dscp);
     if (error && error != EAFNOSUPPORT) {
         VLOG_ERR_RL(&rl, "%s: listen failed: %s", name, strerror(error));
         return NULL;
@@ -388,6 +391,7 @@ ovsdb_jsonrpc_session_set_options(struct ovsdb_jsonrpc_session *session,
 {
     jsonrpc_session_set_max_backoff(session->js, options->max_backoff);
     jsonrpc_session_set_probe_interval(session->js, options->probe_interval);
+    jsonrpc_session_set_dscp(session->js, options->dscp);
 }
 
 static void
