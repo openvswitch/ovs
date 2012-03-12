@@ -466,7 +466,12 @@ OVSDB_CHECK_POSITIVE_CPY([strings at least 2 characters long],
 constraint violation: "a" length 1 is less than minimum allowed length 2
 "ab"
 "abc"
-constraint violation: "𝄞" length 1 is less than minimum allowed length 2]])
+constraint violation: "𝄞" length 1 is less than minimum allowed length 2]],
+  [],
+  [],
+  [dnl This test requires a wide build of Python.
+   AT_CHECK([$PYTHON -c 'unichr(0x10000)' || exit 77],
+            [0], [ignore], [ignore])])
 
 OVSDB_CHECK_POSITIVE_CPY([strings no more than 2 characters long],
   [[parse-atoms '{"type": "string", "maxLength": 2}' \
