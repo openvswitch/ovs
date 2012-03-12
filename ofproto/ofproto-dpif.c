@@ -6322,6 +6322,13 @@ hash_realdev_vid(uint16_t realdev_ofp_port, int vid)
     return hash_2words(realdev_ofp_port, vid);
 }
 
+/* Returns the ODP port number of the Linux VLAN device that corresponds to
+ * 'vlan_tci' on the network device with port number 'realdev_odp_port' in
+ * 'ofproto'.  For example, given 'realdev_odp_port' of eth0 and 'vlan_tci' 9,
+ * it would return the port number of eth0.9.
+ *
+ * Unless VLAN splinters are enabled for port 'realdev_odp_port', this
+ * function just returns its 'realdev_odp_port' argument. */
 static uint32_t
 vsp_realdev_to_vlandev(const struct ofproto_dpif *ofproto,
                        uint32_t realdev_odp_port, ovs_be16 vlan_tci)
@@ -6358,9 +6365,18 @@ vlandev_find(const struct ofproto_dpif *ofproto, uint16_t vlandev_ofp_port)
     return NULL;
 }
 
+/* Returns the OpenFlow port number of the "real" device underlying the Linux
+ * VLAN device with OpenFlow port number 'vlandev_ofp_port' and stores the
+ * VLAN VID of the Linux VLAN device in '*vid'.  For example, given
+ * 'vlandev_ofp_port' of eth0.9, it would return the OpenFlow port number of
+ * eth0 and store 9 in '*vid'.
+ *
+ * Returns 0 and does not modify '*vid' if 'vlandev_ofp_port' is not a Linux
+ * VLAN device.  Unless VLAN splinters are enabled, this is what this function
+ * always does.*/
 static uint16_t
 vsp_vlandev_to_realdev(const struct ofproto_dpif *ofproto,
-                   uint16_t vlandev_ofp_port, int *vid)
+                       uint16_t vlandev_ofp_port, int *vid)
 {
     if (!hmap_is_empty(&ofproto->vlandev_map)) {
         const struct vlan_splinter *vsp;
