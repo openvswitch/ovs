@@ -2486,7 +2486,7 @@ send_packet_in_miss(struct ofproto_dpif *ofproto, const struct ofpbuf *packet,
     /* Registers aren't meaningful on a miss. */
     memset(pin.fmd.reg_masks, 0, sizeof pin.fmd.reg_masks);
 
-    connmgr_send_packet_in(ofproto->up.connmgr, &pin, flow);
+    connmgr_send_packet_in(ofproto->up.connmgr, &pin);
 }
 
 static bool
@@ -4540,7 +4540,7 @@ execute_controller_action(struct action_xlate_ctx *ctx, int len,
     pin.total_len = packet->size;
     flow_get_metadata(&ctx->flow, &pin.fmd);
 
-    connmgr_send_packet_in(ctx->ofproto->up.connmgr, &pin, &ctx->flow);
+    connmgr_send_packet_in(ctx->ofproto->up.connmgr, &pin);
     ofpbuf_delete(packet);
 }
 

@@ -128,8 +128,8 @@ void connmgr_send_port_status(struct connmgr *,
                               const struct ofputil_phy_port *, uint8_t reason);
 void connmgr_send_flow_removed(struct connmgr *,
                                const struct ofputil_flow_removed *);
-void connmgr_send_packet_in(struct connmgr *, const struct ofputil_packet_in *,
-                            const struct flow *);
+void connmgr_send_packet_in(struct connmgr *,
+                            const struct ofputil_packet_in *);
 
 /* Fail-open settings. */
 enum ofproto_fail_mode connmgr_get_fail_mode(const struct connmgr *);
