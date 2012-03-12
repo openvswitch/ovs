@@ -682,11 +682,11 @@ EOF
 }
 
 ifr_run () {
-    ./interface-reconfigure --root-prefix=$PWD --no-syslog "$@"
+    ./interface-reconfigure --root-prefix="`pwd`" --no-syslog "$@"
 }
 
 ifr_filter () {
-    sed -n -e "s,$PWD,,g" -e 's/ -- /\
+    sed -n -e "s,`pwd`,,g" -e 's/ -- /\
     /g' -e '/^Running command:/!p' stderr
 }]
 m4_divert_pop([PREPARE_TESTS])

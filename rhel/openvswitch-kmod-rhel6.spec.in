@@ -1,7 +1,7 @@
 # Spec file for Open vSwitch kernel modules on Red Hat Enterprise
 # Linux 6.
 
-# Copyright (C) 2011 Nicira Networks, Inc.
+# Copyright (C) 2011, 2012 Nicira Networks, Inc.
 #
 # Copying and distribution of this file, with or without modification,
 # are permitted in any medium without royalty provided the copyright
@@ -55,7 +55,7 @@ export INSTALL_MOD_PATH=$RPM_BUILD_ROOT
 export INSTALL_MOD_DIR=extra/%{oname}
 for flavor in %flavors_to_build ; do
          make -C %{kernel_source $flavor} modules_install \
-                 M=$PWD/_$flavor/datapath/linux
+                 M="`pwd`"/_$flavor/datapath/linux
 done
 
 %clean

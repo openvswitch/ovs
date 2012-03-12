@@ -29,9 +29,9 @@ m4_define([TESTABLE_LOG], [-vPATTERN:ANY:'%c|%p|%m'])
 # output (e.g. because it includes "create" commands) then 'vsctl-output'
 # specifies the expected output after filtering through uuidfilt.pl.
 m4_define([OVS_VSWITCHD_START],
-  [OVS_RUNDIR=$PWD; export OVS_RUNDIR
-   OVS_LOGDIR=$PWD; export OVS_LOGDIR
-   OVS_SYSCONFDIR=$PWD; export OVS_SYSCONFDIR
+  [OVS_RUNDIR=`pwd`; export OVS_RUNDIR
+   OVS_LOGDIR=`pwd`; export OVS_LOGDIR
+   OVS_SYSCONFDIR=`pwd`; export OVS_SYSCONFDIR
    trap 'kill `cat ovsdb-server.pid ovs-vswitchd.pid`' 0
 
    dnl Create database.

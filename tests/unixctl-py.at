@@ -72,12 +72,12 @@ OVS_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([unixctl bad target - Python])
-OVS_RUNDIR=$PWD; export OVS_RUNDIR
+OVS_RUNDIR=`pwd`; export OVS_RUNDIR
 AT_SKIP_IF([test $HAVE_PYTHON = no])
 
 AT_CHECK([PYAPPCTL -t bogus doit], [1], [], [stderr])
 AT_CHECK_UNQUOTED([tail -1 stderr], [0], [dnl
-appctl.py: cannot read pidfile "$PWD/bogus.pid" (No such file or directory)
+appctl.py: cannot read pidfile "`pwd`/bogus.pid" (No such file or directory)
 ])
 
 AT_CHECK([PYAPPCTL -t /bogus/path.pid doit], [1], [], [stderr])
@@ -89,11 +89,11 @@ AT_CLEANUP
 
 AT_SETUP([unixctl server - Python])
 AT_SKIP_IF([test $HAVE_PYTHON = no])
-OVS_RUNDIR=$PWD; export OVS_RUNDIR
-OVS_LOGDIR=$PWD; export OVS_LOGDIR
-OVS_SYSCONFDIR=$PWD; export OVS_SYSCONFDIR
+OVS_RUNDIR=`pwd`; export OVS_RUNDIR
+OVS_LOGDIR=`pwd`; export OVS_LOGDIR
+OVS_SYSCONFDIR=`pwd`; export OVS_SYSCONFDIR
 trap 'kill `cat test-unixctl.py.pid`' 0
-AT_CAPTURE_FILE([$PWD/test-unixctl.py.log])
+AT_CAPTURE_FILE([`pwd`/test-unixctl.py.log])
 AT_CHECK([$PYTHON $srcdir/test-unixctl.py --log-file --pidfile --detach])
 
 AT_CHECK([APPCTL -t test-unixctl.py help], [0], [stdout])
@@ -159,5 +159,5 @@ AT_CLEANUP
 
 AT_SETUP([unixctl server errors - Python])
 AT_SKIP_IF([test $HAVE_PYTHON = no])
-AT_CHECK($PYTHON $srcdir/test-unixctl.py --unixctl $PWD/bogus/path, [1], [], [ignore])
+AT_CHECK($PYTHON $srcdir/test-unixctl.py --unixctl "`pwd`"/bogus/path, [1], [], [ignore])
 AT_CLEANUP

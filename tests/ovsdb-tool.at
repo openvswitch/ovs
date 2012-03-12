@@ -101,7 +101,7 @@ AT_CHECK([[perl $srcdir/uuidfilt.pl db | grep -v ^OVSDB | sed 's/"_date":[0-9]*/
 {"_comment":"add back row for five 5","_date":0,"ordinals":{"<11>":{"name":"five","number":5}}}
 ]])
 dnl Dump out and check the actual database contents.
-AT_CHECK([[ovsdb-server --unixctl=$PWD/unixctl --remote=punix:socket --run "ovsdb-client dump unix:socket ordinals" db]],
+AT_CHECK([[ovsdb-server --unixctl="`pwd`"/unixctl --remote=punix:socket --run "ovsdb-client dump unix:socket ordinals" db]],
   [0], [stdout], [ignore])
 AT_CHECK([perl $srcdir/uuidfilt.pl stdout], [0], [dnl
 ordinals table
@@ -124,7 +124,7 @@ AT_CAPTURE_FILE([db])
 AT_CHECK([wc -l < db], [0], [4
 ])
 dnl And check that the dumped data is the same too:
-AT_CHECK([[ovsdb-server --unixctl=$PWD/unixctl --remote=punix:socket --run "ovsdb-client dump unix:socket ordinals" db]],
+AT_CHECK([[ovsdb-server --unixctl="`pwd`"/unixctl --remote=punix:socket --run "ovsdb-client dump unix:socket ordinals" db]],
   [0], [stdout], [ignore])
 AT_CHECK([perl $srcdir/uuidfilt.pl stdout], [0], [dnl
 ordinals table
@@ -165,7 +165,7 @@ AT_CHECK(
     done]],
   [0], [stdout], [ignore])
 dnl Dump out and check the actual database contents.
-AT_CHECK([[ovsdb-server --unixctl=$PWD/unixctl --remote=punix:socket --run "ovsdb-client dump unix:socket ordinals" db]],
+AT_CHECK([[ovsdb-server --unixctl="`pwd`"/unixctl --remote=punix:socket --run "ovsdb-client dump unix:socket ordinals" db]],
   [0], [stdout], [ignore])
 AT_CHECK([perl $srcdir/uuidfilt.pl stdout], [0], [dnl
 ordinals table
@@ -188,7 +188,7 @@ AT_CAPTURE_FILE([db])
 AT_CHECK([wc -l < db], [0], [4
 ])
 dnl And check that the dumped data is the same except for the removed column:
-AT_CHECK([[ovsdb-server --unixctl=$PWD/unixctl --remote=punix:socket --run "ovsdb-client dump unix:socket ordinals" db]],
+AT_CHECK([[ovsdb-server --unixctl="`pwd`"/unixctl --remote=punix:socket --run "ovsdb-client dump unix:socket ordinals" db]],
   [0], [stdout], [ignore])
 AT_CHECK([perl $srcdir/uuidfilt.pl stdout], [0], [dnl
 ordinals table
@@ -228,7 +228,7 @@ AT_CHECK(
     done]],
   [0], [stdout], [ignore])
 dnl Dump out and check the actual database contents.
-AT_CHECK([[ovsdb-server --unixctl=$PWD/unixctl --remote=punix:socket --run "ovsdb-client dump unix:socket ordinals" db]],
+AT_CHECK([[ovsdb-server --unixctl="`pwd`"/unixctl --remote=punix:socket --run "ovsdb-client dump unix:socket ordinals" db]],
   [0], [stdout], [ignore])
 AT_CHECK([perl $srcdir/uuidfilt.pl stdout], [0], [dnl
 ordinals table
@@ -251,7 +251,7 @@ AT_CAPTURE_FILE([db])
 AT_CHECK([wc -l < db], [0], [4
 ])
 dnl And check that the dumped data is the same except for the added column:
-AT_CHECK([[ovsdb-server --unixctl=$PWD/unixctl --remote=punix:socket --run "ovsdb-client dump unix:socket ordinals" db]],
+AT_CHECK([[ovsdb-server --unixctl="`pwd`"/unixctl --remote=punix:socket --run "ovsdb-client dump unix:socket ordinals" db]],
   [0], [stdout], [ignore])
 AT_CHECK([perl $srcdir/uuidfilt.pl stdout], [0], [dnl
 ordinals table

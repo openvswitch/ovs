@@ -7,7 +7,7 @@ AT_CAPTURE_FILE([pid])
 AT_CAPTURE_FILE([expected])
 # Start the daemon and wait for the pidfile to get created
 # and that its contents are the correct pid.
-AT_CHECK([ovsdb-server --pidfile=$PWD/pid --remote=punix:socket --unixctl=$PWD/unixctl db& echo $! > expected], [0])
+AT_CHECK([ovsdb-server --pidfile="`pwd`"/pid --remote=punix:socket --unixctl="`pwd`"/unixctl db& echo $! > expected], [0])
 OVS_WAIT_UNTIL([test -s pid], [kill `cat expected`])
 AT_CHECK(
   [pid=`cat pid` && expected=`cat expected` && test "$pid" = "$expected"],
@@ -27,7 +27,7 @@ AT_CAPTURE_FILE([parent])
 AT_CAPTURE_FILE([parentpid])
 AT_CAPTURE_FILE([newpid])
 # Start the daemon and wait for the pidfile to get created.
-AT_CHECK([ovsdb-server --monitor --pidfile=$PWD/pid --remote=punix:socket --unixctl=$PWD/unixctl db& echo $! > parent], [0])
+AT_CHECK([ovsdb-server --monitor --pidfile="`pwd`"/pid --remote=punix:socket --unixctl="`pwd`"/unixctl db& echo $! > parent], [0])
 OVS_WAIT_UNTIL([test -s pid], [kill `cat parent`])
 # Check that the pidfile names a running process,
 # and that the parent process of that process is our child process.
@@ -70,7 +70,7 @@ OVSDB_INIT([db])
 # Start the daemon and make sure that the pidfile exists immediately.
 # We don't wait for the pidfile to get created because the daemon is
 # supposed to do so before the parent exits.
-AT_CHECK([ovsdb-server --detach --pidfile=$PWD/pid --remote=punix:socket --unixctl=$PWD/unixctl db], [0])
+AT_CHECK([ovsdb-server --detach --pidfile="`pwd`"/pid --remote=punix:socket --unixctl="`pwd`"/unixctl db], [0])
 AT_CHECK([test -s pid])
 AT_CHECK([kill -0 `cat pid`])
 # Kill the daemon and make sure that the pidfile gets deleted.
@@ -94,7 +94,7 @@ AT_CAPTURE_FILE([init])
 # Start the daemon and make sure that the pidfile exists immediately.
 # We don't wait for the pidfile to get created because the daemon is
 # supposed to do so before the parent exits.
-AT_CHECK([ovsdb-server --detach --pidfile=$PWD/daemon --monitor --remote=punix:socket --unixctl=$PWD/unixctl db], [0])
+AT_CHECK([ovsdb-server --detach --pidfile="`pwd`"/daemon --monitor --remote=punix:socket --unixctl="`pwd`"/unixctl db], [0])
 AT_CHECK([test -s daemon])
 # Check that the pidfile names a running process,
 # and that the parent process of that process is a running process,
@@ -133,7 +133,7 @@ AT_CLEANUP
 AT_SETUP([daemon --detach startup errors])
 AT_CAPTURE_FILE([pid])
 OVSDB_INIT([db])
-AT_CHECK([ovsdb-server --detach --pidfile=$PWD/pid --unixctl=$PWD/nonexistent/unixctl db], [1], [], [stderr])
+AT_CHECK([ovsdb-server --detach --pidfile="`pwd`"/pid --unixctl="`pwd`"/nonexistent/unixctl db], [1], [], [stderr])
 AT_CHECK([grep 'ovsdb-server: could not initialize control socket' stderr],
   [0], [ignore], [])
 AT_CHECK([test ! -s pid])
@@ -142,7 +142,7 @@ AT_CLEANUP
 AT_SETUP([daemon --detach --monitor startup errors])
 AT_CAPTURE_FILE([pid])
 OVSDB_INIT([db])
-AT_CHECK([ovsdb-server --detach --pidfile=$PWD/pid --monitor --unixctl=$PWD/nonexistent/unixctl db], [1], [], [stderr])
+AT_CHECK([ovsdb-server --detach --pidfile="`pwd`"/pid --monitor --unixctl="`pwd`"/nonexistent/unixctl db], [1], [], [stderr])
 AT_CHECK([grep 'ovsdb-server: could not initialize control socket' stderr],
   [0], [ignore], [])
 AT_CHECK([test ! -s pid])
@@ -156,7 +156,7 @@ AT_CAPTURE_FILE([pid])
 AT_CAPTURE_FILE([status])
 AT_CAPTURE_FILE([stderr])
 OVSDB_INIT([db])
-AT_CHECK([(yes 2>stderr; echo $? > status) | ovsdb-server --detach --pidfile=$PWD/pid --unixctl=$PWD/unixctl db], [0], [], [])
+AT_CHECK([(yes 2>stderr; echo $? > status) | ovsdb-server --detach --pidfile="`pwd`"/pid --unixctl="`pwd`"/unixctl db], [0], [], [])
 AT_CHECK([kill `cat pid`])
 AT_CHECK([test -s status])
 if grep '[[bB]]roken pipe' stderr >/dev/null 2>&1; then
@@ -179,7 +179,7 @@ AT_CAPTURE_FILE([pid])
 AT_CAPTURE_FILE([status])
 AT_CAPTURE_FILE([stderr])
 OVSDB_INIT([db])
-AT_CHECK([(yes 2>stderr; echo $? > status) | ovsdb-server --detach --monitor --pidfile=$PWD/pid --unixctl=$PWD/unixctl db], [0], [], [])
+AT_CHECK([(yes 2>stderr; echo $? > status) | ovsdb-server --detach --monitor --pidfile="`pwd`"/pid --unixctl="`pwd`"/unixctl db], [0], [], [])
 AT_CHECK([kill `cat pid`])
 AT_CHECK([test -s status])
 if grep '[[bB]]roken pipe' stderr >/dev/null 2>&1; then

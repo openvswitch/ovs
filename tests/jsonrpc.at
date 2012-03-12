@@ -1,7 +1,7 @@
 AT_BANNER([JSON-RPC - C])
 
 AT_SETUP([JSON-RPC request and successful reply])
-AT_CHECK([test-jsonrpc --detach --pidfile=$PWD/pid listen punix:socket])
+AT_CHECK([test-jsonrpc --detach --pidfile="`pwd`"/pid listen punix:socket])
 AT_CHECK([test -s pid])
 AT_CHECK([kill -0 `cat pid`])
 AT_CHECK(
@@ -12,7 +12,7 @@ AT_CHECK([kill `cat pid`])
 AT_CLEANUP
 
 AT_SETUP([JSON-RPC request and error reply])
-AT_CHECK([test-jsonrpc --detach --pidfile=$PWD/pid listen punix:socket])
+AT_CHECK([test-jsonrpc --detach --pidfile="`pwd`"/pid listen punix:socket])
 AT_CHECK([test -s pid])
 AT_CHECK([kill -0 `cat pid`])
 AT_CHECK(
@@ -23,7 +23,7 @@ AT_CHECK([kill `cat pid`])
 AT_CLEANUP
 
 AT_SETUP([JSON-RPC notification])
-AT_CHECK([test-jsonrpc --detach --pidfile=$PWD/pid listen punix:socket])
+AT_CHECK([test-jsonrpc --detach --pidfile="`pwd`"/pid listen punix:socket])
 AT_CHECK([test -s pid])
 # When a daemon dies it deletes its pidfile, so make a copy.
 AT_CHECK([cp pid pid2])

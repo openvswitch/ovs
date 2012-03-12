@@ -178,7 +178,7 @@ if test -z "$dsaparam"; then
 fi
 case $log in
     /*) ;;
-    *) log="$PWD/$log" ;;
+    *) log=`pwd`/$log ;;
 esac
 
 logdir=$(dirname "$log")
@@ -213,7 +213,7 @@ if test "$command" = "init"; then
     # Create the CAs.
     for ca in controllerca switchca; do
         echo "Creating $ca..." >&2
-        oldpwd=$PWD
+        oldpwd=`pwd`
         mkdir -p $ca
         cd $ca
 
