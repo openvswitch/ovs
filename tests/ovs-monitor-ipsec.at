@@ -3,6 +3,7 @@ AT_BANNER([ovs-monitor-ipsec])
 AT_SETUP([ovs-monitor-ipsec])
 AT_SKIP_IF([test $HAVE_PYTHON = no])
 
+OVS_RUNDIR=`pwd`; export OVS_RUNDIR
 OVS_PKGDATADIR=`pwd`; export OVS_PKGDATADIR
 cp "$top_srcdir/vswitchd/vswitch.ovsschema" .
 
