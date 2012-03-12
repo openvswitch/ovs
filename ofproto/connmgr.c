@@ -1438,29 +1438,6 @@ connmgr_is_any_controller_admitted(const struct connmgr *mgr)
     }
     return false;
 }
-
-/* Sends 'packet' to each controller connected to 'mgr'.  Takes ownership of
- * 'packet'. */
-void
-connmgr_broadcast(struct connmgr *mgr, struct ofpbuf *packet)
-{
-    struct ofconn *ofconn, *prev;
-
-    prev = NULL;
-    LIST_FOR_EACH (ofconn, node, &mgr->all_conns) {
-        if (prev) {
-            ofconn_send_reply(ofconn, ofpbuf_clone(packet));
-        }
-        if (rconn_is_connected(ofconn->rconn)) {
-            prev = ofconn;
-        }
-    }
-    if (prev) {
-        ofconn_send_reply(prev, packet);
-    } else {
-        ofpbuf_delete(packet);
-    }
-}
 
 /* In-band configuration. */
 

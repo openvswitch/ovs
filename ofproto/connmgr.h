@@ -140,7 +140,6 @@ int connmgr_get_max_probe_interval(const struct connmgr *);
 bool connmgr_is_any_controller_connected(const struct connmgr *);
 bool connmgr_is_any_controller_admitted(const struct connmgr *);
 int connmgr_failure_duration(const struct connmgr *);
-void connmgr_broadcast(struct connmgr *, struct ofpbuf *);
 
 /* In-band configuration. */
 void connmgr_set_extra_in_band_remotes(struct connmgr *,
