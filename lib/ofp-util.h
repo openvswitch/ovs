@@ -293,7 +293,7 @@ struct ofputil_packet_in {
     const void *packet;
     size_t packet_len;
 
-    enum ofp_packet_in_reason reason;    /* One of OFPRR_*. */
+    enum ofp_packet_in_reason reason;    /* One of OFPR_*. */
     uint16_t controller_id;              /* Controller ID to send to. */
     uint8_t table_id;
     ovs_be64 cookie;
