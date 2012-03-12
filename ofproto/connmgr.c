@@ -1278,7 +1278,9 @@ connmgr_send_flow_removed(struct connmgr *mgr,
 }
 
 /* Given 'pin', sends an OFPT_PACKET_IN message to each OpenFlow controller as
- * necessary according to their individual configurations. */
+ * necessary according to their individual configurations.
+ *
+ * The caller doesn't need to fill in pin->buffer_id or pin->total_len. */
 void
 connmgr_send_packet_in(struct connmgr *mgr,
                        const struct ofputil_packet_in *pin)
@@ -1309,6 +1311,8 @@ static void
 schedule_packet_in(struct ofconn *ofconn, struct ofputil_packet_in pin)
 {
     struct connmgr *mgr = ofconn->connmgr;
+
+    pin.total_len = pin.packet_len;
 
     /* Get OpenFlow buffer_id. */
     if (pin.reason == OFPR_ACTION) {

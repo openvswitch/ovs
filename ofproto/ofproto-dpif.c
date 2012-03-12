@@ -2471,14 +2471,12 @@ send_packet_in_miss(struct ofproto_dpif *ofproto, const struct ofpbuf *packet,
 
     pin.packet = packet->data;
     pin.packet_len = packet->size;
-    pin.total_len = packet->size;
     pin.reason = OFPR_NO_MATCH;
     pin.controller_id = 0;
 
     pin.table_id = 0;
     pin.cookie = 0;
 
-    pin.buffer_id = 0;          /* not yet known */
     pin.send_len = 0;           /* not used for flow table misses */
 
     flow_get_metadata(flow, &pin.fmd);
@@ -4535,9 +4533,7 @@ execute_controller_action(struct action_xlate_ctx *ctx, int len,
     pin.table_id = ctx->table_id;
     pin.cookie = ctx->rule ? ctx->rule->up.flow_cookie : 0;
 
-    pin.buffer_id = 0;
     pin.send_len = len;
-    pin.total_len = packet->size;
     flow_get_metadata(&ctx->flow, &pin.fmd);
 
     connmgr_send_packet_in(ctx->ofproto->up.connmgr, &pin);
