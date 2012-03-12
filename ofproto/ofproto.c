@@ -1357,8 +1357,8 @@ ofport_install(struct ofproto *p,
     shash_add(&p->port_by_name, netdev_name, ofport);
 
     if (!netdev_get_mtu(netdev, &dev_mtu)) {
-        set_internal_devs_mtu(p);
         ofport->mtu = dev_mtu;
+        set_internal_devs_mtu(p);
     } else {
         ofport->mtu = 0;
     }
