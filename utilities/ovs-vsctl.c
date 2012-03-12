@@ -489,7 +489,7 @@ Bridge commands:\n\
   add-br BRIDGE PARENT VLAN   create new fake BRIDGE in PARENT on VLAN\n\
   del-br BRIDGE               delete BRIDGE and all of its ports\n\
   list-br                     print the names of all the bridges\n\
-  br-exists BRIDGE            test whether BRIDGE exists\n\
+  br-exists BRIDGE            exit 2 if BRIDGE does not exist\n\
   br-to-vlan BRIDGE           print the VLAN which BRIDGE is on\n\
   br-to-parent BRIDGE         print the parent of BRIDGE\n\
   br-set-external-id BRIDGE KEY VALUE  set KEY on BRIDGE to VALUE\n\
