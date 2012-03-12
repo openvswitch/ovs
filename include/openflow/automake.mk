@@ -17,6 +17,7 @@ HSTAMP_FILES = \
 	include/openflow/openflow-1.0.hstamp \
 	include/openflow/openflow-1.1.hstamp \
 	include/openflow/openflow.hstamp
+CLEANFILES += $(HSTAMP_FILES)
 ALL_LOCAL += $(HSTAMP_FILES)
 $(HSTAMP_FILES): build-aux/check-structs
 
