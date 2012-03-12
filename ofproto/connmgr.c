@@ -1235,8 +1235,7 @@ ofconn_send(const struct ofconn *ofconn, struct ofpbuf *msg,
 
 /* Sending asynchronous messages. */
 
-static void schedule_packet_in(struct ofconn *, struct ofputil_packet_in,
-                               const struct flow *);
+static void schedule_packet_in(struct ofconn *, struct ofputil_packet_in);
 
 /* Sends an OFPT_PORT_STATUS message with 'opp' and 'reason' to appropriate
  * controllers managed by 'mgr'. */
@@ -1287,14 +1286,13 @@ connmgr_send_flow_removed(struct connmgr *mgr,
  * necessary according to their individual configurations. */
 void
 connmgr_send_packet_in(struct connmgr *mgr,
-                       const struct ofputil_packet_in *pin,
-                       const struct flow *flow)
+                       const struct ofputil_packet_in *pin)
 {
     struct ofconn *ofconn;
 
     LIST_FOR_EACH (ofconn, node, &mgr->all_conns) {
         if (ofconn_receives_async_msg(ofconn, OAM_PACKET_IN, pin->reason)) {
-            schedule_packet_in(ofconn, *pin, flow);
+            schedule_packet_in(ofconn, *pin);
         }
     }
 }
@@ -1309,12 +1307,10 @@ do_send_packet_in(struct ofpbuf *ofp_packet_in, void *ofconn_)
                           ofconn->packet_in_counter, 100);
 }
 
-/* Takes 'pin', whose packet has the flow specified by 'flow', composes an
- * OpenFlow packet-in message from it, and passes it to 'ofconn''s packet
- * scheduler for sending. */
+/* Takes 'pin', composes an OpenFlow packet-in message from it, and passes it
+ * to 'ofconn''s packet scheduler for sending. */
 static void
-schedule_packet_in(struct ofconn *ofconn, struct ofputil_packet_in pin,
-                   const struct flow *flow)
+schedule_packet_in(struct ofconn *ofconn, struct ofputil_packet_in pin)
 {
     struct connmgr *mgr = ofconn->connmgr;
 
@@ -1327,7 +1323,7 @@ schedule_packet_in(struct ofconn *ofconn, struct ofputil_packet_in pin,
         pin.buffer_id = UINT32_MAX;
     } else {
         pin.buffer_id = pktbuf_save(ofconn->pktbuf, pin.packet, pin.packet_len,
-                                    flow->in_port);
+                                    pin.fmd.in_port);
     }
 
     /* Figure out how much of the packet to send. */
@@ -1345,7 +1341,7 @@ schedule_packet_in(struct ofconn *ofconn, struct ofputil_packet_in pin,
      * immediately call into do_send_packet_in() or it might buffer it for a
      * while (until a later call to pinsched_run()). */
     pinsched_send(ofconn->schedulers[pin.reason == OFPR_NO_MATCH ? 0 : 1],
-                  flow->in_port,
+                  pin.fmd.in_port,
                   ofputil_encode_packet_in(&pin, ofconn->packet_in_format),
                   do_send_packet_in, ofconn);
 }
