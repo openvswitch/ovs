@@ -115,19 +115,23 @@ fail_open_is_active(const struct fail_open *fo)
 static void
 send_bogus_packet_ins(struct fail_open *fo)
 {
+    struct ofputil_packet_in pin;
     uint8_t mac[ETH_ADDR_LEN];
-    struct ofpbuf *opi;
     struct ofpbuf b;
 
-    /* Compose ofp_packet_in. */
     ofpbuf_init(&b, 128);
     eth_addr_nicira_random(mac);
     compose_benign_packet(&b, "Open vSwitch Controller Probe", 0xa033, mac);
-    opi = make_packet_in(pktbuf_get_null(), OFPP_LOCAL, OFPR_NO_MATCH, &b, 64);
-    ofpbuf_uninit(&b);
 
-    /* Send. */
-    connmgr_broadcast(fo->connmgr, opi);
+    memset(&pin, 0, sizeof pin);
+    pin.packet = b.data;
+    pin.packet_len = b.size;
+    pin.reason = OFPR_NO_MATCH;
+    pin.send_len = b.size;
+    pin.fmd.in_port = OFPP_LOCAL;
+    connmgr_send_packet_in(fo->connmgr, &pin);
+
+    ofpbuf_uninit(&b);
 }
 
 /* Enter fail-open mode if we should be in it. */
