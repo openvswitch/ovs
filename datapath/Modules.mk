@@ -1,7 +1,7 @@
 # Some modules should be built and distributed, e.g. openvswitch.
 #
 # Some modules should be distributed but not built, e.g. we do not build
-# veth if the kernel in question already has it.
+# brcompat if configured without it
 #
 # Some modules should be built but not distributed, e.g. third-party
 # hwtable modules.

@@ -1,7 +1,8 @@
 sbin_PROGRAMS += vswitchd/ovs-vswitchd
-man_MANS += \
-	vswitchd/ovs-vswitchd.8 \
-	vswitchd/ovs-brcompatd.8
+man_MANS += vswitchd/ovs-vswitchd.8
+if BUILD_BRCOMPAT
+  man_MANS += vswitchd/ovs-brcompatd.8
+endif
 DISTCLEANFILES += \
 	vswitchd/ovs-vswitchd.8 \
 	vswitchd/ovs-brcompatd.8
@@ -24,6 +25,7 @@ vswitchd_ovs_vswitchd_LDADD = \
 EXTRA_DIST += vswitchd/INTERNALS
 MAN_ROOTS += vswitchd/ovs-vswitchd.8.in
 
+if BUILD_BRCOMPAT
 if HAVE_NETLINK
 sbin_PROGRAMS += vswitchd/ovs-brcompatd
 vswitchd_ovs_brcompatd_SOURCES = \
@@ -33,6 +35,7 @@ vswitchd_ovs_brcompatd_SOURCES = \
 vswitchd_ovs_brcompatd_LDADD = lib/libopenvswitch.a $(SSL_LIBS)
 endif
 MAN_ROOTS += vswitchd/ovs-brcompatd.8.in
+endif
 
 # vswitch schema and IDL
 OVSIDL_BUILT += \
