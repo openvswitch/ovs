@@ -1650,13 +1650,10 @@ update_port(struct ofproto *ofproto, const char *name)
                 ofport_modified(port, &pp);
             }
 
-            /* If this is a non-internal port and the MTU changed, check
-             * if the datapath's MTU needs to be updated. */
-            if (strcmp(netdev_get_type(netdev), "internal")
-                    && !netdev_get_mtu(netdev, &dev_mtu)
-                    && port->mtu != dev_mtu) {
-                set_internal_devs_mtu(ofproto);
+            if (!netdev_get_mtu(netdev, &dev_mtu) &&
+                port->mtu != dev_mtu) {
                 port->mtu = dev_mtu;
+                set_internal_devs_mtu(ofproto);
             }
 
             /* Install the newly opened netdev in case it has changed.
@@ -1757,6 +1754,7 @@ set_internal_devs_mtu(struct ofproto *p)
 
         if (!strcmp(netdev_get_type(netdev), "internal")) {
             netdev_set_mtu(netdev, mtu);
+            ofport->mtu = mtu;
         }
     }
 }
