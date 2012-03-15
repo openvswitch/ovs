@@ -2343,7 +2343,7 @@ mf_format_subfield(const struct mf_subfield *sf, struct ds *s)
         ds_put_cstr(s, sf->field->name);
     }
 
-    if (sf->ofs == 0 && sf->n_bits == sf->field->n_bits) {
+    if (sf->field && sf->ofs == 0 && sf->n_bits == sf->field->n_bits) {
         ds_put_cstr(s, "[]");
     } else if (sf->n_bits == 1) {
         ds_put_format(s, "[%d]", sf->ofs);
