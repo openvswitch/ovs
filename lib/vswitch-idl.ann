@@ -6,4 +6,4 @@
 # it can generate more programmer-friendly data structures.
 
 s["idlPrefix"] = "ovsrec_"
-s["idlHeader"] = "\"vswitchd/vswitch-idl.h\""
+s["idlHeader"] = "\"lib/vswitch-idl.h\""

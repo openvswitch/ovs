@@ -6,6 +6,3 @@
 /ovs-vswitchd.8
 /ovs-vswitchd.conf.db.5
 /vswitch.ovsschema.stamp
-/vswitch-idl.c
-/vswitch-idl.h
-/vswitch-idl.ovsidl

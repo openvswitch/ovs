@@ -50,7 +50,7 @@
 #include "util.h"
 #include "unixctl.h"
 #include "vlandev.h"
-#include "vswitchd/vswitch-idl.h"
+#include "vswitch-idl.h"
 #include "xenserver.h"
 #include "vlog.h"
 #include "sflow_api.h"

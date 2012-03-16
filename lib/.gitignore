@@ -4,3 +4,6 @@
 /dirs.c
 /coverage-counters.c
 /ofp-errors.inc
+/vswitch-idl.c
+/vswitch-idl.h
+/vswitch-idl.ovsidl

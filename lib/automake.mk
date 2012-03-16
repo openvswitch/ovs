@@ -187,7 +187,10 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/vlandev.c \
 	lib/vlandev.h \
 	lib/vlog.c \
-	lib/vlog.h
+	lib/vlog.h \
+	lib/vswitch-idl.c \
+	lib/vswitch-idl.h
+
 nodist_lib_libopenvswitch_a_SOURCES = \
 	lib/dirs.c
 CLEANFILES += $(nodist_lib_libopenvswitch_a_SOURCES)
@@ -268,6 +271,18 @@ MAN_FRAGMENTS += \
 	lib/vlog-unixctl.man \
 	lib/vlog-syn.man \
 	lib/vlog.man
+
+# vswitch IDL
+OVSIDL_BUILT += \
+	lib/vswitch-idl.c \
+	lib/vswitch-idl.h \
+	lib/vswitch-idl.ovsidl
+
+EXTRA_DIST += lib/vswitch-idl.ann
+VSWITCH_IDL_FILES = vswitchd/vswitch.ovsschema lib/vswitch-idl.ann
+lib/vswitch-idl.ovsidl: $(VSWITCH_IDL_FILES)
+	$(OVSDB_IDLC) -C $(srcdir) annotate $(VSWITCH_IDL_FILES) > $@.tmp
+	mv $@.tmp $@
 
 lib/dirs.c: lib/dirs.c.in Makefile
 	($(ro_c) && sed < $(srcdir)/lib/dirs.c.in \

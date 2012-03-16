@@ -97,7 +97,7 @@ utilities_ovs_ofctl_LDADD = \
 	lib/libopenvswitch.a \
 	$(SSL_LIBS)
 
-utilities_ovs_vsctl_SOURCES = utilities/ovs-vsctl.c vswitchd/vswitch-idl.c
+utilities_ovs_vsctl_SOURCES = utilities/ovs-vsctl.c
 utilities_ovs_vsctl_LDADD = lib/libopenvswitch.a $(SSL_LIBS)
 
 if HAVE_NETLINK
