@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -89,6 +89,7 @@ nl_sock_create(int protocol, struct nl_sock **sockp)
     struct nl_sock *sock;
     struct sockaddr_nl local, remote;
     socklen_t local_size;
+    int rcvbuf;
     int retval = 0;
 
     if (!max_iovs) {
@@ -121,6 +122,13 @@ nl_sock_create(int protocol, struct nl_sock **sockp)
     }
     sock->protocol = protocol;
     sock->dump = NULL;
+
+    rcvbuf = 1024 * 1024;
+    if (setsockopt(sock->fd, SOL_SOCKET, SO_RCVBUFFORCE,
+                   &rcvbuf, sizeof rcvbuf)) {
+        VLOG_WARN_RL(&rl, "setting %d-byte socket receive buffer failed (%s)",
+                     rcvbuf, strerror(errno));
+    }
 
     retval = get_socket_rcvbuf(sock->fd);
     if (retval < 0) {
