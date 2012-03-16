@@ -44,25 +44,11 @@ case "$1" in
         ;;
 esac
 
-HAVE_KMOD="no"
-
-init_script_error () {
-	if test X"$HAVE_KMOD" = Xno; then
-		exit 0
-	fi
-	exit 1
-}
-
 # Do not fail package installation just because the kernel module
 # is not available.
-if test -x /etc/init.d/openvswitch-switch; then
-    if invoke-rc.d openvswitch-switch load-kmod; then
-	HAVE_KMOD="yes"
-    fi
-fi
+OVS_MISSING_KMOD_OK=yes
+export OVS_MISSING_KMOD_OK
 
 #DEBHELPER#
 
 exit 0
-
-
