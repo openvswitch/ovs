@@ -612,8 +612,13 @@ struct vsctl_bridge {
     struct ovsrec_controller **ctrl;
     char *fail_mode;
     size_t n_ctrl;
-    struct vsctl_bridge *parent;
-    int vlan;
+
+    /* VLAN ("fake") bridge support.
+     *
+     * Use 'parent != NULL' to detect a fake bridge, because 'vlan' can be 0
+     * in either case. */
+    struct vsctl_bridge *parent; /* Real bridge, or NULL. */
+    int vlan;                    /* VLAN VID (0...4095), or 0. */
 };
 
 struct vsctl_port {
@@ -704,7 +709,7 @@ port_is_fake_bridge(const struct ovsrec_port *port_cfg)
 {
     return (port_cfg->fake_bridge
             && port_cfg->tag
-            && *port_cfg->tag >= 1 && *port_cfg->tag <= 4095);
+            && *port_cfg->tag >= 0 && *port_cfg->tag <= 4095);
 }
 
 static struct vsctl_bridge *
@@ -841,7 +846,7 @@ get_info(struct vsctl_context *ctx, struct vsctl_info *info)
             port = xmalloc(sizeof *port);
             port->port_cfg = port_cfg;
             if (port_cfg->tag
-                && *port_cfg->tag >= 1 && *port_cfg->tag <= 4095) {
+                && *port_cfg->tag >= 0 && *port_cfg->tag <= 4095) {
                 port->bridge = find_vlan_bridge(info, br, *port_cfg->tag);
                 if (!port->bridge) {
                     port->bridge = br;
@@ -1329,8 +1334,8 @@ cmd_add_br(struct vsctl_context *ctx)
     } else if (ctx->argc == 4) {
         parent_name = ctx->argv[2];
         vlan = atoi(ctx->argv[3]);
-        if (vlan < 1 || vlan > 4095) {
-            vsctl_fatal("%s: vlan must be between 1 and 4095", ctx->argv[0]);
+        if (vlan < 0 || vlan > 4095) {
+            vsctl_fatal("%s: vlan must be between 0 and 4095", ctx->argv[0]);
         }
     } else {
         vsctl_fatal("'%s' command takes exactly 1 or 3 arguments",
@@ -1397,7 +1402,7 @@ cmd_add_br(struct vsctl_context *ctx)
         int64_t tag = vlan;
 
         parent = find_bridge(&info, parent_name, false);
-        if (parent && parent->vlan) {
+        if (parent && parent->parent) {
             vsctl_fatal("cannot create bridge with fake bridge as parent");
         }
         if (!parent) {
@@ -1750,7 +1755,7 @@ add_port(struct vsctl_context *ctx,
     ovsrec_port_set_bond_fake_iface(port, fake_iface);
     free(ifaces);
 
-    if (bridge->vlan) {
+    if (bridge->parent) {
         int64_t tag = bridge->vlan;
         ovsrec_port_set_tag(port, &tag, 1);
     }

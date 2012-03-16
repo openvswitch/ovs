@@ -69,7 +69,8 @@ When such a ``fake bridge'' is active, \fBovs\-vsctl\fR will treat it
 much like a bridge separate from its ``parent bridge,'' but the actual
 implementation in Open vSwitch uses only a single bridge, with ports on
 the fake bridge assigned the implicit VLAN of the fake bridge of which
-they are members.
+they are members.  (A fake bridge for VLAN 0 receives packets that
+have no 802.1Q tag or a tag with VLAN 0.)
 .
 .SH OPTIONS
 .
@@ -179,7 +180,7 @@ nothing if \fIbridge\fR already exists as a real bridge.
 Creates a ``fake bridge'' named \fIbridge\fR within the existing Open
 vSwitch bridge \fIparent\fR, which must already exist and must not
 itself be a fake bridge.  The new fake bridge will be on 802.1Q VLAN
-\fIvlan\fR, which must be an integer between 1 and 4095.  Initially
+\fIvlan\fR, which must be an integer between 0 and 4095.  Initially
 \fIbridge\fR will have no ports (other than \fIbridge\fR itself).
 .IP
 Without \fB\-\-may\-exist\fR, attempting to create a bridge that

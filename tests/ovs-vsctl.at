@@ -401,8 +401,7 @@ OVS_VSCTL_CLEANUP
 AT_CLEANUP
 
 dnl ----------------------------------------------------------------------
-AT_BANNER([ovs-vsctl unit tests -- fake bridges])
-
+dnl OVS_VSCTL_SETUP_SIMPLE_FAKE_CONF([VLAN])
 m4_define([OVS_VSCTL_SETUP_SIMPLE_FAKE_CONF],
   [AT_CHECK(
      [RUN_OVS_VSCTL(
@@ -410,36 +409,40 @@ m4_define([OVS_VSCTL_SETUP_SIMPLE_FAKE_CONF],
         [--may-exist add-br xenbr0],
         [add-port xenbr0 eth0],
         [--may-exist add-port xenbr0 eth0],
-        [add-br xapi1 xenbr0 9],
-        [--may-exist add-br xapi1 xenbr0 9],
-        [add-port xapi1 eth0.9])],
+        [add-br xapi1 xenbr0 $1],
+        [--may-exist add-br xapi1 xenbr0 $1],
+        [add-port xapi1 eth0.$1])],
      [0], [], [], [OVS_VSCTL_CLEANUP])])
 
-AT_SETUP([simple fake bridge])
+dnl OVS_VSCTL_FAKE_BRIDGE_TESTS([VLAN])
+m4_define([OVS_VSCTL_FAKE_BRIDGE_TESTS], [
+AT_BANNER([ovs-vsctl unit tests -- fake bridges (VLAN $1)])
+
+AT_SETUP([simple fake bridge (VLAN $1)])
 AT_KEYWORDS([ovs-vsctl fake-bridge])
 OVS_VSCTL_SETUP
-OVS_VSCTL_SETUP_SIMPLE_FAKE_CONF
+OVS_VSCTL_SETUP_SIMPLE_FAKE_CONF([$1])
 AT_CHECK([RUN_OVS_VSCTL([--may-exist add-br xapi1])], [1], [],
-  [ovs-vsctl: "--may-exist add-br xapi1" but xapi1 is a VLAN bridge for VLAN 9
+  [ovs-vsctl: "--may-exist add-br xapi1" but xapi1 is a VLAN bridge for VLAN $1
 ], [OVS_VSCTL_CLEANUP])
-AT_CHECK([RUN_OVS_VSCTL([--may-exist add-br xapi1 xxx 9])], [1], [],
-  [ovs-vsctl: "--may-exist add-br xapi1 xxx 9" but xapi1 has the wrong parent xenbr0
+AT_CHECK([RUN_OVS_VSCTL([--may-exist add-br xapi1 xxx $1])], [1], [],
+  [ovs-vsctl: "--may-exist add-br xapi1 xxx $1" but xapi1 has the wrong parent xenbr0
 ], [OVS_VSCTL_CLEANUP])
 AT_CHECK([RUN_OVS_VSCTL([--may-exist add-br xapi1 xenbr0 10])], [1], [],
-  [ovs-vsctl: "--may-exist add-br xapi1 xenbr0 10" but xapi1 is a VLAN bridge for the wrong VLAN 9
+  [ovs-vsctl: "--may-exist add-br xapi1 xenbr0 10" but xapi1 is a VLAN bridge for the wrong VLAN $1
 ], [OVS_VSCTL_CLEANUP])
-CHECK_BRIDGES([xapi1, xenbr0, 9], [xenbr0, xenbr0, 0])
+CHECK_BRIDGES([xapi1, xenbr0, $1], [xenbr0, xenbr0, 0])
 CHECK_PORTS([xenbr0], [eth0])
 CHECK_IFACES([xenbr0], [eth0])
-CHECK_PORTS([xapi1], [eth0.9])
-CHECK_IFACES([xapi1], [eth0.9])
+CHECK_PORTS([xapi1], [eth0.$1])
+CHECK_IFACES([xapi1], [eth0.$1])
 OVS_VSCTL_CLEANUP
 AT_CLEANUP
 
-AT_SETUP([simple fake bridge + del-br fake bridge])
+AT_SETUP([simple fake bridge + del-br fake bridge (VLAN $1)])
 AT_KEYWORDS([ovs-vsctl fake-bridge])
 OVS_VSCTL_SETUP
-OVS_VSCTL_SETUP_SIMPLE_FAKE_CONF
+OVS_VSCTL_SETUP_SIMPLE_FAKE_CONF([$1])
 AT_CHECK([RUN_OVS_VSCTL([del-br xapi1])], [0], [], [], [OVS_VSCTL_CLEANUP])
 CHECK_BRIDGES([xenbr0, xenbr0, 0])
 CHECK_PORTS([xenbr0], [eth0])
@@ -447,19 +450,19 @@ CHECK_IFACES([xenbr0], [eth0])
 OVS_VSCTL_CLEANUP
 AT_CLEANUP
 
-AT_SETUP([simple fake bridge + del-br real bridge])
+AT_SETUP([simple fake bridge + del-br real bridge (VLAN $1)])
 AT_KEYWORDS([ovs-vsctl fake-bridge])
 OVS_VSCTL_SETUP
-OVS_VSCTL_SETUP_SIMPLE_FAKE_CONF
+OVS_VSCTL_SETUP_SIMPLE_FAKE_CONF([$1])
 AT_CHECK([RUN_OVS_VSCTL([del-br xenbr0])], [0], [], [], [OVS_VSCTL_CLEANUP])
 CHECK_BRIDGES
 OVS_VSCTL_CLEANUP
 AT_CLEANUP
 
-AT_SETUP([simple fake bridge + external IDs])
+AT_SETUP([simple fake bridge + external IDs (VLAN $1)])
 AT_KEYWORDS([ovs-vsctl fake-bridge])
 OVS_VSCTL_SETUP
-OVS_VSCTL_SETUP_SIMPLE_FAKE_CONF
+OVS_VSCTL_SETUP_SIMPLE_FAKE_CONF([$1])
 AT_CHECK([RUN_OVS_VSCTL_TOGETHER(
   [br-set-external-id xenbr0 key0 value0],
   [br-set-external-id xapi1 key1 value1],
@@ -473,27 +476,32 @@ value0
 key1=value1
 value1
 ], [], [OVS_VSCTL_CLEANUP])
-CHECK_BRIDGES([xapi1, xenbr0, 9], [xenbr0, xenbr0, 0])
+CHECK_BRIDGES([xapi1, xenbr0, $1], [xenbr0, xenbr0, 0])
 CHECK_PORTS([xenbr0], [eth0])
 CHECK_IFACES([xenbr0], [eth0])
-CHECK_PORTS([xapi1], [eth0.9])
-CHECK_IFACES([xapi1], [eth0.9])
+CHECK_PORTS([xapi1], [eth0.$1])
+CHECK_IFACES([xapi1], [eth0.$1])
 OVS_VSCTL_CLEANUP
 AT_CLEANUP
+]) # OVS_VSCTL_FAKE_BRIDGE_TESTS
 
+OVS_VSCTL_FAKE_BRIDGE_TESTS([9])
+OVS_VSCTL_FAKE_BRIDGE_TESTS([0])
+
+dnl OVS_VSCTL_SETUP_BOND_FAKE_CONF([VLAN])
 m4_define([OVS_VSCTL_SETUP_BOND_FAKE_CONF],
   [AT_CHECK(
      [RUN_OVS_VSCTL(
         [add-br xapi1],
         [add-bond xapi1 bond0 eth0 eth1],
-        [add-br xapi2 xapi1 11],
-        [add-port xapi2 bond0.11])],
+        [add-br xapi2 xapi1 $1],
+        [add-port xapi2 bond0.$1])],
      [0], [], [], [OVS_VSCTL_CLEANUP])])
 
 AT_SETUP([fake bridge on bond])
 AT_KEYWORDS([ovs-vsctl fake-bridge])
 OVS_VSCTL_SETUP
-OVS_VSCTL_SETUP_BOND_FAKE_CONF
+OVS_VSCTL_SETUP_BOND_FAKE_CONF([11])
 CHECK_BRIDGES([xapi1, xapi1, 0], [xapi2, xapi1, 11])
 CHECK_PORTS([xapi1], [bond0])
 CHECK_IFACES([xapi1], [eth0], [eth1])
@@ -505,7 +513,7 @@ AT_CLEANUP
 AT_SETUP([fake bridge on bond + del-br fake bridge])
 AT_KEYWORDS([ovs-vsctl fake-bridge])
 OVS_VSCTL_SETUP
-OVS_VSCTL_SETUP_BOND_FAKE_CONF
+OVS_VSCTL_SETUP_BOND_FAKE_CONF([11])
 AT_CHECK([RUN_OVS_VSCTL_ONELINE([del-br xapi2])], [0], [
 ], [], [OVS_VSCTL_CLEANUP])
 CHECK_BRIDGES([xapi1, xapi1, 0])
@@ -517,7 +525,7 @@ AT_CLEANUP
 AT_SETUP([fake bridge on bond + del-br real bridge])
 AT_KEYWORDS([ovs-vsctl fake-bridge])
 OVS_VSCTL_SETUP
-OVS_VSCTL_SETUP_BOND_FAKE_CONF
+OVS_VSCTL_SETUP_BOND_FAKE_CONF([11])
 AT_CHECK([RUN_OVS_VSCTL([del-br xapi1])])
 CHECK_BRIDGES
 OVS_VSCTL_CLEANUP
