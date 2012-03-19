@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011 Nicira Networks.
+ * Copyright (c) 2009, 2010, 2011, 2012 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -469,7 +469,12 @@ struct netdev_class {
      * of iteration is unspecified, but (when successful) each queue is visited
      * exactly once.
      *
-     * 'cb' will not modify or free the 'details' argument passed in. */
+     * 'cb' will not modify or free the 'details' argument passed in.  It may
+     * delete or modify the queue passed in as its 'queue_id' argument.  It may
+     * modify but will not delete any other queue within 'netdev'.  If 'cb'
+     * adds new queues, then ->dump_queues is allowed to visit some queues
+     * twice or not at all.
+     */
     int (*dump_queues)(const struct netdev *netdev,
                        void (*cb)(unsigned int queue_id,
                                   const struct shash *details,
