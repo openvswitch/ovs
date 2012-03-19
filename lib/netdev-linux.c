@@ -1866,7 +1866,7 @@ netdev_linux_dump_queues(const struct netdev *netdev,
 {
     struct netdev_dev_linux *netdev_dev =
                                 netdev_dev_linux_cast(netdev_get_dev(netdev));
-    struct tc_queue *queue;
+    struct tc_queue *queue, *next_queue;
     struct shash details;
     int last_error;
     int error;
@@ -1880,7 +1880,8 @@ netdev_linux_dump_queues(const struct netdev *netdev,
 
     last_error = 0;
     shash_init(&details);
-    HMAP_FOR_EACH (queue, hmap_node, &netdev_dev->tc->queues) {
+    HMAP_FOR_EACH_SAFE (queue, next_queue, hmap_node,
+                        &netdev_dev->tc->queues) {
         shash_clear(&details);
 
         error = netdev_dev->tc->ops->class_get(netdev, queue, &details);
