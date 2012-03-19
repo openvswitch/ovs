@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010, 2011 Nicira Networks
+/* Copyright (c) 2009, 2010, 2011, 2012 Nicira Networks
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -150,7 +150,7 @@ ovsdb_internal_error(struct ovsdb_error *inner_error,
         ds_put_char(&ds, ')');
     }
 
-    ds_put_format(&ds, " (%s %s%s)", program_name, VERSION, BUILDNR);
+    ds_put_format(&ds, " (%s %s)", program_name, VERSION);
 
     if (inner_error) {
         char *s = ovsdb_error_to_string(inner_error);

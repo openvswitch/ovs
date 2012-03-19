@@ -8,15 +8,14 @@
 # without warranty of any kind.
 
 # When building, the rpmbuild command line should define
-# openvswitch_version, kernel_name, kernel_version, kernel_flavor,
-# and build_number using -D arguments.
+# openvswitch_version, kernel_name, kernel_version, and kernel_flavor
+# using -D arguments.
 # for example:
 #
 #    rpmbuild -D "openvswitch_version 1.1.0+build123"
 #      -D "kernel_name  NAME-xen"
 #      -D "kernel_version 2.6.32.12-0.7.1.xs5.6.100.323.170596"
 #      -D "kernel_flavor xen"
-#      -D "build_number --with-build-number=123"
 #      -bb /usr/src/redhat/SPECS/openvswitch-xen.spec
 
 %if %{?openvswitch_version:0}%{!?openvswitch_version:1}
@@ -71,7 +70,7 @@ Open vSwitch Linux kernel module compiled against kernel version
 %setup -q -n openvswitch-%{openvswitch_version}
 
 %build
-./configure --prefix=/usr --sysconfdir=/etc --localstatedir=%{_localstatedir} --with-linux=/lib/modules/%{xen_version}/build --enable-ssl %{?build_number}
+./configure --prefix=/usr --sysconfdir=/etc --localstatedir=%{_localstatedir} --with-linux=/lib/modules/%{xen_version}/build --enable-ssl
 make %{_smp_mflags}
 
 %install

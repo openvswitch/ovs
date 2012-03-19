@@ -7,9 +7,6 @@ MA_DIR ?= /usr/share/modass
 
 DATAPATH_CONFIGURE_OPTS =
 
-# Official build number.  Leave set to 0 if not an official build.
-BUILD_NUMBER = 0
-
 kdist_clean:
 	dh_testdir	
 	dh_testroot
@@ -26,7 +23,7 @@ binary-modules: prep-deb-files
 	dh_testroot
 	dh_clean -k
 	tar xzf openvswitch.tar.gz
-	cd openvswitch && ./configure --with-linux=$(KSRC) $(DATAPATH_CONFIGURE_OPTS) --with-build-number=$(BUILD_NUMBER)
+	cd openvswitch && ./configure --with-linux=$(KSRC) $(DATAPATH_CONFIGURE_OPTS)
 	cd openvswitch && $(MAKE) -C datapath/linux
 	install -d -m755 $(DSTDIR)
 	install -m644 openvswitch/datapath/linux/*.ko $(DSTDIR)/

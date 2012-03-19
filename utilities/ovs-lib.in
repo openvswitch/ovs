@@ -1,7 +1,7 @@
 # This is a shell function library sourced by some Open vSwitch scripts.
 # It is not intended to be invoked on its own.
 
-# Copyright (C) 2009, 2010, 2011 Nicira Networks, Inc.
+# Copyright (C) 2009, 2010, 2011, 2012 Nicira Networks, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -29,10 +29,6 @@ bindir=${OVS_BINDIR-'@bindir@'}                 # /usr/bin
 sbindir=${OVS_SBINDIR-'@sbindir@'}              # /usr/sbin
 
 VERSION='@VERSION@'
-case @BUILDNR@ in
-    [1-9]*) BUILDNR='+build@BUILDNR@' ;;
-    *) BUILDNR= ;;
-esac
 
 LC_ALL=C; export LC_ALL
 

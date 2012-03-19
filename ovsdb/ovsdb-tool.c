@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011 Nicira Networks.
+ * Copyright (c) 2009, 2010, 2011, 2012 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -260,8 +260,7 @@ do_compact(int argc, char *argv[])
     const char *db = argc >= 2 ? argv[1] : default_db();
     const char *target = argc >= 3 ? argv[2] : NULL;
 
-    compact_or_convert(db, target, NULL,
-                       "compacted by ovsdb-tool "VERSION BUILDNR);
+    compact_or_convert(db, target, NULL, "compacted by ovsdb-tool "VERSION);
 }
 
 static void
@@ -274,7 +273,7 @@ do_convert(int argc, char *argv[])
 
     check_ovsdb_error(ovsdb_schema_from_file(schema, &new_schema));
     compact_or_convert(db, target, new_schema,
-                       "converted by ovsdb-tool "VERSION BUILDNR);
+                       "converted by ovsdb-tool "VERSION);
     ovsdb_schema_destroy(new_schema);
 }
 

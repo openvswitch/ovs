@@ -296,7 +296,7 @@ set_program_name__(const char *argv0, const char *date, const char *time)
     program_name = slash ? slash + 1 : argv0;
 
     free(program_version);
-    program_version = xasprintf("%s (Open vSwitch) "VERSION BUILDNR"\n"
+    program_version = xasprintf("%s (Open vSwitch) "VERSION"\n"
                                 "Compiled %s %s\n",
                                 program_name, date, time);
 }

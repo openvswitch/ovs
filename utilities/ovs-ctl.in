@@ -501,7 +501,7 @@ do
             usage
             ;;
         -V | --version)
-            echo "$0 (Open vSwitch) $VERSION$BUILDNR"
+            echo "$0 (Open vSwitch) $VERSION"
             exit 0
             ;;
         --external-id=*)

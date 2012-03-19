@@ -131,7 +131,7 @@ struct ofproto_controller {
 
 #define DEFAULT_MFR_DESC "Nicira Networks, Inc."
 #define DEFAULT_HW_DESC "Open vSwitch"
-#define DEFAULT_SW_DESC VERSION BUILDNR
+#define DEFAULT_SW_DESC VERSION
 #define DEFAULT_SERIAL_DESC "None"
 #define DEFAULT_DP_DESC "None"
 
