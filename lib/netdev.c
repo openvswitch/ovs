@@ -1235,7 +1235,11 @@ netdev_get_queue_stats(const struct netdev *netdev, unsigned int queue_id,
  * Calling this function may be more efficient than calling netdev_get_queue()
  * for every queue.
  *
- * 'cb' must not modify or free the 'details' argument passed in.
+ * 'cb' must not modify or free the 'details' argument passed in.  It may
+ * delete or modify the queue passed in as its 'queue_id' argument.  It may
+ * modify but must not delete any other queue within 'netdev'.  'cb' should not
+ * add new queues because this may cause some queues to be visited twice or not
+ * at all.
  *
  * Returns 0 if successful, otherwise a positive errno value.  On error, some
  * configured queues may not have been included in the iteration. */
