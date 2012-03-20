@@ -162,6 +162,7 @@ def set_or_delete(d, key, value):
 
 
 def set_external_id(row, key, value):
+    row.verify("external_ids")
     external_ids = row.external_ids
     if set_or_delete(external_ids, key, value):
         row.external_ids = external_ids
@@ -186,6 +187,7 @@ def update_fail_mode(row):
     if fail_mode not in ['standalone', 'secure']:
         fail_mode = 'standalone'
 
+    row.verify("fail_mode")
     if row.fail_mode != fail_mode:
         row.fail_mode = fail_mode
 
@@ -197,6 +199,7 @@ def update_in_band_mgmt(row):
 
     dib = rec['other_config'].get('vswitch-disable-in-band')
 
+    row.verify("other_config")
     other_config = row.other_config
     if dib and dib not in ['true', 'false']:
         vlog.warn('"%s" isn\'t a valid setting for '
