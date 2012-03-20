@@ -190,6 +190,7 @@ learn_execute(const struct nx_action_learn *learn, const struct flow *flow,
 
     cls_rule_init_catchall(&fm->cr, ntohs(learn->priority));
     fm->cookie = learn->cookie;
+    fm->cookie_mask = htonll(UINT64_MAX);
     fm->table_id = learn->table_id;
     fm->command = OFPFC_MODIFY_STRICT;
     fm->idle_timeout = ntohs(learn->idle_timeout);
