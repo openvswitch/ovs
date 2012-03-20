@@ -4414,7 +4414,7 @@ xlate_table_action(struct action_xlate_ctx *ctx,
         if (table_id > 0 && table_id < N_TABLES) {
             struct table_dpif *table = &ofproto->tables[table_id];
             if (table->other_table) {
-                ctx->tags |= (rule
+                ctx->tags |= (rule && rule->tag
                               ? rule->tag
                               : rule_calculate_tag(&ctx->flow,
                                                    &table->other_table->wc,
