@@ -25,6 +25,12 @@ def constify(cType, const):
     else:
         return cType
 
+def is_string_map(column):
+    return (column.type.key
+            and column.type.value
+            and column.type.key.type == ovs.db.types.StringType
+            and column.type.value.type == ovs.db.types.StringType)
+
 def cMembers(prefix, columnName, column, const):
     type = column.type
     if type.n_min == 1 and type.n_max == 1:
@@ -140,6 +146,15 @@ struct %(s)s *%(s)s_insert(struct ovsdb_idl_txn *);
                     in cMembers(prefix, columnName, column, True)]
             print '%s);' % ', '.join(args)
 
+        print
+        for columnName, column in sorted(table.columns.iteritems()):
+            if not is_string_map(column):
+                continue
+            print "const char *%(s)s_get_%(c)s_value(const struct %(s)s *," \
+                    " const char *key, const char *default_value);" \
+                    % {'s': structName, 'c': columnName}
+
+
     # Table indexes.
     printEnum(["%sTABLE_%s" % (prefix.upper(), tableName.upper()) for tableName in sorted(schema.tables)] + ["%sN_TABLES" % prefix.upper()])
     print
@@ -187,6 +202,22 @@ enum { sizeof_bool = sizeof(bool) };
 
 static bool inited;
 ''' % schema.idlHeader
+
+    try:
+        for table in schema.tables.itervalues():
+            for column in table.columns.itervalues():
+                if is_string_map(column):
+                    print """\
+static int
+bsearch_strcmp(const void *a_, const void *b_)
+{
+    char *const *a = a_;
+    char *const *b = b_;
+    return strcmp(*a, *b);
+}"""
+                    raise StopIteration
+    except StopIteration:
+        pass
 
     # Cast functions.
     for tableName, table in sorted(schema.tables.iteritems()):
@@ -491,6 +522,25 @@ const struct ovsdb_datum *
                    'S': structName.upper(),
                    'C': columnName.upper()}
             print "}"
+
+        # String Map Helpers.
+        for columnName, column in sorted(table.columns.iteritems()):
+            if not is_string_map(column):
+                continue
+
+            print """
+const char * %(s)s_get_%(c)s_value(const struct %(s)s *row, const char *search_key, const char *default_value)
+{
+    char **keys = row->key_%(c)s;
+    char **values = row->value_%(c)s;
+    size_t n_keys = row->n_%(c)s;
+    char ** result_key;
+
+    assert(inited);
+    result_key = bsearch(&search_key, keys, n_keys, sizeof *keys,
+                         bsearch_strcmp);
+    return result_key ? values[result_key - keys] : default_value;
+}""" % {'s': structName, 'c': columnName}
 
         # Table columns.
         print "\nstruct ovsdb_idl_column %s_columns[%s_N_COLUMNS];" % (

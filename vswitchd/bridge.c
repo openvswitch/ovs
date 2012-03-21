@@ -171,11 +171,6 @@ static void bridge_pick_local_hw_addr(struct bridge *,
 static uint64_t bridge_pick_datapath_id(struct bridge *,
                                         const uint8_t bridge_ea[ETH_ADDR_LEN],
                                         struct iface *hw_addr_iface);
-static const char *bridge_get_other_config(const struct ovsrec_bridge *,
-                                            const char *key);
-static const char *get_port_other_config(const struct ovsrec_port *,
-                                         const char *key,
-                                         const char *default_value);
 static uint64_t dpid_from_hash(const void *, size_t nbytes);
 static bool bridge_has_bond_fake_iface(const struct bridge *,
                                        const char *name);
@@ -219,9 +214,6 @@ static void iface_refresh_cfm_stats(struct iface *);
 static void iface_refresh_stats(struct iface *);
 static void iface_refresh_status(struct iface *);
 static bool iface_is_synthetic(const struct iface *);
-static const char *get_interface_other_config(const struct ovsrec_interface *,
-                                              const char *key,
-                                              const char *default_value);
 
 static void shash_from_ovs_idl_map(char **keys, char **values, size_t n,
                                    struct shash *);
@@ -589,7 +581,7 @@ port_configure(struct port *port)
             s.vlan_mode = PORT_VLAN_TRUNK;
         }
     }
-    s.use_priority_tags = !strcmp("true", get_port_other_config(
+    s.use_priority_tags = !strcmp("true", ovsrec_port_get_other_config_value(
                                       cfg, "priority-tags", ""));
 
     /* Get LACP settings. */
@@ -780,7 +772,8 @@ port_configure_stp(const struct ofproto *ofproto, struct port *port,
     const char *config_str;
     struct iface *iface;
 
-    config_str = get_port_other_config(port->cfg, "stp-enable", NULL);
+    config_str = ovsrec_port_get_other_config_value(port->cfg, "stp-enable",
+                                                    NULL);
     if (config_str && !strcmp(config_str, "false")) {
         port_s->enable = false;
         return;
@@ -813,7 +806,8 @@ port_configure_stp(const struct ofproto *ofproto, struct port *port,
         return;
     }
 
-    config_str = get_port_other_config(port->cfg, "stp-port-num", NULL);
+    config_str = ovsrec_port_get_other_config_value(port->cfg, "stp-port-num",
+                                                    NULL);
     if (config_str) {
         unsigned long int port_num = strtoul(config_str, NULL, 0);
         int port_idx = port_num - 1;
@@ -842,7 +836,8 @@ port_configure_stp(const struct ofproto *ofproto, struct port *port,
         port_s->port_num = (*port_num_counter)++;
     }
 
-    config_str = get_port_other_config(port->cfg, "stp-path-cost", NULL);
+    config_str = ovsrec_port_get_other_config_value(port->cfg, "stp-path-cost",
+                                                    NULL);
     if (config_str) {
         port_s->path_cost = strtoul(config_str, NULL, 10);
     } else {
@@ -859,7 +854,9 @@ port_configure_stp(const struct ofproto *ofproto, struct port *port,
         }
     }
 
-    config_str = get_port_other_config(port->cfg, "stp-port-priority", NULL);
+    config_str = ovsrec_port_get_other_config_value(port->cfg,
+                                                    "stp-port-priority",
+                                                    NULL);
     if (config_str) {
         port_s->priority = strtoul(config_str, NULL, 0);
     } else {
@@ -880,7 +877,9 @@ bridge_configure_stp(struct bridge *br)
         int port_num_counter;
         unsigned long *port_num_bitmap;
 
-        config_str = bridge_get_other_config(br->cfg, "stp-system-id");
+        config_str = ovsrec_bridge_get_other_config_value(br->cfg,
+                                                          "stp-system-id",
+                                                          NULL);
         if (config_str) {
             uint8_t ea[ETH_ADDR_LEN];
 
@@ -895,28 +894,36 @@ bridge_configure_stp(struct bridge *br)
             br_s.system_id = eth_addr_to_uint64(br->ea);
         }
 
-        config_str = bridge_get_other_config(br->cfg, "stp-priority");
+        config_str = ovsrec_bridge_get_other_config_value(br->cfg,
+                                                          "stp-priority",
+                                                          NULL);
         if (config_str) {
             br_s.priority = strtoul(config_str, NULL, 0);
         } else {
             br_s.priority = STP_DEFAULT_BRIDGE_PRIORITY;
         }
 
-        config_str = bridge_get_other_config(br->cfg, "stp-hello-time");
+        config_str = ovsrec_bridge_get_other_config_value(br->cfg,
+                                                          "stp-hello-time",
+                                                          NULL);
         if (config_str) {
             br_s.hello_time = strtoul(config_str, NULL, 10) * 1000;
         } else {
             br_s.hello_time = STP_DEFAULT_HELLO_TIME;
         }
 
-        config_str = bridge_get_other_config(br->cfg, "stp-max-age");
+        config_str = ovsrec_bridge_get_other_config_value(br->cfg,
+                                                          "stp-max-age",
+                                                          NULL);
         if (config_str) {
             br_s.max_age = strtoul(config_str, NULL, 10) * 1000;
         } else {
             br_s.max_age = STP_DEFAULT_MAX_AGE;
         }
 
-        config_str = bridge_get_other_config(br->cfg, "stp-forward-delay");
+        config_str = ovsrec_bridge_get_other_config_value(br->cfg,
+                                                          "stp-forward-delay",
+                                                          NULL);
         if (config_str) {
             br_s.fwd_delay = strtoul(config_str, NULL, 10) * 1000;
         } else {
@@ -1232,27 +1239,6 @@ bridge_add_ofproto_ports(struct bridge *br)
     }
 }
 
-static const char *
-get_ovsrec_key_value(char **keys, char **values, size_t n, const char *key)
-{
-    size_t i;
-
-    for (i = 0; i < n; i++) {
-        if (!strcmp(keys[i], key)) {
-            return values[i];
-        }
-    }
-    return NULL;
-}
-
-static const char *
-bridge_get_other_config(const struct ovsrec_bridge *br_cfg, const char *key)
-{
-    return get_ovsrec_key_value(br_cfg->key_other_config,
-                                br_cfg->value_other_config,
-                                br_cfg->n_other_config, key);
-}
-
 /* Set Flow eviction threshold */
 static void
 bridge_configure_flow_eviction_threshold(struct bridge *br)
@@ -1260,8 +1246,10 @@ bridge_configure_flow_eviction_threshold(struct bridge *br)
     const char *threshold_str;
     unsigned threshold;
 
-    threshold_str = bridge_get_other_config(br->cfg,
-                                            "flow-eviction-threshold");
+    threshold_str =
+        ovsrec_bridge_get_other_config_value(br->cfg,
+                                             "flow-eviction-threshold",
+                                             NULL);
     if (threshold_str) {
         threshold = strtoul(threshold_str, NULL, 10);
     } else {
@@ -1277,7 +1265,9 @@ bridge_configure_forward_bpdu(struct bridge *br)
     const char *forward_bpdu_str;
     bool forward_bpdu = false;
 
-    forward_bpdu_str = bridge_get_other_config(br->cfg, "forward-bpdu");
+    forward_bpdu_str = ovsrec_bridge_get_other_config_value(br->cfg,
+                                                            "forward-bpdu",
+                                                            NULL);
     if (forward_bpdu_str && !strcmp(forward_bpdu_str, "true")) {
         forward_bpdu = true;
     }
@@ -1291,7 +1281,9 @@ bridge_configure_mac_idle_time(struct bridge *br)
     const char *idle_time_str;
     int idle_time;
 
-    idle_time_str = bridge_get_other_config(br->cfg, "mac-aging-time");
+    idle_time_str = ovsrec_bridge_get_other_config_value(br->cfg,
+                                                         "mac-aging-time",
+                                                         NULL);
     idle_time = (idle_time_str && atoi(idle_time_str)
                  ? atoi(idle_time_str)
                  : MAC_ENTRY_DEFAULT_IDLE_TIME);
@@ -1312,7 +1304,7 @@ bridge_pick_local_hw_addr(struct bridge *br, uint8_t ea[ETH_ADDR_LEN],
     *hw_addr_iface = NULL;
 
     /* Did the user request a particular MAC? */
-    hwaddr = bridge_get_other_config(br->cfg, "hwaddr");
+    hwaddr = ovsrec_bridge_get_other_config_value(br->cfg, "hwaddr", NULL);
     if (hwaddr && eth_addr_from_string(hwaddr, ea)) {
         if (eth_addr_is_multicast(ea)) {
             VLOG_ERR("bridge %s: cannot set MAC address to multicast "
@@ -1436,7 +1428,8 @@ bridge_pick_datapath_id(struct bridge *br,
     const char *datapath_id;
     uint64_t dpid;
 
-    datapath_id = bridge_get_other_config(br->cfg, "datapath-id");
+    datapath_id = ovsrec_bridge_get_other_config_value(br->cfg, "datapath-id",
+                                                       NULL);
     if (datapath_id && dpid_from_string(datapath_id, &dpid)) {
         return dpid;
     }
@@ -1734,10 +1727,9 @@ enable_system_stats(const struct ovsrec_open_vswitch *cfg)
     const char *enable;
 
     /* Use other-config:enable-system-stats by preference. */
-    enable = get_ovsrec_key_value(cfg->key_other_config,
-                                  cfg->value_other_config,
-                                  cfg->n_other_config,
-                                  "enable-statistics");
+    enable = ovsrec_open_vswitch_get_other_config_value(cfg,
+                                                        "enable-statistics",
+                                                        NULL);
     if (enable) {
         return !strcmp(enable, "true");
     }
@@ -2437,13 +2429,17 @@ bridge_configure_remotes(struct bridge *br,
     size_t i;
 
     /* Check if we should disable in-band control on this bridge. */
-    disable_ib_str = bridge_get_other_config(br->cfg, "disable-in-band");
+    disable_ib_str = ovsrec_bridge_get_other_config_value(br->cfg,
+                                                          "disable-in-band",
+                                                          NULL);
     if (disable_ib_str && !strcmp(disable_ib_str, "true")) {
         disable_in_band = true;
     }
 
     /* Set OpenFlow queue ID for in-band control. */
-    queue_id_str = bridge_get_other_config(br->cfg, "in-band-queue");
+    queue_id_str = ovsrec_bridge_get_other_config_value(br->cfg,
+                                                        "in-band-queue",
+                                                        NULL);
     queue_id = queue_id_str ? strtol(queue_id_str, NULL, 10) : -1;
     ofproto_set_in_band_queue(br->ofproto, queue_id);
 
@@ -2598,30 +2594,6 @@ port_create(struct bridge *br, const struct ovsrec_port *cfg)
     return port;
 }
 
-static const char *
-get_port_other_config(const struct ovsrec_port *port, const char *key,
-                      const char *default_value)
-{
-    const char *value;
-
-    value = get_ovsrec_key_value(port->key_other_config,
-                                 port->value_other_config,
-                                 port->n_other_config, key);
-    return value ? value : default_value;
-}
-
-static const char *
-get_interface_other_config(const struct ovsrec_interface *iface,
-                           const char *key, const char *default_value)
-{
-    const char *value;
-
-    value = get_ovsrec_key_value(iface->key_other_config,
-                                 iface->value_other_config,
-                                 iface->n_other_config, key);
-    return value ? value : default_value;
-}
-
 /* Deletes interfaces from 'port' that are no longer configured for it. */
 static void
 port_del_ifaces(struct port *port)
@@ -2768,7 +2740,8 @@ port_configure_lacp(struct port *port, struct lacp_settings *s)
 
     s->name = port->name;
 
-    system_id = get_port_other_config(port->cfg, "lacp-system-id", NULL);
+    system_id = ovsrec_port_get_other_config_value(port->cfg, "lacp-system-id",
+                                                   NULL);
     if (system_id) {
         if (sscanf(system_id, ETH_ADDR_SCAN_FMT,
                    ETH_ADDR_SCAN_ARGS(s->id)) != ETH_ADDR_SCAN_COUNT) {
@@ -2786,17 +2759,20 @@ port_configure_lacp(struct port *port, struct lacp_settings *s)
     }
 
     /* Prefer bondable links if unspecified. */
-    priority = atoi(get_port_other_config(port->cfg, "lacp-system-priority",
-                                          "0"));
+    priority = atoi(ovsrec_port_get_other_config_value(port->cfg,
+                                                       "lacp-system-priority",
+                                                       "0"));
     s->priority = (priority > 0 && priority <= UINT16_MAX
                    ? priority
                    : UINT16_MAX - !list_is_short(&port->ifaces));
 
-    s->heartbeat = !strcmp(get_port_other_config(port->cfg,
-                                                 "lacp-heartbeat",
-                                                 "false"), "true");
+    s->heartbeat = !strcmp(ovsrec_port_get_other_config_value(port->cfg,
+                                                              "lacp-heartbeat",
+                                                              "false"),
+                           "true");
 
-    lacp_time = get_port_other_config(port->cfg, "lacp-time", "slow");
+    lacp_time = ovsrec_port_get_other_config_value(port->cfg, "lacp-time",
+                                                   "slow");
     custom_time = atoi(lacp_time);
     if (!strcmp(lacp_time, "fast")) {
         s->lacp_time = LACP_TIME_FAST;
@@ -2817,11 +2793,16 @@ iface_configure_lacp(struct iface *iface, struct lacp_slave_settings *s)
 {
     int priority, portid, key;
 
-    portid = atoi(get_interface_other_config(iface->cfg, "lacp-port-id", "0"));
-    priority = atoi(get_interface_other_config(iface->cfg,
-                                               "lacp-port-priority", "0"));
-    key = atoi(get_interface_other_config(iface->cfg, "lacp-aggregation-key",
-                                          "0"));
+    portid = atoi(ovsrec_interface_get_other_config_value(iface->cfg,
+                                                          "lacp-port-id",
+                                                          "0"));
+    priority =
+        atoi(ovsrec_interface_get_other_config_value(iface->cfg,
+                                                     "lacp-port-priority",
+                                                     "0"));
+    key = atoi(ovsrec_interface_get_other_config_value(iface->cfg,
+                                                       "lacp-aggregation-key",
+                                                       "0"));
 
     if (portid <= 0 || portid > UINT16_MAX) {
         portid = iface->ofp_port;
@@ -2874,13 +2855,16 @@ port_configure_bond(struct port *port, struct bond_settings *s,
                   port->name);
     }
 
-    miimon_interval = atoi(get_port_other_config(port->cfg,
-                                                 "bond-miimon-interval", "0"));
+    miimon_interval =
+        atoi(ovsrec_port_get_other_config_value(port->cfg,
+                                                "bond-miimon-interval", "0"));
     if (miimon_interval <= 0) {
         miimon_interval = 200;
     }
 
-    detect_s = get_port_other_config(port->cfg, "bond-detect-mode", "carrier");
+    detect_s = ovsrec_port_get_other_config_value(port->cfg,
+                                                  "bond-detect-mode",
+                                                  "carrier");
     if (!strcmp(detect_s, "carrier")) {
         miimon_interval = 0;
     } else if (strcmp(detect_s, "miimon")) {
@@ -2891,9 +2875,13 @@ port_configure_bond(struct port *port, struct bond_settings *s,
 
     s->up_delay = MAX(0, port->cfg->bond_updelay);
     s->down_delay = MAX(0, port->cfg->bond_downdelay);
-    s->basis = atoi(get_port_other_config(port->cfg, "bond-hash-basis", "0"));
+    s->basis = atoi(ovsrec_port_get_other_config_value(port->cfg,
+                                                       "bond-hash-basis",
+                                                       "0"));
     s->rebalance_interval = atoi(
-        get_port_other_config(port->cfg, "bond-rebalance-interval", "10000"));
+        ovsrec_port_get_other_config_value(port->cfg,
+                                           "bond-rebalance-interval",
+                                           "10000"));
     if (s->rebalance_interval && s->rebalance_interval < 1000) {
         s->rebalance_interval = 1000;
     }
@@ -2904,8 +2892,10 @@ port_configure_bond(struct port *port, struct bond_settings *s,
     LIST_FOR_EACH (iface, port_elem, &port->ifaces) {
         long long stable_id;
 
-        stable_id = atoll(get_interface_other_config(iface->cfg,
-                                                     "bond-stable-id", "0"));
+        stable_id =
+            atoll(ovsrec_interface_get_other_config_value(iface->cfg,
+                                                          "bond-stable-id",
+                                                          "0"));
         if (stable_id <= 0 || stable_id >= UINT32_MAX) {
             stable_id = iface->ofp_port;
         }
@@ -3238,11 +3228,15 @@ iface_configure_cfm(struct iface *iface)
     }
 
     s.mpid = *cfg->cfm_mpid;
-    s.interval = atoi(get_interface_other_config(iface->cfg, "cfm_interval",
-                                                 "0"));
-    cfm_ccm_vlan = get_interface_other_config(iface->cfg, "cfm_ccm_vlan", "0");
-    s.ccm_pcp = atoi(get_interface_other_config(iface->cfg, "cfm_ccm_pcp",
-                                                "0"));
+    s.interval = atoi(ovsrec_interface_get_other_config_value(iface->cfg,
+                                                              "cfm_interval",
+                                                              "0"));
+    cfm_ccm_vlan = ovsrec_interface_get_other_config_value(iface->cfg,
+                                                           "cfm_ccm_vlan",
+                                                           "0");
+    s.ccm_pcp = atoi(ovsrec_interface_get_other_config_value(iface->cfg,
+                                                             "cfm_ccm_pcp",
+                                                             "0"));
     if (s.interval <= 0) {
         s.interval = 1000;
     }
@@ -3256,11 +3250,14 @@ iface_configure_cfm(struct iface *iface)
         }
     }
 
-    extended_str = get_interface_other_config(iface->cfg, "cfm_extended",
-                                              "false");
+    extended_str = ovsrec_interface_get_other_config_value(iface->cfg,
+                                                           "cfm_extended",
+                                                           "false");
     s.extended = !strcasecmp("true", extended_str);
 
-    opstate_str = get_interface_other_config(iface->cfg, "cfm_opstate", "up");
+    opstate_str = ovsrec_interface_get_other_config_value(iface->cfg,
+                                                          "cfm_opstate",
+                                                          "up");
     s.opup = !strcasecmp("up", opstate_str);
 
     ofproto_port_set_cfm(iface->port->bridge->ofproto, iface->ofp_port, &s);
@@ -3501,7 +3498,9 @@ vlan_splinters_is_enabled(const struct ovsrec_interface *iface_cfg)
 {
     const char *value;
 
-    value = get_interface_other_config(iface_cfg, "enable-vlan-splinters", "");
+    value = ovsrec_interface_get_other_config_value(iface_cfg,
+                                                    "enable-vlan-splinters",
+                                                    "");
     return !strcmp(value, "true");
 }
 
@@ -3646,7 +3645,8 @@ configure_splinter_port(struct port *port)
     vlandev = CONTAINER_OF(list_front(&port->ifaces), struct iface,
                            port_elem);
 
-    realdev_name = get_port_other_config(port->cfg, "realdev", NULL);
+    realdev_name = ovsrec_port_get_other_config_value(port->cfg,
+                                                      "realdev", NULL);
     realdev = iface_lookup(port->bridge, realdev_name);
     realdev_ofp_port = realdev ? realdev->ofp_port : 0;
 
