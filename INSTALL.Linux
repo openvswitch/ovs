@@ -302,7 +302,7 @@ also upgrade the database schema:
 
 1. Stop the Open vSwitch daemons, e.g.:
 
-      % kill `cd /usr/local/var/run && cat ovsdb-server.pid ovs-vswitchd.pid`
+      % kill `cd /usr/local/var/run/openvswitch && cat ovsdb-server.pid ovs-vswitchd.pid`
 
 2. Install the new Open vSwitch release.
 
