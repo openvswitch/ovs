@@ -209,11 +209,17 @@ struct action_xlate_ctx {
      * revalidating without a packet to refer to. */
     const struct ofpbuf *packet;
 
-    /* Should OFPP_NORMAL MAC learning and NXAST_LEARN actions execute?  We
-     * want to execute them if we are actually processing a packet, or if we
-     * are accounting for packets that the datapath has processed, but not if
-     * we are just revalidating. */
-    bool may_learn;
+    /* Should OFPP_NORMAL update the MAC learning table?  We want to update it
+     * if we are actually processing a packet, or if we are accounting for
+     * packets that the datapath has processed, but not if we are just
+     * revalidating. */
+    bool may_learn_macs;
+
+    /* Should "learn" actions update the flow table?  We want to update it if
+     * we are actually processing a packet, or in most cases if we are
+     * accounting for packets that the datapath has processed, but not if we
+     * are just revalidating.  */
+    bool may_flow_mod;
 
     /* The rule that we are currently translating, or NULL. */
     struct rule_dpif *rule;
@@ -346,7 +352,7 @@ static void facet_flush_stats(struct facet *);
 static void facet_update_time(struct facet *, long long int used);
 static void facet_reset_counters(struct facet *);
 static void facet_push_stats(struct facet *);
-static void facet_account(struct facet *);
+static void facet_account(struct facet *, bool may_flow_mod);
 
 static bool facet_is_controller_flow(struct facet *);
 
@@ -2989,7 +2995,7 @@ update_stats(struct ofproto_dpif *p)
             facet->tcp_flags |= stats->tcp_flags;
 
             subfacet_update_time(subfacet, stats->used);
-            facet_account(facet);
+            facet_account(facet, true);
             facet_push_stats(facet);
         } else {
             if (!VLOG_DROP_WARN(&rl)) {
@@ -3241,7 +3247,7 @@ facet_remove(struct facet *facet)
 }
 
 static void
-facet_account(struct facet *facet)
+facet_account(struct facet *facet, bool may_flow_mod)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(facet->rule->up.ofproto);
     uint64_t n_bytes;
@@ -3267,7 +3273,8 @@ facet_account(struct facet *facet)
         action_xlate_ctx_init(&ctx, ofproto, &facet->flow,
                               facet->flow.vlan_tci,
                               facet->rule, facet->tcp_flags, NULL);
-        ctx.may_learn = true;
+        ctx.may_learn_macs = true;
+        ctx.may_flow_mod = may_flow_mod;
         ofpbuf_delete(xlate_actions(&ctx, facet->rule->up.actions,
                                     facet->rule->up.n_actions));
     }
@@ -3341,7 +3348,7 @@ facet_flush_stats(struct facet *facet)
     }
 
     facet_push_stats(facet);
-    facet_account(facet);
+    facet_account(facet, false);
 
     if (ofproto->netflow && !facet_is_controller_flow(facet)) {
         struct ofexpired expired;
@@ -4964,7 +4971,7 @@ do_xlate_actions(const union ofp_action *in, size_t n_in,
 
         case OFPUTIL_NXAST_LEARN:
             ctx->has_learn = true;
-            if (ctx->may_learn) {
+            if (ctx->may_flow_mod) {
                 xlate_learn_action(ctx, (const struct nx_action_learn *) ia);
             }
             break;
@@ -5017,7 +5024,8 @@ action_xlate_ctx_init(struct action_xlate_ctx *ctx,
     ctx->base_flow.vlan_tci = initial_tci;
     ctx->rule = rule;
     ctx->packet = packet;
-    ctx->may_learn = packet != NULL;
+    ctx->may_learn_macs = packet != NULL;
+    ctx->may_flow_mod = packet != NULL;
     ctx->tcp_flags = tcp_flags;
     ctx->resubmit_hook = NULL;
 }
@@ -5645,7 +5653,7 @@ xlate_normal(struct action_xlate_ctx *ctx)
     }
 
     /* Learn source MAC. */
-    if (ctx->may_learn) {
+    if (ctx->may_learn_macs) {
         update_learning_table(ctx->ofproto, &ctx->flow, vlan, in_bundle);
     }
 
