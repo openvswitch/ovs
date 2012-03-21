@@ -110,7 +110,7 @@ static void flow_push_stats(const struct rule_dpif *, const struct flow *,
                             uint64_t packets, uint64_t bytes,
                             long long int used);
 
-static uint32_t rule_calculate_tag(const struct flow *,
+static tag_type rule_calculate_tag(const struct flow *,
                                    const struct flow_wildcards *,
                                    uint32_t basis);
 static void rule_invalidate(const struct rule_dpif *);
@@ -5429,7 +5429,7 @@ xlate_normal(struct action_xlate_ctx *ctx)
 
 /* Calculates the tag to use for 'flow' and wildcards 'wc' when it is inserted
  * into an OpenFlow table with the given 'basis'. */
-static uint32_t
+static tag_type
 rule_calculate_tag(const struct flow *flow, const struct flow_wildcards *wc,
                    uint32_t secret)
 {
