@@ -1,13 +1,13 @@
                           Why Open vSwitch?
                           =================
 
-We love the existing network stack in Linux.  It is robust, flexible,
-and feature rich.  Linux already contains an in-kernel L2 switch (the
-Linux bridge) which can be used by VMs for inter-VM communication.  So,
-it is reasonable to ask why there is a need for a new network switch.
+Hypervisors need the ability to bridge traffic between VMs and with the
+outside world.  On Linux-based hypervisors, this used to mean using the
+built-in L2 switch (the Linux bridge), which is fast and reliable.  So,
+it is reasonable to ask why Open vSwitch is used.
 
 The answer is that Open vSwitch is targeted at multi-server
-virtualization deployments, a landscape for which the existing stack is
+virtualization deployments, a landscape for which the previous stack is
 not well suited.  These environments are often characterized by highly
 dynamic end-points, the maintenance of logical abstractions, and
 (sometimes) integration with or offloading to special purpose switching
@@ -83,7 +83,8 @@ vSwitch cope with the above requirements.
 
   There are many ongoing efforts to port Open vSwitch to hardware
   chipsets.  These include multiple merchant silicon chipsets (Broadcom
-  and Marvell), as well as a number of vendor-specific platforms.
+  and Marvell), as well as a number of vendor-specific platforms.  (The
+  PORTING file discusses how one would go about making such a port.)
 
   The advantage of hardware integration is not only performance within
   virtualized environments.  If physical switches also expose the Open
@@ -92,13 +93,13 @@ vSwitch cope with the above requirements.
   network control.
 
 In many ways, Open vSwitch targets a different point in the design space
-than the existing Linux networking stack, focusing on the need for
+than previous hypervisor networking stacks, focusing on the need for
 automated and dynamic network control in large-scale Linux-based
 virtualization environments.
 
 The goal with Open vSwitch is to keep the in-kernel code as small as
 possible (as is necessary for performance) and to re-use existing
 subsystems when applicable (for example Open vSwitch uses the existing
-QoS stack).  Open vSwitch limits disruption by using existing hooks into
-the kernel, so Open vSwitch can be deployed as a module without
-requiring any modification to the kernel.
+QoS stack).  As of Linux 3.3, Open vSwitch is included as a part of the
+kernel and packaging for the userspace utilities are available on most
+popular distributions.
