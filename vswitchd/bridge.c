@@ -1260,7 +1260,8 @@ bridge_configure_flow_eviction_threshold(struct bridge *br)
     const char *threshold_str;
     unsigned threshold;
 
-    threshold_str = bridge_get_other_config(br->cfg, "flow-eviction-threshold");
+    threshold_str = bridge_get_other_config(br->cfg,
+                                            "flow-eviction-threshold");
     if (threshold_str) {
         threshold = strtoul(threshold_str, NULL, 10);
     } else {
@@ -1513,7 +1514,8 @@ iface_refresh_status(struct iface *iface)
 
     error = netdev_get_flags(iface->netdev, &flags);
     if (!error) {
-        ovsrec_interface_set_admin_state(iface->cfg, flags & NETDEV_UP ? "up" : "down");
+        ovsrec_interface_set_admin_state(iface->cfg,
+                                         flags & NETDEV_UP ? "up" : "down");
     }
     else {
         ovsrec_interface_set_admin_state(iface->cfg, NULL);
@@ -1628,7 +1630,8 @@ iface_refresh_stats(struct iface *iface)
 #undef IFACE_STAT
     assert(i == ARRAY_SIZE(keys));
 
-    ovsrec_interface_set_statistics(iface->cfg, keys, values, ARRAY_SIZE(keys));
+    ovsrec_interface_set_statistics(iface->cfg, keys, values,
+                                    ARRAY_SIZE(keys));
 #undef IFACE_STATS
 }
 
