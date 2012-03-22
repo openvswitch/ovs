@@ -765,12 +765,12 @@ netdev_get_next_hop(const struct netdev *netdev,
  * may be used to populate the status column of the Interface table as defined
  * in ovs-vswitchd.conf.db(5). */
 int
-netdev_get_status(const struct netdev *netdev, struct shash *sh)
+netdev_get_drv_info(const struct netdev *netdev, struct shash *sh)
 {
     struct netdev_dev *dev = netdev_get_dev(netdev);
 
-    return (dev->netdev_class->get_status
-            ? dev->netdev_class->get_status(netdev, sh)
+    return (dev->netdev_class->get_drv_info
+            ? dev->netdev_class->get_drv_info(netdev, sh)
             : EOPNOTSUPP);
 }
 

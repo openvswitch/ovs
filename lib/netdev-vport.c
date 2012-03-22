@@ -458,7 +458,7 @@ netdev_vport_set_stats(struct netdev *netdev, const struct netdev_stats *stats)
 }
 
 static int
-netdev_vport_get_status(const struct netdev *netdev, struct shash *sh)
+netdev_vport_get_drv_info(const struct netdev *netdev, struct shash *sh)
 {
     const char *iface = netdev_vport_get_tnl_iface(netdev);
 
@@ -952,15 +952,15 @@ netdev_vport_register(void)
 {
     static const struct vport_class vport_classes[] = {
         { OVS_VPORT_TYPE_GRE,
-          { "gre", VPORT_FUNCTIONS(netdev_vport_get_status) },
+          { "gre", VPORT_FUNCTIONS(netdev_vport_get_drv_info) },
           parse_tunnel_config, unparse_tunnel_config },
 
         { OVS_VPORT_TYPE_GRE,
-          { "ipsec_gre", VPORT_FUNCTIONS(netdev_vport_get_status) },
+          { "ipsec_gre", VPORT_FUNCTIONS(netdev_vport_get_drv_info) },
           parse_tunnel_config, unparse_tunnel_config },
 
         { OVS_VPORT_TYPE_CAPWAP,
-          { "capwap", VPORT_FUNCTIONS(netdev_vport_get_status) },
+          { "capwap", VPORT_FUNCTIONS(netdev_vport_get_drv_info) },
           parse_tunnel_config, unparse_tunnel_config },
 
         { OVS_VPORT_TYPE_PATCH,

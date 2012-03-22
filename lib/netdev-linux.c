@@ -2272,7 +2272,7 @@ netdev_linux_get_next_hop(const struct in_addr *host, struct in_addr *next_hop,
 }
 
 static int
-netdev_linux_get_status(const struct netdev *netdev, struct shash *sh)
+netdev_linux_get_drv_info(const struct netdev *netdev, struct shash *sh)
 {
     int error;
     struct netdev_dev_linux *netdev_dev =
@@ -2288,7 +2288,7 @@ netdev_linux_get_status(const struct netdev *netdev, struct shash *sh)
 }
 
 static int
-netdev_internal_get_status(const struct netdev *netdev OVS_UNUSED, struct shash *sh)
+netdev_internal_get_drv_info(const struct netdev *netdev OVS_UNUSED, struct shash *sh)
 {
     shash_add(sh, "driver_name", xstrdup("openvswitch"));
     return 0;
@@ -2448,7 +2448,7 @@ const struct netdev_class netdev_linux_class =
         netdev_linux_get_stats,
         NULL,                    /* set_stats */
         netdev_linux_get_features,
-        netdev_linux_get_status);
+        netdev_linux_get_drv_info);
 
 const struct netdev_class netdev_tap_class =
     NETDEV_LINUX_CLASS(
@@ -2457,7 +2457,7 @@ const struct netdev_class netdev_tap_class =
         netdev_tap_get_stats,
         NULL,                   /* set_stats */
         netdev_linux_get_features,
-        netdev_linux_get_status);
+        netdev_linux_get_drv_info);
 
 const struct netdev_class netdev_internal_class =
     NETDEV_LINUX_CLASS(
@@ -2466,7 +2466,7 @@ const struct netdev_class netdev_internal_class =
         netdev_internal_get_stats,
         netdev_vport_set_stats,
         NULL,                  /* get_features */
-        netdev_internal_get_status);
+        netdev_internal_get_drv_info);
 
 /* HTB traffic control class. */
 

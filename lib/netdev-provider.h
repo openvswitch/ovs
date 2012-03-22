@@ -540,10 +540,10 @@ struct netdev_class {
     int (*get_next_hop)(const struct in_addr *host, struct in_addr *next_hop,
                         char **netdev_name);
 
-    /* Retrieves the status of the device.
+    /* Retrieves driver information of the device.
      *
      * Populates 'sh' with key-value pairs representing the status of the
-     * device.  A device's status is a set of key-value string pairs
+     * device.  Driver info is a set of key-value string pairs
      * representing netdev type specific information.  For more information see
      * ovs-vswitchd.conf.db(5).
      *
@@ -552,7 +552,7 @@ struct netdev_class {
      *
      * This function may be set to null if it would always return EOPNOTSUPP
      * anyhow. */
-    int (*get_status)(const struct netdev *netdev, struct shash *sh);
+    int (*get_drv_info)(const struct netdev *netdev, struct shash *sh);
 
     /* Looks up the ARP table entry for 'ip' on 'netdev' and stores the
      * corresponding MAC address in 'mac'.  A return value of ENXIO, in

@@ -1496,7 +1496,7 @@ iface_refresh_status(struct iface *iface)
 
     shash_init(&sh);
 
-    if (!netdev_get_status(iface->netdev, &sh)) {
+    if (!netdev_get_drv_info(iface->netdev, &sh)) {
         size_t n;
         char **keys, **values;
 
