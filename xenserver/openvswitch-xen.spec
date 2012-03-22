@@ -175,6 +175,12 @@ case $md5sums in
         replace_files=$scripts
         printf "\nVerified host scripts from XenServer 6.0.0.\n"
         ;;
+
+    c5f48246577a17cf1b971fb5ce4e920b,2e2c912f86f9c536c89adc34ff3c2b2b,28d3ff72d72bdec4f37d70699f5edb76,67e1d0af16fc1ddf10009c5c063ad2ba,f3feff30aa3b3f8b514664a96a8dc0ab)
+        keep_files=
+        replace_files=$scripts
+        printf "\nVerified host scripts from XenServer 5.6-SP2.\n"
+        ;;
         
     c5f48246577a17cf1b971fb5ce4e920b,2e2c912f86f9c536c89adc34ff3c2b2b,28d3ff72d72bdec4f37d70699f5edb76,67e1d0af16fc1ddf10009c5c063ad2ba,24bae6906d182ba47668174f8e480cc6)
         keep_files=
