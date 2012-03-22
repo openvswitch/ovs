@@ -336,15 +336,7 @@ static void
         # Unparse functions.
         for columnName, column in sorted(table.columns.iteritems()):
             type = column.type
-            if (type.key.type == ovs.db.types.BooleanType and not type.value
-                and type.n_min == 0 and type.n_max == 1):
-                print '''
-static void
-%(s)s_unparse_%(c)s(struct ovsdb_idl_row *row OVS_UNUSED)
-{
-    /* Nothing to do. */
-}''' % {'s': structName, 'c': columnName}
-            elif (type.n_min != 1 or type.n_max != 1) and not type.is_optional_pointer():
+            if (type.n_min != 1 or type.n_max != 1) and not type.is_optional_pointer():
                 print '''
 static void
 %(s)s_unparse_%(c)s(struct ovsdb_idl_row *row_)
