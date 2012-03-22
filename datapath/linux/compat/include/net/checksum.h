@@ -38,4 +38,8 @@ static inline void csum_replace2(__sum16 *sum, __be16 from, __be16 to)
 					   (__force __be32)(to), pseudohdr)
 #endif
 
+#ifndef CSUM_MANGLED_0
+#define CSUM_MANGLED_0 ((__force __sum16)0xffff)
+#endif
+
 #endif /* checksum.h */
