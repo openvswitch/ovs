@@ -23,10 +23,10 @@
 /* This software also makes use of the following component:
  *
  * NIST Secure Hash Algorithm
- *  	heavily modified by Uwe Hollerbach uh@alumni.caltech edu
- *	from Peter C. Gutmann's implementation as found in
- *	Applied Cryptography by Bruce Schneier
- *	This code is hereby placed in the public domain
+ *      heavily modified by Uwe Hollerbach uh@alumni.caltech edu
+ *  from Peter C. Gutmann's implementation as found in
+ *  Applied Cryptography by Bruce Schneier
+ *  This code is hereby placed in the public domain
  */
 
 #include <config.h>
@@ -65,10 +65,10 @@ f4(uint32_t x, uint32_t y, uint32_t z)
 }
 
 /* SHA constants */
-#define CONST1		0x5a827999L
-#define CONST2		0x6ed9eba1L
-#define CONST3		0x8f1bbcdcL
-#define CONST4		0xca62c1d6L
+#define CONST1      0x5a827999L
+#define CONST2      0x6ed9eba1L
+#define CONST3      0x8f1bbcdcL
+#define CONST4      0xca62c1d6L
 
 /* 32-bit rotate */
 static inline uint32_t
@@ -157,19 +157,19 @@ maybe_byte_reverse(uint32_t *buffer OVS_UNUSED, int count OVS_UNUSED)
     int i;
     uint8_t ct[4], *cp;
 
-	count /= sizeof(uint32_t);
-	cp = (uint8_t *) buffer;
-	for (i = 0; i < count; i++) {
-	    ct[0] = cp[0];
-	    ct[1] = cp[1];
-	    ct[2] = cp[2];
-	    ct[3] = cp[3];
-	    cp[0] = ct[3];
-	    cp[1] = ct[2];
-	    cp[2] = ct[1];
-	    cp[3] = ct[0];
-	    cp += sizeof(uint32_t);
-	}
+    count /= sizeof(uint32_t);
+    cp = (uint8_t *) buffer;
+    for (i = 0; i < count; i++) {
+        ct[0] = cp[0];
+        ct[1] = cp[1];
+        ct[2] = cp[2];
+        ct[3] = cp[3];
+        cp[0] = ct[3];
+        cp[1] = ct[2];
+        cp[2] = ct[1];
+        cp[3] = ct[0];
+        cp += sizeof(uint32_t);
+    }
 #endif
 }
 

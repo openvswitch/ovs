@@ -178,15 +178,15 @@ put_unaligned_u64(uint64_t *p, uint64_t x)
 static inline uint64_t
 get_32aligned_u64(const ovs_32aligned_u64 *x)
 {
-	return ((uint64_t) x->hi << 32) | x->lo;
+    return ((uint64_t) x->hi << 32) | x->lo;
 }
 
 /* Stores 'value' in 'x'. */
 static inline void
 put_32aligned_u64(ovs_32aligned_u64 *x, uint64_t value)
 {
-	x->hi = value >> 32;
-	x->lo = value;
+    x->hi = value >> 32;
+    x->lo = value;
 }
 
 #ifndef __CHECKER__
@@ -195,9 +195,9 @@ static inline ovs_be64
 get_32aligned_be64(const ovs_32aligned_be64 *x)
 {
 #ifdef WORDS_BIGENDIAN
-	return ((ovs_be64) x->hi << 32) | x->lo;
+    return ((ovs_be64) x->hi << 32) | x->lo;
 #else
-	return ((ovs_be64) x->lo << 32) | x->hi;
+    return ((ovs_be64) x->lo << 32) | x->hi;
 #endif
 }
 
@@ -206,8 +206,8 @@ static inline void
 put_32aligned_be64(ovs_32aligned_be64 *x, ovs_be64 value)
 {
 #if WORDS_BIGENDIAN
-	x->hi = value >> 32;
-	x->lo = value;
+    x->hi = value >> 32;
+    x->lo = value;
 #else
     x->hi = value;
     x->lo = value >> 32;

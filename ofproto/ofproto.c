@@ -1943,7 +1943,7 @@ handle_set_config(struct ofconn *ofconn, const struct ofp_switch_config *osc)
         }
     }
     ofconn_set_invalid_ttl_to_controller(ofconn,
-			 (flags & OFPC_INVALID_TTL_TO_CONTROLLER));
+             (flags & OFPC_INVALID_TTL_TO_CONTROLLER));
 
     ofconn_set_miss_send_len(ofconn, ntohs(osc->miss_send_len));
 
