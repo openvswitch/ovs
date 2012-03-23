@@ -80,6 +80,7 @@ struct ofproto {
      * widespread use, we will delete these interfaces. */
     unsigned long int *vlan_bitmap; /* 4096-bit bitmap of in-use VLANs. */
     bool vlans_changed;             /* True if new VLANs are in use. */
+    int min_mtu;                    /* Current MTU of non-internal ports. */
 };
 
 void ofproto_init_tables(struct ofproto *, int n_tables);
