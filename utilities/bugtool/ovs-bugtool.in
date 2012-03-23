@@ -319,30 +319,42 @@ def cmd_output(cap, args, label = None, filter = None):
                 label = args
         data[label] = {'cap': cap, 'cmd_args': args, 'filter': filter}
 
-def file_output(cap, path_list):
+def file_output(cap, path_list, newest_first=False):
+    """
+    If newest_first is True, the list of files in path_list is sorted
+    by file modification time in descending order, else its sorted
+    in ascending order.
+    """
     if cap in entries:
-        for p in path_list:
-            if os.path.exists(p):
-                if unlimited_data or caps[cap][MAX_SIZE] == -1 or \
-                        cap_sizes[cap] < caps[cap][MAX_SIZE]:
-                    data[p] = {'cap': cap, 'filename': p}
-                    try:
-                        s = os.stat(p)
-                        cap_sizes[cap] += s.st_size
-                    except:
-                        pass
-                else:
-                    output("Omitting %s, size constraint of %s exceeded" % (p, cap))
+        path_entries = []
+        for path in path_list:
+            try:
+                s = os.stat(path)
+            except OSError, e:
+                continue
+            path_entries.append((path, s))
 
-def tree_output(cap, path, pattern = None, negate = False):
+        mtime = lambda(path, stat): stat.st_mtime
+        path_entries.sort(key=mtime, reverse=newest_first)
+        for p in path_entries:
+            if unlimited_data or caps[cap][MAX_SIZE] == -1 or \
+                    cap_sizes[cap] < caps[cap][MAX_SIZE]:
+                data[p] = {'cap': cap, 'filename': p[0]}
+                cap_sizes[cap] += p[1].st_size
+            else:
+                output("Omitting %s, size constraint of %s exceeded" % (p[0], cap))
+
+def tree_output(cap, path, pattern=None, negate=False, newest_first=False):
+    """
+    Walks the directory tree rooted at path. Files in current dir are processed
+    before files in sub-dirs.
+    """
     if cap in entries:
         if os.path.exists(path):
-            for f in os.listdir(path):
-                fn = os.path.join(path, f)
-                if os.path.isfile(fn) and matches(fn, pattern, negate):
-                    file_output(cap, [fn])
-                elif os.path.isdir(fn):
-                    tree_output(cap, fn, pattern, negate)
+            for root, dirs, files in os.walk(path):
+                fns = [fn for fn in [os.path.join(root, f) for f in files]
+                       if os.path.isfile(fn) and matches(fn, pattern, negate)]
+                file_output(cap, fns, newest_first=newest_first)
 
 def func_output(cap, label, func):
     if cap in entries:
@@ -876,12 +888,16 @@ def load_plugins(just_capabilities = False):
 
             for el in xmldoc.documentElement.getElementsByTagName("*"):
                 if el.tagName == "files":
-                    file_output(dir, getText(el.childNodes).split())
+                    newest_first = getBoolAttr(el, 'newest_first')
+                    file_output(dir, getText(el.childNodes).split(),
+                                newest_first=newest_first)
                 elif el.tagName == "directory":
                     pattern = el.getAttribute("pattern")
                     if pattern == '': pattern = None
                     negate = getBoolAttr(el, 'negate')
-                    tree_output(dir, getText(el.childNodes), pattern and re.compile(pattern) or None, negate)
+                    newest_first = getBoolAttr(el, 'newest_first')
+                    tree_output(dir, getText(el.childNodes), pattern and re.compile(pattern) or None,
+                                negate=negate, newest_first=newest_first)
                 elif el.tagName == "command":
                     label = el.getAttribute("label")
                     if label == '': label = None
