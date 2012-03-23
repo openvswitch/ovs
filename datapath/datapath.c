@@ -62,8 +62,8 @@
 #include "vport-internal_dev.h"
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,18) || \
-    LINUX_VERSION_CODE >= KERNEL_VERSION(3,3,0)
-#error Kernels before 2.6.18 or after 3.2 are not supported by this version of Open vSwitch.
+    LINUX_VERSION_CODE >= KERNEL_VERSION(3,4,0)
+#error Kernels before 2.6.18 or after 3.3 are not supported by this version of Open vSwitch.
 #endif
 
 #define REHASH_FLOW_INTERVAL (10 * 60 * HZ)

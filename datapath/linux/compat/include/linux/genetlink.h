@@ -1,18 +1,18 @@
 #ifndef __GENETLINK_WRAPPER_H
 #define __GENETLINK_WRAPPER_H 1
 
+#include <linux/version.h>
 #include_next <linux/genetlink.h>
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,3,0)
 #ifdef CONFIG_PROVE_LOCKING
-/* No version of the kernel has this function, but our locking scheme depends
- * on genl_mutex so for clarity we use it where appropriate. */
 static inline int lockdep_genl_is_held(void)
 {
 	return 1;
 }
 #endif
+#endif
 
-/* This is also not upstream yet. */
 #ifndef genl_dereference
 #include <linux/rcupdate.h>
 

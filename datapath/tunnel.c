@@ -111,7 +111,7 @@ static unsigned int multicast_ports __read_mostly;
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3,1,0)
 static struct hh_cache *rt_hh(struct rtable *rt)
 {
-	struct neighbour *neigh = dst_get_neighbour(&rt->dst);
+	struct neighbour *neigh = dst_get_neighbour_noref(&rt->dst);
 	if (!neigh || !(neigh->nud_state & NUD_CONNECTED) ||
 			!neigh->hh.hh_len)
 		return NULL;

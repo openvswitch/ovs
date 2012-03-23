@@ -1,8 +1,9 @@
 #ifndef __LINUX_IF_VLAN_WRAPPER_H
 #define __LINUX_IF_VLAN_WRAPPER_H 1
 
-#include_next <linux/if_vlan.h>
 #include <linux/skbuff.h>
+#include <linux/version.h>
+#include_next <linux/if_vlan.h>
 
 /*
  * The behavior of __vlan_put_tag() has changed over time:
@@ -54,8 +55,7 @@ static inline struct sk_buff *__vlan_put_tag(struct sk_buff *skb, u16 vlan_tci)
 #define VLAN_TAG_PRESENT	VLAN_CFI_MASK
 #endif
 
-/* This function is not exported from kernel. OVS Upstreaming patch will
- * fix that. */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,3,0)
 static inline void vlan_set_encap_proto(struct sk_buff *skb, struct vlan_hdr *vhdr)
 {
 	__be16 proto;
@@ -88,4 +88,5 @@ static inline void vlan_set_encap_proto(struct sk_buff *skb, struct vlan_hdr *vh
 		 */
 		skb->protocol = htons(ETH_P_802_2);
 }
+#endif
 #endif	/* linux/if_vlan.h wrapper */
