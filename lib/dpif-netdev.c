@@ -976,7 +976,8 @@ dp_netdev_flow_used(struct dp_netdev_flow *flow, struct flow *key,
     flow->used = time_msec();
     flow->packet_count++;
     flow->byte_count += packet->size;
-    if (key->dl_type == htons(ETH_TYPE_IP) && key->nw_proto == IPPROTO_TCP) {
+    if (key->dl_type == htons(ETH_TYPE_IP) &&
+        key->nw_proto == IPPROTO_TCP && packet->l7) {
         struct tcp_header *th = packet->l4;
         flow->tcp_ctl |= th->tcp_ctl;
     }
