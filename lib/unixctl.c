@@ -222,12 +222,9 @@ unixctl_server_create(const char *path, struct unixctl_server **serverp)
     }
 
     error = pstream_open(punix_path, &listener);
-    free(punix_path);
-    punix_path = NULL;
-
     if (error) {
-        ovs_error(error, "could not initialize control socket %s", path);
-        return error;
+        ovs_error(error, "could not initialize control socket %s", punix_path);
+        goto exit;
     }
 
     unixctl_command_register("help", "", 0, 0, unixctl_help, NULL);
@@ -237,7 +234,10 @@ unixctl_server_create(const char *path, struct unixctl_server **serverp)
     server->listener = listener;
     list_init(&server->conns);
     *serverp = server;
-    return 0;
+
+exit:
+    free(punix_path);
+    return error;
 }
 
 static void
