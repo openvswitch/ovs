@@ -806,8 +806,12 @@ ofp_print_flow_mod(struct ds *s, const struct ofp_header *oh,
     if (ds_last(s) != ' ') {
         ds_put_char(s, ' ');
     }
-    if (fm.cookie != htonll(0)) {
-        ds_put_format(s, "cookie:0x%"PRIx64" ", ntohll(fm.cookie));
+    if (fm.new_cookie != htonll(0)) {
+        ds_put_format(s, "cookie:0x%"PRIx64" ", ntohll(fm.new_cookie));
+    }
+    if (fm.cookie_mask != htonll(0)) {
+        ds_put_format(s, "cookie:0x%"PRIx64"/0x%"PRIx64" ",
+                ntohll(fm.cookie), ntohll(fm.cookie_mask));
     }
     if (fm.idle_timeout != OFP_FLOW_PERMANENT) {
         ds_put_format(s, "idle:%"PRIu16" ", fm.idle_timeout);

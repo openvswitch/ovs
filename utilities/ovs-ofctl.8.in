@@ -936,19 +936,35 @@ levels of the \fBresubmit\fR call stack, are ignored.
 An opaque identifier called a cookie can be used as a handle to identify
 a set of flows:
 .
-.IP \fBcookie=\fIvalue\fR[\fB/\fImask\fR]
+.IP \fBcookie=\fIvalue\fR
 .
-A cookie can be associated with a flow using the \fBadd-flow\fR and
-\fBadd-flows\fR commands.  \fIvalue\fR can be any 64-bit number and need
-not be unique among flows.  If this field is omitted, a default cookie
-value of 0 is used.
-.IP
+A cookie can be associated with a flow using the \fBadd\-flow\fR,
+\fBadd\-flows\fR, and \fBmod\-flows\fR commands.  \fIvalue\fR can be any
+64-bit number and need not be unique among flows.  If this field is
+omitted, a default cookie value of 0 is used.
+.
+.IP \fBcookie=\fIvalue\fR\fB/\fImask\fR
+.
 When using NXM, the cookie can be used as a handle for querying,
-modifying, and deleting flows.  In addition to \fIvalue\fR, an optional
-\fImask\fR may be supplied for the \fBdel-flows\fR, \fBmod-flows\fR,
-\fBdump-flows\fR, and \fBdump-aggregate\fR commands to limit matching
-cookies.  A 1-bit in \fImask\fR indicates that the corresponding bit in
-\fIcookie\fR must match exactly, and a 0-bit wildcards that bit.
+modifying, and deleting flows.  \fIvalue\fR and \fImask\fR may be
+supplied for the \fBdel\-flows\fR, \fBmod\-flows\fR, \fBdump\-flows\fR, and
+\fBdump\-aggregate\fR commands to limit matching cookies.  A 1-bit in
+\fImask\fR indicates that the corresponding bit in \fIcookie\fR must
+match exactly, and a 0-bit wildcards that bit.  A mask of \-1 may be used
+to exactly match a cookie.
+.IP
+The \fBmod\-flows\fR command can update the cookies of flows that
+match a cookie by specifying the \fIcookie\fR field twice (once with a
+mask for matching and once without to indicate the new value):
+.RS
+.IP "\fBovs\-ofctl mod\-flows br0 cookie=1,actions=normal\fR"
+Change all flows' cookies to 1 and change their actions to \fBnormal\fR.
+.IP "\fBovs\-ofctl mod\-flows br0 cookie=1/\-1,cookie=2,actions=normal\fR"
+Update cookies with a value of 1 to 2 and change their actions to
+\fBnormal\fR.
+.RE
+.IP
+The ability to match on cookies was added in Open vSwitch 1.5.0.
 .
 .PP
 The following additional field sets the priority for flows added by

@@ -1743,10 +1743,8 @@ OFP_ASSERT(sizeof(struct nx_set_flow_format) == 20);
 /* NXT_FLOW_MOD (analogous to OFPT_FLOW_MOD).
  *
  * It is possible to limit flow deletions and modifications to certain
- * cookies by using the NXM_NX_COOKIE and NXM_NX_COOKIE_W matches.  For
- * these commands, the "cookie" field is always ignored.  Flow additions
- * make use of the "cookie" field and ignore any NXM_NX_COOKIE*
- * definitions.
+ * cookies by using the NXM_NX_COOKIE(_W) matches.  The "cookie" field
+ * is used only to add or modify flow cookies.
  */
 struct nx_flow_mod {
     struct nicira_header nxh;
