@@ -791,6 +791,7 @@ add_internal_flow(struct ofproto_dpif *ofproto, int id,
 
     cls_rule_init_catchall(&fm.cr, 0);
     cls_rule_set_reg(&fm.cr, 0, id);
+    fm.new_cookie = htonll(0);
     fm.cookie = htonll(0);
     fm.cookie_mask = htonll(0);
     fm.table_id = TBL_INTERNAL;

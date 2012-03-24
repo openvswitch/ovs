@@ -1613,7 +1613,7 @@ read_flows_from_file(const char *filename, struct classifier *cls, int index)
         parse_ofp_str(&fm, OFPFC_ADD, ds_cstr(&s), true);
 
         version = xmalloc(sizeof *version);
-        version->cookie = fm.cookie;
+        version->cookie = fm.new_cookie;
         version->idle_timeout = fm.idle_timeout;
         version->hard_timeout = fm.hard_timeout;
         version->flags = fm.flags & (OFPFF_SEND_FLOW_REM | OFPFF_EMERG);
@@ -1722,7 +1722,9 @@ fte_make_flow_mod(const struct fte *fte, int index, uint16_t command,
     struct ofpbuf *ofm;
 
     fm.cr = fte->rule;
-    fm.cookie = version->cookie;
+    fm.cookie = htonll(0);
+    fm.cookie_mask = htonll(0);
+    fm.new_cookie = version->cookie;
     fm.table_id = 0xff;
     fm.command = command;
     fm.idle_timeout = version->idle_timeout;

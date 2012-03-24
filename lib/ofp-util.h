@@ -197,11 +197,29 @@ struct ofpbuf *ofputil_make_set_packet_in_format(enum nx_packet_in_format);
 /* NXT_FLOW_MOD_TABLE_ID extension. */
 struct ofpbuf *ofputil_make_flow_mod_table_id(bool flow_mod_table_id);
 
-/* Protocol-independent flow_mod. */
+/* Protocol-independent flow_mod.
+ *
+ * The handling of cookies across multiple versions of OpenFlow is a bit
+ * confusing.  A full description of Open vSwitch's cookie handling is
+ * in the DESIGN file.  The following table shows the expected values of
+ * the cookie-related fields for the different flow_mod commands in
+ * OpenFlow 1.0 ("OF10") and NXM.  "<used>" and "-" indicate a value
+ * that may be populated and an ignored field, respectively.
+ *
+ *               cookie  cookie_mask  new_cookie
+ *               ======  ===========  ==========
+ * OF10 Add        -          0         <used>
+ * OF10 Modify     -          0         <used>
+ * OF10 Delete     -          0           -
+ * NXM Add         -          0         <used>
+ * NXM Modify    <used>     <used>      <used>
+ * NXM Delete    <used>     <used>        -
+ */
 struct ofputil_flow_mod {
     struct cls_rule cr;
-    ovs_be64 cookie;
-    ovs_be64 cookie_mask;
+    ovs_be64 cookie;         /* Cookie bits to match. */
+    ovs_be64 cookie_mask;    /* 1-bit in each 'cookie' bit to match. */
+    ovs_be64 new_cookie;     /* New cookie to install or -1. */
     uint8_t table_id;
     uint16_t command;
     uint16_t idle_timeout;

@@ -592,6 +592,12 @@ parse_ofp_str(struct ofputil_flow_mod *fm, int command, const char *str_,
     cls_rule_init_catchall(&fm->cr, OFP_DEFAULT_PRIORITY);
     fm->cookie = htonll(0);
     fm->cookie_mask = htonll(0);
+    if (command == OFPFC_MODIFY || command == OFPFC_MODIFY_STRICT) {
+        /* For modify, by default, don't update the cookie. */
+        fm->new_cookie = htonll(UINT64_MAX);
+    } else{
+        fm->new_cookie = htonll(0);
+    }
     fm->table_id = 0xff;
     fm->command = command;
     fm->idle_timeout = OFP_FLOW_PERMANENT;
@@ -646,17 +652,24 @@ parse_ofp_str(struct ofputil_flow_mod *fm, int command, const char *str_,
                 fm->hard_timeout = str_to_u16(value, name);
             } else if (!strcmp(name, "cookie")) {
                 char *mask = strchr(value, '/');
+
                 if (mask) {
+                    /* A mask means we're searching for a cookie. */
                     if (command == OFPFC_ADD) {
                         ofp_fatal(str_, verbose, "flow additions cannot use "
                                   "a cookie mask");
                     }
                     *mask = '\0';
+                    fm->cookie = htonll(str_to_u64(value));
                     fm->cookie_mask = htonll(str_to_u64(mask+1));
                 } else {
-                    fm->cookie_mask = htonll(UINT64_MAX);
+                    /* No mask means that the cookie is being set. */
+                    if (command != OFPFC_ADD && command != OFPFC_MODIFY
+                            && command != OFPFC_MODIFY_STRICT) {
+                        ofp_fatal(str_, verbose, "cannot set cookie");
+                    }
+                    fm->new_cookie = htonll(str_to_u64(value));
                 }
-                fm->cookie = htonll(str_to_u64(value));
             } else if (mf_from_name(name)) {
                 parse_field(mf_from_name(name), value, &fm->cr);
             } else if (!strcmp(name, "duration")
@@ -669,6 +682,13 @@ parse_ofp_str(struct ofputil_flow_mod *fm, int command, const char *str_,
                 ofp_fatal(str_, verbose, "unknown keyword %s", name);
             }
         }
+    }
+    if (!fm->cookie_mask && fm->new_cookie == htonll(UINT64_MAX)
+            && (command == OFPFC_MODIFY || command == OFPFC_MODIFY_STRICT)) {
+        /* On modifies without a mask, we are supposed to add a flow if
+         * one does not exist.  If a cookie wasn't been specified, use a
+         * default of zero. */
+        fm->new_cookie = htonll(0);
     }
     if (fields & F_ACTIONS) {
         struct ofpbuf actions;

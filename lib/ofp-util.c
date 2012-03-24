@@ -1402,9 +1402,10 @@ ofputil_decode_flow_mod(struct ofputil_flow_mod *fm,
         ofputil_normalize_rule(&fm->cr);
 
         /* Translate the message. */
-        fm->cookie = ofm->cookie;
-        fm->cookie_mask = htonll(UINT64_MAX);
         command = ntohs(ofm->command);
+        fm->cookie = htonll(0);
+        fm->cookie_mask = htonll(0);
+        fm->new_cookie = ofm->cookie;
         fm->idle_timeout = ntohs(ofm->idle_timeout);
         fm->hard_timeout = ntohs(ofm->hard_timeout);
         fm->buffer_id = ntohl(ofm->buffer_id);
@@ -1429,17 +1430,12 @@ ofputil_decode_flow_mod(struct ofputil_flow_mod *fm,
 
         /* Translate the message. */
         command = ntohs(nfm->command);
-        if (command == OFPFC_ADD) {
-            if (fm->cookie_mask) {
-                /* The "NXM_NX_COOKIE*" matches are not valid for flow
-                 * additions.  Additions must use the "cookie" field of
-                 * the "nx_flow_mod" structure. */
-                return OFPERR_NXBRC_NXM_INVALID;
-            } else {
-                fm->cookie = nfm->cookie;
-                fm->cookie_mask = htonll(UINT64_MAX);
-            }
+        if ((command & 0xff) == OFPFC_ADD && fm->cookie_mask) {
+            /* Flow additions may only set a new cookie, not match an
+             * existing cookie. */
+            return OFPERR_NXBRC_NXM_INVALID;
         }
+        fm->new_cookie = nfm->cookie;
         fm->idle_timeout = ntohs(nfm->idle_timeout);
         fm->hard_timeout = ntohs(nfm->hard_timeout);
         fm->buffer_id = ntohl(nfm->buffer_id);
@@ -1483,7 +1479,7 @@ ofputil_encode_flow_mod(const struct ofputil_flow_mod *fm,
         msg = ofpbuf_new(sizeof *ofm + actions_len);
         ofm = put_openflow(sizeof *ofm, OFPT10_FLOW_MOD, msg);
         ofputil_cls_rule_to_match(&fm->cr, &ofm->match);
-        ofm->cookie = fm->cookie;
+        ofm->cookie = fm->new_cookie;
         ofm->command = htons(command);
         ofm->idle_timeout = htons(fm->idle_timeout);
         ofm->hard_timeout = htons(fm->hard_timeout);
@@ -1499,14 +1495,8 @@ ofputil_encode_flow_mod(const struct ofputil_flow_mod *fm,
         put_nxmsg(sizeof *nfm, NXT_FLOW_MOD, msg);
         nfm = msg->data;
         nfm->command = htons(command);
-        if (command == OFPFC_ADD) {
-            nfm->cookie = fm->cookie;
-            match_len = nx_put_match(msg, &fm->cr, 0, 0);
-        } else {
-            nfm->cookie = 0;
-            match_len = nx_put_match(msg, &fm->cr,
-                                     fm->cookie, fm->cookie_mask);
-        }
+        nfm->cookie = fm->new_cookie;
+        match_len = nx_put_match(msg, &fm->cr, fm->cookie, fm->cookie_mask);
         nfm->idle_timeout = htons(fm->idle_timeout);
         nfm->hard_timeout = htons(fm->hard_timeout);
         nfm->priority = htons(fm->cr.priority);
@@ -1545,7 +1535,9 @@ ofputil_flow_mod_usable_protocols(const struct ofputil_flow_mod *fms,
         if (fm->table_id != 0xff) {
             usable_protocols &= OFPUTIL_P_TID;
         }
-        if (fm->command != OFPFC_ADD && fm->cookie_mask != htonll(0)) {
+
+        /* Matching of the cookie is only supported through NXM. */
+        if (fm->cookie_mask != htonll(0)) {
             usable_protocols &= OFPUTIL_P_NXM_ANY;
         }
     }
