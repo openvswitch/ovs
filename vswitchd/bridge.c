@@ -75,6 +75,7 @@ struct iface {
     struct netdev *netdev;      /* Network device. */
     const char *type;           /* Usually same as cfg->type. */
     const struct ovsrec_interface *cfg;
+    bool need_refresh;          /* Refresh iface after create. */
 };
 
 struct mirror {
@@ -1182,9 +1183,10 @@ bridge_add_ofproto_ports(struct bridge *br)
             }
 
             /* Populate stats columns in new Interface rows. */
-            if (iface->netdev && !iface->cfg->mtu) {
+            if (iface->netdev && iface->need_refresh) {
                 iface_refresh_stats(iface);
                 iface_refresh_status(iface);
+                iface->need_refresh = false;
             }
 
             /* Delete the iface if we failed. */
@@ -2936,6 +2938,7 @@ iface_create(struct port *port, const struct ovsrec_interface *if_cfg)
     iface->tag = tag_create_random();
     iface->netdev = NULL;
     iface->cfg = if_cfg;
+    iface->need_refresh = true;
 
     hmap_insert(&br->iface_by_name, &iface->name_node, hash_string(name, 0));
 
