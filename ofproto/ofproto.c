@@ -2721,7 +2721,7 @@ add_flow(struct ofproto *ofproto, struct ofconn *ofconn,
     rule->ofproto = ofproto;
     rule->cr = fm->cr;
     rule->pending = NULL;
-    rule->flow_cookie = fm->cookie;
+    rule->flow_cookie = fm->new_cookie;
     rule->created = rule->modified = rule->used = time_msec();
     rule->idle_timeout = fm->idle_timeout;
     rule->hard_timeout = fm->hard_timeout;
@@ -2821,7 +2821,9 @@ modify_flows__(struct ofproto *ofproto, struct ofconn *ofconn,
         } else {
             rule->modified = time_msec();
         }
-        rule->flow_cookie = fm->cookie;
+        if (fm->new_cookie != htonll(UINT64_MAX)) {
+            rule->flow_cookie = fm->new_cookie;
+        }
     }
     ofopgroup_submit(group);
 
@@ -2844,9 +2846,13 @@ modify_flows_loose(struct ofproto *ofproto, struct ofconn *ofconn,
     error = collect_rules_loose(ofproto, fm->table_id, &fm->cr,
                                 fm->cookie, fm->cookie_mask,
                                 OFPP_NONE, &rules);
-    return (error ? error
-            : list_is_empty(&rules) ? add_flow(ofproto, ofconn, fm, request)
-            : modify_flows__(ofproto, ofconn, fm, request, &rules));
+    if (error) {
+        return error;
+    } else if (list_is_empty(&rules)) {
+        return fm->cookie_mask ? 0 : add_flow(ofproto, ofconn, fm, request);
+    } else {
+        return modify_flows__(ofproto, ofconn, fm, request, &rules);
+    }
 }
 
 /* Implements OFPFC_MODIFY_STRICT.  Returns 0 on success or an OpenFlow error
@@ -2865,11 +2871,16 @@ modify_flow_strict(struct ofproto *ofproto, struct ofconn *ofconn,
     error = collect_rules_strict(ofproto, fm->table_id, &fm->cr,
                                  fm->cookie, fm->cookie_mask,
                                  OFPP_NONE, &rules);
-    return (error ? error
-            : list_is_empty(&rules) ? add_flow(ofproto, ofconn, fm, request)
-            : list_is_singleton(&rules) ? modify_flows__(ofproto, ofconn,
-                                                         fm, request, &rules)
-            : 0);
+
+    if (error) {
+        return error;
+    } else if (list_is_empty(&rules)) {
+        return fm->cookie_mask ? 0 : add_flow(ofproto, ofconn, fm, request);
+    } else {
+        return list_is_singleton(&rules) ? modify_flows__(ofproto, ofconn,
+                                                          fm, request, &rules)
+                                         : 0;
+    }
 }
 
 /* OFPFC_DELETE implementation. */
