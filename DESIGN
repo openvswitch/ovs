@@ -198,17 +198,37 @@ behavior with the following extensions:
           arbitrary masks.  This is much like the equivalent OpenFlow
           1.1 feature.
 
-        - However, unlike OpenFlow 1.1, OFPC_MODIFY and
-          OFPFC_MODIFY_STRICT, regardless of whether there was a match
-          based on a cookie or not, always add a new flow if there is
-          no match, and they always update the cookies of flows that
-          they do match.
+        - Like OpenFlow 1.1, OFPC_MODIFY and OFPFC_MODIFY_STRICT add a
+          new flow if there is no match and the mask is zero (or not
+          given).
+
+        - The "cookie" field in OFPT_FLOW_MOD and NXT_FLOW_MOD messages
+          is used as the cookie value for OFPFC_ADD commands, as
+          described in OpenFlow 1.0.  For OFPFC_MODIFY and
+          OFPFC_MODIFY_STRICT commands, the "cookie" field is used as a
+          new cookie for flows that match unless it is UINT64_MAX, in
+          which case the flow's cookie is not updated.
 
         - NXT_PACKET_IN (the Nicira extended version of
           OFPT_PACKET_IN) reports the cookie of the rule that
           generated the packet, or all-1-bits if no rule generated the
           packet.  (Older versions of OVS used all-0-bits instead of
           all-1-bits.)
+
+The following table shows the handling of different protocols when
+receiving OFPFC_MODIFY and OFPFC_MODIFY_STRICT messages.  A mask of 0
+indicates either an explicit mask of zero or an implicit one by not
+specifying the NXM_NX_COOKIE(_W) field.
+
+                Match   Update   Add on miss   Add on miss
+                cookie  cookie     mask!=0       mask==0
+                ======  ======   ===========   ===========
+OpenFlow 1.0      no     yes        <always add on miss>
+OpenFlow 1.1     yes      no          no           yes
+OpenFlow 1.2     yes      no          no            no
+NXM              yes     yes*         no           yes
+
+* Updates the flow's cookie unless the "cookie" field is UINT64_MAX.
 
 
 Multiple Table Support
