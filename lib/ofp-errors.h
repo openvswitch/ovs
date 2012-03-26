@@ -92,7 +92,7 @@ enum ofperr {
     /* OF1.0+(1,8).  Specified buffer does not exist. */
     OFPERR_OFPBRC_BUFFER_UNKNOWN,
 
-    /* OF1.1(1,9).  Specified table-id invalid or does not exist. */
+    /* OF1.1+(1,9).  Specified table-id invalid or does not exist. */
     OFPERR_OFPBRC_BAD_TABLE_ID,
 
     /* NX1.0+(1,256).  Invalid NXM flow match. */
@@ -164,17 +164,17 @@ enum ofperr {
     /* OF1.0+(2,8).  Problem validating output queue. */
     OFPERR_OFPBAC_BAD_QUEUE,
 
-    /* OF1.1(2,9).  Invalid group id in forward action. */
+    /* OF1.1+(2,9).  Invalid group id in forward action. */
     OFPERR_OFPBAC_BAD_OUT_GROUP,
 
-    /* OF1.1(2,10).  Action can't apply for this match. */
+    /* OF1.1+(2,10).  Action can't apply for this match. */
     OFPERR_OFPBAC_MATCH_INCONSISTENT,
 
-    /* OF1.1(2,11).  Action order is unsupported for the action list in an
+    /* OF1.1+(2,11).  Action order is unsupported for the action list in an
      * Apply-Actions instruction */
     OFPERR_OFPBAC_UNSUPPORTED_ORDER,
 
-    /* OF1.1(2,12).  Actions uses an unsupported tag/encap. */
+    /* OF1.1+(2,12).  Actions uses an unsupported tag/encap. */
     OFPERR_OFPBAC_BAD_TAG,
 
     /* NX1.0+(2,256).  Must-be-zero action argument had nonzero value. */
@@ -184,93 +184,94 @@ enum ofperr {
 /* ## OFPET_BAD_INSTRUCTION ## */
 /* ## --------------------- ## */
 
-    /* OF1.1(3).  Error in instruction list. */
+    /* OF1.1+(3).  Error in instruction list. */
     OFPERR_OFPET_BAD_INSTRUCTION,
 
-    /* OF1.1(3,0).  Unknown instruction. */
+    /* OF1.1+(3,0).  Unknown instruction. */
     OFPERR_OFPBIC_UNKNOWN_INST,
 
-    /* OF1.1(3,1).  Switch or table does not support the instruction. */
+    /* OF1.1+(3,1).  Switch or table does not support the instruction. */
     OFPERR_OFPBIC_UNSUP_INST,
 
-    /* OF1.1(3,2).  Invalid Table-ID specified. */
+    /* OF1.1+(3,2).  Invalid Table-ID specified. */
     OFPERR_OFPBIC_BAD_TABLE_ID,
 
-    /* OF1.1(3,3).  Metadata value unsupported by datapath. */
+    /* OF1.1+(3,3).  Metadata value unsupported by datapath. */
     OFPERR_OFPBIC_UNSUP_METADATA,
 
-    /* OF1.1(3,4).  Metadata mask value unsupported by datapath. */
+    /* OF1.1+(3,4).  Metadata mask value unsupported by datapath. */
     OFPERR_OFPBIC_UNSUP_METADATA_MASK,
 
-    /* OF1.1(3,5).  Specific experimenter instruction unsupported. */
+    /* OF1.1+(3,5).  Specific experimenter instruction unsupported. */
     OFPERR_OFPBIC_UNSUP_EXP_INST,
 
 /* ## --------------- ## */
 /* ## OFPET_BAD_MATCH ## */
 /* ## --------------- ## */
 
-    /* OF1.1(4).  Error in match. */
+    /* OF1.1+(4).  Error in match. */
     OFPERR_OFPET_BAD_MATCH,
 
-    /* OF1.1(4,0).  Unsupported match type specified by the match */
+    /* OF1.1+(4,0).  Unsupported match type specified by the match */
     OFPERR_OFPBMC_BAD_TYPE,
 
-    /* OF1.1(4,1).  Length problem in match. */
+    /* OF1.1+(4,1).  Length problem in match. */
     OFPERR_OFPBMC_BAD_LEN,
 
-    /* OF1.1(4,2).  Match uses an unsupported tag/encap. */
+    /* OF1.1+(4,2).  Match uses an unsupported tag/encap. */
     OFPERR_OFPBMC_BAD_TAG,
 
-    /* OF1.1(4,3).  Unsupported datalink addr mask - switch does not support
+    /* OF1.1+(4,3).  Unsupported datalink addr mask - switch does not support
      * arbitrary datalink address mask. */
     OFPERR_OFPBMC_BAD_DL_ADDR_MASK,
 
-    /* OF1.1(4,4).  Unsupported network addr mask - switch does not support
+    /* OF1.1+(4,4).  Unsupported network addr mask - switch does not support
      * arbitrary network address mask. */
     OFPERR_OFPBMC_BAD_NW_ADDR_MASK,
 
-    /* OF1.1(4,5).  Unsupported wildcard specified in the match. */
+    /* OF1.1+(4,5).  Unsupported wildcard specified in the match. */
     OFPERR_OFPBMC_BAD_WILDCARDS,
 
-    /* OF1.1(4,6).  Unsupported field in the match. */
+    /* OF1.1+(4,6).  Unsupported field in the match. */
     OFPERR_OFPBMC_BAD_FIELD,
 
-    /* OF1.1(4,7).  Unsupported value in a match field. */
+    /* OF1.1+(4,7).  Unsupported value in a match field. */
     OFPERR_OFPBMC_BAD_VALUE,
 
 /* ## --------------------- ## */
 /* ## OFPET_FLOW_MOD_FAILED ## */
 /* ## --------------------- ## */
 
-    /* OF1.0(3), OF1.1(5).  Problem modifying flow entry. */
+    /* OF1.0(3), OF1.1+(5).  Problem modifying flow entry. */
     OFPERR_OFPET_FLOW_MOD_FAILED,
 
-    /* OF1.1(5,0).  Unspecified error. */
+    /* OF1.1+(5,0).  Unspecified error. */
     OFPERR_OFPFMFC_UNKNOWN,
 
     /* OF1.0(3,0).  Flow not added because of full tables. */
     OFPERR_OFPFMFC_ALL_TABLES_FULL,
 
-    /* OF1.1(5,1).  Flow not added because table was full. */
+    /* OF1.1+(5,1).  Flow not added because table was full. */
     OFPERR_OFPFMFC_TABLE_FULL,
 
-    /* OF1.1(5,2).  Table does not exist */
+    /* OF1.1+(5,2).  Table does not exist */
     OFPERR_OFPFMFC_BAD_TABLE_ID,
 
-    /* OF1.0(3,1), OF1.1(5,3).  Attempted to add overlapping flow with
+    /* OF1.0(3,1), OF1.1+(5,3).  Attempted to add overlapping flow with
      * CHECK_OVERLAP flag set. */
     OFPERR_OFPFMFC_OVERLAP,
 
-    /* OF1.0(3,2), OF1.1(5,4).  Permissions error. */
+    /* OF1.0(3,2), OF1.1+(5,4).  Permissions error. */
     OFPERR_OFPFMFC_EPERM,
 
-    /* OF1.1(5,5).  Flow not added because of unsupported idle/hard timeout. */
+    /* OF1.1+(5,5).  Flow not added because of unsupported idle/hard
+     * timeout. */
     OFPERR_OFPFMFC_BAD_TIMEOUT,
 
     /* OF1.0(3,3).  Flow not added because of non-zero idle/hard timeout. */
     OFPERR_OFPFMFC_BAD_EMERG_TIMEOUT,
 
-    /* OF1.0(3,4), OF1.1(5,6).  Unsupported or unknown command. */
+    /* OF1.0(3,4), OF1.1+(5,6).  Unsupported or unknown command. */
     OFPERR_OFPFMFC_BAD_COMMAND,
 
     /* OF1.0(3,5).  Unsupported action list - cannot process in the order
@@ -289,38 +290,38 @@ enum ofperr {
 /* ## OFPET_GROUP_MOD_FAILED ## */
 /* ## ---------------------- ## */
 
-    /* OF1.1(6).  Problem modifying group entry. */
+    /* OF1.1+(6).  Problem modifying group entry. */
     OFPERR_OFPET_GROUP_MOD_FAILED,
 
-    /* OF1.1(6,0).  Group not added because a group ADD attempted to replace an
-     * already-present group. */
+    /* OF1.1+(6,0).  Group not added because a group ADD attempted to replace
+     * an already-present group. */
     OFPERR_OFPGMFC_GROUP_EXISTS,
 
-    /* OF1.1(6,1).  Group not added because Group specified is invalid. */
+    /* OF1.1+(6,1).  Group not added because Group specified is invalid. */
     OFPERR_OFPGMFC_INVALID_GROUP,
 
-    /* OF1.1(6,2).  Switch does not support unequal load sharing with select
+    /* OF1.1+(6,2).  Switch does not support unequal load sharing with select
      * groups. */
     OFPERR_OFPGMFC_WEIGHT_UNSUPPORTED,
 
-    /* OF1.1(6,3).  The group table is full. */
+    /* OF1.1+(6,3).  The group table is full. */
     OFPERR_OFPGMFC_OUT_OF_GROUPS,
 
-    /* OF1.1(6,4).  The maximum number of action buckets for a group has been
+    /* OF1.1+(6,4).  The maximum number of action buckets for a group has been
      * exceeded. */
     OFPERR_OFPGMFC_OUT_OF_BUCKETS,
 
-    /* OF1.1(6,5).  Switch does not support groups that forward to groups. */
+    /* OF1.1+(6,5).  Switch does not support groups that forward to groups. */
     OFPERR_OFPGMFC_CHAINING_UNSUPPORTED,
 
-    /* OF1.1(6,6).  This group cannot watch the watch_port or watch_group
+    /* OF1.1+(6,6).  This group cannot watch the watch_port or watch_group
      * specified. */
     OFPERR_OFPGMFC_WATCH_UNSUPPORTED,
 
-    /* OF1.1(6,7).  Group entry would cause a loop. */
+    /* OF1.1+(6,7).  Group entry would cause a loop. */
     OFPERR_OFPGMFC_LOOP,
 
-    /* OF1.1(6,8).  Group not modified because a group MODIFY attempted to
+    /* OF1.1+(6,8).  Group not modified because a group MODIFY attempted to
      * modify a non-existent group. */
     OFPERR_OFPGMFC_UNKNOWN_GROUP,
 
@@ -328,62 +329,62 @@ enum ofperr {
 /* ## OFPET_PORT_MOD_FAILED ## */
 /* ## --------------------- ## */
 
-    /* OF1.0(4), OF1.1(7).  OFPT_PORT_MOD failed. */
+    /* OF1.0(4), OF1.1+(7).  OFPT_PORT_MOD failed. */
     OFPERR_OFPET_PORT_MOD_FAILED,
 
-    /* OF1.0(4,0), OF1.1(7,0).  Specified port does not exist. */
+    /* OF1.0(4,0), OF1.1+(7,0).  Specified port does not exist. */
     OFPERR_OFPPMFC_BAD_PORT,
 
-    /* OF1.0(4,1), OF1.1(7,1).  Specified hardware address does not match the
+    /* OF1.0(4,1), OF1.1+(7,1).  Specified hardware address does not match the
      * port number. */
     OFPERR_OFPPMFC_BAD_HW_ADDR,
 
-    /* OF1.1(7,2).  Specified config is invalid. */
+    /* OF1.1+(7,2).  Specified config is invalid. */
     OFPERR_OFPPMFC_BAD_CONFIG,
 
-    /* OF1.1(7,3).  Specified advertise is invalid. */
+    /* OF1.1+(7,3).  Specified advertise is invalid. */
     OFPERR_OFPPMFC_BAD_ADVERTISE,
 
 /* ## ---------------------- ## */
 /* ## OFPET_TABLE_MOD_FAILED ## */
 /* ## ---------------------- ## */
 
-    /* OF1.1(8).  Table mod request failed. */
+    /* OF1.1+(8).  Table mod request failed. */
     OFPERR_OFPET_TABLE_MOD_FAILED,
 
-    /* OF1.1(8,0).  Specified table does not exist. */
+    /* OF1.1+(8,0).  Specified table does not exist. */
     OFPERR_OFPTMFC_BAD_TABLE,
 
-    /* OF1.1(8,1).  Specified config is invalid. */
+    /* OF1.1+(8,1).  Specified config is invalid. */
     OFPERR_OFPTMFC_BAD_CONFIG,
 
 /* ## --------------------- ## */
 /* ## OFPET_QUEUE_OP_FAILED ## */
 /* ## --------------------- ## */
 
-    /* OF1.0(5), OF1.1(9).  Queue operation failed. */
+    /* OF1.0(5), OF1.1+(9).  Queue operation failed. */
     OFPERR_OFPET_QUEUE_OP_FAILED,
 
-    /* OF1.0(5,0), OF1.1(9,0).  Invalid port (or port does not exist). */
+    /* OF1.0(5,0), OF1.1+(9,0).  Invalid port (or port does not exist). */
     OFPERR_OFPQOFC_BAD_PORT,
 
-    /* OF1.0(5,1), OF1.1(9,1).  Queue does not exist. */
+    /* OF1.0(5,1), OF1.1+(9,1).  Queue does not exist. */
     OFPERR_OFPQOFC_BAD_QUEUE,
 
-    /* OF1.0(5,2), OF1.1(9,2).  Permissions error. */
+    /* OF1.0(5,2), OF1.1+(9,2).  Permissions error. */
     OFPERR_OFPQOFC_EPERM,
 
 /* ## -------------------------- ## */
 /* ## OFPET_SWITCH_CONFIG_FAILED ## */
 /* ## -------------------------- ## */
 
-    /* OF1.1(10).  Switch config request failed. */
+    /* OF1.1+(10).  Switch config request failed. */
     OFPERR_OFPET_SWITCH_CONFIG_FAILED,
 
-    /* OF1.1(10,0).  Specified flags is invalid. */
+    /* OF1.1+(10,0).  Specified flags is invalid. */
     OFPERR_OFPSCFC_BAD_FLAGS,
 
-    /* OF1.1(10,1).  Specified len is invalid. */
+    /* OF1.1+(10,1).  Specified len is invalid. */
     OFPERR_OFPSCFC_BAD_LEN,
 };
 
