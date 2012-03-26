@@ -125,8 +125,8 @@ below the table.
                                           MODIFY          DELETE
                              ADD  MODIFY  STRICT  DELETE  STRICT
                              ===  ======  ======  ======  ======
-match on priority           ---    ---     yes     ---     yes
-match on out_port           ---    ---     ---     yes     yes
+match on priority            ---    ---     yes     ---     yes
+match on out_port            ---    ---     ---     yes     yes
 updates flow_cookie          yes    yes     yes
 updates OFPFF_SEND_FLOW_REM  yes     +       +
 honors OFPFF_CHECK_OVERLAP   yes     +       +
