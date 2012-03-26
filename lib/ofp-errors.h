@@ -48,119 +48,120 @@ enum ofperr {
 /* ## OFPET_HELLO_FAILED ## */
 /* ## ------------------ ## */
 
-    /* OF(0).  Hello protocol failed. */
+    /* OF1.0+(0).  Hello protocol failed. */
     OFPERR_OFPET_HELLO_FAILED = OFPERR_OFS,
 
-    /* OF(0,0).  No compatible version. */
+    /* OF1.0+(0,0).  No compatible version. */
     OFPERR_OFPHFC_INCOMPATIBLE,
 
-    /* OF(0,1).  Permissions error. */
+    /* OF1.0+(0,1).  Permissions error. */
     OFPERR_OFPHFC_EPERM,
 
 /* ## ----------------- ## */
 /* ## OFPET_BAD_REQUEST ## */
 /* ## ----------------- ## */
 
-    /* OF(1).  Request was not understood. */
+    /* OF1.0+(1).  Request was not understood. */
     OFPERR_OFPET_BAD_REQUEST,
 
-    /* OF(1,0).  ofp_header.version not supported. */
+    /* OF1.0+(1,0).  ofp_header.version not supported. */
     OFPERR_OFPBRC_BAD_VERSION,
 
-    /* OF(1,1).  ofp_header.type not supported. */
+    /* OF1.0+(1,1).  ofp_header.type not supported. */
     OFPERR_OFPBRC_BAD_TYPE,
 
-    /* OF(1,2).  ofp_stats_msg.type not supported. */
+    /* OF1.0+(1,2).  ofp_stats_msg.type not supported. */
     OFPERR_OFPBRC_BAD_STAT,
 
-    /* OF(1,3).  Vendor not supported (in ofp_vendor_header or
+    /* OF1.0+(1,3).  Vendor not supported (in ofp_vendor_header or
      * ofp_stats_msg). */
     OFPERR_OFPBRC_BAD_VENDOR,
 
-    /* OF(1,4).  Vendor subtype not supported. */
+    /* OF1.0+(1,4).  Vendor subtype not supported. */
     OFPERR_OFPBRC_BAD_SUBTYPE,
 
-    /* OF(1,5).  Permissions error. */
+    /* OF1.0+(1,5).  Permissions error. */
     OFPERR_OFPBRC_EPERM,
 
-    /* OF(1,6).  Wrong request length for type. */
+    /* OF1.0+(1,6).  Wrong request length for type. */
     OFPERR_OFPBRC_BAD_LEN,
 
-    /* OF(1,7).  Specified buffer has already been used. */
+    /* OF1.0+(1,7).  Specified buffer has already been used. */
     OFPERR_OFPBRC_BUFFER_EMPTY,
 
-    /* OF(1,8).  Specified buffer does not exist. */
+    /* OF1.0+(1,8).  Specified buffer does not exist. */
     OFPERR_OFPBRC_BUFFER_UNKNOWN,
 
     /* OF1.1(1,9).  Specified table-id invalid or does not exist. */
     OFPERR_OFPBRC_BAD_TABLE_ID,
 
-    /* NX(1,256).  Invalid NXM flow match. */
+    /* NX1.0+(1,256).  Invalid NXM flow match. */
     OFPERR_NXBRC_NXM_INVALID,
 
-    /* NX(1,257).  The nxm_type, or nxm_type taken in combination with
+    /* NX1.0+(1,257).  The nxm_type, or nxm_type taken in combination with
      * nxm_hasmask or nxm_length or both, is invalid or not implemented. */
     OFPERR_NXBRC_NXM_BAD_TYPE,
 
-    /* NX(1,258).  Invalid nxm_value. */
+    /* NX1.0+(1,258).  Invalid nxm_value. */
     OFPERR_NXBRC_NXM_BAD_VALUE,
 
-    /* NX(1,259).  Invalid nxm_mask. */
+    /* NX1.0+(1,259).  Invalid nxm_mask. */
     OFPERR_NXBRC_NXM_BAD_MASK,
 
-    /* NX(1,260).  A prerequisite was not met. */
+    /* NX1.0+(1,260).  A prerequisite was not met. */
     OFPERR_NXBRC_NXM_BAD_PREREQ,
 
-    /* NX(1,261).  A given nxm_type was specified more than once. */
+    /* NX1.0+(1,261).  A given nxm_type was specified more than once. */
     OFPERR_NXBRC_NXM_DUP_TYPE,
 
-    /* NX(1,512).  A request specified a nonexistent table ID. */
+    /* NX1.0+(1,512).  A request specified a nonexistent table ID. */
     OFPERR_NXBRC_BAD_TABLE_ID,
 
-    /* NX(1,513).  NXT_ROLE_REQUEST specified an invalid role. */
+    /* NX1.0+(1,513).  NXT_ROLE_REQUEST specified an invalid role. */
     OFPERR_NXBRC_BAD_ROLE,
 
-    /* NX(1,514).  The in_port in an ofp_packet_out request is invalid. */
+    /* NX1.0+(1,514).  The in_port in an ofp_packet_out request is invalid. */
     OFPERR_NXBRC_BAD_IN_PORT,
 
-    /* NX(1,515).  Must-be-zero field had nonzero value. */
+    /* NX1.0+(1,515).  Must-be-zero field had nonzero value. */
     OFPERR_NXBRC_MUST_BE_ZERO,
 
-    /* NX(1,516).  The reason in an ofp_port_status message is not valid. */
+    /* NX1.0+(1,516).  The reason in an ofp_port_status message is not
+     * valid. */
     OFPERR_NXBRC_BAD_REASON,
 
 /* ## ---------------- ## */
 /* ## OFPET_BAD_ACTION ## */
 /* ## ---------------- ## */
 
-    /* OF(2).  Error in action description. */
+    /* OF1.0+(2).  Error in action description. */
     OFPERR_OFPET_BAD_ACTION,
 
-    /* OF(2,0).  Unknown action type. */
+    /* OF1.0+(2,0).  Unknown action type. */
     OFPERR_OFPBAC_BAD_TYPE,
 
-    /* OF(2,1).  Length problem in actions. */
+    /* OF1.0+(2,1).  Length problem in actions. */
     OFPERR_OFPBAC_BAD_LEN,
 
-    /* OF(2,2).  Unknown experimenter id specified. */
+    /* OF1.0+(2,2).  Unknown experimenter id specified. */
     OFPERR_OFPBAC_BAD_VENDOR,
 
-    /* OF(2,3).  Unknown action type for experimenter id. */
+    /* OF1.0+(2,3).  Unknown action type for experimenter id. */
     OFPERR_OFPBAC_BAD_VENDOR_TYPE,
 
-    /* OF(2,4).  Problem validating output port. */
+    /* OF1.0+(2,4).  Problem validating output port. */
     OFPERR_OFPBAC_BAD_OUT_PORT,
 
-    /* OF(2,5).  Bad action argument. */
+    /* OF1.0+(2,5).  Bad action argument. */
     OFPERR_OFPBAC_BAD_ARGUMENT,
 
-    /* OF(2,6).  Permissions error. */
+    /* OF1.0+(2,6).  Permissions error. */
     OFPERR_OFPBAC_EPERM,
 
-    /* OF(2,7).  Can't handle this many actions. */
+    /* OF1.0+(2,7).  Can't handle this many actions. */
     OFPERR_OFPBAC_TOO_MANY,
 
-    /* OF(2,8).  Problem validating output queue. */
+    /* OF1.0+(2,8).  Problem validating output queue. */
     OFPERR_OFPBAC_BAD_QUEUE,
 
     /* OF1.1(2,9).  Invalid group id in forward action. */
@@ -176,7 +177,7 @@ enum ofperr {
     /* OF1.1(2,12).  Actions uses an unsupported tag/encap. */
     OFPERR_OFPBAC_BAD_TAG,
 
-    /* NX(2,256).  Must-be-zero action argument had nonzero value. */
+    /* NX1.0+(2,256).  Must-be-zero action argument had nonzero value. */
     OFPERR_NXBAC_MUST_BE_ZERO,
 
 /* ## --------------------- ## */

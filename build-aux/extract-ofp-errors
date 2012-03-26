@@ -194,7 +194,7 @@ def extract_ofp_errors(filenames):
             names.append(enum)
 
             for dst in dsts.split(', '):
-                m = re.match(r'([A-Z0-9.]+)\((\d+)(?:,(\d+))?\)$', dst)
+                m = re.match(r'([A-Z0-9.+]+)\((\d+)(?:,(\d+))?\)$', dst)
                 if not m:
                     fatal("%s: syntax error in destination" % dst)
                 targets = m.group(1)
@@ -204,12 +204,13 @@ def extract_ofp_errors(filenames):
                 else:
                     code = None
 
-                target_map = {"OF":    ("OF1.0", "OF1.1"),
-                              "OF1.0": ("OF1.0",),
-                              "OF1.1": ("OF1.1",),
-                              "NX":    ("OF1.0", "OF1.1"),
-                              "NX1.0": ("OF1.0",),
-                              "NX1.1": ("OF1.1",)}
+                target_map = {"OF1.0+": ("OF1.0", "OF1.1"),
+                              "OF1.1+": ("OF1.1",),
+                              "OF1.0":  ("OF1.0",),
+                              "OF1.1":  ("OF1.1",),
+                              "NX1.0+": ("OF1.0", "OF1.1"),
+                              "NX1.0":  ("OF1.0",),
+                              "NX1.1":  ("OF1.1",)}
                 if targets not in target_map:
                     fatal("%s: unknown error domain" % targets)
                 for target in target_map[targets]:
