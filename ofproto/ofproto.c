@@ -3064,7 +3064,7 @@ handle_role_request(struct ofconn *ofconn, const struct ofp_header *oh)
     role = ntohl(nrr->role);
     if (role != NX_ROLE_OTHER && role != NX_ROLE_MASTER
         && role != NX_ROLE_SLAVE) {
-        return OFPERR_NXBRC_BAD_ROLE;
+        return OFPERR_OFPRRFC_BAD_ROLE;
     }
 
     if (ofconn_get_role(ofconn) != role

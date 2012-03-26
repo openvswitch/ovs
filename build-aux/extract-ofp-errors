@@ -66,8 +66,14 @@ def getToken():
                 token = None
                 return False
 
-def fatal(msg):
+n_errors = 0
+def error(msg):
+    global n_errors
     sys.stderr.write("%s:%d: %s\n" % (fileName, lineNumber, msg))
+    n_errors += 1
+
+def fatal(msg):
+    error(msg)
     sys.exit(1)
 
 def skipDirective():
@@ -145,9 +151,12 @@ def extract_ofp_errors(filenames):
     names = []
     domain = {}
     reverse = {}
-    for domain_name in ("OF1.0", "OF1.1", "NX1.0", "NX1.1"):
+    for domain_name in ("OF1.0", "OF1.1", "OF1.2", "NX1.0", "NX1.1"):
         domain[domain_name] = {}
         reverse[domain_name] = {}
+
+    n_errors = 0
+    expected_errors = {}
 
     global fileName
     for fileName in filenames:
@@ -168,19 +177,27 @@ def extract_ofp_errors(filenames):
             elif re.match('}', line):
                 break
 
-            m = re.match('\s+/\* ((?:.(?!\.  ))+.)\.  (.*)$', line)
-            if not m:
+            if not line.lstrip().startswith('/*'):
                 fatal("unexpected syntax between errors")
 
-            dsts, comment = m.groups()
-
-            comment.rstrip()
+            comment = line.lstrip()[2:].strip()
             while not comment.endswith('*/'):
                 getLine()
                 if line.startswith('/*') or not line or line.isspace():
                     fatal("unexpected syntax within error")
                 comment += ' %s' % line.lstrip('* \t').rstrip(' \t\r\n')
             comment = comment[:-2].rstrip()
+
+            m = re.match('Expected: (.*)\.$', comment)
+            if m:
+                expected_errors[m.group(1)] = (fileName, lineNumber)
+                continue
+
+            m = re.match('((?:.(?!\.  ))+.)\.  (.*)$', comment)
+            if not m:
+                fatal("unexpected syntax between errors")
+
+            dsts, comment = m.groups()
 
             getLine()
             m = re.match('\s+(?:OFPERR_((?:OFP|NX)[A-Z0-9_]+))(\s*=\s*OFPERR_OFS)?,',
@@ -194,34 +211,67 @@ def extract_ofp_errors(filenames):
             names.append(enum)
 
             for dst in dsts.split(', '):
-                m = re.match(r'([A-Z0-9.+]+)\((\d+)(?:,(\d+))?\)$', dst)
+                m = re.match(r'([A-Z0-9.+]+)\((\d+|(0x)[0-9a-fA-F]+)(?:,(\d+))?\)$', dst)
                 if not m:
                     fatal("%s: syntax error in destination" % dst)
                 targets = m.group(1)
-                type_ = int(m.group(2))
                 if m.group(3):
-                    code = int(m.group(3))
+                    base = 16
+                else:
+                    base = 10
+                type_ = int(m.group(2), base)
+                if m.group(4):
+                    code = int(m.group(4))
                 else:
                     code = None
 
-                target_map = {"OF1.0+": ("OF1.0", "OF1.1"),
-                              "OF1.1+": ("OF1.1",),
+                target_map = {"OF1.0+": ("OF1.0", "OF1.1", "OF1.2"),
+                              "OF1.1+": ("OF1.1", "OF1.2"),
+                              "OF1.2+": ("OF1.2",),
                               "OF1.0":  ("OF1.0",),
                               "OF1.1":  ("OF1.1",),
-                              "NX1.0+": ("OF1.0", "OF1.1"),
+                              "OF1.2":  ("OF1.2",),
+                              "NX1.0+": ("OF1.0", "OF1.1", "OF1.2"),
                               "NX1.0":  ("OF1.0",),
-                              "NX1.1":  ("OF1.1",)}
+                              "NX1.1":  ("OF1.1",),
+                              "NX1.2":  ("OF1.2",)}
                 if targets not in target_map:
                     fatal("%s: unknown error domain" % targets)
                 for target in target_map[targets]:
-                    if type_ not in domain[target]:
-                        domain[target][type_] = {}
+                    domain[target].setdefault(type_, {})
                     if code in domain[target][type_]:
-                        fatal("%s: duplicate assignment in domain" % dst)
-                    domain[target][type_][code] = enum
+                        msg = "%d,%d in %s means both %s and %s" % (
+                            type_, code, target,
+                            domain[target][type_][code][0], enum)
+                        if msg in expected_errors:
+                            del expected_errors[msg]
+                        else:
+                            error("%s: %s." % (dst, msg))
+                            sys.stderr.write("%s:%d: %s: Here is the location "
+                                             "of the previous definition.\n"
+                                             % (domain[target][type_][code][1],
+                                                domain[target][type_][code][2],
+                                                dst))
+                    else:
+                        domain[target][type_][code] = (enum, fileName,
+                                                       lineNumber)
+
+                    if enum in reverse[target]:
+                        error("%s: %s in %s means both %d,%d and %d,%d." %
+                              (dst, enum, target,
+                               reverse[target][enum][0],
+                               reverse[target][enum][1],
+                               type_, code))
                     reverse[target][enum] = (type_, code)
 
         inputFile.close()
+
+    for fn, ln in expected_errors.itervalues():
+        sys.stderr.write("%s:%d: expected duplicate not used.\n" % (fn, ln))
+        n_errors += 1
+
+    if n_errors:
+        sys.exit(1)
 
     print """\
 /* Generated automatically; do not modify!     -*- buffer-read-only: t -*- */
@@ -254,12 +304,17 @@ static enum ofperr
 %s_decode(uint16_t type, uint16_t code)
 {
     switch ((type << 16) | code) {""" % name
+        found = set()
         for enum in names:
             if enum not in map:
                 continue
             type_, code = map[enum]
             if code is None:
                 continue
+            value = (type_ << 16) | code
+            if value in found:
+                continue
+            found.add(value)
             print "    case (%d << 16) | %d:" % (type_, code)
             print "        return OFPERR_%s;" % enum
         print """\
@@ -307,6 +362,7 @@ const struct ofperr_domain %s = {
 
     output_domain(reverse["OF1.0"], "ofperr_of10", "OpenFlow 1.0", 0x01)
     output_domain(reverse["OF1.1"], "ofperr_of11", "OpenFlow 1.1", 0x02)
+    output_domain(reverse["OF1.2"], "ofperr_of12", "OpenFlow 1.2", 0x03)
 
 if __name__ == '__main__':
     if '--help' in sys.argv:

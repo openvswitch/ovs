@@ -1832,6 +1832,34 @@ do_parse_nx_match(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
     ds_destroy(&in);
 }
 
+/* "print-error ENUM": Prints the type and code of ENUM for every OpenFlow
+ * version. */
+static void
+do_print_error(int argc OVS_UNUSED, char *argv[])
+{
+    enum ofperr error;
+    int version;
+
+    error = ofperr_from_name(argv[1]);
+    if (!error) {
+        ovs_fatal(0, "unknown error \"%s\"", argv[1]);
+    }
+
+    for (version = 0; version <= UINT8_MAX; version++) {
+        const struct ofperr_domain *domain;
+
+        domain = ofperr_domain_from_version(version);
+        if (!domain) {
+            continue;
+        }
+
+        printf("%s: %d,%d\n",
+               ofperr_domain_get_name(domain),
+               ofperr_get_type(error, domain),
+               ofperr_get_code(error, domain));
+    }
+}
+
 /* "ofp-print HEXSTRING [VERBOSITY]": Converts the hex digits in HEXSTRING into
  * binary data, interpreting them as an OpenFlow message, and prints the
  * OpenFlow message on stdout, at VERBOSITY (level 2 by default).  */
@@ -1877,6 +1905,7 @@ static const struct command all_commands[] = {
     { "parse-flow", 1, 1, do_parse_flow },
     { "parse-flows", 1, 1, do_parse_flows },
     { "parse-nx-match", 0, 0, do_parse_nx_match },
+    { "print-error", 1, 1, do_print_error },
     { "ofp-print", 1, 2, do_ofp_print },
 
     { NULL, 0, 0, NULL },

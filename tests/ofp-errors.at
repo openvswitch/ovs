@@ -1,0 +1,97 @@
+AT_BANNER([ofp-errors tests])
+
+AT_SETUP([OFPT_ERROR with type OFPET_HELLO_FAILED - OF1.0])
+AT_KEYWORDS([ofp-print ofp-errors])
+AT_CHECK([ovs-ofctl ofp-print 010100170000000000000001657874726120646174610a], [0], [dnl
+OFPT_ERROR (xid=0x0): OFPHFC_EPERM
+extra data\012
+])
+AT_CLEANUP
+
+AT_SETUP([OFPT_ERROR with type OFPET_HELLO_FAILED - OF1.1])
+AT_KEYWORDS([ofp-print ofp-errors])
+AT_CHECK([ovs-ofctl ofp-print 020100170000000000000001657874726120646174610a], [0], [dnl
+OFPT_ERROR (OF1.1) (xid=0x0): OFPHFC_EPERM
+extra data\012
+])
+AT_CLEANUP
+
+AT_SETUP([OFPT_ERROR with type OFPET_BAD_REQUEST - OF1.0])
+AT_KEYWORDS([ofp-print ofp-errors])
+AT_CHECK([ovs-ofctl ofp-print 01010014000000000001000601bbccddeeff0011], [0], [dnl
+OFPT_ERROR (xid=0x0): OFPBRC_BAD_LEN
+(***truncated to 8 bytes from 52445***)
+00000000  01 bb cc dd ee ff 00 11-                        |........        |
+])
+AT_CLEANUP
+
+AT_SETUP([OFPT_ERROR with code OFPBMC_BAD_PREREQ - OF1.0])
+AT_KEYWORDS([ofp-print ofp-errors])
+AT_CHECK([ovs-ofctl ofp-print '0101001c55555555 b0c20000 0000232000010104 0102000811111111'], [0], [dnl
+OFPT_ERROR (xid=0x55555555): OFPBMC_BAD_PREREQ
+OFPT_ECHO_REQUEST (xid=0x11111111): 0 bytes of payload
+])
+AT_CLEANUP
+
+AT_SETUP([OFPT_ERROR with code OFPBMC_BAD_PREREQ - OF1.1])
+AT_KEYWORDS([ofp-print ofp-errors])
+AT_CHECK([ovs-ofctl ofp-print '0201001c55555555 b0c20000 0000232000010104 0102000811111111'], [0], [dnl
+OFPT_ERROR (OF1.1) (xid=0x55555555): OFPBMC_BAD_PREREQ
+OFPT_ECHO_REQUEST (xid=0x11111111): 0 bytes of payload
+])
+AT_CLEANUP
+
+dnl Error type 3, code 1 is OFPFMFC_OVERLAP in OF1.0
+dnl and OFPBIC_UNSUP_INST in OF1.1, so check that value in both versions.
+AT_SETUP([OFPT_ERROR with type OFPFMFC_OVERLAP - OF1.0])
+AT_KEYWORDS([ofp-print ofp-errors])
+AT_CHECK([ovs-ofctl ofp-print 01010014000000000003000101bbccddeeff0011], [0], [dnl
+OFPT_ERROR (xid=0x0): OFPFMFC_OVERLAP
+(***truncated to 8 bytes from 52445***)
+00000000  01 bb cc dd ee ff 00 11-                        |........        |
+])
+AT_CLEANUP
+AT_SETUP([OFPT_ERROR with type OFPBIC_UNSUP_INST - OF1.1])
+AT_KEYWORDS([ofp-print ofp-errors])
+AT_CHECK([ovs-ofctl ofp-print 02010014000000000003000102bbccddeeff0011], [0], [dnl
+OFPT_ERROR (OF1.1) (xid=0x0): OFPBIC_UNSUP_INST
+(***truncated to 8 bytes from 52445***)
+00000000  02 bb cc dd ee ff 00 11-                        |........        |
+])
+AT_CLEANUP
+
+dnl OF1.1 had OFPBIC_UNSUP_EXP_INST as 3,5.
+dnl OF1.2 broke it into OFPBIC_BAD_EXPERIMENTER as 3,5
+dnl                 and OFPBIC_BAD_EXT_TYPE as 3,6.
+dnl Thus, for OF1.1 we translate both of the latter error codes into 3,5.
+AT_SETUP([encoding OFPBIC_* experimenter errors])
+AT_KEYWORDS([ofp-print ofp-errors])
+AT_CHECK([ovs-ofctl print-error OFPBIC_BAD_EXPERIMENTER], [0], [dnl
+OpenFlow 1.0: -1,-1
+OpenFlow 1.1: 3,5
+OpenFlow 1.2: 3,5
+])
+AT_CHECK([ovs-ofctl print-error OFPBIC_BAD_EXP_TYPE], [0], [dnl
+OpenFlow 1.0: -1,-1
+OpenFlow 1.1: 3,5
+OpenFlow 1.2: 3,6
+])
+AT_CLEANUP
+
+AT_SETUP([decoding OFPBIC_* experimenter errors])
+AT_KEYWORDS([ofp-print ofp-errors])
+AT_CHECK([ovs-ofctl ofp-print '0201001455555555 00030005 0102000811111111'], [0], [dnl
+OFPT_ERROR (OF1.1) (xid=0x55555555): OFPBIC_BAD_EXPERIMENTER
+OFPT_ECHO_REQUEST (xid=0x11111111): 0 bytes of payload
+])
+AT_KEYWORDS([ofp-print ofp-errors])
+AT_CHECK([ovs-ofctl ofp-print '0301001455555555 00030005 0102000811111111'], [0], [dnl
+OFPT_ERROR (OF 0x03) (xid=0x55555555): OFPBIC_BAD_EXPERIMENTER
+OFPT_ECHO_REQUEST (xid=0x11111111): 0 bytes of payload
+])
+AT_KEYWORDS([ofp-print ofp-errors])
+AT_CHECK([ovs-ofctl ofp-print '0301001455555555 00030006 0102000811111111'], [0], [dnl
+OFPT_ERROR (OF 0x03) (xid=0x55555555): OFPBIC_BAD_EXP_TYPE
+OFPT_ECHO_REQUEST (xid=0x11111111): 0 bytes of payload
+])
+AT_CLEANUP

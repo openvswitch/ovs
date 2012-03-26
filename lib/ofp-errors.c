@@ -25,7 +25,15 @@ ofperr_domain_from_version(uint8_t version)
 {
     return (version == ofperr_of10.version ? &ofperr_of10
             : version == ofperr_of11.version ? &ofperr_of11
+            : version == ofperr_of12.version ? &ofperr_of12
             : NULL);
+}
+
+/* Returns the name (e.g. "OpenFlow 1.0") of OpenFlow error domain 'domain'. */
+const char *
+ofperr_domain_get_name(const struct ofperr_domain *domain)
+{
+    return domain->name;
 }
 
 /* Returns true if 'error' is a valid OFPERR_* value, false otherwise. */
@@ -97,6 +105,24 @@ ofperr_get_name(enum ofperr error)
             : "<invalid>");
 }
 
+/* Returns the OFPERR_* value that corresponds for 'name', 0 if none exists.
+ * For example, returns OFPERR_OFPHFC_INCOMPATIBLE if 'name' is
+ * "OFPHFC_INCOMPATIBLE".
+ *
+ * This is probably useful only for debugging and testing. */
+enum ofperr
+ofperr_from_name(const char *name)
+{
+    int i;
+
+    for (i = 0; i < OFPERR_N_ERRORS; i++) {
+        if (!strcmp(name, error_names[i])) {
+            return i + OFPERR_OFS;
+        }
+    }
+    return 0;
+}
+
 /* Returns an extended description name of 'error', e.g. "ofp_header.type not
  * supported." if 'error' is OFPBRC_BAD_TYPE, or "<invalid>" if 'error' is not
  * a valid OFPERR_* value. */
@@ -108,6 +134,15 @@ ofperr_get_description(enum ofperr error)
             : "<invalid>");
 }
 
+static const struct pair *
+ofperr_get_pair__(enum ofperr error, const struct ofperr_domain *domain)
+{
+    size_t ofs = error - OFPERR_OFS;
+
+    assert(ofperr_is_valid(error));
+    return &domain->errors[ofs];
+}
+
 static struct ofpbuf *
 ofperr_encode_msg__(enum ofperr error, const struct ofperr_domain *domain,
                     ovs_be32 xid, const void *data, size_t data_len)
@@ -115,7 +150,6 @@ ofperr_encode_msg__(enum ofperr error, const struct ofperr_domain *domain,
     struct ofp_error_msg *oem;
     const struct pair *pair;
     struct ofpbuf *buf;
-    size_t ofs;
 
     if (!domain) {
         return NULL;
@@ -140,8 +174,7 @@ ofperr_encode_msg__(enum ofperr error, const struct ofperr_domain *domain,
         return NULL;
     }
 
-    ofs = error - OFPERR_OFS;
-    pair = &domain->errors[ofs];
+    pair = ofperr_get_pair__(error, domain);
     if (!ofperr_is_nx_extension(error)) {
         oem = make_openflow_xid(data_len + sizeof *oem, OFPT_ERROR, xid, &buf);
         oem->type = htons(pair->type);
@@ -208,6 +241,28 @@ ofperr_encode_hello(enum ofperr error, const struct ofperr_domain *domain,
         domain = &ofperr_of10;
     }
     return ofperr_encode_msg__(error, domain, htonl(0), s, strlen(s));
+}
+
+/* Returns the value that would go into an OFPT_ERROR message's 'type' for
+ * encoding 'error' in 'domain'.  Returns -1 if 'error' is not encodable in
+ * 'domain'.
+ *
+ * 'error' must be a valid OFPERR_* code, as checked by ofperr_is_valid(). */
+int
+ofperr_get_type(enum ofperr error, const struct ofperr_domain *domain)
+{
+    return ofperr_get_pair__(error, domain)->type;
+}
+
+/* Returns the value that would go into an OFPT_ERROR message's 'code' for
+ * encoding 'error' in 'domain'.  Returns -1 if 'error' is not encodable in
+ * 'domain' or if 'error' represents a category rather than a specific error.
+ *
+ * 'error' must be a valid OFPERR_* code, as checked by ofperr_is_valid(). */
+int
+ofperr_get_code(enum ofperr error, const struct ofperr_domain *domain)
+{
+    return ofperr_get_pair__(error, domain)->code;
 }
 
 /* Tries to decodes 'oh', which should be an OpenFlow OFPT_ERROR message.

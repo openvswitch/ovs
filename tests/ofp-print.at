@@ -57,65 +57,7 @@ OFPT_HELLO (xid=0x0):
 ])
 AT_CLEANUP
 
-AT_SETUP([OFPT_ERROR with type OFPET_HELLO_FAILED - OF1.0])
-AT_KEYWORDS([ofp-print])
-AT_CHECK([ovs-ofctl ofp-print 010100170000000000000001657874726120646174610a], [0], [dnl
-OFPT_ERROR (xid=0x0): OFPHFC_EPERM
-extra data\012
-])
-AT_CLEANUP
-
-AT_SETUP([OFPT_ERROR with type OFPET_HELLO_FAILED - OF1.1])
-AT_KEYWORDS([ofp-print])
-AT_CHECK([ovs-ofctl ofp-print 020100170000000000000001657874726120646174610a], [0], [dnl
-OFPT_ERROR (OF1.1) (xid=0x0): OFPHFC_EPERM
-extra data\012
-])
-AT_CLEANUP
-
-AT_SETUP([OFPT_ERROR with type OFPET_BAD_REQUEST - OF1.0])
-AT_KEYWORDS([ofp-print])
-AT_CHECK([ovs-ofctl ofp-print 01010014000000000001000601bbccddeeff0011], [0], [dnl
-OFPT_ERROR (xid=0x0): OFPBRC_BAD_LEN
-(***truncated to 8 bytes from 52445***)
-00000000  01 bb cc dd ee ff 00 11-                        |........        |
-])
-AT_CLEANUP
-
-AT_SETUP([OFPT_ERROR with code NXBRC_NXM_BAD_PREREQ - OF1.0])
-AT_KEYWORDS([ofp-print])
-AT_CHECK([ovs-ofctl ofp-print '0101001c55555555 b0c20000 0000232000010104 0102000811111111'], [0], [dnl
-OFPT_ERROR (xid=0x55555555): NXBRC_NXM_BAD_PREREQ
-OFPT_ECHO_REQUEST (xid=0x11111111): 0 bytes of payload
-])
-AT_CLEANUP
-
-AT_SETUP([OFPT_ERROR with code NXBRC_NXM_BAD_PREREQ - OF1.1])
-AT_KEYWORDS([ofp-print])
-AT_CHECK([ovs-ofctl ofp-print '0201001c55555555 b0c20000 0000232000010104 0102000811111111'], [0], [dnl
-OFPT_ERROR (OF1.1) (xid=0x55555555): NXBRC_NXM_BAD_PREREQ
-OFPT_ECHO_REQUEST (xid=0x11111111): 0 bytes of payload
-])
-AT_CLEANUP
-
-dnl Error type 3, code 1 is OFPFMFC_OVERLAP in OF1.0
-dnl and OFPBIC_UNSUP_INST in OF1.1, so check that value in both versions.
-AT_SETUP([OFPT_ERROR with type OFPFMFC_OVERLAP - OF1.0])
-AT_KEYWORDS([ofp-print])
-AT_CHECK([ovs-ofctl ofp-print 01010014000000000003000101bbccddeeff0011], [0], [dnl
-OFPT_ERROR (xid=0x0): OFPFMFC_OVERLAP
-(***truncated to 8 bytes from 52445***)
-00000000  01 bb cc dd ee ff 00 11-                        |........        |
-])
-AT_CLEANUP
-AT_SETUP([OFPT_ERROR with type OFPBIC_UNSUP_INST - OF1.1])
-AT_KEYWORDS([ofp-print])
-AT_CHECK([ovs-ofctl ofp-print 02010014000000000003000102bbccddeeff0011], [0], [dnl
-OFPT_ERROR (OF1.1) (xid=0x0): OFPBIC_UNSUP_INST
-(***truncated to 8 bytes from 52445***)
-00000000  02 bb cc dd ee ff 00 11-                        |........        |
-])
-AT_CLEANUP
+dnl OFPT_ERROR tests are in ofp-errors.at.
 
 AT_SETUP([OFPT_ECHO_REQUEST, empty payload])
 AT_KEYWORDS([ofp-print])

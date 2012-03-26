@@ -103,7 +103,7 @@ nx_pull_match__(struct ofpbuf *b, unsigned int match_len, bool strict,
         VLOG_DBG_RL(&rl, "nx_match length %u, rounded up to a "
                     "multiple of 8, is longer than space in message (max "
                     "length %zu)", match_len, b->size);
-        return OFPERR_OFPBRC_BAD_LEN;
+        return OFPERR_OFPBMC_BAD_LEN;
     }
 
     cls_rule_init_catchall(rule, priority);
@@ -119,21 +119,21 @@ nx_pull_match__(struct ofpbuf *b, unsigned int match_len, bool strict,
         mf = mf_from_nxm_header(header);
         if (!mf) {
             if (strict) {
-                error = OFPERR_NXBRC_NXM_BAD_TYPE;
+                error = OFPERR_OFPBMC_BAD_FIELD;
             } else {
                 continue;
             }
         } else if (!mf_are_prereqs_ok(mf, &rule->flow)) {
-            error = OFPERR_NXBRC_NXM_BAD_PREREQ;
+            error = OFPERR_OFPBMC_BAD_PREREQ;
         } else if (!mf_is_all_wild(mf, &rule->wc)) {
-            error = OFPERR_NXBRC_NXM_DUP_TYPE;
+            error = OFPERR_OFPBMC_DUP_FIELD;
         } else {
             unsigned int width = mf->n_bytes;
             union mf_value value;
 
             memcpy(&value, p + 4, width);
             if (!mf_is_value_valid(mf, &value)) {
-                error = OFPERR_NXBRC_NXM_BAD_VALUE;
+                error = OFPERR_OFPBMC_BAD_VALUE;
             } else if (!NXM_HASMASK(header)) {
                 error = 0;
                 mf_set_value(mf, &value, rule);
@@ -142,7 +142,7 @@ nx_pull_match__(struct ofpbuf *b, unsigned int match_len, bool strict,
 
                 memcpy(&mask, p + 4 + width, width);
                 if (!mf_is_mask_valid(mf, &mask)) {
-                    error = OFPERR_NXBRC_NXM_BAD_MASK;
+                    error = OFPERR_OFPBMC_BAD_MASK;
                 } else {
                     error = 0;
                     mf_set(mf, &value, &mask, rule);
@@ -153,7 +153,7 @@ nx_pull_match__(struct ofpbuf *b, unsigned int match_len, bool strict,
         /* Check if the match is for a cookie rather than a classifier rule. */
         if ((header == NXM_NX_COOKIE || header == NXM_NX_COOKIE_W) && cookie) {
             if (*cookie_mask) {
-                error = OFPERR_NXBRC_NXM_DUP_TYPE;
+                error = OFPERR_OFPBMC_DUP_FIELD;
             } else {
                 unsigned int width = sizeof *cookie;
 
@@ -178,7 +178,7 @@ nx_pull_match__(struct ofpbuf *b, unsigned int match_len, bool strict,
         }
     }
 
-    return match_len ? OFPERR_NXBRC_NXM_INVALID : 0;
+    return match_len ? OFPERR_OFPBMC_BAD_LEN : 0;
 }
 
 /* Parses the nx_match formatted match description in 'b' with length
