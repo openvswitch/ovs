@@ -113,7 +113,7 @@ struct dp_netdev_flow {
     long long int used;         /* Last used time, in monotonic msecs. */
     long long int packet_count; /* Number of packets matched. */
     long long int byte_count;   /* Number of bytes matched. */
-    ovs_be16 tcp_ctl;           /* Bitwise-OR of seen tcp_ctl values. */
+    ovs_be16 tcp_flags;         /* Bitwise-OR of seen tcp_flags values. */
 
     /* Actions. */
     struct nlattr *actions;
@@ -627,7 +627,7 @@ get_dpif_flow_stats(struct dp_netdev_flow *flow, struct dpif_flow_stats *stats)
     stats->n_packets = flow->packet_count;
     stats->n_bytes = flow->byte_count;
     stats->used = flow->used;
-    stats->tcp_flags = TCP_FLAGS(flow->tcp_ctl);
+    stats->tcp_flags = flow->tcp_flags;
 }
 
 static int
@@ -728,7 +728,7 @@ clear_stats(struct dp_netdev_flow *flow)
     flow->used = 0;
     flow->packet_count = 0;
     flow->byte_count = 0;
-    flow->tcp_ctl = 0;
+    flow->tcp_flags = 0;
 }
 
 static int
@@ -976,12 +976,7 @@ dp_netdev_flow_used(struct dp_netdev_flow *flow, struct flow *key,
     flow->used = time_msec();
     flow->packet_count++;
     flow->byte_count += packet->size;
-    if ((key->dl_type == htons(ETH_TYPE_IP) ||
-         key->dl_type == htons(ETH_TYPE_IPV6)) &&
-        key->nw_proto == IPPROTO_TCP && packet->l7) {
-        struct tcp_header *th = packet->l4;
-        flow->tcp_ctl |= th->tcp_ctl;
-    }
+    flow->tcp_flags |= packet_get_tcp_flags(packet, key);
 }
 
 static void
