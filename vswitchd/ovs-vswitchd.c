@@ -49,7 +49,7 @@
 #include "util.h"
 #include "vconn.h"
 #include "vlog.h"
-#include "vswitch-idl.h"
+#include "lib/vswitch-idl.h"
 
 VLOG_DEFINE_THIS_MODULE(vswitchd);
 

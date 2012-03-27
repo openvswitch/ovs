@@ -41,7 +41,7 @@
 #include "stream-ssl.h"
 #include "sset.h"
 #include "svec.h"
-#include "vswitch-idl.h"
+#include "lib/vswitch-idl.h"
 #include "table.h"
 #include "timeval.h"
 #include "util.h"

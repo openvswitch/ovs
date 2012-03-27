@@ -95,3 +95,7 @@ vswitchd/vswitch.ovsschema.stamp: vswitchd/vswitch.ovsschema
 	  exit 1; \
 	fi
 CLEANFILES += vswitchd/vswitch.ovsschema.stamp
+
+# Clean up generated files from older OVS versions.  (This is important so that
+# #include "vswitch-idl.h" doesn't get the wrong copy.)
+CLEANFILES += vswitchd/vswitch-idl.c vswitchd/vswitch-idl.h
