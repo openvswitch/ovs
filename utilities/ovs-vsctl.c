@@ -1370,6 +1370,7 @@ cmd_add_br(struct vsctl_context *ctx)
                                 br_name, parent_name, vlan, br_name, br->vlan);
                 }
             }
+            free_info(&info);
             return;
         }
     }
@@ -1730,6 +1731,7 @@ add_port(struct vsctl_context *ctx,
 
             svec_destroy(&want_names);
             svec_destroy(&have_names);
+            free_info(&info);
 
             return;
         }
@@ -3540,6 +3542,7 @@ is_condition_satisfied(const struct vsctl_table_class *table,
         }
 
         ovsdb_atom_destroy(&want_key, column->type.key.type);
+        ovsdb_datum_destroy(&b, &type);
     } else {
         struct ovsdb_datum want_datum;
 

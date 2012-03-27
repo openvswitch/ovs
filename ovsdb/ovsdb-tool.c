@@ -252,6 +252,10 @@ compact_or_convert(const char *src_name, const char *dst_name,
     }
 
     lockfile_unlock(dst_lock);
+
+    if (in_place) {
+        free((char *) dst_name);
+    }
 }
 
 static void

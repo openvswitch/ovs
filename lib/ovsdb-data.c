@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010, 2011 Nicira Networks
+/* Copyright (c) 2009, 2010, 2011, 2012 Nicira Networks
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -590,6 +590,7 @@ ovsdb_atom_from_string(union ovsdb_atom *atom,
 
     error = ovsdb_atom_check_constraints(atom, base);
     if (error) {
+        ovsdb_atom_destroy(atom, base->type);
         msg = ovsdb_error_to_string(error);
         ovsdb_error_destroy(error);
     }

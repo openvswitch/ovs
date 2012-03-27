@@ -363,6 +363,7 @@ dump_transaction(const char *vconn_name, struct ofpbuf *request)
     open_vconn(vconn_name, &vconn);
     run(vconn_transact(vconn, request, &reply), "talking to %s", vconn_name);
     ofp_print(stdout, reply->data, reply->size, verbosity + 1);
+    ofpbuf_delete(reply);
     vconn_close(vconn);
 }
 
@@ -1135,6 +1136,7 @@ do_packet_out(int argc, char *argv[])
         ofpbuf_delete(packet);
     }
     vconn_close(vconn);
+    ofpbuf_uninit(&actions);
 }
 
 static void
@@ -1413,6 +1415,7 @@ fte_free_all(struct classifier *cls)
         classifier_remove(cls, &fte->rule);
         fte_free(fte);
     }
+    classifier_destroy(cls);
 }
 
 /* Searches 'cls' for an FTE matching 'rule', inserting a new one if

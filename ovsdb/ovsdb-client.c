@@ -885,10 +885,15 @@ dump_table(const struct ovsdb_table_schema *ts, struct json_array *rows)
             struct cell *cell = table_add_cell(&t);
             cell->json = ovsdb_datum_to_json(&data[y][x], &columns[x]->type);
             cell->type = &columns[x]->type;
+            ovsdb_datum_destroy(&data[y][x], &columns[x]->type);
         }
+        free(data[y]);
     }
     table_print(&t, &table_style);
     table_destroy(&t);
+
+    free(data);
+    free(columns);
 }
 
 static void
@@ -957,6 +962,10 @@ do_dump(struct jsonrpc *rpc, const char *database,
 
         dump_table(ts, &rows->u.array);
     }
+
+    jsonrpc_msg_destroy(reply);
+    free(tables);
+    ovsdb_schema_destroy(schema);
 }
 
 static void
