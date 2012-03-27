@@ -447,7 +447,7 @@ class Idl:
     def __txn_abort_all(self):
         while self._outstanding_txns:
             txn = self._outstanding_txns.popitem()[1]
-            txn._status = Transaction.AGAIN_WAIT
+            txn._status = Transaction.TRY_AGAIN
 
     def __txn_process_reply(self, msg):
         txn = self._outstanding_txns.pop(msg.id, None)
@@ -567,9 +567,7 @@ class Row(object):
         if 'column_name' changed in this row (or if this row was deleted)
         between the time that the IDL originally read its contents and the time
         that the transaction commits, then the transaction aborts and
-        Transaction.commit() returns Transaction.AGAIN_WAIT or
-        Transaction.AGAIN_NOW (depending on whether the database change has
-        already been received).
+        Transaction.commit() returns Transaction.TRY_AGAIN.
 
         The intention is that, to ensure that no transaction commits based on
         dirty reads, an application should call Row.verify() on each data item
@@ -628,12 +626,10 @@ class Transaction(object):
     INCOMPLETE = "incomplete"    # Commit in progress, please wait.
     ABORTED = "aborted"          # ovsdb_idl_txn_abort() called.
     SUCCESS = "success"          # Commit successful.
-    AGAIN_WAIT = "wait then try again"
-                                 # Commit failed because a "verify" operation
+    TRY_AGAIN = "try again"      # Commit failed because a "verify" operation
                                  # reported an inconsistency, due to a network
                                  # problem, or other transient failure.  Wait
                                  # for a change, then try again.
-    AGAIN_NOW = "try again now"  # Same as AGAIN_WAIT but try again right away.
     NOT_LOCKED = "not locked"    # Server hasn't given us the lock yet.
     ERROR = "error"              # Commit failed due to a hard error.
 
@@ -839,7 +835,7 @@ class Transaction(object):
                 self.idl._outstanding_txns[self._request_id] = self
                 self._status = Transaction.INCOMPLETE
             else:
-                self._status = Transaction.AGAIN_WAIT
+                self._status = Transaction.TRY_AGAIN
 
         self.__disassemble()
         return self._status
@@ -994,10 +990,7 @@ class Transaction(object):
             elif lock_errors:
                 self._status = Transaction.NOT_LOCKED
             elif soft_errors:
-                if self._commit_seqno == self.idl.change_seqno:
-                    self._status = Transaction.AGAIN_WAIT
-                else:
-                    self._status = Transaction.AGAIN_NOW
+                self._status = Transaction.TRY_AGAIN
             else:
                 self._status = Transaction.SUCCESS
 

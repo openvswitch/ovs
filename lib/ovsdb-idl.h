@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010, 2011 Nicira Networks.
+/* Copyright (c) 2009, 2010, 2011, 2012 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -47,7 +47,7 @@ struct ovsdb_idl *ovsdb_idl_create(const char *remote,
                                    bool monitor_everything_by_default);
 void ovsdb_idl_destroy(struct ovsdb_idl *);
 
-bool ovsdb_idl_run(struct ovsdb_idl *);
+void ovsdb_idl_run(struct ovsdb_idl *);
 void ovsdb_idl_wait(struct ovsdb_idl *);
 
 void ovsdb_idl_set_lock(struct ovsdb_idl *, const char *lock_name);
@@ -66,9 +66,9 @@ void ovsdb_idl_force_reconnect(struct ovsdb_idl *);
  * always appear to the client to be the default value for its type.
  *
  * If OVSDB_IDL_MONITOR is set, then the column is replicated.  Its value will
- * reflect the value in the database.  If OVSDB_IDL_ALERT is also set, then
- * ovsdb_idl_run() will return "true", and the value returned by
- * ovsdb_idl_get_seqno() will change, when the column's value changes.
+ * reflect the value in the database.  If OVSDB_IDL_ALERT is also set, then the
+ * value returned by ovsdb_idl_get_seqno() will change when the column's value
+ * changes.
  *
  * The possible mode combinations are:
  *
@@ -120,11 +120,10 @@ enum ovsdb_idl_txn_status {
     TXN_INCOMPLETE,             /* Commit in progress, please wait. */
     TXN_ABORTED,                /* ovsdb_idl_txn_abort() called. */
     TXN_SUCCESS,                /* Commit successful. */
-    TXN_AGAIN_WAIT,             /* Commit failed because a "verify" operation
+    TXN_TRY_AGAIN,              /* Commit failed because a "verify" operation
                                  * reported an inconsistency, due to a network
                                  * problem, or other transient failure.  Wait
                                  * for a change, then try again. */
-    TXN_AGAIN_NOW,              /* Same as above but try again immediately. */
     TXN_NOT_LOCKED,             /* Server hasn't given us the lock yet. */
     TXN_ERROR                   /* Commit failed due to a hard error. */
 };

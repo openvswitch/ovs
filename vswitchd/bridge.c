@@ -129,6 +129,9 @@ static struct hmap all_bridges = HMAP_INITIALIZER(&all_bridges);
 /* OVSDB IDL used to obtain configuration. */
 static struct ovsdb_idl *idl;
 
+/* Most recently processed IDL sequence number. */
+static unsigned int idl_seqno;
+
 /* Each time this timer expires, the bridge fetches systems and interface
  * statistics and pushes them into the database. */
 #define STATS_INTERVAL (5 * 1000) /* In milliseconds. */
@@ -248,6 +251,7 @@ bridge_init(const char *remote)
 {
     /* Create connection to database. */
     idl = ovsdb_idl_create(remote, &ovsrec_idl_class, true);
+    idl_seqno = ovsdb_idl_get_seqno(idl);
     ovsdb_idl_set_lock(idl, "ovs_vswitchd");
 
     ovsdb_idl_omit_alert(idl, &ovsrec_open_vswitch_col_cur_cfg);
@@ -1868,11 +1872,10 @@ bridge_run(void)
     const struct ovsrec_open_vswitch *cfg;
 
     bool vlan_splinters_changed;
-    bool database_changed;
     struct bridge *br;
 
     /* (Re)configure if necessary. */
-    database_changed = ovsdb_idl_run(idl);
+    ovsdb_idl_run(idl);
     if (ovsdb_idl_is_lock_contended(idl)) {
         static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
         struct bridge *br, *next_br;
@@ -1919,7 +1922,8 @@ bridge_run(void)
         }
     }
 
-    if (database_changed || vlan_splinters_changed) {
+    if (ovsdb_idl_get_seqno(idl) != idl_seqno || vlan_splinters_changed) {
+        idl_seqno = ovsdb_idl_get_seqno(idl);
         if (cfg) {
             struct ovsdb_idl_txn *txn = ovsdb_idl_txn_create(idl);
 

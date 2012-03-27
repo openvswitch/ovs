@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011 Nicira Networks.
+ * Copyright (c) 2009, 2010, 2011, 2012 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1893,7 +1893,11 @@ do_idl(int argc, char *argv[])
             arg++;
         } else {
             /* Wait for update. */
-            while (ovsdb_idl_get_seqno(idl) == seqno && !ovsdb_idl_run(idl)) {
+            for (;;) {
+                ovsdb_idl_run(idl);
+                if (ovsdb_idl_get_seqno(idl) != seqno) {
+                    break;
+                }
                 jsonrpc_run(rpc);
 
                 ovsdb_idl_wait(idl);
@@ -1933,7 +1937,11 @@ do_idl(int argc, char *argv[])
     if (rpc) {
         jsonrpc_close(rpc);
     }
-    while (ovsdb_idl_get_seqno(idl) == seqno && !ovsdb_idl_run(idl)) {
+    for (;;) {
+        ovsdb_idl_run(idl);
+        if (ovsdb_idl_get_seqno(idl) != seqno) {
+            break;
+        }
         ovsdb_idl_wait(idl);
         poll_block();
     }

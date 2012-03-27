@@ -270,32 +270,12 @@ ovsdb_idl_clear(struct ovsdb_idl *idl)
     }
 }
 
-/* Processes a batch of messages from the database server on 'idl'.  Returns
- * true if the database as seen through 'idl' changed, false if it did not
- * change.  The initial fetch of the entire contents of the remote database is
- * considered to be one kind of change.  If 'idl' has been configured to
- * acquire a database lock (with ovsdb_idl_set_lock()), then successfully
- * acquiring the lock is also considered to be a change.
- *
- * When this function returns false, the client may continue to use any data
- * structures it obtained from 'idl' in the past.  But when it returns true,
- * the client must not access any of these data structures again, because they
- * could have freed or reused for other purposes.
- *
- * This function can return occasional false positives, that is, report that
- * the database changed even though it didn't.  This happens if the connection
- * to the database drops and reconnects, which causes the database contents to
- * be reloaded even if they didn't change.  (It could also happen if the
- * database server sends out a "change" that reflects what we already thought
- * was in the database, but the database server is not supposed to do that.)
- *
- * As an alternative to checking the return value, the client may check for
- * changes in the value returned by ovsdb_idl_get_seqno().
- */
-bool
+/* Processes a batch of messages from the database server on 'idl'.  This may
+ * cause the IDL's contents to change.  The client may check for that with
+ * ovsdb_idl_get_seqno(). */
+void
 ovsdb_idl_run(struct ovsdb_idl *idl)
 {
-    unsigned int initial_change_seqno = idl->change_seqno;
     int i;
 
     assert(!idl->txn);
@@ -366,8 +346,6 @@ ovsdb_idl_run(struct ovsdb_idl *idl)
         }
         jsonrpc_msg_destroy(msg);
     }
-
-    return initial_change_seqno != idl->change_seqno;
 }
 
 /* Arranges for poll_block() to wake up when ovsdb_idl_run() has something to
@@ -1179,10 +1157,8 @@ ovsdb_idl_txn_status_to_string(enum ovsdb_idl_txn_status status)
         return "aborted";
     case TXN_SUCCESS:
         return "success";
-    case TXN_AGAIN_WAIT:
-        return "wait then try again";
-    case TXN_AGAIN_NOW:
-        return "try again now";
+    case TXN_TRY_AGAIN:
+        return "try again";
     case TXN_NOT_LOCKED:
         return "not locked";
     case TXN_ERROR:
@@ -1596,7 +1572,7 @@ ovsdb_idl_txn_commit(struct ovsdb_idl_txn *txn)
                     json_hash(txn->request_id, 0));
         txn->status = TXN_INCOMPLETE;
     } else {
-        txn->status = TXN_AGAIN_WAIT;
+        txn->status = TXN_TRY_AGAIN;
     }
 
     ovsdb_idl_txn_disassemble(txn);
@@ -1902,7 +1878,7 @@ ovsdb_idl_txn_abort_all(struct ovsdb_idl *idl)
     struct ovsdb_idl_txn *txn;
 
     HMAP_FOR_EACH (txn, hmap_node, &idl->outstanding_txns) {
-        ovsdb_idl_txn_complete(txn, TXN_AGAIN_WAIT);
+        ovsdb_idl_txn_complete(txn, TXN_TRY_AGAIN);
     }
 }
 
@@ -2103,9 +2079,7 @@ ovsdb_idl_txn_process_reply(struct ovsdb_idl *idl,
 
         status = (hard_errors ? TXN_ERROR
                   : lock_errors ? TXN_NOT_LOCKED
-                  : soft_errors ? (txn->commit_seqno == idl->change_seqno
-                                   ? TXN_AGAIN_WAIT
-                                   : TXN_AGAIN_NOW)
+                  : soft_errors ? TXN_TRY_AGAIN
                   : TXN_SUCCESS);
     }
 
