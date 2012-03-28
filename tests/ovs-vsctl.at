@@ -871,6 +871,7 @@ VSCTL_CHECK_FIND([other-config:x{>}x], [])
 VSCTL_CHECK_FIND([other-config:x{>}""], [])
 VSCTL_CHECK_FIND([other-config:x{>}y], [])
 VSCTL_CHECK_FIND([other-config:x{>}z], [])
+OVS_VSCTL_CLEANUP
 AT_CLEANUP
 
 AT_SETUP([database commands -- wait-until immediately true])

@@ -72,4 +72,6 @@ AT_CHECK([ovs_vsctl get interface vif1.0 external-ids], [0],
   [{attached-mac="00:11:22:33:44:55", iface-id="custom iface ID", iface-status=active, vm-id="custom vm ID", xs-network-uuid="9b66c68b-a74e-4d34-89a5-20a8ab352d1e", xs-vif-uuid="6ab1b260-398e-49ba-827b-c7696108964c", xs-vm-uuid="fcb8a3f6-dc04-41d2-8b8a-55afd2b755b8"}
 ])
 
+OVSDB_SERVER_SHUTDOWN
+
 AT_CLEANUP

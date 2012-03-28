@@ -527,4 +527,5 @@ ovs-appctl -t ovs-ofctl ofctl/send 0104001400000002000023200000000a00000001
 check_async 7 OFPR_ACTION OFPPR_ADD
 
 ovs-appctl -t ovs-ofctl exit
+OVS_VSWITCHD_STOP
 AT_CLEANUP
