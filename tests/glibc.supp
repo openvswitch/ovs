@@ -1,0 +1,16 @@
+# suppress what appear to unavoidable error reports from glibc
+
+{
+   timer_create
+   Memcheck:Leak
+   fun:malloc
+   fun:timer_create
+}
+
+{
+   timer_create
+   Memcheck:Param
+   timer_create(evp)
+   fun:timer_create
+}
+
