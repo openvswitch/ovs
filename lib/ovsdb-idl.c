@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010, 2011 Nicira Networks.
+/* Copyright (c) 2009, 2010, 2011, 2012 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1718,6 +1718,7 @@ ovsdb_idl_txn_write(const struct ovsdb_idl_row *row_,
     size_t column_idx;
 
     if (ovsdb_idl_row_is_synthetic(row)) {
+        ovsdb_datum_destroy(datum, &column->type);
         return;
     }
 
