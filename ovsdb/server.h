@@ -1,4 +1,4 @@
-/* Copyright (c) 2011 Nicira Networks
+/* Copyright (c) 2011, 2012 Nicira Networks
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,9 +39,9 @@ struct ovsdb_lock_waiter *ovsdb_session_get_lock_waiter(
  * A lock always has one or more "lock waiters" kept on a list.  The waiter at
  * the head of the list owns the lock. */
 struct ovsdb_lock {
+    struct hmap_node hmap_node;  /* In ovsdb_server's "locks" hmap. */
     struct ovsdb_server *server; /* The containing server. */
     char *name;                  /* Unique name. */
-    struct hmap_node hmap_node;  /* In ovsdb_server's "locks" hmap. */
     struct list waiters;         /* Contains "struct ovsdb_lock_waiter"s. */
 };
 
@@ -55,14 +55,14 @@ enum ovsdb_lock_mode {
 
 /* A session's request for a database lock. */
 struct ovsdb_lock_waiter {
+    struct hmap_node session_node; /* In ->session->locks's hmap. */
+    struct ovsdb_lock *lock;    /* The lock being waited for. */
+
     enum ovsdb_lock_mode mode;
     char *lock_name;
 
-    struct ovsdb_lock *lock;    /* The lock being waited for. */
-    struct list lock_node;      /* In ->lock->waiters's list. */
-
     struct ovsdb_session *session;
-    struct hmap_node session_node; /* In ->session->locks's hmap. */
+    struct list lock_node;      /* In ->lock->waiters's list. */
 };
 
 struct ovsdb_session *ovsdb_lock_waiter_remove(struct ovsdb_lock_waiter *);

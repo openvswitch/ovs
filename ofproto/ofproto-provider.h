@@ -36,10 +36,10 @@ struct ofputil_flow_mod;
  * With few exceptions, ofproto implementations may look at these fields but
  * should not modify them. */
 struct ofproto {
+    struct hmap_node hmap_node; /* In global 'all_ofprotos' hmap. */
     const struct ofproto_class *ofproto_class;
     char *type;                 /* Datapath type. */
     char *name;                 /* Datapath name. */
-    struct hmap_node hmap_node; /* In global 'all_ofprotos' hmap. */
 
     /* Settings. */
     uint64_t fallback_dpid;     /* Datapath ID if no better choice found. */
@@ -94,8 +94,8 @@ struct ofport *ofproto_get_port(const struct ofproto *, uint16_t ofp_port);
  * With few exceptions, ofproto implementations may look at these fields but
  * should not modify them. */
 struct ofport {
-    struct ofproto *ofproto;    /* The ofproto that contains this port. */
     struct hmap_node hmap_node; /* In struct ofproto's "ports" hmap. */
+    struct ofproto *ofproto;    /* The ofproto that contains this port. */
     struct netdev *netdev;
     struct ofputil_phy_port pp;
     uint16_t ofp_port;          /* OpenFlow port number. */
@@ -156,8 +156,8 @@ struct oftable {
  * With few exceptions, ofproto implementations may look at these fields but
  * should not modify them. */
 struct rule {
-    struct ofproto *ofproto;     /* The ofproto that contains this rule. */
     struct list ofproto_node;    /* Owned by ofproto base code. */
+    struct ofproto *ofproto;     /* The ofproto that contains this rule. */
     struct cls_rule cr;          /* In owning ofproto's classifier. */
 
     struct ofoperation *pending; /* Operation now in progress, if nonnull. */

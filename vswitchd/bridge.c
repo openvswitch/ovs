@@ -87,8 +87,8 @@ struct mirror {
 };
 
 struct port {
-    struct bridge *bridge;
     struct hmap_node hmap_node; /* Element in struct bridge's "ports" hmap. */
+    struct bridge *bridge;
     char *name;
 
     const struct ovsrec_port *cfg;

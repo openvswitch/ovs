@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010, 2011 Nicira Networks
+/* Copyright (c) 2009, 2010, 2011, 2012 Nicira Networks
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,8 +43,8 @@ struct ovsdb_weak_ref {
 
 /* A row in a database table. */
 struct ovsdb_row {
-    struct ovsdb_table *table;     /* Table to which this belongs. */
     struct hmap_node hmap_node;    /* Element in ovsdb_table's 'rows' hmap. */
+    struct ovsdb_table *table;     /* Table to which this belongs. */
     struct ovsdb_txn_row *txn_row; /* Transaction that row is in, if any. */
 
     /* Weak references. */

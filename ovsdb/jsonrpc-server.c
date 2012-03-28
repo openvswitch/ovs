@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010, 2011 Nicira Networks
+/* Copyright (c) 2009, 2010, 2011, 2012 Nicira Networks
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -295,9 +295,9 @@ ovsdb_jsonrpc_server_wait(struct ovsdb_jsonrpc_server *svr)
 /* JSON-RPC database server session. */
 
 struct ovsdb_jsonrpc_session {
+    struct list node;           /* Element in remote's sessions list. */
     struct ovsdb_session up;
     struct ovsdb_jsonrpc_remote *remote;
-    struct list node;           /* Element in remote's sessions list. */
 
     /* Triggers. */
     struct hmap triggers;       /* Hmap of "struct ovsdb_jsonrpc_trigger"s. */

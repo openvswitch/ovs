@@ -145,8 +145,8 @@ static void update_mirror_stats(struct ofproto_dpif *ofproto,
                                 uint64_t packets, uint64_t bytes);
 
 struct ofbundle {
-    struct ofproto_dpif *ofproto; /* Owning ofproto. */
     struct hmap_node hmap_node; /* In struct ofproto's "bundles" hmap. */
+    struct ofproto_dpif *ofproto; /* Owning ofproto. */
     void *aux;                  /* Key supplied by ofproto's client. */
     char *name;                 /* Identifier for log messages. */
 
