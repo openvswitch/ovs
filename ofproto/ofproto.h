@@ -348,7 +348,8 @@ int ofproto_port_get_cfm_fault(const struct ofproto *, uint16_t ofp_port);
 int ofproto_port_get_cfm_remote_mpids(const struct ofproto *,
                                       uint16_t ofp_port, const uint64_t **rmps,
                                       size_t *n_rmps);
-
+int ofproto_port_get_cfm_health(const struct ofproto *ofproto,
+                                uint16_t ofp_port);
 void ofproto_get_ofproto_controller_info(const struct ofproto *, struct shash *);
 void ofproto_free_ofproto_controller_info(struct shash *);
 

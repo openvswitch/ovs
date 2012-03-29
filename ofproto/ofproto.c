@@ -2481,6 +2481,19 @@ ofproto_port_get_cfm_remote_mpids(const struct ofproto *ofproto,
             : -1);
 }
 
+/* Checks the health of the CFM for 'ofp_port' within 'ofproto'.  Returns an
+ * integer value between 0 and 100 to indicate the health of the port as a
+ * percentage which is the average of cfm health of all the remote_mpids or
+ * returns -1 if CFM is not enabled on 'ofport'. */
+int
+ofproto_port_get_cfm_health(const struct ofproto *ofproto, uint16_t ofp_port)
+{
+    struct ofport *ofport = ofproto_get_port(ofproto, ofp_port);
+    return (ofport && ofproto->ofproto_class->get_cfm_health
+            ? ofproto->ofproto_class->get_cfm_health(ofport)
+            : -1);
+}
+
 static enum ofperr
 handle_aggregate_stats_request(struct ofconn *ofconn,
                                const struct ofp_stats_msg *osm)

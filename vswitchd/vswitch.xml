@@ -1726,6 +1726,27 @@
         an <code>ovs-appctl</code> command.
       </column>
 
+      <column name="cfm_health">
+        <p>
+          Indicates the health of the interface as a percentage of CCM frames
+          received over 21 <ref column="other_config" key="cfm_interval"/>s.
+          The health of an interface is undefined if it is communicating with
+          more than one <ref column="cfm_remote_mpids"/>.  It reduces if
+          healthy heartbeats are not received at the expected rate, and
+          gradually improves as healthy heartbeats are received at the desired
+          rate. Every 21 <ref column="other_config" key="cfm_interval"/>s, the
+          health of the interface is refreshed.
+        </p>
+        <p>
+          As mentioned above, the faults can be triggered for several reasons.
+          The link health will deteriorate even if heartbeats are received but
+          they are reported to be unhealthy.  An unhealthy heartbeat in this
+          context is a heartbeat for which either some fault is set or is out
+          of sequence.  The interface health can be 100 only on receiving
+          healthy heartbeats at the desired rate.
+        </p>
+      </column>
+
       <column name="cfm_remote_mpids">
         When CFM is properly configured, Open vSwitch will occasionally
         receive CCM broadcasts.  These broadcasts contain the MPID of the
