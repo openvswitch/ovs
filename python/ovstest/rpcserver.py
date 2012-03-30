@@ -1,4 +1,4 @@
-# Copyright (c) 2011 Nicira Networks
+# Copyright (c) 2011, 2012 Nicira Networks
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,26 +16,36 @@
 rpcserver is an XML RPC server that allows RPC client to initiate tests
 """
 
+import exceptions
+import sys
+import xmlrpclib
+
 from twisted.internet import reactor
-from twisted.web import xmlrpc, server
 from twisted.internet.error import CannotListenError
-import udp
+from twisted.web import xmlrpc
+from twisted.web import server
+
 import tcp
-import args
+import udp
 import util
+import vswitch
 
 
 class TestArena(xmlrpc.XMLRPC):
     """
-    This class contains all the functions that ovstest will call
+    This class contains all the functions that ovs-test client will call
     remotely. The caller is responsible to use designated handleIds
     for designated methods (e.g. do not mix UDP and TCP handles).
     """
 
     def __init__(self):
-        xmlrpc.XMLRPC.__init__(self)
+        xmlrpc.XMLRPC.__init__(self, allowNone=True)
         self.handle_id = 1
         self.handle_map = {}
+        self.bridges = set()
+        self.pbridges = set()
+        self.ports = set()
+        self.request = None
 
     def __acquire_handle(self, value):
         """
@@ -58,6 +68,46 @@ class TestArena(xmlrpc.XMLRPC):
         """
         del self.handle_map[handle]
 
+    def cleanup(self):
+        """
+        Delete all remaining bridges and ports if ovs-test client did not had
+        a chance to remove them. It is necessary to call this function if
+        ovs-test server is abruptly terminated when doing the tests.
+        """
+        for port in self.ports:
+            # Remove ports that were added to existing bridges
+            vswitch.ovs_vsctl_del_port_from_bridge(port)
+
+        for bridge in self.bridges:
+            # Remove bridges that were added for L3 tests
+            vswitch.ovs_vsctl_del_bridge(bridge)
+
+        for pbridge in self.pbridges:
+            # Remove bridges that were added for VLAN tests
+            vswitch.ovs_vsctl_del_pbridge(pbridge[0], pbridge[1])
+
+    def render(self, request):
+        """
+        This method overrides the original XMLRPC.render method so that it
+        would be possible to get the XML RPC client IP address from the
+        request object.
+        """
+        self.request = request
+        return xmlrpc.XMLRPC.render(self, request)
+
+    def xmlrpc_get_my_address(self):
+        """
+        Returns the RPC client's IP address.
+        """
+        return self.request.getClientIP()
+
+    def xmlrpc_get_my_address_from(self, his_ip, his_port):
+        """
+        Returns the ovs-test server IP address that the other ovs-test server
+        with the given ip will see.
+        """
+        server1 = xmlrpclib.Server("http://%s:%u/" % (his_ip, his_port))
+        return server1.get_my_address()
 
     def xmlrpc_create_udp_listener(self, port):
         """
@@ -171,6 +221,103 @@ class TestArena(xmlrpc.XMLRPC):
             return -1
         return 0
 
+    def xmlrpc_create_test_bridge(self, bridge, iface):
+        """
+        This function creates a physical bridge from iface. It moves the
+        IP configuration from the physical interface to the bridge.
+        """
+        ret = vswitch.ovs_vsctl_add_bridge(bridge)
+        if ret == 0:
+            self.pbridges.add((bridge, iface))
+            util.interface_up(bridge)
+            (ip_addr, mask) = util.interface_get_ip(iface)
+            util.interface_assign_ip(bridge, ip_addr, mask)
+            util.move_routes(iface, bridge)
+            util.interface_assign_ip(iface, "0.0.0.0", "255.255.255.255")
+            ret = vswitch.ovs_vsctl_add_port_to_bridge(bridge, iface)
+            if ret == 0:
+                self.ports.add(iface)
+            else:
+                util.interface_assign_ip(iface, ip_addr, mask)
+                util.move_routes(bridge, iface)
+                vswitch.ovs_vsctl_del_bridge(bridge)
+
+        return ret
+
+    def xmlrpc_del_test_bridge(self, bridge, iface):
+        """
+        This function deletes the test bridge and moves its IP configuration
+        back to the physical interface.
+        """
+        ret = vswitch.ovs_vsctl_del_pbridge(bridge, iface)
+        self.pbridges.discard((bridge, iface))
+        return ret
+
+    def xmlrpc_get_iface_from_bridge(self, brname):
+        """
+        Tries to figure out physical interface from bridge.
+        """
+        return vswitch.ovs_get_physical_interface(brname)
+
+    def xmlrpc_create_bridge(self, brname):
+        """
+        Creates an OVS bridge.
+        """
+        ret = vswitch.ovs_vsctl_add_bridge(brname)
+        if ret == 0:
+            self.bridges.add(brname)
+        return ret
+
+    def xmlrpc_del_bridge(self, brname):
+        """
+        Deletes an OVS bridge.
+        """
+        ret = vswitch.ovs_vsctl_del_bridge(brname)
+        if ret == 0:
+            self.bridges.discard(brname)
+        return ret
+
+    def xmlrpc_is_ovs_bridge(self, bridge):
+        """
+        This function verifies whether given interface is an ovs bridge.
+        """
+        return vswitch.ovs_vsctl_is_ovs_bridge(bridge)
+
+    def xmlrpc_add_port_to_bridge(self, bridge, port):
+        """
+        Adds a port to the OVS bridge.
+        """
+        ret = vswitch.ovs_vsctl_add_port_to_bridge(bridge, port)
+        if ret == 0:
+            self.ports.add(port)
+        return ret
+
+    def xmlrpc_del_port_from_bridge(self, port):
+        """
+        Removes a port from OVS bridge.
+        """
+        ret = vswitch.ovs_vsctl_del_port_from_bridge(port)
+        if ret == 0:
+            self.ports.discard(port)
+        return ret
+
+    def xmlrpc_ovs_vsctl_set(self, table, record, column, key, value):
+        """
+        This function allows to alter OVS database.
+        """
+        return vswitch.ovs_vsctl_set(table, record, column, key, value)
+
+    def xmlrpc_interface_up(self, iface):
+        """
+        This function brings up given interface.
+        """
+        return util.interface_up(iface)
+
+    def xmlrpc_interface_assign_ip(self, iface, ip_address, mask):
+        """
+        This function allows to assing ip address to the given interface.
+        """
+        return util.interface_assign_ip(iface, ip_address, mask)
 
     def xmlrpc_get_interface(self, address):
         """
@@ -198,6 +345,17 @@ class TestArena(xmlrpc.XMLRPC):
 
 
 def start_rpc_server(port):
-    RPC_SERVER = TestArena()
-    reactor.listenTCP(port, server.Site(RPC_SERVER))
-    reactor.run()
+    """
+    This function creates a RPC server and adds it to the Twisted Reactor.
+    """
+    rpc_server = TestArena()
+    reactor.listenTCP(port, server.Site(rpc_server))
+    try:
+        print "Starting RPC server\n"
+        sys.stdout.flush()
+         # If this server was started from ovs-test client then we must flush
+         # STDOUT so that client would know that server is ready to accept
+         # XML RPC connections.
+        reactor.run()
+    finally:
+        rpc_server.cleanup()

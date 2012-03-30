@@ -8,6 +8,10 @@ post-v1.6.0
       Internetwork Control (0xc0).
     - Added the granular link health statistics, 'cfm_health', to an
       interface.
+    - ovs-test:
+        - Added support for spawning ovs-test server from the client.
+        - Now ovs-test is able to automatically create test bridges and ports.
+
 
 
 v1.6.0 - xx xxx xxxx

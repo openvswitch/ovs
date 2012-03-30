@@ -3,41 +3,47 @@
 .  ns
 .  IP "\\$1"
 ..
-.TH ovs\-test 1 "October 2011" "Open vSwitch" "Open vSwitch Manual"
+.TH ovs\-test 1 "April 2012" "Open vSwitch" "Open vSwitch Manual"
 .
 .SH NAME
-\fBovs\-test\fR \- check Linux drivers for performance and vlan problems
+\fBovs\-test\fR \- check Linux drivers for performance, vlan and L3 tunneling
+problems
 .
 .SH SYNOPSIS
 \fBovs\-test\fR \fB\-s\fR \fIport\fR
 .PP
-\fBovs\-test\fR \fB\-c\fR \fIserver1\fR
-\fIserver2\fR [\fB\-b\fR \fIbandwidth\fR]
+\fBovs\-test\fR \fB\-c\fR \fIserver1\fR \fIserver2\fR
+[\fB\-b\fR \fItargetbandwidth\fR] [\fB\-i\fR \fItestinterval\fR]
+[\fB\-d\fR]
+[\fB\-l\fR \fIvlantag\fR]
+[\fB\-t\fR \fItunnelmodes\fR]
 .so lib/common-syn.man
 .
 .SH DESCRIPTION
 The \fBovs\-test\fR program may be used to check for problems sending
-802.1Q traffic that Open vSwitch may uncover. These problems can
-occur when Open vSwitch is used to send 802.1Q traffic through physical
-interfaces running certain drivers of certain Linux kernel versions. To run a
-test, configure Open vSwitch to tag traffic originating from \fIserver1\fR and
-forward it to the \fIserver2\fR. On both servers run \fBovs\-test\fR
-in server mode. Then, on any other host, run the \fBovs\-test\fR in client
-mode. The client will connect to both \fBovs\-test\fR servers and schedule
-tests between them. \fBovs\-test\fR will perform UDP and TCP tests.
+802.1Q or GRE traffic that Open vSwitch may uncover. These problems,
+for example, can occur when Open vSwitch is used to send 802.1Q traffic
+through physical interfaces running certain drivers of certain Linux kernel
+versions. To run a test, configure IP addresses on \fIserver1\fR and
+\fIserver2\fR for interfaces you intended to test. These interfaces could
+also be already configured OVS bridges that have a physical interface attached
+to them. Then, on one of the nodes, run \fBovs\-test\fR in server mode and on
+the other node run it in client mode. The client will connect to
+\fBovs\-test\fR server and schedule tests between both of them. The
+\fBovs\-test\fR client will perform UDP and TCP tests.
 .PP
-UDP tests can report packet loss and achieved bandwidth, because UDP flow
-control is done inside \fBovs\-test\fR. It is also possible to specify target
-bandwidth for UDP. By default it is 1Mbit/s.
+UDP tests can report packet loss and achieved bandwidth for various
+datagram sizes. By default target bandwidth for UDP tests is 1Mbit/s.
 .PP
 TCP tests report only achieved bandwidth, because kernel TCP stack
 takes care of flow control and packet loss. TCP tests are essential to detect
-potential TSO related VLAN issues.
+potential TSO related issues.
 .PP
-To determine whether Open vSwitch is encountering any 802.1Q related problems,
+To determine whether Open vSwitch is encountering any problems,
 the user must compare packet loss and achieved bandwidth in a setup where
-traffic is being tagged against one where it is not. If in the tagged setup
-both servers are unable to communicate or the achieved bandwidth is lower,
+traffic is being directly sent and in one where it is not. If in the
+802.1Q or L3 tunneled tests both \fBovs\-test\fR processes are unable to
+communicate or the achieved bandwidth is much lower compared to direct setup,
 then, most likely, Open vSwitch has encountered a pre-existing kernel or
 driver bug.
 .PP
@@ -46,71 +52,87 @@ Some examples of the types of problems that may be encountered are:
 .
 .SS "Client Mode"
 An \fBovs\-test\fR client will connect to two \fBovs\-test\fR servers and
-will ask them to exchange traffic.
+will ask them to exchange test traffic. It is also possible to spawn an
+\fBovs\-test\fR server automatically from the client.
 .
 .SS "Server Mode"
 To conduct tests, two \fBovs\-test\fR servers must be running on two different
-hosts where client can connect. The actual test traffic is exchanged only
-between both \fBovs\-test\fR server test IP addresses. It is recommended that
-both servers have their test IP addresses in the same subnet, otherwise one
-will need to change routing so that the test traffic actually goes through the
-interface that he originally intended to test.
+hosts where the client can connect. The actual test traffic is exchanged only
+between both \fBovs\-test\fR servers. It is recommended that both servers have
+their IP addresses in the same subnet, otherwise one would have to make sure
+that routing is set up correctly.
 .
 .SH OPTIONS
 .
 .IP "\fB\-s \fIport\fR"
 .IQ "\fB\-\-server\fR \fIport\fR"
-Run in server mode and wait for a client to establish XML RPC Control
-Connection on TCP \fIport\fR. It is recommended to have ethtool installed on
-the server so that it could retrieve information about NIC driver.
+Run in server mode and wait for the client to establish XML RPC Control
+Connection on this TCP \fIport\fR. It is recommended to have \fBethtool\fR(8)
+installed on the server so that it could retrieve information about the NIC
+driver.
 .
 .IP "\fB\-c \fIserver1\fR \fIserver2\fR"
 .IQ "\fB\-\-client \fIserver1\fR \fIserver2\fR"
 Run in client mode and schedule tests between \fIserver1\fR and \fIserver2\fR,
-where each \fIserver\fR must be given in following format -
-ControlIP[:ControlPort][,TestIP[:TestPort]]. If TestIP is omitted then
-ovs-test server will use the ControlIP for testing purposes. ControlPort is
-TCP port where server will listen for incoming XML/RPC control
-connections to schedule tests (by default it is 15531). TestPort
-is port which will be used by server to listen for test traffic
-(by default it is 15532).
+where each \fIserver\fR must be given in the following format -
+\fIOuterIP[:OuterPort],InnerIP[/Mask][:InnerPort]\fR. The \fIOuterIP\fR must
+be already assigned to the physical interface which is going to be tested.
+This is the IP address where client will try to establish XML RPC connection.
+If \fIOuterIP\fR is 127.0.0.1 then client will automatically spawn a local
+instance of \fBovs\-test\fR server. \fIOuterPort\fR is TCP port where server
+is listening for incoming XML/RPC control connections to schedule tests (by
+default it is 15531). The \fBovs\-test\fR will automatically assign
+\fIInnerIP[/Mask]\fR to the interfaces that will be created on the fly for
+testing purposes. It is important that \fIInnerIP[/Mask]\fR does not interfere
+with already existing IP addresses on both \fBovs\-test\fR servers and client.
+\fIInnerPort\fR is port which will be used by server to listen for test
+traffic that will be encapsulated (by default it is 15532).
 .
-.IP "\fB\-b \fIbandwidth\fR"
-.IQ "\fB\-\-bandwidth\fR \fIbandwidth\fR"
-Target bandwidth for UDP tests. The \fIbandwidth\fR must be given in bits per
-second. It is possible to use postfix M or K to alter the target bandwidth
-magnitude.
+.IP "\fB\-b \fItargetbandwidth\fR"
+.IQ "\fB\-\-bandwidth\fR \fItargetbandwidth\fR"
+Target bandwidth for UDP tests. The \fItargetbandwidth\fR must be given in
+bits per second. It is possible to use postfix M or K to alter the target
+bandwidth magnitude.
+.
+.IP "\fB\-i \fItestinterval\fR"
+.IQ "\fB\-\-interval\fR \fItestinterval\fR"
+How long each test should run. By default 5 seconds.
 .
 .so lib/common.man
+.
+.SH "Test Modes"
+The following test modes are supported by \fBovs\-test\fR. It is possible
+to combine multiple of them in a single \fBovs\-test\fR invocation.
+.
+.IP "\fB\-d \fR"
+.IQ "\fB\-\-direct\fR"
+Perform direct tests between both \fIOuterIP\fR addresses. These tests could
+be used as a reference to compare 802.1Q or L3 tunneling test results.
+.
+.IP "\fB\-l \fIvlantag\fR"
+.IQ "\fB\-\-vlan\-tag\fR \fIvlantag\fR"
+Perform 802.1Q tests between both servers. These tests will create a temporary
+OVS bridge, if necessary, and attach a VLAN tagged port to it for testing
+purposes.
+.
+.IP "\fB\-t \fItunnelmodes\fR"
+.IQ "\fB\-\-tunnel\-modes\fR \fItunnelmodes\fR"
+Perform L3 tunneling tests. The given argument is a comma separated string
+that specifies all the L3 tunnel modes that should be tested (e.g. gre). The L3
+tunnels are terminated on interface that has the \fIOuterIP\fR address
+assigned.
+.
 .SH EXAMPLES
 .PP
-Set up a bridge which forwards traffic originating from \fB1.2.3.4\fR out
-\fBeth1\fR with VLAN tag 10.
+On host 1.2.3.4 start \fBovs\-test\fR in server mode:
 .IP
-.B ovs\-vsctl \-\- add\-br vlan\-br \(rs
-.IP
-.B \-\- add\-port vlan\-br eth1 \(rs
-.IP
-.B \-\- add\-port vlan\-br vlan\-br\-tag tag=10 \(rs
-.IP
-.B \-\- set Interface vlan\-br\-tag type=internal
-.IP
-.B ifconfig vlan\-br\-tag up 1.2.3.4
+.B ovs\-test \-s 15531
 .
 .PP
-On two different hosts start \fBovs\-test\fR in server mode and tell them to
-listen on port 15531 for incoming client control connections:
+On host 1.2.3.5 start \fBovs\-test\fR in client mode and do direct, VLAN and
+GRE tests between both nodes:
 .IP
-.B 1.2.3.4: ovs\-test \-s 15531
-.IP
-.B 1.2.3.5: ovs\-test \-s 15531
-.
-.PP
-On any other host start \fBovs\-test\fR in client mode and ask it to connect
-to those two servers - one at 1.2.3.4 and another at 1.2.3.5 (by default
-client will use TCP port 15531 to establish control channel).
-.IP
-.B ovs\-test -c 1.2.3.4 1.2.3.5
+.B ovs\-test \-c 127.0.0.1,1.1.1.1/30 1.2.3.4,1.1.1.2/30 -d -l 123 -t gre
 .
 .SH SEE ALSO
 .

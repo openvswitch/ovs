@@ -6,7 +6,8 @@ ovstest_pyfiles = \
 	python/ovstest/rpcserver.py \
 	python/ovstest/tcp.py \
 	python/ovstest/udp.py \
-	python/ovstest/util.py
+	python/ovstest/util.py \
+	python/ovstest/vswitch.py
 
 ovs_pyfiles = \
 	python/ovs/__init__.py \

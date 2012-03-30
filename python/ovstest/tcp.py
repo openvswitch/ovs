@@ -1,4 +1,4 @@
-# Copyright (c) 2011 Nicira Networks
+# Copyright (c) 2011, 2012 Nicira Networks
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -29,14 +29,10 @@ class TcpListenerConnection(Protocol):
     def __init__(self):
         self.stats = 0
 
-    def connectionMade(self):
-        print "Started TCP Listener connection"
-
     def dataReceived(self, data):
         self.stats += len(data)
 
     def connectionLost(self, reason):
-        print "Stopped TCP Listener connection"
         self.factory.stats += self.stats
 
 
@@ -50,16 +46,10 @@ class TcpListenerFactory(Factory):
     def __init__(self):
         self.stats = 0
 
-    def startFactory(self):
-        print "Starting TCP listener factory"
-
-    def stopFactory(self):
-        print "Stopping TCP listener factory"
-
     def getResults(self):
         """ returns the number of bytes received as string"""
-        #XML RPC does not support 64bit int (http://bugs.python.org/issue2985)
-        #so we have to convert the amount of bytes into a string
+        # XML RPC does not support 64bit int (http://bugs.python.org/issue2985)
+        # so we have to convert the amount of bytes into a string
         return str(self.stats)
 
 
@@ -104,17 +94,12 @@ class TcpSenderConnection(Protocol):
     """
 
     def connectionMade(self):
-        print "Started TCP sender connection"
         producer = Producer(self, self.factory.duration)
         self.transport.registerProducer(producer, True)
         producer.resumeProducing()
 
     def dataReceived(self, data):
-        print "Sender received data!", data
         self.transport.loseConnection()
-
-    def connectionLost(self, reason):
-        print "Stopped TCP sender connection"
 
 
 class TcpSenderFactory(ClientFactory):
@@ -127,12 +112,6 @@ class TcpSenderFactory(ClientFactory):
     def __init__(self, duration):
         self.duration = duration
         self.stats = 0
-
-    def startFactory(self):
-        print "Starting TCP sender factory"
-
-    def stopFactory(self):
-        print "Stopping TCP sender factory"
 
     def getResults(self):
         """Returns amount of bytes sent to the Listener (as a string)"""

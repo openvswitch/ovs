@@ -1,4 +1,4 @@
-# Copyright (c) 2011 Nicira Networks
+# Copyright (c) 2011, 2012 Nicira Networks
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,9 +16,12 @@
 ovsudp contains listener and sender classes for UDP protocol
 """
 
+import array
+import struct
+import time
+
 from twisted.internet.protocol import DatagramProtocol
 from twisted.internet.task import LoopingCall
-import array, struct, time
 
 
 class UdpListener(DatagramProtocol):
@@ -28,18 +31,12 @@ class UdpListener(DatagramProtocol):
     def __init__(self):
         self.stats = []
 
-    def startProtocol(self):
-        print "Starting UDP listener"
-
-    def stopProtocol(self):
-        print "Stopping UDP listener"
-
     def datagramReceived(self, data, (_1, _2)):
         """This function is called each time datagram is received"""
         try:
             self.stats.append(struct.unpack_from("Q", data, 0))
         except struct.error:
-            pass #ignore packets that are less than 8 bytes of size
+            pass  # ignore packets that are less than 8 bytes of size
 
     def getResults(self):
         """Returns number of packets that were actually received"""
@@ -51,7 +48,7 @@ class UdpSender(DatagramProtocol):
     Class that will send UDP packets to UDP Listener
     """
     def __init__(self, host, count, size, duration):
-        #LoopingCall does not know whether UDP socket is actually writable
+        # LoopingCall does not know whether UDP socket is actually writable
         self.looper = None
         self.host = host
         self.count = count
@@ -61,13 +58,11 @@ class UdpSender(DatagramProtocol):
         self.data = array.array('c', 'X' * size)
 
     def startProtocol(self):
-        print "Starting UDP sender"
         self.looper = LoopingCall(self.sendData)
         period = self.duration / float(self.count)
         self.looper.start(period , now = False)
 
     def stopProtocol(self):
-        print "Stopping UDP sender"
         if (self.looper is not None):
             self.looper.stop()
             self.looper = None
