@@ -209,6 +209,21 @@ enum ofp_capabilities {
                                       pkts. */
 };
 
+/* Why is this packet being sent to the controller? */
+enum ofp_packet_in_reason {
+    OFPR_NO_MATCH,          /* No matching flow. */
+    OFPR_ACTION,            /* Action explicitly output to controller. */
+    OFPR_INVALID_TTL        /* Packet has invalid TTL. */,
+    OFPR_N_REASONS
+};
+
+/* Why was this flow removed? */
+enum ofp_flow_removed_reason {
+    OFPRR_IDLE_TIMEOUT,         /* Flow idle time exceeded idle_timeout. */
+    OFPRR_HARD_TIMEOUT,         /* Time exceeded hard_timeout. */
+    OFPRR_DELETE                /* Evicted by a DELETE flow mod. */
+};
+
 /* What changed about the physical port */
 enum ofp_port_reason {
     OFPPR_ADD,              /* The port was added. */

@@ -178,14 +178,6 @@ struct ofp10_port_mod {
 };
 OFP_ASSERT(sizeof(struct ofp10_port_mod) == 32);
 
-/* Why is this packet being sent to the controller? */
-enum ofp_packet_in_reason {
-    OFPR_NO_MATCH,          /* No matching flow. */
-    OFPR_ACTION,            /* Action explicitly output to controller. */
-    OFPR_INVALID_TTL        /* Packet has invalid TTL. */,
-    OFPR_N_REASONS
-};
-
 /* Packet received on port (datapath -> controller). */
 struct ofp_packet_in {
     struct ofp_header header;
@@ -471,13 +463,6 @@ struct ofp_flow_mod {
                                             header. */
 };
 OFP_ASSERT(sizeof(struct ofp_flow_mod) == 72);
-
-/* Why was this flow removed? */
-enum ofp_flow_removed_reason {
-    OFPRR_IDLE_TIMEOUT,         /* Flow idle time exceeded idle_timeout. */
-    OFPRR_HARD_TIMEOUT,         /* Time exceeded hard_timeout. */
-    OFPRR_DELETE                /* Evicted by a DELETE flow mod. */
-};
 
 /* Flow removed (datapath -> controller). */
 struct ofp_flow_removed {
