@@ -19,5 +19,6 @@
 
 #include "openflow/openflow-1.0.h"
 #include "openflow/openflow-1.1.h"
+#include "openflow/openflow-1.2.h"
 
 #endif /* openflow/openflow.h */

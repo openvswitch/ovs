@@ -73,6 +73,7 @@
  */
 #define OFP10_VERSION   0x01
 #define OFP11_VERSION   0x02
+#define OFP12_VERSION   0x03
 
 #define OFP_MAX_TABLE_NAME_LEN 32
 #define OFP_MAX_PORT_NAME_LEN  16
@@ -189,7 +190,7 @@ struct ofp_switch_features {
     uint8_t pad[3];         /* Align to 64-bits. */
 
     /* Features. */
-    ovs_be32 capabilities;  /* OFPC_*, OFPC10_*, OFPC11_*. */
+    ovs_be32 capabilities;  /* OFPC_*, OFPC10_*, OFPC11_*, OFPC12_*. */
     ovs_be32 actions;       /* Bitmap of supported "ofp_action_type"s. */
 
     /* Followed by an array of struct ofp10_phy_port or struct ofp11_port
@@ -251,6 +252,7 @@ OFP_ASSERT(sizeof(struct ofp_port_status) == 16);
 enum ofp_match_type {
     OFPMT_STANDARD = 0,         /* The match fields defined in the ofp11_match
                                    structure apply */
+    OFPMT_OXM = 1,              /* OpenFlow Extensible Match */
 };
 
 #endif /* openflow/openflow-common.h */
