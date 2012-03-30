@@ -171,7 +171,7 @@ OFP_ASSERT(sizeof(struct ofp_queue_prop_header) == 8);
 /* Min-Rate queue property description. */
 struct ofp_queue_prop_min_rate {
     struct ofp_queue_prop_header prop_header; /* prop: OFPQT_MIN, len: 16. */
-    uint16_t rate;        /* In 1/10 of a percent; >1000 -> disabled. */
+    ovs_be16 rate;        /* In 1/10 of a percent; >1000 -> disabled. */
     uint8_t pad[6];       /* 64-bit alignment */
 };
 OFP_ASSERT(sizeof(struct ofp_queue_prop_min_rate) == 16);
