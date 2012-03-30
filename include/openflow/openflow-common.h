@@ -221,7 +221,8 @@ enum ofp_packet_in_reason {
 enum ofp_flow_removed_reason {
     OFPRR_IDLE_TIMEOUT,         /* Flow idle time exceeded idle_timeout. */
     OFPRR_HARD_TIMEOUT,         /* Time exceeded hard_timeout. */
-    OFPRR_DELETE                /* Evicted by a DELETE flow mod. */
+    OFPRR_DELETE,               /* Evicted by a DELETE flow mod. */
+    OFPRR_GROUP_DELETE          /* Group was removed. */
 };
 
 /* What changed about the physical port */
@@ -239,5 +240,17 @@ struct ofp_port_status {
     /* Followed by struct ofp10_phy_port or struct ofp11_port.  */
 };
 OFP_ASSERT(sizeof(struct ofp_port_status) == 16);
+
+/* The match type indicates the match structure (set of fields that compose the
+ * match) in use. The match type is placed in the type field at the beginning
+ * of all match structures. The "OpenFlow Extensible Match" type corresponds
+ * to OXM TLV format described below and must be supported by all OpenFlow
+ * switches. Extensions that define other match types may be published on the
+ * ONF wiki. Support for extensions is optional.
+ */
+enum ofp_match_type {
+    OFPMT_STANDARD = 0,         /* The match fields defined in the ofp11_match
+                                   structure apply */
+};
 
 #endif /* openflow/openflow-common.h */

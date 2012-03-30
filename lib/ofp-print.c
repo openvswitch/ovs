@@ -1025,6 +1025,8 @@ ofp_flow_removed_reason_to_string(enum ofp_flow_removed_reason reason)
         return "hard";
     case OFPRR_DELETE:
         return "delete";
+    case OFPRR_GROUP_DELETE:
+        return "group_delete";
     default:
         sprintf(s, "%d", (int) reason);
         return s;
