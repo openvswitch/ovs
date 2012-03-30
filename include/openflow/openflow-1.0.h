@@ -178,6 +178,25 @@ struct ofp10_port_mod {
 };
 OFP_ASSERT(sizeof(struct ofp10_port_mod) == 32);
 
+/* Query for port queue configuration. */
+struct ofp10_queue_get_config_request {
+    struct ofp_header header;
+    ovs_be16 port;          /* Port to be queried. Should refer
+                               to a valid physical port (i.e. < OFPP_MAX) */
+    uint8_t pad[2];
+    /* 32-bit alignment. */
+};
+OFP_ASSERT(sizeof(struct ofp10_queue_get_config_request) == 12);
+
+/* Queue configuration for a given port. */
+struct ofp10_queue_get_config_reply {
+    struct ofp_header header;
+    ovs_be16 port;
+    uint8_t pad[6];
+    /* struct ofp10_packet_queue queues[0]; List of configured queues. */
+};
+OFP_ASSERT(sizeof(struct ofp10_queue_get_config_reply) == 16);
+
 /* Packet received on port (datapath -> controller). */
 struct ofp_packet_in {
     struct ofp_header header;
