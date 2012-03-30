@@ -193,8 +193,8 @@ enum nx_hash_fields {
  */
 struct nx_flow_mod_table_id {
     struct ofp_header header;
-    uint32_t vendor;            /* NX_VENDOR_ID. */
-    uint32_t subtype;           /* NXT_FLOW_MOD_TABLE_ID. */
+    ovs_be32 vendor;            /* NX_VENDOR_ID. */
+    ovs_be32 subtype;           /* NXT_FLOW_MOD_TABLE_ID. */
     uint8_t set;                /* Nonzero to enable, zero to disable. */
     uint8_t pad[7];
 };
