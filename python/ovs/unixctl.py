@@ -55,10 +55,9 @@ def _unixctl_help(conn, unused_argv, unused_aux):
     conn.reply(reply)
 
 
-def _unixctl_version(conn, unused_argv, unused_aux):
+def _unixctl_version(conn, unused_argv, version):
     assert isinstance(conn, UnixctlConnection)
-    version = "%s (Open vSwitch) %s" % (ovs.util.PROGRAM_NAME,
-                                        ovs.version.VERSION)
+    version = "%s (Open vSwitch) %s" % (ovs.util.PROGRAM_NAME, version)
     conn.reply(version)
 
 
@@ -240,7 +239,12 @@ class UnixctlServer(object):
         self._listener = None
 
     @staticmethod
-    def create(path):
+    def create(path, version=None):
+        """Creates a new UnixctlServer which listens on a unixctl socket
+        created at 'path'.  If 'path' is None, the default path is chosen.
+        'version' contains the version of the server as reported by the unixctl
+        version command.  If None, ovs.version.VERSION is used."""
+
         assert path is None or isinstance(path, strtypes)
 
         if path is not None:
@@ -249,6 +253,9 @@ class UnixctlServer(object):
             path = "punix:%s/%s.%d.ctl" % (ovs.dirs.RUNDIR,
                                            ovs.util.PROGRAM_NAME, os.getpid())
 
+        if version is None:
+            version = ovs.version.VERSION
+
         error, listener = ovs.stream.PassiveStream.open(path)
         if error:
             ovs.util.ovs_error(error, "could not initialize control socket %s"
@@ -256,7 +263,7 @@ class UnixctlServer(object):
             return error, None
 
         command_register("help", "", 0, 0, _unixctl_help, None)
-        command_register("version", "", 0, 0, _unixctl_version, None)
+        command_register("version", "", 0, 0, _unixctl_version, version)
 
         return 0, UnixctlServer(listener)
 
