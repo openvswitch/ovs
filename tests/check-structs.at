@@ -11,7 +11,7 @@ m4_define([RUN_STRUCT_CHECKER],
 AT_SETUP([check struct tail padding])
 RUN_STRUCT_CHECKER(
 [struct xyz {
-    uint16_t x;
+    ovs_be16 x;
 };], 
   [1], [], 
   [test.h:3: warning: struct xyz needs 2 bytes of tail padding
@@ -21,8 +21,8 @@ AT_CLEANUP
 AT_SETUP([check struct internal alignment])
 RUN_STRUCT_CHECKER(
 [struct xyzzy {
-    uint16_t x;
-    uint32_t y;
+    ovs_be16 x;
+    ovs_be32 y;
 };], 
   [1], [], 
   [test.h:3: warning: struct xyzzy member y is 2 bytes short of 4-byte alignment
@@ -32,7 +32,7 @@ AT_CLEANUP
 AT_SETUP([check struct declared size])
 RUN_STRUCT_CHECKER(
 [struct wibble {
-    uint64_t z;
+    ovs_be64 z;
 };
 OFP_ASSERT(sizeof(struct wibble) == 12);
 ], 
@@ -44,11 +44,11 @@ AT_CLEANUP
 AT_SETUP([check wrong struct's declared size])
 RUN_STRUCT_CHECKER(
 [struct moo {
-    uint64_t bar;
+    ovs_be64 bar;
 };
 OFP_ASSERT(sizeof(struct moo) == 8);
 struct wibble {
-    uint64_t z;
+    ovs_be64 z;
 };
 OFP_ASSERT(sizeof(struct moo) == 8);
 ], [1], [], [test.h:8: warning: checking size of struct moo but struct wibble was most recently defined
