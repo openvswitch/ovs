@@ -1553,19 +1553,24 @@ int ovs_tnl_get_options(const struct vport *vport, struct sk_buff *skb)
 	const struct tnl_vport *tnl_vport = tnl_vport_priv(vport);
 	const struct tnl_mutable_config *mutable = rcu_dereference_rtnl(tnl_vport->mutable);
 
-	NLA_PUT_U32(skb, OVS_TUNNEL_ATTR_FLAGS, mutable->flags & TNL_F_PUBLIC);
-	NLA_PUT_BE32(skb, OVS_TUNNEL_ATTR_DST_IPV4, mutable->key.daddr);
+	if (nla_put_u32(skb, OVS_TUNNEL_ATTR_FLAGS,
+		      mutable->flags & TNL_F_PUBLIC) ||
+	    nla_put_be32(skb, OVS_TUNNEL_ATTR_DST_IPV4, mutable->key.daddr))
+		goto nla_put_failure;
 
-	if (!(mutable->flags & TNL_F_IN_KEY_MATCH))
-		NLA_PUT_BE64(skb, OVS_TUNNEL_ATTR_IN_KEY, mutable->key.in_key);
-	if (!(mutable->flags & TNL_F_OUT_KEY_ACTION))
-		NLA_PUT_BE64(skb, OVS_TUNNEL_ATTR_OUT_KEY, mutable->out_key);
-	if (mutable->key.saddr)
-		NLA_PUT_BE32(skb, OVS_TUNNEL_ATTR_SRC_IPV4, mutable->key.saddr);
-	if (mutable->tos)
-		NLA_PUT_U8(skb, OVS_TUNNEL_ATTR_TOS, mutable->tos);
-	if (mutable->ttl)
-		NLA_PUT_U8(skb, OVS_TUNNEL_ATTR_TTL, mutable->ttl);
+	if (!(mutable->flags & TNL_F_IN_KEY_MATCH) &&
+	    nla_put_be64(skb, OVS_TUNNEL_ATTR_IN_KEY, mutable->key.in_key))
+		goto nla_put_failure;
+	if (!(mutable->flags & TNL_F_OUT_KEY_ACTION) &&
+	    nla_put_be64(skb, OVS_TUNNEL_ATTR_OUT_KEY, mutable->out_key))
+		goto nla_put_failure;
+	if (mutable->key.saddr &&
+	    nla_put_be32(skb, OVS_TUNNEL_ATTR_SRC_IPV4, mutable->key.saddr))
+		goto nla_put_failure;
+	if (mutable->tos && nla_put_u8(skb, OVS_TUNNEL_ATTR_TOS, mutable->tos))
+		goto nla_put_failure;
+	if (mutable->ttl && nla_put_u8(skb, OVS_TUNNEL_ATTR_TTL, mutable->ttl))
+		goto nla_put_failure;
 
 	return 0;
 

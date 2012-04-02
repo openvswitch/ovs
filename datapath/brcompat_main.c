@@ -63,10 +63,12 @@ static struct sk_buff *brc_make_request(int op, const char *bridge,
 		goto error;
 
 	genlmsg_put(skb, 0, 0, &brc_genl_family, 0, op);
-	if (bridge)
-		NLA_PUT_STRING(skb, BRC_GENL_A_DP_NAME, bridge);
-	if (port)
-		NLA_PUT_STRING(skb, BRC_GENL_A_PORT_NAME, port);
+
+	if (bridge && nla_put_string(skb, BRC_GENL_A_DP_NAME, bridge))
+		goto nla_put_failure;
+	if (port && nla_put_string(skb, BRC_GENL_A_PORT_NAME, port))
+		goto nla_put_failure;
+
 	return skb;
 
 nla_put_failure:
@@ -288,8 +290,9 @@ static int brc_get_fdb_entries(struct net_device *dev, void __user *userbuf,
 	request = brc_make_request(BRC_GENL_C_FDB_QUERY, dev->name, NULL);
 	if (!request)
 		return -ENOMEM;
-	NLA_PUT_U64(request, BRC_GENL_A_FDB_COUNT, maxnum);
-	NLA_PUT_U64(request, BRC_GENL_A_FDB_SKIP, offset);
+	if (nla_put_u64(request, BRC_GENL_A_FDB_COUNT, maxnum) ||
+	    nla_put_u64(request, BRC_GENL_A_FDB_SKIP, offset))
+		goto nla_put_failure;
 
 	rtnl_unlock();
 	reply = brc_send_command(dev_net(dev), request, attrs);
@@ -401,7 +404,8 @@ static int brc_genl_query(struct sk_buff *skb, struct genl_info *info)
 		err = -ENOMEM;
 		goto err;
 	}
-	NLA_PUT_U32(ans_skb, BRC_GENL_A_MC_GROUP, brc_mc_group.id);
+	if (nla_put_u32(ans_skb, BRC_GENL_A_MC_GROUP, brc_mc_group.id))
+		goto nla_put_failure;
 
 	genlmsg_end(ans_skb, data);
 	return genlmsg_reply(ans_skb, info);

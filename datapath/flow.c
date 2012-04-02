@@ -1206,14 +1206,17 @@ int ovs_flow_to_nlattrs(const struct sw_flow_key *swkey, struct sk_buff *skb)
 	struct ovs_key_ethernet *eth_key;
 	struct nlattr *nla, *encap;
 
-	if (swkey->phy.priority)
-		NLA_PUT_U32(skb, OVS_KEY_ATTR_PRIORITY, swkey->phy.priority);
+	if (swkey->phy.priority &&
+	    nla_put_u32(skb, OVS_KEY_ATTR_PRIORITY, swkey->phy.priority))
+		goto nla_put_failure;
 
-	if (swkey->phy.tun_id != cpu_to_be64(0))
-		NLA_PUT_BE64(skb, OVS_KEY_ATTR_TUN_ID, swkey->phy.tun_id);
+	if (swkey->phy.tun_id != cpu_to_be64(0) &&
+	    nla_put_be64(skb, OVS_KEY_ATTR_TUN_ID, swkey->phy.tun_id))
+		goto nla_put_failure;
 
-	if (swkey->phy.in_port != DP_MAX_PORTS)
-		NLA_PUT_U32(skb, OVS_KEY_ATTR_IN_PORT, swkey->phy.in_port);
+	if (swkey->phy.in_port != DP_MAX_PORTS &&
+	    nla_put_u32(skb, OVS_KEY_ATTR_IN_PORT, swkey->phy.in_port))
+		goto nla_put_failure;
 
 	nla = nla_reserve(skb, OVS_KEY_ATTR_ETHERNET, sizeof(*eth_key));
 	if (!nla)
@@ -1223,8 +1226,9 @@ int ovs_flow_to_nlattrs(const struct sw_flow_key *swkey, struct sk_buff *skb)
 	memcpy(eth_key->eth_dst, swkey->eth.dst, ETH_ALEN);
 
 	if (swkey->eth.tci || swkey->eth.type == htons(ETH_P_8021Q)) {
-		NLA_PUT_BE16(skb, OVS_KEY_ATTR_ETHERTYPE, htons(ETH_P_8021Q));
-		NLA_PUT_BE16(skb, OVS_KEY_ATTR_VLAN, swkey->eth.tci);
+		if (nla_put_be16(skb, OVS_KEY_ATTR_ETHERTYPE, htons(ETH_P_8021Q)) ||
+		    nla_put_be16(skb, OVS_KEY_ATTR_VLAN, swkey->eth.tci))
+			goto nla_put_failure;
 		encap = nla_nest_start(skb, OVS_KEY_ATTR_ENCAP);
 		if (!swkey->eth.tci)
 			goto unencap;
@@ -1235,7 +1239,8 @@ int ovs_flow_to_nlattrs(const struct sw_flow_key *swkey, struct sk_buff *skb)
 	if (swkey->eth.type == htons(ETH_P_802_2))
 		goto unencap;
 
-	NLA_PUT_BE16(skb, OVS_KEY_ATTR_ETHERTYPE, swkey->eth.type);
+	if (nla_put_be16(skb, OVS_KEY_ATTR_ETHERTYPE, swkey->eth.type))
+		goto nla_put_failure;
 
 	if (swkey->eth.type == htons(ETH_P_IP)) {
 		struct ovs_key_ipv4 *ipv4_key;
