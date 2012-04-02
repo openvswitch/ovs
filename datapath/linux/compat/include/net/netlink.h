@@ -29,21 +29,6 @@
 #define NLA_NESTED NLA_UNSPEC
 #endif
 
-#ifndef NLA_PUT_BE16
-#define NLA_PUT_BE16(skb, attrtype, value) \
-	NLA_PUT_TYPE(skb, __be16, attrtype, value)
-#endif  /* !NLA_PUT_BE16 */
-
-#ifndef NLA_PUT_BE32
-#define NLA_PUT_BE32(skb, attrtype, value) \
-	NLA_PUT_TYPE(skb, __be32, attrtype, value)
-#endif  /* !NLA_PUT_BE32 */
-
-#ifndef NLA_PUT_BE64
-#define NLA_PUT_BE64(skb, attrtype, value) \
-	NLA_PUT_TYPE(skb, __be64, attrtype, value)
-#endif  /* !NLA_PUT_BE64 */
-
 #ifndef HAVE_NLA_GET_BE16
 /**
  * nla_get_be16 - return payload of __be16 attribute
@@ -97,6 +82,21 @@ static inline __be64 nla_get_be64(const struct nlattr *nla)
 	nla_memcpy(&tmp, (struct nlattr *) nla, sizeof(tmp));
 
 	return tmp;
+}
+#endif
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,5,0)
+static inline int nla_put_be16(struct sk_buff *skb, int attrtype, __be16 value)
+{
+	return nla_put(skb, attrtype, sizeof(__be16), &value);
+}
+static inline int nla_put_be32(struct sk_buff *skb, int attrtype, __be32 value)
+{
+	return nla_put(skb, attrtype, sizeof(__be32), &value);
+}
+static inline int nla_put_be64(struct sk_buff *skb, int attrtype, __be64 value)
+{
+	return nla_put(skb, attrtype, sizeof(__be64), &value);
 }
 #endif
 
