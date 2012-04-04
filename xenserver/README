@@ -89,7 +89,10 @@ debugging.  The sources for the extensions are in
     system-configuration/openvswitch.xml
 
         Collect system configuration information relevant to Open vSwitch,
-        including timezone.
+        including timezone. Runs the following script which is described
+        below:
+
+            * ovs-bugtool-daemons-ver
 
     system-configuration.xml
 
@@ -117,6 +120,10 @@ scripts are located in ../utilities/bugtool:
     ovs-bugtool-tc-class-show
 
         Script to dump tc class configuration for all network interfaces.
+
+    ovs-bugtool-daemons-ver
+
+        Script to dump version information for all Open vSwitch daemons.
 
 ----------------------------------------------------------------------
 Copyright (C) 2009, 2010, 2011 Nicira Networks, Inc.

@@ -56,6 +56,7 @@ License:
 	utilities/bugtool/ovs-bugtool-cfm-show
 	utilities/bugtool/ovs-bugtool-lacp-show
 	utilities/bugtool/ovs-bugtool-tc-class-show
+	utilities/bugtool/ovs-bugtool-daemons-ver
 	utilities/bugtool/plugins/kernel-info/openvswitch.xml
 	utilities/bugtool/plugins/network-status/openvswitch.xml
 	utilities/bugtool/plugins/system-configuration.xml

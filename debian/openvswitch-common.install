@@ -9,3 +9,4 @@ usr/share/openvswitch/bugtool-plugins
 usr/share/openvswitch/scripts/ovs-bugtool-cfm-show
 usr/share/openvswitch/scripts/ovs-bugtool-lacp-show
 usr/share/openvswitch/scripts/ovs-bugtool-tc-class-show
+usr/share/openvswitch/scripts/ovs-bugtool-daemons-ver

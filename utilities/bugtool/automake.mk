@@ -15,7 +15,8 @@ bugtool_scripts = \
 	utilities/bugtool/ovs-bugtool-cfm-show \
 	utilities/bugtool/ovs-bugtool-lacp-show \
 	utilities/bugtool/ovs-bugtool-tc-class-show \
-	utilities/bugtool/ovs-bugtool-ovsdb-dump
+	utilities/bugtool/ovs-bugtool-ovsdb-dump \
+	utilities/bugtool/ovs-bugtool-daemons-ver
 scripts_SCRIPTS += $(bugtool_scripts)
 
 bugtoolpluginsdir = $(pkgdatadir)/bugtool-plugins

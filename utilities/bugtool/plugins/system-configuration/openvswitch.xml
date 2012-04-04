@@ -18,4 +18,5 @@
 
 <collect>
     <command label="timezone">date --rfc-3339=seconds</command>
+    <command label="ovs-daemons-ver">/usr/share/openvswitch/scripts/ovs-bugtool-daemons-ver</command>
 </collect>
