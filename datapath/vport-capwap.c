@@ -361,7 +361,7 @@ static inline struct capwap_net *ovs_get_capwap_net(struct net *net)
 	return &ovs_net->vport_net.capwap;
 }
 
-/* Random value.  Irrelevant as long as it's not 0 since we set the handler. */
+/* Arbitrary value.  Irrelevant as long as it's not 0 since we set the handler. */
 #define UDP_ENCAP_CAPWAP 10
 static int init_socket(struct net *net)
 {
