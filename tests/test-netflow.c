@@ -24,6 +24,7 @@
 
 #include "command-line.h"
 #include "daemon.h"
+#include "dynamic-string.h"
 #include "netflow.h"
 #include "ofpbuf.h"
 #include "packets.h"
@@ -87,31 +88,10 @@ print_netflow(struct ofpbuf *buf)
             printf(", TCP %"PRIu16" > %"PRIu16,
                    ntohs(rec->src_port), ntohs(rec->dst_port));
             if (rec->tcp_flags) {
-                putchar(' ');
-                if (rec->tcp_flags & TCP_SYN) {
-                    putchar('S');
-                }
-                if (rec->tcp_flags & TCP_FIN) {
-                    putchar('F');
-                }
-                if (rec->tcp_flags & TCP_PSH) {
-                    putchar('P');
-                }
-                if (rec->tcp_flags & TCP_RST) {
-                    putchar('R');
-                }
-                if (rec->tcp_flags & TCP_URG) {
-                    putchar('U');
-                }
-                if (rec->tcp_flags & TCP_ACK) {
-                    putchar('.');
-                }
-                if (rec->tcp_flags & 0x40) {
-                    printf("[40]");
-                }
-                if (rec->tcp_flags & 0x80) {
-                    printf("[80]");
-                }
+                struct ds s = DS_EMPTY_INITIALIZER;
+                packet_format_tcp_flags(&s, rec->tcp_flags);
+                printf(" %s", ds_cstr(&s));
+                ds_destroy(&s);
             }
             break;
 

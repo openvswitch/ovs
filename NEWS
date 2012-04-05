@@ -11,7 +11,7 @@ post-v1.6.0
     - ovs-test:
         - Added support for spawning ovs-test server from the client.
         - Now ovs-test is able to automatically create test bridges and ports.
-
+    - "ovs-dpctl dump-flows" now prints observed TCP flags in TCP flows.
 
 
 v1.6.0 - xx xxx xxxx

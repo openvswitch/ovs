@@ -470,5 +470,6 @@ void packet_set_tcp_port(struct ofpbuf *, ovs_be16 src, ovs_be16 dst);
 void packet_set_udp_port(struct ofpbuf *, ovs_be16 src, ovs_be16 dst);
 
 uint8_t packet_get_tcp_flags(const struct ofpbuf *, const struct flow *);
+void packet_format_tcp_flags(struct ds *, uint8_t);
 
 #endif /* packets.h */

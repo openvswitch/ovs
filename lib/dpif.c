@@ -697,7 +697,10 @@ dpif_flow_stats_format(const struct dpif_flow_stats *stats, struct ds *s)
     } else {
         ds_put_format(s, "never");
     }
-    /* XXX tcp_flags? */
+    if (stats->tcp_flags) {
+        ds_put_cstr(s, ", flags:");
+        packet_format_tcp_flags(s, stats->tcp_flags);
+    }
 }
 
 /* Deletes all flows from 'dpif'.  Returns 0 if successful, otherwise a

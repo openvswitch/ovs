@@ -496,3 +496,40 @@ packet_get_tcp_flags(const struct ofpbuf *packet, const struct flow *flow)
         return 0;
     }
 }
+
+/* Appends a string representation of the TCP flags value 'tcp_flags'
+ * (e.g. obtained via packet_get_tcp_flags() or TCP_FLAGS) to 's', in the
+ * format used by tcpdump. */
+void
+packet_format_tcp_flags(struct ds *s, uint8_t tcp_flags)
+{
+    if (!tcp_flags) {
+        ds_put_cstr(s, "none");
+        return;
+    }
+
+    if (tcp_flags & TCP_SYN) {
+        ds_put_char(s, 'S');
+    }
+    if (tcp_flags & TCP_FIN) {
+        ds_put_char(s, 'F');
+    }
+    if (tcp_flags & TCP_PSH) {
+        ds_put_char(s, 'P');
+    }
+    if (tcp_flags & TCP_RST) {
+        ds_put_char(s, 'R');
+    }
+    if (tcp_flags & TCP_URG) {
+        ds_put_char(s, 'U');
+    }
+    if (tcp_flags & TCP_ACK) {
+        ds_put_char(s, '.');
+    }
+    if (tcp_flags & 0x40) {
+        ds_put_cstr(s, "[40]");
+    }
+    if (tcp_flags & 0x80) {
+        ds_put_cstr(s, "[80]");
+    }
+}
