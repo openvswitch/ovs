@@ -767,14 +767,16 @@ dpif_linux_flow_dump_done(const struct dpif *dpif OVS_UNUSED, void *state_)
     return error;
 }
 
-static struct ofpbuf *
-dpif_linux_encode_execute(int dp_ifindex,
-                          const struct dpif_execute *d_exec)
+static void
+dpif_linux_encode_execute(int dp_ifindex, const struct dpif_execute *d_exec,
+                          struct ofpbuf *buf)
 {
     struct ovs_header *k_exec;
-    struct ofpbuf *buf;
 
-    buf = ofpbuf_new(128 + d_exec->actions_len + d_exec->packet->size);
+    ofpbuf_prealloc_tailroom(buf, (64
+                                   + d_exec->packet->size
+                                   + d_exec->key_len
+                                   + d_exec->actions_len));
 
     nl_msg_put_genlmsghdr(buf, 0, ovs_packet_family, NLM_F_REQUEST,
                           OVS_PACKET_CMD_EXECUTE, OVS_PACKET_VERSION);
@@ -787,19 +789,19 @@ dpif_linux_encode_execute(int dp_ifindex,
     nl_msg_put_unspec(buf, OVS_PACKET_ATTR_KEY, d_exec->key, d_exec->key_len);
     nl_msg_put_unspec(buf, OVS_PACKET_ATTR_ACTIONS,
                       d_exec->actions, d_exec->actions_len);
-
-    return buf;
 }
 
 static int
 dpif_linux_execute__(int dp_ifindex, const struct dpif_execute *execute)
 {
-    struct ofpbuf *request;
+    uint64_t request_stub[1024 / 8];
+    struct ofpbuf request;
     int error;
 
-    request = dpif_linux_encode_execute(dp_ifindex, execute);
-    error = nl_sock_transact(genl_sock, request, NULL);
-    ofpbuf_delete(request);
+    ofpbuf_use_stub(&request, request_stub, sizeof request_stub);
+    dpif_linux_encode_execute(dp_ifindex, execute, &request);
+    error = nl_sock_transact(genl_sock, &request, NULL);
+    ofpbuf_uninit(&request);
 
     return error;
 }
@@ -812,48 +814,58 @@ dpif_linux_execute(struct dpif *dpif_, const struct dpif_execute *execute)
     return dpif_linux_execute__(dpif->dp_ifindex, execute);
 }
 
+#define MAX_OPS 50
+
 static void
-dpif_linux_operate(struct dpif *dpif_, struct dpif_op **ops, size_t n_ops)
+dpif_linux_operate__(struct dpif *dpif_, struct dpif_op **ops, size_t n_ops)
 {
     struct dpif_linux *dpif = dpif_linux_cast(dpif_);
-    struct nl_transaction **txnsp;
-    struct nl_transaction *txns;
+
+    struct op_auxdata {
+        struct nl_transaction txn;
+        struct ofpbuf request;
+        uint64_t request_stub[1024 / 8];
+    } auxes[MAX_OPS];
+
+    struct nl_transaction *txnsp[MAX_OPS];
     size_t i;
 
-    txns = xmalloc(n_ops * sizeof *txns);
+    assert(n_ops <= MAX_OPS);
     for (i = 0; i < n_ops; i++) {
-        struct nl_transaction *txn = &txns[i];
+        struct op_auxdata *aux = &auxes[i];
         struct dpif_op *op = ops[i];
         struct dpif_flow_put *put;
         struct dpif_flow_del *del;
         struct dpif_execute *execute;
-        struct dpif_linux_flow request;
+        struct dpif_linux_flow flow;
+
+        ofpbuf_use_stub(&aux->request,
+                        aux->request_stub, sizeof aux->request_stub);
+        aux->txn.request = &aux->request;
 
         switch (op->type) {
         case DPIF_OP_FLOW_PUT:
             put = &op->u.flow_put;
-            dpif_linux_init_flow_put(dpif_, put, &request);
+            dpif_linux_init_flow_put(dpif_, put, &flow);
             if (put->stats) {
-                request.nlmsg_flags |= NLM_F_ECHO;
+                flow.nlmsg_flags |= NLM_F_ECHO;
             }
-            txn->request = ofpbuf_new(1024);
-            dpif_linux_flow_to_ofpbuf(&request, txn->request);
+            dpif_linux_flow_to_ofpbuf(&flow, &aux->request);
             break;
 
         case DPIF_OP_FLOW_DEL:
             del = &op->u.flow_del;
-            dpif_linux_init_flow_del(dpif_, del, &request);
+            dpif_linux_init_flow_del(dpif_, del, &flow);
             if (del->stats) {
-                request.nlmsg_flags |= NLM_F_ECHO;
+                flow.nlmsg_flags |= NLM_F_ECHO;
             }
-            txn->request = ofpbuf_new(1024);
-            dpif_linux_flow_to_ofpbuf(&request, txn->request);
+            dpif_linux_flow_to_ofpbuf(&flow, &aux->request);
             break;
 
         case DPIF_OP_EXECUTE:
             execute = &op->u.execute;
-            txn->request = dpif_linux_encode_execute(dpif->dp_ifindex,
-                                                     execute);
+            dpif_linux_encode_execute(dpif->dp_ifindex, execute,
+                                      &aux->request);
             break;
 
         default:
@@ -861,17 +873,13 @@ dpif_linux_operate(struct dpif *dpif_, struct dpif_op **ops, size_t n_ops)
         }
     }
 
-    txnsp = xmalloc(n_ops * sizeof *txnsp);
     for (i = 0; i < n_ops; i++) {
-        txnsp[i] = &txns[i];
+        txnsp[i] = &auxes[i].txn;
     }
-
     nl_sock_transact_multiple(genl_sock, txnsp, n_ops);
 
-    free(txnsp);
-
     for (i = 0; i < n_ops; i++) {
-        struct nl_transaction *txn = &txns[i];
+        struct nl_transaction *txn = &auxes[i].txn;
         struct dpif_op *op = ops[i];
         struct dpif_flow_put *put;
         struct dpif_flow_del *del;
@@ -910,10 +918,20 @@ dpif_linux_operate(struct dpif *dpif_, struct dpif_op **ops, size_t n_ops)
             NOT_REACHED();
         }
 
-        ofpbuf_delete(txn->request);
+        ofpbuf_uninit(txn->request);
         ofpbuf_delete(txn->reply);
     }
-    free(txns);
+}
+
+static void
+dpif_linux_operate(struct dpif *dpif, struct dpif_op **ops, size_t n_ops)
+{
+    while (n_ops > 0) {
+        size_t chunk = MIN(n_ops, MAX_OPS);
+        dpif_linux_operate__(dpif, ops, chunk);
+        ops += chunk;
+        n_ops -= chunk;
+    }
 }
 
 static void
