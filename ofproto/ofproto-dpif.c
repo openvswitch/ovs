@@ -209,17 +209,13 @@ struct action_xlate_ctx {
      * revalidating without a packet to refer to. */
     const struct ofpbuf *packet;
 
-    /* Should OFPP_NORMAL update the MAC learning table?  We want to update it
-     * if we are actually processing a packet, or if we are accounting for
-     * packets that the datapath has processed, but not if we are just
-     * revalidating. */
-    bool may_learn_macs;
-
-    /* Should "learn" actions update the flow table?  We want to update it if
-     * we are actually processing a packet, or in most cases if we are
-     * accounting for packets that the datapath has processed, but not if we
-     * are just revalidating.  */
-    bool may_flow_mod;
+    /* Should OFPP_NORMAL update the MAC learning table?  Should "learn"
+     * actions update the flow table?
+     *
+     * We want to update these tables if we are actually processing a packet,
+     * or if we are accounting for packets that the datapath has processed, but
+     * not if we are just revalidating. */
+    bool may_learn;
 
     /* The rule that we are currently translating, or NULL. */
     struct rule_dpif *rule;
@@ -352,7 +348,8 @@ static void facet_flush_stats(struct facet *);
 static void facet_update_time(struct facet *, long long int used);
 static void facet_reset_counters(struct facet *);
 static void facet_push_stats(struct facet *);
-static void facet_account(struct facet *, bool may_flow_mod);
+static void facet_learn(struct facet *);
+static void facet_account(struct facet *);
 
 static bool facet_is_controller_flow(struct facet *);
 
@@ -3006,7 +3003,11 @@ update_stats(struct ofproto_dpif *p)
             facet->tcp_flags |= stats->tcp_flags;
 
             subfacet_update_time(subfacet, stats->used);
-            facet_account(facet, true);
+            if (facet->accounted_bytes < facet->byte_count) {
+                facet_learn(facet);
+                facet_account(facet);
+                facet->accounted_bytes = facet->byte_count;
+            }
             facet_push_stats(facet);
         } else {
             if (!VLOG_DROP_WARN(&rl)) {
@@ -3302,42 +3303,43 @@ facet_remove(struct facet *facet)
     facet_free(facet);
 }
 
+/* Feed information from 'facet' back into the learning table to keep it in
+ * sync with what is actually flowing through the datapath. */
 static void
-facet_account(struct facet *facet, bool may_flow_mod)
+facet_learn(struct facet *facet)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(facet->rule->up.ofproto);
-    uint64_t n_bytes;
+    struct action_xlate_ctx ctx;
+
+    if (!facet->has_learn
+        && !facet->has_normal
+        && (!facet->has_fin_timeout
+            || !(facet->tcp_flags & (TCP_FIN | TCP_RST)))) {
+        return;
+    }
+
+    action_xlate_ctx_init(&ctx, ofproto, &facet->flow,
+                          facet->flow.vlan_tci,
+                          facet->rule, facet->tcp_flags, NULL);
+    ctx.may_learn = true;
+    ofpbuf_delete(xlate_actions(&ctx, facet->rule->up.actions,
+                                facet->rule->up.n_actions));
+}
+
+static void
+facet_account(struct facet *facet)
+{
+    struct ofproto_dpif *ofproto = ofproto_dpif_cast(facet->rule->up.ofproto);
     struct subfacet *subfacet;
     const struct nlattr *a;
     unsigned int left;
     ovs_be16 vlan_tci;
-
-    if (facet->byte_count <= facet->accounted_bytes) {
-        return;
-    }
-    n_bytes = facet->byte_count - facet->accounted_bytes;
-    facet->accounted_bytes = facet->byte_count;
-
-    /* Feed information from the active flows back into the learning table to
-     * ensure that table is always in sync with what is actually flowing
-     * through the datapath. */
-    if (facet->has_learn || facet->has_normal
-        || (facet->has_fin_timeout
-            && facet->tcp_flags & (TCP_FIN | TCP_RST))) {
-        struct action_xlate_ctx ctx;
-
-        action_xlate_ctx_init(&ctx, ofproto, &facet->flow,
-                              facet->flow.vlan_tci,
-                              facet->rule, facet->tcp_flags, NULL);
-        ctx.may_learn_macs = true;
-        ctx.may_flow_mod = may_flow_mod;
-        ofpbuf_delete(xlate_actions(&ctx, facet->rule->up.actions,
-                                    facet->rule->up.n_actions));
-    }
+    uint64_t n_bytes;
 
     if (!facet->has_normal || !ofproto->has_bonded_bundles) {
         return;
     }
+    n_bytes = facet->byte_count - facet->accounted_bytes;
 
     /* This loop feeds byte counters to bond_account() for rebalancing to use
      * as a basis.  We also need to track the actual VLAN on which the packet
@@ -3404,7 +3406,10 @@ facet_flush_stats(struct facet *facet)
     }
 
     facet_push_stats(facet);
-    facet_account(facet, false);
+    if (facet->accounted_bytes < facet->byte_count) {
+        facet_account(facet);
+        facet->accounted_bytes = facet->byte_count;
+    }
 
     if (ofproto->netflow && !facet_is_controller_flow(facet)) {
         struct ofexpired expired;
@@ -5033,7 +5038,7 @@ do_xlate_actions(const union ofp_action *in, size_t n_in,
 
         case OFPUTIL_NXAST_LEARN:
             ctx->has_learn = true;
-            if (ctx->may_flow_mod) {
+            if (ctx->may_learn) {
                 xlate_learn_action(ctx, (const struct nx_action_learn *) ia);
             }
             break;
@@ -5086,8 +5091,7 @@ action_xlate_ctx_init(struct action_xlate_ctx *ctx,
     ctx->base_flow.vlan_tci = initial_tci;
     ctx->rule = rule;
     ctx->packet = packet;
-    ctx->may_learn_macs = packet != NULL;
-    ctx->may_flow_mod = packet != NULL;
+    ctx->may_learn = packet != NULL;
     ctx->tcp_flags = tcp_flags;
     ctx->resubmit_hook = NULL;
 }
@@ -5715,7 +5719,7 @@ xlate_normal(struct action_xlate_ctx *ctx)
     }
 
     /* Learn source MAC. */
-    if (ctx->may_learn_macs) {
+    if (ctx->may_learn) {
         update_learning_table(ctx->ofproto, &ctx->flow, vlan, in_bundle);
     }
 
