@@ -1726,6 +1726,16 @@
         an <code>ovs-appctl</code> command.
       </column>
 
+      <column name="cfm_fault_status" key="interval">
+        Indicates a CFM fault was triggered due to the reception of a CCM
+        frame having an invalid interval.
+      </column>
+
+      <column name="cfm_fault_status" key="sequence">
+        Indicates a CFM fault was triggered because the CFM module received
+        a CCM frame with a sequence number that it was not expecting.
+      </column>
+
       <column name="cfm_health">
         <p>
           Indicates the health of the interface as a percentage of CCM frames

@@ -87,8 +87,9 @@ struct cfm {
 
     uint64_t mpid;
     bool extended;         /* Extended mode. */
-    int fault;             /* Connectivity fault status. */
-    int recv_fault;        /* Bit mask of faults occuring on receive. */
+    enum cfm_fault_reason fault;  /* Connectivity fault status. */
+    enum cfm_fault_reason recv_fault;  /* Bit mask of faults occuring on
+                                          receive. */
     bool opup;             /* Operational State. */
     bool remote_opup;      /* Remote Operational State. */
 
@@ -127,8 +128,6 @@ struct remote_mp {
     struct hmap_node node; /* Node in 'remote_mps' map. */
 
     bool recv;           /* CCM was received since last fault check. */
-    bool rdi;            /* Remote Defect Indicator. Indicates remote_mp isn't
-                            receiving CCMs that it's expecting to. */
     bool opup;           /* Operational State. */
     uint32_t seq;        /* Most recently received sequence number. */
     uint8_t num_health_ccm; /* Number of received ccm frames every
@@ -384,18 +383,6 @@ cfm_run(struct cfm *cfm)
             } else {
                 rmp->recv = false;
 
-                if (rmp->mpid == cfm->mpid) {
-                    VLOG_WARN_RL(&rl,"%s: received CCM with local MPID"
-                                 " %"PRIu64, cfm->name, rmp->mpid);
-                    cfm->fault |= CFM_FAULT_LOOPBACK;
-                }
-
-                if (rmp->rdi) {
-                    VLOG_DBG("%s: RDI bit flagged from RMP %"PRIu64, cfm->name,
-                             rmp->mpid);
-                    cfm->fault |= CFM_FAULT_RDI;
-                }
-
                 if (!rmp->opup) {
                     cfm->remote_opup = rmp->opup;
                 }
@@ -563,7 +550,7 @@ cfm_process_heartbeat(struct cfm *cfm, const struct ofpbuf *p)
      * expensive changes to the network topology.  It seems prudent to trigger
      * them judiciously, especially when CFM is used to check slave status of
      * bonds. Furthermore, faults can be maliciously triggered by crafting
-     * invalid CCMs. */
+     * unexpected CCMs. */
     if (memcmp(ccm->maid, cfm->maid, sizeof ccm->maid)) {
         cfm->recv_fault |= CFM_FAULT_MAID;
         VLOG_WARN_RL(&rl, "%s: Received unexpected remote MAID from MAC "
@@ -577,7 +564,7 @@ cfm_process_heartbeat(struct cfm *cfm, const struct ofpbuf *p)
         uint64_t ccm_mpid;
         uint32_t ccm_seq;
         bool ccm_opdown;
-        bool fault = false;
+        enum cfm_fault_reason cfm_fault = 0;
 
         if (cfm->extended) {
             ccm_mpid = ntohll(ccm->mpid64);
@@ -589,18 +576,18 @@ cfm_process_heartbeat(struct cfm *cfm, const struct ofpbuf *p)
         ccm_seq = ntohl(ccm->seq);
 
         if (ccm_interval != cfm->ccm_interval) {
-            VLOG_WARN_RL(&rl, "%s: received a CCM with an invalid interval"
+            cfm_fault |= CFM_FAULT_INTERVAL;
+            VLOG_WARN_RL(&rl, "%s: received a CCM with an unexpected interval"
                          " (%"PRIu8") from RMP %"PRIu64, cfm->name,
                          ccm_interval, ccm_mpid);
-            fault = true;
         }
 
         if (cfm->extended && ccm_interval == 0
             && ccm_interval_ms_x != cfm->ccm_interval_ms) {
-            VLOG_WARN_RL(&rl, "%s: received a CCM with an invalid extended"
+            cfm_fault |= CFM_FAULT_INTERVAL;
+            VLOG_WARN_RL(&rl, "%s: received a CCM with an unexpected extended"
                          " interval (%"PRIu16"ms) from RMP %"PRIu64, cfm->name,
                          ccm_interval_ms_x, ccm_mpid);
-            fault = true;
         }
 
         rmp = lookup_remote_mp(cfm, ccm_mpid);
@@ -609,38 +596,46 @@ cfm_process_heartbeat(struct cfm *cfm, const struct ofpbuf *p)
                 rmp = xzalloc(sizeof *rmp);
                 hmap_insert(&cfm->remote_mps, &rmp->node, hash_mpid(ccm_mpid));
             } else {
-                cfm->recv_fault |= CFM_FAULT_OVERFLOW;
+                cfm_fault |= CFM_FAULT_OVERFLOW;
                 VLOG_WARN_RL(&rl,
                              "%s: dropped CCM with MPID %"PRIu64" from MAC "
                              ETH_ADDR_FMT, cfm->name, ccm_mpid,
                              ETH_ADDR_ARGS(eth->eth_src));
-                fault = true;
             }
+        }
+
+        if (ccm_rdi) {
+            cfm_fault |= CFM_FAULT_RDI;
+            VLOG_DBG("%s: RDI bit flagged from RMP %"PRIu64, cfm->name,
+                     rmp->mpid);
         }
 
         VLOG_DBG("%s: received CCM (seq %"PRIu32") (mpid %"PRIu64")"
                  " (interval %"PRIu8") (RDI %s)", cfm->name, ccm_seq,
                  ccm_mpid, ccm_interval, ccm_rdi ? "true" : "false");
 
-        if (ccm_rdi) {
-            fault = true;
-        }
         if (rmp) {
+            if (rmp->mpid == cfm->mpid) {
+                cfm_fault |= CFM_FAULT_LOOPBACK;
+                VLOG_WARN_RL(&rl,"%s: received CCM with local MPID"
+                             " %"PRIu64, cfm->name, rmp->mpid);
+            }
+
             if (rmp->seq && ccm_seq != (rmp->seq + 1)) {
+                cfm_fault |= CFM_FAULT_SEQUENCE;
                 VLOG_WARN_RL(&rl, "%s: (mpid %"PRIu64") detected sequence"
                              " numbers which indicate possible connectivity"
                              " problems (previous %"PRIu32") (current %"PRIu32
                              ")", cfm->name, ccm_mpid, rmp->seq, ccm_seq);
-                fault = true;
             }
 
             rmp->mpid = ccm_mpid;
-            rmp->recv = true;
-            if (!fault) {
+            if (!cfm_fault) {
                 rmp->num_health_ccm++;
             }
+            rmp->recv = true;
+            cfm->recv_fault |= cfm_fault;
             rmp->seq = ccm_seq;
-            rmp->rdi = ccm_rdi;
             rmp->opup = !ccm_opdown;
         }
     }
@@ -735,9 +730,7 @@ cfm_print_details(struct ds *ds, const struct cfm *cfm)
                   timer_msecs_until_expired(&cfm->fault_timer));
 
     HMAP_FOR_EACH (rmp, node, &cfm->remote_mps) {
-        ds_put_format(ds, "Remote MPID %"PRIu64":%s\n",
-                      rmp->mpid,
-                      rmp->rdi ? " rdi" : "");
+        ds_put_format(ds, "Remote MPID %"PRIu64"\n", rmp->mpid);
         ds_put_format(ds, "\trecv since check: %s\n",
                       rmp->recv ? "true" : "false");
         ds_put_format(ds, "\topstate: %s\n", rmp->opup? "up" : "down");
