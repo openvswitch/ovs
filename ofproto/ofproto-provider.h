@@ -980,17 +980,6 @@ struct ofproto_class {
     int (*get_cfm_remote_mpids)(const struct ofport *ofport,
                                 const uint64_t **rmps, size_t *n_rmps);
 
-    /* Checks the health of CFM configured on 'ofport'.  Returns an integer
-     * to indicate the health percentage of the 'ofport' which is an average of
-     * the health of all the remote_mps.  Returns an integer between 0 and 100
-     * where 0 means that the 'ofport' is very unhealthy and 100 means the
-     * 'ofport' is perfectly healthy.  Returns -1 if CFM is not enabled on
-     * 'port' or if the number of remote_mpids is > 1.
-     *
-     * This function may be a null pointer if the ofproto implementation does
-     * not support CFM. */
-    int (*get_cfm_health)(const struct ofport *ofport);
-
     /* Configures spanning tree protocol (STP) on 'ofproto' using the
      * settings defined in 's'.
      *

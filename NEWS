@@ -6,8 +6,6 @@ post-v1.6.0
     - Added ability to configure dscp setting for manager and controller
       connections.  By default, these connections have a DSCP value of
       Internetwork Control (0xc0).
-    - Added the granular link health statistics, 'cfm_health', to an
-      interface.
 
 
 v1.6.0 - xx xxx xxxx

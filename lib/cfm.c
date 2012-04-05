@@ -60,7 +60,6 @@ static const uint8_t eth_addr_ccm_x[6] = {
 #define CCM_MAID_LEN 48
 #define CCM_OPCODE 1 /* CFM message opcode meaning CCM. */
 #define CCM_RDI_MASK 0x80
-#define CFM_HEALTH_INTERVAL 6
 struct ccm {
     uint8_t  mdlevel_version; /* MD Level and Version */
     uint8_t  opcode;
@@ -112,12 +111,6 @@ struct cfm {
      * avoid flapping. */
     uint64_t *rmps_array;     /* Cache of remote_mps. */
     size_t rmps_array_len;    /* Number of rmps in 'rmps_array'. */
-
-    int health;               /* Percentage of the number of CCM frames
-                                 received. */
-    int health_interval;      /* Number of fault_intervals since health was
-                                 recomputed. */
-
 };
 
 /* Remote MPs represent foreign network entities that are configured to have
@@ -131,9 +124,6 @@ struct remote_mp {
                             receiving CCMs that it's expecting to. */
     bool opup;           /* Operational State. */
     uint32_t seq;        /* Most recently received sequence number. */
-    uint8_t num_health_ccm; /* Number of received ccm frames every
-                               CFM_HEALTH_INTERVAL * 'fault_interval'. */
-
 };
 
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(20, 30);
@@ -300,7 +290,6 @@ cfm_create(const char *name)
     hmap_insert(&all_cfms, &cfm->hmap_node, hash_string(cfm->name, 0));
     cfm->remote_opup = true;
     cfm->fault_override = -1;
-    cfm->health = -1;
     return cfm;
 }
 
@@ -343,37 +332,6 @@ cfm_run(struct cfm *cfm)
                                   sizeof *cfm->rmps_array);
 
         cfm->remote_opup = true;
-        if (cfm->health_interval == CFM_HEALTH_INTERVAL) {
-            /* Calculate the cfm health of the interface.  If the number of
-             * remote_mpids of a cfm interface is > 1, the cfm health is
-             * undefined. If the number of remote_mpids is 1, the cfm health is
-             * the percentage of the ccm frames received in the
-             * (CFM_HEALTH_INTERVAL * 3.5)ms, else it is 0. */
-            if (hmap_count(&cfm->remote_mps) > 1) {
-                cfm->health = -1;
-            } else if (hmap_is_empty(&cfm->remote_mps)) {
-                cfm->health = 0;
-            } else {
-                int exp_ccm_recvd;
-
-                rmp = CONTAINER_OF(hmap_first(&cfm->remote_mps),
-                                   struct remote_mp, node);
-                exp_ccm_recvd = (CFM_HEALTH_INTERVAL * 7) / 2;
-                /* Calculate the percentage of healthy ccm frames received.
-                 * Since the 'fault_interval' is (3.5 * cfm_interval), and
-                 * 1 CCM packet must be received every cfm_interval,
-                 * the 'remote_mpid' health reports the percentage of
-                 * healthy CCM frames received every
-                 * 'CFM_HEALTH_INTERVAL'th 'fault_interval'. */
-                cfm->health = (rmp->num_health_ccm * 100) / exp_ccm_recvd;
-                cfm->health = MIN(cfm->health, 100);
-                rmp->num_health_ccm = 0;
-                assert(cfm->health >= 0 && cfm->health <= 100);
-            }
-            cfm->health_interval = 0;
-        }
-        cfm->health_interval++;
-
         HMAP_FOR_EACH_SAFE (rmp, rmp_next, node, &cfm->remote_mps) {
 
             if (!rmp->recv) {
@@ -577,7 +535,6 @@ cfm_process_heartbeat(struct cfm *cfm, const struct ofpbuf *p)
         uint64_t ccm_mpid;
         uint32_t ccm_seq;
         bool ccm_opdown;
-        bool fault = false;
 
         if (cfm->extended) {
             ccm_mpid = ntohll(ccm->mpid64);
@@ -592,7 +549,6 @@ cfm_process_heartbeat(struct cfm *cfm, const struct ofpbuf *p)
             VLOG_WARN_RL(&rl, "%s: received a CCM with an invalid interval"
                          " (%"PRIu8") from RMP %"PRIu64, cfm->name,
                          ccm_interval, ccm_mpid);
-            fault = true;
         }
 
         if (cfm->extended && ccm_interval == 0
@@ -600,7 +556,6 @@ cfm_process_heartbeat(struct cfm *cfm, const struct ofpbuf *p)
             VLOG_WARN_RL(&rl, "%s: received a CCM with an invalid extended"
                          " interval (%"PRIu16"ms) from RMP %"PRIu64, cfm->name,
                          ccm_interval_ms_x, ccm_mpid);
-            fault = true;
         }
 
         rmp = lookup_remote_mp(cfm, ccm_mpid);
@@ -614,7 +569,6 @@ cfm_process_heartbeat(struct cfm *cfm, const struct ofpbuf *p)
                              "%s: dropped CCM with MPID %"PRIu64" from MAC "
                              ETH_ADDR_FMT, cfm->name, ccm_mpid,
                              ETH_ADDR_ARGS(eth->eth_src));
-                fault = true;
             }
         }
 
@@ -622,23 +576,16 @@ cfm_process_heartbeat(struct cfm *cfm, const struct ofpbuf *p)
                  " (interval %"PRIu8") (RDI %s)", cfm->name, ccm_seq,
                  ccm_mpid, ccm_interval, ccm_rdi ? "true" : "false");
 
-        if (ccm_rdi) {
-            fault = true;
-        }
         if (rmp) {
             if (rmp->seq && ccm_seq != (rmp->seq + 1)) {
                 VLOG_WARN_RL(&rl, "%s: (mpid %"PRIu64") detected sequence"
                              " numbers which indicate possible connectivity"
                              " problems (previous %"PRIu32") (current %"PRIu32
                              ")", cfm->name, ccm_mpid, rmp->seq, ccm_seq);
-                fault = true;
             }
 
             rmp->mpid = ccm_mpid;
             rmp->recv = true;
-            if (!fault) {
-                rmp->num_health_ccm++;
-            }
             rmp->seq = ccm_seq;
             rmp->rdi = ccm_rdi;
             rmp->opup = !ccm_opdown;
@@ -656,17 +603,6 @@ cfm_get_fault(const struct cfm *cfm)
         return cfm->fault_override ? CFM_FAULT_OVERRIDE : 0;
     }
     return cfm->fault;
-}
-
-/* Gets the health of 'cfm'.  Returns an integer between 0 and 100 indicating
- * the health of the link as a percentage of ccm frames received in
- * CFM_HEALTH_INTERVAL * 'fault_interval' if there is only 1 remote_mpid,
- * returns 0 if there are no remote_mpids, and returns -1 if there are more
- * than 1 remote_mpids. */
-int
-cfm_get_health(const struct cfm *cfm)
-{
-    return cfm->health;
 }
 
 /* Gets the operational state of 'cfm'.  'cfm' is considered operationally down
@@ -720,11 +656,6 @@ cfm_print_details(struct ds *ds, const struct cfm *cfm)
         ds_put_cstr(ds, "\n");
     }
 
-    if (cfm->health == -1) {
-        ds_put_format(ds, "\taverage health: undefined\n");
-    } else {
-        ds_put_format(ds, "\taverage health: %d\n", cfm->health);
-    }
     ds_put_format(ds, "\topstate: %s\n", cfm->opup ? "up" : "down");
     ds_put_format(ds, "\tremote_opstate: %s\n",
                   cfm->remote_opup ? "up" : "down");

@@ -1119,14 +1119,6 @@ get_cfm_remote_mpids(const struct ofport *ofport_, const uint64_t **rmps,
         return -1;
     }
 }
-
-static int
-get_cfm_health(const struct ofport *ofport_)
-{
-    struct ofport_dpif *ofport = ofport_dpif_cast(ofport_);
-
-    return ofport->cfm ? cfm_get_health(ofport->cfm) : -1;
-}
 
 /* Spanning Tree. */
 
@@ -6499,7 +6491,6 @@ const struct ofproto_class ofproto_dpif_class = {
     set_cfm,
     get_cfm_fault,
     get_cfm_remote_mpids,
-    get_cfm_health,
     set_stp,
     get_stp_status,
     set_stp_port,
