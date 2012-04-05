@@ -440,11 +440,6 @@ nl_sock_transact_multiple__(struct nl_sock *sock,
 
         nlmsg->nlmsg_len = request->size;
         nlmsg->nlmsg_pid = sock->pid;
-        if (i == n - 1) {
-            /* Ensure that we get a reply even if the final request doesn't
-             * ordinarily call for one. */
-            nlmsg->nlmsg_flags |= NLM_F_ACK;
-        }
 
         iovs[i].iov_base = request->data;
         iovs[i].iov_len = request->size;
@@ -474,8 +469,12 @@ nl_sock_transact_multiple__(struct nl_sock *sock,
     while (n > 0) {
         struct ofpbuf *reply;
 
-        error = nl_sock_recv__(sock, &reply, true);
-        if (error) {
+        error = nl_sock_recv__(sock, &reply, false);
+        if (error == EAGAIN) {
+            nl_sock_record_errors__(transactions, n, 0);
+            *done += n;
+            return 0;
+        } else if (error) {
             return error;
         }
 
