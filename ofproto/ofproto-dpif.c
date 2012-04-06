@@ -394,6 +394,11 @@ struct facet {
     bool has_fin_timeout;        /* Actions include NXAST_FIN_TIMEOUT? */
     tag_type tags;               /* Tags that would require revalidation. */
     mirror_mask_t mirrors;       /* Bitmap of dependent mirrors. */
+
+    /* Storage for a single subfacet, to reduce malloc() time and space
+     * overhead.  (A facet always has at least one subfacet and in the common
+     * case has exactly one subfacet.) */
+    struct subfacet one_subfacet;
 };
 
 static struct facet *facet_create(struct rule_dpif *,
@@ -3872,16 +3877,25 @@ subfacet_create(struct facet *facet, enum odp_key_fitness key_fitness,
         subfacet_destroy(subfacet);
     }
 
-    subfacet = xzalloc(sizeof *subfacet);
+    subfacet = (list_is_empty(&facet->subfacets)
+                ? &facet->one_subfacet
+                : xmalloc(sizeof *subfacet));
     hmap_insert(&ofproto->subfacets, &subfacet->hmap_node, key_hash);
     list_push_back(&facet->subfacets, &subfacet->list_node);
     subfacet->facet = facet;
-    subfacet->used = time_msec();
     subfacet->key_fitness = key_fitness;
     if (key_fitness != ODP_FIT_PERFECT) {
         subfacet->key = xmemdup(key, key_len);
         subfacet->key_len = key_len;
+    } else {
+        subfacet->key = NULL;
+        subfacet->key_len = 0;
     }
+    subfacet->used = time_msec();
+    subfacet->dp_packet_count = 0;
+    subfacet->dp_byte_count = 0;
+    subfacet->actions_len = 0;
+    subfacet->actions = NULL;
     subfacet->installed = false;
     subfacet->initial_tci = initial_tci;
 
@@ -3919,7 +3933,9 @@ subfacet_destroy__(struct subfacet *subfacet)
     list_remove(&subfacet->list_node);
     free(subfacet->key);
     free(subfacet->actions);
-    free(subfacet);
+    if (subfacet != &facet->one_subfacet) {
+        free(subfacet);
+    }
 }
 
 /* Destroys 'subfacet', as with subfacet_destroy__(), and then if this was the
