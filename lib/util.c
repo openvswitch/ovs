@@ -284,21 +284,35 @@ ovs_retval_to_string(int retval)
  * be called at the beginning of main() with "argv[0]" as the argument
  * to 'argv0'.
  *
+ * 'version' should contain the version of the caller's program.  If 'version'
+ * is the same as the VERSION #define, the caller is assumed to be part of Open
+ * vSwitch.  Otherwise, it is assumed to be an external program linking against
+ * the Open vSwitch libraries.
+ *
  * The 'date' and 'time' arguments should likely be called with
  * "__DATE__" and "__TIME__" to use the time the binary was built.
  * Alternatively, the "set_program_name" macro may be called to do this
  * automatically.
  */
 void
-set_program_name__(const char *argv0, const char *date, const char *time)
+set_program_name__(const char *argv0, const char *version, const char *date,
+                   const char *time)
 {
     const char *slash = strrchr(argv0, '/');
     program_name = slash ? slash + 1 : argv0;
 
     free(program_version);
-    program_version = xasprintf("%s (Open vSwitch) "VERSION"\n"
-                                "Compiled %s %s\n",
-                                program_name, date, time);
+
+    if (!strcmp(version, VERSION)) {
+        program_version = xasprintf("%s (Open vSwitch) "VERSION"\n"
+                                    "Compiled %s %s\n",
+                                    program_name, date, time);
+    } else {
+        program_version = xasprintf("%s %s\n"
+                                    "Open vSwitch Library "VERSION"\n"
+                                    "Compiled %s %s\n",
+                                    program_name, version, date, time);
+    }
 }
 
 /* Returns a pointer to a string describing the program version.  The

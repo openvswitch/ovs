@@ -162,9 +162,10 @@ rightmost_1bit(uintmax_t x)
 extern "C" {
 #endif
 
-void set_program_name__(const char *name, const char *date, const char *time);
+void set_program_name__(const char *name, const char *version,
+                        const char *date, const char *time);
 #define set_program_name(name) \
-        set_program_name__(name, __DATE__, __TIME__)
+        set_program_name__(name, VERSION, __DATE__, __TIME__)
 
 const char *get_program_version(void);
 void ovs_print_version(uint8_t min_ofp, uint8_t max_ofp);
