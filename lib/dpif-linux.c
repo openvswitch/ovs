@@ -1089,7 +1089,8 @@ parse_odp_packet(struct ofpbuf *buf, struct dpif_upcall *upcall,
 }
 
 static int
-dpif_linux_recv(struct dpif *dpif_, struct dpif_upcall *upcall)
+dpif_linux_recv(struct dpif *dpif_, struct dpif_upcall *upcall,
+                struct ofpbuf *buf)
 {
     struct dpif_linux *dpif = dpif_linux_cast(dpif_);
     int read_tries = 0;
@@ -1123,7 +1124,6 @@ dpif_linux_recv(struct dpif *dpif_, struct dpif_upcall *upcall)
         dpif->ready_mask &= ~(1u << indx);
 
         for (;;) {
-            struct ofpbuf *buf;
             int dp_ifindex;
             int error;
 
@@ -1131,10 +1131,8 @@ dpif_linux_recv(struct dpif *dpif_, struct dpif_upcall *upcall)
                 return EAGAIN;
             }
 
-            buf = ofpbuf_new(2048);
             error = nl_sock_recv(upcall_sock, buf, false);
             if (error) {
-                ofpbuf_delete(buf);
                 if (error == EAGAIN) {
                     break;
                 }
@@ -1145,8 +1143,6 @@ dpif_linux_recv(struct dpif *dpif_, struct dpif_upcall *upcall)
             if (!error && dp_ifindex == dpif->dp_ifindex) {
                 return 0;
             }
-
-            ofpbuf_delete(buf);
             if (error) {
                 return error;
             }

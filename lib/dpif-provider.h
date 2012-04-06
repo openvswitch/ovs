@@ -307,21 +307,19 @@ struct dpif_class {
                              uint32_t *priority);
 
     /* Polls for an upcall from 'dpif'.  If successful, stores the upcall into
-     * '*upcall'.  Should only be called if 'recv_set' has been used to enable
-     * receiving packets from 'dpif'.
+     * '*upcall', using 'buf' for storage.  Should only be called if 'recv_set'
+     * has been used to enable receiving packets from 'dpif'.
      *
-     * The caller takes ownership of the data that 'upcall' points to.
-     * 'upcall->key' and 'upcall->actions' (if nonnull) point into data owned
-     * by 'upcall->packet', so their memory cannot be freed separately.  (This
-     * is hardly a great way to do things but it works out OK for the dpif
-     * providers that exist so far.)
-     *
-     * For greatest efficiency, 'upcall->packet' should have at least
-     * offsetof(struct ofp_packet_in, data) bytes of headroom.
+     * The implementation should point 'upcall->packet' and 'upcall->key' into
+     * data in the caller-provided 'buf'.  If necessary to make room, the
+     * implementation may expand the data in 'buf'.  (This is hardly a great
+     * way to do things but it works out OK for the dpif providers that exist
+     * so far.)
      *
      * This function must not block.  If no upcall is pending when it is
      * called, it should return EAGAIN without blocking. */
-    int (*recv)(struct dpif *dpif, struct dpif_upcall *upcall);
+    int (*recv)(struct dpif *dpif, struct dpif_upcall *upcall,
+                struct ofpbuf *buf);
 
     /* Arranges for the poll loop to wake up when 'dpif' has a message queued
      * to be received with the recv member function. */

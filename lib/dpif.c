@@ -1069,21 +1069,20 @@ dpif_recv_set(struct dpif *dpif, bool enable)
 }
 
 /* Polls for an upcall from 'dpif'.  If successful, stores the upcall into
- * '*upcall'.  Should only be called if dpif_recv_set() has been used to enable
- * receiving packets on 'dpif'.
+ * '*upcall', using 'buf' for storage.  Should only be called if
+ * dpif_recv_set() has been used to enable receiving packets on 'dpif'.
  *
- * The caller takes ownership of the data that 'upcall' points to.
- * 'upcall->key' and 'upcall->actions' (if nonnull) point into data owned by
- * 'upcall->packet', so their memory cannot be freed separately.  (This is
+ * 'upcall->packet' and 'upcall->key' point into data in the caller-provided
+ * 'buf', so their memory cannot be freed separately from 'buf'.  (This is
  * hardly a great way to do things but it works out OK for the dpif providers
  * and clients that exist so far.)
  *
  * Returns 0 if successful, otherwise a positive errno value.  Returns EAGAIN
  * if no upcall is immediately available. */
 int
-dpif_recv(struct dpif *dpif, struct dpif_upcall *upcall)
+dpif_recv(struct dpif *dpif, struct dpif_upcall *upcall, struct ofpbuf *buf)
 {
-    int error = dpif->dpif_class->recv(dpif, upcall);
+    int error = dpif->dpif_class->recv(dpif, upcall, buf);
     if (!error && !VLOG_DROP_DBG(&dpmsg_rl)) {
         struct ds flow;
         char *packet;

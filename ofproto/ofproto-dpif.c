@@ -2783,7 +2783,6 @@ handle_miss_upcalls(struct ofproto_dpif *ofproto, struct dpif_upcall *upcalls,
                                                 &flow, &initial_tci,
                                                 upcall->packet);
         if (fitness == ODP_FIT_ERROR) {
-            ofpbuf_delete(upcall->packet);
             continue;
         }
         flow_extract(upcall->packet, flow.skb_priority, flow.tun_id,
@@ -2793,7 +2792,6 @@ handle_miss_upcalls(struct ofproto_dpif *ofproto, struct dpif_upcall *upcalls,
         if (process_special(ofproto, &flow, upcall->packet)) {
             ofproto_update_local_port_stats(&ofproto->up,
                                             0, upcall->packet->size);
-            ofpbuf_delete(upcall->packet);
             ofproto->n_matches++;
             continue;
         }
@@ -2842,7 +2840,6 @@ handle_miss_upcalls(struct ofproto_dpif *ofproto, struct dpif_upcall *upcalls,
         }
     }
     HMAP_FOR_EACH_SAFE (miss, next_miss, hmap_node, &todo) {
-        ofpbuf_list_delete(&miss->packets);
         hmap_remove(&todo, &miss->hmap_node);
         free(miss);
     }
@@ -2864,7 +2861,6 @@ handle_userspace_upcall(struct ofproto_dpif *ofproto,
                                             upcall->key_len, &flow,
                                             &initial_tci, upcall->packet);
     if (fitness == ODP_FIT_ERROR) {
-        ofpbuf_delete(upcall->packet);
         return;
     }
 
@@ -2876,31 +2872,39 @@ handle_userspace_upcall(struct ofproto_dpif *ofproto,
     } else {
         VLOG_WARN_RL(&rl, "invalid user cookie : 0x%"PRIx64, upcall->userdata);
     }
-    ofpbuf_delete(upcall->packet);
 }
 
 static int
 handle_upcalls(struct ofproto_dpif *ofproto, unsigned int max_batch)
 {
     struct dpif_upcall misses[FLOW_MISS_MAX_BATCH];
+    struct ofpbuf miss_bufs[FLOW_MISS_MAX_BATCH];
+    uint64_t miss_buf_stubs[FLOW_MISS_MAX_BATCH][4096 / 8];
+    int n_processed;
     int n_misses;
     int i;
 
-    assert (max_batch <= FLOW_MISS_MAX_BATCH);
+    assert(max_batch <= FLOW_MISS_MAX_BATCH);
 
+    n_processed = 0;
     n_misses = 0;
-    for (i = 0; i < max_batch; i++) {
+    for (n_processed = 0; n_processed < max_batch; n_processed++) {
         struct dpif_upcall *upcall = &misses[n_misses];
+        struct ofpbuf *buf = &miss_bufs[n_misses];
         int error;
 
-        error = dpif_recv(ofproto->dpif, upcall);
+        ofpbuf_use_stub(buf, miss_buf_stubs[n_misses],
+                        sizeof miss_buf_stubs[n_misses]);
+        error = dpif_recv(ofproto->dpif, upcall, buf);
         if (error) {
+            ofpbuf_uninit(buf);
             break;
         }
 
         switch (upcall->type) {
         case DPIF_UC_ACTION:
             handle_userspace_upcall(ofproto, upcall);
+            ofpbuf_uninit(buf);
             break;
 
         case DPIF_UC_MISS:
@@ -2917,8 +2921,11 @@ handle_upcalls(struct ofproto_dpif *ofproto, unsigned int max_batch)
     }
 
     handle_miss_upcalls(ofproto, misses, n_misses);
+    for (i = 0; i < n_misses; i++) {
+        ofpbuf_uninit(&miss_bufs[i]);
+    }
 
-    return i;
+    return n_processed;
 }
 
 /* Flow expiration. */

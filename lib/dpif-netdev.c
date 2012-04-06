@@ -935,13 +935,17 @@ find_nonempty_queue(struct dpif *dpif)
 }
 
 static int
-dpif_netdev_recv(struct dpif *dpif, struct dpif_upcall *upcall)
+dpif_netdev_recv(struct dpif *dpif, struct dpif_upcall *upcall,
+                 struct ofpbuf *buf)
 {
     struct dp_netdev_queue *q = find_nonempty_queue(dpif);
     if (q) {
         struct dpif_upcall *u = q->upcalls[q->tail++ & QUEUE_MASK];
         *upcall = *u;
         free(u);
+
+        ofpbuf_uninit(buf);
+        *buf = *u->packet;
 
         return 0;
     } else {
