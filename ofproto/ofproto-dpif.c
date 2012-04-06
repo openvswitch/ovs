@@ -271,6 +271,65 @@ static void xlate_actions_for_side_effects(struct action_xlate_ctx *,
                                            const union ofp_action *in,
                                            size_t n_in);
 
+/* A dpif flow and actions associated with a facet.
+ *
+ * See also the large comment on struct facet. */
+struct subfacet {
+    /* Owners. */
+    struct hmap_node hmap_node; /* In struct ofproto_dpif 'subfacets' list. */
+    struct list list_node;      /* In struct facet's 'facets' list. */
+    struct facet *facet;        /* Owning facet. */
+
+    /* Key.
+     *
+     * To save memory in the common case, 'key' is NULL if 'key_fitness' is
+     * ODP_FIT_PERFECT, that is, odp_flow_key_from_flow() can accurately
+     * regenerate the ODP flow key from ->facet->flow. */
+    enum odp_key_fitness key_fitness;
+    struct nlattr *key;
+    int key_len;
+
+    long long int used;         /* Time last used; time created if not used. */
+
+    uint64_t dp_packet_count;   /* Last known packet count in the datapath. */
+    uint64_t dp_byte_count;     /* Last known byte count in the datapath. */
+
+    /* Datapath actions.
+     *
+     * These should be essentially identical for every subfacet in a facet, but
+     * may differ in trivial ways due to VLAN splinters. */
+    size_t actions_len;         /* Number of bytes in actions[]. */
+    struct nlattr *actions;     /* Datapath actions. */
+
+    bool installed;             /* Installed in datapath? */
+
+    /* This value is normally the same as ->facet->flow.vlan_tci.  Only VLAN
+     * splinters can cause it to differ.  This value should be removed when
+     * the VLAN splinters feature is no longer needed.  */
+    ovs_be16 initial_tci;       /* Initial VLAN TCI value. */
+};
+
+static struct subfacet *subfacet_create(struct facet *, enum odp_key_fitness,
+                                        const struct nlattr *key,
+                                        size_t key_len, ovs_be16 initial_tci);
+static struct subfacet *subfacet_find(struct ofproto_dpif *,
+                                      const struct nlattr *key, size_t key_len);
+static void subfacet_destroy(struct subfacet *);
+static void subfacet_destroy__(struct subfacet *);
+static void subfacet_get_key(struct subfacet *, struct odputil_keybuf *,
+                             struct ofpbuf *key);
+static void subfacet_reset_dp_stats(struct subfacet *,
+                                    struct dpif_flow_stats *);
+static void subfacet_update_time(struct subfacet *, long long int used);
+static void subfacet_update_stats(struct subfacet *,
+                                  const struct dpif_flow_stats *);
+static void subfacet_make_actions(struct subfacet *,
+                                  const struct ofpbuf *packet);
+static int subfacet_install(struct subfacet *,
+                            const struct nlattr *actions, size_t actions_len,
+                            struct dpif_flow_stats *);
+static void subfacet_uninstall(struct subfacet *);
+
 /* An exact-match instantiation of an OpenFlow flow.
  *
  * A facet associates a "struct flow", which represents the Open vSwitch
@@ -358,65 +417,6 @@ static void facet_learn(struct facet *);
 static void facet_account(struct facet *);
 
 static bool facet_is_controller_flow(struct facet *);
-
-/* A dpif flow and actions associated with a facet.
- *
- * See also the large comment on struct facet. */
-struct subfacet {
-    /* Owners. */
-    struct hmap_node hmap_node; /* In struct ofproto_dpif 'subfacets' list. */
-    struct list list_node;      /* In struct facet's 'facets' list. */
-    struct facet *facet;        /* Owning facet. */
-
-    /* Key.
-     *
-     * To save memory in the common case, 'key' is NULL if 'key_fitness' is
-     * ODP_FIT_PERFECT, that is, odp_flow_key_from_flow() can accurately
-     * regenerate the ODP flow key from ->facet->flow. */
-    enum odp_key_fitness key_fitness;
-    struct nlattr *key;
-    int key_len;
-
-    long long int used;         /* Time last used; time created if not used. */
-
-    uint64_t dp_packet_count;   /* Last known packet count in the datapath. */
-    uint64_t dp_byte_count;     /* Last known byte count in the datapath. */
-
-    /* Datapath actions.
-     *
-     * These should be essentially identical for every subfacet in a facet, but
-     * may differ in trivial ways due to VLAN splinters. */
-    size_t actions_len;         /* Number of bytes in actions[]. */
-    struct nlattr *actions;     /* Datapath actions. */
-
-    bool installed;             /* Installed in datapath? */
-
-    /* This value is normally the same as ->facet->flow.vlan_tci.  Only VLAN
-     * splinters can cause it to differ.  This value should be removed when
-     * the VLAN splinters feature is no longer needed.  */
-    ovs_be16 initial_tci;       /* Initial VLAN TCI value. */
-};
-
-static struct subfacet *subfacet_create(struct facet *, enum odp_key_fitness,
-                                        const struct nlattr *key,
-                                        size_t key_len, ovs_be16 initial_tci);
-static struct subfacet *subfacet_find(struct ofproto_dpif *,
-                                      const struct nlattr *key, size_t key_len);
-static void subfacet_destroy(struct subfacet *);
-static void subfacet_destroy__(struct subfacet *);
-static void subfacet_get_key(struct subfacet *, struct odputil_keybuf *,
-                             struct ofpbuf *key);
-static void subfacet_reset_dp_stats(struct subfacet *,
-                                    struct dpif_flow_stats *);
-static void subfacet_update_time(struct subfacet *, long long int used);
-static void subfacet_update_stats(struct subfacet *,
-                                  const struct dpif_flow_stats *);
-static void subfacet_make_actions(struct subfacet *,
-                                  const struct ofpbuf *packet);
-static int subfacet_install(struct subfacet *,
-                            const struct nlattr *actions, size_t actions_len,
-                            struct dpif_flow_stats *);
-static void subfacet_uninstall(struct subfacet *);
 
 struct ofport_dpif {
     struct ofport up;
