@@ -35,7 +35,6 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-#include "list.h"
 
 struct ofpbuf;
 struct nl_sock;
