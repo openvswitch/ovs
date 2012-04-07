@@ -1194,6 +1194,11 @@ bridge_add_ofproto_ports(struct bridge *br)
                     /* We already reported a related error, don't bother
                      * duplicating it. */
                 }
+                if (!ofproto_port_query_by_name(br->ofproto, port->name,
+                                                &ofproto_port)) {
+                    ofproto_port_del(br->ofproto, ofproto_port.ofp_port);
+                    ofproto_port_destroy(&ofproto_port);
+                }
                 iface_clear_db_record(iface->cfg);
                 iface_destroy(iface);
             }
