@@ -1883,6 +1883,8 @@ static int ovs_vport_cmd_set(struct sk_buff *skb, struct genl_info *info)
 		err = ovs_vport_set_options(vport, a[OVS_VPORT_ATTR_OPTIONS]);
 	if (!err)
 		err = change_vport(vport, a);
+	else
+		goto exit_unlock;
 	if (!err && a[OVS_VPORT_ATTR_UPCALL_PID])
 		vport->upcall_pid = nla_get_u32(a[OVS_VPORT_ATTR_UPCALL_PID]);
 
