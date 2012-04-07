@@ -2540,12 +2540,8 @@ process_special(struct ofproto_dpif *ofproto, const struct flow *flow,
 }
 
 static struct flow_miss *
-flow_miss_create(struct hmap *todo, const struct flow *flow,
-                 enum odp_key_fitness key_fitness,
-                 const struct nlattr *key, size_t key_len,
-                 ovs_be16 initial_tci)
+flow_miss_find(struct hmap *todo, const struct flow *flow, uint32_t hash)
 {
-    uint32_t hash = flow_hash(flow, 0);
     struct flow_miss *miss;
 
     HMAP_FOR_EACH_WITH_HASH (miss, hmap_node, hash, todo) {
@@ -2554,15 +2550,7 @@ flow_miss_create(struct hmap *todo, const struct flow *flow,
         }
     }
 
-    miss = xmalloc(sizeof *miss);
-    hmap_insert(todo, &miss->hmap_node, hash);
-    miss->flow = *flow;
-    miss->key_fitness = key_fitness;
-    miss->key = key;
-    miss->key_len = key_len;
-    miss->initial_tci = initial_tci;
-    list_init(&miss->packets);
-    return miss;
+    return NULL;
 }
 
 static void
@@ -2753,10 +2741,12 @@ handle_miss_upcalls(struct ofproto_dpif *ofproto, struct dpif_upcall *upcalls,
                     size_t n_upcalls)
 {
     struct dpif_upcall *upcall;
-    struct flow_miss *miss, *next_miss;
+    struct flow_miss *miss;
+    struct flow_miss misses[FLOW_MISS_MAX_BATCH];
     struct flow_miss_op flow_miss_ops[FLOW_MISS_MAX_BATCH * 2];
     struct dpif_op *dpif_ops[FLOW_MISS_MAX_BATCH * 2];
     struct hmap todo;
+    int n_misses;
     size_t n_ops;
     size_t i;
 
@@ -2770,26 +2760,25 @@ handle_miss_upcalls(struct ofproto_dpif *ofproto, struct dpif_upcall *upcalls,
      * the packets that have the same flow in the same "flow_miss" structure so
      * that we can process them together. */
     hmap_init(&todo);
+    n_misses = 0;
     for (upcall = upcalls; upcall < &upcalls[n_upcalls]; upcall++) {
-        enum odp_key_fitness fitness;
-        struct flow_miss *miss;
-        ovs_be16 initial_tci;
-        struct flow flow;
+        struct flow_miss *miss = &misses[n_misses];
+        struct flow_miss *existing_miss;
+        uint32_t hash;
 
         /* Obtain metadata and check userspace/kernel agreement on flow match,
          * then set 'flow''s header pointers. */
-        fitness = ofproto_dpif_extract_flow_key(ofproto,
-                                                upcall->key, upcall->key_len,
-                                                &flow, &initial_tci,
-                                                upcall->packet);
-        if (fitness == ODP_FIT_ERROR) {
+        miss->key_fitness = ofproto_dpif_extract_flow_key(
+            ofproto, upcall->key, upcall->key_len,
+            &miss->flow, &miss->initial_tci, upcall->packet);
+        if (miss->key_fitness == ODP_FIT_ERROR) {
             continue;
         }
-        flow_extract(upcall->packet, flow.skb_priority, flow.tun_id,
-                     flow.in_port, &flow);
+        flow_extract(upcall->packet, miss->flow.skb_priority,
+                     miss->flow.tun_id, miss->flow.in_port, &miss->flow);
 
         /* Handle 802.1ag, LACP, and STP specially. */
-        if (process_special(ofproto, &flow, upcall->packet)) {
+        if (process_special(ofproto, &miss->flow, upcall->packet)) {
             ofproto_update_local_port_stats(&ofproto->up,
                                             0, upcall->packet->size);
             ofproto->n_matches++;
@@ -2797,8 +2786,18 @@ handle_miss_upcalls(struct ofproto_dpif *ofproto, struct dpif_upcall *upcalls,
         }
 
         /* Add other packets to a to-do list. */
-        miss = flow_miss_create(&todo, &flow, fitness,
-                                upcall->key, upcall->key_len, initial_tci);
+        hash = flow_hash(&miss->flow, 0);
+        existing_miss = flow_miss_find(&todo, &miss->flow, hash);
+        if (!existing_miss) {
+            hmap_insert(&todo, &miss->hmap_node, hash);
+            miss->key = upcall->key;
+            miss->key_len = upcall->key_len;
+            list_init(&miss->packets);
+
+            n_misses++;
+        } else {
+            miss = existing_miss;
+        }
         list_push_back(&miss->packets, &upcall->packet->list_node);
     }
 
@@ -2838,10 +2837,6 @@ handle_miss_upcalls(struct ofproto_dpif *ofproto, struct dpif_upcall *upcalls,
         case DPIF_OP_FLOW_DEL:
             NOT_REACHED();
         }
-    }
-    HMAP_FOR_EACH_SAFE (miss, next_miss, hmap_node, &todo) {
-        hmap_remove(&todo, &miss->hmap_node);
-        free(miss);
     }
     hmap_destroy(&todo);
 }
