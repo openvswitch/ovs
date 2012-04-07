@@ -140,6 +140,17 @@ static long long int stats_timer = LLONG_MIN;
 #define DB_LIMIT_INTERVAL (1 * 1000) /* In milliseconds. */
 static long long int db_limiter = LLONG_MIN;
 
+/* In some datapaths, creating and destroying OpenFlow ports can be extremely
+ * expensive.  This can cause bridge_reconfigure() to take a long time during
+ * which no other work can be done.  To deal with this problem, we limit port
+ * adds and deletions to a window of OFP_PORT_ACTION_WINDOW milliseconds per
+ * call to bridge_reconfigure().  If there is more work to do after the limit
+ * is reached, 'need_reconfigure', is flagged and it's done on the next loop.
+ * This allows the rest of the code to catch up on important things like
+ * forwarding packets. */
+#define OFP_PORT_ACTION_WINDOW 10
+static bool need_reconfigure = false;
+
 static void add_del_bridges(const struct ovsrec_open_vswitch *);
 static void bridge_del_ofprotos(void);
 static bool bridge_add_ofprotos(struct bridge *);
@@ -152,8 +163,10 @@ static size_t bridge_get_controllers(const struct bridge *br,
                                      struct ovsrec_controller ***controllersp);
 static void bridge_add_del_ports(struct bridge *,
                                  const unsigned long int *splinter_vlans);
-static void bridge_add_ofproto_ports(struct bridge *);
-static void bridge_del_ofproto_ports(struct bridge *);
+static void bridge_add_ofproto_ports(struct bridge *,
+                                     long long int *port_action_timer);
+static void bridge_del_ofproto_ports(struct bridge *,
+                                     long long int *port_action_timer);
 static void bridge_refresh_ofp_port(struct bridge *);
 static void bridge_configure_datapath_id(struct bridge *);
 static void bridge_configure_flow_eviction_threshold(struct bridge *);
@@ -399,12 +412,16 @@ static void
 bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
 {
     unsigned long int *splinter_vlans;
+    long long int port_action_timer;
     struct sockaddr_in *managers;
     struct bridge *br, *next;
     int sflow_bridge_number;
     size_t n_managers;
 
     COVERAGE_INC(bridge_reconfigure);
+
+    port_action_timer = LLONG_MAX;
+    need_reconfigure = false;
 
     /* Create and destroy "struct bridge"s, "struct port"s, and "struct
      * iface"s according to 'ovs_cfg', with only very minimal configuration
@@ -428,7 +445,7 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
     bridge_del_ofprotos();
     HMAP_FOR_EACH (br, node, &all_bridges) {
         if (br->ofproto) {
-            bridge_del_ofproto_ports(br);
+            bridge_del_ofproto_ports(br, &port_action_timer);
         }
     }
 
@@ -441,7 +458,7 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
     HMAP_FOR_EACH_SAFE (br, next, node, &all_bridges) {
         if (!br->ofproto) {
             if (bridge_add_ofprotos(br)) {
-                bridge_del_ofproto_ports(br);
+                bridge_del_ofproto_ports(br, &port_action_timer);
             } else {
                 bridge_destroy(br);
             }
@@ -449,7 +466,7 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
     }
     HMAP_FOR_EACH (br, node, &all_bridges) {
         bridge_refresh_ofp_port(br);
-        bridge_add_ofproto_ports(br);
+        bridge_add_ofproto_ports(br, &port_action_timer);
     }
 
     /* Complete the configuration. */
@@ -485,9 +502,11 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
     }
     free(managers);
 
-    /* ovs-vswitchd has completed initialization, so allow the process that
-     * forked us to exit successfully. */
-    daemonize_complete();
+    if (!need_reconfigure) {
+        /* ovs-vswitchd has completed initialization, so allow the process that
+         * forked us to exit successfully. */
+        daemonize_complete();
+    }
 }
 
 /* Iterate over all ofprotos and delete any of them that do not have a
@@ -1021,6 +1040,23 @@ add_del_bridges(const struct ovsrec_open_vswitch *cfg)
     shash_destroy(&new_br);
 }
 
+static bool
+may_port_action(long long int *port_action_timer)
+{
+    if (need_reconfigure) {
+        return false;
+    }
+
+    time_refresh();
+    if (*port_action_timer == LLONG_MAX) {
+        *port_action_timer = time_msec() + OFP_PORT_ACTION_WINDOW;
+    } else if (time_msec() > *port_action_timer) {
+        need_reconfigure = true;
+        return false;
+    }
+    return true;
+}
+
 /* Delete each ofproto port on 'br' that doesn't have a corresponding "struct
  * iface".
  *
@@ -1028,7 +1064,8 @@ add_del_bridges(const struct ovsrec_open_vswitch *cfg)
  * port already belongs to a different datapath, so we must do all port
  * deletions before any port additions. */
 static void
-bridge_del_ofproto_ports(struct bridge *br)
+bridge_del_ofproto_ports(struct bridge *br,
+                         long long int *port_action_timer)
 {
     struct ofproto_port_dump dump;
     struct ofproto_port ofproto_port;
@@ -1059,10 +1096,16 @@ bridge_del_ofproto_ports(struct bridge *br)
                 || !strcmp(netdev_get_type(iface->netdev), type))) {
             continue;
         }
-        error = ofproto_port_del(br->ofproto, ofproto_port.ofp_port);
-        if (error) {
-            VLOG_WARN("bridge %s: failed to remove %s interface (%s)",
-                      br->name, name, strerror(error));
+
+        if (may_port_action(port_action_timer)) {
+            error = ofproto_port_del(br->ofproto, ofproto_port.ofp_port);
+            if (error) {
+                VLOG_WARN("bridge %s: failed to remove %s interface (%s)",
+                          br->name, name, strerror(error));
+            } else {
+                VLOG_INFO("bridge %s: removed interface %s (%d)", br->name,
+                          name, ofproto_port.ofp_port);
+            }
         }
         if (iface) {
             netdev_close(iface->netdev);
@@ -1120,7 +1163,8 @@ bridge_refresh_ofp_port(struct bridge *br)
  * Delete any "struct iface" for which this fails.
  * Delete any "struct port" that thereby ends up with no ifaces. */
 static void
-bridge_add_ofproto_ports(struct bridge *br)
+bridge_add_ofproto_ports(struct bridge *br,
+                         long long int *port_action_timer)
 {
     struct port *port, *next_port;
 
@@ -1130,6 +1174,12 @@ bridge_add_ofproto_ports(struct bridge *br)
 
         LIST_FOR_EACH_SAFE (iface, next_iface, port_elem, &port->ifaces) {
             int error;
+
+            if (iface->ofp_port < 0 && !may_port_action(port_action_timer)) {
+                iface_clear_db_record(iface->cfg);
+                iface_destroy(iface);
+                continue;
+            }
 
             /* Open the netdev. */
             if (!iface->netdev) {
@@ -1175,6 +1225,8 @@ bridge_add_ofproto_ports(struct bridge *br)
                 error = ofproto_port_add(br->ofproto, iface->netdev,
                                          &ofp_port);
                 if (!error) {
+                    VLOG_INFO("bridge %s: added interface %s (%d)", br->name,
+                              iface->name, ofp_port);
                     iface_set_ofp_port(iface, ofp_port);
                 } else {
                     netdev_close(iface->netdev);
@@ -1203,6 +1255,8 @@ bridge_add_ofproto_ports(struct bridge *br)
                 }
                 if (!ofproto_port_query_by_name(br->ofproto, port->name,
                                                 &ofproto_port)) {
+                    VLOG_INFO("bridge %s: removed interface %s (%d)",
+                              br->name, port->name, ofproto_port.ofp_port);
                     ofproto_port_del(br->ofproto, ofproto_port.ofp_port);
                     ofproto_port_destroy(&ofproto_port);
                 }
@@ -1210,8 +1264,11 @@ bridge_add_ofproto_ports(struct bridge *br)
                 iface_destroy(iface);
             }
         }
+
         if (list_is_empty(&port->ifaces)) {
-            VLOG_WARN("%s port has no interfaces, dropping", port->name);
+            if (!need_reconfigure) {
+                VLOG_WARN("%s port has no interfaces, dropping", port->name);
+            }
             port_destroy(port);
             continue;
         }
@@ -1225,6 +1282,9 @@ bridge_add_ofproto_ports(struct bridge *br)
 
                 error = netdev_open(port->name, "internal", &netdev);
                 if (!error) {
+                    /* There are unlikely to be a great number of fake
+                     * interfaces so we don't bother rate limiting their
+                     * creation. */
                     ofproto_port_add(br->ofproto, netdev, NULL);
                     netdev_close(netdev);
                 } else {
@@ -1915,7 +1975,7 @@ bridge_run(void)
         }
     }
 
-    if (database_changed || vlan_splinters_changed) {
+    if (need_reconfigure || database_changed || vlan_splinters_changed) {
         if (cfg) {
             struct ovsdb_idl_txn *txn = ovsdb_idl_txn_create(idl);
 
@@ -2019,6 +2079,11 @@ void
 bridge_wait(void)
 {
     ovsdb_idl_wait(idl);
+
+    if (need_reconfigure) {
+        poll_immediate_wake();
+    }
+
     if (!hmap_is_empty(&all_bridges)) {
         struct bridge *br;
 
@@ -2597,9 +2662,6 @@ port_create(struct bridge *br, const struct ovsrec_port *cfg)
     list_init(&port->ifaces);
 
     hmap_insert(&br->ports, &port->hmap_node, hash_string(port->name, 0));
-
-    VLOG_INFO("created port %s on bridge %s", port->name, br->name);
-
     return port;
 }
 
@@ -2716,9 +2778,6 @@ port_destroy(struct port *port)
         }
 
         hmap_remove(&br->ports, &port->hmap_node);
-
-        VLOG_INFO("destroyed port %s on bridge %s", port->name, br->name);
-
         free(port->name);
         free(port);
     }
