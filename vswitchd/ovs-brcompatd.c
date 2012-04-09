@@ -1,4 +1,4 @@
-/* Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks
+/* Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira Networks
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -654,56 +654,53 @@ handle_get_ports_cmd(struct ofpbuf *buffer)
     return 0;
 }
 
-static struct ofpbuf *
-brc_recv_update__(void)
+static bool
+brc_recv_update__(struct ofpbuf *buffer)
 {
     for (;;) {
-        struct ofpbuf *buffer;
-        int retval;
-
-        retval = nl_sock_recv(brc_sock, &buffer, false);
+        int retval = nl_sock_recv(brc_sock, buffer, false);
         switch (retval) {
         case 0:
             if (nl_msg_nlmsgerr(buffer, NULL)
                 || nl_msg_nlmsghdr(buffer)->nlmsg_type == NLMSG_DONE) {
                 break;
             }
-            return buffer;
+            return true;
 
         case ENOBUFS:
             break;
 
         case EAGAIN:
-            return NULL;
+            return false;
 
         default:
             VLOG_WARN_RL(&rl, "brc_recv_update: %s", strerror(retval));
-            return NULL;
+            return false;
         }
-        ofpbuf_delete(buffer);
     }
 }
 
 static void
 brc_recv_update(void)
 {
-    struct ofpbuf *buffer;
     struct genlmsghdr *genlmsghdr;
+    uint64_t buffer_stub[1024 / 8];
+    struct ofpbuf buffer;
 
-    buffer = brc_recv_update__();
-    if (!buffer) {
-        return;
+    ofpbuf_use_stub(&buffer, buffer_stub, sizeof buffer_stub);
+    if (!brc_recv_update__(&buffer)) {
+        goto error;
     }
 
-    genlmsghdr = nl_msg_genlmsghdr(buffer);
+    genlmsghdr = nl_msg_genlmsghdr(&buffer);
     if (!genlmsghdr) {
         VLOG_WARN_RL(&rl, "received packet too short for generic NetLink");
         goto error;
     }
 
-    if (nl_msg_nlmsghdr(buffer)->nlmsg_type != brc_family) {
+    if (nl_msg_nlmsghdr(&buffer)->nlmsg_type != brc_family) {
         VLOG_DBG_RL(&rl, "received type (%"PRIu16") != brcompat family (%d)",
-                nl_msg_nlmsghdr(buffer)->nlmsg_type, brc_family);
+                nl_msg_nlmsghdr(&buffer)->nlmsg_type, brc_family);
         goto error;
     }
 
@@ -729,31 +726,31 @@ brc_recv_update(void)
 
     switch (genlmsghdr->cmd) {
     case BRC_GENL_C_DP_ADD:
-        handle_bridge_cmd(buffer, true);
+        handle_bridge_cmd(&buffer, true);
         break;
 
     case BRC_GENL_C_DP_DEL:
-        handle_bridge_cmd(buffer, false);
+        handle_bridge_cmd(&buffer, false);
         break;
 
     case BRC_GENL_C_PORT_ADD:
-        handle_port_cmd(buffer, true);
+        handle_port_cmd(&buffer, true);
         break;
 
     case BRC_GENL_C_PORT_DEL:
-        handle_port_cmd(buffer, false);
+        handle_port_cmd(&buffer, false);
         break;
 
     case BRC_GENL_C_FDB_QUERY:
-        handle_fdb_query_cmd(buffer);
+        handle_fdb_query_cmd(&buffer);
         break;
 
     case BRC_GENL_C_GET_BRIDGES:
-        handle_get_bridges_cmd(buffer);
+        handle_get_bridges_cmd(&buffer);
         break;
 
     case BRC_GENL_C_GET_PORTS:
-        handle_get_ports_cmd(buffer);
+        handle_get_ports_cmd(&buffer);
         break;
 
     default:
@@ -763,7 +760,7 @@ brc_recv_update(void)
     }
 
 error:
-    ofpbuf_delete(buffer);
+    ofpbuf_uninit(&buffer);
 }
 
 static void

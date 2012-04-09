@@ -300,32 +300,26 @@ STRESS_OPTION(
     5, 1, -1, 100);
 
 static int
-nl_sock_recv__(struct nl_sock *sock, struct ofpbuf **bufp, bool wait)
+nl_sock_recv__(struct nl_sock *sock, struct ofpbuf *buf, bool wait)
 {
-    /* We can't accurately predict the size of the data to be received.  Most
-     * received data will fit in a 2 kB buffer, so we allocate that much space.
-     * In case the data is actually bigger than that, we make available enough
-     * additional space to allow Netlink messages to be up to 64 kB long (a
-     * reasonable figure since that's the maximum length of a Netlink
-     * attribute). */
-    enum { MAX_SIZE = 65536 };
-    enum { HEAD_SIZE = 2048 };
-    enum { TAIL_SIZE = MAX_SIZE - HEAD_SIZE };
-
+    /* We can't accurately predict the size of the data to be received.  The
+     * caller is supposed to have allocated enough space in 'buf' to handle the
+     * "typical" case.  To handle exceptions, we make available enough space in
+     * 'tail' to allow Netlink messages to be up to 64 kB long (a reasonable
+     * figure since that's the maximum length of a Netlink attribute). */
     struct nlmsghdr *nlmsghdr;
-    uint8_t tail[TAIL_SIZE];
+    uint8_t tail[65536];
     struct iovec iov[2];
-    struct ofpbuf *buf;
     struct msghdr msg;
     ssize_t retval;
 
-    *bufp = NULL;
+    assert(buf->allocated >= sizeof *nlmsghdr);
+    ofpbuf_clear(buf);
 
-    buf = ofpbuf_new(HEAD_SIZE);
-    iov[0].iov_base = buf->data;
-    iov[0].iov_len = HEAD_SIZE;
+    iov[0].iov_base = buf->base;
+    iov[0].iov_len = buf->allocated;
     iov[1].iov_base = tail;
-    iov[1].iov_len = TAIL_SIZE;
+    iov[1].iov_len = sizeof tail;
 
     memset(&msg, 0, sizeof msg);
     msg.msg_iov = iov;
@@ -342,77 +336,65 @@ nl_sock_recv__(struct nl_sock *sock, struct ofpbuf **bufp, bool wait)
              * the kernel tried to send to us. */
             COVERAGE_INC(netlink_overflow);
         }
-        ofpbuf_delete(buf);
         return error;
     }
 
     if (msg.msg_flags & MSG_TRUNC) {
-        VLOG_ERR_RL(&rl, "truncated message (longer than %d bytes)", MAX_SIZE);
-        ofpbuf_delete(buf);
+        VLOG_ERR_RL(&rl, "truncated message (longer than %zu bytes)",
+                    sizeof tail);
         return E2BIG;
-    }
-
-    ofpbuf_put_uninit(buf, MIN(retval, HEAD_SIZE));
-    if (retval > HEAD_SIZE) {
-        COVERAGE_INC(netlink_recv_jumbo);
-        ofpbuf_put(buf, tail, retval - HEAD_SIZE);
     }
 
     nlmsghdr = buf->data;
     if (retval < sizeof *nlmsghdr
         || nlmsghdr->nlmsg_len < sizeof *nlmsghdr
         || nlmsghdr->nlmsg_len > retval) {
-        VLOG_ERR_RL(&rl, "received invalid nlmsg (%zd bytes < %d)",
-                    retval, NLMSG_HDRLEN);
-        ofpbuf_delete(buf);
+        VLOG_ERR_RL(&rl, "received invalid nlmsg (%zd bytes < %zu)",
+                    retval, sizeof *nlmsghdr);
         return EPROTO;
     }
 
     if (STRESS(netlink_overflow)) {
-        ofpbuf_delete(buf);
         return ENOBUFS;
     }
 
-    *bufp = buf;
+    buf->size = MIN(retval, buf->allocated);
+    if (retval > buf->allocated) {
+        COVERAGE_INC(netlink_recv_jumbo);
+        ofpbuf_put(buf, tail, retval - buf->allocated);
+    }
+
     log_nlmsg(__func__, 0, buf->data, buf->size, sock->protocol);
     COVERAGE_INC(netlink_received);
 
     return 0;
 }
 
-/* Tries to receive a netlink message from the kernel on 'sock'.  If
- * successful, stores the received message into '*bufp' and returns 0.  The
- * caller is responsible for destroying the message with ofpbuf_delete().  On
- * failure, returns a positive errno value and stores a null pointer into
- * '*bufp'.
+/* Tries to receive a Netlink message from the kernel on 'sock' into 'buf'.  If
+ * 'wait' is true, waits for a message to be ready.  Otherwise, fails with
+ * EAGAIN if the 'sock' receive buffer is empty.
  *
- * If 'wait' is true, nl_sock_recv waits for a message to be ready; otherwise,
- * returns EAGAIN if the 'sock' receive buffer is empty. */
+ * The caller must have initialized 'buf' with an allocation of at least
+ * NLMSG_HDRLEN bytes.  For best performance, the caller should allocate enough
+ * space for a "typical" message.
+ *
+ * On success, returns 0 and replaces 'buf''s previous content by the received
+ * message.  This function expands 'buf''s allocated memory, as necessary, to
+ * hold the actual size of the received message.
+ *
+ * On failure, returns a positive errno value and clears 'buf' to zero length.
+ * 'buf' retains its previous memory allocation.
+ *
+ * Regardless of success or failure, this function resets 'buf''s headroom to
+ * 0. */
 int
-nl_sock_recv(struct nl_sock *sock, struct ofpbuf **bufp, bool wait)
+nl_sock_recv(struct nl_sock *sock, struct ofpbuf *buf, bool wait)
 {
     int error = nl_sock_cow__(sock);
     if (error) {
         return error;
     }
-    return nl_sock_recv__(sock, bufp, wait);
-}
-
-static int
-find_nl_transaction_by_seq(struct nl_transaction **transactions, size_t n,
-                           uint32_t seq)
-{
-    int i;
-
-    for (i = 0; i < n; i++) {
-        struct nl_transaction *t = transactions[i];
-
-        if (seq == nl_msg_nlmsghdr(t->request)->nlmsg_seq) {
-            return i;
-        }
-    }
-
-    return -1;
+    return nl_sock_recv__(sock, buf, wait);
 }
 
 static void
@@ -422,8 +404,12 @@ nl_sock_record_errors__(struct nl_transaction **transactions, size_t n,
     size_t i;
 
     for (i = 0; i < n; i++) {
-        transactions[i]->error = error;
-        transactions[i]->reply = NULL;
+        struct nl_transaction *txn = transactions[i];
+
+        txn->error = error;
+        if (txn->reply) {
+            ofpbuf_clear(txn->reply);
+        }
     }
 }
 
@@ -432,21 +418,28 @@ nl_sock_transact_multiple__(struct nl_sock *sock,
                             struct nl_transaction **transactions, size_t n,
                             size_t *done)
 {
+    uint64_t tmp_reply_stub[1024 / 8];
+    struct nl_transaction tmp_txn;
+    struct ofpbuf tmp_reply;
+
+    uint32_t base_seq;
     struct iovec iovs[MAX_IOVS];
     struct msghdr msg;
     int error;
     int i;
 
+    base_seq = nl_sock_allocate_seq(sock, n);
     *done = 0;
     for (i = 0; i < n; i++) {
-        struct ofpbuf *request = transactions[i]->request;
-        struct nlmsghdr *nlmsg = nl_msg_nlmsghdr(request);
+        struct nl_transaction *txn = transactions[i];
+        struct nlmsghdr *nlmsg = nl_msg_nlmsghdr(txn->request);
 
-        nlmsg->nlmsg_len = request->size;
+        nlmsg->nlmsg_len = txn->request->size;
+        nlmsg->nlmsg_seq = base_seq + i;
         nlmsg->nlmsg_pid = sock->pid;
 
-        iovs[i].iov_base = request->data;
-        iovs[i].iov_len = request->size;
+        iovs[i].iov_base = txn->request->data;
+        iovs[i].iov_len = txn->request->size;
     }
 
     memset(&msg, 0, sizeof msg);
@@ -457,9 +450,9 @@ nl_sock_transact_multiple__(struct nl_sock *sock,
     } while (error == EINTR);
 
     for (i = 0; i < n; i++) {
-        struct ofpbuf *request = transactions[i]->request;
+        struct nl_transaction *txn = transactions[i];
 
-        log_nlmsg(__func__, error, request->data, request->size,
+        log_nlmsg(__func__, error, txn->request->data, txn->request->size,
                   sock->protocol);
     }
     if (!error) {
@@ -470,62 +463,93 @@ nl_sock_transact_multiple__(struct nl_sock *sock,
         return error;
     }
 
+    ofpbuf_use_stub(&tmp_reply, tmp_reply_stub, sizeof tmp_reply_stub);
+    tmp_txn.request = NULL;
+    tmp_txn.reply = &tmp_reply;
+    tmp_txn.error = 0;
     while (n > 0) {
-        struct ofpbuf *reply;
+        struct nl_transaction *buf_txn, *txn;
+        uint32_t seq;
 
-        error = nl_sock_recv__(sock, &reply, false);
-        if (error == EAGAIN) {
-            nl_sock_record_errors__(transactions, n, 0);
-            *done += n;
-            return 0;
-        } else if (error) {
-            return error;
+        /* Find a transaction whose buffer we can use for receiving a reply.
+         * If no such transaction is left, use tmp_txn. */
+        buf_txn = &tmp_txn;
+        for (i = 0; i < n; i++) {
+            if (transactions[i]->reply) {
+                buf_txn = transactions[i];
+                break;
+            }
         }
 
-        i = find_nl_transaction_by_seq(transactions, n,
-                                       nl_msg_nlmsghdr(reply)->nlmsg_seq);
-        if (i < 0) {
-            VLOG_DBG_RL(&rl, "ignoring unexpected seq %#"PRIx32,
-                        nl_msg_nlmsghdr(reply)->nlmsg_seq);
-            ofpbuf_delete(reply);
+        /* Receive a reply. */
+        error = nl_sock_recv__(sock, buf_txn->reply, false);
+        if (error) {
+            if (error == EAGAIN) {
+                nl_sock_record_errors__(transactions, n, 0);
+                *done += n;
+                error = 0;
+            }
+            break;
+        }
+
+        /* Match the reply up with a transaction. */
+        seq = nl_msg_nlmsghdr(buf_txn->reply)->nlmsg_seq;
+        if (seq < base_seq || seq >= base_seq + n) {
+            VLOG_DBG_RL(&rl, "ignoring unexpected seq %#"PRIx32, seq);
             continue;
         }
+        i = seq - base_seq;
+        txn = transactions[i];
 
-        nl_sock_record_errors__(transactions, i, 0);
-        if (nl_msg_nlmsgerr(reply, &error)) {
-            transactions[i]->reply = NULL;
-            transactions[i]->error = error;
-            if (error) {
-                VLOG_DBG_RL(&rl, "received NAK error=%d (%s)",
-                            error, strerror(error));
+        /* Fill in the results for 'txn'. */
+        if (nl_msg_nlmsgerr(buf_txn->reply, &txn->error)) {
+            if (txn->reply) {
+                ofpbuf_clear(txn->reply);
             }
-            ofpbuf_delete(reply);
+            if (txn->error) {
+                VLOG_DBG_RL(&rl, "received NAK error=%d (%s)",
+                            error, strerror(txn->error));
+            }
         } else {
-            transactions[i]->reply = reply;
-            transactions[i]->error = 0;
+            txn->error = 0;
+            if (txn->reply && txn != buf_txn) {
+                /* Swap buffers. */
+                struct ofpbuf *reply = buf_txn->reply;
+                buf_txn->reply = txn->reply;
+                txn->reply = reply;
+            }
         }
 
+        /* Fill in the results for transactions before 'txn'.  (We have to do
+         * this after the results for 'txn' itself because of the buffer swap
+         * above.) */
+        nl_sock_record_errors__(transactions, i, 0);
+
+        /* Advance. */
         *done += i + 1;
         transactions += i + 1;
         n -= i + 1;
+        base_seq += i + 1;
     }
+    ofpbuf_uninit(&tmp_reply);
 
-    return 0;
+    return error;
 }
 
-/* Sends the 'request' member of the 'n' transactions in 'transactions' to the
- * kernel, in order, and waits for responses to all of them.  Fills in the
+/* Sends the 'request' member of the 'n' transactions in 'transactions' on
+ * 'sock', in order, and receives responses to all of them.  Fills in the
  * 'error' member of each transaction with 0 if it was successful, otherwise
- * with a positive errno value.  'reply' will be NULL on error or if the
- * transaction was successful but had no reply beyond an indication of success.
- * For a successful transaction that did have a more detailed reply, 'reply'
- * will be set to the reply message.
+ * with a positive errno value.  If 'reply' is nonnull, then it will be filled
+ * with the reply if the message receives a detailed reply.  In other cases,
+ * i.e. where the request failed or had no reply beyond an indication of
+ * success, 'reply' will be cleared if it is nonnull.
  *
  * The caller is responsible for destroying each request and reply, and the
  * transactions array itself.
  *
  * Before sending each message, this function will finalize nlmsg_len in each
- * 'request' to match the ofpbuf's size, and set nlmsg_pid to 'sock''s pid.
+ * 'request' to match the ofpbuf's size,  set nlmsg_pid to 'sock''s pid, and
+ * initialize nlmsg_seq.
  *
  * Bare Netlink is an unreliable transport protocol.  This function layers
  * reliable delivery and reply semantics on top of bare Netlink.  See
@@ -640,13 +664,20 @@ nl_sock_transact(struct nl_sock *sock, const struct ofpbuf *request,
     struct nl_transaction transaction;
 
     transaction.request = (struct ofpbuf *) request;
+    transaction.reply = replyp ? ofpbuf_new(1024) : NULL;
     transactionp = &transaction;
+
     nl_sock_transact_multiple(sock, &transactionp, 1);
+
     if (replyp) {
-        *replyp = transaction.reply;
-    } else {
-        ofpbuf_delete(transaction.reply);
+        if (transaction.error) {
+            ofpbuf_delete(transaction.reply);
+            *replyp = NULL;
+        } else {
+            *replyp = transaction.reply;
+        }
     }
+
     return transaction.error;
 }
 
@@ -724,7 +755,7 @@ void
 nl_dump_start(struct nl_dump *dump,
               struct nl_sock *sock, const struct ofpbuf *request)
 {
-    dump->buffer = NULL;
+    ofpbuf_init(&dump->buffer, 4096);
     if (sock->dump) {
         /* 'sock' already has an ongoing dump.  Clone the socket because
          * Netlink only allows one dump at a time. */
@@ -745,26 +776,24 @@ nl_dump_start(struct nl_dump *dump,
 
 /* Helper function for nl_dump_next(). */
 static int
-nl_dump_recv(struct nl_dump *dump, struct ofpbuf **bufferp)
+nl_dump_recv(struct nl_dump *dump)
 {
     struct nlmsghdr *nlmsghdr;
-    struct ofpbuf *buffer;
     int retval;
 
-    retval = nl_sock_recv__(dump->sock, bufferp, true);
+    retval = nl_sock_recv__(dump->sock, &dump->buffer, true);
     if (retval) {
         return retval == EINTR ? EAGAIN : retval;
     }
-    buffer = *bufferp;
 
-    nlmsghdr = nl_msg_nlmsghdr(buffer);
+    nlmsghdr = nl_msg_nlmsghdr(&dump->buffer);
     if (dump->seq != nlmsghdr->nlmsg_seq) {
         VLOG_DBG_RL(&rl, "ignoring seq %#"PRIx32" != expected %#"PRIx32,
                     nlmsghdr->nlmsg_seq, dump->seq);
         return EAGAIN;
     }
 
-    if (nl_msg_nlmsgerr(buffer, &retval)) {
+    if (nl_msg_nlmsgerr(&dump->buffer, &retval)) {
         VLOG_INFO_RL(&rl, "netlink dump request error (%s)",
                      strerror(retval));
         return retval && retval != EAGAIN ? retval : EPROTO;
@@ -796,15 +825,10 @@ nl_dump_next(struct nl_dump *dump, struct ofpbuf *reply)
         return false;
     }
 
-    if (dump->buffer && !dump->buffer->size) {
-        ofpbuf_delete(dump->buffer);
-        dump->buffer = NULL;
-    }
-    while (!dump->buffer) {
-        int retval = nl_dump_recv(dump, &dump->buffer);
+    while (!dump->buffer.size) {
+        int retval = nl_dump_recv(dump);
         if (retval) {
-            ofpbuf_delete(dump->buffer);
-            dump->buffer = NULL;
+            ofpbuf_clear(&dump->buffer);
             if (retval != EAGAIN) {
                 dump->status = retval;
                 return false;
@@ -812,7 +836,7 @@ nl_dump_next(struct nl_dump *dump, struct ofpbuf *reply)
         }
     }
 
-    nlmsghdr = nl_msg_next(dump->buffer, reply);
+    nlmsghdr = nl_msg_next(&dump->buffer, reply);
     if (!nlmsghdr) {
         VLOG_WARN_RL(&rl, "netlink dump reply contains message fragment");
         dump->status = EPROTO;
@@ -847,7 +871,7 @@ nl_dump_done(struct nl_dump *dump)
             nl_sock_destroy(dump->sock);
         }
     }
-    ofpbuf_delete(dump->buffer);
+    ofpbuf_uninit(&dump->buffer);
     return dump->status == EOF ? 0 : dump->status;
 }
 
@@ -1191,5 +1215,3 @@ log_nlmsg(const char *function, int error,
     VLOG_DBG_RL(&rl, "%s (%s): %s", function, strerror(error), nlmsg);
     free(nlmsg);
 }
-
-

@@ -823,8 +823,12 @@ dpif_linux_operate__(struct dpif *dpif_, struct dpif_op **ops, size_t n_ops)
 
     struct op_auxdata {
         struct nl_transaction txn;
+
         struct ofpbuf request;
         uint64_t request_stub[1024 / 8];
+
+        struct ofpbuf reply;
+        uint64_t reply_stub[1024 / 8];
     } auxes[MAX_OPS];
 
     struct nl_transaction *txnsp[MAX_OPS];
@@ -843,12 +847,16 @@ dpif_linux_operate__(struct dpif *dpif_, struct dpif_op **ops, size_t n_ops)
                         aux->request_stub, sizeof aux->request_stub);
         aux->txn.request = &aux->request;
 
+        ofpbuf_use_stub(&aux->reply, aux->reply_stub, sizeof aux->reply_stub);
+        aux->txn.reply = NULL;
+
         switch (op->type) {
         case DPIF_OP_FLOW_PUT:
             put = &op->u.flow_put;
             dpif_linux_init_flow_put(dpif_, put, &flow);
             if (put->stats) {
                 flow.nlmsg_flags |= NLM_F_ECHO;
+                aux->txn.reply = &aux->reply;
             }
             dpif_linux_flow_to_ofpbuf(&flow, &aux->request);
             break;
@@ -858,6 +866,7 @@ dpif_linux_operate__(struct dpif *dpif_, struct dpif_op **ops, size_t n_ops)
             dpif_linux_init_flow_del(dpif_, del, &flow);
             if (del->stats) {
                 flow.nlmsg_flags |= NLM_F_ECHO;
+                aux->txn.reply = &aux->reply;
             }
             dpif_linux_flow_to_ofpbuf(&flow, &aux->request);
             break;
@@ -879,6 +888,7 @@ dpif_linux_operate__(struct dpif *dpif_, struct dpif_op **ops, size_t n_ops)
     nl_sock_transact_multiple(genl_sock, txnsp, n_ops);
 
     for (i = 0; i < n_ops; i++) {
+        struct op_auxdata *aux = &auxes[i];
         struct nl_transaction *txn = &auxes[i].txn;
         struct dpif_op *op = ops[i];
         struct dpif_flow_put *put;
@@ -918,8 +928,8 @@ dpif_linux_operate__(struct dpif *dpif_, struct dpif_op **ops, size_t n_ops)
             NOT_REACHED();
         }
 
-        ofpbuf_uninit(txn->request);
-        ofpbuf_delete(txn->reply);
+        ofpbuf_uninit(&aux->request);
+        ofpbuf_uninit(&aux->reply);
     }
 }
 
@@ -1121,10 +1131,13 @@ dpif_linux_recv(struct dpif *dpif_, struct dpif_upcall *upcall)
                 return EAGAIN;
             }
 
-            error = nl_sock_recv(upcall_sock, &buf, false);
-            if (error == EAGAIN) {
-                break;
-            } else if (error) {
+            buf = ofpbuf_new(2048);
+            error = nl_sock_recv(upcall_sock, buf, false);
+            if (error) {
+                ofpbuf_delete(buf);
+                if (error == EAGAIN) {
+                    break;
+                }
                 return error;
             }
 

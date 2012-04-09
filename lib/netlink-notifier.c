@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011 Nicira Networks.
+ * Copyright (c) 2009, 2010, 2011, 2012 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -164,18 +164,20 @@ nln_run(struct nln *nln)
 
     nln->has_run = true;
     for (;;) {
-        struct ofpbuf *buf;
+        uint64_t buf_stub[4096 / 8];
+        struct ofpbuf buf;
         int error;
 
+        ofpbuf_use_stub(&buf, buf_stub, sizeof buf_stub);
         error = nl_sock_recv(nln->notify_sock, &buf, false);
         if (!error) {
-            if (nln->parse(buf, nln->change)) {
+            if (nln->parse(&buf, nln->change)) {
                 nln_report(nln, nln->change);
             } else {
                 VLOG_WARN_RL(&rl, "received bad netlink message");
                 nln_report(nln, NULL);
             }
-            ofpbuf_delete(buf);
+            ofpbuf_uninit(&buf);
         } else if (error == EAGAIN) {
             return;
         } else {

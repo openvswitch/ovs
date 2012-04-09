@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,8 +35,8 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include "ofpbuf.h"
 
-struct ofpbuf;
 struct nl_sock;
 
 #ifndef HAVE_NETLINK
@@ -52,9 +52,9 @@ int nl_sock_join_mcgroup(struct nl_sock *, unsigned int multicast_group);
 int nl_sock_leave_mcgroup(struct nl_sock *, unsigned int multicast_group);
 
 int nl_sock_send(struct nl_sock *, const struct ofpbuf *, bool wait);
-int nl_sock_recv(struct nl_sock *, struct ofpbuf **, bool wait);
+int nl_sock_recv(struct nl_sock *, struct ofpbuf *, bool wait);
 int nl_sock_transact(struct nl_sock *, const struct ofpbuf *request,
-                     struct ofpbuf **reply);
+                     struct ofpbuf **replyp);
 
 int nl_sock_drain(struct nl_sock *);
 
@@ -68,8 +68,14 @@ struct nl_transaction {
     /* Filled in by client. */
     struct ofpbuf *request;     /* Request to send. */
 
-    /* Filled in by nl_sock_transact_batch(). */
-    struct ofpbuf *reply;       /* Reply (NULL if reply was an error code). */
+    /* The client must initialize 'reply' to one of:
+     *
+     *   - NULL, if it does not care to examine the reply.
+     *
+     *   - Otherwise, to an ofpbuf with a memory allocation of at least
+     *     NLMSG_HDRLEN bytes.
+     */
+    struct ofpbuf *reply;       /* Reply (empty if reply was an error code). */
     int error;                  /* Positive errno value, 0 if no error. */
 };
 
@@ -80,7 +86,7 @@ void nl_sock_transact_multiple(struct nl_sock *,
 struct nl_dump {
     struct nl_sock *sock;       /* Socket being dumped. */
     uint32_t seq;               /* Expected nlmsg_seq for replies. */
-    struct ofpbuf *buffer;      /* Receive buffer currently being iterated. */
+    struct ofpbuf buffer;       /* Receive buffer currently being iterated. */
     int status;                 /* 0=OK, EOF=done, or positive errno value. */
 };
 
