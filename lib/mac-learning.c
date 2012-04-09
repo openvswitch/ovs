@@ -28,6 +28,7 @@
 #include "poll-loop.h"
 #include "tag.h"
 #include "timeval.h"
+#include "unaligned.h"
 #include "util.h"
 #include "vlan-bitmap.h"
 #include "vlog.h"
@@ -49,7 +50,9 @@ static uint32_t
 mac_table_hash(const struct mac_learning *ml, const uint8_t mac[ETH_ADDR_LEN],
                uint16_t vlan)
 {
-    return hash_bytes(mac, ETH_ADDR_LEN, vlan ^ ml->secret);
+    unsigned int mac1 = get_unaligned_u32((uint32_t *) mac);
+    unsigned int mac2 = get_unaligned_u16((uint16_t *) (mac + 4));
+    return hash_3words(mac1, mac2 | (vlan << 16), ml->secret);
 }
 
 static struct mac_entry *
