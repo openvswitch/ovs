@@ -361,6 +361,7 @@ def main():
         iface_ids = new_iface_ids
         vm_ids = new_vm_ids
 
+        txn.add_comment("ovs-xapi-sync: Updating records from XAPI")
         txn.commit_block()
 
     unixctl_server.close()
