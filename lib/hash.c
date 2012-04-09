@@ -16,6 +16,7 @@
 #include <config.h>
 #include "hash.h"
 #include <string.h>
+#include "unaligned.h"
 
 /* Returns the hash of the 'n' 32-bit words at 'p', starting from 'basis'.
  * 'p' must be properly aligned. */
@@ -76,21 +77,21 @@ hash_bytes(const void *p_, size_t n, uint32_t basis)
 {
     const uint8_t *p = p_;
     uint32_t a, b, c;
-    uint32_t tmp[3];
 
     a = b = c = 0xdeadbeef + n + basis;
 
-    while (n >= sizeof tmp) {
-        memcpy(tmp, p, sizeof tmp);
-        a += tmp[0];
-        b += tmp[1];
-        c += tmp[2];
+    while (n >= 12) {
+        a += get_unaligned_u32((uint32_t *) p);
+        b += get_unaligned_u32((uint32_t *) (p + 4));
+        c += get_unaligned_u32((uint32_t *) (p + 8));
         hash_mix(&a, &b, &c);
-        n -= sizeof tmp;
-        p += sizeof tmp;
+        n -= 12;
+        p += 12;
     }
 
     if (n) {
+        uint32_t tmp[3];
+
         tmp[0] = tmp[1] = tmp[2] = 0;
         memcpy(tmp, p, n);
         a += tmp[0];
