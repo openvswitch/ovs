@@ -1036,6 +1036,7 @@ insert_table(struct classifier *cls, const struct flow_wildcards *wc)
     table = xzalloc(sizeof *table);
     hmap_init(&table->rules);
     table->wc = *wc;
+    table->is_catchall = flow_wildcards_is_catchall(&table->wc);
     hmap_insert(&cls->tables, &table->hmap_node, flow_wildcards_hash(wc, 0));
 
     return table;
@@ -1053,16 +1054,24 @@ static struct cls_rule *
 find_match(const struct cls_table *table, const struct flow *flow)
 {
     struct cls_rule *rule;
-    struct flow f;
 
-    f = *flow;
-    flow_zero_wildcards(&f, &table->wc);
-    HMAP_FOR_EACH_WITH_HASH (rule, hmap_node, flow_hash(&f, 0),
-                             &table->rules) {
-        if (flow_equal(&f, &rule->flow)) {
+    if (table->is_catchall) {
+        HMAP_FOR_EACH (rule, hmap_node, &table->rules) {
             return rule;
         }
+    } else {
+        struct flow f;
+
+        f = *flow;
+        flow_zero_wildcards(&f, &table->wc);
+        HMAP_FOR_EACH_WITH_HASH (rule, hmap_node, flow_hash(&f, 0),
+                                 &table->rules) {
+            if (flow_equal(&f, &rule->flow)) {
+                return rule;
+            }
+        }
     }
+
     return NULL;
 }
 
