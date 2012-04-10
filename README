@@ -102,6 +102,8 @@ Linux host, read INSTALL.RHEL.
 To use Open vSwitch with KVM on Linux, read INSTALL.Linux, then
 INSTALL.KVM.
 
+To use Open vSwitch with Libvirt, read INSTALL.Libvirt.
+
 To install Open vSwitch without using a kernel module, read
 INSTALL.userspace.
 

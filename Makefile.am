@@ -34,6 +34,7 @@ EXTRA_DIST = \
 	CodingStyle \
 	DESIGN \
 	INSTALL.KVM \
+	INSTALL.Libvirt \
 	INSTALL.Linux \
 	INSTALL.RHEL \
 	INSTALL.SSL \
