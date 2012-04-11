@@ -100,7 +100,8 @@ nibble   0   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15
 ])
 AT_CLEANUP
 
-AT_SETUP([test log_2_floor])
+AT_SETUP([test utility functions])
+AT_KEYWORDS([util])
 AT_CHECK([test-util])
 AT_CLEANUP
 

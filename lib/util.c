@@ -851,6 +851,54 @@ bitwise_zero(void *dst_, unsigned int dst_len, unsigned dst_ofs,
     }
 }
 
+/* Sets to 1 all of the 'n_bits' bits starting from bit 'dst_ofs' in 'dst'.
+ * 'dst' is 'dst_len' bytes long.
+ *
+ * If you consider all of 'dst' to be a single unsigned integer in network byte
+ * order, then bit N is the bit with value 2**N.  That is, bit 0 is the bit
+ * with value 1 in dst[dst_len - 1], bit 1 is the bit with value 2, bit 2 is
+ * the bit with value 4, ..., bit 8 is the bit with value 1 in dst[dst_len -
+ * 2], and so on.
+ *
+ * Required invariant:
+ *   dst_ofs + n_bits <= dst_len * 8
+ */
+void
+bitwise_one(void *dst_, unsigned int dst_len, unsigned dst_ofs,
+            unsigned int n_bits)
+{
+    uint8_t *dst = dst_;
+
+    if (!n_bits) {
+        return;
+    }
+
+    dst += dst_len - (dst_ofs / 8 + 1);
+    dst_ofs %= 8;
+
+    if (dst_ofs) {
+        unsigned int chunk = MIN(n_bits, 8 - dst_ofs);
+
+        *dst |= ((1 << chunk) - 1) << dst_ofs;
+
+        n_bits -= chunk;
+        if (!n_bits) {
+            return;
+        }
+
+        dst--;
+    }
+
+    while (n_bits >= 8) {
+        *dst-- = 0xff;
+        n_bits -= 8;
+    }
+
+    if (n_bits) {
+        *dst |= (1 << n_bits) - 1;
+    }
+}
+
 /* Copies the 'n_bits' low-order bits of 'value' into the 'n_bits' bits
  * starting at bit 'dst_ofs' in 'dst', which is 'dst_len' bytes long.
  *

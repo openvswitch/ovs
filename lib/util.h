@@ -213,6 +213,8 @@ void bitwise_copy(const void *src, unsigned int src_len, unsigned int src_ofs,
                   unsigned int n_bits);
 void bitwise_zero(void *dst_, unsigned int dst_len, unsigned dst_ofs,
                   unsigned int n_bits);
+void bitwise_one(void *dst_, unsigned int dst_len, unsigned dst_ofs,
+                 unsigned int n_bits);
 void bitwise_put(uint64_t value,
                  void *dst, unsigned int dst_len, unsigned int dst_ofs,
                  unsigned int n_bits);
