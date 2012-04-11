@@ -2145,25 +2145,48 @@ mf_format(const struct mf_field *mf,
     }
 }
 
-/* Makes a subfield starting at bit offset 'ofs' and continuing for 'n_bits' in
- * 'rule''s field 'mf' exactly match the 'n_bits' least-significant bits of
- * 'x'.
+/* Makes subfield 'sf' within 'rule' exactly match the 'sf->n_bits'
+ * least-significant bits in 'x'.
  *
- * Example: suppose that 'mf' is originally the following 2-byte field in
- * 'rule':
+ * See mf_set_subfield() for an example.
+ *
+ * The difference between this function and mf_set_subfield() is that the
+ * latter function can only handle subfields up to 64 bits wide, whereas this
+ * one handles the general case.  On the other hand, mf_set_subfield() is
+ * arguably easier to use. */
+void
+mf_write_subfield(const struct mf_subfield *sf, const union mf_subvalue *x,
+                  struct cls_rule *rule)
+{
+    const struct mf_field *field = sf->field;
+    union mf_value value, mask;
+
+    mf_get(field, rule, &value, &mask);
+    bitwise_copy(x, sizeof *x, 0, &value, field->n_bytes, sf->ofs, sf->n_bits);
+    bitwise_one (                 &mask,  field->n_bytes, sf->ofs, sf->n_bits);
+    mf_set(field, &value, &mask, rule);
+}
+
+/* Makes subfield 'sf' within 'rule' exactly match the 'sf->n_bits'
+ * least-significant bits of 'x'.
+ *
+ * Example: suppose that 'sf->field' is originally the following 2-byte field
+ * in 'rule':
  *
  *     value == 0xe00a == 2#1110000000001010
  *      mask == 0xfc3f == 2#1111110000111111
  *
- * The call mf_set_subfield(mf, 0x55, 8, 7, rule) would have the following
- * effect (note that 0x55 is 2#1010101):
+ * The call mf_set_subfield(sf, 0x55, 8, 7, rule), where sf->ofs == 8 and
+ * sf->n_bits == 7 would have the following effect (note that 0x55 is
+ * 2#1010101):
  *
  *     value == 0xd50a == 2#1101010100001010
  *      mask == 0xff3f == 2#1111111100111111
+ *                           ^^^^^^^ affected bits
  *
  * The caller is responsible for ensuring that the result will be a valid
- * wildcard pattern for 'mf'.  The caller is responsible for ensuring that
- * 'rule' meets 'mf''s prerequisites. */
+ * wildcard pattern for 'sf->field'.  The caller is responsible for ensuring
+ * that 'rule' meets 'sf->field''s prerequisites. */
 void
 mf_set_subfield(const struct mf_subfield *sf, uint64_t x,
                 struct cls_rule *rule)
@@ -2216,6 +2239,22 @@ mf_set_subfield_value(const struct mf_subfield *sf, uint64_t x,
         bitwise_put(x, &value, field->n_bytes, ofs, n_bits);
         mf_set_flow_value(field, &value, flow);
     }
+}
+
+/* Initializes 'x' to the value of 'sf' within 'flow'.  'sf' must be valid for
+ * reading 'flow', e.g. as checked by mf_check_src(). */
+void
+mf_read_subfield(const struct mf_subfield *sf, const struct flow *flow,
+                 union mf_subvalue *x)
+{
+    union mf_value value;
+
+    mf_get_value(sf->field, flow, &value);
+
+    memset(x, 0, sizeof *x);
+    bitwise_copy(&value, sf->field->n_bytes, sf->ofs,
+                 x, sizeof *x, 0,
+                 sf->n_bits);
 }
 
 /* Returns the value of 'sf' within 'flow'.  'sf' must be valid for reading

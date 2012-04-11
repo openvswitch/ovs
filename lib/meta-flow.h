@@ -198,6 +198,7 @@ union mf_value {
     uint8_t mac[ETH_ADDR_LEN];
     struct in6_addr ipv6;
 };
+BUILD_ASSERT_DECL(sizeof(union mf_value) == 16);
 
 /* Part of a field. */
 struct mf_subfield {
@@ -205,6 +206,19 @@ struct mf_subfield {
     unsigned int ofs;           /* Bit offset. */
     unsigned int n_bits;        /* Number of bits. */
 };
+
+/* Data for some part of an mf_field.
+ *
+ * The data is stored "right-justified".  For example, if "union mf_subvalue
+ * value" contains NXM_OF_VLAN_TCI[0..11], then one could access the
+ * corresponding data in value.be16[7] as the bits in the mask htons(0xfff). */
+union mf_subvalue {
+    uint8_t u8[16];
+    ovs_be16 be16[8];
+    ovs_be32 be32[4];
+    ovs_be64 be64[2];
+};
+BUILD_ASSERT_DECL(sizeof(union mf_value) == sizeof (union mf_subvalue));
 
 /* Finding mf_fields. */
 const struct mf_field *mf_from_id(enum mf_field_id);
@@ -244,11 +258,17 @@ void mf_set_wild(const struct mf_field *, struct cls_rule *);
 void mf_random_value(const struct mf_field *, union mf_value *value);
 
 /* Subfields. */
+void mf_write_subfield(const struct mf_subfield *, const union mf_subvalue *,
+                       struct cls_rule *);
 void mf_set_subfield(const struct mf_subfield *, uint64_t value,
                      struct cls_rule *);
 void mf_set_subfield_value(const struct mf_subfield *, uint64_t value,
                            struct flow *);
+
+void mf_read_subfield(const struct mf_subfield *, const struct flow *,
+                      union mf_subvalue *);
 uint64_t mf_get_subfield(const struct mf_subfield *, const struct flow *);
+
 
 void mf_format_subfield(const struct mf_subfield *, struct ds *);
 char *mf_parse_subfield__(struct mf_subfield *sf, const char **s);
