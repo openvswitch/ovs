@@ -1,4 +1,4 @@
-# Copyright (c) 2009, 2010, 2011 Nicira Networks
+# Copyright (c) 2009, 2010, 2011, 2012 Nicira Networks
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -292,11 +292,17 @@ def idl_set(idl, commands, step):
                                  '"%s"\n' % args[1])
                 sys.exit(1)
         elif name == "increment":
-            if len(args) != 2:
-                sys.stderr.write('"increment" command requires 2 arguments\n')
+            if len(args) != 1:
+                sys.stderr.write('"increment" command requires 1 argument\n')
                 sys.exit(1)
 
-            txn.increment(args[0], args[1], [])
+            s = idltest_find_simple(idl, int(args[0]))
+            if not s:
+                sys.stderr.write('"set" command asks for nonexistent i=%d\n'
+                                 % int(args[0]))
+                sys.exit(1)
+
+            s.increment("i")
             increment = True
         elif name == "abort":
             txn.abort()

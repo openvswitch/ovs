@@ -604,6 +604,21 @@ class Row(object):
         self.__dict__["_changes"] = None
         del self._table.rows[self.uuid]
 
+    def increment(self, column_name):
+        """Causes the transaction, when committed, to increment the value of
+        'column_name' within this row by 1.  'column_name' must have an integer
+        type.  After the transaction commits successfully, the client may
+        retrieve the final (incremented) value of 'column_name' with
+        Transaction.get_increment_new_value().
+
+        The client could accomplish something similar by reading and writing
+        and verify()ing columns.  However, increment() will never (by itself)
+        cause a transaction to fail because of a verify error.
+
+        The intended use is for incrementing the "next_cfg" column in
+        the Open_vSwitch table."""
+        self._idl.txn._increment(self, column_name)
+
 
 def _uuid_name_from_uuid(uuid):
     return "row%s" % str(uuid).replace("-", "_")
@@ -666,9 +681,8 @@ class Transaction(object):
         self._comments = []
         self._commit_seqno = self.idl.change_seqno
 
-        self._inc_table = None
+        self._inc_row = None
         self._inc_column = None
-        self._inc_where = None
 
         self._inserted_rows = {}  # Map from UUID to _InsertedRow
 
@@ -678,12 +692,6 @@ class Transaction(object):
         committed to the OVSDB log, which "ovsdb-tool show-log" can print in a
         relatively human-readable form.)"""
         self._comments.append(comment)
-
-    def increment(self, table, column, where):
-        assert not self._inc_table
-        self._inc_table = table
-        self._inc_column = column
-        self._inc_where = where
 
     def wait(self, poller):
         if self._status not in (Transaction.UNCOMMITTED,
@@ -803,18 +811,18 @@ class Transaction(object):
                     operations.append(op)
 
         # Add increment.
-        if self._inc_table and any_updates:
+        if self._inc_row and any_updates:
             self._inc_index = len(operations) - 1
 
             operations.append({"op": "mutate",
-                               "table": self._inc_table,
+                               "table": self._inc_row._table.name,
                                "where": self._substitute_uuids(
-                                   self._inc_where),
+                                   _where_uuid_equals(self._inc_row.uuid)),
                                "mutations": [[self._inc_column, "+=", 1]]})
             operations.append({"op": "select",
-                               "table": self._inc_table,
+                               "table": self._inc_row._table.name,
                                "where": self._substitute_uuids(
-                                   self._inc_where),
+                                   _where_uuid_equals(self._inc_row.uuid)),
                                "columns": [self._inc_column]})
 
         # Add comment.
@@ -898,6 +906,11 @@ class Transaction(object):
             return inserted_row.real
         return None
 
+    def _increment(self, row, column):
+        assert not self._inc_row
+        self._inc_row = row
+        self._inc_column = column
+
     def _write(self, row, column, datum):
         assert row._changes is not None
 
@@ -978,7 +991,7 @@ class Transaction(object):
                     vlog.warn("operation reply is not JSON null or object")
 
             if not soft_errors and not hard_errors and not lock_errors:
-                if self._inc_table and not self.__process_inc_reply(ops):
+                if self._inc_row and not self.__process_inc_reply(ops):
                     hard_errors = True
 
                 for insert in self._inserted_rows.itervalues():

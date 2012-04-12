@@ -221,7 +221,7 @@ OVSDB_CHECK_IDL([simple idl, handling verification failure],
 000: i=1 r=2 b=false s= u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<2>
 001: commit, status=success
 002: {"error":null,"result":[{"count":1}]}
-003: commit, status=try again now
+003: commit, status=try again
 004: i=0 r=0 b=true s= u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
 004: i=1 r=5 b=false s= u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<2>
 005: commit, status=success
@@ -235,7 +235,7 @@ OVSDB_CHECK_IDL([simple idl, increment operation],
       {"op": "insert",
        "table": "simple",
        "row": {}}]']],
-  [['set 0 r 2.0, increment simple i']],
+  [['set 0 r 2.0, increment 0']],
   [[000: i=0 r=0 b=false s= u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
 001: commit, status=success, increment=1
 002: i=1 r=2 b=false s= u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>

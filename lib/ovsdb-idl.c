@@ -94,9 +94,9 @@ struct ovsdb_idl_txn {
     unsigned int commit_seqno;
 
     /* Increments. */
-    char *inc_table;
-    char *inc_column;
-    struct json *inc_where;
+    const char *inc_table;
+    const char *inc_column;
+    struct uuid inc_row;
     unsigned int inc_index;
     int64_t inc_new_value;
 
@@ -1185,7 +1185,6 @@ ovsdb_idl_txn_create(struct ovsdb_idl *idl)
 
     txn->inc_table = NULL;
     txn->inc_column = NULL;
-    txn->inc_where = NULL;
 
     hmap_init(&txn->inserted_rows);
 
@@ -1216,14 +1215,30 @@ ovsdb_idl_txn_set_dry_run(struct ovsdb_idl_txn *txn)
     txn->dry_run = true;
 }
 
+/* Causes 'txn', when committed, to increment the value of 'column' within
+ * 'row' by 1.  'column' must have an integer type.  After 'txn' commits
+ * successfully, the client may retrieve the final (incremented) value of
+ * 'column' with ovsdb_idl_txn_get_increment_new_value().
+ *
+ * The client could accomplish something similar with ovsdb_idl_read(),
+ * ovsdb_idl_txn_verify() and ovsdb_idl_txn_write(), or with ovsdb-idlc
+ * generated wrappers for these functions.  However, ovsdb_idl_txn_increment()
+ * will never (by itself) fail because of a verify error.
+ *
+ * The intended use is for incrementing the "next_cfg" column in the
+ * Open_vSwitch table. */
 void
-ovsdb_idl_txn_increment(struct ovsdb_idl_txn *txn, const char *table,
-                        const char *column, const struct json *where)
+ovsdb_idl_txn_increment(struct ovsdb_idl_txn *txn,
+                        const struct ovsdb_idl_row *row,
+                        const struct ovsdb_idl_column *column)
 {
     assert(!txn->inc_table);
-    txn->inc_table = xstrdup(table);
-    txn->inc_column = xstrdup(column);
-    txn->inc_where = where ? json_clone(where) : json_array_create_empty();
+    assert(column->type.key.type == OVSDB_TYPE_INTEGER);
+    assert(column->type.value.type == OVSDB_TYPE_VOID);
+
+    txn->inc_table = row->table->class->name;
+    txn->inc_column = column->name;
+    txn->inc_row = row->uuid;
 }
 
 void
@@ -1238,9 +1253,6 @@ ovsdb_idl_txn_destroy(struct ovsdb_idl_txn *txn)
     ovsdb_idl_txn_abort(txn);
     ds_destroy(&txn->comment);
     free(txn->error);
-    free(txn->inc_table);
-    free(txn->inc_column);
-    json_destroy(txn->inc_where);
     HMAP_FOR_EACH_SAFE (insert, next, hmap_node, &txn->inserted_rows) {
         free(insert);
     }
@@ -1528,7 +1540,8 @@ ovsdb_idl_txn_commit(struct ovsdb_idl_txn *txn)
         json_object_put_string(op, "op", "mutate");
         json_object_put_string(op, "table", txn->inc_table);
         json_object_put(op, "where",
-                        substitute_uuids(json_clone(txn->inc_where), txn));
+                        substitute_uuids(where_uuid_equals(&txn->inc_row),
+                                         txn));
         json_object_put(op, "mutations",
                         json_array_create_1(
                             json_array_create_3(
@@ -1541,7 +1554,8 @@ ovsdb_idl_txn_commit(struct ovsdb_idl_txn *txn)
         json_object_put_string(op, "op", "select");
         json_object_put_string(op, "table", txn->inc_table);
         json_object_put(op, "where",
-                        substitute_uuids(json_clone(txn->inc_where), txn));
+                        substitute_uuids(where_uuid_equals(&txn->inc_row),
+                                         txn));
         json_object_put(op, "columns",
                         json_array_create_1(json_string_create(
                                                 txn->inc_column)));

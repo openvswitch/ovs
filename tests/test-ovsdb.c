@@ -1825,10 +1825,19 @@ idl_set(struct ovsdb_idl *idl, char *commands, int step)
                           arg2);
             }
         } else if (!strcmp(name, "increment")) {
-            if (!arg2 || arg3) {
-                ovs_fatal(0, "\"increment\" command requires 2 arguments");
+            const struct idltest_simple *s;
+
+            if (!arg1 || arg2) {
+                ovs_fatal(0, "\"increment\" command requires 1 argument");
             }
-            ovsdb_idl_txn_increment(txn, arg1, arg2, NULL);
+
+            s = idltest_find_simple(idl, atoi(arg1));
+            if (!s) {
+                ovs_fatal(0, "\"set\" command asks for nonexistent "
+                          "i=%d", atoi(arg1));
+            }
+
+            ovsdb_idl_txn_increment(txn, &s->header_, &idltest_simple_col_i);
             increment = true;
         } else if (!strcmp(name, "abort")) {
             ovsdb_idl_txn_abort(txn);

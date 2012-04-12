@@ -3605,20 +3605,6 @@ cmd_wait_until(struct vsctl_context *ctx)
     }
 }
 
-static struct json *
-where_uuid_equals(const struct uuid *uuid)
-{
-    return
-        json_array_create_1(
-            json_array_create_3(
-                json_string_create("_uuid"),
-                json_string_create("=="),
-                json_array_create_2(
-                    json_string_create("uuid"),
-                    json_string_create_nocopy(
-                        xasprintf(UUID_FMT, UUID_ARGS(uuid))))));
-}
-
 static void
 vsctl_context_init(struct vsctl_context *ctx, struct vsctl_command *command,
                    struct ovsdb_idl *idl, struct ovsdb_idl_txn *txn,
@@ -3701,9 +3687,8 @@ do_vsctl(const char *args, struct vsctl_command *commands, size_t n_commands,
     }
 
     if (wait_for_reload) {
-        struct json *where = where_uuid_equals(&ovs->header_.uuid);
-        ovsdb_idl_txn_increment(txn, "Open_vSwitch", "next_cfg", where);
-        json_destroy(where);
+        ovsdb_idl_txn_increment(txn, &ovs->header_,
+                                &ovsrec_open_vswitch_col_next_cfg);
     }
 
     symtab = ovsdb_symbol_table_create();
