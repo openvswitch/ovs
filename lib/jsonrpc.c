@@ -734,6 +734,7 @@ struct jsonrpc_session {
     struct stream *stream;
     struct pstream *pstream;
     unsigned int seqno;
+    uint8_t dscp;
 };
 
 /* Creates and returns a jsonrpc_session to 'name', which should be a string
@@ -759,6 +760,7 @@ jsonrpc_session_open(const char *name)
     s->stream = NULL;
     s->pstream = NULL;
     s->seqno = 0;
+    s->dscp = 0;
 
     if (!pstream_verify_name(name)) {
         reconnect_set_passive(s->reconnect, true, time_msec());
@@ -830,14 +832,13 @@ jsonrpc_session_connect(struct jsonrpc_session *s)
 
     jsonrpc_session_disconnect(s);
     if (!reconnect_is_passive(s->reconnect)) {
-        error = jsonrpc_stream_open(name, &s->stream,
-                                    reconnect_get_dscp(s->reconnect));
+        error = jsonrpc_stream_open(name, &s->stream, s->dscp);
         if (!error) {
             reconnect_connecting(s->reconnect, time_msec());
         }
     } else {
         error = s->pstream ? 0 : jsonrpc_pstream_open(name, &s->pstream,
-                                        reconnect_get_dscp(s->reconnect));
+                                                      s->dscp);
         if (!error) {
             reconnect_listening(s->reconnect, time_msec());
         }
@@ -1053,5 +1054,5 @@ void
 jsonrpc_session_set_dscp(struct jsonrpc_session *s,
                          uint8_t dscp)
 {
-    reconnect_set_dscp(s->reconnect, dscp);
+    s->dscp = dscp;
 }
