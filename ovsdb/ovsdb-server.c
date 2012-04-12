@@ -276,7 +276,7 @@ add_remote(struct shash *remotes, const char *target)
 
     options = shash_find_data(remotes, target);
     if (!options) {
-        options = ovsdb_jsonrpc_default_options();
+        options = ovsdb_jsonrpc_default_options(target);
         shash_add(remotes, target, options);
     }
 

@@ -86,6 +86,7 @@ tcp_open(const char *name, char *suffix, struct stream **streamp)
 
 const struct stream_class tcp_stream_class = {
     "tcp",                      /* name */
+    true,                       /* needs_probes */
     tcp_open,                   /* open */
     NULL,                       /* close */
     NULL,                       /* connect */
@@ -136,6 +137,7 @@ ptcp_accept(int fd, const struct sockaddr *sa, size_t sa_len,
 
 const struct pstream_class ptcp_pstream_class = {
     "ptcp",
+    true,
     ptcp_open,
     NULL,
     NULL,

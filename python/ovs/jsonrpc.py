@@ -372,6 +372,9 @@ class Session(object):
         if ovs.stream.PassiveStream.is_valid_name(name):
             reconnect.set_passive(True, ovs.timeval.msec())
 
+        if ovs.stream.stream_or_pstream_needs_probes(name):
+            reconnect.set_probe_interval(0)
+
         return Session(reconnect, None)
 
     @staticmethod

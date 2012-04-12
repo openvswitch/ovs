@@ -704,6 +704,10 @@ jsonrpc_session_open(const char *name)
         reconnect_set_passive(s->reconnect, true, time_msec());
     }
 
+    if (!stream_or_pstream_needs_probes(name)) {
+        reconnect_set_probe_interval(s->reconnect, 0);
+    }
+
     return s;
 }
 
