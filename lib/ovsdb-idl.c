@@ -357,8 +357,23 @@ ovsdb_idl_wait(struct ovsdb_idl *idl)
     jsonrpc_session_recv_wait(idl->session);
 }
 
-/* Returns a number that represents the state of 'idl'.  When 'idl' is updated
- * (by ovsdb_idl_run()), the return value changes. */
+/* Returns a "sequence number" that represents the state of 'idl'.  When
+ * ovsdb_idl_run() changes the database, the sequence number changes.  The
+ * initial fetch of the entire contents of the remote database is considered to
+ * be one kind of change.  Successfully acquiring a lock, if one has been
+ * configured with ovsdb_idl_set_lock(), is also considered to be a change.
+ *
+ * As long as the sequence number does not change, the client may continue to
+ * use any data structures it obtains from 'idl'.  But when it changes, the
+ * client must not access any of these data structures again, because they
+ * could have freed or reused for other purposes.
+ *
+ * The sequence number can occasionally change even if the database does not.
+ * This happens if the connection to the database drops and reconnects, which
+ * causes the database contents to be reloaded even if they didn't change.  (It
+ * could also happen if the database server sends out a "change" that reflects
+ * what the IDL already thought was in the database.  The database server is
+ * not supposed to do that, but bugs could in theory cause it to do so.) */
 unsigned int
 ovsdb_idl_get_seqno(const struct ovsdb_idl *idl)
 {
@@ -992,6 +1007,7 @@ ovsdb_idl_table_from_class(const struct ovsdb_idl *idl,
     return &idl->tables[table_class - idl->class->tables];
 }
 
+/* Called by ovsdb-idlc generated code. */
 struct ovsdb_idl_row *
 ovsdb_idl_get_row_arc(struct ovsdb_idl_row *src,
                       struct ovsdb_idl_table_class *dst_table_class,
@@ -1036,6 +1052,8 @@ ovsdb_idl_get_row_arc(struct ovsdb_idl_row *src,
     }
 }
 
+/* Searches 'tc''s table in 'idl' for a row with UUID 'uuid'.  Returns a
+ * pointer to the row if there is one, otherwise a null pointer.  */
 const struct ovsdb_idl_row *
 ovsdb_idl_get_row_for_uuid(const struct ovsdb_idl *idl,
                            const struct ovsdb_idl_table_class *tc,
@@ -1058,6 +1076,12 @@ next_real_row(struct ovsdb_idl_table *table, struct hmap_node *node)
     return NULL;
 }
 
+/* Returns a row in 'table_class''s table in 'idl', or a null pointer if that
+ * table is empty.
+ *
+ * Database tables are internally maintained as hash tables, so adding or
+ * removing rows while traversing the same table can cause some rows to be
+ * visited twice or not at apply. */
 const struct ovsdb_idl_row *
 ovsdb_idl_first_row(const struct ovsdb_idl *idl,
                     const struct ovsdb_idl_table_class *table_class)
@@ -1067,6 +1091,8 @@ ovsdb_idl_first_row(const struct ovsdb_idl *idl,
     return next_real_row(table, hmap_first(&table->rows));
 }
 
+/* Returns a row following 'row' within its table, or a null pointer if 'row'
+ * is the last row in its table. */
 const struct ovsdb_idl_row *
 ovsdb_idl_next_row(const struct ovsdb_idl_row *row)
 {
@@ -1143,6 +1169,11 @@ ovsdb_idl_row_is_synthetic(const struct ovsdb_idl_row *row)
 static void ovsdb_idl_txn_complete(struct ovsdb_idl_txn *txn,
                                    enum ovsdb_idl_txn_status);
 
+/* Returns a string representation of 'status'.  The caller must not modify or
+ * free the returned string.
+ *
+ * The return value is probably useful only for debug log messages and unit
+ * tests. */
 const char *
 ovsdb_idl_txn_status_to_string(enum ovsdb_idl_txn_status status)
 {
@@ -1167,6 +1198,9 @@ ovsdb_idl_txn_status_to_string(enum ovsdb_idl_txn_status status)
     return "<unknown>";
 }
 
+/* Starts a new transaction on 'idl'.  A given ovsdb_idl may only have a single
+ * active transaction at a time.  See the large comment in ovsdb-idl.h for
+ * general information on transactions. */
 struct ovsdb_idl_txn *
 ovsdb_idl_txn_create(struct ovsdb_idl *idl)
 {
@@ -1209,6 +1243,13 @@ ovsdb_idl_txn_add_comment(struct ovsdb_idl_txn *txn, const char *s, ...)
     va_end(args);
 }
 
+/* Marks 'txn' as a transaction that will not actually modify the database.  In
+ * almost every way, the transaction is treated like other transactions.  It
+ * must be committed or aborted like other transactions, it will be sent to the
+ * database server like other transactions, and so on.  The only difference is
+ * that the operations sent to the database server will include, as the last
+ * step, an "abort" operation, so that any changes made by the transaction will
+ * not actually take effect. */
 void
 ovsdb_idl_txn_set_dry_run(struct ovsdb_idl_txn *txn)
 {
@@ -1241,6 +1282,11 @@ ovsdb_idl_txn_increment(struct ovsdb_idl_txn *txn,
     txn->inc_row = row->uuid;
 }
 
+/* Destroys 'txn' and frees all associated memory.  If ovsdb_idl_txn_commit()
+ * has been called for 'txn' but the commit is still incomplete (that is, the
+ * last call returned TXN_INCOMPLETE) then the transaction may or may not still
+ * end up committing at the database server, but the client will not be able to
+ * get any further status information back. */
 void
 ovsdb_idl_txn_destroy(struct ovsdb_idl_txn *txn)
 {
@@ -1260,6 +1306,7 @@ ovsdb_idl_txn_destroy(struct ovsdb_idl_txn *txn)
     free(txn);
 }
 
+/* Causes poll_block() to wake up if 'txn' has completed committing. */
 void
 ovsdb_idl_txn_wait(const struct ovsdb_idl_txn *txn)
 {
@@ -1390,6 +1437,55 @@ ovsdb_idl_txn_disassemble(struct ovsdb_idl_txn *txn)
     hmap_init(&txn->txn_rows);
 }
 
+/* Attempts to commit 'txn'.  Returns the status of the commit operation, one
+ * of the following TXN_* constants:
+ *
+ *   TXN_INCOMPLETE:
+ *
+ *       The transaction is in progress, but not yet complete.  The caller
+ *       should call again later, after calling ovsdb_idl_run() to let the IDL
+ *       do OVSDB protocol processing.
+ *
+ *   TXN_UNCHANGED:
+ *
+ *       The transaction is complete.  (It didn't actually change the database,
+ *       so the IDL didn't send any request to the database server.)
+ *
+ *   TXN_ABORTED:
+ *
+ *       The caller previously called ovsdb_idl_txn_abort().
+ *
+ *   TXN_SUCCESS:
+ *
+ *       The transaction was successful.  The update made by the transaction
+ *       (and possibly other changes made by other database clients) should
+ *       already be visible in the IDL.
+ *
+ *   TXN_TRY_AGAIN:
+ *
+ *       The transaction failed for some transient reason, e.g. because a
+ *       "verify" operation reported an inconsistency or due to a network
+ *       problem.  The caller should wait for a change to the database, then
+ *       compose a new transaction, and commit the new transaction.
+ *
+ *       Use the return value of ovsdb_idl_get_seqno() to wait for a change in
+ *       the database.  It is important to use its return value *before* the
+ *       initial call to ovsdb_idl_txn_commit() as the baseline for this
+ *       purpose, because the change that one should wait for can happen after
+ *       the initial call but before the call that returns TXN_TRY_AGAIN, and
+ *       using some other baseline value in that situation could cause an
+ *       indefinite wait if the database rarely changes.
+ *
+ *   TXN_NOT_LOCKED:
+ *
+ *       The transaction failed because the IDL has been configured to require
+ *       a database lock (with ovsdb_idl_set_lock()) but didn't get it yet or
+ *       has already lost it.
+ *
+ * Committing a transaction rolls back all of the changes that it made to the
+ * IDL's copy of the database.  If the transaction commits successfully, then
+ * the database server will send an update and, thus, the IDL will be updated
+ * with the committed changes. */
 enum ovsdb_idl_txn_status
 ovsdb_idl_txn_commit(struct ovsdb_idl_txn *txn)
 {
@@ -1595,7 +1691,10 @@ ovsdb_idl_txn_commit(struct ovsdb_idl_txn *txn)
 
 /* Attempts to commit 'txn', blocking until the commit either succeeds or
  * fails.  Returns the final commit status, which may be any TXN_* value other
- * than TXN_INCOMPLETE. */
+ * than TXN_INCOMPLETE.
+ *
+ * This function calls ovsdb_idl_run() on 'txn''s IDL, so it may cause the
+ * return value of ovsdb_idl_get_seqno() to change. */
 enum ovsdb_idl_txn_status
 ovsdb_idl_txn_commit_block(struct ovsdb_idl_txn *txn)
 {
@@ -1611,6 +1710,9 @@ ovsdb_idl_txn_commit_block(struct ovsdb_idl_txn *txn)
     return status;
 }
 
+/* Returns the final (incremented) value of the column in 'txn' that was set to
+ * be incremented by ovsdb_idl_txn_increment().  'txn' must have committed
+ * successfully. */
 int64_t
 ovsdb_idl_txn_get_increment_new_value(const struct ovsdb_idl_txn *txn)
 {
@@ -1618,6 +1720,12 @@ ovsdb_idl_txn_get_increment_new_value(const struct ovsdb_idl_txn *txn)
     return txn->inc_new_value;
 }
 
+/* Aborts 'txn' without sending it to the database server.  This is effective
+ * only if ovsdb_idl_txn_commit() has not yet been called for 'txn'.
+ * Otherwise, it has no effect.
+ *
+ * Aborting a transaction doesn't free its memory.  Use
+ * ovsdb_idl_txn_destroy() to do that. */
 void
 ovsdb_idl_txn_abort(struct ovsdb_idl_txn *txn)
 {
@@ -1627,6 +1735,14 @@ ovsdb_idl_txn_abort(struct ovsdb_idl_txn *txn)
     }
 }
 
+/* Returns a string that reports the error status for 'txn'.  The caller must
+ * not modify or free the returned string.  A call to ovsdb_idl_txn_destroy()
+ * for 'txn' may free the returned string.
+ *
+ * The return value is ordinarily one of the strings that
+ * ovsdb_idl_txn_status_to_string() would return, but if the transaction failed
+ * due to an error reported by the database server, the return value is that
+ * error. */
 const char *
 ovsdb_idl_txn_get_error(const struct ovsdb_idl_txn *txn)
 {
@@ -2101,6 +2217,8 @@ ovsdb_idl_txn_process_reply(struct ovsdb_idl *idl,
     return true;
 }
 
+/* Returns the transaction currently active for 'row''s IDL.  A transaction
+ * must currently be active. */
 struct ovsdb_idl_txn *
 ovsdb_idl_txn_get(const struct ovsdb_idl_row *row)
 {
@@ -2109,6 +2227,7 @@ ovsdb_idl_txn_get(const struct ovsdb_idl_row *row)
     return txn;
 }
 
+/* Returns the IDL on which 'txn' acts. */
 struct ovsdb_idl *
 ovsdb_idl_txn_get_idl (struct ovsdb_idl_txn *txn)
 {

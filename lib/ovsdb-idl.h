@@ -112,7 +112,56 @@ const struct ovsdb_datum *ovsdb_idl_get(const struct ovsdb_idl_row *,
 
 bool ovsdb_idl_row_is_synthetic(const struct ovsdb_idl_row *);
 
-/* Transactions. */
+/* Transactions.
+ *
+ * A transaction may modify the contents of a database by modifying the values
+ * of columns, deleting rows, inserting rows, or adding checks that columns in
+ * the database have not changed ("verify" operations), through
+ * ovsdb_idl_txn_*() functions.  (The OVSDB IDL code generator produces helper
+ * functions that internally call the ovsdb_idl_txn_*() functions.  These are
+ * likely to be more convenient.)
+ *
+ * Reading and writing columns and inserting and deleting rows are all
+ * straightforward.  The reasons to verify columns are less obvious.
+ * Verification is the key to maintaining transactional integrity.  Because
+ * OVSDB handles multiple clients, it can happen that between the time that
+ * OVSDB client A reads a column and writes a new value, OVSDB client B has
+ * written that column.  Client A's write should not ordinarily overwrite
+ * client B's, especially if the column in question is a "map" column that
+ * contains several more or less independent data items.  If client A adds a
+ * "verify" operation before it writes the column, then the transaction fails
+ * in case client B modifies it first.  Client A will then see the new value of
+ * the column and compose a new transaction based on the new contents written
+ * by client B.
+ *
+ * When a transaction is complete, which must be before the next call to
+ * ovsdb_idl_run() on 'idl', call ovsdb_idl_txn_commit() or
+ * ovsdb_idl_txn_abort().
+ *
+ * The life-cycle of a transaction looks like this:
+ *
+ * 1. Create the transaction and record the initial sequence number:
+ *
+ *     seqno = ovsdb_idl_get_seqno(idl);
+ *     txn = ovsdb_idl_txn_create(idl);
+ *
+ * 2. Modify the database with ovsdb_idl_txn_*() functions directly or
+ *    indirectly.
+ *
+ * 3. Commit the transaction by calling ovsdb_idl_txn_commit().  The first call
+ *    to this function probably returns TXN_INCOMPLETE.  The client must keep
+ *    calling again along as this remains true, calling ovsdb_idl_run() in
+ *    between to let the IDL do protocol processing.  (If the client doesn't
+ *    have anything else to do in the meantime, it can use
+ *    ovsdb_idl_txn_commit_block() to avoid having to loop itself.)
+ *
+ * 4. If the final status is TXN_TRY_AGAIN, wait for ovsdb_idl_get_seqno() to
+ *    change from the saved 'seqno' (it's possible that it's already changed,
+ *    in which case the client should not wait at all), then start over from
+ *    step 1.  Only a call to ovsdb_idl_run() will change the return value of
+ *    ovsdb_idl_get_seqno().  (ovsdb_idl_txn_commit_block() calls
+ *    ovsdb_idl_run().)
+ */
 
 enum ovsdb_idl_txn_status {
     TXN_UNCOMMITTED,            /* Not yet committed or aborted. */
