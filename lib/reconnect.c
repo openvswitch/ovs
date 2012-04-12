@@ -541,7 +541,10 @@ reconnect_deadline__(const struct reconnect *fsm)
         return LLONG_MAX;
 
     case S_IDLE:
-        return fsm->state_entered + fsm->probe_interval;
+        if (fsm->probe_interval) {
+            return fsm->state_entered + fsm->probe_interval;
+        }
+        return LLONG_MAX;
 
     case S_RECONNECT:
         return fsm->state_entered;
