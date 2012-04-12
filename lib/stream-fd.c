@@ -150,6 +150,7 @@ fd_wait(struct stream *stream, enum stream_wait_type wait)
 
 static const struct stream_class stream_fd_class = {
     "fd",                       /* name */
+    false,                      /* needs_probes */
     NULL,                       /* open */
     fd_close,                   /* close */
     fd_connect,                 /* connect */
@@ -255,6 +256,7 @@ pfd_wait(struct pstream *pstream)
 
 static struct pstream_class fd_pstream_class = {
     "pstream",
+    false,
     NULL,
     pfd_close,
     pfd_accept,

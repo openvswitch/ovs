@@ -57,6 +57,7 @@ unix_open(const char *name, char *suffix, struct stream **streamp,
 
 const struct stream_class unix_stream_class = {
     "unix",                     /* name */
+    false,                      /* needs_probes */
     unix_open,                  /* open */
     NULL,                       /* close */
     NULL,                       /* connect */
@@ -113,6 +114,7 @@ punix_accept(int fd, const struct sockaddr *sa, size_t sa_len,
 
 const struct pstream_class punix_pstream_class = {
     "punix",
+    false,
     punix_open,
     NULL,
     NULL,

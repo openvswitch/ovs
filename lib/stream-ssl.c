@@ -755,6 +755,7 @@ ssl_wait(struct stream *stream, enum stream_wait_type wait)
 
 const struct stream_class ssl_stream_class = {
     "ssl",                      /* name */
+    true,                       /* needs_probes */
     ssl_open,                   /* open */
     ssl_close,                  /* close */
     ssl_connect,                /* connect */
@@ -861,6 +862,7 @@ pssl_wait(struct pstream *pstream)
 
 const struct pstream_class pssl_pstream_class = {
     "pssl",
+    true,
     pssl_open,
     pssl_close,
     pssl_accept,
