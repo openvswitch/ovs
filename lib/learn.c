@@ -177,7 +177,14 @@ learn_check(const struct nx_action_learn *learn, const struct flow *flow)
 
             if (dst_type == NX_LEARN_DST_MATCH
                 && src_type == NX_LEARN_SRC_IMMEDIATE) {
-                mf_set_subfield(&dst, value, &rule);
+                if (n_bits <= 64) {
+                    mf_set_subfield(&dst, value, &rule);
+                } else {
+                    /* We're only setting subfields to allow us to check
+                     * prerequisites.  No prerequisite depends on the value of
+                     * a field that is wider than 64 bits.  So just skip
+                     * setting it entirely. */
+                }
             }
         }
     }
@@ -223,10 +230,10 @@ learn_execute(const struct nx_action_learn *learn, const struct flow *flow,
         int n_bits = header & NX_LEARN_N_BITS_MASK;
         int src_type = header & NX_LEARN_SRC_MASK;
         int dst_type = header & NX_LEARN_DST_MASK;
-        uint64_t value;
+        union mf_subvalue value;
 
-        struct nx_action_reg_load *load;
         struct mf_subfield dst;
+        int chunk, ofs;
 
         if (!header) {
             break;
@@ -236,27 +243,43 @@ learn_execute(const struct nx_action_learn *learn, const struct flow *flow,
             struct mf_subfield src;
 
             get_subfield(n_bits, &p, &src);
-            value = mf_get_subfield(&src, flow);
+            mf_read_subfield(&src, flow, &value);
         } else {
-            value = get_bits(n_bits, &p);
+            int p_bytes = 2 * DIV_ROUND_UP(n_bits, 16);
+
+            memset(&value, 0, sizeof value);
+            bitwise_copy(p, p_bytes, 0,
+                         &value, sizeof value, 0,
+                         n_bits);
+            p = (const uint8_t *) p + p_bytes;
         }
 
         switch (dst_type) {
         case NX_LEARN_DST_MATCH:
             get_subfield(n_bits, &p, &dst);
-            mf_set_subfield(&dst, value, &fm->cr);
+            mf_write_subfield(&dst, &value, &fm->cr);
             break;
 
         case NX_LEARN_DST_LOAD:
             get_subfield(n_bits, &p, &dst);
-            load = ofputil_put_NXAST_REG_LOAD(&actions);
-            load->ofs_nbits = nxm_encode_ofs_nbits(dst.ofs, dst.n_bits);
-            load->dst = htonl(dst.field->nxm_header);
-            load->value = htonll(value);
+            for (ofs = 0; ofs < n_bits; ofs += chunk) {
+                struct nx_action_reg_load *load;
+
+                chunk = MIN(n_bits - ofs, 64);
+
+                load = ofputil_put_NXAST_REG_LOAD(&actions);
+                load->ofs_nbits = nxm_encode_ofs_nbits(dst.ofs + ofs, chunk);
+                load->dst = htonl(dst.field->nxm_header);
+                bitwise_copy(&value, sizeof value, ofs,
+                             &load->value, sizeof load->value, 0,
+                             chunk);
+            }
             break;
 
         case NX_LEARN_DST_OUTPUT:
-            ofputil_put_OFPAT_OUTPUT(&actions)->port = htons(value);
+            if (n_bits <= 16 || is_all_zeros(value.u8, sizeof value - 2)) {
+                ofputil_put_OFPAT_OUTPUT(&actions)->port = value.be16[7];
+            }
             break;
         }
     }

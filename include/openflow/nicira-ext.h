@@ -785,6 +785,9 @@ enum nx_mp_algorithm {
  *     field[ofs:ofs+n_bits-1].  Actions are executed in the same order as the
  *     flow_mod_specs.
  *
+ *     A single NXAST_REG_LOAD action writes no more than 64 bits, so n_bits
+ *     greater than 64 yields multiple NXAST_REG_LOAD actions.
+ *
  * The flow_mod_spec destination spec for 'dst' of 2 (when 'src' is 0) is
  * empty.  It has the following meaning:
  *

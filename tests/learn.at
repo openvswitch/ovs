@@ -107,6 +107,48 @@ NXST_FLOW reply:
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([learning action - TCPv4 port learning])
+OVS_VSWITCHD_START(
+  [add-port br0 eth0 -- set Interface eth0 type=dummy -- \
+   add-port br0 eth1 -- set Interface eth1 type=dummy -- \
+   add-port br0 eth2 -- set Interface eth2 type=dummy])
+# Set up flow table for TCPv4 port learning.
+AT_CHECK([[ovs-ofctl add-flow br0 'table=0 tcp actions=learn(table=1, hard_timeout=60, eth_type=0x800, nw_proto=6, NXM_OF_IP_SRC[]=NXM_OF_IP_DST[], NXM_OF_IP_DST[]=NXM_OF_IP_SRC[], NXM_OF_TCP_SRC[]=NXM_OF_TCP_DST[], NXM_OF_TCP_DST[]=NXM_OF_TCP_SRC[]), flood']])
+
+# Trace a TCPv4 packet arriving on port 3.
+AT_CHECK([ovs-appctl ofproto/trace br0 'in_port(3),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:06),eth_type(0x0800),ipv4(src=192.168.0.2,dst=192.168.0.1,proto=6,tos=0,ttl=64,frag=no),tcp(src=40000,dst=80)' -generate], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0], [Datapath actions: 2,0,1
+])
+
+# Check for the learning entry.
+AT_CHECK([ovs-ofctl dump-flows br0 table=1 | ofctl_strip | sort], [0], [dnl
+ table=1, hard_timeout=60,tcp,nw_src=192.168.0.1,nw_dst=192.168.0.2,tp_src=80,tp_dst=40000 actions=drop
+NXST_FLOW reply:
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([learning action - TCPv6 port learning])
+OVS_VSWITCHD_START(
+  [add-port br0 eth0 -- set Interface eth0 type=dummy -- \
+   add-port br0 eth1 -- set Interface eth1 type=dummy -- \
+   add-port br0 eth2 -- set Interface eth2 type=dummy])
+# Set up flow table for TCPv6 port learning.
+AT_CHECK([[ovs-ofctl add-flow br0 'table=0 tcp6 actions=learn(table=1, hard_timeout=60, eth_type=0x86dd, nw_proto=6, NXM_NX_IPV6_SRC[]=NXM_NX_IPV6_DST[], NXM_NX_IPV6_DST[]=NXM_NX_IPV6_SRC[], NXM_OF_TCP_SRC[]=NXM_OF_TCP_DST[], NXM_OF_TCP_DST[]=NXM_OF_TCP_SRC[]), flood']])
+
+# Trace a TCPv6 packet arriving on port 3.
+AT_CHECK([ovs-appctl ofproto/trace br0 'in_port(3),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:06),eth_type(0x86dd),ipv6(src=fec0::2,dst=fec0::1,label=0,proto=6,tclass=0,hlimit=255,frag=no),tcp(src=40000,dst=80)' -generate], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0], [Datapath actions: 2,0,1
+])
+
+# Check for the learning entry.
+AT_CHECK([ovs-ofctl dump-flows br0 table=1 | ofctl_strip | sort], [0], [dnl
+ table=1, hard_timeout=60,tcp6,ipv6_src=fec0::1,ipv6_dst=fec0::2,tp_src=80,tp_dst=40000 actions=drop
+NXST_FLOW reply:
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([learning action - fin_timeout feature])
 # This is a totally artificial use of the "learn" action.  The only purpose
 # is to check that specifying fin_idle_timeout or fin_hard_timeout causes
