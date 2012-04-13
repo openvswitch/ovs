@@ -105,10 +105,10 @@ static struct rule_dpif *rule_dpif_cast(const struct rule *rule)
 static struct rule_dpif *rule_dpif_lookup(struct ofproto_dpif *,
                                           const struct flow *, uint8_t table);
 
+static void rule_credit_stats(struct rule_dpif *,
+                              const struct dpif_flow_stats *);
 static void flow_push_stats(struct rule_dpif *, const struct flow *,
-                            uint64_t packets, uint64_t bytes,
-                            long long int used);
-
+                            const struct dpif_flow_stats *);
 static tag_type rule_calculate_tag(const struct flow *,
                                    const struct flow_wildcards *,
                                    uint32_t basis);
@@ -225,13 +225,23 @@ struct action_xlate_ctx {
      * timeouts.) */
     uint8_t tcp_flags;
 
-    /* If nonnull, called just before executing a resubmit action.  In
-     * addition, disables logging of traces when the recursion depth is
-     * exceeded.
+    /* If nonnull, flow translation calls this function just before executing a
+     * resubmit or OFPP_TABLE action.  In addition, disables logging of traces
+     * when the recursion depth is exceeded.
+     *
+     * 'rule' is the rule being submitted into.  It will be null if the
+     * resubmit or OFPP_TABLE action didn't find a matching rule.
      *
      * This is normally null so the client has to set it manually after
      * calling action_xlate_ctx_init(). */
-    void (*resubmit_hook)(struct action_xlate_ctx *, struct rule_dpif *);
+    void (*resubmit_hook)(struct action_xlate_ctx *, struct rule_dpif *rule);
+
+    /* If nonnull, flow translation credits the specified statistics to each
+     * rule reached through a resubmit or OFPP_TABLE action.
+     *
+     * This is normally null so the client has to set it manually after
+     * calling action_xlate_ctx_init(). */
+    const struct dpif_flow_stats *resubmit_stats;
 
 /* xlate_actions() initializes and uses these members.  The client might want
  * to look at them after it returns. */
@@ -3767,68 +3777,52 @@ facet_reset_counters(struct facet *facet)
 static void
 facet_push_stats(struct facet *facet)
 {
-    uint64_t new_packets, new_bytes;
+    struct dpif_flow_stats stats;
 
     assert(facet->packet_count >= facet->prev_packet_count);
     assert(facet->byte_count >= facet->prev_byte_count);
     assert(facet->used >= facet->prev_used);
 
-    new_packets = facet->packet_count - facet->prev_packet_count;
-    new_bytes = facet->byte_count - facet->prev_byte_count;
+    stats.n_packets = facet->packet_count - facet->prev_packet_count;
+    stats.n_bytes = facet->byte_count - facet->prev_byte_count;
+    stats.used = facet->used;
+    stats.tcp_flags = 0;
 
-    if (new_packets || new_bytes || facet->used > facet->prev_used) {
+    if (stats.n_packets || stats.n_bytes || facet->used > facet->prev_used) {
         facet->prev_packet_count = facet->packet_count;
         facet->prev_byte_count = facet->byte_count;
         facet->prev_used = facet->used;
 
-        flow_push_stats(facet->rule, &facet->flow,
-                        new_packets, new_bytes, facet->used);
+        flow_push_stats(facet->rule, &facet->flow, &stats);
 
         update_mirror_stats(ofproto_dpif_cast(facet->rule->up.ofproto),
-                            facet->mirrors, new_packets, new_bytes);
+                            facet->mirrors, stats.n_packets, stats.n_bytes);
     }
 }
 
-struct ofproto_push {
-    struct action_xlate_ctx ctx;
-    uint64_t packets;
-    uint64_t bytes;
-    long long int used;
-};
-
 static void
-push_resubmit(struct action_xlate_ctx *ctx, struct rule_dpif *rule)
+rule_credit_stats(struct rule_dpif *rule, const struct dpif_flow_stats *stats)
 {
-    struct ofproto_push *push = CONTAINER_OF(ctx, struct ofproto_push, ctx);
-
-    if (rule) {
-        rule->packet_count += push->packets;
-        rule->byte_count += push->bytes;
-        ofproto_rule_update_used(&rule->up, push->used);
-    }
+    rule->packet_count += stats->n_packets;
+    rule->byte_count += stats->n_bytes;
+    ofproto_rule_update_used(&rule->up, stats->used);
 }
 
 /* Pushes flow statistics to the rules which 'flow' resubmits into given
  * 'rule''s actions and mirrors. */
 static void
 flow_push_stats(struct rule_dpif *rule,
-                const struct flow *flow, uint64_t packets, uint64_t bytes,
-                long long int used)
+                const struct flow *flow, const struct dpif_flow_stats *stats)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(rule->up.ofproto);
-    struct ofproto_push push;
+    struct action_xlate_ctx ctx;
 
-    push.packets = packets;
-    push.bytes = bytes;
-    push.used = used;
+    ofproto_rule_update_used(&rule->up, stats->used);
 
-    ofproto_rule_update_used(&rule->up, used);
-
-    action_xlate_ctx_init(&push.ctx, ofproto, flow, flow->vlan_tci, rule,
+    action_xlate_ctx_init(&ctx, ofproto, flow, flow->vlan_tci, rule,
                           0, NULL);
-    push.ctx.resubmit_hook = push_resubmit;
-    xlate_actions_for_side_effects(&push.ctx,
-                                   rule->up.actions, rule->up.n_actions);
+    ctx.resubmit_stats = stats;
+    xlate_actions_for_side_effects(&ctx, rule->up.actions, rule->up.n_actions);
 }
 
 /* Subfacets. */
@@ -4262,22 +4256,24 @@ rule_execute(struct rule *rule_, const struct flow *flow,
     struct rule_dpif *rule = rule_dpif_cast(rule_);
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(rule->up.ofproto);
 
-    size_t size = packet->size;
+    struct dpif_flow_stats stats;
 
     struct action_xlate_ctx ctx;
     uint64_t odp_actions_stub[1024 / 8];
     struct ofpbuf odp_actions;
 
+    dpif_flow_stats_extract(flow, packet, &stats);
+    rule_credit_stats(rule, &stats);
+
     ofpbuf_use_stub(&odp_actions, odp_actions_stub, sizeof odp_actions_stub);
     action_xlate_ctx_init(&ctx, ofproto, flow, flow->vlan_tci,
-                          rule, packet_get_tcp_flags(packet, flow), packet);
+                          rule, stats.tcp_flags, packet);
+    ctx.resubmit_stats = &stats;
     xlate_actions(&ctx, rule->up.actions, rule->up.n_actions, &odp_actions);
-    if (execute_odp_actions(ofproto, flow, odp_actions.data,
-                            odp_actions.size, packet)) {
-        rule->packet_count++;
-        rule->byte_count += size;
-        flow_push_stats(rule, flow, 1, size, time_msec());
-    }
+
+    execute_odp_actions(ofproto, flow, odp_actions.data,
+                        odp_actions.size, packet);
+
     ofpbuf_uninit(&odp_actions);
 
     return 0;
@@ -4539,6 +4535,10 @@ xlate_table_action(struct action_xlate_ctx *ctx,
 
         if (rule) {
             struct rule_dpif *old_rule = ctx->rule;
+
+            if (ctx->resubmit_stats) {
+                rule_credit_stats(rule, ctx->resubmit_stats);
+            }
 
             ctx->recurse++;
             ctx->rule = rule;
@@ -5140,6 +5140,7 @@ action_xlate_ctx_init(struct action_xlate_ctx *ctx,
     ctx->may_learn = packet != NULL;
     ctx->tcp_flags = tcp_flags;
     ctx->resubmit_hook = NULL;
+    ctx->resubmit_stats = NULL;
 }
 
 /* Translates the 'n_in' "union ofp_action"s in 'in' into datapath actions in
@@ -5951,28 +5952,26 @@ packet_out(struct ofproto *ofproto_, struct ofpbuf *packet,
                              ofproto->max_ports);
     if (!error) {
         struct odputil_keybuf keybuf;
+        struct dpif_flow_stats stats;
+
         struct ofpbuf key;
 
+        struct action_xlate_ctx ctx;
         uint64_t odp_actions_stub[1024 / 8];
         struct ofpbuf odp_actions;
-        struct ofproto_push push;
 
         ofpbuf_use_stack(&key, &keybuf, sizeof keybuf);
         odp_flow_key_from_flow(&key, flow);
 
-        action_xlate_ctx_init(&push.ctx, ofproto, flow, flow->vlan_tci, NULL,
-                              packet_get_tcp_flags(packet, flow), packet);
+        dpif_flow_stats_extract(flow, packet, &stats);
 
-        /* Ensure that resubmits in 'ofp_actions' get accounted to their
-         * matching rules. */
-        push.packets = 1;
-        push.bytes = packet->size;
-        push.used = time_msec();
-        push.ctx.resubmit_hook = push_resubmit;
+        action_xlate_ctx_init(&ctx, ofproto, flow, flow->vlan_tci, NULL,
+                              packet_get_tcp_flags(packet, flow), packet);
+        ctx.resubmit_stats = &stats;
 
         ofpbuf_use_stub(&odp_actions,
                         odp_actions_stub, sizeof odp_actions_stub);
-        xlate_actions(&push.ctx, ofp_actions, n_ofp_actions, &odp_actions);
+        xlate_actions(&ctx, ofp_actions, n_ofp_actions, &odp_actions);
         dpif_execute(ofproto->dpif, key.data, key.size,
                      odp_actions.data, odp_actions.size, packet);
         ofpbuf_uninit(&odp_actions);
