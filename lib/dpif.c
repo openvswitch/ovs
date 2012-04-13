@@ -678,10 +678,10 @@ void
 dpif_flow_stats_extract(const struct flow *flow, const struct ofpbuf *packet,
                         struct dpif_flow_stats *stats)
 {
-    memset(stats, 0, sizeof(*stats));
     stats->tcp_flags = packet_get_tcp_flags(packet, flow);
     stats->n_bytes = packet->size;
     stats->n_packets = 1;
+    stats->used = time_msec();
 }
 
 /* Appends a human-readable representation of 'stats' to 's'. */
