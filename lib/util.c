@@ -913,6 +913,62 @@ bitwise_one(void *dst_, unsigned int dst_len, unsigned dst_ofs,
     }
 }
 
+/* Scans the 'n_bits' bits starting from bit 'dst_ofs' in 'dst' for 1-bits.
+ * Returns false if any 1-bits are found, otherwise true.  'dst' is 'dst_len'
+ * bytes long.
+ *
+ * If you consider all of 'dst' to be a single unsigned integer in network byte
+ * order, then bit N is the bit with value 2**N.  That is, bit 0 is the bit
+ * with value 1 in dst[dst_len - 1], bit 1 is the bit with value 2, bit 2 is
+ * the bit with value 4, ..., bit 8 is the bit with value 1 in dst[dst_len -
+ * 2], and so on.
+ *
+ * Required invariant:
+ *   dst_ofs + n_bits <= dst_len * 8
+ */
+bool
+bitwise_is_all_zeros(const void *p_, unsigned int len, unsigned int ofs,
+                     unsigned int n_bits)
+{
+    const uint8_t *p = p_;
+
+    if (!n_bits) {
+        return true;
+    }
+
+    p += len - (ofs / 8 + 1);
+    ofs %= 8;
+
+    if (ofs) {
+        unsigned int chunk = MIN(n_bits, 8 - ofs);
+
+        if (*p & (((1 << chunk) - 1) << ofs)) {
+            return false;
+        }
+
+        n_bits -= chunk;
+        if (!n_bits) {
+            return true;
+        }
+
+        p--;
+    }
+
+    while (n_bits >= 8) {
+        if (*p) {
+            return false;
+        }
+        n_bits -= 8;
+        p--;
+    }
+
+    if (n_bits && *p & ((1 << n_bits) - 1)) {
+        return false;
+    }
+
+    return true;
+}
+
 /* Copies the 'n_bits' low-order bits of 'value' into the 'n_bits' bits
  * starting at bit 'dst_ofs' in 'dst', which is 'dst_len' bytes long.
  *
