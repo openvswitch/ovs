@@ -134,7 +134,9 @@ OVS_VSWITCHD_START(
    add-port br0 eth1 -- set Interface eth1 type=dummy -- \
    add-port br0 eth2 -- set Interface eth2 type=dummy])
 # Set up flow table for TCPv6 port learning.
-AT_CHECK([[ovs-ofctl add-flow br0 'table=0 tcp6 actions=learn(table=1, hard_timeout=60, eth_type=0x86dd, nw_proto=6, NXM_NX_IPV6_SRC[]=NXM_NX_IPV6_DST[], NXM_NX_IPV6_DST[]=NXM_NX_IPV6_SRC[], NXM_OF_TCP_SRC[]=NXM_OF_TCP_DST[], NXM_OF_TCP_DST[]=NXM_OF_TCP_SRC[]), flood']])
+# Also add a 128-bit-wide "load" action and a 128-bit literal match to check
+# that they work.
+AT_CHECK([[ovs-ofctl add-flow br0 'table=0 tcp6 actions=learn(table=1, hard_timeout=60, eth_type=0x86dd, nw_proto=6, NXM_NX_IPV6_SRC[]=NXM_NX_IPV6_DST[], ipv6_dst=2001:0db8:85a3:0000:0000:8a2e:0370:7334, NXM_OF_TCP_SRC[]=NXM_OF_TCP_DST[], NXM_OF_TCP_DST[]=NXM_OF_TCP_SRC[], load(0x20010db885a308d313198a2e03707348->NXM_NX_IPV6_DST[])), flood']])
 
 # Trace a TCPv6 packet arriving on port 3.
 AT_CHECK([ovs-appctl ofproto/trace br0 'in_port(3),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:06),eth_type(0x86dd),ipv6(src=fec0::2,dst=fec0::1,label=0,proto=6,tclass=0,hlimit=255,frag=no),tcp(src=40000,dst=80)' -generate], [0], [stdout])
@@ -142,8 +144,9 @@ AT_CHECK([tail -1 stdout], [0], [Datapath actions: 2,0,1
 ])
 
 # Check for the learning entry.
-AT_CHECK([ovs-ofctl dump-flows br0 table=1 | ofctl_strip | sort], [0], [dnl
- table=1, hard_timeout=60,tcp6,ipv6_src=fec0::1,ipv6_dst=fec0::2,tp_src=80,tp_dst=40000 actions=drop
+AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | sort], [0], [dnl
+ table=1, hard_timeout=60,tcp6,ipv6_src=fec0::1,ipv6_dst=2001:db8:85a3::8a2e:370:7334,tp_src=80,tp_dst=40000 actions=load:0x13198a2e03707348->NXM_NX_IPV6_DST[[0..63]],load:0x20010db885a308d3->NXM_NX_IPV6_DST[[64..127]]
+ tcp6 actions=learn(table=1,hard_timeout=60,eth_type=0x86dd,nw_proto=6,NXM_NX_IPV6_SRC[[]]=NXM_NX_IPV6_DST[[]],ipv6_dst=2001:db8:85a3::8a2e:370:7334,NXM_OF_TCP_SRC[[]]=NXM_OF_TCP_DST[[]],NXM_OF_TCP_DST[[]]=NXM_OF_TCP_SRC[[]],load:0x20010db885a308d313198a2e03707348->NXM_NX_IPV6_DST[[]]),FLOOD
 NXST_FLOW reply:
 ])
 OVS_VSWITCHD_STOP
