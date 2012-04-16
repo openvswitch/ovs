@@ -54,7 +54,7 @@ fi
 
 devs=$*
 for dev in $devs; do
-    state=`ip link show $dev` || continue
+    state=`ip link show dev $dev` || continue
 
     echo "# $dev"
     # Link state (Ethernet addresses, up/down, ...)
@@ -83,12 +83,12 @@ for dev in $devs; do
         linkcmd="$linkcmd mtu $mtu"
     fi
     if test -n "$linkcmd"; then
-        echo ip link set $dev down # Required to change hwaddr.
-        echo ip link set $dev $linkcmd
+        echo ip link set dev $dev down # Required to change hwaddr.
+        echo ip link set dev $dev $linkcmd
     fi
 
     # IP addresses (including IPv6).
-    echo "ip addr flush $dev 2>/dev/null" # Suppresses "Nothing to flush".
+    echo "ip addr flush dev $dev 2>/dev/null" # Suppresses "Nothing to flush".
     ip addr show dev $dev | while read addr; do
         set -- $addr
 
