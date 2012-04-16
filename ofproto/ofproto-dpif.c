@@ -264,8 +264,12 @@ static void action_xlate_ctx_init(struct action_xlate_ctx *,
                                   struct ofproto_dpif *, const struct flow *,
                                   ovs_be16 initial_tci, struct rule_dpif *,
                                   uint8_t tcp_flags, const struct ofpbuf *);
-static struct ofpbuf *xlate_actions(struct action_xlate_ctx *,
-                                    const union ofp_action *in, size_t n_in);
+static void xlate_actions(struct action_xlate_ctx *,
+                          const union ofp_action *in, size_t n_in,
+                          struct ofpbuf *odp_actions);
+static void xlate_actions_for_side_effects(struct action_xlate_ctx *,
+                                           const union ofp_action *in,
+                                           size_t n_in);
 
 /* An exact-match instantiation of an OpenFlow flow.
  *
@@ -3322,8 +3326,8 @@ facet_learn(struct facet *facet)
                           facet->flow.vlan_tci,
                           facet->rule, facet->tcp_flags, NULL);
     ctx.may_learn = true;
-    ofpbuf_delete(xlate_actions(&ctx, facet->rule->up.actions,
-                                facet->rule->up.n_actions));
+    xlate_actions_for_side_effects(&ctx, facet->rule->up.actions,
+                                   facet->rule->up.n_actions);
 }
 
 static void
@@ -3480,6 +3484,9 @@ facet_check_consistency(struct facet *facet)
 
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(facet->rule->up.ofproto);
 
+    uint64_t odp_actions_stub[1024 / 8];
+    struct ofpbuf odp_actions;
+
     struct rule_dpif *rule;
     struct subfacet *subfacet;
     bool may_log = false;
@@ -3518,27 +3525,27 @@ facet_check_consistency(struct facet *facet)
     }
 
     /* Check the datapath actions for consistency. */
+    ofpbuf_use_stub(&odp_actions, odp_actions_stub, sizeof odp_actions_stub);
     LIST_FOR_EACH (subfacet, list_node, &facet->subfacets) {
         struct action_xlate_ctx ctx;
-        struct ofpbuf *odp_actions;
         bool actions_changed;
         bool should_install;
 
         action_xlate_ctx_init(&ctx, ofproto, &facet->flow,
                               subfacet->initial_tci, rule, 0, NULL);
-        odp_actions = xlate_actions(&ctx, rule->up.actions,
-                                    rule->up.n_actions);
+        xlate_actions(&ctx, rule->up.actions, rule->up.n_actions,
+                      &odp_actions);
 
         should_install = (ctx.may_set_up_flow
                           && subfacet->key_fitness != ODP_FIT_TOO_LITTLE);
         if (!should_install && !subfacet->installed) {
             /* The actions for uninstallable flows may vary from one packet to
              * the next, so don't compare the actions. */
-            goto next;
+            continue;
         }
 
-        actions_changed = (subfacet->actions_len != odp_actions->size
-                           || memcmp(subfacet->actions, odp_actions->data,
+        actions_changed = (subfacet->actions_len != odp_actions.size
+                           || memcmp(subfacet->actions, odp_actions.data,
                                      subfacet->actions_len));
         if (should_install != subfacet->installed || actions_changed) {
             if (ok) {
@@ -3570,8 +3577,7 @@ facet_check_consistency(struct facet *facet)
                     format_odp_actions(&s, subfacet->actions,
                                        subfacet->actions_len);
                     ds_put_cstr(&s, ") (correct actions: ");
-                    format_odp_actions(&s, odp_actions->data,
-                                       odp_actions->size);
+                    format_odp_actions(&s, odp_actions.data, odp_actions.size);
                     ds_put_char(&s, ')');
                 } else {
                     ds_put_cstr(&s, " (actions: ");
@@ -3583,10 +3589,8 @@ facet_check_consistency(struct facet *facet)
                 ds_destroy(&s);
             }
         }
-
-    next:
-        ofpbuf_delete(odp_actions);
     }
+    ofpbuf_uninit(&odp_actions);
 
     return ok;
 }
@@ -3613,6 +3617,9 @@ facet_revalidate(struct facet *facet)
     struct actions *new_actions;
 
     struct action_xlate_ctx ctx;
+    uint64_t odp_actions_stub[1024 / 8];
+    struct ofpbuf odp_actions;
+
     struct rule_dpif *new_rule;
     struct subfacet *subfacet;
     bool actions_changed;
@@ -3639,16 +3646,16 @@ facet_revalidate(struct facet *facet)
     i = 0;
     new_actions = NULL;
     memset(&ctx, 0, sizeof ctx);
+    ofpbuf_use_stub(&odp_actions, odp_actions_stub, sizeof odp_actions_stub);
     LIST_FOR_EACH (subfacet, list_node, &facet->subfacets) {
-        struct ofpbuf *odp_actions;
         bool should_install;
 
         action_xlate_ctx_init(&ctx, ofproto, &facet->flow,
                               subfacet->initial_tci, new_rule, 0, NULL);
-        odp_actions = xlate_actions(&ctx, new_rule->up.actions,
-                                    new_rule->up.n_actions);
-        actions_changed = (subfacet->actions_len != odp_actions->size
-                           || memcmp(subfacet->actions, odp_actions->data,
+        xlate_actions(&ctx, new_rule->up.actions, new_rule->up.n_actions,
+                      &odp_actions);
+        actions_changed = (subfacet->actions_len != odp_actions.size
+                           || memcmp(subfacet->actions, odp_actions.data,
                                      subfacet->actions_len));
 
         should_install = (ctx.may_set_up_flow
@@ -3658,7 +3665,7 @@ facet_revalidate(struct facet *facet)
                 struct dpif_flow_stats stats;
 
                 subfacet_install(subfacet,
-                                 odp_actions->data, odp_actions->size, &stats);
+                                 odp_actions.data, odp_actions.size, &stats);
                 subfacet_update_stats(subfacet, &stats);
             } else {
                 subfacet_uninstall(subfacet);
@@ -3668,14 +3675,15 @@ facet_revalidate(struct facet *facet)
                 new_actions = xcalloc(list_size(&facet->subfacets),
                                       sizeof *new_actions);
             }
-            new_actions[i].odp_actions = xmemdup(odp_actions->data,
-                                                 odp_actions->size);
-            new_actions[i].actions_len = odp_actions->size;
+            new_actions[i].odp_actions = xmemdup(odp_actions.data,
+                                                 odp_actions.size);
+            new_actions[i].actions_len = odp_actions.size;
         }
 
-        ofpbuf_delete(odp_actions);
         i++;
     }
+    ofpbuf_uninit(&odp_actions);
+
     if (new_actions) {
         facet_flush_stats(facet);
     }
@@ -3798,8 +3806,8 @@ flow_push_stats(struct rule_dpif *rule,
     action_xlate_ctx_init(&push.ctx, ofproto, flow, flow->vlan_tci, rule,
                           0, NULL);
     push.ctx.resubmit_hook = push_resubmit;
-    ofpbuf_delete(xlate_actions(&push.ctx,
-                                rule->up.actions, rule->up.n_actions));
+    xlate_actions_for_side_effects(&push.ctx,
+                                   rule->up.actions, rule->up.n_actions);
 }
 
 /* Subfacets. */
@@ -3937,12 +3945,15 @@ subfacet_make_actions(struct subfacet *subfacet, const struct ofpbuf *packet)
     struct facet *facet = subfacet->facet;
     struct rule_dpif *rule = facet->rule;
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(rule->up.ofproto);
-    struct ofpbuf *odp_actions;
-    struct action_xlate_ctx ctx;
 
+    struct action_xlate_ctx ctx;
+    uint64_t odp_actions_stub[1024 / 8];
+    struct ofpbuf odp_actions;
+
+    ofpbuf_use_stub(&odp_actions, odp_actions_stub, sizeof odp_actions_stub);
     action_xlate_ctx_init(&ctx, ofproto, &facet->flow, subfacet->initial_tci,
                           rule, 0, packet);
-    odp_actions = xlate_actions(&ctx, rule->up.actions, rule->up.n_actions);
+    xlate_actions(&ctx, rule->up.actions, rule->up.n_actions, &odp_actions);
     facet->tags = ctx.tags;
     facet->may_install = ctx.may_set_up_flow;
     facet->has_learn = ctx.has_learn;
@@ -3951,14 +3962,14 @@ subfacet_make_actions(struct subfacet *subfacet, const struct ofpbuf *packet)
     facet->nf_flow.output_iface = ctx.nf_output_iface;
     facet->mirrors = ctx.mirrors;
 
-    if (subfacet->actions_len != odp_actions->size
-        || memcmp(subfacet->actions, odp_actions->data, odp_actions->size)) {
+    if (subfacet->actions_len != odp_actions.size
+        || memcmp(subfacet->actions, odp_actions.data, odp_actions.size)) {
         free(subfacet->actions);
-        subfacet->actions_len = odp_actions->size;
-        subfacet->actions = xmemdup(odp_actions->data, odp_actions->size);
+        subfacet->actions_len = odp_actions.size;
+        subfacet->actions = xmemdup(odp_actions.data, odp_actions.size);
     }
 
-    ofpbuf_delete(odp_actions);
+    ofpbuf_uninit(&odp_actions);
 }
 
 /* Updates 'subfacet''s datapath flow, setting its actions to 'actions_len'
@@ -4218,21 +4229,24 @@ rule_execute(struct rule *rule_, const struct flow *flow,
 {
     struct rule_dpif *rule = rule_dpif_cast(rule_);
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(rule->up.ofproto);
-    struct action_xlate_ctx ctx;
-    struct ofpbuf *odp_actions;
-    size_t size;
 
+    size_t size = packet->size;
+
+    struct action_xlate_ctx ctx;
+    uint64_t odp_actions_stub[1024 / 8];
+    struct ofpbuf odp_actions;
+
+    ofpbuf_use_stub(&odp_actions, odp_actions_stub, sizeof odp_actions_stub);
     action_xlate_ctx_init(&ctx, ofproto, flow, flow->vlan_tci,
                           rule, packet_get_tcp_flags(packet, flow), packet);
-    odp_actions = xlate_actions(&ctx, rule->up.actions, rule->up.n_actions);
-    size = packet->size;
-    if (execute_odp_actions(ofproto, flow, odp_actions->data,
-                            odp_actions->size, packet)) {
+    xlate_actions(&ctx, rule->up.actions, rule->up.n_actions, &odp_actions);
+    if (execute_odp_actions(ofproto, flow, odp_actions.data,
+                            odp_actions.size, packet)) {
         rule->packet_count++;
         rule->byte_count += size;
         flow_push_stats(rule, flow, 1, size, time_msec());
     }
-    ofpbuf_delete(odp_actions);
+    ofpbuf_uninit(&odp_actions);
 
     return 0;
 }
@@ -5096,16 +5110,21 @@ action_xlate_ctx_init(struct action_xlate_ctx *ctx,
     ctx->resubmit_hook = NULL;
 }
 
-static struct ofpbuf *
+/* Translates the 'n_in' "union ofp_action"s in 'in' into datapath actions in
+ * 'odp_actions', using 'ctx'. */
+static void
 xlate_actions(struct action_xlate_ctx *ctx,
-              const union ofp_action *in, size_t n_in)
+              const union ofp_action *in, size_t n_in,
+              struct ofpbuf *odp_actions)
 {
     struct flow orig_flow = ctx->flow;
 
     COVERAGE_INC(ofproto_dpif_xlate);
 
-    ctx->odp_actions = ofpbuf_new(512);
-    ofpbuf_reserve(ctx->odp_actions, NL_A_U32_SIZE);
+    ofpbuf_clear(odp_actions);
+    ofpbuf_reserve(odp_actions, NL_A_U32_SIZE);
+
+    ctx->odp_actions = odp_actions;
     ctx->tags = 0;
     ctx->may_set_up_flow = true;
     ctx->has_learn = false;
@@ -5128,7 +5147,7 @@ xlate_actions(struct action_xlate_ctx *ctx,
             break;
 
         case OFPC_FRAG_DROP:
-            return ctx->odp_actions;
+            return;
 
         case OFPC_FRAG_REASM:
             NOT_REACHED();
@@ -5144,7 +5163,6 @@ xlate_actions(struct action_xlate_ctx *ctx,
 
     if (process_special(ctx->ofproto, &ctx->flow, ctx->packet)) {
         ctx->may_set_up_flow = false;
-        return ctx->odp_actions;
     } else {
         static struct vlog_rate_limit trace_rl = VLOG_RATE_LIMIT_INIT(1, 1);
         struct flow original_flow = ctx->flow;
@@ -5177,8 +5195,20 @@ xlate_actions(struct action_xlate_ctx *ctx,
         add_mirror_actions(ctx, &orig_flow);
         fix_sflow_action(ctx);
     }
+}
 
-    return ctx->odp_actions;
+/* Translates the 'n_in' "union ofp_action"s in 'in' into datapath actions,
+ * using 'ctx', and discards the datapath actions. */
+static void
+xlate_actions_for_side_effects(struct action_xlate_ctx *ctx,
+                               const union ofp_action *in, size_t n_in)
+{
+    uint64_t odp_actions_stub[1024 / 8];
+    struct ofpbuf odp_actions;
+
+    ofpbuf_use_stub(&odp_actions, odp_actions_stub, sizeof odp_actions_stub);
+    xlate_actions(ctx, in, n_in, &odp_actions);
+    ofpbuf_uninit(&odp_actions);
 }
 
 /* OFPP_NORMAL implementation. */
@@ -5889,9 +5919,11 @@ packet_out(struct ofproto *ofproto_, struct ofpbuf *packet,
                              ofproto->max_ports);
     if (!error) {
         struct odputil_keybuf keybuf;
-        struct ofpbuf *odp_actions;
-        struct ofproto_push push;
         struct ofpbuf key;
+
+        uint64_t odp_actions_stub[1024 / 8];
+        struct ofpbuf odp_actions;
+        struct ofproto_push push;
 
         ofpbuf_use_stack(&key, &keybuf, sizeof keybuf);
         odp_flow_key_from_flow(&key, flow);
@@ -5906,10 +5938,12 @@ packet_out(struct ofproto *ofproto_, struct ofpbuf *packet,
         push.used = time_msec();
         push.ctx.resubmit_hook = push_resubmit;
 
-        odp_actions = xlate_actions(&push.ctx, ofp_actions, n_ofp_actions);
+        ofpbuf_use_stub(&odp_actions,
+                        odp_actions_stub, sizeof odp_actions_stub);
+        xlate_actions(&push.ctx, ofp_actions, n_ofp_actions, &odp_actions);
         dpif_execute(ofproto->dpif, key.data, key.size,
-                     odp_actions->data, odp_actions->size, packet);
-        ofpbuf_delete(odp_actions);
+                     odp_actions.data, odp_actions.size, packet);
+        ofpbuf_uninit(&odp_actions);
     }
     return error;
 }
@@ -6225,24 +6259,28 @@ ofproto_trace(struct ofproto_dpif *ofproto, const struct flow *flow,
     rule = rule_dpif_lookup(ofproto, flow, 0);
     trace_format_rule(ds, 0, 0, rule);
     if (rule) {
+        uint64_t odp_actions_stub[1024 / 8];
+        struct ofpbuf odp_actions;
+
         struct trace_ctx trace;
-        struct ofpbuf *odp_actions;
         uint8_t tcp_flags;
 
         tcp_flags = packet ? packet_get_tcp_flags(packet, flow) : 0;
         trace.result = ds;
         trace.flow = *flow;
+        ofpbuf_use_stub(&odp_actions,
+                        odp_actions_stub, sizeof odp_actions_stub);
         action_xlate_ctx_init(&trace.ctx, ofproto, flow, initial_tci,
                               rule, tcp_flags, packet);
         trace.ctx.resubmit_hook = trace_resubmit;
-        odp_actions = xlate_actions(&trace.ctx,
-                                    rule->up.actions, rule->up.n_actions);
+        xlate_actions(&trace.ctx, rule->up.actions, rule->up.n_actions,
+                      &odp_actions);
 
         ds_put_char(ds, '\n');
         trace_format_flow(ds, 0, "Final flow", &trace);
         ds_put_cstr(ds, "Datapath actions: ");
-        format_odp_actions(ds, odp_actions->data, odp_actions->size);
-        ofpbuf_delete(odp_actions);
+        format_odp_actions(ds, odp_actions.data, odp_actions.size);
+        ofpbuf_uninit(&odp_actions);
 
         if (!trace.ctx.may_set_up_flow) {
             if (packet) {
