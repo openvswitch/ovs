@@ -905,14 +905,6 @@
             rate of once every 30 seconds.
           </p>
         </column>
-
-        <column name="other_config" key="lacp-heartbeat"
-                type='{"type": "boolean"}'>
-          Treat LACP like a simple heartbeat protocol for link state
-          monitoring.  Most features of the LACP protocol are disabled
-          when this mode is in use.  The default if not specified is
-          <code>false</code>.
-        </column>
       </group>
 
       <group title="SLB Configuration">

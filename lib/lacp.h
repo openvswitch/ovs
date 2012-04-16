@@ -35,7 +35,6 @@ struct lacp_settings {
     uint16_t priority;                /* System priority. */
     bool active;                      /* Active or passive mode? */
     bool fast;                        /* Fast or slow probe interval. */
-    bool heartbeat;                   /* Heartbeat mode. */
 };
 
 void lacp_init(void);

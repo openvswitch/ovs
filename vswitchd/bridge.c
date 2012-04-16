@@ -2859,11 +2859,6 @@ port_configure_lacp(struct port *port, struct lacp_settings *s)
                    ? priority
                    : UINT16_MAX - !list_is_short(&port->ifaces));
 
-    s->heartbeat = !strcmp(ovsrec_port_get_other_config_value(port->cfg,
-                                                              "lacp-heartbeat",
-                                                              "false"),
-                           "true");
-
     lacp_time = ovsrec_port_get_other_config_value(port->cfg, "lacp-time",
                                                    "slow");
     s->fast = !strcasecmp(lacp_time, "fast");

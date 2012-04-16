@@ -101,7 +101,6 @@ struct lacp {
     bool fast;               /* True if using fast probe interval. */
     bool negotiated;         /* True if LACP negotiations were successful. */
     bool update;             /* True if lacp_update() needs to be called. */
-    bool heartbeat;          /* LACP heartbeat mode. */
 };
 
 struct slave {
@@ -232,11 +231,9 @@ lacp_configure(struct lacp *lacp, const struct lacp_settings *s)
     }
 
     if (!eth_addr_equals(lacp->sys_id, s->id)
-        || lacp->sys_priority != s->priority
-        || lacp->heartbeat != s->heartbeat) {
+        || lacp->sys_priority != s->priority) {
         memcpy(lacp->sys_id, s->id, ETH_ADDR_LEN);
         lacp->sys_priority = s->priority;
-        lacp->heartbeat = s->heartbeat;
         lacp->update = true;
     }
 
@@ -474,13 +471,6 @@ lacp_update_attached(struct lacp *lacp)
     struct lacp_info lead_pri;
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 10);
 
-    if (lacp->heartbeat) {
-        HMAP_FOR_EACH (slave, node, &lacp->slaves) {
-            slave->attached = slave->status != LACP_DEFAULTED;
-        }
-        return;
-    }
-
     lacp->update = false;
 
     lead = NULL;
@@ -593,7 +583,7 @@ slave_get_actor(struct slave *slave, struct lacp_info *actor)
         state |= LACP_STATE_EXP;
     }
 
-    if (lacp->heartbeat || hmap_count(&lacp->slaves) > 1) {
+    if (hmap_count(&lacp->slaves) > 1) {
         state |= LACP_STATE_AGG;
     }
 
@@ -747,9 +737,6 @@ lacp_print_details(struct ds *ds, struct lacp *lacp)
 
     ds_put_format(ds, "---- %s ----\n", lacp->name);
     ds_put_format(ds, "\tstatus: %s", lacp->active ? "active" : "passive");
-    if (lacp->heartbeat) {
-        ds_put_cstr(ds, " heartbeat");
-    }
     if (lacp->negotiated) {
         ds_put_cstr(ds, " negotiated");
     }
