@@ -271,6 +271,7 @@ struct action_xlate_ctx {
     uint16_t sflow_odp_port;    /* Output port for composing sFlow action. */
     uint16_t user_cookie_offset;/* Used for user_action_cookie fixup. */
     bool exit;                  /* No further actions should be processed. */
+    struct flow orig_flow;      /* Copy of original flow. */
 };
 
 static void action_xlate_ctx_init(struct action_xlate_ctx *,
@@ -540,6 +541,7 @@ struct ofproto_dpif {
     struct hmap bundles;        /* Contains "struct ofbundle"s. */
     struct mac_learning *ml;
     struct ofmirror *mirrors[MAX_MIRRORS];
+    bool has_mirrors;
     bool has_bonded_bundles;
 
     /* Expiration. */
@@ -720,6 +722,7 @@ construct(struct ofproto *ofproto_)
 
     ofproto_dpif_unixctl_init();
 
+    ofproto->has_mirrors = false;
     ofproto->has_bundle_action = false;
 
     hmap_init(&ofproto->vlandev_map);
@@ -2154,6 +2157,7 @@ mirror_set(struct ofproto *ofproto_, void *aux,
     }
 
     ofproto->need_revalidate = true;
+    ofproto->has_mirrors = true;
     mac_learning_flush(ofproto->ml, &ofproto->revalidate_set);
     mirror_update_dups(ofproto);
 
@@ -2166,6 +2170,7 @@ mirror_destroy(struct ofmirror *mirror)
     struct ofproto_dpif *ofproto;
     mirror_mask_t mirror_bit;
     struct ofbundle *bundle;
+    int i;
 
     if (!mirror) {
         return;
@@ -2191,6 +2196,14 @@ mirror_destroy(struct ofmirror *mirror)
     free(mirror);
 
     mirror_update_dups(ofproto);
+
+    ofproto->has_mirrors = false;
+    for (i = 0; i < MAX_MIRRORS; i++) {
+        if (ofproto->mirrors[i]) {
+            ofproto->has_mirrors = true;
+            break;
+        }
+    }
 }
 
 static int
@@ -5297,8 +5310,6 @@ xlate_actions(struct action_xlate_ctx *ctx,
               const union ofp_action *in, size_t n_in,
               struct ofpbuf *odp_actions)
 {
-    struct flow orig_flow = ctx->flow;
-
     COVERAGE_INC(ofproto_dpif_xlate);
 
     ofpbuf_clear(odp_actions);
@@ -5317,6 +5328,16 @@ xlate_actions(struct action_xlate_ctx *ctx,
     ctx->orig_skb_priority = ctx->flow.skb_priority;
     ctx->table_id = 0;
     ctx->exit = false;
+
+    if (ctx->ofproto->has_mirrors) {
+        /* Do this conditionally because the copy is expensive enough that it
+         * shows up in profiles.
+         *
+         * We keep orig_flow in 'ctx' only because I couldn't make GCC 4.4
+         * believe that I wasn't using it without initializing it if I kept it
+         * in a local variable. */
+        ctx->orig_flow = ctx->flow;
+    }
 
     if (ctx->flow.nw_frag & FLOW_NW_FRAG_ANY) {
         switch (ctx->ofproto->up.frag_handling) {
@@ -5372,7 +5393,9 @@ xlate_actions(struct action_xlate_ctx *ctx,
                 compose_output_action(ctx, OFPP_LOCAL);
             }
         }
-        add_mirror_actions(ctx, &orig_flow);
+        if (ctx->ofproto->has_mirrors) {
+            add_mirror_actions(ctx, &ctx->orig_flow);
+        }
         fix_sflow_action(ctx);
     }
 }
