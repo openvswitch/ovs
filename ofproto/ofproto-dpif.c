@@ -178,7 +178,8 @@ static void bundle_del_port(struct ofport_dpif *);
 static void bundle_run(struct ofbundle *);
 static void bundle_wait(struct ofbundle *);
 static struct ofbundle *lookup_input_bundle(struct ofproto_dpif *,
-                                            uint16_t in_port, bool warn);
+                                            uint16_t in_port, bool warn,
+                                            struct ofport_dpif **in_ofportp);
 
 /* A controller may use OFPP_NONE as the ingress port to indicate that
  * it did not arrive on a "real" port.  'ofpp_none_bundle' exists for
@@ -5624,7 +5625,7 @@ add_mirror_actions(struct action_xlate_ctx *ctx, const struct flow *orig_flow)
     size_t left;
 
     in_bundle = lookup_input_bundle(ctx->ofproto, orig_flow->in_port,
-                                    ctx->packet != NULL);
+                                    ctx->packet != NULL, NULL);
     if (!in_bundle) {
         return;
     }
@@ -5784,20 +5785,24 @@ update_learning_table(struct ofproto_dpif *ofproto,
 }
 
 static struct ofbundle *
-lookup_input_bundle(struct ofproto_dpif *ofproto, uint16_t in_port, bool warn)
+lookup_input_bundle(struct ofproto_dpif *ofproto, uint16_t in_port, bool warn,
+                    struct ofport_dpif **in_ofportp)
 {
     struct ofport_dpif *ofport;
+
+    /* Find the port and bundle for the received packet. */
+    ofport = get_ofp_port(ofproto, in_port);
+    if (in_ofportp) {
+        *in_ofportp = ofport;
+    }
+    if (ofport && ofport->bundle) {
+        return ofport->bundle;
+    }
 
     /* Special-case OFPP_NONE, which a controller may use as the ingress
      * port for traffic that it is sourcing. */
     if (in_port == OFPP_NONE) {
         return &ofpp_none_bundle;
-    }
-
-    /* Find the port and bundle for the received packet. */
-    ofport = get_ofp_port(ofproto, in_port);
-    if (ofport && ofport->bundle) {
-        return ofport->bundle;
     }
 
     /* Odd.  A few possible reasons here:
@@ -5882,14 +5887,10 @@ xlate_normal(struct action_xlate_ctx *ctx)
     ctx->has_normal = true;
 
     in_bundle = lookup_input_bundle(ctx->ofproto, ctx->flow.in_port,
-                                  ctx->packet != NULL);
+                                    ctx->packet != NULL, &in_port);
     if (!in_bundle) {
         return;
     }
-
-    /* We know 'in_port' exists unless it is "ofpp_none_bundle",
-     * since lookup_input_bundle() succeeded. */
-    in_port = get_ofp_port(ctx->ofproto, ctx->flow.in_port);
 
     /* Drop malformed frames. */
     if (ctx->flow.dl_type == htons(ETH_TYPE_VLAN) &&
