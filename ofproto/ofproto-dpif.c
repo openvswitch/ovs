@@ -2562,8 +2562,8 @@ handle_flow_miss(struct ofproto_dpif *ofproto, struct flow_miss *miss,
                  struct flow_miss_op *ops, size_t *n_ops)
 {
     const struct flow *flow = &miss->flow;
-    struct ofpbuf *packet, *next_packet;
     struct subfacet *subfacet;
+    struct ofpbuf *packet;
     struct facet *facet;
 
     facet = facet_lookup_valid(ofproto, flow);
@@ -2599,7 +2599,7 @@ handle_flow_miss(struct ofproto_dpif *ofproto, struct flow_miss *miss,
                                miss->key_fitness, miss->key, miss->key_len,
                                miss->initial_tci);
 
-    LIST_FOR_EACH_SAFE (packet, next_packet, list_node, &miss->packets) {
+    LIST_FOR_EACH (packet, list_node, &miss->packets) {
         struct dpif_flow_stats stats;
         struct flow_miss_op *op;
         struct dpif_execute *execute;
