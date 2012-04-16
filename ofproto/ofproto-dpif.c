@@ -5310,6 +5310,11 @@ xlate_actions(struct action_xlate_ctx *ctx,
               const union ofp_action *in, size_t n_in,
               struct ofpbuf *odp_actions)
 {
+    /* Normally false.  Set to true if we ever hit MAX_RESUBMIT_RECURSION, so
+     * that in the future we always keep a copy of the original flow for
+     * tracing purposes. */
+    static bool hit_resubmit_limit;
+
     COVERAGE_INC(ofproto_dpif_xlate);
 
     ofpbuf_clear(odp_actions);
@@ -5329,7 +5334,7 @@ xlate_actions(struct action_xlate_ctx *ctx,
     ctx->table_id = 0;
     ctx->exit = false;
 
-    if (ctx->ofproto->has_mirrors) {
+    if (ctx->ofproto->has_mirrors || hit_resubmit_limit) {
         /* Do this conditionally because the copy is expensive enough that it
          * shows up in profiles.
          *
@@ -5366,21 +5371,25 @@ xlate_actions(struct action_xlate_ctx *ctx,
         ctx->may_set_up_flow = false;
     } else {
         static struct vlog_rate_limit trace_rl = VLOG_RATE_LIMIT_INIT(1, 1);
-        struct flow original_flow = ctx->flow;
         ovs_be16 initial_tci = ctx->base_flow.vlan_tci;
 
         add_sflow_action(ctx);
         do_xlate_actions(in, n_in, ctx);
 
-        if (ctx->max_resubmit_trigger && !ctx->resubmit_hook
-            && !VLOG_DROP_ERR(&trace_rl)) {
-            struct ds ds = DS_EMPTY_INITIALIZER;
+        if (ctx->max_resubmit_trigger && !ctx->resubmit_hook) {
+            if (!hit_resubmit_limit) {
+                /* We didn't record the original flow.  Make sure we do from
+                 * now on. */
+                hit_resubmit_limit = true;
+            } else if (!VLOG_DROP_ERR(&trace_rl)) {
+                struct ds ds = DS_EMPTY_INITIALIZER;
 
-            ofproto_trace(ctx->ofproto, &original_flow, ctx->packet,
-                          initial_tci, &ds);
-            VLOG_ERR("Trace triggered by excessive resubmit recursion:\n%s",
-                     ds_cstr(&ds));
-            ds_destroy(&ds);
+                ofproto_trace(ctx->ofproto, &ctx->orig_flow, ctx->packet,
+                              initial_tci, &ds);
+                VLOG_ERR("Trace triggered by excessive resubmit "
+                         "recursion:\n%s", ds_cstr(&ds));
+                ds_destroy(&ds);
+            }
         }
 
         if (!connmgr_may_set_up_flow(ctx->ofproto->up.connmgr, &ctx->flow,
