@@ -69,9 +69,4 @@ char *describe_fd(int fd);
  * in <netinet/ip.h> is used.  */
 #define DSCP_DEFAULT IPTOS_PREC_INTERNETCONTROL
 
-/* Invalid dscp value.  If the dscp value will not be used, the dscp value
- * passed must be invalid.  Set to 0xFF as the TOS bits passed can only be
- * 6 bits. */
-#define DSCP_INVALID 0xFF
-
 #endif /* socket-util.h */

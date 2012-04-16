@@ -221,7 +221,7 @@ unixctl_server_create(const char *path, struct unixctl_server **serverp)
                                program_name, (long int) getpid());
     }
 
-    error = pstream_open(punix_path, &listener, DSCP_INVALID);
+    error = pstream_open(punix_path, &listener, 0);
     if (error) {
         ovs_error(error, "could not initialize control socket %s", punix_path);
         goto exit;

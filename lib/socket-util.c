@@ -546,8 +546,7 @@ exit:
  * If 'sinp' is non-null, then on success the target address is stored into
  * '*sinp'.
  *
- * 'dscp'  If not DSCP_INVALID, its value becomes the DSCP bits in the IP
- * headers for the new connection. */
+ * 'dscp' becomes the DSCP bits in the IP headers for the new connection. */
 int
 inet_open_active(int style, const char *target, uint16_t default_port,
                  struct sockaddr_in *sinp, int *fdp, uint8_t dscp)
@@ -577,12 +576,10 @@ inet_open_active(int style, const char *target, uint16_t default_port,
     /* The socket options set here ensure that the TOS bits are set during
      * the connection establishment.  If set after connect(), the handshake
      * SYN frames will be sent with a TOS of 0. */
-    if (dscp != DSCP_INVALID) {
-        if (setsockopt(fd, IPPROTO_IP, IP_TOS, &dscp, sizeof dscp)) {
-            VLOG_ERR("%s: socket: %s", target, strerror(errno));
-            error = errno;
-            goto exit;
-        }
+    if (setsockopt(fd, IPPROTO_IP, IP_TOS, &dscp, sizeof dscp)) {
+        VLOG_ERR("%s: socket: %s", target, strerror(errno));
+        error = errno;
+        goto exit;
     }
 
     /* Connect. */
@@ -672,8 +669,7 @@ exit:
  * If 'sinp' is non-null, then on success the bound address is stored into
  * '*sinp'.
  *
- * 'dscp'  If not DSCP_INVALID, its value becomes the DSCP bits in the IP
- * headers for the new connection. */
+ * 'dscp' becomes the DSCP bits in the IP headers for the new connection. */
 int
 inet_open_passive(int style, const char *target, int default_port,
                   struct sockaddr_in *sinp, uint8_t dscp)
@@ -714,12 +710,10 @@ inet_open_passive(int style, const char *target, int default_port,
     /* The socket options set here ensure that the TOS bits are set during
      * the connection establishment.  If set after connect(), the handshake
      * SYN frames will be sent with a TOS of 0. */
-    if (dscp != DSCP_INVALID) {
-        if (setsockopt(fd, IPPROTO_IP, IP_TOS, &dscp, sizeof dscp)) {
-            VLOG_ERR("%s: socket: %s", target, strerror(errno));
-            error = errno;
-            goto error;
-        }
+    if (setsockopt(fd, IPPROTO_IP, IP_TOS, &dscp, sizeof dscp)) {
+        VLOG_ERR("%s: socket: %s", target, strerror(errno));
+        error = errno;
+        goto error;
     }
 
     /* Listen. */

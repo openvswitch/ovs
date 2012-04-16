@@ -63,9 +63,7 @@ struct vconn_class {
      *
      * 'suffix' is a copy of 'name' following the colon and may be modified.
      * 'dscp' is the DSCP value that the new connection should use in the IP
-     * packets it sends.  (If no DSCP value should be set in the packet, dscp
-     * will be set to DSCP_INVALID.  If no DSCP value is specified, DSCP_DEFAULT
-     * value will be applied.)
+     * packets it sends.
      *
      * Returns 0 if successful, otherwise a positive errno value.  If
      * successful, stores a pointer to the new connection in '*vconnp'.
@@ -155,9 +153,7 @@ struct pvconn_class {
      *
      * 'suffix' is a copy of 'name' following the colon and may be modified.
      * 'dscp' is the DSCP value that the new connection should use in the IP
-     * packets it sends.  (If no DSCP value should be set in the packet, dscp
-     * will be set to DSCP_INVALID.  If no DSCP value is specified, DSCP_DEFAULT
-     * value will be applied.)
+     * packets it sends.
      *
      * Returns 0 if successful, otherwise a positive errno value.  If
      * successful, stores a pointer to the new connection in '*pvconnp'.

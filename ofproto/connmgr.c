@@ -674,7 +674,7 @@ set_pvconns(struct pvconn ***pvconnsp, size_t *n_pvconnsp,
         struct pvconn *pvconn;
         int error;
 
-        error = pvconn_open(name, &pvconn, DSCP_INVALID);
+        error = pvconn_open(name, &pvconn, 0);
         if (!error) {
             pvconns[n_pvconns++] = pvconn;
         } else {
