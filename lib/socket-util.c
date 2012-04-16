@@ -571,7 +571,7 @@ inet_open_active(int style, const char *target, uint16_t default_port,
     }
     error = set_nonblocking(fd);
     if (error) {
-        goto exit_close;
+        goto exit;
     }
 
     /* The socket options set here ensure that the TOS bits are set during
@@ -589,24 +589,17 @@ inet_open_active(int style, const char *target, uint16_t default_port,
     error = connect(fd, (struct sockaddr *) &sin, sizeof sin) == 0 ? 0 : errno;
     if (error == EINPROGRESS) {
         error = EAGAIN;
-    } else if (error && error != EAGAIN) {
-        goto exit_close;
     }
 
-    /* Success: error is 0 or EAGAIN. */
-    goto exit;
-
-exit_close:
-    close(fd);
 exit:
     if (!error || error == EAGAIN) {
         if (sinp) {
             *sinp = sin;
         }
-        *fdp = fd;
-    } else {
-        *fdp = -1;
+    } else if (fd >= 0) {
+        close(fd);
     }
+    *fdp = fd;
     return error;
 }
 
