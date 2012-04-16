@@ -66,7 +66,7 @@ char *describe_fd(int fd);
 
 /* Default value of dscp bits for connection between controller and manager.
  * Value of IPTOS_PREC_INTERNETCONTROL = 0xc0 which is defined
- * in <netinet/ip.h> is used.  */
-#define DSCP_DEFAULT IPTOS_PREC_INTERNETCONTROL
+ * in <netinet/ip.h> is used. */
+#define DSCP_DEFAULT (IPTOS_PREC_INTERNETCONTROL >> 2)
 
 #endif /* socket-util.h */

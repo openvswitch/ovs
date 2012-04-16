@@ -2436,10 +2436,14 @@ bridge_ofproto_controller_from_ovsrec(const struct ovsrec_controller *c,
     oc->enable_async_msgs = (!c->enable_async_messages
                              || *c->enable_async_messages);
     config_str = ovsrec_controller_get_other_config_value(c, "dscp", NULL);
+
+    oc->dscp = DSCP_DEFAULT;
     if (config_str) {
-        oc->dscp = atoi(config_str);
-    } else {
-        oc->dscp = DSCP_DEFAULT;
+        int dscp = atoi(config_str);
+
+        if (dscp >= 0 && dscp <= 63) {
+            oc->dscp = dscp;
+        }
     }
 }
 

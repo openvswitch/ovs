@@ -17,6 +17,7 @@
 #include <config.h>
 #include "socket-util.h"
 #include <arpa/inet.h>
+#include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <net/if.h>
@@ -79,6 +80,21 @@ set_nonblocking(int fd)
         VLOG_ERR("fcntl(F_GETFL) failed: %s", strerror(errno));
         return errno;
     }
+}
+
+static int
+set_dscp(int fd, uint8_t dscp)
+{
+    if (dscp > 63) {
+        return EINVAL;
+    }
+
+    dscp = dscp << 2;
+    if (setsockopt(fd, IPPROTO_IP, IP_TOS, &dscp, sizeof dscp)) {
+        return errno;
+    }
+
+    return 0;
 }
 
 static bool
@@ -546,7 +562,9 @@ exit:
  * If 'sinp' is non-null, then on success the target address is stored into
  * '*sinp'.
  *
- * 'dscp' becomes the DSCP bits in the IP headers for the new connection. */
+ * 'dscp' becomes the DSCP bits in the IP headers for the new connection.  It
+ * should be in the range [0, 63] and will automatically be shifted to the
+ * appropriately place in the IP tos field. */
 int
 inet_open_active(int style, const char *target, uint16_t default_port,
                  struct sockaddr_in *sinp, int *fdp, uint8_t dscp)
@@ -573,12 +591,12 @@ inet_open_active(int style, const char *target, uint16_t default_port,
         goto exit;
     }
 
-    /* The socket options set here ensure that the TOS bits are set during
-     * the connection establishment.  If set after connect(), the handshake
-     * SYN frames will be sent with a TOS of 0. */
-    if (setsockopt(fd, IPPROTO_IP, IP_TOS, &dscp, sizeof dscp)) {
-        VLOG_ERR("%s: socket: %s", target, strerror(errno));
-        error = errno;
+    /* The dscp bits must be configured before connect() to ensure that the TOS
+     * field is set during the connection establishment.  If set after
+     * connect(), the handshake SYN frames will be sent with a TOS of 0. */
+    error = set_dscp(fd, dscp);
+    if (error) {
+        VLOG_ERR("%s: socket: %s", target, strerror(error));
         goto exit;
     }
 
@@ -669,7 +687,9 @@ exit:
  * If 'sinp' is non-null, then on success the bound address is stored into
  * '*sinp'.
  *
- * 'dscp' becomes the DSCP bits in the IP headers for the new connection. */
+ * 'dscp' becomes the DSCP bits in the IP headers for the new connection.  It
+ * should be in the range [0, 63] and will automatically be shifted to the
+ * appropriately place in the IP tos field. */
 int
 inet_open_passive(int style, const char *target, int default_port,
                   struct sockaddr_in *sinp, uint8_t dscp)
@@ -707,12 +727,12 @@ inet_open_passive(int style, const char *target, int default_port,
         goto error;
     }
 
-    /* The socket options set here ensure that the TOS bits are set during
-     * the connection establishment.  If set after connect(), the handshake
-     * SYN frames will be sent with a TOS of 0. */
-    if (setsockopt(fd, IPPROTO_IP, IP_TOS, &dscp, sizeof dscp)) {
-        VLOG_ERR("%s: socket: %s", target, strerror(errno));
-        error = errno;
+    /* The dscp bits must be configured before connect() to ensure that the TOS
+     * field is set during the connection establishment.  If set after
+     * connect(), the handshake SYN frames will be sent with a TOS of 0. */
+    error = set_dscp(fd, dscp);
+    if (error) {
+        VLOG_ERR("%s: socket: %s", target, strerror(error));
         goto error;
     }
 
