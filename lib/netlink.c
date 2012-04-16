@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -88,26 +88,6 @@ nl_msg_reserve(struct ofpbuf *msg, size_t size)
     ofpbuf_prealloc_tailroom(msg, NLMSG_ALIGN(size));
 }
 
-static uint32_t
-get_nlmsg_seq(void)
-{
-    /* Next nlmsghdr sequence number.
-     *
-     * This implementation uses sequence numbers that are unique process-wide,
-     * to avoid a hypothetical race: send request, close socket, open new
-     * socket that reuses the old socket's PID value, send request on new
-     * socket, receive reply from kernel to old socket but with same PID and
-     * sequence number.  (This race could be avoided other ways, e.g. by
-     * preventing PIDs from being quickly reused). */
-    static uint32_t next_seq;
-
-    if (next_seq == 0) {
-        /* Pick initial sequence number. */
-        next_seq = getpid() ^ time_wall();
-    }
-    return next_seq++;
-}
-
 /* Puts a nlmsghdr at the beginning of 'msg', which must be initially empty.
  * Uses the given 'type' and 'flags'.  'expected_payload' should be
  * an estimate of the number of payload bytes to be supplied; if the size of
@@ -121,8 +101,9 @@ get_nlmsg_seq(void)
  * is often NLM_F_REQUEST indicating that a request is being made, commonly
  * or'd with NLM_F_ACK to request an acknowledgement.
  *
- * Sets the new nlmsghdr's nlmsg_pid field to 0 for now.  nl_sock_send() will
- * fill it in just before sending the message.
+ * Sets the new nlmsghdr's nlmsg_len, nlmsg_seq, and nlmsg_pid fields to 0 for
+ * now.  Functions that send Netlink messages will fill these in just before
+ * sending the message.
  *
  * nl_msg_put_genlmsghdr() is more convenient for composing a Generic Netlink
  * message. */
@@ -139,7 +120,7 @@ nl_msg_put_nlmsghdr(struct ofpbuf *msg,
     nlmsghdr->nlmsg_len = 0;
     nlmsghdr->nlmsg_type = type;
     nlmsghdr->nlmsg_flags = flags;
-    nlmsghdr->nlmsg_seq = get_nlmsg_seq();
+    nlmsghdr->nlmsg_seq = 0;
     nlmsghdr->nlmsg_pid = 0;
 }
 

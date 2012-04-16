@@ -54,6 +54,7 @@ COVERAGE_DEFINE(netlink_sent);
  * information.  Also, at high logging levels we log *all* Netlink messages. */
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(60, 600);
 
+static uint32_t nl_sock_allocate_seq(struct nl_sock *, unsigned int n);
 static void log_nlmsg(const char *function, int error,
                       const void *message, size_t size, int protocol);
 
@@ -62,6 +63,7 @@ static void log_nlmsg(const char *function, int error,
 struct nl_sock
 {
     int fd;
+    uint32_t next_seq;
     uint32_t pid;
     int protocol;
     struct nl_dump *dump;
@@ -122,6 +124,7 @@ nl_sock_create(int protocol, struct nl_sock **sockp)
     }
     sock->protocol = protocol;
     sock->dump = NULL;
+    sock->next_seq = 1;
 
     rcvbuf = 1024 * 1024;
     if (setsockopt(sock->fd, SOL_SOCKET, SO_RCVBUFFORCE,
@@ -256,6 +259,7 @@ nl_sock_send__(struct nl_sock *sock, const struct ofpbuf *msg, bool wait)
     int error;
 
     nlmsg->nlmsg_len = msg->size;
+    nlmsg->nlmsg_seq = nl_sock_allocate_seq(sock, 1);
     nlmsg->nlmsg_pid = sock->pid;
     do {
         int retval;
@@ -522,7 +526,6 @@ nl_sock_transact_multiple__(struct nl_sock *sock,
  *
  * Before sending each message, this function will finalize nlmsg_len in each
  * 'request' to match the ofpbuf's size, and set nlmsg_pid to 'sock''s pid.
- * NLM_F_ACK will be added to some requests' nlmsg_flags.
  *
  * Bare Netlink is an unreliable transport protocol.  This function layers
  * reliable delivery and reply semantics on top of bare Netlink.  See
@@ -597,9 +600,9 @@ nl_sock_transact_multiple(struct nl_sock *sock,
  * on failure '*replyp' is set to NULL.  If 'replyp' is null, then the kernel's
  * reply, if any, is discarded.
  *
- * nlmsg_len in 'msg' will be finalized to match msg->size, and nlmsg_pid will
- * be set to 'sock''s pid, before the message is sent.  NLM_F_ACK will be set
- * in nlmsg_flags.
+ * Before the message is sent, nlmsg_len in 'request' will be finalized to
+ * match msg->size, nlmsg_pid will be set to 'sock''s pid, and nlmsg_seq will
+ * be initialized, NLM_F_ACK will be set in nlmsg_flags.
  *
  * The caller is responsible for destroying 'request'.
  *
@@ -721,9 +724,6 @@ void
 nl_dump_start(struct nl_dump *dump,
               struct nl_sock *sock, const struct ofpbuf *request)
 {
-    struct nlmsghdr *nlmsghdr = nl_msg_nlmsghdr(request);
-    nlmsghdr->nlmsg_flags |= NLM_F_DUMP | NLM_F_ACK;
-    dump->seq = nlmsghdr->nlmsg_seq;
     dump->buffer = NULL;
     if (sock->dump) {
         /* 'sock' already has an ongoing dump.  Clone the socket because
@@ -737,7 +737,10 @@ nl_dump_start(struct nl_dump *dump,
         dump->sock = sock;
         dump->status = 0;
     }
+
+    nl_msg_nlmsghdr(request)->nlmsg_flags |= NLM_F_DUMP | NLM_F_ACK;
     dump->status = nl_sock_send__(sock, request, true);
+    dump->seq = nl_msg_nlmsghdr(request)->nlmsg_seq;
 }
 
 /* Helper function for nl_dump_next(). */
@@ -1057,6 +1060,23 @@ nl_lookup_genl_family(const char *name, int *number)
     return *number > 0 ? 0 : -*number;
 }
 
+static uint32_t
+nl_sock_allocate_seq(struct nl_sock *sock, unsigned int n)
+{
+    uint32_t seq = sock->next_seq;
+
+    sock->next_seq += n;
+
+    /* Make it impossible for the next request for sequence numbers to wrap
+     * around to 0.  Start over with 1 to avoid ever using a sequence number of
+     * 0, because the kernel uses sequence number 0 for notifications. */
+    if (sock->next_seq >= UINT32_MAX / 2) {
+        sock->next_seq = 1;
+    }
+
+    return seq;
+}
+
 static void
 nlmsghdr_to_string(const struct nlmsghdr *h, int protocol, struct ds *ds)
 {
