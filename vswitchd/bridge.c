@@ -2825,7 +2825,6 @@ static struct lacp_settings *
 port_configure_lacp(struct port *port, struct lacp_settings *s)
 {
     const char *lacp_time, *system_id;
-    long long int custom_time;
     int priority;
 
     if (!enable_lacp(port, &s->active)) {
@@ -2867,18 +2866,7 @@ port_configure_lacp(struct port *port, struct lacp_settings *s)
 
     lacp_time = ovsrec_port_get_other_config_value(port->cfg, "lacp-time",
                                                    "slow");
-    custom_time = atoi(lacp_time);
-    if (!strcmp(lacp_time, "fast")) {
-        s->lacp_time = LACP_TIME_FAST;
-    } else if (!strcmp(lacp_time, "slow")) {
-        s->lacp_time = LACP_TIME_SLOW;
-    } else if (custom_time > 0) {
-        s->lacp_time = LACP_TIME_CUSTOM;
-        s->custom_time = custom_time;
-    } else {
-        s->lacp_time = LACP_TIME_SLOW;
-    }
-
+    s->fast = !strcasecmp(lacp_time, "fast");
     return s;
 }
 

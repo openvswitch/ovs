@@ -98,8 +98,7 @@ struct lacp {
     struct hmap slaves;      /* Slaves this LACP object controls. */
     struct slave *key_slave; /* Slave whose ID will be the aggregation key. */
 
-    enum lacp_time lacp_time;  /* Fast, Slow or Custom LACP time. */
-    long long int custom_time; /* LACP_TIME_CUSTOM transmission rate. */
+    bool fast;               /* True if using fast probe interval. */
     bool negotiated;         /* True if LACP negotiations were successful. */
     bool update;             /* True if lacp_update() needs to be called. */
     bool heartbeat;          /* LACP heartbeat mode. */
@@ -242,10 +241,7 @@ lacp_configure(struct lacp *lacp, const struct lacp_settings *s)
     }
 
     lacp->active = s->active;
-    lacp->lacp_time = s->lacp_time;
-    lacp->custom_time = (s->lacp_time == LACP_TIME_CUSTOM
-                         ? MAX(TIME_UPDATE_INTERVAL, s->custom_time)
-                         : 0);
+    lacp->fast = s->fast;
 }
 
 /* Returns true if 'lacp' is configured in active mode, false if 'lacp' is
@@ -274,20 +270,8 @@ lacp_process_packet(struct lacp *lacp, const void *slave_,
         return;
     }
 
-    switch (lacp->lacp_time) {
-    case LACP_TIME_FAST:
-        tx_rate = LACP_FAST_TIME_TX;
-        break;
-    case LACP_TIME_SLOW:
-        tx_rate = LACP_SLOW_TIME_TX;
-        break;
-    case LACP_TIME_CUSTOM:
-        tx_rate = lacp->custom_time;
-        break;
-    default: NOT_REACHED();
-    }
-
     slave->status = LACP_CURRENT;
+    tx_rate = lacp->fast ? LACP_FAST_TIME_TX : LACP_SLOW_TIME_TX;
     timer_set_duration(&slave->rx, LACP_RX_MULTIPLIER * tx_rate);
 
     slave->ntt_actor = pdu->partner;
@@ -453,13 +437,9 @@ lacp_run(struct lacp *lacp, lacp_send_pdu *send_pdu)
             compose_lacp_pdu(&actor, &slave->partner, &pdu);
             send_pdu(slave->aux, &pdu, sizeof pdu);
 
-            if (lacp->lacp_time == LACP_TIME_CUSTOM) {
-                duration = lacp->custom_time;
-            } else {
-                duration = (slave->partner.state & LACP_STATE_TIME
-                            ? LACP_FAST_TIME_TX
-                            : LACP_SLOW_TIME_TX);
-            }
+            duration = (slave->partner.state & LACP_STATE_TIME
+                        ? LACP_FAST_TIME_TX
+                        : LACP_SLOW_TIME_TX);
 
             timer_set_duration(&slave->tx, duration);
         }
@@ -579,18 +559,11 @@ slave_set_defaulted(struct slave *slave)
 static void
 slave_set_expired(struct slave *slave)
 {
-    struct lacp *lacp = slave->lacp;
-
     slave->status = LACP_EXPIRED;
     slave->partner.state |= LACP_STATE_TIME;
     slave->partner.state &= ~LACP_STATE_SYNC;
 
-    /* The spec says we should wait LACP_RX_MULTIPLIER * LACP_FAST_TIME_TX.
-     * This doesn't make sense when using custom times which can be much
-     * smaller than LACP_FAST_TIME. */
-    timer_set_duration(&slave->rx, (lacp->lacp_time == LACP_TIME_CUSTOM
-                                    ? lacp->custom_time
-                                    : LACP_RX_MULTIPLIER * LACP_FAST_TIME_TX));
+    timer_set_duration(&slave->rx, LACP_RX_MULTIPLIER * LACP_FAST_TIME_TX);
 }
 
 static void
@@ -604,7 +577,7 @@ slave_get_actor(struct slave *slave, struct lacp_info *actor)
         state |= LACP_STATE_ACT;
     }
 
-    if (lacp->lacp_time != LACP_TIME_SLOW) {
+    if (lacp->fast) {
         state |= LACP_STATE_TIME;
     }
 
@@ -793,18 +766,10 @@ lacp_print_details(struct ds *ds, struct lacp *lacp)
     ds_put_cstr(ds, "\n");
 
     ds_put_cstr(ds, "\tlacp_time: ");
-    switch (lacp->lacp_time) {
-    case LACP_TIME_FAST:
+    if (lacp->fast) {
         ds_put_cstr(ds, "fast\n");
-        break;
-    case LACP_TIME_SLOW:
+    } else {
         ds_put_cstr(ds, "slow\n");
-        break;
-    case LACP_TIME_CUSTOM:
-        ds_put_format(ds, "custom (%lld)\n", lacp->custom_time);
-        break;
-    default:
-        ds_put_cstr(ds, "unknown\n");
     }
 
     HMAP_FOR_EACH (slave, node, &lacp->slaves) {

@@ -894,24 +894,15 @@
           numerically lower priority.
         </column>
 
-        <column name="other_config" key="lacp-time">
+        <column name="other_config" key="lacp-time"
+          type='{"type": "string", "enum": ["set", ["fast", "slow"]]}'>
           <p>
             The LACP timing which should be used on this <ref table="Port"/>.
-            Possible values are <code>fast</code>, <code>slow</code> and a
-            positive number of milliseconds.  By default <code>slow</code> is
-            used.  When configured to be <code>fast</code> LACP heartbeats are
-            requested at a rate of once per second causing connectivity
-            problems to be detected more quickly.  In <code>slow</code> mode,
-            heartbeats are requested at a rate of once every 30 seconds.
-          </p>
-
-          <p>
-            Users may manually set a heartbeat transmission rate to increase
-            the fault detection speed further.  When manually set, OVS expects
-            the partner switch to be configured with the same transmission
-            rate.  Manually setting <code>lacp-time</code> to something other
-            than <code>fast</code> or <code>slow</code> is not supported by the
-            LACP specification.
+            By default <code>slow</code> is used.  When configured to be
+            <code>fast</code> LACP heartbeats are requested at a rate of once
+            per second causing connectivity problems to be detected more
+            quickly.  In <code>slow</code> mode, heartbeats are requested at a
+            rate of once every 30 seconds.
           </p>
         </column>
 

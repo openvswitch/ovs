@@ -23,12 +23,6 @@
 
 /* LACP Protocol Implementation. */
 
-enum lacp_time {
-    LACP_TIME_FAST,                   /* LACP fast mode. */
-    LACP_TIME_SLOW,                   /* LACP slow mode. */
-    LACP_TIME_CUSTOM                  /* Nonstandard custom mode. */
-};
-
 enum lacp_status {
     LACP_NEGOTIATED,                  /* Successful LACP negotations. */
     LACP_CONFIGURED,                  /* LACP is enabled but not negotiated. */
@@ -40,8 +34,7 @@ struct lacp_settings {
     uint8_t id[ETH_ADDR_LEN];         /* System ID. Must be nonzero. */
     uint16_t priority;                /* System priority. */
     bool active;                      /* Active or passive mode? */
-    enum lacp_time lacp_time;         /* Probe rate. */
-    long long int custom_time;        /* Probe interval if LACP_TIME_CUSTOM. */
+    bool fast;                        /* Fast or slow probe interval. */
     bool heartbeat;                   /* Heartbeat mode. */
 };
 
