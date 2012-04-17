@@ -32,6 +32,7 @@
 #include "compiler.h"
 #include "dirs.h"
 #include "dynamic-string.h"
+#include "hash.h"
 #include "json.h"
 #include "ovsdb-data.h"
 #include "ovsdb-idl.h"
@@ -629,21 +630,27 @@ struct vsctl_context {
 struct vsctl_bridge {
     struct ovsrec_bridge *br_cfg;
     char *name;
+    struct list ports;          /* Contains "struct vsctl_port"s. */
 
     /* VLAN ("fake") bridge support.
      *
      * Use 'parent != NULL' to detect a fake bridge, because 'vlan' can be 0
      * in either case. */
+    struct hmap children;        /* VLAN bridges indexed by 'vlan'. */
+    struct hmap_node children_node; /* Node in parent's 'children' hmap. */
     struct vsctl_bridge *parent; /* Real bridge, or NULL. */
     int vlan;                    /* VLAN VID (0...4095), or 0. */
 };
 
 struct vsctl_port {
+    struct list ports_node;     /* In struct vsctl_bridge's 'ports' list. */
+    struct list ifaces;         /* Contains "struct vsctl_iface"s. */
     struct ovsrec_port *port_cfg;
     struct vsctl_bridge *bridge;
 };
 
 struct vsctl_iface {
+    struct list ifaces_node;     /* In struct vsctl_port's 'ifaces' list. */
     struct ovsrec_interface *iface_cfg;
     struct vsctl_port *port;
 };
@@ -692,17 +699,57 @@ verify_ports(struct vsctl_context *ctx)
 }
 
 static struct vsctl_bridge *
-add_bridge(struct vsctl_context *ctx,
-           struct ovsrec_bridge *br_cfg, const char *name,
-           struct vsctl_bridge *parent, int vlan)
+add_bridge_to_cache(struct vsctl_context *ctx,
+                    struct ovsrec_bridge *br_cfg, const char *name,
+                    struct vsctl_bridge *parent, int vlan)
 {
     struct vsctl_bridge *br = xmalloc(sizeof *br);
     br->br_cfg = br_cfg;
     br->name = xstrdup(name);
+    list_init(&br->ports);
     br->parent = parent;
     br->vlan = vlan;
+    hmap_init(&br->children);
+    if (parent) {
+        hmap_insert(&parent->children, &br->children_node, hash_int(vlan, 0));
+    }
     shash_add(&ctx->bridges, br->name, br);
     return br;
+}
+
+static void
+ovs_delete_bridge(const struct ovsrec_open_vswitch *ovs,
+                  struct ovsrec_bridge *bridge)
+{
+    struct ovsrec_bridge **bridges;
+    size_t i, n;
+
+    bridges = xmalloc(sizeof *ovs->bridges * ovs->n_bridges);
+    for (i = n = 0; i < ovs->n_bridges; i++) {
+        if (ovs->bridges[i] != bridge) {
+            bridges[n++] = ovs->bridges[i];
+        }
+    }
+    ovsrec_open_vswitch_set_bridges(ovs, bridges, n);
+    free(bridges);
+}
+
+static void
+del_cached_bridge(struct vsctl_context *ctx, struct vsctl_bridge *br)
+{
+    assert(list_is_empty(&br->ports));
+    assert(hmap_is_empty(&br->children));
+    if (br->parent) {
+        hmap_remove(&br->parent->children, &br->children_node);
+    }
+    if (br->br_cfg) {
+        ovsrec_bridge_delete(br->br_cfg);
+        ovs_delete_bridge(ctx->ovs, br->br_cfg);
+    }
+    shash_find_and_delete(&ctx->bridges, br->name);
+    hmap_destroy(&br->children);
+    free(br->name);
+    free(br);
 }
 
 static bool
@@ -714,19 +761,78 @@ port_is_fake_bridge(const struct ovsrec_port *port_cfg)
 }
 
 static struct vsctl_bridge *
-find_vlan_bridge(struct vsctl_context *ctx,
-                 struct vsctl_bridge *parent, int vlan)
+find_vlan_bridge(struct vsctl_bridge *parent, int vlan)
 {
-    struct shash_node *node;
+    struct vsctl_bridge *child;
 
-    SHASH_FOR_EACH (node, &ctx->bridges) {
-        struct vsctl_bridge *br = node->data;
-        if (br->parent == parent && br->vlan == vlan) {
-            return br;
+    HMAP_FOR_EACH_IN_BUCKET (child, children_node, hash_int(vlan, 0),
+                             &parent->children) {
+        if (child->vlan == vlan) {
+            return child;
         }
     }
 
     return NULL;
+}
+
+static struct vsctl_port *
+add_port_to_cache(struct vsctl_context *ctx, struct vsctl_bridge *parent,
+                  struct ovsrec_port *port_cfg)
+{
+    struct vsctl_port *port;
+
+    if (port_cfg->tag
+        && *port_cfg->tag >= 0 && *port_cfg->tag <= 4095) {
+        struct vsctl_bridge *vlan_bridge;
+
+        vlan_bridge = find_vlan_bridge(parent, *port_cfg->tag);
+        if (vlan_bridge) {
+            parent = vlan_bridge;
+        }
+    }
+
+    port = xmalloc(sizeof *port);
+    list_push_back(&parent->ports, &port->ports_node);
+    list_init(&port->ifaces);
+    port->port_cfg = port_cfg;
+    port->bridge = parent;
+    shash_add(&ctx->ports, port_cfg->name, port);
+
+    return port;
+}
+
+static void
+del_cached_port(struct vsctl_context *ctx, struct vsctl_port *port)
+{
+    assert(list_is_empty(&port->ifaces));
+    list_remove(&port->ports_node);
+    shash_find_and_delete(&ctx->ports, port->port_cfg->name);
+    ovsrec_port_delete(port->port_cfg);
+    free(port);
+}
+
+static struct vsctl_iface *
+add_iface_to_cache(struct vsctl_context *ctx, struct vsctl_port *parent,
+                   struct ovsrec_interface *iface_cfg)
+{
+    struct vsctl_iface *iface;
+
+    iface = xmalloc(sizeof *iface);
+    list_push_back(&parent->ifaces, &iface->ifaces_node);
+    iface->iface_cfg = iface_cfg;
+    iface->port = parent;
+    shash_add(&ctx->ifaces, iface_cfg->name, iface);
+
+    return iface;
+}
+
+static void
+del_cached_iface(struct vsctl_context *ctx, struct vsctl_iface *iface)
+{
+    list_remove(&iface->ifaces_node);
+    shash_find_and_delete(&ctx->ifaces, iface->iface_cfg->name);
+    ovsrec_interface_delete(iface->iface_cfg);
+    free(iface);
 }
 
 static void
@@ -741,6 +847,7 @@ vsctl_context_invalidate_cache(struct vsctl_context *ctx)
 
     SHASH_FOR_EACH (node, &ctx->bridges) {
         struct vsctl_bridge *bridge = node->data;
+        hmap_destroy(&bridge->children);
         free(bridge->name);
         free(bridge);
     }
@@ -796,7 +903,7 @@ vsctl_context_populate_cache(struct vsctl_context *ctx)
                       br_cfg->name);
             continue;
         }
-        br = add_bridge(ctx, br_cfg, br_cfg->name, NULL, 0);
+        br = add_bridge_to_cache(ctx, br_cfg, br_cfg->name, NULL, 0);
         if (!br) {
             continue;
         }
@@ -811,7 +918,8 @@ vsctl_context_populate_cache(struct vsctl_context *ctx)
 
             if (port_is_fake_bridge(port_cfg)
                 && sset_add(&bridges, port_cfg->name)) {
-                add_bridge(ctx, NULL, port_cfg->name, br, *port_cfg->tag);
+                add_bridge_to_cache(ctx, NULL, port_cfg->name, br,
+                                    *port_cfg->tag);
             }
         }
     }
@@ -853,19 +961,7 @@ vsctl_context_populate_cache(struct vsctl_context *ctx)
                 continue;
             }
 
-            port = xmalloc(sizeof *port);
-            port->port_cfg = port_cfg;
-            if (port_cfg->tag
-                && *port_cfg->tag >= 0 && *port_cfg->tag <= 4095) {
-                port->bridge = find_vlan_bridge(ctx, br, *port_cfg->tag);
-                if (!port->bridge) {
-                    port->bridge = br;
-                }
-            } else {
-                port->bridge = br;
-            }
-            shash_add(&ctx->ports, port_cfg->name, port);
-
+            port = add_port_to_cache(ctx, br, port_cfg);
             for (k = 0; k < port_cfg->n_interfaces; k++) {
                 struct ovsrec_interface *iface_cfg = port_cfg->interfaces[k];
                 struct vsctl_iface *iface;
@@ -888,10 +984,7 @@ vsctl_context_populate_cache(struct vsctl_context *ctx)
                     continue;
                 }
 
-                iface = xmalloc(sizeof *iface);
-                iface->iface_cfg = iface_cfg;
-                iface->port = port;
-                shash_add(&ctx->ifaces, iface_cfg->name, iface);
+                add_iface_to_cache(ctx, port, iface_cfg);
             }
         }
     }
@@ -1032,23 +1125,6 @@ ovs_insert_bridge(const struct ovsrec_open_vswitch *ovs,
     }
     bridges[ovs->n_bridges] = bridge;
     ovsrec_open_vswitch_set_bridges(ovs, bridges, ovs->n_bridges + 1);
-    free(bridges);
-}
-
-static void
-ovs_delete_bridge(const struct ovsrec_open_vswitch *ovs,
-                  struct ovsrec_bridge *bridge)
-{
-    struct ovsrec_bridge **bridges;
-    size_t i, n;
-
-    bridges = xmalloc(sizeof *ovs->bridges * ovs->n_bridges);
-    for (i = n = 0; i < ovs->n_bridges; i++) {
-        if (ovs->bridges[i] != bridge) {
-            bridges[n++] = ovs->bridges[i];
-        }
-    }
-    ovsrec_open_vswitch_set_bridges(ovs, bridges, n);
     free(bridges);
 }
 
@@ -1452,19 +1528,33 @@ cmd_add_br(struct vsctl_context *ctx)
 static void
 del_port(struct vsctl_context *ctx, struct vsctl_port *port)
 {
-    struct shash_node *node;
-
-    SHASH_FOR_EACH (node, &ctx->ifaces) {
-        struct vsctl_iface *iface = node->data;
-        if (iface->port == port) {
-            ovsrec_interface_delete(iface->iface_cfg);
-        }
-    }
-    ovsrec_port_delete(port->port_cfg);
+    struct vsctl_iface *iface, *next_iface;
 
     bridge_delete_port((port->bridge->parent
                         ? port->bridge->parent->br_cfg
                         : port->bridge->br_cfg), port->port_cfg);
+
+    LIST_FOR_EACH_SAFE (iface, next_iface, ifaces_node, &port->ifaces) {
+        del_cached_iface(ctx, iface);
+    }
+    del_cached_port(ctx, port);
+}
+
+static void
+del_bridge(struct vsctl_context *ctx, struct vsctl_bridge *br)
+{
+    struct vsctl_bridge *child, *next_child;
+    struct vsctl_port *port, *next_port;
+
+    HMAP_FOR_EACH_SAFE (child, next_child, children_node, &br->children) {
+        del_bridge(ctx, child);
+    }
+
+    LIST_FOR_EACH_SAFE (port, next_port, ports_node, &br->ports) {
+        del_port(ctx, port);
+    }
+
+    del_cached_bridge(ctx, br);
 }
 
 static void
@@ -1476,20 +1566,7 @@ cmd_del_br(struct vsctl_context *ctx)
     vsctl_context_populate_cache(ctx);
     bridge = find_bridge(ctx, ctx->argv[1], must_exist);
     if (bridge) {
-        struct shash_node *node;
-
-        SHASH_FOR_EACH (node, &ctx->ports) {
-            struct vsctl_port *port = node->data;
-            if (port->bridge == bridge || port->bridge->parent == bridge
-                || !strcmp(port->port_cfg->name, bridge->name)) {
-                del_port(ctx, port);
-            }
-        }
-        if (bridge->br_cfg) {
-            ovsrec_bridge_delete(bridge->br_cfg);
-            ovs_delete_bridge(ctx->ovs, bridge->br_cfg);
-        }
-        vsctl_context_invalidate_cache(ctx);
+        del_bridge(ctx, bridge);
     }
 }
 
@@ -1669,7 +1746,7 @@ static void
 cmd_list_ports(struct vsctl_context *ctx)
 {
     struct vsctl_bridge *br;
-    struct shash_node *node;
+    struct vsctl_port *port;
     struct svec ports;
 
     vsctl_context_populate_cache(ctx);
@@ -1677,10 +1754,8 @@ cmd_list_ports(struct vsctl_context *ctx)
     ovsrec_bridge_verify_ports(br->br_cfg ? br->br_cfg : br->parent->br_cfg);
 
     svec_init(&ports);
-    SHASH_FOR_EACH (node, &ctx->ports) {
-        struct vsctl_port *port = node->data;
-
-        if (strcmp(port->port_cfg->name, br->name) && br == port->bridge) {
+    LIST_FOR_EACH (port, ports_node, &br->ports) {
+        if (strcmp(port->port_cfg->name, br->name)) {
             svec_add(&ports, port->port_cfg->name);
         }
     }
@@ -1695,6 +1770,7 @@ add_port(struct vsctl_context *ctx,
          char *iface_names[], int n_ifaces,
          char *settings[], int n_settings)
 {
+    struct vsctl_port *vsctl_port;
     struct vsctl_bridge *bridge;
     struct ovsrec_interface **ifaces;
     struct ovsrec_port *port;
@@ -1760,7 +1836,6 @@ add_port(struct vsctl_context *ctx,
     ovsrec_port_set_name(port, port_name);
     ovsrec_port_set_interfaces(port, ifaces, n_ifaces);
     ovsrec_port_set_bond_fake_iface(port, fake_iface);
-    free(ifaces);
 
     if (bridge->parent) {
         int64_t tag = bridge->vlan;
@@ -1775,7 +1850,11 @@ add_port(struct vsctl_context *ctx,
     bridge_insert_port((bridge->parent ? bridge->parent->br_cfg
                         : bridge->br_cfg), port);
 
-    vsctl_context_invalidate_cache(ctx);
+    vsctl_port = add_port_to_cache(ctx, bridge, port);
+    for (i = 0; i < n_ifaces; i++) {
+        add_iface_to_cache(ctx, vsctl_port, ifaces[i]);
+    }
+    free(ifaces);
 }
 
 static void
@@ -1857,7 +1936,6 @@ cmd_del_port(struct vsctl_context *ctx)
         }
 
         del_port(ctx, port);
-        vsctl_context_invalidate_cache(ctx);
     }
 }
 
@@ -1901,7 +1979,7 @@ static void
 cmd_list_ifaces(struct vsctl_context *ctx)
 {
     struct vsctl_bridge *br;
-    struct shash_node *node;
+    struct vsctl_port *port;
     struct svec ifaces;
 
     vsctl_context_populate_cache(ctx);
@@ -1910,12 +1988,13 @@ cmd_list_ifaces(struct vsctl_context *ctx)
     verify_ports(ctx);
 
     svec_init(&ifaces);
-    SHASH_FOR_EACH (node, &ctx->ifaces) {
-        struct vsctl_iface *iface = node->data;
+    LIST_FOR_EACH (port, ports_node, &br->ports) {
+        struct vsctl_iface *iface;
 
-        if (strcmp(iface->iface_cfg->name, br->name)
-            && br == iface->port->bridge) {
-            svec_add(&ifaces, iface->iface_cfg->name);
+        LIST_FOR_EACH (iface, ifaces_node, &port->ifaces) {
+            if (strcmp(iface->iface_cfg->name, br->name)) {
+                svec_add(&ifaces, iface->iface_cfg->name);
+            }
         }
     }
     output_sorted(&ifaces, &ctx->output);
