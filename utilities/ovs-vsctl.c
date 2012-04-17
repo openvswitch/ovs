@@ -1947,13 +1947,11 @@ cmd_iface_to_br(struct vsctl_context *ctx)
 static void
 verify_controllers(struct ovsrec_bridge *bridge)
 {
-    if (bridge) {
-        size_t i;
+    size_t i;
 
-        ovsrec_bridge_verify_controller(bridge);
-        for (i = 0; i < bridge->n_controller; i++) {
-            ovsrec_controller_verify_target(bridge->controller[i]);
-        }
+    ovsrec_bridge_verify_controller(bridge);
+    for (i = 0; i < bridge->n_controller; i++) {
+        ovsrec_controller_verify_target(bridge->controller[i]);
     }
 }
 
@@ -1975,6 +1973,9 @@ cmd_get_controller(struct vsctl_context *ctx)
 
     get_info(ctx, &info);
     br = find_bridge(&info, ctx->argv[1], true);
+    if (br->parent) {
+        br = br->parent;
+    }
     verify_controllers(br->br_cfg);
 
     /* Print the targets in sorted order for reproducibility. */
