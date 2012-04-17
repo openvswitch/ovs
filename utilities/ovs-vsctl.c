@@ -629,8 +629,6 @@ struct vsctl_context {
 struct vsctl_bridge {
     struct ovsrec_bridge *br_cfg;
     char *name;
-    struct ovsrec_controller **ctrl;
-    size_t n_ctrl;
 
     /* VLAN ("fake") bridge support.
      *
@@ -703,13 +701,6 @@ add_bridge(struct vsctl_context *ctx,
     br->name = xstrdup(name);
     br->parent = parent;
     br->vlan = vlan;
-    if (parent) {
-        br->ctrl = parent->br_cfg->controller;
-        br->n_ctrl = parent->br_cfg->n_controller;
-    } else {
-        br->ctrl = br_cfg->controller;
-        br->n_ctrl = br_cfg->n_controller;
-    }
     shash_add(&ctx->bridges, br->name, br);
     return br;
 }
@@ -1978,8 +1969,8 @@ cmd_get_controller(struct vsctl_context *ctx)
 
     /* Print the targets in sorted order for reproducibility. */
     svec_init(&targets);
-    for (i = 0; i < br->n_ctrl; i++) {
-        svec_add(&targets, br->ctrl[i]->target);
+    for (i = 0; i < br->br_cfg->n_controller; i++) {
+        svec_add(&targets, br->br_cfg->controller[i]->target);
     }
 
     svec_sort(&targets);
@@ -2003,18 +1994,16 @@ delete_controllers(struct ovsrec_controller **controllers,
 static void
 cmd_del_controller(struct vsctl_context *ctx)
 {
-    struct vsctl_bridge *br;
+    struct ovsrec_bridge *br;
 
     vsctl_context_populate_cache(ctx);
 
-    br = find_real_bridge(ctx, ctx->argv[1], true);
-    verify_controllers(br->br_cfg);
+    br = find_real_bridge(ctx, ctx->argv[1], true)->br_cfg;
+    verify_controllers(br);
 
-    if (br->ctrl) {
-        delete_controllers(br->ctrl, br->n_ctrl);
-        ovsrec_bridge_set_controller(br->br_cfg, NULL, 0);
-
-        vsctl_context_invalidate_cache(ctx);
+    if (br->controller) {
+        delete_controllers(br->controller, br->n_controller);
+        ovsrec_bridge_set_controller(br, NULL, 0);
     }
 }
 
@@ -2039,23 +2028,21 @@ insert_controllers(struct ovsdb_idl_txn *txn, char *targets[], size_t n)
 static void
 cmd_set_controller(struct vsctl_context *ctx)
 {
-    struct vsctl_bridge *br;
     struct ovsrec_controller **controllers;
+    struct ovsrec_bridge *br;
     size_t n;
 
     vsctl_context_populate_cache(ctx);
 
-    br = find_real_bridge(ctx, ctx->argv[1], true);
-    verify_controllers(br->br_cfg);
+    br = find_real_bridge(ctx, ctx->argv[1], true)->br_cfg;
+    verify_controllers(br);
 
-    delete_controllers(br->ctrl, br->n_ctrl);
+    delete_controllers(br->controller, br->n_controller);
 
     n = ctx->argc - 2;
     controllers = insert_controllers(ctx->txn, &ctx->argv[2], n);
-    ovsrec_bridge_set_controller(br->br_cfg, controllers, n);
+    ovsrec_bridge_set_controller(br, controllers, n);
     free(controllers);
-
-    vsctl_context_invalidate_cache(ctx);
 }
 
 static void
