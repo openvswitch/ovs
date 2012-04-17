@@ -2071,9 +2071,8 @@ cmd_get_fail_mode(struct vsctl_context *ctx)
     get_info(ctx, &info);
     br = find_bridge(&info, ctx->argv[1], true);
 
-    if (br->br_cfg) {
-        ovsrec_bridge_verify_fail_mode(br->br_cfg);
-    }
+    ovsrec_bridge_verify_fail_mode(br->br_cfg
+                                   ? br->br_cfg : br->parent->br_cfg);
     if (br->fail_mode && strlen(br->fail_mode)) {
         ds_put_format(&ctx->output, "%s\n", br->fail_mode);
     }
