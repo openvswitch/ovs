@@ -337,13 +337,15 @@ struct facet {
     mirror_mask_t mirrors;       /* Bitmap of dependent mirrors. */
 };
 
-static struct facet *facet_create(struct rule_dpif *, const struct flow *);
+static struct facet *facet_create(struct rule_dpif *,
+                                  const struct flow *, uint32_t hash);
 static void facet_remove(struct facet *);
 static void facet_free(struct facet *);
 
-static struct facet *facet_find(struct ofproto_dpif *, const struct flow *);
+static struct facet *facet_find(struct ofproto_dpif *,
+                                const struct flow *, uint32_t hash);
 static struct facet *facet_lookup_valid(struct ofproto_dpif *,
-                                        const struct flow *);
+                                        const struct flow *, uint32_t hash);
 static bool facet_revalidate(struct facet *);
 static bool facet_check_consistency(struct facet *);
 
@@ -2566,8 +2568,13 @@ handle_flow_miss(struct ofproto_dpif *ofproto, struct flow_miss *miss,
     struct subfacet *subfacet;
     struct ofpbuf *packet;
     struct facet *facet;
+    uint32_t hash;
 
-    facet = facet_lookup_valid(ofproto, flow);
+    /* The caller must ensure that miss->hmap_node.hash contains
+     * flow_hash(miss->flow, 0). */
+    hash = miss->hmap_node.hash;
+
+    facet = facet_lookup_valid(ofproto, flow, hash);
     if (!facet) {
         struct rule_dpif *rule;
 
@@ -2593,7 +2600,7 @@ handle_flow_miss(struct ofproto_dpif *ofproto, struct flow_miss *miss,
             return;
         }
 
-        facet = facet_create(rule, flow);
+        facet = facet_create(rule, flow, hash);
     }
 
     subfacet = subfacet_create(facet,
@@ -3220,17 +3227,19 @@ rule_expire(struct rule_dpif *rule)
  * 'flow' exists in 'ofproto' and that 'flow' is the best match for 'rule' in
  * the ofproto's classifier table.
  *
+ * 'hash' must be the return value of flow_hash(flow, 0).
+ *
  * The facet will initially have no subfacets.  The caller should create (at
  * least) one subfacet with subfacet_create(). */
 static struct facet *
-facet_create(struct rule_dpif *rule, const struct flow *flow)
+facet_create(struct rule_dpif *rule, const struct flow *flow, uint32_t hash)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(rule->up.ofproto);
     struct facet *facet;
 
     facet = xzalloc(sizeof *facet);
     facet->used = time_msec();
-    hmap_insert(&ofproto->facets, &facet->hmap_node, flow_hash(flow, 0));
+    hmap_insert(&ofproto->facets, &facet->hmap_node, hash);
     list_push_back(&rule->facets, &facet->list_node);
     facet->rule = rule;
     facet->flow = *flow;
@@ -3438,15 +3447,17 @@ facet_flush_stats(struct facet *facet)
 /* Searches 'ofproto''s table of facets for one exactly equal to 'flow'.
  * Returns it if found, otherwise a null pointer.
  *
+ * 'hash' must be the return value of flow_hash(flow, 0).
+ *
  * The returned facet might need revalidation; use facet_lookup_valid()
  * instead if that is important. */
 static struct facet *
-facet_find(struct ofproto_dpif *ofproto, const struct flow *flow)
+facet_find(struct ofproto_dpif *ofproto,
+           const struct flow *flow, uint32_t hash)
 {
     struct facet *facet;
 
-    HMAP_FOR_EACH_WITH_HASH (facet, hmap_node, flow_hash(flow, 0),
-                             &ofproto->facets) {
+    HMAP_FOR_EACH_WITH_HASH (facet, hmap_node, hash, &ofproto->facets) {
         if (flow_equal(flow, &facet->flow)) {
             return facet;
         }
@@ -3458,11 +3469,14 @@ facet_find(struct ofproto_dpif *ofproto, const struct flow *flow)
 /* Searches 'ofproto''s table of facets for one exactly equal to 'flow'.
  * Returns it if found, otherwise a null pointer.
  *
+ * 'hash' must be the return value of flow_hash(flow, 0).
+ *
  * The returned facet is guaranteed to be valid. */
 static struct facet *
-facet_lookup_valid(struct ofproto_dpif *ofproto, const struct flow *flow)
+facet_lookup_valid(struct ofproto_dpif *ofproto, const struct flow *flow,
+                   uint32_t hash)
 {
-    struct facet *facet = facet_find(ofproto, flow);
+    struct facet *facet = facet_find(ofproto, flow, hash);
 
     /* The facet we found might not be valid, since we could be in need of
      * revalidation.  If it is not valid, don't return it. */
