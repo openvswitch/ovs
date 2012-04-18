@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -645,26 +645,32 @@ dpif_linux_flow_put(struct dpif *dpif_, const struct dpif_flow_put *put)
     return error;
 }
 
-static int
-dpif_linux_flow_del(struct dpif *dpif_,
-                    const struct nlattr *key, size_t key_len,
-                    struct dpif_flow_stats *stats)
+static void
+dpif_linux_init_flow_del(struct dpif *dpif_, const struct dpif_flow_del *del,
+                         struct dpif_linux_flow *request)
 {
     struct dpif_linux *dpif = dpif_linux_cast(dpif_);
+
+    dpif_linux_flow_init(request);
+    request->cmd = OVS_FLOW_CMD_DEL;
+    request->dp_ifindex = dpif->dp_ifindex;
+    request->key = del->key;
+    request->key_len = del->key_len;
+}
+
+static int
+dpif_linux_flow_del(struct dpif *dpif_, const struct dpif_flow_del *del)
+{
     struct dpif_linux_flow request, reply;
     struct ofpbuf *buf;
     int error;
 
-    dpif_linux_flow_init(&request);
-    request.cmd = OVS_FLOW_CMD_DEL;
-    request.dp_ifindex = dpif->dp_ifindex;
-    request.key = key;
-    request.key_len = key_len;
+    dpif_linux_init_flow_del(dpif_, del, &request);
     error = dpif_linux_flow_transact(&request,
-                                     stats ? &reply : NULL,
-                                     stats ? &buf : NULL);
-    if (!error && stats) {
-        dpif_linux_flow_get_stats(&reply, stats);
+                                     del->stats ? &reply : NULL,
+                                     del->stats ? &buf : NULL);
+    if (!error && del->stats) {
+        dpif_linux_flow_get_stats(&reply, del->stats);
         ofpbuf_delete(buf);
     }
     return error;
@@ -818,23 +824,39 @@ dpif_linux_operate(struct dpif *dpif_, struct dpif_op **ops, size_t n_ops)
     for (i = 0; i < n_ops; i++) {
         struct nl_transaction *txn = &txns[i];
         struct dpif_op *op = ops[i];
+        struct dpif_flow_put *put;
+        struct dpif_flow_del *del;
+        struct dpif_execute *execute;
+        struct dpif_linux_flow request;
 
-        if (op->type == DPIF_OP_FLOW_PUT) {
-            struct dpif_flow_put *put = &op->u.flow_put;
-            struct dpif_linux_flow request;
-
+        switch (op->type) {
+        case DPIF_OP_FLOW_PUT:
+            put = &op->u.flow_put;
             dpif_linux_init_flow_put(dpif_, put, &request);
             if (put->stats) {
                 request.nlmsg_flags |= NLM_F_ECHO;
             }
             txn->request = ofpbuf_new(1024);
             dpif_linux_flow_to_ofpbuf(&request, txn->request);
-        } else if (op->type == DPIF_OP_EXECUTE) {
-            struct dpif_execute *execute = &op->u.execute;
+            break;
 
+        case DPIF_OP_FLOW_DEL:
+            del = &op->u.flow_del;
+            dpif_linux_init_flow_del(dpif_, del, &request);
+            if (del->stats) {
+                request.nlmsg_flags |= NLM_F_ECHO;
+            }
+            txn->request = ofpbuf_new(1024);
+            dpif_linux_flow_to_ofpbuf(&request, txn->request);
+            break;
+
+        case DPIF_OP_EXECUTE:
+            execute = &op->u.execute;
             txn->request = dpif_linux_encode_execute(dpif->dp_ifindex,
                                                      execute);
-        } else {
+            break;
+
+        default:
             NOT_REACHED();
         }
     }
@@ -851,23 +873,40 @@ dpif_linux_operate(struct dpif *dpif_, struct dpif_op **ops, size_t n_ops)
     for (i = 0; i < n_ops; i++) {
         struct nl_transaction *txn = &txns[i];
         struct dpif_op *op = ops[i];
+        struct dpif_flow_put *put;
+        struct dpif_flow_del *del;
 
-        if (op->type == DPIF_OP_FLOW_PUT) {
-            struct dpif_flow_put *put = &op->u.flow_put;
-            int error = txn->error;
+        op->error = txn->error;
 
-            if (!error && put->stats) {
+        switch (op->type) {
+        case DPIF_OP_FLOW_PUT:
+            put = &op->u.flow_put;
+            if (!op->error && put->stats) {
                 struct dpif_linux_flow reply;
 
-                error = dpif_linux_flow_from_ofpbuf(&reply, txn->reply);
-                if (!error) {
+                op->error = dpif_linux_flow_from_ofpbuf(&reply, txn->reply);
+                if (!op->error) {
                     dpif_linux_flow_get_stats(&reply, put->stats);
                 }
             }
-            op->error = error;
-        } else if (op->type == DPIF_OP_EXECUTE) {
-            op->error = txn->error;
-        } else {
+            break;
+
+        case DPIF_OP_FLOW_DEL:
+            del = &op->u.flow_del;
+            if (!op->error && del->stats) {
+                struct dpif_linux_flow reply;
+
+                op->error = dpif_linux_flow_from_ofpbuf(&reply, txn->reply);
+                if (!op->error) {
+                    dpif_linux_flow_get_stats(&reply, del->stats);
+                }
+            }
+            break;
+
+        case DPIF_OP_EXECUTE:
+            break;
+
+        default:
             NOT_REACHED();
         }
 

@@ -2823,6 +2823,9 @@ handle_miss_upcalls(struct ofproto_dpif *ofproto, struct dpif_upcall *upcalls,
                 op->subfacet->installed = true;
             }
             break;
+
+        case DPIF_OP_FLOW_DEL:
+            NOT_REACHED();
         }
     }
     HMAP_FOR_EACH_SAFE (miss, next_miss, hmap_node, &todo) {
@@ -3112,17 +3115,62 @@ subfacet_max_idle(const struct ofproto_dpif *ofproto)
     return bucket * BUCKET_WIDTH;
 }
 
+enum { EXPIRE_MAX_BATCH = 50 };
+
+static void
+expire_batch(struct ofproto_dpif *ofproto, struct subfacet **subfacets, int n)
+{
+    struct odputil_keybuf keybufs[EXPIRE_MAX_BATCH];
+    struct dpif_op ops[EXPIRE_MAX_BATCH];
+    struct dpif_op *opsp[EXPIRE_MAX_BATCH];
+    struct ofpbuf keys[EXPIRE_MAX_BATCH];
+    struct dpif_flow_stats stats[EXPIRE_MAX_BATCH];
+    int i;
+
+    for (i = 0; i < n; i++) {
+        ops[i].type = DPIF_OP_FLOW_DEL;
+        subfacet_get_key(subfacets[i], &keybufs[i], &keys[i]);
+        ops[i].u.flow_del.key = keys[i].data;
+        ops[i].u.flow_del.key_len = keys[i].size;
+        ops[i].u.flow_del.stats = &stats[i];
+        opsp[i] = &ops[i];
+    }
+
+    dpif_operate(ofproto->dpif, opsp, n);
+    for (i = 0; i < n; i++) {
+        subfacet_reset_dp_stats(subfacets[i], &stats[i]);
+        subfacets[i]->installed = false;
+        subfacet_destroy(subfacets[i]);
+    }
+}
+
 static void
 expire_subfacets(struct ofproto_dpif *ofproto, int dp_max_idle)
 {
     long long int cutoff = time_msec() - dp_max_idle;
-    struct subfacet *subfacet, *next_subfacet;
 
+    struct subfacet *subfacet, *next_subfacet;
+    struct subfacet *batch[EXPIRE_MAX_BATCH];
+    int n_batch;
+
+    n_batch = 0;
     HMAP_FOR_EACH_SAFE (subfacet, next_subfacet, hmap_node,
                         &ofproto->subfacets) {
         if (subfacet->used < cutoff) {
-            subfacet_destroy(subfacet);
+            if (subfacet->installed) {
+                batch[n_batch++] = subfacet;
+                if (n_batch >= EXPIRE_MAX_BATCH) {
+                    expire_batch(ofproto, batch, n_batch);
+                    n_batch = 0;
+                }
+            } else {
+                subfacet_destroy(subfacet);
+            }
         }
+    }
+
+    if (n_batch > 0) {
+        expire_batch(ofproto, batch, n_batch);
     }
 }
 

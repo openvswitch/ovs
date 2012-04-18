@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011 Nicira Networks.
+ * Copyright (c) 2009, 2010, 2011, 2012 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -235,14 +235,12 @@ struct dpif_class {
 
     /* Deletes a flow from 'dpif' and returns 0, or returns ENOENT if 'dpif'
      * does not contain such a flow.  The flow is specified by the Netlink
-     * attributes with types OVS_KEY_ATTR_* in the 'key_len' bytes starting at
-     * 'key'.
+     * attributes with types OVS_KEY_ATTR_* in the 'del->key_len' bytes
+     * starting at 'del->key'.
      *
-     * If the operation succeeds, then 'stats', if nonnull, must be set to the
-     * flow's statistics before its deletion. */
-    int (*flow_del)(struct dpif *dpif,
-                    const struct nlattr *key, size_t key_len,
-                    struct dpif_flow_stats *stats);
+     * If the operation succeeds, then 'del->stats', if nonnull, must be set to
+     * the flow's statistics before its deletion. */
+    int (*flow_del)(struct dpif *dpif, const struct dpif_flow_del *del);
 
     /* Deletes all flows from 'dpif' and clears all of its queues of received
      * packets. */

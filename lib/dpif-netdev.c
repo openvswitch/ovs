@@ -777,24 +777,22 @@ dpif_netdev_flow_put(struct dpif *dpif, const struct dpif_flow_put *put)
 }
 
 static int
-dpif_netdev_flow_del(struct dpif *dpif,
-                     const struct nlattr *nl_key, size_t nl_key_len,
-                     struct dpif_flow_stats *stats)
+dpif_netdev_flow_del(struct dpif *dpif, const struct dpif_flow_del *del)
 {
     struct dp_netdev *dp = get_dp_netdev(dpif);
     struct dp_netdev_flow *flow;
     struct flow key;
     int error;
 
-    error = dpif_netdev_flow_from_nlattrs(nl_key, nl_key_len, &key);
+    error = dpif_netdev_flow_from_nlattrs(del->key, del->key_len, &key);
     if (error) {
         return error;
     }
 
     flow = dp_netdev_lookup_flow(dp, &key);
     if (flow) {
-        if (stats) {
-            get_dpif_flow_stats(flow, stats);
+        if (del->stats) {
+            get_dpif_flow_stats(flow, del->stats);
         }
         dp_netdev_free_flow(dp, flow);
         return 0;
