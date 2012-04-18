@@ -334,7 +334,8 @@ static void subfacet_update_time(struct subfacet *, long long int used);
 static void subfacet_update_stats(struct subfacet *,
                                   const struct dpif_flow_stats *);
 static void subfacet_make_actions(struct subfacet *,
-                                  const struct ofpbuf *packet);
+                                  const struct ofpbuf *packet,
+                                  struct ofpbuf *odp_actions);
 static int subfacet_install(struct subfacet *,
                             const struct nlattr *actions, size_t actions_len,
                             struct dpif_flow_stats *);
@@ -2489,7 +2490,9 @@ struct flow_miss {
 
 struct flow_miss_op {
     struct dpif_op dpif_op;
-    struct subfacet *subfacet;
+    struct subfacet *subfacet;  /* Subfacet  */
+    void *garbage;              /* Pointer to pass to free(), NULL if none. */
+    uint64_t stub[1024 / 8];    /* Temporary buffer. */
 };
 
 /* Sends an OFPT_PACKET_IN message for 'packet' of type OFPR_NO_MATCH to each
@@ -2611,9 +2614,11 @@ handle_flow_miss(struct ofproto_dpif *ofproto, struct flow_miss *miss,
                                miss->initial_tci);
 
     LIST_FOR_EACH (packet, list_node, &miss->packets) {
+        struct flow_miss_op *op = &ops[*n_ops];
+        struct dpif_execute *execute = &op->dpif_op.u.execute;
         struct dpif_flow_stats stats;
-        struct flow_miss_op *op;
-        struct dpif_execute *execute;
+
+        struct ofpbuf odp_actions;
 
         ofproto->n_matches++;
 
@@ -2631,8 +2636,9 @@ handle_flow_miss(struct ofproto_dpif *ofproto, struct flow_miss *miss,
             send_packet_in_miss(ofproto, packet, flow);
         }
 
+        ofpbuf_use_stub(&odp_actions, op->stub, sizeof op->stub);
         if (!facet->may_install || !subfacet->actions) {
-            subfacet_make_actions(subfacet, packet);
+            subfacet_make_actions(subfacet, packet, &odp_actions);
         }
 
         dpif_flow_stats_extract(&facet->flow, packet, &stats);
@@ -2640,6 +2646,7 @@ handle_flow_miss(struct ofproto_dpif *ofproto, struct flow_miss *miss,
 
         if (!subfacet->actions_len) {
             /* No actions to execute, so skip talking to the dpif. */
+            ofpbuf_uninit(&odp_actions);
             continue;
         }
 
@@ -2652,18 +2659,23 @@ handle_flow_miss(struct ofproto_dpif *ofproto, struct flow_miss *miss,
             eth_pop_vlan(packet);
         }
 
-        op = &ops[(*n_ops)++];
-        execute = &op->dpif_op.u.execute;
-        op->subfacet = subfacet;
+        /* Set up operation. */
         op->dpif_op.type = DPIF_OP_EXECUTE;
         execute->key = miss->key;
         execute->key_len = miss->key_len;
-        execute->actions = (facet->may_install
-                            ? subfacet->actions
-                            : xmemdup(subfacet->actions,
-                                      subfacet->actions_len));
-        execute->actions_len = subfacet->actions_len;
+        if (facet->may_install) {
+            execute->actions = subfacet->actions;
+            execute->actions_len = subfacet->actions_len;
+            ofpbuf_uninit(&odp_actions);
+            op->garbage = NULL;
+        } else {
+            execute->actions = odp_actions.data;
+            execute->actions_len = odp_actions.size;
+            op->garbage = ofpbuf_get_uninit_pointer(&odp_actions);
+        }
         execute->packet = packet;
+
+        (*n_ops)++;
     }
 
     if (facet->may_install && subfacet->key_fitness != ODP_FIT_TOO_LITTLE) {
@@ -2671,6 +2683,7 @@ handle_flow_miss(struct ofproto_dpif *ofproto, struct flow_miss *miss,
         struct dpif_flow_put *put = &op->dpif_op.u.flow_put;
 
         op->subfacet = subfacet;
+        op->garbage = NULL;
         op->dpif_op.type = DPIF_OP_FLOW_PUT;
         put->flags = DPIF_FP_CREATE | DPIF_FP_MODIFY;
         put->key = miss->key;
@@ -2828,14 +2841,9 @@ handle_miss_upcalls(struct ofproto_dpif *ofproto, struct dpif_upcall *upcalls,
     /* Free memory and update facets. */
     for (i = 0; i < n_ops; i++) {
         struct flow_miss_op *op = &flow_miss_ops[i];
-        struct dpif_execute *execute;
 
         switch (op->dpif_op.type) {
         case DPIF_OP_EXECUTE:
-            execute = &op->dpif_op.u.execute;
-            if (op->subfacet->actions != execute->actions) {
-                free((struct nlattr *) execute->actions);
-            }
             break;
 
         case DPIF_OP_FLOW_PUT:
@@ -2847,6 +2855,8 @@ handle_miss_upcalls(struct ofproto_dpif *ofproto, struct dpif_upcall *upcalls,
         case DPIF_OP_FLOW_DEL:
             NOT_REACHED();
         }
+
+        free(op->garbage);
     }
     hmap_destroy(&todo);
 }
@@ -3964,22 +3974,22 @@ subfacet_get_key(struct subfacet *subfacet, struct odputil_keybuf *keybuf,
     }
 }
 
-/* Composes the datapath actions for 'subfacet' based on its rule's actions. */
+/* Composes the datapath actions for 'subfacet' based on its rule's actions.
+ * Translates the actions into 'odp_actions', which the caller must have
+ * initialized and is responsible for uninitializing. */
 static void
-subfacet_make_actions(struct subfacet *subfacet, const struct ofpbuf *packet)
+subfacet_make_actions(struct subfacet *subfacet, const struct ofpbuf *packet,
+                      struct ofpbuf *odp_actions)
 {
     struct facet *facet = subfacet->facet;
     struct rule_dpif *rule = facet->rule;
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(rule->up.ofproto);
 
     struct action_xlate_ctx ctx;
-    uint64_t odp_actions_stub[1024 / 8];
-    struct ofpbuf odp_actions;
 
-    ofpbuf_use_stub(&odp_actions, odp_actions_stub, sizeof odp_actions_stub);
     action_xlate_ctx_init(&ctx, ofproto, &facet->flow, subfacet->initial_tci,
                           rule, 0, packet);
-    xlate_actions(&ctx, rule->up.actions, rule->up.n_actions, &odp_actions);
+    xlate_actions(&ctx, rule->up.actions, rule->up.n_actions, odp_actions);
     facet->tags = ctx.tags;
     facet->may_install = ctx.may_set_up_flow;
     facet->has_learn = ctx.has_learn;
@@ -3988,14 +3998,12 @@ subfacet_make_actions(struct subfacet *subfacet, const struct ofpbuf *packet)
     facet->nf_flow.output_iface = ctx.nf_output_iface;
     facet->mirrors = ctx.mirrors;
 
-    if (subfacet->actions_len != odp_actions.size
-        || memcmp(subfacet->actions, odp_actions.data, odp_actions.size)) {
+    if (subfacet->actions_len != odp_actions->size
+        || memcmp(subfacet->actions, odp_actions->data, odp_actions->size)) {
         free(subfacet->actions);
-        subfacet->actions_len = odp_actions.size;
-        subfacet->actions = xmemdup(odp_actions.data, odp_actions.size);
+        subfacet->actions_len = odp_actions->size;
+        subfacet->actions = xmemdup(odp_actions->data, odp_actions->size);
     }
-
-    ofpbuf_uninit(&odp_actions);
 }
 
 /* Updates 'subfacet''s datapath flow, setting its actions to 'actions_len'
