@@ -31,7 +31,7 @@ static inline struct sk_buff *__vlan_put_tag(struct sk_buff *skb, u16 vlan_tci)
 	veth = (struct vlan_ethhdr *)skb_push(skb, VLAN_HLEN);
 
 	/* Move the mac addresses to the beginning of the new header. */
-	memmove(skb->data, skb->data + VLAN_HLEN, 2 * VLAN_ETH_ALEN);
+	memmove(skb->data, skb->data + VLAN_HLEN, 2 * ETH_ALEN);
 	skb->mac_header -= VLAN_HLEN;
 
 	/* first, the ethernet type */
