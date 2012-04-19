@@ -19,6 +19,7 @@
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
 #include <linux/version.h>
+#include <linux/completion.h>
 #include <net/genetlink.h>
 #include "genl_exec.h"
 
