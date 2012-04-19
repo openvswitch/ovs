@@ -630,7 +630,6 @@ struct vsctl_bridge {
     struct ovsrec_bridge *br_cfg;
     char *name;
     struct ovsrec_controller **ctrl;
-    char *fail_mode;
     size_t n_ctrl;
 
     /* VLAN ("fake") bridge support.
@@ -707,11 +706,9 @@ add_bridge(struct vsctl_context *ctx,
     if (parent) {
         br->ctrl = parent->br_cfg->controller;
         br->n_ctrl = parent->br_cfg->n_controller;
-        br->fail_mode = parent->br_cfg->fail_mode;
     } else {
         br->ctrl = br_cfg->controller;
         br->n_ctrl = br_cfg->n_controller;
-        br->fail_mode = br_cfg->fail_mode;
     }
     shash_add(&ctx->bridges, br->name, br);
     return br;
@@ -2065,14 +2062,19 @@ static void
 cmd_get_fail_mode(struct vsctl_context *ctx)
 {
     struct vsctl_bridge *br;
+    const char *fail_mode;
 
     vsctl_context_populate_cache(ctx);
     br = find_bridge(ctx, ctx->argv[1], true);
 
-    ovsrec_bridge_verify_fail_mode(br->br_cfg
-                                   ? br->br_cfg : br->parent->br_cfg);
-    if (br->fail_mode && strlen(br->fail_mode)) {
-        ds_put_format(&ctx->output, "%s\n", br->fail_mode);
+    if (br->parent) {
+        br = br->parent;
+    }
+    ovsrec_bridge_verify_fail_mode(br->br_cfg);
+
+    fail_mode = br->br_cfg->fail_mode;
+    if (fail_mode && strlen(fail_mode)) {
+        ds_put_format(&ctx->output, "%s\n", fail_mode);
     }
 }
 
@@ -2086,7 +2088,6 @@ cmd_del_fail_mode(struct vsctl_context *ctx)
     br = find_real_bridge(ctx, ctx->argv[1], true);
 
     ovsrec_bridge_set_fail_mode(br->br_cfg, NULL);
-    vsctl_context_invalidate_cache(ctx);
 }
 
 static void
@@ -2104,7 +2105,6 @@ cmd_set_fail_mode(struct vsctl_context *ctx)
     }
 
     ovsrec_bridge_set_fail_mode(br->br_cfg, fail_mode);
-    vsctl_context_invalidate_cache(ctx);
 }
 
 static void
