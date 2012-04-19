@@ -43,6 +43,7 @@
 #include "ofp-util.h"
 #include "ofpbuf.h"
 #include "ofp-print.h"
+#include "ofproto-dpif-governor.h"
 #include "ofproto-dpif-sflow.h"
 #include "poll-loop.h"
 #include "timer.h"
@@ -61,6 +62,7 @@ COVERAGE_DEFINE(facet_changed_rule);
 COVERAGE_DEFINE(facet_invalidated);
 COVERAGE_DEFINE(facet_revalidate);
 COVERAGE_DEFINE(facet_unexpected);
+COVERAGE_DEFINE(facet_suppress);
 
 /* Maximum depth of flow table recursion (due to resubmit actions) in a
  * flow translation. */
@@ -545,6 +547,7 @@ struct ofproto_dpif {
     /* Facets. */
     struct hmap facets;
     struct hmap subfacets;
+    struct governor *governor;
 
     /* Revalidation. */
     struct table_dpif tables[N_TABLES];
@@ -700,6 +703,7 @@ construct(struct ofproto *ofproto_)
 
     hmap_init(&ofproto->facets);
     hmap_init(&ofproto->subfacets);
+    ofproto->governor = NULL;
 
     for (i = 0; i < N_TABLES; i++) {
         struct table_dpif *table = &ofproto->tables[i];
@@ -772,6 +776,7 @@ destruct(struct ofproto *ofproto_)
 
     hmap_destroy(&ofproto->facets);
     hmap_destroy(&ofproto->subfacets);
+    governor_destroy(ofproto->governor);
 
     hmap_destroy(&ofproto->vlandev_map);
     hmap_destroy(&ofproto->realdev_vid_map);
@@ -879,6 +884,24 @@ run(struct ofproto *ofproto_)
         }
     }
 
+    if (ofproto->governor) {
+        size_t n_subfacets;
+
+        governor_run(ofproto->governor);
+
+        /* If the governor has shrunk to its minimum size and the number of
+         * subfacets has dwindled, then drop the governor entirely.
+         *
+         * For hysteresis, the number of subfacets to drop the governor is
+         * smaller than the number needed to trigger its creation. */
+        n_subfacets = hmap_count(&ofproto->subfacets);
+        if (n_subfacets * 4 < ofproto->up.flow_eviction_threshold
+            && governor_is_idle(ofproto->governor)) {
+            governor_destroy(ofproto->governor);
+            ofproto->governor = NULL;
+        }
+    }
+
     return 0;
 }
 
@@ -918,6 +941,9 @@ wait(struct ofproto *ofproto_)
         poll_immediate_wake();
     } else {
         timer_wait(&ofproto->next_expiration);
+    }
+    if (ofproto->governor) {
+        governor_wait(ofproto->governor);
     }
 }
 
@@ -2566,48 +2592,136 @@ flow_miss_find(struct hmap *todo, const struct flow *flow, uint32_t hash)
     return NULL;
 }
 
+/* Partially Initializes 'op' as an "execute" operation for 'miss' and
+ * 'packet'.  The caller must initialize op->actions and op->actions_len.  If
+ * 'miss' is associated with a subfacet the caller must also initialize the
+ * returned op->subfacet, and if anything needs to be freed after processing
+ * the op, the caller must initialize op->garbage also. */
 static void
-handle_flow_miss(struct ofproto_dpif *ofproto, struct flow_miss *miss,
-                 struct flow_miss_op *ops, size_t *n_ops)
+init_flow_miss_execute_op(struct flow_miss *miss, struct ofpbuf *packet,
+                          struct flow_miss_op *op)
 {
-    const struct flow *flow = &miss->flow;
-    struct subfacet *subfacet;
-    struct ofpbuf *packet;
-    struct facet *facet;
-    uint32_t hash;
+    if (miss->flow.vlan_tci != miss->initial_tci) {
+        /* This packet was received on a VLAN splinter port.  We
+         * added a VLAN to the packet to make the packet resemble
+         * the flow, but the actions were composed assuming that
+         * the packet contained no VLAN.  So, we must remove the
+         * VLAN header from the packet before trying to execute the
+         * actions. */
+        eth_pop_vlan(packet);
+    }
 
-    /* The caller must ensure that miss->hmap_node.hash contains
-     * flow_hash(miss->flow, 0). */
-    hash = miss->hmap_node.hash;
+    op->subfacet = NULL;
+    op->garbage = NULL;
+    op->dpif_op.type = DPIF_OP_EXECUTE;
+    op->dpif_op.u.execute.key = miss->key;
+    op->dpif_op.u.execute.key_len = miss->key_len;
+    op->dpif_op.u.execute.packet = packet;
+}
 
-    facet = facet_lookup_valid(ofproto, flow, hash);
-    if (!facet) {
-        struct rule_dpif *rule;
+/* Helper for handle_flow_miss_without_facet() and
+ * handle_flow_miss_with_facet(). */
+static void
+handle_flow_miss_common(struct rule_dpif *rule,
+                        struct ofpbuf *packet, const struct flow *flow)
+{
+    struct ofproto_dpif *ofproto = ofproto_dpif_cast(rule->up.ofproto);
 
-        rule = rule_dpif_lookup(ofproto, flow, 0);
-        if (!rule) {
-            /* Don't send a packet-in if OFPUTIL_PC_NO_PACKET_IN asserted. */
-            struct ofport_dpif *port = get_ofp_port(ofproto, flow->in_port);
-            if (port) {
-                if (port->up.pp.config & OFPUTIL_PC_NO_PACKET_IN) {
-                    COVERAGE_INC(ofproto_dpif_no_packet_in);
-                    /* XXX install 'drop' flow entry */
-                    return;
-                }
-            } else {
-                VLOG_WARN_RL(&rl, "packet-in on unknown port %"PRIu16,
-                             flow->in_port);
-            }
+    ofproto->n_matches++;
 
-            LIST_FOR_EACH (packet, list_node, &miss->packets) {
-                send_packet_in_miss(ofproto, packet, flow);
-            }
+    if (rule->up.cr.priority == FAIL_OPEN_PRIORITY) {
+        /*
+         * Extra-special case for fail-open mode.
+         *
+         * We are in fail-open mode and the packet matched the fail-open
+         * rule, but we are connected to a controller too.  We should send
+         * the packet up to the controller in the hope that it will try to
+         * set up a flow and thereby allow us to exit fail-open.
+         *
+         * See the top-level comment in fail-open.c for more information.
+         */
+        send_packet_in_miss(ofproto, packet, flow);
+    }
+}
 
-            return;
+/* Figures out whether a flow that missed in 'ofproto', whose details are in
+ * 'miss', is likely to be worth tracking in detail in userspace and (usually)
+ * installing a datapath flow.  The answer is usually "yes" (a return value of
+ * true).  However, for short flows the cost of bookkeeping is much higher than
+ * the benefits, so when the datapath holds a large number of flows we impose
+ * some heuristics to decide which flows are likely to be worth tracking. */
+static bool
+flow_miss_should_make_facet(struct ofproto_dpif *ofproto,
+                            struct flow_miss *miss, uint32_t hash)
+{
+    if (!ofproto->governor) {
+        size_t n_subfacets;
+
+        n_subfacets = hmap_count(&ofproto->subfacets);
+        if (n_subfacets * 2 <= ofproto->up.flow_eviction_threshold) {
+            return true;
         }
 
-        facet = facet_create(rule, flow, hash);
+        ofproto->governor = governor_create(ofproto->up.name);
     }
+
+    return governor_should_install_flow(ofproto->governor, hash,
+                                        list_size(&miss->packets));
+}
+
+/* Handles 'miss', which matches 'rule', without creating a facet or subfacet
+ * or creating any datapath flow.  May add an "execute" operation to 'ops' and
+ * increment '*n_ops'. */
+static void
+handle_flow_miss_without_facet(struct flow_miss *miss,
+                               struct rule_dpif *rule,
+                               struct flow_miss_op *ops, size_t *n_ops)
+{
+    struct ofproto_dpif *ofproto = ofproto_dpif_cast(rule->up.ofproto);
+    struct action_xlate_ctx ctx;
+    struct ofpbuf *packet;
+
+    LIST_FOR_EACH (packet, list_node, &miss->packets) {
+        struct flow_miss_op *op = &ops[*n_ops];
+        struct dpif_flow_stats stats;
+        struct ofpbuf odp_actions;
+
+        COVERAGE_INC(facet_suppress);
+
+        ofpbuf_use_stub(&odp_actions, op->stub, sizeof op->stub);
+
+        dpif_flow_stats_extract(&miss->flow, packet, &stats);
+        rule_credit_stats(rule, &stats);
+
+        action_xlate_ctx_init(&ctx, ofproto, &miss->flow, miss->initial_tci,
+                              rule, 0, packet);
+        ctx.resubmit_stats = &stats;
+        xlate_actions(&ctx, rule->up.actions, rule->up.n_actions,
+                      &odp_actions);
+
+        if (odp_actions.size) {
+            struct dpif_execute *execute = &op->dpif_op.u.execute;
+
+            init_flow_miss_execute_op(miss, packet, op);
+            execute->actions = odp_actions.data;
+            execute->actions_len = odp_actions.size;
+            op->garbage = ofpbuf_get_uninit_pointer(&odp_actions);
+
+            (*n_ops)++;
+        } else {
+            ofpbuf_uninit(&odp_actions);
+        }
+    }
+}
+
+/* Handles 'miss', which matches 'facet'.  May add any required datapath
+ * operations to 'ops', incrementing '*n_ops' for each new op. */
+static void
+handle_flow_miss_with_facet(struct flow_miss *miss, struct facet *facet,
+                            struct flow_miss_op *ops, size_t *n_ops)
+{
+    struct subfacet *subfacet;
+    struct ofpbuf *packet;
 
     subfacet = subfacet_create(facet,
                                miss->key_fitness, miss->key, miss->key_len,
@@ -2615,26 +2729,10 @@ handle_flow_miss(struct ofproto_dpif *ofproto, struct flow_miss *miss,
 
     LIST_FOR_EACH (packet, list_node, &miss->packets) {
         struct flow_miss_op *op = &ops[*n_ops];
-        struct dpif_execute *execute = &op->dpif_op.u.execute;
         struct dpif_flow_stats stats;
-
         struct ofpbuf odp_actions;
 
-        ofproto->n_matches++;
-
-        if (facet->rule->up.cr.priority == FAIL_OPEN_PRIORITY) {
-            /*
-             * Extra-special case for fail-open mode.
-             *
-             * We are in fail-open mode and the packet matched the fail-open
-             * rule, but we are connected to a controller too.  We should send
-             * the packet up to the controller in the hope that it will try to
-             * set up a flow and thereby allow us to exit fail-open.
-             *
-             * See the top-level comment in fail-open.c for more information.
-             */
-            send_packet_in_miss(ofproto, packet, flow);
-        }
+        handle_flow_miss_common(facet->rule, packet, &miss->flow);
 
         ofpbuf_use_stub(&odp_actions, op->stub, sizeof op->stub);
         if (!facet->may_install || !subfacet->actions) {
@@ -2644,38 +2742,25 @@ handle_flow_miss(struct ofproto_dpif *ofproto, struct flow_miss *miss,
         dpif_flow_stats_extract(&facet->flow, packet, &stats);
         subfacet_update_stats(subfacet, &stats);
 
-        if (!subfacet->actions_len) {
-            /* No actions to execute, so skip talking to the dpif. */
-            ofpbuf_uninit(&odp_actions);
-            continue;
-        }
+        if (subfacet->actions_len) {
+            struct dpif_execute *execute = &op->dpif_op.u.execute;
 
-        if (flow->vlan_tci != subfacet->initial_tci) {
-            /* This packet was received on a VLAN splinter port.  We added
-             * a VLAN to the packet to make the packet resemble the flow,
-             * but the actions were composed assuming that the packet
-             * contained no VLAN.  So, we must remove the VLAN header from
-             * the packet before trying to execute the actions. */
-            eth_pop_vlan(packet);
-        }
+            init_flow_miss_execute_op(miss, packet, op);
+            op->subfacet = subfacet;
+            if (facet->may_install) {
+                execute->actions = subfacet->actions;
+                execute->actions_len = subfacet->actions_len;
+                ofpbuf_uninit(&odp_actions);
+            } else {
+                execute->actions = odp_actions.data;
+                execute->actions_len = odp_actions.size;
+                op->garbage = ofpbuf_get_uninit_pointer(&odp_actions);
+            }
 
-        /* Set up operation. */
-        op->dpif_op.type = DPIF_OP_EXECUTE;
-        execute->key = miss->key;
-        execute->key_len = miss->key_len;
-        if (facet->may_install) {
-            execute->actions = subfacet->actions;
-            execute->actions_len = subfacet->actions_len;
-            ofpbuf_uninit(&odp_actions);
-            op->garbage = NULL;
+            (*n_ops)++;
         } else {
-            execute->actions = odp_actions.data;
-            execute->actions_len = odp_actions.size;
-            op->garbage = ofpbuf_get_uninit_pointer(&odp_actions);
+            ofpbuf_uninit(&odp_actions);
         }
-        execute->packet = packet;
-
-        (*n_ops)++;
     }
 
     if (facet->may_install && subfacet->key_fitness != ODP_FIT_TOO_LITTLE) {
@@ -2692,6 +2777,59 @@ handle_flow_miss(struct ofproto_dpif *ofproto, struct flow_miss *miss,
         put->actions_len = subfacet->actions_len;
         put->stats = NULL;
     }
+}
+
+/* Handles flow miss 'miss' on 'ofproto'.  The flow does not match any flow in
+ * the OpenFlow flow table. */
+static void
+handle_flow_miss_no_rule(struct ofproto_dpif *ofproto, struct flow_miss *miss)
+{
+    uint16_t in_port = miss->flow.in_port;
+    struct ofport_dpif *port = get_ofp_port(ofproto, in_port);
+
+    if (!port) {
+        VLOG_WARN_RL(&rl, "packet-in on unknown port %"PRIu16, in_port);
+    }
+
+    if (port && port->up.pp.config & OFPUTIL_PC_NO_PACKET_IN) {
+        /* XXX install 'drop' flow entry */
+        COVERAGE_INC(ofproto_dpif_no_packet_in);
+    } else {
+        const struct ofpbuf *packet;
+
+        LIST_FOR_EACH (packet, list_node, &miss->packets) {
+            send_packet_in_miss(ofproto, packet, &miss->flow);
+        }
+    }
+}
+
+/* Handles flow miss 'miss' on 'ofproto'.  May add any required datapath
+ * operations to 'ops', incrementing '*n_ops' for each new op. */
+static void
+handle_flow_miss(struct ofproto_dpif *ofproto, struct flow_miss *miss,
+                 struct flow_miss_op *ops, size_t *n_ops)
+{
+    struct facet *facet;
+    uint32_t hash;
+
+    /* The caller must ensure that miss->hmap_node.hash contains
+     * flow_hash(miss->flow, 0). */
+    hash = miss->hmap_node.hash;
+
+    facet = facet_lookup_valid(ofproto, &miss->flow, hash);
+    if (!facet) {
+        struct rule_dpif *rule = rule_dpif_lookup(ofproto, &miss->flow, 0);
+        if (!rule) {
+            handle_flow_miss_no_rule(ofproto, miss);
+            return;
+        } else if (!flow_miss_should_make_facet(ofproto, miss, hash)) {
+            handle_flow_miss_without_facet(miss, rule, ops, n_ops);
+            return;
+        }
+
+        facet = facet_create(rule, &miss->flow, hash);
+    }
+    handle_flow_miss_with_facet(miss, facet, ops, n_ops);
 }
 
 /* Like odp_flow_key_to_flow(), this function converts the 'key_len' bytes of

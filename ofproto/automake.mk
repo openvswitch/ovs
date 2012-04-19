@@ -1,4 +1,4 @@
-# Copyright (C) 2009, 2010, 2011 Nicira Networks, Inc.
+# Copyright (C) 2009, 2010, 2011, 2012 Nicira Networks, Inc.
 #
 # Copying and distribution of this file, with or without modification,
 # are permitted in any medium without royalty provided the copyright
@@ -21,6 +21,8 @@ ofproto_libofproto_a_SOURCES = \
 	ofproto/ofproto.c \
 	ofproto/ofproto.h \
 	ofproto/ofproto-dpif.c \
+	ofproto/ofproto-dpif-governor.c \
+	ofproto/ofproto-dpif-governor.h \
 	ofproto/ofproto-dpif-sflow.c \
 	ofproto/ofproto-dpif-sflow.h \
 	ofproto/ofproto-provider.h \
