@@ -1,6 +1,6 @@
 {"name": "Open_vSwitch",
  "version": "6.8.0",
- "cksum": "1404093776 16263",
+ "cksum": "2532393314 16305",
  "tables": {
    "Open_vSwitch": {
      "columns": {
@@ -196,7 +196,9 @@
            "max": 1},
          "ephemeral": true},
        "cfm_fault_status": {
-         "type": {"key": "string", "min": 0, "max": "unlimited"}},
+         "type": {
+           "key": "string", "min": 0, "max": "unlimited"},
+           "ephemeral": true},
        "lacp_current": {
          "type": {"key": {"type": "boolean"},
                   "min": 0, "max": 1},
