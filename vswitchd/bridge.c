@@ -66,7 +66,6 @@ struct iface {
     struct hmap_node name_node; /* In struct bridge's "iface_by_name" hmap. */
     struct port *port;          /* Containing port. */
     char *name;                 /* Host network device name. */
-    tag_type tag;               /* Tag associated with this interface. */
 
     /* These members are valid only after bridge_reconfigure() causes them to
      * be initialized. */
@@ -3000,7 +2999,6 @@ iface_create(struct port *port, const struct ovsrec_interface *if_cfg)
     iface->port = port;
     iface->name = xstrdup(name);
     iface->ofp_port = -1;
-    iface->tag = tag_create_random();
     iface->netdev = NULL;
     iface->cfg = if_cfg;
     iface->need_refresh = true;
