@@ -1,6 +1,6 @@
 {"name": "Open_vSwitch",
- "version": "6.9.2",
- "cksum": "2800409701 16724",
+ "version": "6.9.3",
+ "cksum": "2110020336 16754",
  "tables": {
    "Open_vSwitch": {
      "columns": {
@@ -203,7 +203,8 @@
          "type": {"key": {"type": "integer",
                           "minInteger": 0,
                           "maxInteger": 100},
-                  "min": 0, "max": 1}},
+                  "min": 0, "max": 1},
+           "ephemeral": true},
        "lacp_current": {
          "type": {"key": {"type": "boolean"},
                   "min": 0, "max": 1},
