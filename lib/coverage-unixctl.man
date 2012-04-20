@@ -1,0 +1,11 @@
+.SS "COVERAGE COMMANDS"
+These commands manage \fB\*(PN\fR's ``coverage counters,'' which count
+the number of times particular events occur during a daemon's runtime.
+In addition to these commands, \fB\*(PN\fR automatically logs coverage
+counter values, at \fBINFO\fR level, when it detects that the daemon's
+main loop takes unusually long to run.
+.PP
+Coverage counters are useful mainly for performance analysis and
+debugging.
+.IP "\fBcoverage/show\fR"
+Displays the values of all of the coverage counters.

@@ -499,11 +499,7 @@ log_poll_interval(long long int last_wakeup)
                           rusage.ru_nivcsw - last_rusage->ru_nivcsw);
             }
         }
-        /* Care should be taken in the value chosen for logging.  Depending
-         * on the configuration, syslog can write changes synchronously,
-         * which can cause the coverage messages to take longer to log
-         * than the processing delay that triggered it. */
-        coverage_log(VLL_INFO, true);
+        coverage_log();
     }
 
     /* Update exponentially weighted moving average.  With these parameters, a

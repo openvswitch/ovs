@@ -20,6 +20,7 @@
 #include <stdlib.h>
 #include "dynamic-string.h"
 #include "hash.h"
+#include "svec.h"
 #include "timeval.h"
 #include "unixctl.h"
 #include "util.h"
@@ -48,19 +49,28 @@ struct coverage_counter *coverage_counters[] = {
 
 static unsigned int epoch;
 
+static void coverage_read(struct svec *);
+
 static void
-coverage_unixctl_log(struct unixctl_conn *conn, int argc OVS_UNUSED,
+coverage_unixctl_show(struct unixctl_conn *conn, int argc OVS_UNUSED,
                      const char *argv[] OVS_UNUSED, void *aux OVS_UNUSED)
 {
-    coverage_log(VLL_WARN, false);
-    unixctl_command_reply(conn, NULL);
+    struct svec lines;
+    char *reply;
+
+    svec_init(&lines);
+    coverage_read(&lines);
+    reply = svec_join(&lines, "\n", "\n");
+    unixctl_command_reply(conn, reply);
+    free(reply);
+    svec_destroy(&lines);
 }
 
 void
 coverage_init(void)
 {
-    unixctl_command_register("coverage/log", "", 0, 0,
-                             coverage_unixctl_log, NULL);
+    unixctl_command_register("coverage/show", "", 0, 0,
+                             coverage_unixctl_show, NULL);
 }
 
 /* Sorts coverage counters in descending order by count, within equal counts
@@ -144,60 +154,75 @@ coverage_hit(uint32_t hash)
     }
 }
 
-static void
-coverage_log_counter(enum vlog_level level, const struct coverage_counter *c)
-{
-    VLOG(level, "%-24s %5u / %9llu", c->name, c->count, c->count + c->total);
-}
-
-/* Logs the coverage counters at the given vlog 'level'.  If
- * 'suppress_dups' is true, then duplicate events are not displayed.
- * Care should be taken in the value used for 'level'.  Depending on the
- * configuration, syslog can write changes synchronously, which can
- * cause the coverage messages to take several seconds to write. */
+/* Logs the coverage counters, unless a similar set of events has already been
+ * logged.
+ *
+ * This function logs at log level VLL_INFO.  Use care before adjusting this
+ * level, because depending on its configuration, syslogd can write changes
+ * synchronously, which can cause the coverage messages to take several seconds
+ * to write. */
 void
-coverage_log(enum vlog_level level, bool suppress_dups)
+coverage_log(void)
 {
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 3);
+
+    if (!VLOG_DROP_INFO(&rl)) {
+        uint32_t hash = coverage_hash();
+        if (coverage_hit(hash)) {
+            VLOG_INFO("Skipping details of duplicate event coverage for "
+                      "hash=%08"PRIx32" in epoch %u", hash, epoch);
+        } else {
+            struct svec lines;
+            const char *line;
+            size_t i;
+
+            svec_init(&lines);
+            coverage_read(&lines);
+            SVEC_FOR_EACH (i, line, &lines) {
+                VLOG_INFO("%s", line);
+            }
+            svec_destroy(&lines);
+        }
+    }
+}
+
+static void
+coverage_read_counter(struct svec *lines, const struct coverage_counter *c)
+{
+    svec_add_nocopy(lines, xasprintf("%-24s %5u / %9llu",
+                                     c->name, c->count, c->count + c->total));
+}
+
+/* Adds coverage counter information to 'lines'. */
+static void
+coverage_read(struct svec *lines)
+{
     size_t n_never_hit;
     uint32_t hash;
     size_t i;
 
-    if (suppress_dups
-        ? !vlog_is_enabled(THIS_MODULE, level)
-        : vlog_should_drop(THIS_MODULE, level, &rl)) {
-        return;
-    }
-
     hash = coverage_hash();
-    if (suppress_dups) {
-        if (coverage_hit(hash)) {
-            VLOG(level, "Skipping details of duplicate event coverage for "
-                 "hash=%08"PRIx32" in epoch %u", hash, epoch);
-            return;
-        }
-    }
 
     n_never_hit = 0;
-    VLOG(level, "Event coverage (epoch %u/entire run), hash=%08"PRIx32":",
-         epoch, hash);
+    svec_add_nocopy(lines, xasprintf("Event coverage (epoch %u/entire run), "
+                                     "hash=%08"PRIx32":", epoch, hash));
     for (i = 0; i < n_coverage_counters; i++) {
         struct coverage_counter *c = coverage_counters[i];
         if (c->count) {
-            coverage_log_counter(level, c);
+            coverage_read_counter(lines, c);
         }
     }
     for (i = 0; i < n_coverage_counters; i++) {
         struct coverage_counter *c = coverage_counters[i];
         if (!c->count) {
             if (c->total) {
-                coverage_log_counter(level, c);
+                coverage_read_counter(lines, c);
             } else {
                 n_never_hit++;
             }
         }
     }
-    VLOG(level, "%zu events never hit", n_never_hit);
+    svec_add_nocopy(lines, xasprintf("%zu events never hit", n_never_hit));
 }
 
 /* Advances to the next epoch of coverage, resetting all the counters to 0. */

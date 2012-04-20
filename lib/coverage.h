@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011 Nicira Networks.
+ * Copyright (c) 2009, 2010, 2011, 2012 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -56,7 +56,7 @@ struct coverage_counter {
 #define COVERAGE_ADD(COUNTER, AMOUNT) counter_##COUNTER.count += (AMOUNT);
 
 void coverage_init(void);
-void coverage_log(enum vlog_level, bool suppress_dups);
+void coverage_log(void);
 void coverage_clear(void);
 
 /* Implementation detail. */

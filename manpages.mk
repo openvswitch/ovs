@@ -34,6 +34,7 @@ ovsdb/ovsdb-server.1: \
 	ovsdb/ovsdb-server.1.in \
 	lib/common-syn.man \
 	lib/common.man \
+	lib/coverage-unixctl.man \
 	lib/daemon-syn.man \
 	lib/daemon.man \
 	lib/ssl-bootstrap-syn.man \
@@ -51,6 +52,7 @@ ovsdb/ovsdb-server.1: \
 ovsdb/ovsdb-server.1.in:
 lib/common-syn.man:
 lib/common.man:
+lib/coverage-unixctl.man:
 lib/daemon-syn.man:
 lib/daemon.man:
 lib/ssl-bootstrap-syn.man:

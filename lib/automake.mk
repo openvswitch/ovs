@@ -253,6 +253,7 @@ EXTRA_DIST += \
 MAN_FRAGMENTS += \
 	lib/common.man \
 	lib/common-syn.man \
+	lib/coverage-unixctl.man \
 	lib/daemon.man \
 	lib/daemon-syn.man \
 	lib/leak-checker.man \
