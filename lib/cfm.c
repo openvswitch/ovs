@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010, 2011 Nicira Networks.
+ * Copyright (c) 2010, 2011, 2012 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -159,21 +159,20 @@ cfm_fault_reason_to_str(int reason) {
 }
 
 static void
-ds_put_cfm_fault(struct ds *ds, int fault)
+ds_put_cfm_fault(struct ds *ds, int old_fault, int new_fault)
 {
-    size_t length = ds->length;
     int i;
 
     for (i = 0; i < CFM_FAULT_N_REASONS; i++) {
         int reason = 1 << i;
 
-        if (fault & reason) {
-            ds_put_format(ds, "%s ", cfm_fault_reason_to_str(reason));
+        if ((old_fault | new_fault) & reason) {
+            ds_put_format(ds, " %s%s",
+                          (!(old_fault & reason) ? "+"
+                           : !(new_fault & reason) ? "-"
+                           : ""),
+                          cfm_fault_reason_to_str(reason));
         }
-    }
-
-    if (ds->length > length) {
-        ds_truncate(ds, ds->length - 1);
     }
 }
 
@@ -398,8 +397,8 @@ cfm_run(struct cfm *cfm)
         if (old_cfm_fault != cfm->fault) {
             struct ds ds = DS_EMPTY_INITIALIZER;
 
-            ds_put_cfm_fault(&ds, cfm->fault);
-            VLOG_INFO_RL(&rl, "%s: CFM fault status changed: %s", cfm->name,
+            ds_put_cfm_fault(&ds, old_cfm_fault, cfm->fault);
+            VLOG_INFO_RL(&rl, "%s: CFM fault status changed:%s", cfm->name,
                          ds_cstr_ro(&ds));
             ds_destroy(&ds);
         }
@@ -702,16 +701,17 @@ static void
 cfm_print_details(struct ds *ds, const struct cfm *cfm)
 {
     struct remote_mp *rmp;
+    int fault;
 
     ds_put_format(ds, "---- %s ----\n", cfm->name);
     ds_put_format(ds, "MPID %"PRIu64":%s%s\n", cfm->mpid,
                   cfm->extended ? " extended" : "",
                   cfm->fault_override >= 0 ? " fault_override" : "");
 
-
-    if (cfm_get_fault(cfm)) {
-        ds_put_cstr(ds, "\tfault: ");
-        ds_put_cfm_fault(ds, cfm_get_fault(cfm));
+    fault = cfm_get_fault(cfm);
+    if (fault) {
+        ds_put_cstr(ds, "\tfault:");
+        ds_put_cfm_fault(ds, fault, fault);
         ds_put_cstr(ds, "\n");
     }
 
