@@ -158,11 +158,14 @@ coverage_log_counter(enum vlog_level level, const struct coverage_counter *c)
 void
 coverage_log(enum vlog_level level, bool suppress_dups)
 {
+    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 3);
     size_t n_never_hit;
     uint32_t hash;
     size_t i;
 
-    if (!vlog_is_enabled(THIS_MODULE, level)) {
+    if (suppress_dups
+        ? !vlog_is_enabled(THIS_MODULE, level)
+        : vlog_should_drop(THIS_MODULE, level, &rl)) {
         return;
     }
 
