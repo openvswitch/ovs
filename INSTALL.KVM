@@ -58,7 +58,7 @@ Please refer to ovs-vsctl(8) for more details.
 
 Next, we'll start a guest that will use our ifup and ifdown scripts.
 
-      % kvm -m 512 -net nic,maddr=00:11:22:EE:EE:EE -net \
+      % kvm -m 512 -net nic,macaddr=00:11:22:EE:EE:EE -net \
 tap,script=/etc/ovs-ifup,downscript=/etc/ovs-ifdown -drive \
 file=/path/to/disk-image,boot=on
 
