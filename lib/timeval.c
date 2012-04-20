@@ -463,37 +463,42 @@ log_poll_interval(long long int last_wakeup)
     /* Warn if we took too much time between polls: at least 50 ms and at least
      * 8X the mean interval. */
     if (n_samples > 10 && interval > mean_interval * 8 && interval > 50 * 16) {
-        const struct rusage *last_rusage = get_recent_rusage();
-        struct rusage rusage;
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 3);
 
-        getrusage(RUSAGE_SELF, &rusage);
-        VLOG_WARN("%lld ms poll interval (%lld ms user, %lld ms system) "
-                  "is over %u times the weighted mean interval %u ms "
-                  "(%u samples)",
-                  now - last_wakeup,
-                  timeval_diff_msec(&rusage.ru_utime, &last_rusage->ru_utime),
-                  timeval_diff_msec(&rusage.ru_stime, &last_rusage->ru_stime),
-                  interval / mean_interval,
-                  (mean_interval + 8) / 16, n_samples);
-        if (rusage.ru_minflt > last_rusage->ru_minflt
-            || rusage.ru_majflt > last_rusage->ru_majflt) {
-            VLOG_WARN("faults: %ld minor, %ld major",
-                      rusage.ru_minflt - last_rusage->ru_minflt,
-                      rusage.ru_majflt - last_rusage->ru_majflt);
-        }
-        if (rusage.ru_inblock > last_rusage->ru_inblock
-            || rusage.ru_oublock > last_rusage->ru_oublock) {
-            VLOG_WARN("disk: %ld reads, %ld writes",
-                      rusage.ru_inblock - last_rusage->ru_inblock,
-                      rusage.ru_oublock - last_rusage->ru_oublock);
-        }
-        if (rusage.ru_nvcsw > last_rusage->ru_nvcsw
-            || rusage.ru_nivcsw > last_rusage->ru_nivcsw) {
-            VLOG_WARN("context switches: %ld voluntary, %ld involuntary",
-                      rusage.ru_nvcsw - last_rusage->ru_nvcsw,
-                      rusage.ru_nivcsw - last_rusage->ru_nivcsw);
-        }
+        if (!VLOG_DROP_WARN(&rl)) {
+            const struct rusage *last_rusage = get_recent_rusage();
+            struct rusage rusage;
 
+            getrusage(RUSAGE_SELF, &rusage);
+            VLOG_WARN("%lld ms poll interval (%lld ms user, %lld ms system) "
+                      "is over %u times the weighted mean interval %u ms "
+                      "(%u samples)",
+                      now - last_wakeup,
+                      timeval_diff_msec(&rusage.ru_utime,
+                                        &last_rusage->ru_utime),
+                      timeval_diff_msec(&rusage.ru_stime,
+                                        &last_rusage->ru_stime),
+                      interval / mean_interval,
+                      (mean_interval + 8) / 16, n_samples);
+            if (rusage.ru_minflt > last_rusage->ru_minflt
+                || rusage.ru_majflt > last_rusage->ru_majflt) {
+                VLOG_WARN("faults: %ld minor, %ld major",
+                          rusage.ru_minflt - last_rusage->ru_minflt,
+                          rusage.ru_majflt - last_rusage->ru_majflt);
+            }
+            if (rusage.ru_inblock > last_rusage->ru_inblock
+                || rusage.ru_oublock > last_rusage->ru_oublock) {
+                VLOG_WARN("disk: %ld reads, %ld writes",
+                          rusage.ru_inblock - last_rusage->ru_inblock,
+                          rusage.ru_oublock - last_rusage->ru_oublock);
+            }
+            if (rusage.ru_nvcsw > last_rusage->ru_nvcsw
+                || rusage.ru_nivcsw > last_rusage->ru_nivcsw) {
+                VLOG_WARN("context switches: %ld voluntary, %ld involuntary",
+                          rusage.ru_nvcsw - last_rusage->ru_nvcsw,
+                          rusage.ru_nivcsw - last_rusage->ru_nivcsw);
+            }
+        }
         /* Care should be taken in the value chosen for logging.  Depending
          * on the configuration, syslog can write changes synchronously,
          * which can cause the coverage messages to take longer to log
