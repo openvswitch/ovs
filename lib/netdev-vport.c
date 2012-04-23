@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010, 2011 Nicira Networks.
+ * Copyright (c) 2010, 2011, 2012 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -198,6 +198,7 @@ netdev_vport_destroy(struct netdev_dev *netdev_dev_)
 {
     struct netdev_dev_vport *netdev_dev = netdev_dev_vport_cast(netdev_dev_);
 
+    ofpbuf_delete(netdev_dev->options);
     route_table_unregister();
     free(netdev_dev);
 }
