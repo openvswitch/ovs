@@ -851,7 +851,7 @@ OFPROTO_TRACE(
   [0,1,2])
 
 # Check for the MAC learning entry.
-AT_CHECK_UNQUOTED([ovs-appctl fdb/show br0 | sed 's/[[0-9]]$/?/'], [0], [dnl
+AT_CHECK_UNQUOTED([ovs-appctl fdb/show br0 | sed 's/[[0-9]]\{1,\}$/?/'], [0], [dnl
  port  VLAN  MAC                Age
     3     0  50:54:00:00:00:05    ?
 ])
@@ -865,7 +865,7 @@ OFPROTO_TRACE(
   [3])
 
 # Check for both MAC learning entries.
-AT_CHECK_UNQUOTED([ovs-appctl fdb/show br0 | sed 's/[[0-9]]$/?/'], [0], [dnl
+AT_CHECK_UNQUOTED([ovs-appctl fdb/show br0 | sed 's/[[0-9]]\{1,\}$/?/'], [0], [dnl
  port  VLAN  MAC                Age
     3     0  50:54:00:00:00:05    ?
     1     0  50:54:00:00:00:06    ?
@@ -879,7 +879,7 @@ OFPROTO_TRACE(
   [0,1,3])
 
 # Check that the MAC learning entry was updated.
-AT_CHECK_UNQUOTED([ovs-appctl fdb/show br0 | sed 's/[[0-9]]$/?/'], [0], [dnl
+AT_CHECK_UNQUOTED([ovs-appctl fdb/show br0 | sed 's/[[0-9]]\{1,\}$/?/'], [0], [dnl
  port  VLAN  MAC                Age
     1     0  50:54:00:00:00:06    ?
     2     0  50:54:00:00:00:05    ?
@@ -906,7 +906,7 @@ OFPROTO_TRACE(
   [0,4])
 
 # Check that the MAC learning entries were added.
-AT_CHECK_UNQUOTED([ovs-appctl fdb/show br1 | sed 's/[[0-9]]$/?/'], [0], [dnl
+AT_CHECK_UNQUOTED([ovs-appctl fdb/show br1 | sed 's/[[0-9]]\{1,\}$/?/'], [0], [dnl
  port  VLAN  MAC                Age
     4     0  50:54:00:00:00:06    ?
     5     0  50:54:00:00:00:07    ?
@@ -915,11 +915,11 @@ AT_CHECK_UNQUOTED([ovs-appctl fdb/show br1 | sed 's/[[0-9]]$/?/'], [0], [dnl
 # Delete port p1 and see that its MAC learning entry disappeared, and
 # that the MAC learning entry for the same MAC was also deleted from br1.
 AT_CHECK([ovs-vsctl del-port p1])
-AT_CHECK_UNQUOTED([ovs-appctl fdb/show br0 | sed 's/[[0-9]]$/?/'], [0], [dnl
+AT_CHECK_UNQUOTED([ovs-appctl fdb/show br0 | sed 's/[[0-9]]\{1,\}$/?/'], [0], [dnl
  port  VLAN  MAC                Age
     2     0  50:54:00:00:00:05    ?
 ])
-AT_CHECK_UNQUOTED([ovs-appctl fdb/show br1 | sed 's/[[0-9]]$/?/'], [0], [dnl
+AT_CHECK_UNQUOTED([ovs-appctl fdb/show br1 | sed 's/[[0-9]]\{1,\}$/?/'], [0], [dnl
  port  VLAN  MAC                Age
     5     0  50:54:00:00:00:07    ?
 ])
