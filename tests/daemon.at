@@ -39,6 +39,11 @@ AT_CHECK(
    parent=`cat parent` && 
    test $parentpid = $parent],
   [0], [], [], [kill `cat parent`])
+# Avoid a race between pidfile creation and notifying the parent,
+# which can easily trigger if ovsdb-server is slow (e.g. due to valgrind).
+OVS_WAIT_UNTIL(
+  [ovs-appctl --timeout=10 -t "`pwd`/unixctl" version],
+  [kill `cat pid`])
 # Kill the daemon process, making it look like a segfault,
 # and wait for a new child process to get spawned.
 AT_CHECK([cp pid oldpid], [0], [], [], [kill `cat parent`])
