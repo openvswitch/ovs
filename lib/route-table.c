@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 Nicira Networks.
+ * Copyright (c) 2011, 2012 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -246,6 +246,7 @@ route_table_reset(void)
     rtmsg->rtgen_family = AF_INET;
 
     nl_dump_start(&dump, rtnl_sock, &request);
+    ofpbuf_uninit(&request);
 
     while (nl_dump_next(&dump, &reply)) {
         struct route_table_msg msg;
@@ -437,6 +438,8 @@ name_table_reset(void)
     rtmsg->rtgen_family = AF_INET;
 
     nl_dump_start(&dump, rtnl_sock, &request);
+    ofpbuf_uninit(&request);
+
     while (nl_dump_next(&dump, &reply)) {
         struct rtnetlink_link_change change;
 
