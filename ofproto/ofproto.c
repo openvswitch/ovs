@@ -1027,8 +1027,9 @@ process_port_change(struct ofproto *ofproto, int error, char *devname)
 int
 ofproto_run(struct ofproto *p)
 {
+    struct sset changed_netdevs;
+    const char *changed_netdev;
     struct ofport *ofport;
-    char *devname;
     int error;
 
     error = p->ofproto_class->run(p);
@@ -1037,18 +1038,31 @@ ofproto_run(struct ofproto *p)
     }
 
     if (p->ofproto_class->port_poll) {
+        char *devname;
+
         while ((error = p->ofproto_class->port_poll(p, &devname)) != EAGAIN) {
             process_port_change(p, error, devname);
         }
     }
 
+    /* Update OpenFlow port status for any port whose netdev has changed.
+     *
+     * Refreshing a given 'ofport' can cause an arbitrary ofport to be
+     * destroyed, so it's not safe to update ports directly from the
+     * HMAP_FOR_EACH loop, or even to use HMAP_FOR_EACH_SAFE.  Instead, we
+     * need this two-phase approach. */
+    sset_init(&changed_netdevs);
     HMAP_FOR_EACH (ofport, hmap_node, &p->ports) {
         unsigned int change_seq = netdev_change_seq(ofport->netdev);
         if (ofport->change_seq != change_seq) {
             ofport->change_seq = change_seq;
-            update_port(p, netdev_get_name(ofport->netdev));
+            sset_add(&changed_netdevs, netdev_get_name(ofport->netdev));
         }
     }
+    SSET_FOR_EACH (changed_netdev, &changed_netdevs) {
+        update_port(p, changed_netdev);
+    }
+    sset_destroy(&changed_netdevs);
 
     switch (p->state) {
     case S_OPENFLOW:
