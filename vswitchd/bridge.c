@@ -2816,7 +2816,7 @@ port_del_ifaces(struct port *port)
     sset_init(&new_ifaces);
     for (i = 0; i < port->cfg->n_interfaces; i++) {
         const char *name = port->cfg->interfaces[i]->name;
-        const char *type = port->cfg->interfaces[i]->name;
+        const char *type = port->cfg->interfaces[i]->type;
         if (strcmp(type, "null")) {
             sset_add(&new_ifaces, name);
         }
