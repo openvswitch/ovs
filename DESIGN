@@ -232,22 +232,151 @@ vSwitch doesn't process jumbograms.
 In-Band Control
 ===============
 
-In-band control allows a single network to be used for OpenFlow traffic and
-other data traffic.  See ovs-vswitchd.conf.db(5) for a description of
-configuring in-band control.
+Motivation
+----------
 
-This comment is an attempt to describe how in-band control works at a
-wire- and implementation-level.  Correctly implementing in-band
-control has proven difficult due to its many subtleties, and has thus
-gone through many iterations.  Please read through and understand the
-reasoning behind the chosen rules before making modifications.
+An OpenFlow switch must establish and maintain a TCP network
+connection to its controller.  There are two basic ways to categorize
+the network that this connection traverses: either it is completely
+separate from the one that the switch is otherwise controlling, or its
+path may overlap the network that the switch controls.  We call the
+former case "out-of-band control", the latter case "in-band control".
 
-In Open vSwitch, in-band control is implemented as "hidden" flows (in that
-they are not visible through OpenFlow) and at a higher priority than
-wildcarded flows can be set up by through OpenFlow.  This is done so that
-the OpenFlow controller cannot interfere with them and possibly break
-connectivity with its switches.  It is possible to see all flows, including
-in-band ones, with the ovs-appctl "bridge/dump-flows" command.
+Out-of-band control has the following benefits:
+
+    - Simplicity: Out-of-band control slightly simplifies the switch
+      implementation.
+
+    - Reliability: Excessive switch traffic volume cannot interfere
+      with control traffic.
+
+    - Integrity: Machines not on the control network cannot
+      impersonate a switch or a controller.
+
+    - Confidentiality: Machines not on the control network cannot
+      snoop on control traffic.
+
+In-band control, on the other hand, has the following advantages:
+
+    - No dedicated port: There is no need to dedicate a physical
+      switch port to control, which is important on switches that have
+      few ports (e.g. wireless routers, low-end embedded platforms).
+
+    - No dedicated network: There is no need to build and maintain a
+      separate control network.  This is important in many
+      environments because it reduces proliferation of switches and
+      wiring.
+
+Open vSwitch supports both out-of-band and in-band control.  This
+section describes the principles behind in-band control.  See the
+description of the Controller table in ovs-vswitchd.conf.db(5) to
+configure OVS for in-band control.
+
+Principles
+----------
+
+The fundamental principle of in-band control is that an OpenFlow
+switch must recognize and switch control traffic without involving the
+OpenFlow controller.  All the details of implementing in-band control
+are special cases of this principle.
+
+The rationale for this principle is simple.  If the switch does not
+handle in-band control traffic itself, then it will be caught in a
+contradiction: it must contact the controller, but it cannot, because
+only the controller can set up the flows that are needed to contact
+the controller.
+
+The following points describe important special cases of this
+principle.
+
+   - In-band control must be implemented regardless of whether the
+     switch is connected.
+
+     It is tempting to implement the in-band control rules only when
+     the switch is not connected to the controller, using the
+     reasoning that the controller should have complete control once
+     it has established a connection with the switch.
+
+     This does not work in practice.  Consider the case where the
+     switch is connected to the controller.  Occasionally it can
+     happen that the controller forgets or otherwise needs to obtain
+     the MAC address of the switch.  To do so, the controller sends a
+     broadcast ARP request.  A switch that implements the in-band
+     control rules only when it is disconnected will then send an
+     OFPT_PACKET_IN message up to the controller.  The controller will
+     be unable to respond, because it does not know the MAC address of
+     the switch.  This is a deadlock situation that can only be
+     resolved by the switch noticing that its connection to the
+     controller has hung and reconnecting.
+
+   - In-band control must override flows set up by the controller.
+
+     It is reasonable to assume that flows set up by the OpenFlow
+     controller should take precedence over in-band control, on the
+     basis that the controller should be in charge of the switch.
+
+     Again, this does not work in practice.  Reasonable controller
+     implementations may set up a "last resort" fallback rule that
+     wildcards every field and, e.g., sends it up to the controller or
+     discards it.  If a controller does that, then it will isolate
+     itself from the switch.
+
+   - The switch must recognize all control traffic.
+
+     The fundamental principle of in-band control states, in part,
+     that a switch must recognize control traffic without involving
+     the OpenFlow controller.  More specifically, the switch must
+     recognize *all* control traffic.  "False negatives", that is,
+     packets that constitute control traffic but that the switch does
+     not recognize as control traffic, lead to control traffic storms.
+
+     Consider an OpenFlow switch that only recognizes control packets
+     sent to or from that switch.  Now suppose that two switches of
+     this type, named A and B, are connected to ports on an Ethernet
+     hub (not a switch) and that an OpenFlow controller is connected
+     to a third hub port.  In this setup, control traffic sent by
+     switch A will be seen by switch B, which will send it to the
+     controller as part of an OFPT_PACKET_IN message.  Switch A will
+     then see the OFPT_PACKET_IN message's packet, re-encapsulate it
+     in another OFPT_PACKET_IN, and send it to the controller.  Switch
+     B will then see that OFPT_PACKET_IN, and so on in an infinite
+     loop.
+
+     Incidentally, the consequences of "false positives", where
+     packets that are not control traffic are nevertheless recognized
+     as control traffic, are much less severe.  The controller will
+     not be able to control their behavior, but the network will
+     remain in working order.  False positives do constitute a
+     security problem.
+
+   - The switch should use echo-requests to detect disconnection.
+
+     TCP will notice that a connection has hung, but this can take a
+     considerable amount of time.  For example, with default settings
+     the Linux kernel TCP implementation will retransmit for between
+     13 and 30 minutes, depending on the connection's retransmission
+     timeout, according to kernel documentation.  This is far too long
+     for a switch to be disconnected, so an OpenFlow switch should
+     implement its own connection timeout.  OpenFlow OFPT_ECHO_REQUEST
+     messages are the best way to do this, since they test the
+     OpenFlow connection itself.
+
+Implementation
+--------------
+
+This section describes how Open vSwitch implements in-band control.
+Correctly implementing in-band control has proven difficult due to its
+many subtleties, and has thus gone through many iterations.  Please
+read through and understand the reasoning behind the chosen rules
+before making modifications.
+
+Open vSwitch implements in-band control as "hidden" flows, that is,
+flows that are not visible through OpenFlow, and at a higher priority
+than wildcarded flows can be set up through OpenFlow.  This is done so
+that the OpenFlow controller cannot interfere with them and possibly
+break connectivity with its switches.  It is possible to see all
+flows, including in-band ones, with the ovs-appctl "bridge/dump-flows"
+command.
 
 The Open vSwitch implementation of in-band control can hide traffic to
 arbitrary "remotes", where each remote is one TCP port on one IP address.
