@@ -1156,19 +1156,6 @@ iface_set_netdev_config(const struct ovsrec_interface *iface_cfg,
     return error;
 }
 
-static void
-bridge_ofproto_port_del(struct bridge *br, struct ofproto_port ofproto_port)
-{
-    int error = ofproto_port_del(br->ofproto, ofproto_port.ofp_port);
-    if (error) {
-        VLOG_WARN("bridge %s: failed to remove %s interface (%s)",
-                  br->name, ofproto_port.name, strerror(error));
-    } else {
-        VLOG_INFO("bridge %s: removed interface %s (%d)", br->name,
-                  ofproto_port.name, ofproto_port.ofp_port);
-    }
-}
-
 /* This function determines whether 'ofproto_port', which is attached to
  * br->ofproto's datapath, is one that we want in 'br'.
  *
@@ -1277,6 +1264,64 @@ bridge_refresh_ofp_port(struct bridge *br)
     }
 }
 
+/* Opens a network device for 'iface_cfg' and configures it.  If '*ofp_portp'
+ * is negative, adds the network device to br->ofproto and stores the OpenFlow
+ * port number in '*ofp_portp'; otherwise leaves br->ofproto and '*ofp_portp'
+ * untouched.
+ *
+ * If successful, returns 0 and stores the network device in '*netdevp'.  On
+ * failure, returns a positive errno value and stores NULL in '*netdevp'. */
+static int
+iface_do_create(const struct bridge *br,
+                const struct ovsrec_interface *iface_cfg,
+                const struct ovsrec_port *port_cfg,
+                int *ofp_portp, struct netdev **netdevp)
+{
+    struct netdev *netdev;
+    int error;
+
+    error = netdev_open(iface_cfg->name,
+                        iface_get_type(iface_cfg, br->cfg), &netdev);
+    if (error) {
+        VLOG_WARN("could not open network device %s (%s)",
+                  iface_cfg->name, strerror(error));
+        goto error;
+    }
+
+    error = iface_set_netdev_config(iface_cfg, netdev);
+    if (error) {
+        goto error;
+    }
+
+    if (*ofp_portp < 0) {
+        uint16_t ofp_port;
+
+        error = ofproto_port_add(br->ofproto, netdev, &ofp_port);
+        if (error) {
+            goto error;
+        }
+        *ofp_portp = ofp_port;
+
+        VLOG_INFO("bridge %s: added interface %s on port %d",
+                  br->name, iface_cfg->name, *ofp_portp);
+    } else {
+        VLOG_DBG("bridge %s: interface %s is on port %d",
+                 br->name, iface_cfg->name, *ofp_portp);
+    }
+
+    if (port_cfg->vlan_mode && !strcmp(port_cfg->vlan_mode, "splinter")) {
+        netdev_turn_flags_on(netdev, NETDEV_UP, true);
+    }
+
+    *netdevp = netdev;
+    return 0;
+
+error:
+    *netdevp = NULL;
+    netdev_close(netdev);
+    return error;
+}
+
 /* Creates a new iface on 'br' based on 'if_cfg'.  The new iface has OpenFlow
  * port number 'ofp_port'.  If ofp_port is negative, an OpenFlow port is
  * automatically allocated for the iface.  Takes ownership of and
@@ -1286,111 +1331,50 @@ bridge_refresh_ofp_port(struct bridge *br)
 static bool
 iface_create(struct bridge *br, struct if_cfg *if_cfg, int ofp_port)
 {
+    const struct ovsrec_interface *iface_cfg = if_cfg->cfg;
+    const struct ovsrec_port *port_cfg = if_cfg->parent;
+
+    struct netdev *netdev;
     struct iface *iface;
     struct port *port;
     int error;
-    bool ok;
 
-    assert(!iface_lookup(br, if_cfg->cfg->name));
-
-    port = port_lookup(br, if_cfg->parent->name);
-    if (!port) {
-        port = port_create(br, if_cfg->parent);
-    }
-
-    iface = xzalloc(sizeof *iface);
-    iface->port = port;
-    iface->name = xstrdup(if_cfg->cfg->name);
-    iface->ofp_port = -1;
-    iface->netdev = NULL;
-    iface->cfg = if_cfg->cfg;
-    hmap_insert(&br->iface_by_name, &iface->name_node,
-                hash_string(iface->name, 0));
-    list_push_back(&port->ifaces, &iface->port_elem);
-    iface->type = iface_get_type(iface->cfg, br->cfg);
-    if (ofp_port >= 0) {
-        iface_set_ofp_port(iface, ofp_port);
-    }
-
+    /* Get rid of 'if_cfg' itself.  We already copied out the interesting
+     * bits. */
     hmap_remove(&br->if_cfg_todo, &if_cfg->hmap_node);
     free(if_cfg);
-    if_cfg = NULL;
 
-    error = netdev_open(iface->name, iface->type, &iface->netdev);
+    /* Do the bits that can fail up front. */
+    assert(!iface_lookup(br, iface_cfg->name));
+    error = iface_do_create(br, iface_cfg, port_cfg, &ofp_port, &netdev);
     if (error) {
-        VLOG_WARN("could not open network device %s (%s)", iface->name,
-                  strerror(error));
-    }
-
-    if (iface->netdev
-        && port->cfg->vlan_mode
-        && !strcmp(port->cfg->vlan_mode, "splinter")) {
-        netdev_turn_flags_on(iface->netdev, NETDEV_UP, true);
-    }
-
-    /* Configure the netdev. */
-    if (iface->netdev) {
-        int error = iface_set_netdev_config(iface->cfg, iface->netdev);
-        if (error) {
-            netdev_close(iface->netdev);
-            iface->netdev = NULL;
-        }
-    }
-
-    /* Add the port, if necessary. */
-    if (iface->netdev && iface->ofp_port < 0) {
-        uint16_t new_ofp_port;
-        int error;
-
-        error = ofproto_port_add(br->ofproto, iface->netdev, &new_ofp_port);
-        if (!error) {
-            VLOG_INFO("bridge %s: added interface %s (%d)", br->name,
-                      iface->name, new_ofp_port);
-            iface_set_ofp_port(iface, new_ofp_port);
-        } else {
-            netdev_close(iface->netdev);
-            iface->netdev = NULL;
-        }
-    }
-
-    /* Initially populate stats columns. */
-    if (iface->netdev) {
-        iface_refresh_stats(iface);
-        iface_refresh_status(iface);
-    }
-
-    /* Delete the iface if we failed. */
-    ok = iface->netdev && iface->ofp_port >= 0;
-    if (ok) {
-        VLOG_DBG("bridge %s: interface %s is on port %d",
-                 br->name, iface->name, iface->ofp_port);
-    } else {
-        struct ofproto_port ofproto_port;
-
-        if (iface->netdev) {
-            VLOG_ERR("bridge %s: missing %s interface, dropping",
-                     br->name, iface->name);
-        } else {
-            /* We already reported a related error, don't bother
-             * duplicating it. */
-        }
-        if (!ofproto_port_query_by_name(br->ofproto, port->name,
-                                        &ofproto_port)) {
-            VLOG_INFO("bridge %s: removed interface %s (%d)",
-                      br->name, port->name, ofproto_port.ofp_port);
-            bridge_ofproto_port_del(br, ofproto_port);
-            ofproto_port_destroy(&ofproto_port);
-        }
-        iface_clear_db_record(iface->cfg);
-        iface_destroy(iface);
-    }
-
-    if (!ok) {
-        if (list_is_empty(&port->ifaces)) {
-            port_destroy(port);
-        }
+        iface_clear_db_record(iface_cfg);
         return false;
     }
+
+    /* Get or create the port structure. */
+    port = port_lookup(br, port_cfg->name);
+    if (!port) {
+        port = port_create(br, port_cfg);
+    }
+
+    /* Create the iface structure. */
+    iface = xzalloc(sizeof *iface);
+    list_push_back(&port->ifaces, &iface->port_elem);
+    hmap_insert(&br->iface_by_name, &iface->name_node,
+                hash_string(iface_cfg->name, 0));
+    iface->port = port;
+    iface->name = xstrdup(iface_cfg->name);
+    iface->ofp_port = -1;
+    iface->netdev = netdev;
+    iface->type = iface_get_type(iface_cfg, br->cfg);
+    iface->cfg = iface_cfg;
+
+    iface_set_ofp_port(iface, ofp_port);
+
+    /* Populate initial status in database. */
+    iface_refresh_stats(iface);
+    iface_refresh_status(iface);
 
     /* Add bond fake iface if necessary. */
     if (port_is_bond_fake_iface(port)) {
