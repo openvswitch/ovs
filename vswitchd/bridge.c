@@ -1133,6 +1133,29 @@ iface_set_ofp_port(struct iface *iface, int ofp_port)
     iface_set_ofport(iface->cfg, ofp_port);
 }
 
+/* Configures 'netdev' based on the "options" column in 'iface_cfg'.
+ * Returns 0 if successful, otherwise a positive errno value. */
+static int
+iface_set_netdev_config(const struct ovsrec_interface *iface_cfg,
+                        struct netdev *netdev)
+{
+    struct shash args;
+    int error;
+
+    shash_init(&args);
+    shash_from_ovs_idl_map(iface_cfg->key_options,
+                           iface_cfg->value_options,
+                           iface_cfg->n_options, &args);
+    error = netdev_set_config(netdev, &args);
+    shash_destroy(&args);
+
+    if (error) {
+        VLOG_WARN("could not configure network device %s (%s)",
+                  iface_cfg->name, strerror(error));
+    }
+    return error;
+}
+
 static void
 bridge_ofproto_port_del(struct bridge *br, struct ofproto_port ofproto_port)
 {
@@ -1268,18 +1291,8 @@ iface_create(struct bridge *br, struct if_cfg *if_cfg, int ofp_port)
 
     /* Configure the netdev. */
     if (iface->netdev) {
-        struct shash args;
-
-        shash_init(&args);
-        shash_from_ovs_idl_map(iface->cfg->key_options,
-                               iface->cfg->value_options,
-                               iface->cfg->n_options, &args);
-        error = netdev_set_config(iface->netdev, &args);
-        shash_destroy(&args);
-
+        int error = iface_set_netdev_config(iface->cfg, iface->netdev);
         if (error) {
-            VLOG_WARN("could not configure network device %s (%s)",
-                      iface->name, strerror(error));
             netdev_close(iface->netdev);
             iface->netdev = NULL;
         }
