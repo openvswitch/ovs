@@ -1306,7 +1306,7 @@ iface_create(struct bridge *br, struct if_cfg *if_cfg, int ofp_port)
         error = ofproto_port_add(br->ofproto, iface->netdev, &new_ofp_port);
         if (!error) {
             VLOG_INFO("bridge %s: added interface %s (%d)", br->name,
-                      iface->name, ofp_port);
+                      iface->name, new_ofp_port);
             iface_set_ofp_port(iface, new_ofp_port);
         } else {
             netdev_close(iface->netdev);
