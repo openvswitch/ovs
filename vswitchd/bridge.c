@@ -1180,6 +1180,65 @@ bridge_ofproto_port_del(struct bridge *br, struct ofproto_port ofproto_port)
     }
 }
 
+/* This function determines whether 'ofproto_port', which is attached to
+ * br->ofproto's datapath, is one that we want in 'br'.
+ *
+ * If it is, it returns true, after creating an iface (if necessary),
+ * configuring the iface's netdev according to the iface's options, and setting
+ * iface's ofp_port member to 'ofproto_port->ofp_port'.
+ *
+ * If, on the other hand, 'port' should be removed, it returns false.  The
+ * caller should later detach the port from br->ofproto. */
+static bool
+bridge_refresh_one_ofp_port(struct bridge *br,
+                            const struct ofproto_port *ofproto_port)
+{
+    const char *name = ofproto_port->name;
+    const char *type = ofproto_port->type;
+    uint16_t ofp_port = ofproto_port->ofp_port;
+
+    struct iface *iface = iface_lookup(br, name);
+    if (iface) {
+        /* Check that the name-to-number mapping is one-to-one. */
+        if (iface->ofp_port >= 0) {
+            VLOG_WARN("bridge %s: interface %s reported twice",
+                      br->name, name);
+            return false;
+        } else if (iface_from_ofp_port(br, ofp_port)) {
+            VLOG_WARN("bridge %s: interface %"PRIu16" reported twice",
+                      br->name, ofp_port);
+            return false;
+        }
+
+        /* There's a configured interface named 'name'. */
+        if (strcmp(type, iface->type)
+            || iface_set_netdev_config(iface->cfg, iface->netdev)) {
+            /* It's the wrong type, or it's the right type but can't be
+             * configured as the user requested, so we must destroy it. */
+            return false;
+        } else {
+            /* It's the right type and configured correctly.  keep it. */
+            iface_set_ofp_port(iface, ofp_port);
+            return true;
+        }
+    } else if (bridge_has_bond_fake_iface(br, name)
+               && !strcmp(type, "internal")) {
+        /* It's a bond fake iface.  Keep it. */
+        return true;
+    } else {
+        /* There's no configured interface named 'name', but there might be an
+         * interface of that name queued to be created.
+         *
+         * If there is, and it has the correct type, then try to configure it
+         * and add it.  If that's successful, we'll keep it.  Otherwise, we'll
+         * delete it and later try to re-add it. */
+        struct if_cfg *if_cfg = if_cfg_lookup(br, name);
+        return (if_cfg
+                && !strcmp(type, iface_get_type(if_cfg->cfg, br->cfg))
+                && iface_create(br, if_cfg, ofp_port));
+    }
+}
+
 /* Update bridges "if_cfg"s, "struct port"s, and "struct iface"s to be
  * consistent with the ofp_ports in "br->ofproto". */
 static void
@@ -1203,33 +1262,10 @@ bridge_refresh_ofp_port(struct bridge *br)
      * already exist in the datapath and promote them to full fledged "struct
      * iface"s.  Mark ports in the datapath which don't belong as garbage. */
     OFPROTO_PORT_FOR_EACH (&ofproto_port, &dump, br->ofproto) {
-        struct iface *iface = iface_lookup(br, ofproto_port.name);
-        if (iface) {
-            if (iface->ofp_port >= 0) {
-                VLOG_WARN("bridge %s: interface %s reported twice",
-                          br->name, ofproto_port.name);
-            } else if (iface_from_ofp_port(br, ofproto_port.ofp_port)) {
-                VLOG_WARN("bridge %s: interface %"PRIu16" reported twice",
-                          br->name, ofproto_port.ofp_port);
-            } else if (!strcmp(ofproto_port.type, iface->type)) {
-                iface_set_ofp_port(iface, ofproto_port.ofp_port);
-            } else {
-                /* Port has incorrect type so delete it later. */
-            }
-        } else {
-            struct if_cfg *if_cfg = if_cfg_lookup(br, ofproto_port.name);
-
-            if (if_cfg) {
-                iface_create(br, if_cfg, ofproto_port.ofp_port);
-            } else if (bridge_has_bond_fake_iface(br, ofproto_port.name)
-                       && strcmp(ofproto_port.type, "internal")) {
-                /* Bond fake iface with the wrong type. */
-                bridge_ofproto_port_del(br, ofproto_port);
-            } else {
-                struct ofpp_garbage *garbage = xmalloc(sizeof *garbage);
-                garbage->ofp_port = ofproto_port.ofp_port;
-                list_push_front(&br->ofpp_garbage, &garbage->list_node);
-            }
+        if (!bridge_refresh_one_ofp_port(br, &ofproto_port)) {
+            struct ofpp_garbage *garbage = xmalloc(sizeof *garbage);
+            garbage->ofp_port = ofproto_port.ofp_port;
+            list_push_front(&br->ofpp_garbage, &garbage->list_node);
         }
     }
 
