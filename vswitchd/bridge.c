@@ -1225,7 +1225,6 @@ bridge_refresh_ofp_port(struct bridge *br)
 static void
 iface_create(struct bridge *br, struct if_cfg *if_cfg, int ofp_port)
 {
-    struct ofproto_port ofproto_port;
     struct iface *iface;
     struct port *port;
     int error;
@@ -1315,6 +1314,8 @@ iface_create(struct bridge *br, struct if_cfg *if_cfg, int ofp_port)
         VLOG_DBG("bridge %s: interface %s is on port %d",
                  br->name, iface->name, iface->ofp_port);
     } else {
+        struct ofproto_port ofproto_port;
+
         if (iface->netdev) {
             VLOG_ERR("bridge %s: missing %s interface, dropping",
                      br->name, iface->name);
@@ -1340,6 +1341,8 @@ iface_create(struct bridge *br, struct if_cfg *if_cfg, int ofp_port)
 
     /* Add bond fake iface if necessary. */
     if (port_is_bond_fake_iface(port)) {
+        struct ofproto_port ofproto_port;
+
         if (ofproto_port_query_by_name(br->ofproto, port->name,
                                        &ofproto_port)) {
             struct netdev *netdev;
