@@ -227,7 +227,7 @@ static bool mirror_configure(struct mirror *);
 static void mirror_refresh_stats(struct mirror *);
 
 static void iface_configure_lacp(struct iface *, struct lacp_slave_settings *);
-static void iface_create(struct bridge *, struct if_cfg *, int ofp_port);
+static bool iface_create(struct bridge *, struct if_cfg *, int ofp_port);
 static const char *iface_get_type(const struct ovsrec_interface *,
                                   const struct ovsrec_bridge *);
 static void iface_destroy(struct iface *);
@@ -1255,13 +1255,16 @@ bridge_refresh_ofp_port(struct bridge *br)
 /* Creates a new iface on 'br' based on 'if_cfg'.  The new iface has OpenFlow
  * port number 'ofp_port'.  If ofp_port is negative, an OpenFlow port is
  * automatically allocated for the iface.  Takes ownership of and
- * deallocates 'if_cfg'. */
-static void
+ * deallocates 'if_cfg'.
+ *
+ * Return true if an iface is successfully created, false otherwise. */
+static bool
 iface_create(struct bridge *br, struct if_cfg *if_cfg, int ofp_port)
 {
     struct iface *iface;
     struct port *port;
     int error;
+    bool ok;
 
     assert(!iface_lookup(br, if_cfg->cfg->name));
 
@@ -1332,7 +1335,8 @@ iface_create(struct bridge *br, struct if_cfg *if_cfg, int ofp_port)
     }
 
     /* Delete the iface if we failed. */
-    if (iface->netdev && iface->ofp_port >= 0) {
+    ok = iface->netdev && iface->ofp_port >= 0;
+    if (ok) {
         VLOG_DBG("bridge %s: interface %s is on port %d",
                  br->name, iface->name, iface->ofp_port);
     } else {
@@ -1356,9 +1360,11 @@ iface_create(struct bridge *br, struct if_cfg *if_cfg, int ofp_port)
         iface_destroy(iface);
     }
 
-    if (list_is_empty(&port->ifaces)) {
-        port_destroy(port);
-        return;
+    if (!ok) {
+        if (list_is_empty(&port->ifaces)) {
+            port_destroy(port);
+        }
+        return false;
     }
 
     /* Add bond fake iface if necessary. */
@@ -1383,6 +1389,8 @@ iface_create(struct bridge *br, struct if_cfg *if_cfg, int ofp_port)
             ofproto_port_destroy(&ofproto_port);
         }
     }
+
+    return true;
 }
 
 /* Set Flow eviction threshold */
