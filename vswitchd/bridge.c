@@ -230,7 +230,8 @@ static void mirror_refresh_stats(struct mirror *);
 
 static void iface_configure_lacp(struct iface *, struct lacp_slave_settings *);
 static void iface_create(struct bridge *, struct if_cfg *, int ofp_port);
-static void iface_refresh_type(struct iface *);
+static const char *iface_get_type(const struct ovsrec_interface *,
+                                  const struct ovsrec_bridge *);
 static void iface_destroy(struct iface *);
 static struct iface *iface_lookup(const struct bridge *, const char *name);
 static struct iface *iface_find(const char *name);
@@ -1244,7 +1245,7 @@ iface_create(struct bridge *br, struct if_cfg *if_cfg, int ofp_port)
     hmap_insert(&br->iface_by_name, &iface->name_node,
                 hash_string(iface->name, 0));
     list_push_back(&port->ifaces, &iface->port_elem);
-    iface_refresh_type(iface);
+    iface->type = iface_get_type(iface->cfg, br->cfg);
     if (ofp_port >= 0) {
         iface_set_ofp_port(iface, ofp_port);
     }
@@ -2484,6 +2485,8 @@ bridge_add_del_ports(struct bridge *br,
         }
     }
 
+    /* Update iface->cfg and iface->type in interfaces that still exist.
+     * Add new interfaces to creation queue. */
     SHASH_FOR_EACH (port_node, &new_ports) {
         const struct ovsrec_port *port = port_node->data;
         size_t i;
@@ -2494,7 +2497,7 @@ bridge_add_del_ports(struct bridge *br,
 
             if (iface) {
                 iface->cfg = cfg;
-                iface_refresh_type(iface);
+                iface->type = iface_get_type(cfg, br->cfg);
             } else {
                 bridge_queue_if_cfg(br, cfg, port);
             }
@@ -3057,15 +3060,17 @@ port_is_synthetic(const struct port *port)
 
 /* Interface functions. */
 
-static void
-iface_refresh_type(struct iface *iface)
+/* Returns the correct network device type for interface 'iface' in bridge
+ * 'br'. */
+static const char *
+iface_get_type(const struct ovsrec_interface *iface,
+               const struct ovsrec_bridge *br)
 {
-    /* Determine interface type.  The local port always has type
-     * "internal".  Other ports take their type from the database and
-     * default to "system" if none is specified. */
-    iface->type = (!strcmp(iface->name, iface->port->bridge->name) ? "internal"
-                   : iface->cfg->type[0] ? iface->cfg->type
-                   : "system");
+    /* The local port always has type "internal".  Other ports take their type
+     * from the database and default to "system" if none is specified. */
+    return (!strcmp(iface->name, br->name) ? "internal"
+            : iface->type[0] ? iface->type
+            : "system");
 }
 
 static void
