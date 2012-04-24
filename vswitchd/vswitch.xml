@@ -1852,6 +1852,32 @@
         commonly be the same as <ref column="external_ids" key="xs-vif-uuid"/>.
       </column>
 
+      <column name="external_ids" key="iface-status"
+              type='{"type": "string",
+                    "enum": ["set", ["active", "inactive"]]}'>
+        <p>
+          Hypervisors may sometimes have more than one interface associated
+          with a given <ref column="external_ids" key="iface-id"/>, only one of
+          which is actually in use at a given time.  For example, in some
+          circumstances XenServer has both a ``tap'' and a ``vif'' interface
+          for a single <ref column="external_ids" key="iface-id"/>, but only
+          uses one of them at a time.  A hypervisor that behaves this way must
+          mark the currently in use interface <code>active</code> and the
+          others <code>inactive</code>.  A hypervisor that never has more than
+          one interface for a given <ref column="external_ids" key="iface-id"/>
+          may mark that interface <code>active</code> or omit <ref
+          column="external_ids" key="iface-status"/> entirely.
+        </p>
+
+        <p>
+          During VM migration, a given <ref column="external_ids"
+          key="iface-id"/> might transiently be marked <code>active</code> on
+          two different hypervisors.  That is, <code>active</code> means that
+          this <ref column="external_ids" key="iface-id"/> is the active
+          instance within a single hypervisor, not in a broader scope.
+        </p>
+      </column>
+
       <column name="external_ids" key="xs-vif-uuid">
         The virtual interface associated with this interface.
       </column>
