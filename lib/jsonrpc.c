@@ -277,13 +277,19 @@ jsonrpc_send(struct jsonrpc *rpc, struct jsonrpc_msg *msg)
 int
 jsonrpc_recv(struct jsonrpc *rpc, struct jsonrpc_msg **msgp)
 {
+    int i;
+
     *msgp = NULL;
     if (rpc->status) {
         return rpc->status;
     }
 
-    while (!rpc->received) {
-        if (byteq_is_empty(&rpc->input)) {
+    for (i = 0; i < 50; i++) {
+        if (rpc->received) {
+            *msgp = rpc->received;
+            rpc->received = NULL;
+            return 0;
+        } else if (byteq_is_empty(&rpc->input)) {
             size_t chunk;
             int retval;
 
@@ -328,9 +334,7 @@ jsonrpc_recv(struct jsonrpc *rpc, struct jsonrpc_msg **msgp)
         }
     }
 
-    *msgp = rpc->received;
-    rpc->received = NULL;
-    return 0;
+    return EAGAIN;
 }
 
 /* Causes the poll loop to wake up when jsonrpc_recv() may return a value other
