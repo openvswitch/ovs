@@ -471,7 +471,7 @@ nx_put_match(struct ofpbuf *b, const struct cls_rule *cr,
     int match_len;
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 9);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 10);
 
     /* Metadata. */
     if (!(wc & FWW_IN_PORT)) {
@@ -514,10 +514,8 @@ nx_put_match(struct ofpbuf *b, const struct cls_rule *cr,
         if (flow->nw_proto == IPPROTO_ICMPV6
             && (flow->tp_src == htons(ND_NEIGHBOR_SOLICIT) ||
                 flow->tp_src == htons(ND_NEIGHBOR_ADVERT))) {
-            if (!(wc & FWW_ND_TARGET)) {
-                nxm_put_ipv6(b, NXM_NX_ND_TARGET, &flow->nd_target,
-                             &in6addr_exact);
-            }
+            nxm_put_ipv6(b, NXM_NX_ND_TARGET, &flow->nd_target,
+                         &cr->wc.nd_target_mask);
             if (!(wc & FWW_ARP_SHA)
                 && flow->tp_src == htons(ND_NEIGHBOR_SOLICIT)) {
                 nxm_put_eth(b, NXM_NX_ND_SLL, flow->arp_sha);

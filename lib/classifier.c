@@ -415,8 +415,17 @@ cls_rule_set_ipv6_label(struct cls_rule *rule, ovs_be32 ipv6_label)
 void
 cls_rule_set_nd_target(struct cls_rule *rule, const struct in6_addr *target)
 {
-    rule->wc.wildcards &= ~FWW_ND_TARGET;
     rule->flow.nd_target = *target;
+    rule->wc.nd_target_mask = in6addr_exact;
+}
+
+void
+cls_rule_set_nd_target_masked(struct cls_rule *rule,
+                              const struct in6_addr *target,
+                              const struct in6_addr *mask)
+{
+    rule->flow.nd_target = ipv6_addr_bitand(target, mask);
+    rule->wc.nd_target_mask = *mask;
 }
 
 /* Returns true if 'a' and 'b' have the same priority, wildcard the same
@@ -491,7 +500,7 @@ cls_rule_format(const struct cls_rule *rule, struct ds *s)
 
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 9);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 10);
 
     if (rule->priority != OFP_DEFAULT_PRIORITY) {
         ds_put_format(s, "priority=%d,", rule->priority);
@@ -669,11 +678,8 @@ cls_rule_format(const struct cls_rule *rule, struct ds *s)
     } else if (f->nw_proto == IPPROTO_ICMPV6) {
         format_be16_masked(s, "icmp_type", f->tp_src, wc->tp_src_mask);
         format_be16_masked(s, "icmp_code", f->tp_dst, wc->tp_dst_mask);
-        if (!(w & FWW_ND_TARGET)) {
-            ds_put_cstr(s, "nd_target=");
-            print_ipv6_addr(s, &f->nd_target);
-            ds_put_char(s, ',');
-        }
+        format_ipv6_netmask(s, "nd_target", &f->nd_target,
+                            &wc->nd_target_mask);
         if (!(w & FWW_ARP_SHA)) {
             ds_put_format(s, "nd_sll="ETH_ADDR_FMT",",
                     ETH_ADDR_ARGS(f->arp_sha));
@@ -1173,7 +1179,7 @@ flow_equal_except(const struct flow *a, const struct flow *b,
     const flow_wildcards_t wc = wildcards->wildcards;
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 9);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 10);
 
     for (i = 0; i < FLOW_N_REGS; i++) {
         if ((a->regs[i] ^ b->regs[i]) & wildcards->reg_masks[i]) {
@@ -1211,6 +1217,6 @@ flow_equal_except(const struct flow *a, const struct flow *b,
                     &wildcards->ipv6_src_mask)
             && ipv6_equal_except(&a->ipv6_dst, &b->ipv6_dst,
                     &wildcards->ipv6_dst_mask)
-            && (wc & FWW_ND_TARGET
-                || ipv6_addr_equals(&a->nd_target, &b->nd_target)));
+            && ipv6_equal_except(&a->nd_target, &b->nd_target,
+                                 &wildcards->nd_target_mask));
 }

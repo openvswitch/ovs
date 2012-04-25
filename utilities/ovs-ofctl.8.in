@@ -654,7 +654,7 @@ as a CIDR block (e.g. \fB2001:db8:3c4d:1::/64\fR).
 When \fBdl_type\fR is 0x86dd (possibly via shorthand, e.g., \fBipv6\fR
 or \fBtcp6\fR), matches IPv6 flow label \fIlabel\fR.
 .
-.IP \fBnd_target=\fIipv6\fR
+.IP \fBnd_target=\fIipv6\fR[\fB/\fInetmask\fR]
 When \fBdl_type\fR, \fBnw_proto\fR, and \fBicmp_type\fR specify
 IPv6 Neighbor Discovery (ICMPv6 type 135 or 136), matches the target address
 \fIipv6\fR.  \fIipv6\fR is in the same format described earlier for the

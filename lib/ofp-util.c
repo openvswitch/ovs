@@ -101,7 +101,7 @@ static const flow_wildcards_t WC_INVARIANTS = 0
 void
 ofputil_wildcard_from_openflow(uint32_t ofpfw, struct flow_wildcards *wc)
 {
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 9);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 10);
 
     /* Initialize most of rule->wc. */
     flow_wildcards_init_catchall(wc);
@@ -109,7 +109,7 @@ ofputil_wildcard_from_openflow(uint32_t ofpfw, struct flow_wildcards *wc)
 
     /* Wildcard fields that aren't defined by ofp_match or tun_id. */
     wc->wildcards |= (FWW_ARP_SHA | FWW_ARP_THA | FWW_NW_ECN | FWW_NW_TTL
-                      | FWW_ND_TARGET | FWW_IPV6_LABEL);
+                      | FWW_IPV6_LABEL);
 
     if (ofpfw & OFPFW_NW_TOS) {
         /* OpenFlow 1.0 defines a TOS wildcard, but it's much later in
@@ -1166,7 +1166,7 @@ ofputil_usable_protocols(const struct cls_rule *rule)
 {
     const struct flow_wildcards *wc = &rule->wc;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 9);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 10);
 
     /* Only NXM supports separately wildcards the Ethernet multicast bit. */
     if (!(wc->wildcards & FWW_DL_DST) != !(wc->wildcards & FWW_ETH_MCAST)) {
@@ -3810,7 +3810,7 @@ ofputil_normalize_rule(struct cls_rule *rule)
         wc.wildcards |= FWW_IPV6_LABEL;
     }
     if (!(may_match & MAY_ND_TARGET)) {
-        wc.wildcards |= FWW_ND_TARGET;
+        wc.nd_target_mask = in6addr_any;
     }
 
     /* Log any changes. */

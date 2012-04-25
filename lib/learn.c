@@ -184,7 +184,7 @@ learn_check(const struct nx_action_learn *learn, const struct flow *flow)
                      * prerequisites.  No prerequisite depends on the value of
                      * a field that is wider than 64 bits.  So just skip
                      * setting it entirely. */
-                    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 9);
+                    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 10);
                 }
             }
         }

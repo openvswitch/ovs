@@ -407,7 +407,7 @@ static const struct mf_field mf_fields[MFF_N_IDS] = {
     {
         MFF_ND_TARGET, "nd_target", NULL,
         MF_FIELD_SIZES(ipv6),
-        MFM_NONE, FWW_ND_TARGET,
+        MFM_CIDR, 0,
         MFS_IPV6,
         MFP_ND,
         false,
@@ -553,7 +553,6 @@ mf_is_all_wild(const struct mf_field *mf, const struct flow_wildcards *wc)
     case MFF_ARP_OP:
     case MFF_ARP_SHA:
     case MFF_ARP_THA:
-    case MFF_ND_TARGET:
     case MFF_ND_SLL:
     case MFF_ND_TLL:
         assert(mf->fww_bit != 0);
@@ -612,6 +611,9 @@ mf_is_all_wild(const struct mf_field *mf, const struct flow_wildcards *wc)
     case MFF_IPV6_DST:
         return ipv6_mask_is_any(&wc->ipv6_dst_mask);
 
+    case MFF_ND_TARGET:
+        return ipv6_mask_is_any(&wc->nd_target_mask);
+
     case MFF_IP_FRAG:
         return !(wc->nw_frag_mask & FLOW_NW_FRAG_MASK);
 
@@ -659,7 +661,6 @@ mf_get_mask(const struct mf_field *mf, const struct flow_wildcards *wc,
     case MFF_ARP_OP:
     case MFF_ARP_SHA:
     case MFF_ARP_THA:
-    case MFF_ND_TARGET:
     case MFF_ND_SLL:
     case MFF_ND_TLL:
         assert(mf->fww_bit != 0);
@@ -727,6 +728,10 @@ mf_get_mask(const struct mf_field *mf, const struct flow_wildcards *wc,
         break;
     case MFF_IPV6_DST:
         mask->ipv6 = wc->ipv6_dst_mask;
+        break;
+
+    case MFF_ND_TARGET:
+        mask->ipv6 = wc->nd_target_mask;
         break;
 
     case MFF_IP_FRAG:
@@ -1624,7 +1629,7 @@ mf_set_wild(const struct mf_field *mf, struct cls_rule *rule)
         break;
 
     case MFF_ND_TARGET:
-        rule->wc.wildcards |= FWW_ND_TARGET;
+        memset(&rule->wc.nd_target_mask, 0, sizeof rule->wc.nd_target_mask);
         memset(&rule->flow.nd_target, 0, sizeof rule->flow.nd_target);
         break;
 
@@ -1676,7 +1681,6 @@ mf_set(const struct mf_field *mf,
     case MFF_ICMPV4_CODE:
     case MFF_ICMPV6_TYPE:
     case MFF_ICMPV6_CODE:
-    case MFF_ND_TARGET:
     case MFF_ND_SLL:
     case MFF_ND_TLL:
         NOT_REACHED();
@@ -1740,6 +1744,10 @@ mf_set(const struct mf_field *mf,
 
     case MFF_IPV6_DST:
         cls_rule_set_ipv6_dst_masked(rule, &value->ipv6, &mask->ipv6);
+        break;
+
+    case MFF_ND_TARGET:
+        cls_rule_set_nd_target_masked(rule, &value->ipv6, &mask->ipv6);
         break;
 
     case MFF_IP_FRAG:
