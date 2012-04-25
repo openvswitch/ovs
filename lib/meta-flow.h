@@ -196,6 +196,15 @@ struct mf_field {
      * NULL for the following members, respectively. */
     uint32_t nxm_header;        /* An NXM_* constant (a few fields have 0). */
     const char *nxm_name;       /* The "NXM_*" constant's name. */
+
+    /* OXM properties */
+    uint32_t oxm_header;        /* Field id in the OXM basic class,
+				 * an OXM_* constant.
+				 * Ignored if oxm_name is NULL */
+    const char *oxm_name;	/* The OXM_* constant's name,
+				 * NULL if the field is not present
+				 * in the OXM basic class */
+
 };
 
 /* The representation of a field's value. */
