@@ -2049,6 +2049,8 @@ bridge_run(void)
         } else if (!ovsdb_idl_has_lock(idl)) {
             return;
         }
+    } else {
+        database_changed = false;
     }
     cfg = ovsrec_open_vswitch_first(idl);
 
