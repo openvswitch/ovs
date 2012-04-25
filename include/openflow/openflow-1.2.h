@@ -72,8 +72,8 @@ enum ofp12_type {
 enum ofp12_oxm_class {
     OFPXMC12_NXM_0          = 0x0000, /* Backward compatibility with NXM */
     OFPXMC12_NXM_1          = 0x0001, /* Backward compatibility with NXM */
-    OFPXMC12_OPENFLOW_BASIC = 0x0000, /* Basic class for OpenFlow */
-    OFPXMC12_EXPERIMENTER   = 0x0000, /* Experimenter class */
+    OFPXMC12_OPENFLOW_BASIC = 0x8000, /* Basic class for OpenFlow */
+    OFPXMC12_EXPERIMENTER   = 0xffff, /* Experimenter class */
 };
 
 /* OXM Flow match field types for OpenFlow basic class. */
