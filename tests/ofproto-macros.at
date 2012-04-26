@@ -10,8 +10,8 @@ s/ cookie=0x0,//
 s/ table=0,//
 s/ n_packets=0,//
 s/ n_bytes=0,//
-s/idle_age=[0-9]*,//
-s/hard_age=[0-9]*,//
+s/ idle_age=[0-9]*,//
+s/ hard_age=[0-9]*,//
 '
 }]
 m4_divert_pop([PREPARE_TESTS])

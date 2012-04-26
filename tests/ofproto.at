@@ -302,18 +302,18 @@ for in_port in 4 3 2 1; do
     ovs-ofctl add-flow br0 idle_timeout=${in_port}0,in_port=$in_port,actions=drop
 done
 AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | sort], [0], [dnl
- idle_timeout=10,in_port=1 actions=drop
- idle_timeout=20,in_port=2 actions=drop
- idle_timeout=30,in_port=3 actions=drop
- idle_timeout=40,in_port=4 actions=drop
+ idle_timeout=10, in_port=1 actions=drop
+ idle_timeout=20, in_port=2 actions=drop
+ idle_timeout=30, in_port=3 actions=drop
+ idle_timeout=40, in_port=4 actions=drop
 NXST_FLOW reply:
 ])
 # Adding another flow will cause the one that expires soonest to be evicted.
 AT_CHECK([ovs-ofctl add-flow br0 in_port=5,actions=drop])
 AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | sort], [0], [dnl
- idle_timeout=20,in_port=2 actions=drop
- idle_timeout=30,in_port=3 actions=drop
- idle_timeout=40,in_port=4 actions=drop
+ idle_timeout=20, in_port=2 actions=drop
+ idle_timeout=30, in_port=3 actions=drop
+ idle_timeout=40, in_port=4 actions=drop
  in_port=5 actions=drop
 NXST_FLOW reply:
 ])
@@ -323,7 +323,7 @@ AT_CHECK([ovs-ofctl mod-flows br0 in_port=6,actions=drop])
 AT_CHECK([ovs-ofctl add-flow br0 in_port=4,actions=normal])
 AT_CHECK([ovs-ofctl mod-flows br0 in_port=3,actions=output:1])
 AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | sort], [0], [dnl
- idle_timeout=30,in_port=3 actions=output:1
+ idle_timeout=30, in_port=3 actions=output:1
  in_port=4 actions=NORMAL
  in_port=5 actions=drop
  in_port=6 actions=drop
@@ -365,10 +365,10 @@ idle_timeout=30 in_port=1 dl_src=00:22:33:44:55:66 actions=drop
 idle_timeout=40 in_port=1 dl_src=00:33:44:55:66:77 actions=drop
 EOF
 AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | sort], [0], [dnl
- idle_timeout=10,in_port=2,dl_src=00:44:55:66:77:88 actions=drop
- idle_timeout=20,in_port=1,dl_src=00:11:22:33:44:55 actions=drop
- idle_timeout=30,in_port=1,dl_src=00:22:33:44:55:66 actions=drop
- idle_timeout=40,in_port=1,dl_src=00:33:44:55:66:77 actions=drop
+ idle_timeout=10, in_port=2,dl_src=00:44:55:66:77:88 actions=drop
+ idle_timeout=20, in_port=1,dl_src=00:11:22:33:44:55 actions=drop
+ idle_timeout=30, in_port=1,dl_src=00:22:33:44:55:66 actions=drop
+ idle_timeout=40, in_port=1,dl_src=00:33:44:55:66:77 actions=drop
 NXST_FLOW reply:
 ])
 # Adding another flow will cause the one that expires soonest within
@@ -377,9 +377,9 @@ NXST_FLOW reply:
 # (which is what makes the test interesting):
 AT_CHECK([ovs-ofctl add-flow br0 in_port=2,dl_src=00:55:66:77:88:99,actions=drop])
 AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | sort], [0], [dnl
- idle_timeout=10,in_port=2,dl_src=00:44:55:66:77:88 actions=drop
- idle_timeout=30,in_port=1,dl_src=00:22:33:44:55:66 actions=drop
- idle_timeout=40,in_port=1,dl_src=00:33:44:55:66:77 actions=drop
+ idle_timeout=10, in_port=2,dl_src=00:44:55:66:77:88 actions=drop
+ idle_timeout=30, in_port=1,dl_src=00:22:33:44:55:66 actions=drop
+ idle_timeout=40, in_port=1,dl_src=00:33:44:55:66:77 actions=drop
  in_port=2,dl_src=00:55:66:77:88:99 actions=drop
 NXST_FLOW reply:
 ])
@@ -392,12 +392,12 @@ idle_timeout=60 in_port=2 dl_src=00:77:88:99:aa:bb actions=drop
 idle_timeout=70 in_port=2 dl_src=00:88:99:aa:bb:cc actions=drop
 EOF
 AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | sort], [0], [dnl
- idle_timeout=10,in_port=2,dl_src=00:44:55:66:77:88 actions=drop
- idle_timeout=30,in_port=1,dl_src=00:22:33:44:55:66 actions=drop
- idle_timeout=40,in_port=1,dl_src=00:33:44:55:66:77 actions=drop
- idle_timeout=50,in_port=2,dl_src=00:66:77:88:99:aa actions=drop
- idle_timeout=60,in_port=2,dl_src=00:77:88:99:aa:bb actions=drop
- idle_timeout=70,in_port=2,dl_src=00:88:99:aa:bb:cc actions=drop
+ idle_timeout=10, in_port=2,dl_src=00:44:55:66:77:88 actions=drop
+ idle_timeout=30, in_port=1,dl_src=00:22:33:44:55:66 actions=drop
+ idle_timeout=40, in_port=1,dl_src=00:33:44:55:66:77 actions=drop
+ idle_timeout=50, in_port=2,dl_src=00:66:77:88:99:aa actions=drop
+ idle_timeout=60, in_port=2,dl_src=00:77:88:99:aa:bb actions=drop
+ idle_timeout=70, in_port=2,dl_src=00:88:99:aa:bb:cc actions=drop
  in_port=2,dl_src=00:55:66:77:88:99 actions=drop
 NXST_FLOW reply:
 ])
@@ -405,12 +405,12 @@ NXST_FLOW reply:
 # to be evicted.
 AT_CHECK([ovs-ofctl add-flow br0 'idle_timeout=80 in_port=2 dl_src=00:99:aa:bb:cc:dd actions=drop'])
 AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | sort], [0], [dnl
- idle_timeout=30,in_port=1,dl_src=00:22:33:44:55:66 actions=drop
- idle_timeout=40,in_port=1,dl_src=00:33:44:55:66:77 actions=drop
- idle_timeout=50,in_port=2,dl_src=00:66:77:88:99:aa actions=drop
- idle_timeout=60,in_port=2,dl_src=00:77:88:99:aa:bb actions=drop
- idle_timeout=70,in_port=2,dl_src=00:88:99:aa:bb:cc actions=drop
- idle_timeout=80,in_port=2,dl_src=00:99:aa:bb:cc:dd actions=drop
+ idle_timeout=30, in_port=1,dl_src=00:22:33:44:55:66 actions=drop
+ idle_timeout=40, in_port=1,dl_src=00:33:44:55:66:77 actions=drop
+ idle_timeout=50, in_port=2,dl_src=00:66:77:88:99:aa actions=drop
+ idle_timeout=60, in_port=2,dl_src=00:77:88:99:aa:bb actions=drop
+ idle_timeout=70, in_port=2,dl_src=00:88:99:aa:bb:cc actions=drop
+ idle_timeout=80, in_port=2,dl_src=00:99:aa:bb:cc:dd actions=drop
  in_port=2,dl_src=00:55:66:77:88:99 actions=drop
 NXST_FLOW reply:
 ])
@@ -418,9 +418,9 @@ NXST_FLOW reply:
 # overall to be evicted.
 AT_CHECK([ovs-vsctl set Flow_Table evict flow-limit=4])
 AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | sort], [0], [dnl
- idle_timeout=60,in_port=2,dl_src=00:77:88:99:aa:bb actions=drop
- idle_timeout=70,in_port=2,dl_src=00:88:99:aa:bb:cc actions=drop
- idle_timeout=80,in_port=2,dl_src=00:99:aa:bb:cc:dd actions=drop
+ idle_timeout=60, in_port=2,dl_src=00:77:88:99:aa:bb actions=drop
+ idle_timeout=70, in_port=2,dl_src=00:88:99:aa:bb:cc actions=drop
+ idle_timeout=80, in_port=2,dl_src=00:99:aa:bb:cc:dd actions=drop
  in_port=2,dl_src=00:55:66:77:88:99 actions=drop
 NXST_FLOW reply:
 ])

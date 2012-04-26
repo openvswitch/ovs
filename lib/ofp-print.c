@@ -1223,16 +1223,16 @@ ofp_print_flow_stats_reply(struct ds *string, const struct ofp_header *oh)
         ds_put_format(string, "n_packets=%"PRIu64", ", fs.packet_count);
         ds_put_format(string, "n_bytes=%"PRIu64", ", fs.byte_count);
         if (fs.idle_timeout != OFP_FLOW_PERMANENT) {
-            ds_put_format(string, "idle_timeout=%"PRIu16",", fs.idle_timeout);
+            ds_put_format(string, "idle_timeout=%"PRIu16", ", fs.idle_timeout);
         }
         if (fs.hard_timeout != OFP_FLOW_PERMANENT) {
-            ds_put_format(string, "hard_timeout=%"PRIu16",", fs.hard_timeout);
+            ds_put_format(string, "hard_timeout=%"PRIu16", ", fs.hard_timeout);
         }
         if (fs.idle_age >= 0) {
-            ds_put_format(string, "idle_age=%d,", fs.idle_age);
+            ds_put_format(string, "idle_age=%d, ", fs.idle_age);
         }
         if (fs.hard_age >= 0 && fs.hard_age != fs.duration_sec) {
-            ds_put_format(string, "hard_age=%d,", fs.hard_age);
+            ds_put_format(string, "hard_age=%d, ", fs.hard_age);
         }
 
         cls_rule_format(&fs.rule, string);
