@@ -1,4 +1,4 @@
-# Copyright (c) 2010, 2011 Nicira Networks
+# Copyright (c) 2010, 2011, 2012 Nicira Networks
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -420,13 +420,6 @@ class Parser(object):
         return True
 
     def __lex_input(self, c):
-        self.byte_number += 1
-        if c == '\n':
-            self.column_number = 0
-            self.line_number += 1
-        else:
-            self.column_number += 1
-
         eat = self.lex_state(self, c)
         assert eat is True or eat is False
         return eat
@@ -557,7 +550,16 @@ class Parser(object):
         while True:
             if self.done or i >= len(s):
                 return i
-            if self.__lex_input(s[i]):
+
+            c = s[i]
+            if self.__lex_input(c):
+                self.byte_number += 1
+                if c == '\n':
+                    self.column_number = 0
+                    self.line_number += 1
+                else:
+                    self.column_number += 1
+
                 i += 1
 
     def is_done(self):

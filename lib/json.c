@@ -908,14 +908,6 @@ json_lex_input(struct json_parser *p, unsigned char c)
 {
     struct json_token token;
 
-    p->byte_number++;
-    if (c == '\n') {
-        p->column_number = 0;
-        p->line_number++;
-    } else {
-        p->column_number++;
-    }
-
     switch (p->lex_state) {
     case JSON_LEX_START:
         switch (c) {
@@ -1092,6 +1084,13 @@ json_parser_feed(struct json_parser *p, const char *input, size_t n)
     size_t i;
     for (i = 0; !p->done && i < n; ) {
         if (json_lex_input(p, input[i])) {
+            p->byte_number++;
+            if (input[i] == '\n') {
+                p->column_number = 0;
+                p->line_number++;
+            } else {
+                p->column_number++;
+            }
             i++;
         }
     }
