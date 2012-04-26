@@ -178,7 +178,6 @@ lswitch_create(struct rconn *rconn, const struct lswitch_config *cfg)
         if (error) {
             VLOG_INFO_RL(&rl, "%s: failed to queue default flows (%s)",
                          rconn_get_name(rconn), strerror(error));
-            ofpbuf_delete(msg);
         }
     }
 

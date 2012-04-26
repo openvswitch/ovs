@@ -560,9 +560,8 @@ rconn_recv_wait(struct rconn *rc)
     }
 }
 
-/* Sends 'b' on 'rc'.  Returns 0 if successful (in which case 'b' is
- * destroyed), or ENOTCONN if 'rc' is not currently connected (in which case
- * the caller retains ownership of 'b').
+/* Sends 'b' on 'rc'.  Returns 0 if successful, or ENOTCONN if 'rc' is not
+ * currently connected.  Takes ownership of 'b'.
  *
  * If 'counter' is non-null, then 'counter' will be incremented while the
  * packet is in flight, then decremented when it has been sent (or discarded
@@ -595,6 +594,7 @@ rconn_send(struct rconn *rc, struct ofpbuf *b,
         }
         return 0;
     } else {
+        ofpbuf_delete(b);
         return ENOTCONN;
     }
 }
@@ -619,7 +619,6 @@ rconn_send_with_limit(struct rconn *rc, struct ofpbuf *b,
     retval = counter->n >= queue_limit ? EAGAIN : rconn_send(rc, b, counter);
     if (retval) {
         COVERAGE_INC(rconn_overflow);
-        ofpbuf_delete(b);
     }
     return retval;
 }

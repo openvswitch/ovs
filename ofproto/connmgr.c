@@ -1225,9 +1225,7 @@ ofconn_send(const struct ofconn *ofconn, struct ofpbuf *msg,
             struct rconn_packet_counter *counter)
 {
     update_openflow_length(msg);
-    if (rconn_send(ofconn->rconn, msg, counter)) {
-        ofpbuf_delete(msg);
-    }
+    rconn_send(ofconn->rconn, msg, counter);
 }
 
 /* Sending asynchronous messages. */
