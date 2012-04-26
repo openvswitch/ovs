@@ -291,10 +291,10 @@ done
 # Ensure all required services are set to run
 for s in openvswitch openvswitch-xapi-update; do
     if chkconfig --list $s >/dev/null 2>&1; then
-        chkconfig --del $s || printf "Could not remove $s init script."
+        chkconfig --del $s || printf "Could not remove $s init script.\n"
     fi
-    chkconfig --add $s || printf "Could not add $s init script."
-    chkconfig $s on || printf "Could not enable $s init script."
+    chkconfig --add $s || printf "Could not add $s init script.\n"
+    chkconfig $s on || printf "Could not enable $s init script.\n"
 done
 
 if [ "$1" = "1" ]; then    # $1 = 1 for install
@@ -307,12 +307,8 @@ else    # $1 = 2 for upgrade
         printf "\nThe server is not configured to run Open vSwitch.  To run in\n"
         printf "vswitch mode, you must run the following command:\n\n"
         printf "\txe-switch-network-backend vswitch"
-    else
-        printf "\nTo use the new Open vSwitch install, you should reboot the\n"
-        printf "server now.  Failure to do so may result in incorrect operation."
+        printf "\n\n"
     fi
-
-    printf "\n\n"
 fi
 
 %posttrans %{module_package}
@@ -324,6 +320,15 @@ fi
 # we use %post then depmod may find the old versions that are about to
 # be removed.
 depmod %{xen_version}
+
+mode=$(cat /etc/xensource/network.conf)
+if [ "$mode" = "vswitch" ] || [ "$mode" = "openvswitch" ]; then
+    printf "\nTo use the newly installed Open vSwitch kernel module, you\n"
+    printf "will either have to reboot the hypervisor or follow any\n"
+    printf "workarounds provided by your administration guide. Failure to do\n"
+    printf "so may result in incorrect operation."
+    printf "\n\n"
+fi
 
 %preun
 if [ "$1" = "0" ]; then     # $1 = 0 for uninstall
