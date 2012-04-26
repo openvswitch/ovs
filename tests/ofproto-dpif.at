@@ -412,10 +412,12 @@ AT_CHECK(
 set `cat stdout`
 p1=$1 p2=$2 p3=$3
 
-AT_DATA([flows.txt], [dnl
-in_port=1 actions=output:2
-in_port=2 actions=output:1
-])
+cat > flows.txt <<EOF
+in_port=$p1 actions=output:$p2
+in_port=$p2 actions=output:$p1
+EOF
+AT
+AT_CAPTURE_FILE([flows.txt])
 AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 
 flow="in_port($p1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)"
@@ -457,10 +459,12 @@ AT_CHECK(
 set `cat stdout`
 p1=$1 p2=$2 p3=$3
 
-AT_DATA([flows.txt], [dnl
-in_port=1 actions=output:2
-in_port=2 actions=output:1
-])
+cat > flows.txt <<EOF
+in_port=$p1 actions=output:$p2
+in_port=$p2 actions=output:$p1
+EOF
+AT
+AT_CAPTURE_FILE([flows.txt])
 AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 
 flow="in_port($p1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)"
@@ -498,7 +502,7 @@ AT_CHECK(
 set `cat stdout`
 p1=$1 p2=$2
 
-AT_CHECK([ovs-ofctl add-flow br0 action=output:1])
+AT_CHECK([ovs-ofctl add-flow br0 action=output:$p1])
 
 # "in_port" defaults to OFPP_NONE if it's not specified.
 flow="eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)"
@@ -534,10 +538,12 @@ AT_CHECK(
 set `cat stdout`
 p1=$1 p2=$2 p3=$3
 
-AT_DATA([flows.txt], [dnl
-in_port=1 actions=output:2
-in_port=2 actions=output:1
-])
+cat > flows.txt <<EOF
+in_port=$p1 actions=output:$p2
+in_port=$p2 actions=output:$p1
+EOF
+AT
+AT_CAPTURE_FILE([flows.txt])
 AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 
 flow="in_port($p1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)"
@@ -579,9 +585,11 @@ AT_CHECK(
 set `cat stdout`
 p1=$1 p2=$2 p3=$3
 
-AT_DATA([flows.txt], [dnl
-in_port=1, actions=output:2
-])
+cat > flows.txt <<EOF
+in_port=$p1 actions=output:$p2
+EOF
+AT
+AT_CAPTURE_FILE([flows.txt])
 AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 
 flow="in_port($p1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)"
@@ -629,10 +637,12 @@ AT_CHECK(
 set `cat stdout`
 p1=$1 p2=$2 p3=$3
 
-AT_DATA([flows.txt], [dnl
-in_port=1 actions=mod_vlan_vid:17,output:2
-in_port=2 actions=output:1
-])
+cat > flows.txt <<EOF
+in_port=$p1 actions=mod_vlan_vid:17,output:$p2
+in_port=$p2 actions=output:$p1
+EOF
+AT
+AT_CAPTURE_FILE([flows.txt])
 AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 
 flow="in_port($p1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)"
@@ -671,10 +681,12 @@ AT_CHECK(
 set `cat stdout`
 br0=0 p1=$1 p2=$2
 
-AT_DATA([flows.txt], [dnl
-in_port=1 actions=output:2
-in_port=2 actions=mod_vlan_vid:17,output:1
-])
+cat > flows.txt <<EOF
+in_port=$p1 actions=output:$p2
+in_port=$p2 actions=mod_vlan_vid:17,output:$p1
+EOF
+AT
+AT_CAPTURE_FILE([flows.txt])
 AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 
 flow="in_port($p1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)"
