@@ -1220,7 +1220,7 @@ mf_set_flow_value(const struct mf_field *mf,
         break;
 
     case MFF_ETH_DST:
-        memcpy(flow->dl_src, value->mac, ETH_ADDR_LEN);
+        memcpy(flow->dl_dst, value->mac, ETH_ADDR_LEN);
         break;
 
     case MFF_ETH_TYPE:
