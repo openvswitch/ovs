@@ -499,7 +499,7 @@ s/00:0.$/00:0x/' < monitor.log]],
 # It's a service connection so initially there should be no async messages.
 check_async 1
 
-# Set miss_send_len to 128, turning on packet-outs for our service connection.
+# Set miss_send_len to 128, turning on packet-ins for our service connection.
 ovs-appctl -t ovs-ofctl ofctl/send 0109000c0123456700000080
 check_async 2 OFPR_ACTION OFPPR_ADD OFPPR_DELETE OFPRR_DELETE
 
