@@ -13,7 +13,7 @@
  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301
  USA.
 
- Copyright (C) 2011 Nicira Networks.
+ Copyright (C) 2011, 2012 Nicira Networks.
 -->
 
 <collect>
@@ -21,4 +21,5 @@
   <command label="dump-ovsdb">/usr/share/openvswitch/scripts/ovs-bugtool-ovsdb-dump</command>
   <command label="ovs-lacp-show">/usr/share/openvswitch/scripts/ovs-bugtool-lacp-show</command>
   <command label="ovs-cfm-show">/usr/share/openvswitch/scripts/ovs-bugtool-cfm-show</command>
+  <command label="ovs-coverage-show">/usr/share/openvswitch/scripts/ovs-bugtool-coverage-show</command>
 </collect>
