@@ -495,6 +495,7 @@ static uint32_t vsp_realdev_to_vlandev(const struct ofproto_dpif *,
                                        uint32_t realdev, ovs_be16 vlan_tci);
 static uint16_t vsp_vlandev_to_realdev(const struct ofproto_dpif *,
                                        uint16_t vlandev, int *vid);
+static bool vsp_adjust_flow(const struct ofproto_dpif *, struct flow *);
 static void vsp_remove(struct ofport_dpif *);
 static void vsp_add(struct ofport_dpif *, uint16_t realdev_ofp_port, int vid);
 
@@ -2869,8 +2870,6 @@ ofproto_dpif_extract_flow_key(const struct ofproto_dpif *ofproto,
                               struct ofpbuf *packet)
 {
     enum odp_key_fitness fitness;
-    uint16_t realdev;
-    int vid;
 
     fitness = odp_flow_key_to_flow(key, key_len, flow);
     if (fitness == ODP_FIT_ERROR) {
@@ -2878,12 +2877,7 @@ ofproto_dpif_extract_flow_key(const struct ofproto_dpif *ofproto,
     }
     *initial_tci = flow->vlan_tci;
 
-    realdev = vsp_vlandev_to_realdev(ofproto, flow->in_port, &vid);
-    if (realdev) {
-        /* Cause the flow to be processed as if it came in on the real device
-         * with the VLAN device's VLAN ID. */
-        flow->in_port = realdev;
-        flow->vlan_tci = htons((vid & VLAN_VID_MASK) | VLAN_CFI);
+    if (vsp_adjust_flow(ofproto, flow)) {
         if (packet) {
             /* Make the packet resemble the flow, so that it gets sent to an
              * OpenFlow controller properly, so that it looks correct for
@@ -6708,6 +6702,30 @@ vsp_vlandev_to_realdev(const struct ofproto_dpif *ofproto,
         }
     }
     return 0;
+}
+
+/* Given 'flow', a flow representing a packet received on 'ofproto', checks
+ * whether 'flow->in_port' represents a Linux VLAN device.  If so, changes
+ * 'flow->in_port' to the "real" device backing the VLAN device, sets
+ * 'flow->vlan_tci' to the VLAN VID, and returns true.  Otherwise (which is
+ * always the case unless VLAN splinters are enabled), returns false without
+ * making any changes. */
+static bool
+vsp_adjust_flow(const struct ofproto_dpif *ofproto, struct flow *flow)
+{
+    uint16_t realdev;
+    int vid;
+
+    realdev = vsp_vlandev_to_realdev(ofproto, flow->in_port, &vid);
+    if (!realdev) {
+        return false;
+    }
+
+    /* Cause the flow to be processed as if it came in on the real device with
+     * the VLAN device's VLAN ID. */
+    flow->in_port = realdev;
+    flow->vlan_tci = htons((vid & VLAN_VID_MASK) | VLAN_CFI);
+    return true;
 }
 
 static void
