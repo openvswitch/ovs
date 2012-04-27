@@ -3926,7 +3926,8 @@ ofputil_parse_key_value(char **stringp, char **keyp, char **valuep)
         for (value_len = 0; level > 0; value_len++) {
             switch (value[value_len]) {
             case '\0':
-                ovs_fatal(0, "unbalanced parentheses in argument to %s", key);
+                level = 0;
+                break;
 
             case '(':
                 level++;
