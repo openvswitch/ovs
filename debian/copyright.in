@@ -8,7 +8,7 @@ Upstream Authors (from AUTHORS):
 
 Upstream Copyright Holders:
 
-	Copyright (c) 2007, 2008, 2009, 2010, 2011 Nicira Networks.
+	Copyright (c) 2007, 2008, 2009, 2010, 2011, 2012 Nicira Networks.
 	Copyright (c) 2010 Jean Tourrilhes - HP-Labs.
 	Copyright (c) 2008,2009,2010 Citrix Systems, Inc.
 	and authors listed above.
@@ -53,10 +53,7 @@ License:
   GNU Lesser General Public License version 2.1.
 
 	utilities/bugtool/ovs-bugtool
-	utilities/bugtool/ovs-bugtool-cfm-show
-	utilities/bugtool/ovs-bugtool-lacp-show
-	utilities/bugtool/ovs-bugtool-tc-class-show
-	utilities/bugtool/ovs-bugtool-daemons-ver
+	utilities/bugtool/ovs-bugtool-*
 	utilities/bugtool/plugins/kernel-info/openvswitch.xml
 	utilities/bugtool/plugins/network-status/openvswitch.xml
 	utilities/bugtool/plugins/system-configuration.xml
