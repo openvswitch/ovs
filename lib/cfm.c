@@ -394,12 +394,12 @@ cfm_run(struct cfm *cfm)
             cfm->fault |= CFM_FAULT_RECV;
         }
 
-        if (old_cfm_fault != cfm->fault) {
+        if (old_cfm_fault != cfm->fault && !VLOG_DROP_INFO(&rl)) {
             struct ds ds = DS_EMPTY_INITIALIZER;
 
             ds_put_cfm_fault(&ds, old_cfm_fault, cfm->fault);
-            VLOG_INFO_RL(&rl, "%s: CFM fault status changed:%s", cfm->name,
-                         ds_cstr_ro(&ds));
+            VLOG_INFO("%s: CFM fault status changed:%s", cfm->name,
+                      ds_cstr_ro(&ds));
             ds_destroy(&ds);
         }
 
