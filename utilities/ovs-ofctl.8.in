@@ -1098,6 +1098,13 @@ others.  \fIvalue\fR is a number between 0 and 65535, inclusive.  A higher
 have priority over an entry containing wildcards, so it has an implicit 
 priority value of 65535.  When adding a flow, if the field is not specified, 
 the flow's priority will default to 32768.
+.IP
+OpenFlow leaves behavior undefined when two or more flows with the
+same priority can match a single packet.  Some users expect
+``sensible'' behavior, such as more specific flows taking precedence
+over less specific flows, but OpenFlow does not specify this and Open
+vSwitch does not implement it.  Users should therefore take care to
+use priorities to ensure the behavior that they expect.
 .
 .PP
 The \fBadd\-flow\fR, \fBadd\-flows\fR, and \fBmod\-flows\fR commands
