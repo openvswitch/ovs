@@ -20,7 +20,8 @@ ovs\-appctl \- utility for configuring running Open vSwitch daemons
 .SH DESCRIPTION
 Open vSwitch daemons accept certain commands at runtime to control their
 behavior and query their settings.  Every daemon accepts a common set of
-commands documented under \fBCOMMON COMMANDS\fR below, and
+commands documented under \fBCOMMON COMMANDS\fR below.  Some daemons
+support additional commands documented in their own manpages.
 \fBovs\-vswitchd\fR in particular accepts a number of additional
 commands documented in \fBovs\-vswitchd\fR(8).
 .PP
