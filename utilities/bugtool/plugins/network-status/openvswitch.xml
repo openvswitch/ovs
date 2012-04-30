@@ -18,6 +18,7 @@
 
 <collect>
   <command label="tc-class-show">/usr/share/openvswitch/scripts/ovs-bugtool-tc-class-show</command>
+  <command label="ovs-vsctl-show">/usr/share/openvswitch/scripts/ovs-bugtool-vsctl-show</command>
   <command label="dump-ovsdb">/usr/share/openvswitch/scripts/ovs-bugtool-ovsdb-dump</command>
   <command label="ovs-lacp-show">/usr/share/openvswitch/scripts/ovs-bugtool-lacp-show</command>
   <command label="ovs-cfm-show">/usr/share/openvswitch/scripts/ovs-bugtool-cfm-show</command>
