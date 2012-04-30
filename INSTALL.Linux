@@ -100,6 +100,14 @@ you have the following:
 
     - Python 2.x, for x >= 4.
 
+If you are going to extensively modify Open vSwitch, please consider
+installing the following to obtain better warnings:
+
+    - "sparse" version 0.4.4 or later
+      (http://www.kernel.org/pub/software/devel/sparse/dist/).
+
+    - GNU make.
+
 Installation Requirements
 -------------------------
 
@@ -186,6 +194,9 @@ Prerequisites section, follow the procedure below to build.
 3. Run make in the top source directory: 
 
       % make
+
+   For improved warnings if you installed "sparse" (see
+   "Prerequisites"), add C=1 to the "make" command line.
 
 4. Become root by running "su" or another program.
 
