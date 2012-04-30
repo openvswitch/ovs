@@ -467,10 +467,14 @@ connmgr_set_controllers(struct connmgr *mgr,
 
         if (!vconn_verify_name(c->target)) {
             if (!find_controller_by_target(mgr, c->target)) {
+                VLOG_INFO("%s: added primary controller \"%s\"",
+                          mgr->name, c->target);
                 add_controller(mgr, c->target, c->dscp);
             }
         } else if (!pvconn_verify_name(c->target)) {
             if (!ofservice_lookup(mgr, c->target)) {
+                VLOG_INFO("%s: added service controller \"%s\"",
+                          mgr->name, c->target);
                 ofservice_create(mgr, c->target, c->dscp);
             }
         } else {
@@ -485,10 +489,13 @@ connmgr_set_controllers(struct connmgr *mgr,
     /* Delete controllers that are no longer configured.
      * Update configuration of all now-existing controllers. */
     HMAP_FOR_EACH_SAFE (ofconn, next_ofconn, hmap_node, &mgr->controllers) {
+        const char *target = ofconn_get_target(ofconn);
         struct ofproto_controller *c;
 
-        c = shash_find_data(&new_controllers, ofconn_get_target(ofconn));
+        c = shash_find_data(&new_controllers, target);
         if (!c) {
+            VLOG_INFO("%s: removed primary controller \"%s\"",
+                      mgr->name, target);
             ofconn_destroy(ofconn);
         } else {
             ofconn_reconfigure(ofconn, c);
@@ -498,11 +505,13 @@ connmgr_set_controllers(struct connmgr *mgr,
     /* Delete services that are no longer configured.
      * Update configuration of all now-existing services. */
     HMAP_FOR_EACH_SAFE (ofservice, next_ofservice, node, &mgr->services) {
+        const char *target = pvconn_get_name(ofservice->pvconn);
         struct ofproto_controller *c;
 
-        c = shash_find_data(&new_controllers,
-                            pvconn_get_name(ofservice->pvconn));
+        c = shash_find_data(&new_controllers, target);
         if (!c) {
+            VLOG_INFO("%s: removed service controller \"%s\"",
+                      mgr->name, target);
             ofservice_destroy(mgr, ofservice);
         } else {
             ofservice_reconfigure(ofservice, c);
