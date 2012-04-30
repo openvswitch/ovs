@@ -1750,9 +1750,21 @@
 
       <column name="other_config" key="cfm_interval"
               type='{"type": "integer"}'>
-        The interval, in milliseconds, between transmissions of CFM heartbeats.
-        Three missed heartbeat receptions indicate a connectivity fault.
-        Defaults to 1000.
+        <p>
+          The interval, in milliseconds, between transmissions of CFM
+          heartbeats.  Three missed heartbeat receptions indicate a
+          connectivity fault.
+        </p>
+
+        <p>
+          In standard operation only intervals of 3, 10, 100, 1,000, 10,000,
+          60,000, or 600,000 ms are supported.  Other values will be rounded
+          down to the nearest value on the list.  Extended mode (see <ref
+          column="other_config" key="cfm_extended"/>) supports any interval up
+          to 65,535 ms.  In either mode, the default is 1000 ms.
+        </p>
+
+        <p>We do not recommend using intervals less than 100 ms.</p>
       </column>
 
       <column name="other_config" key="cfm_extended"
