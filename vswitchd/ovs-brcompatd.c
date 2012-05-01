@@ -76,7 +76,7 @@ static char *appctl_program;
 static char *vsctl_program;
 
 /* Options that we should generally pass to ovs-vsctl. */
-#define VSCTL_OPTIONS "--timeout=5", "-vANY:console:WARN"
+#define VSCTL_OPTIONS "--timeout=5", "-vconsole:warn"
 
 /* Netlink socket to bridge compatibility kernel module. */
 static struct nl_sock *brc_sock;

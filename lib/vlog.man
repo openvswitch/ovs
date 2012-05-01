@@ -43,7 +43,7 @@ a word but has no effect.
 .IP "\fB\-v\fR"
 .IQ "\fB\-\-verbose\fR"
 Sets the maximum logging verbosity level, equivalent to
-\fB\-\-verbose=ANY:ANY:dbg\fR.
+\fB\-\-verbose=dbg\fR.
 .
 .\" Python vlog doesn't implement -vPATTERN so only document it if
 .\" \*(PY is empty:

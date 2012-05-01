@@ -73,7 +73,7 @@ ovs_vsctl () {
 }
 
 ovsdb_tool () {
-    ovsdb-tool -vANY:console:off "$@"
+    ovsdb-tool -vconsole:off "$@"
 }
 
 create_db () {
@@ -182,7 +182,7 @@ start () {
 
 	# Start ovsdb-server.
 	set ovsdb-server "$DB_FILE"
-	set "$@" -vANY:CONSOLE:EMER -vANY:SYSLOG:ERR -vANY:FILE:INFO
+	set "$@" -vconsole:emer -vsyslog:err -vfile:info
 	set "$@" --remote=punix:"$DB_SOCK"
 	set "$@" --remote=db:Open_vSwitch,manager_options
 	set "$@" --private-key=db:SSL,private_key
@@ -211,7 +211,7 @@ start () {
 
 	# Start ovs-vswitchd.
 	set ovs-vswitchd unix:"$DB_SOCK"
-	set "$@" -vANY:CONSOLE:EMER -vANY:SYSLOG:ERR -vANY:FILE:INFO
+	set "$@" -vconsole:emer -vsyslog:err -vfile:info
 	if test X"$MLOCKALL" != Xno; then
 	    set "$@" --mlockall
 	fi
@@ -222,7 +222,7 @@ start () {
 	log_success_msg "ovs-brcompatd is already running"
     elif test X"$BRCOMPAT" = Xyes; then
         set ovs-brcompatd
-	set "$@" -vANY:CONSOLE:EMER -vANY:SYSLOG:ERR -vANY:FILE:INFO
+	set "$@" -vconsole:emer -vsyslog:err -vfile:info
 	start_daemon "$OVS_BRCOMPATD_PRIORITY" "$@"
     fi
 }

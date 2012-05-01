@@ -709,7 +709,7 @@ configure_datapath: bridge      - xenbr2
 configure_datapath: physical    - [u'eth2']
 configure_datapath: extra ports - []
 configure_datapath: extra bonds - []
-/usr/bin/ovs-vsctl --timeout=5 -vANY:console:off get-fail-mode xenbr2
+/usr/bin/ovs-vsctl --timeout=5 -vconsole:off get-fail-mode xenbr2
 Applying changes to /etc/sysconfig/network-scripts/route-xenbr2 configuration
 Applying changes to /etc/sysconfig/network configuration
 Applying changes to /etc/sysconfig/network-scripts/ifcfg-xenbr2 configuration
@@ -724,7 +724,7 @@ Applying changes to /etc/sysconfig/network-scripts/ifcfg-xenbr2 configuration
     set Bridge xenbr2 fail_mode=secure
     remove Bridge xenbr2 other_config disable-in-band
     br-set-external-id xenbr2 xs-network-uuids d08c8749-0c8f-9e8d-ce25-fd364661ee99
-/usr/bin/ovs-vsctl --timeout=5 -vANY:console:off get interface eth2 ofport
+/usr/bin/ovs-vsctl --timeout=5 -vconsole:off get interface eth2 ofport
 /usr/bin/ovs-ofctl add-flow xenbr2 idle_timeout=0,priority=0,in_port=5,arp,nw_proto=1,actions=local
 /usr/bin/ovs-ofctl add-flow xenbr2 idle_timeout=0,priority=0,in_port=local,arp,dl_src=00:15:17:a0:29:80,actions=5
 /usr/bin/ovs-ofctl add-flow xenbr2 idle_timeout=0,priority=0,in_port=5,dl_dst=00:15:17:a0:29:80,actions=local

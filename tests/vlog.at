@@ -2,11 +2,10 @@ AT_BANNER([vlog])
 
 AT_SETUP([vlog - Python])
 AT_SKIP_IF([test $HAVE_PYTHON = no])
-AT_CHECK([$PYTHON $srcdir/test-vlog.py --log-file log_file \
--v ANY:ANY:dbg module_1:ANY:info module_2:ANY:warn ANY:syslog:off \
-2>stderr_log])
 AT_CAPTURE_FILE([log_file])
 AT_CAPTURE_FILE([stderr_log])
+AT_CHECK([$PYTHON $srcdir/test-vlog.py --log-file log_file \
+-v dbg module_1:info module_2:warn syslog:off 2>stderr_log])
 
 AT_CHECK([diff log_file stderr_log])
 

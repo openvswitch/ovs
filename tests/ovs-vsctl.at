@@ -15,17 +15,17 @@ dnl RUN_OVS_VSCTL(COMMAND, ...)
 dnl
 dnl Executes each ovs-vsctl COMMAND.
 m4_define([RUN_OVS_VSCTL],
-  [m4_foreach([command], [$@], [ovs-vsctl --timeout=5 --no-wait -vreconnect:ANY:emer --db=unix:socket -- command
+  [m4_foreach([command], [$@], [ovs-vsctl --timeout=5 --no-wait -vreconnect:emer --db=unix:socket -- command
 ])])
 m4_define([RUN_OVS_VSCTL_ONELINE],
-  [m4_foreach([command], [$@], [ovs-vsctl --timeout=5 --no-wait -vreconnect:ANY:emer --db=unix:socket --oneline -- command
+  [m4_foreach([command], [$@], [ovs-vsctl --timeout=5 --no-wait -vreconnect:emer --db=unix:socket --oneline -- command
 ])])
 
 dnl RUN_OVS_VSCTL_TOGETHER(COMMAND, ...)
 dnl
 dnl Executes each ovs-vsctl COMMAND in a single run of ovs-vsctl.
 m4_define([RUN_OVS_VSCTL_TOGETHER],
-  [ovs-vsctl --timeout=5 --no-wait -vreconnect:ANY:emer --db=unix:socket --oneline dnl
+  [ovs-vsctl --timeout=5 --no-wait -vreconnect:emer --db=unix:socket --oneline dnl
 m4_foreach([command], [$@], [ -- command])])
 
 dnl CHECK_BRIDGES([BRIDGE, PARENT, VLAN], ...)
@@ -769,7 +769,7 @@ AT_CHECK(
 
 ])
 m4_define([VSCTL_CHECK_FIND],
-  [AT_CHECK([ovs-vsctl --bare --timeout=5 --no-wait -vreconnect:ANY:emer --db=unix:socket -- --columns=name find bridge '$1' | sort | xargs echo], [0], [$2
+  [AT_CHECK([ovs-vsctl --bare --timeout=5 --no-wait -vreconnect:emer --db=unix:socket -- --columns=name find bridge '$1' | sort | xargs echo], [0], [$2
 ])])
 
 # Arithmetic relational operators without keys.
@@ -985,19 +985,19 @@ AT_SETUP([unreferenced record warnings])
 AT_KEYWORDS([ovs-vsctl])
 OVS_VSCTL_SETUP
 AT_CHECK(
-  [ovs-vsctl -vPATTERN:console:'%c|%p|%m' --timeout=5 --no-wait -vreconnect:ANY:emer --db=unix:socket \
+  [ovs-vsctl -vPATTERN:console:'%c|%p|%m' --timeout=5 --no-wait -vreconnect:emer --db=unix:socket \
      -- create Bridge name=br0 | $srcdir/uuidfilt.pl],
   [0], [<0>
 ], [vsctl|WARN|applying "create" command to table Bridge without --id option will have no effect
 ], [OVS_VSCTL_CLEANUP])
 AT_CHECK(
-  [ovs-vsctl -vPATTERN:console:'%c|%p|%m' --timeout=5 --no-wait -vreconnect:ANY:emer --db=unix:socket \
+  [ovs-vsctl -vPATTERN:console:'%c|%p|%m' --timeout=5 --no-wait -vreconnect:emer --db=unix:socket \
      -- --id=@br0 create Bridge name=br0 | $srcdir/uuidfilt.pl],
   [0], [<0>
 ], [vsctl|WARN|row id "@br0" was created but no reference to it was inserted, so it will not actually appear in the database
 ], [OVS_VSCTL_CLEANUP])
 AT_CHECK(
-  [ovs-vsctl -vPATTERN:console:'%c|%p|%m' --timeout=5 --no-wait -vreconnect:ANY:emer --db=unix:socket \
+  [ovs-vsctl -vPATTERN:console:'%c|%p|%m' --timeout=5 --no-wait -vreconnect:emer --db=unix:socket \
      -- --id=@eth0_iface create Interface name=eth0 \
      -- --id=@eth0 create Port name=eth0 interfaces=@eth0_iface \
      -- --id=@m0 create Mirror name=m0 output_port=@eth0 \

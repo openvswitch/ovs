@@ -232,11 +232,11 @@ if test ! -e /etc/openvswitch/conf.db; then
     install -d -m 755 -o root -g root /etc/openvswitch
 
     # Create ovs-vswitchd config database
-    ovsdb-tool -vANY:console:off create /etc/openvswitch/conf.db \
+    ovsdb-tool -vconsole:off create /etc/openvswitch/conf.db \
             /usr/share/openvswitch/vswitch.ovsschema
 
     # Create initial table in config database
-    ovsdb-tool -vANY:console:off transact /etc/openvswitch/conf.db \
+    ovsdb-tool -vconsole:off transact /etc/openvswitch/conf.db \
             '[{"op": "insert", "table": "Open_vSwitch", "row": {}}]' \
             > /dev/null
 fi

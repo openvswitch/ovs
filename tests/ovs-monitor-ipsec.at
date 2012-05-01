@@ -32,7 +32,7 @@ chmod +x usr/sbin/setkey
 touch etc/racoon/certs/ovs-stale.pem
 
 ovs_vsctl () {
-    ovs-vsctl --timeout=5 --no-wait -vreconnect:ANY:emer --db=unix:socket "$@"
+    ovs-vsctl --timeout=5 --no-wait -vreconnect:emer --db=unix:socket "$@"
 }
 trim () {  # Removes blank lines and lines starting with # from input.
     sed -e '/^#/d' -e '/^[       ]*$/d' "$@"
