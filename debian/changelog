@@ -1,3 +1,12 @@
+openvswitch (1.4.1-1) unstable; urgency=low
+  [ Open vSwitch team ]
+  * New upstream version
+    - The default MAC learning timeout has been increased from 60 seconds
+      to 300 seconds.  The MAC learning timeout is now configurable.
+    - Bug fixes
+
+ -- Open vSwitch team <dev@openvswitch.org>  Mon, 30 Apr 2012 22:57:00 +0000
+
 openvswitch (1.4.0-2) unstable; urgency=low
 
   * Use explicit DKMS variable for kernel source directory

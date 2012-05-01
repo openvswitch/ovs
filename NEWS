@@ -1,7 +1,8 @@
-v1.4.1 - xx xxx xxx
+v1.4.1 - 30 Apr 2012
 ------------------------
     - The default MAC learning timeout has been increased from 60 seconds
       to 300 seconds.  The MAC learning timeout is now configurable.
+    - Bug fixes
 
 
 v1.4.0 - 30 Jan 2012
