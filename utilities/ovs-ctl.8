@@ -261,11 +261,15 @@ reloads the kernel module and restarts the OVS daemons (including
 .IP 6.
 Restores the kernel configuration state that was saved in step 3.
 .
-.PP
-The steps above are often enough to hot-upgrade a new kernel module
-with only a few seconds of downtime.  DHCP is a common problem: if the
-ISC DHCP client is running on an OVS internal interface, then it will
-have to be restarted after completing the above procedure.
+.IP 7.
+Checks for daemons that may need to be restarted because they have
+packet sockets that are listening on old instances of Open vSwitch
+kernel interfaces and, if it finds any, prints a warning on stdout.
+DHCP is a common example: if the ISC DHCP client is running on an OVS
+internal interface, then it will have to be restarted after completing
+the above procedure.  (It would be nice if \fBovs\-ctl\fR could restart
+daemons automatically, but the details are far too specific to a
+particular distribution and installation.)
 .
 .PP
 \fBforce\-kmod\-reload\fR internally stops and starts OVS, so it

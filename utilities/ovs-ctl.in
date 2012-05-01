@@ -311,6 +311,8 @@ force_reload_kmod () {
     log="logger -p daemon.$level -t ovs-save"
     $log "force-reload-kmod interface restore script exited with status $rc:"
     $log -f "$script"
+
+    "$datadir/scripts/ovs-check-dead-ifs"
 }
 
 ## --------------- ##

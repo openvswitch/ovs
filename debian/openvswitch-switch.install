@@ -6,6 +6,7 @@ usr/bin/ovs-vsctl
 usr/bin/ovsdb-tool
 usr/sbin/ovs-vswitchd
 usr/sbin/ovsdb-server
+usr/share/openvswitch/scripts/ovs-check-dead-ifs
 usr/share/openvswitch/scripts/ovs-ctl
 usr/share/openvswitch/scripts/ovs-lib
 usr/share/openvswitch/scripts/ovs-save

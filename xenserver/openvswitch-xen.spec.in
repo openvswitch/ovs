@@ -407,6 +407,7 @@ exit 0
 /etc/logrotate.d/openvswitch
 /etc/profile.d/openvswitch.sh
 /usr/share/openvswitch/python/
+/usr/share/openvswitch/scripts/ovs-check-dead-ifs
 /usr/share/openvswitch/scripts/ovs-xapi-sync
 /usr/share/openvswitch/scripts/interface-reconfigure
 /usr/share/openvswitch/scripts/InterfaceReconfigure.py

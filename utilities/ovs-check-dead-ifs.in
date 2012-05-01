@@ -1,0 +1,96 @@
+#! @PYTHON@
+
+import os
+import re
+import stat
+import sys
+
+if "--help" in sys.argv:
+    sys.stdout.write("""\
+ovs-check-dead-ifs: Check for packet sockets for nonexistent network devices.
+
+One side effect of the "force-reload-kmod" command that reloads the
+Open vSwitch kernel module is that all the network devices that the
+Open vSwitch kernel module implemented get destroyed and then replaced
+by new instances with the same names.  Unfortunately, programs that
+are listening for packets on the original network devices will not
+receive packets that arrive on the new instances.  This causes some
+services, such as DHCP, to silently fail.  This program looks for such
+problems and, if it finds any, prints information about programs that
+are in such a state.  The system administrator should then take some
+action to fix the problem, such as restarting these programs.
+""")
+    sys.exit(0)
+elif len(sys.argv) > 1:
+    sys.stderr.write("ovs-check-dead-ifs: no arguments or options accepted "
+                     "(use --help for help)\n")
+    sys.exit(1)
+
+# Get the set of all valid ifindexes.
+#
+# 0 is always valid for our purposes because it means "any interface".
+valid_ifindexes = set([])
+for ifname in os.listdir("/sys/class/net"):
+    fn = "/sys/class/net/%s/ifindex" % ifname
+    try:
+        valid_ifindexes.add(int(open(fn).readline()))
+    except IOError:
+        pass
+    except ValueError:
+        print "%s: unexpected format\n" % fn
+
+# Get inodes for all packet sockets whose ifindexes don't exist.
+invalid_inodes = set()
+f = open("/proc/net/packet")
+f.readline()                    # Skip header line.
+for line in f:
+    fields = line.split()
+    ifindex = int(fields[4])
+    if ifindex not in valid_ifindexes:
+        invalid_inodes.add(int(fields[8]))
+f.close()
+
+if not invalid_inodes:
+    sys.exit(0)
+
+# Now find the processes that are using those packet sockets.
+inode_re = re.compile(r'socket:\[([0-9]+)\]$')
+bad_pids = set()
+for pid in os.listdir("/proc"):
+    try:
+        pid = int(pid)
+    except ValueError:
+        continue
+
+    for fd in os.listdir("/proc/%d/fd" % pid):
+        try:
+            fd = int(fd)
+        except ValueError:
+            continue
+
+        try:
+            s = os.stat("/proc/%d/fd/%d" % (pid, fd))
+        except OSError:
+            continue
+
+        if not stat.S_ISSOCK(s.st_mode):
+            continue
+
+        try:
+            linkname = os.readlink("/proc/%d/fd/%d" % (pid, fd))
+        except OSError:
+            continue
+
+        m = inode_re.match(linkname)
+        if not m:
+            continue
+
+        inode = int(m.group(1))
+        if inode in invalid_inodes:
+            bad_pids.add(pid)
+
+if bad_pids:
+    print """
+The following processes are listening for packets to arrive on network devices
+that no longer exist. You may want to restart them."""
+    os.execvp("ps", ["ps"] + ["%s" % pid for pid in bad_pids])
