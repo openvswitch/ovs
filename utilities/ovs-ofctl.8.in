@@ -886,6 +886,10 @@ processing.
 Does nothing at all.  Any number of bytes represented as hex digits
 \fIhh\fR may be included.  Pairs of hex digits may be separated by
 periods for readability.
+The \fBnote\fR action's format doesn't include an exact length for its
+payload, so the provided bytes will be padded on the right by enough
+bytes with value 0 to make the total number 6 more than a multiple of
+8.
 .
 .IP "\fBmove:\fIsrc\fB[\fIstart\fB..\fIend\fB]\->\fIdst\fB[\fIstart\fB..\fIend\fB]\fR"
 Copies the named bits from field \fIsrc\fR to field \fIdst\fR.
