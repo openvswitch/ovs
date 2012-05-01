@@ -103,3 +103,80 @@ AssertionError
 ])
 
 AT_CLEANUP
+
+AT_SETUP([vlog - vlog/reopen - Python])
+AT_SKIP_IF([test $HAVE_PYTHON = no])
+OVS_RUNDIR=`pwd`; export OVS_RUNDIR
+OVS_LOGDIR=`pwd`; export OVS_LOGDIR
+OVS_SYSCONFDIR=`pwd`; export OVS_SYSCONFDIR
+trap 'kill `cat test-unixctl.py.pid`' 0
+
+AT_CAPTURE_FILE([log])
+AT_CAPTURE_FILE([log.old])
+AT_CHECK([$PYTHON $srcdir/test-unixctl.py --log-file=`pwd`/log --pidfile --detach])
+
+AT_CHECK([APPCTL -t test-unixctl.py log message])
+mv log log.old
+AT_CHECK([APPCTL -t test-unixctl.py log message2])
+AT_CHECK([APPCTL -t test-unixctl.py vlog/reopen])
+AT_CHECK([APPCTL -t test-unixctl.py log message3])
+AT_CHECK([APPCTL -t test-unixctl.py exit])
+trap '' 0
+
+AT_CHECK([sed 's/.*|//' log.old], [0], [dnl
+Entering run loop.
+message
+message2
+])
+AT_CHECK([sed 's/.*|//' log], [0], [dnl
+message3
+])
+AT_CLEANUP
+
+AT_SETUP([vlog - vlog/reopen without log file - Python])
+AT_SKIP_IF([test $HAVE_PYTHON = no])
+OVS_RUNDIR=`pwd`; export OVS_RUNDIR
+OVS_LOGDIR=`pwd`; export OVS_LOGDIR
+OVS_SYSCONFDIR=`pwd`; export OVS_SYSCONFDIR
+trap 'kill `cat test-unixctl.py.pid`' 0
+
+AT_CHECK([$PYTHON $srcdir/test-unixctl.py --pidfile --detach])
+
+AT_CHECK([APPCTL -t test-unixctl.py vlog/reopen], [0],
+  [Logging to file not configured
+])
+AT_CLEANUP
+
+dnl This checks that if vlog/reopen can't reopen the log file,
+dnl nothing particularly bad (e.g. Python throws an exception and
+dnl aborts the program) happens.
+AT_SETUP([vlog - vlog/reopen can't reopen log file - Python])
+AT_SKIP_IF([test $HAVE_PYTHON = no])
+
+# Verify that /dev/full is a character device that fails writes.
+AT_SKIP_IF([test ! -c /dev/full])
+AT_SKIP_IF([echo > /dev/full])
+
+OVS_RUNDIR=`pwd`; export OVS_RUNDIR
+OVS_LOGDIR=`pwd`; export OVS_LOGDIR
+OVS_SYSCONFDIR=`pwd`; export OVS_SYSCONFDIR
+trap 'kill `cat test-unixctl.py.pid`' 0
+
+AT_CHECK([$PYTHON $srcdir/test-unixctl.py --log-file=`pwd`/log --pidfile --detach])
+AT_CHECK([APPCTL -t test-unixctl.py log message])
+mv log log.old
+ln -s /dev/full log
+AT_CHECK([APPCTL -t test-unixctl.py vlog/reopen])
+AT_CHECK([APPCTL -t test-unixctl.py log message2])
+rm log
+AT_CHECK([APPCTL -t test-unixctl.py vlog/reopen])
+AT_CHECK([APPCTL -t test-unixctl.py log message3])
+AT_CHECK([APPCTL -t test-unixctl.py exit])
+AT_CHECK([sed 's/.*|//' log.old], [0], [dnl
+Entering run loop.
+message
+])
+AT_CHECK([sed 's/.*|//' log], [0], [dnl
+message3
+])
+AT_CLEANUP

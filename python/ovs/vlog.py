@@ -1,5 +1,5 @@
 
-# Copyright (c) 2011 Nicira, Inc.
+# Copyright (c) 2011, 2012 Nicira, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@ import socket
 import sys
 
 import ovs.dirs
+import ovs.unixctl
 import ovs.util
 
 FACILITIES = {"console": "info", "file": "info", "syslog": "info"}
@@ -41,6 +42,8 @@ class Vlog:
     __inited = False
     __msg_num = 0
     __mfl = {}  # Module -> facility -> level
+    __log_file = None
+    __file_handler = None
 
     def __init__(self, name):
         """Creates a new Vlog object representing a module called 'name'.  The
@@ -99,6 +102,7 @@ class Vlog:
 
         Vlog.__inited = True
         logging.raiseExceptions = False
+        Vlog.__log_file = log_file
         for f in FACILITIES:
             logger = logging.getLogger(f)
             logger.setLevel(logging.DEBUG)
@@ -110,10 +114,14 @@ class Vlog:
                     logger.addHandler(logging.handlers.SysLogHandler(
                         address="/dev/log",
                         facility=logging.handlers.SysLogHandler.LOG_DAEMON))
-                elif f == "file" and log_file:
-                    logger.addHandler(logging.FileHandler(log_file))
+                elif f == "file" and Vlog.__log_file:
+                    Vlog.__file_handler = logging.FileHandler(Vlog.__log_file)
+                    logger.addHandler(Vlog.__file_handler)
             except (IOError, socket.error):
                 logger.setLevel(logging.CRITICAL)
+
+        ovs.unixctl.command_register("vlog/reopen", "", 0, 0,
+                                     Vlog._unixctl_vlog_reopen, None)
 
     @staticmethod
     def set_level(module, facility, level):
@@ -149,6 +157,25 @@ class Vlog:
             for f in facilities:
                 Vlog.__mfl[m][f] = level
 
+    @staticmethod
+    def reopen_log_file():
+        """Closes and then attempts to re-open the current log file.  (This is
+        useful just after log rotation, to ensure that the new log file starts
+        being used.)"""
+
+        if Vlog.__log_file:
+            logger = logging.getLogger("file")
+            logger.removeHandler(Vlog.__file_handler)
+            Vlog.__file_handler = logging.FileHandler(Vlog.__log_file)
+            logger.addHandler(Vlog.__file_handler)
+
+    @staticmethod
+    def _unixctl_vlog_reopen(conn, unused_argv, unused_aux):
+        if Vlog.__log_file:
+            Vlog.reopen_log_file()
+            conn.reply(None)
+        else:
+            conn.reply("Logging to file not configured")
 
 def add_args(parser):
     """Adds vlog related options to 'parser', an ArgumentParser object.  The
