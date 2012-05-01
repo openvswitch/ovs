@@ -146,6 +146,71 @@ sends flow_removed message   ---    ---     ---      %       %
     receive the generated messages.)
 
 
+Flow Cookies
+============
+
+OpenFlow 1.0 and later versions have the concept of a "flow cookie",
+which is a 64-bit integer value attached to each flow.  The treatment
+of the flow cookie has varied greatly across OpenFlow versions,
+however.
+
+In OpenFlow 1.0:
+
+        - OFPFC_ADD set the cookie in the flow that it added.
+
+        - OFPFC_MODIFY and OFPFC_MODIFY_STRICT updated the cookie for
+          the flow or flows that it modified.
+
+        - OFPST_FLOW messages included the flow cookie.
+
+        - OFPT_FLOW_REMOVED messages reported the cookie of the flow
+          that was removed.
+
+OpenFlow 1.1 made the following changes:
+
+        - Flow mod operations OFPFC_MODIFY, OFPFC_MODIFY_STRICT,
+          OFPFC_DELETE, and OFPFC_DELETE_STRICT, plus flow stats
+          requests and aggregate stats requests, gained the ability to
+          match on flow cookies with an arbitrary mask.
+
+        - OFPFC_MODIFY and OFPFC_MODIFY_STRICT were changed to add a
+          new flow, in the case of no match, only if the flow table
+          modification operation did not match on the cookie field.
+          (In OpenFlow 1.0, modify operations always added a new flow
+          when there was no match.)
+
+        - OFPFC_MODIFY and OFPFC_MODIFY_STRICT no longer updated flow
+          cookies.
+
+OpenFlow 1.2 made the following changes:
+
+        - OFPC_MODIFY and OFPFC_MODIFY_STRICT were changed to never
+          add a new flow, regardless of whether the flow cookie was
+          used for matching.
+
+Open vSwitch support for OpenFlow 1.0 implements the OpenFlow 1.0
+behavior with the following extensions:
+
+        - An NXM extension field NXM_NX_COOKIE(_W) allows the NXM
+          versions of OFPFC_MODIFY, OFPFC_MODIFY_STRICT, OFPFC_DELETE,
+          and OFPFC_DELETE_STRICT flow_mods, plus flow stats requests
+          and aggregate stats requests, to match on flow cookies with
+          arbitrary masks.  This is much like the equivalent OpenFlow
+          1.1 feature.
+
+        - However, unlike OpenFlow 1.1, OFPC_MODIFY and
+          OFPFC_MODIFY_STRICT, regardless of whether there was a match
+          based on a cookie or not, always add a new flow if there is
+          no match, and they always update the cookies of flows that
+          they do match.
+
+        - NXT_PACKET_IN (the Nicira extended version of
+          OFPT_PACKET_IN) reports the cookie of the rule that
+          generated the packet, or all-1-bits if no rule generated the
+          packet.  (Older versions of OVS used all-0-bits instead of
+          all-1-bits.)
+
+
 Multiple Table Support
 ======================
 
