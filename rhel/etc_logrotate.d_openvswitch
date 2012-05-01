@@ -1,4 +1,4 @@
-# Copyright (C) 2009, 2010, 2011 Nicira, Inc.
+# Copyright (C) 2009, 2010, 2011, 2012 Nicira, Inc.
 #
 # Copying and distribution of this file, with or without modification,
 # are permitted in any medium without royalty provided the copyright
@@ -10,11 +10,8 @@
 	missingok
 	postrotate
 	# Tell Open vSwitch daemons to reopen their log files
-	if [ -e /var/run/openvswitch/ovs-vswitchd.pid ]; then
-	    /usr/bin/ovs-appctl -t ovs-vswitchd vlog/reopen
-	fi
-	if [ -e /var/run/openvswitch/ovsdb-server.pid ]; then
-	    /usr/bin/ovs-appctl -t ovsdb-server vlog/reopen
-	fi
+        for pidfile in `cd /var/run/openvswitch && echo *.pid`; do
+            ovs-appctl -t "${pidfile%%.pid}" vlog/reopen
+        done
 	endscript
 }
