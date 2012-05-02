@@ -1904,6 +1904,9 @@ handle_features_request(struct ofconn *ofconn, const struct ofp_header *oh)
     osf->actions = htonl(actions);
 
     HMAP_FOR_EACH (port, hmap_node, &ofproto->ports) {
+        if (buf->size + sizeof port->opp > UINT16_MAX) {
+            break;
+        }
         ofpbuf_put(buf, &port->opp, sizeof port->opp);
     }
 
