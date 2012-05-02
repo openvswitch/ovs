@@ -664,8 +664,8 @@ ofproto_port_get_stp_status(struct ofproto *ofproto, uint16_t ofp_port,
 {
     struct ofport *ofport = ofproto_get_port(ofproto, ofp_port);
     if (!ofport) {
-        VLOG_WARN("%s: cannot get STP status on nonexistent port %"PRIu16,
-                  ofproto->name, ofp_port);
+        VLOG_WARN_RL(&rl, "%s: cannot get STP status on nonexistent "
+                     "port %"PRIu16, ofproto->name, ofp_port);
         return ENODEV;
     }
 
