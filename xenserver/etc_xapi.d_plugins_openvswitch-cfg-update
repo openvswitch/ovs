@@ -4,7 +4,7 @@
 # ovs-vswitchd configuration that are managed in the xapi database when 
 # integrated with Citrix management tools.
 
-# Copyright (C) 2009, 2010, 2011 Nicira Networks, Inc.
+# Copyright (C) 2009, 2010, 2011 Nicira, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.

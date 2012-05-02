@@ -1,6 +1,6 @@
 # Spec file for Open vSwitch on Red Hat Enterprise Linux.
 
-# Copyright (C) 2009, 2010, 2011, 2012 Nicira Networks, Inc.
+# Copyright (C) 2009, 2010, 2011, 2012 Nicira, Inc.
 #
 # Copying and distribution of this file, with or without modification,
 # are permitted in any medium without royalty provided the copyright
@@ -11,7 +11,7 @@ Name: openvswitch
 Summary: Open vSwitch daemon/database/utilities
 Group: System Environment/Daemons
 URL: http://www.openvswitch.org/
-Vendor: Nicira Networks, Inc.
+Vendor: Nicira, Inc.
 Version: @VERSION@
 
 License: ASL 2.0

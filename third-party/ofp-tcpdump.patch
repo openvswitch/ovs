@@ -46,7 +46,7 @@
 --- tcpdump/print-openflow.c	1969-12-31 16:00:00.000000000 -0800
 +++ tcpdump/print-openflow.c	2009-05-11 15:38:41.000000000 -0700
 @@ -0,0 +1,46 @@
-+/* Copyright (C) 2007, 2008, 2009 Nicira Networks.
++/* Copyright (C) 2007, 2008, 2009 Nicira, Inc.
 +
 +   Redistribution and use in source and binary forms, with or without
 +   modification, are permitted provided that the following conditions

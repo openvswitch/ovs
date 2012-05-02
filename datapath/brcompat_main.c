@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2007-2012 Nicira Networks.
+ * Copyright (c) 2007-2012 Nicira, Inc.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of version 2 of the GNU General Public
@@ -569,7 +569,7 @@ module_init(brc_init);
 module_exit(brc_cleanup);
 
 MODULE_DESCRIPTION("Open vSwitch bridge compatibility");
-MODULE_AUTHOR("Nicira Networks");
+MODULE_AUTHOR("Nicira, Inc.");
 MODULE_LICENSE("GPL");
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,36)

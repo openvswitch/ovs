@@ -32,7 +32,7 @@
  */
 
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira, Inc.
  * Copyright (c) 2012 Horms Solutions Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");

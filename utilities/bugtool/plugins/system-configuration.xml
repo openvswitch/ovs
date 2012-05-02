@@ -15,7 +15,7 @@
  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301
  USA.
 
- Copyright (C) 2011 Nicira Networks.
+ Copyright (C) 2011 Nicira, Inc.
 -->
 <capability pii="no" min_size="-1" max_size="1000000" min_time="-1" max_time="60" mime="text/plain" checked="true" hidden="true">
 </capability>

@@ -1,7 +1,7 @@
 /*
  * This file is from the Apache Portable Runtime Library.
  * The full upstream copyright and license statement is included below.
- * Modifications copyright (c) 2009, 2010 Nicira Networks.
+ * Modifications copyright (c) 2009, 2010 Nicira, Inc.
  */
 
 /* Licensed to the Apache Software Foundation (ASF) under one or more

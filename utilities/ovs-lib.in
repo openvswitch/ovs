@@ -1,7 +1,7 @@
 # This is a shell function library sourced by some Open vSwitch scripts.
 # It is not intended to be invoked on its own.
 
-# Copyright (C) 2009, 2010, 2011, 2012 Nicira Networks, Inc.
+# Copyright (C) 2009, 2010, 2011, 2012 Nicira, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.

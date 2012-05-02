@@ -1,5 +1,5 @@
 # Copyright (c) 2007-2011 Citrix Systems Inc.
-# Copyright (c) 2009,2010,2011 Nicira Networks.
+# Copyright (c) 2009,2010,2011 Nicira, Inc.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by

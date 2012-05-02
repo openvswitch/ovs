@@ -421,8 +421,8 @@ AT_SETUP([OFPST_DESC reply])
 AT_KEYWORDS([ofp-print OFPT_STATS_REPLY])
 AT_CHECK([ovs-ofctl ofp-print "\
 01 11 04 2c 00 00 00 01 00 00 00 00 4e 69 63 69 \
-72 61 20 4e 65 74 77 6f 72 6b 73 2c 20 49 6e 63 \
-2e 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 \
+72 61 2c 20 49 6e 63 2e 00 00 00 00 00 00 00 00 \
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 \
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 \
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 \
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 \
@@ -489,7 +489,7 @@ AT_CHECK([ovs-ofctl ofp-print "\
 00 00 00 00 00 00 00 00 00 00 00 00 \
 "], [0], [dnl
 OFPST_DESC reply (xid=0x1):
-Manufacturer: Nicira Networks, Inc.
+Manufacturer: Nicira, Inc.
 Hardware: Open vSwitch
 Software: 1.1.0pre2
 Serial Num: None

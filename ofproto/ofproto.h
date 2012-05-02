@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012 Nicira Networks.
+ * Copyright (c) 2009, 2010, 2011, 2012 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -131,7 +131,7 @@ struct ofproto_controller {
     uint8_t dscp;               /* DSCP value for controller connection. */
 };
 
-#define DEFAULT_MFR_DESC "Nicira Networks, Inc."
+#define DEFAULT_MFR_DESC "Nicira, Inc."
 #define DEFAULT_HW_DESC "Open vSwitch"
 #define DEFAULT_SW_DESC VERSION
 #define DEFAULT_SERIAL_DESC "None"
