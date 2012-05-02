@@ -3760,11 +3760,13 @@ ofputil_put_action(enum ofputil_action_code code, struct ofpbuf *buf)
 bool
 action_outputs_to_port(const union ofp_action *action, ovs_be16 port)
 {
-    switch (ntohs(action->type)) {
-    case OFPAT10_OUTPUT:
+    switch (ofputil_decode_action(action)) {
+    case OFPUTIL_OFPAT10_OUTPUT:
         return action->output.port == port;
-    case OFPAT10_ENQUEUE:
+    case OFPUTIL_OFPAT10_ENQUEUE:
         return ((const struct ofp_action_enqueue *) action)->port == port;
+    case OFPUTIL_NXAST_CONTROLLER:
+        return port == htons(OFPP_CONTROLLER);
     default:
         return false;
     }
