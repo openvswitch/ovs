@@ -189,12 +189,16 @@ format_odp_userspace_action(struct ds *ds, const struct nlattr *attr)
 
         memcpy(&cookie, &userdata, sizeof cookie);
 
-        if (cookie.type == USER_ACTION_COOKIE_SFLOW) {
+        switch (cookie.type) {
+        case USER_ACTION_COOKIE_SFLOW:
             ds_put_format(ds, ",sFlow,n_output=%"PRIu8","
                           "vid=%"PRIu16",pcp=%"PRIu8",ifindex=%"PRIu32,
                           cookie.n_output, vlan_tci_to_vid(cookie.vlan_tci),
                           vlan_tci_to_pcp(cookie.vlan_tci), cookie.data);
-        } else {
+            break;
+
+        case USER_ACTION_COOKIE_UNSPEC:
+        default:
             ds_put_format(ds, ",userdata=0x%"PRIx64, userdata);
         }
     }

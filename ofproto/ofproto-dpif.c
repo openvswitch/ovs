@@ -3026,13 +3026,18 @@ handle_userspace_upcall(struct ofproto_dpif *ofproto,
         return;
     }
 
-    if (cookie.type == USER_ACTION_COOKIE_SFLOW) {
+    switch (cookie.type) {
+    case USER_ACTION_COOKIE_SFLOW:
         if (ofproto->sflow) {
             dpif_sflow_received(ofproto->sflow, upcall->packet, &flow,
                                 &cookie);
         }
-    } else {
+        break;
+
+    case USER_ACTION_COOKIE_UNSPEC:
+    default:
         VLOG_WARN_RL(&rl, "invalid user cookie : 0x%"PRIx64, upcall->userdata);
+        break;
     }
 }
 
