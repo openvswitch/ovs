@@ -242,6 +242,42 @@ struct ofp_port_status {
 };
 OFP_ASSERT(sizeof(struct ofp_port_status) == 16);
 
+enum ofp_stats_types {
+    /* Description of this OpenFlow switch. (OFPMP_DESC)
+     * The OF1.0 request is struct ofp_stats_msg.
+     * The OF1.0 reply is struct ofp_desc_stats. */
+    OFPST_DESC = 0,
+
+    /* Individual flow statistics. (OFPMP_FLOW)
+     * The OF1.0 request is struct ofp_flow_stats_request.
+     * The OF1.0 reply body is an array of struct ofp_flow_stats. */
+    OFPST_FLOW = 1,
+
+    /* Aggregate flow statistics. (OFPMP_AGGREGATE)
+     * The OF1.0 request is struct ofp_flow_stats_request.
+     * The OF1.0 reply is struct ofp_aggregate_stats_reply. */
+    OFPST_AGGREGATE = 2,
+
+    /* Flow table statistics. (OFPMP_TABLE)
+     * The OF1.0 request is struct ofp_stats_msg.
+     * The OF1.0 reply body is an array of struct ofp_table_stats. */
+    OFPST_TABLE = 3,
+
+    /* Physical port statistics. (OFPMP_PORT_STATS)
+     * The OF1.0 request is struct ofp_port_stats_request.
+     * The OF1.0 reply body is an array of struct ofp_port_stats. */
+    OFPST_PORT = 4,
+
+    /* Queue statistics for a port. (OFPMP_QUEUE)
+     * The OF1.0 request is struct ofp_stats_msg.
+     * The OF1.0 reply body is an array of struct ofp_queue_stats. */
+    OFPST_QUEUE = 5,
+
+    /* Vendor extension.
+     * The OF1.0 request and reply begin with struct ofp_vendor_stats. */
+    OFPST_VENDOR = 0xffff
+};
+
 /* The match type indicates the match structure (set of fields that compose the
  * match) in use. The match type is placed in the type field at the beginning
  * of all match structures. The "OpenFlow Extensible Match" type corresponds
