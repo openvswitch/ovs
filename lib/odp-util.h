@@ -122,7 +122,7 @@ enum user_action_cookie_type {
 };
 
 /* user_action_cookie is passed as argument to OVS_ACTION_ATTR_USERSPACE.
- * Since is it passed to kernel as u64, its size has to be 8 bytes. */
+ * Since it is passed to kernel as u64, its size has to be 8 bytes. */
 struct user_action_cookie {
     uint8_t   type;                 /* enum user_action_cookie_type. */
     uint8_t   n_output;             /* No of output ports. used by sflow. */
