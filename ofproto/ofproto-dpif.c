@@ -615,9 +615,9 @@ static void send_netflow_active_timeouts(struct ofproto_dpif *);
 
 /* Utilities. */
 static int send_packet(const struct ofport_dpif *, struct ofpbuf *packet);
-static size_t
-compose_sflow_action(const struct ofproto_dpif *, struct ofpbuf *odp_actions,
-                     const struct flow *, uint32_t odp_port);
+static size_t compose_sflow_action(const struct ofproto_dpif *,
+                                   struct ofpbuf *odp_actions,
+                                   const struct flow *, uint32_t odp_port);
 static void add_mirror_actions(struct action_xlate_ctx *ctx,
                                const struct flow *flow);
 /* Global variables. */
