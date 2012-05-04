@@ -42,6 +42,7 @@
 #include "odp-util.h"
 #include "ofp-util.h"
 #include "ofpbuf.h"
+#include "ofp-parse.h"
 #include "ofp-print.h"
 #include "ofproto-dpif-governor.h"
 #include "ofproto-dpif-sflow.h"
@@ -6387,23 +6388,48 @@ ofproto_unixctl_trace(struct unixctl_conn *conn, int argc, const char *argv[],
         /* ofproto/trace dpname flow [-generate] */
         const char *flow_s = argv[2];
         const char *generate_s = argv[3];
-        int error;
 
-        /* Convert string to datapath key. */
-        ofpbuf_init(&odp_key, 0);
-        error = odp_flow_key_from_string(flow_s, NULL, &odp_key);
-        if (error) {
-            unixctl_command_reply_error(conn, "Bad flow syntax");
-            goto exit;
-        }
+        /* Allow 'flow_s' to be either a datapath flow or an OpenFlow-like
+         * flow.  We guess which type it is based on whether 'flow_s' contains
+         * an '(', since a datapath flow always contains '(') but an
+         * OpenFlow-like flow should not (in fact it's allowed but I believe
+         * that's not documented anywhere).
+         *
+         * An alternative would be to try to parse 'flow_s' both ways, but then
+         * it would be tricky giving a sensible error message.  After all, do
+         * you just say "syntax error" or do you present both error messages?
+         * Both choices seem lousy. */
+        if (strchr(flow_s, '(')) {
+            int error;
 
-        /* Convert odp_key to flow. */
-        error = ofproto_dpif_extract_flow_key(ofproto, odp_key.data,
-                                              odp_key.size, &flow,
-                                              &initial_tci, NULL);
-        if (error == ODP_FIT_ERROR) {
-            unixctl_command_reply_error(conn, "Invalid flow");
-            goto exit;
+            /* Convert string to datapath key. */
+            ofpbuf_init(&odp_key, 0);
+            error = odp_flow_key_from_string(flow_s, NULL, &odp_key);
+            if (error) {
+                unixctl_command_reply_error(conn, "Bad flow syntax");
+                goto exit;
+            }
+
+            /* Convert odp_key to flow. */
+            error = ofproto_dpif_extract_flow_key(ofproto, odp_key.data,
+                                                  odp_key.size, &flow,
+                                                  &initial_tci, NULL);
+            if (error == ODP_FIT_ERROR) {
+                unixctl_command_reply_error(conn, "Invalid flow");
+                goto exit;
+            }
+        } else {
+            char *error_s;
+
+            error_s = parse_ofp_exact_flow(&flow, argv[2]);
+            if (error_s) {
+                unixctl_command_reply_error(conn, error_s);
+                free(error_s);
+                goto exit;
+            }
+
+            initial_tci = flow.vlan_tci;
+            vsp_adjust_flow(ofproto, &flow);
         }
 
         /* Generate a packet, if requested. */

@@ -7,7 +7,7 @@ Lists the names of the running ofproto instances.  These are the names
 that may be used on \fBofproto/trace\fR.
 .
 .IP "\fBofproto/trace \fIswitch priority tun_id in_port packet\fR"
-.IQ "\fBofproto/trace \fIswitch odp_flow \fB\-generate\fR"
+.IQ "\fBofproto/trace \fIswitch flow \fB\-generate\fR"
 Traces the path of an imaginary packet through \fIswitch\fR.  Both
 forms require \fIswitch\fR, the switch on which the packet arrived
 (one of those listed by \fBofproto/list\fR).  The first form specifies
@@ -31,32 +31,36 @@ utilities provide easier ways.
 .IP
 The second form specifies the packet's contents implicitly:
 .RS
-.IP "\fIodp_flow\fR"
-A flow in the form printed by \fBovs\-dpctl\fR(8)'s \fBdump\-flows\fR
+.IP "\flow\fR"
+A flow in one of two forms: either the form printed by
+\fBovs\-dpctl\fR(8)'s \fBdump\-flows\fR command, or in a format
+similar to that accepted by \Bovs\-ofctl\fR(8)'s \fBadd\-flow\fR
 command.  This is not an OpenFlow flow: besides other differences, it
 never contains wildcards.  \fB\*(PN\fR generates an arbitrary packet
-that has the specified \fIodp_flow\fR.
+that has the specified \flow\fR.
 .RE
 .IP
 \fB\*(PN\fR will respond with extensive information on how the packet
 would be handled if it were to be received.  The packet will not
 actually be sent, but side effects such as MAC learning will occur.
 .
-.IP "\fBofproto/trace \fIswitch odp_flow\fR"
+.IP "\fBofproto/trace \fIswitch flow\fR"
 Traces the path of a packet in an imaginary flow through
 \fIswitch\fR.  The arguments are:
 .RS
 .IP "\fIswitch\fR"
 The switch on which the packet arrived (one of those listed by
 \fBofproto/list\fR).
-.IP "\fIodp_flow\fR"
-A flow in the form printed by \fBovs\-dpctl\fR(8)'s \fBdump\-flows\fR
+.IP "\flow\fR"
+A flow in one of two forms: either the form printed by
+\fBovs\-dpctl\fR(8)'s \fBdump\-flows\fR command, or in a format
+similar to that accepted by \Bovs\-ofctl\fR(8)'s \fBadd\-flow\fR
 command.  This is not an OpenFlow flow: besides other differences, it
 never contains wildcards.
 .RE
 .IP
 \fB\*(PN\fR will respond with extensive information on how a packet
-in \fIodp_flow\fR would be handled if it were received by
+in \flow\fR would be handled if it were received by
 \fIswitch\fR.  No packet will actually be sent.  Some side effects may
 occur, but MAC learning in particular will not.
 .IP
