@@ -116,9 +116,20 @@ enum odp_key_fitness odp_flow_key_to_flow(const struct nlattr *, size_t,
                                           struct flow *);
 const char *odp_key_fitness_to_string(enum odp_key_fitness);
 
+void commit_odp_actions(const struct flow *, struct flow *base,
+                        struct ofpbuf *odp_actions);
+
+/* ofproto-dpif interface.
+ *
+ * The following types and functions are logically part of ofproto-dpif.
+ * ofproto-dpif puts values of these types into the flows that it installs in
+ * the kernel datapath, though, so ovs-dpctl needs to interpret them so that
+ * it can print flows in a more human-readable manner. */
+
 enum user_action_cookie_type {
     USER_ACTION_COOKIE_UNSPEC,
     USER_ACTION_COOKIE_SFLOW,        /* Packet for sFlow sampling. */
+    USER_ACTION_COOKIE_SLOW_PATH     /* Userspace must process this flow. */
 };
 
 /* user_action_cookie is passed as argument to OVS_ACTION_ATTR_USERSPACE.
@@ -131,14 +142,34 @@ union user_action_cookie {
         ovs_be16 vlan_tci;      /* Destination VLAN TCI. */
         uint32_t output;        /* SFL_FLOW_SAMPLE_TYPE 'output' value. */
     } sflow;
-};
 
+    struct {
+        uint16_t type;          /* USER_ACTION_COOKIE_SLOW_PATH. */
+        uint16_t unused;
+        uint32_t reason;        /* enum slow_path_reason. */
+    } slow_path;
+};
 BUILD_ASSERT_DECL(sizeof(union user_action_cookie) == 8);
 
 size_t odp_put_userspace_action(uint32_t pid,
                                 const union user_action_cookie *,
                                 struct ofpbuf *odp_actions);
 
-void commit_odp_actions(const struct flow *, struct flow *base,
-                        struct ofpbuf *odp_actions);
+/* Reasons why a subfacet might not be fast-pathable. */
+enum slow_path_reason {
+    /* These reasons are mutually exclusive. */
+    SLOW_CFM = 1 << 0,          /* CFM packets need per-packet processing. */
+    SLOW_LACP = 1 << 1,         /* LACP packets need per-packet processing. */
+    SLOW_STP = 1 << 2,          /* STP packets need per-packet processing. */
+    SLOW_IN_BAND = 1 << 3,      /* In-band control needs every packet. */
+
+    /* Mutually exclusive with SLOW_CFM, SLOW_LACP, SLOW_STP.
+     * Could possibly appear with SLOW_IN_BAND. */
+    SLOW_CONTROLLER = 1 << 4,   /* Packets must go to OpenFlow controller. */
+
+    /* This can appear on its own, or, theoretically at least, along with any
+     * other combination of reasons. */
+    SLOW_MATCH = 1 << 5,        /* Datapath can't match specifically enough. */
+};
+
 #endif /* odp-util.h */
