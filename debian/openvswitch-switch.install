@@ -11,3 +11,4 @@ usr/share/openvswitch/scripts/ovs-ctl
 usr/share/openvswitch/scripts/ovs-lib
 usr/share/openvswitch/scripts/ovs-save
 usr/share/openvswitch/vswitch.ovsschema
+debian/ifupdown.sh usr/share/openvswitch/scripts

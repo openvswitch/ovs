@@ -43,6 +43,7 @@ EXTRA_DIST += \
 	debian/openvswitch-switch.postinst \
 	debian/openvswitch-switch.postrm \
 	debian/openvswitch-switch.template \
+	debian/openvswitch-switch.links \
 	debian/openvswitch-test.dirs \
 	debian/openvswitch-test.install \
 	debian/openvswitch-test.manpages \
@@ -53,6 +54,7 @@ EXTRA_DIST += \
 	debian/python-openvswitch.install \
 	debian/rules \
 	debian/rules.modules \
+	debian/ifupdown.sh \
 	debian/source/format
 
 check-debian-changelog-version:

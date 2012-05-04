@@ -111,6 +111,7 @@ install-arch: build-arch
 	$(MAKE) -C _debian DESTDIR=$(CURDIR)/debian/tmp install
 	cp debian/openvswitch-switch.template debian/openvswitch-switch/usr/share/openvswitch/switch/default.template
 	dh_install -s
+	dh_link -s
 
 # Must not depend on anything. This is to be called by
 # binary-arch/binary-indep

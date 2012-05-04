@@ -14,3 +14,120 @@ README.Debian for openvswitch-switch
   switch implementation.
 
  -- Ben Pfaff <blp@nicira.com>, Mon, 30 Aug 2010 09:51:19 -0700
+
+Debian network scripts integration
+----------------------------------
+This package lets a user to optionally configure Open vSwitch bridges
+and ports from /etc/network/interfaces. Please refer to the interfaces(5)
+manpage for more details regarding /etc/network/interfaces.
+
+The stanzas that configure the OVS bridges should begin with "allow-ovs"
+followed by name of the bridge. Here is an example.
+allow-ovs br0
+
+The stanzas that configure the OVS ports should begin with
+"allow-${bridge-name}" followed by name of the port. Here is an example.
+allow-br0 eth0
+
+The following OVS specific "command" options are supported:
+
+    - ovs_type: This can either be OVSBridge, OVSPort, OVSIntPort or OVSBond
+      depending on whether you configure a bridge, port, an internal port or
+      a bond. This is a required option.
+
+    - ovs_ports: This option specifies all the ports that belong to a bridge.
+
+    - ovs_bridge: This options specifies a bridge to which a port belongs.
+      This is a required option for a port.
+
+    - ovs_bonds: This option specifies the list of physical interfaces to be
+      bonded together.
+
+    - ovs_options: This option lets you add extra arguments to a ovs-vsctl
+      command. See examples.
+
+    - ovs_extra: This option lets you run additional ovs-vsctl commands,
+      separated by "--" (double dash). Variables can be part of the "ovs_extra"
+      option. You can provide all the standard environmental variables
+      described in the interfaces(5) man page. You can also pass shell
+      commands.
+
+More implementation specific details can be seen in the examples.
+
+Examples:
+--------
+ex 1: A standalone bridge.
+
+allow-ovs br0
+iface br0 inet static
+    address 192.168.1.1
+    netmask 255.255.255.0
+    ovs_type OVSBridge
+
+ex 2: A bridge with one port.
+
+allow-ovs br0
+iface br0 inet dhcp
+    ovs_type OVSBridge
+    ovs_ports eth0
+
+allow-br0 eth0
+iface eth0 inet manual
+    ovs_bridge br0
+    ovs_type OVSPort
+
+ex 3: A bridge with multiple physical ports.
+
+allow-ovs br0
+iface br0 inet dhcp
+    ovs_type OVSBridge
+    ovs_ports eth0 eth1
+
+allow-br0 eth0
+iface eth0 inet manual
+    ovs_bridge br0
+    ovs_type OVSPort
+
+allow-br0 eth1
+iface eth1 inet manual
+    ovs_bridge br0
+    ovs_type OVSPort
+
+ex 4: A bridge with an OVS internal port.
+
+allow-ovs br1
+iface br1 inet static
+    address 192.168.1.1
+    netmask 255.255.255.0
+    ovs_type OVSBridge
+    ovs_ports vlan100
+
+allow-br1 vlan100
+iface vlan100 inet manual
+    ovs_bridge br1
+    ovs_type OVSIntPort
+    ovs_options tag=100
+    ovs_extra set interface ${IFACE} external-ids:iface-id=$(hostname -s)
+
+ex 5: Bonding.
+
+allow-ovs br2
+iface br2 inet static
+    address 192.170.1.1
+    netmask 255.255.255.0
+    ovs_type OVSBridge
+    ovs_ports bond0
+
+allow-br2 bond0
+iface bond0 inet manual
+    ovs_bridge br2
+    ovs_type OVSBond
+    ovs_bonds eth2 eth3
+    ovs_options bond_mode=balance-tcp lacp=active
+
+ex 6: Create and destroy bridges.
+
+ifup --allow=ovs $list_of_bridges
+ifdown --allow=ovs $list_of_bridges
+
+-- Gurucharan Shetty <gshetty@nicira.com>, Fri, 04 May 2012 12:58:19 -0700
