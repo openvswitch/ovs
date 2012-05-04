@@ -491,7 +491,7 @@ dpif_sflow_odp_port_to_ifindex(const struct dpif_sflow *ds,
 void
 dpif_sflow_received(struct dpif_sflow *ds, struct ofpbuf *packet,
                     const struct flow *flow,
-                    const struct user_action_cookie *cookie)
+                    const union user_action_cookie *cookie)
 {
     SFL_FLOW_SAMPLE_TYPE fs;
     SFLFlow_sample_element hdrElem;
@@ -500,6 +500,7 @@ dpif_sflow_received(struct dpif_sflow *ds, struct ofpbuf *packet,
     SFLSampler *sampler;
     struct dpif_sflow_port *in_dsp;
     struct netdev_stats stats;
+    ovs_be16 vlan_tci;
     int error;
 
     /* Build a flow sample */
@@ -549,10 +550,11 @@ dpif_sflow_received(struct dpif_sflow *ds, struct ofpbuf *packet,
     switchElem.flowType.sw.src_priority = vlan_tci_to_pcp(flow->vlan_tci);
 
     /* Retrieve data from user_action_cookie. */
-    switchElem.flowType.sw.dst_vlan = vlan_tci_to_vid(cookie->vlan_tci);
-    switchElem.flowType.sw.dst_priority = vlan_tci_to_pcp(cookie->vlan_tci);
+    vlan_tci = cookie->sflow.vlan_tci;
+    switchElem.flowType.sw.dst_vlan = vlan_tci_to_vid(vlan_tci);
+    switchElem.flowType.sw.dst_priority = vlan_tci_to_pcp(vlan_tci);
 
-    fs.output = cookie->output;
+    fs.output = cookie->sflow.output;
 
     /* Submit the flow sample to be encoded into the next datagram. */
     SFLADD_ELEMENT(&fs, &hdrElem);

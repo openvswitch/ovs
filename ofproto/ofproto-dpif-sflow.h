@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2009, 2010 InMon Corp.
- * Copyright (c) 2009 Nicira, Inc.
+ * Copyright (c) 2009, 2012 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -46,7 +46,7 @@ void dpif_sflow_wait(struct dpif_sflow *);
 void dpif_sflow_received(struct dpif_sflow *,
                          struct ofpbuf *,
                          const struct flow *,
-                         const struct user_action_cookie *);
+                         const union user_action_cookie *);
 
 int dpif_sflow_odp_port_to_ifindex(const struct dpif_sflow *, uint16_t);
 
