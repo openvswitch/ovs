@@ -185,7 +185,7 @@ format_odp_userspace_action(struct ds *ds, const struct nlattr *attr)
 
     if (a[OVS_USERSPACE_ATTR_USERDATA]) {
         uint64_t userdata = nl_attr_get_u64(a[OVS_USERSPACE_ATTR_USERDATA]);
-        struct user_action_cookie cookie;
+        union user_action_cookie cookie;
 
         memcpy(&cookie, &userdata, sizeof cookie);
 
@@ -193,8 +193,9 @@ format_odp_userspace_action(struct ds *ds, const struct nlattr *attr)
         case USER_ACTION_COOKIE_SFLOW:
             ds_put_format(ds, ",sFlow,"
                           "vid=%"PRIu16",pcp=%"PRIu8",output=%"PRIu32,
-                          vlan_tci_to_vid(cookie.vlan_tci),
-                          vlan_tci_to_pcp(cookie.vlan_tci), cookie.output);
+                          vlan_tci_to_vid(cookie.sflow.vlan_tci),
+                          vlan_tci_to_pcp(cookie.sflow.vlan_tci),
+                          cookie.sflow.output);
             break;
 
         case USER_ACTION_COOKIE_UNSPEC:
@@ -348,7 +349,7 @@ parse_odp_action(const char *s, const struct shash *port_names,
         } else if (sscanf(s, "userspace(pid=%lli,sFlow,vid=%i,"
                           "pcp=%i,output=%lli)%n",
                           &pid, &vid, &pcp, &output, &n) > 0 && n > 0) {
-            struct user_action_cookie cookie;
+            union user_action_cookie cookie;
             uint16_t tci;
 
             tci = vid | (pcp << VLAN_PCP_SHIFT);
@@ -357,14 +358,14 @@ parse_odp_action(const char *s, const struct shash *port_names,
             }
 
             cookie.type = USER_ACTION_COOKIE_SFLOW;
-            cookie.vlan_tci = htons(tci);
-            cookie.output = output;
+            cookie.sflow.vlan_tci = htons(tci);
+            cookie.sflow.output = output;
             odp_put_userspace_action(pid, &cookie, actions);
             return n;
         } else if (sscanf(s, "userspace(pid=%lli,userdata="
                           "%31[x0123456789abcdefABCDEF])%n", &pid, userdata_s,
                           &n) > 0 && n > 0) {
-            struct user_action_cookie cookie;
+            union user_action_cookie cookie;
             uint64_t userdata;
 
             userdata = strtoull(userdata_s, NULL, 0);
@@ -1726,7 +1727,7 @@ odp_key_fitness_to_string(enum odp_key_fitness fitness)
  * the start of the cookie.  (If 'cookie' is null, then the return value is not
  * meaningful.) */
 size_t
-odp_put_userspace_action(uint32_t pid, const struct user_action_cookie *cookie,
+odp_put_userspace_action(uint32_t pid, const union user_action_cookie *cookie,
                          struct ofpbuf *odp_actions)
 {
     size_t offset;

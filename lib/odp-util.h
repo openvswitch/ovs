@@ -123,18 +123,20 @@ enum user_action_cookie_type {
 
 /* user_action_cookie is passed as argument to OVS_ACTION_ATTR_USERSPACE.
  * Since it is passed to kernel as u64, its size has to be 8 bytes. */
-struct user_action_cookie {
+union user_action_cookie {
     uint16_t type;              /* enum user_action_cookie_type. */
 
-    /* The following members are used only by USER_ACTION_COOKIE_SFLOW. */
-    ovs_be16 vlan_tci;          /* Destination VLAN TCI. */
-    uint32_t output;            /* SFL_FLOW_SAMPLE_TYPE 'output' value. */
+    struct {
+        uint16_t type;          /* USER_ACTION_COOKIE_SFLOW. */
+        ovs_be16 vlan_tci;      /* Destination VLAN TCI. */
+        uint32_t output;        /* SFL_FLOW_SAMPLE_TYPE 'output' value. */
+    } sflow;
 };
 
-BUILD_ASSERT_DECL(sizeof(struct user_action_cookie) == 8);
+BUILD_ASSERT_DECL(sizeof(union user_action_cookie) == 8);
 
 size_t odp_put_userspace_action(uint32_t pid,
-                                const struct user_action_cookie *,
+                                const union user_action_cookie *,
                                 struct ofpbuf *odp_actions);
 
 void commit_odp_actions(const struct flow *, struct flow *base,

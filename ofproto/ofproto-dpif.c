@@ -3012,7 +3012,7 @@ static void
 handle_userspace_upcall(struct ofproto_dpif *ofproto,
                         struct dpif_upcall *upcall)
 {
-    struct user_action_cookie cookie;
+    union user_action_cookie cookie;
     enum odp_key_fitness fitness;
     ovs_be16 initial_tci;
     struct flow flow;
@@ -4508,7 +4508,7 @@ static size_t
 put_userspace_action(const struct ofproto_dpif *ofproto,
                      struct ofpbuf *odp_actions,
                      const struct flow *flow,
-                     const struct user_action_cookie *cookie)
+                     const union user_action_cookie *cookie)
 {
     uint32_t pid;
 
@@ -4521,31 +4521,31 @@ put_userspace_action(const struct ofproto_dpif *ofproto,
 static void
 compose_sflow_cookie(const struct ofproto_dpif *ofproto,
                      ovs_be16 vlan_tci, uint32_t odp_port,
-                     unsigned int n_outputs, struct user_action_cookie *cookie)
+                     unsigned int n_outputs, union user_action_cookie *cookie)
 {
     int ifindex;
 
     cookie->type = USER_ACTION_COOKIE_SFLOW;
-    cookie->vlan_tci = vlan_tci;
+    cookie->sflow.vlan_tci = vlan_tci;
 
     /* See http://www.sflow.org/sflow_version_5.txt (search for "Input/output
      * port information") for the interpretation of cookie->output. */
     switch (n_outputs) {
     case 0:
         /* 0x40000000 | 256 means "packet dropped for unknown reason". */
-        cookie->output = 0x40000000 | 256;
+        cookie->sflow.output = 0x40000000 | 256;
         break;
 
     case 1:
         ifindex = dpif_sflow_odp_port_to_ifindex(ofproto->sflow, odp_port);
         if (ifindex) {
-            cookie->output = ifindex;
+            cookie->sflow.output = ifindex;
             break;
         }
         /* Fall through. */
     default:
         /* 0x80000000 means "multiple output ports. */
-        cookie->output = 0x80000000 | n_outputs;
+        cookie->sflow.output = 0x80000000 | n_outputs;
         break;
     }
 }
@@ -4558,7 +4558,7 @@ compose_sflow_action(const struct ofproto_dpif *ofproto,
                      uint32_t odp_port)
 {
     uint32_t probability;
-    struct user_action_cookie cookie;
+    union user_action_cookie cookie;
     size_t sample_offset, actions_offset;
     int cookie_offset;
 
@@ -4602,7 +4602,7 @@ static void
 fix_sflow_action(struct action_xlate_ctx *ctx)
 {
     const struct flow *base = &ctx->base_flow;
-    struct user_action_cookie *cookie;
+    union user_action_cookie *cookie;
 
     if (!ctx->user_cookie_offset) {
         return;
