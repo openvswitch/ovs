@@ -755,3 +755,80 @@ parse_ofp_flow_stats_request_str(struct ofputil_flow_stats_request *fsr,
     fsr->out_port = fm.out_port;
     fsr->table_id = fm.table_id;
 }
+
+/* Parses a specification of a flow from 's' into 'flow'.  's' must take the
+ * form FIELD=VALUE[,FIELD=VALUE]... where each FIELD is the name of a
+ * mf_field.  Fields must be specified in a natural order for satisfying
+ * prerequisites.
+ *
+ * Returns NULL on success, otherwise a malloc()'d string that explains the
+ * problem. */
+char *
+parse_ofp_exact_flow(struct flow *flow, const char *s)
+{
+    char *pos, *key, *value_s;
+    char *error = NULL;
+    char *copy;
+
+    memset(flow, 0, sizeof *flow);
+
+    pos = copy = xstrdup(s);
+    while (ofputil_parse_key_value(&pos, &key, &value_s)) {
+        const struct protocol *p;
+        if (parse_protocol(key, &p)) {
+            if (flow->dl_type) {
+                error = xasprintf("%s: Ethernet type set multiple times", s);
+                goto exit;
+            }
+            flow->dl_type = htons(p->dl_type);
+
+            if (p->nw_proto) {
+                if (flow->nw_proto) {
+                    error = xasprintf("%s: network protocol set "
+                                      "multiple times", s);
+                    goto exit;
+                }
+                flow->nw_proto = p->nw_proto;
+            }
+        } else {
+            const struct mf_field *mf;
+            union mf_value value;
+            char *field_error;
+
+            mf = mf_from_name(key);
+            if (!mf) {
+                error = xasprintf("%s: unknown field %s", s, key);
+                goto exit;
+            }
+
+            if (!mf_are_prereqs_ok(mf, flow)) {
+                error = xasprintf("%s: prerequisites not met for setting %s",
+                                  s, key);
+                goto exit;
+            }
+
+            if (!mf_is_zero(mf, flow)) {
+                error = xasprintf("%s: field %s set multiple times", s, key);
+                goto exit;
+            }
+
+            field_error = mf_parse_value(mf, value_s, &value);
+            if (field_error) {
+                error = xasprintf("%s: bad value for %s (%s)",
+                                  s, key, field_error);
+                free(field_error);
+                goto exit;
+            }
+
+            mf_set_flow_value(mf, &value, flow);
+        }
+    }
+
+exit:
+    free(copy);
+
+    if (error) {
+        memset(flow, 0, sizeof *flow);
+    }
+    return error;
+}

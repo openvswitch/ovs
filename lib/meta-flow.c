@@ -1457,6 +1457,19 @@ mf_set_flow_value(const struct mf_field *mf,
     }
 }
 
+/* Returns true if 'mf' has a zero value in 'flow', false if it is nonzero.
+ *
+ * The caller is responsible for ensuring that 'flow' meets 'mf''s
+ * prerequisites. */
+bool
+mf_is_zero(const struct mf_field *mf, const struct flow *flow)
+{
+    union mf_value value;
+
+    mf_get_value(mf, flow, &value);
+    return is_all_zeros((const uint8_t *) &value, mf->n_bytes);
+}
+
 /* Makes 'rule' wildcard field 'mf'.
  *
  * The caller is responsible for ensuring that 'rule' meets 'mf''s
