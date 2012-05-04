@@ -255,8 +255,7 @@ struct action_xlate_ctx {
 
     struct ofpbuf *odp_actions; /* Datapath actions. */
     tag_type tags;              /* Tags associated with actions. */
-    bool may_set_up_flow;       /* True ordinarily; false if the actions must
-                                 * be reassessed for every packet. */
+    enum slow_path_reason slow; /* 0 if fast path may be used. */
     bool has_learn;             /* Actions include NXAST_LEARN? */
     bool has_normal;            /* Actions output to OFPP_NORMAL? */
     bool has_fin_timeout;       /* Actions include NXAST_FIN_TIMEOUT? */
@@ -289,6 +288,38 @@ static void xlate_actions_for_side_effects(struct action_xlate_ctx *,
                                            const union ofp_action *in,
                                            size_t n_in);
 
+static size_t put_userspace_action(const struct ofproto_dpif *,
+                                   struct ofpbuf *odp_actions,
+                                   const struct flow *,
+                                   const union user_action_cookie *);
+
+static void compose_slow_path(const struct ofproto_dpif *, const struct flow *,
+                              enum slow_path_reason,
+                              uint64_t *stub, size_t stub_size,
+                              const struct nlattr **actionsp,
+                              size_t *actions_lenp);
+
+/* A subfacet (see "struct subfacet" below) has three possible installation
+ * states:
+ *
+ *   - SF_NOT_INSTALLED: Not installed in the datapath.  This will only be the
+ *     case just after the subfacet is created, just before the subfacet is
+ *     destroyed, or if the datapath returns an error when we try to install a
+ *     subfacet.
+ *
+ *   - SF_FAST_PATH: The subfacet's actions are installed in the datapath.
+ *
+ *   - SF_SLOW_PATH: An action that sends every packet for the subfacet through
+ *     ofproto_dpif is installed in the datapath.
+ */
+enum subfacet_path {
+    SF_NOT_INSTALLED,           /* No datapath flow for this subfacet. */
+    SF_FAST_PATH,               /* Full actions are installed. */
+    SF_SLOW_PATH,               /* Send-to-userspace action is installed. */
+};
+
+static const char *subfacet_path_to_string(enum subfacet_path);
+
 /* A dpif flow and actions associated with a facet.
  *
  * See also the large comment on struct facet. */
@@ -319,7 +350,8 @@ struct subfacet {
     size_t actions_len;         /* Number of bytes in actions[]. */
     struct nlattr *actions;     /* Datapath actions. */
 
-    bool installed;             /* Installed in datapath? */
+    enum slow_path_reason slow; /* 0 if fast path may be used. */
+    enum subfacet_path path;    /* Installed in datapath? */
 
     /* This value is normally the same as ->facet->flow.vlan_tci.  Only VLAN
      * splinters can cause it to differ.  This value should be removed when
@@ -346,8 +378,10 @@ static void subfacet_make_actions(struct subfacet *,
                                   struct ofpbuf *odp_actions);
 static int subfacet_install(struct subfacet *,
                             const struct nlattr *actions, size_t actions_len,
-                            struct dpif_flow_stats *);
+                            struct dpif_flow_stats *, enum slow_path_reason);
 static void subfacet_uninstall(struct subfacet *);
+
+static enum subfacet_path subfacet_want_path(enum slow_path_reason);
 
 /* An exact-match instantiation of an OpenFlow flow.
  *
@@ -407,7 +441,6 @@ struct facet {
      * between splintered and non-splintered subfacets due to the VLAN tag
      * being initially different (present vs. absent).  All of them have these
      * properties in common so we just store one copy of them here. */
-    bool may_install;            /* Reassess actions for every packet? */
     bool has_learn;              /* Actions include NXAST_LEARN? */
     bool has_normal;             /* Actions output to OFPP_NORMAL? */
     bool has_fin_timeout;        /* Actions include NXAST_FIN_TIMEOUT? */
@@ -1039,7 +1072,7 @@ flush(struct ofproto *ofproto_)
         struct subfacet *subfacet;
 
         LIST_FOR_EACH (subfacet, list_node, &facet->subfacets) {
-            subfacet->installed = false;
+            subfacet->path = SF_NOT_INSTALLED;
             subfacet->dp_packet_count = 0;
             subfacet->dp_byte_count = 0;
         }
@@ -2601,6 +2634,7 @@ struct flow_miss {
     size_t key_len;
     ovs_be16 initial_tci;
     struct list packets;
+    enum dpif_upcall_type upcall_type;
 };
 
 struct flow_miss_op {
@@ -2637,34 +2671,34 @@ send_packet_in_miss(struct ofproto_dpif *ofproto, const struct ofpbuf *packet,
     connmgr_send_packet_in(ofproto->up.connmgr, &pin);
 }
 
-static bool
+static enum slow_path_reason
 process_special(struct ofproto_dpif *ofproto, const struct flow *flow,
                 const struct ofpbuf *packet)
 {
     struct ofport_dpif *ofport = get_ofp_port(ofproto, flow->in_port);
 
     if (!ofport) {
-        return false;
+        return 0;
     }
 
     if (ofport->cfm && cfm_should_process_flow(ofport->cfm, flow)) {
         if (packet) {
             cfm_process_heartbeat(ofport->cfm, packet);
         }
-        return true;
+        return SLOW_CFM;
     } else if (ofport->bundle && ofport->bundle->lacp
                && flow->dl_type == htons(ETH_TYPE_LACP)) {
         if (packet) {
             lacp_process_packet(ofport->bundle->lacp, ofport, packet);
         }
-        return true;
+        return SLOW_LACP;
     } else if (ofproto->stp && stp_should_process_flow(flow)) {
         if (packet) {
             stp_process_packet(ofport, packet);
         }
-        return true;
+        return SLOW_STP;
     }
-    return false;
+    return 0;
 }
 
 static struct flow_miss *
@@ -2809,6 +2843,8 @@ static void
 handle_flow_miss_with_facet(struct flow_miss *miss, struct facet *facet,
                             struct flow_miss_op *ops, size_t *n_ops)
 {
+    struct ofproto_dpif *ofproto = ofproto_dpif_cast(facet->rule->up.ofproto);
+    enum subfacet_path want_path;
     struct subfacet *subfacet;
     struct ofpbuf *packet;
 
@@ -2824,7 +2860,7 @@ handle_flow_miss_with_facet(struct flow_miss *miss, struct facet *facet,
         handle_flow_miss_common(facet->rule, packet, &miss->flow);
 
         ofpbuf_use_stub(&odp_actions, op->stub, sizeof op->stub);
-        if (!facet->may_install || !subfacet->actions) {
+        if (!subfacet->actions || subfacet->slow) {
             subfacet_make_actions(subfacet, packet, &odp_actions);
         }
 
@@ -2836,7 +2872,7 @@ handle_flow_miss_with_facet(struct flow_miss *miss, struct facet *facet,
 
             init_flow_miss_execute_op(miss, packet, op);
             op->subfacet = subfacet;
-            if (facet->may_install) {
+            if (!subfacet->slow) {
                 execute->actions = subfacet->actions;
                 execute->actions_len = subfacet->actions_len;
                 ofpbuf_uninit(&odp_actions);
@@ -2852,7 +2888,8 @@ handle_flow_miss_with_facet(struct flow_miss *miss, struct facet *facet,
         }
     }
 
-    if (facet->may_install && subfacet->key_fitness != ODP_FIT_TOO_LITTLE) {
+    want_path = subfacet_want_path(subfacet->slow);
+    if (miss->upcall_type == DPIF_UC_MISS || subfacet->path != want_path) {
         struct flow_miss_op *op = &ops[(*n_ops)++];
         struct dpif_flow_put *put = &op->dpif_op.u.flow_put;
 
@@ -2862,8 +2899,14 @@ handle_flow_miss_with_facet(struct flow_miss *miss, struct facet *facet,
         put->flags = DPIF_FP_CREATE | DPIF_FP_MODIFY;
         put->key = miss->key;
         put->key_len = miss->key_len;
-        put->actions = subfacet->actions;
-        put->actions_len = subfacet->actions_len;
+        if (want_path == SF_FAST_PATH) {
+            put->actions = subfacet->actions;
+            put->actions_len = subfacet->actions_len;
+        } else {
+            compose_slow_path(ofproto, &facet->flow, subfacet->slow,
+                              op->stub, sizeof op->stub,
+                              &put->actions, &put->actions_len);
+        }
         put->stats = NULL;
     }
 }
@@ -2994,14 +3037,6 @@ handle_miss_upcalls(struct ofproto_dpif *ofproto, struct dpif_upcall *upcalls,
         flow_extract(upcall->packet, miss->flow.skb_priority,
                      miss->flow.tun_id, miss->flow.in_port, &miss->flow);
 
-        /* Handle 802.1ag, LACP, and STP specially. */
-        if (process_special(ofproto, &miss->flow, upcall->packet)) {
-            ofproto_update_local_port_stats(&ofproto->up,
-                                            0, upcall->packet->size);
-            ofproto->n_matches++;
-            continue;
-        }
-
         /* Add other packets to a to-do list. */
         hash = flow_hash(&miss->flow, 0);
         existing_miss = flow_miss_find(&todo, &miss->flow, hash);
@@ -3009,6 +3044,7 @@ handle_miss_upcalls(struct ofproto_dpif *ofproto, struct dpif_upcall *upcalls,
             hmap_insert(&todo, &miss->hmap_node, hash);
             miss->key = upcall->key;
             miss->key_len = upcall->key_len;
+            miss->upcall_type = upcall->type;
             list_init(&miss->packets);
 
             n_misses++;
@@ -3042,7 +3078,7 @@ handle_miss_upcalls(struct ofproto_dpif *ofproto, struct dpif_upcall *upcalls,
 
         case DPIF_OP_FLOW_PUT:
             if (!op->dpif_op.error) {
-                op->subfacet->installed = true;
+                op->subfacet->path = subfacet_want_path(op->subfacet->slow);
             }
             break;
 
@@ -3055,16 +3091,49 @@ handle_miss_upcalls(struct ofproto_dpif *ofproto, struct dpif_upcall *upcalls,
     hmap_destroy(&todo);
 }
 
+static enum { SFLOW_UPCALL, MISS_UPCALL, BAD_UPCALL }
+classify_upcall(const struct dpif_upcall *upcall)
+{
+    union user_action_cookie cookie;
+
+    /* First look at the upcall type. */
+    switch (upcall->type) {
+    case DPIF_UC_ACTION:
+        break;
+
+    case DPIF_UC_MISS:
+        return MISS_UPCALL;
+
+    case DPIF_N_UC_TYPES:
+    default:
+        VLOG_WARN_RL(&rl, "upcall has unexpected type %"PRIu32, upcall->type);
+        return BAD_UPCALL;
+    }
+
+    /* "action" upcalls need a closer look. */
+    memcpy(&cookie, &upcall->userdata, sizeof(cookie));
+    switch (cookie.type) {
+    case USER_ACTION_COOKIE_SFLOW:
+        return SFLOW_UPCALL;
+
+    case USER_ACTION_COOKIE_SLOW_PATH:
+        return MISS_UPCALL;
+
+    case USER_ACTION_COOKIE_UNSPEC:
+    default:
+        VLOG_WARN_RL(&rl, "invalid user cookie : 0x%"PRIx64, upcall->userdata);
+        return BAD_UPCALL;
+    }
+}
+
 static void
-handle_userspace_upcall(struct ofproto_dpif *ofproto,
-                        struct dpif_upcall *upcall)
+handle_sflow_upcall(struct ofproto_dpif *ofproto,
+                    const struct dpif_upcall *upcall)
 {
     union user_action_cookie cookie;
     enum odp_key_fitness fitness;
     ovs_be16 initial_tci;
     struct flow flow;
-
-    memcpy(&cookie, &upcall->userdata, sizeof(cookie));
 
     fitness = ofproto_dpif_extract_flow_key(ofproto, upcall->key,
                                             upcall->key_len, &flow,
@@ -3073,19 +3142,8 @@ handle_userspace_upcall(struct ofproto_dpif *ofproto,
         return;
     }
 
-    switch (cookie.type) {
-    case USER_ACTION_COOKIE_SFLOW:
-        if (ofproto->sflow) {
-            dpif_sflow_received(ofproto->sflow, upcall->packet, &flow,
-                                &cookie);
-        }
-        break;
-
-    case USER_ACTION_COOKIE_UNSPEC:
-    default:
-        VLOG_WARN_RL(&rl, "invalid user cookie : 0x%"PRIx64, upcall->userdata);
-        break;
-    }
+    memcpy(&cookie, &upcall->userdata, sizeof(cookie));
+    dpif_sflow_received(ofproto->sflow, upcall->packet, &flow, &cookie);
 }
 
 static int
@@ -3115,25 +3173,26 @@ handle_upcalls(struct ofproto_dpif *ofproto, unsigned int max_batch)
             break;
         }
 
-        switch (upcall->type) {
-        case DPIF_UC_ACTION:
-            handle_userspace_upcall(ofproto, upcall);
-            ofpbuf_uninit(buf);
-            break;
-
-        case DPIF_UC_MISS:
+        switch (classify_upcall(upcall)) {
+        case MISS_UPCALL:
             /* Handle it later. */
             n_misses++;
             break;
 
-        case DPIF_N_UC_TYPES:
-        default:
-            VLOG_WARN_RL(&rl, "upcall has unexpected type %"PRIu32,
-                         upcall->type);
+        case SFLOW_UPCALL:
+            if (ofproto->sflow) {
+                handle_sflow_upcall(ofproto, upcall);
+            }
+            ofpbuf_uninit(buf);
+            break;
+
+        case BAD_UPCALL:
+            ofpbuf_uninit(buf);
             break;
         }
     }
 
+    /* Handle deferred MISS_UPCALL processing. */
     handle_miss_upcalls(ofproto, misses, n_misses);
     for (i = 0; i < n_misses; i++) {
         ofpbuf_uninit(&miss_bufs[i]);
@@ -3272,10 +3331,19 @@ update_stats(struct ofproto_dpif *p)
         struct subfacet *subfacet;
 
         subfacet = subfacet_find(p, key, key_len);
-        if (subfacet && subfacet->installed) {
+        switch (subfacet ? subfacet->path : SF_NOT_INSTALLED) {
+        case SF_FAST_PATH:
             update_subfacet_stats(subfacet, stats);
-        } else {
+            break;
+
+        case SF_SLOW_PATH:
+            /* Stats are updated per-packet. */
+            break;
+
+        case SF_NOT_INSTALLED:
+        default:
             delete_unexpected_flow(p->dpif, key, key_len);
+            break;
         }
     }
     dpif_flow_dump_done(&dump);
@@ -3393,7 +3461,7 @@ expire_batch(struct ofproto_dpif *ofproto, struct subfacet **subfacets, int n)
     dpif_operate(ofproto->dpif, opsp, n);
     for (i = 0; i < n; i++) {
         subfacet_reset_dp_stats(subfacets[i], &stats[i]);
-        subfacets[i]->installed = false;
+        subfacets[i]->path = SF_NOT_INSTALLED;
         subfacet_destroy(subfacets[i]);
     }
 }
@@ -3411,7 +3479,7 @@ expire_subfacets(struct ofproto_dpif *ofproto, int dp_max_idle)
     HMAP_FOR_EACH_SAFE (subfacet, next_subfacet, hmap_node,
                         &ofproto->subfacets) {
         if (subfacet->used < cutoff) {
-            if (subfacet->installed) {
+            if (subfacet->path != SF_NOT_INSTALLED) {
                 batch[n_batch++] = subfacet;
                 if (n_batch >= EXPIRE_MAX_BATCH) {
                     expire_batch(ofproto, batch, n_batch);
@@ -3730,6 +3798,44 @@ facet_lookup_valid(struct ofproto_dpif *ofproto, const struct flow *flow,
     return facet;
 }
 
+static const char *
+subfacet_path_to_string(enum subfacet_path path)
+{
+    switch (path) {
+    case SF_NOT_INSTALLED:
+        return "not installed";
+    case SF_FAST_PATH:
+        return "in fast path";
+    case SF_SLOW_PATH:
+        return "in slow path";
+    default:
+        return "<error>";
+    }
+}
+
+/* Returns the path in which a subfacet should be installed if its 'slow'
+ * member has the specified value. */
+static enum subfacet_path
+subfacet_want_path(enum slow_path_reason slow)
+{
+    return slow ? SF_SLOW_PATH : SF_FAST_PATH;
+}
+
+/* Returns true if 'subfacet' needs to have its datapath flow updated,
+ * supposing that its actions have been recalculated as 'want_actions' and that
+ * 'slow' is nonzero iff 'subfacet' should be in the slow path. */
+static bool
+subfacet_should_install(struct subfacet *subfacet, enum slow_path_reason slow,
+                        const struct ofpbuf *want_actions)
+{
+    enum subfacet_path want_path = subfacet_want_path(slow);
+    return (want_path != subfacet->path
+            || (want_path == SF_FAST_PATH
+                && (subfacet->actions_len != want_actions->size
+                    || memcmp(subfacet->actions, want_actions->data,
+                              subfacet->actions_len))));
+}
+
 static bool
 facet_check_consistency(struct facet *facet)
 {
@@ -3771,10 +3877,9 @@ facet_check_consistency(struct facet *facet)
     /* Check the datapath actions for consistency. */
     ofpbuf_use_stub(&odp_actions, odp_actions_stub, sizeof odp_actions_stub);
     LIST_FOR_EACH (subfacet, list_node, &facet->subfacets) {
+        enum subfacet_path want_path;
         struct odputil_keybuf keybuf;
         struct action_xlate_ctx ctx;
-        bool actions_changed;
-        bool should_install;
         struct ofpbuf key;
         struct ds s;
 
@@ -3783,18 +3888,20 @@ facet_check_consistency(struct facet *facet)
         xlate_actions(&ctx, rule->up.actions, rule->up.n_actions,
                       &odp_actions);
 
-        should_install = (ctx.may_set_up_flow
-                          && subfacet->key_fitness != ODP_FIT_TOO_LITTLE);
-        if (!should_install && !subfacet->installed) {
-            /* The actions for uninstallable flows may vary from one packet to
-             * the next, so don't compare the actions. */
+        if (subfacet->path == SF_NOT_INSTALLED) {
+            /* This only happens if the datapath reported an error when we
+             * tried to install the flow.  Don't flag another error here. */
             continue;
         }
 
-        actions_changed = (subfacet->actions_len != odp_actions.size
-                           || memcmp(subfacet->actions, odp_actions.data,
-                                     subfacet->actions_len));
-        if (should_install == subfacet->installed && !actions_changed) {
+        want_path = subfacet_want_path(subfacet->slow);
+        if (want_path == SF_SLOW_PATH && subfacet->path == SF_SLOW_PATH) {
+            /* The actions for slow-path flows may legitimately vary from one
+             * packet to the next.  We're done. */
+            continue;
+        }
+
+        if (!subfacet_should_install(subfacet, subfacet->slow, &odp_actions)) {
             continue;
         }
 
@@ -3813,16 +3920,15 @@ facet_check_consistency(struct facet *facet)
         odp_flow_key_format(key.data, key.size, &s);
 
         ds_put_cstr(&s, ": inconsistency in subfacet");
-        if (should_install != subfacet->installed) {
+        if (want_path != subfacet->path) {
             enum odp_key_fitness fitness = subfacet->key_fitness;
 
-            ds_put_format(&s, " (should%s have been installed)",
-                          should_install ? "" : " not");
-            ds_put_format(&s, " (may_set_up_flow=%s, fitness=%s)",
-                          ctx.may_set_up_flow ? "true" : "false",
+            ds_put_format(&s, " (%s, fitness=%s)",
+                          subfacet_path_to_string(subfacet->path),
                           odp_key_fitness_to_string(fitness));
-        }
-        if (actions_changed) {
+            ds_put_format(&s, " (should have been %s)",
+                          subfacet_path_to_string(want_path));
+        } else if (want_path == SF_FAST_PATH) {
             ds_put_cstr(&s, " (actions were: ");
             format_odp_actions(&s, subfacet->actions,
                                subfacet->actions_len);
@@ -3866,7 +3972,6 @@ facet_revalidate(struct facet *facet)
 
     struct rule_dpif *new_rule;
     struct subfacet *subfacet;
-    bool actions_changed;
     int i;
 
     COVERAGE_INC(facet_revalidate);
@@ -3886,28 +3991,20 @@ facet_revalidate(struct facet *facet)
     memset(&ctx, 0, sizeof ctx);
     ofpbuf_use_stub(&odp_actions, odp_actions_stub, sizeof odp_actions_stub);
     LIST_FOR_EACH (subfacet, list_node, &facet->subfacets) {
-        bool should_install;
+        enum slow_path_reason slow;
 
         action_xlate_ctx_init(&ctx, ofproto, &facet->flow,
                               subfacet->initial_tci, new_rule, 0, NULL);
         xlate_actions(&ctx, new_rule->up.actions, new_rule->up.n_actions,
                       &odp_actions);
-        actions_changed = (subfacet->actions_len != odp_actions.size
-                           || memcmp(subfacet->actions, odp_actions.data,
-                                     subfacet->actions_len));
 
-        should_install = (ctx.may_set_up_flow
-                          && subfacet->key_fitness != ODP_FIT_TOO_LITTLE);
-        if (actions_changed || should_install != subfacet->installed) {
-            if (should_install) {
-                struct dpif_flow_stats stats;
+        slow = (subfacet->slow & SLOW_MATCH) | ctx.slow;
+        if (subfacet_should_install(subfacet, slow, &odp_actions)) {
+            struct dpif_flow_stats stats;
 
-                subfacet_install(subfacet,
-                                 odp_actions.data, odp_actions.size, &stats);
-                subfacet_update_stats(subfacet, &stats);
-            } else {
-                subfacet_uninstall(subfacet);
-            }
+            subfacet_install(subfacet,
+                             odp_actions.data, odp_actions.size, &stats, slow);
+            subfacet_update_stats(subfacet, &stats);
 
             if (!new_actions) {
                 new_actions = xcalloc(list_size(&facet->subfacets),
@@ -3929,23 +4026,24 @@ facet_revalidate(struct facet *facet)
     /* Update 'facet' now that we've taken care of all the old state. */
     facet->tags = ctx.tags;
     facet->nf_flow.output_iface = ctx.nf_output_iface;
-    facet->may_install = ctx.may_set_up_flow;
     facet->has_learn = ctx.has_learn;
     facet->has_normal = ctx.has_normal;
     facet->has_fin_timeout = ctx.has_fin_timeout;
     facet->mirrors = ctx.mirrors;
-    if (new_actions) {
-        i = 0;
-        LIST_FOR_EACH (subfacet, list_node, &facet->subfacets) {
-            if (new_actions[i].odp_actions) {
-                free(subfacet->actions);
-                subfacet->actions = new_actions[i].odp_actions;
-                subfacet->actions_len = new_actions[i].actions_len;
-            }
-            i++;
+
+    i = 0;
+    LIST_FOR_EACH (subfacet, list_node, &facet->subfacets) {
+        subfacet->slow = (subfacet->slow & SLOW_MATCH) | ctx.slow;
+
+        if (new_actions && new_actions[i].odp_actions) {
+            free(subfacet->actions);
+            subfacet->actions = new_actions[i].odp_actions;
+            subfacet->actions_len = new_actions[i].actions_len;
         }
-        free(new_actions);
+        i++;
     }
+    free(new_actions);
+
     if (facet->rule != new_rule) {
         COVERAGE_INC(facet_changed_rule);
         list_remove(&facet->list_node);
@@ -4097,7 +4195,10 @@ subfacet_create(struct facet *facet, enum odp_key_fitness key_fitness,
     subfacet->dp_byte_count = 0;
     subfacet->actions_len = 0;
     subfacet->actions = NULL;
-    subfacet->installed = false;
+    subfacet->slow = (subfacet->key_fitness == ODP_FIT_TOO_LITTLE
+                      ? SLOW_MATCH
+                      : 0);
+    subfacet->path = SF_NOT_INSTALLED;
     subfacet->initial_tci = initial_tci;
 
     return subfacet;
@@ -4186,13 +4287,13 @@ subfacet_make_actions(struct subfacet *subfacet, const struct ofpbuf *packet,
                           rule, 0, packet);
     xlate_actions(&ctx, rule->up.actions, rule->up.n_actions, odp_actions);
     facet->tags = ctx.tags;
-    facet->may_install = ctx.may_set_up_flow;
     facet->has_learn = ctx.has_learn;
     facet->has_normal = ctx.has_normal;
     facet->has_fin_timeout = ctx.has_fin_timeout;
     facet->nf_flow.output_iface = ctx.nf_output_iface;
     facet->mirrors = ctx.mirrors;
 
+    subfacet->slow = (subfacet->slow & SLOW_MATCH) | ctx.slow;
     if (subfacet->actions_len != odp_actions->size
         || memcmp(subfacet->actions, odp_actions->data, odp_actions->size)) {
         free(subfacet->actions);
@@ -4210,10 +4311,13 @@ subfacet_make_actions(struct subfacet *subfacet, const struct ofpbuf *packet,
 static int
 subfacet_install(struct subfacet *subfacet,
                  const struct nlattr *actions, size_t actions_len,
-                 struct dpif_flow_stats *stats)
+                 struct dpif_flow_stats *stats,
+                 enum slow_path_reason slow)
 {
     struct facet *facet = subfacet->facet;
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(facet->rule->up.ofproto);
+    enum subfacet_path path = subfacet_want_path(slow);
+    uint64_t slow_path_stub[128 / 8];
     struct odputil_keybuf keybuf;
     enum dpif_flow_put_flags flags;
     struct ofpbuf key;
@@ -4224,6 +4328,12 @@ subfacet_install(struct subfacet *subfacet,
         flags |= DPIF_FP_ZERO_STATS;
     }
 
+    if (path == SF_SLOW_PATH) {
+        compose_slow_path(ofproto, &facet->flow, slow,
+                          slow_path_stub, sizeof slow_path_stub,
+                          &actions, &actions_len);
+    }
+
     subfacet_get_key(subfacet, &keybuf, &key);
     ret = dpif_flow_put(ofproto->dpif, flags, key.data, key.size,
                         actions, actions_len, stats);
@@ -4232,14 +4342,24 @@ subfacet_install(struct subfacet *subfacet,
         subfacet_reset_dp_stats(subfacet, stats);
     }
 
+    if (!ret) {
+        subfacet->path = path;
+    }
     return ret;
+}
+
+static int
+subfacet_reinstall(struct subfacet *subfacet, struct dpif_flow_stats *stats)
+{
+    return subfacet_install(subfacet, subfacet->actions, subfacet->actions_len,
+                            stats, subfacet->slow);
 }
 
 /* If 'subfacet' is installed in the datapath, uninstalls it. */
 static void
 subfacet_uninstall(struct subfacet *subfacet)
 {
-    if (subfacet->installed) {
+    if (subfacet->path != SF_NOT_INSTALLED) {
         struct rule_dpif *rule = subfacet->facet->rule;
         struct ofproto_dpif *ofproto = ofproto_dpif_cast(rule->up.ofproto);
         struct odputil_keybuf keybuf;
@@ -4253,7 +4373,7 @@ subfacet_uninstall(struct subfacet *subfacet)
         if (!error) {
             subfacet_update_stats(subfacet, &stats);
         }
-        subfacet->installed = false;
+        subfacet->path = SF_NOT_INSTALLED;
     } else {
         assert(subfacet->dp_packet_count == 0);
         assert(subfacet->dp_byte_count == 0);
@@ -4570,6 +4690,35 @@ static void do_xlate_actions(const union ofp_action *in, size_t n_in,
                              struct action_xlate_ctx *ctx);
 static void xlate_normal(struct action_xlate_ctx *);
 
+/* Composes an ODP action for a "slow path" action for 'flow' within 'ofproto'.
+ * The action will state 'slow' as the reason that the action is in the slow
+ * path.  (This is purely informational: it allows a human viewing "ovs-dpctl
+ * dump-flows" output to see why a flow is in the slow path.)
+ *
+ * The 'stub_size' bytes in 'stub' will be used to store the action.
+ * 'stub_size' must be large enough for the action.
+ *
+ * The action and its size will be stored in '*actionsp' and '*actions_lenp',
+ * respectively. */
+static void
+compose_slow_path(const struct ofproto_dpif *ofproto, const struct flow *flow,
+                  enum slow_path_reason slow,
+                  uint64_t *stub, size_t stub_size,
+                  const struct nlattr **actionsp, size_t *actions_lenp)
+{
+    union user_action_cookie cookie;
+    struct ofpbuf buf;
+
+    cookie.type = USER_ACTION_COOKIE_SLOW_PATH;
+    cookie.slow_path.unused = 0;
+    cookie.slow_path.reason = slow;
+
+    ofpbuf_use_stack(&buf, stub, stub_size);
+    put_userspace_action(ofproto, &buf, flow, &cookie);
+    *actionsp = buf.data;
+    *actions_lenp = buf.size;
+}
+
 static size_t
 put_userspace_action(const struct ofproto_dpif *ofproto,
                      struct ofpbuf *odp_actions,
@@ -4839,7 +4988,7 @@ execute_controller_action(struct action_xlate_ctx *ctx, int len,
     struct ofputil_packet_in pin;
     struct ofpbuf *packet;
 
-    ctx->may_set_up_flow = false;
+    ctx->slow |= SLOW_CONTROLLER;
     if (!ctx->packet) {
         return;
     }
@@ -5392,6 +5541,8 @@ xlate_actions(struct action_xlate_ctx *ctx,
      * tracing purposes. */
     static bool hit_resubmit_limit;
 
+    enum slow_path_reason special;
+
     COVERAGE_INC(ofproto_dpif_xlate);
 
     ofpbuf_clear(odp_actions);
@@ -5399,7 +5550,7 @@ xlate_actions(struct action_xlate_ctx *ctx,
 
     ctx->odp_actions = odp_actions;
     ctx->tags = 0;
-    ctx->may_set_up_flow = true;
+    ctx->slow = 0;
     ctx->has_learn = false;
     ctx->has_normal = false;
     ctx->has_fin_timeout = false;
@@ -5444,8 +5595,9 @@ xlate_actions(struct action_xlate_ctx *ctx,
         }
     }
 
-    if (process_special(ctx->ofproto, &ctx->flow, ctx->packet)) {
-        ctx->may_set_up_flow = false;
+    special = process_special(ctx->ofproto, &ctx->flow, ctx->packet);
+    if (special) {
+        ctx->slow |= special;
     } else {
         static struct vlog_rate_limit trace_rl = VLOG_RATE_LIMIT_INIT(1, 1);
         ovs_be16 initial_tci = ctx->base_flow.vlan_tci;
@@ -5472,7 +5624,7 @@ xlate_actions(struct action_xlate_ctx *ctx,
         if (!connmgr_may_set_up_flow(ctx->ofproto->up.connmgr, &ctx->flow,
                                      ctx->odp_actions->data,
                                      ctx->odp_actions->size)) {
-            ctx->may_set_up_flow = false;
+            ctx->slow |= SLOW_IN_BAND;
             if (ctx->packet
                 && connmgr_msg_in_hook(ctx->ofproto->up.connmgr, &ctx->flow,
                                        ctx->packet)) {
@@ -6273,11 +6425,10 @@ send_active_timeout(struct ofproto_dpif *ofproto, struct facet *facet)
         struct ofexpired expired;
 
         LIST_FOR_EACH (subfacet, list_node, &facet->subfacets) {
-            if (subfacet->installed) {
+            if (subfacet->path == SF_FAST_PATH) {
                 struct dpif_flow_stats stats;
 
-                subfacet_install(subfacet, subfacet->actions,
-                                 subfacet->actions_len, &stats);
+                subfacet_reinstall(subfacet, &stats);
                 subfacet_update_stats(subfacet, &stats);
             }
         }
@@ -6602,12 +6753,49 @@ ofproto_trace(struct ofproto_dpif *ofproto, const struct flow *flow,
         format_odp_actions(ds, odp_actions.data, odp_actions.size);
         ofpbuf_uninit(&odp_actions);
 
-        if (!trace.ctx.may_set_up_flow) {
-            if (packet) {
-                ds_put_cstr(ds, "\nThis flow is not cachable.");
-            } else {
-                ds_put_cstr(ds, "\nThe datapath actions are incomplete--"
-                            "for complete actions, please supply a packet.");
+        if (trace.ctx.slow) {
+            enum slow_path_reason slow;
+
+            ds_put_cstr(ds, "\nThis flow is handled by the userspace "
+                        "slow path because it:");
+            for (slow = trace.ctx.slow; slow; ) {
+                enum slow_path_reason bit = rightmost_1bit(slow);
+
+                switch (bit) {
+                case SLOW_CFM:
+                    ds_put_cstr(ds, "\n\t- Consists of CFM packets.");
+                    break;
+                case SLOW_LACP:
+                    ds_put_cstr(ds, "\n\t- Consists of LACP packets.");
+                    break;
+                case SLOW_STP:
+                    ds_put_cstr(ds, "\n\t- Consists of STP packets.");
+                    break;
+                case SLOW_IN_BAND:
+                    ds_put_cstr(ds, "\n\t- Needs in-band special case "
+                                "processing.");
+                    if (!packet) {
+                        ds_put_cstr(ds, "\n\t  (The datapath actions are "
+                                    "incomplete--for complete actions, "
+                                    "please supply a packet.)");
+                    }
+                    break;
+                case SLOW_CONTROLLER:
+                    ds_put_cstr(ds, "\n\t- Sends \"packet-in\" messages "
+                                "to the OpenFlow controller.");
+                    break;
+                case SLOW_MATCH:
+                    ds_put_cstr(ds, "\n\t- Needs more specific matching "
+                                "than the datapath supports.");
+                    break;
+                }
+
+                slow &= ~bit;
+            }
+
+            if (slow & ~SLOW_MATCH) {
+                ds_put_cstr(ds, "\nThe datapath actions above do not reflect "
+                            "the special slow-path processing.");
             }
         }
     }

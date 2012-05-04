@@ -78,9 +78,10 @@ table=1 in_port=1 action=dec_ttl,output:3
 ])
 AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 AT_CHECK([ovs-appctl ofproto/trace br0 'in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=2,frag=no)' -generate], [0], [stdout])
-AT_CHECK([tail -2 stdout], [0],
+AT_CHECK([tail -3 stdout], [0],
   [Datapath actions: set(ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=1,frag=no)),2,4
-This flow is not cachable.
+This flow is handled by the userspace slow path because it:
+	- Sends "packet-in" messages to the OpenFlow controller.
 ])
 AT_CHECK([ovs-appctl ofproto/trace br0 'in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=3,frag=no)'], [0], [stdout])
 AT_CHECK([tail -1 stdout], [0],
