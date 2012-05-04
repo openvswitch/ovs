@@ -3147,6 +3147,60 @@ expire(struct ofproto_dpif *ofproto)
     return MIN(dp_max_idle, 1000);
 }
 
+/* Updates flow table statistics given that the datapath just reported 'stats'
+ * as 'subfacet''s statistics. */
+static void
+update_subfacet_stats(struct subfacet *subfacet,
+                      const struct dpif_flow_stats *stats)
+{
+    struct facet *facet = subfacet->facet;
+
+    if (stats->n_packets >= subfacet->dp_packet_count) {
+        uint64_t extra = stats->n_packets - subfacet->dp_packet_count;
+        facet->packet_count += extra;
+    } else {
+        VLOG_WARN_RL(&rl, "unexpected packet count from the datapath");
+    }
+
+    if (stats->n_bytes >= subfacet->dp_byte_count) {
+        facet->byte_count += stats->n_bytes - subfacet->dp_byte_count;
+    } else {
+        VLOG_WARN_RL(&rl, "unexpected byte count from datapath");
+    }
+
+    subfacet->dp_packet_count = stats->n_packets;
+    subfacet->dp_byte_count = stats->n_bytes;
+
+    facet->tcp_flags |= stats->tcp_flags;
+
+    subfacet_update_time(subfacet, stats->used);
+    if (facet->accounted_bytes < facet->byte_count) {
+        facet_learn(facet);
+        facet_account(facet);
+        facet->accounted_bytes = facet->byte_count;
+    }
+    facet_push_stats(facet);
+}
+
+/* 'key' with length 'key_len' bytes is a flow in 'dpif' that we know nothing
+ * about, or a flow that shouldn't be installed but was anyway.  Delete it. */
+static void
+delete_unexpected_flow(struct dpif *dpif,
+                       const struct nlattr *key, size_t key_len)
+{
+    if (!VLOG_DROP_WARN(&rl)) {
+        struct ds s;
+
+        ds_init(&s);
+        odp_flow_key_format(key, key_len, &s);
+        VLOG_WARN("unexpected flow from datapath %s", ds_cstr(&s));
+        ds_destroy(&s);
+    }
+
+    COVERAGE_INC(facet_unexpected);
+    dpif_flow_del(dpif, key, key_len, NULL);
+}
+
 /* Update 'packet_count', 'byte_count', and 'used' members of installed facets.
  *
  * This function also pushes statistics updates to rules which each facet
@@ -3172,47 +3226,9 @@ update_stats(struct ofproto_dpif *p)
 
         subfacet = subfacet_find(p, key, key_len);
         if (subfacet && subfacet->installed) {
-            struct facet *facet = subfacet->facet;
-
-            if (stats->n_packets >= subfacet->dp_packet_count) {
-                uint64_t extra = stats->n_packets - subfacet->dp_packet_count;
-                facet->packet_count += extra;
-            } else {
-                VLOG_WARN_RL(&rl, "unexpected packet count from the datapath");
-            }
-
-            if (stats->n_bytes >= subfacet->dp_byte_count) {
-                facet->byte_count += stats->n_bytes - subfacet->dp_byte_count;
-            } else {
-                VLOG_WARN_RL(&rl, "unexpected byte count from datapath");
-            }
-
-            subfacet->dp_packet_count = stats->n_packets;
-            subfacet->dp_byte_count = stats->n_bytes;
-
-            facet->tcp_flags |= stats->tcp_flags;
-
-            subfacet_update_time(subfacet, stats->used);
-            if (facet->accounted_bytes < facet->byte_count) {
-                facet_learn(facet);
-                facet_account(facet);
-                facet->accounted_bytes = facet->byte_count;
-            }
-            facet_push_stats(facet);
+            update_subfacet_stats(subfacet, stats);
         } else {
-            if (!VLOG_DROP_WARN(&rl)) {
-                struct ds s;
-
-                ds_init(&s);
-                odp_flow_key_format(key, key_len, &s);
-                VLOG_WARN("unexpected flow from datapath %s", ds_cstr(&s));
-                ds_destroy(&s);
-            }
-
-            COVERAGE_INC(facet_unexpected);
-            /* There's a flow in the datapath that we know nothing about, or a
-             * flow that shouldn't be installed but was anyway.  Delete it. */
-            dpif_flow_del(p->dpif, key, key_len, NULL);
+            delete_unexpected_flow(p->dpif, key, key_len);
         }
     }
     dpif_flow_dump_done(&dump);
