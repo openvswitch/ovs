@@ -210,6 +210,7 @@ usage(void)
            "  get-frags SWITCH            print fragment handling behavior\n"
            "  set-frags SWITCH FRAG_MODE  set fragment handling behavior\n"
            "  dump-ports SWITCH [PORT]    print port statistics\n"
+           "  dump-ports-desc SWITCH      print port descriptions\n"
            "  dump-flows SWITCH           print all flow entries\n"
            "  dump-flows SWITCH FLOW      print matching FLOWs\n"
            "  dump-aggregate SWITCH       print aggregate flow statistics\n"
@@ -547,7 +548,7 @@ fetch_ofputil_phy_port(const char *vconn_name, const char *port_name,
                   vconn_name, ofperr_to_string(error));
     }
 
-    while (!ofputil_pull_switch_features_port(&b, pp)) {
+    while (!ofputil_pull_phy_port(osf->header.version, &b, pp)) {
         if (port_no != UINT_MAX
             ? port_no == pp->port_no
             : !strcmp(pp->name, port_name)) {
@@ -1082,6 +1083,12 @@ do_dump_ports(int argc, char *argv[])
     port = argc > 2 ? str_to_port_no(argv[1], argv[2]) : OFPP_NONE;
     req->port_no = htons(port);
     dump_stats_transaction(argv[1], request);
+}
+
+static void
+do_dump_ports_desc(int argc OVS_UNUSED, char *argv[])
+{
+    dump_trivial_stats_transaction(argv[1], OFPST_PORT_DESC);
 }
 
 static void
@@ -1896,6 +1903,7 @@ static const struct command all_commands[] = {
     { "diff-flows", 2, 2, do_diff_flows },
     { "packet-out", 4, INT_MAX, do_packet_out },
     { "dump-ports", 1, 2, do_dump_ports },
+    { "dump-ports-desc", 1, 1, do_dump_ports_desc },
     { "mod-port", 3, 3, do_mod_port },
     { "get-frags", 1, 1, do_get_frags },
     { "set-frags", 2, 2, do_set_frags },

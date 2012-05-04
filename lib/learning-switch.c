@@ -278,12 +278,14 @@ lswitch_process_packet(struct lswitch *sw, struct rconn *rconn,
     case OFPUTIL_OFPST_TABLE_REQUEST:
     case OFPUTIL_OFPST_PORT_REQUEST:
     case OFPUTIL_OFPST_QUEUE_REQUEST:
+    case OFPUTIL_OFPST_PORT_DESC_REQUEST:
     case OFPUTIL_OFPST_DESC_REPLY:
     case OFPUTIL_OFPST_FLOW_REPLY:
     case OFPUTIL_OFPST_QUEUE_REPLY:
     case OFPUTIL_OFPST_PORT_REPLY:
     case OFPUTIL_OFPST_TABLE_REPLY:
     case OFPUTIL_OFPST_AGGREGATE_REPLY:
+    case OFPUTIL_OFPST_PORT_DESC_REPLY:
     case OFPUTIL_NXT_ROLE_REQUEST:
     case OFPUTIL_NXT_ROLE_REPLY:
     case OFPUTIL_NXT_FLOW_MOD_TABLE_ID:
@@ -363,7 +365,7 @@ process_switch_features(struct lswitch *sw, struct ofp_switch_features *osf)
 
     sw->datapath_id = features.datapath_id;
 
-    while (!ofputil_pull_switch_features_port(&b, &port)) {
+    while (!ofputil_pull_phy_port(osf->header.version, &b, &port)) {
         struct lswitch_port *lp = shash_find_data(&sw->queue_names, port.name);
         if (lp && hmap_node_is_null(&lp->hmap_node)) {
             lp->port_no = port.port_no;

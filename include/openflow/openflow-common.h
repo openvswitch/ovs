@@ -273,6 +273,13 @@ enum ofp_stats_types {
      * The OF1.0 reply body is an array of struct ofp_queue_stats. */
     OFPST_QUEUE = 5,
 
+    /* Port description. (OFPMP_PORT_DESC)
+     * This was introduced as part of OF1.3, but is useful for bridges
+     * with many ports, so we support it with OF1.0, too.
+     * The OF1.0 request is struct ofp_stats_msg.
+     * The OF1.0 reply body is an array of struct ofp10_phy_port. */
+    OFPST_PORT_DESC = 13,
+
     /* Vendor extension.
      * The OF1.0 request and reply begin with struct ofp_vendor_stats. */
     OFPST_VENDOR = 0xffff

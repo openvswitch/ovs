@@ -38,6 +38,21 @@ AT_CLEANUP
 
 dnl This is really bare-bones.
 dnl It at least checks request and reply serialization and deserialization.
+AT_SETUP([ofproto - port-desc stats])
+OVS_VSWITCHD_START
+AT_CHECK([ovs-ofctl -vwarn dump-ports-desc br0], [0], [stdout])
+AT_CHECK([STRIP_XIDS stdout], [0], [dnl
+OFPST_PORT_DESC reply:
+ LOCAL(br0): addr:aa:55:aa:55:00:00
+     config:     PORT_DOWN
+     state:      LINK_DOWN
+     speed: 100 Mbps now, 100 Mbps max
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+dnl This is really bare-bones.
+dnl It at least checks request and reply serialization and deserialization.
 AT_SETUP([ofproto - queue stats])
 OVS_VSWITCHD_START
 AT_CHECK([ovs-ofctl -vANY:ANY:WARN queue-stats br0], [0], [stdout])

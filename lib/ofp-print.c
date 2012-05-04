@@ -642,6 +642,37 @@ ofp_print_phy_port(struct ds *string, const struct ofputil_phy_port *port)
                   port->max_speed / UINT32_C(1000));
 }
 
+/* Given a buffer 'b' that contains an array of OpenFlow ports of type
+ * 'ofp_version', writes a detailed description of each port into
+ * 'string'. */
+static void
+ofp_print_phy_ports(struct ds *string, uint8_t ofp_version,
+                    struct ofpbuf *b)
+{
+    size_t n_ports;
+    struct ofputil_phy_port *ports;
+    enum ofperr error;
+    size_t i;
+
+    n_ports = ofputil_count_phy_ports(ofp_version, b);
+
+    ports = xmalloc(n_ports * sizeof *ports);
+    for (i = 0; i < n_ports; i++) {
+        error = ofputil_pull_phy_port(ofp_version, b, &ports[i]);
+        if (error) {
+            ofp_print_error(string, error);
+            goto exit;
+        }
+    }
+    qsort(ports, n_ports, sizeof *ports, compare_ports);
+    for (i = 0; i < n_ports; i++) {
+        ofp_print_phy_port(string, &ports[i]);
+    }
+
+exit:
+    free(ports);
+}
+
 static const char *
 ofputil_capabilities_to_name(uint32_t bit)
 {
@@ -704,11 +735,8 @@ ofp_print_switch_features(struct ds *string,
                           const struct ofp_switch_features *osf)
 {
     struct ofputil_switch_features features;
-    struct ofputil_phy_port *ports;
     enum ofperr error;
     struct ofpbuf b;
-    size_t n_ports;
-    size_t i;
 
     error = ofputil_decode_switch_features(osf, &features, &b);
     if (error) {
@@ -730,21 +758,7 @@ ofp_print_switch_features(struct ds *string,
                         ofputil_action_bitmap_to_name);
     ds_put_char(string, '\n');
 
-    n_ports = ofputil_count_phy_ports(osf);
-
-    ports = xmalloc(n_ports * sizeof *ports);
-    for (i = 0; i < n_ports; i++) {
-        error = ofputil_pull_switch_features_port(&b, &ports[i]);
-        if (error) {
-            ofp_print_error(string, error);
-            return;
-        }
-    }
-    qsort(ports, n_ports, sizeof *ports, compare_ports);
-    for (i = 0; i < n_ports; i++) {
-        ofp_print_phy_port(string, &ports[i]);
-    }
-    free(ports);
+    ofp_print_phy_ports(string, osf->header.version, &b);
 }
 
 static void
@@ -1393,6 +1407,18 @@ ofp_print_ofpst_queue_reply(struct ds *string, const struct ofp_header *oh,
 }
 
 static void
+ofp_print_ofpst_port_desc_reply(struct ds *string,
+                                const struct ofp_header *oh)
+{
+    struct ofpbuf b;
+
+    ofpbuf_use_const(&b, oh, ntohs(oh->length));
+    ofpbuf_pull(&b, sizeof(struct ofp_stats_msg));
+    ds_put_char(string, '\n');
+    ofp_print_phy_ports(string, oh->version, &b);
+}
+
+static void
 ofp_print_stats_request(struct ds *string, const struct ofp_header *oh)
 {
     const struct ofp_stats_msg *srq = (const struct ofp_stats_msg *) oh;
@@ -1656,6 +1682,7 @@ ofp_to_string__(const struct ofp_header *oh,
         break;
 
     case OFPUTIL_OFPST_DESC_REQUEST:
+    case OFPUTIL_OFPST_PORT_DESC_REQUEST:
         ofp_print_stats_request(string, oh);
         break;
 
@@ -1710,6 +1737,11 @@ ofp_to_string__(const struct ofp_header *oh,
     case OFPUTIL_OFPST_AGGREGATE_REPLY:
         ofp_print_stats_reply(string, oh);
         ofp_print_ofpst_aggregate_reply(string, msg);
+        break;
+
+    case OFPUTIL_OFPST_PORT_DESC_REPLY:
+        ofp_print_stats_reply(string, oh);
+        ofp_print_ofpst_port_desc_reply(string, oh);
         break;
 
     case OFPUTIL_NXT_ROLE_REQUEST:

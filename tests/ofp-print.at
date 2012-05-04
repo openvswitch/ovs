@@ -688,6 +688,32 @@ OFPST_QUEUE reply (xid=0x1): 6 queues
 ])
 AT_CLEANUP
 
+AT_SETUP([OFPST_PORT_DESC request - OF1.0])
+AT_KEYWORDS([ofp-print OFPT_STATS_REQUEST])
+AT_CHECK([ovs-ofctl ofp-print "0110000c00000001000d0000"], [0], [dnl
+OFPST_PORT_DESC request (xid=0x1):
+])
+AT_CLEANUP
+
+AT_SETUP([OFPST_PORT_DESC reply - OF1.0])
+AT_KEYWORDS([ofp-print OFPT_STATS_REPLY])
+AT_CHECK([ovs-ofctl ofp-print "\
+01 11 00 3c 00 00 00 00 00 0d 00 00 00 03 50 54 \
+00 00 00 01 65 74 68 30 00 00 00 00 00 00 00 00 \
+00 00 00 00 00 00 00 01 00 00 00 01 00 00 02 08 \
+00 00 02 8f 00 00 02 8f 00 00 00 00 \
+"], [0], [dnl
+OFPST_PORT_DESC reply (xid=0x0):
+ 3(eth0): addr:50:54:00:00:00:01
+     config:     PORT_DOWN
+     state:      LINK_DOWN
+     current:    100MB-FD AUTO_NEG
+     advertised: 10MB-HD 10MB-FD 100MB-HD 100MB-FD COPPER AUTO_NEG
+     supported:  10MB-HD 10MB-FD 100MB-HD 100MB-FD COPPER AUTO_NEG
+     speed: 100 Mbps now, 100 Mbps max
+])
+AT_CLEANUP
+
 AT_SETUP([OFPT_BARRIER_REQUEST])
 AT_KEYWORDS([ofp-print])
 AT_CHECK([ovs-ofctl ofp-print '01 12 00 08 00 00 00 01'], [0], [dnl

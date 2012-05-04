@@ -66,6 +66,12 @@ associated with that device will be printed.  \fInetdev\fR can be an
 OpenFlow assigned port number or device name, e.g. \fBeth0\fR.
 .
 .TP
+\fBdump\-ports\-desc \fIswitch\fR
+Prints to the console detailed information about network devices
+associated with \fIswitch\fR (version 1.7 or later).  This is a subset
+of the information provided by the \fBshow\fR command.
+.
+.TP
 \fBmod\-port \fIswitch\fR \fInetdev\fR \fIaction\fR
 Modify characteristics of an interface monitored by \fIswitch\fR.  
 \fInetdev\fR can be referred to by its OpenFlow assigned port number or 
