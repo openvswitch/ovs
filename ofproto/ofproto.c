@@ -3897,6 +3897,7 @@ oftable_init(struct oftable *table)
 {
     memset(table, 0, sizeof *table);
     classifier_init(&table->cls);
+    table->max_flows = UINT_MAX;
 }
 
 /* Destroys 'table', including its classifier and eviction groups.
