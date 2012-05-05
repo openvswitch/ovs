@@ -2568,6 +2568,40 @@ ofputil_decode_switch_features(const struct ofp_switch_features *osf,
     return 0;
 }
 
+/* Returns true if the maximum number of ports are in 'osf'. */
+static bool
+max_ports_in_features(const struct ofp_switch_features *osf)
+{
+    size_t pp_size = osf->header.version == OFP10_VERSION ?
+                        sizeof(struct ofp10_phy_port) :
+                        sizeof(struct ofp11_port);
+
+    return ntohs(osf->header.length) + pp_size > UINT16_MAX;
+}
+
+/* Given a buffer 'b' that contains a Features Reply message, checks if
+ * it contains the maximum number of ports that will fit.  If so, it
+ * returns true and removes the ports from the message.  The caller
+ * should then send an OFPST_PORT_DESC stats request to get the ports,
+ * since the switch may have more ports than could be represented in the
+ * Features Reply.  Otherwise, returns false.
+ */
+bool
+ofputil_switch_features_ports_trunc(struct ofpbuf *b)
+{
+    struct ofp_switch_features *osf = b->data;
+
+    if (max_ports_in_features(osf)) {
+        /* Remove all the ports. */
+        b->size = sizeof(*osf);
+        update_openflow_length(b);
+
+        return true;
+    }
+
+    return false;
+}
+
 static ovs_be32
 encode_action_bits(enum ofputil_action_bitmap ofputil_actions,
                    const struct ofputil_action_bit_translation *x)

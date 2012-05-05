@@ -443,6 +443,7 @@ struct ofpbuf *ofputil_encode_switch_features(
     ovs_be32 xid);
 void ofputil_put_switch_features_port(const struct ofputil_phy_port *,
                                       struct ofpbuf *);
+bool ofputil_switch_features_ports_trunc(struct ofpbuf *b);
 
 /* phy_port helper functions. */
 int ofputil_pull_phy_port(uint8_t ofp_version, struct ofpbuf *,
