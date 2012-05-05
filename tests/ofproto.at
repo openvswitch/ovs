@@ -229,12 +229,14 @@ OVS_VSWITCHD_START
   0: classifier: wild=0x3fffff, max=1000000, active=0
                lookup=0, matched=0"
  x=1
- while test $x -lt 255; do
+ while test $x -lt 254; do
    printf "  %d: %-8s: wild=0x3fffff, max=1000000, active=0
                lookup=0, matched=0
 " $x table$x
    x=`expr $x + 1`
- done) > expout
+ done
+ echo "  254: table254: wild=0x3fffff, max=1000000, active=2
+               lookup=0, matched=0") > expout
 AT_CHECK([ovs-ofctl dump-tables br0], [0], [expout])
 # Change the configuration.
 AT_CHECK(

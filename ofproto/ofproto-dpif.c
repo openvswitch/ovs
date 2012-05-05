@@ -57,7 +57,6 @@ VLOG_DEFINE_THIS_MODULE(ofproto_dpif);
 
 COVERAGE_DEFINE(ofproto_dpif_ctlr_action);
 COVERAGE_DEFINE(ofproto_dpif_expired);
-COVERAGE_DEFINE(ofproto_dpif_no_packet_in);
 COVERAGE_DEFINE(ofproto_dpif_xlate);
 COVERAGE_DEFINE(facet_changed_rule);
 COVERAGE_DEFINE(facet_invalidated);
@@ -71,7 +70,8 @@ COVERAGE_DEFINE(facet_suppress);
 
 /* Number of implemented OpenFlow tables. */
 enum { N_TABLES = 255 };
-BUILD_ASSERT_DECL(N_TABLES >= 1 && N_TABLES <= 255);
+enum { TBL_INTERNAL = N_TABLES - 1 };    /* Used for internal hidden rules. */
+BUILD_ASSERT_DECL(N_TABLES >= 2 && N_TABLES <= 255);
 
 struct ofport_dpif;
 struct ofproto_dpif;
@@ -106,7 +106,10 @@ static struct rule_dpif *rule_dpif_cast(const struct rule *rule)
 }
 
 static struct rule_dpif *rule_dpif_lookup(struct ofproto_dpif *,
-                                          const struct flow *, uint8_t table);
+                                          const struct flow *);
+static struct rule_dpif *rule_dpif_lookup__(struct ofproto_dpif *,
+                                            const struct flow *,
+                                            uint8_t table);
 
 static void rule_credit_stats(struct rule_dpif *,
                               const struct dpif_flow_stats *);
@@ -426,7 +429,7 @@ static struct facet *facet_find(struct ofproto_dpif *,
                                 const struct flow *, uint32_t hash);
 static struct facet *facet_lookup_valid(struct ofproto_dpif *,
                                         const struct flow *, uint32_t hash);
-static bool facet_revalidate(struct facet *);
+static void facet_revalidate(struct facet *);
 static bool facet_check_consistency(struct facet *);
 
 static void facet_flush_stats(struct facet *);
@@ -533,6 +536,10 @@ struct ofproto_dpif {
     struct ofproto up;
     struct dpif *dpif;
     int max_ports;
+
+    /* Special OpenFlow rules. */
+    struct rule_dpif *miss_rule; /* Sends flow table misses to controller. */
+    struct rule_dpif *no_packet_in_rule; /* Drops flow table misses. */
 
     /* Statistics. */
     uint64_t n_matches;
@@ -653,6 +660,8 @@ del(const char *type, const char *name)
 
 /* Basic life-cycle. */
 
+static int add_internal_flows(struct ofproto_dpif *);
+
 static struct ofproto *
 alloc(void)
 {
@@ -735,8 +744,71 @@ construct(struct ofproto *ofproto_)
     memset(&ofproto->stats, 0, sizeof ofproto->stats);
 
     ofproto_init_tables(ofproto_, N_TABLES);
+    error = add_internal_flows(ofproto);
+    ofproto->up.tables[TBL_INTERNAL].flags = OFTABLE_HIDDEN | OFTABLE_READONLY;
+
+    return error;
+}
+
+static int
+add_internal_flow(struct ofproto_dpif *ofproto, int id,
+                  const struct ofpbuf *actions, struct rule_dpif **rulep)
+{
+    struct ofputil_flow_mod fm;
+    int error;
+
+    cls_rule_init_catchall(&fm.cr, 0);
+    cls_rule_set_reg(&fm.cr, 0, id);
+    fm.cookie = htonll(0);
+    fm.cookie_mask = htonll(0);
+    fm.table_id = TBL_INTERNAL;
+    fm.command = OFPFC_ADD;
+    fm.idle_timeout = 0;
+    fm.hard_timeout = 0;
+    fm.buffer_id = 0;
+    fm.out_port = 0;
+    fm.flags = 0;
+    fm.actions = actions->data;
+    fm.n_actions = actions->size / sizeof(union ofp_action);
+
+    error = ofproto_flow_mod(&ofproto->up, &fm);
+    if (error) {
+        VLOG_ERR_RL(&rl, "failed to add internal flow %d (%s)",
+                    id, ofperr_to_string(error));
+        return error;
+    }
+
+    *rulep = rule_dpif_lookup__(ofproto, &fm.cr.flow, TBL_INTERNAL);
+    assert(*rulep != NULL);
 
     return 0;
+}
+
+static int
+add_internal_flows(struct ofproto_dpif *ofproto)
+{
+    struct nx_action_controller *nac;
+    uint64_t actions_stub[128 / 8];
+    struct ofpbuf actions;
+    int error;
+    int id;
+
+    ofpbuf_use_stack(&actions, actions_stub, sizeof actions_stub);
+    id = 1;
+
+    nac = ofputil_put_NXAST_CONTROLLER(&actions);
+    nac->max_len = htons(UINT16_MAX);
+    nac->controller_id = htons(0);
+    nac->reason = OFPR_NO_MATCH;
+    error = add_internal_flow(ofproto, id++, &actions, &ofproto->miss_rule);
+    if (error) {
+        return error;
+    }
+
+    ofpbuf_clear(&actions);
+    error = add_internal_flow(ofproto, id++, &actions,
+                              &ofproto->no_packet_in_rule);
+    return error;
 }
 
 static void
@@ -863,13 +935,13 @@ run(struct ofproto *ofproto_)
         || !tag_set_is_empty(&ofproto->revalidate_set)) {
         struct tag_set revalidate_set = ofproto->revalidate_set;
         bool revalidate_all = ofproto->need_revalidate;
-        struct facet *facet, *next;
+        struct facet *facet;
 
         /* Clear the revalidation flags. */
         tag_set_init(&ofproto->revalidate_set);
         ofproto->need_revalidate = false;
 
-        HMAP_FOR_EACH_SAFE (facet, next, hmap_node, &ofproto->facets) {
+        HMAP_FOR_EACH (facet, hmap_node, &ofproto->facets) {
             if (revalidate_all
                 || tag_set_intersects(&revalidate_set, facet->tags)) {
                 facet_revalidate(facet);
@@ -1084,7 +1156,8 @@ port_reconfigured(struct ofport *port_, enum ofputil_port_config old_config)
     enum ofputil_port_config changed = old_config ^ port->up.pp.config;
 
     if (changed & (OFPUTIL_PC_NO_RECV | OFPUTIL_PC_NO_RECV_STP |
-                   OFPUTIL_PC_NO_FWD | OFPUTIL_PC_NO_FLOOD)) {
+                   OFPUTIL_PC_NO_FWD | OFPUTIL_PC_NO_FLOOD |
+                   OFPUTIL_PC_NO_PACKET_IN)) {
         ofproto->need_revalidate = true;
 
         if (changed & OFPUTIL_PC_NO_FLOOD && port->bundle) {
@@ -2795,30 +2868,6 @@ handle_flow_miss_with_facet(struct flow_miss *miss, struct facet *facet,
     }
 }
 
-/* Handles flow miss 'miss' on 'ofproto'.  The flow does not match any flow in
- * the OpenFlow flow table. */
-static void
-handle_flow_miss_no_rule(struct ofproto_dpif *ofproto, struct flow_miss *miss)
-{
-    uint16_t in_port = miss->flow.in_port;
-    struct ofport_dpif *port = get_ofp_port(ofproto, in_port);
-
-    if (!port) {
-        VLOG_WARN_RL(&rl, "packet-in on unknown port %"PRIu16, in_port);
-    }
-
-    if (port && port->up.pp.config & OFPUTIL_PC_NO_PACKET_IN) {
-        /* XXX install 'drop' flow entry */
-        COVERAGE_INC(ofproto_dpif_no_packet_in);
-    } else {
-        const struct ofpbuf *packet;
-
-        LIST_FOR_EACH (packet, list_node, &miss->packets) {
-            send_packet_in_miss(ofproto, packet, &miss->flow);
-        }
-    }
-}
-
 /* Handles flow miss 'miss' on 'ofproto'.  May add any required datapath
  * operations to 'ops', incrementing '*n_ops' for each new op. */
 static void
@@ -2834,11 +2883,9 @@ handle_flow_miss(struct ofproto_dpif *ofproto, struct flow_miss *miss,
 
     facet = facet_lookup_valid(ofproto, &miss->flow, hash);
     if (!facet) {
-        struct rule_dpif *rule = rule_dpif_lookup(ofproto, &miss->flow, 0);
-        if (!rule) {
-            handle_flow_miss_no_rule(ofproto, miss);
-            return;
-        } else if (!flow_miss_should_make_facet(ofproto, miss, hash)) {
+        struct rule_dpif *rule = rule_dpif_lookup(ofproto, &miss->flow);
+
+        if (!flow_miss_should_make_facet(ofproto, miss, hash)) {
             handle_flow_miss_without_facet(miss, rule, ops, n_ops);
             return;
         }
@@ -3671,16 +3718,13 @@ static struct facet *
 facet_lookup_valid(struct ofproto_dpif *ofproto, const struct flow *flow,
                    uint32_t hash)
 {
-    struct facet *facet = facet_find(ofproto, flow, hash);
+    struct facet *facet;
 
-    /* The facet we found might not be valid, since we could be in need of
-     * revalidation.  If it is not valid, don't return it. */
+    facet = facet_find(ofproto, flow, hash);
     if (facet
         && (ofproto->need_revalidate
-            || tag_set_intersects(&ofproto->revalidate_set, facet->tags))
-        && !facet_revalidate(facet)) {
-        COVERAGE_INC(facet_invalidated);
-        return NULL;
+            || tag_set_intersects(&ofproto->revalidate_set, facet->tags))) {
+        facet_revalidate(facet);
     }
 
     return facet;
@@ -3702,17 +3746,10 @@ facet_check_consistency(struct facet *facet)
     bool ok;
 
     /* Check the rule for consistency. */
-    rule = rule_dpif_lookup(ofproto, &facet->flow, 0);
-    if (!rule) {
-        if (!VLOG_DROP_WARN(&rl)) {
-            char *s = flow_to_string(&facet->flow);
-            VLOG_WARN("%s: facet should not exist", s);
-            free(s);
-        }
-        return false;
-    } else if (rule != facet->rule) {
+    rule = rule_dpif_lookup(ofproto, &facet->flow);
+    ok = rule == facet->rule;
+    if (!ok) {
         may_log = !VLOG_DROP_WARN(&rl);
-        ok = false;
         if (may_log) {
             struct ds s;
 
@@ -3729,8 +3766,6 @@ facet_check_consistency(struct facet *facet)
             VLOG_WARN("%s", ds_cstr(&s));
             ds_destroy(&s);
         }
-    } else {
-        ok = true;
     }
 
     /* Check the datapath actions for consistency. */
@@ -3814,12 +3849,8 @@ facet_check_consistency(struct facet *facet)
  *     'facet' to the new rule and recompiles its actions.
  *
  *   - If the rule found is the same as 'facet''s current rule, leaves 'facet'
- *     where it is and recompiles its actions anyway.
- *
- *   - If there is none, destroys 'facet'.
- *
- * Returns true if 'facet' still exists, false if it has been destroyed. */
-static bool
+ *     where it is and recompiles its actions anyway. */
+static void
 facet_revalidate(struct facet *facet)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(facet->rule->up.ofproto);
@@ -3840,13 +3871,7 @@ facet_revalidate(struct facet *facet)
 
     COVERAGE_INC(facet_revalidate);
 
-    /* Determine the new rule. */
-    new_rule = rule_dpif_lookup(ofproto, &facet->flow, 0);
-    if (!new_rule) {
-        /* No new rule, so delete the facet. */
-        facet_remove(facet);
-        return false;
-    }
+    new_rule = rule_dpif_lookup(ofproto, &facet->flow);
 
     /* Calculate new datapath actions.
      *
@@ -3929,8 +3954,6 @@ facet_revalidate(struct facet *facet)
         facet->used = new_rule->up.created;
         facet->prev_used = facet->used;
     }
-
-    return true;
 }
 
 /* Updates 'facet''s used time.  Caller is responsible for calling
@@ -4293,8 +4316,31 @@ subfacet_update_stats(struct subfacet *subfacet,
 /* Rules. */
 
 static struct rule_dpif *
-rule_dpif_lookup(struct ofproto_dpif *ofproto, const struct flow *flow,
-                 uint8_t table_id)
+rule_dpif_lookup(struct ofproto_dpif *ofproto, const struct flow *flow)
+{
+    struct ofport_dpif *port;
+    struct rule_dpif *rule;
+
+    rule = rule_dpif_lookup__(ofproto, flow, 0);
+    if (rule) {
+        return rule;
+    }
+
+    port = get_ofp_port(ofproto, flow->in_port);
+    if (!port) {
+        VLOG_WARN_RL(&rl, "packet-in on unknown port %"PRIu16, flow->in_port);
+        return ofproto->miss_rule;
+    }
+
+    if (port->up.pp.config & OFPUTIL_PC_NO_PACKET_IN) {
+        return ofproto->no_packet_in_rule;
+    }
+    return ofproto->miss_rule;
+}
+
+static struct rule_dpif *
+rule_dpif_lookup__(struct ofproto_dpif *ofproto, const struct flow *flow,
+                   uint8_t table_id)
 {
     struct cls_rule *cls_rule;
     struct classifier *cls;
@@ -4702,7 +4748,7 @@ xlate_table_action(struct action_xlate_ctx *ctx,
         /* Look up a flow with 'in_port' as the input port. */
         old_in_port = ctx->flow.in_port;
         ctx->flow.in_port = in_port;
-        rule = rule_dpif_lookup(ofproto, &ctx->flow, table_id);
+        rule = rule_dpif_lookup__(ofproto, &ctx->flow, table_id);
 
         /* Tag the flow. */
         if (table_id > 0 && table_id < N_TABLES) {
@@ -6522,8 +6568,16 @@ ofproto_trace(struct ofproto_dpif *ofproto, const struct flow *flow,
     flow_format(ds, flow);
     ds_put_char(ds, '\n');
 
-    rule = rule_dpif_lookup(ofproto, flow, 0);
+    rule = rule_dpif_lookup(ofproto, flow);
+
     trace_format_rule(ds, 0, 0, rule);
+    if (rule == ofproto->miss_rule) {
+        ds_put_cstr(ds, "\nNo match, flow generates \"packet in\"s.\n");
+    } else if (rule == ofproto->no_packet_in_rule) {
+        ds_put_cstr(ds, "\nNo match, packets dropped because "
+                    "OFPPC_NO_PACKET_IN is set on in_port.\n");
+    }
+
     if (rule) {
         uint64_t odp_actions_stub[1024 / 8];
         struct ofpbuf odp_actions;
