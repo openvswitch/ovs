@@ -496,8 +496,30 @@ set_switch_config(struct vconn *vconn, struct ofp_switch_config *config_)
 static void
 do_show(int argc OVS_UNUSED, char *argv[])
 {
-    dump_trivial_transaction(argv[1], OFPT_FEATURES_REQUEST);
-    dump_trivial_transaction(argv[1], OFPT_GET_CONFIG_REQUEST);
+    const char *vconn_name = argv[1];
+    struct vconn *vconn;
+    struct ofpbuf *request;
+    struct ofpbuf *reply;
+    bool trunc;
+
+    make_openflow(sizeof(struct ofp_header), OFPT_FEATURES_REQUEST,
+                  &request);
+    open_vconn(vconn_name, &vconn);
+    run(vconn_transact(vconn, request, &reply), "talking to %s", vconn_name);
+
+    trunc = ofputil_switch_features_ports_trunc(reply);
+    ofp_print(stdout, reply->data, reply->size, verbosity + 1);
+
+    ofpbuf_delete(reply);
+    vconn_close(vconn);
+
+    if (trunc) {
+        /* The Features Reply may not contain all the ports, so send a
+         * Port Description stats request, which doesn't have size
+         * constraints. */
+        dump_trivial_stats_transaction(vconn_name, OFPST_PORT_DESC);
+    }
+    dump_trivial_transaction(vconn_name, OFPT_GET_CONFIG_REQUEST);
 }
 
 static void
