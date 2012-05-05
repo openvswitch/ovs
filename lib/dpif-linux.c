@@ -61,8 +61,9 @@
 VLOG_DEFINE_THIS_MODULE(dpif_linux);
 enum { MAX_PORTS = USHRT_MAX };
 
-enum { N_UPCALL_SOCKS = 16 };
-BUILD_ASSERT_DECL(IS_POW2(N_UPCALL_SOCKS));
+enum { N_UPCALL_SOCKS = 17 };
+BUILD_ASSERT_DECL(IS_POW2(N_UPCALL_SOCKS - 1));
+BUILD_ASSERT_DECL(N_UPCALL_SOCKS > 1);
 BUILD_ASSERT_DECL(N_UPCALL_SOCKS <= 32); /* We use a 32-bit word as a mask. */
 
 /* This ethtool flag was introduced in Linux 2.6.24, so it might be
@@ -460,7 +461,11 @@ dpif_linux_port_get_pid(const struct dpif *dpif_, uint16_t port_no)
     if (dpif->epoll_fd < 0) {
         return 0;
     } else {
-        int idx = port_no & (N_UPCALL_SOCKS - 1);
+        int idx;
+
+        idx = (port_no != UINT16_MAX
+               ? 1 + (port_no & (N_UPCALL_SOCKS - 2))
+               : 0);
         return nl_sock_pid(dpif->upcall_socks[idx]);
     }
 }
