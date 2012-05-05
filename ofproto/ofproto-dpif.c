@@ -3736,9 +3736,12 @@ facet_check_consistency(struct facet *facet)
     /* Check the datapath actions for consistency. */
     ofpbuf_use_stub(&odp_actions, odp_actions_stub, sizeof odp_actions_stub);
     LIST_FOR_EACH (subfacet, list_node, &facet->subfacets) {
+        struct odputil_keybuf keybuf;
         struct action_xlate_ctx ctx;
         bool actions_changed;
         bool should_install;
+        struct ofpbuf key;
+        struct ds s;
 
         action_xlate_ctx_init(&ctx, ofproto, &facet->flow,
                               subfacet->initial_tci, rule, 0, NULL);
@@ -3756,48 +3759,49 @@ facet_check_consistency(struct facet *facet)
         actions_changed = (subfacet->actions_len != odp_actions.size
                            || memcmp(subfacet->actions, odp_actions.data,
                                      subfacet->actions_len));
-        if (should_install != subfacet->installed || actions_changed) {
-            if (ok) {
-                may_log = !VLOG_DROP_WARN(&rl);
-                ok = false;
-            }
-
-            if (may_log) {
-                struct odputil_keybuf keybuf;
-                struct ofpbuf key;
-                struct ds s;
-
-                ds_init(&s);
-                subfacet_get_key(subfacet, &keybuf, &key);
-                odp_flow_key_format(key.data, key.size, &s);
-
-                ds_put_cstr(&s, ": inconsistency in subfacet");
-                if (should_install != subfacet->installed) {
-                    enum odp_key_fitness fitness = subfacet->key_fitness;
-
-                    ds_put_format(&s, " (should%s have been installed)",
-                                  should_install ? "" : " not");
-                    ds_put_format(&s, " (may_set_up_flow=%s, fitness=%s)",
-                                  ctx.may_set_up_flow ? "true" : "false",
-                                  odp_key_fitness_to_string(fitness));
-                }
-                if (actions_changed) {
-                    ds_put_cstr(&s, " (actions were: ");
-                    format_odp_actions(&s, subfacet->actions,
-                                       subfacet->actions_len);
-                    ds_put_cstr(&s, ") (correct actions: ");
-                    format_odp_actions(&s, odp_actions.data, odp_actions.size);
-                    ds_put_char(&s, ')');
-                } else {
-                    ds_put_cstr(&s, " (actions: ");
-                    format_odp_actions(&s, subfacet->actions,
-                                       subfacet->actions_len);
-                    ds_put_char(&s, ')');
-                }
-                VLOG_WARN("%s", ds_cstr(&s));
-                ds_destroy(&s);
-            }
+        if (should_install == subfacet->installed && !actions_changed) {
+            continue;
         }
+
+        /* Inconsistency! */
+        if (ok) {
+            may_log = !VLOG_DROP_WARN(&rl);
+            ok = false;
+        }
+        if (!may_log) {
+            /* Rate-limited, skip reporting. */
+            continue;
+        }
+
+        ds_init(&s);
+        subfacet_get_key(subfacet, &keybuf, &key);
+        odp_flow_key_format(key.data, key.size, &s);
+
+        ds_put_cstr(&s, ": inconsistency in subfacet");
+        if (should_install != subfacet->installed) {
+            enum odp_key_fitness fitness = subfacet->key_fitness;
+
+            ds_put_format(&s, " (should%s have been installed)",
+                          should_install ? "" : " not");
+            ds_put_format(&s, " (may_set_up_flow=%s, fitness=%s)",
+                          ctx.may_set_up_flow ? "true" : "false",
+                          odp_key_fitness_to_string(fitness));
+        }
+        if (actions_changed) {
+            ds_put_cstr(&s, " (actions were: ");
+            format_odp_actions(&s, subfacet->actions,
+                               subfacet->actions_len);
+            ds_put_cstr(&s, ") (correct actions: ");
+            format_odp_actions(&s, odp_actions.data, odp_actions.size);
+            ds_put_char(&s, ')');
+        } else {
+            ds_put_cstr(&s, " (actions: ");
+            format_odp_actions(&s, subfacet->actions,
+                               subfacet->actions_len);
+            ds_put_char(&s, ')');
+        }
+        VLOG_WARN("%s", ds_cstr(&s));
+        ds_destroy(&s);
     }
     ofpbuf_uninit(&odp_actions);
 
