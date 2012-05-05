@@ -3469,7 +3469,12 @@ expire_batch(struct ofproto_dpif *ofproto, struct subfacet **subfacets, int n)
 static void
 expire_subfacets(struct ofproto_dpif *ofproto, int dp_max_idle)
 {
-    long long int cutoff = time_msec() - dp_max_idle;
+    /* Cutoff time for most flows. */
+    long long int normal_cutoff = time_msec() - dp_max_idle;
+
+    /* We really want to keep flows for special protocols around, so use a more
+     * conservative cutoff. */
+    long long int special_cutoff = time_msec() - 10000;
 
     struct subfacet *subfacet, *next_subfacet;
     struct subfacet *batch[EXPIRE_MAX_BATCH];
@@ -3478,6 +3483,11 @@ expire_subfacets(struct ofproto_dpif *ofproto, int dp_max_idle)
     n_batch = 0;
     HMAP_FOR_EACH_SAFE (subfacet, next_subfacet, hmap_node,
                         &ofproto->subfacets) {
+        long long int cutoff;
+
+        cutoff = (subfacet->slow & (SLOW_CFM | SLOW_LACP | SLOW_STP)
+                  ? special_cutoff
+                  : normal_cutoff);
         if (subfacet->used < cutoff) {
             if (subfacet->path != SF_NOT_INSTALLED) {
                 batch[n_batch++] = subfacet;
@@ -4714,7 +4724,12 @@ compose_slow_path(const struct ofproto_dpif *ofproto, const struct flow *flow,
     cookie.slow_path.reason = slow;
 
     ofpbuf_use_stack(&buf, stub, stub_size);
-    put_userspace_action(ofproto, &buf, flow, &cookie);
+    if (slow & (SLOW_CFM | SLOW_LACP | SLOW_STP)) {
+        uint32_t pid = dpif_port_get_pid(ofproto->dpif, UINT16_MAX);
+        odp_put_userspace_action(pid, &cookie, &buf);
+    } else {
+        put_userspace_action(ofproto, &buf, flow, &cookie);
+    }
     *actionsp = buf.data;
     *actions_lenp = buf.size;
 }

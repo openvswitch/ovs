@@ -541,6 +541,9 @@ dpif_get_max_ports(const struct dpif *dpif)
  * as the OVS_USERSPACE_ATTR_PID attribute's value, for use in flows whose
  * packets arrived on port 'port_no'.
  *
+ * A 'port_no' of UINT16_MAX is a special case: it returns a reserved PID, not
+ * allocated to any port, that the client may use for special purposes.
+ *
  * The return value is only meaningful when DPIF_UC_ACTION has been enabled in
  * the 'dpif''s listen mask.  It is allowed to change when DPIF_UC_ACTION is
  * disabled and then re-enabled, so a client that does that must be prepared to

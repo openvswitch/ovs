@@ -136,6 +136,10 @@ struct dpif_class {
      * actions as the OVS_USERSPACE_ATTR_PID attribute's value, for use in
      * flows whose packets arrived on port 'port_no'.
      *
+     * A 'port_no' of UINT16_MAX should be treated as a special case.  The
+     * implementation should return a reserved PID, not allocated to any port,
+     * that the client may use for special purposes.
+     *
      * The return value only needs to be meaningful when DPIF_UC_ACTION has
      * been enabled in the 'dpif''s listen mask, and it is allowed to change
      * when DPIF_UC_ACTION is disabled and then re-enabled.
