@@ -250,12 +250,15 @@ struct ofpbuf *ofputil_encode_packet_in(const struct ofputil_packet_in *,
 int ofputil_decode_packet_in(struct ofputil_packet_in *pi,
                              const struct ofp_header *oh);
 
-/* Abstract packet-out message. */
+/* Abstract packet-out message.
+ *
+ * ofputil_decode_packet_out() will ensure that 'in_port' is a physical port
+ * (OFPP_MAX or less) or one of OFPP_LOCAL, OFPP_NONE, or OFPP_CONTROLLER. */
 struct ofputil_packet_out {
     const void *packet;         /* Packet data, if buffer_id == UINT32_MAX. */
     size_t packet_len;          /* Length of packet data in bytes. */
     uint32_t buffer_id;         /* Buffer id or UINT32_MAX if no buffer. */
-    uint16_t in_port;           /* Packet's input port or OFPP_NONE. */
+    uint16_t in_port;           /* Packet's input port. */
     union ofp_action *actions;  /* Actions. */
     size_t n_actions;           /* Number of elements in 'actions' array. */
 };

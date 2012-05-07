@@ -917,8 +917,27 @@ struct ofproto_class {
      *
      * 'flow' reflects the flow information for 'packet'.  All of the
      * information in 'flow' is extracted from 'packet', except for
-     * flow->in_port, which is taken from the OFPT_PACKET_OUT message.
-     * flow->tun_id and its register values are zeroed.
+     * flow->in_port (see below).  flow->tun_id and its register values are
+     * zeroed.
+     *
+     * flow->in_port comes from the OpenFlow OFPT_PACKET_OUT message.  The
+     * implementation should reject invalid flow->in_port values by returning
+     * OFPERR_NXBRC_BAD_IN_PORT.  For consistency, the implementation should
+     * consider valid for flow->in_port any value that could possibly be seen
+     * in a packet that it passes to connmgr_send_packet_in().  Ideally, even
+     * an implementation that never generates packet-ins (e.g. due to hardware
+     * limitations) should still allow flow->in_port values for every possible
+     * physical port and OFPP_LOCAL.  The only virtual ports (those above
+     * OFPP_MAX) that the caller will ever pass in as flow->in_port, other than
+     * OFPP_LOCAL, are OFPP_NONE and OFPP_CONTROLLER.  The implementation
+     * should allow both of these, treating each of them as packets generated
+     * by the controller as opposed to packets originating from some switch
+     * port.
+     *
+     * (Ordinarily the only effect of flow->in_port is on output actions that
+     * involve the input port, such as actions that output to OFPP_IN_PORT,
+     * OFPP_FLOOD, or OFPP_ALL.  flow->in_port can also affect Nicira extension
+     * "resubmit" actions.)
      *
      * 'packet' is not matched against the OpenFlow flow table, so its
      * statistics should not be included in OpenFlow flow statistics.

@@ -1794,7 +1794,7 @@ ofputil_decode_packet_out(struct ofputil_packet_out *po,
     po->buffer_id = ntohl(opo->buffer_id);
     po->in_port = ntohs(opo->in_port);
     if (po->in_port >= OFPP_MAX && po->in_port != OFPP_LOCAL
-        && po->in_port != OFPP_NONE) {
+        && po->in_port != OFPP_NONE && po->in_port != OFPP_CONTROLLER) {
         VLOG_WARN_RL(&bad_ofmsg_rl, "packet-out has bad input port %#"PRIx16,
                      po->in_port);
         return OFPERR_NXBRC_BAD_IN_PORT;
