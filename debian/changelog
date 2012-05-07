@@ -1,9 +1,30 @@
-openvswitch (1.6.90-1) unstable; urgency=low
+openvswitch (1.7.0-1) unstable; urgency=low
   [ Open vSwitch team ]
   * New upstream version
-    - Nothing yet!  Try NEWS...
+    - kernel modules are renamed. openvswitch_mod.ko is now
+      openvswitch.ko and brcompat_mod.ko is now brcompat.ko.
+    - Increased the number of NXM registers to 8.
+    - Added ability to configure dscp setting for manager and controller
+      connections.  By default, these connections have a DSCP value of
+      Internetwork Control (0xc0).
+    - Added the granular link health statistics, 'cfm_health', to an
+      interface.
+    - OpenFlow:
+        - Added support to mask nd_target for ICMPv6 neighbor discovery flows.
+        - Added support for OpenFlow 1.3 port description (OFPMP_PORT_DESC)
+          multipart messages.
+    - ovs-ofctl:
+        - Added the "dump-ports-desc" command to retrieve port
+          information using the new port description multipart messages.
+    - ovs-test:
+        - Added support for spawning ovs-test server from the client.
+        - Now ovs-test is able to automatically create test bridges and ports.
+    - "ovs-dpctl dump-flows" now prints observed TCP flags in TCP flows.
+    - The "coverage/log" command previously available through ovs-appctl
+      has been replaced by "coverage/show".  The new command replies with
+      coverage counter values, instead of logging them.
 
- -- Open vSwitch team <dev@openvswitch.org>  Fri, 24 Feb 2012 11:12:52 +0900
+ -- Open vSwitch team <dev@openvswitch.org>  Mon, 07 May 2012 14:11:52 +0900
 
 openvswitch (1.6.0-1) unstable; urgency=low
   [ Open vSwitch team ]
