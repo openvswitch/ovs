@@ -1,11 +1,93 @@
 openvswitch (1.4.1-1) unstable; urgency=low
-  [ Open vSwitch team ]
-  * New upstream version
-    - The default MAC learning timeout has been increased from 60 seconds
-      to 300 seconds.  The MAC learning timeout is now configurable.
-    - Bug fixes
 
- -- Open vSwitch team <dev@openvswitch.org>  Mon, 30 Apr 2012 22:57:00 +0000
+  * New upstream version fixing the following bugs:
+    o Correctly set destination MAC in mf_set_flow_value().
+
+ -- Ben Pfaff <pfaffben@debian.org>  Mon, 07 May 2012 09:26:44 -0700
+
+openvswitch (1.4.0+git20120426-1) unstable; urgency=low
+
+  * New upstream release fixing the following bugs:
+    o Broken log rotation.
+    o Use-after-free error when ports disappear.
+    o Minor memory leaks.
+    o Testsuite failures on big-endian architectures.
+
+ -- Ben Pfaff <pfaffben@debian.org>  Thu, 26 Apr 2012 13:46:55 -0700
+
+openvswitch (1.4.0+git20120321-1) unstable; urgency=low
+
+  * New upstream version including:
+    o Features:
+      - ovs-vsctl: Allow "fake bridges" to be created for VLAN 0.
+      - vswitchd: Make the MAC entry aging time configurable.
+      - mac-learning: Increase MAC learning timeout to 300 seconds.
+    o Bug fixes:
+      - netdev-linux: Fix use-after-free when netdev_dump_queues() deletes
+        queues.
+      - netlink-socket: Increase Netlink socket receive buffer size.
+      - ofproto: Fix code that keeps track of MTU.
+      - ovs-monitor-ipsec: Detect correctly IPSEC configuration changes
+      - bond: Incorrectly reported an error in appctl.
+      - socket-util: Unlink Unix domain sockets that bind but fail to connect.
+      - bridge: Remove unwanted ports at time of ofproto creation.
+      - dpif-linux: Make dpif_linux_port_query_by_name() query only one
+        datapath.
+      - ofproto-dpif: Cleanup STP on ports when disabled on their bridge.
+      - configure: Try to extract kernel source directory from build Makefile.
+      - vswitchd: Always configure a default queue for QoS.
+      - ofproto-dpif: Don't output to in_port even if in_port is OFPP_LOCAL.
+      - sflow_agent: Use snprintf() in place of sprintf().
+    o Packaging:
+      - Move PKI directory to FHS-compliant location.  Closes: #661090.
+        Thanks to Andreas Beckmann <debian@abeckmann.de> for reporting
+        this bug.
+      - Use a different way to avoid failing install without kernel module.
+      - Avoid unit test failure when doing "unofficial" builds.
+      - Bump standards-version to 3.9.3.
+      - Remove some useless files from the dkms package.
+      - Clean .pyc files in "clean" target.
+      - Remove po-debconf build dependency.
+      - Build-depend on python-all to pull in all Python versions.
+      - Add missing ${python:Depends} to openvswitch-test package.
+      - Improve long descriptions so as to better describe the packages.
+      - Bump debhelper compat level to 8 and make build-depends consistent.
+      - Fix exit status of openvswitch-switch init script "status" command.
+      - Use provided kernel source dir instead of host kernel version.
+      - Do not run "make" if "configure" fails during DKMS build.
+      - Look in /lib/modules instead of /usr/src for DKMS kernel sources.
+      - Fix dependencies for openvswitch-datapath-dkms package.
+      - Don't install Python modules for obsolete Python versions.
+      - Add dependency on ${misc:Depends} to openvswitch-test
+    o Documentation improvements:
+      - ovsdb-doc: Use minus sign in negative numbers in nroff output.
+      - ovsdb-doc: Convert '-' preceding a number as a minus sign, not a
+        hyphen.
+      - ovsdb-doc: Put NAME section into generated manpage.
+      - Fix typo in manpage.
+      - vswitchd: Document behavior of 802.1p priorities with VLAN splinters.
+      - netdev: Fix typo in error message.
+      - INSTALL.Linux: minor typo
+
+  * Many thanks to Thomas Goirand <zigo@debian.org> for contributing many
+    of the packaging fixes listed above.
+
+  * This version fixes most of the lintian errors described in bug
+    #663051, but a few remain, so this upload does not close that bug.  I
+    believe that this upload should be suitable for downgrading that bug's
+    severity.
+
+ -- Ben Pfaff <pfaffben@debian.org>  Wed, 21 Mar 2012 10:00:28 -0700
+
+openvswitch (1.4.0-2+nmu1) unstable; urgency=low
+
+  * Non maintainer upload.
+  * Removes all patches in debian/patches, because they are patching stuff
+  inconditionally in debian/*, and this should be applied by default.
+  * Uses the correct ${kernel_source_dir} in debian/dkms.conf.in, so that
+  the kernel module builds as expected (Closes: #659685).
+
+ -- Thomas Goirand <zigo@debian.org>  Thu, 08 Mar 2012 08:46:24 +0000
 
 openvswitch (1.4.0-2) unstable; urgency=low
 
@@ -162,7 +244,7 @@ openvswitch (1.1.1-1) unstable; urgency=low
     - For local non-debian/ patches (above)
 
  -- Simon Horman <horms@debian.org>  Wed, 15 Jun 2011 10:46:15 +0900
-    
+
 openvswitch (1.1.0-1) unstable; urgency=low
 
   [ Open vSwitch team ]
@@ -207,7 +289,7 @@ openvswitch (1.1.0-1) unstable; urgency=low
       bugs.  New ovs-vlan-bug-workaround command for enabling and
       disabling a workaround for these driver bugs.
     - OpenFlow support:
-      - "Resubmit" actions now update flow statistics. 
+      - "Resubmit" actions now update flow statistics.
       - New "register" extension for use in matching and actions, via NXM.
       - New "multipath" experimental action extension.
       - New support for matching multicast Ethernet frames, via NXM.
