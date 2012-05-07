@@ -1157,7 +1157,7 @@ odp_flow_key_from_flow(struct ofpbuf *buf, const struct flow *flow)
         nl_msg_put_be64(buf, OVS_KEY_ATTR_TUN_ID, flow->tun_id);
     }
 
-    if (flow->in_port != OFPP_NONE) {
+    if (flow->in_port != OFPP_NONE && flow->in_port != OFPP_CONTROLLER) {
         nl_msg_put_u32(buf, OVS_KEY_ATTR_IN_PORT,
                        ofp_port_to_odp_port(flow->in_port));
     }
