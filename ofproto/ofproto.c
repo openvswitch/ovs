@@ -1858,7 +1858,8 @@ handle_packet_out(struct ofconn *ofconn, const struct ofp_header *oh)
      * we do know that only certain reserved ports (numbered OFPP_MAX and
      * above) are valid. */
     in_port = ntohs(opo->in_port);
-    if (in_port >= OFPP_MAX && in_port != OFPP_LOCAL && in_port != OFPP_NONE) {
+    if (in_port >= OFPP_MAX && in_port != OFPP_LOCAL && in_port != OFPP_NONE
+        && in_port != OFPP_CONTROLLER) {
         return ofp_mkerr_nicira(OFPET_BAD_REQUEST, NXBRC_BAD_IN_PORT);
     }
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011 Nicira Networks.
+ * Copyright (c) 2009, 2010, 2011, 2012 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -127,7 +127,7 @@ struct user_action_cookie {
     uint8_t   type;                 /* enum user_action_cookie_type. */
     uint8_t   n_output;             /* No of output ports. used by sflow. */
     ovs_be16  vlan_tci;             /* Used by sFlow */
-    uint32_t  data;                 /* Data is len for OFPP_CONTROLLER action.
+    uint32_t  data;                 /* (len<<16)|in_port for OFPP_CONTROLLER.
                                        For sFlow it is port_ifindex. */
 };
 

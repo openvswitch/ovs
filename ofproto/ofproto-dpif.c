@@ -2408,10 +2408,10 @@ send_packet_in_action(struct ofproto_dpif *ofproto, struct ofpbuf *packet,
     memcpy(&cookie, &userdata, sizeof(cookie));
 
     pin.packet = packet;
-    pin.in_port = flow->in_port;
+    pin.in_port = cookie.data & 0xffff;
     pin.reason = OFPR_ACTION;
     pin.buffer_id = 0;          /* not yet known */
-    pin.send_len = cookie.data;
+    pin.send_len = cookie.data >> 16;
     connmgr_send_packet_in(ofproto->up.connmgr, &pin, flow,
                            clone ? NULL : packet);
 }
@@ -4322,7 +4322,7 @@ compose_controller_action(struct action_xlate_ctx *ctx, int len)
 
     commit_odp_actions(&ctx->flow, &ctx->base_flow, ctx->odp_actions);
     cookie.type = USER_ACTION_COOKIE_CONTROLLER;
-    cookie.data = len;
+    cookie.data = (len << 16) | ctx->flow.in_port;
     cookie.n_output = 0;
     cookie.vlan_tci = 0;
     put_userspace_action(ctx->ofproto, ctx->odp_actions, &ctx->flow, &cookie);
