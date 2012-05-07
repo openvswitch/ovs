@@ -534,36 +534,37 @@ do_dump_tables(int argc OVS_UNUSED, char *argv[])
     dump_trivial_stats_transaction(argv[1], OFPST_TABLE);
 }
 
-/* Opens a connection to 'vconn_name', fetches the port structure for
- * 'port_name' (which may be a port name or number), and copies it into
- * '*oppp'. */
-static void
-fetch_ofputil_phy_port(const char *vconn_name, const char *port_name,
-                       struct ofputil_phy_port *pp)
+static bool
+fetch_port_by_features(const char *vconn_name,
+                       const char *port_name, unsigned int port_no,
+                       struct ofputil_phy_port *pp, bool *trunc)
 {
     struct ofputil_switch_features features;
     const struct ofp_switch_features *osf;
     struct ofpbuf *request, *reply;
-    unsigned int port_no;
     struct vconn *vconn;
     enum ofperr error;
     struct ofpbuf b;
-
-    /* Try to interpret the argument as a port number. */
-    if (!str_to_uint(port_name, 10, &port_no)) {
-        port_no = UINT_MAX;
-    }
+    bool found = false;
 
     /* Fetch the switch's ofp_switch_features. */
     make_openflow(sizeof(struct ofp_header), OFPT_FEATURES_REQUEST, &request);
     open_vconn(vconn_name, &vconn);
     run(vconn_transact(vconn, request, &reply), "talking to %s", vconn_name);
+    vconn_close(vconn);
 
     osf = reply->data;
     if (reply->size < sizeof *osf) {
         ovs_fatal(0, "%s: received too-short features reply (only %zu bytes)",
                   vconn_name, reply->size);
     }
+
+    *trunc = false;
+    if (ofputil_switch_features_ports_trunc(reply)) {
+        *trunc = true;
+        goto exit;
+    }
+
     error = ofputil_decode_switch_features(osf, &features, &b);
     if (error) {
         ovs_fatal(0, "%s: failed to decode features reply (%s)",
@@ -574,12 +575,110 @@ fetch_ofputil_phy_port(const char *vconn_name, const char *port_name,
         if (port_no != UINT_MAX
             ? port_no == pp->port_no
             : !strcmp(pp->name, port_name)) {
-            ofpbuf_delete(reply);
-            vconn_close(vconn);
-            return;
+            found = true;
+            goto exit;
         }
     }
-    ovs_fatal(0, "%s: couldn't find port `%s'", vconn_name, port_name);
+
+exit:
+    ofpbuf_delete(reply);
+    return found;
+}
+
+static bool
+fetch_port_by_stats(const char *vconn_name,
+                    const char *port_name, unsigned int port_no,
+                    struct ofputil_phy_port *pp)
+{
+    struct ofpbuf *request;
+    struct vconn *vconn;
+    ovs_be32 send_xid;
+    struct ofpbuf b;
+    bool done = false;
+    bool found = false;
+
+    alloc_stats_request(sizeof(struct ofp_stats_msg), OFPST_PORT_DESC,
+                        &request);
+    send_xid = ((struct ofp_header *) request->data)->xid;
+
+    open_vconn(vconn_name, &vconn);
+    send_openflow_buffer(vconn, request);
+    while (!done) {
+        ovs_be32 recv_xid;
+        struct ofpbuf *reply;
+
+        run(vconn_recv_block(vconn, &reply), "OpenFlow packet receive failed");
+        recv_xid = ((struct ofp_header *) reply->data)->xid;
+        if (send_xid == recv_xid) {
+            const struct ofputil_msg_type *type;
+            struct ofp_stats_msg *osm;
+
+            ofputil_decode_msg_type(reply->data, &type);
+            if (ofputil_msg_type_code(type) != OFPUTIL_OFPST_PORT_DESC_REPLY) {
+                ovs_fatal(0, "received bad reply: %s",
+                          ofp_to_string(reply->data, reply->size,
+                                        verbosity + 1));
+            }
+
+            osm = ofpbuf_at(reply, 0, sizeof *osm);
+            done = !osm || !(ntohs(osm->flags) & OFPSF_REPLY_MORE);
+
+            if (found) {
+                /* We've already found the port, but we need to drain
+                 * the queue of any other replies for this request. */
+                continue;
+            }
+
+            ofpbuf_use_const(&b, &osm->header, ntohs(osm->header.length));
+            ofpbuf_pull(&b, sizeof(struct ofp_stats_msg));
+
+            while (!ofputil_pull_phy_port(osm->header.version, &b, pp)) {
+                if (port_no != UINT_MAX ? port_no == pp->port_no
+                                        : !strcmp(pp->name, port_name)) {
+                    found = true;
+                    break;
+                }
+            }
+        } else {
+            VLOG_DBG("received reply with xid %08"PRIx32" "
+                     "!= expected %08"PRIx32, recv_xid, send_xid);
+        }
+        ofpbuf_delete(reply);
+    }
+    vconn_close(vconn);
+
+    return found;
+}
+
+
+/* Opens a connection to 'vconn_name', fetches the port structure for
+ * 'port_name' (which may be a port name or number), and copies it into
+ * '*pp'. */
+static void
+fetch_ofputil_phy_port(const char *vconn_name, const char *port_name,
+                       struct ofputil_phy_port *pp)
+{
+    unsigned int port_no;
+    bool found;
+    bool trunc;
+
+    /* Try to interpret the argument as a port number. */
+    if (!str_to_uint(port_name, 10, &port_no)) {
+        port_no = UINT_MAX;
+    }
+
+    /* Try to find the port based on the Features Reply.  If it looks
+     * like the results may be truncated, then use the Port Description
+     * stats message introduced in OVS 1.7. */
+    found = fetch_port_by_features(vconn_name, port_name, port_no, pp,
+                                   &trunc);
+    if (trunc) {
+        found = fetch_port_by_stats(vconn_name, port_name, port_no, pp);
+    }
+
+    if (!found) {
+        ovs_fatal(0, "%s: couldn't find port `%s'", vconn_name, port_name);
+    }
 }
 
 /* Returns the port number corresponding to 'port_name' (which may be a port
