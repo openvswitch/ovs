@@ -47,6 +47,7 @@
 #include "ofproto-dpif-governor.h"
 #include "ofproto-dpif-sflow.h"
 #include "poll-loop.h"
+#include "simap.h"
 #include "timer.h"
 #include "unaligned.h"
 #include "unixctl.h"
@@ -1054,6 +1055,15 @@ wait(struct ofproto *ofproto_)
     if (ofproto->governor) {
         governor_wait(ofproto->governor);
     }
+}
+
+static void
+get_memory_usage(const struct ofproto *ofproto_, struct simap *usage)
+{
+    const struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
+
+    simap_increase(usage, "facets", hmap_count(&ofproto->facets));
+    simap_increase(usage, "subfacets", hmap_count(&ofproto->subfacets));
 }
 
 static void
@@ -7098,6 +7108,7 @@ const struct ofproto_class ofproto_dpif_class = {
     run,
     run_fast,
     wait,
+    get_memory_usage,
     flush,
     get_features,
     get_tables,

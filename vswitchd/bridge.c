@@ -2228,6 +2228,18 @@ bridge_wait(void)
         }
     }
 }
+
+/* Adds some memory usage statistics for bridges into 'usage', for use with
+ * memory_report(). */
+void
+bridge_get_memory_usage(struct simap *usage)
+{
+    struct bridge *br;
+
+    HMAP_FOR_EACH (br, node, &all_bridges) {
+        ofproto_get_memory_usage(br->ofproto, usage);
+    }
+}
 
 /* QoS unixctl user interface functions. */
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -319,4 +319,12 @@ pinsched_set_limits(struct pinsched *ps, int rate_limit, int burst_limit)
     while (ps->n_queued > burst_limit) {
         drop_packet(ps);
     }
+}
+
+/* Returns the number of packets scheduled to be sent eventually by 'ps'.
+ * Returns 0 if 'ps' is null. */
+unsigned int
+pinsched_count_txqlen(const struct pinsched *ps)
+{
+    return ps ? ps->n_txq : 0;
 }

@@ -1,4 +1,4 @@
-/* Copyright (c) 2008, 2009, 2010, 2011 Nicira, Inc.
+/* Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,11 +16,15 @@
 #ifndef VSWITCHD_BRIDGE_H
 #define VSWITCHD_BRIDGE_H 1
 
+struct simap;
+
 void bridge_init(const char *remote);
 void bridge_exit(void);
 
 void bridge_run(void);
 void bridge_run_fast(void);
 void bridge_wait(void);
+
+void bridge_get_memory_usage(struct simap *usage);
 
 #endif /* bridge.h */

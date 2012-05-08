@@ -45,6 +45,7 @@
 #include "poll-loop.h"
 #include "random.h"
 #include "shash.h"
+#include "simap.h"
 #include "sset.h"
 #include "timeval.h"
 #include "unaligned.h"
@@ -1147,6 +1148,31 @@ bool
 ofproto_is_alive(const struct ofproto *p)
 {
     return connmgr_has_controllers(p->connmgr);
+}
+
+/* Adds some memory usage statistics for 'ofproto' into 'usage', for use with
+ * memory_report(). */
+void
+ofproto_get_memory_usage(const struct ofproto *ofproto, struct simap *usage)
+{
+    const struct oftable *table;
+    unsigned int n_rules;
+
+    simap_increase(usage, "ports", hmap_count(&ofproto->ports));
+    simap_increase(usage, "ops",
+                   ofproto->n_pending + hmap_count(&ofproto->deletions));
+
+    n_rules = 0;
+    OFPROTO_FOR_EACH_TABLE (table, ofproto) {
+        n_rules += classifier_count(&table->cls);
+    }
+    simap_increase(usage, "rules", n_rules);
+
+    if (ofproto->ofproto_class->get_memory_usage) {
+        ofproto->ofproto_class->get_memory_usage(ofproto, usage);
+    }
+
+    connmgr_get_memory_usage(ofproto->connmgr, usage);
 }
 
 void

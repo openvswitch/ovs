@@ -33,6 +33,7 @@
 #include "pktbuf.h"
 #include "rconn.h"
 #include "shash.h"
+#include "simap.h"
 #include "stream.h"
 #include "timeval.h"
 #include "vconn.h"
@@ -336,6 +337,30 @@ connmgr_wait(struct connmgr *mgr, bool handling_openflow)
     for (i = 0; i < mgr->n_snoops; i++) {
         pvconn_wait(mgr->snoops[i]);
     }
+}
+
+/* Adds some memory usage statistics for 'mgr' into 'usage', for use with
+ * memory_report(). */
+void
+connmgr_get_memory_usage(const struct connmgr *mgr, struct simap *usage)
+{
+    const struct ofconn *ofconn;
+    unsigned int packets = 0;
+    unsigned int ofconns = 0;
+
+    LIST_FOR_EACH (ofconn, node, &mgr->all_conns) {
+        int i;
+
+        ofconns++;
+
+        packets += rconn_count_txqlen(ofconn->rconn);
+        for (i = 0; i < N_SCHEDULERS; i++) {
+            packets += pinsched_count_txqlen(ofconn->schedulers[i]);
+        }
+        packets += pktbuf_count_packets(ofconn->pktbuf);
+    }
+    simap_increase(usage, "ofconns", ofconns);
+    simap_increase(usage, "packets", packets);
 }
 
 /* Returns the ofproto that owns 'ofconn''s connmgr. */

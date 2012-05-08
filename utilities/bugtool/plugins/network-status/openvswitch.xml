@@ -24,4 +24,5 @@
   <command label="ovs-appctl-cfm-show">/usr/share/openvswitch/scripts/ovs-bugtool-cfm-show</command>
   <command label="ovs-appctl-coverage-show">/usr/share/openvswitch/scripts/ovs-bugtool-coverage-show</command>
   <command label="ovs-appctl-bond-show">/usr/share/openvswitch/scripts/ovs-bugtool-bond-show</command>
+  <command label="ovs-appctl-memory-show">/usr/share/openvswitch/scripts/ovs-bugtool-memory-show</command>
 </collect>

@@ -31,6 +31,7 @@
 #include "reconnect.h"
 #include "row.h"
 #include "server.h"
+#include "simap.h"
 #include "stream.h"
 #include "table.h"
 #include "timeval.h"
@@ -51,6 +52,8 @@ static struct ovsdb_jsonrpc_session *ovsdb_jsonrpc_session_create(
     struct ovsdb_jsonrpc_remote *, struct jsonrpc_session *);
 static void ovsdb_jsonrpc_session_run_all(struct ovsdb_jsonrpc_remote *);
 static void ovsdb_jsonrpc_session_wait_all(struct ovsdb_jsonrpc_remote *);
+static void ovsdb_jsonrpc_session_get_memory_usage_all(
+    const struct ovsdb_jsonrpc_remote *, struct simap *usage);
 static void ovsdb_jsonrpc_session_close_all(struct ovsdb_jsonrpc_remote *);
 static void ovsdb_jsonrpc_session_reconnect_all(struct ovsdb_jsonrpc_remote *);
 static void ovsdb_jsonrpc_session_set_all_options(
@@ -293,6 +296,22 @@ ovsdb_jsonrpc_server_wait(struct ovsdb_jsonrpc_server *svr)
         ovsdb_jsonrpc_session_wait_all(remote);
     }
 }
+
+/* Adds some memory usage statistics for 'svr' into 'usage', for use with
+ * memory_report(). */
+void
+ovsdb_jsonrpc_server_get_memory_usage(const struct ovsdb_jsonrpc_server *svr,
+                                      struct simap *usage)
+{
+    struct shash_node *node;
+
+    simap_increase(usage, "sessions", svr->n_sessions);
+    SHASH_FOR_EACH (node, &svr->remotes) {
+        struct ovsdb_jsonrpc_remote *remote = node->data;
+
+        ovsdb_jsonrpc_session_get_memory_usage_all(remote, usage);
+    }
+}
 
 /* JSON-RPC database server session. */
 
@@ -315,6 +334,8 @@ struct ovsdb_jsonrpc_session {
 static void ovsdb_jsonrpc_session_close(struct ovsdb_jsonrpc_session *);
 static int ovsdb_jsonrpc_session_run(struct ovsdb_jsonrpc_session *);
 static void ovsdb_jsonrpc_session_wait(struct ovsdb_jsonrpc_session *);
+static void ovsdb_jsonrpc_session_get_memory_usage(
+    const struct ovsdb_jsonrpc_session *, struct simap *usage);
 static void ovsdb_jsonrpc_session_set_options(
     struct ovsdb_jsonrpc_session *, const struct ovsdb_jsonrpc_options *);
 static void ovsdb_jsonrpc_session_got_request(struct ovsdb_jsonrpc_session *,
@@ -425,6 +446,27 @@ ovsdb_jsonrpc_session_wait_all(struct ovsdb_jsonrpc_remote *remote)
 
     LIST_FOR_EACH (s, node, &remote->sessions) {
         ovsdb_jsonrpc_session_wait(s);
+    }
+}
+
+static void
+ovsdb_jsonrpc_session_get_memory_usage(const struct ovsdb_jsonrpc_session *s,
+                                       struct simap *usage)
+{
+    simap_increase(usage, "triggers", hmap_count(&s->triggers));
+    simap_increase(usage, "monitors", hmap_count(&s->monitors));
+    simap_increase(usage, "backlog", jsonrpc_session_get_backlog(s->js));
+}
+
+static void
+ovsdb_jsonrpc_session_get_memory_usage_all(
+    const struct ovsdb_jsonrpc_remote *remote,
+    struct simap *usage)
+{
+    struct ovsdb_jsonrpc_session *s;
+
+    LIST_FOR_EACH (s, node, &remote->sessions) {
+        ovsdb_jsonrpc_session_get_memory_usage(s, usage);
     }
 }
 

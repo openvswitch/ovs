@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010, 2011 Nicira, Inc.
+/* Copyright (c) 2009, 2010, 2011, 2012 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@
 #include "ovsdb-error.h"
 #include "ovsdb-parser.h"
 #include "ovsdb-types.h"
+#include "simap.h"
 #include "table.h"
 #include "transaction.h"
 
@@ -382,6 +383,25 @@ ovsdb_destroy(struct ovsdb *db)
         ovsdb_schema_destroy(db->schema);
         free(db);
     }
+}
+
+/* Adds some memory usage statistics for 'db' into 'usage', for use with
+ * memory_report(). */
+void
+ovsdb_get_memory_usage(const struct ovsdb *db, struct simap *usage)
+{
+    const struct shash_node *node;
+    unsigned int cells = 0;
+
+    SHASH_FOR_EACH (node, &db->tables) {
+        const struct ovsdb_table *table = node->data;
+        unsigned int n_columns = shash_count(&table->schema->columns);
+        unsigned int n_rows = hmap_count(&table->rows);
+
+        cells += n_rows * n_columns;
+    }
+
+    simap_increase(usage, "cells", cells);
 }
 
 struct ovsdb_table *

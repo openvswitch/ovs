@@ -855,6 +855,13 @@ rconn_get_last_error(const struct rconn *rc)
 {
     return rc->last_error;
 }
+
+/* Returns the number of messages queued for transmission on 'rc'. */
+unsigned int
+rconn_count_txqlen(const struct rconn *rc)
+{
+    return list_size(&rc->txq);
+}
 
 struct rconn_packet_counter *
 rconn_packet_counter_create(void)

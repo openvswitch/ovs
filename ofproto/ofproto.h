@@ -39,6 +39,7 @@ struct netdev;
 struct ofproto;
 struct ofport;
 struct shash;
+struct simap;
 struct netdev_stats;
 
 struct ofproto_controller_info {
@@ -152,6 +153,8 @@ int ofproto_run(struct ofproto *);
 int ofproto_run_fast(struct ofproto *);
 void ofproto_wait(struct ofproto *);
 bool ofproto_is_alive(const struct ofproto *);
+
+void ofproto_get_memory_usage(const struct ofproto *, struct simap *);
 
 /* A port within an OpenFlow switch.
  *

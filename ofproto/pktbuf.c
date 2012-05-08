@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -231,4 +231,24 @@ pktbuf_discard(struct pktbuf *pb, uint32_t id)
         ofpbuf_delete(p->buffer);
         p->buffer = NULL;
     }
+}
+
+/* Returns the number of packets buffered in 'pb'.  Returns 0 if 'pb' is
+ * null. */
+unsigned int
+pktbuf_count_packets(const struct pktbuf *pb)
+{
+    int n = 0;
+
+    if (pb) {
+        int i;
+
+        for (i = 0; i < PKTBUF_CNT; i++) {
+            if (pb->packets[i].buffer) {
+                n++;
+            }
+        }
+    }
+
+    return n;
 }

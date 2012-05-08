@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010, 2011 Nicira, Inc.
+/* Copyright (c) 2009, 2010, 2011, 2012 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,6 +32,7 @@
 #include "jsonrpc-server.h"
 #include "leak-checker.h"
 #include "list.h"
+#include "memory.h"
 #include "ovsdb.h"
 #include "ovsdb-data.h"
 #include "ovsdb-types.h"
@@ -39,6 +40,7 @@
 #include "poll-loop.h"
 #include "process.h"
 #include "row.h"
+#include "simap.h"
 #include "stream-ssl.h"
 #include "stream.h"
 #include "stress.h"
@@ -143,6 +145,17 @@ main(int argc, char *argv[])
 
     exiting = false;
     while (!exiting) {
+        memory_run();
+        if (memory_should_report()) {
+            struct simap usage;
+
+            simap_init(&usage);
+            ovsdb_jsonrpc_server_get_memory_usage(jsonrpc, &usage);
+            ovsdb_get_memory_usage(db, &usage);
+            memory_report(&usage);
+            simap_destroy(&usage);
+        }
+
         reconfigure_from_db(jsonrpc, db, &remotes);
         ovsdb_jsonrpc_server_run(jsonrpc);
         unixctl_server_run(unixctl);
@@ -157,6 +170,7 @@ main(int argc, char *argv[])
             update_remote_status(jsonrpc, &remotes, db);
         }
 
+        memory_wait();
         ovsdb_jsonrpc_server_wait(jsonrpc);
         unixctl_server_wait(unixctl);
         ovsdb_trigger_wait(db, time_msec());

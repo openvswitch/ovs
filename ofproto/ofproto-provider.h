@@ -30,6 +30,7 @@
 #include "timeval.h"
 
 struct ofputil_flow_mod;
+struct simap;
 
 /* An OpenFlow switch.
  *
@@ -395,6 +396,13 @@ struct ofproto_class {
      * be called, e.g. by calling the timer or fd waiting functions in
      * poll-loop.h.  */
     void (*wait)(struct ofproto *ofproto);
+
+    /* Adds some memory usage statistics for the implementation of 'ofproto'
+     * into 'usage', for use with memory_report().
+     *
+     * This function is optional. */
+    void (*get_memory_usage)(const struct ofproto *ofproto,
+                             struct simap *usage);
 
     /* Every "struct rule" in 'ofproto' is about to be deleted, one by one.
      * This function may prepare for that, for example by clearing state in

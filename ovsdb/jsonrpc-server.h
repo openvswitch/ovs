@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010, 2011 Nicira, Inc.
+/* Copyright (c) 2009, 2010, 2011, 2012 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@
 
 struct ovsdb;
 struct shash;
+struct simap;
 
 struct ovsdb_jsonrpc_server *ovsdb_jsonrpc_server_create(struct ovsdb *);
 void ovsdb_jsonrpc_server_destroy(struct ovsdb_jsonrpc_server *);
@@ -58,5 +59,8 @@ void ovsdb_jsonrpc_server_reconnect(struct ovsdb_jsonrpc_server *);
 
 void ovsdb_jsonrpc_server_run(struct ovsdb_jsonrpc_server *);
 void ovsdb_jsonrpc_server_wait(struct ovsdb_jsonrpc_server *);
+
+void ovsdb_jsonrpc_server_get_memory_usage(const struct ovsdb_jsonrpc_server *,
+                                           struct simap *usage);
 
 #endif /* ovsdb/jsonrpc-server.h */

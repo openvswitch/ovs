@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -91,6 +91,7 @@ int rconn_get_backoff(const struct rconn *);
 unsigned int rconn_get_state_elapsed(const struct rconn *);
 unsigned int rconn_get_connection_seqno(const struct rconn *);
 int rconn_get_last_error(const struct rconn *);
+unsigned int rconn_count_txqlen(const struct rconn *);
 
 /* Counts the number of packets queued into an rconn by a given source. */
 struct rconn_packet_counter {

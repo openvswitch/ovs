@@ -30,6 +30,7 @@ struct ofopgroup;
 struct ofputil_flow_removed;
 struct ofputil_packet_in;
 struct ofputil_phy_port;
+struct simap;
 struct sset;
 
 /* ofproto supports two kinds of OpenFlow connections:
@@ -69,6 +70,8 @@ void connmgr_run(struct connmgr *,
                  bool (*handle_openflow)(struct ofconn *,
                                          struct ofpbuf *ofp_msg));
 void connmgr_wait(struct connmgr *, bool handling_openflow);
+
+void connmgr_get_memory_usage(const struct connmgr *, struct simap *usage);
 
 struct ofproto *ofconn_get_ofproto(const struct ofconn *);
 
