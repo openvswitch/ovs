@@ -2371,6 +2371,13 @@ ofputil_decode_ofp11_port(struct ofputil_phy_port *pp,
     return 0;
 }
 
+static size_t
+ofputil_get_phy_port_size(uint8_t ofp_version)
+{
+    return ofp_version == OFP10_VERSION ? sizeof(struct ofp10_phy_port)
+                                        : sizeof(struct ofp11_port);
+}
+
 static void
 ofputil_encode_ofp10_phy_port(const struct ofputil_phy_port *pp,
                               struct ofp10_phy_port *opp)
@@ -2543,20 +2550,17 @@ ofputil_decode_switch_features(const struct ofp_switch_features *osf,
     features->n_tables = osf->n_tables;
 
     features->capabilities = ntohl(osf->capabilities) & OFPC_COMMON;
-    if (osf->header.version == OFP10_VERSION) {
-        if (b->size % sizeof(struct ofp10_phy_port)) {
-            return OFPERR_OFPBRC_BAD_LEN;
-        }
 
+    if (b->size % ofputil_get_phy_port_size(osf->header.version)) {
+        return OFPERR_OFPBRC_BAD_LEN;
+    }
+
+    if (osf->header.version == OFP10_VERSION) {
         if (osf->capabilities & htonl(OFPC10_STP)) {
             features->capabilities |= OFPUTIL_C_STP;
         }
         features->actions = decode_action_bits(osf->actions, of10_action_bits);
     } else if (osf->header.version == OFP11_VERSION) {
-        if (b->size % sizeof(struct ofp11_port)) {
-            return OFPERR_OFPBRC_BAD_LEN;
-        }
-
         if (osf->capabilities & htonl(OFPC11_GROUP_STATS)) {
             features->capabilities |= OFPUTIL_C_GROUP_STATS;
         }
@@ -2572,10 +2576,7 @@ ofputil_decode_switch_features(const struct ofp_switch_features *osf,
 static bool
 max_ports_in_features(const struct ofp_switch_features *osf)
 {
-    size_t pp_size = osf->header.version == OFP10_VERSION ?
-                        sizeof(struct ofp10_phy_port) :
-                        sizeof(struct ofp11_port);
-
+    size_t pp_size = ofputil_get_phy_port_size(osf->header.version);
     return ntohs(osf->header.length) + pp_size > UINT16_MAX;
 }
 
@@ -3403,9 +3404,7 @@ ofputil_pull_phy_port(uint8_t ofp_version, struct ofpbuf *b,
  * 'ofp_version', returns the number of elements. */
 size_t ofputil_count_phy_ports(uint8_t ofp_version, struct ofpbuf *b)
 {
-    return (ofp_version == OFP10_VERSION
-            ? b->size / sizeof(struct ofp10_phy_port)
-            : b->size / sizeof(struct ofp11_port));
+    return b->size / ofputil_get_phy_port_size(ofp_version);
 }
 
 static enum ofperr
