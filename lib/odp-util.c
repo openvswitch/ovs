@@ -191,15 +191,16 @@ format_odp_userspace_action(struct ds *ds, const struct nlattr *attr)
 
         switch (cookie.type) {
         case USER_ACTION_COOKIE_SFLOW:
-            ds_put_format(ds, ",sFlow,n_output=%"PRIu8","
-                          "vid=%"PRIu16",pcp=%"PRIu8",ifindex=%"PRIu32,
-                          cookie.n_output, vlan_tci_to_vid(cookie.vlan_tci),
-                          vlan_tci_to_pcp(cookie.vlan_tci), cookie.data);
+            ds_put_format(ds, ",sFlow,"
+                          "vid=%"PRIu16",pcp=%"PRIu8",output=%"PRIu32,
+                          vlan_tci_to_vid(cookie.vlan_tci),
+                          vlan_tci_to_pcp(cookie.vlan_tci), cookie.output);
             break;
 
         case USER_ACTION_COOKIE_UNSPEC:
         default:
             ds_put_format(ds, ",userdata=0x%"PRIx64, userdata);
+            break;
         }
     }
 
@@ -336,18 +337,17 @@ parse_odp_action(const char *s, const struct shash *port_names,
 
     {
         unsigned long long int pid;
-        unsigned long long int ifindex;
+        unsigned long long int output;
         char userdata_s[32];
-        int n_output;
         int vid, pcp;
         int n = -1;
 
         if (sscanf(s, "userspace(pid=%lli)%n", &pid, &n) > 0 && n > 0) {
             odp_put_userspace_action(pid, NULL, actions);
             return n;
-        } else if (sscanf(s, "userspace(pid=%lli,sFlow,n_output=%i,vid=%i,"
-                          "pcp=%i,ifindex=%lli)%n", &pid, &n_output,
-                          &vid, &pcp, &ifindex, &n) > 0 && n > 0) {
+        } else if (sscanf(s, "userspace(pid=%lli,sFlow,vid=%i,"
+                          "pcp=%i,output=%lli)%n",
+                          &pid, &vid, &pcp, &output, &n) > 0 && n > 0) {
             struct user_action_cookie cookie;
             uint16_t tci;
 
@@ -357,9 +357,8 @@ parse_odp_action(const char *s, const struct shash *port_names,
             }
 
             cookie.type = USER_ACTION_COOKIE_SFLOW;
-            cookie.n_output = n_output;
             cookie.vlan_tci = htons(tci);
-            cookie.data = ifindex;
+            cookie.output = output;
             odp_put_userspace_action(pid, &cookie, actions);
             return n;
         } else if (sscanf(s, "userspace(pid=%lli,userdata="

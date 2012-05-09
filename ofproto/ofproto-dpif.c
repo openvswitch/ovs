@@ -4518,6 +4518,38 @@ put_userspace_action(const struct ofproto_dpif *ofproto,
     return odp_put_userspace_action(pid, cookie, odp_actions);
 }
 
+static void
+compose_sflow_cookie(const struct ofproto_dpif *ofproto,
+                     ovs_be16 vlan_tci, uint32_t odp_port,
+                     unsigned int n_outputs, struct user_action_cookie *cookie)
+{
+    int ifindex;
+
+    cookie->type = USER_ACTION_COOKIE_SFLOW;
+    cookie->vlan_tci = vlan_tci;
+
+    /* See http://www.sflow.org/sflow_version_5.txt (search for "Input/output
+     * port information") for the interpretation of cookie->output. */
+    switch (n_outputs) {
+    case 0:
+        /* 0x40000000 | 256 means "packet dropped for unknown reason". */
+        cookie->output = 0x40000000 | 256;
+        break;
+
+    case 1:
+        ifindex = dpif_sflow_odp_port_to_ifindex(ofproto->sflow, odp_port);
+        if (ifindex) {
+            cookie->output = ifindex;
+            break;
+        }
+        /* Fall through. */
+    default:
+        /* 0x80000000 means "multiple output ports. */
+        cookie->output = 0x80000000 | n_outputs;
+        break;
+    }
+}
+
 /* Compose SAMPLE action for sFlow. */
 static size_t
 compose_sflow_action(const struct ofproto_dpif *ofproto,
@@ -4525,22 +4557,13 @@ compose_sflow_action(const struct ofproto_dpif *ofproto,
                      const struct flow *flow,
                      uint32_t odp_port)
 {
-    uint32_t port_ifindex;
     uint32_t probability;
     struct user_action_cookie cookie;
     size_t sample_offset, actions_offset;
-    int cookie_offset, n_output;
+    int cookie_offset;
 
     if (!ofproto->sflow || flow->in_port == OFPP_NONE) {
         return 0;
-    }
-
-    if (odp_port == OVSP_NONE) {
-        port_ifindex = 0;
-        n_output = 0;
-    } else {
-        port_ifindex = dpif_sflow_odp_port_to_ifindex(ofproto->sflow, odp_port);
-        n_output = 1;
     }
 
     sample_offset = nl_msg_start_nested(odp_actions, OVS_ACTION_ATTR_SAMPLE);
@@ -4550,11 +4573,8 @@ compose_sflow_action(const struct ofproto_dpif *ofproto,
     nl_msg_put_u32(odp_actions, OVS_SAMPLE_ATTR_PROBABILITY, probability);
 
     actions_offset = nl_msg_start_nested(odp_actions, OVS_SAMPLE_ATTR_ACTIONS);
-
-    cookie.type = USER_ACTION_COOKIE_SFLOW;
-    cookie.data = port_ifindex;
-    cookie.n_output = n_output;
-    cookie.vlan_tci = 0;
+    compose_sflow_cookie(ofproto, htons(0), odp_port,
+                         odp_port == OVSP_NONE ? 0 : 1, &cookie);
     cookie_offset = put_userspace_action(ofproto, odp_actions, flow, &cookie);
 
     nl_msg_end_nested(odp_actions, actions_offset);
@@ -4589,20 +4609,11 @@ fix_sflow_action(struct action_xlate_ctx *ctx)
     }
 
     cookie = ofpbuf_at(ctx->odp_actions, ctx->user_cookie_offset,
-                     sizeof(*cookie));
-    assert(cookie != NULL);
+                       sizeof(*cookie));
     assert(cookie->type == USER_ACTION_COOKIE_SFLOW);
 
-    if (ctx->sflow_n_outputs) {
-        cookie->data = dpif_sflow_odp_port_to_ifindex(ctx->ofproto->sflow,
-                                                    ctx->sflow_odp_port);
-    }
-    if (ctx->sflow_n_outputs >= 255) {
-        cookie->n_output = 255;
-    } else {
-        cookie->n_output = ctx->sflow_n_outputs;
-    }
-    cookie->vlan_tci = base->vlan_tci;
+    compose_sflow_cookie(ctx->ofproto, base->vlan_tci,
+                         ctx->sflow_odp_port, ctx->sflow_n_outputs, cookie);
 }
 
 static void

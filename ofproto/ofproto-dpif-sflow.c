@@ -552,18 +552,7 @@ dpif_sflow_received(struct dpif_sflow *ds, struct ofpbuf *packet,
     switchElem.flowType.sw.dst_vlan = vlan_tci_to_vid(cookie->vlan_tci);
     switchElem.flowType.sw.dst_priority = vlan_tci_to_pcp(cookie->vlan_tci);
 
-    /* Set output port, as defined by http://www.sflow.org/sflow_version_5.txt
-       (search for "Input/output port information"). */
-    if (!cookie->n_output) {
-        /* This value indicates that the packet was dropped for an unknown
-         * reason. */
-        fs.output = 0x40000000 | 256;
-    } else if (cookie->n_output > 1 || !cookie->data) {
-        /* Setting the high bit means "multiple output ports". */
-        fs.output = 0x80000000 | cookie->n_output;
-    } else {
-        fs.output = cookie->data;
-    }
+    fs.output = cookie->output;
 
     /* Submit the flow sample to be encoded into the next datagram. */
     SFLADD_ELEMENT(&fs, &hdrElem);
