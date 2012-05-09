@@ -434,7 +434,7 @@ parse_odp_action(const char *s, const struct shash *port_names,
             for (;;) {
                 int retval;
 
-                s += strspn(s, delimiters);
+                n += strspn(s + n, delimiters);
                 if (s[n] == ')') {
                     break;
                 }
@@ -444,7 +444,6 @@ parse_odp_action(const char *s, const struct shash *port_names,
                     return retval;
                 }
                 n += retval;
-
             }
             nl_msg_end_nested(actions, actions_ofs);
             nl_msg_end_nested(actions, sample_ofs);
