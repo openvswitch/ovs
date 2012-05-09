@@ -124,11 +124,11 @@ enum user_action_cookie_type {
 /* user_action_cookie is passed as argument to OVS_ACTION_ATTR_USERSPACE.
  * Since it is passed to kernel as u64, its size has to be 8 bytes. */
 struct user_action_cookie {
-    uint8_t   type;                 /* enum user_action_cookie_type. */
-    uint8_t   n_output;             /* No of output ports. used by sflow. */
-    ovs_be16  vlan_tci;             /* Used by sFlow */
-    uint32_t  data;                 /* Data is len for OFPP_CONTROLLER action.
-                                       For sFlow it is port_ifindex. */
+    uint16_t type;              /* enum user_action_cookie_type. */
+
+    /* The following members are used only by USER_ACTION_COOKIE_SFLOW. */
+    ovs_be16 vlan_tci;          /* Destination VLAN TCI. */
+    uint32_t output;            /* SFL_FLOW_SAMPLE_TYPE 'output' value. */
 };
 
 BUILD_ASSERT_DECL(sizeof(struct user_action_cookie) == 8);
