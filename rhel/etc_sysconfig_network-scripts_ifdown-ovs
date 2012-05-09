@@ -22,6 +22,7 @@ cd /etc/sysconfig/network-scripts
 [ -f ../network ] && . ../network
 
 CONFIG=${1}
+TIMEOUT=10
 
 source_config
 
@@ -37,12 +38,12 @@ case "$TYPE" in
 	OVSBridge)
 		${OTHERSCRIPT} ${CONFIG} $2
 		retval=$?
-		ovs-vsctl -- --if-exists del-br "$DEVICE"
+		ovs-vsctl -t ${TIMEOUT} -- --if-exists del-br "$DEVICE"
 		;;
 	OVSPort|OVSIntPort|OVSBond)
 		${OTHERSCRIPT} ${CONFIG} $2
 		retval=$?
-		ovs-vsctl -- --if-exists del-port "$OVS_BRIDGE" "$DEVICE"
+		ovs-vsctl -t ${TIMEOUT} -- --if-exists del-port "$OVS_BRIDGE" "$DEVICE"
 		;;
 	*)
 		echo $"Invalid OVS interface type $TYPE"
