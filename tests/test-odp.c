@@ -31,27 +31,12 @@ main(void)
 
     ds_init(&in);
     vlog_set_levels_from_string("odp_util:console:dbg");
-    while (!ds_get_line(&in, stdin)) {
+    while (!ds_get_test_line(&in, stdin)) {
         enum odp_key_fitness fitness;
         struct ofpbuf odp_key;
         struct flow flow;
         struct ds out;
         int error;
-        char *s;
-
-        /* Delete comments, skip blank lines. */
-        s = ds_cstr(&in);
-        if (*s == '#') {
-            puts(s);
-            continue;
-        }
-        if (strchr(s, '#')) {
-            *strchr(s, '#') = '\0';
-        }
-        if (s[strspn(s, " ")] == '\0') {
-            putchar('\n');
-            continue;
-        }
 
         /* Convert string to OVS DP key. */
         ofpbuf_init(&odp_key, 0);

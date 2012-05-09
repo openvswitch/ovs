@@ -250,6 +250,54 @@ ds_get_preprocessed_line(struct ds *ds, FILE *file)
     return EOF;
 }
 
+/* Reads a line from 'file' into 'ds' and does some preprocessing on it:
+ *
+ *    - If the line begins with #, prints it on stdout and reads the next line.
+ *
+ *    - Otherwise, if the line contains an # somewhere else, strips it and
+ *      everything following it (as a comment).
+ *
+ *    - If (after comment removal) the line contains only white space, prints
+ *      a blank line on stdout and reads the next line.
+ *
+ *    - Otherwise, returns the line to the caller.
+ *
+ * This is useful in some of the OVS tests, where we want to check that parsing
+ * and then re-formatting some kind of data does not change it, but we also
+ * want to be able to put comments in the input.
+ *
+ * Returns 0 if successful, EOF if no non-blank line was found. */
+int
+ds_get_test_line(struct ds *ds, FILE *file)
+{
+    for (;;) {
+        char *s, *comment;
+        int retval;
+
+        retval = ds_get_line(ds, file);
+        if (retval) {
+            return retval;
+        }
+
+        s = ds_cstr(ds);
+        if (*s == '#') {
+            puts(s);
+            continue;
+        }
+
+        comment = strchr(s, '#');
+        if (comment) {
+            *comment = '\0';
+        }
+        if (s[strspn(s, " \t\n")] == '\0') {
+            putchar('\n');
+            continue;
+        }
+
+        return 0;
+    }
+}
+
 char *
 ds_cstr(struct ds *ds)
 {

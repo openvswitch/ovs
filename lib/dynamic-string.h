@@ -62,6 +62,7 @@ void ds_put_hex_dump(struct ds *ds, const void *buf_, size_t size,
                      uintptr_t ofs, bool ascii);
 int ds_get_line(struct ds *, FILE *);
 int ds_get_preprocessed_line(struct ds *, FILE *);
+int ds_get_test_line(struct ds *, FILE *);
 
 char *ds_cstr(struct ds *);
 const char *ds_cstr_ro(const struct ds *);

@@ -1906,27 +1906,12 @@ do_parse_nx_match(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
     struct ds in;
 
     ds_init(&in);
-    while (!ds_get_line(&in, stdin)) {
+    while (!ds_get_test_line(&in, stdin)) {
         struct ofpbuf nx_match;
         struct cls_rule rule;
         ovs_be64 cookie, cookie_mask;
         enum ofperr error;
         int match_len;
-        char *s;
-
-        /* Delete comments, skip blank lines. */
-        s = ds_cstr(&in);
-        if (*s == '#') {
-            puts(s);
-            continue;
-        }
-        if (strchr(s, '#')) {
-            *strchr(s, '#') = '\0';
-        }
-        if (s[strspn(s, " ")] == '\0') {
-            putchar('\n');
-            continue;
-        }
 
         /* Convert string to nx_match. */
         ofpbuf_init(&nx_match, 0);
