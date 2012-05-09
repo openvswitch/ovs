@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 Nicira, Inc.
+ * Copyright (c) 2011, 2012 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,10 +22,11 @@
 #include "flow.h"
 #include "odp-util.h"
 #include "ofpbuf.h"
+#include "util.h"
 #include "vlog.h"
 
-int
-main(void)
+static int
+parse_keys(void)
 {
     struct ds in;
 
@@ -82,4 +83,50 @@ main(void)
     ds_destroy(&in);
 
     return 0;
+}
+
+static int
+parse_actions(void)
+{
+    struct ds in;
+
+    ds_init(&in);
+    vlog_set_levels_from_string("odp_util:console:dbg");
+    while (!ds_get_test_line(&in, stdin)) {
+        struct ofpbuf odp_actions;
+        struct ds out;
+        int error;
+
+        /* Convert string to OVS DP actions. */
+        ofpbuf_init(&odp_actions, 0);
+        error = odp_actions_from_string(ds_cstr(&in), NULL, &odp_actions);
+        if (error) {
+            printf("odp_actions_from_string: error\n");
+            goto next;
+        }
+
+        /* Convert odp_actions back to string. */
+        ds_init(&out);
+        format_odp_actions(&out, odp_actions.data, odp_actions.size);
+        puts(ds_cstr(&out));
+        ds_destroy(&out);
+
+    next:
+        ofpbuf_uninit(&odp_actions);
+    }
+    ds_destroy(&in);
+
+    return 0;
+}
+
+int
+main(int argc, char *argv[])
+{
+    if (argc == 2 &&!strcmp(argv[1], "parse-keys")) {
+        return parse_keys();
+    } else if (argc == 2 && !strcmp(argv[1], "parse-actions")) {
+        return parse_actions();
+    } else {
+        ovs_fatal(0, "usage: %s parse-keys | parse-actions", argv[0]);
+    }
 }

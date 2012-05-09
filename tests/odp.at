@@ -1,6 +1,7 @@
 AT_BANNER([datapath parsing and formatting])
 
-AT_SETUP([OVS datapath parsing and formatting - valid forms])
+AT_SETUP([OVS datapath key parsing and formatting - valid forms])
+dnl We could add a test for invalid forms, but that's less important.
 AT_DATA([odp-base.txt], [dnl
 in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15)
 in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x1234)
@@ -55,8 +56,37 @@ sed -n 's/,frag=no),/,frag=first),/p' odp-base.txt
  echo '# Valid forms with IP later fragment.'
 sed -n 's/,frag=no),.*/,frag=later)/p' odp-base.txt) > odp.txt
 AT_CAPTURE_FILE([odp.txt])
-AT_CHECK_UNQUOTED([test-odp < odp.txt], [0], [`cat odp.txt`
+AT_CHECK_UNQUOTED([test-odp parse-keys < odp.txt], [0], [`cat odp.txt`
 ])
 AT_CLEANUP
 
-dnl We could add a test for invalid forms, but that's less important.
+AT_SETUP([OVS datapath actions parsing and formatting - valid forms])
+AT_DATA([actions.txt], [dnl
+1,2,3
+userspace(pid=555666777)
+userspace(pid=6633,sFlow(vid=9,pcp=7,output=10))
+userspace(pid=9765,slow_path())
+userspace(pid=9765,slow_path(cfm))
+userspace(pid=9765,slow_path(cfm,match))
+userspace(pid=9123,userdata=0x815309)
+set(tun_id(0x7f10354))
+set(in_port(2))
+set(eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15))
+set(eth_type(0x1234))
+set(ipv4(src=35.8.2.41,dst=172.16.0.20,proto=5,tos=0x80,ttl=128,frag=no))
+set(tcp(src=80,dst=8080))
+set(udp(src=81,dst=6632))
+set(icmp(type=1,code=2))
+set(ipv6(src=::1,dst=::2,label=0,proto=10,tclass=0x70,hlimit=128,frag=no))
+set(icmpv6(type=1,code=2))
+push_vlan(vid=12,pcp=0)
+push_vlan(vid=13,pcp=5,cfi=0)
+push_vlan(tpid=0x9100,vid=13,pcp=5)
+push_vlan(tpid=0x9100,vid=13,pcp=5,cfi=0)
+pop_vlan
+sample(sample=9.7%,actions(1,2,3,push_vlan(vid=1,pcp=2)))
+])
+AT_CHECK_UNQUOTED([test-odp parse-actions < actions.txt], [0],
+  [`cat actions.txt`
+])
+AT_CLEANUP
