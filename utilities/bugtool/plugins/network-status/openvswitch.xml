@@ -20,8 +20,8 @@
   <command label="tc-class-show">/usr/share/openvswitch/scripts/ovs-bugtool-tc-class-show</command>
   <command label="ovs-vsctl-show">/usr/share/openvswitch/scripts/ovs-bugtool-vsctl-show</command>
   <command label="dump-ovsdb">/usr/share/openvswitch/scripts/ovs-bugtool-ovsdb-dump</command>
-  <command label="ovs-lacp-show">/usr/share/openvswitch/scripts/ovs-bugtool-lacp-show</command>
-  <command label="ovs-cfm-show">/usr/share/openvswitch/scripts/ovs-bugtool-cfm-show</command>
-  <command label="ovs-coverage-show">/usr/share/openvswitch/scripts/ovs-bugtool-coverage-show</command>
+  <command label="ovs-appctl-lacp-show">/usr/share/openvswitch/scripts/ovs-bugtool-lacp-show</command>
+  <command label="ovs-appctl-cfm-show">/usr/share/openvswitch/scripts/ovs-bugtool-cfm-show</command>
+  <command label="ovs-appctl-coverage-show">/usr/share/openvswitch/scripts/ovs-bugtool-coverage-show</command>
   <command label="ovs-appctl-bond-show">/usr/share/openvswitch/scripts/ovs-bugtool-bond-show</command>
 </collect>
