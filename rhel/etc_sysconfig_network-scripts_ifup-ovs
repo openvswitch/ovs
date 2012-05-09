@@ -22,6 +22,7 @@ cd /etc/sysconfig/network-scripts
 [ -f ../network ] && . ../network
 
 CONFIG=${1}
+TIMEOUT=10
 
 need_config ${CONFIG}
 
@@ -35,7 +36,7 @@ fi
 
 case "$TYPE" in
 	OVSBridge)
-		ovs-vsctl -- --may-exist add-br "$DEVICE" $OVS_OPTIONS ${OVS_EXTRA+-- $OVS_EXTRA}
+		ovs-vsctl -t ${TIMEOUT} -- --may-exist add-br "$DEVICE" $OVS_OPTIONS ${OVS_EXTRA+-- $OVS_EXTRA}
 		if [ "${OVSBOOTPROTO}" = "dhcp" ] && [ -n "${OVSINTF}" ]; then
 			case " ${OVSDHCPINTERFACES} " in
 				*" ${OVSINTF} "*)
@@ -50,12 +51,12 @@ case "$TYPE" in
 	OVSPort)
 		/sbin/ifup "$OVS_BRIDGE"
 		${OTHERSCRIPT} ${CONFIG} ${2}
-		ovs-vsctl -- --may-exist add-port "$OVS_BRIDGE" "$DEVICE" $OVS_OPTIONS ${OVS_EXTRA+-- $OVS_EXTRA}
+		ovs-vsctl -t ${TIMEOUT} -- --may-exist add-port "$OVS_BRIDGE" "$DEVICE" $OVS_OPTIONS ${OVS_EXTRA+-- $OVS_EXTRA}
 		OVSINTF=${DEVICE} /sbin/ifup "$OVS_BRIDGE"
 		;;
 	OVSIntPort)
 		/sbin/ifup "$OVS_BRIDGE"
-		ovs-vsctl -- --may-exist add-port "$OVS_BRIDGE" "$DEVICE" $OVS_OPTIONS -- set Interface "$DEVICE" type=internal ${OVS_EXTRA+-- $OVS_EXTRA}
+		ovs-vsctl -t ${TIMEOUT} -- --may-exist add-port "$OVS_BRIDGE" "$DEVICE" $OVS_OPTIONS -- set Interface "$DEVICE" type=internal ${OVS_EXTRA+-- $OVS_EXTRA}
 		${OTHERSCRIPT} ${CONFIG} ${2}
 		;;
 	OVSBond)
@@ -63,7 +64,7 @@ case "$TYPE" in
 		for _iface in $BOND_IFACES; do
 			/sbin/ifup ${_iface}
 		done
-		ovs-vsctl -- --fake-iface add-bond "$OVS_BRIDGE" "$DEVICE" ${BOND_IFACES} $OVS_OPTIONS ${OVS_EXTRA+-- $OVS_EXTRA}
+		ovs-vsctl -t ${TIMEOUT} -- --fake-iface add-bond "$OVS_BRIDGE" "$DEVICE" ${BOND_IFACES} $OVS_OPTIONS ${OVS_EXTRA+-- $OVS_EXTRA}
 		${OTHERSCRIPT} ${CONFIG} ${2}
 		OVSINTF=${DEVICE} /sbin/ifup "$OVS_BRIDGE"
 		;;
