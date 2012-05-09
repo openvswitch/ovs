@@ -165,6 +165,17 @@ get_dp_netdev(const struct dpif *dpif)
     return dpif_netdev_cast(dpif)->dp;
 }
 
+static int
+dpif_netdev_enumerate(struct sset *all_dps)
+{
+    struct shash_node *node;
+
+    SHASH_FOR_EACH(node, &dp_netdevs) {
+        sset_add(all_dps, node->name);
+    }
+    return 0;
+}
+
 static struct dpif *
 create_dpif_netdev(struct dp_netdev *dp)
 {
@@ -1239,7 +1250,7 @@ dp_netdev_execute_actions(struct dp_netdev *dp,
 
 const struct dpif_class dpif_netdev_class = {
     "netdev",
-    NULL,                       /* enumerate */
+    dpif_netdev_enumerate,
     dpif_netdev_open,
     dpif_netdev_close,
     dpif_netdev_destroy,
