@@ -85,6 +85,7 @@ debugging.  The sources for the extensions are in
             * ovs-bugtool-lcap-show
             * ovs-bugtool-ovsdb-dump
             * ovs-bugtool-tc-class-show
+            * ovs-bugtool-bond-show
 
     system-configuration/openvswitch.xml
 
