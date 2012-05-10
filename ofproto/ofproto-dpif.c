@@ -181,7 +181,7 @@ static void bundle_destroy(struct ofbundle *);
 static void bundle_del_port(struct ofport_dpif *);
 static void bundle_run(struct ofbundle *);
 static void bundle_wait(struct ofbundle *);
-static struct ofbundle *lookup_input_bundle(struct ofproto_dpif *,
+static struct ofbundle *lookup_input_bundle(const struct ofproto_dpif *,
                                             uint16_t in_port, bool warn,
                                             struct ofport_dpif **in_ofportp);
 
@@ -631,9 +631,9 @@ ofproto_dpif_cast(const struct ofproto *ofproto)
     return CONTAINER_OF(ofproto, struct ofproto_dpif, up);
 }
 
-static struct ofport_dpif *get_ofp_port(struct ofproto_dpif *,
+static struct ofport_dpif *get_ofp_port(const struct ofproto_dpif *,
                                         uint16_t ofp_port);
-static struct ofport_dpif *get_odp_port(struct ofproto_dpif *,
+static struct ofport_dpif *get_odp_port(const struct ofproto_dpif *,
                                         uint32_t odp_port);
 static void ofproto_trace(struct ofproto_dpif *, const struct flow *,
                           const struct ofpbuf *, ovs_be16 initial_tci,
@@ -2368,14 +2368,14 @@ set_mac_idle_time(struct ofproto *ofproto_, unsigned int idle_time)
 /* Ports. */
 
 static struct ofport_dpif *
-get_ofp_port(struct ofproto_dpif *ofproto, uint16_t ofp_port)
+get_ofp_port(const struct ofproto_dpif *ofproto, uint16_t ofp_port)
 {
     struct ofport *ofport = ofproto_get_port(&ofproto->up, ofp_port);
     return ofport ? ofport_dpif_cast(ofport) : NULL;
 }
 
 static struct ofport_dpif *
-get_odp_port(struct ofproto_dpif *ofproto, uint32_t odp_port)
+get_odp_port(const struct ofproto_dpif *ofproto, uint32_t odp_port)
 {
     return get_ofp_port(ofproto, odp_port_to_ofp_port(odp_port));
 }
@@ -6061,8 +6061,8 @@ update_learning_table(struct ofproto_dpif *ofproto,
 }
 
 static struct ofbundle *
-lookup_input_bundle(struct ofproto_dpif *ofproto, uint16_t in_port, bool warn,
-                    struct ofport_dpif **in_ofportp)
+lookup_input_bundle(const struct ofproto_dpif *ofproto, uint16_t in_port,
+                    bool warn, struct ofport_dpif **in_ofportp)
 {
     struct ofport_dpif *ofport;
 
