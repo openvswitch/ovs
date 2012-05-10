@@ -51,6 +51,7 @@ DISTCLEANFILES += \
 	utilities/ovs-appctl.8 \
 	utilities/ovs-ctl \
 	utilities/ovs-benchmark.1 \
+	utilities/ovs-check-dead-ifs \
 	utilities/ovs-controller.8 \
 	utilities/ovs-dpctl.8 \
 	utilities/ovs-lib \
