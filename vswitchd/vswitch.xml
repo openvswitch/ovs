@@ -409,7 +409,10 @@
           any defined controllers forever.</dd>
         </dl>
         </p>
-        <p>If this value is unset, the default is implementation-specific.</p>
+        <p>
+          The default is <code>standalone</code> if the value is unset, but
+          future versions of Open vSwitch may change the default.
+        </p>
         <p>
           The <code>standalone</code> mode can create forwarding loops on a
           bridge that has more than one uplink port unless STP is enabled.  To
