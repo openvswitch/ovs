@@ -410,6 +410,12 @@
         </dl>
         </p>
         <p>If this value is unset, the default is implementation-specific.</p>
+        <p>
+          The <code>standalone</code> mode can create forwarding loops on a
+          bridge that has more than one uplink port unless STP is enabled.  To
+          avoid loops on such a bridge, configure <code>secure</code> mode or
+          enable STP (see <ref column="stp_enable"/>).
+        </p>
         <p>When more than one controller is configured,
         <ref column="fail_mode"/> is considered only when none of the
         configured controllers can be contacted.</p>
