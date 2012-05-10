@@ -3309,6 +3309,7 @@ ofputil_check_output_port(uint16_t port, int max_ports)
     case OFPP_FLOOD:
     case OFPP_ALL:
     case OFPP_CONTROLLER:
+    case OFPP_NONE:
     case OFPP_LOCAL:
         return 0;
 
