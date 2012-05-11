@@ -1175,6 +1175,7 @@ class ProcOutput:
     def terminate(self):
         if self.running:
             try:
+                self.proc.stdout.close()
                 os.kill(self.proc.pid, SIGTERM)
             except:
                 pass
@@ -1187,6 +1188,7 @@ class ProcOutput:
         line = self.proc.stdout.readline()
         if line == '':
             # process exited
+            self.proc.stdout.close()
             self.status = self.proc.wait()
             self.proc = None
             self.running = False
