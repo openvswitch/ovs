@@ -3809,8 +3809,6 @@ do_vsctl(const char *args, struct vsctl_command *commands, size_t n_commands,
 
         if (ctx.try_again) {
             vsctl_context_done(&ctx, NULL);
-
-            status = TXN_TRY_AGAIN;
             goto try_again;
         }
     }

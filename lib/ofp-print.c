@@ -480,7 +480,7 @@ ofp_print_bit_names(struct ds *string, uint32_t bits,
     }
 
     if (bits) {
-        if (n++) {
+        if (n) {
             ds_put_char(string, ' ');
         }
         ds_put_format(string, "0x%"PRIx32, bits);
