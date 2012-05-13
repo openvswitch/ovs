@@ -41,6 +41,9 @@
 
 VLOG_DEFINE_THIS_MODULE(ofp_parse);
 
+static void ofp_fatal(const char *flow, bool verbose, const char *format, ...)
+    NO_RETURN;
+
 static uint8_t
 str_to_table_id(const char *str)
 {
