@@ -620,8 +620,8 @@ fetch_port_by_stats(const char *vconn_name,
                                         verbosity + 1));
             }
 
-            osm = ofpbuf_at(reply, 0, sizeof *osm);
-            done = !osm || !(ntohs(osm->flags) & OFPSF_REPLY_MORE);
+            osm = ofpbuf_at_assert(reply, 0, sizeof *osm);
+            done = !(ntohs(osm->flags) & OFPSF_REPLY_MORE);
 
             if (found) {
                 /* We've already found the port, but we need to drain
