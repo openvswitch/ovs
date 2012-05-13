@@ -3227,14 +3227,13 @@ handle_nxt_set_controller_id(struct ofconn *ofconn,
 static enum ofperr
 handle_barrier_request(struct ofconn *ofconn, const struct ofp_header *oh)
 {
-    struct ofp_header *ob;
     struct ofpbuf *buf;
 
     if (ofconn_has_pending_opgroups(ofconn)) {
         return OFPROTO_POSTPONE;
     }
 
-    ob = make_openflow_xid(sizeof *ob, OFPT10_BARRIER_REPLY, oh->xid, &buf);
+    make_openflow_xid(sizeof *oh, OFPT10_BARRIER_REPLY, oh->xid, &buf);
     ofconn_send_reply(ofconn, buf);
     return 0;
 }
