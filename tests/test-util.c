@@ -189,7 +189,6 @@ check_bitwise_is_all_zeros(void)
 {
     int n_loops;
 
-    n_loops = 0;
     for (n_loops = 0; n_loops < 100; n_loops++) {
         ovs_be64 x = htonll(0);
         int i;

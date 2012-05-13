@@ -3156,7 +3156,6 @@ handle_upcalls(struct ofproto_dpif *ofproto, unsigned int max_batch)
 
     assert(max_batch <= FLOW_MISS_MAX_BATCH);
 
-    n_processed = 0;
     n_misses = 0;
     for (n_processed = 0; n_processed < max_batch; n_processed++) {
         struct dpif_upcall *upcall = &misses[n_misses];
