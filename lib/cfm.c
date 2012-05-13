@@ -606,7 +606,7 @@ cfm_process_heartbeat(struct cfm *cfm, const struct ofpbuf *p)
         if (ccm_rdi) {
             cfm_fault |= CFM_FAULT_RDI;
             VLOG_DBG("%s: RDI bit flagged from RMP %"PRIu64, cfm->name,
-                     rmp->mpid);
+                     ccm_mpid);
         }
 
         VLOG_DBG("%s: received CCM (seq %"PRIu32") (mpid %"PRIu64")"
