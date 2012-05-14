@@ -214,6 +214,10 @@ width.  (A field wider than \fIwidth\fR is not truncated to fit.)
 The default pattern for console and file output is \fB%D{%Y-%m-%dT
 %H:%M:%SZ}|%05N|%c|%p|%m\fR; for syslog output, \fB%05N|%c|%p|%m\fR.
 .
+.IP
+Daemons written in Python (e.g. \fBovs\-xapi\-sync\fR,
+\fBovs\-monitor\-ipsec) do not allow control over the log pattern.
+.
 .IP "\fBvlog/reopen\fR"
 Causes the daemon to close and reopen its log file.  (This
 is useful after rotating log files, to cause a new log file to be
@@ -228,7 +232,7 @@ This has no effect if the target application was not invoked with the
 .
 .SH "SEE ALSO"
 .
-\fBovs\-appctl\fR can control the following daemons:
+\fBovs\-appctl\fR can control all Open vSwitch daemons, including:
 .BR ovs\-vswitchd (8),
-.BR ovs\-controller (8),
-.BR ovs\-brcompatd (8).
+and
+.BR ovsdb\-server (8).

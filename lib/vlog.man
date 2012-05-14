@@ -45,10 +45,15 @@ a word but has no effect.
 Sets the maximum logging verbosity level, equivalent to
 \fB\-\-verbose=ANY:ANY:dbg\fR.
 .
+.\" Python vlog doesn't implement -vPATTERN so only document it if
+.\" \*(PY is empty:
+.ie dPY
+.el \{
 .IP "\fB\-vPATTERN:\fIfacility\fB:\fIpattern\fR"
 .IQ "\fB\-\-verbose=PATTERN:\fIfacility\fB:\fIpattern\fR"
 Sets the log pattern for \fIfacility\fR to \fIpattern\fR.  Refer to
 \fBovs\-appctl\fR(8) for a description of the valid syntax for \fIpattern\fR.
+\}
 .
 .TP
 \fB\-\-log\-file\fR[\fB=\fIfile\fR]

@@ -180,3 +180,47 @@ AT_CHECK([sed 's/.*|//' log], [0], [dnl
 message3
 ])
 AT_CLEANUP
+
+AT_SETUP([vlog - vlog/set and vlog/list - Python])
+AT_SKIP_IF([test $HAVE_PYTHON = no])
+OVS_RUNDIR=`pwd`; export OVS_RUNDIR
+OVS_LOGDIR=`pwd`; export OVS_LOGDIR
+OVS_SYSCONFDIR=`pwd`; export OVS_SYSCONFDIR
+trap 'kill `cat test-unixctl.py.pid`' 0
+
+AT_CAPTURE_FILE([log])
+AT_CHECK([$PYTHON $srcdir/test-unixctl.py --log-file=`pwd`/log --pidfile --detach])
+
+AT_CHECK([APPCTL -t test-unixctl.py vlog/list], [0], [dnl
+                 console    syslog    file
+                 -------    ------    ------
+daemon            info       info       info
+fatal-signal      info       info       info
+jsonrpc           info       info       info
+poller            info       info       info
+reconnect         info       info       info
+socket_util       info       info       info
+stream            info       info       info
+test-unixctl      info       info       info
+unixctl_server    info       info       info
+])
+
+AT_CHECK([APPCTL -t test-unixctl.py vlog/set daemon:syslog:err])
+AT_CHECK([APPCTL -t test-unixctl.py vlog/set file:dbg])
+AT_CHECK([APPCTL -t test-unixctl.py vlog/set nonexistent], [0],
+  [no facility, level, or module "nonexistent"
+])
+AT_CHECK([APPCTL -t test-unixctl.py vlog/list], [0], [dnl
+                 console    syslog    file
+                 -------    ------    ------
+daemon            info        err        dbg
+fatal-signal      info       info        dbg
+jsonrpc           info       info        dbg
+poller            info       info        dbg
+reconnect         info       info        dbg
+socket_util       info       info        dbg
+stream            info       info        dbg
+test-unixctl      info       info        dbg
+unixctl_server    info       info        dbg
+])
+AT_CLEANUP
