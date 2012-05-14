@@ -17,6 +17,7 @@ import sys
 
 import ovs.daemon
 import ovs.unixctl
+import ovs.unixctl.server
 
 vlog = ovs.vlog.Vlog("test-unixctl")
 exiting = False
@@ -55,7 +56,7 @@ def main():
     ovs.vlog.handle_args(args)
 
     ovs.daemon.daemonize_start()
-    error, server = ovs.unixctl.UnixctlServer.create(args.unixctl)
+    error, server = ovs.unixctl.server.UnixctlServer.create(args.unixctl)
     if error:
         ovs.util.ovs_fatal(error, "could not create unixctl server at %s"
                            % args.unixctl, vlog)

@@ -27,7 +27,9 @@ ovs_pyfiles = \
 	python/ovs/socket_util.py \
 	python/ovs/stream.py \
 	python/ovs/timeval.py \
-	python/ovs/unixctl.py \
+	python/ovs/unixctl/__init__.py \
+	python/ovs/unixctl/client.py \
+	python/ovs/unixctl/server.py \
 	python/ovs/util.py \
 	python/ovs/version.py \
 	python/ovs/vlog.py

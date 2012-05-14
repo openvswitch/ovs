@@ -38,6 +38,7 @@ import ovs.util
 import ovs.daemon
 import ovs.db.idl
 import ovs.unixctl
+import ovs.unixctl.server
 import ovs.vlog
 
 vlog = ovs.vlog.Vlog("ovs-monitor-ipsec")
@@ -414,7 +415,7 @@ def main():
     ovs.daemon.daemonize()
 
     ovs.unixctl.command_register("exit", "", 0, 0, unixctl_exit, None)
-    error, unixctl_server = ovs.unixctl.UnixctlServer.create(None)
+    error, unixctl_server = ovs.unixctl.server.UnixctlServer.create(None)
     if error:
         ovs.util.ovs_fatal(error, "could not create unixctl server", vlog)
 

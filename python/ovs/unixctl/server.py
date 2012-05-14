@@ -17,87 +17,17 @@ import errno
 import os
 import types
 
-import ovs.daemon
 import ovs.dirs
 import ovs.jsonrpc
 import ovs.stream
+import ovs.unixctl
 import ovs.util
 import ovs.version
 import ovs.vlog
 
 Message = ovs.jsonrpc.Message
-vlog = ovs.vlog.Vlog("unixctl")
-commands = {}
+vlog = ovs.vlog.Vlog("unixctl_server")
 strtypes = types.StringTypes
-
-
-class _UnixctlCommand(object):
-    def __init__(self, usage, min_args, max_args, callback, aux):
-        self.usage = usage
-        self.min_args = min_args
-        self.max_args = max_args
-        self.callback = callback
-        self.aux = aux
-
-
-def _unixctl_help(conn, unused_argv, unused_aux):
-    assert isinstance(conn, UnixctlConnection)
-    reply = "The available commands are:\n"
-    command_names = sorted(commands.keys())
-    for name in command_names:
-        reply += "  "
-        usage = commands[name].usage
-        if usage:
-            reply += "%-23s %s" % (name, usage)
-        else:
-            reply += name
-        reply += "\n"
-    conn.reply(reply)
-
-
-def _unixctl_version(conn, unused_argv, version):
-    assert isinstance(conn, UnixctlConnection)
-    version = "%s (Open vSwitch) %s" % (ovs.util.PROGRAM_NAME, version)
-    conn.reply(version)
-
-
-def command_register(name, usage, min_args, max_args, callback, aux):
-    """ Registers a command with the given 'name' to be exposed by the
-    UnixctlServer. 'usage' describes the arguments to the command; it is used
-    only for presentation to the user in "help" output.
-
-    'callback' is called when the command is received.  It is passed a
-    UnixctlConnection object, the list of arguments as unicode strings, and
-    'aux'.  Normally 'callback' should reply by calling
-    UnixctlConnection.reply() or UnixctlConnection.reply_error() before it
-    returns, but if the command cannot be handled immediately, then it can
-    defer the reply until later.  A given connection can only process a single
-    request at a time, so a reply must be made eventually to avoid blocking
-    that connection."""
-
-    assert isinstance(name, strtypes)
-    assert isinstance(usage, strtypes)
-    assert isinstance(min_args, int)
-    assert isinstance(max_args, int)
-    assert isinstance(callback, types.FunctionType)
-
-    if name not in commands:
-        commands[name] = _UnixctlCommand(usage, min_args, max_args, callback,
-                                         aux)
-
-
-def socket_name_from_target(target):
-    assert isinstance(target, strtypes)
-
-    if target.startswith("/"):
-        return 0, target
-
-    pidfile_name = "%s/%s.pid" % (ovs.dirs.RUNDIR, target)
-    pid = ovs.daemon.read_pidfile(pidfile_name)
-    if pid < 0:
-        return -pid, "cannot read pidfile \"%s\"" % pidfile_name
-
-    return 0, "%s/%s.%d.ctl" % (ovs.dirs.RUNDIR, target, pid)
 
 
 class UnixctlConnection(object):
@@ -177,7 +107,7 @@ class UnixctlConnection(object):
         error = None
         params = request.params
         method = request.method
-        command = commands.get(method)
+        command = ovs.unixctl.commands.get(method)
         if command is None:
             error = '"%s" is not a valid command' % method
         elif len(params) < command.min_args:
@@ -199,6 +129,11 @@ class UnixctlConnection(object):
         if error:
             self.reply_error(error)
 
+
+def _unixctl_version(conn, unused_argv, version):
+    assert isinstance(conn, UnixctlConnection)
+    version = "%s (Open vSwitch) %s" % (ovs.util.PROGRAM_NAME, version)
+    conn.reply(version)
 
 class UnixctlServer(object):
     def __init__(self, listener):
@@ -262,8 +197,8 @@ class UnixctlServer(object):
                                % path)
             return error, None
 
-        command_register("help", "", 0, 0, _unixctl_help, None)
-        command_register("version", "", 0, 0, _unixctl_version, version)
+        ovs.unixctl.command_register("version", "", 0, 0, _unixctl_version,
+                                     version)
 
         return 0, UnixctlServer(listener)
 

@@ -18,6 +18,7 @@ import sys
 
 import ovs.daemon
 import ovs.unixctl
+import ovs.unixctl.client
 import ovs.util
 import ovs.vlog
 
@@ -29,7 +30,7 @@ def connect_to_target(target):
     else:
         socket_name = str_result
 
-    error, client = ovs.unixctl.UnixctlClient.create(socket_name)
+    error, client = ovs.unixctl.client.UnixctlClient.create(socket_name)
     if error:
         ovs.util.ovs_fatal(error, "cannot connect to \"%s\"" % socket_name)
 

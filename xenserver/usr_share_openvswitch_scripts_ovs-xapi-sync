@@ -35,6 +35,7 @@ from ovs.db import types
 import ovs.daemon
 import ovs.db.idl
 import ovs.unixctl
+import ovs.unixctl.server
 
 vlog = ovs.vlog.Vlog("ovs-xapi-sync")
 session = None
@@ -236,7 +237,7 @@ def main():
     ovs.unixctl.command_register("exit", "", 0, 0, unixctl_exit, None)
     ovs.unixctl.command_register("flush-cache", "", 0, 0, unixctl_flush_cache,
                                  None)
-    error, unixctl_server = ovs.unixctl.UnixctlServer.create(None)
+    error, unixctl_server = ovs.unixctl.server.UnixctlServer.create(None)
     if error:
         ovs.util.ovs_fatal(error, "could not create unixctl server", vlog)
 
