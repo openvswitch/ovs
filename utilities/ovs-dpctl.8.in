@@ -16,8 +16,7 @@ ovs\-dpctl \- administer Open vSwitch datapaths
 .SH DESCRIPTION
 .PP
 The \fBovs\-dpctl\fR program can create, modify, and delete Open vSwitch
-datapaths.  A single machine may host up to 256 datapaths (numbered 0
-to 255).
+datapaths.  A single machine may host any number of datapaths.
 .PP
 A newly created datapath is associated with only one network device, a
 virtual network device sometimes called the datapath's ``local port''.
