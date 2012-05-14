@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010 Nicira, Inc.
+ * Copyright (c) 2010, 2012 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -42,7 +42,7 @@ main(int argc, char *argv[])
     alarm(5);
 
     /* Create a listening socket under name 'sockname1'. */
-    sock1 = make_unix_socket(SOCK_STREAM, false, false, sockname1, NULL);
+    sock1 = make_unix_socket(SOCK_STREAM, false, sockname1, NULL);
     if (sock1 < 0) {
         ovs_fatal(-sock1, "%s: bind failed", sockname1);
     }
@@ -52,7 +52,7 @@ main(int argc, char *argv[])
 
     /* Connect to 'sockname2' (which should be the same file, perhaps under a
      * different name). */
-    sock2 = make_unix_socket(SOCK_STREAM, false, false, NULL, sockname2);
+    sock2 = make_unix_socket(SOCK_STREAM, false, NULL, sockname2);
     if (sock2 < 0) {
         ovs_fatal(-sock2, "%s: connect failed", sockname2);
     }

@@ -384,12 +384,11 @@ bind_unix_socket(int fd, struct sockaddr *sun, socklen_t sun_len)
 /* Creates a Unix domain socket in the given 'style' (either SOCK_DGRAM or
  * SOCK_STREAM) that is bound to '*bind_path' (if 'bind_path' is non-null) and
  * connected to '*connect_path' (if 'connect_path' is non-null).  If 'nonblock'
- * is true, the socket is made non-blocking.  If 'passcred' is true, the socket
- * is configured to receive SCM_CREDENTIALS control messages.
+ * is true, the socket is made non-blocking.
  *
  * Returns the socket's fd if successful, otherwise a negative errno value. */
 int
-make_unix_socket(int style, bool nonblock, bool passcred OVS_UNUSED,
+make_unix_socket(int style, bool nonblock,
                  const char *bind_path, const char *connect_path)
 {
     int error;
@@ -456,16 +455,6 @@ make_unix_socket(int style, bool nonblock, bool passcred OVS_UNUSED,
             goto error;
         }
     }
-
-#ifdef SCM_CREDENTIALS
-    if (passcred) {
-        int enable = 1;
-        if (setsockopt(fd, SOL_SOCKET, SO_PASSCRED, &enable, sizeof(enable))) {
-            error = errno;
-            goto error;
-        }
-    }
-#endif
 
     return fd;
 

@@ -46,7 +46,7 @@ unix_open(const char *name, char *suffix, struct stream **streamp,
     const char *connect_path = suffix;
     int fd;
 
-    fd = make_unix_socket(SOCK_STREAM, true, false, NULL, connect_path);
+    fd = make_unix_socket(SOCK_STREAM, true, NULL, connect_path);
     if (fd < 0) {
         VLOG_ERR("%s: connection failed (%s)", connect_path, strerror(-fd));
         return -fd;
@@ -79,7 +79,7 @@ punix_open(const char *name OVS_UNUSED, char *suffix,
 {
     int fd, error;
 
-    fd = make_unix_socket(SOCK_STREAM, true, true, suffix, NULL);
+    fd = make_unix_socket(SOCK_STREAM, true, suffix, NULL);
     if (fd < 0) {
         VLOG_ERR("%s: binding failed: %s", suffix, strerror(errno));
         return errno;

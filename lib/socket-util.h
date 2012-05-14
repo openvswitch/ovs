@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,7 +38,7 @@ int get_socket_rcvbuf(int sock);
 int check_connection_completion(int fd);
 int drain_rcvbuf(int fd);
 void drain_fd(int fd, size_t n_packets);
-int make_unix_socket(int style, bool nonblock, bool passcred,
+int make_unix_socket(int style, bool nonblock,
                      const char *bind_path, const char *connect_path);
 int get_unix_name_len(socklen_t sun_len);
 ovs_be32 guess_netmask(ovs_be32 ip);
