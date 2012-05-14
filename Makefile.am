@@ -20,8 +20,6 @@ AM_CFLAGS += $(WARNING_FLAGS)
 if NDEBUG
 AM_CPPFLAGS += -DNDEBUG
 AM_CFLAGS += -fomit-frame-pointer
-else
-AM_LDFLAGS = -export-dynamic
 endif
 
 ALL_LOCAL =
