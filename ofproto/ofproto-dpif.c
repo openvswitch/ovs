@@ -530,8 +530,6 @@ struct vlan_splinter {
 
 static uint32_t vsp_realdev_to_vlandev(const struct ofproto_dpif *,
                                        uint32_t realdev, ovs_be16 vlan_tci);
-static uint16_t vsp_vlandev_to_realdev(const struct ofproto_dpif *,
-                                       uint16_t vlandev, int *vid);
 static bool vsp_adjust_flow(const struct ofproto_dpif *, struct flow *);
 static void vsp_remove(struct ofport_dpif *);
 static void vsp_add(struct ofport_dpif *, uint16_t realdev_ofp_port, int vid);
