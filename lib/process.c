@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -83,8 +83,8 @@ process_init(void)
 
     /* Create notification pipe. */
     xpipe(fds);
-    set_nonblocking(fds[0]);
-    set_nonblocking(fds[1]);
+    xset_nonblocking(fds[0]);
+    xset_nonblocking(fds[1]);
 
     /* Set up child termination signal handler. */
     memset(&sa, 0, sizeof sa);

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2011 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2011, 2012 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -64,8 +64,8 @@ signal_init(void)
     if (!inited) {
         inited = true;
         xpipe(fds);
-        set_nonblocking(fds[0]);
-        set_nonblocking(fds[1]);
+        xset_nonblocking(fds[0]);
+        xset_nonblocking(fds[1]);
     }
 }
 

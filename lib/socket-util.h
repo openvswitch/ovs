@@ -26,6 +26,8 @@
 #include <netinet/ip.h>
 
 int set_nonblocking(int fd);
+void xset_nonblocking(int fd);
+
 int get_max_fds(void);
 
 int lookup_ip(const char *host_name, struct in_addr *address);

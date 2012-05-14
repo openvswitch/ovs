@@ -82,6 +82,14 @@ set_nonblocking(int fd)
     }
 }
 
+void
+xset_nonblocking(int fd)
+{
+    if (set_nonblocking(fd)) {
+        exit(EXIT_FAILURE);
+    }
+}
+
 static int
 set_dscp(int fd, uint8_t dscp)
 {
