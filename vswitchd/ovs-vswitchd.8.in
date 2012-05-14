@@ -207,6 +207,49 @@ enabled.
 .so ofproto/ofproto-unixctl.man
 .so lib/vlog-unixctl.man
 .so lib/stress-unixctl.man
+.
+.SH "LIMITS"
+.
+.PP
+We believe these limits to be accurate as of this writing.  These
+limits assume the use of the Linux kernel datapath.
+.
+.IP \(bu
+Approximately 256 bridges given the allowance of 5,000 file
+descriptors that \fBovs\-ctl\fR(8) configures.  (\fBovs\-vswitchd\fR
+requires 17 file descriptors per datapath.)
+.
+.IP \(bu
+65,280 ports per bridge.  Performance will degrade beyond 1,024 ports
+per bridge due to fixed hash table sizing.
+.
+.IP \(bu
+2,048 MAC learning entries per bridge.
+.
+.IP \(bu
+Kernel flows are limited only by memory available to the kernel.
+Performance will degrade beyond 1,048,576 kernel flows per bridge with
+a 32-bit kernel, beyond 262,144 with a 64-bit kernel.
+(\fBovs\-vswitchd\fR should never install anywhere near that many
+flows.)
+.
+.IP \(bu
+OpenFlow flows are limited only by available memory.  Performance is
+linear in the number of unique wildcard patterns.  That is, an
+OpenFlow table that contains many flows that all match on the same
+fields in the same way has a constant-time lookup, but a table that
+contains many flows that match on different fields requires lookup
+time linear in the number of flows.
+.
+.IP \(bu
+255 ports per bridge participating in 802.1D Spanning Tree Protocol.
+.
+.IP \(bu
+32 mirrors per bridge.
+.
+.IP \(bu
+15 bytes for the name of a port.  (This is a Linux kernel limitation.)
+.
 .SH "SEE ALSO"
 .BR ovs\-appctl (8),
 .BR ovs\-brcompatd (8),
