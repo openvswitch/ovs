@@ -49,6 +49,12 @@ s/\(eth([[^)]]*)\),*/\1,eth_type(0x8100),vlan(vid=99,pcp=7),encap(/
 s/$/)/' odp-base.txt
 
  echo
+ echo '# Valid forms with QOS priority, tun_id, and VLAN headers.'
+ sed 's/^/priority(1234),tun_id(0xfedcba9876543210),/
+s/\(eth([[^)]]*)\),*/\1,eth_type(0x8100),vlan(vid=99,pcp=7),encap(/
+s/$/)/' odp-base.txt
+
+ echo
  echo '# Valid forms with IP first fragment.'
 sed -n 's/,frag=no),/,frag=first),/p' odp-base.txt
 

@@ -1246,7 +1246,10 @@ ovs_to_odp_frag(uint8_t nw_frag)
           : OVS_FRAG_TYPE_LATER);
 }
 
-/* Appends a representation of 'flow' as OVS_KEY_ATTR_* attributes to 'buf'. */
+/* Appends a representation of 'flow' as OVS_KEY_ATTR_* attributes to 'buf'.
+ *
+ * 'buf' must have at least ODPUTIL_FLOW_KEY_BYTES bytes of space, or be
+ * capable of being expanded to allow for that much space. */
 void
 odp_flow_key_from_flow(struct ofpbuf *buf, const struct flow *flow)
 {
