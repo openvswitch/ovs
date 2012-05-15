@@ -27,6 +27,7 @@
 int
 main(void)
 {
+    int exit_code = 0;
     struct ds in;
 
     ds_init(&in);
@@ -85,6 +86,12 @@ main(void)
         ofpbuf_init(&odp_key, 0);
         odp_flow_key_from_flow(&odp_key, &flow);
 
+        if (odp_key.size > ODPUTIL_FLOW_KEY_BYTES) {
+            printf ("too long: %zu > %d\n",
+                    odp_key.size, ODPUTIL_FLOW_KEY_BYTES);
+            exit_code = 1;
+        }
+
         /* Convert odp_key to string. */
         ds_init(&out);
         odp_flow_key_format(odp_key.data, odp_key.size, &out);
@@ -96,5 +103,5 @@ main(void)
     }
     ds_destroy(&in);
 
-    return 0;
+    return exit_code;
 }
