@@ -3471,20 +3471,41 @@ static void
 cmd_destroy(struct vsctl_context *ctx)
 {
     bool must_exist = !shash_find(&ctx->options, "--if-exists");
+    bool delete_all = shash_find(&ctx->options, "--all");
     const char *table_name = ctx->argv[1];
     const struct vsctl_table_class *table;
     int i;
 
     table = get_table(table_name);
-    for (i = 2; i < ctx->argc; i++) {
-        const struct ovsdb_idl_row *row;
 
-        row = (must_exist ? must_get_row : get_row)(ctx, table, ctx->argv[i]);
-        if (row) {
-            ovsdb_idl_txn_delete(row);
-        }
+    if (delete_all && ctx->argc > 2) {
+        vsctl_fatal("--all and records argument should not be specified together");
     }
 
+    if (delete_all && !must_exist) {
+        vsctl_fatal("--all and --if-exists should not be specified together");
+    }
+
+    if (delete_all) {
+        const struct ovsdb_idl_row *row;
+        const struct ovsdb_idl_row *next_row;
+
+        for (row = ovsdb_idl_first_row(ctx->idl, table->class);
+             row;) {
+             next_row = ovsdb_idl_next_row(row);
+             ovsdb_idl_txn_delete(row);
+             row = next_row;
+        }
+    } else {
+        for (i = 2; i < ctx->argc; i++) {
+            const struct ovsdb_idl_row *row;
+
+            row = (must_exist ? must_get_row : get_row)(ctx, table, ctx->argv[i]);
+            if (row) {
+                ovsdb_idl_txn_delete(row);
+            }
+        }
+    }
     vsctl_context_invalidate_cache(ctx);
 }
 
@@ -4015,8 +4036,8 @@ static const struct vsctl_command_syntax all_commands[] = {
     {"remove", 4, INT_MAX, pre_cmd_remove, cmd_remove, NULL, "", RW},
     {"clear", 3, INT_MAX, pre_cmd_clear, cmd_clear, NULL, "", RW},
     {"create", 2, INT_MAX, pre_create, cmd_create, post_create, "--id=", RW},
-    {"destroy", 1, INT_MAX, pre_cmd_destroy, cmd_destroy, NULL, "--if-exists",
-     RW},
+    {"destroy", 1, INT_MAX, pre_cmd_destroy, cmd_destroy, NULL,
+     "--if-exists,--all", RW},
     {"wait-until", 2, INT_MAX, pre_cmd_wait_until, cmd_wait_until, NULL, "",
      RO},
 

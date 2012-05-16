@@ -716,6 +716,8 @@ this.
 .IP "\fR[\fB\-\-if\-exists\fR] \fBdestroy \fItable record\fR..."
 Deletes each specified \fIrecord\fR from \fItable\fR.  Unless
 \fB\-\-if\-exists\fR is specified, each \fIrecord\fRs must exist.
+.IP "\fB\-\-all destroy \fItable\fR"
+Deletes all records from the \fItable\fR.
 .IP
 The \fBdestroy\fR command is only useful for records in the \fBQoS\fR
 or \fBQueue\fR tables.  Records in other tables are automatically
@@ -844,7 +846,8 @@ unreferenced QoS records are not automatically destroyed):
 (This command will leave two unreferenced Queue records in the
 database.  To delete them, use "\fBovs\-vsctl list Queue\fR" to find
 their UUIDs, then "\fBovs\-vsctl destroy Queue \fIuuid1\fR
-\fIuuid2\fR" to destroy each of them.)
+\fIuuid2\fR" to destroy each of them or use
+"\fBovs\-vsctl -- --all destroy Queue\fR" to delete all records.)
 .SS "Connectivity Monitoring"
 .PP
 Monitor connectivity to a remote maintenance point on eth0.

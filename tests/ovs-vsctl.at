@@ -1041,3 +1041,51 @@ stp_enable          : false
 ]], [ignore], [test ! -e pid || kill `cat pid`])
 OVS_VSCTL_CLEANUP
 AT_CLEANUP
+
+dnl This test will create a linux-htb QoS record that
+dnl points to a few queues and use it on a1 and a2 port.
+dnl It also destroys all records from Qos and Queue table.
+AT_SETUP([--all option on destroy command])
+AT_KEYWORDS([ovs-vsctl])
+OVS_VSCTL_SETUP
+AT_CHECK([RUN_OVS_VSCTL(
+   [add-br a],
+   [add-port a a1],
+   [add-port a a2])], [0], [], [], [OVS_VSCTL_CLEANUP])
+CHECK_BRIDGES([a, a, 0])
+CHECK_PORTS([a], [a1], [a2])
+CHECK_IFACES([a], [a1], [a2])
+AT_CHECK([RUN_OVS_VSCTL_TOGETHER(
+   [set Port a1 qos=@newqos],
+   [set Port a2 qos=@newqos],
+   [--id=@newqos create QoS type=linux-htb other-config:max-rate=1000000000 queues=0=@q0,1=@q1],
+   [--id=@q0 create Queue other-config:min-rate=100000000 other-config:max-rate=100000000],
+   [--id=@q1 create Queue other-config:min-rate=500000000])], [0], [ignore], [], [OVS_VSCTL_CLEANUP])
+AT_CHECK([RUN_OVS_VSCTL(
+   [--columns=other_config,type list Qos])], [0],
+[other_config        : {max-rate="1000000000"}
+type                : linux-htb
+], [], [OVS_VSCTL_CLEANUP])
+AT_CHECK([RUN_OVS_VSCTL(
+   [--columns=other_config list Queue | sort | xargs echo])], [0],
+[other_config : {max-rate=100000000, min-rate=100000000} other_config : {min-rate=500000000}
+], [], [OVS_VSCTL_CLEANUP])
+AT_CHECK([RUN_OVS_VSCTL(
+   [clear Port a1 qos],
+   [clear Port a2 qos])], [0], [], [], [OVS_VSCTL_CLEANUP])
+AT_CHECK([RUN_OVS_VSCTL(
+   [--columns=qos list Port a1 a2])], [0],
+[[qos                 : []
+
+qos                 : []
+]], [], [OVS_VSCTL_CLEANUP])
+AT_CHECK([RUN_OVS_VSCTL(
+   [--all destroy Qos])], [0], [], [], [OVS_VSCTL_CLEANUP])
+AT_CHECK([RUN_OVS_VSCTL(
+   [-- list Qos])], [0], [], [], [OVS_VSCTL_CLEANUP])
+AT_CHECK([RUN_OVS_VSCTL(
+   [--all destroy Queue])], [0], [], [], [OVS_VSCTL_CLEANUP])
+AT_CHECK([RUN_OVS_VSCTL(
+   [-- list Queue])], [0], [], [], [OVS_VSCTL_CLEANUP])
+OVS_VSCTL_CLEANUP
+AT_CLEANUP
