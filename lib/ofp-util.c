@@ -1461,10 +1461,7 @@ ofputil_decode_flow_mod(struct ofputil_flow_mod *fm,
 }
 
 /* Converts 'fm' into an OFPT_FLOW_MOD or NXT_FLOW_MOD message according to
- * 'protocol' and returns the message.
- *
- * 'flow_mod_table_id' should be true if the NXT_FLOW_MOD_TABLE_ID extension is
- * enabled, false otherwise. */
+ * 'protocol' and returns the message. */
 struct ofpbuf *
 ofputil_encode_flow_mod(const struct ofputil_flow_mod *fm,
                         enum ofputil_protocol protocol)
