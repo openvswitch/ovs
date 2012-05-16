@@ -245,6 +245,17 @@ ovs_be64 as fixed-width types in network byte order.  Each of the
 latter is equivalent to the one of the former, but the difference in
 name makes the intended use obvious.
 
+The default "fail-mode" for Open vSwitch bridges is "standalone",
+meaning that, when the OpenFlow controllers cannot be contacted, Open
+vSwitch acts as a regular MAC-learning switch.  This works well in
+virtualization environments where there is normally just one uplink
+(either a single physical interface or a bond).  In a more general
+environment, it can create loops.  So, if you are porting to a
+general-purpose switch platform, you should consider changing the
+default "fail-mode" to "secure", which does not behave this way.  See
+documentation for the "fail-mode" column in the Bridge table in
+ovs-vswitchd.conf.db(5) for more information.
+
 lib/entropy.c assumes that it can obtain high-quality random number
 seeds at startup by reading from /dev/urandom.  You will need to
 modify it if this is not true on your platform.
