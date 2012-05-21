@@ -39,7 +39,8 @@
 VLOG_DEFINE_THIS_MODULE(daemon);
 
 /* --detach: Should we run in the background? */
-static bool detach;
+static bool detach;             /* Was --detach specified? */
+static bool detached;           /* Have we already detached? */
 
 /* --pidfile: Name of pidfile (null if none). */
 static char *pidfile;
@@ -513,22 +514,38 @@ daemonize_start(void)
 }
 
 /* If daemonization is configured, then this function notifies the parent
- * process that the child process has completed startup successfully.
+ * process that the child process has completed startup successfully.  It also
+ * call daemonize_post_detach().
  *
  * Calling this function more than once has no additional effect. */
 void
 daemonize_complete(void)
 {
-    fork_notify_startup(daemonize_fd);
-    daemonize_fd = -1;
+    if (!detached) {
+        detached = true;
 
+        fork_notify_startup(daemonize_fd);
+        daemonize_fd = -1;
+        daemonize_post_detach();
+    }
+}
+
+/* If daemonization is configured, then this function does traditional Unix
+ * daemonization behavior: join a new session, chdir to the root (if not
+ * disabled), and close the standard file descriptors.
+ *
+ * It only makes sense to call this function as part of an implementation of a
+ * special daemon subprocess.  A normal daemon should just call
+ * daemonize_complete(). */
+void
+daemonize_post_detach(void)
+{
     if (detach) {
         setsid();
         if (chdir_) {
             ignore(chdir("/"));
         }
         close_standard_fds();
-        detach = false;
     }
 }
 

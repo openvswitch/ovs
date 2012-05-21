@@ -74,5 +74,6 @@ pid_t read_pidfile(const char *name);
 pid_t read_pidfile_if_exists(const char *name);
 
 pid_t fork_and_clean_up(void);
+void daemonize_post_detach(void);
 
 #endif /* daemon.h */
