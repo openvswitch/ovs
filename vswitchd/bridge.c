@@ -2545,11 +2545,12 @@ bridge_add_del_ports(struct bridge *br,
         for (i = 0; i < port->n_interfaces; i++) {
             const struct ovsrec_interface *cfg = port->interfaces[i];
             struct iface *iface = iface_lookup(br, cfg->name);
+            const char *type = iface_get_type(cfg, br->cfg);
 
             if (iface) {
                 iface->cfg = cfg;
-                iface->type = iface_get_type(cfg, br->cfg);
-            } else {
+                iface->type = type;
+            } else if (strcmp(type, "null")) {
                 bridge_queue_if_cfg(br, cfg, port);
             }
         }
