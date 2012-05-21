@@ -245,6 +245,32 @@ daemonize(void)
     daemonize_complete();
 }
 
+/* Calls fork() and on success returns its return value.  On failure, logs an
+ * error and exits unsuccessfully.
+ *
+ * Post-fork, but before returning, this function calls a few other functions
+ * that are generally useful if the child isn't planning to exec a new
+ * process. */
+pid_t
+fork_and_clean_up(void)
+{
+    pid_t pid;
+
+    pid = fork();
+    if (pid > 0) {
+        /* Running in parent process. */
+        fatal_signal_fork();
+    } else if (!pid) {
+        /* Running in child process. */
+        time_postfork();
+        lockfile_postfork();
+    } else {
+        VLOG_FATAL("fork failed (%s)", strerror(errno));
+    }
+
+    return pid;
+}
+
 /* Forks, then:
  *
  *   - In the parent, waits for the child to signal that it has completed its
@@ -264,14 +290,13 @@ fork_and_wait_for_startup(int *fdp)
 
     xpipe(fds);
 
-    pid = fork();
+    pid = fork_and_clean_up();
     if (pid > 0) {
         /* Running in parent process. */
         size_t bytes_read;
         char c;
 
         close(fds[1]);
-        fatal_signal_fork();
         if (read_fully(fds[0], &c, 1, &bytes_read) != 0) {
             int retval;
             int status;
@@ -301,11 +326,7 @@ fork_and_wait_for_startup(int *fdp)
     } else if (!pid) {
         /* Running in child process. */
         close(fds[0]);
-        time_postfork();
-        lockfile_postfork();
         *fdp = fds[1];
-    } else {
-        VLOG_FATAL("fork failed (%s)", strerror(errno));
     }
 
     return pid;
