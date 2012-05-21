@@ -19,6 +19,7 @@
 #include <assert.h>
 #include <ctype.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
@@ -84,7 +85,7 @@ static struct facility facilities[VLF_N_FACILITIES] = {
 
 /* VLF_FILE configuration. */
 static char *log_file_name;
-static FILE *log_file;
+static int log_fd = -1;
 
 /* vlog initialized? */
 static bool vlog_inited;
@@ -186,7 +187,7 @@ update_min_level(struct vlog_module *module)
 
     module->min_level = VLL_OFF;
     for (facility = 0; facility < VLF_N_FACILITIES; facility++) {
-        if (log_file || facility != VLF_FILE) {
+        if (log_fd >= 0 || facility != VLF_FILE) {
             enum vlog_level level = module->levels[facility];
             if (level > module->min_level) {
                 module->min_level = level;
@@ -279,10 +280,10 @@ vlog_set_log_file(const char *file_name)
     int error;
 
     /* Close old log file. */
-    if (log_file) {
+    if (log_fd >= 0) {
         VLOG_INFO("closing log file");
-        fclose(log_file);
-        log_file = NULL;
+        close(log_fd);
+        log_fd = -1;
     }
 
     /* Update log file name and free old name.  The ordering is important
@@ -296,13 +297,13 @@ vlog_set_log_file(const char *file_name)
 
     /* Open new log file and update min_levels[] to reflect whether we actually
      * have a log_file. */
-    log_file = fopen(log_file_name, "a");
+    log_fd = open(log_file_name, O_WRONLY | O_CREAT | O_APPEND, 0666);
     for (mp = vlog_modules; mp < &vlog_modules[n_vlog_modules]; mp++) {
         update_min_level(*mp);
     }
 
     /* Log success or failure. */
-    if (!log_file) {
+    if (log_fd < 0) {
         VLOG_WARN("failed to open %s for logging: %s",
                   log_file_name, strerror(errno));
         error = errno;
@@ -330,8 +331,8 @@ vlog_reopen_log_file(void)
     /* Skip re-opening if it would be a no-op because the old and new files are
      * the same.  (This avoids writing "closing log file" followed immediately
      * by "opened log file".) */
-    if (log_file
-        && !fstat(fileno(log_file), &old)
+    if (log_fd >= 0
+        && !fstat(log_fd, &old)
         && !stat(log_file_name, &new)
         && old.st_dev == new.st_dev
         && old.st_ino == new.st_ino) {
@@ -689,7 +690,7 @@ vlog_valist(const struct vlog_module *module, enum vlog_level level,
 {
     bool log_to_console = module->levels[VLF_CONSOLE] >= level;
     bool log_to_syslog = module->levels[VLF_SYSLOG] >= level;
-    bool log_to_file = module->levels[VLF_FILE] >= level && log_file;
+    bool log_to_file = module->levels[VLF_FILE] >= level && log_fd >= 0;
     if (log_to_console || log_to_syslog || log_to_file) {
         int save_errno = errno;
         static unsigned int msg_num;
@@ -725,8 +726,7 @@ vlog_valist(const struct vlog_module *module, enum vlog_level level,
             format_log_message(module, level, VLF_FILE, msg_num,
                                message, args, &s);
             ds_put_char(&s, '\n');
-            fputs(ds_cstr(&s), log_file);
-            fflush(log_file);
+            write(log_fd, s.string, s.length);
         }
 
         ds_destroy(&s);
