@@ -991,12 +991,15 @@ unlock:
 static struct rtable *__find_route(const struct tnl_mutable_config *mutable,
 				   u8 ipproto, u8 tos)
 {
+	/* Tunnel configuration keeps DSCP part of TOS bits, But Linux
+	 * router expect RT_TOS bits only. */
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,39)
 	struct flowi fl = { .nl_u = { .ip4_u = {
 					.daddr = mutable->key.daddr,
 					.saddr = mutable->key.saddr,
-					.tos = tos } },
-			    .proto = ipproto };
+					.tos   = RT_TOS(tos) } },
+					.proto = ipproto };
 	struct rtable *rt;
 
 	if (unlikely(ip_route_output_key(&init_net, &rt, &fl)))
@@ -1006,7 +1009,7 @@ static struct rtable *__find_route(const struct tnl_mutable_config *mutable,
 #else
 	struct flowi4 fl = { .daddr = mutable->key.daddr,
 			     .saddr = mutable->key.saddr,
-			     .flowi4_tos = tos,
+			     .flowi4_tos = RT_TOS(tos),
 			     .flowi4_proto = ipproto };
 
 	return ip_route_output_key(&init_net, &fl);
@@ -1023,7 +1026,7 @@ static struct rtable *find_route(struct vport *vport,
 	*cache = NULL;
 	tos = RT_TOS(tos);
 
-	if (likely(tos == mutable->tos &&
+	if (likely(tos == RT_TOS(mutable->tos) &&
 	    check_cache_valid(cur_cache, mutable))) {
 		*cache = cur_cache;
 		return cur_cache->rt;
@@ -1034,7 +1037,7 @@ static struct rtable *find_route(struct vport *vport,
 		if (IS_ERR(rt))
 			return NULL;
 
-		if (likely(tos == mutable->tos))
+		if (likely(tos == RT_TOS(mutable->tos)))
 			*cache = build_cache(vport, mutable, rt);
 
 		return rt;
@@ -1208,14 +1211,14 @@ int ovs_tnl_send(struct vport *vport, struct sk_buff *skb)
 	else
 		tos = mutable->tos;
 
-	tos = INET_ECN_encapsulate(tos, inner_tos);
-
 	/* Route lookup */
 	rt = find_route(vport, mutable, tos, &cache);
 	if (unlikely(!rt))
 		goto error_free;
 	if (unlikely(!cache))
 		unattached_dst = &rt_dst(rt);
+
+	tos = INET_ECN_encapsulate(tos, inner_tos);
 
 	/* Reset SKB */
 	nf_reset(skb);
@@ -1389,7 +1392,8 @@ static int tnl_set_config(struct nlattr *options, const struct tnl_ops *tnl_ops,
 
 	if (a[OVS_TUNNEL_ATTR_TOS]) {
 		mutable->tos = nla_get_u8(a[OVS_TUNNEL_ATTR_TOS]);
-		if (mutable->tos != RT_TOS(mutable->tos))
+		/* Reject ToS config with ECN bits set. */
+		if (mutable->tos & INET_ECN_MASK)
 			return -EINVAL;
 	}
 

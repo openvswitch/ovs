@@ -1259,7 +1259,8 @@
 
       <column name="options" key="tos">
         Optional.  The value of the ToS bits to be set on the encapsulating
-        packet.  It may also be the word <code>inherit</code>, in which case
+        packet.  ToS is interpreted as DSCP and ECN bits, ECN part must be
+        zero.  It may also be the word <code>inherit</code>, in which case
         the ToS will be copied from the inner packet if it is IPv4 or IPv6
         (otherwise it will be 0).  The ECN fields are always inherited.
         Default is 0.
