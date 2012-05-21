@@ -612,7 +612,12 @@ parse_tunnel_config(const char *name, const char *type,
             if (!strcmp(node->data, "inherit")) {
                 flags |= TNL_F_TOS_INHERIT;
             } else {
-                nl_msg_put_u8(options, OVS_TUNNEL_ATTR_TOS, atoi(node->data));
+                char *endptr;
+                int tos;
+                tos = strtol(node->data, &endptr, 0);
+                if (*endptr == '\0') {
+                    nl_msg_put_u8(options, OVS_TUNNEL_ATTR_TOS, tos);
+                }
             }
         } else if (!strcmp(node->name, "ttl")) {
             if (!strcmp(node->data, "inherit")) {
@@ -814,7 +819,7 @@ unparse_tunnel_config(const char *name OVS_UNUSED, const char *type OVS_UNUSED,
         smap_add(args, "tos", "inherit");
     } else if (a[OVS_TUNNEL_ATTR_TOS]) {
         int tos = nl_attr_get_u8(a[OVS_TUNNEL_ATTR_TOS]);
-        shash_add(args, "tos", xasprintf("%d", tos));
+        shash_add(args, "tos", xasprintf("0x%x", tos));
     }
 
     if (flags & TNL_F_CSUM) {
