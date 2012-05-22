@@ -372,41 +372,43 @@ enum ofp_flow_mod_command {
 
 /* Flow wildcards. */
 enum ofp_flow_wildcards {
-    OFPFW_IN_PORT    = 1 << 0,  /* Switch input port. */
-    OFPFW_DL_VLAN    = 1 << 1,  /* VLAN vid. */
-    OFPFW_DL_SRC     = 1 << 2,  /* Ethernet source address. */
-    OFPFW_DL_DST     = 1 << 3,  /* Ethernet destination address. */
-    OFPFW_DL_TYPE    = 1 << 4,  /* Ethernet frame type. */
-    OFPFW_NW_PROTO   = 1 << 5,  /* IP protocol. */
-    OFPFW_TP_SRC     = 1 << 6,  /* TCP/UDP source port. */
-    OFPFW_TP_DST     = 1 << 7,  /* TCP/UDP destination port. */
+    OFPFW10_IN_PORT    = 1 << 0,  /* Switch input port. */
+    OFPFW10_DL_VLAN    = 1 << 1,  /* VLAN vid. */
+    OFPFW10_DL_SRC     = 1 << 2,  /* Ethernet source address. */
+    OFPFW10_DL_DST     = 1 << 3,  /* Ethernet destination address. */
+    OFPFW10_DL_TYPE    = 1 << 4,  /* Ethernet frame type. */
+    OFPFW10_NW_PROTO   = 1 << 5,  /* IP protocol. */
+    OFPFW10_TP_SRC     = 1 << 6,  /* TCP/UDP source port. */
+    OFPFW10_TP_DST     = 1 << 7,  /* TCP/UDP destination port. */
 
     /* IP source address wildcard bit count.  0 is exact match, 1 ignores the
      * LSB, 2 ignores the 2 least-significant bits, ..., 32 and higher wildcard
      * the entire field.  This is the *opposite* of the usual convention where
      * e.g. /24 indicates that 8 bits (not 24 bits) are wildcarded. */
-    OFPFW_NW_SRC_SHIFT = 8,
-    OFPFW_NW_SRC_BITS = 6,
-    OFPFW_NW_SRC_MASK = ((1 << OFPFW_NW_SRC_BITS) - 1) << OFPFW_NW_SRC_SHIFT,
-    OFPFW_NW_SRC_ALL = 32 << OFPFW_NW_SRC_SHIFT,
+    OFPFW10_NW_SRC_SHIFT = 8,
+    OFPFW10_NW_SRC_BITS = 6,
+    OFPFW10_NW_SRC_MASK = (((1 << OFPFW10_NW_SRC_BITS) - 1)
+                           << OFPFW10_NW_SRC_SHIFT),
+    OFPFW10_NW_SRC_ALL = 32 << OFPFW10_NW_SRC_SHIFT,
 
     /* IP destination address wildcard bit count.  Same format as source. */
-    OFPFW_NW_DST_SHIFT = 14,
-    OFPFW_NW_DST_BITS = 6,
-    OFPFW_NW_DST_MASK = ((1 << OFPFW_NW_DST_BITS) - 1) << OFPFW_NW_DST_SHIFT,
-    OFPFW_NW_DST_ALL = 32 << OFPFW_NW_DST_SHIFT,
+    OFPFW10_NW_DST_SHIFT = 14,
+    OFPFW10_NW_DST_BITS = 6,
+    OFPFW10_NW_DST_MASK = (((1 << OFPFW10_NW_DST_BITS) - 1)
+                           << OFPFW10_NW_DST_SHIFT),
+    OFPFW10_NW_DST_ALL = 32 << OFPFW10_NW_DST_SHIFT,
 
-    OFPFW_DL_VLAN_PCP = 1 << 20, /* VLAN priority. */
-    OFPFW_NW_TOS = 1 << 21, /* IP ToS (DSCP field, 6 bits). */
+    OFPFW10_DL_VLAN_PCP = 1 << 20, /* VLAN priority. */
+    OFPFW10_NW_TOS = 1 << 21, /* IP ToS (DSCP field, 6 bits). */
 
     /* Wildcard all fields. */
-    OFPFW_ALL = ((1 << 22) - 1)
+    OFPFW10_ALL = ((1 << 22) - 1)
 };
 
 /* The wildcards for ICMP type and code fields use the transport source
  * and destination port fields, respectively. */
-#define OFPFW_ICMP_TYPE OFPFW_TP_SRC
-#define OFPFW_ICMP_CODE OFPFW_TP_DST
+#define OFPFW10_ICMP_TYPE OFPFW10_TP_SRC
+#define OFPFW10_ICMP_CODE OFPFW10_TP_DST
 
 /* Values below this cutoff are 802.3 packets and the two bytes
  * following MAC addresses are used as a frame length.  Otherwise, the
@@ -425,7 +427,7 @@ enum ofp_flow_wildcards {
 #define OFP_VLAN_NONE      0xffff
 
 /* Fields to match against flows */
-struct ofp_match {
+struct ofp10_match {
     ovs_be32 wildcards;        /* Wildcard fields. */
     ovs_be16 in_port;          /* Input switch port. */
     uint8_t dl_src[OFP_ETH_ALEN]; /* Ethernet source address. */
@@ -443,7 +445,7 @@ struct ofp_match {
     ovs_be16 tp_src;           /* TCP/UDP source port. */
     ovs_be16 tp_dst;           /* TCP/UDP destination port. */
 };
-OFP_ASSERT(sizeof(struct ofp_match) == 40);
+OFP_ASSERT(sizeof(struct ofp10_match) == 40);
 
 /* Value used in "idle_timeout" and "hard_timeout" to indicate that the entry
  * is permanent. */
@@ -462,7 +464,7 @@ enum ofp_flow_mod_flags {
 /* Flow setup and teardown (controller -> datapath). */
 struct ofp_flow_mod {
     struct ofp_header header;
-    struct ofp_match match;      /* Fields to match */
+    struct ofp10_match match;    /* Fields to match */
     ovs_be64 cookie;             /* Opaque controller-issued identifier. */
 
     /* Flow actions. */
@@ -486,7 +488,7 @@ OFP_ASSERT(sizeof(struct ofp_flow_mod) == 72);
 /* Flow removed (datapath -> controller). */
 struct ofp_flow_removed {
     struct ofp_header header;
-    struct ofp_match match;   /* Description of fields. */
+    struct ofp10_match match; /* Description of fields. */
     ovs_be64 cookie;          /* Opaque controller-issued identifier. */
 
     ovs_be16 priority;        /* Priority level of flow entry. */
@@ -545,7 +547,7 @@ OFP_ASSERT(sizeof(struct ofp_desc_stats) == 1068);
 /* Stats request of type OFPST_AGGREGATE or OFPST_FLOW. */
 struct ofp_flow_stats_request {
     struct ofp_stats_msg osm;
-    struct ofp_match match;   /* Fields to match. */
+    struct ofp10_match match; /* Fields to match. */
     uint8_t table_id;         /* ID of table to read (from ofp_table_stats)
                                  or 0xff for all tables. */
     uint8_t pad;              /* Align to 32 bits. */
@@ -560,7 +562,7 @@ struct ofp_flow_stats {
     ovs_be16 length;          /* Length of this entry. */
     uint8_t table_id;         /* ID of table flow came from. */
     uint8_t pad;
-    struct ofp_match match;   /* Description of fields. */
+    struct ofp10_match match; /* Description of fields. */
     ovs_be32 duration_sec;    /* Time flow has been alive in seconds. */
     ovs_be32 duration_nsec;   /* Time flow has been alive in nanoseconds
                                  beyond duration_sec. */
@@ -592,7 +594,7 @@ struct ofp_table_stats {
                                 are consulted first. */
     uint8_t pad[3];          /* Align to 32-bits. */
     char name[OFP_MAX_TABLE_NAME_LEN];
-    ovs_be32 wildcards;      /* Bitmap of OFPFW_* wildcards that are
+    ovs_be32 wildcards;      /* Bitmap of OFPFW10_* wildcards that are
                                 supported by the table. */
     ovs_be32 max_entries;    /* Max number of entries supported. */
     ovs_be32 active_count;   /* Number of active entries. */

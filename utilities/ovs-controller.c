@@ -62,7 +62,7 @@ static bool set_up_flows = true;
 /* -N, --normal: Use "NORMAL" action instead of explicit port? */
 static bool action_normal = false;
 
-/* -w, --wildcard: 0 to disable wildcard flow entries, a OFPFW_* bitmask to
+/* -w, --wildcard: 0 to disable wildcard flow entries, an OFPFW10_* bitmask to
  * enable specific wildcards, or UINT32_MAX to use the default wildcards. */
 static uint32_t wildcards = 0;
 

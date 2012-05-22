@@ -29,7 +29,6 @@
 struct dpif_flow_stats;
 struct ds;
 struct flow_wildcards;
-struct ofp_match;
 struct ofpbuf;
 
 /* This sequence number should be incremented whenever anything involving flows
@@ -145,11 +144,11 @@ flow_hash(const struct flow *flow, uint32_t basis)
 
 typedef unsigned int OVS_BITWISE flow_wildcards_t;
 
-/* Same values and meanings as corresponding OFPFW_* bits. */
+/* Same values and meanings as corresponding OFPFW10_* bits. */
 #define FWW_IN_PORT     ((OVS_FORCE flow_wildcards_t) (1 << 0))
 #define FWW_DL_TYPE     ((OVS_FORCE flow_wildcards_t) (1 << 4))
 #define FWW_NW_PROTO    ((OVS_FORCE flow_wildcards_t) (1 << 5))
-/* No corresponding OFPFW_* bits. */
+/* No corresponding OFPFW10_* bits. */
 #define FWW_NW_DSCP     ((OVS_FORCE flow_wildcards_t) (1 << 1))
 #define FWW_NW_ECN      ((OVS_FORCE flow_wildcards_t) (1 << 2))
 #define FWW_ARP_SHA     ((OVS_FORCE flow_wildcards_t) (1 << 3))

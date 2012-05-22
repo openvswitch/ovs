@@ -365,7 +365,8 @@ ofp_util|INFO|post: priority=65535,arp,in_port=1,vlan_tci=0x0000,dl_src=50:54:00
 ])
 AT_CLEANUP
 
-# The flow is formatted with ofp_match_to_string() for the high-verbosity case.
+# The flow is formatted with ofp10_match_to_string() for the
+# high-verbosity case.
 AT_SETUP([OFPT_FLOW_MOD - high verbosity])
 AT_KEYWORDS([ofp-print])
 AT_CHECK([ovs-ofctl '-vPATTERN:console:%c|%p|%m' ofp-print "\
@@ -833,7 +834,8 @@ NXT_FLOW_MOD (xid=0x2): ADD reg0=0x7b,tun_id=0x1c8 actions=load:0x5->NXM_NX_REG0
 ])
 AT_CLEANUP
 
-# The flow is formatted with ofp_match_to_string() for the low-verbosity case.
+# The flow is formatted with ofp10_match_to_string() for the
+# low-verbosity case.
 AT_SETUP([NXT_FLOW_MOD, high verbosity])
 AT_KEYWORDS([ofp-print])
 AT_CHECK([ovs-ofctl ofp-print "\

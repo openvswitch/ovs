@@ -111,15 +111,15 @@ lswitch_create(struct rconn *rconn, const struct lswitch_config *cfg)
             /* Try to wildcard as many fields as possible, but we cannot
              * wildcard all fields.  We need in_port to detect moves.  We need
              * Ethernet source and dest and VLAN VID to do L2 learning. */
-            ofpfw = (OFPFW_DL_TYPE | OFPFW_DL_VLAN_PCP
-                     | OFPFW_NW_SRC_ALL | OFPFW_NW_DST_ALL
-                     | OFPFW_NW_TOS | OFPFW_NW_PROTO
-                     | OFPFW_TP_SRC | OFPFW_TP_DST);
+            ofpfw = (OFPFW10_DL_TYPE | OFPFW10_DL_VLAN_PCP
+                     | OFPFW10_NW_SRC_ALL | OFPFW10_NW_DST_ALL
+                     | OFPFW10_NW_TOS | OFPFW10_NW_PROTO
+                     | OFPFW10_TP_SRC | OFPFW10_TP_DST);
         } else {
             ofpfw = cfg->wildcards;
         }
 
-        ofputil_wildcard_from_openflow(ofpfw, &sw->wc);
+        ofputil_wildcard_from_ofpfw10(ofpfw, &sw->wc);
     }
 
     sw->default_queue = cfg->default_queue;

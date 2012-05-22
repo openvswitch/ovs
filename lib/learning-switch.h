@@ -34,7 +34,7 @@ struct lswitch_config {
     enum lswitch_mode mode;
 
     /* 0 to use exact-match flow entries,
-     * a OFPFW_* bitmask to enable specific wildcards,
+     * a OFPFW10_* bitmask to enable specific wildcards,
      * or UINT32_MAX to use the default wildcards (wildcarding as many fields
      * as possible.
      *

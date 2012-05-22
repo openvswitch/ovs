@@ -1149,11 +1149,11 @@ OFP_ASSERT(sizeof(struct nx_action_output_reg) == 24);
 
 /* Flexible flow specifications (aka NXM = Nicira Extended Match).
  *
- * OpenFlow 1.0 has "struct ofp_match" for specifying flow matches.  This
+ * OpenFlow 1.0 has "struct ofp10_match" for specifying flow matches.  This
  * structure is fixed-length and hence difficult to extend.  This section
  * describes a more flexible, variable-length flow match, called "nx_match" for
  * short, that is also supported by Open vSwitch.  This section also defines a
- * replacement for each OpenFlow message that includes struct ofp_match.
+ * replacement for each OpenFlow message that includes struct ofp10_match.
  *
  *
  * Format
@@ -1211,7 +1211,7 @@ OFP_ASSERT(sizeof(struct nx_action_output_reg) == 24);
  *     matches bit J in nxm_value.  A 0-bit in nxm_mask causes the
  *     corresponding bits in nxm_value and the field's value to be ignored.
  *     (The sense of the nxm_mask bits is the opposite of that used by the
- *     "wildcards" member of struct ofp_match.)
+ *     "wildcards" member of struct ofp10_match.)
  *
  *     When nxm_hasmask is 1, nxm_length is always even.
  *

@@ -826,25 +826,25 @@ print_ip_netmask(struct ds *string, const char *leader, ovs_be32 ip,
 }
 
 void
-ofp_print_match(struct ds *f, const struct ofp_match *om, int verbosity)
+ofp10_match_print(struct ds *f, const struct ofp10_match *om, int verbosity)
 {
-    char *s = ofp_match_to_string(om, verbosity);
+    char *s = ofp10_match_to_string(om, verbosity);
     ds_put_cstr(f, s);
     free(s);
 }
 
 char *
-ofp_match_to_string(const struct ofp_match *om, int verbosity)
+ofp10_match_to_string(const struct ofp10_match *om, int verbosity)
 {
     struct ds f = DS_EMPTY_INITIALIZER;
     uint32_t w = ntohl(om->wildcards);
     bool skip_type = false;
     bool skip_proto = false;
 
-    if (!(w & OFPFW_DL_TYPE)) {
+    if (!(w & OFPFW10_DL_TYPE)) {
         skip_type = true;
         if (om->dl_type == htons(ETH_TYPE_IP)) {
-            if (!(w & OFPFW_NW_PROTO)) {
+            if (!(w & OFPFW10_NW_PROTO)) {
                 skip_proto = true;
                 if (om->nw_proto == IPPROTO_ICMP) {
                     ds_put_cstr(&f, "icmp,");
@@ -865,44 +865,46 @@ ofp_match_to_string(const struct ofp_match *om, int verbosity)
             skip_type = false;
         }
     }
-    print_wild(&f, "in_port=", w & OFPFW_IN_PORT, verbosity,
+    print_wild(&f, "in_port=", w & OFPFW10_IN_PORT, verbosity,
                "%d", ntohs(om->in_port));
-    print_wild(&f, "dl_vlan=", w & OFPFW_DL_VLAN, verbosity,
+    print_wild(&f, "dl_vlan=", w & OFPFW10_DL_VLAN, verbosity,
                "%d", ntohs(om->dl_vlan));
-    print_wild(&f, "dl_vlan_pcp=", w & OFPFW_DL_VLAN_PCP, verbosity,
+    print_wild(&f, "dl_vlan_pcp=", w & OFPFW10_DL_VLAN_PCP, verbosity,
                "%d", om->dl_vlan_pcp);
-    print_wild(&f, "dl_src=", w & OFPFW_DL_SRC, verbosity,
+    print_wild(&f, "dl_src=", w & OFPFW10_DL_SRC, verbosity,
                ETH_ADDR_FMT, ETH_ADDR_ARGS(om->dl_src));
-    print_wild(&f, "dl_dst=", w & OFPFW_DL_DST, verbosity,
+    print_wild(&f, "dl_dst=", w & OFPFW10_DL_DST, verbosity,
                ETH_ADDR_FMT, ETH_ADDR_ARGS(om->dl_dst));
     if (!skip_type) {
-        print_wild(&f, "dl_type=", w & OFPFW_DL_TYPE, verbosity,
+        print_wild(&f, "dl_type=", w & OFPFW10_DL_TYPE, verbosity,
                    "0x%04x", ntohs(om->dl_type));
     }
     print_ip_netmask(&f, "nw_src=", om->nw_src,
-                     (w & OFPFW_NW_SRC_MASK) >> OFPFW_NW_SRC_SHIFT, verbosity);
+                     (w & OFPFW10_NW_SRC_MASK) >> OFPFW10_NW_SRC_SHIFT,
+                     verbosity);
     print_ip_netmask(&f, "nw_dst=", om->nw_dst,
-                     (w & OFPFW_NW_DST_MASK) >> OFPFW_NW_DST_SHIFT, verbosity);
+                     (w & OFPFW10_NW_DST_MASK) >> OFPFW10_NW_DST_SHIFT,
+                     verbosity);
     if (!skip_proto) {
         if (om->dl_type == htons(ETH_TYPE_ARP)) {
-            print_wild(&f, "arp_op=", w & OFPFW_NW_PROTO, verbosity,
+            print_wild(&f, "arp_op=", w & OFPFW10_NW_PROTO, verbosity,
                        "%u", om->nw_proto);
         } else {
-            print_wild(&f, "nw_proto=", w & OFPFW_NW_PROTO, verbosity,
+            print_wild(&f, "nw_proto=", w & OFPFW10_NW_PROTO, verbosity,
                        "%u", om->nw_proto);
         }
     }
-    print_wild(&f, "nw_tos=", w & OFPFW_NW_TOS, verbosity,
+    print_wild(&f, "nw_tos=", w & OFPFW10_NW_TOS, verbosity,
                "%u", om->nw_tos);
     if (om->nw_proto == IPPROTO_ICMP) {
-        print_wild(&f, "icmp_type=", w & OFPFW_ICMP_TYPE, verbosity,
+        print_wild(&f, "icmp_type=", w & OFPFW10_ICMP_TYPE, verbosity,
                    "%d", ntohs(om->tp_src));
-        print_wild(&f, "icmp_code=", w & OFPFW_ICMP_CODE, verbosity,
+        print_wild(&f, "icmp_code=", w & OFPFW10_ICMP_CODE, verbosity,
                    "%d", ntohs(om->tp_dst));
     } else {
-        print_wild(&f, "tp_src=", w & OFPFW_TP_SRC, verbosity,
+        print_wild(&f, "tp_src=", w & OFPFW10_TP_SRC, verbosity,
                    "%d", ntohs(om->tp_src));
-        print_wild(&f, "tp_dst=", w & OFPFW_TP_DST, verbosity,
+        print_wild(&f, "tp_dst=", w & OFPFW10_TP_DST, verbosity,
                    "%d", ntohs(om->tp_dst));
     }
     if (ds_last(&f) == ',') {
@@ -952,7 +954,7 @@ ofp_print_flow_mod(struct ds *s, const struct ofp_header *oh,
     ds_put_char(s, ' ');
     if (verbosity >= 3 && code == OFPUTIL_OFPT_FLOW_MOD) {
         const struct ofp_flow_mod *ofm = (const struct ofp_flow_mod *) oh;
-        ofp_print_match(s, &ofm->match, verbosity);
+        ofp10_match_print(s, &ofm->match, verbosity);
 
         /* ofp_print_match() doesn't print priority. */
         need_priority = true;

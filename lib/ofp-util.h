@@ -112,8 +112,8 @@ enum ofperr ofputil_check_output_port(uint16_t ofp_port, int max_ports);
 bool ofputil_port_from_string(const char *, uint16_t *port);
 void ofputil_format_port(uint16_t port, struct ds *);
 
-/* Converting OFPFW_NW_SRC_MASK and OFPFW_NW_DST_MASK wildcard bit counts to
- * and from IP bitmasks. */
+/* Converting OFPFW10_NW_SRC_MASK and OFPFW10_NW_DST_MASK wildcard bit counts
+ * to and from IP bitmasks. */
 ovs_be32 ofputil_wcbits_to_netmask(int wcbits);
 int ofputil_netmask_to_wcbits(ovs_be32 netmask);
 
@@ -177,12 +177,14 @@ enum ofputil_protocol ofputil_nx_flow_format_to_protocol(enum nx_flow_format);
 bool ofputil_nx_flow_format_is_valid(enum nx_flow_format);
 const char *ofputil_nx_flow_format_to_string(enum nx_flow_format);
 
-/* Work with OpenFlow 1.0 ofp_match. */
-void ofputil_wildcard_from_openflow(uint32_t ofpfw, struct flow_wildcards *);
-void ofputil_cls_rule_from_match(const struct ofp_match *,
-                                 unsigned int priority, struct cls_rule *);
+/* Work with ofp10_match. */
+void ofputil_wildcard_from_ofpfw10(uint32_t ofpfw, struct flow_wildcards *);
+void ofputil_cls_rule_from_ofp10_match(const struct ofp10_match *,
+                                       unsigned int priority,
+                                       struct cls_rule *);
 void ofputil_normalize_rule(struct cls_rule *);
-void ofputil_cls_rule_to_match(const struct cls_rule *, struct ofp_match *);
+void ofputil_cls_rule_to_ofp10_match(const struct cls_rule *,
+                                     struct ofp10_match *);
 
 /* dl_type translation between OpenFlow and 'struct flow' format. */
 ovs_be16 ofputil_dl_type_to_openflow(ovs_be16 flow_dl_type);
