@@ -269,19 +269,19 @@ OFP_ASSERT(sizeof(struct ofp11_match) == OFPMT11_STANDARD_LENGTH);
 
 /* Flow wildcards. */
 enum ofp11_flow_wildcards {
-    OFPFW11_IN_PORT    = 1 << 0,  /* Switch input port. */
-    OFPFW11_DL_VLAN    = 1 << 1,  /* VLAN vid. */
-    OFPFW11_DL_SRC     = 1 << 2,  /* Ethernet source address. */
-    OFPFW11_DL_DST     = 1 << 3,  /* Ethernet destination address. */
-    OFPFW11_DL_TYPE    = 1 << 4,  /* Ethernet frame type. */
-    OFPFW11_NW_PROTO   = 1 << 5,  /* IP protocol. */
-    OFPFW11_TP_SRC     = 1 << 6,  /* TCP/UDP source port. */
-    OFPFW11_TP_DST     = 1 << 7,  /* TCP/UDP destination port. */
-    OFPFW11_MPLS_LABEL = 1 << 8,  /* MPLS label. */
-    OFPFW11_MPLS_TC    = 1 << 9,  /* MPLS TC. */
+    OFPFW11_IN_PORT     = 1 << 0,  /* Switch input port. */
+    OFPFW11_DL_VLAN     = 1 << 1,  /* VLAN id. */
+    OFPFW11_DL_VLAN_PCP = 1 << 2,  /* VLAN priority. */
+    OFPFW11_DL_TYPE     = 1 << 3,  /* Ethernet frame type. */
+    OFPFW11_NW_TOS      = 1 << 4,  /* IP ToS (DSCP field, 6 bits). */
+    OFPFW11_NW_PROTO    = 1 << 5,  /* IP protocol. */
+    OFPFW11_TP_SRC      = 1 << 6,  /* TCP/UDP/SCTP source port. */
+    OFPFW11_TP_DST      = 1 << 7,  /* TCP/UDP/SCTP destination port. */
+    OFPFW11_MPLS_LABEL  = 1 << 8,  /* MPLS label. */
+    OFPFW11_MPLS_TC     = 1 << 9,  /* MPLS TC. */
 
     /* Wildcard all fields. */
-    OFPFW11_ALL = ((1 << 10) - 1)
+    OFPFW11_ALL           = ((1 << 10) - 1)
 };
 
 /* The VLAN id is 12-bits, so we can use the entire 16 bits to indicate
