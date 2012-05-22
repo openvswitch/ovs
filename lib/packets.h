@@ -181,6 +181,8 @@ void eth_addr_bitand(const uint8_t src[ETH_ADDR_LEN],
 #define ETH_TYPE_IPV6          0x86dd
 #define ETH_TYPE_LACP          0x8809
 #define ETH_TYPE_RARP          0x8035
+#define ETH_TYPE_MPLS          0x8847
+#define ETH_TYPE_MPLS_MCAST    0x8848
 
 /* Minimum value for an Ethernet type.  Values below this are IEEE 802.2 frame
  * lengths. */
