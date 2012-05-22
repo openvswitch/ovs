@@ -135,6 +135,8 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/sha1.h \
 	lib/shash.c \
 	lib/shash.h \
+	lib/simap.c \
+	lib/simap.h \
 	lib/signals.c \
 	lib/signals.h \
 	lib/socket-util.c \

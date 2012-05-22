@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,6 +43,7 @@
 #include "ofpbuf.h"
 #include "packets.h"
 #include "shash.h"
+#include "simap.h"
 #include "sset.h"
 #include "timeval.h"
 #include "util.h"
@@ -826,7 +827,7 @@ sort_output_actions(struct nlattr *actions, size_t length)
 static void
 do_normalize_actions(int argc, char *argv[])
 {
-    struct shash port_names;
+    struct simap port_names;
     struct ofpbuf keybuf;
     struct flow flow;
     struct ofpbuf odp_actions;
@@ -841,7 +842,7 @@ do_normalize_actions(int argc, char *argv[])
 
     ds_init(&s);
 
-    shash_init(&port_names);
+    simap_init(&port_names);
     for (i = 3; i < argc; i++) {
         char name[16];
         int number;
@@ -849,7 +850,7 @@ do_normalize_actions(int argc, char *argv[])
 
         if (sscanf(argv[i], "%15[^=]=%d%n", name, &number, &n) > 0 && n > 0) {
             uintptr_t n = number;
-            shash_add(&port_names, name, (void *) n);
+            simap_put(&port_names, name, n);
         } else {
             ovs_fatal(0, "%s: expected NAME=NUMBER", argv[i]);
         }

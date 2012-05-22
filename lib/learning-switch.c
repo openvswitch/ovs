@@ -37,6 +37,7 @@
 #include "poll-loop.h"
 #include "rconn.h"
 #include "shash.h"
+#include "simap.h"
 #include "timeval.h"
 #include "vconn.h"
 #include "vlog.h"
@@ -125,12 +126,12 @@ lswitch_create(struct rconn *rconn, const struct lswitch_config *cfg)
     hmap_init(&sw->queue_numbers);
     shash_init(&sw->queue_names);
     if (cfg->port_queues) {
-        struct shash_node *node;
+        struct simap_node *node;
 
-        SHASH_FOR_EACH (node, cfg->port_queues) {
+        SIMAP_FOR_EACH (node, cfg->port_queues) {
             struct lswitch_port *port = xmalloc(sizeof *port);
             hmap_node_nullify(&port->hmap_node);
-            port->queue_id = (uintptr_t) node->data;
+            port->queue_id = node->data;
             shash_add(&sw->queue_names, node->name, port);
         }
     }

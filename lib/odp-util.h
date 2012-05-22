@@ -30,7 +30,7 @@ struct ds;
 struct flow;
 struct nlattr;
 struct ofpbuf;
-struct shash;
+struct simap;
 
 #define OVSP_NONE ((uint16_t) -1)
 
@@ -62,7 +62,7 @@ odp_port_to_ofp_port(uint16_t odp_port)
 
 void format_odp_actions(struct ds *, const struct nlattr *odp_actions,
                         size_t actions_len);
-int odp_actions_from_string(const char *, const struct shash *port_names,
+int odp_actions_from_string(const char *, const struct simap *port_names,
                             struct ofpbuf *odp_actions);
 
 /* Upper bound on the length of a nlattr-formatted flow key.  The longest
@@ -92,7 +92,7 @@ struct odputil_keybuf {
 };
 
 void odp_flow_key_format(const struct nlattr *, size_t, struct ds *);
-int odp_flow_key_from_string(const char *s, const struct shash *port_names,
+int odp_flow_key_from_string(const char *s, const struct simap *port_names,
                              struct ofpbuf *);
 
 void odp_flow_key_from_flow(struct ofpbuf *, const struct flow *);

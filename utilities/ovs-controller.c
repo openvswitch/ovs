@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,7 +33,7 @@
 #include "openflow/openflow.h"
 #include "poll-loop.h"
 #include "rconn.h"
-#include "shash.h"
+#include "simap.h"
 #include "stream-ssl.h"
 #include "timeval.h"
 #include "unixctl.h"
@@ -76,8 +76,8 @@ static bool mute = false;
 /* -q, --queue: default OpenFlow queue, none if UINT32_MAX. */
 static uint32_t default_queue = UINT32_MAX;
 
-/* -Q, --port-queue: map from port name to port number (cast to void *). */
-static struct shash port_queues = SHASH_INITIALIZER(&port_queues);
+/* -Q, --port-queue: map from port name to port number. */
+static struct simap port_queues = SIMAP_INITIALIZER(&port_queues);
 
 /* --with-flows: Flows to send to switch. */
 static struct ofputil_flow_mod *default_flows;
@@ -274,8 +274,7 @@ add_port_queue(char *s)
                   "\"<port-name>:<queue-id>\"");
     }
 
-    if (!shash_add_once(&port_queues, port_name,
-                        (void *) (uintptr_t) atoi(queue_id))) {
+    if (!simap_put(&port_queues, port_name, atoi(queue_id))) {
         ovs_fatal(0, "<port-name> arguments for -Q or --port-queue must "
                   "be unique");
     }
@@ -398,7 +397,7 @@ parse_options(int argc, char *argv[])
     }
     free(short_options);
 
-    if (!shash_is_empty(&port_queues) || default_queue != UINT32_MAX) {
+    if (!simap_is_empty(&port_queues) || default_queue != UINT32_MAX) {
         if (action_normal) {
             ovs_error(0, "queue IDs are incompatible with -N or --normal; "
                       "not using OFPP_NORMAL");
