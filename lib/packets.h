@@ -337,6 +337,10 @@ void ip_format_masked(ovs_be32 ip, ovs_be32 mask, struct ds *);
 #define IP_IHL(ip_ihl_ver) ((ip_ihl_ver) & 15)
 #define IP_IHL_VER(ihl, ver) (((ver) << 4) | (ihl))
 
+#ifndef IPPROTO_SCTP
+#define IPPROTO_SCTP 132
+#endif
+
 /* TOS fields. */
 #define IP_ECN_MASK 0x03
 #define IP_DSCP_MASK 0xfc
