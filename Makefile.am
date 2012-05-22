@@ -22,6 +22,16 @@ AM_CPPFLAGS += -DNDEBUG
 AM_CFLAGS += -fomit-frame-pointer
 endif
 
+# PYTHONDONTWRITEBYTECODE=yes keeps Python from creating .pyc and .pyo
+# files.  Creating .py[co] works OK for any given version of Open
+# vSwitch, but it causes trouble if you switch from a version with
+# foo/__init__.py into an (older) version with plain foo.py, since
+# foo/__init__.pyc will cause Python to ignore foo.py.
+run_python = \
+	PYTHONDONTWRITEBYTECODE=yes \
+	PYTHONPATH=$(top_srcdir)/python:$$PYTHONPATH \
+	$(PYTHON)
+
 ALL_LOCAL =
 BUILT_SOURCES =
 CLEANFILES =

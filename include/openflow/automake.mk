@@ -10,7 +10,7 @@ if HAVE_PYTHON
 SUFFIXES += .h .hstamp
 
 .h.hstamp:
-	$(PYTHON) $(srcdir)/build-aux/check-structs -I$(srcdir)/include $<
+	$(run_python) $(srcdir)/build-aux/check-structs -I$(srcdir)/include $<
 	touch $@
 
 HSTAMP_FILES = \

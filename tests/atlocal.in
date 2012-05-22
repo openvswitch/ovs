@@ -13,6 +13,17 @@ export PYTHONPATH
 PYTHONIOENCODING=utf_8
 export PYTHONIOENCODING
 
+# PYTHONDONTWRITEBYTECODE=yes keeps Python 2.6+ from creating .pyc and .pyo
+# files.  Creating .py[co] works OK for any given version of Open
+# vSwitch, but it causes trouble if you switch from a version with
+# foo/__init__.py into an (older) version with plain foo.py, since
+# foo/__init__.pyc will cause Python to ignore foo.py.
+#
+# Python before version 2.6 always creates .pyc files, so if you develop
+# with such an older version then you're out of luck.
+PYTHONDONTWRITEBYTECODE=yes
+export PYTHONDONTWRITEBYTECODE
+
 if test $HAVE_PYTHON = yes; then
     if python -m argparse 2>/dev/null; then
         :
