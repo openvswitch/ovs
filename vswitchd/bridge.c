@@ -246,10 +246,6 @@ static void iface_refresh_cfm_stats(struct iface *);
 static void iface_refresh_stats(struct iface *);
 static void iface_refresh_status(struct iface *);
 static bool iface_is_synthetic(const struct iface *);
-static void smap_from_ovs_idl_map(char **keys, char **values, size_t n,
-                                  struct smap *);
-static void smap_to_ovs_idl_map(struct smap *,
-                                char ***keys, char ***values, size_t *n);
 
 /* Linux VLAN device support (e.g. "eth0.10" for VLAN 10.)
  *
@@ -688,8 +684,8 @@ port_configure(struct port *port)
             s.vlan_mode = PORT_VLAN_TRUNK;
         }
     }
-    s.use_priority_tags = !strcmp("true", ovsrec_port_get_other_config_value(
-                                      cfg, "priority-tags", ""));
+    s.use_priority_tags = smap_get_bool(&cfg->other_config, "priority-tags",
+                                        false);
 
     /* Get LACP settings. */
     s.lacp = port_configure_lacp(port, &lacp_settings);
@@ -879,9 +875,7 @@ port_configure_stp(const struct ofproto *ofproto, struct port *port,
     const char *config_str;
     struct iface *iface;
 
-    config_str = ovsrec_port_get_other_config_value(port->cfg, "stp-enable",
-                                                    NULL);
-    if (config_str && !strcmp(config_str, "false")) {
+    if (smap_get_bool(&port->cfg->other_config, "stp-enable", false)) {
         port_s->enable = false;
         return;
     } else {
@@ -913,8 +907,7 @@ port_configure_stp(const struct ofproto *ofproto, struct port *port,
         return;
     }
 
-    config_str = ovsrec_port_get_other_config_value(port->cfg, "stp-port-num",
-                                                    NULL);
+    config_str = smap_get(&port->cfg->other_config, "stp-port-num");
     if (config_str) {
         unsigned long int port_num = strtoul(config_str, NULL, 0);
         int port_idx = port_num - 1;
@@ -943,8 +936,7 @@ port_configure_stp(const struct ofproto *ofproto, struct port *port,
         port_s->port_num = (*port_num_counter)++;
     }
 
-    config_str = ovsrec_port_get_other_config_value(port->cfg, "stp-path-cost",
-                                                    NULL);
+    config_str = smap_get(&port->cfg->other_config, "stp-path-cost");
     if (config_str) {
         port_s->path_cost = strtoul(config_str, NULL, 10);
     } else {
@@ -961,9 +953,7 @@ port_configure_stp(const struct ofproto *ofproto, struct port *port,
         }
     }
 
-    config_str = ovsrec_port_get_other_config_value(port->cfg,
-                                                    "stp-port-priority",
-                                                    NULL);
+    config_str = smap_get(&port->cfg->other_config, "stp-port-priority");
     if (config_str) {
         port_s->priority = strtoul(config_str, NULL, 0);
     } else {
@@ -984,9 +974,7 @@ bridge_configure_stp(struct bridge *br)
         int port_num_counter;
         unsigned long *port_num_bitmap;
 
-        config_str = ovsrec_bridge_get_other_config_value(br->cfg,
-                                                          "stp-system-id",
-                                                          NULL);
+        config_str = smap_get(&br->cfg->other_config, "stp-system-id");
         if (config_str) {
             uint8_t ea[ETH_ADDR_LEN];
 
@@ -1001,36 +989,28 @@ bridge_configure_stp(struct bridge *br)
             br_s.system_id = eth_addr_to_uint64(br->ea);
         }
 
-        config_str = ovsrec_bridge_get_other_config_value(br->cfg,
-                                                          "stp-priority",
-                                                          NULL);
+        config_str = smap_get(&br->cfg->other_config, "stp-priority");
         if (config_str) {
             br_s.priority = strtoul(config_str, NULL, 0);
         } else {
             br_s.priority = STP_DEFAULT_BRIDGE_PRIORITY;
         }
 
-        config_str = ovsrec_bridge_get_other_config_value(br->cfg,
-                                                          "stp-hello-time",
-                                                          NULL);
+        config_str = smap_get(&br->cfg->other_config, "stp-hello-time");
         if (config_str) {
             br_s.hello_time = strtoul(config_str, NULL, 10) * 1000;
         } else {
             br_s.hello_time = STP_DEFAULT_HELLO_TIME;
         }
 
-        config_str = ovsrec_bridge_get_other_config_value(br->cfg,
-                                                          "stp-max-age",
-                                                          NULL);
+        config_str = smap_get(&br->cfg->other_config, "stp-max-age");
         if (config_str) {
             br_s.max_age = strtoul(config_str, NULL, 10) * 1000;
         } else {
             br_s.max_age = STP_DEFAULT_MAX_AGE;
         }
 
-        config_str = ovsrec_bridge_get_other_config_value(br->cfg,
-                                                          "stp-forward-delay",
-                                                          NULL);
+        config_str = smap_get(&br->cfg->other_config, "stp-forward-delay");
         if (config_str) {
             br_s.fwd_delay = strtoul(config_str, NULL, 10) * 1000;
         } else {
@@ -1151,16 +1131,9 @@ static int
 iface_set_netdev_config(const struct ovsrec_interface *iface_cfg,
                         struct netdev *netdev)
 {
-    struct smap args;
     int error;
 
-    smap_init(&args);
-    smap_from_ovs_idl_map(iface_cfg->key_options,
-                          iface_cfg->value_options,
-                          iface_cfg->n_options, &args);
-    error = netdev_set_config(netdev, &args);
-    smap_destroy(&args);
-
+    error = netdev_set_config(netdev, &iface_cfg->options);
     if (error) {
         VLOG_WARN("could not configure network device %s (%s)",
                   iface_cfg->name, strerror(error));
@@ -1421,10 +1394,8 @@ bridge_configure_flow_eviction_threshold(struct bridge *br)
     const char *threshold_str;
     unsigned threshold;
 
-    threshold_str =
-        ovsrec_bridge_get_other_config_value(br->cfg,
-                                             "flow-eviction-threshold",
-                                             NULL);
+    threshold_str = smap_get(&br->cfg->other_config,
+                             "flow-eviction-threshold");
     if (threshold_str) {
         threshold = strtoul(threshold_str, NULL, 10);
     } else {
@@ -1437,16 +1408,10 @@ bridge_configure_flow_eviction_threshold(struct bridge *br)
 static void
 bridge_configure_forward_bpdu(struct bridge *br)
 {
-    const char *forward_bpdu_str;
-    bool forward_bpdu = false;
-
-    forward_bpdu_str = ovsrec_bridge_get_other_config_value(br->cfg,
-                                                            "forward-bpdu",
-                                                            NULL);
-    if (forward_bpdu_str && !strcmp(forward_bpdu_str, "true")) {
-        forward_bpdu = true;
-    }
-    ofproto_set_forward_bpdu(br->ofproto, forward_bpdu);
+    ofproto_set_forward_bpdu(br->ofproto,
+                             smap_get_bool(&br->cfg->other_config,
+                                           "forward-bpdu",
+                                           false));
 }
 
 /* Set MAC aging time for 'br'. */
@@ -1456,9 +1421,7 @@ bridge_configure_mac_idle_time(struct bridge *br)
     const char *idle_time_str;
     int idle_time;
 
-    idle_time_str = ovsrec_bridge_get_other_config_value(br->cfg,
-                                                         "mac-aging-time",
-                                                         NULL);
+    idle_time_str = smap_get(&br->cfg->other_config, "mac-aging-time");
     idle_time = (idle_time_str && atoi(idle_time_str)
                  ? atoi(idle_time_str)
                  : MAC_ENTRY_DEFAULT_IDLE_TIME);
@@ -1479,7 +1442,7 @@ bridge_pick_local_hw_addr(struct bridge *br, uint8_t ea[ETH_ADDR_LEN],
     *hw_addr_iface = NULL;
 
     /* Did the user request a particular MAC? */
-    hwaddr = ovsrec_bridge_get_other_config_value(br->cfg, "hwaddr", NULL);
+    hwaddr = smap_get(&br->cfg->other_config, "hwaddr");
     if (hwaddr && eth_addr_from_string(hwaddr, ea)) {
         if (eth_addr_is_multicast(ea)) {
             VLOG_ERR("bridge %s: cannot set MAC address to multicast "
@@ -1604,8 +1567,7 @@ bridge_pick_datapath_id(struct bridge *br,
     const char *datapath_id;
     uint64_t dpid;
 
-    datapath_id = ovsrec_bridge_get_other_config_value(br->cfg, "datapath-id",
-                                                       NULL);
+    datapath_id = smap_get(&br->cfg->other_config, "datapath-id");
     if (datapath_id && dpid_from_string(datapath_id, &dpid)) {
         return dpid;
     }
@@ -1667,16 +1629,9 @@ iface_refresh_status(struct iface *iface)
     smap_init(&smap);
 
     if (!netdev_get_drv_info(iface->netdev, &smap)) {
-        size_t n;
-        char **keys, **values;
-
-        smap_to_ovs_idl_map(&smap, &keys, &values, &n);
-        ovsrec_interface_set_status(iface->cfg, keys, values, n);
-
-        free(keys);
-        free(values);
+        ovsrec_interface_set_status(iface->cfg, &smap);
     } else {
-        ovsrec_interface_set_status(iface->cfg, NULL, NULL, 0);
+        ovsrec_interface_set_status(iface->cfg, NULL);
     }
 
     smap_destroy(&smap);
@@ -1817,32 +1772,27 @@ iface_refresh_stats(struct iface *iface)
 static void
 br_refresh_stp_status(struct bridge *br)
 {
+    struct smap smap = SMAP_INITIALIZER(&smap);
     struct ofproto *ofproto = br->ofproto;
     struct ofproto_stp_status status;
-    char *keys[3], *values[3];
-    size_t i;
 
     if (ofproto_get_stp_status(ofproto, &status)) {
         return;
     }
 
     if (!status.enabled) {
-        ovsrec_bridge_set_status(br->cfg, NULL, NULL, 0);
+        ovsrec_bridge_set_status(br->cfg, NULL);
         return;
     }
 
-    keys[0] = "stp_bridge_id",
-    values[0] = xasprintf(STP_ID_FMT, STP_ID_ARGS(status.bridge_id));
-    keys[1] = "stp_designated_root",
-    values[1] = xasprintf(STP_ID_FMT, STP_ID_ARGS(status.designated_root));
-    keys[2] = "stp_root_path_cost",
-    values[2] = xasprintf("%d", status.root_path_cost);
+    smap_add_format(&smap, "stp_bridge_id", STP_ID_FMT,
+                    STP_ID_ARGS(status.bridge_id));
+    smap_add_format(&smap, "stp_designated_root", STP_ID_FMT,
+                    STP_ID_ARGS(status.designated_root));
+    smap_add_format(&smap, "stp_root_path_cost", "%d", status.root_path_cost);
 
-    ovsrec_bridge_set_status(br->cfg, keys, values, ARRAY_SIZE(values));
-
-    for (i = 0; i < ARRAY_SIZE(values); i++) {
-        free(values[i]);
-    }
+    ovsrec_bridge_set_status(br->cfg, &smap);
+    smap_destroy(&smap);
 }
 
 static void
@@ -1851,10 +1801,9 @@ port_refresh_stp_status(struct port *port)
     struct ofproto *ofproto = port->bridge->ofproto;
     struct iface *iface;
     struct ofproto_port_stp_status status;
-    char *keys[4];
-    char *str_values[4];
+    char *keys[3];
     int64_t int_values[3];
-    size_t i;
+    struct smap smap;
 
     if (port_is_synthetic(port)) {
         return;
@@ -1862,7 +1811,7 @@ port_refresh_stp_status(struct port *port)
 
     /* STP doesn't currently support bonds. */
     if (!list_is_singleton(&port->ifaces)) {
-        ovsrec_port_set_status(port->cfg, NULL, NULL, 0);
+        ovsrec_port_set_status(port->cfg, NULL);
         return;
     }
 
@@ -1873,27 +1822,19 @@ port_refresh_stp_status(struct port *port)
     }
 
     if (!status.enabled) {
-        ovsrec_port_set_status(port->cfg, NULL, NULL, 0);
+        ovsrec_port_set_status(port->cfg, NULL);
         ovsrec_port_set_statistics(port->cfg, NULL, NULL, 0);
         return;
     }
 
     /* Set Status column. */
-    keys[0] = "stp_port_id";
-    str_values[0] = xasprintf(STP_PORT_ID_FMT, status.port_id);
-    keys[1] = "stp_state";
-    str_values[1] = xstrdup(stp_state_name(status.state));
-    keys[2] = "stp_sec_in_state";
-    str_values[2] = xasprintf("%u", status.sec_in_state);
-    keys[3] = "stp_role";
-    str_values[3] = xstrdup(stp_role_name(status.role));
-
-    ovsrec_port_set_status(port->cfg, keys, str_values,
-                           ARRAY_SIZE(str_values));
-
-    for (i = 0; i < ARRAY_SIZE(str_values); i++) {
-        free(str_values[i]);
-    }
+    smap_init(&smap);
+    smap_add_format(&smap, "stp_port_id", STP_PORT_ID_FMT, status.port_id);
+    smap_add(&smap, "stp_state", stp_state_name(status.state));
+    smap_add_format(&smap, "stp_sec_in_state", "%u", status.sec_in_state);
+    smap_add(&smap, "stp_role", stp_role_name(status.role));
+    ovsrec_port_set_status(port->cfg, &smap);
+    smap_destroy(&smap);
 
     /* Set Statistics column. */
     keys[0] = "stp_tx_count";
@@ -1910,18 +1851,7 @@ port_refresh_stp_status(struct port *port)
 static bool
 enable_system_stats(const struct ovsrec_open_vswitch *cfg)
 {
-    const char *enable;
-
-    /* Use other-config:enable-system-stats by preference. */
-    enable = ovsrec_open_vswitch_get_other_config_value(cfg,
-                                                        "enable-statistics",
-                                                        NULL);
-    if (enable) {
-        return !strcmp(enable, "true");
-    }
-
-    /* Disable by default. */
-    return false;
+    return smap_get_bool(&cfg->other_config, "enable-statistics", false);
 }
 
 static void
@@ -1975,15 +1905,23 @@ refresh_controller_status(void)
             shash_find_data(&info, cfg->target);
 
         if (cinfo) {
+            struct smap smap = SMAP_INITIALIZER(&smap);
+            const char **values = cinfo->pairs.values;
+            const char **keys = cinfo->pairs.keys;
+            size_t i;
+
+            for (i = 0; i < cinfo->pairs.n; i++) {
+                smap_add(&smap, keys[i], values[i]);
+            }
+
             ovsrec_controller_set_is_connected(cfg, cinfo->is_connected);
             ovsrec_controller_set_role(cfg, nx_role_to_str(cinfo->role));
-            ovsrec_controller_set_status(cfg, (char **) cinfo->pairs.keys,
-                                         (char **) cinfo->pairs.values,
-                                         cinfo->pairs.n);
+            ovsrec_controller_set_status(cfg, &smap);
+            smap_destroy(&smap);
         } else {
             ovsrec_controller_set_is_connected(cfg, false);
             ovsrec_controller_set_role(cfg, NULL);
-            ovsrec_controller_set_status(cfg, NULL, NULL, 0);
+            ovsrec_controller_set_status(cfg, NULL);
         }
     }
 
@@ -2522,6 +2460,9 @@ bridge_add_del_ports(struct bridge *br,
         VLOG_WARN("bridge %s: no port named %s, synthesizing one",
                   br->name, br->name);
 
+        ovsrec_interface_init(&br->synth_local_iface);
+        ovsrec_port_init(&br->synth_local_port);
+
         br->synth_local_port.interfaces = &br->synth_local_ifacep;
         br->synth_local_port.n_interfaces = 1;
         br->synth_local_port.name = br->name;
@@ -2594,7 +2535,7 @@ static void
 bridge_ofproto_controller_from_ovsrec(const struct ovsrec_controller *c,
                                       struct ofproto_controller *oc)
 {
-    const char *config_str;
+    int dscp;
 
     oc->target = c->target;
     oc->max_backoff = c->max_backoff ? *c->max_backoff / 1000 : 8;
@@ -2606,16 +2547,11 @@ bridge_ofproto_controller_from_ovsrec(const struct ovsrec_controller *c,
                        ? *c->controller_burst_limit : 0);
     oc->enable_async_msgs = (!c->enable_async_messages
                              || *c->enable_async_messages);
-    config_str = ovsrec_controller_get_other_config_value(c, "dscp", NULL);
-
-    oc->dscp = DSCP_DEFAULT;
-    if (config_str) {
-        int dscp = atoi(config_str);
-
-        if (dscp >= 0 && dscp <= 63) {
-            oc->dscp = dscp;
-        }
+    dscp = smap_get_int(&c->other_config, "dscp", DSCP_DEFAULT);
+    if (dscp < 0 || dscp > 63) {
+        dscp = DSCP_DEFAULT;
     }
+    oc->dscp = dscp;
 }
 
 /* Configures the IP stack for 'br''s local interface properly according to the
@@ -2686,9 +2622,7 @@ static void
 bridge_configure_remotes(struct bridge *br,
                          const struct sockaddr_in *managers, size_t n_managers)
 {
-    const char *disable_ib_str, *queue_id_str;
-    bool disable_in_band = false;
-    int queue_id;
+    bool disable_in_band;
 
     struct ovsrec_controller **controllers;
     size_t n_controllers;
@@ -2700,19 +2634,13 @@ bridge_configure_remotes(struct bridge *br,
     size_t i;
 
     /* Check if we should disable in-band control on this bridge. */
-    disable_ib_str = ovsrec_bridge_get_other_config_value(br->cfg,
-                                                          "disable-in-band",
-                                                          NULL);
-    if (disable_ib_str && !strcmp(disable_ib_str, "true")) {
-        disable_in_band = true;
-    }
+    disable_in_band = smap_get_bool(&br->cfg->other_config, "disable-in-band",
+                                    false);
 
     /* Set OpenFlow queue ID for in-band control. */
-    queue_id_str = ovsrec_bridge_get_other_config_value(br->cfg,
-                                                        "in-band-queue",
-                                                        NULL);
-    queue_id = queue_id_str ? strtol(queue_id_str, NULL, 10) : -1;
-    ofproto_set_in_band_queue(br->ofproto, queue_id);
+    ofproto_set_in_band_queue(br->ofproto,
+                              smap_get_int(&br->cfg->other_config,
+                                           "in-band-queue", -1));
 
     if (disable_in_band) {
         ofproto_set_extra_in_band_remotes(br->ofproto, NULL, 0);
@@ -2959,8 +2887,7 @@ port_configure_lacp(struct port *port, struct lacp_settings *s)
 
     s->name = port->name;
 
-    system_id = ovsrec_port_get_other_config_value(port->cfg, "lacp-system-id",
-                                                   NULL);
+    system_id = smap_get(&port->cfg->other_config, "lacp-system-id");
     if (system_id) {
         if (sscanf(system_id, ETH_ADDR_SCAN_FMT,
                    ETH_ADDR_SCAN_ARGS(s->id)) != ETH_ADDR_SCAN_COUNT) {
@@ -2978,16 +2905,14 @@ port_configure_lacp(struct port *port, struct lacp_settings *s)
     }
 
     /* Prefer bondable links if unspecified. */
-    priority = atoi(ovsrec_port_get_other_config_value(port->cfg,
-                                                       "lacp-system-priority",
-                                                       "0"));
+    priority = smap_get_int(&port->cfg->other_config, "lacp-system-priority",
+                            0);
     s->priority = (priority > 0 && priority <= UINT16_MAX
                    ? priority
                    : UINT16_MAX - !list_is_short(&port->ifaces));
 
-    lacp_time = ovsrec_port_get_other_config_value(port->cfg, "lacp-time",
-                                                   "slow");
-    s->fast = !strcasecmp(lacp_time, "fast");
+    lacp_time = smap_get(&port->cfg->other_config, "lacp-time");
+    s->fast = lacp_time && !strcasecmp(lacp_time, "fast");
     return s;
 }
 
@@ -2996,16 +2921,10 @@ iface_configure_lacp(struct iface *iface, struct lacp_slave_settings *s)
 {
     int priority, portid, key;
 
-    portid = atoi(ovsrec_interface_get_other_config_value(iface->cfg,
-                                                          "lacp-port-id",
-                                                          "0"));
-    priority =
-        atoi(ovsrec_interface_get_other_config_value(iface->cfg,
-                                                     "lacp-port-priority",
-                                                     "0"));
-    key = atoi(ovsrec_interface_get_other_config_value(iface->cfg,
-                                                       "lacp-aggregation-key",
-                                                       "0"));
+    portid = smap_get_int(&iface->cfg->other_config, "lacp-port-id", 0);
+    priority = smap_get_int(&iface->cfg->other_config, "lacp-port-priority",
+                            0);
+    key = smap_get_int(&iface->cfg->other_config, "lacp-aggregation-key", 0);
 
     if (portid <= 0 || portid > UINT16_MAX) {
         portid = iface->ofp_port;
@@ -3058,17 +2977,14 @@ port_configure_bond(struct port *port, struct bond_settings *s,
                   port->name);
     }
 
-    miimon_interval =
-        atoi(ovsrec_port_get_other_config_value(port->cfg,
-                                                "bond-miimon-interval", "0"));
+    miimon_interval = smap_get_int(&port->cfg->other_config,
+                                   "bond-miimon-interval", 0);
     if (miimon_interval <= 0) {
         miimon_interval = 200;
     }
 
-    detect_s = ovsrec_port_get_other_config_value(port->cfg,
-                                                  "bond-detect-mode",
-                                                  "carrier");
-    if (!strcmp(detect_s, "carrier")) {
+    detect_s = smap_get(&port->cfg->other_config, "bond-detect-mode");
+    if (!detect_s || !strcmp(detect_s, "carrier")) {
         miimon_interval = 0;
     } else if (strcmp(detect_s, "miimon")) {
         VLOG_WARN("port %s: unsupported bond-detect-mode %s, "
@@ -3078,13 +2994,9 @@ port_configure_bond(struct port *port, struct bond_settings *s,
 
     s->up_delay = MAX(0, port->cfg->bond_updelay);
     s->down_delay = MAX(0, port->cfg->bond_downdelay);
-    s->basis = atoi(ovsrec_port_get_other_config_value(port->cfg,
-                                                       "bond-hash-basis",
-                                                       "0"));
-    s->rebalance_interval = atoi(
-        ovsrec_port_get_other_config_value(port->cfg,
-                                           "bond-rebalance-interval",
-                                           "10000"));
+    s->basis = smap_get_int(&port->cfg->other_config, "bond-hash-basis", 0);
+    s->rebalance_interval = smap_get_int(&port->cfg->other_config,
+                                           "bond-rebalance-interval", 10000);
     if (s->rebalance_interval && s->rebalance_interval < 1000) {
         s->rebalance_interval = 1000;
     }
@@ -3095,10 +3007,8 @@ port_configure_bond(struct port *port, struct bond_settings *s,
     LIST_FOR_EACH (iface, port_elem, &port->ifaces) {
         long long stable_id;
 
-        stable_id =
-            atoll(ovsrec_interface_get_other_config_value(iface->cfg,
-                                                          "bond-stable-id",
-                                                          "0"));
+        stable_id = smap_get_int(&iface->cfg->other_config, "bond-stable-id",
+                                 0);
         if (stable_id <= 0 || stable_id >= UINT32_MAX) {
             stable_id = iface->ofp_port;
         }
@@ -3260,7 +3170,7 @@ iface_clear_db_record(const struct ovsrec_interface *if_cfg)
 {
     if (!ovsdb_idl_row_is_synthetic(&if_cfg->header_)) {
         iface_set_ofport(if_cfg, -1);
-        ovsrec_interface_set_status(if_cfg, NULL, NULL, 0);
+        ovsrec_interface_set_status(if_cfg, NULL);
         ovsrec_interface_set_admin_state(if_cfg, NULL);
         ovsrec_interface_set_duplex(if_cfg, NULL);
         ovsrec_interface_set_link_speed(if_cfg, NULL, 0);
@@ -3272,50 +3182,6 @@ iface_clear_db_record(const struct ovsrec_interface *if_cfg)
         ovsrec_interface_set_lacp_current(if_cfg, NULL, 0);
         ovsrec_interface_set_statistics(if_cfg, NULL, NULL, 0);
     }
-}
-
-/* Adds the 'n' key-value pairs in 'keys' in 'values' to 'shash'. */
-static void
-smap_from_ovs_idl_map(char **keys, char **values, size_t n, struct smap *smap)
-{
-    size_t i;
-
-    smap_init(smap);
-    for (i = 0; i < n; i++) {
-        smap_add(smap, keys[i], values[i]);
-    }
-}
-
-/* Creates 'keys' and 'values' arrays from 'shash'.
- *
- * Sets 'keys' and 'values' to heap allocated arrays representing the key-value
- * pairs in 'smap'.  The caller takes ownership of 'keys' and 'values'.  They
- * are populated with with strings taken directly from 'shash' and thus have
- * the same ownership of the key-value pairs in shash.
- */
-static void
-smap_to_ovs_idl_map(struct smap *smap,
-                    char ***keys, char ***values, size_t *n)
-{
-    size_t i, count;
-    char **k, **v;
-    struct smap_node *sn;
-
-    count = smap_count(smap);
-
-    k = xmalloc(count * sizeof *k);
-    v = xmalloc(count * sizeof *v);
-
-    i = 0;
-    SMAP_FOR_EACH(sn, smap) {
-        k[i] = sn->key;
-        v[i] = sn->value;
-        i++;
-    }
-
-    *n      = count;
-    *keys   = k;
-    *values = v;
 }
 
 struct iface_delete_queues_cbdata {
@@ -3354,15 +3220,11 @@ iface_configure_qos(struct iface *iface, const struct ovsrec_qos *qos)
         netdev_set_qos(iface->netdev, NULL, NULL);
     } else {
         struct iface_delete_queues_cbdata cbdata;
-        struct smap details;
         bool queue_zero;
         size_t i;
 
         /* Configure top-level Qos for 'iface'. */
-        smap_from_ovs_idl_map(qos->key_other_config, qos->value_other_config,
-                              qos->n_other_config, &details);
-        netdev_set_qos(iface->netdev, qos->type, &details);
-        smap_destroy(&details);
+        netdev_set_qos(iface->netdev, qos->type, &qos->other_config);
 
         /* Deconfigure queues that were deleted. */
         cbdata.netdev = iface->netdev;
@@ -3389,13 +3251,11 @@ iface_configure_qos(struct iface *iface, const struct ovsrec_qos *qos)
                 port_queue->dscp = queue->dscp[0];
             }
 
-            smap_from_ovs_idl_map(queue->key_other_config,
-                                  queue->value_other_config,
-                                  queue->n_other_config, &details);
-            netdev_set_queue(iface->netdev, queue_id, &details);
-            smap_destroy(&details);
+            netdev_set_queue(iface->netdev, queue_id, &queue->other_config);
         }
         if (!queue_zero) {
+            struct smap details;
+
             smap_init(&details);
             netdev_set_queue(iface->netdev, 0, &details);
             smap_destroy(&details);
@@ -3421,7 +3281,7 @@ static void
 iface_configure_cfm(struct iface *iface)
 {
     const struct ovsrec_interface *cfg = iface->cfg;
-    const char *extended_str, *opstate_str;
+    const char *opstate_str;
     const char *cfm_ccm_vlan;
     struct cfm_settings s;
 
@@ -3431,20 +3291,17 @@ iface_configure_cfm(struct iface *iface)
     }
 
     s.mpid = *cfg->cfm_mpid;
-    s.interval = atoi(ovsrec_interface_get_other_config_value(iface->cfg,
-                                                              "cfm_interval",
-                                                              "0"));
-    cfm_ccm_vlan = ovsrec_interface_get_other_config_value(iface->cfg,
-                                                           "cfm_ccm_vlan",
-                                                           "0");
-    s.ccm_pcp = atoi(ovsrec_interface_get_other_config_value(iface->cfg,
-                                                             "cfm_ccm_pcp",
-                                                             "0"));
+    s.interval = smap_get_int(&iface->cfg->other_config, "cfm_interval", 0);
+    cfm_ccm_vlan = smap_get(&iface->cfg->other_config, "cfm_ccm_vlan");
+    s.ccm_pcp = smap_get_int(&iface->cfg->other_config, "cfm_ccm_pcp", 0);
+
     if (s.interval <= 0) {
         s.interval = 1000;
     }
 
-    if (!strcasecmp("random", cfm_ccm_vlan)) {
+    if (!cfm_ccm_vlan) {
+        s.ccm_vlan = 0;
+    } else if (!strcasecmp("random", cfm_ccm_vlan)) {
         s.ccm_vlan = CFM_RANDOM_VLAN;
     } else {
         s.ccm_vlan = atoi(cfm_ccm_vlan);
@@ -3453,15 +3310,11 @@ iface_configure_cfm(struct iface *iface)
         }
     }
 
-    extended_str = ovsrec_interface_get_other_config_value(iface->cfg,
-                                                           "cfm_extended",
-                                                           "false");
-    s.extended = !strcasecmp("true", extended_str);
+    s.extended = smap_get_bool(&iface->cfg->other_config, "cfm_extended",
+                               false);
 
-    opstate_str = ovsrec_interface_get_other_config_value(iface->cfg,
-                                                          "cfm_opstate",
-                                                          "up");
-    s.opup = !strcasecmp("up", opstate_str);
+    opstate_str = smap_get(&iface->cfg->other_config, "cfm_opstate");
+    s.opup = !opstate_str || !strcasecmp("up", opstate_str);
 
     ofproto_port_set_cfm(iface->port->bridge->ofproto, iface->ofp_port, &s);
 }
@@ -3699,12 +3552,10 @@ free_registered_recs(void)
             free(iface);
         }
 
+        smap_destroy(&port->other_config);
         free(port->interfaces);
         free(port->name);
         free(port->tag);
-        free(port->key_other_config);
-        free(port->value_other_config[0]);
-        free(port->value_other_config);
         free(port);
     }
     n_recs = 0;
@@ -3715,12 +3566,8 @@ free_registered_recs(void)
 static bool
 vlan_splinters_is_enabled(const struct ovsrec_interface *iface_cfg)
 {
-    const char *value;
-
-    value = ovsrec_interface_get_other_config_value(iface_cfg,
-                                                    "enable-vlan-splinters",
-                                                    "");
-    return !strcmp(value, "true");
+    return smap_get_bool(&iface_cfg->other_config, "enable-vlan-splinters",
+                         false);
 }
 
 /* Figures out the set of VLANs that are in use for the purpose of VLAN
@@ -3864,8 +3711,7 @@ configure_splinter_port(struct port *port)
     vlandev = CONTAINER_OF(list_front(&port->ifaces), struct iface,
                            port_elem);
 
-    realdev_name = ovsrec_port_get_other_config_value(port->cfg,
-                                                      "realdev", NULL);
+    realdev_name = smap_get(&port->cfg->other_config, "realdev");
     realdev = iface_lookup(port->bridge, realdev_name);
     realdev_ofp_port = realdev ? realdev->ofp_port : 0;
 
@@ -3880,22 +3726,21 @@ synthesize_splinter_port(const char *real_dev_name,
     struct ovsrec_interface *iface;
     struct ovsrec_port *port;
 
-    iface = xzalloc(sizeof *iface);
+    iface = xmalloc(sizeof *iface);
+    ovsrec_interface_init(iface);
     iface->name = xstrdup(vlan_dev_name);
     iface->type = "system";
 
-    port = xzalloc(sizeof *port);
+    port = xmalloc(sizeof *port);
+    ovsrec_port_init(port);
     port->interfaces = xmemdup(&iface, sizeof iface);
     port->n_interfaces = 1;
     port->name = xstrdup(vlan_dev_name);
     port->vlan_mode = "splinter";
     port->tag = xmalloc(sizeof *port->tag);
     *port->tag = vid;
-    port->key_other_config = xmalloc(sizeof *port->key_other_config);
-    port->key_other_config[0] = "realdev";
-    port->value_other_config = xmalloc(sizeof *port->value_other_config);
-    port->value_other_config[0] = xstrdup(real_dev_name);
-    port->n_other_config = 1;
+
+    smap_add(&port->other_config, "realdev", real_dev_name);
 
     register_rec(port);
     return port;

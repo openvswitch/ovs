@@ -51,6 +51,7 @@ struct ovsdb_idl_table_class {
     const struct ovsdb_idl_column *columns;
     size_t n_columns;
     size_t allocation_size;
+    void (*row_init)(struct ovsdb_idl_row *);
 };
 
 struct ovsdb_idl_table {

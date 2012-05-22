@@ -450,6 +450,11 @@ class Type(object):
     def is_map(self):
         return self.value is not None
 
+    def is_smap(self):
+        return (self.is_map()
+                and self.key.type == StringType
+                and self.value.type == StringType)
+
     def is_optional_pointer(self):
         return (self.is_optional() and not self.value
                 and (self.key.type == StringType or self.key.ref_table_name))

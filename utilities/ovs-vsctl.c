@@ -40,6 +40,7 @@
 #include "process.h"
 #include "stream.h"
 #include "stream-ssl.h"
+#include "smap.h"
 #include "sset.h"
 #include "svec.h"
 #include "lib/vswitch-idl.h"
@@ -1354,9 +1355,7 @@ cmd_emer_reset(struct vsctl_context *ctx)
     ovsrec_open_vswitch_set_ssl(ctx->ovs, NULL);
 
     OVSREC_BRIDGE_FOR_EACH (br, idl) {
-        int i;
-        char *hw_key = "hwaddr";
-        char *hw_val = NULL;
+        const char *hwaddr;
 
         ovsrec_bridge_set_controller(br, NULL, 0);
         ovsrec_bridge_set_fail_mode(br, NULL);
@@ -1366,23 +1365,19 @@ cmd_emer_reset(struct vsctl_context *ctx)
         ovsrec_bridge_set_flood_vlans(br, NULL, 0);
 
         /* We only want to save the "hwaddr" key from other_config. */
-        for (i=0; i < br->n_other_config; i++) {
-            if (!strcmp(br->key_other_config[i], hw_key)) {
-                hw_val = br->value_other_config[i];
-                break;
-            }
-        }
-        if (hw_val) {
-            char *val = xstrdup(hw_val);
-            ovsrec_bridge_set_other_config(br, &hw_key, &val, 1);
-            free(val);
+        hwaddr = smap_get(&br->other_config, "hwaddr");
+        if (hwaddr) {
+            struct smap smap = SMAP_INITIALIZER(&smap);
+            smap_add(&smap, "hwaddr", hwaddr);
+            ovsrec_bridge_set_other_config(br, &smap);
+            smap_destroy(&smap);
         } else {
-            ovsrec_bridge_set_other_config(br, NULL, NULL, 0);
+            ovsrec_bridge_set_other_config(br, NULL);
         }
     }
 
     OVSREC_PORT_FOR_EACH (port, idl) {
-        ovsrec_port_set_other_config(port, NULL, NULL, 0);
+        ovsrec_port_set_other_config(port, NULL);
     }
 
     OVSREC_INTERFACE_FOR_EACH (iface, idl) {
@@ -1608,43 +1603,17 @@ cmd_br_exists(struct vsctl_context *ctx)
     }
 }
 
-/* Returns true if 'b_prefix' (of length 'b_prefix_len') concatenated with 'b'
- * equals 'a', false otherwise. */
-static bool
-key_matches(const char *a,
-            const char *b_prefix, size_t b_prefix_len, const char *b)
-{
-    return !strncmp(a, b_prefix, b_prefix_len) && !strcmp(a + b_prefix_len, b);
-}
-
 static void
-set_external_id(char **old_keys, char **old_values, size_t old_n,
-                char *key, char *value,
-                char ***new_keysp, char ***new_valuesp, size_t *new_np)
+set_external_id(struct smap *old, struct smap *new,
+                char *key, char *value)
 {
-    char **new_keys;
-    char **new_values;
-    size_t new_n;
-    size_t i;
+    smap_clone(new, old);
 
-    new_keys = xmalloc(sizeof *new_keys * (old_n + 1));
-    new_values = xmalloc(sizeof *new_values * (old_n + 1));
-    new_n = 0;
-    for (i = 0; i < old_n; i++) {
-        if (strcmp(key, old_keys[i])) {
-            new_keys[new_n] = old_keys[i];
-            new_values[new_n] = old_values[i];
-            new_n++;
-        }
-    }
     if (value) {
-        new_keys[new_n] = key;
-        new_values[new_n] = value;
-        new_n++;
+        smap_replace(new, key, value);
+    } else {
+        smap_remove(new, key);
     }
-    *new_keysp = new_keys;
-    *new_valuesp = new_values;
-    *new_np = new_n;
 }
 
 static void
@@ -1659,56 +1628,54 @@ static void
 cmd_br_set_external_id(struct vsctl_context *ctx)
 {
     struct vsctl_bridge *bridge;
-    char **keys, **values;
-    size_t n;
+    struct smap new;
 
     vsctl_context_populate_cache(ctx);
     bridge = find_bridge(ctx, ctx->argv[1], true);
     if (bridge->br_cfg) {
-        set_external_id(bridge->br_cfg->key_external_ids,
-                        bridge->br_cfg->value_external_ids,
-                        bridge->br_cfg->n_external_ids,
-                        ctx->argv[2], ctx->argc >= 4 ? ctx->argv[3] : NULL,
-                        &keys, &values, &n);
+
+        set_external_id(&bridge->br_cfg->external_ids, &new, ctx->argv[2],
+                        ctx->argc >= 4 ? ctx->argv[3] : NULL);
         ovsrec_bridge_verify_external_ids(bridge->br_cfg);
-        ovsrec_bridge_set_external_ids(bridge->br_cfg, keys, values, n);
+        ovsrec_bridge_set_external_ids(bridge->br_cfg, &new);
     } else {
         char *key = xasprintf("fake-bridge-%s", ctx->argv[2]);
         struct vsctl_port *port = shash_find_data(&ctx->ports, ctx->argv[1]);
-        set_external_id(port->port_cfg->key_external_ids,
-                        port->port_cfg->value_external_ids,
-                        port->port_cfg->n_external_ids,
-                        key, ctx->argc >= 4 ? ctx->argv[3] : NULL,
-                        &keys, &values, &n);
+        set_external_id(&port->port_cfg->external_ids, &new,
+                        key, ctx->argc >= 4 ? ctx->argv[3] : NULL);
         ovsrec_port_verify_external_ids(port->port_cfg);
-        ovsrec_port_set_external_ids(port->port_cfg, keys, values, n);
+        ovsrec_port_set_external_ids(port->port_cfg, &new);
         free(key);
     }
-    free(keys);
-    free(values);
+    smap_destroy(&new);
 }
 
 static void
-get_external_id(char **keys, char **values, size_t n,
-                const char *prefix, const char *key,
+get_external_id(struct smap *smap, const char *prefix, const char *key,
                 struct ds *output)
 {
-    size_t prefix_len = strlen(prefix);
-    struct svec svec;
-    size_t i;
+    if (key) {
+        char *prefix_key = xasprintf("%s%s", prefix, key);
+        const char *value = smap_get(smap, prefix_key);
 
-    svec_init(&svec);
-    for (i = 0; i < n; i++) {
-        if (!key && !strncmp(keys[i], prefix, prefix_len)) {
-            svec_add_nocopy(&svec, xasprintf("%s=%s",
-                                             keys[i] + prefix_len, values[i]));
-        } else if (key && key_matches(keys[i], prefix, prefix_len, key)) {
-            svec_add(&svec, values[i]);
-            break;
+        if (value) {
+            ds_put_format(output, "%s\n", value);
         }
+        free(prefix_key);
+    } else {
+        const struct smap_node **sorted = smap_sort(smap);
+        size_t prefix_len = strlen(prefix);
+        size_t i;
+
+        for (i = 0; i < smap_count(smap); i++) {
+            const struct smap_node *node = sorted[i];
+            if (!strncmp(node->key, prefix, prefix_len)) {
+                ds_put_format(output, "%s=%s\n", node->key + prefix_len,
+                              node->value);
+            }
+        }
+        free(sorted);
     }
-    output_sorted(&svec, output);
-    svec_destroy(&svec);
 }
 
 static void
@@ -1727,18 +1694,13 @@ cmd_br_get_external_id(struct vsctl_context *ctx)
     bridge = find_bridge(ctx, ctx->argv[1], true);
     if (bridge->br_cfg) {
         ovsrec_bridge_verify_external_ids(bridge->br_cfg);
-        get_external_id(bridge->br_cfg->key_external_ids,
-                        bridge->br_cfg->value_external_ids,
-                        bridge->br_cfg->n_external_ids,
-                        "", ctx->argc >= 3 ? ctx->argv[2] : NULL,
-                        &ctx->output);
+        get_external_id(&bridge->br_cfg->external_ids, "",
+                        ctx->argc >= 3 ? ctx->argv[2] : NULL, &ctx->output);
     } else {
         struct vsctl_port *port = shash_find_data(&ctx->ports, ctx->argv[1]);
         ovsrec_port_verify_external_ids(port->port_cfg);
-        get_external_id(port->port_cfg->key_external_ids,
-                        port->port_cfg->value_external_ids,
-                        port->port_cfg->n_external_ids,
-                        "fake-bridge-", ctx->argc >= 3 ? ctx->argv[2] : NULL, &ctx->output);
+        get_external_id(&port->port_cfg->external_ids, "fake-bridge-",
+                        ctx->argc >= 3 ? ctx->argv[2] : NULL, &ctx->output);
     }
 }
 

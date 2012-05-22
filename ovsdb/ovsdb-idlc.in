@@ -25,14 +25,14 @@ def constify(cType, const):
     else:
         return cType
 
-def is_string_map(column):
-    return (column.type.key
-            and column.type.value
-            and column.type.key.type == ovs.db.types.StringType
-            and column.type.value.type == ovs.db.types.StringType)
-
 def cMembers(prefix, columnName, column, const):
     type = column.type
+
+    if type.is_smap():
+        return [{'name': columnName,
+                 'type': 'struct smap ',
+                 'comment': ''}]
+
     if type.n_min == 1 and type.n_max == 1:
         singleton = True
         pointer = ''
@@ -77,6 +77,7 @@ def printCIDLHeader(schemaFile):
 #include <stdint.h>
 #include "ovsdb-data.h"
 #include "ovsdb-idl-provider.h"
+#include "smap.h"
 #include "uuid.h"''' % {'prefix': prefix.upper()}
 
     for tableName, table in sorted(schema.tables.iteritems()):
@@ -119,6 +120,7 @@ const struct %(s)s *%(s)s_next(const struct %(s)s *);
              (ROW) ? ((NEXT) = %(s)s_next(ROW), 1) : 0; \\
              (ROW) = (NEXT))
 
+void %(s)s_init(struct %(s)s *);
 void %(s)s_delete(const struct %(s)s *);
 struct %(s)s *%(s)s_insert(struct ovsdb_idl_txn *);
 ''' % {'s': structName, 'S': structName.upper()}
@@ -140,20 +142,15 @@ struct %(s)s *%(s)s_insert(struct ovsdb_idl_txn *);
 
         print
         for columnName, column in sorted(table.columns.iteritems()):
-
             print 'void %(s)s_set_%(c)s(const struct %(s)s *,' % {'s': structName, 'c': columnName},
-            args = ['%(type)s%(name)s' % member for member
-                    in cMembers(prefix, columnName, column, True)]
+            if column.type.is_smap():
+                args = ['const struct smap *']
+            else:
+                args = ['%(type)s%(name)s' % member for member
+                        in cMembers(prefix, columnName, column, True)]
             print '%s);' % ', '.join(args)
 
         print
-        for columnName, column in sorted(table.columns.iteritems()):
-            if not is_string_map(column):
-                continue
-            print "const char *%(s)s_get_%(c)s_value(const struct %(s)s *," \
-                    " const char *key, const char *default_value);" \
-                    % {'s': structName, 'c': columnName}
-
 
     # Table indexes.
     printEnum(["%sTABLE_%s" % (prefix.upper(), tableName.upper()) for tableName in sorted(schema.tables)] + ["%sN_TABLES" % prefix.upper()])
@@ -203,22 +200,6 @@ enum { sizeof_bool = sizeof(bool) };
 static bool inited;
 ''' % schema.idlHeader
 
-    try:
-        for table in schema.tables.itervalues():
-            for column in table.columns.itervalues():
-                if is_string_map(column):
-                    print """\
-static int
-bsearch_strcmp(const void *a_, const void *b_)
-{
-    char *const *a = a_;
-    char *const *b = b_;
-    return strcmp(*a, *b);
-}"""
-                    raise StopIteration
-    except StopIteration:
-        pass
-
     # Cast functions.
     for tableName, table in sorted(schema.tables.iteritems()):
         structName = "%s%s" % (prefix, tableName.lower())
@@ -244,7 +225,6 @@ static void
 {
     struct %(s)s *row = %(s)s_cast(row_);''' % {'s': structName,
                                                 'c': columnName}
-
             type = column.type
             if type.value:
                 keyVar = "row->key_%s" % columnName
@@ -253,7 +233,17 @@ static void
                 keyVar = "row->%s" % columnName
                 valueVar = None
 
-            if (type.n_min == 1 and type.n_max == 1) or type.is_optional_pointer():
+            if type.is_smap():
+                print "    size_t i;"
+                print
+                print "    assert(inited);"
+                print "    smap_init(&row->%s);" % columnName
+                print "    for (i = 0; i < datum->n; i++) {"
+                print "        smap_add(&row->%s," % columnName
+                print "                 datum->keys[i].string,"
+                print "                 datum->values[i].string);"
+                print "    }"
+            elif (type.n_min == 1 and type.n_max == 1) or type.is_optional_pointer():
                 print
                 print "    assert(inited);"
                 print "    if (datum->n >= 1) {"
@@ -336,7 +326,7 @@ static void
         # Unparse functions.
         for columnName, column in sorted(table.columns.iteritems()):
             type = column.type
-            if (type.n_min != 1 or type.n_max != 1) and not type.is_optional_pointer():
+            if type.is_smap() or (type.n_min != 1 or type.n_max != 1) and not type.is_optional_pointer():
                 print '''
 static void
 %(s)s_unparse_%(c)s(struct ovsdb_idl_row *row_)
@@ -344,15 +334,19 @@ static void
     struct %(s)s *row = %(s)s_cast(row_);
 
     assert(inited);''' % {'s': structName, 'c': columnName}
-                if type.value:
-                    keyVar = "row->key_%s" % columnName
-                    valueVar = "row->value_%s" % columnName
+
+                if type.is_smap():
+                    print "    smap_destroy(&row->%s);" % columnName
                 else:
-                    keyVar = "row->%s" % columnName
-                    valueVar = None
-                print "    free(%s);" % keyVar
-                if valueVar:
-                    print "    free(%s);" % valueVar
+                    if type.value:
+                        keyVar = "row->key_%s" % columnName
+                        valueVar = "row->value_%s" % columnName
+                    else:
+                        keyVar = "row->%s" % columnName
+                        valueVar = None
+                    print "    free(%s);" % keyVar
+                    if valueVar:
+                        print "    free(%s);" % valueVar
                 print '}'
             else:
                 print '''
@@ -361,6 +355,25 @@ static void
 {
     /* Nothing to do. */
 }''' % {'s': structName, 'c': columnName}
+
+        # Generic Row Initialization function.
+        print """
+static void
+%(s)s_init__(struct ovsdb_idl_row *row)
+{
+    %(s)s_init(%(s)s_cast(row));
+}""" % {'s': structName}
+
+        # Row Initialization function.
+        print """
+void
+%(s)s_init(struct %(s)s *row)
+{
+    memset(row, 0, sizeof *row); """ % {'s': structName}
+        for columnName, column in sorted(table.columns.iteritems()):
+            if column.type.is_smap():
+                print "    smap_init(&row->%s);" % columnName
+        print "}"
 
         # First, next functions.
         print '''
@@ -448,6 +461,44 @@ const struct ovsdb_datum *
         # Set functions.
         for columnName, column in sorted(table.columns.iteritems()):
             type = column.type
+
+            if type.is_smap():
+                print """
+void
+%(s)s_set_%(c)s(const struct %(s)s *row, const struct smap *smap)
+{
+    struct ovsdb_datum datum;
+
+    assert(inited);
+    if (smap) {
+        struct smap_node *node;
+        size_t i;
+
+        datum.n = smap_count(smap);
+        datum.keys = xmalloc(datum.n * sizeof *datum.keys);
+        datum.values = xmalloc(datum.n * sizeof *datum.values);
+
+        i = 0;
+        SMAP_FOR_EACH (node, smap) {
+            datum.keys[i].string = xstrdup(node->key);
+            datum.values[i].string = xstrdup(node->value);
+            i++;
+        }
+        ovsdb_datum_sort_unique(&datum, OVSDB_TYPE_STRING, OVSDB_TYPE_STRING);
+    } else {
+        ovsdb_datum_init_empty(&datum);
+    }
+    ovsdb_idl_txn_write(&row->header_,
+                        &%(s)s_columns[%(S)s_COL_%(C)s],
+                        &datum);
+}
+""" % {'s': structName,
+       'S': structName.upper(),
+       'c': columnName,
+       'C': columnName.upper()}
+                continue
+
+
             print '\nvoid'
             members = cMembers(prefix, columnName, column, True)
             keyVar = members[0]['name']
@@ -515,25 +566,6 @@ const struct ovsdb_datum *
                    'C': columnName.upper()}
             print "}"
 
-        # String Map Helpers.
-        for columnName, column in sorted(table.columns.iteritems()):
-            if not is_string_map(column):
-                continue
-
-            print """
-const char * %(s)s_get_%(c)s_value(const struct %(s)s *row, const char *search_key, const char *default_value)
-{
-    char **keys = row->key_%(c)s;
-    char **values = row->value_%(c)s;
-    size_t n_keys = row->n_%(c)s;
-    char ** result_key;
-
-    assert(inited);
-    result_key = bsearch(&search_key, keys, n_keys, sizeof *keys,
-                         bsearch_strcmp);
-    return result_key ? values[result_key - keys] : default_value;
-}""" % {'s': structName, 'c': columnName}
-
         # Table columns.
         print "\nstruct ovsdb_idl_column %s_columns[%s_N_COLUMNS];" % (
             structName, structName.upper())
@@ -566,7 +598,7 @@ static void\n%s_columns_init(void)
         print "    {\"%s\", %s," % (tableName, is_root)
         print "     %s_columns, ARRAY_SIZE(%s_columns)," % (
             structName, structName)
-        print "     sizeof(struct %s)}," % structName
+        print "     sizeof(struct %s), %s_init__}," % (structName, structName)
     print "};"
 
     # IDL class.
