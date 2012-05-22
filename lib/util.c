@@ -199,9 +199,14 @@ ovs_abort(int err_no, const char *format, ...)
     va_list args;
 
     va_start(args, format);
-    ovs_error_valist(err_no, format, args);
-    va_end(args);
+    ovs_abort_valist(err_no, format, args);
+}
 
+/* Same as ovs_abort() except that the arguments are supplied as a va_list. */
+void
+ovs_abort_valist(int err_no, const char *format, va_list args)
+{
+    ovs_error_valist(err_no, format, args);
     abort();
 }
 

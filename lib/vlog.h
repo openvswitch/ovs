@@ -142,6 +142,11 @@ void vlog_fatal(const struct vlog_module *, const char *format, ...)
 void vlog_fatal_valist(const struct vlog_module *, const char *format, va_list)
     PRINTF_FORMAT (2, 0) NO_RETURN;
 
+void vlog_abort(const struct vlog_module *, const char *format, ...)
+    PRINTF_FORMAT (2, 3) NO_RETURN;
+void vlog_abort_valist(const struct vlog_module *, const char *format, va_list)
+    PRINTF_FORMAT (2, 0) NO_RETURN;
+
 void vlog_rate_limit(const struct vlog_module *, enum vlog_level,
                      struct vlog_rate_limit *, const char *, ...)
     PRINTF_FORMAT (4, 5);
@@ -160,6 +165,7 @@ void vlog_rate_limit(const struct vlog_module *, enum vlog_level,
  * Guaranteed to preserve errno.
  */
 #define VLOG_FATAL(...) vlog_fatal(THIS_MODULE, __VA_ARGS__)
+#define VLOG_ABORT(...) vlog_abort(THIS_MODULE, __VA_ARGS__)
 #define VLOG_EMER(...) VLOG(VLL_EMER, __VA_ARGS__)
 #define VLOG_ERR(...) VLOG(VLL_ERR, __VA_ARGS__)
 #define VLOG_WARN(...) VLOG(VLL_WARN, __VA_ARGS__)
