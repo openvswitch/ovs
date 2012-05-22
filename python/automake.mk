@@ -1,4 +1,4 @@
-run_python = PYTHONPATH=$(top_srcdir)/python:$$PYTHON_PATH $(PYTHON)
+run_python = PYTHONPATH=$(top_srcdir)/python:$$PYTHONPATH $(PYTHON)
 
 ovstest_pyfiles = \
 	python/ovstest/__init__.py \
