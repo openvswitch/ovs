@@ -3672,30 +3672,45 @@ mirror_configure(struct mirror *m)
  * devices are not used.  When broken device drivers are no longer in
  * widespread use, we will delete these interfaces. */
 
-static void **blocks;
-static size_t n_blocks, allocated_blocks;
+static struct ovsrec_port **recs;
+static size_t n_recs, allocated_recs;
 
-/* Adds 'block' to a list of blocks that have to be freed with free() when the
- * VLAN splinters are reconfigured. */
+/* Adds 'rec' to a list of recs that have to be destroyed when the VLAN
+ * splinters are reconfigured. */
 static void
-register_block(void *block)
+register_rec(struct ovsrec_port *rec)
 {
-    if (n_blocks >= allocated_blocks) {
-        blocks = x2nrealloc(blocks, &allocated_blocks, sizeof *blocks);
+    if (n_recs >= allocated_recs) {
+        recs = x2nrealloc(recs, &allocated_recs, sizeof *recs);
     }
-    blocks[n_blocks++] = block;
+    recs[n_recs++] = rec;
 }
 
-/* Frees all of the blocks registered with register_block(). */
+/* Frees all of the ports registered with register_reg(). */
 static void
-free_registered_blocks(void)
+free_registered_recs(void)
 {
     size_t i;
 
-    for (i = 0; i < n_blocks; i++) {
-        free(blocks[i]);
+    for (i = 0; i < n_recs; i++) {
+        struct ovsrec_port *port = recs[i];
+        size_t j;
+
+        for (j = 0; j < port->n_interfaces; j++) {
+            struct ovsrec_interface *iface = port->interfaces[j];
+            free(iface->name);
+            free(iface);
+        }
+
+        free(port->interfaces);
+        free(port->name);
+        free(port->tag);
+        free(port->key_other_config);
+        free(port->value_other_config[0]);
+        free(port->value_other_config);
+        free(port);
     }
-    n_blocks = 0;
+    n_recs = 0;
 }
 
 /* Returns true if VLAN splinters are enabled on 'iface_cfg', false
@@ -3736,7 +3751,7 @@ collect_splinter_vlans(const struct ovsrec_open_vswitch *ovs_cfg)
 
     /* Free space allocated for synthesized ports and interfaces, since we're
      * in the process of reconstructing all of them. */
-    free_registered_blocks();
+    free_registered_recs();
 
     splinter_vlans = bitmap_allocate(4096);
     sset_init(&splinter_ifaces);
@@ -3885,16 +3900,7 @@ synthesize_splinter_port(const char *real_dev_name,
     port->value_other_config[0] = xstrdup(real_dev_name);
     port->n_other_config = 1;
 
-    register_block(iface);
-    register_block(iface->name);
-    register_block(port);
-    register_block(port->interfaces);
-    register_block(port->name);
-    register_block(port->tag);
-    register_block(port->key_other_config);
-    register_block(port->value_other_config);
-    register_block(port->value_other_config[0]);
-
+    register_rec(port);
     return port;
 }
 
