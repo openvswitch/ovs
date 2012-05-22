@@ -162,7 +162,7 @@ governor_new_generation(struct governor *g, unsigned int size)
     if (g->size != size) {
         if (!g->size) {
             VLOG_INFO("%s: engaging governor with %u kB hash table",
-                      g->name, g->size / 1024);
+                      g->name, size / 1024);
         } else {
             VLOG_INFO("%s: processed %u packets in %.2f s, "
                       "%s hash table to %u kB",
