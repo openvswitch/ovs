@@ -3936,7 +3936,7 @@ do_vsctl(const char *args, struct vsctl_command *commands, size_t n_commands,
         table_destroy(c->table);
         free(c->table);
 
-        smap_destroy(&c->options);
+        shash_destroy_free_data(&c->options);
     }
     free(commands);
 

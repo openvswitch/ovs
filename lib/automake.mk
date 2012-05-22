@@ -141,6 +141,8 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/simap.h \
 	lib/signals.c \
 	lib/signals.h \
+	lib/smap.c \
+	lib/smap.h \
 	lib/socket-util.c \
 	lib/socket-util.h \
 	lib/sort.c \

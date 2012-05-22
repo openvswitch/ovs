@@ -37,6 +37,7 @@
 #include "packets.h"
 #include "poll-loop.h"
 #include "shash.h"
+#include "smap.h"
 #include "sset.h"
 #include "svec.h"
 #include "vlog.h"
@@ -243,15 +244,15 @@ netdev_open(const char *name, const char *type, struct netdev **netdevp)
 /* Reconfigures the device 'netdev' with 'args'.  'args' may be empty
  * or NULL if none are needed. */
 int
-netdev_set_config(struct netdev *netdev, const struct shash *args)
+netdev_set_config(struct netdev *netdev, const struct smap *args)
 {
     struct netdev_dev *netdev_dev = netdev_get_dev(netdev);
 
     if (netdev_dev->netdev_class->set_config) {
-        struct shash no_args = SHASH_INITIALIZER(&no_args);
+        struct smap no_args = SMAP_INITIALIZER(&no_args);
         return netdev_dev->netdev_class->set_config(netdev_dev,
                                                     args ? args : &no_args);
-    } else if (args && !shash_is_empty(args)) {
+    } else if (args && !smap_is_empty(args)) {
         VLOG_WARN("%s: arguments provided to device that is not configurable",
                   netdev_get_name(netdev));
     }
@@ -260,23 +261,23 @@ netdev_set_config(struct netdev *netdev, const struct shash *args)
 }
 
 /* Returns the current configuration for 'netdev' in 'args'.  The caller must
- * have already initialized 'args' with shash_init().  Returns 0 on success, in
+ * have already initialized 'args' with smap_init().  Returns 0 on success, in
  * which case 'args' will be filled with 'netdev''s configuration.  On failure
  * returns a positive errno value, in which case 'args' will be empty.
  *
  * The caller owns 'args' and its contents and must eventually free them with
- * shash_destroy_free_data(). */
+ * smap_destroy(). */
 int
-netdev_get_config(const struct netdev *netdev, struct shash *args)
+netdev_get_config(const struct netdev *netdev, struct smap *args)
 {
     struct netdev_dev *netdev_dev = netdev_get_dev(netdev);
     int error;
 
-    shash_clear_free_data(args);
+    smap_clear(args);
     if (netdev_dev->netdev_class->get_config) {
         error = netdev_dev->netdev_class->get_config(netdev_dev, args);
         if (error) {
-            shash_clear_free_data(args);
+            smap_clear(args);
         }
     } else {
         error = 0;
@@ -759,18 +760,18 @@ netdev_get_next_hop(const struct netdev *netdev,
     return error;
 }
 
-/* Populates 'sh' with status information.
+/* Populates 'smap' with status information.
  *
- * Populates 'sh' with 'netdev' specific status information.  This information
- * may be used to populate the status column of the Interface table as defined
- * in ovs-vswitchd.conf.db(5). */
+ * Populates 'smap' with 'netdev' specific status information.  This
+ * information may be used to populate the status column of the Interface table
+ * as defined in ovs-vswitchd.conf.db(5). */
 int
-netdev_get_drv_info(const struct netdev *netdev, struct shash *sh)
+netdev_get_drv_info(const struct netdev *netdev, struct smap *smap)
 {
     struct netdev_dev *dev = netdev_get_dev(netdev);
 
     return (dev->netdev_class->get_drv_info
-            ? dev->netdev_class->get_drv_info(netdev, sh)
+            ? dev->netdev_class->get_drv_info(netdev, smap)
             : EOPNOTSUPP);
 }
 
@@ -1065,10 +1066,9 @@ netdev_get_n_queues(const struct netdev *netdev,
  *
  * A '*typep' of "" indicates that QoS is currently disabled on 'netdev'.
  *
- * The caller must initialize 'details' as an empty shash (e.g. with
- * shash_init()) before calling this function.  The caller must free 'details',
- * including 'data' members, when it is no longer needed (e.g. with
- * shash_destroy_free_data()).
+ * The caller must initialize 'details' as an empty smap (e.g. with
+ * smap_init()) before calling this function.  The caller must free 'details'
+ * when it is no longer needed (e.g. with smap_destroy()).
  *
  * The caller must not modify or free '*typep'.
  *
@@ -1078,7 +1078,7 @@ netdev_get_n_queues(const struct netdev *netdev,
  * vswitchd/vswitch.xml (which is built as ovs-vswitchd.conf.db(8)). */
 int
 netdev_get_qos(const struct netdev *netdev,
-               const char **typep, struct shash *details)
+               const char **typep, struct smap *details)
 {
     const struct netdev_class *class = netdev_get_dev(netdev)->netdev_class;
     int retval;
@@ -1087,7 +1087,7 @@ netdev_get_qos(const struct netdev *netdev,
         retval = class->get_qos(netdev, typep, details);
         if (retval) {
             *typep = NULL;
-            shash_clear_free_data(details);
+            smap_clear(details);
         }
         return retval;
     } else {
@@ -1117,7 +1117,7 @@ netdev_get_qos(const struct netdev *netdev,
  * details. */
 int
 netdev_set_qos(struct netdev *netdev,
-               const char *type, const struct shash *details)
+               const char *type, const struct smap *details)
 {
     const struct netdev_class *class = netdev_get_dev(netdev)->netdev_class;
 
@@ -1127,7 +1127,7 @@ netdev_set_qos(struct netdev *netdev,
 
     if (class->set_qos) {
         if (!details) {
-            static struct shash empty = SHASH_INITIALIZER(&empty);
+            static struct smap empty = SMAP_INITIALIZER(&empty);
             details = &empty;
         }
         return class->set_qos(netdev, type, details);
@@ -1147,12 +1147,12 @@ netdev_set_qos(struct netdev *netdev,
  * given 'type' in the "other_config" column in the "Queue" table in
  * vswitchd/vswitch.xml (which is built as ovs-vswitchd.conf.db(8)).
  *
- * The caller must initialize 'details' (e.g. with shash_init()) before calling
- * this function.  The caller must free 'details', including 'data' members,
- * when it is no longer needed (e.g. with shash_destroy_free_data()). */
+ * The caller must initialize 'details' (e.g. with smap_init()) before calling
+ * this function.  The caller must free 'details' when it is no longer needed
+ * (e.g. with smap_destroy()). */
 int
 netdev_get_queue(const struct netdev *netdev,
-                 unsigned int queue_id, struct shash *details)
+                 unsigned int queue_id, struct smap *details)
 {
     const struct netdev_class *class = netdev_get_dev(netdev)->netdev_class;
     int retval;
@@ -1161,7 +1161,7 @@ netdev_get_queue(const struct netdev *netdev,
               ? class->get_queue(netdev, queue_id, details)
               : EOPNOTSUPP);
     if (retval) {
-        shash_clear_free_data(details);
+        smap_clear(details);
     }
     return retval;
 }
@@ -1180,7 +1180,7 @@ netdev_get_queue(const struct netdev *netdev,
  * it. */
 int
 netdev_set_queue(struct netdev *netdev,
-                 unsigned int queue_id, const struct shash *details)
+                 unsigned int queue_id, const struct smap *details)
 {
     const struct netdev_class *class = netdev_get_dev(netdev)->netdev_class;
     return (class->set_queue

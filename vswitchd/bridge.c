@@ -41,6 +41,7 @@
 #include "poll-loop.h"
 #include "sha1.h"
 #include "shash.h"
+#include "smap.h"
 #include "socket-util.h"
 #include "stream.h"
 #include "stream-ssl.h"
@@ -245,10 +246,10 @@ static void iface_refresh_cfm_stats(struct iface *);
 static void iface_refresh_stats(struct iface *);
 static void iface_refresh_status(struct iface *);
 static bool iface_is_synthetic(const struct iface *);
-static void shash_from_ovs_idl_map(char **keys, char **values, size_t n,
-                                   struct shash *);
-static void shash_to_ovs_idl_map(struct shash *,
-                                 char ***keys, char ***values, size_t *n);
+static void smap_from_ovs_idl_map(char **keys, char **values, size_t n,
+                                  struct smap *);
+static void smap_to_ovs_idl_map(struct smap *,
+                                char ***keys, char ***values, size_t *n);
 
 /* Linux VLAN device support (e.g. "eth0.10" for VLAN 10.)
  *
@@ -1150,15 +1151,15 @@ static int
 iface_set_netdev_config(const struct ovsrec_interface *iface_cfg,
                         struct netdev *netdev)
 {
-    struct shash args;
+    struct smap args;
     int error;
 
-    shash_init(&args);
-    shash_from_ovs_idl_map(iface_cfg->key_options,
-                           iface_cfg->value_options,
-                           iface_cfg->n_options, &args);
+    smap_init(&args);
+    smap_from_ovs_idl_map(iface_cfg->key_options,
+                          iface_cfg->value_options,
+                          iface_cfg->n_options, &args);
     error = netdev_set_config(netdev, &args);
-    shash_destroy(&args);
+    smap_destroy(&args);
 
     if (error) {
         VLOG_WARN("could not configure network device %s (%s)",
@@ -1650,7 +1651,7 @@ dpid_from_hash(const void *data, size_t n)
 static void
 iface_refresh_status(struct iface *iface)
 {
-    struct shash sh;
+    struct smap smap;
 
     enum netdev_features current;
     enum netdev_flags flags;
@@ -1663,13 +1664,13 @@ iface_refresh_status(struct iface *iface)
         return;
     }
 
-    shash_init(&sh);
+    smap_init(&smap);
 
-    if (!netdev_get_drv_info(iface->netdev, &sh)) {
+    if (!netdev_get_drv_info(iface->netdev, &smap)) {
         size_t n;
         char **keys, **values;
 
-        shash_to_ovs_idl_map(&sh, &keys, &values, &n);
+        smap_to_ovs_idl_map(&smap, &keys, &values, &n);
         ovsrec_interface_set_status(iface->cfg, keys, values, n);
 
         free(keys);
@@ -1678,7 +1679,7 @@ iface_refresh_status(struct iface *iface)
         ovsrec_interface_set_status(iface->cfg, NULL, NULL, 0);
     }
 
-    shash_destroy_free_data(&sh);
+    smap_destroy(&smap);
 
     error = netdev_get_flags(iface->netdev, &flags);
     if (!error) {
@@ -2250,14 +2251,14 @@ struct qos_unixctl_show_cbdata {
 
 static void
 qos_unixctl_show_cb(unsigned int queue_id,
-                    const struct shash *details,
+                    const struct smap *details,
                     void *aux)
 {
     struct qos_unixctl_show_cbdata *data = aux;
     struct ds *ds = data->ds;
     struct iface *iface = data->iface;
     struct netdev_queue_stats stats;
-    struct shash_node *node;
+    struct smap_node *node;
     int error;
 
     ds_put_cstr(ds, "\n");
@@ -2267,8 +2268,8 @@ qos_unixctl_show_cb(unsigned int queue_id,
         ds_put_cstr(ds, "Default:\n");
     }
 
-    SHASH_FOR_EACH (node, details) {
-        ds_put_format(ds, "\t%s: %s\n", node->name, (char *)node->data);
+    SMAP_FOR_EACH (node, details) {
+        ds_put_format(ds, "\t%s: %s\n", node->key, node->value);
     }
 
     error = netdev_get_queue_stats(iface->netdev, queue_id, &stats);
@@ -2295,10 +2296,10 @@ qos_unixctl_show(struct unixctl_conn *conn, int argc OVS_UNUSED,
                  const char *argv[], void *aux OVS_UNUSED)
 {
     struct ds ds = DS_EMPTY_INITIALIZER;
-    struct shash sh = SHASH_INITIALIZER(&sh);
+    struct smap smap = SMAP_INITIALIZER(&smap);
     struct iface *iface;
     const char *type;
-    struct shash_node *node;
+    struct smap_node *node;
     struct qos_unixctl_show_cbdata data;
     int error;
 
@@ -2308,13 +2309,13 @@ qos_unixctl_show(struct unixctl_conn *conn, int argc OVS_UNUSED,
         return;
     }
 
-    netdev_get_qos(iface->netdev, &type, &sh);
+    netdev_get_qos(iface->netdev, &type, &smap);
 
     if (*type != '\0') {
         ds_put_format(&ds, "QoS: %s %s\n", iface->name, type);
 
-        SHASH_FOR_EACH (node, &sh) {
-            ds_put_format(&ds, "%s: %s\n", node->name, (char *)node->data);
+        SMAP_FOR_EACH (node, &smap) {
+            ds_put_format(&ds, "%s: %s\n", node->key, node->value);
         }
 
         data.ds = &ds;
@@ -2330,7 +2331,7 @@ qos_unixctl_show(struct unixctl_conn *conn, int argc OVS_UNUSED,
         unixctl_command_reply_error(conn, ds_cstr(&ds));
     }
 
-    shash_destroy_free_data(&sh);
+    smap_destroy(&smap);
     ds_destroy(&ds);
 }
 
@@ -3273,46 +3274,42 @@ iface_clear_db_record(const struct ovsrec_interface *if_cfg)
     }
 }
 
-/* Adds the 'n' key-value pairs in 'keys' in 'values' to 'shash'.
- *
- * The value strings in '*shash' are taken directly from values[], not copied,
- * so the caller should not modify or free them. */
+/* Adds the 'n' key-value pairs in 'keys' in 'values' to 'shash'. */
 static void
-shash_from_ovs_idl_map(char **keys, char **values, size_t n,
-                       struct shash *shash)
+smap_from_ovs_idl_map(char **keys, char **values, size_t n, struct smap *smap)
 {
     size_t i;
 
-    shash_init(shash);
+    smap_init(smap);
     for (i = 0; i < n; i++) {
-        shash_add(shash, keys[i], values[i]);
+        smap_add(smap, keys[i], values[i]);
     }
 }
 
 /* Creates 'keys' and 'values' arrays from 'shash'.
  *
  * Sets 'keys' and 'values' to heap allocated arrays representing the key-value
- * pairs in 'shash'.  The caller takes ownership of 'keys' and 'values'.  They
+ * pairs in 'smap'.  The caller takes ownership of 'keys' and 'values'.  They
  * are populated with with strings taken directly from 'shash' and thus have
  * the same ownership of the key-value pairs in shash.
  */
 static void
-shash_to_ovs_idl_map(struct shash *shash,
-                     char ***keys, char ***values, size_t *n)
+smap_to_ovs_idl_map(struct smap *smap,
+                    char ***keys, char ***values, size_t *n)
 {
     size_t i, count;
     char **k, **v;
-    struct shash_node *sn;
+    struct smap_node *sn;
 
-    count = shash_count(shash);
+    count = smap_count(smap);
 
     k = xmalloc(count * sizeof *k);
     v = xmalloc(count * sizeof *v);
 
     i = 0;
-    SHASH_FOR_EACH(sn, shash) {
-        k[i] = sn->name;
-        v[i] = sn->data;
+    SMAP_FOR_EACH(sn, smap) {
+        k[i] = sn->key;
+        v[i] = sn->value;
         i++;
     }
 
@@ -3337,7 +3334,7 @@ queue_ids_include(const struct ovsdb_datum *queues, int64_t target)
 
 static void
 iface_delete_queues(unsigned int queue_id,
-                    const struct shash *details OVS_UNUSED, void *cbdata_)
+                    const struct smap *details OVS_UNUSED, void *cbdata_)
 {
     struct iface_delete_queues_cbdata *cbdata = cbdata_;
 
@@ -3357,15 +3354,15 @@ iface_configure_qos(struct iface *iface, const struct ovsrec_qos *qos)
         netdev_set_qos(iface->netdev, NULL, NULL);
     } else {
         struct iface_delete_queues_cbdata cbdata;
-        struct shash details;
+        struct smap details;
         bool queue_zero;
         size_t i;
 
         /* Configure top-level Qos for 'iface'. */
-        shash_from_ovs_idl_map(qos->key_other_config, qos->value_other_config,
-                               qos->n_other_config, &details);
+        smap_from_ovs_idl_map(qos->key_other_config, qos->value_other_config,
+                              qos->n_other_config, &details);
         netdev_set_qos(iface->netdev, qos->type, &details);
-        shash_destroy(&details);
+        smap_destroy(&details);
 
         /* Deconfigure queues that were deleted. */
         cbdata.netdev = iface->netdev;
@@ -3392,16 +3389,16 @@ iface_configure_qos(struct iface *iface, const struct ovsrec_qos *qos)
                 port_queue->dscp = queue->dscp[0];
             }
 
-            shash_from_ovs_idl_map(queue->key_other_config,
-                                   queue->value_other_config,
-                                   queue->n_other_config, &details);
+            smap_from_ovs_idl_map(queue->key_other_config,
+                                  queue->value_other_config,
+                                  queue->n_other_config, &details);
             netdev_set_queue(iface->netdev, queue_id, &details);
-            shash_destroy(&details);
+            smap_destroy(&details);
         }
         if (!queue_zero) {
-            shash_init(&details);
+            smap_init(&details);
             netdev_set_queue(iface->netdev, 0, &details);
-            shash_destroy(&details);
+            smap_destroy(&details);
         }
     }
 

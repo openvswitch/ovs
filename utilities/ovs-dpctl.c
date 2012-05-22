@@ -44,6 +44,7 @@
 #include "packets.h"
 #include "shash.h"
 #include "simap.h"
+#include "smap.h"
 #include "sset.h"
 #include "timeval.h"
 #include "util.h"
@@ -246,7 +247,7 @@ do_add_if(int argc OVS_UNUSED, char *argv[])
         const char *name, *type;
         char *save_ptr = NULL;
         struct netdev *netdev = NULL;
-        struct shash args;
+        struct smap args;
         char *option;
         int error;
 
@@ -259,7 +260,7 @@ do_add_if(int argc OVS_UNUSED, char *argv[])
             continue;
         }
 
-        shash_init(&args);
+        smap_init(&args);
         while ((option = strtok_r(NULL, ",", &save_ptr)) != NULL) {
             char *save_ptr_2 = NULL;
             char *key, *value;
@@ -272,7 +273,7 @@ do_add_if(int argc OVS_UNUSED, char *argv[])
 
             if (!strcmp(key, "type")) {
                 type = value;
-            } else if (!shash_add_once(&args, key, value)) {
+            } else if (!smap_add_once(&args, key, value)) {
                 ovs_error(0, "duplicate \"%s\" option", key);
             }
         }
@@ -323,7 +324,7 @@ do_set_if(int argc, char *argv[])
         char *save_ptr = NULL;
         char *type = NULL;
         const char *name;
-        struct shash args;
+        struct smap args;
         char *option;
         int error;
 
@@ -350,7 +351,7 @@ do_set_if(int argc, char *argv[])
             goto next;
         }
 
-        shash_init(&args);
+        smap_init(&args);
         error = netdev_get_config(netdev, &args);
         if (error) {
             ovs_error(error, "%s: failed to fetch configuration", name);
@@ -375,9 +376,9 @@ do_set_if(int argc, char *argv[])
                     failure = true;
                 }
             } else if (value[0] == '\0') {
-                free(shash_find_and_delete(&args, key));
+                smap_remove(&args, key);
             } else {
-                free(shash_replace(&args, key, xstrdup(value)));
+                smap_replace(&args, key, value);
             }
         }
 
@@ -500,26 +501,26 @@ show_dpif(struct dpif *dpif)
 
             error = netdev_open(dpif_port.name, dpif_port.type, &netdev);
             if (!error) {
-                struct shash config;
+                struct smap config;
 
-                shash_init(&config);
+                smap_init(&config);
                 error = netdev_get_config(netdev, &config);
                 if (!error) {
-                    const struct shash_node **nodes;
+                    const struct smap_node **nodes;
                     size_t i;
 
-                    nodes = shash_sort(&config);
-                    for (i = 0; i < shash_count(&config); i++) {
-                        const struct shash_node *node = nodes[i];
-                        printf("%c %s=%s", i ? ',' : ':',
-                               node->name, (char *) node->data);
+                    nodes = smap_sort(&config);
+                    for (i = 0; i < smap_count(&config); i++) {
+                        const struct smap_node *node = nodes[i];
+                        printf("%c %s=%s", i ? ',' : ':', node->key,
+                               node->value);
                     }
                     free(nodes);
                 } else {
                     printf(", could not retrieve configuration (%s)",
                            strerror(error));
                 }
-                shash_destroy_free_data(&config);
+                smap_destroy(&config);
 
                 netdev_close(netdev);
             } else {

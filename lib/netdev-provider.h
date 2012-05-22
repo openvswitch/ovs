@@ -24,6 +24,7 @@
 #include "netdev.h"
 #include "list.h"
 #include "shash.h"
+#include "smap.h"
 
 #ifdef  __cplusplus
 extern "C" {
@@ -126,17 +127,17 @@ struct netdev_class {
     void (*destroy)(struct netdev_dev *netdev_dev);
 
     /* Fetches the device 'netdev_dev''s configuration, storing it in 'args'.
-     * The caller owns 'args' and pre-initializes it to an empty shash.
+     * The caller owns 'args' and pre-initializes it to an empty smap.
      *
      * If this netdev class does not have any configuration options, this may
      * be a null pointer. */
-    int (*get_config)(struct netdev_dev *netdev_dev, struct shash *args);
+    int (*get_config)(struct netdev_dev *netdev_dev, struct smap *args);
 
     /* Changes the device 'netdev_dev''s configuration to 'args'.
      *
      * If this netdev class does not support configuration, this may be a null
      * pointer. */
-    int (*set_config)(struct netdev_dev *netdev_dev, const struct shash *args);
+    int (*set_config)(struct netdev_dev *netdev_dev, const struct smap *args);
 
     /* Attempts to open a network device.  On success, sets 'netdevp'
      * to the new network device. */
@@ -381,7 +382,7 @@ struct netdev_class {
      *
      * May be NULL if 'netdev' does not support QoS at all. */
     int (*get_qos)(const struct netdev *netdev,
-                   const char **typep, struct shash *details);
+                   const char **typep, struct smap *details);
 
     /* Attempts to reconfigure QoS on 'netdev', changing the form of QoS to
      * 'type' with details of configuration from 'details'.
@@ -401,7 +402,7 @@ struct netdev_class {
      *
      * May be NULL if 'netdev' does not support QoS at all. */
     int (*set_qos)(struct netdev *netdev,
-                   const char *type, const struct shash *details);
+                   const char *type, const struct smap *details);
 
     /* Queries 'netdev' for information about the queue numbered 'queue_id'.
      * If successful, adds that information as string key-value pairs to
@@ -420,7 +421,7 @@ struct netdev_class {
      * vswitchd/vswitch.xml (which is built as ovs-vswitchd.conf.db(8)).
      */
     int (*get_queue)(const struct netdev *netdev,
-                     unsigned int queue_id, struct shash *details);
+                     unsigned int queue_id, struct smap *details);
 
     /* Configures the queue numbered 'queue_id' on 'netdev' with the key-value
      * string pairs in 'details'.  The contents of 'details' should be
@@ -440,7 +441,7 @@ struct netdev_class {
      *
      * May be NULL if 'netdev' does not support QoS at all. */
     int (*set_queue)(struct netdev *netdev,
-                     unsigned int queue_id, const struct shash *details);
+                     unsigned int queue_id, const struct smap *details);
 
     /* Attempts to delete the queue numbered 'queue_id' from 'netdev'.
      *
@@ -475,7 +476,7 @@ struct netdev_class {
      */
     int (*dump_queues)(const struct netdev *netdev,
                        void (*cb)(unsigned int queue_id,
-                                  const struct shash *details,
+                                  const struct smap *details,
                                   void *aux),
                        void *aux);
 
@@ -550,12 +551,11 @@ struct netdev_class {
      * representing netdev type specific information.  For more information see
      * ovs-vswitchd.conf.db(5).
      *
-     * The data of 'sh' are heap allocated strings which the caller is
-     * responsible for deallocating.
+     * The caller is responsible for destroying 'smap' and its data.
      *
      * This function may be set to null if it would always return EOPNOTSUPP
      * anyhow. */
-    int (*get_drv_info)(const struct netdev *netdev, struct shash *sh);
+    int (*get_drv_info)(const struct netdev *netdev, struct smap *smap);
 
     /* Looks up the ARP table entry for 'ip' on 'netdev' and stores the
      * corresponding MAC address in 'mac'.  A return value of ENXIO, in
