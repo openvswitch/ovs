@@ -119,6 +119,7 @@ compose_report(const struct simap *usage, struct ds *s)
         ds_put_format(s, "%s:%u ", node->name, node->data);
     }
     ds_chomp(s, ' ');
+    free(nodes);
 }
 
 /* Logs the contents of 'usage', as a collection of name-count pairs.
