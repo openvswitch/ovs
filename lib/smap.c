@@ -18,6 +18,7 @@
 #include <assert.h>
 
 #include "hash.h"
+#include "json.h"
 
 static struct smap_node *smap_add__(struct smap *, char *, void *,
                                     size_t hash);
@@ -231,6 +232,41 @@ smap_sort(const struct smap *smap)
 
         return nodes;
     }
+}
+
+/* Adds each of the key-value pairs from 'json' (which must be a JSON object
+ * whose values are strings) to 'smap'.
+ *
+ * The caller must have initialized 'smap'.
+ *
+ * The caller retains ownership of 'json' and everything in it. */
+void
+smap_from_json(struct smap *smap, const struct json *json)
+{
+    const struct shash_node *node;
+
+    SHASH_FOR_EACH (node, json_object(json)) {
+        const struct json *value = node->data;
+        smap_add(smap, node->name, json_string(value));
+    }
+}
+
+/* Returns a JSON object that maps from the keys in 'smap' to their values.
+ *
+ * The caller owns the returned value and must eventually json_destroy() it.
+ *
+ * The caller retains ownership of 'smap' and everything in it. */
+struct json *
+smap_to_json(const struct smap *smap)
+{
+    const struct smap_node *node;
+    struct json *json;
+
+    json = json_object_create();
+    SMAP_FOR_EACH (node, smap) {
+        json_object_put_string(json, node->key, node->value);
+    }
+    return json;
 }
 
 /* Private Helpers. */
