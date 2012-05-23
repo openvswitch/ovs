@@ -26,17 +26,17 @@ AT_CLEANUP
 
 AT_SETUP([truncated message])
 AT_KEYWORDS([ofp-print])
-AT_CHECK([ovs-ofctl ofp-print 01bbccddeeff0011], [0], [dnl
+AT_CHECK([ovs-ofctl ofp-print 0110ccddeeff0011], [0], [dnl
 (***truncated to 8 bytes from 52445***)
-00000000  01 bb cc dd ee ff 00 11-                        |........        |
+00000000  01 10 cc dd ee ff 00 11-                        |........        |
 ])
 AT_CLEANUP
 
 AT_SETUP([message only uses part of buffer])
 AT_KEYWORDS([ofp-print])
-AT_CHECK([ovs-ofctl ofp-print 01bb0009eeff00112233], [0], [dnl
+AT_CHECK([ovs-ofctl ofp-print 01100009eeff00112233], [0], [dnl
 (***only uses 9 bytes out of 10***)
-00000000  01 bb 00 09 ee ff 00 11-22 33                   |........"3      |
+00000000  01 10 00 09 ee ff 00 11-22 33                   |........"3      |
 ])
 # "
 AT_CLEANUP

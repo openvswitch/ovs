@@ -1520,6 +1520,14 @@ ofp_print_version(const struct ofp_header *oh,
 }
 
 static void
+ofp_header_to_string__(const struct ofp_header *oh,
+                       const struct ofputil_msg_type *type, struct ds *string)
+{
+    ds_put_cstr(string, ofputil_msg_type_name(type));
+    ofp_print_version(oh, string);
+}
+
+static void
 ofp_to_string__(const struct ofp_header *oh,
                 const struct ofputil_msg_type *type, struct ds *string,
                 int verbosity)
@@ -1527,8 +1535,7 @@ ofp_to_string__(const struct ofp_header *oh,
     enum ofputil_msg_code code;
     const void *msg = oh;
 
-    ds_put_cstr(string, ofputil_msg_type_name(type));
-    ofp_print_version(oh, string);
+    ofp_header_to_string__(oh, type, string);
     code = ofputil_msg_type_code(type);
     switch (code) {
     case OFPUTIL_MSG_INVALID:
@@ -1730,6 +1737,15 @@ ofp_to_string(const void *oh_, size_t len, int verbosity)
         ds_put_format(&string, "OpenFlow packet too short (only %zu bytes):\n",
                       len);
     } else if (ntohs(oh->length) > len) {
+        const struct ofputil_msg_type *type;
+        enum ofperr error;
+
+        error = ofputil_decode_msg_type_partial(oh, len, &type);
+        if (!error) {
+            ofp_header_to_string__(oh, type, &string);
+            ds_put_char(&string, '\n');
+        }
+
         ds_put_format(&string,
                       "(***truncated to %zu bytes from %"PRIu16"***)\n",
                       len, ntohs(oh->length));

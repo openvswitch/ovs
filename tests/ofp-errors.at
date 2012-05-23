@@ -18,10 +18,28 @@ AT_CLEANUP
 
 AT_SETUP([OFPT_ERROR with type OFPET_BAD_REQUEST - OF1.0])
 AT_KEYWORDS([ofp-print ofp-errors])
-AT_CHECK([ovs-ofctl ofp-print 01010014000000000001000601bbccddeeff0011], [0], [dnl
+AT_CHECK([ovs-ofctl ofp-print 0101001400000000000100060105ccddeeff0011], [0], [dnl
 OFPT_ERROR (xid=0x0): OFPBRC_BAD_LEN
+OFPT_FEATURES_REQUEST (xid=0xeeff0011):
 (***truncated to 8 bytes from 52445***)
-00000000  01 bb cc dd ee ff 00 11-                        |........        |
+00000000  01 05 cc dd ee ff 00 11-                        |........        |
+])
+AT_CLEANUP
+
+AT_SETUP([OFPT_ERROR prints type of truncated inner messages])
+AT_KEYWORDS([ofp-print ofp-errors])
+AT_CHECK([ovs-ofctl ofp-print "0101004c092529d500010006 \
+01 06 00 e0 00 00 00 01 00 00 50 54 00 00 00 01 \
+00 00 01 00 02 00 00 00 00 00 00 87 00 00 0f ff \
+ff fe 50 54 00 00 00 01 62 72 30 00 00 00 00 00 \
+00 00 00 00 00 00 00 00 00 00 00 01 00 00 00 01"], [0], [dnl
+OFPT_ERROR (xid=0x92529d5): OFPBRC_BAD_LEN
+OFPT_FEATURES_REPLY (xid=0x1):
+(***truncated to 64 bytes from 224***)
+00000000  01 06 00 e0 00 00 00 01-00 00 50 54 00 00 00 01 |..........PT....|
+00000010  00 00 01 00 02 00 00 00-00 00 00 87 00 00 0f ff |................|
+00000020  ff fe 50 54 00 00 00 01-62 72 30 00 00 00 00 00 |..PT....br0.....|
+00000030  00 00 00 00 00 00 00 00-00 00 00 01 00 00 00 01 |................|
 ])
 AT_CLEANUP
 
@@ -45,18 +63,20 @@ dnl Error type 3, code 1 is OFPFMFC_OVERLAP in OF1.0
 dnl and OFPBIC_UNSUP_INST in OF1.1, so check that value in both versions.
 AT_SETUP([OFPT_ERROR with type OFPFMFC_OVERLAP - OF1.0])
 AT_KEYWORDS([ofp-print ofp-errors])
-AT_CHECK([ovs-ofctl ofp-print 01010014000000000003000101bbccddeeff0011], [0], [dnl
+AT_CHECK([ovs-ofctl ofp-print 0101001400000000000300010106ccddeeff0011], [0], [dnl
 OFPT_ERROR (xid=0x0): OFPFMFC_OVERLAP
+OFPT_FEATURES_REPLY (xid=0xeeff0011):
 (***truncated to 8 bytes from 52445***)
-00000000  01 bb cc dd ee ff 00 11-                        |........        |
+00000000  01 06 cc dd ee ff 00 11-                        |........        |
 ])
 AT_CLEANUP
 AT_SETUP([OFPT_ERROR with type OFPBIC_UNSUP_INST - OF1.1])
 AT_KEYWORDS([ofp-print ofp-errors])
-AT_CHECK([ovs-ofctl ofp-print 02010014000000000003000102bbccddeeff0011], [0], [dnl
+AT_CHECK([ovs-ofctl ofp-print 0201001400000000000300010206ccddeeff0011], [0], [dnl
 OFPT_ERROR (OF1.1) (xid=0x0): OFPBIC_UNSUP_INST
+OFPT_FEATURES_REPLY (OF1.1) (xid=0xeeff0011):
 (***truncated to 8 bytes from 52445***)
-00000000  02 bb cc dd ee ff 00 11-                        |........        |
+00000000  02 06 cc dd ee ff 00 11-                        |........        |
 ])
 AT_CLEANUP
 
