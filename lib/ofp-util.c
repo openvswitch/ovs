@@ -64,8 +64,11 @@ ofputil_wcbits_to_netmask(int wcbits)
 }
 
 /* Given the IP netmask 'netmask', returns the number of bits of the IP address
- * that it wildcards, that is, the number of 0-bits in 'netmask'.  'netmask'
- * must be a CIDR netmask (see ip_is_cidr()). */
+ * that it wildcards, that is, the number of 0-bits in 'netmask', a number
+ * between 0 and 32 inclusive.
+ *
+ * If 'netmask' is not a CIDR netmask (see ip_is_cidr()), the return value will
+ * still be in the valid range but isn't otherwise meaningful. */
 int
 ofputil_netmask_to_wcbits(ovs_be32 netmask)
 {
@@ -347,11 +350,6 @@ ofputil_cls_rule_from_ofp11_match(const struct ofp11_match *match,
     if (ipv4 || arp) {
         if (!(wc & OFPFW11_NW_PROTO)) {
             cls_rule_set_nw_proto(rule, match->nw_proto);
-        }
-
-        if (!ip_is_cidr(~match->nw_src_mask) ||
-            !ip_is_cidr(~match->nw_dst_mask)) {
-            return OFPERR_OFPBMC_BAD_NW_ADDR_MASK;
         }
         cls_rule_set_nw_src_masked(rule, match->nw_src, ~match->nw_src_mask);
         cls_rule_set_nw_dst_masked(rule, match->nw_dst, ~match->nw_dst_mask);
@@ -1494,6 +1492,11 @@ ofputil_usable_protocols(const struct cls_rule *rule)
 
     /* Only NXM supports matching IP TTL/hop limit. */
     if (!(wc->wildcards & FWW_NW_TTL)) {
+        return OFPUTIL_P_NXM_ANY;
+    }
+
+    /* Only NXM supports non-CIDR IPv4 address masks. */
+    if (!ip_is_cidr(wc->nw_src_mask) || !ip_is_cidr(wc->nw_dst_mask)) {
         return OFPUTIL_P_NXM_ANY;
     }
 

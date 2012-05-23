@@ -1461,7 +1461,8 @@ OFP_ASSERT(sizeof(struct nx_action_output_reg) == 24);
  *
  * Format: 32-bit integer in network byte order.
  *
- * Masking: Only CIDR masks are allowed, that is, masks that consist of N
+ * Masking: Fully maskable, in Open vSwitch 1.8 and later.  In earlier
+ *   versions, only CIDR masks are allowed, that is, masks that consist of N
  *   high-order bits set to 1 and the other 32-N bits set to 0. */
 #define NXM_OF_IP_SRC     NXM_HEADER  (0x0000,  7, 4)
 #define NXM_OF_IP_SRC_W   NXM_HEADER_W(0x0000,  7, 4)
@@ -1530,7 +1531,8 @@ OFP_ASSERT(sizeof(struct nx_action_output_reg) == 24);
  *
  * Format: 32-bit integer in network byte order.
  *
- * Masking: Only CIDR masks are allowed, that is, masks that consist of N
+ * Masking: Fully maskable, in Open vSwitch 1.8 and later.  In earlier
+ *   versions, only CIDR masks are allowed, that is, masks that consist of N
  *   high-order bits set to 1 and the other 32-N bits set to 0. */
 #define NXM_OF_ARP_SPA    NXM_HEADER  (0x0000, 16, 4)
 #define NXM_OF_ARP_SPA_W  NXM_HEADER_W(0x0000, 16, 4)

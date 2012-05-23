@@ -246,12 +246,13 @@ eth_addr_bitand(const uint8_t src[ETH_ADDR_LEN],
 }
 
 /* Given the IP netmask 'netmask', returns the number of bits of the IP address
- * that it specifies, that is, the number of 1-bits in 'netmask'.  'netmask'
- * must be a CIDR netmask (see ip_is_cidr()). */
+ * that it specifies, that is, the number of 1-bits in 'netmask'.
+ *
+ * If 'netmask' is not a CIDR netmask (see ip_is_cidr()), the return value will
+ * still be in the valid range but isn't otherwise meaningful. */
 int
 ip_count_cidr_bits(ovs_be32 netmask)
 {
-    assert(ip_is_cidr(netmask));
     return 32 - ctz(ntohl(netmask));
 }
 

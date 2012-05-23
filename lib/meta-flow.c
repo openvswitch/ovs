@@ -175,7 +175,7 @@ static const struct mf_field mf_fields[MFF_N_IDS] = {
     {
         MFF_IPV4_SRC, "ip_src", "nw_src",
         MF_FIELD_SIZES(be32),
-        MFM_CIDR, 0,
+        MFM_FULLY, 0,
         MFS_IPV4,
         MFP_IPV4,
         true,
@@ -184,7 +184,7 @@ static const struct mf_field mf_fields[MFF_N_IDS] = {
     }, {
         MFF_IPV4_DST, "ip_dst", "nw_dst",
         MF_FIELD_SIZES(be32),
-        MFM_CIDR, 0,
+        MFM_FULLY, 0,
         MFS_IPV4,
         MFP_IPV4,
         true,
@@ -281,7 +281,7 @@ static const struct mf_field mf_fields[MFF_N_IDS] = {
     }, {
         MFF_ARP_SPA, "arp_spa", NULL,
         MF_FIELD_SIZES(be32),
-        MFM_CIDR, 0,
+        MFM_FULLY, 0,
         MFS_IPV4,
         MFP_ARP,
         false,
@@ -290,7 +290,7 @@ static const struct mf_field mf_fields[MFF_N_IDS] = {
     }, {
         MFF_ARP_TPA, "arp_tpa", NULL,
         MF_FIELD_SIZES(be32),
-        MFM_CIDR, 0,
+        MFM_FULLY, 0,
         MFS_IPV4,
         MFP_ARP,
         false,

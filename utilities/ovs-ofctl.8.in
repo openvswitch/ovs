@@ -418,7 +418,9 @@ which may be specified as an IP address or host name
 \fInetmask\fR allows restricting a match to an IPv4 address prefix.
 The netmask may be specified as a dotted quad
 (e.g. \fB192.168.1.0/255.255.255.0\fR) or as a CIDR block
-(e.g. \fB192.168.1.0/24\fR).
+(e.g. \fB192.168.1.0/24\fR).  Open vSwitch 1.8 and later support
+arbitrary dotted quad masks; earlier versions support only CIDR masks,
+that is, the dotted quads that are equivalent to some CIDR block.
 .IP
 When \fBdl_type=0x0806\fR or \fBarp\fR is specified, matches the
 \fBar_spa\fR or \fBar_tpa\fR field, respectively, in ARP packets for

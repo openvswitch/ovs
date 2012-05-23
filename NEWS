@@ -3,7 +3,13 @@ post-v1.7.0
     - New FAQ.  Please send updates and additions!
     - ovs-ofctl:
         - "mod-port" command can now control all OpenFlow config flags.
-    - Added support for arbitrary ethernet masks
+    - OpenFlow:
+      - Allow general bitwise masking for IPv4 source and destination
+        addresses in IPv4 and ARP packets.  (Previously, only CIDR masks
+        were allowed.)
+      - Allow support for arbitrary Ethernet masks.  (Previously, only
+        the multicast bit in the destination address could be individually
+	masked.)
     - Additional protocols are not mirrored and dropped when forward-bpdu is
       false.  For a full list, see the ovs-vswitchd.conf.db man page.
     - Open vSwitch now sends RARP packets in situations where it previously
