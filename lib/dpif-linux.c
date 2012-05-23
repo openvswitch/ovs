@@ -61,10 +61,10 @@
 VLOG_DEFINE_THIS_MODULE(dpif_linux);
 enum { MAX_PORTS = USHRT_MAX };
 
-enum { N_UPCALL_SOCKS = 17 };
-BUILD_ASSERT_DECL(IS_POW2(N_UPCALL_SOCKS - 1));
-BUILD_ASSERT_DECL(N_UPCALL_SOCKS > 1);
-BUILD_ASSERT_DECL(N_UPCALL_SOCKS <= 32); /* We use a 32-bit word as a mask. */
+enum { N_CHANNELS = 17 };
+BUILD_ASSERT_DECL(IS_POW2(N_CHANNELS - 1));
+BUILD_ASSERT_DECL(N_CHANNELS > 1);
+BUILD_ASSERT_DECL(N_CHANNELS <= 32); /* We use a 32-bit word as a mask. */
 
 /* This ethtool flag was introduced in Linux 2.6.24, so it might be
  * missing if we have old headers. */
@@ -130,15 +130,19 @@ static int dpif_linux_flow_transact(struct dpif_linux_flow *request,
 static void dpif_linux_flow_get_stats(const struct dpif_linux_flow *,
                                       struct dpif_flow_stats *);
 
+struct dpif_channel {
+    struct nl_sock *sock;
+};
+
 /* Datapath interface for the openvswitch Linux kernel module. */
 struct dpif_linux {
     struct dpif dpif;
     int dp_ifindex;
 
     /* Upcall messages. */
-    struct nl_sock *upcall_socks[N_UPCALL_SOCKS];
+    struct dpif_channel channels[N_CHANNELS];
     uint32_t ready_mask;        /* 1-bit for each sock with unread messages. */
-    int epoll_fd;               /* epoll fd that includes the upcall socks. */
+    int epoll_fd;               /* epoll fd that includes channel socks. */
 
     /* Change notification. */
     struct sset changed_ports;  /* Ports that have changed. */
@@ -256,17 +260,17 @@ open_dpif(const struct dpif_linux_dp *dp, struct dpif **dpifp)
 }
 
 static void
-destroy_upcall_socks(struct dpif_linux *dpif)
+destroy_channels(struct dpif_linux *dpif)
 {
-    int i;
+    struct dpif_channel *ch;
 
     if (dpif->epoll_fd >= 0) {
         close(dpif->epoll_fd);
         dpif->epoll_fd = -1;
     }
-    for (i = 0; i < N_UPCALL_SOCKS; i++) {
-        nl_sock_destroy(dpif->upcall_socks[i]);
-        dpif->upcall_socks[i] = NULL;
+    for (ch = dpif->channels; ch < &dpif->channels[N_CHANNELS]; ch++) {
+        nl_sock_destroy(ch->sock);
+        ch->sock = NULL;
     }
 }
 
@@ -276,7 +280,7 @@ dpif_linux_close(struct dpif *dpif_)
     struct dpif_linux *dpif = dpif_linux_cast(dpif_);
 
     nln_notifier_destroy(dpif->port_notifier);
-    destroy_upcall_socks(dpif);
+    destroy_channels(dpif);
     sset_destroy(&dpif->changed_ports);
     free(dpif);
 }
@@ -465,9 +469,9 @@ dpif_linux_port_get_pid(const struct dpif *dpif_, uint16_t port_no)
         int idx;
 
         idx = (port_no != UINT16_MAX
-               ? 1 + (port_no & (N_UPCALL_SOCKS - 2))
+               ? 1 + (port_no & (N_CHANNELS - 2))
                : 0);
-        return nl_sock_pid(dpif->upcall_socks[idx]);
+        return nl_sock_pid(dpif->channels[idx].sock);
     }
 }
 
@@ -989,32 +993,33 @@ dpif_linux_recv_set(struct dpif *dpif_, bool enable)
     }
 
     if (!enable) {
-        destroy_upcall_socks(dpif);
+        destroy_channels(dpif);
     } else {
-        int i;
+        struct dpif_channel *ch;
         int error;
 
-        dpif->epoll_fd = epoll_create(N_UPCALL_SOCKS);
+        dpif->epoll_fd = epoll_create(N_CHANNELS);
         if (dpif->epoll_fd < 0) {
             return errno;
         }
 
-        for (i = 0; i < N_UPCALL_SOCKS; i++) {
+        for (ch = dpif->channels; ch < &dpif->channels[N_CHANNELS]; ch++) {
+            int indx = ch - dpif->channels;
             struct epoll_event event;
 
-            error = nl_sock_create(NETLINK_GENERIC, &dpif->upcall_socks[i]);
+            error = nl_sock_create(NETLINK_GENERIC, &ch->sock);
             if (error) {
-                destroy_upcall_socks(dpif);
+                destroy_channels(dpif);
                 return error;
             }
 
             memset(&event, 0, sizeof event);
             event.events = EPOLLIN;
-            event.data.u32 = i;
-            if (epoll_ctl(dpif->epoll_fd, EPOLL_CTL_ADD,
-                          nl_sock_fd(dpif->upcall_socks[i]), &event) < 0) {
+            event.data.u32 = indx;
+            if (epoll_ctl(dpif->epoll_fd, EPOLL_CTL_ADD, nl_sock_fd(ch->sock),
+                          &event) < 0) {
                 error = errno;
-                destroy_upcall_socks(dpif);
+                destroy_channels(dpif);
                 return error;
             }
         }
@@ -1106,12 +1111,12 @@ dpif_linux_recv(struct dpif *dpif_, struct dpif_upcall *upcall,
     }
 
     if (!dpif->ready_mask) {
-        struct epoll_event events[N_UPCALL_SOCKS];
+        struct epoll_event events[N_CHANNELS];
         int retval;
         int i;
 
         do {
-            retval = epoll_wait(dpif->epoll_fd, events, N_UPCALL_SOCKS, 0);
+            retval = epoll_wait(dpif->epoll_fd, events, N_CHANNELS, 0);
         } while (retval < 0 && errno == EINTR);
         if (retval < 0) {
             static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
@@ -1125,7 +1130,7 @@ dpif_linux_recv(struct dpif *dpif_, struct dpif_upcall *upcall,
 
     while (dpif->ready_mask) {
         int indx = ffs(dpif->ready_mask) - 1;
-        struct nl_sock *upcall_sock = dpif->upcall_socks[indx];
+        struct dpif_channel *ch = &dpif->channels[indx];
 
         dpif->ready_mask &= ~(1u << indx);
 
@@ -1137,7 +1142,7 @@ dpif_linux_recv(struct dpif *dpif_, struct dpif_upcall *upcall,
                 return EAGAIN;
             }
 
-            error = nl_sock_recv(upcall_sock, buf, false);
+            error = nl_sock_recv(ch->sock, buf, false);
             if (error) {
                 if (error == ENOBUFS) {
                     /* ENOBUFS typically means that we've received so many
@@ -1183,14 +1188,14 @@ static void
 dpif_linux_recv_purge(struct dpif *dpif_)
 {
     struct dpif_linux *dpif = dpif_linux_cast(dpif_);
-    int i;
+    struct dpif_channel *ch;
 
     if (dpif->epoll_fd < 0) {
        return;
     }
 
-    for (i = 0; i < N_UPCALL_SOCKS; i++) {
-        nl_sock_drain(dpif->upcall_socks[i]);
+    for (ch = dpif->channels; ch < &dpif->channels[N_CHANNELS]; ch++) {
+        nl_sock_drain(ch->sock);
     }
 }
 
