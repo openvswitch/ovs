@@ -4,8 +4,8 @@ post-v1.7.0
     - ovs-ofctl:
         - "mod-port" command can now control all OpenFlow config flags.
     - OpenFlow:
-      - Allow general bitwise masking for IPv4 source and destination
-        addresses in IPv4 and ARP packets.  (Previously, only CIDR masks
+      - Allow general bitwise masking for IPv4 and IPv6 addresses in
+        IPv4, IPv6, and ARP packets.  (Previously, only CIDR masks
         were allowed.)
       - Allow support for arbitrary Ethernet masks.  (Previously, only
         the multicast bit in the destination address could be individually

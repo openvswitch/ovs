@@ -350,15 +350,16 @@ ipv6_create_mask(int mask)
 
 /* Given the IPv6 netmask 'netmask', returns the number of bits of the IPv6
  * address that it specifies, that is, the number of 1-bits in 'netmask'.
- * 'netmask' must be a CIDR netmask (see ipv6_is_cidr()). */
+ * 'netmask' must be a CIDR netmask (see ipv6_is_cidr()).
+ *
+ * If 'netmask' is not a CIDR netmask (see ipv6_is_cidr()), the return value
+ * will still be in the valid range but isn't otherwise meaningful. */
 int
 ipv6_count_cidr_bits(const struct in6_addr *netmask)
 {
     int i;
     int count = 0;
     const uint8_t *netmaskp = &netmask->s6_addr[0];
-
-    assert(ipv6_is_cidr(netmask));
 
     for (i=0; i<16; i++) {
         if (netmaskp[i] == 0xff) {

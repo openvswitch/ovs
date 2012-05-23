@@ -676,7 +676,11 @@ which may be specified as defined in RFC 2373.  The preferred format is
 address.  A single instance of \fB::\fR may be used to indicate multiple
 groups of 16-bits of zeros.  The optional \fInetmask\fR allows
 restricting a match to an IPv6 address prefix.  A netmask is specified
-as a CIDR block (e.g. \fB2001:db8:3c4d:1::/64\fR).
+as an IPv6 address (e.g. \fB2001:db8:3c4d:1::/ffff:ffff:ffff:ffff::\fR)
+or a CIDR block (e.g. \fB2001:db8:3c4d:1::/64\fR).  Open vSwitch 1.8
+and later support arbitrary masks; earlier versions support only CIDR
+masks, that is, CIDR block and IPv6 addresses that are equivalent to
+CIDR blocks.
 .
 .IP \fBipv6_label=\fIlabel\fR
 When \fBdl_type\fR is 0x86dd (possibly via shorthand, e.g., \fBipv6\fR

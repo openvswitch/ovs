@@ -1608,7 +1608,8 @@ OFP_ASSERT(sizeof(struct nx_action_output_reg) == 24);
  *
  * Format: 128-bit IPv6 address.
  *
- * Masking: Only CIDR masks are allowed, that is, masks that consist of N
+ * Masking: Fully maskable, in Open vSwitch 1.8 and later.  In previous
+ *   versions, only CIDR masks are allowed, that is, masks that consist of N
  *   high-order bits set to 1 and the other 128-N bits set to 0. */
 #define NXM_NX_IPV6_SRC    NXM_HEADER  (0x0001, 19, 16)
 #define NXM_NX_IPV6_SRC_W  NXM_HEADER_W(0x0001, 19, 16)
@@ -1636,7 +1637,8 @@ OFP_ASSERT(sizeof(struct nx_action_output_reg) == 24);
  *
  * Format: 128-bit IPv6 address.
  *
- * Masking: Only CIDR masks are allowed, that is, masks that consist of N
+ * Masking: Fully maskable, in Open vSwitch 1.8 and later.  In previous
+ *   versions, only CIDR masks are allowed, that is, masks that consist of N
  *   high-order bits set to 1 and the other 128-N bits set to 0. */
 #define NXM_NX_ND_TARGET     NXM_HEADER    (0x0001, 23, 16)
 #define NXM_NX_ND_TARGET_W   NXM_HEADER_W  (0x0001, 23, 16)

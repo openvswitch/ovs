@@ -195,7 +195,7 @@ static const struct mf_field mf_fields[MFF_N_IDS] = {
     {
         MFF_IPV6_SRC, "ipv6_src", NULL,
         MF_FIELD_SIZES(ipv6),
-        MFM_CIDR, 0,
+        MFM_FULLY, 0,
         MFS_IPV6,
         MFP_IPV6,
         true,
@@ -204,7 +204,7 @@ static const struct mf_field mf_fields[MFF_N_IDS] = {
     }, {
         MFF_IPV6_DST, "ipv6_dst", NULL,
         MF_FIELD_SIZES(ipv6),
-        MFM_CIDR, 0,
+        MFM_FULLY, 0,
         MFS_IPV6,
         MFP_IPV6,
         true,
@@ -407,7 +407,7 @@ static const struct mf_field mf_fields[MFF_N_IDS] = {
     {
         MFF_ND_TARGET, "nd_target", NULL,
         MF_FIELD_SIZES(ipv6),
-        MFM_CIDR, 0,
+        MFM_FULLY, 0,
         MFS_IPV6,
         MFP_ND,
         false,
@@ -814,11 +814,6 @@ mf_is_mask_valid(const struct mf_field *mf, const union mf_value *mask)
 
     case MFM_FULLY:
         return true;
-
-    case MFM_CIDR:
-        return (mf->n_bytes == 4
-                ? ip_is_cidr(mask->be32)
-                : ipv6_is_cidr(&mask->ipv6));
     }
 
     NOT_REACHED();
@@ -2091,12 +2086,14 @@ mf_from_ipv6_string(const struct mf_field *mf, const char *s,
 
     netmask = strtok_r(NULL, "/", &save_ptr);
     if (netmask) {
-        int prefix = atoi(netmask);
-        if (prefix <= 0 || prefix > 128) {
-            free(str);
-            return xasprintf("%s: prefix bits not between 1 and 128", s);
-        } else {
-            *mask = ipv6_create_mask(prefix);
+        if (inet_pton(AF_INET6, netmask, mask) != 1) {
+            int prefix = atoi(netmask);
+            if (prefix <= 0 || prefix > 128) {
+                free(str);
+                return xasprintf("%s: prefix bits not between 1 and 128", s);
+            } else {
+                *mask = ipv6_create_mask(prefix);
+            }
         }
     } else {
         *mask = in6addr_exact;
