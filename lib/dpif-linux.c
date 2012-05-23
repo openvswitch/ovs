@@ -150,6 +150,7 @@ struct dpif_linux {
 };
 
 static struct vlog_rate_limit error_rl = VLOG_RATE_LIMIT_INIT(9999, 5);
+static struct vlog_rate_limit enobufs_rl = VLOG_RATE_LIMIT_INIT(60, 5);
 
 /* Generic Netlink family numbers for OVS. */
 static int ovs_datapath_family;
@@ -1138,6 +1139,15 @@ dpif_linux_recv(struct dpif *dpif_, struct dpif_upcall *upcall,
 
             error = nl_sock_recv(upcall_sock, buf, false);
             if (error) {
+                if (error == ENOBUFS) {
+                    /* ENOBUFS typically means that we've received so many
+                     * packets that the buffer overflowed.  Try again
+                     * immediately because there's almost certainly a packet
+                     * waiting for us. */
+                    VLOG_ERR_RL(&enobufs_rl, "%s: lost packet with hash %d",
+                                dpif_name(dpif_), dpif->ready_mask);
+                    continue;
+                }
                 if (error == EAGAIN) {
                     break;
                 }
