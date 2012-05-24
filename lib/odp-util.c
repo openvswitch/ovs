@@ -30,7 +30,6 @@
 #include "flow.h"
 #include "netlink.h"
 #include "ofpbuf.h"
-#include "openvswitch/tunnel.h"
 #include "packets.h"
 #include "simap.h"
 #include "timeval.h"
