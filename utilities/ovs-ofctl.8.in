@@ -79,31 +79,49 @@ the device name, e.g. \fBeth0\fR.  The \fIaction\fR may be any one of the
 following:
 .
 .RS
-.IP \fBup\fR
-Enables the interface.  This is equivalent to ``ifconfig up'' on a Unix
-system.
+.IQ \fBup\fR
+.IQ \fBdown\fR
+Enable or disable the interface.  This is equivalent to \fBifconfig
+up\fR or \fBifconfig down\fR on a Unix system.
 .
-.IP \fBdown\fR
-Disables the interface.  This is equivalent to ``ifconfig down'' on a Unix
-system.
+.IP \fBstp\fR
+.IQ \fBno\-stp\fR
+Enable or disable 802.1D spanning tree protocol (STP) on the
+interface.  OpenFlow implementations that don't support STP will
+refuse to enable it.
+.
+.IP \fBreceive\fR
+.IQ \fBno\-receive\fR
+.IQ \fBreceive\-stp\fR
+.IQ \fBno\-receive\-stp\fR
+Enable or disable OpenFlow processing of packets received on this
+interface.  When packet processing is disabled, packets will be
+dropped instead of being processed through the OpenFlow table.  The
+\fBreceive\fR or \fBno\-receive\fR setting applies to all packets
+except 802.1D spanning tree packets, which are separately controlled
+by \fBreceive\-stp\fR or \fBno\-receive\-stp\fR.
 .
 .IP \fBforward\fR
-Allows forwarding of traffic on this interface.  This is the default posture
-for all ports.
-.
-.IP \fBnoforward\fR
-Disallows forwarding of traffic on this interface.
+.IQ \fBno\-forward\fR
+Allow or disallow forwarding of traffic to this interface.  By
+default, forwarding is enabled.
 .
 .IP \fBflood\fR
-When a \fIflood\fR action is specified, traffic will be sent out this
-interface.  This is the default posture for monitored ports.
+.IQ \fBno\-flood\fR
+Controls whether an OpenFlow \fBflood\fR action will send traffic out
+this interface.  By default, flooding is enabled.  Disabling flooding
+is primarily useful to prevent loops when a spanning tree protocol is
+not in use.
 .
-.IP \fBnoflood\fR
-When a \fIflood\fR action is specified, traffic will not be sent out 
-this interface.  This is primarily useful to prevent loops when a
-spanning tree protocol is not in use.
-.
+.IP \fBpacket\-in\fR
+.IQ \fBno\-packet\-in\fR
+Controls whether packets received on this interface that do not match
+a flow table entry generate a ``packet in'' message to the OpenFlow
+controller.  By default, ``packet in'' messages are enabled.
 .RE
+.IP
+The \fBshow\fR command displays (among other information) the
+configuration that \fBmod\-port\fR changes.
 .
 .IP "\fBget\-frags \fIswitch\fR"
 Prints \fIswitch\fR's fragment handling mode.  See \fBset\-frags\fR,

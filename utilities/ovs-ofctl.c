@@ -1270,10 +1270,29 @@ do_packet_out(int argc, char *argv[])
 static void
 do_mod_port(int argc OVS_UNUSED, char *argv[])
 {
+    struct ofp_config_flag {
+        const char *name;             /* The flag's name. */
+        enum ofputil_port_config bit; /* Bit to turn on or off. */
+        bool on;                      /* Value to set the bit to. */
+    };
+    static const struct ofp_config_flag flags[] = {
+        { "up",          OFPUTIL_PC_PORT_DOWN,    false },
+        { "down",        OFPUTIL_PC_PORT_DOWN,    true  },
+        { "stp",         OFPUTIL_PC_NO_STP,       false },
+        { "receive",     OFPUTIL_PC_NO_RECV,      false },
+        { "receive-stp", OFPUTIL_PC_NO_RECV_STP,  false },
+        { "flood",       OFPUTIL_PC_NO_FLOOD,     false },
+        { "forward",     OFPUTIL_PC_NO_FWD,       false },
+        { "packet-in",   OFPUTIL_PC_NO_PACKET_IN, false },
+    };
+
+    const struct ofp_config_flag *flag;
     enum ofputil_protocol protocol;
     struct ofputil_port_mod pm;
     struct ofputil_phy_port pp;
     struct vconn *vconn;
+    const char *command;
+    bool not;
 
     fetch_ofputil_phy_port(argv[1], argv[2], &pp);
 
@@ -1283,25 +1302,26 @@ do_mod_port(int argc OVS_UNUSED, char *argv[])
     pm.mask = 0;
     pm.advertise = 0;
 
-    if (!strcasecmp(argv[3], "up")) {
-        pm.mask |= OFPUTIL_PC_PORT_DOWN;
-    } else if (!strcasecmp(argv[3], "down")) {
-        pm.mask |= OFPUTIL_PC_PORT_DOWN;
-        pm.config |= OFPUTIL_PC_PORT_DOWN;
-    } else if (!strcasecmp(argv[3], "flood")) {
-        pm.mask |= OFPUTIL_PC_NO_FLOOD;
-    } else if (!strcasecmp(argv[3], "noflood")) {
-        pm.mask |= OFPUTIL_PC_NO_FLOOD;
-        pm.config |= OFPUTIL_PC_NO_FLOOD;
-    } else if (!strcasecmp(argv[3], "forward")) {
-        pm.mask |= OFPUTIL_PC_NO_FWD;
-    } else if (!strcasecmp(argv[3], "noforward")) {
-        pm.mask |= OFPUTIL_PC_NO_FWD;
-        pm.config |= OFPUTIL_PC_NO_FWD;
+    if (!strncasecmp(argv[3], "no-", 3)) {
+        command = argv[3] + 3;
+        not = true;
+    } else if (!strncasecmp(argv[3], "no", 2)) {
+        command = argv[3] + 2;
+        not = true;
     } else {
-        ovs_fatal(0, "unknown mod-port command '%s'", argv[3]);
+        command = argv[3];
+        not = false;
     }
+    for (flag = flags; flag < &flags[ARRAY_SIZE(flags)]; flag++) {
+        if (!strcasecmp(command, flag->name)) {
+            pm.mask = flag->bit;
+            pm.config = flag->on ^ not ? flag->bit : 0;
+            goto found;
+        }
+    }
+    ovs_fatal(0, "unknown mod-port command '%s'", argv[3]);
 
+found:
     protocol = open_vconn(argv[1], &vconn);
     transact_noreply(vconn, ofputil_encode_port_mod(&pm, protocol));
     vconn_close(vconn);

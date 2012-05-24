@@ -26,6 +26,8 @@ v1.7.0 - xx xxx xxxx
     - The "coverage/log" command previously available through ovs-appctl
       has been replaced by "coverage/show".  The new command replies with
       coverage counter values, instead of logging them.
+    - ovs-ofctl:
+        - "mod-port" command can now control all OpenFlow config flags.
 
 
 v1.6.0 - xx xxx xxxx

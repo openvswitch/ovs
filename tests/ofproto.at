@@ -68,7 +68,14 @@ for command_config_state in \
     'up 0 0' \
     'noflood NO_FLOOD 0' \
     'down PORT_DOWN,NO_FLOOD LINK_DOWN' \
-    'flood PORT_DOWN LINK_DOWN'
+    'flood PORT_DOWN LINK_DOWN' \
+    'no-receive PORT_DOWN,NO_RECV LINK_DOWN' \
+    'no-forward PORT_DOWN,NO_RECV,NO_FWD LINK_DOWN' \
+    'no-packet-in PORT_DOWN,NO_RECV,NO_FWD,NO_PACKET_IN LINK_DOWN' \
+    'forward PORT_DOWN,NO_RECV,NO_PACKET_IN LINK_DOWN' \
+    'packet-in PORT_DOWN,NO_RECV LINK_DOWN' \
+    'up NO_RECV 0' \
+    'receive 0 0'
 do
     set $command_config_state
     command=$[1] config=`echo $[2] | sed 's/,/ /g'` state=$[3]
