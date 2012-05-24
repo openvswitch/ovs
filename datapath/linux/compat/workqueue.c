@@ -23,8 +23,6 @@
 #include <linux/lockdep.h>
 #include <linux/idr.h>
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,23)
-
 static spinlock_t wq_lock;
 static struct list_head workq;
 static wait_queue_head_t more_work;
@@ -210,4 +208,3 @@ void  ovs_workqueues_exit(void)
 	BUG_ON(!list_empty(&workq));
 	kthread_stop(workq_thread);
 }
-#endif
