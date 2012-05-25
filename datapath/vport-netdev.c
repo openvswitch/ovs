@@ -273,9 +273,9 @@ static void netdev_port_receive(struct vport *vport, struct sk_buff *skb)
 	ovs_vport_receive(vport, skb);
 }
 
-static unsigned packet_length(const struct sk_buff *skb)
+static unsigned int packet_length(const struct sk_buff *skb)
 {
-	unsigned length = skb->len - ETH_HLEN;
+	unsigned int length = skb->len - ETH_HLEN;
 
 	if (skb->protocol == htons(ETH_P_8021Q))
 		length -= VLAN_HLEN;
