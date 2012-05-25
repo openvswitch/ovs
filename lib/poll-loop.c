@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -157,7 +157,7 @@ poll_immediate_wake(const char *where)
 static void
 log_wakeup(const char *where, const struct pollfd *pollfd, int timeout)
 {
-    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(120, 120);
+    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(10, 10);
     enum vlog_level level;
     int cpu_usage;
     struct ds s;
