@@ -37,6 +37,7 @@ openvswitch_headers += \
 	linux/compat/include/linux/lockdep.h \
 	linux/compat/include/linux/log2.h \
 	linux/compat/include/linux/mutex.h \
+	linux/compat/include/linux/net.h \
 	linux/compat/include/linux/netdevice.h \
 	linux/compat/include/linux/netfilter_bridge.h \
 	linux/compat/include/linux/netfilter_ipv4.h \
