@@ -39,7 +39,6 @@
 #include <linux/version.h>
 #include <linux/ethtool.h>
 #include <linux/wait.h>
-#include <asm/system.h>
 #include <asm/div64.h>
 #include <linux/highmem.h>
 #include <linux/netfilter_bridge.h>
