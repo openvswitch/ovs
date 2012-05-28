@@ -52,8 +52,8 @@
     CLS_FIELD(FWW_DL_TYPE,                dl_type,     DL_TYPE)     \
     CLS_FIELD(0,                          tp_src,      TP_SRC)      \
     CLS_FIELD(0,                          tp_dst,      TP_DST)      \
-    CLS_FIELD(FWW_DL_SRC,                 dl_src,      DL_SRC)      \
-    CLS_FIELD(FWW_DL_DST | FWW_ETH_MCAST, dl_dst,      DL_DST)      \
+    CLS_FIELD(0,                          dl_src,      DL_SRC)      \
+    CLS_FIELD(0,                          dl_dst,      DL_DST)      \
     CLS_FIELD(FWW_NW_PROTO,               nw_proto,    NW_PROTO)    \
     CLS_FIELD(FWW_NW_DSCP,                nw_tos,      NW_DSCP)
 
@@ -202,6 +202,12 @@ match(const struct cls_rule *wild, const struct flow *fixed)
             eq = !((fixed->tp_src ^ wild->flow.tp_src) & wild->wc.tp_src_mask);
         } else if (f_idx == CLS_F_IDX_TP_DST) {
             eq = !((fixed->tp_dst ^ wild->flow.tp_dst) & wild->wc.tp_dst_mask);
+        } else if (f_idx == CLS_F_IDX_DL_SRC) {
+            eq = !eth_addr_equal_except(fixed->dl_src, wild->flow.dl_src,
+                                        wild->wc.dl_src_mask);
+        } else if (f_idx == CLS_F_IDX_DL_DST) {
+            eq = !eth_addr_equal_except(fixed->dl_dst, wild->flow.dl_dst,
+                                        wild->wc.dl_dst_mask);
         } else if (f_idx == CLS_F_IDX_VLAN_TCI) {
             eq = !((fixed->vlan_tci ^ wild->flow.vlan_tci)
                    & wild->wc.vlan_tci_mask);
@@ -471,6 +477,10 @@ make_rule(int wc_fields, unsigned int priority, int value_pat)
             rule->cls_rule.wc.tp_src_mask = htons(UINT16_MAX);
         } else if (f_idx == CLS_F_IDX_TP_DST) {
             rule->cls_rule.wc.tp_dst_mask = htons(UINT16_MAX);
+        } else if (f_idx == CLS_F_IDX_DL_SRC) {
+            memset(rule->cls_rule.wc.dl_src_mask, 0xff, ETH_ADDR_LEN);
+        } else if (f_idx == CLS_F_IDX_DL_DST) {
+            memset(rule->cls_rule.wc.dl_dst_mask, 0xff, ETH_ADDR_LEN);
         } else if (f_idx == CLS_F_IDX_VLAN_TCI) {
             rule->cls_rule.wc.vlan_tci_mask = htons(UINT16_MAX);
         } else if (f_idx == CLS_F_IDX_TUN_ID) {

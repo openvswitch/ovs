@@ -153,7 +153,7 @@ eth_format_masked(const uint8_t eth[ETH_ADDR_LEN],
                   const uint8_t mask[ETH_ADDR_LEN], struct ds *s)
 {
     ds_put_format(s, ETH_ADDR_FMT, ETH_ADDR_ARGS(eth));
-    if (mask) {
+    if (mask && !eth_mask_is_exact(mask)) {
         ds_put_format(s, "/"ETH_ADDR_FMT, ETH_ADDR_ARGS(mask));
     }
 }

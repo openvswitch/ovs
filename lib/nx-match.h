@@ -90,7 +90,7 @@ void nxm_decode(struct mf_subfield *, ovs_be32 header, ovs_be16 ofs_nbits);
 void nxm_decode_discrete(struct mf_subfield *, ovs_be32 header,
                          ovs_be16 ofs, ovs_be16 n_bits);
 
-BUILD_ASSERT_DECL(FLOW_WC_SEQ == 10);
+BUILD_ASSERT_DECL(FLOW_WC_SEQ == 11);
 /* Upper bound on the length of an nx_match.  The longest nx_match (an
  * IPV6 neighbor discovery message using 5 registers) would be:
  *
@@ -98,7 +98,7 @@ BUILD_ASSERT_DECL(FLOW_WC_SEQ == 10);
  *                   ------  -----  ----  -----
  *  NXM_OF_IN_PORT      4       2    --      6
  *  NXM_OF_ETH_DST_W    4       6     6     16
- *  NXM_OF_ETH_SRC      4       6    --     10
+ *  NXM_OF_ETH_SRC_W    4       6     6     16
  *  NXM_OF_ETH_TYPE     4       2    --      6
  *  NXM_OF_VLAN_TCI     4       2     2      8
  *  NXM_OF_IP_TOS       4       1    --      5
@@ -123,7 +123,7 @@ BUILD_ASSERT_DECL(FLOW_WC_SEQ == 10);
  *  NXM_NX_REG_W(7)     4       4     4     12
  *  NXM_NX_TUN_ID_W     4       8     8     20
  *  -------------------------------------------
- *  total                                  327
+ *  total                                  333
  *
  * So this value is conservative.
  */

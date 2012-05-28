@@ -76,8 +76,6 @@ ofputil_netmask_to_wcbits(ovs_be32 netmask)
  * name. */
 #define WC_INVARIANT_LIST \
     WC_INVARIANT_BIT(IN_PORT) \
-    WC_INVARIANT_BIT(DL_SRC) \
-    WC_INVARIANT_BIT(DL_DST) \
     WC_INVARIANT_BIT(DL_TYPE) \
     WC_INVARIANT_BIT(NW_PROTO)
 
@@ -101,7 +99,7 @@ static const flow_wildcards_t WC_INVARIANTS = 0
 void
 ofputil_wildcard_from_openflow(uint32_t ofpfw, struct flow_wildcards *wc)
 {
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 10);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 11);
 
     /* Initialize most of rule->wc. */
     flow_wildcards_init_catchall(wc);
@@ -127,11 +125,11 @@ ofputil_wildcard_from_openflow(uint32_t ofpfw, struct flow_wildcards *wc)
         wc->tp_dst_mask = htons(UINT16_MAX);
     }
 
-    if (ofpfw & OFPFW_DL_DST) {
-        /* OpenFlow 1.0 OFPFW_DL_DST covers the whole Ethernet destination, but
-         * Open vSwitch breaks the Ethernet destination into bits as FWW_DL_DST
-         * and FWW_ETH_MCAST. */
-        wc->wildcards |= FWW_ETH_MCAST;
+    if (!(ofpfw & OFPFW_DL_SRC)) {
+        memset(wc->dl_src_mask, 0xff, ETH_ADDR_LEN);
+    }
+    if (!(ofpfw & OFPFW_DL_DST)) {
+        memset(wc->dl_dst_mask, 0xff, ETH_ADDR_LEN);
     }
 
     /* VLAN TCI mask. */
@@ -211,6 +209,12 @@ ofputil_cls_rule_to_match(const struct cls_rule *rule, struct ofp_match *match)
     }
     if (!wc->tp_dst_mask) {
         ofpfw |= OFPFW_TP_DST;
+    }
+    if (eth_addr_is_zero(wc->dl_src_mask)) {
+        ofpfw |= OFPFW_DL_SRC;
+    }
+    if (eth_addr_is_zero(wc->dl_dst_mask)) {
+        ofpfw |= OFPFW_DL_DST;
     }
 
     /* Translate VLANs. */
@@ -1174,10 +1178,15 @@ ofputil_usable_protocols(const struct cls_rule *rule)
 {
     const struct flow_wildcards *wc = &rule->wc;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 10);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 11);
 
-    /* Only NXM supports separately wildcards the Ethernet multicast bit. */
-    if (!(wc->wildcards & FWW_DL_DST) != !(wc->wildcards & FWW_ETH_MCAST)) {
+    /* NXM and OF1.1+ supports bitwise matching on ethernet addresses. */
+    if (!eth_mask_is_exact(wc->dl_src_mask)
+        && !eth_addr_is_zero(wc->dl_src_mask)) {
+        return OFPUTIL_P_NXM_ANY;
+    }
+    if (!eth_mask_is_exact(wc->dl_dst_mask)
+        && !eth_addr_is_zero(wc->dl_dst_mask)) {
         return OFPUTIL_P_NXM_ANY;
     }
 

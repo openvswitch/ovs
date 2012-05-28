@@ -96,6 +96,8 @@ void cls_rule_set_tun_id_masked(struct cls_rule *,
 void cls_rule_set_in_port(struct cls_rule *, uint16_t ofp_port);
 void cls_rule_set_dl_type(struct cls_rule *, ovs_be16);
 void cls_rule_set_dl_src(struct cls_rule *, const uint8_t[6]);
+void cls_rule_set_dl_src_masked(struct cls_rule *, const uint8_t dl_src[6],
+                                const uint8_t mask[6]);
 void cls_rule_set_dl_dst(struct cls_rule *, const uint8_t[6]);
 void cls_rule_set_dl_dst_masked(struct cls_rule *, const uint8_t dl_dst[6],
                                 const uint8_t mask[6]);

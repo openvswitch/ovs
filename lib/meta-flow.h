@@ -144,8 +144,7 @@ enum mf_prereqs {
 enum mf_maskable {
     MFM_NONE,                   /* No sub-field masking. */
     MFM_FULLY,                  /* Every bit is individually maskable. */
-    MFM_CIDR,                   /* Contiguous low-order bits may be masked. */
-    MFM_MCAST                   /* Byte 0, bit 0 is separately maskable. */
+    MFM_CIDR                    /* Contiguous low-order bits may be masked. */
 };
 
 /* How to format or parse a field's value. */

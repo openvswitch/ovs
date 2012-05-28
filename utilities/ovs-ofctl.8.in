@@ -381,11 +381,13 @@ Matches an Ethernet source (or destination) address specified as 6
 pairs of hexadecimal digits delimited by colons
 (e.g. \fB00:0A:E4:25:6B:B0\fR).
 .
-.IP \fBdl_dst=\fIxx\fB:\fIxx\fB:\fIxx\fB:\fIxx\fB:\fIxx\fB:\fIxx\fB/\fIxx\fB:\fIxx\fB:\fIxx\fB:\fIxx\fB:\fIxx\fB:\fIxx\fR
+.IP \fBdl_src=\fIxx\fB:\fIxx\fB:\fIxx\fB:\fIxx\fB:\fIxx\fB:\fIxx\fB/\fIxx\fB:\fIxx\fB:\fIxx\fB:\fIxx\fB:\fIxx\fB:\fIxx\fR
+.IQ \fBdl_dst=\fIxx\fB:\fIxx\fB:\fIxx\fB:\fIxx\fB:\fIxx\fB:\fIxx\fB/\fIxx\fB:\fIxx\fB:\fIxx\fB:\fIxx\fB:\fIxx\fB:\fIxx\fR
 Matches an Ethernet destination address specified as 6 pairs of
 hexadecimal digits delimited by colons (e.g. \fB00:0A:E4:25:6B:B0\fR),
-with a wildcard mask following the slash.  Only
-the following masks are allowed:
+with a wildcard mask following the slash. Open vSwitch 1.8 and later
+support arbitrary masks for source and/or destination. Earlier
+versions only support masking the destination with the following masks:
 .RS
 .IP \fB01:00:00:00:00:00\fR
 Match only the multicast bit.  Thus,

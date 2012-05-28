@@ -113,7 +113,7 @@ static const struct mf_field mf_fields[MFF_N_IDS] = {
     {
         MFF_ETH_SRC, "eth_src", "dl_src",
         MF_FIELD_SIZES(mac),
-        MFM_NONE, FWW_DL_SRC,
+        MFM_FULLY, 0,
         MFS_ETHERNET,
         MFP_NONE,
         true,
@@ -122,7 +122,7 @@ static const struct mf_field mf_fields[MFF_N_IDS] = {
     }, {
         MFF_ETH_DST, "eth_dst", "dl_dst",
         MF_FIELD_SIZES(mac),
-        MFM_MCAST, 0,
+        MFM_FULLY, 0,
         MFS_ETHERNET,
         MFP_NONE,
         true,
@@ -543,7 +543,6 @@ mf_is_all_wild(const struct mf_field *mf, const struct flow_wildcards *wc)
 {
     switch (mf->id) {
     case MFF_IN_PORT:
-    case MFF_ETH_SRC:
     case MFF_ETH_TYPE:
     case MFF_IP_PROTO:
     case MFF_IP_DSCP:
@@ -590,9 +589,10 @@ mf_is_all_wild(const struct mf_field *mf, const struct flow_wildcards *wc)
 #endif
         return !wc->reg_masks[mf->id - MFF_REG0];
 
+    case MFF_ETH_SRC:
+        return eth_addr_is_zero(wc->dl_src_mask);
     case MFF_ETH_DST:
-        return ((wc->wildcards & (FWW_ETH_MCAST | FWW_DL_DST))
-                == (FWW_ETH_MCAST | FWW_DL_DST));
+        return eth_addr_is_zero(wc->dl_dst_mask);
 
     case MFF_VLAN_TCI:
         return !wc->vlan_tci_mask;
@@ -651,7 +651,6 @@ mf_get_mask(const struct mf_field *mf, const struct flow_wildcards *wc,
 {
     switch (mf->id) {
     case MFF_IN_PORT:
-    case MFF_ETH_SRC:
     case MFF_ETH_TYPE:
     case MFF_IP_PROTO:
     case MFF_IP_DSCP:
@@ -702,8 +701,11 @@ mf_get_mask(const struct mf_field *mf, const struct flow_wildcards *wc,
         break;
 
     case MFF_ETH_DST:
-        memcpy(mask->mac, flow_wildcards_to_dl_dst_mask(wc->wildcards),
-               ETH_ADDR_LEN);
+        memcpy(mask->mac, wc->dl_dst_mask, ETH_ADDR_LEN);
+        break;
+
+    case MFF_ETH_SRC:
+        memcpy(mask->mac, wc->dl_src_mask, ETH_ADDR_LEN);
         break;
 
     case MFF_VLAN_TCI:
@@ -786,9 +788,6 @@ mf_is_mask_valid(const struct mf_field *mf, const union mf_value *mask)
         return (mf->n_bytes == 4
                 ? ip_is_cidr(mask->be32)
                 : ipv6_is_cidr(&mask->ipv6));
-
-    case MFM_MCAST:
-        return flow_wildcards_is_dl_dst_mask_valid(mask->mac);
     }
 
     NOT_REACHED();
@@ -1532,13 +1531,13 @@ mf_set_wild(const struct mf_field *mf, struct cls_rule *rule)
 #endif
 
     case MFF_ETH_SRC:
-        rule->wc.wildcards |= FWW_DL_SRC;
-        memset(rule->flow.dl_src, 0, sizeof rule->flow.dl_src);
+        memset(rule->flow.dl_src, 0, ETH_ADDR_LEN);
+        memset(rule->wc.dl_src_mask, 0, ETH_ADDR_LEN);
         break;
 
     case MFF_ETH_DST:
-        rule->wc.wildcards |= FWW_DL_DST | FWW_ETH_MCAST;
-        memset(rule->flow.dl_dst, 0, sizeof rule->flow.dl_dst);
+        memset(rule->flow.dl_dst, 0, ETH_ADDR_LEN);
+        memset(rule->wc.dl_dst_mask, 0, ETH_ADDR_LEN);
         break;
 
     case MFF_ETH_TYPE:
@@ -1678,7 +1677,6 @@ mf_set(const struct mf_field *mf,
 
     switch (mf->id) {
     case MFF_IN_PORT:
-    case MFF_ETH_SRC:
     case MFF_ETH_TYPE:
     case MFF_VLAN_VID:
     case MFF_VLAN_PCP:
@@ -1734,9 +1732,11 @@ mf_set(const struct mf_field *mf,
         break;
 
     case MFF_ETH_DST:
-        if (flow_wildcards_is_dl_dst_mask_valid(mask->mac)) {
-            cls_rule_set_dl_dst_masked(rule, value->mac, mask->mac);
-        }
+        cls_rule_set_dl_dst_masked(rule, value->mac, mask->mac);
+        break;
+
+    case MFF_ETH_SRC:
+        cls_rule_set_dl_src_masked(rule, value->mac, mask->mac);
         break;
 
     case MFF_VLAN_TCI:

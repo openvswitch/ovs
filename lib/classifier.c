@@ -149,16 +149,31 @@ cls_rule_set_dl_type(struct cls_rule *rule, ovs_be16 dl_type)
 void
 cls_rule_set_dl_src(struct cls_rule *rule, const uint8_t dl_src[ETH_ADDR_LEN])
 {
-    rule->wc.wildcards &= ~FWW_DL_SRC;
     memcpy(rule->flow.dl_src, dl_src, ETH_ADDR_LEN);
+    memset(rule->wc.dl_src_mask, 0xff, ETH_ADDR_LEN);
+}
+
+/* Modifies 'rule' so that the Ethernet address must match 'dl_src' after each
+ * byte is ANDed with the appropriate byte in 'mask'. */
+void
+cls_rule_set_dl_src_masked(struct cls_rule *rule,
+                           const uint8_t dl_src[ETH_ADDR_LEN],
+                           const uint8_t mask[ETH_ADDR_LEN])
+{
+    size_t i;
+
+    for (i = 0; i < ETH_ADDR_LEN; i++) {
+        rule->flow.dl_src[i] = dl_src[i] & mask[i];
+        rule->wc.dl_src_mask[i] = mask[i];
+    }
 }
 
 /* Modifies 'rule' so that the Ethernet address must match 'dl_dst' exactly. */
 void
 cls_rule_set_dl_dst(struct cls_rule *rule, const uint8_t dl_dst[ETH_ADDR_LEN])
 {
-    rule->wc.wildcards &= ~(FWW_DL_DST | FWW_ETH_MCAST);
     memcpy(rule->flow.dl_dst, dl_dst, ETH_ADDR_LEN);
+    memset(rule->wc.dl_dst_mask, 0xff, ETH_ADDR_LEN);
 }
 
 /* Modifies 'rule' so that the Ethernet address must match 'dl_dst' after each
@@ -171,12 +186,11 @@ cls_rule_set_dl_dst_masked(struct cls_rule *rule,
                            const uint8_t dl_dst[ETH_ADDR_LEN],
                            const uint8_t mask[ETH_ADDR_LEN])
 {
-    flow_wildcards_t *wc = &rule->wc.wildcards;
     size_t i;
 
-    *wc = flow_wildcards_set_dl_dst_mask(*wc, mask);
     for (i = 0; i < ETH_ADDR_LEN; i++) {
         rule->flow.dl_dst[i] = dl_dst[i] & mask[i];
+        rule->wc.dl_dst_mask[i] = mask[i];
     }
 }
 
@@ -449,6 +463,17 @@ cls_rule_hash(const struct cls_rule *rule, uint32_t basis)
 }
 
 static void
+format_eth_masked(struct ds *s, const char *name, const uint8_t eth[6],
+                  const uint8_t mask[6])
+{
+    if (!eth_addr_is_zero(mask)) {
+        ds_put_format(s, "%s=", name);
+        eth_format_masked(eth, mask, s);
+        ds_put_char(s, ',');
+    }
+}
+
+static void
 format_ip_netmask(struct ds *s, const char *name, ovs_be32 ip,
                   ovs_be32 netmask)
 {
@@ -500,7 +525,7 @@ cls_rule_format(const struct cls_rule *rule, struct ds *s)
 
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 10);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 11);
 
     if (rule->priority != OFP_DEFAULT_PRIORITY) {
         ds_put_format(s, "priority=%d,", rule->priority);
@@ -597,24 +622,8 @@ cls_rule_format(const struct cls_rule *rule, struct ds *s)
                           ntohs(f->vlan_tci), ntohs(wc->vlan_tci_mask));
         }
     }
-    if (!(w & FWW_DL_SRC)) {
-        ds_put_format(s, "dl_src="ETH_ADDR_FMT",", ETH_ADDR_ARGS(f->dl_src));
-    }
-    switch (w & (FWW_DL_DST | FWW_ETH_MCAST)) {
-    case 0:
-        ds_put_format(s, "dl_dst="ETH_ADDR_FMT",", ETH_ADDR_ARGS(f->dl_dst));
-        break;
-    case FWW_DL_DST:
-        ds_put_format(s, "dl_dst="ETH_ADDR_FMT"/01:00:00:00:00:00,",
-                      ETH_ADDR_ARGS(f->dl_dst));
-        break;
-    case FWW_ETH_MCAST:
-        ds_put_format(s, "dl_dst="ETH_ADDR_FMT"/fe:ff:ff:ff:ff:ff,",
-                      ETH_ADDR_ARGS(f->dl_dst));
-        break;
-    case FWW_DL_DST | FWW_ETH_MCAST:
-        break;
-    }
+    format_eth_masked(s, "dl_src", f->dl_src, wc->dl_src_mask);
+    format_eth_masked(s, "dl_dst", f->dl_dst, wc->dl_dst_mask);
     if (!skip_type && !(w & FWW_DL_TYPE)) {
         ds_put_format(s, "dl_type=0x%04"PRIx16",", ntohs(f->dl_type));
     }
@@ -1179,7 +1188,7 @@ flow_equal_except(const struct flow *a, const struct flow *b,
     const flow_wildcards_t wc = wildcards->wildcards;
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 10);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 11);
 
     for (i = 0; i < FLOW_N_REGS; i++) {
         if ((a->regs[i] ^ b->regs[i]) & wildcards->reg_masks[i]) {
@@ -1195,16 +1204,10 @@ flow_equal_except(const struct flow *a, const struct flow *b,
             && (wc & FWW_DL_TYPE || a->dl_type == b->dl_type)
             && !((a->tp_src ^ b->tp_src) & wildcards->tp_src_mask)
             && !((a->tp_dst ^ b->tp_dst) & wildcards->tp_dst_mask)
-            && (wc & FWW_DL_SRC || eth_addr_equals(a->dl_src, b->dl_src))
-            && (wc & FWW_DL_DST
-                || (!((a->dl_dst[0] ^ b->dl_dst[0]) & 0xfe)
-                    && a->dl_dst[1] == b->dl_dst[1]
-                    && a->dl_dst[2] == b->dl_dst[2]
-                    && a->dl_dst[3] == b->dl_dst[3]
-                    && a->dl_dst[4] == b->dl_dst[4]
-                    && a->dl_dst[5] == b->dl_dst[5]))
-            && (wc & FWW_ETH_MCAST
-                || !((a->dl_dst[0] ^ b->dl_dst[0]) & 0x01))
+            && !eth_addr_equal_except(a->dl_src, b->dl_src,
+                    wildcards->dl_src_mask)
+            && !eth_addr_equal_except(a->dl_dst, b->dl_dst,
+                    wildcards->dl_dst_mask)
             && (wc & FWW_NW_PROTO || a->nw_proto == b->nw_proto)
             && (wc & FWW_NW_TTL || a->nw_ttl == b->nw_ttl)
             && (wc & FWW_NW_DSCP || !((a->nw_tos ^ b->nw_tos) & IP_DSCP_MASK))

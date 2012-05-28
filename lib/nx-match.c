@@ -354,20 +354,18 @@ nxm_put_eth(struct ofpbuf *b, uint32_t header,
 }
 
 static void
-nxm_put_eth_dst(struct ofpbuf *b,
-                flow_wildcards_t wc, const uint8_t value[ETH_ADDR_LEN])
+nxm_put_eth_masked(struct ofpbuf *b, uint32_t header,
+                   const uint8_t value[ETH_ADDR_LEN],
+                   const uint8_t mask[ETH_ADDR_LEN])
 {
-    switch (wc & (FWW_DL_DST | FWW_ETH_MCAST)) {
-    case FWW_DL_DST | FWW_ETH_MCAST:
-        break;
-    default:
-        nxm_put_header(b, NXM_OF_ETH_DST_W);
-        ofpbuf_put(b, value, ETH_ADDR_LEN);
-        ofpbuf_put(b, flow_wildcards_to_dl_dst_mask(wc), ETH_ADDR_LEN);
-        break;
-    case 0:
-        nxm_put_eth(b, NXM_OF_ETH_DST, value);
-        break;
+    if (!eth_addr_is_zero(mask)) {
+        if (eth_mask_is_exact(mask)) {
+            nxm_put_eth(b, header, value);
+        } else {
+            nxm_put_header(b, NXM_MAKE_WILD_HEADER(header));
+            ofpbuf_put(b, value, ETH_ADDR_LEN);
+            ofpbuf_put(b, mask, ETH_ADDR_LEN);
+        }
     }
 }
 
@@ -471,7 +469,7 @@ nx_put_match(struct ofpbuf *b, const struct cls_rule *cr,
     int match_len;
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 10);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 11);
 
     /* Metadata. */
     if (!(wc & FWW_IN_PORT)) {
@@ -480,10 +478,8 @@ nx_put_match(struct ofpbuf *b, const struct cls_rule *cr,
     }
 
     /* Ethernet. */
-    nxm_put_eth_dst(b, wc, flow->dl_dst);
-    if (!(wc & FWW_DL_SRC)) {
-        nxm_put_eth(b, NXM_OF_ETH_SRC, flow->dl_src);
-    }
+    nxm_put_eth_masked(b, NXM_OF_ETH_SRC, flow->dl_src, cr->wc.dl_src_mask);
+    nxm_put_eth_masked(b, NXM_OF_ETH_DST, flow->dl_dst, cr->wc.dl_dst_mask);
     if (!(wc & FWW_DL_TYPE)) {
         nxm_put_16(b, NXM_OF_ETH_TYPE,
                    ofputil_dl_type_to_openflow(flow->dl_type));
