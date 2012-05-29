@@ -64,6 +64,12 @@ static inline bool eth_addr_is_zero(const uint8_t ea[6])
 {
     return !(ea[0] | ea[1] | ea[2] | ea[3] | ea[4] | ea[5]);
 }
+
+static inline int eth_mask_is_exact(const uint8_t ea[ETH_ADDR_LEN])
+{
+    return (ea[0] & ea[1] & ea[2] & ea[3] & ea[4] & ea[5]) == 0xff;
+}
+
 static inline int eth_addr_compare_3way(const uint8_t a[ETH_ADDR_LEN],
                                         const uint8_t b[ETH_ADDR_LEN])
 {
@@ -73,6 +79,17 @@ static inline bool eth_addr_equals(const uint8_t a[ETH_ADDR_LEN],
                                    const uint8_t b[ETH_ADDR_LEN])
 {
     return !eth_addr_compare_3way(a, b);
+}
+static inline bool eth_addr_equal_except(const uint8_t a[ETH_ADDR_LEN],
+                                    const uint8_t b[ETH_ADDR_LEN],
+                                    const uint8_t mask[ETH_ADDR_LEN])
+{
+    return (((a[0] ^ b[0]) & mask[0])
+            || ((a[1] ^ b[1]) & mask[1])
+            || ((a[2] ^ b[2]) & mask[2])
+            || ((a[3] ^ b[3]) & mask[3])
+            || ((a[4] ^ b[4]) & mask[4])
+            || ((a[5] ^ b[5]) & mask[5]));
 }
 static inline uint64_t eth_addr_to_uint64(const uint8_t ea[ETH_ADDR_LEN])
 {
@@ -136,6 +153,11 @@ void eth_push_vlan(struct ofpbuf *, ovs_be16 tci);
 void eth_pop_vlan(struct ofpbuf *);
 
 const char *eth_from_hex(const char *hex, struct ofpbuf **packetp);
+void eth_format_masked(const uint8_t eth[ETH_ADDR_LEN],
+                       const uint8_t mask[ETH_ADDR_LEN], struct ds *s);
+void eth_addr_bitand(const uint8_t src[ETH_ADDR_LEN],
+                     const uint8_t mask[ETH_ADDR_LEN],
+                     uint8_t dst[ETH_ADDR_LEN]);
 
 /* Example:
  *

@@ -148,6 +148,28 @@ eth_from_hex(const char *hex, struct ofpbuf **packetp)
     return NULL;
 }
 
+void
+eth_format_masked(const uint8_t eth[ETH_ADDR_LEN],
+                  const uint8_t mask[ETH_ADDR_LEN], struct ds *s)
+{
+    ds_put_format(s, ETH_ADDR_FMT, ETH_ADDR_ARGS(eth));
+    if (mask) {
+        ds_put_format(s, "/"ETH_ADDR_FMT, ETH_ADDR_ARGS(mask));
+    }
+}
+
+void
+eth_addr_bitand(const uint8_t src[ETH_ADDR_LEN],
+                const uint8_t mask[ETH_ADDR_LEN],
+                uint8_t dst[ETH_ADDR_LEN])
+{
+    int i;
+
+    for (i = 0; i < ETH_ADDR_LEN; i++) {
+        dst[i] = src[i] & mask[i];
+    }
+}
+
 /* Given the IP netmask 'netmask', returns the number of bits of the IP address
  * that it specifies, that is, the number of 1-bits in 'netmask'.  'netmask'
  * must be a CIDR netmask (see ip_is_cidr()). */

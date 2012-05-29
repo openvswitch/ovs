@@ -2273,10 +2273,7 @@ mf_format(const struct mf_field *mf,
         break;
 
     case MFS_ETHERNET:
-        ds_put_format(s, ETH_ADDR_FMT, ETH_ADDR_ARGS(value->mac));
-        if (mask) {
-            ds_put_format(s, "/"ETH_ADDR_FMT, ETH_ADDR_ARGS(mask->mac));
-        }
+        eth_format_masked(value->mac, mask->mac, s);
         break;
 
     case MFS_IPV4:
