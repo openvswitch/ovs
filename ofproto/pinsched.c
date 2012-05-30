@@ -268,7 +268,7 @@ pinsched_create(int rate_limit, int burst_limit)
     ps->n_queued = 0;
     ps->next_txq = NULL;
     ps->last_fill = time_msec();
-    ps->tokens = rate_limit * 100;
+    ps->tokens = rate_limit * 1000;
     ps->n_txq = 0;
     ps->n_normal = 0;
     ps->n_limited = 0;
