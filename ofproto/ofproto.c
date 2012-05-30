@@ -3090,8 +3090,8 @@ handle_flow_mod(struct ofconn *ofconn, const struct ofp_header *oh)
         return error;
     }
 
-    /* We do not support the emergency flow cache.  It will hopefully get
-     * dropped from OpenFlow in the near future. */
+    /* We do not support the OpenFlow 1.0 emergency flow cache, which is not
+     * required in OpenFlow 1.0.1 and removed from OpenFlow 1.1. */
     if (fm.flags & OFPFF_EMERG) {
         /* There isn't a good fit for an error code, so just state that the
          * flow table is full. */
