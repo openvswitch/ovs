@@ -546,10 +546,6 @@ struct ofpbuf *make_flow_mod(uint16_t command, const struct cls_rule *,
                              size_t actions_len);
 struct ofpbuf *make_add_flow(const struct cls_rule *, uint32_t buffer_id,
                              uint16_t max_idle, size_t actions_len);
-struct ofpbuf *make_del_flow(const struct cls_rule *);
-struct ofpbuf *make_add_simple_flow(const struct cls_rule *,
-                                    uint32_t buffer_id, uint16_t out_port,
-                                    uint16_t max_idle);
 struct ofpbuf *make_packet_in(uint32_t buffer_id, uint16_t in_port,
                               uint8_t reason,
                               const struct ofpbuf *payload, int max_send_len);

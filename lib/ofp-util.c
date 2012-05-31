@@ -3414,32 +3414,6 @@ make_add_flow(const struct cls_rule *rule, uint32_t buffer_id,
 }
 
 struct ofpbuf *
-make_del_flow(const struct cls_rule *rule)
-{
-    struct ofpbuf *out = make_flow_mod(OFPFC_DELETE_STRICT, rule, 0);
-    struct ofp_flow_mod *ofm = out->data;
-    ofm->out_port = htons(OFPP_NONE);
-    return out;
-}
-
-struct ofpbuf *
-make_add_simple_flow(const struct cls_rule *rule,
-                     uint32_t buffer_id, uint16_t out_port,
-                     uint16_t idle_timeout)
-{
-    if (out_port != OFPP_NONE) {
-        struct ofp_action_output *oao;
-        struct ofpbuf *buffer;
-
-        buffer = make_add_flow(rule, buffer_id, idle_timeout, sizeof *oao);
-        ofputil_put_OFPAT10_OUTPUT(buffer)->port = htons(out_port);
-        return buffer;
-    } else {
-        return make_add_flow(rule, buffer_id, idle_timeout, 0);
-    }
-}
-
-struct ofpbuf *
 make_packet_in(uint32_t buffer_id, uint16_t in_port, uint8_t reason,
                const struct ofpbuf *payload, int max_send_len)
 {
