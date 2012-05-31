@@ -28,7 +28,9 @@
 #include "poll-loop.h"
 #include "random.h"
 #include "rconn.h"
+#include "sat-math.h"
 #include "timeval.h"
+#include "token-bucket.h"
 #include "vconn.h"
 
 struct pinqueue {
@@ -39,23 +41,12 @@ struct pinqueue {
 };
 
 struct pinsched {
-    /* Client-supplied parameters. */
-    int rate_limit;           /* Packets added to bucket per second. */
-    int burst_limit;          /* Maximum token bucket size, in packets. */
+    struct token_bucket token_bucket;
 
     /* One queue per physical port. */
     struct hmap queues;         /* Contains "struct pinqueue"s. */
     int n_queued;               /* Sum over queues[*].n. */
     struct pinqueue *next_txq;  /* Next pinqueue check in round-robin. */
-
-    /* Token bucket.
-     *
-     * It costs 1000 tokens to send a single packet_in message.  A single token
-     * per message would be more straightforward, but this choice lets us avoid
-     * round-off error in refill_bucket()'s calculation of how many tokens to
-     * add to the bucket, since no division step is needed. */
-    long long int last_fill;    /* Time at which we last added tokens. */
-    int tokens;                 /* Current number of tokens. */
 
     /* Transmission queue. */
     int n_txq;                  /* No. of packets waiting in rconn for tx. */
@@ -84,6 +75,20 @@ dequeue_packet(struct pinsched *ps, struct pinqueue *q)
     q->n--;
     ps->n_queued--;
     return packet;
+}
+
+static void
+adjust_limits(int *rate_limit, int *burst_limit)
+{
+    if (*rate_limit <= 0) {
+        *rate_limit = 1000;
+    }
+    if (*burst_limit <= 0) {
+        *burst_limit = *rate_limit / 4;
+    }
+    if (*burst_limit < 1) {
+        *burst_limit = 1;
+    }
 }
 
 /* Destroys 'q' and removes it from 'ps''s set of queues.
@@ -169,30 +174,13 @@ get_tx_packet(struct pinsched *ps)
     return packet;
 }
 
-/* Add tokens to the bucket based on elapsed time. */
-static void
-refill_bucket(struct pinsched *ps)
-{
-    long long int now = time_msec();
-    long long int tokens = (now - ps->last_fill) * ps->rate_limit + ps->tokens;
-    if (tokens >= 1000) {
-        ps->last_fill = now;
-        ps->tokens = MIN(tokens, ps->burst_limit * 1000);
-    }
-}
-
 /* Attempts to remove enough tokens from 'ps' to transmit a packet.  Returns
  * true if successful, false otherwise.  (In the latter case no tokens are
  * removed.) */
 static bool
 get_token(struct pinsched *ps)
 {
-    if (ps->tokens >= 1000) {
-        ps->tokens -= 1000;
-        return true;
-    } else {
-        return false;
-    }
+    return token_bucket_withdraw(&ps->token_bucket, 1000);
 }
 
 void
@@ -216,7 +204,7 @@ pinsched_send(struct pinsched *ps, uint16_t port_no,
          * otherwise wasted space. */
         ofpbuf_trim(packet);
 
-        if (ps->n_queued >= ps->burst_limit) {
+        if (ps->n_queued * 1000 >= ps->token_bucket.burst) {
             drop_packet(ps);
         }
         q = pinqueue_get(ps, port_no);
@@ -235,7 +223,6 @@ pinsched_run(struct pinsched *ps, pinsched_tx_cb *cb, void *aux)
 
         /* Drain some packets out of the bucket if possible, but limit the
          * number of iterations to allow other code to get work done too. */
-        refill_bucket(ps);
         for (i = 0; ps->n_queued && get_token(ps) && i < 50; i++) {
             cb(get_tx_packet(ps), aux);
         }
@@ -246,14 +233,7 @@ void
 pinsched_wait(struct pinsched *ps)
 {
     if (ps && ps->n_queued) {
-        if (ps->tokens >= 1000) {
-            /* We can transmit more packets as soon as we're called again. */
-            poll_immediate_wake();
-        } else {
-            /* We have to wait for the bucket to re-fill.  We could calculate
-             * the exact amount of time here for increased smoothness. */
-            poll_timer_wait(TIME_UPDATE_INTERVAL / 2);
-        }
+        token_bucket_wait(&ps->token_bucket, 1000);
     }
 }
 
@@ -264,16 +244,18 @@ pinsched_create(int rate_limit, int burst_limit)
     struct pinsched *ps;
 
     ps = xzalloc(sizeof *ps);
+
+    adjust_limits(&rate_limit, &burst_limit);
+    token_bucket_init(&ps->token_bucket,
+                      rate_limit, sat_mul(burst_limit, 1000));
+
     hmap_init(&ps->queues);
     ps->n_queued = 0;
     ps->next_txq = NULL;
-    ps->last_fill = time_msec();
-    ps->tokens = rate_limit * 1000;
     ps->n_txq = 0;
     ps->n_normal = 0;
     ps->n_limited = 0;
     ps->n_queue_dropped = 0;
-    pinsched_set_limits(ps, rate_limit, burst_limit);
 
     return ps;
 }
@@ -298,24 +280,16 @@ void
 pinsched_get_limits(const struct pinsched *ps,
                     int *rate_limit, int *burst_limit)
 {
-    *rate_limit = ps->rate_limit;
-    *burst_limit = ps->burst_limit;
+    *rate_limit = ps->token_bucket.rate;
+    *burst_limit = ps->token_bucket.burst / 1000;
 }
 
 void
 pinsched_set_limits(struct pinsched *ps, int rate_limit, int burst_limit)
 {
-    if (rate_limit <= 0) {
-        rate_limit = 1000;
-    }
-    if (burst_limit <= 0) {
-        burst_limit = rate_limit / 4;
-    }
-    burst_limit = MAX(burst_limit, 1);
-    burst_limit = MIN(burst_limit, INT_MAX / 1000);
-
-    ps->rate_limit = rate_limit;
-    ps->burst_limit = burst_limit;
+    adjust_limits(&rate_limit, &burst_limit);
+    token_bucket_set(&ps->token_bucket,
+                     rate_limit, sat_mul(burst_limit, 1000));
     while (ps->n_queued > burst_limit) {
         drop_packet(ps);
     }

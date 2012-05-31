@@ -769,28 +769,15 @@ vlog_should_drop(const struct vlog_module *module, enum vlog_level level,
         return true;
     }
 
-    if (rl->tokens < VLOG_MSG_TOKENS) {
+    if (!token_bucket_withdraw(&rl->token_bucket, VLOG_MSG_TOKENS)) {
         time_t now = time_now();
-        if (rl->last_fill > now) {
-            /* Last filled in the future?  Time must have gone backward, or
-             * 'rl' has not been used before. */
-            rl->tokens = rl->burst;
-        } else if (rl->last_fill < now) {
-            unsigned int add = sat_mul(rl->rate, now - rl->last_fill);
-            unsigned int tokens = sat_add(rl->tokens, add);
-            rl->tokens = MIN(tokens, rl->burst);
-            rl->last_fill = now;
+        if (!rl->n_dropped) {
+            rl->first_dropped = now;
         }
-        if (rl->tokens < VLOG_MSG_TOKENS) {
-            if (!rl->n_dropped) {
-                rl->first_dropped = now;
-            }
-            rl->last_dropped = now;
-            rl->n_dropped++;
-            return true;
-        }
+        rl->last_dropped = now;
+        rl->n_dropped++;
+        return true;
     }
-    rl->tokens -= VLOG_MSG_TOKENS;
 
     if (rl->n_dropped) {
         time_t now = time_now();
