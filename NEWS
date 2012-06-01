@@ -72,7 +72,7 @@ v1.6.0 - xx xxx xxxx
     - CFM module CCM broadcasts can now be tagged with an 802.1p priority.
 
 
-v1.5.0 - xx xxx xxxx
+v1.5.0 - 01 Jun 2012
 ------------------------
     - OpenFlow:
         - Added support for querying, modifying, and deleting flows
