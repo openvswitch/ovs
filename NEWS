@@ -18,8 +18,6 @@ v1.6.0 - xx xxx xxxx
           receive asynchronously.
         - New "fin_timeout" action.
         - Added "fin_timeout" support to "learn" action.
-    - The default MAC learning timeout has been increased from 60 seconds
-      to 300 seconds.  The MAC learning timeout is now configurable.
     - When QoS settings for an interface do not configure a default queue
       (queue 0), Open vSwitch now uses a default configuration for that
       queue, instead of dropping all packets as in previous versions.
@@ -56,6 +54,8 @@ v1.5.0 - xx xxx xxxx
           {=}, {!=}, {<}, {>}, {<=}, and {>=}.
     - ovsdb-tool now uses the typical database and schema installation
       directories as defaults.
+    - The default MAC learning timeout has been increased from 60 seconds
+      to 300 seconds.  The MAC learning timeout is now configurable.
 
 
 v1.4.0 - 30 Jan 2012
