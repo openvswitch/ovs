@@ -1,3 +1,8 @@
+v1.4.2 - 01 June 2012
+------------------------
+    - Allow OFPP_CONTROLLER as the in_port for packet-out messages.
+    - Bug fixes
+
 v1.4.1 - 30 Apr 2012
 ------------------------
     - The default MAC learning timeout has been increased from 60 seconds

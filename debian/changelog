@@ -1,3 +1,10 @@
+openvswitch (1.4.2-1) unstable; urgency=low
+
+  * New upstream version fixing the following bugs:
+    o Allow OFPP_CONTROLLER as the in_port for packet-out messages.
+
+ -- Open vSwitch team <dev@openvswitch.org>  Fri, 01 Jun 2012 14:12:00 -0700
+
 openvswitch (1.4.1-1) unstable; urgency=low
 
   * New upstream version fixing the following bugs:
