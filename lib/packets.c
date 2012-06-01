@@ -43,6 +43,47 @@ dpid_from_string(const char *s, uint64_t *dpidp)
     return *dpidp != 0;
 }
 
+/* Returns true if 'ea' is a reserved multicast address, that a bridge must
+ * never forward, false otherwise.  Includes some proprietary vendor protocols
+ * that shouldn't be forwarded as well.
+ *
+ * If you change this function's behavior, please update corresponding
+ * documentation in vswitch.xml at the same time. */
+bool
+eth_addr_is_reserved(const uint8_t ea[ETH_ADDR_LEN])
+{
+    struct masked_eth_addr {
+        uint8_t ea[ETH_ADDR_LEN];
+        uint8_t mask[ETH_ADDR_LEN];
+    };
+
+    static struct masked_eth_addr mea[] = {
+        { /* STP, IEEE pause frames, and other reserved protocols. */
+            {0x01, 0x08, 0xc2, 0x00, 0x00, 0x00},
+            {0xff, 0xff, 0xff, 0xff, 0xff, 0xf0}},
+
+        { /* Cisco Inter Switch Link. */
+            {0x01, 0x00, 0x0c, 0x00, 0x00, 0x00},
+            {0xff, 0xff, 0xff, 0xff, 0xff, 0xff}},
+
+        { /* Cisco protocols plus others following the same pattern:
+           *
+           * CDP, VTP, DTP, PAgP  (01-00-0c-cc-cc-cc)
+           * Spanning Tree PVSTP+ (01-00-0c-cc-cc-cd)
+           * STP Uplink Fast      (01-00-0c-cd-cd-cd) */
+            {0x01, 0x00, 0x0c, 0xcc, 0xcc, 0xcc},
+            {0xff, 0xff, 0xff, 0xfe, 0xfe, 0xfe}}};
+
+    size_t i;
+
+    for (i = 0; i < ARRAY_SIZE(mea); i++) {
+        if (eth_addr_equal_except(ea, mea[i].ea, mea[i].mask)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 bool
 eth_addr_from_string(const char *s, uint8_t ea[ETH_ADDR_LEN])
 {

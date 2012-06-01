@@ -556,6 +556,35 @@
         and if Open vSwitch node does not run STP, then this option
         should be enabled.  Default is disabled, set to
         <code>true</code> to enable.
+
+        The following destination MAC addresss will not be forwarded when this
+        option is enabled.
+        <dl>
+          <dt><code>01:80:c2:00:00:00</code></dt>
+          <dd>IEEE 802.1D Spanning Tree Protocol (STP).</dd>
+
+          <dt><code>01:80:c2:00:00:01</code></dt>
+          <dd>IEEE Pause frame.</dd>
+
+          <dt><code>01:80:c2:00:00:0<var>x</var></code></dt>
+          <dd>Other reserved protocols.</dd>
+
+          <dt><code>01:00:0c:cc:cc:cc</code></dt>
+          <dd>
+            Cisco Discovery Protocol (CDP), VLAN Trunking Protocol (VTP),
+            Dynamic Trunking Protocol (DTP), Port Aggregation Protocol (PAgP),
+            and others.
+          </dd>
+
+          <dt><code>01:00:0c:cc:cc:cd</code></dt>
+          <dd>Cisco Shared Spanning Tree Protocol PVSTP+.</dd>
+
+          <dt><code>01:00:0c:cd:cd:cd</code></dt>
+          <dd>Cisco STP Uplink Fast.</dd>
+
+          <dt><code>01:00:0c:00:00:00</code></dt>
+          <dd>Cisco Inter Switch Link.</dd>
+        </dl>
       </column>
 
       <column name="other_config" key="mac-aging-time"
@@ -2315,36 +2344,12 @@
         sent out an implicit VLAN port, the frame will not be tagged.  This
         type of mirroring is sometimes called RSPAN.</p>
         <p>
-          The following destination MAC addresses will not be mirrored to a
-          VLAN to avoid confusing switches that interpret the protocols that
-          they represent:
+          See the documentation for
+          <ref column="other_config" key="forward-bpdu"/> in the
+          <ref table="Interface"/> table for a list of destination MAC
+          addresses which will not be mirrored to a VLAN to avoid confusing
+          switches that interpret the protocols that they represent.
         </p>
-        <dl>
-          <dt><code>01:80:c2:00:00:00</code></dt>
-          <dd>IEEE 802.1D Spanning Tree Protocol (STP).</dd>
-
-          <dt><code>01:80:c2:00:00:01</code></dt>
-          <dd>IEEE Pause frame.</dd>
-
-          <dt><code>01:80:c2:00:00:0<var>x</var></code></dt>
-          <dd>Other reserved protocols.</dd>
-
-          <dt><code>01:00:0c:cc:cc:cc</code></dt>
-          <dd>
-            Cisco Discovery Protocol (CDP), VLAN Trunking Protocol (VTP),
-            Dynamic Trunking Protocol (DTP), Port Aggregation Protocol (PAgP),
-            and others.
-          </dd>
-
-          <dt><code>01:00:0c:cc:cc:cd</code></dt>
-          <dd>Cisco Shared Spanning Tree Protocol PVSTP+.</dd>
-
-          <dt><code>01:00:0c:cd:cd:cd</code></dt>
-          <dd>Cisco STP Uplink Fast.</dd>
-
-          <dt><code>01:00:0c:00:00:00</code></dt>
-          <dd>Cisco Inter Switch Link.</dd>
-        </dl>
         <p><em>Please note:</em> Mirroring to a VLAN can disrupt a network that
         contains unmanaged switches.  Consider an unmanaged physical switch
         with two ports: port 1, connected to an end host, and port 2,

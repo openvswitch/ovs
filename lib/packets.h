@@ -131,18 +131,8 @@ static inline void eth_addr_nicira_random(uint8_t ea[ETH_ADDR_LEN])
     /* Set the top bit to indicate random Nicira address. */
     ea[3] |= 0x80;
 }
-/* Returns true if 'ea' is a reserved multicast address, that a bridge must
- * never forward, false otherwise. */
-static inline bool eth_addr_is_reserved(const uint8_t ea[ETH_ADDR_LEN])
-{
-    return (ea[0] == 0x01
-            && ea[1] == 0x80
-            && ea[2] == 0xc2
-            && ea[3] == 0x00
-            && ea[4] == 0x00
-            && (ea[5] & 0xf0) == 0x00);
-}
 
+bool eth_addr_is_reserved(const uint8_t ea[ETH_ADDR_LEN]);
 bool eth_addr_from_string(const char *, uint8_t ea[ETH_ADDR_LEN]);
 
 void compose_benign_packet(struct ofpbuf *, const char *tag,
