@@ -94,7 +94,7 @@ openvswitch (1.5.0-1) unstable; urgency=low
     - ovsdb-tool now uses the typical database and schema installation
       directories as defaults.
 
- -- Open vSwitch team <dev@openvswitch.org>  Wed, 15 Feb 2012 11:12:48 +0900
+ -- Open vSwitch team <dev@openvswitch.org>  Fri, 01 June 2012 13:06:00 +0900
 
 openvswitch (1.4.0+git20120426-1) unstable; urgency=low
 
