@@ -54,6 +54,7 @@
 #include "random.h"
 #include "shash.h"
 #include "sset.h"
+#include "timeval.h"
 #include "unaligned.h"
 #include "util.h"
 #include "vlog.h"
@@ -130,9 +131,57 @@ static int dpif_linux_flow_transact(struct dpif_linux_flow *request,
 static void dpif_linux_flow_get_stats(const struct dpif_linux_flow *,
                                       struct dpif_flow_stats *);
 
-struct dpif_channel {
-    struct nl_sock *sock;
+/* Packet drop monitoring.
+ *
+ * When kernel-to-user Netlink buffers overflow, the kernel notifies us that
+ * one or more packets were dropped, but it doesn't tell us anything about
+ * those packets.  However, the administrator really wants to know.  So we do
+ * the next best thing, and keep track of the top sources of packets received
+ * on each kernel-to-user channel, since the top sources are those that will
+ * cause the buffers to overflow.
+ *
+ * We use a variation on the "Space-Saving" algorithm in Metwally et al.,
+ * "Efficient Computation of Frequent and Top-k Elements in Data Streams", ACM
+ * Transactions on Database Systems 31:3 (2006).  This algorithm yields
+ * perfectly accurate results when the data stream's unique values (in this
+ * case, port numbers) fit into our data structure, and degrades gracefully
+ * even for challenging distributions (e.g. Zipf).
+ *
+ * Our implementation is very simple, without any of the special flourishes
+ * described in the paper.  It avoids the need to use a hash for lookup by
+ * keeping the constant factor (N_SKETCHES) very small.  The error calculations
+ * in the paper make it sound like the results should still be satisfactory.
+ *
+ * "space-saving" and "Metwally" seem like awkward names for data structures,
+ * so we call this a "sketch" even though technically that's a different sort
+ * of summary structure.
+ */
+
+/* One of N_SKETCHES counting elements per channel in the Metwally
+ * "space-saving" algorithm. */
+enum { N_SKETCHES = 8 };        /* Number of elements per channel. */
+struct dpif_sketch {
+    uint32_t port_no;           /* Port number. */
+    unsigned int hits;          /* Number of hits. */
+    unsigned int error;         /* Upper bound on error in 'hits'. */
 };
+
+/* One of N_CHANNELS channels per dpif between the kernel and userspace. */
+struct dpif_channel {
+    struct nl_sock *sock;       /* Netlink socket. */
+    struct dpif_sketch sketches[N_SKETCHES]; /* From max to min 'hits'. */
+    long long int last_poll;    /* Last time this channel was polled. */
+};
+
+static void update_sketch(struct dpif_channel *, uint32_t port_no);
+static void scale_sketches(struct dpif *);
+static void report_loss(struct dpif *, struct dpif_channel *);
+
+/* Interval, in milliseconds, at which to scale down the sketch values by a
+ * factor of 2.  The Metwally algorithm doesn't do this, which makes sense in
+ * the context it assumes, but in our situation we ought to weight recent data
+ * more heavily than old data, so in my opinion this is reasonable. */
+#define SCALE_INTERVAL (60 * 1000)
 
 /* Datapath interface for the openvswitch Linux kernel module. */
 struct dpif_linux {
@@ -143,6 +192,7 @@ struct dpif_linux {
     struct dpif_channel channels[N_CHANNELS];
     uint32_t ready_mask;        /* 1-bit for each sock with unread messages. */
     int epoll_fd;               /* epoll fd that includes channel socks. */
+    long long int next_scale;   /* Next time to scale down the sketches. */
 
     /* Change notification. */
     struct sset changed_ports;  /* Ports that have changed. */
@@ -154,7 +204,6 @@ struct dpif_linux {
 };
 
 static struct vlog_rate_limit error_rl = VLOG_RATE_LIMIT_INIT(9999, 5);
-static struct vlog_rate_limit enobufs_rl = VLOG_RATE_LIMIT_INIT(60, 5);
 
 /* Generic Netlink family numbers for OVS. */
 static int ovs_datapath_family;
@@ -254,6 +303,8 @@ open_dpif(const struct dpif_linux_dp *dp, struct dpif **dpifp)
     dpif_init(&dpif->dpif, &dpif_linux_class, dp->name,
               dp->dp_ifindex, dp->dp_ifindex);
 
+    dpif->next_scale = LLONG_MAX;
+
     dpif->dp_ifindex = dp->dp_ifindex;
     sset_init(&dpif->changed_ports);
     *dpifp = &dpif->dpif;
@@ -272,6 +323,7 @@ destroy_channels(struct dpif_linux *dpif)
         nl_sock_destroy(ch->sock);
         ch->sock = NULL;
     }
+    dpif->next_scale = LLONG_MAX;
 }
 
 static void
@@ -298,8 +350,15 @@ dpif_linux_destroy(struct dpif *dpif_)
 }
 
 static void
-dpif_linux_run(struct dpif *dpif OVS_UNUSED)
+dpif_linux_run(struct dpif *dpif_)
 {
+    struct dpif_linux *dpif = dpif_linux_cast(dpif_);
+
+    if (time_msec() >= dpif->next_scale) {
+        dpif->next_scale = time_msec() + SCALE_INTERVAL;
+        scale_sketches(dpif_);
+    }
+
     if (nln) {
         nln_run(nln);
     }
@@ -1022,9 +1081,13 @@ dpif_linux_recv_set(struct dpif *dpif_, bool enable)
                 destroy_channels(dpif);
                 return error;
             }
+
+            memset(ch->sketches, 0, sizeof ch->sketches);
+            ch->last_poll = LLONG_MIN;
         }
 
         dpif->ready_mask = 0;
+        dpif->next_scale = time_msec() + SCALE_INTERVAL;
     }
 
     set_upcall_pids(dpif_);
@@ -1143,16 +1206,17 @@ dpif_linux_recv(struct dpif *dpif_, struct dpif_upcall *upcall,
             }
 
             error = nl_sock_recv(ch->sock, buf, false);
+            if (error == ENOBUFS) {
+                /* ENOBUFS typically means that we've received so many
+                 * packets that the buffer overflowed.  Try again
+                 * immediately because there's almost certainly a packet
+                 * waiting for us. */
+                report_loss(dpif_, ch);
+                continue;
+            }
+
+            ch->last_poll = time_msec();
             if (error) {
-                if (error == ENOBUFS) {
-                    /* ENOBUFS typically means that we've received so many
-                     * packets that the buffer overflowed.  Try again
-                     * immediately because there's almost certainly a packet
-                     * waiting for us. */
-                    VLOG_ERR_RL(&enobufs_rl, "%s: lost packet with hash %d",
-                                dpif_name(dpif_), dpif->ready_mask);
-                    continue;
-                }
                 if (error == EAGAIN) {
                     break;
                 }
@@ -1161,6 +1225,13 @@ dpif_linux_recv(struct dpif *dpif_, struct dpif_upcall *upcall,
 
             error = parse_odp_packet(buf, upcall, &dp_ifindex);
             if (!error && dp_ifindex == dpif->dp_ifindex) {
+                const struct nlattr *in_port;
+
+                in_port = nl_attr_find__(upcall->key, upcall->key_len,
+                                         OVS_KEY_ATTR_IN_PORT);
+                if (in_port) {
+                    update_sketch(ch, nl_attr_get_u32(in_port));
+                }
                 return 0;
             }
             if (error) {
@@ -1820,4 +1891,97 @@ dpif_linux_flow_get_stats(const struct dpif_linux_flow *flow,
     }
     stats->used = flow->used ? get_32aligned_u64(flow->used) : 0;
     stats->tcp_flags = flow->tcp_flags ? *flow->tcp_flags : 0;
+}
+
+/* Metwally "space-saving" algorithm implementation. */
+
+/* Updates 'ch' to record that a packet was received on 'port_no'. */
+static void
+update_sketch(struct dpif_channel *ch, uint32_t port_no)
+{
+    struct dpif_sketch *sk;
+
+    /* Find an existing counting element for 'port_no' or, if none, replace the
+     * counting element with the fewest hits by 'port_no'. */
+    for (sk = ch->sketches; ; sk++) {
+        if (port_no == sk->port_no) {
+            break;
+        } else if (sk == &ch->sketches[N_SKETCHES - 1]) {
+            sk->port_no = port_no;
+            sk->error = sk->hits;
+            break;
+        }
+    }
+
+    /* Increment the hit count, then re-sort the counting elements (usually
+     * nothing needs to be done). */
+    sk->hits++;
+    while (sk > ch->sketches && sk[-1].hits > sk->hits) {
+        struct dpif_sketch tmp = sk[-1];
+        sk[-1] = *sk;
+        *sk = tmp;
+        sk--;
+    }
+}
+
+/* Divide the counts of all the the counting elements in 'dpif' by 2.  See the
+ * comment on SCALE_INTERVAL. */
+static void
+scale_sketches(struct dpif *dpif_)
+{
+    struct dpif_linux *dpif = dpif_linux_cast(dpif_);
+    struct dpif_channel *ch;
+
+    for (ch = dpif->channels; ch < &dpif->channels[N_CHANNELS]; ch++) {
+        struct dpif_sketch *sk;
+
+        for (sk = ch->sketches; sk < &ch->sketches[N_SKETCHES]; sk++) {
+            sk->hits /= 2;
+            sk->error /= 2;
+        }
+    }
+}
+
+/* Logs information about a packet that was recently lost in 'ch' (in
+ * 'dpif_'). */
+static void
+report_loss(struct dpif *dpif_, struct dpif_channel *ch)
+{
+    struct dpif_linux *dpif = dpif_linux_cast(dpif_);
+    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 5);
+    struct dpif_sketch *sk;
+    struct ds s;
+
+    if (VLOG_DROP_ERR(&rl)) {
+        return;
+    }
+
+    ds_init(&s);
+    if (ch->last_poll != LLONG_MIN) {
+        ds_put_format(&s, " (last polled %lld ms ago)",
+                      time_msec() - ch->last_poll);
+    }
+    ds_put_cstr(&s, ", most frequent sources are");
+    for (sk = ch->sketches; sk < &ch->sketches[N_SKETCHES]; sk++) {
+        if (sk->hits) {
+            struct dpif_port port;
+
+            ds_put_format(&s, " %"PRIu32, sk->port_no);
+            if (!dpif_port_query_by_number(dpif_, sk->port_no, &port)) {
+                ds_put_format(&s, "(%s)", port.name);
+                dpif_port_destroy(&port);
+            }
+            if (sk->error) {
+                ds_put_format(&s, ": %u to %u,",
+                              sk->hits - sk->error, sk->hits);
+            } else {
+                ds_put_format(&s, ": %u,", sk->hits);
+            }
+        }
+    }
+    ds_chomp(&s, ',');
+
+    VLOG_ERR("%s: lost packet on channel %d%s",
+             dpif_name(dpif_), ch - dpif->channels, ds_cstr(&s));
+    ds_destroy(&s);
 }
