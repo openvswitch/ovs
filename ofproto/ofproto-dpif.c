@@ -5930,8 +5930,8 @@ add_mirror_actions(struct action_xlate_ctx *ctx, const struct flow *orig_flow)
         ctx->mirrors |= m->dup_mirrors;
         if (m->out) {
             output_normal(ctx, m->out, vlan);
-        } else if (!eth_addr_is_reserved(orig_flow->dl_dst)
-                   && vlan != m->out_vlan) {
+        } else if (vlan != m->out_vlan
+                   && !eth_addr_is_reserved(orig_flow->dl_dst)) {
             struct ofbundle *bundle;
 
             HMAP_FOR_EACH (bundle, hmap_node, &ofproto->bundles) {
@@ -6089,7 +6089,7 @@ is_admissible(struct ofproto_dpif *ofproto, const struct flow *flow,
 
     /* Drop frames for reserved multicast addresses
      * only if forward_bpdu option is absent. */
-    if (eth_addr_is_reserved(flow->dl_dst) && !ofproto->up.forward_bpdu) {
+    if (!ofproto->up.forward_bpdu && eth_addr_is_reserved(flow->dl_dst)) {
         return false;
     }
 
