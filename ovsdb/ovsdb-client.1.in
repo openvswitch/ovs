@@ -84,7 +84,7 @@ If \fIdatabase\fR was created before schema versioning was introduced,
 then it will not have a version number and this command will print a
 blank line.
 .
-.IP "\fBlist\-columns\fI \fR[\fIserver\fR] \fR[\fIdatabase\fR]"
+.IP "\fBlist\-tables\fI \fR[\fIserver\fR] \fR[\fIdatabase\fR]"
 Connects to \fIserver\fR, retrieves the schema for \fIdatabase\fR, and
 prints a table listing the name of each table
 within the database.
@@ -104,7 +104,7 @@ operations, and prints the received reply on stdout.
 Connects to \fIserver\fR, retrieves all of the data in \fIdatabase\fR,
 and prints it on stdout as a series of tables.
 .
-.IP "\fBmonitor\fI \fR[\fIserver\fR] \fR[\fIdatabase\fR] \fItable\fR"
+.IP "\fBmonitor\fI \fR[\fIserver\fR] \fR[\fIdatabase\fR] \fItable\fR [\fIcolumn\fR[\fB,\fIcolumn\fR]...]..."
 Connects to \fIserver\fR and monitors the contents of \fItable\fR in
 \fIdatabase\fR.  By default, the initial contents of \fItable\fR are
 printed, followed by each change as it occurs.  If at least one
