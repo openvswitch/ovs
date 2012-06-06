@@ -471,7 +471,7 @@ struct ofp11_flow_mod {
                                     indicates no restriction. */
     ovs_be32 out_group;          /* For OFPFC_DELETE* commands, require
                                     matching entries to include this as an
-                                    output group. A value of OFPG_ANY
+                                    output group. A value of OFPG11_ANY
                                     indicates no restriction. */
     ovs_be16 flags;              /* One of OFPFF_*. */
     uint8_t pad[2];
@@ -487,6 +487,20 @@ enum ofp11_group_type {
     OFPGT11_SELECT,   /* Select group. */
     OFPGT11_INDIRECT, /* Indirect group. */
     OFPGT11_FF        /* Fast failover group. */
+};
+
+/* Group numbering. Groups can use any number up to OFPG_MAX. */
+enum ofp11_group {
+    /* Last usable group number. */
+    OFPG11_MAX        = 0xffffff00,
+
+    /* Fake groups. */
+    OFPG11_ALL        = 0xfffffffc,  /* Represents all groups for group delete
+                                        commands. */
+    OFPG11_ANY        = 0xffffffff   /* Wildcard group used only for flow stats
+                                        requests. Selects all flows regardless
+                                        of group (including flows with no
+                                        group). */
 };
 
 /* Bucket for use in groups. */
@@ -537,7 +551,7 @@ struct ofp11_flow_stats_request {
                                  as an output port. A value of OFPP_ANY
                                  indicates no restriction. */
     ovs_be32 out_group;       /* Require matching entries to include this
-                                 as an output group. A value of OFPG_ANY
+                                 as an output group. A value of OFPG11_ANY
                                  indicates no restriction. */
     uint8_t pad2[4];          /* Align to 64 bits. */
     ovs_be64 cookie;          /* Require matching entries to contain this
