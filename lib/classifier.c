@@ -1204,10 +1204,10 @@ flow_equal_except(const struct flow *a, const struct flow *b,
             && (wc & FWW_DL_TYPE || a->dl_type == b->dl_type)
             && !((a->tp_src ^ b->tp_src) & wildcards->tp_src_mask)
             && !((a->tp_dst ^ b->tp_dst) & wildcards->tp_dst_mask)
-            && !eth_addr_equal_except(a->dl_src, b->dl_src,
-                    wildcards->dl_src_mask)
-            && !eth_addr_equal_except(a->dl_dst, b->dl_dst,
-                    wildcards->dl_dst_mask)
+            && eth_addr_equal_except(a->dl_src, b->dl_src,
+                                     wildcards->dl_src_mask)
+            && eth_addr_equal_except(a->dl_dst, b->dl_dst,
+                                     wildcards->dl_dst_mask)
             && (wc & FWW_NW_PROTO || a->nw_proto == b->nw_proto)
             && (wc & FWW_NW_TTL || a->nw_ttl == b->nw_ttl)
             && (wc & FWW_NW_DSCP || !((a->nw_tos ^ b->nw_tos) & IP_DSCP_MASK))

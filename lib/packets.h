@@ -84,12 +84,12 @@ static inline bool eth_addr_equal_except(const uint8_t a[ETH_ADDR_LEN],
                                     const uint8_t b[ETH_ADDR_LEN],
                                     const uint8_t mask[ETH_ADDR_LEN])
 {
-    return (((a[0] ^ b[0]) & mask[0])
-            || ((a[1] ^ b[1]) & mask[1])
-            || ((a[2] ^ b[2]) & mask[2])
-            || ((a[3] ^ b[3]) & mask[3])
-            || ((a[4] ^ b[4]) & mask[4])
-            || ((a[5] ^ b[5]) & mask[5]));
+    return !(((a[0] ^ b[0]) & mask[0])
+             || ((a[1] ^ b[1]) & mask[1])
+             || ((a[2] ^ b[2]) & mask[2])
+             || ((a[3] ^ b[3]) & mask[3])
+             || ((a[4] ^ b[4]) & mask[4])
+             || ((a[5] ^ b[5]) & mask[5]));
 }
 static inline uint64_t eth_addr_to_uint64(const uint8_t ea[ETH_ADDR_LEN])
 {

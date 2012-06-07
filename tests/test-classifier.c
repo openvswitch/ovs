@@ -203,11 +203,11 @@ match(const struct cls_rule *wild, const struct flow *fixed)
         } else if (f_idx == CLS_F_IDX_TP_DST) {
             eq = !((fixed->tp_dst ^ wild->flow.tp_dst) & wild->wc.tp_dst_mask);
         } else if (f_idx == CLS_F_IDX_DL_SRC) {
-            eq = !eth_addr_equal_except(fixed->dl_src, wild->flow.dl_src,
-                                        wild->wc.dl_src_mask);
+            eq = eth_addr_equal_except(fixed->dl_src, wild->flow.dl_src,
+                                       wild->wc.dl_src_mask);
         } else if (f_idx == CLS_F_IDX_DL_DST) {
-            eq = !eth_addr_equal_except(fixed->dl_dst, wild->flow.dl_dst,
-                                        wild->wc.dl_dst_mask);
+            eq = eth_addr_equal_except(fixed->dl_dst, wild->flow.dl_dst,
+                                       wild->wc.dl_dst_mask);
         } else if (f_idx == CLS_F_IDX_VLAN_TCI) {
             eq = !((fixed->vlan_tci ^ wild->flow.vlan_tci)
                    & wild->wc.vlan_tci_mask);
