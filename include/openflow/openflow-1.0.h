@@ -286,7 +286,7 @@ OFP_ASSERT(sizeof(struct ofp_action_nw_addr) == 8);
 struct ofp_action_nw_tos {
     ovs_be16 type;                  /* OFPAT10_SET_TW_TOS. */
     ovs_be16 len;                   /* Length is 8. */
-    uint8_t nw_tos;                 /* IP TOS (DSCP field, 6 bits). */
+    uint8_t nw_tos;                 /* DSCP in high 6 bits, rest ignored. */
     uint8_t pad[3];
 };
 OFP_ASSERT(sizeof(struct ofp_action_nw_tos) == 8);
