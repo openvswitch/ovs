@@ -334,8 +334,8 @@ struct ofputil_packet_in {
     struct flow_metadata fmd;   /* Metadata at creation time. */
 };
 
-int ofputil_decode_packet_in(struct ofputil_packet_in *,
-                             const struct ofp_header *);
+enum ofperr ofputil_decode_packet_in(struct ofputil_packet_in *,
+                                     const struct ofp_header *);
 struct ofpbuf *ofputil_encode_packet_in(const struct ofputil_packet_in *,
                                         enum nx_packet_in_format);
 
