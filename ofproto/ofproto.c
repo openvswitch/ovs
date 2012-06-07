@@ -3617,6 +3617,7 @@ ofoperation_complete(struct ofoperation *op, enum ofperr error)
         } else {
             oftable_substitute_rule(rule, op->victim);
             ofproto_rule_destroy__(rule);
+            op->rule = NULL;
         }
         break;
 
