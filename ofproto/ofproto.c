@@ -3275,6 +3275,7 @@ ofoperation_complete(struct ofoperation *op, int error)
                 classifier_remove(table, &rule->cr);
             }
             ofproto_rule_destroy__(rule);
+            op->rule = NULL;
         }
         op->victim = NULL;
         break;
