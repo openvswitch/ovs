@@ -531,8 +531,7 @@ bond_compose_learning_packet(struct bond *bond,
     slave = choose_output_slave(bond, &flow, vlan);
 
     packet = ofpbuf_new(0);
-    compose_benign_packet(packet, "Open vSwitch Bond Failover", 0xf177,
-                          eth_src);
+    compose_benign_packet(packet, eth_src);
     if (vlan) {
         eth_push_vlan(packet, htons(vlan));
     }

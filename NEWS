@@ -5,6 +5,9 @@ post-v1.7.0
     - Added support for arbitrary ethernet masks
     - Additional protocols are not mirrored and dropped when forward-bpdu is
       false.  For a full list, see the ovs-vswitchd.conf.db man page.
+    - Open vSwitch now sends RARP packets in situations where it previously
+      sent a custom protocol, making it consistent with behavior of QEMU and
+      VMware.
 
 
 v1.7.0 - xx xxx xxxx

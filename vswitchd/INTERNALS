@@ -57,14 +57,15 @@ enabled all output packets are blackholed anyway.
 
 When a slave becomes disabled, the vswitch immediately chooses a new
 output port for traffic that was destined for that slave (see
-bond_enable_slave()).  It also sends a "gratuitous learning packet" on
-the bond port (on the newly chosen slave) for each MAC address that
-the vswitch has learned on a port other than the bond (see
-bond_send_learning_packets()), to teach the physical switch that the
-new slave should be used in place of the one that is now disabled.
-(This behavior probably makes sense only for a vswitch that has only
-one port (the bond) connected to a physical switch; vswitchd should
-probably provide a way to disable or configure it in other scenarios.)
+bond_enable_slave()).  It also sends a "gratuitous learning packet",
+specifically a RARP, on the bond port (on the newly chosen slave) for
+each MAC address that the vswitch has learned on a port other than the
+bond (see bond_send_learning_packets()), to teach the physical switch
+that the new slave should be used in place of the one that is now
+disabled.  (This behavior probably makes sense only for a vswitch that
+has only one port (the bond) connected to a physical switch; vswitchd
+should probably provide a way to disable or configure it in other
+scenarios.)
 
 Bond Packet Input
 -----------------
