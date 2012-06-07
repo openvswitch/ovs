@@ -17,6 +17,7 @@ AT_CHECK([ovs-appctl lacp/show], [0], [dnl
 slave: p1: expired attached
 	port_id: 1
 	port_priority: 65535
+	may_enable: false
 
 	actor sys_id: aa:55:aa:55:00:00
 	actor sys_priority: 65535
@@ -64,6 +65,7 @@ AT_CHECK([sed -e 's/aggregation key:.*/aggregation key: <omitted>/' < stdout], [
 slave: p1: expired attached
 	port_id: 11
 	port_priority: 111
+	may_enable: false
 
 	actor sys_id: 11:22:33:44:55:66
 	actor sys_priority: 54321
@@ -82,6 +84,7 @@ slave: p1: expired attached
 slave: p2: expired attached
 	port_id: 22
 	port_priority: 222
+	may_enable: false
 
 	actor sys_id: 11:22:33:44:55:66
 	actor sys_priority: 54321

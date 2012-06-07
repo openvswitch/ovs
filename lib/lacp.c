@@ -362,6 +362,14 @@ lacp_slave_carrier_changed(const struct lacp *lacp, const void *slave_)
     }
 }
 
+static bool
+slave_may_enable__(struct slave *slave)
+{
+    /* The slave may be enabled if it's attached to an aggregator and its
+     * partner is synchronized.*/
+    return slave->attached && (slave->partner.state & LACP_STATE_SYNC);
+}
+
 /* This function should be called before enabling 'slave_' to send or receive
  * traffic.  If it returns false, 'slave_' should not enabled.  As a
  * convenience, returns true if 'lacp' is NULL. */
@@ -369,11 +377,7 @@ bool
 lacp_slave_may_enable(const struct lacp *lacp, const void *slave_)
 {
     if (lacp) {
-        struct slave *slave = slave_lookup(lacp, slave_);
-
-        /* The slave may be enabled if it's attached to an aggregator and its
-         * partner is synchronized.*/
-        return slave->attached && (slave->partner.state & LACP_STATE_SYNC);
+        return slave_may_enable__(slave_lookup(lacp, slave_));
     } else {
         return true;
     }
@@ -788,6 +792,8 @@ lacp_print_details(struct ds *ds, struct lacp *lacp)
                       slave->attached ? "attached" : "detached");
         ds_put_format(ds, "\tport_id: %u\n", slave->port_id);
         ds_put_format(ds, "\tport_priority: %u\n", slave->port_priority);
+        ds_put_format(ds, "\tmay_enable: %s\n", (slave_may_enable__(slave)
+                                                 ? "true" : "false"));
 
         ds_put_format(ds, "\n\tactor sys_id: " ETH_ADDR_FMT "\n",
                       ETH_ADDR_ARGS(actor.sys_id));
