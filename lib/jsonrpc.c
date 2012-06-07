@@ -1058,5 +1058,8 @@ void
 jsonrpc_session_set_dscp(struct jsonrpc_session *s,
                          uint8_t dscp)
 {
-    s->dscp = dscp;
+    if (s->dscp != dscp) {
+        jsonrpc_session_force_reconnect(s);
+        s->dscp = dscp;
+    }
 }

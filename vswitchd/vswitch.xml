@@ -2756,10 +2756,9 @@
         Service (QoS) on IP networks.
 
         The DSCP value specified here is used when establishing the connection
-        between the controller and the Open vSwitch.  The connection must be
-        reset for the new DSCP values to take effect.  If no value is
-        specified, a default value of 48 is chosen.  Valid DSCP values must be
-        in the range 0 to 63.
+        between the controller and the Open vSwitch.  If no value is specified,
+        a default value of 48 is chosen.  Valid DSCP values must be in the
+        range 0 to 63.
       </column>
     </group>
 
@@ -3003,10 +3002,9 @@
         Service (QoS) on IP networks.
 
         The DSCP value specified here is used when establishing the connection
-        between the manager and the Open vSwitch.  The connection must be
-        reset for the new DSCP values to take effect.  If no value is
-        specified, a default value of 48 is chosen.  Valid DSCP values must be
-        in the range 0 to 63.
+        between the manager and the Open vSwitch.  If no value is specified, a
+        default value of 48 is chosen.  Valid DSCP values must be in the range
+        0 to 63.
       </column>
     </group>
 

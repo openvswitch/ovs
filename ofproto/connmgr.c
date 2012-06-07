@@ -1114,6 +1114,12 @@ ofconn_reconfigure(struct ofconn *ofconn, const struct ofproto_controller *c)
     rconn_set_probe_interval(ofconn->rconn, probe_interval);
 
     ofconn_set_rate_limit(ofconn, c->rate_limit, c->burst_limit);
+
+    /* If dscp value changed reconnect. */
+    if (c->dscp != rconn_get_dscp(ofconn->rconn)) {
+        rconn_set_dscp(ofconn->rconn, c->dscp);
+        rconn_reconnect(ofconn->rconn);
+    }
 }
 
 /* Returns true if it makes sense for 'ofconn' to receive and process OpenFlow
