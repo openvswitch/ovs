@@ -323,6 +323,9 @@ parse_named_action(enum ofputil_action_code code, const struct flow *flow,
     struct ofp_action_tp_port *oata;
 
     switch (code) {
+    case OFPUTIL_ACTION_INVALID:
+        NOT_REACHED();
+
     case OFPUTIL_OFPAT10_OUTPUT:
         parse_output(b, arg);
         break;

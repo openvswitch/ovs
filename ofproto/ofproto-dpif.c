@@ -5397,6 +5397,9 @@ do_xlate_actions(const union ofp_action *in, size_t n_in,
 
         code = ofputil_decode_action_unsafe(ia);
         switch (code) {
+        case OFPUTIL_ACTION_INVALID:
+            NOT_REACHED();
+
         case OFPUTIL_OFPAT10_OUTPUT:
             xlate_output_action(ctx, &ia->output);
             break;

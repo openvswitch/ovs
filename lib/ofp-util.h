@@ -598,6 +598,7 @@ bool ofputil_frag_handling_from_string(const char *, enum ofp_config_flags *);
  * (The above list helps developers who want to "grep" for these definitions.)
  */
 enum ofputil_action_code {
+    OFPUTIL_ACTION_INVALID,
 #define OFPAT10_ACTION(ENUM, STRUCT, NAME)             OFPUTIL_##ENUM,
 #define NXAST_ACTION(ENUM, STRUCT, EXTENSIBLE, NAME) OFPUTIL_##ENUM,
 #include "ofp-util.def"
@@ -607,7 +608,7 @@ enum ofputil_action_code {
 enum {
 #define OFPAT10_ACTION(ENUM, STRUCT, NAME)             + 1
 #define NXAST_ACTION(ENUM, STRUCT, EXTENSIBLE, NAME) + 1
-    OFPUTIL_N_ACTIONS = 0
+    OFPUTIL_N_ACTIONS = 1
 #include "ofp-util.def"
 };
 

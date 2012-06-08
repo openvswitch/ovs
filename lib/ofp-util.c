@@ -3711,6 +3711,9 @@ validate_actions(const union ofp_action *actions, size_t n_actions,
 
         error = 0;
         switch ((enum ofputil_action_code) code) {
+        case OFPUTIL_ACTION_INVALID:
+            NOT_REACHED();
+
         case OFPUTIL_OFPAT10_OUTPUT:
             error = ofputil_check_output_port(ntohs(a->output.port),
                                               max_ports);
@@ -3941,6 +3944,7 @@ int
 ofputil_action_code_from_name(const char *name)
 {
     static const char *names[OFPUTIL_N_ACTIONS] = {
+        NULL,
 #define OFPAT10_ACTION(ENUM, STRUCT, NAME)             NAME,
 #define NXAST_ACTION(ENUM, STRUCT, EXTENSIBLE, NAME) NAME,
 #include "ofp-util.def"
@@ -3965,6 +3969,9 @@ void *
 ofputil_put_action(enum ofputil_action_code code, struct ofpbuf *buf)
 {
     switch (code) {
+    case OFPUTIL_ACTION_INVALID:
+        NOT_REACHED();
+
 #define OFPAT10_ACTION(ENUM, STRUCT, NAME)                    \
     case OFPUTIL_##ENUM: return ofputil_put_##ENUM(buf);
 #define NXAST_ACTION(ENUM, STRUCT, EXTENSIBLE, NAME)        \

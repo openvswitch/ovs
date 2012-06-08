@@ -190,6 +190,9 @@ ofp_print_action(struct ds *s, const union ofp_action *a,
     uint16_t port;
 
     switch (code) {
+    case OFPUTIL_ACTION_INVALID:
+        NOT_REACHED();
+
     case OFPUTIL_OFPAT10_OUTPUT:
         port = ntohs(a->output.port);
         if (port < OFPP_MAX) {
