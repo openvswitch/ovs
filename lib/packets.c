@@ -127,7 +127,7 @@ eth_addr_from_string(const char *s, uint8_t ea[ETH_ADDR_LEN])
  * The returned packet has enough headroom to insert an 802.1Q VLAN header if
  * desired. */
 void
-compose_benign_packet(struct ofpbuf *b, const uint8_t eth_src[ETH_ADDR_LEN])
+compose_rarp(struct ofpbuf *b, const uint8_t eth_src[ETH_ADDR_LEN])
 {
     struct eth_header *eth;
     struct rarp_header *rarp;

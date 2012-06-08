@@ -531,7 +531,7 @@ bond_compose_learning_packet(struct bond *bond,
     slave = choose_output_slave(bond, &flow, vlan);
 
     packet = ofpbuf_new(0);
-    compose_benign_packet(packet, eth_src);
+    compose_rarp(packet, eth_src);
     if (vlan) {
         eth_push_vlan(packet, htons(vlan));
     }

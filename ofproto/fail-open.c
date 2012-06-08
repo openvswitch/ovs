@@ -121,7 +121,7 @@ send_bogus_packet_ins(struct fail_open *fo)
 
     ofpbuf_init(&b, 128);
     eth_addr_nicira_random(mac);
-    compose_benign_packet(&b, mac);
+    compose_rarp(&b, mac);
 
     memset(&pin, 0, sizeof pin);
     pin.packet = b.data;

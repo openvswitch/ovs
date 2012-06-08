@@ -135,8 +135,7 @@ static inline void eth_addr_nicira_random(uint8_t ea[ETH_ADDR_LEN])
 bool eth_addr_is_reserved(const uint8_t ea[ETH_ADDR_LEN]);
 bool eth_addr_from_string(const char *, uint8_t ea[ETH_ADDR_LEN]);
 
-void compose_benign_packet(struct ofpbuf *,
-                           const uint8_t eth_src[ETH_ADDR_LEN]);
+void compose_rarp(struct ofpbuf *, const uint8_t eth_src[ETH_ADDR_LEN]);
 
 void eth_push_vlan(struct ofpbuf *, ovs_be16 tci);
 void eth_pop_vlan(struct ofpbuf *);
