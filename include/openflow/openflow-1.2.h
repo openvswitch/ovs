@@ -121,9 +121,9 @@ enum oxm12_ofb_match_fields {
  */
 
 #define OXM_HEADER(FIELD, LENGTH) \
-	NXM_HEADER(OFPXMC12_OPENFLOW_BASIC, FIELD, LENGTH)
+    NXM_HEADER(OFPXMC12_OPENFLOW_BASIC, FIELD, LENGTH)
 #define OXM_HEADER_W(FIELD, LENGTH) \
-	NXM_HEADER_W(OFPXMC12_OPENFLOW_BASIC, FIELD, LENGTH)
+    NXM_HEADER_W(OFPXMC12_OPENFLOW_BASIC, FIELD, LENGTH)
 
 #define OXM_OF_IN_PORT        OXM_HEADER   (OFPXMT12_OFB_IN_PORT, 4)
 #define OXM_OF_IN_PHY_PORT    OXM_HEADER   (OFPXMT12_OFB_IN_PHY_PORT, 4)
@@ -211,11 +211,11 @@ enum ofp12_action_type {
 };
 
 enum ofp12_controller_max_len {
-	OFPCML12_MAX       = 0xffe5, /* maximum max_len value which can be used
-	                              * to request a specific byte length. */
-	OFPCML12_NO_BUFFER = 0xffff  /* indicates that no buffering should be
-	                              * applied and the whole packet is to be
-	                              * sent to the controller. */
+    OFPCML12_MAX       = 0xffe5, /* maximum max_len value which can be used
+                                  * to request a specific byte length. */
+    OFPCML12_NO_BUFFER = 0xffff  /* indicates that no buffering should be
+                                  * applied and the whole packet is to be
+                                  * sent to the controller. */
 };
 
 /* Action structure for OFPAT12_SET_FIELD. */
