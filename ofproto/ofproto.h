@@ -33,12 +33,15 @@
 extern "C" {
 #endif
 
+struct bfd_cfg;
+struct cfm_settings;
 struct cls_rule;
 struct netdev;
 struct ofproto;
 struct ofport;
 struct shash;
 struct simap;
+struct smap;
 struct netdev_stats;
 
 struct ofproto_controller_info {
@@ -255,6 +258,10 @@ void ofproto_port_unregister(struct ofproto *, uint16_t ofp_port);
 void ofproto_port_clear_cfm(struct ofproto *, uint16_t ofp_port);
 void ofproto_port_set_cfm(struct ofproto *, uint16_t ofp_port,
                           const struct cfm_settings *);
+void ofproto_port_set_bfd(struct ofproto *, uint16_t ofp_port,
+                          const struct smap *cfg);
+int ofproto_port_get_bfd_status(struct ofproto *, uint16_t ofp_port,
+                                struct smap *);
 int ofproto_port_is_lacp_current(struct ofproto *, uint16_t ofp_port);
 int ofproto_port_set_stp(struct ofproto *, uint16_t ofp_port,
                          const struct ofproto_port_stp_settings *);

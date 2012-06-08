@@ -18,6 +18,7 @@
 #include <errno.h>
 #include <inttypes.h>
 #include <stdlib.h>
+#include "bfd.h"
 #include "bitmap.h"
 #include "bond.h"
 #include "cfm.h"
@@ -373,6 +374,7 @@ bridge_init(const char *remote)
     ovsdb_idl_omit_alert(idl, &ovsrec_interface_col_cfm_remote_mpids);
     ovsdb_idl_omit_alert(idl, &ovsrec_interface_col_cfm_health);
     ovsdb_idl_omit_alert(idl, &ovsrec_interface_col_cfm_remote_opstate);
+    ovsdb_idl_omit_alert(idl, &ovsrec_interface_col_bfd_status);
     ovsdb_idl_omit_alert(idl, &ovsrec_interface_col_lacp_current);
     ovsdb_idl_omit(idl, &ovsrec_interface_col_external_ids);
 
@@ -605,6 +607,8 @@ bridge_reconfigure_continue(const struct ovsrec_open_vswitch *ovs_cfg)
                 iface_configure_cfm(iface);
                 iface_configure_qos(iface, port->cfg->qos);
                 iface_set_mac(iface);
+                ofproto_port_set_bfd(br->ofproto, iface->ofp_port,
+                                     &iface->cfg->bfd);
             }
         }
         bridge_configure_mirrors(br);
@@ -2175,6 +2179,7 @@ instant_stats_run(void)
 
             HMAP_FOR_EACH (iface, name_node, &br->iface_by_name) {
                 enum netdev_flags flags;
+                struct smap smap;
                 const char *link_state;
                 int64_t link_resets;
                 int current, error;
@@ -2207,6 +2212,13 @@ instant_stats_run(void)
                 ovsrec_interface_set_link_resets(iface->cfg, &link_resets, 1);
 
                 iface_refresh_cfm_stats(iface);
+
+                smap_init(&smap);
+                if (!ofproto_port_get_bfd_status(br->ofproto, iface->ofp_port,
+                                                 &smap)) {
+                    ovsrec_interface_set_bfd_status(iface->cfg, &smap);
+                    smap_destroy(&smap);
+                }
             }
         }
     }

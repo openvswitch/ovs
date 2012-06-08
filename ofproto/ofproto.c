@@ -799,6 +799,45 @@ ofproto_port_set_cfm(struct ofproto *ofproto, uint16_t ofp_port,
     }
 }
 
+/* Configures BFD on 'ofp_port' in 'ofproto'.  This function has no effect if
+ * 'ofproto' does not have a port 'ofp_port'. */
+void
+ofproto_port_set_bfd(struct ofproto *ofproto, uint16_t ofp_port,
+                     const struct smap *cfg)
+{
+    struct ofport *ofport;
+    int error;
+
+    ofport = ofproto_get_port(ofproto, ofp_port);
+    if (!ofport) {
+        VLOG_WARN("%s: cannot configure bfd on nonexistent port %"PRIu16,
+                  ofproto->name, ofp_port);
+    }
+
+    error = (ofproto->ofproto_class->set_bfd
+             ? ofproto->ofproto_class->set_bfd(ofport, cfg)
+             : EOPNOTSUPP);
+    if (error) {
+        VLOG_WARN("%s: bfd configuration on port %"PRIu16" (%s) failed (%s)",
+                  ofproto->name, ofp_port, netdev_get_name(ofport->netdev),
+                  strerror(error));
+    }
+}
+
+/* Populates 'status' with key value pairs indicating the status of the BFD
+ * session on 'ofp_port'.  This information is intended to be populated in the
+ * OVS database.  Has no effect if 'ofp_port' is not na OpenFlow port in
+ * 'ofproto'. */
+int
+ofproto_port_get_bfd_status(struct ofproto *ofproto, uint16_t ofp_port,
+                            struct smap *status)
+{
+    struct ofport *ofport = ofproto_get_port(ofproto, ofp_port);
+    return (ofport && ofproto->ofproto_class->get_bfd_status
+            ? ofproto->ofproto_class->get_bfd_status(ofport, status)
+            : EOPNOTSUPP);
+}
+
 /* Checks the status of LACP negotiation for 'ofp_port' within ofproto.
  * Returns 1 if LACP partner information for 'ofp_port' is up-to-date,
  * 0 if LACP partner information is not current (generally indicating a

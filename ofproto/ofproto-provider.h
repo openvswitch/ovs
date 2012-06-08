@@ -33,6 +33,7 @@
 struct match;
 struct ofpact;
 struct ofputil_flow_mod;
+struct bfd_cfg;
 
 /* An OpenFlow switch.
  *
@@ -1143,6 +1144,21 @@ struct ofproto_class {
      * not modify or free the array returned in 'status->rmps'. */
     bool (*get_cfm_status)(const struct ofport *ofport,
                            struct ofproto_cfm_status *status);
+
+    /* Configures BFD on 'ofport'.
+     *
+     * If 'cfg' is NULL, or 'cfg' does not contain the key value pair
+     * "enable=true", removes BFD from 'ofport'.  Otherwise, configures BFD
+     * according to 'cfg'.
+     *
+     * EOPNOTSUPP as a return value indicates that this ofproto_class does not
+     * support BFD, as does a null pointer. */
+    int (*set_bfd)(struct ofport *ofport, const struct smap *cfg);
+
+    /* Populates 'smap' with the status of BFD on 'ofport'.  Returns 0 on
+     * success, or a positive errno.  EOPNOTSUPP as a return value indicates
+     * that this ofproto_class does not support BFD, as does a null pointer. */
+    int (*get_bfd_status)(struct ofport *ofport, struct smap *smap);
 
     /* Configures spanning tree protocol (STP) on 'ofproto' using the
      * settings defined in 's'.

@@ -12,6 +12,8 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/aes128.h \
 	lib/backtrace.c \
 	lib/backtrace.h \
+	lib/bfd.c \
+	lib/bfd.h \
 	lib/bitmap.c \
 	lib/bitmap.h \
 	lib/bond.c \

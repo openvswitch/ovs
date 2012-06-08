@@ -179,14 +179,15 @@ enum slow_path_reason {
     SLOW_LACP = 1 << 1,         /* LACP packets need per-packet processing. */
     SLOW_STP = 1 << 2,          /* STP packets need per-packet processing. */
     SLOW_IN_BAND = 1 << 3,      /* In-band control needs every packet. */
+    SLOW_BFD = 1 << 4,          /* BFD packets need per-packet processing. */
 
-    /* Mutually exclusive with SLOW_CFM, SLOW_LACP, SLOW_STP.
+    /* Mutually exclusive with SLOW_BFD, SLOW_CFM, SLOW_LACP, SLOW_STP.
      * Could possibly appear with SLOW_IN_BAND. */
-    SLOW_CONTROLLER = 1 << 4,   /* Packets must go to OpenFlow controller. */
+    SLOW_CONTROLLER = 1 << 5,   /* Packets must go to OpenFlow controller. */
 
     /* This can appear on its own, or, theoretically at least, along with any
      * other combination of reasons. */
-    SLOW_MATCH = 1 << 5,        /* Datapath can't match specifically enough. */
+    SLOW_MATCH = 1 << 6,        /* Datapath can't match specifically enough. */
 };
 
 #endif /* odp-util.h */

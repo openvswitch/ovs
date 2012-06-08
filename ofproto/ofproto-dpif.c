@@ -20,6 +20,7 @@
 
 #include <errno.h>
 
+#include "bfd.h"
 #include "bond.h"
 #include "bundle.h"
 #include "byte-order.h"
@@ -531,6 +532,7 @@ struct ofport_dpif {
     struct ofbundle *bundle;    /* Bundle that contains this port, if any. */
     struct list bundle_node;    /* In struct ofbundle's "ports" list. */
     struct cfm *cfm;            /* Connectivity Fault Management, if any. */
+    struct bfd *bfd;            /* BFD, if any. */
     tag_type tag;               /* Tag associated with this port. */
     bool may_enable;            /* May be enabled in bonds. */
     long long int carrier_seq;  /* Carrier status changes. */
@@ -1778,6 +1780,7 @@ port_construct(struct ofport *port_)
     ofproto->backer->need_revalidate = REV_RECONFIGURE;
     port->bundle = NULL;
     port->cfm = NULL;
+    port->bfd = NULL;
     port->tag = tag_create_random();
     port->may_enable = true;
     port->stp_port = NULL;
@@ -1992,6 +1995,35 @@ get_cfm_status(const struct ofport *ofport_,
         return true;
     } else {
         return false;
+    }
+}
+
+static int
+set_bfd(struct ofport *ofport_, const struct smap *cfg)
+{
+    struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofport_->ofproto);
+    struct ofport_dpif *ofport = ofport_dpif_cast(ofport_);
+    struct bfd *old;
+
+    old = ofport->bfd;
+    ofport->bfd = bfd_configure(old, netdev_get_name(ofport->up.netdev), cfg);
+    if (ofport->bfd != old) {
+        ofproto->backer->need_revalidate = REV_RECONFIGURE;
+    }
+
+    return 0;
+}
+
+static int
+get_bfd_status(struct ofport *ofport_, struct smap *smap)
+{
+    struct ofport_dpif *ofport = ofport_dpif_cast(ofport_);
+
+    if (ofport->bfd) {
+        bfd_get_status(ofport->bfd, smap);
+        return 0;
+    } else {
+        return ENOENT;
     }
 }
 
@@ -3133,6 +3165,15 @@ port_run_fast(struct ofport_dpif *ofport)
         send_packet(ofport, &packet);
         ofpbuf_uninit(&packet);
     }
+
+    if (ofport->bfd && bfd_should_send_packet(ofport->bfd)) {
+        struct ofpbuf packet;
+
+        ofpbuf_init(&packet, 0);
+        bfd_put_packet(ofport->bfd, &packet, ofport->up.pp.hw_addr);
+        send_packet(ofport, &packet);
+        ofpbuf_uninit(&packet);
+    }
 }
 
 static void
@@ -3163,6 +3204,11 @@ port_run(struct ofport_dpif *ofport)
         }
     }
 
+    if (ofport->bfd) {
+        bfd_run(ofport->bfd);
+        enable = enable && bfd_forwarding(ofport->bfd);
+    }
+
     if (ofport->bundle) {
         enable = enable && lacp_slave_may_enable(ofport->bundle->lacp, ofport);
         if (carrier_changed) {
@@ -3186,6 +3232,10 @@ port_wait(struct ofport_dpif *ofport)
 {
     if (ofport->cfm) {
         cfm_wait(ofport->cfm);
+    }
+
+    if (ofport->bfd) {
+        bfd_wait(ofport->bfd);
     }
 }
 
@@ -3510,6 +3560,11 @@ process_special(struct ofproto_dpif *ofproto, const struct flow *flow,
             cfm_process_heartbeat(ofport->cfm, packet);
         }
         return SLOW_CFM;
+    } else if (ofport->bfd && bfd_should_process_flow(flow)) {
+        if (packet) {
+            bfd_process_packet(ofport->bfd, flow, packet);
+        }
+        return SLOW_BFD;
     } else if (ofport->bundle && ofport->bundle->lacp
                && flow->dl_type == htons(ETH_TYPE_LACP)) {
         if (packet) {
@@ -4527,7 +4582,7 @@ expire_subfacets(struct ofproto_dpif *ofproto, int dp_max_idle)
                         &ofproto->subfacets) {
         long long int cutoff;
 
-        cutoff = (subfacet->slow & (SLOW_CFM | SLOW_LACP | SLOW_STP)
+        cutoff = (subfacet->slow & (SLOW_CFM | SLOW_BFD | SLOW_LACP | SLOW_STP)
                   ? special_cutoff
                   : normal_cutoff);
         if (subfacet->used < cutoff) {
@@ -5896,7 +5951,7 @@ compose_slow_path(const struct ofproto_dpif *ofproto, const struct flow *flow,
     cookie.slow_path.reason = slow;
 
     ofpbuf_use_stack(&buf, stub, stub_size);
-    if (slow & (SLOW_CFM | SLOW_LACP | SLOW_STP)) {
+    if (slow & (SLOW_CFM | SLOW_BFD | SLOW_LACP | SLOW_STP)) {
         uint32_t pid = dpif_port_get_pid(ofproto->backer->dpif, UINT32_MAX);
         odp_put_userspace_action(pid, &cookie, sizeof cookie.slow_path, &buf);
     } else {
@@ -8322,6 +8377,9 @@ ofproto_trace(struct ofproto_dpif *ofproto, const struct flow *flow,
                 case SLOW_STP:
                     ds_put_cstr(ds, "\n\t- Consists of STP packets.");
                     break;
+                case SLOW_BFD:
+                    ds_put_cstr(ds, "\n\t- Consists of BFD packets.");
+                    break;
                 case SLOW_IN_BAND:
                     ds_put_cstr(ds, "\n\t- Needs in-band special case "
                                 "processing.");
@@ -9046,6 +9104,8 @@ const struct ofproto_class ofproto_dpif_class = {
     set_ipfix,
     set_cfm,
     get_cfm_status,
+    set_bfd,
+    get_bfd_status,
     set_stp,
     get_stp_status,
     set_stp_port,

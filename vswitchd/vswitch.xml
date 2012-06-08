@@ -1695,6 +1695,98 @@
       </column>
     </group>
 
+    <group title="Bidirectional Forwarding Detection (BFD)">
+        <p>
+            BFD, defined in RFC 5880 and RFC 5881, allows point to point
+            detection of connectivity failures by occasional transmission of
+            BFD control messages.  It is implemented in Open vSwitch to serve
+            as a more popular and standards compliant alternative to CFM.
+        </p>
+
+        <p>
+            BFD operates by regularly transmitting BFD control messages at a
+            rate negotiated independently in each direction.  Each endpoint
+            specifies the rate at which it expects to receive control messages,
+            and the rate at which it's willing to transmit them.  Open vSwitch
+            uses a detection multiplier of three, meaning that an endpoint
+            which fails to receive BFD control messages for a period of three
+            times the expected reception rate, will signal a connectivity
+            fault.  In the case of a unidirectional connectivity issue, the
+            system not receiving BFD control messages will signal the problem
+            to its peer in the messages is transmists.
+        </p>
+
+        <p>
+            The Open vSwitch implementation of BFD aims to comply faithfully
+            with the requirements put forth in RFC 5880.  Currently, the only
+            known omission is ``Demand Mode'', which we hope to include in
+            future.  Open vSwitch does not implement the optional
+            Authentication or ``Echo Mode'' features.
+        </p>
+
+      <column name="bfd" key="enable">
+          When <code>true</code> BFD is enabled on this
+          <ref table="Interface"/>, otherwise it's disabled.  Defaults to
+          <code>false</code>.
+      </column>
+
+      <column name="bfd" key="min_rx"
+          type='{"type": "integer", "minInteger": 1}'>
+          The fastest rate, in milliseconds, at which this BFD session is
+          willing to receive BFD control messages.  The actual rate may be
+          slower if the remote endpoint isn't willing to transmit as quickly as
+          specified.  Defaults to <code>1000</code>.
+      </column>
+
+      <column name="bfd" key="min_tx"
+          type='{"type": "integer", "minInteger": 1}'>
+          The fastest rate, in milliseconds, at which this BFD session is
+          willing to transmit BFD control messages.  The actual rate may be
+          slower if the remote endpoint isn't willing to receive as quickly as
+          specified.  Defaults to <code>100</code>.
+      </column>
+
+      <column name="bfd" key="cpath_down" type='{"type": "boolean"}'>
+          Concatenated path down may be used when the local system should not
+          have traffic forwarded to it for some reason other than a connectivty
+          failure on the interface being monitored.  When a controller thinks
+          this may be the case, it may set <code>cpath_down</code> to
+          <code>true</code> which may cause the remote BFD session not to
+          forward traffic to this <ref table="Interface"/>. Defaults to
+          <code>false</code>.
+      </column>
+
+      <column name="bfd_status" key="state"
+          type='{"type": "string",
+          "enum": ["set", ["admin_down", "down", "init", "up"]]}'>
+          State of the BFD session.  The BFD session is fully healthy and
+          negotiated if <code>UP</code>.
+      </column>
+
+      <column name="bfd_status" key="forwarding" type='{"type": "boolean"}'>
+          True if the BFD session believes this <ref table="Interface"/> may be
+          used to forward traffic.  Typically this means the local session is
+          signaling <code>UP</code>, and the remote system isn't signaling a
+          problem such as concatenated path down.
+      </column>
+
+      <column name="bfd_status" key="diagnostic">
+          A short message indicating what the BFD session thinks is wrong in
+          case of a problem.
+      </column>
+
+      <column name="bfd_status" key="remote_state"
+          type='{"type": "string",
+          "enum": ["set", ["admin_down", "down", "init", "up"]]}'>
+          State of the remote endpoint's BFD session.
+      </column>
+
+      <column name="bfd_status" key="remote_diagnostic">
+          A short message indicating what the remote endpoint's BFD session
+          thinks is wrong in case of a problem.
+      </column>
+    </group>
+
     <group title="Connectivity Fault Management">
       <p>
         802.1ag Connectivity Fault Management (CFM) allows a group of
