@@ -259,6 +259,267 @@ ofputil_cls_rule_to_ofp10_match(const struct cls_rule *rule,
     memset(match->pad2, '\0', sizeof match->pad2);
 }
 
+/* Converts the ofp11_match in 'match' into a cls_rule in 'rule', with the
+ * given 'priority'.  Returns 0 if successful, otherwise an OFPERR_* value. */
+enum ofperr
+ofputil_cls_rule_from_ofp11_match(const struct ofp11_match *match,
+                                  unsigned int priority,
+                                  struct cls_rule *rule)
+{
+    uint16_t wc = ntohl(match->wildcards);
+    uint8_t dl_src_mask[ETH_ADDR_LEN];
+    uint8_t dl_dst_mask[ETH_ADDR_LEN];
+    bool ipv4, arp;
+    int i;
+
+    cls_rule_init_catchall(rule, priority);
+
+    if (!(wc & OFPFW11_IN_PORT)) {
+        uint16_t ofp_port;
+        enum ofperr error;
+
+        error = ofputil_port_from_ofp11(match->in_port, &ofp_port);
+        if (error) {
+            return OFPERR_OFPBMC_BAD_VALUE;
+        }
+        cls_rule_set_in_port(rule, ofp_port);
+    }
+
+    for (i = 0; i < ETH_ADDR_LEN; i++) {
+        dl_src_mask[i] = ~match->dl_src_mask[i];
+    }
+    cls_rule_set_dl_src_masked(rule, match->dl_src, dl_src_mask);
+
+    for (i = 0; i < ETH_ADDR_LEN; i++) {
+        dl_dst_mask[i] = ~match->dl_dst_mask[i];
+    }
+    cls_rule_set_dl_dst_masked(rule, match->dl_dst, dl_dst_mask);
+
+    if (!(wc & OFPFW11_DL_VLAN)) {
+        if (match->dl_vlan == htons(OFPVID11_NONE)) {
+            /* Match only packets without a VLAN tag. */
+            rule->flow.vlan_tci = htons(0);
+            rule->wc.vlan_tci_mask = htons(UINT16_MAX);
+        } else {
+            if (match->dl_vlan == htons(OFPVID11_ANY)) {
+                /* Match any packet with a VLAN tag regardless of VID. */
+                rule->flow.vlan_tci = htons(VLAN_CFI);
+                rule->wc.vlan_tci_mask = htons(VLAN_CFI);
+            } else if (ntohs(match->dl_vlan) < 4096) {
+                /* Match only packets with the specified VLAN VID. */
+                rule->flow.vlan_tci = htons(VLAN_CFI) | match->dl_vlan;
+                rule->wc.vlan_tci_mask = htons(VLAN_CFI | VLAN_VID_MASK);
+            } else {
+                /* Invalid VID. */
+                return OFPERR_OFPBMC_BAD_VALUE;
+            }
+
+            if (!(wc & OFPFW11_DL_VLAN_PCP)) {
+                if (match->dl_vlan_pcp <= 7) {
+                    rule->flow.vlan_tci |= htons(match->dl_vlan_pcp
+                                                 << VLAN_PCP_SHIFT);
+                    rule->wc.vlan_tci_mask |= htons(VLAN_PCP_MASK);
+                } else {
+                    /* Invalid PCP. */
+                    return OFPERR_OFPBMC_BAD_VALUE;
+                }
+            }
+        }
+    }
+
+    if (!(wc & OFPFW11_DL_TYPE)) {
+        cls_rule_set_dl_type(rule,
+                             ofputil_dl_type_from_openflow(match->dl_type));
+    }
+
+    ipv4 = rule->flow.dl_type == htons(ETH_TYPE_IP);
+    arp = rule->flow.dl_type == htons(ETH_TYPE_ARP);
+
+    if (ipv4 && !(wc & OFPFW11_NW_TOS)) {
+        if (match->nw_tos & ~IP_DSCP_MASK) {
+            /* Invalid TOS. */
+            return OFPERR_OFPBMC_BAD_VALUE;
+        }
+
+        cls_rule_set_nw_dscp(rule, match->nw_tos);
+    }
+
+    if (ipv4 || arp) {
+        if (!(wc & OFPFW11_NW_PROTO)) {
+            cls_rule_set_nw_proto(rule, match->nw_proto);
+        }
+
+        if (!ip_is_cidr(~match->nw_src_mask) ||
+            !ip_is_cidr(~match->nw_dst_mask)) {
+            return OFPERR_OFPBMC_BAD_NW_ADDR_MASK;
+        }
+        cls_rule_set_nw_src_masked(rule, match->nw_src, ~match->nw_src_mask);
+        cls_rule_set_nw_dst_masked(rule, match->nw_dst, ~match->nw_dst_mask);
+    }
+
+#define OFPFW11_TP_ALL (OFPFW11_TP_SRC | OFPFW11_TP_DST)
+    if (ipv4 && (wc & OFPFW11_TP_ALL) != OFPFW11_TP_ALL) {
+        switch (rule->flow.nw_proto) {
+        case IPPROTO_ICMP:
+            /* "A.2.3 Flow Match Structures" in OF1.1 says:
+             *
+             *    The tp_src and tp_dst fields will be ignored unless the
+             *    network protocol specified is as TCP, UDP or SCTP.
+             *
+             * but I'm pretty sure we should support ICMP too, otherwise
+             * that's a regression from OF1.0. */
+            if (!(wc & OFPFW11_TP_SRC)) {
+                uint16_t icmp_type = ntohs(match->tp_src);
+                if (icmp_type < 0x100) {
+                    cls_rule_set_icmp_type(rule, icmp_type);
+                } else {
+                    return OFPERR_OFPBMC_BAD_FIELD;
+                }
+            }
+            if (!(wc & OFPFW11_TP_DST)) {
+                uint16_t icmp_code = ntohs(match->tp_dst);
+                if (icmp_code < 0x100) {
+                    cls_rule_set_icmp_code(rule, icmp_code);
+                } else {
+                    return OFPERR_OFPBMC_BAD_FIELD;
+                }
+            }
+            break;
+
+        case IPPROTO_TCP:
+        case IPPROTO_UDP:
+            if (!(wc & (OFPFW11_TP_SRC))) {
+                cls_rule_set_tp_src(rule, match->tp_src);
+            }
+            if (!(wc & (OFPFW11_TP_DST))) {
+                cls_rule_set_tp_dst(rule, match->tp_dst);
+            }
+            break;
+
+        case IPPROTO_SCTP:
+            /* We don't support SCTP and it seems that we should tell the
+             * controller, since OF1.1 implementations are supposed to. */
+            return OFPERR_OFPBMC_BAD_FIELD;
+
+        default:
+            /* OF1.1 says explicitly to ignore this. */
+            break;
+        }
+    }
+
+    if (rule->flow.dl_type == htons(ETH_TYPE_MPLS) ||
+        rule->flow.dl_type == htons(ETH_TYPE_MPLS_MCAST)) {
+        enum { OFPFW11_MPLS_ALL = OFPFW11_MPLS_LABEL | OFPFW11_MPLS_TC };
+
+        if ((wc & OFPFW11_MPLS_ALL) != OFPFW11_MPLS_ALL) {
+            /* MPLS not supported. */
+            return OFPERR_OFPBMC_BAD_TAG;
+        }
+    }
+
+    if (match->metadata_mask != htonll(UINT64_MAX)) {
+        /* Metadata field not yet supported because we haven't decided how to
+         * map it onto our existing fields (or whether to add a new field). */
+        return OFPERR_OFPBMC_BAD_FIELD;
+    }
+
+    return 0;
+}
+
+/* Convert 'rule' into the OpenFlow 1.1 match structure 'match'. */
+void
+ofputil_cls_rule_to_ofp11_match(const struct cls_rule *rule,
+                                struct ofp11_match *match)
+{
+    uint32_t wc = 0;
+    int i;
+
+    memset(match, 0, sizeof *match);
+    match->omh.type = htons(OFPMT_STANDARD);
+    match->omh.length = htons(OFPMT11_STANDARD_LENGTH);
+
+    if (rule->wc.wildcards & FWW_IN_PORT) {
+        wc |= OFPFW11_IN_PORT;
+    } else {
+        match->in_port = ofputil_port_to_ofp11(rule->flow.in_port);
+    }
+
+
+    memcpy(match->dl_src, rule->flow.dl_src, ETH_ADDR_LEN);
+    for (i = 0; i < ETH_ADDR_LEN; i++) {
+        match->dl_src_mask[i] = ~rule->wc.dl_src_mask[i];
+    }
+
+    memcpy(match->dl_dst, rule->flow.dl_dst, ETH_ADDR_LEN);
+    for (i = 0; i < ETH_ADDR_LEN; i++) {
+        match->dl_dst_mask[i] = ~rule->wc.dl_dst_mask[i];
+    }
+
+    if (rule->wc.vlan_tci_mask == htons(0)) {
+        wc |= OFPFW11_DL_VLAN | OFPFW11_DL_VLAN_PCP;
+    } else if (rule->wc.vlan_tci_mask & htons(VLAN_CFI)
+               && !(rule->flow.vlan_tci & htons(VLAN_CFI))) {
+        match->dl_vlan = htons(OFPVID11_NONE);
+        wc |= OFPFW11_DL_VLAN_PCP;
+    } else {
+        if (!(rule->wc.vlan_tci_mask & htons(VLAN_VID_MASK))) {
+            match->dl_vlan = htons(OFPVID11_ANY);
+        } else {
+            match->dl_vlan = htons(vlan_tci_to_vid(rule->flow.vlan_tci));
+        }
+
+        if (!(rule->wc.vlan_tci_mask & htons(VLAN_PCP_MASK))) {
+            wc |= OFPFW11_DL_VLAN_PCP;
+        } else {
+            match->dl_vlan_pcp = vlan_tci_to_pcp(rule->flow.vlan_tci);
+        }
+    }
+
+    if (rule->wc.wildcards & FWW_DL_TYPE) {
+        wc |= OFPFW11_DL_TYPE;
+    } else {
+        match->dl_type = ofputil_dl_type_to_openflow(rule->flow.dl_type);
+    }
+
+    if (rule->wc.wildcards & FWW_NW_DSCP) {
+        wc |= OFPFW11_NW_TOS;
+    } else {
+        match->nw_tos = rule->flow.nw_tos & IP_DSCP_MASK;
+    }
+
+    if (rule->wc.wildcards & FWW_NW_PROTO) {
+        wc |= OFPFW11_NW_PROTO;
+    } else {
+        match->nw_proto = rule->flow.nw_proto;
+    }
+
+    match->nw_src = rule->flow.nw_src;
+    match->nw_src_mask = ~rule->wc.nw_src_mask;
+    match->nw_dst = rule->flow.nw_dst;
+    match->nw_dst_mask = ~rule->wc.nw_dst_mask;
+
+    if (!rule->wc.tp_src_mask) {
+        wc |= OFPFW11_TP_SRC;
+    } else {
+        match->tp_src = rule->flow.tp_src;
+    }
+
+    if (!rule->wc.tp_dst_mask) {
+        wc |= OFPFW11_TP_DST;
+    } else {
+        match->tp_dst = rule->flow.tp_dst;
+    }
+
+    /* MPLS not supported. */
+    wc |= OFPFW11_MPLS_LABEL;
+    wc |= OFPFW11_MPLS_TC;
+
+    /* Metadata field not yet supported */
+    match->metadata_mask = htonll(UINT64_MAX);
+
+    match->wildcards = htonl(wc);
+}
+
 /* Given a 'dl_type' value in the format used in struct flow, returns the
  * corresponding 'dl_type' value for use in an ofp10_match or ofp11_match
  * structure. */
