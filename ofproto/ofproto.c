@@ -2684,7 +2684,7 @@ handle_queue_stats_dump_cb(uint32_t queue_id,
     put_queue_stats(cbdata, queue_id, stats);
 }
 
-static void
+static enum ofperr
 handle_queue_stats_for_port(struct ofport *port, uint32_t queue_id,
                             struct queue_stats_cbdata *cbdata)
 {
@@ -2697,8 +2697,11 @@ handle_queue_stats_for_port(struct ofport *port, uint32_t queue_id,
 
         if (!netdev_get_queue_stats(port->netdev, queue_id, &stats)) {
             put_queue_stats(cbdata, queue_id, &stats);
+        } else {
+            return OFPERR_OFPQOFC_BAD_QUEUE;
         }
     }
+    return 0;
 }
 
 static enum ofperr
@@ -2707,9 +2710,10 @@ handle_queue_stats_request(struct ofconn *ofconn,
 {
     struct ofproto *ofproto = ofconn_get_ofproto(ofconn);
     struct queue_stats_cbdata cbdata;
-    struct ofport *port;
     unsigned int port_no;
+    struct ofport *port;
     uint32_t queue_id;
+    enum ofperr error;
 
     COVERAGE_INC(ofproto_queue_req);
 
@@ -2718,21 +2722,25 @@ handle_queue_stats_request(struct ofconn *ofconn,
     port_no = ntohs(qsr->port_no);
     queue_id = ntohl(qsr->queue_id);
     if (port_no == OFPP_ALL) {
+        error = OFPERR_OFPQOFC_BAD_QUEUE;
         HMAP_FOR_EACH (port, hmap_node, &ofproto->ports) {
-            handle_queue_stats_for_port(port, queue_id, &cbdata);
-        }
-    } else if (port_no < OFPP_MAX) {
-        port = ofproto_get_port(ofproto, port_no);
-        if (port) {
-            handle_queue_stats_for_port(port, queue_id, &cbdata);
+            if (!handle_queue_stats_for_port(port, queue_id, &cbdata)) {
+                error = 0;
+            }
         }
     } else {
-        ofpbuf_list_delete(&cbdata.replies);
-        return OFPERR_OFPQOFC_BAD_PORT;
+        port = ofproto_get_port(ofproto, port_no);
+        error = (port
+                 ? handle_queue_stats_for_port(port, queue_id, &cbdata)
+                 : OFPERR_OFPQOFC_BAD_PORT);
     }
-    ofconn_send_replies(ofconn, &cbdata.replies);
+    if (!error) {
+        ofconn_send_replies(ofconn, &cbdata.replies);
+    } else {
+        ofpbuf_list_delete(&cbdata.replies);
+    }
 
-    return 0;
+    return error;
 }
 
 static bool

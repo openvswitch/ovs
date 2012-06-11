@@ -59,6 +59,14 @@ AT_CHECK([ovs-ofctl -vwarn queue-stats br0], [0], [stdout])
 AT_CHECK([STRIP_XIDS stdout], [0], [dnl
 OFPST_QUEUE reply: 0 queues
 ])
+AT_CHECK([ovs-ofctl -vwarn queue-stats br0 ALL 5], [0],
+  [OFPT_ERROR (xid=0x1): OFPQOFC_BAD_QUEUE
+OFPST_QUEUE request (xid=0x1):port=ALL queue=5
+])
+AT_CHECK([ovs-ofctl -vwarn queue-stats br0 10], [0],
+  [OFPT_ERROR (xid=0x1): OFPQOFC_BAD_PORT
+OFPST_QUEUE request (xid=0x1):port=10 queue=ALL
+])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 

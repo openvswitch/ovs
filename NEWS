@@ -11,6 +11,10 @@ post-v1.7.0
         the multicast bit in the destination address could be individually
 	masked.)
       - New field OXM_OF_METADATA, to align with OpenFlow 1.1.
+      - The OFPST_QUEUE request now reports an error if a specified port or
+        queue does not exist, or for requests for a specific queue on all
+        ports, if the specified queue does not exist on any port.  (Previous
+        versions generally reported an empty set of results.)
     - Additional protocols are not mirrored and dropped when forward-bpdu is
       false.  For a full list, see the ovs-vswitchd.conf.db man page.
     - Open vSwitch now sends RARP packets in situations where it previously
