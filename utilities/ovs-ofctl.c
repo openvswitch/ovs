@@ -380,6 +380,7 @@ static void
 dump_stats_transaction(const char *vconn_name, struct ofpbuf *request)
 {
     ovs_be32 send_xid = ((struct ofp_header *) request->data)->xid;
+    ovs_be16 stats_type = ((struct ofp_stats_msg *) request->data)->type;
     struct vconn *vconn;
     bool done = false;
 
@@ -392,12 +393,21 @@ dump_stats_transaction(const char *vconn_name, struct ofpbuf *request)
         run(vconn_recv_block(vconn, &reply), "OpenFlow packet receive failed");
         recv_xid = ((struct ofp_header *) reply->data)->xid;
         if (send_xid == recv_xid) {
-            struct ofp_stats_msg *osm;
+            const struct ofp_stats_msg *osm = reply->data;
+            const struct ofp_header *oh = reply->data;
 
             ofp_print(stdout, reply->data, reply->size, verbosity + 1);
 
-            osm = ofpbuf_at(reply, 0, sizeof *osm);
-            done = !osm || !(ntohs(osm->flags) & OFPSF_REPLY_MORE);
+            if (oh->type == OFPT_ERROR) {
+                done = true;
+            } else if (oh->type == OFPT10_STATS_REPLY
+                       && osm->type == stats_type) {
+                done = !(ntohs(osm->flags) & OFPSF_REPLY_MORE);
+            } else {
+                ovs_fatal(0, "received bad reply: %s",
+                          ofp_to_string(reply->data, reply->size,
+                                        verbosity + 1));
+            }
         } else {
             VLOG_DBG("received reply with xid %08"PRIx32" "
                      "!= expected %08"PRIx32, recv_xid, send_xid);
