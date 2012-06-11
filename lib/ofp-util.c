@@ -1505,7 +1505,8 @@ ofputil_encode_flow_mod(const struct ofputil_flow_mod *fm,
         nfm = msg->data;
         nfm->command = htons(command);
         nfm->cookie = fm->new_cookie;
-        match_len = nx_put_match(msg, &fm->cr, fm->cookie, fm->cookie_mask);
+        match_len = nx_put_match(msg, false, &fm->cr,
+                                 fm->cookie, fm->cookie_mask);
         nfm->idle_timeout = htons(fm->idle_timeout);
         nfm->hard_timeout = htons(fm->hard_timeout);
         nfm->priority = htons(fm->cr.priority);
@@ -1665,7 +1666,7 @@ ofputil_encode_flow_stats_request(const struct ofputil_flow_stats_request *fsr,
 
         subtype = fsr->aggregate ? NXST_AGGREGATE : NXST_FLOW;
         ofputil_make_stats_request(sizeof *nfsr, OFPST_VENDOR, subtype, &msg);
-        match_len = nx_put_match(msg, &fsr->match,
+        match_len = nx_put_match(msg, false, &fsr->match,
                                  fsr->cookie, fsr->cookie_mask);
 
         nfsr = msg->data;
@@ -1892,7 +1893,7 @@ ofputil_append_flow_stats_reply(const struct ofputil_flow_stats *fs,
         nfs->hard_age = htons(fs->hard_age < 0 ? 0
                               : fs->hard_age < UINT16_MAX ? fs->hard_age + 1
                               : UINT16_MAX);
-        nfs->match_len = htons(nx_put_match(msg, &fs->rule, 0, 0));
+        nfs->match_len = htons(nx_put_match(msg, false, &fs->rule, 0, 0));
         nfs->cookie = fs->cookie;
         nfs->packet_count = htonll(fs->packet_count);
         nfs->byte_count = htonll(fs->byte_count);
@@ -2026,7 +2027,7 @@ ofputil_encode_flow_removed(const struct ofputil_flow_removed *fr,
         int match_len;
 
         make_nxmsg_xid(sizeof *nfr, NXT_FLOW_REMOVED, htonl(0), &msg);
-        match_len = nx_put_match(msg, &fr->rule, 0, 0);
+        match_len = nx_put_match(msg, false, &fr->rule, 0, 0);
 
         nfr = msg->data;
         nfr->cookie = fr->cookie;
@@ -2080,7 +2081,7 @@ ofputil_decode_packet_in(struct ofputil_packet_in *pin,
 
         npi = ofpbuf_pull(&b, sizeof *npi);
         error = nx_pull_match_loose(&b, ntohs(npi->match_len), 0, &rule, NULL,
-                              NULL);
+                                    NULL);
         if (error) {
             return error;
         }
@@ -2161,7 +2162,7 @@ ofputil_encode_packet_in(const struct ofputil_packet_in *pin,
         cls_rule_set_in_port(&rule, pin->fmd.in_port);
 
         ofpbuf_put_zeros(packet, sizeof *npi);
-        match_len = nx_put_match(packet, &rule, 0, 0);
+        match_len = nx_put_match(packet, false, &rule, 0, 0);
         ofpbuf_put_zeros(packet, 2);
         ofpbuf_put(packet, pin->packet, send_len);
 

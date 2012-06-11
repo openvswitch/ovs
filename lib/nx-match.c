@@ -127,7 +127,7 @@ nx_pull_match__(struct ofpbuf *b, unsigned int match_len, bool strict,
             error = OFPERR_OFPBMC_BAD_PREREQ;
         } else if (!mf_is_all_wild(mf, &rule->wc)) {
             error = OFPERR_OFPBMC_DUP_FIELD;
-        } else {
+        } else if (header != OXM_OF_IN_PORT) {
             unsigned int width = mf->n_bytes;
             union mf_value value;
 
@@ -147,6 +147,17 @@ nx_pull_match__(struct ofpbuf *b, unsigned int match_len, bool strict,
                     error = 0;
                     mf_set(mf, &value, &mask, rule);
                 }
+            }
+        } else {
+            /* Special case for 32bit ports when using OXM,
+             * ports are 16 bits wide otherwise. */
+            ovs_be32 port_of11;
+            uint16_t port;
+
+            memcpy(&port_of11, p + 4, sizeof port_of11);
+            error = ofputil_port_from_ofp11(port_of11, &port);
+            if (!error) {
+                cls_rule_set_in_port(rule, port);
             }
         }
 
@@ -408,7 +419,8 @@ nxm_put_frag(struct ofpbuf *b, const struct cls_rule *cr)
 
 static void
 nxm_put_ip(struct ofpbuf *b, const struct cls_rule *cr,
-           uint8_t icmp_proto, uint32_t icmp_type, uint32_t icmp_code)
+           uint8_t icmp_proto, uint32_t icmp_type, uint32_t icmp_code,
+           bool oxm)
 {
     const flow_wildcards_t wc = cr->wc.wildcards;
     const struct flow *flow = &cr->flow;
@@ -416,26 +428,32 @@ nxm_put_ip(struct ofpbuf *b, const struct cls_rule *cr,
     nxm_put_frag(b, cr);
 
     if (!(wc & FWW_NW_DSCP)) {
-        nxm_put_8(b, NXM_OF_IP_TOS, flow->nw_tos & IP_DSCP_MASK);
+        nxm_put_8(b, oxm ? OXM_OF_IP_DSCP : NXM_OF_IP_TOS,
+                  flow->nw_tos & IP_DSCP_MASK);
     }
 
     if (!(wc & FWW_NW_ECN)) {
-        nxm_put_8(b, NXM_NX_IP_ECN, flow->nw_tos & IP_ECN_MASK);
+        nxm_put_8(b, oxm ? OXM_OF_IP_ECN : NXM_NX_IP_ECN,
+                  flow->nw_tos & IP_ECN_MASK);
     }
 
-    if (!(wc & FWW_NW_TTL)) {
+    if (!oxm && !(wc & FWW_NW_TTL)) {
         nxm_put_8(b, NXM_NX_IP_TTL, flow->nw_ttl);
     }
 
     if (!(wc & FWW_NW_PROTO)) {
-        nxm_put_8(b, NXM_OF_IP_PROTO, flow->nw_proto);
+        nxm_put_8(b, oxm ? OXM_OF_IP_PROTO : NXM_OF_IP_PROTO, flow->nw_proto);
 
         if (flow->nw_proto == IPPROTO_TCP) {
-            nxm_put_16m(b, NXM_OF_TCP_SRC, flow->tp_src, cr->wc.tp_src_mask);
-            nxm_put_16m(b, NXM_OF_TCP_DST, flow->tp_dst, cr->wc.tp_dst_mask);
+            nxm_put_16m(b, oxm ? OXM_OF_TCP_SRC : NXM_OF_TCP_SRC,
+                        flow->tp_src, cr->wc.tp_src_mask);
+            nxm_put_16m(b, oxm ? OXM_OF_TCP_DST : NXM_OF_TCP_DST,
+                        flow->tp_dst, cr->wc.tp_dst_mask);
         } else if (flow->nw_proto == IPPROTO_UDP) {
-            nxm_put_16m(b, NXM_OF_UDP_SRC, flow->tp_src, cr->wc.tp_src_mask);
-            nxm_put_16m(b, NXM_OF_UDP_DST, flow->tp_dst, cr->wc.tp_dst_mask);
+            nxm_put_16m(b, oxm ? OXM_OF_UDP_SRC : NXM_OF_UDP_SRC,
+                        flow->tp_src, cr->wc.tp_src_mask);
+            nxm_put_16m(b, oxm ? OXM_OF_UDP_DST : NXM_OF_UDP_DST,
+                        flow->tp_dst, cr->wc.tp_dst_mask);
         } else if (flow->nw_proto == icmp_proto) {
             if (cr->wc.tp_src_mask) {
                 nxm_put_8(b, icmp_type, ntohs(flow->tp_src));
@@ -460,7 +478,7 @@ nxm_put_ip(struct ofpbuf *b, const struct cls_rule *cr,
  * If 'cr' is a catch-all rule that matches every packet, then this function
  * appends nothing to 'b' and returns 0. */
 int
-nx_put_match(struct ofpbuf *b, const struct cls_rule *cr,
+nx_put_match(struct ofpbuf *b, bool oxm, const struct cls_rule *cr,
              ovs_be64 cookie, ovs_be64 cookie_mask)
 {
     const flow_wildcards_t wc = cr->wc.wildcards;
@@ -474,65 +492,86 @@ nx_put_match(struct ofpbuf *b, const struct cls_rule *cr,
     /* Metadata. */
     if (!(wc & FWW_IN_PORT)) {
         uint16_t in_port = flow->in_port;
-        nxm_put_16(b, NXM_OF_IN_PORT, htons(in_port));
+        if (oxm) {
+            nxm_put_32(b, OXM_OF_IN_PORT, ofputil_port_to_ofp11(in_port));
+        } else {
+            nxm_put_16(b, NXM_OF_IN_PORT, htons(in_port));
+        }
     }
 
     /* Ethernet. */
-    nxm_put_eth_masked(b, NXM_OF_ETH_SRC, flow->dl_src, cr->wc.dl_src_mask);
-    nxm_put_eth_masked(b, NXM_OF_ETH_DST, flow->dl_dst, cr->wc.dl_dst_mask);
+    nxm_put_eth_masked(b, oxm ? OXM_OF_ETH_SRC : NXM_OF_ETH_SRC,
+                       flow->dl_src, cr->wc.dl_src_mask);
+    nxm_put_eth_masked(b, oxm ? OXM_OF_ETH_DST : NXM_OF_ETH_DST,
+                       flow->dl_dst, cr->wc.dl_dst_mask);
     if (!(wc & FWW_DL_TYPE)) {
-        nxm_put_16(b, NXM_OF_ETH_TYPE,
+        nxm_put_16(b, oxm ? OXM_OF_ETH_TYPE : NXM_OF_ETH_TYPE,
                    ofputil_dl_type_to_openflow(flow->dl_type));
     }
 
-    /* 802.1Q. */
+    /* 802.1Q.
+     *
+     * XXX missing OXM support */
     nxm_put_16m(b, NXM_OF_VLAN_TCI, flow->vlan_tci, cr->wc.vlan_tci_mask);
 
     /* L3. */
     if (!(wc & FWW_DL_TYPE) && flow->dl_type == htons(ETH_TYPE_IP)) {
         /* IP. */
-        nxm_put_32m(b, NXM_OF_IP_SRC, flow->nw_src, cr->wc.nw_src_mask);
-        nxm_put_32m(b, NXM_OF_IP_DST, flow->nw_dst, cr->wc.nw_dst_mask);
-        nxm_put_ip(b, cr, IPPROTO_ICMP, NXM_OF_ICMP_TYPE, NXM_OF_ICMP_CODE);
+        nxm_put_32m(b, oxm ? OXM_OF_IPV4_SRC : NXM_OF_IP_SRC,
+                    flow->nw_src, cr->wc.nw_src_mask);
+        nxm_put_32m(b, oxm ? OXM_OF_IPV4_DST : NXM_OF_IP_DST,
+                    flow->nw_dst, cr->wc.nw_dst_mask);
+        nxm_put_ip(b, cr, IPPROTO_ICMP,
+                   oxm ? OXM_OF_ICMPV4_TYPE : NXM_OF_ICMP_TYPE,
+                   oxm ? OXM_OF_ICMPV4_CODE : NXM_OF_ICMP_CODE, oxm);
     } else if (!(wc & FWW_DL_TYPE) && flow->dl_type == htons(ETH_TYPE_IPV6)) {
         /* IPv6. */
-        nxm_put_ipv6(b, NXM_NX_IPV6_SRC, &flow->ipv6_src,
-                &cr->wc.ipv6_src_mask);
-        nxm_put_ipv6(b, NXM_NX_IPV6_DST, &flow->ipv6_dst,
-                &cr->wc.ipv6_dst_mask);
-        nxm_put_ip(b, cr,
-                   IPPROTO_ICMPV6, NXM_NX_ICMPV6_TYPE, NXM_NX_ICMPV6_CODE);
+        nxm_put_ipv6(b, oxm ? OXM_OF_IPV6_SRC : NXM_NX_IPV6_SRC,
+                     &flow->ipv6_src, &cr->wc.ipv6_src_mask);
+        nxm_put_ipv6(b, oxm ? OXM_OF_IPV6_DST : NXM_NX_IPV6_DST,
+                     &flow->ipv6_dst, &cr->wc.ipv6_dst_mask);
+        nxm_put_ip(b, cr, IPPROTO_ICMPV6,
+                   oxm ? OXM_OF_ICMPV6_TYPE : NXM_NX_ICMPV6_TYPE,
+                   oxm ? OXM_OF_ICMPV6_CODE : NXM_NX_ICMPV6_CODE, oxm);
 
         if (!(wc & FWW_IPV6_LABEL)) {
-            nxm_put_32(b, NXM_NX_IPV6_LABEL, flow->ipv6_label);
+            nxm_put_32(b, oxm ? OXM_OF_IPV6_FLABEL : NXM_NX_IPV6_LABEL,
+                       flow->ipv6_label);
         }
 
         if (flow->nw_proto == IPPROTO_ICMPV6
             && (flow->tp_src == htons(ND_NEIGHBOR_SOLICIT) ||
                 flow->tp_src == htons(ND_NEIGHBOR_ADVERT))) {
-            nxm_put_ipv6(b, NXM_NX_ND_TARGET, &flow->nd_target,
-                         &cr->wc.nd_target_mask);
+            nxm_put_ipv6(b, oxm ? OXM_OF_IPV6_ND_TARGET : NXM_NX_ND_TARGET,
+                         &flow->nd_target, &cr->wc.nd_target_mask);
             if (!(wc & FWW_ARP_SHA)
                 && flow->tp_src == htons(ND_NEIGHBOR_SOLICIT)) {
-                nxm_put_eth(b, NXM_NX_ND_SLL, flow->arp_sha);
+                nxm_put_eth(b, oxm ? OXM_OF_IPV6_ND_SLL : NXM_NX_ND_SLL,
+                            flow->arp_sha);
             }
             if (!(wc & FWW_ARP_THA)
                 && flow->tp_src == htons(ND_NEIGHBOR_ADVERT)) {
-                nxm_put_eth(b, NXM_NX_ND_TLL, flow->arp_tha);
+                nxm_put_eth(b, oxm ? OXM_OF_IPV6_ND_TLL : NXM_NX_ND_TLL,
+                            flow->arp_tha);
             }
         }
     } else if (!(wc & FWW_DL_TYPE) && flow->dl_type == htons(ETH_TYPE_ARP)) {
         /* ARP. */
         if (!(wc & FWW_NW_PROTO)) {
-            nxm_put_16(b, NXM_OF_ARP_OP, htons(flow->nw_proto));
+            nxm_put_16(b, oxm ? OXM_OF_ARP_OP : NXM_OF_ARP_OP,
+                       htons(flow->nw_proto));
         }
-        nxm_put_32m(b, NXM_OF_ARP_SPA, flow->nw_src, cr->wc.nw_src_mask);
-        nxm_put_32m(b, NXM_OF_ARP_TPA, flow->nw_dst, cr->wc.nw_dst_mask);
+        nxm_put_32m(b, oxm ? OXM_OF_ARP_SPA : NXM_OF_ARP_SPA,
+                    flow->nw_src, cr->wc.nw_src_mask);
+        nxm_put_32m(b, oxm ? OXM_OF_ARP_TPA : NXM_OF_ARP_TPA,
+                    flow->nw_dst, cr->wc.nw_dst_mask);
         if (!(wc & FWW_ARP_SHA)) {
-            nxm_put_eth(b, NXM_NX_ARP_SHA, flow->arp_sha);
+            nxm_put_eth(b, oxm ? OXM_OF_ARP_SHA : NXM_NX_ARP_SHA,
+                        flow->arp_sha);
         }
         if (!(wc & FWW_ARP_THA)) {
-            nxm_put_eth(b, NXM_NX_ARP_THA, flow->arp_tha);
+            nxm_put_eth(b, oxm ? OXM_OF_ARP_THA : NXM_NX_ARP_THA,
+                        flow->arp_tha);
         }
     }
 
@@ -613,7 +652,7 @@ format_nxm_field_name(struct ds *s, uint32_t header)
 {
     const struct mf_field *mf = mf_from_nxm_header(header);
     if (mf) {
-        ds_put_cstr(s, mf->nxm_name);
+        ds_put_cstr(s, IS_OXM_HEADER(header) ? mf->oxm_name : mf->nxm_name);
         if (NXM_HASMASK(header)) {
             ds_put_cstr(s, "_W");
         }
@@ -640,20 +679,29 @@ parse_nxm_field_name(const char *name, int name_len)
 
     for (i = 0; i < MFF_N_IDS; i++) {
         const struct mf_field *mf = mf_from_id(i);
+        uint32_t header;
 
-        if (mf->nxm_name
-            && !strncmp(mf->nxm_name, name, name_len)
-            && mf->nxm_name[name_len] == '\0') {
-            if (!wild) {
-                return mf->nxm_header;
-            } else if (mf->maskable != MFM_NONE) {
-                return NXM_MAKE_WILD_HEADER(mf->nxm_header);
-            }
+        if (mf->nxm_name &&
+            !strncmp(mf->nxm_name, name, name_len) &&
+            mf->nxm_name[name_len] == '\0') {
+            header = mf->nxm_header;
+        } else if (mf->oxm_name &&
+                   !strncmp(mf->oxm_name, name, name_len) &&
+                   mf->oxm_name[name_len] == '\0') {
+            header = mf->oxm_header;
+        } else {
+            continue;
+        }
+
+        if (!wild) {
+            return header;
+        } else if (mf->maskable != MFM_NONE) {
+            return NXM_MAKE_WILD_HEADER(header);
         }
     }
 
-    if (!strncmp("NXM_NX_COOKIE", name, name_len)
-                && (name_len == strlen("NXM_NX_COOKIE"))) {
+    if (!strncmp("NXM_NX_COOKIE", name, name_len) &&
+        (name_len == strlen("NXM_NX_COOKIE"))) {
         if (!wild) {
             return NXM_NX_COOKIE;
         } else {
