@@ -477,6 +477,7 @@ vlog_unixctl_reopen(struct unixctl_conn *conn, int argc OVS_UNUSED,
 void
 vlog_init(void)
 {
+    static char *program_name_copy;
     time_t now;
 
     if (vlog_inited) {
@@ -484,7 +485,13 @@ vlog_init(void)
     }
     vlog_inited = true;
 
-    openlog(program_name, LOG_NDELAY, LOG_DAEMON);
+    /* openlog() is allowed to keep the pointer passed in, without making a
+     * copy.  The daemonize code sometimes frees and replaces 'program_name',
+     * so make a private copy just for openlog().  (We keep a pointer to the
+     * private copy to suppress memory leak warnings in case openlog() does
+     * make its own copy.) */
+    program_name_copy = program_name ? xstrdup(program_name) : NULL;
+    openlog(program_name_copy, LOG_NDELAY, LOG_DAEMON);
 
     now = time_wall();
     if (now < 0) {
