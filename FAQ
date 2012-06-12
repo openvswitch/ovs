@@ -60,8 +60,8 @@ Q: I created a bridge and added a couple of Ethernet ports to it,
 
    and now my network seems to have melted: connectivity is unreliable
    (even connectivity that doesn't go through Open vSwitch), all the
-   LEDs on my physical switches are blinking, and wireshark shows
-   duplicated packets.
+   LEDs on my physical switches are blinking, wireshark shows
+   duplicated packets, and CPU usage is very high.
 
 A: More than likely, you've looped your network.  Probably, eth0 and
    eth1 are connected to the same physical Ethernet switch.  This
