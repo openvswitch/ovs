@@ -1,5 +1,6 @@
 post-v1.7.0
 ------------------------
+    - New FAQ.  Please send updates and additions!
     - ovs-ofctl:
         - "mod-port" command can now control all OpenFlow config flags.
     - Added support for arbitrary ethernet masks

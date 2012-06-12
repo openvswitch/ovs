@@ -12,6 +12,7 @@ EXTRA_DIST += \
 	debian/openvswitch-brcompat.postinst \
 	debian/openvswitch-brcompat.postrm \
 	debian/openvswitch-common.dirs \
+	debian/openvswitch-common.docs \
 	debian/openvswitch-common.install \
 	debian/openvswitch-common.manpages \
 	debian/openvswitch-controller.README.Debian \

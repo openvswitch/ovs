@@ -41,6 +41,7 @@ PYCOV_CLEAN_FILES = build-aux/check-structs,cover
 EXTRA_DIST = \
 	CodingStyle \
 	DESIGN \
+	FAQ \
 	INSTALL.KVM \
 	INSTALL.Libvirt \
 	INSTALL.Linux \

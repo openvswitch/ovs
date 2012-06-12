@@ -90,6 +90,8 @@ What other documentation is available?
 
 To install Open vSwitch on a regular Linux machine, read INSTALL.Linux.
 
+For answers to common questions, read FAQ.
+
 To use Open vSwitch as a drop-in replacement for the Linux bridge,
 read INSTALL.bridge.
 

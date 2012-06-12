@@ -1,0 +1,322 @@
+                 Open vSwitch <http://openvswitch.org>
+
+Frequently Asked Questions
+==========================
+
+Configuration Problems
+----------------------
+
+Q: I created a bridge and added my Ethernet port to it, using commands
+   like these:
+
+       ovs-vsctl add-br br0
+       ovs-vsctl add-port br0 eth0
+
+   and as soon as I ran the "add-port" command I lost all connectivity
+   through eth0.  Help!
+
+A: A physical Ethernet device that is part of an Open vSwitch bridge
+   should not have an IP address.  If one does, then that IP address
+   will not be fully functional.
+
+   You can restore functionality by moving the IP address to an Open
+   vSwitch "internal" device, such as the network device named after
+   the bridge itself.  For example, assuming that eth0's IP address is
+   192.168.128.5, you could run the commands below to fix up the
+   situation:
+
+       ifconfig eth0 0.0.0.0
+       ifconfig br0 192.168.128.5
+
+   (If your only connection to the machine running OVS is through the
+   IP address in question, then you would want to run all of these
+   commands on a single command line, or put them into a script.)  If
+   there were any additional routes assigned to eth0, then you would
+   also want to use commands to adjust these routes to go through br0.
+
+   If you use DHCP to obtain an IP address, then you should kill the
+   DHCP client that was listening on the physical Ethernet interface
+   (e.g. eth0) and start one listening on the internal interface
+   (e.g. br0).  You might still need to manually clear the IP address
+   from the physical interface (e.g. with "ifconfig eth0 0.0.0.0").
+
+   There is no compelling reason why Open vSwitch must work this way.
+   However, this is the way that the Linux kernel bridge module has
+   always worked, so it's a model that those accustomed to Linux
+   bridging are already used to.  Also, the model that most people
+   expect is not implementable without kernel changes on all the
+   versions of Linux that Open vSwitch supports.
+
+   By the way, this issue is not specific to physical Ethernet
+   devices.  It applies to all network devices except Open vswitch
+   "internal" devices.
+
+Q: I created a bridge and added a couple of Ethernet ports to it,
+   using commands like these:
+
+       ovs-vsctl add-br br0
+       ovs-vsctl add-port br0 eth0
+       ovs-vsctl add-port br0 eth1
+
+   and now my network seems to have melted: connectivity is unreliable
+   (even connectivity that doesn't go through Open vSwitch), all the
+   LEDs on my physical switches are blinking, and wireshark shows
+   duplicated packets.
+
+A: More than likely, you've looped your network.  Probably, eth0 and
+   eth1 are connected to the same physical Ethernet switch.  This
+   yields a scenario where OVS receives a broadcast packet on eth0 and
+   sends it out on eth1, then the physical switch connected to eth1
+   sends the packet back on eth0, and so on forever.  More complicated
+   scenarios, involving a loop through multiple switches, are possible
+   too.
+
+   The solution depends on what you are trying to do:
+
+       - If you added eth0 and eth1 to get higher bandwidth or higher
+         reliability between OVS and your physical Ethernet switch,
+         use a bond.  The following commands create br0 and then add
+         eth0 and eth1 as a bond:
+
+             ovs-vsctl add-br br0
+             ovs-vsctl add-bond br0 bond0 eth0 eth1
+
+         Bonds have tons of configuration options.  Please read the
+         documentation on the Port table in ovs-vswitchd.conf.db(5)
+         for all the details.
+
+       - Perhaps you don't actually need eth0 and eth1 to be on the
+         same bridge.  For example, if you simply want to be able to
+         connect each of them to virtual machines, then you can put
+         each of them on a bridge of its own:
+
+             ovs-vsctl add-br br0
+             ovs-vsctl add-port br0 eth0
+
+             ovs-vsctl add-br br1
+             ovs-vsctl add-port br1 eth1
+
+         and then connect VMs to br0 and br1.  (A potential
+         disadvantage is that traffic cannot directly pass between br0
+         and br1.  Instead, it will go out eth0 and come back in eth1,
+         or vice versa.)
+
+       - If you have a redundant or complex network topology and you
+         want to prevent loops, turn on spanning tree protocol (STP).
+         The following commands create br0, enable STP, and add eth0
+         and eth1 to the bridge.  The order is important because you
+         don't want have to have a loop in your network even
+         transiently:
+
+             ovs-vsctl add-br br0
+             ovs-vsctl set bridge br0 stp_enable=true
+             ovs-vsctl add-port br0 eth0
+             ovs-vsctl add-port br0 eth1
+
+         The Open vSwitch implementation of STP is not well tested.
+         Please report any bugs you observe, but if you'd rather avoid
+         acting as a beta tester then another option might be your
+         best shot.
+
+Q: I can't seem to use Open vSwitch in a wireless network.
+
+A: Wireless base stations generally only allow packets with the source
+   MAC address of NIC that completed the initial handshake.
+   Therefore, without MAC rewriting, only a single device can
+   communicate over a single wireless link.
+
+   This isn't specific to Open vSwitch, it's enforced by the access
+   point, so the same problems will show up with the Linux bridge or
+   any other way to do bridging.
+
+
+VLANs
+-----
+
+Q: VLANs don't work.
+
+A: Many drivers in Linux kernels before version 3.3 had VLAN-related
+   bugs.  If you are having problems with VLANs that you suspect to be
+   driver related, then you have several options:
+
+       - Upgrade to Linux 3.3 or later.
+
+       - Build and install a fixed version of the particular driver
+         that is causing trouble, if one is available.
+
+       - Use a NIC whose driver does not have VLAN problems.
+
+       - Use "VLAN splinters", a feature in Open vSwitch 1.4 and later
+         that works around bugs in kernel drivers.  To enable VLAN
+         splinters on interface eth0, use the command:
+
+             ovs-vsctl set interface eth0 other-config:enable-vlan-splinters=true
+
+         For VLAN splinters to be effective, Open vSwitch must know
+         which VLANs are in use.  See the "VLAN splinters" section in
+         the Interface table in ovs-vswitchd.conf.db(5) for details on
+         how Open vSwitch infers in-use VLANs.
+
+         VLAN splinters increase memory use and reduce performance, so
+         use them only if needed.
+
+       - Apply the "vlan workaround" patch from the XenServer kernel
+         patch queue, build Open vSwitch against this patched kernel,
+         and then use ovs-vlan-bug-workaround(8) to enable the VLAN
+         workaround for each interface whose driver is buggy.
+
+         (This is a nontrivial exercise, so this option is included
+         only for completeness.)
+
+   It is not always easy to tell whether a Linux kernel driver has
+   buggy VLAN support.  The ovs-vlan-test(8) and ovs-test(8) utilities
+   can help you test.  See their manpages for details.  Of the two
+   utilities, ovs-test(8) is newer and more thorough, but
+   ovs-vlan-test(8) may be easier to use.
+
+Q: VLANs still don't work.  I've tested the driver so I know that it's OK.
+
+A: Do you have VLANs enabled on the physical switch that OVS is
+   attached to?  Make sure that the port is configured to trunk the
+   VLAN or VLANs that you are using with OVS.
+
+Q: Outgoing VLAN-tagged traffic goes through OVS to my physical switch
+   and to its destination host, but OVS seems to drop incoming return
+   traffic.
+
+A: It's possible that you have the VLAN configured on your physical
+   switch as the "native" VLAN.  In this mode, the switch treats
+   incoming packets either tagged with the native VLAN or untagged as
+   part of the native VLAN.  It may also send outgoing packets in the
+   native VLAN without a VLAN tag.
+
+   If this is the case, you have two choices:
+
+       - Change the physical switch port configuration to tag packets
+         it forwards to OVS with the native VLAN instead of forwarding
+         them untagged.
+
+       - Change the OVS configuration for the physical port to a
+         native VLAN mode.  For example, the following sets up a
+         bridge with port eth0 in "native-tagged" mode in VLAN 9:
+
+             ovs-vsctl add-br br0
+             ovs-vsctl add-port br0 eth0 tag=9 vlan_mode=native-tagged
+
+         In this situation, "native-untagged" mode will probably work
+         equally well.  Refer to the documentation for the Port table
+         in ovs-vswitchd.conf.db(5) for more information.
+
+Q: Can I configure an IP address on a VLAN?
+
+A: Yes.  Use an "internal port" configured as an access port.  For
+   example, the following configures IP address 192.168.0.7 on VLAN 9.
+   That is, OVS will forward packets from eth0 to 192.168.0.7 only if
+   they have an 802.1Q header with VLAN 9.  Conversely, traffic
+   forwarded from 192.168.0.7 to eth0 will be tagged with an 802.1Q
+   header with VLAN 9:
+
+       ovs-vsctl add-br br0
+       ovs-vsctl add-port br0 eth0
+       ovs-vsctl add-port br0 vlan9 tag=9 -- set interface vlan9 type=internal
+       ifconfig vlan9 192.168.0.7
+
+Q: My OpenFlow controller doesn't see the VLANs that I expect.
+
+A: The configuration for VLANs in the Open vSwitch database (e.g. via
+   ovs-vsctl) only affects traffic that goes through Open vSwitch's
+   implementation of the OpenFlow "normal switching" action.  By
+   default, when Open vSwitch isn't connected to a controller and
+   nothing has been manually configured in the flow table, all traffic
+   goes through the "normal switching" action.  But, if you set up
+   OpenFlow flows on your own, through a controller or using ovs-ofctl
+   or through other means, then you have to implement VLAN handling
+   yourself.
+
+   You can use "normal switching" as a component of your OpenFlow
+   actions, e.g. by putting "normal" into the lists of actions on
+   ovs-ofctl or by outputting to OFPP_NORMAL from an OpenFlow
+   controller.  This will only be suitable for some situations,
+   though.
+
+
+Controllers
+-----------
+
+Q: I'm getting "error type 45250 code 0".  What's that?
+
+A: This is a Open vSwitch extension to OpenFlow error codes.  Open
+   vSwitch uses this extension when it must report an error to an
+   OpenFlow controller but no standard OpenFlow error code is
+   suitable.
+
+   Open vSwitch logs the errors that it sends to controllers, so the
+   easiest thing to do is probably to look at the ovs-vswitchd log to
+   find out what the error was.
+
+   If you want to dissect the extended error message yourself, the
+   format is documented in include/openflow/nicira-ext.h in the Open
+   vSwitch source distribution.  The extended error codes are
+   documented in lib/ofp-errors.h.
+
+Q1: Some of the traffic that I'd expect my OpenFlow controller to see
+    doesn't actually appear through the OpenFlow connection, even
+    though I know that it's going through.
+Q2: Some of the OpenFlow flows that my controller sets up don't seem
+    to apply to certain traffic, especially traffic between OVS and
+    the controller itself.
+
+A: By default, Open vSwitch assumes that OpenFlow controllers are
+   connected "in-band", that is, that the controllers are actually
+   part of the network that is being controlled.  In in-band mode,
+   Open vSwitch sets up special "hidden" flows to make sure that
+   traffic can make it back and forth between OVS and the controllers.
+   These hidden flows are higher priority than any flows that can be
+   set up through OpenFlow, and they are not visible through normal
+   OpenFlow flow table dumps.
+
+   Usually, the hidden flows are desirable and helpful, but
+   occasionally they can cause unexpected behavior.  You can view the
+   full OpenFlow flow table, including hidden flows, on bridge br0
+   with the command:
+
+       ovs-appctl bridge/dump-flows br0
+
+   to help you debug.  The hidden flows are those with priorities
+   greater than 65535 (the maximum priority that can be set with
+   OpenFlow).
+
+   The DESIGN file at the top level of the Open vSwitch source
+   distribution describes the in-band model in detail.
+
+   If your controllers are not actually in-band (e.g. they are on
+   localhost via 127.0.0.1, or on a separate network), then you should
+   configure your controllers in "out-of-band" mode.  If you have one
+   controller on bridge br0, then you can configure out-of-band mode
+   on it with:
+
+       ovs-vsctl set controller br0 connection-mode=out-of-band
+
+Q: I configured all my controllers for out-of-band control mode but
+   "ovs-appctl bridge/dump-flows" still shows some hidden flows.
+
+A: You probably have a remote manager configured (e.g. with "ovs-vsctl
+   set-manager").  By default, Open vSwitch assumes that managers need
+   in-band rules set up on every bridge.  You can disable these rules
+   on bridge br0 with:
+
+       ovs-vsctl set bridge br0 other-config:disable-in-band=true
+
+   This actually disables in-band control entirely for the bridge, as
+   if all the bridge's controllers were configured for out-of-band
+   control.
+
+Q: My OpenFlow controller doesn't see the VLANs that I expect.
+
+A: See answer under "VLANs", above.
+
+Contact 
+-------
+
+bugs@openvswitch.org
+http://openvswitch.org/

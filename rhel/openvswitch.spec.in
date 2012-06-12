@@ -50,7 +50,7 @@ rhel_cp usr_share_openvswitch_scripts_sysconfig.template 0644
 
 docdir=$RPM_BUILD_ROOT/usr/share/doc/openvswitch-%{version}
 install -d -m755 "$docdir"
-install -m 0644 rhel/README.RHEL "$docdir"
+install -m 0644 FAQ rhel/README.RHEL "$docdir"
 install python/compat/uuid.py $RPM_BUILD_ROOT/usr/share/openvswitch/python
 install python/compat/argparse.py $RPM_BUILD_ROOT/usr/share/openvswitch/python
 
@@ -152,5 +152,6 @@ exit 0
 /usr/share/openvswitch/scripts/ovs-save
 /usr/share/openvswitch/scripts/sysconfig.template
 /usr/share/openvswitch/vswitch.ovsschema
+/usr/share/doc/openvswitch-%{version}/FAQ
 /usr/share/doc/openvswitch-%{version}/README.RHEL
 /var/lib/openvswitch
