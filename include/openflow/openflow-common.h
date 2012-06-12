@@ -322,4 +322,14 @@ enum ofp_match_type {
     OFPMT_OXM = 1,              /* OpenFlow Extensible Match */
 };
 
+/* Group numbering. Groups can use any number up to OFPG_MAX. */
+enum ofp_group {
+    /* Last usable group number. */
+    OFPG_MAX        = 0xffffff00,
+
+    /* Fake groups. */
+    OFPG_ALL        = 0xfffffffc,  /* All groups, for group delete commands. */
+    OFPG_ANY        = 0xffffffff   /* Wildcard, for flow stats requests. */
+};
+
 #endif /* openflow/openflow-common.h */

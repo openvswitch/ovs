@@ -339,6 +339,9 @@ enum ofperr {
      * extension is enabled. */
     OFPERR_NXFMFC_BAD_TABLE_ID,
 
+    /* NX1.0+(3,258).  'out_group' specified but groups not yet supported. */
+    OFPERR_NXFMFC_GROUPS_NOT_SUPPORTED,
+
 /* ## ---------------------- ## */
 /* ## OFPET_GROUP_MOD_FAILED ## */
 /* ## ---------------------- ## */

@@ -265,6 +265,31 @@ ofputil_cls_rule_to_ofp10_match(const struct cls_rule *rule,
     memset(match->pad2, '\0', sizeof match->pad2);
 }
 
+enum ofperr
+ofputil_pull_ofp11_match(struct ofpbuf *buf, unsigned int priority,
+                         struct cls_rule *rule)
+{
+    struct ofp11_match_header *omh;
+    struct ofp11_match *om;
+
+    if (buf->size < sizeof(struct ofp11_match_header)) {
+        return OFPERR_OFPBMC_BAD_LEN;
+    }
+
+    omh = buf->data;
+    switch (ntohs(omh->type)) {
+    case OFPMT_STANDARD:
+        if (omh->length != htons(sizeof *om) || buf->size < sizeof *om) {
+            return OFPERR_OFPBMC_BAD_LEN;
+        }
+        om = ofpbuf_pull(buf, sizeof *om);
+        return ofputil_cls_rule_from_ofp11_match(om, priority, rule);
+
+    default:
+        return OFPERR_OFPBMC_BAD_TYPE;
+    }
+}
+
 /* Converts the ofp11_match in 'match' into a cls_rule in 'rule', with the
  * given 'priority'.  Returns 0 if successful, otherwise an OFPERR_* value. */
 enum ofperr
@@ -1102,87 +1127,131 @@ ofputil_decode_flow_mod(struct ofputil_flow_mod *fm,
 
     ofpbuf_use_const(&b, oh, ntohs(oh->length));
     raw = ofpraw_pull_assert(&b);
-    if (raw == OFPRAW_OFPT10_FLOW_MOD) {
+    if (raw == OFPRAW_OFPT11_FLOW_MOD) {
         /* Standard OpenFlow 1.1 flow_mod. */
-        const struct ofp10_flow_mod *ofm;
-        uint16_t priority;
+        const struct ofp11_flow_mod *ofm;
         enum ofperr error;
 
-        /* Get the ofp_flow_mod. */
         ofm = ofpbuf_pull(&b, sizeof *ofm);
 
-        /* Set priority based on original wildcards.  Normally we'd allow
-         * ofputil_cls_rule_from_match() to do this for us, but
-         * ofputil_normalize_rule() can put wildcards where the original flow
-         * didn't have them. */
-        priority = ntohs(ofm->priority);
-        if (!(ofm->match.wildcards & htonl(OFPFW10_ALL))) {
-            priority = UINT16_MAX;
+        error = ofputil_pull_ofp11_match(&b, ntohs(ofm->priority), &fm->cr);
+        if (error) {
+            return error;
         }
 
-        /* Translate the rule. */
-        ofputil_cls_rule_from_ofp10_match(&ofm->match, priority, &fm->cr);
-        ofputil_normalize_rule(&fm->cr);
-
-        /* Now get the actions. */
-        error = ofpacts_pull_openflow10(&b, b.size, ofpacts);
+        error = ofpacts_pull_openflow11_instructions(&b, b.size, ofpacts);
         if (error) {
             return error;
         }
 
         /* Translate the message. */
-        command = ntohs(ofm->command);
-        fm->cookie = htonll(0);
-        fm->cookie_mask = htonll(0);
-        fm->new_cookie = ofm->cookie;
+        if (ofm->command == OFPFC_ADD) {
+            fm->cookie = htonll(0);
+            fm->cookie_mask = htonll(0);
+            fm->new_cookie = ofm->cookie;
+        } else {
+            /* XXX */
+            fm->cookie = ofm->cookie;
+            fm->cookie_mask = ofm->cookie_mask;
+            fm->new_cookie = htonll(UINT64_MAX);
+        }
+        fm->command = ofm->command;
+        fm->table_id = ofm->table_id;
         fm->idle_timeout = ntohs(ofm->idle_timeout);
         fm->hard_timeout = ntohs(ofm->hard_timeout);
         fm->buffer_id = ntohl(ofm->buffer_id);
-        fm->out_port = ntohs(ofm->out_port);
+        error = ofputil_port_from_ofp11(ofm->out_port, &fm->out_port);
+        if (error) {
+            return error;
+        }
+        if (ofm->out_group != htonl(OFPG_ANY)) {
+            return OFPERR_NXFMFC_GROUPS_NOT_SUPPORTED;
+        }
         fm->flags = ntohs(ofm->flags);
-    } else if (raw == OFPRAW_NXT_FLOW_MOD) {
-        /* Nicira extended flow_mod. */
-        const struct nx_flow_mod *nfm;
-        enum ofperr error;
-
-        /* Dissect the message. */
-        nfm = ofpbuf_pull(&b, sizeof *nfm);
-        error = nx_pull_match(&b, ntohs(nfm->match_len), ntohs(nfm->priority),
-                              &fm->cr, &fm->cookie, &fm->cookie_mask);
-        if (error) {
-            return error;
-        }
-        error = ofpacts_pull_openflow10(&b, b.size, ofpacts);
-        if (error) {
-            return error;
-        }
-
-        /* Translate the message. */
-        command = ntohs(nfm->command);
-        if ((command & 0xff) == OFPFC_ADD && fm->cookie_mask) {
-            /* Flow additions may only set a new cookie, not match an
-             * existing cookie. */
-            return OFPERR_NXBRC_NXM_INVALID;
-        }
-        fm->new_cookie = nfm->cookie;
-        fm->idle_timeout = ntohs(nfm->idle_timeout);
-        fm->hard_timeout = ntohs(nfm->hard_timeout);
-        fm->buffer_id = ntohl(nfm->buffer_id);
-        fm->out_port = ntohs(nfm->out_port);
-        fm->flags = ntohs(nfm->flags);
     } else {
-        NOT_REACHED();
+        if (raw == OFPRAW_OFPT10_FLOW_MOD) {
+            /* Standard OpenFlow 1.0 flow_mod. */
+            const struct ofp10_flow_mod *ofm;
+            uint16_t priority;
+            enum ofperr error;
+
+            /* Get the ofp10_flow_mod. */
+            ofm = ofpbuf_pull(&b, sizeof *ofm);
+
+            /* Set priority based on original wildcards.  Normally we'd allow
+             * ofputil_cls_rule_from_match() to do this for us, but
+             * ofputil_normalize_rule() can put wildcards where the original
+             * flow didn't have them. */
+            priority = ntohs(ofm->priority);
+            if (!(ofm->match.wildcards & htonl(OFPFW10_ALL))) {
+                priority = UINT16_MAX;
+            }
+
+            /* Translate the rule. */
+            ofputil_cls_rule_from_ofp10_match(&ofm->match, priority, &fm->cr);
+            ofputil_normalize_rule(&fm->cr);
+
+            /* Now get the actions. */
+            error = ofpacts_pull_openflow10(&b, b.size, ofpacts);
+            if (error) {
+                return error;
+            }
+
+            /* Translate the message. */
+            command = ntohs(ofm->command);
+            fm->cookie = htonll(0);
+            fm->cookie_mask = htonll(0);
+            fm->new_cookie = ofm->cookie;
+            fm->idle_timeout = ntohs(ofm->idle_timeout);
+            fm->hard_timeout = ntohs(ofm->hard_timeout);
+            fm->buffer_id = ntohl(ofm->buffer_id);
+            fm->out_port = ntohs(ofm->out_port);
+            fm->flags = ntohs(ofm->flags);
+        } else if (raw == OFPRAW_NXT_FLOW_MOD) {
+            /* Nicira extended flow_mod. */
+            const struct nx_flow_mod *nfm;
+            enum ofperr error;
+
+            /* Dissect the message. */
+            nfm = ofpbuf_pull(&b, sizeof *nfm);
+            error = nx_pull_match(&b, ntohs(nfm->match_len), ntohs(nfm->priority),
+                                  &fm->cr, &fm->cookie, &fm->cookie_mask);
+            if (error) {
+                return error;
+            }
+            error = ofpacts_pull_openflow10(&b, b.size, ofpacts);
+            if (error) {
+                return error;
+            }
+
+            /* Translate the message. */
+            command = ntohs(nfm->command);
+            if ((command & 0xff) == OFPFC_ADD && fm->cookie_mask) {
+                /* Flow additions may only set a new cookie, not match an
+                 * existing cookie. */
+                return OFPERR_NXBRC_NXM_INVALID;
+            }
+            fm->new_cookie = nfm->cookie;
+            fm->idle_timeout = ntohs(nfm->idle_timeout);
+            fm->hard_timeout = ntohs(nfm->hard_timeout);
+            fm->buffer_id = ntohl(nfm->buffer_id);
+            fm->out_port = ntohs(nfm->out_port);
+            fm->flags = ntohs(nfm->flags);
+        } else {
+            NOT_REACHED();
+        }
+
+        if (protocol & OFPUTIL_P_TID) {
+            fm->command = command & 0xff;
+            fm->table_id = command >> 8;
+        } else {
+            fm->command = command;
+            fm->table_id = 0xff;
+        }
     }
 
     fm->ofpacts = ofpacts->data;
     fm->ofpacts_len = ofpacts->size;
-    if (protocol & OFPUTIL_P_TID) {
-        fm->command = command & 0xff;
-        fm->table_id = command >> 8;
-    } else {
-        fm->command = command;
-        fm->table_id = 0xff;
-    }
 
     return 0;
 }
