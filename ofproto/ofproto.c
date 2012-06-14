@@ -385,6 +385,10 @@ ofproto_create(const char *datapath_name, const char *datapath_type,
     list_init(&ofproto->pending);
     ofproto->n_pending = 0;
     hmap_init(&ofproto->deletions);
+    ofproto->n_add = ofproto->n_delete = ofproto->n_modify = 0;
+    ofproto->first_op = ofproto->last_op = LLONG_MIN;
+    ofproto->next_op_report = LLONG_MAX;
+    ofproto->op_backoff = LLONG_MIN;
     ofproto->vlan_bitmap = NULL;
     ofproto->vlans_changed = false;
     ofproto->min_mtu = INT_MAX;
@@ -1088,6 +1092,43 @@ ofproto_run(struct ofproto *p)
 
     default:
         NOT_REACHED();
+    }
+
+    if (time_msec() >= p->next_op_report) {
+        long long int ago = (time_msec() - p->first_op) / 1000;
+        long long int interval = (p->last_op - p->first_op) / 1000;
+        struct ds s;
+
+        ds_init(&s);
+        ds_put_format(&s, "%d flow_mods ",
+                      p->n_add + p->n_delete + p->n_modify);
+        if (interval == ago) {
+            ds_put_format(&s, "in the last %lld s", ago);
+        } else if (interval) {
+            ds_put_format(&s, "in the %lld s starting %lld s ago",
+                          interval, ago);
+        } else {
+            ds_put_format(&s, "%lld s ago", ago);
+        }
+
+        ds_put_cstr(&s, " (");
+        if (p->n_add) {
+            ds_put_format(&s, "%d adds, ", p->n_add);
+        }
+        if (p->n_delete) {
+            ds_put_format(&s, "%d deletes, ", p->n_delete);
+        }
+        if (p->n_modify) {
+            ds_put_format(&s, "%d modifications, ", p->n_modify);
+        }
+        s.length -= 2;
+        ds_put_char(&s, ')');
+
+        VLOG_INFO("%s", ds_cstr(&s));
+        ds_destroy(&s);
+
+        p->n_add = p->n_delete = p->n_modify = 0;
+        p->next_op_report = LLONG_MAX;
     }
 
     return error;
@@ -3076,8 +3117,10 @@ ofproto_rule_expire(struct rule *rule, uint8_t reason)
 static enum ofperr
 handle_flow_mod(struct ofconn *ofconn, const struct ofp_header *oh)
 {
+    struct ofproto *ofproto = ofconn_get_ofproto(ofconn);
     struct ofputil_flow_mod fm;
     enum ofperr error;
+    long long int now;
 
     error = reject_slave_controller(ofconn);
     if (error) {
@@ -3097,7 +3140,38 @@ handle_flow_mod(struct ofconn *ofconn, const struct ofp_header *oh)
         return OFPERR_OFPFMFC_ALL_TABLES_FULL;
     }
 
-    return handle_flow_mod__(ofconn_get_ofproto(ofconn), ofconn, &fm, oh);
+    error = handle_flow_mod__(ofconn_get_ofproto(ofconn), ofconn, &fm, oh);
+    if (error) {
+        return error;
+    }
+
+    /* Record the operation for logging a summary report. */
+    switch (fm.command) {
+    case OFPFC_ADD:
+        ofproto->n_add++;
+        break;
+
+    case OFPFC_MODIFY:
+    case OFPFC_MODIFY_STRICT:
+        ofproto->n_modify++;
+        break;
+
+    case OFPFC_DELETE:
+    case OFPFC_DELETE_STRICT:
+        ofproto->n_delete++;
+        break;
+    }
+
+    now = time_msec();
+    if (ofproto->next_op_report == LLONG_MAX) {
+        ofproto->first_op = now;
+        ofproto->next_op_report = MAX(now + 10 * 1000,
+                                      ofproto->op_backoff);
+        ofproto->op_backoff = ofproto->next_op_report + 60 * 1000;
+    }
+    ofproto->last_op = now;
+
+    return 0;
 }
 
 static enum ofperr
@@ -3499,6 +3573,7 @@ static void
 ofoperation_create(struct ofopgroup *group, struct rule *rule,
                    enum ofoperation_type type)
 {
+    struct ofproto *ofproto = group->ofproto;
     struct ofoperation *op;
 
     assert(!rule->pending);
@@ -3511,7 +3586,7 @@ ofoperation_create(struct ofopgroup *group, struct rule *rule,
     op->flow_cookie = rule->flow_cookie;
 
     if (type == OFOPERATION_DELETE) {
-        hmap_insert(&op->group->ofproto->deletions, &op->hmap_node,
+        hmap_insert(&ofproto->deletions, &op->hmap_node,
                     cls_rule_hash(&rule->cr, rule->table_id));
     }
 }

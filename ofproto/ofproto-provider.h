@@ -74,6 +74,12 @@ struct ofproto {
     unsigned int n_pending;     /* list_size(&pending). */
     struct hmap deletions;      /* All OFOPERATION_DELETE "ofoperation"s. */
 
+    /* Flow table operation logging. */
+    int n_add, n_delete, n_modify; /* Number of unreported ops of each kind. */
+    long long int first_op, last_op; /* Range of times for unreported ops. */
+    long long int next_op_report;    /* Time to report ops, or LLONG_MAX. */
+    long long int op_backoff;        /* Earliest time to report ops again. */
+
     /* Linux VLAN device support (e.g. "eth0.10" for VLAN 10.)
      *
      * This is deprecated.  It is only for compatibility with broken device
