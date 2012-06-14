@@ -13,7 +13,7 @@
 # limitations under the License.
 
 AC_PREREQ(2.64)
-AC_INIT(openvswitch, 1.6.0, ovs-bugs@openvswitch.org)
+AC_INIT(openvswitch, 1.6.1, ovs-bugs@openvswitch.org)
 NX_BUILDNR
 AC_CONFIG_SRCDIR([datapath/datapath.c])
 AC_CONFIG_MACRO_DIR([m4])

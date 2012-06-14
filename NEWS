@@ -1,5 +1,10 @@
-v1.6.0 - xx xxx xxxx
+v1.6.1 - 14 Jun 2012
 ------------------------
+    - Allow OFPP_CONTROLLER as the in_port for packet-out messages.
+
+v1.6.0 - 24 Feb 2012
+------------------------
+    *** Internal only release ***
     - bonding
         - LACP bonds no longer fall back to balance-slb when negotiations fail.
           Instead they drop traffic.
