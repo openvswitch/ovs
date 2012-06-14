@@ -47,6 +47,37 @@ struct msghdr {
     int            msg_flags;
 };
 
+struct cmsghdr {
+    size_t cmsg_len;
+    int cmsg_level;
+    int cmsg_type;
+    unsigned char cmsg_data[];
+};
+
+#define __CMSG_ALIGNTO sizeof(size_t)
+#define CMSG_ALIGN(LEN) \
+        (((LEN) + __CMSG_ALIGNTO - 1) / __CMSG_ALIGNTO * __CMSG_ALIGNTO)
+#define CMSG_DATA(CMSG) ((CMSG)->cmsg_data)
+#define CMSG_LEN(LEN) (sizeof(struct cmsghdr) + (LEN))
+#define CMSG_SPACE(LEN) CMSG_ALIGN(CMSG_LEN(LEN))
+#define CMSG_FIRSTHDR(MSG) \
+    ((MSG)->msg_controllen ? (struct cmsghdr *) (MSG)->msg_control : NULL)
+#define CMSG_NXTHDR(MSG, CMSG) __cmsg_nxthdr(MSG, CMSG)
+
+static inline struct cmsghdr *
+__cmsg_nxthdr(struct msghdr *msg, struct cmsghdr *cmsg)
+{
+    size_t ofs = (char *) cmsg - (char *) msg->msg_control;
+    size_t next_ofs = ofs + CMSG_ALIGN(cmsg->cmsg_len);
+    return (next_ofs < msg->msg_controllen
+            ? (void *) ((char *) msg->msg_control + next_ofs)
+            : NULL);
+}
+
+enum {
+    SCM_RIGHTS = 1
+};
+
 enum {
     SOCK_DGRAM,
     SOCK_RAW,

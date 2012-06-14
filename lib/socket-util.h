@@ -71,4 +71,28 @@ char *describe_fd(int fd);
  * in <netinet/ip.h> is used. */
 #define DSCP_DEFAULT (IPTOS_PREC_INTERNETCONTROL >> 2)
 
+/* Maximum number of fds that we support sending or receiving at one time
+ * across a Unix domain socket. */
+#define SOUTIL_MAX_FDS 8
+
+/* Iovecs. */
+size_t iovec_len(const struct iovec *iovs, size_t n_iovs);
+bool iovec_is_empty(const struct iovec *iovs, size_t n_iovs);
+
+/* Functions particularly useful for Unix domain sockets. */
+void xsocketpair(int domain, int type, int protocol, int fds[2]);
+int send_iovec_and_fds(int sock,
+                       const struct iovec *iovs, size_t n_iovs,
+                       const int fds[], size_t n_fds);
+int send_iovec_and_fds_fully(int sock,
+                             const struct iovec *iovs, size_t n_iovs,
+                             const int fds[], size_t n_fds,
+                             size_t skip_bytes, size_t *bytes_sent);
+int send_iovec_and_fds_fully_block(int sock,
+                                   const struct iovec *iovs, size_t n_iovs,
+                                   const int fds[], size_t n_fds);
+int recv_data_and_fds(int sock,
+                      void *data, size_t size,
+                      int fds[SOUTIL_MAX_FDS], size_t *n_fdsp);
+
 #endif /* socket-util.h */
