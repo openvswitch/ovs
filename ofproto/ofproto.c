@@ -117,7 +117,6 @@ struct ofoperation {
     struct hmap_node hmap_node; /* In ofproto's "deletions" hmap. */
     struct rule *rule;          /* Rule being operated upon. */
     enum ofoperation_type type; /* Type of operation. */
-    int status;                 /* -1 if pending, otherwise 0 or error code. */
     struct rule *victim;        /* OFOPERATION_ADDING: Replaced rule. */
     union ofp_action *actions;  /* OFOPERATION_MODIFYING: Replaced actions. */
     int n_actions;              /* OFOPERATION_MODIFYING: # of old actions. */
@@ -3509,7 +3508,6 @@ ofoperation_create(struct ofopgroup *group, struct rule *rule,
     list_push_back(&group->ops, &op->group_node);
     op->rule = rule;
     op->type = type;
-    op->status = -1;
     op->flow_cookie = rule->flow_cookie;
 
     if (type == OFOPERATION_DELETE) {
@@ -3575,7 +3573,6 @@ ofoperation_complete(struct ofoperation *op, enum ofperr error)
     struct ofproto *ofproto = rule->ofproto;
 
     assert(rule->pending == op);
-    assert(op->status < 0);
 
     if (!error
         && !group->error
