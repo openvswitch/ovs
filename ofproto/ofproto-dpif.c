@@ -56,11 +56,9 @@
 
 VLOG_DEFINE_THIS_MODULE(ofproto_dpif);
 
-COVERAGE_DEFINE(ofproto_dpif_ctlr_action);
 COVERAGE_DEFINE(ofproto_dpif_expired);
 COVERAGE_DEFINE(ofproto_dpif_xlate);
 COVERAGE_DEFINE(facet_changed_rule);
-COVERAGE_DEFINE(facet_invalidated);
 COVERAGE_DEFINE(facet_revalidate);
 COVERAGE_DEFINE(facet_unexpected);
 COVERAGE_DEFINE(facet_suppress);
