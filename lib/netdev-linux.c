@@ -77,7 +77,8 @@ COVERAGE_DEFINE(netdev_arp_lookup);
 COVERAGE_DEFINE(netdev_get_ifindex);
 COVERAGE_DEFINE(netdev_get_hwaddr);
 COVERAGE_DEFINE(netdev_set_hwaddr);
-COVERAGE_DEFINE(netdev_ethtool);
+COVERAGE_DEFINE(netdev_get_ethtool);
+COVERAGE_DEFINE(netdev_set_ethtool);
 
 
 /* These were introduced in Linux 2.6.14, so they might be missing if we have
@@ -506,6 +507,7 @@ netdev_linux_get_drvinfo(struct netdev_dev_linux *netdev_dev)
         return 0;
     }
 
+    COVERAGE_INC(netdev_get_ethtool);
     memset(&netdev_dev->drvinfo, 0, sizeof netdev_dev->drvinfo);
     error = netdev_linux_do_ethtool(netdev_dev->netdev_dev.name,
                                     (struct ethtool_cmd *)&netdev_dev->drvinfo,
@@ -1203,6 +1205,7 @@ netdev_linux_get_miimon(const char *name, bool *miimon)
         VLOG_DBG_RL(&rl, "%s: failed to query MII, falling back to ethtool",
                     name);
 
+        COVERAGE_INC(netdev_get_ethtool);
         memset(&ecmd, 0, sizeof ecmd);
         error = netdev_linux_do_ethtool(name, &ecmd, ETHTOOL_GLINK,
                                         "ETHTOOL_GLINK");
@@ -1496,6 +1499,7 @@ netdev_linux_read_features(struct netdev_dev_linux *netdev_dev)
         return;
     }
 
+    COVERAGE_INC(netdev_get_ethtool);
     memset(&ecmd, 0, sizeof ecmd);
     error = netdev_linux_do_ethtool(netdev_dev->netdev_dev.name, &ecmd,
                                     ETHTOOL_GSET, "ETHTOOL_GSET");
@@ -1652,6 +1656,7 @@ netdev_linux_set_advertisements(struct netdev *netdev,
     struct ethtool_cmd ecmd;
     int error;
 
+    COVERAGE_INC(netdev_get_ethtool);
     memset(&ecmd, 0, sizeof ecmd);
     error = netdev_linux_do_ethtool(netdev_get_name(netdev), &ecmd,
                                     ETHTOOL_GSET, "ETHTOOL_GSET");
@@ -1696,6 +1701,7 @@ netdev_linux_set_advertisements(struct netdev *netdev,
     if (advertise & NETDEV_F_PAUSE_ASYM) {
         ecmd.advertising |= ADVERTISED_Asym_Pause;
     }
+    COVERAGE_INC(netdev_set_ethtool);
     return netdev_linux_do_ethtool(netdev_get_name(netdev), &ecmd,
                                    ETHTOOL_SSET, "ETHTOOL_SSET");
 }
@@ -4197,6 +4203,7 @@ netdev_linux_ethtool_set_flag(struct netdev *netdev, uint32_t flag,
     uint32_t new_flags;
     int error;
 
+    COVERAGE_INC(netdev_get_ethtool);
     memset(&evalue, 0, sizeof evalue);
     error = netdev_linux_do_ethtool(netdev_name,
                                     (struct ethtool_cmd *)&evalue,
@@ -4205,6 +4212,7 @@ netdev_linux_ethtool_set_flag(struct netdev *netdev, uint32_t flag,
         return error;
     }
 
+    COVERAGE_INC(netdev_set_ethtool);
     evalue.data = new_flags = (evalue.data & ~flag) | (enable ? flag : 0);
     error = netdev_linux_do_ethtool(netdev_name,
                                     (struct ethtool_cmd *)&evalue,
@@ -4213,6 +4221,7 @@ netdev_linux_ethtool_set_flag(struct netdev *netdev, uint32_t flag,
         return error;
     }
 
+    COVERAGE_INC(netdev_get_ethtool);
     memset(&evalue, 0, sizeof evalue);
     error = netdev_linux_do_ethtool(netdev_name,
                                     (struct ethtool_cmd *)&evalue,
@@ -4488,7 +4497,6 @@ netdev_linux_do_ethtool(const char *name, struct ethtool_cmd *ecmd,
     ifr.ifr_data = (caddr_t) ecmd;
 
     ecmd->cmd = cmd;
-    COVERAGE_INC(netdev_ethtool);
     if (ioctl(af_inet_sock, SIOCETHTOOL, &ifr) == 0) {
         return 0;
     } else {
