@@ -179,8 +179,9 @@ suppresses that behavior.
 .
 .IP "\fB\-\-ovsdb\-server\-priority=\fIniceness\fR"
 .IQ "\fB\-\-ovs\-vswitchd\-priority=\fIniceness\fR"
-Sets the \fBnice\fR(1) level used for \fBovsdb\-server\fR and
-\fBovs\-vswitchd\fR, respectively.  Both default to \fB\-10\fR.
+.IQ "\fB\-\-ovs\-brcompatd\-priority=\fIniceness\fR"
+Sets the \fBnice\fR(1) level used for each daemon.  All of them
+default to \fB\-10\fR.
 .
 .PP
 The following options control file locations.  They should only be
