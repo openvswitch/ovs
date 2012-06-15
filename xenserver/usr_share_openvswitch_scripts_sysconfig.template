@@ -18,3 +18,7 @@
 #     system memory pressure in extraordinary situations, such as multiple
 #     concurrent VM import operations.
 # VSWITCHD_MLOCKALL=yes
+
+# OVS_CTL_OPTS: Extra options to pass to ovs-ctl.  This is, for example,
+# a suitable place to specify --ovs-vswitchd-wrapper=valgrind.
+# OVS_CTL_OPTS=

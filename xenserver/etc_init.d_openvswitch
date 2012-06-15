@@ -76,6 +76,7 @@ start () {
         touch /var/run/openvswitch.booted
         set "$@" --delete-bridges
     fi
+    set "$@" $OVS_CTL_OPTS
     "$@"
 
     start_ovs_xapi_sync

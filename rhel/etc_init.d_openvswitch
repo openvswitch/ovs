@@ -48,6 +48,7 @@ start () {
     if test X"$BRCOMPAT" = Xyes; then
 	set "$@" --brcompat
     fi
+    set "$@" $OVS_CTL_OPTS
     "$@"
 
     $ovs_ctl --protocol=gre enable-protocol
