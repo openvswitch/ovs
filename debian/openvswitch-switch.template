@@ -6,3 +6,7 @@
 # BRCOMPAT: If 'yes' and the openvswitch-brcompat package is installed, then
 # Linux bridge compatibility will be enabled.
 # BRCOMPAT=no
+
+# OVS_CTL_OPTS: Extra options to pass to ovs-ctl.  This is, for example,
+# a suitable place to specify --ovs-vswitchd-wrapper=valgrind.
+# OVS_CTL_OPTS=

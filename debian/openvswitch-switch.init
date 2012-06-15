@@ -70,6 +70,7 @@ start () {
     if test X"$FORCE_COREFILES" != X; then
 	set "$@" --force-corefiles="$FORCE_COREFILES"
     fi
+    set "$@" $OVS_CTL_OPTS
     "$@" || exit $?
 
     ovs_ctl --protocol=gre enable-protocol
