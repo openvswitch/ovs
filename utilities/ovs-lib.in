@@ -88,7 +88,8 @@ pid_exists () {
 
 start_daemon () {
     priority=$1
-    shift
+    wrapper=$2
+    shift; shift
     daemon=$1
 
     # drop core files in a sensible place
@@ -104,6 +105,30 @@ start_daemon () {
     test -d "$rundir" || install -d -m 755 -o root -g root "$rundir"
     set "$@" --pidfile="$rundir/$daemon.pid"
     set "$@" --detach --monitor
+
+    # wrapper
+    case $wrapper in
+        valgrind)
+            if (valgrind --version) > /dev/null 2>&1; then
+                set valgrind -q --leak-check=full \
+                    --log-file="$logdir/$daemon.valgrind.log.%p" "$@"
+            else
+                log_failure_msg "valgrind not installed, running $daemon without it"
+            fi
+            ;;
+        strace)
+            if (strace -V) > /dev/null 2>&1; then
+                set strace -D -ff -o "$logdir/$daemon.strace.log" "$@"
+            else
+                log_failure_msg "strace not installed, running $daemon without it"
+            fi
+            ;;
+        '')
+            ;;
+        *)
+            log_failure_msg "unknown wrapper $wrapper, running $daemon without it"
+            ;;
+    esac
 
     # priority
     if test X"$priority" != X; then

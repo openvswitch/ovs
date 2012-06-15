@@ -188,7 +188,8 @@ start () {
 	set "$@" --private-key=db:SSL,private_key
 	set "$@" --certificate=db:SSL,certificate
 	set "$@" --bootstrap-ca-cert=db:SSL,ca_cert
-	start_daemon "$OVSDB_SERVER_PRIORITY" "$@" || return 1
+	start_daemon "$OVSDB_SERVER_PRIORITY" "$OVSDB_SERVER_WRAPPER" "$@" \
+            || return 1
 
 	# Initialize database settings.
 	ovs_vsctl -- init -- set Open_vSwitch . db-version="$schemaver" \
@@ -215,7 +216,7 @@ start () {
 	if test X"$MLOCKALL" != Xno; then
 	    set "$@" --mlockall
 	fi
-	start_daemon "$OVS_VSWITCHD_PRIORITY" "$@"
+	start_daemon "$OVS_VSWITCHD_PRIORITY" "$OVS_VSWITCHD_WRAPPER" "$@"
     fi
 
     if daemon_is_running ovs-brcompatd; then
@@ -223,7 +224,7 @@ start () {
     elif test X"$BRCOMPAT" = Xyes; then
         set ovs-brcompatd
 	set "$@" -vconsole:emer -vsyslog:err -vfile:info
-	start_daemon "$OVS_BRCOMPATD_PRIORITY" "$@"
+	start_daemon "$OVS_BRCOMPATD_PRIORITY" "$OVS_BRCOMPATD_WRAPPER" "$@"
     fi
 }
 
@@ -377,6 +378,9 @@ set_defaults () {
     OVSDB_SERVER_PRIORITY=-10
     OVS_VSWITCHD_PRIORITY=-10
     OVS_BRCOMPATD_PRIORITY=-10
+    OVSDB_SERVER_WRAPPER=
+    OVS_VSWITCHD_WRAPPER=
+    OVS_BRCOMPATD_WRAPPER=
 
     DB_FILE=$etcdir/conf.db
     DB_SOCK=$rundir/db.sock
@@ -441,6 +445,12 @@ Less important options for "start" and "force-reload-kmod":
   --ovsdb-server-priority=NICE   set ovsdb-server's niceness (default: $OVSDB_SERVER_PRIORITY)
   --ovs-vswitchd-priority=NICE   set ovs-vswitchd's niceness (default: $OVS_VSWITCHD_PRIORITY)
   --ovs-brcompatd-priority=NICE  set ovs-brcompatd's niceness (default: $OVS_BRCOMPATD_PRIORITY)
+
+Debugging options for "start" and "force-reload-kmod":
+  --ovsdb-server-wrapper=WRAPPER
+  --ovs-vswitchd-wrapper=WRAPPER
+  --ovs-vswitchd-wrapper=WRAPPER
+     run specified daemon under WRAPPER (either 'valgrind' or 'strace')
 
 Options for "start", "force-reload-kmod", "load-kmod", "status", and "version":
   --brcompat         enable Linux bridge compatibility module and daemon

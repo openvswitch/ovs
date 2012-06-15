@@ -183,6 +183,31 @@ suppresses that behavior.
 Sets the \fBnice\fR(1) level used for each daemon.  All of them
 default to \fB\-10\fR.
 .
+.IP "\fB\-\-ovsdb\-server\-wrapper=\fIwrapper\fR"
+.IQ "\fB\-\-ovs\-vswitchd\-wrapper=\fIwrapper\fR"
+.IQ "\fB\-\-ovs\-brcompatd\-wrapper=\fIwrapper\fR"
+.
+Configures the specified daemon to run under \fIwrapper\fR, which is
+one of the following:
+.
+.RS
+.IP "\fBvalgrind\fR"
+Run the daemon under \fBvalgrind\fR(1), if it is installed, logging to
+\fIdaemon\fB.valgrind.log.\fIpid\fR in the log directory.
+.
+.IP "\fBstrace\fR"
+Run the daemon under \fBstrace\fR(1), if it is installed, logging to
+\fIdaemon\fB.strace.log.\fIpid\fR in the log directory.
+.RE
+.
+.IP
+By default, no wrapper is used.
+.
+.IP
+Wrappers greatly slow daemon operations so they should not be used in
+production.  They also produce voluminous logs that can quickly fill
+small disk partitions.
+.
 .PP
 The following options control file locations.  They should only be
 used if the default locations cannot be used.  See \fBFILES\fR, below,
