@@ -7,3 +7,4 @@ BUILT_MODULE_LOCATION[0]=datapath/linux/
 BUILT_MODULE_LOCATION[1]=datapath/linux/
 DEST_MODULE_LOCATION[0]=/kernel/drivers/net/openvswitch/
 DEST_MODULE_LOCATION[1]=/kernel/drivers/net/openvswitch/
+AUTOINSTALL=yes
