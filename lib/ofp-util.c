@@ -111,7 +111,7 @@ ofputil_wildcard_from_ofpfw10(uint32_t ofpfw, struct flow_wildcards *wc)
     flow_wildcards_init_catchall(wc);
     wc->wildcards = (OVS_FORCE flow_wildcards_t) ofpfw & WC_INVARIANTS;
 
-    /* Wildcard fields that aren't defined by ofp10_match or tun_id. */
+    /* Wildcard fields that aren't defined by ofp10_match. */
     wc->wildcards |= FWW_NW_ECN | FWW_NW_TTL;
 
     if (ofpfw & OFPFW10_NW_TOS) {
