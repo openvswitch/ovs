@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -693,6 +693,7 @@ flow_wildcards_combine(struct flow_wildcards *dst,
         dst->reg_masks[i] = src1->reg_masks[i] & src2->reg_masks[i];
     }
     dst->vlan_tci_mask = src1->vlan_tci_mask & src2->vlan_tci_mask;
+    dst->nw_frag_mask = src1->nw_frag_mask & src2->nw_frag_mask;
 }
 
 /* Returns a hash of the wildcards in 'wc'. */
@@ -720,7 +721,8 @@ flow_wildcards_equal(const struct flow_wildcards *a,
         || a->nw_dst_mask != b->nw_dst_mask
         || a->vlan_tci_mask != b->vlan_tci_mask
         || !ipv6_addr_equals(&a->ipv6_src_mask, &b->ipv6_src_mask)
-        || !ipv6_addr_equals(&a->ipv6_dst_mask, &b->ipv6_dst_mask)) {
+        || !ipv6_addr_equals(&a->ipv6_dst_mask, &b->ipv6_dst_mask)
+        || a->nw_frag_mask != b->nw_frag_mask) {
         return false;
     }
 
@@ -762,7 +764,8 @@ flow_wildcards_has_extra(const struct flow_wildcards *a,
             || (a->tun_id_mask & b->tun_id_mask) != b->tun_id_mask
             || (a->nw_src_mask & b->nw_src_mask) != b->nw_src_mask
             || (a->nw_dst_mask & b->nw_dst_mask) != b->nw_dst_mask
-            || (a->vlan_tci_mask & b->vlan_tci_mask) != b->vlan_tci_mask);
+            || (a->vlan_tci_mask & b->vlan_tci_mask) != b->vlan_tci_mask
+            || (a->nw_frag_mask & b->nw_frag_mask) != b->nw_frag_mask);
 }
 
 /* Sets the wildcard mask for register 'idx' in 'wc' to 'mask'.
