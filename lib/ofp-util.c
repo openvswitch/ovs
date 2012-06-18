@@ -138,6 +138,7 @@ ofputil_cls_rule_from_ofp10_match(const struct ofp10_match *match,
     uint32_t ofpfw = ntohl(match->wildcards) & OFPFW10_ALL;
 
     /* Initialize rule->priority, rule->wc. */
+    memset(rule->flow.zeros, 0, sizeof rule->flow.zeros);
     rule->priority = !ofpfw ? UINT16_MAX : priority;
     ofputil_wildcard_from_ofpfw10(ofpfw, &rule->wc);
 

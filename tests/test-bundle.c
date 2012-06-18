@@ -136,6 +136,7 @@ main(int argc, char *argv[])
     flows = xmalloc(N_FLOWS * sizeof *flows);
     for (i = 0; i < N_FLOWS; i++) {
         random_bytes(&flows[i], sizeof flows[i]);
+        memset(flows[i].zeros, 0, sizeof flows[i].zeros);
         flows[i].regs[0] = OFPP_NONE;
     }
 

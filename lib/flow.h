@@ -75,7 +75,7 @@ struct flow {
     uint8_t arp_tha[6];         /* ARP/ND target hardware address. */
     uint8_t nw_ttl;             /* IP TTL/Hop Limit. */
     uint8_t nw_frag;            /* FLOW_FRAG_* flags. */
-    uint8_t reserved[2];        /* Reserved for 64-bit packing. */
+    uint8_t zeros[2];           /* Must be zero. */
 };
 
 /* Represents the metadata fields of struct flow. */

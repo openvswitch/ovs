@@ -379,6 +379,7 @@ compare_classifiers(struct classifier *cls, struct tcls *tcls)
         unsigned int x;
 
         x = rand () % N_FLOW_VALUES;
+        memset(&flow, 0, sizeof flow);
         flow.nw_src = nw_src_values[get_value(&x, N_NW_SRC_VALUES)];
         flow.nw_dst = nw_dst_values[get_value(&x, N_NW_DST_VALUES)];
         flow.tun_id = tun_id_values[get_value(&x, N_TUN_ID_VALUES)];
