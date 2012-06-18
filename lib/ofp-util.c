@@ -84,7 +84,7 @@ ofputil_netmask_to_wcbits(ovs_be32 netmask)
 void
 ofputil_wildcard_from_ofpfw10(uint32_t ofpfw, struct flow_wildcards *wc)
 {
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 16);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 17);
 
     /* Initialize most of rule->wc. */
     flow_wildcards_init_catchall(wc);
@@ -92,9 +92,6 @@ ofputil_wildcard_from_ofpfw10(uint32_t ofpfw, struct flow_wildcards *wc)
     wc->wildcards = 0;
     if (ofpfw & OFPFW10_IN_PORT) {
         wc->wildcards |= FWW_IN_PORT;
-    }
-    if (ofpfw & OFPFW10_DL_TYPE) {
-        wc->wildcards |= FWW_DL_TYPE;
     }
 
     if (!(ofpfw & OFPFW10_NW_TOS)) {
@@ -119,6 +116,9 @@ ofputil_wildcard_from_ofpfw10(uint32_t ofpfw, struct flow_wildcards *wc)
     }
     if (!(ofpfw & OFPFW10_DL_DST)) {
         memset(wc->dl_dst_mask, 0xff, ETH_ADDR_LEN);
+    }
+    if (!(ofpfw & OFPFW10_DL_TYPE)) {
+        wc->dl_type_mask = htons(UINT16_MAX);
     }
 
     /* VLAN TCI mask. */
@@ -193,7 +193,7 @@ ofputil_cls_rule_to_ofp10_match(const struct cls_rule *rule,
     if (wc->wildcards & FWW_IN_PORT) {
         ofpfw |= OFPFW10_IN_PORT;
     }
-    if (wc->wildcards & FWW_DL_TYPE) {
+    if (!wc->dl_type_mask) {
         ofpfw |= OFPFW10_DL_TYPE;
     }
     if (!wc->nw_proto_mask) {
@@ -505,7 +505,7 @@ ofputil_cls_rule_to_ofp11_match(const struct cls_rule *rule,
         }
     }
 
-    if (rule->wc.wildcards & FWW_DL_TYPE) {
+    if (!rule->wc.dl_type_mask) {
         wc |= OFPFW11_DL_TYPE;
     } else {
         match->dl_type = ofputil_dl_type_to_openflow(rule->flow.dl_type);
@@ -903,7 +903,7 @@ ofputil_usable_protocols(const struct cls_rule *rule)
 {
     const struct flow_wildcards *wc = &rule->wc;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 16);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 17);
 
     /* NXM and OF1.1+ supports bitwise matching on ethernet addresses. */
     if (!eth_mask_is_exact(wc->dl_src_mask)
@@ -927,8 +927,7 @@ ofputil_usable_protocols(const struct cls_rule *rule)
     }
 
     /* Only NXM supports matching IPv6 traffic. */
-    if (!(wc->wildcards & FWW_DL_TYPE)
-            && (rule->flow.dl_type == htons(ETH_TYPE_IPV6))) {
+    if (rule->flow.dl_type == htons(ETH_TYPE_IPV6)) {
         return OFPUTIL_P_NXM_ANY;
     }
 

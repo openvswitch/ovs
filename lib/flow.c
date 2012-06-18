@@ -445,7 +445,7 @@ flow_zero_wildcards(struct flow *flow, const struct flow_wildcards *wildcards)
     const flow_wildcards_t wc = wildcards->wildcards;
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 16);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 17);
 
     for (i = 0; i < FLOW_N_REGS; i++) {
         flow->regs[i] &= wildcards->reg_masks[i];
@@ -458,9 +458,7 @@ flow_zero_wildcards(struct flow *flow, const struct flow_wildcards *wildcards)
         flow->in_port = 0;
     }
     flow->vlan_tci &= wildcards->vlan_tci_mask;
-    if (wc & FWW_DL_TYPE) {
-        flow->dl_type = htons(0);
-    }
+    flow->dl_type &= wildcards->dl_type_mask;
     flow->tp_src &= wildcards->tp_src_mask;
     flow->tp_dst &= wildcards->tp_dst_mask;
     eth_addr_bitand(flow->dl_src, wildcards->dl_src_mask, flow->dl_src);
@@ -485,7 +483,7 @@ flow_zero_wildcards(struct flow *flow, const struct flow_wildcards *wildcards)
 void
 flow_get_metadata(const struct flow *flow, struct flow_metadata *fmd)
 {
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 16);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 17);
 
     fmd->tun_id = flow->tun_id;
     fmd->metadata = flow->metadata;
@@ -573,7 +571,7 @@ flow_print(FILE *stream, const struct flow *flow)
 void
 flow_wildcards_init_catchall(struct flow_wildcards *wc)
 {
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 16);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 17);
 
     wc->wildcards = FWW_ALL;
     wc->tun_id_mask = htonll(0);
@@ -587,6 +585,7 @@ flow_wildcards_init_catchall(struct flow_wildcards *wc)
     wc->metadata_mask = htonll(0);
     wc->vlan_tci_mask = htons(0);
     wc->nw_frag_mask = 0;
+    wc->dl_type_mask = htons(0);
     wc->tp_src_mask = htons(0);
     wc->tp_dst_mask = htons(0);
     memset(wc->dl_src_mask, 0, ETH_ADDR_LEN);
@@ -604,7 +603,7 @@ flow_wildcards_init_catchall(struct flow_wildcards *wc)
 void
 flow_wildcards_init_exact(struct flow_wildcards *wc)
 {
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 16);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 17);
 
     wc->wildcards = 0;
     wc->tun_id_mask = htonll(UINT64_MAX);
@@ -618,6 +617,7 @@ flow_wildcards_init_exact(struct flow_wildcards *wc)
     wc->metadata_mask = htonll(UINT64_MAX);
     wc->vlan_tci_mask = htons(UINT16_MAX);
     wc->nw_frag_mask = UINT8_MAX;
+    wc->dl_type_mask = htons(UINT16_MAX);
     wc->tp_src_mask = htons(UINT16_MAX);
     wc->tp_dst_mask = htons(UINT16_MAX);
     memset(wc->dl_src_mask, 0xff, ETH_ADDR_LEN);
@@ -637,7 +637,7 @@ flow_wildcards_is_exact(const struct flow_wildcards *wc)
 {
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 16);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 17);
 
     if (wc->wildcards
         || wc->tun_id_mask != htonll(UINT64_MAX)
@@ -647,6 +647,7 @@ flow_wildcards_is_exact(const struct flow_wildcards *wc)
         || wc->tp_dst_mask != htons(UINT16_MAX)
         || wc->vlan_tci_mask != htons(UINT16_MAX)
         || wc->metadata_mask != htonll(UINT64_MAX)
+        || wc->dl_type_mask != htons(UINT16_MAX)
         || !eth_mask_is_exact(wc->dl_src_mask)
         || !eth_mask_is_exact(wc->dl_dst_mask)
         || !eth_mask_is_exact(wc->arp_sha_mask)
@@ -678,7 +679,7 @@ flow_wildcards_is_catchall(const struct flow_wildcards *wc)
 {
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 16);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 17);
 
     if (wc->wildcards != FWW_ALL
         || wc->tun_id_mask != htonll(0)
@@ -688,6 +689,7 @@ flow_wildcards_is_catchall(const struct flow_wildcards *wc)
         || wc->tp_dst_mask != htons(0)
         || wc->vlan_tci_mask != htons(0)
         || wc->metadata_mask != htonll(0)
+        || wc->dl_type_mask != htons(0)
         || !eth_addr_is_zero(wc->dl_src_mask)
         || !eth_addr_is_zero(wc->dl_dst_mask)
         || !eth_addr_is_zero(wc->arp_sha_mask)
@@ -722,7 +724,7 @@ flow_wildcards_combine(struct flow_wildcards *dst,
 {
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 16);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 17);
 
     dst->wildcards = src1->wildcards | src2->wildcards;
     dst->tun_id_mask = src1->tun_id_mask & src2->tun_id_mask;
@@ -740,6 +742,7 @@ flow_wildcards_combine(struct flow_wildcards *dst,
     }
     dst->metadata_mask = src1->metadata_mask & src2->metadata_mask;
     dst->vlan_tci_mask = src1->vlan_tci_mask & src2->vlan_tci_mask;
+    dst->dl_type_mask = src1->dl_type_mask & src2->dl_type_mask;
     dst->tp_src_mask = src1->tp_src_mask & src2->tp_src_mask;
     dst->tp_dst_mask = src1->tp_dst_mask & src2->tp_dst_mask;
     dst->nw_frag_mask = src1->nw_frag_mask & src2->nw_frag_mask;
@@ -771,7 +774,7 @@ flow_wildcards_equal(const struct flow_wildcards *a,
 {
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 16);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 17);
 
     if (a->wildcards != b->wildcards
         || a->tun_id_mask != b->tun_id_mask
@@ -779,6 +782,7 @@ flow_wildcards_equal(const struct flow_wildcards *a,
         || a->nw_dst_mask != b->nw_dst_mask
         || a->vlan_tci_mask != b->vlan_tci_mask
         || a->metadata_mask != b->metadata_mask
+        || a->dl_type_mask != b->dl_type_mask
         || !ipv6_addr_equals(&a->ipv6_src_mask, &b->ipv6_src_mask)
         || !ipv6_addr_equals(&a->ipv6_dst_mask, &b->ipv6_dst_mask)
         || a->ipv6_label_mask != b->ipv6_label_mask
@@ -815,7 +819,7 @@ flow_wildcards_has_extra(const struct flow_wildcards *a,
     uint8_t eth_masked[ETH_ADDR_LEN];
     struct in6_addr ipv6_masked;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 16);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 17);
 
     for (i = 0; i < FLOW_N_REGS; i++) {
         if ((a->reg_masks[i] & b->reg_masks[i]) != b->reg_masks[i]) {
@@ -865,6 +869,7 @@ flow_wildcards_has_extra(const struct flow_wildcards *a,
             || (a->ipv6_label_mask & b->ipv6_label_mask) != b->ipv6_label_mask
             || (a->vlan_tci_mask & b->vlan_tci_mask) != b->vlan_tci_mask
             || (a->metadata_mask & b->metadata_mask) != b->metadata_mask
+            || (a->dl_type_mask & b->dl_type_mask) != b->dl_type_mask
             || (a->tp_src_mask & b->tp_src_mask) != b->tp_src_mask
             || (a->tp_dst_mask & b->tp_dst_mask) != b->tp_dst_mask
             || (a->nw_proto_mask & b->nw_proto_mask) != b->nw_proto_mask

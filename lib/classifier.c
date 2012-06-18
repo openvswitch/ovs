@@ -156,7 +156,7 @@ cls_rule_set_in_port(struct cls_rule *rule, uint16_t ofp_port)
 void
 cls_rule_set_dl_type(struct cls_rule *rule, ovs_be16 dl_type)
 {
-    rule->wc.wildcards &= ~FWW_DL_TYPE;
+    rule->wc.dl_type_mask = htons(UINT16_MAX);
     rule->flow.dl_type = dl_type;
 }
 
@@ -607,13 +607,13 @@ cls_rule_format(const struct cls_rule *rule, struct ds *s)
 
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 16);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 17);
 
     if (rule->priority != OFP_DEFAULT_PRIORITY) {
         ds_put_format(s, "priority=%d,", rule->priority);
     }
 
-    if (!(w & FWW_DL_TYPE)) {
+    if (wc->dl_type_mask) {
         skip_type = true;
         if (f->dl_type == htons(ETH_TYPE_IP)) {
             if (wc->nw_proto_mask) {
@@ -717,7 +717,7 @@ cls_rule_format(const struct cls_rule *rule, struct ds *s)
     }
     format_eth_masked(s, "dl_src", f->dl_src, wc->dl_src_mask);
     format_eth_masked(s, "dl_dst", f->dl_dst, wc->dl_dst_mask);
-    if (!skip_type && !(w & FWW_DL_TYPE)) {
+    if (!skip_type && wc->dl_type_mask) {
         ds_put_format(s, "dl_type=0x%04"PRIx16",", ntohs(f->dl_type));
     }
     if (f->dl_type == htons(ETH_TYPE_IPV6)) {
@@ -1291,7 +1291,7 @@ flow_equal_except(const struct flow *a, const struct flow *b,
     const flow_wildcards_t wc = wildcards->wildcards;
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 16);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 17);
 
     for (i = 0; i < FLOW_N_REGS; i++) {
         if ((a->regs[i] ^ b->regs[i]) & wildcards->reg_masks[i]) {
@@ -1305,7 +1305,7 @@ flow_equal_except(const struct flow *a, const struct flow *b,
             && !((a->nw_dst ^ b->nw_dst) & wildcards->nw_dst_mask)
             && (wc & FWW_IN_PORT || a->in_port == b->in_port)
             && !((a->vlan_tci ^ b->vlan_tci) & wildcards->vlan_tci_mask)
-            && (wc & FWW_DL_TYPE || a->dl_type == b->dl_type)
+            && !((a->dl_type ^ b->dl_type) & wildcards->dl_type_mask)
             && !((a->tp_src ^ b->tp_src) & wildcards->tp_src_mask)
             && !((a->tp_dst ^ b->tp_dst) & wildcards->tp_dst_mask)
             && eth_addr_equal_except(a->dl_src, b->dl_src,

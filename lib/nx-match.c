@@ -558,7 +558,7 @@ nx_put_raw(struct ofpbuf *b, bool oxm, const struct cls_rule *cr,
     int match_len;
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 16);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 17);
 
     /* Metadata. */
     if (!(wc & FWW_IN_PORT)) {
@@ -575,10 +575,9 @@ nx_put_raw(struct ofpbuf *b, bool oxm, const struct cls_rule *cr,
                        flow->dl_src, cr->wc.dl_src_mask);
     nxm_put_eth_masked(b, oxm ? OXM_OF_ETH_DST : NXM_OF_ETH_DST,
                        flow->dl_dst, cr->wc.dl_dst_mask);
-    if (!(wc & FWW_DL_TYPE)) {
-        nxm_put_16(b, oxm ? OXM_OF_ETH_TYPE : NXM_OF_ETH_TYPE,
-                   ofputil_dl_type_to_openflow(flow->dl_type));
-    }
+    nxm_put_16m(b, oxm ? OXM_OF_ETH_TYPE : NXM_OF_ETH_TYPE,
+                ofputil_dl_type_to_openflow(flow->dl_type),
+                cr->wc.dl_type_mask);
 
     /* 802.1Q. */
     if (oxm) {
@@ -600,7 +599,7 @@ nx_put_raw(struct ofpbuf *b, bool oxm, const struct cls_rule *cr,
     }
 
     /* L3. */
-    if (!(wc & FWW_DL_TYPE) && flow->dl_type == htons(ETH_TYPE_IP)) {
+    if (flow->dl_type == htons(ETH_TYPE_IP)) {
         /* IP. */
         nxm_put_32m(b, oxm ? OXM_OF_IPV4_SRC : NXM_OF_IP_SRC,
                     flow->nw_src, cr->wc.nw_src_mask);
@@ -609,7 +608,7 @@ nx_put_raw(struct ofpbuf *b, bool oxm, const struct cls_rule *cr,
         nxm_put_ip(b, cr, IPPROTO_ICMP,
                    oxm ? OXM_OF_ICMPV4_TYPE : NXM_OF_ICMP_TYPE,
                    oxm ? OXM_OF_ICMPV4_CODE : NXM_OF_ICMP_CODE, oxm);
-    } else if (!(wc & FWW_DL_TYPE) && flow->dl_type == htons(ETH_TYPE_IPV6)) {
+    } else if (flow->dl_type == htons(ETH_TYPE_IPV6)) {
         /* IPv6. */
         nxm_put_ipv6(b, oxm ? OXM_OF_IPV6_SRC : NXM_NX_IPV6_SRC,
                      &flow->ipv6_src, &cr->wc.ipv6_src_mask);
@@ -636,7 +635,7 @@ nx_put_raw(struct ofpbuf *b, bool oxm, const struct cls_rule *cr,
                                    flow->arp_tha, cr->wc.arp_tha_mask);
             }
         }
-    } else if (!(wc & FWW_DL_TYPE) && flow->dl_type == htons(ETH_TYPE_ARP)) {
+    } else if (flow->dl_type == htons(ETH_TYPE_ARP)) {
         /* ARP. */
         if (cr->wc.nw_proto_mask) {
             nxm_put_16(b, oxm ? OXM_OF_ARP_OP : NXM_OF_ARP_OP,

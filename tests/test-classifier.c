@@ -50,7 +50,7 @@
     CLS_FIELD(0,                          nw_dst,      NW_DST)      \
     CLS_FIELD(FWW_IN_PORT,                in_port,     IN_PORT)     \
     CLS_FIELD(0,                          vlan_tci,    VLAN_TCI)    \
-    CLS_FIELD(FWW_DL_TYPE,                dl_type,     DL_TYPE)     \
+    CLS_FIELD(0,                          dl_type,     DL_TYPE)     \
     CLS_FIELD(0,                          tp_src,      TP_SRC)      \
     CLS_FIELD(0,                          tp_dst,      TP_DST)      \
     CLS_FIELD(0,                          dl_src,      DL_SRC)      \
@@ -223,6 +223,9 @@ match(const struct cls_rule *wild, const struct flow *fixed)
         } else if (f_idx == CLS_F_IDX_NW_PROTO) {
             eq = !((fixed->nw_proto ^ wild->flow.nw_proto)
                    & wild->wc.nw_proto_mask);
+        } else if (f_idx == CLS_F_IDX_DL_TYPE) {
+            eq = !((fixed->dl_type ^ wild->flow.dl_type)
+                   & wild->wc.dl_type_mask);
         } else {
             NOT_REACHED();
         }
@@ -507,6 +510,8 @@ make_rule(int wc_fields, unsigned int priority, int value_pat)
             rule->cls_rule.wc.nw_tos_mask |= IP_DSCP_MASK;
         } else if (f_idx == CLS_F_IDX_NW_PROTO) {
             rule->cls_rule.wc.nw_proto_mask = UINT8_MAX;
+        } else if (f_idx == CLS_F_IDX_DL_TYPE) {
+            rule->cls_rule.wc.dl_type_mask = htons(UINT16_MAX);
         } else {
             NOT_REACHED();
         }

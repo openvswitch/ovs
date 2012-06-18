@@ -139,7 +139,7 @@ static const struct mf_field mf_fields[MFF_N_IDS] = {
     }, {
         MFF_ETH_TYPE, "eth_type", "dl_type",
         MF_FIELD_SIZES(be16),
-        MFM_NONE, FWW_DL_TYPE,
+        MFM_NONE, 0,
         MFS_HEXADECIMAL,
         MFP_NONE,
         false,
@@ -574,7 +574,6 @@ mf_is_all_wild(const struct mf_field *mf, const struct flow_wildcards *wc)
 {
     switch (mf->id) {
     case MFF_IN_PORT:
-    case MFF_ETH_TYPE:
         assert(mf->fww_bit != 0);
         return (wc->wildcards & mf->fww_bit) != 0;
 
@@ -590,6 +589,8 @@ mf_is_all_wild(const struct mf_field *mf, const struct flow_wildcards *wc)
         return eth_addr_is_zero(wc->dl_src_mask);
     case MFF_ETH_DST:
         return eth_addr_is_zero(wc->dl_dst_mask);
+    case MFF_ETH_TYPE:
+        return !wc->dl_type_mask;
 
     case MFF_ARP_SHA:
     case MFF_ND_SLL:
@@ -673,7 +674,6 @@ mf_get_mask(const struct mf_field *mf, const struct flow_wildcards *wc,
 {
     switch (mf->id) {
     case MFF_IN_PORT:
-    case MFF_ETH_TYPE:
         assert(mf->fww_bit != 0);
         memset(mask, wc->wildcards & mf->fww_bit ? 0x00 : 0xff, mf->n_bytes);
         break;
@@ -692,9 +692,11 @@ mf_get_mask(const struct mf_field *mf, const struct flow_wildcards *wc,
     case MFF_ETH_DST:
         memcpy(mask->mac, wc->dl_dst_mask, ETH_ADDR_LEN);
         break;
-
     case MFF_ETH_SRC:
         memcpy(mask->mac, wc->dl_src_mask, ETH_ADDR_LEN);
+        break;
+    case MFF_ETH_TYPE:
+        mask->be16 = wc->dl_type_mask;
         break;
 
     case MFF_VLAN_TCI:
@@ -1425,8 +1427,8 @@ mf_set_wild(const struct mf_field *mf, struct cls_rule *rule)
         break;
 
     case MFF_ETH_TYPE:
-        rule->wc.wildcards |= FWW_DL_TYPE;
         rule->flow.dl_type = htons(0);
+        rule->wc.dl_type_mask = htons(0);
         break;
 
     case MFF_VLAN_TCI:
