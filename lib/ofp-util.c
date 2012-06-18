@@ -77,27 +77,6 @@ ofputil_netmask_to_wcbits(ovs_be32 netmask)
     return 32 - ip_count_cidr_bits(netmask);
 }
 
-/* A list of the FWW_* and OFPFW10_ bits that have the same value, meaning, and
- * name. */
-#define WC_INVARIANT_LIST \
-    WC_INVARIANT_BIT(IN_PORT) \
-    WC_INVARIANT_BIT(DL_TYPE) \
-    WC_INVARIANT_BIT(NW_PROTO)
-
-/* Verify that all of the invariant bits (as defined on WC_INVARIANT_LIST)
- * actually have the same names and values. */
-#define WC_INVARIANT_BIT(NAME) BUILD_ASSERT_DECL(FWW_##NAME == OFPFW10_##NAME);
-    WC_INVARIANT_LIST
-#undef WC_INVARIANT_BIT
-
-/* WC_INVARIANTS is the invariant bits (as defined on WC_INVARIANT_LIST) all
- * OR'd together. */
-static const flow_wildcards_t WC_INVARIANTS = 0
-#define WC_INVARIANT_BIT(NAME) | FWW_##NAME
-    WC_INVARIANT_LIST
-#undef WC_INVARIANT_BIT
-;
-
 /* Converts the OpenFlow 1.0 wildcards in 'ofpfw' (OFPFW10_*) into a
  * flow_wildcards in 'wc' for use in struct cls_rule.  It is the caller's
  * responsibility to handle the special case where the flow match's dl_vlan is
@@ -109,14 +88,20 @@ ofputil_wildcard_from_ofpfw10(uint32_t ofpfw, struct flow_wildcards *wc)
 
     /* Initialize most of rule->wc. */
     flow_wildcards_init_catchall(wc);
-    wc->wildcards = (OVS_FORCE flow_wildcards_t) ofpfw & WC_INVARIANTS;
 
-    /* Wildcard fields that aren't defined by ofp10_match. */
-    wc->wildcards |= FWW_NW_ECN | FWW_NW_TTL;
+    /* Start with wildcard fields that aren't defined by ofp10_match. */
+    wc->wildcards = FWW_NW_ECN | FWW_NW_TTL;
 
+    if (ofpfw & OFPFW10_IN_PORT) {
+        wc->wildcards |= FWW_IN_PORT;
+    }
+    if (ofpfw & OFPFW10_DL_TYPE) {
+        wc->wildcards |= FWW_DL_TYPE;
+    }
+    if (ofpfw & OFPFW10_NW_PROTO) {
+        wc->wildcards |= FWW_NW_PROTO;
+    }
     if (ofpfw & OFPFW10_NW_TOS) {
-        /* OpenFlow 1.0 defines a TOS wildcard, but it's much later in
-         * the enum than we can use. */
         wc->wildcards |= FWW_NW_DSCP;
     }
 
@@ -205,7 +190,16 @@ ofputil_cls_rule_to_ofp10_match(const struct cls_rule *rule,
     uint32_t ofpfw;
 
     /* Figure out most OpenFlow wildcards. */
-    ofpfw = (OVS_FORCE uint32_t) (wc->wildcards & WC_INVARIANTS);
+    ofpfw = 0;
+    if (wc->wildcards & FWW_IN_PORT) {
+        ofpfw |= OFPFW10_IN_PORT;
+    }
+    if (wc->wildcards & FWW_DL_TYPE) {
+        ofpfw |= OFPFW10_DL_TYPE;
+    }
+    if (wc->wildcards & FWW_NW_PROTO) {
+        ofpfw |= OFPFW10_NW_PROTO;
+    }
     ofpfw |= (ofputil_netmask_to_wcbits(wc->nw_src_mask)
               << OFPFW10_NW_SRC_SHIFT);
     ofpfw |= (ofputil_netmask_to_wcbits(wc->nw_dst_mask)

@@ -141,14 +141,12 @@ flow_hash(const struct flow *flow, uint32_t basis)
 
 typedef unsigned int OVS_BITWISE flow_wildcards_t;
 
-/* Same values and meanings as corresponding OFPFW10_* bits. */
 #define FWW_IN_PORT     ((OVS_FORCE flow_wildcards_t) (1 << 0))
-#define FWW_DL_TYPE     ((OVS_FORCE flow_wildcards_t) (1 << 4))
-#define FWW_NW_PROTO    ((OVS_FORCE flow_wildcards_t) (1 << 5))
-/* No corresponding OFPFW10_* bits. */
-#define FWW_NW_DSCP     ((OVS_FORCE flow_wildcards_t) (1 << 1))
-#define FWW_NW_ECN      ((OVS_FORCE flow_wildcards_t) (1 << 2))
-#define FWW_NW_TTL      ((OVS_FORCE flow_wildcards_t) (1 << 3))
+#define FWW_DL_TYPE     ((OVS_FORCE flow_wildcards_t) (1 << 1))
+#define FWW_NW_PROTO    ((OVS_FORCE flow_wildcards_t) (1 << 2))
+#define FWW_NW_DSCP     ((OVS_FORCE flow_wildcards_t) (1 << 3))
+#define FWW_NW_ECN      ((OVS_FORCE flow_wildcards_t) (1 << 4))
+#define FWW_NW_TTL      ((OVS_FORCE flow_wildcards_t) (1 << 5))
 #define FWW_ALL         ((OVS_FORCE flow_wildcards_t) (((1 << 6)) - 1))
 
 /* Remember to update FLOW_WC_SEQ when adding or removing FWW_*. */
