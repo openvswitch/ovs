@@ -745,6 +745,7 @@ flow_wildcards_combine(struct flow_wildcards *dst,
     dst->vlan_tci_mask = src1->vlan_tci_mask & src2->vlan_tci_mask;
     dst->tp_src_mask = src1->tp_src_mask & src2->tp_src_mask;
     dst->tp_dst_mask = src1->tp_dst_mask & src2->tp_dst_mask;
+    dst->nw_frag_mask = src1->nw_frag_mask & src2->nw_frag_mask;
     eth_addr_bitand(src1->dl_src_mask, src2->dl_src_mask, dst->dl_src_mask);
     eth_addr_bitand(src1->dl_dst_mask, src2->dl_dst_mask, dst->dl_dst_mask);
     eth_addr_bitand(src1->arp_sha_mask, src2->arp_sha_mask, dst->arp_sha_mask);
@@ -784,6 +785,7 @@ flow_wildcards_equal(const struct flow_wildcards *a,
         || !ipv6_addr_equals(&a->nd_target_mask, &b->nd_target_mask)
         || a->tp_src_mask != b->tp_src_mask
         || a->tp_dst_mask != b->tp_dst_mask
+        || a->nw_frag_mask != b->nw_frag_mask
         || !eth_addr_equals(a->dl_src_mask, b->dl_src_mask)
         || !eth_addr_equals(a->dl_dst_mask, b->dl_dst_mask)
         || !eth_addr_equals(a->arp_sha_mask, b->arp_sha_mask)
@@ -861,7 +863,8 @@ flow_wildcards_has_extra(const struct flow_wildcards *a,
             || (a->vlan_tci_mask & b->vlan_tci_mask) != b->vlan_tci_mask
             || (a->metadata_mask & b->metadata_mask) != b->metadata_mask
             || (a->tp_src_mask & b->tp_src_mask) != b->tp_src_mask
-            || (a->tp_dst_mask & b->tp_dst_mask) != b->tp_dst_mask);
+            || (a->tp_dst_mask & b->tp_dst_mask) != b->tp_dst_mask
+            || (a->nw_frag_mask & b->nw_frag_mask) != b->nw_frag_mask);
 }
 
 /* Sets the wildcard mask for register 'idx' in 'wc' to 'mask'.
