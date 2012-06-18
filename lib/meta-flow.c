@@ -278,7 +278,7 @@ static const struct mf_field mf_fields[MFF_N_IDS] = {
     }, {
         MFF_IP_TTL, "nw_ttl", NULL,
         MF_FIELD_SIZES(u8),
-        MFM_NONE, FWW_NW_TTL,
+        MFM_NONE, 0,
         MFS_DECIMAL,
         MFP_IP_ANY,
         true,
@@ -576,7 +576,6 @@ mf_is_all_wild(const struct mf_field *mf, const struct flow_wildcards *wc)
     case MFF_IN_PORT:
     case MFF_ETH_TYPE:
     case MFF_IP_PROTO:
-    case MFF_IP_TTL:
     case MFF_ARP_OP:
         assert(mf->fww_bit != 0);
         return (wc->wildcards & mf->fww_bit) != 0;
@@ -629,6 +628,8 @@ mf_is_all_wild(const struct mf_field *mf, const struct flow_wildcards *wc)
         return !(wc->nw_tos_mask & IP_DSCP_MASK);
     case MFF_IP_ECN:
         return !(wc->nw_tos_mask & IP_ECN_MASK);
+    case MFF_IP_TTL:
+        return !wc->nw_ttl_mask;
 
     case MFF_ND_TARGET:
         return ipv6_mask_is_any(&wc->nd_target_mask);
@@ -672,7 +673,6 @@ mf_get_mask(const struct mf_field *mf, const struct flow_wildcards *wc,
     case MFF_IN_PORT:
     case MFF_ETH_TYPE:
     case MFF_IP_PROTO:
-    case MFF_IP_TTL:
     case MFF_ARP_OP:
         assert(mf->fww_bit != 0);
         memset(mask, wc->wildcards & mf->fww_bit ? 0x00 : 0xff, mf->n_bytes);
@@ -739,6 +739,9 @@ mf_get_mask(const struct mf_field *mf, const struct flow_wildcards *wc,
         mask->ipv6 = wc->nd_target_mask;
         break;
 
+    case MFF_IP_TTL:
+        mask->u8 = wc->nw_ttl_mask;
+        break;
     case MFF_IP_FRAG:
         mask->u8 = wc->nw_frag_mask & FLOW_NW_FRAG_MASK;
         break;
@@ -1475,7 +1478,7 @@ mf_set_wild(const struct mf_field *mf, struct cls_rule *rule)
         break;
 
     case MFF_IP_TTL:
-        rule->wc.wildcards |= FWW_NW_TTL;
+        rule->wc.nw_ttl_mask = 0;
         rule->flow.nw_ttl = 0;
         break;
 

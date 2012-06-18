@@ -84,14 +84,12 @@ ofputil_netmask_to_wcbits(ovs_be32 netmask)
 void
 ofputil_wildcard_from_ofpfw10(uint32_t ofpfw, struct flow_wildcards *wc)
 {
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 14);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 15);
 
     /* Initialize most of rule->wc. */
     flow_wildcards_init_catchall(wc);
 
-    /* Start with wildcard fields that aren't defined by ofp10_match. */
-    wc->wildcards = FWW_NW_TTL;
-
+    wc->wildcards = 0;
     if (ofpfw & OFPFW10_IN_PORT) {
         wc->wildcards |= FWW_IN_PORT;
     }
@@ -905,7 +903,7 @@ ofputil_usable_protocols(const struct cls_rule *rule)
 {
     const struct flow_wildcards *wc = &rule->wc;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 14);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 15);
 
     /* NXM and OF1.1+ supports bitwise matching on ethernet addresses. */
     if (!eth_mask_is_exact(wc->dl_src_mask)
@@ -960,7 +958,7 @@ ofputil_usable_protocols(const struct cls_rule *rule)
     }
 
     /* Only NXM supports matching IP TTL/hop limit. */
-    if (!(wc->wildcards & FWW_NW_TTL)) {
+    if (wc->nw_ttl_mask) {
         return OFPUTIL_P_NXM_ANY;
     }
 
@@ -3638,7 +3636,7 @@ ofputil_normalize_rule__(struct cls_rule *rule, bool may_log)
     }
     if (!(may_match & MAY_IPVx)) {
         wc.nw_tos_mask = 0;
-        wc.wildcards |= FWW_NW_TTL;
+        wc.nw_ttl_mask = 0;
     }
     if (!(may_match & MAY_ARP_SHA)) {
         memset(wc.arp_sha_mask, 0, ETH_ADDR_LEN);

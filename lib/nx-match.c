@@ -510,7 +510,7 @@ nxm_put_ip(struct ofpbuf *b, const struct cls_rule *cr,
                   flow->nw_tos & IP_ECN_MASK);
     }
 
-    if (!oxm && !(wc & FWW_NW_TTL)) {
+    if (!oxm && cr->wc.nw_ttl_mask) {
         nxm_put_8(b, NXM_NX_IP_TTL, flow->nw_ttl);
     }
 
@@ -559,7 +559,7 @@ nx_put_raw(struct ofpbuf *b, bool oxm, const struct cls_rule *cr,
     int match_len;
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 14);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 15);
 
     /* Metadata. */
     if (!(wc & FWW_IN_PORT)) {

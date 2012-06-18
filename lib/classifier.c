@@ -403,7 +403,7 @@ cls_rule_set_nw_ecn(struct cls_rule *rule, uint8_t nw_ecn)
 void
 cls_rule_set_nw_ttl(struct cls_rule *rule, uint8_t nw_ttl)
 {
-    rule->wc.wildcards &= ~FWW_NW_TTL;
+    rule->wc.nw_ttl_mask = UINT8_MAX;
     rule->flow.nw_ttl = nw_ttl;
 }
 
@@ -607,7 +607,7 @@ cls_rule_format(const struct cls_rule *rule, struct ds *s)
 
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 14);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 15);
 
     if (rule->priority != OFP_DEFAULT_PRIORITY) {
         ds_put_format(s, "priority=%d,", rule->priority);
@@ -754,7 +754,7 @@ cls_rule_format(const struct cls_rule *rule, struct ds *s)
     if (wc->nw_tos_mask & IP_ECN_MASK) {
         ds_put_format(s, "nw_ecn=%"PRIu8",", f->nw_tos & IP_ECN_MASK);
     }
-    if (!(w & FWW_NW_TTL)) {
+    if (wc->nw_ttl_mask) {
         ds_put_format(s, "nw_ttl=%"PRIu8",", f->nw_ttl);
     }
     switch (wc->nw_frag_mask) {
@@ -1291,7 +1291,7 @@ flow_equal_except(const struct flow *a, const struct flow *b,
     const flow_wildcards_t wc = wildcards->wildcards;
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 14);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 15);
 
     for (i = 0; i < FLOW_N_REGS; i++) {
         if ((a->regs[i] ^ b->regs[i]) & wildcards->reg_masks[i]) {
@@ -1313,7 +1313,7 @@ flow_equal_except(const struct flow *a, const struct flow *b,
             && eth_addr_equal_except(a->dl_dst, b->dl_dst,
                                      wildcards->dl_dst_mask)
             && (wc & FWW_NW_PROTO || a->nw_proto == b->nw_proto)
-            && (wc & FWW_NW_TTL || a->nw_ttl == b->nw_ttl)
+            && !((a->nw_ttl ^ b->nw_ttl) & wildcards->nw_ttl_mask)
             && !((a->nw_tos ^ b->nw_tos) & wildcards->nw_tos_mask)
             && !((a->nw_frag ^ b->nw_frag) & wildcards->nw_frag_mask)
             && eth_addr_equal_except(a->arp_sha, b->arp_sha,
