@@ -351,8 +351,8 @@ cls_rule_set_tp_dst_masked(struct cls_rule *rule, ovs_be16 port, ovs_be16 mask)
 void
 cls_rule_set_nw_proto(struct cls_rule *rule, uint8_t nw_proto)
 {
-    rule->wc.wildcards &= ~FWW_NW_PROTO;
     rule->flow.nw_proto = nw_proto;
+    rule->wc.nw_proto_mask = UINT8_MAX;
 }
 
 void
@@ -607,7 +607,7 @@ cls_rule_format(const struct cls_rule *rule, struct ds *s)
 
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 15);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 16);
 
     if (rule->priority != OFP_DEFAULT_PRIORITY) {
         ds_put_format(s, "priority=%d,", rule->priority);
@@ -616,7 +616,7 @@ cls_rule_format(const struct cls_rule *rule, struct ds *s)
     if (!(w & FWW_DL_TYPE)) {
         skip_type = true;
         if (f->dl_type == htons(ETH_TYPE_IP)) {
-            if (!(w & FWW_NW_PROTO)) {
+            if (wc->nw_proto_mask) {
                 skip_proto = true;
                 if (f->nw_proto == IPPROTO_ICMP) {
                     ds_put_cstr(s, "icmp,");
@@ -632,7 +632,7 @@ cls_rule_format(const struct cls_rule *rule, struct ds *s)
                 ds_put_cstr(s, "ip,");
             }
         } else if (f->dl_type == htons(ETH_TYPE_IPV6)) {
-            if (!(w & FWW_NW_PROTO)) {
+            if (wc->nw_proto_mask) {
                 skip_proto = true;
                 if (f->nw_proto == IPPROTO_ICMPV6) {
                     ds_put_cstr(s, "icmp6,");
@@ -737,7 +737,7 @@ cls_rule_format(const struct cls_rule *rule, struct ds *s)
         format_ip_netmask(s, "nw_src", f->nw_src, wc->nw_src_mask);
         format_ip_netmask(s, "nw_dst", f->nw_dst, wc->nw_dst_mask);
     }
-    if (!skip_proto && !(w & FWW_NW_PROTO)) {
+    if (!skip_proto && wc->nw_proto_mask) {
         if (f->dl_type == htons(ETH_TYPE_ARP)) {
             ds_put_format(s, "arp_op=%"PRIu8",", f->nw_proto);
         } else {
@@ -1291,7 +1291,7 @@ flow_equal_except(const struct flow *a, const struct flow *b,
     const flow_wildcards_t wc = wildcards->wildcards;
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 15);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 16);
 
     for (i = 0; i < FLOW_N_REGS; i++) {
         if ((a->regs[i] ^ b->regs[i]) & wildcards->reg_masks[i]) {
@@ -1312,7 +1312,7 @@ flow_equal_except(const struct flow *a, const struct flow *b,
                                      wildcards->dl_src_mask)
             && eth_addr_equal_except(a->dl_dst, b->dl_dst,
                                      wildcards->dl_dst_mask)
-            && (wc & FWW_NW_PROTO || a->nw_proto == b->nw_proto)
+            && !((a->nw_proto ^ b->nw_proto) & wildcards->nw_proto_mask)
             && !((a->nw_ttl ^ b->nw_ttl) & wildcards->nw_ttl_mask)
             && !((a->nw_tos ^ b->nw_tos) & wildcards->nw_tos_mask)
             && !((a->nw_frag ^ b->nw_frag) & wildcards->nw_frag_mask)

@@ -34,7 +34,7 @@ struct ofpbuf;
 /* This sequence number should be incremented whenever anything involving flows
  * or the wildcarding of flows changes.  This will cause build assertion
  * failures in places which likely need to be updated. */
-#define FLOW_WC_SEQ 15
+#define FLOW_WC_SEQ 16
 
 #define FLOW_N_REGS 8
 BUILD_ASSERT_DECL(FLOW_N_REGS <= NXM_NX_MAX_REGS);
@@ -95,7 +95,7 @@ BUILD_ASSERT_DECL(sizeof(((struct flow *)0)->nw_frag) == 1);
 BUILD_ASSERT_DECL(sizeof(struct flow) == FLOW_SIG_SIZE + FLOW_PAD_SIZE);
 
 /* Remember to update FLOW_WC_SEQ when changing 'struct flow'. */
-BUILD_ASSERT_DECL(FLOW_SIG_SIZE == 150 && FLOW_WC_SEQ == 15);
+BUILD_ASSERT_DECL(FLOW_SIG_SIZE == 150 && FLOW_WC_SEQ == 16);
 
 void flow_extract(struct ofpbuf *, uint32_t priority, ovs_be64 tun_id,
                   uint16_t in_port, struct flow *);
@@ -143,11 +143,10 @@ typedef unsigned int OVS_BITWISE flow_wildcards_t;
 
 #define FWW_IN_PORT     ((OVS_FORCE flow_wildcards_t) (1 << 0))
 #define FWW_DL_TYPE     ((OVS_FORCE flow_wildcards_t) (1 << 1))
-#define FWW_NW_PROTO    ((OVS_FORCE flow_wildcards_t) (1 << 2))
-#define FWW_ALL         ((OVS_FORCE flow_wildcards_t) (((1 << 3)) - 1))
+#define FWW_ALL         ((OVS_FORCE flow_wildcards_t) (((1 << 2)) - 1))
 
 /* Remember to update FLOW_WC_SEQ when adding or removing FWW_*. */
-BUILD_ASSERT_DECL(FWW_ALL == ((1 << 3) - 1) && FLOW_WC_SEQ == 15);
+BUILD_ASSERT_DECL(FWW_ALL == ((1 << 2) - 1) && FLOW_WC_SEQ == 16);
 
 /* Information on wildcards for a flow, as a supplement to "struct flow".
  *
@@ -168,6 +167,7 @@ struct flow_wildcards {
     ovs_be16 vlan_tci_mask;     /* 1-bit in each significant vlan_tci bit. */
     ovs_be16 tp_src_mask;       /* 1-bit in each significant tp_src bit. */
     ovs_be16 tp_dst_mask;       /* 1-bit in each significant tp_dst bit. */
+    uint8_t nw_proto_mask;      /* 1-bit in each significant nw_proto bit. */
     uint8_t nw_frag_mask;       /* 1-bit in each significant nw_frag bit. */
     uint8_t dl_src_mask[6];     /* 1-bit in each significant dl_src bit. */
     uint8_t dl_dst_mask[6];     /* 1-bit in each significant dl_dst bit. */
@@ -175,11 +175,11 @@ struct flow_wildcards {
     uint8_t arp_tha_mask[6];    /* 1-bit in each significant dl_dst bit. */
     uint8_t nw_tos_mask;        /* 1-bit in each significant nw_tos bit. */
     uint8_t nw_ttl_mask;        /* 1-bit in each significant nw_ttl bit. */
-    uint8_t zeros[7];           /* Padding field set to zero. */
+    uint8_t zeros[6];           /* Padding field set to zero. */
 };
 
 /* Remember to update FLOW_WC_SEQ when updating struct flow_wildcards. */
-BUILD_ASSERT_DECL(sizeof(struct flow_wildcards) == 152 && FLOW_WC_SEQ == 15);
+BUILD_ASSERT_DECL(sizeof(struct flow_wildcards) == 152 && FLOW_WC_SEQ == 16);
 
 void flow_wildcards_init_catchall(struct flow_wildcards *);
 void flow_wildcards_init_exact(struct flow_wildcards *);

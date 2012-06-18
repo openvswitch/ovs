@@ -84,7 +84,7 @@ ofputil_netmask_to_wcbits(ovs_be32 netmask)
 void
 ofputil_wildcard_from_ofpfw10(uint32_t ofpfw, struct flow_wildcards *wc)
 {
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 15);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 16);
 
     /* Initialize most of rule->wc. */
     flow_wildcards_init_catchall(wc);
@@ -96,14 +96,14 @@ ofputil_wildcard_from_ofpfw10(uint32_t ofpfw, struct flow_wildcards *wc)
     if (ofpfw & OFPFW10_DL_TYPE) {
         wc->wildcards |= FWW_DL_TYPE;
     }
-    if (ofpfw & OFPFW10_NW_PROTO) {
-        wc->wildcards |= FWW_NW_PROTO;
-    }
 
     if (!(ofpfw & OFPFW10_NW_TOS)) {
         wc->nw_tos_mask |= IP_DSCP_MASK;
     }
 
+    if (!(ofpfw & OFPFW10_NW_PROTO)) {
+        wc->nw_proto_mask = UINT8_MAX;
+    }
     wc->nw_src_mask = ofputil_wcbits_to_netmask(ofpfw >> OFPFW10_NW_SRC_SHIFT);
     wc->nw_dst_mask = ofputil_wcbits_to_netmask(ofpfw >> OFPFW10_NW_DST_SHIFT);
 
@@ -196,7 +196,7 @@ ofputil_cls_rule_to_ofp10_match(const struct cls_rule *rule,
     if (wc->wildcards & FWW_DL_TYPE) {
         ofpfw |= OFPFW10_DL_TYPE;
     }
-    if (wc->wildcards & FWW_NW_PROTO) {
+    if (!wc->nw_proto_mask) {
         ofpfw |= OFPFW10_NW_PROTO;
     }
     ofpfw |= (ofputil_netmask_to_wcbits(wc->nw_src_mask)
@@ -517,7 +517,7 @@ ofputil_cls_rule_to_ofp11_match(const struct cls_rule *rule,
         match->nw_tos = rule->flow.nw_tos & IP_DSCP_MASK;
     }
 
-    if (rule->wc.wildcards & FWW_NW_PROTO) {
+    if (!rule->wc.nw_proto_mask) {
         wc |= OFPFW11_NW_PROTO;
     } else {
         match->nw_proto = rule->flow.nw_proto;
@@ -903,7 +903,7 @@ ofputil_usable_protocols(const struct cls_rule *rule)
 {
     const struct flow_wildcards *wc = &rule->wc;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 15);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 16);
 
     /* NXM and OF1.1+ supports bitwise matching on ethernet addresses. */
     if (!eth_mask_is_exact(wc->dl_src_mask)
@@ -3632,7 +3632,7 @@ ofputil_normalize_rule__(struct cls_rule *rule, bool may_log)
         wc.tp_src_mask = wc.tp_dst_mask = htons(0);
     }
     if (!(may_match & MAY_NW_PROTO)) {
-        wc.wildcards |= FWW_NW_PROTO;
+        wc.nw_proto_mask = 0;
     }
     if (!(may_match & MAY_IPVx)) {
         wc.nw_tos_mask = 0;

@@ -495,7 +495,6 @@ nxm_put_ip(struct ofpbuf *b, const struct cls_rule *cr,
            uint8_t icmp_proto, uint32_t icmp_type, uint32_t icmp_code,
            bool oxm)
 {
-    const flow_wildcards_t wc = cr->wc.wildcards;
     const struct flow *flow = &cr->flow;
 
     nxm_put_frag(b, cr);
@@ -514,7 +513,7 @@ nxm_put_ip(struct ofpbuf *b, const struct cls_rule *cr,
         nxm_put_8(b, NXM_NX_IP_TTL, flow->nw_ttl);
     }
 
-    if (!(wc & FWW_NW_PROTO)) {
+    if (cr->wc.nw_proto_mask) {
         nxm_put_8(b, oxm ? OXM_OF_IP_PROTO : NXM_OF_IP_PROTO, flow->nw_proto);
 
         if (flow->nw_proto == IPPROTO_TCP) {
@@ -559,7 +558,7 @@ nx_put_raw(struct ofpbuf *b, bool oxm, const struct cls_rule *cr,
     int match_len;
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 15);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 16);
 
     /* Metadata. */
     if (!(wc & FWW_IN_PORT)) {
@@ -639,7 +638,7 @@ nx_put_raw(struct ofpbuf *b, bool oxm, const struct cls_rule *cr,
         }
     } else if (!(wc & FWW_DL_TYPE) && flow->dl_type == htons(ETH_TYPE_ARP)) {
         /* ARP. */
-        if (!(wc & FWW_NW_PROTO)) {
+        if (cr->wc.nw_proto_mask) {
             nxm_put_16(b, oxm ? OXM_OF_ARP_OP : NXM_OF_ARP_OP,
                        htons(flow->nw_proto));
         }
