@@ -719,6 +719,7 @@ flow_wildcards_combine(struct flow_wildcards *dst,
     dst->vlan_tci_mask = src1->vlan_tci_mask & src2->vlan_tci_mask;
     dst->tp_src_mask = src1->tp_src_mask & src2->tp_src_mask;
     dst->tp_dst_mask = src1->tp_dst_mask & src2->tp_dst_mask;
+    dst->nw_frag_mask = src1->nw_frag_mask & src2->nw_frag_mask;
 }
 
 /* Returns a hash of the wildcards in 'wc'. */
@@ -750,7 +751,8 @@ flow_wildcards_equal(const struct flow_wildcards *a,
         || !ipv6_addr_equals(&a->ipv6_src_mask, &b->ipv6_src_mask)
         || !ipv6_addr_equals(&a->ipv6_dst_mask, &b->ipv6_dst_mask)
         || a->tp_src_mask != b->tp_src_mask
-        || a->tp_dst_mask != b->tp_dst_mask) {
+        || a->tp_dst_mask != b->tp_dst_mask
+        || a->nw_frag_mask != b->nw_frag_mask) {
         return false;
     }
 
@@ -796,7 +798,8 @@ flow_wildcards_has_extra(const struct flow_wildcards *a,
             || (a->nw_dst_mask & b->nw_dst_mask) != b->nw_dst_mask
             || (a->vlan_tci_mask & b->vlan_tci_mask) != b->vlan_tci_mask
             || (a->tp_src_mask & b->tp_src_mask) != b->tp_src_mask
-            || (a->tp_dst_mask & b->tp_dst_mask) != b->tp_dst_mask);
+            || (a->tp_dst_mask & b->tp_dst_mask) != b->tp_dst_mask
+            || (a->nw_frag_mask & b->nw_frag_mask) != b->nw_frag_mask);
 }
 
 /* Sets the wildcard mask for register 'idx' in 'wc' to 'mask'.
