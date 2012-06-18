@@ -144,13 +144,11 @@ typedef unsigned int OVS_BITWISE flow_wildcards_t;
 #define FWW_IN_PORT     ((OVS_FORCE flow_wildcards_t) (1 << 0))
 #define FWW_DL_TYPE     ((OVS_FORCE flow_wildcards_t) (1 << 1))
 #define FWW_NW_PROTO    ((OVS_FORCE flow_wildcards_t) (1 << 2))
-#define FWW_NW_DSCP     ((OVS_FORCE flow_wildcards_t) (1 << 3))
-#define FWW_NW_ECN      ((OVS_FORCE flow_wildcards_t) (1 << 4))
-#define FWW_NW_TTL      ((OVS_FORCE flow_wildcards_t) (1 << 5))
-#define FWW_ALL         ((OVS_FORCE flow_wildcards_t) (((1 << 6)) - 1))
+#define FWW_NW_TTL      ((OVS_FORCE flow_wildcards_t) (1 << 3))
+#define FWW_ALL         ((OVS_FORCE flow_wildcards_t) (((1 << 4)) - 1))
 
 /* Remember to update FLOW_WC_SEQ when adding or removing FWW_*. */
-BUILD_ASSERT_DECL(FWW_ALL == ((1 << 6) - 1) && FLOW_WC_SEQ == 14);
+BUILD_ASSERT_DECL(FWW_ALL == ((1 << 4) - 1) && FLOW_WC_SEQ == 14);
 
 /* Information on wildcards for a flow, as a supplement to "struct flow".
  *
@@ -176,7 +174,7 @@ struct flow_wildcards {
     uint8_t dl_dst_mask[6];     /* 1-bit in each significant dl_dst bit. */
     uint8_t arp_sha_mask[6];    /* 1-bit in each significant dl_dst bit. */
     uint8_t arp_tha_mask[6];    /* 1-bit in each significant dl_dst bit. */
-    uint8_t zeros[1];           /* Padding field set to zero. */
+    uint8_t nw_tos_mask;        /* 1-bit in each significant nw_tos bit. */
 };
 
 /* Remember to update FLOW_WC_SEQ when updating struct flow_wildcards. */

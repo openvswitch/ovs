@@ -500,12 +500,12 @@ nxm_put_ip(struct ofpbuf *b, const struct cls_rule *cr,
 
     nxm_put_frag(b, cr);
 
-    if (!(wc & FWW_NW_DSCP)) {
+    if (cr->wc.nw_tos_mask & IP_DSCP_MASK) {
         nxm_put_8(b, oxm ? OXM_OF_IP_DSCP : NXM_OF_IP_TOS,
                   flow->nw_tos & IP_DSCP_MASK);
     }
 
-    if (!(wc & FWW_NW_ECN)) {
+    if (cr->wc.nw_tos_mask & IP_ECN_MASK) {
         nxm_put_8(b, oxm ? OXM_OF_IP_ECN : NXM_NX_IP_ECN,
                   flow->nw_tos & IP_ECN_MASK);
     }

@@ -260,7 +260,7 @@ static const struct mf_field mf_fields[MFF_N_IDS] = {
     }, {
         MFF_IP_DSCP, "nw_tos", NULL,
         MF_FIELD_SIZES(u8),
-        MFM_NONE, FWW_NW_DSCP,
+        MFM_NONE, 0,
         MFS_DECIMAL,
         MFP_IP_ANY,
         true,
@@ -269,7 +269,7 @@ static const struct mf_field mf_fields[MFF_N_IDS] = {
     }, {
         MFF_IP_ECN, "nw_ecn", NULL,
         1, 2,
-        MFM_NONE, FWW_NW_ECN,
+        MFM_NONE, 0,
         MFS_DECIMAL,
         MFP_IP_ANY,
         true,
@@ -576,8 +576,6 @@ mf_is_all_wild(const struct mf_field *mf, const struct flow_wildcards *wc)
     case MFF_IN_PORT:
     case MFF_ETH_TYPE:
     case MFF_IP_PROTO:
-    case MFF_IP_DSCP:
-    case MFF_IP_ECN:
     case MFF_IP_TTL:
     case MFF_ARP_OP:
         assert(mf->fww_bit != 0);
@@ -627,6 +625,11 @@ mf_is_all_wild(const struct mf_field *mf, const struct flow_wildcards *wc)
     case MFF_IPV6_LABEL:
         return !wc->ipv6_label_mask;
 
+    case MFF_IP_DSCP:
+        return !(wc->nw_tos_mask & IP_DSCP_MASK);
+    case MFF_IP_ECN:
+        return !(wc->nw_tos_mask & IP_ECN_MASK);
+
     case MFF_ND_TARGET:
         return ipv6_mask_is_any(&wc->nd_target_mask);
 
@@ -669,8 +672,6 @@ mf_get_mask(const struct mf_field *mf, const struct flow_wildcards *wc,
     case MFF_IN_PORT:
     case MFF_ETH_TYPE:
     case MFF_IP_PROTO:
-    case MFF_IP_DSCP:
-    case MFF_IP_ECN:
     case MFF_IP_TTL:
     case MFF_ARP_OP:
         assert(mf->fww_bit != 0);
@@ -725,6 +726,13 @@ mf_get_mask(const struct mf_field *mf, const struct flow_wildcards *wc,
         break;
     case MFF_IPV6_LABEL:
         mask->be32 = wc->ipv6_label_mask;
+        break;
+
+    case MFF_IP_DSCP:
+        mask->u8 = wc->nw_tos_mask & IP_DSCP_MASK;
+        break;
+    case MFF_IP_ECN:
+        mask->u8 = wc->nw_tos_mask & IP_ECN_MASK;
         break;
 
     case MFF_ND_TARGET:
@@ -1457,12 +1465,12 @@ mf_set_wild(const struct mf_field *mf, struct cls_rule *rule)
         break;
 
     case MFF_IP_DSCP:
-        rule->wc.wildcards |= FWW_NW_DSCP;
+        rule->wc.nw_tos_mask &= ~IP_DSCP_MASK;
         rule->flow.nw_tos &= ~IP_DSCP_MASK;
         break;
 
     case MFF_IP_ECN:
-        rule->wc.wildcards |= FWW_NW_ECN;
+        rule->wc.nw_tos_mask &= ~IP_ECN_MASK;
         rule->flow.nw_tos &= ~IP_ECN_MASK;
         break;
 

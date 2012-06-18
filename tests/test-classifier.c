@@ -56,7 +56,7 @@
     CLS_FIELD(0,                          dl_src,      DL_SRC)      \
     CLS_FIELD(0,                          dl_dst,      DL_DST)      \
     CLS_FIELD(FWW_NW_PROTO,               nw_proto,    NW_PROTO)    \
-    CLS_FIELD(FWW_NW_DSCP,                nw_tos,      NW_DSCP)
+    CLS_FIELD(0,                          nw_tos,      NW_DSCP)
 
 /* Field indexes.
  *
@@ -218,7 +218,8 @@ match(const struct cls_rule *wild, const struct flow *fixed)
             eq = !((fixed->metadata ^ wild->flow.metadata)
                    & wild->wc.metadata_mask);
         } else if (f_idx == CLS_F_IDX_NW_DSCP) {
-            eq = !((fixed->nw_tos ^ wild->flow.nw_tos) & IP_DSCP_MASK);
+            eq = !((fixed->nw_tos ^ wild->flow.nw_tos) &
+                   (wild->wc.nw_tos_mask & IP_DSCP_MASK));
         } else {
             NOT_REACHED();
         }
@@ -499,6 +500,8 @@ make_rule(int wc_fields, unsigned int priority, int value_pat)
             rule->cls_rule.wc.tun_id_mask = htonll(UINT64_MAX);
         } else if (f_idx == CLS_F_IDX_METADATA) {
             rule->cls_rule.wc.metadata_mask = htonll(UINT64_MAX);
+        } else if (f_idx == CLS_F_IDX_NW_DSCP) {
+            rule->cls_rule.wc.nw_tos_mask |= IP_DSCP_MASK;
         } else {
             NOT_REACHED();
         }

@@ -90,7 +90,7 @@ ofputil_wildcard_from_ofpfw10(uint32_t ofpfw, struct flow_wildcards *wc)
     flow_wildcards_init_catchall(wc);
 
     /* Start with wildcard fields that aren't defined by ofp10_match. */
-    wc->wildcards = FWW_NW_ECN | FWW_NW_TTL;
+    wc->wildcards = FWW_NW_TTL;
 
     if (ofpfw & OFPFW10_IN_PORT) {
         wc->wildcards |= FWW_IN_PORT;
@@ -101,8 +101,9 @@ ofputil_wildcard_from_ofpfw10(uint32_t ofpfw, struct flow_wildcards *wc)
     if (ofpfw & OFPFW10_NW_PROTO) {
         wc->wildcards |= FWW_NW_PROTO;
     }
-    if (ofpfw & OFPFW10_NW_TOS) {
-        wc->wildcards |= FWW_NW_DSCP;
+
+    if (!(ofpfw & OFPFW10_NW_TOS)) {
+        wc->nw_tos_mask |= IP_DSCP_MASK;
     }
 
     wc->nw_src_mask = ofputil_wcbits_to_netmask(ofpfw >> OFPFW10_NW_SRC_SHIFT);
@@ -204,7 +205,7 @@ ofputil_cls_rule_to_ofp10_match(const struct cls_rule *rule,
               << OFPFW10_NW_SRC_SHIFT);
     ofpfw |= (ofputil_netmask_to_wcbits(wc->nw_dst_mask)
               << OFPFW10_NW_DST_SHIFT);
-    if (wc->wildcards & FWW_NW_DSCP) {
+    if (!(wc->nw_tos_mask & IP_DSCP_MASK)) {
         ofpfw |= OFPFW10_NW_TOS;
     }
     if (!wc->tp_src_mask) {
@@ -512,7 +513,7 @@ ofputil_cls_rule_to_ofp11_match(const struct cls_rule *rule,
         match->dl_type = ofputil_dl_type_to_openflow(rule->flow.dl_type);
     }
 
-    if (rule->wc.wildcards & FWW_NW_DSCP) {
+    if (!(rule->wc.nw_tos_mask & IP_DSCP_MASK)) {
         wc |= OFPFW11_NW_TOS;
     } else {
         match->nw_tos = rule->flow.nw_tos & IP_DSCP_MASK;
@@ -954,7 +955,7 @@ ofputil_usable_protocols(const struct cls_rule *rule)
     }
 
     /* Only NXM supports matching IP ECN bits. */
-    if (!(wc->wildcards & FWW_NW_ECN)) {
+    if (wc->nw_tos_mask & IP_ECN_MASK) {
         return OFPUTIL_P_NXM_ANY;
     }
 
@@ -3636,8 +3637,7 @@ ofputil_normalize_rule__(struct cls_rule *rule, bool may_log)
         wc.wildcards |= FWW_NW_PROTO;
     }
     if (!(may_match & MAY_IPVx)) {
-        wc.wildcards |= FWW_NW_DSCP;
-        wc.wildcards |= FWW_NW_ECN;
+        wc.nw_tos_mask = 0;
         wc.wildcards |= FWW_NW_TTL;
     }
     if (!(may_match & MAY_ARP_SHA)) {

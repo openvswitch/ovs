@@ -469,12 +469,7 @@ flow_zero_wildcards(struct flow *flow, const struct flow_wildcards *wildcards)
         flow->nw_proto = 0;
     }
     flow->ipv6_label &= wildcards->ipv6_label_mask;
-    if (wc & FWW_NW_DSCP) {
-        flow->nw_tos &= ~IP_DSCP_MASK;
-    }
-    if (wc & FWW_NW_ECN) {
-        flow->nw_tos &= ~IP_ECN_MASK;
-    }
+    flow->nw_tos &= wildcards->nw_tos_mask;
     if (wc & FWW_NW_TTL) {
         flow->nw_ttl = 0;
     }
@@ -602,7 +597,7 @@ flow_wildcards_init_catchall(struct flow_wildcards *wc)
     memset(wc->dl_dst_mask, 0, ETH_ADDR_LEN);
     memset(wc->arp_sha_mask, 0, ETH_ADDR_LEN);
     memset(wc->arp_tha_mask, 0, ETH_ADDR_LEN);
-    memset(wc->zeros, 0, sizeof wc->zeros);
+    wc->nw_tos_mask = 0;
 }
 
 /* Initializes 'wc' as an exact-match set of wildcards; that is, 'wc' does not
@@ -630,7 +625,7 @@ flow_wildcards_init_exact(struct flow_wildcards *wc)
     memset(wc->dl_dst_mask, 0xff, ETH_ADDR_LEN);
     memset(wc->arp_sha_mask, 0xff, ETH_ADDR_LEN);
     memset(wc->arp_tha_mask, 0xff, ETH_ADDR_LEN);
-    memset(wc->zeros, 0, sizeof wc->zeros);
+    wc->nw_tos_mask = UINT8_MAX;
 }
 
 /* Returns true if 'wc' is exact-match, false if 'wc' wildcards any bits or
@@ -658,7 +653,8 @@ flow_wildcards_is_exact(const struct flow_wildcards *wc)
         || !ipv6_mask_is_exact(&wc->ipv6_dst_mask)
         || wc->ipv6_label_mask != htonl(UINT32_MAX)
         || !ipv6_mask_is_exact(&wc->nd_target_mask)
-        || wc->nw_frag_mask != UINT8_MAX) {
+        || wc->nw_frag_mask != UINT8_MAX
+        || wc->nw_tos_mask != UINT8_MAX) {
         return false;
     }
 
@@ -696,7 +692,8 @@ flow_wildcards_is_catchall(const struct flow_wildcards *wc)
         || !ipv6_mask_is_any(&wc->ipv6_dst_mask)
         || wc->ipv6_label_mask != htonl(0)
         || !ipv6_mask_is_any(&wc->nd_target_mask)
-        || wc->nw_frag_mask != 0) {
+        || wc->nw_frag_mask != 0
+        || wc->nw_tos_mask != 0) {
         return false;
     }
 
@@ -744,6 +741,7 @@ flow_wildcards_combine(struct flow_wildcards *dst,
     eth_addr_bitand(src1->dl_dst_mask, src2->dl_dst_mask, dst->dl_dst_mask);
     eth_addr_bitand(src1->arp_sha_mask, src2->arp_sha_mask, dst->arp_sha_mask);
     eth_addr_bitand(src1->arp_tha_mask, src2->arp_tha_mask, dst->arp_tha_mask);
+    dst->nw_tos_mask = src1->nw_tos_mask & src2->nw_tos_mask;
 }
 
 /* Returns a hash of the wildcards in 'wc'. */
@@ -783,7 +781,8 @@ flow_wildcards_equal(const struct flow_wildcards *a,
         || !eth_addr_equals(a->dl_src_mask, b->dl_src_mask)
         || !eth_addr_equals(a->dl_dst_mask, b->dl_dst_mask)
         || !eth_addr_equals(a->arp_sha_mask, b->arp_sha_mask)
-        || !eth_addr_equals(a->arp_tha_mask, b->arp_tha_mask)) {
+        || !eth_addr_equals(a->arp_tha_mask, b->arp_tha_mask)
+        || a->nw_tos_mask != b->nw_tos_mask) {
         return false;
     }
 
@@ -858,7 +857,8 @@ flow_wildcards_has_extra(const struct flow_wildcards *a,
             || (a->metadata_mask & b->metadata_mask) != b->metadata_mask
             || (a->tp_src_mask & b->tp_src_mask) != b->tp_src_mask
             || (a->tp_dst_mask & b->tp_dst_mask) != b->tp_dst_mask
-            || (a->nw_frag_mask & b->nw_frag_mask) != b->nw_frag_mask);
+            || (a->nw_frag_mask & b->nw_frag_mask) != b->nw_frag_mask
+            || (a->nw_tos_mask & b->nw_tos_mask) != b->nw_tos_mask);
 }
 
 /* Sets the wildcard mask for register 'idx' in 'wc' to 'mask'.

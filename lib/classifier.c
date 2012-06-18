@@ -387,7 +387,7 @@ cls_rule_set_nw_dst_masked(struct cls_rule *rule, ovs_be32 ip, ovs_be32 mask)
 void
 cls_rule_set_nw_dscp(struct cls_rule *rule, uint8_t nw_dscp)
 {
-    rule->wc.wildcards &= ~FWW_NW_DSCP;
+    rule->wc.nw_tos_mask |= IP_DSCP_MASK;
     rule->flow.nw_tos &= ~IP_DSCP_MASK;
     rule->flow.nw_tos |= nw_dscp & IP_DSCP_MASK;
 }
@@ -395,7 +395,7 @@ cls_rule_set_nw_dscp(struct cls_rule *rule, uint8_t nw_dscp)
 void
 cls_rule_set_nw_ecn(struct cls_rule *rule, uint8_t nw_ecn)
 {
-    rule->wc.wildcards &= ~FWW_NW_ECN;
+    rule->wc.nw_tos_mask |= IP_ECN_MASK;
     rule->flow.nw_tos &= ~IP_ECN_MASK;
     rule->flow.nw_tos |= nw_ecn & IP_ECN_MASK;
 }
@@ -748,10 +748,10 @@ cls_rule_format(const struct cls_rule *rule, struct ds *s)
         format_eth_masked(s, "arp_sha", f->arp_sha, wc->arp_sha_mask);
         format_eth_masked(s, "arp_tha", f->arp_tha, wc->arp_tha_mask);
     }
-    if (!(w & FWW_NW_DSCP)) {
+    if (wc->nw_tos_mask & IP_DSCP_MASK) {
         ds_put_format(s, "nw_tos=%"PRIu8",", f->nw_tos & IP_DSCP_MASK);
     }
-    if (!(w & FWW_NW_ECN)) {
+    if (wc->nw_tos_mask & IP_ECN_MASK) {
         ds_put_format(s, "nw_ecn=%"PRIu8",", f->nw_tos & IP_ECN_MASK);
     }
     if (!(w & FWW_NW_TTL)) {
@@ -1314,8 +1314,7 @@ flow_equal_except(const struct flow *a, const struct flow *b,
                                      wildcards->dl_dst_mask)
             && (wc & FWW_NW_PROTO || a->nw_proto == b->nw_proto)
             && (wc & FWW_NW_TTL || a->nw_ttl == b->nw_ttl)
-            && (wc & FWW_NW_DSCP || !((a->nw_tos ^ b->nw_tos) & IP_DSCP_MASK))
-            && (wc & FWW_NW_ECN || !((a->nw_tos ^ b->nw_tos) & IP_ECN_MASK))
+            && !((a->nw_tos ^ b->nw_tos) & wildcards->nw_tos_mask)
             && !((a->nw_frag ^ b->nw_frag) & wildcards->nw_frag_mask)
             && eth_addr_equal_except(a->arp_sha, b->arp_sha,
                                      wildcards->arp_sha_mask)
