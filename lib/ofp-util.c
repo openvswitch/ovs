@@ -469,7 +469,6 @@ ofputil_cls_rule_to_ofp11_match(const struct cls_rule *rule,
         match->in_port = ofputil_port_to_ofp11(rule->flow.in_port);
     }
 
-
     memcpy(match->dl_src, rule->flow.dl_src, ETH_ADDR_LEN);
     for (i = 0; i < ETH_ADDR_LEN; i++) {
         match->dl_src_mask[i] = ~rule->wc.dl_src_mask[i];
