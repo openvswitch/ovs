@@ -756,11 +756,7 @@ flow_wildcards_combine(struct flow_wildcards *dst,
 uint32_t
 flow_wildcards_hash(const struct flow_wildcards *wc, uint32_t basis)
 {
-    /* If you change struct flow_wildcards and thereby trigger this
-     * assertion, please check that the new struct flow_wildcards has no holes
-     * in it before you update the assertion. */
-    BUILD_ASSERT_DECL(sizeof *wc == 120 + FLOW_N_REGS * 4);
-    return hash_bytes(wc, sizeof *wc, basis);
+    return hash_words((const uint32_t *) wc, sizeof *wc / 4, basis);
 }
 
 /* Returns true if 'a' and 'b' represent the same wildcards, false if they are

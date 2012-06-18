@@ -77,6 +77,10 @@ struct flow {
     uint8_t nw_frag;            /* FLOW_FRAG_* flags. */
     uint8_t zeros[2];           /* Must be zero. */
 };
+BUILD_ASSERT_DECL(sizeof(struct flow) % 8 == 0);
+
+/* Remember to update FLOW_WC_SEQ when changing 'struct flow'. */
+BUILD_ASSERT_DECL(sizeof(struct flow) == 152 && FLOW_WC_SEQ == 17);
 
 /* Represents the metadata fields of struct flow. */
 struct flow_metadata {
@@ -85,17 +89,6 @@ struct flow_metadata {
     uint32_t regs[FLOW_N_REGS];      /* Registers. */
     uint16_t in_port;                /* OpenFlow port or zero. */
 };
-
-/* Assert that there are FLOW_SIG_SIZE bytes of significant data in "struct
- * flow", followed by FLOW_PAD_SIZE bytes of padding. */
-#define FLOW_SIG_SIZE (118 + FLOW_N_REGS * 4)
-#define FLOW_PAD_SIZE 2
-BUILD_ASSERT_DECL(offsetof(struct flow, nw_frag) == FLOW_SIG_SIZE - 1);
-BUILD_ASSERT_DECL(sizeof(((struct flow *)0)->nw_frag) == 1);
-BUILD_ASSERT_DECL(sizeof(struct flow) == FLOW_SIG_SIZE + FLOW_PAD_SIZE);
-
-/* Remember to update FLOW_WC_SEQ when changing 'struct flow'. */
-BUILD_ASSERT_DECL(FLOW_SIG_SIZE == 150 && FLOW_WC_SEQ == 17);
 
 void flow_extract(struct ofpbuf *, uint32_t priority, ovs_be64 tun_id,
                   uint16_t in_port, struct flow *);
@@ -118,7 +111,7 @@ void flow_compose(struct ofpbuf *, const struct flow *);
 static inline int
 flow_compare_3way(const struct flow *a, const struct flow *b)
 {
-    return memcmp(a, b, FLOW_SIG_SIZE);
+    return memcmp(a, b, sizeof *a);
 }
 
 static inline bool
@@ -130,7 +123,7 @@ flow_equal(const struct flow *a, const struct flow *b)
 static inline size_t
 flow_hash(const struct flow *flow, uint32_t basis)
 {
-    return hash_bytes(flow, FLOW_SIG_SIZE, basis);
+    return hash_words((const uint32_t *) flow, sizeof *flow / 4, basis);
 }
 
 /* Information on wildcards for a flow, as a supplement to "struct flow". */
@@ -160,6 +153,7 @@ struct flow_wildcards {
     uint8_t nw_ttl_mask;        /* 1-bit in each significant nw_ttl bit. */
     uint8_t zeros[6];           /* Padding field set to zero. */
 };
+BUILD_ASSERT_DECL(sizeof(struct flow_wildcards) % 8 == 0);
 
 /* Remember to update FLOW_WC_SEQ when updating struct flow_wildcards. */
 BUILD_ASSERT_DECL(sizeof(struct flow_wildcards) == 152 && FLOW_WC_SEQ == 17);
