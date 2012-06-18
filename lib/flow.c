@@ -627,48 +627,6 @@ flow_wildcards_init_exact(struct flow_wildcards *wc)
     memset(wc->masks.zeros, 0, sizeof wc->masks.zeros);
 }
 
-/* Returns true if 'wc' is exact-match, false if 'wc' wildcards any bits or
- * fields. */
-bool
-flow_wildcards_is_exact(const struct flow_wildcards *wc)
-{
-    int i;
-
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 17);
-
-    if (wc->masks.tun_id != htonll(UINT64_MAX)
-        || wc->masks.nw_src != htonl(UINT32_MAX)
-        || wc->masks.nw_dst != htonl(UINT32_MAX)
-        || wc->masks.tp_src != htons(UINT16_MAX)
-        || wc->masks.tp_dst != htons(UINT16_MAX)
-        || wc->masks.in_port != UINT16_MAX
-        || wc->masks.vlan_tci != htons(UINT16_MAX)
-        || wc->masks.metadata != htonll(UINT64_MAX)
-        || wc->masks.dl_type != htons(UINT16_MAX)
-        || !eth_mask_is_exact(wc->masks.dl_src)
-        || !eth_mask_is_exact(wc->masks.dl_dst)
-        || !eth_mask_is_exact(wc->masks.arp_sha)
-        || !eth_mask_is_exact(wc->masks.arp_tha)
-        || !ipv6_mask_is_exact(&wc->masks.ipv6_src)
-        || !ipv6_mask_is_exact(&wc->masks.ipv6_dst)
-        || wc->masks.ipv6_label != htonl(UINT32_MAX)
-        || !ipv6_mask_is_exact(&wc->masks.nd_target)
-        || wc->masks.nw_proto != UINT8_MAX
-        || wc->masks.nw_frag != UINT8_MAX
-        || wc->masks.nw_tos != UINT8_MAX
-        || wc->masks.nw_ttl != UINT8_MAX) {
-        return false;
-    }
-
-    for (i = 0; i < FLOW_N_REGS; i++) {
-        if (wc->masks.regs[i] != UINT32_MAX) {
-            return false;
-        }
-    }
-
-    return true;
-}
-
 /* Returns true if 'wc' matches every packet, false if 'wc' fixes any bits or
  * fields. */
 bool
