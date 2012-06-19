@@ -57,7 +57,7 @@ int smap_get_int(const struct smap *smap, const char *key, int def);
 bool smap_is_empty(const struct smap *);
 size_t smap_count(const struct smap *);
 
-void smap_clone(struct smap *dst, struct smap *src);
+void smap_clone(struct smap *dst, const struct smap *src);
 const struct smap_node **smap_sort(const struct smap *);
 
 #endif /* smap.h */

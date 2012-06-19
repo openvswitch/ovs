@@ -196,9 +196,9 @@ smap_count(const struct smap *smap)
 
 /* Initializes 'dst' as a clone of 'src. */
 void
-smap_clone(struct smap *dst, struct smap *src)
+smap_clone(struct smap *dst, const struct smap *src)
 {
-    struct smap_node *node;
+    const struct smap_node *node;
 
     smap_init(dst);
     SMAP_FOR_EACH (node, src) {
