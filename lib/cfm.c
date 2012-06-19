@@ -118,7 +118,7 @@ struct cfm {
                                  received. */
     int health_interval;      /* Number of fault_intervals since health was
                                  recomputed. */
-
+    long long int last_tx;    /* Last CCM transmission time. */
 };
 
 /* Remote MPs represent foreign network entities that are configured to have
@@ -299,6 +299,7 @@ cfm_create(const char *name)
     cfm->remote_opup = true;
     cfm->fault_override = -1;
     cfm->health = -1;
+    cfm->last_tx = 0;
     return cfm;
 }
 
@@ -466,6 +467,16 @@ cfm_compose_ccm(struct cfm *cfm, struct ofpbuf *packet,
     if (hmap_is_empty(&cfm->remote_mps)) {
         ccm->flags |= CCM_RDI_MASK;
     }
+
+    if (cfm->last_tx) {
+        long long int delay = time_msec() - cfm->last_tx;
+        if (delay > (cfm->ccm_interval_ms * 3 / 2)) {
+            VLOG_WARN("%s: long delay of %lldms (expected %dms) sending CCM"
+                      " seq %"PRIu32, cfm->name, delay, cfm->ccm_interval_ms,
+                      cfm->seq);
+        }
+    }
+    cfm->last_tx = time_msec();
 }
 
 void
