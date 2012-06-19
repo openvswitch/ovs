@@ -404,6 +404,7 @@ cfm_run(struct cfm *cfm)
         }
 
         timer_set_duration(&cfm->fault_timer, interval);
+        VLOG_DBG("%s: new fault interval", cfm->name);
     }
 }
 
