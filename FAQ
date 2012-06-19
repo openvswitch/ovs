@@ -3,6 +3,107 @@
 Frequently Asked Questions
 ==========================
 
+General
+-------
+
+Q: What is Open vSwitch?
+
+A: Open vSwitch is a production quality open source software switch
+   designed to be used as a vswitch in virtualized server environments.  A
+   vswitch forwards traffic between different VMs on the same physical host
+   and also forwards traffic between VMs and the physical network.  Open
+   vSwitch supports standard management interfaces (e.g. sFlow, NetFlow,
+   RSPAN, CLI), and is open to programmatic extension and control using
+   OpenFlow and the OVSDB management protocol.
+
+   Open vSwitch as designed to be compatible with modern switching
+   chipsets.  This means that it can be ported to existing high-fanout
+   switches allowing the same flexible control of the physical
+   infrastructure as the virtual infrastructure.  It also means that
+   Open vSwitch will be able to take advantage of on-NIC switching
+   chipsets as their functionality matures.
+
+Q: What virtualization platforms can use Open vSwitch?
+
+A: Open vSwitch can currently run on any Linux-based virtualization
+   platform (kernel 2.6.18 and newer), including: KVM, VirtualBox, Xen,
+   Xen Cloud Platform, XenServer. As of Linux 3.3 it is part of the
+   mainline kernel.  The bulk of the code is written in platform-
+   independent C and is easily ported to other environments.  We welcome
+   inquires about integrating Open vSwitch with other virtualization
+   platforms.
+
+Q: How can I try Open vSwitch?
+
+A: Open vSwitch is as source code to be built on a Linux system.  You
+   can build and experiment with Open vSwitch on any Linux machine.
+   Packages for various Linux distributions are underway and will be linked
+   to from this website as they materialize.
+
+   You may also download and run a virtualization platform that already
+   has Open vSwitch integrated.  For example, download the ISO for Xen
+   Cloud Platform.  Be aware that the version integrated with a
+   particular platform may not be the most recent Open vSwitch release.
+
+Q: Why would I use Open vSwitch instead of the Linux bridge?
+
+A: Open vSwitch is specially designed to make it easier to manage VM
+   network configuration and monitoring state spread across many
+   physical hosts in dynamic virtualized environments.  Please see
+   WHY-OVS for a more detailed description of how Open vSwitch relates
+   to the Linux Bridge.
+
+Q: How is Open vSwitch related to distributed virtual switches like the
+   VMware vNetwork distributed switch or the Cisco Nexus 1000V?
+
+A: Distributed vswitch applications (e.g., VMware vNetwork distributed
+   switch, Cisco Nexus 1000V) provide a centralized way to configure and
+   monitor the network state of VMs that are spread across many physical
+   hosts.  Open vSwitch is not a distributed vswitch itself, rather it
+   runs on each physical host and supports remote management in a way
+   that makes it easier for developers of virtualization/cloud
+   management platforms to offer distributed vswitch capabilities.
+
+   To aid in distribution, Open vSwitch provides two open protocols that
+   are specially designed for remote management in virtualized network
+   environments: OpenFlow, which exposes flow-based forwarding state,
+   and the OVSDB management protocol, which exposes switch port state.
+   In addition to the switch implementation itself, Open vSwitch
+   includes tools (ovs-controller, ovs-ofctl, ovs-vsctl) that developers
+   can script and extend to provide distributed vswitch capabilities
+   that are closely integrated with their virtualization management
+   platform.
+
+Q: Why doesn't Open vSwitch support distribution?
+
+A: Open vSwitch is intended to be a useful component for building
+   flexible network infrastructure. There are many different approaches
+   to distribution which balance trade-offs between simplicity,
+   scalability, hardware compatibility, convergence times, logical
+   forwarding model, etc. The goal of Open vSwitch is to be able to
+   support all as a primitive building block rather than choose a
+   particular point in the distributed design space.
+
+Q: What does it mean for an Open vSwitch release to be "stable"?
+
+A: A stable Open vSwitch release is code that has been through a
+   comprehensive testing process and is suitable for production use.
+   Planned stable releases will occur several times a year.  If a
+   significant bug is identified in a stable release, we will provide an
+   updated stable release that includes the fix.  Developers looking to
+   test the latest Open vSwitch code can use an "unstable" release or
+   directly access the code via git.
+
+Q: How can I contribute to the Open vSwitch Community?
+
+A: You can start by joining the mailing lists and helping to answer
+   questions.  You can also suggest improvements to documentation or offer
+   to write a configuration cookbook entry.
+
+   If you have a feature or bug you would like to work on send a mail to
+   dev mailing list.
+
+
 Configuration Problems
 ----------------------
 
