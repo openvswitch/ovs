@@ -93,7 +93,9 @@ governor_run(struct governor *g)
 void
 governor_wait(struct governor *g)
 {
-    poll_timer_wait_until(g->start + MAX_ELAPSED);
+    if (g->size > MIN_SIZE) {
+        poll_timer_wait_until(g->start + MAX_ELAPSED);
+    }
 }
 
 /* Returns true if 'g' has been doing only a minimal amount of work and thus
