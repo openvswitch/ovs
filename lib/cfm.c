@@ -62,19 +62,19 @@ static const uint8_t eth_addr_ccm_x[6] = {
 #define CCM_RDI_MASK 0x80
 #define CFM_HEALTH_INTERVAL 6
 struct ccm {
-    uint8_t  mdlevel_version; /* MD Level and Version */
-    uint8_t  opcode;
-    uint8_t  flags;
-    uint8_t  tlv_offset;
+    uint8_t mdlevel_version; /* MD Level and Version */
+    uint8_t opcode;
+    uint8_t flags;
+    uint8_t tlv_offset;
     ovs_be32 seq;
     ovs_be16 mpid;
-    uint8_t  maid[CCM_MAID_LEN];
+    uint8_t maid[CCM_MAID_LEN];
 
     /* Defined by ITU-T Y.1731 should be zero */
     ovs_be16 interval_ms_x;      /* Transmission interval in ms. */
     ovs_be64 mpid64;             /* MPID in extended mode. */
     uint8_t opdown;              /* Operationally down. */
-    uint8_t  zero[5];
+    uint8_t zero[5];
 
     /* TLV space. */
     uint8_t end_tlv;
