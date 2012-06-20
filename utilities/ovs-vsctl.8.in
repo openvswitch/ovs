@@ -25,19 +25,17 @@ ovs\-vsctl \- utility for querying and configuring \fBovs\-vswitchd\fR
 .
 .SH DESCRIPTION
 The \fBovs\-vsctl\fR program configures \fBovs\-vswitchd\fR(8) by
-providing a high\-level interface to its configuration
-database.  This program is mainly intended for use when
-\fBovs\-vswitchd\fR is running.  If it is used when
-\fBovs\-vswitchd\fR is not running, then \fB\-\-no\-wait\fR should be
-specified and configuration changes will only take effect when
-\fBovs\-vswitchd\fR is started.
+providing a high\-level interface to its configuration database.
+See \fBovs\-vswitchd.conf.db\fR(5) for comprehensive documentation of
+the database schema.
 .PP
-By default, each time \fBovs\-vsctl\fR runs, it connects to an
-\fBovsdb\-server\fR process that maintains an Open vSwitch
-configuration database.  Using this connection, it queries and
-possibly applies changes to the database, depending on the supplied
-commands.  Then, if it applied any changes, it waits until
-\fBovs\-vswitchd\fR has finished reconfiguring itself before it exits.
+\fBovs\-vsctl\fR connects to an \fBovsdb\-server\fR process that
+maintains an Open vSwitch configuration database.  Using this
+connection, it queries and possibly applies changes to the database,
+depending on the supplied commands.  Then, if it applied any changes,
+by default it waits until \fBovs\-vswitchd\fR has finished
+reconfiguring itself before it exits.  (If you use \fBovs\-vsctl\fR
+when \fBovs\-vswitchd\fR is not running, use \fB\-\-no\-wait\fR.)
 .PP
 \fBovs\-vsctl\fR can perform any number of commands in a single run,
 implemented as a single atomic transaction against the database.
@@ -918,4 +916,5 @@ bridge that does not exist.
 .SH "SEE ALSO"
 .
 .BR ovsdb\-server (1),
-.BR ovs\-vswitchd (8).
+.BR ovs\-vswitchd (8),
+.BR ovs\-vswitchd.conf.db (5).

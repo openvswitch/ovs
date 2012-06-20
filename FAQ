@@ -290,6 +290,10 @@ A: Wireless base stations generally only allow packets with the source
    point, so the same problems will show up with the Linux bridge or
    any other way to do bridging.
 
+Q: Is there any documentation on the database tables and fields?
+
+A: Yes.  ovs-vswitchd.conf.db(5) is a comprehensive reference.
+
 
 VLANs
 -----
