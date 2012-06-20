@@ -110,7 +110,7 @@ start_daemon () {
     case $wrapper in
         valgrind)
             if (valgrind --version) > /dev/null 2>&1; then
-                set valgrind -q --leak-check=full \
+                set valgrind -q --leak-check=full --time-stamp=yes \
                     --log-file="$logdir/$daemon.valgrind.log.%p" "$@"
             else
                 log_failure_msg "valgrind not installed, running $daemon without it"
