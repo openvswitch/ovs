@@ -968,24 +968,38 @@ dpif_linux_operate__(struct dpif *dpif_, struct dpif_op **ops, size_t n_ops)
         switch (op->type) {
         case DPIF_OP_FLOW_PUT:
             put = &op->u.flow_put;
-            if (!op->error && put->stats) {
-                struct dpif_linux_flow reply;
-
-                op->error = dpif_linux_flow_from_ofpbuf(&reply, txn->reply);
+            if (put->stats) {
                 if (!op->error) {
-                    dpif_linux_flow_get_stats(&reply, put->stats);
+                    struct dpif_linux_flow reply;
+
+                    op->error = dpif_linux_flow_from_ofpbuf(&reply,
+                                                            txn->reply);
+                    if (!op->error) {
+                        dpif_linux_flow_get_stats(&reply, put->stats);
+                    }
+                }
+
+                if (op->error) {
+                    memset(put->stats, 0, sizeof *put->stats);
                 }
             }
             break;
 
         case DPIF_OP_FLOW_DEL:
             del = &op->u.flow_del;
-            if (!op->error && del->stats) {
-                struct dpif_linux_flow reply;
-
-                op->error = dpif_linux_flow_from_ofpbuf(&reply, txn->reply);
+            if (del->stats) {
                 if (!op->error) {
-                    dpif_linux_flow_get_stats(&reply, del->stats);
+                    struct dpif_linux_flow reply;
+
+                    op->error = dpif_linux_flow_from_ofpbuf(&reply,
+                                                            txn->reply);
+                    if (!op->error) {
+                        dpif_linux_flow_get_stats(&reply, del->stats);
+                    }
+                }
+
+                if (op->error) {
+                    memset(del->stats, 0, sizeof *del->stats);
                 }
             }
             break;
