@@ -226,6 +226,12 @@ rconn_set_dscp(struct rconn *rc, uint8_t dscp)
     rc->dscp = dscp;
 }
 
+uint8_t
+rconn_get_dscp(const struct rconn *rc)
+{
+    return rc->dscp;
+}
+
 void
 rconn_set_probe_interval(struct rconn *rc, int probe_interval)
 {
