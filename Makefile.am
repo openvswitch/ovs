@@ -50,6 +50,7 @@ EXTRA_DIST = \
 	INSTALL.XenServer \
 	INSTALL.bridge \
 	INSTALL.userspace \
+	IntegrationGuide \
 	NOTICE \
 	PORTING \
 	README-gcov \
