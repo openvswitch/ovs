@@ -561,6 +561,27 @@ struct table_dpif {
     uint32_t basis;                   /* Keeps each table's tags separate. */
 };
 
+/* Reasons that we might need to revalidate every facet, and corresponding
+ * coverage counters.
+ *
+ * A value of 0 means that there is no need to revalidate.
+ *
+ * It would be nice to have some cleaner way to integrate with coverage
+ * counters, but with only a few reasons I guess this is good enough for
+ * now. */
+enum revalidate_reason {
+    REV_RECONFIGURE = 1,       /* Switch configuration changed. */
+    REV_STP,                   /* Spanning tree protocol port status change. */
+    REV_PORT_TOGGLED,          /* Port enabled or disabled by CFM, LACP, ...*/
+    REV_FLOW_TABLE,            /* Flow table changed. */
+    REV_INCONSISTENCY          /* Facet self-check failed. */
+};
+COVERAGE_DEFINE(rev_reconfigure);
+COVERAGE_DEFINE(rev_stp);
+COVERAGE_DEFINE(rev_port_toggled);
+COVERAGE_DEFINE(rev_flow_table);
+COVERAGE_DEFINE(rev_inconsistency);
+
 struct ofproto_dpif {
     struct hmap_node all_ofproto_dpifs_node; /* In 'all_ofproto_dpifs'. */
     struct ofproto up;
@@ -593,7 +614,7 @@ struct ofproto_dpif {
 
     /* Revalidation. */
     struct table_dpif tables[N_TABLES];
-    bool need_revalidate;
+    enum revalidate_reason need_revalidate;
     struct tag_set revalidate_set;
 
     /* Support for debugging async flow mods. */
@@ -756,7 +777,7 @@ construct(struct ofproto *ofproto_)
         table->other_table = NULL;
         table->basis = random_uint32();
     }
-    ofproto->need_revalidate = false;
+    ofproto->need_revalidate = 0;
     tag_set_init(&ofproto->revalidate_set);
 
     list_init(&ofproto->completions);
@@ -968,9 +989,17 @@ run(struct ofproto *ofproto_)
         bool revalidate_all = ofproto->need_revalidate;
         struct facet *facet;
 
+        switch (ofproto->need_revalidate) {
+        case REV_RECONFIGURE:   COVERAGE_INC(rev_reconfigure);   break;
+        case REV_STP:           COVERAGE_INC(rev_stp);           break;
+        case REV_PORT_TOGGLED:  COVERAGE_INC(rev_port_toggled);  break;
+        case REV_FLOW_TABLE:    COVERAGE_INC(rev_flow_table);    break;
+        case REV_INCONSISTENCY: COVERAGE_INC(rev_inconsistency); break;
+        }
+
         /* Clear the revalidation flags. */
         tag_set_init(&ofproto->revalidate_set);
-        ofproto->need_revalidate = false;
+        ofproto->need_revalidate = 0;
 
         HMAP_FOR_EACH (facet, hmap_node, &ofproto->facets) {
             if (revalidate_all
@@ -988,7 +1017,7 @@ run(struct ofproto *ofproto_)
                              struct facet, hmap_node);
         if (!tag_set_intersects(&ofproto->revalidate_set, facet->tags)) {
             if (!facet_check_consistency(facet)) {
-                ofproto->need_revalidate = true;
+                ofproto->need_revalidate = REV_INCONSISTENCY;
             }
         }
     }
@@ -1141,7 +1170,7 @@ port_construct(struct ofport *port_)
     struct ofport_dpif *port = ofport_dpif_cast(port_);
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(port->up.ofproto);
 
-    ofproto->need_revalidate = true;
+    ofproto->need_revalidate = REV_RECONFIGURE;
     port->odp_port = ofp_port_to_odp_port(port->up.ofp_port);
     port->bundle = NULL;
     port->cfm = NULL;
@@ -1167,7 +1196,7 @@ port_destruct(struct ofport *port_)
     struct ofport_dpif *port = ofport_dpif_cast(port_);
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(port->up.ofproto);
 
-    ofproto->need_revalidate = true;
+    ofproto->need_revalidate = REV_RECONFIGURE;
     bundle_remove(port_);
     set_cfm(port_, NULL);
     if (ofproto->sflow) {
@@ -1198,7 +1227,7 @@ port_reconfigured(struct ofport *port_, enum ofputil_port_config old_config)
     if (changed & (OFPUTIL_PC_NO_RECV | OFPUTIL_PC_NO_RECV_STP |
                    OFPUTIL_PC_NO_FWD | OFPUTIL_PC_NO_FLOOD |
                    OFPUTIL_PC_NO_PACKET_IN)) {
-        ofproto->need_revalidate = true;
+        ofproto->need_revalidate = REV_RECONFIGURE;
 
         if (changed & OFPUTIL_PC_NO_FLOOD && port->bundle) {
             bundle_update(port->bundle);
@@ -1221,13 +1250,13 @@ set_sflow(struct ofproto *ofproto_,
             HMAP_FOR_EACH (ofport, up.hmap_node, &ofproto->up.ports) {
                 dpif_sflow_add_port(ds, &ofport->up);
             }
-            ofproto->need_revalidate = true;
+            ofproto->need_revalidate = REV_RECONFIGURE;
         }
         dpif_sflow_set_options(ds, sflow_options);
     } else {
         if (ds) {
             dpif_sflow_destroy(ds);
-            ofproto->need_revalidate = true;
+            ofproto->need_revalidate = REV_RECONFIGURE;
             ofproto->sflow = NULL;
         }
     }
@@ -1247,7 +1276,7 @@ set_cfm(struct ofport *ofport_, const struct cfm_settings *s)
             struct ofproto_dpif *ofproto;
 
             ofproto = ofproto_dpif_cast(ofport->up.ofproto);
-            ofproto->need_revalidate = true;
+            ofproto->need_revalidate = REV_RECONFIGURE;
             ofport->cfm = cfm_create(netdev_get_name(ofport->up.netdev));
         }
 
@@ -1327,7 +1356,7 @@ set_stp(struct ofproto *ofproto_, const struct ofproto_stp_settings *s)
 
     /* Only revalidate flows if the configuration changed. */
     if (!s != !ofproto->stp) {
-        ofproto->need_revalidate = true;
+        ofproto->need_revalidate = REV_RECONFIGURE;
     }
 
     if (s) {
@@ -1400,7 +1429,7 @@ update_stp_port_state(struct ofport_dpif *ofport)
         fwd_change = stp_forward_in_state(ofport->stp_state)
                         != stp_forward_in_state(state);
 
-        ofproto->need_revalidate = true;
+        ofproto->need_revalidate = REV_STP;
         ofport->stp_state = state;
         ofport->stp_state_entered = time_msec();
 
@@ -1598,12 +1627,12 @@ set_queues(struct ofport *ofport_,
             pdscp = xmalloc(sizeof *pdscp);
             pdscp->priority = priority;
             pdscp->dscp = dscp;
-            ofproto->need_revalidate = true;
+            ofproto->need_revalidate = REV_RECONFIGURE;
         }
 
         if (pdscp->dscp != dscp) {
             pdscp->dscp = dscp;
-            ofproto->need_revalidate = true;
+            ofproto->need_revalidate = REV_RECONFIGURE;
         }
 
         hmap_insert(&new, &pdscp->hmap_node, hash_int(pdscp->priority, 0));
@@ -1611,7 +1640,7 @@ set_queues(struct ofport *ofport_,
 
     if (!hmap_is_empty(&ofport->priorities)) {
         ofport_clear_priorities(ofport);
-        ofproto->need_revalidate = true;
+        ofproto->need_revalidate = REV_RECONFIGURE;
     }
 
     hmap_swap(&new, &ofport->priorities);
@@ -1638,7 +1667,7 @@ bundle_flush_macs(struct ofbundle *bundle, bool all_ofprotos)
     struct mac_learning *ml = ofproto->ml;
     struct mac_entry *mac, *next_mac;
 
-    ofproto->need_revalidate = true;
+    ofproto->need_revalidate = REV_RECONFIGURE;
     LIST_FOR_EACH_SAFE (mac, next_mac, lru_node, &ml->lrus) {
         if (mac->port.p == bundle) {
             if (all_ofprotos) {
@@ -1715,7 +1744,7 @@ bundle_del_port(struct ofport_dpif *port)
 {
     struct ofbundle *bundle = port->bundle;
 
-    bundle->ofproto->need_revalidate = true;
+    bundle->ofproto->need_revalidate = REV_RECONFIGURE;
 
     list_remove(&port->bundle_node);
     port->bundle = NULL;
@@ -1743,7 +1772,7 @@ bundle_add_port(struct ofbundle *bundle, uint32_t ofp_port,
     }
 
     if (port->bundle != bundle) {
-        bundle->ofproto->need_revalidate = true;
+        bundle->ofproto->need_revalidate = REV_RECONFIGURE;
         if (port->bundle) {
             bundle_del_port(port);
         }
@@ -1756,7 +1785,7 @@ bundle_add_port(struct ofbundle *bundle, uint32_t ofp_port,
         }
     }
     if (lacp) {
-        port->bundle->ofproto->need_revalidate = true;
+        port->bundle->ofproto->need_revalidate = REV_RECONFIGURE;
         lacp_slave_register(bundle->lacp, port, lacp);
     }
 
@@ -1784,7 +1813,7 @@ bundle_destroy(struct ofbundle *bundle)
                 mirror_destroy(m);
             } else if (hmapx_find_and_delete(&m->srcs, bundle)
                        || hmapx_find_and_delete(&m->dsts, bundle)) {
-                ofproto->need_revalidate = true;
+                ofproto->need_revalidate = REV_RECONFIGURE;
             }
         }
     }
@@ -1856,7 +1885,7 @@ bundle_set(struct ofproto *ofproto_, void *aux,
     /* LACP. */
     if (s->lacp) {
         if (!bundle->lacp) {
-            ofproto->need_revalidate = true;
+            ofproto->need_revalidate = REV_RECONFIGURE;
             bundle->lacp = lacp_create();
         }
         lacp_configure(bundle->lacp, s->lacp);
@@ -1962,11 +1991,11 @@ bundle_set(struct ofproto *ofproto_, void *aux,
         bundle->ofproto->has_bonded_bundles = true;
         if (bundle->bond) {
             if (bond_reconfigure(bundle->bond, s->bond)) {
-                ofproto->need_revalidate = true;
+                ofproto->need_revalidate = REV_RECONFIGURE;
             }
         } else {
             bundle->bond = bond_create(s->bond);
-            ofproto->need_revalidate = true;
+            ofproto->need_revalidate = REV_RECONFIGURE;
         }
 
         LIST_FOR_EACH (port, bundle_node, &bundle->ports) {
@@ -2271,7 +2300,7 @@ mirror_set(struct ofproto *ofproto_, void *aux,
         }
     }
 
-    ofproto->need_revalidate = true;
+    ofproto->need_revalidate = REV_RECONFIGURE;
     ofproto->has_mirrors = true;
     mac_learning_flush(ofproto->ml, &ofproto->revalidate_set);
     mirror_update_dups(ofproto);
@@ -2292,7 +2321,7 @@ mirror_destroy(struct ofmirror *mirror)
     }
 
     ofproto = mirror->ofproto;
-    ofproto->need_revalidate = true;
+    ofproto->need_revalidate = REV_RECONFIGURE;
     mac_learning_flush(ofproto->ml, &ofproto->revalidate_set);
 
     mirror_bit = MIRROR_MASK_C(1) << mirror->idx;
@@ -2361,8 +2390,7 @@ static void
 forward_bpdu_changed(struct ofproto *ofproto_)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
-    /* Revalidate cached flows whenever forward_bpdu option changes. */
-    ofproto->need_revalidate = true;
+    ofproto->need_revalidate = REV_RECONFIGURE;
 }
 
 static void
@@ -2432,7 +2460,7 @@ port_run(struct ofport_dpif *ofport)
         struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofport->up.ofproto);
 
         if (ofproto->has_bundle_action) {
-            ofproto->need_revalidate = true;
+            ofproto->need_revalidate = REV_PORT_TOGGLED;
         }
     }
 
@@ -6281,7 +6309,7 @@ table_update_taggable(struct ofproto_dpif *ofproto, uint8_t table_id)
     if (table->catchall_table != catchall || table->other_table != other) {
         table->catchall_table = catchall;
         table->other_table = other;
-        ofproto->need_revalidate = true;
+        ofproto->need_revalidate = REV_FLOW_TABLE;
     }
 }
 
@@ -6305,7 +6333,7 @@ rule_invalidate(const struct rule_dpif *rule)
         if (table->other_table && rule->tag) {
             tag_set_add(&ofproto->revalidate_set, rule->tag);
         } else {
-            ofproto->need_revalidate = true;
+            ofproto->need_revalidate = REV_FLOW_TABLE;
         }
     }
 }
@@ -6317,7 +6345,7 @@ set_frag_handling(struct ofproto *ofproto_,
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
 
     if (frag_handling != OFPC_FRAG_REASM) {
-        ofproto->need_revalidate = true;
+        ofproto->need_revalidate = REV_RECONFIGURE;
         return true;
     } else {
         return false;
@@ -6812,7 +6840,7 @@ ofproto_dpif_self_check__(struct ofproto_dpif *ofproto, struct ds *reply)
         }
     }
     if (errors) {
-        ofproto->need_revalidate = true;
+        ofproto->need_revalidate = REV_INCONSISTENCY;
     }
 
     if (errors) {
@@ -6891,7 +6919,7 @@ set_realdev(struct ofport *ofport_, uint16_t realdev_ofp_port, int vid)
         return 0;
     }
 
-    ofproto->need_revalidate = true;
+    ofproto->need_revalidate = REV_RECONFIGURE;
 
     if (ofport->realdev_ofp_port) {
         vsp_remove(ofport);
