@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#include <arpa/inet.h>
 #include <config.h>
+#include <arpa/inet.h>
 #include "odp-util.h"
 #include <errno.h>
 #include <inttypes.h>
