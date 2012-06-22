@@ -541,6 +541,7 @@ ofport_dpif_cast(const struct ofport *ofport)
 }
 
 static void port_run(struct ofport_dpif *);
+static void port_run_fast(struct ofport_dpif *);
 static void port_wait(struct ofport_dpif *);
 static int set_cfm(struct ofport *, const struct cfm_settings *);
 static void ofport_clear_priorities(struct ofport_dpif *);
@@ -918,7 +919,12 @@ static int
 run_fast(struct ofproto *ofproto_)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
+    struct ofport_dpif *ofport;
     unsigned int work;
+
+    HMAP_FOR_EACH (ofport, up.hmap_node, &ofproto->up.ports) {
+        port_run_fast(ofport);
+    }
 
     /* Handle one or more batches of upcalls, until there's nothing left to do
      * or until we do a fixed total amount of work.
@@ -2425,6 +2431,19 @@ ofproto_port_from_dpif_port(struct ofproto_port *ofproto_port,
 }
 
 static void
+port_run_fast(struct ofport_dpif *ofport)
+{
+    if (ofport->cfm && cfm_should_send_ccm(ofport->cfm)) {
+        struct ofpbuf packet;
+
+        ofpbuf_init(&packet, 0);
+        cfm_compose_ccm(ofport->cfm, &packet, ofport->up.pp.hw_addr);
+        send_packet(ofport, &packet);
+        ofpbuf_uninit(&packet);
+    }
+}
+
+static void
 port_run(struct ofport_dpif *ofport)
 {
     long long int carrier_seq = netdev_get_carrier_resets(ofport->up.netdev);
@@ -2433,18 +2452,9 @@ port_run(struct ofport_dpif *ofport)
 
     ofport->carrier_seq = carrier_seq;
 
+    port_run_fast(ofport);
     if (ofport->cfm) {
         cfm_run(ofport->cfm);
-
-        if (cfm_should_send_ccm(ofport->cfm)) {
-            struct ofpbuf packet;
-
-            ofpbuf_init(&packet, 0);
-            cfm_compose_ccm(ofport->cfm, &packet, ofport->up.pp.hw_addr);
-            send_packet(ofport, &packet);
-            ofpbuf_uninit(&packet);
-        }
-
         enable = enable && !cfm_get_fault(ofport->cfm)
             && cfm_get_opup(ofport->cfm);
     }
