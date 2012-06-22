@@ -6083,6 +6083,9 @@ lookup_input_bundle(const struct ofproto_dpif *ofproto, uint16_t in_port,
      *   we don't know about.
      *
      * - The ofproto client didn't configure the port as part of a bundle.
+     *   This is particularly likely to happen if a packet was received on the
+     *   port after it was created, but before the client had a chance to
+     *   configure its bundle.
      */
     if (warn) {
         static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);

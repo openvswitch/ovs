@@ -474,6 +474,11 @@ bridge_reconfigure_ofp(void)
         struct ofpp_garbage *garbage, *next;
 
         LIST_FOR_EACH_SAFE (garbage, next, list_node, &br->ofpp_garbage) {
+            /* It's a bit dangerous to call bridge_run_fast() here as ofproto's
+             * internal datastructures may not be consistent.  Eventually, when
+             * port additions and deletions are cheaper, these calls should be
+             * removed. */
+            bridge_run_fast();
             ofproto_port_del(br->ofproto, garbage->ofp_port);
             list_remove(&garbage->list_node);
             free(garbage);
@@ -482,6 +487,7 @@ bridge_reconfigure_ofp(void)
             if (time_msec() >= deadline) {
                 return false;
             }
+            bridge_run_fast();
         }
     }
 
@@ -1329,9 +1335,15 @@ iface_create(struct bridge *br, struct if_cfg *if_cfg, int ofp_port)
     hmap_remove(&br->if_cfg_todo, &if_cfg->hmap_node);
     free(if_cfg);
 
-    /* Do the bits that can fail up front. */
+    /* Do the bits that can fail up front.
+     *
+     * It's a bit dangerous to call bridge_run_fast() here as ofproto's
+     * internal datastructures may not be consistent.  Eventually, when port
+     * additions and deletions are cheaper, these calls should be removed. */
+    bridge_run_fast();
     assert(!iface_lookup(br, iface_cfg->name));
     error = iface_do_create(br, iface_cfg, port_cfg, &ofp_port, &netdev);
+    bridge_run_fast();
     if (error) {
         iface_clear_db_record(iface_cfg);
         return false;
