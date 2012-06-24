@@ -1159,10 +1159,10 @@ ofputil_encode_flow_mod(const struct ofputil_flow_mod *fm,
 
         msg = ofpbuf_new(sizeof *nfm + NXM_TYPICAL_LEN + actions_len);
         put_nxmsg(sizeof *nfm, NXT_FLOW_MOD, msg);
+        match_len = nx_put_match(msg, &fm->cr, fm->cookie, fm->cookie_mask);
         nfm = msg->data;
         nfm->command = htons(command);
         nfm->cookie = fm->new_cookie;
-        match_len = nx_put_match(msg, &fm->cr, fm->cookie, fm->cookie_mask);
         nfm->idle_timeout = htons(fm->idle_timeout);
         nfm->hard_timeout = htons(fm->hard_timeout);
         nfm->priority = htons(fm->cr.priority);
