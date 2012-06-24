@@ -1776,6 +1776,7 @@ ofputil_encode_flow_mod(const struct ofputil_flow_mod *fm,
         nfm->cookie = fm->new_cookie;
         match_len = nx_put_match(msg, false, &fm->cr,
                                  fm->cookie, fm->cookie_mask);
+        nfm = msg->data;
         nfm->idle_timeout = htons(fm->idle_timeout);
         nfm->hard_timeout = htons(fm->hard_timeout);
         nfm->priority = htons(fm->cr.priority);
