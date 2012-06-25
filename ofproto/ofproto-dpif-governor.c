@@ -116,9 +116,9 @@ governor_is_idle(struct governor *g)
 bool
 governor_should_install_flow(struct governor *g, uint32_t hash, int n)
 {
+    int old_count, new_count;
     bool install_flow;
     uint8_t *e;
-    int count;
 
     assert(n > 0);
 
@@ -135,19 +135,38 @@ governor_should_install_flow(struct governor *g, uint32_t hash, int n)
         governor_new_generation(g, new_size);
     }
 
+    /* If we've set up most of the flows we've seen, then we're wasting time
+     * handling most packets one at a time, so in this case instead set up most
+     * flows directly and use the remaining flows as a sample set to adjust our
+     * criteria later.
+     *
+     * The definition of "most" is conservative, but the sample size is tuned
+     * based on a few experiments with TCP_CRR mode in netperf. */
+    if (g->n_setups >= g->n_flows - g->n_flows / 16
+        && g->n_flows >= 64
+        && hash & 0x3f) {
+        g->n_shortcuts++;
+        return true;
+    }
+
     /* Do hash table processing.
      *
      * Even-numbered hash values use high-order nibbles.
      * Odd-numbered hash values use low-order nibbles. */
     e = &g->table[(hash >> 1) & (g->size - 1)];
-    count = n + (hash & 1 ? *e >> 4 : *e & 0x0f);
-    if (count >= FLOW_SETUP_THRESHOLD) {
+    old_count = (hash & 1 ? *e >> 4 : *e & 0x0f);
+    if (!old_count) {
+        g->n_flows++;
+    }
+    new_count = n + old_count;
+    if (new_count >= FLOW_SETUP_THRESHOLD) {
+        g->n_setups++;
         install_flow = true;
-        count = 0;
+        new_count = 0;
     } else {
         install_flow = false;
     }
-    *e = hash & 1 ? (count << 4) | (*e & 0x0f) : (*e & 0xf0) | count;
+    *e = hash & 1 ? (new_count << 4) | (*e & 0x0f) : (*e & 0xf0) | new_count;
 
     return install_flow;
 }
@@ -167,24 +186,30 @@ governor_new_generation(struct governor *g, unsigned int size)
                       g->name, size / 1024);
         } else {
             VLOG_INFO("%s: processed %u packets in %.2f s, "
-                      "%s hash table to %u kB",
+                      "%s hash table to %u kB "
+                      "(%u hashes, %u setups, %u shortcuts)",
                       g->name, g->n_packets,
                       (time_msec() - g->start) / 1000.0,
                       size > g->size ? "enlarging" : "shrinking",
-                      size / 1024);
+                      size / 1024,
+                      g->n_flows, g->n_setups, g->n_shortcuts);
         }
 
         free(g->table);
         g->table = xmalloc(size * sizeof *g->table);
         g->size = size;
     } else {
-        VLOG_DBG("%s: processed %u packets in %.2f s with %u kB hash table",
+        VLOG_DBG("%s: processed %u packets in %.2f s with %u kB hash table "
+                 "(%u hashes, %u setups, %u shortcuts)",
                  g->name, g->n_packets, (time_msec() - g->start) / 1000.0,
-                 size / 1024);
+                 size / 1024, g->n_flows, g->n_setups, g->n_shortcuts);
     }
 
     /* Clear data for next generation. */
     memset(g->table, 0, size * sizeof *g->table);
     g->start = time_msec();
     g->n_packets = 0;
+    g->n_flows /= 2;
+    g->n_setups /= 2;
+    g->n_shortcuts = 0;
 }
