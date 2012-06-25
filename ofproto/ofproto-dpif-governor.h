@@ -38,6 +38,11 @@ struct governor {
     unsigned int size;          /* Table size in bytes. */
     long long int start;        /* Time when the table was last cleared. */
     unsigned int n_packets;     /* Number of packets processed. */
+
+    /* Statistics for skipping counters when most flows get set up. */
+    unsigned int n_flows;       /* Number of unique flows seen. */
+    unsigned int n_setups;      /* Number of flows set up based on counters. */
+    unsigned int n_shortcuts;   /* Number of flows set up based on history. */
 };
 
 struct governor *governor_create(const char *name);
