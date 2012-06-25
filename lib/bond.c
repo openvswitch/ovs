@@ -488,7 +488,6 @@ static bool
 may_send_learning_packets(const struct bond *bond)
 {
     return bond->lacp_status == LACP_DISABLED
-        && bond->balance != BM_AB
         && bond->balance != BM_STABLE
         && bond->active_slave;
 }
