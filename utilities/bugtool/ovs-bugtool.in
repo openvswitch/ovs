@@ -583,13 +583,14 @@ exclude those logs from the archive.
             f = open('/sys/class/net/%s/type' % p, 'r')
             t = f.readline()
             f.close()
-            if int(t) == 1:
+            if os.path.islink('/sys/class/net/%s/device' % p) and int(t) == 1:
                 # ARPHRD_ETHER
                 cmd_output(CAP_NETWORK_STATUS, [ETHTOOL, p])
                 cmd_output(CAP_NETWORK_STATUS, [ETHTOOL, '-S', p])
                 cmd_output(CAP_NETWORK_STATUS, [ETHTOOL, '-k', p])
                 cmd_output(CAP_NETWORK_STATUS, [ETHTOOL, '-i', p])
                 cmd_output(CAP_NETWORK_STATUS, [ETHTOOL, '-c', p])
+            if int(t) == 1:
                 cmd_output(CAP_NETWORK_STATUS,
                            [TC, '-s', '-d', 'class', 'show', 'dev', p])
         except:
