@@ -1,4 +1,4 @@
-v1.6.1 - 14 Jun 2012
+v1.6.1 - 25 Jun 2012
 ------------------------
     - Allow OFPP_CONTROLLER as the in_port for packet-out messages.
 
