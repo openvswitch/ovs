@@ -405,8 +405,6 @@ ofproto_create(const char *datapath_name, const char *datapath_type,
     assert(ofproto->n_tables);
 
     ofproto->datapath_id = pick_datapath_id(ofproto);
-    VLOG_INFO("%s: using datapath ID %016"PRIx64,
-              ofproto->name, ofproto->datapath_id);
     init_ports(ofproto);
 
     *ofprotop = ofproto;
@@ -428,15 +426,18 @@ ofproto_init_tables(struct ofproto *ofproto, int n_tables)
     }
 }
 
+uint64_t
+ofproto_get_datapath_id(const struct ofproto *ofproto)
+{
+    return ofproto->datapath_id;
+}
+
 void
 ofproto_set_datapath_id(struct ofproto *p, uint64_t datapath_id)
 {
     uint64_t old_dpid = p->datapath_id;
     p->datapath_id = datapath_id ? datapath_id : pick_datapath_id(p);
     if (p->datapath_id != old_dpid) {
-        VLOG_INFO("%s: datapath ID changed to %016"PRIx64,
-                  p->name, p->datapath_id);
-
         /* Force all active connections to reconnect, since there is no way to
          * notify a controller that the datapath ID has changed. */
         ofproto_reconnect_controllers(p);

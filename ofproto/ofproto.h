@@ -201,6 +201,7 @@ int ofproto_port_query_by_name(const struct ofproto *, const char *devname,
                                struct ofproto_port *);
 
 /* Top-level configuration. */
+uint64_t ofproto_get_datapath_id(const struct ofproto *);
 void ofproto_set_datapath_id(struct ofproto *, uint64_t datapath_id);
 void ofproto_set_controllers(struct ofproto *,
                              const struct ofproto_controller *, size_t n);

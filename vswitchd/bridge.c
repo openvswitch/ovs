@@ -754,7 +754,10 @@ bridge_configure_datapath_id(struct bridge *br)
     memcpy(br->ea, ea, ETH_ADDR_LEN);
 
     dpid = bridge_pick_datapath_id(br, ea, hw_addr_iface);
-    ofproto_set_datapath_id(br->ofproto, dpid);
+    if (dpid != ofproto_get_datapath_id(br->ofproto)) {
+        VLOG_INFO("bridge %s: using datapath ID %016"PRIx64, br->name, dpid);
+        ofproto_set_datapath_id(br->ofproto, dpid);
+    }
 
     dpid_string = xasprintf("%016"PRIx64, dpid);
     ovsrec_bridge_set_datapath_id(br->cfg, dpid_string);
