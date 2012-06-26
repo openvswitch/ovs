@@ -405,7 +405,8 @@ ofproto_create(const char *datapath_name, const char *datapath_type,
     assert(ofproto->n_tables);
 
     ofproto->datapath_id = pick_datapath_id(ofproto);
-    VLOG_INFO("using datapath ID %016"PRIx64, ofproto->datapath_id);
+    VLOG_INFO("%s: using datapath ID %016"PRIx64,
+              ofproto->name, ofproto->datapath_id);
     init_ports(ofproto);
 
     *ofprotop = ofproto;
@@ -433,7 +434,8 @@ ofproto_set_datapath_id(struct ofproto *p, uint64_t datapath_id)
     uint64_t old_dpid = p->datapath_id;
     p->datapath_id = datapath_id ? datapath_id : pick_datapath_id(p);
     if (p->datapath_id != old_dpid) {
-        VLOG_INFO("datapath ID changed to %016"PRIx64, p->datapath_id);
+        VLOG_INFO("%s: datapath ID changed to %016"PRIx64,
+                  p->name, p->datapath_id);
 
         /* Force all active connections to reconnect, since there is no way to
          * notify a controller that the datapath ID has changed. */
@@ -529,41 +531,40 @@ ofproto_set_desc(struct ofproto *p,
 
     if (mfr_desc) {
         if (strlen(mfr_desc) >= sizeof ods->mfr_desc) {
-            VLOG_WARN("truncating mfr_desc, must be less than %zu characters",
-                    sizeof ods->mfr_desc);
+            VLOG_WARN("%s: truncating mfr_desc, must be less than %zu bytes",
+                      p->name, sizeof ods->mfr_desc);
         }
         free(p->mfr_desc);
         p->mfr_desc = xstrdup(mfr_desc);
     }
     if (hw_desc) {
         if (strlen(hw_desc) >= sizeof ods->hw_desc) {
-            VLOG_WARN("truncating hw_desc, must be less than %zu characters",
-                    sizeof ods->hw_desc);
+            VLOG_WARN("%s: truncating hw_desc, must be less than %zu bytes",
+                      p->name, sizeof ods->hw_desc);
         }
         free(p->hw_desc);
         p->hw_desc = xstrdup(hw_desc);
     }
     if (sw_desc) {
         if (strlen(sw_desc) >= sizeof ods->sw_desc) {
-            VLOG_WARN("truncating sw_desc, must be less than %zu characters",
-                    sizeof ods->sw_desc);
+            VLOG_WARN("%s: truncating sw_desc, must be less than %zu bytes",
+                      p->name, sizeof ods->sw_desc);
         }
         free(p->sw_desc);
         p->sw_desc = xstrdup(sw_desc);
     }
     if (serial_desc) {
         if (strlen(serial_desc) >= sizeof ods->serial_num) {
-            VLOG_WARN("truncating serial_desc, must be less than %zu "
-                    "characters",
-                    sizeof ods->serial_num);
+            VLOG_WARN("%s: truncating serial_desc, must be less than %zu "
+                      "bytes", p->name, sizeof ods->serial_num);
         }
         free(p->serial_desc);
         p->serial_desc = xstrdup(serial_desc);
     }
     if (dp_desc) {
         if (strlen(dp_desc) >= sizeof ods->dp_desc) {
-            VLOG_WARN("truncating dp_desc, must be less than %zu characters",
-                    sizeof ods->dp_desc);
+            VLOG_WARN("%s: truncating dp_desc, must be less than %zu bytes",
+                      p->name, sizeof ods->dp_desc);
         }
         free(p->dp_desc);
         p->dp_desc = xstrdup(dp_desc);
@@ -1125,7 +1126,7 @@ ofproto_run(struct ofproto *p)
         s.length -= 2;
         ds_put_char(&s, ')');
 
-        VLOG_INFO("%s", ds_cstr(&s));
+        VLOG_INFO("%s: %s", p->name, ds_cstr(&s));
         ds_destroy(&s);
 
         p->n_add = p->n_delete = p->n_modify = 0;
@@ -1480,10 +1481,12 @@ reinit_ports(struct ofproto *p)
     sset_destroy(&devnames);
 }
 
-/* Opens and returns a netdev for 'ofproto_port', or a null pointer if the
- * netdev cannot be opened.  On success, also fills in 'opp'.  */
+/* Opens and returns a netdev for 'ofproto_port' in 'ofproto', or a null
+ * pointer if the netdev cannot be opened.  On success, also fills in
+ * 'opp'.  */
 static struct netdev *
-ofport_open(const struct ofproto_port *ofproto_port,
+ofport_open(const struct ofproto *ofproto,
+            const struct ofproto_port *ofproto_port,
             struct ofputil_phy_port *pp)
 {
     enum netdev_flags flags;
@@ -1492,8 +1495,9 @@ ofport_open(const struct ofproto_port *ofproto_port,
 
     error = netdev_open(ofproto_port->name, ofproto_port->type, &netdev);
     if (error) {
-        VLOG_WARN_RL(&rl, "ignoring port %s (%"PRIu16") because netdev %s "
+        VLOG_WARN_RL(&rl, "%s: ignoring port %s (%"PRIu16") because netdev %s "
                      "cannot be opened (%s)",
+                     ofproto->name,
                      ofproto_port->name, ofproto_port->ofp_port,
                      ofproto_port->name, strerror(error));
         return NULL;
@@ -1714,7 +1718,7 @@ update_port(struct ofproto *ofproto, const char *name)
 
     /* Fetch 'name''s location and properties from the datapath. */
     netdev = (!ofproto_port_query_by_name(ofproto, name, &ofproto_port)
-              ? ofport_open(&ofproto_port, &pp)
+              ? ofport_open(ofproto, &ofproto_port, &pp)
               : NULL);
     if (netdev) {
         port = ofproto_get_port(ofproto, ofproto_port.ofp_port);
@@ -1765,16 +1769,16 @@ init_ports(struct ofproto *p)
     OFPROTO_PORT_FOR_EACH (&ofproto_port, &dump, p) {
         uint16_t ofp_port = ofproto_port.ofp_port;
         if (ofproto_get_port(p, ofp_port)) {
-            VLOG_WARN_RL(&rl, "ignoring duplicate port %"PRIu16" in datapath",
-                         ofp_port);
+            VLOG_WARN_RL(&rl, "%s: ignoring duplicate port %"PRIu16" "
+                         "in datapath", p->name, ofp_port);
         } else if (shash_find(&p->port_by_name, ofproto_port.name)) {
-            VLOG_WARN_RL(&rl, "ignoring duplicate device %s in datapath",
-                         ofproto_port.name);
+            VLOG_WARN_RL(&rl, "%s: ignoring duplicate device %s in datapath",
+                         p->name, ofproto_port.name);
         } else {
             struct ofputil_phy_port pp;
             struct netdev *netdev;
 
-            netdev = ofport_open(&ofproto_port, &pp);
+            netdev = ofport_open(p, &ofproto_port, &pp);
             if (netdev) {
                 ofport_install(p, netdev, &pp);
             }
@@ -3218,8 +3222,9 @@ handle_flow_mod__(struct ofproto *ofproto, struct ofconn *ofconn,
 
     default:
         if (fm->command > 0xff) {
-            VLOG_WARN_RL(&rl, "flow_mod has explicit table_id but "
-                         "flow_mod_table_id extension is not enabled");
+            VLOG_WARN_RL(&rl, "%s: flow_mod has explicit table_id but "
+                         "flow_mod_table_id extension is not enabled",
+                         ofproto->name);
         }
         return OFPERR_OFPFMFC_BAD_COMMAND;
     }
@@ -3757,8 +3762,9 @@ pick_datapath_id(const struct ofproto *ofproto)
         if (!error) {
             return eth_addr_to_uint64(ea);
         }
-        VLOG_WARN("could not get MAC address for %s (%s)",
-                  netdev_get_name(port->netdev), strerror(error));
+        VLOG_WARN("%s: could not get MAC address for %s (%s)",
+                  ofproto->name, netdev_get_name(port->netdev),
+                  strerror(error));
     }
     return ofproto->fallback_dpid;
 }
