@@ -17,8 +17,14 @@ given controller receives OpenFlow asynchronous messages.  This
 section describes how all of these features interact.
 
 First, a service controller never receives any asynchronous messages
-unless it explicitly configures a miss_send_len greater than zero with
-an OFPT_SET_CONFIG message.
+unless it changes its miss_send_len from the service controller
+default of zero in one of the following ways:
+
+    - Sending an OFPT_SET_CONFIG message with nonzero miss_send_len.
+
+    - Sending any NXT_SET_ASYNC_CONFIG message: as a side effect, this
+      message changes the miss_send_len to
+      OFP_DEFAULT_MISS_SEND_LEN (128) for service controllers.
 
 Second, OFPT_FLOW_REMOVED and NXT_FLOW_REMOVED messages are generated
 only if the flow that was removed had the OFPFF_SEND_FLOW_REM flag

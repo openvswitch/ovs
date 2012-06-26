@@ -3315,6 +3315,10 @@ handle_nxt_set_async_config(struct ofconn *ofconn, const struct ofp_header *oh)
     slave[OAM_FLOW_REMOVED] = ntohl(msg->flow_removed_mask[1]);
 
     ofconn_set_async_config(ofconn, master, slave);
+    if (ofconn_get_type(ofconn) == OFCONN_SERVICE &&
+        !ofconn_get_miss_send_len(ofconn)) {
+        ofconn_set_miss_send_len(ofconn, OFP_DEFAULT_MISS_SEND_LEN);
+    }
 
     return 0;
 }

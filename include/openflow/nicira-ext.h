@@ -305,6 +305,9 @@ enum nx_role {
  * with value 1<<2 == 4 in port_status_mask[1] determines whether the
  * controller will receive OFPT_PORT_STATUS messages with reason OFPPR_MODIFY
  * (value 2) when the controller has a "slave" role.
+ *
+ * As a side effect, for service controllers, this message changes the
+ * miss_send_len from default of zero to OFP_DEFAULT_MISS_SEND_LEN (128).
  */
 struct nx_async_config {
     struct nicira_header nxh;
