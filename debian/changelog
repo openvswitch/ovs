@@ -33,6 +33,13 @@ openvswitch (1.7.0-1) unstable; urgency=low
 
  -- Open vSwitch team <dev@openvswitch.org>  Mon, 07 May 2012 14:11:52 +0900
 
+openvswitch (1.6.1-1) unstable; urgency=low
+  [ Open vSwitch team ]
+  * New upstream version
+    - Allow OFPP_CONTROLLER as the in_port for packet-out messages.
+
+ -- Open vSwitch team <dev@openvswitch.org>  Mon, 25 Jun 2012 13:52:17 +0900
+
 openvswitch (1.6.0-1) unstable; urgency=low
   [ Open vSwitch team ]
   * New upstream version
