@@ -37,7 +37,7 @@ AT_SETUP([learning action - satisfied prerequisites])
 AT_DATA([flows.txt],
 [[actions=learn(eth_type=0x800,load:5->NXM_OF_IP_DST[])
 ip,actions=learn(load:NXM_OF_IP_DST[]->NXM_NX_REG1[])
-ip,actions=learn(eth_type=0x800,NXM_OF_IP_DST[])
+ip,actions=learn(eth_type=0x800,OXM_OF_IPV4_DST[])
 ]])
 AT_CHECK([ovs-ofctl parse-flows flows.txt], [0],
 [[usable protocols: any

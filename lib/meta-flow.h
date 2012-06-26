@@ -188,21 +188,30 @@ struct mf_field {
     enum mf_prereqs prereqs;
     bool writable;              /* May be written by actions? */
 
-    /* NXM properties.
+    /* NXM and OXM properties.
      *
-     * A few "mf_field"s don't correspond to NXM fields.  Those have 0 and
-     * NULL for the following members, respectively. */
-    uint32_t nxm_header;        /* An NXM_* constant (a few fields have 0). */
-    const char *nxm_name;       /* The "NXM_*" constant's name. */
-
-    /* OXM properties */
-    uint32_t oxm_header;        /* Field id in the OXM basic class,
-				 * an OXM_* constant.
-				 * Ignored if oxm_name is NULL */
-    const char *oxm_name;	/* The OXM_* constant's name,
-				 * NULL if the field is not present
-				 * in the OXM basic class */
-
+     * There are the following possibilities for these members for a given
+     * mf_field:
+     *
+     *   - Neither NXM nor OXM defines such a field: these members will all be
+     *     zero or NULL.
+     *
+     *   - NXM and OXM both define such a field: nxm_header and oxm_header will
+     *     both be nonzero and different, similarly for nxm_name and oxm_name.
+     *
+     *   - Only NXM or only OXM defines such a field: nxm_header and oxm_header
+     *     will both have the same value (either an OXM_* or NXM_* value) and
+     *     similarly for nxm_name and oxm_name.
+     *
+     * Thus, 'nxm_header' is the appropriate header to use when outputting an
+     * NXM formatted match, since it will be an NXM_* constant when possible
+     * for compatibility with OpenFlow implementations that expect that, with
+     * OXM_* constants used for fields that OXM adds.  Conversely, 'oxm_header'
+     * is the header to use when outputting an OXM formatted match. */
+    uint32_t nxm_header;        /* An NXM_* (or OXM_*) constant. */
+    const char *nxm_name;       /* The nxm_header constant's name. */
+    uint32_t oxm_header;        /* An OXM_* (or NXM_*) constant. */
+    const char *oxm_name;	    /* The oxm_header constant's name */
 };
 
 /* The representation of a field's value. */
