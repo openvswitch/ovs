@@ -119,6 +119,20 @@ cls_rule_set_reg_masked(struct cls_rule *rule, unsigned int reg_idx,
 }
 
 void
+cls_rule_set_metadata(struct cls_rule *rule, ovs_be64 metadata)
+{
+    cls_rule_set_metadata_masked(rule, metadata, htonll(UINT64_MAX));
+}
+
+void
+cls_rule_set_metadata_masked(struct cls_rule *rule, ovs_be64 metadata,
+                             ovs_be64 mask)
+{
+    rule->wc.metadata_mask = mask;
+    rule->flow.metadata = metadata & mask;
+}
+
+void
 cls_rule_set_tun_id(struct cls_rule *rule, ovs_be64 tun_id)
 {
     cls_rule_set_tun_id_masked(rule, tun_id, htonll(UINT64_MAX));
@@ -525,7 +539,7 @@ cls_rule_format(const struct cls_rule *rule, struct ds *s)
 
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 11);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 12);
 
     if (rule->priority != OFP_DEFAULT_PRIORITY) {
         ds_put_format(s, "priority=%d,", rule->priority);
@@ -593,6 +607,17 @@ cls_rule_format(const struct cls_rule *rule, struct ds *s)
     default:
         ds_put_format(s, "tun_id=%#"PRIx64"/%#"PRIx64",",
                       ntohll(f->tun_id), ntohll(wc->tun_id_mask));
+        break;
+    }
+    switch (wc->metadata_mask) {
+    case 0:
+        break;
+    case CONSTANT_HTONLL(UINT64_MAX):
+        ds_put_format(s, "metadata=%#"PRIx64",", ntohll(f->metadata));
+        break;
+    default:
+        ds_put_format(s, "metadata=%#"PRIx64"/%#"PRIx64",",
+                      ntohll(f->metadata), ntohll(wc->metadata_mask));
         break;
     }
     if (!(w & FWW_IN_PORT)) {
@@ -1188,7 +1213,7 @@ flow_equal_except(const struct flow *a, const struct flow *b,
     const flow_wildcards_t wc = wildcards->wildcards;
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 11);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 12);
 
     for (i = 0; i < FLOW_N_REGS; i++) {
         if ((a->regs[i] ^ b->regs[i]) & wildcards->reg_masks[i]) {
@@ -1197,6 +1222,7 @@ flow_equal_except(const struct flow *a, const struct flow *b,
     }
 
     return (!((a->tun_id ^ b->tun_id) & wildcards->tun_id_mask)
+            && !((a->metadata ^ b->metadata) & wildcards->metadata_mask)
             && !((a->nw_src ^ b->nw_src) & wildcards->nw_src_mask)
             && !((a->nw_dst ^ b->nw_dst) & wildcards->nw_dst_mask)
             && (wc & FWW_IN_PORT || a->in_port == b->in_port)

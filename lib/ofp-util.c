@@ -103,7 +103,7 @@ static const flow_wildcards_t WC_INVARIANTS = 0
 void
 ofputil_wildcard_from_ofpfw10(uint32_t ofpfw, struct flow_wildcards *wc)
 {
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 11);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 12);
 
     /* Initialize most of rule->wc. */
     flow_wildcards_init_catchall(wc);
@@ -416,9 +416,8 @@ ofputil_cls_rule_from_ofp11_match(const struct ofp11_match *match,
     }
 
     if (match->metadata_mask != htonll(UINT64_MAX)) {
-        /* Metadata field not yet supported because we haven't decided how to
-         * map it onto our existing fields (or whether to add a new field). */
-        return OFPERR_OFPBMC_BAD_FIELD;
+        cls_rule_set_metadata_masked(rule, match->metadata,
+                                     ~match->metadata_mask);
     }
 
     return 0;
@@ -512,8 +511,8 @@ ofputil_cls_rule_to_ofp11_match(const struct cls_rule *rule,
     wc |= OFPFW11_MPLS_LABEL;
     wc |= OFPFW11_MPLS_TC;
 
-    /* Metadata field not yet supported */
-    match->metadata_mask = htonll(UINT64_MAX);
+    match->metadata = rule->flow.metadata;
+    match->metadata_mask = ~rule->wc.metadata_mask;
 
     match->wildcards = htonl(wc);
 }
@@ -1442,7 +1441,7 @@ ofputil_usable_protocols(const struct cls_rule *rule)
 {
     const struct flow_wildcards *wc = &rule->wc;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 11);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 12);
 
     /* NXM and OF1.1+ supports bitwise matching on ethernet addresses. */
     if (!eth_mask_is_exact(wc->dl_src_mask)
@@ -1451,6 +1450,11 @@ ofputil_usable_protocols(const struct cls_rule *rule)
     }
     if (!eth_mask_is_exact(wc->dl_dst_mask)
         && !eth_addr_is_zero(wc->dl_dst_mask)) {
+        return OFPUTIL_P_NXM_ANY;
+    }
+
+    /* NXM and OF1.1+ support matching metadata. */
+    if (wc->metadata_mask != htonll(0)) {
         return OFPUTIL_P_NXM_ANY;
     }
 
@@ -2371,6 +2375,9 @@ ofputil_decode_packet_in(struct ofputil_packet_in *pin,
         pin->fmd.tun_id = rule.flow.tun_id;
         pin->fmd.tun_id_mask = rule.wc.tun_id_mask;
 
+        pin->fmd.metadata = rule.flow.metadata;
+        pin->fmd.metadata_mask = rule.wc.metadata_mask;
+
         memcpy(pin->fmd.regs, rule.flow.regs, sizeof pin->fmd.regs);
         memcpy(pin->fmd.reg_masks, rule.wc.reg_masks,
                sizeof pin->fmd.reg_masks);
@@ -2423,6 +2430,9 @@ ofputil_encode_packet_in(const struct ofputil_packet_in *pin,
         cls_rule_init_catchall(&rule, 0);
         cls_rule_set_tun_id_masked(&rule, pin->fmd.tun_id,
                                    pin->fmd.tun_id_mask);
+        cls_rule_set_metadata_masked(&rule, pin->fmd.metadata,
+                                   pin->fmd.metadata_mask);
+
 
         for (i = 0; i < FLOW_N_REGS; i++) {
             cls_rule_set_reg_masked(&rule, i, pin->fmd.regs[i],

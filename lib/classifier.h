@@ -90,6 +90,9 @@ void cls_rule_zero_wildcarded_fields(struct cls_rule *);
 void cls_rule_set_reg(struct cls_rule *, unsigned int reg_idx, uint32_t value);
 void cls_rule_set_reg_masked(struct cls_rule *, unsigned int reg_idx,
                              uint32_t value, uint32_t mask);
+void cls_rule_set_metadata(struct cls_rule *, ovs_be64 metadata);
+void cls_rule_set_metadata_masked(struct cls_rule *, ovs_be64 metadata,
+                                  ovs_be64 mask);
 void cls_rule_set_tun_id(struct cls_rule *, ovs_be64 tun_id);
 void cls_rule_set_tun_id_masked(struct cls_rule *,
                                 ovs_be64 tun_id, ovs_be64 mask);

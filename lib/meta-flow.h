@@ -32,6 +32,7 @@ struct ds;
 enum mf_field_id {
     /* Metadata. */
     MFF_TUN_ID,                 /* be64 */
+    MFF_METADATA,               /* be64 */
     MFF_IN_PORT,                /* be16 */
 
 #if FLOW_N_REGS > 0

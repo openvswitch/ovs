@@ -933,12 +933,30 @@ dnl mpls_label and mpls_tc must be ignored if dl_type is not MPLS:
 0000 00 00 1234 00 00 00000000ffffffff 00000000ffffffff 0000 0000 dnl
 12345678 5a 000000 0000000000000000ffffffffffffffff
 
-dnl metadata match not yet supported:
-# bad ofp11_match: OFPBMC_BAD_FIELD
+dnl metadata match:
+# metadata=0x1234567890abcdef
 0000 0058 00000000 000003ff dnl
 000000000000ffffffffffff 000000000000ffffffffffff dnl
 0000 00 00 0000 00 00 00000000ffffffff 00000000ffffffff 0000 0000 dnl
-00000000 00 000000 0000000000000001fffffffffffffffe
+00000000 00 000000 1234567890abcdef0000000000000000
+
+dnl metadata match:
+# metadata=0x5555555555555555/0x5555555555555555
+0000 0058 00000000 000003ff dnl
+000000000000ffffffffffff 000000000000ffffffffffff dnl
+0000 00 00 0000 00 00 00000000ffffffff 00000000ffffffff 0000 0000 dnl
+00000000 00 000000 5555555555555555aaaaaaaaaaaaaaaa
+
+dnl metadata match:
+# metadata=0x1234000090ab0000/0xffff0000ffff0000
+# 74: 56 -> 00
+# 75: 78 -> 00
+# 78: cd -> 00
+# 79: ef -> 00
+0000 0058 00000000 000003ff dnl
+000000000000ffffffffffff 000000000000ffffffffffff dnl
+0000 00 00 0000 00 00 00000000ffffffff 00000000ffffffff 0000 0000 dnl
+00000000 00 000000 1234567890abcdef0000ffff0000ffff
 
 ])
 sed '/^[[#&]]/d' < test-data > input.txt
@@ -975,6 +993,12 @@ AT_DATA([oxm.txt], [dnl
 # in port
 OXM_OF_IN_PORT(00000000)
 OXM_OF_IN_PORT(fffffffe)
+
+# metadata
+OXM_OF_METADATA(5a5a5a5a5a5a5a5a)
+OXM_OF_METADATA_W(0000000000000000/00000000ffffffff)
+OXM_OF_METADATA_W(1234567890abcdef/ffff0000ffff0000)
+OXM_OF_METADATA_W(1234567890abcdef/ffffffffffffffff)
 
 # eth dst
 OXM_OF_ETH_DST(0002e30f80a4)
@@ -1105,6 +1129,12 @@ AT_CHECK([ovs-ofctl --strict parse-oxm < oxm.txt], [0], [dnl
 # in port
 OXM_OF_IN_PORT(00000000)
 OXM_OF_IN_PORT(fffffffe)
+
+# metadata
+OXM_OF_METADATA(5a5a5a5a5a5a5a5a)
+OXM_OF_METADATA_W(0000000000000000/00000000ffffffff)
+OXM_OF_METADATA_W(1234000090ab0000/ffff0000ffff0000)
+OXM_OF_METADATA(1234567890abcdef)
 
 # eth dst
 OXM_OF_ETH_DST(0002e30f80a4)

@@ -10,6 +10,7 @@ post-v1.7.0
       - Allow support for arbitrary Ethernet masks.  (Previously, only
         the multicast bit in the destination address could be individually
 	masked.)
+      - New field OXM_OF_METADATA, to align with OpenFlow 1.1.
     - Additional protocols are not mirrored and dropped when forward-bpdu is
       false.  For a full list, see the ovs-vswitchd.conf.db man page.
     - Open vSwitch now sends RARP packets in situations where it previously

@@ -113,6 +113,13 @@ ofp_print_packet_in(struct ds *string, const struct ofp_header *oh,
         }
     }
 
+    if (pin.fmd.metadata_mask) {
+        ds_put_format(string, " metadata=0x%"PRIx64, ntohll(pin.fmd.metadata));
+        if (pin.fmd.metadata_mask != htonll(UINT64_MAX)) {
+            ds_put_format(string, "/0x%"PRIx64, ntohll(pin.fmd.metadata_mask));
+        }
+    }
+
     for (i = 0; i < FLOW_N_REGS; i++) {
         if (pin.fmd.reg_masks[i]) {
             ds_put_format(string, " reg%d=0x%"PRIx32, i, pin.fmd.regs[i]);

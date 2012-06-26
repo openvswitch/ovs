@@ -487,7 +487,7 @@ nx_put_match(struct ofpbuf *b, bool oxm, const struct cls_rule *cr,
     int match_len;
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 11);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 12);
 
     /* Metadata. */
     if (!(wc & FWW_IN_PORT)) {
@@ -583,6 +583,9 @@ nx_put_match(struct ofpbuf *b, bool oxm, const struct cls_rule *cr,
         nxm_put_32m(b, NXM_NX_REG(i),
                     htonl(flow->regs[i]), htonl(cr->wc.reg_masks[i]));
     }
+
+    /* OpenFlow 1.1+ Metadata. */
+    nxm_put_64m(b, OXM_OF_METADATA, flow->metadata, cr->wc.metadata_mask);
 
     /* Cookie. */
     nxm_put_64m(b, NXM_NX_COOKIE, cookie, cookie_mask);
