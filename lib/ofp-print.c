@@ -1617,6 +1617,9 @@ ofp_to_string__(const struct ofp_header *oh,
     case OFP11_VERSION:
         ds_put_cstr(string, " (OF1.1)");
         break;
+    case OFP12_VERSION:
+        ds_put_cstr(string, " (OF1.2)");
+        break;
     default:
         ds_put_format(string, " (OF 0x%02"PRIx8")", oh->version);
         break;
