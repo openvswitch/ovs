@@ -1006,7 +1006,7 @@ OFP_ASSERT(sizeof(struct nx_action_fin_timeout) == 16);
  */
 struct nx_action_autopath {
     ovs_be16 type;              /* OFPAT_VENDOR. */
-    ovs_be16 len;               /* Length is 20. */
+    ovs_be16 len;               /* Length is 24. */
     ovs_be32 vendor;            /* NX_VENDOR_ID. */
     ovs_be16 subtype;           /* NXAST_AUTOPATH. */
 
