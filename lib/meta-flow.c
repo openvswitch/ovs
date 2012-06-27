@@ -968,7 +968,7 @@ mf_is_value_valid(const struct mf_field *mf, const union mf_value *value)
         return !(value->be16 & htons(VLAN_CFI | VLAN_PCP_MASK));
 
     case MFF_VLAN_PCP:
-        return !(value->u8 & ~7);
+        return !(value->u8 & ~(VLAN_PCP_MASK >> VLAN_PCP_SHIFT));
 
     case MFF_IPV6_LABEL:
         return !(value->be32 & ~htonl(IPV6_LABEL_MASK));
