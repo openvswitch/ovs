@@ -59,9 +59,6 @@ enum mf_field_id {
 #if FLOW_N_REGS > 7
     MFF_REG7,                   /* be32 */
 #endif
-#if FLOW_N_REGS > 8
-#error
-#endif
 
     /* L2. */
     MFF_ETH_SRC,                /* mac */
@@ -112,6 +109,40 @@ enum mf_field_id {
 
     MFF_N_IDS
 };
+
+/* Use this macro as CASE_MFF_REGS: in a switch statement to choose all of the
+ * MFF_REGx cases. */
+#if FLOW_N_REGS == 1
+# define CASE_MFF_REGS                                          \
+    case MFF_REG0
+#elif FLOW_N_REGS == 2
+# define CASE_MFF_REGS                                          \
+    case MFF_REG0: case MFF_REG1
+#elif FLOW_N_REGS == 3
+# define CASE_MFF_REGS                                          \
+    case MFF_REG0: case MFF_REG1: case MFF_REG2
+#elif FLOW_N_REGS == 4
+# define CASE_MFF_REGS                                          \
+    case MFF_REG0: case MFF_REG1: case MFF_REG2: case MFF_REG3
+#elif FLOW_N_REGS == 5
+# define CASE_MFF_REGS                                          \
+    case MFF_REG0: case MFF_REG1: case MFF_REG2: case MFF_REG3: \
+    case MFF_REG4
+#elif FLOW_N_REGS == 6
+# define CASE_MFF_REGS                                          \
+    case MFF_REG0: case MFF_REG1: case MFF_REG2: case MFF_REG3: \
+    case MFF_REG4: case MFF_REG5
+#elif FLOW_N_REGS == 7
+# define CASE_MFF_REGS                                          \
+    case MFF_REG0: case MFF_REG1: case MFF_REG2: case MFF_REG3: \
+    case MFF_REG4: case MFF_REG5: case MFF_REG6
+#elif FLOW_N_REGS == 8
+# define CASE_MFF_REGS                                          \
+    case MFF_REG0: case MFF_REG1: case MFF_REG2: case MFF_REG3: \
+    case MFF_REG4: case MFF_REG5: case MFF_REG6: case MFF_REG7
+#else
+# error
+#endif
 
 /* Prerequisites for matching a field.
  *

@@ -575,33 +575,7 @@ mf_is_all_wild(const struct mf_field *mf, const struct flow_wildcards *wc)
     case MFF_METADATA:
         return !wc->metadata_mask;
 
-#if FLOW_N_REGS > 0
-    case MFF_REG0:
-#endif
-#if FLOW_N_REGS > 1
-    case MFF_REG1:
-#endif
-#if FLOW_N_REGS > 2
-    case MFF_REG2:
-#endif
-#if FLOW_N_REGS > 3
-    case MFF_REG3:
-#endif
-#if FLOW_N_REGS > 4
-    case MFF_REG4:
-#endif
-#if FLOW_N_REGS > 5
-    case MFF_REG5:
-#endif
-#if FLOW_N_REGS > 6
-    case MFF_REG6:
-#endif
-#if FLOW_N_REGS > 7
-    case MFF_REG7:
-#endif
-#if FLOW_N_REGS > 8
-#error
-#endif
+    CASE_MFF_REGS:
         return !wc->reg_masks[mf->id - MFF_REG0];
 
     case MFF_ETH_SRC:
@@ -688,33 +662,7 @@ mf_get_mask(const struct mf_field *mf, const struct flow_wildcards *wc,
         mask->be64 = wc->metadata_mask;
         break;
 
-#if FLOW_N_REGS > 0
-    case MFF_REG0:
-#endif
-#if FLOW_N_REGS > 1
-    case MFF_REG1:
-#endif
-#if FLOW_N_REGS > 2
-    case MFF_REG2:
-#endif
-#if FLOW_N_REGS > 3
-    case MFF_REG3:
-#endif
-#if FLOW_N_REGS > 4
-    case MFF_REG4:
-#endif
-#if FLOW_N_REGS > 5
-    case MFF_REG5:
-#endif
-#if FLOW_N_REGS > 6
-    case MFF_REG6:
-#endif
-#if FLOW_N_REGS > 7
-    case MFF_REG7:
-#endif
-#if FLOW_N_REGS > 8
-#error
-#endif
+    CASE_MFF_REGS:
         mask->be32 = htonl(wc->reg_masks[mf->id - MFF_REG0]);
         break;
 
@@ -888,33 +836,7 @@ mf_is_value_valid(const struct mf_field *mf, const union mf_value *value)
     case MFF_TUN_ID:
     case MFF_METADATA:
     case MFF_IN_PORT:
-#if FLOW_N_REGS > 0
-    case MFF_REG0:
-#endif
-#if FLOW_N_REGS > 1
-    case MFF_REG1:
-#endif
-#if FLOW_N_REGS > 2
-    case MFF_REG2:
-#endif
-#if FLOW_N_REGS > 3
-    case MFF_REG3:
-#endif
-#if FLOW_N_REGS > 4
-    case MFF_REG4:
-#endif
-#if FLOW_N_REGS > 5
-    case MFF_REG5:
-#endif
-#if FLOW_N_REGS > 6
-    case MFF_REG6:
-#endif
-#if FLOW_N_REGS > 7
-    case MFF_REG7:
-#endif
-#if FLOW_N_REGS > 8
-#error
-#endif
+    CASE_MFF_REGS:
     case MFF_ETH_SRC:
     case MFF_ETH_DST:
     case MFF_ETH_TYPE:
@@ -985,33 +907,7 @@ mf_get_value(const struct mf_field *mf, const struct flow *flow,
         value->be16 = htons(flow->in_port);
         break;
 
-#if FLOW_N_REGS > 0
-    case MFF_REG0:
-#endif
-#if FLOW_N_REGS > 1
-    case MFF_REG1:
-#endif
-#if FLOW_N_REGS > 2
-    case MFF_REG2:
-#endif
-#if FLOW_N_REGS > 3
-    case MFF_REG3:
-#endif
-#if FLOW_N_REGS > 4
-    case MFF_REG4:
-#endif
-#if FLOW_N_REGS > 5
-    case MFF_REG5:
-#endif
-#if FLOW_N_REGS > 6
-    case MFF_REG6:
-#endif
-#if FLOW_N_REGS > 7
-    case MFF_REG7:
-#endif
-#if FLOW_N_REGS > 8
-#error
-#endif
+    CASE_MFF_REGS:
         value->be32 = htonl(flow->regs[mf->id - MFF_REG0]);
         break;
 
@@ -1156,37 +1052,9 @@ mf_set_value(const struct mf_field *mf,
         cls_rule_set_in_port(rule, ntohs(value->be16));
         break;
 
-#if FLOW_N_REGS > 0
-    case MFF_REG0:
-#endif
-#if FLOW_N_REGS > 1
-    case MFF_REG1:
-#endif
-#if FLOW_N_REGS > 2
-    case MFF_REG2:
-#endif
-#if FLOW_N_REGS > 3
-    case MFF_REG3:
-#endif
-#if FLOW_N_REGS > 4
-    case MFF_REG4:
-#endif
-#if FLOW_N_REGS > 5
-    case MFF_REG5:
-#endif
-#if FLOW_N_REGS > 6
-    case MFF_REG6:
-#endif
-#if FLOW_N_REGS > 7
-    case MFF_REG7:
-#endif
-#if FLOW_N_REGS > 8
-#error
-#endif
-#if FLOW_N_REGS > 0
+    CASE_MFF_REGS:
         cls_rule_set_reg(rule, mf->id - MFF_REG0, ntohl(value->be32));
         break;
-#endif
 
     case MFF_ETH_SRC:
         cls_rule_set_dl_src(rule, value->mac);
@@ -1329,37 +1197,9 @@ mf_set_flow_value(const struct mf_field *mf,
         flow->in_port = ntohs(value->be16);
         break;
 
-#if FLOW_N_REGS > 0
-    case MFF_REG0:
-#endif
-#if FLOW_N_REGS > 1
-    case MFF_REG1:
-#endif
-#if FLOW_N_REGS > 2
-    case MFF_REG2:
-#endif
-#if FLOW_N_REGS > 3
-    case MFF_REG3:
-#endif
-#if FLOW_N_REGS > 4
-    case MFF_REG4:
-#endif
-#if FLOW_N_REGS > 5
-    case MFF_REG5:
-#endif
-#if FLOW_N_REGS > 6
-    case MFF_REG6:
-#endif
-#if FLOW_N_REGS > 7
-    case MFF_REG7:
-#endif
-#if FLOW_N_REGS > 8
-#error
-#endif
-#if FLOW_N_REGS > 0
+    CASE_MFF_REGS:
         flow->regs[mf->id - MFF_REG0] = ntohl(value->be32);
         break;
-#endif
 
     case MFF_ETH_SRC:
         memcpy(flow->dl_src, value->mac, ETH_ADDR_LEN);
@@ -1511,49 +1351,9 @@ mf_set_wild(const struct mf_field *mf, struct cls_rule *rule)
         rule->flow.in_port = 0;
         break;
 
-#if FLOW_N_REGS > 0
-    case MFF_REG0:
-        cls_rule_set_reg_masked(rule, 0, 0, 0);
+    CASE_MFF_REGS:
+        cls_rule_set_reg_masked(rule, mf->id - MFF_REG0, 0, 0);
         break;
-#endif
-#if FLOW_N_REGS > 1
-    case MFF_REG1:
-        cls_rule_set_reg_masked(rule, 1, 0, 0);
-        break;
-#endif
-#if FLOW_N_REGS > 2
-    case MFF_REG2:
-        cls_rule_set_reg_masked(rule, 2, 0, 0);
-        break;
-#endif
-#if FLOW_N_REGS > 3
-    case MFF_REG3:
-        cls_rule_set_reg_masked(rule, 3, 0, 0);
-        break;
-#endif
-#if FLOW_N_REGS > 4
-    case MFF_REG4:
-        cls_rule_set_reg_masked(rule, 4, 0, 0);
-        break;
-#endif
-#if FLOW_N_REGS > 5
-    case MFF_REG5:
-        cls_rule_set_reg_masked(rule, 5, 0, 0);
-        break;
-#endif
-#if FLOW_N_REGS > 6
-    case MFF_REG6:
-        cls_rule_set_reg_masked(rule, 6, 0, 0);
-        break;
-#endif
-#if FLOW_N_REGS > 7
-    case MFF_REG7:
-        cls_rule_set_reg_masked(rule, 7, 0, 0);
-        break;
-#endif
-#if FLOW_N_REGS > 8
-#error
-#endif
 
     case MFF_ETH_SRC:
         memset(rule->flow.dl_src, 0, ETH_ADDR_LEN);
@@ -1728,33 +1528,7 @@ mf_set(const struct mf_field *mf,
         cls_rule_set_metadata_masked(rule, value->be64, mask->be64);
         break;
 
-#if FLOW_N_REGS > 0
-    case MFF_REG0:
-#endif
-#if FLOW_N_REGS > 1
-    case MFF_REG1:
-#endif
-#if FLOW_N_REGS > 2
-    case MFF_REG2:
-#endif
-#if FLOW_N_REGS > 3
-    case MFF_REG3:
-#endif
-#if FLOW_N_REGS > 4
-    case MFF_REG4:
-#endif
-#if FLOW_N_REGS > 5
-    case MFF_REG5:
-#endif
-#if FLOW_N_REGS > 6
-    case MFF_REG6:
-#endif
-#if FLOW_N_REGS > 7
-    case MFF_REG7:
-#endif
-#if FLOW_N_REGS > 8
-#error
-#endif
+    CASE_MFF_REGS:
         cls_rule_set_reg_masked(rule, mf->id - MFF_REG0,
                                 ntohl(value->be32), ntohl(mask->be32));
         break;
@@ -1888,33 +1662,7 @@ mf_random_value(const struct mf_field *mf, union mf_value *value)
     case MFF_TUN_ID:
     case MFF_METADATA:
     case MFF_IN_PORT:
-#if FLOW_N_REGS > 0
-    case MFF_REG0:
-#endif
-#if FLOW_N_REGS > 1
-    case MFF_REG1:
-#endif
-#if FLOW_N_REGS > 2
-    case MFF_REG2:
-#endif
-#if FLOW_N_REGS > 3
-    case MFF_REG3:
-#endif
-#if FLOW_N_REGS > 4
-    case MFF_REG4:
-#endif
-#if FLOW_N_REGS > 5
-    case MFF_REG5:
-#endif
-#if FLOW_N_REGS > 6
-    case MFF_REG6:
-#endif
-#if FLOW_N_REGS > 7
-    case MFF_REG7:
-#endif
-#if FLOW_N_REGS > 8
-#error
-#endif
+    CASE_MFF_REGS:
     case MFF_ETH_SRC:
     case MFF_ETH_DST:
     case MFF_ETH_TYPE:
