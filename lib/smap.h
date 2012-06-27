@@ -48,7 +48,8 @@ void smap_add_format(struct smap *, const char *key, const char *, ...)
 void smap_replace(struct smap *, const char *, const char *);
 
 void smap_remove(struct smap *, const char *);
-void smap_remove_node(struct smap *smap, struct smap_node *);
+void smap_remove_node(struct smap *, struct smap_node *);
+char *smap_steal(struct smap *, struct smap_node *);
 void smap_clear(struct smap *);
 
 const char *smap_get(const struct smap *, const char *);
