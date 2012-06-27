@@ -118,7 +118,7 @@ start_daemon () {
             ;;
         strace)
             if (strace -V) > /dev/null 2>&1; then
-                set strace -D -ff -o "$logdir/$daemon.strace.log" "$@"
+                set strace -tt -T -s 256 -D -ff -o "$logdir/$daemon.strace.log" "$@"
             else
                 log_failure_msg "strace not installed, running $daemon without it"
             fi
