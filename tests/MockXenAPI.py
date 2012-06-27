@@ -1,4 +1,4 @@
-# Copyright (c) 2011 Nicira, Inc.
+# Copyright (c) 2011, 2012 Nicira, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,6 +11,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
+import re
 
 def xapi_local():
     return Session()
@@ -47,6 +49,20 @@ class Table(object):
 
     def get_all(self):
         return [RecordRef(rec) for rec in self.records]
+
+    def get_all_records_where(self, condition):
+        k, v = re.match(r'field "([^"]*)"="([^"]*)"$', condition).groups()
+        d = {}
+
+        # I'm sure that the keys used in the dictionary below are wrong
+        # but I can't find any documentation on get_all_records_where
+        # and this satisfies the current test case.
+        i = 0
+        for rec in self.records:
+            if rec[k] == v:
+                d[i] = rec
+                i += 1
+        return d
 
     def get_by_uuid(self, uuid):
         recs = [rec for rec in self.records if rec["uuid"] == uuid]
