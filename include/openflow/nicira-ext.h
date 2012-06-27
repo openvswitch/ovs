@@ -429,7 +429,7 @@ OFP_ASSERT(sizeof(struct nx_action_set_tunnel) == 16);
  * Sets the encapsulating tunnel ID to a 64-bit value. */
 struct nx_action_set_tunnel64 {
     ovs_be16 type;                  /* OFPAT_VENDOR. */
-    ovs_be16 len;                   /* Length is 16. */
+    ovs_be16 len;                   /* Length is 24. */
     ovs_be32 vendor;                /* NX_VENDOR_ID. */
     ovs_be16 subtype;               /* NXAST_SET_TUNNEL64. */
     uint8_t pad[6];
@@ -543,7 +543,7 @@ OFP_ASSERT(sizeof(struct nx_action_pop_queue) == 16);
  */
 struct nx_action_reg_move {
     ovs_be16 type;                  /* OFPAT_VENDOR. */
-    ovs_be16 len;                   /* Length is 16. */
+    ovs_be16 len;                   /* Length is 24. */
     ovs_be32 vendor;                /* NX_VENDOR_ID. */
     ovs_be16 subtype;               /* NXAST_REG_MOVE. */
     ovs_be16 n_bits;                /* Number of bits. */
@@ -582,7 +582,7 @@ OFP_ASSERT(sizeof(struct nx_action_reg_move) == 24);
  */
 struct nx_action_reg_load {
     ovs_be16 type;                  /* OFPAT_VENDOR. */
-    ovs_be16 len;                   /* Length is 16. */
+    ovs_be16 len;                   /* Length is 24. */
     ovs_be32 vendor;                /* NX_VENDOR_ID. */
     ovs_be16 subtype;               /* NXAST_REG_LOAD. */
     ovs_be16 ofs_nbits;             /* (ofs << 6) | (n_bits - 1). */
