@@ -124,8 +124,9 @@ struct ofoperation {
     ovs_be64 flow_cookie;       /* Rule's old flow cookie. */
 };
 
-static void ofoperation_create(struct ofopgroup *, struct rule *,
-                               enum ofoperation_type);
+static struct ofoperation *ofoperation_create(struct ofopgroup *,
+                                              struct rule *,
+                                              enum ofoperation_type);
 static void ofoperation_destroy(struct ofoperation *);
 
 /* oftable. */
@@ -2856,6 +2857,7 @@ add_flow(struct ofproto *ofproto, struct ofconn *ofconn,
     } else if (victim && victim->pending) {
         error = OFPROTO_POSTPONE;
     } else {
+        struct ofoperation *op;
         struct rule *evict;
 
         if (classifier_count(&table->cls) > table->max_flows) {
@@ -2878,8 +2880,8 @@ add_flow(struct ofproto *ofproto, struct ofconn *ofconn,
         }
 
         group = ofopgroup_create(ofproto, ofconn, request, fm->buffer_id);
-        ofoperation_create(group, rule, OFOPERATION_ADD);
-        rule->pending->victim = victim;
+        op = ofoperation_create(group, rule, OFOPERATION_ADD);
+        op->victim = victim;
 
         error = ofproto->ofproto_class->rule_construct(rule);
         if (error) {
@@ -2929,9 +2931,11 @@ modify_flows__(struct ofproto *ofproto, struct ofconn *ofconn,
 
         if (!ofpacts_equal(fm->ofpacts, fm->ofpacts_len,
                            rule->ofpacts, rule->ofpacts_len)) {
-            ofoperation_create(group, rule, OFOPERATION_MODIFY);
-            rule->pending->ofpacts = rule->ofpacts;
-            rule->pending->ofpacts_len = rule->ofpacts_len;
+            struct ofoperation *op;
+
+            op = ofoperation_create(group, rule, OFOPERATION_MODIFY);
+            op->ofpacts = rule->ofpacts;
+            op->ofpacts_len = rule->ofpacts_len;
             rule->ofpacts = xmemdup(fm->ofpacts, fm->ofpacts_len);
             rule->ofpacts_len = fm->ofpacts_len;
             rule->ofproto->ofproto_class->rule_modify_actions(rule);
@@ -3594,8 +3598,11 @@ ofopgroup_destroy(struct ofopgroup *group)
 }
 
 /* Initiates a new operation on 'rule', of the specified 'type', within
- * 'group'.  Prior to calling, 'rule' must not have any pending operation. */
-static void
+ * 'group'.  Prior to calling, 'rule' must not have any pending operation.
+ *
+ * Returns the newly created ofoperation (which is also available as
+ * rule->pending). */
+static struct ofoperation *
 ofoperation_create(struct ofopgroup *group, struct rule *rule,
                    enum ofoperation_type type)
 {
@@ -3615,6 +3622,8 @@ ofoperation_create(struct ofopgroup *group, struct rule *rule,
         hmap_insert(&ofproto->deletions, &op->hmap_node,
                     cls_rule_hash(&rule->cr, rule->table_id));
     }
+
+    return op;
 }
 
 static void
