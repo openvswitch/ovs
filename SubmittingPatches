@@ -1,7 +1,7 @@
 How to Submit Patches for Open vSwitch
 ======================================
 
-Send changes to Open vSwitch as patches to discuss@openvswitch.org.
+Send changes to Open vSwitch as patches to dev@openvswitch.org.
 One patch per email, please.  More details are included below.
 
 If you are using Git, then "git format-patch" takes care of most of
