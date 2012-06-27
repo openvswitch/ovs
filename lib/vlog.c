@@ -30,11 +30,13 @@
 #include <unistd.h>
 #include "dirs.h"
 #include "dynamic-string.h"
+#include "ofpbuf.h"
 #include "sat-math.h"
 #include "svec.h"
 #include "timeval.h"
 #include "unixctl.h"
 #include "util.h"
+#include "worker.h"
 
 VLOG_DEFINE_THIS_MODULE(vlog);
 
@@ -94,6 +96,8 @@ static void format_log_message(const struct vlog_module *, enum vlog_level,
                                enum vlog_facility, unsigned int msg_num,
                                const char *message, va_list, struct ds *)
     PRINTF_FORMAT(5, 0);
+static void vlog_write_file(struct ds *);
+static void vlog_update_async_log_fd(void);
 
 /* Searches the 'n_names' in 'names'.  Returns the index of a match for
  * 'target', or 'n_names' if no name matches. */
@@ -298,6 +302,9 @@ vlog_set_log_file(const char *file_name)
     /* Open new log file and update min_levels[] to reflect whether we actually
      * have a log_file. */
     log_fd = open(log_file_name, O_WRONLY | O_CREAT | O_APPEND, 0666);
+    if (log_fd >= 0) {
+        vlog_update_async_log_fd();
+    }
     for (mp = vlog_modules; mp < &vlog_modules[n_vlog_modules]; mp++) {
         update_min_level(*mp);
     }
@@ -726,7 +733,7 @@ vlog_valist(const struct vlog_module *module, enum vlog_level level,
             format_log_message(module, level, VLF_FILE, msg_num,
                                message, args, &s);
             ds_put_char(&s, '\n');
-            write(log_fd, s.string, s.length);
+            vlog_write_file(&s);
         }
 
         ds_destroy(&s);
@@ -870,4 +877,47 @@ vlog_usage(void)
            "  --log-file[=FILE]       enable logging to specified FILE\n"
            "                          (default: %s/%s.log)\n",
            ovs_logdir(), program_name);
+}
+
+static bool vlog_async_inited = false;
+
+static worker_request_func vlog_async_write_request_cb;
+
+static void
+vlog_write_file(struct ds *s)
+{
+    if (worker_is_running()) {
+        worker_request(s->string, s->length,
+                       &log_fd, vlog_async_inited ? 0 : 1,
+                       vlog_async_write_request_cb, NULL, NULL);
+        vlog_async_inited = true;
+    } else {
+        write(log_fd, s->string, s->length);
+    }
+}
+
+static void
+vlog_update_async_log_fd(void)
+{
+    if (worker_is_running()) {
+        worker_request(NULL, 0, &log_fd, 1, vlog_async_write_request_cb,
+                       NULL, NULL);
+        vlog_async_inited = true;
+    }
+}
+
+static void
+vlog_async_write_request_cb(struct ofpbuf *request,
+                            const int *fd, size_t n_fds)
+{
+    if (n_fds > 0) {
+        if (log_fd >= 0) {
+            close(log_fd);
+        }
+        log_fd = *fd;
+    }
+
+    if (request->size > 0) {
+        write(log_fd, request->data, request->size);
+    }
 }
