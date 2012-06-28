@@ -91,6 +91,7 @@ start_daemon () {
     wrapper=$2
     shift; shift
     daemon=$1
+    strace=""
 
     # drop core files in a sensible place
     test -d "$DAEMON_CWD" || install -d -m 755 -o root -g root "$DAEMON_CWD"
@@ -118,7 +119,12 @@ start_daemon () {
             ;;
         strace)
             if (strace -V) > /dev/null 2>&1; then
-                set strace -tt -T -s 256 -D -ff -o "$logdir/$daemon.strace.log" "$@"
+                strace="strace -tt -T -s 256 -ff"
+                if (strace -DV) > /dev/null 2>&1; then
+                    # Has the -D option.
+                    set $strace -D -o "$logdir/$daemon.strace.log" "$@"
+                    strace=""
+                fi
             else
                 log_failure_msg "strace not installed, running $daemon without it"
             fi
@@ -136,6 +142,12 @@ start_daemon () {
     fi
 
     action "Starting $daemon" "$@"
+
+    if test X"$strace" != X; then
+        # Strace doesn't have the -D option so we attach after the fact.
+        setsid $strace -o "$logdir/$daemon.strace.log" \
+            -p `cat $rundir/$daemon.pid` > /dev/null 2>&1 &
+    fi
 }
 
 DAEMON_CWD=/
