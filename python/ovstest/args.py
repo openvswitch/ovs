@@ -78,6 +78,23 @@ def ip_optional_port(string, default_port, ip_callback):
                                          "must be colon-separated")
 
 
+def ip_optional_port_port(string, default_port1, default_port2, ip_callback):
+    """Convert a string into IP, Port1, Port2 tuple. If any of ports were
+     missing, then default ports will be used. The fourth argument is a
+     callback that verifies whether IP address is given in the expected
+     format."""
+    value = string.split(':')
+    if len(value) == 1:
+        return (ip_callback(value[0]), default_port1, default_port2)
+    elif len(value) == 2:
+        return (ip_callback(value[0]), port(value[1]), default_port2)
+    elif len(value) == 3:
+        return (ip_callback(value[0]), port(value[1]), port(value[2]))
+    else:
+        raise argparse.ArgumentTypeError("Expected IP address and at most "
+                                         "two colon-separated ports")
+
+
 def vlan_tag(string):
     """
     This function verifies whether given string is a correct VLAN tag.
@@ -154,6 +171,37 @@ def tunnel_types(string):
     return string.split(',')
 
 
+def l3_endpoint_client(string):
+    """
+    This function parses command line argument string in
+    remoteIP,localInnerIP[/mask][:ControlPort[:TestPort]],remoteInnerIP[:
+    ControlPort[:TestPort]] format.
+    """
+    try:
+        remote_ip, me, he = string.split(',')
+    except ValueError:
+        raise argparse.ArgumentTypeError("All 3 IP addresses must be comma "
+                                         "separated.")
+    r = (ip_address(remote_ip),
+         ip_optional_port_port(me, CONTROL_PORT, DATA_PORT, ip_optional_mask),
+         ip_optional_port_port(he, CONTROL_PORT, DATA_PORT, ip_address))
+    return r
+
+
+def l3_endpoint_server(string):
+    """
+    This function parses a command line argument string in
+    remoteIP,localInnerIP[/mask][:ControlPort] format.
+    """
+    try:
+        remote_ip, me = string.split(',')
+    except ValueError:
+        raise argparse.ArgumentTypeError("Both IP addresses must be comma "
+                                         "separated.")
+    return (ip_address(remote_ip),
+            ip_optional_port(me, CONTROL_PORT, ip_optional_mask))
+
+
 def ovs_initialize_args():
     """
     Initialize argument parsing for ovs-test utility.
@@ -196,4 +244,38 @@ def ovs_initialize_args():
                 ':InnerPort. It is possible to start local instance of '
                 'ovs-test server in the client mode by using 127.0.0.1 as '
                 'OuterIP.')
+    return parser.parse_args()
+
+def l3_initialize_args():
+    """
+    Initialize argument parsing for ovs-l3ping utility.
+    """
+    parser = argparse.ArgumentParser(description='Test L3 tunnel '
+                        'connectivity between two Open vSwitch instances.')
+
+    parser.add_argument('-v', '--version', action='version',
+                version='ovs-l3ping (Open vSwitch) @VERSION@')
+
+    parser.add_argument("-b", "--bandwidth", action='store',
+                dest="targetBandwidth", default="1M", type=bandwidth,
+                help='Target bandwidth for UDP tests in bits/second. Use '
+                'postfix M or K to alter unit magnitude.')
+    parser.add_argument("-i", "--interval", action='store',
+                dest="testInterval", default=5, type=int,
+                help='Interval for how long to run each test in seconds.')
+
+    parser.add_argument("-t", "--tunnel-mode", action='store',
+                dest="tunnelMode", required=True,
+                help='Do L3 tests with this tunnel type.')
+
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument("-s", "--server", action="store", dest="server",
+                metavar="TUNNELIP,SERVER",
+                type=l3_endpoint_server,
+                help='Run in server mode and wait for the client to '
+                'connect.')
+    group.add_argument('-c', "--client", action="store", dest="client",
+                metavar="TUNNELIP,CLIENT,SERVER",
+                type=l3_endpoint_client,
+                help='Run in client mode and connect to the server.')
     return parser.parse_args()

@@ -1,0 +1,76 @@
+#! @PYTHON@
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at:
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+"""
+ovs L3 ping utility allows to do tests between two remote hosts without
+opening holes in the firewall for the XML RPC control connection.  This is
+achieved by tunneling the control connection inside the tunnel itself.
+"""
+
+import socket
+import xmlrpclib
+
+import ovstest.args as args
+import ovstest.tests as tests
+import ovstest.util as util
+
+
+def get_packet_sizes(me, he, remote_ip):
+    """
+    This function retrieves MTUs from both hosts and returns a list of
+    packet sizes, that are more likely to uncover possible configuration
+    issues.
+    """
+    mtu_node1 = 1500
+    mtu_node2 = 1500
+    server1 = util.rpc_client(me[0], me[1])
+    server2 = util.rpc_client(he[0], he[1])
+    iface1 = server2.get_interface(remote_ip)
+    iface2 = server1.get_interface_from_routing_decision(remote_ip)
+    if iface1:
+        mtu_node1 = server2.get_interface_mtu(iface1)
+    if iface2:
+        mtu_node2 = server1.get_interface_mtu(iface2)
+    return util.get_datagram_sizes(mtu_node1, mtu_node2)
+
+
+if __name__ == '__main__':
+    local_server = None
+    try:
+        args = args.l3_initialize_args()
+        tunnel_mode = args.tunnelMode
+        if args.server is not None:  # Start in server mode
+            local_server = tests.configure_l3(args.server, tunnel_mode)
+            local_server.wait()
+        elif args.client is not None:  # Run in client mode
+            bandwidth = args.targetBandwidth
+            interval = args.testInterval
+            me = (util.ip_from_cidr(args.client[1][0]), args.client[1][1],
+                  args.client[1][0], args.client[1][2])
+            he = (args.client[2][0], args.client[2][1],
+                  args.client[2][0], args.client[2][2])
+            local_server = tests. configure_l3(args.client, tunnel_mode)
+            ps = get_packet_sizes(me, he, args.client[0])
+            tests.do_direct_tests(me, he, bandwidth, interval, ps)
+    except KeyboardInterrupt:
+        print "Terminating"
+    except xmlrpclib.Fault:
+        print "Couldn't contact peer"
+    except socket.error:
+        print "Couldn't contact peer"
+    except xmlrpclib.ProtocolError:
+        print "XMLRPC control channel was abruptly terminated"
+    finally:
+        if local_server is not None:
+            local_server.terminate()

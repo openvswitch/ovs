@@ -1,6 +1,9 @@
 post-v1.7.0
 ------------------------
     - New FAQ.  Please send updates and additions!
+    - ovs-l3ping:
+        - A new test utility that can create L3 tunnel between two Open
+          vSwitches and detect connectivity issues.
     - ovs-ofctl:
         - "mod-port" command can now control all OpenFlow config flags.
     - OpenFlow:

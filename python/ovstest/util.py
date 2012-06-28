@@ -19,10 +19,13 @@ import array
 import exceptions
 import fcntl
 import os
+import select
 import socket
 import struct
+import signal
 import subprocess
 import re
+import xmlrpclib
 
 
 def str_ip(ip_address):
@@ -147,3 +150,81 @@ def move_routes(iface1, iface2):
         for route in out.splitlines():
             args = ["ip", "route", "replace", "dev", iface2] + route.split()
             start_process(args)
+
+
+def get_interface_from_routing_decision(ip):
+    """
+    This function returns the interface through which the given ip address
+    is reachable.
+    """
+    args = ["ip", "route", "get", ip]
+    ret, out, _err = start_process(args)
+    if ret == 0:
+        iface = re.search(r'dev (\S+)', out)
+        if iface:
+            return iface.group(1)
+    return None
+
+
+def rpc_client(ip, port):
+    return xmlrpclib.Server("http://%s:%u/" % (ip, port), allow_none=True)
+
+
+def sigint_intercept():
+    """
+    Intercept SIGINT from child (the local ovs-test server process).
+    """
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
+
+
+def start_local_server(port):
+    """
+    This function spawns an ovs-test server that listens on specified port
+    and blocks till the spawned ovs-test server is ready to accept XML RPC
+    connections.
+    """
+    p = subprocess.Popen(["ovs-test", "-s", str(port)],
+                         stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                         preexec_fn=sigint_intercept)
+    fcntl.fcntl( p.stdout.fileno(),fcntl.F_SETFL,
+        fcntl.fcntl(p.stdout.fileno(), fcntl.F_GETFL) | os.O_NONBLOCK)
+
+    while p.poll() is None:
+        fd = select.select([p.stdout.fileno()], [], [])[0]
+        if fd:
+            out = p.stdout.readline()
+            if out.startswith("Starting RPC server"):
+                break
+    if p.poll() is not None:
+        raise RuntimeError("Couldn't start local instance of ovs-test server")
+    return p
+
+
+def get_datagram_sizes(mtu1, mtu2):
+    """
+    This function calculates all the "interesting" datagram sizes so that
+    we test both - receive and send side with different packets sizes.
+    """
+    s1 = set([8, mtu1 - 100, mtu1 - 28, mtu1])
+    s2 = set([8, mtu2 - 100, mtu2 - 28, mtu2])
+    return sorted(s1.union(s2))
+
+
+def ip_from_cidr(string):
+    """
+    This function removes the netmask (if present) from the given string and
+    returns the IP address.
+    """
+    token = string.split("/")
+    return token[0]
+
+
+def bandwidth_to_string(bwidth):
+    """Convert bandwidth from long to string and add units."""
+    bwidth = bwidth * 8  # Convert back to bits/second
+    if bwidth >= 10000000:
+        return str(int(bwidth / 1000000)) + "Mbps"
+    elif bwidth > 10000:
+        return str(int(bwidth / 1000)) + "Kbps"
+    else:
+        return str(int(bwidth)) + "bps"

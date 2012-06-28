@@ -120,6 +120,14 @@ utilities/ovs-dpctl.8.in:
 lib/common.man:
 lib/vlog.man:
 
+utilities/ovs-l3ping.8: \
+	utilities/ovs-l3ping.8.in \
+	lib/common-syn.man \
+	lib/common.man
+utilities/ovs-l3ping.8.in:
+lib/common-syn.man:
+lib/common.man:
+
 utilities/ovs-ofctl.8: \
 	utilities/ovs-ofctl.8.in \
 	lib/common.man \

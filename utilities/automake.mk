@@ -7,6 +7,7 @@ bin_PROGRAMS += \
 bin_SCRIPTS += utilities/ovs-pki utilities/ovs-vsctl utilities/ovs-parse-leaks
 if HAVE_PYTHON
 bin_SCRIPTS += \
+	utilities/ovs-l3ping \
 	utilities/ovs-pcap \
 	utilities/ovs-tcpundump \
 	utilities/ovs-test \
@@ -22,6 +23,7 @@ scripts_DATA += utilities/ovs-lib
 EXTRA_DIST += \
 	utilities/ovs-check-dead-ifs.in \
 	utilities/ovs-ctl.in \
+	utilities/ovs-l3ping.in \
 	utilities/ovs-lib.in \
 	utilities/ovs-parse-leaks.in \
 	utilities/ovs-pcap.in \
@@ -37,6 +39,7 @@ MAN_ROOTS += \
 	utilities/ovs-controller.8.in \
 	utilities/ovs-ctl.8 \
 	utilities/ovs-dpctl.8.in \
+	utilities/ovs-l3ping.8.in \
 	utilities/ovs-ofctl.8.in \
 	utilities/ovs-parse-leaks.8 \
 	utilities/ovs-pcap.1.in \
@@ -54,6 +57,8 @@ DISTCLEANFILES += \
 	utilities/ovs-check-dead-ifs \
 	utilities/ovs-controller.8 \
 	utilities/ovs-dpctl.8 \
+	utilities/ovs-l3ping \
+	utilities/ovs-l3ping.8 \
 	utilities/ovs-lib \
 	utilities/ovs-ofctl.8 \
 	utilities/ovs-parse-leaks \
@@ -76,6 +81,7 @@ man_MANS += \
 	utilities/ovs-benchmark.1 \
 	utilities/ovs-controller.8 \
 	utilities/ovs-dpctl.8 \
+	utilities/ovs-l3ping.8 \
 	utilities/ovs-ofctl.8 \
 	utilities/ovs-parse-leaks.8 \
 	utilities/ovs-pcap.1 \

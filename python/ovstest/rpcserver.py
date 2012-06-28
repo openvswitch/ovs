@@ -343,6 +343,12 @@ class TestArena(xmlrpc.XMLRPC):
         """
         return util.get_driver(iface)
 
+    def xmlrpc_get_interface_from_routing_decision(self, ip):
+        """
+        Returns driver version
+        """
+        return util.get_interface_from_routing_decision(ip)
+
 
 def start_rpc_server(port):
     """

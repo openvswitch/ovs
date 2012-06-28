@@ -13,6 +13,8 @@
 /ovs-ctl
 /ovs-dpctl
 /ovs-dpctl.8
+/ovs-l3ping
+/ovs-l3ping.8
 /ovs-lib
 /ovs-ofctl
 /ovs-ofctl.8

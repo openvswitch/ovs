@@ -3,6 +3,7 @@ ovstest_pyfiles = \
 	python/ovstest/args.py \
 	python/ovstest/rpcserver.py \
 	python/ovstest/tcp.py \
+	python/ovstest/tests.py \
 	python/ovstest/udp.py \
 	python/ovstest/util.py \
 	python/ovstest/vswitch.py
