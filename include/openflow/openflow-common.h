@@ -103,6 +103,10 @@ enum ofp_type {
     OFPT_PACKET_IN,           /* Async message */
     OFPT_FLOW_REMOVED,        /* Async message */
     OFPT_PORT_STATUS,         /* Async message */
+
+    /* Controller command messages. */
+    OFPT_PACKET_OUT,          /* Controller/switch message */
+    OFPT_FLOW_MOD,            /* Controller/switch message */
 };
 
 /* Header on all OpenFlow packets. */

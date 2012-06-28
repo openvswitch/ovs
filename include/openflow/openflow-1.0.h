@@ -47,9 +47,7 @@ enum ofp_port {
  * types. */
 enum ofp10_type {
     /* Controller command messages. */
-    OFPT10_PACKET_OUT = 13,     /* Controller/switch message */
-    OFPT10_FLOW_MOD,            /* Controller/switch message */
-    OFPT10_PORT_MOD,            /* Controller/switch message */
+    OFPT10_PORT_MOD = 15,       /* Controller/switch message */
 
     /* Statistics messages. */
     OFPT10_STATS_REQUEST,       /* Controller/switch message */

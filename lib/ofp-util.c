@@ -1006,11 +1006,11 @@ ofputil_decode_msg_type__(const struct ofp_header *oh, size_t length,
           sizeof(struct ofp_port_status) + sizeof(struct ofp11_port), 0 },
 
         { OFPUTIL_OFPT_PACKET_OUT, OFP10_VERSION,
-          OFPT10_PACKET_OUT, "OFPT_PACKET_OUT",
+          OFPT_PACKET_OUT, "OFPT_PACKET_OUT",
           sizeof(struct ofp_packet_out), 1 },
 
         { OFPUTIL_OFPT_FLOW_MOD, OFP10_VERSION,
-          OFPT10_FLOW_MOD, "OFPT_FLOW_MOD",
+          OFPT_FLOW_MOD, "OFPT_FLOW_MOD",
           sizeof(struct ofp_flow_mod), 1 },
 
         { OFPUTIL_OFPT_PORT_MOD, OFP10_VERSION,
@@ -1759,7 +1759,7 @@ ofputil_encode_flow_mod(const struct ofputil_flow_mod *fm,
     case OFPUTIL_P_OF10:
     case OFPUTIL_P_OF10_TID:
         msg = ofpbuf_new(sizeof *ofm + actions_len);
-        ofm = put_openflow(sizeof *ofm, OFPT10_FLOW_MOD, msg);
+        ofm = put_openflow(sizeof *ofm, OFPT_FLOW_MOD, msg);
         ofputil_cls_rule_to_ofp10_match(&fm->cr, &ofm->match);
         ofm->cookie = fm->new_cookie;
         ofm->command = htons(command);
@@ -3081,7 +3081,7 @@ ofputil_encode_packet_out(const struct ofputil_packet_out *po)
     }
 
     msg = ofpbuf_new(size);
-    opo = put_openflow(sizeof *opo, OFPT10_PACKET_OUT, msg);
+    opo = put_openflow(sizeof *opo, OFPT_PACKET_OUT, msg);
     opo->buffer_id = htonl(po->buffer_id);
     opo->in_port = htons(po->in_port);
     opo->actions_len = htons(actions_len);
@@ -3403,7 +3403,7 @@ make_flow_mod(uint16_t command, const struct cls_rule *rule,
     struct ofpbuf *out = ofpbuf_new(size);
     ofm = ofpbuf_put_zeros(out, sizeof *ofm);
     ofm->header.version = OFP10_VERSION;
-    ofm->header.type = OFPT10_FLOW_MOD;
+    ofm->header.type = OFPT_FLOW_MOD;
     ofm->header.length = htons(size);
     ofm->cookie = 0;
     ofm->priority = htons(MIN(rule->priority, UINT16_MAX));

@@ -74,9 +74,7 @@
  * types. */
 enum ofp11_type {
     /* Controller command messages. */
-    OFPT11_PACKET_OUT = 13,     /* Controller/switch message */
-    OFPT11_FLOW_MOD,            /* Controller/switch message */
-    OFPT11_GROUP_MOD,           /* Controller/switch message */
+    OFPT11_GROUP_MOD = 15,      /* Controller/switch message */
     OFPT11_PORT_MOD,            /* Controller/switch message */
     OFPT11_TABLE_MOD,           /* Controller/switch message */
 
