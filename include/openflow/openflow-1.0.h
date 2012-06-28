@@ -422,34 +422,20 @@ struct ofp_error_msg {
 OFP_ASSERT(sizeof(struct ofp_error_msg) == 4);
 
 /* Statistics request or reply message. */
-struct ofp_stats_msg {
+struct ofp10_stats_msg {
     struct ofp_header header;
     ovs_be16 type;              /* One of the OFPST_* constants. */
     ovs_be16 flags;             /* Requests: always 0.
                                  * Replies: 0 or OFPSF_REPLY_MORE. */
 };
-OFP_ASSERT(sizeof(struct ofp_stats_msg) == 12);
+OFP_ASSERT(sizeof(struct ofp10_stats_msg) == 12);
 
 enum ofp_stats_reply_flags {
     OFPSF_REPLY_MORE  = 1 << 0  /* More replies to follow. */
 };
 
-#define DESC_STR_LEN   256
-#define SERIAL_NUM_LEN 32
-/* Body of reply to OFPST_DESC request.  Each entry is a NULL-terminated ASCII
- * string. */
-struct ofp_desc_stats {
-    char mfr_desc[DESC_STR_LEN];       /* Manufacturer description. */
-    char hw_desc[DESC_STR_LEN];        /* Hardware description. */
-    char sw_desc[DESC_STR_LEN];        /* Software description. */
-    char serial_num[SERIAL_NUM_LEN];   /* Serial number. */
-    char dp_desc[DESC_STR_LEN];        /* Human readable description of
-                                          the datapath. */
-};
-OFP_ASSERT(sizeof(struct ofp_desc_stats) == 1056);
-
 /* Stats request of type OFPST_AGGREGATE or OFPST_FLOW. */
-struct ofp_flow_stats_request {
+struct ofp10_flow_stats_request {
     struct ofp10_match match; /* Fields to match. */
     uint8_t table_id;         /* ID of table to read (from ofp_table_stats)
                                  or 0xff for all tables. */
@@ -458,10 +444,10 @@ struct ofp_flow_stats_request {
                                  as an output port.  A value of OFPP_NONE
                                  indicates no restriction. */
 };
-OFP_ASSERT(sizeof(struct ofp_flow_stats_request) == 44);
+OFP_ASSERT(sizeof(struct ofp10_flow_stats_request) == 44);
 
 /* Body of reply to OFPST_FLOW request. */
-struct ofp_flow_stats {
+struct ofp10_flow_stats {
     ovs_be16 length;          /* Length of this entry. */
     uint8_t table_id;         /* ID of table flow came from. */
     uint8_t pad;
@@ -479,19 +465,10 @@ struct ofp_flow_stats {
     ovs_32aligned_be64 byte_count;   /* Number of bytes in flow. */
     struct ofp_action_header actions[0]; /* Actions. */
 };
-OFP_ASSERT(sizeof(struct ofp_flow_stats) == 88);
-
-/* Reply to OFPST_AGGREGATE request. */
-struct ofp_aggregate_stats_reply {
-    ovs_32aligned_be64 packet_count; /* Number of packets in flows. */
-    ovs_32aligned_be64 byte_count;   /* Number of bytes in flows. */
-    ovs_be32 flow_count;      /* Number of flows. */
-    uint8_t pad[4];           /* Align to 64 bits. */
-};
-OFP_ASSERT(sizeof(struct ofp_aggregate_stats_reply) == 24);
+OFP_ASSERT(sizeof(struct ofp10_flow_stats) == 88);
 
 /* Body of reply to OFPST_TABLE request. */
-struct ofp_table_stats {
+struct ofp10_table_stats {
     uint8_t table_id;        /* Identifier of table.  Lower numbered tables
                                 are consulted first. */
     uint8_t pad[3];          /* Align to 32-bits. */
@@ -503,20 +480,20 @@ struct ofp_table_stats {
     ovs_32aligned_be64 lookup_count;  /* # of packets looked up in table. */
     ovs_32aligned_be64 matched_count; /* Number of packets that hit table. */
 };
-OFP_ASSERT(sizeof(struct ofp_table_stats) == 64);
+OFP_ASSERT(sizeof(struct ofp10_table_stats) == 64);
 
 /* Stats request of type OFPST_PORT. */
-struct ofp_port_stats_request {
+struct ofp10_port_stats_request {
     ovs_be16 port_no;        /* OFPST_PORT message may request statistics
                                 for a single port (specified with port_no)
                                 or for all ports (port_no == OFPP_NONE). */
     uint8_t pad[6];
 };
-OFP_ASSERT(sizeof(struct ofp_port_stats_request) == 8);
+OFP_ASSERT(sizeof(struct ofp10_port_stats_request) == 8);
 
 /* Body of reply to OFPST_PORT request. If a counter is unsupported, set
  * the field to all ones. */
-struct ofp_port_stats {
+struct ofp10_port_stats {
     ovs_be16 port_no;
     uint8_t pad[6];          /* Align to 64-bits. */
     ovs_32aligned_be64 rx_packets;     /* Number of received packets. */
@@ -536,22 +513,22 @@ struct ofp_port_stats {
     ovs_32aligned_be64 rx_crc_err;   /* Number of CRC errors. */
     ovs_32aligned_be64 collisions;   /* Number of collisions. */
 };
-OFP_ASSERT(sizeof(struct ofp_port_stats) == 104);
+OFP_ASSERT(sizeof(struct ofp10_port_stats) == 104);
 
 /* All ones is used to indicate all queues in a port (for stats retrieval). */
 #define OFPQ_ALL      0xffffffff
 
 /* Body for stats request of type OFPST_QUEUE. */
-struct ofp_queue_stats_request {
+struct ofp10_queue_stats_request {
     ovs_be16 port_no;        /* All ports if OFPP_ALL. */
     uint8_t pad[2];          /* Align to 32-bits. */
     ovs_be32 queue_id;       /* All queues if OFPQ_ALL. */
 };
-OFP_ASSERT(sizeof(struct ofp_queue_stats_request) == 8);
+OFP_ASSERT(sizeof(struct ofp10_queue_stats_request) == 8);
 
 /* Body for stats reply of type OFPST_QUEUE consists of an array of this
  * structure type. */
-struct ofp_queue_stats {
+struct ofp10_queue_stats {
     ovs_be16 port_no;
     uint8_t pad[2];          /* Align to 32-bits. */
     ovs_be32 queue_id;       /* Queue id. */
@@ -559,11 +536,11 @@ struct ofp_queue_stats {
     ovs_32aligned_be64 tx_packets; /* Number of transmitted packets. */
     ovs_32aligned_be64 tx_errors;  /* # of packets dropped due to overrun. */
 };
-OFP_ASSERT(sizeof(struct ofp_queue_stats) == 32);
+OFP_ASSERT(sizeof(struct ofp10_queue_stats) == 32);
 
 /* Vendor extension stats message. */
 struct ofp10_vendor_stats_msg {
-    struct ofp_stats_msg osm;   /* Type OFPST_VENDOR. */
+    struct ofp10_stats_msg osm; /* Type OFPST_VENDOR. */
     ovs_be32 vendor;            /* Vendor ID:
                                  * - MSB 0: low-order bytes are IEEE OUI.
                                  * - MSB != 0: defined by OpenFlow

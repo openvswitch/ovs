@@ -481,10 +481,10 @@ struct ofproto_class {
      *   - 'matched_count' to the number of packets looked up in this flow
      *     table so far that matched one of the flow entries.
      *
-     * Keep in mind that all of the members of struct ofp_table_stats are in
+     * Keep in mind that all of the members of struct ofp10_table_stats are in
      * network byte order.
      */
-    void (*get_tables)(struct ofproto *ofproto, struct ofp_table_stats *ots);
+    void (*get_tables)(struct ofproto *ofproto, struct ofp10_table_stats *ots);
 
 /* ## ---------------- ## */
 /* ## ofport Functions ## */

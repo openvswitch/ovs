@@ -272,6 +272,29 @@ struct ofp_port_status {
 };
 OFP_ASSERT(sizeof(struct ofp_port_status) == 8);
 
+#define DESC_STR_LEN   256
+#define SERIAL_NUM_LEN 32
+/* Body of reply to OFPST_DESC request.  Each entry is a NULL-terminated ASCII
+ * string. */
+struct ofp_desc_stats {
+    char mfr_desc[DESC_STR_LEN];       /* Manufacturer description. */
+    char hw_desc[DESC_STR_LEN];        /* Hardware description. */
+    char sw_desc[DESC_STR_LEN];        /* Software description. */
+    char serial_num[SERIAL_NUM_LEN];   /* Serial number. */
+    char dp_desc[DESC_STR_LEN];        /* Human readable description of
+                                          the datapath. */
+};
+OFP_ASSERT(sizeof(struct ofp_desc_stats) == 1056);
+
+/* Reply to OFPST_AGGREGATE request. */
+struct ofp_aggregate_stats_reply {
+    ovs_32aligned_be64 packet_count; /* Number of packets in flows. */
+    ovs_32aligned_be64 byte_count;   /* Number of bytes in flows. */
+    ovs_be32 flow_count;      /* Number of flows. */
+    uint8_t pad[4];           /* Align to 64 bits. */
+};
+OFP_ASSERT(sizeof(struct ofp_aggregate_stats_reply) == 24);
+
 /* The match type indicates the match structure (set of fields that compose the
  * match) in use. The match type is placed in the type field at the beginning
  * of all match structures. The "OpenFlow Extensible Match" type corresponds

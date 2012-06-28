@@ -954,7 +954,7 @@ ofctl_dump_aggregate(int argc, char *argv[])
 static void
 ofctl_queue_stats(int argc, char *argv[])
 {
-    struct ofp_queue_stats_request *req;
+    struct ofp10_queue_stats_request *req;
     struct ofpbuf *request;
 
     request = ofpraw_alloc(OFPRAW_OFPST_QUEUE_REQUEST, OFP10_VERSION, 0);
@@ -1416,7 +1416,7 @@ ofctl_snoop(int argc OVS_UNUSED, char *argv[])
 static void
 ofctl_dump_ports(int argc, char *argv[])
 {
-    struct ofp_port_stats_request *req;
+    struct ofp10_port_stats_request *req;
     struct ofpbuf *request;
     uint16_t port;
 

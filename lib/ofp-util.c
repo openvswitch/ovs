@@ -1284,7 +1284,7 @@ ofputil_flow_mod_usable_protocols(const struct ofputil_flow_mod *fms,
 
 static enum ofperr
 ofputil_decode_ofpst_flow_request(struct ofputil_flow_stats_request *fsr,
-                                  const struct ofp_flow_stats_request *ofsr,
+                                  const struct ofp10_flow_stats_request *ofsr,
                                   bool aggregate)
 {
     fsr->aggregate = aggregate;
@@ -1364,7 +1364,7 @@ ofputil_encode_flow_stats_request(const struct ofputil_flow_stats_request *fsr,
     switch (protocol) {
     case OFPUTIL_P_OF10:
     case OFPUTIL_P_OF10_TID: {
-        struct ofp_flow_stats_request *ofsr;
+        struct ofp10_flow_stats_request *ofsr;
 
         raw = (fsr->aggregate
                ? OFPRAW_OFPST_AGGREGATE_REQUEST
@@ -1461,7 +1461,7 @@ ofputil_decode_flow_stats_reply(struct ofputil_flow_stats *fs,
     if (!msg->size) {
         return EOF;
     } else if (raw == OFPRAW_OFPST_FLOW_REPLY) {
-        const struct ofp_flow_stats *ofs;
+        const struct ofp10_flow_stats *ofs;
         size_t length;
 
         ofs = ofpbuf_try_pull(msg, sizeof *ofs);
@@ -1573,7 +1573,7 @@ ofputil_append_flow_stats_reply(const struct ofputil_flow_stats *fs,
 
     ofpraw_decode_partial(&raw, reply->data, reply->size);
     if (raw == OFPRAW_OFPST_FLOW_REPLY) {
-        struct ofp_flow_stats *ofs;
+        struct ofp10_flow_stats *ofs;
 
         ofpbuf_put_uninit(reply, sizeof *ofs);
         ofpacts_put_openflow10(fs->ofpacts, fs->ofpacts_len, reply);

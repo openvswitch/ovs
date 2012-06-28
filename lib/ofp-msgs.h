@@ -175,7 +175,7 @@ enum ofpraw {
     /* OFPST 1.0+ (0): struct ofp_desc_stats. */
     OFPRAW_OFPST_DESC_REPLY,
 
-    /* OFPST 1.0 (1): struct ofp_flow_stats_request. */
+    /* OFPST 1.0 (1): struct ofp10_flow_stats_request. */
     OFPRAW_OFPST_FLOW_REQUEST,
     /* NXST 1.0 (0): struct nx_flow_stats_request, uint8_t[8][]. */
     OFPRAW_NXST_FLOW_REQUEST,
@@ -185,7 +185,7 @@ enum ofpraw {
     /* NXST 1.0 (0): uint8_t[]. */
     OFPRAW_NXST_FLOW_REPLY,
 
-    /* OFPST 1.0 (2): struct ofp_flow_stats_request. */
+    /* OFPST 1.0 (2): struct ofp10_flow_stats_request. */
     OFPRAW_OFPST_AGGREGATE_REQUEST,
     /* NXST 1.0 (1): struct nx_flow_stats_request, uint8_t[8][]. */
     OFPRAW_NXST_AGGREGATE_REQUEST,
@@ -198,19 +198,19 @@ enum ofpraw {
     /* OFPST 1.0 (3): void. */
     OFPRAW_OFPST_TABLE_REQUEST,
 
-    /* OFPST 1.0 (3): struct ofp_table_stats[]. */
+    /* OFPST 1.0 (3): struct ofp10_table_stats[]. */
     OFPRAW_OFPST_TABLE_REPLY,
 
-    /* OFPST 1.0 (4): struct ofp_port_stats_request. */
+    /* OFPST 1.0 (4): struct ofp10_port_stats_request. */
     OFPRAW_OFPST_PORT_REQUEST,
 
-    /* OFPST 1.0 (4): struct ofp_port_stats[]. */
+    /* OFPST 1.0 (4): struct ofp10_port_stats[]. */
     OFPRAW_OFPST_PORT_REPLY,
 
-    /* OFPST 1.0 (5): struct ofp_queue_stats_request. */
+    /* OFPST 1.0 (5): struct ofp10_queue_stats_request. */
     OFPRAW_OFPST_QUEUE_REQUEST,
 
-    /* OFPST 1.0 (5): struct ofp_queue_stats[]. */
+    /* OFPST 1.0 (5): struct ofp10_queue_stats[]. */
     OFPRAW_OFPST_QUEUE_REPLY,
 
     /* OFPST 1.0 (13): void. */

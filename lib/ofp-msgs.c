@@ -174,13 +174,13 @@ ofphdrs_decode(struct ofphdrs *hdrs,
     } else if (hdrs->version == OFP10_VERSION
                && (hdrs->type == OFPT10_STATS_REQUEST ||
                    hdrs->type == OFPT10_STATS_REPLY)) {
-        const struct ofp_stats_msg *osm;
+        const struct ofp10_stats_msg *osm;
 
         /* Get statistic type (OFPST_*). */
         if (length < sizeof *osm) {
             return OFPERR_OFPBRC_BAD_LEN;
         }
-        osm = (const struct ofp_stats_msg *) oh;
+        osm = (const struct ofp10_stats_msg *) oh;
         hdrs->stat = ntohs(osm->type);
 
         if (hdrs->stat == OFPST_VENDOR) {
@@ -278,7 +278,7 @@ ofphdrs_len(const struct ofphdrs *hdrs)
             hdrs->type == OFPT10_STATS_REPLY) {
             return (hdrs->stat == OFPST_VENDOR
                     ? sizeof(struct nicira10_stats_msg)
-                    : sizeof(struct ofp_stats_msg));
+                    : sizeof(struct ofp10_stats_msg));
         }
     } else {
         if (hdrs->type == OFPT11_STATS_REQUEST ||
@@ -619,7 +619,7 @@ ofpraw_put__(enum ofpraw raw, uint8_t version, ovs_be32 xid,
     } else if (version == OFP10_VERSION
                && (hdrs->type == OFPT10_STATS_REQUEST ||
                    hdrs->type == OFPT10_STATS_REPLY)) {
-        struct ofp_stats_msg *osm = buf->l2;
+        struct ofp10_stats_msg *osm = buf->l2;
 
         osm->type = htons(hdrs->stat);
         osm->flags = htons(0);
@@ -855,7 +855,7 @@ static ovs_be16 *
 ofpmp_flags__(const struct ofp_header *oh)
 {
     return (oh->version == OFP10_VERSION
-            ? &((struct ofp_stats_msg *) oh)->flags
+            ? &((struct ofp10_stats_msg *) oh)->flags
             : &((struct ofp11_stats_msg *) oh)->flags);
 }
 

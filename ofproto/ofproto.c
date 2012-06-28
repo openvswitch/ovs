@@ -2208,7 +2208,7 @@ handle_table_stats_request(struct ofconn *ofconn,
                            const struct ofp_header *request)
 {
     struct ofproto *p = ofconn_get_ofproto(ofconn);
-    struct ofp_table_stats *ots;
+    struct ofp10_table_stats *ots;
     struct ofpbuf *msg;
     size_t i;
 
@@ -2244,7 +2244,7 @@ static void
 append_port_stat(struct ofport *port, struct list *replies)
 {
     struct netdev_stats stats;
-    struct ofp_port_stats *ops;
+    struct ofp10_port_stats *ops;
 
     /* Intentionally ignore return value, since errors will set
      * 'stats' to all-1s, which is correct for OpenFlow, and
@@ -2273,7 +2273,7 @@ handle_port_stats_request(struct ofconn *ofconn,
                           const struct ofp_header *request)
 {
     struct ofproto *p = ofconn_get_ofproto(ofconn);
-    const struct ofp_port_stats_request *psr = ofpmsg_body(request);
+    const struct ofp10_port_stats_request *psr = ofpmsg_body(request);
     struct ofport *port;
     struct list replies;
 
@@ -2705,7 +2705,7 @@ static void
 put_queue_stats(struct queue_stats_cbdata *cbdata, uint32_t queue_id,
                 const struct netdev_queue_stats *stats)
 {
-    struct ofp_queue_stats *reply;
+    struct ofp10_queue_stats *reply;
 
     reply = ofpmp_append(&cbdata->replies, sizeof *reply);
     reply->port_no = htons(cbdata->ofport->pp.port_no);
@@ -2751,7 +2751,7 @@ handle_queue_stats_request(struct ofconn *ofconn,
                            const struct ofp_header *rq)
 {
     struct ofproto *ofproto = ofconn_get_ofproto(ofconn);
-    const struct ofp_queue_stats_request *qsr = ofpmsg_body(rq);
+    const struct ofp10_queue_stats_request *qsr = ofpmsg_body(rq);
     struct queue_stats_cbdata cbdata;
     unsigned int port_no;
     struct ofport *port;

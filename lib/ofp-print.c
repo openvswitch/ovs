@@ -1073,7 +1073,7 @@ static void print_port_stat(struct ds *string, const char *leader,
 static void
 ofp_print_ofpst_port_request(struct ds *string, const struct ofp_header *oh)
 {
-    const struct ofp_port_stats_request *psr = ofpmsg_body(oh);
+    const struct ofp10_port_stats_request *psr = ofpmsg_body(oh);
     ds_put_format(string, " port_no=%"PRIu16, ntohs(psr->port_no));
 }
 
@@ -1081,7 +1081,7 @@ static void
 ofp_print_ofpst_port_reply(struct ds *string, const struct ofp_header *oh,
                            int verbosity)
 {
-    struct ofp_port_stats *ps;
+    struct ofp10_port_stats *ps;
     struct ofpbuf b;
     size_t n;
 
@@ -1124,7 +1124,7 @@ static void
 ofp_print_ofpst_table_reply(struct ds *string, const struct ofp_header *oh,
                             int verbosity)
 {
-    struct ofp_table_stats *ts;
+    struct ofp10_table_stats *ts;
     struct ofpbuf b;
     size_t n;
 
@@ -1172,7 +1172,7 @@ ofp_print_queue_name(struct ds *string, uint32_t queue_id)
 static void
 ofp_print_ofpst_queue_request(struct ds *string, const struct ofp_header *oh)
 {
-    const struct ofp_queue_stats_request *qsr = ofpmsg_body(oh);
+    const struct ofp10_queue_stats_request *qsr = ofpmsg_body(oh);
 
     ds_put_cstr(string, "port=");
     ofputil_format_port(ntohs(qsr->port_no), string);
@@ -1185,7 +1185,7 @@ static void
 ofp_print_ofpst_queue_reply(struct ds *string, const struct ofp_header *oh,
                             int verbosity)
 {
-    struct ofp_queue_stats *qs;
+    struct ofp10_queue_stats *qs;
     struct ofpbuf b;
     size_t n;
 
