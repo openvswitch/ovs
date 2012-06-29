@@ -1887,8 +1887,7 @@ struct nx_flow_stats {
     ovs_be32 duration_sec;    /* Time flow has been alive in seconds. */
     ovs_be32 duration_nsec;   /* Time flow has been alive in nanoseconds
                                  beyond duration_sec. */
-    ovs_be16 priority;        /* Priority of the entry. Only meaningful
-                                 when this is not an exact-match entry. */
+    ovs_be16 priority;        /* Priority of the entry. */
     ovs_be16 idle_timeout;    /* Number of seconds idle before expiration. */
     ovs_be16 hard_timeout;    /* Number of seconds before expiration. */
     ovs_be16 match_len;       /* Length of nx_match. */
