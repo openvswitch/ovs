@@ -55,6 +55,10 @@
 
 VLOG_DEFINE_THIS_MODULE(vswitchd);
 
+/* --mlockall: If set, locks all process memory into physical RAM, preventing
+ * the kernel from paging any of its memory to disk. */
+static bool want_mlockall;
+
 static unixctl_cb_func ovs_vswitchd_exit;
 
 static char *parse_options(int argc, char *argv[], char **unixctl_path);
@@ -80,6 +84,16 @@ main(int argc, char *argv[])
     ovsrec_init();
 
     daemonize_start();
+
+    if (want_mlockall) {
+#ifdef HAVE_MLOCKALL
+        if (mlockall(MCL_CURRENT | MCL_FUTURE)) {
+            VLOG_ERR("mlockall failed: %s", strerror(errno));
+        }
+#else
+        VLOG_ERR("mlockall not supported on this system");
+#endif
+    }
 
     retval = unixctl_server_create(unixctl_path, &unixctl);
     if (retval) {
@@ -175,13 +189,7 @@ parse_options(int argc, char *argv[], char **unixctl_pathp)
             exit(EXIT_SUCCESS);
 
         case OPT_MLOCKALL:
-#ifdef HAVE_MLOCKALL
-            if (mlockall(MCL_CURRENT | MCL_FUTURE)) {
-                VLOG_ERR("mlockall failed: %s", strerror(errno));
-            }
-#else
-            VLOG_ERR("mlockall not supported on this system");
-#endif
+            want_mlockall = true;
             break;
 
         case OPT_UNIXCTL:
