@@ -276,7 +276,7 @@ If a switch has no controller configured, or if
 the configured controller is disconnected, no traffic is sent, so
 monitoring will not show any traffic.
 .
-.IP "\fBmonitor \fIswitch\fR [\fImiss-len\fR] [\fIinvalid_ttl\fR]"
+.IP "\fBmonitor \fIswitch\fR [\fImiss-len\fR] [\fBinvalid_ttl\fR]"
 Connects to \fIswitch\fR and prints to the console all OpenFlow
 messages received.  Usually, \fIswitch\fR should specify the name of a
 bridge in the \fBovs\-vswitchd\fR database.
@@ -292,8 +292,8 @@ specified, very little traffic will ordinarily be printed.)
 .IP
 If \fBinvalid_ttl\fR is passed, \fBovs\-ofctl\fR sends an OpenFlow ``set
 configuration'' message at connection setup time that requests
-\fIINVALID_TTL_TO_CONTROLLER\fR, so that \fBovs\-ofctl monitor\fR can
-receive ``packets-in'' messages when TTL reaches zero on \fBdec_ttl\fR action.
+\fBINVALID_TTL_TO_CONTROLLER\fR, so that \fBovs\-ofctl monitor\fR can
+receive ``packet-in'' messages when TTL reaches zero on \fBdec_ttl\fR action.
 .IP
 
 This command may be useful for debugging switch or controller
