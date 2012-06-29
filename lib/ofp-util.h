@@ -531,6 +531,10 @@ void *ofputil_make_stats_reply(size_t openflow_len,
                                const struct ofp_stats_msg *request,
                                struct ofpbuf **);
 
+void ofputil_put_stats_header(ovs_be32 xid, uint8_t ofp_type,
+                              ovs_be16 ofpst_type, ovs_be32 nxst_subtype,
+                              struct ofpbuf *);
+
 void ofputil_start_stats_reply(const struct ofp_stats_msg *request,
                                struct list *);
 struct ofpbuf *ofputil_reserve_stats_reply(size_t len, struct list *);

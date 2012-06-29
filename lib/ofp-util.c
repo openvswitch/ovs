@@ -3268,10 +3268,10 @@ update_openflow_length(struct ofpbuf *buffer)
     oh->length = htons(buffer->size);
 }
 
-static void
-put_stats__(ovs_be32 xid, uint8_t ofp_type,
-            ovs_be16 ofpst_type, ovs_be32 nxst_subtype,
-            struct ofpbuf *msg)
+void
+ofputil_put_stats_header(ovs_be32 xid, uint8_t ofp_type,
+                         ovs_be16 ofpst_type, ovs_be32 nxst_subtype,
+                         struct ofpbuf *msg)
 {
     if (ofpst_type == htons(OFPST_VENDOR)) {
         struct nicira_stats_msg *nsm;
@@ -3304,8 +3304,8 @@ ofputil_make_stats_request(size_t openflow_len, uint16_t ofpst_type,
     struct ofpbuf *msg;
 
     msg = *bufferp = ofpbuf_new(openflow_len);
-    put_stats__(alloc_xid(), OFPT10_STATS_REQUEST,
-                htons(ofpst_type), htonl(nxst_subtype), msg);
+    ofputil_put_stats_header(alloc_xid(), OFPT10_STATS_REQUEST,
+                             htons(ofpst_type), htonl(nxst_subtype), msg);
     ofpbuf_padto(msg, openflow_len);
 
     return msg->data;
@@ -3314,13 +3314,16 @@ ofputil_make_stats_request(size_t openflow_len, uint16_t ofpst_type,
 static void
 put_stats_reply__(const struct ofp_stats_msg *request, struct ofpbuf *msg)
 {
+    ovs_be32 nxst_subtype;
+
     assert(request->header.type == OFPT10_STATS_REQUEST ||
            request->header.type == OFPT10_STATS_REPLY);
-    put_stats__(request->header.xid, OFPT10_STATS_REPLY, request->type,
-                (request->type != htons(OFPST_VENDOR)
-                 ? htonl(0)
-                 : ((const struct nicira_stats_msg *) request)->subtype),
-                msg);
+
+    nxst_subtype = (request->type != htons(OFPST_VENDOR)
+                    ? htonl(0)
+                    : ((const struct nicira_stats_msg *) request)->subtype);
+    ofputil_put_stats_header(request->header.xid, OFPT10_STATS_REPLY,
+                             request->type, nxst_subtype, msg);
 }
 
 /* Creates a statistics reply message with total length 'openflow_len'
