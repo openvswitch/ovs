@@ -238,6 +238,11 @@ lib_libopenvswitch_a_SOURCES += \
 	lib/route-table.h
 endif
 
+if HAVE_IF_DL
+lib_libopenvswitch_a_SOURCES += \
+	lib/route-table-bsd.c
+endif
+
 if HAVE_OPENSSL
 lib_libopenvswitch_a_SOURCES += lib/stream-ssl.c
 nodist_lib_libopenvswitch_a_SOURCES += lib/dhparams.c

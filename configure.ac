@@ -52,6 +52,7 @@ OVS_CHECK_PYUIC4
 OVS_CHECK_OVSDBMONITOR
 OVS_CHECK_DOT
 OVS_CHECK_IF_PACKET
+OVS_CHECK_IF_DL
 OVS_CHECK_STRTOK_R
 AC_CHECK_MEMBERS([struct stat.st_mtim.tv_nsec, struct stat.st_mtimensec],
   [], [], [[#include <sys/stat.h>]])
