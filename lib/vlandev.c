@@ -23,13 +23,13 @@
 #include <sys/stat.h>
 
 #include "hash.h"
-#include "rtnetlink-link.h"
 #include "shash.h"
 #include "vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(vlandev);
 
 #ifdef __linux__
+#include "rtnetlink-link.h"
 #include <linux/if_vlan.h>
 #include <linux/sockios.h>
 #include "netdev-linux.h"
