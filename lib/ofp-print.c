@@ -206,7 +206,8 @@ compare_ports(const void *a_, const void *b_)
 
 static void
 ofp_print_bit_names(struct ds *string, uint32_t bits,
-                    const char *(*bit_to_name)(uint32_t bit))
+                    const char *(*bit_to_name)(uint32_t bit),
+                    char separator)
 {
     int n = 0;
     int i;
@@ -223,7 +224,7 @@ ofp_print_bit_names(struct ds *string, uint32_t bits,
             const char *name = bit_to_name(bit);
             if (name) {
                 if (n++) {
-                    ds_put_char(string, ' ');
+                    ds_put_char(string, separator);
                 }
                 ds_put_cstr(string, name);
                 bits &= ~bit;
@@ -233,7 +234,7 @@ ofp_print_bit_names(struct ds *string, uint32_t bits,
 
     if (bits) {
         if (n) {
-            ds_put_char(string, ' ');
+            ds_put_char(string, separator);
         }
         ds_put_format(string, "0x%"PRIx32, bits);
     }
@@ -269,7 +270,7 @@ netdev_feature_to_name(uint32_t bit)
 static void
 ofp_print_port_features(struct ds *string, enum netdev_features features)
 {
-    ofp_print_bit_names(string, features, netdev_feature_to_name);
+    ofp_print_bit_names(string, features, netdev_feature_to_name, ' ');
     ds_put_char(string, '\n');
 }
 
@@ -294,7 +295,7 @@ ofputil_port_config_to_name(uint32_t bit)
 static void
 ofp_print_port_config(struct ds *string, enum ofputil_port_config config)
 {
-    ofp_print_bit_names(string, config, ofputil_port_config_to_name);
+    ofp_print_bit_names(string, config, ofputil_port_config_to_name, ' ');
     ds_put_char(string, '\n');
 }
 
@@ -339,10 +340,11 @@ ofp_print_port_state(struct ds *string, enum ofputil_port_state state)
                      : "STP_BLOCK"));
         state &= ~OFPUTIL_PS_STP_MASK;
         if (state) {
-            ofp_print_bit_names(string, state, ofputil_port_state_to_name);
+            ofp_print_bit_names(string, state, ofputil_port_state_to_name,
+                                ' ');
         }
     } else {
-        ofp_print_bit_names(string, state, ofputil_port_state_to_name);
+        ofp_print_bit_names(string, state, ofputil_port_state_to_name, ' ');
     }
     ds_put_char(string, '\n');
 }
@@ -502,12 +504,12 @@ ofp_print_switch_features(struct ds *string,
 
     ds_put_cstr(string, "capabilities: ");
     ofp_print_bit_names(string, features.capabilities,
-                        ofputil_capabilities_to_name);
+                        ofputil_capabilities_to_name, ' ');
     ds_put_char(string, '\n');
 
     ds_put_cstr(string, "actions: ");
     ofp_print_bit_names(string, features.actions,
-                        ofputil_action_bitmap_to_name);
+                        ofputil_action_bitmap_to_name, ' ');
     ds_put_char(string, '\n');
 
     ofp_print_phy_ports(string, osf->header.version, &b);
