@@ -118,9 +118,9 @@ struct ofoperation {
     struct hmap_node hmap_node; /* In ofproto's "deletions" hmap. */
     struct rule *rule;          /* Rule being operated upon. */
     enum ofoperation_type type; /* Type of operation. */
-    struct rule *victim;        /* OFOPERATION_ADDING: Replaced rule. */
-    struct ofpact *ofpacts;     /* OFOPERATION_MODIFYING: Replaced actions. */
-    size_t ofpacts_len;         /* OFOPERATION_MODIFYING: Bytes of ofpacts. */
+    struct rule *victim;        /* OFOPERATION_ADD: Replaced rule. */
+    struct ofpact *ofpacts;     /* OFOPERATION_MODIFY: Replaced actions. */
+    size_t ofpacts_len;         /* OFOPERATION_MODIFY: Bytes of ofpacts. */
     ovs_be64 flow_cookie;       /* Rule's old flow cookie. */
 };
 
