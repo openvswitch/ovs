@@ -1,4 +1,4 @@
-/* Copyright (c) 2008, 2009, 2010, 2011 Nicira Networks
+/* Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira Networks
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -51,6 +51,10 @@
 
 VLOG_DEFINE_THIS_MODULE(vswitchd);
 
+/* --mlockall: If set, locks all process memory into physical RAM, preventing
+ * the kernel from paging any of its memory to disk. */
+static bool want_mlockall;
+
 static unixctl_cb_func ovs_vswitchd_exit;
 
 static char *parse_options(int argc, char *argv[]);
@@ -75,6 +79,16 @@ main(int argc, char *argv[])
     ovsrec_init();
 
     daemonize_start();
+
+    if (want_mlockall) {
+#ifdef HAVE_MLOCKALL
+        if (mlockall(MCL_CURRENT | MCL_FUTURE)) {
+            VLOG_ERR("mlockall failed: %s", strerror(errno));
+        }
+#else
+        VLOG_ERR("mlockall not supported on this system");
+#endif
+    }
 
     retval = unixctl_server_create(NULL, &unixctl);
     if (retval) {
@@ -155,13 +169,7 @@ parse_options(int argc, char *argv[])
             exit(EXIT_SUCCESS);
 
         case OPT_MLOCKALL:
-#ifdef HAVE_MLOCKALL
-            if (mlockall(MCL_CURRENT | MCL_FUTURE)) {
-                VLOG_ERR("mlockall failed: %s", strerror(errno));
-            }
-#else
-            VLOG_ERR("mlockall not supported on this system");
-#endif
+            want_mlockall = true;
             break;
 
         VLOG_OPTION_HANDLERS
