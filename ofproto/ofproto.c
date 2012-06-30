@@ -87,6 +87,7 @@ struct ofopgroup {
     struct ofproto *ofproto;    /* Owning ofproto. */
     struct list ofproto_node;   /* In ofproto's "pending" list. */
     struct list ops;            /* List of "struct ofoperation"s. */
+    int n_running;              /* Number of ops still pending. */
 
     /* Data needed to send OpenFlow reply on failure or to send a buffered
      * packet on success.
@@ -101,7 +102,6 @@ struct ofopgroup {
     struct ofconn *ofconn;      /* ofconn for reply (but see note above). */
     struct ofp_header *request; /* Original request (truncated at 64 bytes). */
     uint32_t buffer_id;         /* Buffer id from original request. */
-    int error;                  /* 0 if no error yet, otherwise error code. */
 };
 
 static struct ofopgroup *ofopgroup_create_unattached(struct ofproto *);
@@ -109,7 +109,7 @@ static struct ofopgroup *ofopgroup_create(struct ofproto *, struct ofconn *,
                                           const struct ofp_header *,
                                           uint32_t buffer_id);
 static void ofopgroup_submit(struct ofopgroup *);
-static void ofopgroup_destroy(struct ofopgroup *);
+static void ofopgroup_complete(struct ofopgroup *);
 
 /* A single flow table operation. */
 struct ofoperation {
@@ -122,6 +122,7 @@ struct ofoperation {
     struct ofpact *ofpacts;     /* OFOPERATION_MODIFY: Replaced actions. */
     size_t ofpacts_len;         /* OFOPERATION_MODIFY: Bytes of ofpacts. */
     ovs_be64 flow_cookie;       /* Rule's old flow cookie. */
+    enum ofperr error;          /* 0 if no error. */
 };
 
 static struct ofoperation *ofoperation_create(struct ofopgroup *,
@@ -2885,6 +2886,7 @@ add_flow(struct ofproto *ofproto, struct ofconn *ofconn,
 
         error = ofproto->ofproto_class->rule_construct(rule);
         if (error) {
+            op->group->n_running--;
             ofoperation_destroy(rule->pending);
         } else if (evict) {
             delete_flow__(evict, group);
@@ -3569,8 +3571,8 @@ ofopgroup_create(struct ofproto *ofproto, struct ofconn *ofconn,
 static void
 ofopgroup_submit(struct ofopgroup *group)
 {
-    if (list_is_empty(&group->ops)) {
-        ofopgroup_destroy(group);
+    if (!group->n_running) {
+        ofopgroup_complete(group);
     } else {
         list_push_back(&group->ofproto->pending, &group->ofproto_node);
         group->ofproto->n_pending++;
@@ -3578,20 +3580,102 @@ ofopgroup_submit(struct ofopgroup *group)
 }
 
 static void
-ofopgroup_destroy(struct ofopgroup *group)
+ofopgroup_complete(struct ofopgroup *group)
 {
-    assert(list_is_empty(&group->ops));
+    struct ofproto *ofproto = group->ofproto;
+    struct ofoperation *op, *next_op;
+    int error;
+
+    assert(!group->n_running);
+
+    error = 0;
+    LIST_FOR_EACH (op, group_node, &group->ops) {
+        if (op->error) {
+            error = op->error;
+            break;
+        }
+    }
+
+    if (!error && group->ofconn && group->buffer_id != UINT32_MAX) {
+        LIST_FOR_EACH (op, group_node, &group->ops) {
+            if (op->type != OFOPERATION_DELETE) {
+                struct ofpbuf *packet;
+                uint16_t in_port;
+
+                error = ofconn_pktbuf_retrieve(group->ofconn, group->buffer_id,
+                                               &packet, &in_port);
+                if (packet) {
+                    assert(!error);
+                    error = rule_execute(op->rule, in_port, packet);
+                }
+                break;
+            }
+        }
+    }
+
+    LIST_FOR_EACH_SAFE (op, next_op, group_node, &group->ops) {
+        struct rule *rule = op->rule;
+        rule->pending = NULL;
+
+        switch (op->type) {
+        case OFOPERATION_ADD:
+            if (!op->error) {
+                ofproto_rule_destroy__(op->victim);
+                if ((rule->cr.wc.vlan_tci_mask & htons(VLAN_VID_MASK))
+                    == htons(VLAN_VID_MASK)) {
+                    if (ofproto->vlan_bitmap) {
+                        uint16_t vid = vlan_tci_to_vid(rule->cr.flow.vlan_tci);
+
+                        if (!bitmap_is_set(ofproto->vlan_bitmap, vid)) {
+                            bitmap_set1(ofproto->vlan_bitmap, vid);
+                            ofproto->vlans_changed = true;
+                        }
+                    } else {
+                        ofproto->vlans_changed = true;
+                    }
+                }
+            } else {
+                oftable_substitute_rule(rule, op->victim);
+                ofproto_rule_destroy__(rule);
+            }
+            break;
+
+        case OFOPERATION_DELETE:
+            assert(!op->error);
+            ofproto_rule_destroy__(rule);
+            op->rule = NULL;
+            break;
+
+        case OFOPERATION_MODIFY:
+            if (!op->error) {
+                rule->modified = time_msec();
+            } else {
+                free(rule->ofpacts);
+                rule->ofpacts = op->ofpacts;
+                rule->ofpacts_len = op->ofpacts_len;
+                op->ofpacts = NULL;
+                op->ofpacts_len = 0;
+            }
+            break;
+
+        default:
+            NOT_REACHED();
+        }
+
+        ofoperation_destroy(op);
+    }
+
     if (!list_is_empty(&group->ofproto_node)) {
-        assert(group->ofproto->n_pending > 0);
-        group->ofproto->n_pending--;
+        assert(ofproto->n_pending > 0);
+        ofproto->n_pending--;
         list_remove(&group->ofproto_node);
     }
     if (!list_is_empty(&group->ofconn_node)) {
         list_remove(&group->ofconn_node);
-        if (group->error) {
-            ofconn_send_error(group->ofconn, group->request, group->error);
+        if (error) {
+            ofconn_send_error(group->ofconn, group->request, error);
         }
-        connmgr_retry(group->ofproto->connmgr);
+        connmgr_retry(ofproto->connmgr);
     }
     free(group->request);
     free(group);
@@ -3618,6 +3702,8 @@ ofoperation_create(struct ofopgroup *group, struct rule *rule,
     op->type = type;
     op->flow_cookie = rule->flow_cookie;
 
+    group->n_running++;
+
     if (type == OFOPERATION_DELETE) {
         hmap_insert(&ofproto->deletions, &op->hmap_node,
                     cls_rule_hash(&rule->cr, rule->table_id));
@@ -3640,10 +3726,6 @@ ofoperation_destroy(struct ofoperation *op)
     list_remove(&op->group_node);
     free(op->ofpacts);
     free(op);
-
-    if (list_is_empty(&group->ops) && !list_is_empty(&group->ofproto_node)) {
-        ofopgroup_destroy(group);
-    }
 }
 
 /* Indicates that 'op' completed with status 'error', which is either 0 to
@@ -3679,76 +3761,15 @@ void
 ofoperation_complete(struct ofoperation *op, enum ofperr error)
 {
     struct ofopgroup *group = op->group;
-    struct rule *rule = op->rule;
-    struct ofproto *ofproto = rule->ofproto;
 
-    assert(rule->pending == op);
+    assert(op->rule->pending == op);
+    assert(group->n_running > 0);
+    assert(!error || op->type != OFOPERATION_DELETE);
 
-    if (!error
-        && !group->error
-        && op->type != OFOPERATION_DELETE
-        && group->ofconn
-        && group->buffer_id != UINT32_MAX
-        && list_is_singleton(&op->group_node)) {
-        struct ofpbuf *packet;
-        uint16_t in_port;
-
-        error = ofconn_pktbuf_retrieve(group->ofconn, group->buffer_id,
-                                       &packet, &in_port);
-        if (packet) {
-            assert(!error);
-            error = rule_execute(rule, in_port, packet);
-        }
+    op->error = error;
+    if (!--group->n_running && !list_is_empty(&group->ofproto_node)) {
+        ofopgroup_complete(group);
     }
-    if (!group->error) {
-        group->error = error;
-    }
-
-    switch (op->type) {
-    case OFOPERATION_ADD:
-        if (!error) {
-            ofproto_rule_destroy__(op->victim);
-            if ((rule->cr.wc.vlan_tci_mask & htons(VLAN_VID_MASK))
-                == htons(VLAN_VID_MASK)) {
-                if (ofproto->vlan_bitmap) {
-                    uint16_t vid = vlan_tci_to_vid(rule->cr.flow.vlan_tci);
-
-                    if (!bitmap_is_set(ofproto->vlan_bitmap, vid)) {
-                        bitmap_set1(ofproto->vlan_bitmap, vid);
-                        ofproto->vlans_changed = true;
-                    }
-                } else {
-                    ofproto->vlans_changed = true;
-                }
-            }
-        } else {
-            oftable_substitute_rule(rule, op->victim);
-            ofproto_rule_destroy__(rule);
-            op->rule = NULL;
-        }
-        break;
-
-    case OFOPERATION_DELETE:
-        assert(!error);
-        ofproto_rule_destroy__(rule);
-        op->rule = NULL;
-        break;
-
-    case OFOPERATION_MODIFY:
-        if (!error) {
-            rule->modified = time_msec();
-        } else {
-            free(rule->ofpacts);
-            rule->ofpacts = op->ofpacts;
-            rule->ofpacts_len = op->ofpacts_len;
-            op->ofpacts = NULL;
-        }
-        break;
-
-    default:
-        NOT_REACHED();
-    }
-    ofoperation_destroy(op);
 }
 
 struct rule *
