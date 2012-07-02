@@ -210,7 +210,7 @@ class Connection(object):
         if not self.status:
             self.stream.run_wait(poller)
             if len(self.output):
-                self.stream.send_wait()
+                self.stream.send_wait(poller)
 
     def get_status(self):
         return self.status
