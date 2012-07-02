@@ -113,7 +113,7 @@ class Stream(object):
                     break
                 stream.run()
                 poller = ovs.poller.Poller()
-                stream.run_wait()
+                stream.run_wait(poller)
                 stream.connect_wait(poller)
                 poller.block()
             assert error != errno.EINPROGRESS
