@@ -20,6 +20,8 @@ post-v1.7.0
     - Open vSwitch now sends RARP packets in situations where it previously
       sent a custom protocol, making it consistent with behavior of QEMU and
       VMware.
+    - "ovsdb-tool show-log" and the --timestamp options on ovsdb-client and
+      ovs-ofctl now display timestamps in UTC instead of the local timezone.
 
 
 v1.7.0 - xx xxx xxxx

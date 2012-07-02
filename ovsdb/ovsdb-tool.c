@@ -513,7 +513,7 @@ do_show_log(int argc, char *argv[])
                 time_t t = json_integer(date);
                 char s[128];
 
-                strftime(s, sizeof s, "%Y-%m-%d %H:%M:%S", localtime(&t));
+                strftime(s, sizeof s, "%Y-%m-%d %H:%M:%S", gmtime(&t));
                 printf(" %s", s);
             }
 

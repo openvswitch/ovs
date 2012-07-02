@@ -498,8 +498,8 @@ vlog_init(void)
         struct tm tm;
         char s[128];
 
-        localtime_r(&now, &tm);
-        strftime(s, sizeof s, "%a, %d %b %Y %H:%M:%S %z", &tm);
+        gmtime_r(&now, &tm);
+        strftime(s, sizeof s, "%a, %d %b %Y %H:%M:%S", &tm);
         VLOG_ERR("current time is negative: %s (%ld)", s, (long int) now);
     }
 

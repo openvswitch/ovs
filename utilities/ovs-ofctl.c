@@ -1127,7 +1127,7 @@ monitor_vconn(struct vconn *vconn)
                 time_t now = time_wall();
                 char s[32];
 
-                strftime(s, sizeof s, "%Y-%m-%d %H:%M:%S: ", localtime(&now));
+                strftime(s, sizeof s, "%Y-%m-%d %H:%M:%S: ", gmtime(&now));
                 fputs(s, stderr);
             }
 
