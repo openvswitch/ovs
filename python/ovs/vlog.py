@@ -60,7 +60,7 @@ class Vlog:
         if not Vlog.__inited:
             return
 
-        now = datetime.datetime.now().strftime("%b %d %H:%M:%S")
+        now = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
         message = ("%s|%s|%s|%s|%s"
                    % (now, Vlog.__msg_num, self.name, level, message))
 
