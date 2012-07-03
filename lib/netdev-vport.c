@@ -681,10 +681,14 @@ parse_tunnel_config(const char *name, const char *type,
     }
 
     if (is_ipsec) {
-        char *file_name = xasprintf("%s/%s", ovs_rundir(),
-                "ovs-monitor-ipsec.pid");
-        pid_t pid = read_pidfile(file_name);
-        free(file_name);
+        static pid_t pid = 0;
+        if (pid == 0) {
+            char *file_name = xasprintf("%s/%s", ovs_rundir(),
+                                        "ovs-monitor-ipsec.pid");
+            pid = read_pidfile(file_name);
+            free(file_name);
+        }
+
         if (pid < 0) {
             VLOG_ERR("%s: IPsec requires the ovs-monitor-ipsec daemon",
                      name);
