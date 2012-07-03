@@ -377,14 +377,12 @@ dump_trivial_transaction(const char *vconn_name, uint8_t request_type)
 }
 
 static void
-dump_stats_transaction(const char *vconn_name, struct ofpbuf *request)
+dump_stats_transaction__(struct vconn *vconn, struct ofpbuf *request)
 {
     ovs_be32 send_xid = ((struct ofp_header *) request->data)->xid;
     ovs_be16 stats_type = ((struct ofp_stats_msg *) request->data)->type;
-    struct vconn *vconn;
     bool done = false;
 
-    open_vconn(vconn_name, &vconn);
     send_openflow_buffer(vconn, request);
     while (!done) {
         ovs_be32 recv_xid;
@@ -414,6 +412,15 @@ dump_stats_transaction(const char *vconn_name, struct ofpbuf *request)
         }
         ofpbuf_delete(reply);
     }
+}
+
+static void
+dump_stats_transaction(const char *vconn_name, struct ofpbuf *request)
+{
+    struct vconn *vconn;
+
+    open_vconn(vconn_name, &vconn);
+    dump_stats_transaction__(vconn, request);
     vconn_close(vconn);
 }
 
@@ -777,7 +784,7 @@ ofctl_dump_flows__(int argc, char *argv[], bool aggregate)
     protocol = open_vconn(argv[1], &vconn);
     protocol = set_protocol_for_flow_dump(vconn, protocol, usable_protocols);
     request = ofputil_encode_flow_stats_request(&fsr, protocol);
-    dump_stats_transaction(argv[1], request);
+    dump_stats_transaction__(vconn, request);
     vconn_close(vconn);
 }
 
