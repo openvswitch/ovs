@@ -1650,6 +1650,60 @@ read_flows_from_file(const char *filename, struct classifier *cls, int index)
     return usable_protocols;
 }
 
+static bool
+recv_flow_stats_reply(struct vconn *vconn, ovs_be32 send_xid,
+                      struct ofpbuf **replyp,
+                      struct ofputil_flow_stats *fs, struct ofpbuf *ofpacts)
+{
+    struct ofpbuf *reply = *replyp;
+
+    for (;;) {
+        ovs_be16 flags;
+        int retval;
+
+        /* Get a flow stats reply message, if we don't already have one. */
+        if (!reply) {
+            const struct ofputil_msg_type *type;
+            enum ofputil_msg_code code;
+
+            do {
+                run(vconn_recv_block(vconn, &reply),
+                    "OpenFlow packet receive failed");
+            } while (((struct ofp_header *) reply->data)->xid != send_xid);
+
+            ofputil_decode_msg_type(reply->data, &type);
+            code = ofputil_msg_type_code(type);
+            if (code != OFPUTIL_OFPST_FLOW_REPLY &&
+                code != OFPUTIL_NXST_FLOW_REPLY) {
+                ovs_fatal(0, "received bad reply: %s",
+                          ofp_to_string(reply->data, reply->size,
+                                        verbosity + 1));
+            }
+        }
+
+        /* Pull an individual flow stats reply out of the message. */
+        retval = ofputil_decode_flow_stats_reply(fs, reply, false, ofpacts);
+        switch (retval) {
+        case 0:
+            *replyp = reply;
+            return true;
+
+        case EOF:
+            flags = ((const struct ofp_stats_msg *) reply->l2)->flags;
+            ofpbuf_delete(reply);
+            if (!(flags & htons(OFPSF_REPLY_MORE))) {
+                *replyp = NULL;
+                return false;
+            }
+            break;
+
+        default:
+            ovs_fatal(0, "parse error in reply (%s)",
+                      ofperr_to_string(retval));
+        }
+    }
+}
+
 /* Reads the OpenFlow flow table from 'vconn', which has currently active flow
  * format 'protocol', and adds them as flow table entries in 'cls' for the
  * version with the specified 'index'. */
@@ -1659,9 +1713,11 @@ read_flows_from_switch(struct vconn *vconn,
                        struct classifier *cls, int index)
 {
     struct ofputil_flow_stats_request fsr;
+    struct ofputil_flow_stats fs;
     struct ofpbuf *request;
+    struct ofpbuf ofpacts;
+    struct ofpbuf *reply;
     ovs_be32 send_xid;
-    bool done;
 
     fsr.aggregate = false;
     cls_rule_init_catchall(&fsr.match, 0);
@@ -1672,65 +1728,22 @@ read_flows_from_switch(struct vconn *vconn,
     send_xid = ((struct ofp_header *) request->data)->xid;
     send_openflow_buffer(vconn, request);
 
-    done = false;
-    while (!done) {
-        ovs_be32 recv_xid;
-        struct ofpbuf *reply;
+    reply = NULL;
+    ofpbuf_init(&ofpacts, 0);
+    while (recv_flow_stats_reply(vconn, send_xid, &reply, &fs, &ofpacts)) {
+        struct fte_version *version;
 
-        run(vconn_recv_block(vconn, &reply), "OpenFlow packet receive failed");
-        recv_xid = ((struct ofp_header *) reply->data)->xid;
-        if (send_xid == recv_xid) {
-            const struct ofputil_msg_type *type;
-            const struct ofp_stats_msg *osm;
-            enum ofputil_msg_code code;
+        version = xmalloc(sizeof *version);
+        version->cookie = fs.cookie;
+        version->idle_timeout = fs.idle_timeout;
+        version->hard_timeout = fs.hard_timeout;
+        version->flags = 0;
+        version->ofpacts_len = fs.ofpacts_len;
+        version->ofpacts = xmemdup(fs.ofpacts, fs.ofpacts_len);
 
-            ofputil_decode_msg_type(reply->data, &type);
-            code = ofputil_msg_type_code(type);
-            if (code != OFPUTIL_OFPST_FLOW_REPLY &&
-                code != OFPUTIL_NXST_FLOW_REPLY) {
-                ovs_fatal(0, "received bad reply: %s",
-                          ofp_to_string(reply->data, reply->size,
-                                        verbosity + 1));
-            }
-
-            osm = reply->data;
-            if (!(osm->flags & htons(OFPSF_REPLY_MORE))) {
-                done = true;
-            }
-
-            for (;;) {
-                struct fte_version *version;
-                struct ofputil_flow_stats fs;
-                struct ofpbuf ofpacts;
-                int retval;
-
-                ofpbuf_init(&ofpacts, 64);
-                retval = ofputil_decode_flow_stats_reply(&fs, reply, false,
-                                                         &ofpacts);
-                if (retval) {
-                    ofpbuf_uninit(&ofpacts);
-                    if (retval != EOF) {
-                        ovs_fatal(0, "parse error in reply");
-                    }
-                    break;
-                }
-
-                version = xmalloc(sizeof *version);
-                version->cookie = fs.cookie;
-                version->idle_timeout = fs.idle_timeout;
-                version->hard_timeout = fs.hard_timeout;
-                version->flags = 0;
-                version->ofpacts = ofpbuf_steal_data(&ofpacts);
-                version->ofpacts_len = ofpacts.size;
-
-                fte_insert(cls, &fs.rule, version, index);
-            }
-        } else {
-            VLOG_DBG("received reply with xid %08"PRIx32" "
-                     "!= expected %08"PRIx32, recv_xid, send_xid);
-        }
-        ofpbuf_delete(reply);
+        fte_insert(cls, &fs.rule, version, index);
     }
+    ofpbuf_uninit(&ofpacts);
 }
 
 static void
