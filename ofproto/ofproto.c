@@ -3128,6 +3128,9 @@ ofproto_rule_update_used(struct rule *rule, long long int used)
  * OFPRR_HARD_TIMEOUT or OFPRR_IDLE_TIMEOUT), and then removes 'rule' from its
  * ofproto.
  *
+ * 'rule' must not have a pending operation (that is, 'rule->pending' must be
+ * NULL).
+ *
  * ofproto implementation ->run() functions should use this function to expire
  * OpenFlow flows. */
 void

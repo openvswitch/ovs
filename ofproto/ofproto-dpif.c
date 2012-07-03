@@ -3562,6 +3562,11 @@ rule_expire(struct rule_dpif *rule)
     long long int now;
     uint8_t reason;
 
+    if (rule->up.pending) {
+        /* We'll have to expire it later. */
+        return;
+    }
+
     /* Has 'rule' expired? */
     now = time_msec();
     if (rule->up.hard_timeout

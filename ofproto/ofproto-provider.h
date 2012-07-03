@@ -388,6 +388,9 @@ struct ofproto_class {
      *   - Call ofproto_rule_expire() for each OpenFlow flow that has reached
      *     its hard_timeout or idle_timeout, to expire the flow.
      *
+     *     (But rules that are part of a pending operation, e.g. rules for
+     *     which ->pending is true, may not expire.)
+     *
      * Returns 0 if successful, otherwise a positive errno value. */
     int (*run)(struct ofproto *ofproto);
 
