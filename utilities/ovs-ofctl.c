@@ -1843,7 +1843,7 @@ read_flows_from_file(const char *filename, struct classifier *cls, int index)
         version->cookie = fm.new_cookie;
         version->idle_timeout = fm.idle_timeout;
         version->hard_timeout = fm.hard_timeout;
-        version->flags = fm.flags & (OFPFF_SEND_FLOW_REM | OFPFF_EMERG);
+        version->flags = fm.flags & (OFPFF_SEND_FLOW_REM | OFPFF10_EMERG);
         version->ofpacts = fm.ofpacts;
         version->ofpacts_len = fm.ofpacts_len;
 
@@ -1868,8 +1868,8 @@ recv_flow_stats_reply(struct vconn *vconn, ovs_be32 send_xid,
     struct ofpbuf *reply = *replyp;
 
     for (;;) {
-        ovs_be16 flags;
         int retval;
+        bool more;
 
         /* Get a flow stats reply message, if we don't already have one. */
         if (!reply) {
@@ -1897,10 +1897,10 @@ recv_flow_stats_reply(struct vconn *vconn, ovs_be32 send_xid,
             return true;
 
         case EOF:
-            flags = ((const struct ofp_stats_msg *) reply->l2)->flags;
+            more = ofpmp_more(reply->l2);
             ofpbuf_delete(reply);
             reply = NULL;
-            if (!(flags & htons(OFPSF_REPLY_MORE))) {
+            if (!more) {
                 *replyp = NULL;
                 return false;
             }

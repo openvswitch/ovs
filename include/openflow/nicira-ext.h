@@ -118,7 +118,7 @@ enum nx_hash_fields {
  * instead of having the switch decide which table is most appropriate as
  * required by OpenFlow 1.0.  By default, the extension is disabled.
  *
- * When this feature is enabled, Open vSwitch treats struct ofp_flow_mod's
+ * When this feature is enabled, Open vSwitch treats struct ofp10_flow_mod's
  * 16-bit 'command' member as two separate fields.  The upper 8 bits are used
  * as the table ID, the lower 8 bits specify the command as usual.  A table ID
  * of 0xff is treated like a wildcarded table ID.

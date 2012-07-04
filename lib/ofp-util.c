@@ -1104,7 +1104,7 @@ ofputil_decode_flow_mod(struct ofputil_flow_mod *fm,
     raw = ofpraw_pull_assert(&b);
     if (raw == OFPRAW_OFPT10_FLOW_MOD) {
         /* Standard OpenFlow 1.1 flow_mod. */
-        const struct ofp_flow_mod *ofm;
+        const struct ofp10_flow_mod *ofm;
         uint16_t priority;
         enum ofperr error;
 
@@ -1193,7 +1193,7 @@ struct ofpbuf *
 ofputil_encode_flow_mod(const struct ofputil_flow_mod *fm,
                         enum ofputil_protocol protocol)
 {
-    struct ofp_flow_mod *ofm;
+    struct ofp10_flow_mod *ofm;
     struct nx_flow_mod *nfm;
     struct ofpbuf *msg;
     uint16_t command;

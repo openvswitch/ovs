@@ -271,14 +271,6 @@ struct ofp_packet_out {
 };
 OFP_ASSERT(sizeof(struct ofp_packet_out) == 8);
 
-enum ofp_flow_mod_command {
-    OFPFC_ADD,              /* New flow. */
-    OFPFC_MODIFY,           /* Modify all matching flows. */
-    OFPFC_MODIFY_STRICT,    /* Modify entry strictly matching wildcards */
-    OFPFC_DELETE,           /* Delete all matching flows. */
-    OFPFC_DELETE_STRICT     /* Strictly match wildcards and priority. */
-};
-
 /* Flow wildcards. */
 enum ofp_flow_wildcards {
     OFPFW10_IN_PORT    = 1 << 0,  /* Switch input port. */
@@ -363,15 +355,12 @@ OFP_ASSERT(sizeof(struct ofp10_match) == 40);
 /* By default, choose a priority in the middle. */
 #define OFP_DEFAULT_PRIORITY 0x8000
 
-enum ofp_flow_mod_flags {
-    OFPFF_SEND_FLOW_REM = 1 << 0,  /* Send flow removed message when flow
-                                    * expires or is deleted. */
-    OFPFF_CHECK_OVERLAP = 1 << 1,  /* Check for overlapping entries first. */
-    OFPFF_EMERG         = 1 << 2   /* Ramark this is for emergency. */
+enum ofp10_flow_mod_flags {
+    OFPFF10_EMERG       = 1 << 2   /* Ramark this is for emergency. */
 };
 
 /* Flow setup and teardown (controller -> datapath). */
-struct ofp_flow_mod {
+struct ofp10_flow_mod {
     struct ofp10_match match;    /* Fields to match */
     ovs_be64 cookie;             /* Opaque controller-issued identifier. */
 
@@ -391,7 +380,7 @@ struct ofp_flow_mod {
                                             from the length field in the
                                             header. */
 };
-OFP_ASSERT(sizeof(struct ofp_flow_mod) == 64);
+OFP_ASSERT(sizeof(struct ofp10_flow_mod) == 64);
 
 /* Flow removed (datapath -> controller). */
 struct ofp_flow_removed {

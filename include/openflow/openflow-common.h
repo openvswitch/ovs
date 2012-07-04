@@ -195,6 +195,20 @@ enum ofp_packet_in_reason {
     OFPR_N_REASONS
 };
 
+enum ofp_flow_mod_command {
+    OFPFC_ADD,              /* New flow. */
+    OFPFC_MODIFY,           /* Modify all matching flows. */
+    OFPFC_MODIFY_STRICT,    /* Modify entry strictly matching wildcards */
+    OFPFC_DELETE,           /* Delete all matching flows. */
+    OFPFC_DELETE_STRICT     /* Strictly match wildcards and priority. */
+};
+
+enum ofp_flow_mod_flags {
+    OFPFF_SEND_FLOW_REM = 1 << 0,  /* Send flow removed message when flow
+                                    * expires or is deleted. */
+    OFPFF_CHECK_OVERLAP = 1 << 1,  /* Check for overlapping entries first. */
+};
+
 /* Action structure for OFPAT10_SET_VLAN_VID and OFPAT11_SET_VLAN_VID. */
 struct ofp_action_vlan_vid {
     ovs_be16 type;                  /* Type. */
