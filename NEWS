@@ -1,6 +1,9 @@
 post-v1.7.0
 ------------------------
     - New FAQ.  Please send updates and additions!
+    - Authors of controllers, please read the new section titled "Action
+      Reproduction" in DESIGN, which describes an Open vSwitch change in
+      behavior in corner cases that may affect some controllers.
     - ovs-l3ping:
         - A new test utility that can create L3 tunnel between two Open
           vSwitches and detect connectivity issues.

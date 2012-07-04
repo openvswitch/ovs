@@ -23,6 +23,7 @@
 #include "flow.h"
 #include "mac-learning.h"
 #include "odp-util.h"
+#include "ofp-actions.h"
 #include "ofp-util.h"
 #include "ofpbuf.h"
 #include "ofproto.h"
@@ -214,18 +215,19 @@ fail_open_flushed(struct fail_open *fo)
     int disconn_secs = connmgr_failure_duration(fo->connmgr);
     bool open = disconn_secs >= trigger_duration(fo);
     if (open) {
-        union ofp_action action;
+        struct ofpbuf ofpacts;
         struct cls_rule rule;
 
         /* Set up a flow that matches every packet and directs them to
          * OFPP_NORMAL. */
-        memset(&action, 0, sizeof action);
-        action.type = htons(OFPAT10_OUTPUT);
-        action.output.len = htons(sizeof action);
-        action.output.port = htons(OFPP_NORMAL);
+        ofpbuf_init(&ofpacts, OFPACT_OUTPUT_SIZE);
+        ofpact_put_OUTPUT(&ofpacts)->port = OFPP_NORMAL;
+        ofpact_pad(&ofpacts);
 
         cls_rule_init_catchall(&rule, FAIL_OPEN_PRIORITY);
-        ofproto_add_flow(fo->ofproto, &rule, &action, 1);
+        ofproto_add_flow(fo->ofproto, &rule, ofpacts.data, ofpacts.size);
+
+        ofpbuf_uninit(&ofpacts);
     }
 }
 

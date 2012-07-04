@@ -32,6 +32,7 @@
 #include "meta-flow.h"
 #include "netdev.h"
 #include "nx-match.h"
+#include "ofp-actions.h"
 #include "ofp-errors.h"
 #include "ofp-print.h"
 #include "ofp-util.h"
@@ -118,8 +119,8 @@ struct ofoperation {
     struct rule *rule;          /* Rule being operated upon. */
     enum ofoperation_type type; /* Type of operation. */
     struct rule *victim;        /* OFOPERATION_ADDING: Replaced rule. */
-    union ofp_action *actions;  /* OFOPERATION_MODIFYING: Replaced actions. */
-    int n_actions;              /* OFOPERATION_MODIFYING: # of old actions. */
+    struct ofpact *ofpacts;     /* OFOPERATION_MODIFYING: Replaced actions. */
+    size_t ofpacts_len;         /* OFOPERATION_MODIFYING: Bytes of ofpacts. */
     ovs_be64 flow_cookie;       /* Rule's old flow cookie. */
 };
 
@@ -1378,27 +1379,28 @@ ofproto_port_del(struct ofproto *ofproto, uint16_t ofp_port)
  * (0...65535, inclusive) then the flow will be visible to OpenFlow
  * controllers; otherwise, it will be hidden.
  *
- * The caller retains ownership of 'cls_rule' and 'actions'.
+ * The caller retains ownership of 'cls_rule' and 'ofpacts'.
  *
  * This is a helper function for in-band control and fail-open. */
 void
 ofproto_add_flow(struct ofproto *ofproto, const struct cls_rule *cls_rule,
-                 const union ofp_action *actions, size_t n_actions)
+                 const struct ofpact *ofpacts, size_t ofpacts_len)
 {
     const struct rule *rule;
 
     rule = rule_from_cls_rule(classifier_find_rule_exactly(
                                     &ofproto->tables[0].cls, cls_rule));
-    if (!rule || !ofputil_actions_equal(rule->actions, rule->n_actions,
-                                        actions, n_actions)) {
+    if (!rule || !ofpacts_equal(rule->ofpacts, rule->ofpacts_len,
+                                ofpacts, ofpacts_len)) {
         struct ofputil_flow_mod fm;
 
         memset(&fm, 0, sizeof fm);
         fm.cr = *cls_rule;
         fm.buffer_id = UINT32_MAX;
-        fm.actions = (union ofp_action *) actions;
-        fm.n_actions = n_actions;
+        fm.ofpacts = xmemdup(ofpacts, ofpacts_len);
+        fm.ofpacts_len = ofpacts_len;
         add_flow(ofproto, NULL, &fm, NULL);
+        free(fm.ofpacts);
     }
 }
 
@@ -1857,7 +1859,7 @@ static void
 ofproto_rule_destroy__(struct rule *rule)
 {
     if (rule) {
-        free(rule->actions);
+        free(rule->ofpacts);
         rule->ofproto->ofproto_class->rule_dealloc(rule);
     }
 }
@@ -1879,23 +1881,12 @@ ofproto_rule_destroy(struct rule *rule)
 }
 
 /* Returns true if 'rule' has an OpenFlow OFPAT_OUTPUT or OFPAT_ENQUEUE action
- * that outputs to 'out_port' (output to OFPP_FLOOD and OFPP_ALL doesn't
- * count). */
+ * that outputs to 'port' (output to OFPP_FLOOD and OFPP_ALL doesn't count). */
 static bool
-rule_has_out_port(const struct rule *rule, uint16_t out_port)
+rule_has_out_port(const struct rule *rule, uint16_t port)
 {
-    const union ofp_action *oa;
-    size_t left;
-
-    if (out_port == OFPP_NONE) {
-        return true;
-    }
-    OFPUTIL_ACTION_FOR_EACH_UNSAFE (oa, left, rule->actions, rule->n_actions) {
-        if (action_outputs_to_port(oa, htons(out_port))) {
-            return true;
-        }
-    }
-    return false;
+    return (port == OFPP_NONE
+            || ofpacts_output_to_port(rule->ofpacts, rule->ofpacts_len, port));
 }
 
 /* Executes the actions indicated by 'rule' on 'packet' and credits 'rule''s
@@ -2052,6 +2043,8 @@ handle_packet_out(struct ofconn *ofconn, const struct ofp_packet_out *opo)
     struct ofproto *p = ofconn_get_ofproto(ofconn);
     struct ofputil_packet_out po;
     struct ofpbuf *payload;
+    uint64_t ofpacts_stub[1024 / 8];
+    struct ofpbuf ofpacts;
     struct flow flow;
     enum ofperr error;
 
@@ -2059,20 +2052,21 @@ handle_packet_out(struct ofconn *ofconn, const struct ofp_packet_out *opo)
 
     error = reject_slave_controller(ofconn);
     if (error) {
-        return error;
+        goto exit;
     }
 
     /* Decode message. */
-    error = ofputil_decode_packet_out(&po, opo);
+    ofpbuf_use_stub(&ofpacts, ofpacts_stub, sizeof ofpacts_stub);
+    error = ofputil_decode_packet_out(&po, opo, &ofpacts);
     if (error) {
-        return error;
+        goto exit_free_ofpacts;
     }
 
     /* Get payload. */
     if (po.buffer_id != UINT32_MAX) {
         error = ofconn_pktbuf_retrieve(ofconn, po.buffer_id, &payload, NULL);
         if (error || !payload) {
-            return error;
+            goto exit_free_ofpacts;
         }
     } else {
         payload = xmalloc(sizeof *payload);
@@ -2082,9 +2076,12 @@ handle_packet_out(struct ofconn *ofconn, const struct ofp_packet_out *opo)
     /* Send out packet. */
     flow_extract(payload, 0, 0, po.in_port, &flow);
     error = p->ofproto_class->packet_out(p, payload, &flow,
-                                         po.actions, po.n_actions);
+                                         po.ofpacts, po.ofpacts_len);
     ofpbuf_delete(payload);
 
+exit_free_ofpacts:
+    ofpbuf_uninit(&ofpacts);
+exit:
     return error;
 }
 
@@ -2486,8 +2483,8 @@ handle_flow_stats_request(struct ofconn *ofconn,
         fs.hard_age = age_secs(now - rule->modified);
         ofproto->ofproto_class->rule_get_stats(rule, &fs.packet_count,
                                                &fs.byte_count);
-        fs.actions = rule->actions;
-        fs.n_actions = rule->n_actions;
+        fs.ofpacts = rule->ofpacts;
+        fs.ofpacts_len = rule->ofpacts_len;
         ofputil_append_flow_stats_reply(&fs, &replies);
     }
     ofconn_send_replies(ofconn, &replies);
@@ -2513,8 +2510,8 @@ flow_stats_ds(struct rule *rule, struct ds *results)
     ds_put_format(results, "n_bytes=%"PRIu64", ", byte_count);
     cls_rule_format(&rule->cr, results);
     ds_put_char(results, ',');
-    if (rule->n_actions > 0) {
-        ofp_print_actions(results, rule->actions, rule->n_actions);
+    if (rule->ofpacts_len > 0) {
+        ofpacts_format(rule->ofpacts, rule->ofpacts_len, results);
     } else {
         ds_put_cstr(results, "drop");
     }
@@ -2771,6 +2768,9 @@ is_flow_deletion_pending(const struct ofproto *ofproto,
  * error code on failure, or OFPROTO_POSTPONE if the operation cannot be
  * initiated now but may be retried later.
  *
+ * Upon successful return, takes ownership of 'fm->ofpacts'.  On failure,
+ * ownership remains with the caller.
+ *
  * 'ofconn' is used to retrieve the packet buffer specified in ofm->buffer_id,
  * if any. */
 static enum ofperr
@@ -2839,8 +2839,8 @@ add_flow(struct ofproto *ofproto, struct ofconn *ofconn,
     rule->hard_timeout = fm->hard_timeout;
     rule->table_id = table - ofproto->tables;
     rule->send_flow_removed = (fm->flags & OFPFF_SEND_FLOW_REM) != 0;
-    rule->actions = ofputil_actions_clone(fm->actions, fm->n_actions);
-    rule->n_actions = fm->n_actions;
+    rule->ofpacts = xmemdup(fm->ofpacts, fm->ofpacts_len);
+    rule->ofpacts_len = fm->ofpacts_len;
     rule->evictable = true;
     rule->eviction_group = NULL;
 
@@ -2922,14 +2922,14 @@ modify_flows__(struct ofproto *ofproto, struct ofconn *ofconn,
             continue;
         }
 
-        if (!ofputil_actions_equal(fm->actions, fm->n_actions,
-                                   rule->actions, rule->n_actions)) {
+        if (!ofpacts_equal(fm->ofpacts, fm->ofpacts_len,
+                           rule->ofpacts, rule->ofpacts_len)) {
             ofoperation_create(group, rule, OFOPERATION_MODIFY);
-            rule->pending->actions = rule->actions;
-            rule->pending->n_actions = rule->n_actions;
-            rule->actions = ofputil_actions_clone(fm->actions, fm->n_actions);
-            rule->n_actions = fm->n_actions;
-            ofproto->ofproto_class->rule_modify_actions(rule);
+            rule->pending->ofpacts = rule->ofpacts;
+            rule->pending->ofpacts_len = rule->ofpacts_len;
+            rule->ofpacts = xmemdup(fm->ofpacts, fm->ofpacts_len);
+            rule->ofpacts_len = fm->ofpacts_len;
+            rule->ofproto->ofproto_class->rule_modify_actions(rule);
         } else {
             rule->modified = time_msec();
         }
@@ -3127,30 +3127,35 @@ handle_flow_mod(struct ofconn *ofconn, const struct ofp_header *oh)
 {
     struct ofproto *ofproto = ofconn_get_ofproto(ofconn);
     struct ofputil_flow_mod fm;
+    uint64_t ofpacts_stub[1024 / 8];
+    struct ofpbuf ofpacts;
     enum ofperr error;
     long long int now;
 
     error = reject_slave_controller(ofconn);
     if (error) {
-        return error;
+        goto exit;
     }
 
-    error = ofputil_decode_flow_mod(&fm, oh, ofconn_get_protocol(ofconn));
+    ofpbuf_use_stub(&ofpacts, ofpacts_stub, sizeof ofpacts_stub);
+    error = ofputil_decode_flow_mod(&fm, oh, ofconn_get_protocol(ofconn),
+                                    &ofpacts);
     if (error) {
-        return error;
+        goto exit_free_ofpacts;
     }
 
     /* We do not support the OpenFlow 1.0 emergency flow cache, which is not
      * required in OpenFlow 1.0.1 and removed from OpenFlow 1.1. */
     if (fm.flags & OFPFF_EMERG) {
-        /* There isn't a good fit for an error code, so just state that the
-         * flow table is full. */
-        return OFPERR_OFPFMFC_ALL_TABLES_FULL;
+        /* We do not support the emergency flow cache.  It will hopefully get
+         * dropped from OpenFlow in the near future.  There is no good error
+         * code, so just state that the flow table is full. */
+        error = OFPERR_OFPFMFC_ALL_TABLES_FULL;
+    } else {
+        error = handle_flow_mod__(ofconn_get_ofproto(ofconn), ofconn, &fm, oh);
     }
-
-    error = handle_flow_mod__(ofconn_get_ofproto(ofconn), ofconn, &fm, oh);
     if (error) {
-        return error;
+        goto exit_free_ofpacts;
     }
 
     /* Record the operation for logging a summary report. */
@@ -3179,7 +3184,10 @@ handle_flow_mod(struct ofconn *ofconn, const struct ofp_header *oh)
     }
     ofproto->last_op = now;
 
-    return 0;
+exit_free_ofpacts:
+    ofpbuf_uninit(&ofpacts);
+exit:
+    return error;
 }
 
 static enum ofperr
@@ -3615,7 +3623,7 @@ ofoperation_destroy(struct ofoperation *op)
         hmap_remove(&group->ofproto->deletions, &op->hmap_node);
     }
     list_remove(&op->group_node);
-    free(op->actions);
+    free(op->ofpacts);
     free(op);
 
     if (list_is_empty(&group->ops) && !list_is_empty(&group->ofproto_node)) {
@@ -3715,10 +3723,10 @@ ofoperation_complete(struct ofoperation *op, enum ofperr error)
         if (!error) {
             rule->modified = time_msec();
         } else {
-            free(rule->actions);
-            rule->actions = op->actions;
-            rule->n_actions = op->n_actions;
-            op->actions = NULL;
+            free(rule->ofpacts);
+            rule->ofpacts = op->ofpacts;
+            rule->ofpacts_len = op->ofpacts_len;
+            op->ofpacts = NULL;
         }
         break;
 

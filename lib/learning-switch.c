@@ -29,6 +29,7 @@
 #include "hmap.h"
 #include "mac-learning.h"
 #include "ofpbuf.h"
+#include "ofp-actions.h"
 #include "ofp-errors.h"
 #include "ofp-parse.h"
 #include "ofp-print.h"
@@ -56,6 +57,7 @@ struct lswitch {
      * Otherwise, the switch processes every packet. */
     int max_idle;
 
+    enum ofputil_protocol protocol;
     unsigned long long int datapath_id;
     time_t last_features_request;
     struct mac_learning *ml;    /* NULL to act as hub instead of switch. */
@@ -81,7 +83,7 @@ static void send_features_request(struct lswitch *, struct rconn *);
 static enum ofperr process_switch_features(struct lswitch *,
                                            struct ofp_switch_features *);
 static void process_packet_in(struct lswitch *, struct rconn *,
-                              const struct ofp_packet_in *);
+                              const struct ofp_header *);
 static void process_echo_request(struct lswitch *, struct rconn *,
                                  const struct ofp_header *);
 
@@ -92,6 +94,7 @@ static void process_echo_request(struct lswitch *, struct rconn *,
 struct lswitch *
 lswitch_create(struct rconn *rconn, const struct lswitch_config *cfg)
 {
+    enum ofputil_protocol protocol;
     struct lswitch *sw;
 
     sw = xzalloc(sizeof *sw);
@@ -139,17 +142,12 @@ lswitch_create(struct rconn *rconn, const struct lswitch_config *cfg)
     sw->queued = rconn_packet_counter_create();
     send_features_request(sw, rconn);
 
+    protocol = ofputil_protocol_from_ofp_version(rconn_get_version(rconn));
     if (cfg->default_flows) {
         enum ofputil_protocol usable_protocols;
-        enum ofputil_protocol protocol;
         struct ofpbuf *msg = NULL;
-        int ofp_version;
         int error = 0;
         size_t i;
-
-        /* Figure out the initial protocol on the connection. */
-        ofp_version = rconn_get_version(rconn);
-        protocol = ofputil_protocol_from_ofp_version(ofp_version);
 
         /* If the initial protocol isn't good enough for default_flows, then
          * pick one that will work and encode messages to set up that
@@ -181,6 +179,7 @@ lswitch_create(struct rconn *rconn, const struct lswitch_config *cfg)
                          rconn_get_name(rconn), strerror(error));
         }
     }
+    sw->protocol = protocol;
 
     return sw;
 }
@@ -250,6 +249,7 @@ lswitch_process_packet(struct lswitch *sw, struct rconn *rconn,
         break;
 
     case OFPUTIL_OFPT_PACKET_IN:
+    case OFPUTIL_NXT_PACKET_IN:
         process_packet_in(sw, rconn, msg->data);
         break;
 
@@ -292,7 +292,6 @@ lswitch_process_packet(struct lswitch *sw, struct rconn *rconn,
     case OFPUTIL_NXT_FLOW_MOD_TABLE_ID:
     case OFPUTIL_NXT_SET_FLOW_FORMAT:
     case OFPUTIL_NXT_SET_PACKET_IN_FORMAT:
-    case OFPUTIL_NXT_PACKET_IN:
     case OFPUTIL_NXT_FLOW_MOD:
     case OFPUTIL_NXT_FLOW_REMOVED:
     case OFPUTIL_NXT_FLOW_AGE:
@@ -439,67 +438,58 @@ get_queue_id(const struct lswitch *sw, uint16_t in_port)
 
 static void
 process_packet_in(struct lswitch *sw, struct rconn *rconn,
-                  const struct ofp_packet_in *opi)
+                  const struct ofp_header *oh)
 {
-    uint16_t in_port = ntohs(opi->in_port);
+    struct ofputil_packet_in pi;
     uint32_t queue_id;
     uint16_t out_port;
 
-    struct ofp_action_header actions[2];
-    size_t actions_len;
+    uint64_t ofpacts_stub[64 / 8];
+    struct ofpbuf ofpacts;
 
     struct ofputil_packet_out po;
+    enum ofperr error;
 
-    size_t pkt_ofs, pkt_len;
     struct ofpbuf pkt;
     struct flow flow;
+
+    error = ofputil_decode_packet_in(&pi, oh);
+    if (error) {
+        VLOG_WARN_RL(&rl, "failed to decode packet-in: %s",
+                     ofperr_to_string(error));
+        return;
+    }
 
     /* Ignore packets sent via output to OFPP_CONTROLLER.  This library never
      * uses such an action.  You never know what experiments might be going on,
      * though, and it seems best not to interfere with them. */
-    if (opi->reason != OFPR_NO_MATCH) {
+    if (pi.reason != OFPR_NO_MATCH) {
         return;
     }
 
     /* Extract flow data from 'opi' into 'flow'. */
-    pkt_ofs = offsetof(struct ofp_packet_in, data);
-    pkt_len = ntohs(opi->header.length) - pkt_ofs;
-    ofpbuf_use_const(&pkt, opi->data, pkt_len);
-    flow_extract(&pkt, 0, 0, in_port, &flow);
+    ofpbuf_use_const(&pkt, pi.packet, pi.packet_len);
+    flow_extract(&pkt, 0, pi.fmd.tun_id, pi.fmd.in_port, &flow);
 
     /* Choose output port. */
     out_port = lswitch_choose_destination(sw, &flow);
 
     /* Make actions. */
-    queue_id = get_queue_id(sw, in_port);
+    queue_id = get_queue_id(sw, pi.fmd.in_port);
+    ofpbuf_use_stack(&ofpacts, ofpacts_stub, sizeof ofpacts_stub);
     if (out_port == OFPP_NONE) {
-        actions_len = 0;
+        /* No actions. */
     } else if (queue_id == UINT32_MAX || out_port >= OFPP_MAX) {
-        struct ofp_action_output oao;
-
-        memset(&oao, 0, sizeof oao);
-        oao.type = htons(OFPAT10_OUTPUT);
-        oao.len = htons(sizeof oao);
-        oao.port = htons(out_port);
-
-        memcpy(actions, &oao, sizeof oao);
-        actions_len = sizeof oao;
+        ofpact_put_OUTPUT(&ofpacts)->port = out_port;
     } else {
-        struct ofp_action_enqueue oae;
-
-        memset(&oae, 0, sizeof oae);
-        oae.type = htons(OFPAT10_ENQUEUE);
-        oae.len = htons(sizeof oae);
-        oae.port = htons(out_port);
-        oae.queue_id = htonl(queue_id);
-
-        memcpy(actions, &oae, sizeof oae);
-        actions_len = sizeof oae;
+        struct ofpact_enqueue *enqueue = ofpact_put_ENQUEUE(&ofpacts);
+        enqueue->port = out_port;
+        enqueue->queue = queue_id;
     }
-    assert(actions_len <= sizeof actions);
+    ofpact_pad(&ofpacts);
 
     /* Prepare packet_out in case we need one. */
-    po.buffer_id = ntohl(opi->buffer_id);
+    po.buffer_id = pi.buffer_id;
     if (po.buffer_id == UINT32_MAX) {
         po.packet = pkt.data;
         po.packet_len = pkt.size;
@@ -507,31 +497,38 @@ process_packet_in(struct lswitch *sw, struct rconn *rconn,
         po.packet = NULL;
         po.packet_len = 0;
     }
-    po.in_port = in_port;
-    po.actions = (union ofp_action *) actions;
-    po.n_actions = actions_len / sizeof *actions;
+    po.in_port = pi.fmd.in_port;
+    po.ofpacts = ofpacts.data;
+    po.ofpacts_len = ofpacts.size;
 
     /* Send the packet, and possibly the whole flow, to the output port. */
     if (sw->max_idle >= 0 && (!sw->ml || out_port != OFPP_FLOOD)) {
+        struct ofputil_flow_mod fm;
         struct ofpbuf *buffer;
-        struct cls_rule rule;
 
         /* The output port is known, or we always flood everything, so add a
          * new flow. */
-        cls_rule_init(&flow, &sw->wc, 0, &rule);
-        buffer = make_add_flow(&rule, ntohl(opi->buffer_id),
-                               sw->max_idle, actions_len);
-        ofpbuf_put(buffer, actions, actions_len);
+        memset(&fm, 0, sizeof fm);
+        cls_rule_init(&flow, &sw->wc, 0, &fm.cr);
+        fm.table_id = 0xff;
+        fm.command = OFPFC_ADD;
+        fm.idle_timeout = sw->max_idle;
+        fm.buffer_id = pi.buffer_id;
+        fm.out_port = OFPP_NONE;
+        fm.ofpacts = ofpacts.data;
+        fm.ofpacts_len = ofpacts.size;
+        buffer = ofputil_encode_flow_mod(&fm, sw->protocol);
+
         queue_tx(sw, rconn, buffer);
 
         /* If the switch didn't buffer the packet, we need to send a copy. */
-        if (ntohl(opi->buffer_id) == UINT32_MAX && actions_len > 0) {
+        if (pi.buffer_id == UINT32_MAX && out_port != OFPP_NONE) {
             queue_tx(sw, rconn, ofputil_encode_packet_out(&po));
         }
     } else {
         /* We don't know that MAC, or we don't set up flows.  Send along the
          * packet without setting up a flow. */
-        if (ntohl(opi->buffer_id) != UINT32_MAX || actions_len > 0) {
+        if (pi.buffer_id != UINT32_MAX || out_port != OFPP_NONE) {
             queue_tx(sw, rconn, ofputil_encode_packet_out(&po));
         }
     }

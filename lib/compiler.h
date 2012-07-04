@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,6 +35,24 @@
 #define ALWAYS_INLINE
 #define WARN_UNUSED_RESULT
 #define SENTINEL(N)
+#endif
+
+/* ISO C says that a C implementation may choose any integer type for an enum
+ * that is sufficient to hold all of its values.  Common ABIs (such as the
+ * System V ABI used on i386 GNU/Linux) always use a full-sized "int", even
+ * when a smaller type would suffice.
+ *
+ * In GNU C, "enum __attribute__((packed)) name { ... }" defines 'name' as an
+ * enum compatible with a type that is no bigger than necessary.  This is the
+ * intended use of OVS_PACKED_ENUM.
+ *
+ * OVS_PACKED_ENUM is intended for use only as a space optimization, since it
+ * only works with GCC.  That means that it must not be used in wire protocols
+ * or otherwise exposed outside of a single process. */
+#if __GNUC__ && !__CHECKER__
+#define OVS_PACKED_ENUM __attribute__((__packed__))
+#else
+#define OVS_PACKED_ENUM
 #endif
 
 #endif /* compiler.h */

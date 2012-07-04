@@ -29,6 +29,7 @@
 #include "shash.h"
 #include "timeval.h"
 
+struct ofpact;
 struct ofputil_flow_mod;
 struct simap;
 
@@ -184,8 +185,8 @@ struct rule {
     struct heap_node evg_node;   /* In eviction_group's "rules" heap. */
     struct eviction_group *eviction_group; /* NULL if not in any group. */
 
-    union ofp_action *actions;   /* OpenFlow actions. */
-    int n_actions;               /* Number of elements in actions[]. */
+    struct ofpact *ofpacts;      /* Sequence of "struct ofpacts". */
+    unsigned int ofpacts_len;    /* Size of 'ofpacts', in bytes. */
 };
 
 static inline struct rule *
@@ -781,13 +782,11 @@ struct ofproto_class {
      *     registers, then it is an error if 'rule->cr' does not wildcard all
      *     registers.
      *
-     *   - Validate that 'rule->actions' and 'rule->n_actions' are well-formed
-     *     OpenFlow actions that the datapath can correctly implement.  The
-     *     validate_actions() function (in ofp-util.c) can be useful as a model
-     *     for action validation, but it accepts all of the OpenFlow actions
-     *     that OVS understands.  If your ofproto implementation only
-     *     implements a subset of those, then you should implement your own
-     *     action validation.
+     *   - Validate that 'rule->ofpacts' is a sequence of well-formed actions
+     *     that the datapath can correctly implement.  If your ofproto
+     *     implementation only implements a subset of the actions that Open
+     *     vSwitch understands, then you should implement your own action
+     *     validation.
      *
      *   - If the rule is valid, update the datapath flow table, adding the new
      *     rule or replacing the existing one.
@@ -918,14 +917,13 @@ struct ofproto_class {
                               enum ofp_config_flags frag_handling);
 
     /* Implements the OpenFlow OFPT_PACKET_OUT command.  The datapath should
-     * execute the 'n_actions' in the 'actions' array on 'packet'.
+     * execute the 'ofpacts_len' bytes of "struct ofpacts" in 'ofpacts'.
      *
-     * The caller retains ownership of 'packet', so ->packet_out() should not
-     * modify or free it.
+     * The caller retains ownership of 'packet' and of 'ofpacts', so
+     * ->packet_out() should not modify or free them.
      *
-     * This function must validate that the 'n_actions' elements in 'actions'
-     * are well-formed OpenFlow actions that can be correctly implemented by
-     * the datapath.  If not, then it should return an OpenFlow error code.
+     * This function must validate that it can implement 'ofpacts'.  If not,
+     * then it should return an OpenFlow error code.
      *
      * 'flow' reflects the flow information for 'packet'.  All of the
      * information in 'flow' is extracted from 'packet', except for
@@ -957,8 +955,8 @@ struct ofproto_class {
      * Returns 0 if successful, otherwise an OpenFlow error code. */
     enum ofperr (*packet_out)(struct ofproto *ofproto, struct ofpbuf *packet,
                               const struct flow *flow,
-                              const union ofp_action *actions,
-                              size_t n_actions);
+                              const struct ofpact *ofpacts,
+                              size_t ofpacts_len);
 
 /* ## ------------------------- ## */
 /* ## OFPP_NORMAL configuration ## */
@@ -1195,7 +1193,7 @@ BUILD_ASSERT_DECL(OFPROTO_POSTPONE < OFPERR_OFS);
 
 int ofproto_flow_mod(struct ofproto *, const struct ofputil_flow_mod *);
 void ofproto_add_flow(struct ofproto *, const struct cls_rule *,
-                      const union ofp_action *, size_t n_actions);
+                      const struct ofpact *ofpacts, size_t ofpacts_len);
 bool ofproto_delete_flow(struct ofproto *, const struct cls_rule *);
 void ofproto_flush_flows(struct ofproto *);
 

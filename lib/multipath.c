@@ -22,8 +22,8 @@
 #include <sys/types.h>
 #include <netinet/in.h>
 #include "dynamic-string.h"
-#include "meta-flow.h"
 #include "nx-match.h"
+#include "ofp-actions.h"
 #include "ofp-errors.h"
 #include "ofp-util.h"
 #include "openflow/nicira-ext.h"
@@ -34,37 +34,66 @@ VLOG_DEFINE_THIS_MODULE(multipath);
 
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 
-/* multipath_check(). */
+/* Converts 'nam' into 'mp'.  Returns 0 if successful, otherwise an
+ * OFPERR_*. */
 enum ofperr
-multipath_check(const struct nx_action_multipath *mp, const struct flow *flow)
+multipath_from_openflow(const struct nx_action_multipath *nam,
+                        struct ofpact_multipath *mp)
 {
-    uint32_t n_links = ntohs(mp->max_link) + 1;
+    uint32_t n_links = ntohs(nam->max_link) + 1;
     size_t min_n_bits = log_2_ceil(n_links);
-    struct mf_subfield dst;
-    enum ofperr error;
 
-    nxm_decode(&dst, mp->dst, mp->ofs_nbits);
-    error = mf_check_dst(&dst, flow);
-    if (error) {
-        return error;
-    }
+    ofpact_init_MULTIPATH(mp);
+    mp->fields = ntohs(nam->fields);
+    mp->basis = ntohs(nam->basis);
+    mp->algorithm = ntohs(nam->algorithm);
+    mp->max_link = ntohs(nam->max_link);
+    mp->arg = ntohl(nam->arg);
+    mp->dst.field = mf_from_nxm_header(ntohl(nam->dst));
+    mp->dst.ofs = nxm_decode_ofs(nam->ofs_nbits);
+    mp->dst.n_bits = nxm_decode_n_bits(nam->ofs_nbits);
 
-    if (!flow_hash_fields_valid(ntohs(mp->fields))) {
-        VLOG_WARN_RL(&rl, "unsupported fields %"PRIu16, ntohs(mp->fields));
-    } else if (mp->algorithm != htons(NX_MP_ALG_MODULO_N)
-               && mp->algorithm != htons(NX_MP_ALG_HASH_THRESHOLD)
-               && mp->algorithm != htons(NX_MP_ALG_HRW)
-               && mp->algorithm != htons(NX_MP_ALG_ITER_HASH)) {
-        VLOG_WARN_RL(&rl, "unsupported algorithm %"PRIu16,
-                     ntohs(mp->algorithm));
-    } else if (dst.n_bits < min_n_bits) {
+    if (!flow_hash_fields_valid(mp->fields)) {
+        VLOG_WARN_RL(&rl, "unsupported fields %d", (int) mp->fields);
+        return OFPERR_OFPBAC_BAD_ARGUMENT;
+    } else if (mp->algorithm != NX_MP_ALG_MODULO_N
+               && mp->algorithm != NX_MP_ALG_HASH_THRESHOLD
+               && mp->algorithm != NX_MP_ALG_HRW
+               && mp->algorithm != NX_MP_ALG_ITER_HASH) {
+        VLOG_WARN_RL(&rl, "unsupported algorithm %d", (int) mp->algorithm);
+        return OFPERR_OFPBAC_BAD_ARGUMENT;
+    } else if (mp->dst.n_bits < min_n_bits) {
         VLOG_WARN_RL(&rl, "multipath action requires at least %zu bits for "
                      "%"PRIu32" links", min_n_bits, n_links);
-    } else {
-        return 0;
+        return OFPERR_OFPBAC_BAD_ARGUMENT;
     }
 
-    return OFPERR_OFPBAC_BAD_ARGUMENT;
+    return multipath_check(mp, NULL);
+}
+
+/* Checks that 'mp' is valid on flow.  Returns 0 if it is valid, otherwise an
+ * OFPERR_*. */
+enum ofperr
+multipath_check(const struct ofpact_multipath *mp,
+                const struct flow *flow)
+{
+    return mf_check_dst(&mp->dst, flow);
+}
+
+/* Converts 'mp' into an OpenFlow NXAST_MULTIPATH action, which it appends to
+ * 'openflow'. */
+void
+multipath_to_nxast(const struct ofpact_multipath *mp, struct ofpbuf *openflow)
+{
+    struct nx_action_multipath *nam = ofputil_put_NXAST_MULTIPATH(openflow);
+
+    nam->fields = htons(mp->fields);
+    nam->basis = htons(mp->basis);
+    nam->algorithm = htons(mp->algorithm);
+    nam->max_link = htons(mp->max_link);
+    nam->arg = htonl(mp->arg);
+    nam->ofs_nbits = nxm_encode_ofs_nbits(mp->dst.ofs, mp->dst.n_bits);
+    nam->dst = htonl(mp->dst.field->nxm_header);
 }
 
 /* multipath_execute(). */
@@ -72,19 +101,17 @@ multipath_check(const struct nx_action_multipath *mp, const struct flow *flow)
 static uint16_t multipath_algorithm(uint32_t hash, enum nx_mp_algorithm,
                                     unsigned int n_links, unsigned int arg);
 
+/* Executes 'mp' based on the current contents of 'flow', writing the results
+ * back into 'flow'. */
 void
-multipath_execute(const struct nx_action_multipath *mp, struct flow *flow)
+multipath_execute(const struct ofpact_multipath *mp, struct flow *flow)
 {
     /* Calculate value to store. */
-    uint32_t hash = flow_hash_fields(flow, ntohs(mp->fields),
-                                     ntohs(mp->basis));
-    uint16_t link = multipath_algorithm(hash, ntohs(mp->algorithm),
-                                        ntohs(mp->max_link) + 1,
-                                        ntohl(mp->arg));
-    struct mf_subfield dst;
+    uint32_t hash = flow_hash_fields(flow, mp->fields, mp->basis);
+    uint16_t link = multipath_algorithm(hash, mp->algorithm,
+                                        mp->max_link + 1, mp->arg);
 
-    nxm_decode(&dst, mp->dst, mp->ofs_nbits);
-    mf_set_subfield_value(&dst, link, flow);
+    nxm_reg_load(&mp->dst, link, flow);
 }
 
 static uint16_t
@@ -162,15 +189,17 @@ multipath_algorithm(uint32_t hash, enum nx_mp_algorithm algorithm,
     NOT_REACHED();
 }
 
-/* multipath_parse(). */
-
+/* Parses 's_' as a set of arguments to the "multipath" action and initializes
+ * 'mp' accordingly.  ovs-ofctl(8) describes the format parsed.
+ *
+ * Prints an error on stderr and aborts the program if 's_' syntax is
+ * invalid. */
 void
-multipath_parse(struct nx_action_multipath *mp, const char *s_)
+multipath_parse(struct ofpact_multipath *mp, const char *s_)
 {
     char *s = xstrdup(s_);
     char *save_ptr = NULL;
-    char *fields, *basis, *algorithm, *n_links_str, *arg, *dst_s;
-    struct mf_subfield dst;
+    char *fields, *basis, *algorithm, *n_links_str, *arg, *dst;
     int n_links;
 
     fields = strtok_r(s, ", ", &save_ptr);
@@ -178,28 +207,28 @@ multipath_parse(struct nx_action_multipath *mp, const char *s_)
     algorithm = strtok_r(NULL, ", ", &save_ptr);
     n_links_str = strtok_r(NULL, ", ", &save_ptr);
     arg = strtok_r(NULL, ", ", &save_ptr);
-    dst_s = strtok_r(NULL, ", ", &save_ptr);
-    if (!dst_s) {
+    dst = strtok_r(NULL, ", ", &save_ptr);
+    if (!dst) {
         ovs_fatal(0, "%s: not enough arguments to multipath action", s_);
     }
 
-    ofputil_init_NXAST_MULTIPATH(mp);
+    ofpact_init_MULTIPATH(mp);
     if (!strcasecmp(fields, "eth_src")) {
-        mp->fields = htons(NX_HASH_FIELDS_ETH_SRC);
+        mp->fields = NX_HASH_FIELDS_ETH_SRC;
     } else if (!strcasecmp(fields, "symmetric_l4")) {
-        mp->fields = htons(NX_HASH_FIELDS_SYMMETRIC_L4);
+        mp->fields = NX_HASH_FIELDS_SYMMETRIC_L4;
     } else {
         ovs_fatal(0, "%s: unknown fields `%s'", s_, fields);
     }
-    mp->basis = htons(atoi(basis));
+    mp->basis = atoi(basis);
     if (!strcasecmp(algorithm, "modulo_n")) {
-        mp->algorithm = htons(NX_MP_ALG_MODULO_N);
+        mp->algorithm = NX_MP_ALG_MODULO_N;
     } else if (!strcasecmp(algorithm, "hash_threshold")) {
-        mp->algorithm = htons(NX_MP_ALG_HASH_THRESHOLD);
+        mp->algorithm = NX_MP_ALG_HASH_THRESHOLD;
     } else if (!strcasecmp(algorithm, "hrw")) {
-        mp->algorithm = htons(NX_MP_ALG_HRW);
+        mp->algorithm = NX_MP_ALG_HRW;
     } else if (!strcasecmp(algorithm, "iter_hash")) {
-        mp->algorithm = htons(NX_MP_ALG_ITER_HASH);
+        mp->algorithm = NX_MP_ALG_ITER_HASH;
     } else {
         ovs_fatal(0, "%s: unknown algorithm `%s'", s_, algorithm);
     }
@@ -208,34 +237,29 @@ multipath_parse(struct nx_action_multipath *mp, const char *s_)
         ovs_fatal(0, "%s: n_links %d is not in valid range 1 to 65536",
                   s_, n_links);
     }
-    mp->max_link = htons(n_links - 1);
-    mp->arg = htonl(atoi(arg));
+    mp->max_link = n_links - 1;
+    mp->arg = atoi(arg);
 
-    mf_parse_subfield(&dst, dst_s);
-    if (dst.n_bits < 16 && n_links > (1u << dst.n_bits)) {
+    mf_parse_subfield(&mp->dst, dst);
+    if (mp->dst.n_bits < 16 && n_links > (1u << mp->dst.n_bits)) {
         ovs_fatal(0, "%s: %d-bit destination field has %u possible values, "
                   "less than specified n_links %d",
-                  s_, dst.n_bits, 1u << dst.n_bits, n_links);
+                  s_, mp->dst.n_bits, 1u << mp->dst.n_bits, n_links);
     }
-    mp->ofs_nbits = nxm_encode_ofs_nbits(dst.ofs, dst.n_bits);
-    mp->dst = htonl(dst.field->nxm_header);
 
     free(s);
 }
 
+/* Appends a description of 'mp' to 's', in the format that ovs-ofctl(8)
+ * describes. */
 void
-multipath_format(const struct nx_action_multipath *mp, struct ds *s)
+multipath_format(const struct ofpact_multipath *mp, struct ds *s)
 {
     const char *fields, *algorithm;
 
-    uint16_t mp_fields    = ntohs(mp->fields);
-    uint16_t mp_algorithm = ntohs(mp->algorithm);
+    fields = flow_hash_fields_to_str(mp->fields);
 
-    struct mf_subfield dst;
-
-    fields = flow_hash_fields_to_str(mp_fields);
-
-    switch ((enum nx_mp_algorithm) mp_algorithm) {
+    switch (mp->algorithm) {
     case NX_MP_ALG_MODULO_N:
         algorithm = "modulo_n";
         break;
@@ -253,9 +277,8 @@ multipath_format(const struct nx_action_multipath *mp, struct ds *s)
     }
 
     ds_put_format(s, "multipath(%s,%"PRIu16",%s,%d,%"PRIu16",",
-                  fields, ntohs(mp->basis), algorithm, ntohs(mp->max_link) + 1,
-                  ntohl(mp->arg));
-    nxm_decode(&dst, mp->dst, mp->ofs_nbits);
-    mf_format_subfield(&dst, s);
+                  fields, mp->basis, algorithm, mp->max_link + 1,
+                  mp->arg);
+    mf_format_subfield(&mp->dst, s);
     ds_put_char(s, ')');
 }

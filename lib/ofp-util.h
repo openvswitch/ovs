@@ -22,6 +22,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include "classifier.h"
+#include "compiler.h"
 #include "flow.h"
 #include "netdev.h"
 #include "openflow/nicira-ext.h"
@@ -236,13 +237,14 @@ struct ofputil_flow_mod {
     uint32_t buffer_id;
     uint16_t out_port;
     uint16_t flags;
-    union ofp_action *actions;
-    size_t n_actions;
+    struct ofpact *ofpacts;     /* Series of "struct ofpact"s. */
+    size_t ofpacts_len;         /* Length of ofpacts, in bytes. */
 };
 
 enum ofperr ofputil_decode_flow_mod(struct ofputil_flow_mod *,
                                     const struct ofp_header *,
-                                    enum ofputil_protocol);
+                                    enum ofputil_protocol,
+                                    struct ofpbuf *ofpacts);
 struct ofpbuf *ofputil_encode_flow_mod(const struct ofputil_flow_mod *,
                                        enum ofputil_protocol);
 
@@ -279,13 +281,14 @@ struct ofputil_flow_stats {
     int hard_age;               /* Seconds since last change, -1 if unknown. */
     uint64_t packet_count;      /* Packet count, UINT64_MAX if unknown. */
     uint64_t byte_count;        /* Byte count, UINT64_MAX if unknown. */
-    union ofp_action *actions;
-    size_t n_actions;
+    struct ofpact *ofpacts;
+    size_t ofpacts_len;
 };
 
 int ofputil_decode_flow_stats_reply(struct ofputil_flow_stats *,
                                     struct ofpbuf *msg,
-                                    bool flow_age_extension);
+                                    bool flow_age_extension,
+                                    struct ofpbuf *ofpacts);
 void ofputil_append_flow_stats_reply(const struct ofputil_flow_stats *,
                                      struct list *replies);
 
@@ -352,12 +355,13 @@ struct ofputil_packet_out {
     size_t packet_len;          /* Length of packet data in bytes. */
     uint32_t buffer_id;         /* Buffer id or UINT32_MAX if no buffer. */
     uint16_t in_port;           /* Packet's input port. */
-    union ofp_action *actions;  /* Actions. */
-    size_t n_actions;           /* Number of elements in 'actions' array. */
+    struct ofpact *ofpacts;     /* Actions. */
+    size_t ofpacts_len;         /* Size of ofpacts in bytes. */
 };
 
 enum ofperr ofputil_decode_packet_out(struct ofputil_packet_out *,
-                                      const struct ofp_packet_out *);
+                                      const struct ofp_packet_out *,
+                                      struct ofpbuf *ofpacts);
 struct ofpbuf *ofputil_encode_packet_out(const struct ofputil_packet_out *);
 
 enum ofputil_port_config {
@@ -531,6 +535,7 @@ void ofputil_start_stats_reply(const struct ofp_stats_msg *request,
                                struct list *);
 struct ofpbuf *ofputil_reserve_stats_reply(size_t len, struct list *);
 void *ofputil_append_stats_reply(size_t len, struct list *);
+void ofputil_postappend_stats_reply(size_t start_ofs, struct list *);
 
 void ofputil_append_port_desc_stats_reply(uint8_t ofp_version,
                                           const struct ofputil_phy_port *pp,
@@ -542,13 +547,7 @@ size_t ofputil_stats_body_len(const struct ofp_header *);
 const void *ofputil_nxstats_body(const struct ofp_header *);
 size_t ofputil_nxstats_body_len(const struct ofp_header *);
 
-struct ofpbuf *make_flow_mod(uint16_t command, const struct cls_rule *,
-                             size_t actions_len);
-struct ofpbuf *make_add_flow(const struct cls_rule *, uint32_t buffer_id,
-                             uint16_t max_idle, size_t actions_len);
-struct ofpbuf *make_packet_in(uint32_t buffer_id, uint16_t in_port,
-                              uint8_t reason,
-                              const struct ofpbuf *payload, int max_send_len);
+/*  */
 struct ofpbuf *make_echo_request(void);
 struct ofpbuf *make_echo_reply(const struct ofp_header *rq);
 
@@ -597,7 +596,7 @@ bool ofputil_frag_handling_from_string(const char *, enum ofp_config_flags *);
  *
  * (The above list helps developers who want to "grep" for these definitions.)
  */
-enum ofputil_action_code {
+enum OVS_PACKED_ENUM ofputil_action_code {
     OFPUTIL_ACTION_INVALID,
 #define OFPAT10_ACTION(ENUM, STRUCT, NAME)             OFPUTIL_##ENUM,
 #define NXAST_ACTION(ENUM, STRUCT, EXTENSIBLE, NAME) OFPUTIL_##ENUM,
@@ -611,10 +610,6 @@ enum {
     OFPUTIL_N_ACTIONS = 1
 #include "ofp-util.def"
 };
-
-int ofputil_decode_action(const union ofp_action *);
-enum ofputil_action_code ofputil_decode_action_unsafe(
-    const union ofp_action *);
 
 int ofputil_action_code_from_name(const char *);
 
@@ -643,38 +638,6 @@ void *ofputil_put_action(enum ofputil_action_code, struct ofpbuf *buf);
 #include "ofp-util.def"
 
 #define OFP_ACTION_ALIGN 8      /* Alignment of ofp_actions. */
-
-static inline union ofp_action *
-ofputil_action_next(const union ofp_action *a)
-{
-    return ((union ofp_action *) (void *)
-            ((uint8_t *) a + ntohs(a->header.len)));
-}
-
-static inline bool
-ofputil_action_is_valid(const union ofp_action *a, size_t n_actions)
-{
-    uint16_t len = ntohs(a->header.len);
-    return (!(len % OFP_ACTION_ALIGN)
-            && len >= sizeof *a
-            && len / sizeof *a <= n_actions);
-}
-
-/* This macro is careful to check for actions with bad lengths. */
-#define OFPUTIL_ACTION_FOR_EACH(ITER, LEFT, ACTIONS, N_ACTIONS)         \
-    for ((ITER) = (ACTIONS), (LEFT) = (N_ACTIONS);                      \
-         (LEFT) > 0 && ofputil_action_is_valid(ITER, LEFT);             \
-         ((LEFT) -= ntohs((ITER)->header.len) / sizeof(union ofp_action), \
-          (ITER) = ofputil_action_next(ITER)))
-
-/* This macro does not check for actions with bad lengths.  It should only be
- * used with actions from trusted sources or with actions that have already
- * been validated (e.g. with OFPUTIL_ACTION_FOR_EACH).  */
-#define OFPUTIL_ACTION_FOR_EACH_UNSAFE(ITER, LEFT, ACTIONS, N_ACTIONS)  \
-    for ((ITER) = (ACTIONS), (LEFT) = (N_ACTIONS);                      \
-         (LEFT) > 0;                                                    \
-         ((LEFT) -= ntohs((ITER)->header.len) / sizeof(union ofp_action), \
-          (ITER) = ofputil_action_next(ITER)))
 
 enum ofperr validate_actions(const union ofp_action *, size_t n_actions,
                              const struct flow *, int max_ports);

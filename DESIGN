@@ -612,6 +612,26 @@ The following are explicitly *not* supported by in-band control:
      gateway.
 
 
+Action Reproduction
+===================
+
+It seems likely that many controllers, at least at startup, use the
+OpenFlow "flow statistics" request to obtain existing flows, then
+compare the flows' actions against the actions that they expect to
+find.  Before version 1.8.0, Open vSwitch always returned exact,
+byte-for-byte copies of the actions that had been added to the flow
+table.  The current version of Open vSwitch does not always do this in
+some exceptional cases.  This section lists the exceptions that
+controller authors must keep in mind if they compare actual actions
+against desired actions in a bytewise fashion:
+
+        - Open vSwitch zeros padding bytes in action structures,
+          regardless of their values when the flows were added.
+
+Please report other discrepancies, if you notice any, so that we can
+fix or document them.
+
+
 Suggestions
 ===========
 

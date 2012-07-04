@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 Nicira, Inc.
+ * Copyright (c) 2011, 2012 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,15 +22,20 @@
 
 struct flow;
 struct nx_action_autopath;
+struct ofpact_autopath;
+struct ofpbuf;
 
 /* NXAST_AUTOPATH  helper functions.
  *
  * See include/openflow/nicira-ext.h for NXAST_AUTOPATH specification. */
 
-void autopath_execute(const struct nx_action_autopath *, struct flow *,
-                      uint16_t ofp_port);
-void autopath_parse(struct nx_action_autopath *, const char *);
-enum ofperr autopath_check(const struct nx_action_autopath *,
+void autopath_parse(struct ofpact_autopath *, const char *);
+
+enum ofperr autopath_from_openflow(const struct nx_action_autopath *,
+                                   struct ofpact_autopath *);
+enum ofperr autopath_check(const struct ofpact_autopath *,
                            const struct flow *);
+void autopath_to_nxast(const struct ofpact_autopath *,
+                       struct ofpbuf *openflow);
 
 #endif /* autopath.h */

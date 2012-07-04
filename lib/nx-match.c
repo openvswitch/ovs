@@ -23,6 +23,7 @@
 #include "classifier.h"
 #include "dynamic-string.h"
 #include "meta-flow.h"
+#include "ofp-actions.h"
 #include "ofp-errors.h"
 #include "ofp-util.h"
 #include "ofpbuf.h"
@@ -789,199 +790,183 @@ nx_match_from_string(const char *s, struct ofpbuf *b)
 }
 
 void
-nxm_parse_reg_move(struct nx_action_reg_move *move, const char *s)
+nxm_parse_reg_move(struct ofpact_reg_move *move, const char *s)
 {
     const char *full_s = s;
-    struct mf_subfield src, dst;
 
-    s = mf_parse_subfield(&src, s);
+    s = mf_parse_subfield(&move->src, s);
     if (strncmp(s, "->", 2)) {
         ovs_fatal(0, "%s: missing `->' following source", full_s);
     }
     s += 2;
-    s = mf_parse_subfield(&dst, s);
+    s = mf_parse_subfield(&move->dst, s);
     if (*s != '\0') {
         ovs_fatal(0, "%s: trailing garbage following destination", full_s);
     }
 
-    if (src.n_bits != dst.n_bits) {
+    if (move->src.n_bits != move->dst.n_bits) {
         ovs_fatal(0, "%s: source field is %d bits wide but destination is "
-                  "%d bits wide", full_s, src.n_bits, dst.n_bits);
+                  "%d bits wide", full_s,
+                  move->src.n_bits, move->dst.n_bits);
     }
-
-    ofputil_init_NXAST_REG_MOVE(move);
-    move->n_bits = htons(src.n_bits);
-    move->src_ofs = htons(src.ofs);
-    move->dst_ofs = htons(dst.ofs);
-    move->src = htonl(src.field->nxm_header);
-    move->dst = htonl(dst.field->nxm_header);
 }
 
 void
-nxm_parse_reg_load(struct nx_action_reg_load *load, const char *s)
+nxm_parse_reg_load(struct ofpact_reg_load *load, const char *s)
 {
     const char *full_s = s;
-    struct mf_subfield dst;
-    uint64_t value;
 
-    value = strtoull(s, (char **) &s, 0);
+    load->value = strtoull(s, (char **) &s, 0);
     if (strncmp(s, "->", 2)) {
         ovs_fatal(0, "%s: missing `->' following value", full_s);
     }
     s += 2;
-    s = mf_parse_subfield(&dst, s);
+    s = mf_parse_subfield(&load->dst, s);
     if (*s != '\0') {
         ovs_fatal(0, "%s: trailing garbage following destination", full_s);
     }
 
-    if (dst.n_bits < 64 && (value >> dst.n_bits) != 0) {
-        ovs_fatal(0, "%s: value %"PRIu64" does not fit into %u bits",
-                  full_s, value, dst.n_bits);
+    if (load->dst.n_bits < 64 && (load->value >> load->dst.n_bits) != 0) {
+        ovs_fatal(0, "%s: value %"PRIu64" does not fit into %d bits",
+                  full_s, load->value, load->dst.n_bits);
     }
-
-    ofputil_init_NXAST_REG_LOAD(load);
-    load->ofs_nbits = nxm_encode_ofs_nbits(dst.ofs, dst.n_bits);
-    load->dst = htonl(dst.field->nxm_header);
-    load->value = htonll(value);
 }
 
 /* nxm_format_reg_move(), nxm_format_reg_load(). */
 
 void
-nxm_format_reg_move(const struct nx_action_reg_move *move, struct ds *s)
+nxm_format_reg_move(const struct ofpact_reg_move *move, struct ds *s)
 {
-    struct mf_subfield src, dst;
-
-    nxm_decode_discrete(&src, move->src, move->src_ofs, move->n_bits);
-    nxm_decode_discrete(&dst, move->dst, move->dst_ofs, move->n_bits);
-
     ds_put_format(s, "move:");
-    mf_format_subfield(&src, s);
+    mf_format_subfield(&move->src, s);
     ds_put_cstr(s, "->");
-    mf_format_subfield(&dst, s);
+    mf_format_subfield(&move->dst, s);
 }
 
 void
-nxm_format_reg_load(const struct nx_action_reg_load *load, struct ds *s)
+nxm_format_reg_load(const struct ofpact_reg_load *load, struct ds *s)
 {
-    struct mf_subfield dst;
-
-    ds_put_format(s, "load:%#"PRIx64"->", ntohll(load->value));
-
-    nxm_decode(&dst, load->dst, load->ofs_nbits);
-    mf_format_subfield(&dst, s);
+    ds_put_format(s, "load:%#"PRIx64"->", load->value);
+    mf_format_subfield(&load->dst, s);
 }
 
-/* nxm_check_reg_move(), nxm_check_reg_load(). */
-
 enum ofperr
-nxm_check_reg_move(const struct nx_action_reg_move *action,
-                   const struct flow *flow)
+nxm_reg_move_from_openflow(const struct nx_action_reg_move *narm,
+                           struct ofpbuf *ofpacts)
 {
-    struct mf_subfield src;
-    struct mf_subfield dst;
-    int error;
+    struct ofpact_reg_move *move;
 
-    nxm_decode_discrete(&src, action->src, action->src_ofs, action->n_bits);
-    error = mf_check_src(&src, flow);
-    if (error) {
-        return error;
-    }
+    move = ofpact_put_REG_MOVE(ofpacts);
+    move->src.field = mf_from_nxm_header(ntohl(narm->src));
+    move->src.ofs = ntohs(narm->src_ofs);
+    move->src.n_bits = ntohs(narm->n_bits);
+    move->dst.field = mf_from_nxm_header(ntohl(narm->dst));
+    move->dst.ofs = ntohs(narm->dst_ofs);
+    move->dst.n_bits = ntohs(narm->n_bits);
 
-    nxm_decode_discrete(&dst, action->dst, action->dst_ofs, action->n_bits);
-    return mf_check_dst(&dst, flow);
+    return nxm_reg_move_check(move, NULL);
 }
 
 enum ofperr
-nxm_check_reg_load(const struct nx_action_reg_load *action,
-                   const struct flow *flow)
+nxm_reg_load_from_openflow(const struct nx_action_reg_load *narl,
+                           struct ofpbuf *ofpacts)
 {
-    struct mf_subfield dst;
-    enum ofperr error;
+    struct ofpact_reg_load *load;
 
-    nxm_decode(&dst, action->dst, action->ofs_nbits);
-    error = mf_check_dst(&dst, flow);
-    if (error) {
-        return error;
-    }
+    load = ofpact_put_REG_LOAD(ofpacts);
+    load->dst.field = mf_from_nxm_header(ntohl(narl->dst));
+    load->dst.ofs = nxm_decode_ofs(narl->ofs_nbits);
+    load->dst.n_bits = nxm_decode_n_bits(narl->ofs_nbits);
+    load->value = ntohll(narl->value);
 
-    /* Reject 'action' if a bit numbered 'n_bits' or higher is set to 1 in
-     * action->value. */
-    if (dst.n_bits < 64 && ntohll(action->value) >> dst.n_bits) {
+    /* Reject 'narl' if a bit numbered 'n_bits' or higher is set to 1 in
+     * narl->value. */
+    if (load->dst.n_bits < 64 && load->value >> load->dst.n_bits) {
         return OFPERR_OFPBAC_BAD_ARGUMENT;
     }
 
-    return 0;
+    return nxm_reg_load_check(load, NULL);
+}
+
+enum ofperr
+nxm_reg_move_check(const struct ofpact_reg_move *move, const struct flow *flow)
+{
+    enum ofperr error;
+
+    error = mf_check_src(&move->src, flow);
+    if (error) {
+        return error;
+    }
+
+    return mf_check_dst(&move->dst, NULL);
+}
+
+enum ofperr
+nxm_reg_load_check(const struct ofpact_reg_load *load, const struct flow *flow)
+{
+    return mf_check_dst(&load->dst, flow);
+}
+
+void
+nxm_reg_move_to_nxast(const struct ofpact_reg_move *move,
+                      struct ofpbuf *openflow)
+{
+    struct nx_action_reg_move *narm;
+
+    narm = ofputil_put_NXAST_REG_MOVE(openflow);
+    narm->n_bits = htons(move->dst.n_bits);
+    narm->src_ofs = htons(move->src.ofs);
+    narm->dst_ofs = htons(move->dst.ofs);
+    narm->src = htonl(move->src.field->nxm_header);
+    narm->dst = htonl(move->dst.field->nxm_header);
+}
+
+void
+nxm_reg_load_to_nxast(const struct ofpact_reg_load *load,
+                      struct ofpbuf *openflow)
+{
+    struct nx_action_reg_load *narl;
+
+    narl = ofputil_put_NXAST_REG_LOAD(openflow);
+    narl->ofs_nbits = nxm_encode_ofs_nbits(load->dst.ofs, load->dst.n_bits);
+    narl->dst = htonl(load->dst.field->nxm_header);
+    narl->value = htonll(load->value);
 }
 
 /* nxm_execute_reg_move(), nxm_execute_reg_load(). */
 
 void
-nxm_execute_reg_move(const struct nx_action_reg_move *action,
+nxm_execute_reg_move(const struct ofpact_reg_move *move,
                      struct flow *flow)
 {
-    struct mf_subfield src, dst;
     union mf_value src_value;
     union mf_value dst_value;
 
-    nxm_decode_discrete(&src, action->src, action->src_ofs, action->n_bits);
-    nxm_decode_discrete(&dst, action->dst, action->dst_ofs, action->n_bits);
-
-    mf_get_value(dst.field, flow, &dst_value);
-    mf_get_value(src.field, flow, &src_value);
-    bitwise_copy(&src_value, src.field->n_bytes, src.ofs,
-                 &dst_value, dst.field->n_bytes, dst.ofs,
-                 src.n_bits);
-    mf_set_flow_value(dst.field, &dst_value, flow);
+    mf_get_value(move->dst.field, flow, &dst_value);
+    mf_get_value(move->src.field, flow, &src_value);
+    bitwise_copy(&src_value, move->src.field->n_bytes, move->src.ofs,
+                 &dst_value, move->dst.field->n_bytes, move->dst.ofs,
+                 move->src.n_bits);
+    mf_set_flow_value(move->dst.field, &dst_value, flow);
 }
 
 void
-nxm_execute_reg_load(const struct nx_action_reg_load *action,
-                     struct flow *flow)
+nxm_execute_reg_load(const struct ofpact_reg_load *load, struct flow *flow)
 {
-    struct mf_subfield dst;
-
-    nxm_decode(&dst, action->dst, action->ofs_nbits);
-    mf_set_subfield_value(&dst, ntohll(action->value), flow);
+    nxm_reg_load(&load->dst, load->value, flow);
 }
 
-/* Initializes 'sf->field' with the field corresponding to the given NXM
- * 'header' and 'sf->ofs' and 'sf->n_bits' decoded from 'ofs_nbits' with
- * nxm_decode_ofs() and nxm_decode_n_bits(), respectively.
- *
- * Afterward, 'sf' might be invalid in a few different ways:
- *
- *   - 'sf->field' will be NULL if 'header' is unknown.
- *
- *   - 'sf->ofs' and 'sf->n_bits' might exceed the width of sf->field.
- *
- * The caller should call mf_check_src() or mf_check_dst() to check for these
- * problems. */
 void
-nxm_decode(struct mf_subfield *sf, ovs_be32 header, ovs_be16 ofs_nbits)
+nxm_reg_load(const struct mf_subfield *dst, uint64_t src_data,
+             struct flow *flow)
 {
-    sf->field = mf_from_nxm_header(ntohl(header));
-    sf->ofs = nxm_decode_ofs(ofs_nbits);
-    sf->n_bits = nxm_decode_n_bits(ofs_nbits);
-}
+    union mf_value dst_value;
+    union mf_value src_value;
 
-/* Initializes 'sf->field' with the field corresponding to the given NXM
- * 'header' and 'sf->ofs' and 'sf->n_bits' from 'ofs' and 'n_bits',
- * respectively.
- *
- * Afterward, 'sf' might be invalid in a few different ways:
- *
- *   - 'sf->field' will be NULL if 'header' is unknown.
- *
- *   - 'sf->ofs' and 'sf->n_bits' might exceed the width of sf->field.
- *
- * The caller should call mf_check_src() or mf_check_dst() to check for these
- * problems. */
-void
-nxm_decode_discrete(struct mf_subfield *sf, ovs_be32 header,
-                    ovs_be16 ofs, ovs_be16 n_bits)
-{
-    sf->field = mf_from_nxm_header(ntohl(header));
-    sf->ofs = ntohs(ofs);
-    sf->n_bits = ntohs(n_bits);
+    mf_get_value(dst->field, flow, &dst_value);
+    src_value.be64 = htonll(src_data);
+    bitwise_copy(&src_value, sizeof src_value.be64, 0,
+                 &dst_value, dst->field->n_bytes, dst->ofs,
+                 dst->n_bits);
+    mf_set_flow_value(dst->field, &dst_value, flow);
 }

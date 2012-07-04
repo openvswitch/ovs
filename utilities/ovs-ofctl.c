@@ -35,9 +35,9 @@
 #include "compiler.h"
 #include "dirs.h"
 #include "dynamic-string.h"
-#include "netlink.h"
 #include "nx-match.h"
 #include "odp-util.h"
+#include "ofp-actions.h"
 #include "ofp-errors.h"
 #include "ofp-parse.h"
 #include "ofp-print.h"
@@ -871,7 +871,7 @@ do_flow_mod__(const char *remote, struct ofputil_flow_mod *fms, size_t n_fms)
         struct ofputil_flow_mod *fm = &fms[i];
 
         transact_noreply(vconn, ofputil_encode_flow_mod(fm, protocol));
-        free(fm->actions);
+        free(fm->ofpacts);
     }
     vconn_close(vconn);
 }
@@ -1243,19 +1243,19 @@ static void
 do_packet_out(int argc, char *argv[])
 {
     struct ofputil_packet_out po;
-    struct ofpbuf actions;
+    struct ofpbuf ofpacts;
     struct vconn *vconn;
     int i;
 
-    ofpbuf_init(&actions, sizeof(union ofp_action));
-    parse_ofp_actions(argv[3], &actions);
+    ofpbuf_init(&ofpacts, 64);
+    parse_ofpacts(argv[3], &ofpacts);
 
     po.buffer_id = UINT32_MAX;
     po.in_port = (!strcasecmp(argv[2], "none") ? OFPP_NONE
                   : !strcasecmp(argv[2], "local") ? OFPP_LOCAL
                   : str_to_port_no(argv[1], argv[2]));
-    po.actions = actions.data;
-    po.n_actions = actions.size / sizeof(union ofp_action);
+    po.ofpacts = ofpacts.data;
+    po.ofpacts_len = ofpacts.size;
 
     open_vconn(argv[1], &vconn);
     for (i = 4; i < argc; i++) {
@@ -1274,7 +1274,7 @@ do_packet_out(int argc, char *argv[])
         ofpbuf_delete(packet);
     }
     vconn_close(vconn);
-    ofpbuf_uninit(&actions);
+    ofpbuf_uninit(&ofpacts);
 }
 
 static void
@@ -1492,8 +1492,8 @@ struct fte_version {
     uint16_t idle_timeout;
     uint16_t hard_timeout;
     uint16_t flags;
-    union ofp_action *actions;
-    size_t n_actions;
+    struct ofpact *ofpacts;
+    size_t ofpacts_len;
 };
 
 /* Frees 'version' and the data that it owns. */
@@ -1501,7 +1501,7 @@ static void
 fte_version_free(struct fte_version *version)
 {
     if (version) {
-        free(version->actions);
+        free(version->ofpacts);
         free(version);
     }
 }
@@ -1516,9 +1516,8 @@ fte_version_equals(const struct fte_version *a, const struct fte_version *b)
     return (a->cookie == b->cookie
             && a->idle_timeout == b->idle_timeout
             && a->hard_timeout == b->hard_timeout
-            && a->n_actions == b->n_actions
-            && !memcmp(a->actions, b->actions,
-                       a->n_actions * sizeof *a->actions));
+            && ofpacts_equal(a->ofpacts, a->ofpacts_len,
+                             b->ofpacts, b->ofpacts_len));
 }
 
 /* Prints 'version' on stdout.  Expects the caller to have printed the rule
@@ -1539,7 +1538,7 @@ fte_version_print(const struct fte_version *version)
     }
 
     ds_init(&s);
-    ofp_print_actions(&s, version->actions, version->n_actions);
+    ofpacts_format(version->ofpacts, version->ofpacts_len, &s);
     printf(" %s\n", ds_cstr(&s));
     ds_destroy(&s);
 }
@@ -1627,8 +1626,8 @@ read_flows_from_file(const char *filename, struct classifier *cls, int index)
         version->idle_timeout = fm.idle_timeout;
         version->hard_timeout = fm.hard_timeout;
         version->flags = fm.flags & (OFPFF_SEND_FLOW_REM | OFPFF_EMERG);
-        version->actions = fm.actions;
-        version->n_actions = fm.n_actions;
+        version->ofpacts = fm.ofpacts;
+        version->ofpacts_len = fm.ofpacts_len;
 
         usable_protocols &= ofputil_usable_protocols(&fm.cr);
 
@@ -1694,10 +1693,14 @@ read_flows_from_switch(struct vconn *vconn,
             for (;;) {
                 struct fte_version *version;
                 struct ofputil_flow_stats fs;
+                struct ofpbuf ofpacts;
                 int retval;
 
-                retval = ofputil_decode_flow_stats_reply(&fs, reply, false);
+                ofpbuf_init(&ofpacts, 64);
+                retval = ofputil_decode_flow_stats_reply(&fs, reply, false,
+                                                         &ofpacts);
                 if (retval) {
+                    ofpbuf_uninit(&ofpacts);
                     if (retval != EOF) {
                         ovs_fatal(0, "parse error in reply");
                     }
@@ -1709,9 +1712,8 @@ read_flows_from_switch(struct vconn *vconn,
                 version->idle_timeout = fs.idle_timeout;
                 version->hard_timeout = fs.hard_timeout;
                 version->flags = 0;
-                version->n_actions = fs.n_actions;
-                version->actions = xmemdup(fs.actions,
-                                           fs.n_actions * sizeof *fs.actions);
+                version->ofpacts = ofpbuf_steal_data(&ofpacts);
+                version->ofpacts_len = ofpacts.size;
 
                 fte_insert(cls, &fs.rule, version, index);
             }
@@ -1744,11 +1746,11 @@ fte_make_flow_mod(const struct fte *fte, int index, uint16_t command,
     fm.flags = version->flags;
     if (command == OFPFC_ADD || command == OFPFC_MODIFY ||
         command == OFPFC_MODIFY_STRICT) {
-        fm.actions = version->actions;
-        fm.n_actions = version->n_actions;
+        fm.ofpacts = version->ofpacts;
+        fm.ofpacts_len = version->ofpacts_len;
     } else {
-        fm.actions = NULL;
-        fm.n_actions = 0;
+        fm.ofpacts = NULL;
+        fm.ofpacts_len = 0;
     }
 
     ofm = ofputil_encode_flow_mod(&fm, protocol);
@@ -1901,7 +1903,7 @@ do_parse_flows__(struct ofputil_flow_mod *fms, size_t n_fms)
         ofp_print(stdout, msg->data, msg->size, verbosity);
         ofpbuf_delete(msg);
 
-        free(fm->actions);
+        free(fm->ofpacts);
     }
 }
 
@@ -1994,6 +1996,84 @@ static void
 do_parse_oxm(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
     return do_parse_nxm__(true);
+}
+
+static void
+print_differences(const void *a_, size_t a_len,
+                  const void *b_, size_t b_len)
+{
+    const uint8_t *a = a_;
+    const uint8_t *b = b_;
+    size_t i;
+
+    for (i = 0; i < MIN(a_len, b_len); i++) {
+        if (a[i] != b[i]) {
+            printf("%2zu: %02"PRIx8" -> %02"PRIx8"\n", i, a[i], b[i]);
+        }
+    }
+    for (i = a_len; i < b_len; i++) {
+        printf("%2zu: (none) -> %02"PRIx8"\n", i, b[i]);
+    }
+    for (i = b_len; i < a_len; i++) {
+        printf("%2zu: %02"PRIx8" -> (none)\n", i, a[i]);
+    }
+}
+
+/* "parse-ofp10-actions": reads a series of OpenFlow 1.0 action specifications
+ * as hex bytes from stdin, converts them to ofpacts, prints them as strings
+ * on stdout, and then converts them back to hex bytes and prints any
+ * differences from the input. */
+static void
+do_parse_ofp10_actions(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
+{
+    struct ds in;
+
+    ds_init(&in);
+    while (!ds_get_preprocessed_line(&in, stdin)) {
+        struct ofpbuf of10_out;
+        struct ofpbuf of10_in;
+        struct ofpbuf ofpacts;
+        enum ofperr error;
+        size_t size;
+        struct ds s;
+
+        /* Parse hex bytes. */
+        ofpbuf_init(&of10_in, 0);
+        if (ofpbuf_put_hex(&of10_in, ds_cstr(&in), NULL)[0] != '\0') {
+            ovs_fatal(0, "Trailing garbage in hex data");
+        }
+
+        /* Convert to ofpacts. */
+        ofpbuf_init(&ofpacts, 0);
+        size = of10_in.size;
+        error = ofpacts_pull_openflow(&of10_in, of10_in.size, &ofpacts);
+        if (error) {
+            printf("bad OF1.1 actions: %s\n\n", ofperr_get_name(error));
+            ofpbuf_uninit(&ofpacts);
+            ofpbuf_uninit(&of10_in);
+            continue;
+        }
+        ofpbuf_push_uninit(&of10_in, size);
+
+        /* Print cls_rule. */
+        ds_init(&s);
+        ofpacts_format(ofpacts.data, ofpacts.size, &s);
+        puts(ds_cstr(&s));
+        ds_destroy(&s);
+
+        /* Convert back to ofp10 actions and print differences from input. */
+        ofpbuf_init(&of10_out, 0);
+        ofpacts_to_openflow(ofpacts.data, ofpacts.size, &of10_out);
+
+        print_differences(of10_in.data, of10_in.size,
+                          of10_out.data, of10_out.size);
+        putchar('\n');
+
+        ofpbuf_uninit(&ofpacts);
+        ofpbuf_uninit(&of10_in);
+        ofpbuf_uninit(&of10_out);
+    }
+    ds_destroy(&in);
 }
 
 /* "parse-ofp11-match": reads a series of ofp11_match specifications as hex
@@ -2129,6 +2209,7 @@ static const struct command all_commands[] = {
     { "parse-nx-match", 0, 0, do_parse_nxm },
     { "parse-nxm", 0, 0, do_parse_nxm },
     { "parse-oxm", 0, 0, do_parse_oxm },
+    { "parse-ofp10-actions", 0, 0, do_parse_ofp10_actions },
     { "parse-ofp11-match", 0, 0, do_parse_ofp11_match },
     { "print-error", 1, 1, do_print_error },
     { "ofp-print", 1, 2, do_ofp_print },

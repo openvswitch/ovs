@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 Nicira, Inc.
+ * Copyright (c) 2011, 2012 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@
 #include "flow.h"
 #include "meta-flow.h"
 #include "nx-match.h"
+#include "ofp-actions.h"
 #include "ofp-errors.h"
 #include "ofp-util.h"
 #include "openflow/nicira-ext.h"
@@ -31,32 +32,21 @@
 
 VLOG_DEFINE_THIS_MODULE(autopath);
 
-/* Loads 'ofp_port' into the appropriate register in accordance with the
- * autopath action. */
 void
-autopath_execute(const struct nx_action_autopath *ap, struct flow *flow,
-                 uint16_t ofp_port)
-{
-    struct mf_subfield dst;
-
-    nxm_decode(&dst, ap->dst, ap->ofs_nbits);
-    mf_set_subfield_value(&dst, ofp_port, flow);
-}
-
-void
-autopath_parse(struct nx_action_autopath *ap, const char *s_)
+autopath_parse(struct ofpact_autopath *ap, const char *s_)
 {
     char *s;
-    char *id_str, *dst_s, *save_ptr;
-    struct mf_subfield dst;
     int id_int;
+    char *id_str, *dst, *save_ptr;
+
+    ofpact_init_AUTOPATH(ap);
 
     s = xstrdup(s_);
     save_ptr = NULL;
     id_str = strtok_r(s, ", ", &save_ptr);
-    dst_s = strtok_r(NULL, ", ", &save_ptr);
+    dst = strtok_r(NULL, ", ", &save_ptr);
 
-    if (!dst_s) {
+    if (!dst) {
         ovs_fatal(0, "%s: not enough arguments to autopath action", s_);
     }
 
@@ -65,33 +55,51 @@ autopath_parse(struct nx_action_autopath *ap, const char *s_)
         ovs_fatal(0, "%s: autopath id %d is not in valid range "
                   "1 to %"PRIu32, s_, id_int, UINT32_MAX);
     }
+    ap->port = id_int;
 
-    mf_parse_subfield(&dst, dst_s);
-    if (dst.n_bits < 16) {
+    mf_parse_subfield(&ap->dst, dst);
+    if (ap->dst.n_bits < 16) {
         ovs_fatal(0, "%s: %d-bit destination field has %u possible values, "
                   "less than required 65536",
-                  s_, dst.n_bits, 1u << dst.n_bits);
+                  s_, ap->dst.n_bits, 1u << ap->dst.n_bits);
     }
-
-    ofputil_init_NXAST_AUTOPATH(ap);
-    ap->id = htonl(id_int);
-    ap->ofs_nbits = nxm_encode_ofs_nbits(dst.ofs, dst.n_bits);
-    ap->dst = htonl(dst.field->nxm_header);
 
     free(s);
 }
 
 enum ofperr
-autopath_check(const struct nx_action_autopath *ap, const struct flow *flow)
+autopath_from_openflow(const struct nx_action_autopath *nap,
+                       struct ofpact_autopath *autopath)
 {
-    struct mf_subfield dst;
+    ofpact_init_AUTOPATH(autopath);
+    autopath->dst.field = mf_from_nxm_header(ntohl(nap->dst));
+    autopath->dst.ofs = nxm_decode_ofs(nap->ofs_nbits);
+    autopath->dst.n_bits = nxm_decode_n_bits(nap->ofs_nbits);
+    autopath->port = ntohl(nap->id);
 
-    nxm_decode(&dst, ap->dst, ap->ofs_nbits);
-    if (dst.n_bits < 16) {
+    if (autopath->dst.n_bits < 16) {
         VLOG_WARN("at least 16 bit destination is required for autopath "
                   "action.");
         return OFPERR_OFPBAC_BAD_ARGUMENT;
     }
 
-    return mf_check_dst(&dst, flow);
+    return autopath_check(autopath, NULL);
+}
+
+enum ofperr
+autopath_check(const struct ofpact_autopath *autopath, const struct flow *flow)
+{
+    return mf_check_dst(&autopath->dst, flow);
+}
+
+void
+autopath_to_nxast(const struct ofpact_autopath *autopath,
+                  struct ofpbuf *openflow)
+{
+    struct nx_action_autopath *ap = ofputil_put_NXAST_AUTOPATH(openflow);
+
+    ap->ofs_nbits = nxm_encode_ofs_nbits(autopath->dst.ofs,
+                                         autopath->dst.n_bits);
+    ap->dst = htonl(autopath->dst.field->nxm_header);
+    ap->id = htonl(autopath->port);
 }

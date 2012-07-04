@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,6 +29,7 @@
 #include "netdev.h"
 #include "netlink.h"
 #include "odp-util.h"
+#include "ofp-actions.h"
 #include "ofproto.h"
 #include "ofpbuf.h"
 #include "ofproto-provider.h"
@@ -402,32 +403,17 @@ update_rules(struct in_band *ib)
 bool
 in_band_run(struct in_band *ib)
 {
-    struct {
-        struct nx_action_set_queue nxsq;
-        union ofp_action oa;
-    } actions;
-    const void *a;
-    size_t na;
+    uint64_t ofpacts_stub[128 / 8];
+    struct ofpbuf ofpacts;
 
     struct in_band_rule *rule, *next;
 
-    memset(&actions, 0, sizeof actions);
-    actions.oa.output.type = htons(OFPAT10_OUTPUT);
-    actions.oa.output.len = htons(sizeof actions.oa);
-    actions.oa.output.port = htons(OFPP_NORMAL);
-    actions.oa.output.max_len = htons(0);
-    if (ib->queue_id < 0) {
-        a = &actions.oa;
-        na = sizeof actions.oa / sizeof(union ofp_action);
-    } else {
-        actions.nxsq.type = htons(OFPAT10_VENDOR);
-        actions.nxsq.len = htons(sizeof actions.nxsq);
-        actions.nxsq.vendor = htonl(NX_VENDOR_ID);
-        actions.nxsq.subtype = htons(NXAST_SET_QUEUE);
-        actions.nxsq.queue_id = htonl(ib->queue_id);
-        a = &actions;
-        na = sizeof actions / sizeof(union ofp_action);
+    ofpbuf_use_stub(&ofpacts, ofpacts_stub, sizeof ofpacts_stub);
+
+    if (ib->queue_id >= 0) {
+        ofpact_put_SET_QUEUE(&ofpacts)->queue_id = ib->queue_id;
     }
+    ofpact_put_OUTPUT(&ofpacts)->port = OFPP_NORMAL;
 
     refresh_local(ib);
     refresh_remotes(ib);
@@ -437,7 +423,8 @@ in_band_run(struct in_band *ib)
     HMAP_FOR_EACH_SAFE (rule, next, cls_rule.hmap_node, &ib->rules) {
         switch (rule->op) {
         case ADD:
-            ofproto_add_flow(ib->ofproto, &rule->cls_rule, a, na);
+            ofproto_add_flow(ib->ofproto, &rule->cls_rule,
+                             ofpacts.data, ofpacts.size);
             break;
 
         case DELETE:
@@ -450,6 +437,8 @@ in_band_run(struct in_band *ib)
             break;
         }
     }
+
+    ofpbuf_uninit(&ofpacts);
 
     return ib->n_remotes || !hmap_is_empty(&ib->rules);
 }

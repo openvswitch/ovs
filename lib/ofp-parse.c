@@ -28,9 +28,10 @@
 #include "dynamic-string.h"
 #include "learn.h"
 #include "meta-flow.h"
-#include "netdev.h"
 #include "multipath.h"
+#include "netdev.h"
 #include "nx-match.h"
+#include "ofp-actions.h"
 #include "ofp-util.h"
 #include "ofpbuf.h"
 #include "openflow/openflow.h"
@@ -122,107 +123,73 @@ str_to_ip(const char *str, ovs_be32 *ip)
     *ip = in_addr.s_addr;
 }
 
-static struct ofp_action_output *
-put_output_action(struct ofpbuf *b, uint16_t port)
-{
-    struct ofp_action_output *oao;
-
-    oao = ofputil_put_OFPAT10_OUTPUT(b);
-    oao->port = htons(port);
-    return oao;
-}
-
 static void
-parse_enqueue(struct ofpbuf *b, char *arg)
+parse_enqueue(char *arg, struct ofpbuf *ofpacts)
 {
     char *sp = NULL;
     char *port = strtok_r(arg, ":q", &sp);
     char *queue = strtok_r(NULL, "", &sp);
-    struct ofp_action_enqueue *oae;
+    struct ofpact_enqueue *enqueue;
 
     if (port == NULL || queue == NULL) {
         ovs_fatal(0, "\"enqueue\" syntax is \"enqueue:PORT:QUEUE\"");
     }
 
-    oae = ofputil_put_OFPAT10_ENQUEUE(b);
-    oae->port = htons(str_to_u32(port));
-    oae->queue_id = htonl(str_to_u32(queue));
+    enqueue = ofpact_put_ENQUEUE(ofpacts);
+    enqueue->port = str_to_u32(port);
+    enqueue->queue = str_to_u32(queue);
 }
 
 static void
-parse_output(struct ofpbuf *b, char *arg)
+parse_output(char *arg, struct ofpbuf *ofpacts)
 {
     if (strchr(arg, '[')) {
-        struct nx_action_output_reg *naor;
-        struct mf_subfield src;
+        struct ofpact_output_reg *output_reg;
 
-        mf_parse_subfield(&src, arg);
-
-        naor = ofputil_put_NXAST_OUTPUT_REG(b);
-        naor->ofs_nbits = nxm_encode_ofs_nbits(src.ofs, src.n_bits);
-        naor->src = htonl(src.field->nxm_header);
-        naor->max_len = htons(UINT16_MAX);
+        output_reg = ofpact_put_OUTPUT_REG(ofpacts);
+        mf_parse_subfield(&output_reg->src, arg);
+        output_reg->max_len = UINT16_MAX;
     } else {
-        put_output_action(b, str_to_u32(arg));
+        struct ofpact_output *output;
+
+        output = ofpact_put_OUTPUT(ofpacts);
+        output->port = str_to_u32(arg);
+        output->max_len = output->port == OFPP_CONTROLLER ? UINT16_MAX : 0;
     }
 }
 
 static void
-parse_resubmit(struct ofpbuf *b, char *arg)
+parse_resubmit(char *arg, struct ofpbuf *ofpacts)
 {
-    struct nx_action_resubmit *nar;
+    struct ofpact_resubmit *resubmit;
     char *in_port_s, *table_s;
-    uint16_t in_port;
-    uint8_t table;
+
+    resubmit = ofpact_put_RESUBMIT(ofpacts);
 
     in_port_s = strsep(&arg, ",");
     if (in_port_s && in_port_s[0]) {
-        if (!ofputil_port_from_string(in_port_s, &in_port)) {
-            in_port = str_to_u32(in_port_s);
+        if (!ofputil_port_from_string(in_port_s, &resubmit->in_port)) {
+            resubmit->in_port = str_to_u32(in_port_s);
         }
     } else {
-        in_port = OFPP_IN_PORT;
+        resubmit->in_port = OFPP_IN_PORT;
     }
 
     table_s = strsep(&arg, ",");
-    table = table_s && table_s[0] ? str_to_u32(table_s) : 255;
+    resubmit->table_id = table_s && table_s[0] ? str_to_u32(table_s) : 255;
 
-    if (in_port == OFPP_IN_PORT && table == 255) {
+    if (resubmit->in_port == OFPP_IN_PORT && resubmit->table_id == 255) {
         ovs_fatal(0, "at least one \"in_port\" or \"table\" must be specified "
                   " on resubmit");
     }
-
-    if (in_port != OFPP_IN_PORT && table == 255) {
-        nar = ofputil_put_NXAST_RESUBMIT(b);
-    } else {
-        nar = ofputil_put_NXAST_RESUBMIT_TABLE(b);
-        nar->table = table;
-    }
-    nar->in_port = htons(in_port);
 }
 
 static void
-parse_set_tunnel(struct ofpbuf *b, const char *arg)
+parse_note(const char *arg, struct ofpbuf *ofpacts)
 {
-    uint64_t tun_id = str_to_u64(arg);
-    if (tun_id > UINT32_MAX) {
-        ofputil_put_NXAST_SET_TUNNEL64(b)->tun_id = htonll(tun_id);
-    } else {
-        ofputil_put_NXAST_SET_TUNNEL(b)->tun_id = htonl(tun_id);
-    }
-}
+    struct ofpact_note *note;
 
-static void
-parse_note(struct ofpbuf *b, const char *arg)
-{
-    size_t start_ofs = b->size;
-    struct nx_action_note *nan;
-    int remainder;
-    size_t len;
-
-    nan = ofputil_put_NXAST_NOTE(b);
-
-    b->size -= sizeof nan->note;
+    note = ofpact_put_NOTE(ofpacts);
     while (*arg != '\0') {
         uint8_t byte;
         bool ok;
@@ -238,32 +205,27 @@ parse_note(struct ofpbuf *b, const char *arg)
         if (!ok) {
             ovs_fatal(0, "bad hex digit in `note' argument");
         }
-        ofpbuf_put(b, &byte, 1);
+        ofpbuf_put(ofpacts, &byte, 1);
+
+        note = ofpacts->l2;
+        note->length++;
 
         arg += 2;
     }
-
-    len = b->size - start_ofs;
-    remainder = len % OFP_ACTION_ALIGN;
-    if (remainder) {
-        ofpbuf_put_zeros(b, OFP_ACTION_ALIGN - remainder);
-    }
-    nan = (struct nx_action_note *)((char *)b->data + start_ofs);
-    nan->len = htons(b->size - start_ofs);
+    ofpact_update_len(ofpacts, &note->ofpact);
 }
 
 static void
 parse_fin_timeout(struct ofpbuf *b, char *arg)
 {
-    struct nx_action_fin_timeout *naft;
+    struct ofpact_fin_timeout *oft = ofpact_put_FIN_TIMEOUT(b);
     char *key, *value;
 
-    naft = ofputil_put_NXAST_FIN_TIMEOUT(b);
     while (ofputil_parse_key_value(&arg, &key, &value)) {
         if (!strcmp(key, "idle_timeout")) {
-            naft->fin_idle_timeout = htons(str_to_u16(value, key));
+            oft->fin_idle_timeout = str_to_u16(value, key);
         } else if (!strcmp(key, "hard_timeout")) {
-            naft->fin_hard_timeout = htons(str_to_u16(value, key));
+            oft->fin_hard_timeout = str_to_u16(value, key);
         } else {
             ovs_fatal(0, "invalid key '%s' in 'fin_timeout' argument", key);
         }
@@ -301,121 +263,142 @@ parse_controller(struct ofpbuf *b, char *arg)
     }
 
     if (reason == OFPR_ACTION && controller_id == 0) {
-        put_output_action(b, OFPP_CONTROLLER)->max_len = htons(max_len);
-    } else {
-        struct nx_action_controller *nac;
+        struct ofpact_output *output;
 
-        nac = ofputil_put_NXAST_CONTROLLER(b);
-        nac->max_len = htons(max_len);
-        nac->reason = reason;
-        nac->controller_id = htons(controller_id);
+        output = ofpact_put_OUTPUT(b);
+        output->port = OFPP_CONTROLLER;
+        output->max_len = max_len;
+    } else {
+        struct ofpact_controller *controller;
+
+        controller = ofpact_put_CONTROLLER(b);
+        controller->max_len = max_len;
+        controller->reason = reason;
+        controller->controller_id = controller_id;
     }
 }
 
 static void
 parse_named_action(enum ofputil_action_code code, const struct flow *flow,
-                   struct ofpbuf *b, char *arg)
+                   char *arg, struct ofpbuf *ofpacts)
 {
-    struct ofp_action_dl_addr *oada;
-    struct ofp_action_vlan_pcp *oavp;
-    struct ofp_action_vlan_vid *oavv;
-    struct ofp_action_nw_addr *oana;
-    struct ofp_action_tp_port *oata;
+    struct ofpact_tunnel *tunnel;
+    uint16_t vid;
+    ovs_be32 ip;
+    uint8_t pcp;
+    uint8_t tos;
 
     switch (code) {
     case OFPUTIL_ACTION_INVALID:
         NOT_REACHED();
 
     case OFPUTIL_OFPAT10_OUTPUT:
-        parse_output(b, arg);
+        parse_output(arg, ofpacts);
         break;
 
     case OFPUTIL_OFPAT10_SET_VLAN_VID:
-        oavv = ofputil_put_OFPAT10_SET_VLAN_VID(b);
-        oavv->vlan_vid = htons(str_to_u32(arg));
+        vid = str_to_u32(arg);
+        if (vid & ~VLAN_VID_MASK) {
+            ovs_fatal(0, "%s: not a valid VLAN VID", arg);
+        }
+        ofpact_put_SET_VLAN_VID(ofpacts)->vlan_vid = vid;
         break;
 
     case OFPUTIL_OFPAT10_SET_VLAN_PCP:
-        oavp = ofputil_put_OFPAT10_SET_VLAN_PCP(b);
-        oavp->vlan_pcp = str_to_u32(arg);
+        pcp = str_to_u32(arg);
+        if (pcp & ~7) {
+            ovs_fatal(0, "%s: not a valid VLAN PCP", arg);
+        }
+        ofpact_put_SET_VLAN_PCP(ofpacts)->vlan_pcp = pcp;
         break;
 
     case OFPUTIL_OFPAT10_STRIP_VLAN:
-        ofputil_put_OFPAT10_STRIP_VLAN(b);
+        ofpact_put_STRIP_VLAN(ofpacts);
         break;
 
     case OFPUTIL_OFPAT10_SET_DL_SRC:
+        str_to_mac(arg, ofpact_put_SET_ETH_SRC(ofpacts)->mac);
+        break;
+
     case OFPUTIL_OFPAT10_SET_DL_DST:
-        oada = ofputil_put_action(code, b);
-        str_to_mac(arg, oada->dl_addr);
+        str_to_mac(arg, ofpact_put_SET_ETH_DST(ofpacts)->mac);
         break;
 
     case OFPUTIL_OFPAT10_SET_NW_SRC:
+        str_to_ip(arg, &ip);
+        ofpact_put_SET_IPV4_SRC(ofpacts)->ipv4 = ip;
+        break;
+
     case OFPUTIL_OFPAT10_SET_NW_DST:
-        oana = ofputil_put_action(code, b);
-        str_to_ip(arg, &oana->nw_addr);
+        str_to_ip(arg, &ip);
+        ofpact_put_SET_IPV4_DST(ofpacts)->ipv4 = ip;
         break;
 
     case OFPUTIL_OFPAT10_SET_NW_TOS:
-        ofputil_put_OFPAT10_SET_NW_TOS(b)->nw_tos = str_to_u32(arg);
+        tos = str_to_u32(arg);
+        if (tos & ~IP_DSCP_MASK) {
+            ovs_fatal(0, "%s: not a valid TOS", arg);
+        }
+        ofpact_put_SET_IPV4_DSCP(ofpacts)->dscp = tos;
         break;
 
     case OFPUTIL_OFPAT10_SET_TP_SRC:
+        ofpact_put_SET_L4_SRC_PORT(ofpacts)->port = str_to_u32(arg);
+        break;
+
     case OFPUTIL_OFPAT10_SET_TP_DST:
-        oata = ofputil_put_action(code, b);
-        oata->tp_port = htons(str_to_u32(arg));
+        ofpact_put_SET_L4_DST_PORT(ofpacts)->port = str_to_u32(arg);
         break;
 
     case OFPUTIL_OFPAT10_ENQUEUE:
-        parse_enqueue(b, arg);
+        parse_enqueue(arg, ofpacts);
         break;
 
     case OFPUTIL_NXAST_RESUBMIT:
-        parse_resubmit(b, arg);
+        parse_resubmit(arg, ofpacts);
         break;
 
     case OFPUTIL_NXAST_SET_TUNNEL:
-        parse_set_tunnel(b, arg);
+    case OFPUTIL_NXAST_SET_TUNNEL64:
+        tunnel = ofpact_put_SET_TUNNEL(ofpacts);
+        tunnel->ofpact.compat = code;
+        tunnel->tun_id = str_to_u64(arg);
         break;
 
     case OFPUTIL_NXAST_SET_QUEUE:
-        ofputil_put_NXAST_SET_QUEUE(b)->queue_id = htonl(str_to_u32(arg));
+        ofpact_put_SET_QUEUE(ofpacts)->queue_id = str_to_u32(arg);
         break;
 
     case OFPUTIL_NXAST_POP_QUEUE:
-        ofputil_put_NXAST_POP_QUEUE(b);
+        ofpact_put_POP_QUEUE(ofpacts);
         break;
 
     case OFPUTIL_NXAST_REG_MOVE:
-        nxm_parse_reg_move(ofputil_put_NXAST_REG_MOVE(b), arg);
+        nxm_parse_reg_move(ofpact_put_REG_MOVE(ofpacts), arg);
         break;
 
     case OFPUTIL_NXAST_REG_LOAD:
-        nxm_parse_reg_load(ofputil_put_NXAST_REG_LOAD(b), arg);
+        nxm_parse_reg_load(ofpact_put_REG_LOAD(ofpacts), arg);
         break;
 
     case OFPUTIL_NXAST_NOTE:
-        parse_note(b, arg);
-        break;
-
-    case OFPUTIL_NXAST_SET_TUNNEL64:
-        ofputil_put_NXAST_SET_TUNNEL64(b)->tun_id = htonll(str_to_u64(arg));
+        parse_note(arg, ofpacts);
         break;
 
     case OFPUTIL_NXAST_MULTIPATH:
-        multipath_parse(ofputil_put_NXAST_MULTIPATH(b), arg);
+        multipath_parse(ofpact_put_MULTIPATH(ofpacts), arg);
         break;
 
     case OFPUTIL_NXAST_AUTOPATH:
-        autopath_parse(ofputil_put_NXAST_AUTOPATH(b), arg);
+        autopath_parse(ofpact_put_AUTOPATH(ofpacts), arg);
         break;
 
     case OFPUTIL_NXAST_BUNDLE:
-        bundle_parse(b, arg);
+        bundle_parse(arg, ofpacts);
         break;
 
     case OFPUTIL_NXAST_BUNDLE_LOAD:
-        bundle_parse_load(b, arg);
+        bundle_parse_load(arg, ofpacts);
         break;
 
     case OFPUTIL_NXAST_RESUBMIT_TABLE:
@@ -423,29 +406,29 @@ parse_named_action(enum ofputil_action_code code, const struct flow *flow,
         NOT_REACHED();
 
     case OFPUTIL_NXAST_LEARN:
-        learn_parse(b, arg, flow);
+        learn_parse(arg, flow, ofpacts);
         break;
 
     case OFPUTIL_NXAST_EXIT:
-        ofputil_put_NXAST_EXIT(b);
+        ofpact_put_EXIT(ofpacts);
         break;
 
     case OFPUTIL_NXAST_DEC_TTL:
-        ofputil_put_NXAST_DEC_TTL(b);
+        ofpact_put_DEC_TTL(ofpacts);
         break;
 
     case OFPUTIL_NXAST_FIN_TIMEOUT:
-        parse_fin_timeout(b, arg);
+        parse_fin_timeout(ofpacts, arg);
         break;
 
     case OFPUTIL_NXAST_CONTROLLER:
-        parse_controller(b, arg);
+        parse_controller(ofpacts, arg);
         break;
     }
 }
 
 static void
-str_to_action(const struct flow *flow, char *str, struct ofpbuf *b)
+str_to_ofpacts(const struct flow *flow, char *str, struct ofpbuf *ofpacts)
 {
     char *pos, *act, *arg;
     int n_actions;
@@ -458,10 +441,8 @@ str_to_action(const struct flow *flow, char *str, struct ofpbuf *b)
 
         code = ofputil_action_code_from_name(act);
         if (code >= 0) {
-            parse_named_action(code, flow, b, arg);
+            parse_named_action(code, flow, arg, ofpacts);
         } else if (!strcasecmp(act, "drop")) {
-            /* A drop action in OpenFlow occurs by just not setting
-             * an action. */
             if (n_actions) {
                 ovs_fatal(0, "Drop actions must not be preceded by other "
                           "actions");
@@ -471,12 +452,13 @@ str_to_action(const struct flow *flow, char *str, struct ofpbuf *b)
             }
             break;
         } else if (ofputil_port_from_string(act, &port)) {
-            put_output_action(b, port);
+            ofpact_put_OUTPUT(ofpacts)->port = port;
         } else {
             ovs_fatal(0, "Unknown action: %s", act);
         }
         n_actions++;
     }
+    ofpact_pad(ofpacts);
 }
 
 struct protocol {
@@ -694,15 +676,15 @@ parse_ofp_str(struct ofputil_flow_mod *fm, int command, const char *str_,
         fm->new_cookie = htonll(0);
     }
     if (fields & F_ACTIONS) {
-        struct ofpbuf actions;
+        struct ofpbuf ofpacts;
 
-        ofpbuf_init(&actions, sizeof(union ofp_action));
-        str_to_action(&fm->cr.flow, act_str, &actions);
-        fm->actions = ofpbuf_steal_data(&actions);
-        fm->n_actions = actions.size / sizeof(union ofp_action);
+        ofpbuf_init(&ofpacts, 32);
+        str_to_ofpacts(&fm->cr.flow, act_str, &ofpacts);
+        fm->ofpacts_len = ofpacts.size;
+        fm->ofpacts = ofpbuf_steal_data(&ofpacts);
     } else {
-        fm->actions = NULL;
-        fm->n_actions = 0;
+        fm->ofpacts_len = 0;
+        fm->ofpacts = NULL;
     }
 
     free(string);
@@ -714,10 +696,10 @@ parse_ofp_str(struct ofputil_flow_mod *fm, int command, const char *str_,
  * Prints an error on stderr and aborts the program if 's' syntax is
  * invalid. */
 void
-parse_ofp_actions(const char *s_, struct ofpbuf *actions)
+parse_ofpacts(const char *s_, struct ofpbuf *ofpacts)
 {
     char *s = xstrdup(s_);
-    str_to_action(NULL, s, actions);
+    str_to_ofpacts(NULL, s, ofpacts);
     free(s);
 }
 

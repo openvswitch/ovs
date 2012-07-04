@@ -96,6 +96,8 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/nx-match.h \
 	lib/odp-util.c \
 	lib/odp-util.h \
+	lib/ofp-actions.c \
+	lib/ofp-actions.h \
 	lib/ofp-errors.c \
 	lib/ofp-errors.h \
 	lib/ofp-parse.c \

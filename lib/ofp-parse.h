@@ -40,7 +40,7 @@ void parse_ofp_flow_stats_request_str(struct ofputil_flow_stats_request *,
                                       bool aggregate, const char *string);
 
 
-void parse_ofp_actions(const char *, struct ofpbuf *actions);
+void parse_ofpacts(const char *, struct ofpbuf *ofpacts);
 
 char *parse_ofp_exact_flow(struct flow *, const char *);
 

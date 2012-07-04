@@ -10,7 +10,7 @@ AT_CHECK([ovs-ofctl parse-flows flows.txt], [0],
 [[usable protocols: any
 chosen protocol: OpenFlow10-table_id
 OFPT_FLOW_MOD (xid=0x1): ADD actions=learn(table=1)
-OFPT_FLOW_MOD (xid=0x2): ADD actions=learn(table=1,NXM_OF_VLAN_TCI[0..11],NXM_OF_ETH_DST[]=NXM_OF_ETH_SRC[],output:NXM_OF_IN_PORT[],load:0x000a->NXM_NX_REG0[5..10])
+OFPT_FLOW_MOD (xid=0x2): ADD actions=learn(table=1,NXM_OF_VLAN_TCI[0..11],NXM_OF_ETH_DST[]=NXM_OF_ETH_SRC[],output:NXM_OF_IN_PORT[],load:0xa->NXM_NX_REG0[5..10])
 OFPT_FLOW_MOD (xid=0x3): ADD actions=learn(table=1,idle_timeout=10,hard_timeout=20,fin_idle_timeout=5,fin_hard_timeout=10,priority=10,cookie=0xfedcba9876543210,in_port=99,NXM_OF_ETH_DST[]=NXM_OF_ETH_SRC[],load:NXM_OF_IN_PORT[]->NXM_NX_REG1[16..31])
 ]])
 AT_CLEANUP
@@ -42,7 +42,7 @@ ip,actions=learn(eth_type=0x800,OXM_OF_IPV4_DST[])
 AT_CHECK([ovs-ofctl parse-flows flows.txt], [0],
 [[usable protocols: any
 chosen protocol: OpenFlow10-table_id
-OFPT_FLOW_MOD (xid=0x1): ADD actions=learn(table=1,eth_type=0x800,load:0x00000005->NXM_OF_IP_DST[])
+OFPT_FLOW_MOD (xid=0x1): ADD actions=learn(table=1,eth_type=0x800,load:0x5->NXM_OF_IP_DST[])
 OFPT_FLOW_MOD (xid=0x2): ADD ip actions=learn(table=1,load:NXM_OF_IP_DST[]->NXM_NX_REG1[])
 OFPT_FLOW_MOD (xid=0x3): ADD ip actions=learn(table=1,eth_type=0x800,NXM_OF_IP_DST[])
 ]])

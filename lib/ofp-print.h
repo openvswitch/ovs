@@ -25,7 +25,6 @@
 struct ofp_flow_mod;
 struct ofp10_match;
 struct ds;
-union ofp_action;
 
 #ifdef  __cplusplus
 extern "C" {
@@ -34,7 +33,6 @@ extern "C" {
 void ofp_print(FILE *, const void *, size_t, int verbosity);
 void ofp_print_packet(FILE *stream, const void *data, size_t len);
 
-void ofp_print_actions(struct ds *, const union ofp_action *, size_t);
 void ofp10_match_print(struct ds *, const struct ofp10_match *, int verbosity);
 
 char *ofp_to_string(const void *, size_t, int verbosity);

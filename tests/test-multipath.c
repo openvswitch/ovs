@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010 Nicira, Inc.
+ * Copyright (c) 2010, 2012 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@
 #include <stdlib.h>
 
 #include "flow.h"
+#include "ofp-actions.h"
 #include "random.h"
 #include "util.h"
 
@@ -32,7 +33,7 @@ int
 main(int argc, char *argv[])
 {
     enum { MP_MAX_LINKS = 63 };
-    struct nx_action_multipath mp;
+    struct ofpact_multipath mp;
     bool ok = true;
     int n;
 
@@ -60,11 +61,11 @@ main(int argc, char *argv[])
 
             random_bytes(&flow, sizeof flow);
 
-            mp.max_link = htons(n - 1);
+            mp.max_link = n - 1;
             multipath_execute(&mp, &flow);
             old_link = flow.regs[0];
 
-            mp.max_link = htons(n);
+            mp.max_link = n;
             multipath_execute(&mp, &flow);
             new_link = flow.regs[0];
 
@@ -91,7 +92,7 @@ main(int argc, char *argv[])
                "stddev/expected=%.4f\n",
                n, n + 1, disruption, perfect, distribution);
 
-        switch (ntohs(mp.algorithm)) {
+        switch (mp.algorithm) {
         case NX_MP_ALG_MODULO_N:
             if (disruption < (n < 2 ? .25 : .5)) {
                 fprintf(stderr, "%d -> %d: disruption=%.2f < .5\n",

@@ -1,4 +1,4 @@
-/* Copyright (c) 2011 Nicira, Inc.
+/* Copyright (c) 2011, 2012 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,29 +27,23 @@
 
 struct ds;
 struct flow;
+struct ofpact_bundle;
 struct ofpbuf;
 
 /* NXAST_BUNDLE helper functions.
  *
  * See include/openflow/nicira-ext.h for NXAST_BUNDLE specification. */
 
-uint16_t bundle_execute(const struct nx_action_bundle *, const struct flow *,
+uint16_t bundle_execute(const struct ofpact_bundle *, const struct flow *,
                         bool (*slave_enabled)(uint16_t ofp_port, void *aux),
                         void *aux);
-void bundle_execute_load(const struct nx_action_bundle *, struct flow *,
-                         bool (*slave_enabled)(uint16_t ofp_port, void *aux),
-                         void *aux);
-enum ofperr bundle_check(const struct nx_action_bundle *, int max_ports,
+enum ofperr bundle_from_openflow(const struct nx_action_bundle *,
+                                 struct ofpbuf *ofpact);
+enum ofperr bundle_check(const struct ofpact_bundle *, int max_ports,
                          const struct flow *);
-void bundle_parse(struct ofpbuf *, const char *);
-void bundle_parse_load(struct ofpbuf *b, const char *);
-void bundle_format(const struct nx_action_bundle *, struct ds *);
-
-/* Returns the 'i'th slave in 'nab'. */
-static inline uint16_t
-bundle_get_slave(const struct nx_action_bundle *nab, size_t i)
-{
-    return ntohs(((ovs_be16 *)(nab + 1))[i]);
-}
+void bundle_to_nxast(const struct ofpact_bundle *, struct ofpbuf *of10);
+void bundle_parse(const char *, struct ofpbuf *ofpacts);
+void bundle_parse_load(const char *, struct ofpbuf *ofpacts);
+void bundle_format(const struct ofpact_bundle *, struct ds *);
 
 #endif /* bundle.h */
