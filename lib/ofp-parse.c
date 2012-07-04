@@ -293,10 +293,12 @@ parse_named_action(enum ofputil_action_code code, const struct flow *flow,
         NOT_REACHED();
 
     case OFPUTIL_OFPAT10_OUTPUT:
+    case OFPUTIL_OFPAT11_OUTPUT:
         parse_output(arg, ofpacts);
         break;
 
     case OFPUTIL_OFPAT10_SET_VLAN_VID:
+    case OFPUTIL_OFPAT11_SET_VLAN_VID:
         vid = str_to_u32(arg);
         if (vid & ~VLAN_VID_MASK) {
             ovs_fatal(0, "%s: not a valid VLAN VID", arg);
@@ -305,6 +307,7 @@ parse_named_action(enum ofputil_action_code code, const struct flow *flow,
         break;
 
     case OFPUTIL_OFPAT10_SET_VLAN_PCP:
+    case OFPUTIL_OFPAT11_SET_VLAN_PCP:
         pcp = str_to_u32(arg);
         if (pcp & ~7) {
             ovs_fatal(0, "%s: not a valid VLAN PCP", arg);
@@ -317,24 +320,29 @@ parse_named_action(enum ofputil_action_code code, const struct flow *flow,
         break;
 
     case OFPUTIL_OFPAT10_SET_DL_SRC:
+    case OFPUTIL_OFPAT11_SET_DL_SRC:
         str_to_mac(arg, ofpact_put_SET_ETH_SRC(ofpacts)->mac);
         break;
 
     case OFPUTIL_OFPAT10_SET_DL_DST:
+    case OFPUTIL_OFPAT11_SET_DL_DST:
         str_to_mac(arg, ofpact_put_SET_ETH_DST(ofpacts)->mac);
         break;
 
     case OFPUTIL_OFPAT10_SET_NW_SRC:
+    case OFPUTIL_OFPAT11_SET_NW_SRC:
         str_to_ip(arg, &ip);
         ofpact_put_SET_IPV4_SRC(ofpacts)->ipv4 = ip;
         break;
 
     case OFPUTIL_OFPAT10_SET_NW_DST:
+    case OFPUTIL_OFPAT11_SET_NW_DST:
         str_to_ip(arg, &ip);
         ofpact_put_SET_IPV4_DST(ofpacts)->ipv4 = ip;
         break;
 
     case OFPUTIL_OFPAT10_SET_NW_TOS:
+    case OFPUTIL_OFPAT11_SET_NW_TOS:
         tos = str_to_u32(arg);
         if (tos & ~IP_DSCP_MASK) {
             ovs_fatal(0, "%s: not a valid TOS", arg);
@@ -343,10 +351,12 @@ parse_named_action(enum ofputil_action_code code, const struct flow *flow,
         break;
 
     case OFPUTIL_OFPAT10_SET_TP_SRC:
+    case OFPUTIL_OFPAT11_SET_TP_SRC:
         ofpact_put_SET_L4_SRC_PORT(ofpacts)->port = str_to_u32(arg);
         break;
 
     case OFPUTIL_OFPAT10_SET_TP_DST:
+    case OFPUTIL_OFPAT11_SET_TP_DST:
         ofpact_put_SET_L4_DST_PORT(ofpacts)->port = str_to_u32(arg);
         break;
 

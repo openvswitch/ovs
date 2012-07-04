@@ -628,6 +628,19 @@ against desired actions in a bytewise fashion:
         - Open vSwitch zeros padding bytes in action structures,
           regardless of their values when the flows were added.
 
+        - Open vSwitch "normalizes" the instructions in OpenFlow 1.1
+          (and later) in the following way:
+
+              * OVS sorts the instructions into the following order:
+                Apply-Actions, Clear-Actions, Write-Actions,
+                Write-Metadata, Goto-Table.
+
+              * OVS drops Apply-Actions instructions that have empty
+                action lists.
+
+              * OVS drops Write-Actions instructions that have empty
+                action sets.
+
 Please report other discrepancies, if you notice any, so that we can
 fix or document them.
 

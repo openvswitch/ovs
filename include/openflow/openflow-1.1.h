@@ -305,6 +305,16 @@ enum ofp11_instruction_type {
     OFPIT11_EXPERIMENTER = 0xFFFF  /* Experimenter instruction */
 };
 
+#define OFP11_INSTRUCTION_ALIGN 8
+
+/* Generic ofp_instruction structure. */
+struct ofp11_instruction {
+    ovs_be16 type;              /* Instruction type */
+    ovs_be16 len;               /* Length of this struct in bytes. */
+    uint8_t pad[4];             /* Align to 64-bits */
+};
+OFP_ASSERT(sizeof(struct ofp11_instruction) == 8);
+
 /* Instruction structure for OFPIT_GOTO_TABLE */
 struct ofp11_instruction_goto_table {
     ovs_be16 type;                 /* OFPIT_GOTO_TABLE */
@@ -334,6 +344,16 @@ struct ofp11_instruction_actions {
                                              OFPIT_APPLY_ACTIONS */
 };
 OFP_ASSERT(sizeof(struct ofp11_instruction_actions) == 8);
+
+/* Instruction structure for experimental instructions */
+struct ofp11_instruction_experimenter {
+    ovs_be16 type;              /* OFPIT11_EXPERIMENTER */
+    ovs_be16 len;               /* Length of this struct in bytes */
+    ovs_be32 experimenter;      /* Experimenter ID which takes the same form
+                                   as in struct ofp_vendor_header. */
+    /* Experimenter-defined arbitrary additional data. */
+};
+OFP_ASSERT(sizeof(struct ofp11_instruction_experimenter) == 8);
 
 /* Action structure for OFPAT_OUTPUT, which sends packets out 'port'.
    * When the 'port' is the OFPP_CONTROLLER, 'max_len' indicates the max

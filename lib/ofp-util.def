@@ -3,7 +3,7 @@
 #ifndef OFPAT10_ACTION
 #define OFPAT10_ACTION(ENUM, STRUCT, NAME)
 #endif
-OFPAT10_ACTION(OFPAT10_OUTPUT,       ofp_action_output,   "output")
+OFPAT10_ACTION(OFPAT10_OUTPUT,       ofp10_action_output, "output")
 OFPAT10_ACTION(OFPAT10_SET_VLAN_VID, ofp_action_vlan_vid, "mod_vlan_vid")
 OFPAT10_ACTION(OFPAT10_SET_VLAN_PCP, ofp_action_vlan_pcp, "mod_vlan_pcp")
 OFPAT10_ACTION(OFPAT10_STRIP_VLAN,   ofp_action_header,   "strip_vlan")
@@ -15,7 +15,26 @@ OFPAT10_ACTION(OFPAT10_SET_NW_TOS,   ofp_action_nw_tos,   "mod_nw_tos")
 OFPAT10_ACTION(OFPAT10_SET_TP_SRC,   ofp_action_tp_port,  "mod_tp_src")
 OFPAT10_ACTION(OFPAT10_SET_TP_DST,   ofp_action_tp_port,  "mod_tp_dst")
 OFPAT10_ACTION(OFPAT10_ENQUEUE,      ofp_action_enqueue,  "enqueue")
-#undef OFPAT10_ACTION
+
+#ifndef OFPAT11_ACTION
+#define OFPAT11_ACTION(ENUM, STRUCT, NAME)
+#endif
+OFPAT11_ACTION(OFPAT11_OUTPUT,       ofp11_action_output, "output")
+OFPAT11_ACTION(OFPAT11_SET_VLAN_VID, ofp_action_vlan_vid, "mod_vlan_vid")
+OFPAT11_ACTION(OFPAT11_SET_VLAN_PCP, ofp_action_vlan_pcp, "mod_vlan_pcp")
+OFPAT11_ACTION(OFPAT11_SET_DL_SRC,   ofp_action_dl_addr,  "mod_dl_src")
+OFPAT11_ACTION(OFPAT11_SET_DL_DST,   ofp_action_dl_addr,  "mod_dl_dst")
+OFPAT11_ACTION(OFPAT11_SET_NW_SRC,   ofp_action_nw_addr,  "mod_nw_src")
+OFPAT11_ACTION(OFPAT11_SET_NW_DST,   ofp_action_nw_addr,  "mod_nw_dst")
+OFPAT11_ACTION(OFPAT11_SET_NW_TOS,   ofp_action_nw_tos,   "mod_nw_tos")
+//OFPAT11_ACTION(OFPAT11_SET_NW_ECN,   ofp11_action_nw_ecn, "mod_nw_ecn")
+OFPAT11_ACTION(OFPAT11_SET_TP_SRC,   ofp_action_tp_port,  "mod_tp_src")
+OFPAT11_ACTION(OFPAT11_SET_TP_DST,   ofp_action_tp_port,  "mod_tp_dst")
+//OFPAT11_ACTION(OFPAT11_PUSH_VLAN,    ofp11_action_push,   "push_vlan")
+//OFPAT11_ACTION(OFPAT11_POP_VLAN,     ofp_action_header,   "pop_vlan")
+//OFPAT11_ACTION(OFPAT11_SET_QUEUE,    ofp11_action_set_queue, "set_queue")
+//OFPAT11_ACTION(OFPAT11_SET_NW_TTL,   ofp11_action_nw_ttl, "set_nw_ttl")
+//OFPAT11_ACTION(OFPAT11_DEC_NW_TTL,   ofp_action_header,   "dec_ttl")
 
 #ifndef NXAST_ACTION
 #define NXAST_ACTION(ENUM, STRUCT, EXTENSIBLE, NAME)
@@ -39,4 +58,7 @@ NXAST_ACTION(NXAST_EXIT,           nx_action_header,       0, "exit")
 NXAST_ACTION(NXAST_DEC_TTL,        nx_action_header,       0, "dec_ttl")
 NXAST_ACTION(NXAST_FIN_TIMEOUT,    nx_action_fin_timeout,  0, "fin_timeout")
 NXAST_ACTION(NXAST_CONTROLLER,     nx_action_controller,   0, "controller")
+
+#undef OFPAT10_ACTION
+#undef OFPAT11_ACTION
 #undef NXAST_ACTION

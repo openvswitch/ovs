@@ -1,4 +1,4 @@
-/* Copyright (c) 2008, 2011 The Board of Trustees of The Leland Stanford
+/* Copyright (c) 2008, 2011, 2012 The Board of Trustees of The Leland Stanford
  * Junior University
  *
  * We are making the OpenFlow specification and associated documentation
@@ -221,6 +221,59 @@ enum ofp_packet_in_reason {
     OFPR_INVALID_TTL        /* Packet has invalid TTL. */,
     OFPR_N_REASONS
 };
+
+/* Action structure for OFPAT10_SET_VLAN_VID and OFPAT11_SET_VLAN_VID. */
+struct ofp_action_vlan_vid {
+    ovs_be16 type;                  /* Type. */
+    ovs_be16 len;                   /* Length is 8. */
+    ovs_be16 vlan_vid;              /* VLAN id. */
+    uint8_t pad[2];
+};
+OFP_ASSERT(sizeof(struct ofp_action_vlan_vid) == 8);
+
+/* Action structure for OFPAT10_SET_VLAN_PCP and OFPAT11_SET_VLAN_PCP. */
+struct ofp_action_vlan_pcp {
+    ovs_be16 type;                  /* Type. */
+    ovs_be16 len;                   /* Length is 8. */
+    uint8_t vlan_pcp;               /* VLAN priority. */
+    uint8_t pad[3];
+};
+OFP_ASSERT(sizeof(struct ofp_action_vlan_pcp) == 8);
+
+/* Action structure for OFPAT10_SET_DL_SRC/DST and OFPAT11_SET_DL_SRC/DST. */
+struct ofp_action_dl_addr {
+    ovs_be16 type;                  /* Type. */
+    ovs_be16 len;                   /* Length is 16. */
+    uint8_t dl_addr[OFP_ETH_ALEN];  /* Ethernet address. */
+    uint8_t pad[6];
+};
+OFP_ASSERT(sizeof(struct ofp_action_dl_addr) == 16);
+
+/* Action structure for OFPAT10_SET_NW_SRC/DST and OFPAT11_SET_NW_SRC/DST. */
+struct ofp_action_nw_addr {
+    ovs_be16 type;                  /* Type. */
+    ovs_be16 len;                   /* Length is 8. */
+    ovs_be32 nw_addr;               /* IP address. */
+};
+OFP_ASSERT(sizeof(struct ofp_action_nw_addr) == 8);
+
+/* Action structure for OFPAT10_SET_NW_TOS and OFPAT11_SET_NW_TOS. */
+struct ofp_action_nw_tos {
+    ovs_be16 type;                  /* Type.. */
+    ovs_be16 len;                   /* Length is 8. */
+    uint8_t nw_tos;                 /* DSCP in high 6 bits, rest ignored. */
+    uint8_t pad[3];
+};
+OFP_ASSERT(sizeof(struct ofp_action_nw_tos) == 8);
+
+/* Action structure for OFPAT10_SET_TP_SRC/DST and OFPAT11_SET_TP_SRC/DST. */
+struct ofp_action_tp_port {
+    ovs_be16 type;                  /* Type. */
+    ovs_be16 len;                   /* Length is 8. */
+    ovs_be16 tp_port;               /* TCP/UDP port. */
+    uint8_t pad[2];
+};
+OFP_ASSERT(sizeof(struct ofp_action_tp_port) == 8);
 
 /* Why was this flow removed? */
 enum ofp_flow_removed_reason {

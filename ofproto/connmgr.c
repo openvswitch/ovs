@@ -1372,7 +1372,7 @@ schedule_packet_in(struct ofconn *ofconn, struct ofputil_packet_in pin)
         pin.send_len = pin.packet_len;
     } else {
         /* Caller should have initialized 'send_len' to 'max_len' specified in
-         * struct ofp_action_output. */
+         * output action. */
     }
     if (pin.buffer_id != UINT32_MAX) {
         pin.send_len = MIN(pin.send_len, ofconn->miss_send_len);

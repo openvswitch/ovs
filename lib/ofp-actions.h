@@ -381,15 +381,26 @@ struct ofpact_note {
 };
 
 /* Converting OpenFlow to ofpacts. */
-enum ofperr ofpacts_pull_openflow(struct ofpbuf *openflow,
-                                  unsigned int actions_len,
-                                  struct ofpbuf *ofpacts);
+enum ofperr ofpacts_pull_openflow10(struct ofpbuf *openflow,
+                                    unsigned int actions_len,
+                                    struct ofpbuf *ofpacts);
+enum ofperr ofpacts_pull_openflow11_actions(struct ofpbuf *openflow,
+                                            unsigned int actions_len,
+                                            struct ofpbuf *ofpacts);
+enum ofperr ofpacts_pull_openflow11_instructions(struct ofpbuf *openflow,
+                                                 unsigned int instructions_len,
+                                                 struct ofpbuf *ofpacts);
 enum ofperr ofpacts_check(const struct ofpact[], size_t ofpacts_len,
                           const struct flow *, int max_ports);
 
 /* Converting ofpacts to OpenFlow. */
-void ofpacts_to_openflow(const struct ofpact[], size_t ofpacts_len,
-                         struct ofpbuf *openflow);
+void ofpacts_put_openflow10(const struct ofpact[], size_t ofpacts_len,
+                            struct ofpbuf *openflow);
+void ofpacts_put_openflow11_actions(const struct ofpact[], size_t ofpacts_len,
+                                    struct ofpbuf *openflow);
+void ofpacts_put_openflow11_instructions(const struct ofpact[],
+                                         size_t ofpacts_len,
+                                         struct ofpbuf *openflow);
 
 /* Working with ofpacts. */
 bool ofpacts_output_to_port(const struct ofpact[], size_t ofpacts_len,

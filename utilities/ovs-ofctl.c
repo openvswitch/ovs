@@ -2046,7 +2046,7 @@ do_parse_ofp10_actions(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
         /* Convert to ofpacts. */
         ofpbuf_init(&ofpacts, 0);
         size = of10_in.size;
-        error = ofpacts_pull_openflow(&of10_in, of10_in.size, &ofpacts);
+        error = ofpacts_pull_openflow10(&of10_in, of10_in.size, &ofpacts);
         if (error) {
             printf("bad OF1.1 actions: %s\n\n", ofperr_get_name(error));
             ofpbuf_uninit(&ofpacts);
@@ -2063,7 +2063,7 @@ do_parse_ofp10_actions(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 
         /* Convert back to ofp10 actions and print differences from input. */
         ofpbuf_init(&of10_out, 0);
-        ofpacts_to_openflow(ofpacts.data, ofpacts.size, &of10_out);
+        ofpacts_put_openflow10(ofpacts.data, ofpacts.size, &of10_out);
 
         print_differences(of10_in.data, of10_in.size,
                           of10_out.data, of10_out.size);
@@ -2091,7 +2091,6 @@ do_parse_ofp11_match(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
         struct ofp11_match match_out;
         struct cls_rule rule;
         enum ofperr error;
-        int i;
 
         /* Parse hex bytes. */
         ofpbuf_init(&match_in, 0);
@@ -2118,17 +2117,129 @@ do_parse_ofp11_match(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
         /* Convert back to ofp11_match and print differences from input. */
         ofputil_cls_rule_to_ofp11_match(&rule, &match_out);
 
-        for (i = 0; i < sizeof match_out; i++) {
-            uint8_t in = ((const uint8_t *) match_in.data)[i];
-            uint8_t out = ((const uint8_t *) &match_out)[i];
-
-            if (in != out) {
-                printf("%2d: %02"PRIx8" -> %02"PRIx8"\n", i, in, out);
-            }
-        }
+        print_differences(match_in.data, match_in.size,
+                          &match_out, sizeof match_out);
         putchar('\n');
 
         ofpbuf_uninit(&match_in);
+    }
+    ds_destroy(&in);
+}
+
+/* "parse-ofp11-actions": reads a series of OpenFlow 1.1 action specifications
+ * as hex bytes from stdin, converts them to ofpacts, prints them as strings
+ * on stdout, and then converts them back to hex bytes and prints any
+ * differences from the input. */
+static void
+do_parse_ofp11_actions(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
+{
+    struct ds in;
+
+    ds_init(&in);
+    while (!ds_get_preprocessed_line(&in, stdin)) {
+        struct ofpbuf of11_out;
+        struct ofpbuf of11_in;
+        struct ofpbuf ofpacts;
+        enum ofperr error;
+        size_t size;
+        struct ds s;
+
+        /* Parse hex bytes. */
+        ofpbuf_init(&of11_in, 0);
+        if (ofpbuf_put_hex(&of11_in, ds_cstr(&in), NULL)[0] != '\0') {
+            ovs_fatal(0, "Trailing garbage in hex data");
+        }
+
+        /* Convert to ofpacts. */
+        ofpbuf_init(&ofpacts, 0);
+        size = of11_in.size;
+        error = ofpacts_pull_openflow11_actions(&of11_in, of11_in.size,
+                                                &ofpacts);
+        if (error) {
+            printf("bad OF1.1 actions: %s\n\n", ofperr_get_name(error));
+            ofpbuf_uninit(&ofpacts);
+            ofpbuf_uninit(&of11_in);
+            continue;
+        }
+        ofpbuf_push_uninit(&of11_in, size);
+
+        /* Print cls_rule. */
+        ds_init(&s);
+        ofpacts_format(ofpacts.data, ofpacts.size, &s);
+        puts(ds_cstr(&s));
+        ds_destroy(&s);
+
+        /* Convert back to ofp11 actions and print differences from input. */
+        ofpbuf_init(&of11_out, 0);
+        ofpacts_put_openflow11_actions(ofpacts.data, ofpacts.size, &of11_out);
+
+        print_differences(of11_in.data, of11_in.size,
+                          of11_out.data, of11_out.size);
+        putchar('\n');
+
+        ofpbuf_uninit(&ofpacts);
+        ofpbuf_uninit(&of11_in);
+        ofpbuf_uninit(&of11_out);
+    }
+    ds_destroy(&in);
+}
+
+/* "parse-ofp11-instructions": reads a series of OpenFlow 1.1 instruction
+ * specifications as hex bytes from stdin, converts them to ofpacts, prints
+ * them as strings on stdout, and then converts them back to hex bytes and
+ * prints any differences from the input. */
+static void
+do_parse_ofp11_instructions(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
+{
+    struct ds in;
+
+    ds_init(&in);
+    while (!ds_get_preprocessed_line(&in, stdin)) {
+        struct ofpbuf of11_out;
+        struct ofpbuf of11_in;
+        struct ofpbuf ofpacts;
+        enum ofperr error;
+        size_t size;
+        struct ds s;
+
+        /* Parse hex bytes. */
+        ofpbuf_init(&of11_in, 0);
+        if (ofpbuf_put_hex(&of11_in, ds_cstr(&in), NULL)[0] != '\0') {
+            ovs_fatal(0, "Trailing garbage in hex data");
+        }
+
+        /* Convert to ofpacts. */
+        ofpbuf_init(&ofpacts, 0);
+        size = of11_in.size;
+        error = ofpacts_pull_openflow11_instructions(&of11_in, of11_in.size,
+                                                     &ofpacts);
+        if (error) {
+            printf("bad OF1.1 instructions: %s\n\n", ofperr_get_name(error));
+            ofpbuf_uninit(&ofpacts);
+            ofpbuf_uninit(&of11_in);
+            continue;
+        }
+        ofpbuf_push_uninit(&of11_in, size);
+
+        /* Print cls_rule. */
+        ds_init(&s);
+        ofpacts_format(ofpacts.data, ofpacts.size, &s);
+        puts(ds_cstr(&s));
+        ds_destroy(&s);
+
+        /* Convert back to ofp11 instructions and print differences from
+         * input. */
+        ofpbuf_init(&of11_out, 0);
+        ofpacts_put_openflow11_instructions(ofpacts.data, ofpacts.size,
+                                            &of11_out);
+
+        print_differences(of11_in.data, of11_in.size,
+                          of11_out.data, of11_out.size);
+        putchar('\n');
+
+        ofpbuf_uninit(&ofpacts);
+        ofpbuf_uninit(&of11_in);
+        ofpbuf_uninit(&of11_out);
     }
     ds_destroy(&in);
 }
@@ -2211,6 +2322,8 @@ static const struct command all_commands[] = {
     { "parse-oxm", 0, 0, do_parse_oxm },
     { "parse-ofp10-actions", 0, 0, do_parse_ofp10_actions },
     { "parse-ofp11-match", 0, 0, do_parse_ofp11_match },
+    { "parse-ofp11-actions", 0, 0, do_parse_ofp11_actions },
+    { "parse-ofp11-instructions", 0, 0, do_parse_ofp11_instructions },
     { "print-error", 1, 1, do_print_error },
     { "ofp-print", 1, 2, do_ofp_print },
 

@@ -234,6 +234,7 @@ def extract_ofp_errors(filenames):
                               "NX1.0+": ("OF1.0", "OF1.1", "OF1.2"),
                               "NX1.0":  ("OF1.0",),
                               "NX1.1":  ("OF1.1",),
+                              "NX1.1+": ("OF1.1",),
                               "NX1.2":  ("OF1.2",)}
                 if targets not in target_map:
                     fatal("%s: unknown error domain" % targets)
