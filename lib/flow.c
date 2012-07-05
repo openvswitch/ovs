@@ -947,7 +947,7 @@ flow_hash_fields_valid(enum nx_hash_fields fields)
 void
 flow_set_vlan_vid(struct flow *flow, ovs_be16 vid)
 {
-    if (vid == htons(OFP_VLAN_NONE)) {
+    if (vid == htons(OFP10_VLAN_NONE)) {
         flow->vlan_tci = htons(0);
     } else {
         vid &= htons(VLAN_VID_MASK);

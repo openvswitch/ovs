@@ -240,11 +240,6 @@ struct ofp10_action_output {
 };
 OFP_ASSERT(sizeof(struct ofp10_action_output) == 8);
 
-/* The VLAN id is 12 bits, so we can use the entire 16 bits to indicate
- * special conditions.  All ones is used to match that no VLAN id was
- * set. */
-#define OFP_VLAN_NONE      0xffff
-
 /* Action header for OFPAT10_VENDOR. The rest of the body is vendor-defined. */
 struct ofp_action_vendor_header {
     ovs_be16 type;                  /* OFPAT10_VENDOR. */
@@ -369,7 +364,7 @@ enum ofp_flow_wildcards {
 /* The VLAN id is 12-bits, so we can use the entire 16 bits to indicate
  * special conditions.  All ones indicates that no VLAN id was set.
  */
-#define OFP_VLAN_NONE      0xffff
+#define OFP10_VLAN_NONE      0xffff
 
 /* Fields to match against flows */
 struct ofp10_match {

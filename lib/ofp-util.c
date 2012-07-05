@@ -171,7 +171,8 @@ ofputil_cls_rule_from_ofp10_match(const struct ofp10_match *match,
     rule->flow.nw_proto = match->nw_proto;
 
     /* Translate VLANs. */
-    if (!(ofpfw & OFPFW10_DL_VLAN) && match->dl_vlan == htons(OFP_VLAN_NONE)) {
+    if (!(ofpfw & OFPFW10_DL_VLAN) &&
+        match->dl_vlan == htons(OFP10_VLAN_NONE)) {
         /* Match only packets without 802.1Q header.
          *
          * When OFPFW10_DL_VLAN_PCP is wildcarded, this is obviously correct.
@@ -232,7 +233,7 @@ ofputil_cls_rule_to_ofp10_match(const struct cls_rule *rule,
         ofpfw |= OFPFW10_DL_VLAN | OFPFW10_DL_VLAN_PCP;
     } else if (rule->wc.vlan_tci_mask & htons(VLAN_CFI)
                && !(rule->flow.vlan_tci & htons(VLAN_CFI))) {
-        match->dl_vlan = htons(OFP_VLAN_NONE);
+        match->dl_vlan = htons(OFP10_VLAN_NONE);
     } else {
         if (!(rule->wc.vlan_tci_mask & htons(VLAN_VID_MASK))) {
             ofpfw |= OFPFW10_DL_VLAN;
