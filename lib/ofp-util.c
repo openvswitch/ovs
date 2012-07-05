@@ -3392,6 +3392,16 @@ ofputil_append_stats_reply(size_t len, struct list *replies)
     return ofpbuf_put_uninit(ofputil_reserve_stats_reply(len, replies), len);
 }
 
+/* Sometimes, when composing stats replies, it's difficult to predict how long
+ * an individual reply chunk will be before actually encoding it into the reply
+ * buffer.  This function allows easy handling of this case: just encode the
+ * reply, then use this function to break the message into two pieces if it
+ * exceeds the OpenFlow message limit.
+ *
+ * In detail, if the final stats message in 'replies' is too long for OpenFlow,
+ * this function breaks it into two separate stats replies, the first one with
+ * the first 'start_ofs' bytes, the second one containing the bytes from that
+ * offset onward. */
 void
 ofputil_postappend_stats_reply(size_t start_ofs, struct list *replies)
 {
