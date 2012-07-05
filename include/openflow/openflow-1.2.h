@@ -198,7 +198,7 @@ enum ofp12_action_type {
                                   to outermost */
     OFPAT12_COPY_TTL_IN,       /* Copy TTL "inwards" -- from outermost to
                                   next-to-outermost */
-    OFPAT12_SET_MPLS_TTL,      /* MPLS TTL */
+    OFPAT12_SET_MPLS_TTL = 15, /* MPLS TTL */
     OFPAT12_DEC_MPLS_TTL,      /* Decrement MPLS TTL */
     OFPAT12_PUSH_VLAN,         /* Push a new VLAN tag */
     OFPAT12_POP_VLAN,          /* Pop the outer VLAN tag */
