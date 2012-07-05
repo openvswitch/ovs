@@ -62,7 +62,12 @@ for pid in os.listdir("/proc"):
     except ValueError:
         continue
 
-    for fd in os.listdir("/proc/%d/fd" % pid):
+    try:
+        fds = os.listdir("/proc/%d/fd" % pid)
+    except OSError:
+        continue
+
+    for fd in fds:
         try:
             fd = int(fd)
         except ValueError:
