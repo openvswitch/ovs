@@ -253,13 +253,14 @@ nl_sock_leave_mcgroup(struct nl_sock *sock, unsigned int multicast_group)
 }
 
 static int
-nl_sock_send__(struct nl_sock *sock, const struct ofpbuf *msg, bool wait)
+nl_sock_send__(struct nl_sock *sock, const struct ofpbuf *msg,
+               uint32_t nlmsg_seq, bool wait)
 {
     struct nlmsghdr *nlmsg = nl_msg_nlmsghdr(msg);
     int error;
 
     nlmsg->nlmsg_len = msg->size;
-    nlmsg->nlmsg_seq = nl_sock_allocate_seq(sock, 1);
+    nlmsg->nlmsg_seq = nlmsg_seq;
     nlmsg->nlmsg_pid = sock->pid;
     do {
         int retval;
@@ -274,8 +275,9 @@ nl_sock_send__(struct nl_sock *sock, const struct ofpbuf *msg, bool wait)
 }
 
 /* Tries to send 'msg', which must contain a Netlink message, to the kernel on
- * 'sock'.  nlmsg_len in 'msg' will be finalized to match msg->size, and
- * nlmsg_pid will be set to 'sock''s pid, before the message is sent.
+ * 'sock'.  nlmsg_len in 'msg' will be finalized to match msg->size, nlmsg_pid
+ * will be set to 'sock''s pid, and nlmsg_seq will be initialized to a fresh
+ * sequence number, before the message is sent.
  *
  * Returns 0 if successful, otherwise a positive errno value.  If
  * 'wait' is true, then the send will wait until buffer space is ready;
@@ -283,11 +285,29 @@ nl_sock_send__(struct nl_sock *sock, const struct ofpbuf *msg, bool wait)
 int
 nl_sock_send(struct nl_sock *sock, const struct ofpbuf *msg, bool wait)
 {
+    return nl_sock_send_seq(sock, msg, nl_sock_allocate_seq(sock, 1), wait);
+}
+
+/* Tries to send 'msg', which must contain a Netlink message, to the kernel on
+ * 'sock'.  nlmsg_len in 'msg' will be finalized to match msg->size, nlmsg_pid
+ * will be set to 'sock''s pid, and nlmsg_seq will be initialized to
+ * 'nlmsg_seq', before the message is sent.
+ *
+ * Returns 0 if successful, otherwise a positive errno value.  If
+ * 'wait' is true, then the send will wait until buffer space is ready;
+ * otherwise, returns EAGAIN if the 'sock' send buffer is full.
+ *
+ * This function is suitable for sending a reply to a request that was received
+ * with sequence number 'nlmsg_seq'.  Otherwise, use nl_sock_send() instead. */
+int
+nl_sock_send_seq(struct nl_sock *sock, const struct ofpbuf *msg,
+                 uint32_t nlmsg_seq, bool wait)
+{
     int error = nl_sock_cow__(sock);
     if (error) {
         return error;
     }
-    return nl_sock_send__(sock, msg, wait);
+    return nl_sock_send__(sock, msg, nlmsg_seq, wait);
 }
 
 /* This stress option is useful for testing that OVS properly tolerates
@@ -770,7 +790,8 @@ nl_dump_start(struct nl_dump *dump,
     }
 
     nl_msg_nlmsghdr(request)->nlmsg_flags |= NLM_F_DUMP | NLM_F_ACK;
-    dump->status = nl_sock_send__(sock, request, true);
+    dump->status = nl_sock_send__(sock, request, nl_sock_allocate_seq(sock, 1),
+                                  true);
     dump->seq = nl_msg_nlmsghdr(request)->nlmsg_seq;
 }
 
