@@ -101,46 +101,6 @@ nxm_decode_n_bits(ovs_be16 ofs_nbits)
     return (ntohs(ofs_nbits) & 0x3f) + 1;
 }
 
-BUILD_ASSERT_DECL(FLOW_WC_SEQ == 12);
-/* Upper bound on the length of an nx_match.  The longest nx_match (an
- * IPV6 neighbor discovery message using all the registers) would be:
- *
- *                   header  value  mask  total
- *                   ------  -----  ----  -----
- *  NXM_OF_IN_PORT      4       2    --      6
- *  NXM_OF_ETH_DST_W    4       6     6     16
- *  NXM_OF_ETH_SRC_W    4       6     6     16
- *  NXM_OF_ETH_TYPE     4       2    --      6
- *  NXM_OF_VLAN_TCI     4       2     2      8
- *  NXM_OF_IP_TOS       4       1    --      5
- *  NXM_NX_IP_ECN       4       1    --      5
- *  NXM_OF_IP_TTL       4       1    --      5
- *  NXM_NX_IP_FRAG      4       1     1      8
- *  NXM_OF_IP_PROTO     4       2    --      6
- *  NXM_OF_IPV6_SRC_W   4      16    16     36
- *  NXM_OF_IPV6_DST_W   4      16    16     36
- *  NXM_OF_IPV6_LABEL   4       4    --      8
- *  NXM_OF_ICMP_TYPE    4       1    --      5
- *  NXM_OF_ICMP_CODE    4       1    --      5
- *  NXM_NX_ND_TARGET    4      16    16     36
- *  NXM_NX_ND_SLL       4       6    --     10
- *  NXM_NX_REG_W(0)     4       4     4     12
- *  NXM_NX_REG_W(1)     4       4     4     12
- *  NXM_NX_REG_W(2)     4       4     4     12
- *  NXM_NX_REG_W(3)     4       4     4     12
- *  NXM_NX_REG_W(4)     4       4     4     12
- *  NXM_NX_REG_W(5)     4       4     4     12
- *  NXM_NX_REG_W(6)     4       4     4     12
- *  NXM_NX_REG_W(7)     4       4     4     12
- *  NXM_NX_TUN_ID_W     4       8     8     20
- *  OXM_OF_METADATA     4       8     8     20
- *  -------------------------------------------
- *  total                                  353
- *
- * So this value is conservative.
- */
-#define NXM_MAX_LEN 400
-
 /* This is my guess at the length of a "typical" nx_match, for use in
  * predicting space requirements. */
 #define NXM_TYPICAL_LEN 64
