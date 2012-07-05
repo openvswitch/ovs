@@ -2063,13 +2063,7 @@ mf_format(const struct mf_field *mf,
 
 /* Makes subfield 'sf' within 'rule' exactly match the 'sf->n_bits'
  * least-significant bits in 'x'.
- *
- * See mf_set_subfield() for an example.
- *
- * The difference between this function and mf_set_subfield() is that the
- * latter function can only handle subfields up to 64 bits wide, whereas this
- * one handles the general case.  On the other hand, mf_set_subfield() is
- * arguably easier to use. */
+ */
 void
 mf_write_subfield(const struct mf_subfield *sf, const union mf_subvalue *x,
                   struct cls_rule *rule)
@@ -2081,80 +2075,6 @@ mf_write_subfield(const struct mf_subfield *sf, const union mf_subvalue *x,
     bitwise_copy(x, sizeof *x, 0, &value, field->n_bytes, sf->ofs, sf->n_bits);
     bitwise_one (                 &mask,  field->n_bytes, sf->ofs, sf->n_bits);
     mf_set(field, &value, &mask, rule);
-}
-
-/* Makes subfield 'sf' within 'rule' exactly match the 'sf->n_bits'
- * least-significant bits of 'x'.
- *
- * Example: suppose that 'sf->field' is originally the following 2-byte field
- * in 'rule':
- *
- *     value == 0xe00a == 2#1110000000001010
- *      mask == 0xfc3f == 2#1111110000111111
- *
- * The call mf_set_subfield(sf, 0x55, 8, 7, rule), where sf->ofs == 8 and
- * sf->n_bits == 7 would have the following effect (note that 0x55 is
- * 2#1010101):
- *
- *     value == 0xd50a == 2#1101010100001010
- *      mask == 0xff3f == 2#1111111100111111
- *                           ^^^^^^^ affected bits
- *
- * The caller is responsible for ensuring that the result will be a valid
- * wildcard pattern for 'sf->field'.  The caller is responsible for ensuring
- * that 'rule' meets 'sf->field''s prerequisites. */
-void
-mf_set_subfield(const struct mf_subfield *sf, uint64_t x,
-                struct cls_rule *rule)
-{
-    const struct mf_field *field = sf->field;
-    unsigned int n_bits = sf->n_bits;
-    unsigned int ofs = sf->ofs;
-
-    if (ofs == 0 && field->n_bytes * 8 == n_bits) {
-        union mf_value value;
-        int i;
-
-        for (i = field->n_bytes - 1; i >= 0; i--) {
-            ((uint8_t *) &value)[i] = x;
-            x >>= 8;
-        }
-        mf_set_value(field, &value, rule);
-    } else {
-        union mf_value value, mask;
-        uint8_t *vp = (uint8_t *) &value;
-        uint8_t *mp = (uint8_t *) &mask;
-
-        mf_get(field, rule, &value, &mask);
-        bitwise_put(x,          vp, field->n_bytes, ofs, n_bits);
-        bitwise_put(UINT64_MAX, mp, field->n_bytes, ofs, n_bits);
-        mf_set(field, &value, &mask, rule);
-    }
-}
-
-/* Similar to mf_set_subfield() but modifies only a flow, not a cls_rule. */
-void
-mf_set_subfield_value(const struct mf_subfield *sf, uint64_t x,
-                      struct flow *flow)
-{
-    const struct mf_field *field = sf->field;
-    unsigned int n_bits = sf->n_bits;
-    unsigned int ofs = sf->ofs;
-    union mf_value value;
-
-    if (ofs == 0 && field->n_bytes * 8 == n_bits) {
-        int i;
-
-        for (i = field->n_bytes - 1; i >= 0; i--) {
-            ((uint8_t *) &value)[i] = x;
-            x >>= 8;
-        }
-        mf_set_flow_value(field, &value, flow);
-    } else {
-        mf_get_value(field, flow, &value);
-        bitwise_put(x, &value, field->n_bytes, ofs, n_bits);
-        mf_set_flow_value(field, &value, flow);
-    }
 }
 
 /* Initializes 'x' to the value of 'sf' within 'flow'.  'sf' must be valid for

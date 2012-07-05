@@ -318,10 +318,6 @@ void mf_random_value(const struct mf_field *, union mf_value *value);
 /* Subfields. */
 void mf_write_subfield(const struct mf_subfield *, const union mf_subvalue *,
                        struct cls_rule *);
-void mf_set_subfield(const struct mf_subfield *, uint64_t value,
-                     struct cls_rule *);
-void mf_set_subfield_value(const struct mf_subfield *, uint64_t value,
-                           struct flow *);
 
 void mf_read_subfield(const struct mf_subfield *, const struct flow *,
                       union mf_subvalue *);
