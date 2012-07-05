@@ -280,25 +280,25 @@ parse_command(struct ofpbuf *buffer, uint32_t *seq, const char **br_name,
     return 0;
 }
 
-/* Composes and returns a reply to a request made by the datapath with Netlink
- * sequence number 'seq' and error code 'error'.  The caller may add additional
- * attributes to the message, then it may send it with send_reply(). */
+/* Composes and returns a reply to a request made by the datapath with error
+ * code 'error'.  The caller may add additional attributes to the message, then
+ * it may send it with send_reply(). */
 static struct ofpbuf *
-compose_reply(uint32_t seq, int error)
+compose_reply(int error)
 {
     struct ofpbuf *reply = ofpbuf_new(4096);
     nl_msg_put_genlmsghdr(reply, 32, brc_family, NLM_F_REQUEST,
                           BRC_GENL_C_DP_RESULT, 1);
-    ((struct nlmsghdr *) reply->data)->nlmsg_seq = seq;
     nl_msg_put_u32(reply, BRC_GENL_A_ERR_CODE, error);
     return reply;
 }
 
-/* Sends 'reply' to the datapath and frees it. */
+/* Sends 'reply' to the datapath, using sequence number 'nlmsg_seq', and frees
+ * it. */
 static void
-send_reply(struct ofpbuf *reply)
+send_reply(struct ofpbuf *reply, uint32_t nlmsg_seq)
 {
-    int retval = nl_sock_send(brc_sock, reply, false);
+    int retval = nl_sock_send_seq(brc_sock, reply, nlmsg_seq, false);
     if (retval) {
         VLOG_WARN_RL(&rl, "replying to brcompat request: %s",
                      strerror(retval));
@@ -311,7 +311,7 @@ send_reply(struct ofpbuf *reply)
 static void
 send_simple_reply(uint32_t seq, int error)
 {
-    send_reply(compose_reply(seq, error));
+    send_reply(compose_reply(error), seq);
 }
 
 static int
@@ -555,10 +555,10 @@ handle_fdb_query_cmd(struct ofpbuf *buffer)
     free(output);
 
     /* Compose and send reply to datapath. */
-    reply = compose_reply(seq, 0);
+    reply = compose_reply(0);
     nl_msg_put_unspec(reply, BRC_GENL_A_FDB_DATA,
                       query_data.data, query_data.size);
-    send_reply(reply);
+    send_reply(reply, seq);
 
     /* Free memory. */
     ofpbuf_uninit(&query_data);
@@ -594,10 +594,10 @@ send_ifindex_reply(uint32_t seq, char *output)
     }
 
     /* Compose and send reply. */
-    reply = compose_reply(seq, 0);
+    reply = compose_reply(0);
     nl_msg_put_unspec(reply, BRC_GENL_A_IFINDEXES,
                       indices, n_indices * sizeof *indices);
-    send_reply(reply);
+    send_reply(reply, seq);
 
     /* Free memory. */
     free(indices);
