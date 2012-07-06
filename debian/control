@@ -66,7 +66,7 @@ Description: Open vSwitch common components
 Package: openvswitch-switch
 Architecture: linux-any
 Suggests: openvswitch-datapath-module
-Depends: ${shlibs:Depends}, ${misc:Depends}, ${python:Depends}, openvswitch-common (= ${binary:Version}), module-init-tools, procps, uuid-runtime
+Depends: ${shlibs:Depends}, ${misc:Depends}, ${python:Depends}, openvswitch-common (= ${binary:Version}), module-init-tools, procps, uuid-runtime, netbase
 Description: Open vSwitch switch implementations
  Open vSwitch is a production quality, multilayer, software-based, Ethernet
  virtual switch. It is designed to enable massive network automation through
