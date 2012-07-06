@@ -357,7 +357,7 @@ AT_CHECK([ovs-ofctl '-vPATTERN:console:%c|%p|%m' ofp-print "\
 00 00 00 00 00 00 00 00 00 00 00 05 00 00 00 00 \
 00 00 01 0e 00 00 00 00 00 00 00 08 00 03 00 00 \
 " 2], [0], [dnl
-OFPT_FLOW_MOD (xid=0x0): ADD priority=65535,arp,in_port=1,vlan_tci=0x0000,dl_src=50:54:00:00:00:06,dl_dst=50:54:00:00:00:05,nw_src=192.168.0.2,nw_dst=192.168.0.1,arp_op=2 idle:5 buf:0x10e actions=output:3
+OFPT_FLOW_MOD (xid=0x0): ADD priority=65535,arp,in_port=1,vlan_tci=0x0000,dl_src=50:54:00:00:00:06,dl_dst=50:54:00:00:00:05,nw_src=192.168.0.2,nw_dst=192.168.0.1,arp_op=2 idle:5 buf:0x10e out_port:0 actions=output:3
 ], [dnl
 ofp_util|INFO|normalization changed ofp_match, details:
 ofp_util|INFO| pre: priority=65535,arp,in_port=1,vlan_tci=0x0000,dl_src=50:54:00:00:00:06,dl_dst=50:54:00:00:00:05,nw_src=192.168.0.2,nw_dst=192.168.0.1,arp_op=2,nw_tos=0,tp_src=0,tp_dst=0
@@ -376,7 +376,7 @@ AT_CHECK([ovs-ofctl '-vPATTERN:console:%c|%p|%m' ofp-print "\
 00 00 00 00 00 00 00 00 00 00 00 05 00 00 00 00 \
 00 00 01 0e 00 00 00 00 00 00 00 08 00 03 00 00 \
 " 3], [0], [dnl
-OFPT_FLOW_MOD (xid=0x0): ADD arp,in_port=1,dl_vlan=65535,dl_vlan_pcp=0,dl_src=50:54:00:00:00:06,dl_dst=50:54:00:00:00:05,nw_src=192.168.0.2,nw_dst=192.168.0.1,arp_op=2,nw_tos=0,tp_src=0,tp_dst=0 idle:5 pri:65535 buf:0x10e actions=output:3
+OFPT_FLOW_MOD (xid=0x0): ADD arp,in_port=1,dl_vlan=65535,dl_vlan_pcp=0,dl_src=50:54:00:00:00:06,dl_dst=50:54:00:00:00:05,nw_src=192.168.0.2,nw_dst=192.168.0.1,arp_op=2,nw_tos=0,tp_src=0,tp_dst=0 idle:5 pri:65535 buf:0x10e out_port:0 actions=output:3
 ], [dnl
 ofp_util|INFO|normalization changed ofp_match, details:
 ofp_util|INFO| pre: priority=65535,arp,in_port=1,vlan_tci=0x0000,dl_src=50:54:00:00:00:06,dl_dst=50:54:00:00:00:05,nw_src=192.168.0.2,nw_dst=192.168.0.1,arp_op=2,nw_tos=0,tp_src=0,tp_dst=0
@@ -826,12 +826,12 @@ AT_KEYWORDS([ofp-print])
 AT_CHECK([ovs-ofctl ofp-print "\
 01 04 00 60 00 00 00 02 00 00 23 20 00 00 00 0d \
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 80 00 \
-ff ff ff ff ff ff 00 00 00 14 00 00 00 00 00 00 \
+ff ff ff ff 00 10 00 00 00 14 00 00 00 00 00 00 \
 00 01 20 08 00 00 00 00 00 00 01 c8 00 01 00 04 \
 00 00 00 7b 00 00 00 00 ff ff 00 18 00 00 23 20 \
 00 07 00 1f 00 01 00 04 00 00 00 00 00 00 00 05 \
 " 2], [0], [dnl
-NXT_FLOW_MOD (xid=0x2): ADD reg0=0x7b,tun_id=0x1c8 actions=load:0x5->NXM_NX_REG0[[]]
+NXT_FLOW_MOD (xid=0x2): ADD reg0=0x7b,tun_id=0x1c8 out_port:16 actions=load:0x5->NXM_NX_REG0[[]]
 ])
 AT_CLEANUP
 
@@ -842,12 +842,12 @@ AT_KEYWORDS([ofp-print])
 AT_CHECK([ovs-ofctl ofp-print "\
 01 04 00 60 00 00 00 02 00 00 23 20 00 00 00 0d \
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 80 00 \
-ff ff ff ff ff ff 00 00 00 14 00 00 00 00 00 00 \
+ff ff ff ff 01 00 00 00 00 14 00 00 00 00 00 00 \
 00 01 20 08 00 00 00 00 00 00 01 c8 00 01 00 04 \
 00 00 00 7b 00 00 00 00 ff ff 00 18 00 00 23 20 \
 00 07 00 1f 00 01 00 04 00 00 00 00 00 00 00 05 \
 " 3], [0], [dnl
-NXT_FLOW_MOD (xid=0x2): ADD NXM_NX_TUN_ID(00000000000001c8), NXM_NX_REG0(0000007b) actions=load:0x5->NXM_NX_REG0[[]]
+NXT_FLOW_MOD (xid=0x2): ADD NXM_NX_TUN_ID(00000000000001c8), NXM_NX_REG0(0000007b) out_port:256 actions=load:0x5->NXM_NX_REG0[[]]
 ])
 AT_CLEANUP
 

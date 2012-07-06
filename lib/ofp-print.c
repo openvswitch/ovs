@@ -753,6 +753,11 @@ ofp_print_flow_mod(struct ds *s, const struct ofp_header *oh,
     if (fm.buffer_id != UINT32_MAX) {
         ds_put_format(s, "buf:0x%"PRIx32" ", fm.buffer_id);
     }
+    if (fm.out_port != OFPP_NONE) {
+        ds_put_format(s, "out_port:");
+        ofputil_format_port(fm.out_port, s);
+        ds_put_char(s, ' ');
+    }
     if (fm.flags != 0) {
         uint16_t flags = fm.flags;
 
