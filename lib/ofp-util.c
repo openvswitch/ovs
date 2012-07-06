@@ -1629,37 +1629,32 @@ ofputil_append_flow_stats_reply(const struct ofputil_flow_stats *fs,
 }
 
 /* Converts abstract ofputil_aggregate_stats 'stats' into an OFPST_AGGREGATE or
- * NXST_AGGREGATE reply according to 'protocol', and returns the message. */
+ * NXST_AGGREGATE reply matching 'request', and returns the message. */
 struct ofpbuf *
 ofputil_encode_aggregate_stats_reply(
     const struct ofputil_aggregate_stats *stats,
     const struct ofp_header *request)
 {
+    struct ofp_aggregate_stats_reply *asr;
+    uint64_t packet_count;
+    uint64_t byte_count;
     struct ofpbuf *msg;
     enum ofpraw raw;
 
     ofpraw_decode(&raw, request);
     if (raw == OFPRAW_OFPST_AGGREGATE_REQUEST) {
-        struct ofp_aggregate_stats_reply *asr;
-
-        msg = ofpraw_alloc_reply(OFPRAW_OFPST_AGGREGATE_REPLY, request, 0);
-        asr = ofpbuf_put_zeros(msg, sizeof *asr);
-        put_32aligned_be64(&asr->packet_count,
-                           htonll(unknown_to_zero(stats->packet_count)));
-        put_32aligned_be64(&asr->byte_count,
-                           htonll(unknown_to_zero(stats->byte_count)));
-        asr->flow_count = htonl(stats->flow_count);
-    } else if (raw == OFPRAW_NXST_AGGREGATE_REQUEST) {
-        struct nx_aggregate_stats_reply *nasr;
-
-        msg = ofpraw_alloc_reply(OFPRAW_NXST_AGGREGATE_REPLY, request, 0);
-        nasr = ofpbuf_put_zeros(msg, sizeof *nasr);
-        nasr->packet_count = htonll(stats->packet_count);
-        nasr->byte_count = htonll(stats->byte_count);
-        nasr->flow_count = htonl(stats->flow_count);
+        packet_count = unknown_to_zero(stats->packet_count);
+        byte_count = unknown_to_zero(stats->byte_count);
     } else {
-        NOT_REACHED();
+        packet_count = stats->packet_count;
+        byte_count = stats->byte_count;
     }
+
+    msg = ofpraw_alloc_stats_reply(request, 0);
+    asr = ofpbuf_put_zeros(msg, sizeof *asr);
+    put_32aligned_be64(&asr->packet_count, htonll(packet_count));
+    put_32aligned_be64(&asr->byte_count, htonll(byte_count));
+    asr->flow_count = htonl(stats->flow_count);
 
     return msg;
 }
@@ -1668,26 +1663,16 @@ enum ofperr
 ofputil_decode_aggregate_stats_reply(struct ofputil_aggregate_stats *stats,
                                      const struct ofp_header *reply)
 {
+    struct ofp_aggregate_stats_reply *asr;
     struct ofpbuf msg;
-    enum ofpraw raw;
 
     ofpbuf_use_const(&msg, reply, ntohs(reply->length));
-    raw = ofpraw_pull_assert(&msg);
-    if (raw == OFPRAW_OFPST_AGGREGATE_REPLY) {
-        struct ofp_aggregate_stats_reply *asr = msg.l3;
+    ofpraw_pull_assert(&msg);
 
-        stats->packet_count = ntohll(get_32aligned_be64(&asr->packet_count));
-        stats->byte_count = ntohll(get_32aligned_be64(&asr->byte_count));
-        stats->flow_count = ntohl(asr->flow_count);
-    } else if (raw == OFPRAW_NXST_AGGREGATE_REPLY) {
-        struct nx_aggregate_stats_reply *nasr = msg.l3;
-
-        stats->packet_count = ntohll(nasr->packet_count);
-        stats->byte_count = ntohll(nasr->byte_count);
-        stats->flow_count = ntohl(nasr->flow_count);
-    } else {
-        NOT_REACHED();
-    }
+    asr = msg.l3;
+    stats->packet_count = ntohll(get_32aligned_be64(&asr->packet_count));
+    stats->byte_count = ntohll(get_32aligned_be64(&asr->byte_count));
+    stats->flow_count = ntohl(asr->flow_count);
 
     return 0;
 }

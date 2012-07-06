@@ -1857,7 +1857,10 @@ struct nx_flow_stats {
 OFP_ASSERT(sizeof(struct nx_flow_stats) == 48);
 
 /* Nicira vendor stats request of type NXST_AGGREGATE (analogous to
- * OFPST_AGGREGATE request). */
+ * OFPST_AGGREGATE request).
+ *
+ * The reply format is identical to the reply format for OFPST_AGGREGATE,
+ * except for the header. */
 struct nx_aggregate_stats_request {
     ovs_be16 out_port;        /* Require matching entries to include this
                                  as an output port.  A value of OFPP_NONE
@@ -1874,16 +1877,6 @@ struct nx_aggregate_stats_request {
      */
 };
 OFP_ASSERT(sizeof(struct nx_aggregate_stats_request) == 8);
-
-/* Body for nicira_stats_msg reply of type NXST_AGGREGATE (analogous to
- * OFPST_AGGREGATE reply). */
-struct nx_aggregate_stats_reply {
-    ovs_be64 packet_count;     /* Number of packets, UINT64_MAX if unknown. */
-    ovs_be64 byte_count;       /* Number of bytes, UINT64_MAX if unknown. */
-    ovs_be32 flow_count;       /* Number of flows. */
-    uint8_t pad[4];            /* Align to 64 bits. */
-};
-OFP_ASSERT(sizeof(struct nx_aggregate_stats_reply) == 24);
 
 /* NXT_SET_CONTROLLER_ID.
  *

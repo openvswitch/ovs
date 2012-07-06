@@ -192,7 +192,7 @@ enum ofpraw {
 
     /* OFPST 1.0 (2): struct ofp_aggregate_stats_reply. */
     OFPRAW_OFPST_AGGREGATE_REPLY,
-    /* NXST 1.0 (1): struct nx_aggregate_stats_reply. */
+    /* NXST 1.0 (1): struct ofp_aggregate_stats_reply. */
     OFPRAW_NXST_AGGREGATE_REPLY,
 
     /* OFPST 1.0 (3): void. */
