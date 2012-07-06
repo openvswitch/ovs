@@ -3650,6 +3650,7 @@ ofopgroup_complete(struct ofopgroup *group)
             if (!op->error) {
                 rule->modified = time_msec();
             } else {
+                rule->flow_cookie = op->flow_cookie;
                 free(rule->ofpacts);
                 rule->ofpacts = op->ofpacts;
                 rule->ofpacts_len = op->ofpacts_len;
