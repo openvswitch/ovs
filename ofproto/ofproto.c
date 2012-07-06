@@ -2296,7 +2296,7 @@ check_table_id(const struct ofproto *ofproto, uint8_t table_id)
 }
 
 static struct oftable *
-next_visible_table(struct ofproto *ofproto, uint8_t table_id)
+next_visible_table(const struct ofproto *ofproto, uint8_t table_id)
 {
     struct oftable *table;
 
@@ -2312,7 +2312,7 @@ next_visible_table(struct ofproto *ofproto, uint8_t table_id)
 }
 
 static struct oftable *
-first_matching_table(struct ofproto *ofproto, uint8_t table_id)
+first_matching_table(const struct ofproto *ofproto, uint8_t table_id)
 {
     if (table_id == 0xff) {
         return next_visible_table(ofproto, 0);
@@ -2324,8 +2324,8 @@ first_matching_table(struct ofproto *ofproto, uint8_t table_id)
 }
 
 static struct oftable *
-next_matching_table(struct ofproto *ofproto,
-                    struct oftable *table, uint8_t table_id)
+next_matching_table(const struct ofproto *ofproto,
+                    const struct oftable *table, uint8_t table_id)
 {
     return (table_id == 0xff
             ? next_visible_table(ofproto, (table - ofproto->tables) + 1)
