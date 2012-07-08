@@ -504,7 +504,7 @@ set_switch_config(struct vconn *vconn, struct ofp_switch_config *config_)
 }
 
 static void
-do_show(int argc OVS_UNUSED, char *argv[])
+ofctl_show(int argc OVS_UNUSED, char *argv[])
 {
     const char *vconn_name = argv[1];
     struct vconn *vconn;
@@ -533,13 +533,13 @@ do_show(int argc OVS_UNUSED, char *argv[])
 }
 
 static void
-do_dump_desc(int argc OVS_UNUSED, char *argv[])
+ofctl_dump_desc(int argc OVS_UNUSED, char *argv[])
 {
     dump_trivial_stats_transaction(argv[1], OFPST_DESC);
 }
 
 static void
-do_dump_tables(int argc OVS_UNUSED, char *argv[])
+ofctl_dump_tables(int argc OVS_UNUSED, char *argv[])
 {
     dump_trivial_stats_transaction(argv[1], OFPST_TABLE);
 }
@@ -764,7 +764,7 @@ set_protocol_for_flow_dump(struct vconn *vconn,
 }
 
 static void
-do_dump_flows__(int argc, char *argv[], bool aggregate)
+ofctl_dump_flows__(int argc, char *argv[], bool aggregate)
 {
     enum ofputil_protocol usable_protocols, protocol;
     struct ofputil_flow_stats_request fsr;
@@ -782,19 +782,19 @@ do_dump_flows__(int argc, char *argv[], bool aggregate)
 }
 
 static void
-do_dump_flows(int argc, char *argv[])
+ofctl_dump_flows(int argc, char *argv[])
 {
-    return do_dump_flows__(argc, argv, false);
+    return ofctl_dump_flows__(argc, argv, false);
 }
 
 static void
-do_dump_aggregate(int argc, char *argv[])
+ofctl_dump_aggregate(int argc, char *argv[])
 {
-    return do_dump_flows__(argc, argv, true);
+    return ofctl_dump_flows__(argc, argv, true);
 }
 
 static void
-do_queue_stats(int argc, char *argv[])
+ofctl_queue_stats(int argc, char *argv[])
 {
     struct ofp_queue_stats_request *req;
     struct ofpbuf *request;
@@ -859,7 +859,8 @@ open_vconn_for_flow_mod(const char *remote,
 }
 
 static void
-do_flow_mod__(const char *remote, struct ofputil_flow_mod *fms, size_t n_fms)
+ofctl_flow_mod__(const char *remote, struct ofputil_flow_mod *fms,
+                 size_t n_fms)
 {
     enum ofputil_protocol protocol;
     struct vconn *vconn;
@@ -877,50 +878,50 @@ do_flow_mod__(const char *remote, struct ofputil_flow_mod *fms, size_t n_fms)
 }
 
 static void
-do_flow_mod_file(int argc OVS_UNUSED, char *argv[], uint16_t command)
+ofctl_flow_mod_file(int argc OVS_UNUSED, char *argv[], uint16_t command)
 {
     struct ofputil_flow_mod *fms = NULL;
     size_t n_fms = 0;
 
     parse_ofp_flow_mod_file(argv[2], command, &fms, &n_fms);
-    do_flow_mod__(argv[1], fms, n_fms);
+    ofctl_flow_mod__(argv[1], fms, n_fms);
     free(fms);
 }
 
 static void
-do_flow_mod(int argc, char *argv[], uint16_t command)
+ofctl_flow_mod(int argc, char *argv[], uint16_t command)
 {
     if (argc > 2 && !strcmp(argv[2], "-")) {
-        do_flow_mod_file(argc, argv, command);
+        ofctl_flow_mod_file(argc, argv, command);
     } else {
         struct ofputil_flow_mod fm;
         parse_ofp_flow_mod_str(&fm, argc > 2 ? argv[2] : "", command, false);
-        do_flow_mod__(argv[1], &fm, 1);
+        ofctl_flow_mod__(argv[1], &fm, 1);
     }
 }
 
 static void
-do_add_flow(int argc, char *argv[])
+ofctl_add_flow(int argc, char *argv[])
 {
-    do_flow_mod(argc, argv, OFPFC_ADD);
+    ofctl_flow_mod(argc, argv, OFPFC_ADD);
 }
 
 static void
-do_add_flows(int argc, char *argv[])
+ofctl_add_flows(int argc, char *argv[])
 {
-    do_flow_mod_file(argc, argv, OFPFC_ADD);
+    ofctl_flow_mod_file(argc, argv, OFPFC_ADD);
 }
 
 static void
-do_mod_flows(int argc, char *argv[])
+ofctl_mod_flows(int argc, char *argv[])
 {
-    do_flow_mod(argc, argv, strict ? OFPFC_MODIFY_STRICT : OFPFC_MODIFY);
+    ofctl_flow_mod(argc, argv, strict ? OFPFC_MODIFY_STRICT : OFPFC_MODIFY);
 }
 
 static void
-do_del_flows(int argc, char *argv[])
+ofctl_del_flows(int argc, char *argv[])
 {
-    do_flow_mod(argc, argv, strict ? OFPFC_DELETE_STRICT : OFPFC_DELETE);
+    ofctl_flow_mod(argc, argv, strict ? OFPFC_DELETE_STRICT : OFPFC_DELETE);
 }
 
 static void
@@ -1156,7 +1157,7 @@ monitor_vconn(struct vconn *vconn)
 }
 
 static void
-do_monitor(int argc, char *argv[])
+ofctl_monitor(int argc, char *argv[])
 {
     struct vconn *vconn;
 
@@ -1195,7 +1196,7 @@ do_monitor(int argc, char *argv[])
 }
 
 static void
-do_snoop(int argc OVS_UNUSED, char *argv[])
+ofctl_snoop(int argc OVS_UNUSED, char *argv[])
 {
     struct vconn *vconn;
 
@@ -1204,7 +1205,7 @@ do_snoop(int argc OVS_UNUSED, char *argv[])
 }
 
 static void
-do_dump_ports(int argc, char *argv[])
+ofctl_dump_ports(int argc, char *argv[])
 {
     struct ofp_port_stats_request *req;
     struct ofpbuf *request;
@@ -1217,13 +1218,13 @@ do_dump_ports(int argc, char *argv[])
 }
 
 static void
-do_dump_ports_desc(int argc OVS_UNUSED, char *argv[])
+ofctl_dump_ports_desc(int argc OVS_UNUSED, char *argv[])
 {
     dump_trivial_stats_transaction(argv[1], OFPST_PORT_DESC);
 }
 
 static void
-do_probe(int argc OVS_UNUSED, char *argv[])
+ofctl_probe(int argc OVS_UNUSED, char *argv[])
 {
     struct ofpbuf *request;
     struct vconn *vconn;
@@ -1240,7 +1241,7 @@ do_probe(int argc OVS_UNUSED, char *argv[])
 }
 
 static void
-do_packet_out(int argc, char *argv[])
+ofctl_packet_out(int argc, char *argv[])
 {
     struct ofputil_packet_out po;
     struct ofpbuf ofpacts;
@@ -1278,7 +1279,7 @@ do_packet_out(int argc, char *argv[])
 }
 
 static void
-do_mod_port(int argc OVS_UNUSED, char *argv[])
+ofctl_mod_port(int argc OVS_UNUSED, char *argv[])
 {
     struct ofp_config_flag {
         const char *name;             /* The flag's name. */
@@ -1338,7 +1339,7 @@ found:
 }
 
 static void
-do_get_frags(int argc OVS_UNUSED, char *argv[])
+ofctl_get_frags(int argc OVS_UNUSED, char *argv[])
 {
     struct ofp_switch_config config;
     struct vconn *vconn;
@@ -1350,7 +1351,7 @@ do_get_frags(int argc OVS_UNUSED, char *argv[])
 }
 
 static void
-do_set_frags(int argc OVS_UNUSED, char *argv[])
+ofctl_set_frags(int argc OVS_UNUSED, char *argv[])
 {
     struct ofp_switch_config config;
     enum ofp_config_flags mode;
@@ -1383,7 +1384,7 @@ do_set_frags(int argc OVS_UNUSED, char *argv[])
 }
 
 static void
-do_ping(int argc, char *argv[])
+ofctl_ping(int argc, char *argv[])
 {
     size_t max_payload = 65535 - sizeof(struct ofp_header);
     unsigned int payload;
@@ -1430,7 +1431,7 @@ do_ping(int argc, char *argv[])
 }
 
 static void
-do_benchmark(int argc OVS_UNUSED, char *argv[])
+ofctl_benchmark(int argc OVS_UNUSED, char *argv[])
 {
     size_t max_payload = 65535 - sizeof(struct ofp_header);
     struct timeval start, end;
@@ -1473,7 +1474,7 @@ do_benchmark(int argc OVS_UNUSED, char *argv[])
 }
 
 static void
-do_help(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
+ofctl_help(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
     usage();
 }
@@ -1758,7 +1759,7 @@ fte_make_flow_mod(const struct fte *fte, int index, uint16_t command,
 }
 
 static void
-do_replace_flows(int argc OVS_UNUSED, char *argv[])
+ofctl_replace_flows(int argc OVS_UNUSED, char *argv[])
 {
     enum { FILE_IDX = 0, SWITCH_IDX = 1 };
     enum ofputil_protocol usable_protocols, protocol;
@@ -1828,7 +1829,7 @@ read_flows_from_source(const char *source, struct classifier *cls, int index)
 }
 
 static void
-do_diff_flows(int argc OVS_UNUSED, char *argv[])
+ofctl_diff_flows(int argc OVS_UNUSED, char *argv[])
 {
     bool differences = false;
     struct cls_cursor cursor;
@@ -1870,7 +1871,7 @@ do_diff_flows(int argc OVS_UNUSED, char *argv[])
 /* Undocumented commands for unit testing. */
 
 static void
-do_parse_flows__(struct ofputil_flow_mod *fms, size_t n_fms)
+ofctl_parse_flows__(struct ofputil_flow_mod *fms, size_t n_fms)
 {
     enum ofputil_protocol usable_protocols;
     enum ofputil_protocol protocol = 0;
@@ -1910,29 +1911,29 @@ do_parse_flows__(struct ofputil_flow_mod *fms, size_t n_fms)
 /* "parse-flow FLOW": parses the argument as a flow (like add-flow) and prints
  * it back to stdout.  */
 static void
-do_parse_flow(int argc OVS_UNUSED, char *argv[])
+ofctl_parse_flow(int argc OVS_UNUSED, char *argv[])
 {
     struct ofputil_flow_mod fm;
 
     parse_ofp_flow_mod_str(&fm, argv[1], OFPFC_ADD, false);
-    do_parse_flows__(&fm, 1);
+    ofctl_parse_flows__(&fm, 1);
 }
 
 /* "parse-flows FILENAME": reads the named file as a sequence of flows (like
  * add-flows) and prints each of the flows back to stdout.  */
 static void
-do_parse_flows(int argc OVS_UNUSED, char *argv[])
+ofctl_parse_flows(int argc OVS_UNUSED, char *argv[])
 {
     struct ofputil_flow_mod *fms = NULL;
     size_t n_fms = 0;
 
     parse_ofp_flow_mod_file(argv[1], OFPFC_ADD, &fms, &n_fms);
-    do_parse_flows__(fms, n_fms);
+    ofctl_parse_flows__(fms, n_fms);
     free(fms);
 }
 
 static void
-do_parse_nxm__(bool oxm)
+ofctl_parse_nxm__(bool oxm)
 {
     struct ds in;
 
@@ -1984,18 +1985,18 @@ do_parse_nxm__(bool oxm)
  * stdin, does some internal fussing with them, and then prints them back as
  * strings on stdout. */
 static void
-do_parse_nxm(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
+ofctl_parse_nxm(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
-    return do_parse_nxm__(false);
+    return ofctl_parse_nxm__(false);
 }
 
 /* "parse-oxm": reads a series of OXM nx_match specifications as strings from
  * stdin, does some internal fussing with them, and then prints them back as
  * strings on stdout. */
 static void
-do_parse_oxm(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
+ofctl_parse_oxm(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
-    return do_parse_nxm__(true);
+    return ofctl_parse_nxm__(true);
 }
 
 static void
@@ -2024,7 +2025,7 @@ print_differences(const void *a_, size_t a_len,
  * on stdout, and then converts them back to hex bytes and prints any
  * differences from the input. */
 static void
-do_parse_ofp10_actions(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
+ofctl_parse_ofp10_actions(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
     struct ds in;
 
@@ -2081,7 +2082,7 @@ do_parse_ofp10_actions(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
  * stdout, and then converts them back to hex bytes and prints any differences
  * from the input. */
 static void
-do_parse_ofp11_match(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
+ofctl_parse_ofp11_match(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
     struct ds in;
 
@@ -2131,7 +2132,7 @@ do_parse_ofp11_match(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
  * on stdout, and then converts them back to hex bytes and prints any
  * differences from the input. */
 static void
-do_parse_ofp11_actions(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
+ofctl_parse_ofp11_actions(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
     struct ds in;
 
@@ -2189,7 +2190,7 @@ do_parse_ofp11_actions(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
  * them as strings on stdout, and then converts them back to hex bytes and
  * prints any differences from the input. */
 static void
-do_parse_ofp11_instructions(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
+ofctl_parse_ofp11_instructions(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
     struct ds in;
 
@@ -2247,7 +2248,7 @@ do_parse_ofp11_instructions(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 /* "print-error ENUM": Prints the type and code of ENUM for every OpenFlow
  * version. */
 static void
-do_print_error(int argc OVS_UNUSED, char *argv[])
+ofctl_print_error(int argc OVS_UNUSED, char *argv[])
 {
     enum ofperr error;
     int version;
@@ -2276,7 +2277,7 @@ do_print_error(int argc OVS_UNUSED, char *argv[])
  * binary data, interpreting them as an OpenFlow message, and prints the
  * OpenFlow message on stdout, at VERBOSITY (level 2 by default).  */
 static void
-do_ofp_print(int argc, char *argv[])
+ofctl_ofp_print(int argc, char *argv[])
 {
     struct ofpbuf packet;
 
@@ -2289,43 +2290,43 @@ do_ofp_print(int argc, char *argv[])
 }
 
 static const struct command all_commands[] = {
-    { "show", 1, 1, do_show },
-    { "monitor", 1, 3, do_monitor },
-    { "snoop", 1, 1, do_snoop },
-    { "dump-desc", 1, 1, do_dump_desc },
-    { "dump-tables", 1, 1, do_dump_tables },
-    { "dump-flows", 1, 2, do_dump_flows },
-    { "dump-aggregate", 1, 2, do_dump_aggregate },
-    { "queue-stats", 1, 3, do_queue_stats },
-    { "add-flow", 2, 2, do_add_flow },
-    { "add-flows", 2, 2, do_add_flows },
-    { "mod-flows", 2, 2, do_mod_flows },
-    { "del-flows", 1, 2, do_del_flows },
-    { "replace-flows", 2, 2, do_replace_flows },
-    { "diff-flows", 2, 2, do_diff_flows },
-    { "packet-out", 4, INT_MAX, do_packet_out },
-    { "dump-ports", 1, 2, do_dump_ports },
-    { "dump-ports-desc", 1, 1, do_dump_ports_desc },
-    { "mod-port", 3, 3, do_mod_port },
-    { "get-frags", 1, 1, do_get_frags },
-    { "set-frags", 2, 2, do_set_frags },
-    { "probe", 1, 1, do_probe },
-    { "ping", 1, 2, do_ping },
-    { "benchmark", 3, 3, do_benchmark },
-    { "help", 0, INT_MAX, do_help },
+    { "show", 1, 1, ofctl_show },
+    { "monitor", 1, 3, ofctl_monitor },
+    { "snoop", 1, 1, ofctl_snoop },
+    { "dump-desc", 1, 1, ofctl_dump_desc },
+    { "dump-tables", 1, 1, ofctl_dump_tables },
+    { "dump-flows", 1, 2, ofctl_dump_flows },
+    { "dump-aggregate", 1, 2, ofctl_dump_aggregate },
+    { "queue-stats", 1, 3, ofctl_queue_stats },
+    { "add-flow", 2, 2, ofctl_add_flow },
+    { "add-flows", 2, 2, ofctl_add_flows },
+    { "mod-flows", 2, 2, ofctl_mod_flows },
+    { "del-flows", 1, 2, ofctl_del_flows },
+    { "replace-flows", 2, 2, ofctl_replace_flows },
+    { "diff-flows", 2, 2, ofctl_diff_flows },
+    { "packet-out", 4, INT_MAX, ofctl_packet_out },
+    { "dump-ports", 1, 2, ofctl_dump_ports },
+    { "dump-ports-desc", 1, 1, ofctl_dump_ports_desc },
+    { "mod-port", 3, 3, ofctl_mod_port },
+    { "get-frags", 1, 1, ofctl_get_frags },
+    { "set-frags", 2, 2, ofctl_set_frags },
+    { "probe", 1, 1, ofctl_probe },
+    { "ping", 1, 2, ofctl_ping },
+    { "benchmark", 3, 3, ofctl_benchmark },
+    { "help", 0, INT_MAX, ofctl_help },
 
     /* Undocumented commands for testing. */
-    { "parse-flow", 1, 1, do_parse_flow },
-    { "parse-flows", 1, 1, do_parse_flows },
-    { "parse-nx-match", 0, 0, do_parse_nxm },
-    { "parse-nxm", 0, 0, do_parse_nxm },
-    { "parse-oxm", 0, 0, do_parse_oxm },
-    { "parse-ofp10-actions", 0, 0, do_parse_ofp10_actions },
-    { "parse-ofp11-match", 0, 0, do_parse_ofp11_match },
-    { "parse-ofp11-actions", 0, 0, do_parse_ofp11_actions },
-    { "parse-ofp11-instructions", 0, 0, do_parse_ofp11_instructions },
-    { "print-error", 1, 1, do_print_error },
-    { "ofp-print", 1, 2, do_ofp_print },
+    { "parse-flow", 1, 1, ofctl_parse_flow },
+    { "parse-flows", 1, 1, ofctl_parse_flows },
+    { "parse-nx-match", 0, 0, ofctl_parse_nxm },
+    { "parse-nxm", 0, 0, ofctl_parse_nxm },
+    { "parse-oxm", 0, 0, ofctl_parse_oxm },
+    { "parse-ofp10-actions", 0, 0, ofctl_parse_ofp10_actions },
+    { "parse-ofp11-match", 0, 0, ofctl_parse_ofp11_match },
+    { "parse-ofp11-actions", 0, 0, ofctl_parse_ofp11_actions },
+    { "parse-ofp11-instructions", 0, 0, ofctl_parse_ofp11_instructions },
+    { "print-error", 1, 1, ofctl_print_error },
+    { "ofp-print", 1, 2, ofctl_ofp_print },
 
     { NULL, 0, 0, NULL },
 };

@@ -181,7 +181,7 @@ static void run(int retval, const char *message, ...)
     }
 }
 
-static void do_add_if(int argc, char *argv[]);
+static void dpctl_add_if(int argc, char *argv[]);
 
 static int if_up(const char *netdev_name)
 {
@@ -216,18 +216,18 @@ parsed_dpif_open(const char *arg_, bool create, struct dpif **dpifp)
 }
 
 static void
-do_add_dp(int argc OVS_UNUSED, char *argv[])
+dpctl_add_dp(int argc OVS_UNUSED, char *argv[])
 {
     struct dpif *dpif;
     run(parsed_dpif_open(argv[1], true, &dpif), "add_dp");
     dpif_close(dpif);
     if (argc > 2) {
-        do_add_if(argc, argv);
+        dpctl_add_if(argc, argv);
     }
 }
 
 static void
-do_del_dp(int argc OVS_UNUSED, char *argv[])
+dpctl_del_dp(int argc OVS_UNUSED, char *argv[])
 {
     struct dpif *dpif;
     run(parsed_dpif_open(argv[1], false, &dpif), "opening datapath");
@@ -236,7 +236,7 @@ do_del_dp(int argc OVS_UNUSED, char *argv[])
 }
 
 static void
-do_add_if(int argc OVS_UNUSED, char *argv[])
+dpctl_add_if(int argc OVS_UNUSED, char *argv[])
 {
     bool failure = false;
     struct dpif *dpif;
@@ -311,7 +311,7 @@ next:
 }
 
 static void
-do_set_if(int argc, char *argv[])
+dpctl_set_if(int argc, char *argv[])
 {
     bool failure = false;
     struct dpif *dpif;
@@ -419,7 +419,7 @@ get_port_number(struct dpif *dpif, const char *name, uint16_t *port)
 }
 
 static void
-do_del_if(int argc OVS_UNUSED, char *argv[])
+dpctl_del_if(int argc OVS_UNUSED, char *argv[])
 {
     bool failure = false;
     struct dpif *dpif;
@@ -574,7 +574,7 @@ show_dpif(struct dpif *dpif)
 }
 
 static void
-do_show(int argc, char *argv[])
+dpctl_show(int argc, char *argv[])
 {
     bool failure = false;
     if (argc > 1) {
@@ -629,7 +629,7 @@ do_show(int argc, char *argv[])
 }
 
 static void
-do_dump_dps(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
+dpctl_dump_dps(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
     struct sset dpif_names, dpif_types;
     const char *type;
@@ -665,7 +665,7 @@ do_dump_dps(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 }
 
 static void
-do_dump_flows(int argc OVS_UNUSED, char *argv[])
+dpctl_dump_flows(int argc OVS_UNUSED, char *argv[])
 {
     const struct dpif_flow_stats *stats;
     const struct nlattr *actions;
@@ -696,7 +696,7 @@ do_dump_flows(int argc OVS_UNUSED, char *argv[])
 }
 
 static void
-do_del_flows(int argc OVS_UNUSED, char *argv[])
+dpctl_del_flows(int argc OVS_UNUSED, char *argv[])
 {
     struct dpif *dpif;
 
@@ -706,7 +706,7 @@ do_del_flows(int argc OVS_UNUSED, char *argv[])
 }
 
 static void
-do_help(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
+dpctl_help(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
     usage();
 }
@@ -714,7 +714,7 @@ do_help(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 /* Undocumented commands for unit testing. */
 
 static void
-do_parse_actions(int argc, char *argv[])
+dpctl_parse_actions(int argc, char *argv[])
 {
     int i;
 
@@ -826,7 +826,7 @@ sort_output_actions(struct nlattr *actions, size_t length)
  * The idea here generalizes beyond VLANs (e.g. to setting other fields) but
  * so far the implementation only covers VLANs. */
 static void
-do_normalize_actions(int argc, char *argv[])
+dpctl_normalize_actions(int argc, char *argv[])
 {
     struct simap port_names;
     struct ofpbuf keybuf;
@@ -932,20 +932,20 @@ do_normalize_actions(int argc, char *argv[])
 }
 
 static const struct command all_commands[] = {
-    { "add-dp", 1, INT_MAX, do_add_dp },
-    { "del-dp", 1, 1, do_del_dp },
-    { "add-if", 2, INT_MAX, do_add_if },
-    { "del-if", 2, INT_MAX, do_del_if },
-    { "set-if", 2, INT_MAX, do_set_if },
-    { "dump-dps", 0, 0, do_dump_dps },
-    { "show", 0, INT_MAX, do_show },
-    { "dump-flows", 1, 1, do_dump_flows },
-    { "del-flows", 1, 1, do_del_flows },
-    { "help", 0, INT_MAX, do_help },
+    { "add-dp", 1, INT_MAX, dpctl_add_dp },
+    { "del-dp", 1, 1, dpctl_del_dp },
+    { "add-if", 2, INT_MAX, dpctl_add_if },
+    { "del-if", 2, INT_MAX, dpctl_del_if },
+    { "set-if", 2, INT_MAX, dpctl_set_if },
+    { "dump-dps", 0, 0, dpctl_dump_dps },
+    { "show", 0, INT_MAX, dpctl_show },
+    { "dump-flows", 1, 1, dpctl_dump_flows },
+    { "del-flows", 1, 1, dpctl_del_flows },
+    { "help", 0, INT_MAX, dpctl_help },
 
     /* Undocumented commands for testing. */
-    { "parse-actions", 1, INT_MAX, do_parse_actions },
-    { "normalize-actions", 2, INT_MAX, do_normalize_actions },
+    { "parse-actions", 1, INT_MAX, dpctl_parse_actions },
+    { "normalize-actions", 2, INT_MAX, dpctl_normalize_actions },
 
     { NULL, 0, 0, NULL },
 };

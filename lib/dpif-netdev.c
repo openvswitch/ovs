@@ -713,10 +713,9 @@ set_flow_actions(struct dp_netdev_flow *flow,
 }
 
 static int
-add_flow(struct dpif *dpif, const struct flow *key,
-         const struct nlattr *actions, size_t actions_len)
+dp_netdev_flow_add(struct dp_netdev *dp, const struct flow *key,
+                   const struct nlattr *actions, size_t actions_len)
 {
-    struct dp_netdev *dp = get_dp_netdev(dpif);
     struct dp_netdev_flow *flow;
     int error;
 
@@ -762,7 +761,8 @@ dpif_netdev_flow_put(struct dpif *dpif, const struct dpif_flow_put *put)
                 if (put->stats) {
                     memset(put->stats, 0, sizeof *put->stats);
                 }
-                return add_flow(dpif, &key, put->actions, put->actions_len);
+                return dp_netdev_flow_add(dp, &key, put->actions,
+                                          put->actions_len);
             } else {
                 return EFBIG;
             }
