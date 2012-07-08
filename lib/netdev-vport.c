@@ -682,7 +682,7 @@ parse_tunnel_config(const char *name, const char *type,
 
     if (is_ipsec) {
         static pid_t pid = 0;
-        if (pid == 0) {
+        if (pid <= 0) {
             char *file_name = xasprintf("%s/%s", ovs_rundir(),
                                         "ovs-monitor-ipsec.pid");
             pid = read_pidfile(file_name);
