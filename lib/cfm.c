@@ -633,7 +633,6 @@ cfm_process_heartbeat(struct cfm *cfm, const struct ofpbuf *p)
             }
 
             if (rmp->seq && ccm_seq != (rmp->seq + 1)) {
-                cfm_fault |= CFM_FAULT_SEQUENCE;
                 VLOG_WARN_RL(&rl, "%s: (mpid %"PRIu64") detected sequence"
                              " numbers which indicate possible connectivity"
                              " problems (previous %"PRIu32") (current %"PRIu32

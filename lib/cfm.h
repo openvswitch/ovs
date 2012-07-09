@@ -33,8 +33,7 @@ struct ofpbuf;
     CFM_FAULT_REASON(LOOPBACK, loopback)   \
     CFM_FAULT_REASON(OVERFLOW, overflow)   \
     CFM_FAULT_REASON(OVERRIDE, override)   \
-    CFM_FAULT_REASON(INTERVAL, interval)   \
-    CFM_FAULT_REASON(SEQUENCE, sequence)
+    CFM_FAULT_REASON(INTERVAL, interval)
 
 enum cfm_fault_bit_index {
 #define CFM_FAULT_REASON(NAME, STR) CFM_FAULT_INDEX_##NAME,
