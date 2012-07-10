@@ -2752,7 +2752,8 @@ xlate_output_action__(struct action_xlate_ctx *ctx,
                       &ctx->nf_output_iface, ctx->odp_actions);
         break;
     case OFPP_CONTROLLER:
-        nl_msg_put_u64(ctx->odp_actions, ODP_ACTION_ATTR_CONTROLLER, max_len);
+        nl_msg_put_u64(ctx->odp_actions, ODP_ACTION_ATTR_CONTROLLER,
+                       max_len | (ctx->flow.in_port << 16));
         break;
     case OFPP_LOCAL:
         add_output_action(ctx, ODPP_LOCAL);
@@ -4463,6 +4464,7 @@ handle_upcall(struct ofproto *p, struct dpif_upcall *upcall)
     case DPIF_UC_ACTION:
         COVERAGE_INC(ofproto_ctlr_action);
         odp_flow_key_to_flow(upcall->key, upcall->key_len, &flow);
+        flow.in_port = upcall->userdata >> 16;
         send_packet_in(p, upcall, &flow, false);
         break;
 
@@ -4902,7 +4904,7 @@ schedule_packet_in(struct ofconn *ofconn, struct dpif_upcall *upcall,
         send_len = MIN(send_len, ofconn->miss_send_len);
     }
     if (upcall->type == DPIF_UC_ACTION) {
-        send_len = MIN(send_len, upcall->userdata);
+        send_len = MIN(send_len, upcall->userdata & 0xffff);
     }
 
     /* Copy or steal buffer for OFPT_PACKET_IN. */
