@@ -234,6 +234,7 @@ ofputil_cls_rule_to_ofp10_match(const struct cls_rule *rule,
     } else if (rule->wc.vlan_tci_mask & htons(VLAN_CFI)
                && !(rule->flow.vlan_tci & htons(VLAN_CFI))) {
         match->dl_vlan = htons(OFP10_VLAN_NONE);
+        ofpfw |= OFPFW10_DL_VLAN_PCP;
     } else {
         if (!(rule->wc.vlan_tci_mask & htons(VLAN_VID_MASK))) {
             ofpfw |= OFPFW10_DL_VLAN;

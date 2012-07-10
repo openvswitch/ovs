@@ -1,6 +1,6 @@
 #! /usr/bin/perl
 
-# Copyright (c) 2009, 2010, 2011 Nicira, Inc.
+# Copyright (c) 2009, 2010, 2011, 2012 Nicira, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -109,10 +109,13 @@ sub output {
 
     # Compose packet.
     my $packet = '';
+    my $wildcards = 0;
     $packet .= pack_ethaddr($flow{DL_DST});
     $packet .= pack_ethaddr($flow{DL_SRC});
     if ($flow{DL_VLAN} != 0xffff) {
         $packet .= pack('nn', 0x8100, $flow{DL_VLAN});
+    } else {
+        $wildcards |= 1 << 20;   # OFPFW10_DL_VLAN_PCP
     }
     my $len_ofs = length($packet);
     $packet .= pack('n', 0) if $attrs{DL_HEADER} =~ /^802.2/;
@@ -204,8 +207,8 @@ sub output {
     print "\n";
 
     print FLOWS pack('Nn',
-                     0,         # wildcards
-                     1);        # in_port
+                     $wildcards, # wildcards
+                     1);         # in_port
     print FLOWS pack_ethaddr($flow{DL_SRC});
     print FLOWS pack_ethaddr($flow{DL_DST});
     print FLOWS pack('nCxnCCxxNNnn',
