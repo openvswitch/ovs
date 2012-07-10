@@ -375,6 +375,8 @@ cfm_compose_ccm(struct cfm *cfm, struct ofpbuf *packet,
     if (cfm->ccm_interval == 0) {
         assert(cfm->extended);
         ccm->interval_ms_x = htons(cfm->ccm_interval_ms);
+    } else {
+        ccm->interval_ms_x = htons(0);
     }
 
     if (hmap_is_empty(&cfm->remote_mps)) {
