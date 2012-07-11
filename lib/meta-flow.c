@@ -998,17 +998,11 @@ mf_get_value(const struct mf_field *mf, const struct flow *flow,
         break;
 
     case MFF_TCP_SRC:
-        value->be16 = flow->tp_src;
-        break;
-
-    case MFF_TCP_DST:
-        value->be16 = flow->tp_dst;
-        break;
-
     case MFF_UDP_SRC:
         value->be16 = flow->tp_src;
         break;
 
+    case MFF_TCP_DST:
     case MFF_UDP_DST:
         value->be16 = flow->tp_dst;
         break;
@@ -1143,17 +1137,11 @@ mf_set_value(const struct mf_field *mf,
         break;
 
     case MFF_TCP_SRC:
-        cls_rule_set_tp_src(rule, value->be16);
-        break;
-
-    case MFF_TCP_DST:
-        cls_rule_set_tp_dst(rule, value->be16);
-        break;
-
     case MFF_UDP_SRC:
         cls_rule_set_tp_src(rule, value->be16);
         break;
 
+    case MFF_TCP_DST:
     case MFF_UDP_DST:
         cls_rule_set_tp_dst(rule, value->be16);
         break;
