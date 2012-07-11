@@ -29,6 +29,8 @@
 #include <string.h>
 #include <unistd.h>
 
+#include "vlog.h"
+
 VLOG_DEFINE_THIS_MODULE(route_table);
 
 static int pid;
