@@ -45,6 +45,7 @@
     /*        FWW_* bit(s)                member name  name     */  \
     /*        --------------------------  -----------  -------- */  \
     CLS_FIELD(0,                          tun_id,      TUN_ID)      \
+    CLS_FIELD(0,                          metadata,    METADATA)    \
     CLS_FIELD(0,                          nw_src,      NW_SRC)      \
     CLS_FIELD(0,                          nw_dst,      NW_DST)      \
     CLS_FIELD(FWW_IN_PORT,                in_port,     IN_PORT)     \
@@ -213,6 +214,9 @@ match(const struct cls_rule *wild, const struct flow *fixed)
                    & wild->wc.vlan_tci_mask);
         } else if (f_idx == CLS_F_IDX_TUN_ID) {
             eq = !((fixed->tun_id ^ wild->flow.tun_id) & wild->wc.tun_id_mask);
+        } else if (f_idx == CLS_F_IDX_METADATA) {
+            eq = !((fixed->metadata ^ wild->flow.metadata)
+                   & wild->wc.metadata_mask);
         } else if (f_idx == CLS_F_IDX_NW_DSCP) {
             eq = !((fixed->nw_tos ^ wild->flow.nw_tos) & IP_DSCP_MASK);
         } else {
@@ -263,6 +267,9 @@ static ovs_be32 nw_dst_values[] = { CONSTANT_HTONL(0xc0a80002),
 static ovs_be64 tun_id_values[] = {
     0,
     CONSTANT_HTONLL(UINT64_C(0xfedcba9876543210)) };
+static ovs_be64 metadata_values[] = {
+    0,
+    CONSTANT_HTONLL(UINT64_C(0xfedcba9876543210)) };
 static uint16_t in_port_values[] = { 1, OFPP_LOCAL };
 static ovs_be16 vlan_tci_values[] = { CONSTANT_HTONS(101), CONSTANT_HTONS(0) };
 static ovs_be16 dl_type_values[]
@@ -284,6 +291,9 @@ init_values(void)
 {
     values[CLS_F_IDX_TUN_ID][0] = &tun_id_values[0];
     values[CLS_F_IDX_TUN_ID][1] = &tun_id_values[1];
+
+    values[CLS_F_IDX_METADATA][0] = &metadata_values[0];
+    values[CLS_F_IDX_METADATA][1] = &metadata_values[1];
 
     values[CLS_F_IDX_IN_PORT][0] = &in_port_values[0];
     values[CLS_F_IDX_IN_PORT][1] = &in_port_values[1];
@@ -322,6 +332,7 @@ init_values(void)
 #define N_NW_SRC_VALUES ARRAY_SIZE(nw_src_values)
 #define N_NW_DST_VALUES ARRAY_SIZE(nw_dst_values)
 #define N_TUN_ID_VALUES ARRAY_SIZE(tun_id_values)
+#define N_METADATA_VALUES ARRAY_SIZE(metadata_values)
 #define N_IN_PORT_VALUES ARRAY_SIZE(in_port_values)
 #define N_VLAN_TCI_VALUES ARRAY_SIZE(vlan_tci_values)
 #define N_DL_TYPE_VALUES ARRAY_SIZE(dl_type_values)
@@ -369,6 +380,7 @@ compare_classifiers(struct classifier *cls, struct tcls *tcls)
         flow.nw_src = nw_src_values[get_value(&x, N_NW_SRC_VALUES)];
         flow.nw_dst = nw_dst_values[get_value(&x, N_NW_DST_VALUES)];
         flow.tun_id = tun_id_values[get_value(&x, N_TUN_ID_VALUES)];
+        flow.metadata = metadata_values[get_value(&x, N_METADATA_VALUES)];
         flow.in_port = in_port_values[get_value(&x, N_IN_PORT_VALUES)];
         flow.vlan_tci = vlan_tci_values[get_value(&x, N_VLAN_TCI_VALUES)];
         flow.dl_type = dl_type_values[get_value(&x, N_DL_TYPE_VALUES)];
@@ -485,6 +497,8 @@ make_rule(int wc_fields, unsigned int priority, int value_pat)
             rule->cls_rule.wc.vlan_tci_mask = htons(UINT16_MAX);
         } else if (f_idx == CLS_F_IDX_TUN_ID) {
             rule->cls_rule.wc.tun_id_mask = htonll(UINT64_MAX);
+        } else if (f_idx == CLS_F_IDX_METADATA) {
+            rule->cls_rule.wc.metadata_mask = htonll(UINT64_MAX);
         } else {
             NOT_REACHED();
         }

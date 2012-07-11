@@ -42,6 +42,7 @@ actions=set_tunnel:0x1234,set_tunnel64:0x9876,set_tunnel:0x123456789
 actions=multipath(eth_src, 50, hrw, 12, 0, NXM_NX_REG0[0..3]),multipath(symmetric_l4, 1024, iter_hash, 5000, 5050, NXM_NX_REG0[0..12])
 table=1,actions=drop
 tun_id=0x1234000056780000/0xffff0000ffff0000,actions=drop
+metadata=0x1234ffff5678ffff/0xffff0000ffff0000,actions=drop
 actions=bundle(eth_src,50,active_backup,ofport,slaves:1)
 actions=bundle(symmetric_l4,60,hrw,ofport,slaves:2,3)
 actions=bundle(symmetric_l4,60,hrw,ofport,slaves:)
@@ -75,6 +76,7 @@ NXT_FLOW_MOD: ADD table:255 actions=set_tunnel:0x1234,set_tunnel64:0x9876,set_tu
 NXT_FLOW_MOD: ADD table:255 actions=multipath(eth_src,50,hrw,12,0,NXM_NX_REG0[0..3]),multipath(symmetric_l4,1024,iter_hash,5000,5050,NXM_NX_REG0[0..12])
 NXT_FLOW_MOD: ADD table:1 actions=drop
 NXT_FLOW_MOD: ADD table:255 tun_id=0x1234000056780000/0xffff0000ffff0000 actions=drop
+NXT_FLOW_MOD: ADD table:255 metadata=0x1234000056780000/0xffff0000ffff0000 actions=drop
 NXT_FLOW_MOD: ADD table:255 actions=bundle(eth_src,50,active_backup,ofport,slaves:1)
 NXT_FLOW_MOD: ADD table:255 actions=bundle(symmetric_l4,60,hrw,ofport,slaves:2,3)
 NXT_FLOW_MOD: ADD table:255 actions=bundle(symmetric_l4,60,hrw,ofport,slaves:)
@@ -1296,10 +1298,13 @@ OXM_OF_IN_PORT(00000001), OXM_OF_ETH_TYPE(0800)
 ])
 AT_CLEANUP
 
-dnl Check that "-F openflow10" rejects a flow_mod with a tun_id, since
-dnl OpenFlow 1.0 doesn't support tunnels.
-AT_SETUP([ovs-ofctl -F option and tun_id])
+dnl Check that "-F openflow10" rejects a flow_mod with unsupported features,
+dnl such as tunnels and metadata.
+AT_SETUP([ovs-ofctl -F option and NXM features])
 AT_CHECK([ovs-ofctl -F openflow10 add-flow dummy tun_id=123,actions=drop],
+  [1], [], [ovs-ofctl: none of the usable flow formats (NXM) is among the allowed flow formats (OpenFlow10)
+])
+AT_CHECK([ovs-ofctl -F openflow10 add-flow dummy metadata=123,actions=drop],
   [1], [], [ovs-ofctl: none of the usable flow formats (NXM) is among the allowed flow formats (OpenFlow10)
 ])
 AT_CLEANUP
