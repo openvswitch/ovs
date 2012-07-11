@@ -489,6 +489,37 @@ Q: My OpenFlow controller doesn't see the VLANs that I expect.
 
 A: See answer under "VLANs", above.
 
+Q: I ran "ovs-ofctl add-flow br0 nw_dst=192.168.0.1,actions=drop"
+   but I got a funny message like this:
+
+       ofp_util|INFO|normalization changed ofp_match, details:
+       ofp_util|INFO| pre: nw_dst=192.168.0.1
+       ofp_util|INFO|post:
+
+   and when I ran "ovs-ofctl dump-flows br0" I saw that my nw_dst
+   match had disappeared, so that the flow ends up matching every
+   packet.
+
+A: The term "normalization" in the log message means that a flow
+   cannot match on an L3 field without saying what L3 protocol is in
+   use.  The "ovs-ofctl" command above didn't specify an L3 protocol,
+   so the L3 field match was dropped.
+
+   In this case, the L3 protocol could be IP or ARP.  A correct
+   command for each possibility is, respectively:
+
+       ovs-ofctl add-flow br0 ip,nw_dst=192.168.0.1,actions=drop
+
+   and 
+
+       ovs-ofctl add-flow br0 arp,nw_dst=192.168.0.1,actions=drop
+
+   Similarly, a flow cannot match on an L4 field without saying what
+   L4 protocol is in use.  For example, the flow match "tp_src=1234"
+   is, by itself, meaningless and will be ignored.  Instead, to match
+   TCP source port 1234, write "tcp,tp_src=1234", or to match UDP
+   source port 1234, write "udp,tp_src=1234".
+
 
 Contact 
 -------
