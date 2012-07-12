@@ -2145,7 +2145,11 @@ ofputil_append_flow_stats_reply(const struct ofputil_flow_stats *fs,
     if (osm->type == htons(OFPST_FLOW)) {
         struct ofp_flow_stats *ofs;
 
-        ofs = ofpbuf_put_uninit(reply, sizeof *ofs);
+        ofpbuf_put_uninit(reply, sizeof *ofs);
+        ofpacts_put_openflow10(fs->ofpacts, fs->ofpacts_len, reply);
+
+        ofs = ofpbuf_at_assert(reply, start_ofs, sizeof *ofs);
+        ofs->length = htons(reply->size - start_ofs);
         ofs->table_id = fs->table_id;
         ofs->pad = 0;
         ofputil_cls_rule_to_ofp10_match(&fs->rule, &ofs->match);
@@ -2160,14 +2164,16 @@ ofputil_append_flow_stats_reply(const struct ofputil_flow_stats *fs,
                            htonll(unknown_to_zero(fs->packet_count)));
         put_32aligned_be64(&ofs->byte_count,
                            htonll(unknown_to_zero(fs->byte_count)));
-        ofpacts_put_openflow10(fs->ofpacts, fs->ofpacts_len, reply);
-
-        ofs = ofpbuf_at_assert(reply, start_ofs, sizeof *ofs);
-        ofs->length = htons(reply->size - start_ofs);
     } else if (osm->type == htons(OFPST_VENDOR)) {
         struct nx_flow_stats *nfs;
+        int match_len;
 
-        nfs = ofpbuf_put_uninit(reply, sizeof *nfs);
+        ofpbuf_put_uninit(reply, sizeof *nfs);
+        match_len = nx_put_match(reply, false, &fs->rule, 0, 0);
+        ofpacts_put_openflow10(fs->ofpacts, fs->ofpacts_len, reply);
+
+        nfs = ofpbuf_at_assert(reply, start_ofs, sizeof *nfs);
+        nfs->length = htons(reply->size - start_ofs);
         nfs->table_id = fs->table_id;
         nfs->pad = 0;
         nfs->duration_sec = htonl(fs->duration_sec);
@@ -2181,14 +2187,10 @@ ofputil_append_flow_stats_reply(const struct ofputil_flow_stats *fs,
         nfs->hard_age = htons(fs->hard_age < 0 ? 0
                               : fs->hard_age < UINT16_MAX ? fs->hard_age + 1
                               : UINT16_MAX);
-        nfs->match_len = htons(nx_put_match(reply, false, &fs->rule, 0, 0));
+        nfs->match_len = htons(match_len);
         nfs->cookie = fs->cookie;
         nfs->packet_count = htonll(fs->packet_count);
         nfs->byte_count = htonll(fs->byte_count);
-        ofpacts_put_openflow10(fs->ofpacts, fs->ofpacts_len, reply);
-
-        nfs = ofpbuf_at_assert(reply, start_ofs, sizeof *nfs);
-        nfs->length = htons(reply->size - start_ofs);
     } else {
         NOT_REACHED();
     }
