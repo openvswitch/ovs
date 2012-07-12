@@ -849,17 +849,38 @@ echo adds=$adds deletes=$deletes
 AT_CHECK([test $adds -gt 100 && test $adds -lt $n_msgs])
 AT_CHECK([test $adds = $deletes])
 
-# Check that the flow monitor reported everything in the expected order.
+# Check that the flow monitor reported everything in the expected order:
+#
+#     event=ADDED table=0 cookie=0x1 reg1=0x22
+# ...
+#    NXT_FLOW_MONITOR_PAUSED:
+# ...
+#     event=DELETED reason=delete table=0 cookie=0x1 reg1=0x22
+# ...
+#     event=ADDED table=0 cookie=0x3 in_port=1
+#     event=MODIFIED table=0 cookie=0x2 in_port=2 actions=output:2
+#    NXT_FLOW_MONITOR_RESUMED:
+#
+# except that, between the PAUSED and RESUMED, the order of the ADDED
+# and MODIFIED lines lines depends on hash order, that is, it varies
+# as we change the hash function or change architecture.  Therefore,
+# we use a couple of tests below to accept both orders.
 AT_CHECK([ofctl_strip < monitor.log | sed -n -e '
 /reg1=0x22\b/p
 /cookie=0x[[23]]/p
 /NXT_FLOW_MONITOR_PAUSED:/p
 /NXT_FLOW_MONITOR_RESUMED:/p
-'], [0],
-[ event=ADDED table=0 cookie=0x1 reg1=0x22
+' > monitor.log.subset])
+AT_CHECK([grep -v MODIFIED monitor.log.subset], [0], [dnl
+ event=ADDED table=0 cookie=0x1 reg1=0x22
 NXT_FLOW_MONITOR_PAUSED:
  event=DELETED reason=delete table=0 cookie=0x1 reg1=0x22
  event=ADDED table=0 cookie=0x3 in_port=1
+NXT_FLOW_MONITOR_RESUMED:
+])
+AT_CHECK([grep -v ADDED monitor.log.subset], [0], [dnl
+NXT_FLOW_MONITOR_PAUSED:
+ event=DELETED reason=delete table=0 cookie=0x1 reg1=0x22
  event=MODIFIED table=0 cookie=0x2 in_port=2 actions=output:2
 NXT_FLOW_MONITOR_RESUMED:
 ])
