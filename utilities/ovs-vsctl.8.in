@@ -815,7 +815,13 @@ ignored):
 Remove the mirror created above from \fBbr0\fR, which also destroys
 the Mirror record (since it is now unreferenced):
 .IP
-.B "remove Bridge br0 mirrors mymirror"
+.B "ovs\-vsctl \-\- \-\-id=@rec get Mirror mymirror \(rs"
+.IP
+.B "\-\- remove Bridge br0 mirrors @rec"
+.PP
+The following simpler command also works:
+.IP
+.B "ovs\-vsctl clear Bridge br0 mirrors"
 .SS "Quality of Service (QoS)"
 .PP
 Create a \fBlinux\-htb\fR QoS record that points to a few queues and
