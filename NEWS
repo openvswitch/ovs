@@ -22,6 +22,8 @@ post-v1.7.0
         queue does not exist, or for requests for a specific queue on all
         ports, if the specified queue does not exist on any port.  (Previous
         versions generally reported an empty set of results.)
+      - New "flow monitor" feature to allow controllers to be notified of
+        flow table changes as they happen.
     - Additional protocols are not mirrored and dropped when forward-bpdu is
       false.  For a full list, see the ovs-vswitchd.conf.db man page.
     - Open vSwitch now sends RARP packets in situations where it previously

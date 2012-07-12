@@ -1368,6 +1368,137 @@ ofp_print_nxt_set_controller_id(struct ds *string,
     ds_put_format(string, " id=%"PRIu16, ntohs(nci->controller_id));
 }
 
+static void
+ofp_print_nxt_flow_monitor_cancel(struct ds *string,
+                                  const struct ofp_header *oh)
+{
+    ds_put_format(string, " id=%"PRIu32,
+                  ofputil_decode_flow_monitor_cancel(oh));
+}
+
+static const char *
+nx_flow_monitor_flags_to_name(uint32_t bit)
+{
+    enum nx_flow_monitor_flags fmf = bit;
+
+    switch (fmf) {
+    case NXFMF_INITIAL: return "initial";
+    case NXFMF_ADD: return "add";
+    case NXFMF_DELETE: return "delete";
+    case NXFMF_MODIFY: return "modify";
+    case NXFMF_ACTIONS: return "actions";
+    case NXFMF_OWN: return "own";
+    }
+
+    return NULL;
+}
+
+static void
+ofp_print_nxst_flow_monitor_request(struct ds *string,
+                                    const struct ofp_header *oh)
+{
+    struct ofpbuf b;
+
+    ofpbuf_use_const(&b, oh, ntohs(oh->length));
+    for (;;) {
+        struct ofputil_flow_monitor_request request;
+        int retval;
+
+        retval = ofputil_decode_flow_monitor_request(&request, &b);
+        if (retval) {
+            if (retval != EOF) {
+                ofp_print_error(string, retval);
+            }
+            return;
+        }
+
+        ds_put_format(string, "\n id=%"PRIu32" flags=", request.id);
+        ofp_print_bit_names(string, request.flags,
+                            nx_flow_monitor_flags_to_name, ',');
+
+        if (request.out_port != OFPP_NONE) {
+            ds_put_cstr(string, " out_port=");
+            ofputil_format_port(request.out_port, string);
+        }
+
+        if (request.table_id != 0xff) {
+            ds_put_format(string, " table=%"PRIu8, request.table_id);
+        }
+
+        ds_put_char(string, ' ');
+        cls_rule_format(&request.match, string);
+        ds_chomp(string, ' ');
+    }
+}
+
+static void
+ofp_print_nxst_flow_monitor_reply(struct ds *string,
+                                  const struct ofp_header *oh)
+{
+    uint64_t ofpacts_stub[1024 / 8];
+    struct ofpbuf ofpacts;
+    struct ofpbuf b;
+
+    ofpbuf_use_const(&b, oh, ntohs(oh->length));
+    ofpbuf_use_stub(&ofpacts, ofpacts_stub, sizeof ofpacts_stub);
+    for (;;) {
+        struct ofputil_flow_update update;
+        struct cls_rule match;
+        int retval;
+
+        update.match = &match;
+        retval = ofputil_decode_flow_update(&update, &b, &ofpacts);
+        if (retval) {
+            if (retval != EOF) {
+                ofp_print_error(string, retval);
+            }
+            ofpbuf_uninit(&ofpacts);
+            return;
+        }
+
+        ds_put_cstr(string, "\n event=");
+        switch (update.event) {
+        case NXFME_ADDED:
+            ds_put_cstr(string, "ADDED");
+            break;
+
+        case NXFME_DELETED:
+            ds_put_format(string, "DELETED reason=%s",
+                          ofp_flow_removed_reason_to_string(update.reason));
+            break;
+
+        case NXFME_MODIFIED:
+            ds_put_cstr(string, "MODIFIED");
+            break;
+
+        case NXFME_ABBREV:
+            ds_put_format(string, "ABBREV xid=0x%"PRIx32, ntohl(update.xid));
+            continue;
+        }
+
+        ds_put_format(string, " table=%"PRIu8, update.table_id);
+        if (update.idle_timeout != OFP_FLOW_PERMANENT) {
+            ds_put_format(string, " idle_timeout=%"PRIu16,
+                          update.idle_timeout);
+        }
+        if (update.hard_timeout != OFP_FLOW_PERMANENT) {
+            ds_put_format(string, " hard_timeout=%"PRIu16,
+                          update.hard_timeout);
+        }
+        ds_put_format(string, " cookie=%#"PRIx64, ntohll(update.cookie));
+
+        ds_put_char(string, ' ');
+        cls_rule_format(update.match, string);
+
+        if (update.ofpacts_len) {
+            if (string->string[string->length - 1] != ' ') {
+                ds_put_char(string, ' ');
+            }
+            ofpacts_format(update.ofpacts, update.ofpacts_len, string);
+        }
+    }
+}
+
 void
 ofp_print_version(const struct ofp_header *oh,
                   struct ds *string)
@@ -1563,6 +1694,22 @@ ofp_to_string__(const struct ofp_header *oh,
     case OFPUTIL_NXST_AGGREGATE_REPLY:
         ofp_print_stats_reply(string, oh);
         ofp_print_nxst_aggregate_reply(string, msg);
+        break;
+
+    case OFPUTIL_NXT_FLOW_MONITOR_CANCEL:
+        ofp_print_nxt_flow_monitor_cancel(string, msg);
+        break;
+
+    case OFPUTIL_NXT_FLOW_MONITOR_PAUSED:
+    case OFPUTIL_NXT_FLOW_MONITOR_RESUMED:
+        break;
+
+    case OFPUTIL_NXST_FLOW_MONITOR_REQUEST:
+        ofp_print_nxst_flow_monitor_request(string, msg);
+        break;
+
+    case OFPUTIL_NXST_FLOW_MONITOR_REPLY:
+        ofp_print_nxst_flow_monitor_reply(string, msg);
         break;
     }
 }

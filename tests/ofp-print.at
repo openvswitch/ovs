@@ -810,6 +810,34 @@ NXT_SET_CONTROLLER_ID (xid=0x3): id=123
 ])
 AT_CLEANUP
 
+AT_SETUP([NXT_FLOW_MONITOR_CANCEL])
+AT_KEYWORDS([ofp-print])
+AT_CHECK([ovs-ofctl ofp-print "\
+01 04 00 14 00 00 00 03 00 00 23 20 00 00 00 15 \
+01 02 30 40 \
+"], [0], [dnl
+NXT_FLOW_MONITOR_CANCEL (xid=0x3): id=16920640
+])
+AT_CLEANUP
+
+AT_SETUP([NXT_FLOW_MONITOR_PAUSED])
+AT_KEYWORDS([ofp-print])
+AT_CHECK([ovs-ofctl ofp-print "\
+01 04 00 10 00 00 00 03 00 00 23 20 00 00 00 16 \
+"], [0], [dnl
+NXT_FLOW_MONITOR_PAUSED (xid=0x3):
+])
+AT_CLEANUP
+
+AT_SETUP([NXT_FLOW_MONITOR_RESUMED])
+AT_KEYWORDS([ofp-print])
+AT_CHECK([ovs-ofctl ofp-print "\
+01 04 00 10 00 00 00 03 00 00 23 20 00 00 00 17 \
+"], [0], [dnl
+NXT_FLOW_MONITOR_RESUMED (xid=0x3):
+])
+AT_CLEANUP
+
 AT_SETUP([NXT_SET_FLOW_FORMAT])
 AT_KEYWORDS([ofp-print])
 AT_CHECK([ovs-ofctl ofp-print "\
@@ -1059,5 +1087,32 @@ AT_CHECK([ovs-ofctl ofp-print "\
 00 00 00 00 00 00 01 a4 00 00 00 07 00 00 00 00 \
 "], [0], [dnl
 NXST_AGGREGATE reply (xid=0x4): packet_count=7 byte_count=420 flow_count=7
+])
+AT_CLEANUP
+
+AT_SETUP([NXST_FLOW_MONITOR request])
+AT_KEYWORDS([ofp-print OFPT_STATS_REPLY])
+AT_CHECK([ovs-ofctl ofp-print "\
+01 10 00 40 00 00 00 04 ff ff 00 00 00 00 23 20 00 00 00 02 00 00 00 00 \
+00 00 40 00 00 3f ff fe 00 00 01 00 00 00 00 00 \
+00 00 20 00 00 04 ff ff 00 06 02 00 00 00 00 00 00 00 00 02 00 01 00 00 \
+"], [0], [dnl
+NXST_FLOW_MONITOR request (xid=0x4):
+ id=16384 flags=initial,add,delete,modify,actions,own out_port=LOCAL table=1
+ id=8192 flags=delete table=2 in_port=1
+])
+AT_CLEANUP
+
+AT_SETUP([NXST_FLOW_MONITOR reply])
+AT_KEYWORDS([ofp-print OFPT_STATS_REPLY])
+AT_CHECK([ovs-ofctl ofp-print "\
+01 11 00 40 00 00 00 04 ff ff 00 00 00 00 23 20 00 00 00 02 00 00 00 00 \
+00 20 00 01 00 04 80 00 00 05 00 10 00 06 01 00 12 34 56 78 9a bc de f0 \
+00 00 00 02 00 01 00 00 \
+00 08 00 03 00 01 86 a0 \
+"], [0], [dnl
+NXST_FLOW_MONITOR reply (xid=0x4):
+ event=DELETED reason=eviction table=1 idle_timeout=5 hard_timeout=16 cookie=0x123456789abcdef0 in_port=1
+ event=ABBREV xid=0x186a0
 ])
 AT_CLEANUP

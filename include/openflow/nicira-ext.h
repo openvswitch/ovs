@@ -117,6 +117,11 @@ enum nicira_type {
 
     NXT_SET_ASYNC_CONFIG = 19,  /* struct nx_async_config. */
     NXT_SET_CONTROLLER_ID = 20, /* struct nx_controller_id. */
+
+    /* Flow table monitoring (see also NXST_FLOW_MONITOR). */
+    NXT_FLOW_MONITOR_CANCEL = 21,  /* struct nx_flow_monitor_cancel. */
+    NXT_FLOW_MONITOR_PAUSED = 22,  /* struct nicira_header. */
+    NXT_FLOW_MONITOR_RESUMED = 23, /* struct nicira_header. */
 };
 
 /* Header for Nicira vendor stats request and reply messages. */
@@ -131,7 +136,10 @@ OFP_ASSERT(sizeof(struct nicira_stats_msg) == 24);
 enum nicira_stats_type {
     /* Flexible flow specification (aka NXM = Nicira Extended Match). */
     NXST_FLOW,                  /* Analogous to OFPST_FLOW. */
-    NXST_AGGREGATE              /* Analogous to OFPST_AGGREGATE. */
+    NXST_AGGREGATE,             /* Analogous to OFPST_AGGREGATE. */
+
+    /* Flow table monitoring. */
+    NXST_FLOW_MONITOR,
 };
 
 /* Fields to use when hashing flows. */
@@ -1976,5 +1984,240 @@ struct nx_action_controller {
     uint8_t zero;                   /* Must be zero. */
 };
 OFP_ASSERT(sizeof(struct nx_action_controller) == 16);
+
+/* Flow Table Monitoring
+ * =====================
+ *
+ * NXST_FLOW_MONITOR allows a controller to keep track of changes to OpenFlow
+ * flow table(s) or subsets of them, with the following workflow:
+ *
+ * 1. The controller sends an NXST_FLOW_MONITOR request to begin monitoring
+ *    flows.  The 'id' in the request must be unique among all monitors that
+ *    the controller has started and not yet canceled on this OpenFlow
+ *    connection.
+ *
+ * 2. The switch responds with an NXST_FLOW_MONITOR reply.  If the request's
+ *    'flags' included NXFMF_INITIAL, the reply includes all the flows that
+ *    matched the request at the time of the request (with event NXFME_ADDED).
+ *    If 'flags' did not include NXFMF_INITIAL, the reply is empty.
+ *
+ *    The reply uses the xid of the request (as do all replies to OpenFlow
+ *    requests).
+ *
+ * 3. Whenever a change to a flow table entry matches some outstanding monitor
+ *    request's criteria and flags, the switch sends a notification to the
+ *    controller as an additional NXST_FLOW_MONITOR reply with xid 0.
+ *
+ *    When multiple outstanding monitors match a single change, only a single
+ *    notification is sent.  This merged notification includes the information
+ *    requested in any of the individual monitors.  That is, if any of the
+ *    matching monitors requests actions (NXFMF_ACTIONS), the notification
+ *    includes actions, and if any of the monitors request full changes for the
+ *    controller's own changes (NXFMF_OWN), the controller's own changes will
+ *    be included in full.
+ *
+ * 4. The controller may cancel a monitor with NXT_FLOW_MONITOR_CANCEL.  No
+ *    further notifications will be sent on the basis of the canceled monitor
+ *    afterward.
+ *
+ *
+ * Buffer Management
+ * =================
+ *
+ * OpenFlow messages for flow monitor notifications can overflow the buffer
+ * space available to the switch, either temporarily (e.g. due to network
+ * conditions slowing OpenFlow traffic) or more permanently (e.g. the sustained
+ * rate of flow table change exceeds the network bandwidth between switch and
+ * controller).
+ *
+ * When Open vSwitch's notification buffer space reaches a limiting threshold,
+ * OVS reacts as follows:
+ *
+ * 1. OVS sends an NXT_FLOW_MONITOR_PAUSED message to the controller, following
+ *    all the already queued notifications.  After it receives this message,
+ *    the controller knows that its view of the flow table, as represented by
+ *    flow monitor notifications, is incomplete.
+ *
+ * 2. As long as the notification buffer is not empty:
+ *
+ *        - NXMFE_ADD and NXFME_MODIFIED notifications will not be sent.
+ *
+ *        - NXFME_DELETED notifications will still be sent, but only for flows
+ *          that existed before OVS sent NXT_FLOW_MONITOR_PAUSED.
+ *
+ *        - NXFME_ABBREV notifications will not be sent.  They are treated as
+ *          the expanded version (and therefore only the NXFME_DELETED
+ *          components, if any, are sent).
+ *
+ * 3. When the notification buffer empties, OVS sends NXFME_ADD notifications
+ *    for flows added since the buffer reached its limit and NXFME_MODIFIED
+ *    notifications for flows that existed before the limit was reached and
+ *    changed after the limit was reached.
+ *
+ * 4. OVS sends an NXT_FLOW_MONITOR_RESUMED message to the controller.  After
+ *    it receives this message, the controller knows that its view of the flow
+ *    table, as represented by flow monitor notifications, is again complete.
+ *
+ * This allows the maximum buffer space requirement for notifications to be
+ * bounded by the limit plus the maximum number of supported flows.
+ *
+ *
+ * "Flow Removed" messages
+ * =======================
+ *
+ * The flow monitor mechanism is independent of OFPT_FLOW_REMOVED and
+ * NXT_FLOW_REMOVED.  Flow monitor updates for deletion are sent if
+ * NXFMF_DELETE is set on a monitor, regardless of whether the
+ * OFPFF_SEND_FLOW_REM flag was set when the flow was added. */
+
+/* NXST_FLOW_MONITOR request.
+ *
+ * The NXST_FLOW_MONITOR request's body consists of an array of zero or more
+ * instances of this structure.  The request arranges to monitor the flows
+ * that match the specified criteria, which are interpreted in the same way as
+ * for NXST_FLOW.
+ *
+ * 'id' identifies a particular monitor for the purpose of allowing it to be
+ * canceled later with NXT_FLOW_MONITOR_CANCEL.  'id' must be unique among
+ * existing monitors that have not already been canceled.
+ *
+ * The reply includes the initial flow matches for monitors that have the
+ * NXFMF_INITIAL flag set.  No single flow will be included in the reply more
+ * than once, even if more than one requested monitor matches that flow.  The
+ * reply will be empty if none of the monitors has NXFMF_INITIAL set or if none
+ * of the monitors initially matches any flows.
+ *
+ * For NXFMF_ADD, an event will be reported if 'out_port' matches against the
+ * actions of the flow being added or, for a flow that is replacing an existing
+ * flow, if 'out_port' matches against the actions of the flow being replaced.
+ * For NXFMF_DELETE, 'out_port' matches against the actions of a flow being
+ * deleted.  For NXFMF_MODIFY, an event will be reported if 'out_port' matches
+ * either the old or the new actions. */
+struct nx_flow_monitor_request {
+    ovs_be32 id;                /* Controller-assigned ID for this monitor. */
+    ovs_be16 flags;             /* NXFMF_*. */
+    ovs_be16 out_port;          /* Required output port, if not OFPP_NONE. */
+    ovs_be16 match_len;         /* Length of nx_match. */
+    uint8_t table_id;           /* One table's ID or 0xff for all tables. */
+    uint8_t zeros[5];           /* Align to 64 bits (must be zero). */
+    /* Followed by:
+     *   - Exactly match_len (possibly 0) bytes containing the nx_match, then
+     *   - Exactly (match_len + 7)/8*8 - match_len (between 0 and 7) bytes of
+     *     all-zero bytes. */
+};
+OFP_ASSERT(sizeof(struct nx_flow_monitor_request) == 16);
+
+/* 'flags' bits in struct nx_flow_monitor_request. */
+enum nx_flow_monitor_flags {
+    /* When to send updates. */
+    NXFMF_INITIAL = 1 << 0,     /* Initially matching flows. */
+    NXFMF_ADD = 1 << 1,         /* New matching flows as they are added. */
+    NXFMF_DELETE = 1 << 2,      /* Old matching flows as they are removed. */
+    NXFMF_MODIFY = 1 << 3,      /* Matching flows as they are changed. */
+
+    /* What to include in updates. */
+    NXFMF_ACTIONS = 1 << 4,     /* If set, actions are included. */
+    NXFMF_OWN = 1 << 5,         /* If set, include own changes in full. */
+};
+
+/* NXST_FLOW_MONITOR reply header.
+ *
+ * The body of an NXST_FLOW_MONITOR reply is an array of variable-length
+ * structures, each of which begins with this header.  The 'length' member may
+ * be used to traverse the array, and the 'event' member may be used to
+ * determine the particular structure.
+ *
+ * Every instance is a multiple of 8 bytes long. */
+struct nx_flow_update_header {
+    ovs_be16 length;            /* Length of this entry. */
+    ovs_be16 event;             /* One of NXFME_*. */
+    /* ...other data depending on 'event'... */
+};
+OFP_ASSERT(sizeof(struct nx_flow_update_header) == 4);
+
+/* 'event' values in struct nx_flow_update_header. */
+enum nx_flow_update_event {
+    /* struct nx_flow_update_full. */
+    NXFME_ADDED = 0,            /* Flow was added. */
+    NXFME_DELETED = 1,          /* Flow was deleted. */
+    NXFME_MODIFIED = 2,         /* Flow (generally its actions) was changed. */
+
+    /* struct nx_flow_update_abbrev. */
+    NXFME_ABBREV = 3,           /* Abbreviated reply. */
+};
+
+/* NXST_FLOW_MONITOR reply for NXFME_ADDED, NXFME_DELETED, and
+ * NXFME_MODIFIED. */
+struct nx_flow_update_full {
+    ovs_be16 length;            /* Length is 24. */
+    ovs_be16 event;             /* One of NXFME_*. */
+    ovs_be16 reason;            /* OFPRR_* for NXFME_DELETED, else zero. */
+    ovs_be16 priority;          /* Priority of the entry. */
+    ovs_be16 idle_timeout;      /* Number of seconds idle before expiration. */
+    ovs_be16 hard_timeout;      /* Number of seconds before expiration. */
+    ovs_be16 match_len;         /* Length of nx_match. */
+    uint8_t table_id;           /* ID of flow's table. */
+    uint8_t pad;                /* Reserved, currently zeroed. */
+    ovs_be64 cookie;            /* Opaque controller-issued identifier. */
+    /* Followed by:
+     *   - Exactly match_len (possibly 0) bytes containing the nx_match, then
+     *   - Exactly (match_len + 7)/8*8 - match_len (between 0 and 7) bytes of
+     *     all-zero bytes, then
+     *   - Actions to fill out the remainder 'length' bytes (always a multiple
+     *     of 8).  If NXFMF_ACTIONS was not specified, or 'event' is
+     *     NXFME_DELETED, no actions are included.
+     */
+};
+OFP_ASSERT(sizeof(struct nx_flow_update_full) == 24);
+
+/* NXST_FLOW_MONITOR reply for NXFME_ABBREV.
+ *
+ * When the controller does not specify NXFMF_OWN in a monitor request, any
+ * flow tables changes due to the controller's own requests (on the same
+ * OpenFlow channel) will be abbreviated, when possible, to this form, which
+ * simply specifies the 'xid' of the OpenFlow request (e.g. an OFPT_FLOW_MOD or
+ * NXT_FLOW_MOD) that caused the change.
+ *
+ * Some changes cannot be abbreviated and will be sent in full:
+ *
+ *   - Changes that only partially succeed.  This can happen if, for example,
+ *     a flow_mod with type OFPFC_MODIFY affects multiple flows, but only some
+ *     of those modifications succeed (e.g. due to hardware limitations).
+ *
+ *     This cannot occur with the current implementation of the Open vSwitch
+ *     software datapath.  It could happen with other datapath implementations.
+ *
+ *   - Changes that race with conflicting changes made by other controllers or
+ *     other flow_mods (not separated by barriers) by the same controller.
+ *
+ *     This cannot occur with the current Open vSwitch implementation
+ *     (regardless of datapath) because Open vSwitch internally serializes
+ *     potentially conflicting changes.
+ *
+ * A flow_mod that does not change the flow table will not trigger any
+ * notification, even an abbreviated one.  For example, a "modify" or "delete"
+ * flow_mod that does not match any flows will not trigger a notification.
+ * Whether an "add" or "modify" that specifies all the same parameters that a
+ * flow already has triggers a notification is unspecified and subject to
+ * change in future versions of Open vSwitch.
+ *
+ * OVS will always send the notifications for a given flow table change before
+ * the reply to a OFPT_BARRIER_REQUEST request that precedes the flow table
+ * change.  Thus, if the controller does not receive an abbreviated
+ * notification for a flow_mod before the next OFPT_BARRIER_REPLY, it will
+ * never receive one. */
+struct nx_flow_update_abbrev {
+    ovs_be16 length;            /* Length is 8. */
+    ovs_be16 event;             /* NXFME_ABBREV. */
+    ovs_be32 xid;               /* Controller-specified xid from flow_mod. */
+};
+OFP_ASSERT(sizeof(struct nx_flow_update_abbrev) == 8);
+
+/* Used by a controller to cancel an outstanding monitor. */
+struct nx_flow_monitor_cancel {
+    struct nicira_header nxh;   /* Type NXT_FLOW_MONITOR_CANCEL. */
+    ovs_be32 id;                /* 'id' from nx_flow_monitor_request. */
+};
+OFP_ASSERT(sizeof(struct nx_flow_monitor_cancel) == 20);
 
 #endif /* openflow/nicira-ext.h */

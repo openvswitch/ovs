@@ -15,6 +15,7 @@
  */
 
 #include <config.h>
+#include <ctype.h>
 #include <errno.h>
 #include <getopt.h>
 #include <inttypes.h>
@@ -278,7 +279,7 @@ usage(void)
            "  diff-flows SOURCE1 SOURCE2  compare flows from two sources\n"
            "  packet-out SWITCH IN_PORT ACTIONS PACKET...\n"
            "                              execute ACTIONS on PACKET\n"
-           "  monitor SWITCH [MISSLEN] [invalid_ttl]\n"
+           "  monitor SWITCH [MISSLEN] [invalid_ttl] [watch:[...]]\n"
            "                              print packets received from SWITCH\n"
            "  snoop SWITCH                snoop on SWITCH and its controller\n"
            "\nFor OpenFlow switches and controllers:\n"
@@ -1255,10 +1256,57 @@ ofctl_set_output_file(struct unixctl_conn *conn, int argc OVS_UNUSED,
     unixctl_command_reply(conn, NULL);
 }
 
+struct block_aux {
+    struct vconn *vconn;
+    struct unixctl_server *server;
+    bool blocked;
+};
+
+static void
+ofctl_block(struct unixctl_conn *conn, int argc OVS_UNUSED,
+            const char *argv[] OVS_UNUSED, void *block_)
+{
+    struct block_aux *block = block_;
+
+    if (block->blocked) {
+        unixctl_command_reply(conn, "already blocking");
+        return;
+    }
+
+    block->blocked = true;
+    unixctl_command_reply(conn, NULL);
+    for (;;) {
+        unixctl_server_run(block->server);
+        if (!block->blocked) {
+            break;
+        }
+        vconn_run(block->vconn);
+
+        unixctl_server_wait(block->server);
+        vconn_run_wait(block->vconn);
+        poll_block();
+    }
+}
+
+static void
+ofctl_unblock(struct unixctl_conn *conn, int argc OVS_UNUSED,
+              const char *argv[] OVS_UNUSED, void *block_)
+{
+    struct block_aux *block = block_;
+
+    if (!block->blocked) {
+        unixctl_command_reply(conn, "not blocking");
+    } else {
+        block->blocked = false;
+        unixctl_command_reply(conn, NULL);
+    }
+}
+
 static void
 monitor_vconn(struct vconn *vconn)
 {
     struct barrier_aux barrier_aux = { vconn, NULL };
+    struct block_aux block;
     struct unixctl_server *server;
     bool exiting = false;
     int error;
@@ -1276,6 +1324,13 @@ monitor_vconn(struct vconn *vconn)
                              ofctl_barrier, &barrier_aux);
     unixctl_command_register("ofctl/set-output-file", "FILE", 1, 1,
                              ofctl_set_output_file, NULL);
+
+    block.vconn = vconn;
+    block.server = server;
+    block.blocked = false;
+    unixctl_command_register("ofctl/block", "", 0, 0, ofctl_block, &block);
+    unixctl_command_register("ofctl/unblock", "", 0, 0, ofctl_unblock, &block);
+
     daemonize_complete();
 
     for (;;) {
@@ -1329,20 +1384,34 @@ static void
 ofctl_monitor(int argc, char *argv[])
 {
     struct vconn *vconn;
+    int i;
 
     open_vconn(argv[1], &vconn);
-    if (argc > 2) {
-        struct ofp_switch_config config;
+    for (i = 2; i < argc; i++) {
+        const char *arg = argv[i];
 
-        fetch_switch_config(vconn, &config);
-        config.miss_send_len = htons(atoi(argv[2]));
-        set_switch_config(vconn, &config);
-    }
-    if (argc > 3) {
-        if (!strcmp(argv[3], "invalid_ttl")) {
+        if (isdigit((unsigned char) *arg)) {
+            struct ofp_switch_config config;
+
+            fetch_switch_config(vconn, &config);
+            config.miss_send_len = htons(atoi(arg));
+            set_switch_config(vconn, &config);
+        } else if (!strcmp(arg, "invalid_ttl")) {
             monitor_set_invalid_ttl_to_controller(vconn);
+        } else if (!strncmp(arg, "watch:", 6)) {
+            struct ofputil_flow_monitor_request fmr;
+            struct ofpbuf *msg;
+
+            parse_flow_monitor_request(&fmr, arg + 6);
+
+            msg = ofpbuf_new(0);
+            ofputil_append_flow_monitor_request(&fmr, msg);
+            dump_stats_transaction__(vconn, msg);
+        } else {
+            ovs_fatal(0, "%s: unsupported \"monitor\" argument", arg);
         }
     }
+
     if (preferred_packet_in_format >= 0) {
         set_packet_in_format(vconn, preferred_packet_in_format);
     } else {

@@ -700,6 +700,68 @@ parse_ofp_str(struct ofputil_flow_mod *fm, int command, const char *str_,
     free(string);
 }
 
+/* Convert 'str_' (as described in the documentation for the "monitor" command
+ * in the ovs-ofctl man page) into 'fmr'. */
+void
+parse_flow_monitor_request(struct ofputil_flow_monitor_request *fmr,
+                           const char *str_)
+{
+    static uint32_t id;
+
+    char *string = xstrdup(str_);
+    char *save_ptr = NULL;
+    char *name;
+
+    fmr->id = id++;
+    fmr->flags = (NXFMF_INITIAL | NXFMF_ADD | NXFMF_DELETE | NXFMF_MODIFY
+                  | NXFMF_OWN | NXFMF_ACTIONS);
+    fmr->out_port = OFPP_NONE;
+    fmr->table_id = 0xff;
+    cls_rule_init_catchall(&fmr->match, 0);
+
+    for (name = strtok_r(string, "=, \t\r\n", &save_ptr); name;
+         name = strtok_r(NULL, "=, \t\r\n", &save_ptr)) {
+        const struct protocol *p;
+
+        if (!strcmp(name, "!initial")) {
+            fmr->flags &= ~NXFMF_INITIAL;
+        } else if (!strcmp(name, "!add")) {
+            fmr->flags &= ~NXFMF_ADD;
+        } else if (!strcmp(name, "!delete")) {
+            fmr->flags &= ~NXFMF_DELETE;
+        } else if (!strcmp(name, "!modify")) {
+            fmr->flags &= ~NXFMF_MODIFY;
+        } else if (!strcmp(name, "!actions")) {
+            fmr->flags &= ~NXFMF_ACTIONS;
+        } else if (!strcmp(name, "!own")) {
+            fmr->flags &= ~NXFMF_OWN;
+        } else if (parse_protocol(name, &p)) {
+            cls_rule_set_dl_type(&fmr->match, htons(p->dl_type));
+            if (p->nw_proto) {
+                cls_rule_set_nw_proto(&fmr->match, p->nw_proto);
+            }
+        } else {
+            char *value;
+
+            value = strtok_r(NULL, ", \t\r\n", &save_ptr);
+            if (!value) {
+                ovs_fatal(0, "%s: field %s missing value", str_, name);
+            }
+
+            if (!strcmp(name, "table")) {
+                fmr->table_id = str_to_table_id(value);
+            } else if (!strcmp(name, "out_port")) {
+                fmr->out_port = atoi(value);
+            } else if (mf_from_name(name)) {
+                parse_field(mf_from_name(name), value, &fmr->match);
+            } else {
+                ovs_fatal(0, "%s: unknown keyword %s", str_, name);
+            }
+        }
+    }
+    free(string);
+}
+
 /* Parses 's' as a set of OpenFlow actions and appends the actions to
  * 'actions'.
  *

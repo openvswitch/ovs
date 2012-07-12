@@ -187,6 +187,11 @@ struct rule {
 
     struct ofpact *ofpacts;      /* Sequence of "struct ofpacts". */
     unsigned int ofpacts_len;    /* Size of 'ofpacts', in bytes. */
+
+    /* Flow monitors. */
+    enum nx_flow_monitor_flags monitor_flags;
+    uint64_t add_seqno;         /* Sequence number when added. */
+    uint64_t modify_seqno;      /* Sequence number when changed. */
 };
 
 static inline struct rule *
@@ -199,8 +204,14 @@ void ofproto_rule_update_used(struct rule *, long long int used);
 void ofproto_rule_expire(struct rule *, uint8_t reason);
 void ofproto_rule_destroy(struct rule *);
 
+bool ofproto_rule_has_out_port(const struct rule *, uint16_t out_port);
+
 void ofoperation_complete(struct ofoperation *, enum ofperr);
 struct rule *ofoperation_get_victim(struct ofoperation *);
+
+bool ofoperation_has_out_port(const struct ofoperation *, uint16_t out_port);
+
+bool ofproto_rule_is_hidden(const struct rule *);
 
 /* ofproto class structure, to be defined by each ofproto implementation.
  *

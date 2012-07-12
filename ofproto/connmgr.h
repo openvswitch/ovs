@@ -17,6 +17,7 @@
 #ifndef CONNMGR_H
 #define CONNMGR_H 1
 
+#include "classifier.h"
 #include "hmap.h"
 #include "list.h"
 #include "ofp-errors.h"
@@ -30,6 +31,7 @@ struct ofopgroup;
 struct ofputil_flow_removed;
 struct ofputil_packet_in;
 struct ofputil_phy_port;
+struct rule;
 struct simap;
 struct sset;
 
@@ -158,5 +160,35 @@ bool connmgr_may_set_up_flow(struct connmgr *, const struct flow *,
 
 /* Fail-open and in-band implementation. */
 void connmgr_flushed(struct connmgr *);
+
+/* A flow monitor managed by NXST_FLOW_MONITOR and related requests. */
+struct ofmonitor {
+    struct ofconn *ofconn;      /* Owning 'ofconn'. */
+    struct hmap_node ofconn_node; /* In ofconn's 'monitors' hmap. */
+    uint32_t id;
+
+    enum nx_flow_monitor_flags flags;
+
+    /* Matching. */
+    uint16_t out_port;
+    uint8_t table_id;
+    struct cls_rule match;
+};
+
+struct ofputil_flow_monitor_request;
+
+enum ofperr ofmonitor_create(const struct ofputil_flow_monitor_request *,
+                             struct ofconn *, struct ofmonitor **);
+struct ofmonitor *ofmonitor_lookup(struct ofconn *, uint32_t id);
+void ofmonitor_destroy(struct ofmonitor *);
+
+void ofmonitor_report(struct connmgr *, struct rule *,
+                      enum nx_flow_update_event, enum ofp_flow_removed_reason,
+                      const struct ofconn *abbrev_ofconn, ovs_be32 abbrev_xid);
+void ofmonitor_flush(struct connmgr *);
+
+void ofmonitor_collect_resume_rules(struct ofmonitor *, uint64_t seqno,
+                                    struct list *rules);
+void ofmonitor_compose_refresh_updates(struct list *rules, struct list *msgs);
 
 #endif /* connmgr.h */

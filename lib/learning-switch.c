@@ -295,12 +295,17 @@ lswitch_process_packet(struct lswitch *sw, struct rconn *rconn,
     case OFPUTIL_NXT_FLOW_MOD:
     case OFPUTIL_NXT_FLOW_REMOVED:
     case OFPUTIL_NXT_FLOW_AGE:
+    case OFPUTIL_NXT_FLOW_MONITOR_CANCEL:
+    case OFPUTIL_NXT_FLOW_MONITOR_PAUSED:
+    case OFPUTIL_NXT_FLOW_MONITOR_RESUMED:
     case OFPUTIL_NXT_SET_ASYNC_CONFIG:
     case OFPUTIL_NXT_SET_CONTROLLER_ID:
     case OFPUTIL_NXST_FLOW_REQUEST:
     case OFPUTIL_NXST_AGGREGATE_REQUEST:
+    case OFPUTIL_NXST_FLOW_MONITOR_REQUEST:
     case OFPUTIL_NXST_FLOW_REPLY:
     case OFPUTIL_NXST_AGGREGATE_REPLY:
+    case OFPUTIL_NXST_FLOW_MONITOR_REPLY:
     default:
         if (VLOG_IS_DBG_ENABLED()) {
             char *s = ofp_to_string(msg->data, msg->size, 2);

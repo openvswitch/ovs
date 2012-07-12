@@ -736,3 +736,133 @@ OFPT_BARRIER_REPLY:
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP
+
+AT_SETUP([ofproto - flow monitoring])
+AT_KEYWORDS([monitor])
+OVS_VSWITCHD_START
+
+ovs-ofctl add-flow br0 in_port=0,dl_vlan=123,actions=output:1
+
+# Start a monitor watching the flow table and check the initial reply.
+ovs-ofctl monitor br0 watch: --detach --no-chdir --pidfile >monitor.log 2>&1
+AT_CAPTURE_FILE([monitor.log])
+ovs-appctl -t ovs-ofctl ofctl/barrier
+AT_CHECK([sed 's/ (xid=0x[[1-9a-fA-F]][[0-9a-fA-F]]*)//' monitor.log], [0],
+  [NXST_FLOW_MONITOR reply:
+ event=ADDED table=0 cookie=0 in_port=0,dl_vlan=123 actions=output:1
+OFPT_BARRIER_REPLY:
+])
+
+# Add, delete, and modify some flows and check the updates.
+ovs-appctl -t ovs-ofctl ofctl/set-output-file monitor.log
+ovs-ofctl add-flow br0 in_port=0,dl_vlan=124,actions=output:2
+ovs-ofctl add-flow br0 in_port=0,dl_vlan=123,actions=output:5
+ovs-ofctl mod-flows br0 cookie=5,dl_vlan=123,actions=output:3
+ovs-ofctl del-flows br0 dl_vlan=123
+ovs-ofctl del-flows br0
+ovs-appctl -t ovs-ofctl ofctl/barrier
+AT_CHECK([sed 's/ (xid=0x[[1-9a-fA-F]][[0-9a-fA-F]]*)//' monitor.log], [0],
+[NXST_FLOW_MONITOR reply (xid=0x0):
+ event=ADDED table=0 cookie=0 in_port=0,dl_vlan=124 actions=output:2
+NXST_FLOW_MONITOR reply (xid=0x0):
+ event=ADDED table=0 cookie=0 in_port=0,dl_vlan=123 actions=output:5
+NXST_FLOW_MONITOR reply (xid=0x0):
+ event=MODIFIED table=0 cookie=0x5 in_port=0,dl_vlan=123 actions=output:3
+NXST_FLOW_MONITOR reply (xid=0x0):
+ event=DELETED reason=delete table=0 cookie=0x5 in_port=0,dl_vlan=123 actions=output:3
+NXST_FLOW_MONITOR reply (xid=0x0):
+ event=DELETED reason=delete table=0 cookie=0 in_port=0,dl_vlan=124 actions=output:2
+OFPT_BARRIER_REPLY:
+])
+
+# Check that our own changes are reported as abbreviations.
+ovs-appctl -t ovs-ofctl ofctl/set-output-file monitor.log
+ovs-ofctl add-flow br0 in_port=1,actions=output:2
+ovs-ofctl add-flow br0 in_port=2,actions=output:1
+ovs-appctl -t ovs-ofctl ofctl/send 010e004812345678003fffff00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000003000000000000ffffffffffff0000
+ovs-appctl -t ovs-ofctl ofctl/barrier
+AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip], [0], [NXST_FLOW reply:
+])
+AT_CHECK([sed 's/ (xid=0x[[1-9a-fA-F]][[0-9a-fA-F]]*)//' monitor.log], [0],
+[NXST_FLOW_MONITOR reply (xid=0x0):
+ event=ADDED table=0 cookie=0 in_port=1 actions=output:2
+NXST_FLOW_MONITOR reply (xid=0x0):
+ event=ADDED table=0 cookie=0 in_port=2 actions=output:1
+send: OFPT_FLOW_MOD: DEL priority=0 actions=drop
+NXST_FLOW_MONITOR reply (xid=0x0):
+ event=ABBREV xid=0x12345678
+OFPT_BARRIER_REPLY:
+])
+
+ovs-appctl -t ovs-ofctl exit
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto - flow monitoring pause and resume])
+AT_KEYWORDS([monitor])
+
+# With a Linux kernel, this file has the maximum socket receive buffer
+# size.  That's important for this test, which tests behavior when the
+# receive buffer overflows.
+AT_SKIP_IF([test ! -e /proc/sys/net/core/rmem_max])
+
+# Calculate the total amount of queuing: rmem_max in the kernel, 128 kB
+# in ofproto sending userspace (see ofmonitor_flush() in connmgr.c).
+rmem_max=`cat /proc/sys/net/core/rmem_max`
+queue_size=`expr $rmem_max + 128 \* 1024`
+echo rmem_max=$rmem_max queue_size=$queue_size
+
+# Each flow update message takes up at least 48 bytes of space in queues
+# and in practice more than that.
+n_msgs=`expr $queue_size / 48`
+echo n_msgs=$n_msgs
+
+OVS_VSWITCHD_START
+
+# Start a monitor watching the flow table, then make it block.
+ovs-ofctl monitor br0 watch: --detach --no-chdir --pidfile >monitor.log 2>&1
+AT_CAPTURE_FILE([monitor.log])
+ovs-appctl -t ovs-ofctl ofctl/block
+
+# Add $n_msgs flows.
+(echo "in_port=2,actions=output:2"
+perl -e '
+    for ($i = 0; $i < '$n_msgs'; $i++) {
+        print "cookie=1,reg1=$i,actions=drop\n";
+    }
+') > flows.txt
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+AT_CHECK([ovs-ofctl add-flow br0 in_port=1,cookie=3,actions=drop])
+AT_CHECK([ovs-ofctl mod-flows br0 in_port=2,cookie=2,actions=output:2])
+AT_CHECK([ovs-ofctl del-flows br0 cookie=1/-1])
+
+ovs-appctl -t ovs-ofctl ofctl/unblock
+ovs-appctl -t ovs-ofctl ofctl/barrier
+
+ovs-appctl -t ovs-ofctl exit
+
+# Check that the flow monitor reported the same number of flows
+# added and deleted, but fewer than we actually added and deleted.
+adds=`grep -c 'ADDED.*reg1=' monitor.log`
+deletes=`grep -c 'DELETED.*reg1=' monitor.log`
+echo adds=$adds deletes=$deletes
+AT_CHECK([test $adds -gt 100 && test $adds -lt $n_msgs])
+AT_CHECK([test $adds = $deletes])
+
+# Check that the flow monitor reported everything in the expected order.
+AT_CHECK([ofctl_strip < monitor.log | sed -n -e '
+/reg1=0x22\b/p
+/cookie=0x[[23]]/p
+/NXT_FLOW_MONITOR_PAUSED:/p
+/NXT_FLOW_MONITOR_RESUMED:/p
+'], [0],
+[ event=ADDED table=0 cookie=0x1 reg1=0x22
+NXT_FLOW_MONITOR_PAUSED:
+ event=DELETED reason=delete table=0 cookie=0x1 reg1=0x22
+ event=ADDED table=0 cookie=0x3 in_port=1
+ event=MODIFIED table=0 cookie=0x2 in_port=2 actions=output:2
+NXT_FLOW_MONITOR_RESUMED:
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP

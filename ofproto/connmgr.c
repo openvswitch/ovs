@@ -88,6 +88,13 @@ struct ofconn {
      * that the message might be generated, a 0-bit disables it. */
     uint32_t master_async_config[OAM_N_TYPES]; /* master, other */
     uint32_t slave_async_config[OAM_N_TYPES];  /* slave */
+
+    /* Flow monitors. */
+    struct hmap monitors;       /* Contains "struct ofmonitor"s. */
+    struct list updates;        /* List of "struct ofpbuf"s. */
+    bool sent_abbrev_update;    /* Does 'updates' contain NXFME_ABBREV? */
+    struct rconn_packet_counter *monitor_counter;
+    uint64_t monitor_paused;
 };
 
 static struct ofconn *ofconn_create(struct connmgr *, struct rconn *,
@@ -162,6 +169,8 @@ struct connmgr {
 
 static void update_in_band_remotes(struct connmgr *);
 static void add_snooper(struct connmgr *, struct vconn *);
+static void ofmonitor_run(struct connmgr *);
+static void ofmonitor_wait(struct connmgr *);
 
 /* Creates and returns a new connection manager owned by 'ofproto'.  'name' is
  * a name for the ofproto suitable for using in log messages.
@@ -267,6 +276,7 @@ connmgr_run(struct connmgr *mgr,
     LIST_FOR_EACH_SAFE (ofconn, next_ofconn, node, &mgr->all_conns) {
         ofconn_run(ofconn, handle_openflow);
     }
+    ofmonitor_run(mgr);
 
     /* Fail-open maintenance.  Do this after processing the ofconns since
      * fail-open checks the status of the controller rconn. */
@@ -326,6 +336,7 @@ connmgr_wait(struct connmgr *mgr, bool handling_openflow)
     LIST_FOR_EACH (ofconn, node, &mgr->all_conns) {
         ofconn_wait(ofconn, handling_openflow);
     }
+    ofmonitor_wait(mgr);
     if (handling_openflow && mgr->in_band) {
         in_band_wait(mgr->in_band);
     }
@@ -1002,6 +1013,9 @@ ofconn_create(struct connmgr *mgr, struct rconn *rconn, enum ofconn_type type,
 
     list_init(&ofconn->opgroups);
 
+    hmap_init(&ofconn->monitors);
+    list_init(&ofconn->updates);
+
     ofconn_flush(ofconn);
 
     return ofconn;
@@ -1012,6 +1026,7 @@ ofconn_create(struct connmgr *mgr, struct rconn *rconn, enum ofconn_type type,
 static void
 ofconn_flush(struct ofconn *ofconn)
 {
+    struct ofmonitor *monitor, *next_monitor;
     int i;
 
     ofconn->role = NX_ROLE_OTHER;
@@ -1080,6 +1095,14 @@ ofconn_flush(struct ofconn *ofconn)
         memset(ofconn->slave_async_config, 0,
                sizeof ofconn->slave_async_config);
     }
+
+    HMAP_FOR_EACH_SAFE (monitor, next_monitor, ofconn_node,
+                        &ofconn->monitors) {
+        ofmonitor_destroy(monitor);
+    }
+    rconn_packet_counter_destroy(ofconn->monitor_counter);
+    ofconn->monitor_counter = rconn_packet_counter_create();
+    ofpbuf_list_delete(&ofconn->updates); /* ...but it should be empty. */
 }
 
 static void
@@ -1096,6 +1119,7 @@ ofconn_destroy(struct ofconn *ofconn)
     rconn_packet_counter_destroy(ofconn->packet_in_counter);
     rconn_packet_counter_destroy(ofconn->reply_counter);
     pktbuf_destroy(ofconn->pktbuf);
+    rconn_packet_counter_destroy(ofconn->monitor_counter);
     free(ofconn);
 }
 
@@ -1645,4 +1669,240 @@ ofservice_lookup(struct connmgr *mgr, const char *target)
         }
     }
     return NULL;
+}
+
+/* Flow monitors (NXST_FLOW_MONITOR). */
+
+/* A counter incremented when something significant happens to an OpenFlow
+ * rule.
+ *
+ *     - When a rule is added, its 'add_seqno' and 'modify_seqno' are set to
+ *       the current value (which is then incremented).
+ *
+ *     - When a rule is modified, its 'modify_seqno' is set to the current
+ *       value (which is then incremented).
+ *
+ * Thus, by comparing an old value of monitor_seqno against a rule's
+ * 'add_seqno', one can tell whether the rule was added before or after the old
+ * value was read, and similarly for 'modify_seqno'.
+ *
+ * 32 bits should normally be sufficient (and would be nice, to save space in
+ * each rule) but then we'd have to have some special cases for wraparound.
+ *
+ * We initialize monitor_seqno to 1 to allow 0 to be used as an invalid
+ * value. */
+static uint64_t monitor_seqno = 1;
+
+COVERAGE_DEFINE(ofmonitor_pause);
+COVERAGE_DEFINE(ofmonitor_resume);
+
+enum ofperr
+ofmonitor_create(const struct ofputil_flow_monitor_request *request,
+                 struct ofconn *ofconn, struct ofmonitor **monitorp)
+{
+    struct ofmonitor *m;
+
+    *monitorp = NULL;
+
+    m = ofmonitor_lookup(ofconn, request->id);
+    if (m) {
+        return OFPERR_NXBRC_FM_DUPLICATE_ID;
+    }
+
+    m = xmalloc(sizeof *m);
+    m->ofconn = ofconn;
+    hmap_insert(&ofconn->monitors, &m->ofconn_node, hash_int(request->id, 0));
+    m->id = request->id;
+    m->flags = request->flags;
+    m->out_port = request->out_port;
+    m->table_id = request->table_id;
+    m->match = request->match;
+
+    *monitorp = m;
+    return 0;
+}
+
+struct ofmonitor *
+ofmonitor_lookup(struct ofconn *ofconn, uint32_t id)
+{
+    struct ofmonitor *m;
+
+    HMAP_FOR_EACH_IN_BUCKET (m, ofconn_node, hash_int(id, 0),
+                             &ofconn->monitors) {
+        if (m->id == id) {
+            return m;
+        }
+    }
+    return NULL;
+}
+
+void
+ofmonitor_destroy(struct ofmonitor *m)
+{
+    if (m) {
+        hmap_remove(&m->ofconn->monitors, &m->ofconn_node);
+        free(m);
+    }
+}
+
+void
+ofmonitor_report(struct connmgr *mgr, struct rule *rule,
+                 enum nx_flow_update_event event,
+                 enum ofp_flow_removed_reason reason,
+                 const struct ofconn *abbrev_ofconn, ovs_be32 abbrev_xid)
+{
+    enum nx_flow_monitor_flags update;
+    struct ofconn *ofconn;
+
+    switch (event) {
+    case NXFME_ADDED:
+        update = NXFMF_ADD;
+        rule->add_seqno = rule->modify_seqno = monitor_seqno++;
+        break;
+
+    case NXFME_DELETED:
+        update = NXFMF_DELETE;
+        break;
+
+    case NXFME_MODIFIED:
+        update = NXFMF_MODIFY;
+        rule->modify_seqno = monitor_seqno++;
+        break;
+
+    default:
+    case NXFME_ABBREV:
+        NOT_REACHED();
+    }
+
+    LIST_FOR_EACH (ofconn, node, &mgr->all_conns) {
+        enum nx_flow_monitor_flags flags = 0;
+        struct ofmonitor *m;
+
+        if (ofconn->monitor_paused) {
+            /* Only send NXFME_DELETED notifications for flows that were added
+             * before we paused. */
+            if (event != NXFME_DELETED
+                || rule->add_seqno > ofconn->monitor_paused) {
+                continue;
+            }
+        }
+
+        HMAP_FOR_EACH (m, ofconn_node, &ofconn->monitors) {
+            if (m->flags & update
+                && (m->table_id == 0xff || m->table_id == rule->table_id)
+                && ofoperation_has_out_port(rule->pending, m->out_port)
+                && cls_rule_is_loose_match(&rule->cr, &m->match)) {
+                flags |= m->flags;
+            }
+        }
+
+        if (flags) {
+            if (list_is_empty(&ofconn->updates)) {
+                ofputil_start_flow_update(&ofconn->updates);
+                ofconn->sent_abbrev_update = false;
+            }
+
+            if (ofconn != abbrev_ofconn || ofconn->monitor_paused) {
+                struct ofputil_flow_update fu;
+
+                fu.event = event;
+                fu.reason = event == NXFME_DELETED ? reason : 0;
+                fu.idle_timeout = rule->idle_timeout;
+                fu.hard_timeout = rule->hard_timeout;
+                fu.table_id = rule->table_id;
+                fu.cookie = rule->flow_cookie;
+                fu.match = &rule->cr;
+                if (flags & NXFMF_ACTIONS) {
+                    fu.ofpacts = rule->ofpacts;
+                    fu.ofpacts_len = rule->ofpacts_len;
+                } else {
+                    fu.ofpacts = NULL;
+                    fu.ofpacts_len = 0;
+                }
+                ofputil_append_flow_update(&fu, &ofconn->updates);
+            } else if (!ofconn->sent_abbrev_update) {
+                struct ofputil_flow_update fu;
+
+                fu.event = NXFME_ABBREV;
+                fu.xid = abbrev_xid;
+                ofputil_append_flow_update(&fu, &ofconn->updates);
+
+                ofconn->sent_abbrev_update = true;
+            }
+        }
+    }
+}
+
+void
+ofmonitor_flush(struct connmgr *mgr)
+{
+    struct ofconn *ofconn;
+
+    LIST_FOR_EACH (ofconn, node, &mgr->all_conns) {
+        struct ofpbuf *msg, *next;
+
+        LIST_FOR_EACH_SAFE (msg, next, list_node, &ofconn->updates) {
+            list_remove(&msg->list_node);
+            ofconn_send(ofconn, msg, ofconn->monitor_counter);
+            if (!ofconn->monitor_paused
+                && ofconn->monitor_counter->n_bytes > 128 * 1024) {
+                struct ofpbuf *pause;
+
+                COVERAGE_INC(ofmonitor_pause);
+                ofconn->monitor_paused = monitor_seqno++;
+                make_nxmsg_xid(sizeof(struct nicira_header),
+                               NXT_FLOW_MONITOR_PAUSED, htonl(0), &pause);
+                ofconn_send(ofconn, pause, ofconn->monitor_counter);
+            }
+        }
+    }
+}
+
+static void
+ofmonitor_resume(struct ofconn *ofconn)
+{
+    struct ofpbuf *resume;
+    struct ofmonitor *m;
+    struct list rules;
+    struct list msgs;
+
+    list_init(&rules);
+    HMAP_FOR_EACH (m, ofconn_node, &ofconn->monitors) {
+        ofmonitor_collect_resume_rules(m, ofconn->monitor_paused, &rules);
+    }
+
+    list_init(&msgs);
+    ofmonitor_compose_refresh_updates(&rules, &msgs);
+
+    make_nxmsg_xid(sizeof(struct nicira_header),
+                   NXT_FLOW_MONITOR_RESUMED, htonl(0), &resume);
+    list_push_back(&msgs, &resume->list_node);
+    ofconn_send_replies(ofconn, &msgs);
+
+    ofconn->monitor_paused = 0;
+}
+
+static void
+ofmonitor_run(struct connmgr *mgr)
+{
+    struct ofconn *ofconn;
+
+    LIST_FOR_EACH (ofconn, node, &mgr->all_conns) {
+        if (ofconn->monitor_paused && !ofconn->monitor_counter->n_packets) {
+            COVERAGE_INC(ofmonitor_resume);
+            ofmonitor_resume(ofconn);
+        }
+    }
+}
+
+static void
+ofmonitor_wait(struct connmgr *mgr)
+{
+    struct ofconn *ofconn;
+
+    LIST_FOR_EACH (ofconn, node, &mgr->all_conns) {
+        if (ofconn->monitor_paused && !ofconn->monitor_counter->n_packets) {
+            poll_immediate_wake();
+        }
+    }
 }

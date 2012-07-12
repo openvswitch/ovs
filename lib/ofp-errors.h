@@ -129,6 +129,20 @@ enum ofperr {
      * valid. */
     OFPERR_NXBRC_BAD_REASON,
 
+    /* NX1.0+(1,517).  The 'id' in an NXST_FLOW_MONITOR request is the same as
+     * an existing monitor id (or two monitors in the same NXST_FLOW_MONITOR
+     * request have the same 'id').  */
+    OFPERR_NXBRC_FM_DUPLICATE_ID,
+
+    /* NX1.0+(1,518).  The 'flags' in an NXST_FLOW_MONITOR request either does
+     * not specify at least one of the NXFMF_ADD, NXFMF_DELETE, or NXFMF_MODIFY
+     * flags, or specifies a flag bit that is not defined. */
+    OFPERR_NXBRC_FM_BAD_FLAGS,
+
+    /* NX1.0+(1,519).  The 'id' in an NXT_FLOW_MONITOR_CANCEL request is not
+     * the id of any existing monitor. */
+    OFPERR_NXBRC_FM_BAD_ID,
+
 /* ## ---------------- ## */
 /* ## OFPET_BAD_ACTION ## */
 /* ## ---------------- ## */
@@ -468,7 +482,6 @@ enum ofperr {
 
     /* NX1.0(1,513), NX1.1(1,513), OF1.2+(11,2).  Invalid role. */
     OFPERR_OFPRRFC_BAD_ROLE,
-
 
 /* ## ------------------ ## */
 /* ## OFPET_EXPERIMENTER ## */

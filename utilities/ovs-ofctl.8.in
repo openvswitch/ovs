@@ -282,7 +282,7 @@ If a switch has no controller configured, or if
 the configured controller is disconnected, no traffic is sent, so
 monitoring will not show any traffic.
 .
-.IP "\fBmonitor \fIswitch\fR [\fImiss-len\fR] [\fBinvalid_ttl\fR]"
+.IP "\fBmonitor \fIswitch\fR [\fImiss-len\fR] [\fBinvalid_ttl\fR] [\fBwatch:\fR[\fIspec\fR...]]"
 Connects to \fIswitch\fR and prints to the console all OpenFlow
 messages received.  Usually, \fIswitch\fR should specify the name of a
 bridge in the \fBovs\-vswitchd\fR database.
@@ -295,15 +295,46 @@ does not send these and other asynchronous messages to an
 specified on this argument.  (Thus, if \fImiss\-len\fR is not
 specified, very little traffic will ordinarily be printed.)
 .IP
-.IP
 If \fBinvalid_ttl\fR is passed, \fBovs\-ofctl\fR sends an OpenFlow ``set
 configuration'' message at connection setup time that requests
 \fBINVALID_TTL_TO_CONTROLLER\fR, so that \fBovs\-ofctl monitor\fR can
 receive ``packet-in'' messages when TTL reaches zero on \fBdec_ttl\fR action.
 .IP
-
+\fBwatch:\fR[\fB\fIspec\fR...] causes \fBovs\-ofctl\fR to send a
+``monitor request'' Nicira extension message to the switch at
+connection setup time.  This message causes the switch to send
+information about flow table changes as they occur.  The following
+comma-separated \fIspec\fR syntax is available:
+.RS
+.IP "\fB!initial\fR"
+Do not report the switch's initial flow table contents.
+.IP "\fB!add\fR"
+Do not report newly added flows.
+.IP "\fB!delete\fR"
+Do not report deleted flows.
+.IP "\fB!modify\fR"
+Do not report modifications to existing flows.
+.IP "\fB!own\fR"
+Abbreviate changes made to the flow table by \fBovs\-ofctl\fR's own
+connection to the switch.  (These could only occur using the
+\fBofctl/send\fR command described below under \fBRUNTIME MANAGEMENT
+COMMANDS\fR.)
+.IP "\fB!actions\fR"
+Do not report actions as part of flow updates.
+.IP "\fBtable=\fInumber\fR"
+Limits the monitoring to the table with the given \fInumber\fR between
+0 and 254.  By default, all tables are monitored.
+.IP "\fBout_port=\fIport\fR"
+If set, only flows that output to \fIport\fR are monitored.
+.IP "\fIfield\fB=\fIvalue\fR"
+Monitors only flows that have \fIfield\fR specified as the given
+\fIvalue\fR.  Any syntax valid for matching on \fBdump\-flows\fR may
+be used.
+.RE
+.IP
 This command may be useful for debugging switch or controller
-implementations.
+implementations.  With \fBwatch:\fR, it is particularly useful for
+observing how a controller updates flow tables.
 .
 .SS "OpenFlow Switch and Controller Commands"
 .

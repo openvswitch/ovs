@@ -86,14 +86,19 @@ enum ofputil_msg_code {
     OFPUTIL_NXT_FLOW_AGE,
     OFPUTIL_NXT_SET_ASYNC_CONFIG,
     OFPUTIL_NXT_SET_CONTROLLER_ID,
+    OFPUTIL_NXT_FLOW_MONITOR_CANCEL,
+    OFPUTIL_NXT_FLOW_MONITOR_PAUSED,
+    OFPUTIL_NXT_FLOW_MONITOR_RESUMED,
 
     /* NXST_* stat requests. */
     OFPUTIL_NXST_FLOW_REQUEST,
     OFPUTIL_NXST_AGGREGATE_REQUEST,
+    OFPUTIL_NXST_FLOW_MONITOR_REQUEST,
 
     /* NXST_* stat replies. */
     OFPUTIL_NXST_FLOW_REPLY,
-    OFPUTIL_NXST_AGGREGATE_REPLY
+    OFPUTIL_NXST_AGGREGATE_REPLY,
+    OFPUTIL_NXST_FLOW_MONITOR_REPLY,
 };
 
 struct ofputil_msg_type;
@@ -505,6 +510,48 @@ enum ofperr ofputil_decode_port_mod(const struct ofp_header *,
                                     struct ofputil_port_mod *);
 struct ofpbuf *ofputil_encode_port_mod(const struct ofputil_port_mod *,
                                        enum ofputil_protocol);
+
+/* Abstract nx_flow_monitor_request. */
+struct ofputil_flow_monitor_request {
+    uint32_t id;
+    enum nx_flow_monitor_flags flags;
+    uint16_t out_port;
+    uint8_t table_id;
+    struct cls_rule match;
+};
+
+int ofputil_decode_flow_monitor_request(struct ofputil_flow_monitor_request *,
+                                        struct ofpbuf *msg);
+void ofputil_append_flow_monitor_request(
+    const struct ofputil_flow_monitor_request *, struct ofpbuf *msg);
+
+/* Abstract nx_flow_update. */
+struct ofputil_flow_update {
+    enum nx_flow_update_event event;
+
+    /* Used only for NXFME_ADDED, NXFME_DELETED, NXFME_MODIFIED. */
+    enum ofp_flow_removed_reason reason;
+    uint16_t idle_timeout;
+    uint16_t hard_timeout;
+    uint8_t table_id;
+    ovs_be64 cookie;
+    struct cls_rule *match;
+    struct ofpact *ofpacts;
+    size_t ofpacts_len;
+
+    /* Used only for NXFME_ABBREV. */
+    ovs_be32 xid;
+};
+
+int ofputil_decode_flow_update(struct ofputil_flow_update *,
+                               struct ofpbuf *msg, struct ofpbuf *ofpacts);
+void ofputil_start_flow_update(struct list *replies);
+void ofputil_append_flow_update(const struct ofputil_flow_update *,
+                                struct list *replies);
+
+/* Abstract nx_flow_monitor_cancel. */
+uint32_t ofputil_decode_flow_monitor_cancel(const struct ofp_header *);
+struct ofpbuf *ofputil_encode_flow_monitor_cancel(uint32_t id);
 
 /* OpenFlow protocol utility functions. */
 void *make_openflow(size_t openflow_len, uint8_t type, struct ofpbuf **);
