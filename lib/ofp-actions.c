@@ -434,6 +434,21 @@ action_is_valid(const union ofp_action *a, size_t n_actions)
          ((LEFT) -= ntohs((ITER)->header.len) / sizeof(union ofp_action), \
           (ITER) = action_next(ITER)))
 
+static void
+log_bad_action(const union ofp_action *actions, size_t n_actions, size_t ofs,
+               enum ofperr error)
+{
+    if (!VLOG_DROP_WARN(&rl)) {
+        struct ds s;
+
+        ds_init(&s);
+        ds_put_hex_dump(&s, actions, n_actions * sizeof *actions, 0, false);
+        VLOG_WARN("bad action at offset %#zx (%s):\n%s",
+                  ofs * sizeof *actions, ofperr_get_name(error), ds_cstr(&s));
+        ds_destroy(&s);
+    }
+}
+
 static enum ofperr
 ofpacts_from_openflow10(const union ofp_action *in, size_t n_in,
                         struct ofpbuf *out)
@@ -444,22 +459,14 @@ ofpacts_from_openflow10(const union ofp_action *in, size_t n_in,
     ACTION_FOR_EACH (a, left, in, n_in) {
         enum ofperr error = ofpact_from_openflow10(a, out);
         if (error) {
-            VLOG_WARN_RL(&rl, "bad action at offset %td (%s)",
-                         (a - in) * sizeof *a, ofperr_get_name(error));
+            log_bad_action(in, n_in, a - in, error);
             return error;
         }
     }
     if (left) {
-        if (!VLOG_DROP_WARN(&rl)) {
-            struct ds s;
-
-            ds_init(&s);
-            ds_put_hex_dump(&s, in, n_in * sizeof *a, 0, false);
-            VLOG_WARN("bad action format at offset %#zx:\n%s",
-                      (n_in - left) * sizeof *a, ds_cstr(&s));
-            ds_destroy(&s);
-        }
-        return OFPERR_OFPBAC_BAD_LEN;
+        enum ofperr error = OFPERR_OFPBAC_BAD_LEN;
+        log_bad_action(in, n_in, n_in - left, error);
+        return error;
     }
 
     ofpact_pad(out);
