@@ -118,9 +118,14 @@ struct ofoperation {
     struct hmap_node hmap_node; /* In ofproto's "deletions" hmap. */
     struct rule *rule;          /* Rule being operated upon. */
     enum ofoperation_type type; /* Type of operation. */
-    struct rule *victim;        /* OFOPERATION_ADD: Replaced rule. */
-    struct ofpact *ofpacts;     /* OFOPERATION_MODIFY: Replaced actions. */
-    size_t ofpacts_len;         /* OFOPERATION_MODIFY: Bytes of ofpacts. */
+
+    /* OFOPERATION_ADD. */
+    struct rule *victim;        /* Rule being replaced, if any.. */
+
+    /* OFOPERATION_MODIFY: The old actions, if the actions are changing. */
+    struct ofpact *ofpacts;
+    size_t ofpacts_len;
+
     ovs_be64 flow_cookie;       /* Rule's old flow cookie. */
     enum ofperr error;          /* 0 if no error. */
 };
@@ -2924,6 +2929,10 @@ modify_flows__(struct ofproto *ofproto, struct ofconn *ofconn,
     group = ofopgroup_create(ofproto, ofconn, request, fm->buffer_id);
     error = OFPERR_OFPBRC_EPERM;
     LIST_FOR_EACH (rule, ofproto_node, rules) {
+        struct ofoperation *op;
+        bool actions_changed;
+        ovs_be64 new_cookie;
+
         if (rule_is_modifiable(rule)) {
             /* At least one rule is modifiable, don't report EPERM error. */
             error = 0;
@@ -2931,21 +2940,26 @@ modify_flows__(struct ofproto *ofproto, struct ofconn *ofconn,
             continue;
         }
 
-        if (!ofpacts_equal(fm->ofpacts, fm->ofpacts_len,
-                           rule->ofpacts, rule->ofpacts_len)) {
-            struct ofoperation *op;
+        actions_changed = !ofpacts_equal(fm->ofpacts, fm->ofpacts_len,
+                                         rule->ofpacts, rule->ofpacts_len);
+        new_cookie = (fm->new_cookie != htonll(UINT64_MAX)
+                      ? fm->new_cookie
+                      : rule->flow_cookie);
+        if (!actions_changed && new_cookie == rule->flow_cookie) {
+            /* No change at all. */
+            continue;
+        }
 
-            op = ofoperation_create(group, rule, OFOPERATION_MODIFY);
+        op = ofoperation_create(group, rule, OFOPERATION_MODIFY);
+        rule->flow_cookie = new_cookie;
+        if (actions_changed) {
             op->ofpacts = rule->ofpacts;
             op->ofpacts_len = rule->ofpacts_len;
             rule->ofpacts = xmemdup(fm->ofpacts, fm->ofpacts_len);
             rule->ofpacts_len = fm->ofpacts_len;
             rule->ofproto->ofproto_class->rule_modify_actions(rule);
         } else {
-            rule->modified = time_msec();
-        }
-        if (fm->new_cookie != htonll(UINT64_MAX)) {
-            rule->flow_cookie = fm->new_cookie;
+            ofoperation_complete(op, 0);
         }
     }
     ofopgroup_submit(group);
@@ -3651,11 +3665,13 @@ ofopgroup_complete(struct ofopgroup *group)
                 rule->modified = time_msec();
             } else {
                 rule->flow_cookie = op->flow_cookie;
-                free(rule->ofpacts);
-                rule->ofpacts = op->ofpacts;
-                rule->ofpacts_len = op->ofpacts_len;
-                op->ofpacts = NULL;
-                op->ofpacts_len = 0;
+                if (op->ofpacts) {
+                    free(rule->ofpacts);
+                    rule->ofpacts = op->ofpacts;
+                    rule->ofpacts_len = op->ofpacts_len;
+                    op->ofpacts = NULL;
+                    op->ofpacts_len = 0;
+                }
             }
             break;
 
