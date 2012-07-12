@@ -32,7 +32,7 @@ struct nlattr;
 struct ofpbuf;
 struct simap;
 
-#define OVSP_NONE ((uint16_t) -1)
+#define OVSP_NONE UINT16_MAX
 
 static inline uint16_t
 ofp_port_to_odp_port(uint16_t ofp_port)
