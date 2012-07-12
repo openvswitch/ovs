@@ -247,6 +247,7 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
   OVS_GREP_IFELSE([$KSRC/include/linux/skbuff.h], [skb_warn_if_lro],
                   [OVS_DEFINE([HAVE_SKB_WARN_LRO])])
   OVS_GREP_IFELSE([$KSRC/include/linux/skbuff.h], [consume_skb])
+  OVS_GREP_IFELSE([$KSRC/include/linux/skbuff.h], [skb_frag_page])
 
   OVS_GREP_IFELSE([$KSRC/include/linux/string.h], [kmemdup], [],
                   [OVS_GREP_IFELSE([$KSRC/include/linux/slab.h], [kmemdup])])
