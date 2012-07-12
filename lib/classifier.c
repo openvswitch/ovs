@@ -934,6 +934,47 @@ classifier_rule_overlaps(const struct classifier *cls,
 
     return false;
 }
+
+/* Returns true if 'rule' exactly matches 'criteria' or if 'rule' is more
+ * specific than 'criteria'.  That is, 'rule' matches 'criteria' and this
+ * function returns true if, for every field:
+ *
+ *   - 'criteria' and 'rule' specify the same (non-wildcarded) value for the
+ *     field, or
+ *
+ *   - 'criteria' wildcards the field,
+ *
+ * Conversely, 'rule' does not match 'criteria' and this function returns false
+ * if, for at least one field:
+ *
+ *   - 'criteria' and 'rule' specify different values for the field, or
+ *
+ *   - 'criteria' specifies a value for the field but 'rule' wildcards it.
+ *
+ * Equivalently, the truth table for whether a field matches is:
+ *
+ *                                     rule
+ *
+ *                   c         wildcard    exact
+ *                   r        +---------+---------+
+ *                   i   wild |   yes   |   yes   |
+ *                   t   card |         |         |
+ *                   e        +---------+---------+
+ *                   r  exact |    no   |if values|
+ *                   i        |         |are equal|
+ *                   a        +---------+---------+
+ *
+ * This is the matching rule used by OpenFlow 1.0 non-strict OFPT_FLOW_MOD
+ * commands and by OpenFlow 1.0 aggregate and flow stats.
+ *
+ * Ignores rule->priority and criteria->priority. */
+bool
+cls_rule_is_loose_match(const struct cls_rule *rule,
+                        const struct cls_rule *criteria)
+{
+    return (!flow_wildcards_has_extra(&rule->wc, &criteria->wc)
+            && flow_equal_except(&rule->flow, &criteria->flow, &criteria->wc));
+}
 
 /* Iteration. */
 
@@ -959,40 +1000,14 @@ search_table(const struct cls_table *table, const struct cls_rule *target)
     return NULL;
 }
 
-/* Initializes 'cursor' for iterating through 'cls' rules that exactly match
- * 'target' or are more specific than 'target'.  That is, a given 'rule'
- * matches 'target' if, for every field:
+/* Initializes 'cursor' for iterating through rules in 'cls':
  *
- *   - 'target' and 'rule' specify the same (non-wildcarded) value for the
- *     field, or
+ *     - If 'target' is null, the cursor will visit every rule in 'cls'.
  *
- *   - 'target' wildcards the field,
+ *     - If 'target' is nonnull, the cursor will visit each 'rule' in 'cls'
+ *       such that cls_rule_is_loose_match(rule, target) returns true.
  *
- * but not if:
- *
- *   - 'target' and 'rule' specify different values for the field, or
- *
- *   - 'target' specifies a value for the field but 'rule' wildcards it.
- *
- * Equivalently, the truth table for whether a field matches is:
- *
- *                                     rule
- *
- *                             wildcard    exact
- *                            +---------+---------+
- *                   t   wild |   yes   |   yes   |
- *                   a   card |         |         |
- *                   r        +---------+---------+
- *                   g  exact |    no   |if values|
- *                   e        |         |are equal|
- *                   t        +---------+---------+
- *
- * This is the matching rule used by OpenFlow 1.0 non-strict OFPT_FLOW_MOD
- * commands and by OpenFlow 1.0 aggregate and flow stats.
- *
- * Ignores target->priority.
- *
- * 'target' may be NULL to iterate over every rule in 'cls'. */
+ * Ignores target->priority. */
 void
 cls_cursor_init(struct cls_cursor *cursor, const struct classifier *cls,
                 const struct cls_rule *target)
