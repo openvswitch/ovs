@@ -972,6 +972,37 @@ ofp_print_flow_stats_request(struct ds *string,
     cls_rule_format(&fsr.match, string);
 }
 
+void
+ofp_print_flow_stats(struct ds *string, struct ofputil_flow_stats *fs)
+{
+    ds_put_format(string, " cookie=0x%"PRIx64", duration=",
+                  ntohll(fs->cookie));
+
+    ofp_print_duration(string, fs->duration_sec, fs->duration_nsec);
+    ds_put_format(string, ", table=%"PRIu8", ", fs->table_id);
+    ds_put_format(string, "n_packets=%"PRIu64", ", fs->packet_count);
+    ds_put_format(string, "n_bytes=%"PRIu64", ", fs->byte_count);
+    if (fs->idle_timeout != OFP_FLOW_PERMANENT) {
+        ds_put_format(string, "idle_timeout=%"PRIu16", ", fs->idle_timeout);
+    }
+    if (fs->hard_timeout != OFP_FLOW_PERMANENT) {
+        ds_put_format(string, "hard_timeout=%"PRIu16", ", fs->hard_timeout);
+    }
+    if (fs->idle_age >= 0) {
+        ds_put_format(string, "idle_age=%d, ", fs->idle_age);
+    }
+    if (fs->hard_age >= 0 && fs->hard_age != fs->duration_sec) {
+        ds_put_format(string, "hard_age=%d, ", fs->hard_age);
+    }
+
+    cls_rule_format(&fs->rule, string);
+    if (string->string[string->length - 1] != ' ') {
+        ds_put_char(string, ' ');
+    }
+
+    ofpacts_format(fs->ofpacts, fs->ofpacts_len, string);
+}
+
 static void
 ofp_print_flow_stats_reply(struct ds *string, const struct ofp_header *oh)
 {
@@ -991,35 +1022,9 @@ ofp_print_flow_stats_reply(struct ds *string, const struct ofp_header *oh)
             }
             break;
         }
-
         ds_put_char(string, '\n');
-
-        ds_put_format(string, " cookie=0x%"PRIx64", duration=",
-                      ntohll(fs.cookie));
-        ofp_print_duration(string, fs.duration_sec, fs.duration_nsec);
-        ds_put_format(string, ", table=%"PRIu8", ", fs.table_id);
-        ds_put_format(string, "n_packets=%"PRIu64", ", fs.packet_count);
-        ds_put_format(string, "n_bytes=%"PRIu64", ", fs.byte_count);
-        if (fs.idle_timeout != OFP_FLOW_PERMANENT) {
-            ds_put_format(string, "idle_timeout=%"PRIu16", ", fs.idle_timeout);
-        }
-        if (fs.hard_timeout != OFP_FLOW_PERMANENT) {
-            ds_put_format(string, "hard_timeout=%"PRIu16", ", fs.hard_timeout);
-        }
-        if (fs.idle_age >= 0) {
-            ds_put_format(string, "idle_age=%d, ", fs.idle_age);
-        }
-        if (fs.hard_age >= 0 && fs.hard_age != fs.duration_sec) {
-            ds_put_format(string, "hard_age=%d, ", fs.hard_age);
-        }
-
-        cls_rule_format(&fs.rule, string);
-        if (string->string[string->length - 1] != ' ') {
-            ds_put_char(string, ' ');
-        }
-        ofpacts_format(fs.ofpacts, fs.ofpacts_len, string);
-    }
-    ofpbuf_uninit(&ofpacts);
+        ofp_print_flow_stats(string, &fs);
+     }
 }
 
 static void
@@ -1354,15 +1359,10 @@ ofp_print_nxt_set_controller_id(struct ds *string,
     ds_put_format(string, " id=%"PRIu16, ntohs(nci->controller_id));
 }
 
-static void
-ofp_to_string__(const struct ofp_header *oh,
-                const struct ofputil_msg_type *type, struct ds *string,
-                int verbosity)
+void
+ofp_print_version(const struct ofp_header *oh,
+                  struct ds *string)
 {
-    enum ofputil_msg_code code;
-    const void *msg = oh;
-
-    ds_put_cstr(string, ofputil_msg_type_name(type));
     switch (oh->version) {
     case OFP10_VERSION:
         break;
@@ -1377,7 +1377,18 @@ ofp_to_string__(const struct ofp_header *oh,
         break;
     }
     ds_put_format(string, " (xid=0x%"PRIx32"):", ntohl(oh->xid));
+}
 
+static void
+ofp_to_string__(const struct ofp_header *oh,
+                const struct ofputil_msg_type *type, struct ds *string,
+                int verbosity)
+{
+    enum ofputil_msg_code code;
+    const void *msg = oh;
+
+    ds_put_cstr(string, ofputil_msg_type_name(type));
+    ofp_print_version(oh, string);
     code = ofputil_msg_type_code(type);
     switch (code) {
     case OFPUTIL_MSG_INVALID:

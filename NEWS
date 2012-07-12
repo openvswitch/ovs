@@ -8,6 +8,7 @@ post-v1.7.0
         - A new test utility that can create L3 tunnel between two Open
           vSwitches and detect connectivity issues.
     - ovs-ofctl:
+        - New --sort and --rsort options for "dump-flows" command.
         - "mod-port" command can now control all OpenFlow config flags.
     - OpenFlow:
       - Allow general bitwise masking for IPv4 and IPv6 addresses in

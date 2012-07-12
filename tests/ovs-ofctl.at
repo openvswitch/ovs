@@ -1357,3 +1357,92 @@ ofp_util|INFO|post: @&t@
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+dnl Check that --sort and --rsort works with dump-flows
+dnl Default field is 'priority'. Flow entries are displayed based
+dnl on field to sort.
+AT_SETUP([ovs-ofctl dump-flows with sorting])
+OVS_VSWITCHD_START
+AT_KEYWORDS([sort])
+AT_DATA([allflows.txt], [[
+priority=4,in_port=23213 actions=output:42
+priority=5,in_port=1029 actions=output:43
+priority=7,in_port=1029 actions=output:43
+priority=3,in_port=1028 actions=output:44
+priority=1,in_port=1026 actions=output:45
+priority=6,in_port=1027 actions=output:64
+priority=2,in_port=1025 actions=output:47
+priority=8,tcp,tp_src=5 actions=drop
+priority=9,tcp,tp_src=6 actions=drop
+]])
+
+AT_CHECK([ovs-ofctl add-flows br0 allflows.txt
+], [0], [ignore])
+AT_CHECK([ovs-ofctl --sort dump-flows br0 | ofctl_strip], [0], [dnl
+ priority=1,in_port=1026 actions=output:45
+ priority=2,in_port=1025 actions=output:47
+ priority=3,in_port=1028 actions=output:44
+ priority=4,in_port=23213 actions=output:42
+ priority=5,in_port=1029 actions=output:43
+ priority=6,in_port=1027 actions=output:64
+ priority=7,in_port=1029 actions=output:43
+ priority=8,tcp,tp_src=5 actions=drop
+ priority=9,tcp,tp_src=6 actions=drop
+])
+AT_CHECK([ovs-ofctl --rsort dump-flows br0 | ofctl_strip], [0], [dnl
+ priority=9,tcp,tp_src=6 actions=drop
+ priority=8,tcp,tp_src=5 actions=drop
+ priority=7,in_port=1029 actions=output:43
+ priority=6,in_port=1027 actions=output:64
+ priority=5,in_port=1029 actions=output:43
+ priority=4,in_port=23213 actions=output:42
+ priority=3,in_port=1028 actions=output:44
+ priority=2,in_port=1025 actions=output:47
+ priority=1,in_port=1026 actions=output:45
+])
+AT_CHECK([ovs-ofctl --sort=in_port dump-flows br0 | ofctl_strip], [0], [dnl
+ priority=2,in_port=1025 actions=output:47
+ priority=1,in_port=1026 actions=output:45
+ priority=6,in_port=1027 actions=output:64
+ priority=3,in_port=1028 actions=output:44
+ priority=7,in_port=1029 actions=output:43
+ priority=5,in_port=1029 actions=output:43
+ priority=4,in_port=23213 actions=output:42
+ priority=9,tcp,tp_src=6 actions=drop
+ priority=8,tcp,tp_src=5 actions=drop
+])
+AT_CHECK([ovs-ofctl --rsort=in_port dump-flows br0 | ofctl_strip], [0], [dnl
+ priority=4,in_port=23213 actions=output:42
+ priority=7,in_port=1029 actions=output:43
+ priority=5,in_port=1029 actions=output:43
+ priority=3,in_port=1028 actions=output:44
+ priority=6,in_port=1027 actions=output:64
+ priority=1,in_port=1026 actions=output:45
+ priority=2,in_port=1025 actions=output:47
+ priority=9,tcp,tp_src=6 actions=drop
+ priority=8,tcp,tp_src=5 actions=drop
+])
+AT_CHECK([ovs-ofctl --sort=tcp_src dump-flows br0 | ofctl_strip], [0], [dnl
+ priority=8,tcp,tp_src=5 actions=drop
+ priority=9,tcp,tp_src=6 actions=drop
+ priority=7,in_port=1029 actions=output:43
+ priority=6,in_port=1027 actions=output:64
+ priority=5,in_port=1029 actions=output:43
+ priority=4,in_port=23213 actions=output:42
+ priority=3,in_port=1028 actions=output:44
+ priority=2,in_port=1025 actions=output:47
+ priority=1,in_port=1026 actions=output:45
+])
+AT_CHECK(
+  [ovs-ofctl --sort=in_port --sort=tcp_src dump-flows br0 | ofctl_strip], [0],
+  [ priority=2,in_port=1025 actions=output:47
+ priority=1,in_port=1026 actions=output:45
+ priority=6,in_port=1027 actions=output:64
+ priority=3,in_port=1028 actions=output:44
+ priority=7,in_port=1029 actions=output:43
+ priority=5,in_port=1029 actions=output:43
+ priority=4,in_port=23213 actions=output:42
+ priority=8,tcp,tp_src=5 actions=drop
+ priority=9,tcp,tp_src=6 actions=drop
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP

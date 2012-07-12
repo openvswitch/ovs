@@ -55,6 +55,8 @@
 #include "util.h"
 #include "vconn.h"
 #include "vlog.h"
+#include "meta-flow.h"
+#include "sort.h"
 
 VLOG_DEFINE_THIS_MODULE(ofctl);
 
@@ -83,11 +85,24 @@ static int verbosity;
  * "snoop" command? */
 static bool timestamp;
 
+/* --sort, --rsort: Sort order. */
+enum sort_order { SORT_ASC, SORT_DESC };
+struct sort_criterion {
+    const struct mf_field *field; /* NULL means to sort by priority. */
+    enum sort_order order;
+};
+static struct sort_criterion *criteria;
+static size_t n_criteria, allocated_criteria;
+
 static const struct command all_commands[];
 
 static void usage(void) NO_RETURN;
 static void parse_options(int argc, char *argv[]);
 
+static bool recv_flow_stats_reply(struct vconn *, ovs_be32 send_xid,
+                                  struct ofpbuf **replyp,
+                                  struct ofputil_flow_stats *,
+                                  struct ofpbuf *ofpacts);
 int
 main(int argc, char *argv[])
 {
@@ -99,12 +114,35 @@ main(int argc, char *argv[])
 }
 
 static void
+add_sort_criterion(enum sort_order order, const char *field)
+{
+    struct sort_criterion *sc;
+
+    if (n_criteria >= allocated_criteria) {
+        criteria = x2nrealloc(criteria, &allocated_criteria, sizeof *criteria);
+    }
+
+    sc = &criteria[n_criteria++];
+    if (!field || !strcasecmp(field, "priority")) {
+        sc->field = NULL;
+    } else {
+        sc->field = mf_from_name(field);
+        if (!sc->field) {
+            ovs_fatal(0, "%s: unknown field name", field);
+        }
+    }
+    sc->order = order;
+}
+
+static void
 parse_options(int argc, char *argv[])
 {
     enum {
         OPT_STRICT = UCHAR_MAX + 1,
         OPT_READD,
         OPT_TIMESTAMP,
+        OPT_SORT,
+        OPT_RSORT,
         DAEMON_OPTION_ENUMS,
         VLOG_OPTION_ENUMS
     };
@@ -116,6 +154,8 @@ parse_options(int argc, char *argv[])
         {"packet-in-format", required_argument, NULL, 'P'},
         {"more", no_argument, NULL, 'm'},
         {"timestamp", no_argument, NULL, OPT_TIMESTAMP},
+        {"sort", optional_argument, NULL, OPT_SORT},
+        {"rsort", optional_argument, NULL, OPT_RSORT},
         {"help", no_argument, NULL, 'h'},
         {"version", no_argument, NULL, 'V'},
         DAEMON_LONG_OPTIONS,
@@ -183,6 +223,14 @@ parse_options(int argc, char *argv[])
             timestamp = true;
             break;
 
+        case OPT_SORT:
+            add_sort_criterion(SORT_ASC, optarg);
+            break;
+
+        case OPT_RSORT:
+            add_sort_criterion(SORT_DESC, optarg);
+            break;
+
         DAEMON_OPTION_HANDLERS
         VLOG_OPTION_HANDLERS
         STREAM_SSL_OPTION_HANDLERS
@@ -194,6 +242,12 @@ parse_options(int argc, char *argv[])
             abort();
         }
     }
+
+    if (n_criteria) {
+        /* Always do a final sort pass based on priority. */
+        add_sort_criterion(SORT_DESC, "priority");
+    }
+
     free(short_options);
 }
 
@@ -244,6 +298,8 @@ usage(void)
            "  -m, --more                  be more verbose printing OpenFlow\n"
            "  --timestamp                 (monitor, snoop) print timestamps\n"
            "  -t, --timeout=SECS          give up after SECS seconds\n"
+           "  --sort[=field]              sort in ascending order\n"
+           "  --rsort[=field]             sort in descending order\n"
            "  -h, --help                  display this help message\n"
            "  -V, --version               display version information\n");
     exit(EXIT_SUCCESS);
@@ -770,12 +826,12 @@ set_protocol_for_flow_dump(struct vconn *vconn,
     }
 }
 
-static void
-ofctl_dump_flows__(int argc, char *argv[], bool aggregate)
+static struct vconn *
+prepare_dump_flows(int argc, char *argv[], bool aggregate,
+                   struct ofpbuf **requestp)
 {
     enum ofputil_protocol usable_protocols, protocol;
     struct ofputil_flow_stats_request fsr;
-    struct ofpbuf *request;
     struct vconn *vconn;
 
     parse_ofp_flow_stats_request_str(&fsr, aggregate, argc > 2 ? argv[2] : "");
@@ -783,15 +839,121 @@ ofctl_dump_flows__(int argc, char *argv[], bool aggregate)
 
     protocol = open_vconn(argv[1], &vconn);
     protocol = set_protocol_for_flow_dump(vconn, protocol, usable_protocols);
-    request = ofputil_encode_flow_stats_request(&fsr, protocol);
+    *requestp = ofputil_encode_flow_stats_request(&fsr, protocol);
+    return vconn;
+}
+
+static void
+ofctl_dump_flows__(int argc, char *argv[], bool aggregate)
+{
+    struct ofpbuf *request;
+    struct vconn *vconn;
+
+    vconn = prepare_dump_flows(argc, argv, aggregate, &request);
     dump_stats_transaction__(vconn, request);
     vconn_close(vconn);
+}
+
+static int
+compare_flows(const void *afs_, const void *bfs_)
+{
+    const struct ofputil_flow_stats *afs = afs_;
+    const struct ofputil_flow_stats *bfs = bfs_;
+    const struct cls_rule *a = &afs->rule;
+    const struct cls_rule *b = &bfs->rule;
+    const struct sort_criterion *sc;
+
+    for (sc = criteria; sc < &criteria[n_criteria]; sc++) {
+        const struct mf_field *f = sc->field;
+        int ret;
+
+        if (!f) {
+            ret = a->priority < b->priority ? -1 : a->priority > b->priority;
+        } else {
+            bool ina, inb;
+
+            ina = mf_are_prereqs_ok(f, &a->flow) && !mf_is_all_wild(f, &a->wc);
+            inb = mf_are_prereqs_ok(f, &b->flow) && !mf_is_all_wild(f, &b->wc);
+            if (ina != inb) {
+                /* Skip the test for sc->order, so that missing fields always
+                 * sort to the end whether we're sorting in ascending or
+                 * descending order. */
+                return ina ? -1 : 1;
+            } else {
+                union mf_value aval, bval;
+
+                mf_get_value(f, &a->flow, &aval);
+                mf_get_value(f, &b->flow, &bval);
+                ret = memcmp(&aval, &bval, f->n_bytes);
+            }
+        }
+
+        if (ret) {
+            return sc->order == SORT_ASC ? ret : -ret;
+        }
+    }
+
+    return 0;
 }
 
 static void
 ofctl_dump_flows(int argc, char *argv[])
 {
-    return ofctl_dump_flows__(argc, argv, false);
+    if (!n_criteria) {
+        return ofctl_dump_flows__(argc, argv, false);
+    } else {
+        struct ofputil_flow_stats *fses;
+        size_t n_fses, allocated_fses;
+        struct ofpbuf *request;
+        struct ofpbuf ofpacts;
+        struct ofpbuf *reply;
+        struct vconn *vconn;
+        ovs_be32 send_xid;
+        struct ds s;
+        size_t i;
+
+        vconn = prepare_dump_flows(argc, argv, false, &request);
+        send_xid = ((struct ofp_header *) request->data)->xid;
+        send_openflow_buffer(vconn, request);
+
+        fses = NULL;
+        n_fses = allocated_fses = 0;
+        reply = NULL;
+        ofpbuf_init(&ofpacts, 0);
+        for (;;) {
+            struct ofputil_flow_stats *fs;
+
+            if (n_fses >= allocated_fses) {
+                fses = x2nrealloc(fses, &allocated_fses, sizeof *fses);
+            }
+
+            fs = &fses[n_fses];
+            if (!recv_flow_stats_reply(vconn, send_xid, &reply, fs,
+                                       &ofpacts)) {
+                break;
+            }
+            fs->ofpacts = xmemdup(fs->ofpacts, fs->ofpacts_len);
+            n_fses++;
+        }
+        ofpbuf_uninit(&ofpacts);
+
+        qsort(fses, n_fses, sizeof *fses, compare_flows);
+
+        ds_init(&s);
+        for (i = 0; i < n_fses; i++) {
+            ds_clear(&s);
+            ofp_print_flow_stats(&s, &fses[i]);
+            puts(ds_cstr(&s));
+        }
+        ds_destroy(&s);
+
+        for (i = 0; i < n_fses; i++) {
+            free(fses[i].ofpacts);
+        }
+        free(fses);
+
+        vconn_close(vconn);
+    }
 }
 
 static void

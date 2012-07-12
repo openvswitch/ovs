@@ -161,12 +161,18 @@ whether a packet is a fragment and on its fragment offset.
 Prints to the console all flow entries in \fIswitch\fR's
 tables that match \fIflows\fR.  If \fIflows\fR is omitted, all flows
 in the switch are retrieved.  See \fBFlow Syntax\fR, below, for the
-syntax of \fIflows\fR.  The output format is described in 
+syntax of \fIflows\fR.  The output format is described in
 \fBTable Entry Output\fR.
+.
+.IP
+By default, \fBovs\-ofctl\fR prints flow entries in the same order
+that the switch sends them, which is unlikely to be intuitive or
+consistent.  See the description of \fB\-\-sort\fR and \fB\-\-rsort\fR,
+under \fBOPTIONS\fR below, to influence the display order.
 .
 .TP
 \fBdump\-aggregate \fIswitch \fR[\fIflows\fR]
-Prints to the console aggregate statistics for flows in 
+Prints to the console aggregate statistics for flows in
 \fIswitch\fR's tables that match \fIflows\fR.  If \fIflows\fR is omitted, 
 the statistics are aggregated across all flows in the switch's flow
 tables.  See \fBFlow Syntax\fR, below, for the syntax of \fIflows\fR.
@@ -1316,6 +1322,33 @@ affects the \fBmonitor\fR and \fBsnoop\fR commands.
 Increases the verbosity of OpenFlow messages printed and logged by
 \fBovs\-ofctl\fR commands.  Specify this option more than once to
 increase verbosity further.
+.
+.IP \fB\-\-sort\fR[\fB=\fIfield\fR]
+.IQ \fB\-\-rsort\fR[\fB=\fIfield\fR]
+Display output sorted by flow \fIfield\fR in ascending
+(\fB\-\-sort\fR) or descending (\fB\-\-rsort\fR) order, where
+\fIfield\fR is any of the fields that are allowed for matching or
+\fBpriority\fR to sort by priority.  When \fIfield\fR is omitted, the
+output is sorted by priority.  Specify these options multiple times to
+sort by multiple fields.
+.IP
+Any given flow will not necessarily specify a value for a given
+field.  This requires special treatement:
+.RS
+.IP \(bu
+A flow that does not specify any part of a field that is used for sorting is
+sorted after all the flows that do specify the field.  For example,
+\fB\-\-sort=tcp_src\fR will sort all the flows that specify a TCP
+source port in ascending order, followed by the flows that do not
+specify a TCP source port at all.  
+.IP \(bu
+A flow that only specifies some bits in a field is sorted as if the
+wildcarded bits were zero.  For example, \fB\-\-sort=nw_src\fR would
+sort a flow that specifies \fBnw_src=192.168.0.0/24\fR the same as
+\fBnw_src=192.168.0.0\fR.
+.RE
+.IP
+These options currently affect only \fBdump\-flows\fR output.
 .
 .ds DD \
 \fBovs\-ofctl\fR detaches only when executing the \fBmonitor\fR or \
