@@ -143,18 +143,22 @@ A: The kernel module in upstream Linux 3.3 and later does not include
          kernel module from the Open vSwitch distribution instead of the
          upstream Linux kernel module.
 
-       - Tunnel and patch virtual ports, that is, interfaces with type
-         "gre", "ipsec_gre", "capwap", or "patch".  It is possible to
-         create tunnels in Linux and attach them to Open vSwitch as
-         system devices.  However, they cannot be dynamically created
-         through the OVSDB protocol or set the tunnel ids as a flow
-         action.
+       - Tunnel virtual ports, that is, interfaces with type "gre",
+         "ipsec_gre", "capwap".  It is possible to create tunnels in
+         Linux and attach them to Open vSwitch as system devices.
+         However, they cannot be dynamically created through the OVSDB
+         protocol or set the tunnel ids as a flow action.
 
          Work is in progress in adding these features to the upstream
          Linux version of the Open vSwitch kernel module.  For now, if
          you need these features, use the kernel module from the Open
          vSwitch distribution instead of the upstream Linux kernel
          module.
+
+       - Patch virtual ports, that is, interfaces with type "patch".
+         You can use Linux "veth" devices as a substitute.
+
+         We don't have any plans to add patch ports upstream.
 
 Q: What features are not available when using the userspace datapath?
 
