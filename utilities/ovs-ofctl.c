@@ -1256,49 +1256,31 @@ ofctl_set_output_file(struct unixctl_conn *conn, int argc OVS_UNUSED,
     unixctl_command_reply(conn, NULL);
 }
 
-struct block_aux {
-    struct vconn *vconn;
-    struct unixctl_server *server;
-    bool blocked;
-};
-
 static void
 ofctl_block(struct unixctl_conn *conn, int argc OVS_UNUSED,
-            const char *argv[] OVS_UNUSED, void *block_)
+            const char *argv[] OVS_UNUSED, void *blocked_)
 {
-    struct block_aux *block = block_;
+    bool *blocked = blocked_;
 
-    if (block->blocked) {
+    if (!*blocked) {
+        *blocked = true;
+        unixctl_command_reply(conn, NULL);
+    } else {
         unixctl_command_reply(conn, "already blocking");
-        return;
-    }
-
-    block->blocked = true;
-    unixctl_command_reply(conn, NULL);
-    for (;;) {
-        unixctl_server_run(block->server);
-        if (!block->blocked) {
-            break;
-        }
-        vconn_run(block->vconn);
-
-        unixctl_server_wait(block->server);
-        vconn_run_wait(block->vconn);
-        poll_block();
     }
 }
 
 static void
 ofctl_unblock(struct unixctl_conn *conn, int argc OVS_UNUSED,
-              const char *argv[] OVS_UNUSED, void *block_)
+              const char *argv[] OVS_UNUSED, void *blocked_)
 {
-    struct block_aux *block = block_;
+    bool *blocked = blocked_;
 
-    if (!block->blocked) {
-        unixctl_command_reply(conn, "not blocking");
-    } else {
-        block->blocked = false;
+    if (*blocked) {
+        *blocked = false;
         unixctl_command_reply(conn, NULL);
+    } else {
+        unixctl_command_reply(conn, "already unblocked");
     }
 }
 
@@ -1306,9 +1288,9 @@ static void
 monitor_vconn(struct vconn *vconn)
 {
     struct barrier_aux barrier_aux = { vconn, NULL };
-    struct block_aux block;
     struct unixctl_server *server;
     bool exiting = false;
+    bool blocked = false;
     int error;
 
     daemon_save_fd(STDERR_FILENO);
@@ -1325,11 +1307,9 @@ monitor_vconn(struct vconn *vconn)
     unixctl_command_register("ofctl/set-output-file", "FILE", 1, 1,
                              ofctl_set_output_file, NULL);
 
-    block.vconn = vconn;
-    block.server = server;
-    block.blocked = false;
-    unixctl_command_register("ofctl/block", "", 0, 0, ofctl_block, &block);
-    unixctl_command_register("ofctl/unblock", "", 0, 0, ofctl_unblock, &block);
+    unixctl_command_register("ofctl/block", "", 0, 0, ofctl_block, &blocked);
+    unixctl_command_register("ofctl/unblock", "", 0, 0, ofctl_unblock,
+                             &blocked);
 
     daemonize_complete();
 
@@ -1338,8 +1318,7 @@ monitor_vconn(struct vconn *vconn)
         int retval;
 
         unixctl_server_run(server);
-
-        for (;;) {
+        while (!blocked) {
             uint8_t msg_type;
 
             retval = vconn_recv(vconn, &b);
@@ -1372,7 +1351,9 @@ monitor_vconn(struct vconn *vconn)
 
         vconn_run(vconn);
         vconn_run_wait(vconn);
-        vconn_recv_wait(vconn);
+        if (!blocked) {
+            vconn_recv_wait(vconn);
+        }
         unixctl_server_wait(server);
         poll_block();
     }
