@@ -94,21 +94,16 @@ unsigned int rconn_get_connection_seqno(const struct rconn *);
 int rconn_get_last_error(const struct rconn *);
 unsigned int rconn_count_txqlen(const struct rconn *);
 
-/* Counts the number of packets queued into an rconn by a given source. */
+/* Counts packets and bytes queued into an rconn by a given source. */
 struct rconn_packet_counter {
-    int n;                      /* Number of packets queued. */
+    unsigned int n_packets;     /* Number of packets queued. */
+    unsigned int n_bytes;       /* Number of bytes queued. */
     int ref_cnt;                /* Number of owners. */
 };
 
 struct rconn_packet_counter *rconn_packet_counter_create(void);
 void rconn_packet_counter_destroy(struct rconn_packet_counter *);
-void rconn_packet_counter_inc(struct rconn_packet_counter *);
-void rconn_packet_counter_dec(struct rconn_packet_counter *);
-
-static inline int
-rconn_packet_counter_read(const struct rconn_packet_counter *counter)
-{
-    return counter->n;
-}
+void rconn_packet_counter_inc(struct rconn_packet_counter *, unsigned n_bytes);
+void rconn_packet_counter_dec(struct rconn_packet_counter *, unsigned n_bytes);
 
 #endif /* rconn.h */

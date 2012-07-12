@@ -1128,7 +1128,7 @@ ofconn_reconfigure(struct ofconn *ofconn, const struct ofproto_controller *c)
 static bool
 ofconn_may_recv(const struct ofconn *ofconn)
 {
-    int count = rconn_packet_counter_read (ofconn->reply_counter);
+    int count = ofconn->reply_counter->n_packets;
     return (!ofconn->blocked || ofconn->retry) && count < OFCONN_REPLY_MAX;
 }
 

@@ -587,7 +587,7 @@ rconn_send(struct rconn *rc, struct ofpbuf *b,
         copy_to_monitor(rc, b);
         b->private_p = counter;
         if (counter) {
-            rconn_packet_counter_inc(counter);
+            rconn_packet_counter_inc(counter, b->size);
         }
         list_push_back(&rc->txq, &b->list_node);
 
@@ -622,7 +622,9 @@ rconn_send_with_limit(struct rconn *rc, struct ofpbuf *b,
                       struct rconn_packet_counter *counter, int queue_limit)
 {
     int retval;
-    retval = counter->n >= queue_limit ? EAGAIN : rconn_send(rc, b, counter);
+    retval = (counter->n_packets >= queue_limit
+              ? EAGAIN
+              : rconn_send(rc, b, counter));
     if (retval) {
         COVERAGE_INC(rconn_overflow);
     }
@@ -872,8 +874,7 @@ rconn_count_txqlen(const struct rconn *rc)
 struct rconn_packet_counter *
 rconn_packet_counter_create(void)
 {
-    struct rconn_packet_counter *c = xmalloc(sizeof *c);
-    c->n = 0;
+    struct rconn_packet_counter *c = xzalloc(sizeof *c);
     c->ref_cnt = 1;
     return c;
 }
@@ -883,24 +884,32 @@ rconn_packet_counter_destroy(struct rconn_packet_counter *c)
 {
     if (c) {
         assert(c->ref_cnt > 0);
-        if (!--c->ref_cnt && !c->n) {
+        if (!--c->ref_cnt && !c->n_packets) {
             free(c);
         }
     }
 }
 
 void
-rconn_packet_counter_inc(struct rconn_packet_counter *c)
+rconn_packet_counter_inc(struct rconn_packet_counter *c, unsigned int n_bytes)
 {
-    c->n++;
+    c->n_packets++;
+    c->n_bytes += n_bytes;
 }
 
 void
-rconn_packet_counter_dec(struct rconn_packet_counter *c)
+rconn_packet_counter_dec(struct rconn_packet_counter *c, unsigned int n_bytes)
 {
-    assert(c->n > 0);
-    if (!--c->n && !c->ref_cnt) {
-        free(c);
+    assert(c->n_packets > 0);
+    assert(c->n_bytes >= n_bytes);
+
+    c->n_bytes -= n_bytes;
+    c->n_packets--;
+    if (!c->n_packets) {
+        assert(!c->n_bytes);
+        if (!c->ref_cnt) {
+            free(c);
+        }
     }
 }
 
@@ -927,6 +936,7 @@ static int
 try_send(struct rconn *rc)
 {
     struct ofpbuf *msg = ofpbuf_from_list(rc->txq.next);
+    unsigned int n_bytes = msg->size;
     struct rconn_packet_counter *counter = msg->private_p;
     int retval;
 
@@ -947,7 +957,7 @@ try_send(struct rconn *rc)
     COVERAGE_INC(rconn_sent);
     rc->packets_sent++;
     if (counter) {
-        rconn_packet_counter_dec(counter);
+        rconn_packet_counter_dec(counter, n_bytes);
     }
     return 0;
 }
@@ -1027,7 +1037,7 @@ flush_queue(struct rconn *rc)
         struct ofpbuf *b = ofpbuf_from_list(list_pop_front(&rc->txq));
         struct rconn_packet_counter *counter = b->private_p;
         if (counter) {
-            rconn_packet_counter_dec(counter);
+            rconn_packet_counter_dec(counter, b->size);
         }
         COVERAGE_INC(rconn_discarded);
         ofpbuf_delete(b);
