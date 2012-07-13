@@ -69,8 +69,6 @@ start () {
 	set "$@" --force-corefiles="$FORCE_COREFILES"
     fi
     "$@" || exit $?
-
-    ovs_ctl --protocol=gre enable-protocol
 }
 
 stop () {
