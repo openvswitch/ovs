@@ -72,8 +72,6 @@ start () {
     fi
     set "$@" $OVS_CTL_OPTS
     "$@" || exit $?
-
-    ovs_ctl --protocol=gre enable-protocol
 }
 
 stop () {
