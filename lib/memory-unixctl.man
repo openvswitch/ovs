@@ -1,0 +1,7 @@
+.SS "MEMORY COMMANDS"
+These commands report memory usage.
+.
+.IP "\fBmemory/show\fR"
+Displays some basic statistics about \fB\*(PN\fR's memory usage.
+\fB\*(PN\fR also logs this information soon after startup and
+periodically as its memory consumption grows.
