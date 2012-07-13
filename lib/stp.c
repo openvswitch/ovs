@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -151,7 +151,7 @@ stp_next_enabled_port(const struct stp *stp, const struct stp_port *port)
 {
     for (; port < &stp->ports[ARRAY_SIZE(stp->ports)]; port++) {
         if (port->state != STP_DISABLED) {
-            return (struct stp_port *) port;
+            return CONST_CAST(struct stp_port *, port);
         }
     }
     return NULL;

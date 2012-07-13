@@ -350,8 +350,8 @@ read_map_string_column(const struct ovsdb_row *row, const char *column_name,
     union ovsdb_atom *atom_key = NULL, *atom_value = NULL;
     size_t i;
 
-    datum = get_datum((struct ovsdb_row *) row, column_name, OVSDB_TYPE_STRING,
-                      OVSDB_TYPE_STRING, UINT_MAX);
+    datum = get_datum(CONST_CAST(struct ovsdb_row *, row), column_name,
+                      OVSDB_TYPE_STRING, OVSDB_TYPE_STRING, UINT_MAX);
 
     if (!datum) {
         return NULL;
@@ -374,8 +374,8 @@ read_column(const struct ovsdb_row *row, const char *column_name,
 {
     const struct ovsdb_datum *datum;
 
-    datum = get_datum((struct ovsdb_row *) row, column_name, type, OVSDB_TYPE_VOID,
-                      1);
+    datum = get_datum(CONST_CAST(struct ovsdb_row *, row), column_name, type,
+                      OVSDB_TYPE_VOID, 1);
     return datum && datum->n ? datum->keys : NULL;
 }
 

@@ -311,7 +311,7 @@ ds_cstr(struct ds *ds)
 const char *
 ds_cstr_ro(const struct ds *ds)
 {
-    return ds_cstr((struct ds *) ds);
+    return ds_cstr(CONST_CAST(struct ds *, ds));
 }
 
 /* Returns a null-terminated string representing the current contents of 'ds',

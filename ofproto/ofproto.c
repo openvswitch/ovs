@@ -3455,7 +3455,7 @@ ofproto_compose_flow_refresh_update(const struct rule *rule,
     fu.hard_timeout = rule->hard_timeout;
     fu.table_id = rule->table_id;
     fu.cookie = rule->flow_cookie;
-    fu.match = (struct cls_rule *) &rule->cr;
+    fu.match = CONST_CAST(struct cls_rule *, &rule->cr);
     if (!(flags & NXFMF_ACTIONS)) {
         fu.ofpacts = NULL;
         fu.ofpacts_len = 0;

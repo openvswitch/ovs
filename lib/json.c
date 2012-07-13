@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -296,14 +296,14 @@ struct json_array *
 json_array(const struct json *json)
 {
     assert(json->type == JSON_ARRAY);
-    return (struct json_array *) &json->u.array;
+    return CONST_CAST(struct json_array *, &json->u.array);
 }
 
 struct shash *
 json_object(const struct json *json)
 {
     assert(json->type == JSON_OBJECT);
-    return (struct shash *) json->u.object;
+    return CONST_CAST(struct shash *, json->u.object);
 }
 
 bool

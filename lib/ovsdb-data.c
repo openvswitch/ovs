@@ -884,9 +884,10 @@ ovsdb_datum_default(const struct ovsdb_type *type)
         d = &default_data[kt][vt];
         if (!d->n) {
             d->n = 1;
-            d->keys = (union ovsdb_atom *) ovsdb_atom_default(kt);
+            d->keys = CONST_CAST(union ovsdb_atom *, ovsdb_atom_default(kt));
             if (vt != OVSDB_TYPE_VOID) {
-                d->values = (union ovsdb_atom *) ovsdb_atom_default(vt);
+                d->values = CONST_CAST(union ovsdb_atom *,
+                                       ovsdb_atom_default(vt));
             }
         }
         return d;

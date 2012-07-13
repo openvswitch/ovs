@@ -762,7 +762,7 @@ void
 vlog_fatal_valist(const struct vlog_module *module_,
                   const char *message, va_list args)
 {
-    struct vlog_module *module = (struct vlog_module *) module_;
+    struct vlog_module *module = CONST_CAST(struct vlog_module *, module_);
 
     /* Don't log this message to the console to avoid redundancy with the
      * message written by the later ovs_fatal_valist(). */

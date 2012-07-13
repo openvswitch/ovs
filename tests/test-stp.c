@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2012 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -656,7 +656,7 @@ main(int argc, char *argv[])
 
     for (i = 0; i < tc->n_lans; i++) {
         struct lan *lan = tc->lans[i];
-        free((char *) lan->name);
+        free(CONST_CAST(char *, lan->name));
         free(lan);
     }
     for (i = 0; i < tc->n_bridges; i++) {

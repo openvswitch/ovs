@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -109,7 +109,7 @@ shash_add_nocopy__(struct shash *sh, char *name, const void *data, size_t hash)
 {
     struct shash_node *node = xmalloc(sizeof *node);
     node->name = name;
-    node->data = (void *) data;
+    node->data = CONST_CAST(void *, data);
     hmap_insert(&sh->map, &node->node, hash);
     return node;
 }
@@ -163,7 +163,7 @@ shash_replace(struct shash *sh, const char *name, const void *data)
         return NULL;
     } else {
         void *old_data = node->data;
-        node->data = (void *) data;
+        node->data = CONST_CAST(void *, data);
         return old_data;
     }
 }

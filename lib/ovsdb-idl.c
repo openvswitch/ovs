@@ -1820,7 +1820,7 @@ ovsdb_idl_txn_write(const struct ovsdb_idl_row *row_,
                     const struct ovsdb_idl_column *column,
                     struct ovsdb_datum *datum)
 {
-    struct ovsdb_idl_row *row = (struct ovsdb_idl_row *) row_;
+    struct ovsdb_idl_row *row = CONST_CAST(struct ovsdb_idl_row *, row_);
     const struct ovsdb_idl_table_class *class;
     size_t column_idx;
 
@@ -1907,7 +1907,7 @@ void
 ovsdb_idl_txn_verify(const struct ovsdb_idl_row *row_,
                      const struct ovsdb_idl_column *column)
 {
-    struct ovsdb_idl_row *row = (struct ovsdb_idl_row *) row_;
+    struct ovsdb_idl_row *row = CONST_CAST(struct ovsdb_idl_row *, row_);
     const struct ovsdb_idl_table_class *class;
     size_t column_idx;
 
@@ -1946,7 +1946,7 @@ ovsdb_idl_txn_verify(const struct ovsdb_idl_row *row_,
 void
 ovsdb_idl_txn_delete(const struct ovsdb_idl_row *row_)
 {
-    struct ovsdb_idl_row *row = (struct ovsdb_idl_row *) row_;
+    struct ovsdb_idl_row *row = CONST_CAST(struct ovsdb_idl_row *, row_);
 
     if (ovsdb_idl_row_is_synthetic(row)) {
         return;

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -136,7 +136,7 @@ list_pop_back(struct list *list)
 struct list *
 list_front(const struct list *list_)
 {
-    struct list *list = (struct list *) list_;
+    struct list *list = CONST_CAST(struct list *, list_);
 
     assert(!list_is_empty(list));
     return list->next;
@@ -147,7 +147,7 @@ list_front(const struct list *list_)
 struct list *
 list_back(const struct list *list_)
 {
-    struct list *list = (struct list *) list_;
+    struct list *list = CONST_CAST(struct list *, list_);
 
     assert(!list_is_empty(list));
     return list->prev;

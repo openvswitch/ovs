@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -902,7 +902,7 @@ do_ssl_init(void)
 
     /* New OpenSSL changed TLSv1_method() to return a "const" pointer, so the
      * cast is needed to avoid a warning with those newer versions. */
-    method = (SSL_METHOD *) TLSv1_method();
+    method = CONST_CAST(SSL_METHOD *, TLSv1_method());
     if (method == NULL) {
         VLOG_ERR("TLSv1_method: %s", ERR_error_string(ERR_get_error(), NULL));
         return ENOPROTOOPT;

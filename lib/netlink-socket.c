@@ -683,7 +683,7 @@ nl_sock_transact(struct nl_sock *sock, const struct ofpbuf *request,
     struct nl_transaction *transactionp;
     struct nl_transaction transaction;
 
-    transaction.request = (struct ofpbuf *) request;
+    transaction.request = CONST_CAST(struct ofpbuf *, request);
     transaction.reply = replyp ? ofpbuf_new(1024) : NULL;
     transactionp = &transaction;
 

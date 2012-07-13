@@ -1964,7 +1964,7 @@ bundle_set(struct ofproto *ofproto_, void *aux,
         break;
 
     case PORT_VLAN_TRUNK:
-        trunks = (unsigned long *) s->trunks;
+        trunks = CONST_CAST(unsigned long *, s->trunks);
         break;
 
     case PORT_VLAN_NATIVE_UNTAGGED:
@@ -1981,7 +1981,7 @@ bundle_set(struct ofproto *ofproto_, void *aux,
             bitmap_set1(trunks, vlan);
             bitmap_set0(trunks, 0);
         } else {
-            trunks = (unsigned long *) s->trunks;
+            trunks = CONST_CAST(unsigned long *, s->trunks);
         }
         break;
 

@@ -477,7 +477,7 @@ connmgr_free_controller_info(struct shash *info)
     SHASH_FOR_EACH (node, info) {
         struct ofproto_controller_info *cinfo = node->data;
         while (cinfo->pairs.n) {
-            free((char *) cinfo->pairs.values[--cinfo->pairs.n]);
+            free(CONST_CAST(char *, cinfo->pairs.values[--cinfo->pairs.n]));
         }
         free(cinfo);
     }

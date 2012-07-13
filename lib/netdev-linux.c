@@ -955,7 +955,7 @@ netdev_linux_send(struct netdev *netdev_, const void *data, size_t size)
             sll.sll_family = AF_PACKET;
             sll.sll_ifindex = ifindex;
 
-            iov.iov_base = (void *) data;
+            iov.iov_base = CONST_CAST(void *, data);
             iov.iov_len = size;
 
             msg.msg_name = &sll;
@@ -4106,7 +4106,7 @@ tc_query_qdisc(const struct netdev *netdev)
     }
 
     /* Instantiate it. */
-    load_error = ops->tc_load((struct netdev *) netdev, qdisc);
+    load_error = ops->tc_load(CONST_CAST(struct netdev *, netdev), qdisc);
     assert((load_error == 0) == (netdev_dev->tc != NULL));
     ofpbuf_delete(qdisc);
 

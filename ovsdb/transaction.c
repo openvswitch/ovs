@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010, 2011 Nicira, Inc.
+/* Copyright (c) 2009, 2010, 2011, 2012 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -439,8 +439,8 @@ static void
 add_weak_ref(struct ovsdb_txn *txn,
              const struct ovsdb_row *src_, const struct ovsdb_row *dst_)
 {
-    struct ovsdb_row *src = (struct ovsdb_row *) src_;
-    struct ovsdb_row *dst = (struct ovsdb_row *) dst_;
+    struct ovsdb_row *src = CONST_CAST(struct ovsdb_row *, src_);
+    struct ovsdb_row *dst = CONST_CAST(struct ovsdb_row *, dst_);
     struct ovsdb_weak_ref *weak;
 
     if (src == dst) {
@@ -864,7 +864,7 @@ ovsdb_txn_row_create(struct ovsdb_txn *txn, struct ovsdb_table *table,
                      const struct ovsdb_row *old_, struct ovsdb_row *new)
 {
     const struct ovsdb_row *row = old_ ? old_ : new;
-    struct ovsdb_row *old = (struct ovsdb_row *) old_;
+    struct ovsdb_row *old = CONST_CAST(struct ovsdb_row *, old_);
     size_t n_columns = shash_count(&table->schema->columns);
     struct ovsdb_txn_table *txn_table;
     struct ovsdb_txn_row *txn_row;
@@ -895,7 +895,7 @@ ovsdb_txn_row_create(struct ovsdb_txn *txn, struct ovsdb_table *table,
 struct ovsdb_row *
 ovsdb_txn_row_modify(struct ovsdb_txn *txn, const struct ovsdb_row *ro_row_)
 {
-    struct ovsdb_row *ro_row = (struct ovsdb_row *) ro_row_;
+    struct ovsdb_row *ro_row = CONST_CAST(struct ovsdb_row *, ro_row_);
 
     if (ro_row->txn_row) {
         assert(ro_row == ro_row->txn_row->new);
@@ -931,7 +931,7 @@ ovsdb_txn_row_insert(struct ovsdb_txn *txn, struct ovsdb_row *row)
 void
 ovsdb_txn_row_delete(struct ovsdb_txn *txn, const struct ovsdb_row *row_)
 {
-    struct ovsdb_row *row = (struct ovsdb_row *) row_;
+    struct ovsdb_row *row = CONST_CAST(struct ovsdb_row *, row_);
     struct ovsdb_table *table = row->table;
     struct ovsdb_txn_row *txn_row = row->txn_row;
 

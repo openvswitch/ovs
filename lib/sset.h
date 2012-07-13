@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 Nicira, Inc.
+ * Copyright (c) 2011, 2012 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
 #define SSET_H
 
 #include "hmap.h"
+#include "util.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -82,7 +83,7 @@ bool sset_equals(const struct sset *, const struct sset *);
 #define SSET_NODE_FROM_HMAP_NODE(HMAP_NODE) \
     CONTAINER_OF(HMAP_NODE, struct sset_node, hmap_node)
 #define SSET_NAME_FROM_HMAP_NODE(HMAP_NODE) \
-    ((const char *) (SSET_NODE_FROM_HMAP_NODE(HMAP_NODE)->name))
+    (CONST_CAST(const char *, (SSET_NODE_FROM_HMAP_NODE(HMAP_NODE)->name)))
 #define SSET_NODE_FROM_NAME(NAME) CONTAINER_OF(NAME, struct sset_node, name)
 #define SSET_FIRST(SSET) SSET_NAME_FROM_HMAP_NODE(hmap_first(&(SSET)->map))
 #define SSET_NEXT(SSET, NAME)                                           \

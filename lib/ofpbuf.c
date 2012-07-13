@@ -95,7 +95,7 @@ ofpbuf_use_stub(struct ofpbuf *b, void *base, size_t allocated)
 void
 ofpbuf_use_const(struct ofpbuf *b, const void *data, size_t size)
 {
-    ofpbuf_use__(b, (void *) data, size, OFPBUF_STACK);
+    ofpbuf_use__(b, CONST_CAST(void *, data), size, OFPBUF_STACK);
     b->size = size;
 }
 
@@ -408,7 +408,7 @@ ofpbuf_put_hex(struct ofpbuf *b, const char *s, size_t *n)
             if (n) {
                 *n = b->size - initial_size;
             }
-            return (char *) s;
+            return CONST_CAST(char *, s);
         }
 
         ofpbuf_put(b, &byte, 1);

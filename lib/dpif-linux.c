@@ -595,8 +595,8 @@ dpif_linux_port_dump_next(const struct dpif *dpif OVS_UNUSED, void *state_,
         return error;
     }
 
-    dpif_port->name = (char *) vport.name;
-    dpif_port->type = (char *) netdev_vport_get_netdev_type(&vport);
+    dpif_port->name = CONST_CAST(char *, vport.name);
+    dpif_port->type = CONST_CAST(char *, netdev_vport_get_netdev_type(&vport));
     dpif_port->port_no = vport.port_no;
     return 0;
 }
@@ -668,7 +668,7 @@ dpif_linux_flow_get(const struct dpif *dpif_,
             dpif_linux_flow_get_stats(&reply, stats);
         }
         if (actionsp) {
-            buf->data = (void *) reply.actions;
+            buf->data = CONST_CAST(struct nlattr *, reply.actions);
             buf->size = reply.actions_len;
             *actionsp = buf;
         } else {
@@ -1169,9 +1169,11 @@ parse_odp_packet(struct ofpbuf *buf, struct dpif_upcall *upcall,
     memset(upcall, 0, sizeof *upcall);
     upcall->type = type;
     upcall->packet = buf;
-    upcall->packet->data = (void *) nl_attr_get(a[OVS_PACKET_ATTR_PACKET]);
+    upcall->packet->data = CONST_CAST(struct nlattr *,
+                                      nl_attr_get(a[OVS_PACKET_ATTR_PACKET]));
     upcall->packet->size = nl_attr_get_size(a[OVS_PACKET_ATTR_PACKET]);
-    upcall->key = (void *) nl_attr_get(a[OVS_PACKET_ATTR_KEY]);
+    upcall->key = CONST_CAST(struct nlattr *,
+                             nl_attr_get(a[OVS_PACKET_ATTR_KEY]));
     upcall->key_len = nl_attr_get_size(a[OVS_PACKET_ATTR_KEY]);
     upcall->userdata = (a[OVS_PACKET_ATTR_USERDATA]
                         ? nl_attr_get_u64(a[OVS_PACKET_ATTR_USERDATA])

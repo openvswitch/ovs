@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,7 +26,7 @@
 static inline unsigned long *
 bitmap_unit__(const unsigned long *bitmap, size_t offset)
 {
-    return (unsigned long *) &bitmap[offset / BITMAP_ULONG_BITS];
+    return CONST_CAST(unsigned long *, &bitmap[offset / BITMAP_ULONG_BITS]);
 }
 
 static inline unsigned long
