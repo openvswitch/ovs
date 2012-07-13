@@ -180,7 +180,7 @@ parse_ipv6(struct ofpbuf *packet, struct flow *flow)
                 || (nexthdr == IPPROTO_DSTOPTS)) {
             /* These headers, while different, have the fields we care about
              * in the same location and with the same interpretation. */
-            const struct ip6_ext *ext_hdr = (struct ip6_ext *)packet->data;
+            const struct ip6_ext *ext_hdr = packet->data;
             nexthdr = ext_hdr->ip6e_nxt;
             if (!ofpbuf_try_pull(packet, (ext_hdr->ip6e_len + 1) * 8)) {
                 return EINVAL;
@@ -190,13 +190,13 @@ parse_ipv6(struct ofpbuf *packet, struct flow *flow)
              * we care about are in the same location as the generic
              * option header--only the header length is calculated
              * differently. */
-            const struct ip6_ext *ext_hdr = (struct ip6_ext *)packet->data;
+            const struct ip6_ext *ext_hdr = packet->data;
             nexthdr = ext_hdr->ip6e_nxt;
             if (!ofpbuf_try_pull(packet, (ext_hdr->ip6e_len + 2) * 4)) {
                return EINVAL;
             }
         } else if (nexthdr == IPPROTO_FRAGMENT) {
-            const struct ip6_frag *frag_hdr = (struct ip6_frag *)packet->data;
+            const struct ip6_frag *frag_hdr = packet->data;
 
             nexthdr = frag_hdr->ip6f_nxt;
             if (!ofpbuf_try_pull(packet, sizeof *frag_hdr)) {
