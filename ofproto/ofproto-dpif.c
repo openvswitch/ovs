@@ -4732,7 +4732,7 @@ send_packet(const struct ofport_dpif *ofport, struct ofpbuf *packet)
     struct flow flow;
     int error;
 
-    flow_extract((struct ofpbuf *) packet, 0, 0, 0, &flow);
+    flow_extract(packet, 0, 0, 0, &flow);
     odp_port = vsp_realdev_to_vlandev(ofproto, ofport->odp_port,
                                       flow.vlan_tci);
     if (odp_port != ofport->odp_port) {
