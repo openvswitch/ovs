@@ -105,6 +105,8 @@ main(int argc, char *argv[])
 
     daemonize_start();
 
+    VLOG_INFO("%s (Open vSwitch) %s", program_name, VERSION);
+
     error = ovsdb_file_open(file_name, false, &db, &file);
     if (error) {
         ovs_fatal(0, "%s", ovsdb_error_to_string(error));

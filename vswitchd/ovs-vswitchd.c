@@ -85,6 +85,8 @@ main(int argc, char *argv[])
 
     daemonize_start();
 
+    VLOG_INFO("%s (Open vSwitch) %s", program_name, VERSION);
+
     if (want_mlockall) {
 #ifdef HAVE_MLOCKALL
         if (mlockall(MCL_CURRENT | MCL_FUTURE)) {
