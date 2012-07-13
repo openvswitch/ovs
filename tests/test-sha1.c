@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2011 Nicira, Inc.
+ * Copyright (c) 2009, 2011, 2012 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -108,8 +108,8 @@ test_one(const struct test_vector *vec)
         struct sha1_ctx sha1;
 
         sha1_init(&sha1);
-        sha1_update(&sha1, (const void *) vec->data, n0);
-        sha1_update(&sha1, (const void *) (vec->data + n0), n1);
+        sha1_update(&sha1, vec->data, n0);
+        sha1_update(&sha1, vec->data + n0, n1);
         sha1_final(&sha1, md);
         assert(!memcmp(md, vec->output, SHA1_DIGEST_SIZE));
     }
