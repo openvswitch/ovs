@@ -1446,3 +1446,35 @@ AT_CHECK(
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
+
+AT_SETUP([ovs-ofctl diff-flows])
+OVS_VSWITCHD_START
+
+# Prints the integers from $1 to $2, increasing by $3 (default 1) on stdout.
+seq () {
+    while test $1 -le $2; do
+        echo $1
+        set `expr $1 + ${3-1}` $2 $3
+    done
+}
+
+# Add tons of flows to br0.
+for i in `seq 0 1023`; do echo "dl_vlan=$i,actions=drop"; done > add-flows.txt
+AT_CHECK([ovs-ofctl add-flows br0 add-flows.txt])
+
+# Dump them and compare against what we expect by hand, then with diff-flows.
+for i in `seq 0 1023`; do echo " dl_vlan=$i actions=drop"; done | sort > expout
+AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | sed '/NXST_FLOW/d' | sort],
+  [0], [expout])
+AT_CHECK([ovs-ofctl diff-flows br0 add-flows.txt])
+
+# Remove even-numbered flows, compare again.
+for i in `seq 0 1023 2`; do echo "dl_vlan=$i"; done > del-flows.txt
+AT_CHECK([ovs-ofctl del-flows br0 - < del-flows.txt])
+for i in `seq 0 1023 2`; do echo "+dl_vlan=$i actions=drop"; done | sort > expout
+AT_CHECK([ovs-ofctl diff-flows br0 add-flows.txt | sort], [0], [expout])
+for i in `seq 0 1023 2`; do echo "-dl_vlan=$i actions=drop"; done | sort > expout
+AT_CHECK([ovs-ofctl diff-flows add-flows.txt br0 | sort], [0], [expout])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP

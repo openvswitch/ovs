@@ -1903,6 +1903,7 @@ recv_flow_stats_reply(struct vconn *vconn, ovs_be32 send_xid,
         case EOF:
             flags = ((const struct ofp_stats_msg *) reply->l2)->flags;
             ofpbuf_delete(reply);
+            reply = NULL;
             if (!(flags & htons(OFPSF_REPLY_MORE))) {
                 *replyp = NULL;
                 return false;
