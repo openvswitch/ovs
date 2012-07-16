@@ -505,8 +505,11 @@ ofpacts_pull_actions(struct ofpbuf *openflow, unsigned int actions_len,
  * in 'ofpacts' by the converted ofpacts; on failure, clears 'ofpacts'.
  * Returns 0 if successful, otherwise an OpenFlow error.
  *
- * This function does not check that the actions are valid in a given context.
- * The caller should do so, with ofpacts_check(). */
+ * The parsed actions are valid generically, but they may not be valid in a
+ * specific context.  For example, port numbers up to OFPP_MAX are valid
+ * generically, but specific datapaths may only support port numbers in a
+ * smaller range.  Use ofpacts_check() to additional check whether actions are
+ * valid in a specific context. */
 enum ofperr
 ofpacts_pull_openflow10(struct ofpbuf *openflow, unsigned int actions_len,
                         struct ofpbuf *ofpacts)
@@ -826,8 +829,11 @@ get_actions_from_instruction(const struct ofp11_instruction *inst,
  * instructions, so you should call ofpacts_pull_openflow11_instructions()
  * instead of this function.
  *
- * This function does not check that the actions are valid in a given context.
- * The caller should do so, with ofpacts_check(). */
+ * The parsed actions are valid generically, but they may not be valid in a
+ * specific context.  For example, port numbers up to OFPP_MAX are valid
+ * generically, but specific datapaths may only support port numbers in a
+ * smaller range.  Use ofpacts_check() to additional check whether actions are
+ * valid in a specific context. */
 enum ofperr
 ofpacts_pull_openflow11_actions(struct ofpbuf *openflow,
                                 unsigned int actions_len,
