@@ -47,6 +47,19 @@ ovs-vswitchd will create a TAP device as the bridge's local interface,
 named the same as the bridge, as well as for each configured internal
 interface.
 
+Firewall Rules
+--------------
+
+On Linux, when a physical interface is in use by the userspace
+datapath, packets received on the interface still also pass into the
+kernel TCP/IP stack.  This can cause surprising and incorrect
+behavior.  You can use "iptables" to avoid this behavior, by using it
+to drop received packets.  For example, to drop packets received on
+eth0:
+
+    iptables -A INPUT -i eth0 -j DROP
+    iptables -A FORWARD -i eth0 -j DROP
+
 Bug Reporting
 -------------
 
