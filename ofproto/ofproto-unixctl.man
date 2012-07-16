@@ -34,7 +34,7 @@ The second form specifies the packet's contents implicitly:
 .IP "\fIflow\fR"
 A flow in one of two forms: either the form printed by
 \fBovs\-dpctl\fR(8)'s \fBdump\-flows\fR command, or in a format
-similar to that accepted by \Bovs\-ofctl\fR(8)'s \fBadd\-flow\fR
+similar to that accepted by \fBovs\-ofctl\fR(8)'s \fBadd\-flow\fR
 command.  This is not an OpenFlow flow: besides other differences, it
 never contains wildcards.  \fB\*(PN\fR generates an arbitrary packet
 that has the specified \fIflow\fR.
@@ -54,7 +54,7 @@ The switch on which the packet arrived (one of those listed by
 .IP "\fIflow\fR"
 A flow in one of two forms: either the form printed by
 \fBovs\-dpctl\fR(8)'s \fBdump\-flows\fR command, or in a format
-similar to that accepted by \Bovs\-ofctl\fR(8)'s \fBadd\-flow\fR
+similar to that accepted by \fBovs\-ofctl\fR(8)'s \fBadd\-flow\fR
 command.  This is not an OpenFlow flow: besides other differences, it
 never contains wildcards.
 .RE
