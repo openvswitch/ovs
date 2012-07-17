@@ -2233,7 +2233,8 @@ ofctl_parse_oxm(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 }
 
 static void
-print_differences(const void *a_, size_t a_len,
+print_differences(const char *prefix,
+                  const void *a_, size_t a_len,
                   const void *b_, size_t b_len)
 {
     const uint8_t *a = a_;
@@ -2242,14 +2243,15 @@ print_differences(const void *a_, size_t a_len,
 
     for (i = 0; i < MIN(a_len, b_len); i++) {
         if (a[i] != b[i]) {
-            printf("%2zu: %02"PRIx8" -> %02"PRIx8"\n", i, a[i], b[i]);
+            printf("%s%2zu: %02"PRIx8" -> %02"PRIx8"\n",
+                   prefix, i, a[i], b[i]);
         }
     }
     for (i = a_len; i < b_len; i++) {
-        printf("%2zu: (none) -> %02"PRIx8"\n", i, b[i]);
+        printf("%s%2zu: (none) -> %02"PRIx8"\n", prefix, i, b[i]);
     }
     for (i = b_len; i < a_len; i++) {
-        printf("%2zu: %02"PRIx8" -> (none)\n", i, a[i]);
+        printf("%s%2zu: %02"PRIx8" -> (none)\n", prefix, i, a[i]);
     }
 }
 
@@ -2299,13 +2301,61 @@ ofctl_parse_ofp10_actions(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
         ofpbuf_init(&of10_out, 0);
         ofpacts_put_openflow10(ofpacts.data, ofpacts.size, &of10_out);
 
-        print_differences(of10_in.data, of10_in.size,
+        print_differences("", of10_in.data, of10_in.size,
                           of10_out.data, of10_out.size);
         putchar('\n');
 
         ofpbuf_uninit(&ofpacts);
         ofpbuf_uninit(&of10_in);
         ofpbuf_uninit(&of10_out);
+    }
+    ds_destroy(&in);
+}
+
+/* "parse-ofp10-match": reads a series of ofp10_match specifications as hex
+ * bytes from stdin, converts them to cls_rules, prints them as strings on
+ * stdout, and then converts them back to hex bytes and prints any differences
+ * from the input. */
+static void
+ofctl_parse_ofp10_match(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
+{
+    struct ds in;
+
+    ds_init(&in);
+    while (!ds_get_preprocessed_line(&in, stdin)) {
+        struct ofpbuf match_in;
+        struct ofp10_match match_out;
+        struct ofp10_match match_normal;
+        struct cls_rule rule;
+
+        /* Parse hex bytes. */
+        ofpbuf_init(&match_in, 0);
+        if (ofpbuf_put_hex(&match_in, ds_cstr(&in), NULL)[0] != '\0') {
+            ovs_fatal(0, "Trailing garbage in hex data");
+        }
+        if (match_in.size != sizeof(struct ofp10_match)) {
+            ovs_fatal(0, "Input is %zu bytes, expected %zu",
+                      match_in.size, sizeof(struct ofp10_match));
+        }
+
+        /* Convert to cls_rule and print. */
+        ofputil_cls_rule_from_ofp10_match(match_in.data, OFP_DEFAULT_PRIORITY,
+                                          &rule);
+        cls_rule_print(&rule);
+
+        /* Convert back to ofp10_match and print differences from input. */
+        ofputil_cls_rule_to_ofp10_match(&rule, &match_out);
+        print_differences("", match_in.data, match_in.size,
+                          &match_out, sizeof match_out);
+
+        /* Normalize, then convert and compare again. */
+        ofputil_normalize_rule(&rule);
+        ofputil_cls_rule_to_ofp10_match(&rule, &match_normal);
+        print_differences("normal: ", &match_out, sizeof match_out,
+                          &match_normal, sizeof match_normal);
+        putchar('\n');
+
+        ofpbuf_uninit(&match_in);
     }
     ds_destroy(&in);
 }
@@ -2351,7 +2401,7 @@ ofctl_parse_ofp11_match(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
         /* Convert back to ofp11_match and print differences from input. */
         ofputil_cls_rule_to_ofp11_match(&rule, &match_out);
 
-        print_differences(match_in.data, match_in.size,
+        print_differences("", match_in.data, match_in.size,
                           &match_out, sizeof match_out);
         putchar('\n');
 
@@ -2407,7 +2457,7 @@ ofctl_parse_ofp11_actions(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
         ofpbuf_init(&of11_out, 0);
         ofpacts_put_openflow11_actions(ofpacts.data, ofpacts.size, &of11_out);
 
-        print_differences(of11_in.data, of11_in.size,
+        print_differences("", of11_in.data, of11_in.size,
                           of11_out.data, of11_out.size);
         putchar('\n');
 
@@ -2467,7 +2517,7 @@ ofctl_parse_ofp11_instructions(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
         ofpacts_put_openflow11_instructions(ofpacts.data, ofpacts.size,
                                             &of11_out);
 
-        print_differences(of11_in.data, of11_in.size,
+        print_differences("", of11_in.data, of11_in.size,
                           of11_out.data, of11_out.size);
         putchar('\n');
 
@@ -2555,6 +2605,7 @@ static const struct command all_commands[] = {
     { "parse-nxm", 0, 0, ofctl_parse_nxm },
     { "parse-oxm", 0, 0, ofctl_parse_oxm },
     { "parse-ofp10-actions", 0, 0, ofctl_parse_ofp10_actions },
+    { "parse-ofp10-match", 0, 0, ofctl_parse_ofp10_match },
     { "parse-ofp11-match", 0, 0, ofctl_parse_ofp11_match },
     { "parse-ofp11-actions", 0, 0, ofctl_parse_ofp11_actions },
     { "parse-ofp11-instructions", 0, 0, ofctl_parse_ofp11_instructions },
