@@ -3937,9 +3937,12 @@ ofopgroup_complete(struct ofopgroup *group)
         if (!op->error && !ofproto_rule_is_hidden(rule)) {
             /* Check that we can just cast from ofoperation_type to
              * nx_flow_update_event. */
-            BUILD_ASSERT_DECL(OFOPERATION_ADD == NXFME_ADDED);
-            BUILD_ASSERT_DECL(OFOPERATION_DELETE == NXFME_DELETED);
-            BUILD_ASSERT_DECL(OFOPERATION_MODIFY == NXFME_MODIFIED);
+            BUILD_ASSERT_DECL((enum nx_flow_update_event) OFOPERATION_ADD
+                              == NXFME_ADDED);
+            BUILD_ASSERT_DECL((enum nx_flow_update_event) OFOPERATION_DELETE
+                              == NXFME_DELETED);
+            BUILD_ASSERT_DECL((enum nx_flow_update_event) OFOPERATION_MODIFY
+                              == NXFME_MODIFIED);
 
             ofmonitor_report(ofproto->connmgr, rule,
                              (enum nx_flow_update_event) op->type,

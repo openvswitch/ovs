@@ -455,7 +455,7 @@ ofpacts_from_openflow10(const union ofp_action *in, size_t n_in,
 
             ds_init(&s);
             ds_put_hex_dump(&s, in, n_in * sizeof *a, 0, false);
-            VLOG_WARN("bad action format at offset %#x:\n%s",
+            VLOG_WARN("bad action format at offset %#zx:\n%s",
                       (n_in - left) * sizeof *a, ds_cstr(&s));
             ds_destroy(&s);
         }
