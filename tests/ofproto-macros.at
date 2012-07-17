@@ -41,7 +41,9 @@ m4_define([OVS_VSWITCHD_START],
 
    dnl Start ovsdb-server.
    AT_CHECK([ovsdb-server --detach --pidfile --log-file --remote=punix:$OVS_RUNDIR/db.sock], [0], [], [stderr])
-   AT_CHECK([[sed < stderr '/vlog|INFO|opened log file/d']])
+   AT_CHECK([[sed < stderr '
+/vlog|INFO|opened log file/d
+/ovsdb_server|INFO|ovsdb-server (Open vSwitch)/d']])
    AT_CAPTURE_FILE([ovsdb-server.log])
 
    dnl Initialize database.
@@ -52,6 +54,7 @@ m4_define([OVS_VSWITCHD_START],
    AT_CAPTURE_FILE([ovs-vswitchd.log])
    AT_CHECK([[sed < stderr '
 /vlog|INFO|opened log file/d
+/vswitchd|INFO|ovs-vswitchd (Open vSwitch)/d
 /reconnect|INFO|/d
 /ofproto|INFO|using datapath ID/d
 /ofproto|INFO|datapath ID changed to fedcba9876543210/d']])
