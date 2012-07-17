@@ -556,6 +556,8 @@ bridge_reconfigure_continue(const struct ovsrec_open_vswitch *ovs_cfg)
          * forked us to exit successfully. */
         daemonize_complete();
         reconfiguring = false;
+
+        VLOG_INFO("%s (Open vSwitch) %s", program_name, VERSION);
     }
 
     return done;
