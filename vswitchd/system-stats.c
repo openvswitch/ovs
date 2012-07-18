@@ -1,4 +1,4 @@
-/* Copyright (c) 2010 Nicira, Inc.
+/* Copyright (c) 2010, 2012 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,6 +14,8 @@
  */
 
 #include <config.h>
+
+#include "system-stats.h"
 
 #include <assert.h>
 #include <ctype.h>
@@ -34,7 +36,7 @@
 #include "dirs.h"
 #include "dynamic-string.h"
 #include "shash.h"
-#include "system-stats.h"
+#include "smap.h"
 #include "timeval.h"
 #include "vlog.h"
 
@@ -52,24 +54,23 @@ VLOG_DEFINE_THIS_MODULE(system_stats);
 #endif
 
 static void
-get_cpu_cores(struct shash *stats)
+get_cpu_cores(struct smap *stats)
 {
     long int n_cores = sysconf(_SC_NPROCESSORS_ONLN);
     if (n_cores > 0) {
-        shash_add(stats, "cpu", xasprintf("%ld", n_cores));
+        smap_add_format(stats, "cpu", "%ld", n_cores);
     }
 }
 
 static void
-get_load_average(struct shash *stats OVS_UNUSED)
+get_load_average(struct smap *stats OVS_UNUSED)
 {
 #if HAVE_GETLOADAVG
     double loadavg[3];
 
     if (getloadavg(loadavg, 3) == 3) {
-        shash_add(stats, "load_average",
-                  xasprintf("%.2f,%.2f,%.2f",
-                            loadavg[0], loadavg[1], loadavg[2]));
+        smap_add_format(stats, "load_average", "%.2f,%.2f,%.2f",
+                        loadavg[0], loadavg[1], loadavg[2]);
     }
 #endif
 }
@@ -90,7 +91,7 @@ get_page_size(void)
 }
 
 static void
-get_memory_stats(struct shash *stats)
+get_memory_stats(struct smap *stats)
 {
     if (!LINUX) {
         unsigned int pagesize = get_page_size();
@@ -108,7 +109,7 @@ get_memory_stats(struct shash *stats)
 
         mem_total = phys_pages * (pagesize / 1024);
         mem_used = (phys_pages - avphys_pages) * (pagesize / 1024);
-        shash_add(stats, "memory", xasprintf("%d,%d", mem_total, mem_used));
+        smap_add_format(stats, "memory", "%d,%d", mem_total, mem_used);
     } else {
         static const char file_name[] = "/proc/meminfo";
         int mem_used, mem_cache, swap_used;
@@ -152,9 +153,8 @@ get_memory_stats(struct shash *stats)
         mem_used = mem_total - mem_free;
         mem_cache = buffers + cached;
         swap_used = swap_total - swap_free;
-        shash_add(stats, "memory",
-                  xasprintf("%d,%d,%d,%d,%d", mem_total, mem_used, mem_cache,
-                            swap_total, swap_used));
+        smap_add_format(stats, "memory", "%d,%d,%d,%d,%d",
+                        mem_total, mem_used, mem_cache, swap_total, swap_used);
     }
 }
 
@@ -385,7 +385,7 @@ get_process_info(pid_t pid, struct process_info *pinfo)
 }
 
 static void
-get_process_stats(struct shash *stats)
+get_process_stats(struct smap *stats)
 {
     struct dirent *de;
     DIR *dir;
@@ -398,9 +398,9 @@ get_process_stats(struct shash *stats)
 
     while ((de = readdir(dir)) != NULL) {
         struct process_info pinfo;
-        char *key, *value;
         char *file_name;
         char *extension;
+        char *key;
         pid_t pid;
 
 #ifdef _DIRENT_HAVE_D_TYPE
@@ -423,27 +423,23 @@ get_process_stats(struct shash *stats)
 
         key = xasprintf("process_%.*s",
                         (int) (extension - de->d_name), de->d_name);
-        if (shash_find(stats, key)) {
-            free(key);
-            continue;
+        if (!smap_get(stats, key)) {
+            if (LINUX && get_process_info(pid, &pinfo)) {
+                smap_add_format(stats, key, "%lu,%lu,%lld,%d,%lld,%lld",
+                                pinfo.vsz, pinfo.rss, pinfo.cputime,
+                                pinfo.crashes, pinfo.booted, pinfo.uptime);
+            } else {
+                smap_add(stats, key, "");
+            }
         }
-
-        if (LINUX && get_process_info(pid, &pinfo)) {
-            value = xasprintf("%lu,%lu,%lld,%d,%lld,%lld",
-                              pinfo.vsz, pinfo.rss, pinfo.cputime,
-                              pinfo.crashes, pinfo.booted, pinfo.uptime);
-        } else {
-            value = xstrdup("");
-        }
-
-        shash_add_nocopy(stats, key, value);
+        free(key);
     }
 
     closedir(dir);
 }
 
 static void
-get_filesys_stats(struct shash *stats OVS_UNUSED)
+get_filesys_stats(struct smap *stats OVS_UNUSED)
 {
 #if HAVE_SETMNTENT && HAVE_STATVFS
     static const char file_name[] = "/etc/mtab";
@@ -489,14 +485,14 @@ get_filesys_stats(struct shash *stats OVS_UNUSED)
     endmntent(stream);
 
     if (s.length) {
-        shash_add(stats, "file_systems", ds_steal_cstr(&s));
+        smap_add(stats, "file_systems", ds_cstr(&s));
     }
     ds_destroy(&s);
 #endif  /* HAVE_SETMNTENT && HAVE_STATVFS */
 }
 
 void
-get_system_stats(struct shash *stats)
+get_system_stats(struct smap *stats)
 {
     get_cpu_cores(stats);
     get_load_average(stats);

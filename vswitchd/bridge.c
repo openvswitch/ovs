@@ -1875,14 +1875,14 @@ static void
 refresh_system_stats(const struct ovsrec_open_vswitch *cfg)
 {
     struct ovsdb_datum datum;
-    struct shash stats;
+    struct smap stats;
 
-    shash_init(&stats);
+    smap_init(&stats);
     if (enable_system_stats(cfg)) {
         get_system_stats(&stats);
     }
 
-    ovsdb_datum_from_shash(&datum, &stats);
+    ovsdb_datum_from_smap(&datum, &stats);
     ovsdb_idl_txn_write(&cfg->header_, &ovsrec_open_vswitch_col_statistics,
                         &datum);
 }

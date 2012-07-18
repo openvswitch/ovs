@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010, 2011 Nicira, Inc.
+/* Copyright (c) 2009, 2010, 2011, 2012 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@
 
 struct ds;
 struct ovsdb_symbol_table;
+struct smap;
 
 /* One value of an atomic type (given by enum ovs_atomic_type). */
 union ovsdb_atom {
@@ -172,7 +173,7 @@ void ovsdb_datum_to_string(const struct ovsdb_datum *,
 void ovsdb_datum_to_bare(const struct ovsdb_datum *,
                          const struct ovsdb_type *, struct ds *);
 
-void ovsdb_datum_from_shash(struct ovsdb_datum *, struct shash *);
+void ovsdb_datum_from_smap(struct ovsdb_datum *, struct smap *);
 
 /* Comparison. */
 uint32_t ovsdb_datum_hash(const struct ovsdb_datum *,

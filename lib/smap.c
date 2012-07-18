@@ -125,16 +125,29 @@ smap_remove_node(struct smap *smap, struct smap_node *node)
     free(node);
 }
 
-/* Deletes 'node' from 'sh'.  Neither the node's key nor its value is freed;
- * instead, ownership is transferred to the caller.  Returns the node's key. */
-char *
-smap_steal(struct smap *smap, struct smap_node *node)
+/* Deletes 'node' from 'smap'.
+ *
+ * If 'keyp' is nonnull, stores the node's key in '*keyp' and transfers
+ * ownership to the caller.  Otherwise, frees the node's key.  Similarly for
+ * 'valuep' and the node's value. */
+void
+smap_steal(struct smap *smap, struct smap_node *node,
+           char **keyp, char **valuep)
 {
-    char *key = node->key;
+    if (keyp) {
+        *keyp = node->key;
+    } else {
+        free(node->key);
+    }
+
+    if (valuep) {
+        *valuep = node->value;
+    } else {
+        free(node->value);
+    }
 
     hmap_remove(&smap->map, &node->node);
     free(node);
-    return key;
 }
 
 /* Removes all key-value pairs from 'smap'. */
