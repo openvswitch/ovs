@@ -757,6 +757,24 @@ OFPT_BARRIER_REPLY:
 ovs-appctl -t ovs-ofctl ofctl/set-output-file monitor.log
 ovs-ofctl add-flow br0 in_port=0,dl_vlan=124,actions=output:2
 ovs-ofctl add-flow br0 in_port=0,dl_vlan=123,actions=output:5
+ovs-ofctl add-flow br0 in_port=0,dl_vlan=123,dl_vlan_pcp=0,actions=output:6
+ovs-ofctl add-flow br0 in_port=0,dl_vlan=123,dl_vlan_pcp=1,actions=output:7
+ovs-ofctl add-flow br0 in_port=0,dl_vlan=123,actions=output:8
+ovs-ofctl add-flow br0 in_port=0,dl_vlan=65535,dl_vlan_pcp=0,actions=output:9
+ovs-ofctl add-flow br0 in_port=0,dl_vlan=65535,dl_vlan_pcp=1,actions=output:10
+ovs-ofctl add-flow br0 in_port=0,dl_vlan=65535,actions=output:11
+ovs-ofctl add-flow br0 in_port=0,dl_vlan=8191,dl_vlan_pcp=0,actions=output:12
+ovs-ofctl add-flow br0 in_port=0,dl_vlan=8191,dl_vlan_pcp=1,actions=output:13
+ovs-ofctl add-flow br0 in_port=0,dl_vlan=8191,actions=output:14
+ovs-ofctl add-flow br0 in_port=0,dl_vlan=0,dl_vlan_pcp=0,actions=output:15
+ovs-ofctl add-flow br0 in_port=0,dl_vlan=0,dl_vlan_pcp=1,actions=output:16
+ovs-ofctl add-flow br0 in_port=0,dl_vlan=0,actions=output:17
+ovs-ofctl add-flow br0 in_port=0,dl_vlan=0,dl_vlan_pcp=0,actions=output:18
+ovs-ofctl add-flow br0 in_port=0,dl_vlan=0,dl_vlan_pcp=1,actions=output:19
+ovs-ofctl add-flow br0 in_port=0,dl_vlan=0,actions=output:20
+ovs-ofctl add-flow br0 in_port=0,dl_vlan_pcp=0,actions=output:21
+ovs-ofctl add-flow br0 in_port=0,dl_vlan_pcp=1,actions=output:22
+ovs-ofctl add-flow br0 in_port=0,actions=output:23
 ovs-ofctl mod-flows br0 cookie=5,dl_vlan=123,actions=output:3
 ovs-ofctl del-flows br0 dl_vlan=123
 ovs-ofctl del-flows br0
@@ -767,11 +785,61 @@ AT_CHECK([sed 's/ (xid=0x[[1-9a-fA-F]][[0-9a-fA-F]]*)//' monitor.log], [0],
 NXST_FLOW_MONITOR reply (xid=0x0):
  event=ADDED table=0 cookie=0 in_port=0,dl_vlan=123 actions=output:5
 NXST_FLOW_MONITOR reply (xid=0x0):
+ event=ADDED table=0 cookie=0 in_port=0,dl_vlan=123,dl_vlan_pcp=0 actions=output:6
+NXST_FLOW_MONITOR reply (xid=0x0):
+ event=ADDED table=0 cookie=0 in_port=0,dl_vlan=123,dl_vlan_pcp=1 actions=output:7
+NXST_FLOW_MONITOR reply (xid=0x0):
+ event=ADDED table=0 cookie=0 in_port=0,dl_vlan=123 actions=output:8
+NXST_FLOW_MONITOR reply (xid=0x0):
+ event=ADDED table=0 cookie=0 in_port=0,dl_vlan=0,dl_vlan_pcp=0 actions=output:9
+NXST_FLOW_MONITOR reply (xid=0x0):
+ event=ADDED table=0 cookie=0 in_port=0,dl_vlan=0,dl_vlan_pcp=1 actions=output:10
+NXST_FLOW_MONITOR reply (xid=0x0):
+ event=ADDED table=0 cookie=0 in_port=0,vlan_tci=0x0000 actions=output:11
+NXST_FLOW_MONITOR reply (xid=0x0):
+ event=ADDED table=0 cookie=0 in_port=0,dl_vlan=4095,dl_vlan_pcp=0 actions=output:12
+NXST_FLOW_MONITOR reply (xid=0x0):
+ event=ADDED table=0 cookie=0 in_port=0,dl_vlan=4095,dl_vlan_pcp=1 actions=output:13
+NXST_FLOW_MONITOR reply (xid=0x0):
+ event=ADDED table=0 cookie=0 in_port=0,dl_vlan=4095 actions=output:14
+NXST_FLOW_MONITOR reply (xid=0x0):
+ event=ADDED table=0 cookie=0 in_port=0,dl_vlan=0,dl_vlan_pcp=0 actions=output:15
+NXST_FLOW_MONITOR reply (xid=0x0):
+ event=ADDED table=0 cookie=0 in_port=0,dl_vlan=0,dl_vlan_pcp=1 actions=output:16
+NXST_FLOW_MONITOR reply (xid=0x0):
+ event=ADDED table=0 cookie=0 in_port=0,dl_vlan=0 actions=output:17
+NXST_FLOW_MONITOR reply (xid=0x0):
+ event=ADDED table=0 cookie=0 in_port=0,dl_vlan=0,dl_vlan_pcp=0 actions=output:18
+NXST_FLOW_MONITOR reply (xid=0x0):
+ event=ADDED table=0 cookie=0 in_port=0,dl_vlan=0,dl_vlan_pcp=1 actions=output:19
+NXST_FLOW_MONITOR reply (xid=0x0):
+ event=ADDED table=0 cookie=0 in_port=0,dl_vlan=0 actions=output:20
+NXST_FLOW_MONITOR reply (xid=0x0):
+ event=ADDED table=0 cookie=0 in_port=0,dl_vlan_pcp=0 actions=output:21
+NXST_FLOW_MONITOR reply (xid=0x0):
+ event=ADDED table=0 cookie=0 in_port=0,dl_vlan_pcp=1 actions=output:22
+NXST_FLOW_MONITOR reply (xid=0x0):
+ event=ADDED table=0 cookie=0 in_port=0 actions=output:23
+NXST_FLOW_MONITOR reply (xid=0x0):
  event=MODIFIED table=0 cookie=0x5 in_port=0,dl_vlan=123 actions=output:3
+ event=MODIFIED table=0 cookie=0x5 in_port=0,dl_vlan=123,dl_vlan_pcp=0 actions=output:3
+ event=MODIFIED table=0 cookie=0x5 in_port=0,dl_vlan=123,dl_vlan_pcp=1 actions=output:3
 NXST_FLOW_MONITOR reply (xid=0x0):
  event=DELETED reason=delete table=0 cookie=0x5 in_port=0,dl_vlan=123 actions=output:3
+ event=DELETED reason=delete table=0 cookie=0x5 in_port=0,dl_vlan=123,dl_vlan_pcp=0 actions=output:3
+ event=DELETED reason=delete table=0 cookie=0x5 in_port=0,dl_vlan=123,dl_vlan_pcp=1 actions=output:3
 NXST_FLOW_MONITOR reply (xid=0x0):
+ event=DELETED reason=delete table=0 cookie=0 in_port=0,dl_vlan_pcp=0 actions=output:21
+ event=DELETED reason=delete table=0 cookie=0 in_port=0,dl_vlan_pcp=1 actions=output:22
+ event=DELETED reason=delete table=0 cookie=0 in_port=0,dl_vlan=0 actions=output:20
  event=DELETED reason=delete table=0 cookie=0 in_port=0,dl_vlan=124 actions=output:2
+ event=DELETED reason=delete table=0 cookie=0 in_port=0,dl_vlan=4095 actions=output:14
+ event=DELETED reason=delete table=0 cookie=0 in_port=0,dl_vlan=4095,dl_vlan_pcp=1 actions=output:13
+ event=DELETED reason=delete table=0 cookie=0 in_port=0,vlan_tci=0x0000 actions=output:11
+ event=DELETED reason=delete table=0 cookie=0 in_port=0,dl_vlan=0,dl_vlan_pcp=0 actions=output:18
+ event=DELETED reason=delete table=0 cookie=0 in_port=0,dl_vlan=4095,dl_vlan_pcp=0 actions=output:12
+ event=DELETED reason=delete table=0 cookie=0 in_port=0,dl_vlan=0,dl_vlan_pcp=1 actions=output:19
+ event=DELETED reason=delete table=0 cookie=0 in_port=0 actions=output:23
 OFPT_BARRIER_REPLY:
 ])
 
