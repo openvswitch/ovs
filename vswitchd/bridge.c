@@ -2018,6 +2018,8 @@ bridge_run(void)
     bool vlan_splinters_changed;
     struct bridge *br;
 
+    ovsrec_open_vswitch_init((struct ovsrec_open_vswitch *) &null_cfg);
+
     /* (Re)configure if necessary. */
     if (!reconfiguring) {
         ovsdb_idl_run(idl);
