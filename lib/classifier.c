@@ -160,52 +160,72 @@ cls_rule_set_dl_type(struct cls_rule *rule, ovs_be16 dl_type)
     rule->flow.dl_type = dl_type;
 }
 
+/* Modifies 'value_src' so that the Ethernet address must match
+ * 'value_dst' exactly. 'mask_dst' is set to all 1s */
+static void
+cls_rule_set_eth(const uint8_t value_src[ETH_ADDR_LEN],
+                 uint8_t value_dst[ETH_ADDR_LEN],
+                 uint8_t mask_dst[ETH_ADDR_LEN])
+{
+    memcpy(value_dst, value_src, ETH_ADDR_LEN);
+    memset(mask_dst, 0xff, ETH_ADDR_LEN);
+}
+
+/* Modifies 'value_src' so that the Ethernet address must match
+ * 'value_src' after each byte is ANDed with the appropriate byte in
+ * 'mask_src'. 'mask_dst' is set to 'mask_src' */
+static void
+cls_rule_set_eth_masked(const uint8_t value_src[ETH_ADDR_LEN],
+                        const uint8_t mask_src[ETH_ADDR_LEN],
+                        uint8_t value_dst[ETH_ADDR_LEN],
+                        uint8_t mask_dst[ETH_ADDR_LEN])
+{
+    size_t i;
+
+    for (i = 0; i < ETH_ADDR_LEN; i++) {
+        value_dst[i] = value_src[i] & mask_src[i];
+        mask_dst[i] = mask_src[i];
+    }
+}
+
+/* Modifies 'rule' so that the source Ethernet address
+ * must match 'dl_src' exactly. */
 void
 cls_rule_set_dl_src(struct cls_rule *rule, const uint8_t dl_src[ETH_ADDR_LEN])
 {
-    memcpy(rule->flow.dl_src, dl_src, ETH_ADDR_LEN);
-    memset(rule->wc.dl_src_mask, 0xff, ETH_ADDR_LEN);
+    cls_rule_set_eth(dl_src, rule->flow.dl_src, rule->wc.dl_src_mask);
 }
 
-/* Modifies 'rule' so that the Ethernet address must match 'dl_src' after each
- * byte is ANDed with the appropriate byte in 'mask'. */
+/* Modifies 'rule' so that the source Ethernet address
+ * must match 'dl_src' after each byte is ANDed with
+ * the appropriate byte in 'mask'. */
 void
 cls_rule_set_dl_src_masked(struct cls_rule *rule,
                            const uint8_t dl_src[ETH_ADDR_LEN],
                            const uint8_t mask[ETH_ADDR_LEN])
 {
-    size_t i;
-
-    for (i = 0; i < ETH_ADDR_LEN; i++) {
-        rule->flow.dl_src[i] = dl_src[i] & mask[i];
-        rule->wc.dl_src_mask[i] = mask[i];
-    }
+    cls_rule_set_eth_masked(dl_src, mask,
+                            rule->flow.dl_src, rule->wc.dl_src_mask);
 }
 
-/* Modifies 'rule' so that the Ethernet address must match 'dl_dst' exactly. */
+/* Modifies 'rule' so that the destination Ethernet address
+ * must match 'dl_dst' exactly. */
 void
 cls_rule_set_dl_dst(struct cls_rule *rule, const uint8_t dl_dst[ETH_ADDR_LEN])
 {
-    memcpy(rule->flow.dl_dst, dl_dst, ETH_ADDR_LEN);
-    memset(rule->wc.dl_dst_mask, 0xff, ETH_ADDR_LEN);
+    cls_rule_set_eth(dl_dst, rule->flow.dl_dst, rule->wc.dl_dst_mask);
 }
 
-/* Modifies 'rule' so that the Ethernet address must match 'dl_dst' after each
- * byte is ANDed with the appropriate byte in 'mask'.
- *
- * This function will assert-fail if 'mask' is invalid.  Only 'mask' values
- * accepted by flow_wildcards_is_dl_dst_mask_valid() are allowed. */
+/* Modifies 'rule' so that the destination Ethernet address
+ * must match 'dl_src' after each byte is ANDed with
+ * the appropriate byte in 'mask'. */
 void
 cls_rule_set_dl_dst_masked(struct cls_rule *rule,
                            const uint8_t dl_dst[ETH_ADDR_LEN],
                            const uint8_t mask[ETH_ADDR_LEN])
 {
-    size_t i;
-
-    for (i = 0; i < ETH_ADDR_LEN; i++) {
-        rule->flow.dl_dst[i] = dl_dst[i] & mask[i];
-        rule->wc.dl_dst_mask[i] = mask[i];
-    }
+    cls_rule_set_eth_masked(dl_dst, mask,
+                            rule->flow.dl_dst, rule->wc.dl_dst_mask);
 }
 
 void
