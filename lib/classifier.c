@@ -436,8 +436,15 @@ cls_rule_set_ipv6_dst_masked(struct cls_rule *rule, const struct in6_addr *dst,
 void
 cls_rule_set_ipv6_label(struct cls_rule *rule, ovs_be32 ipv6_label)
 {
-    rule->wc.wildcards &= ~FWW_IPV6_LABEL;
-    rule->flow.ipv6_label = ipv6_label;
+    cls_rule_set_ipv6_label_masked(rule, ipv6_label, htonl(UINT32_MAX));
+}
+
+void
+cls_rule_set_ipv6_label_masked(struct cls_rule *rule, ovs_be32 ipv6_label,
+                               ovs_be32 mask)
+{
+    rule->flow.ipv6_label = ipv6_label & mask;
+    rule->wc.ipv6_label_mask = mask;
 }
 
 void
@@ -539,7 +546,7 @@ cls_rule_format(const struct cls_rule *rule, struct ds *s)
 
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 12);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 13);
 
     if (rule->priority != OFP_DEFAULT_PRIORITY) {
         ds_put_format(s, "priority=%d,", rule->priority);
@@ -655,8 +662,15 @@ cls_rule_format(const struct cls_rule *rule, struct ds *s)
     if (f->dl_type == htons(ETH_TYPE_IPV6)) {
         format_ipv6_netmask(s, "ipv6_src", &f->ipv6_src, &wc->ipv6_src_mask);
         format_ipv6_netmask(s, "ipv6_dst", &f->ipv6_dst, &wc->ipv6_dst_mask);
-        if (!(w & FWW_IPV6_LABEL)) {
-            ds_put_format(s, "ipv6_label=0x%05"PRIx32",", ntohl(f->ipv6_label));
+        if (wc->ipv6_label_mask) {
+            if (wc->ipv6_label_mask == htonl(UINT32_MAX)) {
+                ds_put_format(s, "ipv6_label=0x%05"PRIx32",",
+                              ntohl(f->ipv6_label));
+            } else {
+                ds_put_format(s, "ipv6_label=0x%05"PRIx32"/0x%05"PRIx32",",
+                              ntohl(f->ipv6_label),
+                              ntohl(wc->ipv6_label_mask));
+            }
         }
     } else {
         format_ip_netmask(s, "nw_src", f->nw_src, wc->nw_src_mask);
@@ -1228,7 +1242,7 @@ flow_equal_except(const struct flow *a, const struct flow *b,
     const flow_wildcards_t wc = wildcards->wildcards;
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 12);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 13);
 
     for (i = 0; i < FLOW_N_REGS; i++) {
         if ((a->regs[i] ^ b->regs[i]) & wildcards->reg_masks[i]) {
@@ -1256,7 +1270,7 @@ flow_equal_except(const struct flow *a, const struct flow *b,
             && !((a->nw_frag ^ b->nw_frag) & wildcards->nw_frag_mask)
             && (wc & FWW_ARP_SHA || eth_addr_equals(a->arp_sha, b->arp_sha))
             && (wc & FWW_ARP_THA || eth_addr_equals(a->arp_tha, b->arp_tha))
-            && (wc & FWW_IPV6_LABEL || a->ipv6_label == b->ipv6_label)
+            && !((a->ipv6_label ^ b->ipv6_label) & wildcards->ipv6_label_mask)
             && ipv6_equal_except(&a->ipv6_src, &b->ipv6_src,
                     &wildcards->ipv6_src_mask)
             && ipv6_equal_except(&a->ipv6_dst, &b->ipv6_dst,

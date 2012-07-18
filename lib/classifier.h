@@ -142,6 +142,7 @@ void cls_rule_set_ipv6_dst(struct cls_rule *, const struct in6_addr *);
 void cls_rule_set_ipv6_dst_masked(struct cls_rule *, const struct in6_addr *,
                                   const struct in6_addr *);
 void cls_rule_set_ipv6_label(struct cls_rule *, ovs_be32);
+void cls_rule_set_ipv6_label_masked(struct cls_rule *, ovs_be32, ovs_be32);
 void cls_rule_set_nd_target(struct cls_rule *, const struct in6_addr *);
 void cls_rule_set_nd_target_masked(struct cls_rule *, const struct in6_addr *,
                                    const struct in6_addr *);

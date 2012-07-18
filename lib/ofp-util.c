@@ -104,15 +104,14 @@ static const flow_wildcards_t WC_INVARIANTS = 0
 void
 ofputil_wildcard_from_ofpfw10(uint32_t ofpfw, struct flow_wildcards *wc)
 {
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 12);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 13);
 
     /* Initialize most of rule->wc. */
     flow_wildcards_init_catchall(wc);
     wc->wildcards = (OVS_FORCE flow_wildcards_t) ofpfw & WC_INVARIANTS;
 
     /* Wildcard fields that aren't defined by ofp10_match or tun_id. */
-    wc->wildcards |= (FWW_ARP_SHA | FWW_ARP_THA | FWW_NW_ECN | FWW_NW_TTL
-                      | FWW_IPV6_LABEL);
+    wc->wildcards |= FWW_ARP_SHA | FWW_ARP_THA | FWW_NW_ECN | FWW_NW_TTL;
 
     if (ofpfw & OFPFW10_NW_TOS) {
         /* OpenFlow 1.0 defines a TOS wildcard, but it's much later in
@@ -1464,7 +1463,7 @@ ofputil_usable_protocols(const struct cls_rule *rule)
 {
     const struct flow_wildcards *wc = &rule->wc;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 12);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 13);
 
     /* NXM and OF1.1+ supports bitwise matching on ethernet addresses. */
     if (!eth_mask_is_exact(wc->dl_src_mask)
@@ -1508,7 +1507,7 @@ ofputil_usable_protocols(const struct cls_rule *rule)
     }
 
     /* Only NXM supports matching IPv6 flow label. */
-    if (!(wc->wildcards & FWW_IPV6_LABEL)) {
+    if (wc->ipv6_label_mask) {
         return OFPUTIL_P_NXM_ANY;
     }
 
@@ -4117,7 +4116,7 @@ ofputil_normalize_rule(struct cls_rule *rule)
     }
     if (!(may_match & MAY_IPV6)) {
         wc.ipv6_src_mask = wc.ipv6_dst_mask = in6addr_any;
-        wc.wildcards |= FWW_IPV6_LABEL;
+        wc.ipv6_label_mask = htonl(0);
     }
     if (!(may_match & MAY_ND_TARGET)) {
         wc.nd_target_mask = in6addr_any;

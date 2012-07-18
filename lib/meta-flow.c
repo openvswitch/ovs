@@ -222,7 +222,7 @@ static const struct mf_field mf_fields[MFF_N_IDS] = {
     {
         MFF_IPV6_LABEL, "ipv6_label", NULL,
         4, 20,
-        MFM_NONE, FWW_IPV6_LABEL,
+        MFM_FULLY, 0,
         MFS_HEXADECIMAL,
         MFP_IPV6,
         false,
@@ -561,7 +561,6 @@ mf_is_all_wild(const struct mf_field *mf, const struct flow_wildcards *wc)
     case MFF_IP_DSCP:
     case MFF_IP_ECN:
     case MFF_IP_TTL:
-    case MFF_IPV6_LABEL:
     case MFF_ARP_OP:
     case MFF_ARP_SHA:
     case MFF_ARP_THA:
@@ -599,6 +598,9 @@ mf_is_all_wild(const struct mf_field *mf, const struct flow_wildcards *wc)
         return ipv6_mask_is_any(&wc->ipv6_src_mask);
     case MFF_IPV6_DST:
         return ipv6_mask_is_any(&wc->ipv6_dst_mask);
+
+    case MFF_IPV6_LABEL:
+        return !wc->ipv6_label_mask;
 
     case MFF_ND_TARGET:
         return ipv6_mask_is_any(&wc->nd_target_mask);
@@ -1391,7 +1393,7 @@ mf_set_wild(const struct mf_field *mf, struct cls_rule *rule)
         break;
 
     case MFF_IPV6_LABEL:
-        rule->wc.wildcards |= FWW_IPV6_LABEL;
+        rule->wc.ipv6_label_mask = 0;
         rule->flow.ipv6_label = 0;
         break;
 
@@ -1493,7 +1495,6 @@ mf_set(const struct mf_field *mf,
     case MFF_ETH_TYPE:
     case MFF_VLAN_VID:
     case MFF_VLAN_PCP:
-    case MFF_IPV6_LABEL:
     case MFF_IP_PROTO:
     case MFF_IP_TTL:
     case MFF_IP_DSCP:
@@ -1547,6 +1548,14 @@ mf_set(const struct mf_field *mf,
 
     case MFF_IPV6_DST:
         cls_rule_set_ipv6_dst_masked(rule, &value->ipv6, &mask->ipv6);
+        break;
+
+    case MFF_IPV6_LABEL:
+        if ((mask->be32 & htonl(IPV6_LABEL_MASK)) == htonl(IPV6_LABEL_MASK)) {
+            mf_set_value(mf, value, rule);
+        } else {
+            cls_rule_set_ipv6_label_masked(rule, value->be32, mask->be32);
+        }
         break;
 
     case MFF_ND_TARGET:

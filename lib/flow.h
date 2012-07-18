@@ -34,7 +34,7 @@ struct ofpbuf;
 /* This sequence number should be incremented whenever anything involving flows
  * or the wildcarding of flows changes.  This will cause build assertion
  * failures in places which likely need to be updated. */
-#define FLOW_WC_SEQ 12
+#define FLOW_WC_SEQ 13
 
 #define FLOW_N_REGS 8
 BUILD_ASSERT_DECL(FLOW_N_REGS <= NXM_NX_MAX_REGS);
@@ -103,7 +103,7 @@ BUILD_ASSERT_DECL(sizeof(((struct flow *)0)->nw_frag) == 1);
 BUILD_ASSERT_DECL(sizeof(struct flow) == FLOW_SIG_SIZE + FLOW_PAD_SIZE);
 
 /* Remember to update FLOW_WC_SEQ when changing 'struct flow'. */
-BUILD_ASSERT_DECL(FLOW_SIG_SIZE == 150 && FLOW_WC_SEQ == 12);
+BUILD_ASSERT_DECL(FLOW_SIG_SIZE == 150 && FLOW_WC_SEQ == 13);
 
 void flow_extract(struct ofpbuf *, uint32_t priority, ovs_be64 tun_id,
                   uint16_t in_port, struct flow *);
@@ -157,12 +157,11 @@ typedef unsigned int OVS_BITWISE flow_wildcards_t;
 #define FWW_NW_ECN      ((OVS_FORCE flow_wildcards_t) (1 << 2))
 #define FWW_ARP_SHA     ((OVS_FORCE flow_wildcards_t) (1 << 3))
 #define FWW_ARP_THA     ((OVS_FORCE flow_wildcards_t) (1 << 6))
-#define FWW_IPV6_LABEL  ((OVS_FORCE flow_wildcards_t) (1 << 7))
-#define FWW_NW_TTL      ((OVS_FORCE flow_wildcards_t) (1 << 8))
-#define FWW_ALL         ((OVS_FORCE flow_wildcards_t) (((1 << 9)) - 1))
+#define FWW_NW_TTL      ((OVS_FORCE flow_wildcards_t) (1 << 7))
+#define FWW_ALL         ((OVS_FORCE flow_wildcards_t) (((1 << 8)) - 1))
 
 /* Remember to update FLOW_WC_SEQ when adding or removing FWW_*. */
-BUILD_ASSERT_DECL(FWW_ALL == ((1 << 9) - 1) && FLOW_WC_SEQ == 12);
+BUILD_ASSERT_DECL(FWW_ALL == ((1 << 8) - 1) && FLOW_WC_SEQ == 13);
 
 /* Information on wildcards for a flow, as a supplement to "struct flow".
  *
@@ -179,17 +178,18 @@ struct flow_wildcards {
     struct in6_addr ipv6_dst_mask; /* 1-bit in each signficant ipv6_dst bit. */
     struct in6_addr nd_target_mask; /* 1-bit in each significant
                                        nd_target bit. */
+    ovs_be32 ipv6_label_mask;   /* 1 bit in each significant ipv6_label bit. */
     ovs_be16 vlan_tci_mask;     /* 1-bit in each significant vlan_tci bit. */
     ovs_be16 tp_src_mask;       /* 1-bit in each significant tp_src bit. */
     ovs_be16 tp_dst_mask;       /* 1-bit in each significant tp_dst bit. */
     uint8_t nw_frag_mask;       /* 1-bit in each significant nw_frag bit. */
     uint8_t dl_src_mask[6];     /* 1-bit in each significant dl_src bit. */
     uint8_t dl_dst_mask[6];     /* 1-bit in each significant dl_dst bit. */
-    uint8_t zeros[1];           /* Padding field set to zero. */
+    uint8_t zeros[5];           /* Padding field set to zero. */
 };
 
 /* Remember to update FLOW_WC_SEQ when updating struct flow_wildcards. */
-BUILD_ASSERT_DECL(sizeof(struct flow_wildcards) == 128 && FLOW_WC_SEQ == 12);
+BUILD_ASSERT_DECL(sizeof(struct flow_wildcards) == 136 && FLOW_WC_SEQ == 13);
 
 void flow_wildcards_init_catchall(struct flow_wildcards *);
 void flow_wildcards_init_exact(struct flow_wildcards *);

@@ -444,7 +444,7 @@ flow_zero_wildcards(struct flow *flow, const struct flow_wildcards *wildcards)
     const flow_wildcards_t wc = wildcards->wildcards;
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 12);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 13);
 
     for (i = 0; i < FLOW_N_REGS; i++) {
         flow->regs[i] &= wildcards->reg_masks[i];
@@ -467,9 +467,7 @@ flow_zero_wildcards(struct flow *flow, const struct flow_wildcards *wildcards)
     if (wc & FWW_NW_PROTO) {
         flow->nw_proto = 0;
     }
-    if (wc & FWW_IPV6_LABEL) {
-        flow->ipv6_label = htonl(0);
-    }
+    flow->ipv6_label &= wildcards->ipv6_label_mask;
     if (wc & FWW_NW_DSCP) {
         flow->nw_tos &= ~IP_DSCP_MASK;
     }
@@ -499,7 +497,7 @@ flow_zero_wildcards(struct flow *flow, const struct flow_wildcards *wildcards)
 void
 flow_get_metadata(const struct flow *flow, struct flow_metadata *fmd)
 {
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 12);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 13);
 
     fmd->tun_id = flow->tun_id;
     fmd->tun_id_mask = htonll(UINT64_MAX);
@@ -593,7 +591,7 @@ flow_print(FILE *stream, const struct flow *flow)
 void
 flow_wildcards_init_catchall(struct flow_wildcards *wc)
 {
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 12);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 13);
 
     wc->wildcards = FWW_ALL;
     wc->tun_id_mask = htonll(0);
@@ -601,6 +599,7 @@ flow_wildcards_init_catchall(struct flow_wildcards *wc)
     wc->nw_dst_mask = htonl(0);
     wc->ipv6_src_mask = in6addr_any;
     wc->ipv6_dst_mask = in6addr_any;
+    wc->ipv6_label_mask = htonl(0);
     wc->nd_target_mask = in6addr_any;
     memset(wc->reg_masks, 0, sizeof wc->reg_masks);
     wc->metadata_mask = htonll(0);
@@ -618,7 +617,7 @@ flow_wildcards_init_catchall(struct flow_wildcards *wc)
 void
 flow_wildcards_init_exact(struct flow_wildcards *wc)
 {
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 12);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 13);
 
     wc->wildcards = 0;
     wc->tun_id_mask = htonll(UINT64_MAX);
@@ -626,6 +625,7 @@ flow_wildcards_init_exact(struct flow_wildcards *wc)
     wc->nw_dst_mask = htonl(UINT32_MAX);
     wc->ipv6_src_mask = in6addr_exact;
     wc->ipv6_dst_mask = in6addr_exact;
+    wc->ipv6_label_mask = htonl(UINT32_MAX);
     wc->nd_target_mask = in6addr_exact;
     memset(wc->reg_masks, 0xff, sizeof wc->reg_masks);
     wc->metadata_mask = htonll(UINT64_MAX);
@@ -645,7 +645,7 @@ flow_wildcards_is_exact(const struct flow_wildcards *wc)
 {
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 12);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 13);
 
     if (wc->wildcards
         || wc->tun_id_mask != htonll(UINT64_MAX)
@@ -659,6 +659,7 @@ flow_wildcards_is_exact(const struct flow_wildcards *wc)
         || !eth_mask_is_exact(wc->dl_dst_mask)
         || !ipv6_mask_is_exact(&wc->ipv6_src_mask)
         || !ipv6_mask_is_exact(&wc->ipv6_dst_mask)
+        || wc->ipv6_label_mask != htonl(UINT32_MAX)
         || !ipv6_mask_is_exact(&wc->nd_target_mask)
         || wc->nw_frag_mask != UINT8_MAX) {
         return false;
@@ -680,7 +681,7 @@ flow_wildcards_is_catchall(const struct flow_wildcards *wc)
 {
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 12);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 13);
 
     if (wc->wildcards != FWW_ALL
         || wc->tun_id_mask != htonll(0)
@@ -694,6 +695,7 @@ flow_wildcards_is_catchall(const struct flow_wildcards *wc)
         || !eth_addr_is_zero(wc->dl_dst_mask)
         || !ipv6_mask_is_any(&wc->ipv6_src_mask)
         || !ipv6_mask_is_any(&wc->ipv6_dst_mask)
+        || wc->ipv6_label_mask != htonl(0)
         || !ipv6_mask_is_any(&wc->nd_target_mask)
         || wc->nw_frag_mask != 0) {
         return false;
@@ -718,7 +720,7 @@ flow_wildcards_combine(struct flow_wildcards *dst,
 {
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 12);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 13);
 
     dst->wildcards = src1->wildcards | src2->wildcards;
     dst->tun_id_mask = src1->tun_id_mask & src2->tun_id_mask;
@@ -728,6 +730,7 @@ flow_wildcards_combine(struct flow_wildcards *dst,
                                         &src2->ipv6_src_mask);
     dst->ipv6_dst_mask = ipv6_addr_bitand(&src1->ipv6_dst_mask,
                                         &src2->ipv6_dst_mask);
+    dst->ipv6_label_mask = src1->ipv6_label_mask & src2->ipv6_label_mask;
     dst->nd_target_mask = ipv6_addr_bitand(&src1->nd_target_mask,
                                         &src2->nd_target_mask);
     for (i = 0; i < FLOW_N_REGS; i++) {
@@ -748,7 +751,7 @@ flow_wildcards_hash(const struct flow_wildcards *wc, uint32_t basis)
     /* If you change struct flow_wildcards and thereby trigger this
      * assertion, please check that the new struct flow_wildcards has no holes
      * in it before you update the assertion. */
-    BUILD_ASSERT_DECL(sizeof *wc == 96 + FLOW_N_REGS * 4);
+    BUILD_ASSERT_DECL(sizeof *wc == 104 + FLOW_N_REGS * 4);
     return hash_bytes(wc, sizeof *wc, basis);
 }
 
@@ -760,7 +763,7 @@ flow_wildcards_equal(const struct flow_wildcards *a,
 {
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 12);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 13);
 
     if (a->wildcards != b->wildcards
         || a->tun_id_mask != b->tun_id_mask
@@ -770,6 +773,7 @@ flow_wildcards_equal(const struct flow_wildcards *a,
         || a->metadata_mask != b->metadata_mask
         || !ipv6_addr_equals(&a->ipv6_src_mask, &b->ipv6_src_mask)
         || !ipv6_addr_equals(&a->ipv6_dst_mask, &b->ipv6_dst_mask)
+        || a->ipv6_label_mask != b->ipv6_label_mask
         || !ipv6_addr_equals(&a->nd_target_mask, &b->nd_target_mask)
         || a->tp_src_mask != b->tp_src_mask
         || a->tp_dst_mask != b->tp_dst_mask
@@ -797,7 +801,7 @@ flow_wildcards_has_extra(const struct flow_wildcards *a,
     uint8_t eth_masked[ETH_ADDR_LEN];
     struct in6_addr ipv6_masked;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 12);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 13);
 
     for (i = 0; i < FLOW_N_REGS; i++) {
         if ((a->reg_masks[i] & b->reg_masks[i]) != b->reg_masks[i]) {
@@ -834,6 +838,7 @@ flow_wildcards_has_extra(const struct flow_wildcards *a,
             || (a->tun_id_mask & b->tun_id_mask) != b->tun_id_mask
             || (a->nw_src_mask & b->nw_src_mask) != b->nw_src_mask
             || (a->nw_dst_mask & b->nw_dst_mask) != b->nw_dst_mask
+            || (a->ipv6_label_mask & b->ipv6_label_mask) != b->ipv6_label_mask
             || (a->vlan_tci_mask & b->vlan_tci_mask) != b->vlan_tci_mask
             || (a->metadata_mask & b->metadata_mask) != b->metadata_mask
             || (a->tp_src_mask & b->tp_src_mask) != b->tp_src_mask

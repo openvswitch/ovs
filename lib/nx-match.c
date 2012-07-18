@@ -493,7 +493,7 @@ nx_put_match(struct ofpbuf *b, bool oxm, const struct cls_rule *cr,
     int match_len;
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 12);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 13);
 
     /* Metadata. */
     if (!(wc & FWW_IN_PORT)) {
@@ -540,10 +540,8 @@ nx_put_match(struct ofpbuf *b, bool oxm, const struct cls_rule *cr,
                    oxm ? OXM_OF_ICMPV6_TYPE : NXM_NX_ICMPV6_TYPE,
                    oxm ? OXM_OF_ICMPV6_CODE : NXM_NX_ICMPV6_CODE, oxm);
 
-        if (!(wc & FWW_IPV6_LABEL)) {
-            nxm_put_32(b, oxm ? OXM_OF_IPV6_FLABEL : NXM_NX_IPV6_LABEL,
-                       flow->ipv6_label);
-        }
+        nxm_put_32m(b, oxm ? OXM_OF_IPV6_FLABEL : NXM_NX_IPV6_LABEL,
+                    flow->ipv6_label, cr->wc.ipv6_label_mask);
 
         if (flow->nw_proto == IPPROTO_ICMPV6
             && (flow->tp_src == htons(ND_NEIGHBOR_SOLICIT) ||
