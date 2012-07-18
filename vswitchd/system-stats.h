@@ -16,8 +16,10 @@
 #ifndef VSWITCHD_SYSTEM_STATS
 #define VSWITCHD_SYSTEM_STATS 1
 
-struct smap;
+#include <stdbool.h>
 
-void get_system_stats(struct smap *);
+void system_stats_enable(bool enable);
+struct smap *system_stats_run(void);
+void system_stats_wait(void);
 
 #endif /* vswitchd/system-stats.h */

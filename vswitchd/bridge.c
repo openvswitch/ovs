@@ -148,10 +148,10 @@ static struct ovsdb_idl *idl;
 /* Most recently processed IDL sequence number. */
 static unsigned int idl_seqno;
 
-/* Each time this timer expires, the bridge fetches systems and interface
+/* Each time this timer expires, the bridge fetches interface and mirror
  * statistics and pushes them into the database. */
-#define STATS_INTERVAL (5 * 1000) /* In milliseconds. */
-static long long int stats_timer = LLONG_MIN;
+#define IFACE_STATS_INTERVAL (5 * 1000) /* In milliseconds. */
+static long long int iface_stats_timer = LLONG_MIN;
 
 /* Stores the time after which rate limited statistics may be written to the
  * database.  Only updated when changes to the database require rate limiting.
@@ -219,6 +219,9 @@ static struct lacp_settings *port_configure_lacp(struct port *,
 static void port_configure_bond(struct port *, struct bond_settings *,
                                 uint32_t *bond_stable_ids);
 static bool port_is_synthetic(const struct port *);
+
+static void reconfigure_system_stats(const struct ovsrec_open_vswitch *);
+static void run_system_stats(void);
 
 static void bridge_configure_mirrors(struct bridge *);
 static struct mirror *mirror_create(struct bridge *,
@@ -456,6 +459,8 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
             iface_clear_db_record(if_cfg->cfg);
         }
     }
+
+    reconfigure_system_stats(ovs_cfg);
 }
 
 static bool
@@ -1872,19 +1877,36 @@ enable_system_stats(const struct ovsrec_open_vswitch *cfg)
 }
 
 static void
-refresh_system_stats(const struct ovsrec_open_vswitch *cfg)
+reconfigure_system_stats(const struct ovsrec_open_vswitch *cfg)
 {
-    struct ovsdb_datum datum;
-    struct smap stats;
+    bool enable = enable_system_stats(cfg);
 
-    smap_init(&stats);
-    if (enable_system_stats(cfg)) {
-        get_system_stats(&stats);
+    system_stats_enable(enable);
+    if (!enable) {
+        ovsrec_open_vswitch_set_statistics(cfg, NULL);
     }
+}
 
-    ovsdb_datum_from_smap(&datum, &stats);
-    ovsdb_idl_txn_write(&cfg->header_, &ovsrec_open_vswitch_col_statistics,
-                        &datum);
+static void
+run_system_stats(void)
+{
+    const struct ovsrec_open_vswitch *cfg = ovsrec_open_vswitch_first(idl);
+    struct smap *stats;
+
+    stats = system_stats_run();
+    if (stats && cfg) {
+        struct ovsdb_idl_txn *txn;
+        struct ovsdb_datum datum;
+
+        txn = ovsdb_idl_txn_create(idl);
+        ovsdb_datum_from_smap(&datum, stats);
+        ovsdb_idl_txn_write(&cfg->header_, &ovsrec_open_vswitch_col_statistics,
+                            &datum);
+        ovsdb_idl_txn_commit(txn);
+        ovsdb_idl_txn_destroy(txn);
+
+        free(stats);
+    }
 }
 
 static inline const char *
@@ -2080,8 +2102,8 @@ bridge_run(void)
         reconf_txn = NULL;
     }
 
-    /* Refresh system and interface stats if necessary. */
-    if (time_msec() >= stats_timer) {
+    /* Refresh interface and mirror stats if necessary. */
+    if (time_msec() >= iface_stats_timer) {
         if (cfg) {
             struct ovsdb_idl_txn *txn;
 
@@ -2104,14 +2126,15 @@ bridge_run(void)
                 }
 
             }
-            refresh_system_stats(cfg);
             refresh_controller_status();
             ovsdb_idl_txn_commit(txn);
             ovsdb_idl_txn_destroy(txn); /* XXX */
         }
 
-        stats_timer = time_msec() + STATS_INTERVAL;
+        iface_stats_timer = time_msec() + IFACE_STATS_INTERVAL;
     }
+
+    run_system_stats();
 
     if (time_msec() >= db_limiter) {
         struct ovsdb_idl_txn *txn;
@@ -2177,12 +2200,14 @@ bridge_wait(void)
         HMAP_FOR_EACH (br, node, &all_bridges) {
             ofproto_wait(br->ofproto);
         }
-        poll_timer_wait_until(stats_timer);
+        poll_timer_wait_until(iface_stats_timer);
 
         if (db_limiter > time_msec()) {
             poll_timer_wait_until(db_limiter);
         }
     }
+
+    system_stats_wait();
 }
 
 /* Adds some memory usage statistics for bridges into 'usage', for use with
