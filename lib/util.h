@@ -62,6 +62,7 @@
 #endif
 
 extern const char *program_name;
+extern const char *subprogram_name;
 
 /* Returns the number of elements in ARRAY. */
 #define ARRAY_SIZE(ARRAY) (sizeof ARRAY / sizeof *ARRAY)

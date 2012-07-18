@@ -653,6 +653,14 @@ format_log_message(const struct vlog_module *module, enum vlog_level level,
         case 'r':
             ds_put_format(s, "%lld", time_msec() - time_boot_msec());
             break;
+        case 't':
+            ds_put_cstr(s, subprogram_name[0] ? subprogram_name : "main");
+            break;
+        case 'T':
+            if (subprogram_name[0]) {
+                ds_put_format(s, "(%s)", subprogram_name);
+            }
+            break;
         default:
             ds_put_char(s, p[-1]);
             break;

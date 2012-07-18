@@ -187,6 +187,16 @@ The program's process ID (pid), as a decimal number.
 The number of milliseconds elapsed from the start of the application
 to the time the message was logged.
 .
+.IP \fB%t\fR
+The subprogram name, that is, an identifying name for the process or
+thread that emitted the log message, such as \fBmonitor\fR for the
+process used for \fB\-\-monitor\fR or \fBmain\fR for the primary
+process or thread in a program.
+.
+.IP \fB%T\fR
+The subprogram name enclosed in parentheses, e.g. \fB(monitor)\fR, or
+the empty string for the primary process or thread in a program.
+.
 .IP \fB%%\fR
 A literal \fB%\fR.
 .RE

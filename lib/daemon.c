@@ -351,13 +351,11 @@ static void
 monitor_daemon(pid_t daemon_pid)
 {
     /* XXX Should log daemon's stderr output at startup time. */
-    const char *saved_program_name;
     time_t last_restart;
     char *status_msg;
     int crashes;
 
-    saved_program_name = program_name;
-    program_name = xasprintf("monitor(%s)", program_name);
+    subprogram_name = "monitor";
     status_msg = xstrdup("healthy");
     last_restart = TIME_MIN;
     crashes = 0;
@@ -366,7 +364,7 @@ monitor_daemon(pid_t daemon_pid)
         int status;
 
         proctitle_set("%s: monitoring pid %lu (%s)",
-                      saved_program_name, (unsigned long int) daemon_pid,
+                      program_name, (unsigned long int) daemon_pid,
                       status_msg);
 
         do {
@@ -428,8 +426,7 @@ monitor_daemon(pid_t daemon_pid)
 
     /* Running in new daemon process. */
     proctitle_restore();
-    free((char *) program_name);
-    program_name = saved_program_name;
+    subprogram_name = "";
 }
 
 /* Close standard file descriptors (except any that the client has requested we

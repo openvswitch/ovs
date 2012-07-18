@@ -1,5 +1,8 @@
 post-v1.8.0
 ------------------------
+    - New %t and %T log escapes to identify the subprogram within a
+      cooperating group of processes or threads that emitted a log message.
+      The default log patterns now include this information.
 
 
 v1.8.0 - xx xxx xxxx

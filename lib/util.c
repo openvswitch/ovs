@@ -34,7 +34,14 @@ VLOG_DEFINE_THIS_MODULE(util);
 
 COVERAGE_DEFINE(util_xalloc);
 
+/* argv[0] without directory names. */
 const char *program_name;
+
+/* Ordinarily "" but set to "monitor" for a monitor process or "worker" for a
+ * worker process. */
+const char *subprogram_name = "";
+
+/* --version option output. */
 static char *program_version;
 
 void
@@ -243,7 +250,12 @@ ovs_error_valist(int err_no, const char *format, va_list args)
 {
     int save_errno = errno;
 
-    fprintf(stderr, "%s: ", program_name);
+    if (subprogram_name[0]) {
+        fprintf(stderr, "%s(%s): ", program_name, subprogram_name);
+    } else {
+        fprintf(stderr, "%s: ", program_name);
+    }
+
     vfprintf(stderr, format, args);
     if (err_no != 0) {
         fprintf(stderr, " (%s)", ovs_retval_to_string(err_no));
