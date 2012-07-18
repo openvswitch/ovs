@@ -5158,7 +5158,7 @@ xlate_output_action(struct action_xlate_ctx *ctx,
         compose_output_action(ctx, ctx->flow.in_port);
         break;
     case OFPP_TABLE:
-        xlate_table_action(ctx, ctx->flow.in_port, ctx->table_id);
+        xlate_table_action(ctx, ctx->flow.in_port, 0);
         break;
     case OFPP_NORMAL:
         xlate_normal(ctx);
