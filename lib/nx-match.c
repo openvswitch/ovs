@@ -67,7 +67,8 @@ nx_entry_ok(const void *p, unsigned int match_len)
 
     if (match_len < 4) {
         if (match_len) {
-            VLOG_DBG_RL(&rl, "nx_match ends with partial nxm_header");
+            VLOG_DBG_RL(&rl, "nx_match ends with partial (%u-byte) nxm_header",
+                        match_len);
         }
         return 0;
     }
