@@ -308,7 +308,7 @@ def output(x):
 def output_ts(x):
     output("[%s]  %s" % (time.strftime("%x %X %Z"), x))
 
-def cmd_output(cap, args, label = None, filter = None):
+def cmd_output(cap, args, label=None, filter=None):
     if cap in entries:
         if not label:
             if isinstance(args, list):
@@ -400,9 +400,13 @@ def collect_data():
     run_procs(process_lists.values())
 
 
-def main(argv = None):
+def main(argv=None):
     global ANSWER_YES_TO_ALL, SILENT_MODE
     global entries, data, dbg, unlimited_data
+
+    # Filter flags
+    only_ovs_info = False
+    collect_all_info = True
 
     # we need access to privileged files, exit if we are not running as root
     if os.getuid() != 0:
@@ -420,7 +424,7 @@ def main(argv = None):
         (options, params) = getopt.gnu_getopt(
             argv, 'sy', ['capabilities', 'silent', 'yestoall', 'entries=',
                          'output=', 'outfd=', 'outfile=', 'all', 'unlimited',
-                         'debug'])
+                         'debug', 'ovs'])
     except getopt.GetoptError, opterr:
         print >>sys.stderr, opterr
         return 2
@@ -477,6 +481,10 @@ def main(argv = None):
         elif k == '--debug':
             dbg = True
             ProcOutput.debug = True
+
+        if k == '--ovs':
+            only_ovs_info = True
+            collect_all_info = False
 
     if len(params) != 1:
         print >>sys.stderr, "Invalid additional arguments", str(params)
@@ -547,7 +555,7 @@ exclude those logs from the archive.
     for d in disk_list():
         cmd_output(CAP_HDPARM_T, [HDPARM, '-tT', '/dev/%s' % d])
 
-    file_output(CAP_KERNEL_INFO, [PROC_VERSION, PROC_MODULES, PROC_DEVICES, 
+    file_output(CAP_KERNEL_INFO, [PROC_VERSION, PROC_MODULES, PROC_DEVICES,
                                   PROC_FILESYSTEMS, PROC_CMDLINE])
     cmd_output(CAP_KERNEL_INFO, [ZCAT, PROC_CONFIG], label='config')
     cmd_output(CAP_KERNEL_INFO, [SYSCTL, '-A'])
@@ -561,7 +569,7 @@ exclude those logs from the archive.
     cmd_output(CAP_MULTIPATH, [DMSETUP, 'table'])
     func_output(CAP_MULTIPATH, 'multipathd_topology', multipathd_topology)
     cmd_output(CAP_MULTIPATH, [MPPUTIL, '-a'])
-    if CAP_MULTIPATH in entries:
+    if CAP_MULTIPATH in entries and collect_all_info:
         dump_rdac_groups(CAP_MULTIPATH)
 
     tree_output(CAP_NETWORK_CONFIG, SYSCONFIG_NETWORK_SCRIPTS, IFCFG_RE)
@@ -650,15 +658,44 @@ exclude those logs from the archive.
     tree_output(CAP_YUM, APT_SOURCES_LIST_D)
     cmd_output(CAP_YUM, [DPKG_QUERY, '-W', '-f=${Package} ${Version} ${Status}\n'], 'dpkg-packages')
 
+    # Filter out ovs relevant information if --ovs option passed
+    # else collect all information
+    filters = set()
+    if only_ovs_info:
+        filters.add('ovs')
+        ovs_info_caps = [CAP_NETWORK_STATUS, CAP_SYSTEM_LOGS,
+                         CAP_NETWORK_CONFIG]
+        ovs_info_list = ['process-tree']
+        # We cannot use iteritems, since we modify 'data' as we pass through
+        for (k, v) in data.items():
+            cap = v['cap']
+            if 'filename' in v:
+                info = k[0]
+            else:
+                info = k
+            if info not in ovs_info_list and cap not in ovs_info_caps:
+                del data[k]
+
+    if filters:
+        filter = ",".join(filters)
+    else:
+        filter = None
+
     try:
-        load_plugins()
+        load_plugins(filter=filter)
     except:
         pass
-    
+
     # permit the user to filter out data
-    for k in sorted(data.keys()):
-        if not ANSWER_YES_TO_ALL and not yes("Include '%s'? [Y/n]: " % k):
-            del data[k]
+    # We cannot use iteritems, since we modify 'data' as we pass through
+    for (k, v) in sorted(data.items()):
+       cap = v['cap']
+       if 'filename' in v:
+           key = k[0]
+       else:
+           key = k
+       if not ANSWER_YES_TO_ALL and not yes("Include '%s'? [Y/n]: " % key):
+           del data[k]
 
     # collect selected data now
     output_ts('Running commands to collect data')
@@ -773,7 +810,7 @@ def module_info(cap):
 
 
 def multipathd_topology(cap):
-    pipe = Popen([MULTIPATHD, '-k'], bufsize=1, stdin=PIPE, 
+    pipe = Popen([MULTIPATHD, '-k'], bufsize=1, stdin=PIPE,
                      stdout=PIPE, stderr=dev_null)
     stdout, stderr = pipe.communicate('show topology')
 
@@ -837,7 +874,7 @@ def dump_rdac_groups(cap):
                 group, _ = line.split(None, 1)
                 cmd_output(cap, [MPPUTIL, '-g', group])
 
-def load_plugins(just_capabilities = False):
+def load_plugins(just_capabilities=False, filter=None):
     def getText(nodelist):
         rc = ""
         for node in nodelist:
@@ -845,13 +882,13 @@ def load_plugins(just_capabilities = False):
                 rc += node.data
         return rc.encode()
 
-    def getBoolAttr(el, attr, default = False):
+    def getBoolAttr(el, attr, default=False):
         ret = default
         val = el.getAttribute(attr).lower()
         if val in ['true', 'false', 'yes', 'no']:
             ret = val in ['true', 'yes']
         return ret
-        
+
     for dir in [d for d in os.listdir(PLUGIN_DIR) if os.path.isdir(os.path.join(PLUGIN_DIR, d))]:
         if not caps.has_key(dir):
             if not os.path.exists("%s/%s.xml" % (PLUGIN_DIR, dir)):
@@ -881,13 +918,20 @@ def load_plugins(just_capabilities = False):
 
         if just_capabilities:
             continue
-                    
+
         plugdir = os.path.join(PLUGIN_DIR, dir)
         for file in [f for f in os.listdir(plugdir) if f.endswith('.xml')]:
             xmldoc = parse(os.path.join(plugdir, file))
             assert xmldoc.documentElement.tagName == "collect"
 
             for el in xmldoc.documentElement.getElementsByTagName("*"):
+                filters_tmp = el.getAttribute("filters")
+                if filters_tmp == '':
+                    filters = []
+                else:
+                    filters = filters_tmp.split(',')
+                if not(filter is None or filter in filters):
+                    continue
                 if el.tagName == "files":
                     newest_first = getBoolAttr(el, 'newest_first')
                     file_output(dir, getText(el.childNodes).split(),
@@ -897,7 +941,8 @@ def load_plugins(just_capabilities = False):
                     if pattern == '': pattern = None
                     negate = getBoolAttr(el, 'negate')
                     newest_first = getBoolAttr(el, 'newest_first')
-                    tree_output(dir, getText(el.childNodes), pattern and re.compile(pattern) or None,
+                    tree_output(dir, getText(el.childNodes),
+                                pattern and re.compile(pattern) or None,
                                 negate=negate, newest_first=newest_first)
                 elif el.tagName == "command":
                     label = el.getAttribute("label")
@@ -982,7 +1027,7 @@ def make_zip(subdir, output_file):
                 pass
     finally:
         zf.close()
-    
+
     output ('Writing archive %s successful.' % filename)
     if SILENT_MODE:
         print filename
@@ -1062,7 +1107,7 @@ def update_cap(cap, k, v):
     caps[cap] = tuple(l)
 
 
-def size_of_dir(d, pattern = None, negate = False):
+def size_of_dir(d, pattern=None, negate=False):
     if os.path.isdir(d):
         return size_of_all([os.path.join(d, fn) for fn in os.listdir(d)],
                            pattern, negate)
@@ -1070,7 +1115,7 @@ def size_of_dir(d, pattern = None, negate = False):
         return 0
 
 
-def size_of_all(files, pattern = None, negate = False):
+def size_of_all(files, pattern=None, negate=False):
     return sum([size_of(f, pattern, negate) for f in files])
 
 
@@ -1252,7 +1297,7 @@ def pidof(name):
 
 
 class StringIOmtime(StringIO.StringIO):
-    def __init__(self, buf = ''):
+    def __init__(self, buf=''):
         StringIO.StringIO.__init__(self, buf)
         self.mtime = time.time()
 

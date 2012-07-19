@@ -1,5 +1,6 @@
 post-v1.8.0
 ------------------------
+    - ovs-bugtool: New --ovs option to report only OVS related information.
     - New %t and %T log escapes to identify the subprogram within a
       cooperating group of processes or threads that emitted a log message.
       The default log patterns now include this information.

@@ -17,5 +17,5 @@
 -->
 
 <collect>
-  <directory label="ovsdb-backups" pattern=".*/conf.db.backup[0-9][^/]*$">/etc/openvswitch</directory>
+  <directory label="ovsdb-backups" filters="ovs" pattern=".*/conf.db.backup[0-9][^/]*$">/etc/openvswitch</directory>
 </collect>
