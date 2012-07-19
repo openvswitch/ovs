@@ -132,6 +132,7 @@ struct remote_mp {
     uint32_t seq;        /* Most recently received sequence number. */
     uint8_t num_health_ccm; /* Number of received ccm frames every
                                CFM_HEALTH_INTERVAL * 'fault_interval'. */
+    long long int last_rx; /* Last CCM reception time. */
 
 };
 
@@ -159,21 +160,19 @@ cfm_fault_reason_to_str(int reason) {
 }
 
 static void
-ds_put_cfm_fault(struct ds *ds, int old_fault, int new_fault)
+ds_put_cfm_fault(struct ds *ds, int fault)
 {
     int i;
 
     for (i = 0; i < CFM_FAULT_N_REASONS; i++) {
         int reason = 1 << i;
 
-        if ((old_fault | new_fault) & reason) {
-            ds_put_format(ds, " %s%s",
-                          (!(old_fault & reason) ? "+"
-                           : !(new_fault & reason) ? "-"
-                           : ""),
-                          cfm_fault_reason_to_str(reason));
+        if (fault & reason) {
+            ds_put_format(ds, "%s ", cfm_fault_reason_to_str(reason));
         }
     }
+
+    ds_chomp(ds, ' ');
 }
 
 static void
@@ -376,8 +375,9 @@ cfm_run(struct cfm *cfm)
         HMAP_FOR_EACH_SAFE (rmp, rmp_next, node, &cfm->remote_mps) {
 
             if (!rmp->recv) {
-                VLOG_DBG("%s: no CCM from RMP %"PRIu64" in the last %lldms",
-                         cfm->name, rmp->mpid, interval);
+                VLOG_INFO("%s: Received no CCM from RMP %"PRIu64" in the last"
+                          " %lldms", cfm->name, rmp->mpid,
+                          time_msec() - rmp->last_rx);
                 hmap_remove(&cfm->remote_mps, &rmp->node);
                 free(rmp);
             } else {
@@ -398,9 +398,12 @@ cfm_run(struct cfm *cfm)
         if (old_cfm_fault != cfm->fault && !VLOG_DROP_INFO(&rl)) {
             struct ds ds = DS_EMPTY_INITIALIZER;
 
-            ds_put_cfm_fault(&ds, old_cfm_fault, cfm->fault);
-            VLOG_INFO("%s: CFM fault status changed:%s", cfm->name,
-                      ds_cstr_ro(&ds));
+            ds_put_cstr(&ds, "from [");
+            ds_put_cfm_fault(&ds, old_cfm_fault);
+            ds_put_cstr(&ds, "] to [");
+            ds_put_cfm_fault(&ds, cfm->fault);
+            ds_put_char(&ds, ']');
+            VLOG_INFO("%s: CFM faults changed %s.", cfm->name, ds_cstr(&ds));
             ds_destroy(&ds);
         }
 
@@ -649,6 +652,7 @@ cfm_process_heartbeat(struct cfm *cfm, const struct ofpbuf *p)
             cfm->recv_fault |= cfm_fault;
             rmp->seq = ccm_seq;
             rmp->opup = !ccm_opdown;
+            rmp->last_rx = time_msec();
         }
     }
 }
@@ -723,8 +727,8 @@ cfm_print_details(struct ds *ds, const struct cfm *cfm)
 
     fault = cfm_get_fault(cfm);
     if (fault) {
-        ds_put_cstr(ds, "\tfault:");
-        ds_put_cfm_fault(ds, fault, fault);
+        ds_put_cstr(ds, "\tfault: ");
+        ds_put_cfm_fault(ds, fault);
         ds_put_cstr(ds, "\n");
     }
 
