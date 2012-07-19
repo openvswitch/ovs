@@ -779,7 +779,24 @@ ovs-ofctl mod-flows br0 cookie=5,dl_vlan=123,actions=output:3
 ovs-ofctl del-flows br0 dl_vlan=123
 ovs-ofctl del-flows br0
 ovs-appctl -t ovs-ofctl ofctl/barrier
-AT_CHECK([sed 's/ (xid=0x[[1-9a-fA-F]][[0-9a-fA-F]]*)//' monitor.log], [0],
+sort='
+    # Sorts groups of lines that start with a space, without moving them
+    # past the nearest line that does not start with a space.
+    use warnings;
+    use strict;
+    my @buffer = ();
+    while (<STDIN>) {
+        if (/^ /) {
+            push(@buffer, $_);
+        } else {
+            print $_ foreach sort(@buffer);
+            print $_;
+            @buffer = ();
+        }
+    }
+    print $_ foreach sort(@buffer);
+'
+AT_CHECK([sed 's/ (xid=0x[[1-9a-fA-F]][[0-9a-fA-F]]*)//' monitor.log | perl -e "$sort"], [0],
 [NXST_FLOW_MONITOR reply (xid=0x0):
  event=ADDED table=0 cookie=0 in_port=0,dl_vlan=124 actions=output:2
 NXST_FLOW_MONITOR reply (xid=0x0):
@@ -829,17 +846,17 @@ NXST_FLOW_MONITOR reply (xid=0x0):
  event=DELETED reason=delete table=0 cookie=0x5 in_port=0,dl_vlan=123,dl_vlan_pcp=0 actions=output:3
  event=DELETED reason=delete table=0 cookie=0x5 in_port=0,dl_vlan=123,dl_vlan_pcp=1 actions=output:3
 NXST_FLOW_MONITOR reply (xid=0x0):
- event=DELETED reason=delete table=0 cookie=0 in_port=0,dl_vlan_pcp=0 actions=output:21
- event=DELETED reason=delete table=0 cookie=0 in_port=0,dl_vlan_pcp=1 actions=output:22
+ event=DELETED reason=delete table=0 cookie=0 in_port=0 actions=output:23
  event=DELETED reason=delete table=0 cookie=0 in_port=0,dl_vlan=0 actions=output:20
+ event=DELETED reason=delete table=0 cookie=0 in_port=0,dl_vlan=0,dl_vlan_pcp=0 actions=output:18
+ event=DELETED reason=delete table=0 cookie=0 in_port=0,dl_vlan=0,dl_vlan_pcp=1 actions=output:19
  event=DELETED reason=delete table=0 cookie=0 in_port=0,dl_vlan=124 actions=output:2
  event=DELETED reason=delete table=0 cookie=0 in_port=0,dl_vlan=4095 actions=output:14
- event=DELETED reason=delete table=0 cookie=0 in_port=0,dl_vlan=4095,dl_vlan_pcp=1 actions=output:13
- event=DELETED reason=delete table=0 cookie=0 in_port=0,vlan_tci=0x0000 actions=output:11
- event=DELETED reason=delete table=0 cookie=0 in_port=0,dl_vlan=0,dl_vlan_pcp=0 actions=output:18
  event=DELETED reason=delete table=0 cookie=0 in_port=0,dl_vlan=4095,dl_vlan_pcp=0 actions=output:12
- event=DELETED reason=delete table=0 cookie=0 in_port=0,dl_vlan=0,dl_vlan_pcp=1 actions=output:19
- event=DELETED reason=delete table=0 cookie=0 in_port=0 actions=output:23
+ event=DELETED reason=delete table=0 cookie=0 in_port=0,dl_vlan=4095,dl_vlan_pcp=1 actions=output:13
+ event=DELETED reason=delete table=0 cookie=0 in_port=0,dl_vlan_pcp=0 actions=output:21
+ event=DELETED reason=delete table=0 cookie=0 in_port=0,dl_vlan_pcp=1 actions=output:22
+ event=DELETED reason=delete table=0 cookie=0 in_port=0,vlan_tci=0x0000 actions=output:11
 OFPT_BARRIER_REPLY:
 ])
 
