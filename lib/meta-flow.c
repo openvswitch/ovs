@@ -647,7 +647,6 @@ mf_get_mask(const struct mf_field *mf, const struct flow_wildcards *wc,
     case MFF_IP_DSCP:
     case MFF_IP_ECN:
     case MFF_IP_TTL:
-    case MFF_IPV6_LABEL:
     case MFF_ARP_OP:
     case MFF_ARP_SHA:
     case MFF_ARP_THA:
@@ -698,6 +697,9 @@ mf_get_mask(const struct mf_field *mf, const struct flow_wildcards *wc,
         break;
     case MFF_IPV6_DST:
         mask->ipv6 = wc->ipv6_dst_mask;
+        break;
+    case MFF_IPV6_LABEL:
+        mask->be32 = wc->ipv6_label_mask;
         break;
 
     case MFF_ND_TARGET:
