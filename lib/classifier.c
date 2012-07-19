@@ -412,15 +412,31 @@ cls_rule_set_icmp_code(struct cls_rule *rule, uint8_t icmp_code)
 void
 cls_rule_set_arp_sha(struct cls_rule *rule, const uint8_t sha[ETH_ADDR_LEN])
 {
-    rule->wc.wildcards &= ~FWW_ARP_SHA;
-    memcpy(rule->flow.arp_sha, sha, ETH_ADDR_LEN);
+    cls_rule_set_eth(sha, rule->flow.arp_sha, rule->wc.arp_sha_mask);
+}
+
+void
+cls_rule_set_arp_sha_masked(struct cls_rule *rule,
+                           const uint8_t arp_sha[ETH_ADDR_LEN],
+                           const uint8_t mask[ETH_ADDR_LEN])
+{
+    cls_rule_set_eth_masked(arp_sha, mask,
+                            rule->flow.arp_sha, rule->wc.arp_sha_mask);
 }
 
 void
 cls_rule_set_arp_tha(struct cls_rule *rule, const uint8_t tha[ETH_ADDR_LEN])
 {
-    rule->wc.wildcards &= ~FWW_ARP_THA;
-    memcpy(rule->flow.arp_tha, tha, ETH_ADDR_LEN);
+    cls_rule_set_eth(tha, rule->flow.arp_tha, rule->wc.arp_tha_mask);
+}
+
+void
+cls_rule_set_arp_tha_masked(struct cls_rule *rule,
+                           const uint8_t arp_tha[ETH_ADDR_LEN],
+                           const uint8_t mask[ETH_ADDR_LEN])
+{
+    cls_rule_set_eth_masked(arp_tha, mask,
+                            rule->flow.arp_tha, rule->wc.arp_tha_mask);
 }
 
 void
@@ -566,7 +582,7 @@ cls_rule_format(const struct cls_rule *rule, struct ds *s)
 
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 13);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 14);
 
     if (rule->priority != OFP_DEFAULT_PRIORITY) {
         ds_put_format(s, "priority=%d,", rule->priority);
@@ -704,14 +720,8 @@ cls_rule_format(const struct cls_rule *rule, struct ds *s)
         }
     }
     if (f->dl_type == htons(ETH_TYPE_ARP)) {
-        if (!(w & FWW_ARP_SHA)) {
-            ds_put_format(s, "arp_sha="ETH_ADDR_FMT",",
-                    ETH_ADDR_ARGS(f->arp_sha));
-        }
-        if (!(w & FWW_ARP_THA)) {
-            ds_put_format(s, "arp_tha="ETH_ADDR_FMT",",
-                    ETH_ADDR_ARGS(f->arp_tha));
-        }
+        format_eth_masked(s, "arp_sha", f->arp_sha, wc->arp_sha_mask);
+        format_eth_masked(s, "arp_tha", f->arp_tha, wc->arp_tha_mask);
     }
     if (!(w & FWW_NW_DSCP)) {
         ds_put_format(s, "nw_tos=%"PRIu8",", f->nw_tos & IP_DSCP_MASK);
@@ -748,14 +758,8 @@ cls_rule_format(const struct cls_rule *rule, struct ds *s)
         format_be16_masked(s, "icmp_code", f->tp_dst, wc->tp_dst_mask);
         format_ipv6_netmask(s, "nd_target", &f->nd_target,
                             &wc->nd_target_mask);
-        if (!(w & FWW_ARP_SHA)) {
-            ds_put_format(s, "nd_sll="ETH_ADDR_FMT",",
-                    ETH_ADDR_ARGS(f->arp_sha));
-        }
-        if (!(w & FWW_ARP_THA)) {
-            ds_put_format(s, "nd_tll="ETH_ADDR_FMT",",
-                    ETH_ADDR_ARGS(f->arp_tha));
-        }
+        format_eth_masked(s, "nd_sll", f->arp_sha, wc->arp_sha_mask);
+        format_eth_masked(s, "nd_tll", f->arp_tha, wc->arp_tha_mask);
    } else {
         format_be16_masked(s, "tp_src", f->tp_src, wc->tp_src_mask);
         format_be16_masked(s, "tp_dst", f->tp_dst, wc->tp_dst_mask);
@@ -1262,7 +1266,7 @@ flow_equal_except(const struct flow *a, const struct flow *b,
     const flow_wildcards_t wc = wildcards->wildcards;
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 13);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 14);
 
     for (i = 0; i < FLOW_N_REGS; i++) {
         if ((a->regs[i] ^ b->regs[i]) & wildcards->reg_masks[i]) {
@@ -1288,8 +1292,10 @@ flow_equal_except(const struct flow *a, const struct flow *b,
             && (wc & FWW_NW_DSCP || !((a->nw_tos ^ b->nw_tos) & IP_DSCP_MASK))
             && (wc & FWW_NW_ECN || !((a->nw_tos ^ b->nw_tos) & IP_ECN_MASK))
             && !((a->nw_frag ^ b->nw_frag) & wildcards->nw_frag_mask)
-            && (wc & FWW_ARP_SHA || eth_addr_equals(a->arp_sha, b->arp_sha))
-            && (wc & FWW_ARP_THA || eth_addr_equals(a->arp_tha, b->arp_tha))
+            && eth_addr_equal_except(a->arp_sha, b->arp_sha,
+                                     wildcards->arp_sha_mask)
+            && eth_addr_equal_except(a->arp_tha, b->arp_tha,
+                                     wildcards->arp_tha_mask)
             && !((a->ipv6_label ^ b->ipv6_label) & wildcards->ipv6_label_mask)
             && ipv6_equal_except(&a->ipv6_src, &b->ipv6_src,
                     &wildcards->ipv6_src_mask)

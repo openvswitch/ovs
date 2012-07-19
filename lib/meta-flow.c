@@ -307,7 +307,7 @@ static const struct mf_field mf_fields[MFF_N_IDS] = {
     }, {
         MFF_ARP_SHA, "arp_sha", NULL,
         MF_FIELD_SIZES(mac),
-        MFM_NONE, FWW_ARP_SHA,
+        MFM_FULLY, 0,
         MFS_ETHERNET,
         MFP_ARP,
         false,
@@ -316,7 +316,7 @@ static const struct mf_field mf_fields[MFF_N_IDS] = {
     }, {
         MFF_ARP_THA, "arp_tha", NULL,
         MF_FIELD_SIZES(mac),
-        MFM_NONE, FWW_ARP_THA,
+        MFM_FULLY, 0,
         MFS_ETHERNET,
         MFP_ARP,
         false,
@@ -424,7 +424,7 @@ static const struct mf_field mf_fields[MFF_N_IDS] = {
     }, {
         MFF_ND_SLL, "nd_sll", NULL,
         MF_FIELD_SIZES(mac),
-        MFM_NONE, FWW_ARP_SHA,
+        MFM_FULLY, 0,
         MFS_ETHERNET,
         MFP_ND_SOLICIT,
         false,
@@ -433,7 +433,7 @@ static const struct mf_field mf_fields[MFF_N_IDS] = {
     }, {
         MFF_ND_TLL, "nd_tll", NULL,
         MF_FIELD_SIZES(mac),
-        MFM_NONE, FWW_ARP_THA,
+        MFM_FULLY, 0,
         MFS_ETHERNET,
         MFP_ND_ADVERT,
         false,
@@ -562,10 +562,6 @@ mf_is_all_wild(const struct mf_field *mf, const struct flow_wildcards *wc)
     case MFF_IP_ECN:
     case MFF_IP_TTL:
     case MFF_ARP_OP:
-    case MFF_ARP_SHA:
-    case MFF_ARP_THA:
-    case MFF_ND_SLL:
-    case MFF_ND_TLL:
         assert(mf->fww_bit != 0);
         return (wc->wildcards & mf->fww_bit) != 0;
 
@@ -581,6 +577,14 @@ mf_is_all_wild(const struct mf_field *mf, const struct flow_wildcards *wc)
         return eth_addr_is_zero(wc->dl_src_mask);
     case MFF_ETH_DST:
         return eth_addr_is_zero(wc->dl_dst_mask);
+
+    case MFF_ARP_SHA:
+    case MFF_ND_SLL:
+        return eth_addr_is_zero(wc->arp_sha_mask);
+
+    case MFF_ARP_THA:
+    case MFF_ND_TLL:
+        return eth_addr_is_zero(wc->arp_tha_mask);
 
     case MFF_VLAN_TCI:
         return !wc->vlan_tci_mask;
@@ -648,10 +652,6 @@ mf_get_mask(const struct mf_field *mf, const struct flow_wildcards *wc,
     case MFF_IP_ECN:
     case MFF_IP_TTL:
     case MFF_ARP_OP:
-    case MFF_ARP_SHA:
-    case MFF_ARP_THA:
-    case MFF_ND_SLL:
-    case MFF_ND_TLL:
         assert(mf->fww_bit != 0);
         memset(mask, wc->wildcards & mf->fww_bit ? 0x00 : 0xff, mf->n_bytes);
         break;
@@ -715,6 +715,14 @@ mf_get_mask(const struct mf_field *mf, const struct flow_wildcards *wc,
         break;
     case MFF_ARP_TPA:
         mask->be32 = wc->nw_dst_mask;
+        break;
+    case MFF_ARP_SHA:
+    case MFF_ND_SLL:
+        memcpy(mask->mac, wc->arp_sha_mask, ETH_ADDR_LEN);
+        break;
+    case MFF_ARP_THA:
+    case MFF_ND_TLL:
+        memcpy(mask->mac, wc->arp_tha_mask, ETH_ADDR_LEN);
         break;
 
     case MFF_TCP_SRC:
@@ -1431,14 +1439,14 @@ mf_set_wild(const struct mf_field *mf, struct cls_rule *rule)
 
     case MFF_ARP_SHA:
     case MFF_ND_SLL:
-        rule->wc.wildcards |= FWW_ARP_SHA;
-        memset(rule->flow.arp_sha, 0, sizeof rule->flow.arp_sha);
+        memset(rule->flow.arp_sha, 0, ETH_ADDR_LEN);
+        memset(rule->wc.arp_sha_mask, 0, ETH_ADDR_LEN);
         break;
 
     case MFF_ARP_THA:
     case MFF_ND_TLL:
-        rule->wc.wildcards |= FWW_ARP_THA;
-        memset(rule->flow.arp_tha, 0, sizeof rule->flow.arp_tha);
+        memset(rule->flow.arp_tha, 0, ETH_ADDR_LEN);
+        memset(rule->wc.arp_tha_mask, 0, ETH_ADDR_LEN);
         break;
 
     case MFF_TCP_SRC:
@@ -1502,14 +1510,10 @@ mf_set(const struct mf_field *mf,
     case MFF_IP_DSCP:
     case MFF_IP_ECN:
     case MFF_ARP_OP:
-    case MFF_ARP_SHA:
-    case MFF_ARP_THA:
     case MFF_ICMPV4_TYPE:
     case MFF_ICMPV4_CODE:
     case MFF_ICMPV6_TYPE:
     case MFF_ICMPV6_CODE:
-    case MFF_ND_SLL:
-    case MFF_ND_TLL:
         NOT_REACHED();
 
     case MFF_TUN_ID:
@@ -1530,6 +1534,16 @@ mf_set(const struct mf_field *mf,
 
     case MFF_ETH_SRC:
         cls_rule_set_dl_src_masked(rule, value->mac, mask->mac);
+        break;
+
+    case MFF_ARP_SHA:
+    case MFF_ND_SLL:
+        cls_rule_set_arp_sha_masked(rule, value->mac, mask->mac);
+        break;
+
+    case MFF_ARP_THA:
+    case MFF_ND_TLL:
+        cls_rule_set_arp_tha_masked(rule, value->mac, mask->mac);
         break;
 
     case MFF_VLAN_TCI:

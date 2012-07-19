@@ -493,7 +493,7 @@ nx_put_match(struct ofpbuf *b, bool oxm, const struct cls_rule *cr,
     int match_len;
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 13);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 14);
 
     /* Metadata. */
     if (!(wc & FWW_IN_PORT)) {
@@ -548,15 +548,13 @@ nx_put_match(struct ofpbuf *b, bool oxm, const struct cls_rule *cr,
                 flow->tp_src == htons(ND_NEIGHBOR_ADVERT))) {
             nxm_put_ipv6(b, oxm ? OXM_OF_IPV6_ND_TARGET : NXM_NX_ND_TARGET,
                          &flow->nd_target, &cr->wc.nd_target_mask);
-            if (!(wc & FWW_ARP_SHA)
-                && flow->tp_src == htons(ND_NEIGHBOR_SOLICIT)) {
-                nxm_put_eth(b, oxm ? OXM_OF_IPV6_ND_SLL : NXM_NX_ND_SLL,
-                            flow->arp_sha);
+            if (flow->tp_src == htons(ND_NEIGHBOR_SOLICIT)) {
+                nxm_put_eth_masked(b, oxm ? OXM_OF_IPV6_ND_SLL : NXM_NX_ND_SLL,
+                                   flow->arp_sha, cr->wc.arp_sha_mask);
             }
-            if (!(wc & FWW_ARP_THA)
-                && flow->tp_src == htons(ND_NEIGHBOR_ADVERT)) {
-                nxm_put_eth(b, oxm ? OXM_OF_IPV6_ND_TLL : NXM_NX_ND_TLL,
-                            flow->arp_tha);
+            if (flow->tp_src == htons(ND_NEIGHBOR_ADVERT)) {
+                nxm_put_eth_masked(b, oxm ? OXM_OF_IPV6_ND_TLL : NXM_NX_ND_TLL,
+                                   flow->arp_tha, cr->wc.arp_tha_mask);
             }
         }
     } else if (!(wc & FWW_DL_TYPE) && flow->dl_type == htons(ETH_TYPE_ARP)) {
@@ -569,14 +567,10 @@ nx_put_match(struct ofpbuf *b, bool oxm, const struct cls_rule *cr,
                     flow->nw_src, cr->wc.nw_src_mask);
         nxm_put_32m(b, oxm ? OXM_OF_ARP_TPA : NXM_OF_ARP_TPA,
                     flow->nw_dst, cr->wc.nw_dst_mask);
-        if (!(wc & FWW_ARP_SHA)) {
-            nxm_put_eth(b, oxm ? OXM_OF_ARP_SHA : NXM_NX_ARP_SHA,
-                        flow->arp_sha);
-        }
-        if (!(wc & FWW_ARP_THA)) {
-            nxm_put_eth(b, oxm ? OXM_OF_ARP_THA : NXM_NX_ARP_THA,
-                        flow->arp_tha);
-        }
+        nxm_put_eth_masked(b, oxm ? OXM_OF_ARP_SHA : NXM_NX_ARP_SHA,
+                           flow->arp_sha, cr->wc.arp_sha_mask);
+        nxm_put_eth_masked(b, oxm ? OXM_OF_ARP_THA : NXM_NX_ARP_THA,
+                           flow->arp_tha, cr->wc.arp_tha_mask);
     }
 
     /* Tunnel ID. */

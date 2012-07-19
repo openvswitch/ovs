@@ -4,7 +4,8 @@ post-v1.8.0
       cooperating group of processes or threads that emitted a log message.
       The default log patterns now include this information.
     - OpenFlow:
-      - Allow bitwise masking for IPv6 flow label.
+      - Allow bitwise masking for SHA and THA fields in ARP, SLL and TLL
+        fields in IPv6 neighbor discovery messages, and IPv6 flow label.
 
 
 v1.8.0 - xx xxx xxxx

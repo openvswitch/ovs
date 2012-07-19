@@ -134,7 +134,11 @@ void cls_rule_set_nw_frag_masked(struct cls_rule *,
 void cls_rule_set_icmp_type(struct cls_rule *, uint8_t);
 void cls_rule_set_icmp_code(struct cls_rule *, uint8_t);
 void cls_rule_set_arp_sha(struct cls_rule *, const uint8_t[6]);
+void cls_rule_set_arp_sha_masked(struct cls_rule *, const uint8_t[6],
+                                 const uint8_t [6]);
 void cls_rule_set_arp_tha(struct cls_rule *, const uint8_t[6]);
+void cls_rule_set_arp_tha_masked(struct cls_rule *, const uint8_t[6],
+                                 const uint8_t [6]);
 void cls_rule_set_ipv6_src(struct cls_rule *, const struct in6_addr *);
 void cls_rule_set_ipv6_src_masked(struct cls_rule *, const struct in6_addr *,
                                   const struct in6_addr *);
