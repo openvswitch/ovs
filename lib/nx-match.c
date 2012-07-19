@@ -99,6 +99,14 @@ nx_pull_match__(struct ofpbuf *b, unsigned int match_len, bool strict,
 
     assert((cookie != NULL) == (cookie_mask != NULL));
 
+    cls_rule_init_catchall(rule, priority);
+    if (cookie) {
+        *cookie = *cookie_mask = htonll(0);
+    }
+    if (!match_len) {
+        return 0;
+    }
+
     p = ofpbuf_try_pull(b, ROUND_UP(match_len, 8));
     if (!p) {
         VLOG_DBG_RL(&rl, "nx_match length %u, rounded up to a "
@@ -107,10 +115,6 @@ nx_pull_match__(struct ofpbuf *b, unsigned int match_len, bool strict,
         return OFPERR_OFPBMC_BAD_LEN;
     }
 
-    cls_rule_init_catchall(rule, priority);
-    if (cookie) {
-        *cookie = *cookie_mask = htonll(0);
-    }
     for (;
          (header = nx_entry_ok(p, match_len)) != 0;
          p += 4 + NXM_LENGTH(header), match_len -= 4 + NXM_LENGTH(header)) {
