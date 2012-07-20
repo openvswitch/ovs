@@ -823,6 +823,40 @@ ctz(uint32_t n)
     }
 }
 
+/* Returns the number of 1-bits in 'x', between 0 and 32 inclusive. */
+int
+popcount(uint32_t x)
+{
+    /* In my testing, this implementation is over twice as fast as any other
+     * portable implementation that I tried, including GCC 4.4
+     * __builtin_popcount(), although nonportable asm("popcnt") was over 50%
+     * faster. */
+#define INIT1(X)                                \
+    ((((X) & (1 << 0)) != 0) +                  \
+     (((X) & (1 << 1)) != 0) +                  \
+     (((X) & (1 << 2)) != 0) +                  \
+     (((X) & (1 << 3)) != 0) +                  \
+     (((X) & (1 << 4)) != 0) +                  \
+     (((X) & (1 << 5)) != 0) +                  \
+     (((X) & (1 << 6)) != 0) +                  \
+     (((X) & (1 << 7)) != 0))
+#define INIT2(X)   INIT1(X),  INIT1((X) +  1)
+#define INIT4(X)   INIT2(X),  INIT2((X) +  2)
+#define INIT8(X)   INIT4(X),  INIT4((X) +  4)
+#define INIT16(X)  INIT8(X),  INIT8((X) +  8)
+#define INIT32(X) INIT16(X), INIT16((X) + 16)
+#define INIT64(X) INIT32(X), INIT32((X) + 32)
+
+    static const uint8_t popcount8[256] = {
+        INIT64(0), INIT64(64), INIT64(128), INIT64(192)
+    };
+
+    return (popcount8[x & 0xff] +
+            popcount8[(x >> 8) & 0xff] +
+            popcount8[(x >> 16) & 0xff] +
+            popcount8[x >> 24]);
+}
+
 /* Returns true if the 'n' bytes starting at 'p' are zeros. */
 bool
 is_all_zeros(const uint8_t *p, size_t n)

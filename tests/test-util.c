@@ -26,6 +26,9 @@
 #include "random.h"
 #include "util.h"
 
+#undef NDEBUG
+#include <assert.h>
+
 static void
 check_log_2_floor(uint32_t x, int n)
 {
@@ -83,6 +86,59 @@ test_ctz(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 
     /* Check ctz(0). */
     check_ctz(0, 32);
+}
+
+static void
+shuffle(unsigned int *p, size_t n)
+{
+    for (; n > 1; n--, p++) {
+        unsigned int *q = &p[rand() % n];
+        unsigned int tmp = *p;
+        *p = *q;
+        *q = tmp;
+    }
+}
+
+static void
+check_popcount(uint32_t x, int n)
+{
+    if (popcount(x) != n) {
+        fprintf(stderr, "popcount(%#"PRIx32") is %d but should be %d\n",
+                x, popcount(x), n);
+        abort();
+    }
+}
+
+static void
+test_popcount(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
+{
+    unsigned int bits[32];
+    int i;
+
+    for (i = 0; i < ARRAY_SIZE(bits); i++) {
+        bits[i] = 1u << i;
+    }
+
+    check_popcount(0, 0);
+
+    for (i = 0; i < 1000; i++) {
+        uint32_t x = 0;
+        int j;
+
+        shuffle(bits, ARRAY_SIZE(bits));
+        for (j = 0; j < 32; j++) {
+            x |= bits[j];
+            check_popcount(x, j + 1);
+        }
+        assert(x == UINT32_MAX);
+
+        shuffle(bits, ARRAY_SIZE(bits));
+        for (j = 31; j >= 0; j--) {
+            x &= ~bits[j];
+            check_popcount(x, j);
+        }
+        assert(x == 0);
+    }
 }
 
 /* Returns the sum of the squares of the first 'n' positive integers. */
@@ -282,6 +338,7 @@ test_follow_symlinks(int argc, char *argv[])
 
 static const struct command commands[] = {
     {"ctz", 0, 0, test_ctz},
+    {"popcount", 0, 0, test_popcount},
     {"log_2_floor", 0, 0, test_log_2_floor},
     {"bitwise_copy", 0, 0, test_bitwise_copy},
     {"bitwise_zero", 0, 0, test_bitwise_zero},

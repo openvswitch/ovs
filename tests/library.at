@@ -103,12 +103,14 @@ AT_CLEANUP
 m4_foreach(
   [testname],
   [[ctz],
+   [popcount],
    [log_2_floor],
    [bitwise_copy],
    [bitwise_zero],
    [bitwise_one],
    [bitwise_is_all_zeros]],
   [AT_SETUP([testname[()] function])
+   AT_KEYWORDS([testname])
    AT_CHECK([test-util testname], [0], [], [])
    AT_CLEANUP])
 
