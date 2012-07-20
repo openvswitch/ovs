@@ -152,6 +152,121 @@ sends flow_removed message   ---    ---     ---      %       %
     receive the generated messages.)
 
 
+VLAN Matching
+=============
+
+The 802.1Q VLAN header causes more trouble than any other 4 bytes in
+networking.  More specifically, three versions of OpenFlow and Open
+vSwitch have among them four different ways to match the contents and
+presence of the VLAN header.  The following table describes how each
+version works.
+
+       Match        NXM        OF1.0        OF1.1         OF1.2
+       -----  ---------  -----------  -----------  ------------
+         [1]  0000/0000  ????/1,??/?  ????/1,??/?  0000/0000,--
+         [2]  0000/ffff  ffff/0,??/?  ffff/0,??/?  0000/ffff,--
+         [3]  1xxx/1fff  0xxx/0,??/1  0xxx/0,??/1  1xxx/ffff,--
+         [4]  z000/f000  ????/1,0y/0  fffe/0,0y/0  1000/1000,0y
+         [5]  zxxx/ffff  0xxx/0,0y/0  0xxx/0,0y/0  1xxx/ffff,0y
+         [6]  0000/0fff    <none>       <none>        <none>
+         [7]  0000/f000    <none>       <none>        <none>
+         [8]  0000/efff    <none>       <none>        <none>
+         [9]  1001/1001    <none>       <none>     1001/1001,--
+        [10]  3000/3000    <none>       <none>        <none>
+
+Each column is interpreted as follows.
+
+    - Match: See the list below.
+
+    - NXM: xxxx/yyyy means NXM_OF_VLAN_TCI_W with value xxxx and mask
+      yyyy.  A mask of 0000 is equivalent to omitting
+      NXM_OF_VLAN_TCI(_W), a mask of ffff is equivalent to
+      NXM_OF_VLAN_TCI.
+
+    - OF1.0 and OF1.1: wwww/x,yy/z means dl_vlan wwww, OFPFW_DL_VLAN
+      x, dl_vlan_pcp yy, and OFPFW_DL_VLAN_PCP z.  ? means that the
+      given nibble is ignored (and conventionally 0 for wwww or z,
+      conventionally 1 for x or z).  <none> means that the given match
+      is not supported.
+
+    - OF1.2: xxxx/yyyy,zz means OXM_OF_VLAN_VID_W with value xxxx and
+      mask yyyy, and OXM_OF_VLAN_PCP (which is not maskable) with
+      value zz.  A mask of 0000 is equivalent to omitting
+      OXM_OF_VLAN_VID(_W), a mask of ffff is equivalent to
+      OXM_OF_VLAN_VID.  -- means that OXM_OF_VLAN_PCP is omitted.
+      <none> means that the given match is not supported.
+
+The matches are:
+
+ [1] Matches any packet, that is, one without an 802.1Q header or with
+     an 802.1Q header with any TCI value.
+
+ [2] Matches only packets without an 802.1Q header.
+
+     NXM: Any match with (vlan_tci == 0) and (vlan_tci_mask & 0x1000)
+     != 0 is equivalent to the one listed in the table.
+
+     OF1.0: The spec doesn't define behavior if dl_vlan is set to
+     0xffff and OFPFW_DL_VLAN_PCP is not set.
+
+     OF1.1: The spec says explicitly to ignore dl_vlan_pcp when
+     dl_vlan is set to 0xffff.
+
+     OF1.2: The spec doesn't say what should happen if (vlan_vid == 0)
+     and (vlan_vid_mask & 0x1000) != 0 but (vlan_vid_mask != 0x1000),
+     but it would be straightforward to also interpret as [2].
+
+ [3] Matches only packets that have an 802.1Q header with VID xxx (and
+     any PCP).
+
+ [4] Matches only packets that have an 802.1Q header with PCP y (and
+     any VID).
+
+     NXM: z is ((y << 1) | 1).
+
+     OF1.0: The spec isn't very clear, but OVS implements it this way.
+
+     OF1.2: Presumably other masks such that (vlan_vid_mask & 0x1fff)
+     == 0x1000 would also work, but the spec doesn't define their
+     behavior.
+
+ [5] Matches only packets that have an 802.1Q header with VID xxx and
+     PCP y.
+
+     NXM: z is ((y << 1) | 1).
+
+     OF1.2: Presumably other masks such that (vlan_vid_mask & 0x1fff)
+     == 0x1fff would also work.
+
+ [6] Matches packets with no 802.1Q header or with an 802.1Q header
+     with a VID of 0.  Only possible with NXM.
+
+ [7] Matches packets with no 802.1Q header or with an 802.1Q header
+     with a PCP of 0.  Only possible with NXM.
+
+ [8] Matches packets with no 802.1Q header or with an 802.1Q header
+     with both VID and PCP of 0.  Only possible with NXM.
+
+ [9] Matches only packets that have an 802.1Q header with an
+     odd-numbered VID (and any PCP).  Only possible with NXM and
+     OF1.2.  (This is just an example; one can match on any desired
+     VID bit pattern.)
+
+[10] Matches only packets that have an 802.1Q header with an
+     odd-numbered PCP (and any VID).  Only possible with NXM.  (This
+     is just an example; one can match on any desired VID bit
+     pattern.)
+
+Additional notes:
+
+    - OF1.2: The top three bits of OXM_OF_VLAN_VID are fixed to zero,
+      so bits 13, 14, and 15 in the masks listed in the table may be
+      set to arbitrary values, as long as the corresponding value bits
+      are also zero.  The suggested ffff mask for [2], [3], and [5]
+      allows a shorter OXM representation (the mask is omitted) than
+      the minimal 1fff mask.
+
+
 Flow Cookies
 ============
 
