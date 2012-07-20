@@ -842,7 +842,7 @@ classifier_is_empty(const struct classifier *cls)
     return cls->n_rules == 0;
 }
 
-/* Returns the number of rules in 'classifier'. */
+/* Returns the number of rules in 'cls'. */
 int
 classifier_count(const struct classifier *cls)
 {
