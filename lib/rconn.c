@@ -22,6 +22,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "coverage.h"
+#include "ofp-msgs.h"
 #include "ofp-util.h"
 #include "ofpbuf.h"
 #include "openflow/openflow.h"
@@ -1121,19 +1122,64 @@ is_connected_state(enum state state)
 static bool
 is_admitted_msg(const struct ofpbuf *b)
 {
-    struct ofp_header *oh = b->data;
-    uint8_t type = oh->type;
-    return !(type < 32
-             && (1u << type) & ((1u << OFPT_HELLO) |
-                                (1u << OFPT_ERROR) |
-                                (1u << OFPT_ECHO_REQUEST) |
-                                (1u << OFPT_ECHO_REPLY) |
-                                (1u << OFPT_VENDOR) |
-                                (1u << OFPT_FEATURES_REQUEST) |
-                                (1u << OFPT_FEATURES_REPLY) |
-                                (1u << OFPT_GET_CONFIG_REQUEST) |
-                                (1u << OFPT_GET_CONFIG_REPLY) |
-                                (1u << OFPT_SET_CONFIG)));
+    enum ofptype type;
+    enum ofperr error;
+
+    error = ofptype_decode(&type, b->data);
+    if (error) {
+        return false;
+    }
+
+    switch (type) {
+    case OFPTYPE_HELLO:
+    case OFPTYPE_ERROR:
+    case OFPTYPE_ECHO_REQUEST:
+    case OFPTYPE_ECHO_REPLY:
+    case OFPTYPE_FEATURES_REQUEST:
+    case OFPTYPE_FEATURES_REPLY:
+    case OFPTYPE_GET_CONFIG_REQUEST:
+    case OFPTYPE_GET_CONFIG_REPLY:
+    case OFPTYPE_SET_CONFIG:
+        return false;
+
+    case OFPTYPE_PACKET_IN:
+    case OFPTYPE_FLOW_REMOVED:
+    case OFPTYPE_PORT_STATUS:
+    case OFPTYPE_PACKET_OUT:
+    case OFPTYPE_FLOW_MOD:
+    case OFPTYPE_PORT_MOD:
+    case OFPTYPE_BARRIER_REQUEST:
+    case OFPTYPE_BARRIER_REPLY:
+    case OFPTYPE_DESC_STATS_REQUEST:
+    case OFPTYPE_DESC_STATS_REPLY:
+    case OFPTYPE_FLOW_STATS_REQUEST:
+    case OFPTYPE_FLOW_STATS_REPLY:
+    case OFPTYPE_AGGREGATE_STATS_REQUEST:
+    case OFPTYPE_AGGREGATE_STATS_REPLY:
+    case OFPTYPE_TABLE_STATS_REQUEST:
+    case OFPTYPE_TABLE_STATS_REPLY:
+    case OFPTYPE_PORT_STATS_REQUEST:
+    case OFPTYPE_PORT_STATS_REPLY:
+    case OFPTYPE_QUEUE_STATS_REQUEST:
+    case OFPTYPE_QUEUE_STATS_REPLY:
+    case OFPTYPE_PORT_DESC_STATS_REQUEST:
+    case OFPTYPE_PORT_DESC_STATS_REPLY:
+    case OFPTYPE_ROLE_REQUEST:
+    case OFPTYPE_ROLE_REPLY:
+    case OFPTYPE_SET_FLOW_FORMAT:
+    case OFPTYPE_FLOW_MOD_TABLE_ID:
+    case OFPTYPE_SET_PACKET_IN_FORMAT:
+    case OFPTYPE_FLOW_AGE:
+    case OFPTYPE_SET_ASYNC_CONFIG:
+    case OFPTYPE_SET_CONTROLLER_ID:
+    case OFPTYPE_FLOW_MONITOR_STATS_REQUEST:
+    case OFPTYPE_FLOW_MONITOR_STATS_REPLY:
+    case OFPTYPE_FLOW_MONITOR_CANCEL:
+    case OFPTYPE_FLOW_MONITOR_PAUSED:
+    case OFPTYPE_FLOW_MONITOR_RESUMED:
+    default:
+        return true;
+    }
 }
 
 /* Returns true if 'rc' is currently logging information about connection

@@ -31,6 +31,7 @@
 #include "ofpbuf.h"
 #include "ofp-actions.h"
 #include "ofp-errors.h"
+#include "ofp-msgs.h"
 #include "ofp-parse.h"
 #include "ofp-print.h"
 #include "ofp-util.h"
@@ -81,7 +82,7 @@ static void queue_tx(struct lswitch *, struct rconn *, struct ofpbuf *);
 static void send_features_request(struct lswitch *, struct rconn *);
 
 static enum ofperr process_switch_features(struct lswitch *,
-                                           struct ofp_switch_features *);
+                                           struct ofp_header *);
 static void process_packet_in(struct lswitch *, struct rconn *,
                               const struct ofp_header *);
 static void process_echo_request(struct lswitch *, struct rconn *,
@@ -228,84 +229,78 @@ void
 lswitch_process_packet(struct lswitch *sw, struct rconn *rconn,
                        const struct ofpbuf *msg)
 {
-    const struct ofp_header *oh = msg->data;
-    const struct ofputil_msg_type *type;
+    enum ofptype type;
+    struct ofpbuf b;
+
+    b = *msg;
+    if (ofptype_pull(&type, &b)) {
+        return;
+    }
 
     if (sw->datapath_id == 0
-        && oh->type != OFPT_ECHO_REQUEST
-        && oh->type != OFPT_FEATURES_REPLY) {
+        && type != OFPTYPE_ECHO_REQUEST
+        && type != OFPTYPE_FEATURES_REPLY) {
         send_features_request(sw, rconn);
         return;
     }
 
-    ofputil_decode_msg_type(oh, &type);
-    switch (ofputil_msg_type_code(type)) {
-    case OFPUTIL_OFPT_ECHO_REQUEST:
+    switch (type) {
+    case OFPTYPE_ECHO_REQUEST:
         process_echo_request(sw, rconn, msg->data);
         break;
 
-    case OFPUTIL_OFPT_FEATURES_REPLY:
+    case OFPTYPE_FEATURES_REPLY:
         process_switch_features(sw, msg->data);
         break;
 
-    case OFPUTIL_OFPT_PACKET_IN:
-    case OFPUTIL_NXT_PACKET_IN:
+    case OFPTYPE_PACKET_IN:
         process_packet_in(sw, rconn, msg->data);
         break;
 
-    case OFPUTIL_OFPT_FLOW_REMOVED:
+    case OFPTYPE_FLOW_REMOVED:
         /* Nothing to do. */
         break;
 
-    case OFPUTIL_MSG_INVALID:
-    case OFPUTIL_OFPT_HELLO:
-    case OFPUTIL_OFPT_ERROR:
-    case OFPUTIL_OFPT_ECHO_REPLY:
-    case OFPUTIL_OFPT_FEATURES_REQUEST:
-    case OFPUTIL_OFPT_GET_CONFIG_REQUEST:
-    case OFPUTIL_OFPT_GET_CONFIG_REPLY:
-    case OFPUTIL_OFPT_SET_CONFIG:
-    case OFPUTIL_OFPT_PORT_STATUS:
-    case OFPUTIL_OFPT_PACKET_OUT:
-    case OFPUTIL_OFPT_FLOW_MOD:
-    case OFPUTIL_OFPT_PORT_MOD:
-    case OFPUTIL_OFPT_BARRIER_REQUEST:
-    case OFPUTIL_OFPT_BARRIER_REPLY:
-    case OFPUTIL_OFPT_QUEUE_GET_CONFIG_REQUEST:
-    case OFPUTIL_OFPT_QUEUE_GET_CONFIG_REPLY:
-    case OFPUTIL_OFPST_DESC_REQUEST:
-    case OFPUTIL_OFPST_FLOW_REQUEST:
-    case OFPUTIL_OFPST_AGGREGATE_REQUEST:
-    case OFPUTIL_OFPST_TABLE_REQUEST:
-    case OFPUTIL_OFPST_PORT_REQUEST:
-    case OFPUTIL_OFPST_QUEUE_REQUEST:
-    case OFPUTIL_OFPST_PORT_DESC_REQUEST:
-    case OFPUTIL_OFPST_DESC_REPLY:
-    case OFPUTIL_OFPST_FLOW_REPLY:
-    case OFPUTIL_OFPST_QUEUE_REPLY:
-    case OFPUTIL_OFPST_PORT_REPLY:
-    case OFPUTIL_OFPST_TABLE_REPLY:
-    case OFPUTIL_OFPST_AGGREGATE_REPLY:
-    case OFPUTIL_OFPST_PORT_DESC_REPLY:
-    case OFPUTIL_NXT_ROLE_REQUEST:
-    case OFPUTIL_NXT_ROLE_REPLY:
-    case OFPUTIL_NXT_FLOW_MOD_TABLE_ID:
-    case OFPUTIL_NXT_SET_FLOW_FORMAT:
-    case OFPUTIL_NXT_SET_PACKET_IN_FORMAT:
-    case OFPUTIL_NXT_FLOW_MOD:
-    case OFPUTIL_NXT_FLOW_REMOVED:
-    case OFPUTIL_NXT_FLOW_AGE:
-    case OFPUTIL_NXT_FLOW_MONITOR_CANCEL:
-    case OFPUTIL_NXT_FLOW_MONITOR_PAUSED:
-    case OFPUTIL_NXT_FLOW_MONITOR_RESUMED:
-    case OFPUTIL_NXT_SET_ASYNC_CONFIG:
-    case OFPUTIL_NXT_SET_CONTROLLER_ID:
-    case OFPUTIL_NXST_FLOW_REQUEST:
-    case OFPUTIL_NXST_AGGREGATE_REQUEST:
-    case OFPUTIL_NXST_FLOW_MONITOR_REQUEST:
-    case OFPUTIL_NXST_FLOW_REPLY:
-    case OFPUTIL_NXST_AGGREGATE_REPLY:
-    case OFPUTIL_NXST_FLOW_MONITOR_REPLY:
+    case OFPTYPE_HELLO:
+    case OFPTYPE_ERROR:
+    case OFPTYPE_ECHO_REPLY:
+    case OFPTYPE_FEATURES_REQUEST:
+    case OFPTYPE_GET_CONFIG_REQUEST:
+    case OFPTYPE_GET_CONFIG_REPLY:
+    case OFPTYPE_SET_CONFIG:
+    case OFPTYPE_PORT_STATUS:
+    case OFPTYPE_PACKET_OUT:
+    case OFPTYPE_FLOW_MOD:
+    case OFPTYPE_PORT_MOD:
+    case OFPTYPE_BARRIER_REQUEST:
+    case OFPTYPE_BARRIER_REPLY:
+    case OFPTYPE_DESC_STATS_REQUEST:
+    case OFPTYPE_DESC_STATS_REPLY:
+    case OFPTYPE_FLOW_STATS_REQUEST:
+    case OFPTYPE_FLOW_STATS_REPLY:
+    case OFPTYPE_AGGREGATE_STATS_REQUEST:
+    case OFPTYPE_AGGREGATE_STATS_REPLY:
+    case OFPTYPE_TABLE_STATS_REQUEST:
+    case OFPTYPE_TABLE_STATS_REPLY:
+    case OFPTYPE_PORT_STATS_REQUEST:
+    case OFPTYPE_PORT_STATS_REPLY:
+    case OFPTYPE_QUEUE_STATS_REQUEST:
+    case OFPTYPE_QUEUE_STATS_REPLY:
+    case OFPTYPE_PORT_DESC_STATS_REQUEST:
+    case OFPTYPE_PORT_DESC_STATS_REPLY:
+    case OFPTYPE_ROLE_REQUEST:
+    case OFPTYPE_ROLE_REPLY:
+    case OFPTYPE_SET_FLOW_FORMAT:
+    case OFPTYPE_FLOW_MOD_TABLE_ID:
+    case OFPTYPE_SET_PACKET_IN_FORMAT:
+    case OFPTYPE_FLOW_AGE:
+    case OFPTYPE_SET_ASYNC_CONFIG:
+    case OFPTYPE_SET_CONTROLLER_ID:
+    case OFPTYPE_FLOW_MONITOR_STATS_REQUEST:
+    case OFPTYPE_FLOW_MONITOR_STATS_REPLY:
+    case OFPTYPE_FLOW_MONITOR_CANCEL:
+    case OFPTYPE_FLOW_MONITOR_PAUSED:
+    case OFPTYPE_FLOW_MONITOR_RESUMED:
     default:
         if (VLOG_IS_DBG_ENABLED()) {
             char *s = ofp_to_string(msg->data, msg->size, 2);
@@ -325,11 +320,12 @@ send_features_request(struct lswitch *sw, struct rconn *rconn)
         struct ofp_switch_config *osc;
 
         /* Send OFPT_FEATURES_REQUEST. */
-        make_openflow(sizeof(struct ofp_header), OFPT_FEATURES_REQUEST, &b);
+        b = ofpraw_alloc(OFPRAW_OFPT_FEATURES_REQUEST, OFP10_VERSION, 0);
         queue_tx(sw, rconn, b);
 
         /* Send OFPT_SET_CONFIG. */
-        osc = make_openflow(sizeof *osc, OFPT_SET_CONFIG, &b);
+        b = ofpraw_alloc(OFPRAW_OFPT_SET_CONFIG, OFP10_VERSION, sizeof *osc);
+        osc = ofpbuf_put_uninit(b, sizeof *osc);
         osc->miss_send_len = htons(OFP_DEFAULT_MISS_SEND_LEN);
         queue_tx(sw, rconn, b);
 
@@ -354,14 +350,14 @@ queue_tx(struct lswitch *sw, struct rconn *rconn, struct ofpbuf *b)
 }
 
 static enum ofperr
-process_switch_features(struct lswitch *sw, struct ofp_switch_features *osf)
+process_switch_features(struct lswitch *sw, struct ofp_header *oh)
 {
     struct ofputil_switch_features features;
     struct ofputil_phy_port port;
     enum ofperr error;
     struct ofpbuf b;
 
-    error = ofputil_decode_switch_features(osf, &features, &b);
+    error = ofputil_decode_switch_features(oh, &features, &b);
     if (error) {
         VLOG_ERR("received invalid switch feature reply (%s)",
                  ofperr_to_string(error));
@@ -370,7 +366,7 @@ process_switch_features(struct lswitch *sw, struct ofp_switch_features *osf)
 
     sw->datapath_id = features.datapath_id;
 
-    while (!ofputil_pull_phy_port(osf->header.version, &b, &port)) {
+    while (!ofputil_pull_phy_port(oh->version, &b, &port)) {
         struct lswitch_port *lp = shash_find_data(&sw->queue_names, port.name);
         if (lp && hmap_node_is_null(&lp->hmap_node)) {
             lp->port_no = port.port_no;

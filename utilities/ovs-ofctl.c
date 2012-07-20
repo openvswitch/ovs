@@ -40,6 +40,7 @@
 #include "odp-util.h"
 #include "ofp-actions.h"
 #include "ofp-errors.h"
+#include "ofp-msgs.h"
 #include "ofp-parse.h"
 #include "ofp-print.h"
 #include "ofp-util.h"
@@ -393,21 +394,10 @@ open_vconn(const char *name, struct vconn **vconnp)
     return open_vconn__(name, "mgmt", vconnp);
 }
 
-static void *
-alloc_stats_request(size_t rq_len, uint16_t type, struct ofpbuf **bufferp)
-{
-    struct ofp_stats_msg *rq;
-
-    rq = make_openflow(rq_len, OFPT10_STATS_REQUEST, bufferp);
-    rq->type = htons(type);
-    rq->flags = htons(0);
-    return rq;
-}
-
 static void
 send_openflow_buffer(struct vconn *vconn, struct ofpbuf *buffer)
 {
-    update_openflow_length(buffer);
+    ofpmsg_update_length(buffer);
     run(vconn_send_block(vconn, buffer), "failed to send packet to switch");
 }
 
@@ -417,7 +407,7 @@ dump_transaction(const char *vconn_name, struct ofpbuf *request)
     struct vconn *vconn;
     struct ofpbuf *reply;
 
-    update_openflow_length(request);
+    ofpmsg_update_length(request);
     open_vconn(vconn_name, &vconn);
     run(vconn_transact(vconn, request, &reply), "talking to %s", vconn_name);
     ofp_print(stdout, reply->data, reply->size, verbosity + 1);
@@ -426,19 +416,25 @@ dump_transaction(const char *vconn_name, struct ofpbuf *request)
 }
 
 static void
-dump_trivial_transaction(const char *vconn_name, uint8_t request_type)
+dump_trivial_transaction(const char *vconn_name, enum ofpraw raw)
 {
     struct ofpbuf *request;
-    make_openflow(sizeof(struct ofp_header), request_type, &request);
+    request = ofpraw_alloc(raw, OFP10_VERSION, 0);
     dump_transaction(vconn_name, request);
 }
 
 static void
 dump_stats_transaction__(struct vconn *vconn, struct ofpbuf *request)
 {
-    ovs_be32 send_xid = ((struct ofp_header *) request->data)->xid;
-    ovs_be16 stats_type = ((struct ofp_stats_msg *) request->data)->type;
+    const struct ofp_header *request_oh = request->data;
+    ovs_be32 send_xid = request_oh->xid;
+    enum ofpraw request_raw;
+    enum ofpraw reply_raw;
     bool done = false;
+
+    ofpraw_decode_partial(&request_raw, request->data, request->size);
+    reply_raw = ofpraw_stats_request_to_reply(request_raw,
+                                              request_oh->version);
 
     send_openflow_buffer(vconn, request);
     while (!done) {
@@ -448,16 +444,15 @@ dump_stats_transaction__(struct vconn *vconn, struct ofpbuf *request)
         run(vconn_recv_block(vconn, &reply), "OpenFlow packet receive failed");
         recv_xid = ((struct ofp_header *) reply->data)->xid;
         if (send_xid == recv_xid) {
-            const struct ofp_stats_msg *osm = reply->data;
-            const struct ofp_header *oh = reply->data;
+            enum ofpraw raw;
 
             ofp_print(stdout, reply->data, reply->size, verbosity + 1);
 
-            if (oh->type == OFPT_ERROR) {
+            ofpraw_decode(&raw, reply->data);
+            if (ofptype_from_ofpraw(raw) == OFPTYPE_ERROR) {
                 done = true;
-            } else if (oh->type == OFPT10_STATS_REPLY
-                       && osm->type == stats_type) {
-                done = !(ntohs(osm->flags) & OFPSF_REPLY_MORE);
+            } else if (raw == reply_raw) {
+                done = !ofpmp_more(reply->data);
             } else {
                 ovs_fatal(0, "received bad reply: %s",
                           ofp_to_string(reply->data, reply->size,
@@ -482,10 +477,11 @@ dump_stats_transaction(const char *vconn_name, struct ofpbuf *request)
 }
 
 static void
-dump_trivial_stats_transaction(const char *vconn_name, uint8_t stats_type)
+dump_trivial_stats_transaction(const char *vconn_name, enum ofpraw raw)
 {
     struct ofpbuf *request;
-    alloc_stats_request(sizeof(struct ofp_stats_msg), stats_type, &request);
+
+    request = ofpraw_alloc(raw, OFP10_VERSION, 0);
     dump_stats_transaction(vconn_name, request);
 }
 
@@ -500,7 +496,7 @@ transact_multiple_noreply(struct vconn *vconn, struct list *requests)
     struct ofpbuf *request, *reply;
 
     LIST_FOR_EACH (request, list_node, requests) {
-        update_openflow_length(request);
+        ofpmsg_update_length(request);
     }
 
     run(vconn_transact_multiple_noreply(vconn, requests, &reply),
@@ -531,38 +527,31 @@ static void
 fetch_switch_config(struct vconn *vconn, struct ofp_switch_config *config_)
 {
     struct ofp_switch_config *config;
-    struct ofp_header *header;
     struct ofpbuf *request;
     struct ofpbuf *reply;
+    enum ofptype type;
 
-    make_openflow(sizeof(struct ofp_header), OFPT_GET_CONFIG_REQUEST,
-                  &request);
+    request = ofpraw_alloc(OFPRAW_OFPT_GET_CONFIG_REQUEST, OFP10_VERSION, 0);
     run(vconn_transact(vconn, request, &reply),
         "talking to %s", vconn_get_name(vconn));
 
-    header = reply->data;
-    if (header->type != OFPT_GET_CONFIG_REPLY ||
-        header->length != htons(sizeof *config)) {
+    if (ofptype_pull(&type, reply) || type != OFPTYPE_GET_CONFIG_REPLY) {
         ovs_fatal(0, "%s: bad reply to config request", vconn_get_name(vconn));
     }
 
-    config = reply->data;
+    config = ofpbuf_pull(reply, sizeof *config);
     *config_ = *config;
 
     ofpbuf_delete(reply);
 }
 
 static void
-set_switch_config(struct vconn *vconn, struct ofp_switch_config *config_)
+set_switch_config(struct vconn *vconn, const struct ofp_switch_config *config)
 {
-    struct ofp_switch_config *config;
-    struct ofp_header save_header;
     struct ofpbuf *request;
 
-    config = make_openflow(sizeof *config, OFPT_SET_CONFIG, &request);
-    save_header = config->header;
-    *config = *config_;
-    config->header = save_header;
+    request = ofpraw_alloc(OFPRAW_OFPT_SET_CONFIG, OFP10_VERSION, 0);
+    ofpbuf_put(request, config, sizeof *config);
 
     transact_noreply(vconn, request);
 }
@@ -576,8 +565,7 @@ ofctl_show(int argc OVS_UNUSED, char *argv[])
     struct ofpbuf *reply;
     bool trunc;
 
-    make_openflow(sizeof(struct ofp_header), OFPT_FEATURES_REQUEST,
-                  &request);
+    request = ofpraw_alloc(OFPRAW_OFPT_FEATURES_REQUEST, OFP10_VERSION, 0);
     open_vconn(vconn_name, &vconn);
     run(vconn_transact(vconn, request, &reply), "talking to %s", vconn_name);
 
@@ -591,21 +579,22 @@ ofctl_show(int argc OVS_UNUSED, char *argv[])
         /* The Features Reply may not contain all the ports, so send a
          * Port Description stats request, which doesn't have size
          * constraints. */
-        dump_trivial_stats_transaction(vconn_name, OFPST_PORT_DESC);
+        dump_trivial_stats_transaction(vconn_name,
+                                       OFPRAW_OFPST_PORT_DESC_REQUEST);
     }
-    dump_trivial_transaction(vconn_name, OFPT_GET_CONFIG_REQUEST);
+    dump_trivial_transaction(vconn_name, OFPRAW_OFPT_GET_CONFIG_REQUEST);
 }
 
 static void
 ofctl_dump_desc(int argc OVS_UNUSED, char *argv[])
 {
-    dump_trivial_stats_transaction(argv[1], OFPST_DESC);
+    dump_trivial_stats_transaction(argv[1], OFPRAW_OFPST_DESC_REQUEST);
 }
 
 static void
 ofctl_dump_tables(int argc OVS_UNUSED, char *argv[])
 {
-    dump_trivial_stats_transaction(argv[1], OFPST_TABLE);
+    dump_trivial_stats_transaction(argv[1], OFPRAW_OFPST_TABLE_REQUEST);
 }
 
 static bool
@@ -614,23 +603,24 @@ fetch_port_by_features(const char *vconn_name,
                        struct ofputil_phy_port *pp, bool *trunc)
 {
     struct ofputil_switch_features features;
-    const struct ofp_switch_features *osf;
+    const struct ofp_header *oh;
     struct ofpbuf *request, *reply;
     struct vconn *vconn;
     enum ofperr error;
+    enum ofptype type;
     struct ofpbuf b;
     bool found = false;
 
     /* Fetch the switch's ofp_switch_features. */
-    make_openflow(sizeof(struct ofp_header), OFPT_FEATURES_REQUEST, &request);
+    request = ofpraw_alloc(OFPRAW_OFPT_FEATURES_REQUEST, OFP10_VERSION, 0);
     open_vconn(vconn_name, &vconn);
     run(vconn_transact(vconn, request, &reply), "talking to %s", vconn_name);
     vconn_close(vconn);
 
-    osf = reply->data;
-    if (reply->size < sizeof *osf) {
-        ovs_fatal(0, "%s: received too-short features reply (only %zu bytes)",
-                  vconn_name, reply->size);
+    oh = reply->data;
+    if (ofptype_decode(&type, reply->data)
+        || type != OFPTYPE_FEATURES_REPLY) {
+        ovs_fatal(0, "%s: received bad features reply", vconn_name);
     }
 
     *trunc = false;
@@ -639,13 +629,13 @@ fetch_port_by_features(const char *vconn_name,
         goto exit;
     }
 
-    error = ofputil_decode_switch_features(osf, &features, &b);
+    error = ofputil_decode_switch_features(oh, &features, &b);
     if (error) {
         ovs_fatal(0, "%s: failed to decode features reply (%s)",
                   vconn_name, ofperr_to_string(error));
     }
 
-    while (!ofputil_pull_phy_port(osf->header.version, &b, pp)) {
+    while (!ofputil_pull_phy_port(oh->version, &b, pp)) {
         if (port_no != UINT_MAX
             ? port_no == pp->port_no
             : !strcmp(pp->name, port_name)) {
@@ -667,12 +657,10 @@ fetch_port_by_stats(const char *vconn_name,
     struct ofpbuf *request;
     struct vconn *vconn;
     ovs_be32 send_xid;
-    struct ofpbuf b;
     bool done = false;
     bool found = false;
 
-    alloc_stats_request(sizeof(struct ofp_stats_msg), OFPST_PORT_DESC,
-                        &request);
+    request = ofpraw_alloc(OFPRAW_OFPST_PORT_DESC_REQUEST, OFP10_VERSION, 0);
     send_xid = ((struct ofp_header *) request->data)->xid;
 
     open_vconn(vconn_name, &vconn);
@@ -684,18 +672,21 @@ fetch_port_by_stats(const char *vconn_name,
         run(vconn_recv_block(vconn, &reply), "OpenFlow packet receive failed");
         recv_xid = ((struct ofp_header *) reply->data)->xid;
         if (send_xid == recv_xid) {
-            const struct ofputil_msg_type *type;
-            struct ofp_stats_msg *osm;
+            struct ofp_header *oh = reply->data;
+            enum ofptype type;
+            struct ofpbuf b;
+            uint16_t flags;
 
-            ofputil_decode_msg_type(reply->data, &type);
-            if (ofputil_msg_type_code(type) != OFPUTIL_OFPST_PORT_DESC_REPLY) {
+            ofpbuf_use_const(&b, oh, ntohs(oh->length));
+            if (ofptype_pull(&type, &b)
+                || type != OFPTYPE_PORT_DESC_STATS_REPLY) {
                 ovs_fatal(0, "received bad reply: %s",
                           ofp_to_string(reply->data, reply->size,
                                         verbosity + 1));
             }
 
-            osm = ofpbuf_at_assert(reply, 0, sizeof *osm);
-            done = !(ntohs(osm->flags) & OFPSF_REPLY_MORE);
+            flags = ofpmp_flags(oh);
+            done = !(flags & OFPSF_REPLY_MORE);
 
             if (found) {
                 /* We've already found the port, but we need to drain
@@ -703,10 +694,7 @@ fetch_port_by_stats(const char *vconn_name,
                 continue;
             }
 
-            ofpbuf_use_const(&b, &osm->header, ntohs(osm->header.length));
-            ofpbuf_pull(&b, sizeof(struct ofp_stats_msg));
-
-            while (!ofputil_pull_phy_port(osm->header.version, &b, pp)) {
+            while (!ofputil_pull_phy_port(oh->version, &b, pp)) {
                 if (port_no != UINT_MAX ? port_no == pp->port_no
                                         : !strcmp(pp->name, port_name)) {
                     found = true;
@@ -969,7 +957,8 @@ ofctl_queue_stats(int argc, char *argv[])
     struct ofp_queue_stats_request *req;
     struct ofpbuf *request;
 
-    req = alloc_stats_request(sizeof *req, OFPST_QUEUE, &request);
+    request = ofpraw_alloc(OFPRAW_OFPST_QUEUE_REQUEST, OFP10_VERSION, 0);
+    req = ofpbuf_put_zeros(request, sizeof *req);
 
     if (argc > 2 && argv[2][0] && strcasecmp(argv[2], "all")) {
         req->port_no = htons(str_to_port_no(argv[1], argv[2]));
@@ -1318,8 +1307,9 @@ monitor_vconn(struct vconn *vconn)
         int retval;
 
         unixctl_server_run(server);
+
         while (!blocked) {
-            uint8_t msg_type;
+            enum ofptype type;
 
             retval = vconn_recv(vconn, &b);
             if (retval == EAGAIN) {
@@ -1335,11 +1325,11 @@ monitor_vconn(struct vconn *vconn)
                 fputs(s, stderr);
             }
 
-            msg_type = ((const struct ofp_header *) b->data)->type;
+            ofptype_decode(&type, b->data);
             ofp_print(stderr, b->data, b->size, verbosity + 2);
             ofpbuf_delete(b);
 
-            if (barrier_aux.conn && msg_type == OFPT10_BARRIER_REPLY) {
+            if (barrier_aux.conn && type == OFPTYPE_BARRIER_REPLY) {
                 unixctl_command_reply(barrier_aux.conn, NULL);
                 barrier_aux.conn = NULL;
             }
@@ -1430,7 +1420,8 @@ ofctl_dump_ports(int argc, char *argv[])
     struct ofpbuf *request;
     uint16_t port;
 
-    req = alloc_stats_request(sizeof *req, OFPST_PORT, &request);
+    request = ofpraw_alloc(OFPRAW_OFPST_PORT_REQUEST, OFP10_VERSION, 0);
+    req = ofpbuf_put_zeros(request, sizeof *req);
     port = argc > 2 ? str_to_port_no(argv[1], argv[2]) : OFPP_NONE;
     req->port_no = htons(port);
     dump_stats_transaction(argv[1], request);
@@ -1439,7 +1430,7 @@ ofctl_dump_ports(int argc, char *argv[])
 static void
 ofctl_dump_ports_desc(int argc OVS_UNUSED, char *argv[])
 {
-    dump_trivial_stats_transaction(argv[1], OFPST_PORT_DESC);
+    dump_trivial_stats_transaction(argv[1], OFPRAW_OFPST_PORT_DESC_REQUEST);
 }
 
 static void
@@ -1449,7 +1440,7 @@ ofctl_probe(int argc OVS_UNUSED, char *argv[])
     struct vconn *vconn;
     struct ofpbuf *reply;
 
-    make_openflow(sizeof(struct ofp_header), OFPT_ECHO_REQUEST, &request);
+    request = make_echo_request();
     open_vconn(argv[1], &vconn);
     run(vconn_transact(vconn, request, &reply), "talking to %s", argv[1]);
     if (reply->size != sizeof(struct ofp_header)) {
@@ -1619,28 +1610,29 @@ ofctl_ping(int argc, char *argv[])
     for (i = 0; i < 10; i++) {
         struct timeval start, end;
         struct ofpbuf *request, *reply;
-        struct ofp_header *rq_hdr, *rpy_hdr;
+        const struct ofp_header *rpy_hdr;
+        enum ofptype type;
 
-        rq_hdr = make_openflow(sizeof(struct ofp_header) + payload,
-                               OFPT_ECHO_REQUEST, &request);
-        random_bytes(rq_hdr + 1, payload);
+        request = ofpraw_alloc(OFPRAW_OFPT_ECHO_REQUEST, OFP10_VERSION,
+                               payload);
+        random_bytes(ofpbuf_put_uninit(request, payload), payload);
 
         xgettimeofday(&start);
         run(vconn_transact(vconn, ofpbuf_clone(request), &reply), "transact");
         xgettimeofday(&end);
 
         rpy_hdr = reply->data;
-        if (reply->size != request->size
-            || memcmp(rpy_hdr + 1, rq_hdr + 1, payload)
-            || rpy_hdr->xid != rq_hdr->xid
-            || rpy_hdr->type != OFPT_ECHO_REPLY) {
+        if (ofptype_pull(&type, reply)
+            || type != OFPTYPE_ECHO_REPLY
+            || reply->size != payload
+            || memcmp(request->l3, reply->l3, payload)) {
             printf("Reply does not match request.  Request:\n");
             ofp_print(stdout, request, request->size, verbosity + 2);
             printf("Reply:\n");
             ofp_print(stdout, reply, reply->size, verbosity + 2);
         }
         printf("%zu bytes from %s: xid=%08"PRIx32" time=%.1f ms\n",
-               reply->size - sizeof *rpy_hdr, argv[1], ntohl(rpy_hdr->xid),
+               reply->size, argv[1], ntohl(rpy_hdr->xid),
                    (1000*(double)(end.tv_sec - start.tv_sec))
                    + (.001*(end.tv_usec - start.tv_usec)));
         ofpbuf_delete(request);
@@ -1675,10 +1667,10 @@ ofctl_benchmark(int argc OVS_UNUSED, char *argv[])
     xgettimeofday(&start);
     for (i = 0; i < count; i++) {
         struct ofpbuf *request, *reply;
-        struct ofp_header *rq_hdr;
 
-        rq_hdr = make_openflow(message_size, OFPT_ECHO_REQUEST, &request);
-        memset(rq_hdr + 1, 0, payload_size);
+        request = ofpraw_alloc(OFPRAW_OFPT_ECHO_REQUEST, OFP10_VERSION,
+                               payload_size);
+        ofpbuf_put_zeros(request, payload_size);
         run(vconn_transact(vconn, request, &reply), "transact");
         ofpbuf_delete(reply);
     }
@@ -1881,18 +1873,16 @@ recv_flow_stats_reply(struct vconn *vconn, ovs_be32 send_xid,
 
         /* Get a flow stats reply message, if we don't already have one. */
         if (!reply) {
-            const struct ofputil_msg_type *type;
-            enum ofputil_msg_code code;
+            enum ofptype type;
+            enum ofperr error;
 
             do {
                 run(vconn_recv_block(vconn, &reply),
                     "OpenFlow packet receive failed");
             } while (((struct ofp_header *) reply->data)->xid != send_xid);
 
-            ofputil_decode_msg_type(reply->data, &type);
-            code = ofputil_msg_type_code(type);
-            if (code != OFPUTIL_OFPST_FLOW_REPLY &&
-                code != OFPUTIL_NXST_FLOW_REPLY) {
+            error = ofptype_decode(&type, reply->data);
+            if (error || type != OFPTYPE_FLOW_STATS_REPLY) {
                 ovs_fatal(0, "received bad reply: %s",
                           ofp_to_string(reply->data, reply->size,
                                         verbosity + 1));

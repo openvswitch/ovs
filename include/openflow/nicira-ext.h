@@ -73,74 +73,26 @@ struct nx_vendor_error {
 struct nicira_header {
     struct ofp_header header;
     ovs_be32 vendor;            /* NX_VENDOR_ID. */
-    ovs_be32 subtype;           /* One of NXT_* below. */
+    ovs_be32 subtype;           /* See the NXT numbers in ofp-msgs.h. */
 };
 OFP_ASSERT(sizeof(struct nicira_header) == 16);
 
-/* Values for the 'subtype' member of struct nicira_header. */
-enum nicira_type {
-    /* No longer used. */
-    NXT_STATUS_REQUEST__OBSOLETE = 0,
-    NXT_STATUS_REPLY__OBSOLETE = 1,
-    NXT_ACT_SET_CONFIG__OBSOLETE = 2,
-    NXT_ACT_GET_CONFIG__OBSOLETE = 3,
-    NXT_COMMAND_REQUEST__OBSOLETE = 4,
-    NXT_COMMAND_REPLY__OBSOLETE = 5,
-    NXT_FLOW_END_CONFIG__OBSOLETE = 6,
-    NXT_FLOW_END__OBSOLETE = 7,
-    NXT_MGMT__OBSOLETE = 8,
-    NXT_TUN_ID_FROM_COOKIE__OBSOLETE = 9,
-
-    /* Controller role support.  The request body is struct nx_role_request.
-     * The reply echos the request. */
-    NXT_ROLE_REQUEST = 10,
-    NXT_ROLE_REPLY = 11,
-
-    /* Flexible flow specification (aka NXM = Nicira Extended Match). */
-    NXT_SET_FLOW_FORMAT = 12,   /* Set flow format. */
-    NXT_FLOW_MOD = 13,          /* Analogous to OFPT_FLOW_MOD. */
-    NXT_FLOW_REMOVED = 14,      /* Analogous to OFPT_FLOW_REMOVED. */
-
-    /* Use the upper 8 bits of the 'command' member in struct ofp_flow_mod to
-     * designate the table to which a flow is to be added?  See the big comment
-     * on struct nx_flow_mod_table_id for more information. */
-    NXT_FLOW_MOD_TABLE_ID = 15,
-
-    /* Alternative PACKET_IN message formats. */
-    NXT_SET_PACKET_IN_FORMAT = 16, /* Set Packet In format. */
-    NXT_PACKET_IN = 17,            /* Nicira Packet In. */
-
-    /* Are the idle_age and hard_age members in struct nx_flow_stats supported?
-     * If so, the switch does not reply to this message (which consists only of
-     * a "struct nicira_header").  If not, the switch sends an error reply. */
-    NXT_FLOW_AGE = 18,
-
-    NXT_SET_ASYNC_CONFIG = 19,  /* struct nx_async_config. */
-    NXT_SET_CONTROLLER_ID = 20, /* struct nx_controller_id. */
-
-    /* Flow table monitoring (see also NXST_FLOW_MONITOR). */
-    NXT_FLOW_MONITOR_CANCEL = 21,  /* struct nx_flow_monitor_cancel. */
-    NXT_FLOW_MONITOR_PAUSED = 22,  /* struct nicira_header. */
-    NXT_FLOW_MONITOR_RESUMED = 23, /* struct nicira_header. */
-};
-
-/* Header for Nicira vendor stats request and reply messages. */
-struct nicira_stats_msg {
-    struct ofp_vendor_stats_msg vsm; /* Vendor NX_VENDOR_ID. */
+/* Header for Nicira vendor stats request and reply messages in OpenFlow
+ * 1.0. */
+struct nicira10_stats_msg {
+    struct ofp10_vendor_stats_msg vsm; /* Vendor NX_VENDOR_ID. */
     ovs_be32 subtype;           /* One of NXST_* below. */
     uint8_t pad[4];             /* Align to 64-bits. */
 };
-OFP_ASSERT(sizeof(struct nicira_stats_msg) == 24);
+OFP_ASSERT(sizeof(struct nicira10_stats_msg) == 24);
 
-/* Values for the 'subtype' member of struct nicira_stats_msg. */
-enum nicira_stats_type {
-    /* Flexible flow specification (aka NXM = Nicira Extended Match). */
-    NXST_FLOW,                  /* Analogous to OFPST_FLOW. */
-    NXST_AGGREGATE,             /* Analogous to OFPST_AGGREGATE. */
-
-    /* Flow table monitoring. */
-    NXST_FLOW_MONITOR,
+/* Header for Nicira vendor stats request and reply messages in OpenFlow
+ * 1.1. */
+struct nicira11_stats_msg {
+    struct ofp11_vendor_stats_msg vsm; /* Vendor NX_VENDOR_ID. */
+    ovs_be32 subtype;           /* One of NXST_* below. */
 };
+OFP_ASSERT(sizeof(struct nicira11_stats_msg) == 24);
 
 /* Fields to use when hashing flows. */
 enum nx_hash_fields {
@@ -200,13 +152,10 @@ enum nx_hash_fields {
  *      table match, then none is modified or deleted.
  */
 struct nx_flow_mod_table_id {
-    struct ofp_header header;
-    ovs_be32 vendor;            /* NX_VENDOR_ID. */
-    ovs_be32 subtype;           /* NXT_FLOW_MOD_TABLE_ID. */
     uint8_t set;                /* Nonzero to enable, zero to disable. */
     uint8_t pad[7];
 };
-OFP_ASSERT(sizeof(struct nx_flow_mod_table_id) == 24);
+OFP_ASSERT(sizeof(struct nx_flow_mod_table_id) == 8);
 
 enum nx_packet_in_format {
     NXPIF_OPENFLOW10 = 0,       /* Standard OpenFlow 1.0 compatible. */
@@ -215,10 +164,9 @@ enum nx_packet_in_format {
 
 /* NXT_SET_PACKET_IN_FORMAT request. */
 struct nx_set_packet_in_format {
-    struct nicira_header nxh;
     ovs_be32 format;            /* One of NXPIF_*. */
 };
-OFP_ASSERT(sizeof(struct nx_set_packet_in_format) == 20);
+OFP_ASSERT(sizeof(struct nx_set_packet_in_format) == 4);
 
 /* NXT_PACKET_IN (analogous to OFPT_PACKET_IN).
  *
@@ -245,7 +193,6 @@ OFP_ASSERT(sizeof(struct nx_set_packet_in_format) == 20);
  * The 'cookie' and 'table_id' fields have no meaning when 'reason' is
  * OFPR_NO_MATCH.  In this case they should be set to 0. */
 struct nx_packet_in {
-    struct nicira_header nxh;
     ovs_be32 buffer_id;       /* ID assigned by datapath. */
     ovs_be16 total_len;       /* Full length of frame. */
     uint8_t reason;           /* Reason packet is sent (one of OFPR_*). */
@@ -267,7 +214,7 @@ struct nx_packet_in {
     /* uint8_t pad[2]; */          /* Align to 64 bit + 16 bit. */
     /* uint8_t data[0]; */         /* Ethernet frame. */
 };
-OFP_ASSERT(sizeof(struct nx_packet_in) == 40);
+OFP_ASSERT(sizeof(struct nx_packet_in) == 24);
 
 /* Configures the "role" of the sending controller.  The default role is:
  *
@@ -289,10 +236,9 @@ OFP_ASSERT(sizeof(struct nx_packet_in) == 40);
  *      messages, but they do receive OFPT_PORT_STATUS messages.
  */
 struct nx_role_request {
-    struct nicira_header nxh;
     ovs_be32 role;              /* One of NX_ROLE_*. */
 };
-OFP_ASSERT(sizeof(struct nx_role_request) == 20);
+OFP_ASSERT(sizeof(struct nx_role_request) == 4);
 
 enum nx_role {
     NX_ROLE_OTHER,              /* Default role, full access. */
@@ -318,12 +264,11 @@ enum nx_role {
  * miss_send_len from default of zero to OFP_DEFAULT_MISS_SEND_LEN (128).
  */
 struct nx_async_config {
-    struct nicira_header nxh;
     ovs_be32 packet_in_mask[2];    /* Bitmasks of OFPR_* values. */
     ovs_be32 port_status_mask[2];  /* Bitmasks of OFPRR_* values. */
     ovs_be32 flow_removed_mask[2]; /* Bitmasks of OFPPR_* values. */
 };
-OFP_ASSERT(sizeof(struct nx_async_config) == 40);
+OFP_ASSERT(sizeof(struct nx_async_config) == 24);
 
 /* Nicira vendor flow actions. */
 
@@ -1785,10 +1730,9 @@ enum nx_flow_format {
 
 /* NXT_SET_FLOW_FORMAT request. */
 struct nx_set_flow_format {
-    struct nicira_header nxh;
     ovs_be32 format;            /* One of NXFF_*. */
 };
-OFP_ASSERT(sizeof(struct nx_set_flow_format) == 20);
+OFP_ASSERT(sizeof(struct nx_set_flow_format) == 4);
 
 /* NXT_FLOW_MOD (analogous to OFPT_FLOW_MOD).
  *
@@ -1797,7 +1741,6 @@ OFP_ASSERT(sizeof(struct nx_set_flow_format) == 20);
  * is used only to add or modify flow cookies.
  */
 struct nx_flow_mod {
-    struct nicira_header nxh;
     ovs_be64 cookie;              /* Opaque controller-issued identifier. */
     ovs_be16 command;             /* One of OFPFC_*. */
     ovs_be16 idle_timeout;        /* Idle time before discarding (seconds). */
@@ -1820,11 +1763,10 @@ struct nx_flow_mod {
      *     multiple of 8).
      */
 };
-OFP_ASSERT(sizeof(struct nx_flow_mod) == 48);
+OFP_ASSERT(sizeof(struct nx_flow_mod) == 32);
 
 /* NXT_FLOW_REMOVED (analogous to OFPT_FLOW_REMOVED). */
 struct nx_flow_removed {
-    struct nicira_header nxh;
     ovs_be64 cookie;          /* Opaque controller-issued identifier. */
     ovs_be16 priority;        /* Priority level of flow entry. */
     uint8_t reason;           /* One of OFPRR_*. */
@@ -1841,7 +1783,7 @@ struct nx_flow_removed {
      *   - Exactly (match_len + 7)/8*8 - match_len (between 0 and 7) bytes of
      *     all-zero bytes. */
 };
-OFP_ASSERT(sizeof(struct nx_flow_removed) == 56);
+OFP_ASSERT(sizeof(struct nx_flow_removed) == 40);
 
 /* Nicira vendor stats request of type NXST_FLOW (analogous to OFPST_FLOW
  * request).
@@ -1850,7 +1792,6 @@ OFP_ASSERT(sizeof(struct nx_flow_removed) == 56);
  * NXM_NX_COOKIE and NXM_NX_COOKIE_W matches.
  */
 struct nx_flow_stats_request {
-    struct nicira_stats_msg nsm;
     ovs_be16 out_port;        /* Require matching entries to include this
                                  as an output port.  A value of OFPP_NONE
                                  indicates no restriction. */
@@ -1865,7 +1806,7 @@ struct nx_flow_stats_request {
      *     message.
      */
 };
-OFP_ASSERT(sizeof(struct nx_flow_stats_request) == 32);
+OFP_ASSERT(sizeof(struct nx_flow_stats_request) == 8);
 
 /* Body for Nicira vendor stats reply of type NXST_FLOW (analogous to
  * OFPST_FLOW reply).
@@ -1918,7 +1859,6 @@ OFP_ASSERT(sizeof(struct nx_flow_stats) == 48);
 /* Nicira vendor stats request of type NXST_AGGREGATE (analogous to
  * OFPST_AGGREGATE request). */
 struct nx_aggregate_stats_request {
-    struct nicira_stats_msg nsm;
     ovs_be16 out_port;        /* Require matching entries to include this
                                  as an output port.  A value of OFPP_NONE
                                  indicates no restriction. */
@@ -1933,18 +1873,17 @@ struct nx_aggregate_stats_request {
      *     message.
      */
 };
-OFP_ASSERT(sizeof(struct nx_aggregate_stats_request) == 32);
+OFP_ASSERT(sizeof(struct nx_aggregate_stats_request) == 8);
 
 /* Body for nicira_stats_msg reply of type NXST_AGGREGATE (analogous to
  * OFPST_AGGREGATE reply). */
 struct nx_aggregate_stats_reply {
-    struct nicira_stats_msg nsm;
     ovs_be64 packet_count;     /* Number of packets, UINT64_MAX if unknown. */
     ovs_be64 byte_count;       /* Number of bytes, UINT64_MAX if unknown. */
     ovs_be32 flow_count;       /* Number of flows. */
     uint8_t pad[4];            /* Align to 64 bits. */
 };
-OFP_ASSERT(sizeof(struct nx_aggregate_stats_reply) == 48);
+OFP_ASSERT(sizeof(struct nx_aggregate_stats_reply) == 24);
 
 /* NXT_SET_CONTROLLER_ID.
  *
@@ -1956,11 +1895,10 @@ OFP_ASSERT(sizeof(struct nx_aggregate_stats_reply) == 48);
  * The NXAST_CONTROLLER action is the only current user of controller
  * connection IDs. */
 struct nx_controller_id {
-    struct nicira_header nxh;
     uint8_t zero[6];            /* Must be zero. */
     ovs_be16 controller_id;     /* New controller connection ID. */
 };
-OFP_ASSERT(sizeof(struct nx_controller_id) == 24);
+OFP_ASSERT(sizeof(struct nx_controller_id) == 8);
 
 /* Action structure for NXAST_CONTROLLER.
  *
@@ -2214,11 +2152,12 @@ struct nx_flow_update_abbrev {
 };
 OFP_ASSERT(sizeof(struct nx_flow_update_abbrev) == 8);
 
-/* Used by a controller to cancel an outstanding monitor. */
+/* NXT_FLOW_MONITOR_CANCEL.
+ *
+ * Used by a controller to cancel an outstanding monitor. */
 struct nx_flow_monitor_cancel {
-    struct nicira_header nxh;   /* Type NXT_FLOW_MONITOR_CANCEL. */
     ovs_be32 id;                /* 'id' from nx_flow_monitor_request. */
 };
-OFP_ASSERT(sizeof(struct nx_flow_monitor_cancel) == 20);
+OFP_ASSERT(sizeof(struct nx_flow_monitor_cancel) == 4);
 
 #endif /* openflow/nicira-ext.h */

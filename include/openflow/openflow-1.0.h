@@ -43,31 +43,6 @@ enum ofp_port {
     OFPP_NONE       = 0xffff   /* Not associated with a physical port. */
 };
 
-/* OpenFlow 1.0 specific message types, in addition to the common message
- * types. */
-enum ofp10_type {
-    /* Controller command messages. */
-    OFPT10_PORT_MOD = 15,       /* Controller/switch message */
-
-    /* Statistics messages. */
-    OFPT10_STATS_REQUEST,       /* Controller/switch message */
-    OFPT10_STATS_REPLY,         /* Controller/switch message */
-
-    /* Barrier messages. */
-    OFPT10_BARRIER_REQUEST,     /* Controller/switch message */
-    OFPT10_BARRIER_REPLY,       /* Controller/switch message */
-
-    /* Queue Configuration messages. */
-    OFPT10_QUEUE_GET_CONFIG_REQUEST,  /* Controller/switch message */
-    OFPT10_QUEUE_GET_CONFIG_REPLY     /* Controller/switch message */
-};
-
-/* OFPT_HELLO.  This message has an empty body, but implementations must
- * ignore any data included in the body, to allow for future extensions. */
-struct ofp_hello {
-    struct ofp_header header;
-};
-
 #define OFP_DEFAULT_MISS_SEND_LEN   128
 
 enum ofp_config_flags {
@@ -85,12 +60,11 @@ enum ofp_config_flags {
 
 /* Switch configuration. */
 struct ofp_switch_config {
-    struct ofp_header header;
     ovs_be16 flags;             /* OFPC_* flags. */
     ovs_be16 miss_send_len;     /* Max bytes of new flow that datapath should
                                    send to the controller. */
 };
-OFP_ASSERT(sizeof(struct ofp_switch_config) == 12);
+OFP_ASSERT(sizeof(struct ofp_switch_config) == 4);
 
 /* OpenFlow 1.0 specific capabilities supported by the datapath (struct
  * ofp_switch_features, member capabilities). */
@@ -159,7 +133,6 @@ OFP_ASSERT(sizeof(struct ofp10_phy_port) == 48);
 
 /* Modify behavior of the physical port */
 struct ofp10_port_mod {
-    struct ofp_header header;
     ovs_be16 port_no;
     uint8_t hw_addr[OFP_ETH_ALEN]; /* The hardware address is not
                                       configurable.  This is used to
@@ -174,30 +147,27 @@ struct ofp10_port_mod {
                                bits to prevent any action taking place. */
     uint8_t pad[4];         /* Pad to 64-bits. */
 };
-OFP_ASSERT(sizeof(struct ofp10_port_mod) == 32);
+OFP_ASSERT(sizeof(struct ofp10_port_mod) == 24);
 
 /* Query for port queue configuration. */
 struct ofp10_queue_get_config_request {
-    struct ofp_header header;
     ovs_be16 port;          /* Port to be queried. Should refer
                                to a valid physical port (i.e. < OFPP_MAX) */
     uint8_t pad[2];
     /* 32-bit alignment. */
 };
-OFP_ASSERT(sizeof(struct ofp10_queue_get_config_request) == 12);
+OFP_ASSERT(sizeof(struct ofp10_queue_get_config_request) == 4);
 
 /* Queue configuration for a given port. */
 struct ofp10_queue_get_config_reply {
-    struct ofp_header header;
     ovs_be16 port;
     uint8_t pad[6];
     /* struct ofp10_packet_queue queues[0]; List of configured queues. */
 };
-OFP_ASSERT(sizeof(struct ofp10_queue_get_config_reply) == 16);
+OFP_ASSERT(sizeof(struct ofp10_queue_get_config_reply) == 8);
 
 /* Packet received on port (datapath -> controller). */
 struct ofp_packet_in {
-    struct ofp_header header;
     ovs_be32 buffer_id;     /* ID assigned by datapath. */
     ovs_be16 total_len;     /* Full length of frame. */
     ovs_be16 in_port;       /* Port on which frame was received. */
@@ -210,7 +180,7 @@ struct ofp_packet_in {
                                offsetof(struct ofp_packet_in, data) ==
                                sizeof(struct ofp_packet_in) - 2. */
 };
-OFP_ASSERT(sizeof(struct ofp_packet_in) == 20);
+OFP_ASSERT(sizeof(struct ofp_packet_in) == 12);
 
 enum ofp10_action_type {
     OFPAT10_OUTPUT,             /* Output to switch port. */
@@ -289,7 +259,6 @@ OFP_ASSERT(sizeof(union ofp_action) == 8);
 
 /* Send packet (controller -> datapath). */
 struct ofp_packet_out {
-    struct ofp_header header;
     ovs_be32 buffer_id;           /* ID assigned by datapath or UINT32_MAX. */
     ovs_be16 in_port;             /* Packet's input port (OFPP_NONE if none). */
     ovs_be16 actions_len;         /* Size of action array in bytes. */
@@ -300,7 +269,7 @@ struct ofp_packet_out {
      *     of the message length.
      */
 };
-OFP_ASSERT(sizeof(struct ofp_packet_out) == 16);
+OFP_ASSERT(sizeof(struct ofp_packet_out) == 8);
 
 enum ofp_flow_mod_command {
     OFPFC_ADD,              /* New flow. */
@@ -403,7 +372,6 @@ enum ofp_flow_mod_flags {
 
 /* Flow setup and teardown (controller -> datapath). */
 struct ofp_flow_mod {
-    struct ofp_header header;
     struct ofp10_match match;    /* Fields to match */
     ovs_be64 cookie;             /* Opaque controller-issued identifier. */
 
@@ -423,11 +391,10 @@ struct ofp_flow_mod {
                                             from the length field in the
                                             header. */
 };
-OFP_ASSERT(sizeof(struct ofp_flow_mod) == 72);
+OFP_ASSERT(sizeof(struct ofp_flow_mod) == 64);
 
 /* Flow removed (datapath -> controller). */
 struct ofp_flow_removed {
-    struct ofp_header header;
     struct ofp10_match match; /* Description of fields. */
     ovs_be64 cookie;          /* Opaque controller-issued identifier. */
 
@@ -443,18 +410,16 @@ struct ofp_flow_removed {
     ovs_be64 packet_count;
     ovs_be64 byte_count;
 };
-OFP_ASSERT(sizeof(struct ofp_flow_removed) == 88);
+OFP_ASSERT(sizeof(struct ofp_flow_removed) == 80);
 
 /* OFPT_ERROR: Error message (datapath -> controller). */
 struct ofp_error_msg {
-    struct ofp_header header;
-
     ovs_be16 type;
     ovs_be16 code;
     uint8_t data[0];          /* Variable-length data.  Interpreted based
                                  on the type and code. */
 };
-OFP_ASSERT(sizeof(struct ofp_error_msg) == 12);
+OFP_ASSERT(sizeof(struct ofp_error_msg) == 4);
 
 /* Statistics request or reply message. */
 struct ofp_stats_msg {
@@ -471,10 +436,9 @@ enum ofp_stats_reply_flags {
 
 #define DESC_STR_LEN   256
 #define SERIAL_NUM_LEN 32
-/* Reply to OFPST_DESC request.  Each entry is a NULL-terminated ASCII
+/* Body of reply to OFPST_DESC request.  Each entry is a NULL-terminated ASCII
  * string. */
 struct ofp_desc_stats {
-    struct ofp_stats_msg osm;
     char mfr_desc[DESC_STR_LEN];       /* Manufacturer description. */
     char hw_desc[DESC_STR_LEN];        /* Hardware description. */
     char sw_desc[DESC_STR_LEN];        /* Software description. */
@@ -482,11 +446,10 @@ struct ofp_desc_stats {
     char dp_desc[DESC_STR_LEN];        /* Human readable description of
                                           the datapath. */
 };
-OFP_ASSERT(sizeof(struct ofp_desc_stats) == 1068);
+OFP_ASSERT(sizeof(struct ofp_desc_stats) == 1056);
 
 /* Stats request of type OFPST_AGGREGATE or OFPST_FLOW. */
 struct ofp_flow_stats_request {
-    struct ofp_stats_msg osm;
     struct ofp10_match match; /* Fields to match. */
     uint8_t table_id;         /* ID of table to read (from ofp_table_stats)
                                  or 0xff for all tables. */
@@ -495,7 +458,7 @@ struct ofp_flow_stats_request {
                                  as an output port.  A value of OFPP_NONE
                                  indicates no restriction. */
 };
-OFP_ASSERT(sizeof(struct ofp_flow_stats_request) == 56);
+OFP_ASSERT(sizeof(struct ofp_flow_stats_request) == 44);
 
 /* Body of reply to OFPST_FLOW request. */
 struct ofp_flow_stats {
@@ -520,13 +483,12 @@ OFP_ASSERT(sizeof(struct ofp_flow_stats) == 88);
 
 /* Reply to OFPST_AGGREGATE request. */
 struct ofp_aggregate_stats_reply {
-    struct ofp_stats_msg osm;
     ovs_32aligned_be64 packet_count; /* Number of packets in flows. */
     ovs_32aligned_be64 byte_count;   /* Number of bytes in flows. */
     ovs_be32 flow_count;      /* Number of flows. */
     uint8_t pad[4];           /* Align to 64 bits. */
 };
-OFP_ASSERT(sizeof(struct ofp_aggregate_stats_reply) == 36);
+OFP_ASSERT(sizeof(struct ofp_aggregate_stats_reply) == 24);
 
 /* Body of reply to OFPST_TABLE request. */
 struct ofp_table_stats {
@@ -545,13 +507,12 @@ OFP_ASSERT(sizeof(struct ofp_table_stats) == 64);
 
 /* Stats request of type OFPST_PORT. */
 struct ofp_port_stats_request {
-    struct ofp_stats_msg osm;
     ovs_be16 port_no;        /* OFPST_PORT message may request statistics
                                 for a single port (specified with port_no)
                                 or for all ports (port_no == OFPP_NONE). */
     uint8_t pad[6];
 };
-OFP_ASSERT(sizeof(struct ofp_port_stats_request) == 20);
+OFP_ASSERT(sizeof(struct ofp_port_stats_request) == 8);
 
 /* Body of reply to OFPST_PORT request. If a counter is unsupported, set
  * the field to all ones. */
@@ -582,12 +543,11 @@ OFP_ASSERT(sizeof(struct ofp_port_stats) == 104);
 
 /* Body for stats request of type OFPST_QUEUE. */
 struct ofp_queue_stats_request {
-    struct ofp_stats_msg osm;
     ovs_be16 port_no;        /* All ports if OFPP_ALL. */
     uint8_t pad[2];          /* Align to 32-bits. */
     ovs_be32 queue_id;       /* All queues if OFPQ_ALL. */
 };
-OFP_ASSERT(sizeof(struct ofp_queue_stats_request) == 20);
+OFP_ASSERT(sizeof(struct ofp_queue_stats_request) == 8);
 
 /* Body for stats reply of type OFPST_QUEUE consists of an array of this
  * structure type. */
@@ -602,7 +562,7 @@ struct ofp_queue_stats {
 OFP_ASSERT(sizeof(struct ofp_queue_stats) == 32);
 
 /* Vendor extension stats message. */
-struct ofp_vendor_stats_msg {
+struct ofp10_vendor_stats_msg {
     struct ofp_stats_msg osm;   /* Type OFPST_VENDOR. */
     ovs_be32 vendor;            /* Vendor ID:
                                  * - MSB 0: low-order bytes are IEEE OUI.
@@ -610,7 +570,7 @@ struct ofp_vendor_stats_msg {
                                  *   consortium. */
     /* Followed by vendor-defined arbitrary additional data. */
 };
-OFP_ASSERT(sizeof(struct ofp_vendor_stats_msg) == 16);
+OFP_ASSERT(sizeof(struct ofp10_vendor_stats_msg) == 16);
 
 /* Vendor extension. */
 struct ofp_vendor_header {

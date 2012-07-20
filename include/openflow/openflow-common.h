@@ -83,32 +83,6 @@
 
 #define OFP_ETH_ALEN 6          /* Bytes in an Ethernet address. */
 
-/* Common OpenFlow message types. */
-enum ofp_type {
-    /* Immutable messages. */
-    OFPT_HELLO,               /* Symmetric message */
-    OFPT_ERROR,               /* Symmetric message */
-    OFPT_ECHO_REQUEST,        /* Symmetric message */
-    OFPT_ECHO_REPLY,          /* Symmetric message */
-    OFPT_VENDOR,              /* Symmetric message */
-
-    /* Switch configuration messages. */
-    OFPT_FEATURES_REQUEST,    /* Controller/switch message */
-    OFPT_FEATURES_REPLY,      /* Controller/switch message */
-    OFPT_GET_CONFIG_REQUEST,  /* Controller/switch message */
-    OFPT_GET_CONFIG_REPLY,    /* Controller/switch message */
-    OFPT_SET_CONFIG,          /* Controller/switch message */
-
-    /* Asynchronous messages. */
-    OFPT_PACKET_IN,           /* Async message */
-    OFPT_FLOW_REMOVED,        /* Async message */
-    OFPT_PORT_STATUS,         /* Async message */
-
-    /* Controller command messages. */
-    OFPT_PACKET_OUT,          /* Controller/switch message */
-    OFPT_FLOW_MOD,            /* Controller/switch message */
-};
-
 /* Header on all OpenFlow packets. */
 struct ofp_header {
     uint8_t version;    /* An OpenFlow version number, e.g. OFP10_VERSION. */
@@ -183,7 +157,6 @@ OFP_ASSERT(sizeof(struct ofp_queue_prop_min_rate) == 16);
 
 /* Switch features. */
 struct ofp_switch_features {
-    struct ofp_header header;
     ovs_be64 datapath_id;   /* Datapath unique ID.  The lower 48-bits are for
                                a MAC address, while the upper 16-bits are
                                implementer-defined. */
@@ -200,7 +173,7 @@ struct ofp_switch_features {
     /* Followed by an array of struct ofp10_phy_port or struct ofp11_port
      * structures.  The number is inferred from header.length. */
 };
-OFP_ASSERT(sizeof(struct ofp_switch_features) == 32);
+OFP_ASSERT(sizeof(struct ofp_switch_features) == 24);
 
 /* Common capabilities supported by the datapath (struct ofp_switch_features,
  * member capabilities). */
@@ -293,55 +266,11 @@ enum ofp_port_reason {
 
 /* A physical port has changed in the datapath */
 struct ofp_port_status {
-    struct ofp_header header;
     uint8_t reason;          /* One of OFPPR_*. */
     uint8_t pad[7];          /* Align to 64-bits. */
     /* Followed by struct ofp10_phy_port or struct ofp11_port.  */
 };
-OFP_ASSERT(sizeof(struct ofp_port_status) == 16);
-
-enum ofp_stats_types {
-    /* Description of this OpenFlow switch. (OFPMP_DESC)
-     * The OF1.0 request is struct ofp_stats_msg.
-     * The OF1.0 reply is struct ofp_desc_stats. */
-    OFPST_DESC = 0,
-
-    /* Individual flow statistics. (OFPMP_FLOW)
-     * The OF1.0 request is struct ofp_flow_stats_request.
-     * The OF1.0 reply body is an array of struct ofp_flow_stats. */
-    OFPST_FLOW = 1,
-
-    /* Aggregate flow statistics. (OFPMP_AGGREGATE)
-     * The OF1.0 request is struct ofp_flow_stats_request.
-     * The OF1.0 reply is struct ofp_aggregate_stats_reply. */
-    OFPST_AGGREGATE = 2,
-
-    /* Flow table statistics. (OFPMP_TABLE)
-     * The OF1.0 request is struct ofp_stats_msg.
-     * The OF1.0 reply body is an array of struct ofp_table_stats. */
-    OFPST_TABLE = 3,
-
-    /* Physical port statistics. (OFPMP_PORT_STATS)
-     * The OF1.0 request is struct ofp_port_stats_request.
-     * The OF1.0 reply body is an array of struct ofp_port_stats. */
-    OFPST_PORT = 4,
-
-    /* Queue statistics for a port. (OFPMP_QUEUE)
-     * The OF1.0 request is struct ofp_stats_msg.
-     * The OF1.0 reply body is an array of struct ofp_queue_stats. */
-    OFPST_QUEUE = 5,
-
-    /* Port description. (OFPMP_PORT_DESC)
-     * This was introduced as part of OF1.3, but is useful for bridges
-     * with many ports, so we support it with OF1.0, too.
-     * The OF1.0 request is struct ofp_stats_msg.
-     * The OF1.0 reply body is an array of struct ofp10_phy_port. */
-    OFPST_PORT_DESC = 13,
-
-    /* Vendor extension.
-     * The OF1.0 request and reply begin with struct ofp_vendor_stats. */
-    OFPST_VENDOR = 0xffff
-};
+OFP_ASSERT(sizeof(struct ofp_port_status) == 8);
 
 /* The match type indicates the match structure (set of fields that compose the
  * match) in use. The match type is placed in the type field at the beginning

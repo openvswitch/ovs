@@ -20,7 +20,7 @@ AT_CHECK([ovs-ofctl '-vPATTERN:console:%c|%p|%m' ofp-print 00bb0008eeff0011],
   [0], [dnl
 ***decode error: OFPBRC_BAD_TYPE***
 00000000  00 bb 00 08 ee ff 00 11-                        |........        |
-], [ofp_util|WARN|received OpenFlow message of unknown type 187
+], [ofp_msgs|WARN|unknown OpenFlow message (version 0, type 187)
 ])
 AT_CLEANUP
 

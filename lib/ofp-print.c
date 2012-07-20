@@ -38,6 +38,7 @@
 #include "nx-match.h"
 #include "ofp-actions.h"
 #include "ofp-errors.h"
+#include "ofp-msgs.h"
 #include "ofp-util.h"
 #include "ofpbuf.h"
 #include "openflow/openflow.h"
@@ -155,7 +156,7 @@ ofp_print_packet_in(struct ds *string, const struct ofp_header *oh,
 }
 
 static void
-ofp_print_packet_out(struct ds *string, const struct ofp_packet_out *opo,
+ofp_print_packet_out(struct ds *string, const struct ofp_header *oh,
                      int verbosity)
 {
     struct ofputil_packet_out po;
@@ -163,7 +164,7 @@ ofp_print_packet_out(struct ds *string, const struct ofp_packet_out *opo,
     enum ofperr error;
 
     ofpbuf_init(&ofpacts, 64);
-    error = ofputil_decode_packet_out(&po, opo, &ofpacts);
+    error = ofputil_decode_packet_out(&po, oh, &ofpacts);
     if (error) {
         ofpbuf_uninit(&ofpacts);
         ofp_print_error(string, error);
@@ -485,14 +486,13 @@ ofputil_action_bitmap_to_name(uint32_t bit)
 }
 
 static void
-ofp_print_switch_features(struct ds *string,
-                          const struct ofp_switch_features *osf)
+ofp_print_switch_features(struct ds *string, const struct ofp_header *oh)
 {
     struct ofputil_switch_features features;
     enum ofperr error;
     struct ofpbuf b;
 
-    error = ofputil_decode_switch_features(osf, &features, &b);
+    error = ofputil_decode_switch_features(oh, &features, &b);
     if (error) {
         ofp_print_error(string, error);
         return;
@@ -512,7 +512,7 @@ ofp_print_switch_features(struct ds *string,
                         ofputil_action_bitmap_to_name, ' ');
     ds_put_char(string, '\n');
 
-    ofp_print_phy_ports(string, osf->header.version, &b);
+    ofp_print_phy_ports(string, oh->version, &b);
 }
 
 static void
@@ -668,13 +668,13 @@ ofp10_match_to_string(const struct ofp10_match *om, int verbosity)
 }
 
 static void
-ofp_print_flow_mod(struct ds *s, const struct ofp_header *oh,
-                   enum ofputil_msg_code code, int verbosity)
+ofp_print_flow_mod(struct ds *s, const struct ofp_header *oh, int verbosity)
 {
     struct ofputil_flow_mod fm;
     struct ofpbuf ofpacts;
     bool need_priority;
     enum ofperr error;
+    enum ofpraw raw;
 
     ofpbuf_init(&ofpacts, 64);
     error = ofputil_decode_flow_mod(&fm, oh, OFPUTIL_P_OF10_TID, &ofpacts);
@@ -709,14 +709,15 @@ ofp_print_flow_mod(struct ds *s, const struct ofp_header *oh,
     }
 
     ds_put_char(s, ' ');
-    if (verbosity >= 3 && code == OFPUTIL_OFPT_FLOW_MOD) {
-        const struct ofp_flow_mod *ofm = (const struct ofp_flow_mod *) oh;
+    ofpraw_decode(&raw, oh);
+    if (verbosity >= 3 && raw == OFPRAW_OFPT10_FLOW_MOD) {
+        const struct ofp_flow_mod *ofm = ofpmsg_body(oh);
         ofp10_match_print(s, &ofm->match, verbosity);
 
         /* ofp_print_match() doesn't print priority. */
         need_priority = true;
-    } else if (verbosity >= 3 && code == OFPUTIL_NXT_FLOW_MOD) {
-        const struct nx_flow_mod *nfm = (const struct nx_flow_mod *) oh;
+    } else if (verbosity >= 3 && raw == OFPRAW_NXT_FLOW_MOD) {
+        const struct nx_flow_mod *nfm = ofpmsg_body(oh);
         const void *nxm = nfm + 1;
         char *nxm_s;
 
@@ -884,41 +885,38 @@ ofp_print_error(struct ds *string, enum ofperr error)
 }
 
 static void
-ofp_print_error_msg(struct ds *string, const struct ofp_error_msg *oem)
+ofp_print_error_msg(struct ds *string, const struct ofp_header *oh)
 {
-    size_t len = ntohs(oem->header.length);
-    size_t payload_ofs, payload_len;
-    const void *payload;
+    size_t len = ntohs(oh->length);
+    struct ofpbuf payload;
     enum ofperr error;
     char *s;
 
-    error = ofperr_decode_msg(&oem->header, &payload_ofs);
+    error = ofperr_decode_msg(oh, &payload);
     if (!error) {
         ds_put_cstr(string, "***decode error***");
-        ds_put_hex_dump(string, oem->data, len - sizeof *oem, 0, true);
+        ds_put_hex_dump(string, oh + 1, len - sizeof *oh, 0, true);
         return;
     }
 
     ds_put_format(string, " %s\n", ofperr_get_name(error));
 
-    payload = (const uint8_t *) oem + payload_ofs;
-    payload_len = len - payload_ofs;
     if (error == OFPERR_OFPHFC_INCOMPATIBLE || error == OFPERR_OFPHFC_EPERM) {
-        ds_put_printable(string, payload, payload_len);
+        ds_put_printable(string, payload.data, payload.size);
     } else {
-        s = ofp_to_string(payload, payload_len, 1);
+        s = ofp_to_string(payload.data, payload.size, 1);
         ds_put_cstr(string, s);
         free(s);
     }
 }
 
 static void
-ofp_print_port_status(struct ds *string, const struct ofp_port_status *ops)
+ofp_print_port_status(struct ds *string, const struct ofp_header *oh)
 {
     struct ofputil_port_status ps;
     enum ofperr error;
 
-    error = ofputil_decode_port_status(ops, &ps);
+    error = ofputil_decode_port_status(oh, &ps);
     if (error) {
         ofp_print_error(string, error);
         return;
@@ -936,8 +934,10 @@ ofp_print_port_status(struct ds *string, const struct ofp_port_status *ops)
 }
 
 static void
-ofp_print_ofpst_desc_reply(struct ds *string, const struct ofp_desc_stats *ods)
+ofp_print_ofpst_desc_reply(struct ds *string, const struct ofp_header *oh)
 {
+    const struct ofp_desc_stats *ods = ofpmsg_body(oh);
+
     ds_put_char(string, '\n');
     ds_put_format(string, "Manufacturer: %.*s\n",
             (int) sizeof ods->mfr_desc, ods->mfr_desc);
@@ -952,13 +952,12 @@ ofp_print_ofpst_desc_reply(struct ds *string, const struct ofp_desc_stats *ods)
 }
 
 static void
-ofp_print_flow_stats_request(struct ds *string,
-                             const struct ofp_stats_msg *osm)
+ofp_print_flow_stats_request(struct ds *string, const struct ofp_header *oh)
 {
     struct ofputil_flow_stats_request fsr;
     enum ofperr error;
 
-    error = ofputil_decode_flow_stats_request(&fsr, &osm->header);
+    error = ofputil_decode_flow_stats_request(&fsr, oh);
     if (error) {
         ofp_print_error(string, error);
         return;
@@ -1037,23 +1036,20 @@ ofp_print_flow_stats_reply(struct ds *string, const struct ofp_header *oh)
 }
 
 static void
-ofp_print_ofpst_aggregate_reply(struct ds *string,
-                                const struct ofp_aggregate_stats_reply *asr)
+ofp_print_aggregate_stats_reply(struct ds *string, const struct ofp_header *oh)
 {
-    ds_put_format(string, " packet_count=%"PRIu64,
-                  ntohll(get_32aligned_be64(&asr->packet_count)));
-    ds_put_format(string, " byte_count=%"PRIu64,
-                  ntohll(get_32aligned_be64(&asr->byte_count)));
-    ds_put_format(string, " flow_count=%"PRIu32, ntohl(asr->flow_count));
-}
+    struct ofputil_aggregate_stats as;
+    enum ofperr error;
 
-static void
-ofp_print_nxst_aggregate_reply(struct ds *string,
-                               const struct nx_aggregate_stats_reply *nasr)
-{
-    ds_put_format(string, " packet_count=%"PRIu64, ntohll(nasr->packet_count));
-    ds_put_format(string, " byte_count=%"PRIu64, ntohll(nasr->byte_count));
-    ds_put_format(string, " flow_count=%"PRIu32, ntohl(nasr->flow_count));
+    error = ofputil_decode_aggregate_stats_reply(&as, oh);
+    if (error) {
+        ofp_print_error(string, error);
+        return;
+    }
+
+    ds_put_format(string, " packet_count=%"PRIu64, as.packet_count);
+    ds_put_format(string, " byte_count=%"PRIu64, as.byte_count);
+    ds_put_format(string, " flow_count=%"PRIu32, as.flow_count);
 }
 
 static void print_port_stat(struct ds *string, const char *leader,
@@ -1075,9 +1071,9 @@ static void print_port_stat(struct ds *string, const char *leader,
 }
 
 static void
-ofp_print_ofpst_port_request(struct ds *string,
-                             const struct ofp_port_stats_request *psr)
+ofp_print_ofpst_port_request(struct ds *string, const struct ofp_header *oh)
 {
+    const struct ofp_port_stats_request *psr = ofpmsg_body(oh);
     ds_put_format(string, " port_no=%"PRIu16, ntohs(psr->port_no));
 }
 
@@ -1085,14 +1081,25 @@ static void
 ofp_print_ofpst_port_reply(struct ds *string, const struct ofp_header *oh,
                            int verbosity)
 {
-    const struct ofp_port_stats *ps = ofputil_stats_body(oh);
-    size_t n = ofputil_stats_body_len(oh) / sizeof *ps;
+    struct ofp_port_stats *ps;
+    struct ofpbuf b;
+    size_t n;
+
+    ofpbuf_use_const(&b, oh, ntohs(oh->length));
+    ofpraw_pull_assert(&b);
+
+    n = b.size / sizeof *ps;
     ds_put_format(string, " %zu ports\n", n);
     if (verbosity < 1) {
         return;
     }
 
-    for (; n--; ps++) {
+    for (;;) {
+        ps = ofpbuf_try_pull(&b, sizeof *ps);
+        if (!ps) {
+            return;
+        }
+
         ds_put_format(string, "  port %2"PRIu16": ", ntohs(ps->port_no));
 
         ds_put_cstr(string, "rx ");
@@ -1117,15 +1124,27 @@ static void
 ofp_print_ofpst_table_reply(struct ds *string, const struct ofp_header *oh,
                             int verbosity)
 {
-    const struct ofp_table_stats *ts = ofputil_stats_body(oh);
-    size_t n = ofputil_stats_body_len(oh) / sizeof *ts;
+    struct ofp_table_stats *ts;
+    struct ofpbuf b;
+    size_t n;
+
+    ofpbuf_use_const(&b, oh, ntohs(oh->length));
+    ofpraw_pull_assert(&b);
+
+    n = b.size / sizeof *ts;
     ds_put_format(string, " %zu tables\n", n);
     if (verbosity < 1) {
         return;
     }
 
-    for (; n--; ts++) {
+    for (;;) {
         char name[OFP_MAX_TABLE_NAME_LEN + 1];
+
+        ts = ofpbuf_try_pull(&b, sizeof *ts);
+        if (!ts) {
+            return;
+        }
+
         ovs_strlcpy(name, ts->name, sizeof name);
 
         ds_put_format(string, "  %d: %-8s: ", ts->table_id, name);
@@ -1151,9 +1170,10 @@ ofp_print_queue_name(struct ds *string, uint32_t queue_id)
 }
 
 static void
-ofp_print_ofpst_queue_request(struct ds *string,
-                              const struct ofp_queue_stats_request *qsr)
+ofp_print_ofpst_queue_request(struct ds *string, const struct ofp_header *oh)
 {
+    const struct ofp_queue_stats_request *qsr = ofpmsg_body(oh);
+
     ds_put_cstr(string, "port=");
     ofputil_format_port(ntohs(qsr->port_no), string);
 
@@ -1165,14 +1185,25 @@ static void
 ofp_print_ofpst_queue_reply(struct ds *string, const struct ofp_header *oh,
                             int verbosity)
 {
-    const struct ofp_queue_stats *qs = ofputil_stats_body(oh);
-    size_t n = ofputil_stats_body_len(oh) / sizeof *qs;
+    struct ofp_queue_stats *qs;
+    struct ofpbuf b;
+    size_t n;
+
+    ofpbuf_use_const(&b, oh, ntohs(oh->length));
+    ofpraw_pull_assert(&b);
+
+    n = b.size / sizeof *qs;
     ds_put_format(string, " %zu queues\n", n);
     if (verbosity < 1) {
         return;
     }
 
-    for (; n--; qs++) {
+    for (;;) {
+        qs = ofpbuf_try_pull(&b, sizeof *qs);
+        if (!qs) {
+            return;
+        }
+
         ds_put_cstr(string, "  port ");
         ofputil_format_port(ntohs(qs->port_no), string);
         ds_put_cstr(string, " queue ");
@@ -1192,7 +1223,7 @@ ofp_print_ofpst_port_desc_reply(struct ds *string,
     struct ofpbuf b;
 
     ofpbuf_use_const(&b, oh, ntohs(oh->length));
-    ofpbuf_pull(&b, sizeof(struct ofp_stats_msg));
+    ofpraw_pull_assert(&b);
     ds_put_char(string, '\n');
     ofp_print_phy_ports(string, oh->version, &b);
 }
@@ -1200,22 +1231,19 @@ ofp_print_ofpst_port_desc_reply(struct ds *string,
 static void
 ofp_print_stats_request(struct ds *string, const struct ofp_header *oh)
 {
-    const struct ofp_stats_msg *srq = (const struct ofp_stats_msg *) oh;
+    uint16_t flags = ofpmp_flags(oh);
 
-    if (srq->flags) {
-        ds_put_format(string, " ***unknown flags 0x%04"PRIx16"***",
-                      ntohs(srq->flags));
+    if (flags) {
+        ds_put_format(string, " ***unknown flags 0x%04"PRIx16"***", flags);
     }
 }
 
 static void
 ofp_print_stats_reply(struct ds *string, const struct ofp_header *oh)
 {
-    const struct ofp_stats_msg *srp = (const struct ofp_stats_msg *) oh;
+    uint16_t flags = ofpmp_flags(oh);
 
-    if (srp->flags) {
-        uint16_t flags = ntohs(srp->flags);
-
+    if (flags) {
         ds_put_cstr(string, " flags=");
         if (flags & OFPSF_REPLY_MORE) {
             ds_put_cstr(string, "[more]");
@@ -1520,202 +1548,180 @@ ofp_print_version(const struct ofp_header *oh,
 }
 
 static void
-ofp_header_to_string__(const struct ofp_header *oh,
-                       const struct ofputil_msg_type *type, struct ds *string)
+ofp_header_to_string__(const struct ofp_header *oh, enum ofpraw raw,
+                       struct ds *string)
 {
-    ds_put_cstr(string, ofputil_msg_type_name(type));
+    ds_put_cstr(string, ofpraw_get_name(raw));
     ofp_print_version(oh, string);
 }
 
 static void
-ofp_to_string__(const struct ofp_header *oh,
-                const struct ofputil_msg_type *type, struct ds *string,
-                int verbosity)
+ofp_to_string__(const struct ofp_header *oh, enum ofpraw raw,
+                struct ds *string, int verbosity)
 {
-    enum ofputil_msg_code code;
     const void *msg = oh;
 
-    ofp_header_to_string__(oh, type, string);
-    code = ofputil_msg_type_code(type);
-    switch (code) {
-    case OFPUTIL_MSG_INVALID:
-        break;
-
-    case OFPUTIL_OFPT_HELLO:
+    ofp_header_to_string__(oh, raw, string);
+    switch (ofptype_from_ofpraw(raw)) {
+    case OFPTYPE_HELLO:
         ds_put_char(string, '\n');
         ds_put_hex_dump(string, oh + 1, ntohs(oh->length) - sizeof *oh,
                         0, true);
         break;
 
-    case OFPUTIL_OFPT_ERROR:
-        ofp_print_error_msg(string, msg);
+    case OFPTYPE_ERROR:
+        ofp_print_error_msg(string, oh);
         break;
 
-    case OFPUTIL_OFPT_ECHO_REQUEST:
-    case OFPUTIL_OFPT_ECHO_REPLY:
+    case OFPTYPE_ECHO_REQUEST:
+    case OFPTYPE_ECHO_REPLY:
         ofp_print_echo(string, oh, verbosity);
         break;
 
-    case OFPUTIL_OFPT_FEATURES_REQUEST:
+    case OFPTYPE_FEATURES_REQUEST:
         break;
 
-    case OFPUTIL_OFPT_FEATURES_REPLY:
-        ofp_print_switch_features(string, msg);
+    case OFPTYPE_FEATURES_REPLY:
+        ofp_print_switch_features(string, oh);
         break;
 
-    case OFPUTIL_OFPT_GET_CONFIG_REQUEST:
+    case OFPTYPE_GET_CONFIG_REQUEST:
         break;
 
-    case OFPUTIL_OFPT_GET_CONFIG_REPLY:
-    case OFPUTIL_OFPT_SET_CONFIG:
-        ofp_print_switch_config(string, msg);
+    case OFPTYPE_GET_CONFIG_REPLY:
+    case OFPTYPE_SET_CONFIG:
+        ofp_print_switch_config(string, ofpmsg_body(oh));
         break;
 
-    case OFPUTIL_OFPT_PACKET_IN:
-    case OFPUTIL_NXT_PACKET_IN:
-        ofp_print_packet_in(string, msg, verbosity);
+    case OFPTYPE_PACKET_IN:
+        ofp_print_packet_in(string, oh, verbosity);
         break;
 
-    case OFPUTIL_OFPT_FLOW_REMOVED:
-    case OFPUTIL_NXT_FLOW_REMOVED:
-        ofp_print_flow_removed(string, msg);
+    case OFPTYPE_FLOW_REMOVED:
+        ofp_print_flow_removed(string, oh);
         break;
 
-    case OFPUTIL_OFPT_PORT_STATUS:
-        ofp_print_port_status(string, msg);
+    case OFPTYPE_PORT_STATUS:
+        ofp_print_port_status(string, oh);
         break;
 
-    case OFPUTIL_OFPT_PACKET_OUT:
-        ofp_print_packet_out(string, msg, verbosity);
+    case OFPTYPE_PACKET_OUT:
+        ofp_print_packet_out(string, oh, verbosity);
         break;
 
-    case OFPUTIL_OFPT_FLOW_MOD:
-    case OFPUTIL_NXT_FLOW_MOD:
-        ofp_print_flow_mod(string, msg, code, verbosity);
+    case OFPTYPE_FLOW_MOD:
+        ofp_print_flow_mod(string, oh, verbosity);
         break;
 
-    case OFPUTIL_OFPT_PORT_MOD:
-        ofp_print_port_mod(string, msg);
+    case OFPTYPE_PORT_MOD:
+        ofp_print_port_mod(string, oh);
         break;
 
-    case OFPUTIL_OFPT_BARRIER_REQUEST:
-    case OFPUTIL_OFPT_BARRIER_REPLY:
+    case OFPTYPE_BARRIER_REQUEST:
+    case OFPTYPE_BARRIER_REPLY:
         break;
 
-    case OFPUTIL_OFPT_QUEUE_GET_CONFIG_REQUEST:
-    case OFPUTIL_OFPT_QUEUE_GET_CONFIG_REPLY:
-        /* XXX */
-        break;
-
-    case OFPUTIL_OFPST_DESC_REQUEST:
-    case OFPUTIL_OFPST_PORT_DESC_REQUEST:
+    case OFPTYPE_DESC_STATS_REQUEST:
+    case OFPTYPE_PORT_DESC_STATS_REQUEST:
         ofp_print_stats_request(string, oh);
         break;
 
-    case OFPUTIL_OFPST_FLOW_REQUEST:
-    case OFPUTIL_NXST_FLOW_REQUEST:
-    case OFPUTIL_OFPST_AGGREGATE_REQUEST:
-    case OFPUTIL_NXST_AGGREGATE_REQUEST:
+    case OFPTYPE_FLOW_STATS_REQUEST:
+    case OFPTYPE_AGGREGATE_STATS_REQUEST:
         ofp_print_stats_request(string, oh);
-        ofp_print_flow_stats_request(string, msg);
+        ofp_print_flow_stats_request(string, oh);
         break;
 
-    case OFPUTIL_OFPST_TABLE_REQUEST:
+    case OFPTYPE_TABLE_STATS_REQUEST:
         ofp_print_stats_request(string, oh);
         break;
 
-    case OFPUTIL_OFPST_PORT_REQUEST:
+    case OFPTYPE_PORT_STATS_REQUEST:
         ofp_print_stats_request(string, oh);
-        ofp_print_ofpst_port_request(string, msg);
+        ofp_print_ofpst_port_request(string, oh);
         break;
 
-    case OFPUTIL_OFPST_QUEUE_REQUEST:
+    case OFPTYPE_QUEUE_STATS_REQUEST:
         ofp_print_stats_request(string, oh);
-        ofp_print_ofpst_queue_request(string, msg);
+        ofp_print_ofpst_queue_request(string, oh);
         break;
 
-    case OFPUTIL_OFPST_DESC_REPLY:
+    case OFPTYPE_DESC_STATS_REPLY:
         ofp_print_stats_reply(string, oh);
-        ofp_print_ofpst_desc_reply(string, msg);
+        ofp_print_ofpst_desc_reply(string, oh);
         break;
 
-    case OFPUTIL_OFPST_FLOW_REPLY:
-    case OFPUTIL_NXST_FLOW_REPLY:
+    case OFPTYPE_FLOW_STATS_REPLY:
         ofp_print_stats_reply(string, oh);
         ofp_print_flow_stats_reply(string, oh);
         break;
 
-    case OFPUTIL_OFPST_QUEUE_REPLY:
+    case OFPTYPE_QUEUE_STATS_REPLY:
         ofp_print_stats_reply(string, oh);
         ofp_print_ofpst_queue_reply(string, oh, verbosity);
         break;
 
-    case OFPUTIL_OFPST_PORT_REPLY:
+    case OFPTYPE_PORT_STATS_REPLY:
         ofp_print_stats_reply(string, oh);
         ofp_print_ofpst_port_reply(string, oh, verbosity);
         break;
 
-    case OFPUTIL_OFPST_TABLE_REPLY:
+    case OFPTYPE_TABLE_STATS_REPLY:
         ofp_print_stats_reply(string, oh);
         ofp_print_ofpst_table_reply(string, oh, verbosity);
         break;
 
-    case OFPUTIL_OFPST_AGGREGATE_REPLY:
+    case OFPTYPE_AGGREGATE_STATS_REPLY:
         ofp_print_stats_reply(string, oh);
-        ofp_print_ofpst_aggregate_reply(string, msg);
+        ofp_print_aggregate_stats_reply(string, oh);
         break;
 
-    case OFPUTIL_OFPST_PORT_DESC_REPLY:
+    case OFPTYPE_PORT_DESC_STATS_REPLY:
         ofp_print_stats_reply(string, oh);
         ofp_print_ofpst_port_desc_reply(string, oh);
         break;
 
-    case OFPUTIL_NXT_ROLE_REQUEST:
-    case OFPUTIL_NXT_ROLE_REPLY:
-        ofp_print_nxt_role_message(string, msg);
+    case OFPTYPE_ROLE_REQUEST:
+    case OFPTYPE_ROLE_REPLY:
+        ofp_print_nxt_role_message(string, ofpmsg_body(oh));
         break;
 
-    case OFPUTIL_NXT_FLOW_MOD_TABLE_ID:
-        ofp_print_nxt_flow_mod_table_id(string, msg);
+    case OFPTYPE_FLOW_MOD_TABLE_ID:
+        ofp_print_nxt_flow_mod_table_id(string, ofpmsg_body(oh));
         break;
 
-    case OFPUTIL_NXT_SET_FLOW_FORMAT:
-        ofp_print_nxt_set_flow_format(string, msg);
+    case OFPTYPE_SET_FLOW_FORMAT:
+        ofp_print_nxt_set_flow_format(string, ofpmsg_body(oh));
         break;
 
-    case OFPUTIL_NXT_SET_PACKET_IN_FORMAT:
-        ofp_print_nxt_set_packet_in_format(string, msg);
+    case OFPTYPE_SET_PACKET_IN_FORMAT:
+        ofp_print_nxt_set_packet_in_format(string, ofpmsg_body(oh));
         break;
 
-    case OFPUTIL_NXT_FLOW_AGE:
+    case OFPTYPE_FLOW_AGE:
         break;
 
-    case OFPUTIL_NXT_SET_CONTROLLER_ID:
-        ofp_print_nxt_set_controller_id(string, msg);
+    case OFPTYPE_SET_CONTROLLER_ID:
+        ofp_print_nxt_set_controller_id(string, ofpmsg_body(oh));
         break;
 
-    case OFPUTIL_NXT_SET_ASYNC_CONFIG:
-        ofp_print_nxt_set_async_config(string, msg);
+    case OFPTYPE_SET_ASYNC_CONFIG:
+        ofp_print_nxt_set_async_config(string, ofpmsg_body(oh));
         break;
 
-    case OFPUTIL_NXST_AGGREGATE_REPLY:
-        ofp_print_stats_reply(string, oh);
-        ofp_print_nxst_aggregate_reply(string, msg);
-        break;
-
-    case OFPUTIL_NXT_FLOW_MONITOR_CANCEL:
+    case OFPTYPE_FLOW_MONITOR_CANCEL:
         ofp_print_nxt_flow_monitor_cancel(string, msg);
         break;
 
-    case OFPUTIL_NXT_FLOW_MONITOR_PAUSED:
-    case OFPUTIL_NXT_FLOW_MONITOR_RESUMED:
+    case OFPTYPE_FLOW_MONITOR_PAUSED:
+    case OFPTYPE_FLOW_MONITOR_RESUMED:
         break;
 
-    case OFPUTIL_NXST_FLOW_MONITOR_REQUEST:
+    case OFPTYPE_FLOW_MONITOR_STATS_REQUEST:
         ofp_print_nxst_flow_monitor_request(string, msg);
         break;
 
-    case OFPUTIL_NXST_FLOW_MONITOR_REPLY:
+    case OFPTYPE_FLOW_MONITOR_STATS_REPLY:
         ofp_print_nxst_flow_monitor_reply(string, msg);
         break;
     }
@@ -1737,12 +1743,12 @@ ofp_to_string(const void *oh_, size_t len, int verbosity)
         ds_put_format(&string, "OpenFlow packet too short (only %zu bytes):\n",
                       len);
     } else if (ntohs(oh->length) > len) {
-        const struct ofputil_msg_type *type;
         enum ofperr error;
+        enum ofpraw raw;
 
-        error = ofputil_decode_msg_type_partial(oh, len, &type);
+        error = ofpraw_decode_partial(&raw, oh, len);
         if (!error) {
-            ofp_header_to_string__(oh, type, &string);
+            ofp_header_to_string__(oh, raw, &string);
             ds_put_char(&string, '\n');
         }
 
@@ -1754,12 +1760,12 @@ ofp_to_string(const void *oh_, size_t len, int verbosity)
                       "(***only uses %"PRIu16" bytes out of %zu***)\n",
                       ntohs(oh->length), len);
     } else {
-        const struct ofputil_msg_type *type;
         enum ofperr error;
+        enum ofpraw raw;
 
-        error = ofputil_decode_msg_type(oh, &type);
+        error = ofpraw_decode(&raw, oh);
         if (!error) {
-            ofp_to_string__(oh, type, &string, verbosity);
+            ofp_to_string__(oh, raw, &string, verbosity);
             if (verbosity >= 5) {
                 if (ds_last(&string) != '\n') {
                     ds_put_char(&string, '\n');

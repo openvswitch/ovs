@@ -92,6 +92,7 @@ AT_CHECK([tail -1 stdout], [0],
   [Datapath actions: set(ipv6(src=::1,dst=::2,label=0,proto=10,tclass=0x70,hlimit=127,frag=no)),2,set(ipv6(src=::1,dst=::2,label=0,proto=10,tclass=0x70,hlimit=126,frag=no)),3,4
 ])
 
+AT_CAPTURE_FILE([ofctl_monitor.log])
 AT_CHECK([ovs-ofctl monitor br0 65534 invalid_ttl --detach --pidfile 2> ofctl_monitor.log])
 AT_CHECK([ovs-appctl ofproto/trace br0 'in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=2,frag=no)' -generate], [0], [stdout])
 OVS_WAIT_UNTIL([ovs-appctl -t ovs-ofctl exit])

@@ -55,14 +55,6 @@
 
 #include "openflow/openflow-1.1.h"
 
-/* OpenFlow 1.2 specific message types, in addition to the common message
- * types. */
-enum ofp12_type {
-    /* Controller role change request messages. */
-    OFPT12_ROLE_REQUEST = 24,   /* Controller/switch message */
-    OFPT12_ROLE_REPLY,          /* Controller/switch message */
-};
-
 /*
  * OXM Class IDs.
  * The high order bit differentiate reserved classes from member classes.
@@ -264,7 +256,6 @@ enum ofp12_queue_properties {
 
 /* Body of reply to OFPST_TABLE request. */
 struct ofp12_table_stats {
-    struct ofp11_stats_msg osm;
     uint8_t table_id;        /* Identifier of table.  Lower numbered tables
                                 are consulted first. */
     uint8_t pad[7];          /* Align to 64-bits. */
@@ -290,17 +281,16 @@ struct ofp12_table_stats {
     ovs_be64 lookup_count;   /* Number of packets looked up in table. */
     ovs_be64 matched_count;  /* Number of packets that hit table. */
 };
-OFP_ASSERT(sizeof(struct ofp12_table_stats) == 144);
+OFP_ASSERT(sizeof(struct ofp12_table_stats) == 128);
 
 /* Body of reply to OFPST12_GROUP_FEATURES request. Group features. */
 struct ofp12_group_features_stats {
-    struct ofp11_stats_msg osm;
     ovs_be32  types;           /* Bitmap of OFPGT_* values supported. */
     ovs_be32  capabilities;    /* Bitmap of OFPGFC12_* capability supported. */
     ovs_be32  max_groups[4];   /* Maximum number of groups for each type. */
     ovs_be32  actions[4];      /* Bitmaps of OFPAT_* that are supported. */
 };
-OFP_ASSERT(sizeof(struct ofp12_group_features_stats) == 56);
+OFP_ASSERT(sizeof(struct ofp12_group_features_stats) == 40);
 
 /* Group configuration flags */
 enum ofp12_group_capabilities {
@@ -321,12 +311,11 @@ OFP_ASSERT(sizeof(struct ofp12_experimenter_stats_header) == 8);
 
 /* Role request and reply message. */
 struct ofp12_role_request {
-    struct ofp_header header; /* Type OFPT12_ROLE_REQUEST/OFPT12_ROLE_REPLY. */
     ovs_be32 role;            /* One of OFPCR12_ROLE_*. */
     uint8_t pad[4];           /* Align to 64 bits. */
     ovs_be64 generation_id;   /* Master Election Generation Id */
 };
-OFP_ASSERT(sizeof(struct ofp12_role_request) == 24);
+OFP_ASSERT(sizeof(struct ofp12_role_request) == 16);
 
 /* Controller roles. */
 enum ofp12_controller_role {
@@ -338,7 +327,6 @@ enum ofp12_controller_role {
 
 /* Packet received on port (datapath -> controller). */
 struct ofp12_packet_in {
-    struct ofp_header header;
     ovs_be32 buffer_id;     /* ID assigned by datapath. */
     ovs_be16 total_len;     /* Full length of frame. */
     uint8_t reason;         /* Reason packet is being sent (one of OFPR_*) */
@@ -354,11 +342,10 @@ struct ofp12_packet_in {
     /* uint8_t pad[2];         Align to 64 bit + 16 bit */
     /* uint8_t data[0];        Ethernet frame */
 };
-OFP_ASSERT(sizeof(struct ofp12_packet_in) == 16);
+OFP_ASSERT(sizeof(struct ofp12_packet_in) == 8);
 
 /* Flow removed (datapath -> controller). */
 struct ofp12_flow_removed {
-    struct ofp_header header;
     ovs_be64 cookie;          /* Opaque controller-issued identifier. */
 
     ovs_be16 priority;        /* Priority level of flow entry. */
@@ -374,6 +361,6 @@ struct ofp12_flow_removed {
     ovs_be64 byte_count;
     /* struct ofp12_match match;  Description of fields. Variable size. */
 };
-OFP_ASSERT(sizeof(struct ofp12_flow_removed) == 48);
+OFP_ASSERT(sizeof(struct ofp12_flow_removed) == 40);
 
 #endif /* openflow/openflow-1.2.h */

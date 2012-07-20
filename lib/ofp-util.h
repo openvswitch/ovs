@@ -31,85 +31,6 @@
 struct cls_rule;
 struct ofpbuf;
 
-/* Basic decoding and length validation of OpenFlow messages. */
-enum ofputil_msg_code {
-    OFPUTIL_MSG_INVALID,
-
-    /* OFPT_* messages. */
-    OFPUTIL_OFPT_HELLO,
-    OFPUTIL_OFPT_ERROR,
-    OFPUTIL_OFPT_ECHO_REQUEST,
-    OFPUTIL_OFPT_ECHO_REPLY,
-    OFPUTIL_OFPT_FEATURES_REQUEST,
-    OFPUTIL_OFPT_FEATURES_REPLY,
-    OFPUTIL_OFPT_GET_CONFIG_REQUEST,
-    OFPUTIL_OFPT_GET_CONFIG_REPLY,
-    OFPUTIL_OFPT_SET_CONFIG,
-    OFPUTIL_OFPT_PACKET_IN,
-    OFPUTIL_OFPT_FLOW_REMOVED,
-    OFPUTIL_OFPT_PORT_STATUS,
-    OFPUTIL_OFPT_PACKET_OUT,
-    OFPUTIL_OFPT_FLOW_MOD,
-    OFPUTIL_OFPT_PORT_MOD,
-    OFPUTIL_OFPT_BARRIER_REQUEST,
-    OFPUTIL_OFPT_BARRIER_REPLY,
-    OFPUTIL_OFPT_QUEUE_GET_CONFIG_REQUEST,
-    OFPUTIL_OFPT_QUEUE_GET_CONFIG_REPLY,
-
-    /* OFPST_* stat requests. */
-    OFPUTIL_OFPST_DESC_REQUEST,
-    OFPUTIL_OFPST_FLOW_REQUEST,
-    OFPUTIL_OFPST_AGGREGATE_REQUEST,
-    OFPUTIL_OFPST_TABLE_REQUEST,
-    OFPUTIL_OFPST_PORT_REQUEST,
-    OFPUTIL_OFPST_QUEUE_REQUEST,
-    OFPUTIL_OFPST_PORT_DESC_REQUEST,
-
-    /* OFPST_* stat replies. */
-    OFPUTIL_OFPST_DESC_REPLY,
-    OFPUTIL_OFPST_FLOW_REPLY,
-    OFPUTIL_OFPST_QUEUE_REPLY,
-    OFPUTIL_OFPST_PORT_REPLY,
-    OFPUTIL_OFPST_TABLE_REPLY,
-    OFPUTIL_OFPST_AGGREGATE_REPLY,
-    OFPUTIL_OFPST_PORT_DESC_REPLY,
-
-    /* NXT_* messages. */
-    OFPUTIL_NXT_ROLE_REQUEST,
-    OFPUTIL_NXT_ROLE_REPLY,
-    OFPUTIL_NXT_SET_FLOW_FORMAT,
-    OFPUTIL_NXT_FLOW_MOD_TABLE_ID,
-    OFPUTIL_NXT_FLOW_MOD,
-    OFPUTIL_NXT_FLOW_REMOVED,
-    OFPUTIL_NXT_SET_PACKET_IN_FORMAT,
-    OFPUTIL_NXT_PACKET_IN,
-    OFPUTIL_NXT_FLOW_AGE,
-    OFPUTIL_NXT_SET_ASYNC_CONFIG,
-    OFPUTIL_NXT_SET_CONTROLLER_ID,
-    OFPUTIL_NXT_FLOW_MONITOR_CANCEL,
-    OFPUTIL_NXT_FLOW_MONITOR_PAUSED,
-    OFPUTIL_NXT_FLOW_MONITOR_RESUMED,
-
-    /* NXST_* stat requests. */
-    OFPUTIL_NXST_FLOW_REQUEST,
-    OFPUTIL_NXST_AGGREGATE_REQUEST,
-    OFPUTIL_NXST_FLOW_MONITOR_REQUEST,
-
-    /* NXST_* stat replies. */
-    OFPUTIL_NXST_FLOW_REPLY,
-    OFPUTIL_NXST_AGGREGATE_REPLY,
-    OFPUTIL_NXST_FLOW_MONITOR_REPLY,
-};
-
-struct ofputil_msg_type;
-enum ofperr ofputil_decode_msg_type(const struct ofp_header *,
-                                    const struct ofputil_msg_type **);
-enum ofperr ofputil_decode_msg_type_partial(const struct ofp_header *,
-                                            size_t length,
-                                            const struct ofputil_msg_type **);
-enum ofputil_msg_code ofputil_msg_type_code(const struct ofputil_msg_type *);
-const char *ofputil_msg_type_name(const struct ofputil_msg_type *);
-
 /* Port numbers. */
 enum ofperr ofputil_port_from_ofp11(ovs_be32 ofp11_port, uint16_t *ofp10_port);
 ovs_be32 ofputil_port_to_ofp11(uint16_t ofp10_port);
@@ -309,7 +230,10 @@ struct ofputil_aggregate_stats {
 
 struct ofpbuf *ofputil_encode_aggregate_stats_reply(
     const struct ofputil_aggregate_stats *stats,
-    const struct ofp_stats_msg *request);
+    const struct ofp_header *request);
+enum ofperr ofputil_decode_aggregate_stats_reply(
+    struct ofputil_aggregate_stats *,
+    const struct ofp_header *reply);
 
 /* Flow removed message, independent of protocol. */
 struct ofputil_flow_removed {
@@ -368,7 +292,7 @@ struct ofputil_packet_out {
 };
 
 enum ofperr ofputil_decode_packet_out(struct ofputil_packet_out *,
-                                      const struct ofp_packet_out *,
+                                      const struct ofp_header *,
                                       struct ofpbuf *ofpacts);
 struct ofpbuf *ofputil_encode_packet_out(const struct ofputil_packet_out *);
 
@@ -473,7 +397,7 @@ struct ofputil_switch_features {
     enum ofputil_action_bitmap actions;
 };
 
-enum ofperr ofputil_decode_switch_features(const struct ofp_switch_features *,
+enum ofperr ofputil_decode_switch_features(const struct ofp_header *,
                                            struct ofputil_switch_features *,
                                            struct ofpbuf *);
 
@@ -495,7 +419,7 @@ struct ofputil_port_status {
     struct ofputil_phy_port desc;
 };
 
-enum ofperr ofputil_decode_port_status(const struct ofp_port_status *,
+enum ofperr ofputil_decode_port_status(const struct ofp_header *,
                                        struct ofputil_port_status *);
 struct ofpbuf *ofputil_encode_port_status(const struct ofputil_port_status *,
                                           enum ofputil_protocol);
@@ -556,52 +480,12 @@ void ofputil_append_flow_update(const struct ofputil_flow_update *,
 uint32_t ofputil_decode_flow_monitor_cancel(const struct ofp_header *);
 struct ofpbuf *ofputil_encode_flow_monitor_cancel(uint32_t id);
 
-/* OpenFlow protocol utility functions. */
-void *make_openflow(size_t openflow_len, uint8_t type, struct ofpbuf **);
-void *make_nxmsg(size_t openflow_len, uint32_t subtype, struct ofpbuf **);
-
-void *make_openflow_xid(size_t openflow_len, uint8_t type,
-                        ovs_be32 xid, struct ofpbuf **);
-void *make_nxmsg_xid(size_t openflow_len, uint32_t subtype, ovs_be32 xid,
-                     struct ofpbuf **);
-
-void *put_openflow(size_t openflow_len, uint8_t type, struct ofpbuf *);
-void *put_openflow_xid(size_t openflow_len, uint8_t type, ovs_be32 xid,
-                       struct ofpbuf *);
-
-void *put_nxmsg(size_t openflow_len, uint32_t subtype, struct ofpbuf *);
-void *put_nxmsg_xid(size_t openflow_len, uint32_t subtype, ovs_be32 xid,
-                    struct ofpbuf *);
-
-void update_openflow_length(struct ofpbuf *);
-
-void *ofputil_make_stats_request(size_t openflow_len, uint16_t type,
-                                 uint32_t subtype, struct ofpbuf **);
-void *ofputil_make_stats_reply(size_t openflow_len,
-                               const struct ofp_stats_msg *request,
-                               struct ofpbuf **);
-
-void ofputil_put_stats_header(ovs_be32 xid, uint8_t ofp_type,
-                              ovs_be16 ofpst_type, ovs_be32 nxst_subtype,
-                              struct ofpbuf *);
-
-void ofputil_start_stats_reply(const struct ofp_stats_msg *request,
-                               struct list *);
-struct ofpbuf *ofputil_reserve_stats_reply(size_t len, struct list *);
-void *ofputil_append_stats_reply(size_t len, struct list *);
-void ofputil_postappend_stats_reply(size_t start_ofs, struct list *);
-
+/* Encoding OpenFlow stats messages. */
 void ofputil_append_port_desc_stats_reply(uint8_t ofp_version,
                                           const struct ofputil_phy_port *pp,
                                           struct list *replies);
 
-const void *ofputil_stats_body(const struct ofp_header *);
-size_t ofputil_stats_body_len(const struct ofp_header *);
-
-const void *ofputil_nxstats_body(const struct ofp_header *);
-size_t ofputil_nxstats_body_len(const struct ofp_header *);
-
-/*  */
+/* Encoding simple OpenFlow messages. */
 struct ofpbuf *make_echo_request(void);
 struct ofpbuf *make_echo_reply(const struct ofp_header *rq);
 

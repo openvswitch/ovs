@@ -23,6 +23,7 @@
 
 struct ds;
 struct ofp_header;
+struct ofpbuf;
 
 /* Error codes.
  *
@@ -508,7 +509,8 @@ enum ofperr ofperr_decode(const struct ofperr_domain *,
 enum ofperr ofperr_decode_type(const struct ofperr_domain *, uint16_t type);
 enum ofperr ofperr_from_name(const char *);
 
-enum ofperr ofperr_decode_msg(const struct ofp_header *, size_t *payload_ofs);
+enum ofperr ofperr_decode_msg(const struct ofp_header *,
+                              struct ofpbuf *payload);
 struct ofpbuf *ofperr_encode_reply(enum ofperr, const struct ofp_header *);
 struct ofpbuf *ofperr_encode_hello(enum ofperr, const struct ofperr_domain *,
                                    const char *);

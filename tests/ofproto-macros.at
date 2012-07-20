@@ -50,7 +50,7 @@ m4_define([OVS_VSWITCHD_START],
    AT_CHECK([ovs-vsctl --no-wait init])
 
    dnl Start ovs-vswitchd.
-   AT_CHECK([ovs-vswitchd --detach --pidfile --enable-dummy --disable-system --log-file], [0], [], [stderr])
+   AT_CHECK([ovs-vswitchd --detach --pidfile --enable-dummy --disable-system --log-file -vvconn], [0], [], [stderr])
    AT_CAPTURE_FILE([ovs-vswitchd.log])
    AT_CHECK([[sed < stderr '
 /vlog|INFO|opened log file/d

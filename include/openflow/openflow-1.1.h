@@ -70,27 +70,6 @@
 #define OFPP11_MAX    0xffffff00
 #define OFPP11_OFFSET (OFPP11_MAX - OFPP_MAX)
 
-/* OpenFlow 1.1 specific message types, in addition to the common message
- * types. */
-enum ofp11_type {
-    /* Controller command messages. */
-    OFPT11_GROUP_MOD = 15,      /* Controller/switch message */
-    OFPT11_PORT_MOD,            /* Controller/switch message */
-    OFPT11_TABLE_MOD,           /* Controller/switch message */
-
-    /* Statistics messages. */
-    OFPT11_STATS_REQUEST,       /* Controller/switch message */
-    OFPT11_STATS_REPLY,         /* Controller/switch message */
-
-    /* Barrier messages. */
-    OFPT11_BARRIER_REQUEST,     /* Controller/switch message */
-    OFPT11_BARRIER_REPLY,       /* Controller/switch message */
-
-    /* Queue Configuration messages. */
-    OFPT11_QUEUE_GET_CONFIG_REQUEST,  /* Controller/switch message */
-    OFPT11_QUEUE_GET_CONFIG_REPLY,    /* Controller/switch message */
-};
-
 /* OpenFlow 1.1 port config flags are just the common flags. */
 #define OFPPC11_ALL \
     (OFPPC_PORT_DOWN | OFPPC_NO_RECV | OFPPC_NO_FWD | OFPPC_NO_PACKET_IN)
@@ -143,7 +122,6 @@ struct ofp11_port {
 
 /* Modify behavior of the physical port */
 struct ofp11_port_mod {
-    struct ofp_header header;
     ovs_be32 port_no;
     uint8_t pad[4];
     uint8_t hw_addr[OFP_ETH_ALEN]; /* The hardware address is not
@@ -159,11 +137,10 @@ struct ofp11_port_mod {
                                to prevent any action taking place. */
     uint8_t pad3[4];        /* Pad to 64 bits. */
 };
-OFP_ASSERT(sizeof(struct ofp11_port_mod) == 40);
+OFP_ASSERT(sizeof(struct ofp11_port_mod) == 32);
 
 /* Group setup and teardown (controller -> datapath). */
 struct ofp11_group_mod {
-    struct ofp_header header;
     ovs_be16 command;             /* One of OFPGC_*. */
     uint8_t type;                 /* One of OFPGT_*. */
     uint8_t pad;                  /* Pad to 64 bits. */
@@ -171,17 +148,16 @@ struct ofp11_group_mod {
     /* struct ofp11_bucket buckets[0]; The bucket length is inferred from the
                                        length field in the header. */
 };
-OFP_ASSERT(sizeof(struct ofp11_group_mod) == 16);
+OFP_ASSERT(sizeof(struct ofp11_group_mod) == 8);
 
 /* Query for port queue configuration. */
 struct ofp11_queue_get_config_request {
-    struct ofp_header header;
     ovs_be32 port;
     /* Port to be queried. Should refer
        to a valid physical port (i.e. < OFPP_MAX) */
     uint8_t pad[4];
 };
-OFP_ASSERT(sizeof(struct ofp11_queue_get_config_request) == 16);
+OFP_ASSERT(sizeof(struct ofp11_queue_get_config_request) == 8);
 
 /* Group commands */
 enum ofp11_group_mod_command {
@@ -448,12 +424,11 @@ OFP_ASSERT(sizeof(struct ofp11_action_pop_mpls) == 8);
 
 /* Configure/Modify behavior of a flow table */
 struct ofp11_table_mod {
-    struct ofp_header header;
     uint8_t table_id;       /* ID of the table, 0xFF indicates all tables */
     uint8_t pad[3];         /* Pad to 32 bits */
     ovs_be32 config;        /* Bitmap of OFPTC_* flags */
 };
-OFP_ASSERT(sizeof(struct ofp11_table_mod) == 16);
+OFP_ASSERT(sizeof(struct ofp11_table_mod) == 8);
 
 /* Flags to indicate behavior of the flow table for unmatched packets.
    These flags are used in ofp_table_stats messages to describe the current
@@ -469,7 +444,6 @@ enum ofp11_table_config {
 
 /* Flow setup and teardown (controller -> datapath). */
 struct ofp11_flow_mod {
-    struct ofp_header header;
     ovs_be64 cookie;             /* Opaque controller-issued identifier. */
     ovs_be64 cookie_mask;        /* Mask used to restrict the cookie bits
                                     that must match when the command is
@@ -496,7 +470,7 @@ struct ofp11_flow_mod {
     /* Open Flow version specific match */
     /* struct ofp_instruction instructions[0];  Instruction set */
 };
-OFP_ASSERT(sizeof(struct ofp11_flow_mod) == 48);
+OFP_ASSERT(sizeof(struct ofp11_flow_mod) == 40);
 
 /* Group types. Values in the range [128, 255] are reserved for experimental
  * use. */
@@ -543,12 +517,11 @@ OFP_ASSERT(sizeof(struct ofp11_bucket) == 16);
 
 /* Queue configuration for a given port. */
 struct ofp11_queue_get_config_reply {
-    struct ofp_header header;
     ovs_be32 port;
     uint8_t pad[4];
     /* struct ofp_packet_queue queues[0];  List of configured queues. */
 };
-OFP_ASSERT(sizeof(struct ofp11_queue_get_config_reply) == 16);
+OFP_ASSERT(sizeof(struct ofp11_queue_get_config_reply) == 8);
 
 struct ofp11_stats_msg {
     struct ofp_header header;
@@ -559,9 +532,19 @@ struct ofp11_stats_msg {
 };
 OFP_ASSERT(sizeof(struct ofp11_stats_msg) == 16);
 
+/* Vendor extension stats message. */
+struct ofp11_vendor_stats_msg {
+    struct ofp11_stats_msg osm; /* Type OFPST_VENDOR. */
+    ovs_be32 vendor;            /* Vendor ID:
+                                 * - MSB 0: low-order bytes are IEEE OUI.
+                                 * - MSB != 0: defined by OpenFlow
+                                 *   consortium. */
+    /* Followed by vendor-defined arbitrary additional data. */
+};
+OFP_ASSERT(sizeof(struct ofp11_vendor_stats_msg) == 20);
+
 /* Stats request of type OFPST_FLOW. */
 struct ofp11_flow_stats_request {
-    struct ofp11_stats_msg osm;
     uint8_t table_id;         /* ID of table to read (from ofp_table_stats),
                                  0xff for all tables. */
     uint8_t pad[3];           /* Align to 64 bits. */
@@ -579,7 +562,7 @@ struct ofp11_flow_stats_request {
                                  no restriction. */
     struct ofp11_match match; /* Fields to match. */
 };
-OFP_ASSERT(sizeof(struct ofp11_flow_stats_request) == 136);
+OFP_ASSERT(sizeof(struct ofp11_flow_stats_request) == 120);
 
 /* Body of reply to OFPST_FLOW request. */
 struct ofp11_flow_stats {
@@ -607,7 +590,6 @@ OFP_ASSERT(sizeof(struct ofp11_flow_stats) == 48);
 
 /* Body of reply to OFPST_TABLE request. */
 struct ofp11_table_stats {
-    struct ofp11_stats_msg osm;
     uint8_t table_id;        /* Identifier of table. Lower numbered tables
                                 are consulted first. */
     uint8_t pad[7];          /* Align to 64-bits. */
@@ -627,23 +609,21 @@ struct ofp11_table_stats {
     ovs_be64 lookup_count;   /* Number of packets looked up in table. */
     ovs_be64 matched_count;  /* Number of packets that hit table. */
 };
-OFP_ASSERT(sizeof(struct ofp11_table_stats) == 104);
+OFP_ASSERT(sizeof(struct ofp11_table_stats) == 88);
 
 /* Body for ofp_stats_request of type OFPST_PORT. */
 struct ofp11_port_stats_request {
-    struct ofp11_stats_msg osm;
     ovs_be32 port_no;        /* OFPST_PORT message must request statistics
                               * either for a single port (specified in
                               * port_no) or for all ports (if port_no ==
                               * OFPP_ANY). */
     uint8_t pad[4];
 };
-OFP_ASSERT(sizeof(struct ofp11_port_stats_request) == 24);
+OFP_ASSERT(sizeof(struct ofp11_port_stats_request) == 8);
 
 /* Body of reply to OFPST_PORT request. If a counter is unsupported, set
  * the field to all ones. */
 struct ofp11_port_stats {
-    struct ofp11_stats_msg osm;
     ovs_be32 port_no;
     uint8_t pad[4];           /* Align to 64-bits. */
     ovs_be64 rx_packets;      /* Number of received packets. */
@@ -663,31 +643,28 @@ struct ofp11_port_stats {
     ovs_be64 rx_crc_err;      /* Number of CRC errors. */
     ovs_be64 collisions;      /* Number of collisions. */
 };
-OFP_ASSERT(sizeof(struct ofp11_port_stats) == 120);
+OFP_ASSERT(sizeof(struct ofp11_port_stats) == 104);
 
 struct ofp11_queue_stats_request {
-    struct ofp11_stats_msg osm;
     ovs_be32 port_no;         /* All ports if OFPP_ANY. */
     ovs_be32 queue_id;        /* All queues if OFPQ_ALL. */
 };
-OFP_ASSERT(sizeof(struct ofp11_queue_stats_request) == 24);
+OFP_ASSERT(sizeof(struct ofp11_queue_stats_request) == 8);
 
 struct ofp11_queue_stats {
-    struct ofp11_stats_msg osm;
     ovs_be32 port_no;
     ovs_be32 queue_id;         /* Queue id. */
     ovs_be64 tx_bytes;         /* Number of transmitted bytes. */
     ovs_be64 tx_packets;       /* Number of transmitted packets. */
     ovs_be64 tx_errors;        /* # of packets dropped due to overrun. */
 };
-OFP_ASSERT(sizeof(struct ofp11_queue_stats) == 48);
+OFP_ASSERT(sizeof(struct ofp11_queue_stats) == 32);
 
 struct ofp11_group_stats_request {
-    struct ofp11_stats_msg osm;
     ovs_be32 group_id;         /* All groups if OFPG_ALL. */
     uint8_t pad[4];            /* Align to 64 bits. */
 };
-OFP_ASSERT(sizeof(struct ofp11_group_stats_request) == 24);
+OFP_ASSERT(sizeof(struct ofp11_group_stats_request) == 8);
 
 /* Body of reply to OFPST11_GROUP request */
 struct ofp11_group_stats {
@@ -706,11 +683,10 @@ OFP_ASSERT(sizeof(struct ofp11_group_stats) == 32);
 
 /* Used in group stats replies. */
 struct ofp11_bucket_counter {
-    struct ofp11_stats_msg osm;
     ovs_be64 packet_count;   /* Number of packets processed by bucket. */
     ovs_be64 byte_count;     /* Number of bytes processed by bucket. */
 };
-OFP_ASSERT(sizeof(struct ofp11_bucket_counter) == 32);
+OFP_ASSERT(sizeof(struct ofp11_bucket_counter) == 16);
 
 /* Body of reply to OFPST11_GROUP_DESC request. */
 struct ofp11_group_desc_stats {
@@ -724,7 +700,6 @@ OFP_ASSERT(sizeof(struct ofp11_group_desc_stats) == 8);
 
 /* Send packet (controller -> datapath). */
 struct ofp11_packet_out {
-    struct ofp_header header;
     ovs_be32 buffer_id;       /* ID assigned by datapath (-1 if none). */
     ovs_be32 in_port;         /* Packet's input port or OFPP_CONTROLLER. */
     ovs_be16 actions_len;     /* Size of action array in bytes. */
@@ -734,11 +709,10 @@ struct ofp11_packet_out {
                                  from the length field in the header.
                                  (Only meaningful if buffer_id == -1.) */
 };
-OFP_ASSERT(sizeof(struct ofp11_packet_out) == 24);
+OFP_ASSERT(sizeof(struct ofp11_packet_out) == 16);
 
 /* Packet received on port (datapath -> controller). */
 struct ofp11_packet_in {
-    struct ofp_header header;
     ovs_be32 buffer_id;     /* ID assigned by datapath. */
     ovs_be32 in_port;       /* Port on which frame was received. */
     ovs_be32 in_phy_port;   /* Physical Port on which frame was received. */
@@ -752,11 +726,10 @@ struct ofp11_packet_in {
                                offsetof(struct ofp_packet_in, data) ==
                                sizeof(struct ofp_packet_in) - 2. */
 };
-OFP_ASSERT(sizeof(struct ofp11_packet_in) == 24);
+OFP_ASSERT(sizeof(struct ofp11_packet_in) == 16);
 
 /* Flow removed (datapath -> controller). */
 struct ofp11_flow_removed {
-    struct ofp_header header;
     ovs_be64 cookie;          /* Opaque controller-issued identifier. */
 
     ovs_be16 priority;        /* Priority level of flow entry. */
@@ -772,6 +745,6 @@ struct ofp11_flow_removed {
     ovs_be64 byte_count;
     struct ofp11_match match; /* Description of fields. */
 };
-OFP_ASSERT(sizeof(struct ofp11_flow_removed) == 136);
+OFP_ASSERT(sizeof(struct ofp11_flow_removed) == 128);
 
 #endif /* openflow/openflow-1.1.h */

@@ -34,6 +34,7 @@
 #include "nx-match.h"
 #include "ofp-actions.h"
 #include "ofp-errors.h"
+#include "ofp-msgs.h"
 #include "ofp-print.h"
 #include "ofp-util.h"
 #include "ofpbuf.h"
@@ -2018,7 +2019,8 @@ handle_get_config_request(struct ofconn *ofconn, const struct ofp_header *oh)
     struct ofpbuf *buf;
 
     /* Send reply. */
-    osc = make_openflow_xid(sizeof *osc, OFPT_GET_CONFIG_REPLY, oh->xid, &buf);
+    buf = ofpraw_alloc_reply(OFPRAW_OFPT_GET_CONFIG_REPLY, oh, 0);
+    osc = ofpbuf_put_uninit(buf, sizeof *osc);
     flags = ofproto->frag_handling;
     if (ofconn_get_invalid_ttl_to_controller(ofconn)) {
         flags |= OFPC_INVALID_TTL_TO_CONTROLLER;
@@ -2031,8 +2033,9 @@ handle_get_config_request(struct ofconn *ofconn, const struct ofp_header *oh)
 }
 
 static enum ofperr
-handle_set_config(struct ofconn *ofconn, const struct ofp_switch_config *osc)
+handle_set_config(struct ofconn *ofconn, const struct ofp_header *oh)
 {
+    const struct ofp_switch_config *osc = ofpmsg_body(oh);
     struct ofproto *ofproto = ofconn_get_ofproto(ofconn);
     uint16_t flags = ntohs(osc->flags);
 
@@ -2077,7 +2080,7 @@ reject_slave_controller(struct ofconn *ofconn)
 }
 
 static enum ofperr
-handle_packet_out(struct ofconn *ofconn, const struct ofp_packet_out *opo)
+handle_packet_out(struct ofconn *ofconn, const struct ofp_header *oh)
 {
     struct ofproto *p = ofconn_get_ofproto(ofconn);
     struct ofputil_packet_out po;
@@ -2096,7 +2099,7 @@ handle_packet_out(struct ofconn *ofconn, const struct ofp_packet_out *opo)
 
     /* Decode message. */
     ofpbuf_use_stub(&ofpacts, ofpacts_stub, sizeof ofpacts_stub);
-    error = ofputil_decode_packet_out(&po, opo, &ofpacts);
+    error = ofputil_decode_packet_out(&po, oh, &ofpacts);
     if (error) {
         goto exit_free_ofpacts;
     }
@@ -2182,13 +2185,14 @@ handle_port_mod(struct ofconn *ofconn, const struct ofp_header *oh)
 
 static enum ofperr
 handle_desc_stats_request(struct ofconn *ofconn,
-                          const struct ofp_stats_msg *request)
+                          const struct ofp_header *request)
 {
     struct ofproto *p = ofconn_get_ofproto(ofconn);
     struct ofp_desc_stats *ods;
     struct ofpbuf *msg;
 
-    ods = ofputil_make_stats_reply(sizeof *ods, request, &msg);
+    msg = ofpraw_alloc_stats_reply(request, 0);
+    ods = ofpbuf_put_zeros(msg, sizeof *ods);
     ovs_strlcpy(ods->mfr_desc, p->mfr_desc, sizeof ods->mfr_desc);
     ovs_strlcpy(ods->hw_desc, p->hw_desc, sizeof ods->hw_desc);
     ovs_strlcpy(ods->sw_desc, p->sw_desc, sizeof ods->sw_desc);
@@ -2201,15 +2205,14 @@ handle_desc_stats_request(struct ofconn *ofconn,
 
 static enum ofperr
 handle_table_stats_request(struct ofconn *ofconn,
-                           const struct ofp_stats_msg *request)
+                           const struct ofp_header *request)
 {
     struct ofproto *p = ofconn_get_ofproto(ofconn);
     struct ofp_table_stats *ots;
     struct ofpbuf *msg;
     size_t i;
 
-    ofputil_make_stats_reply(sizeof(struct ofp_stats_msg), request, &msg);
-
+    msg = ofpraw_alloc_stats_reply(request, sizeof *ots * p->n_tables);
     ots = ofpbuf_put_zeros(msg, sizeof *ots * p->n_tables);
     for (i = 0; i < p->n_tables; i++) {
         ots[i].table_id = i;
@@ -2248,7 +2251,7 @@ append_port_stat(struct ofport *port, struct list *replies)
      * netdev_get_stats() will log errors. */
     ofproto_port_get_stats(port, &stats);
 
-    ops = ofputil_append_stats_reply(sizeof *ops, replies);
+    ops = ofpmp_append(replies, sizeof *ops);
     ops->port_no = htons(port->pp.port_no);
     memset(ops->pad, 0, sizeof ops->pad);
     put_32aligned_be64(&ops->rx_packets, htonll(stats.rx_packets));
@@ -2267,13 +2270,14 @@ append_port_stat(struct ofport *port, struct list *replies)
 
 static enum ofperr
 handle_port_stats_request(struct ofconn *ofconn,
-                          const struct ofp_port_stats_request *psr)
+                          const struct ofp_header *request)
 {
     struct ofproto *p = ofconn_get_ofproto(ofconn);
+    const struct ofp_port_stats_request *psr = ofpmsg_body(request);
     struct ofport *port;
     struct list replies;
 
-    ofputil_start_stats_reply(&psr->osm, &replies);
+    ofpmp_init(&replies, request);
     if (psr->port_no != htons(OFPP_NONE)) {
         port = ofproto_get_port(p, ntohs(psr->port_no));
         if (port) {
@@ -2291,13 +2295,13 @@ handle_port_stats_request(struct ofconn *ofconn,
 
 static enum ofperr
 handle_port_desc_stats_request(struct ofconn *ofconn,
-                               const struct ofp_stats_msg *osm)
+                               const struct ofp_header *request)
 {
     struct ofproto *p = ofconn_get_ofproto(ofconn);
     struct ofport *port;
     struct list replies;
 
-    ofputil_start_stats_reply(osm, &replies);
+    ofpmp_init(&replies, request);
 
     HMAP_FOR_EACH (port, hmap_node, &p->ports) {
         ofputil_append_port_desc_stats_reply(ofconn_get_protocol(ofconn),
@@ -2487,7 +2491,7 @@ age_secs(long long int age_ms)
 
 static enum ofperr
 handle_flow_stats_request(struct ofconn *ofconn,
-                          const struct ofp_stats_msg *osm)
+                          const struct ofp_header *request)
 {
     struct ofproto *ofproto = ofconn_get_ofproto(ofconn);
     struct ofputil_flow_stats_request fsr;
@@ -2496,7 +2500,7 @@ handle_flow_stats_request(struct ofconn *ofconn,
     struct rule *rule;
     enum ofperr error;
 
-    error = ofputil_decode_flow_stats_request(&fsr, &osm->header);
+    error = ofputil_decode_flow_stats_request(&fsr, request);
     if (error) {
         return error;
     }
@@ -2508,7 +2512,7 @@ handle_flow_stats_request(struct ofconn *ofconn,
         return error;
     }
 
-    ofputil_start_stats_reply(osm, &replies);
+    ofpmp_init(&replies, request);
     LIST_FOR_EACH (rule, ofproto_node, &rules) {
         long long int now = time_msec();
         struct ofputil_flow_stats fs;
@@ -2633,7 +2637,7 @@ ofproto_port_get_cfm_health(const struct ofproto *ofproto, uint16_t ofp_port)
 
 static enum ofperr
 handle_aggregate_stats_request(struct ofconn *ofconn,
-                               const struct ofp_stats_msg *osm)
+                               const struct ofp_header *oh)
 {
     struct ofproto *ofproto = ofconn_get_ofproto(ofconn);
     struct ofputil_flow_stats_request request;
@@ -2644,7 +2648,7 @@ handle_aggregate_stats_request(struct ofconn *ofconn,
     struct rule *rule;
     enum ofperr error;
 
-    error = ofputil_decode_flow_stats_request(&request, &osm->header);
+    error = ofputil_decode_flow_stats_request(&request, oh);
     if (error) {
         return error;
     }
@@ -2686,7 +2690,7 @@ handle_aggregate_stats_request(struct ofconn *ofconn,
         stats.byte_count = UINT64_MAX;
     }
 
-    reply = ofputil_encode_aggregate_stats_reply(&stats, osm);
+    reply = ofputil_encode_aggregate_stats_reply(&stats, oh);
     ofconn_send_reply(ofconn, reply);
 
     return 0;
@@ -2703,7 +2707,7 @@ put_queue_stats(struct queue_stats_cbdata *cbdata, uint32_t queue_id,
 {
     struct ofp_queue_stats *reply;
 
-    reply = ofputil_append_stats_reply(sizeof *reply, &cbdata->replies);
+    reply = ofpmp_append(&cbdata->replies, sizeof *reply);
     reply->port_no = htons(cbdata->ofport->pp.port_no);
     memset(reply->pad, 0, sizeof reply->pad);
     reply->queue_id = htonl(queue_id);
@@ -2744,9 +2748,10 @@ handle_queue_stats_for_port(struct ofport *port, uint32_t queue_id,
 
 static enum ofperr
 handle_queue_stats_request(struct ofconn *ofconn,
-                           const struct ofp_queue_stats_request *qsr)
+                           const struct ofp_header *rq)
 {
     struct ofproto *ofproto = ofconn_get_ofproto(ofconn);
+    const struct ofp_queue_stats_request *qsr = ofpmsg_body(rq);
     struct queue_stats_cbdata cbdata;
     unsigned int port_no;
     struct ofport *port;
@@ -2755,7 +2760,7 @@ handle_queue_stats_request(struct ofconn *ofconn,
 
     COVERAGE_INC(ofproto_queue_req);
 
-    ofputil_start_stats_reply(&qsr->osm, &cbdata.replies);
+    ofpmp_init(&cbdata.replies, rq);
 
     port_no = ntohs(qsr->port_no);
     queue_id = ntohl(qsr->queue_id);
@@ -3289,7 +3294,7 @@ handle_flow_mod__(struct ofproto *ofproto, struct ofconn *ofconn,
 static enum ofperr
 handle_role_request(struct ofconn *ofconn, const struct ofp_header *oh)
 {
-    struct nx_role_request *nrr = (struct nx_role_request *) oh;
+    const struct nx_role_request *nrr = ofpmsg_body(oh);
     struct nx_role_request *reply;
     struct ofpbuf *buf;
     uint32_t role;
@@ -3307,7 +3312,8 @@ handle_role_request(struct ofconn *ofconn, const struct ofp_header *oh)
 
     ofconn_set_role(ofconn, role);
 
-    reply = make_nxmsg_xid(sizeof *reply, NXT_ROLE_REPLY, oh->xid, &buf);
+    buf = ofpraw_alloc_reply(OFPRAW_NXT_ROLE_REPLY, oh, 0);
+    reply = ofpbuf_put_zeros(buf, sizeof *reply);
     reply->role = htonl(role);
     ofconn_send_reply(ofconn, buf);
 
@@ -3318,8 +3324,7 @@ static enum ofperr
 handle_nxt_flow_mod_table_id(struct ofconn *ofconn,
                              const struct ofp_header *oh)
 {
-    const struct nx_flow_mod_table_id *msg
-        = (const struct nx_flow_mod_table_id *) oh;
+    const struct nx_flow_mod_table_id *msg = ofpmsg_body(oh);
     enum ofputil_protocol cur, next;
 
     cur = ofconn_get_protocol(ofconn);
@@ -3332,8 +3337,7 @@ handle_nxt_flow_mod_table_id(struct ofconn *ofconn,
 static enum ofperr
 handle_nxt_set_flow_format(struct ofconn *ofconn, const struct ofp_header *oh)
 {
-    const struct nx_set_flow_format *msg
-        = (const struct nx_set_flow_format *) oh;
+    const struct nx_set_flow_format *msg = ofpmsg_body(oh);
     enum ofputil_protocol cur, next;
     enum ofputil_protocol next_base;
 
@@ -3357,10 +3361,9 @@ static enum ofperr
 handle_nxt_set_packet_in_format(struct ofconn *ofconn,
                                 const struct ofp_header *oh)
 {
-    const struct nx_set_packet_in_format *msg;
+    const struct nx_set_packet_in_format *msg = ofpmsg_body(oh);
     uint32_t format;
 
-    msg = (const struct nx_set_packet_in_format *) oh;
     format = ntohl(msg->format);
     if (format != NXPIF_OPENFLOW10 && format != NXPIF_NXM) {
         return OFPERR_OFPBRC_EPERM;
@@ -3379,7 +3382,7 @@ handle_nxt_set_packet_in_format(struct ofconn *ofconn,
 static enum ofperr
 handle_nxt_set_async_config(struct ofconn *ofconn, const struct ofp_header *oh)
 {
-    const struct nx_async_config *msg = (const struct nx_async_config *) oh;
+    const struct nx_async_config *msg = ofpmsg_body(oh);
     uint32_t master[OAM_N_TYPES];
     uint32_t slave[OAM_N_TYPES];
 
@@ -3404,9 +3407,8 @@ static enum ofperr
 handle_nxt_set_controller_id(struct ofconn *ofconn,
                              const struct ofp_header *oh)
 {
-    const struct nx_controller_id *nci;
+    const struct nx_controller_id *nci = ofpmsg_body(oh);
 
-    nci = (const struct nx_controller_id *) oh;
     if (!is_all_zeros(nci->zero, sizeof nci->zero)) {
         return OFPERR_NXBRC_MUST_BE_ZERO;
     }
@@ -3424,7 +3426,9 @@ handle_barrier_request(struct ofconn *ofconn, const struct ofp_header *oh)
         return OFPROTO_POSTPONE;
     }
 
-    make_openflow_xid(sizeof *oh, OFPT10_BARRIER_REPLY, oh->xid, &buf);
+    buf = ofpraw_alloc_reply((oh->version == OFP10_VERSION
+                              ? OFPRAW_OFPT10_BARRIER_REPLY
+                              : OFPRAW_OFPT11_BARRIER_REPLY), oh, 0);
     ofconn_send_reply(ofconn, buf);
     return 0;
 }
@@ -3594,8 +3598,7 @@ ofmonitor_collect_resume_rules(struct ofmonitor *m,
 }
 
 static enum ofperr
-handle_flow_monitor_request(struct ofconn *ofconn,
-                            const struct ofp_stats_msg *osm)
+handle_flow_monitor_request(struct ofconn *ofconn, const struct ofp_header *oh)
 {
     struct ofproto *ofproto = ofconn_get_ofproto(ofconn);
     struct ofmonitor **monitors;
@@ -3607,7 +3610,7 @@ handle_flow_monitor_request(struct ofconn *ofconn,
     size_t i;
 
     error = 0;
-    ofpbuf_use_const(&b, osm, ntohs(osm->header.length));
+    ofpbuf_use_const(&b, oh, ntohs(oh->length));
     monitors = NULL;
     n_monitors = allocated_monitors = 0;
     for (;;) {
@@ -3646,7 +3649,7 @@ handle_flow_monitor_request(struct ofconn *ofconn,
         ofproto_collect_ofmonitor_initial_rules(monitors[i], &rules);
     }
 
-    ofputil_start_stats_reply(osm, &replies);
+    ofpmp_init(&replies, oh);
     ofmonitor_compose_refresh_updates(&rules, &replies);
     ofconn_send_replies(ofconn, &replies);
 
@@ -3682,131 +3685,116 @@ static enum ofperr
 handle_openflow__(struct ofconn *ofconn, const struct ofpbuf *msg)
 {
     const struct ofp_header *oh = msg->data;
-    const struct ofputil_msg_type *type;
+    enum ofptype type;
     enum ofperr error;
 
-    error = ofputil_decode_msg_type(oh, &type);
+    error = ofptype_decode(&type, oh);
     if (error) {
         return error;
     }
 
-    switch (ofputil_msg_type_code(type)) {
+    switch (type) {
         /* OpenFlow requests. */
-    case OFPUTIL_OFPT_ECHO_REQUEST:
+    case OFPTYPE_ECHO_REQUEST:
         return handle_echo_request(ofconn, oh);
 
-    case OFPUTIL_OFPT_FEATURES_REQUEST:
+    case OFPTYPE_FEATURES_REQUEST:
         return handle_features_request(ofconn, oh);
 
-    case OFPUTIL_OFPT_GET_CONFIG_REQUEST:
+    case OFPTYPE_GET_CONFIG_REQUEST:
         return handle_get_config_request(ofconn, oh);
 
-    case OFPUTIL_OFPT_SET_CONFIG:
-        return handle_set_config(ofconn, msg->data);
+    case OFPTYPE_SET_CONFIG:
+        return handle_set_config(ofconn, oh);
 
-    case OFPUTIL_OFPT_PACKET_OUT:
-        return handle_packet_out(ofconn, msg->data);
+    case OFPTYPE_PACKET_OUT:
+        return handle_packet_out(ofconn, oh);
 
-    case OFPUTIL_OFPT_PORT_MOD:
+    case OFPTYPE_PORT_MOD:
         return handle_port_mod(ofconn, oh);
 
-    case OFPUTIL_OFPT_FLOW_MOD:
+    case OFPTYPE_FLOW_MOD:
         return handle_flow_mod(ofconn, oh);
 
-    case OFPUTIL_OFPT_BARRIER_REQUEST:
+    case OFPTYPE_BARRIER_REQUEST:
         return handle_barrier_request(ofconn, oh);
 
         /* OpenFlow replies. */
-    case OFPUTIL_OFPT_ECHO_REPLY:
+    case OFPTYPE_ECHO_REPLY:
         return 0;
 
         /* Nicira extension requests. */
-    case OFPUTIL_NXT_ROLE_REQUEST:
+    case OFPTYPE_ROLE_REQUEST:
         return handle_role_request(ofconn, oh);
 
-    case OFPUTIL_NXT_FLOW_MOD_TABLE_ID:
+    case OFPTYPE_FLOW_MOD_TABLE_ID:
         return handle_nxt_flow_mod_table_id(ofconn, oh);
 
-    case OFPUTIL_NXT_SET_FLOW_FORMAT:
+    case OFPTYPE_SET_FLOW_FORMAT:
         return handle_nxt_set_flow_format(ofconn, oh);
 
-    case OFPUTIL_NXT_SET_PACKET_IN_FORMAT:
+    case OFPTYPE_SET_PACKET_IN_FORMAT:
         return handle_nxt_set_packet_in_format(ofconn, oh);
 
-    case OFPUTIL_NXT_SET_CONTROLLER_ID:
+    case OFPTYPE_SET_CONTROLLER_ID:
         return handle_nxt_set_controller_id(ofconn, oh);
 
-    case OFPUTIL_NXT_FLOW_MOD:
-        return handle_flow_mod(ofconn, oh);
-
-    case OFPUTIL_NXT_FLOW_AGE:
+    case OFPTYPE_FLOW_AGE:
         /* Nothing to do. */
         return 0;
 
-    case OFPUTIL_NXT_FLOW_MONITOR_CANCEL:
+    case OFPTYPE_FLOW_MONITOR_CANCEL:
         return handle_flow_monitor_cancel(ofconn, oh);
 
-    case OFPUTIL_NXT_SET_ASYNC_CONFIG:
+    case OFPTYPE_SET_ASYNC_CONFIG:
         return handle_nxt_set_async_config(ofconn, oh);
 
         /* Statistics requests. */
-    case OFPUTIL_OFPST_DESC_REQUEST:
-        return handle_desc_stats_request(ofconn, msg->data);
+    case OFPTYPE_DESC_STATS_REQUEST:
+        return handle_desc_stats_request(ofconn, oh);
 
-    case OFPUTIL_OFPST_FLOW_REQUEST:
-    case OFPUTIL_NXST_FLOW_REQUEST:
-        return handle_flow_stats_request(ofconn, msg->data);
+    case OFPTYPE_FLOW_STATS_REQUEST:
+        return handle_flow_stats_request(ofconn, oh);
 
-    case OFPUTIL_OFPST_AGGREGATE_REQUEST:
-    case OFPUTIL_NXST_AGGREGATE_REQUEST:
-        return handle_aggregate_stats_request(ofconn, msg->data);
+    case OFPTYPE_AGGREGATE_STATS_REQUEST:
+        return handle_aggregate_stats_request(ofconn, oh);
 
-    case OFPUTIL_OFPST_TABLE_REQUEST:
-        return handle_table_stats_request(ofconn, msg->data);
+    case OFPTYPE_TABLE_STATS_REQUEST:
+        return handle_table_stats_request(ofconn, oh);
 
-    case OFPUTIL_OFPST_PORT_REQUEST:
-        return handle_port_stats_request(ofconn, msg->data);
+    case OFPTYPE_PORT_STATS_REQUEST:
+        return handle_port_stats_request(ofconn, oh);
 
-    case OFPUTIL_OFPST_QUEUE_REQUEST:
-        return handle_queue_stats_request(ofconn, msg->data);
+    case OFPTYPE_QUEUE_STATS_REQUEST:
+        return handle_queue_stats_request(ofconn, oh);
 
-    case OFPUTIL_OFPST_PORT_DESC_REQUEST:
-        return handle_port_desc_stats_request(ofconn, msg->data);
+    case OFPTYPE_PORT_DESC_STATS_REQUEST:
+        return handle_port_desc_stats_request(ofconn, oh);
 
-    case OFPUTIL_NXST_FLOW_MONITOR_REQUEST:
-        return handle_flow_monitor_request(ofconn, msg->data);
+    case OFPTYPE_FLOW_MONITOR_STATS_REQUEST:
+        return handle_flow_monitor_request(ofconn, oh);
 
-    case OFPUTIL_MSG_INVALID:
-    case OFPUTIL_OFPT_HELLO:
-    case OFPUTIL_OFPT_ERROR:
-    case OFPUTIL_OFPT_FEATURES_REPLY:
-    case OFPUTIL_OFPT_GET_CONFIG_REPLY:
-    case OFPUTIL_OFPT_PACKET_IN:
-    case OFPUTIL_OFPT_FLOW_REMOVED:
-    case OFPUTIL_OFPT_PORT_STATUS:
-    case OFPUTIL_OFPT_BARRIER_REPLY:
-    case OFPUTIL_OFPT_QUEUE_GET_CONFIG_REQUEST:
-    case OFPUTIL_OFPT_QUEUE_GET_CONFIG_REPLY:
-    case OFPUTIL_OFPST_DESC_REPLY:
-    case OFPUTIL_OFPST_FLOW_REPLY:
-    case OFPUTIL_OFPST_QUEUE_REPLY:
-    case OFPUTIL_OFPST_PORT_REPLY:
-    case OFPUTIL_OFPST_TABLE_REPLY:
-    case OFPUTIL_OFPST_AGGREGATE_REPLY:
-    case OFPUTIL_OFPST_PORT_DESC_REPLY:
-    case OFPUTIL_NXT_ROLE_REPLY:
-    case OFPUTIL_NXT_FLOW_REMOVED:
-    case OFPUTIL_NXT_PACKET_IN:
-    case OFPUTIL_NXT_FLOW_MONITOR_PAUSED:
-    case OFPUTIL_NXT_FLOW_MONITOR_RESUMED:
-    case OFPUTIL_NXST_FLOW_REPLY:
-    case OFPUTIL_NXST_AGGREGATE_REPLY:
-    case OFPUTIL_NXST_FLOW_MONITOR_REPLY:
+    case OFPTYPE_HELLO:
+    case OFPTYPE_ERROR:
+    case OFPTYPE_FEATURES_REPLY:
+    case OFPTYPE_GET_CONFIG_REPLY:
+    case OFPTYPE_PACKET_IN:
+    case OFPTYPE_FLOW_REMOVED:
+    case OFPTYPE_PORT_STATUS:
+    case OFPTYPE_BARRIER_REPLY:
+    case OFPTYPE_DESC_STATS_REPLY:
+    case OFPTYPE_FLOW_STATS_REPLY:
+    case OFPTYPE_QUEUE_STATS_REPLY:
+    case OFPTYPE_PORT_STATS_REPLY:
+    case OFPTYPE_TABLE_STATS_REPLY:
+    case OFPTYPE_AGGREGATE_STATS_REPLY:
+    case OFPTYPE_PORT_DESC_STATS_REPLY:
+    case OFPTYPE_ROLE_REPLY:
+    case OFPTYPE_FLOW_MONITOR_PAUSED:
+    case OFPTYPE_FLOW_MONITOR_RESUMED:
+    case OFPTYPE_FLOW_MONITOR_STATS_REPLY:
     default:
-        return (oh->type == OFPT10_STATS_REQUEST ||
-                oh->type == OFPT10_STATS_REPLY
-                ? OFPERR_OFPBRC_BAD_STAT
-                : OFPERR_OFPBRC_BAD_TYPE);
+        return OFPERR_OFPBRC_BAD_TYPE;
     }
 }
 

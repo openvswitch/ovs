@@ -100,6 +100,8 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/ofp-actions.h \
 	lib/ofp-errors.c \
 	lib/ofp-errors.h \
+	lib/ofp-msgs.c \
+	lib/ofp-msgs.h \
 	lib/ofp-parse.c \
 	lib/ofp-parse.h \
 	lib/ofp-print.c \
@@ -323,6 +325,13 @@ $(srcdir)/lib/ofp-errors.inc: \
 		$(srcdir)/lib/ofp-errors.h > $@.tmp && mv $@.tmp $@
 $(srcdir)/lib/ofp-errors.c: $(srcdir)/lib/ofp-errors.inc
 EXTRA_DIST += build-aux/extract-ofp-errors lib/ofp-errors.inc
+
+$(srcdir)/lib/ofp-msgs.inc: \
+	lib/ofp-msgs.h $(srcdir)/build-aux/extract-ofp-msgs
+	$(run_python) $(srcdir)/build-aux/extract-ofp-msgs \
+		$(srcdir)/lib/ofp-msgs.h $@ > $@.tmp && mv $@.tmp $@
+$(srcdir)/lib/ofp-msgs.c: $(srcdir)/lib/ofp-msgs.inc
+EXTRA_DIST += build-aux/extract-ofp-msgs lib/ofp-msgs.inc
 
 INSTALL_DATA_LOCAL += lib-install-data-local
 lib-install-data-local:

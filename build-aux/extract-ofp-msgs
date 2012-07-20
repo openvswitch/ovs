@@ -1,0 +1,351 @@
+#! /usr/bin/python
+
+import sys
+import os.path
+import re
+
+line = ""
+
+OFP10_VERSION = 0x01
+OFP11_VERSION = 0x02
+OFP12_VERSION = 0x03
+OFP13_VERSION = 0x04
+
+NX_VENDOR_ID = 0x00002320
+
+OFPT_VENDOR = 4
+OFPT10_STATS_REQUEST = 16
+OFPT10_STATS_REPLY = 17
+OFPT11_STATS_REQUEST = 18
+OFPT11_STATS_REPLY = 19
+OFPST_VENDOR = 0xffff
+
+version_map = {"1.0":     (OFP10_VERSION, OFP10_VERSION),
+               "1.1":     (OFP11_VERSION, OFP11_VERSION),
+               "1.2":     (OFP12_VERSION, OFP12_VERSION),
+               "1.3":     (OFP13_VERSION, OFP13_VERSION),
+               "1.0+":    (OFP10_VERSION, OFP13_VERSION),
+               "1.1+":    (OFP11_VERSION, OFP13_VERSION),
+               "1.2+":    (OFP12_VERSION, OFP13_VERSION),
+               "1.3+":    (OFP13_VERSION, OFP13_VERSION),
+               "1.0-1.1": (OFP10_VERSION, OFP11_VERSION)}
+
+def get_line():
+    global line
+    global line_number
+    line = input_file.readline()
+    line_number += 1
+    if line == "":
+        fatal("unexpected end of input")
+
+n_errors = 0
+def error(msg):
+    global n_errors
+    sys.stderr.write("%s:%d: %s\n" % (file_name, line_number, msg))
+    n_errors += 1
+
+def fatal(msg):
+    error(msg)
+    sys.exit(1)
+
+def usage():
+    argv0 = os.path.basename(sys.argv[0])
+    print '''\
+%(argv0)s, for extracting OpenFlow message types from header files
+usage: %(argv0)s INPUT OUTPUT
+  where INPUT is the name of the input header file
+    and OUTPUT is the output file name.
+Despite OUTPUT, the output is written to stdout, and the OUTPUT argument
+only controls #line directives in the output.\
+''' % {"argv0": argv0}
+    sys.exit(0)
+
+def make_sizeof(s):
+    m = re.match(r'(.*) up to (.*)', s)
+    if m:
+        struct, member = m.groups()
+        return "offsetof(%s, %s)" % (struct, member)
+    else:
+        return "sizeof(%s)" % s
+
+def extract_ofp_msgs(output_file_name):
+    raw_types = []
+
+    all_hdrs = {}
+    all_raws = {}
+    all_raws_order = []
+
+    while True:
+        get_line()
+        if re.match('enum ofpraw', line):
+            break
+
+    while True:
+        get_line()
+        first_line_number = line_number
+        here = '%s:%d' % (file_name, line_number)
+        if (line.startswith('/*')
+            or line.startswith(' *')
+            or not line
+            or line.isspace()):
+            continue
+        elif re.match('}', line):
+            break
+
+        if not line.lstrip().startswith('/*'):
+            fatal("unexpected syntax between ofpraw types")
+
+        comment = line.lstrip()[2:].strip()
+        while not comment.endswith('*/'):
+            get_line()
+            if line.startswith('/*') or not line or line.isspace():
+                fatal("unexpected syntax within error")
+            comment += ' %s' % line.lstrip('* \t').rstrip(' \t\r\n')
+        comment = comment[:-2].rstrip()
+
+        m = re.match(r'([A-Z]+) ([-.+\d]+) \((\d+)\): ([^.]+)\.$', comment)
+        if not m:
+            fatal("unexpected syntax between messages")
+        type_, versions, number, contents = m.groups()
+        number = int(number)
+
+        get_line()
+        m = re.match('\s+(?:OFPRAW_%s)(\d*)_([A-Z0-9_]+),?$' % type_,
+                     line)
+        if not m:
+            fatal("syntax error expecting OFPRAW_ enum")
+        vinfix, name = m.groups()
+        rawname = 'OFPRAW_%s%s_%s' % (type_, vinfix, name)
+
+        min_version, max_version = version_map[versions]
+
+        human_name = '%s_%s' % (type_, name)
+        if type_.endswith('ST'):
+            if rawname.endswith('_REQUEST'):
+                human_name = human_name[:-8] + " request"
+            elif rawname.endswith('_REPLY'):
+                human_name = human_name[:-6] + " reply"
+            else:
+                fatal("%s messages are statistics but %s doesn't end "
+                      "in _REQUEST or _REPLY" % (type_, rawname))
+
+        these_hdrs = []
+        for version in range(min_version, max_version + 1):
+            if type_ == 'OFPT':
+                if number == OFPT_VENDOR:
+                    fatal("OFPT (%d) is used for vendor extensions"
+                          % number)
+                elif (version == OFP10_VERSION
+                      and (number == OFPT10_STATS_REQUEST
+                           or number == OFPT10_STATS_REPLY)):
+                    fatal("OFPT 1.0 (%d) is used for stats messages"
+                          % number)
+                elif (version != OFP10_VERSION
+                      and (number == OFPT11_STATS_REQUEST
+                           or number == OFPT11_STATS_REPLY)):
+                    fatal("OFPT 1.1+ (%d) is used for stats messages"
+                          % number)
+                hdrs = (version, number, 0, 0, 0)
+            elif type_ == 'OFPST' and name.endswith('_REQUEST'):
+                if version == OFP10_VERSION:
+                    hdrs = (version, OFPT10_STATS_REQUEST, number, 0, 0)
+                else:
+                    hdrs = (version, OFPT11_STATS_REQUEST, number, 0, 0)
+            elif type_ == 'OFPST' and name.endswith('_REPLY'):
+                if version == OFP10_VERSION:
+                    hdrs = (version, OFPT10_STATS_REPLY, number, 0, 0)
+                else:
+                    hdrs = (version, OFPT11_STATS_REPLY, number, 0, 0)
+            elif type_ == 'NXT':
+                hdrs = (version, OFPT_VENDOR, 0, NX_VENDOR_ID, number)
+            elif type_ == 'NXST' and name.endswith('_REQUEST'):
+                if version == OFP10_VERSION:
+                    hdrs = (version, OFPT10_STATS_REQUEST, OFPST_VENDOR,
+                            NX_VENDOR_ID, number)
+                else:
+                    hdrs = (version, OFPT11_STATS_REQUEST, OFPST_VENDOR,
+                            NX_VENDOR_ID, number)
+            elif type_ == 'NXST' and name.endswith('_REPLY'):
+                if version == OFP10_VERSION:
+                    hdrs = (version, OFPT10_STATS_REPLY, OFPST_VENDOR,
+                            NX_VENDOR_ID, number)
+                else:
+                    hdrs = (version, OFPT11_STATS_REPLY, OFPST_VENDOR,
+                            NX_VENDOR_ID, number)
+            else:
+                fatal("type '%s' unknown" % type_)
+
+            if hdrs in all_hdrs:
+                error("Duplicate message definition for %s." % str(hdrs))
+                sys.stderr.write("%s: Here is the location "
+                                 "of the previous definition.\n"
+                                 % (all_hdrs[hdrs]))
+            all_hdrs[hdrs] = here
+            these_hdrs.append(hdrs)
+
+        extra_multiple = '0'
+        if contents == 'void':
+            min_body = '0'
+        else:
+            min_body_elem = []
+            for c in [s.strip() for s in contents.split(",")]:
+                if c.endswith('[]'):
+                    if extra_multiple == '0':
+                        extra_multiple = make_sizeof(c[:-2])
+                    else:
+                        error("Cannot have multiple [] elements")
+                else:
+                    min_body_elem.append(c)
+
+            if min_body_elem:
+                min_body = " + ".join([make_sizeof(s)
+                                       for s in min_body_elem])
+            else:
+                if extra_multiple == '0':
+                    error("Must specify contents (use 'void' if empty)")
+                min_body = 0
+
+        if rawname in all_raws:
+            fatal("%s: Duplicate name" % rawname)
+
+        all_raws[rawname] = {"hdrs": these_hdrs,
+                             "min_version": min_version,
+                             "max_version": max_version,
+                             "min_body": min_body,
+                             "extra_multiple": extra_multiple,
+                             "type": type_,
+                             "human_name": human_name,
+                             "line": first_line_number}
+        all_raws_order.append(rawname)
+
+        continue
+
+    while True:
+        get_line()
+        if re.match('enum ofptype', line):
+            break
+
+    while True:
+        get_line()
+        if re.match(r'\s*/?\*', line) or line.isspace():
+            continue
+        elif re.match('}', line):
+            break
+
+        if not re.match(r'\s*OFPTYPE_.*/\*', line):
+            fatal("unexpected syntax between OFPTYPE_ definitions")
+
+        syntax = line.strip()
+        while not syntax.endswith('*/'):
+            get_line()
+            if not line.strip().startswith('*'):
+                fatal("unexpected syntax within OFPTYPE_ definition")
+            syntax += ' %s' % line.strip().lstrip('* \t')
+            syntax = syntax.strip()
+
+        m = re.match(r'(OFPTYPE_[A-Z0-9_]+),\s*/\* (.*) \*/', syntax)
+        if not m:
+            fatal("syntax error in OFPTYPE_ definition")
+
+        ofptype, raws_ = m.groups()
+        raws = [s.rstrip('.') for s in raws_.split()]
+        for raw in raws:
+            if not re.match('OFPRAW_[A-Z0-9_]+$', raw):
+                fatal("%s: invalid OFPRAW_* name syntax" % raw)
+            if raw not in all_raws:
+                fatal("%s: not a declared OFPRAW_* name" % raw)
+            if "ofptype" in all_raws[raw]:
+                fatal("%s: already part of %s"
+                      % (raw, all_raws[raw]["ofptype"]))
+            all_raws[raw]["ofptype"] = ofptype
+
+    input_file.close()
+
+    if n_errors:
+        sys.exit(1)
+
+    output = []
+    output.append("/* Generated automatically; do not modify!     "
+                  "-*- buffer-read-only: t -*- */")
+    output.append("")
+
+    for raw in all_raws_order:
+        r = all_raws[raw]
+        output.append("static struct raw_instance %s_instances[] = {"
+                      % raw.lower())
+        for hdrs in r['hdrs']:
+            output.append("    { {0, NULL}, {%d, %d, %d, 0x%x, %d}, %s, 0 },"
+                          % (hdrs + (raw,)))
+                
+        output.append("};")
+
+    output.append("")
+
+    output.append("static struct raw_info raw_infos[] = {")
+    for raw in all_raws_order:
+        r = all_raws[raw]
+        if "ofptype" not in r:
+            error("%s: no defined OFPTYPE_" % raw)
+            continue
+        output.append("    {")
+        output.append("        %s_instances," % raw.lower())
+        output.append("        %d, %d," % (r["min_version"], r["max_version"]))
+        output.append("#line %s \"%s\"" % (r["line"], file_name))
+        output.append("        %s," % r["min_body"])
+        output.append("#line %s \"%s\"" % (r["line"], file_name))
+        output.append("        %s," % r["extra_multiple"])
+        output.append("#line %s \"%s\"" % (len(output) + 2, output_file_name))
+        output.append("        %s," % r["ofptype"])
+        output.append("        \"%s\"," % r["human_name"])
+        output.append("    },")
+
+        if r['type'].endswith("ST"):
+            for hdrs in r['hdrs']:
+                op_hdrs = list(hdrs)
+                if hdrs[0] == OFP10_VERSION:
+                    if hdrs[1] == OFPT10_STATS_REQUEST:
+                        op_hdrs[1] = OFPT10_STATS_REPLY
+                    elif hdrs[1] == OFPT10_STATS_REPLY:
+                        op_hdrs[1] = OFPT10_STATS_REQUEST
+                    else:
+                        assert False
+                else:
+                    if hdrs[1] == OFPT11_STATS_REQUEST:
+                        op_hdrs[1] = OFPT11_STATS_REPLY
+                    elif hdrs[1] == OFPT11_STATS_REPLY:
+                        op_hdrs[1] = OFPT11_STATS_REQUEST
+                    else:
+                        assert False
+                if tuple(op_hdrs) not in all_hdrs:
+                    if r["human_name"].endswith("request"):
+                        fatal("%s has no corresponding reply"
+                              % r["human_name"])
+                    else:
+                        fatal("%s has no corresponding request"
+                              % r["human_name"])
+    output.append("};")
+
+    if n_errors:
+        sys.exit(1)
+
+    return output
+
+
+if __name__ == '__main__':
+    if '--help' in sys.argv:
+        usage()
+    elif len(sys.argv) != 3:
+        sys.stderr.write("exactly one non-option arguments required; "
+                         "use --help for help\n")
+        sys.exit(1)
+    else:
+        global file_name
+        global input_file
+        global line_number
+        file_name = sys.argv[1]
+        input_file = open(file_name)
+        line_number = 0
+
+        for line in extract_ofp_msgs(sys.argv[2]):
+            print line
+        

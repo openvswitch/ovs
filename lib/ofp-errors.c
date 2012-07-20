@@ -3,6 +3,7 @@
 #include <errno.h>
 #include "byte-order.h"
 #include "dynamic-string.h"
+#include "ofp-msgs.h"
 #include "ofp-util.h"
 #include "ofpbuf.h"
 #include "openflow/openflow.h"
@@ -176,25 +177,28 @@ ofperr_encode_msg__(enum ofperr error, const struct ofperr_domain *domain,
 
     pair = ofperr_get_pair__(error, domain);
     if (!ofperr_is_nx_extension(error)) {
-        oem = make_openflow_xid(data_len + sizeof *oem, OFPT_ERROR, xid, &buf);
+        buf = ofpraw_alloc_xid(OFPRAW_OFPT_ERROR, domain->version, xid,
+                               sizeof *oem + data_len);
+
+        oem = ofpbuf_put_uninit(buf, sizeof *oem);
         oem->type = htons(pair->type);
         oem->code = htons(pair->code);
     } else {
         struct nx_vendor_error *nve;
 
-        oem = make_openflow_xid(data_len + sizeof *oem + sizeof *nve,
-                                OFPT_ERROR, xid, &buf);
+        buf = ofpraw_alloc_xid(OFPRAW_OFPT_ERROR, domain->version, xid,
+                               sizeof *oem + sizeof *nve + data_len);
+
+        oem = ofpbuf_put_uninit(buf, sizeof *oem);
         oem->type = htons(NXET_VENDOR);
         oem->code = htons(NXVC_VENDOR_ERROR);
 
-        nve = (struct nx_vendor_error *) oem->data;
+        nve = ofpbuf_put_uninit(buf, sizeof *nve);
         nve->vendor = htonl(NX_VENDOR_ID);
         nve->type = htons(pair->type);
         nve->code = htons(pair->code);
     }
-    oem->header.version = domain->version;
 
-    buf->size -= data_len;
     ofpbuf_put(buf, data, data_len);
 
     return buf;
@@ -268,34 +272,33 @@ ofperr_get_code(enum ofperr error, const struct ofperr_domain *domain)
 /* Tries to decodes 'oh', which should be an OpenFlow OFPT_ERROR message.
  * Returns an OFPERR_* constant on success, 0 on failure.
  *
- * If 'payload_ofs' is nonnull, on success '*payload_ofs' is set to the offset
- * to the payload starting from 'oh' and on failure it is set to 0. */
+ * If 'payload' is nonnull, on success '*payload' is initialized to the
+ * error's payload, and on failure it is cleared. */
 enum ofperr
-ofperr_decode_msg(const struct ofp_header *oh, size_t *payload_ofs)
+ofperr_decode_msg(const struct ofp_header *oh, struct ofpbuf *payload)
 {
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 
     const struct ofperr_domain *domain;
     const struct ofp_error_msg *oem;
+    enum ofpraw raw;
     uint16_t type, code;
     enum ofperr error;
     struct ofpbuf b;
 
-    if (payload_ofs) {
-        *payload_ofs = 0;
+    if (payload) {
+        memset(payload, 0, sizeof *payload);
     }
 
     /* Pull off the error message. */
     ofpbuf_use_const(&b, oh, ntohs(oh->length));
-    oem = ofpbuf_try_pull(&b, sizeof *oem);
-    if (!oem) {
+    error = ofpraw_pull(&raw, &b);
+    if (error) {
         return 0;
     }
+    oem = ofpbuf_pull(&b, sizeof *oem);
 
-    /* Check message type and version. */
-    if (oh->type != OFPT_ERROR) {
-        return 0;
-    }
+    /* Check version. */
     domain = ofperr_domain_from_version(oh->version);
     if (!domain) {
         return 0;
@@ -325,8 +328,8 @@ ofperr_decode_msg(const struct ofp_header *oh, size_t *payload_ofs)
     if (!error) {
         error = ofperr_decode_type(domain, type);
     }
-    if (error && payload_ofs) {
-        *payload_ofs = (uint8_t *) b.data - (uint8_t *) oh;
+    if (error && payload) {
+        ofpbuf_use_const(payload, b.data, b.size);
     }
     return error;
 }

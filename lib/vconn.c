@@ -28,6 +28,7 @@
 #include "fatal-signal.h"
 #include "flow.h"
 #include "ofp-errors.h"
+#include "ofp-msgs.h"
 #include "ofp-print.h"
 #include "ofp-util.h"
 #include "ofpbuf.h"
@@ -385,7 +386,7 @@ vcs_send_hello(struct vconn *vconn)
     struct ofpbuf *b;
     int retval;
 
-    make_openflow(sizeof(struct ofp_header), OFPT_HELLO, &b);
+    b = ofpraw_alloc(OFPRAW_OFPT_HELLO, OFP10_VERSION, 0);
     retval = do_send(vconn, b);
     if (!retval) {
         vconn->state = VCS_RECV_HELLO;
@@ -406,9 +407,12 @@ vcs_recv_hello(struct vconn *vconn)
 
     retval = do_recv(vconn, &b);
     if (!retval) {
-        struct ofp_header *oh = b->data;
+        const struct ofp_header *oh = b->data;
+        enum ofptype type;
+        enum ofperr error;
 
-        if (oh->type == OFPT_HELLO) {
+        error = ofptype_decode(&type, b->data);
+        if (!error && type == OFPTYPE_HELLO) {
             if (b->size > sizeof *oh) {
                 struct ds msg = DS_EMPTY_INITIALIZER;
                 ds_put_format(&msg, "%s: extra-long hello:\n", vconn->name);
@@ -529,10 +533,33 @@ vconn_connect(struct vconn *vconn)
 int
 vconn_recv(struct vconn *vconn, struct ofpbuf **msgp)
 {
-    int retval = vconn_connect(vconn);
+    struct ofpbuf *msg;
+    int retval;
+
+    retval = vconn_connect(vconn);
     if (!retval) {
-        retval = do_recv(vconn, msgp);
+        retval = do_recv(vconn, &msg);
     }
+    if (!retval) {
+        const struct ofp_header *oh = msg->data;
+        if (oh->version != vconn->version) {
+            enum ofptype type;
+
+            if (ofptype_decode(&type, msg->data)
+                || (type != OFPTYPE_HELLO &&
+                    type != OFPTYPE_ERROR &&
+                    type != OFPTYPE_ECHO_REQUEST &&
+                    type != OFPTYPE_ECHO_REPLY)) {
+                VLOG_ERR_RL(&bad_ofmsg_rl, "%s: received OpenFlow version "
+                            "0x%02"PRIx8" != expected %02x",
+                            vconn->name, oh->version, vconn->version);
+                ofpbuf_delete(msg);
+                retval = EPROTO;
+            }
+        }
+    }
+
+    *msgp = retval ? NULL : msg;
     return retval;
 }
 
@@ -541,40 +568,12 @@ do_recv(struct vconn *vconn, struct ofpbuf **msgp)
 {
     int retval = (vconn->class->recv)(vconn, msgp);
     if (!retval) {
-        struct ofp_header *oh;
-
         COVERAGE_INC(vconn_received);
         if (VLOG_IS_DBG_ENABLED()) {
             char *s = ofp_to_string((*msgp)->data, (*msgp)->size, 1);
             VLOG_DBG_RL(&ofmsg_rl, "%s: received: %s", vconn->name, s);
             free(s);
         }
-
-        oh = ofpbuf_at_assert(*msgp, 0, sizeof *oh);
-        if ((oh->version != vconn->version || oh->version == 0)
-            && oh->type != OFPT_HELLO
-            && oh->type != OFPT_ERROR
-            && oh->type != OFPT_ECHO_REQUEST
-            && oh->type != OFPT_ECHO_REPLY
-            && oh->type != OFPT_VENDOR)
-        {
-            if (vconn->version == 0) {
-                VLOG_ERR_RL(&bad_ofmsg_rl,
-                            "%s: received OpenFlow message type %"PRIu8" "
-                            "before version negotiation complete",
-                            vconn->name, oh->type);
-            } else {
-                VLOG_ERR_RL(&bad_ofmsg_rl,
-                            "%s: received OpenFlow version 0x%02"PRIx8" "
-                            "!= expected %02x",
-                            vconn->name, oh->version, vconn->version);
-            }
-            ofpbuf_delete(*msgp);
-            retval = EPROTO;
-        }
-    }
-    if (retval) {
-        *msgp = NULL;
     }
     return retval;
 }
@@ -605,7 +604,8 @@ do_send(struct vconn *vconn, struct ofpbuf *msg)
     int retval;
 
     assert(msg->size >= sizeof(struct ofp_header));
-    assert(((struct ofp_header *) msg->data)->length == htons(msg->size));
+
+    ofpmsg_update_length(msg);
     if (!VLOG_IS_DBG_ENABLED()) {
         COVERAGE_INC(vconn_sent);
         retval = (vconn->class->send)(vconn, msg);

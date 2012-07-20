@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,9 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include "command-line.h"
+#include "ofp-msgs.h"
+#include "ofp-util.h"
+#include "ofpbuf.h"
 #include "openflow/openflow.h"
 #include "poll-loop.h"
 #include "socket-util.h"
@@ -207,8 +210,11 @@ test_read_hello(int argc OVS_UNUSED, char *argv[])
 
        retval = stream_recv(stream, &hello, sizeof hello);
        if (retval == sizeof hello) {
+           enum ofpraw raw;
+
            CHECK(hello.version, OFP10_VERSION);
-           CHECK(hello.type, OFPT_HELLO);
+           CHECK(ofpraw_decode_partial(&raw, &hello, sizeof hello), 0);
+           CHECK(raw, OFPRAW_OFPT_HELLO);
            CHECK(ntohs(hello.length), sizeof hello);
            break;
        } else {
@@ -274,8 +280,11 @@ test_send_hello(const char *type, const void *out, size_t out_size,
            struct ofp_header hello;
            int retval = stream_recv(stream, &hello, sizeof hello);
            if (retval == sizeof hello) {
+               enum ofpraw raw;
+
                CHECK(hello.version, OFP10_VERSION);
-               CHECK(hello.type, OFPT_HELLO);
+               CHECK(ofpraw_decode_partial(&raw, &hello, sizeof hello), 0);
+               CHECK(raw, OFPRAW_OFPT_HELLO);
                CHECK(ntohs(hello.length), sizeof hello);
                read_hello = true;
            } else {
@@ -322,13 +331,12 @@ static void
 test_send_plain_hello(int argc OVS_UNUSED, char *argv[])
 {
     const char *type = argv[1];
-    struct ofp_header hello;
+    struct ofpbuf *hello;
 
-    hello.version = OFP10_VERSION;
-    hello.type = OFPT_HELLO;
-    hello.length = htons(sizeof hello);
-    hello.xid = htonl(0x12345678);
-    test_send_hello(type, &hello, sizeof hello, 0);
+    hello = ofpraw_alloc_xid(OFPRAW_OFPT_HELLO, OFP10_VERSION,
+                             htonl(0x12345678), 0);
+    test_send_hello(type, hello->data, hello->size, 0);
+    ofpbuf_delete(hello);
 }
 
 /* Try connecting and sending an extra-long hello, which should succeed (since
@@ -338,16 +346,15 @@ static void
 test_send_long_hello(int argc OVS_UNUSED, char *argv[])
 {
     const char *type = argv[1];
-    struct ofp_header hello;
-    char buffer[sizeof hello * 2];
+    struct ofpbuf *hello;
+    enum { EXTRA_BYTES = 8 };
 
-    hello.version = OFP10_VERSION;
-    hello.type = OFPT_HELLO;
-    hello.length = htons(sizeof buffer);
-    hello.xid = htonl(0x12345678);
-    memset(buffer, 0, sizeof buffer);
-    memcpy(buffer, &hello, sizeof hello);
-    test_send_hello(type, buffer, sizeof buffer, 0);
+    hello = ofpraw_alloc_xid(OFPRAW_OFPT_HELLO, OFP10_VERSION,
+                             htonl(0x12345678), EXTRA_BYTES);
+    ofpbuf_put_zeros(hello, EXTRA_BYTES);
+    ofpmsg_update_length(hello);
+    test_send_hello(type, hello->data, hello->size, 0);
+    ofpbuf_delete(hello);
 }
 
 /* Try connecting and sending an echo request instead of a hello, which should
@@ -356,13 +363,12 @@ static void
 test_send_echo_hello(int argc OVS_UNUSED, char *argv[])
 {
     const char *type = argv[1];
-    struct ofp_header echo;
+    struct ofpbuf *echo;
 
-    echo.version = OFP10_VERSION;
-    echo.type = OFPT_ECHO_REQUEST;
-    echo.length = htons(sizeof echo);
-    echo.xid = htonl(0x89abcdef);
-    test_send_hello(type, &echo, sizeof echo, EPROTO);
+    echo = ofpraw_alloc_xid(OFPRAW_OFPT_ECHO_REQUEST, OFP10_VERSION,
+                             htonl(0x12345678), 0);
+    test_send_hello(type, echo->data, echo->size, EPROTO);
+    ofpbuf_delete(echo);
 }
 
 /* Try connecting and sending a hello packet that has its length field as 0,
@@ -383,13 +389,13 @@ static void
 test_send_invalid_version_hello(int argc OVS_UNUSED, char *argv[])
 {
     const char *type = argv[1];
-    struct ofp_header hello;
+    struct ofpbuf *hello;
 
-    hello.version = OFP10_VERSION - 1;
-    hello.type = OFPT_HELLO;
-    hello.length = htons(sizeof hello);
-    hello.xid = htonl(0x12345678);
-    test_send_hello(type, &hello, sizeof hello, EPROTO);
+    hello = ofpraw_alloc_xid(OFPRAW_OFPT_HELLO, OFP10_VERSION,
+                             htonl(0x12345678), 0);
+    ((struct ofp_header *) hello->data)->version = 0;
+    test_send_hello(type, hello->data, hello->size, EPROTO);
+    ofpbuf_delete(hello);
 }
 
 static const struct command commands[] = {
