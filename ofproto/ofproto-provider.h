@@ -803,11 +803,7 @@ struct ofproto_class {
      *     registers, then it is an error if 'rule->cr' does not wildcard all
      *     registers.
      *
-     *   - Validate that 'rule->ofpacts' is a sequence of well-formed actions
-     *     that the datapath can correctly implement.  If your ofproto
-     *     implementation only implements a subset of the actions that Open
-     *     vSwitch understands, then you should implement your own action
-     *     validation.
+     *   - Validate that the datapath can correctly implement 'rule->ofpacts'.
      *
      *   - If the rule is valid, update the datapath flow table, adding the new
      *     rule or replacing the existing one.
@@ -889,8 +885,8 @@ struct ofproto_class {
      *
      * ->rule_modify_actions() should set the following in motion:
      *
-     *   - Validate that the actions now in 'rule' are well-formed OpenFlow
-     *     actions that the datapath can correctly implement.
+     *   - Validate that the datapath can correctly implement the actions now
+     *     in 'rule'.
      *
      *   - Update the datapath flow table with the new actions.
      *
@@ -943,8 +939,8 @@ struct ofproto_class {
      * The caller retains ownership of 'packet' and of 'ofpacts', so
      * ->packet_out() should not modify or free them.
      *
-     * This function must validate that it can implement 'ofpacts'.  If not,
-     * then it should return an OpenFlow error code.
+     * This function must validate that it can correctly implement 'ofpacts'.
+     * If not, then it should return an OpenFlow error code.
      *
      * 'flow' reflects the flow information for 'packet'.  All of the
      * information in 'flow' is extracted from 'packet', except for

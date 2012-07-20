@@ -2141,10 +2141,13 @@ handle_packet_out(struct ofconn *ofconn, const struct ofp_header *oh)
         ofpbuf_use_const(payload, po.packet, po.packet_len);
     }
 
-    /* Send out packet. */
+    /* Verify actions against packet, then send packet if successful. */
     flow_extract(payload, 0, 0, po.in_port, &flow);
-    error = p->ofproto_class->packet_out(p, payload, &flow,
-                                         po.ofpacts, po.ofpacts_len);
+    error = ofpacts_check(po.ofpacts, po.ofpacts_len, &flow, p->max_ports);
+    if (!error) {
+        error = p->ofproto_class->packet_out(p, payload, &flow,
+                                             po.ofpacts, po.ofpacts_len);
+    }
     ofpbuf_delete(payload);
 
 exit_free_ofpacts:
@@ -3257,7 +3260,12 @@ handle_flow_mod(struct ofconn *ofconn, const struct ofp_header *oh)
          * dropped from OpenFlow in the near future.  There is no good error
          * code, so just state that the flow table is full. */
         error = OFPERR_OFPFMFC_ALL_TABLES_FULL;
-    } else {
+    }
+    if (!error) {
+        error = ofpacts_check(fm.ofpacts, fm.ofpacts_len,
+                              &fm.cr.flow, ofproto->max_ports);
+    }
+    if (!error) {
         error = handle_flow_mod__(ofconn_get_ofproto(ofconn), ofconn, &fm, oh);
     }
     if (error) {

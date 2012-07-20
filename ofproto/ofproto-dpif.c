@@ -4638,13 +4638,6 @@ rule_construct(struct rule *rule_)
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(rule->up.ofproto);
     struct rule_dpif *victim;
     uint8_t table_id;
-    enum ofperr error;
-
-    error = ofpacts_check(rule->up.ofpacts, rule->up.ofpacts_len,
-                          &rule->up.cr.flow, ofproto->up.max_ports);
-    if (error) {
-        return error;
-    }
 
     rule->packet_count = 0;
     rule->byte_count = 0;
@@ -4747,15 +4740,6 @@ static void
 rule_modify_actions(struct rule *rule_)
 {
     struct rule_dpif *rule = rule_dpif_cast(rule_);
-    struct ofproto_dpif *ofproto = ofproto_dpif_cast(rule->up.ofproto);
-    enum ofperr error;
-
-    error = ofpacts_check(rule->up.ofpacts, rule->up.ofpacts_len,
-                          &rule->up.cr.flow, ofproto->up.max_ports);
-    if (error) {
-        ofoperation_complete(rule->up.pending, error);
-        return;
-    }
 
     complete_operation(rule);
 }
@@ -6443,36 +6427,32 @@ packet_out(struct ofproto *ofproto_, struct ofpbuf *packet,
            const struct ofpact *ofpacts, size_t ofpacts_len)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
-    enum ofperr error;
+    struct odputil_keybuf keybuf;
+    struct dpif_flow_stats stats;
 
-    error = ofpacts_check(ofpacts, ofpacts_len, flow, ofproto->up.max_ports);
-    if (!error) {
-        struct odputil_keybuf keybuf;
-        struct dpif_flow_stats stats;
+    struct ofpbuf key;
 
-        struct ofpbuf key;
+    struct action_xlate_ctx ctx;
+    uint64_t odp_actions_stub[1024 / 8];
+    struct ofpbuf odp_actions;
 
-        struct action_xlate_ctx ctx;
-        uint64_t odp_actions_stub[1024 / 8];
-        struct ofpbuf odp_actions;
+    ofpbuf_use_stack(&key, &keybuf, sizeof keybuf);
+    odp_flow_key_from_flow(&key, flow);
 
-        ofpbuf_use_stack(&key, &keybuf, sizeof keybuf);
-        odp_flow_key_from_flow(&key, flow);
+    dpif_flow_stats_extract(flow, packet, time_msec(), &stats);
 
-        dpif_flow_stats_extract(flow, packet, time_msec(), &stats);
+    action_xlate_ctx_init(&ctx, ofproto, flow, flow->vlan_tci, NULL,
+                          packet_get_tcp_flags(packet, flow), packet);
+    ctx.resubmit_stats = &stats;
 
-        action_xlate_ctx_init(&ctx, ofproto, flow, flow->vlan_tci, NULL,
-                              packet_get_tcp_flags(packet, flow), packet);
-        ctx.resubmit_stats = &stats;
+    ofpbuf_use_stub(&odp_actions,
+                    odp_actions_stub, sizeof odp_actions_stub);
+    xlate_actions(&ctx, ofpacts, ofpacts_len, &odp_actions);
+    dpif_execute(ofproto->dpif, key.data, key.size,
+                 odp_actions.data, odp_actions.size, packet);
+    ofpbuf_uninit(&odp_actions);
 
-        ofpbuf_use_stub(&odp_actions,
-                        odp_actions_stub, sizeof odp_actions_stub);
-        xlate_actions(&ctx, ofpacts, ofpacts_len, &odp_actions);
-        dpif_execute(ofproto->dpif, key.data, key.size,
-                     odp_actions.data, odp_actions.size, packet);
-        ofpbuf_uninit(&odp_actions);
-    }
-    return error;
+    return 0;
 }
 
 /* NetFlow. */
