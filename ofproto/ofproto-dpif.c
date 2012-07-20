@@ -6001,7 +6001,7 @@ add_mirror_actions(struct action_xlate_ctx *ctx, const struct flow *orig_flow)
         m = ofproto->mirrors[mirror_mask_ffs(mirrors) - 1];
 
         if (!vlan_is_mirrored(m, vlan)) {
-            mirrors &= mirrors - 1;
+            mirrors = zero_rightmost_1bit(mirrors);
             continue;
         }
 
@@ -6031,7 +6031,7 @@ update_mirror_stats(struct ofproto_dpif *ofproto, mirror_mask_t mirrors,
         return;
     }
 
-    for (; mirrors; mirrors &= mirrors - 1) {
+    for (; mirrors; mirrors = zero_rightmost_1bit(mirrors)) {
         struct ofmirror *m;
 
         m = ofproto->mirrors[mirror_mask_ffs(mirrors) - 1];

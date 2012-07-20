@@ -769,7 +769,7 @@ count_ones(unsigned long int x)
     int n = 0;
 
     while (x) {
-        x &= x - 1;
+        x = zero_rightmost_1bit(x);
         n++;
     }
 
