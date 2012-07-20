@@ -614,8 +614,10 @@ parse_tunnel_config(const char *name, const char *type,
                 char *endptr;
                 int tos;
                 tos = strtol(node->value, &endptr, 0);
-                if (*endptr == '\0') {
+                if (*endptr == '\0' && tos == (tos & IP_DSCP_MASK)) {
                     nl_msg_put_u8(options, OVS_TUNNEL_ATTR_TOS, tos);
+                } else {
+                    VLOG_WARN("%s: invalid TOS %s", name, node->value);
                 }
             }
         } else if (!strcmp(node->key, "ttl")) {
