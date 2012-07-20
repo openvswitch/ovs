@@ -390,6 +390,7 @@ ofproto_create(const char *datapath_name, const char *datapath_type,
     ofproto->frag_handling = OFPC_FRAG_NORMAL;
     hmap_init(&ofproto->ports);
     shash_init(&ofproto->port_by_name);
+    ofproto->max_ports = OFPP_MAX;
     ofproto->tables = NULL;
     ofproto->n_tables = 0;
     ofproto->connmgr = connmgr_create(ofproto, datapath_name, datapath_name);
@@ -422,6 +423,9 @@ ofproto_create(const char *datapath_name, const char *datapath_type,
     return 0;
 }
 
+/* Must be called (only) by an ofproto implementation in its constructor
+ * function.  See the large comment on 'construct' in struct ofproto_class for
+ * details. */
 void
 ofproto_init_tables(struct ofproto *ofproto, int n_tables)
 {
@@ -435,6 +439,24 @@ ofproto_init_tables(struct ofproto *ofproto, int n_tables)
     OFPROTO_FOR_EACH_TABLE (table, ofproto) {
         oftable_init(table);
     }
+}
+
+/* To be optionally called (only) by an ofproto implementation in its
+ * constructor function.  See the large comment on 'construct' in struct
+ * ofproto_class for details.
+ *
+ * Sets the maximum number of ports to 'max_ports'.  The ofproto generic layer
+ * will then ensure that actions passed into the ofproto implementation will
+ * not refer to OpenFlow ports numbered 'max_ports' or higher.  If this
+ * function is not called, there will be no such restriction.
+ *
+ * Reserved ports numbered OFPP_MAX and higher are special and not subject to
+ * the 'max_ports' restriction. */
+void
+ofproto_init_max_ports(struct ofproto *ofproto, uint16_t max_ports)
+{
+    assert(max_ports <= OFPP_MAX);
+    ofproto->max_ports = max_ports;
 }
 
 uint64_t
@@ -2101,6 +2123,10 @@ handle_packet_out(struct ofconn *ofconn, const struct ofp_header *oh)
     ofpbuf_use_stub(&ofpacts, ofpacts_stub, sizeof ofpacts_stub);
     error = ofputil_decode_packet_out(&po, oh, &ofpacts);
     if (error) {
+        goto exit_free_ofpacts;
+    }
+    if (po.in_port >= p->max_ports && po.in_port < OFPP_MAX) {
+        error = OFPERR_NXBRC_BAD_IN_PORT;
         goto exit_free_ofpacts;
     }
 

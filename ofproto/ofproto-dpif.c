@@ -598,7 +598,6 @@ struct ofproto_dpif {
     struct hmap_node all_ofproto_dpifs_node; /* In 'all_ofproto_dpifs'. */
     struct ofproto up;
     struct dpif *dpif;
-    int max_ports;
 
     /* Special OpenFlow rules. */
     struct rule_dpif *miss_rule; /* Sends flow table misses to controller. */
@@ -744,6 +743,7 @@ construct(struct ofproto *ofproto_)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
     const char *name = ofproto->up.name;
+    int max_ports;
     int error;
     int i;
 
@@ -753,7 +753,9 @@ construct(struct ofproto *ofproto_)
         return error;
     }
 
-    ofproto->max_ports = dpif_get_max_ports(ofproto->dpif);
+    max_ports = dpif_get_max_ports(ofproto->dpif);
+    ofproto_init_max_ports(ofproto_, MIN(max_ports, OFPP_MAX));
+
     ofproto->n_matches = 0;
 
     dpif_flow_flush(ofproto->dpif);
@@ -4639,7 +4641,7 @@ rule_construct(struct rule *rule_)
     enum ofperr error;
 
     error = ofpacts_check(rule->up.ofpacts, rule->up.ofpacts_len,
-                          &rule->up.cr.flow, ofproto->max_ports);
+                          &rule->up.cr.flow, ofproto->up.max_ports);
     if (error) {
         return error;
     }
@@ -4749,7 +4751,7 @@ rule_modify_actions(struct rule *rule_)
     enum ofperr error;
 
     error = ofpacts_check(rule->up.ofpacts, rule->up.ofpacts_len,
-                          &rule->up.cr.flow, ofproto->max_ports);
+                          &rule->up.cr.flow, ofproto->up.max_ports);
     if (error) {
         ofoperation_complete(rule->up.pending, error);
         return;
@@ -6443,11 +6445,7 @@ packet_out(struct ofproto *ofproto_, struct ofpbuf *packet,
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
     enum ofperr error;
 
-    if (flow->in_port >= ofproto->max_ports && flow->in_port < OFPP_MAX) {
-        return OFPERR_NXBRC_BAD_IN_PORT;
-    }
-
-    error = ofpacts_check(ofpacts, ofpacts_len, flow, ofproto->max_ports);
+    error = ofpacts_check(ofpacts, ofpacts_len, flow, ofproto->up.max_ports);
     if (!error) {
         struct odputil_keybuf keybuf;
         struct dpif_flow_stats stats;
