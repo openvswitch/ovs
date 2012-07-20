@@ -896,11 +896,6 @@ AT_CLEANUP
 AT_SETUP([database commands -- wait-until must wait])
 AT_KEYWORDS([ovs-vsctl])
 
-# Disable lcov for this test.  All the programs running in parallel
-# race badly on access to profiling data.
-DISABLE_LCOV=true
-export DISABLE_LCOV
-
 OVS_VSCTL_SETUP
 
 # Start ovs-vsctls in background.

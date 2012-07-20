@@ -12,27 +12,7 @@ m4_define([CHECK_UUID],
      exit 1
    fi])
 
-# This test is a strict subset of the larger test down below, but it
-# completes in a realistic amount of time with the "lcov" wrapper.
-AT_SETUP([UUID generation])
-AT_KEYWORDS([UUID])
-AT_CHECK([test-uuid > uuid])
-AT_CHECK([
-  uuid=`cat uuid`
-  CHECK_UUID])
-AT_CLEANUP
-
-# This test is a strict subset of the larger test down below, but it
-# completes in a realistic amount of time with the "lcov" wrapper.
-AT_SETUP([UUID parsing and serialization])
-AT_KEYWORDS([UUID])
-AT_CHECK([test-uuid f47ac10b-58cc-4372-a567-0e02b2c3d479], [0],
-         [f47ac10b-58cc-4372-a567-0e02b2c3d479
-])
-AT_CLEANUP
-
 AT_SETUP([UUID generation, parsing, serialization])
-AT_SKIP_IF([test "$CHECK_LCOV" = true]) # lcov makes this test absurdly slow
 AT_KEYWORDS([UUID])
 AT_CHECK([
   uuids=

@@ -16,9 +16,3 @@ code-coverage related options:
   --enable-coverage=yes
 
     Build with gcov code coverage support.
-
-    If you enable coverage and you have the "lcov" and "genhtml"
-    programs in PATH, then you may run "make check-lcov" to produce a
-    directory "tests/coverage.html" in the build directory with an
-    analysis of the test suite's coverage.  lcov is available at
-    http://ltp.sourceforge.net/coverage/lcov.php

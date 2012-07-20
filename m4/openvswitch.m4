@@ -22,7 +22,7 @@ AC_DEFUN([OVS_CHECK_COVERAGE],
      [AC_HELP_STRING([--enable-coverage], 
                      [Enable gcov coverage tool.])],
      [case "${enableval}" in
-        (lcov|yes) coverage=true ;;
+        (yes) coverage=true ;;
         (no)  coverage=false ;;
         (*) AC_MSG_ERROR([bad value ${enableval} for --enable-coverage]) ;;
       esac],
