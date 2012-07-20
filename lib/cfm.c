@@ -87,6 +87,7 @@ struct cfm {
 
     uint64_t mpid;
     bool extended;         /* Extended mode. */
+    bool booted;           /* A full fault interval has occured. */
     enum cfm_fault_reason fault;  /* Connectivity fault status. */
     enum cfm_fault_reason recv_fault;  /* Bit mask of faults occuring on
                                           receive. */
@@ -407,6 +408,7 @@ cfm_run(struct cfm *cfm)
             ds_destroy(&ds);
         }
 
+        cfm->booted = true;
         timer_set_duration(&cfm->fault_timer, interval);
         VLOG_DBG("%s: new fault interval", cfm->name);
     }
@@ -469,7 +471,7 @@ cfm_compose_ccm(struct cfm *cfm, struct ofpbuf *packet,
         ccm->interval_ms_x = htons(0);
     }
 
-    if (hmap_is_empty(&cfm->remote_mps)) {
+    if (cfm->booted && hmap_is_empty(&cfm->remote_mps)) {
         ccm->flags |= CCM_RDI_MASK;
     }
 
