@@ -111,6 +111,13 @@ cls_rule_format(const struct cls_rule *rule, struct ds *s)
 {
     match_format(&rule->match, s, rule->priority);
 }
+
+/* Returns true if 'rule' matches every packet, false otherwise. */
+bool
+cls_rule_is_catchall(const struct cls_rule *rule)
+{
+    return flow_wildcards_is_catchall(&rule->match.wc);
+}
 
 /* Initializes 'cls' as a classifier that initially contains no classification
  * rules. */
@@ -399,7 +406,7 @@ cls_cursor_init(struct cls_cursor *cursor, const struct classifier *cls,
                 const struct cls_rule *target)
 {
     cursor->cls = cls;
-    cursor->target = target;
+    cursor->target = target && !cls_rule_is_catchall(target) ? target : NULL;
 }
 
 /* Returns the first matching cls_rule in 'cursor''s iteration, or a null
