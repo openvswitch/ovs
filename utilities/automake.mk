@@ -4,7 +4,7 @@ bin_PROGRAMS += \
 	utilities/ovs-dpctl \
 	utilities/ovs-ofctl \
 	utilities/ovs-vsctl
-bin_SCRIPTS += utilities/ovs-pki utilities/ovs-vsctl utilities/ovs-parse-leaks
+bin_SCRIPTS += utilities/ovs-pki utilities/ovs-parse-leaks
 if HAVE_PYTHON
 bin_SCRIPTS += \
 	utilities/ovs-l3ping \
