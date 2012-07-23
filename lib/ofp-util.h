@@ -147,6 +147,9 @@ enum ofputil_protocol {
     OFPUTIL_P_NXM_TID  = 1 << 3, /* NXM + flow_mod_table_id extension. */
 #define OFPUTIL_P_NXM_ANY (OFPUTIL_P_NXM | OFPUTIL_P_NXM_TID)
 
+    /* OpenFlow 1.2 */
+    OFPUTIL_P_OF12      = 1 << 4, /* OpenFlow 1.2 flow format. */
+
     /* All protocols. */
 #define OFPUTIL_P_ANY (OFPUTIL_P_OF10_ANY | OFPUTIL_P_NXM_ANY)
 

@@ -1779,7 +1779,8 @@ OFP_ASSERT(sizeof(struct nx_action_output_reg) == 24);
 
 enum nx_flow_format {
     NXFF_OPENFLOW10 = 0,         /* Standard OpenFlow 1.0 compatible. */
-    NXFF_NXM = 2                 /* Nicira extended match. */
+    NXFF_NXM = 2,                /* Nicira extended match. */
+    NXFF_OPENFLOW12 = 3          /* OpenFlow 1.2 format. */
 };
 
 /* NXT_SET_FLOW_FORMAT request. */
