@@ -968,7 +968,7 @@ flow_hash_fields_valid(enum nx_hash_fields fields)
  *
  *      - Other values of 'vid' should not be used. */
 void
-flow_set_vlan_vid(struct flow *flow, ovs_be16 vid)
+flow_set_dl_vlan(struct flow *flow, ovs_be16 vid)
 {
     if (vid == htons(OFP10_VLAN_NONE)) {
         flow->vlan_tci = htons(0);

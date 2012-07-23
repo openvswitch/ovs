@@ -1218,7 +1218,7 @@ mf_set_flow_value(const struct mf_field *mf,
         break;
 
     case MFF_DL_VLAN:
-        flow_set_vlan_vid(flow, value->be16);
+        flow_set_dl_vlan(flow, value->be16);
         break;
 
     case MFF_DL_VLAN_PCP:
