@@ -1311,10 +1311,12 @@ OXM_OF_ETH_TYPE(0800) OXM_OF_IN_PORT(00000012)
 # vlan
 OXM_OF_VLAN_VID(1009) OXM_OF_VLAN_VID(1009) # Duplicate Field
 OXM_OF_VLAN_VID(f009)           # Bad Value
+OXM_OF_VLAN_PCP(00)             # Bad Pre-Requisite
 OXM_OF_VLAN_VID(0000)           # Packets without 802.1Q header or with VID=0
 OXM_OF_VLAN_VID(1123)           # Packets with VID=123, any PCP
 OXM_OF_VLAN_VID(1123) OXM_OF_VLAN_PCP(01) # Packets with VID=123, PCP=1.
 OXM_OF_VLAN_VID(0123)           # Does not make sense (but supported anyway)
+OXM_OF_VLAN_VID(0123) OXM_OF_VLAN_PCP(01)  #Bad Pre-Requisite
 
 # IP ECN
 OXM_OF_ETH_TYPE(0800) OXM_OF_IP_ECN(03)
@@ -1494,10 +1496,12 @@ OXM_OF_IN_PORT(00000012), OXM_OF_ETH_TYPE(0800)
 # vlan
 nx_pull_match() returned error OFPBMC_DUP_FIELD
 nx_pull_match() returned error OFPBMC_BAD_VALUE
+nx_pull_match() returned error OFPBMC_BAD_PREREQ
 OXM_OF_VLAN_VID(0000)
 OXM_OF_VLAN_VID(1123)
 OXM_OF_VLAN_VID(1123), OXM_OF_VLAN_PCP(01)
 OXM_OF_VLAN_VID(0123)
+nx_pull_match() returned error OFPBMC_BAD_PREREQ
 
 # IP ECN
 OXM_OF_ETH_TYPE(0800), OXM_OF_IP_ECN(03)

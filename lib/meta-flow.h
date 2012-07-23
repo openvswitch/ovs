@@ -156,6 +156,7 @@ enum mf_prereqs {
 
     /* L2 requirements. */
     MFP_ARP,
+    MFP_VLAN_VID,
     MFP_IPV4,
     MFP_IPV6,
     MFP_IP_ANY,

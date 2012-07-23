@@ -188,7 +188,7 @@ static const struct mf_field mf_fields[MFF_N_IDS] = {
         1, 3,
         MFM_NONE, 0,
         MFS_DECIMAL,
-        MFP_NONE,
+        MFP_VLAN_VID,
         true,
         OXM_OF_VLAN_PCP, "OXM_OF_VLAN_PCP",
         OXM_OF_VLAN_PCP, "OXM_OF_VLAN_PCP",
@@ -826,6 +826,8 @@ mf_are_prereqs_ok(const struct mf_field *mf, const struct flow *flow)
         return flow->dl_type == htons(ETH_TYPE_IP);
     case MFP_IPV6:
         return flow->dl_type == htons(ETH_TYPE_IPV6);
+    case MFP_VLAN_VID:
+        return flow->vlan_tci & htons(VLAN_CFI);
     case MFP_IP_ANY:
         return is_ip_any(flow);
 
