@@ -1316,7 +1316,17 @@ OXM_OF_VLAN_VID(0000)           # Packets without 802.1Q header or with VID=0
 OXM_OF_VLAN_VID(1123)           # Packets with VID=123, any PCP
 OXM_OF_VLAN_VID(1123) OXM_OF_VLAN_PCP(01) # Packets with VID=123, PCP=1.
 OXM_OF_VLAN_VID(0123)           # Does not make sense (but supported anyway)
+OXM_OF_VLAN_VID_W(0123/0123)      # Does not make sense (but supported anyway)
+OXM_OF_VLAN_VID_W(1123/0123)      # Does not make sense (but supported anyway)
+OXM_OF_VLAN_VID_W(0123/1123)      # Does not make sense (but supported anyway)
 OXM_OF_VLAN_VID(0123) OXM_OF_VLAN_PCP(01)  #Bad Pre-Requisite
+OXM_OF_VLAN_VID_W(1123/1fff)    # Packets with VID=123, any PCP.
+OXM_OF_VLAN_VID_W(1123/ffff)    # Packets with VID=123, any PCP.
+OXM_OF_VLAN_VID_W(1123/0000)    # Packets with or without 802.1Q header
+OXM_OF_VLAN_VID_W(1123/1f0f),   # Packets with # VID=123 (masked)
+OXM_OF_VLAN_VID_W(1123/1f0f), OXM_OF_VLAN_PCP(01)  # Packets with VID=123 (masked), any PCP.
+OXM_OF_VLAN_VID_W(1000/1000)    # Packets with any VID, any PCP
+OXM_OF_VLAN_VID_W(1000/1000), OXM_OF_VLAN_PCP(01)  # Packets with any VID, PCP=1.
 
 # IP ECN
 OXM_OF_ETH_TYPE(0800) OXM_OF_IP_ECN(03)
@@ -1501,7 +1511,17 @@ OXM_OF_VLAN_VID(0000)
 OXM_OF_VLAN_VID(1123)
 OXM_OF_VLAN_VID(1123), OXM_OF_VLAN_PCP(01)
 OXM_OF_VLAN_VID(0123)
+OXM_OF_VLAN_VID_W(0123/0123)
+OXM_OF_VLAN_VID_W(0123/0123)
+OXM_OF_VLAN_VID_W(0123/1123)
 nx_pull_match() returned error OFPBMC_BAD_PREREQ
+OXM_OF_VLAN_VID(1123)
+OXM_OF_VLAN_VID(1123)
+<any>
+OXM_OF_VLAN_VID_W(1103/1f0f)
+OXM_OF_VLAN_VID_W(1103/1f0f), OXM_OF_VLAN_PCP(01)
+OXM_OF_VLAN_VID_W(1000/1000)
+OXM_OF_VLAN_VID_W(1000/1000), OXM_OF_VLAN_PCP(01)
 
 # IP ECN
 OXM_OF_ETH_TYPE(0800), OXM_OF_IP_ECN(03)
