@@ -2124,7 +2124,7 @@
       <p>
         The eviction process only considers flows that have an idle timeout or
         a hard timeout.  That is, eviction never deletes permanent flows.
-        (Permanent flows do count against <ref column="flow_limit"/>.
+        (Permanent flows do count against <ref column="flow_limit"/>.)
       </p>
 
       <p>
