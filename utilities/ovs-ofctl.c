@@ -2580,6 +2580,30 @@ ofctl_check_vlan(int argc OVS_UNUSED, char *argv[])
     free(nxm_s);
     ofpbuf_uninit(&nxm);
 
+    /* Convert to and from OXM. */
+    ofpbuf_init(&nxm, 0);
+    nxm_match_len = nx_put_match(&nxm, true, &rule, htonll(0), htonll(0));
+    nxm_s = nx_match_to_string(nxm.data, nxm_match_len);
+    error = nx_pull_match(&nxm, nxm_match_len, 0, &nxm_rule, NULL, NULL);
+    printf("OXM: %s -> ", nxm_s);
+    if (error) {
+        printf("%s\n", ofperr_to_string(error));
+    } else {
+        uint16_t vid = ntohs(nxm_rule.flow.vlan_tci) &
+            (VLAN_VID_MASK | VLAN_CFI);
+        uint16_t mask = ntohs(nxm_rule.wc.vlan_tci_mask) &
+            (VLAN_VID_MASK | VLAN_CFI);
+
+        printf("%04"PRIx16"/%04"PRIx16",", vid, mask);
+        if (vid && vlan_tci_to_pcp(nxm_rule.wc.vlan_tci_mask)) {
+            printf("%02"PRIx8"\n", vlan_tci_to_pcp(nxm_rule.flow.vlan_tci));
+        } else {
+            printf("--\n");
+        }
+    }
+    free(nxm_s);
+    ofpbuf_uninit(&nxm);
+
     /* Convert to and from OpenFlow 1.0. */
     ofputil_cls_rule_to_ofp10_match(&rule, &of10_match);
     ofputil_cls_rule_from_ofp10_match(&of10_match, 0, &of10_rule);

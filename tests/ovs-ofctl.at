@@ -1674,6 +1674,7 @@ dnl [1]
 AT_CHECK([ovs-ofctl check-vlan 0000 0000], [0], [dnl
  -> 0000/0000
 NXM: <any> -> 0000/0000
+OXM: <any> -> 0000/0000,--
 OF1.0: 0000/1,00/1 -> 0000/0000
 OF1.1: 0000/1,00/1 -> 0000/0000
 ])
@@ -1682,6 +1683,7 @@ dnl [2]
 AT_CHECK([ovs-ofctl check-vlan 0000 ffff], [0], [dnl
 vlan_tci=0x0000 -> 0000/ffff
 NXM: NXM_OF_VLAN_TCI(0000) -> 0000/ffff
+OXM: OXM_OF_VLAN_VID(0000) -> 0000/1fff,--
 OF1.0: ffff/0,00/1 -> 0000/ffff
 OF1.1: ffff/0,00/1 -> 0000/ffff
 ])
@@ -1690,6 +1692,7 @@ dnl [3]
 AT_CHECK([ovs-ofctl check-vlan 1abc 1fff], [0], [dnl
 dl_vlan=2748 -> 1abc/1fff
 NXM: NXM_OF_VLAN_TCI_W(1abc/1fff) -> 1abc/1fff
+OXM: OXM_OF_VLAN_VID(1abc) -> 1abc/1fff,--
 OF1.0: 0abc/0,00/1 -> 1abc/1fff
 OF1.1: 0abc/0,00/1 -> 1abc/1fff
 ])
@@ -1698,6 +1701,7 @@ dnl [4]
 AT_CHECK([ovs-ofctl check-vlan b000 f000], [0], [dnl
 dl_vlan_pcp=5 -> b000/f000
 NXM: NXM_OF_VLAN_TCI_W(b000/f000) -> b000/f000
+OXM: OXM_OF_VLAN_VID_W(1000/1000), OXM_OF_VLAN_PCP(05) -> 1000/1000,05
 OF1.0: 0000/1,05/0 -> b000/f000
 OF1.1: fffe/0,05/0 -> b000/f000
 ])
@@ -1706,6 +1710,7 @@ dnl [5]
 AT_CHECK([ovs-ofctl check-vlan babc ffff], [0], [dnl
 dl_vlan=2748,dl_vlan_pcp=5 -> babc/ffff
 NXM: NXM_OF_VLAN_TCI(babc) -> babc/ffff
+OXM: OXM_OF_VLAN_VID(1abc), OXM_OF_VLAN_PCP(05) -> 1abc/1fff,05
 OF1.0: 0abc/0,05/0 -> babc/ffff
 OF1.1: 0abc/0,05/0 -> babc/ffff
 ])
@@ -1714,6 +1719,7 @@ dnl [6]
 AT_CHECK([ovs-ofctl check-vlan 0000 0fff], [0], [dnl
 vlan_tci=0x0000/0x0fff -> 0000/0fff
 NXM: NXM_OF_VLAN_TCI_W(0000/0fff) -> 0000/0fff
+OXM: OXM_OF_VLAN_VID_W(0000/0fff) -> 0000/0fff,--
 OF1.0: 0000/0,00/1 -> 1000/1fff
 OF1.1: 0000/0,00/1 -> 1000/1fff
 ])
@@ -1722,6 +1728,7 @@ dnl [7]
 AT_CHECK([ovs-ofctl check-vlan 0000 f000], [0], [dnl
 vlan_tci=0x0000/0xf000 -> 0000/f000
 NXM: NXM_OF_VLAN_TCI_W(0000/f000) -> 0000/f000
+OXM: OXM_OF_VLAN_VID_W(0000/1000) -> 0000/1000,--
 OF1.0: ffff/0,00/1 -> 0000/ffff
 OF1.1: ffff/0,00/1 -> 0000/ffff
 ])
@@ -1730,6 +1737,7 @@ dnl [8]
 AT_CHECK([ovs-ofctl check-vlan 0000 efff], [0], [dnl
 vlan_tci=0x0000/0xefff -> 0000/efff
 NXM: NXM_OF_VLAN_TCI_W(0000/efff) -> 0000/efff
+OXM: OXM_OF_VLAN_VID_W(0000/0fff) -> 0000/0fff,--
 OF1.0: 0000/0,00/0 -> 1000/ffff
 OF1.1: 0000/0,00/0 -> 1000/ffff
 ])
@@ -1738,6 +1746,7 @@ dnl [9]
 AT_CHECK([ovs-ofctl check-vlan 1001 1001], [0], [dnl
 vlan_tci=0x1001/0x1001 -> 1001/1001
 NXM: NXM_OF_VLAN_TCI_W(1001/1001) -> 1001/1001
+OXM: OXM_OF_VLAN_VID_W(1001/1001) -> 1001/1001,--
 OF1.0: 0001/0,00/1 -> 1001/1fff
 OF1.1: 0001/0,00/1 -> 1001/1fff
 ])
@@ -1746,6 +1755,7 @@ dnl [10]
 AT_CHECK([ovs-ofctl check-vlan 3000 3000], [0], [dnl
 vlan_tci=0x3000/0x3000 -> 3000/3000
 NXM: NXM_OF_VLAN_TCI_W(3000/3000) -> 3000/3000
+OXM: OXM_OF_VLAN_VID_W(1000/1000), OXM_OF_VLAN_PCP(01) -> 1000/1000,01
 OF1.0: 0000/1,01/0 -> 3000/f000
 OF1.1: fffe/0,01/0 -> 3000/f000
 ])
