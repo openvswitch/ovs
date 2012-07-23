@@ -180,7 +180,7 @@ lookup_ipv6(const char *host_name, struct in6_addr *addr)
  * Most Open vSwitch code should not use this because it causes deadlocks:
  * gethostbyname() sends out a DNS request but that starts a new flow for which
  * OVS must set up a flow, but it can't because it's waiting for a DNS reply.
- * The synchronous lookup also delays other activty.  (Of course we can solve
+ * The synchronous lookup also delays other activity.  (Of course we can solve
  * this but it doesn't seem worthwhile quite yet.)  */
 int
 lookup_hostname(const char *host_name, struct in_addr *addr)

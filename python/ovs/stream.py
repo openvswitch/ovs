@@ -26,7 +26,7 @@ vlog = ovs.vlog.Vlog("stream")
 
 def stream_or_pstream_needs_probes(name):
     """ 1 if the stream or pstream specified by 'name' needs periodic probes to
-    verify connectivty.  For [p]streams which need probes, it can take a long
+    verify connectivity.  For [p]streams which need probes, it can take a long
     time to notice the connection was dropped.  Returns 0 if probes aren't
     needed, and -1 if 'name' is invalid"""
 

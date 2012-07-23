@@ -54,7 +54,7 @@ struct stream_class {
     /* Prefix for connection names, e.g. "tcp", "ssl", "unix". */
     const char *name;
 
-    /* True if this stream needs periodic probes to verify connectivty.  For
+    /* True if this stream needs periodic probes to verify connectivity.  For
      * streams which need probes, it can take a long time to notice the
      * connection was dropped. */
     bool needs_probes;
@@ -154,7 +154,7 @@ struct pstream_class {
     /* Prefix for connection names, e.g. "ptcp", "pssl", "punix". */
     const char *name;
 
-    /* True if this pstream needs periodic probes to verify connectivty.  For
+    /* True if this pstream needs periodic probes to verify connectivity.  For
      * pstreams which need probes, it can take a long time to notice the
      * connection was dropped. */
     bool needs_probes;
