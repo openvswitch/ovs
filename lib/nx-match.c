@@ -515,10 +515,24 @@ nx_put_match(struct ofpbuf *b, bool oxm, const struct cls_rule *cr,
                    ofputil_dl_type_to_openflow(flow->dl_type));
     }
 
-    /* 802.1Q.
-     *
-     * XXX missing OXM support */
-    nxm_put_16m(b, NXM_OF_VLAN_TCI, flow->vlan_tci, cr->wc.vlan_tci_mask);
+    /* 802.1Q. */
+    if (oxm) {
+        ovs_be16 vid = flow->vlan_tci & htons(VLAN_VID_MASK | VLAN_CFI);
+        ovs_be16 mask = cr->wc.vlan_tci_mask & htons(VLAN_VID_MASK | VLAN_CFI);
+
+        if (mask == htons(VLAN_VID_MASK | VLAN_CFI)) {
+            nxm_put_16(b, OXM_OF_VLAN_VID, vid);
+        } else if (mask) {
+            nxm_put_16m(b, OXM_OF_VLAN_VID, vid, mask);
+        }
+
+        if (vid && vlan_tci_to_pcp(cr->wc.vlan_tci_mask)) {
+            nxm_put_8(b, OXM_OF_VLAN_PCP, vlan_tci_to_pcp(flow->vlan_tci));
+        }
+
+    } else {
+        nxm_put_16m(b, NXM_OF_VLAN_TCI, flow->vlan_tci, cr->wc.vlan_tci_mask);
+    }
 
     /* L3. */
     if (!(wc & FWW_DL_TYPE) && flow->dl_type == htons(ETH_TYPE_IP)) {
