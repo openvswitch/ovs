@@ -1740,27 +1740,33 @@ fte_version_equals(const struct fte_version *a, const struct fte_version *b)
                              b->ofpacts, b->ofpacts_len));
 }
 
-/* Prints 'version' on stdout.  Expects the caller to have printed the rule
- * associated with the version. */
+/* Clears 's', then if 's' has a version 'index', formats 'fte' and version
+ * 'index' into 's', followed by a new-line. */
 static void
-fte_version_print(const struct fte_version *version)
+fte_version_format(const struct fte *fte, int index, struct ds *s)
 {
-    struct ds s;
+    const struct fte_version *version = fte->versions[index];
 
+    ds_clear(s);
+    if (!version) {
+        return;
+    }
+
+    cls_rule_format(&fte->rule, s);
     if (version->cookie != htonll(0)) {
-        printf(" cookie=0x%"PRIx64, ntohll(version->cookie));
+        ds_put_format(s, " cookie=0x%"PRIx64, ntohll(version->cookie));
     }
     if (version->idle_timeout != OFP_FLOW_PERMANENT) {
-        printf(" idle_timeout=%"PRIu16, version->idle_timeout);
+        ds_put_format(s, " idle_timeout=%"PRIu16, version->idle_timeout);
     }
     if (version->hard_timeout != OFP_FLOW_PERMANENT) {
-        printf(" hard_timeout=%"PRIu16, version->hard_timeout);
+        ds_put_format(s, " hard_timeout=%"PRIu16, version->hard_timeout);
     }
 
-    ds_init(&s);
-    ofpacts_format(version->ofpacts, version->ofpacts_len, &s);
-    printf(" %s\n", ds_cstr(&s));
-    ds_destroy(&s);
+    ds_put_char(s, ' ');
+    ofpacts_format(version->ofpacts, version->ofpacts_len, s);
+
+    ds_put_char(s, '\n');
 }
 
 static struct fte *
@@ -2067,11 +2073,15 @@ ofctl_diff_flows(int argc OVS_UNUSED, char *argv[])
     bool differences = false;
     struct cls_cursor cursor;
     struct classifier cls;
+    struct ds a_s, b_s;
     struct fte *fte;
 
     classifier_init(&cls);
     read_flows_from_source(argv[1], &cls, 0);
     read_flows_from_source(argv[2], &cls, 1);
+
+    ds_init(&a_s);
+    ds_init(&b_s);
 
     cls_cursor_init(&cursor, &cls, NULL);
     CLS_CURSOR_FOR_EACH (fte, rule, &cursor) {
@@ -2079,20 +2089,22 @@ ofctl_diff_flows(int argc OVS_UNUSED, char *argv[])
         struct fte_version *b = fte->versions[1];
 
         if (!a || !b || !fte_version_equals(a, b)) {
-            char *rule_s = cls_rule_to_string(&fte->rule);
-            if (a) {
-                printf("-%s", rule_s);
-                fte_version_print(a);
+            fte_version_format(fte, 0, &a_s);
+            fte_version_format(fte, 1, &b_s);
+            if (strcmp(ds_cstr(&a_s), ds_cstr(&b_s))) {
+                if (a_s.length) {
+                    printf("-%s", ds_cstr(&a_s));
+                }
+                if (b_s.length) {
+                    printf("+%s", ds_cstr(&b_s));
+                }
+                differences = true;
             }
-            if (b) {
-                printf("+%s", rule_s);
-                fte_version_print(b);
-            }
-            free(rule_s);
-
-            differences = true;
         }
     }
+
+    ds_destroy(&a_s);
+    ds_destroy(&b_s);
 
     fte_free_all(&cls);
 

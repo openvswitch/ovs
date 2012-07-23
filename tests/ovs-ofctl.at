@@ -1962,3 +1962,28 @@ AT_CHECK([ovs-ofctl diff-flows add-flows.txt br0 | sort], [0], [expout])
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP
+
+dnl ofpacts that differ bytewise don't necessarily differ when
+dnl converted to another representation, such as OpenFlow 1.0
+dnl or to a string.  "resubmit(,1)" is an example of an action
+dnl of this type: "ofpact_resubmit"s can differ in their "compat"
+dnl values even though this doesn't affect the string format.
+dnl
+dnl This test checks that "ovs-ofctl diff-flows" doesn't report
+dnl false ofpacts differences.
+AT_SETUP([ovs-ofctl diff-flows - suppress false differences])
+OVS_VSWITCHD_START
+AT_DATA([flows.txt], [actions=resubmit(,1)
+])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+AT_CHECK([ovs-ofctl diff-flows br0 flows.txt])
+AT_CHECK([ovs-ofctl add-flow br0 idle_timeout=60,dl_vlan=9,actions=output:1])
+AT_CHECK([ovs-ofctl diff-flows br0 flows.txt], [2], [dnl
+-dl_vlan=9 idle_timeout=60 actions=output:1
+])
+AT_CHECK([ovs-ofctl add-flow br0 hard_timeout=120,cookie=1234,dl_vlan=9,actions=output:1])
+AT_CHECK([ovs-ofctl diff-flows flows.txt br0], [2], [dnl
++dl_vlan=9 cookie=0x4d2 hard_timeout=120 actions=output:1
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
