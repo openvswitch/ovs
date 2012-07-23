@@ -979,6 +979,17 @@ flow_set_dl_vlan(struct flow *flow, ovs_be16 vid)
     }
 }
 
+/* Sets the VLAN VID that 'flow' matches to 'vid', which is interpreted as an
+ * OpenFlow 1.2 "vlan_vid" value, that is, the low 13 bits of 'vlan_tci' (VID
+ * plus CFI). */
+void
+flow_set_vlan_vid(struct flow *flow, ovs_be16 vid)
+{
+    ovs_be16 mask = htons(VLAN_VID_MASK | VLAN_CFI);
+    flow->vlan_tci &= ~mask;
+    flow->vlan_tci |= vid & mask;
+}
+
 /* Sets the VLAN PCP that 'flow' matches to 'pcp', which should be in the
  * range 0...7.
  *

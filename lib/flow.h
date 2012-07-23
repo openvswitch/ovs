@@ -118,6 +118,7 @@ static inline bool flow_equal(const struct flow *, const struct flow *);
 static inline size_t flow_hash(const struct flow *, uint32_t basis);
 
 void flow_set_dl_vlan(struct flow *, ovs_be16 vid);
+void flow_set_vlan_vid(struct flow *, ovs_be16 vid);
 void flow_set_vlan_pcp(struct flow *, uint8_t pcp);
 
 void flow_compose(struct ofpbuf *, const struct flow *);

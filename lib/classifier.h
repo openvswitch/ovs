@@ -112,6 +112,9 @@ void cls_rule_set_dl_tci_masked(struct cls_rule *,
                                 ovs_be16 tci, ovs_be16 mask);
 void cls_rule_set_any_vid(struct cls_rule *);
 void cls_rule_set_dl_vlan(struct cls_rule *, ovs_be16);
+void cls_rule_set_vlan_vid(struct cls_rule *, ovs_be16);
+void cls_rule_set_vlan_vid_masked(struct cls_rule *,
+                                  ovs_be16 vid, ovs_be16 mask);
 void cls_rule_set_any_pcp(struct cls_rule *);
 void cls_rule_set_dl_vlan_pcp(struct cls_rule *, uint8_t);
 void cls_rule_set_tp_src(struct cls_rule *, ovs_be16);

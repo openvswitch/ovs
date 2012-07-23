@@ -274,6 +274,31 @@ cls_rule_set_dl_vlan(struct cls_rule *rule, ovs_be16 dl_vlan)
     }
 }
 
+/* Sets the VLAN VID that 'flow' matches to 'vid', which is interpreted as an
+ * OpenFlow 1.2 "vlan_vid" value, that is, the low 13 bits of 'vlan_tci' (VID
+ * plus CFI). */
+void
+cls_rule_set_vlan_vid(struct cls_rule *rule, ovs_be16 vid)
+{
+    cls_rule_set_vlan_vid_masked(rule, vid, htons(VLAN_VID_MASK | VLAN_CFI));
+}
+
+
+/* Sets the VLAN VID that 'flow' matches to 'vid', which is interpreted as an
+ * OpenFlow 1.2 "vlan_vid" value, that is, the low 13 bits of 'vlan_tci' (VID
+ * plus CFI), with the corresponding 'mask'. */
+void
+cls_rule_set_vlan_vid_masked(struct cls_rule *rule,
+                             ovs_be16 vid, ovs_be16 mask)
+{
+    ovs_be16 pcp_mask = htons(VLAN_PCP_MASK);
+    ovs_be16 vid_mask = htons(VLAN_VID_MASK | VLAN_CFI);
+
+    mask &= vid_mask;
+    flow_set_vlan_vid(&rule->flow, vid & mask);
+    rule->wc.vlan_tci_mask = mask | (rule->wc.vlan_tci_mask & pcp_mask);
+}
+
 /* Modifies 'rule' so that the VLAN PCP is wildcarded.  If the VID is already
  * wildcarded, then 'rule' will match a packet regardless of whether it has an
  * 802.1Q header or not. */
