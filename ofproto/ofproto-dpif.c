@@ -243,6 +243,11 @@ struct action_xlate_ctx {
      * calling action_xlate_ctx_init(). */
     void (*resubmit_hook)(struct action_xlate_ctx *, struct rule_dpif *rule);
 
+    /* If nonnull, flow translation calls this function to report some
+     * significant decision, e.g. to explain why OFPP_NORMAL translation
+     * dropped a packet. */
+    void (*report_hook)(struct action_xlate_ctx *, const char *s);
+
     /* If nonnull, flow translation credits the specified statistics to each
      * rule reached through a resubmit or OFPP_TABLE action.
      *
@@ -298,6 +303,8 @@ static void compose_slow_path(const struct ofproto_dpif *, const struct flow *,
                               uint64_t *stub, size_t stub_size,
                               const struct nlattr **actionsp,
                               size_t *actions_lenp);
+
+static void xlate_report(struct action_xlate_ctx *ctx, const char *s);
 
 /* A subfacet (see "struct subfacet" below) has three possible installation
  * states:
@@ -5570,6 +5577,7 @@ action_xlate_ctx_init(struct action_xlate_ctx *ctx,
     ctx->may_learn = packet != NULL;
     ctx->tcp_flags = tcp_flags;
     ctx->resubmit_hook = NULL;
+    ctx->report_hook = NULL;
     ctx->resubmit_stats = NULL;
 }
 
@@ -5695,6 +5703,14 @@ xlate_actions_for_side_effects(struct action_xlate_ctx *ctx,
     ofpbuf_use_stub(&odp_actions, odp_actions_stub, sizeof odp_actions_stub);
     xlate_actions(ctx, ofpacts, ofpacts_len, &odp_actions);
     ofpbuf_uninit(&odp_actions);
+}
+
+static void
+xlate_report(struct action_xlate_ctx *ctx, const char *s)
+{
+    if (ctx->report_hook) {
+        ctx->report_hook(ctx, s);
+    }
 }
 
 /* OFPP_NORMAL implementation. */
@@ -6107,14 +6123,17 @@ lookup_input_bundle(const struct ofproto_dpif *ofproto, uint16_t in_port,
  * so in one special case.
  */
 static bool
-is_admissible(struct ofproto_dpif *ofproto, const struct flow *flow,
-              struct ofport_dpif *in_port, uint16_t vlan, tag_type *tags)
+is_admissible(struct action_xlate_ctx *ctx, struct ofport_dpif *in_port,
+              uint16_t vlan)
 {
+    struct ofproto_dpif *ofproto = ctx->ofproto;
+    struct flow *flow = &ctx->flow;
     struct ofbundle *in_bundle = in_port->bundle;
 
     /* Drop frames for reserved multicast addresses
      * only if forward_bpdu option is absent. */
     if (!ofproto->up.forward_bpdu && eth_addr_is_reserved(flow->dl_dst)) {
+        xlate_report(ctx, "packet has reserved destination MAC, dropping");
         return false;
     }
 
@@ -6122,11 +6141,12 @@ is_admissible(struct ofproto_dpif *ofproto, const struct flow *flow,
         struct mac_entry *mac;
 
         switch (bond_check_admissibility(in_bundle->bond, in_port,
-                                         flow->dl_dst, tags)) {
+                                         flow->dl_dst, &ctx->tags)) {
         case BV_ACCEPT:
             break;
 
         case BV_DROP:
+            xlate_report(ctx, "bonding refused admissibility, dropping");
             return false;
 
         case BV_DROP_IF_MOVED:
@@ -6134,6 +6154,8 @@ is_admissible(struct ofproto_dpif *ofproto, const struct flow *flow,
             if (mac && mac->port.p != in_bundle &&
                 (!is_gratuitous_arp(flow)
                  || mac_entry_is_grat_arp_locked(mac))) {
+                xlate_report(ctx, "SLB bond thinks this packet looped back, "
+                            "dropping");
                 return false;
             }
             break;
@@ -6157,6 +6179,7 @@ xlate_normal(struct action_xlate_ctx *ctx)
     in_bundle = lookup_input_bundle(ctx->ofproto, ctx->flow.in_port,
                                     ctx->packet != NULL, &in_port);
     if (!in_bundle) {
+        xlate_report(ctx, "no input bundle, dropping");
         return;
     }
 
@@ -6169,6 +6192,7 @@ xlate_normal(struct action_xlate_ctx *ctx)
                          "VLAN tag received on port %s",
                          ctx->ofproto->up.name, in_bundle->name);
         }
+        xlate_report(ctx, "partial VLAN tag, dropping");
         return;
     }
 
@@ -6180,19 +6204,20 @@ xlate_normal(struct action_xlate_ctx *ctx)
                          "%s, which is reserved exclusively for mirroring",
                          ctx->ofproto->up.name, in_bundle->name);
         }
+        xlate_report(ctx, "input port is mirror output port, dropping");
         return;
     }
 
     /* Check VLAN. */
     vid = vlan_tci_to_vid(ctx->flow.vlan_tci);
     if (!input_vid_is_valid(vid, in_bundle, ctx->packet != NULL)) {
+        xlate_report(ctx, "disallowed VLAN VID for this input port, dropping");
         return;
     }
     vlan = input_vid_to_vlan(in_bundle, vid);
 
     /* Check other admissibility requirements. */
-    if (in_port &&
-         !is_admissible(ctx->ofproto, &ctx->flow, in_port, vlan, &ctx->tags)) {
+    if (in_port && !is_admissible(ctx, in_port, vlan)) {
         return;
     }
 
@@ -6206,11 +6231,15 @@ xlate_normal(struct action_xlate_ctx *ctx)
                               &ctx->tags);
     if (mac) {
         if (mac->port.p != in_bundle) {
+            xlate_report(ctx, "forwarding to learned port");
             output_normal(ctx, mac->port.p, vlan);
+        } else {
+            xlate_report(ctx, "learned port is input port, dropping");
         }
     } else {
         struct ofbundle *bundle;
 
+        xlate_report(ctx, "no learned MAC for destination, flooding");
         HMAP_FOR_EACH (bundle, hmap_node, &ctx->ofproto->bundles) {
             if (bundle != in_bundle
                 && ofbundle_includes_vlan(bundle, vlan)
@@ -6601,6 +6630,17 @@ trace_resubmit(struct action_xlate_ctx *ctx, struct rule_dpif *rule)
 }
 
 static void
+trace_report(struct action_xlate_ctx *ctx, const char *s)
+{
+    struct trace_ctx *trace = CONTAINER_OF(ctx, struct trace_ctx, ctx);
+    struct ds *result = trace->result;
+
+    ds_put_char_multiple(result, '\t', ctx->recurse);
+    ds_put_cstr(result, s);
+    ds_put_char(result, '\n');
+}
+
+static void
 ofproto_unixctl_trace(struct unixctl_conn *conn, int argc, const char *argv[],
                       void *aux OVS_UNUSED)
 {
@@ -6750,6 +6790,7 @@ ofproto_trace(struct ofproto_dpif *ofproto, const struct flow *flow,
         action_xlate_ctx_init(&trace.ctx, ofproto, flow, initial_tci,
                               rule, tcp_flags, packet);
         trace.ctx.resubmit_hook = trace_resubmit;
+        trace.ctx.report_hook = trace_report;
         xlate_actions(&trace.ctx, rule->up.ofpacts, rule->up.ofpacts_len,
                       &odp_actions);
 
