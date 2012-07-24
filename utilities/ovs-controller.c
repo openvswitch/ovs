@@ -49,7 +49,6 @@ VLOG_DEFINE_THIS_MODULE(controller);
 
 struct switch_ {
     struct lswitch *lswitch;
-    struct rconn *rconn;
 };
 
 /* -H, --hub: Learn the ports on which MAC addresses appear? */
@@ -86,7 +85,6 @@ static size_t n_default_flows;
 /* --unixctl: Name of unixctl socket, or null to use the default. */
 static char *unixctl_path = NULL;
 
-static int do_switching(struct switch_ *);
 static void new_switch(struct switch_ *, struct vconn *);
 static void parse_options(int argc, char *argv[]);
 static void usage(void) NO_RETURN;
@@ -151,8 +149,6 @@ main(int argc, char *argv[])
     daemonize_complete();
 
     while (n_switches > 0 || n_listeners > 0) {
-        int iteration;
-
         /* Accept connections on listening vconns. */
         for (i = 0; i < n_listeners && n_switches < MAX_SWITCHES; ) {
             struct vconn *new_vconn;
@@ -169,32 +165,16 @@ main(int argc, char *argv[])
             }
         }
 
-        /* Do some switching work.  Limit the number of iterations so that
-         * callbacks registered with the poll loop don't starve. */
-        for (iteration = 0; iteration < 50; iteration++) {
-            bool progress = false;
-            for (i = 0; i < n_switches; ) {
-                struct switch_ *this = &switches[i];
-
-                retval = do_switching(this);
-                if (!retval || retval == EAGAIN) {
-                    if (!retval) {
-                        progress = true;
-                    }
-                    i++;
-                } else {
-                    rconn_destroy(this->rconn);
-                    lswitch_destroy(this->lswitch);
-                    switches[i] = switches[--n_switches];
-                }
-            }
-            if (!progress) {
-                break;
-            }
-        }
-        for (i = 0; i < n_switches; i++) {
+        /* Do some switching work.  . */
+        for (i = 0; i < n_switches; ) {
             struct switch_ *this = &switches[i];
             lswitch_run(this->lswitch);
+            if (lswitch_is_alive(this->lswitch)) {
+                i++;
+            } else {
+                lswitch_destroy(this->lswitch);
+                switches[i] = switches[--n_switches];
+            }
         }
 
         unixctl_server_run(unixctl);
@@ -207,8 +187,6 @@ main(int argc, char *argv[])
         }
         for (i = 0; i < n_switches; i++) {
             struct switch_ *sw = &switches[i];
-            rconn_run_wait(sw->rconn);
-            rconn_recv_wait(sw->rconn);
             lswitch_wait(sw->lswitch);
         }
         unixctl_server_wait(unixctl);
@@ -222,9 +200,10 @@ static void
 new_switch(struct switch_ *sw, struct vconn *vconn)
 {
     struct lswitch_config cfg;
+    struct rconn *rconn;
 
-    sw->rconn = rconn_create(60, 0, DSCP_DEFAULT);
-    rconn_connect_unreliably(sw->rconn, vconn, NULL);
+    rconn = rconn_create(60, 0, DSCP_DEFAULT);
+    rconn_connect_unreliably(rconn, vconn, NULL);
 
     cfg.mode = (action_normal ? LSW_NORMAL
                 : learn_macs ? LSW_LEARN
@@ -235,29 +214,8 @@ new_switch(struct switch_ *sw, struct vconn *vconn)
     cfg.n_default_flows = n_default_flows;
     cfg.default_queue = default_queue;
     cfg.port_queues = &port_queues;
-    sw->lswitch = lswitch_create(sw->rconn, &cfg);
-}
-
-static int
-do_switching(struct switch_ *sw)
-{
-    unsigned int packets_sent;
-    struct ofpbuf *msg;
-
-    packets_sent = rconn_packets_sent(sw->rconn);
-
-    msg = rconn_recv(sw->rconn);
-    if (msg) {
-        if (!mute) {
-            lswitch_process_packet(sw->lswitch, sw->rconn, msg);
-        }
-        ofpbuf_delete(msg);
-    }
-    rconn_run(sw->rconn);
-
-    return (!rconn_is_alive(sw->rconn) ? EOF
-            : rconn_packets_sent(sw->rconn) != packets_sent ? 0
-            : EAGAIN);
+    cfg.mute = mute;
+    sw->lswitch = lswitch_create(rconn, &cfg);
 }
 
 static void

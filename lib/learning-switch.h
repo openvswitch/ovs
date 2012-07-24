@@ -57,15 +57,19 @@ struct lswitch_config {
 
     /* Maps from a port name to a queue_id. */
     const struct simap *port_queues;
+
+    /* If true, do not reply to any messages from the switch (for debugging
+     * fail-open mode). */
+    bool mute;
 };
 
 struct lswitch *lswitch_create(struct rconn *, const struct lswitch_config *);
+bool lswitch_is_alive(const struct lswitch *);
 void lswitch_set_queue(struct lswitch *sw, uint32_t queue);
 void lswitch_run(struct lswitch *);
 void lswitch_wait(struct lswitch *);
 void lswitch_destroy(struct lswitch *);
-void lswitch_process_packet(struct lswitch *, struct rconn *,
-                            const struct ofpbuf *);
 
+void lswitch_mute(struct lswitch *);
 
 #endif /* learning-switch.h */
