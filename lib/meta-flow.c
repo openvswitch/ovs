@@ -827,7 +827,7 @@ mf_are_prereqs_ok(const struct mf_field *mf, const struct flow *flow)
     case MFP_IPV6:
         return flow->dl_type == htons(ETH_TYPE_IPV6);
     case MFP_VLAN_VID:
-        return flow->vlan_tci & htons(VLAN_CFI);
+        return (flow->vlan_tci & htons(VLAN_CFI)) != 0;
     case MFP_IP_ANY:
         return is_ip_any(flow);
 
