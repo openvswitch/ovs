@@ -427,6 +427,27 @@ EOF
         ovs_cv_gnu_make_if=no
       fi])])
 
+dnl OVS_CHECK_GNU_MAKE
+dnl
+dnl Checks whether make is GNU make (because Linux kernel Makefiles
+dnl only work with GNU make).
+AC_DEFUN([OVS_CHECK_GNU_MAKE],
+  [AC_CACHE_CHECK(
+     [whether ${MAKE-make} is GNU make],
+     [ovs_cv_gnu_make],
+     [rm -f conftest.out
+      AS_ECHO(["$as_me:$LINENO: invoking ${MAKE-make} --version:"]) >&AS_MESSAGE_LOG_FD 2>&1
+      ${MAKE-make} --version >conftest.out 2>&1
+      cat conftest.out >&AS_MESSAGE_LOG_FD 2>&1
+      result=`cat conftest.out`
+      rm -f conftest.mk conftest.out
+
+      case $result in # (
+        GNU*) ovs_cv_gnu_make=yes ;; # (
+        *) ovs_cv_gnu_make=no ;;
+      esac])
+   AM_CONDITIONAL([GNU_MAKE], [test $ovs_cv_gnu_make = yes])])
+
 dnl OVS_CHECK_SPARSE_TARGET
 dnl
 dnl The "cgcc" script from "sparse" isn't very good at detecting the
