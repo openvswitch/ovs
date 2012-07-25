@@ -148,6 +148,7 @@ dist-hook-git: distfiles
 	    exit 1;							    \
 	  fi;								    \
 	fi
+.PHONY: dist-hook-git
 CLEANFILES += all-distfiles all-gitfiles missing-distfiles
 # The following is based on commands for the Automake "distdir" target.
 distfiles: Makefile
@@ -169,6 +170,7 @@ rate-limit-check:
 	    echo "'struct vlog_rate_limit' must always be 'static'"; \
 	    exit 1; \
 	 fi
+.PHONY: rate-limit-check
 
 if HAVE_GROFF
 ALL_LOCAL += manpage-check
