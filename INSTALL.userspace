@@ -17,7 +17,7 @@ Building and Installing
 -----------------------
 
 The requirements and procedure for building, installing, and
-configuring Open vSwitch are the same as those given in INSTALL.Linux.
+configuring Open vSwitch are the same as those given in INSTALL.
 You may omit configuring, building, and installing the kernel module,
 and the related requirements.
 
@@ -30,6 +30,10 @@ module with "modprobe tun".
 The tun device must also exist as /dev/net/tun.  If it does not exist,
 then create /dev/net (if necessary) with "mkdir /dev/net", then create
 /dev/net/tun with "mknod /dev/net/tun c 10 200".
+
+On FreeBSD, the userspace switch additionally requires the kernel
+tap(4) driver to be available, either built into the kernel or loaded
+as a module.
 
 Using the Userspace Datapath with ovs-vswitchd
 ----------------------------------------------

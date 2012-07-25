@@ -1,5 +1,7 @@
 post-v1.8.0
 ------------------------
+    - FreeBSD is now a supported platform, thanks to code contributions from
+      Gaetano Catalli, Ed Maste, and Giuseppe Lettieri.
     - ovs-bugtool: New --ovs option to report only OVS related information.
     - New %t and %T log escapes to identify the subprogram within a
       cooperating group of processes or threads that emitted a log message.

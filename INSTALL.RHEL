@@ -3,7 +3,7 @@
 
 This document describes how to build and install Open vSwitch on a Red
 Hat Enterprise Linux (RHEL) host.  If you want to install Open vSwitch
-on a generic Linux host, see INSTALL.Linux instead.
+on a generic Linux host, see INSTALL instead.
 
 We have tested these instructions with RHEL 5.6 and RHEL 6.0.
 

@@ -18,6 +18,7 @@
 #include <config.h>
 #include "ofproto-dpif-sflow.h"
 #include <inttypes.h>
+#include <sys/socket.h>
 #include <net/if.h>
 #include <stdlib.h>
 #include "collectors.h"

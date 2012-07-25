@@ -3,7 +3,7 @@
 
 This document describes how to build and install Open vSwitch on a
 Citrix XenServer host.  If you want to install Open vSwitch on a
-generic Linux host, see INSTALL.Linux instead.
+generic Linux or BSD host, see INSTALL instead.
 
 These instructions have been tested with XenServer 5.6 FP1.
 
@@ -19,8 +19,8 @@ RPMs for Citrix XenServer is the DDK VM available from Citrix.
    ./configure; make dist" in the Git tree.  You cannot run this in
    the DDK VM, because it lacks tools that are necessary to bootstrap
    the Open vSwitch distribution.  Instead, you must run this on a
-   machine that has the tools listed in INSTALL.Linux as prerequisites
-   for building from a Git tree.
+   machine that has the tools listed in INSTALL as prerequisites for
+   building from a Git tree.
 
 2. Copy the distribution tarball into /usr/src/redhat/SOURCES inside
    the DDK VM.

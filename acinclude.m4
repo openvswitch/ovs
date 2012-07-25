@@ -288,7 +288,7 @@ AC_DEFUN([OVS_CHECK_IF_PACKET],
                 [Define to 1 if net/if_packet.h is available.])
    fi])
 
-dnl Checks for net/if_dl.h
+dnl Checks for net/if_dl.h.
 AC_DEFUN([OVS_CHECK_IF_DL],
   [AC_CHECK_HEADER([net/if_dl.h],
                    [HAVE_IF_DL=yes],

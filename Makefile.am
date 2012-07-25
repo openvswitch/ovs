@@ -42,9 +42,9 @@ EXTRA_DIST = \
 	CodingStyle \
 	DESIGN \
 	FAQ \
+	INSTALL \
 	INSTALL.KVM \
 	INSTALL.Libvirt \
-	INSTALL.Linux \
 	INSTALL.RHEL \
 	INSTALL.SSL \
 	INSTALL.XenServer \

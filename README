@@ -88,7 +88,7 @@ Open vSwitch also provides some tools:
 What other documentation is available?
 --------------------------------------
 
-To install Open vSwitch on a regular Linux machine, read INSTALL.Linux.
+To install Open vSwitch on a regular Linux machine, read INSTALL.
 
 For answers to common questions, read FAQ.
 
@@ -101,7 +101,7 @@ or resource pool, read INSTALL.XenServer.
 To build RPMs for installing Open vSwitch on a Red Hat Enterprise
 Linux host, read INSTALL.RHEL.
 
-To use Open vSwitch with KVM on Linux, read INSTALL.Linux, then
+To use Open vSwitch with KVM on Linux, read INSTALL, then
 INSTALL.KVM.
 
 To use Open vSwitch with Libvirt, read INSTALL.Libvirt.

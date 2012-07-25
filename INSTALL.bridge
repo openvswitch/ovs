@@ -25,7 +25,7 @@ that the Open vSwitch kernel modules are loaded before the Linux
 kernel bridge module.
 
 1. Build, install, and start up the Open vSwitch kernel modules and
-   userspace programs as described in INSTALL.Linux.
+   userspace programs as described in INSTALL.
 
    It is important to run "make install", because some Open vSwitch
    programs expect to find files in locations selected at installation

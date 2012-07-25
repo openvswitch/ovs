@@ -1,9 +1,9 @@
-                 How to Install Open vSwitch on Linux
-                 ====================================
+           How to Install Open vSwitch on Linux and FreeBSD
+           ================================================
 
 This document describes how to build and install Open vSwitch on a
-generic Linux host.  If you want to install Open vSwitch on a Citrix
-XenServer, see INSTALL.XenServer instead.
+generic Linux or FreeBSD host.  If you want to install Open vSwitch on
+a Citrix XenServer, see INSTALL.XenServer instead.
 
 This version of Open vSwitch may be built manually with "configure"
 and "make", as described below.  You may also build Debian packages by
@@ -29,9 +29,9 @@ you will need the following software:
       libssl is installed, then Open vSwitch will automatically build
       with support for it.
 
-To compile the kernel module, you must also install the following.  If
-you cannot build or install the kernel module, you may use the
-userspace-only implementation, at a cost in performance.  The
+To compile the kernel module on Linux, you must also install the
+following.  If you cannot build or install the kernel module, you may
+use the userspace-only implementation, at a cost in performance.  The
 userspace implementation may also lack some features.  Refer to
 INSTALL.userspace for more information.
 
@@ -119,14 +119,14 @@ following software:
     - libssl compatible with the libssl used for build, if OpenSSL was
       used for the build.
 
-    - The Linux kernel version configured as part of the build.
+    - On Linux, the same kernel version configured as part of the build.
 
-    - For optional support of ingress policing, the "tc" program from
-      iproute2 (part of all major distributions and available at
+    - For optional support of ingress policing on Linux, the "tc" program
+      from iproute2 (part of all major distributions and available at
       http://www.linux-foundation.org/en/Net:Iproute2).
 
-You should ensure that /dev/urandom exists.  To support TAP devices,
-you must also ensure that /dev/net/tun exists.
+On Linux you should ensure that /dev/urandom exists.  To support TAP
+devices, you must also ensure that /dev/net/tun exists.
 
 To run the ovsdbmonitor tool, the machine must also have the following
 software:
@@ -144,13 +144,13 @@ software:
 (On Debian "lenny" the above can be installed with "apt-get install
 python-json python-qt4 python-zopeinterface python-twisted-conch".)
 
-Building and Installing Open vSwitch for Linux
-==============================================
+Building and Installing Open vSwitch for Linux or FreeBSD
+=========================================================
 
 Once you have installed all the prerequisites listed above in the Base
 Prerequisites section, follow the procedure below to build.
 
-1. If you pulled the sources directly from an Open vSwitch Git tree, 
+1. If you pulled the sources directly from an Open vSwitch Git tree,
    run boot.sh in the top source directory:
 
       % ./boot.sh
@@ -191,9 +191,12 @@ Prerequisites section, follow the procedure below to build.
    additional environment variables.  For a full list, invoke
    configure with the --help option.
 
-3. Run make in the top source directory: 
+3. Run make in the top source directory:
 
       % make
+
+   On FreeBSD you may need to use GNU make (gmake) or NetBSD make
+   (bmake) instead of the native make.
 
    For improved warnings if you installed "sparse" (see
    "Prerequisites"), add C=1 to the "make" command line.
@@ -322,7 +325,7 @@ also upgrade the database schema:
       - If there is no important data in your database, then you may
         delete the database file and recreate it with ovsdb-tool,
         following the instructions under "Building and Installing Open
-        vSwitch for Linux".
+        vSwitch for Linux or FreeBSD".
 
       - If you want to preserve the contents of your database, back it
         up first, then use "ovsdb-tool convert" to upgrade it, e.g.:
@@ -330,7 +333,7 @@ also upgrade the database schema:
         % ovsdb-tool convert /usr/local/etc/openvswitch/conf.db vswitchd/vswitch.ovsschema
 
 4. Start the Open vSwitch daemons as described under "Building and
-   Installing Open vSwitch for Linux" above.
+   Installing Open vSwitch for Linux or FreeBSD" above.
 
 Bug Reporting
 -------------

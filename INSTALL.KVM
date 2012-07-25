@@ -3,12 +3,12 @@
 
 This document describes how to use Open vSwitch with the Kernel-based
 Virtual Machine (KVM). This document assumes that you have read and
-followed INSTALL.Linux to get Open vSwitch setup on your Linux system.
+followed INSTALL to get Open vSwitch setup on your Linux system.
 
 Setup
 -----
 
-First, follow the setup instructions in INSTALL.Linux to get a working
+First, follow the setup instructions in INSTALL to get a working
 Open vSwitch installation.
 
 KVM uses tunctl to handle various bridging modes, which you can 
@@ -43,7 +43,7 @@ switch='br0'
 ovs-vsctl del-port ${switch} $1
 --------------------------------------------------------------------
 
-At the end of INSTALL.Linux, it describes basic usage of creating 
+At the end of INSTALL, it describes basic usage of creating
 bridges and ports. If you haven't already, create a bridge named
 br0 with the following command:
 
