@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010, 2011 Nicira, Inc.
+/* Copyright (c) 2009, 2010, 2011, 2012 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -95,7 +95,16 @@ ovsdb_log_open(const char *name, enum ovsdb_log_open_mode open_mode,
     } else if (open_mode == OVSDB_LOG_READ_WRITE) {
         flags = O_RDWR;
     } else if (open_mode == OVSDB_LOG_CREATE) {
-        flags = O_RDWR | O_CREAT | O_EXCL;
+        if (stat(name, &s) == -1 && errno == ENOENT
+            && lstat(name, &s) == 0 && S_ISLNK(s.st_mode)) {
+            /* 'name' is a dangling symlink.  We want to create the file that
+             * the symlink points to, but POSIX says that open() with O_EXCL
+             * must fail with EEXIST if the named file is a symlink.  So, we
+             * have to leave off O_EXCL and accept the race. */
+            flags = O_RDWR | O_CREAT;
+        } else {
+            flags = O_RDWR | O_CREAT | O_EXCL;
+        }
     } else {
         NOT_REACHED();
     }
