@@ -569,21 +569,13 @@
           <dt><code>01:80:c2:00:00:0<var>x</var></code></dt>
           <dd>Other reserved protocols.</dd>
 
-          <dt><code>00:00:5e:00:01:<var>x</var><var>x</var></code></dt>
-          <dd> VRRP IPv4 virtual router MAC address. </dd>
+          <dt><code>00:e0:2b:00:00:00</code></dt>
+          <dd>Extreme Discovery Protocol (EDP).</dd>
 
-          <dt><code>00:00:5e:00:02:<var>x</var><var>x</var></code></dt>
-          <dd> VRRP IPv6 virtual router MAC address. </dd>
-
-          <dt><code>00:00:0c:07:ac:<var>x</var><var>x</var></code></dt>
-          <dd> HSRP Version 1. </dd>
-
-          <dt><code>00:00:0c:9f:f<var>x</var>:<var>x</var><var>x</var></code>
-          </dt>
-          <dd> HSRP Version 2. </dd>
-
-          <dt><code>00:07:b4:<var>x</var><var>x</var>:<var>x</var><var>x</var>:<var>x</var><var>x</var></code></dt>
-          <dd> GLBP. </dd>
+          <dt>
+	    <code>00:e0:2b:00:00:04</code> and <code>00:e0:2b:00:00:06</code>
+	  </dt>
+          <dd>Ethernet Automatic Protection Switching (EAPS).</dd>
 
           <dt><code>01:00:0c:cc:cc:cc</code></dt>
           <dd>
@@ -600,6 +592,9 @@
 
           <dt><code>01:00:0c:00:00:00</code></dt>
           <dd>Cisco Inter Switch Link.</dd>
+
+          <dt><code>01:00:0c:cc:cc:c<var>x</var></code></dt>
+          <dd>Cisco CFM.</dd>
         </dl>
       </column>
 

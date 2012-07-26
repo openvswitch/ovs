@@ -24,6 +24,7 @@
 #include "byte-order.h"
 #include "csum.h"
 #include "flow.h"
+#include "hmap.h"
 #include "dynamic-string.h"
 #include "ofpbuf.h"
 
@@ -43,65 +44,77 @@ dpid_from_string(const char *s, uint64_t *dpidp)
     return *dpidp != 0;
 }
 
-/* Returns true if 'ea' is a reserved multicast address, that a bridge must
- * never forward, false otherwise.  Includes some proprietary vendor protocols
- * that shouldn't be forwarded as well.
+/* Returns true if 'ea' is a reserved address, that a bridge must never
+ * forward, false otherwise.
  *
  * If you change this function's behavior, please update corresponding
  * documentation in vswitch.xml at the same time. */
 bool
 eth_addr_is_reserved(const uint8_t ea[ETH_ADDR_LEN])
 {
-    struct masked_eth_addr {
-        uint8_t ea[ETH_ADDR_LEN];
-        uint8_t mask[ETH_ADDR_LEN];
+    struct eth_addr_node {
+        struct hmap_node hmap_node;
+        uint64_t ea64;
     };
 
-    static struct masked_eth_addr mea[] = {
-        { /* STP, IEEE pause frames, and other reserved protocols. */
-            {0x01, 0x08, 0xc2, 0x00, 0x00, 0x00},
-            {0xff, 0xff, 0xff, 0xff, 0xff, 0xf0}},
+    static struct eth_addr_node nodes[] = {
+        /* STP, IEEE pause frames, and other reserved protocols. */
+        { HMAP_NODE_NULL_INITIALIZER, 0x0108c2000000ULL },
+        { HMAP_NODE_NULL_INITIALIZER, 0x0108c2000001ULL },
+        { HMAP_NODE_NULL_INITIALIZER, 0x0108c2000002ULL },
+        { HMAP_NODE_NULL_INITIALIZER, 0x0108c2000003ULL },
+        { HMAP_NODE_NULL_INITIALIZER, 0x0108c2000004ULL },
+        { HMAP_NODE_NULL_INITIALIZER, 0x0108c2000005ULL },
+        { HMAP_NODE_NULL_INITIALIZER, 0x0108c2000006ULL },
+        { HMAP_NODE_NULL_INITIALIZER, 0x0108c2000007ULL },
+        { HMAP_NODE_NULL_INITIALIZER, 0x0108c2000008ULL },
+        { HMAP_NODE_NULL_INITIALIZER, 0x0108c2000009ULL },
+        { HMAP_NODE_NULL_INITIALIZER, 0x0108c200000aULL },
+        { HMAP_NODE_NULL_INITIALIZER, 0x0108c200000bULL },
+        { HMAP_NODE_NULL_INITIALIZER, 0x0108c200000cULL },
+        { HMAP_NODE_NULL_INITIALIZER, 0x0108c200000dULL },
+        { HMAP_NODE_NULL_INITIALIZER, 0x0108c200000eULL },
+        { HMAP_NODE_NULL_INITIALIZER, 0x0108c200000fULL },
 
-        { /* VRRP IPv4. */
-            {0x00, 0x00, 0x5e, 0x00, 0x01, 0x00},
-            {0xff, 0xff, 0xff, 0xff, 0xff, 0x00}},
+        /* Extreme protocols. */
+        { HMAP_NODE_NULL_INITIALIZER, 0x00e02b000000ULL }, /* EDP. */
+        { HMAP_NODE_NULL_INITIALIZER, 0x00e02b000004ULL }, /* EAPS. */
+        { HMAP_NODE_NULL_INITIALIZER, 0x00e02b000006ULL }, /* EAPS. */
 
-        { /* VRRP IPv6. */
-            {0x00, 0x00, 0x5e, 0x00, 0x02, 0x00},
-            {0xff, 0xff, 0xff, 0xff, 0xff, 0x00}},
+        /* Cisco protocols. */
+        { HMAP_NODE_NULL_INITIALIZER, 0x01000c000000ULL }, /* ISL. */
+        { HMAP_NODE_NULL_INITIALIZER, 0x01000cccccccULL }, /* PAgP, UDLD, CDP,
+                                                            * DTP, VTP. */
+        { HMAP_NODE_NULL_INITIALIZER, 0x01000ccccccdULL }, /* PVST+. */
+        { HMAP_NODE_NULL_INITIALIZER, 0x01000ccdcdcdULL }, /* STP Uplink Fast,
+                                                            * FlexLink. */
 
-        { /* HSRPv1. */
-            {0x00, 0x00, 0x0c, 0x07, 0xac, 0x00},
-            {0xff, 0xff, 0xff, 0xff, 0xff, 0x00}},
+        /* Cisco CFM. */
+        { HMAP_NODE_NULL_INITIALIZER, 0x01000cccccc0ULL },
+        { HMAP_NODE_NULL_INITIALIZER, 0x01000cccccc1ULL },
+        { HMAP_NODE_NULL_INITIALIZER, 0x01000cccccc2ULL },
+        { HMAP_NODE_NULL_INITIALIZER, 0x01000cccccc3ULL },
+        { HMAP_NODE_NULL_INITIALIZER, 0x01000cccccc4ULL },
+        { HMAP_NODE_NULL_INITIALIZER, 0x01000cccccc5ULL },
+        { HMAP_NODE_NULL_INITIALIZER, 0x01000cccccc6ULL },
+        { HMAP_NODE_NULL_INITIALIZER, 0x01000cccccc7ULL },
+    };
 
-        { /* HSRPv2. */
-            {0x00, 0x00, 0x0c, 0x9f, 0xf0, 0x00},
-            {0xff, 0xff, 0xff, 0xff, 0xf0, 0x00}},
+    static struct hmap addrs = HMAP_INITIALIZER(&addrs);
+    struct eth_addr_node *node;
+    uint64_t ea64;
 
-        { /* GLBP. */
-            {0x00, 0x07, 0xb4, 0x00, 0x00, 0x00},
-            {0xff, 0xff, 0xff, 0x00, 0x00, 0x00}},
+    if (hmap_is_empty(&addrs)) {
+        for (node = nodes; node < &nodes[ARRAY_SIZE(nodes)]; node++) {
+            hmap_insert(&addrs, &node->hmap_node,
+                        hash_2words(node->ea64, node->ea64 >> 32));
+        }
+    }
 
-        { /* Extreme Discovery Protocol. */
-            {0x00, 0xE0, 0x2B, 0x00, 0x00, 0x00},
-            {0xff, 0xff, 0xff, 0xff, 0xf0, 0x00}},
-
-        { /* Cisco Inter Switch Link. */
-            {0x01, 0x00, 0x0c, 0x00, 0x00, 0x00},
-            {0xff, 0xff, 0xff, 0xff, 0xff, 0xff}},
-
-        { /* Cisco protocols plus others following the same pattern:
-           *
-           * CDP, VTP, DTP, PAgP  (01-00-0c-cc-cc-cc)
-           * Spanning Tree PVSTP+ (01-00-0c-cc-cc-cd)
-           * STP Uplink Fast      (01-00-0c-cd-cd-cd) */
-            {0x01, 0x00, 0x0c, 0xcc, 0xcc, 0xcc},
-            {0xff, 0xff, 0xff, 0xfe, 0xfe, 0xfe}}};
-
-    size_t i;
-
-    for (i = 0; i < ARRAY_SIZE(mea); i++) {
-        if (eth_addr_equal_except(ea, mea[i].ea, mea[i].mask)) {
+    ea64 = eth_addr_to_uint64(ea);
+    HMAP_FOR_EACH_IN_BUCKET (node, hmap_node, hash_2words(ea64, ea64 >> 32),
+                             &addrs) {
+        if (node->ea64 == ea64) {
             return true;
         }
     }
