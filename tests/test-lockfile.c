@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@
 
 #include <errno.h>
 #include <stdlib.h>
+#include <sys/stat.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -214,6 +215,40 @@ run_lock_multiple(void)
     lockfile_unlock(a);
 }
 
+/* Checks that locking a dangling symlink works OK.  (It used to hang.) */
+static void
+run_lock_symlink(void)
+{
+    struct lockfile *a, *b, *dummy;
+    struct stat s;
+
+    /* Create a symlink .a.~lock~ pointing to .b.~lock~. */
+    CHECK(symlink(".b.~lock~", ".a.~lock~"), 0);
+    CHECK(lstat(".a.~lock~", &s), 0);
+    CHECK(S_ISLNK(s.st_mode) != 0, 1);
+    CHECK(stat(".a.~lock~", &s), -1);
+    CHECK(errno, ENOENT);
+    CHECK(stat(".b.~lock~", &s), -1);
+    CHECK(errno, ENOENT);
+
+    CHECK(lockfile_lock("a", 0, &a), 0);
+    CHECK(lockfile_lock("a", 0, &dummy), EDEADLK);
+    CHECK(lockfile_lock("b", 0, &dummy), EDEADLK);
+    lockfile_unlock(a);
+
+    CHECK(lockfile_lock("b", 0, &b), 0);
+    CHECK(lockfile_lock("b", 0, &dummy), EDEADLK);
+    CHECK(lockfile_lock("a", 0, &dummy), EDEADLK);
+    lockfile_unlock(b);
+
+    CHECK(lstat(".a.~lock~", &s), 0);
+    CHECK(S_ISLNK(s.st_mode) != 0, 1);
+    CHECK(stat(".a.~lock~", &s), 0);
+    CHECK(S_ISREG(s.st_mode) != 0, 1);
+    CHECK(stat(".b.~lock~", &s), 0);
+    CHECK(S_ISREG(s.st_mode) != 0, 1);
+}
+
 static void
 run_help(void)
 {
@@ -239,6 +274,7 @@ static const struct test tests[] = {
     TEST(lock_timeout_gets_the_lock),
     TEST(lock_timeout_runs_out),
     TEST(lock_multiple),
+    TEST(lock_symlink),
     TEST(help),
     { NULL, NULL }
 #undef TEST

@@ -1,4 +1,4 @@
- /* Copyright (c) 2008, 2009, 2010, 2011 Nicira, Inc.
+ /* Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -221,41 +221,23 @@ lockfile_try_lock(const char *name, bool block, struct lockfile **lockfilep)
 
     *lockfilep = NULL;
 
-    /* Open the lock file, first creating it if necessary. */
-    for (;;) {
-        /* Check whether we've already got a lock on that file. */
-        if (!stat(name, &s)) {
-            if (lockfile_find(s.st_dev, s.st_ino)) {
-                return EDEADLK;
-            }
-        } else if (errno != ENOENT) {
-            VLOG_WARN("%s: failed to stat lock file: %s",
-                      name, strerror(errno));
-            return errno;
+    /* Check whether we've already got a lock on that file. */
+    if (!stat(name, &s)) {
+        if (lockfile_find(s.st_dev, s.st_ino)) {
+            return EDEADLK;
         }
+    } else if (errno != ENOENT) {
+        VLOG_WARN("%s: failed to stat lock file: %s",
+                  name, strerror(errno));
+        return errno;
+    }
 
-        /* Try to open an existing lock file. */
-        fd = open(name, O_RDWR);
-        if (fd >= 0) {
-            break;
-        } else if (errno != ENOENT) {
-            VLOG_WARN("%s: failed to open lock file: %s",
-                      name, strerror(errno));
-            return errno;
-        }
-
-        /* Try to create a new lock file. */
-        VLOG_INFO("%s: lock file does not exist, creating", name);
-        fd = open(name, O_RDWR | O_CREAT | O_EXCL, 0600);
-        if (fd >= 0) {
-            break;
-        } else if (errno != EEXIST) {
-            VLOG_WARN("%s: failed to create lock file: %s",
-                      name, strerror(errno));
-            return errno;
-        }
-
-        /* Someone else created the lock file.  Try again. */
+    /* Open the lock file. */
+    fd = open(name, O_RDWR | O_CREAT, 0600);
+    if (fd < 0) {
+        VLOG_WARN("%s: failed to open lock file: %s",
+                  name, strerror(errno));
+        return errno;
     }
 
     /* Get the inode and device number for the lock table. */
