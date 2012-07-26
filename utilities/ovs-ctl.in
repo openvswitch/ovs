@@ -180,56 +180,56 @@ start () {
     insert_mod_if_required || return 1
 
     if daemon_is_running ovsdb-server; then
-	log_success_msg "ovsdb-server is already running"
+        log_success_msg "ovsdb-server is already running"
     else
-	# Create initial database or upgrade database schema.
-	upgrade_db || return 1
+        # Create initial database or upgrade database schema.
+        upgrade_db || return 1
 
-	# Start ovsdb-server.
-	set ovsdb-server "$DB_FILE"
-	set "$@" -vconsole:emer -vsyslog:err -vfile:info
-	set "$@" --remote=punix:"$DB_SOCK"
-	set "$@" --remote=db:Open_vSwitch,manager_options
-	set "$@" --private-key=db:SSL,private_key
-	set "$@" --certificate=db:SSL,certificate
-	set "$@" --bootstrap-ca-cert=db:SSL,ca_cert
-	start_daemon "$OVSDB_SERVER_PRIORITY" "$OVSDB_SERVER_WRAPPER" "$@" \
+        # Start ovsdb-server.
+        set ovsdb-server "$DB_FILE"
+        set "$@" -vconsole:emer -vsyslog:err -vfile:info
+        set "$@" --remote=punix:"$DB_SOCK"
+        set "$@" --remote=db:Open_vSwitch,manager_options
+        set "$@" --private-key=db:SSL,private_key
+        set "$@" --certificate=db:SSL,certificate
+        set "$@" --bootstrap-ca-cert=db:SSL,ca_cert
+        start_daemon "$OVSDB_SERVER_PRIORITY" "$OVSDB_SERVER_WRAPPER" "$@" \
             || return 1
 
-	# Initialize database settings.
-	ovs_vsctl -- init -- set Open_vSwitch . db-version="$schemaver" \
-	    || return 1
-	set_system_ids || return 1
-	if test X"$DELETE_BRIDGES" = Xyes; then
+        # Initialize database settings.
+        ovs_vsctl -- init -- set Open_vSwitch . db-version="$schemaver" \
+            || return 1
+        set_system_ids || return 1
+        if test X"$DELETE_BRIDGES" = Xyes; then
             for bridge in `ovs_vsctl list-br`; do
-		ovs_vsctl del-br $bridge
+        ovs_vsctl del-br $bridge
             done
-	fi
+        fi
     fi
 
     if daemon_is_running ovs-vswitchd; then
-	log_success_msg "ovs-vswitchd is already running"
+        log_success_msg "ovs-vswitchd is already running"
     else
-	# Increase the limit on the number of open file descriptors.
-	# ovs-vswitchd needs 16 per datapath, plus a few extra, so this
-	# should allow for 256 (or more) bridges.
-	ulimit -n 5000
+        # Increase the limit on the number of open file descriptors.
+        # ovs-vswitchd needs 16 per datapath, plus a few extra, so this
+        # should allow for 256 (or more) bridges.
+        ulimit -n 5000
 
-	# Start ovs-vswitchd.
-	set ovs-vswitchd unix:"$DB_SOCK"
-	set "$@" -vconsole:emer -vsyslog:err -vfile:info
-	if test X"$MLOCKALL" != Xno; then
-	    set "$@" --mlockall
-	fi
-	start_daemon "$OVS_VSWITCHD_PRIORITY" "$OVS_VSWITCHD_WRAPPER" "$@"
+	    # Start ovs-vswitchd.
+	    set ovs-vswitchd unix:"$DB_SOCK"
+	    set "$@" -vconsole:emer -vsyslog:err -vfile:info
+	    if test X"$MLOCKALL" != Xno; then
+	        set "$@" --mlockall
+	    fi
+	    start_daemon "$OVS_VSWITCHD_PRIORITY" "$OVS_VSWITCHD_WRAPPER" "$@"
     fi
 
     if daemon_is_running ovs-brcompatd; then
-	log_success_msg "ovs-brcompatd is already running"
+	    log_success_msg "ovs-brcompatd is already running"
     elif test X"$BRCOMPAT" = Xyes; then
         set ovs-brcompatd
-	set "$@" -vconsole:emer -vsyslog:err -vfile:info
-	start_daemon "$OVS_BRCOMPATD_PRIORITY" "$OVS_BRCOMPATD_WRAPPER" "$@"
+	    set "$@" -vconsole:emer -vsyslog:err -vfile:info
+	    start_daemon "$OVS_BRCOMPATD_PRIORITY" "$OVS_BRCOMPATD_WRAPPER" "$@"
     fi
 }
 
@@ -260,11 +260,11 @@ internal_interfaces () {
     # But ignore interfaces that don't really exist.
     for d in `(ovs_vsctl --bare \
                 -- --columns=name find Interface type=internal \
-		-- list-br) | sort -u`
+		    -- list-br) | sort -u`
     do
         if test -e "/sys/class/net/$d"; then
-	    printf "%s " "$d"
-	fi
+	        printf "%s " "$d"
+	    fi
     done
 }
 
@@ -585,7 +585,7 @@ case $command in
         done
         ;;
     force-reload-kmod)
-	force_reload_kmod
+	    force_reload_kmod
         ;;
     load-kmod)
         insert_mod_if_required
