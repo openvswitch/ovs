@@ -172,12 +172,14 @@ set_system_ids () {
     action "Configuring Open vSwitch system IDs" "$@" $extra_ids
 }
 
-start () {
+check_force_cores () {
     if test X"$FORCE_COREFILES" = Xyes; then
         ulimit -Sc 67108864
     fi
+}
 
-    insert_mod_if_required || return 1
+start_ovsdb () {
+    check_force_cores
 
     if daemon_is_running ovsdb-server; then
         log_success_msg "ovsdb-server is already running"
@@ -206,6 +208,12 @@ start () {
             done
         fi
     fi
+}
+
+start_forwarding () {
+    check_force_cores
+
+    insert_mod_if_required || return 1
 
     if daemon_is_running ovs-vswitchd; then
         log_success_msg "ovs-vswitchd is already running"
@@ -237,10 +245,13 @@ start () {
 ## stop ##
 ## ---- ##
 
-stop () {
+stop_ovsdb () {
+    stop_daemon ovsdb-server
+}
+
+stop_forwarding () {
     stop_daemon ovs-brcompatd
     stop_daemon ovs-vswitchd
-    stop_daemon ovsdb-server
 }
 
 ## ----------------- ##
@@ -276,7 +287,12 @@ force_reload_kmod () {
     ifaces=`internal_interfaces`
     action "Detected internal interfaces: $ifaces" true
 
-    stop
+    # Restart the database first, since a large database may take a
+    # while to load, and we want to minimize forwarding disruption.
+    stop_ovsdb
+    start_ovsdb
+
+    stop_forwarding
 
     script=`mktemp`
     trap 'rm -f "$script"' 0 1 2 13 15
@@ -284,7 +300,7 @@ force_reload_kmod () {
         :
     else
         log_warning_msg "Failed to save configuration, not replacing kernel module"
-        start
+        start_forwarding
         exit 1
     fi
     chmod +x "$script"
@@ -305,7 +321,7 @@ force_reload_kmod () {
         action "Removing openvswitch module" rmmod openvswitch
     fi
 
-    start
+    start_forwarding
 
     action "Restoring interface configuration" "$script"
     rc=$?
@@ -567,10 +583,12 @@ do
 done
 case $command in
     start)
-        start
+        start_ovsdb
+        start_forwarding
         ;;
     stop)
-        stop
+        stop_forwarding
+        stop_ovsdb
         ;;
     status)
         rc=0
