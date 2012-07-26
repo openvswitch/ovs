@@ -229,25 +229,6 @@ struct llc_snap_header {
 } __attribute__((packed));
 BUILD_ASSERT_DECL(LLC_SNAP_HEADER_LEN == sizeof(struct llc_snap_header));
 
-#define ARP_HTYPE_ETH 0x0001
-#define RARP_REQUEST_REVERSE 0x0003
-
-#define RARP_HEADER_LEN 28
-/* RARP header only for Ethernet-IP. */
-struct rarp_header {
-    ovs_be16 hw_addr_space;        /* ARP_HTYPE_ETH. */
-    ovs_be16 proto_addr_space;     /* ETH_TYPE_IP. */
-    uint8_t hw_addr_length;        /* ETH_ADDR_LEN. */
-    uint8_t proto_addr_length;     /* IPV4_ADDR_LEN. */
-    ovs_be16 opcode;               /* RARP_REQUEST_REVERSE. */
-    uint8_t src_hw_addr[ETH_ADDR_LEN];
-    ovs_be32 src_proto_addr;
-    uint8_t target_hw_addr[ETH_ADDR_LEN];
-    ovs_be32 target_proto_addr;
-} __attribute__((packed));
-BUILD_ASSERT_DECL(RARP_HEADER_LEN == sizeof(struct rarp_header));
-
-
 #define VLAN_VID_MASK 0x0fff
 #define VLAN_VID_SHIFT 0
 
@@ -427,6 +408,7 @@ BUILD_ASSERT_DECL(TCP_HEADER_LEN == sizeof(struct tcp_header));
 #define ARP_PRO_IP 0x0800
 #define ARP_OP_REQUEST 1
 #define ARP_OP_REPLY 2
+#define ARP_OP_RARP 3
 
 #define ARP_ETH_HEADER_LEN 28
 struct arp_eth_header {

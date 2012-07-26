@@ -143,27 +143,27 @@ void
 compose_rarp(struct ofpbuf *b, const uint8_t eth_src[ETH_ADDR_LEN])
 {
     struct eth_header *eth;
-    struct rarp_header *rarp;
+    struct arp_eth_header *arp;
 
     ofpbuf_clear(b);
     ofpbuf_prealloc_tailroom(b, ETH_HEADER_LEN + VLAN_HEADER_LEN
-                             + RARP_HEADER_LEN);
+                             + ARP_ETH_HEADER_LEN);
     ofpbuf_reserve(b, VLAN_HEADER_LEN);
     eth = ofpbuf_put_uninit(b, sizeof *eth);
     memcpy(eth->eth_dst, eth_addr_broadcast, ETH_ADDR_LEN);
     memcpy(eth->eth_src, eth_src, ETH_ADDR_LEN);
     eth->eth_type = htons(ETH_TYPE_RARP);
 
-    rarp = ofpbuf_put_uninit(b, sizeof *rarp);
-    rarp->hw_addr_space = htons(ARP_HTYPE_ETH);
-    rarp->proto_addr_space = htons(ETH_TYPE_IP);
-    rarp->hw_addr_length = ETH_ADDR_LEN;
-    rarp->proto_addr_length = sizeof rarp->src_proto_addr;
-    rarp->opcode = htons(RARP_REQUEST_REVERSE);
-    memcpy(rarp->src_hw_addr, eth_src, ETH_ADDR_LEN);
-    rarp->src_proto_addr = htonl(0);
-    memcpy(rarp->target_hw_addr, eth_src, ETH_ADDR_LEN);
-    rarp->target_proto_addr = htonl(0);
+    arp = ofpbuf_put_uninit(b, sizeof *arp);
+    arp->ar_hrd = htons(ARP_HRD_ETHERNET);
+    arp->ar_pro = htons(ARP_PRO_IP);
+    arp->ar_hln = sizeof arp->ar_sha;
+    arp->ar_pln = sizeof arp->ar_spa;
+    arp->ar_op = htons(ARP_OP_RARP);
+    memcpy(arp->ar_sha, eth_src, ETH_ADDR_LEN);
+    arp->ar_spa = htonl(0);
+    memcpy(arp->ar_tha, eth_src, ETH_ADDR_LEN);
+    arp->ar_tpa = htonl(0);
 }
 
 /* Insert VLAN header according to given TCI. Packet passed must be Ethernet
