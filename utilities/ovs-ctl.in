@@ -59,7 +59,12 @@ insert_brcompat_mod_if_required () {
 insert_mod_if_required () {
     insert_openvswitch_mod_if_required || return 1
     if test X"$BRCOMPAT" = Xyes; then
-        insert_brcompat_mod_if_required || return 1
+        if insert_brcompat_mod_if_required; then
+            :
+        else
+            log_warning_msg "could not load brcompat module, disabling bridge compatibility"
+            BRCOMPAT=no
+        fi
     fi
 }
 
