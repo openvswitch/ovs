@@ -47,6 +47,7 @@ ovs-install-data-local:
 	 echo 'PKGDATADIR = os.environ.get("OVS_PKGDATADIR", """$(pkgdatadir)""")' && \
 	 echo 'RUNDIR = os.environ.get("OVS_RUNDIR", """@RUNDIR@""")' && \
 	 echo 'LOGDIR = os.environ.get("OVS_LOGDIR", """@LOGDIR@""")' && \
+	 echo 'DBDIR = os.environ.get("OVS_DBDIR", """@DBDIR@""")' && \
 	 echo 'BINDIR = os.environ.get("OVS_BINDIR", """$(bindir)""")') \
 		> python/ovs/dirs.py.tmp
 	$(MKDIR_P) $(DESTDIR)$(pkgdatadir)/python/ovs

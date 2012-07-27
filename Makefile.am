@@ -108,6 +108,7 @@ SUFFIXES += .in
 	    sed \
 		-e 's,[@]PKIDIR[@],$(PKIDIR),g' \
                 -e 's,[@]LOGDIR[@],$(LOGDIR),g' \
+                -e 's,[@]DBDIR[@],$(DBDIR),g' \
                 -e 's,[@]PERL[@],$(PERL),g' \
                 -e 's,[@]PYTHON[@],$(PYTHON),g' \
                 -e 's,[@]RUNDIR[@],$(RUNDIR),g' \

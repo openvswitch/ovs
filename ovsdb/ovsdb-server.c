@@ -808,7 +808,7 @@ parse_options(int argc, char *argv[], char **file_namep,
 
     switch (argc) {
     case 0:
-        *file_namep = xasprintf("%s/openvswitch/conf.db", ovs_sysconfdir());
+        *file_namep = xasprintf("%s/conf.db", ovs_dbdir());
         break;
 
     case 1:

@@ -140,7 +140,7 @@ default_db(void)
 {
     static char *db;
     if (!db) {
-        db = xasprintf("%s/conf.db", ovs_sysconfdir());
+        db = xasprintf("%s/conf.db", ovs_dbdir());
     }
     return db;
 }

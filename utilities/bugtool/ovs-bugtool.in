@@ -14,7 +14,7 @@
 # Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 #
 # Copyright (c) 2005, 2007 XenSource Ltd.
-# Copyright (c) 2010, 2011 Nicira, Inc.
+# Copyright (c) 2010, 2011, 2012 Nicira, Inc.
 
 #
 # To add new entries to the bugtool, you need to:
@@ -115,7 +115,7 @@ OPENVSWITCH_LOG_DIR = '@LOGDIR@/'
 OPENVSWITCH_DEFAULT_SWITCH = '/etc/default/openvswitch-switch' # Debian
 OPENVSWITCH_SYSCONFIG_SWITCH = '/etc/sysconfig/openvswitch'    # RHEL
 OPENVSWITCH_DEFAULT_CONTROLLER = '/etc/default/openvswitch-controller'
-OPENVSWITCH_CONF_DB = '@sysconfdir@/openvswitch/conf.db'
+OPENVSWITCH_CONF_DB = '@DBDIR@/conf.db'
 OPENVSWITCH_VSWITCHD_PID = '@RUNDIR@/ovs-vswitchd.pid'
 COLLECTD_LOGS_DIR = '/var/lib/collectd/rrd'
 VAR_LOG_DIR = '/var/log/'

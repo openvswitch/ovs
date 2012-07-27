@@ -13,9 +13,10 @@
  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301
  USA.
 
- Copyright (C) 2011 Nicira, Inc.
+ Copyright (C) 2011, 2012 Nicira, Inc.
 -->
 
 <collect>
   <directory label="ovsdb-backups" filters="ovs" pattern=".*/conf.db.backup[0-9][^/]*$">/etc/openvswitch</directory>
+  <directory label="ovsdb-backups2" filters="ovs" pattern=".*/conf.db.backup[0-9][^/]*$">/var/lib/openvswitch</directory>
 </collect>

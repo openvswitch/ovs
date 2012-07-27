@@ -73,6 +73,7 @@ AT_CLEANUP
 
 AT_SETUP([unixctl bad target - Python])
 OVS_RUNDIR=`pwd`; export OVS_RUNDIR
+OVS_DBDIR=`pwd`; export OVS_DBDIR
 AT_SKIP_IF([test $HAVE_PYTHON = no])
 
 AT_CHECK([PYAPPCTL -t bogus doit], [1], [], [stderr])
@@ -91,6 +92,7 @@ AT_SETUP([unixctl server - Python])
 AT_SKIP_IF([test $HAVE_PYTHON = no])
 OVS_RUNDIR=`pwd`; export OVS_RUNDIR
 OVS_LOGDIR=`pwd`; export OVS_LOGDIR
+OVS_DBDIR=`pwd`; export OVS_DBDIR
 OVS_SYSCONFDIR=`pwd`; export OVS_SYSCONFDIR
 trap 'kill `cat test-unixctl.py.pid`' 0
 AT_CAPTURE_FILE([`pwd`/test-unixctl.py.log])

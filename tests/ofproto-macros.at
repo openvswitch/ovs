@@ -31,13 +31,14 @@ m4_define([TESTABLE_LOG], [-vPATTERN:ANY:'%c|%p|%m'])
 m4_define([OVS_VSWITCHD_START],
   [OVS_RUNDIR=`pwd`; export OVS_RUNDIR
    OVS_LOGDIR=`pwd`; export OVS_LOGDIR
+   OVS_DBDIR=`pwd`; export OVS_DBDIR
    OVS_SYSCONFDIR=`pwd`; export OVS_SYSCONFDIR
    trap 'kill `cat ovsdb-server.pid ovs-vswitchd.pid`' 0
 
    dnl Create database.
    mkdir openvswitch
    touch openvswitch/.conf.db.~lock~
-   AT_CHECK([ovsdb-tool create openvswitch/conf.db $abs_top_srcdir/vswitchd/vswitch.ovsschema])
+   AT_CHECK([ovsdb-tool create conf.db $abs_top_srcdir/vswitchd/vswitch.ovsschema])
 
    dnl Start ovsdb-server.
    AT_CHECK([ovsdb-server --detach --pidfile --log-file --remote=punix:$OVS_RUNDIR/db.sock], [0], [], [stderr])

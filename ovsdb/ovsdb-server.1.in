@@ -26,7 +26,7 @@ vSwitch database (OVSDB).  It supports JSON-RPC client connections
 over active or passive TCP/IP or Unix domain sockets.
 .PP
 The OVSDB file may be specified on the command line as \fIdatabase\fR.
-The default is \fB@sysconfdir@/openvswitch/conf.db\fR.  The database
+The default is \fB@DBDIR@/conf.db\fR.  The database
 file must already have been created and initialized using, for
 example, \fBovsdb\-tool create\fR.
 .

@@ -403,7 +403,7 @@ set_defaults () {
     OVS_VSWITCHD_WRAPPER=
     OVS_BRCOMPATD_WRAPPER=
 
-    DB_FILE=$etcdir/conf.db
+    DB_FILE=$dbdir/conf.db
     DB_SOCK=$rundir/db.sock
     DB_SCHEMA=$datadir/vswitch.ovsschema
 
@@ -491,8 +491,9 @@ Other options:
   -V, --version               display version information
 
 Default directories with "configure" option and environment variable override:
-  logs: @LOGDIR@ (--log-dir, OVS_LOGDIR)
-  pidfiles and sockets: @RUNDIR@ (--run-dir, OVS_RUNDIR)
+  logs: @LOGDIR@ (--with-logdir, OVS_LOGDIR)
+  pidfiles and sockets: @RUNDIR@ (--with-rundir, OVS_RUNDIR)
+  conf.db: @DBDIR@ (--with-dbdir, OVS_DBDIR)
   system configuration: @sysconfdir@ (--sysconfdir, OVS_SYSCONFDIR)
   data files: @pkgdatadir@ (--pkgdatadir, OVS_PKGDATADIR)
   user binaries: @bindir@ (--bindir, OVS_BINDIR)

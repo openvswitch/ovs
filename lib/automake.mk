@@ -313,6 +313,7 @@ lib/dirs.c: lib/dirs.c.in Makefile
 		-e 's,[@]srcdir[@],$(srcdir),g' \
 		-e 's,[@]LOGDIR[@],"$(LOGDIR)",g' \
 		-e 's,[@]RUNDIR[@],"$(RUNDIR)",g' \
+		-e 's,[@]DBDIR[@],"$(DBDIR)",g' \
 		-e 's,[@]bindir[@],"$(bindir)",g' \
 		-e 's,[@]sysconfdir[@],"$(sysconfdir)",g' \
 		-e 's,[@]pkgdatadir[@],"$(pkgdatadir)",g') \
@@ -338,6 +339,7 @@ lib-install-data-local:
 	$(MKDIR_P) $(DESTDIR)$(RUNDIR)
 	$(MKDIR_P) $(DESTDIR)$(PKIDIR)
 	$(MKDIR_P) $(DESTDIR)$(LOGDIR)
+	$(MKDIR_P) $(DESTDIR)$(DBDIR)
 
 if !USE_LINKER_SECTIONS
 # All distributed sources, with names adjust properly for referencing

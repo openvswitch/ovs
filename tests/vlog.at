@@ -107,6 +107,7 @@ AT_SETUP([vlog - vlog/reopen - Python])
 AT_SKIP_IF([test $HAVE_PYTHON = no])
 OVS_RUNDIR=`pwd`; export OVS_RUNDIR
 OVS_LOGDIR=`pwd`; export OVS_LOGDIR
+OVS_DBDIR=`pwd`; export OVS_DBDIR
 OVS_SYSCONFDIR=`pwd`; export OVS_SYSCONFDIR
 trap 'kill `cat test-unixctl.py.pid`' 0
 
@@ -136,6 +137,7 @@ AT_SETUP([vlog - vlog/reopen without log file - Python])
 AT_SKIP_IF([test $HAVE_PYTHON = no])
 OVS_RUNDIR=`pwd`; export OVS_RUNDIR
 OVS_LOGDIR=`pwd`; export OVS_LOGDIR
+OVS_DBDIR=`pwd`; export OVS_DBDIR
 OVS_SYSCONFDIR=`pwd`; export OVS_SYSCONFDIR
 trap 'kill `cat test-unixctl.py.pid`' 0
 
@@ -158,6 +160,7 @@ AT_SKIP_IF([echo > /dev/full])
 
 OVS_RUNDIR=`pwd`; export OVS_RUNDIR
 OVS_LOGDIR=`pwd`; export OVS_LOGDIR
+OVS_DBDIR=`pwd`; export OVS_DBDIR
 OVS_SYSCONFDIR=`pwd`; export OVS_SYSCONFDIR
 trap 'kill `cat test-unixctl.py.pid`' 0
 
@@ -184,6 +187,7 @@ AT_SETUP([vlog - vlog/set and vlog/list - Python])
 AT_SKIP_IF([test $HAVE_PYTHON = no])
 OVS_RUNDIR=`pwd`; export OVS_RUNDIR
 OVS_LOGDIR=`pwd`; export OVS_LOGDIR
+OVS_DBDIR=`pwd`; export OVS_DBDIR
 OVS_SYSCONFDIR=`pwd`; export OVS_SYSCONFDIR
 trap 'kill `cat test-unixctl.py.pid`' 0
 

@@ -132,6 +132,16 @@ AC_DEFUN([OVS_CHECK_LOGDIR],
      [LOGDIR='${localstatedir}/log/${PACKAGE}'])
    AC_SUBST([LOGDIR])])
 
+dnl Checks for the directory in which to store the Open vSwitch database.
+AC_DEFUN([OVS_CHECK_DBDIR],
+  [AC_ARG_WITH(
+     [dbdir],
+     AC_HELP_STRING([--with-dbdir=DIR],
+                    [directory used for conf.db [[SYSCONFDIR/PACKAGE]]]),
+     [DBDIR=$withval],
+     [DBDIR='${sysconfdir}/${PACKAGE}'])
+   AC_SUBST([DBDIR])])
+
 dnl Defines HAVE_BACKTRACE if backtrace() is declared in <execinfo.h>
 dnl and exists in libc.
 AC_DEFUN([OVS_CHECK_BACKTRACE],

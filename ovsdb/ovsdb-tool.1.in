@@ -148,7 +148,7 @@ record.
 .SS "Other Options"
 .so lib/common.man
 .SH "FILES"
-The default \fIdb\fR is \fB@sysconfdir@/openvswitch/conf.db\fR.  The
+The default \fIdb\fR is \fB@DBDIR@/conf.db\fR.  The
 default \fIschema\fR is \fB@pkgdatadir@/vswitch.ovsschema\fR.  The
 \fBhelp\fR command also displays these defaults.
 .SH "SEE ALSO"
