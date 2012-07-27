@@ -408,6 +408,24 @@ A: The configuration for VLANs in the Open vSwitch database (e.g. via
    controller.  This will only be suitable for some situations,
    though.
 
+Q: I configured ports on a bridge as access ports with different VLAN
+   tags, like this:
+
+       ovs-vsctl add-br br0
+       ovs-vsctl set-controller br0 tcp:192.168.0.10:6633
+       ovs-vsctl add-port br0 eth0
+       ovs-vsctl add-port br0 tap0 tag=9
+       ovs-vsctl add-port br0 tap1 tag=10
+
+   but the VMs running behind tap0 and tap1 can still communicate,
+   that is, they are not isolated from each other even though they are
+   on different VLANs.
+
+A: Do you have a controller configured on br0 (as the commands above
+   do)?  If so, then this is a variant on the previous question, "My
+   OpenFlow controller doesn't see the VLANs that I expect," and you
+   can refer to the answer there for more information.
+
 
 Controllers
 -----------
