@@ -56,8 +56,9 @@ static void
 check_errno(int a, int b, const char *as, const char *file, int line)
 {
     if (a != b) {
+        char *str_b = strdup(strerror(abs(b)));
         ovs_fatal(0, "%s:%d: %s is %d (%s) but should be %d (%s)",
-                  file, line, as, a, strerror(abs(a)), b, strerror(abs(b)));
+                  file, line, as, a, strerror(abs(a)), b, str_b);
     }
 }
 
