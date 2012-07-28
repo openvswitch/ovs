@@ -410,18 +410,26 @@ dpif_get_dp_stats(const struct dpif *dpif, struct dpif_dp_stats *stats)
     return error;
 }
 
-/* Attempts to add 'netdev' as a port on 'dpif'.  If successful, returns 0 and
- * sets '*port_nop' to the new port's port number (if 'port_nop' is non-null).
- * On failure, returns a positive errno value and sets '*port_nop' to
- * UINT16_MAX (if 'port_nop' is non-null). */
+/* Attempts to add 'netdev' as a port on 'dpif'.  If 'port_nop' is
+ * non-null and its value is not UINT16_MAX, then attempts to use the
+ * value as the port number.
+ *
+ * If successful, returns 0 and sets '*port_nop' to the new port's port
+ * number (if 'port_nop' is non-null).  On failure, returns a positive
+ * errno value and sets '*port_nop' to UINT16_MAX (if 'port_nop' is
+ * non-null). */
 int
 dpif_port_add(struct dpif *dpif, struct netdev *netdev, uint16_t *port_nop)
 {
     const char *netdev_name = netdev_get_name(netdev);
-    uint16_t port_no;
+    uint16_t port_no = UINT16_MAX;
     int error;
 
     COVERAGE_INC(dpif_port_add);
+
+    if (port_nop) {
+        port_no = *port_nop;
+    }
 
     error = dpif->dpif_class->port_add(dpif, netdev, &port_no);
     if (!error) {

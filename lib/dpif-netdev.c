@@ -407,7 +407,16 @@ dpif_netdev_port_add(struct dpif *dpif, struct netdev *netdev,
     struct dp_netdev *dp = get_dp_netdev(dpif);
     int port_no;
 
-    port_no = choose_port(dpif, netdev);
+    if (*port_nop != UINT16_MAX) {
+        if (*port_nop >= MAX_PORTS) {
+            return EFBIG;
+        } else if (dp->ports[*port_nop]) {
+            return EBUSY;
+        }
+        port_no = *port_nop;
+    } else {
+        port_no = choose_port(dpif, netdev);
+    }
     if (port_no >= 0) {
         *port_nop = port_no;
         return do_add_port(dp, netdev_get_name(netdev),

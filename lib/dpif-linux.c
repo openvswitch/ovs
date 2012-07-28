@@ -424,11 +424,13 @@ dpif_linux_port_add(struct dpif *dpif_, struct netdev *netdev,
         netdev_linux_ethtool_set_flag(netdev, ETH_FLAG_LRO, "LRO", false);
     }
 
-    /* Loop until we find a port that isn't used. */
+    /* Unless a specific port was requested, loop until we find a port
+     * that isn't used. */
     do {
         uint32_t upcall_pid;
 
-        request.port_no = ++dpif->alloc_port_no;
+        request.port_no = *port_nop != UINT16_MAX ? *port_nop
+                          : ++dpif->alloc_port_no;
         upcall_pid = dpif_linux_port_get_pid(dpif_, request.port_no);
         request.upcall_pid = &upcall_pid;
         error = dpif_linux_vport_transact(&request, &reply, &buf);
@@ -441,10 +443,13 @@ dpif_linux_port_add(struct dpif *dpif_, struct netdev *netdev,
             /* Older datapath has lower limit. */
             max_ports = dpif->alloc_port_no;
             dpif->alloc_port_no = 0;
+        } else if (error == EBUSY && *port_nop != UINT16_MAX) {
+            VLOG_INFO("%s: requested port %"PRIu16" is in use",
+                     dpif_name(dpif_), *port_nop);
         }
 
         ofpbuf_delete(buf);
-    } while ((i++ < max_ports)
+    } while ((*port_nop == UINT16_MAX) && (i++ < max_ports)
              && (error == EBUSY || error == EFBIG));
 
     return error;

@@ -2514,7 +2514,7 @@ static int
 port_add(struct ofproto *ofproto_, struct netdev *netdev, uint16_t *ofp_portp)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
-    uint16_t odp_port;
+    uint16_t odp_port = UINT16_MAX;
     int error;
 
     error = dpif_port_add(ofproto->dpif, netdev, &odp_port);

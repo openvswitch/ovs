@@ -110,8 +110,12 @@ struct dpif_class {
     /* Retrieves statistics for 'dpif' into 'stats'. */
     int (*get_stats)(const struct dpif *dpif, struct dpif_dp_stats *stats);
 
-    /* Adds 'netdev' as a new port in 'dpif'.  If successful, sets '*port_no'
-     * to the new port's port number. */
+    /* Adds 'netdev' as a new port in 'dpif'.  If '*port_no' is not
+     * UINT16_MAX, attempts to use that as the port's port number.
+     *
+     * If port is successfully added, sets '*port_no' to the new port's
+     * port number.  Returns EBUSY if caller attempted to choose a port
+     * number, and it was in use. */
     int (*port_add)(struct dpif *dpif, struct netdev *netdev,
                     uint16_t *port_no);
 
