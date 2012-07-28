@@ -248,6 +248,7 @@ dpctl_add_if(int argc OVS_UNUSED, char *argv[])
         char *save_ptr = NULL;
         struct netdev *netdev = NULL;
         struct smap args;
+        uint16_t port_no = UINT16_MAX;
         char *option;
         int error;
 
@@ -273,6 +274,8 @@ dpctl_add_if(int argc OVS_UNUSED, char *argv[])
 
             if (!strcmp(key, "type")) {
                 type = value;
+            } else if (!strcmp(key, "port_no")) {
+                port_no = atoi(value);
             } else if (!smap_add_once(&args, key, value)) {
                 ovs_error(0, "duplicate \"%s\" option", key);
             }
@@ -290,7 +293,7 @@ dpctl_add_if(int argc OVS_UNUSED, char *argv[])
             goto next;
         }
 
-        error = dpif_port_add(dpif, netdev, NULL);
+        error = dpif_port_add(dpif, netdev, &port_no);
         if (error) {
             ovs_error(error, "adding %s to %s failed", name, argv[1]);
             goto next;
@@ -325,6 +328,7 @@ dpctl_set_if(int argc, char *argv[])
         char *type = NULL;
         const char *name;
         struct smap args;
+        uint32_t port_no;
         char *option;
         int error;
 
@@ -342,6 +346,7 @@ dpctl_set_if(int argc, char *argv[])
             goto next;
         }
         type = xstrdup(dpif_port.type);
+        port_no = dpif_port.port_no;
         dpif_port_destroy(&dpif_port);
 
         /* Retrieve its existing configuration. */
@@ -373,6 +378,13 @@ dpctl_set_if(int argc, char *argv[])
                 if (strcmp(value, type)) {
                     ovs_error(0, "%s: can't change type from %s to %s",
                               name, type, value);
+                    failure = true;
+                }
+            } else if (!strcmp(key, "port_no")) {
+                if (port_no != atoi(value)) {
+                    ovs_error(0, "%s: can't change port number from "
+                              "%"PRIu32" to %d",
+                              name, port_no, atoi(value));
                     failure = true;
                 }
             } else if (value[0] == '\0') {

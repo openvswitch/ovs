@@ -66,6 +66,9 @@ The following options are currently supported:
 .RS
 .IP "\fBtype=\fItype\fR"
 Specifies the type of port to add.  The default type is \fBsystem\fR.
+.IP "\fBport_no=\fIport\fR"
+Requests a specific port number within the datapath.  If this option is
+not specified then one will be automatically assigned.
 .IP "\fIkey\fB=\fIvalue\fR"
 Adds an arbitrary key-value option to the port's configuration.
 .RE
@@ -78,9 +81,9 @@ Reconfigures each \fIport\fR in \fIdp\fR as specified.  An
 \fIoption\fR of the form \fIkey\fB=\fIvalue\fR adds the specified
 key-value option to the port or overrides an existing key's value.  An
 \fIoption\fR of the form \fIkey\fB=\fR, that is, without a value,
-deletes the key-value named \fIkey\fR.  The type of a port cannot be
-changed, so \fBtype=\fItype\fR is only allowed if \fItype\fR is the
-port's existing type.
+deletes the key-value named \fIkey\fR.  The type and port number of a
+port cannot be changed, so \fBtype\fR and \fBport_no\fR are only allowed if
+they match the existing configuration.
 .TP
 \fBdel\-if \fIdp netdev\fR...
 Removes each \fInetdev\fR from the list of network devices datapath

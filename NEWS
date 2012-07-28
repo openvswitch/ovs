@@ -9,6 +9,9 @@ post-v1.8.0
     - OpenFlow:
       - Allow bitwise masking for SHA and THA fields in ARP, SLL and TLL
         fields in IPv6 neighbor discovery messages, and IPv6 flow label.
+    - ovs-dpctl
+      - Support requesting the port number with the "port_no" option in
+        the "add-if" command.
 
 
 v1.8.0 - xx xxx xxxx
