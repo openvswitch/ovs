@@ -22,6 +22,7 @@
 #include <stdlib.h>
 
 #include "byte-order.h"
+#include "command-line.h"
 #include "random.h"
 #include "util.h"
 
@@ -36,6 +37,25 @@ check_log_2_floor(uint32_t x, int n)
 }
 
 static void
+test_log_2_floor(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
+{
+    int n;
+
+    for (n = 0; n < 32; n++) {
+        /* Check minimum x such that f(x) == n. */
+        check_log_2_floor(1 << n, n);
+
+        /* Check maximum x such that f(x) == n. */
+        check_log_2_floor((1 << n) | ((1 << n) - 1), n);
+
+        /* Check a random value in the middle. */
+        check_log_2_floor((random_uint32() & ((1 << n) - 1)) | (1 << n), n);
+    }
+
+    /* log_2_floor(0) is undefined, so don't check it. */
+}
+
+static void
 check_ctz(uint32_t x, int n)
 {
     if (ctz(x) != n) {
@@ -43,6 +63,26 @@ check_ctz(uint32_t x, int n)
                 x, ctz(x), n);
         abort();
     }
+}
+
+static void
+test_ctz(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
+{
+    int n;
+
+    for (n = 0; n < 32; n++) {
+        /* Check minimum x such that f(x) == n. */
+        check_ctz(1 << n, n);
+
+        /* Check maximum x such that f(x) == n. */
+        check_ctz(UINT32_MAX << n, n);
+
+        /* Check a random value in the middle. */
+        check_ctz((random_uint32() | 1) << n, n);
+    }
+
+    /* Check ctz(0). */
+    check_ctz(0, 32);
 }
 
 /* Returns the sum of the squares of the first 'n' positive integers. */
@@ -53,7 +93,7 @@ sum_of_squares(int n)
 }
 
 static void
-check_bitwise_copy(void)
+test_bitwise_copy(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
     unsigned int n_loops;
     int src_ofs;
@@ -103,7 +143,7 @@ check_bitwise_copy(void)
 }
 
 static void
-check_bitwise_zero(void)
+test_bitwise_zero(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
     unsigned int n_loops;
     int dst_ofs;
@@ -144,7 +184,7 @@ check_bitwise_zero(void)
 }
 
 static void
-check_bitwise_one(void)
+test_bitwise_one(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
     unsigned int n_loops;
     int dst_ofs;
@@ -185,7 +225,7 @@ check_bitwise_one(void)
 }
 
 static void
-check_bitwise_is_all_zeros(void)
+test_bitwise_is_all_zeros(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
     int n_loops;
 
@@ -227,37 +267,21 @@ check_bitwise_is_all_zeros(void)
         }
     }
 }
+
+static const struct command commands[] = {
+    {"ctz", 0, 0, test_ctz},
+    {"log_2_floor", 0, 0, test_log_2_floor},
+    {"bitwise_copy", 0, 0, test_bitwise_copy},
+    {"bitwise_zero", 0, 0, test_bitwise_zero},
+    {"bitwise_one", 0, 0, test_bitwise_one},
+    {"bitwise_is_all_zeros", 0, 0, test_bitwise_is_all_zeros},
+    {NULL, 0, 0, NULL},
+};
 
 int
-main(void)
+main(int argc, char *argv[])
 {
-    int n;
-
-    for (n = 0; n < 32; n++) {
-        /* Check minimum x such that f(x) == n. */
-        check_log_2_floor(1 << n, n);
-        check_ctz(1 << n, n);
-
-        /* Check maximum x such that f(x) == n. */
-        check_log_2_floor((1 << n) | ((1 << n) - 1), n);
-        check_ctz(UINT32_MAX << n, n);
-
-        /* Check a random value in the middle. */
-        check_log_2_floor((random_uint32() & ((1 << n) - 1)) | (1 << n), n);
-        check_ctz((random_uint32() | 1) << n, n);
-    }
-
-    /* Check ctz(0).
-     * (log_2_floor(0) is undefined.) */
-    check_ctz(0, 32);
-
-    check_bitwise_copy();
-
-    check_bitwise_zero();
-
-    check_bitwise_one();
-
-    check_bitwise_is_all_zeros();
-
+    set_program_name(argv[0]);
+    run_command(argc - 1, argv + 1, commands);
     return 0;
 }
