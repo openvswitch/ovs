@@ -442,6 +442,7 @@ ofputil_capabilities_to_name(uint32_t bit)
     case OFPUTIL_C_ARP_MATCH_IP: return "ARP_MATCH_IP";
     case OFPUTIL_C_STP:          return "STP";
     case OFPUTIL_C_GROUP_STATS:  return "GROUP_STATS";
+    case OFPUTIL_C_PORT_BLOCKED: return "PORT_BLOCKED";
     }
 
     return NULL;

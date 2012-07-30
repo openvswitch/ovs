@@ -346,19 +346,24 @@ struct ofputil_phy_port {
 };
 
 enum ofputil_capabilities {
-    /* OpenFlow 1.0 and 1.1 share these values for these capabilities. */
+    /* OpenFlow 1.0, 1.1 and 1.2 share these values for these capabilities. */
     OFPUTIL_C_FLOW_STATS     = 1 << 0,  /* Flow statistics. */
     OFPUTIL_C_TABLE_STATS    = 1 << 1,  /* Table statistics. */
     OFPUTIL_C_PORT_STATS     = 1 << 2,  /* Port statistics. */
     OFPUTIL_C_IP_REASM       = 1 << 5,  /* Can reassemble IP fragments. */
     OFPUTIL_C_QUEUE_STATS    = 1 << 6,  /* Queue statistics. */
+
+    /* OpenFlow 1.0 and 1.1 share this capability. */
     OFPUTIL_C_ARP_MATCH_IP   = 1 << 7,  /* Match IP addresses in ARP pkts. */
 
     /* OpenFlow 1.0 only. */
     OFPUTIL_C_STP            = 1 << 3,  /* 802.1d spanning tree. */
 
-    /* OpenFlow 1.1 only. */
+    /* OpenFlow 1.1 and 1.2 share this capability. */
     OFPUTIL_C_GROUP_STATS    = 1 << 4,  /* Group statistics. */
+
+    /* OpenFlow 1.2 only */
+    OFPUTIL_C_PORT_BLOCKED   = 1 << 8,  /* Switch will block looping ports */
 };
 
 enum ofputil_action_bitmap {
