@@ -2418,7 +2418,16 @@ ofputil_decode_switch_features(const struct ofp_header *oh,
         if (osf->capabilities & htonl(OFPC11_GROUP_STATS)) {
             features->capabilities |= OFPUTIL_C_GROUP_STATS;
         }
-        features->actions = decode_action_bits(osf->actions, of11_action_bits);
+        switch ((enum ofp_version)oh->version) {
+        case OFP11_VERSION:
+        case OFP12_VERSION:
+            features->actions = decode_action_bits(htonl(UINT32_MAX),
+                                                   of11_action_bits);
+            break;
+        case OFP10_VERSION:
+        default:
+            NOT_REACHED();
+        }
     } else {
         return OFPERR_OFPBRC_BAD_VERSION;
     }
@@ -2517,7 +2526,6 @@ ofputil_encode_switch_features(const struct ofputil_switch_features *features,
         if (features->capabilities & OFPUTIL_C_GROUP_STATS) {
             osf->capabilities |= htonl(OFPC11_GROUP_STATS);
         }
-        osf->actions = encode_action_bits(features->actions, of11_action_bits);
         break;
     default:
         NOT_REACHED();

@@ -507,10 +507,19 @@ ofp_print_switch_features(struct ds *string, const struct ofp_header *oh)
                         ofputil_capabilities_to_name, ' ');
     ds_put_char(string, '\n');
 
-    ds_put_cstr(string, "actions: ");
-    ofp_print_bit_names(string, features.actions,
-                        ofputil_action_bitmap_to_name, ' ');
-    ds_put_char(string, '\n');
+    switch ((enum ofp_version)oh->version) {
+    case OFP10_VERSION:
+        ds_put_cstr(string, "actions: ");
+        ofp_print_bit_names(string, features.actions,
+                            ofputil_action_bitmap_to_name, ' ');
+        ds_put_char(string, '\n');
+        break;
+    case OFP11_VERSION:
+    case OFP12_VERSION:
+        break;
+    default:
+        NOT_REACHED();
+    }
 
     ofp_print_phy_ports(string, oh->version, &b);
 }
