@@ -207,15 +207,25 @@ do_create(int argc, char *argv[])
 }
 
 static void
-compact_or_convert(const char *src_name, const char *dst_name,
+compact_or_convert(const char *src_name_, const char *dst_name_,
                    const struct ovsdb_schema *new_schema,
                    const char *comment)
 {
+    char *src_name, *dst_name;
     struct lockfile *src_lock;
     struct lockfile *dst_lock;
-    bool in_place = dst_name == NULL;
+    bool in_place = dst_name_ == NULL;
     struct ovsdb *db;
     int retval;
+
+    /* Dereference symlinks for source and destination names.  In the in-place
+     * case this ensures that, if the source name is a symlink, we replace its
+     * target instead of replacing the symlink by a regular file.  In the
+     * non-in-place, this has the same effect for the destination name. */
+    src_name = follow_symlinks(src_name_);
+    dst_name = (in_place
+                ? xasprintf("%s.tmp", src_name)
+                : follow_symlinks(dst_name_));
 
     /* Lock the source, if we will be replacing it. */
     if (in_place) {
@@ -226,9 +236,6 @@ compact_or_convert(const char *src_name, const char *dst_name,
     }
 
     /* Get (temporary) destination and lock it. */
-    if (in_place) {
-        dst_name = xasprintf("%s.tmp", src_name);
-    }
     retval = lockfile_lock(dst_name, 0, &dst_lock);
     if (retval) {
         ovs_fatal(retval, "%s: failed to lock lockfile", dst_name);
@@ -253,9 +260,8 @@ compact_or_convert(const char *src_name, const char *dst_name,
 
     lockfile_unlock(dst_lock);
 
-    if (in_place) {
-        free((char *) dst_name);
-    }
+    free(src_name);
+    free(dst_name);
 }
 
 static void

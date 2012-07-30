@@ -49,8 +49,18 @@ AT_CLEANUP
 AT_SETUP([ovsdb-tool compact])
 AT_KEYWORDS([ovsdb file positive])
 ordinal_schema > schema
-touch .db.~lock~
+dnl Make sure that "ovsdb-tool create" works with a dangling symlink,
+dnl creating the target of the symlink rather than replacing the symlink
+dnl with a regular file, and that the lockfile gets created relative to
+dnl the symlink's target.
+mkdir dir
+: > dir/.db.~lock~
+ln -s dir/db db
+AT_SKIP_IF([test ! -h db])
 AT_CHECK([ovsdb-tool create db schema], [0], [], [ignore])
+AT_CHECK([test ! -e .db.~lock])
+AT_CHECK([test -h db])
+AT_CHECK([test -f dir/db])
 dnl Do a bunch of random transactions that put crap in the database log.
 AT_CHECK(
   [[for pair in 'zero 0' 'one 1' 'two 2' 'three 3' 'four 4' 'five 5'; do
@@ -117,6 +127,11 @@ _uuid                                name  number
 dnl Now compact the database in-place.
 touch .db.tmp.~lock~
 AT_CHECK([[ovsdb-tool compact db]], [0], [], [ignore])
+dnl Make sure that "db" is still a symlink to dir/db instead of getting
+dnl replaced by a regular file.
+AT_CHECK([test ! -e .db.~lock])
+AT_CHECK([test -h db])
+AT_CHECK([test -f dir/db])
 dnl We can't fully re-check the contents of the database log, because the
 dnl order of the records is not predictable, but there should only be 4 lines
 dnl in it now.
