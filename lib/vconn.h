@@ -41,7 +41,7 @@ ovs_be32 vconn_get_remote_ip(const struct vconn *);
 ovs_be16 vconn_get_remote_port(const struct vconn *);
 ovs_be32 vconn_get_local_ip(const struct vconn *);
 ovs_be16 vconn_get_local_port(const struct vconn *);
-int vconn_get_version(const struct vconn *);
+enum ofp_version vconn_get_version(const struct vconn *);
 int vconn_connect(struct vconn *);
 int vconn_recv(struct vconn *, struct ofpbuf **);
 int vconn_send(struct vconn *, struct ofpbuf *);
@@ -54,7 +54,8 @@ int vconn_transact_multiple_noreply(struct vconn *, struct list *requests,
 void vconn_run(struct vconn *);
 void vconn_run_wait(struct vconn *);
 
-int vconn_open_block(const char *name, int min_version, struct vconn **);
+int vconn_open_block(const char *name, enum ofp_version min_version,
+                     struct vconn **);
 int vconn_send_block(struct vconn *, struct ofpbuf *);
 int vconn_recv_block(struct vconn *, struct ofpbuf **);
 

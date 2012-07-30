@@ -595,18 +595,22 @@ size_t ofputil_n_flow_dump_protocols = ARRAY_SIZE(ofputil_flow_dump_protocols);
  * 1.0, 0x02 for OpenFlow 1.1).  Returns 0 if 'version' is not supported or
  * outside the valid range.  */
 enum ofputil_protocol
-ofputil_protocol_from_ofp_version(int version)
+ofputil_protocol_from_ofp_version(enum ofp_version version)
 {
     switch (version) {
-    case OFP10_VERSION: return OFPUTIL_P_OF10;
-    case OFP12_VERSION: return OFPUTIL_P_OF12;
-    default: return 0;
+    case OFP10_VERSION:
+        return OFPUTIL_P_OF10;
+    case OFP12_VERSION:
+        return OFPUTIL_P_OF12;
+    case OFP11_VERSION:
+    default:
+        return 0;
     }
 }
 
 /* Returns the OpenFlow protocol version number (e.g. OFP10_VERSION,
  * OFP11_VERSION or OFP12_VERSION) that corresponds to 'protocol'. */
-uint8_t
+enum ofp_version
 ofputil_protocol_to_ofp_version(enum ofputil_protocol protocol)
 {
     switch (protocol) {
@@ -2191,10 +2195,17 @@ ofputil_decode_ofp11_port(struct ofputil_phy_port *pp,
 }
 
 static size_t
-ofputil_get_phy_port_size(uint8_t ofp_version)
+ofputil_get_phy_port_size(enum ofp_version ofp_version)
 {
-    return ofp_version == OFP10_VERSION ? sizeof(struct ofp10_phy_port)
-                                        : sizeof(struct ofp11_port);
+    switch (ofp_version) {
+    case OFP10_VERSION:
+        return sizeof(struct ofp10_phy_port);
+    case OFP11_VERSION:
+    case OFP12_VERSION:
+        return sizeof(struct ofp11_port);
+    default:
+        NOT_REACHED();
+    }
 }
 
 static void
@@ -2239,39 +2250,59 @@ ofputil_encode_ofp11_port(const struct ofputil_phy_port *pp,
 }
 
 static void
-ofputil_put_phy_port(uint8_t ofp_version, const struct ofputil_phy_port *pp,
-                     struct ofpbuf *b)
+ofputil_put_phy_port(enum ofp_version ofp_version,
+                     const struct ofputil_phy_port *pp, struct ofpbuf *b)
 {
-    if (ofp_version == OFP10_VERSION) {
+    switch (ofp_version) {
+    case OFP10_VERSION: {
         struct ofp10_phy_port *opp;
         if (b->size + sizeof *opp <= UINT16_MAX) {
             opp = ofpbuf_put_uninit(b, sizeof *opp);
             ofputil_encode_ofp10_phy_port(pp, opp);
         }
-    } else {
+        break;
+    }
+
+    case OFP11_VERSION:
+    case OFP12_VERSION: {
         struct ofp11_port *op;
         if (b->size + sizeof *op <= UINT16_MAX) {
             op = ofpbuf_put_uninit(b, sizeof *op);
             ofputil_encode_ofp11_port(pp, op);
         }
+        break;
+    }
+
+    default:
+        NOT_REACHED();
     }
 }
 
 void
-ofputil_append_port_desc_stats_reply(uint8_t ofp_version,
+ofputil_append_port_desc_stats_reply(enum ofp_version ofp_version,
                                      const struct ofputil_phy_port *pp,
                                      struct list *replies)
 {
-    if (ofp_version == OFP10_VERSION) {
+    switch (ofp_version) {
+    case OFP10_VERSION: {
         struct ofp10_phy_port *opp;
 
         opp = ofpmp_append(replies, sizeof *opp);
         ofputil_encode_ofp10_phy_port(pp, opp);
-    } else {
+        break;
+    }
+
+    case OFP11_VERSION:
+    case OFP12_VERSION: {
         struct ofp11_port *op;
 
         op = ofpmp_append(replies, sizeof *op);
         ofputil_encode_ofp11_port(pp, op);
+        break;
+    }
+
+    default:
+      NOT_REACHED();
     }
 }
 
@@ -2452,29 +2483,44 @@ ofputil_encode_switch_features(const struct ofputil_switch_features *features,
 {
     struct ofp_switch_features *osf;
     struct ofpbuf *b;
-    uint8_t version;
+    enum ofp_version version;
+    enum ofpraw raw;
 
     version = ofputil_protocol_to_ofp_version(protocol);
-    b = ofpraw_alloc_xid(version == OFP10_VERSION
-                         ? OFPRAW_OFPT10_FEATURES_REPLY
-                         : OFPRAW_OFPT11_FEATURES_REPLY,
-                         version, xid, 0);
+    switch (version) {
+    case OFP10_VERSION:
+        raw = OFPRAW_OFPT10_FEATURES_REPLY;
+        break;
+    case OFP11_VERSION:
+    case OFP12_VERSION:
+        raw = OFPRAW_OFPT11_FEATURES_REPLY;
+        break;
+    default:
+        NOT_REACHED();
+    }
+    b = ofpraw_alloc_xid(raw, version, xid, 0);
     osf = ofpbuf_put_zeros(b, sizeof *osf);
     osf->datapath_id = htonll(features->datapath_id);
     osf->n_buffers = htonl(features->n_buffers);
     osf->n_tables = features->n_tables;
 
     osf->capabilities = htonl(features->capabilities & OFPC_COMMON);
-    if (version == OFP10_VERSION) {
+    switch (version) {
+    case OFP10_VERSION:
         if (features->capabilities & OFPUTIL_C_STP) {
             osf->capabilities |= htonl(OFPC10_STP);
         }
         osf->actions = encode_action_bits(features->actions, of10_action_bits);
-    } else {
+        break;
+    case OFP11_VERSION:
+    case OFP12_VERSION:
         if (features->capabilities & OFPUTIL_C_GROUP_STATS) {
             osf->capabilities |= htonl(OFPC11_GROUP_STATS);
         }
         osf->actions = encode_action_bits(features->actions, of11_action_bits);
+        break;
+    default:
+        NOT_REACHED();
     }
 
     return b;
@@ -2529,13 +2575,25 @@ ofputil_encode_port_status(const struct ofputil_port_status *ps,
 {
     struct ofp_port_status *ops;
     struct ofpbuf *b;
-    uint8_t version;
+    enum ofp_version version;
+    enum ofpraw raw;
 
     version = ofputil_protocol_to_ofp_version(protocol);
-    b = ofpraw_alloc_xid(version == OFP10_VERSION
-                         ? OFPRAW_OFPT10_PORT_STATUS
-                         : OFPRAW_OFPT11_PORT_STATUS,
-                         version, htonl(0), 0);
+    switch (version) {
+    case OFP10_VERSION:
+        raw = OFPRAW_OFPT10_PORT_STATUS;
+        break;
+
+    case OFP11_VERSION:
+    case OFP12_VERSION:
+        raw = OFPRAW_OFPT11_PORT_STATUS;
+        break;
+
+    default:
+        NOT_REACHED();
+    }
+
+    b = ofpraw_alloc_xid(raw, version, htonl(0), 0);
     ops = ofpbuf_put_zeros(b, sizeof *ops);
     ops->reason = ps->reason;
     ofputil_put_phy_port(version, &ps->desc, b);
@@ -2593,10 +2651,11 @@ struct ofpbuf *
 ofputil_encode_port_mod(const struct ofputil_port_mod *pm,
                         enum ofputil_protocol protocol)
 {
-    uint8_t ofp_version = ofputil_protocol_to_ofp_version(protocol);
+    enum ofp_version ofp_version = ofputil_protocol_to_ofp_version(protocol);
     struct ofpbuf *b;
 
-    if (ofp_version == OFP10_VERSION) {
+    switch (ofp_version) {
+    case OFP10_VERSION: {
         struct ofp10_port_mod *opm;
 
         b = ofpraw_alloc(OFPRAW_OFPT10_PORT_MOD, ofp_version, 0);
@@ -2606,7 +2665,10 @@ ofputil_encode_port_mod(const struct ofputil_port_mod *pm,
         opm->config = htonl(pm->config & OFPPC10_ALL);
         opm->mask = htonl(pm->mask & OFPPC10_ALL);
         opm->advertise = netdev_port_features_to_ofp10(pm->advertise);
-    } else if (ofp_version == OFP11_VERSION) {
+        break;
+    }
+
+    case OFP11_VERSION: {
         struct ofp11_port_mod *opm;
 
         b = ofpraw_alloc(OFPRAW_OFPT11_PORT_MOD, ofp_version, 0);
@@ -2616,7 +2678,11 @@ ofputil_encode_port_mod(const struct ofputil_port_mod *pm,
         opm->config = htonl(pm->config & OFPPC11_ALL);
         opm->mask = htonl(pm->mask & OFPPC11_ALL);
         opm->advertise = netdev_port_features_to_ofp11(pm->advertise);
-    } else {
+        break;
+    }
+
+    case OFP12_VERSION:
+    default:
         NOT_REACHED();
     }
 
@@ -3106,15 +3172,21 @@ ofputil_format_port(uint16_t port, struct ds *s)
  * port and returns 0.  If no ports remain to be decoded, returns EOF.
  * On an error, returns a positive OFPERR_* value. */
 int
-ofputil_pull_phy_port(uint8_t ofp_version, struct ofpbuf *b,
+ofputil_pull_phy_port(enum ofp_version ofp_version, struct ofpbuf *b,
                       struct ofputil_phy_port *pp)
 {
-    if (ofp_version == OFP10_VERSION) {
+    switch (ofp_version) {
+    case OFP10_VERSION: {
         const struct ofp10_phy_port *opp = ofpbuf_try_pull(b, sizeof *opp);
         return opp ? ofputil_decode_ofp10_phy_port(pp, opp) : EOF;
-    } else {
+    }
+    case OFP11_VERSION:
+    case OFP12_VERSION: {
         const struct ofp11_port *op = ofpbuf_try_pull(b, sizeof *op);
         return op ? ofputil_decode_ofp11_port(pp, op) : EOF;
+    }
+    default:
+        NOT_REACHED();
     }
 }
 

@@ -2298,14 +2298,15 @@ handle_port_desc_stats_request(struct ofconn *ofconn,
                                const struct ofp_header *request)
 {
     struct ofproto *p = ofconn_get_ofproto(ofconn);
+    enum ofp_version version;
     struct ofport *port;
     struct list replies;
 
     ofpmp_init(&replies, request);
 
+    version = ofputil_protocol_to_ofp_version(ofconn_get_protocol(ofconn));
     HMAP_FOR_EACH (port, hmap_node, &p->ports) {
-        ofputil_append_port_desc_stats_reply(ofconn_get_protocol(ofconn),
-                                             &port->pp, &replies);
+        ofputil_append_port_desc_stats_reply(version, &port->pp, &replies);
     }
 
     ofconn_send_replies(ofconn, &replies);

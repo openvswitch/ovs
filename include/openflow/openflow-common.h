@@ -71,9 +71,11 @@
 /* The most significant bit being set in the version field indicates an
  * experimental OpenFlow version.
  */
-#define OFP10_VERSION   0x01
-#define OFP11_VERSION   0x02
-#define OFP12_VERSION   0x03
+enum ofp_version {
+    OFP10_VERSION = 0x01,
+    OFP11_VERSION = 0x02,
+    OFP12_VERSION = 0x03,
+};
 
 #define OFP_MAX_TABLE_NAME_LEN 32
 #define OFP_MAX_PORT_NAME_LEN  16

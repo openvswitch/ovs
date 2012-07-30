@@ -82,8 +82,9 @@ enum ofputil_protocol {
 extern enum ofputil_protocol ofputil_flow_dump_protocols[];
 extern size_t ofputil_n_flow_dump_protocols;
 
-enum ofputil_protocol ofputil_protocol_from_ofp_version(int version);
-uint8_t ofputil_protocol_to_ofp_version(enum ofputil_protocol);
+enum ofputil_protocol
+ofputil_protocol_from_ofp_version(enum ofp_version version);
+enum ofp_version  ofputil_protocol_to_ofp_version(enum ofputil_protocol);
 
 bool ofputil_protocol_is_valid(enum ofputil_protocol);
 enum ofputil_protocol ofputil_protocol_set_tid(enum ofputil_protocol,
@@ -411,7 +412,7 @@ void ofputil_put_switch_features_port(const struct ofputil_phy_port *,
 bool ofputil_switch_features_ports_trunc(struct ofpbuf *b);
 
 /* phy_port helper functions. */
-int ofputil_pull_phy_port(uint8_t ofp_version, struct ofpbuf *,
+int ofputil_pull_phy_port(enum ofp_version ofp_version, struct ofpbuf *,
                           struct ofputil_phy_port *);
 size_t ofputil_count_phy_ports(uint8_t ofp_version, struct ofpbuf *);
 
@@ -483,7 +484,7 @@ uint32_t ofputil_decode_flow_monitor_cancel(const struct ofp_header *);
 struct ofpbuf *ofputil_encode_flow_monitor_cancel(uint32_t id);
 
 /* Encoding OpenFlow stats messages. */
-void ofputil_append_port_desc_stats_reply(uint8_t ofp_version,
+void ofputil_append_port_desc_stats_reply(enum ofp_version ofp_version,
                                           const struct ofputil_phy_port *pp,
                                           struct list *replies);
 

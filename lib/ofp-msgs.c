@@ -259,11 +259,17 @@ ofphdrs_decode_assert(struct ofphdrs *hdrs,
 static bool
 ofphdrs_is_stat(const struct ofphdrs *hdrs)
 {
-    return (hdrs->version == OFP10_VERSION
-            ? (hdrs->type == OFPT10_STATS_REQUEST ||
-               hdrs->type == OFPT10_STATS_REPLY)
-            : (hdrs->type == OFPT11_STATS_REQUEST ||
-               hdrs->type == OFPT11_STATS_REPLY));
+    switch ((enum ofp_version) hdrs->version) {
+    case OFP10_VERSION:
+        return (hdrs->type == OFPT10_STATS_REQUEST ||
+                hdrs->type == OFPT10_STATS_REPLY);
+    case OFP11_VERSION:
+    case OFP12_VERSION:
+        return (hdrs->type == OFPT11_STATS_REQUEST ||
+                hdrs->type == OFPT11_STATS_REPLY);
+    }
+
+    return false;
 }
 
 size_t
@@ -273,20 +279,25 @@ ofphdrs_len(const struct ofphdrs *hdrs)
         return sizeof(struct nicira_header);
     }
 
-    if (hdrs->version == OFP10_VERSION) {
+    switch ((enum ofp_version) hdrs->version) {
+    case OFP10_VERSION:
         if (hdrs->type == OFPT10_STATS_REQUEST ||
             hdrs->type == OFPT10_STATS_REPLY) {
             return (hdrs->stat == OFPST_VENDOR
                     ? sizeof(struct nicira10_stats_msg)
                     : sizeof(struct ofp10_stats_msg));
         }
-    } else {
+        break;
+
+    case OFP11_VERSION:
+    case OFP12_VERSION:
         if (hdrs->type == OFPT11_STATS_REQUEST ||
             hdrs->type == OFPT11_STATS_REPLY) {
             return (hdrs->stat == OFPST_VENDOR
                     ? sizeof(struct nicira11_stats_msg)
                     : sizeof(struct ofp11_stats_msg));
         }
+        break;
     }
 
     return sizeof(struct ofp_header);
@@ -686,12 +697,18 @@ ofpraw_stats_request_to_reply(enum ofpraw raw, uint8_t version)
     enum ofperr error;
 
     hdrs = instance->hdrs;
-    if (hdrs.version == OFP10_VERSION) {
+    switch ((enum ofp_version)hdrs.version) {
+    case OFP10_VERSION:
         assert(hdrs.type == OFPT10_STATS_REQUEST);
         hdrs.type = OFPT10_STATS_REPLY;
-    } else {
+        break;
+    case OFP11_VERSION:
+    case OFP12_VERSION:
         assert(hdrs.type == OFPT11_STATS_REQUEST);
         hdrs.type = OFPT11_STATS_REPLY;
+        break;
+    default:
+        NOT_REACHED();
     }
 
     error = ofpraw_from_ofphdrs(&reply_raw, &hdrs);
@@ -854,9 +871,15 @@ ofpmp_postappend(struct list *replies, size_t start_ofs)
 static ovs_be16 *
 ofpmp_flags__(const struct ofp_header *oh)
 {
-    return (oh->version == OFP10_VERSION
-            ? &((struct ofp10_stats_msg *) oh)->flags
-            : &((struct ofp11_stats_msg *) oh)->flags);
+    switch ((enum ofp_version)oh->version) {
+    case OFP10_VERSION:
+        return &((struct ofp10_stats_msg *) oh)->flags;
+    case OFP11_VERSION:
+    case OFP12_VERSION:
+        return &((struct ofp11_stats_msg *) oh)->flags;
+    default:
+        NOT_REACHED();
+    }
 }
 
 /* Returns the OFPSF_* flags found in the OpenFlow stats header of 'oh', which

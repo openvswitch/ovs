@@ -278,7 +278,8 @@ vconn_run_wait(struct vconn *vconn)
 }
 
 int
-vconn_open_block(const char *name, int min_version, struct vconn **vconnp)
+vconn_open_block(const char *name, enum ofp_version min_version,
+                 struct vconn **vconnp)
 {
     struct vconn *vconn;
     int error;
@@ -361,7 +362,7 @@ vconn_get_local_port(const struct vconn *vconn)
  *
  * A vconn that has successfully connected (that is, vconn_connect() or
  * vconn_send() or vconn_recv() has returned 0) always negotiated a version. */
-int
+enum ofp_version
 vconn_get_version(const struct vconn *vconn)
 {
     return vconn->version;
