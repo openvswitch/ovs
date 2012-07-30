@@ -322,8 +322,8 @@ dnl We can't fully re-check the contents of the database log, because the
 dnl order of the records is not predictable, but there should only be 4 lines
 dnl in it now.
 AT_CAPTURE_FILE([db])
-AT_CHECK([wc -l < db], [0], [4
-], [], [test ! -e pid || kill `cat pid`])
+AT_CHECK([test `wc -l < db` -eq 4], [0], [], [],
+  [test ! -e pid || kill `cat pid`])
 dnl And check that the dumped data is the same too:
 AT_CHECK([ovsdb-client dump unix:socket ordinals], [0], [stdout], [ignore],
   [test ! -e pid || kill `cat pid`])
@@ -348,8 +348,8 @@ AT_CHECK(
   [0], [[[{"count":3}]
 ]], [ignore], [test ! -e pid || kill `cat pid`])
 dnl There should be 6 lines in the log now.
-AT_CHECK([wc -l < db], [0], [6
-], [], [test ! -e pid || kill `cat pid`])
+AT_CHECK([test `wc -l < db` -eq 6], [0], [], [],
+  [test ! -e pid || kill `cat pid`])
 dnl Then check that the dumped data is correct.
 AT_CHECK([ovsdb-client dump unix:socket ordinals], [0], [stdout], [ignore],
   [test ! -e pid || kill `cat pid`])

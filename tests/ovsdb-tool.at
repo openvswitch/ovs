@@ -121,8 +121,7 @@ dnl We can't fully re-check the contents of the database log, because the
 dnl order of the records is not predictable, but there should only be 4 lines
 dnl in it now.
 AT_CAPTURE_FILE([db])
-AT_CHECK([wc -l < db], [0], [4
-])
+AT_CHECK([test `wc -l < db` -eq 4])
 dnl And check that the dumped data is the same too:
 AT_CHECK([[ovsdb-server --unixctl="`pwd`"/unixctl --remote=punix:socket --run "ovsdb-client dump unix:socket ordinals" db]],
   [0], [stdout], [ignore])
@@ -185,8 +184,7 @@ dnl We can't fully re-check the contents of the database log, because the
 dnl order of the records is not predictable, but there should only be 4 lines
 dnl in it now.
 AT_CAPTURE_FILE([db])
-AT_CHECK([wc -l < db], [0], [4
-])
+AT_CHECK([test `wc -l < db` -eq 4])
 dnl And check that the dumped data is the same except for the removed column:
 AT_CHECK([[ovsdb-server --unixctl="`pwd`"/unixctl --remote=punix:socket --run "ovsdb-client dump unix:socket ordinals" db]],
   [0], [stdout], [ignore])
@@ -248,8 +246,7 @@ dnl We can't fully re-check the contents of the database log, because the
 dnl order of the records is not predictable, but there should only be 4 lines
 dnl in it now.
 AT_CAPTURE_FILE([db])
-AT_CHECK([wc -l < db], [0], [4
-])
+AT_CHECK([test `wc -l < db` -eq 4])
 dnl And check that the dumped data is the same except for the added column:
 AT_CHECK([[ovsdb-server --unixctl="`pwd`"/unixctl --remote=punix:socket --run "ovsdb-client dump unix:socket ordinals" db]],
   [0], [stdout], [ignore])
