@@ -2367,6 +2367,23 @@ static const struct ofputil_action_bit_translation of11_action_bits[] = {
     { 0, 0 },
 };
 
+static const struct ofputil_action_bit_translation of12_action_bits[] = {
+    { OFPUTIL_A_OUTPUT,         OFPAT12_OUTPUT },
+    { OFPUTIL_A_COPY_TTL_OUT,   OFPAT12_COPY_TTL_OUT },
+    { OFPUTIL_A_COPY_TTL_IN,    OFPAT12_COPY_TTL_IN },
+    { OFPUTIL_A_SET_MPLS_TTL,   OFPAT12_SET_MPLS_TTL },
+    { OFPUTIL_A_DEC_MPLS_TTL,   OFPAT12_DEC_MPLS_TTL },
+    { OFPUTIL_A_PUSH_VLAN,      OFPAT12_PUSH_VLAN },
+    { OFPUTIL_A_POP_VLAN,       OFPAT12_POP_VLAN },
+    { OFPUTIL_A_PUSH_MPLS,      OFPAT12_PUSH_MPLS },
+    { OFPUTIL_A_POP_MPLS,       OFPAT12_POP_MPLS },
+    { OFPUTIL_A_SET_QUEUE,      OFPAT12_SET_QUEUE },
+    { OFPUTIL_A_GROUP,          OFPAT12_GROUP },
+    { OFPUTIL_A_SET_NW_TTL,     OFPAT12_SET_NW_TTL },
+    { OFPUTIL_A_DEC_NW_TTL,     OFPAT12_DEC_NW_TTL },
+    { 0, 0 },
+};
+
 static enum ofputil_action_bitmap
 decode_action_bits(ovs_be32 of_actions,
                    const struct ofputil_action_bit_translation *x)
@@ -2420,9 +2437,12 @@ ofputil_decode_switch_features(const struct ofp_header *oh,
         }
         switch ((enum ofp_version)oh->version) {
         case OFP11_VERSION:
-        case OFP12_VERSION:
             features->actions = decode_action_bits(htonl(UINT32_MAX),
                                                    of11_action_bits);
+            break;
+        case OFP12_VERSION:
+            features->actions = decode_action_bits(htonl(UINT32_MAX),
+                                                   of12_action_bits);
             break;
         case OFP10_VERSION:
         default:
