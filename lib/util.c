@@ -24,6 +24,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #include "byte-order.h"
 #include "coverage.h"
@@ -647,6 +648,90 @@ abs_file_name(const char *dir, const char *file_name)
     }
 }
 
+/* Like readlink(), but returns the link name as a null-terminated string in
+ * allocated memory that the caller must eventually free (with free()).
+ * Returns NULL on error, in which case errno is set appropriately. */
+char *
+xreadlink(const char *filename)
+{
+    size_t size;
+
+    for (size = 64; ; size *= 2) {
+        char *buf = xmalloc(size);
+        ssize_t retval = readlink(filename, buf, size);
+        int error = errno;
+
+        if (retval >= 0 && retval < size) {
+            buf[retval] = '\0';
+            return buf;
+        }
+
+        free(buf);
+        if (retval < 0) {
+            errno = error;
+            return NULL;
+        }
+    }
+}
+
+/* Returns a version of 'filename' with symlinks in the final component
+ * dereferenced.  This differs from realpath() in that:
+ *
+ *     - 'filename' need not exist.
+ *
+ *     - If 'filename' does exist as a symlink, its referent need not exist.
+ *
+ *     - Only symlinks in the final component of 'filename' are dereferenced.
+ *
+ * The caller must eventually free the returned string (with free()). */
+char *
+follow_symlinks(const char *filename)
+{
+    struct stat s;
+    char *fn;
+    int i;
+
+    fn = xstrdup(filename);
+    for (i = 0; i < 10; i++) {
+        char *linkname;
+        char *next_fn;
+
+        if (lstat(fn, &s) != 0 || !S_ISLNK(s.st_mode)) {
+            return fn;
+        }
+
+        linkname = xreadlink(fn);
+        if (!linkname) {
+            VLOG_WARN("%s: readlink failed (%s)", filename, strerror(errno));
+            return fn;
+        }
+
+        if (linkname[0] == '/') {
+            /* Target of symlink is absolute so use it raw. */
+            next_fn = linkname;
+        } else {
+            /* Target of symlink is relative so add to 'fn''s directory. */
+            char *dir = dir_name(fn);
+
+            if (!strcmp(dir, ".")) {
+                next_fn = linkname;
+            } else {
+                char *separator = dir[strlen(dir) - 1] == '/' ? "" : "/";
+                next_fn = xasprintf("%s%s%s", dir, separator, linkname);
+                free(linkname);
+            }
+
+            free(dir);
+        }
+
+        free(fn);
+        fn = next_fn;
+    }
+
+    VLOG_WARN("%s: too many levels of symlinks", filename);
+    free(fn);
+    return xstrdup(filename);
+}
 
 /* Pass a value to this function if it is marked with
  * __attribute__((warn_unused_result)) and you genuinely want to ignore

@@ -24,3 +24,100 @@ CHECK_FILE_NAME([dir/file], [dir], [file])
 CHECK_FILE_NAME([dir/file/], [dir], [file])
 CHECK_FILE_NAME([dir/file//], [dir], [file])
 CHECK_FILE_NAME([///foo], [/], [foo])
+
+AT_BANNER([test follow_symlinks function])
+
+m4_define([CHECK_FOLLOW],
+  [echo "check $1 -> $2"
+   AT_CHECK_UNQUOTED([test-util follow-symlinks "$1"], [0], [$2
+])
+   echo])
+
+AT_SETUP([follow_symlinks - relative symlinks])
+: > target
+ln -s target source
+AT_SKIP_IF([test ! -h source])
+CHECK_FOLLOW([source], [target])
+
+mkdir dir
+ln -s target2 dir/source2
+CHECK_FOLLOW([dir/source2], [dir/target2])
+
+mkdir dir/dir2
+ln -s dir/b a
+ln -s c dir/b
+ln -s dir2/d dir/c
+CHECK_FOLLOW([a], [dir/dir2/d])
+AT_CLEANUP
+
+AT_SETUP([follow_symlinks - absolute symlinks])
+: > target
+ln -s "`pwd`/target" source
+AT_SKIP_IF([test ! -h source])
+CHECK_FOLLOW([source], [`pwd`/target])
+
+mkdir dir
+ln -s "`pwd`/dir/target2" dir/source2
+CHECK_FOLLOW([dir/source2], [`pwd`/dir/target2])
+
+mkdir dir/dir2
+ln -s "`pwd`/dir/b" a
+ln -s "`pwd`/dir/c" dir/b
+ln -s "`pwd`/dir/dir2/d" dir/c
+CHECK_FOLLOW([a], [`pwd`/dir/dir2/d])
+AT_CLEANUP
+
+AT_SETUP([follow_symlinks - symlinks to directories])
+mkdir target
+ln -s target source
+AT_SKIP_IF([test ! -h source])
+ln -s target/ source2
+CHECK_FOLLOW([source], [target])
+CHECK_FOLLOW([source2], [target/])
+
+# follow_symlinks() doesn't expand symlinks in the middle of a name.
+: > source/x
+CHECK_FOLLOW([source/x], [source/x])
+AT_CLEANUP
+
+AT_SETUP([follow_symlinks - nonexistent targets])
+ln -s target source
+AT_SKIP_IF([test ! -h source])
+CHECK_FOLLOW([source], [target])
+CHECK_FOLLOW([target], [target])
+CHECK_FOLLOW([target], [target])
+AT_CLEANUP
+
+AT_SETUP([follow_symlinks - regular files])
+touch x
+CHECK_FOLLOW([x], [x])
+AT_CLEANUP
+
+AT_SETUP([follow_symlinks - device targets])
+AT_SKIP_IF([test ! -e /dev/null])
+AT_SKIP_IF([test ! -e /dev/full])
+ln -s /dev/null x
+ln -s /dev/full y
+CHECK_FOLLOW([x], [/dev/null])
+CHECK_FOLLOW([y], [/dev/full])
+AT_CLEANUP
+
+AT_SETUP([follow_symlinks - nonexistent files])
+CHECK_FOLLOW([nonexistent], [nonexistent])
+CHECK_FOLLOW([a/b/c], [a/b/c])
+CHECK_FOLLOW([/a/b/c], [/a/b/c])
+CHECK_FOLLOW([//a/b/c], [//a/b/c])
+AT_CLEANUP
+
+AT_SETUP([follow_symlinks - symlink loop])
+ln -s a b
+AT_SKIP_IF([test ! -h b])
+ln -s b a
+AT_SKIP_IF([test ! -h a])
+
+AT_CHECK([test-util follow-symlinks a], [0], [a
+], [stderr])
+AT_CHECK([sed 's/^[[^|]]*|//' stderr], [0],
+  [00001|util|WARN|a: too many levels of symlinks
+])
+AT_CLEANUP

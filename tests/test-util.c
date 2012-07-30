@@ -267,6 +267,18 @@ test_bitwise_is_all_zeros(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
         }
     }
 }
+
+static void
+test_follow_symlinks(int argc, char *argv[])
+{
+    int i;
+
+    for (i = 1; i < argc; i++) {
+        char *target = follow_symlinks(argv[i]);
+        puts(target);
+        free(target);
+    }
+}
 
 static const struct command commands[] = {
     {"ctz", 0, 0, test_ctz},
@@ -275,6 +287,7 @@ static const struct command commands[] = {
     {"bitwise_zero", 0, 0, test_bitwise_zero},
     {"bitwise_one", 0, 0, test_bitwise_one},
     {"bitwise_is_all_zeros", 0, 0, test_bitwise_is_all_zeros},
+    {"follow-symlinks", 1, INT_MAX, test_follow_symlinks},
     {NULL, 0, 0, NULL},
 };
 
