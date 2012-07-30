@@ -1266,11 +1266,8 @@ struct ofpbuf *
 ofputil_encode_flow_mod(const struct ofputil_flow_mod *fm,
                         enum ofputil_protocol protocol)
 {
-    struct ofp10_flow_mod *ofm;
-    struct nx_flow_mod *nfm;
     struct ofpbuf *msg;
     uint16_t command;
-    int match_len;
 
     command = (protocol & OFPUTIL_P_TID
                ? (fm->command & 0xff) | (fm->table_id << 8)
@@ -1278,7 +1275,9 @@ ofputil_encode_flow_mod(const struct ofputil_flow_mod *fm,
 
     switch (protocol) {
     case OFPUTIL_P_OF10:
-    case OFPUTIL_P_OF10_TID:
+    case OFPUTIL_P_OF10_TID: {
+        struct ofp10_flow_mod *ofm;
+
         msg = ofpraw_alloc(OFPRAW_OFPT10_FLOW_MOD, OFP10_VERSION,
                            fm->ofpacts_len);
         ofm = ofpbuf_put_zeros(msg, sizeof *ofm);
@@ -1292,9 +1291,13 @@ ofputil_encode_flow_mod(const struct ofputil_flow_mod *fm,
         ofm->out_port = htons(fm->out_port);
         ofm->flags = htons(fm->flags);
         break;
+    }
 
     case OFPUTIL_P_NXM:
-    case OFPUTIL_P_NXM_TID:
+    case OFPUTIL_P_NXM_TID: {
+        struct nx_flow_mod *nfm;
+        int match_len;
+
         msg = ofpraw_alloc(OFPRAW_NXT_FLOW_MOD, OFP10_VERSION,
                            NXM_TYPICAL_LEN + fm->ofpacts_len);
         nfm = ofpbuf_put_zeros(msg, sizeof *nfm);
@@ -1311,6 +1314,7 @@ ofputil_encode_flow_mod(const struct ofputil_flow_mod *fm,
         nfm->flags = htons(fm->flags);
         nfm->match_len = htons(match_len);
         break;
+    }
 
     case OFPUTIL_P_OF12:
     default:
