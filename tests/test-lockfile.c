@@ -249,6 +249,35 @@ run_lock_symlink(void)
     CHECK(S_ISREG(s.st_mode) != 0, 1);
 }
 
+/* Checks that locking a file that is itself a symlink yields a lockfile in the
+ * directory that the symlink points to, named for the target of the
+ * symlink.
+ *
+ * (That is, if "a" is a symlink to "dir/b", then "a"'s lockfile is named
+ * "dir/.b.~lock".) */
+static void
+run_lock_symlink_to_dir(void)
+{
+    struct lockfile *a, *dummy;
+    struct stat s;
+
+    /* Create a symlink "a" pointing to "dir/b". */
+    CHECK(mkdir("dir", 0700), 0);
+    CHECK(symlink("dir/b", "a"), 0);
+    CHECK(lstat("a", &s), 0);
+    CHECK(S_ISLNK(s.st_mode) != 0, 1);
+
+    /* Lock 'a'. */
+    CHECK(lockfile_lock("a", 0, &a), 0);
+    CHECK(lstat("dir/.b.~lock~", &s), 0);
+    CHECK(S_ISREG(s.st_mode) != 0, 1);
+    CHECK(lstat(".a.~lock~", &s), -1);
+    CHECK(errno, ENOENT);
+    CHECK(lockfile_lock("dir/b", 0, &dummy), EDEADLK);
+
+    lockfile_unlock(a);
+}
+
 static void
 run_help(void)
 {
@@ -275,6 +304,7 @@ static const struct test tests[] = {
     TEST(lock_timeout_runs_out),
     TEST(lock_multiple),
     TEST(lock_symlink),
+    TEST(lock_symlink_to_dir),
     TEST(help),
     { NULL, NULL }
 #undef TEST

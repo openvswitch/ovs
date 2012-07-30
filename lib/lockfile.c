@@ -59,16 +59,29 @@ static int lockfile_try_lock(const char *name, bool block,
                              struct lockfile **lockfilep);
 
 /* Returns the name of the lockfile that would be created for locking a file
- * named 'file_name'.  The caller is responsible for freeing the returned
- * name, with free(), when it is no longer needed. */
+ * named 'filename_'.  The caller is responsible for freeing the returned name,
+ * with free(), when it is no longer needed. */
 char *
-lockfile_name(const char *file_name)
+lockfile_name(const char *filename_)
 {
-    const char *slash = strrchr(file_name, '/');
-    return (slash
-            ? xasprintf("%.*s/.%s.~lock~",
-                        (int) (slash - file_name), file_name, slash + 1)
-            : xasprintf(".%s.~lock~", file_name));
+    char *filename;
+    const char *slash;
+    char *lockname;
+
+    /* If 'filename_' is a symlink, base the name of the lockfile on the
+     * symlink's target rather than the name of the symlink.  That way, if a
+     * file is symlinked, but there is no symlink for its lockfile, then there
+     * is only a single lockfile for both the source and the target of the
+     * symlink, not one for each. */
+    filename = follow_symlinks(filename_);
+    slash = strrchr(filename, '/');
+    lockname = (slash
+                ? xasprintf("%.*s/.%s.~lock~",
+                            (int) (slash - filename), filename, slash + 1)
+                : xasprintf(".%s.~lock~", filename));
+    free(filename);
+
+    return lockname;
 }
 
 /* Locks the configuration file against modification by other processes and
