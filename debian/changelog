@@ -20,11 +20,12 @@ openvswitch (1.7.0-1) unstable; urgency=low
         - Added support for spawning ovs-test server from the client.
         - Now ovs-test is able to automatically create test bridges and ports.
     - "ovs-dpctl dump-flows" now prints observed TCP flags in TCP flows.
+    - Tripled flow setup performance.
     - The "coverage/log" command previously available through ovs-appctl
       has been replaced by "coverage/show".  The new command replies with
       coverage counter values, instead of logging them.
 
- -- Open vSwitch team <dev@openvswitch.org>  Mon, 07 May 2012 14:11:52 +0900
+ -- Open vSwitch team <dev@openvswitch.org>  Mon, 30 Jul 2012 17:23:57 +0900
 
 openvswitch (1.6.1-1) unstable; urgency=low
   [ Open vSwitch team ]
