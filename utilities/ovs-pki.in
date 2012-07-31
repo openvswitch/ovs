@@ -24,6 +24,38 @@ batch=no
 log='@LOGDIR@/ovs-pki.log'
 keytype=rsa
 bits=2048
+
+# OS-specific compatibility routines
+case $(uname -s) in
+FreeBSD)
+    file_mod_epoch()
+    {
+        stat -r "$1" | awk '{print $10}'
+    }
+
+    file_mod_date()
+    {
+        stat -f '%Sm' "$1"
+    }
+
+    sha1sum()
+    {
+        sha1 "$@"
+    }
+    ;;
+*)
+    file_mod_epoch()
+    {
+        date -r "$1" +%s
+    }
+
+    file_mod_date()
+    {
+        date -r "$1"
+    }
+    ;;
+esac
+
 for option; do
     # This option-parsing mechanism borrowed from a Autoconf-generated
     # configure script under the following license:
@@ -365,7 +397,7 @@ make_tmpdir() {
 fingerprint() {
     file=$1
     name=${1-$2}
-    date=$(date -r $file)
+    date=$(file_mod_date "$file")
     if grep -e '-BEGIN CERTIFICATE-' "$file" > /dev/null; then
         fingerprint=$(openssl x509 -noout -in "$file" -fingerprint |
                       sed 's/SHA1 Fingerprint=//' | tr -d ':')
@@ -609,7 +641,7 @@ elif test "$command" = expire; then
     for type in switch controller; do
         cd "$pkidir/${type}ca/incoming" || exit 1
         for file in $(glob "*"); do
-            time=$(date -r "$file" +%s)
+            time=$(file_mod_epoch "$file")
             if test "$time" -lt "$cutoff"; then
                 rm -f "$file"
             fi
