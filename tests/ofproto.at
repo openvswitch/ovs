@@ -886,14 +886,19 @@ AT_CLEANUP
 AT_SETUP([ofproto - flow monitoring pause and resume])
 AT_KEYWORDS([monitor])
 
-# With a Linux kernel, this file has the maximum socket receive buffer
-# size.  That's important for this test, which tests behavior when the
-# receive buffer overflows.
-AT_SKIP_IF([test ! -e /proc/sys/net/core/rmem_max])
-
+# The maximum socket receive buffer size is important for this test, which
+# tests behavior when the receive buffer overflows.
+if test -e /proc/sys/net/core/rmem_max; then
+    # Linux
+    rmem_max=`cat /proc/sys/net/core/rmem_max`
+elif rmem_max=`sysctl -n net.inet.tcp.recvbuf_max 2>/dev/null`; then
+    : # FreeBSD
+else
+    # Don't know how to get maximum socket receive buffer on this OS
+    AT_SKIP_IF([:])
+fi
 # Calculate the total amount of queuing: rmem_max in the kernel, 128 kB
 # in ofproto sending userspace (see ofmonitor_flush() in connmgr.c).
-rmem_max=`cat /proc/sys/net/core/rmem_max`
 queue_size=`expr $rmem_max + 128 \* 1024`
 echo rmem_max=$rmem_max queue_size=$queue_size
 
@@ -936,7 +941,7 @@ AT_CHECK([test $adds = $deletes])
 
 # Check that the flow monitor reported everything in the expected order.
 AT_CHECK([ofctl_strip < monitor.log | sed -n -e '
-/reg1=0x22\b/p
+/reg1=0x22$/p
 /cookie=0x[[23]]/p
 /NXT_FLOW_MONITOR_PAUSED:/p
 /NXT_FLOW_MONITOR_RESUMED:/p
