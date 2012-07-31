@@ -49,7 +49,7 @@ v1.8.0 - xx xxx xxxx
       instead the local timezone, by default.
 
 
-v1.7.0 - xx xxx xxxx
+v1.7.0 - 30 Jul 2012
 ------------------------
     - kernel modules are renamed. openvswitch_mod.ko is now
       openvswitch.ko and brcompat_mod.ko is now brcompat.ko.
