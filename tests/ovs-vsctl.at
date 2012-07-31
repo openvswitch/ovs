@@ -769,7 +769,7 @@ AT_CHECK(
 
 ])
 m4_define([VSCTL_CHECK_FIND],
-  [AT_CHECK([ovs-vsctl --bare --timeout=5 --no-wait -vreconnect:emer --db=unix:socket -- --columns=name find bridge '$1' | sort | xargs echo], [0], [$2
+  [AT_CHECK([echo `ovs-vsctl --bare --timeout=5 --no-wait -vreconnect:emer --db=unix:socket -- --columns=name find bridge '$1' | sort`], [0], [$2
 ])])
 
 # Arithmetic relational operators without keys.
