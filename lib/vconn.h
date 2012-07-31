@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -56,6 +56,7 @@ void vconn_run_wait(struct vconn *);
 
 int vconn_open_block(const char *name, enum ofp_version min_version,
                      struct vconn **);
+int vconn_connect_block(struct vconn *);
 int vconn_send_block(struct vconn *, struct ofpbuf *);
 int vconn_recv_block(struct vconn *, struct ofpbuf **);
 

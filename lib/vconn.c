@@ -288,13 +288,7 @@ vconn_open_block(const char *name, enum ofp_version min_version,
 
     error = vconn_open(name, min_version, &vconn, DSCP_DEFAULT);
     if (!error) {
-        while ((error = vconn_connect(vconn)) == EAGAIN) {
-            vconn_run(vconn);
-            vconn_run_wait(vconn);
-            vconn_connect_wait(vconn);
-            poll_block();
-        }
-        assert(error != EINPROGRESS);
+        error = vconn_connect_block(vconn);
     }
 
     if (error) {
@@ -620,6 +614,24 @@ do_send(struct vconn *vconn, struct ofpbuf *msg)
         free(s);
     }
     return retval;
+}
+
+/* Same as vconn_connect(), except that it waits until the connection on
+ * 'vconn' completes or fails.  Thus, it will never return EAGAIN. */
+int
+vconn_connect_block(struct vconn *vconn)
+{
+    int error;
+
+    while ((error = vconn_connect(vconn)) == EAGAIN) {
+        vconn_run(vconn);
+        vconn_run_wait(vconn);
+        vconn_connect_wait(vconn);
+        poll_block();
+    }
+    assert(error != EINPROGRESS);
+
+    return error;
 }
 
 /* Same as vconn_send, except that it waits until 'msg' can be transmitted. */

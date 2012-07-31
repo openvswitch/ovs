@@ -156,7 +156,7 @@ test_refuse_connection(int argc OVS_UNUSED, char *argv[])
                            DSCP_DEFAULT), 0);
     fpv_close(&fpv);
     vconn_run(vconn);
-    CHECK_ERRNO(vconn_connect(vconn), expected_error);
+    CHECK_ERRNO(vconn_connect_block(vconn), expected_error);
     vconn_close(vconn);
     fpv_destroy(&fpv);
 }
@@ -229,7 +229,7 @@ test_read_hello(int argc OVS_UNUSED, char *argv[])
        poll_block();
     }
     stream_close(stream);
-    CHECK_ERRNO(vconn_connect(vconn), ECONNRESET);
+    CHECK_ERRNO(vconn_connect_block(vconn), ECONNRESET);
     vconn_close(vconn);
 }
 
@@ -322,7 +322,7 @@ test_send_hello(const char *type, const void *out, size_t out_size,
        poll_block();
     }
     stream_close(stream);
-    CHECK_ERRNO(vconn_recv(vconn, &msg), EOF);
+    CHECK_ERRNO(vconn_recv_block(vconn, &msg), EOF);
     vconn_close(vconn);
 }
 
