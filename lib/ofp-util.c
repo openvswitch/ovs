@@ -1259,6 +1259,15 @@ ofputil_decode_flow_mod(struct ofputil_flow_mod *fm,
     return 0;
 }
 
+static ovs_be16
+ofputil_tid_command(const struct ofputil_flow_mod *fm,
+                    enum ofputil_protocol protocol)
+{
+    return htons(protocol & OFPUTIL_P_TID
+                 ? (fm->command & 0xff) | (fm->table_id << 8)
+                 : fm->command);
+}
+
 /* Converts 'fm' into an OFPT_FLOW_MOD or NXT_FLOW_MOD message according to
  * 'protocol' and returns the message. */
 struct ofpbuf *
@@ -1266,13 +1275,33 @@ ofputil_encode_flow_mod(const struct ofputil_flow_mod *fm,
                         enum ofputil_protocol protocol)
 {
     struct ofpbuf *msg;
-    uint16_t command;
-
-    command = (protocol & OFPUTIL_P_TID
-               ? (fm->command & 0xff) | (fm->table_id << 8)
-               : fm->command);
 
     switch (protocol) {
+    case OFPUTIL_P_OF12: {
+        struct ofp11_flow_mod *ofm;
+
+        msg = ofpraw_alloc(OFPRAW_OFPT11_FLOW_MOD, OFP12_VERSION,
+                           NXM_TYPICAL_LEN + fm->ofpacts_len);
+        ofm = ofpbuf_put_zeros(msg, sizeof *ofm);
+        ofm->cookie = fm->new_cookie;
+        ofm->cookie_mask = fm->cookie_mask;
+        ofm->table_id = fm->table_id;
+        ofm->command = fm->command;
+        ofm->idle_timeout = htons(fm->idle_timeout);
+        ofm->hard_timeout = htons(fm->hard_timeout);
+        ofm->priority = htons(fm->cr.priority);
+        ofm->buffer_id = htonl(fm->buffer_id);
+        ofm->out_port = ofputil_port_to_ofp11(fm->out_port);
+        ofm->out_group = htonl(OFPG11_ANY);
+        ofm->flags = htons(fm->flags);
+        oxm_put_match(msg, &fm->cr);
+        if (fm->ofpacts) {
+            ofpacts_put_openflow11_instructions(fm->ofpacts, fm->ofpacts_len,
+                                                msg);
+        }
+        break;
+    }
+
     case OFPUTIL_P_OF10:
     case OFPUTIL_P_OF10_TID: {
         struct ofp10_flow_mod *ofm;
@@ -1282,13 +1311,16 @@ ofputil_encode_flow_mod(const struct ofputil_flow_mod *fm,
         ofm = ofpbuf_put_zeros(msg, sizeof *ofm);
         ofputil_cls_rule_to_ofp10_match(&fm->cr, &ofm->match);
         ofm->cookie = fm->new_cookie;
-        ofm->command = htons(command);
+        ofm->command = ofputil_tid_command(fm, protocol);
         ofm->idle_timeout = htons(fm->idle_timeout);
         ofm->hard_timeout = htons(fm->hard_timeout);
         ofm->priority = htons(fm->cr.priority);
         ofm->buffer_id = htonl(fm->buffer_id);
         ofm->out_port = htons(fm->out_port);
         ofm->flags = htons(fm->flags);
+        if (fm->ofpacts) {
+            ofpacts_put_openflow10(fm->ofpacts, fm->ofpacts_len, msg);
+        }
         break;
     }
 
@@ -1300,7 +1332,7 @@ ofputil_encode_flow_mod(const struct ofputil_flow_mod *fm,
         msg = ofpraw_alloc(OFPRAW_NXT_FLOW_MOD, OFP10_VERSION,
                            NXM_TYPICAL_LEN + fm->ofpacts_len);
         nfm = ofpbuf_put_zeros(msg, sizeof *nfm);
-        nfm->command = htons(command);
+        nfm->command = ofputil_tid_command(fm, protocol);
         nfm->cookie = fm->new_cookie;
         match_len = nx_put_match(msg, &fm->cr, fm->cookie, fm->cookie_mask);
         nfm = msg->l3;
@@ -1311,17 +1343,16 @@ ofputil_encode_flow_mod(const struct ofputil_flow_mod *fm,
         nfm->out_port = htons(fm->out_port);
         nfm->flags = htons(fm->flags);
         nfm->match_len = htons(match_len);
+        if (fm->ofpacts) {
+            ofpacts_put_openflow10(fm->ofpacts, fm->ofpacts_len, msg);
+        }
         break;
     }
 
-    case OFPUTIL_P_OF12:
     default:
         NOT_REACHED();
     }
 
-    if (fm->ofpacts) {
-        ofpacts_put_openflow10(fm->ofpacts, fm->ofpacts_len, msg);
-    }
     ofpmsg_update_length(msg);
     return msg;
 }
