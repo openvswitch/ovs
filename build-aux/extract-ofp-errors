@@ -343,7 +343,7 @@ static enum ofperr
 }"""
 
         print """
-const struct ofperr_domain %s = {
+static const struct ofperr_domain %s = {
     "%s",
     %d,
     %s_decode,

@@ -2660,17 +2660,14 @@ ofctl_print_error(int argc OVS_UNUSED, char *argv[])
     }
 
     for (version = 0; version <= UINT8_MAX; version++) {
-        const struct ofperr_domain *domain;
-
-        domain = ofperr_domain_from_version(version);
-        if (!domain) {
+        const char *name = ofperr_domain_get_name(version);
+        if (!name) {
             continue;
         }
-
         printf("%s: %d,%d\n",
-               ofperr_domain_get_name(domain),
-               ofperr_get_type(error, domain),
-               ofperr_get_code(error, domain));
+               ofperr_domain_get_name(version),
+               ofperr_get_type(error, version),
+               ofperr_get_code(error, version));
     }
 }
 

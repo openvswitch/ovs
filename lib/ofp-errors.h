@@ -496,21 +496,15 @@ enum ofperr {
     OFPERR_OFPET_EXPERIMENTER,
 };
 
-extern const struct ofperr_domain ofperr_of10;
-extern const struct ofperr_domain ofperr_of11;
-extern const struct ofperr_domain ofperr_of12;
-
-const struct ofperr_domain *ofperr_domain_from_version(uint8_t version);
-const char *ofperr_domain_get_name(const struct ofperr_domain *);
+const char *ofperr_domain_get_name(enum ofp_version);
 
 bool ofperr_is_valid(enum ofperr);
 bool ofperr_is_category(enum ofperr);
 bool ofperr_is_nx_extension(enum ofperr);
-bool ofperr_is_encodable(enum ofperr, const struct ofperr_domain *);
+bool ofperr_is_encodable(enum ofperr, enum ofp_version);
 
-enum ofperr ofperr_decode(const struct ofperr_domain *,
-                          uint16_t type, uint16_t code);
-enum ofperr ofperr_decode_type(const struct ofperr_domain *, uint16_t type);
+enum ofperr ofperr_decode(enum ofp_version, uint16_t type, uint16_t code);
+enum ofperr ofperr_decode_type(enum ofp_version, uint16_t type);
 enum ofperr ofperr_from_name(const char *);
 
 enum ofperr ofperr_decode_msg(const struct ofp_header *,
@@ -518,8 +512,8 @@ enum ofperr ofperr_decode_msg(const struct ofp_header *,
 struct ofpbuf *ofperr_encode_reply(enum ofperr, const struct ofp_header *);
 struct ofpbuf *ofperr_encode_hello(enum ofperr, enum ofp_version ofp_version,
                                    const char *);
-int ofperr_get_type(enum ofperr, const struct ofperr_domain *);
-int ofperr_get_code(enum ofperr, const struct ofperr_domain *);
+int ofperr_get_type(enum ofperr, enum ofp_version);
+int ofperr_get_code(enum ofperr, enum ofp_version);
 
 const char *ofperr_get_name(enum ofperr);
 const char *ofperr_get_description(enum ofperr);
