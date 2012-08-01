@@ -673,39 +673,6 @@ ofpacts_from_openflow11(const union ofp_action *in, size_t n_in,
 
 /* OpenFlow 1.1 instructions. */
 
-#define OVS_INSTRUCTIONS                                    \
-    DEFINE_INST(OFPIT11_GOTO_TABLE,                         \
-                ofp11_instruction_goto_table,     false,    \
-                "goto_table")                               \
-                                                            \
-    DEFINE_INST(OFPIT11_WRITE_METADATA,                     \
-                ofp11_instruction_write_metadata, false,    \
-                "write_metadata")                           \
-                                                            \
-    DEFINE_INST(OFPIT11_WRITE_ACTIONS,                      \
-                ofp11_instruction_actions,        true,     \
-                "write_actions")                            \
-                                                            \
-    DEFINE_INST(OFPIT11_APPLY_ACTIONS,                      \
-                ofp11_instruction_actions,        true,     \
-                "apply_actions")                            \
-                                                            \
-    DEFINE_INST(OFPIT11_CLEAR_ACTIONS,                      \
-                ofp11_instruction,                false,    \
-                "clear_actions")
-
-enum ovs_instruction_type {
-#define DEFINE_INST(ENUM, STRUCT, EXTENSIBLE, NAME) OVSINST_##ENUM,
-    OVS_INSTRUCTIONS
-#undef DEFINE_INST
-};
-
-enum {
-#define DEFINE_INST(ENUM, STRUCT, EXTENSIBLE, NAME) + 1
-    N_OVS_INSTRUCTIONS = OVS_INSTRUCTIONS
-#undef DEFINE_INST
-};
-
 #define DEFINE_INST(ENUM, STRUCT, EXTENSIBLE, NAME)             \
     static inline void                                          \
     instruction_init_##ENUM(struct STRUCT *s)                   \
