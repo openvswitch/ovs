@@ -1217,7 +1217,7 @@ ofctl_barrier(struct unixctl_conn *conn, int argc OVS_UNUSED,
         return;
     }
 
-    msg = ofputil_encode_barrier_request();
+    msg = ofputil_encode_barrier_request(vconn_get_version(aux->vconn));
     error = vconn_send_block(aux->vconn, msg);
     if (error) {
         ofpbuf_delete(msg);

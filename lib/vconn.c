@@ -756,7 +756,7 @@ vconn_transact_noreply(struct vconn *vconn, struct ofpbuf *request,
     }
 
     /* Send barrier. */
-    barrier = ofputil_encode_barrier_request();
+    barrier = ofputil_encode_barrier_request(vconn_get_version(vconn));
     barrier_xid = ((struct ofp_header *) barrier->data)->xid;
     error = vconn_send_block(vconn, barrier);
     if (error) {

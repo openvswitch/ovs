@@ -2996,9 +2996,25 @@ make_echo_reply(const struct ofp_header *rq)
 }
 
 struct ofpbuf *
-ofputil_encode_barrier_request(void)
+ofputil_encode_barrier_request(enum ofp_version ofp_version)
 {
-    return ofpraw_alloc(OFPRAW_OFPT10_BARRIER_REQUEST, OFP10_VERSION, 0);
+    enum ofpraw type;
+
+    switch (ofp_version) {
+    case OFP12_VERSION:
+    case OFP11_VERSION:
+        type = OFPRAW_OFPT11_BARRIER_REQUEST;
+        break;
+
+    case OFP10_VERSION:
+        type = OFPRAW_OFPT10_BARRIER_REQUEST;
+        break;
+
+    default:
+        NOT_REACHED();
+    }
+
+    return ofpraw_alloc(type, ofp_version, 0);
 }
 
 const char *
