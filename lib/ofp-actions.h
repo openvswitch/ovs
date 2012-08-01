@@ -530,4 +530,7 @@ enum {
 #undef DEFINE_INST
 };
 
+const char *ofpact_instruction_name_from_type(enum ovs_instruction_type type);
+int ofpact_instruction_type_from_name(const char *name);
+
 #endif /* ofp-actions.h */

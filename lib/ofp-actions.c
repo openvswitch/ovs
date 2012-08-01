@@ -674,6 +674,13 @@ ofpacts_from_openflow11(const union ofp_action *in, size_t n_in,
 /* OpenFlow 1.1 instructions. */
 
 #define DEFINE_INST(ENUM, STRUCT, EXTENSIBLE, NAME)             \
+    static inline const struct STRUCT *                         \
+    instruction_get_##ENUM(const struct ofp11_instruction *inst)\
+    {                                                           \
+        assert(inst->type == htons(ENUM));                      \
+        return (struct STRUCT *)inst;                           \
+    }                                                           \
+                                                                \
     static inline void                                          \
     instruction_init_##ENUM(struct STRUCT *s)                   \
     {                                                           \
@@ -691,6 +698,41 @@ ofpacts_from_openflow11(const union ofp_action *in, size_t n_in,
     }
 OVS_INSTRUCTIONS
 #undef DEFINE_INST
+
+struct instruction_type_info {
+    enum ovs_instruction_type type;
+    const char *name;
+};
+
+static const struct instruction_type_info inst_info[] = {
+#define DEFINE_INST(ENUM, STRUCT, EXTENSIBLE, NAME)    {OVSINST_##ENUM, NAME},
+OVS_INSTRUCTIONS
+#undef DEFINE_INST
+};
+
+const char *
+ofpact_instruction_name_from_type(enum ovs_instruction_type type)
+{
+    const struct instruction_type_info *p;
+    for (p = inst_info; p < &inst_info[ARRAY_SIZE(inst_info)]; p++) {
+        if (p->type == type) {
+            return p->name;
+        }
+    }
+    return NULL;
+}
+
+int
+ofpact_instruction_type_from_name(const char *name)
+{
+    const struct instruction_type_info *p;
+    for (p = inst_info; p < &inst_info[ARRAY_SIZE(inst_info)]; p++) {
+        if (!strcasecmp(name, p->name)) {
+            return p->type;
+        }
+    }
+    return -1;
+}
 
 static inline struct ofp11_instruction *
 instruction_next(const struct ofp11_instruction *inst)
