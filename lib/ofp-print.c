@@ -685,9 +685,13 @@ ofp_print_flow_mod(struct ds *s, const struct ofp_header *oh, int verbosity)
     bool need_priority;
     enum ofperr error;
     enum ofpraw raw;
+    enum ofputil_protocol protocol;
+
+    protocol = ofputil_protocol_from_ofp_version(oh->version);
+    protocol = ofputil_protocol_set_tid(protocol, true);
 
     ofpbuf_init(&ofpacts, 64);
-    error = ofputil_decode_flow_mod(&fm, oh, OFPUTIL_P_OF10_TID, &ofpacts);
+    error = ofputil_decode_flow_mod(&fm, oh, protocol, &ofpacts);
     if (error) {
         ofpbuf_uninit(&ofpacts);
         ofp_print_error(s, error);
