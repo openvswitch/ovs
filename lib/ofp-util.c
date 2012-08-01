@@ -2341,52 +2341,6 @@ static const struct ofputil_action_bit_translation of10_action_bits[] = {
     { 0, 0 },
 };
 
-static const struct ofputil_action_bit_translation of11_action_bits[] = {
-    { OFPUTIL_A_OUTPUT,         OFPAT11_OUTPUT },
-    { OFPUTIL_A_SET_VLAN_VID,   OFPAT11_SET_VLAN_VID },
-    { OFPUTIL_A_SET_VLAN_PCP,   OFPAT11_SET_VLAN_PCP },
-    { OFPUTIL_A_SET_DL_SRC,     OFPAT11_SET_DL_SRC },
-    { OFPUTIL_A_SET_DL_DST,     OFPAT11_SET_DL_DST },
-    { OFPUTIL_A_SET_NW_SRC,     OFPAT11_SET_NW_SRC },
-    { OFPUTIL_A_SET_NW_DST,     OFPAT11_SET_NW_DST },
-    { OFPUTIL_A_SET_NW_TOS,     OFPAT11_SET_NW_TOS },
-    { OFPUTIL_A_SET_NW_ECN,     OFPAT11_SET_NW_ECN },
-    { OFPUTIL_A_SET_TP_SRC,     OFPAT11_SET_TP_SRC },
-    { OFPUTIL_A_SET_TP_DST,     OFPAT11_SET_TP_DST },
-    { OFPUTIL_A_COPY_TTL_OUT,   OFPAT11_COPY_TTL_OUT },
-    { OFPUTIL_A_COPY_TTL_IN,    OFPAT11_COPY_TTL_IN },
-    { OFPUTIL_A_SET_MPLS_LABEL, OFPAT11_SET_MPLS_LABEL },
-    { OFPUTIL_A_SET_MPLS_TC,    OFPAT11_SET_MPLS_TC },
-    { OFPUTIL_A_SET_MPLS_TTL,   OFPAT11_SET_MPLS_TTL },
-    { OFPUTIL_A_DEC_MPLS_TTL,   OFPAT11_DEC_MPLS_TTL },
-    { OFPUTIL_A_PUSH_VLAN,      OFPAT11_PUSH_VLAN },
-    { OFPUTIL_A_POP_VLAN,       OFPAT11_POP_VLAN },
-    { OFPUTIL_A_PUSH_MPLS,      OFPAT11_PUSH_MPLS },
-    { OFPUTIL_A_POP_MPLS,       OFPAT11_POP_MPLS },
-    { OFPUTIL_A_SET_QUEUE,      OFPAT11_SET_QUEUE },
-    { OFPUTIL_A_GROUP,          OFPAT11_GROUP },
-    { OFPUTIL_A_SET_NW_TTL,     OFPAT11_SET_NW_TTL },
-    { OFPUTIL_A_DEC_NW_TTL,     OFPAT11_DEC_NW_TTL },
-    { 0, 0 },
-};
-
-static const struct ofputil_action_bit_translation of12_action_bits[] = {
-    { OFPUTIL_A_OUTPUT,         OFPAT12_OUTPUT },
-    { OFPUTIL_A_COPY_TTL_OUT,   OFPAT12_COPY_TTL_OUT },
-    { OFPUTIL_A_COPY_TTL_IN,    OFPAT12_COPY_TTL_IN },
-    { OFPUTIL_A_SET_MPLS_TTL,   OFPAT12_SET_MPLS_TTL },
-    { OFPUTIL_A_DEC_MPLS_TTL,   OFPAT12_DEC_MPLS_TTL },
-    { OFPUTIL_A_PUSH_VLAN,      OFPAT12_PUSH_VLAN },
-    { OFPUTIL_A_POP_VLAN,       OFPAT12_POP_VLAN },
-    { OFPUTIL_A_PUSH_MPLS,      OFPAT12_PUSH_MPLS },
-    { OFPUTIL_A_POP_MPLS,       OFPAT12_POP_MPLS },
-    { OFPUTIL_A_SET_QUEUE,      OFPAT12_SET_QUEUE },
-    { OFPUTIL_A_GROUP,          OFPAT12_GROUP },
-    { OFPUTIL_A_SET_NW_TTL,     OFPAT12_SET_NW_TTL },
-    { OFPUTIL_A_DEC_NW_TTL,     OFPAT12_DEC_NW_TTL },
-    { 0, 0 },
-};
-
 static enum ofputil_action_bitmap
 decode_action_bits(ovs_be32 of_actions,
                    const struct ofputil_action_bit_translation *x)
@@ -2455,19 +2409,7 @@ ofputil_decode_switch_features(const struct ofp_header *oh,
         if (osf->capabilities & htonl(OFPC11_GROUP_STATS)) {
             features->capabilities |= OFPUTIL_C_GROUP_STATS;
         }
-        switch ((enum ofp_version)oh->version) {
-        case OFP11_VERSION:
-            features->actions = decode_action_bits(htonl(UINT32_MAX),
-                                                   of11_action_bits);
-            break;
-        case OFP12_VERSION:
-            features->actions = decode_action_bits(htonl(UINT32_MAX),
-                                                   of12_action_bits);
-            break;
-        case OFP10_VERSION:
-        default:
-            NOT_REACHED();
-        }
+        features->actions = 0;
     } else {
         return OFPERR_OFPBRC_BAD_VERSION;
     }
