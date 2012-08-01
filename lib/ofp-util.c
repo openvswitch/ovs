@@ -1302,8 +1302,7 @@ ofputil_encode_flow_mod(const struct ofputil_flow_mod *fm,
         nfm = ofpbuf_put_zeros(msg, sizeof *nfm);
         nfm->command = htons(command);
         nfm->cookie = fm->new_cookie;
-        match_len = nx_put_match(msg, false, &fm->cr,
-                                 fm->cookie, fm->cookie_mask);
+        match_len = nx_put_match(msg, &fm->cr, fm->cookie, fm->cookie_mask);
         nfm = msg->l3;
         nfm->idle_timeout = htons(fm->idle_timeout);
         nfm->hard_timeout = htons(fm->hard_timeout);
@@ -1463,7 +1462,7 @@ ofputil_encode_flow_stats_request(const struct ofputil_flow_stats_request *fsr,
                : OFPRAW_NXST_FLOW_REQUEST);
         msg = ofpraw_alloc(raw, OFP10_VERSION, 0);
         ofpbuf_put_zeros(msg, sizeof *nfsr);
-        match_len = nx_put_match(msg, false, &fsr->match,
+        match_len = nx_put_match(msg, &fsr->match,
                                  fsr->cookie, fsr->cookie_mask);
 
         nfsr = msg->l3;
@@ -1675,7 +1674,7 @@ ofputil_append_flow_stats_reply(const struct ofputil_flow_stats *fs,
         int match_len;
 
         ofpbuf_put_uninit(reply, sizeof *nfs);
-        match_len = nx_put_match(reply, false, &fs->rule, 0, 0);
+        match_len = nx_put_match(reply, &fs->rule, 0, 0);
         ofpacts_put_openflow10(fs->ofpacts, fs->ofpacts_len, reply);
 
         nfs = ofpbuf_at_assert(reply, start_ofs, sizeof *nfs);
@@ -1844,7 +1843,7 @@ ofputil_encode_flow_removed(const struct ofputil_flow_removed *fr,
         msg = ofpraw_alloc_xid(OFPRAW_NXT_FLOW_REMOVED, OFP10_VERSION,
                                htonl(0), NXM_TYPICAL_LEN);
         nfr = ofpbuf_put_zeros(msg, sizeof *nfr);
-        match_len = nx_put_match(msg, false, &fr->rule, 0, 0);
+        match_len = nx_put_match(msg, &fr->rule, 0, 0);
 
         nfr = msg->l3;
         nfr->cookie = fr->cookie;
@@ -1980,7 +1979,7 @@ ofputil_encode_packet_in(const struct ofputil_packet_in *pin,
                                   htonl(0), (sizeof(struct flow_metadata) * 2
                                              + 2 + send_len));
         ofpbuf_put_zeros(packet, sizeof *npi);
-        match_len = nx_put_match(packet, false, &rule, 0, 0);
+        match_len = nx_put_match(packet, &rule, 0, 0);
         ofpbuf_put_zeros(packet, 2);
         ofpbuf_put(packet, pin->packet, send_len);
 
@@ -2752,7 +2751,7 @@ ofputil_append_flow_monitor_request(
 
     start_ofs = msg->size;
     ofpbuf_put_zeros(msg, sizeof *nfmr);
-    match_len = nx_put_match(msg, false, &rq->match, htonll(0), htonll(0));
+    match_len = nx_put_match(msg, &rq->match, htonll(0), htonll(0));
 
     nfmr = ofpbuf_at_assert(msg, start_ofs, sizeof *nfmr);
     nfmr->id = htonl(rq->id);
@@ -2920,8 +2919,7 @@ ofputil_append_flow_update(const struct ofputil_flow_update *update,
         int match_len;
 
         ofpbuf_put_zeros(msg, sizeof *nfuf);
-        match_len = nx_put_match(msg, false, update->match,
-                                 htonll(0), htonll(0));
+        match_len = nx_put_match(msg, update->match, htonll(0), htonll(0));
         ofpacts_put_openflow10(update->ofpacts, update->ofpacts_len, msg);
 
         nfuf = ofpbuf_at_assert(msg, start_ofs, sizeof *nfuf);

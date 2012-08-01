@@ -91,12 +91,11 @@ nx_entry_ok(const void *p, unsigned int match_len)
 }
 
 static enum ofperr
-nx_pull_match__(struct ofpbuf *b, unsigned int match_len, bool strict,
-                uint16_t priority, struct cls_rule *rule,
-                ovs_be64 *cookie, ovs_be64 *cookie_mask)
+nx_pull_raw(const uint8_t *p, unsigned int match_len, bool strict,
+            uint16_t priority, struct cls_rule *rule,
+            ovs_be64 *cookie, ovs_be64 *cookie_mask)
 {
     uint32_t header;
-    uint8_t *p;
 
     assert((cookie != NULL) == (cookie_mask != NULL));
 
@@ -106,14 +105,6 @@ nx_pull_match__(struct ofpbuf *b, unsigned int match_len, bool strict,
     }
     if (!match_len) {
         return 0;
-    }
-
-    p = ofpbuf_try_pull(b, ROUND_UP(match_len, 8));
-    if (!p) {
-        VLOG_DBG_RL(&rl, "nx_match length %u, rounded up to a "
-                    "multiple of 8, is longer than space in message (max "
-                    "length %zu)", match_len, b->size);
-        return OFPERR_OFPBMC_BAD_LEN;
     }
 
     for (;
@@ -198,6 +189,27 @@ nx_pull_match__(struct ofpbuf *b, unsigned int match_len, bool strict,
     return match_len ? OFPERR_OFPBMC_BAD_LEN : 0;
 }
 
+static enum ofperr
+nx_pull_match__(struct ofpbuf *b, unsigned int match_len, bool strict,
+                uint16_t priority, struct cls_rule *rule,
+                ovs_be64 *cookie, ovs_be64 *cookie_mask)
+{
+    uint8_t *p = NULL;
+
+    if (match_len) {
+        p = ofpbuf_try_pull(b, ROUND_UP(match_len, 8));
+        if (!p) {
+            VLOG_DBG_RL(&rl, "nx_match length %u, rounded up to a "
+                        "multiple of 8, is longer than space in message (max "
+                        "length %zu)", match_len, b->size);
+            return OFPERR_OFPBMC_BAD_LEN;
+        }
+    }
+
+    return nx_pull_raw(p, match_len, strict, priority, rule,
+                       cookie, cookie_mask);
+}
+
 /* Parses the nx_match formatted match description in 'b' with length
  * 'match_len'.  The results are stored in 'rule', which is initialized with
  * 'priority'.  If 'cookie' and 'cookie_mask' contain valid pointers, then the
@@ -225,6 +237,61 @@ nx_pull_match_loose(struct ofpbuf *b, unsigned int match_len,
 {
     return nx_pull_match__(b, match_len, false, priority, rule, cookie,
                            cookie_mask);
+}
+
+static enum ofperr
+oxm_pull_match__(struct ofpbuf *b, bool strict,
+                 uint16_t priority, struct cls_rule *rule)
+{
+    struct ofp11_match_header *omh = b->data;
+    uint8_t *p;
+    uint16_t match_len;
+
+    if (b->size < sizeof *omh) {
+        return OFPERR_OFPBMC_BAD_LEN;
+    }
+
+    match_len = ntohs(omh->length);
+    if (match_len < sizeof *omh) {
+        return OFPERR_OFPBMC_BAD_LEN;
+    }
+
+    if (omh->type != htons(OFPMT_OXM)) {
+        return OFPERR_OFPBMC_BAD_TYPE;
+    }
+
+    p = ofpbuf_try_pull(b, ROUND_UP(match_len, 8));
+    if (!p) {
+        VLOG_DBG_RL(&rl, "oxm length %u, rounded up to a "
+                    "multiple of 8, is longer than space in message (max "
+                    "length %zu)", match_len, b->size);
+        return OFPERR_OFPBMC_BAD_LEN;
+    }
+
+    return nx_pull_raw(p + sizeof *omh, match_len - sizeof *omh,
+                       strict, priority, rule, NULL, NULL);
+}
+
+/* Parses the oxm formatted match description preceeded by a struct
+ * ofp11_match in 'b' with length 'match_len'.  The results are stored in
+ * 'rule', which is initialized with 'priority'.
+ *
+ * Fails with an error when encountering unknown OXM headers.
+ *
+ * Returns 0 if successful, otherwise an OpenFlow error code. */
+enum ofperr
+oxm_pull_match(struct ofpbuf *b, uint16_t priority, struct cls_rule *rule)
+{
+    return oxm_pull_match__(b, true, priority, rule);
+}
+
+/* Behaves the same as oxm_pull_match() with one exception.  Skips over unknown
+ * PXM headers instead of failing with an error when they are encountered. */
+enum ofperr
+oxm_pull_match_loose(struct ofpbuf *b, uint16_t priority,
+                     struct cls_rule *rule)
+{
+    return oxm_pull_match__(b, false, priority, rule);
 }
 
 /* nx_put_match() and helpers.
@@ -472,10 +539,9 @@ nxm_put_ip(struct ofpbuf *b, const struct cls_rule *cr,
 }
 
 /* Appends to 'b' the nx_match format that expresses 'cr' (except for
- * 'cr->priority', because priority is not part of nx_match), plus enough
- * zero bytes to pad the nx_match out to a multiple of 8.  For Flow Mod
- * and Flow Stats Requests messages, a 'cookie' and 'cookie_mask' may be
- * supplied.  Otherwise, 'cookie_mask' should be zero.
+ * 'cr->priority', because priority is not part of nx_match).  For Flow Mod and
+ * Flow Stats Requests messages, a 'cookie' and 'cookie_mask' may be supplied.
+ * Otherwise, 'cookie_mask' should be zero.
  *
  * This function can cause 'b''s data to be reallocated.
  *
@@ -483,9 +549,9 @@ nxm_put_ip(struct ofpbuf *b, const struct cls_rule *cr,
  *
  * If 'cr' is a catch-all rule that matches every packet, then this function
  * appends nothing to 'b' and returns 0. */
-int
-nx_put_match(struct ofpbuf *b, bool oxm, const struct cls_rule *cr,
-             ovs_be64 cookie, ovs_be64 cookie_mask)
+static int
+nx_put_raw(struct ofpbuf *b, bool oxm, const struct cls_rule *cr,
+           ovs_be64 cookie, ovs_be64 cookie_mask)
 {
     const flow_wildcards_t wc = cr->wc.wildcards;
     const struct flow *flow = &cr->flow;
@@ -603,7 +669,56 @@ nx_put_match(struct ofpbuf *b, bool oxm, const struct cls_rule *cr,
     nxm_put_64m(b, NXM_NX_COOKIE, cookie, cookie_mask);
 
     match_len = b->size - start_len;
+    return match_len;
+}
+
+/* Appends to 'b' the nx_match format that expresses 'cr' (except for
+ * 'cr->priority', because priority is not part of nx_match), plus enough zero
+ * bytes to pad the nx_match out to a multiple of 8.  For Flow Mod and Flow
+ * Stats Requests messages, a 'cookie' and 'cookie_mask' may be supplied.
+ * Otherwise, 'cookie_mask' should be zero.
+ *
+ * This function can cause 'b''s data to be reallocated.
+ *
+ * Returns the number of bytes appended to 'b', excluding padding.  The return
+ * value can be zero if it appended nothing at all to 'b' (which happens if
+ * 'cr' is a catch-all rule that matches every packet). */
+int
+nx_put_match(struct ofpbuf *b, const struct cls_rule *cr,
+             ovs_be64 cookie, ovs_be64 cookie_mask)
+{
+    int match_len = nx_put_raw(b, false, cr, cookie, cookie_mask);
+
     ofpbuf_put_zeros(b, ROUND_UP(match_len, 8) - match_len);
+    return match_len;
+}
+
+
+/* Appends to 'b' an struct ofp11_match_header followed by the oxm format that
+ * expresses 'cr' (except for 'cr->priority', because priority is not part of
+ * nx_match), plus enough zero bytes to pad the data appended out to a multiple
+ * of 8.
+ *
+ * This function can cause 'b''s data to be reallocated.
+ *
+ * Returns the number of bytes appended to 'b', excluding the padding.  Never
+ * returns zero. */
+int
+oxm_put_match(struct ofpbuf *b, const struct cls_rule *cr)
+{
+    int match_len;
+    struct ofp11_match_header *omh;
+    size_t start_len = b->size;
+    ovs_be64 cookie = htonll(0), cookie_mask = htonll(0);
+
+    ofpbuf_put_uninit(b, sizeof *omh);
+    match_len = nx_put_raw(b, true, cr, cookie, cookie_mask) + sizeof *omh;
+    ofpbuf_put_zeros(b, ROUND_UP(match_len, 8) - match_len);
+
+    omh = (struct ofp11_match_header *)((char *)b->data + start_len);
+    omh->type = htons(OFPMT_OXM);
+    omh->length = htons(match_len);
+
     return match_len;
 }
 
@@ -659,6 +774,43 @@ nx_match_to_string(const uint8_t *p, unsigned int match_len)
         ds_put_format(&s, "<%u invalid bytes>", match_len);
     }
 
+    return ds_steal_cstr(&s);
+}
+
+char *
+oxm_match_to_string(const uint8_t *p, unsigned int match_len)
+{
+    const struct ofp11_match_header *omh = (struct ofp11_match_header *)p;
+    uint16_t match_len_;
+    struct ds s;
+
+    ds_init(&s);
+
+    if (match_len < sizeof *omh) {
+        ds_put_format(&s, "<match too short: %u>", match_len);
+        goto err;
+    }
+
+    if (omh->type != htons(OFPMT_OXM)) {
+        ds_put_format(&s, "<bad match type field: %u>", ntohs(omh->type));
+        goto err;
+    }
+
+    match_len_ = ntohs(omh->length);
+    if (match_len_ < sizeof *omh) {
+        ds_put_format(&s, "<match length field too short: %u>", match_len_);
+        goto err;
+    }
+
+    if (match_len_ != match_len) {
+        ds_put_format(&s, "<match length field incorrect: %u != %u>",
+                      match_len_, match_len);
+        goto err;
+    }
+
+    return nx_match_to_string(p + sizeof *omh, match_len - sizeof *omh);
+
+err:
     return ds_steal_cstr(&s);
 }
 
@@ -738,12 +890,11 @@ parse_nxm_field_name(const char *name, int name_len)
 
 /* nx_match_from_string(). */
 
-int
-nx_match_from_string(const char *s, struct ofpbuf *b)
+static int
+nx_match_from_string_raw(const char *s, struct ofpbuf *b)
 {
     const char *full_s = s;
     const size_t start_len = b->size;
-    int match_len;
 
     if (!strcmp(s, "<any>")) {
         /* Ensure that 'b->data' isn't actually null. */
@@ -795,8 +946,32 @@ nx_match_from_string(const char *s, struct ofpbuf *b)
         s++;
     }
 
-    match_len = b->size - start_len;
+    return b->size - start_len;
+}
+
+int
+nx_match_from_string(const char *s, struct ofpbuf *b)
+{
+    int match_len = nx_match_from_string_raw(s, b);
     ofpbuf_put_zeros(b, ROUND_UP(match_len, 8) - match_len);
+    return match_len;
+}
+
+int
+oxm_match_from_string(const char *s, struct ofpbuf *b)
+{
+    int match_len;
+    struct ofp11_match_header *omh;
+    size_t start_len = b->size;
+
+    ofpbuf_put_uninit(b, sizeof *omh);
+    match_len = nx_match_from_string_raw(s, b) + sizeof *omh;
+    ofpbuf_put_zeros(b, ROUND_UP(match_len, 8) - match_len);
+
+    omh = (struct ofp11_match_header *)((char *)b->data + start_len);
+    omh->type = htons(OFPMT_OXM);
+    omh->length = htons(match_len);
+
     return match_len;
 }
 
