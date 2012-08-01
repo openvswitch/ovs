@@ -1440,8 +1440,8 @@ ofctl_probe(int argc OVS_UNUSED, char *argv[])
     struct vconn *vconn;
     struct ofpbuf *reply;
 
-    request = make_echo_request();
     open_vconn(argv[1], &vconn);
+    request = make_echo_request(vconn_get_version(vconn));
     run(vconn_transact(vconn, request, &reply), "talking to %s", argv[1]);
     if (reply->size != sizeof(struct ofp_header)) {
         ovs_fatal(0, "reply does not match request");

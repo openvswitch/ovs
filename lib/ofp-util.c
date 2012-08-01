@@ -2973,9 +2973,9 @@ ofputil_encode_packet_out(const struct ofputil_packet_out *po)
 
 /* Creates and returns an OFPT_ECHO_REQUEST message with an empty payload. */
 struct ofpbuf *
-make_echo_request(void)
+make_echo_request(enum ofp_version ofp_version)
 {
-    return ofpraw_alloc_xid(OFPRAW_OFPT_ECHO_REQUEST, OFP10_VERSION,
+    return ofpraw_alloc_xid(OFPRAW_OFPT_ECHO_REQUEST, ofp_version,
                             htonl(0), 0);
 }
 
