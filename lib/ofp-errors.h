@@ -21,8 +21,9 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "openflow/openflow.h"
+
 struct ds;
-struct ofp_header;
 struct ofpbuf;
 
 /* Error codes.
@@ -515,7 +516,7 @@ enum ofperr ofperr_from_name(const char *);
 enum ofperr ofperr_decode_msg(const struct ofp_header *,
                               struct ofpbuf *payload);
 struct ofpbuf *ofperr_encode_reply(enum ofperr, const struct ofp_header *);
-struct ofpbuf *ofperr_encode_hello(enum ofperr, const struct ofperr_domain *,
+struct ofpbuf *ofperr_encode_hello(enum ofperr, enum ofp_version ofp_version,
                                    const char *);
 int ofperr_get_type(enum ofperr, const struct ofperr_domain *);
 int ofperr_get_code(enum ofperr, const struct ofperr_domain *);

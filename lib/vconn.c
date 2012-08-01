@@ -461,9 +461,8 @@ vcs_send_error(struct vconn *vconn)
 
     snprintf(s, sizeof s, "We support versions 0x%02x to 0x%02x inclusive but "
              "you support no later than version 0x%02"PRIx8".",
-             vconn->min_version, OFP10_VERSION, vconn->version);
-    b = ofperr_encode_hello(OFPERR_OFPHFC_INCOMPATIBLE,
-                            ofperr_domain_from_version(vconn->version), s);
+             vconn->min_version, OFP12_VERSION, vconn->version);
+    b = ofperr_encode_hello(OFPERR_OFPHFC_INCOMPATIBLE, vconn->version, s);
     retval = do_send(vconn, b);
     if (retval) {
         ofpbuf_delete(b);
