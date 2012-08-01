@@ -1031,6 +1031,7 @@ flow_compose(struct ofpbuf *b, const struct flow *flow)
             }
         }
 
+        ip = b->l3;
         ip->ip_tot_len = htons((uint8_t *) b->data + b->size
                                - (uint8_t *) b->l3);
     } else if (flow->dl_type == htons(ETH_TYPE_IPV6)) {
