@@ -36,8 +36,7 @@ m4_define([OVS_VSWITCHD_START],
    trap 'kill `cat ovsdb-server.pid ovs-vswitchd.pid`' 0
 
    dnl Create database.
-   mkdir openvswitch
-   touch openvswitch/.conf.db.~lock~
+   touch .conf.db.~lock~
    AT_CHECK([ovsdb-tool create conf.db $abs_top_srcdir/vswitchd/vswitch.ovsschema])
 
    dnl Start ovsdb-server.
