@@ -323,7 +323,7 @@ enum ofp_flow_wildcards {
 #define OFP_DL_TYPE_NOT_ETH_TYPE  0x05ff
 
 /* The VLAN id is 12-bits, so we can use the entire 16 bits to indicate
- * special conditions.  All ones indicates that no VLAN id was set.
+ * special conditions.  All ones indicates that 802.1Q header is not present.
  */
 #define OFP10_VLAN_NONE      0xffff
 
