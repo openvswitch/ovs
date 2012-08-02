@@ -26,6 +26,7 @@
 #include <string.h>
 #include "byte-order.h"
 #include "coverage.h"
+#include "csum.h"
 #include "dynamic-string.h"
 #include "hash.h"
 #include "ofpbuf.h"
@@ -1009,7 +1010,7 @@ flow_set_vlan_pcp(struct flow *flow, uint8_t pcp)
  * 'flow'.
  *
  * (This is useful only for testing, obviously, and the packet isn't really
- * valid.  It hasn't got any checksums filled in, for one, and lots of fields
+ * valid. It hasn't got some checksums filled in, for one, and lots of fields
  * are just zeroed.) */
 void
 flow_compose(struct ofpbuf *b, const struct flow *flow)
@@ -1068,6 +1069,7 @@ flow_compose(struct ofpbuf *b, const struct flow *flow)
         ip = b->l3;
         ip->ip_tot_len = htons((uint8_t *) b->data + b->size
                                - (uint8_t *) b->l3);
+        ip->ip_csum = csum(ip, sizeof *ip);
     } else if (flow->dl_type == htons(ETH_TYPE_IPV6)) {
         /* XXX */
     } else if (flow->dl_type == htons(ETH_TYPE_ARP)) {
