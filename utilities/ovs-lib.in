@@ -22,13 +22,20 @@
 # All of these should be substituted by the Makefile at build time.
 logdir=${OVS_LOGDIR-'@LOGDIR@'}                 # /var/log/openvswitch
 rundir=${OVS_RUNDIR-'@RUNDIR@'}                 # /var/run/openvswitch
-dbdir=${OVS_DBDIR-'@DBDIR@'}                    # /etc/openvswitch
-                                                # or /var/lib/openvswitch
 sysconfdir=${OVS_SYSCONFDIR-'@sysconfdir@'}     # /etc
 etcdir=$sysconfdir/openvswitch                  # /etc/openvswitch
 datadir=${OVS_PKGDATADIR-'@pkgdatadir@'}        # /usr/share/openvswitch
 bindir=${OVS_BINDIR-'@bindir@'}                 # /usr/bin
 sbindir=${OVS_SBINDIR-'@sbindir@'}              # /usr/sbin
+
+# /etc/openvswitch or /var/lib/openvswitch
+if test X"$OVS_DBDIR" != X; then
+    dbdir=$OVS_DBDIR
+elif test X"$OVS_SYSCONFDIR" != X; then
+    dbdir=$OVS_SYSCONFDIR/openvswitch
+else
+    dbdir='@DBDIR@'
+fi
 
 VERSION='@VERSION@'
 

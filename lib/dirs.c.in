@@ -18,6 +18,7 @@
 #include <config.h>
 #include "dirs.h"
 #include <stdlib.h>
+#include "util.h"
 
 struct directory {
     const char *value;          /* Actual value; NULL if not yet determined. */
@@ -68,8 +69,18 @@ ovs_logdir(void)
 const char *
 ovs_dbdir(void)
 {
-    static struct directory d = { NULL, @DBDIR@, "OVS_DBDIR" };
-    return get_dir(&d);
+    static const char *dbdir;
+    if (!dbdir) {
+        dbdir = getenv("OVS_DBDIR");
+        if (!dbdir || !dbdir[0]) {
+            char *sysconfdir = getenv("OVS_SYSCONFDIR");
+
+            dbdir = (sysconfdir
+                     ? xasprintf("%s/openvswitch", sysconfdir)
+                     : @DBDIR@);
+        }
+    }
+    return dbdir;
 }
 
 const char *

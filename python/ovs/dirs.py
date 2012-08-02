@@ -1,9 +1,13 @@
-# These are the default directories.  They will be replaced by the
-# configured directories at install time.
-
 import os
-PKGDATADIR = os.environ.get("OVS_PKGDATADIR", "/usr/local/share/openvswitch")
-RUNDIR = os.environ.get("OVS_RUNDIR", "/var/run")
-LOGDIR = os.environ.get("OVS_LOGDIR", "/usr/local/var/log")
-DBDIR = os.environ.get("OVS_DBDIR", "/usr/local/etc/openvswitch")
-BINDIR = os.environ.get("OVS_BINDIR", "/usr/local/bin")
+PKGDATADIR = os.environ.get("OVS_PKGDATADIR", """/usr/local/share/openvswitch""")
+RUNDIR = os.environ.get("OVS_RUNDIR", """/var/run""")
+LOGDIR = os.environ.get("OVS_LOGDIR", """/usr/local/var/log""")
+BINDIR = os.environ.get("OVS_BINDIR", """/usr/local/bin""")
+
+DBDIR = os.environ.get("OVS_DBDIR")
+if not DBDIR:
+    sysconfdir = os.environ.get("OVS_SYSCONFDIR")
+    if sysconfdir:
+        DBDIR = "%s/openvswitch" % sysconfdir
+    else:
+        DBDIR = """/usr/local/etc/openvswitch"""

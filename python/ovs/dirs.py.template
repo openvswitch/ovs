@@ -1,0 +1,17 @@
+## The @variables@ in this file are replaced by default directories for
+## use in python/ovs/dirs.py in the source directory and replaced by the
+## configured directories for use in the installed python/ovs/dirs.py.
+##
+import os
+PKGDATADIR = os.environ.get("OVS_PKGDATADIR", """@pkgdatadir@""")
+RUNDIR = os.environ.get("OVS_RUNDIR", """@RUNDIR@""")
+LOGDIR = os.environ.get("OVS_LOGDIR", """@LOGDIR@""")
+BINDIR = os.environ.get("OVS_BINDIR", """@bindir@""")
+
+DBDIR = os.environ.get("OVS_DBDIR")
+if not DBDIR:
+    sysconfdir = os.environ.get("OVS_SYSCONFDIR")
+    if sysconfdir:
+        DBDIR = "%s/openvswitch" % sysconfdir
+    else:
+        DBDIR = """@DBDIR@"""
