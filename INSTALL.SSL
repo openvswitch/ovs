@@ -306,10 +306,6 @@ After you have added all of these configuration keys, you may specify
 "tcp:" connection methods are still allowed even after SSL has been
 configured, so for security you should use only "ssl:" connections.
 
-Unlike most Open vSwitch settings, the SSL settings are read only
-once, at ovs-vswitchd startup time.  For changes to take effect,
-ovs-vswitchd must be killed and restarted.
-
 Reporting Bugs
 --------------
 
