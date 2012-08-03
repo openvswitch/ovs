@@ -11,25 +11,25 @@ ovs\-pki \- OpenFlow public key infrastructure management utility
 .SH SYNOPSIS
 Each command takes the form:
 .sp
-\fBovs\-pki\fR [\fIOPTIONS\fR] \fICOMMAND\fR [\fIARGS\fR]
+\fBovs\-pki\fR [\fIoptions\fR] \fIcommand\fR [\fIargs\fR]
 .sp
 The implemented commands and their arguments are:
 .br
 \fBovs\-pki\fR \fBinit\fR
 .br
-\fBovs\-pki\fR \fBreq\fR \fINAME\fR
+\fBovs\-pki\fR \fBreq\fR \fIname\fR
 .br
-\fBovs\-pki\fR \fBsign\fR \fINAME\fR [\fITYPE\fR]
+\fBovs\-pki\fR \fBsign\fR \fIname\fR [\fItype\fR]
 .br
-\fBovs\-pki\fR \fBreq+sign\fR \fINAME\fR [\fITYPE\fR]
+\fBovs\-pki\fR \fBreq+sign\fR \fIname\fR [\fItype\fR]
 .br
-\fBovs\-pki\fR \fBverify\fR \fINAME\fR [\fITYPE\fR]
+\fBovs\-pki\fR \fBverify\fR \fIname\fR [\fItype\fR]
 .br
-\fBovs\-pki\fR \fBfingerprint\fR \fIFILE\fR
+\fBovs\-pki\fR \fBfingerprint\fR \fIfile\fR
 .br
-\fBovs\-pki\fR \fBself\-sign\fR \fINAME\fR
+\fBovs\-pki\fR \fBself\-sign\fR \fIname\fR
 .sp
-Each \fITYPE\fR above is a certificate type, either \fBswitch\fR
+Each \fItype\fR above is a certificate type, either \fBswitch\fR
 (default) or \fBcontroller\fR.
 .sp
 The available options are:
@@ -94,14 +94,14 @@ The files \fBpki/controllerca/private/cakey.pem\fR and
 contents that should not be exposed.
 
 .TP
-\fBreq\fR \fINAME\fR
-Generates a new private key named \fINAME\fR\fB\-privkey.pem\fR and
-corresponding certificate request named \fINAME\fR\fB\-req.pem\fR.
+\fBreq\fR \fIname\fR
+Generates a new private key named \fIname\fR\fB\-privkey.pem\fR and
+corresponding certificate request named \fIname\fR\fB\-req.pem\fR.
 The private key can be intended for use by a switch or a controller.
 
 This command should ideally be run on the switch or controller that
 will use the private key to identify itself.  The file
-\fINAME\fR\fB\-req.pem\fR must be copied to the CA machine for signing
+\fIname\fR\fB\-req.pem\fR must be copied to the CA machine for signing
 with the \fBsign\fR command (below).  
 
 This command will output a fingerprint to stdout as its final step.
@@ -121,14 +121,14 @@ hierarchy (but not to other files in that tree).  By default,
 the \fB\-D\fR or \fB\-\^\-dsaparam\fR option (see below) may be used to
 specify an alternate location.
 
-\fINAME\fR\fB\-privkey.pem\fR has sensitive contents that should not be
-exposed.  \fINAME\fR\fB\-req.pem\fR may be safely made public.
+\fIname\fR\fB\-privkey.pem\fR has sensitive contents that should not be
+exposed.  \fIname\fR\fB\-req.pem\fR may be safely made public.
 
 .TP
-\fBsign\fR \fINAME\fR [\fITYPE\fR]
-Signs the certificate request named \fINAME\fR\fB\-req.pem\fR that was
+\fBsign\fR \fIname\fR [\fItype\fR]
+Signs the certificate request named \fIname\fR\fB\-req.pem\fR that was
 produced in the previous step, producing a certificate named
-\fINAME\fR\fB\-cert.pem\fR.  \fITYPE\fR, either \fBswitch\fR (default) or
+\fIname\fR\fB\-cert.pem\fR.  \fItype\fR, either \fBswitch\fR (default) or
 \fBcontroller\fR, indicates the use for which the key is being
 certified.
 
@@ -140,17 +140,17 @@ command.  This ensures that the request being signed is the same one
 produced by \fBreq\fR.  (The \fB\-b\fR or \fB\-\^\-batch\fR option
 suppresses the verification step.)
 
-The file \fINAME\fR\fB\-cert.pem\fR will need to be copied back to the
+The file \fIname\fR\fB\-cert.pem\fR will need to be copied back to the
 switch or controller for which it is intended.  Its contents may
 safely be made public.
 
 .TP
-\fBreq+sign\fR \fINAME\fR [\fITYPE\fR]
+\fBreq+sign\fR \fIname\fR [\fItype\fR]
 Combines the \fBreq\fR and \fBsign\fR commands into a single step,
 outputting all the files produced by each.  The
-\fINAME\fR\fB\-privkey.pem\fR and \fINAME\fR\fB\-cert.pem\fR files must
+\fIname\fR\fB\-privkey.pem\fR and \fIname\fR\fB\-cert.pem\fR files must
 be copied securely to the switch or controller.
-\fINAME\fR\fB\-privkey.pem\fR has sensitive contents and must not be
+\fIname\fR\fB\-privkey.pem\fR has sensitive contents and must not be
 exposed in transit.  Afterward, it should be deleted from the CA
 machine.
 
@@ -160,25 +160,25 @@ because there is additional potential for exposure of the private
 key.  However, it is also more convenient.
 
 .TP
-\fBverify\fR \fINAME\fR [\fITYPE\fR]
-Verifies that \fINAME\fR\fB\-cert.pem\fR is a valid certificate for the
-given \fITYPE\fR of use, either \fBswitch\fR (default) or
+\fBverify\fR \fIname\fR [\fItype\fR]
+Verifies that \fIname\fR\fB\-cert.pem\fR is a valid certificate for the
+given \fItype\fR of use, either \fBswitch\fR (default) or
 \fBcontroller\fR.  If the certificate is valid for this use, it prints
-the message ``\fINAME\fR\fB\-cert.pem\fR: OK''; otherwise, it prints an
+the message ``\fIname\fR\fB\-cert.pem\fR: OK''; otherwise, it prints an
 error message.
 
 .TP
-\fBfingerprint\fR \fIFILE\fR
-Prints the fingerprint for \fIFILE\fR.  If \fIFILE\fR is a
+\fBfingerprint\fR \fIfile\fR
+Prints the fingerprint for \fIfile\fR.  If \fIfile\fR is a
 certificate, then this is the SHA\-1 digest of the DER encoded version
 of the certificate; otherwise, it is the SHA\-1 digest of the entire
 file.
 
 .TP
-\fBself\-sign\fR \fINAME\fR
-Signs the certificate request named \fINAME\fB\-req.pem\fR using the
-private key \fINAME\fB\-privkey.pem\fR, producing a self-signed
-certificate named \fINAME\fB\-cert.pem\fR.  The input files should have
+\fBself\-sign\fR \fIname\fR
+Signs the certificate request named \fIname\fB\-req.pem\fR using the
+private key \fIname\fB\-privkey.pem\fR, producing a self-signed
+certificate named \fIname\fB\-cert.pem\fR.  The input files should have
 been produced with \fBovs\-pki req\fR.
 
 Some controllers accept such self-signed certificates.
