@@ -910,6 +910,7 @@ echo n_msgs=$n_msgs
 OVS_VSWITCHD_START
 
 # Start a monitor watching the flow table, then make it block.
+trap 'kill `cat ovsdb-server.pid ovs-vswitchd.pid ovs-ofctl.pid`' 0
 ovs-ofctl monitor br0 watch: --detach --no-chdir --pidfile >monitor.log 2>&1
 AT_CAPTURE_FILE([monitor.log])
 ovs-appctl -t ovs-ofctl ofctl/block
@@ -922,6 +923,8 @@ perl -e '
     }
 ') > flows.txt
 AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+# Check that multipart flow dumps work properly:
+AT_CHECK([ovs-ofctl diff-flows br0 flows.txt])
 AT_CHECK([ovs-ofctl add-flow br0 in_port=1,cookie=3,actions=drop])
 AT_CHECK([ovs-ofctl mod-flows br0 in_port=2,cookie=2,actions=output:2])
 AT_CHECK([ovs-ofctl del-flows br0 cookie=1/-1])

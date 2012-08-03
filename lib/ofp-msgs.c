@@ -789,6 +789,8 @@ ofpmsg_body(const struct ofp_header *oh)
     return (const uint8_t *) oh + ofphdrs_len(&hdrs);
 }
 
+static ovs_be16 *ofpmp_flags__(const struct ofp_header *);
+
 /* Initializes 'replies' as a new list of stats messages that reply to
  * 'request', which must be a stats request message.  Initially the list will
  * consist of only a single reply part without any body.  The caller should
@@ -831,6 +833,8 @@ ofpmp_reserve(struct list *replies, size_t len)
         next = ofpbuf_new(MAX(1024, hdrs_len + len));
         ofpbuf_put(next, msg->data, hdrs_len);
         list_push_back(replies, &next->list_node);
+
+        *ofpmp_flags__(msg->data) |= htons(OFPSF_REPLY_MORE);
 
         return next;
     }
