@@ -302,6 +302,60 @@ A: Yes.  ovs-vswitchd.conf.db(5) is a comprehensive reference.
 VLANs
 -----
 
+Q: What's a VLAN?
+
+A: At the simplest level, a VLAN (short for "virtual LAN") is a way to
+   partition a single switch into multiple switches.  Suppose, for
+   example, that you have two groups of machines, group A and group B.
+   You want the machines in group A to be able to talk to each other,
+   and you want the machine in group B to be able to talk to each
+   other, but you don't want the machines in group A to be able to
+   talk to the machines in group B.  You can do this with two
+   switches, by plugging the machines in group A into one switch and
+   the machines in group B into the other switch.
+
+   If you only have one switch, then you can use VLANs to do the same
+   thing, by configuring the ports for machines in group A as VLAN
+   "access ports" for one VLAN and the ports for group B as "access
+   ports" for a different VLAN.  The switch will only forward packets
+   between ports that are assigned to the same VLAN, so this
+   effectively subdivides your single switch into two independent
+   switches, one for each group of machines.
+
+   So far we haven't said anything about VLAN headers.  With access
+   ports, like we've described so far, no VLAN header is present in
+   the Ethernet frame.  This means that the machines (or switches)
+   connected to access ports need not be aware that VLANs are
+   involved, just like in the case where we use two different physical
+   switches.
+
+   Now suppose that you have a whole bunch of switches in your
+   network, instead of just one, and that some machines in group A are
+   connected directly to both switches 1 and 2.  To allow these
+   machines to talk to each other, you could add an access port for
+   group A's VLAN to switch 1 and another to switch 2, and then
+   connect an Ethernet cable between those ports.  That works fine,
+   but it doesn't scale well as the number of switches and the number
+   of VLANs increases, because you use up a lot of valuable switch
+   ports just connecting together your VLANs.
+
+   This is where VLAN headers come in.  Instead of using one cable and
+   two ports per VLAN to connect a pair of switches, we configure a
+   port on each switch as a VLAN "trunk port".  Packets sent and
+   received on a trunk port carry a VLAN header that says what VLAN
+   the packet belongs to, so that only two ports total are required to
+   connect the switches, regardless of the number of VLANs in use.
+   Normally, only switches (either physical or virtual) are connected
+   to a trunk port, not individual hosts, because individual hosts
+   don't expect to see a VLAN header in the traffic that they receive.
+
+   None of the above discussion says anything about particular VLAN
+   numbers.  This is because VLAN numbers are completely arbitrary.
+   One must only ensure that a given VLAN is numbered consistently
+   throughout a network and that different VLANs are given different
+   numbers.  (That said, VLAN 0 is usually synonymous with a packet
+   that has no VLAN header, and VLAN 4095 is reserved.)
+
 Q: VLANs don't work.
 
 A: Many drivers in Linux kernels before version 3.3 had VLAN-related
