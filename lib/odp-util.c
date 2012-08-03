@@ -1854,7 +1854,7 @@ static void
 commit_set_port_action(const struct flow *flow, struct flow *base,
                        struct ofpbuf *odp_actions)
 {
-    if (!base->tp_src || !base->tp_dst) {
+    if (!base->tp_src && !base->tp_dst) {
         return;
     }
 
