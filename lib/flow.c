@@ -442,7 +442,6 @@ flow_extract(struct ofpbuf *packet, uint32_t skb_priority, ovs_be64 tun_id,
 void
 flow_zero_wildcards(struct flow *flow, const struct flow_wildcards *wildcards)
 {
-    const flow_wildcards_t wc = wildcards->wildcards;
     int i;
 
     BUILD_ASSERT_DECL(FLOW_WC_SEQ == 17);
@@ -454,9 +453,7 @@ flow_zero_wildcards(struct flow *flow, const struct flow_wildcards *wildcards)
     flow->metadata &= wildcards->metadata_mask;
     flow->nw_src &= wildcards->nw_src_mask;
     flow->nw_dst &= wildcards->nw_dst_mask;
-    if (wc & FWW_IN_PORT) {
-        flow->in_port = 0;
-    }
+    flow->in_port &= wildcards->in_port_mask;
     flow->vlan_tci &= wildcards->vlan_tci_mask;
     flow->dl_type &= wildcards->dl_type_mask;
     flow->tp_src &= wildcards->tp_src_mask;
@@ -573,7 +570,6 @@ flow_wildcards_init_catchall(struct flow_wildcards *wc)
 {
     BUILD_ASSERT_DECL(FLOW_WC_SEQ == 17);
 
-    wc->wildcards = FWW_ALL;
     wc->tun_id_mask = htonll(0);
     wc->nw_src_mask = htonl(0);
     wc->nw_dst_mask = htonl(0);
@@ -583,6 +579,7 @@ flow_wildcards_init_catchall(struct flow_wildcards *wc)
     wc->nd_target_mask = in6addr_any;
     memset(wc->reg_masks, 0, sizeof wc->reg_masks);
     wc->metadata_mask = htonll(0);
+    wc->in_port_mask = 0;
     wc->vlan_tci_mask = htons(0);
     wc->nw_frag_mask = 0;
     wc->dl_type_mask = htons(0);
@@ -605,7 +602,6 @@ flow_wildcards_init_exact(struct flow_wildcards *wc)
 {
     BUILD_ASSERT_DECL(FLOW_WC_SEQ == 17);
 
-    wc->wildcards = 0;
     wc->tun_id_mask = htonll(UINT64_MAX);
     wc->nw_src_mask = htonl(UINT32_MAX);
     wc->nw_dst_mask = htonl(UINT32_MAX);
@@ -615,6 +611,7 @@ flow_wildcards_init_exact(struct flow_wildcards *wc)
     wc->nd_target_mask = in6addr_exact;
     memset(wc->reg_masks, 0xff, sizeof wc->reg_masks);
     wc->metadata_mask = htonll(UINT64_MAX);
+    wc->in_port_mask = UINT16_MAX;
     wc->vlan_tci_mask = htons(UINT16_MAX);
     wc->nw_frag_mask = UINT8_MAX;
     wc->dl_type_mask = htons(UINT16_MAX);
@@ -639,12 +636,12 @@ flow_wildcards_is_exact(const struct flow_wildcards *wc)
 
     BUILD_ASSERT_DECL(FLOW_WC_SEQ == 17);
 
-    if (wc->wildcards
-        || wc->tun_id_mask != htonll(UINT64_MAX)
+    if (wc->tun_id_mask != htonll(UINT64_MAX)
         || wc->nw_src_mask != htonl(UINT32_MAX)
         || wc->nw_dst_mask != htonl(UINT32_MAX)
         || wc->tp_src_mask != htons(UINT16_MAX)
         || wc->tp_dst_mask != htons(UINT16_MAX)
+        || wc->in_port_mask != UINT16_MAX
         || wc->vlan_tci_mask != htons(UINT16_MAX)
         || wc->metadata_mask != htonll(UINT64_MAX)
         || wc->dl_type_mask != htons(UINT16_MAX)
@@ -681,12 +678,12 @@ flow_wildcards_is_catchall(const struct flow_wildcards *wc)
 
     BUILD_ASSERT_DECL(FLOW_WC_SEQ == 17);
 
-    if (wc->wildcards != FWW_ALL
-        || wc->tun_id_mask != htonll(0)
+    if (wc->tun_id_mask != htonll(0)
         || wc->nw_src_mask != htonl(0)
         || wc->nw_dst_mask != htonl(0)
         || wc->tp_src_mask != htons(0)
         || wc->tp_dst_mask != htons(0)
+        || wc->in_port_mask != 0
         || wc->vlan_tci_mask != htons(0)
         || wc->metadata_mask != htonll(0)
         || wc->dl_type_mask != htons(0)
@@ -726,7 +723,6 @@ flow_wildcards_combine(struct flow_wildcards *dst,
 
     BUILD_ASSERT_DECL(FLOW_WC_SEQ == 17);
 
-    dst->wildcards = src1->wildcards | src2->wildcards;
     dst->tun_id_mask = src1->tun_id_mask & src2->tun_id_mask;
     dst->nw_src_mask = src1->nw_src_mask & src2->nw_src_mask;
     dst->nw_dst_mask = src1->nw_dst_mask & src2->nw_dst_mask;
@@ -741,6 +737,7 @@ flow_wildcards_combine(struct flow_wildcards *dst,
         dst->reg_masks[i] = src1->reg_masks[i] & src2->reg_masks[i];
     }
     dst->metadata_mask = src1->metadata_mask & src2->metadata_mask;
+    dst->in_port_mask = src1->in_port_mask & src2->in_port_mask;
     dst->vlan_tci_mask = src1->vlan_tci_mask & src2->vlan_tci_mask;
     dst->dl_type_mask = src1->dl_type_mask & src2->dl_type_mask;
     dst->tp_src_mask = src1->tp_src_mask & src2->tp_src_mask;
@@ -776,10 +773,10 @@ flow_wildcards_equal(const struct flow_wildcards *a,
 
     BUILD_ASSERT_DECL(FLOW_WC_SEQ == 17);
 
-    if (a->wildcards != b->wildcards
-        || a->tun_id_mask != b->tun_id_mask
+    if (a->tun_id_mask != b->tun_id_mask
         || a->nw_src_mask != b->nw_src_mask
         || a->nw_dst_mask != b->nw_dst_mask
+        || a->in_port_mask != b->in_port_mask
         || a->vlan_tci_mask != b->vlan_tci_mask
         || a->metadata_mask != b->metadata_mask
         || a->dl_type_mask != b->dl_type_mask
@@ -862,11 +859,11 @@ flow_wildcards_has_extra(const struct flow_wildcards *a,
         return true;
     }
 
-    return (a->wildcards & ~b->wildcards
-            || (a->tun_id_mask & b->tun_id_mask) != b->tun_id_mask
+    return ((a->tun_id_mask & b->tun_id_mask) != b->tun_id_mask
             || (a->nw_src_mask & b->nw_src_mask) != b->nw_src_mask
             || (a->nw_dst_mask & b->nw_dst_mask) != b->nw_dst_mask
             || (a->ipv6_label_mask & b->ipv6_label_mask) != b->ipv6_label_mask
+            || (a->in_port_mask & b->in_port_mask) != b->in_port_mask
             || (a->vlan_tci_mask & b->vlan_tci_mask) != b->vlan_tci_mask
             || (a->metadata_mask & b->metadata_mask) != b->metadata_mask
             || (a->dl_type_mask & b->dl_type_mask) != b->dl_type_mask

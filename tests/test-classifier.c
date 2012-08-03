@@ -41,28 +41,28 @@
 
 /* Fields in a rule. */
 #define CLS_FIELDS                                                  \
-    /*                                    struct flow  all-caps */  \
-    /*        FWW_* bit(s)                member name  name     */  \
-    /*        --------------------------  -----------  -------- */  \
-    CLS_FIELD(0,                          tun_id,      TUN_ID)      \
-    CLS_FIELD(0,                          metadata,    METADATA)    \
-    CLS_FIELD(0,                          nw_src,      NW_SRC)      \
-    CLS_FIELD(0,                          nw_dst,      NW_DST)      \
-    CLS_FIELD(FWW_IN_PORT,                in_port,     IN_PORT)     \
-    CLS_FIELD(0,                          vlan_tci,    VLAN_TCI)    \
-    CLS_FIELD(0,                          dl_type,     DL_TYPE)     \
-    CLS_FIELD(0,                          tp_src,      TP_SRC)      \
-    CLS_FIELD(0,                          tp_dst,      TP_DST)      \
-    CLS_FIELD(0,                          dl_src,      DL_SRC)      \
-    CLS_FIELD(0,                          dl_dst,      DL_DST)      \
-    CLS_FIELD(0,                          nw_proto,    NW_PROTO)    \
-    CLS_FIELD(0,                          nw_tos,      NW_DSCP)
+    /*        struct flow  all-caps */  \
+    /*        member name  name     */  \
+    /*        -----------  -------- */  \
+    CLS_FIELD(tun_id,      TUN_ID)      \
+    CLS_FIELD(metadata,    METADATA)    \
+    CLS_FIELD(nw_src,      NW_SRC)      \
+    CLS_FIELD(nw_dst,      NW_DST)      \
+    CLS_FIELD(in_port,     IN_PORT)     \
+    CLS_FIELD(vlan_tci,    VLAN_TCI)    \
+    CLS_FIELD(dl_type,     DL_TYPE)     \
+    CLS_FIELD(tp_src,      TP_SRC)      \
+    CLS_FIELD(tp_dst,      TP_DST)      \
+    CLS_FIELD(dl_src,      DL_SRC)      \
+    CLS_FIELD(dl_dst,      DL_DST)      \
+    CLS_FIELD(nw_proto,    NW_PROTO)    \
+    CLS_FIELD(nw_tos,      NW_DSCP)
 
 /* Field indexes.
  *
  * (These are also indexed into struct classifier's 'tables' array.) */
 enum {
-#define CLS_FIELD(WILDCARDS, MEMBER, NAME) CLS_F_IDX_##NAME,
+#define CLS_FIELD(MEMBER, NAME) CLS_F_IDX_##NAME,
     CLS_FIELDS
 #undef CLS_FIELD
     CLS_N_FIELDS
@@ -72,15 +72,13 @@ enum {
 struct cls_field {
     int ofs;                    /* Offset in struct flow. */
     int len;                    /* Length in bytes. */
-    flow_wildcards_t wildcards; /* FWW_* bit or bits for this field. */
     const char *name;           /* Name (for debugging). */
 };
 
 static const struct cls_field cls_fields[CLS_N_FIELDS] = {
-#define CLS_FIELD(WILDCARDS, MEMBER, NAME)      \
+#define CLS_FIELD(MEMBER, NAME)                 \
     { offsetof(struct flow, MEMBER),            \
       sizeof ((struct flow *)0)->MEMBER,        \
-      WILDCARDS,                                \
       #NAME },
     CLS_FIELDS
 #undef CLS_FIELD
@@ -187,15 +185,9 @@ match(const struct cls_rule *wild, const struct flow *fixed)
     int f_idx;
 
     for (f_idx = 0; f_idx < CLS_N_FIELDS; f_idx++) {
-        const struct cls_field *f = &cls_fields[f_idx];
         bool eq;
 
-        if (f->wildcards) {
-            void *wild_field = (char *) &wild->flow + f->ofs;
-            void *fixed_field = (char *) fixed + f->ofs;
-            eq = ((wild->wc.wildcards & f->wildcards) == f->wildcards
-                  || !memcmp(wild_field, fixed_field, f->len));
-        } else if (f_idx == CLS_F_IDX_NW_SRC) {
+        if (f_idx == CLS_F_IDX_NW_SRC) {
             eq = !((fixed->nw_src ^ wild->flow.nw_src) & wild->wc.nw_src_mask);
         } else if (f_idx == CLS_F_IDX_NW_DST) {
             eq = !((fixed->nw_dst ^ wild->flow.nw_dst) & wild->wc.nw_dst_mask);
@@ -226,6 +218,9 @@ match(const struct cls_rule *wild, const struct flow *fixed)
         } else if (f_idx == CLS_F_IDX_DL_TYPE) {
             eq = !((fixed->dl_type ^ wild->flow.dl_type)
                    & wild->wc.dl_type_mask);
+        } else if (f_idx == CLS_F_IDX_IN_PORT) {
+            eq = !((fixed->in_port ^ wild->flow.in_port)
+                   & wild->wc.in_port_mask);
         } else {
             NOT_REACHED();
         }
@@ -486,9 +481,7 @@ make_rule(int wc_fields, unsigned int priority, int value_pat)
         memcpy((char *) &rule->cls_rule.flow + f->ofs,
                values[f_idx][value_idx], f->len);
 
-        if (f->wildcards) {
-            rule->cls_rule.wc.wildcards &= ~f->wildcards;
-        } else if (f_idx == CLS_F_IDX_NW_SRC) {
+        if (f_idx == CLS_F_IDX_NW_SRC) {
             rule->cls_rule.wc.nw_src_mask = htonl(UINT32_MAX);
         } else if (f_idx == CLS_F_IDX_NW_DST) {
             rule->cls_rule.wc.nw_dst_mask = htonl(UINT32_MAX);
@@ -512,6 +505,8 @@ make_rule(int wc_fields, unsigned int priority, int value_pat)
             rule->cls_rule.wc.nw_proto_mask = UINT8_MAX;
         } else if (f_idx == CLS_F_IDX_DL_TYPE) {
             rule->cls_rule.wc.dl_type_mask = htons(UINT16_MAX);
+        } else if (f_idx == CLS_F_IDX_IN_PORT) {
+            rule->cls_rule.wc.in_port_mask = UINT16_MAX;
         } else {
             NOT_REACHED();
         }

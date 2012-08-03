@@ -49,7 +49,7 @@ static const struct mf_field mf_fields[MFF_N_IDS] = {
     {
         MFF_TUN_ID, "tun_id", NULL,
         MF_FIELD_SIZES(be64),
-        MFM_FULLY, 0,
+        MFM_FULLY,
         MFS_HEXADECIMAL,
         MFP_NONE,
         true,
@@ -58,7 +58,7 @@ static const struct mf_field mf_fields[MFF_N_IDS] = {
     }, {
         MFF_METADATA, "metadata", NULL,
         MF_FIELD_SIZES(be64),
-        MFM_FULLY, 0,
+        MFM_FULLY,
         MFS_HEXADECIMAL,
         MFP_NONE,
         true,
@@ -67,7 +67,7 @@ static const struct mf_field mf_fields[MFF_N_IDS] = {
     }, {
         MFF_IN_PORT, "in_port", NULL,
         MF_FIELD_SIZES(be16),
-        MFM_NONE, FWW_IN_PORT,
+        MFM_NONE,
         MFS_OFP_PORT,
         MFP_NONE,
         false,
@@ -79,7 +79,7 @@ static const struct mf_field mf_fields[MFF_N_IDS] = {
     {                                           \
         MFF_REG##IDX, "reg" #IDX, NULL,         \
         MF_FIELD_SIZES(be32),                   \
-        MFM_FULLY, 0,                           \
+        MFM_FULLY,                              \
         MFS_HEXADECIMAL,                        \
         MFP_NONE,                               \
         true,                                   \
@@ -121,7 +121,7 @@ static const struct mf_field mf_fields[MFF_N_IDS] = {
     {
         MFF_ETH_SRC, "eth_src", "dl_src",
         MF_FIELD_SIZES(mac),
-        MFM_FULLY, 0,
+        MFM_FULLY,
         MFS_ETHERNET,
         MFP_NONE,
         true,
@@ -130,7 +130,7 @@ static const struct mf_field mf_fields[MFF_N_IDS] = {
     }, {
         MFF_ETH_DST, "eth_dst", "dl_dst",
         MF_FIELD_SIZES(mac),
-        MFM_FULLY, 0,
+        MFM_FULLY,
         MFS_ETHERNET,
         MFP_NONE,
         true,
@@ -139,7 +139,7 @@ static const struct mf_field mf_fields[MFF_N_IDS] = {
     }, {
         MFF_ETH_TYPE, "eth_type", "dl_type",
         MF_FIELD_SIZES(be16),
-        MFM_NONE, 0,
+        MFM_NONE,
         MFS_HEXADECIMAL,
         MFP_NONE,
         false,
@@ -150,7 +150,7 @@ static const struct mf_field mf_fields[MFF_N_IDS] = {
     {
         MFF_VLAN_TCI, "vlan_tci", NULL,
         MF_FIELD_SIZES(be16),
-        MFM_FULLY, 0,
+        MFM_FULLY,
         MFS_HEXADECIMAL,
         MFP_NONE,
         true,
@@ -159,7 +159,7 @@ static const struct mf_field mf_fields[MFF_N_IDS] = {
     }, {
         MFF_DL_VLAN, "dl_vlan", NULL,
         sizeof(ovs_be16), 12,
-        MFM_NONE, 0,
+        MFM_NONE,
         MFS_DECIMAL,
         MFP_NONE,
         true,
@@ -168,7 +168,7 @@ static const struct mf_field mf_fields[MFF_N_IDS] = {
     }, {
         MFF_VLAN_VID, "vlan_vid", NULL,
         sizeof(ovs_be16), 12,
-        MFM_FULLY, 0,
+        MFM_FULLY,
         MFS_DECIMAL,
         MFP_NONE,
         true,
@@ -177,7 +177,7 @@ static const struct mf_field mf_fields[MFF_N_IDS] = {
     }, {
         MFF_DL_VLAN_PCP, "dl_vlan_pcp", NULL,
         1, 3,
-        MFM_NONE, 0,
+        MFM_NONE,
         MFS_DECIMAL,
         MFP_NONE,
         true,
@@ -186,7 +186,7 @@ static const struct mf_field mf_fields[MFF_N_IDS] = {
     }, {
         MFF_VLAN_PCP, "vlan_pcp", NULL,
         1, 3,
-        MFM_NONE, 0,
+        MFM_NONE,
         MFS_DECIMAL,
         MFP_VLAN_VID,
         true,
@@ -201,7 +201,7 @@ static const struct mf_field mf_fields[MFF_N_IDS] = {
     {
         MFF_IPV4_SRC, "ip_src", "nw_src",
         MF_FIELD_SIZES(be32),
-        MFM_FULLY, 0,
+        MFM_FULLY,
         MFS_IPV4,
         MFP_IPV4,
         true,
@@ -210,7 +210,7 @@ static const struct mf_field mf_fields[MFF_N_IDS] = {
     }, {
         MFF_IPV4_DST, "ip_dst", "nw_dst",
         MF_FIELD_SIZES(be32),
-        MFM_FULLY, 0,
+        MFM_FULLY,
         MFS_IPV4,
         MFP_IPV4,
         true,
@@ -221,7 +221,7 @@ static const struct mf_field mf_fields[MFF_N_IDS] = {
     {
         MFF_IPV6_SRC, "ipv6_src", NULL,
         MF_FIELD_SIZES(ipv6),
-        MFM_FULLY, 0,
+        MFM_FULLY,
         MFS_IPV6,
         MFP_IPV6,
         true,
@@ -230,7 +230,7 @@ static const struct mf_field mf_fields[MFF_N_IDS] = {
     }, {
         MFF_IPV6_DST, "ipv6_dst", NULL,
         MF_FIELD_SIZES(ipv6),
-        MFM_FULLY, 0,
+        MFM_FULLY,
         MFS_IPV6,
         MFP_IPV6,
         true,
@@ -240,7 +240,7 @@ static const struct mf_field mf_fields[MFF_N_IDS] = {
     {
         MFF_IPV6_LABEL, "ipv6_label", NULL,
         4, 20,
-        MFM_FULLY, 0,
+        MFM_FULLY,
         MFS_HEXADECIMAL,
         MFP_IPV6,
         false,
@@ -251,7 +251,7 @@ static const struct mf_field mf_fields[MFF_N_IDS] = {
     {
         MFF_IP_PROTO, "nw_proto", NULL,
         MF_FIELD_SIZES(u8),
-        MFM_NONE, 0,
+        MFM_NONE,
         MFS_DECIMAL,
         MFP_IP_ANY,
         false,
@@ -260,7 +260,7 @@ static const struct mf_field mf_fields[MFF_N_IDS] = {
     }, {
         MFF_IP_DSCP, "nw_tos", NULL,
         MF_FIELD_SIZES(u8),
-        MFM_NONE, 0,
+        MFM_NONE,
         MFS_DECIMAL,
         MFP_IP_ANY,
         true,
@@ -269,7 +269,7 @@ static const struct mf_field mf_fields[MFF_N_IDS] = {
     }, {
         MFF_IP_ECN, "nw_ecn", NULL,
         1, 2,
-        MFM_NONE, 0,
+        MFM_NONE,
         MFS_DECIMAL,
         MFP_IP_ANY,
         true,
@@ -278,7 +278,7 @@ static const struct mf_field mf_fields[MFF_N_IDS] = {
     }, {
         MFF_IP_TTL, "nw_ttl", NULL,
         MF_FIELD_SIZES(u8),
-        MFM_NONE, 0,
+        MFM_NONE,
         MFS_DECIMAL,
         MFP_IP_ANY,
         true,
@@ -287,7 +287,7 @@ static const struct mf_field mf_fields[MFF_N_IDS] = {
     }, {
         MFF_IP_FRAG, "ip_frag", NULL,
         1, 2,
-        MFM_FULLY, 0,
+        MFM_FULLY,
         MFS_FRAG,
         MFP_IP_ANY,
         false,
@@ -298,7 +298,7 @@ static const struct mf_field mf_fields[MFF_N_IDS] = {
     {
         MFF_ARP_OP, "arp_op", NULL,
         MF_FIELD_SIZES(be16),
-        MFM_NONE, 0,
+        MFM_NONE,
         MFS_DECIMAL,
         MFP_ARP,
         false,
@@ -307,7 +307,7 @@ static const struct mf_field mf_fields[MFF_N_IDS] = {
     }, {
         MFF_ARP_SPA, "arp_spa", NULL,
         MF_FIELD_SIZES(be32),
-        MFM_FULLY, 0,
+        MFM_FULLY,
         MFS_IPV4,
         MFP_ARP,
         false,
@@ -316,7 +316,7 @@ static const struct mf_field mf_fields[MFF_N_IDS] = {
     }, {
         MFF_ARP_TPA, "arp_tpa", NULL,
         MF_FIELD_SIZES(be32),
-        MFM_FULLY, 0,
+        MFM_FULLY,
         MFS_IPV4,
         MFP_ARP,
         false,
@@ -325,7 +325,7 @@ static const struct mf_field mf_fields[MFF_N_IDS] = {
     }, {
         MFF_ARP_SHA, "arp_sha", NULL,
         MF_FIELD_SIZES(mac),
-        MFM_FULLY, 0,
+        MFM_FULLY,
         MFS_ETHERNET,
         MFP_ARP,
         false,
@@ -334,7 +334,7 @@ static const struct mf_field mf_fields[MFF_N_IDS] = {
     }, {
         MFF_ARP_THA, "arp_tha", NULL,
         MF_FIELD_SIZES(mac),
-        MFM_FULLY, 0,
+        MFM_FULLY,
         MFS_ETHERNET,
         MFP_ARP,
         false,
@@ -349,7 +349,7 @@ static const struct mf_field mf_fields[MFF_N_IDS] = {
     {
         MFF_TCP_SRC, "tcp_src", "tp_src",
         MF_FIELD_SIZES(be16),
-        MFM_FULLY, 0,
+        MFM_FULLY,
         MFS_DECIMAL,
         MFP_TCP,
         true,
@@ -358,7 +358,7 @@ static const struct mf_field mf_fields[MFF_N_IDS] = {
     }, {
         MFF_TCP_DST, "tcp_dst", "tp_dst",
         MF_FIELD_SIZES(be16),
-        MFM_FULLY, 0,
+        MFM_FULLY,
         MFS_DECIMAL,
         MFP_TCP,
         true,
@@ -369,7 +369,7 @@ static const struct mf_field mf_fields[MFF_N_IDS] = {
     {
         MFF_UDP_SRC, "udp_src", NULL,
         MF_FIELD_SIZES(be16),
-        MFM_FULLY, 0,
+        MFM_FULLY,
         MFS_DECIMAL,
         MFP_UDP,
         true,
@@ -378,7 +378,7 @@ static const struct mf_field mf_fields[MFF_N_IDS] = {
     }, {
         MFF_UDP_DST, "udp_dst", NULL,
         MF_FIELD_SIZES(be16),
-        MFM_FULLY, 0,
+        MFM_FULLY,
         MFS_DECIMAL,
         MFP_UDP,
         true,
@@ -389,7 +389,7 @@ static const struct mf_field mf_fields[MFF_N_IDS] = {
     {
         MFF_ICMPV4_TYPE, "icmp_type", NULL,
         MF_FIELD_SIZES(u8),
-        MFM_NONE, 0,
+        MFM_NONE,
         MFS_DECIMAL,
         MFP_ICMPV4,
         false,
@@ -398,7 +398,7 @@ static const struct mf_field mf_fields[MFF_N_IDS] = {
     }, {
         MFF_ICMPV4_CODE, "icmp_code", NULL,
         MF_FIELD_SIZES(u8),
-        MFM_NONE, 0,
+        MFM_NONE,
         MFS_DECIMAL,
         MFP_ICMPV4,
         false,
@@ -409,7 +409,7 @@ static const struct mf_field mf_fields[MFF_N_IDS] = {
     {
         MFF_ICMPV6_TYPE, "icmpv6_type", NULL,
         MF_FIELD_SIZES(u8),
-        MFM_NONE, 0,
+        MFM_NONE,
         MFS_DECIMAL,
         MFP_ICMPV6,
         false,
@@ -418,7 +418,7 @@ static const struct mf_field mf_fields[MFF_N_IDS] = {
     }, {
         MFF_ICMPV6_CODE, "icmpv6_code", NULL,
         MF_FIELD_SIZES(u8),
-        MFM_NONE, 0,
+        MFM_NONE,
         MFS_DECIMAL,
         MFP_ICMPV6,
         false,
@@ -433,7 +433,7 @@ static const struct mf_field mf_fields[MFF_N_IDS] = {
     {
         MFF_ND_TARGET, "nd_target", NULL,
         MF_FIELD_SIZES(ipv6),
-        MFM_FULLY, 0,
+        MFM_FULLY,
         MFS_IPV6,
         MFP_ND,
         false,
@@ -442,7 +442,7 @@ static const struct mf_field mf_fields[MFF_N_IDS] = {
     }, {
         MFF_ND_SLL, "nd_sll", NULL,
         MF_FIELD_SIZES(mac),
-        MFM_FULLY, 0,
+        MFM_FULLY,
         MFS_ETHERNET,
         MFP_ND_SOLICIT,
         false,
@@ -451,7 +451,7 @@ static const struct mf_field mf_fields[MFF_N_IDS] = {
     }, {
         MFF_ND_TLL, "nd_tll", NULL,
         MF_FIELD_SIZES(mac),
-        MFM_FULLY, 0,
+        MFM_FULLY,
         MFS_ETHERNET,
         MFP_ND_ADVERT,
         false,
@@ -573,15 +573,12 @@ bool
 mf_is_all_wild(const struct mf_field *mf, const struct flow_wildcards *wc)
 {
     switch (mf->id) {
-    case MFF_IN_PORT:
-        assert(mf->fww_bit != 0);
-        return (wc->wildcards & mf->fww_bit) != 0;
-
     case MFF_TUN_ID:
         return !wc->tun_id_mask;
     case MFF_METADATA:
         return !wc->metadata_mask;
-
+    case MFF_IN_PORT:
+        return !wc->in_port_mask;
     CASE_MFF_REGS:
         return !wc->reg_masks[mf->id - MFF_REG0];
 
@@ -673,18 +670,15 @@ mf_get_mask(const struct mf_field *mf, const struct flow_wildcards *wc,
             union mf_value *mask)
 {
     switch (mf->id) {
-    case MFF_IN_PORT:
-        assert(mf->fww_bit != 0);
-        memset(mask, wc->wildcards & mf->fww_bit ? 0x00 : 0xff, mf->n_bytes);
-        break;
-
     case MFF_TUN_ID:
         mask->be64 = wc->tun_id_mask;
         break;
     case MFF_METADATA:
         mask->be64 = wc->metadata_mask;
         break;
-
+    case MFF_IN_PORT:
+        mask->be16 = htons(wc->in_port_mask);
+        break;
     CASE_MFF_REGS:
         mask->be32 = htonl(wc->reg_masks[mf->id - MFF_REG0]);
         break;
@@ -1408,8 +1402,8 @@ mf_set_wild(const struct mf_field *mf, struct cls_rule *rule)
         cls_rule_set_metadata_masked(rule, htonll(0), htonll(0));
 
     case MFF_IN_PORT:
-        rule->wc.wildcards |= FWW_IN_PORT;
         rule->flow.in_port = 0;
+        rule->wc.in_port_mask = 0;
         break;
 
     CASE_MFF_REGS:

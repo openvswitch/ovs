@@ -552,7 +552,6 @@ static int
 nx_put_raw(struct ofpbuf *b, bool oxm, const struct cls_rule *cr,
            ovs_be64 cookie, ovs_be64 cookie_mask)
 {
-    const flow_wildcards_t wc = cr->wc.wildcards;
     const struct flow *flow = &cr->flow;
     const size_t start_len = b->size;
     int match_len;
@@ -561,7 +560,7 @@ nx_put_raw(struct ofpbuf *b, bool oxm, const struct cls_rule *cr,
     BUILD_ASSERT_DECL(FLOW_WC_SEQ == 17);
 
     /* Metadata. */
-    if (!(wc & FWW_IN_PORT)) {
+    if (cr->wc.in_port_mask) {
         uint16_t in_port = flow->in_port;
         if (oxm) {
             nxm_put_32(b, OXM_OF_IN_PORT, ofputil_port_to_ofp11(in_port));

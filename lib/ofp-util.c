@@ -89,9 +89,8 @@ ofputil_wildcard_from_ofpfw10(uint32_t ofpfw, struct flow_wildcards *wc)
     /* Initialize most of rule->wc. */
     flow_wildcards_init_catchall(wc);
 
-    wc->wildcards = 0;
-    if (ofpfw & OFPFW10_IN_PORT) {
-        wc->wildcards |= FWW_IN_PORT;
+    if (!(ofpfw & OFPFW10_IN_PORT)) {
+        wc->in_port_mask = UINT16_MAX;
     }
 
     if (!(ofpfw & OFPFW10_NW_TOS)) {
@@ -190,7 +189,7 @@ ofputil_cls_rule_to_ofp10_match(const struct cls_rule *rule,
 
     /* Figure out most OpenFlow wildcards. */
     ofpfw = 0;
-    if (wc->wildcards & FWW_IN_PORT) {
+    if (!wc->in_port_mask) {
         ofpfw |= OFPFW10_IN_PORT;
     }
     if (!wc->dl_type_mask) {
@@ -469,7 +468,7 @@ ofputil_cls_rule_to_ofp11_match(const struct cls_rule *rule,
     match->omh.type = htons(OFPMT_STANDARD);
     match->omh.length = htons(OFPMT11_STANDARD_LENGTH);
 
-    if (rule->wc.wildcards & FWW_IN_PORT) {
+    if (!rule->wc.in_port_mask) {
         wc |= OFPFW11_IN_PORT;
     } else {
         match->in_port = ofputil_port_to_ofp11(rule->flow.in_port);

@@ -149,7 +149,7 @@ cls_rule_set_tun_id_masked(struct cls_rule *rule,
 void
 cls_rule_set_in_port(struct cls_rule *rule, uint16_t ofp_port)
 {
-    rule->wc.wildcards &= ~FWW_IN_PORT;
+    rule->wc.in_port_mask = UINT16_MAX;
     rule->flow.in_port = ofp_port;
 }
 
@@ -600,7 +600,6 @@ cls_rule_format(const struct cls_rule *rule, struct ds *s)
 {
     const struct flow_wildcards *wc = &rule->wc;
     size_t start_len = s->length;
-    flow_wildcards_t w = wc->wildcards;
     const struct flow *f = &rule->flow;
     bool skip_type = false;
     bool skip_proto = false;
@@ -688,7 +687,7 @@ cls_rule_format(const struct cls_rule *rule, struct ds *s)
                       ntohll(f->metadata), ntohll(wc->metadata_mask));
         break;
     }
-    if (!(w & FWW_IN_PORT)) {
+    if (wc->in_port_mask) {
         ds_put_format(s, "in_port=%"PRIu16",", f->in_port);
     }
     if (wc->vlan_tci_mask) {
@@ -1288,7 +1287,6 @@ static bool
 flow_equal_except(const struct flow *a, const struct flow *b,
                   const struct flow_wildcards *wildcards)
 {
-    const flow_wildcards_t wc = wildcards->wildcards;
     int i;
 
     BUILD_ASSERT_DECL(FLOW_WC_SEQ == 17);
@@ -1303,7 +1301,7 @@ flow_equal_except(const struct flow *a, const struct flow *b,
             && !((a->metadata ^ b->metadata) & wildcards->metadata_mask)
             && !((a->nw_src ^ b->nw_src) & wildcards->nw_src_mask)
             && !((a->nw_dst ^ b->nw_dst) & wildcards->nw_dst_mask)
-            && (wc & FWW_IN_PORT || a->in_port == b->in_port)
+            && !((a->in_port ^ b->in_port) & wildcards->in_port_mask)
             && !((a->vlan_tci ^ b->vlan_tci) & wildcards->vlan_tci_mask)
             && !((a->dl_type ^ b->dl_type) & wildcards->dl_type_mask)
             && !((a->tp_src ^ b->tp_src) & wildcards->tp_src_mask)

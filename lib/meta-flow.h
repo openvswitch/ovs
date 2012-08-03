@@ -218,7 +218,6 @@ struct mf_field {
 
     /* Properties. */
     enum mf_maskable maskable;
-    flow_wildcards_t fww_bit;   /* Either 0 or exactly one FWW_* bit. */
     enum mf_string string;
     enum mf_prereqs prereqs;
     bool writable;              /* May be written by actions? */
