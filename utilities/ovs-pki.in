@@ -95,20 +95,6 @@ The valid stand-alone commands and their arguments are:
   fingerprint FILE     Prints the fingerprint for FILE
   self-sign NAME       Sign NAME-req.pem with NAME-privkey.pem,
                        producing self-signed certificate NAME-cert.pem
-
-The following additional commands manage an online PKI:
-  ls [PREFIX] [TYPE]   Lists incoming requests of the given TYPE, optionally 
-                       limited to those whose fingerprint begins with PREFIX
-  flush [TYPE]         Rejects all incoming requests of the given TYPE
-  reject PREFIX [TYPE] Rejects the incoming request(s) whose fingerprint begins
-                       with PREFIX and has the given TYPE
-  approve PREFIX [TYPE] Approves the incoming request whose fingerprint begins
-                       with PREFIX and has the given TYPE
-  expire [AGE]         Rejects all incoming requests older than AGE, in
-                       one of the forms Ns, Nmin, Nh, Nday (default: 1day)
-  prompt [TYPE]        Interactively prompts to accept or reject each incoming
-                       request of the given TYPE
-
 Each TYPE above is a certificate type: 'switch' (default) or 'controller'.
 
 Options for 'init', 'req', and 'req+sign' only:
@@ -117,7 +103,7 @@ Options for 'init', 'req', and 'req+sign' only:
                          this has an effect only on 'init'.
   -D, --dsaparam=FILE  File with DSA parameters (DSA only)
                          (default: dsaparam.pem within PKI directory)
-Options for use with the 'sign' and 'approve' commands:
+Options for use with the 'sign' command:
   -b, --batch          Skip fingerprint verification
 Options that apply to any command:
   -d, --dir=DIR        Directory where the PKI is located
@@ -251,7 +237,6 @@ if test "$command" = "init"; then
 
         mkdir -p certs crl newcerts
         mkdir -p -m 0700 private
-        mkdir -p -m 0733 incoming
         touch index.txt
         test -e crlnumber || echo 01 > crlnumber
         test -e serial || echo 01 > serial
@@ -334,13 +319,6 @@ one_arg() {
     fi
 }
 
-zero_or_one_args() {
-    if test -n "$arg2"; then
-        echo "$0: $command must have zero or one arguments; use --help for help" >&2
-        exit 1
-    fi
-}
-
 one_or_two_args() {
     if test -z "$arg1"; then
         echo "$0: $command must have one or two arguments; use --help for help" >&2
@@ -353,38 +331,6 @@ must_not_exist() {
         echo "$0: $1 already exists and --force not supplied" >&2
         exit 1
     fi
-}
-
-resolve_prefix() {
-    test -n "$type" || exit 123 # Forgot to call check_type?
-
-    case $1 in
-        ????*)
-            ;;
-        *)
-            echo "Prefix $arg1 is too short (less than 4 hex digits)" >&2
-            exit 0
-            ;;
-    esac
-    
-    fingerprint=$(cd "$pkidir/${type}ca/incoming" && echo "$1"*-req.pem | sed 's/-req\.pem$//')
-    case $fingerprint in
-        "${1}*")
-            echo "No certificate requests matching $1" >&2
-            exit 1
-            ;;
-        *" "*)
-            echo "$1 matches more than one certificate request:" >&2
-            echo $fingerprint | sed 's/ /\
-/g' >&2
-            exit 1
-            ;;
-        *)
-            # Nothing to do.
-            ;;
-    esac
-    req="$pkidir/${type}ca/incoming/$fingerprint-req.pem"
-    cert="$pkidir/${type}ca/certs/$fingerprint-cert.pem"
 }
 
 make_tmpdir() {
@@ -571,82 +517,6 @@ elif test "$command" = self-sign; then
     # Reset the permissions on the certificate to the user's default.
     cat "$arg1-cert.pem.tmp" > "$arg1-cert.pem"
     rm -f "$arg1-cert.pem.tmp"
-elif test "$command" = ls; then
-    check_type "$arg2"
-
-    cd "$pkidir/${type}ca/incoming"
-    for file in $(glob "$arg1*-req.pem"); do
-        fingerprint $file
-    done
-elif test "$command" = flush; then
-    check_type "$arg1"
-
-    rm -f "$pkidir/${type}ca/incoming/"*
-elif test "$command" = reject; then
-    one_or_two_args
-    check_type "$arg2"
-    resolve_prefix "$arg1"
-
-    rm -f "$req"
-elif test "$command" = approve; then
-    one_or_two_args
-    check_type "$arg2"
-    resolve_prefix "$arg1"
-
-    make_tmpdir
-    cp "$req" "$TMP/$req"
-    verify_fingerprint "$TMP/$req"
-    sign_request "$TMP/$req"
-    rm -f "$req" "$TMP/$req"
-elif test "$command" = prompt; then
-    zero_or_one_args
-    check_type "$arg1"
-
-    make_tmpdir
-    cd "$pkidir/${type}ca/incoming"
-    for req in $(glob "*-req.pem"); do
-        cp "$req" "$TMP/$req"
-
-        cert=$(echo "$pkidir/${type}ca/certs/$req" |
-               sed 's/-req.pem/-cert.pem/')
-        if test -f $cert; then
-            echo "Request $req already approved--dropping duplicate request"
-            rm -f "$req" "$TMP/$req"
-            continue
-        fi
-
-        echo
-        echo
-        fingerprint "$TMP/$req" "$req"
-        printf "Disposition for this request (skip/approve/reject)? "
-        read answer
-        case $answer in
-            approve)
-                echo "Approving $req"
-                sign_request "$TMP/$req" "$cert"
-                rm -f "$req" "$TMP/$req"
-                ;;
-            r*)
-                echo "Rejecting $req"
-                rm -f "$req" "$TMP/$req"
-                ;;
-            *)
-                echo "Skipping $req"
-                ;;
-        esac
-    done
-elif test "$command" = expire; then
-    zero_or_one_args
-    cutoff=$(($(date +%s) - $(parse_age ${arg1-1day})))
-    for type in switch controller; do
-        cd "$pkidir/${type}ca/incoming" || exit 1
-        for file in $(glob "*"); do
-            time=$(file_mod_epoch "$file")
-            if test "$time" -lt "$cutoff"; then
-                rm -f "$file"
-            fi
-        done
-    done
 else
     echo "$0: $command command unknown; use --help for help" >&2
     exit 1

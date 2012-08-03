@@ -9,9 +9,11 @@
 ovs\-pki \- OpenFlow public key infrastructure management utility
 
 .SH SYNOPSIS
+Each command takes the form:
+.sp
 \fBovs\-pki\fR [\fIOPTIONS\fR] \fICOMMAND\fR [\fIARGS\fR]
 .sp
-Stand\-alone commands with their arguments:
+The implemented commands and their arguments are:
 .br
 \fBovs\-pki\fR \fBinit\fR
 .br
@@ -26,20 +28,6 @@ Stand\-alone commands with their arguments:
 \fBovs\-pki\fR \fBfingerprint\fR \fIFILE\fR
 .br
 \fBovs\-pki\fR \fBself\-sign\fR \fINAME\fR
-.sp
-The following additional commands manage an online PKI:
-.br
-\fBovs\-pki\fR \fBls\fR [\fIPREFIX\fR] [\fITYPE\fR]
-.br
-\fBovs\-pki\fR \fBflush\fR [\fITYPE\fR]
-.br
-\fBovs\-pki\fR \fBreject\fR \fIPREFIX\fR [\fITYPE\fR]
-.br
-\fBovs\-pki\fR \fBapprove\fR \fIPREFIX\fR [\fITYPE\fR]
-.br
-\fBovs\-pki\fR \fBprompt\fR [\fITYPE\fR]
-.br
-\fBovs\-pki\fR \fBexpire\fR [\fIAGE\fR]
 .sp
 Each \fITYPE\fR above is a certificate type, either \fBswitch\fR
 (default) or \fBcontroller\fR.
@@ -195,85 +183,6 @@ been produced with \fBovs\-pki req\fR.
 
 Some controllers accept such self-signed certificates.
 
-.SH "ONLINE COMMANDS"
-
-An OpenFlow PKI can be administered online, in conjunction with
-.BR ovs\-pki\-cgi (8)
-and a web server such as Apache:
-
-.IP \(bu
-The web server exports the contents of the PKI via HTTP.  All files in
-a PKI hierarchy files may be made public, except for the files
-\fBpki/controllerca/private/cakey.pem\fR and
-\fBpki/switchca/private/cakey.pem\fR, which must not be exposed.
-
-.IP \(bu
-\fBovs\-pki\-cgi\fR allows newly generated certificate requests for
-controllers and switches to be uploaded into the
-\fBpki/controllerca/incoming\fR and \fBpki/switchca/incoming\fR
-directories, respectively.  Uploaded certificate requests are stored
-in those directories under names of the form
-\fIFINGERPRINT\fB\-req.pem\fR, which \fIFINGERPRINT\fR is the SHA\-1
-hash of the file.
-
-.IP \(bu
-These \fBovs\-pki\fR commands allow incoming certificate requests to
-be approved or rejected, in a form are suitable for use by humans or
-other software.
-
-.PP
-The following \fBovs\-pki\fR commands support online administration:
-
-.TP
-\fBovs\-pki\fR \fBls\fR [\fIPREFIX\fR] [\fITYPE\fR]
-Lists all of the incoming certificate requests of the given \fITYPE\fR
-(either \fBswitch\fR, the default, or \fBcontroller\fR).  If
-\fIPREFIX\fR, which must be at least 4 characters long, is specified,
-it causes the list to be limited to files whose names begin with
-\fIPREFIX\fR.  This is useful, for example, to avoid typing in an
-entire fingerprint when checking that a specific certificate request
-has been received.
-
-.TP
-\fBovs\-pki\fR \fBflush\fR [\fITYPE\fR]
-Deletes all certificate requests of the given \fITYPE\fR.
-
-.TP
-\fBovs\-pki\fR \fBreject\fR \fIPREFIX\fR [\fITYPE\fR]
-Rejects the certificate request whose name begins with \fIPREFIX\fR,
-which must be at least 4 characters long, of the given type (either
-\fBswitch\fR, the default, or \fBcontroller\fR).  \fIPREFIX\fR must
-match exactly one certificate request; its purpose is to allow the
-user to type fewer characters, not to match multiple certificate
-requests.
-
-.TP
-\fBovs\-pki\fR \fBapprove\fR \fIPREFIX\fR [\fITYPE\fR]
-Approves the certificate request whose name begins with \fIPREFIX\fR,
-which must be at least 4 characters long, of the given \fITYPE\fR
-(either \fBswitch\fR, the default, or \fBcontroller\fR).  \fIPREFIX\fR
-must match exactly one certificate request; its purpose is to allow
-the user to type fewer characters, not to match multiple certificate
-requests.
-
-The command will output a fingerprint to stdout and request that you
-verify that it is correct.  (The \fB\-b\fR or \fB\-\^\-batch\fR option
-suppresses the verification step.)
-
-.TP
-\fBovs\-pki\fR \fBprompt\fR [\fITYPE\fR]
-Prompts the user for each incoming certificate request of the given
-\fITYPE\fR (either \fBswitch\fR, the default, or \fBcontroller\fR).
-Based on the certificate request's fingerprint, the user is given the
-option of approving, rejecting, or skipping the certificate request.
-
-.TP
-\fBovs\-pki\fR \fBexpire\fR [\fIAGE\fR]
-
-Rejects all the incoming certificate requests, of either type, that is
-older than \fIAGE\fR, which must in one of the forms \fIN\fBs\fR,
-\fIN\fBmin\fR, \fIN\fBh\fR, \fIN\fBday\fR.  The default is \fB1day\fR.
-
 .SH OPTIONS
 .IP "\fB\-k\fR \fItype\fR"
 .IQ "\fB\-\^\-key=\fItype\fR"
@@ -306,7 +215,7 @@ The default is \fBdsaparam.pem\fR under the PKI hierarchy.
 .IP "\fB\-b\fR"
 .IQ "\fB\-\^\-batch\fR"
 Suppresses the interactive verification of fingerprints that the
-\fBsign\fR and \fBapprove\fR commands by default require.
+\fBsign\fR command by default requires.
 
 .IP "\fB\-d\fR \fIdir\fR"
 .IQ "\fB\-\^\-dir=\fR\fIdir\fR"
@@ -330,5 +239,4 @@ Prints a help usage message and exits.
 
 .SH "SEE ALSO"
 
-.BR ovs\-controller (8),
-.BR ovs\-pki\-cgi (8)
+.BR ovs\-controller (8).
