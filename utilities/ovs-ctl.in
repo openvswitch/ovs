@@ -30,12 +30,32 @@ done
 ## start ##
 ## ----- ##
 
+do_modprobe () {
+    # First try the name suffixed with _mod, because this is the
+    # original name used for the out-of-tree kernel module.  If the
+    # user has a module by that name, then it means that he went to
+    # some trouble to build it, so presumably he wants to use it.
+    #
+    # Then try the name without the _mod suffix, the upstream Linux
+    # kernel module name and the name used by later versions of Open
+    # vSwitch.
+    modprobe ${1}_mod || modprobe $1
+} 2>/dev/null
+
 insert_openvswitch_mod_if_required () {
     # If openvswitch_mod is already loaded then we're done.
-    test -e /sys/module/openvswitch_mod && return 0
+    if test -e /sys/module/openvswitch_mod || test -e /sys/module/openvswitch
+    then
+        return 0
+    fi
+
+    if (modprobe --dry-run openvswitch_mod && \
+        modprobe --dry-run openvswitch) 2>/dev/null; then
+        log_warning_msg "openvswitch_mod.ko and openvswitch.ko modules are both available.  openvswitch_mod.ko will be preferred."
+    fi
 
     # Load openvswitch_mod.  If that's successful then we're done.
-    action "Inserting openvswitch module" modprobe openvswitch_mod && return 0
+    action "Inserting openvswitch module" do_modprobe openvswitch && return 0
 
     # If the bridge module is loaded, then that might be blocking
     # openvswitch_mod.  Try to unload it, if there are no bridges.
@@ -48,12 +68,12 @@ insert_openvswitch_mod_if_required () {
     action "removing bridge module" rmmod bridge || return 1
 
     # Try loading openvswitch_mod again.
-    action "Inserting openvswitch module" modprobe openvswitch_mod
+    action "Inserting openvswitch module" do_modprobe openvswitch
 }
 
 insert_brcompat_mod_if_required () {
     test -e /sys/module/brcompat_mod && return 0
-    action "Inserting brcompat module" modprobe brcompat_mod
+    action "Inserting brcompat module" do_modprobe brcompat
 }
 
 insert_mod_if_required () {
@@ -287,12 +307,13 @@ force_reload_kmod () {
         action "Removing datapath: $dp" ovs-dpctl del-dp "$dp"
     done
 
-    if test -e /sys/module/brcompat_mod; then
-        action "Removing brcompat module" rmmod brcompat_mod
-    fi
-    if test -e /sys/module/openvswitch_mod; then
-        action "Removing openvswitch module" rmmod openvswitch_mod
-    fi
+    for module in brcompat openvswitch; do
+        for fullname in ${module}_mod $module; do
+            if test -e /sys/module/$fullname; then
+                action "Removing $module module" rmmod $fullname
+            fi
+        done
+    done
 
     start
 
