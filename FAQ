@@ -168,6 +168,122 @@ A: Tunnel and patch virtual ports are not supported, as described in the
    may not be transmitted.
 
 
+Basic Configuration
+-------------------
+
+Q: How do I configure a port as an access port?
+
+A: Add "tag=VLAN" to your "ovs-vsctl add-port" command.  For example,
+   the following commands configure br0 with eth0 as a trunk port (the
+   default) and tap0 as an access port for VLAN 9:
+
+       ovs-vsctl add-br br0
+       ovs-vsctl add-port br0 eth0
+       ovs-vsctl add-port br0 tap0 tag=9
+
+   If you want to configure an already added port as an access port,
+   use "ovs-vsctl set", e.g.:
+
+       ovs-vsctl set port tap0 tag=9
+
+Q: How do I configure a port as a SPAN port, that is, enable mirroring
+   of all traffic to that port?
+
+A: The following commands configure br0 with eth0 and tap0 as trunk
+   ports.  All traffic coming in or going out on eth0 or tap0 is also
+   mirrored to tap1; any traffic arriving on tap1 is dropped:
+
+       ovs-vsctl add-br br0
+       ovs-vsctl add-port br0 eth0
+       ovs-vsctl add-port br0 tap0
+       ovs-vsctl add-port br0 tap1 \
+           -- --id=@p get port tap1 \
+	   -- --id=@m create mirror name=m0 select-all=true output-port=@p \
+	   -- set bridge br0 mirrors=@m
+
+   To later disable mirroring, run:
+
+       ovs-vsctl clear bridge br0 mirrors
+
+Q: How do I configure a VLAN as an RSPAN VLAN, that is, enable
+   mirroring of all traffic to that VLAN?
+
+A: The following commands configure br0 with eth0 as a trunk port and
+   tap0 as an access port for VLAN 10.  All traffic coming in or going
+   out on tap0, as well as traffic coming in or going out on eth0 in
+   VLAN 10, is also mirrored to VLAN 15 on eth0.  The original tag for
+   VLAN 10, in cases where one is present, is dropped as part of
+   mirroring:
+
+       ovs-vsctl add-br br0
+       ovs-vsctl add-port br0 eth0
+       ovs-vsctl add-port br0 tap0 tag=10
+       ovs-vsctl \
+	   -- --id=@m create mirror name=m0 select-all=true select-vlan=10 \
+                                    output-vlan=15 \
+	   -- set bridge br0 mirrors=@m
+
+   To later disable mirroring, run:
+
+       ovs-vsctl clear bridge br0 mirrors
+
+   Mirroring to a VLAN can disrupt a network that contains unmanaged
+   switches.  See ovs-vswitchd.conf.db(5) for details.  Mirroring to a
+   GRE tunnel has fewer caveats than mirroring to a VLAN and should
+   generally be preferred.
+
+Q: Can I mirror more than one input VLAN to an RSPAN VLAN?
+
+A: Yes, but mirroring to a VLAN strips the original VLAN tag in favor
+   of the specified output-vlan.  This loss of information may make
+   the mirrored traffic too hard to interpret.
+
+   To mirror multiple VLANs, use the commands above, but specify a
+   comma-separated list of VLANs as the value for select-vlan.  To
+   mirror every VLAN, use the commands above, but omit select-vlan and
+   its value entirely.
+
+   When a packet arrives on a VLAN that is used as a mirror output
+   VLAN, the mirror is disregarded.  Instead, in standalone mode, OVS
+   floods the packet across all the ports for which the mirror output
+   VLAN is configured.  (If an OpenFlow controller is in use, then it
+   can override this behavior through the flow table.)  If OVS is used
+   as an intermediate switch, rather than an edge switch, this ensures
+   that the RSPAN traffic is distributed through the network.
+
+   Mirroring to a VLAN can disrupt a network that contains unmanaged
+   switches.  See ovs-vswitchd.conf.db(5) for details.  Mirroring to a
+   GRE tunnel has fewer caveats than mirroring to a VLAN and should
+   generally be preferred.
+
+Q: How do I configure mirroring of all traffic to a GRE tunnel?
+
+A: The following commands configure br0 with eth0 and tap0 as trunk
+   ports.  All traffic coming in or going out on eth0 or tap0 is also
+   mirrored to gre0, a GRE tunnel to the remote host 192.168.1.10; any
+   traffic arriving on gre0 is dropped:
+
+       ovs-vsctl add-br br0
+       ovs-vsctl add-port br0 eth0
+       ovs-vsctl add-port br0 tap0
+       ovs-vsctl add-port br0 gre0 \
+           -- set interface gre0 type=gre options:remote_ip=192.168.1.10 \
+           -- --id=@p get port gre0 \
+	   -- --id=@m create mirror name=m0 select-all=true output-port=@p \
+	   -- set bridge br0 mirrors=@m
+
+   To later disable mirroring and destroy the GRE tunnel:
+
+       ovs-vsctl clear bridge br0 mirrors
+       ovs-vcstl del-port br0 gre0
+
+Q: Does Open vSwitch support ERSPAN?
+
+A: No.  ERSPAN is an undocumented proprietary protocol.  As an
+   alternative, Open vSwitch supports mirroring to a GRE tunnel (see
+   above).
+
+
 Configuration Problems
 ----------------------
 
