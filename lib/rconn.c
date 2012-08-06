@@ -771,21 +771,6 @@ rconn_get_state(const struct rconn *rc)
     return state_name(rc->state);
 }
 
-/* Returns the number of connection attempts made by 'rc', including any
- * ongoing attempt that has not yet succeeded or failed. */
-unsigned int
-rconn_get_attempted_connections(const struct rconn *rc)
-{
-    return rc->n_attempted_connections;
-}
-
-/* Returns the number of successful connection attempts made by 'rc'. */
-unsigned int
-rconn_get_successful_connections(const struct rconn *rc)
-{
-    return rc->n_successful_connections;
-}
-
 /* Returns the time at which the last successful connection was made by
  * 'rc'. Returns TIME_MIN if never connected. */
 time_t
@@ -800,45 +785,6 @@ time_t
 rconn_get_last_disconnect(const struct rconn *rc)
 {
     return rc->last_disconnected;
-}
-
-/* Returns the time at which the last OpenFlow message was received by 'rc'.
- * If no packets have been received on 'rc', returns the time at which 'rc'
- * was created. */
-time_t
-rconn_get_last_received(const struct rconn *rc)
-{
-    return rc->last_received;
-}
-
-/* Returns the time at which 'rc' was created. */
-time_t
-rconn_get_creation_time(const struct rconn *rc)
-{
-    return rc->creation_time;
-}
-
-/* Returns the approximate number of seconds that 'rc' has been connected. */
-unsigned long int
-rconn_get_total_time_connected(const struct rconn *rc)
-{
-    return (rc->total_time_connected
-            + (rconn_is_connected(rc) ? elapsed_in_this_state(rc) : 0));
-}
-
-/* Returns the current amount of backoff, in seconds.  This is the amount of
- * time after which the rconn will transition from BACKOFF to CONNECTING. */
-int
-rconn_get_backoff(const struct rconn *rc)
-{
-    return rc->backoff;
-}
-
-/* Returns the number of seconds spent in this state so far. */
-unsigned int
-rconn_get_state_elapsed(const struct rconn *rc)
-{
-    return elapsed_in_this_state(rc);
 }
 
 /* Returns 'rc''s current connection sequence number, a number that changes

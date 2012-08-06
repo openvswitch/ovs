@@ -81,15 +81,8 @@ ovs_be16 rconn_get_local_port(const struct rconn *);
 int rconn_get_version(const struct rconn *);
 
 const char *rconn_get_state(const struct rconn *);
-unsigned int rconn_get_attempted_connections(const struct rconn *);
-unsigned int rconn_get_successful_connections(const struct rconn *);
 time_t rconn_get_last_connection(const struct rconn *);
 time_t rconn_get_last_disconnect(const struct rconn *);
-time_t rconn_get_last_received(const struct rconn *);
-time_t rconn_get_creation_time(const struct rconn *);
-unsigned long int rconn_get_total_time_connected(const struct rconn *);
-int rconn_get_backoff(const struct rconn *);
-unsigned int rconn_get_state_elapsed(const struct rconn *);
 unsigned int rconn_get_connection_seqno(const struct rconn *);
 int rconn_get_last_error(const struct rconn *);
 unsigned int rconn_count_txqlen(const struct rconn *);
