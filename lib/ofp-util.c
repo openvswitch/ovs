@@ -1482,6 +1482,23 @@ ofputil_encode_flow_stats_request(const struct ofputil_flow_stats_request *fsr,
     enum ofpraw raw;
 
     switch (protocol) {
+    case OFPUTIL_P_OF12: {
+        struct ofp11_flow_stats_request *ofsr;
+
+        raw = (fsr->aggregate
+               ? OFPRAW_OFPST_AGGREGATE_REQUEST
+               : OFPRAW_OFPST_FLOW_REQUEST);
+        msg = ofpraw_alloc(raw, OFP12_VERSION, NXM_TYPICAL_LEN);
+        ofsr = ofpbuf_put_zeros(msg, sizeof *ofsr);
+        ofsr->table_id = fsr->table_id;
+        ofsr->out_port = ofputil_port_to_ofp11(fsr->out_port);
+        ofsr->out_group = htonl(OFPG11_ANY);
+        ofsr->cookie = fsr->cookie;
+        ofsr->cookie_mask = fsr->cookie_mask;
+        oxm_put_match(msg, &fsr->match);
+        break;
+    }
+
     case OFPUTIL_P_OF10:
     case OFPUTIL_P_OF10_TID: {
         struct ofp10_flow_stats_request *ofsr;
@@ -1505,7 +1522,7 @@ ofputil_encode_flow_stats_request(const struct ofputil_flow_stats_request *fsr,
         raw = (fsr->aggregate
                ? OFPRAW_NXST_AGGREGATE_REQUEST
                : OFPRAW_NXST_FLOW_REQUEST);
-        msg = ofpraw_alloc(raw, OFP10_VERSION, 0);
+        msg = ofpraw_alloc(raw, OFP10_VERSION, NXM_TYPICAL_LEN);
         ofpbuf_put_zeros(msg, sizeof *nfsr);
         match_len = nx_put_match(msg, &fsr->match,
                                  fsr->cookie, fsr->cookie_mask);
@@ -1517,7 +1534,6 @@ ofputil_encode_flow_stats_request(const struct ofputil_flow_stats_request *fsr,
         break;
     }
 
-    case OFPUTIL_P_OF12:
     default:
         NOT_REACHED();
     }
