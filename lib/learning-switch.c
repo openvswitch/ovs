@@ -576,6 +576,7 @@ process_packet_in(struct lswitch *sw, const struct ofp_header *oh)
          * new flow. */
         memset(&fm, 0, sizeof fm);
         cls_rule_init(&flow, &sw->wc, 0, &fm.cr);
+        ofputil_normalize_rule_quiet(&fm.cr);
         fm.table_id = 0xff;
         fm.command = OFPFC_ADD;
         fm.idle_timeout = sw->max_idle;
