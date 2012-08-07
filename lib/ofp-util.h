@@ -120,7 +120,8 @@ void ofputil_cls_rule_to_ofp10_match(const struct cls_rule *,
 
 /* Work with ofp11_match. */
 enum ofperr ofputil_pull_ofp11_match(struct ofpbuf *, unsigned int priority,
-                                     struct cls_rule *);
+                                     struct cls_rule *,
+                                     uint16_t *padded_match_len);
 enum ofperr ofputil_cls_rule_from_ofp11_match(const struct ofp11_match *,
                                               unsigned int priority,
                                               struct cls_rule *);

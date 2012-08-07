@@ -267,23 +267,36 @@ ofputil_cls_rule_to_ofp10_match(const struct cls_rule *rule,
 
 enum ofperr
 ofputil_pull_ofp11_match(struct ofpbuf *buf, unsigned int priority,
-                         struct cls_rule *rule)
+                         struct cls_rule *rule, uint16_t *padded_match_len)
 {
-    struct ofp11_match_header *omh;
-    struct ofp11_match *om;
+    struct ofp11_match_header *omh = buf->data;
+    uint16_t match_len;
 
-    if (buf->size < sizeof(struct ofp11_match_header)) {
+    if (buf->size < sizeof *omh) {
         return OFPERR_OFPBMC_BAD_LEN;
     }
 
-    omh = buf->data;
+    match_len = ntohs(omh->length);
+
     switch (ntohs(omh->type)) {
-    case OFPMT_STANDARD:
-        if (omh->length != htons(sizeof *om) || buf->size < sizeof *om) {
+    case OFPMT_STANDARD: {
+        struct ofp11_match *om;
+
+        if (match_len != sizeof *om || buf->size < sizeof *om) {
             return OFPERR_OFPBMC_BAD_LEN;
         }
         om = ofpbuf_pull(buf, sizeof *om);
+        if (padded_match_len) {
+            *padded_match_len = match_len;
+        }
         return ofputil_cls_rule_from_ofp11_match(om, priority, rule);
+    }
+
+    case OFPMT_OXM:
+        if (padded_match_len) {
+            *padded_match_len = ROUND_UP(match_len, 8);
+        }
+        return oxm_pull_match(buf, priority, rule);
 
     default:
         return OFPERR_OFPBMC_BAD_TYPE;
@@ -1137,7 +1150,8 @@ ofputil_decode_flow_mod(struct ofputil_flow_mod *fm,
 
         ofm = ofpbuf_pull(&b, sizeof *ofm);
 
-        error = ofputil_pull_ofp11_match(&b, ntohs(ofm->priority), &fm->cr);
+        error = ofputil_pull_ofp11_match(&b, ntohs(ofm->priority), &fm->cr,
+                                         NULL);
         if (error) {
             return error;
         }
