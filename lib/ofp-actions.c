@@ -1384,15 +1384,18 @@ ofpact_to_openflow11(const struct ofpact *a, struct ofpbuf *out)
 /* Converts the ofpacts in 'ofpacts' (terminated by OFPACT_END) into OpenFlow
  * 1.1 actions in 'openflow', appending the actions to any existing data in
  * 'openflow'. */
-void
+size_t
 ofpacts_put_openflow11_actions(const struct ofpact ofpacts[],
                                size_t ofpacts_len, struct ofpbuf *openflow)
 {
     const struct ofpact *a;
+    size_t start_size = openflow->size;
 
     OFPACT_FOR_EACH (a, ofpacts, ofpacts_len) {
         ofpact_to_openflow11(a, openflow);
     }
+
+    return openflow->size - start_size;
 }
 
 void
