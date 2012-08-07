@@ -97,12 +97,22 @@ main(int argc, char *argv[])
     if (argc != 2) {
         usage();
     } else if (!strcmp(argv[1], "plain")) {
+        /* If we're not caching time there isn't much to test and SIGALRM won't
+         * be around to pull us out of the select() call, so just skip out */
+        if (!CACHE_TIME) {
+            exit (77);
+        }
+
         do_test();
     } else if (!strcmp(argv[1], "daemon")) {
         /* Test that time still advances even in a daemon.  This is an
          * interesting test because fork() cancels the interval timer. */
         char cwd[1024], *pidfile;
         FILE *success;
+
+        if (!CACHE_TIME) {
+            exit (77);
+        }
 
         assert(getcwd(cwd, sizeof cwd) == cwd);
 

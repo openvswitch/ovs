@@ -40,7 +40,7 @@ VLOG_DEFINE_THIS_MODULE(timeval);
  * to CLOCK_REALTIME. */
 static clockid_t monotonic_clock;
 
-/* Has a timer tick occurred?
+/* Has a timer tick occurred? Only relevant if CACHE_TIME is 1.
  *
  * We initialize these to true to force time_init() to get called on the first
  * call to time_msec() or another function that queries the current time. */
@@ -94,8 +94,11 @@ time_init(void)
         VLOG_DBG("monotonic timer not available");
     }
 
-    set_up_signal(SA_RESTART);
-    set_up_timer();
+    if (CACHE_TIME) {
+        set_up_signal(SA_RESTART);
+        set_up_timer();
+    }
+
     boot_time = time_msec();
 }
 
@@ -168,7 +171,16 @@ void
 time_postfork(void)
 {
     time_init();
-    set_up_timer();
+
+    if (CACHE_TIME) {
+        set_up_timer();
+    } else {
+        /* If we are not caching  kernel time, the only reason the timer should
+         * exist is if time_alarm() was called and deadline is set */
+        if (deadline != TIME_MIN) {
+            set_up_timer();
+        }
+    }
 }
 
 static void
@@ -199,7 +211,9 @@ refresh_monotonic(void)
 
 /* Forces a refresh of the current time from the kernel.  It is not usually
  * necessary to call this function, since the time will be refreshed
- * automatically at least every TIME_UPDATE_INTERVAL milliseconds. */
+ * automatically at least every TIME_UPDATE_INTERVAL milliseconds.  If
+ * CACHE_TIME is 0, we will always refresh the current time so this
+ * function has no effect. */
 void
 time_refresh(void)
 {
@@ -275,9 +289,17 @@ time_alarm(unsigned int secs)
     sigset_t oldsigs;
 
     time_init();
+
     block_sigalrm(&oldsigs);
     deadline = secs ? time_add(time_now(), secs) : TIME_MIN;
     unblock_sigalrm(&oldsigs);
+
+    if (!CACHE_TIME) {
+        /* If we aren't timing the gaps between kernel time refreshes we need to
+         * to start the timer up now */
+        set_up_signal(SA_RESTART);
+        set_up_timer();
+    }
 }
 
 /* Like poll(), except:
@@ -366,7 +388,7 @@ sigalrm_handler(int sig_nr)
 static void
 refresh_wall_if_ticked(void)
 {
-    if (wall_tick) {
+    if (!CACHE_TIME || wall_tick) {
         refresh_wall();
     }
 }
@@ -374,7 +396,7 @@ refresh_wall_if_ticked(void)
 static void
 refresh_monotonic_if_ticked(void)
 {
-    if (monotonic_tick) {
+    if (!CACHE_TIME || monotonic_tick) {
         refresh_monotonic();
     }
 }
