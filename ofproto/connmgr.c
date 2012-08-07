@@ -1407,7 +1407,8 @@ schedule_packet_in(struct ofconn *ofconn, struct ofputil_packet_in pin)
      * while (until a later call to pinsched_run()). */
     pinsched_send(ofconn->schedulers[pin.reason == OFPR_NO_MATCH ? 0 : 1],
                   pin.fmd.in_port,
-                  ofputil_encode_packet_in(&pin, ofconn->packet_in_format),
+                  ofputil_encode_packet_in(&pin, ofconn->protocol,
+                                           ofconn->packet_in_format),
                   do_send_packet_in, ofconn);
 }
 

@@ -127,6 +127,8 @@ enum ofpraw {
     OFPRAW_OFPT10_PACKET_IN,
     /* OFPT 1.1 (10): struct ofp11_packet_in up to data, uint8_t[]. */
     OFPRAW_OFPT11_PACKET_IN,
+    /* OFPT 1.2 (10): struct ofp12_packet_in, uint8_t[]. */
+    OFPRAW_OFPT12_PACKET_IN,
     /* NXT 1.0+ (17): struct nx_packet_in, uint8_t[]. */
     OFPRAW_NXT_PACKET_IN,
 
@@ -327,6 +329,7 @@ enum ofptype {
     /* Asynchronous messages. */
     OFPTYPE_PACKET_IN,           /* OFPRAW_OFPT10_PACKET_IN.
                                   * OFPRAW_OFPT11_PACKET_IN.
+                                  * OFPRAW_OFPT12_PACKET_IN.
                                   * OFPRAW_NXT_PACKET_IN. */
     OFPTYPE_FLOW_REMOVED,        /* OFPRAW_OFPT10_FLOW_REMOVED.
                                   * OFPRAW_NXT_FLOW_REMOVED. */

@@ -1977,17 +1977,58 @@ ofputil_decode_packet_in(struct ofputil_packet_in *pin,
     return 0;
 }
 
+static void
+ofputil_packet_in_to_rule(const struct ofputil_packet_in *pin,
+                          struct cls_rule *rule)
+{
+    int i;
+
+    cls_rule_init_catchall(rule, 0);
+    cls_rule_set_tun_id_masked(rule, pin->fmd.tun_id,
+                               pin->fmd.tun_id_mask);
+    cls_rule_set_metadata_masked(rule, pin->fmd.metadata,
+                                 pin->fmd.metadata_mask);
+
+    for (i = 0; i < FLOW_N_REGS; i++) {
+        cls_rule_set_reg_masked(rule, i, pin->fmd.regs[i],
+                                pin->fmd.reg_masks[i]);
+    }
+
+    cls_rule_set_in_port(rule, pin->fmd.in_port);
+}
+
 /* Converts abstract ofputil_packet_in 'pin' into a PACKET_IN message
  * in the format specified by 'packet_in_format'.  */
 struct ofpbuf *
 ofputil_encode_packet_in(const struct ofputil_packet_in *pin,
+                         enum ofputil_protocol protocol,
                          enum nx_packet_in_format packet_in_format)
 {
     size_t send_len = MIN(pin->send_len, pin->packet_len);
     struct ofpbuf *packet;
 
     /* Add OFPT_PACKET_IN. */
-    if (packet_in_format == NXPIF_OPENFLOW10) {
+    if (protocol == OFPUTIL_P_OF12) {
+        struct ofp12_packet_in *opi;
+        struct cls_rule rule;
+
+        ofputil_packet_in_to_rule(pin, &rule);
+
+        /* The final argument is just an estimate of the space required. */
+        packet = ofpraw_alloc_xid(OFPRAW_OFPT12_PACKET_IN, OFP12_VERSION,
+                                  htonl(0), (sizeof(struct flow_metadata) * 2
+                                             + 2 + send_len));
+        ofpbuf_put_zeros(packet, sizeof *opi);
+        oxm_put_match(packet, &rule);
+        ofpbuf_put_zeros(packet, 2);
+        ofpbuf_put(packet, pin->packet, send_len);
+
+        opi = packet->l3;
+        opi->buffer_id = htonl(pin->buffer_id);
+        opi->total_len = htons(pin->total_len);
+        opi->reason = pin->reason;
+        opi->table_id = pin->table_id;
+   } else if (packet_in_format == NXPIF_OPENFLOW10) {
         struct ofp_packet_in *opi;
 
         packet = ofpraw_alloc_xid(OFPRAW_OFPT10_PACKET_IN, OFP10_VERSION,
@@ -2003,21 +2044,8 @@ ofputil_encode_packet_in(const struct ofputil_packet_in *pin,
         struct nx_packet_in *npi;
         struct cls_rule rule;
         size_t match_len;
-        size_t i;
 
-        cls_rule_init_catchall(&rule, 0);
-        cls_rule_set_tun_id_masked(&rule, pin->fmd.tun_id,
-                                   pin->fmd.tun_id_mask);
-        cls_rule_set_metadata_masked(&rule, pin->fmd.metadata,
-                                   pin->fmd.metadata_mask);
-
-
-        for (i = 0; i < FLOW_N_REGS; i++) {
-            cls_rule_set_reg_masked(&rule, i, pin->fmd.regs[i],
-                                    pin->fmd.reg_masks[i]);
-        }
-
-        cls_rule_set_in_port(&rule, pin->fmd.in_port);
+        ofputil_packet_in_to_rule(pin, &rule);
 
         /* The final argument is just an estimate of the space required. */
         packet = ofpraw_alloc_xid(OFPRAW_NXT_PACKET_IN, OFP10_VERSION,
