@@ -892,7 +892,7 @@ vlog_write_file(struct ds *s)
                        vlog_async_write_request_cb, NULL, NULL);
         vlog_async_inited = true;
     } else {
-        write(log_fd, s->string, s->length);
+        ignore(write(log_fd, s->string, s->length));
     }
 }
 
@@ -918,6 +918,6 @@ vlog_async_write_request_cb(struct ofpbuf *request,
     }
 
     if (request->size > 0) {
-        write(log_fd, request->data, request->size);
+        ignore(write(log_fd, request->data, request->size));
     }
 }
