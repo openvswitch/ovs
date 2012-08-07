@@ -3319,23 +3319,8 @@ ofputil_put_action(enum ofputil_action_code code, struct ofpbuf *buf)
     }
 #include "ofp-util.def"
 
-/* "Normalizes" the wildcards in 'rule'.  That means:
- *
- *    1. If the type of level N is known, then only the valid fields for that
- *       level may be specified.  For example, ARP does not have a TOS field,
- *       so nw_tos must be wildcarded if 'rule' specifies an ARP flow.
- *       Similarly, IPv4 does not have any IPv6 addresses, so ipv6_src and
- *       ipv6_dst (and other fields) must be wildcarded if 'rule' specifies an
- *       IPv4 flow.
- *
- *    2. If the type of level N is not known (or not understood by Open
- *       vSwitch), then no fields at all for that level may be specified.  For
- *       example, Open vSwitch does not understand SCTP, an L4 protocol, so the
- *       L4 fields tp_src and tp_dst must be wildcarded if 'rule' specifies an
- *       SCTP flow.
- */
-void
-ofputil_normalize_rule(struct cls_rule *rule)
+static void
+ofputil_normalize_rule__(struct cls_rule *rule, bool may_log)
 {
     enum {
         MAY_NW_ADDR     = 1 << 0, /* nw_src, nw_dst */
@@ -3409,7 +3394,7 @@ ofputil_normalize_rule(struct cls_rule *rule)
 
     /* Log any changes. */
     if (!flow_wildcards_equal(&wc, &rule->wc)) {
-        bool log = !VLOG_DROP_INFO(&bad_ofmsg_rl);
+        bool log = may_log && !VLOG_DROP_INFO(&bad_ofmsg_rl);
         char *pre = log ? cls_rule_to_string(rule) : NULL;
 
         rule->wc = wc;
@@ -3424,6 +3409,39 @@ ofputil_normalize_rule(struct cls_rule *rule)
             free(post);
         }
     }
+}
+
+/* "Normalizes" the wildcards in 'rule'.  That means:
+ *
+ *    1. If the type of level N is known, then only the valid fields for that
+ *       level may be specified.  For example, ARP does not have a TOS field,
+ *       so nw_tos must be wildcarded if 'rule' specifies an ARP flow.
+ *       Similarly, IPv4 does not have any IPv6 addresses, so ipv6_src and
+ *       ipv6_dst (and other fields) must be wildcarded if 'rule' specifies an
+ *       IPv4 flow.
+ *
+ *    2. If the type of level N is not known (or not understood by Open
+ *       vSwitch), then no fields at all for that level may be specified.  For
+ *       example, Open vSwitch does not understand SCTP, an L4 protocol, so the
+ *       L4 fields tp_src and tp_dst must be wildcarded if 'rule' specifies an
+ *       SCTP flow.
+ *
+ * If this function changes 'rule', it logs a rate-limited informational
+ * message. */
+void
+ofputil_normalize_rule(struct cls_rule *rule)
+{
+    ofputil_normalize_rule__(rule, true);
+}
+
+/* Same as ofputil_normalize_rule() without the logging.  Thus, this function
+ * is suitable for a program's internal use, whereas ofputil_normalize_rule()
+ * sense for use on flows received from elsewhere (so that a bug in the program
+ * that sent them can be reported and corrected). */
+void
+ofputil_normalize_rule_quiet(struct cls_rule *rule)
+{
+    ofputil_normalize_rule__(rule, false);
 }
 
 /* Parses a key or a key-value pair from '*stringp'.

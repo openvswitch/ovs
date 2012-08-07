@@ -114,6 +114,7 @@ void ofputil_cls_rule_from_ofp10_match(const struct ofp10_match *,
                                        unsigned int priority,
                                        struct cls_rule *);
 void ofputil_normalize_rule(struct cls_rule *);
+void ofputil_normalize_rule_quiet(struct cls_rule *);
 void ofputil_cls_rule_to_ofp10_match(const struct cls_rule *,
                                      struct ofp10_match *);
 

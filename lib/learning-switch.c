@@ -112,6 +112,7 @@ struct lswitch *
 lswitch_create(struct rconn *rconn, const struct lswitch_config *cfg)
 {
     struct lswitch *sw;
+    uint32_t ofpfw;
 
     sw = xzalloc(sizeof *sw);
     sw->rconn = rconn;
@@ -123,24 +124,26 @@ lswitch_create(struct rconn *rconn, const struct lswitch_config *cfg)
               : NULL);
     sw->action_normal = cfg->mode == LSW_NORMAL;
 
-    flow_wildcards_init_exact(&sw->wc);
-    if (cfg->wildcards) {
-        uint32_t ofpfw;
+    switch (cfg->wildcards) {
+    case 0:
+        ofpfw = 0;
+        break;
 
-        if (cfg->wildcards == UINT32_MAX) {
-            /* Try to wildcard as many fields as possible, but we cannot
-             * wildcard all fields.  We need in_port to detect moves.  We need
-             * Ethernet source and dest and VLAN VID to do L2 learning. */
-            ofpfw = (OFPFW10_DL_TYPE | OFPFW10_DL_VLAN_PCP
-                     | OFPFW10_NW_SRC_ALL | OFPFW10_NW_DST_ALL
-                     | OFPFW10_NW_TOS | OFPFW10_NW_PROTO
-                     | OFPFW10_TP_SRC | OFPFW10_TP_DST);
-        } else {
-            ofpfw = cfg->wildcards;
-        }
+    case UINT32_MAX:
+        /* Try to wildcard as many fields as possible, but we cannot
+         * wildcard all fields.  We need in_port to detect moves.  We need
+         * Ethernet source and dest and VLAN VID to do L2 learning. */
+        ofpfw = (OFPFW10_DL_TYPE | OFPFW10_DL_VLAN_PCP
+                 | OFPFW10_NW_SRC_ALL | OFPFW10_NW_DST_ALL
+                 | OFPFW10_NW_TOS | OFPFW10_NW_PROTO
+                 | OFPFW10_TP_SRC | OFPFW10_TP_DST);
+        break;
 
-        ofputil_wildcard_from_ofpfw10(ofpfw, &sw->wc);
+    default:
+        ofpfw = cfg->wildcards;
+        break;
     }
+    ofputil_wildcard_from_ofpfw10(ofpfw, &sw->wc);
 
     sw->default_queue = cfg->default_queue;
     hmap_init(&sw->queue_numbers);
