@@ -262,6 +262,12 @@ error:
 void
 vconn_run(struct vconn *vconn)
 {
+    if (vconn->state == VCS_CONNECTING ||
+        vconn->state == VCS_SEND_HELLO ||
+        vconn->state == VCS_RECV_HELLO) {
+        vconn_connect(vconn);
+    }
+
     if (vconn->class->run) {
         (vconn->class->run)(vconn);
     }
@@ -272,6 +278,12 @@ vconn_run(struct vconn *vconn)
 void
 vconn_run_wait(struct vconn *vconn)
 {
+    if (vconn->state == VCS_CONNECTING ||
+        vconn->state == VCS_SEND_HELLO ||
+        vconn->state == VCS_RECV_HELLO) {
+        vconn_connect_wait(vconn);
+    }
+
     if (vconn->class->run_wait) {
         (vconn->class->run_wait)(vconn);
     }
