@@ -52,8 +52,15 @@ struct lswitch_port {
     uint32_t queue_id;          /* OpenFlow queue number. */
 };
 
+enum lswitch_state {
+    S_CONNECTING,               /* Waiting for connection to complete. */
+    S_FEATURES_REPLY,           /* Waiting for features reply. */
+    S_SWITCHING,                /* Switching flows. */
+};
+
 struct lswitch {
     struct rconn *rconn;
+    enum lswitch_state state;
 
     /* If nonnegative, the switch sets up flows that expire after the given
      * number of seconds (or never expire, if the value is OFP_FLOW_PERMANENT).
@@ -62,7 +69,6 @@ struct lswitch {
 
     enum ofputil_protocol protocol;
     unsigned long long int datapath_id;
-    time_t last_features_request;
     struct mac_learning *ml;    /* NULL to act as hub instead of switch. */
     struct flow_wildcards wc;   /* Wildcards to apply to flows. */
     bool action_normal;         /* Use OFPP_NORMAL? */
@@ -78,6 +84,11 @@ struct lswitch {
     /* If true, do not reply to any messages from the switch (for debugging
      * fail-open mode). */
     bool mute;
+
+    /* Optional "flow mod" requests to send to the switch at connection time,
+     * to set up the flow table. */
+    const struct ofputil_flow_mod *default_flows;
+    size_t n_default_flows;
 };
 
 /* The log messages here could actually be useful in debugging, so keep the
@@ -100,14 +111,13 @@ static void process_echo_request(struct lswitch *, const struct ofp_header *);
 struct lswitch *
 lswitch_create(struct rconn *rconn, const struct lswitch_config *cfg)
 {
-    enum ofputil_protocol protocol;
     struct lswitch *sw;
 
     sw = xzalloc(sizeof *sw);
     sw->rconn = rconn;
+    sw->state = S_CONNECTING;
     sw->max_idle = cfg->max_idle;
     sw->datapath_id = 0;
-    sw->last_features_request = time_now() - 1;
     sw->ml = (cfg->mode == LSW_LEARN
               ? mac_learning_create(MAC_ENTRY_DEFAULT_IDLE_TIME)
               : NULL);
@@ -146,11 +156,23 @@ lswitch_create(struct rconn *rconn, const struct lswitch_config *cfg)
         }
     }
 
+    sw->default_flows = cfg->default_flows;
+    sw->n_default_flows = cfg->n_default_flows;
+
     sw->queued = rconn_packet_counter_create();
+
+    return sw;
+}
+
+static void
+lswitch_handshake(struct lswitch *sw)
+{
+    enum ofputil_protocol protocol;
+
     send_features_request(sw);
 
-    protocol = ofputil_protocol_from_ofp_version(rconn_get_version(rconn));
-    if (cfg->default_flows) {
+    protocol = ofputil_protocol_from_ofp_version(rconn_get_version(sw->rconn));
+    if (sw->default_flows) {
         enum ofputil_protocol usable_protocols;
         struct ofpbuf *msg = NULL;
         int error = 0;
@@ -164,7 +186,7 @@ lswitch_create(struct rconn *rconn, const struct lswitch_config *cfg)
          * flow format with the switch, but that would require an asynchronous
          * state machine.  This version ought to work fine in practice. */
         usable_protocols = ofputil_flow_mod_usable_protocols(
-            cfg->default_flows, cfg->n_default_flows);
+            sw->default_flows, sw->n_default_flows);
         if (!(protocol & usable_protocols)) {
             enum ofputil_protocol want = rightmost_1bit(usable_protocols);
             while (!error) {
@@ -172,23 +194,21 @@ lswitch_create(struct rconn *rconn, const struct lswitch_config *cfg)
                 if (!msg) {
                     break;
                 }
-                error = rconn_send(rconn, msg, NULL);
+                error = rconn_send(sw->rconn, msg, NULL);
             }
         }
 
-        for (i = 0; !error && i < cfg->n_default_flows; i++) {
-            msg = ofputil_encode_flow_mod(&cfg->default_flows[i], protocol);
-            error = rconn_send(rconn, msg, NULL);
+        for (i = 0; !error && i < sw->n_default_flows; i++) {
+            msg = ofputil_encode_flow_mod(&sw->default_flows[i], protocol);
+            error = rconn_send(sw->rconn, msg, NULL);
         }
 
         if (error) {
             VLOG_INFO_RL(&rl, "%s: failed to queue default flows (%s)",
-                         rconn_get_name(rconn), strerror(error));
+                         rconn_get_name(sw->rconn), strerror(error));
         }
     }
     sw->protocol = protocol;
-
-    return sw;
 }
 
 bool
@@ -229,6 +249,14 @@ lswitch_run(struct lswitch *sw)
 
     rconn_run(sw->rconn);
 
+    if (sw->state == S_CONNECTING) {
+        if (rconn_get_version(sw->rconn) != -1) {
+            lswitch_handshake(sw);
+            sw->state = S_FEATURES_REPLY;
+        }
+        return;
+    }
+
     for (i = 0; i < 50; i++) {
         struct ofpbuf *msg;
 
@@ -250,7 +278,7 @@ lswitch_wait(struct lswitch *sw)
     if (sw->ml) {
         mac_learning_wait(sw->ml);
     }
-    rconn_run(sw->rconn);
+    rconn_run_wait(sw->rconn);
     rconn_recv_wait(sw->rconn);
 }
 
@@ -269,10 +297,9 @@ lswitch_process_packet(struct lswitch *sw, const struct ofpbuf *msg)
         return;
     }
 
-    if (sw->datapath_id == 0
+    if (sw->state == S_FEATURES_REPLY
         && type != OFPTYPE_ECHO_REQUEST
         && type != OFPTYPE_FEATURES_REPLY) {
-        send_features_request(sw);
         return;
     }
 
@@ -282,7 +309,13 @@ lswitch_process_packet(struct lswitch *sw, const struct ofpbuf *msg)
         break;
 
     case OFPTYPE_FEATURES_REPLY:
-        process_switch_features(sw, msg->data);
+        if (sw->state == S_FEATURES_REPLY) {
+            if (!process_switch_features(sw, msg->data)) {
+                sw->state = S_SWITCHING;
+            } else {
+                rconn_disconnect(sw->rconn);
+            }
+        }
         break;
 
     case OFPTYPE_PACKET_IN:
@@ -346,26 +379,21 @@ lswitch_process_packet(struct lswitch *sw, const struct ofpbuf *msg)
 static void
 send_features_request(struct lswitch *sw)
 {
-    time_t now = time_now();
-    if (now >= sw->last_features_request + 1) {
-        struct ofpbuf *b;
-        struct ofp_switch_config *osc;
-        int ofp_version = rconn_get_version(sw->rconn);
+    struct ofpbuf *b;
+    struct ofp_switch_config *osc;
+    int ofp_version = rconn_get_version(sw->rconn);
 
-        assert(ofp_version > 0 && ofp_version < 0xff);
+    assert(ofp_version > 0 && ofp_version < 0xff);
 
-        /* Send OFPT_FEATURES_REQUEST. */
-        b = ofpraw_alloc(OFPRAW_OFPT_FEATURES_REQUEST, ofp_version, 0);
-        queue_tx(sw, b);
+    /* Send OFPT_FEATURES_REQUEST. */
+    b = ofpraw_alloc(OFPRAW_OFPT_FEATURES_REQUEST, ofp_version, 0);
+    queue_tx(sw, b);
 
-        /* Send OFPT_SET_CONFIG. */
-        b = ofpraw_alloc(OFPRAW_OFPT_SET_CONFIG, ofp_version, sizeof *osc);
-        osc = ofpbuf_put_zeros(b, sizeof *osc);
-        osc->miss_send_len = htons(OFP_DEFAULT_MISS_SEND_LEN);
-        queue_tx(sw, b);
-
-        sw->last_features_request = now;
-    }
+    /* Send OFPT_SET_CONFIG. */
+    b = ofpraw_alloc(OFPRAW_OFPT_SET_CONFIG, ofp_version, sizeof *osc);
+    osc = ofpbuf_put_zeros(b, sizeof *osc);
+    osc->miss_send_len = htons(OFP_DEFAULT_MISS_SEND_LEN);
+    queue_tx(sw, b);
 }
 
 static void
