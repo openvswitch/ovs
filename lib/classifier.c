@@ -40,9 +40,6 @@ static struct cls_rule *find_equal(struct cls_table *, const struct flow *,
                                    uint32_t hash);
 static struct cls_rule *insert_rule(struct cls_table *, struct cls_rule *);
 
-static bool flow_equal_except(const struct flow *, const struct flow *,
-                                const struct flow_wildcards *);
-
 /* Iterates RULE over HEAD and all of the cls_rules on HEAD->list. */
 #define FOR_EACH_RULE_IN_LIST(RULE, HEAD)                               \
     for ((RULE) = (HEAD); (RULE) != NULL; (RULE) = next_rule_in_list(RULE))
@@ -1257,72 +1254,4 @@ next_rule_in_list(struct cls_rule *rule)
 {
     struct cls_rule *next = next_rule_in_list__(rule);
     return next->priority < rule->priority ? next : NULL;
-}
-
-static bool
-ipv6_equal_except(const struct in6_addr *a, const struct in6_addr *b,
-                  const struct in6_addr *mask)
-{
-    int i;
-
-#ifdef s6_addr32
-    for (i=0; i<4; i++) {
-        if ((a->s6_addr32[i] ^ b->s6_addr32[i]) & mask->s6_addr32[i]) {
-            return false;
-        }
-    }
-#else
-    for (i=0; i<16; i++) {
-        if ((a->s6_addr[i] ^ b->s6_addr[i]) & mask->s6_addr[i]) {
-            return false;
-        }
-    }
-#endif
-
-    return true;
-}
-
-
-static bool
-flow_equal_except(const struct flow *a, const struct flow *b,
-                  const struct flow_wildcards *wildcards)
-{
-    int i;
-
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 17);
-
-    for (i = 0; i < FLOW_N_REGS; i++) {
-        if ((a->regs[i] ^ b->regs[i]) & wildcards->masks.regs[i]) {
-            return false;
-        }
-    }
-
-    return (!((a->tun_id ^ b->tun_id) & wildcards->masks.tun_id)
-            && !((a->metadata ^ b->metadata) & wildcards->masks.metadata)
-            && !((a->nw_src ^ b->nw_src) & wildcards->masks.nw_src)
-            && !((a->nw_dst ^ b->nw_dst) & wildcards->masks.nw_dst)
-            && !((a->in_port ^ b->in_port) & wildcards->masks.in_port)
-            && !((a->vlan_tci ^ b->vlan_tci) & wildcards->masks.vlan_tci)
-            && !((a->dl_type ^ b->dl_type) & wildcards->masks.dl_type)
-            && !((a->tp_src ^ b->tp_src) & wildcards->masks.tp_src)
-            && !((a->tp_dst ^ b->tp_dst) & wildcards->masks.tp_dst)
-            && eth_addr_equal_except(a->dl_src, b->dl_src,
-                                     wildcards->masks.dl_src)
-            && eth_addr_equal_except(a->dl_dst, b->dl_dst,
-                                     wildcards->masks.dl_dst)
-            && !((a->nw_proto ^ b->nw_proto) & wildcards->masks.nw_proto)
-            && !((a->nw_ttl ^ b->nw_ttl) & wildcards->masks.nw_ttl)
-            && !((a->nw_tos ^ b->nw_tos) & wildcards->masks.nw_tos)
-            && !((a->nw_frag ^ b->nw_frag) & wildcards->masks.nw_frag)
-            && eth_addr_equal_except(a->arp_sha, b->arp_sha,
-                                     wildcards->masks.arp_sha)
-            && eth_addr_equal_except(a->arp_tha, b->arp_tha,
-                                     wildcards->masks.arp_tha)
-            && !((a->ipv6_label ^ b->ipv6_label) & wildcards->masks.ipv6_label)
-            && ipv6_equal_except(&a->ipv6_src, &b->ipv6_src,
-                    &wildcards->masks.ipv6_src)
-            && ipv6_equal_except(&a->ipv6_dst, &b->ipv6_dst,
-                    &wildcards->masks.ipv6_dst)
-            && ipv6_equal_except(&a->nd_target, &b->nd_target,
-                                 &wildcards->masks.nd_target));
 }

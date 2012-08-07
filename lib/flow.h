@@ -79,6 +79,8 @@ struct flow {
 };
 BUILD_ASSERT_DECL(sizeof(struct flow) % 8 == 0);
 
+#define FLOW_U32S (sizeof(struct flow) / 4)
+
 /* Remember to update FLOW_WC_SEQ when changing 'struct flow'. */
 BUILD_ASSERT_DECL(sizeof(struct flow) == 152 && FLOW_WC_SEQ == 17);
 
@@ -125,7 +127,7 @@ flow_hash(const struct flow *flow, uint32_t basis)
 {
     return hash_words((const uint32_t *) flow, sizeof *flow / 4, basis);
 }
-
+
 /* Wildcards for a flow.
  *
  * A 1-bit in each bit in 'masks' indicates that the corresponding bit of
@@ -158,5 +160,8 @@ uint32_t flow_hash_fields(const struct flow *, enum nx_hash_fields,
                           uint16_t basis);
 const char *flow_hash_fields_to_str(enum nx_hash_fields);
 bool flow_hash_fields_valid(enum nx_hash_fields);
+
+bool flow_equal_except(const struct flow *a, const struct flow *b,
+                       const struct flow_wildcards *);
 
 #endif /* flow.h */
