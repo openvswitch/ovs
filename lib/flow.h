@@ -126,37 +126,14 @@ flow_hash(const struct flow *flow, uint32_t basis)
     return hash_words((const uint32_t *) flow, sizeof *flow / 4, basis);
 }
 
-/* Information on wildcards for a flow, as a supplement to "struct flow". */
+/* Wildcards for a flow.
+ *
+ * A 1-bit in each bit in 'masks' indicates that the corresponding bit of
+ * the flow is significant (must match).  A 0-bit indicates that the
+ * corresponding bit of the flow is wildcarded (need not match). */
 struct flow_wildcards {
-    ovs_be64 tun_id_mask;       /* 1-bit in each significant tun_id bit. */
-    ovs_be64 metadata_mask;     /* 1-bit in each significant metadata bit. */
-    uint32_t reg_masks[FLOW_N_REGS]; /* 1-bit in each significant regs bit. */
-    ovs_be32 nw_src_mask;       /* 1-bit in each significant nw_src bit. */
-    ovs_be32 nw_dst_mask;       /* 1-bit in each significant nw_dst bit. */
-    struct in6_addr ipv6_src_mask; /* 1-bit in each signficant ipv6_src bit. */
-    struct in6_addr ipv6_dst_mask; /* 1-bit in each signficant ipv6_dst bit. */
-    struct in6_addr nd_target_mask; /* 1-bit in each significant
-                                       nd_target bit. */
-    ovs_be32 ipv6_label_mask;   /* 1 bit in each significant ipv6_label bit. */
-    uint16_t in_port_mask;      /* 1-bit in each significant in_port bit. */
-    ovs_be16 vlan_tci_mask;     /* 1-bit in each significant vlan_tci bit. */
-    ovs_be16 dl_type_mask;      /* 1-bit in each significant dl_type bit. */
-    ovs_be16 tp_src_mask;       /* 1-bit in each significant tp_src bit. */
-    ovs_be16 tp_dst_mask;       /* 1-bit in each significant tp_dst bit. */
-    uint8_t nw_proto_mask;      /* 1-bit in each significant nw_proto bit. */
-    uint8_t nw_frag_mask;       /* 1-bit in each significant nw_frag bit. */
-    uint8_t dl_src_mask[6];     /* 1-bit in each significant dl_src bit. */
-    uint8_t dl_dst_mask[6];     /* 1-bit in each significant dl_dst bit. */
-    uint8_t arp_sha_mask[6];    /* 1-bit in each significant dl_dst bit. */
-    uint8_t arp_tha_mask[6];    /* 1-bit in each significant dl_dst bit. */
-    uint8_t nw_tos_mask;        /* 1-bit in each significant nw_tos bit. */
-    uint8_t nw_ttl_mask;        /* 1-bit in each significant nw_ttl bit. */
-    uint8_t zeros[6];           /* Padding field set to zero. */
+    struct flow masks;
 };
-BUILD_ASSERT_DECL(sizeof(struct flow_wildcards) % 8 == 0);
-
-/* Remember to update FLOW_WC_SEQ when updating struct flow_wildcards. */
-BUILD_ASSERT_DECL(sizeof(struct flow_wildcards) == 152 && FLOW_WC_SEQ == 17);
 
 void flow_wildcards_init_catchall(struct flow_wildcards *);
 void flow_wildcards_init_exact(struct flow_wildcards *);

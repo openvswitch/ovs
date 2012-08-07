@@ -3992,7 +3992,7 @@ ofopgroup_complete(struct ofopgroup *group)
         case OFOPERATION_ADD:
             if (!op->error) {
                 ofproto_rule_destroy__(op->victim);
-                if ((rule->cr.wc.vlan_tci_mask & htons(VLAN_VID_MASK))
+                if ((rule->cr.wc.masks.vlan_tci & htons(VLAN_VID_MASK))
                     == htons(VLAN_VID_MASK)) {
                     if (ofproto->vlan_bitmap) {
                         uint16_t vid = vlan_tci_to_vid(rule->cr.flow.vlan_tci);
@@ -4646,7 +4646,7 @@ ofproto_get_vlan_usage(struct ofproto *ofproto, unsigned long int *vlan_bitmap)
         const struct cls_table *table;
 
         HMAP_FOR_EACH (table, hmap_node, &oftable->cls.tables) {
-            if ((table->wc.vlan_tci_mask & htons(VLAN_VID_MASK))
+            if ((table->wc.masks.vlan_tci & htons(VLAN_VID_MASK))
                 == htons(VLAN_VID_MASK)) {
                 const struct cls_rule *rule;
 

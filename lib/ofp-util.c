@@ -90,42 +90,44 @@ ofputil_wildcard_from_ofpfw10(uint32_t ofpfw, struct flow_wildcards *wc)
     flow_wildcards_init_catchall(wc);
 
     if (!(ofpfw & OFPFW10_IN_PORT)) {
-        wc->in_port_mask = UINT16_MAX;
+        wc->masks.in_port = UINT16_MAX;
     }
 
     if (!(ofpfw & OFPFW10_NW_TOS)) {
-        wc->nw_tos_mask |= IP_DSCP_MASK;
+        wc->masks.nw_tos |= IP_DSCP_MASK;
     }
 
     if (!(ofpfw & OFPFW10_NW_PROTO)) {
-        wc->nw_proto_mask = UINT8_MAX;
+        wc->masks.nw_proto = UINT8_MAX;
     }
-    wc->nw_src_mask = ofputil_wcbits_to_netmask(ofpfw >> OFPFW10_NW_SRC_SHIFT);
-    wc->nw_dst_mask = ofputil_wcbits_to_netmask(ofpfw >> OFPFW10_NW_DST_SHIFT);
+    wc->masks.nw_src = ofputil_wcbits_to_netmask(ofpfw
+                                                 >> OFPFW10_NW_SRC_SHIFT);
+    wc->masks.nw_dst = ofputil_wcbits_to_netmask(ofpfw
+                                                 >> OFPFW10_NW_DST_SHIFT);
 
     if (!(ofpfw & OFPFW10_TP_SRC)) {
-        wc->tp_src_mask = htons(UINT16_MAX);
+        wc->masks.tp_src = htons(UINT16_MAX);
     }
     if (!(ofpfw & OFPFW10_TP_DST)) {
-        wc->tp_dst_mask = htons(UINT16_MAX);
+        wc->masks.tp_dst = htons(UINT16_MAX);
     }
 
     if (!(ofpfw & OFPFW10_DL_SRC)) {
-        memset(wc->dl_src_mask, 0xff, ETH_ADDR_LEN);
+        memset(wc->masks.dl_src, 0xff, ETH_ADDR_LEN);
     }
     if (!(ofpfw & OFPFW10_DL_DST)) {
-        memset(wc->dl_dst_mask, 0xff, ETH_ADDR_LEN);
+        memset(wc->masks.dl_dst, 0xff, ETH_ADDR_LEN);
     }
     if (!(ofpfw & OFPFW10_DL_TYPE)) {
-        wc->dl_type_mask = htons(UINT16_MAX);
+        wc->masks.dl_type = htons(UINT16_MAX);
     }
 
     /* VLAN TCI mask. */
     if (!(ofpfw & OFPFW10_DL_VLAN_PCP)) {
-        wc->vlan_tci_mask |= htons(VLAN_PCP_MASK | VLAN_CFI);
+        wc->masks.vlan_tci |= htons(VLAN_PCP_MASK | VLAN_CFI);
     }
     if (!(ofpfw & OFPFW10_DL_VLAN)) {
-        wc->vlan_tci_mask |= htons(VLAN_VID_MASK | VLAN_CFI);
+        wc->masks.vlan_tci |= htons(VLAN_VID_MASK | VLAN_CFI);
     }
 }
 
@@ -166,14 +168,14 @@ ofputil_cls_rule_from_ofp10_match(const struct ofp10_match *match,
          * However, older versions of OVS treated this as matching packets
          * withut an 802.1Q header, so we do here too. */
         rule->flow.vlan_tci = htons(0);
-        rule->wc.vlan_tci_mask = htons(0xffff);
+        rule->wc.masks.vlan_tci = htons(0xffff);
     } else {
         ovs_be16 vid, pcp, tci;
 
         vid = match->dl_vlan & htons(VLAN_VID_MASK);
         pcp = htons((match->dl_vlan_pcp << VLAN_PCP_SHIFT) & VLAN_PCP_MASK);
         tci = vid | pcp | htons(VLAN_CFI);
-        rule->flow.vlan_tci = tci & rule->wc.vlan_tci_mask;
+        rule->flow.vlan_tci = tci & rule->wc.masks.vlan_tci;
     }
 
     /* Clean up. */
@@ -190,52 +192,52 @@ ofputil_cls_rule_to_ofp10_match(const struct cls_rule *rule,
 
     /* Figure out most OpenFlow wildcards. */
     ofpfw = 0;
-    if (!wc->in_port_mask) {
+    if (!wc->masks.in_port) {
         ofpfw |= OFPFW10_IN_PORT;
     }
-    if (!wc->dl_type_mask) {
+    if (!wc->masks.dl_type) {
         ofpfw |= OFPFW10_DL_TYPE;
     }
-    if (!wc->nw_proto_mask) {
+    if (!wc->masks.nw_proto) {
         ofpfw |= OFPFW10_NW_PROTO;
     }
-    ofpfw |= (ofputil_netmask_to_wcbits(wc->nw_src_mask)
+    ofpfw |= (ofputil_netmask_to_wcbits(wc->masks.nw_src)
               << OFPFW10_NW_SRC_SHIFT);
-    ofpfw |= (ofputil_netmask_to_wcbits(wc->nw_dst_mask)
+    ofpfw |= (ofputil_netmask_to_wcbits(wc->masks.nw_dst)
               << OFPFW10_NW_DST_SHIFT);
-    if (!(wc->nw_tos_mask & IP_DSCP_MASK)) {
+    if (!(wc->masks.nw_tos & IP_DSCP_MASK)) {
         ofpfw |= OFPFW10_NW_TOS;
     }
-    if (!wc->tp_src_mask) {
+    if (!wc->masks.tp_src) {
         ofpfw |= OFPFW10_TP_SRC;
     }
-    if (!wc->tp_dst_mask) {
+    if (!wc->masks.tp_dst) {
         ofpfw |= OFPFW10_TP_DST;
     }
-    if (eth_addr_is_zero(wc->dl_src_mask)) {
+    if (eth_addr_is_zero(wc->masks.dl_src)) {
         ofpfw |= OFPFW10_DL_SRC;
     }
-    if (eth_addr_is_zero(wc->dl_dst_mask)) {
+    if (eth_addr_is_zero(wc->masks.dl_dst)) {
         ofpfw |= OFPFW10_DL_DST;
     }
 
     /* Translate VLANs. */
     match->dl_vlan = htons(0);
     match->dl_vlan_pcp = 0;
-    if (rule->wc.vlan_tci_mask == htons(0)) {
+    if (rule->wc.masks.vlan_tci == htons(0)) {
         ofpfw |= OFPFW10_DL_VLAN | OFPFW10_DL_VLAN_PCP;
-    } else if (rule->wc.vlan_tci_mask & htons(VLAN_CFI)
+    } else if (rule->wc.masks.vlan_tci & htons(VLAN_CFI)
                && !(rule->flow.vlan_tci & htons(VLAN_CFI))) {
         match->dl_vlan = htons(OFP10_VLAN_NONE);
         ofpfw |= OFPFW10_DL_VLAN_PCP;
     } else {
-        if (!(rule->wc.vlan_tci_mask & htons(VLAN_VID_MASK))) {
+        if (!(rule->wc.masks.vlan_tci & htons(VLAN_VID_MASK))) {
             ofpfw |= OFPFW10_DL_VLAN;
         } else {
             match->dl_vlan = htons(vlan_tci_to_vid(rule->flow.vlan_tci));
         }
 
-        if (!(rule->wc.vlan_tci_mask & htons(VLAN_PCP_MASK))) {
+        if (!(rule->wc.masks.vlan_tci & htons(VLAN_PCP_MASK))) {
             ofpfw |= OFPFW10_DL_VLAN_PCP;
         } else {
             match->dl_vlan_pcp = vlan_tci_to_pcp(rule->flow.vlan_tci);
@@ -336,16 +338,16 @@ ofputil_cls_rule_from_ofp11_match(const struct ofp11_match *match,
         if (match->dl_vlan == htons(OFPVID11_NONE)) {
             /* Match only packets without a VLAN tag. */
             rule->flow.vlan_tci = htons(0);
-            rule->wc.vlan_tci_mask = htons(UINT16_MAX);
+            rule->wc.masks.vlan_tci = htons(UINT16_MAX);
         } else {
             if (match->dl_vlan == htons(OFPVID11_ANY)) {
                 /* Match any packet with a VLAN tag regardless of VID. */
                 rule->flow.vlan_tci = htons(VLAN_CFI);
-                rule->wc.vlan_tci_mask = htons(VLAN_CFI);
+                rule->wc.masks.vlan_tci = htons(VLAN_CFI);
             } else if (ntohs(match->dl_vlan) < 4096) {
                 /* Match only packets with the specified VLAN VID. */
                 rule->flow.vlan_tci = htons(VLAN_CFI) | match->dl_vlan;
-                rule->wc.vlan_tci_mask = htons(VLAN_CFI | VLAN_VID_MASK);
+                rule->wc.masks.vlan_tci = htons(VLAN_CFI | VLAN_VID_MASK);
             } else {
                 /* Invalid VID. */
                 return OFPERR_OFPBMC_BAD_VALUE;
@@ -355,7 +357,7 @@ ofputil_cls_rule_from_ofp11_match(const struct ofp11_match *match,
                 if (match->dl_vlan_pcp <= 7) {
                     rule->flow.vlan_tci |= htons(match->dl_vlan_pcp
                                                  << VLAN_PCP_SHIFT);
-                    rule->wc.vlan_tci_mask |= htons(VLAN_PCP_MASK);
+                    rule->wc.masks.vlan_tci |= htons(VLAN_PCP_MASK);
                 } else {
                     /* Invalid PCP. */
                     return OFPERR_OFPBMC_BAD_VALUE;
@@ -469,7 +471,7 @@ ofputil_cls_rule_to_ofp11_match(const struct cls_rule *rule,
     match->omh.type = htons(OFPMT_STANDARD);
     match->omh.length = htons(OFPMT11_STANDARD_LENGTH);
 
-    if (!rule->wc.in_port_mask) {
+    if (!rule->wc.masks.in_port) {
         wc |= OFPFW11_IN_PORT;
     } else {
         match->in_port = ofputil_port_to_ofp11(rule->flow.in_port);
@@ -477,64 +479,64 @@ ofputil_cls_rule_to_ofp11_match(const struct cls_rule *rule,
 
     memcpy(match->dl_src, rule->flow.dl_src, ETH_ADDR_LEN);
     for (i = 0; i < ETH_ADDR_LEN; i++) {
-        match->dl_src_mask[i] = ~rule->wc.dl_src_mask[i];
+        match->dl_src_mask[i] = ~rule->wc.masks.dl_src[i];
     }
 
     memcpy(match->dl_dst, rule->flow.dl_dst, ETH_ADDR_LEN);
     for (i = 0; i < ETH_ADDR_LEN; i++) {
-        match->dl_dst_mask[i] = ~rule->wc.dl_dst_mask[i];
+        match->dl_dst_mask[i] = ~rule->wc.masks.dl_dst[i];
     }
 
-    if (rule->wc.vlan_tci_mask == htons(0)) {
+    if (rule->wc.masks.vlan_tci == htons(0)) {
         wc |= OFPFW11_DL_VLAN | OFPFW11_DL_VLAN_PCP;
-    } else if (rule->wc.vlan_tci_mask & htons(VLAN_CFI)
+    } else if (rule->wc.masks.vlan_tci & htons(VLAN_CFI)
                && !(rule->flow.vlan_tci & htons(VLAN_CFI))) {
         match->dl_vlan = htons(OFPVID11_NONE);
         wc |= OFPFW11_DL_VLAN_PCP;
     } else {
-        if (!(rule->wc.vlan_tci_mask & htons(VLAN_VID_MASK))) {
+        if (!(rule->wc.masks.vlan_tci & htons(VLAN_VID_MASK))) {
             match->dl_vlan = htons(OFPVID11_ANY);
         } else {
             match->dl_vlan = htons(vlan_tci_to_vid(rule->flow.vlan_tci));
         }
 
-        if (!(rule->wc.vlan_tci_mask & htons(VLAN_PCP_MASK))) {
+        if (!(rule->wc.masks.vlan_tci & htons(VLAN_PCP_MASK))) {
             wc |= OFPFW11_DL_VLAN_PCP;
         } else {
             match->dl_vlan_pcp = vlan_tci_to_pcp(rule->flow.vlan_tci);
         }
     }
 
-    if (!rule->wc.dl_type_mask) {
+    if (!rule->wc.masks.dl_type) {
         wc |= OFPFW11_DL_TYPE;
     } else {
         match->dl_type = ofputil_dl_type_to_openflow(rule->flow.dl_type);
     }
 
-    if (!(rule->wc.nw_tos_mask & IP_DSCP_MASK)) {
+    if (!(rule->wc.masks.nw_tos & IP_DSCP_MASK)) {
         wc |= OFPFW11_NW_TOS;
     } else {
         match->nw_tos = rule->flow.nw_tos & IP_DSCP_MASK;
     }
 
-    if (!rule->wc.nw_proto_mask) {
+    if (!rule->wc.masks.nw_proto) {
         wc |= OFPFW11_NW_PROTO;
     } else {
         match->nw_proto = rule->flow.nw_proto;
     }
 
     match->nw_src = rule->flow.nw_src;
-    match->nw_src_mask = ~rule->wc.nw_src_mask;
+    match->nw_src_mask = ~rule->wc.masks.nw_src;
     match->nw_dst = rule->flow.nw_dst;
-    match->nw_dst_mask = ~rule->wc.nw_dst_mask;
+    match->nw_dst_mask = ~rule->wc.masks.nw_dst;
 
-    if (!rule->wc.tp_src_mask) {
+    if (!rule->wc.masks.tp_src) {
         wc |= OFPFW11_TP_SRC;
     } else {
         match->tp_src = rule->flow.tp_src;
     }
 
-    if (!rule->wc.tp_dst_mask) {
+    if (!rule->wc.masks.tp_dst) {
         wc |= OFPFW11_TP_DST;
     } else {
         match->tp_dst = rule->flow.tp_dst;
@@ -545,7 +547,7 @@ ofputil_cls_rule_to_ofp11_match(const struct cls_rule *rule,
     wc |= OFPFW11_MPLS_TC;
 
     match->metadata = rule->flow.metadata;
-    match->metadata_mask = ~rule->wc.metadata_mask;
+    match->metadata_mask = ~rule->wc.masks.metadata;
 
     match->wildcards = htonl(wc);
 }
@@ -887,7 +889,7 @@ regs_fully_wildcarded(const struct flow_wildcards *wc)
     int i;
 
     for (i = 0; i < FLOW_N_REGS; i++) {
-        if (wc->reg_masks[i] != 0) {
+        if (wc->masks.regs[i] != 0) {
             return false;
         }
     }
@@ -906,23 +908,23 @@ ofputil_usable_protocols(const struct cls_rule *rule)
     BUILD_ASSERT_DECL(FLOW_WC_SEQ == 17);
 
     /* NXM and OF1.1+ supports bitwise matching on ethernet addresses. */
-    if (!eth_mask_is_exact(wc->dl_src_mask)
-        && !eth_addr_is_zero(wc->dl_src_mask)) {
+    if (!eth_mask_is_exact(wc->masks.dl_src)
+        && !eth_addr_is_zero(wc->masks.dl_src)) {
         return OFPUTIL_P_NXM_ANY;
     }
-    if (!eth_mask_is_exact(wc->dl_dst_mask)
-        && !eth_addr_is_zero(wc->dl_dst_mask)) {
+    if (!eth_mask_is_exact(wc->masks.dl_dst)
+        && !eth_addr_is_zero(wc->masks.dl_dst)) {
         return OFPUTIL_P_NXM_ANY;
     }
 
     /* NXM and OF1.1+ support matching metadata. */
-    if (wc->metadata_mask != htonll(0)) {
+    if (wc->masks.metadata != htonll(0)) {
         return OFPUTIL_P_NXM_ANY;
     }
 
     /* Only NXM supports matching ARP hardware addresses. */
-    if (!eth_addr_is_zero(wc->arp_sha_mask) ||
-        !eth_addr_is_zero(wc->arp_tha_mask)) {
+    if (!eth_addr_is_zero(wc->masks.arp_sha) ||
+        !eth_addr_is_zero(wc->masks.arp_tha)) {
         return OFPUTIL_P_NXM_ANY;
     }
 
@@ -937,38 +939,38 @@ ofputil_usable_protocols(const struct cls_rule *rule)
     }
 
     /* Only NXM supports matching tun_id. */
-    if (wc->tun_id_mask != htonll(0)) {
+    if (wc->masks.tun_id != htonll(0)) {
         return OFPUTIL_P_NXM_ANY;
     }
 
     /* Only NXM supports matching fragments. */
-    if (wc->nw_frag_mask) {
+    if (wc->masks.nw_frag) {
         return OFPUTIL_P_NXM_ANY;
     }
 
     /* Only NXM supports matching IPv6 flow label. */
-    if (wc->ipv6_label_mask) {
+    if (wc->masks.ipv6_label) {
         return OFPUTIL_P_NXM_ANY;
     }
 
     /* Only NXM supports matching IP ECN bits. */
-    if (wc->nw_tos_mask & IP_ECN_MASK) {
+    if (wc->masks.nw_tos & IP_ECN_MASK) {
         return OFPUTIL_P_NXM_ANY;
     }
 
     /* Only NXM supports matching IP TTL/hop limit. */
-    if (wc->nw_ttl_mask) {
+    if (wc->masks.nw_ttl) {
         return OFPUTIL_P_NXM_ANY;
     }
 
     /* Only NXM supports non-CIDR IPv4 address masks. */
-    if (!ip_is_cidr(wc->nw_src_mask) || !ip_is_cidr(wc->nw_dst_mask)) {
+    if (!ip_is_cidr(wc->masks.nw_src) || !ip_is_cidr(wc->masks.nw_dst)) {
         return OFPUTIL_P_NXM_ANY;
     }
 
     /* Only NXM supports bitwise matching on transport port. */
-    if ((wc->tp_src_mask && wc->tp_src_mask != htons(UINT16_MAX)) ||
-        (wc->tp_dst_mask && wc->tp_dst_mask != htons(UINT16_MAX))) {
+    if ((wc->masks.tp_src && wc->masks.tp_src != htons(UINT16_MAX)) ||
+        (wc->masks.tp_dst && wc->masks.tp_dst != htons(UINT16_MAX))) {
         return OFPUTIL_P_NXM_ANY;
     }
 
@@ -3625,30 +3627,30 @@ ofputil_normalize_rule__(struct cls_rule *rule, bool may_log)
     /* Clear the fields that may not be matched. */
     wc = rule->wc;
     if (!(may_match & MAY_NW_ADDR)) {
-        wc.nw_src_mask = wc.nw_dst_mask = htonl(0);
+        wc.masks.nw_src = wc.masks.nw_dst = htonl(0);
     }
     if (!(may_match & MAY_TP_ADDR)) {
-        wc.tp_src_mask = wc.tp_dst_mask = htons(0);
+        wc.masks.tp_src = wc.masks.tp_dst = htons(0);
     }
     if (!(may_match & MAY_NW_PROTO)) {
-        wc.nw_proto_mask = 0;
+        wc.masks.nw_proto = 0;
     }
     if (!(may_match & MAY_IPVx)) {
-        wc.nw_tos_mask = 0;
-        wc.nw_ttl_mask = 0;
+        wc.masks.nw_tos = 0;
+        wc.masks.nw_ttl = 0;
     }
     if (!(may_match & MAY_ARP_SHA)) {
-        memset(wc.arp_sha_mask, 0, ETH_ADDR_LEN);
+        memset(wc.masks.arp_sha, 0, ETH_ADDR_LEN);
     }
     if (!(may_match & MAY_ARP_THA)) {
-        memset(wc.arp_tha_mask, 0, ETH_ADDR_LEN);
+        memset(wc.masks.arp_tha, 0, ETH_ADDR_LEN);
     }
     if (!(may_match & MAY_IPV6)) {
-        wc.ipv6_src_mask = wc.ipv6_dst_mask = in6addr_any;
-        wc.ipv6_label_mask = htonl(0);
+        wc.masks.ipv6_src = wc.masks.ipv6_dst = in6addr_any;
+        wc.masks.ipv6_label = htonl(0);
     }
     if (!(may_match & MAY_ND_TARGET)) {
-        wc.nd_target_mask = in6addr_any;
+        wc.masks.nd_target = in6addr_any;
     }
 
     /* Log any changes. */

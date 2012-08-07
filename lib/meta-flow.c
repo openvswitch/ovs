@@ -574,84 +574,84 @@ mf_is_all_wild(const struct mf_field *mf, const struct flow_wildcards *wc)
 {
     switch (mf->id) {
     case MFF_TUN_ID:
-        return !wc->tun_id_mask;
+        return !wc->masks.tun_id;
     case MFF_METADATA:
-        return !wc->metadata_mask;
+        return !wc->masks.metadata;
     case MFF_IN_PORT:
-        return !wc->in_port_mask;
+        return !wc->masks.in_port;
     CASE_MFF_REGS:
-        return !wc->reg_masks[mf->id - MFF_REG0];
+        return !wc->masks.regs[mf->id - MFF_REG0];
 
     case MFF_ETH_SRC:
-        return eth_addr_is_zero(wc->dl_src_mask);
+        return eth_addr_is_zero(wc->masks.dl_src);
     case MFF_ETH_DST:
-        return eth_addr_is_zero(wc->dl_dst_mask);
+        return eth_addr_is_zero(wc->masks.dl_dst);
     case MFF_ETH_TYPE:
-        return !wc->dl_type_mask;
+        return !wc->masks.dl_type;
 
     case MFF_ARP_SHA:
     case MFF_ND_SLL:
-        return eth_addr_is_zero(wc->arp_sha_mask);
+        return eth_addr_is_zero(wc->masks.arp_sha);
 
     case MFF_ARP_THA:
     case MFF_ND_TLL:
-        return eth_addr_is_zero(wc->arp_tha_mask);
+        return eth_addr_is_zero(wc->masks.arp_tha);
 
     case MFF_VLAN_TCI:
-        return !wc->vlan_tci_mask;
+        return !wc->masks.vlan_tci;
     case MFF_DL_VLAN:
-        return !(wc->vlan_tci_mask & htons(VLAN_VID_MASK));
+        return !(wc->masks.vlan_tci & htons(VLAN_VID_MASK));
     case MFF_VLAN_VID:
-        return !(wc->vlan_tci_mask & htons(VLAN_VID_MASK | VLAN_CFI));
+        return !(wc->masks.vlan_tci & htons(VLAN_VID_MASK | VLAN_CFI));
     case MFF_DL_VLAN_PCP:
     case MFF_VLAN_PCP:
-        return !(wc->vlan_tci_mask & htons(VLAN_PCP_MASK));
+        return !(wc->masks.vlan_tci & htons(VLAN_PCP_MASK));
 
     case MFF_IPV4_SRC:
-        return !wc->nw_src_mask;
+        return !wc->masks.nw_src;
     case MFF_IPV4_DST:
-        return !wc->nw_dst_mask;
+        return !wc->masks.nw_dst;
 
     case MFF_IPV6_SRC:
-        return ipv6_mask_is_any(&wc->ipv6_src_mask);
+        return ipv6_mask_is_any(&wc->masks.ipv6_src);
     case MFF_IPV6_DST:
-        return ipv6_mask_is_any(&wc->ipv6_dst_mask);
+        return ipv6_mask_is_any(&wc->masks.ipv6_dst);
 
     case MFF_IPV6_LABEL:
-        return !wc->ipv6_label_mask;
+        return !wc->masks.ipv6_label;
 
     case MFF_IP_PROTO:
-        return !wc->nw_proto_mask;
+        return !wc->masks.nw_proto;
     case MFF_IP_DSCP:
-        return !(wc->nw_tos_mask & IP_DSCP_MASK);
+        return !(wc->masks.nw_tos & IP_DSCP_MASK);
     case MFF_IP_ECN:
-        return !(wc->nw_tos_mask & IP_ECN_MASK);
+        return !(wc->masks.nw_tos & IP_ECN_MASK);
     case MFF_IP_TTL:
-        return !wc->nw_ttl_mask;
+        return !wc->masks.nw_ttl;
 
     case MFF_ND_TARGET:
-        return ipv6_mask_is_any(&wc->nd_target_mask);
+        return ipv6_mask_is_any(&wc->masks.nd_target);
 
     case MFF_IP_FRAG:
-        return !(wc->nw_frag_mask & FLOW_NW_FRAG_MASK);
+        return !(wc->masks.nw_frag & FLOW_NW_FRAG_MASK);
 
     case MFF_ARP_OP:
-        return !wc->nw_proto_mask;
+        return !wc->masks.nw_proto;
     case MFF_ARP_SPA:
-        return !wc->nw_src_mask;
+        return !wc->masks.nw_src;
     case MFF_ARP_TPA:
-        return !wc->nw_dst_mask;
+        return !wc->masks.nw_dst;
 
     case MFF_TCP_SRC:
     case MFF_UDP_SRC:
     case MFF_ICMPV4_TYPE:
     case MFF_ICMPV6_TYPE:
-        return !wc->tp_src_mask;
+        return !wc->masks.tp_src;
     case MFF_TCP_DST:
     case MFF_UDP_DST:
     case MFF_ICMPV4_CODE:
     case MFF_ICMPV6_CODE:
-        return !wc->tp_dst_mask;
+        return !wc->masks.tp_dst;
 
     case MFF_N_IDS:
     default:
@@ -671,114 +671,114 @@ mf_get_mask(const struct mf_field *mf, const struct flow_wildcards *wc,
 {
     switch (mf->id) {
     case MFF_TUN_ID:
-        mask->be64 = wc->tun_id_mask;
+        mask->be64 = wc->masks.tun_id;
         break;
     case MFF_METADATA:
-        mask->be64 = wc->metadata_mask;
+        mask->be64 = wc->masks.metadata;
         break;
     case MFF_IN_PORT:
-        mask->be16 = htons(wc->in_port_mask);
+        mask->be16 = htons(wc->masks.in_port);
         break;
     CASE_MFF_REGS:
-        mask->be32 = htonl(wc->reg_masks[mf->id - MFF_REG0]);
+        mask->be32 = htonl(wc->masks.regs[mf->id - MFF_REG0]);
         break;
 
     case MFF_ETH_DST:
-        memcpy(mask->mac, wc->dl_dst_mask, ETH_ADDR_LEN);
+        memcpy(mask->mac, wc->masks.dl_dst, ETH_ADDR_LEN);
         break;
     case MFF_ETH_SRC:
-        memcpy(mask->mac, wc->dl_src_mask, ETH_ADDR_LEN);
+        memcpy(mask->mac, wc->masks.dl_src, ETH_ADDR_LEN);
         break;
     case MFF_ETH_TYPE:
-        mask->be16 = wc->dl_type_mask;
+        mask->be16 = wc->masks.dl_type;
         break;
 
     case MFF_VLAN_TCI:
-        mask->be16 = wc->vlan_tci_mask;
+        mask->be16 = wc->masks.vlan_tci;
         break;
     case MFF_DL_VLAN:
-        mask->be16 = wc->vlan_tci_mask & htons(VLAN_VID_MASK);
+        mask->be16 = wc->masks.vlan_tci & htons(VLAN_VID_MASK);
         break;
     case MFF_VLAN_VID:
-        mask->be16 = wc->vlan_tci_mask & htons(VLAN_VID_MASK | VLAN_CFI);
+        mask->be16 = wc->masks.vlan_tci & htons(VLAN_VID_MASK | VLAN_CFI);
         break;
     case MFF_DL_VLAN_PCP:
     case MFF_VLAN_PCP:
-        mask->u8 = vlan_tci_to_pcp(wc->vlan_tci_mask);
+        mask->u8 = vlan_tci_to_pcp(wc->masks.vlan_tci);
         break;
 
     case MFF_IPV4_SRC:
-        mask->be32 = wc->nw_src_mask;
+        mask->be32 = wc->masks.nw_src;
         break;
     case MFF_IPV4_DST:
-        mask->be32 = wc->nw_dst_mask;
+        mask->be32 = wc->masks.nw_dst;
         break;
 
     case MFF_IPV6_SRC:
-        mask->ipv6 = wc->ipv6_src_mask;
+        mask->ipv6 = wc->masks.ipv6_src;
         break;
     case MFF_IPV6_DST:
-        mask->ipv6 = wc->ipv6_dst_mask;
+        mask->ipv6 = wc->masks.ipv6_dst;
         break;
     case MFF_IPV6_LABEL:
-        mask->be32 = wc->ipv6_label_mask;
+        mask->be32 = wc->masks.ipv6_label;
         break;
 
     case MFF_IP_PROTO:
-        mask->u8 = wc->nw_proto_mask;
+        mask->u8 = wc->masks.nw_proto;
         break;
     case MFF_IP_DSCP:
-        mask->u8 = wc->nw_tos_mask & IP_DSCP_MASK;
+        mask->u8 = wc->masks.nw_tos & IP_DSCP_MASK;
         break;
     case MFF_IP_ECN:
-        mask->u8 = wc->nw_tos_mask & IP_ECN_MASK;
+        mask->u8 = wc->masks.nw_tos & IP_ECN_MASK;
         break;
 
     case MFF_ND_TARGET:
-        mask->ipv6 = wc->nd_target_mask;
+        mask->ipv6 = wc->masks.nd_target;
         break;
 
     case MFF_IP_TTL:
-        mask->u8 = wc->nw_ttl_mask;
+        mask->u8 = wc->masks.nw_ttl;
         break;
     case MFF_IP_FRAG:
-        mask->u8 = wc->nw_frag_mask & FLOW_NW_FRAG_MASK;
+        mask->u8 = wc->masks.nw_frag & FLOW_NW_FRAG_MASK;
         break;
 
     case MFF_ARP_OP:
-        mask->u8 = wc->nw_proto_mask;
+        mask->u8 = wc->masks.nw_proto;
         break;
     case MFF_ARP_SPA:
-        mask->be32 = wc->nw_src_mask;
+        mask->be32 = wc->masks.nw_src;
         break;
     case MFF_ARP_TPA:
-        mask->be32 = wc->nw_dst_mask;
+        mask->be32 = wc->masks.nw_dst;
         break;
     case MFF_ARP_SHA:
     case MFF_ND_SLL:
-        memcpy(mask->mac, wc->arp_sha_mask, ETH_ADDR_LEN);
+        memcpy(mask->mac, wc->masks.arp_sha, ETH_ADDR_LEN);
         break;
     case MFF_ARP_THA:
     case MFF_ND_TLL:
-        memcpy(mask->mac, wc->arp_tha_mask, ETH_ADDR_LEN);
+        memcpy(mask->mac, wc->masks.arp_tha, ETH_ADDR_LEN);
         break;
 
     case MFF_TCP_SRC:
     case MFF_UDP_SRC:
-        mask->be16 = wc->tp_src_mask;
+        mask->be16 = wc->masks.tp_src;
         break;
     case MFF_TCP_DST:
     case MFF_UDP_DST:
-        mask->be16 = wc->tp_dst_mask;
+        mask->be16 = wc->masks.tp_dst;
         break;
 
     case MFF_ICMPV4_TYPE:
     case MFF_ICMPV6_TYPE:
-        mask->u8 = ntohs(wc->tp_src_mask);
+        mask->u8 = ntohs(wc->masks.tp_src);
         break;
     case MFF_ICMPV4_CODE:
     case MFF_ICMPV6_CODE:
-        mask->u8 = ntohs(wc->tp_dst_mask);
+        mask->u8 = ntohs(wc->masks.tp_dst);
         break;
 
     case MFF_N_IDS:
@@ -1403,7 +1403,7 @@ mf_set_wild(const struct mf_field *mf, struct cls_rule *rule)
 
     case MFF_IN_PORT:
         rule->flow.in_port = 0;
-        rule->wc.in_port_mask = 0;
+        rule->wc.masks.in_port = 0;
         break;
 
     CASE_MFF_REGS:
@@ -1412,17 +1412,17 @@ mf_set_wild(const struct mf_field *mf, struct cls_rule *rule)
 
     case MFF_ETH_SRC:
         memset(rule->flow.dl_src, 0, ETH_ADDR_LEN);
-        memset(rule->wc.dl_src_mask, 0, ETH_ADDR_LEN);
+        memset(rule->wc.masks.dl_src, 0, ETH_ADDR_LEN);
         break;
 
     case MFF_ETH_DST:
         memset(rule->flow.dl_dst, 0, ETH_ADDR_LEN);
-        memset(rule->wc.dl_dst_mask, 0, ETH_ADDR_LEN);
+        memset(rule->wc.masks.dl_dst, 0, ETH_ADDR_LEN);
         break;
 
     case MFF_ETH_TYPE:
         rule->flow.dl_type = htons(0);
-        rule->wc.dl_type_mask = htons(0);
+        rule->wc.masks.dl_type = htons(0);
         break;
 
     case MFF_VLAN_TCI:
@@ -1450,67 +1450,67 @@ mf_set_wild(const struct mf_field *mf, struct cls_rule *rule)
         break;
 
     case MFF_IPV6_SRC:
-        memset(&rule->wc.ipv6_src_mask, 0, sizeof rule->wc.ipv6_src_mask);
+        memset(&rule->wc.masks.ipv6_src, 0, sizeof rule->wc.masks.ipv6_src);
         memset(&rule->flow.ipv6_src, 0, sizeof rule->flow.ipv6_src);
         break;
 
     case MFF_IPV6_DST:
-        memset(&rule->wc.ipv6_dst_mask, 0, sizeof rule->wc.ipv6_dst_mask);
+        memset(&rule->wc.masks.ipv6_dst, 0, sizeof rule->wc.masks.ipv6_dst);
         memset(&rule->flow.ipv6_dst, 0, sizeof rule->flow.ipv6_dst);
         break;
 
     case MFF_IPV6_LABEL:
-        rule->wc.ipv6_label_mask = 0;
-        rule->flow.ipv6_label = 0;
+        rule->wc.masks.ipv6_label = htonl(0);
+        rule->flow.ipv6_label = htonl(0);
         break;
 
     case MFF_IP_PROTO:
-        rule->wc.nw_proto_mask = 0;
+        rule->wc.masks.nw_proto = 0;
         rule->flow.nw_proto = 0;
         break;
 
     case MFF_IP_DSCP:
-        rule->wc.nw_tos_mask &= ~IP_DSCP_MASK;
+        rule->wc.masks.nw_tos &= ~IP_DSCP_MASK;
         rule->flow.nw_tos &= ~IP_DSCP_MASK;
         break;
 
     case MFF_IP_ECN:
-        rule->wc.nw_tos_mask &= ~IP_ECN_MASK;
+        rule->wc.masks.nw_tos &= ~IP_ECN_MASK;
         rule->flow.nw_tos &= ~IP_ECN_MASK;
         break;
 
     case MFF_IP_TTL:
-        rule->wc.nw_ttl_mask = 0;
+        rule->wc.masks.nw_ttl = 0;
         rule->flow.nw_ttl = 0;
         break;
 
     case MFF_IP_FRAG:
-        rule->wc.nw_frag_mask |= FLOW_NW_FRAG_MASK;
+        rule->wc.masks.nw_frag |= FLOW_NW_FRAG_MASK;
         rule->flow.nw_frag &= ~FLOW_NW_FRAG_MASK;
         break;
 
     case MFF_ARP_OP:
-        rule->wc.nw_proto_mask = 0;
+        rule->wc.masks.nw_proto = 0;
         rule->flow.nw_proto = 0;
         break;
 
     case MFF_ARP_SHA:
     case MFF_ND_SLL:
         memset(rule->flow.arp_sha, 0, ETH_ADDR_LEN);
-        memset(rule->wc.arp_sha_mask, 0, ETH_ADDR_LEN);
+        memset(rule->wc.masks.arp_sha, 0, ETH_ADDR_LEN);
         break;
 
     case MFF_ARP_THA:
     case MFF_ND_TLL:
         memset(rule->flow.arp_tha, 0, ETH_ADDR_LEN);
-        memset(rule->wc.arp_tha_mask, 0, ETH_ADDR_LEN);
+        memset(rule->wc.masks.arp_tha, 0, ETH_ADDR_LEN);
         break;
 
     case MFF_TCP_SRC:
     case MFF_UDP_SRC:
     case MFF_ICMPV4_TYPE:
     case MFF_ICMPV6_TYPE:
-        rule->wc.tp_src_mask = htons(0);
+        rule->wc.masks.tp_src = htons(0);
         rule->flow.tp_src = htons(0);
         break;
 
@@ -1518,12 +1518,12 @@ mf_set_wild(const struct mf_field *mf, struct cls_rule *rule)
     case MFF_UDP_DST:
     case MFF_ICMPV4_CODE:
     case MFF_ICMPV6_CODE:
-        rule->wc.tp_dst_mask = htons(0);
+        rule->wc.masks.tp_dst = htons(0);
         rule->flow.tp_dst = htons(0);
         break;
 
     case MFF_ND_TARGET:
-        memset(&rule->wc.nd_target_mask, 0, sizeof rule->wc.nd_target_mask);
+        memset(&rule->wc.masks.nd_target, 0, sizeof rule->wc.masks.nd_target);
         memset(&rule->flow.nd_target, 0, sizeof rule->flow.nd_target);
         break;
 

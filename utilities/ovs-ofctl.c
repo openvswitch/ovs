@@ -2606,7 +2606,7 @@ ofctl_check_vlan(int argc OVS_UNUSED, char *argv[])
 
     cls_rule_init_catchall(&rule, OFP_DEFAULT_PRIORITY);
     rule.flow.vlan_tci = htons(strtoul(argv[1], NULL, 16));
-    rule.wc.vlan_tci_mask = htons(strtoul(argv[2], NULL, 16));
+    rule.wc.masks.vlan_tci = htons(strtoul(argv[2], NULL, 16));
 
     /* Convert to and from string. */
     string_s = cls_rule_to_string(&rule);
@@ -2615,7 +2615,7 @@ ofctl_check_vlan(int argc OVS_UNUSED, char *argv[])
     parse_ofp_str(&fm, -1, string_s, false);
     printf("%04"PRIx16"/%04"PRIx16"\n",
            ntohs(fm.cr.flow.vlan_tci),
-           ntohs(fm.cr.wc.vlan_tci_mask));
+           ntohs(fm.cr.wc.masks.vlan_tci));
     free(string_s);
 
     /* Convert to and from NXM. */
@@ -2629,7 +2629,7 @@ ofctl_check_vlan(int argc OVS_UNUSED, char *argv[])
     } else {
         printf("%04"PRIx16"/%04"PRIx16"\n",
                ntohs(nxm_rule.flow.vlan_tci),
-               ntohs(nxm_rule.wc.vlan_tci_mask));
+               ntohs(nxm_rule.wc.masks.vlan_tci));
     }
     free(nxm_s);
     ofpbuf_uninit(&nxm);
@@ -2645,11 +2645,11 @@ ofctl_check_vlan(int argc OVS_UNUSED, char *argv[])
     } else {
         uint16_t vid = ntohs(nxm_rule.flow.vlan_tci) &
             (VLAN_VID_MASK | VLAN_CFI);
-        uint16_t mask = ntohs(nxm_rule.wc.vlan_tci_mask) &
+        uint16_t mask = ntohs(nxm_rule.wc.masks.vlan_tci) &
             (VLAN_VID_MASK | VLAN_CFI);
 
         printf("%04"PRIx16"/%04"PRIx16",", vid, mask);
-        if (vid && vlan_tci_to_pcp(nxm_rule.wc.vlan_tci_mask)) {
+        if (vid && vlan_tci_to_pcp(nxm_rule.wc.masks.vlan_tci)) {
             printf("%02"PRIx8"\n", vlan_tci_to_pcp(nxm_rule.flow.vlan_tci));
         } else {
             printf("--\n");
@@ -2667,7 +2667,7 @@ ofctl_check_vlan(int argc OVS_UNUSED, char *argv[])
            of10_match.dl_vlan_pcp,
            (of10_match.wildcards & htonl(OFPFW10_DL_VLAN_PCP)) != 0,
            ntohs(of10_rule.flow.vlan_tci),
-           ntohs(of10_rule.wc.vlan_tci_mask));
+           ntohs(of10_rule.wc.masks.vlan_tci));
 
     /* Convert to and from OpenFlow 1.1. */
     ofputil_cls_rule_to_ofp11_match(&rule, &of11_match);
@@ -2678,7 +2678,7 @@ ofctl_check_vlan(int argc OVS_UNUSED, char *argv[])
            of11_match.dl_vlan_pcp,
            (of11_match.wildcards & htonl(OFPFW11_DL_VLAN_PCP)) != 0,
            ntohs(of11_rule.flow.vlan_tci),
-           ntohs(of11_rule.wc.vlan_tci_mask));
+           ntohs(of11_rule.wc.masks.vlan_tci));
 }
 
 /* "print-error ENUM": Prints the type and code of ENUM for every OpenFlow

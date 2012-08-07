@@ -473,7 +473,7 @@ static void
 nxm_put_frag(struct ofpbuf *b, const struct cls_rule *cr)
 {
     uint8_t nw_frag = cr->flow.nw_frag;
-    uint8_t nw_frag_mask = cr->wc.nw_frag_mask;
+    uint8_t nw_frag_mask = cr->wc.masks.nw_frag;
 
     switch (nw_frag_mask) {
     case 0:
@@ -499,38 +499,38 @@ nxm_put_ip(struct ofpbuf *b, const struct cls_rule *cr,
 
     nxm_put_frag(b, cr);
 
-    if (cr->wc.nw_tos_mask & IP_DSCP_MASK) {
+    if (cr->wc.masks.nw_tos & IP_DSCP_MASK) {
         nxm_put_8(b, oxm ? OXM_OF_IP_DSCP : NXM_OF_IP_TOS,
                   flow->nw_tos & IP_DSCP_MASK);
     }
 
-    if (cr->wc.nw_tos_mask & IP_ECN_MASK) {
+    if (cr->wc.masks.nw_tos & IP_ECN_MASK) {
         nxm_put_8(b, oxm ? OXM_OF_IP_ECN : NXM_NX_IP_ECN,
                   flow->nw_tos & IP_ECN_MASK);
     }
 
-    if (!oxm && cr->wc.nw_ttl_mask) {
+    if (!oxm && cr->wc.masks.nw_ttl) {
         nxm_put_8(b, NXM_NX_IP_TTL, flow->nw_ttl);
     }
 
-    if (cr->wc.nw_proto_mask) {
+    if (cr->wc.masks.nw_proto) {
         nxm_put_8(b, oxm ? OXM_OF_IP_PROTO : NXM_OF_IP_PROTO, flow->nw_proto);
 
         if (flow->nw_proto == IPPROTO_TCP) {
             nxm_put_16m(b, oxm ? OXM_OF_TCP_SRC : NXM_OF_TCP_SRC,
-                        flow->tp_src, cr->wc.tp_src_mask);
+                        flow->tp_src, cr->wc.masks.tp_src);
             nxm_put_16m(b, oxm ? OXM_OF_TCP_DST : NXM_OF_TCP_DST,
-                        flow->tp_dst, cr->wc.tp_dst_mask);
+                        flow->tp_dst, cr->wc.masks.tp_dst);
         } else if (flow->nw_proto == IPPROTO_UDP) {
             nxm_put_16m(b, oxm ? OXM_OF_UDP_SRC : NXM_OF_UDP_SRC,
-                        flow->tp_src, cr->wc.tp_src_mask);
+                        flow->tp_src, cr->wc.masks.tp_src);
             nxm_put_16m(b, oxm ? OXM_OF_UDP_DST : NXM_OF_UDP_DST,
-                        flow->tp_dst, cr->wc.tp_dst_mask);
+                        flow->tp_dst, cr->wc.masks.tp_dst);
         } else if (flow->nw_proto == icmp_proto) {
-            if (cr->wc.tp_src_mask) {
+            if (cr->wc.masks.tp_src) {
                 nxm_put_8(b, icmp_type, ntohs(flow->tp_src));
             }
-            if (cr->wc.tp_dst_mask) {
+            if (cr->wc.masks.tp_dst) {
                 nxm_put_8(b, icmp_code, ntohs(flow->tp_dst));
             }
         }
@@ -560,7 +560,7 @@ nx_put_raw(struct ofpbuf *b, bool oxm, const struct cls_rule *cr,
     BUILD_ASSERT_DECL(FLOW_WC_SEQ == 17);
 
     /* Metadata. */
-    if (cr->wc.in_port_mask) {
+    if (cr->wc.masks.in_port) {
         uint16_t in_port = flow->in_port;
         if (oxm) {
             nxm_put_32(b, OXM_OF_IN_PORT, ofputil_port_to_ofp11(in_port));
@@ -571,17 +571,18 @@ nx_put_raw(struct ofpbuf *b, bool oxm, const struct cls_rule *cr,
 
     /* Ethernet. */
     nxm_put_eth_masked(b, oxm ? OXM_OF_ETH_SRC : NXM_OF_ETH_SRC,
-                       flow->dl_src, cr->wc.dl_src_mask);
+                       flow->dl_src, cr->wc.masks.dl_src);
     nxm_put_eth_masked(b, oxm ? OXM_OF_ETH_DST : NXM_OF_ETH_DST,
-                       flow->dl_dst, cr->wc.dl_dst_mask);
+                       flow->dl_dst, cr->wc.masks.dl_dst);
     nxm_put_16m(b, oxm ? OXM_OF_ETH_TYPE : NXM_OF_ETH_TYPE,
                 ofputil_dl_type_to_openflow(flow->dl_type),
-                cr->wc.dl_type_mask);
+                cr->wc.masks.dl_type);
 
     /* 802.1Q. */
     if (oxm) {
-        ovs_be16 vid = flow->vlan_tci & htons(VLAN_VID_MASK | VLAN_CFI);
-        ovs_be16 mask = cr->wc.vlan_tci_mask & htons(VLAN_VID_MASK | VLAN_CFI);
+        ovs_be16 VID_CFI_MASK = htons(VLAN_VID_MASK | VLAN_CFI);
+        ovs_be16 vid = flow->vlan_tci & VID_CFI_MASK;
+        ovs_be16 mask = cr->wc.masks.vlan_tci & VID_CFI_MASK;
 
         if (mask == htons(VLAN_VID_MASK | VLAN_CFI)) {
             nxm_put_16(b, OXM_OF_VLAN_VID, vid);
@@ -589,78 +590,78 @@ nx_put_raw(struct ofpbuf *b, bool oxm, const struct cls_rule *cr,
             nxm_put_16m(b, OXM_OF_VLAN_VID, vid, mask);
         }
 
-        if (vid && vlan_tci_to_pcp(cr->wc.vlan_tci_mask)) {
+        if (vid && vlan_tci_to_pcp(cr->wc.masks.vlan_tci)) {
             nxm_put_8(b, OXM_OF_VLAN_PCP, vlan_tci_to_pcp(flow->vlan_tci));
         }
 
     } else {
-        nxm_put_16m(b, NXM_OF_VLAN_TCI, flow->vlan_tci, cr->wc.vlan_tci_mask);
+        nxm_put_16m(b, NXM_OF_VLAN_TCI, flow->vlan_tci, cr->wc.masks.vlan_tci);
     }
 
     /* L3. */
     if (flow->dl_type == htons(ETH_TYPE_IP)) {
         /* IP. */
         nxm_put_32m(b, oxm ? OXM_OF_IPV4_SRC : NXM_OF_IP_SRC,
-                    flow->nw_src, cr->wc.nw_src_mask);
+                    flow->nw_src, cr->wc.masks.nw_src);
         nxm_put_32m(b, oxm ? OXM_OF_IPV4_DST : NXM_OF_IP_DST,
-                    flow->nw_dst, cr->wc.nw_dst_mask);
+                    flow->nw_dst, cr->wc.masks.nw_dst);
         nxm_put_ip(b, cr, IPPROTO_ICMP,
                    oxm ? OXM_OF_ICMPV4_TYPE : NXM_OF_ICMP_TYPE,
                    oxm ? OXM_OF_ICMPV4_CODE : NXM_OF_ICMP_CODE, oxm);
     } else if (flow->dl_type == htons(ETH_TYPE_IPV6)) {
         /* IPv6. */
         nxm_put_ipv6(b, oxm ? OXM_OF_IPV6_SRC : NXM_NX_IPV6_SRC,
-                     &flow->ipv6_src, &cr->wc.ipv6_src_mask);
+                     &flow->ipv6_src, &cr->wc.masks.ipv6_src);
         nxm_put_ipv6(b, oxm ? OXM_OF_IPV6_DST : NXM_NX_IPV6_DST,
-                     &flow->ipv6_dst, &cr->wc.ipv6_dst_mask);
+                     &flow->ipv6_dst, &cr->wc.masks.ipv6_dst);
         nxm_put_ip(b, cr, IPPROTO_ICMPV6,
                    oxm ? OXM_OF_ICMPV6_TYPE : NXM_NX_ICMPV6_TYPE,
                    oxm ? OXM_OF_ICMPV6_CODE : NXM_NX_ICMPV6_CODE, oxm);
 
         nxm_put_32m(b, oxm ? OXM_OF_IPV6_FLABEL : NXM_NX_IPV6_LABEL,
-                    flow->ipv6_label, cr->wc.ipv6_label_mask);
+                    flow->ipv6_label, cr->wc.masks.ipv6_label);
 
         if (flow->nw_proto == IPPROTO_ICMPV6
             && (flow->tp_src == htons(ND_NEIGHBOR_SOLICIT) ||
                 flow->tp_src == htons(ND_NEIGHBOR_ADVERT))) {
             nxm_put_ipv6(b, oxm ? OXM_OF_IPV6_ND_TARGET : NXM_NX_ND_TARGET,
-                         &flow->nd_target, &cr->wc.nd_target_mask);
+                         &flow->nd_target, &cr->wc.masks.nd_target);
             if (flow->tp_src == htons(ND_NEIGHBOR_SOLICIT)) {
                 nxm_put_eth_masked(b, oxm ? OXM_OF_IPV6_ND_SLL : NXM_NX_ND_SLL,
-                                   flow->arp_sha, cr->wc.arp_sha_mask);
+                                   flow->arp_sha, cr->wc.masks.arp_sha);
             }
             if (flow->tp_src == htons(ND_NEIGHBOR_ADVERT)) {
                 nxm_put_eth_masked(b, oxm ? OXM_OF_IPV6_ND_TLL : NXM_NX_ND_TLL,
-                                   flow->arp_tha, cr->wc.arp_tha_mask);
+                                   flow->arp_tha, cr->wc.masks.arp_tha);
             }
         }
     } else if (flow->dl_type == htons(ETH_TYPE_ARP)) {
         /* ARP. */
-        if (cr->wc.nw_proto_mask) {
+        if (cr->wc.masks.nw_proto) {
             nxm_put_16(b, oxm ? OXM_OF_ARP_OP : NXM_OF_ARP_OP,
                        htons(flow->nw_proto));
         }
         nxm_put_32m(b, oxm ? OXM_OF_ARP_SPA : NXM_OF_ARP_SPA,
-                    flow->nw_src, cr->wc.nw_src_mask);
+                    flow->nw_src, cr->wc.masks.nw_src);
         nxm_put_32m(b, oxm ? OXM_OF_ARP_TPA : NXM_OF_ARP_TPA,
-                    flow->nw_dst, cr->wc.nw_dst_mask);
+                    flow->nw_dst, cr->wc.masks.nw_dst);
         nxm_put_eth_masked(b, oxm ? OXM_OF_ARP_SHA : NXM_NX_ARP_SHA,
-                           flow->arp_sha, cr->wc.arp_sha_mask);
+                           flow->arp_sha, cr->wc.masks.arp_sha);
         nxm_put_eth_masked(b, oxm ? OXM_OF_ARP_THA : NXM_NX_ARP_THA,
-                           flow->arp_tha, cr->wc.arp_tha_mask);
+                           flow->arp_tha, cr->wc.masks.arp_tha);
     }
 
     /* Tunnel ID. */
-    nxm_put_64m(b, NXM_NX_TUN_ID, flow->tun_id, cr->wc.tun_id_mask);
+    nxm_put_64m(b, NXM_NX_TUN_ID, flow->tun_id, cr->wc.masks.tun_id);
 
     /* Registers. */
     for (i = 0; i < FLOW_N_REGS; i++) {
         nxm_put_32m(b, NXM_NX_REG(i),
-                    htonl(flow->regs[i]), htonl(cr->wc.reg_masks[i]));
+                    htonl(flow->regs[i]), htonl(cr->wc.masks.regs[i]));
     }
 
     /* OpenFlow 1.1+ Metadata. */
-    nxm_put_64m(b, OXM_OF_METADATA, flow->metadata, cr->wc.metadata_mask);
+    nxm_put_64m(b, OXM_OF_METADATA, flow->metadata, cr->wc.masks.metadata);
 
     /* Cookie. */
     nxm_put_64m(b, NXM_NX_COOKIE, cookie, cookie_mask);

@@ -188,39 +188,44 @@ match(const struct cls_rule *wild, const struct flow *fixed)
         bool eq;
 
         if (f_idx == CLS_F_IDX_NW_SRC) {
-            eq = !((fixed->nw_src ^ wild->flow.nw_src) & wild->wc.nw_src_mask);
+            eq = !((fixed->nw_src ^ wild->flow.nw_src)
+                   & wild->wc.masks.nw_src);
         } else if (f_idx == CLS_F_IDX_NW_DST) {
-            eq = !((fixed->nw_dst ^ wild->flow.nw_dst) & wild->wc.nw_dst_mask);
+            eq = !((fixed->nw_dst ^ wild->flow.nw_dst)
+                   & wild->wc.masks.nw_dst);
         } else if (f_idx == CLS_F_IDX_TP_SRC) {
-            eq = !((fixed->tp_src ^ wild->flow.tp_src) & wild->wc.tp_src_mask);
+            eq = !((fixed->tp_src ^ wild->flow.tp_src)
+                   & wild->wc.masks.tp_src);
         } else if (f_idx == CLS_F_IDX_TP_DST) {
-            eq = !((fixed->tp_dst ^ wild->flow.tp_dst) & wild->wc.tp_dst_mask);
+            eq = !((fixed->tp_dst ^ wild->flow.tp_dst)
+                   & wild->wc.masks.tp_dst);
         } else if (f_idx == CLS_F_IDX_DL_SRC) {
             eq = eth_addr_equal_except(fixed->dl_src, wild->flow.dl_src,
-                                       wild->wc.dl_src_mask);
+                                       wild->wc.masks.dl_src);
         } else if (f_idx == CLS_F_IDX_DL_DST) {
             eq = eth_addr_equal_except(fixed->dl_dst, wild->flow.dl_dst,
-                                       wild->wc.dl_dst_mask);
+                                       wild->wc.masks.dl_dst);
         } else if (f_idx == CLS_F_IDX_VLAN_TCI) {
             eq = !((fixed->vlan_tci ^ wild->flow.vlan_tci)
-                   & wild->wc.vlan_tci_mask);
+                   & wild->wc.masks.vlan_tci);
         } else if (f_idx == CLS_F_IDX_TUN_ID) {
-            eq = !((fixed->tun_id ^ wild->flow.tun_id) & wild->wc.tun_id_mask);
+            eq = !((fixed->tun_id ^ wild->flow.tun_id)
+                   & wild->wc.masks.tun_id);
         } else if (f_idx == CLS_F_IDX_METADATA) {
             eq = !((fixed->metadata ^ wild->flow.metadata)
-                   & wild->wc.metadata_mask);
+                   & wild->wc.masks.metadata);
         } else if (f_idx == CLS_F_IDX_NW_DSCP) {
             eq = !((fixed->nw_tos ^ wild->flow.nw_tos) &
-                   (wild->wc.nw_tos_mask & IP_DSCP_MASK));
+                   (wild->wc.masks.nw_tos & IP_DSCP_MASK));
         } else if (f_idx == CLS_F_IDX_NW_PROTO) {
             eq = !((fixed->nw_proto ^ wild->flow.nw_proto)
-                   & wild->wc.nw_proto_mask);
+                   & wild->wc.masks.nw_proto);
         } else if (f_idx == CLS_F_IDX_DL_TYPE) {
             eq = !((fixed->dl_type ^ wild->flow.dl_type)
-                   & wild->wc.dl_type_mask);
+                   & wild->wc.masks.dl_type);
         } else if (f_idx == CLS_F_IDX_IN_PORT) {
             eq = !((fixed->in_port ^ wild->flow.in_port)
-                   & wild->wc.in_port_mask);
+                   & wild->wc.masks.in_port);
         } else {
             NOT_REACHED();
         }
@@ -483,31 +488,31 @@ make_rule(int wc_fields, unsigned int priority, int value_pat)
                values[f_idx][value_idx], f->len);
 
         if (f_idx == CLS_F_IDX_NW_SRC) {
-            rule->cls_rule.wc.nw_src_mask = htonl(UINT32_MAX);
+            rule->cls_rule.wc.masks.nw_src = htonl(UINT32_MAX);
         } else if (f_idx == CLS_F_IDX_NW_DST) {
-            rule->cls_rule.wc.nw_dst_mask = htonl(UINT32_MAX);
+            rule->cls_rule.wc.masks.nw_dst = htonl(UINT32_MAX);
         } else if (f_idx == CLS_F_IDX_TP_SRC) {
-            rule->cls_rule.wc.tp_src_mask = htons(UINT16_MAX);
+            rule->cls_rule.wc.masks.tp_src = htons(UINT16_MAX);
         } else if (f_idx == CLS_F_IDX_TP_DST) {
-            rule->cls_rule.wc.tp_dst_mask = htons(UINT16_MAX);
+            rule->cls_rule.wc.masks.tp_dst = htons(UINT16_MAX);
         } else if (f_idx == CLS_F_IDX_DL_SRC) {
-            memset(rule->cls_rule.wc.dl_src_mask, 0xff, ETH_ADDR_LEN);
+            memset(rule->cls_rule.wc.masks.dl_src, 0xff, ETH_ADDR_LEN);
         } else if (f_idx == CLS_F_IDX_DL_DST) {
-            memset(rule->cls_rule.wc.dl_dst_mask, 0xff, ETH_ADDR_LEN);
+            memset(rule->cls_rule.wc.masks.dl_dst, 0xff, ETH_ADDR_LEN);
         } else if (f_idx == CLS_F_IDX_VLAN_TCI) {
-            rule->cls_rule.wc.vlan_tci_mask = htons(UINT16_MAX);
+            rule->cls_rule.wc.masks.vlan_tci = htons(UINT16_MAX);
         } else if (f_idx == CLS_F_IDX_TUN_ID) {
-            rule->cls_rule.wc.tun_id_mask = htonll(UINT64_MAX);
+            rule->cls_rule.wc.masks.tun_id = htonll(UINT64_MAX);
         } else if (f_idx == CLS_F_IDX_METADATA) {
-            rule->cls_rule.wc.metadata_mask = htonll(UINT64_MAX);
+            rule->cls_rule.wc.masks.metadata = htonll(UINT64_MAX);
         } else if (f_idx == CLS_F_IDX_NW_DSCP) {
-            rule->cls_rule.wc.nw_tos_mask |= IP_DSCP_MASK;
+            rule->cls_rule.wc.masks.nw_tos |= IP_DSCP_MASK;
         } else if (f_idx == CLS_F_IDX_NW_PROTO) {
-            rule->cls_rule.wc.nw_proto_mask = UINT8_MAX;
+            rule->cls_rule.wc.masks.nw_proto = UINT8_MAX;
         } else if (f_idx == CLS_F_IDX_DL_TYPE) {
-            rule->cls_rule.wc.dl_type_mask = htons(UINT16_MAX);
+            rule->cls_rule.wc.masks.dl_type = htons(UINT16_MAX);
         } else if (f_idx == CLS_F_IDX_IN_PORT) {
-            rule->cls_rule.wc.in_port_mask = UINT16_MAX;
+            rule->cls_rule.wc.masks.in_port = UINT16_MAX;
         } else {
             NOT_REACHED();
         }

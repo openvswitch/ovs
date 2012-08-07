@@ -447,32 +447,32 @@ flow_zero_wildcards(struct flow *flow, const struct flow_wildcards *wildcards)
     BUILD_ASSERT_DECL(FLOW_WC_SEQ == 17);
 
     for (i = 0; i < FLOW_N_REGS; i++) {
-        flow->regs[i] &= wildcards->reg_masks[i];
+        flow->regs[i] &= wildcards->masks.regs[i];
     }
-    flow->tun_id &= wildcards->tun_id_mask;
-    flow->metadata &= wildcards->metadata_mask;
-    flow->nw_src &= wildcards->nw_src_mask;
-    flow->nw_dst &= wildcards->nw_dst_mask;
-    flow->in_port &= wildcards->in_port_mask;
-    flow->vlan_tci &= wildcards->vlan_tci_mask;
-    flow->dl_type &= wildcards->dl_type_mask;
-    flow->tp_src &= wildcards->tp_src_mask;
-    flow->tp_dst &= wildcards->tp_dst_mask;
-    eth_addr_bitand(flow->dl_src, wildcards->dl_src_mask, flow->dl_src);
-    eth_addr_bitand(flow->dl_dst, wildcards->dl_dst_mask, flow->dl_dst);
-    flow->ipv6_label &= wildcards->ipv6_label_mask;
-    flow->nw_proto &= wildcards->nw_proto_mask;
-    flow->nw_tos &= wildcards->nw_tos_mask;
-    flow->nw_ttl &= wildcards->nw_ttl_mask;
-    flow->nw_frag &= wildcards->nw_frag_mask;
-    eth_addr_bitand(flow->arp_sha, wildcards->arp_sha_mask, flow->arp_sha);
-    eth_addr_bitand(flow->arp_tha, wildcards->arp_tha_mask, flow->arp_tha);
+    flow->tun_id &= wildcards->masks.tun_id;
+    flow->metadata &= wildcards->masks.metadata;
+    flow->nw_src &= wildcards->masks.nw_src;
+    flow->nw_dst &= wildcards->masks.nw_dst;
+    flow->in_port &= wildcards->masks.in_port;
+    flow->vlan_tci &= wildcards->masks.vlan_tci;
+    flow->dl_type &= wildcards->masks.dl_type;
+    flow->tp_src &= wildcards->masks.tp_src;
+    flow->tp_dst &= wildcards->masks.tp_dst;
+    eth_addr_bitand(flow->dl_src, wildcards->masks.dl_src, flow->dl_src);
+    eth_addr_bitand(flow->dl_dst, wildcards->masks.dl_dst, flow->dl_dst);
+    flow->ipv6_label &= wildcards->masks.ipv6_label;
+    flow->nw_proto &= wildcards->masks.nw_proto;
+    flow->nw_tos &= wildcards->masks.nw_tos;
+    flow->nw_ttl &= wildcards->masks.nw_ttl;
+    flow->nw_frag &= wildcards->masks.nw_frag;
+    eth_addr_bitand(flow->arp_sha, wildcards->masks.arp_sha, flow->arp_sha);
+    eth_addr_bitand(flow->arp_tha, wildcards->masks.arp_tha, flow->arp_tha);
     flow->ipv6_src = ipv6_addr_bitand(&flow->ipv6_src,
-            &wildcards->ipv6_src_mask);
+            &wildcards->masks.ipv6_src);
     flow->ipv6_dst = ipv6_addr_bitand(&flow->ipv6_dst,
-            &wildcards->ipv6_dst_mask);
+            &wildcards->masks.ipv6_dst);
     flow->nd_target = ipv6_addr_bitand(&flow->nd_target,
-            &wildcards->nd_target_mask);
+            &wildcards->masks.nd_target);
     flow->skb_priority = 0;
 }
 
@@ -570,29 +570,29 @@ flow_wildcards_init_catchall(struct flow_wildcards *wc)
 {
     BUILD_ASSERT_DECL(FLOW_WC_SEQ == 17);
 
-    wc->tun_id_mask = htonll(0);
-    wc->nw_src_mask = htonl(0);
-    wc->nw_dst_mask = htonl(0);
-    wc->ipv6_src_mask = in6addr_any;
-    wc->ipv6_dst_mask = in6addr_any;
-    wc->ipv6_label_mask = htonl(0);
-    wc->nd_target_mask = in6addr_any;
-    memset(wc->reg_masks, 0, sizeof wc->reg_masks);
-    wc->metadata_mask = htonll(0);
-    wc->in_port_mask = 0;
-    wc->vlan_tci_mask = htons(0);
-    wc->nw_frag_mask = 0;
-    wc->dl_type_mask = htons(0);
-    wc->tp_src_mask = htons(0);
-    wc->tp_dst_mask = htons(0);
-    memset(wc->dl_src_mask, 0, ETH_ADDR_LEN);
-    memset(wc->dl_dst_mask, 0, ETH_ADDR_LEN);
-    memset(wc->arp_sha_mask, 0, ETH_ADDR_LEN);
-    memset(wc->arp_tha_mask, 0, ETH_ADDR_LEN);
-    wc->nw_proto_mask = 0;
-    wc->nw_tos_mask = 0;
-    wc->nw_ttl_mask = 0;
-    memset(wc->zeros, 0, sizeof wc->zeros);
+    wc->masks.tun_id = htonll(0);
+    wc->masks.nw_src = htonl(0);
+    wc->masks.nw_dst = htonl(0);
+    wc->masks.ipv6_src = in6addr_any;
+    wc->masks.ipv6_dst = in6addr_any;
+    wc->masks.ipv6_label = htonl(0);
+    wc->masks.nd_target = in6addr_any;
+    memset(wc->masks.regs, 0, sizeof wc->masks.regs);
+    wc->masks.metadata = htonll(0);
+    wc->masks.in_port = 0;
+    wc->masks.vlan_tci = htons(0);
+    wc->masks.nw_frag = 0;
+    wc->masks.dl_type = htons(0);
+    wc->masks.tp_src = htons(0);
+    wc->masks.tp_dst = htons(0);
+    memset(wc->masks.dl_src, 0, ETH_ADDR_LEN);
+    memset(wc->masks.dl_dst, 0, ETH_ADDR_LEN);
+    memset(wc->masks.arp_sha, 0, ETH_ADDR_LEN);
+    memset(wc->masks.arp_tha, 0, ETH_ADDR_LEN);
+    wc->masks.nw_proto = 0;
+    wc->masks.nw_tos = 0;
+    wc->masks.nw_ttl = 0;
+    memset(wc->masks.zeros, 0, sizeof wc->masks.zeros);
 }
 
 /* Initializes 'wc' as an exact-match set of wildcards; that is, 'wc' does not
@@ -602,29 +602,29 @@ flow_wildcards_init_exact(struct flow_wildcards *wc)
 {
     BUILD_ASSERT_DECL(FLOW_WC_SEQ == 17);
 
-    wc->tun_id_mask = htonll(UINT64_MAX);
-    wc->nw_src_mask = htonl(UINT32_MAX);
-    wc->nw_dst_mask = htonl(UINT32_MAX);
-    wc->ipv6_src_mask = in6addr_exact;
-    wc->ipv6_dst_mask = in6addr_exact;
-    wc->ipv6_label_mask = htonl(UINT32_MAX);
-    wc->nd_target_mask = in6addr_exact;
-    memset(wc->reg_masks, 0xff, sizeof wc->reg_masks);
-    wc->metadata_mask = htonll(UINT64_MAX);
-    wc->in_port_mask = UINT16_MAX;
-    wc->vlan_tci_mask = htons(UINT16_MAX);
-    wc->nw_frag_mask = UINT8_MAX;
-    wc->dl_type_mask = htons(UINT16_MAX);
-    wc->tp_src_mask = htons(UINT16_MAX);
-    wc->tp_dst_mask = htons(UINT16_MAX);
-    memset(wc->dl_src_mask, 0xff, ETH_ADDR_LEN);
-    memset(wc->dl_dst_mask, 0xff, ETH_ADDR_LEN);
-    memset(wc->arp_sha_mask, 0xff, ETH_ADDR_LEN);
-    memset(wc->arp_tha_mask, 0xff, ETH_ADDR_LEN);
-    wc->nw_proto_mask = UINT8_MAX;
-    wc->nw_tos_mask = UINT8_MAX;
-    wc->nw_ttl_mask = UINT8_MAX;
-    memset(wc->zeros, 0, sizeof wc->zeros);
+    wc->masks.tun_id = htonll(UINT64_MAX);
+    wc->masks.nw_src = htonl(UINT32_MAX);
+    wc->masks.nw_dst = htonl(UINT32_MAX);
+    wc->masks.ipv6_src = in6addr_exact;
+    wc->masks.ipv6_dst = in6addr_exact;
+    wc->masks.ipv6_label = htonl(UINT32_MAX);
+    wc->masks.nd_target = in6addr_exact;
+    memset(wc->masks.regs, 0xff, sizeof wc->masks.regs);
+    wc->masks.metadata = htonll(UINT64_MAX);
+    wc->masks.in_port = UINT16_MAX;
+    wc->masks.vlan_tci = htons(UINT16_MAX);
+    wc->masks.nw_frag = UINT8_MAX;
+    wc->masks.dl_type = htons(UINT16_MAX);
+    wc->masks.tp_src = htons(UINT16_MAX);
+    wc->masks.tp_dst = htons(UINT16_MAX);
+    memset(wc->masks.dl_src, 0xff, ETH_ADDR_LEN);
+    memset(wc->masks.dl_dst, 0xff, ETH_ADDR_LEN);
+    memset(wc->masks.arp_sha, 0xff, ETH_ADDR_LEN);
+    memset(wc->masks.arp_tha, 0xff, ETH_ADDR_LEN);
+    wc->masks.nw_proto = UINT8_MAX;
+    wc->masks.nw_tos = UINT8_MAX;
+    wc->masks.nw_ttl = UINT8_MAX;
+    memset(wc->masks.zeros, 0, sizeof wc->masks.zeros);
 }
 
 /* Returns true if 'wc' is exact-match, false if 'wc' wildcards any bits or
@@ -636,32 +636,32 @@ flow_wildcards_is_exact(const struct flow_wildcards *wc)
 
     BUILD_ASSERT_DECL(FLOW_WC_SEQ == 17);
 
-    if (wc->tun_id_mask != htonll(UINT64_MAX)
-        || wc->nw_src_mask != htonl(UINT32_MAX)
-        || wc->nw_dst_mask != htonl(UINT32_MAX)
-        || wc->tp_src_mask != htons(UINT16_MAX)
-        || wc->tp_dst_mask != htons(UINT16_MAX)
-        || wc->in_port_mask != UINT16_MAX
-        || wc->vlan_tci_mask != htons(UINT16_MAX)
-        || wc->metadata_mask != htonll(UINT64_MAX)
-        || wc->dl_type_mask != htons(UINT16_MAX)
-        || !eth_mask_is_exact(wc->dl_src_mask)
-        || !eth_mask_is_exact(wc->dl_dst_mask)
-        || !eth_mask_is_exact(wc->arp_sha_mask)
-        || !eth_mask_is_exact(wc->arp_tha_mask)
-        || !ipv6_mask_is_exact(&wc->ipv6_src_mask)
-        || !ipv6_mask_is_exact(&wc->ipv6_dst_mask)
-        || wc->ipv6_label_mask != htonl(UINT32_MAX)
-        || !ipv6_mask_is_exact(&wc->nd_target_mask)
-        || wc->nw_proto_mask != UINT8_MAX
-        || wc->nw_frag_mask != UINT8_MAX
-        || wc->nw_tos_mask != UINT8_MAX
-        || wc->nw_ttl_mask != UINT8_MAX) {
+    if (wc->masks.tun_id != htonll(UINT64_MAX)
+        || wc->masks.nw_src != htonl(UINT32_MAX)
+        || wc->masks.nw_dst != htonl(UINT32_MAX)
+        || wc->masks.tp_src != htons(UINT16_MAX)
+        || wc->masks.tp_dst != htons(UINT16_MAX)
+        || wc->masks.in_port != UINT16_MAX
+        || wc->masks.vlan_tci != htons(UINT16_MAX)
+        || wc->masks.metadata != htonll(UINT64_MAX)
+        || wc->masks.dl_type != htons(UINT16_MAX)
+        || !eth_mask_is_exact(wc->masks.dl_src)
+        || !eth_mask_is_exact(wc->masks.dl_dst)
+        || !eth_mask_is_exact(wc->masks.arp_sha)
+        || !eth_mask_is_exact(wc->masks.arp_tha)
+        || !ipv6_mask_is_exact(&wc->masks.ipv6_src)
+        || !ipv6_mask_is_exact(&wc->masks.ipv6_dst)
+        || wc->masks.ipv6_label != htonl(UINT32_MAX)
+        || !ipv6_mask_is_exact(&wc->masks.nd_target)
+        || wc->masks.nw_proto != UINT8_MAX
+        || wc->masks.nw_frag != UINT8_MAX
+        || wc->masks.nw_tos != UINT8_MAX
+        || wc->masks.nw_ttl != UINT8_MAX) {
         return false;
     }
 
     for (i = 0; i < FLOW_N_REGS; i++) {
-        if (wc->reg_masks[i] != UINT32_MAX) {
+        if (wc->masks.regs[i] != UINT32_MAX) {
             return false;
         }
     }
@@ -678,32 +678,32 @@ flow_wildcards_is_catchall(const struct flow_wildcards *wc)
 
     BUILD_ASSERT_DECL(FLOW_WC_SEQ == 17);
 
-    if (wc->tun_id_mask != htonll(0)
-        || wc->nw_src_mask != htonl(0)
-        || wc->nw_dst_mask != htonl(0)
-        || wc->tp_src_mask != htons(0)
-        || wc->tp_dst_mask != htons(0)
-        || wc->in_port_mask != 0
-        || wc->vlan_tci_mask != htons(0)
-        || wc->metadata_mask != htonll(0)
-        || wc->dl_type_mask != htons(0)
-        || !eth_addr_is_zero(wc->dl_src_mask)
-        || !eth_addr_is_zero(wc->dl_dst_mask)
-        || !eth_addr_is_zero(wc->arp_sha_mask)
-        || !eth_addr_is_zero(wc->arp_tha_mask)
-        || !ipv6_mask_is_any(&wc->ipv6_src_mask)
-        || !ipv6_mask_is_any(&wc->ipv6_dst_mask)
-        || wc->ipv6_label_mask != htonl(0)
-        || !ipv6_mask_is_any(&wc->nd_target_mask)
-        || wc->nw_proto_mask != 0
-        || wc->nw_frag_mask != 0
-        || wc->nw_tos_mask != 0
-        || wc->nw_ttl_mask != 0) {
+    if (wc->masks.tun_id != htonll(0)
+        || wc->masks.nw_src != htonl(0)
+        || wc->masks.nw_dst != htonl(0)
+        || wc->masks.tp_src != htons(0)
+        || wc->masks.tp_dst != htons(0)
+        || wc->masks.in_port != 0
+        || wc->masks.vlan_tci != htons(0)
+        || wc->masks.metadata != htonll(0)
+        || wc->masks.dl_type != htons(0)
+        || !eth_addr_is_zero(wc->masks.dl_src)
+        || !eth_addr_is_zero(wc->masks.dl_dst)
+        || !eth_addr_is_zero(wc->masks.arp_sha)
+        || !eth_addr_is_zero(wc->masks.arp_tha)
+        || !ipv6_mask_is_any(&wc->masks.ipv6_src)
+        || !ipv6_mask_is_any(&wc->masks.ipv6_dst)
+        || wc->masks.ipv6_label != htonl(0)
+        || !ipv6_mask_is_any(&wc->masks.nd_target)
+        || wc->masks.nw_proto != 0
+        || wc->masks.nw_frag != 0
+        || wc->masks.nw_tos != 0
+        || wc->masks.nw_ttl != 0) {
         return false;
     }
 
     for (i = 0; i < FLOW_N_REGS; i++) {
-        if (wc->reg_masks[i] != 0) {
+        if (wc->masks.regs[i] != 0) {
             return false;
         }
     }
@@ -723,33 +723,35 @@ flow_wildcards_combine(struct flow_wildcards *dst,
 
     BUILD_ASSERT_DECL(FLOW_WC_SEQ == 17);
 
-    dst->tun_id_mask = src1->tun_id_mask & src2->tun_id_mask;
-    dst->nw_src_mask = src1->nw_src_mask & src2->nw_src_mask;
-    dst->nw_dst_mask = src1->nw_dst_mask & src2->nw_dst_mask;
-    dst->ipv6_src_mask = ipv6_addr_bitand(&src1->ipv6_src_mask,
-                                        &src2->ipv6_src_mask);
-    dst->ipv6_dst_mask = ipv6_addr_bitand(&src1->ipv6_dst_mask,
-                                        &src2->ipv6_dst_mask);
-    dst->ipv6_label_mask = src1->ipv6_label_mask & src2->ipv6_label_mask;
-    dst->nd_target_mask = ipv6_addr_bitand(&src1->nd_target_mask,
-                                        &src2->nd_target_mask);
+    dst->masks.tun_id = src1->masks.tun_id & src2->masks.tun_id;
+    dst->masks.nw_src = src1->masks.nw_src & src2->masks.nw_src;
+    dst->masks.nw_dst = src1->masks.nw_dst & src2->masks.nw_dst;
+    dst->masks.ipv6_src = ipv6_addr_bitand(&src1->masks.ipv6_src,
+                                           &src2->masks.ipv6_src);
+    dst->masks.ipv6_dst = ipv6_addr_bitand(&src1->masks.ipv6_dst,
+                                           &src2->masks.ipv6_dst);
+    dst->masks.ipv6_label = src1->masks.ipv6_label & src2->masks.ipv6_label;
+    dst->masks.nd_target = ipv6_addr_bitand(&src1->masks.nd_target,
+                                            &src2->masks.nd_target);
     for (i = 0; i < FLOW_N_REGS; i++) {
-        dst->reg_masks[i] = src1->reg_masks[i] & src2->reg_masks[i];
+        dst->masks.regs[i] = src1->masks.regs[i] & src2->masks.regs[i];
     }
-    dst->metadata_mask = src1->metadata_mask & src2->metadata_mask;
-    dst->in_port_mask = src1->in_port_mask & src2->in_port_mask;
-    dst->vlan_tci_mask = src1->vlan_tci_mask & src2->vlan_tci_mask;
-    dst->dl_type_mask = src1->dl_type_mask & src2->dl_type_mask;
-    dst->tp_src_mask = src1->tp_src_mask & src2->tp_src_mask;
-    dst->tp_dst_mask = src1->tp_dst_mask & src2->tp_dst_mask;
-    dst->nw_frag_mask = src1->nw_frag_mask & src2->nw_frag_mask;
-    eth_addr_bitand(src1->dl_src_mask, src2->dl_src_mask, dst->dl_src_mask);
-    eth_addr_bitand(src1->dl_dst_mask, src2->dl_dst_mask, dst->dl_dst_mask);
-    eth_addr_bitand(src1->arp_sha_mask, src2->arp_sha_mask, dst->arp_sha_mask);
-    eth_addr_bitand(src1->arp_tha_mask, src2->arp_tha_mask, dst->arp_tha_mask);
-    dst->nw_proto_mask = src1->nw_proto_mask & src2->nw_proto_mask;
-    dst->nw_tos_mask = src1->nw_tos_mask & src2->nw_tos_mask;
-    dst->nw_ttl_mask = src1->nw_ttl_mask & src2->nw_ttl_mask;
+    dst->masks.metadata = src1->masks.metadata & src2->masks.metadata;
+    dst->masks.in_port = src1->masks.in_port & src2->masks.in_port;
+    dst->masks.vlan_tci = src1->masks.vlan_tci & src2->masks.vlan_tci;
+    dst->masks.dl_type = src1->masks.dl_type & src2->masks.dl_type;
+    dst->masks.tp_src = src1->masks.tp_src & src2->masks.tp_src;
+    dst->masks.tp_dst = src1->masks.tp_dst & src2->masks.tp_dst;
+    dst->masks.nw_frag = src1->masks.nw_frag & src2->masks.nw_frag;
+    eth_addr_bitand(src1->masks.dl_src, src2->masks.dl_src, dst->masks.dl_src);
+    eth_addr_bitand(src1->masks.dl_dst, src2->masks.dl_dst, dst->masks.dl_dst);
+    eth_addr_bitand(src1->masks.arp_sha, src2->masks.arp_sha,
+                    dst->masks.arp_sha);
+    eth_addr_bitand(src1->masks.arp_tha, src2->masks.arp_tha,
+                    dst->masks.arp_tha);
+    dst->masks.nw_proto = src1->masks.nw_proto & src2->masks.nw_proto;
+    dst->masks.nw_tos = src1->masks.nw_tos & src2->masks.nw_tos;
+    dst->masks.nw_ttl = src1->masks.nw_ttl & src2->masks.nw_ttl;
 }
 
 /* Returns a hash of the wildcards in 'wc'. */
@@ -769,32 +771,32 @@ flow_wildcards_equal(const struct flow_wildcards *a,
 
     BUILD_ASSERT_DECL(FLOW_WC_SEQ == 17);
 
-    if (a->tun_id_mask != b->tun_id_mask
-        || a->nw_src_mask != b->nw_src_mask
-        || a->nw_dst_mask != b->nw_dst_mask
-        || a->in_port_mask != b->in_port_mask
-        || a->vlan_tci_mask != b->vlan_tci_mask
-        || a->metadata_mask != b->metadata_mask
-        || a->dl_type_mask != b->dl_type_mask
-        || !ipv6_addr_equals(&a->ipv6_src_mask, &b->ipv6_src_mask)
-        || !ipv6_addr_equals(&a->ipv6_dst_mask, &b->ipv6_dst_mask)
-        || a->ipv6_label_mask != b->ipv6_label_mask
-        || !ipv6_addr_equals(&a->nd_target_mask, &b->nd_target_mask)
-        || a->tp_src_mask != b->tp_src_mask
-        || a->tp_dst_mask != b->tp_dst_mask
-        || a->nw_frag_mask != b->nw_frag_mask
-        || !eth_addr_equals(a->dl_src_mask, b->dl_src_mask)
-        || !eth_addr_equals(a->dl_dst_mask, b->dl_dst_mask)
-        || !eth_addr_equals(a->arp_sha_mask, b->arp_sha_mask)
-        || !eth_addr_equals(a->arp_tha_mask, b->arp_tha_mask)
-        || a->nw_proto_mask != b->nw_proto_mask
-        || a->nw_tos_mask != b->nw_tos_mask
-        || a->nw_ttl_mask != b->nw_ttl_mask) {
+    if (a->masks.tun_id != b->masks.tun_id
+        || a->masks.nw_src != b->masks.nw_src
+        || a->masks.nw_dst != b->masks.nw_dst
+        || a->masks.in_port != b->masks.in_port
+        || a->masks.vlan_tci != b->masks.vlan_tci
+        || a->masks.metadata != b->masks.metadata
+        || a->masks.dl_type != b->masks.dl_type
+        || !ipv6_addr_equals(&a->masks.ipv6_src, &b->masks.ipv6_src)
+        || !ipv6_addr_equals(&a->masks.ipv6_dst, &b->masks.ipv6_dst)
+        || a->masks.ipv6_label != b->masks.ipv6_label
+        || !ipv6_addr_equals(&a->masks.nd_target, &b->masks.nd_target)
+        || a->masks.tp_src != b->masks.tp_src
+        || a->masks.tp_dst != b->masks.tp_dst
+        || a->masks.nw_frag != b->masks.nw_frag
+        || !eth_addr_equals(a->masks.dl_src, b->masks.dl_src)
+        || !eth_addr_equals(a->masks.dl_dst, b->masks.dl_dst)
+        || !eth_addr_equals(a->masks.arp_sha, b->masks.arp_sha)
+        || !eth_addr_equals(a->masks.arp_tha, b->masks.arp_tha)
+        || a->masks.nw_proto != b->masks.nw_proto
+        || a->masks.nw_tos != b->masks.nw_tos
+        || a->masks.nw_ttl != b->masks.nw_ttl) {
         return false;
     }
 
     for (i = 0; i < FLOW_N_REGS; i++) {
-        if (a->reg_masks[i] != b->reg_masks[i]) {
+        if (a->masks.regs[i] != b->masks.regs[i]) {
             return false;
         }
     }
@@ -815,60 +817,62 @@ flow_wildcards_has_extra(const struct flow_wildcards *a,
     BUILD_ASSERT_DECL(FLOW_WC_SEQ == 17);
 
     for (i = 0; i < FLOW_N_REGS; i++) {
-        if ((a->reg_masks[i] & b->reg_masks[i]) != b->reg_masks[i]) {
+        if ((a->masks.regs[i] & b->masks.regs[i]) != b->masks.regs[i]) {
             return true;
         }
     }
 
-    eth_addr_bitand(a->dl_src_mask, b->dl_src_mask, eth_masked);
-    if (!eth_addr_equals(eth_masked, b->dl_src_mask)) {
+    eth_addr_bitand(a->masks.dl_src, b->masks.dl_src, eth_masked);
+    if (!eth_addr_equals(eth_masked, b->masks.dl_src)) {
         return true;
     }
 
-    eth_addr_bitand(a->dl_dst_mask, b->dl_dst_mask, eth_masked);
-    if (!eth_addr_equals(eth_masked, b->dl_dst_mask)) {
+    eth_addr_bitand(a->masks.dl_dst, b->masks.dl_dst, eth_masked);
+    if (!eth_addr_equals(eth_masked, b->masks.dl_dst)) {
         return true;
     }
 
-    eth_addr_bitand(a->arp_sha_mask, b->arp_sha_mask, eth_masked);
-    if (!eth_addr_equals(eth_masked, b->arp_sha_mask)) {
+    eth_addr_bitand(a->masks.arp_sha, b->masks.arp_sha, eth_masked);
+    if (!eth_addr_equals(eth_masked, b->masks.arp_sha)) {
         return true;
     }
 
-    eth_addr_bitand(a->arp_tha_mask, b->arp_tha_mask, eth_masked);
-    if (!eth_addr_equals(eth_masked, b->arp_tha_mask)) {
+    eth_addr_bitand(a->masks.arp_tha, b->masks.arp_tha, eth_masked);
+    if (!eth_addr_equals(eth_masked, b->masks.arp_tha)) {
         return true;
     }
 
-    ipv6_masked = ipv6_addr_bitand(&a->ipv6_src_mask, &b->ipv6_src_mask);
-    if (!ipv6_addr_equals(&ipv6_masked, &b->ipv6_src_mask)) {
+    ipv6_masked = ipv6_addr_bitand(&a->masks.ipv6_src, &b->masks.ipv6_src);
+    if (!ipv6_addr_equals(&ipv6_masked, &b->masks.ipv6_src)) {
         return true;
     }
 
-    ipv6_masked = ipv6_addr_bitand(&a->ipv6_dst_mask, &b->ipv6_dst_mask);
-    if (!ipv6_addr_equals(&ipv6_masked, &b->ipv6_dst_mask)) {
+    ipv6_masked = ipv6_addr_bitand(&a->masks.ipv6_dst, &b->masks.ipv6_dst);
+    if (!ipv6_addr_equals(&ipv6_masked, &b->masks.ipv6_dst)) {
         return true;
     }
 
-    ipv6_masked = ipv6_addr_bitand(&a->nd_target_mask, &b->nd_target_mask);
-    if (!ipv6_addr_equals(&ipv6_masked, &b->nd_target_mask)) {
+    ipv6_masked = ipv6_addr_bitand(&a->masks.nd_target, &b->masks.nd_target);
+    if (!ipv6_addr_equals(&ipv6_masked, &b->masks.nd_target)) {
         return true;
     }
 
-    return ((a->tun_id_mask & b->tun_id_mask) != b->tun_id_mask
-            || (a->nw_src_mask & b->nw_src_mask) != b->nw_src_mask
-            || (a->nw_dst_mask & b->nw_dst_mask) != b->nw_dst_mask
-            || (a->ipv6_label_mask & b->ipv6_label_mask) != b->ipv6_label_mask
-            || (a->in_port_mask & b->in_port_mask) != b->in_port_mask
-            || (a->vlan_tci_mask & b->vlan_tci_mask) != b->vlan_tci_mask
-            || (a->metadata_mask & b->metadata_mask) != b->metadata_mask
-            || (a->dl_type_mask & b->dl_type_mask) != b->dl_type_mask
-            || (a->tp_src_mask & b->tp_src_mask) != b->tp_src_mask
-            || (a->tp_dst_mask & b->tp_dst_mask) != b->tp_dst_mask
-            || (a->nw_proto_mask & b->nw_proto_mask) != b->nw_proto_mask
-            || (a->nw_frag_mask & b->nw_frag_mask) != b->nw_frag_mask
-            || (a->nw_tos_mask & b->nw_tos_mask) != b->nw_tos_mask
-            || (a->nw_ttl_mask & b->nw_ttl_mask) != b->nw_ttl_mask);
+    return ((a->masks.tun_id & b->masks.tun_id) != b->masks.tun_id
+            || (a->masks.nw_src & b->masks.nw_src) != b->masks.nw_src
+            || (a->masks.nw_dst & b->masks.nw_dst) != b->masks.nw_dst
+            || ((a->masks.ipv6_label & b->masks.ipv6_label)
+                != b->masks.ipv6_label)
+            || (a->masks.in_port & b->masks.in_port) != b->masks.in_port
+            || (a->masks.vlan_tci & b->masks.vlan_tci) != b->masks.vlan_tci
+            || (a->masks.metadata & b->masks.metadata) != b->masks.metadata
+            || (a->masks.dl_type & b->masks.dl_type) != b->masks.dl_type
+            || (a->masks.dl_type & b->masks.dl_type) != b->masks.dl_type
+            || (a->masks.tp_src & b->masks.tp_src) != b->masks.tp_src
+            || (a->masks.tp_dst & b->masks.tp_dst) != b->masks.tp_dst
+            || (a->masks.nw_proto & b->masks.nw_proto) != b->masks.nw_proto
+            || (a->masks.nw_frag & b->masks.nw_frag) != b->masks.nw_frag
+            || (a->masks.nw_tos & b->masks.nw_tos) != b->masks.nw_tos
+            || (a->masks.nw_ttl & b->masks.nw_ttl) != b->masks.nw_ttl);
 }
 
 /* Sets the wildcard mask for register 'idx' in 'wc' to 'mask'.
@@ -876,7 +880,7 @@ flow_wildcards_has_extra(const struct flow_wildcards *a,
 void
 flow_wildcards_set_reg_mask(struct flow_wildcards *wc, int idx, uint32_t mask)
 {
-    wc->reg_masks[idx] = mask;
+    wc->masks.regs[idx] = mask;
 }
 
 /* Hashes 'flow' based on its L2 through L4 protocol information. */
