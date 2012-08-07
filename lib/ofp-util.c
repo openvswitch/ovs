@@ -1861,6 +1861,26 @@ ofputil_encode_flow_removed(const struct ofputil_flow_removed *fr,
     struct ofpbuf *msg;
 
     switch (protocol) {
+    case OFPUTIL_P_OF12: {
+        struct ofp12_flow_removed *ofr;
+
+        msg = ofpraw_alloc_xid(OFPRAW_OFPT11_FLOW_REMOVED,
+                               ofputil_protocol_to_ofp_version(protocol),
+                               htonl(0), NXM_TYPICAL_LEN);
+        ofr = ofpbuf_put_zeros(msg, sizeof *ofr);
+        ofr->cookie = fr->cookie;
+        ofr->priority = htons(fr->rule.priority);
+        ofr->reason = fr->reason;
+        ofr->table_id = 0;
+        ofr->duration_sec = htonl(fr->duration_sec);
+        ofr->duration_nsec = htonl(fr->duration_nsec);
+        ofr->idle_timeout = htons(fr->idle_timeout);
+        ofr->packet_count = htonll(fr->packet_count);
+        ofr->byte_count = htonll(fr->byte_count);
+        oxm_put_match(msg, &fr->rule);
+        break;
+    }
+
     case OFPUTIL_P_OF10:
     case OFPUTIL_P_OF10_TID: {
         struct ofp_flow_removed *ofr;
@@ -1903,7 +1923,6 @@ ofputil_encode_flow_removed(const struct ofputil_flow_removed *fr,
         break;
     }
 
-    case OFPUTIL_P_OF12:
     default:
         NOT_REACHED();
     }
