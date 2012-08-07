@@ -1066,6 +1066,7 @@ flow_compose(struct ofpbuf *b, const struct flow *flow)
                 b->l4 = icmp = ofpbuf_put_zeros(b, sizeof *icmp);
                 icmp->icmp_type = ntohs(flow->tp_src);
                 icmp->icmp_code = ntohs(flow->tp_dst);
+                icmp->icmp_csum = csum(icmp, ICMP_HEADER_LEN);
             }
         }
 
