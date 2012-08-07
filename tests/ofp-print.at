@@ -327,7 +327,7 @@ OFPT_GET_CONFIG_REPLY (xid=0x3): frags=reassemble miss_send_len=255
 ])
 AT_CLEANUP
 
-AT_SETUP([OFPT_PACKET_IN])
+AT_SETUP([OFPT_PACKET_IN - OF1.0])
 AT_KEYWORDS([ofp-print])
 AT_CHECK([ovs-ofctl ofp-print "\
 01 0a 00 4e 00 00 00 00 00 00 01 11 00 3c 00 03 \
@@ -338,6 +338,20 @@ c0 a8 00 02 27 2f 00 00 78 50 cc 5b 57 af 42 1e \
 "], [0], [dnl
 OFPT_PACKET_IN (xid=0x0): total_len=60 in_port=3 (via no_match) data_len=60 buffer=0x00000111
 priority:0,tunnel:0,metadata:0,in_port:0000,tci(0) mac(50:54:00:00:00:05->50:54:00:00:00:06) type:0800 proto:6 tos:0 ttl:64 ip(192.168.0.1->192.168.0.2) port(10031->0) tcp_csum:26e8
+])
+AT_CLEANUP
+
+AT_SETUP([OFPT_PACKET_IN - OF1.2])
+AT_KEYWORDS([ofp-print])
+AT_CHECK([ovs-ofctl ofp-print "\
+03 0a 00 4c 00 00 00 00 ff ff ff 00 00 2a 00 00 \
+00 01 00 0c 80 00 00 04 ff ff ff fe 00 00 00 00 \
+00 00 ff ff ff ff ff ff 00 23 20 83 c1 5f 80 35 \
+00 01 08 00 06 04 00 03 00 23 20 83 c1 5f 00 00 \
+00 00 00 23 20 83 c1 5f 00 00 00 00 \
+"], [0], [dnl
+OFPT_PACKET_IN (OF1.2) (xid=0x0): total_len=42 in_port=LOCAL (via no_match) data_len=42 buffer=0xffffff00
+priority:0,tunnel:0,metadata:0,in_port:0000,tci(0) mac(00:23:20:83:c1:5f->ff:ff:ff:ff:ff:ff) type:8035 proto:0 tos:0 ttl:0 ip(0.0.0.0->0.0.0.0)
 ])
 AT_CLEANUP
 
