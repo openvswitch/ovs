@@ -368,10 +368,10 @@ vconn_get_local_port(const struct vconn *vconn)
  *
  * A vconn that has successfully connected (that is, vconn_connect() or
  * vconn_send() or vconn_recv() has returned 0) always negotiated a version. */
-enum ofp_version
+int
 vconn_get_version(const struct vconn *vconn)
 {
-    return vconn->version;
+    return vconn->version ? vconn->version : -1;
 }
 
 static void
