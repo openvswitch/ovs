@@ -120,7 +120,7 @@ enum ofpraw {
     /* OFPT 1.0+ (8): struct ofp_switch_config. */
     OFPRAW_OFPT_GET_CONFIG_REPLY,
 
-    /* OFPT 1.0-1.1 (9): struct ofp_switch_config. */
+    /* OFPT 1.0+ (9): struct ofp_switch_config. */
     OFPRAW_OFPT_SET_CONFIG,
 
     /* OFPT 1.0 (10): struct ofp_packet_in up to data, uint8_t[]. */
