@@ -3073,7 +3073,21 @@ ofputil_encode_packet_out(const struct ofputil_packet_out *po,
     }
 
     case OFP11_VERSION:
-    case OFP12_VERSION:
+    case OFP12_VERSION: {
+        struct ofp11_packet_out *opo;
+        size_t len;
+
+        msg = ofpraw_alloc(OFPRAW_OFPT11_PACKET_OUT, ofp_version, size);
+        ofpbuf_put_zeros(msg, sizeof *opo);
+        len = ofpacts_put_openflow11_actions(po->ofpacts, po->ofpacts_len, msg);
+
+        opo = msg->l3;
+        opo->buffer_id = htonl(po->buffer_id);
+        opo->in_port = ofputil_port_to_ofp11(po->in_port);
+        opo->actions_len = htons(len);
+        break;
+    }
+
     default:
         NOT_REACHED();
     }
