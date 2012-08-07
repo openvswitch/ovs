@@ -958,6 +958,7 @@ for delay in 1000 30000; do
     ovs-appctl time/warp $delay
 done
 
+sleep 1
 OVS_VSWITCHD_STOP
 ovs-appctl -t test-netflow exit
 
@@ -1006,6 +1007,7 @@ done
 
 ovs-appctl time/warp 10000
 
+sleep 1
 OVS_VSWITCHD_STOP
 ovs-appctl -t test-netflow exit
 
