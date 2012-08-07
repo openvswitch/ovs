@@ -1419,19 +1419,21 @@ ofproto_port_del(struct ofproto *ofproto, uint16_t ofp_port)
  *
  * This is a helper function for in-band control and fail-open. */
 void
-ofproto_add_flow(struct ofproto *ofproto, const struct cls_rule *cls_rule,
+ofproto_add_flow(struct ofproto *ofproto, const struct match *match,
+                 unsigned int priority,
                  const struct ofpact *ofpacts, size_t ofpacts_len)
 {
     const struct rule *rule;
 
-    rule = rule_from_cls_rule(classifier_find_rule_exactly(
-                                    &ofproto->tables[0].cls, cls_rule));
+    rule = rule_from_cls_rule(classifier_find_match_exactly(
+                                  &ofproto->tables[0].cls, match, priority));
     if (!rule || !ofpacts_equal(rule->ofpacts, rule->ofpacts_len,
                                 ofpacts, ofpacts_len)) {
         struct ofputil_flow_mod fm;
 
         memset(&fm, 0, sizeof fm);
-        fm.cr = *cls_rule;
+        fm.match = *match;
+        fm.priority = priority;
         fm.buffer_id = UINT32_MAX;
         fm.ofpacts = xmemdup(ofpacts, ofpacts_len);
         fm.ofpacts_len = ofpacts_len;
@@ -1456,12 +1458,13 @@ ofproto_flow_mod(struct ofproto *ofproto, const struct ofputil_flow_mod *fm)
  *
  * This is a helper function for in-band control and fail-open. */
 bool
-ofproto_delete_flow(struct ofproto *ofproto, const struct cls_rule *target)
+ofproto_delete_flow(struct ofproto *ofproto,
+                    const struct match *target, unsigned int priority)
 {
     struct rule *rule;
 
-    rule = rule_from_cls_rule(classifier_find_rule_exactly(
-                                  &ofproto->tables[0].cls, target));
+    rule = rule_from_cls_rule(classifier_find_match_exactly(
+                                  &ofproto->tables[0].cls, target, priority));
     if (!rule) {
         /* No such rule -> success. */
         return true;
@@ -2432,11 +2435,12 @@ next_matching_table(const struct ofproto *ofproto,
  * Returns 0 on success, otherwise an OpenFlow error code. */
 static enum ofperr
 collect_rules_loose(struct ofproto *ofproto, uint8_t table_id,
-                    const struct cls_rule *match,
+                    const struct match *match,
                     ovs_be64 cookie, ovs_be64 cookie_mask,
                     uint16_t out_port, struct list *rules)
 {
     struct oftable *table;
+    struct cls_rule cr;
     enum ofperr error;
 
     error = check_table_id(ofproto, table_id);
@@ -2445,11 +2449,12 @@ collect_rules_loose(struct ofproto *ofproto, uint8_t table_id,
     }
 
     list_init(rules);
+    cls_rule_init(&cr, match, 0);
     FOR_EACH_MATCHING_TABLE (table, table_id, ofproto) {
         struct cls_cursor cursor;
         struct rule *rule;
 
-        cls_cursor_init(&cursor, &table->cls, match);
+        cls_cursor_init(&cursor, &table->cls, &cr);
         CLS_CURSOR_FOR_EACH (rule, cr, &cursor) {
             if (rule->pending) {
                 return OFPROTO_POSTPONE;
@@ -2477,11 +2482,12 @@ collect_rules_loose(struct ofproto *ofproto, uint8_t table_id,
  * Returns 0 on success, otherwise an OpenFlow error code. */
 static enum ofperr
 collect_rules_strict(struct ofproto *ofproto, uint8_t table_id,
-                     const struct cls_rule *match,
+                     const struct match *match, unsigned int priority,
                      ovs_be64 cookie, ovs_be64 cookie_mask,
                      uint16_t out_port, struct list *rules)
 {
     struct oftable *table;
+    struct cls_rule cr;
     int error;
 
     error = check_table_id(ofproto, table_id);
@@ -2490,11 +2496,12 @@ collect_rules_strict(struct ofproto *ofproto, uint8_t table_id,
     }
 
     list_init(rules);
+    cls_rule_init(&cr, match, priority);
     FOR_EACH_MATCHING_TABLE (table, table_id, ofproto) {
         struct rule *rule;
 
         rule = rule_from_cls_rule(classifier_find_rule_exactly(&table->cls,
-                                                               match));
+                                                               &cr));
         if (rule) {
             if (rule->pending) {
                 return OFPROTO_POSTPONE;
@@ -2547,7 +2554,8 @@ handle_flow_stats_request(struct ofconn *ofconn,
         long long int now = time_msec();
         struct ofputil_flow_stats fs;
 
-        fs.rule = rule->cr;
+        fs.match = rule->cr.match;
+        fs.priority = rule->cr.priority;
         fs.cookie = rule->flow_cookie;
         fs.table_id = rule->table_id;
         calc_flow_duration__(rule->created, now, &fs.duration_sec,
@@ -2869,6 +2877,7 @@ add_flow(struct ofproto *ofproto, struct ofconn *ofconn,
     struct oftable *table;
     struct ofopgroup *group;
     struct rule *victim;
+    struct cls_rule cr;
     struct rule *rule;
     int error;
 
@@ -2881,7 +2890,8 @@ add_flow(struct ofproto *ofproto, struct ofconn *ofconn,
     if (fm->table_id == 0xff) {
         uint8_t table_id;
         if (ofproto->ofproto_class->rule_choose_table) {
-            error = ofproto->ofproto_class->rule_choose_table(ofproto, &fm->cr,
+            error = ofproto->ofproto_class->rule_choose_table(ofproto,
+                                                              &fm->match,
                                                               &table_id);
             if (error) {
                 return error;
@@ -2901,26 +2911,29 @@ add_flow(struct ofproto *ofproto, struct ofconn *ofconn,
         return OFPERR_OFPBRC_EPERM;
     }
 
-    /* Check for overlap, if requested. */
-    if (fm->flags & OFPFF_CHECK_OVERLAP
-        && classifier_rule_overlaps(&table->cls, &fm->cr)) {
-        return OFPERR_OFPFMFC_OVERLAP;
-    }
-
-    /* Serialize against pending deletion. */
-    if (is_flow_deletion_pending(ofproto, &fm->cr, table - ofproto->tables)) {
-        return OFPROTO_POSTPONE;
-    }
-
-    /* Allocate new rule. */
+    /* Allocate new rule and initialize classifier rule. */
     rule = ofproto->ofproto_class->rule_alloc();
     if (!rule) {
         VLOG_WARN_RL(&rl, "%s: failed to create rule (%s)",
                      ofproto->name, strerror(error));
         return ENOMEM;
     }
+    cls_rule_init(&rule->cr, &fm->match, fm->priority);
+
+    /* Serialize against pending deletion. */
+    if (is_flow_deletion_pending(ofproto, &cr, table - ofproto->tables)) {
+        ofproto->ofproto_class->rule_dealloc(rule);
+        return OFPROTO_POSTPONE;
+    }
+
+    /* Check for overlap, if requested. */
+    if (fm->flags & OFPFF_CHECK_OVERLAP
+        && classifier_rule_overlaps(&table->cls, &rule->cr)) {
+        ofproto->ofproto_class->rule_dealloc(rule);
+        return OFPERR_OFPFMFC_OVERLAP;
+    }
+
     rule->ofproto = ofproto;
-    rule->cr = fm->cr;
     rule->pending = NULL;
     rule->flow_cookie = fm->new_cookie;
     rule->created = rule->modified = rule->used = time_msec();
@@ -3060,7 +3073,7 @@ modify_flows_loose(struct ofproto *ofproto, struct ofconn *ofconn,
     struct list rules;
     int error;
 
-    error = collect_rules_loose(ofproto, fm->table_id, &fm->cr,
+    error = collect_rules_loose(ofproto, fm->table_id, &fm->match,
                                 fm->cookie, fm->cookie_mask,
                                 OFPP_NONE, &rules);
     if (error) {
@@ -3085,8 +3098,8 @@ modify_flow_strict(struct ofproto *ofproto, struct ofconn *ofconn,
     struct list rules;
     int error;
 
-    error = collect_rules_strict(ofproto, fm->table_id, &fm->cr,
-                                 fm->cookie, fm->cookie_mask,
+    error = collect_rules_strict(ofproto, fm->table_id, &fm->match,
+                                 fm->priority, fm->cookie, fm->cookie_mask,
                                  OFPP_NONE, &rules);
 
     if (error) {
@@ -3142,7 +3155,7 @@ delete_flows_loose(struct ofproto *ofproto, struct ofconn *ofconn,
     struct list rules;
     enum ofperr error;
 
-    error = collect_rules_loose(ofproto, fm->table_id, &fm->cr,
+    error = collect_rules_loose(ofproto, fm->table_id, &fm->match,
                                 fm->cookie, fm->cookie_mask,
                                 fm->out_port, &rules);
     return (error ? error
@@ -3160,8 +3173,8 @@ delete_flow_strict(struct ofproto *ofproto, struct ofconn *ofconn,
     struct list rules;
     enum ofperr error;
 
-    error = collect_rules_strict(ofproto, fm->table_id, &fm->cr,
-                                 fm->cookie, fm->cookie_mask,
+    error = collect_rules_strict(ofproto, fm->table_id, &fm->match,
+                                 fm->priority, fm->cookie, fm->cookie_mask,
                                  fm->out_port, &rules);
     return (error ? error
             : list_is_singleton(&rules) ? delete_flows__(ofproto, ofconn,
@@ -3178,7 +3191,8 @@ ofproto_rule_send_removed(struct rule *rule, uint8_t reason)
         return;
     }
 
-    fr.rule = rule->cr;
+    fr.match = rule->cr.match;
+    fr.priority = rule->cr.priority;
     fr.cookie = rule->flow_cookie;
     fr.reason = reason;
     calc_flow_duration__(rule->created, time_msec(),
@@ -3263,7 +3277,7 @@ handle_flow_mod(struct ofconn *ofconn, const struct ofp_header *oh)
     }
     if (!error) {
         error = ofpacts_check(fm.ofpacts, fm.ofpacts_len,
-                              &fm.cr.flow, ofproto->max_ports);
+                              &fm.match.flow, ofproto->max_ports);
     }
     if (!error) {
         error = handle_flow_mod__(ofconn_get_ofproto(ofconn), ofconn, &fm, oh);
@@ -3503,7 +3517,7 @@ ofproto_compose_flow_refresh_update(const struct rule *rule,
     fu.hard_timeout = rule->hard_timeout;
     fu.table_id = rule->table_id;
     fu.cookie = rule->flow_cookie;
-    fu.match = CONST_CAST(struct cls_rule *, &rule->cr);
+    fu.match = CONST_CAST(struct match *, &rule->cr.match);
     if (!(flags & NXFMF_ACTIONS)) {
         fu.ofpacts = NULL;
         fu.ofpacts_len = 0;
@@ -3606,12 +3620,14 @@ ofproto_collect_ofmonitor_refresh_rules(const struct ofmonitor *m,
     const struct ofproto *ofproto = ofconn_get_ofproto(m->ofconn);
     const struct ofoperation *op;
     const struct oftable *table;
+    struct cls_rule target;
 
+    cls_rule_init(&target, &m->match, 0);
     FOR_EACH_MATCHING_TABLE (table, m->table_id, ofproto) {
         struct cls_cursor cursor;
         struct rule *rule;
 
-        cls_cursor_init(&cursor, &table->cls, &m->match);
+        cls_cursor_init(&cursor, &table->cls, &target);
         CLS_CURSOR_FOR_EACH (rule, cr, &cursor) {
             assert(!rule->pending); /* XXX */
             ofproto_collect_ofmonitor_refresh_rule(m, rule, seqno, rules);
@@ -3624,7 +3640,7 @@ ofproto_collect_ofmonitor_refresh_rules(const struct ofmonitor *m,
         if (((m->table_id == 0xff
               ? !(ofproto->tables[rule->table_id].flags & OFTABLE_HIDDEN)
               : m->table_id == rule->table_id))
-            && cls_rule_is_loose_match(&rule->cr, &m->match)) {
+            && cls_rule_is_loose_match(&rule->cr, &target.match)) {
             ofproto_collect_ofmonitor_refresh_rule(m, rule, seqno, rules);
         }
     }
@@ -3992,11 +4008,12 @@ ofopgroup_complete(struct ofopgroup *group)
         case OFOPERATION_ADD:
             if (!op->error) {
                 ofproto_rule_destroy__(op->victim);
-                if ((rule->cr.wc.masks.vlan_tci & htons(VLAN_VID_MASK))
+                if ((rule->cr.match.wc.masks.vlan_tci & htons(VLAN_VID_MASK))
                     == htons(VLAN_VID_MASK)) {
                     if (ofproto->vlan_bitmap) {
-                        uint16_t vid = vlan_tci_to_vid(rule->cr.flow.vlan_tci);
+                        uint16_t vid;
 
+                        vid = vlan_tci_to_vid(rule->cr.match.flow.vlan_tci);
                         if (!bitmap_is_set(ofproto->vlan_bitmap, vid)) {
                             bitmap_set1(ofproto->vlan_bitmap, vid);
                             ofproto->vlans_changed = true;
@@ -4337,10 +4354,10 @@ eviction_group_hash_rule(struct rule *rule)
          sf < &table->eviction_fields[table->n_eviction_fields];
          sf++)
     {
-        if (mf_are_prereqs_ok(sf->field, &rule->cr.flow)) {
+        if (mf_are_prereqs_ok(sf->field, &rule->cr.match.flow)) {
             union mf_value value;
 
-            mf_get_value(sf->field, &rule->cr.flow, &value);
+            mf_get_value(sf->field, &rule->cr.match.flow, &value);
             if (sf->ofs) {
                 bitwise_zero(&value, sf->field->n_bytes, 0, sf->ofs);
             }
@@ -4651,7 +4668,7 @@ ofproto_get_vlan_usage(struct ofproto *ofproto, unsigned long int *vlan_bitmap)
                 const struct cls_rule *rule;
 
                 HMAP_FOR_EACH (rule, hmap_node, &table->rules) {
-                    uint16_t vid = vlan_tci_to_vid(rule->flow.vlan_tci);
+                    uint16_t vid = vlan_tci_to_vid(rule->match.flow.vlan_tci);
                     bitmap_set1(vlan_bitmap, vid);
                     bitmap_set1(ofproto->vlan_bitmap, vid);
                 }

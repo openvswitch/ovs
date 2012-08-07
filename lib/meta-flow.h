@@ -24,8 +24,8 @@
 #include "ofp-errors.h"
 #include "packets.h"
 
-struct cls_rule;
 struct ds;
+struct match;
 
 /* The comment on each of these indicates the member in "union mf_value" used
  * to represent its value. */
@@ -294,7 +294,7 @@ void mf_get_mask(const struct mf_field *, const struct flow_wildcards *,
 
 /* Prerequisites. */
 bool mf_are_prereqs_ok(const struct mf_field *, const struct flow *);
-void mf_force_prereqs(const struct mf_field *, struct cls_rule *);
+void mf_force_prereqs(const struct mf_field *, struct match *);
 
 /* Field values. */
 bool mf_is_value_valid(const struct mf_field *, const union mf_value *value);
@@ -302,24 +302,24 @@ bool mf_is_value_valid(const struct mf_field *, const union mf_value *value);
 void mf_get_value(const struct mf_field *, const struct flow *,
                   union mf_value *value);
 void mf_set_value(const struct mf_field *, const union mf_value *value,
-                  struct cls_rule *);
+                  struct match *);
 void mf_set_flow_value(const struct mf_field *, const union mf_value *value,
                        struct flow *);
 bool mf_is_zero(const struct mf_field *, const struct flow *);
 
-void mf_get(const struct mf_field *, const struct cls_rule *,
+void mf_get(const struct mf_field *, const struct match *,
             union mf_value *value, union mf_value *mask);
 void mf_set(const struct mf_field *,
             const union mf_value *value, const union mf_value *mask,
-            struct cls_rule *);
+            struct match *);
 
-void mf_set_wild(const struct mf_field *, struct cls_rule *);
+void mf_set_wild(const struct mf_field *, struct match *);
 
 void mf_random_value(const struct mf_field *, union mf_value *value);
 
 /* Subfields. */
 void mf_write_subfield(const struct mf_subfield *, const union mf_subvalue *,
-                       struct cls_rule *);
+                       struct match *);
 
 void mf_read_subfield(const struct mf_subfield *, const struct flow *,
                       union mf_subvalue *);

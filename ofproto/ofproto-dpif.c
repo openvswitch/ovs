@@ -822,8 +822,9 @@ add_internal_flow(struct ofproto_dpif *ofproto, int id,
     struct ofputil_flow_mod fm;
     int error;
 
-    cls_rule_init_catchall(&fm.cr, 0);
-    cls_rule_set_reg(&fm.cr, 0, id);
+    match_init_catchall(&fm.match);
+    fm.priority = 0;
+    match_set_reg(&fm.match, 0, id);
     fm.new_cookie = htonll(0);
     fm.cookie = htonll(0);
     fm.cookie_mask = htonll(0);
@@ -844,7 +845,7 @@ add_internal_flow(struct ofproto_dpif *ofproto, int id,
         return error;
     }
 
-    *rulep = rule_dpif_lookup__(ofproto, &fm.cr.flow, TBL_INTERNAL);
+    *rulep = rule_dpif_lookup__(ofproto, &fm.match.flow, TBL_INTERNAL);
     assert(*rulep != NULL);
 
     return 0;
@@ -4666,7 +4667,8 @@ rule_construct(struct rule *rule_)
     table_id = rule->up.table_id;
     rule->tag = (victim ? victim->tag
                  : table_id == 0 ? 0
-                 : rule_calculate_tag(&rule->up.cr.flow, &rule->up.cr.wc,
+                 : rule_calculate_tag(&rule->up.cr.match.flow,
+                                      &rule->up.cr.match.wc,
                                       ofproto->tables[table_id].basis));
 
     complete_operation(rule);

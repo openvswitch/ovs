@@ -92,14 +92,13 @@ nx_entry_ok(const void *p, unsigned int match_len)
 
 static enum ofperr
 nx_pull_raw(const uint8_t *p, unsigned int match_len, bool strict,
-            uint16_t priority, struct cls_rule *rule,
-            ovs_be64 *cookie, ovs_be64 *cookie_mask)
+            struct match *match, ovs_be64 *cookie, ovs_be64 *cookie_mask)
 {
     uint32_t header;
 
     assert((cookie != NULL) == (cookie_mask != NULL));
 
-    cls_rule_init_catchall(rule, priority);
+    match_init_catchall(match);
     if (cookie) {
         *cookie = *cookie_mask = htonll(0);
     }
@@ -120,9 +119,9 @@ nx_pull_raw(const uint8_t *p, unsigned int match_len, bool strict,
             } else {
                 continue;
             }
-        } else if (!mf_are_prereqs_ok(mf, &rule->flow)) {
+        } else if (!mf_are_prereqs_ok(mf, &match->flow)) {
             error = OFPERR_OFPBMC_BAD_PREREQ;
-        } else if (!mf_is_all_wild(mf, &rule->wc)) {
+        } else if (!mf_is_all_wild(mf, &match->wc)) {
             error = OFPERR_OFPBMC_DUP_FIELD;
         } else if (header != OXM_OF_IN_PORT) {
             unsigned int width = mf->n_bytes;
@@ -133,7 +132,7 @@ nx_pull_raw(const uint8_t *p, unsigned int match_len, bool strict,
                 error = OFPERR_OFPBMC_BAD_VALUE;
             } else if (!NXM_HASMASK(header)) {
                 error = 0;
-                mf_set_value(mf, &value, rule);
+                mf_set_value(mf, &value, match);
             } else {
                 union mf_value mask;
 
@@ -142,7 +141,7 @@ nx_pull_raw(const uint8_t *p, unsigned int match_len, bool strict,
                     error = OFPERR_OFPBMC_BAD_MASK;
                 } else {
                     error = 0;
-                    mf_set(mf, &value, &mask, rule);
+                    mf_set(mf, &value, &mask, match);
                 }
             }
         } else {
@@ -154,7 +153,7 @@ nx_pull_raw(const uint8_t *p, unsigned int match_len, bool strict,
             memcpy(&port_of11, p + 4, sizeof port_of11);
             error = ofputil_port_from_ofp11(port_of11, &port);
             if (!error) {
-                cls_rule_set_in_port(rule, port);
+                match_set_in_port(match, port);
             }
         }
 
@@ -191,7 +190,7 @@ nx_pull_raw(const uint8_t *p, unsigned int match_len, bool strict,
 
 static enum ofperr
 nx_pull_match__(struct ofpbuf *b, unsigned int match_len, bool strict,
-                uint16_t priority, struct cls_rule *rule,
+                struct match *match,
                 ovs_be64 *cookie, ovs_be64 *cookie_mask)
 {
     uint8_t *p = NULL;
@@ -206,42 +205,36 @@ nx_pull_match__(struct ofpbuf *b, unsigned int match_len, bool strict,
         }
     }
 
-    return nx_pull_raw(p, match_len, strict, priority, rule,
-                       cookie, cookie_mask);
+    return nx_pull_raw(p, match_len, strict, match, cookie, cookie_mask);
 }
 
 /* Parses the nx_match formatted match description in 'b' with length
- * 'match_len'.  The results are stored in 'rule', which is initialized with
- * 'priority'.  If 'cookie' and 'cookie_mask' contain valid pointers, then the
- * cookie and mask will be stored in them if a "NXM_NX_COOKIE*" match is
- * defined.  Otherwise, 0 is stored in both.
+ * 'match_len'.  Stores the results in 'match'.  If 'cookie' and 'cookie_mask'
+ * are valid pointers, then stores the cookie and mask in them if 'b' contains
+ * a "NXM_NX_COOKIE*" match.  Otherwise, stores 0 in both.
  *
- * Fails with an error when encountering unknown NXM headers.
+ * Fails with an error upon encountering an unknown NXM header.
  *
  * Returns 0 if successful, otherwise an OpenFlow error code. */
 enum ofperr
-nx_pull_match(struct ofpbuf *b, unsigned int match_len,
-              uint16_t priority, struct cls_rule *rule,
+nx_pull_match(struct ofpbuf *b, unsigned int match_len, struct match *match,
               ovs_be64 *cookie, ovs_be64 *cookie_mask)
 {
-    return nx_pull_match__(b, match_len, true, priority, rule, cookie,
-                           cookie_mask);
+    return nx_pull_match__(b, match_len, true, match, cookie, cookie_mask);
 }
 
-/* Behaves the same as nx_pull_match() with one exception.  Skips over unknown
- * NXM headers instead of failing with an error when they are encountered. */
+/* Behaves the same as nx_pull_match(), but skips over unknown NXM headers,
+ * instead of failing with an error. */
 enum ofperr
 nx_pull_match_loose(struct ofpbuf *b, unsigned int match_len,
-                    uint16_t priority, struct cls_rule *rule,
+                    struct match *match,
                     ovs_be64 *cookie, ovs_be64 *cookie_mask)
 {
-    return nx_pull_match__(b, match_len, false, priority, rule, cookie,
-                           cookie_mask);
+    return nx_pull_match__(b, match_len, false, match, cookie, cookie_mask);
 }
 
 static enum ofperr
-oxm_pull_match__(struct ofpbuf *b, bool strict,
-                 uint16_t priority, struct cls_rule *rule)
+oxm_pull_match__(struct ofpbuf *b, bool strict, struct match *match)
 {
     struct ofp11_match_header *omh = b->data;
     uint8_t *p;
@@ -269,29 +262,27 @@ oxm_pull_match__(struct ofpbuf *b, bool strict,
     }
 
     return nx_pull_raw(p + sizeof *omh, match_len - sizeof *omh,
-                       strict, priority, rule, NULL, NULL);
+                       strict, match, NULL, NULL);
 }
 
-/* Parses the oxm formatted match description preceeded by a struct
- * ofp11_match in 'b' with length 'match_len'.  The results are stored in
- * 'rule', which is initialized with 'priority'.
+/* Parses the oxm formatted match description preceeded by a struct ofp11_match
+ * in 'b' with length 'match_len'.  Stores the result in 'match'.
  *
  * Fails with an error when encountering unknown OXM headers.
  *
  * Returns 0 if successful, otherwise an OpenFlow error code. */
 enum ofperr
-oxm_pull_match(struct ofpbuf *b, uint16_t priority, struct cls_rule *rule)
+oxm_pull_match(struct ofpbuf *b, struct match *match)
 {
-    return oxm_pull_match__(b, true, priority, rule);
+    return oxm_pull_match__(b, true, match);
 }
 
 /* Behaves the same as oxm_pull_match() with one exception.  Skips over unknown
  * PXM headers instead of failing with an error when they are encountered. */
 enum ofperr
-oxm_pull_match_loose(struct ofpbuf *b, uint16_t priority,
-                     struct cls_rule *rule)
+oxm_pull_match_loose(struct ofpbuf *b, struct match *match)
 {
-    return oxm_pull_match__(b, false, priority, rule);
+    return oxm_pull_match__(b, false, match);
 }
 
 /* nx_put_match() and helpers.
@@ -470,10 +461,10 @@ nxm_put_ipv6(struct ofpbuf *b, uint32_t header,
 }
 
 static void
-nxm_put_frag(struct ofpbuf *b, const struct cls_rule *cr)
+nxm_put_frag(struct ofpbuf *b, const struct match *match)
 {
-    uint8_t nw_frag = cr->flow.nw_frag;
-    uint8_t nw_frag_mask = cr->wc.masks.nw_frag;
+    uint8_t nw_frag = match->flow.nw_frag;
+    uint8_t nw_frag_mask = match->wc.masks.nw_frag;
 
     switch (nw_frag_mask) {
     case 0:
@@ -491,54 +482,53 @@ nxm_put_frag(struct ofpbuf *b, const struct cls_rule *cr)
 }
 
 static void
-nxm_put_ip(struct ofpbuf *b, const struct cls_rule *cr,
+nxm_put_ip(struct ofpbuf *b, const struct match *match,
            uint8_t icmp_proto, uint32_t icmp_type, uint32_t icmp_code,
            bool oxm)
 {
-    const struct flow *flow = &cr->flow;
+    const struct flow *flow = &match->flow;
 
-    nxm_put_frag(b, cr);
+    nxm_put_frag(b, match);
 
-    if (cr->wc.masks.nw_tos & IP_DSCP_MASK) {
+    if (match->wc.masks.nw_tos & IP_DSCP_MASK) {
         nxm_put_8(b, oxm ? OXM_OF_IP_DSCP : NXM_OF_IP_TOS,
                   flow->nw_tos & IP_DSCP_MASK);
     }
 
-    if (cr->wc.masks.nw_tos & IP_ECN_MASK) {
+    if (match->wc.masks.nw_tos & IP_ECN_MASK) {
         nxm_put_8(b, oxm ? OXM_OF_IP_ECN : NXM_NX_IP_ECN,
                   flow->nw_tos & IP_ECN_MASK);
     }
 
-    if (!oxm && cr->wc.masks.nw_ttl) {
+    if (!oxm && match->wc.masks.nw_ttl) {
         nxm_put_8(b, NXM_NX_IP_TTL, flow->nw_ttl);
     }
 
-    if (cr->wc.masks.nw_proto) {
+    if (match->wc.masks.nw_proto) {
         nxm_put_8(b, oxm ? OXM_OF_IP_PROTO : NXM_OF_IP_PROTO, flow->nw_proto);
 
         if (flow->nw_proto == IPPROTO_TCP) {
             nxm_put_16m(b, oxm ? OXM_OF_TCP_SRC : NXM_OF_TCP_SRC,
-                        flow->tp_src, cr->wc.masks.tp_src);
+                        flow->tp_src, match->wc.masks.tp_src);
             nxm_put_16m(b, oxm ? OXM_OF_TCP_DST : NXM_OF_TCP_DST,
-                        flow->tp_dst, cr->wc.masks.tp_dst);
+                        flow->tp_dst, match->wc.masks.tp_dst);
         } else if (flow->nw_proto == IPPROTO_UDP) {
             nxm_put_16m(b, oxm ? OXM_OF_UDP_SRC : NXM_OF_UDP_SRC,
-                        flow->tp_src, cr->wc.masks.tp_src);
+                        flow->tp_src, match->wc.masks.tp_src);
             nxm_put_16m(b, oxm ? OXM_OF_UDP_DST : NXM_OF_UDP_DST,
-                        flow->tp_dst, cr->wc.masks.tp_dst);
+                        flow->tp_dst, match->wc.masks.tp_dst);
         } else if (flow->nw_proto == icmp_proto) {
-            if (cr->wc.masks.tp_src) {
+            if (match->wc.masks.tp_src) {
                 nxm_put_8(b, icmp_type, ntohs(flow->tp_src));
             }
-            if (cr->wc.masks.tp_dst) {
+            if (match->wc.masks.tp_dst) {
                 nxm_put_8(b, icmp_code, ntohs(flow->tp_dst));
             }
         }
     }
 }
 
-/* Appends to 'b' the nx_match format that expresses 'cr' (except for
- * 'cr->priority', because priority is not part of nx_match).  For Flow Mod and
+/* Appends to 'b' the nx_match format that expresses 'match'.  For Flow Mod and
  * Flow Stats Requests messages, a 'cookie' and 'cookie_mask' may be supplied.
  * Otherwise, 'cookie_mask' should be zero.
  *
@@ -546,13 +536,13 @@ nxm_put_ip(struct ofpbuf *b, const struct cls_rule *cr,
  *
  * Returns the number of bytes appended to 'b', excluding padding.
  *
- * If 'cr' is a catch-all rule that matches every packet, then this function
+ * If 'match' is a catch-all rule that matches every packet, then this function
  * appends nothing to 'b' and returns 0. */
 static int
-nx_put_raw(struct ofpbuf *b, bool oxm, const struct cls_rule *cr,
+nx_put_raw(struct ofpbuf *b, bool oxm, const struct match *match,
            ovs_be64 cookie, ovs_be64 cookie_mask)
 {
-    const struct flow *flow = &cr->flow;
+    const struct flow *flow = &match->flow;
     const size_t start_len = b->size;
     int match_len;
     int i;
@@ -560,7 +550,7 @@ nx_put_raw(struct ofpbuf *b, bool oxm, const struct cls_rule *cr,
     BUILD_ASSERT_DECL(FLOW_WC_SEQ == 17);
 
     /* Metadata. */
-    if (cr->wc.masks.in_port) {
+    if (match->wc.masks.in_port) {
         uint16_t in_port = flow->in_port;
         if (oxm) {
             nxm_put_32(b, OXM_OF_IN_PORT, ofputil_port_to_ofp11(in_port));
@@ -571,18 +561,18 @@ nx_put_raw(struct ofpbuf *b, bool oxm, const struct cls_rule *cr,
 
     /* Ethernet. */
     nxm_put_eth_masked(b, oxm ? OXM_OF_ETH_SRC : NXM_OF_ETH_SRC,
-                       flow->dl_src, cr->wc.masks.dl_src);
+                       flow->dl_src, match->wc.masks.dl_src);
     nxm_put_eth_masked(b, oxm ? OXM_OF_ETH_DST : NXM_OF_ETH_DST,
-                       flow->dl_dst, cr->wc.masks.dl_dst);
+                       flow->dl_dst, match->wc.masks.dl_dst);
     nxm_put_16m(b, oxm ? OXM_OF_ETH_TYPE : NXM_OF_ETH_TYPE,
                 ofputil_dl_type_to_openflow(flow->dl_type),
-                cr->wc.masks.dl_type);
+                match->wc.masks.dl_type);
 
     /* 802.1Q. */
     if (oxm) {
         ovs_be16 VID_CFI_MASK = htons(VLAN_VID_MASK | VLAN_CFI);
         ovs_be16 vid = flow->vlan_tci & VID_CFI_MASK;
-        ovs_be16 mask = cr->wc.masks.vlan_tci & VID_CFI_MASK;
+        ovs_be16 mask = match->wc.masks.vlan_tci & VID_CFI_MASK;
 
         if (mask == htons(VLAN_VID_MASK | VLAN_CFI)) {
             nxm_put_16(b, OXM_OF_VLAN_VID, vid);
@@ -590,78 +580,79 @@ nx_put_raw(struct ofpbuf *b, bool oxm, const struct cls_rule *cr,
             nxm_put_16m(b, OXM_OF_VLAN_VID, vid, mask);
         }
 
-        if (vid && vlan_tci_to_pcp(cr->wc.masks.vlan_tci)) {
+        if (vid && vlan_tci_to_pcp(match->wc.masks.vlan_tci)) {
             nxm_put_8(b, OXM_OF_VLAN_PCP, vlan_tci_to_pcp(flow->vlan_tci));
         }
 
     } else {
-        nxm_put_16m(b, NXM_OF_VLAN_TCI, flow->vlan_tci, cr->wc.masks.vlan_tci);
+        nxm_put_16m(b, NXM_OF_VLAN_TCI, flow->vlan_tci,
+                    match->wc.masks.vlan_tci);
     }
 
     /* L3. */
     if (flow->dl_type == htons(ETH_TYPE_IP)) {
         /* IP. */
         nxm_put_32m(b, oxm ? OXM_OF_IPV4_SRC : NXM_OF_IP_SRC,
-                    flow->nw_src, cr->wc.masks.nw_src);
+                    flow->nw_src, match->wc.masks.nw_src);
         nxm_put_32m(b, oxm ? OXM_OF_IPV4_DST : NXM_OF_IP_DST,
-                    flow->nw_dst, cr->wc.masks.nw_dst);
-        nxm_put_ip(b, cr, IPPROTO_ICMP,
+                    flow->nw_dst, match->wc.masks.nw_dst);
+        nxm_put_ip(b, match, IPPROTO_ICMP,
                    oxm ? OXM_OF_ICMPV4_TYPE : NXM_OF_ICMP_TYPE,
                    oxm ? OXM_OF_ICMPV4_CODE : NXM_OF_ICMP_CODE, oxm);
     } else if (flow->dl_type == htons(ETH_TYPE_IPV6)) {
         /* IPv6. */
         nxm_put_ipv6(b, oxm ? OXM_OF_IPV6_SRC : NXM_NX_IPV6_SRC,
-                     &flow->ipv6_src, &cr->wc.masks.ipv6_src);
+                     &flow->ipv6_src, &match->wc.masks.ipv6_src);
         nxm_put_ipv6(b, oxm ? OXM_OF_IPV6_DST : NXM_NX_IPV6_DST,
-                     &flow->ipv6_dst, &cr->wc.masks.ipv6_dst);
-        nxm_put_ip(b, cr, IPPROTO_ICMPV6,
+                     &flow->ipv6_dst, &match->wc.masks.ipv6_dst);
+        nxm_put_ip(b, match, IPPROTO_ICMPV6,
                    oxm ? OXM_OF_ICMPV6_TYPE : NXM_NX_ICMPV6_TYPE,
                    oxm ? OXM_OF_ICMPV6_CODE : NXM_NX_ICMPV6_CODE, oxm);
 
         nxm_put_32m(b, oxm ? OXM_OF_IPV6_FLABEL : NXM_NX_IPV6_LABEL,
-                    flow->ipv6_label, cr->wc.masks.ipv6_label);
+                    flow->ipv6_label, match->wc.masks.ipv6_label);
 
         if (flow->nw_proto == IPPROTO_ICMPV6
             && (flow->tp_src == htons(ND_NEIGHBOR_SOLICIT) ||
                 flow->tp_src == htons(ND_NEIGHBOR_ADVERT))) {
             nxm_put_ipv6(b, oxm ? OXM_OF_IPV6_ND_TARGET : NXM_NX_ND_TARGET,
-                         &flow->nd_target, &cr->wc.masks.nd_target);
+                         &flow->nd_target, &match->wc.masks.nd_target);
             if (flow->tp_src == htons(ND_NEIGHBOR_SOLICIT)) {
                 nxm_put_eth_masked(b, oxm ? OXM_OF_IPV6_ND_SLL : NXM_NX_ND_SLL,
-                                   flow->arp_sha, cr->wc.masks.arp_sha);
+                                   flow->arp_sha, match->wc.masks.arp_sha);
             }
             if (flow->tp_src == htons(ND_NEIGHBOR_ADVERT)) {
                 nxm_put_eth_masked(b, oxm ? OXM_OF_IPV6_ND_TLL : NXM_NX_ND_TLL,
-                                   flow->arp_tha, cr->wc.masks.arp_tha);
+                                   flow->arp_tha, match->wc.masks.arp_tha);
             }
         }
     } else if (flow->dl_type == htons(ETH_TYPE_ARP)) {
         /* ARP. */
-        if (cr->wc.masks.nw_proto) {
+        if (match->wc.masks.nw_proto) {
             nxm_put_16(b, oxm ? OXM_OF_ARP_OP : NXM_OF_ARP_OP,
                        htons(flow->nw_proto));
         }
         nxm_put_32m(b, oxm ? OXM_OF_ARP_SPA : NXM_OF_ARP_SPA,
-                    flow->nw_src, cr->wc.masks.nw_src);
+                    flow->nw_src, match->wc.masks.nw_src);
         nxm_put_32m(b, oxm ? OXM_OF_ARP_TPA : NXM_OF_ARP_TPA,
-                    flow->nw_dst, cr->wc.masks.nw_dst);
+                    flow->nw_dst, match->wc.masks.nw_dst);
         nxm_put_eth_masked(b, oxm ? OXM_OF_ARP_SHA : NXM_NX_ARP_SHA,
-                           flow->arp_sha, cr->wc.masks.arp_sha);
+                           flow->arp_sha, match->wc.masks.arp_sha);
         nxm_put_eth_masked(b, oxm ? OXM_OF_ARP_THA : NXM_NX_ARP_THA,
-                           flow->arp_tha, cr->wc.masks.arp_tha);
+                           flow->arp_tha, match->wc.masks.arp_tha);
     }
 
     /* Tunnel ID. */
-    nxm_put_64m(b, NXM_NX_TUN_ID, flow->tun_id, cr->wc.masks.tun_id);
+    nxm_put_64m(b, NXM_NX_TUN_ID, flow->tun_id, match->wc.masks.tun_id);
 
     /* Registers. */
     for (i = 0; i < FLOW_N_REGS; i++) {
         nxm_put_32m(b, NXM_NX_REG(i),
-                    htonl(flow->regs[i]), htonl(cr->wc.masks.regs[i]));
+                    htonl(flow->regs[i]), htonl(match->wc.masks.regs[i]));
     }
 
     /* OpenFlow 1.1+ Metadata. */
-    nxm_put_64m(b, OXM_OF_METADATA, flow->metadata, cr->wc.masks.metadata);
+    nxm_put_64m(b, OXM_OF_METADATA, flow->metadata, match->wc.masks.metadata);
 
     /* Cookie. */
     nxm_put_64m(b, NXM_NX_COOKIE, cookie, cookie_mask);
@@ -670,8 +661,7 @@ nx_put_raw(struct ofpbuf *b, bool oxm, const struct cls_rule *cr,
     return match_len;
 }
 
-/* Appends to 'b' the nx_match format that expresses 'cr' (except for
- * 'cr->priority', because priority is not part of nx_match), plus enough zero
+/* Appends to 'b' the nx_match format that expresses 'match', plus enough zero
  * bytes to pad the nx_match out to a multiple of 8.  For Flow Mod and Flow
  * Stats Requests messages, a 'cookie' and 'cookie_mask' may be supplied.
  * Otherwise, 'cookie_mask' should be zero.
@@ -682,10 +672,10 @@ nx_put_raw(struct ofpbuf *b, bool oxm, const struct cls_rule *cr,
  * value can be zero if it appended nothing at all to 'b' (which happens if
  * 'cr' is a catch-all rule that matches every packet). */
 int
-nx_put_match(struct ofpbuf *b, const struct cls_rule *cr,
+nx_put_match(struct ofpbuf *b, const struct match *match,
              ovs_be64 cookie, ovs_be64 cookie_mask)
 {
-    int match_len = nx_put_raw(b, false, cr, cookie, cookie_mask);
+    int match_len = nx_put_raw(b, false, match, cookie, cookie_mask);
 
     ofpbuf_put_zeros(b, ROUND_UP(match_len, 8) - match_len);
     return match_len;
@@ -693,16 +683,15 @@ nx_put_match(struct ofpbuf *b, const struct cls_rule *cr,
 
 
 /* Appends to 'b' an struct ofp11_match_header followed by the oxm format that
- * expresses 'cr' (except for 'cr->priority', because priority is not part of
- * nx_match), plus enough zero bytes to pad the data appended out to a multiple
- * of 8.
+ * expresses 'cr', plus enough zero bytes to pad the data appended out to a
+ * multiple of 8.
  *
  * This function can cause 'b''s data to be reallocated.
  *
  * Returns the number of bytes appended to 'b', excluding the padding.  Never
  * returns zero. */
 int
-oxm_put_match(struct ofpbuf *b, const struct cls_rule *cr)
+oxm_put_match(struct ofpbuf *b, const struct match *match)
 {
     int match_len;
     struct ofp11_match_header *omh;
@@ -710,7 +699,7 @@ oxm_put_match(struct ofpbuf *b, const struct cls_rule *cr)
     ovs_be64 cookie = htonll(0), cookie_mask = htonll(0);
 
     ofpbuf_put_uninit(b, sizeof *omh);
-    match_len = nx_put_raw(b, true, cr, cookie, cookie_mask) + sizeof *omh;
+    match_len = nx_put_raw(b, true, match, cookie, cookie_mask) + sizeof *omh;
     ofpbuf_put_zeros(b, ROUND_UP(match_len, 8) - match_len);
 
     omh = (struct ofp11_match_header *)((char *)b->data + start_len);

@@ -79,6 +79,8 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/lockfile.h \
 	lib/mac-learning.c \
 	lib/mac-learning.h \
+	lib/match.c \
+	lib/match.h \
 	lib/memory.c \
 	lib/memory.h \
 	lib/meta-flow.c \

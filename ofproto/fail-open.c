@@ -191,14 +191,14 @@ fail_open_maybe_recover(struct fail_open *fo)
 static void
 fail_open_recover(struct fail_open *fo)
 {
-    struct cls_rule rule;
+    struct match match;
 
     VLOG_WARN("No longer in fail-open mode");
     fo->last_disconn_secs = 0;
     fo->next_bogus_packet_in = LLONG_MAX;
 
-    cls_rule_init_catchall(&rule, FAIL_OPEN_PRIORITY);
-    ofproto_delete_flow(fo->ofproto, &rule);
+    match_init_catchall(&match);
+    ofproto_delete_flow(fo->ofproto, &match, FAIL_OPEN_PRIORITY);
 }
 
 void
@@ -216,7 +216,7 @@ fail_open_flushed(struct fail_open *fo)
     bool open = disconn_secs >= trigger_duration(fo);
     if (open) {
         struct ofpbuf ofpacts;
-        struct cls_rule rule;
+        struct match match;
 
         /* Set up a flow that matches every packet and directs them to
          * OFPP_NORMAL. */
@@ -224,8 +224,9 @@ fail_open_flushed(struct fail_open *fo)
         ofpact_put_OUTPUT(&ofpacts)->port = OFPP_NORMAL;
         ofpact_pad(&ofpacts);
 
-        cls_rule_init_catchall(&rule, FAIL_OPEN_PRIORITY);
-        ofproto_add_flow(fo->ofproto, &rule, ofpacts.data, ofpacts.size);
+        match_init_catchall(&match);
+        ofproto_add_flow(fo->ofproto, &match, FAIL_OPEN_PRIORITY,
+                         ofpacts.data, ofpacts.size);
 
         ofpbuf_uninit(&ofpacts);
     }

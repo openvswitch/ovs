@@ -1086,141 +1086,141 @@ mf_get_value(const struct mf_field *mf, const struct flow *flow,
     }
 }
 
-/* Makes 'rule' match field 'mf' exactly, with the value matched taken from
- * 'value'.  The caller is responsible for ensuring that 'rule' meets 'mf''s
+/* Makes 'match' match field 'mf' exactly, with the value matched taken from
+ * 'value'.  The caller is responsible for ensuring that 'match' meets 'mf''s
  * prerequisites. */
 void
 mf_set_value(const struct mf_field *mf,
-             const union mf_value *value, struct cls_rule *rule)
+             const union mf_value *value, struct match *match)
 {
     switch (mf->id) {
     case MFF_TUN_ID:
-        cls_rule_set_tun_id(rule, value->be64);
+        match_set_tun_id(match, value->be64);
         break;
     case MFF_METADATA:
-        cls_rule_set_metadata(rule, value->be64);
+        match_set_metadata(match, value->be64);
         break;
 
     case MFF_IN_PORT:
-        cls_rule_set_in_port(rule, ntohs(value->be16));
+        match_set_in_port(match, ntohs(value->be16));
         break;
 
     CASE_MFF_REGS:
-        cls_rule_set_reg(rule, mf->id - MFF_REG0, ntohl(value->be32));
+        match_set_reg(match, mf->id - MFF_REG0, ntohl(value->be32));
         break;
 
     case MFF_ETH_SRC:
-        cls_rule_set_dl_src(rule, value->mac);
+        match_set_dl_src(match, value->mac);
         break;
 
     case MFF_ETH_DST:
-        cls_rule_set_dl_dst(rule, value->mac);
+        match_set_dl_dst(match, value->mac);
         break;
 
     case MFF_ETH_TYPE:
-        cls_rule_set_dl_type(rule, value->be16);
+        match_set_dl_type(match, value->be16);
         break;
 
     case MFF_VLAN_TCI:
-        cls_rule_set_dl_tci(rule, value->be16);
+        match_set_dl_tci(match, value->be16);
         break;
 
     case MFF_DL_VLAN:
-        cls_rule_set_dl_vlan(rule, value->be16);
+        match_set_dl_vlan(match, value->be16);
         break;
     case MFF_VLAN_VID:
-        cls_rule_set_vlan_vid(rule, value->be16);
+        match_set_vlan_vid(match, value->be16);
         break;
 
     case MFF_DL_VLAN_PCP:
     case MFF_VLAN_PCP:
-        cls_rule_set_dl_vlan_pcp(rule, value->u8);
+        match_set_dl_vlan_pcp(match, value->u8);
         break;
 
     case MFF_IPV4_SRC:
-        cls_rule_set_nw_src(rule, value->be32);
+        match_set_nw_src(match, value->be32);
         break;
 
     case MFF_IPV4_DST:
-        cls_rule_set_nw_dst(rule, value->be32);
+        match_set_nw_dst(match, value->be32);
         break;
 
     case MFF_IPV6_SRC:
-        cls_rule_set_ipv6_src(rule, &value->ipv6);
+        match_set_ipv6_src(match, &value->ipv6);
         break;
 
     case MFF_IPV6_DST:
-        cls_rule_set_ipv6_dst(rule, &value->ipv6);
+        match_set_ipv6_dst(match, &value->ipv6);
         break;
 
     case MFF_IPV6_LABEL:
-        cls_rule_set_ipv6_label(rule, value->be32);
+        match_set_ipv6_label(match, value->be32);
         break;
 
     case MFF_IP_PROTO:
-        cls_rule_set_nw_proto(rule, value->u8);
+        match_set_nw_proto(match, value->u8);
         break;
 
     case MFF_IP_DSCP:
-        cls_rule_set_nw_dscp(rule, value->u8);
+        match_set_nw_dscp(match, value->u8);
         break;
 
     case MFF_IP_ECN:
-        cls_rule_set_nw_ecn(rule, value->u8);
+        match_set_nw_ecn(match, value->u8);
         break;
 
     case MFF_IP_TTL:
-        cls_rule_set_nw_ttl(rule, value->u8);
+        match_set_nw_ttl(match, value->u8);
         break;
 
     case MFF_IP_FRAG:
-        cls_rule_set_nw_frag(rule, value->u8);
+        match_set_nw_frag(match, value->u8);
         break;
 
     case MFF_ARP_OP:
-        cls_rule_set_nw_proto(rule, ntohs(value->be16));
+        match_set_nw_proto(match, ntohs(value->be16));
         break;
 
     case MFF_ARP_SPA:
-        cls_rule_set_nw_src(rule, value->be32);
+        match_set_nw_src(match, value->be32);
         break;
 
     case MFF_ARP_TPA:
-        cls_rule_set_nw_dst(rule, value->be32);
+        match_set_nw_dst(match, value->be32);
         break;
 
     case MFF_ARP_SHA:
     case MFF_ND_SLL:
-        cls_rule_set_arp_sha(rule, value->mac);
+        match_set_arp_sha(match, value->mac);
         break;
 
     case MFF_ARP_THA:
     case MFF_ND_TLL:
-        cls_rule_set_arp_tha(rule, value->mac);
+        match_set_arp_tha(match, value->mac);
         break;
 
     case MFF_TCP_SRC:
     case MFF_UDP_SRC:
-        cls_rule_set_tp_src(rule, value->be16);
+        match_set_tp_src(match, value->be16);
         break;
 
     case MFF_TCP_DST:
     case MFF_UDP_DST:
-        cls_rule_set_tp_dst(rule, value->be16);
+        match_set_tp_dst(match, value->be16);
         break;
 
     case MFF_ICMPV4_TYPE:
     case MFF_ICMPV6_TYPE:
-        cls_rule_set_icmp_type(rule, value->u8);
+        match_set_icmp_type(match, value->u8);
         break;
 
     case MFF_ICMPV4_CODE:
     case MFF_ICMPV6_CODE:
-        cls_rule_set_icmp_code(rule, value->u8);
+        match_set_icmp_code(match, value->u8);
         break;
 
     case MFF_ND_TARGET:
-        cls_rule_set_nd_target(rule, &value->ipv6);
+        match_set_nd_target(match, &value->ipv6);
         break;
 
     case MFF_N_IDS:
@@ -1229,8 +1229,8 @@ mf_set_value(const struct mf_field *mf,
     }
 }
 
-/* Makes 'rule' match field 'mf' exactly, with the value matched taken from
- * 'value'.  The caller is responsible for ensuring that 'rule' meets 'mf''s
+/* Makes 'match' match field 'mf' exactly, with the value matched taken from
+ * 'value'.  The caller is responsible for ensuring that 'match' meets 'mf''s
  * prerequisites. */
 void
 mf_set_flow_value(const struct mf_field *mf,
@@ -1387,144 +1387,145 @@ mf_is_zero(const struct mf_field *mf, const struct flow *flow)
     return is_all_zeros((const uint8_t *) &value, mf->n_bytes);
 }
 
-/* Makes 'rule' wildcard field 'mf'.
+/* Makes 'match' wildcard field 'mf'.
  *
- * The caller is responsible for ensuring that 'rule' meets 'mf''s
+ * The caller is responsible for ensuring that 'match' meets 'mf''s
  * prerequisites. */
 void
-mf_set_wild(const struct mf_field *mf, struct cls_rule *rule)
+mf_set_wild(const struct mf_field *mf, struct match *match)
 {
     switch (mf->id) {
     case MFF_TUN_ID:
-        cls_rule_set_tun_id_masked(rule, htonll(0), htonll(0));
+        match_set_tun_id_masked(match, htonll(0), htonll(0));
         break;
     case MFF_METADATA:
-        cls_rule_set_metadata_masked(rule, htonll(0), htonll(0));
+        match_set_metadata_masked(match, htonll(0), htonll(0));
 
     case MFF_IN_PORT:
-        rule->flow.in_port = 0;
-        rule->wc.masks.in_port = 0;
+        match->flow.in_port = 0;
+        match->wc.masks.in_port = 0;
         break;
 
     CASE_MFF_REGS:
-        cls_rule_set_reg_masked(rule, mf->id - MFF_REG0, 0, 0);
+        match_set_reg_masked(match, mf->id - MFF_REG0, 0, 0);
         break;
 
     case MFF_ETH_SRC:
-        memset(rule->flow.dl_src, 0, ETH_ADDR_LEN);
-        memset(rule->wc.masks.dl_src, 0, ETH_ADDR_LEN);
+        memset(match->flow.dl_src, 0, ETH_ADDR_LEN);
+        memset(match->wc.masks.dl_src, 0, ETH_ADDR_LEN);
         break;
 
     case MFF_ETH_DST:
-        memset(rule->flow.dl_dst, 0, ETH_ADDR_LEN);
-        memset(rule->wc.masks.dl_dst, 0, ETH_ADDR_LEN);
+        memset(match->flow.dl_dst, 0, ETH_ADDR_LEN);
+        memset(match->wc.masks.dl_dst, 0, ETH_ADDR_LEN);
         break;
 
     case MFF_ETH_TYPE:
-        rule->flow.dl_type = htons(0);
-        rule->wc.masks.dl_type = htons(0);
+        match->flow.dl_type = htons(0);
+        match->wc.masks.dl_type = htons(0);
         break;
 
     case MFF_VLAN_TCI:
-        cls_rule_set_dl_tci_masked(rule, htons(0), htons(0));
+        match_set_dl_tci_masked(match, htons(0), htons(0));
         break;
 
     case MFF_DL_VLAN:
     case MFF_VLAN_VID:
-        cls_rule_set_any_vid(rule);
+        match_set_any_vid(match);
         break;
 
     case MFF_DL_VLAN_PCP:
     case MFF_VLAN_PCP:
-        cls_rule_set_any_pcp(rule);
+        match_set_any_pcp(match);
         break;
 
     case MFF_IPV4_SRC:
     case MFF_ARP_SPA:
-        cls_rule_set_nw_src_masked(rule, htonl(0), htonl(0));
+        match_set_nw_src_masked(match, htonl(0), htonl(0));
         break;
 
     case MFF_IPV4_DST:
     case MFF_ARP_TPA:
-        cls_rule_set_nw_dst_masked(rule, htonl(0), htonl(0));
+        match_set_nw_dst_masked(match, htonl(0), htonl(0));
         break;
 
     case MFF_IPV6_SRC:
-        memset(&rule->wc.masks.ipv6_src, 0, sizeof rule->wc.masks.ipv6_src);
-        memset(&rule->flow.ipv6_src, 0, sizeof rule->flow.ipv6_src);
+        memset(&match->wc.masks.ipv6_src, 0, sizeof match->wc.masks.ipv6_src);
+        memset(&match->flow.ipv6_src, 0, sizeof match->flow.ipv6_src);
         break;
 
     case MFF_IPV6_DST:
-        memset(&rule->wc.masks.ipv6_dst, 0, sizeof rule->wc.masks.ipv6_dst);
-        memset(&rule->flow.ipv6_dst, 0, sizeof rule->flow.ipv6_dst);
+        memset(&match->wc.masks.ipv6_dst, 0, sizeof match->wc.masks.ipv6_dst);
+        memset(&match->flow.ipv6_dst, 0, sizeof match->flow.ipv6_dst);
         break;
 
     case MFF_IPV6_LABEL:
-        rule->wc.masks.ipv6_label = htonl(0);
-        rule->flow.ipv6_label = htonl(0);
+        match->wc.masks.ipv6_label = htonl(0);
+        match->flow.ipv6_label = htonl(0);
         break;
 
     case MFF_IP_PROTO:
-        rule->wc.masks.nw_proto = 0;
-        rule->flow.nw_proto = 0;
+        match->wc.masks.nw_proto = 0;
+        match->flow.nw_proto = 0;
         break;
 
     case MFF_IP_DSCP:
-        rule->wc.masks.nw_tos &= ~IP_DSCP_MASK;
-        rule->flow.nw_tos &= ~IP_DSCP_MASK;
+        match->wc.masks.nw_tos &= ~IP_DSCP_MASK;
+        match->flow.nw_tos &= ~IP_DSCP_MASK;
         break;
 
     case MFF_IP_ECN:
-        rule->wc.masks.nw_tos &= ~IP_ECN_MASK;
-        rule->flow.nw_tos &= ~IP_ECN_MASK;
+        match->wc.masks.nw_tos &= ~IP_ECN_MASK;
+        match->flow.nw_tos &= ~IP_ECN_MASK;
         break;
 
     case MFF_IP_TTL:
-        rule->wc.masks.nw_ttl = 0;
-        rule->flow.nw_ttl = 0;
+        match->wc.masks.nw_ttl = 0;
+        match->flow.nw_ttl = 0;
         break;
 
     case MFF_IP_FRAG:
-        rule->wc.masks.nw_frag |= FLOW_NW_FRAG_MASK;
-        rule->flow.nw_frag &= ~FLOW_NW_FRAG_MASK;
+        match->wc.masks.nw_frag |= FLOW_NW_FRAG_MASK;
+        match->flow.nw_frag &= ~FLOW_NW_FRAG_MASK;
         break;
 
     case MFF_ARP_OP:
-        rule->wc.masks.nw_proto = 0;
-        rule->flow.nw_proto = 0;
+        match->wc.masks.nw_proto = 0;
+        match->flow.nw_proto = 0;
         break;
 
     case MFF_ARP_SHA:
     case MFF_ND_SLL:
-        memset(rule->flow.arp_sha, 0, ETH_ADDR_LEN);
-        memset(rule->wc.masks.arp_sha, 0, ETH_ADDR_LEN);
+        memset(match->flow.arp_sha, 0, ETH_ADDR_LEN);
+        memset(match->wc.masks.arp_sha, 0, ETH_ADDR_LEN);
         break;
 
     case MFF_ARP_THA:
     case MFF_ND_TLL:
-        memset(rule->flow.arp_tha, 0, ETH_ADDR_LEN);
-        memset(rule->wc.masks.arp_tha, 0, ETH_ADDR_LEN);
+        memset(match->flow.arp_tha, 0, ETH_ADDR_LEN);
+        memset(match->wc.masks.arp_tha, 0, ETH_ADDR_LEN);
         break;
 
     case MFF_TCP_SRC:
     case MFF_UDP_SRC:
     case MFF_ICMPV4_TYPE:
     case MFF_ICMPV6_TYPE:
-        rule->wc.masks.tp_src = htons(0);
-        rule->flow.tp_src = htons(0);
+        match->wc.masks.tp_src = htons(0);
+        match->flow.tp_src = htons(0);
         break;
 
     case MFF_TCP_DST:
     case MFF_UDP_DST:
     case MFF_ICMPV4_CODE:
     case MFF_ICMPV6_CODE:
-        rule->wc.masks.tp_dst = htons(0);
-        rule->flow.tp_dst = htons(0);
+        match->wc.masks.tp_dst = htons(0);
+        match->flow.tp_dst = htons(0);
         break;
 
     case MFF_ND_TARGET:
-        memset(&rule->wc.masks.nd_target, 0, sizeof rule->wc.masks.nd_target);
-        memset(&rule->flow.nd_target, 0, sizeof rule->flow.nd_target);
+        memset(&match->wc.masks.nd_target, 0,
+               sizeof match->wc.masks.nd_target);
+        memset(&match->flow.nd_target, 0, sizeof match->flow.nd_target);
         break;
 
     case MFF_N_IDS:
@@ -1533,27 +1534,27 @@ mf_set_wild(const struct mf_field *mf, struct cls_rule *rule)
     }
 }
 
-/* Makes 'rule' match field 'mf' with the specified 'value' and 'mask'.
+/* Makes 'match' match field 'mf' with the specified 'value' and 'mask'.
  * 'value' specifies a value to match and 'mask' specifies a wildcard pattern,
  * with a 1-bit indicating that the corresponding value bit must match and a
  * 0-bit indicating a don't-care.
  *
  * If 'mask' is NULL or points to all-1-bits, then this call is equivalent to
- * mf_set_value(mf, value, rule).  If 'mask' points to all-0-bits, then this
- * call is equivalent to mf_set_wild(mf, rule).
+ * mf_set_value(mf, value, match).  If 'mask' points to all-0-bits, then this
+ * call is equivalent to mf_set_wild(mf, match).
  *
  * 'mask' must be a valid mask for 'mf' (see mf_is_mask_valid()).  The caller
- * is responsible for ensuring that 'rule' meets 'mf''s prerequisites. */
+ * is responsible for ensuring that 'match' meets 'mf''s prerequisites. */
 void
 mf_set(const struct mf_field *mf,
        const union mf_value *value, const union mf_value *mask,
-       struct cls_rule *rule)
+       struct match *match)
 {
     if (!mask || is_all_ones((const uint8_t *) mask, mf->n_bytes)) {
-        mf_set_value(mf, value, rule);
+        mf_set_value(mf, value, match);
         return;
     } else if (is_all_zeros((const uint8_t *) mask, mf->n_bytes)) {
-        mf_set_wild(mf, rule);
+        mf_set_wild(mf, match);
         return;
     }
 
@@ -1575,91 +1576,91 @@ mf_set(const struct mf_field *mf,
         NOT_REACHED();
 
     case MFF_TUN_ID:
-        cls_rule_set_tun_id_masked(rule, value->be64, mask->be64);
+        match_set_tun_id_masked(match, value->be64, mask->be64);
         break;
     case MFF_METADATA:
-        cls_rule_set_metadata_masked(rule, value->be64, mask->be64);
+        match_set_metadata_masked(match, value->be64, mask->be64);
         break;
 
     CASE_MFF_REGS:
-        cls_rule_set_reg_masked(rule, mf->id - MFF_REG0,
-                                ntohl(value->be32), ntohl(mask->be32));
+        match_set_reg_masked(match, mf->id - MFF_REG0,
+                             ntohl(value->be32), ntohl(mask->be32));
         break;
 
     case MFF_ETH_DST:
-        cls_rule_set_dl_dst_masked(rule, value->mac, mask->mac);
+        match_set_dl_dst_masked(match, value->mac, mask->mac);
         break;
 
     case MFF_ETH_SRC:
-        cls_rule_set_dl_src_masked(rule, value->mac, mask->mac);
+        match_set_dl_src_masked(match, value->mac, mask->mac);
         break;
 
     case MFF_ARP_SHA:
     case MFF_ND_SLL:
-        cls_rule_set_arp_sha_masked(rule, value->mac, mask->mac);
+        match_set_arp_sha_masked(match, value->mac, mask->mac);
         break;
 
     case MFF_ARP_THA:
     case MFF_ND_TLL:
-        cls_rule_set_arp_tha_masked(rule, value->mac, mask->mac);
+        match_set_arp_tha_masked(match, value->mac, mask->mac);
         break;
 
     case MFF_VLAN_TCI:
-        cls_rule_set_dl_tci_masked(rule, value->be16, mask->be16);
+        match_set_dl_tci_masked(match, value->be16, mask->be16);
         break;
 
     case MFF_VLAN_VID:
-        cls_rule_set_vlan_vid_masked(rule, value->be16, mask->be16);
+        match_set_vlan_vid_masked(match, value->be16, mask->be16);
         break;
 
     case MFF_IPV4_SRC:
-        cls_rule_set_nw_src_masked(rule, value->be32, mask->be32);
+        match_set_nw_src_masked(match, value->be32, mask->be32);
         break;
 
     case MFF_IPV4_DST:
-        cls_rule_set_nw_dst_masked(rule, value->be32, mask->be32);
+        match_set_nw_dst_masked(match, value->be32, mask->be32);
         break;
 
     case MFF_IPV6_SRC:
-        cls_rule_set_ipv6_src_masked(rule, &value->ipv6, &mask->ipv6);
+        match_set_ipv6_src_masked(match, &value->ipv6, &mask->ipv6);
         break;
 
     case MFF_IPV6_DST:
-        cls_rule_set_ipv6_dst_masked(rule, &value->ipv6, &mask->ipv6);
+        match_set_ipv6_dst_masked(match, &value->ipv6, &mask->ipv6);
         break;
 
     case MFF_IPV6_LABEL:
         if ((mask->be32 & htonl(IPV6_LABEL_MASK)) == htonl(IPV6_LABEL_MASK)) {
-            mf_set_value(mf, value, rule);
+            mf_set_value(mf, value, match);
         } else {
-            cls_rule_set_ipv6_label_masked(rule, value->be32, mask->be32);
+            match_set_ipv6_label_masked(match, value->be32, mask->be32);
         }
         break;
 
     case MFF_ND_TARGET:
-        cls_rule_set_nd_target_masked(rule, &value->ipv6, &mask->ipv6);
+        match_set_nd_target_masked(match, &value->ipv6, &mask->ipv6);
         break;
 
     case MFF_IP_FRAG:
-        cls_rule_set_nw_frag_masked(rule, value->u8, mask->u8);
+        match_set_nw_frag_masked(match, value->u8, mask->u8);
         break;
 
     case MFF_ARP_SPA:
-        cls_rule_set_nw_src_masked(rule, value->be32, mask->be32);
+        match_set_nw_src_masked(match, value->be32, mask->be32);
         break;
 
     case MFF_ARP_TPA:
-        cls_rule_set_nw_dst_masked(rule, value->be32, mask->be32);
+        match_set_nw_dst_masked(match, value->be32, mask->be32);
         break;
 
     case MFF_TCP_SRC:
     case MFF_UDP_SRC:
-        cls_rule_set_tp_src_masked(rule, value->be16, mask->be16);
+        match_set_tp_src_masked(match, value->be16, mask->be16);
         break;
 
     case MFF_TCP_DST:
     case MFF_UDP_DST:
-        cls_rule_set_tp_dst_masked(rule, value->be16, mask->be16);
+        match_set_tp_dst_masked(match, value->be16, mask->be16);
         break;
 
     case MFF_N_IDS:
@@ -1717,14 +1718,14 @@ mf_check_dst(const struct mf_subfield *sf, const struct flow *flow)
     return error;
 }
 
-/* Copies the value and wildcard bit pattern for 'mf' from 'rule' into the
+/* Copies the value and wildcard bit pattern for 'mf' from 'match' into the
  * 'value' and 'mask', respectively. */
 void
-mf_get(const struct mf_field *mf, const struct cls_rule *rule,
+mf_get(const struct mf_field *mf, const struct match *match,
        union mf_value *value, union mf_value *mask)
 {
-    mf_get_value(mf, &rule->flow, value);
-    mf_get_mask(mf, &rule->wc, mask);
+    mf_get_value(mf, &match->flow, value);
+    mf_get_mask(mf, &match->wc, mask);
 }
 
 /* Assigns a random value for field 'mf' to 'value'. */
@@ -2152,20 +2153,20 @@ mf_format(const struct mf_field *mf,
     }
 }
 
-/* Makes subfield 'sf' within 'rule' exactly match the 'sf->n_bits'
+/* Makes subfield 'sf' within 'match' exactly match the 'sf->n_bits'
  * least-significant bits in 'x'.
  */
 void
 mf_write_subfield(const struct mf_subfield *sf, const union mf_subvalue *x,
-                  struct cls_rule *rule)
+                  struct match *match)
 {
     const struct mf_field *field = sf->field;
     union mf_value value, mask;
 
-    mf_get(field, rule, &value, &mask);
+    mf_get(field, match, &value, &mask);
     bitwise_copy(x, sizeof *x, 0, &value, field->n_bytes, sf->ofs, sf->n_bits);
     bitwise_one (                 &mask,  field->n_bytes, sf->ofs, sf->n_bits);
-    mf_set(field, &value, &mask, rule);
+    mf_set(field, &value, &mask, match);
 }
 
 /* Initializes 'x' to the value of 'sf' within 'flow'.  'sf' must be valid for

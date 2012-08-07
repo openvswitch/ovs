@@ -29,6 +29,7 @@
 #include "flow.h"
 #include "hmap.h"
 #include "list.h"
+#include "match.h"
 #include "openflow/nicira-ext.h"
 #include "openflow/openflow.h"
 
@@ -59,107 +60,24 @@ cls_table_is_catchall(const struct cls_table *table)
     return table->is_catchall;
 }
 
-/* A flow classification rule.
- *
- * Use one of the cls_rule_*() functions to initialize a cls_rule.
- *
- * The cls_rule_*() functions below maintain the following important
- * invariant that the classifier depends on:
- *
- *   - If a bit or a field is wildcarded in 'wc', then the corresponding bit or
- *     field in 'flow' is set to all-0-bits.  (The
- *     cls_rule_zero_wildcarded_fields() function can be used to restore this
- *     invariant after adding wildcards.)
- */
+/* A rule in a "struct classifier" */
 struct cls_rule {
     struct hmap_node hmap_node; /* Within struct cls_table 'rules'. */
     struct list list;           /* List of identical, lower-priority rules. */
-    struct flow flow;           /* All field values. */
-    struct flow_wildcards wc;   /* Wildcards for fields. */
+    struct match match;         /* Matching rule. */
     unsigned int priority;      /* Larger numbers are higher priorities. */
 };
 
-void cls_rule_init(const struct flow *, const struct flow_wildcards *,
-                   unsigned int priority, struct cls_rule *);
-void cls_rule_init_exact(const struct flow *, unsigned int priority,
-                         struct cls_rule *);
-void cls_rule_init_catchall(struct cls_rule *, unsigned int priority);
-
-void cls_rule_zero_wildcarded_fields(struct cls_rule *);
-
-bool cls_rule_is_loose_match(const struct cls_rule *rule,
-                             const struct cls_rule *criteria);
-
-void cls_rule_set_reg(struct cls_rule *, unsigned int reg_idx, uint32_t value);
-void cls_rule_set_reg_masked(struct cls_rule *, unsigned int reg_idx,
-                             uint32_t value, uint32_t mask);
-void cls_rule_set_metadata(struct cls_rule *, ovs_be64 metadata);
-void cls_rule_set_metadata_masked(struct cls_rule *, ovs_be64 metadata,
-                                  ovs_be64 mask);
-void cls_rule_set_tun_id(struct cls_rule *, ovs_be64 tun_id);
-void cls_rule_set_tun_id_masked(struct cls_rule *,
-                                ovs_be64 tun_id, ovs_be64 mask);
-void cls_rule_set_in_port(struct cls_rule *, uint16_t ofp_port);
-void cls_rule_set_dl_type(struct cls_rule *, ovs_be16);
-void cls_rule_set_dl_src(struct cls_rule *, const uint8_t[6]);
-void cls_rule_set_dl_src_masked(struct cls_rule *, const uint8_t dl_src[6],
-                                const uint8_t mask[6]);
-void cls_rule_set_dl_dst(struct cls_rule *, const uint8_t[6]);
-void cls_rule_set_dl_dst_masked(struct cls_rule *, const uint8_t dl_dst[6],
-                                const uint8_t mask[6]);
-void cls_rule_set_dl_tci(struct cls_rule *, ovs_be16 tci);
-void cls_rule_set_dl_tci_masked(struct cls_rule *,
-                                ovs_be16 tci, ovs_be16 mask);
-void cls_rule_set_any_vid(struct cls_rule *);
-void cls_rule_set_dl_vlan(struct cls_rule *, ovs_be16);
-void cls_rule_set_vlan_vid(struct cls_rule *, ovs_be16);
-void cls_rule_set_vlan_vid_masked(struct cls_rule *,
-                                  ovs_be16 vid, ovs_be16 mask);
-void cls_rule_set_any_pcp(struct cls_rule *);
-void cls_rule_set_dl_vlan_pcp(struct cls_rule *, uint8_t);
-void cls_rule_set_tp_src(struct cls_rule *, ovs_be16);
-void cls_rule_set_tp_src_masked(struct cls_rule *,
-                                ovs_be16 port, ovs_be16 mask);
-void cls_rule_set_tp_dst(struct cls_rule *, ovs_be16);
-void cls_rule_set_tp_dst_masked(struct cls_rule *,
-                                ovs_be16 port, ovs_be16 mask);
-void cls_rule_set_nw_proto(struct cls_rule *, uint8_t);
-void cls_rule_set_nw_src(struct cls_rule *, ovs_be32);
-void cls_rule_set_nw_src_masked(struct cls_rule *, ovs_be32 ip, ovs_be32 mask);
-void cls_rule_set_nw_dst(struct cls_rule *, ovs_be32);
-void cls_rule_set_nw_dst_masked(struct cls_rule *, ovs_be32 ip, ovs_be32 mask);
-void cls_rule_set_nw_dscp(struct cls_rule *, uint8_t);
-void cls_rule_set_nw_ecn(struct cls_rule *, uint8_t);
-void cls_rule_set_nw_ttl(struct cls_rule *, uint8_t);
-void cls_rule_set_nw_frag(struct cls_rule *, uint8_t nw_frag);
-void cls_rule_set_nw_frag_masked(struct cls_rule *,
-                                 uint8_t nw_frag, uint8_t mask);
-void cls_rule_set_icmp_type(struct cls_rule *, uint8_t);
-void cls_rule_set_icmp_code(struct cls_rule *, uint8_t);
-void cls_rule_set_arp_sha(struct cls_rule *, const uint8_t[6]);
-void cls_rule_set_arp_sha_masked(struct cls_rule *, const uint8_t[6],
-                                 const uint8_t [6]);
-void cls_rule_set_arp_tha(struct cls_rule *, const uint8_t[6]);
-void cls_rule_set_arp_tha_masked(struct cls_rule *, const uint8_t[6],
-                                 const uint8_t [6]);
-void cls_rule_set_ipv6_src(struct cls_rule *, const struct in6_addr *);
-void cls_rule_set_ipv6_src_masked(struct cls_rule *, const struct in6_addr *,
-                                  const struct in6_addr *);
-void cls_rule_set_ipv6_dst(struct cls_rule *, const struct in6_addr *);
-void cls_rule_set_ipv6_dst_masked(struct cls_rule *, const struct in6_addr *,
-                                  const struct in6_addr *);
-void cls_rule_set_ipv6_label(struct cls_rule *, ovs_be32);
-void cls_rule_set_ipv6_label_masked(struct cls_rule *, ovs_be32, ovs_be32);
-void cls_rule_set_nd_target(struct cls_rule *, const struct in6_addr *);
-void cls_rule_set_nd_target_masked(struct cls_rule *, const struct in6_addr *,
-                                   const struct in6_addr *);
+void cls_rule_init(struct cls_rule *,
+                   const struct match *, unsigned int priority);
 
 bool cls_rule_equal(const struct cls_rule *, const struct cls_rule *);
 uint32_t cls_rule_hash(const struct cls_rule *, uint32_t basis);
 
 void cls_rule_format(const struct cls_rule *, struct ds *);
-char *cls_rule_to_string(const struct cls_rule *);
-void cls_rule_print(const struct cls_rule *);
+
+bool cls_rule_is_loose_match(const struct cls_rule *rule,
+                             const struct match *criteria);
 
 void classifier_init(struct classifier *);
 void classifier_destroy(struct classifier *);
@@ -177,6 +95,9 @@ typedef void cls_cb_func(struct cls_rule *, void *aux);
 
 struct cls_rule *classifier_find_rule_exactly(const struct classifier *,
                                               const struct cls_rule *);
+struct cls_rule *classifier_find_match_exactly(const struct classifier *,
+                                               const struct match *,
+                                               unsigned int priority);
 
 /* Iteration. */
 

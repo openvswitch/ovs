@@ -29,6 +29,7 @@
 #include "shash.h"
 #include "timeval.h"
 
+struct match;
 struct ofpact;
 struct ofputil_flow_mod;
 struct simap;
@@ -701,24 +702,22 @@ struct ofproto_class {
 /* ## OpenFlow Rule Functions ## */
 /* ## ----------------------- ## */
 
-
-
-    /* Chooses an appropriate table for 'cls_rule' within 'ofproto'.  On
+    /* Chooses an appropriate table for 'match' within 'ofproto'.  On
      * success, stores the table ID into '*table_idp' and returns 0.  On
      * failure, returns an OpenFlow error code.
      *
-     * The choice of table should be a function of 'cls_rule' and 'ofproto''s
+     * The choice of table should be a function of 'match' and 'ofproto''s
      * datapath capabilities.  It should not depend on the flows already in
      * 'ofproto''s flow tables.  Failure implies that an OpenFlow rule with
-     * 'cls_rule' as its matching condition can never be inserted into
-     * 'ofproto', even starting from an empty flow table.
+     * 'match' as its matching condition can never be inserted into 'ofproto',
+     * even starting from an empty flow table.
      *
      * If multiple tables are candidates for inserting the flow, the function
      * should choose one arbitrarily (but deterministically).
      *
      * If this function is NULL then table 0 is always chosen. */
     enum ofperr (*rule_choose_table)(const struct ofproto *ofproto,
-                                     const struct cls_rule *cls_rule,
+                                     const struct match *match,
                                      uint8_t *table_idp);
 
     /* Life-cycle functions for a "struct rule" (see "Life Cycle" above).
@@ -1219,9 +1218,11 @@ enum { OFPROTO_POSTPONE = 1 << 16 };
 BUILD_ASSERT_DECL(OFPROTO_POSTPONE < OFPERR_OFS);
 
 int ofproto_flow_mod(struct ofproto *, const struct ofputil_flow_mod *);
-void ofproto_add_flow(struct ofproto *, const struct cls_rule *,
+void ofproto_add_flow(struct ofproto *, const struct match *,
+                      unsigned int priority,
                       const struct ofpact *ofpacts, size_t ofpacts_len);
-bool ofproto_delete_flow(struct ofproto *, const struct cls_rule *);
+bool ofproto_delete_flow(struct ofproto *,
+                         const struct match *, unsigned int priority);
 void ofproto_flush_flows(struct ofproto *);
 
 #endif /* ofproto/ofproto-provider.h */

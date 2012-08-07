@@ -81,7 +81,9 @@ enum in_band_op {
 
 /* A rule to add to or delete from ofproto's flow table.  */
 struct in_band_rule {
-    struct cls_rule cls_rule;
+    struct hmap_node hmap_node; /* In struct in_band's "rules" hmap. */
+    struct match match;
+    unsigned int priority;
     enum in_band_op op;
 };
 
@@ -279,22 +281,23 @@ in_band_rule_check(const struct flow *flow,
 }
 
 static void
-add_rule(struct in_band *ib, const struct cls_rule *cls_rule)
+add_rule(struct in_band *ib, const struct match *match, unsigned int priority)
 {
-    uint32_t hash = cls_rule_hash(cls_rule, 0);
+    uint32_t hash = match_hash(match, 0);
     struct in_band_rule *rule;
 
-    HMAP_FOR_EACH_WITH_HASH (rule, cls_rule.hmap_node, hash, &ib->rules) {
-        if (cls_rule_equal(&rule->cls_rule, cls_rule)) {
+    HMAP_FOR_EACH_WITH_HASH (rule, hmap_node, hash, &ib->rules) {
+        if (match_equal(&rule->match, match)) {
             rule->op = ADD;
             return;
         }
     }
 
     rule = xmalloc(sizeof *rule);
-    rule->cls_rule = *cls_rule;
+    rule->match = *match;
+    rule->priority = priority;
     rule->op = ADD;
-    hmap_insert(&ib->rules, &rule->cls_rule.hmap_node, hash);
+    hmap_insert(&ib->rules, &rule->hmap_node, hash);
 }
 
 static void
@@ -302,38 +305,38 @@ update_rules(struct in_band *ib)
 {
     struct in_band_rule *ib_rule;
     struct in_band_remote *r;
-    struct cls_rule rule;
+    struct match match;
 
     /* Mark all the existing rules for deletion.  (Afterward we will re-add any
      * rules that are still valid.) */
-    HMAP_FOR_EACH (ib_rule, cls_rule.hmap_node, &ib->rules) {
+    HMAP_FOR_EACH (ib_rule, hmap_node, &ib->rules) {
         ib_rule->op = DELETE;
     }
 
     if (ib->n_remotes && !eth_addr_is_zero(ib->local_mac)) {
         /* (a) Allow DHCP requests sent from the local port. */
-        cls_rule_init_catchall(&rule, IBR_FROM_LOCAL_DHCP);
-        cls_rule_set_in_port(&rule, OFPP_LOCAL);
-        cls_rule_set_dl_type(&rule, htons(ETH_TYPE_IP));
-        cls_rule_set_dl_src(&rule, ib->local_mac);
-        cls_rule_set_nw_proto(&rule, IPPROTO_UDP);
-        cls_rule_set_tp_src(&rule, htons(DHCP_CLIENT_PORT));
-        cls_rule_set_tp_dst(&rule, htons(DHCP_SERVER_PORT));
-        add_rule(ib, &rule);
+        match_init_catchall(&match);
+        match_set_in_port(&match, OFPP_LOCAL);
+        match_set_dl_type(&match, htons(ETH_TYPE_IP));
+        match_set_dl_src(&match, ib->local_mac);
+        match_set_nw_proto(&match, IPPROTO_UDP);
+        match_set_tp_src(&match, htons(DHCP_CLIENT_PORT));
+        match_set_tp_dst(&match, htons(DHCP_SERVER_PORT));
+        add_rule(ib, &match, IBR_FROM_LOCAL_DHCP);
 
         /* (b) Allow ARP replies to the local port's MAC address. */
-        cls_rule_init_catchall(&rule, IBR_TO_LOCAL_ARP);
-        cls_rule_set_dl_type(&rule, htons(ETH_TYPE_ARP));
-        cls_rule_set_dl_dst(&rule, ib->local_mac);
-        cls_rule_set_nw_proto(&rule, ARP_OP_REPLY);
-        add_rule(ib, &rule);
+        match_init_catchall(&match);
+        match_set_dl_type(&match, htons(ETH_TYPE_ARP));
+        match_set_dl_dst(&match, ib->local_mac);
+        match_set_nw_proto(&match, ARP_OP_REPLY);
+        add_rule(ib, &match, IBR_TO_LOCAL_ARP);
 
         /* (c) Allow ARP requests from the local port's MAC address.  */
-        cls_rule_init_catchall(&rule, IBR_FROM_LOCAL_ARP);
-        cls_rule_set_dl_type(&rule, htons(ETH_TYPE_ARP));
-        cls_rule_set_dl_src(&rule, ib->local_mac);
-        cls_rule_set_nw_proto(&rule, ARP_OP_REQUEST);
-        add_rule(ib, &rule);
+        match_init_catchall(&match);
+        match_set_dl_type(&match, htons(ETH_TYPE_ARP));
+        match_set_dl_src(&match, ib->local_mac);
+        match_set_nw_proto(&match, ARP_OP_REQUEST);
+        add_rule(ib, &match, IBR_FROM_LOCAL_ARP);
     }
 
     for (r = ib->remotes; r < &ib->remotes[ib->n_remotes]; r++) {
@@ -344,18 +347,18 @@ update_rules(struct in_band *ib)
         }
 
         /* (d) Allow ARP replies to the next hop's MAC address. */
-        cls_rule_init_catchall(&rule, IBR_TO_NEXT_HOP_ARP);
-        cls_rule_set_dl_type(&rule, htons(ETH_TYPE_ARP));
-        cls_rule_set_dl_dst(&rule, remote_mac);
-        cls_rule_set_nw_proto(&rule, ARP_OP_REPLY);
-        add_rule(ib, &rule);
+        match_init_catchall(&match);
+        match_set_dl_type(&match, htons(ETH_TYPE_ARP));
+        match_set_dl_dst(&match, remote_mac);
+        match_set_nw_proto(&match, ARP_OP_REPLY);
+        add_rule(ib, &match, IBR_TO_NEXT_HOP_ARP);
 
         /* (e) Allow ARP requests from the next hop's MAC address. */
-        cls_rule_init_catchall(&rule, IBR_FROM_NEXT_HOP_ARP);
-        cls_rule_set_dl_type(&rule, htons(ETH_TYPE_ARP));
-        cls_rule_set_dl_src(&rule, remote_mac);
-        cls_rule_set_nw_proto(&rule, ARP_OP_REQUEST);
-        add_rule(ib, &rule);
+        match_init_catchall(&match);
+        match_set_dl_type(&match, htons(ETH_TYPE_ARP));
+        match_set_dl_src(&match, remote_mac);
+        match_set_nw_proto(&match, ARP_OP_REQUEST);
+        add_rule(ib, &match, IBR_FROM_NEXT_HOP_ARP);
     }
 
     for (r = ib->remotes; r < &ib->remotes[ib->n_remotes]; r++) {
@@ -363,35 +366,35 @@ update_rules(struct in_band *ib)
 
         /* (f) Allow ARP replies containing the remote's IP address as a
          * target. */
-        cls_rule_init_catchall(&rule, IBR_TO_REMOTE_ARP);
-        cls_rule_set_dl_type(&rule, htons(ETH_TYPE_ARP));
-        cls_rule_set_nw_proto(&rule, ARP_OP_REPLY);
-        cls_rule_set_nw_dst(&rule, a->sin_addr.s_addr);
-        add_rule(ib, &rule);
+        match_init_catchall(&match);
+        match_set_dl_type(&match, htons(ETH_TYPE_ARP));
+        match_set_nw_proto(&match, ARP_OP_REPLY);
+        match_set_nw_dst(&match, a->sin_addr.s_addr);
+        add_rule(ib, &match, IBR_TO_REMOTE_ARP);
 
         /* (g) Allow ARP requests containing the remote's IP address as a
          * source. */
-        cls_rule_init_catchall(&rule, IBR_FROM_REMOTE_ARP);
-        cls_rule_set_dl_type(&rule, htons(ETH_TYPE_ARP));
-        cls_rule_set_nw_proto(&rule, ARP_OP_REQUEST);
-        cls_rule_set_nw_src(&rule, a->sin_addr.s_addr);
-        add_rule(ib, &rule);
+        match_init_catchall(&match);
+        match_set_dl_type(&match, htons(ETH_TYPE_ARP));
+        match_set_nw_proto(&match, ARP_OP_REQUEST);
+        match_set_nw_src(&match, a->sin_addr.s_addr);
+        add_rule(ib, &match, IBR_FROM_REMOTE_ARP);
 
         /* (h) Allow TCP traffic to the remote's IP and port. */
-        cls_rule_init_catchall(&rule, IBR_TO_REMOTE_TCP);
-        cls_rule_set_dl_type(&rule, htons(ETH_TYPE_IP));
-        cls_rule_set_nw_proto(&rule, IPPROTO_TCP);
-        cls_rule_set_nw_dst(&rule, a->sin_addr.s_addr);
-        cls_rule_set_tp_dst(&rule, a->sin_port);
-        add_rule(ib, &rule);
+        match_init_catchall(&match);
+        match_set_dl_type(&match, htons(ETH_TYPE_IP));
+        match_set_nw_proto(&match, IPPROTO_TCP);
+        match_set_nw_dst(&match, a->sin_addr.s_addr);
+        match_set_tp_dst(&match, a->sin_port);
+        add_rule(ib, &match, IBR_TO_REMOTE_TCP);
 
         /* (i) Allow TCP traffic from the remote's IP and port. */
-        cls_rule_init_catchall(&rule, IBR_FROM_REMOTE_TCP);
-        cls_rule_set_dl_type(&rule, htons(ETH_TYPE_IP));
-        cls_rule_set_nw_proto(&rule, IPPROTO_TCP);
-        cls_rule_set_nw_src(&rule, a->sin_addr.s_addr);
-        cls_rule_set_tp_src(&rule, a->sin_port);
-        add_rule(ib, &rule);
+        match_init_catchall(&match);
+        match_set_dl_type(&match, htons(ETH_TYPE_IP));
+        match_set_nw_proto(&match, IPPROTO_TCP);
+        match_set_nw_src(&match, a->sin_addr.s_addr);
+        match_set_tp_src(&match, a->sin_port);
+        add_rule(ib, &match, IBR_FROM_REMOTE_TCP);
     }
 }
 
@@ -420,18 +423,19 @@ in_band_run(struct in_band *ib)
 
     update_rules(ib);
 
-    HMAP_FOR_EACH_SAFE (rule, next, cls_rule.hmap_node, &ib->rules) {
+    HMAP_FOR_EACH_SAFE (rule, next, hmap_node, &ib->rules) {
         switch (rule->op) {
         case ADD:
-            ofproto_add_flow(ib->ofproto, &rule->cls_rule,
+            ofproto_add_flow(ib->ofproto, &rule->match, rule->priority,
                              ofpacts.data, ofpacts.size);
             break;
 
         case DELETE:
-            if (ofproto_delete_flow(ib->ofproto, &rule->cls_rule)) {
+            if (ofproto_delete_flow(ib->ofproto,
+                                    &rule->match, rule->priority)) {
                 /* ofproto doesn't have the rule anymore so there's no reason
                  * for us to track it any longer. */
-                hmap_remove(&ib->rules, &rule->cls_rule.hmap_node);
+                hmap_remove(&ib->rules, &rule->hmap_node);
                 free(rule);
             }
             break;
@@ -486,8 +490,8 @@ in_band_destroy(struct in_band *ib)
     if (ib) {
         struct in_band_rule *rule, *next;
 
-        HMAP_FOR_EACH_SAFE (rule, next, cls_rule.hmap_node, &ib->rules) {
-            hmap_remove(&ib->rules, &rule->cls_rule.hmap_node);
+        HMAP_FOR_EACH_SAFE (rule, next, hmap_node, &ib->rules) {
+            hmap_remove(&ib->rules, &rule->hmap_node);
             free(rule);
         }
         hmap_destroy(&ib->rules);

@@ -1600,14 +1600,14 @@ connmgr_flushed(struct connmgr *mgr)
     if (!connmgr_has_controllers(mgr)
         && mgr->fail_mode == OFPROTO_FAIL_STANDALONE) {
         struct ofpbuf ofpacts;
-        struct cls_rule rule;
+        struct match match;
 
         ofpbuf_init(&ofpacts, OFPACT_OUTPUT_SIZE);
         ofpact_put_OUTPUT(&ofpacts)->port = OFPP_NORMAL;
         ofpact_pad(&ofpacts);
 
-        cls_rule_init_catchall(&rule, 0);
-        ofproto_add_flow(mgr->ofproto, &rule, ofpacts.data, ofpacts.size);
+        match_init_catchall(&match);
+        ofproto_add_flow(mgr->ofproto, &match, 0, ofpacts.data, ofpacts.size);
 
         ofpbuf_uninit(&ofpacts);
     }
@@ -1812,7 +1812,7 @@ ofmonitor_report(struct connmgr *mgr, struct rule *rule,
                 fu.hard_timeout = rule->hard_timeout;
                 fu.table_id = rule->table_id;
                 fu.cookie = rule->flow_cookie;
-                fu.match = &rule->cr;
+                fu.match = &rule->cr.match;
                 if (flags & NXFMF_ACTIONS) {
                     fu.ofpacts = rule->ofpacts;
                     fu.ofpacts_len = rule->ofpacts_len;

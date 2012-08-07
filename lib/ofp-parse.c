@@ -554,7 +554,7 @@ ofp_fatal(const char *flow, bool verbose, const char *format, ...)
 }
 
 static void
-parse_field(const struct mf_field *mf, const char *s, struct cls_rule *rule)
+parse_field(const struct mf_field *mf, const char *s, struct match *match)
 {
     union mf_value value, mask;
     char *error;
@@ -564,7 +564,7 @@ parse_field(const struct mf_field *mf, const char *s, struct cls_rule *rule)
         ovs_fatal(0, "%s", error);
     }
 
-    mf_set(mf, &value, &mask, rule);
+    mf_set(mf, &value, &mask, match);
 }
 
 /* Convert 'str_' (as described in the Flow Syntax section of the ovs-ofctl man
@@ -620,7 +620,8 @@ parse_ofp_str(struct ofputil_flow_mod *fm, int command, const char *str_,
         NOT_REACHED();
     }
 
-    cls_rule_init_catchall(&fm->cr, OFP_DEFAULT_PRIORITY);
+    match_init_catchall(&fm->match);
+    fm->priority = OFP_DEFAULT_PRIORITY;
     fm->cookie = htonll(0);
     fm->cookie_mask = htonll(0);
     if (command == OFPFC_MODIFY || command == OFPFC_MODIFY_STRICT) {
@@ -655,9 +656,9 @@ parse_ofp_str(struct ofputil_flow_mod *fm, int command, const char *str_,
         const struct protocol *p;
 
         if (parse_protocol(name, &p)) {
-            cls_rule_set_dl_type(&fm->cr, htons(p->dl_type));
+            match_set_dl_type(&fm->match, htons(p->dl_type));
             if (p->nw_proto) {
-                cls_rule_set_nw_proto(&fm->cr, p->nw_proto);
+                match_set_nw_proto(&fm->match, p->nw_proto);
             }
         } else if (fields & F_FLAGS && !strcmp(name, "send_flow_rem")) {
             fm->flags |= OFPFF_SEND_FLOW_REM;
@@ -676,7 +677,7 @@ parse_ofp_str(struct ofputil_flow_mod *fm, int command, const char *str_,
             } else if (!strcmp(name, "out_port")) {
                 fm->out_port = atoi(value);
             } else if (fields & F_PRIORITY && !strcmp(name, "priority")) {
-                fm->cr.priority = str_to_u16(value, name);
+                fm->priority = str_to_u16(value, name);
             } else if (fields & F_TIMEOUT && !strcmp(name, "idle_timeout")) {
                 fm->idle_timeout = str_to_u16(value, name);
             } else if (fields & F_TIMEOUT && !strcmp(name, "hard_timeout")) {
@@ -702,7 +703,7 @@ parse_ofp_str(struct ofputil_flow_mod *fm, int command, const char *str_,
                     fm->new_cookie = htonll(str_to_u64(value));
                 }
             } else if (mf_from_name(name)) {
-                parse_field(mf_from_name(name), value, &fm->cr);
+                parse_field(mf_from_name(name), value, &fm->match);
             } else if (!strcmp(name, "duration")
                        || !strcmp(name, "n_packets")
                        || !strcmp(name, "n_bytes")) {
@@ -725,7 +726,7 @@ parse_ofp_str(struct ofputil_flow_mod *fm, int command, const char *str_,
         struct ofpbuf ofpacts;
 
         ofpbuf_init(&ofpacts, 32);
-        str_to_ofpacts(&fm->cr.flow, act_str, &ofpacts);
+        str_to_ofpacts(&fm->match.flow, act_str, &ofpacts);
         fm->ofpacts_len = ofpacts.size;
         fm->ofpacts = ofpbuf_steal_data(&ofpacts);
     } else {
@@ -753,7 +754,7 @@ parse_flow_monitor_request(struct ofputil_flow_monitor_request *fmr,
                   | NXFMF_OWN | NXFMF_ACTIONS);
     fmr->out_port = OFPP_NONE;
     fmr->table_id = 0xff;
-    cls_rule_init_catchall(&fmr->match, 0);
+    match_init_catchall(&fmr->match);
 
     for (name = strtok_r(string, "=, \t\r\n", &save_ptr); name;
          name = strtok_r(NULL, "=, \t\r\n", &save_ptr)) {
@@ -772,9 +773,9 @@ parse_flow_monitor_request(struct ofputil_flow_monitor_request *fmr,
         } else if (!strcmp(name, "!own")) {
             fmr->flags &= ~NXFMF_OWN;
         } else if (parse_protocol(name, &p)) {
-            cls_rule_set_dl_type(&fmr->match, htons(p->dl_type));
+            match_set_dl_type(&fmr->match, htons(p->dl_type));
             if (p->nw_proto) {
-                cls_rule_set_nw_proto(&fmr->match, p->nw_proto);
+                match_set_nw_proto(&fmr->match, p->nw_proto);
             }
         } else {
             char *value;
@@ -817,15 +818,15 @@ void
 parse_ofp_flow_mod_str(struct ofputil_flow_mod *fm, const char *string,
                        uint16_t command, bool verbose)
 {
-    struct cls_rule rule_copy;
+    struct match match_copy;
 
     parse_ofp_str(fm, command, string, verbose);
 
-    /* Normalize a copy of the rule.  This ensures that non-normalized flows
+    /* Normalize a copy of the match.  This ensures that non-normalized flows
      * get logged but doesn't affect what gets sent to the switch, so that the
      * switch can do whatever it likes with the flow. */
-    rule_copy = fm->cr;
-    ofputil_normalize_rule(&rule_copy);
+    match_copy = fm->match;
+    ofputil_normalize_match(&match_copy);
 }
 
 void
@@ -867,7 +868,7 @@ parse_ofp_flow_stats_request_str(struct ofputil_flow_stats_request *fsr,
     fsr->aggregate = aggregate;
     fsr->cookie = fm.cookie;
     fsr->cookie_mask = fm.cookie_mask;
-    fsr->match = fm.cr;
+    fsr->match = fm.match;
     fsr->out_port = fm.out_port;
     fsr->table_id = fm.table_id;
 }

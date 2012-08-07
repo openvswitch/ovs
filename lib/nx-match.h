@@ -23,11 +23,9 @@
 #include "flow.h"
 #include "ofp-errors.h"
 #include "openvswitch/types.h"
-#include "ofp-errors.h"
 
-struct cls_rule;
 struct ds;
-struct flow;
+struct match;
 struct mf_subfield;
 struct ofpact_reg_move;
 struct ofpact_reg_load;
@@ -41,19 +39,16 @@ struct nx_action_reg_move;
  */
 
 enum ofperr nx_pull_match(struct ofpbuf *, unsigned int match_len,
-                          uint16_t priority, struct cls_rule *,
+                          struct match *,
                           ovs_be64 *cookie, ovs_be64 *cookie_mask);
 enum ofperr nx_pull_match_loose(struct ofpbuf *, unsigned int match_len,
-                                uint16_t priority,
-                                struct cls_rule *, ovs_be64 *cookie,
+                                struct match *, ovs_be64 *cookie,
                                 ovs_be64 *cookie_mask);
-enum ofperr oxm_pull_match(struct ofpbuf *, uint16_t priority,
-                           struct cls_rule *);
-enum ofperr oxm_pull_match_loose(struct ofpbuf *, uint16_t priority,
-                                 struct cls_rule *);
-int nx_put_match(struct ofpbuf *, const struct cls_rule *,
+enum ofperr oxm_pull_match(struct ofpbuf *, struct match *);
+enum ofperr oxm_pull_match_loose(struct ofpbuf *, struct match *);
+int nx_put_match(struct ofpbuf *, const struct match *,
                  ovs_be64 cookie, ovs_be64 cookie_mask);
-int oxm_put_match(struct ofpbuf *, const struct cls_rule *);
+int oxm_put_match(struct ofpbuf *, const struct match *);
 
 char *nx_match_to_string(const uint8_t *, unsigned int match_len);
 char *oxm_match_to_string(const uint8_t *, unsigned int match_len);

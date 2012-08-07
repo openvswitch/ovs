@@ -20,6 +20,7 @@
 #include "classifier.h"
 #include "hmap.h"
 #include "list.h"
+#include "match.h"
 #include "ofp-errors.h"
 #include "ofproto.h"
 #include "openflow/nicira-ext.h"
@@ -172,7 +173,7 @@ struct ofmonitor {
     /* Matching. */
     uint16_t out_port;
     uint8_t table_id;
-    struct cls_rule match;
+    struct match match;
 };
 
 struct ofputil_flow_monitor_request;
