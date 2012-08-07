@@ -406,7 +406,7 @@ OFPT_PORT_STATUS (OF1.1) (xid=0x0): MOD: 3(eth0): addr:50:54:00:00:00:01
 ])
 AT_CLEANUP
 
-AT_SETUP([OFPT_PACKET_OUT])
+AT_SETUP([OFPT_PACKET_OUT - OF1.0])
 AT_KEYWORDS([ofp-print])
 AT_CHECK([ovs-ofctl ofp-print "\
 01 0d 00 54 00 00 00 00 00 00 01 14 00 01 00 08 \
@@ -417,6 +417,17 @@ b9 7c c0 a8 00 02 c0 a8 00 01 00 00 2b 60 00 00 \
 00 00 00 00 \
 "], [0], [dnl
 OFPT_PACKET_OUT (xid=0x0): in_port=1 actions=output:3 buffer=0x00000114
+])
+AT_CLEANUP
+
+AT_SETUP([OFPT_PACKET_OUT - OF1.1])
+AT_KEYWORDS([ofp-print])
+AT_CHECK([ovs-ofctl ofp-print "\
+03 0d 00 28 88 58 df c5 ff ff ff 00 ff ff ff fe \
+00 10 00 00 00 00 00 00 00 00 00 10 ff ff ff fb \
+05 dc 00 00 00 00 00 00 \
+"], [0], [dnl
+OFPT_PACKET_OUT (OF1.2) (xid=0x8858dfc5): in_port=LOCAL actions=FLOOD buffer=0xffffff00
 ])
 AT_CLEANUP
 
