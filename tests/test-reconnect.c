@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -148,9 +148,9 @@ do_connected(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 }
 
 static void
-do_received(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
+do_activity(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
-    reconnect_received(reconnect, now);
+    reconnect_activity(reconnect, now);
 }
 
 static void
@@ -220,10 +220,10 @@ diff_stats(const struct reconnect_stats *old,
                new->state, new->state_elapsed, new->backoff);
     }
     if (old->creation_time != new->creation_time
-        || old->last_received != new->last_received
+        || old->last_activity != new->last_activity
         || old->last_connected != new->last_connected) {
-        printf("  created %lld, last received %lld, last connected %lld\n",
-               new->creation_time, new->last_received, new->last_connected);
+        printf("  created %lld, last activity %lld, last connected %lld\n",
+               new->creation_time, new->last_activity, new->last_connected);
     }
     if (old->n_successful_connections != new->n_successful_connections
         || old->n_attempted_connections != new->n_attempted_connections
@@ -280,7 +280,7 @@ static const struct command commands[] = {
     { "connecting", 0, 0, do_connecting },
     { "connect-failed", 0, 1, do_connect_failed },
     { "connected", 0, 0, do_connected },
-    { "received", 0, 0, do_received },
+    { "activity", 0, 0, do_activity },
     { "run", 0, 1, do_run },
     { "advance", 1, 1, do_advance },
     { "timeout", 0, 0, do_timeout },

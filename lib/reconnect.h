@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2012 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -79,7 +79,7 @@ void reconnect_listen_error(struct reconnect *, long long int now, int error);
 void reconnect_connected(struct reconnect *, long long int now);
 void reconnect_connect_failed(struct reconnect *, long long int now,
                               int error);
-void reconnect_received(struct reconnect *, long long int now);
+void reconnect_activity(struct reconnect *, long long int now);
 
 enum reconnect_action {
     RECONNECT_CONNECT = 1,
@@ -93,7 +93,7 @@ int reconnect_timeout(struct reconnect *, long long int now);
 struct reconnect_stats {
     /* All times and durations in this structure are in milliseconds. */
     long long int creation_time;     /* Time reconnect_create() called. */
-    long long int last_received;     /* Last call to reconnect_received(). */
+    long long int last_activity;     /* Last call to reconnect_activity(). */
     long long int last_connected;    /* Last call to reconnect_connected(). */
     long long int last_disconnected; /* Last call to reconnect_disconnected(). */
     int backoff;                     /* Current backoff duration.  */

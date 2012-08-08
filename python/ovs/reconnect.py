@@ -94,7 +94,7 @@ class Reconnect(object):
         @staticmethod
         def deadline(fsm):
             if fsm.probe_interval:
-                base = max(fsm.last_received, fsm.state_entered)
+                base = max(fsm.last_activity, fsm.state_entered)
                 return base + fsm.probe_interval
             return None
 
@@ -102,7 +102,7 @@ class Reconnect(object):
         def run(fsm, now):
             vlog.dbg("%s: idle %d ms, sending inactivity probe"
                      % (fsm.name,
-                        now - max(fsm.last_received, fsm.state_entered)))
+                        now - max(fsm.last_activity, fsm.state_entered)))
             fsm._transition(now, Reconnect.Idle)
             return PROBE
 
@@ -150,7 +150,7 @@ class Reconnect(object):
         self.state = Reconnect.Void
         self.state_entered = now
         self.backoff = 0
-        self.last_received = now
+        self.last_activity = now
         self.last_connected = None
         self.last_disconnected = None
         self.max_tries = None
@@ -204,8 +204,8 @@ class Reconnect(object):
         """Returns the "probe interval" in milliseconds.  If this is zero, it
         disables the connection keepalive feature.  If it is nonzero, then if
         the interval passes while the FSM is connected and without
-        self.received() being called, self.run() returns ovs.reconnect.PROBE.
-        If the interval passes again without self.received() being called,
+        self.activity() being called, self.run() returns ovs.reconnect.PROBE.
+        If the interval passes again without self.activity() being called,
         self.run() returns ovs.reconnect.DISCONNECT."""
         return self.probe_interval
 
@@ -246,9 +246,9 @@ class Reconnect(object):
         """Sets the "probe interval" to 'probe_interval', in milliseconds.  If
         this is zero, it disables the connection keepalive feature.  If it is
         nonzero, then if the interval passes while this FSM is connected and
-        without self.received() being called, self.run() returns
+        without self.activity() being called, self.run() returns
         ovs.reconnect.PROBE.  If the interval passes again without
-        self.received() being called, self.run() returns
+        self.activity() being called, self.run() returns
         ovs.reconnect.DISCONNECT.
 
         If 'probe_interval' is nonzero, then it will be forced to a value of at
@@ -354,7 +354,7 @@ class Reconnect(object):
 
             # Back off
             if (self.state in (Reconnect.Active, Reconnect.Idle) and
-                (self.last_received - self.last_connected >= self.backoff or
+                (self.last_activity - self.last_connected >= self.backoff or
                  self.passive)):
                 if self.passive:
                     self.backoff = 0
@@ -426,7 +426,7 @@ class Reconnect(object):
         """Tell this FSM that the connection was successful.
 
         The FSM will start the probe interval timer, which is reset by
-        self.received().  If the timer expires, a probe will be sent (by
+        self.activity().  If the timer expires, a probe will be sent (by
         returning ovs.reconnect.PROBE from self.run().  If the timer expires
         again without being reset, the connection will be aborted (by returning
         ovs.reconnect.DISCONNECT from self.run()."""
@@ -444,12 +444,13 @@ class Reconnect(object):
         self.connecting(now)
         self.disconnected(now, error)
 
-    def received(self, now):
-        """Tell this FSM that some data was received.  This resets the probe
-        interval timer, so that the connection is known not to be idle."""
+    def activity(self, now):
+        """Tell this FSM that some activity occurred on the connection.  This
+        resets the probe interval timer, so that the connection is known not to
+        be idle."""
         if self.state != Reconnect.Active:
             self._transition(now, Reconnect.Active)
-        self.last_received = now
+        self.last_activity = now
 
     def _transition(self, now, state):
         if self.state == Reconnect.ConnectInProgress:
@@ -561,7 +562,7 @@ class Reconnect(object):
         stats.creation_time = self.creation_time
         stats.last_connected = self.last_connected
         stats.last_disconnected = self.last_disconnected
-        stats.last_received = self.last_received
+        stats.last_activity = self.last_activity
         stats.backoff = self.backoff
         stats.seqno = self.seqno
         stats.is_connected = self.is_connected()

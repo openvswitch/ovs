@@ -1,4 +1,4 @@
-# Copyright (c) 2009, 2010 Nicira, Inc.
+# Copyright (c) 2009, 2010, 2012 Nicira, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -61,8 +61,8 @@ def do_connected(_):
     r.connected(now)
 
 
-def do_received(_):
-    r.received(now)
+def do_activity(_):
+    r.activity(now)
 
 
 def do_run(arg):
@@ -110,10 +110,10 @@ def diff_stats(old, new, delta):
               % (new.state, new.state_elapsed, new.backoff))
 
     if (old.creation_time != new.creation_time or
-        old.last_received != new.last_received or
+        old.last_activity != new.last_activity or
         old.last_connected != new.last_connected):
-        print("  created %d, last received %d, last connected %d"
-              % (new.creation_time, new.last_received, new.last_connected))
+        print("  created %d, last activity %d, last connected %d"
+              % (new.creation_time, new.last_activity, new.last_connected))
 
     if (old.n_successful_connections != new.n_successful_connections or
         old.n_attempted_connections != new.n_attempted_connections or
@@ -166,7 +166,7 @@ def main():
         "connecting": do_connecting,
         "connect-failed": do_connect_failed,
         "connected": do_connected,
-        "received": do_received,
+        "activity": do_activity,
         "run": do_run,
         "advance": do_advance,
         "timeout": do_timeout,

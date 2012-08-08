@@ -977,7 +977,7 @@ jsonrpc_session_recv(struct jsonrpc_session *s)
         struct jsonrpc_msg *msg;
         jsonrpc_recv(s->rpc, &msg);
         if (msg) {
-            reconnect_received(s->reconnect, time_msec());
+            reconnect_activity(s->reconnect, time_msec());
             if (msg->type == JSONRPC_REQUEST && !strcmp(msg->method, "echo")) {
                 /* Echo request.  Send reply. */
                 struct jsonrpc_msg *reply;

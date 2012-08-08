@@ -59,7 +59,7 @@ run
   should connect
 connected
   in ACTIVE for 0 ms (0 ms backoff)
-  created 1000, last received 1000, last connected 1000
+  created 1000, last activity 1000, last connected 1000
   1 successful connections out of 1 attempts, seqno 1
   connected
   last connected 0 ms ago, connected 0 ms total
@@ -129,7 +129,7 @@ advance 500
 run
 connected
   in ACTIVE for 0 ms (0 ms backoff)
-  created 1000, last received 1000, last connected 1500
+  created 1000, last activity 1000, last connected 1500
   1 successful connections out of 1 attempts, seqno 1
   connected
   last connected 0 ms ago, connected 0 ms total
@@ -408,7 +408,7 @@ run
   should connect
 connected
   in ACTIVE for 0 ms (0 ms backoff)
-  created 1000, last received 1000, last connected 1000
+  created 1000, last activity 1000, last connected 1000
   1 successful connections out of 1 attempts, seqno 1
   connected
   last connected 0 ms ago, connected 0 ms total
@@ -448,7 +448,7 @@ run
   should connect
 connected
   in ACTIVE for 0 ms (1000 ms backoff)
-  created 1000, last received 1000, last connected 12000
+  created 1000, last activity 1000, last connected 12000
   2 successful connections out of 2 attempts, seqno 3
   connected
   last connected 0 ms ago, connected 10000 ms total
@@ -488,7 +488,7 @@ run
   should connect
 connected
   in ACTIVE for 0 ms (2000 ms backoff)
-  created 1000, last received 1000, last connected 24000
+  created 1000, last activity 1000, last connected 24000
   3 successful connections out of 3 attempts, seqno 5
   connected
   last connected 0 ms ago, connected 20000 ms total
@@ -625,7 +625,7 @@ advance 500
 run
 connected
   in ACTIVE for 0 ms (2000 ms backoff)
-  created 1000, last received 1000, last connected 6500
+  created 1000, last activity 1000, last connected 6500
   1 successful connections out of 3 attempts, seqno 1
   connected
   last connected 0 ms ago, connected 0 ms total
@@ -688,13 +688,13 @@ connected
 # Connection receives 3 chunks of data spaced 250 ms apart.
 advance 250
 run
-received
+activity
 advance 250
 run
-received
+activity
 advance 250
 run
-received
+activity
 
 # Connection drops.
 disconnected
@@ -767,7 +767,7 @@ advance 500
 run
 connected
   in ACTIVE for 0 ms (2000 ms backoff)
-  created 1000, last received 1000, last connected 6500
+  created 1000, last activity 1000, last connected 6500
   1 successful connections out of 3 attempts, seqno 1
   connected
   last connected 0 ms ago, connected 0 ms total
@@ -778,22 +778,22 @@ advance 250
 ### t=6750 ###
   in ACTIVE for 250 ms (2000 ms backoff)
 run
-received
-  created 1000, last received 6750, last connected 6500
+activity
+  created 1000, last activity 6750, last connected 6500
 advance 250
 
 ### t=7000 ###
   in ACTIVE for 500 ms (2000 ms backoff)
 run
-received
-  created 1000, last received 7000, last connected 6500
+activity
+  created 1000, last activity 7000, last connected 6500
 advance 250
 
 ### t=7250 ###
   in ACTIVE for 750 ms (2000 ms backoff)
 run
-received
-  created 1000, last received 7250, last connected 6500
+activity
+  created 1000, last activity 7250, last connected 6500
 
 # Connection drops.
 disconnected
@@ -849,13 +849,13 @@ connected
 # Connection receives 3 chunks of data spaced 2000 ms apart.
 advance 2000
 run
-received
+activity
 advance 2000
 run
-received
+activity
 advance 2000
 run
-received
+activity
 
 # Connection drops.
 disconnected
@@ -928,7 +928,7 @@ advance 500
 run
 connected
   in ACTIVE for 0 ms (2000 ms backoff)
-  created 1000, last received 1000, last connected 6500
+  created 1000, last activity 1000, last connected 6500
   1 successful connections out of 3 attempts, seqno 1
   connected
   last connected 0 ms ago, connected 0 ms total
@@ -939,22 +939,22 @@ advance 2000
 ### t=8500 ###
   in ACTIVE for 2000 ms (2000 ms backoff)
 run
-received
-  created 1000, last received 8500, last connected 6500
+activity
+  created 1000, last activity 8500, last connected 6500
 advance 2000
 
 ### t=10500 ###
   in ACTIVE for 4000 ms (2000 ms backoff)
 run
-received
-  created 1000, last received 10500, last connected 6500
+activity
+  created 1000, last activity 10500, last connected 6500
 advance 2000
 
 ### t=12500 ###
   in ACTIVE for 6000 ms (2000 ms backoff)
 run
-received
-  created 1000, last received 12500, last connected 6500
+activity
+  created 1000, last activity 12500, last connected 6500
 
 # Connection drops.
 disconnected
@@ -1060,7 +1060,7 @@ run
   should connect
 connected
   in ACTIVE for 0 ms (0 ms backoff)
-  created 1000, last received 1000, last connected 1000
+  created 1000, last activity 1000, last connected 1000
   1 successful connections out of 1 attempts, seqno 1
   connected
   last connected 0 ms ago, connected 0 ms total
@@ -1128,9 +1128,9 @@ listening
 
 # Connection accepted.
 connected
-received
+activity
 advance 1000
-received
+activity
 
 # Connection times out.
 timeout
@@ -1178,18 +1178,18 @@ listening
 # Connection accepted.
 connected
   in ACTIVE for 0 ms (1000 ms backoff)
-  created 1000, last received 1000, last connected 2000
+  created 1000, last activity 1000, last connected 2000
   1 successful connections out of 1 attempts, seqno 1
   connected
   last connected 0 ms ago, connected 0 ms total
-received
-  created 1000, last received 2000, last connected 2000
+activity
+  created 1000, last activity 2000, last connected 2000
 advance 1000
 
 ### t=3000 ###
   in ACTIVE for 1000 ms (1000 ms backoff)
-received
-  created 1000, last received 3000, last connected 2000
+activity
+  created 1000, last activity 3000, last connected 2000
 
 # Connection times out.
 timeout

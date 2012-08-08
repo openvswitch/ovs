@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2012 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -58,7 +58,7 @@ struct reconnect {
     enum state state;
     long long int state_entered;
     int backoff;
-    long long int last_received;
+    long long int last_activity;
     long long int last_connected;
     long long int last_disconnected;
     unsigned int max_tries;
@@ -105,7 +105,7 @@ reconnect_create(long long int now)
     fsm->state = S_VOID;
     fsm->state_entered = now;
     fsm->backoff = 0;
-    fsm->last_received = now;
+    fsm->last_activity = now;
     fsm->last_connected = LLONG_MAX;
     fsm->last_disconnected = LLONG_MAX;
     fsm->max_tries = UINT_MAX;
@@ -176,9 +176,9 @@ reconnect_get_max_backoff(const struct reconnect *fsm)
 
 /* Returns the "probe interval" for 'fsm' in milliseconds.  If this is zero, it
  * disables the connection keepalive feature.  If it is nonzero, then if the
- * interval passes while 'fsm' is connected and without reconnect_received()
+ * interval passes while 'fsm' is connected and without reconnect_activity()
  * being called for 'fsm', reconnect_run() returns RECONNECT_PROBE.  If the
- * interval passes again without reconnect_received() being called,
+ * interval passes again without reconnect_activity() being called,
  * reconnect_run() returns RECONNECT_DISCONNECT for 'fsm'. */
 int
 reconnect_get_probe_interval(const struct reconnect *fsm)
@@ -233,8 +233,8 @@ reconnect_set_backoff(struct reconnect *fsm, int min_backoff, int max_backoff)
 /* Sets the "probe interval" for 'fsm' to 'probe_interval', in milliseconds.
  * If this is zero, it disables the connection keepalive feature.  If it is
  * nonzero, then if the interval passes while 'fsm' is connected and without
- * reconnect_received() being called for 'fsm', reconnect_run() returns
- * RECONNECT_PROBE.  If the interval passes again without reconnect_received()
+ * reconnect_activity() being called for 'fsm', reconnect_run() returns
+ * RECONNECT_PROBE.  If the interval passes again without reconnect_activity()
  * being called, reconnect_run() returns RECONNECT_DISCONNECT for 'fsm'.
  *
  * If 'probe_interval' is nonzero, then it will be forced to a value of at
@@ -360,7 +360,7 @@ reconnect_disconnected(struct reconnect *fsm, long long int now, int error)
         }
         /* Back off. */
         if (fsm->state & (S_ACTIVE | S_IDLE)
-             && (fsm->last_received - fsm->last_connected >= fsm->backoff
+             && (fsm->last_activity - fsm->last_connected >= fsm->backoff
                  || fsm->passive)) {
             fsm->backoff = fsm->passive ? 0 : fsm->min_backoff;
         } else {
@@ -441,7 +441,7 @@ reconnect_listen_error(struct reconnect *fsm, long long int now, int error)
 /* Tell 'fsm' that the connection was successful.
  *
  * The FSM will start the probe interval timer, which is reset by
- * reconnect_received().  If the timer expires, a probe will be sent (by
+ * reconnect_activity().  If the timer expires, a probe will be sent (by
  * returning RECONNECT_PROBE from reconnect_run()).  If the timer expires
  * again without being reset, the connection will be aborted (by returning
  * RECONNECT_DISCONNECT from reconnect_run()). */
@@ -467,15 +467,15 @@ reconnect_connect_failed(struct reconnect *fsm, long long int now, int error)
     reconnect_disconnected(fsm, now, error);
 }
 
-/* Tell 'fsm' that some data was received.  This resets the probe interval
- * timer, so that the connection is known not to be idle. */
+/* Tell 'fsm' that some activity has occurred on the connection.  This resets
+ * the probe interval timer, so that the connection is known not to be idle. */
 void
-reconnect_received(struct reconnect *fsm, long long int now)
+reconnect_activity(struct reconnect *fsm, long long int now)
 {
     if (fsm->state != S_ACTIVE) {
         reconnect_transition__(fsm, now, S_ACTIVE);
     }
-    fsm->last_received = now;
+    fsm->last_activity = now;
 }
 
 static void
@@ -517,7 +517,7 @@ reconnect_deadline__(const struct reconnect *fsm)
 
     case S_ACTIVE:
         if (fsm->probe_interval) {
-            long long int base = MAX(fsm->last_received, fsm->state_entered);
+            long long int base = MAX(fsm->last_activity, fsm->state_entered);
             return base + fsm->probe_interval;
         }
         return LLONG_MAX;
@@ -587,7 +587,7 @@ reconnect_run(struct reconnect *fsm, long long int now)
 
         case S_ACTIVE:
             VLOG_DBG("%s: idle %lld ms, sending inactivity probe", fsm->name,
-                     now - MAX(fsm->last_received, fsm->state_entered));
+                     now - MAX(fsm->last_activity, fsm->state_entered));
             reconnect_transition__(fsm, now, S_IDLE);
             return RECONNECT_PROBE;
 
@@ -673,7 +673,7 @@ reconnect_get_stats(const struct reconnect *fsm, long long int now,
                     struct reconnect_stats *stats)
 {
     stats->creation_time = fsm->creation_time;
-    stats->last_received = fsm->last_received;
+    stats->last_activity = fsm->last_activity;
     stats->last_connected = fsm->last_connected;
     stats->last_disconnected = fsm->last_disconnected;
     stats->backoff = fsm->backoff;

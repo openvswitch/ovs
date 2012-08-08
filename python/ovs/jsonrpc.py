@@ -504,7 +504,7 @@ class Session(object):
         if self.rpc is not None:
             error, msg = self.rpc.recv()
             if not error:
-                self.reconnect.received(ovs.timeval.msec())
+                self.reconnect.activity(ovs.timeval.msec())
                 if msg.type == Message.T_REQUEST and msg.method == "echo":
                     # Echo request.  Send reply.
                     self.send(Message.create_reply(msg.params, msg.id))
