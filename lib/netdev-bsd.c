@@ -453,7 +453,7 @@ netdev_bsd_listen(struct netdev *netdev_)
     struct netdev_bsd *netdev = netdev_bsd_cast(netdev_);
     char errbuf[PCAP_ERRBUF_SIZE];
     int error;
-    int fd;
+    int fd = -1;
     int one = 1;
 
     if (netdev->netdev_fd >= 0) {
