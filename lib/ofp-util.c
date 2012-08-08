@@ -3043,10 +3043,10 @@ ofputil_append_flow_update(const struct ofputil_flow_update *update,
 }
 
 struct ofpbuf *
-ofputil_encode_packet_out(const struct ofputil_packet_out *po)
+ofputil_encode_packet_out(const struct ofputil_packet_out *po,
+                          enum ofputil_protocol protocol)
 {
-    struct ofp_packet_out *opo;
-    size_t actions_ofs;
+    enum ofp_version ofp_version = ofputil_protocol_to_ofp_version(protocol);
     struct ofpbuf *msg;
     size_t size;
 
@@ -3055,15 +3055,28 @@ ofputil_encode_packet_out(const struct ofputil_packet_out *po)
         size += po->packet_len;
     }
 
-    msg = ofpraw_alloc(OFPRAW_OFPT10_PACKET_OUT, OFP10_VERSION, size);
-    ofpbuf_put_zeros(msg, sizeof *opo);
-    actions_ofs = msg->size;
-    ofpacts_put_openflow10(po->ofpacts, po->ofpacts_len, msg);
+    switch (ofp_version) {
+    case OFP10_VERSION: {
+        struct ofp_packet_out *opo;
+        size_t actions_ofs;
 
-    opo = msg->l3;
-    opo->buffer_id = htonl(po->buffer_id);
-    opo->in_port = htons(po->in_port);
-    opo->actions_len = htons(msg->size - actions_ofs);
+        msg = ofpraw_alloc(OFPRAW_OFPT10_PACKET_OUT, OFP10_VERSION, size);
+        ofpbuf_put_zeros(msg, sizeof *opo);
+        actions_ofs = msg->size;
+        ofpacts_put_openflow10(po->ofpacts, po->ofpacts_len, msg);
+
+        opo = msg->l3;
+        opo->buffer_id = htonl(po->buffer_id);
+        opo->in_port = htons(po->in_port);
+        opo->actions_len = htons(msg->size - actions_ofs);
+        break;
+    }
+
+    case OFP11_VERSION:
+    case OFP12_VERSION:
+    default:
+        NOT_REACHED();
+    }
 
     if (po->buffer_id == UINT32_MAX) {
         ofpbuf_put(msg, po->packet, po->packet_len);
