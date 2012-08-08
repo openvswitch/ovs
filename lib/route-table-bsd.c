@@ -104,7 +104,7 @@ route_table_get_name(ovs_be32 ip, char name[IFNAMSIZ])
 }
 
 void
-route_table_register()
+route_table_register(void)
 {
     if (!register_count)
     {
@@ -115,7 +115,7 @@ route_table_register()
 }
 
 void
-route_table_unregister()
+route_table_unregister(void)
 {
     register_count--;
 }
