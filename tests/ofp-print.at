@@ -355,7 +355,7 @@ priority:0,tunnel:0,metadata:0,in_port:0000,tci(0) mac(00:23:20:83:c1:5f->ff:ff:
 ])
 AT_CLEANUP
 
-AT_SETUP([OFPT_FLOW_REMOVED])
+AT_SETUP([OFPT_FLOW_REMOVED - OF1.0])
 AT_KEYWORDS([ofp-print])
 AT_CHECK([ovs-ofctl ofp-print "\
 01 0b 00 58 00 00 00 00 00 00 00 00 00 03 50 54 \
@@ -366,6 +366,17 @@ AT_CHECK([ovs-ofctl ofp-print "\
 00 00 00 00 00 00 00 3c \
 "], [0], [dnl
 OFPT_FLOW_REMOVED (xid=0x0): priority=65535,arp,in_port=3,vlan_tci=0x0000,dl_src=50:54:00:00:00:05,dl_dst=50:54:00:00:00:06,nw_src=192.168.0.1,nw_dst=192.168.0.2,arp_op=2,nw_tos=0,tp_src=0,tp_dst=0 reason=idle duration5.82s idle5 pkts1 bytes60
+])
+AT_CLEANUP
+
+AT_SETUP([OFPT_FLOW_REMOVED - OF1.2])
+AT_KEYWORDS([ofp-print])
+AT_CHECK([ovs-ofctl ofp-print "\
+03 0b 00 40 00 00 00 00 fe dc ba 98 76 54 32 10 \
+80 00 01 05 00 00 00 01 00 98 96 80 00 3c 00 78 \
+00 00 00 00 00 12 d6 87 00 00 00 00 6f 68 ba 66 \
+00 01 00 0a 80 00 0c 02 10 09 00 00 00 00 00 00"], [0], [dnl
+OFPT_FLOW_REMOVED (OF1.2) (xid=0x0): dl_vlan=9 reason=hard cookie:0xfedcba9876543210 duration1.01s idle60 hard120 pkts1234567 bytes1869134438
 ])
 AT_CLEANUP
 

@@ -1825,7 +1825,28 @@ ofputil_decode_flow_removed(struct ofputil_flow_removed *fr,
 
     ofpbuf_use_const(&b, oh, ntohs(oh->length));
     raw = ofpraw_pull_assert(&b);
-    if (raw == OFPRAW_OFPT10_FLOW_REMOVED) {
+    if (raw == OFPRAW_OFPT11_FLOW_REMOVED) {
+        const struct ofp12_flow_removed *ofr;
+        enum ofperr error;
+
+        ofr = ofpbuf_pull(&b, sizeof *ofr);
+
+        error = ofputil_pull_ofp11_match(&b, ntohs(ofr->priority),
+                                         &fr->rule, NULL);
+        if (error) {
+            return error;
+        }
+
+        fr->cookie = ofr->cookie;
+        fr->reason = ofr->reason;
+        /* XXX: ofr->table_id is ignored */
+        fr->duration_sec = ntohl(ofr->duration_sec);
+        fr->duration_nsec = ntohl(ofr->duration_nsec);
+        fr->idle_timeout = ntohs(ofr->idle_timeout);
+        fr->hard_timeout = ntohs(ofr->hard_timeout);
+        fr->packet_count = ntohll(ofr->packet_count);
+        fr->byte_count = ntohll(ofr->byte_count);
+    } else if (raw == OFPRAW_OFPT10_FLOW_REMOVED) {
         const struct ofp_flow_removed *ofr;
 
         ofr = ofpbuf_pull(&b, sizeof *ofr);
