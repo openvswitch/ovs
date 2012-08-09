@@ -54,7 +54,7 @@ run_lock_and_unlock(void)
 {
     struct lockfile *lockfile;
 
-    CHECK(lockfile_lock("file", 0, &lockfile), 0);
+    CHECK(lockfile_lock("file", &lockfile), 0);
     lockfile_unlock(lockfile);
 }
 
@@ -63,10 +63,10 @@ run_lock_and_unlock_twice(void)
 {
     struct lockfile *lockfile;
 
-    CHECK(lockfile_lock("file", 0, &lockfile), 0);
+    CHECK(lockfile_lock("file", &lockfile), 0);
     lockfile_unlock(lockfile);
 
-    CHECK(lockfile_lock("file", 0, &lockfile), 0);
+    CHECK(lockfile_lock("file", &lockfile), 0);
     lockfile_unlock(lockfile);
 }
 
@@ -75,8 +75,8 @@ run_lock_blocks_same_process(void)
 {
     struct lockfile *lockfile;
 
-    CHECK(lockfile_lock("file", 0, &lockfile), 0);
-    CHECK(lockfile_lock("file", 0, &lockfile), EDEADLK);
+    CHECK(lockfile_lock("file", &lockfile), 0);
+    CHECK(lockfile_lock("file", &lockfile), EDEADLK);
     lockfile_unlock(lockfile);
 }
 
@@ -85,9 +85,9 @@ run_lock_blocks_same_process_twice(void)
 {
     struct lockfile *lockfile;
 
-    CHECK(lockfile_lock("file", 0, &lockfile), 0);
-    CHECK(lockfile_lock("file", 0, &lockfile), EDEADLK);
-    CHECK(lockfile_lock("file", 0, &lockfile), EDEADLK);
+    CHECK(lockfile_lock("file", &lockfile), 0);
+    CHECK(lockfile_lock("file", &lockfile), EDEADLK);
+    CHECK(lockfile_lock("file", &lockfile), EDEADLK);
     lockfile_unlock(lockfile);
 }
 
@@ -118,10 +118,10 @@ run_lock_blocks_other_process(void)
      * this function that does the wait() call. */
     static struct lockfile *lockfile;
 
-    CHECK(lockfile_lock("file", 0, &lockfile), 0);
+    CHECK(lockfile_lock("file", &lockfile), 0);
     if (do_fork() == CHILD) {
         lockfile_unlock(lockfile);
-        CHECK(lockfile_lock("file", 0, &lockfile), EAGAIN);
+        CHECK(lockfile_lock("file", &lockfile), EAGAIN);
         exit(11);
     }
 }
@@ -131,10 +131,10 @@ run_lock_twice_blocks_other_process(void)
 {
     struct lockfile *lockfile, *dummy;
 
-    CHECK(lockfile_lock("file", 0, &lockfile), 0);
-    CHECK(lockfile_lock("file", 0, &dummy), EDEADLK);
+    CHECK(lockfile_lock("file", &lockfile), 0);
+    CHECK(lockfile_lock("file", &dummy), EDEADLK);
     if (do_fork() == CHILD) {
-        CHECK(lockfile_lock("file", 0, &dummy), EAGAIN);
+        CHECK(lockfile_lock("file", &dummy), EAGAIN);
         exit(11);
     }
 }
@@ -144,53 +144,12 @@ run_lock_and_unlock_allows_other_process(void)
 {
     struct lockfile *lockfile;
 
-    CHECK(lockfile_lock("file", 0, &lockfile), 0);
+    CHECK(lockfile_lock("file", &lockfile), 0);
     lockfile_unlock(lockfile);
 
     if (do_fork() == CHILD) {
-        CHECK(lockfile_lock("file", 0, &lockfile), 0);
+        CHECK(lockfile_lock("file", &lockfile), 0);
         exit(11);
-    }
-}
-
-static void
-run_lock_timeout_gets_the_lock(void)
-{
-    struct lockfile *lockfile;
-
-    CHECK(lockfile_lock("file", 0, &lockfile), 0);
-
-    if (do_fork() == CHILD) {
-        lockfile_unlock(lockfile);
-        CHECK(lockfile_lock("file", TIME_UPDATE_INTERVAL * 3, &lockfile), 0);
-        exit(11);
-    } else {
-        long long int now = time_msec();
-        while (time_msec() < now + TIME_UPDATE_INTERVAL) {
-            pause();
-        }
-        lockfile_unlock(lockfile);
-    }
-}
-
-static void
-run_lock_timeout_runs_out(void)
-{
-    struct lockfile *lockfile;
-
-    CHECK(lockfile_lock("file", 0, &lockfile), 0);
-
-    if (do_fork() == CHILD) {
-        lockfile_unlock(lockfile);
-        CHECK(lockfile_lock("file", TIME_UPDATE_INTERVAL, &lockfile),
-              ETIMEDOUT);
-        exit(11);
-    } else {
-        long long int now = time_msec();
-        while (time_msec() < now + TIME_UPDATE_INTERVAL * 3) {
-            pause();
-        }
-        lockfile_unlock(lockfile);
     }
 }
 
@@ -199,17 +158,17 @@ run_lock_multiple(void)
 {
     struct lockfile *a, *b, *c, *dummy;
 
-    CHECK(lockfile_lock("a", 0, &a), 0);
-    CHECK(lockfile_lock("b", 0, &b), 0);
-    CHECK(lockfile_lock("c", 0, &c), 0);
+    CHECK(lockfile_lock("a", &a), 0);
+    CHECK(lockfile_lock("b", &b), 0);
+    CHECK(lockfile_lock("c", &c), 0);
 
     lockfile_unlock(a);
-    CHECK(lockfile_lock("a", 0, &a), 0);
-    CHECK(lockfile_lock("a", 0, &dummy), EDEADLK);
+    CHECK(lockfile_lock("a", &a), 0);
+    CHECK(lockfile_lock("a", &dummy), EDEADLK);
     lockfile_unlock(a);
 
     lockfile_unlock(b);
-    CHECK(lockfile_lock("a", 0, &a), 0);
+    CHECK(lockfile_lock("a", &a), 0);
 
     lockfile_unlock(c);
     lockfile_unlock(a);
@@ -231,14 +190,14 @@ run_lock_symlink(void)
     CHECK(stat(".b.~lock~", &s), -1);
     CHECK(errno, ENOENT);
 
-    CHECK(lockfile_lock("a", 0, &a), 0);
-    CHECK(lockfile_lock("a", 0, &dummy), EDEADLK);
-    CHECK(lockfile_lock("b", 0, &dummy), EDEADLK);
+    CHECK(lockfile_lock("a", &a), 0);
+    CHECK(lockfile_lock("a", &dummy), EDEADLK);
+    CHECK(lockfile_lock("b", &dummy), EDEADLK);
     lockfile_unlock(a);
 
-    CHECK(lockfile_lock("b", 0, &b), 0);
-    CHECK(lockfile_lock("b", 0, &dummy), EDEADLK);
-    CHECK(lockfile_lock("a", 0, &dummy), EDEADLK);
+    CHECK(lockfile_lock("b", &b), 0);
+    CHECK(lockfile_lock("b", &dummy), EDEADLK);
+    CHECK(lockfile_lock("a", &dummy), EDEADLK);
     lockfile_unlock(b);
 
     CHECK(lstat(".a.~lock~", &s), 0);
@@ -268,12 +227,12 @@ run_lock_symlink_to_dir(void)
     CHECK(S_ISLNK(s.st_mode) != 0, 1);
 
     /* Lock 'a'. */
-    CHECK(lockfile_lock("a", 0, &a), 0);
+    CHECK(lockfile_lock("a", &a), 0);
     CHECK(lstat("dir/.b.~lock~", &s), 0);
     CHECK(S_ISREG(s.st_mode) != 0, 1);
     CHECK(lstat(".a.~lock~", &s), -1);
     CHECK(errno, ENOENT);
-    CHECK(lockfile_lock("dir/b", 0, &dummy), EDEADLK);
+    CHECK(lockfile_lock("dir/b", &dummy), EDEADLK);
 
     lockfile_unlock(a);
 }
@@ -300,8 +259,6 @@ static const struct test tests[] = {
     TEST(lock_blocks_other_process),
     TEST(lock_twice_blocks_other_process),
     TEST(lock_and_unlock_allows_other_process),
-    TEST(lock_timeout_gets_the_lock),
-    TEST(lock_timeout_runs_out),
     TEST(lock_multiple),
     TEST(lock_symlink),
     TEST(lock_symlink_to_dir),

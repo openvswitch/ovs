@@ -19,7 +19,7 @@
 struct lockfile;
 
 char *lockfile_name(const char *file);
-int lockfile_lock(const char *file, int timeout, struct lockfile **);
+int lockfile_lock(const char *file, struct lockfile **);
 void lockfile_unlock(struct lockfile *);
 void lockfile_postfork(void);
 

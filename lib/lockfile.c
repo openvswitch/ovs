@@ -55,8 +55,7 @@ struct lockfile {
 static struct hmap lock_table = HMAP_INITIALIZER(&lock_table);
 
 static void lockfile_unhash(struct lockfile *);
-static int lockfile_try_lock(const char *name, bool block,
-                             struct lockfile **lockfilep);
+static int lockfile_try_lock(const char *name, struct lockfile **lockfilep);
 
 /* Returns the name of the lockfile that would be created for locking a file
  * named 'filename_'.  The caller is responsible for freeing the returned name,
@@ -87,56 +86,33 @@ lockfile_name(const char *filename_)
 /* Locks the configuration file against modification by other processes and
  * re-reads it from disk.
  *
- * The 'timeout' specifies the maximum number of milliseconds to wait for the
- * config file to become free.  Use 0 to avoid waiting or INT_MAX to wait
- * forever.
- *
  * Returns 0 on success, otherwise a positive errno value.  On success,
  * '*lockfilep' is set to point to a new "struct lockfile *" that may be
  * unlocked with lockfile_unlock().  On failure, '*lockfilep' is set to
- * NULL. */
+ * NULL.  Will not block if the lock cannot be immediately acquired. */
 int
-lockfile_lock(const char *file, int timeout, struct lockfile **lockfilep)
+lockfile_lock(const char *file, struct lockfile **lockfilep)
 {
     /* Only exclusive ("write") locks are supported.  This is not a problem
      * because the Open vSwitch code that currently uses lock files does so in
      * stylized ways such that any number of readers may access a file while it
      * is being written. */
-    long long int warn_elapsed = 1000;
-    long long int start, elapsed;
     char *lock_name;
     int error;
 
     COVERAGE_INC(lockfile_lock);
 
     lock_name = lockfile_name(file);
-    time_refresh();
-    start = time_msec();
 
-    do {
-        error = lockfile_try_lock(lock_name, timeout > 0, lockfilep);
-        time_refresh();
-        elapsed = time_msec() - start;
-        if (elapsed > warn_elapsed) {
-            warn_elapsed *= 2;
-            VLOG_WARN("%s: waiting for lock file, %lld ms elapsed",
-                      lock_name, elapsed);
-        }
-    } while (error == EINTR && (timeout == INT_MAX || elapsed < timeout));
+    error = lockfile_try_lock(lock_name, lockfilep);
 
-    if (error == EINTR) {
-        COVERAGE_INC(lockfile_timeout);
-        VLOG_WARN("%s: giving up on lock file after %lld ms",
-                  lock_name, elapsed);
-        error = ETIMEDOUT;
-    } else if (error) {
+    if (error) {
         COVERAGE_INC(lockfile_error);
         if (error == EACCES) {
             error = EAGAIN;
         }
-        VLOG_WARN("%s: failed to lock file "
-                  "(after %lld ms, with %d-ms timeout): %s",
-                  lock_name, elapsed, timeout, strerror(error));
+        VLOG_WARN("%s: failed to lock file: %s",
+                  lock_name, strerror(error));
     }
 
     free(lock_name);
@@ -225,7 +201,7 @@ lockfile_register(const char *name, dev_t device, ino_t inode, int fd)
 }
 
 static int
-lockfile_try_lock(const char *name, bool block, struct lockfile **lockfilep)
+lockfile_try_lock(const char *name, struct lockfile **lockfilep)
 {
     struct flock l;
     struct stat s;
@@ -268,7 +244,7 @@ lockfile_try_lock(const char *name, bool block, struct lockfile **lockfilep)
     l.l_len = 0;
 
     time_disable_restart();
-    error = fcntl(fd, block ? F_SETLKW : F_SETLK, &l) == -1 ? errno : 0;
+    error = fcntl(fd, F_SETLK, &l) == -1 ? errno : 0;
     time_enable_restart();
 
     if (!error) {

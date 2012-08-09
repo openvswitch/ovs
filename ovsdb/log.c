@@ -80,7 +80,7 @@ ovsdb_log_open(const char *name, enum ovsdb_log_open_mode open_mode,
         locking = open_mode != OVSDB_LOG_READ_ONLY;
     }
     if (locking) {
-        int retval = lockfile_lock(name, 0, &lockfile);
+        int retval = lockfile_lock(name, &lockfile);
         if (retval) {
             error = ovsdb_io_error(retval, "%s: failed to lock lockfile",
                                    name);

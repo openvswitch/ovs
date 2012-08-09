@@ -229,14 +229,14 @@ compact_or_convert(const char *src_name_, const char *dst_name_,
 
     /* Lock the source, if we will be replacing it. */
     if (in_place) {
-        retval = lockfile_lock(src_name, 0, &src_lock);
+        retval = lockfile_lock(src_name, &src_lock);
         if (retval) {
             ovs_fatal(retval, "%s: failed to lock lockfile", src_name);
         }
     }
 
     /* Get (temporary) destination and lock it. */
-    retval = lockfile_lock(dst_name, 0, &dst_lock);
+    retval = lockfile_lock(dst_name, &dst_lock);
     if (retval) {
         ovs_fatal(retval, "%s: failed to lock lockfile", dst_name);
     }

@@ -649,7 +649,7 @@ ovsdb_file_compact(struct ovsdb_file *file)
 
     /* Lock temporary file. */
     tmp_name = xasprintf("%s.tmp", file->file_name);
-    retval = lockfile_lock(tmp_name, 0, &tmp_lock);
+    retval = lockfile_lock(tmp_name, &tmp_lock);
     if (retval) {
         error = ovsdb_io_error(retval, "could not get lock on %s", tmp_name);
         goto exit;
