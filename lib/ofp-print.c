@@ -856,8 +856,14 @@ ofp_print_flow_removed(struct ds *string, const struct ofp_header *oh)
     }
     ds_put_cstr(string, " duration");
     ofp_print_duration(string, fr.duration_sec, fr.duration_nsec);
-    ds_put_format(string, " idle%"PRIu16" pkts%"PRIu64" bytes%"PRIu64"\n",
-         fr.idle_timeout, fr.packet_count, fr.byte_count);
+    ds_put_format(string, " idle%"PRIu16, fr.idle_timeout);
+    if (fr.hard_timeout) {
+        /* The hard timeout was only added in OF1.2, so only print it if it is
+         * actually in use to avoid gratuitous change to the formatting. */
+        ds_put_format(string, " hard%"PRIu16, fr.hard_timeout);
+    }
+    ds_put_format(string, " pkts%"PRIu64" bytes%"PRIu64"\n",
+                  fr.packet_count, fr.byte_count);
 }
 
 static void

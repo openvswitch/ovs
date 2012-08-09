@@ -3142,6 +3142,7 @@ ofproto_rule_send_removed(struct rule *rule, uint8_t reason)
     calc_flow_duration__(rule->created, time_msec(),
                          &fr.duration_sec, &fr.duration_nsec);
     fr.idle_timeout = rule->idle_timeout;
+    fr.hard_timeout = rule->hard_timeout;
     rule->ofproto->ofproto_class->rule_get_stats(rule, &fr.packet_count,
                                                  &fr.byte_count);
 

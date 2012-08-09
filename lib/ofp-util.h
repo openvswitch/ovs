@@ -248,6 +248,7 @@ struct ofputil_flow_removed {
     uint32_t duration_sec;
     uint32_t duration_nsec;
     uint16_t idle_timeout;
+    uint16_t hard_timeout;
     uint64_t packet_count;      /* Packet count, UINT64_MAX if unknown. */
     uint64_t byte_count;        /* Byte count, UINT64_MAX if unknown. */
 };

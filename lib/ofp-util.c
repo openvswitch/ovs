@@ -1837,6 +1837,7 @@ ofputil_decode_flow_removed(struct ofputil_flow_removed *fr,
         fr->duration_sec = ntohl(ofr->duration_sec);
         fr->duration_nsec = ntohl(ofr->duration_nsec);
         fr->idle_timeout = ntohs(ofr->idle_timeout);
+        fr->hard_timeout = 0;
         fr->packet_count = ntohll(ofr->packet_count);
         fr->byte_count = ntohll(ofr->byte_count);
     } else if (raw == OFPRAW_NXT_FLOW_REMOVED) {
@@ -1858,6 +1859,7 @@ ofputil_decode_flow_removed(struct ofputil_flow_removed *fr,
         fr->duration_sec = ntohl(nfr->duration_sec);
         fr->duration_nsec = ntohl(nfr->duration_nsec);
         fr->idle_timeout = ntohs(nfr->idle_timeout);
+        fr->hard_timeout = 0;
         fr->packet_count = ntohll(nfr->packet_count);
         fr->byte_count = ntohll(nfr->byte_count);
     } else {
@@ -1891,6 +1893,7 @@ ofputil_encode_flow_removed(const struct ofputil_flow_removed *fr,
         ofr->duration_sec = htonl(fr->duration_sec);
         ofr->duration_nsec = htonl(fr->duration_nsec);
         ofr->idle_timeout = htons(fr->idle_timeout);
+        ofr->hard_timeout = htons(fr->hard_timeout);
         ofr->packet_count = htonll(fr->packet_count);
         ofr->byte_count = htonll(fr->byte_count);
         oxm_put_match(msg, &fr->rule);
