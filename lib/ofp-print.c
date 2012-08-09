@@ -1141,8 +1141,124 @@ ofp_print_ofpst_port_reply(struct ds *string, const struct ofp_header *oh,
 }
 
 static void
-ofp_print_ofpst_table_reply(struct ds *string, const struct ofp_header *oh,
-                            int verbosity)
+ofp_print_one_ofpst_table_reply(struct ds *string, enum ofp_version ofp_version,
+                                const char *name, struct ofp12_table_stats *ts)
+{
+    char name_[OFP_MAX_TABLE_NAME_LEN + 1];
+
+    ovs_strlcpy(name_, name, sizeof name_);
+
+    ds_put_format(string, "  %d: %-8s: ", ts->table_id, name_);
+    ds_put_format(string, "wild=0x%05"PRIx64", ", ntohll(ts->wildcards));
+    ds_put_format(string, "max=%6"PRIu32", ", ntohl(ts->max_entries));
+    ds_put_format(string, "active=%"PRIu32"\n", ntohl(ts->active_count));
+    ds_put_cstr(string, "               ");
+    ds_put_format(string, "lookup=%"PRIu64", ", ntohll(ts->lookup_count));
+    ds_put_format(string, "matched=%"PRIu64"\n", ntohll(ts->matched_count));
+
+    if (ofp_version < OFP11_VERSION) {
+        return;
+    }
+
+    ds_put_cstr(string, "               ");
+    ds_put_format(string, "match=0x%08"PRIx64", ", ntohll(ts->match));
+    ds_put_format(string, "instructions=0x%08"PRIx32", ",
+                  ntohl(ts->instructions));
+    ds_put_format(string, "config=0x%08"PRIx32"\n", ntohl(ts->config));
+    ds_put_cstr(string, "               ");
+    ds_put_format(string, "write_actions=0x%08"PRIx32", ",
+                  ntohl(ts->write_actions));
+    ds_put_format(string, "apply_actions=0x%08"PRIx32"\n",
+                  ntohl(ts->apply_actions));
+
+    if (ofp_version < OFP12_VERSION) {
+        return;
+    }
+
+    ds_put_cstr(string, "               ");
+    ds_put_format(string, "write_setfields=0x%016"PRIx64"\n",
+                  ntohll(ts->write_setfields));
+    ds_put_cstr(string, "               ");
+    ds_put_format(string, "apply_setfields=0x%016"PRIx64"\n",
+                  ntohll(ts->apply_setfields));
+    ds_put_cstr(string, "               ");
+    ds_put_format(string, "metadata_match=0x%016"PRIx64"\n",
+                  ntohll(ts->metadata_match));
+    ds_put_cstr(string, "               ");
+    ds_put_format(string, "metadata_write=0x%016"PRIx64"\n",
+                  ntohll(ts->metadata_write));
+}
+
+static void
+ofp_print_ofpst_table_reply12(struct ds *string, const struct ofp_header *oh,
+                              int verbosity)
+{
+    struct ofp12_table_stats *ts;
+    struct ofpbuf b;
+    size_t n;
+
+    ofpbuf_use_const(&b, oh, ntohs(oh->length));
+    ofpraw_pull_assert(&b);
+
+    n = b.size / sizeof *ts;
+    ds_put_format(string, " %zu tables\n", n);
+    if (verbosity < 1) {
+        return;
+    }
+
+    for (;;) {
+        ts = ofpbuf_try_pull(&b, sizeof *ts);
+        if (!ts) {
+            return;
+        }
+
+        ofp_print_one_ofpst_table_reply(string, OFP12_VERSION, ts->name, ts);
+     }
+}
+
+static void
+ofp_print_ofpst_table_reply11(struct ds *string, const struct ofp_header *oh,
+                              int verbosity)
+{
+    struct ofp11_table_stats *ts;
+    struct ofpbuf b;
+    size_t n;
+
+    ofpbuf_use_const(&b, oh, ntohs(oh->length));
+    ofpraw_pull_assert(&b);
+
+    n = b.size / sizeof *ts;
+    ds_put_format(string, " %zu tables\n", n);
+    if (verbosity < 1) {
+        return;
+    }
+
+    for (;;) {
+        struct ofp12_table_stats ts12;
+
+        ts = ofpbuf_try_pull(&b, sizeof *ts);
+        if (!ts) {
+            return;
+        }
+
+        ts12.table_id = ts->table_id;
+        ts12.wildcards = htonll(ntohl(ts->wildcards));
+        ts12.max_entries = ts->max_entries;
+        ts12.active_count = ts->active_count;
+        ts12.lookup_count = ts->lookup_count;
+        ts12.matched_count = ts->matched_count;
+        ts12.match = htonll(ntohl(ts->match));
+        ts12.instructions = ts->instructions;
+        ts12.config = ts->config;
+        ts12.write_actions = ts->write_actions;
+        ts12.apply_actions = ts->apply_actions;
+        ofp_print_one_ofpst_table_reply(string, OFP11_VERSION, ts->name, &ts12);
+     }
+}
+
+static void
+ofp_print_ofpst_table_reply10(struct ds *string, const struct ofp_header *oh,
+                              int verbosity)
 {
     struct ofp10_table_stats *ts;
     struct ofpbuf b;
@@ -1158,25 +1274,43 @@ ofp_print_ofpst_table_reply(struct ds *string, const struct ofp_header *oh,
     }
 
     for (;;) {
-        char name[OFP_MAX_TABLE_NAME_LEN + 1];
+        struct ofp12_table_stats ts12;
 
         ts = ofpbuf_try_pull(&b, sizeof *ts);
         if (!ts) {
             return;
         }
 
-        ovs_strlcpy(name, ts->name, sizeof name);
-
-        ds_put_format(string, "  %d: %-8s: ", ts->table_id, name);
-        ds_put_format(string, "wild=0x%05"PRIx32", ", ntohl(ts->wildcards));
-        ds_put_format(string, "max=%6"PRIu32", ", ntohl(ts->max_entries));
-        ds_put_format(string, "active=%"PRIu32"\n", ntohl(ts->active_count));
-        ds_put_cstr(string, "               ");
-        ds_put_format(string, "lookup=%"PRIu64", ",
-                      ntohll(get_32aligned_be64(&ts->lookup_count)));
-        ds_put_format(string, "matched=%"PRIu64"\n",
-                      ntohll(get_32aligned_be64(&ts->matched_count)));
+        ts12.table_id = ts->table_id;
+        ts12.wildcards = htonll(ntohl(ts->wildcards));
+        ts12.max_entries = ts->max_entries;
+        ts12.active_count = ts->active_count;
+        ts12.lookup_count = get_32aligned_be64(&ts->lookup_count);
+        ts12.matched_count = get_32aligned_be64(&ts->matched_count);
+        ofp_print_one_ofpst_table_reply(string, OFP10_VERSION, ts->name, &ts12);
      }
+}
+
+static void
+ofp_print_ofpst_table_reply(struct ds *string, const struct ofp_header *oh,
+                            int verbosity)
+{
+    switch ((enum ofp_version)oh->version) {
+    case OFP12_VERSION:
+        ofp_print_ofpst_table_reply12(string, oh, verbosity);
+        break;
+
+    case OFP11_VERSION:
+        ofp_print_ofpst_table_reply11(string, oh, verbosity);
+        break;
+
+    case OFP10_VERSION:
+        ofp_print_ofpst_table_reply10(string, oh, verbosity);
+        break;
+
+    default:
+        NOT_REACHED();
+    }
 }
 
 static void

@@ -766,7 +766,7 @@ OFPST_TABLE request (xid=0x1):
 ])
 AT_CLEANUP
 
-AT_SETUP([OFPST_TABLE reply])
+AT_SETUP([OFPST_TABLE reply - OF1.0])
 AT_KEYWORDS([ofp-print OFPT_STATS_REPLY])
 AT_CHECK([ovs-ofctl ofp-print "\
 01 11 00 4c 00 00 00 01 00 03 00 00 00 00 00 00 \
@@ -779,6 +779,61 @@ OFPST_TABLE reply (xid=0x1): 1 tables
   0: classifier: wild=0x3fffff, max=1048576, active=11
                lookup=0, matched=0
 ])
+AT_CLEANUP
+
+AT_SETUP([OFPST_TABLE reply - OF1.2])
+AT_KEYWORDS([ofp-print OFPT_STATS_REPLY])
+(mid="wild=0xfffffffff, max=1000000,"
+ tail="
+               match=0xfffffffff, instructions=0x00000007, config=0x00000000
+               write_actions=0x00000000, apply_actions=0x00000000
+               write_setfields=0x0000000fffffffff
+               apply_setfields=0x0000000fffffffff
+               metadata_match=0x0000000000000000
+               metadata_write=0x0000000000000000"
+ echo "OFPST_TABLE reply (OF1.2) (xid=0x2): 255 tables
+  0: classifier: $mid active=1
+               lookup=74614, matched=106024$tail"
+ x=1
+ while test $x -lt 254; do
+   printf "  %d: %-8s: $mid active=0
+               lookup=0, matched=0$tail
+" $x table$x
+   x=`expr $x + 1`
+ done
+ echo "  254: table254: $mid active=2
+               lookup=0, matched=0$tail") > expout
+
+(pad32="\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"
+ pad7="00 00 00 00 00 00 00 "
+ mid="00 00 00 0f ff ff ff ff \
+00 00 00 0f ff ff ff ff 00 00 00 00 00 00 00 00 \
+00 00 00 0f ff ff ff ff 00 00 00 0f ff ff ff ff \
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 \
+00 00 00 07 00 00 00 00 00 0f 42 40 "
+ tail="00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00"
+
+ echo -n "03 13 7f 90 00 00 00 02 00 03 00 00 00 00 00 00 "
+
+ x=0
+ printf "%02x $pad7" $x
+ printf "%s$pad32" "classifier" | od -A n -t x1 -v -N 32 | tr '\n' ' '
+ echo -n "$mid 00 00 00 01  "
+ echo -n "00 00 00 00 00 01 23 76 00 00 00 00 00 01 9e 28 "
+
+ x=1
+ while test $x -lt 254; do
+   printf "%02x $pad7" $x
+   printf "%s$pad32" "table$x" | od -A n -t x1 -v -N 32 | tr '\n' ' '
+   echo -n "$mid 00 00 00 00 $tail "
+   x=`expr $x + 1`
+ done
+
+ x=254
+ printf "%02x $pad7" $x
+ printf "%s$pad32" "table$x" | od -A n -t x1 -v -N 32 | tr '\n' ' '
+ echo -n "$mid 00 00 00 02 $tail") > in
+AT_CHECK([ovs-ofctl ofp-print "$(cat in)"], [0], [expout])
 AT_CLEANUP
 
 AT_SETUP([OFPST_PORT request])
