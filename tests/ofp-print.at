@@ -657,7 +657,7 @@ OFPST_FLOW request (xid=0x4): @&t@
 ])
 AT_CLEANUP
 
-AT_SETUP([OFPST_FLOW reply])
+AT_SETUP([OFPST_FLOW reply - OF1.0])
 AT_KEYWORDS([ofp-print OFPT_STATS_REPLY])
 AT_CHECK([ovs-ofctl ofp-print "\
 01 11 01 e4 00 00 00 04 00 01 00 00 00 60 00 00 \
@@ -698,6 +698,41 @@ OFPST_FLOW reply (xid=0x4):
  cookie=0x0, duration=4.28s, table=0, n_packets=1, n_bytes=60, idle_timeout=5, priority=65535,arp,in_port=1,vlan_tci=0x0000,dl_src=50:54:00:00:00:06,dl_dst=50:54:00:00:00:05,nw_src=192.168.0.2,nw_dst=192.168.0.1,arp_op=1,nw_tos=0,icmp_type=0,icmp_code=0 actions=output:3
  cookie=0x0, duration=9.096s, table=0, n_packets=13, n_bytes=1274, idle_timeout=5, icmp,vlan_tci=0x0000,dl_src=50:54:00:00:00:05,dl_dst=50:54:00:00:00:06,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,icmp_type=8,icmp_code=0 actions=output:1
  cookie=0x0, duration=0s, table=2, n_packets=0, n_bytes=0, actions=drop
+])
+AT_CLEANUP
+
+AT_SETUP([OFPST_FLOW reply - OF1.2])
+AT_KEYWORDS([ofp-print OFPT_STATS_REPLY])
+AT_CHECK([ovs-ofctl ofp-print "\
+03 13 01 78 00 00 00 02 00 01 00 00 00 00 00 00 \
+00 78 00 00 00 00 00 03 01 5e f3 c0 80 00 00 00 \
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 \
+00 00 00 00 00 00 00 01 00 00 00 00 00 00 00 62 \
+00 01 00 2d 80 00 00 04 00 00 00 02 80 00 06 06 \
+ca da ad d6 0d 37 80 00 0a 02 08 00 80 00 10 01 \
+00 80 00 04 08 00 00 00 00 00 00 00 00 00 00 00 \
+00 04 00 18 00 00 00 00 00 00 00 10 00 00 00 02 \
+05 dc 00 00 00 00 00 00 00 78 00 00 00 00 00 04 \
+20 7c 0a 40 80 00 00 00 00 00 00 00 00 00 00 00 \
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 02 \
+00 00 00 00 00 00 00 8c 00 01 00 2d 80 00 00 04 \
+00 00 00 02 80 00 06 06 52 54 00 c3 00 89 80 00 \
+0a 02 08 00 80 00 10 01 00 80 00 04 08 00 00 00 \
+00 00 00 00 00 00 00 00 00 04 00 18 00 00 00 00 \
+00 00 00 10 00 00 00 02 05 dc 00 00 00 00 00 00 \
+00 78 00 00 00 00 00 04 20 a9 d1 00 80 00 00 00 \
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 \
+00 00 00 00 00 00 00 01 00 00 00 00 00 00 00 2a \
+00 01 00 2d 80 00 00 04 00 00 00 02 80 00 06 06 \
+52 54 00 97 00 69 80 00 0a 02 08 00 80 00 10 01 \
+00 80 00 04 08 00 00 00 00 00 00 00 00 00 00 00 \
+00 04 00 18 00 00 00 00 00 00 00 10 00 00 00 02 \
+05 dc 00 00 00 00 00 00 \
+"], [0], [dnl
+OFPST_FLOW reply (OF1.2) (xid=0x2):
+ cookie=0x0, duration=3.023s, table=0, n_packets=1, n_bytes=98, ip,metadata=0,in_port=2,dl_dst=ca:da:ad:d6:0d:37,nw_tos=0 actions=output:2
+ cookie=0x0, duration=4.545s, table=0, n_packets=2, n_bytes=140, ip,metadata=0,in_port=2,dl_dst=52:54:00:c3:00:89,nw_tos=0 actions=output:2
+ cookie=0x0, duration=4.548s, table=0, n_packets=1, n_bytes=42, ip,metadata=0,in_port=2,dl_dst=52:54:00:97:00:69,nw_tos=0 actions=output:2
 ])
 AT_CLEANUP
 
