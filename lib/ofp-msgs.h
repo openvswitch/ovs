@@ -158,7 +158,7 @@ enum ofpraw {
 
     /* OFPT 1.0 (15): struct ofp10_port_mod. */
     OFPRAW_OFPT10_PORT_MOD,
-    /* OFPT 1.1 (16): struct ofp11_port_mod. */
+    /* OFPT 1.1+ (16): struct ofp11_port_mod. */
     OFPRAW_OFPT11_PORT_MOD,
 
     /* OFPT 1.0 (18): void. */

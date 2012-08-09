@@ -544,6 +544,20 @@ OFPT_PORT_MOD (OF1.1) (xid=0x3):port: 3: addr:50:54:00:00:00:01
 ])
 AT_CLEANUP
 
+AT_SETUP([OFPT_PORT_MOD - OF1.2])
+AT_KEYWORDS([ofp-print])
+AT_CHECK([ovs-ofctl ofp-print "\
+03 10 00 28 00 00 00 03 00 00 00 03 00 00 00 00 \
+50 54 00 00 00 01 00 00 00 00 00 01 00 00 00 01 \
+00 00 00 00 00 00 00 00 \
+" 3], [0], [dnl
+OFPT_PORT_MOD (OF1.2) (xid=0x3):port: 3: addr:50:54:00:00:00:01
+     config: PORT_DOWN
+     mask:   PORT_DOWN
+     advertise: UNCHANGED
+])
+AT_CLEANUP
+
 AT_SETUP([OFPST_DESC request])
 AT_KEYWORDS([ofp-print OFPT_STATS_REQUEST])
 AT_CHECK([ovs-ofctl ofp-print "0110000c0000000100000000"], [0], [dnl
