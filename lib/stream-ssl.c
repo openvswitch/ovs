@@ -230,7 +230,7 @@ new_ssl_stream(const char *name, int fd, enum session_type type,
         VLOG_ERR("CA certificate must be configured to use SSL");
         retval = ENOPROTOOPT;
     }
-    if (!SSL_CTX_check_private_key(ctx)) {
+    if (!retval && !SSL_CTX_check_private_key(ctx)) {
         VLOG_ERR("Private key does not match certificate public key: %s",
                  ERR_error_string(ERR_get_error(), NULL));
         retval = ENOPROTOOPT;
