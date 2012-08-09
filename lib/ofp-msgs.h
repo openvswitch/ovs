@@ -180,12 +180,16 @@ enum ofpraw {
     OFPRAW_OFPST_DESC_REPLY,
 
     /* OFPST 1.0 (1): struct ofp10_flow_stats_request. */
-    OFPRAW_OFPST_FLOW_REQUEST,
+    OFPRAW_OFPST10_FLOW_REQUEST,
+    /* OFPST 1.1+ (1): struct ofp11_flow_stats_request, uint8_t[8][]. */
+    OFPRAW_OFPST11_FLOW_REQUEST,
     /* NXST 1.0 (0): struct nx_flow_stats_request, uint8_t[8][]. */
     OFPRAW_NXST_FLOW_REQUEST,
 
     /* OFPST 1.0 (1): uint8_t[]. */
-    OFPRAW_OFPST_FLOW_REPLY,
+    OFPRAW_OFPST10_FLOW_REPLY,
+    /* OFPST 1.1+ (1): uint8_t[]. */
+    OFPRAW_OFPST11_FLOW_REPLY,
     /* NXST 1.0 (0): uint8_t[]. */
     OFPRAW_NXST_FLOW_REPLY,
 
@@ -357,9 +361,11 @@ enum ofptype {
     /* Statistics. */
     OFPTYPE_DESC_STATS_REQUEST,      /* OFPRAW_OFPST_DESC_REQUEST. */
     OFPTYPE_DESC_STATS_REPLY,        /* OFPRAW_OFPST_DESC_REPLY. */
-    OFPTYPE_FLOW_STATS_REQUEST,      /* OFPRAW_OFPST_FLOW_REQUEST.
+    OFPTYPE_FLOW_STATS_REQUEST,      /* OFPRAW_OFPST10_FLOW_REQUEST.
+                                      * OFPRAW_OFPST11_FLOW_REQUEST.
                                       * OFPRAW_NXST_FLOW_REQUEST. */
-    OFPTYPE_FLOW_STATS_REPLY,        /* OFPRAW_OFPST_FLOW_REPLY.
+    OFPTYPE_FLOW_STATS_REPLY,        /* OFPRAW_OFPST10_FLOW_REPLY.
+                                      * OFPRAW_OFPST11_FLOW_REPLY.
                                       * OFPRAW_NXST_FLOW_REPLY. */
     OFPTYPE_AGGREGATE_STATS_REQUEST, /* OFPRAW_OFPST_AGGREGATE_REQUEST.
                                       * OFPRAW_NXST_AGGREGATE_REQUEST. */

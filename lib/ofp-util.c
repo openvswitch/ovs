@@ -1453,7 +1453,7 @@ ofputil_decode_flow_stats_request(struct ofputil_flow_stats_request *fsr,
     ofpbuf_use_const(&b, oh, ntohs(oh->length));
     raw = ofpraw_pull_assert(&b);
     switch ((int) raw) {
-    case OFPRAW_OFPST_FLOW_REQUEST:
+    case OFPRAW_OFPST10_FLOW_REQUEST:
         return ofputil_decode_ofpst_flow_request(fsr, b.data, false);
 
     case OFPRAW_OFPST_AGGREGATE_REQUEST:
@@ -1487,7 +1487,7 @@ ofputil_encode_flow_stats_request(const struct ofputil_flow_stats_request *fsr,
 
         raw = (fsr->aggregate
                ? OFPRAW_OFPST_AGGREGATE_REQUEST
-               : OFPRAW_OFPST_FLOW_REQUEST);
+               : OFPRAW_OFPST11_FLOW_REQUEST);
         msg = ofpraw_alloc(raw, OFP12_VERSION, NXM_TYPICAL_LEN);
         ofsr = ofpbuf_put_zeros(msg, sizeof *ofsr);
         ofsr->table_id = fsr->table_id;
@@ -1505,7 +1505,7 @@ ofputil_encode_flow_stats_request(const struct ofputil_flow_stats_request *fsr,
 
         raw = (fsr->aggregate
                ? OFPRAW_OFPST_AGGREGATE_REQUEST
-               : OFPRAW_OFPST_FLOW_REQUEST);
+               : OFPRAW_OFPST10_FLOW_REQUEST);
         msg = ofpraw_alloc(raw, OFP10_VERSION, 0);
         ofsr = ofpbuf_put_zeros(msg, sizeof *ofsr);
         ofputil_cls_rule_to_ofp10_match(&fsr->match, &ofsr->match);
@@ -1596,7 +1596,7 @@ ofputil_decode_flow_stats_reply(struct ofputil_flow_stats *fs,
 
     if (!msg->size) {
         return EOF;
-    } else if (raw == OFPRAW_OFPST_FLOW_REPLY) {
+    } else if (raw == OFPRAW_OFPST10_FLOW_REPLY) {
         const struct ofp10_flow_stats *ofs;
         size_t length;
 
@@ -1708,7 +1708,7 @@ ofputil_append_flow_stats_reply(const struct ofputil_flow_stats *fs,
     enum ofpraw raw;
 
     ofpraw_decode_partial(&raw, reply->data, reply->size);
-    if (raw == OFPRAW_OFPST_FLOW_REPLY) {
+    if (raw == OFPRAW_OFPST10_FLOW_REPLY) {
         struct ofp10_flow_stats *ofs;
 
         ofpbuf_put_uninit(reply, sizeof *ofs);
