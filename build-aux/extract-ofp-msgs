@@ -28,7 +28,8 @@ version_map = {"1.0":     (OFP10_VERSION, OFP10_VERSION),
                "1.1+":    (OFP11_VERSION, OFP13_VERSION),
                "1.2+":    (OFP12_VERSION, OFP13_VERSION),
                "1.3+":    (OFP13_VERSION, OFP13_VERSION),
-               "1.0-1.1": (OFP10_VERSION, OFP11_VERSION)}
+               "1.0-1.1": (OFP10_VERSION, OFP11_VERSION),
+               "1.0-1.2": (OFP10_VERSION, OFP12_VERSION)}
 
 def get_line():
     global line
