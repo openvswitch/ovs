@@ -26,6 +26,7 @@
 #include <sys/socket.h>
 #include <netinet/tcp.h>
 #include <openssl/err.h>
+#include <openssl/rand.h>
 #include <openssl/ssl.h>
 #include <openssl/x509v3.h>
 #include <poll.h>
@@ -34,6 +35,7 @@
 #include <unistd.h>
 #include "coverage.h"
 #include "dynamic-string.h"
+#include "entropy.h"
 #include "leak-checker.h"
 #include "ofpbuf.h"
 #include "openflow/openflow.h"
@@ -899,6 +901,36 @@ do_ssl_init(void)
 
     SSL_library_init();
     SSL_load_error_strings();
+
+    if (!RAND_status()) {
+        /* We occasionally see OpenSSL fail to seed its random number generator
+         * in heavily loaded hypervisors.  I suspect the following scenario:
+         *
+         * 1. OpenSSL calls read() to get 32 bytes from /dev/urandom.
+         * 2. The kernel generates 10 bytes of randomness and copies it out.
+         * 3. A signal arrives (perhaps SIGALRM).
+         * 4. The kernel interrupts the system call to service the signal.
+         * 5. Userspace gets 10 bytes of entropy.
+         * 6. OpenSSL doesn't read again to get the final 22 bytes.  Therefore
+         *    OpenSSL doesn't have enough entropy to consider itself
+         *    initialized.
+         *
+         * The only part I'm not entirely sure about is #6, because the OpenSSL
+         * code is so hard to read. */
+        uint8_t seed[32];
+        int retval;
+
+        VLOG_WARN("OpenSSL random seeding failed, reseeding ourselves");
+
+        retval = get_entropy(seed, sizeof seed);
+        if (retval) {
+            VLOG_ERR("failed to obtain entropy (%s)",
+                     ovs_retval_to_string(retval));
+            return retval > 0 ? retval : ENOPROTOOPT;
+        }
+
+        RAND_seed(seed, sizeof seed);
+    }
 
     /* New OpenSSL changed TLSv1_method() to return a "const" pointer, so the
      * cast is needed to avoid a warning with those newer versions. */
