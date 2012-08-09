@@ -203,11 +203,15 @@ enum ofpraw {
     /* NXST 1.0 (1): struct ofp_aggregate_stats_reply. */
     OFPRAW_NXST_AGGREGATE_REPLY,
 
-    /* OFPST 1.0 (3): void. */
+    /* OFPST 1.0-1.2 (3): void. */
     OFPRAW_OFPST_TABLE_REQUEST,
 
     /* OFPST 1.0 (3): struct ofp10_table_stats[]. */
-    OFPRAW_OFPST_TABLE_REPLY,
+    OFPRAW_OFPST10_TABLE_REPLY,
+    /* OFPST 1.1 (3): struct ofp11_table_stats[]. */
+    OFPRAW_OFPST11_TABLE_REPLY,
+    /* OFPST 1.2 (3): struct ofp12_table_stats[]. */
+    OFPRAW_OFPST12_TABLE_REPLY,
 
     /* OFPST 1.0 (4): struct ofp10_port_stats_request. */
     OFPRAW_OFPST_PORT_REQUEST,
@@ -372,7 +376,9 @@ enum ofptype {
     OFPTYPE_AGGREGATE_STATS_REPLY,   /* OFPRAW_OFPST_AGGREGATE_REPLY.
                                       * OFPRAW_NXST_AGGREGATE_REPLY. */
     OFPTYPE_TABLE_STATS_REQUEST,     /* OFPRAW_OFPST_TABLE_REQUEST. */
-    OFPTYPE_TABLE_STATS_REPLY,       /* OFPRAW_OFPST_TABLE_REPLY. */
+    OFPTYPE_TABLE_STATS_REPLY,       /* OFPRAW_OFPST10_TABLE_REPLY.
+                                      * OFPRAW_OFPST11_TABLE_REPLY.
+                                      * OFPRAW_OFPST12_TABLE_REPLY. */
     OFPTYPE_PORT_STATS_REQUEST,      /* OFPRAW_OFPST_PORT_REQUEST. */
     OFPTYPE_PORT_STATS_REPLY,        /* OFPRAW_OFPST_PORT_REPLY. */
     OFPTYPE_QUEUE_STATS_REQUEST,     /* OFPRAW_OFPST_QUEUE_REQUEST. */
