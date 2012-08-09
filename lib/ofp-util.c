@@ -2846,7 +2846,8 @@ ofputil_encode_port_mod(const struct ofputil_port_mod *pm,
         break;
     }
 
-    case OFP11_VERSION: {
+    case OFP11_VERSION:
+    case OFP12_VERSION: {
         struct ofp11_port_mod *opm;
 
         b = ofpraw_alloc(OFPRAW_OFPT11_PORT_MOD, ofp_version, 0);
@@ -2859,7 +2860,6 @@ ofputil_encode_port_mod(const struct ofputil_port_mod *pm,
         break;
     }
 
-    case OFP12_VERSION:
     default:
         NOT_REACHED();
     }
