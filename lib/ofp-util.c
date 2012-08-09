@@ -1708,7 +1708,28 @@ ofputil_append_flow_stats_reply(const struct ofputil_flow_stats *fs,
     enum ofpraw raw;
 
     ofpraw_decode_partial(&raw, reply->data, reply->size);
-    if (raw == OFPRAW_OFPST10_FLOW_REPLY) {
+    if (raw == OFPRAW_OFPST11_FLOW_REPLY) {
+        struct ofp11_flow_stats *ofs;
+
+        ofpbuf_put_uninit(reply, sizeof *ofs);
+        oxm_put_match(reply, &fs->rule);
+        ofpacts_put_openflow11_instructions(fs->ofpacts, fs->ofpacts_len,
+                                            reply);
+
+        ofs = ofpbuf_at_assert(reply, start_ofs, sizeof *ofs);
+        ofs->length = htons(reply->size - start_ofs);
+        ofs->table_id = fs->table_id;
+        ofs->pad = 0;
+        ofs->duration_sec = htonl(fs->duration_sec);
+        ofs->duration_nsec = htonl(fs->duration_nsec);
+        ofs->priority = htons(fs->rule.priority);
+        ofs->idle_timeout = htons(fs->idle_timeout);
+        ofs->hard_timeout = htons(fs->hard_timeout);
+        memset(ofs->pad2, 0, sizeof ofs->pad2);
+        ofs->cookie = fs->cookie;
+        ofs->packet_count = htonll(unknown_to_zero(fs->packet_count));
+        ofs->byte_count = htonll(unknown_to_zero(fs->byte_count));
+    } else if (raw == OFPRAW_OFPST10_FLOW_REPLY) {
         struct ofp10_flow_stats *ofs;
 
         ofpbuf_put_uninit(reply, sizeof *ofs);
