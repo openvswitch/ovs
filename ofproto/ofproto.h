@@ -349,6 +349,7 @@ void ofproto_get_all_flows(struct ofproto *p, struct ds *);
 void ofproto_get_netflow_ids(const struct ofproto *,
                              uint8_t *engine_type, uint8_t *engine_id);
 int ofproto_port_get_cfm_fault(const struct ofproto *, uint16_t ofp_port);
+int ofproto_port_get_cfm_opup(const struct ofproto *, uint16_t ofp_port);
 int ofproto_port_get_cfm_remote_mpids(const struct ofproto *,
                                       uint16_t ofp_port, const uint64_t **rmps,
                                       size_t *n_rmps);

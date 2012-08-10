@@ -1764,6 +1764,13 @@
         frame having an invalid interval.
       </column>
 
+      <column name="cfm_remote_opstate">
+        <p>When in extended mode, indicates the operational state of the
+          remote endpoint as either <code>up</code> or <code>down</code>.  See
+          <ref column="other_config" key="cfm_opstate"/>.
+        </p>
+      </column>
+
       <column name="cfm_health">
         <p>
           Indicates the health of the interface as a percentage of CCM frames

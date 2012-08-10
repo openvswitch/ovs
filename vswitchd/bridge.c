@@ -1696,7 +1696,7 @@ static void
 iface_refresh_cfm_stats(struct iface *iface)
 {
     const struct ovsrec_interface *cfg = iface->cfg;
-    int fault, error;
+    int fault, opup, error;
     const uint64_t *rmps;
     size_t n_rmps;
     int health;
@@ -1725,6 +1725,14 @@ iface_refresh_cfm_stats(struct iface *iface)
     } else {
         ovsrec_interface_set_cfm_fault(cfg, NULL, 0);
         ovsrec_interface_set_cfm_fault_status(cfg, NULL, 0);
+    }
+
+    opup = ofproto_port_get_cfm_opup(iface->port->bridge->ofproto,
+                                     iface->ofp_port);
+    if (opup >= 0) {
+        ovsrec_interface_set_cfm_remote_opstate(cfg, opup ? "up" : "down");
+    } else {
+        ovsrec_interface_set_cfm_remote_opstate(cfg, NULL);
     }
 
     error = ofproto_port_get_cfm_remote_mpids(iface->port->bridge->ofproto,

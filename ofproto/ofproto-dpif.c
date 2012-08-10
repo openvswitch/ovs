@@ -1316,6 +1316,14 @@ get_cfm_fault(const struct ofport *ofport_)
 }
 
 static int
+get_cfm_opup(const struct ofport *ofport_)
+{
+    struct ofport_dpif *ofport = ofport_dpif_cast(ofport_);
+
+    return ofport->cfm ? cfm_get_opup(ofport->cfm) : -1;
+}
+
+static int
 get_cfm_remote_mpids(const struct ofport *ofport_, const uint64_t **rmps,
                      size_t *n_rmps)
 {
@@ -7173,6 +7181,7 @@ const struct ofproto_class ofproto_dpif_class = {
     set_sflow,
     set_cfm,
     get_cfm_fault,
+    get_cfm_opup,
     get_cfm_remote_mpids,
     get_cfm_health,
     set_stp,

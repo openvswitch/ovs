@@ -2594,13 +2594,26 @@ ofproto_get_netflow_ids(const struct ofproto *ofproto,
 /* Checks the fault status of CFM for 'ofp_port' within 'ofproto'.  Returns a
  * bitmask of 'cfm_fault_reason's to indicate a CFM fault (generally
  * indicating a connectivity problem).  Returns zero if CFM is not faulted,
- * and -1 if CFM is not enabled on 'port'. */
+ * and -1 if CFM is not enabled on 'ofp_port'. */
 int
 ofproto_port_get_cfm_fault(const struct ofproto *ofproto, uint16_t ofp_port)
 {
     struct ofport *ofport = ofproto_get_port(ofproto, ofp_port);
     return (ofport && ofproto->ofproto_class->get_cfm_fault
             ? ofproto->ofproto_class->get_cfm_fault(ofport)
+            : -1);
+}
+
+/* Checks the operational status reported by the remote CFM endpoint of
+ * 'ofp_port'  Returns 1 if operationally up, 0 if operationally down, and -1
+ * if CFM is not enabled on 'ofp_port' or does not support operational status.
+ */
+int
+ofproto_port_get_cfm_opup(const struct ofproto *ofproto, uint16_t ofp_port)
+{
+    struct ofport *ofport = ofproto_get_port(ofproto, ofp_port);
+    return (ofport && ofproto->ofproto_class->get_cfm_opup
+            ? ofproto->ofproto_class->get_cfm_opup(ofport)
             : -1);
 }
 
