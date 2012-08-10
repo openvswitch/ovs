@@ -33,6 +33,14 @@ ovs_wait () {
     done
     exit 1
 }
+
+# Prints the integers from $1 to $2, increasing by $3 (default 1) on stdout.
+seq () {
+    while test $1 -le $2; do
+        echo $1
+        set `expr $1 + ${3-1}` $2 $3
+    done
+}
 ]
 m4_divert_pop([PREPARE_TESTS])
 
