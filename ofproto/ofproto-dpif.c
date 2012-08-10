@@ -2464,9 +2464,14 @@ port_run(struct ofport_dpif *ofport)
 
     port_run_fast(ofport);
     if (ofport->cfm) {
+        int cfm_opup = cfm_get_opup(ofport->cfm);
+
         cfm_run(ofport->cfm);
-        enable = enable && !cfm_get_fault(ofport->cfm)
-            && cfm_get_opup(ofport->cfm);
+        enable = enable && !cfm_get_fault(ofport->cfm);
+
+        if (cfm_opup >= 0) {
+            enable = enable && cfm_opup;
+        }
     }
 
     if (ofport->bundle) {

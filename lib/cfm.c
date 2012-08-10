@@ -684,12 +684,17 @@ cfm_get_health(const struct cfm *cfm)
 
 /* Gets the operational state of 'cfm'.  'cfm' is considered operationally down
  * if it has received a CCM with the operationally down bit set from any of its
- * remote maintenance points. Returns true if 'cfm' is operationally up. False
- * otherwise. */
-bool
+ * remote maintenance points. Returns 1 if 'cfm' is operationally up, 0 if
+ * 'cfm' is operationally down, or -1 if 'cfm' has no operational state
+ * (because it isn't in extended mode). */
+int
 cfm_get_opup(const struct cfm *cfm)
 {
-    return cfm->remote_opup;
+    if (cfm->extended) {
+        return cfm->remote_opup;
+    } else {
+        return -1;
+    }
 }
 
 /* Populates 'rmps' with an array of remote maintenance points reachable by
