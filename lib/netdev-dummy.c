@@ -55,9 +55,14 @@ struct netdev_dummy {
 
 static struct shash dummy_netdev_devs = SHASH_INITIALIZER(&dummy_netdev_devs);
 
+static unixctl_cb_func netdev_dummy_set_admin_state;
 static int netdev_dummy_create(const struct netdev_class *, const char *,
                                struct netdev_dev **);
-static void netdev_dummy_poll_notify(const struct netdev *);
+static void netdev_dev_dummy_poll_notify(struct netdev_dev_dummy *);
+static int netdev_dev_dummy_update_flags(struct netdev_dev_dummy *,
+                                         enum netdev_flags off,
+                                         enum netdev_flags on,
+                                         enum netdev_flags *old_flagsp);
 
 static bool
 is_dummy_class(const struct netdev_class *class)
@@ -201,7 +206,7 @@ netdev_dummy_set_etheraddr(struct netdev *netdev,
 
     if (!eth_addr_equals(dev->hwaddr, mac)) {
         memcpy(dev->hwaddr, mac, ETH_ADDR_LEN);
-        netdev_dummy_poll_notify(netdev);
+        netdev_dev_dummy_poll_notify(dev);
     }
 
     return 0;
@@ -266,6 +271,14 @@ netdev_dummy_update_flags(struct netdev *netdev,
     struct netdev_dev_dummy *dev =
         netdev_dev_dummy_cast(netdev_get_dev(netdev));
 
+    return netdev_dev_dummy_update_flags(dev, off, on, old_flagsp);
+}
+
+static int
+netdev_dev_dummy_update_flags(struct netdev_dev_dummy *dev,
+                              enum netdev_flags off, enum netdev_flags on,
+                              enum netdev_flags *old_flagsp)
+{
     if ((off | on) & ~(NETDEV_UP | NETDEV_PROMISC)) {
         return EINVAL;
     }
@@ -274,7 +287,7 @@ netdev_dummy_update_flags(struct netdev *netdev,
     dev->flags |= on;
     dev->flags &= ~off;
     if (*old_flagsp != dev->flags) {
-        netdev_dummy_poll_notify(netdev);
+        netdev_dev_dummy_poll_notify(dev);
     }
     return 0;
 }
@@ -288,11 +301,8 @@ netdev_dummy_change_seq(const struct netdev *netdev)
 /* Helper functions. */
 
 static void
-netdev_dummy_poll_notify(const struct netdev *netdev)
+netdev_dev_dummy_poll_notify(struct netdev_dev_dummy *dev)
 {
-    struct netdev_dev_dummy *dev =
-        netdev_dev_dummy_cast(netdev_get_dev(netdev));
-
     dev->change_seq++;
     if (!dev->change_seq) {
         dev->change_seq++;
@@ -443,11 +453,62 @@ netdev_dummy_receive(struct unixctl_conn *conn,
     }
 }
 
+static void
+netdev_dev_dummy_set_admin_state(struct netdev_dev_dummy *dev,
+                                 bool admin_state)
+{
+    enum netdev_flags old_flags;
+
+    if (admin_state) {
+        netdev_dev_dummy_update_flags(dev, 0, NETDEV_UP, &old_flags);
+    } else {
+        netdev_dev_dummy_update_flags(dev, NETDEV_UP, 0, &old_flags);
+    }
+}
+
+static void
+netdev_dummy_set_admin_state(struct unixctl_conn *conn, int argc,
+                             const char *argv[], void *aux OVS_UNUSED)
+{
+    bool up;
+
+    if (!strcasecmp(argv[argc - 1], "up")) {
+        up = true;
+    } else if ( !strcasecmp(argv[argc - 1], "down")) {
+        up = false;
+    } else {
+        unixctl_command_reply_error(conn, "Invalid Admin State");
+        return;
+    }
+
+    if (argc > 2) {
+        struct netdev_dev_dummy *dummy_dev;
+
+        dummy_dev  = shash_find_data(&dummy_netdev_devs, argv[1]);
+        if (dummy_dev) {
+            netdev_dev_dummy_set_admin_state(dummy_dev, up);
+        } else {
+            unixctl_command_reply_error(conn, "Unknown Dummy Interface");
+            return;
+        }
+    } else {
+        struct shash_node *node;
+
+        SHASH_FOR_EACH (node, &dummy_netdev_devs) {
+            netdev_dev_dummy_set_admin_state(node->data, up);
+        }
+    }
+    unixctl_command_reply(conn, "OK");
+}
+
 void
 netdev_dummy_register(bool override)
 {
     unixctl_command_register("netdev-dummy/receive", "NAME PACKET|FLOW...",
                              2, INT_MAX, netdev_dummy_receive, NULL);
+    unixctl_command_register("netdev-dummy/set-admin-state",
+                             "[netdev] up|down", 1, 2,
+                             netdev_dummy_set_admin_state, NULL);
 
     if (override) {
         struct sset types;
