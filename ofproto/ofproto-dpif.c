@@ -4255,20 +4255,24 @@ subfacet_create(struct facet *facet, enum odp_key_fitness key_fitness,
     uint32_t key_hash = odp_flow_key_hash(key, key_len);
     struct subfacet *subfacet;
 
-    subfacet = subfacet_find__(ofproto, key, key_len, key_hash, &facet->flow);
-    if (subfacet) {
-        if (subfacet->facet == facet) {
-            return subfacet;
+    if (list_is_empty(&facet->subfacets)) {
+        subfacet = &facet->one_subfacet;
+    } else {
+        subfacet = subfacet_find__(ofproto, key, key_len, key_hash,
+                                   &facet->flow);
+        if (subfacet) {
+            if (subfacet->facet == facet) {
+                return subfacet;
+            }
+
+            /* This shouldn't happen. */
+            VLOG_ERR_RL(&rl, "subfacet with wrong facet");
+            subfacet_destroy(subfacet);
         }
 
-        /* This shouldn't happen. */
-        VLOG_ERR_RL(&rl, "subfacet with wrong facet");
-        subfacet_destroy(subfacet);
+        subfacet = xmalloc(sizeof *subfacet);
     }
 
-    subfacet = (list_is_empty(&facet->subfacets)
-                ? &facet->one_subfacet
-                : xmalloc(sizeof *subfacet));
     hmap_insert(&ofproto->subfacets, &subfacet->hmap_node, key_hash);
     list_push_back(&facet->subfacets, &subfacet->list_node);
     subfacet->facet = facet;
