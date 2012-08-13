@@ -4257,6 +4257,14 @@ subfacet_create(struct facet *facet, enum odp_key_fitness key_fitness,
 
     if (list_is_empty(&facet->subfacets)) {
         subfacet = &facet->one_subfacet;
+
+        /* This subfacet should conceptually be created, and have its first
+         * packet pass through, at the same time that its facet was created.
+         * If we called time_msec() here, then the subfacet could look
+         * (occasionally) as though it was used some time after the facet was
+         * used.  That can make a one-packet flow look like it has a nonzero
+         * duration, which looks odd in e.g. NetFlow statistics. */
+        subfacet->used = facet->used;
     } else {
         subfacet = subfacet_find__(ofproto, key, key_len, key_hash,
                                    &facet->flow);
@@ -4271,6 +4279,7 @@ subfacet_create(struct facet *facet, enum odp_key_fitness key_fitness,
         }
 
         subfacet = xmalloc(sizeof *subfacet);
+        subfacet->used = time_msec();
     }
 
     hmap_insert(&ofproto->subfacets, &subfacet->hmap_node, key_hash);
@@ -4284,7 +4293,6 @@ subfacet_create(struct facet *facet, enum odp_key_fitness key_fitness,
         subfacet->key = NULL;
         subfacet->key_len = 0;
     }
-    subfacet->used = time_msec();
     subfacet->dp_packet_count = 0;
     subfacet->dp_byte_count = 0;
     subfacet->actions_len = 0;
