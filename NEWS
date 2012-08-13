@@ -1,3 +1,7 @@
+v1.7.1 - 13 Aug 2012
+------------------------
+    - Bug fixes.
+
 v1.7.0 - 30 Jul 2012
 ------------------------
     - kernel modules are renamed. openvswitch_mod.ko is now

@@ -1,3 +1,10 @@
+openvswitch (1.7.1-1) unstable; urgency=low
+  [ Open vSwitch team ]
+  * New upstream version
+    - Bug fixes.
+
+ -- Open vSwitch team <dev@openvswitch.org>  Mon, 13 Aug 2012 15:35:53 +0900
+
 openvswitch (1.7.0-1) unstable; urgency=low
   [ Open vSwitch team ]
   * New upstream version
