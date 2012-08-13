@@ -477,7 +477,7 @@ ssl_connect(struct stream *stream)
              * certificate, but that's more trouble than it's worth.  These
              * connections will succeed the next time they retry, assuming that
              * they have a certificate against the correct CA.) */
-            VLOG_ERR("rejecting SSL connection during bootstrap race window");
+            VLOG_INFO("rejecting SSL connection during bootstrap race window");
             return EPROTO;
         } else {
             return 0;
