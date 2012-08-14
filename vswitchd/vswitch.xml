@@ -820,7 +820,8 @@
         <dt><code>active-backup</code></dt>
         <dd>
           Assigns all flows to one slave, failing over to a backup slave when
-          the active slave is disabled.
+          the active slave is disabled.  This is the only bonding mode in which
+          interfaces may be plugged into different upstream switches.
         </dd>
       </dl>
 
