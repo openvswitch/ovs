@@ -962,12 +962,10 @@
         </column>
       </group>
 
-      <group title="SLB Configuration">
+      <group title="Rebalancing Configuration">
         <p>
           These settings control behavior when a bond is in
-          <code>balance-slb</code> mode, regardless of whether the bond was
-          intentionally configured in SLB mode or it fell back to SLB mode
-          because LACP negotiation failed.
+          <code>balance-slb</code> or <code>balance-tcp</code> mode.
         </p>
 
         <column name="other_config" key="bond-rebalance-interval"
