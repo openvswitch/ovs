@@ -93,7 +93,7 @@ AT_CHECK([tail -1 stdout], [0],
 ])
 
 AT_CAPTURE_FILE([ofctl_monitor.log])
-AT_CHECK([ovs-ofctl monitor br0 65534 invalid_ttl --detach --pidfile 2> ofctl_monitor.log])
+AT_CHECK([ovs-ofctl monitor br0 65534 invalid_ttl --detach --no-chdir --pidfile 2> ofctl_monitor.log])
 AT_CHECK([ovs-appctl ofproto/trace br0 'in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=2,frag=no)' -generate], [0], [stdout])
 OVS_WAIT_UNTIL([ovs-appctl -t ovs-ofctl exit])
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
@@ -254,7 +254,7 @@ cookie=0x9 table=7 in_port=86 actions=mod_tp_dst:86,controller,controller
 AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 
 dnl Flow miss.
-AT_CHECK([ovs-ofctl monitor -P openflow10 br0 65534 --detach --pidfile 2> ofctl_monitor.log])
+AT_CHECK([ovs-ofctl monitor -P openflow10 br0 65534 --detach --no-chdir --pidfile 2> ofctl_monitor.log])
 
 for i in 1 2 3 ; do
     ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=9)'
@@ -273,7 +273,7 @@ priority:0,tunnel:0,metadata:0,in_port:0000,tci(0) mac(50:54:00:00:00:05->50:54:
 ])
 
 dnl Singleton controller action.
-AT_CHECK([ovs-ofctl monitor -P openflow10 br0 65534 --detach --pidfile 2> ofctl_monitor.log])
+AT_CHECK([ovs-ofctl monitor -P openflow10 br0 65534 --detach --no-chdir --pidfile 2> ofctl_monitor.log])
 
 for i in 1 2 3 ; do
     ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=10:11:11:11:11:11,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=10)'
@@ -292,7 +292,7 @@ priority:0,tunnel:0,metadata:0,in_port:0000,tci(0) mac(10:11:11:11:11:11->50:54:
 ])
 
 dnl Modified controller action.
-AT_CHECK([ovs-ofctl monitor -P openflow10 br0 65534 --detach --pidfile 2> ofctl_monitor.log])
+AT_CHECK([ovs-ofctl monitor -P openflow10 br0 65534 --detach --no-chdir --pidfile 2> ofctl_monitor.log])
 
 for i in 1 2 3 ; do
     ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=30:33:33:33:33:33,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=10)'
@@ -311,7 +311,7 @@ priority:0,tunnel:0,metadata:0,in_port:0000,tci(vlan:15,pcp:0) mac(30:33:33:33:3
 ])
 
 dnl Checksum TCP.
-AT_CHECK([ovs-ofctl monitor br0 65534 -P nxm --detach --pidfile 2> ofctl_monitor.log])
+AT_CHECK([ovs-ofctl monitor br0 65534 -P nxm --detach --no-chdir --pidfile 2> ofctl_monitor.log])
 
 for i in 1 ; do
     ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=20:22:22:22:22:22,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=11)'
@@ -348,7 +348,7 @@ priority:0,tunnel:0,metadata:0,in_port:0000,tci(vlan:80,pcp:0) mac(80:81:81:81:8
 ])
 
 dnl Checksum UDP.
-AT_CHECK([ovs-ofctl monitor br0 65534 --detach --pidfile 2> ofctl_monitor.log])
+AT_CHECK([ovs-ofctl monitor br0 65534 --detach --no-chdir --pidfile 2> ofctl_monitor.log])
 
 for i in 1 ; do
     ovs-appctl netdev-dummy/receive p1 '50 54 00 00 00 07 20 22 22 22 22 22 08 00 45 00 00 1C 00 00 00 00 00 11 00 00 C0 A8 00 01 C0 A8 00 02 00 08 00 0B 00 00 12 34 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00'
@@ -949,7 +949,7 @@ OVS_VSWITCHD_START(
      add-id-to-interface=false], [<0>
 ])
 
-AT_CHECK([test-netflow --detach --pidfile $NETFLOW_PORT:127.0.0.1 > netflow.log])AT_CAPTURE_FILE([netflow.log])
+AT_CHECK([test-netflow --detach --no-chdir --pidfile $NETFLOW_PORT:127.0.0.1 > netflow.log])AT_CAPTURE_FILE([netflow.log])
 
 for delay in 1000 30000; do
     ovs-appctl netdev-dummy/receive p1 'in_port(2),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'
@@ -992,7 +992,7 @@ OVS_VSWITCHD_START(
      add-id-to-interface=false], [<0>
 ])
 
-AT_CHECK([test-netflow --detach --pidfile $NETFLOW_PORT:127.0.0.1 > netflow.log])AT_CAPTURE_FILE([netflow.log])
+AT_CHECK([test-netflow --detach --no-chdir --pidfile $NETFLOW_PORT:127.0.0.1 > netflow.log])AT_CAPTURE_FILE([netflow.log])
 
 AT_CHECK([ovs-appctl time/stop])
 n=1

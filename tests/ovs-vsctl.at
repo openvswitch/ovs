@@ -4,7 +4,7 @@ dnl Creates an empty database in the current directory and then starts
 dnl an ovsdb-server on it for ovs-vsctl to connect to.
 m4_define([OVS_VSCTL_SETUP],
   [OVSDB_INIT([db])
-   AT_CHECK([ovsdb-server --detach --pidfile="`pwd`"/pid --remote=punix:socket --unixctl="`pwd`"/unixctl db >/dev/null 2>&1], [0], [ignore], [ignore])])
+   AT_CHECK([ovsdb-server --detach --no-chdir --pidfile="`pwd`"/pid --remote=punix:socket --unixctl="`pwd`"/unixctl db >/dev/null 2>&1], [0], [ignore], [ignore])])
 
 dnl OVS_VSCTL_CLEANUP
 dnl

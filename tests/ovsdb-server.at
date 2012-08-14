@@ -24,7 +24,7 @@ m4_define([OVSDB_CHECK_EXECUTION],
    AT_KEYWORDS([ovsdb server positive unix $5])
    $2 > schema
    AT_CHECK([ovsdb-tool create db schema], [0], [stdout], [ignore])
-   AT_CHECK([ovsdb-server --detach --pidfile="`pwd`"/pid --remote=punix:socket --unixctl="`pwd`"/unixctl db], [0], [ignore], [ignore])
+   AT_CHECK([ovsdb-server --detach --no-chdir --pidfile="`pwd`"/pid --remote=punix:socket --unixctl="`pwd`"/unixctl db], [0], [ignore], [ignore])
    m4_foreach([txn], [$3], 
      [AT_CHECK([ovsdb-client transact unix:socket 'txn'], [0], [stdout], [ignore],
      [test ! -e pid || kill `cat pid`])
@@ -134,7 +134,7 @@ AT_SETUP([ovsdb-client get-schema-version])
 AT_KEYWORDS([ovsdb server positive])
 ordinal_schema > schema
 AT_CHECK([ovsdb-tool create db schema], [0], [ignore], [ignore])
-AT_CHECK([ovsdb-server --detach --pidfile="`pwd`"/pid --unixctl="`pwd`"/unixctl --remote=punix:socket db], [0], [ignore], [ignore])
+AT_CHECK([ovsdb-server --detach --no-chdir --pidfile="`pwd`"/pid --unixctl="`pwd`"/unixctl --remote=punix:socket db], [0], [ignore], [ignore])
 AT_CHECK([ovsdb-client get-schema-version unix:socket ordinals], [0], [5.1.3
 ])
 OVSDB_SERVER_SHUTDOWN
@@ -144,7 +144,7 @@ AT_SETUP([database multiplexing implementation])
 AT_KEYWORDS([ovsdb server positive])
 ordinal_schema > schema
 AT_CHECK([ovsdb-tool create db schema], [0], [ignore], [ignore])
-AT_CHECK([ovsdb-server --detach --pidfile="`pwd`"/pid --unixctl="`pwd`"/unixctl --remote=punix:socket db], [0], [ignore], [ignore])
+AT_CHECK([ovsdb-server --detach --no-chdir --pidfile="`pwd`"/pid --unixctl="`pwd`"/unixctl --remote=punix:socket db], [0], [ignore], [ignore])
 AT_CHECK(
   [[ovsdb-client list-dbs unix:socket]], 
   [0], [ordinals
@@ -172,7 +172,7 @@ AT_CHECK(
        {"op": "insert",
         "table": "Manager",
         "row": {"manager": "punix:socket"}}]']], [0], [ignore], [ignore])
-AT_CHECK([ovsdb-server --detach --pidfile="`pwd`"/pid --remote=db:Manager,manager --unixctl="`pwd`"/unixctl db], [0], [ignore], [ignore])
+AT_CHECK([ovsdb-server --detach --no-chdir --pidfile="`pwd`"/pid --remote=db:Manager,manager --unixctl="`pwd`"/unixctl db], [0], [ignore], [ignore])
 AT_CHECK(
   [[ovsdb-client transact unix:socket \
      '["mydb",
@@ -219,7 +219,7 @@ AT_CHECK(
 AT_CHECK([perl $srcdir/choose-port.pl], [0], [stdout])
 SSL_PORT=`cat stdout`
 AT_CHECK(
-  [ovsdb-server --detach --pidfile="`pwd`"/pid \
+  [ovsdb-server --detach --no-chdir --pidfile="`pwd`"/pid \
         --private-key=db:SSL,private_key \
         --certificate=db:SSL,certificate \
         --ca-cert=db:SSL,ca_cert \
@@ -257,7 +257,7 @@ ln -s dir/.db.~lock~ .db.~lock~
 AT_SKIP_IF([test ! -h db || test ! -h .db.~lock~])
 AT_CHECK([ovsdb-tool create db schema], [0], [ignore], [ignore])
 dnl Start ovsdb-server.
-AT_CHECK([ovsdb-server --detach --pidfile="`pwd`"/pid --unixctl="`pwd`"/unixctl --remote=punix:socket --log-file="`pwd`"/ovsdb-server.log db], [0], [ignore], [ignore])
+AT_CHECK([ovsdb-server --detach --no-chdir --pidfile="`pwd`"/pid --unixctl="`pwd`"/unixctl --remote=punix:socket --log-file="`pwd`"/ovsdb-server.log db], [0], [ignore], [ignore])
 AT_CAPTURE_FILE([ovsdb-server.log])
 dnl Do a bunch of random transactions that put crap in the database log.
 AT_CHECK(
@@ -402,7 +402,7 @@ m4_define([OVSDB_CHECK_EXECUTION],
    SSL_PORT=`cat stdout`
    PKIDIR=$abs_top_builddir/tests
    AT_CHECK([ovsdb-tool create db schema], [0], [stdout], [ignore])
-   AT_CHECK([ovsdb-server --detach --pidfile="`pwd`"/pid --private-key=$PKIDIR/testpki-privkey2.pem --certificate=$PKIDIR/testpki-cert2.pem --ca-cert=$PKIDIR/testpki-cacert.pem --remote=pssl:$SSL_PORT:127.0.0.1 --unixctl="`pwd`"/unixctl db], [0], [ignore], [ignore])
+   AT_CHECK([ovsdb-server --detach --no-chdir --pidfile="`pwd`"/pid --private-key=$PKIDIR/testpki-privkey2.pem --certificate=$PKIDIR/testpki-cert2.pem --ca-cert=$PKIDIR/testpki-cacert.pem --remote=pssl:$SSL_PORT:127.0.0.1 --unixctl="`pwd`"/unixctl db], [0], [ignore], [ignore])
    m4_foreach([txn], [$3], 
      [AT_CHECK([ovsdb-client --private-key=$PKIDIR/testpki-privkey.pem --certificate=$PKIDIR/testpki-cert.pem --ca-cert=$PKIDIR/testpki-cacert.pem transact ssl:127.0.0.1:$SSL_PORT 'txn'], [0], [stdout], [ignore],
      [test ! -e pid || kill `cat pid`])

@@ -40,7 +40,7 @@ m4_define([OVS_VSWITCHD_START],
    AT_CHECK([ovsdb-tool create conf.db $abs_top_srcdir/vswitchd/vswitch.ovsschema])
 
    dnl Start ovsdb-server.
-   AT_CHECK([ovsdb-server --detach --pidfile --log-file --remote=punix:$OVS_RUNDIR/db.sock], [0], [], [stderr])
+   AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --log-file --remote=punix:$OVS_RUNDIR/db.sock], [0], [], [stderr])
    AT_CHECK([[sed < stderr '
 /vlog|INFO|opened log file/d
 /ovsdb_server|INFO|ovsdb-server (Open vSwitch)/d']])
@@ -50,7 +50,7 @@ m4_define([OVS_VSWITCHD_START],
    AT_CHECK([ovs-vsctl --no-wait init])
 
    dnl Start ovs-vswitchd.
-   AT_CHECK([ovs-vswitchd --detach --pidfile --enable-dummy --disable-system --log-file -vvconn], [0], [], [stderr])
+   AT_CHECK([ovs-vswitchd --detach --no-chdir --pidfile --enable-dummy --disable-system --log-file -vvconn -vofproto_dpif], [0], [], [stderr])
    AT_CAPTURE_FILE([ovs-vswitchd.log])
    AT_CHECK([[sed < stderr '
 /vlog|INFO|opened log file/d

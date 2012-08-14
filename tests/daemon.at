@@ -72,7 +72,7 @@ OVSDB_INIT([db])
 # Start the daemon and make sure that the pidfile exists immediately.
 # We don't wait for the pidfile to get created because the daemon is
 # supposed to do so before the parent exits.
-AT_CHECK([ovsdb-server --detach --pidfile="`pwd`"/pid --remote=punix:socket --unixctl="`pwd`"/unixctl db], [0])
+AT_CHECK([ovsdb-server --detach --no-chdir --pidfile="`pwd`"/pid --remote=punix:socket --unixctl="`pwd`"/unixctl db], [0])
 AT_CHECK([test -s pid])
 AT_CHECK([kill -0 `cat pid`])
 # Kill the daemon and make sure that the pidfile gets deleted.
@@ -95,7 +95,7 @@ AT_CAPTURE_FILE([init])
 # Start the daemon and make sure that the pidfile exists immediately.
 # We don't wait for the pidfile to get created because the daemon is
 # supposed to do so before the parent exits.
-AT_CHECK([ovsdb-server --detach --pidfile="`pwd`"/daemon --monitor --remote=punix:socket --unixctl="`pwd`"/unixctl db], [0])
+AT_CHECK([ovsdb-server --detach --no-chdir --pidfile="`pwd`"/daemon --monitor --remote=punix:socket --unixctl="`pwd`"/unixctl db], [0])
 AT_CHECK([test -s daemon])
 # Check that the pidfile names a running process,
 # and that the parent process of that process is a running process,
@@ -134,7 +134,7 @@ AT_CLEANUP
 AT_SETUP([daemon --detach startup errors])
 AT_CAPTURE_FILE([pid])
 OVSDB_INIT([db])
-AT_CHECK([ovsdb-server --detach --pidfile="`pwd`"/pid --unixctl="`pwd`"/nonexistent/unixctl db], [1], [], [stderr])
+AT_CHECK([ovsdb-server --detach --no-chdir --pidfile="`pwd`"/pid --unixctl="`pwd`"/nonexistent/unixctl db], [1], [], [stderr])
 AT_CHECK([grep 'ovsdb-server: could not initialize control socket' stderr],
   [0], [ignore], [])
 AT_CHECK([test ! -s pid])
@@ -143,7 +143,7 @@ AT_CLEANUP
 AT_SETUP([daemon --detach --monitor startup errors])
 AT_CAPTURE_FILE([pid])
 OVSDB_INIT([db])
-AT_CHECK([ovsdb-server --detach --pidfile="`pwd`"/pid --monitor --unixctl="`pwd`"/nonexistent/unixctl db], [1], [], [stderr])
+AT_CHECK([ovsdb-server --detach --no-chdir --pidfile="`pwd`"/pid --monitor --unixctl="`pwd`"/nonexistent/unixctl db], [1], [], [stderr])
 AT_CHECK([grep 'ovsdb-server: could not initialize control socket' stderr],
   [0], [ignore], [])
 AT_CHECK([test ! -s pid])
