@@ -802,8 +802,13 @@
 
     <group title="Bonding Configuration">
       <p>A port that has more than one interface is a ``bonded port.'' Bonding
-      allows for load balancing and fail-over.  Some kinds of bonding will
-      work with any kind of upstream switch:</p>
+      allows for load balancing and fail-over.</p>
+
+      <p>
+        The following types of bonding will work with any kind of upstream
+        switch.  On the upstream switch, do not configure the interfaces as a
+        bond:
+      </p>
 
       <dl>
         <dt><code>balance-slb</code></dt>
