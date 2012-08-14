@@ -896,7 +896,7 @@
 
         <column name="bond_updelay">
           <p>
-            The number of milliseconds for which carrier must stay up on an
+            The number of milliseconds for which the link must stay up on an
             interface before the interface is considered to be up.  Specify
             <code>0</code> to enable the interface immediately.
           </p>
@@ -909,7 +909,7 @@
         </column>
 
         <column name="bond_downdelay">
-          The number of milliseconds for which carrier must stay down on an
+          The number of milliseconds for which the link must stay down on an
           interface before the interface is considered to be down.  Specify
           <code>0</code> to disable the interface immediately.
         </column>
@@ -976,7 +976,7 @@
           successive attempts to rebalance the bond, that is, to move flows
           from one interface on the bond to another in an attempt to keep usage
           of each interface roughly equal.  If zero, load balancing is disabled
-          on the bond (carrier status changes still cause flows to move).  If
+          on the bond (link failure still cause flows to move).  If
           less than 1000ms, the rebalance interval will be 1000ms.
         </column>
       </group>
