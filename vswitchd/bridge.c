@@ -153,12 +153,6 @@ static unsigned int idl_seqno;
 #define IFACE_STATS_INTERVAL (5 * 1000) /* In milliseconds. */
 static long long int iface_stats_timer = LLONG_MIN;
 
-/* Stores the time after which rate limited statistics may be written to the
- * database.  Only updated when changes to the database require rate limiting.
- */
-#define DB_LIMIT_INTERVAL (1 * 1000) /* In milliseconds. */
-static long long int db_limiter = LLONG_MIN;
-
 /* In some datapaths, creating and destroying OpenFlow ports can be extremely
  * expensive.  This can cause bridge_reconfigure() to take a long time during
  * which no other work can be done.  To deal with this problem, we limit port
@@ -1638,7 +1632,6 @@ iface_refresh_status(struct iface *iface)
     struct smap smap;
 
     enum netdev_features current;
-    enum netdev_flags flags;
     int64_t bps;
     int mtu;
     int64_t mtu_64;
@@ -1657,15 +1650,6 @@ iface_refresh_status(struct iface *iface)
     }
 
     smap_destroy(&smap);
-
-    error = netdev_get_flags(iface->netdev, &flags);
-    if (!error) {
-        ovsrec_interface_set_admin_state(iface->cfg,
-                                         flags & NETDEV_UP ? "up" : "down");
-    }
-    else {
-        ovsrec_interface_set_admin_state(iface->cfg, NULL);
-    }
 
     error = netdev_get_features(iface->netdev, &current, NULL, NULL, NULL);
     if (!error) {
@@ -1691,7 +1675,8 @@ iface_refresh_status(struct iface *iface)
     }
 }
 
-/* Writes 'iface''s CFM statistics to the database. */
+/* Writes 'iface''s CFM statistics to the database. 'iface' must not be
+ * synthetic. */
 static void
 iface_refresh_cfm_stats(struct iface *iface)
 {
@@ -1700,10 +1685,6 @@ iface_refresh_cfm_stats(struct iface *iface)
     const uint64_t *rmps;
     size_t n_rmps;
     int health;
-
-    if (iface_is_synthetic(iface)) {
-        return;
-    }
 
     fault = ofproto_port_get_cfm_fault(iface->port->bridge->ofproto,
                                        iface->ofp_port);
@@ -1976,7 +1957,7 @@ refresh_controller_status(void)
 }
 
 static void
-refresh_cfm_stats(void)
+refresh_instant_stats(void)
 {
     static struct ovsdb_idl_txn *txn = NULL;
 
@@ -1987,8 +1968,47 @@ refresh_cfm_stats(void)
 
         HMAP_FOR_EACH (br, node, &all_bridges) {
             struct iface *iface;
+            struct port *port;
+
+            br_refresh_stp_status(br);
+
+            HMAP_FOR_EACH (port, hmap_node, &br->ports) {
+                port_refresh_stp_status(port);
+            }
 
             HMAP_FOR_EACH (iface, name_node, &br->iface_by_name) {
+                enum netdev_flags flags;
+                const char *link_state;
+                int64_t link_resets;
+                int current, error;
+
+                if (iface_is_synthetic(iface)) {
+                    continue;
+                }
+
+                current = ofproto_port_is_lacp_current(br->ofproto,
+                                                       iface->ofp_port);
+                if (current >= 0) {
+                    bool bl = current;
+                    ovsrec_interface_set_lacp_current(iface->cfg, &bl, 1);
+                } else {
+                    ovsrec_interface_set_lacp_current(iface->cfg, NULL, 0);
+                }
+
+                error = netdev_get_flags(iface->netdev, &flags);
+                if (!error) {
+                    const char *state = flags & NETDEV_UP ? "up" : "down";
+                    ovsrec_interface_set_admin_state(iface->cfg, state);
+                } else {
+                    ovsrec_interface_set_admin_state(iface->cfg, NULL);
+                }
+
+                link_state = netdev_get_carrier(iface->netdev) ? "up" : "down";
+                ovsrec_interface_set_link_state(iface->cfg, link_state);
+
+                link_resets = netdev_get_carrier_resets(iface->netdev);
+                ovsrec_interface_set_link_resets(iface->cfg, &link_resets, 1);
+
                 iface_refresh_cfm_stats(iface);
             }
         }
@@ -2145,54 +2165,7 @@ bridge_run(void)
     }
 
     run_system_stats();
-
-    if (time_msec() >= db_limiter) {
-        struct ovsdb_idl_txn *txn;
-
-        txn = ovsdb_idl_txn_create(idl);
-        HMAP_FOR_EACH (br, node, &all_bridges) {
-            struct iface *iface;
-            struct port *port;
-
-            br_refresh_stp_status(br);
-
-            HMAP_FOR_EACH (port, hmap_node, &br->ports) {
-                port_refresh_stp_status(port);
-            }
-
-            HMAP_FOR_EACH (iface, name_node, &br->iface_by_name) {
-                const char *link_state;
-                int64_t link_resets;
-                int current;
-
-                if (iface_is_synthetic(iface)) {
-                    continue;
-                }
-
-                current = ofproto_port_is_lacp_current(br->ofproto,
-                                                       iface->ofp_port);
-                if (current >= 0) {
-                    bool bl = current;
-                    ovsrec_interface_set_lacp_current(iface->cfg, &bl, 1);
-                } else {
-                    ovsrec_interface_set_lacp_current(iface->cfg, NULL, 0);
-                }
-
-                link_state = netdev_get_carrier(iface->netdev) ? "up" : "down";
-                ovsrec_interface_set_link_state(iface->cfg, link_state);
-
-                link_resets = netdev_get_carrier_resets(iface->netdev);
-                ovsrec_interface_set_link_resets(iface->cfg, &link_resets, 1);
-            }
-        }
-
-        if (ovsdb_idl_txn_commit(txn) != TXN_UNCHANGED) {
-            db_limiter = time_msec() + DB_LIMIT_INTERVAL;
-        }
-        ovsdb_idl_txn_destroy(txn);
-    }
-
-    refresh_cfm_stats();
+    refresh_instant_stats();
 }
 
 void
@@ -2211,10 +2184,6 @@ bridge_wait(void)
             ofproto_wait(br->ofproto);
         }
         poll_timer_wait_until(iface_stats_timer);
-
-        if (db_limiter > time_msec()) {
-            poll_timer_wait_until(db_limiter);
-        }
     }
 
     system_stats_wait();
