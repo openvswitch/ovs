@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -498,8 +498,9 @@ may_send_learning_packets(const struct bond *bond)
  * is located.  For each MAC that has been learned on a port other than 'bond',
  * it should call bond_compose_learning_packet().
  *
- * This function will only return true if 'bond' is in SLB mode and LACP is not
- * negotiated.  Otherwise sending learning packets isn't necessary.
+ * This function will only return true if 'bond' is in SLB or active-backup
+ * mode and LACP is not negotiated.  Otherwise sending learning packets isn't
+ * necessary.
  *
  * Calling this function resets the state that it checks. */
 bool
