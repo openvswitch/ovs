@@ -217,7 +217,7 @@ bundle_check(const struct ofpact_bundle *bundle, int max_ports,
 void
 bundle_to_nxast(const struct ofpact_bundle *bundle, struct ofpbuf *openflow)
 {
-    int slaves_len = ROUND_UP(bundle->n_slaves, OFP_ACTION_ALIGN);
+    int slaves_len = ROUND_UP(2 * bundle->n_slaves, OFP_ACTION_ALIGN);
     struct nx_action_bundle *nab;
     ovs_be16 *slaves;
     size_t i;
