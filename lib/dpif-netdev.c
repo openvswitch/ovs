@@ -966,6 +966,7 @@ dpif_netdev_recv(struct dpif *dpif, struct dpif_upcall *upcall,
 
         ofpbuf_uninit(buf);
         *buf = *upcall->packet;
+        free(upcall->packet);
 
         return 0;
     } else {
