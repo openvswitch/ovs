@@ -2733,9 +2733,6 @@ send_packet_in_miss(struct ofproto_dpif *ofproto, const struct ofpbuf *packet,
 
     flow_get_metadata(flow, &pin.fmd);
 
-    /* Registers aren't meaningful on a miss. */
-    memset(pin.fmd.reg_masks, 0, sizeof pin.fmd.reg_masks);
-
     connmgr_send_packet_in(ofproto->up.connmgr, &pin);
 }
 

@@ -170,25 +170,34 @@ OFP_ASSERT(sizeof(struct nx_set_packet_in_format) == 4);
 
 /* NXT_PACKET_IN (analogous to OFPT_PACKET_IN).
  *
- * The NXT_PACKET_IN format is intended to model the OpenFlow-1.2 PACKET_IN
- * with some minor tweaks.  Most notably NXT_PACKET_IN includes the cookie of
- * the rule which triggered the NXT_PACKET_IN message, and the match fields are
- * in NXM format.
+ * NXT_PACKET_IN is similar to the OpenFlow 1.2 OFPT_PACKET_IN.  The
+ * differences are:
  *
- * The match fields in the NXT_PACKET_IN are intended to contain flow
- * processing metadata collected at the time the NXT_PACKET_IN message was
- * triggered.  It is minimally required to contain the NXM_OF_IN_PORT of the
- * packet, but may include other NXM headers such as flow registers.  The match
- * fields are allowed to contain non-metadata (e.g. NXM_OF_ETH_SRC etc).
- * However, this information can typically be found in the packet directly, so
- * it may be redundant.
+ *     - NXT_PACKET_IN includes the cookie of the rule that triggered the
+ *       message.  (OpenFlow 1.3 OFPT_PACKET_IN also includes the cookie.)
+ *
+ *     - The metadata fields use NXM (instead of OXM) field numbers.
+ *
+ * Open vSwitch 1.9.0 and later omits metadata fields that are zero (as allowed
+ * by OpenFlow 1.2).  Earlier versions included all implemented metadata
+ * fields.
+ *
+ * Open vSwitch does not include non-metadata in the nx_match, because by
+ * definition that information can be found in the packet itself.  The format
+ * and the standards allow this, however, so controllers should be prepared to
+ * tolerate future changes.
+ *
+ * The NXM format is convenient for reporting metadata values, but it is
+ * important not to interpret the format as matching against a flow, because it
+ * does not.  Nothing is being matched; arbitrary metadata masks would not be
+ * meaningful.
  *
  * Whereas in most cases a controller can expect to only get back NXM fields
  * that it set up itself (e.g. flow dumps will ordinarily report only NXM
  * fields from flows that the controller added), NXT_PACKET_IN messages might
  * contain fields that the controller does not understand, because the switch
  * might support fields (new registers, new protocols, etc.) that the
- * controller does not.  The controller must prepared to tolerate these.
+ * controller does not.  The controller must prepared to tolerate these.
  *
  * The 'cookie' and 'table_id' fields have no meaning when 'reason' is
  * OFPR_NO_MATCH.  In this case they should be set to 0. */
@@ -210,7 +219,7 @@ struct nx_packet_in {
      * The padding bytes preceding the Ethernet frame ensure that the IP
      * header (if any) following the Ethernet header is 32-bit aligned. */
 
-    /* uint8_t nxm_fields[...]; */ /* Match. */
+    /* uint8_t nxm_fields[...]; */ /* NXM headers. */
     /* uint8_t pad[2]; */          /* Align to 64 bit + 16 bit. */
     /* uint8_t data[0]; */         /* Ethernet frame. */
 };

@@ -2041,15 +2041,9 @@ ofputil_decode_packet_in_finish(struct ofputil_packet_in *pin,
     pin->packet_len = b->size;
 
     pin->fmd.in_port = rule->flow.in_port;
-
     pin->fmd.tun_id = rule->flow.tun_id;
-    pin->fmd.tun_id_mask = rule->wc.tun_id_mask;
-
     pin->fmd.metadata = rule->flow.metadata;
-    pin->fmd.metadata_mask = rule->wc.metadata_mask;
-
     memcpy(pin->fmd.regs, rule->flow.regs, sizeof pin->fmd.regs);
-    memcpy(pin->fmd.reg_masks, rule->wc.reg_masks, sizeof pin->fmd.reg_masks);
 }
 
 enum ofperr
@@ -2135,14 +2129,17 @@ ofputil_packet_in_to_rule(const struct ofputil_packet_in *pin,
     int i;
 
     cls_rule_init_catchall(rule, 0);
-    cls_rule_set_tun_id_masked(rule, pin->fmd.tun_id,
-                               pin->fmd.tun_id_mask);
-    cls_rule_set_metadata_masked(rule, pin->fmd.metadata,
-                                 pin->fmd.metadata_mask);
+    if (pin->fmd.tun_id != htonll(0)) {
+        cls_rule_set_tun_id(rule, pin->fmd.tun_id);
+    }
+    if (pin->fmd.metadata != htonll(0)) {
+        cls_rule_set_metadata(rule, pin->fmd.metadata);
+    }
 
     for (i = 0; i < FLOW_N_REGS; i++) {
-        cls_rule_set_reg_masked(rule, i, pin->fmd.regs[i],
-                                pin->fmd.reg_masks[i]);
+        if (pin->fmd.regs[i]) {
+            cls_rule_set_reg(rule, i, pin->fmd.regs[i]);
+        }
     }
 
     cls_rule_set_in_port(rule, pin->fmd.in_port);

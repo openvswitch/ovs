@@ -78,19 +78,11 @@ struct flow {
     uint8_t reserved[2];        /* Reserved for 64-bit packing. */
 };
 
-/* Represents the metadata fields of struct flow.  The masks are used to
- * indicate which metadata fields are relevant in a given context.  Typically
- * they will be all 1 or all 0. */
+/* Represents the metadata fields of struct flow. */
 struct flow_metadata {
     ovs_be64 tun_id;                 /* Encapsulating tunnel ID. */
-    ovs_be64 tun_id_mask;            /* 1-bit in each significant tun_id bit.*/
-
-    ovs_be64 metadata;
-    ovs_be64 metadata_mask;
-
+    ovs_be64 metadata;               /* OpenFlow 1.1+ metadata field. */
     uint32_t regs[FLOW_N_REGS];      /* Registers. */
-    uint32_t reg_masks[FLOW_N_REGS]; /* 1-bit in each significant regs bit. */
-
     uint16_t in_port;                /* OpenFlow port or zero. */
 };
 

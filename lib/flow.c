@@ -497,14 +497,8 @@ flow_get_metadata(const struct flow *flow, struct flow_metadata *fmd)
     BUILD_ASSERT_DECL(FLOW_WC_SEQ == 14);
 
     fmd->tun_id = flow->tun_id;
-    fmd->tun_id_mask = htonll(UINT64_MAX);
-
     fmd->metadata = flow->metadata;
-    fmd->metadata_mask = htonll(UINT64_MAX);
-
     memcpy(fmd->regs, flow->regs, sizeof fmd->regs);
-    memset(fmd->reg_masks, 0xff, sizeof fmd->reg_masks);
-
     fmd->in_port = flow->in_port;
 }
 

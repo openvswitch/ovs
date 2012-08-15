@@ -729,7 +729,7 @@ ovs-appctl -t ovs-ofctl ofctl/barrier
 ovs-appctl -t ovs-ofctl exit
 
 AT_CHECK([sed 's/ (xid=0x[[0-9a-fA-F]]*)//' monitor.log], [0], [dnl
-NXT_PACKET_IN: total_len=14 in_port=NONE tun_id=0x0 metadata=0xfafafafa5a5a5a5a reg0=0x0 reg1=0x0 reg2=0x0 reg3=0x0 reg4=0x0 reg5=0x0 reg6=0x0 reg7=0x0 (via action) data_len=14 (unbuffered)
+NXT_PACKET_IN: total_len=14 in_port=NONE metadata=0xfafafafa5a5a5a5a (via action) data_len=14 (unbuffered)
 priority:0,tunnel:0,metadata:0,in_port:0000,tci(0) mac(00:10:20:30:40:50->00:01:02:03:04:05) type:1234 proto:0 tos:0 ttl:0 ip(0.0.0.0->0.0.0.0)
 OFPT_BARRIER_REPLY:
 ])
