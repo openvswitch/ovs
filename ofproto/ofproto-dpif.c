@@ -6795,7 +6795,7 @@ ofproto_unixctl_trace(struct unixctl_conn *conn, int argc, const char *argv[],
         const char *tun_id_s = argv[3];
         const char *in_port_s = argv[4];
         const char *packet_s = argv[5];
-        uint16_t in_port = ofp_port_to_odp_port(atoi(in_port_s));
+        uint16_t in_port = atoi(in_port_s);
         ovs_be64 tun_id = htonll(strtoull(tun_id_s, NULL, 0));
         uint32_t priority = atoi(priority_s);
         const char *msg;
