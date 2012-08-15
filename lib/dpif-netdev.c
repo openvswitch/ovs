@@ -70,8 +70,13 @@ enum { MAX_QUEUE_LEN = 128 };   /* Maximum number of packets per queue. */
 enum { QUEUE_MASK = MAX_QUEUE_LEN - 1 };
 BUILD_ASSERT_DECL(IS_POW2(MAX_QUEUE_LEN));
 
+struct dp_netdev_upcall {
+    struct dpif_upcall upcall;  /* Queued upcall information. */
+    struct ofpbuf buf;          /* ofpbuf instance for upcall.packet. */
+};
+
 struct dp_netdev_queue {
-    struct dpif_upcall *upcalls[MAX_QUEUE_LEN];
+    struct dp_netdev_upcall upcalls[MAX_QUEUE_LEN];
     unsigned int head, tail;
 };
 
@@ -259,10 +264,8 @@ dp_netdev_purge_queues(struct dp_netdev *dp)
         struct dp_netdev_queue *q = &dp->queues[i];
 
         while (q->tail != q->head) {
-            struct dpif_upcall *upcall = q->upcalls[q->tail++ & QUEUE_MASK];
-
-            ofpbuf_delete(upcall->packet);
-            free(upcall);
+            struct dp_netdev_upcall *u = &q->upcalls[q->tail++ & QUEUE_MASK];
+            ofpbuf_uninit(&u->buf);
         }
     }
 }
@@ -960,13 +963,13 @@ dpif_netdev_recv(struct dpif *dpif, struct dpif_upcall *upcall,
 {
     struct dp_netdev_queue *q = find_nonempty_queue(dpif);
     if (q) {
-        struct dpif_upcall *u = q->upcalls[q->tail++ & QUEUE_MASK];
-        *upcall = *u;
-        free(u);
+        struct dp_netdev_upcall *u = &q->upcalls[q->tail++ & QUEUE_MASK];
+
+        *upcall = u->upcall;
+        upcall->packet = buf;
 
         ofpbuf_uninit(buf);
-        *buf = *upcall->packet;
-        free(upcall->packet);
+        *buf = u->buf;
 
         return 0;
     } else {
@@ -1088,6 +1091,7 @@ dp_netdev_output_userspace(struct dp_netdev *dp, const struct ofpbuf *packet,
                          int queue_no, const struct flow *flow, uint64_t arg)
 {
     struct dp_netdev_queue *q = &dp->queues[queue_no];
+    struct dp_netdev_upcall *u;
     struct dpif_upcall *upcall;
     struct ofpbuf *buf;
     size_t key_len;
@@ -1097,21 +1101,22 @@ dp_netdev_output_userspace(struct dp_netdev *dp, const struct ofpbuf *packet,
         return ENOBUFS;
     }
 
-    buf = ofpbuf_new(ODPUTIL_FLOW_KEY_BYTES + 2 + packet->size);
+    u = &q->upcalls[q->head++ & QUEUE_MASK];
+
+    buf = &u->buf;
+    ofpbuf_init(buf, ODPUTIL_FLOW_KEY_BYTES + 2 + packet->size);
     odp_flow_key_from_flow(buf, flow);
     key_len = buf->size;
     ofpbuf_pull(buf, key_len);
     ofpbuf_reserve(buf, 2);
     ofpbuf_put(buf, packet->data, packet->size);
 
-    upcall = xzalloc(sizeof *upcall);
+    upcall = &u->upcall;
     upcall->type = queue_no;
     upcall->packet = buf;
     upcall->key = buf->base;
     upcall->key_len = key_len;
     upcall->userdata = arg;
-
-    q->upcalls[q->head++ & QUEUE_MASK] = upcall;
 
     return 0;
 }
