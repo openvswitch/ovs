@@ -230,6 +230,7 @@ ovsdb_idl_destroy(struct ovsdb_idl *idl)
         json_destroy(idl->monitor_request_id);
         free(idl->lock_name);
         json_destroy(idl->lock_request_id);
+        hmap_destroy(&idl->outstanding_txns);
         free(idl);
     }
 }
