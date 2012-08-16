@@ -66,7 +66,7 @@ COVERAGE_DEFINE(facet_suppress);
 
 /* Maximum depth of flow table recursion (due to resubmit actions) in a
  * flow translation. */
-#define MAX_RESUBMIT_RECURSION 32
+#define MAX_RESUBMIT_RECURSION 64
 
 /* Number of implemented OpenFlow tables. */
 enum { N_TABLES = 255 };
