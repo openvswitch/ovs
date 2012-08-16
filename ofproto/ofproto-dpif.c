@@ -3794,7 +3794,8 @@ facet_is_controller_flow(struct facet *facet)
         const struct ofpact *ofpacts = rule->ofpacts;
         size_t ofpacts_len = rule->ofpacts_len;
 
-        if (ofpacts->type == OFPACT_CONTROLLER &&
+        if (ofpacts_len > 0 &&
+            ofpacts->type == OFPACT_CONTROLLER &&
             ofpact_next(ofpacts) >= ofpact_end(ofpacts, ofpacts_len)) {
             return true;
         }
