@@ -949,7 +949,8 @@ OVS_VSWITCHD_START(
      add-id-to-interface=false], [<0>
 ])
 
-AT_CHECK([test-netflow --detach --no-chdir --pidfile $NETFLOW_PORT:127.0.0.1 > netflow.log])AT_CAPTURE_FILE([netflow.log])
+AT_CHECK([test-netflow --detach --no-chdir --pidfile $NETFLOW_PORT:127.0.0.1 > netflow.log])
+AT_CAPTURE_FILE([netflow.log])
 
 for delay in 1000 30000; do
     ovs-appctl netdev-dummy/receive p1 'in_port(2),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'
