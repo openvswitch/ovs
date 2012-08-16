@@ -279,6 +279,41 @@ parse_controller(struct ofpbuf *b, char *arg)
 }
 
 static void
+parse_dec_ttl(struct ofpbuf *b, char *arg)
+{
+    struct ofpact_cnt_ids *ids;
+
+    ids = ofpact_put_DEC_TTL(b);
+
+    if (*arg == '\0') {
+        uint16_t id = 0;
+
+        ids->ofpact.compat = OFPUTIL_NXAST_DEC_TTL;
+        ofpbuf_put(b, &id, sizeof id);
+        ids = b->l2;
+        ids->n_controllers++;
+    } else {
+        char *cntr;
+
+        ids->ofpact.compat = OFPUTIL_NXAST_DEC_TTL_CNT_IDS;
+        for (cntr = strtok_r(arg, ", ", &arg); cntr != NULL;
+             cntr = strtok_r(NULL, ", ", &arg)) {
+            uint16_t id = atoi(cntr);
+
+            ofpbuf_put(b, &id, sizeof id);
+            ids = b->l2;
+            ids->n_controllers++;
+        }
+        if (!ids->n_controllers) {
+            ovs_fatal(0, "dec_ttl_cnt_ids: expected at least one controller "
+                      "id.");
+        }
+
+    }
+    ofpact_update_len(b, &ids->ofpact);
+}
+
+static void
 parse_named_action(enum ofputil_action_code code, const struct flow *flow,
                    char *arg, struct ofpbuf *ofpacts)
 {
@@ -413,6 +448,7 @@ parse_named_action(enum ofputil_action_code code, const struct flow *flow,
 
     case OFPUTIL_NXAST_RESUBMIT_TABLE:
     case OFPUTIL_NXAST_OUTPUT_REG:
+    case OFPUTIL_NXAST_DEC_TTL_CNT_IDS:
         NOT_REACHED();
 
     case OFPUTIL_NXAST_LEARN:
@@ -424,7 +460,7 @@ parse_named_action(enum ofputil_action_code code, const struct flow *flow,
         break;
 
     case OFPUTIL_NXAST_DEC_TTL:
-        ofpact_put_DEC_TTL(ofpacts);
+        parse_dec_ttl(ofpacts, arg);
         break;
 
     case OFPUTIL_NXAST_FIN_TIMEOUT:

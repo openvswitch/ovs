@@ -108,6 +108,9 @@ ffff 0010 00002320 0013 000a 0014 0000
 # actions=controller(reason=invalid_ttl,max_len=1234,id=5678)
 ffff 0010 00002320 0014 04d2 162e 02 00
 
+# actions=dec_ttl(32768,12345,90,765,1024)
+ffff 0020 00002320 0015 000500000000 80003039005A02fd 0400000000000000
+
 ])
 sed '/^[[#&]]/d' < test-data > input.txt
 sed -n 's/^# //p; /^$/p' < test-data > expout
@@ -221,6 +224,9 @@ ffff 0010 00002320 0013 000a 0014 0000
 
 # actions=controller(reason=invalid_ttl,max_len=1234,id=5678)
 ffff 0010 00002320 0014 04d2 162e 02 00
+
+# actions=dec_ttl(32768,12345,90,765,1024)
+ffff 0020 00002320 0015 000500000000 80003039005A02fd 0400000000000000
 
 ])
 sed '/^[[#&]]/d' < test-data > input.txt

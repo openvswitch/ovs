@@ -69,7 +69,7 @@
     DEFINE_OFPACT(SET_L4_DST_PORT, ofpact_l4_port,       ofpact)    \
     DEFINE_OFPACT(REG_MOVE,        ofpact_reg_move,      ofpact)    \
     DEFINE_OFPACT(REG_LOAD,        ofpact_reg_load,      ofpact)    \
-    DEFINE_OFPACT(DEC_TTL,         ofpact_null,          ofpact)    \
+    DEFINE_OFPACT(DEC_TTL,         ofpact_cnt_ids,       cnt_ids)   \
                                                                     \
     /* Metadata. */                                                 \
     DEFINE_OFPACT(SET_TUNNEL,      ofpact_tunnel,        ofpact)    \
@@ -145,7 +145,7 @@ ofpact_end(const struct ofpact *ofpacts, size_t ofpacts_len)
 
 /* Action structure for each OFPACT_*. */
 
-/* OFPACT_STRIP_VLAN, OFPACT_DEC_TTL, OFPACT_POP_QUEUE, OFPACT_EXIT.
+/* OFPACT_STRIP_VLAN, OFPACT_POP_QUEUE, OFPACT_EXIT.
  *
  * Used for OFPAT10_STRIP_VLAN, NXAST_DEC_TTL, NXAST_POP_QUEUE, NXAST_EXIT.
  *
@@ -378,6 +378,18 @@ struct ofpact_note {
     struct ofpact ofpact;
     size_t length;
     uint8_t data[];
+};
+
+/* OFPACT_DEC_TTL.
+ *
+ * Used for NXAST_DEC_TTL and NXAST_DEC_TTL_CNT_IDS. */
+struct ofpact_cnt_ids {
+    struct ofpact ofpact;
+
+    /* Controller ids. */
+    unsigned int n_controllers;
+    uint16_t cnt_ids[];
+
 };
 
 /* Converting OpenFlow to ofpacts. */

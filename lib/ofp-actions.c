@@ -149,6 +149,58 @@ note_from_openflow(const struct nx_action_note *nan, struct ofpbuf *out)
 }
 
 static enum ofperr
+dec_ttl_from_openflow(struct ofpbuf *out)
+{
+    uint16_t id = 0;
+    struct ofpact_cnt_ids *ids;
+    enum ofperr error = 0;
+
+    ids = ofpact_put_DEC_TTL(out);
+    ids->ofpact.compat = OFPUTIL_NXAST_DEC_TTL;
+    ids->n_controllers = 1;
+    ofpbuf_put(out, &id, sizeof id);
+    ids = out->l2;
+    ofpact_update_len(out, &ids->ofpact);
+    return error;
+}
+
+static enum ofperr
+dec_ttl_cnt_ids_from_openflow(const struct nx_action_cnt_ids *nac_ids,
+                      struct ofpbuf *out)
+{
+    struct ofpact_cnt_ids *ids;
+    size_t ids_size;
+    int i;
+
+    ids = ofpact_put_DEC_TTL(out);
+    ids->ofpact.compat = OFPUTIL_NXAST_DEC_TTL_CNT_IDS;
+    ids->n_controllers = ntohs(nac_ids->n_controllers);
+    ids_size = ntohs(nac_ids->len) - sizeof *nac_ids;
+
+    if (!is_all_zeros(nac_ids->zeros, sizeof nac_ids->zeros)) {
+        return OFPERR_NXBRC_MUST_BE_ZERO;
+    }
+
+    if (ids_size < ids->n_controllers * sizeof(ovs_be16)) {
+        VLOG_WARN_RL(&rl, "Nicira action dec_ttl_cnt_ids only has %zu bytes "
+                     "allocated for controller ids.  %zu bytes are required for "
+                     "%"PRIu16" controllers.", ids_size,
+                     ids->n_controllers * sizeof(ovs_be16), ids->n_controllers);
+        return OFPERR_OFPBAC_BAD_LEN;
+    }
+
+    for (i = 0; i < ids->n_controllers; i++) {
+        uint16_t id = ntohs(((ovs_be16 *)(nac_ids + 1))[i]);
+        ofpbuf_put(out, &id, sizeof id);
+    }
+
+    ids = out->l2;
+    ofpact_update_len(out, &ids->ofpact);
+
+    return 0;
+}
+
+static enum ofperr
 decode_nxast_action(const union ofp_action *a, enum ofputil_action_code *code)
 {
     const struct nx_action_header *nah = (const struct nx_action_header *) a;
@@ -310,7 +362,12 @@ ofpact_from_nxast(const union ofp_action *a, enum ofputil_action_code code,
         break;
 
     case OFPUTIL_NXAST_DEC_TTL:
-        ofpact_put_DEC_TTL(out);
+        error = dec_ttl_from_openflow(out);
+        break;
+
+    case OFPUTIL_NXAST_DEC_TTL_CNT_IDS:
+        error = dec_ttl_cnt_ids_from_openflow(
+                    (const struct nx_action_cnt_ids *) a, out);
         break;
 
     case OFPUTIL_NXAST_FIN_TIMEOUT:
@@ -1083,6 +1140,29 @@ ofpact_controller_to_nxast(const struct ofpact_controller *oc,
 }
 
 static void
+ofpact_dec_ttl_to_nxast(const struct ofpact_cnt_ids *oc_ids,
+                        struct ofpbuf *out)
+{
+    if (oc_ids->ofpact.compat == OFPUTIL_NXAST_DEC_TTL) {
+        ofputil_put_NXAST_DEC_TTL(out);
+    } else {
+        struct nx_action_cnt_ids *nac_ids =
+            ofputil_put_NXAST_DEC_TTL_CNT_IDS(out);
+        int ids_len = ROUND_UP(2 * oc_ids->n_controllers, OFP_ACTION_ALIGN);
+        ovs_be16 *ids;
+        size_t i;
+
+        nac_ids->len = htons(ntohs(nac_ids->len) + ids_len);
+        nac_ids->n_controllers = htons(oc_ids->n_controllers);
+
+        ids = ofpbuf_put_zeros(out, ids_len);
+        for (i = 0; i < oc_ids->n_controllers; i++) {
+            ids[i] = htons(oc_ids->cnt_ids[i]);
+        }
+    }
+}
+
+static void
 ofpact_fin_timeout_to_nxast(const struct ofpact_fin_timeout *fin_timeout,
                             struct ofpbuf *out)
 {
@@ -1116,7 +1196,7 @@ ofpact_to_nxast(const struct ofpact *a, struct ofpbuf *out)
         break;
 
     case OFPACT_DEC_TTL:
-        ofputil_put_NXAST_DEC_TTL(out);
+        ofpact_dec_ttl_to_nxast(ofpact_get_DEC_TTL(a), out);
         break;
 
     case OFPACT_SET_TUNNEL:
@@ -1512,6 +1592,25 @@ print_note(const struct ofpact_note *note, struct ds *string)
 }
 
 static void
+print_dec_ttl(const struct ofpact_cnt_ids *ids,
+              struct ds *s)
+{
+    size_t i;
+
+    ds_put_cstr(s, "dec_ttl");
+    if (ids->ofpact.compat == OFPUTIL_NXAST_DEC_TTL_CNT_IDS) {
+        ds_put_cstr(s, "(");
+        for (i = 0; i < ids->n_controllers; i++) {
+            if (i) {
+                ds_put_cstr(s, ",");
+            }
+            ds_put_format(s, "%"PRIu16, ids->cnt_ids[i]);
+        }
+        ds_put_cstr(s, ")");
+    }
+}
+
+static void
 print_fin_timeout(const struct ofpact_fin_timeout *fin_timeout,
                   struct ds *s)
 {
@@ -1647,7 +1746,7 @@ ofpact_format(const struct ofpact *a, struct ds *s)
         break;
 
     case OFPACT_DEC_TTL:
-        ds_put_cstr(s, "dec_ttl");
+        print_dec_ttl(ofpact_get_DEC_TTL(a), s);
         break;
 
     case OFPACT_SET_TUNNEL:

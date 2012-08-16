@@ -294,6 +294,7 @@ enum nx_action_subtype {
     NXAST_DEC_TTL,              /* struct nx_action_header */
     NXAST_FIN_TIMEOUT,          /* struct nx_action_fin_timeout */
     NXAST_CONTROLLER,           /* struct nx_action_controller */
+    NXAST_DEC_TTL_CNT_IDS,      /* struct nx_action_cnt_ids */
 };
 
 /* Header for Nicira-defined actions. */
@@ -1060,6 +1061,35 @@ enum nx_bd_algorithm {
      * Uses the 'fields' and 'basis' parameters. */
     NX_BD_ALG_HRW /* Highest Random Weight. */
 };
+
+
+/* Action structure for NXAST_DEC_TTL_CNT_IDS.
+ *
+ * If the packet is not IPv4 or IPv6, does nothing.  For IPv4 or IPv6, if the
+ * TTL or hop limit is at least 2, decrements it by 1.  Otherwise, if TTL or
+ * hop limit is 0 or 1, sends a packet-in to the controllers with each of the
+ * 'n_controllers' controller IDs specified in 'cnt_ids'.
+ *
+ * (This differs from NXAST_DEC_TTL in that for NXAST_DEC_TTL the packet-in is
+ * sent only to controllers with id 0.)
+ */
+struct nx_action_cnt_ids {
+    ovs_be16 type;              /* OFPAT_VENDOR. */
+    ovs_be16 len;               /* Length including slaves. */
+    ovs_be32 vendor;            /* NX_VENDOR_ID. */
+    ovs_be16 subtype;           /* NXAST_DEC_TTL_CNT_IDS. */
+
+    ovs_be16 n_controllers;     /* Number of controllers. */
+    uint8_t zeros[4];           /* Must be zero. */
+
+    /* Followed by 1 or more controller ids.
+     *
+     * uint16_t cnt_ids[];        // Controller ids.
+     * uint8_t pad[];           // Must be 0 to 8-byte align cnt_ids[].
+     */
+};
+OFP_ASSERT(sizeof(struct nx_action_cnt_ids) == 16);
+
 
 /* Action structure for NXAST_OUTPUT_REG.
  *
