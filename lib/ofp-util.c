@@ -1309,10 +1309,7 @@ ofputil_encode_flow_mod(const struct ofputil_flow_mod *fm,
         ofm->out_group = htonl(OFPG11_ANY);
         ofm->flags = htons(fm->flags);
         oxm_put_match(msg, &fm->cr);
-        if (fm->ofpacts) {
-            ofpacts_put_openflow11_instructions(fm->ofpacts, fm->ofpacts_len,
-                                                msg);
-        }
+        ofpacts_put_openflow11_instructions(fm->ofpacts, fm->ofpacts_len, msg);
         break;
     }
 
@@ -1332,9 +1329,7 @@ ofputil_encode_flow_mod(const struct ofputil_flow_mod *fm,
         ofm->buffer_id = htonl(fm->buffer_id);
         ofm->out_port = htons(fm->out_port);
         ofm->flags = htons(fm->flags);
-        if (fm->ofpacts) {
-            ofpacts_put_openflow10(fm->ofpacts, fm->ofpacts_len, msg);
-        }
+        ofpacts_put_openflow10(fm->ofpacts, fm->ofpacts_len, msg);
         break;
     }
 
@@ -1357,9 +1352,7 @@ ofputil_encode_flow_mod(const struct ofputil_flow_mod *fm,
         nfm->out_port = htons(fm->out_port);
         nfm->flags = htons(fm->flags);
         nfm->match_len = htons(match_len);
-        if (fm->ofpacts) {
-            ofpacts_put_openflow10(fm->ofpacts, fm->ofpacts_len, msg);
-        }
+        ofpacts_put_openflow10(fm->ofpacts, fm->ofpacts_len, msg);
         break;
     }
 
