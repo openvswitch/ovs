@@ -2583,7 +2583,7 @@ port_get_stats(const struct ofport *ofport_, struct netdev_stats *stats)
 
         /* ofproto->stats.rx_packets represents packets that were received on
          * some port and we processed internally and dropped (e.g. STP).
-         * Account fro them as if they had been forwarded to OFPP_LOCAL. */
+         * Account for them as if they had been forwarded to OFPP_LOCAL. */
 
         if (stats->tx_packets != UINT64_MAX) {
             stats->tx_packets += ofproto->stats.rx_packets;
