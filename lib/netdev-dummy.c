@@ -48,10 +48,15 @@ struct netdev_dummy {
     struct list rxes;           /* List of child "netdev_rx_dummy"s. */
 };
 
+/* Max 'recv_queue_len' in struct netdev_dummy. */
+#define NETDEV_DUMMY_MAX_QUEUE 100
+
 struct netdev_rx_dummy {
     struct netdev_rx up;
     struct list node;           /* In netdev_dummy's "rxes" list. */
     struct list recv_queue;
+    int recv_queue_len;         /* list_size(&recv_queue). */
+    bool listening;
 };
 
 static struct shash dummy_netdevs = SHASH_INITIALIZER(&dummy_netdevs);
@@ -153,6 +158,7 @@ netdev_dummy_rx_open(struct netdev *netdev_, struct netdev_rx **rxp)
     netdev_rx_init(&rx->up, &netdev->up, &netdev_rx_dummy_class);
     list_push_back(&netdev->rxes, &rx->node);
     list_init(&rx->recv_queue);
+    rx->recv_queue_len = 0;
 
     *rxp = &rx->up;
     return 0;
@@ -170,6 +176,7 @@ netdev_rx_dummy_recv(struct netdev_rx *rx_, void *buffer, size_t size)
     }
 
     packet = ofpbuf_from_list(list_pop_front(&rx->recv_queue));
+    rx->recv_queue_len--;
     if (packet->size > size) {
         return -EMSGSIZE;
     }
@@ -204,6 +211,7 @@ netdev_rx_dummy_drain(struct netdev_rx *rx_)
 {
     struct netdev_rx_dummy *rx = netdev_rx_dummy_cast(rx_);
     ofpbuf_list_delete(&rx->recv_queue);
+    rx->recv_queue_len = 0;
     return 0;
 }
 
@@ -457,8 +465,11 @@ netdev_dummy_receive(struct unixctl_conn *conn,
 
         n_listeners = 0;
         LIST_FOR_EACH (rx, node, &dummy_dev->rxes) {
-            struct ofpbuf *copy = ofpbuf_clone(packet);
-            list_push_back(&rx->recv_queue, &copy->list_node);
+            if (rx->recv_queue_len < NETDEV_DUMMY_MAX_QUEUE) {
+                struct ofpbuf *copy = ofpbuf_clone(packet);
+                list_push_back(&rx->recv_queue, &copy->list_node);
+                rx->recv_queue_len++;
+            }
             n_listeners++;
         }
         ofpbuf_delete(packet);
