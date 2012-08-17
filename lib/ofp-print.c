@@ -1044,6 +1044,7 @@ ofp_print_flow_stats_reply(struct ds *string, const struct ofp_header *oh)
         ds_put_char(string, '\n');
         ofp_print_flow_stats(string, &fs);
      }
+    ofpbuf_uninit(&ofpacts);
 }
 
 static void
