@@ -40,7 +40,7 @@ AT_CLEANUP
 AT_SETUP([lacp - multi port config])
 OVS_VSWITCHD_START([dnl
         add-bond br0 bond p1 p2 --\
-        set Port bond lacp=active \
+        set Port bond lacp=active bond-mode=active-backup \
             other_config:lacp-time="fast" \
             other_config:lacp-system-id=11:22:33:44:55:66 \
             other_config:lacp-system-priority=54321 --\
