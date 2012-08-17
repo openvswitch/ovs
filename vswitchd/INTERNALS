@@ -27,12 +27,13 @@ one slave, the port becomes an ordinary port, not a bonded port, and
 none of the special features of bonded ports described in this section
 apply.
 
-There are many forms of bonding, but ovs-vswitchd currently implements
-only a single kind, called "source load balancing" or SLB bonding.
-SLB bonding divides traffic among the slaves based on the Ethernet
-source address.  This is useful only if the traffic over the bond has
-multiple Ethernet source addresses, for example if network traffic
-from multiple VMs are multiplexed over the bond.
+There are many forms of bonding of which ovs-vswitchd implements only
+a few.  The most complex bond ovs-vswitchd implements is called
+"source load balancing" or SLB bonding.  SLB bonding divides traffic
+among the slaves based on the Ethernet source address.  This is useful
+only if the traffic over the bond has multiple Ethernet source
+addresses, for example if network traffic from multiple VMs are
+multiplexed over the bond.
 
 Enabling and Disabling Slaves
 -----------------------------
@@ -141,6 +142,15 @@ LACP Bonding
 LACP bonding requires the remote switch to implement LACP, but it is
 otherwise very simple in that, after LACP negotiation is complete,
 there is no need for special handling of received packets.
+
+Active Backup Bonding
+---------------------
+
+Active Backup bonds send all traffic out one "active" slave until that
+slave becomes unavailable.  Since they are significantly less
+complicated than SLB bonds, they are preferred when LACP is not an
+option.  Additionally, they are the only bond mode which supports
+attaching each slave to a different upstream switch.
 
 SLB Bonding
 -----------
