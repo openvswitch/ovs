@@ -129,8 +129,12 @@ nl_sock_create(int protocol, struct nl_sock **sockp)
     rcvbuf = 1024 * 1024;
     if (setsockopt(sock->fd, SOL_SOCKET, SO_RCVBUFFORCE,
                    &rcvbuf, sizeof rcvbuf)) {
-        VLOG_WARN_RL(&rl, "setting %d-byte socket receive buffer failed (%s)",
-                     rcvbuf, strerror(errno));
+        /* Only root can use SO_RCVBUFFORCE.  Everyone else gets EPERM.
+         * Warn only if the failure is therefore unexpected. */
+        if (errno != EPERM || !getuid()) {
+            VLOG_WARN_RL(&rl, "setting %d-byte socket receive buffer failed "
+                         "(%s)", rcvbuf, strerror(errno));
+        }
     }
 
     retval = get_socket_rcvbuf(sock->fd);
