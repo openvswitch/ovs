@@ -614,6 +614,14 @@ When this field is specified in \fBadd-flow\fR, \fBadd-flows\fR,
 extension to OpenFlow, which as of this writing is only known to be
 implemented by Open vSwitch.
 .
+.IP \fBmetadata=\fIvalue\fR[\fB/\fImask\fR]
+Matches \fIvalue\fR either exactly or with optional \fImask\fR in the metadata
+field. \fIvalue\fR and \fImask\fR are 64-bit integers, by default in decimal
+(use a \fB0x\fR prefix to specify hexadecimal). Arbitrary \fImask\fR values
+are allowed: a 1-bit in \fImask\fR indicates that the corresponding bit in
+\fIvalue\fR must match exactly, and a 0-bit wildcards that bit. Matching on
+metadata was added in Open vSwitch 1.8.
+.
 .PP
 The following shorthand notations are also available:
 .
