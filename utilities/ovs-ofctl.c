@@ -2615,6 +2615,7 @@ ofctl_check_vlan(int argc OVS_UNUSED, char *argv[])
     printf("%04"PRIx16"/%04"PRIx16"\n",
            ntohs(fm.cr.flow.vlan_tci),
            ntohs(fm.cr.wc.vlan_tci_mask));
+    free(string_s);
 
     /* Convert to and from NXM. */
     ofpbuf_init(&nxm, 0);
