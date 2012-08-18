@@ -129,7 +129,7 @@ struct dpif_flow_stats {
 };
 
 void dpif_flow_stats_extract(const struct flow *, const struct ofpbuf *packet,
-                             struct dpif_flow_stats *);
+                             long long int used, struct dpif_flow_stats *);
 void dpif_flow_stats_format(const struct dpif_flow_stats *, struct ds *);
 
 enum dpif_flow_put_flags {

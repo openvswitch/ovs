@@ -2849,6 +2849,7 @@ handle_flow_miss_without_facet(struct flow_miss *miss,
                                struct flow_miss_op *ops, size_t *n_ops)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(rule->up.ofproto);
+    long long int now = time_msec();
     struct action_xlate_ctx ctx;
     struct ofpbuf *packet;
 
@@ -2861,7 +2862,7 @@ handle_flow_miss_without_facet(struct flow_miss *miss,
 
         ofpbuf_use_stub(&odp_actions, op->stub, sizeof op->stub);
 
-        dpif_flow_stats_extract(&miss->flow, packet, &stats);
+        dpif_flow_stats_extract(&miss->flow, packet, now, &stats);
         rule_credit_stats(rule, &stats);
 
         action_xlate_ctx_init(&ctx, ofproto, &miss->flow, miss->initial_tci,
@@ -2912,7 +2913,7 @@ handle_flow_miss_with_facet(struct flow_miss *miss, struct facet *facet,
             subfacet_make_actions(subfacet, packet, &odp_actions);
         }
 
-        dpif_flow_stats_extract(&facet->flow, packet, &stats);
+        dpif_flow_stats_extract(&facet->flow, packet, time_msec(), &stats);
         subfacet_update_stats(subfacet, &stats);
 
         if (subfacet->actions_len) {
@@ -4691,7 +4692,7 @@ rule_execute(struct rule *rule_, const struct flow *flow,
     uint64_t odp_actions_stub[1024 / 8];
     struct ofpbuf odp_actions;
 
-    dpif_flow_stats_extract(flow, packet, &stats);
+    dpif_flow_stats_extract(flow, packet, time_msec(), &stats);
     rule_credit_stats(rule, &stats);
 
     ofpbuf_use_stub(&odp_actions, odp_actions_stub, sizeof odp_actions_stub);
@@ -6390,7 +6391,7 @@ packet_out(struct ofproto *ofproto_, struct ofpbuf *packet,
         ofpbuf_use_stack(&key, &keybuf, sizeof keybuf);
         odp_flow_key_from_flow(&key, flow);
 
-        dpif_flow_stats_extract(flow, packet, &stats);
+        dpif_flow_stats_extract(flow, packet, time_msec(), &stats);
 
         action_xlate_ctx_init(&ctx, ofproto, flow, flow->vlan_tci, NULL,
                               packet_get_tcp_flags(packet, flow), packet);
