@@ -434,7 +434,7 @@ parse_named_action(enum ofputil_action_code code, const struct flow *flow,
         multipath_parse(ofpact_put_MULTIPATH(ofpacts), arg);
         break;
 
-    case OFPUTIL_NXAST_AUTOPATH:
+    case OFPUTIL_NXAST_AUTOPATH__DEPRECATED:
         autopath_parse(ofpact_put_AUTOPATH(ofpacts), arg);
         break;
 

@@ -1013,6 +1013,8 @@ the \fBiter_hash\fR algorithm uses \fIarg\fR.
 Refer to \fBnicira\-ext.h\fR for more details.
 .
 .IP "\fBautopath(\fIid\fB, \fIdst\fB[\fIstart\fB..\fIend\fB])\fR"
+Deprecated and slated for removal in Feburary 2013.
+.IP
 Given \fIid\fR, chooses an OpenFlow port and populates it in
 \fIdst\fB[\fIstart\fB..\fIend\fB]\fR, which must be an NXM field as
 described above.

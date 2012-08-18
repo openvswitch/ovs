@@ -293,7 +293,7 @@ enum nx_action_subtype {
     NXAST_NOTE,                 /* struct nx_action_note */
     NXAST_SET_TUNNEL64,         /* struct nx_action_set_tunnel64 */
     NXAST_MULTIPATH,            /* struct nx_action_multipath */
-    NXAST_AUTOPATH,             /* struct nx_action_autopath */
+    NXAST_AUTOPATH__DEPRECATED, /* struct nx_action_autopath */
     NXAST_BUNDLE,               /* struct nx_action_bundle */
     NXAST_BUNDLE_LOAD,          /* struct nx_action_bundle */
     NXAST_RESUBMIT_TABLE,       /* struct nx_action_resubmit */

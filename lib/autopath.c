@@ -89,6 +89,9 @@ autopath_from_openflow(const struct nx_action_autopath *nap,
 enum ofperr
 autopath_check(const struct ofpact_autopath *autopath, const struct flow *flow)
 {
+    VLOG_WARN_ONCE("The autopath action is deprecated and may be removed in"
+                   " February 2013.  Please email dev@openvswitch.org with"
+                   " concerns.");
     return mf_check_dst(&autopath->dst, flow);
 }
 
@@ -96,8 +99,9 @@ void
 autopath_to_nxast(const struct ofpact_autopath *autopath,
                   struct ofpbuf *openflow)
 {
-    struct nx_action_autopath *ap = ofputil_put_NXAST_AUTOPATH(openflow);
+    struct nx_action_autopath *ap;
 
+    ap = ofputil_put_NXAST_AUTOPATH__DEPRECATED(openflow);
     ap->ofs_nbits = nxm_encode_ofs_nbits(autopath->dst.ofs,
                                          autopath->dst.n_bits);
     ap->dst = htonl(autopath->dst.field->nxm_header);

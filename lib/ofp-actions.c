@@ -333,7 +333,7 @@ ofpact_from_nxast(const union ofp_action *a, enum ofputil_action_code code,
                                         ofpact_put_MULTIPATH(out));
         break;
 
-    case OFPUTIL_NXAST_AUTOPATH:
+    case OFPUTIL_NXAST_AUTOPATH__DEPRECATED:
         error = autopath_from_openflow((const struct nx_action_autopath *) a,
                                        ofpact_put_AUTOPATH(out));
         break;
