@@ -685,15 +685,16 @@ dpif_port_poll_wait(const struct dpif *dpif)
 }
 
 /* Extracts the flow stats for a packet.  The 'flow' and 'packet'
- * arguments must have been initialized through a call to flow_extract(). */
+ * arguments must have been initialized through a call to flow_extract().
+ * 'used' is stored into stats->used. */
 void
 dpif_flow_stats_extract(const struct flow *flow, const struct ofpbuf *packet,
-                        struct dpif_flow_stats *stats)
+                        long long int used, struct dpif_flow_stats *stats)
 {
     stats->tcp_flags = packet_get_tcp_flags(packet, flow);
     stats->n_bytes = packet->size;
     stats->n_packets = 1;
-    stats->used = time_msec();
+    stats->used = used;
 }
 
 /* Appends a human-readable representation of 'stats' to 's'. */
