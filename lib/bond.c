@@ -255,6 +255,12 @@ bond_reconfigure(struct bond *bond, const struct bond_settings *s)
     if (bond->balance != s->balance) {
         bond->balance = s->balance;
         revalidate = true;
+
+        if (bond->balance == BM_STABLE) {
+            VLOG_WARN_ONCE("Stable bond mode is deprecated and may be removed"
+                           " in February 2013. Please email"
+                           " dev@openvswitch.org with concerns.");
+        }
     }
 
     if (bond->basis != s->basis) {
