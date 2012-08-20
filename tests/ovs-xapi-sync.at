@@ -16,7 +16,7 @@ cp "$top_srcdir/vswitchd/vswitch.ovsschema" .
 cp "$top_srcdir/xenserver/usr_share_openvswitch_scripts_ovs-xapi-sync" \
    ovs-xapi-sync
 
-trap 'kill `cat pid ovs-xapi-sync.pid`' 0
+ON_EXIT([kill `cat pid ovs-xapi-sync.pid`])
 
 mkdir var var/run
 touch var/run/xapi_init_complete.cookie

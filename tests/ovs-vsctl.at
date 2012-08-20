@@ -741,7 +741,7 @@ AT_CLEANUP
 
 AT_SETUP([database commands -- conditions])
 AT_KEYWORDS([ovs-vsctl])
-trap 'kill `cat pid`' 0
+ON_EXIT([kill `cat pid`])
 OVS_VSCTL_SETUP
 AT_CHECK(
   [RUN_OVS_VSCTL_TOGETHER(

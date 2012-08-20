@@ -53,6 +53,17 @@ m4_define([OVS_WAIT_UNTIL], [OVS_WAIT([$1], [$2])])
 m4_define([OVS_WAIT_WHILE],
   [OVS_WAIT([if $1; then return 1; else return 0; fi], [$2])])
 
+dnl ON_EXIT([COMMANDS])
+dnl
+dnl Adds the shell COMMANDS to a collection executed when the current test
+dnl completes, as a cleanup action.  (The most common use is to kill a
+dnl daemon started by the test.  This is important to prevent tests that
+dnl start daemons from hanging at exit.)
+m4_define([ON_EXIT], [trap '. ./cleanup' 0; cat >>cleanup <<'EOF'
+$1
+EOF
+])
+
 m4_include([tests/ovsdb-macros.at])
 m4_include([tests/ofproto-macros.at])
 

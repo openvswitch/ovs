@@ -109,7 +109,7 @@ OVS_RUNDIR=`pwd`; export OVS_RUNDIR
 OVS_LOGDIR=`pwd`; export OVS_LOGDIR
 OVS_DBDIR=`pwd`; export OVS_DBDIR
 OVS_SYSCONFDIR=`pwd`; export OVS_SYSCONFDIR
-trap 'kill `cat test-unixctl.py.pid`' 0
+ON_EXIT([kill `cat test-unixctl.py.pid`])
 
 AT_CAPTURE_FILE([log])
 AT_CAPTURE_FILE([log.old])
@@ -121,7 +121,6 @@ AT_CHECK([APPCTL -t test-unixctl.py log message2])
 AT_CHECK([APPCTL -t test-unixctl.py vlog/reopen])
 AT_CHECK([APPCTL -t test-unixctl.py log message3])
 AT_CHECK([APPCTL -t test-unixctl.py exit])
-trap '' 0
 
 AT_CHECK([sed 's/.*|//' log.old], [0], [dnl
 Entering run loop.
@@ -139,7 +138,7 @@ OVS_RUNDIR=`pwd`; export OVS_RUNDIR
 OVS_LOGDIR=`pwd`; export OVS_LOGDIR
 OVS_DBDIR=`pwd`; export OVS_DBDIR
 OVS_SYSCONFDIR=`pwd`; export OVS_SYSCONFDIR
-trap 'kill `cat test-unixctl.py.pid`' 0
+ON_EXIT([kill `cat test-unixctl.py.pid`])
 
 AT_CHECK([$PYTHON $srcdir/test-unixctl.py --pidfile --detach])
 
@@ -162,7 +161,7 @@ OVS_RUNDIR=`pwd`; export OVS_RUNDIR
 OVS_LOGDIR=`pwd`; export OVS_LOGDIR
 OVS_DBDIR=`pwd`; export OVS_DBDIR
 OVS_SYSCONFDIR=`pwd`; export OVS_SYSCONFDIR
-trap 'kill `cat test-unixctl.py.pid`' 0
+ON_EXIT([kill `cat test-unixctl.py.pid`])
 
 AT_CHECK([$PYTHON $srcdir/test-unixctl.py --log-file=`pwd`/log --pidfile --detach])
 AT_CHECK([APPCTL -t test-unixctl.py log message])
@@ -189,7 +188,7 @@ OVS_RUNDIR=`pwd`; export OVS_RUNDIR
 OVS_LOGDIR=`pwd`; export OVS_LOGDIR
 OVS_DBDIR=`pwd`; export OVS_DBDIR
 OVS_SYSCONFDIR=`pwd`; export OVS_SYSCONFDIR
-trap 'kill `cat test-unixctl.py.pid`' 0
+ON_EXIT([kill `cat test-unixctl.py.pid`])
 
 AT_CAPTURE_FILE([log])
 AT_CHECK([$PYTHON $srcdir/test-unixctl.py --log-file=`pwd`/log --pidfile --detach])

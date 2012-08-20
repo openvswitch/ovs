@@ -33,7 +33,7 @@ m4_define([OVS_VSWITCHD_START],
    OVS_LOGDIR=`pwd`; export OVS_LOGDIR
    OVS_DBDIR=`pwd`; export OVS_DBDIR
    OVS_SYSCONFDIR=`pwd`; export OVS_SYSCONFDIR
-   trap 'kill `cat ovsdb-server.pid ovs-vswitchd.pid`' 0
+   ON_EXIT([kill `cat ovsdb-server.pid ovs-vswitchd.pid`])
 
    dnl Create database.
    touch .conf.db.~lock~
@@ -65,5 +65,4 @@ m4_define([OVS_VSWITCHD_START],
 
 m4_define([OVS_VSWITCHD_STOP],
   [AT_CHECK([ovs-appctl -t ovs-vswitchd exit])
-   AT_CHECK([ovs-appctl -t ovsdb-server exit])
-   trap '' 0])
+   AT_CHECK([ovs-appctl -t ovsdb-server exit])])

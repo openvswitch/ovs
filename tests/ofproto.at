@@ -910,7 +910,7 @@ echo n_msgs=$n_msgs
 OVS_VSWITCHD_START
 
 # Start a monitor watching the flow table, then make it block.
-trap 'kill `cat ovsdb-server.pid ovs-vswitchd.pid ovs-ofctl.pid`' 0
+ON_EXIT([kill `cat ovs-ofctl.pid`])
 ovs-ofctl monitor br0 watch: --detach --no-chdir --pidfile >monitor.log 2>&1
 AT_CAPTURE_FILE([monitor.log])
 ovs-appctl -t ovs-ofctl ofctl/block
