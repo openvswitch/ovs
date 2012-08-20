@@ -165,8 +165,8 @@ log_wakeup(const char *where, const struct pollfd *pollfd, int timeout)
     cpu_usage = get_cpu_usage();
     if (VLOG_IS_DBG_ENABLED()) {
         level = VLL_DBG;
-    } else if (cpu_usage > 50 && !VLOG_DROP_WARN(&rl)) {
-        level = VLL_WARN;
+    } else if (cpu_usage > 50 && !VLOG_DROP_INFO(&rl)) {
+        level = VLL_INFO;
     } else {
         return;
     }
