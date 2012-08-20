@@ -56,6 +56,8 @@ static struct cls_rule *next_rule_in_list(struct cls_rule *);
 /* Initializes 'rule' to match packets specified by 'match' at the given
  * 'priority'.
  *
+ * The caller must eventually destroy 'rule' with cls_rule_destroy().
+ *
  * 'match' must satisfy the invariant described in the comment at the
  * definition of struct match.
  *
@@ -67,6 +69,25 @@ cls_rule_init(struct cls_rule *rule,
 {
     rule->match = *match;
     rule->priority = priority;
+}
+
+/* Initializes 'dst' as a copy of 'src'.
+ *
+ * The caller must eventually destroy 'rule' with cls_rule_destroy(). */
+void
+cls_rule_clone(struct cls_rule *dst, const struct cls_rule *src)
+{
+    *dst = *src;
+}
+
+/* Frees memory referenced by 'rule'.  Doesn't free 'rule' itself (it's
+ * normally embedded into a larger structure).
+ *
+ * ('rule' must not currently be in a classifier.) */
+void
+cls_rule_destroy(struct cls_rule *rule OVS_UNUSED)
+{
+    /* Nothing to do yet. */
 }
 
 /* Returns true if 'a' and 'b' match the same packets at the same priority,
@@ -137,7 +158,8 @@ classifier_count(const struct classifier *cls)
  * If 'cls' already contains an identical rule (including wildcards, values of
  * fixed fields, and priority), replaces the old rule by 'rule' and returns the
  * rule that was replaced.  The caller takes ownership of the returned rule and
- * is thus responsible for freeing it, etc., as necessary.
+ * is thus responsible for destroying it with cls_rule_destroy(), freeing the
+ * memory block in which it resides, etc., as necessary.
  *
  * Returns NULL if 'cls' does not contain a rule with an identical key, after
  * inserting the new rule.  In this case, no rules are displaced by the new
@@ -175,8 +197,9 @@ classifier_insert(struct classifier *cls, struct cls_rule *rule)
     assert(!displaced_rule);
 }
 
-/* Removes 'rule' from 'cls'.  It is the caller's responsibility to free
- * 'rule', if this is desirable. */
+/* Removes 'rule' from 'cls'.  It is the caller's responsibility to destroy
+ * 'rule' with cls_rule_destroy(), freeing the memory block in which 'rule'
+ * resides, etc., as necessary. */
 void
 classifier_remove(struct classifier *cls, struct cls_rule *rule)
 {
@@ -261,6 +284,7 @@ classifier_find_match_exactly(const struct classifier *cls,
 
     cls_rule_init(&cr, target, priority);
     retval = classifier_find_rule_exactly(cls, &cr);
+    cls_rule_destroy(&cr);
 
     return retval;
 }

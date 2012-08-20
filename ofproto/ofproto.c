@@ -1901,6 +1901,7 @@ static void
 ofproto_rule_destroy__(struct rule *rule)
 {
     if (rule) {
+        cls_rule_destroy(&rule->cr);
         free(rule->ofpacts);
         rule->ofproto->ofproto_class->rule_dealloc(rule);
     }
@@ -2457,7 +2458,8 @@ collect_rules_loose(struct ofproto *ofproto, uint8_t table_id,
         cls_cursor_init(&cursor, &table->cls, &cr);
         CLS_CURSOR_FOR_EACH (rule, cr, &cursor) {
             if (rule->pending) {
-                return OFPROTO_POSTPONE;
+                error = OFPROTO_POSTPONE;
+                goto exit;
             }
             if (!ofproto_rule_is_hidden(rule)
                 && ofproto_rule_has_out_port(rule, out_port)
@@ -2466,7 +2468,10 @@ collect_rules_loose(struct ofproto *ofproto, uint8_t table_id,
             }
         }
     }
-    return 0;
+
+exit:
+    cls_rule_destroy(&cr);
+    return error;
 }
 
 /* Searches 'ofproto' for rules in table 'table_id' (or in all tables, if
@@ -2504,7 +2509,8 @@ collect_rules_strict(struct ofproto *ofproto, uint8_t table_id,
                                                                &cr));
         if (rule) {
             if (rule->pending) {
-                return OFPROTO_POSTPONE;
+                error = OFPROTO_POSTPONE;
+                goto exit;
             }
             if (!ofproto_rule_is_hidden(rule)
                 && ofproto_rule_has_out_port(rule, out_port)
@@ -2513,6 +2519,9 @@ collect_rules_strict(struct ofproto *ofproto, uint8_t table_id,
             }
         }
     }
+
+exit:
+    cls_rule_destroy(&cr);
     return 0;
 }
 
@@ -2922,6 +2931,7 @@ add_flow(struct ofproto *ofproto, struct ofconn *ofconn,
 
     /* Serialize against pending deletion. */
     if (is_flow_deletion_pending(ofproto, &cr, table - ofproto->tables)) {
+        cls_rule_destroy(&rule->cr);
         ofproto->ofproto_class->rule_dealloc(rule);
         return OFPROTO_POSTPONE;
     }
@@ -2929,6 +2939,7 @@ add_flow(struct ofproto *ofproto, struct ofconn *ofconn,
     /* Check for overlap, if requested. */
     if (fm->flags & OFPFF_CHECK_OVERLAP
         && classifier_rule_overlaps(&table->cls, &rule->cr)) {
+        cls_rule_destroy(&rule->cr);
         ofproto->ofproto_class->rule_dealloc(rule);
         return OFPERR_OFPFMFC_OVERLAP;
     }
@@ -3644,6 +3655,7 @@ ofproto_collect_ofmonitor_refresh_rules(const struct ofmonitor *m,
             ofproto_collect_ofmonitor_refresh_rule(m, rule, seqno, rules);
         }
     }
+    cls_rule_destroy(&target);
 }
 
 static void

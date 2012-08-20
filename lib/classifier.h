@@ -70,6 +70,8 @@ struct cls_rule {
 
 void cls_rule_init(struct cls_rule *,
                    const struct match *, unsigned int priority);
+void cls_rule_clone(struct cls_rule *, const struct cls_rule *);
+void cls_rule_destroy(struct cls_rule *);
 
 bool cls_rule_equal(const struct cls_rule *, const struct cls_rule *);
 uint32_t cls_rule_hash(const struct cls_rule *, uint32_t basis);

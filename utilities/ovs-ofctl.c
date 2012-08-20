@@ -1778,6 +1778,7 @@ fte_free(struct fte *fte)
     if (fte) {
         fte_version_free(fte->versions[0]);
         fte_version_free(fte->versions[1]);
+        cls_rule_destroy(&fte->rule);
         free(fte);
     }
 }
@@ -1816,6 +1817,7 @@ fte_insert(struct classifier *cls, const struct match *match,
     if (old) {
         fte_version_free(old->versions[index]);
         fte->versions[!index] = old->versions[!index];
+        cls_rule_destroy(&old->rule);
         free(old);
     }
 }

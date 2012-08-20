@@ -95,6 +95,11 @@ test_rule_from_cls_rule(const struct cls_rule *rule)
     return rule ? CONTAINER_OF(rule, struct test_rule, cls_rule) : NULL;
 }
 
+static struct test_rule *make_rule(int wc_fields, unsigned int priority,
+                                   int value_pat);
+static void free_rule(struct test_rule *);
+static struct test_rule *clone_rule(const struct test_rule *);
+
 /* Trivial (linear) classifier. */
 struct tcls {
     size_t n_rules;
@@ -138,8 +143,8 @@ tcls_insert(struct tcls *tcls, const struct test_rule *rule)
         const struct cls_rule *pos = &tcls->rules[i]->cls_rule;
         if (cls_rule_equal(pos, &rule->cls_rule)) {
             /* Exact match. */
-            free(tcls->rules[i]);
-            tcls->rules[i] = xmemdup(rule, sizeof *rule);
+            free_rule(tcls->rules[i]);
+            tcls->rules[i] = clone_rule(rule);
             return tcls->rules[i];
         } else if (pos->priority < rule->cls_rule.priority) {
             break;
@@ -154,7 +159,7 @@ tcls_insert(struct tcls *tcls, const struct test_rule *rule)
         memmove(&tcls->rules[i + 1], &tcls->rules[i],
                 sizeof *tcls->rules * (tcls->n_rules - i));
     }
-    tcls->rules[i] = xmemdup(rule, sizeof *rule);
+    tcls->rules[i] = clone_rule(rule);
     tcls->n_rules++;
     return tcls->rules[i];
 }
@@ -422,7 +427,7 @@ destroy_classifier(struct classifier *cls)
     cls_cursor_init(&cursor, cls, NULL);
     CLS_CURSOR_FOR_EACH_SAFE (rule, next_rule, cls_rule, &cursor) {
         classifier_remove(cls, &rule->cls_rule);
-        free(rule);
+        free_rule(rule);
     }
     classifier_destroy(cls);
 }
@@ -522,6 +527,24 @@ make_rule(int wc_fields, unsigned int priority, int value_pat)
     return rule;
 }
 
+static struct test_rule *
+clone_rule(const struct test_rule *src)
+{
+    struct test_rule *dst;
+
+    dst = xmalloc(sizeof *dst);
+    dst->aux = src->aux;
+    cls_rule_clone(&dst->cls_rule, &src->cls_rule);
+    return dst;
+}
+
+static void
+free_rule(struct test_rule *rule)
+{
+    cls_rule_destroy(&rule->cls_rule);
+    free(rule);
+}
+
 static void
 shuffle(unsigned int *p, size_t n)
 {
@@ -584,7 +607,7 @@ test_single_rule(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
         assert(tcls_is_empty(&tcls));
         compare_classifiers(&cls, &tcls);
 
-        free(rule);
+        free_rule(rule);
         classifier_destroy(&cls);
         tcls_destroy(&tcls);
     }
@@ -619,7 +642,7 @@ test_rule_replacement(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
         tcls_insert(&tcls, rule2);
         assert(test_rule_from_cls_rule(
                    classifier_replace(&cls, &rule2->cls_rule)) == rule1);
-        free(rule1);
+        free_rule(rule1);
         check_tables(&cls, 1, 1, 0);
         compare_classifiers(&cls, &tcls);
         tcls_destroy(&tcls);
@@ -760,7 +783,7 @@ test_many_rules_in_one_list (int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
             tcls_destroy(&tcls);
 
             for (i = 0; i < N_RULES; i++) {
-                free(rules[i]);
+                free_rule(rules[i]);
             }
         } while (next_permutation(ops, ARRAY_SIZE(ops)));
         assert(n_permutations == (factorial(N_RULES * 2) >> N_RULES));
@@ -838,7 +861,7 @@ test_many_rules_in_one_table(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
         for (i = 0; i < N_RULES; i++) {
             tcls_remove(&tcls, tcls_rules[i]);
             classifier_remove(&cls, &rules[i]->cls_rule);
-            free(rules[i]);
+            free_rule(rules[i]);
 
             check_tables(&cls, i < N_RULES - 1, N_RULES - (i + 1), 0);
             compare_classifiers(&cls, &tcls);
@@ -897,18 +920,17 @@ test_many_rules_in_n_tables(int n_tables)
             struct test_rule *target;
             struct cls_cursor cursor;
 
-            target = xmemdup(tcls.rules[rand() % tcls.n_rules],
-                             sizeof(struct test_rule));
+            target = clone_rule(tcls.rules[rand() % tcls.n_rules]);
 
             cls_cursor_init(&cursor, &cls, &target->cls_rule);
             CLS_CURSOR_FOR_EACH_SAFE (rule, next_rule, cls_rule, &cursor) {
                 classifier_remove(&cls, &rule->cls_rule);
-                free(rule);
+                free_rule(rule);
             }
             tcls_delete_matches(&tcls, &target->cls_rule);
             compare_classifiers(&cls, &tcls);
             check_tables(&cls, -1, -1, -1);
-            free(target);
+            free_rule(target);
         }
 
         destroy_classifier(&cls);
