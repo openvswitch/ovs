@@ -949,6 +949,7 @@ OVS_VSWITCHD_START(
      add-id-to-interface=false], [<0>
 ])
 
+ON_EXIT([kill `cat test-netflow.pid`])
 AT_CHECK([test-netflow --detach --no-chdir --pidfile $NETFLOW_PORT:127.0.0.1 > netflow.log])
 AT_CAPTURE_FILE([netflow.log])
 
@@ -993,6 +994,7 @@ OVS_VSWITCHD_START(
      add-id-to-interface=false], [<0>
 ])
 
+ON_EXIT([kill `test-netflow.pid`])
 AT_CHECK([test-netflow --detach --no-chdir --pidfile $NETFLOW_PORT:127.0.0.1 > netflow.log])AT_CAPTURE_FILE([netflow.log])
 
 AT_CHECK([ovs-appctl time/stop])
