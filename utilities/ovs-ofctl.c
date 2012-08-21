@@ -424,7 +424,7 @@ dump_trivial_transaction(const char *vconn_name, enum ofpraw raw)
 }
 
 static void
-dump_stats_transaction__(struct vconn *vconn, struct ofpbuf *request)
+dump_stats_transaction(struct vconn *vconn, struct ofpbuf *request)
 {
     const struct ofp_header *request_oh = request->data;
     ovs_be32 send_xid = request_oh->xid;
@@ -467,22 +467,15 @@ dump_stats_transaction__(struct vconn *vconn, struct ofpbuf *request)
 }
 
 static void
-dump_stats_transaction(const char *vconn_name, struct ofpbuf *request)
-{
-    struct vconn *vconn;
-
-    open_vconn(vconn_name, &vconn);
-    dump_stats_transaction__(vconn, request);
-    vconn_close(vconn);
-}
-
-static void
 dump_trivial_stats_transaction(const char *vconn_name, enum ofpraw raw)
 {
     struct ofpbuf *request;
+    struct vconn *vconn;
 
-    request = ofpraw_alloc(raw, OFP10_VERSION, 0);
-    dump_stats_transaction(vconn_name, request);
+    open_vconn(vconn_name, &vconn);
+    request = ofpraw_alloc(raw, vconn_get_version(vconn), 0);
+    dump_stats_transaction(vconn, request);
+    vconn_close(vconn);
 }
 
 /* Sends 'request', which should be a request that only has a reply if an error
@@ -839,7 +832,7 @@ ofctl_dump_flows__(int argc, char *argv[], bool aggregate)
     struct vconn *vconn;
 
     vconn = prepare_dump_flows(argc, argv, aggregate, &request);
-    dump_stats_transaction__(vconn, request);
+    dump_stats_transaction(vconn, request);
     vconn_close(vconn);
 }
 
@@ -956,8 +949,11 @@ ofctl_queue_stats(int argc, char *argv[])
 {
     struct ofp10_queue_stats_request *req;
     struct ofpbuf *request;
+    struct vconn *vconn;
 
-    request = ofpraw_alloc(OFPRAW_OFPST_QUEUE_REQUEST, OFP10_VERSION, 0);
+    open_vconn(argv[1], &vconn);
+    request = ofpraw_alloc(OFPRAW_OFPST_QUEUE_REQUEST,
+                           vconn_get_version(vconn), 0);
     req = ofpbuf_put_zeros(request, sizeof *req);
 
     if (argc > 2 && argv[2][0] && strcasecmp(argv[2], "all")) {
@@ -973,7 +969,8 @@ ofctl_queue_stats(int argc, char *argv[])
 
     memset(req->pad, 0, sizeof req->pad);
 
-    dump_stats_transaction(argv[1], request);
+    dump_stats_transaction(vconn, request);
+    vconn_close(vconn);
 }
 
 static enum ofputil_protocol
@@ -1377,7 +1374,7 @@ ofctl_monitor(int argc, char *argv[])
 
             msg = ofpbuf_new(0);
             ofputil_append_flow_monitor_request(&fmr, msg);
-            dump_stats_transaction__(vconn, msg);
+            dump_stats_transaction(vconn, msg);
         } else {
             ovs_fatal(0, "%s: unsupported \"monitor\" argument", arg);
         }
@@ -1418,13 +1415,17 @@ ofctl_dump_ports(int argc, char *argv[])
 {
     struct ofp10_port_stats_request *req;
     struct ofpbuf *request;
+    struct vconn *vconn;
     uint16_t port;
 
-    request = ofpraw_alloc(OFPRAW_OFPST_PORT_REQUEST, OFP10_VERSION, 0);
+    open_vconn(argv[1], &vconn);
+    request = ofpraw_alloc(OFPRAW_OFPST_PORT_REQUEST,
+                           vconn_get_version(vconn), 0);
     req = ofpbuf_put_zeros(request, sizeof *req);
     port = argc > 2 ? str_to_port_no(argv[1], argv[2]) : OFPP_NONE;
     req->port_no = htons(port);
-    dump_stats_transaction(argv[1], request);
+    dump_stats_transaction(vconn, request);
+    vconn_close(vconn);
 }
 
 static void

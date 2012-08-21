@@ -60,12 +60,12 @@ AT_CHECK([STRIP_XIDS stdout], [0], [dnl
 OFPST_QUEUE reply: 0 queues
 ])
 AT_CHECK([ovs-ofctl -vwarn queue-stats br0 ALL 5], [0],
-  [OFPT_ERROR (xid=0x1): OFPQOFC_BAD_QUEUE
-OFPST_QUEUE request (xid=0x1):port=ALL queue=5
+  [OFPT_ERROR (xid=0x2): OFPQOFC_BAD_QUEUE
+OFPST_QUEUE request (xid=0x2):port=ALL queue=5
 ])
 AT_CHECK([ovs-ofctl -vwarn queue-stats br0 10], [0],
-  [OFPT_ERROR (xid=0x1): OFPQOFC_BAD_PORT
-OFPST_QUEUE request (xid=0x1):port=10 queue=ALL
+  [OFPT_ERROR (xid=0x2): OFPQOFC_BAD_PORT
+OFPST_QUEUE request (xid=0x2):port=10 queue=ALL
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -354,7 +354,7 @@ AT_CLEANUP
 AT_SETUP([ofproto - flow table configuration])
 OVS_VSWITCHD_START
 # Check the default configuration.
-(echo "OFPST_TABLE reply (xid=0x1): 255 tables
+(echo "OFPST_TABLE reply (xid=0x2): 255 tables
   0: classifier: wild=0x3fffff, max=1000000, active=0
                lookup=0, matched=0"
  x=1
@@ -379,7 +379,7 @@ AT_CHECK(
 ])
 # Check that the configuration was updated.
 mv expout orig-expout
-(echo "OFPST_TABLE reply (xid=0x1): 255 tables
+(echo "OFPST_TABLE reply (xid=0x2): 255 tables
   0: main    : wild=0x3fffff, max=1000000, active=0
                lookup=0, matched=0
   1: table1  : wild=0x3fffff, max=  1024, active=0
