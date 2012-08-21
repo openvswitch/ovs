@@ -790,38 +790,34 @@ log_2_ceil(uint32_t n)
     return log_2_floor(n) + !IS_POW2(n);
 }
 
-/* Returns the number of trailing 0-bits in 'n', or 32 if 'n' is 0. */
-int
-ctz(uint32_t n)
-{
-    if (!n) {
-        return 32;
-    } else {
+/* Returns the number of trailing 0-bits in 'n'.  Undefined if 'n' == 0. */
 #if !defined(UINT_MAX) || !defined(UINT32_MAX)
 #error "Someone screwed up the #includes."
 #elif __GNUC__ >= 4 && UINT_MAX == UINT32_MAX
-        return __builtin_ctz(n);
+/* Defined inline in util.h. */
 #else
-        unsigned int k;
-        int count = 31;
+static int
+raw_ctz(uint32_t n)
+{
+    unsigned int k;
+    int count = 31;
 
 #define CTZ_STEP(X)                             \
-        k = n << (X);                           \
-        if (k) {                                \
-            count -= X;                         \
-            n = k;                              \
-        }
-        CTZ_STEP(16);
-        CTZ_STEP(8);
-        CTZ_STEP(4);
-        CTZ_STEP(2);
-        CTZ_STEP(1);
+    k = n << (X);                               \
+    if (k) {                                    \
+        count -= X;                             \
+        n = k;                                  \
+    }
+    CTZ_STEP(16);
+    CTZ_STEP(8);
+    CTZ_STEP(4);
+    CTZ_STEP(2);
+    CTZ_STEP(1);
 #undef CTZ_STEP
 
-        return count;
-#endif
-    }
+    return count;
 }
+#endif
 
 /* Returns the number of 1-bits in 'x', between 0 and 32 inclusive. */
 int
