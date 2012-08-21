@@ -22,6 +22,8 @@ post-v1.8.0
       February 2013.  Please email dev@openvswitch.org with concerns.
     - The autopath action is deprecated and will be removed no earlier than
       February 2013.  Please email dev@openvswitch.org with concerns.
+    - The null interface type is deprecated and will be removed no earlier
+      than February 2013.  Please email dev@openvswitch.org with concerns.
 
 
 v1.8.0 - xx xxx xxxx

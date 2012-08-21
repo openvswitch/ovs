@@ -2525,7 +2525,12 @@ bridge_add_del_ports(struct bridge *br,
             if (iface) {
                 iface->cfg = cfg;
                 iface->type = type;
-            } else if (strcmp(type, "null")) {
+            } else if (!strcmp(type, "null")) {
+                VLOG_WARN_ONCE("%s: The null interface type is deprecated and"
+                               " may be removed in February 2013. Please email"
+                               " dev@openvswitch.org with concerns.",
+                               cfg->name);
+            } else {
                 bridge_queue_if_cfg(br, cfg, port);
             }
         }
