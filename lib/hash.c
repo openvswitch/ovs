@@ -102,3 +102,18 @@ hash_bytes(const void *p_, size_t n, uint32_t basis)
 
     return c;
 }
+
+/* Returns the hash of the 'n' 32-bit words at 'p', starting from 'basis'.
+ * 'p' must be properly aligned. */
+uint32_t
+mhash_words(const uint32_t p[], size_t n_words, uint32_t basis)
+{
+    uint32_t hash;
+    size_t i;
+
+    hash = basis;
+    for (i = 0; i < n_words; i++) {
+        hash = mhash_add(hash, p[i]);
+    }
+    return mhash_finish(hash, n_words);
+}

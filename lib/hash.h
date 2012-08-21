@@ -118,6 +118,48 @@ static inline uint32_t hash_pointer(const void *p, uint32_t basis)
     return hash_int((uint32_t) (uintptr_t) p, basis);
 }
 
+/* Murmurhash by Austin Appleby,
+ * from http://code.google.com/p/smhasher/source/browse/trunk/MurmurHash3.cpp.
+ *
+ * The upstream license there says:
+ *
+ * // MurmurHash3 was written by Austin Appleby, and is placed in the public
+ * // domain. The author hereby disclaims copyright to this source code.
+ *
+ * Murmurhash is faster and higher-quality than the Jenkins lookup3 hash.  When
+ * we have a little more familiarity with it, it's probably a good idea to
+ * switch all of OVS to it.
+ *
+ * For now, we have this implementation here for use by code that needs a hash
+ * that is convenient for use one word at a time, since the Jenkins lookup3
+ * hash works three words at a time.
+ *
+ * See mhash_words() for sample usage. */
+
+uint32_t mhash_words(const uint32_t data[], size_t n_words, uint32_t basis);
+
+static inline uint32_t mhash_add(uint32_t hash, uint32_t data)
+{
+    data *= 0xcc9e2d51;
+    data = hash_rot(data, 15);
+    data *= 0x1b873593;
+
+    hash ^= data;
+    hash = hash_rot(hash, 13);
+    return hash * 5 + 0xe6546b64;
+}
+
+static inline uint32_t mhash_finish(uint32_t hash, size_t n)
+{
+    hash ^= n * 4;
+    hash ^= hash_rot(hash, 16);
+    hash *= 0x85ebca6b;
+    hash ^= hash_rot(hash, 13);
+    hash *= 0xc2b2ae35;
+    hash ^= hash_rot(hash, 16);
+    return hash;
+}
+
 #ifdef __cplusplus
 }
 #endif

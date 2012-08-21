@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009 Nicira, Inc.
+ * Copyright (c) 2009, 2012 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -41,6 +41,12 @@ hash_words_cb(uint32_t input)
 }
 
 static uint32_t
+mhash_words_cb(uint32_t input)
+{
+    return mhash_words(&input, 1, 0);
+}
+
+static uint32_t
 hash_int_cb(uint32_t input)
 {
     return hash_int(input, 0);
@@ -76,11 +82,37 @@ check_word_hash(uint32_t (*hash)(uint32_t), const char *name,
     }
 }
 
-int
-main(void)
+static void
+check_3word_hash(uint32_t (*hash)(const uint32_t[], size_t, uint32_t),
+                 const char *name)
 {
     int i, j;
 
+    for (i = 0; i <= 96; i++) {
+        for (j = i + 1; j <= 96; j++) {
+            uint32_t in1[3], in2[3];
+            uint32_t out1, out2;
+            const int min_unique = 12;
+            const uint32_t unique_mask = (UINT32_C(1) << min_unique) - 1;
+
+            set_bit(in1, i);
+            set_bit(in2, j);
+            out1 = hash(in1, 3, 0);
+            out2 = hash(in2, 3, 0);
+            if ((out1 & unique_mask) == (out2 & unique_mask)) {
+                printf("%s has a partial collision:\n", name);
+                printf("hash(1 << %d) == %08"PRIx32"\n", i, out1);
+                printf("hash(1 << %d) == %08"PRIx32"\n", j, out2);
+                printf("The low-order %d bits of output are both "
+                       "0x%"PRIx32"\n", min_unique, out1 & unique_mask);
+            }
+        }
+    }
+}
+
+int
+main(void)
+{
     /* Check that all hashes computed with hash_words with one 1-bit (or no
      * 1-bits) set within a single 32-bit word have different values in all
      * 11-bit consecutive runs.
@@ -98,6 +130,7 @@ main(void)
      * independence must be a bad assumption :-)
      */
     check_word_hash(hash_words_cb, "hash_words", 11);
+    check_word_hash(mhash_words_cb, "mhash_words", 11);
 
     /* Check that all hash functions of with one 1-bit (or no 1-bits) set
      * within three 32-bit words have different values in their lowest 12
@@ -112,27 +145,8 @@ main(void)
      *
      * so we are doing pretty well to not have any collisions in 12 bits.
      */
-    for (i = 0; i <= 96; i++) {
-        for (j = i + 1; j <= 96; j++) {
-            uint32_t in1[3], in2[3];
-            uint32_t out1, out2;
-            const int min_unique = 12;
-            const uint32_t unique_mask = (UINT32_C(1) << min_unique) - 1;
-
-            set_bit(in1, i);
-            set_bit(in2, j);
-            out1 = hash_words(in1, 3, 0);
-            out2 = hash_words(in2, 3, 0);
-            if ((out1 & unique_mask) == (out2 & unique_mask)) {
-                printf("Partial collision:\n");
-                printf("hash(1 << %d) == %08"PRIx32"\n", i, out1);
-                printf("hash(1 << %d) == %08"PRIx32"\n", j, out2);
-                printf("The low-order %d bits of output are both "
-                       "0x%"PRIx32"\n", min_unique, out1 & unique_mask);
-                exit(1);
-            }
-        }
-    }
+    check_3word_hash(hash_words, "hash_words");
+    check_3word_hash(mhash_words, "mhash_words");
 
     /* Check that all hashes computed with hash_int with one 1-bit (or no
      * 1-bits) set within a single 32-bit word have different values in all
