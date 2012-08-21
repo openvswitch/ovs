@@ -933,7 +933,7 @@ port_configure_stp(const struct ofproto *ofproto, struct port *port,
         bitmap_set1(port_num_bitmap, port_idx);
         port_s->port_num = port_idx;
     } else {
-        if (*port_num_counter > STP_MAX_PORTS) {
+        if (*port_num_counter >= STP_MAX_PORTS) {
             VLOG_ERR("port %s: too many STP ports, disabling", port->name);
             port_s->enable = false;
             return;
