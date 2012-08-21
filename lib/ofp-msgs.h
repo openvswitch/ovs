@@ -163,12 +163,12 @@ enum ofpraw {
 
     /* OFPT 1.0 (18): void. */
     OFPRAW_OFPT10_BARRIER_REQUEST,
-    /* OFPT 1.1 (20): void. */
+    /* OFPT 1.1+ (20): void. */
     OFPRAW_OFPT11_BARRIER_REQUEST,
 
     /* OFPT 1.0 (19): void. */
     OFPRAW_OFPT10_BARRIER_REPLY,
-    /* OFPT 1.1 (21): void. */
+    /* OFPT 1.1+ (21): void. */
     OFPRAW_OFPT11_BARRIER_REPLY,
 
 /* Standard statistics. */

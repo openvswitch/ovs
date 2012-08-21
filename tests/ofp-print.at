@@ -987,17 +987,45 @@ OFPST_PORT_DESC reply (xid=0x0):
 ])
 AT_CLEANUP
 
-AT_SETUP([OFPT_BARRIER_REQUEST])
+AT_SETUP([OFPT_BARRIER_REQUEST - OF1.0])
 AT_KEYWORDS([ofp-print])
 AT_CHECK([ovs-ofctl ofp-print '01 12 00 08 00 00 00 01'], [0], [dnl
 OFPT_BARRIER_REQUEST (xid=0x1):
 ])
 AT_CLEANUP
 
-AT_SETUP([OFPT_BARRIER_REPLY])
+AT_SETUP([OFPT_BARRIER_REQUEST - OF1.1])
+AT_KEYWORDS([ofp-print])
+AT_CHECK([ovs-ofctl ofp-print '02 14 00 08 00 00 00 01'], [0], [dnl
+OFPT_BARRIER_REQUEST (OF1.1) (xid=0x1):
+])
+AT_CLEANUP
+
+AT_SETUP([OFPT_BARRIER_REQUEST - OF1.2])
+AT_KEYWORDS([ofp-print])
+AT_CHECK([ovs-ofctl ofp-print '03 14 00 08 00 00 00 01'], [0], [dnl
+OFPT_BARRIER_REQUEST (OF1.2) (xid=0x1):
+])
+AT_CLEANUP
+
+AT_SETUP([OFPT_BARRIER_REPLY - OF1.0])
 AT_KEYWORDS([ofp-print])
 AT_CHECK([ovs-ofctl ofp-print '01 13 00 08 00 00 00 01'], [0], [dnl
 OFPT_BARRIER_REPLY (xid=0x1):
+])
+AT_CLEANUP
+
+AT_SETUP([OFPT_BARRIER_REPLY] - OF1.1)
+AT_KEYWORDS([ofp-print])
+AT_CHECK([ovs-ofctl ofp-print '02 15 00 08 00 00 00 01'], [0], [dnl
+OFPT_BARRIER_REPLY (OF1.1) (xid=0x1):
+])
+AT_CLEANUP
+
+AT_SETUP([OFPT_BARRIER_REPLY] - OF1.2)
+AT_KEYWORDS([ofp-print])
+AT_CHECK([ovs-ofctl ofp-print '03 15 00 08 00 00 00 01'], [0], [dnl
+OFPT_BARRIER_REPLY (OF1.2) (xid=0x1):
 ])
 AT_CLEANUP
 
