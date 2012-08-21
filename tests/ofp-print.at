@@ -645,7 +645,7 @@ DP Description: None
 ])
 AT_CLEANUP
 
-AT_SETUP([OFPST_FLOW request])
+AT_SETUP([OFPST_FLOW request - OF1.0])
 AT_KEYWORDS([ofp-print OFPT_STATS_REQUEST])
 AT_CHECK([ovs-ofctl ofp-print "\
 01 10 00 38 00 00 00 04 00 01 00 00 00 38 20 ff \
@@ -654,6 +654,18 @@ ff fe 00 00 00 00 00 00 00 00 00 00 00 00 00 00 \
 00 00 00 00 ff 00 ff ff \
 "], [0], [dnl
 OFPST_FLOW request (xid=0x4): @&t@
+])
+AT_CLEANUP
+
+AT_SETUP([OFPST_FLOW request - OF1.2])
+AT_KEYWORDS([ofp-print OFPT_STATS_REQUEST])
+AT_CHECK([ovs-ofctl ofp-print "\
+03 12 00 38 00 00 00 02 00 01 00 00 00 00 00 00 \
+ff 00 00 00 ff ff ff ff ff ff ff ff 00 00 00 00 \
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 \
+00 01 00 04 00 00 00 00 \
+"], [0], [dnl
+OFPST_FLOW request (OF1.2) (xid=0x2): @&t@
 ])
 AT_CLEANUP
 

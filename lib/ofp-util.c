@@ -1396,15 +1396,42 @@ ofputil_flow_mod_usable_protocols(const struct ofputil_flow_mod *fms,
 }
 
 static enum ofperr
-ofputil_decode_ofpst_flow_request(struct ofputil_flow_stats_request *fsr,
-                                  const struct ofp10_flow_stats_request *ofsr,
-                                  bool aggregate)
+ofputil_decode_ofpst10_flow_request(struct ofputil_flow_stats_request *fsr,
+                                    const struct ofp10_flow_stats_request *ofsr,
+                                    bool aggregate)
 {
     fsr->aggregate = aggregate;
     ofputil_cls_rule_from_ofp10_match(&ofsr->match, 0, &fsr->match);
     fsr->out_port = ntohs(ofsr->out_port);
     fsr->table_id = ofsr->table_id;
     fsr->cookie = fsr->cookie_mask = htonll(0);
+
+    return 0;
+}
+
+static enum ofperr
+ofputil_decode_ofpst11_flow_request(struct ofputil_flow_stats_request *fsr,
+                                    struct ofpbuf *b, bool aggregate)
+{
+    const struct ofp11_flow_stats_request *ofsr;
+    enum ofperr error;
+
+    ofsr = ofpbuf_pull(b, sizeof *ofsr);
+    fsr->aggregate = aggregate;
+    fsr->table_id = ofsr->table_id;
+    error = ofputil_port_from_ofp11(ofsr->out_port, &fsr->out_port);
+    if (error) {
+        return error;
+    }
+    if (ofsr->out_group != htonl(OFPG11_ANY)) {
+        return OFPERR_NXFMFC_GROUPS_NOT_SUPPORTED;
+    }
+    fsr->cookie = ofsr->cookie;
+    fsr->cookie_mask = ofsr->cookie_mask;
+    error = ofputil_pull_ofp11_match(b, 0, &fsr->match, NULL);
+    if (error) {
+        return error;
+    }
 
     return 0;
 }
@@ -1447,10 +1474,13 @@ ofputil_decode_flow_stats_request(struct ofputil_flow_stats_request *fsr,
     raw = ofpraw_pull_assert(&b);
     switch ((int) raw) {
     case OFPRAW_OFPST10_FLOW_REQUEST:
-        return ofputil_decode_ofpst_flow_request(fsr, b.data, false);
+        return ofputil_decode_ofpst10_flow_request(fsr, b.data, false);
 
     case OFPRAW_OFPST_AGGREGATE_REQUEST:
-        return ofputil_decode_ofpst_flow_request(fsr, b.data, true);
+        return ofputil_decode_ofpst10_flow_request(fsr, b.data, true);
+
+    case OFPRAW_OFPST11_FLOW_REQUEST:
+        return ofputil_decode_ofpst11_flow_request(fsr, &b, false);
 
     case OFPRAW_NXST_FLOW_REQUEST:
         return ofputil_decode_nxst_flow_request(fsr, &b, false);
