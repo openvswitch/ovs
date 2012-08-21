@@ -133,7 +133,7 @@ static struct bond_entry *lookup_bond_entry(const struct bond *,
 static tag_type bond_get_active_slave_tag(const struct bond *);
 static struct bond_slave *choose_output_slave(const struct bond *,
                                               const struct flow *,
-                                              uint16_t vlan);
+                                              uint16_t vlan, tag_type *tags);
 static void bond_update_fake_slave_stats(struct bond *);
 
 /* Attempts to parse 's' as the name of a bond balancing mode.  If successful,
@@ -523,13 +523,14 @@ bond_compose_learning_packet(struct bond *bond,
 {
     struct bond_slave *slave;
     struct ofpbuf *packet;
+    tag_type tags = 0;
     struct flow flow;
 
     assert(may_send_learning_packets(bond));
 
     memset(&flow, 0, sizeof flow);
     memcpy(flow.dl_src, eth_src, ETH_ADDR_LEN);
-    slave = choose_output_slave(bond, &flow, vlan);
+    slave = choose_output_slave(bond, &flow, vlan, &tags);
 
     packet = ofpbuf_new(0);
     compose_rarp(packet, eth_src);
@@ -637,7 +638,7 @@ void *
 bond_choose_output_slave(struct bond *bond, const struct flow *flow,
                          uint16_t vlan, tag_type *tags)
 {
-    struct bond_slave *slave = choose_output_slave(bond, flow, vlan);
+    struct bond_slave *slave = choose_output_slave(bond, flow, vlan, tags);
     if (slave) {
         *tags |= bond->balance == BM_STABLE ? bond->stb_tag : slave->tag;
         return slave->aux;
@@ -1405,7 +1406,7 @@ choose_stb_slave(const struct bond *bond, uint32_t flow_hash)
 
 static struct bond_slave *
 choose_output_slave(const struct bond *bond, const struct flow *flow,
-                    uint16_t vlan)
+                    uint16_t vlan, tag_type *tags)
 {
     struct bond_entry *e;
 
@@ -1441,6 +1442,7 @@ choose_output_slave(const struct bond *bond, const struct flow *flow,
             }
             e->tag = tag_create_random();
         }
+        *tags |= e->tag;
         return e->slave;
 
     default:
