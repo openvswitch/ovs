@@ -748,7 +748,7 @@ OFPST_FLOW reply (OF1.2) (xid=0x2):
 ])
 AT_CLEANUP
 
-AT_SETUP([OFPST_AGGREGATE request])
+AT_SETUP([OFPST_AGGREGATE request - OF1.0])
 AT_KEYWORDS([ofp-print OFPT_STATS_REQUEST])
 AT_CHECK([ovs-ofctl ofp-print "\
 01 10 00 38 00 00 00 04 00 02 00 00 00 38 20 ff \
@@ -760,7 +760,19 @@ OFPST_AGGREGATE request (xid=0x4): @&t@
 ])
 AT_CLEANUP
 
-AT_SETUP([OFPST_AGGREGATE reply])
+AT_SETUP([OFPST_AGGREGATE request - OF1.2])
+AT_KEYWORDS([ofp-print OFPT_STATS_REQUEST])
+AT_CHECK([ovs-ofctl ofp-print "\
+03 12 00 38 00 00 00 02 00 02 00 00 00 00 00 00 \
+ff 00 00 00 ff ff ff ff ff ff ff ff 00 00 00 00 \
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 \
+00 01 00 04 00 00 00 00 \
+"], [0], [dnl
+OFPST_AGGREGATE request (OF1.2) (xid=0x2): @&t@
+])
+AT_CLEANUP
+
+AT_SETUP([OFPST_AGGREGATE reply - OF1.0])
 AT_KEYWORDS([ofp-print OFPT_STATS_REPLY])
 AT_CHECK([ovs-ofctl ofp-print "\
 01 11 00 24 00 00 00 04 00 02 00 00 00 00 00 00 \
@@ -768,6 +780,17 @@ AT_CHECK([ovs-ofctl ofp-print "\
 00 00 00 00 \
 "], [0], [dnl
 OFPST_AGGREGATE reply (xid=0x4): packet_count=386 byte_count=37752 flow_count=4
+])
+AT_CLEANUP
+
+AT_SETUP([OFPST_AGGREGATE reply - OF1.2])
+AT_KEYWORDS([ofp-print OFPT_STATS_REPLY])
+AT_CHECK([ovs-ofctl ofp-print "\
+03 13 00 28 00 00 00 02 00 02 00 00 00 00 00 00 \
+00 00 00 00 00 00 00 79 00 00 00 00 00 00 4b 4f \
+00 00 00 03 00 00 00 00 \
+"], [0], [dnl
+OFPST_AGGREGATE reply (OF1.2) (xid=0x2): packet_count=121 byte_count=19279 flow_count=3
 ])
 AT_CLEANUP
 

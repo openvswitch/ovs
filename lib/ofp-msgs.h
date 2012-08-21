@@ -194,11 +194,13 @@ enum ofpraw {
     OFPRAW_NXST_FLOW_REPLY,
 
     /* OFPST 1.0 (2): struct ofp10_flow_stats_request. */
-    OFPRAW_OFPST_AGGREGATE_REQUEST,
+    OFPRAW_OFPST10_AGGREGATE_REQUEST,
+    /* OFPST 1.1+ (2): struct ofp11_flow_stats_request, uint8_t[8][]. */
+    OFPRAW_OFPST11_AGGREGATE_REQUEST,
     /* NXST 1.0 (1): struct nx_flow_stats_request, uint8_t[8][]. */
     OFPRAW_NXST_AGGREGATE_REQUEST,
 
-    /* OFPST 1.0 (2): struct ofp_aggregate_stats_reply. */
+    /* OFPST 1.0+ (2): struct ofp_aggregate_stats_reply. */
     OFPRAW_OFPST_AGGREGATE_REPLY,
     /* NXST 1.0 (1): struct ofp_aggregate_stats_reply. */
     OFPRAW_NXST_AGGREGATE_REPLY,
@@ -371,7 +373,8 @@ enum ofptype {
     OFPTYPE_FLOW_STATS_REPLY,        /* OFPRAW_OFPST10_FLOW_REPLY.
                                       * OFPRAW_OFPST11_FLOW_REPLY.
                                       * OFPRAW_NXST_FLOW_REPLY. */
-    OFPTYPE_AGGREGATE_STATS_REQUEST, /* OFPRAW_OFPST_AGGREGATE_REQUEST.
+    OFPTYPE_AGGREGATE_STATS_REQUEST, /* OFPRAW_OFPST10_AGGREGATE_REQUEST.
+                                      * OFPRAW_OFPST11_AGGREGATE_REQUEST.
                                       * OFPRAW_NXST_AGGREGATE_REQUEST. */
     OFPTYPE_AGGREGATE_STATS_REPLY,   /* OFPRAW_OFPST_AGGREGATE_REPLY.
                                       * OFPRAW_NXST_AGGREGATE_REPLY. */
