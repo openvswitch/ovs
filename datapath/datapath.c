@@ -1408,6 +1408,8 @@ static int ovs_dp_cmd_new(struct sk_buff *skb, struct genl_info *info)
 	dp->ifobj.kset = NULL;
 	kobject_init(&dp->ifobj, &dp_ktype);
 
+	ovs_dp_set_net(dp, hold_net(sock_net(skb->sk)));
+
 	/* Allocate table. */
 	err = -ENOMEM;
 	rcu_assign_pointer(dp->table, ovs_flow_tbl_alloc(TBL_MIN_BUCKETS));
@@ -1419,7 +1421,6 @@ static int ovs_dp_cmd_new(struct sk_buff *skb, struct genl_info *info)
 		err = -ENOMEM;
 		goto err_destroy_table;
 	}
-	ovs_dp_set_net(dp, hold_net(sock_net(skb->sk)));
 
 	dp->ports = kmalloc(DP_VPORT_HASH_BUCKETS * sizeof(struct hlist_head),
 			    GFP_KERNEL);
@@ -1474,6 +1475,7 @@ err_destroy_percpu:
 err_destroy_table:
 	ovs_flow_tbl_destroy(genl_dereference(dp->table));
 err_free_dp:
+	release_net(ovs_dp_get_net(dp));
 	kfree(dp);
 err_unlock_rtnl:
 	rtnl_unlock();
