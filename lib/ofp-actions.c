@@ -770,13 +770,7 @@ OVS_INSTRUCTIONS
 const char *
 ofpact_instruction_name_from_type(enum ovs_instruction_type type)
 {
-    const struct instruction_type_info *p;
-    for (p = inst_info; p < &inst_info[ARRAY_SIZE(inst_info)]; p++) {
-        if (p->type == type) {
-            return p->name;
-        }
-    }
-    return NULL;
+    return inst_info[type].name;
 }
 
 int
