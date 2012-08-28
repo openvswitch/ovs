@@ -110,6 +110,8 @@ static struct rule_dpif *rule_dpif_lookup(struct ofproto_dpif *,
 static struct rule_dpif *rule_dpif_lookup__(struct ofproto_dpif *,
                                             const struct flow *,
                                             uint8_t table);
+static struct rule_dpif *rule_dpif_miss_rule(struct ofproto_dpif *ofproto,
+                                             const struct flow *flow);
 
 static void rule_credit_stats(struct rule_dpif *,
                               const struct dpif_flow_stats *);
@@ -4545,7 +4547,6 @@ subfacet_update_stats(struct subfacet *subfacet,
 static struct rule_dpif *
 rule_dpif_lookup(struct ofproto_dpif *ofproto, const struct flow *flow)
 {
-    struct ofport_dpif *port;
     struct rule_dpif *rule;
 
     rule = rule_dpif_lookup__(ofproto, flow, 0);
@@ -4553,16 +4554,7 @@ rule_dpif_lookup(struct ofproto_dpif *ofproto, const struct flow *flow)
         return rule;
     }
 
-    port = get_ofp_port(ofproto, flow->in_port);
-    if (!port) {
-        VLOG_WARN_RL(&rl, "packet-in on unknown port %"PRIu16, flow->in_port);
-        return ofproto->miss_rule;
-    }
-
-    if (port->up.pp.config & OFPUTIL_PC_NO_PACKET_IN) {
-        return ofproto->no_packet_in_rule;
-    }
-    return ofproto->miss_rule;
+    return rule_dpif_miss_rule(ofproto, flow);
 }
 
 static struct rule_dpif *
@@ -4589,6 +4581,23 @@ rule_dpif_lookup__(struct ofproto_dpif *ofproto, const struct flow *flow,
         cls_rule = classifier_lookup(cls, flow);
     }
     return rule_dpif_cast(rule_from_cls_rule(cls_rule));
+}
+
+static struct rule_dpif *
+rule_dpif_miss_rule(struct ofproto_dpif *ofproto, const struct flow *flow)
+{
+    struct ofport_dpif *port;
+
+    port = get_ofp_port(ofproto, flow->in_port);
+    if (!port) {
+        VLOG_WARN_RL(&rl, "packet-in on unknown port %"PRIu16, flow->in_port);
+        return ofproto->miss_rule;
+    }
+
+    if (port->up.pp.config & OFPUTIL_PC_NO_PACKET_IN) {
+        return ofproto->no_packet_in_rule;
+    }
+    return ofproto->miss_rule;
 }
 
 static void
