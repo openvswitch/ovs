@@ -187,7 +187,7 @@ actions=move:OXM_OF_ETH_DST[]->OXM_OF_ETH_SRC[]
 actions=autopath(5,NXM_NX_REG0[])
 vlan_tci=0x1123/0x1fff,actions=drop
 ]])
-AT_CHECK([ovs-ofctl -F nxm -mmm parse-flows flows.txt], [0], [stdout])
+AT_CHECK([ovs-ofctl -F nxm -mmm parse-flows flows.txt], [0], [stdout], [stderr])
 AT_CHECK([[sed 's/ (xid=0x[0-9a-fA-F]*)//' stdout]], [0],
 [[usable protocols: NXM
 chosen protocol: NXM-table_id
@@ -216,6 +216,9 @@ NXT_FLOW_MOD: ADD <any> actions=move:NXM_OF_ETH_DST[]->NXM_OF_ETH_SRC[]
 NXT_FLOW_MOD: ADD <any> actions=autopath(5,NXM_NX_REG0[])
 NXT_FLOW_MOD: ADD NXM_OF_VLAN_TCI_W(1123/1fff) actions=drop
 ]])
+AT_CHECK([[sed 's/^[^|]*|[^|]*|//' stderr]], [0], [dnl
+autopath|WARN|The autopath action is deprecated and may be removed in February 2013.  Please email dev@openvswitch.org with concerns.
+])
 AT_CLEANUP
 
 AT_SETUP([ovs-ofctl parse-nx-match])
