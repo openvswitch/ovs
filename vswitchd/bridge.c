@@ -884,7 +884,7 @@ port_configure_stp(const struct ofproto *ofproto, struct port *port,
     const char *config_str;
     struct iface *iface;
 
-    if (smap_get_bool(&port->cfg->other_config, "stp-enable", false)) {
+    if (!smap_get_bool(&port->cfg->other_config, "stp-enable", true)) {
         port_s->enable = false;
         return;
     } else {
