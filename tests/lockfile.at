@@ -5,7 +5,8 @@ m4_define([CHECK_LOCKFILE],
    AT_KEYWORDS([lockfile])
    AT_CHECK([test-lockfile $1], [0], [$1: success (m4_if(
      [$2], [1], [$2 child], [$2 children]))
-], [$3])
+], [stderr])
+   AT_CHECK([sed 's/pid [[0-9]]*/pid <pid>/' stderr], [0], [$3])
    AT_CLEANUP])
 
 CHECK_LOCKFILE([lock_and_unlock], [0])
@@ -23,13 +24,13 @@ lockfile|WARN|.file.~lock~: failed to lock file: Resource deadlock avoided
 
 CHECK_LOCKFILE([lock_blocks_other_process], [1],
   [lockfile|WARN|.file.~lock~: child does not inherit lock
-lockfile|WARN|.file.~lock~: failed to lock file: Resource temporarily unavailable
+lockfile|WARN|.file.~lock~: cannot lock file because it is already locked by pid <pid>
 ])
 
 CHECK_LOCKFILE([lock_twice_blocks_other_process], [1],
   [lockfile|WARN|.file.~lock~: failed to lock file: Resource deadlock avoided
 lockfile|WARN|.file.~lock~: child does not inherit lock
-lockfile|WARN|.file.~lock~: failed to lock file: Resource temporarily unavailable
+lockfile|WARN|.file.~lock~: cannot lock file because it is already locked by pid <pid>
 ])
 
 CHECK_LOCKFILE([lock_and_unlock_allows_other_process], [1])

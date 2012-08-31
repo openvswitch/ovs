@@ -55,7 +55,8 @@ struct lockfile {
 static struct hmap lock_table = HMAP_INITIALIZER(&lock_table);
 
 static void lockfile_unhash(struct lockfile *);
-static int lockfile_try_lock(const char *name, struct lockfile **lockfilep);
+static int lockfile_try_lock(const char *name, pid_t *pidp,
+                             struct lockfile **lockfilep);
 
 /* Returns the name of the lockfile that would be created for locking a file
  * named 'filename_'.  The caller is responsible for freeing the returned name,
@@ -98,21 +99,27 @@ lockfile_lock(const char *file, struct lockfile **lockfilep)
      * stylized ways such that any number of readers may access a file while it
      * is being written. */
     char *lock_name;
+    pid_t pid;
     int error;
 
     COVERAGE_INC(lockfile_lock);
 
     lock_name = lockfile_name(file);
 
-    error = lockfile_try_lock(lock_name, lockfilep);
+    error = lockfile_try_lock(lock_name, &pid, lockfilep);
 
     if (error) {
         COVERAGE_INC(lockfile_error);
         if (error == EACCES) {
             error = EAGAIN;
         }
-        VLOG_WARN("%s: failed to lock file: %s",
-                  lock_name, strerror(error));
+        if (pid) {
+            VLOG_WARN("%s: cannot lock file because it is already locked by "
+                      "pid %ld", lock_name, (long int) pid);
+        } else {
+            VLOG_WARN("%s: failed to lock file: %s",
+                      lock_name, strerror(error));
+        }
     }
 
     free(lock_name);
@@ -201,7 +208,7 @@ lockfile_register(const char *name, dev_t device, ino_t inode, int fd)
 }
 
 static int
-lockfile_try_lock(const char *name, struct lockfile **lockfilep)
+lockfile_try_lock(const char *name, pid_t *pidp, struct lockfile **lockfilep)
 {
     struct flock l;
     struct stat s;
@@ -209,6 +216,7 @@ lockfile_try_lock(const char *name, struct lockfile **lockfilep)
     int fd;
 
     *lockfilep = NULL;
+    *pidp = 0;
 
     /* Check whether we've already got a lock on that file. */
     if (!stat(name, &s)) {
@@ -250,6 +258,9 @@ lockfile_try_lock(const char *name, struct lockfile **lockfilep)
     if (!error) {
         *lockfilep = lockfile_register(name, s.st_dev, s.st_ino, fd);
     } else {
+        if (!fcntl(fd, F_GETLK, &l) && l.l_type != F_UNLCK) {
+            *pidp = l.l_pid;
+        }
         close(fd);
     }
     return error;
