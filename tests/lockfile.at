@@ -5,16 +5,46 @@ m4_define([CHECK_LOCKFILE],
    AT_KEYWORDS([lockfile])
    AT_CHECK([test-lockfile $1], [0], [$1: success (m4_if(
      [$2], [1], [$2 child], [$2 children]))
-])
+], [$3])
    AT_CLEANUP])
 
 CHECK_LOCKFILE([lock_and_unlock], [0])
+
 CHECK_LOCKFILE([lock_and_unlock_twice], [0])
-CHECK_LOCKFILE([lock_blocks_same_process], [0])
-CHECK_LOCKFILE([lock_blocks_same_process_twice], [0])
-CHECK_LOCKFILE([lock_blocks_other_process], [1])
-CHECK_LOCKFILE([lock_twice_blocks_other_process], [1])
+
+CHECK_LOCKFILE([lock_blocks_same_process], [0],
+  [lockfile|WARN|.file.~lock~: failed to lock file: Resource deadlock avoided
+])
+
+CHECK_LOCKFILE([lock_blocks_same_process_twice], [0],
+  [lockfile|WARN|.file.~lock~: failed to lock file: Resource deadlock avoided
+lockfile|WARN|.file.~lock~: failed to lock file: Resource deadlock avoided
+])
+
+CHECK_LOCKFILE([lock_blocks_other_process], [1],
+  [lockfile|WARN|.file.~lock~: child does not inherit lock
+lockfile|WARN|.file.~lock~: failed to lock file: Resource temporarily unavailable
+])
+
+CHECK_LOCKFILE([lock_twice_blocks_other_process], [1],
+  [lockfile|WARN|.file.~lock~: failed to lock file: Resource deadlock avoided
+lockfile|WARN|.file.~lock~: child does not inherit lock
+lockfile|WARN|.file.~lock~: failed to lock file: Resource temporarily unavailable
+])
+
 CHECK_LOCKFILE([lock_and_unlock_allows_other_process], [1])
-CHECK_LOCKFILE([lock_multiple], [0])
-CHECK_LOCKFILE([lock_symlink], [0])
-CHECK_LOCKFILE([lock_symlink_to_dir], [0])
+
+CHECK_LOCKFILE([lock_multiple], [0],
+  [lockfile|WARN|.a.~lock~: failed to lock file: Resource deadlock avoided
+])
+
+CHECK_LOCKFILE([lock_symlink], [0],
+  [lockfile|WARN|.a.~lock~: failed to lock file: Resource deadlock avoided
+lockfile|WARN|.b.~lock~: failed to lock file: Resource deadlock avoided
+lockfile|WARN|.b.~lock~: failed to lock file: Resource deadlock avoided
+lockfile|WARN|.a.~lock~: failed to lock file: Resource deadlock avoided
+])
+
+CHECK_LOCKFILE([lock_symlink_to_dir], [0],
+  [lockfile|WARN|dir/.b.~lock~: failed to lock file: Resource deadlock avoided
+])

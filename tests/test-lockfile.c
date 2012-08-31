@@ -270,11 +270,11 @@ static const struct test tests[] = {
 int
 main(int argc, char *argv[])
 {
-    extern struct vlog_module VLM_lockfile;
     size_t i;
 
     set_program_name(argv[0]);
-    vlog_set_levels(&VLM_lockfile, VLF_ANY_FACILITY, VLL_ERR);
+    vlog_set_pattern(VLF_CONSOLE, "%c|%p|%m");
+    vlog_set_levels(NULL, VLF_SYSLOG, VLL_OFF);
 
     if (argc != 2) {
         ovs_fatal(0, "exactly one argument required; use \"%s help\" for help",
