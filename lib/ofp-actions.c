@@ -857,7 +857,7 @@ decode_openflow11_instructions(const struct ofp11_instruction insts[],
         }
 
         if (out[type]) {
-            return OFPERR_NXBIC_DUP_TYPE;
+            return OFPERR_OFPIT_BAD_INSTRUCTION;
         }
         out[type] = inst;
     }

@@ -261,7 +261,8 @@ dnl Check that an empty Apply-Actions instruction gets dropped.
 #  7: 00 -> (none)
 0004 0008 00000000
 
-# bad OF1.1 instructions: NXBIC_DUP_TYPE
+dnl Duplicate instruction type:
+# bad OF1.1 instructions: OFPIT_BAD_INSTRUCTION
 0004 0008 00000000 0004 0008 00000000
 
 dnl Instructions not multiple of 8 in length.

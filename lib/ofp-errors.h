@@ -238,9 +238,6 @@ enum ofperr {
     /* OF1.2+(3,8).  Permissions error. */
     OFPERR_OFPBIC_EPERM,
 
-    /* NX1.1+(3,256).  Duplicate instruction type in set of instructions. */
-    OFPERR_NXBIC_DUP_TYPE,
-
 /* ## --------------- ## */
 /* ## OFPET_BAD_MATCH ## */
 /* ## --------------- ## */
