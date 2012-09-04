@@ -1171,7 +1171,7 @@ ofputil_decode_flow_mod(struct ofputil_flow_mod *fm,
             return error;
         }
         if (ofm->out_group != htonl(OFPG_ANY)) {
-            return OFPERR_NXFMFC_GROUPS_NOT_SUPPORTED;
+            return OFPERR_OFPFMFC_UNKNOWN;
         }
         fm->flags = ntohs(ofm->flags);
     } else {
@@ -1410,7 +1410,7 @@ ofputil_decode_ofpst11_flow_request(struct ofputil_flow_stats_request *fsr,
         return error;
     }
     if (ofsr->out_group != htonl(OFPG11_ANY)) {
-        return OFPERR_NXFMFC_GROUPS_NOT_SUPPORTED;
+        return OFPERR_OFPFMFC_UNKNOWN;
     }
     fsr->cookie = ofsr->cookie;
     fsr->cookie_mask = ofsr->cookie_mask;
