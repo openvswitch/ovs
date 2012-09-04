@@ -457,6 +457,7 @@ ofputil_action_bitmap_to_name(uint32_t bit)
     case OFPUTIL_A_SET_NW_TOS:     return "SET_NW_TOS";
     case OFPUTIL_A_SET_TP_SRC:     return "SET_TP_SRC";
     case OFPUTIL_A_SET_TP_DST:     return "SET_TP_DST";
+    case OFPUTIL_A_SET_FIELD:      return "SET_FIELD";
     case OFPUTIL_A_ENQUEUE:        return "ENQUEUE";
     case OFPUTIL_A_COPY_TTL_OUT:   return "COPY_TTL_OUT";
     case OFPUTIL_A_COPY_TTL_IN:    return "COPY_TTL_IN";

@@ -350,6 +350,12 @@ parse_named_action(enum ofputil_action_code code, const struct flow *flow,
         ofpact_put_SET_VLAN_PCP(ofpacts)->vlan_pcp = pcp;
         break;
 
+    case OFPUTIL_OFPAT12_SET_FIELD:
+        NOT_REACHED();  /* This will be implemented by later patch and
+                         * enabled using a non-NULL name in
+                         * OFPAT12_ACTION(OFPAT12_SET_FIELD, ...) */
+        break;
+
     case OFPUTIL_OFPAT10_STRIP_VLAN:
         ofpact_put_STRIP_VLAN(ofpacts);
         break;
