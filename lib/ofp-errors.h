@@ -268,7 +268,7 @@ enum ofperr {
     /* OF1.1+(4,6).  Unsupported field in the match. */
     OFPERR_OFPBMC_BAD_FIELD,
 
-    /* NX1.0(1,258), NX1.1(1,258), OF1.2+(4,7).  Unsupported value in a match
+    /* NX1.0(1,258), OF1.1+(4,7).  Unsupported value in a match
      * field. */
     OFPERR_OFPBMC_BAD_VALUE,
 
