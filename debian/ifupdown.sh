@@ -61,6 +61,10 @@ if [ "${MODE}" = "start" ]; then
                     ${OVS_EXTRA+-- $OVS_EXTRA}
 
                 ifconfig "${IFACE}" up
+                for slave in ${IF_OVS_BONDS}
+                do
+                    ifconfig "${slave}" up
+                done
                 ;;
         *)
                 exit 0
