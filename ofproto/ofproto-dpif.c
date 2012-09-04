@@ -118,8 +118,7 @@ static void rule_credit_stats(struct rule_dpif *,
 static void flow_push_stats(struct rule_dpif *, const struct flow *,
                             const struct dpif_flow_stats *);
 static tag_type rule_calculate_tag(const struct flow *,
-                                   const struct flow_wildcards *,
-                                   uint32_t basis);
+                                   const struct minimask *, uint32_t basis);
 static void rule_invalidate(const struct rule_dpif *);
 
 #define MAX_MIRRORS 32
@@ -4665,11 +4664,17 @@ rule_construct(struct rule *rule_)
     }
 
     table_id = rule->up.table_id;
-    rule->tag = (victim ? victim->tag
-                 : table_id == 0 ? 0
-                 : rule_calculate_tag(&rule->up.cr.match.flow,
-                                      &rule->up.cr.match.wc,
-                                      ofproto->tables[table_id].basis));
+    if (victim) {
+        rule->tag = victim->tag;
+    } else if (table_id == 0) {
+        rule->tag = 0;
+    } else {
+        struct flow flow;
+
+        miniflow_expand(&rule->up.cr.match.flow, &flow);
+        rule->tag = rule_calculate_tag(&flow, &rule->up.cr.match.mask,
+                                       ofproto->tables[table_id].basis);
+    }
 
     complete_operation(rule);
     return 0;
@@ -5015,7 +5020,7 @@ xlate_table_action(struct action_xlate_ctx *ctx,
                 ctx->tags |= (rule && rule->tag
                               ? rule->tag
                               : rule_calculate_tag(&ctx->flow,
-                                                   &table->other_table->wc,
+                                                   &table->other_table->mask,
                                                    table->basis));
             }
         }
@@ -6316,18 +6321,17 @@ xlate_normal(struct action_xlate_ctx *ctx)
  * a few more, but not all of the facets or even all of the facets that
  * resubmit to the table modified by MAC learning). */
 
-/* Calculates the tag to use for 'flow' and wildcards 'wc' when it is inserted
+/* Calculates the tag to use for 'flow' and mask 'mask' when it is inserted
  * into an OpenFlow table with the given 'basis'. */
 static tag_type
-rule_calculate_tag(const struct flow *flow, const struct flow_wildcards *wc,
+rule_calculate_tag(const struct flow *flow, const struct minimask *mask,
                    uint32_t secret)
 {
-    if (flow_wildcards_is_catchall(wc)) {
+    if (minimask_is_catchall(mask)) {
         return 0;
     } else {
-        struct flow tag_flow = *flow;
-        flow_zero_wildcards(&tag_flow, wc);
-        return tag_create_deterministic(flow_hash(&tag_flow, secret));
+        uint32_t hash = flow_hash_in_minimask(flow, mask, secret);
+        return tag_create_deterministic(hash);
     }
 }
 

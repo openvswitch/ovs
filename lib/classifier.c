@@ -28,16 +28,16 @@
 #include "packets.h"
 
 static struct cls_table *find_table(const struct classifier *,
-                                    const struct flow_wildcards *);
+                                    const struct minimask *);
 static struct cls_table *insert_table(struct classifier *,
-                                      const struct flow_wildcards *);
+                                      const struct minimask *);
 
 static void destroy_table(struct classifier *, struct cls_table *);
 
 static struct cls_rule *find_match(const struct cls_table *,
                                    const struct flow *);
-static struct cls_rule *find_equal(struct cls_table *, const struct flow *,
-                                   uint32_t hash);
+static struct cls_rule *find_equal(struct cls_table *,
+                                   const struct miniflow *, uint32_t hash);
 static struct cls_rule *insert_rule(struct cls_table *, struct cls_rule *);
 
 /* Iterates RULE over HEAD and all of the cls_rules on HEAD->list. */
@@ -54,12 +54,10 @@ static struct cls_rule *next_rule_in_list(struct cls_rule *);
 /* cls_rule. */
 
 /* Initializes 'rule' to match packets specified by 'match' at the given
- * 'priority'.
+ * 'priority'.  'match' must satisfy the invariant described in the comment at
+ * the definition of struct match.
  *
  * The caller must eventually destroy 'rule' with cls_rule_destroy().
- *
- * 'match' must satisfy the invariant described in the comment at the
- * definition of struct match.
  *
  * (OpenFlow uses priorities between 0 and UINT16_MAX, inclusive, but
  * internally Open vSwitch supports a wider range.) */
@@ -67,7 +65,17 @@ void
 cls_rule_init(struct cls_rule *rule,
               const struct match *match, unsigned int priority)
 {
-    rule->match = *match;
+    minimatch_init(&rule->match, match);
+    rule->priority = priority;
+}
+
+/* Same as cls_rule_init() for initialization from a "struct minimatch". */
+void
+cls_rule_init_from_minimatch(struct cls_rule *rule,
+                             const struct minimatch *match,
+                             unsigned int priority)
+{
+    minimatch_clone(&rule->match, match);
     rule->priority = priority;
 }
 
@@ -77,7 +85,8 @@ cls_rule_init(struct cls_rule *rule,
 void
 cls_rule_clone(struct cls_rule *dst, const struct cls_rule *src)
 {
-    *dst = *src;
+    minimatch_clone(&dst->match, &src->match);
+    dst->priority = src->priority;
 }
 
 /* Frees memory referenced by 'rule'.  Doesn't free 'rule' itself (it's
@@ -85,9 +94,9 @@ cls_rule_clone(struct cls_rule *dst, const struct cls_rule *src)
  *
  * ('rule' must not currently be in a classifier.) */
 void
-cls_rule_destroy(struct cls_rule *rule OVS_UNUSED)
+cls_rule_destroy(struct cls_rule *rule)
 {
-    /* Nothing to do yet. */
+    minimatch_destroy(&rule->match);
 }
 
 /* Returns true if 'a' and 'b' match the same packets at the same priority,
@@ -95,28 +104,28 @@ cls_rule_destroy(struct cls_rule *rule OVS_UNUSED)
 bool
 cls_rule_equal(const struct cls_rule *a, const struct cls_rule *b)
 {
-    return a->priority == b->priority && match_equal(&a->match, &b->match);
+    return a->priority == b->priority && minimatch_equal(&a->match, &b->match);
 }
 
 /* Returns a hash value for 'rule', folding in 'basis'. */
 uint32_t
 cls_rule_hash(const struct cls_rule *rule, uint32_t basis)
 {
-    return match_hash(&rule->match, hash_int(rule->priority, basis));
+    return minimatch_hash(&rule->match, hash_int(rule->priority, basis));
 }
 
 /* Appends a string describing 'rule' to 's'. */
 void
 cls_rule_format(const struct cls_rule *rule, struct ds *s)
 {
-    match_format(&rule->match, s, rule->priority);
+    minimatch_format(&rule->match, s, rule->priority);
 }
 
 /* Returns true if 'rule' matches every packet, false otherwise. */
 bool
 cls_rule_is_catchall(const struct cls_rule *rule)
 {
-    return flow_wildcards_is_catchall(&rule->match.wc);
+    return minimask_is_catchall(&rule->match.mask);
 }
 
 /* Initializes 'cls' as a classifier that initially contains no classification
@@ -178,9 +187,9 @@ classifier_replace(struct classifier *cls, struct cls_rule *rule)
     struct cls_rule *old_rule;
     struct cls_table *table;
 
-    table = find_table(cls, &rule->match.wc);
+    table = find_table(cls, &rule->match.mask);
     if (!table) {
-        table = insert_table(cls, &rule->match.wc);
+        table = insert_table(cls, &rule->match.mask);
     }
 
     old_rule = insert_rule(table, rule);
@@ -213,7 +222,7 @@ classifier_remove(struct classifier *cls, struct cls_rule *rule)
     struct cls_rule *head;
     struct cls_table *table;
 
-    table = find_table(cls, &rule->match.wc);
+    table = find_table(cls, &rule->match.mask);
     head = find_equal(table, &rule->match.flow, rule->hmap_node.hash);
     if (head != rule) {
         list_remove(&rule->list);
@@ -263,13 +272,14 @@ classifier_find_rule_exactly(const struct classifier *cls,
     struct cls_rule *head, *rule;
     struct cls_table *table;
 
-    table = find_table(cls, &target->match.wc);
+    table = find_table(cls, &target->match.mask);
     if (!table) {
         return NULL;
     }
 
     head = find_equal(table, &target->match.flow,
-                      flow_hash(&target->match.flow, 0));
+                      miniflow_hash_in_minimask(&target->match.flow,
+                                                &target->match.mask, 0));
     FOR_EACH_RULE_IN_LIST (rule, head) {
         if (target->priority >= rule->priority) {
             return target->priority == rule->priority ? rule : NULL;
@@ -306,17 +316,18 @@ classifier_rule_overlaps(const struct classifier *cls,
     struct cls_table *table;
 
     HMAP_FOR_EACH (table, hmap_node, &cls->tables) {
-        struct flow_wildcards wc;
+        uint32_t storage[FLOW_U32S];
+        struct minimask mask;
         struct cls_rule *head;
 
-        flow_wildcards_combine(&wc, &target->match.wc, &table->wc);
+        minimask_combine(&mask, &target->match.mask, &table->mask, storage);
         HMAP_FOR_EACH (head, hmap_node, &table->rules) {
             struct cls_rule *rule;
 
             FOR_EACH_RULE_IN_LIST (rule, head) {
                 if (rule->priority == target->priority
-                    && flow_equal_except(&target->match.flow,
-                                         &rule->match.flow, &wc)) {
+                    && miniflow_equal_in_minimask(&target->match.flow,
+                                                  &rule->match.flow, &mask)) {
                     return true;
                 }
             }
@@ -361,11 +372,11 @@ classifier_rule_overlaps(const struct classifier *cls,
  * Ignores rule->priority. */
 bool
 cls_rule_is_loose_match(const struct cls_rule *rule,
-                        const struct match *criteria)
+                        const struct minimatch *criteria)
 {
-    return (!flow_wildcards_has_extra(&rule->match.wc, &criteria->wc)
-            && flow_equal_except(&rule->match.flow, &criteria->flow,
-                                 &criteria->wc));
+    return (!minimask_has_extra(&rule->match.mask, &criteria->mask)
+            && miniflow_equal_in_minimask(&rule->match.flow, &criteria->flow,
+                                          &criteria->mask));
 }
 
 /* Iteration. */
@@ -374,14 +385,15 @@ static bool
 rule_matches(const struct cls_rule *rule, const struct cls_rule *target)
 {
     return (!target
-            || flow_equal_except(&rule->match.flow, &target->match.flow,
-                                 &target->match.wc));
+            || miniflow_equal_in_minimask(&rule->match.flow,
+                                          &target->match.flow,
+                                          &target->match.mask));
 }
 
 static struct cls_rule *
 search_table(const struct cls_table *table, const struct cls_rule *target)
 {
-    if (!target || !flow_wildcards_has_extra(&table->wc, &target->match.wc)) {
+    if (!target || !minimask_has_extra(&table->mask, &target->match.mask)) {
         struct cls_rule *rule;
 
         HMAP_FOR_EACH (rule, hmap_node, &table->rules) {
@@ -463,13 +475,13 @@ cls_cursor_next(struct cls_cursor *cursor, struct cls_rule *rule)
 }
 
 static struct cls_table *
-find_table(const struct classifier *cls, const struct flow_wildcards *wc)
+find_table(const struct classifier *cls, const struct minimask *mask)
 {
     struct cls_table *table;
 
-    HMAP_FOR_EACH_IN_BUCKET (table, hmap_node, flow_wildcards_hash(wc, 0),
+    HMAP_FOR_EACH_IN_BUCKET (table, hmap_node, minimask_hash(mask, 0),
                              &cls->tables) {
-        if (flow_wildcards_equal(wc, &table->wc)) {
+        if (minimask_equal(mask, &table->mask)) {
             return table;
         }
     }
@@ -477,15 +489,14 @@ find_table(const struct classifier *cls, const struct flow_wildcards *wc)
 }
 
 static struct cls_table *
-insert_table(struct classifier *cls, const struct flow_wildcards *wc)
+insert_table(struct classifier *cls, const struct minimask *mask)
 {
     struct cls_table *table;
 
     table = xzalloc(sizeof *table);
     hmap_init(&table->rules);
-    table->wc = *wc;
-    table->is_catchall = flow_wildcards_is_catchall(&table->wc);
-    hmap_insert(&cls->tables, &table->hmap_node, flow_wildcards_hash(wc, 0));
+    minimask_clone(&table->mask, mask);
+    hmap_insert(&cls->tables, &table->hmap_node, minimask_hash(mask, 0));
 
     return table;
 }
@@ -493,6 +504,7 @@ insert_table(struct classifier *cls, const struct flow_wildcards *wc)
 static void
 destroy_table(struct classifier *cls, struct cls_table *table)
 {
+    minimask_destroy(&table->mask);
     hmap_remove(&cls->tables, &table->hmap_node);
     hmap_destroy(&table->rules);
     free(table);
@@ -501,22 +513,13 @@ destroy_table(struct classifier *cls, struct cls_table *table)
 static struct cls_rule *
 find_match(const struct cls_table *table, const struct flow *flow)
 {
+    uint32_t hash = flow_hash_in_minimask(flow, &table->mask, 0);
     struct cls_rule *rule;
 
-    if (table->is_catchall) {
-        HMAP_FOR_EACH (rule, hmap_node, &table->rules) {
+    HMAP_FOR_EACH_WITH_HASH (rule, hmap_node, hash, &table->rules) {
+        if (miniflow_equal_flow_in_minimask(&rule->match.flow, flow,
+                                            &table->mask)) {
             return rule;
-        }
-    } else {
-        struct flow f;
-
-        f = *flow;
-        flow_zero_wildcards(&f, &table->wc);
-        HMAP_FOR_EACH_WITH_HASH (rule, hmap_node, flow_hash(&f, 0),
-                                 &table->rules) {
-            if (flow_equal(&f, &rule->match.flow)) {
-                return rule;
-            }
         }
     }
 
@@ -524,12 +527,12 @@ find_match(const struct cls_table *table, const struct flow *flow)
 }
 
 static struct cls_rule *
-find_equal(struct cls_table *table, const struct flow *flow, uint32_t hash)
+find_equal(struct cls_table *table, const struct miniflow *flow, uint32_t hash)
 {
     struct cls_rule *head;
 
     HMAP_FOR_EACH_WITH_HASH (head, hmap_node, hash, &table->rules) {
-        if (flow_equal(&head->match.flow, flow)) {
+        if (miniflow_equal(&head->match.flow, flow)) {
             return head;
         }
     }
@@ -541,7 +544,8 @@ insert_rule(struct cls_table *table, struct cls_rule *new)
 {
     struct cls_rule *head;
 
-    new->hmap_node.hash = flow_hash(&new->match.flow, 0);
+    new->hmap_node.hash = miniflow_hash_in_minimask(&new->match.flow,
+                                                    &new->match.mask, 0);
 
     head = find_equal(table, &new->match.flow, new->hmap_node.hash);
     if (!head) {

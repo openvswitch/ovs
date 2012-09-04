@@ -12,3 +12,13 @@ m4_foreach(
   [AT_SETUP([flow classifier - m4_bpatsubst(testname, [-], [ ])])
    AT_CHECK([test-classifier testname], [0], [], [])
    AT_CLEANUP])])
+
+AT_BANNER([miniflow unit tests])
+m4_foreach(
+  [testname],
+  [[miniflow],
+   [minimask_has_extra],
+   [minimask_combine]],
+  [AT_SETUP([miniflow - m4_bpatsubst(testname, [-], [ ])])
+   AT_CHECK([test-classifier testname], [0], [], [])
+   AT_CLEANUP])])

@@ -29,6 +29,8 @@
 struct dpif_flow_stats;
 struct ds;
 struct flow_wildcards;
+struct miniflow;
+struct minimask;
 struct ofpbuf;
 
 /* This sequence number should be incremented whenever anything involving flows
@@ -127,6 +129,9 @@ flow_hash(const struct flow *flow, uint32_t basis)
 {
     return hash_words((const uint32_t *) flow, sizeof *flow / 4, basis);
 }
+
+uint32_t flow_hash_in_minimask(const struct flow *, const struct minimask *,
+                               uint32_t basis);
 
 /* Wildcards for a flow.
  *
@@ -163,5 +168,94 @@ bool flow_hash_fields_valid(enum nx_hash_fields);
 
 bool flow_equal_except(const struct flow *a, const struct flow *b,
                        const struct flow_wildcards *);
+
+/* Compressed flow. */
+
+#define MINI_N_INLINE (sizeof(void *) == 4 ? 7 : 8)
+#define MINI_N_MAPS DIV_ROUND_UP(FLOW_U32S, 32)
+
+/* A sparse representation of a "struct flow".
+ *
+ * A "struct flow" is fairly large and tends to be mostly zeros.  Sparse
+ * representation has two advantages.  First, it saves memory.  Second, it
+ * saves time when the goal is to iterate over only the nonzero parts of the
+ * struct.
+ *
+ * The 'map' member holds one bit for each uint32_t in a "struct flow".  Each
+ * 0-bit indicates that the corresponding uint32_t is zero, each 1-bit that it
+ * is nonzero.
+ *
+ * 'values' points to the start of an array that has one element for each 1-bit
+ * in 'map'.  The least-numbered 1-bit is in values[0], the next 1-bit is in
+ * values[1], and so on.
+ *
+ * 'values' may point to a few different locations:
+ *
+ *     - If 'map' has MINI_N_INLINE or fewer 1-bits, it may point to
+ *       'inline_values'.  One hopes that this is the common case.
+ *
+ *     - If 'map' has more than MINI_N_INLINE 1-bits, it may point to memory
+ *       allocated with malloc().
+ *
+ *     - The caller could provide storage on the stack for situations where
+ *       that makes sense.  So far that's only proved useful for
+ *       minimask_combine(), but the principle works elsewhere.
+ *
+ * The implementation maintains and depends on the invariant that every element
+ * in 'values' is nonzero; that is, wherever a 1-bit appears in 'map', the
+ * corresponding element of 'values' must be nonzero.
+ */
+struct miniflow {
+    uint32_t *values;
+    uint32_t inline_values[MINI_N_INLINE];
+    uint32_t map[MINI_N_MAPS];
+};
+
+void miniflow_init(struct miniflow *, const struct flow *);
+void miniflow_clone(struct miniflow *, const struct miniflow *);
+void miniflow_destroy(struct miniflow *);
+
+void miniflow_expand(const struct miniflow *, struct flow *);
+
+uint32_t miniflow_get(const struct miniflow *, unsigned int u32_ofs);
+uint16_t miniflow_get_vid(const struct miniflow *);
+
+bool miniflow_equal(const struct miniflow *a, const struct miniflow *b);
+bool miniflow_equal_in_minimask(const struct miniflow *a,
+                                const struct miniflow *b,
+                                const struct minimask *);
+bool miniflow_equal_flow_in_minimask(const struct miniflow *a,
+                                     const struct flow *b,
+                                     const struct minimask *);
+uint32_t miniflow_hash(const struct miniflow *, uint32_t basis);
+uint32_t miniflow_hash_in_minimask(const struct miniflow *,
+                                   const struct minimask *, uint32_t basis);
+
+/* Compressed flow wildcards. */
+
+/* A sparse representation of a "struct flow_wildcards".
+ *
+ * See the large comment on struct miniflow for details. */
+struct minimask {
+    struct miniflow masks;
+};
+
+void minimask_init(struct minimask *, const struct flow_wildcards *);
+void minimask_clone(struct minimask *, const struct minimask *);
+void minimask_combine(struct minimask *dst,
+                      const struct minimask *a, const struct minimask *b,
+                      uint32_t storage[FLOW_U32S]);
+void minimask_destroy(struct minimask *);
+
+void minimask_expand(const struct minimask *, struct flow_wildcards *);
+
+uint32_t minimask_get(const struct minimask *, unsigned int u32_ofs);
+uint16_t minimask_get_vid_mask(const struct minimask *);
+
+bool minimask_equal(const struct minimask *a, const struct minimask *b);
+uint32_t minimask_hash(const struct minimask *, uint32_t basis);
+
+bool minimask_has_extra(const struct minimask *, const struct minimask *);
+bool minimask_is_catchall(const struct minimask *);
 
 #endif /* flow.h */

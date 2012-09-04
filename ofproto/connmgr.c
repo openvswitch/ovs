@@ -1717,7 +1717,7 @@ ofmonitor_create(const struct ofputil_flow_monitor_request *request,
     m->flags = request->flags;
     m->out_port = request->out_port;
     m->table_id = request->table_id;
-    m->match = request->match;
+    minimatch_init(&m->match, &request->match);
 
     *monitorp = m;
     return 0;
@@ -1805,6 +1805,7 @@ ofmonitor_report(struct connmgr *mgr, struct rule *rule,
 
             if (ofconn != abbrev_ofconn || ofconn->monitor_paused) {
                 struct ofputil_flow_update fu;
+                struct match match;
 
                 fu.event = event;
                 fu.reason = event == NXFME_DELETED ? reason : 0;
@@ -1812,7 +1813,8 @@ ofmonitor_report(struct connmgr *mgr, struct rule *rule,
                 fu.hard_timeout = rule->hard_timeout;
                 fu.table_id = rule->table_id;
                 fu.cookie = rule->flow_cookie;
-                fu.match = &rule->cr.match;
+                minimatch_expand(&rule->cr.match, &match);
+                fu.match = &match;
                 if (flags & NXFMF_ACTIONS) {
                     fu.ofpacts = rule->ofpacts;
                     fu.ofpacts_len = rule->ofpacts_len;

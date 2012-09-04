@@ -19,6 +19,8 @@
 
 #include "flow.h"
 
+struct ds;
+
 /* A flow classification match.
  *
  * Use one of the match_*() functions to initialize a "struct match".
@@ -105,5 +107,34 @@ uint32_t match_hash(const struct match *, uint32_t basis);
 void match_format(const struct match *, struct ds *, unsigned int priority);
 char *match_to_string(const struct match *, unsigned int priority);
 void match_print(const struct match *);
+
+/* Compressed match. */
+
+/* A sparse representation of a "struct match".
+ *
+ * This has the same invariant as "struct match", that is, a 1-bit in the
+ * 'flow' must correspond to a 1-bit in 'mask'.
+ *
+ * The invariants for the underlying miniflow and minimask are also maintained,
+ * which means that 'flow' and 'mask' can have different 'map's.  In
+ * particular, if the match checks that a given 32-bit field has value 0, then
+ * 'map' will have a 1-bit in 'mask' but a 0-bit in 'flow' for that field. */
+struct minimatch {
+    struct miniflow flow;
+    struct minimask mask;
+};
+
+void minimatch_init(struct minimatch *, const struct match *);
+void minimatch_clone(struct minimatch *, const struct minimatch *);
+void minimatch_destroy(struct minimatch *);
+
+void minimatch_expand(const struct minimatch *, struct match *);
+
+bool minimatch_equal(const struct minimatch *a, const struct minimatch *b);
+uint32_t minimatch_hash(const struct minimatch *, uint32_t basis);
+
+void minimatch_format(const struct minimatch *, struct ds *,
+                      unsigned int priority);
+char *minimatch_to_string(const struct minimatch *, unsigned int priority);
 
 #endif /* match.h */

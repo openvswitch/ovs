@@ -2134,6 +2134,7 @@ handle_packet_out(struct ofconn *ofconn, const struct ofp_header *oh)
         goto exit_free_ofpacts;
     }
 
+
     /* Get payload. */
     if (po.buffer_id != UINT32_MAX) {
         error = ofconn_pktbuf_retrieve(ofconn, po.buffer_id, &payload, NULL);
@@ -2563,7 +2564,7 @@ handle_flow_stats_request(struct ofconn *ofconn,
         long long int now = time_msec();
         struct ofputil_flow_stats fs;
 
-        fs.match = rule->cr.match;
+        minimatch_expand(&rule->cr.match, &fs.match);
         fs.priority = rule->cr.priority;
         fs.cookie = rule->flow_cookie;
         fs.table_id = rule->table_id;
@@ -3202,7 +3203,7 @@ ofproto_rule_send_removed(struct rule *rule, uint8_t reason)
         return;
     }
 
-    fr.match = rule->cr.match;
+    minimatch_expand(&rule->cr.match, &fr.match);
     fr.priority = rule->cr.priority;
     fr.cookie = rule->flow_cookie;
     fr.reason = reason;
@@ -3514,6 +3515,7 @@ ofproto_compose_flow_refresh_update(const struct rule *rule,
 {
     struct ofoperation *op = rule->pending;
     struct ofputil_flow_update fu;
+    struct match match;
 
     if (op && op->type == OFOPERATION_ADD && !op->victim) {
         /* We'll report the final flow when the operation completes.  Reporting
@@ -3528,7 +3530,8 @@ ofproto_compose_flow_refresh_update(const struct rule *rule,
     fu.hard_timeout = rule->hard_timeout;
     fu.table_id = rule->table_id;
     fu.cookie = rule->flow_cookie;
-    fu.match = CONST_CAST(struct match *, &rule->cr.match);
+    minimatch_expand(&rule->cr.match, &match);
+    fu.match = &match;
     if (!(flags & NXFMF_ACTIONS)) {
         fu.ofpacts = NULL;
         fu.ofpacts_len = 0;
@@ -3633,7 +3636,7 @@ ofproto_collect_ofmonitor_refresh_rules(const struct ofmonitor *m,
     const struct oftable *table;
     struct cls_rule target;
 
-    cls_rule_init(&target, &m->match, 0);
+    cls_rule_init_from_minimatch(&target, &m->match, 0);
     FOR_EACH_MATCHING_TABLE (table, m->table_id, ofproto) {
         struct cls_cursor cursor;
         struct rule *rule;
@@ -4019,13 +4022,13 @@ ofopgroup_complete(struct ofopgroup *group)
         switch (op->type) {
         case OFOPERATION_ADD:
             if (!op->error) {
-                ofproto_rule_destroy__(op->victim);
-                if ((rule->cr.match.wc.masks.vlan_tci & htons(VLAN_VID_MASK))
-                    == htons(VLAN_VID_MASK)) {
-                    if (ofproto->vlan_bitmap) {
-                        uint16_t vid;
+                uint16_t vid_mask;
 
-                        vid = vlan_tci_to_vid(rule->cr.match.flow.vlan_tci);
+                ofproto_rule_destroy__(op->victim);
+                vid_mask = minimask_get_vid_mask(&rule->cr.match.mask);
+                if (vid_mask == VLAN_VID_MASK) {
+                    if (ofproto->vlan_bitmap) {
+                        uint16_t vid = miniflow_get_vid(&rule->cr.match.flow);
                         if (!bitmap_is_set(ofproto->vlan_bitmap, vid)) {
                             bitmap_set1(ofproto->vlan_bitmap, vid);
                             ofproto->vlans_changed = true;
@@ -4359,17 +4362,19 @@ eviction_group_hash_rule(struct rule *rule)
 {
     struct oftable *table = &rule->ofproto->tables[rule->table_id];
     const struct mf_subfield *sf;
+    struct flow flow;
     uint32_t hash;
 
     hash = table->eviction_group_id_basis;
+    miniflow_expand(&rule->cr.match.flow, &flow);
     for (sf = table->eviction_fields;
          sf < &table->eviction_fields[table->n_eviction_fields];
          sf++)
     {
-        if (mf_are_prereqs_ok(sf->field, &rule->cr.match.flow)) {
+        if (mf_are_prereqs_ok(sf->field, &flow)) {
             union mf_value value;
 
-            mf_get_value(sf->field, &rule->cr.match.flow, &value);
+            mf_get_value(sf->field, &flow, &value);
             if (sf->ofs) {
                 bitwise_zero(&value, sf->field->n_bytes, 0, sf->ofs);
             }
@@ -4675,12 +4680,11 @@ ofproto_get_vlan_usage(struct ofproto *ofproto, unsigned long int *vlan_bitmap)
         const struct cls_table *table;
 
         HMAP_FOR_EACH (table, hmap_node, &oftable->cls.tables) {
-            if ((table->wc.masks.vlan_tci & htons(VLAN_VID_MASK))
-                == htons(VLAN_VID_MASK)) {
+            if (minimask_get_vid_mask(&table->mask) == VLAN_VID_MASK) {
                 const struct cls_rule *rule;
 
                 HMAP_FOR_EACH (rule, hmap_node, &table->rules) {
-                    uint16_t vid = vlan_tci_to_vid(rule->match.flow.vlan_tci);
+                    uint16_t vid = miniflow_get_vid(&rule->match.flow);
                     bitmap_set1(vlan_bitmap, vid);
                     bitmap_set1(ofproto->vlan_bitmap, vid);
                 }

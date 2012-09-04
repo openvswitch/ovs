@@ -173,7 +173,7 @@ struct ofmonitor {
     /* Matching. */
     uint16_t out_port;
     uint8_t table_id;
-    struct match match;
+    struct minimatch match;
 };
 
 struct ofputil_flow_monitor_request;

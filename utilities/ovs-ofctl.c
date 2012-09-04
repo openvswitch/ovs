@@ -1969,7 +1969,7 @@ fte_make_flow_mod(const struct fte *fte, int index, uint16_t command,
     struct ofputil_flow_mod fm;
     struct ofpbuf *ofm;
 
-    fm.match = fte->rule.match;
+    minimatch_expand(&fte->rule.match, &fm.match);
     fm.priority = fte->rule.priority;
     fm.cookie = htonll(0);
     fm.cookie_mask = htonll(0);

@@ -47,9 +47,8 @@ struct classifier {
 struct cls_table {
     struct hmap_node hmap_node; /* Within struct classifier 'tables' hmap. */
     struct hmap rules;          /* Contains "struct cls_rule"s. */
-    struct flow_wildcards wc;   /* Wildcards for fields. */
+    struct minimask mask;       /* Wildcards for fields. */
     int n_table_rules;          /* Number of rules, including duplicates. */
-    bool is_catchall;           /* True if this table wildcards every field. */
 };
 
 /* Returns true if 'table' is a "catch-all" table that will match every
@@ -57,19 +56,21 @@ struct cls_table {
 static inline bool
 cls_table_is_catchall(const struct cls_table *table)
 {
-    return table->is_catchall;
+    return minimask_is_catchall(&table->mask);
 }
 
-/* A rule in a "struct classifier" */
+/* A rule in a "struct classifier". */
 struct cls_rule {
     struct hmap_node hmap_node; /* Within struct cls_table 'rules'. */
     struct list list;           /* List of identical, lower-priority rules. */
-    struct match match;         /* Matching rule. */
+    struct minimatch match;     /* Matching rule. */
     unsigned int priority;      /* Larger numbers are higher priorities. */
 };
 
-void cls_rule_init(struct cls_rule *,
-                   const struct match *, unsigned int priority);
+void cls_rule_init(struct cls_rule *, const struct match *,
+                   unsigned int priority);
+void cls_rule_init_from_minimatch(struct cls_rule *, const struct minimatch *,
+                                  unsigned int priority);
 void cls_rule_clone(struct cls_rule *, const struct cls_rule *);
 void cls_rule_destroy(struct cls_rule *);
 
@@ -81,7 +82,7 @@ void cls_rule_format(const struct cls_rule *, struct ds *);
 bool cls_rule_is_catchall(const struct cls_rule *);
 
 bool cls_rule_is_loose_match(const struct cls_rule *rule,
-                             const struct match *criteria);
+                             const struct minimatch *criteria);
 
 void classifier_init(struct classifier *);
 void classifier_destroy(struct classifier *);
