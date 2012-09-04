@@ -98,7 +98,6 @@ struct vport {
 	struct datapath	*dp;
 	struct kobject kobj;
 	char linkname[IFNAMSIZ];
-	struct list_head node;
 	u32 upcall_pid;
 
 	struct hlist_node hash_node;
