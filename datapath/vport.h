@@ -80,7 +80,6 @@ struct vport_err_stats {
  * @linkname: The name of the link from /sys/class/net/<datapath>/brif to this
  * &struct vport.  (We keep this around so that we can delete it if the
  * device gets renamed.)  Set to the null string when no link exists.
- * @node: Element in @dp's @port_list.
  * @upcall_pid: The Netlink port to use for packets received on this port that
  * miss the flow table.
  * @hash_node: Element in @dev_table hash table in vport.c.
