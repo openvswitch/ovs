@@ -112,7 +112,10 @@ enum ofperr {
     /* OF1.0+(1,8).  Specified buffer does not exist. */
     OFPERR_OFPBRC_BUFFER_UNKNOWN,
 
-    /* OF1.1+(1,9).  Specified table-id invalid or does not exist. */
+    /* NX1.0(1,512), OF1.1+(1,9).  Specified table-id invalid or does not exist.
+     * [ A non-standard error (1,512), formerly OFPERR_NXBRC_BAD_TABLE_ID,
+     *   is used for OpenFlow 1.0 as there seems to be no appropriste error
+     *   code defined the specification. ] */
     OFPERR_OFPBRC_BAD_TABLE_ID,
 
     /* OF1.2+(1,10).  Denied because controller is slave. */
@@ -133,9 +136,6 @@ enum ofperr {
     /* NX1.0+(1,257).  The nxm_type, or nxm_type taken in combination with
      * nxm_hasmask or nxm_length or both, is invalid or not implemented. */
     OFPERR_NXBRC_NXM_BAD_TYPE,
-
-    /* NX1.0+(1,512).  A request specified a nonexistent table ID. */
-    OFPERR_NXBRC_BAD_TABLE_ID,
 
     /* NX1.0+(1,515).  Must-be-zero field had nonzero value. */
     OFPERR_NXBRC_MUST_BE_ZERO,
