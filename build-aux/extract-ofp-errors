@@ -238,6 +238,11 @@ def extract_ofp_errors(filenames):
                               "NX1.2":  ("OF1.2",)}
                 if targets not in target_map:
                     fatal("%s: unknown error domain" % targets)
+                if targets.startswith('NX') and code < 0x100:
+                    fatal("%s: NX domain code cannot be less than 0x100" % dst)
+                if targets.startswith('OF') and code >= 0x100:
+                    fatal("%s: OF domain code cannot be greater than 0x100"
+                          % dst)
                 for target in target_map[targets]:
                     domain[target].setdefault(type_, {})
                     if code in domain[target][type_]:
