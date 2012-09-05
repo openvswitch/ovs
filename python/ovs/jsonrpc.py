@@ -186,6 +186,7 @@ class Connection(object):
         self.input = ""
         self.output = ""
         self.parser = None
+        self.received_bytes = 0
 
     def close(self):
         self.stream.close()
@@ -220,6 +221,9 @@ class Connection(object):
             return 0
         else:
             return len(self.output)
+
+    def get_received_bytes(self):
+        return self.received_bytes
 
     def __log_msg(self, title, msg):
         vlog.dbg("%s: %s %s" % (self.name, title, msg))
@@ -271,6 +275,7 @@ class Connection(object):
                     return EOF, None
                 else:
                     self.input += data
+                    self.received_bytes += len(data)
             else:
                 if self.parser is None:
                     self.parser = ovs.json.Parser()
@@ -444,7 +449,16 @@ class Session(object):
                 self.pstream = None
 
         if self.rpc:
+            received_bytes = self.rpc.get_received_bytes()
             self.rpc.run()
+            if received_bytes != self.rpc.get_received_bytes():
+                # Data was successfully received.
+                #
+                # Previously we only counted receiving a full message as
+                # activity, but with large messages or a slow connection that
+                # policy could time out the session mid-message.
+                self.reconnect.activity(ovs.timeval.msec())
+
             error = self.rpc.get_status()
             if error != 0:
                 self.reconnect.disconnected(ovs.timeval.msec(), error)

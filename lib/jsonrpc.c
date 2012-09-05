@@ -178,6 +178,14 @@ jsonrpc_get_backlog(const struct jsonrpc *rpc)
     return rpc->status ? 0 : rpc->backlog;
 }
 
+/* Returns the number of bytes that have been received on 'rpc''s underlying
+ * stream.  (The value wraps around if it exceeds UINT_MAX.) */
+unsigned int
+jsonrpc_get_received_bytes(const struct jsonrpc *rpc)
+{
+    return rpc->input.head;
+}
+
 /* Returns 'rpc''s name, that is, the name returned by stream_get_name() for
  * the stream underlying 'rpc' when 'rpc' was created. */
 const char *
@@ -988,10 +996,21 @@ struct jsonrpc_msg *
 jsonrpc_session_recv(struct jsonrpc_session *s)
 {
     if (s->rpc) {
+        unsigned int received_bytes;
         struct jsonrpc_msg *msg;
+
+        received_bytes = jsonrpc_get_received_bytes(s->rpc);
         jsonrpc_recv(s->rpc, &msg);
-        if (msg) {
+        if (received_bytes != jsonrpc_get_received_bytes(s->rpc)) {
+            /* Data was successfully received.
+             *
+             * Previously we only counted receiving a full message as activity,
+             * but with large messages or a slow connection that policy could
+             * time out the session mid-message. */
             reconnect_activity(s->reconnect, time_msec());
+        }
+
+        if (msg) {
             if (msg->type == JSONRPC_REQUEST && !strcmp(msg->method, "echo")) {
                 /* Echo request.  Send reply. */
                 struct jsonrpc_msg *reply;
