@@ -118,7 +118,10 @@ enum ofperr {
     /* OF1.2+(1,10).  Denied because controller is slave. */
     OFPERR_OFPBRC_IS_SLAVE,
 
-    /* OF1.2+(1,11).  Invalid port. */
+    /* NX1.0(1,514), NX1.1(1,514), OF1.2+(1,11).  Invalid port.
+     * [ A non-standard error (1,514), formerly
+     *   OFPERR_NXBRC_BAD_IN_PORT is used for OpenFlow 1.0 and 1.1 as there
+     *   seems to be no appropriste error code defined the specifications. ] */
     OFPERR_OFPBRC_BAD_PORT,
 
     /* OF1.2+(1,12).  Invalid packet in packet-out. */
@@ -133,9 +136,6 @@ enum ofperr {
 
     /* NX1.0+(1,512).  A request specified a nonexistent table ID. */
     OFPERR_NXBRC_BAD_TABLE_ID,
-
-    /* NX1.0+(1,514).  The in_port in an ofp_packet_out request is invalid. */
-    OFPERR_NXBRC_BAD_IN_PORT,
 
     /* NX1.0+(1,515).  Must-be-zero field had nonzero value. */
     OFPERR_NXBRC_MUST_BE_ZERO,

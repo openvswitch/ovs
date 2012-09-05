@@ -2130,7 +2130,7 @@ handle_packet_out(struct ofconn *ofconn, const struct ofp_header *oh)
         goto exit_free_ofpacts;
     }
     if (po.in_port >= p->max_ports && po.in_port < OFPP_MAX) {
-        error = OFPERR_NXBRC_BAD_IN_PORT;
+        error = OFPERR_OFPBRC_BAD_PORT;
         goto exit_free_ofpacts;
     }
 

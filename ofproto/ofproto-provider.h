@@ -948,7 +948,7 @@ struct ofproto_class {
      *
      * flow->in_port comes from the OpenFlow OFPT_PACKET_OUT message.  The
      * implementation should reject invalid flow->in_port values by returning
-     * OFPERR_NXBRC_BAD_IN_PORT.  (If the implementation called
+     * OFPERR_OFPBRC_BAD_PORT.  (If the implementation called
      * ofproto_init_max_ports(), then the client will reject these ports
      * itself.)  For consistency, the implementation should consider valid for
      * flow->in_port any value that could possibly be seen in a packet that it
