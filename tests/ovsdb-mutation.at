@@ -99,6 +99,18 @@ test-ovsdb: syntax "["u","delete",["uuid","9179ca6d-6d65-400a-b455-3ad92783a099"
 ]])
 AT_CLEANUP
 
+AT_SETUP([disallowed mutations on immutable columns])
+AT_KEYWORDS([ovsdb negative mutation])
+AT_CHECK([[test-ovsdb parse-mutations \
+    '{"columns":
+        {"i": {"type": "integer", "mutable": false}}}' \
+    '[["i", "+=", 1]]'
+]],
+  [1], [],
+  [[test-ovsdb: syntax "["i","+=",1]": constraint violation: Cannot mutate immutable column i in table mytable.
+]])
+AT_CLEANUP
+
 OVSDB_CHECK_POSITIVE([mutations on sets],
   [[parse-mutations \
     '{"columns":

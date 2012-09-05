@@ -577,11 +577,16 @@ static void\n%s_columns_init(void)
         for columnName, column in sorted(table.columns.iteritems()):
             cs = "%s_col_%s" % (structName, columnName)
             d = {'cs': cs, 'c': columnName, 's': structName}
+            if column.mutable:
+                mutable = "true"
+            else:
+                mutable = "false"
             print
             print "    /* Initialize %(cs)s. */" % d
             print "    c = &%(cs)s;" % d
             print "    c->name = \"%(c)s\";" % d
             print column.type.cInitType("    ", "c->type")
+            print "    c->mutable = %s;" % mutable
             print "    c->parse = %(s)s_parse_%(c)s;" % d
             print "    c->unparse = %(s)s_unparse_%(c)s;" % d
         print "}"

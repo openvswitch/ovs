@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010, 2011 Nicira, Inc.
+/* Copyright (c) 2009, 2010, 2011, 2012 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -95,6 +95,12 @@ ovsdb_mutation_from_json(const struct ovsdb_table_schema *ts,
                                   "No column %s in table %s.",
                                   column_name, ts->name);
     }
+    if (!m->column->mutable) {
+        return ovsdb_syntax_error(json, "constraint violation",
+                                  "Cannot mutate immutable column %s in "
+                                  "table %s.", column_name, ts->name);
+    }
+
     ovsdb_type_clone(&m->type, &m->column->type);
 
     mutator_name = json_string(array->elems[1]);

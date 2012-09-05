@@ -18,6 +18,8 @@ post-v1.8.0
       are true, but because we do not know of any users for this
       feature it seems better on balance to remove it.  (The ovs-pki-cgi
       program was not included in distribution packaging.)
+    - ovsdb-server now enforces the immutability of immutable columns.  This
+      was not enforced in earlier versions due to an oversight.
     - Stable bond mode is deprecated and will be removed no earlier than
       February 2013.  Please email dev@openvswitch.org with concerns.
     - The autopath action is deprecated and will be removed no earlier than

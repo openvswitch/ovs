@@ -2763,7 +2763,7 @@ error:
     return error;
 }
 
-static void
+static const struct ovsdb_idl_column *
 pre_parse_column_key_value(struct vsctl_context *ctx,
                            const char *arg,
                            const struct vsctl_table_class *table)
@@ -2780,6 +2780,18 @@ pre_parse_column_key_value(struct vsctl_context *ctx,
 
     pre_get_column(ctx, table, column_name, &column);
     free(column_name);
+
+    return column;
+}
+
+static void
+check_mutable(const struct vsctl_table_class *table,
+              const struct ovsdb_idl_column *column)
+{
+    if (!column->mutable) {
+        vsctl_fatal("cannot modify read-only column %s in table %s",
+                    column->name, table->class->name);
+    }
 }
 
 static void
@@ -3112,7 +3124,10 @@ pre_cmd_set(struct vsctl_context *ctx)
 
     table = pre_get_table(ctx, table_name);
     for (i = 3; i < ctx->argc; i++) {
-        pre_parse_column_key_value(ctx, ctx->argv[i], table);
+        const struct ovsdb_idl_column *column;
+
+        column = pre_parse_column_key_value(ctx, ctx->argv[i], table);
+        check_mutable(table, column);
     }
 }
 
@@ -3195,6 +3210,7 @@ pre_cmd_add(struct vsctl_context *ctx)
 
     table = pre_get_table(ctx, table_name);
     pre_get_column(ctx, table, column_name, &column);
+    check_mutable(table, column);
 }
 
 static void
@@ -3251,6 +3267,7 @@ pre_cmd_remove(struct vsctl_context *ctx)
 
     table = pre_get_table(ctx, table_name);
     pre_get_column(ctx, table, column_name, &column);
+    check_mutable(table, column);
 }
 
 static void
@@ -3316,6 +3333,7 @@ pre_cmd_clear(struct vsctl_context *ctx)
         const struct ovsdb_idl_column *column;
 
         pre_get_column(ctx, table, ctx->argv[i], &column);
+        check_mutable(table, column);
     }
 }
 

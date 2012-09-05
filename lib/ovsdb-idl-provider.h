@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010, 2011 Nicira, Inc.
+/* Copyright (c) 2009, 2010, 2011, 2012 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -41,6 +41,7 @@ struct ovsdb_idl_row {
 struct ovsdb_idl_column {
     char *name;
     struct ovsdb_type type;
+    bool mutable;
     void (*parse)(struct ovsdb_idl_row *, const struct ovsdb_datum *);
     void (*unparse)(struct ovsdb_idl_row *);
 };

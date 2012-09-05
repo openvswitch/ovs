@@ -736,6 +736,18 @@ AT_CHECK([RUN_OVS_VSCTL([clear netflow `cat netflow-uuid` targets])],
 AT_CHECK([RUN_OVS_VSCTL([destroy b br2])], 
   [1], [], [ovs-vsctl: no row "br2" in table Bridge
 ], [OVS_VSCTL_CLEANUP])
+AT_CHECK([RUN_OVS_VSCTL([add i br1 name x])],
+  [1], [], [ovs-vsctl: cannot modify read-only column name in table Interface
+], [OVS_VSCTL_CLEANUP])
+AT_CHECK([RUN_OVS_VSCTL([set port br1 name br2])],
+  [1], [], [ovs-vsctl: cannot modify read-only column name in table Port
+], [OVS_VSCTL_CLEANUP])
+AT_CHECK([RUN_OVS_VSCTL([remove b br1 name br1])],
+  [1], [], [ovs-vsctl: cannot modify read-only column name in table Bridge
+], [OVS_VSCTL_CLEANUP])
+AT_CHECK([RUN_OVS_VSCTL([clear b br1 name])],
+  [1], [], [ovs-vsctl: cannot modify read-only column name in table Bridge
+], [OVS_VSCTL_CLEANUP])
 OVS_VSCTL_CLEANUP
 AT_CLEANUP
 

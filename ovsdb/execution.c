@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010, 2011 Nicira, Inc.
+/* Copyright (c) 2009, 2010, 2011, 2012 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -433,6 +433,22 @@ ovsdb_execute_update(struct ovsdb_execution *x, struct ovsdb_parser *parser,
     error = ovsdb_parser_get_error(parser);
     if (!error) {
         error = parse_row(row_json, table, x->symtab, &row, &columns);
+    }
+    if (!error) {
+        size_t i;
+
+        for (i = 0; i < columns.n_columns; i++) {
+            const struct ovsdb_column *column = columns.columns[i];
+
+            if (!column->mutable) {
+                error = ovsdb_syntax_error(parser->json,
+                                           "constraint violation",
+                                           "Cannot update immutable column %s "
+                                           "in table %s.",
+                                           column->name, table->schema->name);
+                break;
+            }
+        }
     }
     if (!error) {
         error = ovsdb_condition_from_json(table->schema, where, x->symtab,

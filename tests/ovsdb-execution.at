@@ -111,6 +111,15 @@ gc_schema () {
          "isRoot": false}}}
 EOF
 }
+
+immutable_schema () {
+    cat <<'EOF'
+{"name": "immutable",
+ "tables": {
+    "a": {
+        "columns": {"i": {"type": "integer", "mutable": false}}}}}
+EOF
+}
 ]
 m4_divert_pop([PREPARE_TESTS])
 
@@ -906,6 +915,40 @@ OVSDB_CHECK_EXECUTION([weak references],
 [{"count":1}]
 [{"rows":[]}]
 [{"rows":[{"_uuid":["uuid","<3>"],"b":2,"b2a":["set",[]]},{"_uuid":["uuid","<4>"],"b":3,"b2a":["set",[]]}]}]
+]])
+
+OVSDB_CHECK_EXECUTION([immutable columns],
+  [immutable_schema],
+  [[[["immutable",
+      {"op": "insert",
+       "table": "a",
+       "row": {"i": 5},
+       "uuid-name": "row1"}]]],
+   [[["immutable",
+      {"op": "update",
+       "table": "a",
+       "row": {"i": 10},
+       "where": []}]]],
+   [[["immutable",
+      {"op": "update",
+       "table": "a",
+       "row": {"i": 5},
+       "where": []}]]],
+   [[["immutable",
+      {"op": "mutate",
+       "table": "a",
+       "where": [],
+       "mutations": [["i", "-=", 5]]}]]],
+   [[["immutable",
+      {"op": "mutate",
+       "table": "a",
+       "where": [],
+       "mutations": [["i", "*=", 1]]}]]]],
+  [[[{"uuid":["uuid","<0>"]}]
+[{"details":"Cannot update immutable column i in table a.","error":"constraint violation","syntax":"{\"op\":\"update\",\"row\":{\"i\":10},\"table\":\"a\",\"where\":[]}"}]
+[{"details":"Cannot update immutable column i in table a.","error":"constraint violation","syntax":"{\"op\":\"update\",\"row\":{\"i\":5},\"table\":\"a\",\"where\":[]}"}]
+[{"details":"Cannot mutate immutable column i in table a.","error":"constraint violation","syntax":"[\"i\",\"-=\",5]"}]
+[{"details":"Cannot mutate immutable column i in table a.","error":"constraint violation","syntax":"[\"i\",\"*=\",1]"}]
 ]])
 
 OVSDB_CHECK_EXECUTION([garbage collection],
