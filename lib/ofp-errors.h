@@ -45,6 +45,19 @@ struct ofpbuf;
 
 #define OFPERR_OFS (1 << 30)
 
+/* OpenFlow error codes.
+ *
+ * The comments below are parsed by the extract-ofp-errors program at build
+ * time and used to determine the mapping between "enum ofperr" constants and
+ * error type/code values used in the OpenFlow protocol:
+ *
+ *   - The first part of each comment specifies OpenFlow type/code for each
+ *     protocol that supports the error.
+ *
+ *   - Additional text is a human-readable description of the meaning of each
+ *     error, used to explain the error to the user.  Any text enclosed in
+ *     square brackets is omitted; this can be used to explain rationale for
+ *     choice of error codes in the case where this is desirable. */
 enum ofperr {
 /* Expected duplications. */
 

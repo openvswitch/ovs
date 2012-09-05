@@ -207,7 +207,7 @@ def extract_ofp_errors(filenames):
 
             enum = m.group(1)
 
-            comments.append(comment)
+            comments.append(re.sub('\[[^]]*\]', '', comment))
             names.append(enum)
 
             for dst in dsts.split(', '):
