@@ -1,6 +1,6 @@
 --- tcpdump/interface.h	2007-06-13 18:03:20.000000000 -0700
 +++ tcpdump/interface.h	2008-04-15 18:28:55.000000000 -0700
-@@ -148,7 +148,8 @@
+@@ -130,7 +130,8 @@
  
  extern const char *dnaddr_string(u_short);
  
@@ -10,18 +10,27 @@
      __attribute__((noreturn, format (printf, 1, 2)));
  extern void warning(const char *, ...) __attribute__ ((format (printf, 1, 2)));
  
-@@ -176,6 +177,7 @@
+@@ -163,6 +164,7 @@
  extern void hex_print_with_offset(const char *, const u_char *, u_int, u_int);
  extern void hex_print(const char *, const u_char *, u_int);
  extern void telnet_print(const u_char *, u_int);
 +extern void openflow_print(const u_char *, u_int);
- extern int ether_encap_print(u_short, const u_char *, u_int, u_int, u_short *);
  extern int llc_print(const u_char *, u_int, u_int, const u_char *,
  	const u_char *, u_short *);
---- tcpdump/Makefile.in	2007-09-25 18:59:52.000000000 -0700
-+++ tcpdump/Makefile.in	2009-05-11 15:59:28.000000000 -0700
-@@ -49,10 +49,10 @@
- CFLAGS = $(CCOPT) $(DEFS) $(INCLS)
+ extern int snap_print(const u_char *, u_int, u_int, u_int);
+--- tcpdump/Makefile.in	2012-06-13 04:56:20.000000000 +1200
++++ tcpdump/Makefile.in	2012-08-29 21:36:37.000000000 +1200
+@@ -43,7 +43,7 @@
+ CC = @CC@
+ PROG = tcpdump
+ CCOPT = @V_CCOPT@
+-INCLS = -I. @V_INCLS@
++INCLS = -I. @V_INCLS@ -I../../include
+ DEFS = @DEFS@ @CPPFLAGS@ @V_DEFS@
+
+ # Standard CFLAGS
+@@ -51,10 +51,10 @@
+ FULL_CFLAGS = $(CCOPT) $(DEFS) $(INCLS) $(CFLAGS)
  
  # Standard LDFLAGS
 -LDFLAGS = @LDFLAGS@
@@ -29,23 +38,23 @@
  
  # Standard LIBS
 -LIBS = @LIBS@
-+LIBS = @LIBS@ -lopenvswitch
++LIBS = @LIBS@ -lopenvswitch -lssl -lrt -lm
  
  INSTALL = @INSTALL@
  INSTALL_PROGRAM = @INSTALL_PROGRAM@
-@@ -87,7 +87,8 @@
- 	print-slow.c print-snmp.c print-stp.c print-sunatm.c print-sunrpc.c \
+@@ -93,7 +93,8 @@
  	print-symantec.c print-syslog.c print-tcp.c print-telnet.c print-tftp.c \
- 	print-timed.c print-token.c print-udp.c print-vjc.c print-vrrp.c \
--	print-wb.c print-zephyr.c setsignal.c tcpdump.c util.c
-+	print-wb.c print-zephyr.c setsignal.c tcpdump.c util.c \
+ 	print-timed.c print-tipc.c print-token.c print-udld.c print-udp.c \
+ 	print-usb.c print-vjc.c print-vqp.c print-vrrp.c print-vtp.c \
+-	print-wb.c print-zephyr.c signature.c setsignal.c tcpdump.c util.c
++	print-wb.c print-zephyr.c signature.c setsignal.c tcpdump.c util.c \
 +	print-openflow.c
  
- LOCALSRC = @LOCALSRC@
- GENSRC = version.c
+ LIBNETDISSECT_SRC=print-isakmp.c
+ LIBNETDISSECT_OBJ=$(LIBNETDISSECT_SRC:.c=.o)
 --- tcpdump/print-openflow.c	1969-12-31 16:00:00.000000000 -0800
 +++ tcpdump/print-openflow.c	2009-05-11 15:38:41.000000000 -0700
-@@ -0,0 +1,46 @@
+@@ -0,0 +1,45 @@
 +/* Copyright (C) 2007, 2008, 2009 Nicira, Inc.
 +
 +   Redistribution and use in source and binary forms, with or without
@@ -66,7 +75,6 @@
 +   IMPLIED WARRANTIES, INCLUDING, WITHOUT LIMITATION, THE IMPLIED
 +   WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
 + */
-+ *
 +
 +#ifdef HAVE_CONFIG_H
 +#include "config.h"
@@ -75,7 +83,7 @@
 +#include <stdlib.h>
 +
 +#include "interface.h"
-+#include "../../include/openflow/openflow.h"
++#include "openflow/openflow.h"
 +#include "../../lib/ofp-print.h"
 +
 +void
@@ -94,22 +102,23 @@
 +}
 --- tcpdump/print-tcp.c	2006-09-19 12:07:57.000000000 -0700
 +++ tcpdump/print-tcp.c	2009-05-11 15:38:25.000000000 -0700
-@@ -52,6 +52,8 @@
+@@ -56,6 +56,8 @@
  
  #include "nameser.h"
  
-+#include "../../include/openflow/openflow.h"
++#include "openflow/openflow.h"
 +
  #ifdef HAVE_LIBCRYPTO
  #include <openssl/md5.h>
+ #include <signature.h>
+@@ -669,7 +672,9 @@
+         }
+         else if (length > 0 && (sport == LDP_PORT || dport == LDP_PORT)) {
+                 ldp_print(bp, length);
+-        }
++        } else if (sport == OFP_TCP_PORT || dport == OFP_TCP_PORT) {
++                   openflow_print(bp, length);
++        }
  
-@@ -680,7 +682,8 @@
- 		}
-                 else if (length > 0 && (sport == LDP_PORT || dport == LDP_PORT)) {
-                         ldp_print(bp, length);
--		}
-+		} else if (sport == OFP_TCP_PORT || dport == OFP_TCP_PORT)
-+			openflow_print(bp, length);
- 	}
- 	return;
- bad:
+         return;
+  bad:

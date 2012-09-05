@@ -4,14 +4,14 @@ debugging.
 tcpdump
 -------
 The "ofp-tcpdump.patch" patch adds the ability to parse OpenFlow
-messages to tcpdump.  These instructions assume that tcpdump 3.9.8 
+messages to tcpdump.  These instructions assume that tcpdump 4.3.0
 is going to be used, but it should work with other versions that are not
 substantially different.  To begin, download tcpdump and apply the
 patch:
 
-    wget http://www.tcpdump.org/release/tcpdump-3.9.8.tar.gz
-    tar xzf tcpdump-3.9.8.tar.gz
-    ln -s tcpdump-3.9.8 tcpdump
+    wget http://www.tcpdump.org/release/tcpdump-4.3.0.tar.gz
+    tar xzf tcpdump-4.3.0.tar.gz
+    ln -s tcpdump-4.3.0 tcpdump
     patch -p0 < ofp-tcpdump.patch
 
 Then build the new version of tcpdump:
