@@ -405,6 +405,7 @@ do_list_dbs(struct jsonrpc *rpc, const char *database OVS_UNUSED,
 
     svec_init(&dbs);
     fetch_dbs(rpc, &dbs);
+    svec_sort(&dbs);
     SVEC_FOR_EACH (i, db_name, &dbs) {
         puts(db_name);
     }
