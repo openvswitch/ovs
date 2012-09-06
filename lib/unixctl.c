@@ -95,13 +95,13 @@ unixctl_version(struct unixctl_conn *conn, int argc OVS_UNUSED,
  * arguments to the command; it is used only for presentation to the user in
  * "help" output.
  *
- * 'cb' is called when the command is received.  It is passed the actual set of
- * arguments, as a text string, plus a copy of 'aux'.  Normally 'cb' should
- * reply by calling unixctl_command_reply() or unixctl_command_reply_error()
- * before it returns, but if the command cannot be handled immediately then it
- * can defer the reply until later.  A given connection can only process a
- * single request at a time, so a reply must be made eventually to avoid
- * blocking that connection. */
+ * 'cb' is called when the command is received.  It is passed an array
+ * containing the command name and arguments, plus a copy of 'aux'.  Normally
+ * 'cb' should reply by calling unixctl_command_reply() or
+ * unixctl_command_reply_error() before it returns, but if the command cannot
+ * be handled immediately then it can defer the reply until later.  A given
+ * connection can only process a single request at a time, so a reply must be
+ * made eventually to avoid blocking that connection. */
 void
 unixctl_command_register(const char *name, const char *usage,
                          int min_args, int max_args,
