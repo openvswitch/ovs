@@ -134,7 +134,7 @@ instead, to write to a database that is served by
 Prints a summary of the records in \fIdb\fR's log, including the time
 and date at which each database change occurred and any associated
 comment.  This may be useful for debugging.
-.PP
+.IP
 To increase the verbosity of output, add \fB\-m\fR (or \fB\-\-more\fR)
 one or more times to the command line.  With one \fB\-m\fR,
 \fBshow\-log\fR prints a summary of the records added, deleted, or
