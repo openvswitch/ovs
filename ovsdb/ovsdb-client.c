@@ -39,7 +39,7 @@
 #include "ovsdb-data.h"
 #include "ovsdb-error.h"
 #include "sort.h"
-#include "sset.h"
+#include "svec.h"
 #include "stream.h"
 #include "stream-ssl.h"
 #include "table.h"
@@ -75,7 +75,7 @@ static const struct ovsdb_client_command all_commands[];
 static void usage(void) NO_RETURN;
 static void parse_options(int argc, char *argv[]);
 static struct jsonrpc *open_jsonrpc(const char *server);
-static void fetch_dbs(struct jsonrpc *, struct sset *dbs);
+static void fetch_dbs(struct jsonrpc *, struct svec *dbs);
 
 int
 main(int argc, char *argv[])
@@ -118,22 +118,22 @@ main(int argc, char *argv[])
     }
 
     if (command->need == NEED_DATABASE) {
-        struct sset dbs;
+        struct svec dbs;
 
-        sset_init(&dbs);
+        svec_init(&dbs);
         fetch_dbs(rpc, &dbs);
         if (argc - optind > command->min_args
-            && sset_contains(&dbs, argv[optind])) {
+            && svec_contains(&dbs, argv[optind])) {
             database = argv[optind++];
-        } else if (sset_count(&dbs) == 1) {
-            database = xstrdup(SSET_FIRST(&dbs));
-        } else if (sset_contains(&dbs, "Open_vSwitch")) {
+        } else if (dbs.n == 1) {
+            database = xstrdup(dbs.names[0]);
+        } else if (svec_contains(&dbs, "Open_vSwitch")) {
             database = "Open_vSwitch";
         } else {
             ovs_fatal(0, "no default database for `%s' command, please "
                       "specify a database name", command->name);
         }
-        sset_destroy(&dbs);
+        svec_destroy(&dbs);
     } else {
         database = NULL;
     }
@@ -371,7 +371,7 @@ fetch_schema(struct jsonrpc *rpc, const char *database)
 }
 
 static void
-fetch_dbs(struct jsonrpc *rpc, struct sset *dbs)
+fetch_dbs(struct jsonrpc *rpc, struct svec *dbs)
 {
     struct jsonrpc_msg *request, *reply;
     size_t i;
@@ -390,7 +390,7 @@ fetch_dbs(struct jsonrpc *rpc, struct sset *dbs)
         if (name->type != JSON_STRING) {
             ovs_fatal(0, "list_dbs response %zu is not string", i);
         }
-        sset_add(dbs, name->u.string);
+        svec_add(dbs, name->u.string);
     }
     jsonrpc_msg_destroy(reply);
 }
@@ -400,14 +400,15 @@ do_list_dbs(struct jsonrpc *rpc, const char *database OVS_UNUSED,
             int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
     const char *db_name;
-    struct sset dbs;
+    struct svec dbs;
+    size_t i;
 
-    sset_init(&dbs);
+    svec_init(&dbs);
     fetch_dbs(rpc, &dbs);
-    SSET_FOR_EACH (db_name, &dbs) {
+    SVEC_FOR_EACH (i, db_name, &dbs) {
         puts(db_name);
     }
-    sset_destroy(&dbs);
+    svec_destroy(&dbs);
 }
 
 static void
