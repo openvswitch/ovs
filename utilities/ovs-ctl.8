@@ -223,6 +223,12 @@ Overrides the file name for the Unix domain socket used to connect to
 .IP "\fB\-\-db\-schema=\fIschema\fR"
 Overrides the file name for the OVS database schema.
 .
+.IP "\fB\-\-extra-dbs=\fIfile\fR"
+Adds \fIfile\fR as an extra database for \fBovsdb\-server\fR to serve
+out.  Multiple space-separated file names may also be specified.
+\fIfile\fR should begin with \fB/\fR; if it does not, then it will be
+taken as relative to \fIdbdir\fR.
+.
 .SH "The ``stop'' command"
 .
 .PP

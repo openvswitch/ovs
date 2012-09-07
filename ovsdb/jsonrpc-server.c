@@ -66,6 +66,7 @@ static void ovsdb_jsonrpc_session_unlock__(struct ovsdb_lock_waiter *);
 
 /* Triggers. */
 static void ovsdb_jsonrpc_trigger_create(struct ovsdb_jsonrpc_session *,
+                                         struct ovsdb *,
                                          struct json *id, struct json *params);
 static struct ovsdb_jsonrpc_trigger *ovsdb_jsonrpc_trigger_find(
     struct ovsdb_jsonrpc_session *, const struct json *id, size_t hash);
@@ -76,7 +77,7 @@ static void ovsdb_jsonrpc_trigger_complete_done(
 
 /* Monitors. */
 static struct json *ovsdb_jsonrpc_monitor_create(
-    struct ovsdb_jsonrpc_session *, struct json *params);
+    struct ovsdb_jsonrpc_session *, struct ovsdb *, struct json *params);
 static struct jsonrpc_msg *ovsdb_jsonrpc_monitor_cancel(
     struct ovsdb_jsonrpc_session *,
     struct json_array *params,
@@ -106,14 +107,27 @@ static struct ovsdb_jsonrpc_remote *ovsdb_jsonrpc_server_add_remote(
 );
 static void ovsdb_jsonrpc_server_del_remote(struct shash_node *);
 
+/* Creates and returns a new server to provide JSON-RPC access to an OVSDB.
+ *
+ * The caller must call ovsdb_jsonrpc_server_add_db() for each database to
+ * which 'server' should provide access. */
 struct ovsdb_jsonrpc_server *
-ovsdb_jsonrpc_server_create(struct ovsdb *db)
+ovsdb_jsonrpc_server_create(void)
 {
     struct ovsdb_jsonrpc_server *server = xzalloc(sizeof *server);
-    ovsdb_server_init(&server->up, db);
+    ovsdb_server_init(&server->up);
     server->max_sessions = 64;
     shash_init(&server->remotes);
     return server;
+}
+
+/* Adds 'db' to the set of databases served out by 'svr'.  Returns true if
+ * successful, false if 'db''s name is the same as some database already in
+ * 'server'. */
+bool
+ovsdb_jsonrpc_server_add_db(struct ovsdb_jsonrpc_server *svr, struct ovsdb *db)
+{
+    return ovsdb_server_add_db(&svr->up, db);
 }
 
 void
@@ -350,7 +364,7 @@ ovsdb_jsonrpc_session_create(struct ovsdb_jsonrpc_remote *remote,
     struct ovsdb_jsonrpc_session *s;
 
     s = xzalloc(sizeof *s);
-    ovsdb_session_init(&s->up, remote->server->up.db);
+    ovsdb_session_init(&s->up, &remote->server->up);
     s->remote = remote;
     list_push_back(&remote->sessions, &s->node);
     hmap_init(&s->triggers);
@@ -558,21 +572,22 @@ ovsdb_jsonrpc_session_get_status(const struct ovsdb_jsonrpc_remote *remote,
     return true;
 }
 
-static const char *
-get_db_name(const struct ovsdb_jsonrpc_session *s)
-{
-    return s->remote->server->up.db->schema->name;
-}
-
-static struct jsonrpc_msg *
-ovsdb_jsonrpc_check_db_name(const struct ovsdb_jsonrpc_session *s,
-                            const struct jsonrpc_msg *request)
+/* Examines 'request' to determine the database to which it relates, and then
+ * searches 's' to find that database:
+ *
+ *    - If successful, returns the database and sets '*replyp' to NULL.
+ *
+ *    - If no such database exists, returns NULL and sets '*replyp' to an
+ *      appropriate JSON-RPC error reply, owned by the caller. */
+static struct ovsdb *
+ovsdb_jsonrpc_lookup_db(const struct ovsdb_jsonrpc_session *s,
+                        const struct jsonrpc_msg *request,
+                        struct jsonrpc_msg **replyp)
 {
     struct json_array *params;
-    const char *want_db_name;
-    const char *have_db_name;
     struct ovsdb_error *error;
-    struct jsonrpc_msg *reply;
+    const char *db_name;
+    struct ovsdb *db;
 
     params = json_array(request->params);
     if (!params->n || params->elems[0]->type != JSON_STRING) {
@@ -582,22 +597,23 @@ ovsdb_jsonrpc_check_db_name(const struct ovsdb_jsonrpc_session *s,
         goto error;
     }
 
-    want_db_name = params->elems[0]->u.string;
-    have_db_name = get_db_name(s);
-    if (strcmp(want_db_name, have_db_name)) {
+    db_name = params->elems[0]->u.string;
+    db = shash_find_data(&s->up.server->dbs, db_name);
+    if (!db) {
         error = ovsdb_syntax_error(
             request->params, "unknown database",
             "%s request specifies unknown database %s",
-            request->method, want_db_name);
+            request->method, db_name);
         goto error;
     }
 
-    return NULL;
+    *replyp = NULL;
+    return db;
 
 error:
-    reply = jsonrpc_create_reply(ovsdb_error_to_json(error), request->id);
+    *replyp = jsonrpc_create_reply(ovsdb_error_to_json(error), request->id);
     ovsdb_error_destroy(error);
-    return reply;
+    return NULL;
 }
 
 static struct ovsdb_error *
@@ -739,10 +755,10 @@ error:
 }
 
 static struct jsonrpc_msg *
-execute_transaction(struct ovsdb_jsonrpc_session *s,
+execute_transaction(struct ovsdb_jsonrpc_session *s, struct ovsdb *db,
                     struct jsonrpc_msg *request)
 {
-    ovsdb_jsonrpc_trigger_create(s, request->id, request->params);
+    ovsdb_jsonrpc_trigger_create(s, db, request->id, request->params);
     request->id = NULL;
     request->params = NULL;
     jsonrpc_msg_destroy(request);
@@ -756,30 +772,39 @@ ovsdb_jsonrpc_session_got_request(struct ovsdb_jsonrpc_session *s,
     struct jsonrpc_msg *reply;
 
     if (!strcmp(request->method, "transact")) {
-        reply = ovsdb_jsonrpc_check_db_name(s, request);
+        struct ovsdb *db = ovsdb_jsonrpc_lookup_db(s, request, &reply);
         if (!reply) {
-            reply = execute_transaction(s, request);
+            reply = execute_transaction(s, db, request);
         }
     } else if (!strcmp(request->method, "monitor")) {
-        reply = ovsdb_jsonrpc_check_db_name(s, request);
+        struct ovsdb *db = ovsdb_jsonrpc_lookup_db(s, request, &reply);
         if (!reply) {
             reply = jsonrpc_create_reply(
-                ovsdb_jsonrpc_monitor_create(s, request->params), request->id);
+                ovsdb_jsonrpc_monitor_create(s, db, request->params),
+                request->id);
         }
     } else if (!strcmp(request->method, "monitor_cancel")) {
         reply = ovsdb_jsonrpc_monitor_cancel(s, json_array(request->params),
                                              request->id);
     } else if (!strcmp(request->method, "get_schema")) {
-        reply = ovsdb_jsonrpc_check_db_name(s, request);
+        struct ovsdb *db = ovsdb_jsonrpc_lookup_db(s, request, &reply);
         if (!reply) {
-            reply = jsonrpc_create_reply(
-                ovsdb_schema_to_json(s->remote->server->up.db->schema),
-                request->id);
+            reply = jsonrpc_create_reply(ovsdb_schema_to_json(db->schema),
+                                         request->id);
         }
     } else if (!strcmp(request->method, "list_dbs")) {
-        reply = jsonrpc_create_reply(
-            json_array_create_1(json_string_create(get_db_name(s))),
-            request->id);
+        size_t n_dbs = shash_count(&s->up.server->dbs);
+        struct shash_node *node;
+        struct json **dbs;
+        size_t i;
+
+        dbs = xmalloc(n_dbs * sizeof *dbs);
+        i = 0;
+        SHASH_FOR_EACH (node, &s->up.server->dbs) {
+            dbs[i++] = json_string_create(node->name);
+        }
+        reply = jsonrpc_create_reply(json_array_create(dbs, n_dbs),
+                                     request->id);
     } else if (!strcmp(request->method, "lock")) {
         reply = ovsdb_jsonrpc_session_lock(s, request, OVSDB_LOCK_WAIT);
     } else if (!strcmp(request->method, "steal")) {
@@ -836,7 +861,7 @@ struct ovsdb_jsonrpc_trigger {
 };
 
 static void
-ovsdb_jsonrpc_trigger_create(struct ovsdb_jsonrpc_session *s,
+ovsdb_jsonrpc_trigger_create(struct ovsdb_jsonrpc_session *s, struct ovsdb *db,
                              struct json *id, struct json *params)
 {
     struct ovsdb_jsonrpc_trigger *t;
@@ -858,7 +883,7 @@ ovsdb_jsonrpc_trigger_create(struct ovsdb_jsonrpc_session *s,
 
     /* Insert into trigger table. */
     t = xmalloc(sizeof *t);
-    ovsdb_trigger_init(&s->up, &t->trigger, params, time_msec());
+    ovsdb_trigger_init(&s->up, db, &t->trigger, params, time_msec());
     t->id = id;
     hmap_insert(&s->triggers, &t->hmap_node, hash);
 
@@ -962,6 +987,7 @@ struct ovsdb_jsonrpc_monitor_table {
 struct ovsdb_jsonrpc_monitor {
     struct ovsdb_replica replica;
     struct ovsdb_jsonrpc_session *session;
+    struct ovsdb *db;
     struct hmap_node node;      /* In ovsdb_jsonrpc_session's "monitors". */
 
     struct json *monitor_id;
@@ -1113,7 +1139,7 @@ ovsdb_jsonrpc_parse_monitor_request(struct ovsdb_jsonrpc_monitor_table *mt,
 }
 
 static struct json *
-ovsdb_jsonrpc_monitor_create(struct ovsdb_jsonrpc_session *s,
+ovsdb_jsonrpc_monitor_create(struct ovsdb_jsonrpc_session *s, struct ovsdb *db,
                              struct json *params)
 {
     struct ovsdb_jsonrpc_monitor *m = NULL;
@@ -1141,8 +1167,9 @@ ovsdb_jsonrpc_monitor_create(struct ovsdb_jsonrpc_session *s,
 
     m = xzalloc(sizeof *m);
     ovsdb_replica_init(&m->replica, &ovsdb_jsonrpc_replica_class);
-    ovsdb_add_replica(s->remote->server->up.db, &m->replica);
+    ovsdb_add_replica(db, &m->replica);
     m->session = s;
+    m->db = db;
     hmap_insert(&s->monitors, &m->node, json_hash(monitor_id, 0));
     m->monitor_id = json_clone(monitor_id);
     shash_init(&m->tables);
@@ -1154,7 +1181,7 @@ ovsdb_jsonrpc_monitor_create(struct ovsdb_jsonrpc_session *s,
         const struct json *mr_value;
         size_t i;
 
-        table = ovsdb_get_table(s->remote->server->up.db, node->name);
+        table = ovsdb_get_table(m->db, node->name);
         if (!table) {
             error = ovsdb_syntax_error(NULL, NULL,
                                        "no table named %s", node->name);
@@ -1203,7 +1230,7 @@ ovsdb_jsonrpc_monitor_create(struct ovsdb_jsonrpc_session *s,
 
 error:
     if (m) {
-        ovsdb_remove_replica(s->remote->server->up.db, &m->replica);
+        ovsdb_remove_replica(m->db, &m->replica);
     }
 
     json = ovsdb_error_to_json(error);
@@ -1227,7 +1254,7 @@ ovsdb_jsonrpc_monitor_cancel(struct ovsdb_jsonrpc_session *s,
             return jsonrpc_create_error(json_string_create("unknown monitor"),
                                         request_id);
         } else {
-            ovsdb_remove_replica(s->remote->server->up.db, &m->replica);
+            ovsdb_remove_replica(m->db, &m->replica);
             return jsonrpc_create_reply(json_object_create(), request_id);
         }
     }
@@ -1239,7 +1266,7 @@ ovsdb_jsonrpc_monitor_remove_all(struct ovsdb_jsonrpc_session *s)
     struct ovsdb_jsonrpc_monitor *m, *next;
 
     HMAP_FOR_EACH_SAFE (m, next, node, &s->monitors) {
-        ovsdb_remove_replica(s->remote->server->up.db, &m->replica);
+        ovsdb_remove_replica(m->db, &m->replica);
     }
 }
 

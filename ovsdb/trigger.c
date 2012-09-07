@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010, 2011 Nicira, Inc.
+/* Copyright (c) 2009, 2010, 2011, 2012 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,12 +30,13 @@ static bool ovsdb_trigger_try(struct ovsdb_trigger *, long long int now);
 static void ovsdb_trigger_complete(struct ovsdb_trigger *);
 
 void
-ovsdb_trigger_init(struct ovsdb_session *session,
+ovsdb_trigger_init(struct ovsdb_session *session, struct ovsdb *db,
                    struct ovsdb_trigger *trigger,
                    struct json *request, long long int now)
 {
     trigger->session = session;
-    list_push_back(&trigger->session->db->triggers, &trigger->node);
+    trigger->db = db;
+    list_push_back(&trigger->db->triggers, &trigger->node);
     trigger->request = request;
     trigger->result = NULL;
     trigger->created = now;
@@ -110,7 +111,7 @@ ovsdb_trigger_wait(struct ovsdb *db, long long int now)
 static bool
 ovsdb_trigger_try(struct ovsdb_trigger *t, long long int now)
 {
-    t->result = ovsdb_execute(t->session->db, t->session,
+    t->result = ovsdb_execute(t->db, t->session,
                               t->request, now - t->created, &t->timeout_msec);
     if (t->result) {
         ovsdb_trigger_complete(t);

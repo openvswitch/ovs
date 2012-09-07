@@ -18,17 +18,21 @@
 
 #include "hmap.h"
 #include "list.h"
+#include "shash.h"
+
+struct ovsdb;
+struct ovsdb_server;
 
 /* Abstract representation of an OVSDB client connection, not tied to any
  * particular network protocol.  Protocol implementations
  * (e.g. jsonrpc-server.c) embed this in a larger data structure.  */
 struct ovsdb_session {
-    struct ovsdb *db;
+    struct ovsdb_server *server;
     struct list completions;    /* Completed triggers. */
     struct hmap waiters;        /* "ovsdb_lock_waiter *"s by lock name. */
 };
 
-void ovsdb_session_init(struct ovsdb_session *, struct ovsdb *);
+void ovsdb_session_init(struct ovsdb_session *, struct ovsdb_server *);
 void ovsdb_session_destroy(struct ovsdb_session *);
 
 struct ovsdb_lock_waiter *ovsdb_session_get_lock_waiter(
@@ -73,11 +77,12 @@ bool ovsdb_lock_waiter_is_owner(const struct ovsdb_lock_waiter *);
  * network protocol.  Protocol implementations (e.g. jsonrpc-server.c) embed
  * this in a larger data structure.  */
 struct ovsdb_server {
-    struct ovsdb *db;
+    struct shash dbs;      /* Maps from a db name to a "struct ovsdb *". */
     struct hmap locks;     /* Contains "struct ovsdb_lock"s indexed by name. */
 };
 
-void ovsdb_server_init(struct ovsdb_server *, struct ovsdb *);
+void ovsdb_server_init(struct ovsdb_server *);
+bool ovsdb_server_add_db(struct ovsdb_server *, struct ovsdb *);
 void ovsdb_server_destroy(struct ovsdb_server *);
 
 struct ovsdb_lock_waiter *ovsdb_server_lock(struct ovsdb_server *,

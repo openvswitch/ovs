@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2011 Nicira, Inc.
+/* Copyright (c) 2009, 2011, 2012 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,7 +22,8 @@ struct ovsdb;
 
 struct ovsdb_trigger {
     struct ovsdb_session *session; /* Session that owns this trigger. */
-    struct list node;           /* !result: in session->db->triggers;
+    struct ovsdb *db;           /* Database on which trigger acts. */
+    struct list node;           /* !result: in db->triggers;
                                  * result: in session->completions. */
     struct json *request;       /* Database request. */
     struct json *result;        /* Result (null if none yet). */
@@ -30,7 +31,8 @@ struct ovsdb_trigger {
     long long int timeout_msec; /* Max wait duration. */
 };
 
-void ovsdb_trigger_init(struct ovsdb_session *, struct ovsdb_trigger *,
+void ovsdb_trigger_init(struct ovsdb_session *, struct ovsdb *,
+                        struct ovsdb_trigger *,
                         struct json *request, long long int now);
 void ovsdb_trigger_destroy(struct ovsdb_trigger *);
 

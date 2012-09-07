@@ -189,9 +189,23 @@ start_ovsdb () {
 
         # Start ovsdb-server.
         set ovsdb-server "$DB_FILE"
+        for db in $EXTRA_DBS; do
+            case $db in
+                /*) ;;
+                *) db=$dbdir/$db ;;
+            esac
+
+            if test ! -f "$db"; then
+                log_warning_msg "$db (from \$EXTRA_DBS) does not exist."
+            elif ovsdb-tool db-version "$db" >/dev/null; then
+                set "$@" "$db"
+            else
+                log_warning_msg "$db (from \$EXTRA_DBS) cannot be read as a database (see error message above)"
+            fi
+        done
         set "$@" -vconsole:emer -vsyslog:err -vfile:info
         set "$@" --remote=punix:"$DB_SOCK"
-        set "$@" --remote=db:Open_vSwitch,manager_options
+        set "$@" --remote=db:Open_vSwitch,Open_vSwitch,manager_options
         set "$@" --private-key=db:SSL,private_key
         set "$@" --certificate=db:SSL,certificate
         set "$@" --bootstrap-ca-cert=db:SSL,ca_cert
@@ -406,6 +420,7 @@ set_defaults () {
     DB_FILE=$dbdir/conf.db
     DB_SOCK=$rundir/db.sock
     DB_SCHEMA=$datadir/vswitch.ovsschema
+    EXTRA_DBS=
 
     PROTOCOL=gre
     DPORT=

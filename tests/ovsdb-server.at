@@ -142,12 +142,15 @@ AT_CLEANUP
 
 AT_SETUP([database multiplexing implementation])
 AT_KEYWORDS([ovsdb server positive])
-ordinal_schema > schema
-AT_CHECK([ovsdb-tool create db schema], [0], [ignore], [ignore])
-AT_CHECK([ovsdb-server --detach --no-chdir --pidfile="`pwd`"/pid --unixctl="`pwd`"/unixctl --remote=punix:socket db], [0], [ignore], [ignore])
+ordinal_schema > schema1
+constraint_schema > schema2
+AT_CHECK([ovsdb-tool create db1 schema1], [0], [ignore], [ignore])
+AT_CHECK([ovsdb-tool create db2 schema2], [0], [ignore], [ignore])
+AT_CHECK([ovsdb-server --detach --no-chdir --pidfile="`pwd`"/pid --unixctl="`pwd`"/unixctl --remote=punix:socket db1 db2], [0], [ignore], [ignore])
 AT_CHECK(
   [[ovsdb-client list-dbs unix:socket]], 
-  [0], [ordinals
+  [0], [constraints
+ordinals
 ], [ignore], [test ! -e pid || kill `cat pid`])
 AT_CHECK(
   [[test-jsonrpc request unix:socket get_schema [\"nonexistent\"]]], [0],
@@ -158,37 +161,67 @@ AT_CLEANUP
 
 AT_SETUP([--remote=db: implementation])
 AT_KEYWORDS([ovsdb server positive])
+OVS_RUNDIR=`pwd`; export OVS_RUNDIR
+OVS_LOGDIR=`pwd`; export OVS_LOGDIR
 AT_DATA([schema],
   [[{"name": "mydb",
      "tables": {
+       "Root": {
+         "columns": {
+           "managers": {
+             "type": {
+               "key": "string",
+               "min": 0,
+               "max": "unlimited"}},
+           "manager_options": {
+             "type": {
+               "key": {"type": "uuid", "refTable": "Manager"},
+               "min": 0,
+               "max": "unlimited"}}}},
        "Manager": {
          "columns": {
-           "manager": {"type": "string"}}}}}
+           "target": {
+             "type": "string"},
+           "is_connected": {
+             "type": {
+               "key": "boolean",
+               "min": 0,
+               "max": 1}}}}}}
 ]])
 AT_CHECK([ovsdb-tool create db schema], [0], [ignore], [ignore])
 AT_CHECK(
   [[ovsdb-tool transact db \
      '["mydb",
        {"op": "insert",
+        "table": "Root",
+        "row": {
+          "managers": "punix:socket1",
+          "manager_options": ["set", [["named-uuid", "x"]]]}},
+       {"op": "insert",
         "table": "Manager",
-        "row": {"manager": "punix:socket"}}]']], [0], [ignore], [ignore])
-AT_CHECK([ovsdb-server --detach --no-chdir --pidfile="`pwd`"/pid --remote=db:Manager,manager --unixctl="`pwd`"/unixctl db], [0], [ignore], [ignore])
+        "uuid-name": "x",
+        "row": {"target": "punix:socket2"}}]']], [0], [ignore], [ignore])
+ON_EXIT([kill `cat ovsdb-server.pid`])
+AT_CHECK([ovsdb-server --enable-dummy --detach --no-chdir --pidfile --remote=db:Root,managers --remote=db:Root,manager_options --log-file db], [0], [ignore], [ignore])
+for i in 1 2 3 4 5 6; do ovs-appctl -t ovsdb-server time/warp 1000; done
 AT_CHECK(
-  [[ovsdb-client transact unix:socket \
+  [[ovsdb-client transact unix:socket1 \
      '["mydb",
+       {"op": "select",
+        "table": "Root",
+        "where": [],
+        "columns": ["managers"]},
        {"op": "select",
         "table": "Manager",
         "where": [],
-        "columns": ["manager"]}]']], 
-  [0], [stdout], [ignore], [test ! -e pid || kill `cat pid`])
+        "columns": ["target", "is_connected"]}]']],
+  [0], [stdout], [ignore])
 AT_CHECK(
   [perl $srcdir/uuidfilt.pl stdout], 
   [0], 
-  [[[{"rows":[{"manager":"punix:socket"}]}]
+  [[[{"rows":[{"managers":"punix:socket1"}]},{"rows":[{"is_connected":false,"target":"punix:socket2"}]}]
 ]], 
-  [ignore], 
-  [test ! -e pid || kill `cat pid`])
-OVSDB_SERVER_SHUTDOWN
+  [ignore])
 AT_CLEANUP
 
 AT_SETUP([SSL db: implementation])

@@ -1294,6 +1294,7 @@ do_trigger(int argc OVS_UNUSED, char *argv[])
 {
     struct ovsdb_schema *schema;
     struct ovsdb_session session;
+    struct ovsdb_server server;
     struct json *json;
     struct ovsdb *db;
     long long int now;
@@ -1306,7 +1307,9 @@ do_trigger(int argc OVS_UNUSED, char *argv[])
     json_destroy(json);
     db = ovsdb_create(schema);
 
-    ovsdb_session_init(&session, db);
+    ovsdb_server_init(&server);
+    ovsdb_server_add_db(&server, db);
+    ovsdb_session_init(&session, &server);
 
     now = 0;
     number = 0;
@@ -1321,7 +1324,7 @@ do_trigger(int argc OVS_UNUSED, char *argv[])
             json_destroy(params);
         } else {
             struct test_trigger *t = xmalloc(sizeof *t);
-            ovsdb_trigger_init(&session, &t->trigger, params, now);
+            ovsdb_trigger_init(&session, db, &t->trigger, params, now);
             t->number = number++;
             if (ovsdb_trigger_is_complete(&t->trigger)) {
                 do_trigger_dump(t, now, "immediate");
@@ -1342,6 +1345,7 @@ do_trigger(int argc OVS_UNUSED, char *argv[])
         poll_block();
     }
 
+    ovsdb_server_destroy(&server);
     ovsdb_destroy(db);
 }
 
