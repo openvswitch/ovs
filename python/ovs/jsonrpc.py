@@ -502,9 +502,19 @@ class Session(object):
 
     def recv(self):
         if self.rpc is not None:
+            backlog = self.rpc.get_backlog()
             error, msg = self.rpc.recv()
-            if not error:
+            if self.rpc.get_backlog() < backlog:
+                # Data previously caught in a queue was successfully sent (or
+                # there's an error, which we'll catch below).
+                #
+                # We don't count data that is successfully sent immediately as
+                # activity, because there's a lot of queuing downstream from
+                # us, which means that we can push a lot of data into a
+                # connection that has stalled and won't ever recover.
                 self.reconnect.activity(ovs.timeval.msec())
+
+            if not error:
                 if msg.type == Message.T_REQUEST and msg.method == "echo":
                     # Echo request.  Send reply.
                     self.send(Message.create_reply(msg.params, msg.id))
