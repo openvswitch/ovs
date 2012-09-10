@@ -261,6 +261,11 @@ Prerequisites section, follow the procedure below to build.
    you do not understand what this means or do not know if your driver
    will work, do not set this.
 
+   Once you verify that the kernel modules load properly, you should
+   install them:
+
+      % make modules_install
+
 7. Initialize the configuration database using ovsdb-tool, e.g.:
 
       % mkdir -p /usr/local/etc/openvswitch
