@@ -1158,7 +1158,7 @@ get_features(struct ofproto *ofproto_ OVS_UNUSED,
 }
 
 static void
-get_tables(struct ofproto *ofproto_, struct ofp10_table_stats *ots)
+get_tables(struct ofproto *ofproto_, struct ofp12_table_stats *ots)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
     struct dpif_dp_stats s;
@@ -1166,9 +1166,8 @@ get_tables(struct ofproto *ofproto_, struct ofp10_table_stats *ots)
     strcpy(ots->name, "classifier");
 
     dpif_get_dp_stats(ofproto->dpif, &s);
-    put_32aligned_be64(&ots->lookup_count, htonll(s.n_hit + s.n_missed));
-    put_32aligned_be64(&ots->matched_count,
-                       htonll(s.n_hit + ofproto->n_matches));
+    ots->lookup_count = htonll(s.n_hit + s.n_missed);
+    ots->matched_count = htonll(s.n_hit + ofproto->n_matches);
 }
 
 static struct ofport *

@@ -464,7 +464,17 @@ struct ofproto_class {
      *
      *   - 'name' to "table#" where # is the table ID.
      *
-     *   - 'wildcards' to OFPFW10_ALL.
+     *   - 'match' and 'wildcards' to OFPXMT12_MASK.
+     *
+     *   - 'write_actions' and 'apply_actions' to OFPAT12_OUTPUT.
+     *
+     *   - 'write_setfields' and 'apply_setfields' to OFPXMT12_MASK.
+     *
+     *   - 'metadata_match' and 'metadata_write' to UINT64_MAX.
+     *
+     *   - 'instructions' to OFPIT11_ALL.
+     *
+     *   - 'config' to OFPTC11_TABLE_MISS_MASK.
      *
      *   - 'max_entries' to 1,000,000.
      *
@@ -480,6 +490,21 @@ struct ofproto_class {
      *   - 'wildcards' to the set of wildcards actually supported by the table
      *     (if it doesn't support all OpenFlow wildcards).
      *
+     *   - 'instructions' to set the instructions actually supported by
+     *     the table.
+     *
+     *   - 'write_actions' to set the write actions actually supported by
+     *     the table (if it doesn't support all OpenFlow actions).
+     *
+     *   - 'apply_actions' to set the apply actions actually supported by
+     *     the table (if it doesn't support all OpenFlow actions).
+     *
+     *   - 'write_setfields' to set the write setfields actually supported by
+     *     the table.
+     *
+     *   - 'apply_setfields' to set the apply setfields actually supported by
+     *     the table.
+     *
      *   - 'max_entries' to the maximum number of flows actually supported by
      *     the hardware.
      *
@@ -489,10 +514,10 @@ struct ofproto_class {
      *   - 'matched_count' to the number of packets looked up in this flow
      *     table so far that matched one of the flow entries.
      *
-     * Keep in mind that all of the members of struct ofp10_table_stats are in
-     * network byte order.
+     * All of the members of struct ofp12_table_stats are in network byte
+     * order.
      */
-    void (*get_tables)(struct ofproto *ofproto, struct ofp10_table_stats *ots);
+    void (*get_tables)(struct ofproto *ofproto, struct ofp12_table_stats *ots);
 
 /* ## ---------------- ## */
 /* ## ofport Functions ## */

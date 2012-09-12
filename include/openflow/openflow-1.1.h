@@ -281,6 +281,10 @@ enum ofp11_instruction_type {
     OFPIT11_EXPERIMENTER = 0xFFFF  /* Experimenter instruction */
 };
 
+#define OFPIT11_ALL (OFPIT11_GOTO_TABLE | OFPIT11_WRITE_METADATA |      \
+                     OFPIT11_WRITE_ACTIONS | OFPIT11_APPLY_ACTIONS |    \
+                     OFPIT11_CLEAR_ACTIONS)
+
 #define OFP11_INSTRUCTION_ALIGN 8
 
 /* Generic ofp_instruction structure. */
@@ -587,6 +591,26 @@ OFP_ASSERT(sizeof(struct ofp11_flow_stats) == 48);
 
 /* Body for ofp_stats_request of type OFPST_AGGREGATE. */
 /* Identical to ofp11_flow_stats_request */
+
+/* Flow match fields. */
+enum ofp11_flow_match_fields {
+    OFPFMF11_IN_PORT     = 1 << 0,  /* Switch input port. */
+    OFPFMF11_DL_VLAN     = 1 << 1,  /* VLAN id. */
+    OFPFMF11_DL_VLAN_PCP = 1 << 2,  /* VLAN priority. */
+    OFPFMF11_DL_TYPE     = 1 << 3,  /* Ethernet frame type. */
+    OFPFMF11_NW_TOS      = 1 << 4,  /* IP ToS (DSCP field, 6 bits). */
+    OFPFMF11_NW_PROTO    = 1 << 5,  /* IP protocol. */
+    OFPFMF11_TP_SRC      = 1 << 6,  /* TCP/UDP/SCTP source port. */
+    OFPFMF11_TP_DST      = 1 << 7,  /* TCP/UDP/SCTP destination port. */
+    OFPFMF11_MPLS_LABEL  = 1 << 8,  /* MPLS label. */
+    OFPFMF11_MPLS_TC     = 1 << 9,  /* MPLS TC. */
+    OFPFMF11_TYPE        = 1 << 10, /* Match type. */
+    OFPFMF11_DL_SRC      = 1 << 11, /* Ethernet source address. */
+    OFPFMF11_DL_DST      = 1 << 12, /* Ethernet destination address. */
+    OFPFMF11_NW_SRC      = 1 << 13, /* IP source address. */
+    OFPFMF11_NW_DST      = 1 << 14, /* IP destination address. */
+    OFPFMF11_METADATA    = 1 << 15, /* Metadata passed between tables. */
+};
 
 /* Body of reply to OFPST_TABLE request. */
 struct ofp11_table_stats {

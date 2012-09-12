@@ -794,10 +794,24 @@ OFPST_AGGREGATE reply (OF1.2) (xid=0x2): packet_count=121 byte_count=19279 flow_
 ])
 AT_CLEANUP
 
-AT_SETUP([OFPST_TABLE request])
+AT_SETUP([OFPST_TABLE request - OF1.0])
 AT_KEYWORDS([ofp-print OFPT_STATS_REQUEST])
 AT_CHECK([ovs-ofctl ofp-print "0110000c0000000100030000"], [0], [dnl
 OFPST_TABLE request (xid=0x1):
+])
+AT_CLEANUP
+
+AT_SETUP([OFPST_TABLE request - OF1.1])
+AT_KEYWORDS([ofp-print OFPT_STATS_REQUEST])
+AT_CHECK([ovs-ofctl ofp-print "02120010000000020003000000000000"], [0], [dnl
+OFPST_TABLE request (OF1.1) (xid=0x2):
+])
+AT_CLEANUP
+
+AT_SETUP([OFPST_TABLE request - OF1.2])
+AT_KEYWORDS([ofp-print OFPT_STATS_REQUEST])
+AT_CHECK([ovs-ofctl ofp-print "03120010000000020003000000000000"], [0], [dnl
+OFPST_TABLE request (OF1.2) (xid=0x2):
 ])
 AT_CLEANUP
 

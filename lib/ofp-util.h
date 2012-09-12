@@ -450,6 +450,15 @@ enum ofperr ofputil_decode_port_mod(const struct ofp_header *,
 struct ofpbuf *ofputil_encode_port_mod(const struct ofputil_port_mod *,
                                        enum ofputil_protocol);
 
+/* Abstract table stats.
+ *
+ * For now we use ofp12_table_stats as a superset of the other protocol
+ * versions' table stats. */
+
+struct ofpbuf *ofputil_encode_table_stats_reply(
+    const struct ofp12_table_stats[], int n,
+    const struct ofp_header *request);
+
 /* Abstract nx_flow_monitor_request. */
 struct ofputil_flow_monitor_request {
     uint32_t id;

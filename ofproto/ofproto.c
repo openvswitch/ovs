@@ -2242,16 +2242,30 @@ handle_table_stats_request(struct ofconn *ofconn,
                            const struct ofp_header *request)
 {
     struct ofproto *p = ofconn_get_ofproto(ofconn);
-    struct ofp10_table_stats *ots;
+    struct ofp12_table_stats *ots;
     struct ofpbuf *msg;
     size_t i;
 
-    msg = ofpraw_alloc_stats_reply(request, sizeof *ots * p->n_tables);
-    ots = ofpbuf_put_zeros(msg, sizeof *ots * p->n_tables);
+    /* Set up default values.
+     *
+     * ofp12_table_stats is used as a generic structure as
+     * it is able to hold all the fields for ofp10_table_stats
+     * and ofp11_table_stats (and of course itself).
+     */
+    ots = xcalloc(p->n_tables, sizeof *ots);
     for (i = 0; i < p->n_tables; i++) {
         ots[i].table_id = i;
         sprintf(ots[i].name, "table%zu", i);
-        ots[i].wildcards = htonl(OFPFW10_ALL);
+        ots[i].match = htonll(OFPXMT12_MASK);
+        ots[i].wildcards = htonll(OFPXMT12_MASK);
+        ots[i].write_actions = htonl(OFPAT12_OUTPUT);
+        ots[i].apply_actions = htonl(OFPAT12_OUTPUT);
+        ots[i].write_setfields = htonll(OFPXMT12_MASK);
+        ots[i].apply_setfields = htonll(OFPXMT12_MASK);
+        ots[i].metadata_match = htonll(UINT64_MAX);
+        ots[i].metadata_write = htonll(UINT64_MAX);
+        ots[i].instructions = htonl(OFPIT11_ALL);
+        ots[i].config = htonl(OFPTC11_TABLE_MISS_MASK);
         ots[i].max_entries = htonl(1000000); /* An arbitrary big number. */
         ots[i].active_count = htonl(classifier_count(&p->tables[i].cls));
     }
@@ -2270,7 +2284,11 @@ handle_table_stats_request(struct ofconn *ofconn,
         }
     }
 
+    msg = ofputil_encode_table_stats_reply(ots, p->n_tables, request);
     ofconn_send_reply(ofconn, msg);
+
+    free(ots);
+
     return 0;
 }
 

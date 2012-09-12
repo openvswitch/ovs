@@ -2933,6 +2933,143 @@ ofputil_encode_port_mod(const struct ofputil_port_mod *pm,
     return b;
 }
 
+/* Table stats. */
+
+static void
+ofputil_put_ofp10_table_stats(const struct ofp12_table_stats *in,
+                              struct ofpbuf *buf)
+{
+    struct wc_map {
+        enum ofp_flow_wildcards wc10;
+        enum oxm12_ofb_match_fields mf12;
+    };
+
+    static const struct wc_map wc_map[] = {
+        { OFPFW10_IN_PORT,     OFPXMT12_OFB_IN_PORT },
+        { OFPFW10_DL_VLAN,     OFPXMT12_OFB_VLAN_VID },
+        { OFPFW10_DL_SRC,      OFPXMT12_OFB_ETH_SRC },
+        { OFPFW10_DL_DST,      OFPXMT12_OFB_ETH_DST},
+        { OFPFW10_DL_TYPE,     OFPXMT12_OFB_ETH_TYPE },
+        { OFPFW10_NW_PROTO,    OFPXMT12_OFB_IP_PROTO },
+        { OFPFW10_TP_SRC,      OFPXMT12_OFB_TCP_SRC },
+        { OFPFW10_TP_DST,      OFPXMT12_OFB_TCP_DST },
+        { OFPFW10_NW_SRC_MASK, OFPXMT12_OFB_IPV4_SRC },
+        { OFPFW10_NW_DST_MASK, OFPXMT12_OFB_IPV4_DST },
+        { OFPFW10_DL_VLAN_PCP, OFPXMT12_OFB_VLAN_PCP },
+        { OFPFW10_NW_TOS,      OFPXMT12_OFB_IP_DSCP },
+    };
+
+    struct ofp10_table_stats *out;
+    const struct wc_map *p;
+
+    out = ofpbuf_put_uninit(buf, sizeof *out);
+    out->table_id = in->table_id;
+    strcpy(out->name, in->name);
+    out->wildcards = 0;
+    for (p = wc_map; p < &wc_map[ARRAY_SIZE(wc_map)]; p++) {
+        if (in->wildcards & htonll(1ULL << p->mf12)) {
+            out->wildcards |= htonl(p->wc10);
+        }
+    }
+    out->max_entries = in->max_entries;
+    out->active_count = in->active_count;
+    put_32aligned_be64(&out->lookup_count, in->lookup_count);
+    put_32aligned_be64(&out->matched_count, in->matched_count);
+}
+
+static ovs_be32
+oxm12_to_ofp11_flow_match_fields(ovs_be64 oxm12)
+{
+    struct map {
+        enum ofp11_flow_match_fields fmf11;
+        enum oxm12_ofb_match_fields mf12;
+    };
+
+    static const struct map map[] = {
+        { OFPFMF11_IN_PORT,     OFPXMT12_OFB_IN_PORT },
+        { OFPFMF11_DL_VLAN,     OFPXMT12_OFB_VLAN_VID },
+        { OFPFMF11_DL_VLAN_PCP, OFPXMT12_OFB_VLAN_PCP },
+        { OFPFMF11_DL_TYPE,     OFPXMT12_OFB_ETH_TYPE },
+        { OFPFMF11_NW_TOS,      OFPXMT12_OFB_IP_DSCP },
+        { OFPFMF11_NW_PROTO,    OFPXMT12_OFB_IP_PROTO },
+        { OFPFMF11_TP_SRC,      OFPXMT12_OFB_TCP_SRC },
+        { OFPFMF11_TP_DST,      OFPXMT12_OFB_TCP_DST },
+        { OFPFMF11_MPLS_LABEL,  OFPXMT12_OFB_MPLS_LABEL },
+        { OFPFMF11_MPLS_TC,     OFPXMT12_OFB_MPLS_TC },
+        /* I don't know what OFPFMF11_TYPE means. */
+        { OFPFMF11_DL_SRC,      OFPXMT12_OFB_ETH_SRC },
+        { OFPFMF11_DL_DST,      OFPXMT12_OFB_ETH_DST },
+        { OFPFMF11_NW_SRC,      OFPXMT12_OFB_IPV4_SRC },
+        { OFPFMF11_NW_DST,      OFPXMT12_OFB_IPV4_DST },
+        { OFPFMF11_METADATA,    OFPXMT12_OFB_METADATA },
+    };
+
+    const struct map *p;
+    uint32_t fmf11;
+
+    fmf11 = 0;
+    for (p = map; p < &map[ARRAY_SIZE(map)]; p++) {
+        if (oxm12 & htonll(1ULL << p->mf12)) {
+            fmf11 |= p->fmf11;
+        }
+    }
+    return htonl(fmf11);
+}
+
+static void
+ofputil_put_ofp11_table_stats(const struct ofp12_table_stats *in,
+                              struct ofpbuf *buf)
+{
+    struct ofp11_table_stats *out;
+
+    out = ofpbuf_put_uninit(buf, sizeof *out);
+    out->table_id = in->table_id;
+    strcpy(out->name, in->name);
+    out->wildcards = oxm12_to_ofp11_flow_match_fields(in->wildcards);
+    out->match = oxm12_to_ofp11_flow_match_fields(in->match);
+    out->instructions = in->instructions;
+    out->write_actions = in->write_actions;
+    out->apply_actions = in->apply_actions;
+    out->config = in->config;
+    out->max_entries = in->max_entries;
+    out->active_count = in->active_count;
+    out->lookup_count = in->lookup_count;
+    out->matched_count = in->matched_count;
+}
+
+struct ofpbuf *
+ofputil_encode_table_stats_reply(const struct ofp12_table_stats stats[], int n,
+                                 const struct ofp_header *request)
+{
+    struct ofpbuf *reply;
+    int i;
+
+    reply = ofpraw_alloc_stats_reply(request, n * sizeof *stats);
+
+    switch ((enum ofp_version) request->version) {
+    case OFP10_VERSION:
+        for (i = 0; i < n; i++) {
+            ofputil_put_ofp10_table_stats(&stats[i], reply);
+        }
+        break;
+
+    case OFP11_VERSION:
+        for (i = 0; i < n; i++) {
+            ofputil_put_ofp11_table_stats(&stats[i], reply);
+        }
+        break;
+
+    case OFP12_VERSION:
+        ofpbuf_put(reply, stats, n * sizeof *stats);
+        break;
+
+    default:
+        NOT_REACHED();
+    }
+
+    return reply;
+}
+
 /* ofputil_flow_monitor_request */
 
 /* Converts an NXST_FLOW_MONITOR request in 'msg' into an abstract

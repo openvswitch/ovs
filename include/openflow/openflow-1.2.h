@@ -106,7 +106,12 @@ enum oxm12_ofb_match_fields {
     OFPXMT12_OFB_IPV6_ND_TLL,    /* Target link-layer for ND. */
     OFPXMT12_OFB_MPLS_LABEL,     /* MPLS label. */
     OFPXMT12_OFB_MPLS_TC,        /* MPLS TC. */
+
+    /* End Marker */
+    OFPXMT12_OFB_MAX,
 };
+
+#define OFPXMT12_MASK ((1ULL << OFPXMT12_OFB_MAX) - 1)
 
 /* OXM implementation makes use of NXM as they are the same format
  * with different field definitions
