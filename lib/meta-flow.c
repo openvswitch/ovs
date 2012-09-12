@@ -2164,7 +2164,7 @@ mf_write_subfield_flow(const struct mf_subfield *sf,
     union mf_value value;
 
     mf_get_value(field, flow, &value);
-    bitwise_copy(x, sizeof *x, sf->ofs, &value, field->n_bytes,
+    bitwise_copy(x, sizeof *x, 0, &value, field->n_bytes,
                  sf->ofs, sf->n_bits);
     mf_set_flow_value(field, &value, flow);
 }

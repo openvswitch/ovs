@@ -346,7 +346,9 @@ learn_execute(const struct ofpact_learn *learn, const struct flow *flow,
                 load->dst.field = spec->dst.field;
                 load->dst.ofs = spec->dst.ofs + ofs;
                 load->dst.n_bits = chunk;
-                load->subvalue = value;
+                bitwise_copy(&value, sizeof value, ofs,
+                             &load->subvalue, sizeof load->subvalue, 0,
+                             chunk);
             }
             break;
 

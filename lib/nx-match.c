@@ -989,7 +989,6 @@ nxm_parse_reg_load(struct ofpact_reg_load *load, const char *s)
 {
     const char *full_s = s;
     uint64_t value = strtoull(s, (char **) &s, 0);
-    ovs_be64 value_be = htonll(value);
 
     if (strncmp(s, "->", 2)) {
         ovs_fatal(0, "%s: missing `->' following value", full_s);
@@ -1005,10 +1004,8 @@ nxm_parse_reg_load(struct ofpact_reg_load *load, const char *s)
                   full_s, value, load->dst.n_bits);
     }
 
-    memset(&load->subvalue, 0, sizeof &load->subvalue);
-    bitwise_copy(&value_be, sizeof value_be, 0,
-                 &load->subvalue, sizeof load->subvalue, load->dst.ofs,
-                 load->dst.n_bits);
+    load->subvalue.be64[0] = htonll(0);
+    load->subvalue.be64[1] = htonll(value);
 }
 
 /* nxm_format_reg_move(), nxm_format_reg_load(). */
@@ -1025,15 +1022,8 @@ nxm_format_reg_move(const struct ofpact_reg_move *move, struct ds *s)
 void
 nxm_format_reg_load(const struct ofpact_reg_load *load, struct ds *s)
 {
-    union mf_subvalue right_justified;
-
-    memset(&right_justified, 0, sizeof right_justified);
-    bitwise_copy(&load->subvalue, sizeof load->subvalue, load->dst.ofs,
-                 &right_justified, sizeof right_justified, 0,
-                 load->dst.n_bits);
-
     ds_put_cstr(s, "load:");
-    mf_format_subvalue(&right_justified, s);
+    mf_format_subvalue(&load->subvalue, s);
     ds_put_cstr(s, "->");
     mf_format_subfield(&load->dst, s);
 }
@@ -1065,10 +1055,7 @@ nxm_reg_load_from_openflow(const struct nx_action_reg_load *narl,
     load->dst.field = mf_from_nxm_header(ntohl(narl->dst));
     load->dst.ofs = nxm_decode_ofs(narl->ofs_nbits);
     load->dst.n_bits = nxm_decode_n_bits(narl->ofs_nbits);
-    memset(&load->subvalue, 0, sizeof &load->subvalue);
-    bitwise_copy(&narl->value, sizeof narl->value, 0,
-                 &load->subvalue, sizeof load->subvalue, load->dst.ofs,
-                 load->dst.n_bits);
+    load->subvalue.be64[1] = narl->value;
 
     /* Reject 'narl' if a bit numbered 'n_bits' or higher is set to 1 in
      * narl->value. */
@@ -1122,9 +1109,7 @@ nxm_reg_load_to_nxast(const struct ofpact_reg_load *load,
     narl = ofputil_put_NXAST_REG_LOAD(openflow);
     narl->ofs_nbits = nxm_encode_ofs_nbits(load->dst.ofs, load->dst.n_bits);
     narl->dst = htonl(load->dst.field->nxm_header);
-    narl->value = htonll(0);
-    bitwise_copy(&load->subvalue, sizeof load->subvalue, load->dst.ofs,
-                 &narl->value, sizeof narl->value, 0, load->dst.n_bits);
+    narl->value = load->subvalue.be64[1];
 }
 
 /* nxm_execute_reg_move(), nxm_execute_reg_load(). */

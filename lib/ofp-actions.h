@@ -275,7 +275,7 @@ struct ofpact_reg_move {
 struct ofpact_reg_load {
     struct ofpact ofpact;
     struct mf_subfield dst;
-    union mf_subvalue subvalue;
+    union mf_subvalue subvalue; /* Least-significant bits are used. */
 };
 
 /* OFPACT_SET_TUNNEL.
