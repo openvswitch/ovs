@@ -73,7 +73,7 @@ class _SelectSelect(object):
         return events_dict.items()
 
 
-_SelectPoll = _SelectSelect
+SelectPoll = _SelectSelect
 # If eventlet/gevent isn't used, we can use select.poll by replacing
 # _SelectPoll with select.poll class
 # _SelectPoll = select.poll
@@ -181,5 +181,5 @@ class Poller(object):
                     vlog.dbg("%s on fd %d" % (s, fd))
 
     def __reset(self):
-        self.poll = _SelectPoll()
+        self.poll = SelectPoll()
         self.timeout = -1

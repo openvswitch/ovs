@@ -19,6 +19,7 @@ import socket
 import sys
 
 import ovs.fatal_signal
+import ovs.poller
 import ovs.vlog
 
 vlog = ovs.vlog.Vlog("socket_util")
@@ -75,7 +76,7 @@ def make_unix_socket(style, nonblock, bind_path, connect_path):
 
 
 def check_connection_completion(sock):
-    p = select.poll()
+    p = ovs.poller.SelectPoll()
     p.register(sock, select.POLLOUT)
     if len(p.poll(0)) == 1:
         return get_socket_error(sock)
