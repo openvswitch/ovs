@@ -2153,6 +2153,22 @@ mf_format(const struct mf_field *mf,
     }
 }
 
+/* Makes subfield 'sf' within 'flow' exactly match the 'sf->n_bits'
+ * least-significant bits in 'x'.
+ */
+void
+mf_write_subfield_flow(const struct mf_subfield *sf,
+                       const union mf_subvalue *x, struct flow *flow)
+{
+    const struct mf_field *field = sf->field;
+    union mf_value value;
+
+    mf_get_value(field, flow, &value);
+    bitwise_copy(x, sizeof *x, sf->ofs, &value, field->n_bytes,
+                 sf->ofs, sf->n_bits);
+    mf_set_flow_value(field, &value, flow);
+}
+
 /* Makes subfield 'sf' within 'match' exactly match the 'sf->n_bits'
  * least-significant bits in 'x'.
  */
@@ -2334,4 +2350,21 @@ mf_parse_subfield(struct mf_subfield *sf, const char *s)
         ovs_fatal(0, "%s", msg);
     }
     return s;
+}
+
+void
+mf_format_subvalue(const union mf_subvalue *subvalue, struct ds *s)
+{
+    int i;
+
+    for (i = 0; i < ARRAY_SIZE(subvalue->u8); i++) {
+        if (subvalue->u8[i]) {
+            ds_put_format(s, "0x%"PRIx8, subvalue->u8[i]);
+            for (i++; i < ARRAY_SIZE(subvalue->u8); i++) {
+                ds_put_format(s, "%02"PRIx8, subvalue->u8[i]);
+            }
+            return;
+        }
+    }
+    ds_put_char(s, '0');
 }

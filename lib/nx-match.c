@@ -988,8 +988,9 @@ void
 nxm_parse_reg_load(struct ofpact_reg_load *load, const char *s)
 {
     const char *full_s = s;
+    uint64_t value = strtoull(s, (char **) &s, 0);
+    ovs_be64 value_be = htonll(value);
 
-    load->value = strtoull(s, (char **) &s, 0);
     if (strncmp(s, "->", 2)) {
         ovs_fatal(0, "%s: missing `->' following value", full_s);
     }
@@ -999,10 +1000,15 @@ nxm_parse_reg_load(struct ofpact_reg_load *load, const char *s)
         ovs_fatal(0, "%s: trailing garbage following destination", full_s);
     }
 
-    if (load->dst.n_bits < 64 && (load->value >> load->dst.n_bits) != 0) {
+    if (load->dst.n_bits < 64 && (value >> load->dst.n_bits) != 0) {
         ovs_fatal(0, "%s: value %"PRIu64" does not fit into %d bits",
-                  full_s, load->value, load->dst.n_bits);
+                  full_s, value, load->dst.n_bits);
     }
+
+    memset(&load->subvalue, 0, sizeof &load->subvalue);
+    bitwise_copy(&value_be, sizeof value_be, 0,
+                 &load->subvalue, sizeof load->subvalue, load->dst.ofs,
+                 load->dst.n_bits);
 }
 
 /* nxm_format_reg_move(), nxm_format_reg_load(). */
@@ -1019,7 +1025,16 @@ nxm_format_reg_move(const struct ofpact_reg_move *move, struct ds *s)
 void
 nxm_format_reg_load(const struct ofpact_reg_load *load, struct ds *s)
 {
-    ds_put_format(s, "load:%#"PRIx64"->", load->value);
+    union mf_subvalue right_justified;
+
+    memset(&right_justified, 0, sizeof right_justified);
+    bitwise_copy(&load->subvalue, sizeof load->subvalue, load->dst.ofs,
+                 &right_justified, sizeof right_justified, 0,
+                 load->dst.n_bits);
+
+    ds_put_cstr(s, "load:");
+    mf_format_subvalue(&right_justified, s);
+    ds_put_cstr(s, "->");
     mf_format_subfield(&load->dst, s);
 }
 
@@ -1050,11 +1065,15 @@ nxm_reg_load_from_openflow(const struct nx_action_reg_load *narl,
     load->dst.field = mf_from_nxm_header(ntohl(narl->dst));
     load->dst.ofs = nxm_decode_ofs(narl->ofs_nbits);
     load->dst.n_bits = nxm_decode_n_bits(narl->ofs_nbits);
-    load->value = ntohll(narl->value);
+    memset(&load->subvalue, 0, sizeof &load->subvalue);
+    bitwise_copy(&narl->value, sizeof narl->value, 0,
+                 &load->subvalue, sizeof load->subvalue, load->dst.ofs,
+                 load->dst.n_bits);
 
     /* Reject 'narl' if a bit numbered 'n_bits' or higher is set to 1 in
      * narl->value. */
-    if (load->dst.n_bits < 64 && load->value >> load->dst.n_bits) {
+    if (load->dst.n_bits < 64 &&
+        ntohll(narl->value) >> load->dst.n_bits) {
         return OFPERR_OFPBAC_BAD_ARGUMENT;
     }
 
@@ -1103,7 +1122,9 @@ nxm_reg_load_to_nxast(const struct ofpact_reg_load *load,
     narl = ofputil_put_NXAST_REG_LOAD(openflow);
     narl->ofs_nbits = nxm_encode_ofs_nbits(load->dst.ofs, load->dst.n_bits);
     narl->dst = htonl(load->dst.field->nxm_header);
-    narl->value = htonll(load->value);
+    narl->value = htonll(0);
+    bitwise_copy(&load->subvalue, sizeof load->subvalue, load->dst.ofs,
+                 &narl->value, sizeof narl->value, 0, load->dst.n_bits);
 }
 
 /* nxm_execute_reg_move(), nxm_execute_reg_load(). */
@@ -1126,20 +1147,18 @@ nxm_execute_reg_move(const struct ofpact_reg_move *move,
 void
 nxm_execute_reg_load(const struct ofpact_reg_load *load, struct flow *flow)
 {
-    nxm_reg_load(&load->dst, load->value, flow);
+    mf_write_subfield_flow(&load->dst, &load->subvalue, flow);
 }
 
 void
 nxm_reg_load(const struct mf_subfield *dst, uint64_t src_data,
              struct flow *flow)
 {
-    union mf_value dst_value;
-    union mf_value src_value;
+    union mf_subvalue src_subvalue;
+    ovs_be64 src_data_be = htonll(src_data);
 
-    mf_get_value(dst->field, flow, &dst_value);
-    src_value.be64 = htonll(src_data);
-    bitwise_copy(&src_value, sizeof src_value.be64, 0,
-                 &dst_value, dst->field->n_bytes, dst->ofs,
-                 dst->n_bits);
-    mf_set_flow_value(dst->field, &dst_value, flow);
+    bitwise_copy(&src_data_be, sizeof src_data_be, 0,
+                 &src_subvalue, sizeof src_subvalue, 0,
+                 sizeof src_data_be * 8);
+    mf_write_subfield_flow(dst, &src_subvalue, flow);
 }

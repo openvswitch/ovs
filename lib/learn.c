@@ -339,7 +339,6 @@ learn_execute(const struct ofpact_learn *learn, const struct flow *flow,
         case NX_LEARN_DST_LOAD:
             for (ofs = 0; ofs < spec->n_bits; ofs += chunk) {
                 struct ofpact_reg_load *load;
-                ovs_be64 value_be;
 
                 chunk = MIN(spec->n_bits - ofs, 64);
 
@@ -347,12 +346,7 @@ learn_execute(const struct ofpact_learn *learn, const struct flow *flow,
                 load->dst.field = spec->dst.field;
                 load->dst.ofs = spec->dst.ofs + ofs;
                 load->dst.n_bits = chunk;
-
-                memset(&value_be, 0, sizeof value_be);
-                bitwise_copy(&value, sizeof value, ofs,
-                             &value_be, sizeof value_be, 0,
-                             chunk);
-                load->value = ntohll(value_be);
+                load->subvalue = value;
             }
             break;
 
@@ -595,23 +589,6 @@ learn_parse(char *arg, const struct flow *flow, struct ofpbuf *ofpacts)
     free(orig);
 }
 
-static void
-format_subvalue(const union mf_subvalue *subvalue, struct ds *s)
-{
-    int i;
-
-    for (i = 0; i < ARRAY_SIZE(subvalue->u8); i++) {
-        if (subvalue->u8[i]) {
-            ds_put_format(s, "0x%"PRIx8, subvalue->u8[i]);
-            for (i++; i < ARRAY_SIZE(subvalue->u8); i++) {
-                ds_put_format(s, "%02"PRIx8, subvalue->u8[i]);
-            }
-            return;
-        }
-    }
-    ds_put_char(s, '0');
-}
-
 /* Appends a description of 'learn' to 's', in the format that ovs-ofctl(8)
  * describes. */
 void
@@ -663,7 +640,7 @@ learn_format(const struct ofpact_learn *learn, struct ds *s)
             } else {
                 mf_format_subfield(&spec->dst, s);
                 ds_put_char(s, '=');
-                format_subvalue(&spec->src_imm, s);
+                mf_format_subvalue(&spec->src_imm, s);
             }
             break;
 
@@ -678,7 +655,7 @@ learn_format(const struct ofpact_learn *learn, struct ds *s)
 
         case NX_LEARN_SRC_IMMEDIATE | NX_LEARN_DST_LOAD:
             ds_put_format(s, "load:");
-            format_subvalue(&spec->src_imm, s);
+            mf_format_subvalue(&spec->src_imm, s);
             ds_put_cstr(s, "->");
             mf_format_subfield(&spec->dst, s);
             break;
