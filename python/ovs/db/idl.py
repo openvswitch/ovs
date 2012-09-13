@@ -1198,13 +1198,22 @@ class SchemaHelper(object):
     The location on disk of the schema used may be found in the
     'schema_location' variable."""
 
-    def __init__(self, location=None):
-        """Creates a new Schema object."""
+    def __init__(self, location=None, schema_json=None):
+        """Creates a new Schema object.
 
-        if location is None:
-            location = "%s/vswitch.ovsschema" % ovs.dirs.PKGDATADIR
+        'location' file path to ovs schema. None means default location
+        'schema_json' schema in json preresentation in memory
+        """
 
-        self.schema_location = location
+        if location and schema_json:
+            raise ValueError("both location and schema_json can't be "
+                             "specified. it's ambiguous.")
+        if schema_json is None:
+            if location is None:
+                location = "%s/vswitch.ovsschema" % ovs.dirs.PKGDATADIR
+            schema_json = ovs.json.from_file(location)
+
+        self.schema_json = schema_json
         self._tables = {}
         self._all = False
 
@@ -1242,8 +1251,8 @@ class SchemaHelper(object):
         object based on columns registered using the register_columns()
         function."""
 
-        schema = ovs.db.schema.DbSchema.from_json(
-            ovs.json.from_file(self.schema_location))
+        schema = ovs.db.schema.DbSchema.from_json(self.schema_json)
+        self.schema_json = None
 
         if not self._all:
             schema_tables = {}
