@@ -758,6 +758,8 @@ class Transaction(object):
                 row = self._txn_rows.get(uuid, None)
                 if row and row._data is None:
                     return ["named-uuid", _uuid_name_from_uuid(uuid)]
+            else:
+                return [self._substitute_uuids(elem) for elem in json]
         return json
 
     def __disassemble(self):

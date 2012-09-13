@@ -180,7 +180,7 @@ def print_idl(idl, step):
     for row in l2.itervalues():
         s = ["%03d: i=%s l1=" % (step, row.i)]
         if row.l1:
-            s.append(str(row.l1.i))
+            s.append(str(row.l1[0].i))
         s.append(" uuid=%s" % row.uuid)
         print(''.join(s))
         n += 1
@@ -312,6 +312,15 @@ def idl_set(idl, commands, step):
             sys.stdout.flush()
             txn.abort()
             return
+        elif name == "linktest":
+            l1_0 = txn.insert(idl.tables["link1"])
+            l1_0.i = 1
+            l1_0.k = [l1_0]
+            l1_0.ka = [l1_0]
+            l1_1 = txn.insert(idl.tables["link1"])
+            l1_1.i = 2
+            l1_1.k = [l1_0]
+            l1_1.ka = [l1_0, l1_1]
         else:
             sys.stderr.write("unknown command %s\n" % name)
             sys.exit(1)
