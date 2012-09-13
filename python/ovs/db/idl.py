@@ -1224,6 +1224,15 @@ class SchemaHelper(object):
         columns = set(columns) | self._tables.get(table, set())
         self._tables[table] = columns
 
+    def register_table(self, table):
+        """Registers interest in the given all columns of 'table'. Future calls
+        to get_idl_schema() will include all columns of 'table'.
+
+        'table' must be a string
+        """
+        assert type(table) is str
+        self._tables[table] = set()  # empty set means all columns in the table
+
     def register_all(self):
         """Registers interest in every column of every table."""
         self._all = True
@@ -1248,6 +1257,10 @@ class SchemaHelper(object):
     def _keep_table_columns(self, schema, table_name, columns):
         assert table_name in schema.tables
         table = schema.tables[table_name]
+
+        if not columns:
+            # empty set means all columns in the table
+            return table
 
         new_columns = {}
         for column_name in columns:
