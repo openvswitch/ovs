@@ -1122,7 +1122,6 @@ For best performance, segregate learned flows into a table (using
 possibly for a lowest-priority ``catch-all'' flow, that is, a flow
 with no match criteria.  (This is why the default \fBtable\fR is 1, to
 keep the learned flows separate from the primary flow table 0.)
-.RE
 .
 .IP "\fBfin_timeout(\fIargument\fR[\fB,\fIargument\fR]\fB)"
 This action changes the idle timeout or hard timeout, or both, of this
@@ -1150,6 +1149,7 @@ This action causes Open vSwitch to immediately halt execution of further
 actions.  Those actions which have already been executed are unaffected.  Any
 further actions, including those which may be in other tables, or different
 levels of the \fBresubmit\fR call stack, are ignored.
+.RE
 .
 .PP
 An opaque identifier called a cookie can be used as a handle to identify
