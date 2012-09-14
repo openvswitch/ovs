@@ -1019,13 +1019,38 @@ nxm_format_reg_move(const struct ofpact_reg_move *move, struct ds *s)
     mf_format_subfield(&move->dst, s);
 }
 
-void
-nxm_format_reg_load(const struct ofpact_reg_load *load, struct ds *s)
+static void
+set_field_format(const struct ofpact_reg_load *load, struct ds *s)
+{
+    const struct mf_field *mf = load->dst.field;
+    union mf_value value;
+
+    assert(load->ofpact.compat == OFPUTIL_OFPAT12_SET_FIELD);
+    ds_put_format(s, "set_field:");
+    memset(&value, 0, sizeof value);
+    bitwise_copy(&load->subvalue, sizeof load->subvalue, 0,
+                 &value, mf->n_bytes, 0, load->dst.n_bits);
+    mf_format(mf, &value, NULL, s);
+    ds_put_format(s, "->%s", mf->name);
+}
+
+static void
+load_format(const struct ofpact_reg_load *load, struct ds *s)
 {
     ds_put_cstr(s, "load:");
     mf_format_subvalue(&load->subvalue, s);
     ds_put_cstr(s, "->");
     mf_format_subfield(&load->dst, s);
+}
+
+void
+nxm_format_reg_load(const struct ofpact_reg_load *load, struct ds *s)
+{
+    if (load->ofpact.compat == OFPUTIL_OFPAT12_SET_FIELD) {
+        set_field_format(load, s);
+    } else {
+        load_format(load, s);
+    }
 }
 
 enum ofperr
@@ -1066,6 +1091,43 @@ nxm_reg_load_from_openflow(const struct nx_action_reg_load *narl,
 
     return nxm_reg_load_check(load, NULL);
 }
+
+enum ofperr
+nxm_reg_load_from_openflow12_set_field(
+    const struct ofp12_action_set_field * oasf, struct ofpbuf *ofpacts)
+{
+    uint16_t oasf_len = ntohs(oasf->len);
+    uint32_t oxm_header = ntohl(oasf->dst);
+    uint8_t oxm_length = NXM_LENGTH(oxm_header);
+    struct ofpact_reg_load *load;
+    const struct mf_field *mf;
+
+    /* ofp12_action_set_field is padded to 64 bits by zero */
+    if (oasf_len != ROUND_UP(sizeof(*oasf) + oxm_length, 8)) {
+        return OFPERR_OFPBAC_BAD_ARGUMENT;
+    }
+    if (!is_all_zeros((const uint8_t *)(oasf) + sizeof *oasf + oxm_length,
+                      oasf_len - oxm_length - sizeof *oasf)) {
+        return OFPERR_OFPBAC_BAD_ARGUMENT;
+    }
+
+    if (NXM_HASMASK(oxm_header)) {
+        return OFPERR_OFPBAC_BAD_ARGUMENT;
+    }
+    mf = mf_from_nxm_header(oxm_header);
+    if (!mf) {
+        return OFPERR_OFPBAC_BAD_ARGUMENT;
+    }
+    load = ofpact_put_REG_LOAD(ofpacts);
+    load->ofpact.compat = OFPUTIL_OFPAT12_SET_FIELD;
+    load->dst.field = mf;
+    load->dst.ofs = 0;
+    load->dst.n_bits = mf->n_bits;
+    bitwise_copy(oasf + 1, mf->n_bytes, load->dst.ofs,
+                 &load->subvalue, sizeof load->subvalue, 0, mf->n_bits);
+
+    return nxm_reg_load_check(load, NULL);
+}
 
 enum ofperr
 nxm_reg_move_check(const struct ofpact_reg_move *move, const struct flow *flow)
@@ -1100,9 +1162,8 @@ nxm_reg_move_to_nxast(const struct ofpact_reg_move *move,
     narm->dst = htonl(move->dst.field->nxm_header);
 }
 
-void
-nxm_reg_load_to_nxast(const struct ofpact_reg_load *load,
-                      struct ofpbuf *openflow)
+static void
+reg_load_to_nxast(const struct ofpact_reg_load *load, struct ofpbuf *openflow)
 {
     struct nx_action_reg_load *narl;
 
@@ -1110,6 +1171,73 @@ nxm_reg_load_to_nxast(const struct ofpact_reg_load *load,
     narl->ofs_nbits = nxm_encode_ofs_nbits(load->dst.ofs, load->dst.n_bits);
     narl->dst = htonl(load->dst.field->nxm_header);
     narl->value = load->subvalue.be64[1];
+}
+
+static void
+set_field_to_ofast(const struct ofpact_reg_load *load,
+                      struct ofpbuf *openflow)
+{
+    const struct mf_field *mf = load->dst.field;
+    struct ofp12_action_set_field *oasf;
+    uint16_t padded_value_len;
+
+    oasf = ofputil_put_OFPAT12_SET_FIELD(openflow);
+    oasf->dst = htonl(mf->oxm_header);
+
+    /* Set field is the only action of variable length (so far),
+     * so handling the variable length portion is open-coded here */
+    padded_value_len = ROUND_UP(mf->n_bytes, 8);
+    ofpbuf_put_uninit(openflow, padded_value_len);
+    oasf->len = htons(ntohs(oasf->len) + padded_value_len);
+    memset(oasf + 1, 0, padded_value_len);
+
+    bitwise_copy(&load->subvalue, sizeof load->subvalue, load->dst.ofs,
+                 oasf + 1, mf->n_bytes, load->dst.ofs, load->dst.n_bits);
+    return;
+}
+
+void
+nxm_reg_load_to_nxast(const struct ofpact_reg_load *load,
+                      struct ofpbuf *openflow)
+{
+
+    if (load->ofpact.compat == OFPUTIL_OFPAT12_SET_FIELD) {
+        struct ofp_header *oh = (struct ofp_header *)openflow->l2;
+
+        switch(oh->version) {
+        case OFP12_VERSION:
+            set_field_to_ofast(load, openflow);
+            break;
+
+        case OFP11_VERSION:
+        case OFP10_VERSION:
+            if (load->dst.n_bits < 64) {
+                reg_load_to_nxast(load, openflow);
+            } else {
+                /* Split into 64bit chunks */
+                int chunk, ofs;
+                for (ofs = 0; ofs < load->dst.n_bits; ofs += chunk) {
+                    struct ofpact_reg_load subload = *load;
+
+                    chunk = MIN(load->dst.n_bits - ofs, 64);
+
+                    subload.dst.field =  load->dst.field;
+                    subload.dst.ofs = load->dst.ofs + ofs;
+                    subload.dst.n_bits = chunk;
+                    bitwise_copy(&load->subvalue, sizeof load->subvalue, ofs,
+                                 &subload.subvalue, sizeof subload.subvalue, 0,
+                                 chunk);
+                    reg_load_to_nxast(&subload, openflow);
+                }
+            }
+            break;
+
+        default:
+            NOT_REACHED();
+        }
+    } else {
+        reg_load_to_nxast(load, openflow);
+    }
 }
 
 /* nxm_execute_reg_move(), nxm_execute_reg_load(). */
