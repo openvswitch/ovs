@@ -449,14 +449,16 @@ class Session(object):
                 self.pstream = None
 
         if self.rpc:
-            received_bytes = self.rpc.get_received_bytes()
+            backlog = self.rpc.get_backlog()
             self.rpc.run()
-            if received_bytes != self.rpc.get_received_bytes():
-                # Data was successfully received.
+            if self.rpc.get_backlog() < backlog:
+                # Data previously caught in a queue was successfully sent (or
+                # there's an error, which we'll catch below).
                 #
-                # Previously we only counted receiving a full message as
-                # activity, but with large messages or a slow connection that
-                # policy could time out the session mid-message.
+                # We don't count data that is successfully sent immediately as
+                # activity, because there's a lot of queuing downstream from
+                # us, which means that we can push a lot of data into a
+                # connection that has stalled and won't ever recover.
                 self.reconnect.activity(ovs.timeval.msec())
 
             error = self.rpc.get_status()
@@ -516,16 +518,14 @@ class Session(object):
 
     def recv(self):
         if self.rpc is not None:
-            backlog = self.rpc.get_backlog()
+            received_bytes = self.rpc.get_received_bytes()
             error, msg = self.rpc.recv()
-            if self.rpc.get_backlog() < backlog:
-                # Data previously caught in a queue was successfully sent (or
-                # there's an error, which we'll catch below).
+            if received_bytes != self.rpc.get_received_bytes():
+                # Data was successfully received.
                 #
-                # We don't count data that is successfully sent immediately as
-                # activity, because there's a lot of queuing downstream from
-                # us, which means that we can push a lot of data into a
-                # connection that has stalled and won't ever recover.
+                # Previously we only counted receiving a full message as
+                # activity, but with large messages or a slow connection that
+                # policy could time out the session mid-message.
                 self.reconnect.activity(ovs.timeval.msec())
 
             if not error:
