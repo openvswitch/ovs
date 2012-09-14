@@ -37,8 +37,12 @@ match_init(struct match *match,
 void
 match_init_exact(struct match *match, const struct flow *flow)
 {
+    ovs_be64 tun_id = flow->tunnel.tun_id;
+
     match->flow = *flow;
     match->flow.skb_priority = 0;
+    memset(&match->flow.tunnel, 0, sizeof match->flow.tunnel);
+    match->flow.tunnel.tun_id = tun_id;
     flow_wildcards_init_exact(&match->wc);
 }
 
@@ -102,8 +106,8 @@ match_set_tun_id(struct match *match, ovs_be64 tun_id)
 void
 match_set_tun_id_masked(struct match *match, ovs_be64 tun_id, ovs_be64 mask)
 {
-    match->wc.masks.tun_id = mask;
-    match->flow.tun_id = tun_id & mask;
+    match->wc.masks.tunnel.tun_id = mask;
+    match->flow.tunnel.tun_id = tun_id & mask;
 }
 
 void
@@ -626,15 +630,16 @@ match_format(const struct match *match, struct ds *s, unsigned int priority)
             break;
         }
     }
-    switch (wc->masks.tun_id) {
+    switch (wc->masks.tunnel.tun_id) {
     case 0:
         break;
     case CONSTANT_HTONLL(UINT64_MAX):
-        ds_put_format(s, "tun_id=%#"PRIx64",", ntohll(f->tun_id));
+        ds_put_format(s, "tun_id=%#"PRIx64",", ntohll(f->tunnel.tun_id));
         break;
     default:
         ds_put_format(s, "tun_id=%#"PRIx64"/%#"PRIx64",",
-                      ntohll(f->tun_id), ntohll(wc->masks.tun_id));
+                      ntohll(f->tunnel.tun_id),
+                      ntohll(wc->masks.tunnel.tun_id));
         break;
     }
     switch (wc->masks.metadata) {

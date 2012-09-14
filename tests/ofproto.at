@@ -631,21 +631,21 @@ check_async () {
     ovs-ofctl -v packet-out br0 none controller '0001020304050010203040501234'
     if test X"$1" = X"OFPR_ACTION"; then shift;
         echo >>expout "OFPT_PACKET_IN: total_len=14 in_port=NONE (via action) data_len=14 (unbuffered)
-priority:0,tunnel:0,metadata:0,in_port:0000,tci(0) mac(00:10:20:30:40:50->00:01:02:03:04:05) type:1234"
+priority:0,metadata:0,in_port:0000,tci(0) mac(00:10:20:30:40:50->00:01:02:03:04:05) type:1234"
     fi
 
     # OFPT_PACKET_IN, OFPR_NO_MATCH (controller_id=123)
     ovs-ofctl -v packet-out br0 none 'controller(reason=no_match,id=123)' '0001020304050010203040501234'
     if test X"$1" = X"OFPR_NO_MATCH"; then shift;
         echo >>expout "OFPT_PACKET_IN: total_len=14 in_port=NONE (via no_match) data_len=14 (unbuffered)
-priority:0,tunnel:0,metadata:0,in_port:0000,tci(0) mac(00:10:20:30:40:50->00:01:02:03:04:05) type:1234"
+priority:0,metadata:0,in_port:0000,tci(0) mac(00:10:20:30:40:50->00:01:02:03:04:05) type:1234"
     fi
 
     # OFPT_PACKET_IN, OFPR_INVALID_TTL (controller_id=0)
     ovs-ofctl packet-out br0 none dec_ttl '002583dfb4000026b98cb0f908004500003fb7e200000011339bac11370dac100002d7730035002b8f6d86fb0100000100000000000006626c702d7873066e696369726103636f6d00000f00'
     if test X"$1" = X"OFPR_INVALID_TTL"; then shift;
         echo >>expout "OFPT_PACKET_IN: total_len=76 in_port=NONE (via invalid_ttl) data_len=76 (unbuffered)
-priority:0,tunnel:0,metadata:0,in_port:0000,tci(0) mac(00:26:b9:8c:b0:f9->00:25:83:df:b4:00) type:0800 proto:17 tos:0 ttl:0 ip(172.17.55.13->172.16.0.2) port(55155->53) udp_csum:8f6d"
+priority:0,metadata:0,in_port:0000,tci(0) mac(00:26:b9:8c:b0:f9->00:25:83:df:b4:00) type:0800 proto:17 tos:0 ttl:0 ip(172.17.55.13->172.16.0.2) port(55155->53) udp_csum:8f6d"
     fi
 
     # OFPT_PORT_STATUS, OFPPR_ADD
@@ -743,9 +743,9 @@ ovs-appctl -t ovs-ofctl exit
 
 AT_CHECK([sed 's/ (xid=0x[[0-9a-fA-F]]*)//' monitor.log], [0], [dnl
 OFPT_PACKET_IN: total_len=14 in_port=NONE (via action) data_len=14 (unbuffered)
-priority:0,tunnel:0,metadata:0,in_port:0000,tci(0) mac(00:10:20:30:40:50->00:01:02:03:04:05) type:1234
+priority:0,metadata:0,in_port:0000,tci(0) mac(00:10:20:30:40:50->00:01:02:03:04:05) type:1234
 OFPT_PACKET_IN: total_len=14 in_port=CONTROLLER (via action) data_len=14 (unbuffered)
-priority:0,tunnel:0,metadata:0,in_port:0000,tci(0) mac(00:10:20:30:40:50->00:01:02:03:04:05) type:5678
+priority:0,metadata:0,in_port:0000,tci(0) mac(00:10:20:30:40:50->00:01:02:03:04:05) type:5678
 OFPT_BARRIER_REPLY:
 ])
 
@@ -773,7 +773,7 @@ ovs-appctl -t ovs-ofctl exit
 
 AT_CHECK([sed 's/ (xid=0x[[0-9a-fA-F]]*)//' monitor.log], [0], [dnl
 NXT_PACKET_IN: total_len=14 in_port=NONE metadata=0xfafafafa5a5a5a5a (via action) data_len=14 (unbuffered)
-priority:0,tunnel:0,metadata:0,in_port:0000,tci(0) mac(00:10:20:30:40:50->00:01:02:03:04:05) type:1234
+priority:0,metadata:0,in_port:0000,tci(0) mac(00:10:20:30:40:50->00:01:02:03:04:05) type:1234
 OFPT_BARRIER_REPLY:
 ])
 

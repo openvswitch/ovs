@@ -139,7 +139,7 @@ ofputil_match_from_ofp10_match(const struct ofp10_match *ofmatch,
     uint32_t ofpfw = ntohl(ofmatch->wildcards) & OFPFW10_ALL;
 
     /* Initialize match->wc. */
-    memset(match->flow.zeros, 0, sizeof match->flow.zeros);
+    memset(&match->flow, 0, sizeof match->flow);
     ofputil_wildcard_from_ofpfw10(ofpfw, &match->wc);
 
     /* Initialize most of match->flow. */
@@ -934,7 +934,7 @@ ofputil_usable_protocols(const struct match *match)
     }
 
     /* Only NXM supports matching tun_id. */
-    if (wc->masks.tun_id != htonll(0)) {
+    if (wc->masks.tunnel.tun_id != htonll(0)) {
         return OFPUTIL_P_NXM_ANY;
     }
 
@@ -2055,7 +2055,7 @@ ofputil_decode_packet_in_finish(struct ofputil_packet_in *pin,
     pin->packet_len = b->size;
 
     pin->fmd.in_port = match->flow.in_port;
-    pin->fmd.tun_id = match->flow.tun_id;
+    pin->fmd.tun_id = match->flow.tunnel.tun_id;
     pin->fmd.metadata = match->flow.metadata;
     memcpy(pin->fmd.regs, match->flow.regs, sizeof pin->fmd.regs);
 }

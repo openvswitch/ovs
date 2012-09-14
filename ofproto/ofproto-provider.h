@@ -893,7 +893,7 @@ struct ofproto_class {
      *
      * 'flow' reflects the flow information for 'packet'.  All of the
      * information in 'flow' is extracted from 'packet', except for
-     * flow->tun_id and flow->in_port, which are assigned the correct values
+     * flow->tunnel and flow->in_port, which are assigned the correct values
      * for the incoming packet.  The register values are zeroed.  'packet''s
      * header pointers (e.g. packet->l3) are appropriately initialized.
      *
@@ -968,7 +968,7 @@ struct ofproto_class {
      *
      * 'flow' reflects the flow information for 'packet'.  All of the
      * information in 'flow' is extracted from 'packet', except for
-     * flow->in_port (see below).  flow->tun_id and its register values are
+     * flow->in_port (see below).  flow->tunnel and its register values are
      * zeroed.
      *
      * flow->in_port comes from the OpenFlow OFPT_PACKET_OUT message.  The

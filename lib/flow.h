@@ -53,8 +53,20 @@ BUILD_ASSERT_DECL(FLOW_N_REGS <= NXM_NX_MAX_REGS);
 BUILD_ASSERT_DECL(FLOW_NW_FRAG_ANY == NX_IP_FRAG_ANY);
 BUILD_ASSERT_DECL(FLOW_NW_FRAG_LATER == NX_IP_FRAG_LATER);
 
+#define FLOW_TNL_F_DONT_FRAGMENT (1 << 0)
+#define FLOW_TNL_F_CSUM (1 << 1)
+#define FLOW_TNL_F_KEY (1 << 2)
+struct flow_tnl {
+    ovs_be64 tun_id;
+    ovs_be32 ip_src;
+    ovs_be32 ip_dst;
+    uint16_t flags;
+    uint8_t ip_tos;
+    uint8_t ip_ttl;
+};
+
 struct flow {
-    ovs_be64 tun_id;            /* Encapsulating tunnel ID. */
+    struct flow_tnl tunnel;     /* Encapsulating tunnel parameters. */
     ovs_be64 metadata;          /* OpenFlow Metadata. */
     struct in6_addr ipv6_src;   /* IPv6 source address. */
     struct in6_addr ipv6_dst;   /* IPv6 destination address. */
@@ -79,12 +91,12 @@ struct flow {
     uint8_t nw_frag;            /* FLOW_FRAG_* flags. */
     uint8_t zeros[2];           /* Must be zero. */
 };
-BUILD_ASSERT_DECL(sizeof(struct flow) % 8 == 0);
+BUILD_ASSERT_DECL(sizeof(struct flow) % 4 == 0);
 
 #define FLOW_U32S (sizeof(struct flow) / 4)
 
 /* Remember to update FLOW_WC_SEQ when changing 'struct flow'. */
-BUILD_ASSERT_DECL(sizeof(struct flow) == 152 && FLOW_WC_SEQ == 17);
+BUILD_ASSERT_DECL(sizeof(struct flow) == 168 && FLOW_WC_SEQ == 17);
 
 /* Represents the metadata fields of struct flow. */
 struct flow_metadata {
@@ -94,7 +106,7 @@ struct flow_metadata {
     uint16_t in_port;                /* OpenFlow port or zero. */
 };
 
-void flow_extract(struct ofpbuf *, uint32_t priority, ovs_be64 tun_id,
+void flow_extract(struct ofpbuf *, uint32_t priority, const struct flow_tnl *,
                   uint16_t in_port, struct flow *);
 void flow_zero_wildcards(struct flow *, const struct flow_wildcards *);
 void flow_get_metadata(const struct flow *, struct flow_metadata *);

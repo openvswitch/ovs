@@ -3117,7 +3117,7 @@ handle_miss_upcalls(struct ofproto_dpif *ofproto, struct dpif_upcall *upcalls,
             continue;
         }
         flow_extract(upcall->packet, miss->flow.skb_priority,
-                     miss->flow.tun_id, miss->flow.in_port, &miss->flow);
+                     &miss->flow.tunnel, miss->flow.in_port, &miss->flow);
 
         /* Add other packets to a to-do list. */
         hash = flow_hash(&miss->flow, 0);
@@ -4763,7 +4763,7 @@ send_packet(const struct ofport_dpif *ofport, struct ofpbuf *packet)
     struct flow flow;
     int error;
 
-    flow_extract(packet, 0, 0, 0, &flow);
+    flow_extract(packet, 0, NULL, 0, &flow);
     odp_port = vsp_realdev_to_vlandev(ofproto, ofport->odp_port,
                                       flow.vlan_tci);
     if (odp_port != ofport->odp_port) {
@@ -5537,7 +5537,7 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
             break;
 
         case OFPACT_SET_TUNNEL:
-            ctx->flow.tun_id = htonll(ofpact_get_SET_TUNNEL(a)->tun_id);
+            ctx->flow.tunnel.tun_id = htonll(ofpact_get_SET_TUNNEL(a)->tun_id);
             break;
 
         case OFPACT_SET_QUEUE:
@@ -5622,7 +5622,7 @@ action_xlate_ctx_init(struct action_xlate_ctx *ctx,
     ctx->ofproto = ofproto;
     ctx->flow = *flow;
     ctx->base_flow = ctx->flow;
-    ctx->base_flow.tun_id = 0;
+    memset(&ctx->base_flow.tunnel, 0, sizeof ctx->base_flow.tunnel);
     ctx->base_flow.vlan_tci = initial_tci;
     ctx->rule = rule;
     ctx->packet = packet;
@@ -6781,7 +6781,8 @@ ofproto_unixctl_trace(struct unixctl_conn *conn, int argc, const char *argv[],
         ds_put_cstr(&result, s);
         free(s);
 
-        flow_extract(packet, priority, tun_id, in_port, &flow);
+        flow_extract(packet, priority, NULL, in_port, &flow);
+        flow.tunnel.tun_id = tun_id;
         initial_tci = flow.vlan_tci;
     } else {
         unixctl_command_reply_error(conn, "Bad command syntax");

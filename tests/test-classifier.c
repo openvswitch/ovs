@@ -41,22 +41,22 @@
 
 /* Fields in a rule. */
 #define CLS_FIELDS                                                  \
-    /*        struct flow  all-caps */  \
-    /*        member name  name     */  \
-    /*        -----------  -------- */  \
-    CLS_FIELD(tun_id,      TUN_ID)      \
-    CLS_FIELD(metadata,    METADATA)    \
-    CLS_FIELD(nw_src,      NW_SRC)      \
-    CLS_FIELD(nw_dst,      NW_DST)      \
-    CLS_FIELD(in_port,     IN_PORT)     \
-    CLS_FIELD(vlan_tci,    VLAN_TCI)    \
-    CLS_FIELD(dl_type,     DL_TYPE)     \
-    CLS_FIELD(tp_src,      TP_SRC)      \
-    CLS_FIELD(tp_dst,      TP_DST)      \
-    CLS_FIELD(dl_src,      DL_SRC)      \
-    CLS_FIELD(dl_dst,      DL_DST)      \
-    CLS_FIELD(nw_proto,    NW_PROTO)    \
-    CLS_FIELD(nw_tos,      NW_DSCP)
+    /*        struct flow    all-caps */  \
+    /*        member name    name     */  \
+    /*        -----------    -------- */  \
+    CLS_FIELD(tunnel.tun_id, TUN_ID)      \
+    CLS_FIELD(metadata,      METADATA)    \
+    CLS_FIELD(nw_src,        NW_SRC)      \
+    CLS_FIELD(nw_dst,        NW_DST)      \
+    CLS_FIELD(in_port,       IN_PORT)     \
+    CLS_FIELD(vlan_tci,      VLAN_TCI)    \
+    CLS_FIELD(dl_type,       DL_TYPE)     \
+    CLS_FIELD(tp_src,        TP_SRC)      \
+    CLS_FIELD(tp_dst,        TP_DST)      \
+    CLS_FIELD(dl_src,        DL_SRC)      \
+    CLS_FIELD(dl_dst,        DL_DST)      \
+    CLS_FIELD(nw_proto,      NW_PROTO)    \
+    CLS_FIELD(nw_tos,        NW_DSCP)
 
 /* Field indexes.
  *
@@ -214,8 +214,8 @@ match(const struct cls_rule *wild_, const struct flow *fixed)
             eq = !((fixed->vlan_tci ^ wild.flow.vlan_tci)
                    & wild.wc.masks.vlan_tci);
         } else if (f_idx == CLS_F_IDX_TUN_ID) {
-            eq = !((fixed->tun_id ^ wild.flow.tun_id)
-                   & wild.wc.masks.tun_id);
+            eq = !((fixed->tunnel.tun_id ^ wild.flow.tunnel.tun_id)
+                   & wild.wc.masks.tunnel.tun_id);
         } else if (f_idx == CLS_F_IDX_METADATA) {
             eq = !((fixed->metadata ^ wild.flow.metadata)
                    & wild.wc.masks.metadata);
@@ -397,7 +397,7 @@ compare_classifiers(struct classifier *cls, struct tcls *tcls)
         memset(&flow, 0, sizeof flow);
         flow.nw_src = nw_src_values[get_value(&x, N_NW_SRC_VALUES)];
         flow.nw_dst = nw_dst_values[get_value(&x, N_NW_DST_VALUES)];
-        flow.tun_id = tun_id_values[get_value(&x, N_TUN_ID_VALUES)];
+        flow.tunnel.tun_id = tun_id_values[get_value(&x, N_TUN_ID_VALUES)];
         flow.metadata = metadata_values[get_value(&x, N_METADATA_VALUES)];
         flow.in_port = in_port_values[get_value(&x, N_IN_PORT_VALUES)];
         flow.vlan_tci = vlan_tci_values[get_value(&x, N_VLAN_TCI_VALUES)];
@@ -512,7 +512,7 @@ make_rule(int wc_fields, unsigned int priority, int value_pat)
         } else if (f_idx == CLS_F_IDX_VLAN_TCI) {
             match.wc.masks.vlan_tci = htons(UINT16_MAX);
         } else if (f_idx == CLS_F_IDX_TUN_ID) {
-            match.wc.masks.tun_id = htonll(UINT64_MAX);
+            match.wc.masks.tunnel.tun_id = htonll(UINT64_MAX);
         } else if (f_idx == CLS_F_IDX_METADATA) {
             match.wc.masks.metadata = htonll(UINT64_MAX);
         } else if (f_idx == CLS_F_IDX_NW_DSCP) {

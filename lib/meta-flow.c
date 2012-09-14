@@ -574,7 +574,7 @@ mf_is_all_wild(const struct mf_field *mf, const struct flow_wildcards *wc)
 {
     switch (mf->id) {
     case MFF_TUN_ID:
-        return !wc->masks.tun_id;
+        return !wc->masks.tunnel.tun_id;
     case MFF_METADATA:
         return !wc->masks.metadata;
     case MFF_IN_PORT:
@@ -671,7 +671,7 @@ mf_get_mask(const struct mf_field *mf, const struct flow_wildcards *wc,
 {
     switch (mf->id) {
     case MFF_TUN_ID:
-        mask->be64 = wc->masks.tun_id;
+        mask->be64 = wc->masks.tunnel.tun_id;
         break;
     case MFF_METADATA:
         mask->be64 = wc->masks.metadata;
@@ -952,7 +952,7 @@ mf_get_value(const struct mf_field *mf, const struct flow *flow,
 {
     switch (mf->id) {
     case MFF_TUN_ID:
-        value->be64 = flow->tun_id;
+        value->be64 = flow->tunnel.tun_id;
         break;
     case MFF_METADATA:
         value->be64 = flow->metadata;
@@ -1238,7 +1238,7 @@ mf_set_flow_value(const struct mf_field *mf,
 {
     switch (mf->id) {
     case MFF_TUN_ID:
-        flow->tun_id = value->be64;
+        flow->tunnel.tun_id = value->be64;
         break;
     case MFF_METADATA:
         flow->metadata = value->be64;

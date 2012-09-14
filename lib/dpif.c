@@ -977,7 +977,7 @@ dpif_execute__(struct dpif *dpif, const struct dpif_execute *execute)
  * the Ethernet frame specified in 'packet' taken from the flow specified in
  * the 'key_len' bytes of 'key'.  ('key' is mostly redundant with 'packet', but
  * it contains some metadata that cannot be recovered from 'packet', such as
- * tun_id and in_port.)
+ * tunnel and in_port.)
  *
  * Returns 0 if successful, otherwise a positive errno value. */
 int

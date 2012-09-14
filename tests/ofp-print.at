@@ -337,7 +337,7 @@ c0 a8 00 02 27 2f 00 00 78 50 cc 5b 57 af 42 1e \
 50 00 02 00 26 e8 00 00 00 00 00 00 00 00 \
 "], [0], [dnl
 OFPT_PACKET_IN (xid=0x0): total_len=60 in_port=3 (via no_match) data_len=60 buffer=0x00000111
-priority:0,tunnel:0,metadata:0,in_port:0000,tci(0) mac(50:54:00:00:00:05->50:54:00:00:00:06) type:0800 proto:6 tos:0 ttl:64 ip(192.168.0.1->192.168.0.2) port(10031->0) tcp_csum:26e8
+priority:0,metadata:0,in_port:0000,tci(0) mac(50:54:00:00:00:05->50:54:00:00:00:06) type:0800 proto:6 tos:0 ttl:64 ip(192.168.0.1->192.168.0.2) port(10031->0) tcp_csum:26e8
 ])
 AT_CLEANUP
 
@@ -351,7 +351,7 @@ AT_CHECK([ovs-ofctl ofp-print "\
 00 00 00 23 20 83 c1 5f 00 00 00 00 \
 "], [0], [dnl
 OFPT_PACKET_IN (OF1.2) (xid=0x0): total_len=42 in_port=LOCAL (via no_match) data_len=42 buffer=0xffffff00
-priority:0,tunnel:0,metadata:0,in_port:0000,tci(0) mac(00:23:20:83:c1:5f->ff:ff:ff:ff:ff:ff) type:8035
+priority:0,metadata:0,in_port:0000,tci(0) mac(00:23:20:83:c1:5f->ff:ff:ff:ff:ff:ff) type:8035
 ])
 AT_CLEANUP
 
@@ -1154,7 +1154,7 @@ ff ff ff ff ff ff 00 00 00 00 82 82 82 82 82 82 \
 31 6d 00 00 00 00 00 00 00 00 \
 "], [0], [dnl
 NXT_PACKET_IN (xid=0x0): table_id=7 cookie=0x9 total_len=64 in_port=1 tun_id=0x6 metadata=0x5a5a5a5a5a5a5a5a reg0=0x1 reg1=0x2 reg2=0x3 reg3=0x4 reg4=0x5 (via action) data_len=64 (unbuffered)
-priority:0,tunnel:0,metadata:0,in_port:0000,tci(vlan:80,pcp:0) mac(80:81:81:81:81:81->82:82:82:82:82:82) type:0800 proto:6 tos:0 ttl:0 ip(83.83.83.83->84.84.84.84) port(85->86) tcp_csum:316d
+priority:0,metadata:0,in_port:0000,tci(vlan:80,pcp:0) mac(80:81:81:81:81:81->82:82:82:82:82:82) type:0800 proto:6 tos:0 ttl:0 ip(83.83.83.83->84.84.84.84) port(85->86) tcp_csum:316d
 ])
 AT_CLEANUP
 
