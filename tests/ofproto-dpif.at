@@ -968,13 +968,13 @@ AT_CHECK([[sed -e 's/, uptime [0-9]*//
 s/, now [0-9.]*//
 s/time \([0-9]*\)\.\.\.\1$/time <moment>/
 s/time [0-9]*\.\.\.[0-9]*/time <range>/
-' netflow.log]], [0],
-  [header: v5, seq 0, engine 2,1
-rec: 192.168.0.1 > 192.168.0.2, if 1 > 65535, 1 pkts, 60 bytes, ICMP 8:0, time <moment>
-
+' netflow.log | sort]], [0],
+  [
+header: v5, seq 0, engine 2,1
 header: v5, seq 1, engine 2,1
-rec: 192.168.0.2 > 192.168.0.1, if 2 > 1, 2 pkts, 120 bytes, ICMP 0:0, time <range>
-rec: 192.168.0.1 > 192.168.0.2, if 1 > 2, 1 pkts, 60 bytes, ICMP 8:0, time <moment>
+seq 0: 192.168.0.1 > 192.168.0.2, if 1 > 65535, 1 pkts, 60 bytes, ICMP 8:0, time <moment>
+seq 1: 192.168.0.1 > 192.168.0.2, if 1 > 2, 1 pkts, 60 bytes, ICMP 8:0, time <moment>
+seq 1: 192.168.0.2 > 192.168.0.1, if 2 > 1, 2 pkts, 120 bytes, ICMP 0:0, time <range>
 ])
 AT_CLEANUP
 
@@ -1032,13 +1032,13 @@ while read line; do
     esac
 
     case $line in
-        "rec: 192.168.0.1 > 192.168.0.2, if 1 > 65535, "*" pkts, "*" bytes, TCP 1234 > 80, time "*)
+        "seq "*": 192.168.0.1 > 192.168.0.2, if 1 > 65535, "*" pkts, "*" bytes, TCP 1234 > 80, time "*)
             counter=n_learn
 	    ;;
-	"rec: 192.168.0.1 > 192.168.0.2, if 1 > 2, "*" pkts, "*" bytes, TCP 1234 > 80, time "*)
+	"seq "*": 192.168.0.1 > 192.168.0.2, if 1 > 2, "*" pkts, "*" bytes, TCP 1234 > 80, time "*)
 	    counter=n_in
 	    ;;
-	"rec: 192.168.0.2 > 192.168.0.1, if 2 > 1, "*" pkts, "*" bytes, TCP 80 > 1234, time "*)
+	"seq "*": 192.168.0.2 > 192.168.0.1, if 2 > 1, "*" pkts, "*" bytes, TCP 80 > 1234, time "*)
 	    counter=n_out
 	    ;;
 	*)

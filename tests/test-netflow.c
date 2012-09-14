@@ -74,7 +74,7 @@ print_netflow(struct ofpbuf *buf)
             return;
         }
 
-        printf("rec: "IP_FMT" > "IP_FMT,
+        printf("seq %"PRIu32": "IP_FMT" > "IP_FMT, ntohl(hdr->flow_seq),
                IP_ARGS(&rec->src_addr), IP_ARGS(&rec->dst_addr));
 
         printf(", if %"PRIu16" > %"PRIu16,
