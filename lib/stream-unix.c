@@ -48,7 +48,7 @@ unix_open(const char *name, char *suffix, struct stream **streamp,
 
     fd = make_unix_socket(SOCK_STREAM, true, NULL, connect_path);
     if (fd < 0) {
-        VLOG_ERR("%s: connection failed (%s)", connect_path, strerror(-fd));
+        VLOG_WARN("%s: connection failed (%s)", connect_path, strerror(-fd));
         return -fd;
     }
 
