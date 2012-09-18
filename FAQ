@@ -740,6 +740,13 @@ A: The OFPT_FEATURES_REQUEST message requests an OpenFlow switch to
    normally an intermittent condition (unless ovs-vswitchd is not
    running).
 
+Q: I added some flows with my controller or with ovs-ofctl, but when I
+   run "ovs-dpctl dump-flows" I don't see them.
+
+A: ovs-dpctl queries a kernel datapath, not an OpenFlow switch.  It
+   won't display the information that you want.  You want to use
+   "ovs-ofctl dump-flows" instead.
+
 Contact 
 -------
 
