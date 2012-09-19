@@ -325,6 +325,10 @@ void ip_format_masked(ovs_be32 ip, ovs_be32 mask, struct ds *);
 #endif
 
 /* TOS fields. */
+#define IP_ECN_NOT_ECT 0x0
+#define IP_ECN_ECT_1 0x01
+#define IP_ECN_ECT_0 0x02
+#define IP_ECN_CE 0x03
 #define IP_ECN_MASK 0x03
 #define IP_DSCP_MASK 0xfc
 
