@@ -108,7 +108,31 @@ enum {
  *
  * Each action is a structure "struct ofpact_*" that begins with "struct
  * ofpact", usually followed by other data that describes the action.  Actions
- * are padded out to a multiple of OFPACT_ALIGNTO bytes in length. */
+ * are padded out to a multiple of OFPACT_ALIGNTO bytes in length.
+ *
+ * The 'compat' member is special:
+ *
+ *     - Most "struct ofpact"s correspond to one particular kind of OpenFlow
+ *       action, at least in a given OpenFlow version.  For example,
+ *       OFPACT_SET_VLAN_VID corresponds to OFPAT10_SET_VLAN_VID in OpenFlow
+ *       1.0.
+ *
+ *       For such actions, the 'compat' member is not meaningful and generally
+ *       should be zero.
+ *
+ *     - A few "struct ofpact"s correspond to multiple OpenFlow actions.  For
+ *       example, OFPACT_SET_TUNNEL can be NXAST_SET_TUNNEL or
+ *       NXAST_SET_TUNNEL64.  In these cases, if the "struct ofpact" originated
+ *       from OpenFlow, then we want to make sure that, if it gets translated
+ *       back to OpenFlow later, it is translated back to the same action type.
+ *       (Otherwise, we'd violate the promise made in DESIGN, in the "Action
+ *       Reproduction" section.)
+ *
+ *       For such actions, the 'compat' member should be the original action
+ *       type.  (If the action didn't originate from OpenFlow, then setting
+ *       'compat' to zero should be fine: code to translate the ofpact to
+ *       OpenFlow must tolerate this case.)
+ */
 struct ofpact {
     enum ofpact_type type;      /* OFPACT_*. */
     enum ofputil_action_code compat; /* Original type when added, if any. */
