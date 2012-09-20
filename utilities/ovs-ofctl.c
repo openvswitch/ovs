@@ -741,9 +741,8 @@ fetch_ofputil_phy_port(const char *vconn_name, const char *port_name,
 static uint16_t
 str_to_port_no(const char *vconn_name, const char *port_name)
 {
-    unsigned int port_no;
-
-    if (str_to_uint(port_name, 10, &port_no)) {
+    uint16_t port_no = ofputil_port_from_string(port_name);
+    if (port_no) {
         return port_no;
     } else {
         struct ofputil_phy_port pp;
@@ -1466,9 +1465,7 @@ ofctl_packet_out(int argc, char *argv[])
     parse_ofpacts(argv[3], &ofpacts);
 
     po.buffer_id = UINT32_MAX;
-    po.in_port = (!strcasecmp(argv[2], "none") ? OFPP_NONE
-                  : !strcasecmp(argv[2], "local") ? OFPP_LOCAL
-                  : str_to_port_no(argv[1], argv[2]));
+    po.in_port = str_to_port_no(argv[1], argv[2]);
     po.ofpacts = ofpacts.data;
     po.ofpacts_len = ofpacts.size;
 

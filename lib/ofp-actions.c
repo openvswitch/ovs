@@ -1770,7 +1770,8 @@ ofpact_format(const struct ofpact *a, struct ds *s)
     case OFPACT_RESUBMIT:
         resubmit = ofpact_get_RESUBMIT(a);
         if (resubmit->in_port != OFPP_IN_PORT && resubmit->table_id == 255) {
-            ds_put_format(s, "resubmit:%"PRIu16, resubmit->in_port);
+            ds_put_cstr(s, "resubmit:");
+            ofputil_format_port(resubmit->in_port, s);
         } else {
             ds_put_format(s, "resubmit(");
             if (resubmit->in_port != OFPP_IN_PORT) {
@@ -1794,7 +1795,9 @@ ofpact_format(const struct ofpact *a, struct ds *s)
 
     case OFPACT_AUTOPATH:
         autopath = ofpact_get_AUTOPATH(a);
-        ds_put_format(s, "autopath(%u,", autopath->port);
+        ds_put_cstr(s, "autopath(");
+        ofputil_format_port(autopath->port, s);
+        ds_put_char(s, ',');
         mf_format_subfield(&autopath->dst, s);
         ds_put_char(s, ')');
         break;

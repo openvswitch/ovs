@@ -36,7 +36,6 @@ void
 autopath_parse(struct ofpact_autopath *ap, const char *s_)
 {
     char *s;
-    int id_int;
     char *id_str, *dst, *save_ptr;
 
     ofpact_init_AUTOPATH(ap);
@@ -50,12 +49,10 @@ autopath_parse(struct ofpact_autopath *ap, const char *s_)
         ovs_fatal(0, "%s: not enough arguments to autopath action", s_);
     }
 
-    id_int = atoi(id_str);
-    if (id_int < 1 || id_int > UINT32_MAX) {
-        ovs_fatal(0, "%s: autopath id %d is not in valid range "
-                  "1 to %"PRIu32, s_, id_int, UINT32_MAX);
+    ap->port = ofputil_port_from_string(id_str);
+    if (!ap->port) {
+        ovs_fatal(0, "%s: bad port number", s_);
     }
-    ap->port = id_int;
 
     mf_parse_subfield(&ap->dst, dst);
     if (ap->dst.n_bits < 16) {

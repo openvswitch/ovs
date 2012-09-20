@@ -168,8 +168,9 @@ parse_resubmit(char *arg, struct ofpbuf *ofpacts)
 
     in_port_s = strsep(&arg, ",");
     if (in_port_s && in_port_s[0]) {
-        if (!ofputil_port_from_string(in_port_s, &resubmit->in_port)) {
-            resubmit->in_port = str_to_u32(in_port_s);
+        resubmit->in_port = ofputil_port_from_string(in_port_s);
+        if (!resubmit->in_port) {
+            ovs_fatal(0, "%s: resubmit to unknown port", in_port_s);
         }
     } else {
         resubmit->in_port = OFPP_IN_PORT;
@@ -488,10 +489,7 @@ str_to_ofpacts(const struct flow *flow, char *str, struct ofpbuf *ofpacts)
     pos = str;
     n_actions = 0;
     while (ofputil_parse_key_value(&pos, &act, &arg)) {
-        uint16_t port;
-        int code;
-
-        code = ofputil_action_code_from_name(act);
+        int code = ofputil_action_code_from_name(act);
         if (code >= 0) {
             parse_named_action(code, flow, arg, ofpacts);
         } else if (!strcasecmp(act, "drop")) {
@@ -503,10 +501,13 @@ str_to_ofpacts(const struct flow *flow, char *str, struct ofpbuf *ofpacts)
                           "actions");
             }
             break;
-        } else if (ofputil_port_from_string(act, &port)) {
-            ofpact_put_OUTPUT(ofpacts)->port = port;
         } else {
-            ovs_fatal(0, "Unknown action: %s", act);
+            uint16_t port = ofputil_port_from_string(act);
+            if (port) {
+                ofpact_put_OUTPUT(ofpacts)->port = port;
+            } else {
+                ovs_fatal(0, "Unknown action: %s", act);
+            }
         }
         n_actions++;
     }
@@ -681,7 +682,11 @@ parse_ofp_str(struct ofputil_flow_mod *fm, int command, const char *str_,
             if (!strcmp(name, "table")) {
                 fm->table_id = str_to_table_id(value);
             } else if (!strcmp(name, "out_port")) {
-                fm->out_port = atoi(value);
+                fm->out_port = ofputil_port_from_string(name);
+                if (!fm->out_port) {
+                    ofp_fatal(str_, verbose, "%s is not a valid OpenFlow port",
+                              name);
+                }
             } else if (fields & F_PRIORITY && !strcmp(name, "priority")) {
                 fm->priority = str_to_u16(value, name);
             } else if (fields & F_TIMEOUT && !strcmp(name, "idle_timeout")) {

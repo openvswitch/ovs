@@ -24,7 +24,7 @@ AT_CLEANUP
 
 AT_SETUP([autopath action bad port])
 AT_CHECK([ovs-ofctl parse-flow 'actions=autopath(bad, NXM_NX_REG0[[]])'], [1], [],
-  [ovs-ofctl: bad, NXM_NX_REG0[[]]: autopath id 0 is not in valid range 1 to 4294967295
+  [ovs-ofctl: bad, NXM_NX_REG0[[]]: bad port number
 ])
 AT_CLEANUP
 

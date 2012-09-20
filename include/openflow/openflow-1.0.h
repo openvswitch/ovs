@@ -21,12 +21,20 @@
 
 #include "openflow/openflow-common.h"
 
-/* Port numbering.  Physical ports are numbered starting from 1. */
+/* Port number(s)   meaning
+ * ---------------  --------------------------------------
+ * 0x0000           not assigned a meaning by OpenFlow 1.0
+ * 0x0001...0xfeff  "physical" ports
+ * 0xff00...0xfff7  "reserved" but not assigned a meaning by OpenFlow 1.0
+ * 0xfff8...0xffff  "reserved" OFPP_* ports with assigned meanings
+ */
 enum ofp_port {
-    /* Maximum number of physical switch ports. */
-    OFPP_MAX = 0xff00,
+    /* Ranges. */
+    OFPP_MAX        = 0xff00,   /* Maximum number of physical switch ports. */
+    OFPP_FIRST_RESV = 0xfff8,   /* First assigned reserved port number. */
+    OFPP_LAST_RESV  = 0xffff,   /* Last assigned reserved port number. */
 
-    /* Fake output "ports". */
+    /* Reserved output "ports". */
     OFPP_IN_PORT    = 0xfff8,  /* Send the packet out the input port.  This
                                   virtual port must be explicitly used
                                   in order to send back out of the input

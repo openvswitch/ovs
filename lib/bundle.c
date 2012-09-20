@@ -267,12 +267,15 @@ bundle_parse__(const char *s, char **save_ptr,
         uint16_t slave_port;
         char *slave;
 
-        slave = strtok_r(NULL, ", [", save_ptr);
+        slave = strtok_r(NULL, ", []", save_ptr);
         if (!slave || bundle->n_slaves >= BUNDLE_MAX_SLAVES) {
             break;
         }
 
-        slave_port = atoi(slave);
+        slave_port = ofputil_port_from_string(slave);
+        if (!slave_port) {
+            ovs_fatal(0, "%s: bad port number", slave);
+        }
         ofpbuf_put(ofpacts, &slave_port, sizeof slave_port);
 
         bundle = ofpacts->l2;
@@ -387,7 +390,7 @@ bundle_format(const struct ofpact_bundle *bundle, struct ds *s)
             ds_put_cstr(s, ",");
         }
 
-        ds_put_format(s, "%"PRIu16, bundle->slaves[i]);
+        ofputil_format_port(bundle->slaves[i], s);
     }
 
     ds_put_cstr(s, ")");

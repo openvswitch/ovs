@@ -3536,36 +3536,72 @@ ofputil_check_output_port(uint16_t port, int max_ports)
         OFPUTIL_NAMED_PORT(LOCAL)               \
         OFPUTIL_NAMED_PORT(NONE)
 
-/* Checks whether 's' is the string representation of an OpenFlow port number,
- * either as an integer or a string name (e.g. "LOCAL").  If it is, stores the
- * number in '*port' and returns true.  Otherwise, returns false. */
-bool
-ofputil_port_from_string(const char *name, uint16_t *port)
+/* Returns the port number represented by 's', which may be an integer or, for
+ * reserved ports, the standard OpenFlow name for the port (e.g. "LOCAL").
+ *
+ * Returns 0 if 's' is not a valid OpenFlow port number or name.  The caller
+ * should issue an error message in this case, because this function usually
+ * does not.  (This gives the caller an opportunity to look up the port name
+ * another way, e.g. by contacting the switch and listing the names of all its
+ * ports).
+ *
+ * This function accepts OpenFlow 1.0 port numbers.  It also accepts a subset
+ * of OpenFlow 1.1+ port numbers, mapping those port numbers into the 16-bit
+ * range as described in include/openflow/openflow-1.1.h. */
+uint16_t
+ofputil_port_from_string(const char *s)
 {
-    struct pair {
-        const char *name;
-        uint16_t value;
-    };
-    static const struct pair pairs[] = {
-#define OFPUTIL_NAMED_PORT(NAME) {#NAME, OFPP_##NAME},
-        OFPUTIL_NAMED_PORTS
-#undef OFPUTIL_NAMED_PORT
-    };
-    static const int n_pairs = ARRAY_SIZE(pairs);
-    int i;
+    unsigned int port32;
 
-    if (str_to_int(name, 0, &i) && i >= 0 && i < UINT16_MAX) {
-        *port = i;
-        return true;
-    }
+    if (str_to_uint(s, 10, &port32)) {
+        if (port32 == 0) {
+            VLOG_WARN("port 0 is not a valid OpenFlow port number");
+            return 0;
+        } else if (port32 < OFPP_MAX) {
+            return port32;
+        } else if (port32 < OFPP_FIRST_RESV) {
+            VLOG_WARN("port %u is a reserved OF1.0 port number that will "
+                      "be translated to %u when talking to an OF1.1 or "
+                      "later controller", port32, port32 + OFPP11_OFFSET);
+            return port32;
+        } else if (port32 <= OFPP_LAST_RESV) {
+            struct ds s;
 
-    for (i = 0; i < n_pairs; i++) {
-        if (!strcasecmp(name, pairs[i].name)) {
-            *port = pairs[i].value;
-            return true;
+            ds_init(&s);
+            ofputil_format_port(port32, &s);
+            VLOG_WARN("port %u is better referred to as %s, for compatibility "
+                      "with future versions of OpenFlow",
+                      port32, ds_cstr(&s));
+            ds_destroy(&s);
+
+            return port32;
+        } else if (port32 < OFPP11_MAX) {
+            VLOG_WARN("port %u is outside the supported range 0 through "
+                      "%"PRIx16"or 0x%x through 0x%"PRIx32, port32,
+                      UINT16_MAX, (unsigned int) OFPP11_MAX, UINT32_MAX);
+            return 0;
+        } else {
+            return port32 - OFPP11_OFFSET;
         }
+    } else {
+        struct pair {
+            const char *name;
+            uint16_t value;
+        };
+        static const struct pair pairs[] = {
+#define OFPUTIL_NAMED_PORT(NAME) {#NAME, OFPP_##NAME},
+            OFPUTIL_NAMED_PORTS
+#undef OFPUTIL_NAMED_PORT
+        };
+        const struct pair *p;
+
+        for (p = pairs; p < &pairs[ARRAY_SIZE(pairs)]; p++) {
+            if (!strcasecmp(s, p->name)) {
+                return p->value;
+            }
+        }
+        return 0;
     }
-    return false;
 }
 
 /* Appends to 's' a string representation of the OpenFlow port number 'port'.
