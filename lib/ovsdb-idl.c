@@ -70,6 +70,7 @@ struct ovsdb_idl {
     struct json *monitor_request_id;
     unsigned int last_monitor_request_seqno;
     unsigned int change_seqno;
+    bool verify_write_only;
 
     /* Database locking. */
     char *lock_name;            /* Name of lock we need, NULL if none. */
@@ -401,6 +402,16 @@ void
 ovsdb_idl_force_reconnect(struct ovsdb_idl *idl)
 {
     jsonrpc_session_force_reconnect(idl->session);
+}
+
+/* Some IDL users should only write to write-only columns.  Furthermore,
+ * writing to a column which is not write-only can cause serious performance
+ * degradations for these users.  This function causes 'idl' to reject writes
+ * to columns which are not marked write only using ovsdb_idl_omit_alert(). */
+void
+ovsdb_idl_verify_write_only(struct ovsdb_idl *idl)
+{
+    idl->verify_write_only = true;
 }
 
 static unsigned char *
@@ -1824,6 +1835,7 @@ ovsdb_idl_txn_write(const struct ovsdb_idl_row *row_,
     struct ovsdb_idl_row *row = CONST_CAST(struct ovsdb_idl_row *, row_);
     const struct ovsdb_idl_table_class *class;
     size_t column_idx;
+    bool write_only;
 
     if (ovsdb_idl_row_is_synthetic(row)) {
         ovsdb_datum_destroy(datum, &column->type);
@@ -1832,11 +1844,19 @@ ovsdb_idl_txn_write(const struct ovsdb_idl_row *row_,
 
     class = row->table->class;
     column_idx = column - class->columns;
+    write_only = row->table->modes[column_idx] == OVSDB_IDL_MONITOR;
 
     assert(row->new != NULL);
     assert(column_idx < class->n_columns);
     assert(row->old == NULL ||
            row->table->modes[column_idx] & OVSDB_IDL_MONITOR);
+
+    if (row->table->idl->verify_write_only && !write_only) {
+        VLOG_ERR("Bug: Attempt to write to a read/write column (%s:%s) when"
+                 " explicitly configured not to.", class->name, column->name);
+        ovsdb_datum_destroy(datum, &column->type);
+        return;
+    }
 
     /* If this is a write-only column and the datum being written is the same
      * as the one already there, just skip the update entirely.  This is worth
@@ -1849,9 +1869,8 @@ ovsdb_idl_txn_write(const struct ovsdb_idl_row *row_,
      * transaction only does writes of existing values, without making any real
      * changes, we will drop the whole transaction later in
      * ovsdb_idl_txn_commit().) */
-    if (row->table->modes[column_idx] == OVSDB_IDL_MONITOR
-        && ovsdb_datum_equals(ovsdb_idl_read(row, column),
-                              datum, &column->type)) {
+    if (write_only && ovsdb_datum_equals(ovsdb_idl_read(row, column),
+                                         datum, &column->type)) {
         ovsdb_datum_destroy(datum, &column->type);
         return;
     }

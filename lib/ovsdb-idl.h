@@ -57,6 +57,7 @@ bool ovsdb_idl_is_lock_contended(const struct ovsdb_idl *);
 unsigned int ovsdb_idl_get_seqno(const struct ovsdb_idl *);
 bool ovsdb_idl_has_ever_connected(const struct ovsdb_idl *);
 void ovsdb_idl_force_reconnect(struct ovsdb_idl *);
+void ovsdb_idl_verify_write_only(struct ovsdb_idl *);
 
 /* Choosing columns and tables to replicate. */
 

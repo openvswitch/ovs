@@ -274,6 +274,7 @@ bridge_init(const char *remote)
     idl = ovsdb_idl_create(remote, &ovsrec_idl_class, true);
     idl_seqno = ovsdb_idl_get_seqno(idl);
     ovsdb_idl_set_lock(idl, "ovs_vswitchd");
+    ovsdb_idl_verify_write_only(idl);
 
     ovsdb_idl_omit_alert(idl, &ovsrec_open_vswitch_col_cur_cfg);
     ovsdb_idl_omit_alert(idl, &ovsrec_open_vswitch_col_statistics);
