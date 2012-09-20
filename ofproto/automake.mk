@@ -29,6 +29,8 @@ ofproto_libofproto_a_SOURCES = \
 	ofproto/pktbuf.c \
 	ofproto/pktbuf.h \
 	ofproto/pinsched.c \
-	ofproto/pinsched.h
+	ofproto/pinsched.h \
+	ofproto/tunnel.c \
+	ofproto/tunnel.h
 
 MAN_FRAGMENTS += ofproto/ofproto-unixctl.man ofproto/ofproto-dpif-unixctl.man
