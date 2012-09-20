@@ -3550,6 +3550,7 @@ ofproto_compose_flow_refresh_update(const struct rule *rule,
     fu.cookie = rule->flow_cookie;
     minimatch_expand(&rule->cr.match, &match);
     fu.match = &match;
+    fu.priority = rule->cr.priority;
     if (!(flags & NXFMF_ACTIONS)) {
         fu.ofpacts = NULL;
         fu.ofpacts_len = 0;

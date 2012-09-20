@@ -1815,6 +1815,7 @@ ofmonitor_report(struct connmgr *mgr, struct rule *rule,
                 fu.cookie = rule->flow_cookie;
                 minimatch_expand(&rule->cr.match, &match);
                 fu.match = &match;
+                fu.priority = rule->cr.priority;
                 if (flags & NXFMF_ACTIONS) {
                     fu.ofpacts = rule->ofpacts;
                     fu.ofpacts_len = rule->ofpacts_len;
