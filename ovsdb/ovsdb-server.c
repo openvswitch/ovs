@@ -404,12 +404,24 @@ read_string_column(const struct ovsdb_row *row, const char *column_name,
 static void
 write_bool_column(struct ovsdb_row *row, const char *column_name, bool value)
 {
-    struct ovsdb_datum *datum = get_datum(row, column_name, OVSDB_TYPE_BOOLEAN,
-                                          OVSDB_TYPE_VOID, 1);
+    const struct ovsdb_column *column;
+    struct ovsdb_datum *datum;
 
+    column = ovsdb_table_schema_get_column(row->table->schema, column_name);
+    datum = get_datum(row, column_name, OVSDB_TYPE_BOOLEAN,
+                      OVSDB_TYPE_VOID, 1);
     if (!datum) {
         return;
     }
+
+    if (datum->n != 1) {
+        ovsdb_datum_destroy(datum, &column->type);
+
+        datum->n = 1;
+        datum->keys = xmalloc(sizeof *datum->keys);
+        datum->values = NULL;
+    }
+
     datum->keys[0].boolean = value;
 }
 
