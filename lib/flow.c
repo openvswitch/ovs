@@ -509,7 +509,8 @@ flow_format(struct ds *ds, const struct flow *flow)
         ds_put_cstr(ds, "->");
         print_ipv6_addr(ds, &flow->ipv6_dst);
         ds_put_char(ds, ')');
-    } else {
+    } else if (flow->dl_type == htons(ETH_TYPE_IP) ||
+               flow->dl_type == htons(ETH_TYPE_ARP)) {
         ds_put_format(ds, " proto:%"PRIu8" tos:%#"PRIx8" ttl:%"PRIu8
                           " ip("IP_FMT"->"IP_FMT")",
                           flow->nw_proto, flow->nw_tos, flow->nw_ttl,

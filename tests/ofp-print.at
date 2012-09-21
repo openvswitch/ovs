@@ -351,7 +351,7 @@ AT_CHECK([ovs-ofctl ofp-print "\
 00 00 00 23 20 83 c1 5f 00 00 00 00 \
 "], [0], [dnl
 OFPT_PACKET_IN (OF1.2) (xid=0x0): total_len=42 in_port=LOCAL (via no_match) data_len=42 buffer=0xffffff00
-priority:0,tunnel:0,metadata:0,in_port:0000,tci(0) mac(00:23:20:83:c1:5f->ff:ff:ff:ff:ff:ff) type:8035 proto:0 tos:0 ttl:0 ip(0.0.0.0->0.0.0.0)
+priority:0,tunnel:0,metadata:0,in_port:0000,tci(0) mac(00:23:20:83:c1:5f->ff:ff:ff:ff:ff:ff) type:8035
 ])
 AT_CLEANUP
 
