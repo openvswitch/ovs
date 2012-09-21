@@ -25,6 +25,7 @@
 #include "command-line.h"
 #include "daemon.h"
 #include "dirs.h"
+#include "dummy.h"
 #include "file.h"
 #include "hash.h"
 #include "json.h"
@@ -729,11 +730,11 @@ parse_options(int argc, char *argv[], char **file_namep,
               char **run_command)
 {
     enum {
-        OPT_DUMMY = UCHAR_MAX + 1,
-        OPT_REMOTE,
+        OPT_REMOTE = UCHAR_MAX + 1,
         OPT_UNIXCTL,
         OPT_RUN,
         OPT_BOOTSTRAP_CA_CERT,
+        OPT_ENABLE_DUMMY,
         VLOG_OPTION_ENUMS,
         LEAK_CHECKER_OPTION_ENUMS,
         DAEMON_OPTION_ENUMS
@@ -751,6 +752,7 @@ parse_options(int argc, char *argv[], char **file_namep,
         {"private-key", required_argument, NULL, 'p'},
         {"certificate", required_argument, NULL, 'c'},
         {"ca-cert",     required_argument, NULL, 'C'},
+        {"enable-dummy", optional_argument, NULL, OPT_ENABLE_DUMMY},
         {NULL, 0, NULL, 0},
     };
     char *short_options = long_options_to_short_options(long_options);
@@ -804,6 +806,10 @@ parse_options(int argc, char *argv[], char **file_namep,
         case OPT_BOOTSTRAP_CA_CERT:
             ca_cert_file = optarg;
             bootstrap_ca_cert = true;
+            break;
+
+        case OPT_ENABLE_DUMMY:
+            dummy_enable(optarg && !strcmp(optarg, "override"));
             break;
 
         case '?':
