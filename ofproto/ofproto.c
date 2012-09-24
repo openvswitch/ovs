@@ -2258,8 +2258,8 @@ handle_table_stats_request(struct ofconn *ofconn,
         sprintf(ots[i].name, "table%zu", i);
         ots[i].match = htonll(OFPXMT12_MASK);
         ots[i].wildcards = htonll(OFPXMT12_MASK);
-        ots[i].write_actions = htonl(OFPAT12_OUTPUT);
-        ots[i].apply_actions = htonl(OFPAT12_OUTPUT);
+        ots[i].write_actions = htonl(OFPAT11_OUTPUT);
+        ots[i].apply_actions = htonl(OFPAT11_OUTPUT);
         ots[i].write_setfields = htonll(OFPXMT12_MASK);
         ots[i].apply_setfields = htonll(OFPXMT12_MASK);
         ots[i].metadata_match = htonll(UINT64_MAX);

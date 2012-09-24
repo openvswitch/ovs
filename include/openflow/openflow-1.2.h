@@ -190,23 +190,7 @@ struct ofp12_oxm_experimenter_header {
 OFP_ASSERT(sizeof(struct ofp12_oxm_experimenter_header) == 8);
 
 enum ofp12_action_type {
-    OFPAT12_OUTPUT       = 0,  /* Output to switch port. */
-    OFPAT12_COPY_TTL_OUT = 11, /* Copy TTL "outwards" -- from next-to-outermost
-                                  to outermost */
-    OFPAT12_COPY_TTL_IN,       /* Copy TTL "inwards" -- from outermost to
-                                  next-to-outermost */
-    OFPAT12_SET_MPLS_TTL = 15, /* MPLS TTL */
-    OFPAT12_DEC_MPLS_TTL,      /* Decrement MPLS TTL */
-    OFPAT12_PUSH_VLAN,         /* Push a new VLAN tag */
-    OFPAT12_POP_VLAN,          /* Pop the outer VLAN tag */
-    OFPAT12_PUSH_MPLS,         /* Push a new MPLS tag */
-    OFPAT12_POP_MPLS,          /* Pop the outer MPLS tag */
-    OFPAT12_SET_QUEUE,         /* Set queue id when outputting to a port */
-    OFPAT12_GROUP,             /* Apply group. */
-    OFPAT12_SET_NW_TTL,        /* IP TTL. */
-    OFPAT12_DEC_NW_TTL,        /* Decrement IP TTL. */
-    OFPAT12_SET_FIELD,         /* Set a header field using OXM TLV format. */
-    OFPAT12_EXPERIMENTER = 0xffff
+    OFPAT12_SET_FIELD = 25,     /* Set a header field using OXM TLV format. */
 };
 
 enum ofp12_controller_max_len {
