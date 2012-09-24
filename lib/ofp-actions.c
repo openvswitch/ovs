@@ -282,7 +282,7 @@ ofpact_from_nxast(const union ofp_action *a, enum ofputil_action_code code,
     switch (code) {
     case OFPUTIL_ACTION_INVALID:
 #define OFPAT10_ACTION(ENUM, STRUCT, NAME) case OFPUTIL_##ENUM:
-#define OFPAT11_ACTION(ENUM, STRUCT, NAME) case OFPUTIL_##ENUM:
+#define OFPAT11_ACTION(ENUM, STRUCT, EXTENSIBLE, NAME) case OFPUTIL_##ENUM:
 #include "ofp-util.def"
         NOT_REACHED();
 
@@ -396,7 +396,7 @@ ofpact_from_openflow10(const union ofp_action *a, struct ofpbuf *out)
 
     switch (code) {
     case OFPUTIL_ACTION_INVALID:
-#define OFPAT11_ACTION(ENUM, STRUCT, NAME) case OFPUTIL_##ENUM:
+#define OFPAT11_ACTION(ENUM, STRUCT, EXTENSIBLE, NAME) case OFPUTIL_##ENUM:
 #include "ofp-util.def"
         NOT_REACHED();
 
@@ -607,19 +607,24 @@ static enum ofperr
 decode_openflow11_action(const union ofp_action *a,
                          enum ofputil_action_code *code)
 {
+    uint16_t len;
+
     switch (a->type) {
     case CONSTANT_HTONS(OFPAT11_EXPERIMENTER):
         return decode_nxast_action(a, code);
 
-#define OFPAT11_ACTION(ENUM, STRUCT, NAME)                          \
-        case CONSTANT_HTONS(ENUM):                                  \
-            if (a->header.len == htons(sizeof(struct STRUCT))) {    \
-                *code = OFPUTIL_##ENUM;                             \
-                return 0;                                           \
-            } else {                                                \
-                return OFPERR_OFPBAC_BAD_LEN;                       \
-            }                                                       \
-            break;
+#define OFPAT11_ACTION(ENUM, STRUCT, EXTENSIBLE, NAME)  \
+        case CONSTANT_HTONS(ENUM):                      \
+            len = ntohs(a->header.len);                 \
+            if (EXTENSIBLE                              \
+                ? len >= sizeof(struct STRUCT)          \
+                : len == sizeof(struct STRUCT)) {       \
+                *code = OFPUTIL_##ENUM;                 \
+                return 0;                               \
+            } else {                                    \
+                return OFPERR_OFPBAC_BAD_LEN;           \
+            }                                           \
+            NOT_REACHED();
 #include "ofp-util.def"
 
     default:

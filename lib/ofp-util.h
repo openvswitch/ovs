@@ -558,17 +558,17 @@ bool ofputil_frag_handling_from_string(const char *, enum ofp_config_flags *);
  */
 enum OVS_PACKED_ENUM ofputil_action_code {
     OFPUTIL_ACTION_INVALID,
-#define OFPAT10_ACTION(ENUM, STRUCT, NAME)           OFPUTIL_##ENUM,
-#define OFPAT11_ACTION(ENUM, STRUCT, NAME)           OFPUTIL_##ENUM,
-#define NXAST_ACTION(ENUM, STRUCT, EXTENSIBLE, NAME) OFPUTIL_##ENUM,
+#define OFPAT10_ACTION(ENUM, STRUCT, NAME)             OFPUTIL_##ENUM,
+#define OFPAT11_ACTION(ENUM, STRUCT, EXTENSIBLE, NAME) OFPUTIL_##ENUM,
+#define NXAST_ACTION(ENUM, STRUCT, EXTENSIBLE, NAME)   OFPUTIL_##ENUM,
 #include "ofp-util.def"
 };
 
 /* The number of values of "enum ofputil_action_code". */
 enum {
-#define OFPAT10_ACTION(ENUM, STRUCT, NAME)           + 1
-#define OFPAT11_ACTION(ENUM, STRUCT, NAME)           + 1
-#define NXAST_ACTION(ENUM, STRUCT, EXTENSIBLE, NAME) + 1
+#define OFPAT10_ACTION(ENUM, STRUCT, NAME)             + 1
+#define OFPAT11_ACTION(ENUM, STRUCT, EXTENSIBLE, NAME) + 1
+#define NXAST_ACTION(ENUM, STRUCT, EXTENSIBLE, NAME)   + 1
     OFPUTIL_N_ACTIONS = 1
 #include "ofp-util.def"
 };
@@ -594,7 +594,7 @@ void *ofputil_put_action(enum ofputil_action_code, struct ofpbuf *buf);
 #define OFPAT10_ACTION(ENUM, STRUCT, NAME)              \
     void ofputil_init_##ENUM(struct STRUCT *);          \
     struct STRUCT *ofputil_put_##ENUM(struct ofpbuf *);
-#define OFPAT11_ACTION(ENUM, STRUCT, NAME)              \
+#define OFPAT11_ACTION(ENUM, STRUCT, EXTENSIBLE, NAME)  \
     void ofputil_init_##ENUM(struct STRUCT *);          \
     struct STRUCT *ofputil_put_##ENUM(struct ofpbuf *);
 #define NXAST_ACTION(ENUM, STRUCT, EXTENSIBLE, NAME)    \
