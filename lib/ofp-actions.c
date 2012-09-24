@@ -719,8 +719,8 @@ ofpact_from_openflow11(const union ofp_action *a, struct ofpbuf *out)
         break;
 
     case OFPUTIL_OFPAT12_SET_FIELD:
-        /* Not yet implemented. */
-        break;
+        return nxm_reg_load_from_openflow12_set_field(
+            (const struct ofp12_action_set_field *)a, out);
 
 #define NXAST_ACTION(ENUM, STRUCT, EXTENSIBLE, NAME) case OFPUTIL_##ENUM:
 #include "ofp-util.def"
