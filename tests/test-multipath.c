@@ -60,7 +60,6 @@ main(int argc, char *argv[])
             struct flow flow;
 
             random_bytes(&flow, sizeof flow);
-            memset(flow.zeros, 0, sizeof flow.zeros);
 
             mp.max_link = n - 1;
             multipath_execute(&mp, &flow);

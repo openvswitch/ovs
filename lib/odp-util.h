@@ -41,6 +41,7 @@ ofp_port_to_odp_port(uint16_t ofp_port)
     case OFPP_LOCAL:
         return OVSP_LOCAL;
     case OFPP_NONE:
+    case OFPP_CONTROLLER:
         return OVSP_NONE;
     default:
         return ofp_port;
@@ -109,7 +110,8 @@ void odp_flow_key_format(const struct nlattr *, size_t, struct ds *);
 int odp_flow_key_from_string(const char *s, const struct simap *port_names,
                              struct ofpbuf *);
 
-void odp_flow_key_from_flow(struct ofpbuf *, const struct flow *);
+void odp_flow_key_from_flow(struct ofpbuf *, const struct flow *,
+                            uint32_t odp_in_port);
 
 uint32_t odp_flow_key_hash(const struct nlattr *, size_t);
 

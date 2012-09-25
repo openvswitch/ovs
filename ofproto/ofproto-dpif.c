@@ -3045,6 +3045,7 @@ ofproto_dpif_extract_flow_key(const struct ofproto_dpif *ofproto,
     enum odp_key_fitness fitness;
 
     fitness = odp_flow_key_to_flow(key, key_len, flow);
+    flow->in_port = odp_port_to_ofp_port(flow->in_port);
     if (fitness == ODP_FIT_ERROR) {
         return fitness;
     }
@@ -3677,7 +3678,7 @@ execute_odp_actions(struct ofproto_dpif *ofproto, const struct flow *flow,
     int error;
 
     ofpbuf_use_stack(&key, &keybuf, sizeof keybuf);
-    odp_flow_key_from_flow(&key, flow);
+    odp_flow_key_from_flow(&key, flow, ofp_port_to_odp_port(flow->in_port));
 
     error = dpif_execute(ofproto->dpif, key.data, key.size,
                          odp_actions, actions_len, packet);
@@ -4326,6 +4327,7 @@ subfacet_find(struct ofproto_dpif *ofproto,
     struct flow flow;
 
     fitness = odp_flow_key_to_flow(key, key_len, &flow);
+    flow.in_port = odp_port_to_ofp_port(flow.in_port);
     if (fitness == ODP_FIT_ERROR) {
         return NULL;
     }
@@ -4374,8 +4376,10 @@ subfacet_get_key(struct subfacet *subfacet, struct odputil_keybuf *keybuf,
                  struct ofpbuf *key)
 {
     if (!subfacet->key) {
+        struct flow *flow = &subfacet->facet->flow;
+
         ofpbuf_use_stack(key, keybuf, sizeof *keybuf);
-        odp_flow_key_from_flow(key, &subfacet->facet->flow);
+        odp_flow_key_from_flow(key, flow, ofp_port_to_odp_port(flow->in_port));
     } else {
         ofpbuf_use_const(key, subfacet->key, subfacet->key_len);
     }
@@ -4773,7 +4777,7 @@ send_packet(const struct ofport_dpif *ofport, struct ofpbuf *packet)
     }
 
     ofpbuf_use_stack(&key, &keybuf, sizeof keybuf);
-    odp_flow_key_from_flow(&key, &flow);
+    odp_flow_key_from_flow(&key, &flow, ofp_port_to_odp_port(flow.in_port));
 
     ofpbuf_init(&odp_actions, 32);
     compose_sflow_action(ofproto, &odp_actions, &flow, odp_port);
@@ -6477,7 +6481,7 @@ packet_out(struct ofproto *ofproto_, struct ofpbuf *packet,
     struct ofpbuf odp_actions;
 
     ofpbuf_use_stack(&key, &keybuf, sizeof keybuf);
-    odp_flow_key_from_flow(&key, flow);
+    odp_flow_key_from_flow(&key, flow, ofp_port_to_odp_port(flow->in_port));
 
     dpif_flow_stats_extract(flow, packet, time_msec(), &stats);
 

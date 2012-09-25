@@ -866,7 +866,7 @@ dpif_netdev_flow_dump_next(const struct dpif *dpif, void *state_,
         struct ofpbuf buf;
 
         ofpbuf_use_stack(&buf, &state->keybuf, sizeof state->keybuf);
-        odp_flow_key_from_flow(&buf, &flow->key);
+        odp_flow_key_from_flow(&buf, &flow->key, flow->key.in_port);
 
         *key = buf.data;
         *key_len = buf.size;
@@ -1014,7 +1014,7 @@ dp_netdev_port_input(struct dp_netdev *dp, struct dp_netdev_port *port,
     if (packet->size < ETH_HEADER_LEN) {
         return;
     }
-    flow_extract(packet, 0, NULL, odp_port_to_ofp_port(port->port_no), &key);
+    flow_extract(packet, 0, NULL, port->port_no, &key);
     flow = dp_netdev_lookup_flow(dp, &key);
     if (flow) {
         dp_netdev_flow_used(flow, packet);
@@ -1104,7 +1104,7 @@ dp_netdev_output_userspace(struct dp_netdev *dp, const struct ofpbuf *packet,
 
     buf = &u->buf;
     ofpbuf_init(buf, ODPUTIL_FLOW_KEY_BYTES + 2 + packet->size);
-    odp_flow_key_from_flow(buf, flow);
+    odp_flow_key_from_flow(buf, flow, flow->in_port);
     key_len = buf->size;
     ofpbuf_pull(buf, key_len);
     ofpbuf_reserve(buf, 2);

@@ -1402,7 +1402,7 @@ dpif_linux_vport_send(int dp_ifindex, uint32_t port_no,
     flow_extract(&packet, 0, NULL, 0, &flow);
 
     ofpbuf_use_stack(&key, &keybuf, sizeof keybuf);
-    odp_flow_key_from_flow(&key, &flow);
+    odp_flow_key_from_flow(&key, &flow, OVSP_NONE);
 
     ofpbuf_use_stack(&actions, &action, sizeof action);
     nl_msg_put_u32(&actions, OVS_ACTION_ATTR_OUTPUT, port_no);

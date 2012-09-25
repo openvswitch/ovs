@@ -509,7 +509,6 @@ void
 flow_wildcards_init_exact(struct flow_wildcards *wc)
 {
     memset(&wc->masks, 0xff, sizeof wc->masks);
-    memset(wc->masks.zeros, 0, sizeof wc->masks.zeros);
 }
 
 /* Returns true if 'wc' matches every packet, false if 'wc' fixes any bits or

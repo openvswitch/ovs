@@ -65,6 +65,14 @@ struct flow_tnl {
     uint8_t ip_ttl;
 };
 
+/*
+* A flow in the network.
+*
+* The meaning of 'in_port' is context-dependent.  In most cases, it is a
+* 16-bit OpenFlow 1.0 port number.  In the software datapath interface (dpif)
+* layer and its implementations (e.g. dpif-linux, dpif-netdev), it is instead
+* a 32-bit datapath port number.
+*/
 struct flow {
     struct flow_tnl tunnel;     /* Encapsulating tunnel parameters. */
     ovs_be64 metadata;          /* OpenFlow Metadata. */
@@ -76,7 +84,9 @@ struct flow {
     ovs_be32 nw_src;            /* IPv4 source address. */
     ovs_be32 nw_dst;            /* IPv4 destination address. */
     ovs_be32 ipv6_label;        /* IPv6 flow label. */
-    uint16_t in_port;           /* OpenFlow port number of input port. */
+    uint32_t in_port;           /* Input port. OpenFlow port number
+                                   unless in DPIF code, in which case it
+                                   is the datapath port number. */
     ovs_be16 vlan_tci;          /* If 802.1Q, TCI | VLAN_CFI; otherwise 0. */
     ovs_be16 dl_type;           /* Ethernet frame type. */
     ovs_be16 tp_src;            /* TCP/UDP source port. */
@@ -89,7 +99,6 @@ struct flow {
     uint8_t arp_tha[6];         /* ARP/ND target hardware address. */
     uint8_t nw_ttl;             /* IP TTL/Hop Limit. */
     uint8_t nw_frag;            /* FLOW_FRAG_* flags. */
-    uint8_t zeros[2];           /* Must be zero. */
 };
 BUILD_ASSERT_DECL(sizeof(struct flow) % 4 == 0);
 

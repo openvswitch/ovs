@@ -70,7 +70,7 @@ parse_keys(void)
         /* Convert cls_rule back to odp_key. */
         ofpbuf_uninit(&odp_key);
         ofpbuf_init(&odp_key, 0);
-        odp_flow_key_from_flow(&odp_key, &flow);
+        odp_flow_key_from_flow(&odp_key, &flow, flow.in_port);
 
         if (odp_key.size > ODPUTIL_FLOW_KEY_BYTES) {
             printf ("too long: %zu > %d\n",

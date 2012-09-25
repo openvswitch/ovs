@@ -1284,11 +1284,16 @@ ovs_to_odp_frag(uint8_t nw_frag)
 }
 
 /* Appends a representation of 'flow' as OVS_KEY_ATTR_* attributes to 'buf'.
+ * 'flow->in_port' is ignored (since it is likely to be an OpenFlow port
+ * number rather than a datapath port number).  Instead, if 'odp_in_port'
+ * is anything other than OVSP_NONE, it is included in 'buf' as the input
+ * port.
  *
  * 'buf' must have at least ODPUTIL_FLOW_KEY_BYTES bytes of space, or be
  * capable of being expanded to allow for that much space. */
 void
-odp_flow_key_from_flow(struct ofpbuf *buf, const struct flow *flow)
+odp_flow_key_from_flow(struct ofpbuf *buf, const struct flow *flow,
+                       uint32_t odp_in_port)
 {
     struct ovs_key_ethernet *eth_key;
     size_t encap;
@@ -1301,9 +1306,8 @@ odp_flow_key_from_flow(struct ofpbuf *buf, const struct flow *flow)
         nl_msg_put_be64(buf, OVS_KEY_ATTR_TUN_ID, flow->tunnel.tun_id);
     }
 
-    if (flow->in_port != OFPP_NONE && flow->in_port != OFPP_CONTROLLER) {
-        nl_msg_put_u32(buf, OVS_KEY_ATTR_IN_PORT,
-                       ofp_port_to_odp_port(flow->in_port));
+    if (odp_in_port != OVSP_NONE) {
+        nl_msg_put_u32(buf, OVS_KEY_ATTR_IN_PORT, odp_in_port);
     }
 
     eth_key = nl_msg_put_unspec_uninit(buf, OVS_KEY_ATTR_ETHERNET,
@@ -1757,6 +1761,10 @@ parse_8021q_onward(const struct nlattr *attrs[OVS_KEY_ATTR_MAX + 1],
  * structure in 'flow'.  Returns an ODP_FIT_* value that indicates how well
  * 'key' fits our expectations for what a flow key should contain.
  *
+ * The 'in_port' will be the datapath's understanding of the port.  The
+ * caller will need to translate with odp_port_to_ofp_port() if the
+ * OpenFlow port is needed.
+ *
  * This function doesn't take the packet itself as an argument because none of
  * the currently understood OVS_KEY_ATTR_* attributes require it.  Currently,
  * it is always possible to infer which additional attribute(s) should appear
@@ -1768,7 +1776,6 @@ enum odp_key_fitness
 odp_flow_key_to_flow(const struct nlattr *key, size_t key_len,
                      struct flow *flow)
 {
-    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
     const struct nlattr *attrs[OVS_KEY_ATTR_MAX + 1];
     uint64_t expected_attrs;
     uint64_t present_attrs;
@@ -1795,16 +1802,10 @@ odp_flow_key_to_flow(const struct nlattr *key, size_t key_len,
     }
 
     if (present_attrs & (UINT64_C(1) << OVS_KEY_ATTR_IN_PORT)) {
-        uint32_t in_port = nl_attr_get_u32(attrs[OVS_KEY_ATTR_IN_PORT]);
-        if (in_port >= UINT16_MAX || in_port >= OFPP_MAX) {
-            VLOG_ERR_RL(&rl, "in_port %"PRIu32" out of supported range",
-                        in_port);
-            return ODP_FIT_ERROR;
-        }
-        flow->in_port = odp_port_to_ofp_port(in_port);
+        flow->in_port = nl_attr_get_u32(attrs[OVS_KEY_ATTR_IN_PORT]);
         expected_attrs |= UINT64_C(1) << OVS_KEY_ATTR_IN_PORT;
     } else {
-        flow->in_port = OFPP_NONE;
+        flow->in_port = OVSP_NONE;
     }
 
     /* Ethernet header. */
