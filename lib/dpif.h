@@ -60,7 +60,7 @@ const char *dpif_base_name(const struct dpif *);
 
 int dpif_delete(struct dpif *);
 
-/* Statisticss for a dpif as a whole. */
+/* Statistics for a dpif as a whole. */
 struct dpif_dp_stats {
     uint64_t n_hit;             /* Number of flow table matches. */
     uint64_t n_missed;          /* Number of flow table misses. */
