@@ -812,10 +812,10 @@ unparse_tunnel_config(const char *name OVS_UNUSED, const char *type OVS_UNUSED,
     }
 
     if (flags & TNL_F_TTL_INHERIT) {
-        smap_add(args, "tos", "inherit");
+        smap_add(args, "ttl", "inherit");
     } else if (a[OVS_TUNNEL_ATTR_TTL]) {
         int ttl = nl_attr_get_u8(a[OVS_TUNNEL_ATTR_TTL]);
-        smap_add_format(args, "tos", "%d", ttl);
+        smap_add_format(args, "ttl", "%d", ttl);
     }
 
     if (flags & TNL_F_TOS_INHERIT) {
