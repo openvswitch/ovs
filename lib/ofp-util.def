@@ -35,28 +35,7 @@ OFPAT11_ACTION(OFPAT11_SET_TP_DST,   ofp_action_tp_port,  "mod_tp_dst")
 //OFPAT11_ACTION(OFPAT11_SET_QUEUE,    ofp11_action_set_queue, "set_queue")
 //OFPAT11_ACTION(OFPAT11_SET_NW_TTL,   ofp11_action_nw_ttl, "set_nw_ttl")
 //OFPAT11_ACTION(OFPAT11_DEC_NW_TTL,   ofp_action_header,   "dec_ttl")
-
-#ifndef OFPAT12_ACTION
-#define OFPAT12_ACTION(ENUM, STRUCT, NAME)
-#endif
-//OFPAT12_ACTION(OFPAT12_OUTPUT, , "output")
-//OFPAT12_ACTION(OFPAT12_COPY_TTL_OUT, ofp_action_header, "copy_ttl_out")
-//OFPAT12_ACTION(OFPAT12_COPY_TTL_IN, ofp_action_header, "copy_ttl_in")
-//OFPAT12_ACTION(OFPAT12_SET_MPLS_TTL, , "set_mpls_ttl")
-//OFPAT12_ACTION(OFPAT12_DEC_MPLS_TTL, ofp_action_header, "dec_mpls_ttl")
-//OFPAT12_ACTION(OFPAT12_PUSH_VLAN, , "push_vlan")
-//OFPAT12_ACTION(OFPAT12_POP_VLAN, ofp_action_header, "pop_vlan")
-//OFPAT12_ACTION(OFPAT12_PUSH_MPLS, , "push_mpls")
-//OFPAT12_ACTION(OFPAT12_POP_MPLS, , "pop_mpls")
-//OFPAT12_ACTION(OFPAT12_SET_QUEUE, , "set_queue")
-//OFPAT12_ACTION(OFPAT12_GROUP, , "group")
-//OFPAT12_ACTION(OFPAT12_SET_NW_TTL, , "set_nw_ttl")
-//OFPAT12_ACTION(OFPAT12_DEC_NW_TTL, ofp_action_header, "dec_ttl")
-//Use non-NULL name for OFPAT12_SET_FIELD once the code for
-//the OFPUTIL_OFPAT12_SET_FIELD case in parse_named_action() is implemented
-//OFPAT12_ACTION(OFPAT12_SET_FIELD, ofp12_action_set_field, "set_field")
-OFPAT12_ACTION(OFPAT12_SET_FIELD, ofp12_action_set_field, NULL)
-//OFPAT12_ACTION(OFPAT12_EXPERIMENTER, , )
+OFPAT11_ACTION(OFPAT12_SET_FIELD, ofp12_action_set_field, NULL)
 
 #ifndef NXAST_ACTION
 #define NXAST_ACTION(ENUM, STRUCT, EXTENSIBLE, NAME)
@@ -84,5 +63,4 @@ NXAST_ACTION(NXAST_DEC_TTL_CNT_IDS, nx_action_cnt_ids,      1, NULL)
 
 #undef OFPAT10_ACTION
 #undef OFPAT11_ACTION
-#undef OFPAT12_ACTION
 #undef NXAST_ACTION

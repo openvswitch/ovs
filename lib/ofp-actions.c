@@ -283,7 +283,6 @@ ofpact_from_nxast(const union ofp_action *a, enum ofputil_action_code code,
     case OFPUTIL_ACTION_INVALID:
 #define OFPAT10_ACTION(ENUM, STRUCT, NAME) case OFPUTIL_##ENUM:
 #define OFPAT11_ACTION(ENUM, STRUCT, NAME) case OFPUTIL_##ENUM:
-#define OFPAT12_ACTION(ENUM, STRUCT, NAME) case OFPUTIL_##ENUM:
 #include "ofp-util.def"
         NOT_REACHED();
 
@@ -398,7 +397,6 @@ ofpact_from_openflow10(const union ofp_action *a, struct ofpbuf *out)
     switch (code) {
     case OFPUTIL_ACTION_INVALID:
 #define OFPAT11_ACTION(ENUM, STRUCT, NAME) case OFPUTIL_##ENUM:
-#define OFPAT12_ACTION(ENUM, STRUCT, NAME) case OFPUTIL_##ENUM:
 #include "ofp-util.def"
         NOT_REACHED();
 
@@ -661,7 +659,6 @@ ofpact_from_openflow11(const union ofp_action *a, struct ofpbuf *out)
     switch (code) {
     case OFPUTIL_ACTION_INVALID:
 #define OFPAT10_ACTION(ENUM, STRUCT, NAME) case OFPUTIL_##ENUM:
-#define OFPAT12_ACTION(ENUM, STRUCT, NAME) case OFPUTIL_##ENUM:
 #include "ofp-util.def"
         NOT_REACHED();
 
@@ -714,6 +711,10 @@ ofpact_from_openflow11(const union ofp_action *a, struct ofpbuf *out)
 
     case OFPUTIL_OFPAT11_SET_TP_DST:
         ofpact_put_SET_L4_DST_PORT(out)->port = ntohs(a->tp_port.tp_port);
+        break;
+
+    case OFPUTIL_OFPAT12_SET_FIELD:
+        /* Not yet implemented. */
         break;
 
 #define NXAST_ACTION(ENUM, STRUCT, EXTENSIBLE, NAME) case OFPUTIL_##ENUM:
