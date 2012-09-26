@@ -4957,8 +4957,11 @@ compose_output_action__(struct action_xlate_ctx *ctx, uint16_t ofp_port,
     if (ofport) {
         struct priority_to_dscp *pdscp;
 
-        if (ofport->up.pp.config & OFPUTIL_PC_NO_FWD
-            || (check_stp && !stp_forward_in_state(ofport->stp_state))) {
+        if (ofport->up.pp.config & OFPUTIL_PC_NO_FWD) {
+            xlate_report(ctx, "OFPPC_NO_FWD set, skipping output");
+            return;
+        } else if (check_stp && !stp_forward_in_state(ofport->stp_state)) {
+            xlate_report(ctx, "STP not in forwarding state, skipping output");
             return;
         }
 
@@ -5232,6 +5235,8 @@ xlate_output_action(struct action_xlate_ctx *ctx,
     default:
         if (port != ctx->flow.in_port) {
             compose_output_action(ctx, port);
+        } else {
+            xlate_report(ctx, "skipping output to input port");
         }
         break;
     }
