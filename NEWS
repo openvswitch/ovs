@@ -28,12 +28,13 @@ post-v1.8.0
       program was not included in distribution packaging.)
     - ovsdb-server now enforces the immutability of immutable columns.  This
       was not enforced in earlier versions due to an oversight.
-    - Stable bond mode is deprecated and will be removed no earlier than
-      February 2013.  Please email dev@openvswitch.org with concerns.
-    - The autopath action is deprecated and will be removed no earlier than
-      February 2013.  Please email dev@openvswitch.org with concerns.
-    - The null interface type is deprecated and will be removed no earlier
-      than February 2013.  Please email dev@openvswitch.org with concerns.
+    - The following features are now deprecated.  They will be removed no
+      earlier than February 2013.  Please email dev@openvswitch.org with
+      concerns.
+        - Stable bond mode.
+        - The autopath action.
+        - Interface type "null".
+        - Numeric values for reserved ports (see "ovs-ofctl" note above).
 
 
 v1.8.0 - xx xxx xxxx

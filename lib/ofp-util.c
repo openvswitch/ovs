@@ -3569,9 +3569,9 @@ ofputil_port_from_string(const char *s)
 
             ds_init(&s);
             ofputil_format_port(port32, &s);
-            VLOG_WARN("port %u is better referred to as %s, for compatibility "
-                      "with future versions of OpenFlow",
-                      port32, ds_cstr(&s));
+            VLOG_WARN_ONCE("referring to port %s as %u is deprecated for "
+                           "compatibility with future versions of OpenFlow",
+                           ds_cstr(&s), port32);
             ds_destroy(&s);
 
             return port32;
