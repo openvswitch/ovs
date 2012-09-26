@@ -72,8 +72,8 @@ int dpif_get_dp_stats(const struct dpif *, struct dpif_dp_stats *);
 
 /* Port operations. */
 
-int dpif_port_add(struct dpif *, struct netdev *, uint16_t *port_nop);
-int dpif_port_del(struct dpif *, uint16_t port_no);
+int dpif_port_add(struct dpif *, struct netdev *, uint32_t *port_nop);
+int dpif_port_del(struct dpif *, uint32_t port_no);
 
 /* A port within a datapath.
  *
@@ -85,14 +85,14 @@ struct dpif_port {
 };
 void dpif_port_clone(struct dpif_port *, const struct dpif_port *);
 void dpif_port_destroy(struct dpif_port *);
-int dpif_port_query_by_number(const struct dpif *, uint16_t port_no,
+int dpif_port_query_by_number(const struct dpif *, uint32_t port_no,
                               struct dpif_port *);
 int dpif_port_query_by_name(const struct dpif *, const char *devname,
                             struct dpif_port *);
-int dpif_port_get_name(struct dpif *, uint16_t port_no,
+int dpif_port_get_name(struct dpif *, uint32_t port_no,
                        char *name, size_t name_size);
 int dpif_get_max_ports(const struct dpif *);
-uint32_t dpif_port_get_pid(const struct dpif *, uint16_t port_no);
+uint32_t dpif_port_get_pid(const struct dpif *, uint32_t port_no);
 
 struct dpif_port_dump {
     const struct dpif *dpif;

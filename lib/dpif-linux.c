@@ -200,7 +200,7 @@ struct dpif_linux {
     bool change_error;
 
     /* Port number allocation. */
-    uint16_t alloc_port_no;
+    uint32_t alloc_port_no;
 };
 
 static struct vlog_rate_limit error_rl = VLOG_RATE_LIMIT_INIT(9999, 5);
@@ -219,7 +219,7 @@ static int dpif_linux_init(void);
 static void open_dpif(const struct dpif_linux_dp *, struct dpif **);
 static bool dpif_linux_nln_parse(struct ofpbuf *, void *);
 static void dpif_linux_port_changed(const void *vport, void *dpif);
-static uint32_t dpif_linux_port_get_pid(const struct dpif *, uint16_t port_no);
+static uint32_t dpif_linux_port_get_pid(const struct dpif *, uint32_t port_no);
 
 static void dpif_linux_vport_to_ofpbuf(const struct dpif_linux_vport *,
                                        struct ofpbuf *);
@@ -392,7 +392,7 @@ dpif_linux_get_stats(const struct dpif *dpif_, struct dpif_dp_stats *stats)
 
 static int
 dpif_linux_port_add(struct dpif *dpif_, struct netdev *netdev,
-                    uint16_t *port_nop)
+                    uint32_t *port_nop)
 {
     struct dpif_linux *dpif = dpif_linux_cast(dpif_);
     const char *name = netdev_get_name(netdev);
@@ -429,7 +429,7 @@ dpif_linux_port_add(struct dpif *dpif_, struct netdev *netdev,
     do {
         uint32_t upcall_pid;
 
-        request.port_no = *port_nop != UINT16_MAX ? *port_nop
+        request.port_no = *port_nop != UINT32_MAX ? *port_nop
                           : ++dpif->alloc_port_no;
         upcall_pid = dpif_linux_port_get_pid(dpif_, request.port_no);
         request.upcall_pid = &upcall_pid;
@@ -443,20 +443,20 @@ dpif_linux_port_add(struct dpif *dpif_, struct netdev *netdev,
             /* Older datapath has lower limit. */
             max_ports = dpif->alloc_port_no;
             dpif->alloc_port_no = 0;
-        } else if (error == EBUSY && *port_nop != UINT16_MAX) {
-            VLOG_INFO("%s: requested port %"PRIu16" is in use",
+        } else if (error == EBUSY && *port_nop != UINT32_MAX) {
+            VLOG_INFO("%s: requested port %"PRIu32" is in use",
                      dpif_name(dpif_), *port_nop);
         }
 
         ofpbuf_delete(buf);
-    } while ((*port_nop == UINT16_MAX) && (i++ < max_ports)
+    } while ((*port_nop == UINT32_MAX) && (i++ < max_ports)
              && (error == EBUSY || error == EFBIG));
 
     return error;
 }
 
 static int
-dpif_linux_port_del(struct dpif *dpif_, uint16_t port_no)
+dpif_linux_port_del(struct dpif *dpif_, uint32_t port_no)
 {
     struct dpif_linux *dpif = dpif_linux_cast(dpif_);
     struct dpif_linux_vport vport;
@@ -503,7 +503,7 @@ dpif_linux_port_query__(const struct dpif *dpif, uint32_t port_no,
 }
 
 static int
-dpif_linux_port_query_by_number(const struct dpif *dpif, uint16_t port_no,
+dpif_linux_port_query_by_number(const struct dpif *dpif, uint32_t port_no,
                                 struct dpif_port *dpif_port)
 {
     return dpif_linux_port_query__(dpif, port_no, NULL, dpif_port);
@@ -523,7 +523,7 @@ dpif_linux_get_max_ports(const struct dpif *dpif OVS_UNUSED)
 }
 
 static uint32_t
-dpif_linux_port_get_pid(const struct dpif *dpif_, uint16_t port_no)
+dpif_linux_port_get_pid(const struct dpif *dpif_, uint32_t port_no)
 {
     struct dpif_linux *dpif = dpif_linux_cast(dpif_);
 
@@ -532,7 +532,7 @@ dpif_linux_port_get_pid(const struct dpif *dpif_, uint16_t port_no)
     } else {
         int idx;
 
-        idx = (port_no != UINT16_MAX
+        idx = (port_no != UINT32_MAX
                ? 1 + (port_no & (N_CHANNELS - 2))
                : 0);
         return nl_sock_pid(dpif->channels[idx].sock);

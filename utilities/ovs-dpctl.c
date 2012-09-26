@@ -248,7 +248,7 @@ dpctl_add_if(int argc OVS_UNUSED, char *argv[])
         char *save_ptr = NULL;
         struct netdev *netdev = NULL;
         struct smap args;
-        uint16_t port_no = UINT16_MAX;
+        uint32_t port_no = UINT32_MAX;
         char *option;
         int error;
 
@@ -416,7 +416,7 @@ next:
 }
 
 static bool
-get_port_number(struct dpif *dpif, const char *name, uint16_t *port)
+get_port_number(struct dpif *dpif, const char *name, uint32_t *port)
 {
     struct dpif_port dpif_port;
 
@@ -440,7 +440,7 @@ dpctl_del_if(int argc OVS_UNUSED, char *argv[])
     run(parsed_dpif_open(argv[1], false, &dpif), "opening datapath");
     for (i = 2; i < argc; i++) {
         const char *name = argv[i];
-        uint16_t port;
+        uint32_t port;
         int error;
 
         if (!name[strspn(name, "0123456789")]) {

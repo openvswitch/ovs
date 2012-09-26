@@ -111,23 +111,23 @@ struct dpif_class {
     int (*get_stats)(const struct dpif *dpif, struct dpif_dp_stats *stats);
 
     /* Adds 'netdev' as a new port in 'dpif'.  If '*port_no' is not
-     * UINT16_MAX, attempts to use that as the port's port number.
+     * UINT32_MAX, attempts to use that as the port's port number.
      *
      * If port is successfully added, sets '*port_no' to the new port's
      * port number.  Returns EBUSY if caller attempted to choose a port
      * number, and it was in use. */
     int (*port_add)(struct dpif *dpif, struct netdev *netdev,
-                    uint16_t *port_no);
+                    uint32_t *port_no);
 
     /* Removes port numbered 'port_no' from 'dpif'. */
-    int (*port_del)(struct dpif *dpif, uint16_t port_no);
+    int (*port_del)(struct dpif *dpif, uint32_t port_no);
 
     /* Queries 'dpif' for a port with the given 'port_no' or 'devname'.  Stores
      * information about the port into '*port' if successful.
      *
      * The caller takes ownership of data in 'port' and must free it with
      * dpif_port_destroy() when it is no longer needed. */
-    int (*port_query_by_number)(const struct dpif *dpif, uint16_t port_no,
+    int (*port_query_by_number)(const struct dpif *dpif, uint32_t port_no,
                                 struct dpif_port *port);
     int (*port_query_by_name)(const struct dpif *dpif, const char *devname,
                               struct dpif_port *port);
@@ -140,7 +140,7 @@ struct dpif_class {
      * actions as the OVS_USERSPACE_ATTR_PID attribute's value, for use in
      * flows whose packets arrived on port 'port_no'.
      *
-     * A 'port_no' of UINT16_MAX should be treated as a special case.  The
+     * A 'port_no' of UINT32_MAX should be treated as a special case.  The
      * implementation should return a reserved PID, not allocated to any port,
      * that the client may use for special purposes.
      *
@@ -150,7 +150,7 @@ struct dpif_class {
      *
      * A dpif provider that doesn't have meaningful Netlink PIDs can use NULL
      * for this function.  This is equivalent to always returning 0. */
-    uint32_t (*port_get_pid)(const struct dpif *dpif, uint16_t port_no);
+    uint32_t (*port_get_pid)(const struct dpif *dpif, uint32_t port_no);
 
     /* Attempts to begin dumping the ports in a dpif.  On success, returns 0
      * and initializes '*statep' with any data needed for iteration.  On

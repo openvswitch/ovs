@@ -277,7 +277,7 @@ struct action_xlate_ctx {
     uint32_t orig_skb_priority; /* Priority when packet arrived. */
     uint8_t table_id;           /* OpenFlow table ID where flow was found. */
     uint32_t sflow_n_outputs;   /* Number of output ports. */
-    uint16_t sflow_odp_port;    /* Output port for composing sFlow action. */
+    uint32_t sflow_odp_port;    /* Output port for composing sFlow action. */
     uint16_t user_cookie_offset;/* Used for user_action_cookie fixup. */
     bool exit;                  /* No further actions should be processed. */
     struct flow orig_flow;      /* Copy of original flow. */
@@ -2531,7 +2531,7 @@ static int
 port_add(struct ofproto *ofproto_, struct netdev *netdev, uint16_t *ofp_portp)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
-    uint16_t odp_port = UINT16_MAX;
+    uint32_t odp_port = UINT32_MAX;
     int error;
 
     error = dpif_port_add(ofproto->dpif, netdev, &odp_port);
@@ -4760,7 +4760,7 @@ send_packet(const struct ofport_dpif *ofport, struct ofpbuf *packet)
     const struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofport->up.ofproto);
     struct ofpbuf key, odp_actions;
     struct odputil_keybuf keybuf;
-    uint16_t odp_port;
+    uint32_t odp_port;
     struct flow flow;
     int error;
 
@@ -4950,7 +4950,7 @@ compose_output_action__(struct action_xlate_ctx *ctx, uint16_t ofp_port,
                         bool check_stp)
 {
     const struct ofport_dpif *ofport = get_ofp_port(ctx->ofproto, ofp_port);
-    uint16_t odp_port = ofp_port_to_odp_port(ofp_port);
+    uint32_t odp_port = ofp_port_to_odp_port(ofp_port);
     ovs_be16 flow_vlan_tci = ctx->flow.vlan_tci;
     uint8_t flow_nw_tos = ctx->flow.nw_tos;
     uint16_t out_port;
@@ -6795,7 +6795,7 @@ ofproto_unixctl_trace(struct unixctl_conn *conn, int argc, const char *argv[],
         const char *tun_id_s = argv[3];
         const char *in_port_s = argv[4];
         const char *packet_s = argv[5];
-        uint16_t in_port = atoi(in_port_s);
+        uint32_t in_port = atoi(in_port_s);
         ovs_be64 tun_id = htonll(strtoull(tun_id_s, NULL, 0));
         uint32_t priority = atoi(priority_s);
         const char *msg;

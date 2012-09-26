@@ -32,9 +32,9 @@ struct nlattr;
 struct ofpbuf;
 struct simap;
 
-#define OVSP_NONE UINT16_MAX
+#define OVSP_NONE UINT32_MAX
 
-static inline uint16_t
+static inline uint32_t
 ofp_port_to_odp_port(uint16_t ofp_port)
 {
     switch (ofp_port) {
@@ -48,7 +48,7 @@ ofp_port_to_odp_port(uint16_t ofp_port)
 }
 
 static inline uint16_t
-odp_port_to_ofp_port(uint16_t odp_port)
+odp_port_to_ofp_port(uint32_t odp_port)
 {
     switch (odp_port) {
     case OVSP_LOCAL:

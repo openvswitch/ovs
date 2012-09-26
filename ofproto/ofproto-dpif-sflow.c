@@ -142,7 +142,7 @@ sflow_agent_send_packet_cb(void *ds_, SFLAgent *agent OVS_UNUSED,
 }
 
 static struct dpif_sflow_port *
-dpif_sflow_find_port(const struct dpif_sflow *ds, uint16_t odp_port)
+dpif_sflow_find_port(const struct dpif_sflow *ds, uint32_t odp_port)
 {
     struct dpif_sflow_port *dsp;
 
@@ -356,7 +356,7 @@ void
 dpif_sflow_add_port(struct dpif_sflow *ds, struct ofport *ofport)
 {
     struct dpif_sflow_port *dsp;
-    uint16_t odp_port = ofp_port_to_odp_port(ofport->ofp_port);
+    uint32_t odp_port = ofp_port_to_odp_port(ofport->ofp_port);
     uint32_t ifindex;
 
     dpif_sflow_del_port(ds, odp_port);
@@ -390,7 +390,7 @@ dpif_sflow_del_port__(struct dpif_sflow *ds, struct dpif_sflow_port *dsp)
 }
 
 void
-dpif_sflow_del_port(struct dpif_sflow *ds, uint16_t odp_port)
+dpif_sflow_del_port(struct dpif_sflow *ds, uint32_t odp_port)
 {
     struct dpif_sflow_port *dsp = dpif_sflow_find_port(ds, odp_port);
     if (dsp) {
@@ -483,7 +483,7 @@ dpif_sflow_set_options(struct dpif_sflow *ds,
 
 int
 dpif_sflow_odp_port_to_ifindex(const struct dpif_sflow *ds,
-                               uint16_t odp_port)
+                               uint32_t odp_port)
 {
     struct dpif_sflow_port *dsp = dpif_sflow_find_port(ds, odp_port);
     return dsp ? SFL_DS_INDEX(dsp->dsi) : 0;

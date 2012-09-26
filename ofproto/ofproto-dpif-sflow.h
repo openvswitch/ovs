@@ -38,7 +38,7 @@ void dpif_sflow_clear(struct dpif_sflow *);
 bool dpif_sflow_is_enabled(const struct dpif_sflow *);
 
 void dpif_sflow_add_port(struct dpif_sflow *ds, struct ofport *ofport);
-void dpif_sflow_del_port(struct dpif_sflow *, uint16_t ovs_port);
+void dpif_sflow_del_port(struct dpif_sflow *, uint32_t odp_port);
 
 void dpif_sflow_run(struct dpif_sflow *);
 void dpif_sflow_wait(struct dpif_sflow *);
@@ -48,6 +48,6 @@ void dpif_sflow_received(struct dpif_sflow *,
                          const struct flow *,
                          const union user_action_cookie *);
 
-int dpif_sflow_odp_port_to_ifindex(const struct dpif_sflow *, uint16_t);
+int dpif_sflow_odp_port_to_ifindex(const struct dpif_sflow *, uint32_t);
 
 #endif /* ofproto/ofproto-dpif-sflow.h */
