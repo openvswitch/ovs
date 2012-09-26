@@ -92,7 +92,7 @@ xset_nonblocking(int fd)
     }
 }
 
-static int
+int
 set_dscp(int fd, uint8_t dscp)
 {
     int val;
