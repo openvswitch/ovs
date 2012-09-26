@@ -204,6 +204,7 @@ information, and partner information.  If \fIport\fR is not specified,
 then displays detailed information about all interfaces with CFM
 enabled.
 .
+.so ofproto/ofproto-dpif-unixctl.man
 .so ofproto/ofproto-unixctl.man
 .so lib/vlog-unixctl.man
 .so lib/memory-unixctl.man

@@ -1190,3 +1190,103 @@ AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip], [0],
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
+
+AT_SETUP([ofproto-dpif - ovs-appctl dpif/dump-dps])
+OVS_VSWITCHD_START([add-br br1 -- set bridge br1 datapath-type=dummy])
+ADD_OF_PORTS([br0], [1], [2])
+ADD_OF_PORTS([br1], [3])
+
+AT_CHECK([ovs-appctl dpif/dump-dps], [0], [dnl
+dummy@br0
+dummy@br1
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto-dpif - ovs-appctl dpif/show])
+OVS_VSWITCHD_START([add-br br1 -- set bridge br1 datapath-type=dummy])
+ADD_OF_PORTS([br0], [1], [2])
+ADD_OF_PORTS([br1], [3])
+
+AT_CHECK([ovs-appctl dpif/show], [0], [dnl
+dummy@br0:
+	lookups: hit:0 missed:0 lost:0
+	flows: 0
+	br0 65534/100: (dummy)
+	p1 1/1: (dummy)
+	p2 2/2: (dummy)
+dummy@br1:
+	lookups: hit:0 missed:0 lost:0
+	flows: 0
+	br1 65534/101: (dummy)
+	p3 3/3: (dummy)
+])
+
+AT_CHECK([ovs-appctl dpif/show br0], [0], [dnl
+dummy@br0:
+	lookups: hit:0 missed:0 lost:0
+	flows: 0
+	br0 65534/100: (dummy)
+	p1 1/1: (dummy)
+	p2 2/2: (dummy)
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto-dpif - ovs-appctl dpif/dump-flows])
+OVS_VSWITCHD_START([add-br br1 -- \
+                    set bridge br1 datapath-type=dummy fail-mode=secure])
+ADD_OF_PORTS([br0], [1], [2])
+ADD_OF_PORTS([br1], [3])
+
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'], [0], [success
+])
+AT_CHECK([ovs-appctl netdev-dummy/receive p2 'in_port(2),eth(src=50:54:00:00:00:07,dst=50:54:00:00:00:05),eth_type(0x0800),ipv4(src=192.168.0.2,dst=192.168.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=0,code=0)'], [0], [success
+])
+AT_CHECK([ovs-appctl netdev-dummy/receive p3 'in_port(3),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'], [0], [success
+])
+
+AT_CHECK([ovs-appctl dpif/dump-flows br0 | sort | STRIP_USED], [0], [dnl
+in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0), packets:0, bytes:0, used:0.0s, actions:drop
+in_port(2),eth(src=50:54:00:00:00:07,dst=50:54:00:00:00:05),eth_type(0x0800),ipv4(src=192.168.0.2,dst=192.168.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=0,code=0), packets:0, bytes:0, used:0.0s, actions:drop
+])
+
+AT_CHECK([ovs-appctl dpif/dump-flows br1 | sort | STRIP_USED], [0], [dnl
+in_port(3),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0), packets:0, bytes:0, used:0.0s, actions:drop
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto-dpif - ovs-appctl dpif/del-flows])
+OVS_VSWITCHD_START([add-br br1 -- \
+                    set bridge br1 datapath-type=dummy fail-mode=secure])
+ADD_OF_PORTS([br0], [1], [2])
+ADD_OF_PORTS([br1], [3])
+
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'], [0], [success
+])
+AT_CHECK([ovs-appctl netdev-dummy/receive p2 'in_port(2),eth(src=50:54:00:00:00:07,dst=50:54:00:00:00:05),eth_type(0x0800),ipv4(src=192.168.0.2,dst=192.168.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=0,code=0)'], [0], [success
+])
+AT_CHECK([ovs-appctl netdev-dummy/receive p3 'in_port(3),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'], [0], [success
+])
+
+AT_CHECK([ovs-appctl dpif/dump-flows br0 | sort | STRIP_USED], [0], [dnl
+in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0), packets:0, bytes:0, used:0.0s, actions:drop
+in_port(2),eth(src=50:54:00:00:00:07,dst=50:54:00:00:00:05),eth_type(0x0800),ipv4(src=192.168.0.2,dst=192.168.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=0,code=0), packets:0, bytes:0, used:0.0s, actions:drop
+])
+
+AT_CHECK([ovs-appctl dpif/dump-flows br1 | sort | STRIP_USED], [0], [dnl
+in_port(3),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0), packets:0, bytes:0, used:0.0s, actions:drop
+])
+
+AT_CHECK([ovs-appctl dpif/del-flows br0])
+AT_CHECK([ovs-appctl dpif/dump-flows br0 | sort | STRIP_USED], [0], [dnl
+])
+
+AT_CHECK([ovs-appctl dpif/dump-flows br1 | sort | STRIP_USED], [0], [dnl
+in_port(3),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0), packets:0, bytes:0, used:0.0s, actions:drop
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP

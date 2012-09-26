@@ -112,7 +112,8 @@ flow table.
 This command is primarily useful for debugging Open vSwitch.  The flow
 table entries that it displays are not
 OpenFlow flow entries.  Instead, they are different and considerably
-simpler flows maintained by the Open vSwitch kernel module.
+simpler flows maintained by the Open vSwitch kernel module.  If you wish
+to see the OpenFlow flow entries, use \fBovs\-ofctl dump\-flows\fR.
 .IP "\fBdel\-flows \fIdp\fR"
 Deletes all flow entries from datapath \fIdp\fR's flow table.
 .IP

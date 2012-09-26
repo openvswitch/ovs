@@ -241,6 +241,7 @@ vswitchd/ovs-vswitchd.8: \
 	lib/stress-unixctl.man \
 	lib/vlog-unixctl.man \
 	lib/vlog.man \
+	ofproto/ofproto-dpif-unixctl.man \
 	ofproto/ofproto-unixctl.man \
 	ovsdb/remote-active.man \
 	ovsdb/remote-passive.man
@@ -254,6 +255,7 @@ lib/ssl.man:
 lib/stress-unixctl.man:
 lib/vlog-unixctl.man:
 lib/vlog.man:
+ofproto/ofproto-dpif-unixctl.man:
 ofproto/ofproto-unixctl.man:
 ovsdb/remote-active.man:
 ovsdb/remote-passive.man:

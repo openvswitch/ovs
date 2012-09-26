@@ -1,0 +1,34 @@
+.SS "DATAPATH COMMANDS"
+These commands manage logical datapaths.  They are are similar to the
+equivalent \fBovs\-dpctl\fR commands.
+.
+.IP "\fBdpif/dump\-dps\fR"
+Prints the name of each configured datapath on a separate line.
+.
+.IP "\fBdpif/show\fR [\fIdp\fR...]"
+Prints a summary of configured datapaths, including statistics and a
+list of connected ports.  The port information includes the OpenFlow
+port number, datapath port number, and the type.  (The local port is
+identified as OpenFlow port 65534.)
+.IP
+If one or more datapaths are specified, information on only those
+datapaths are displayed.  Otherwise, information about all configured
+datapaths are shown.
+.
+.IP "\fBdpif/dump\-flows \fIdp\fR"
+Prints to the console all flow entries in datapath \fIdp\fR's
+flow table.
+.IP
+This command is primarily useful for debugging Open vSwitch.  The flow
+table entries that it displays are not OpenFlow flow entries.  Instead,
+they are different and considerably simpler flows maintained by the
+datapath module.  If you wish to see the OpenFlow flow entries, use
+\fBovs\-ofctl dump\-flows\fR.
+.
+.IP "\fBdpif/del\-flows \fIdp\fR"
+Deletes all flow entries from datapath \fIdp\fR's flow table and
+underlying datapath implementation (e.g., kernel datapath module).
+.IP
+This command is primarily useful for debugging Open vSwitch.  As
+discussed in \fBdpif/dump\-flows\fR, these entries are
+not OpenFlow flow entries.

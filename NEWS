@@ -28,6 +28,9 @@ v1.9.0 - xx xxx xxxx
     - ovs-dpctl:
       - Support requesting the port number with the "port_no" option in
         the "add-if" command.
+    - ovs-appctl:
+      - New "dpif/dump-dps", "dpif/show", and "dpif/dump-flows" command
+        that mimic the equivalent ovs-dpctl commands.
     - ovs-pki: The "online PKI" features have been removed, along with
       the ovs-pki-cgi program that facilitated it, because of some
       alarmist insecurity claims.  We do not believe that these claims

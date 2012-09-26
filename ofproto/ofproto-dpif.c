@@ -49,6 +49,7 @@
 #include "ofproto-dpif-sflow.h"
 #include "poll-loop.h"
 #include "simap.h"
+#include "smap.h"
 #include "timer.h"
 #include "unaligned.h"
 #include "unixctl.h"
@@ -7043,6 +7044,208 @@ ofproto_dpif_self_check(struct unixctl_conn *conn,
     ds_destroy(&reply);
 }
 
+/* Store the current ofprotos in 'ofproto_shash'.  Returns a sorted list
+ * of the 'ofproto_shash' nodes.  It is the responsibility of the caller
+ * to destroy 'ofproto_shash' and free the returned value. */
+static const struct shash_node **
+get_ofprotos(struct shash *ofproto_shash)
+{
+    const struct ofproto_dpif *ofproto;
+
+    HMAP_FOR_EACH (ofproto, all_ofproto_dpifs_node, &all_ofproto_dpifs) {
+        char *name = xasprintf("%s@%s", ofproto->up.type, ofproto->up.name);
+        shash_add_nocopy(ofproto_shash, name, ofproto);
+    }
+
+    return shash_sort(ofproto_shash);
+}
+
+static void
+ofproto_unixctl_dpif_dump_dps(struct unixctl_conn *conn, int argc OVS_UNUSED,
+                              const char *argv[] OVS_UNUSED,
+                              void *aux OVS_UNUSED)
+{
+    struct ds ds = DS_EMPTY_INITIALIZER;
+    struct shash ofproto_shash;
+    const struct shash_node **sorted_ofprotos;
+    int i;
+
+    shash_init(&ofproto_shash);
+    sorted_ofprotos = get_ofprotos(&ofproto_shash);
+    for (i = 0; i < shash_count(&ofproto_shash); i++) {
+        const struct shash_node *node = sorted_ofprotos[i];
+        ds_put_format(&ds, "%s\n", node->name);
+    }
+
+    shash_destroy(&ofproto_shash);
+    free(sorted_ofprotos);
+
+    unixctl_command_reply(conn, ds_cstr(&ds));
+    ds_destroy(&ds);
+}
+
+static void
+show_dp_format(const struct ofproto_dpif *ofproto, struct ds *ds)
+{
+    struct dpif_dp_stats s;
+    const struct shash_node **ports;
+    int i;
+
+    dpif_get_dp_stats(ofproto->dpif, &s);
+
+    ds_put_format(ds, "%s@%s:\n", ofproto->up.type, ofproto->up.name);
+    ds_put_format(ds,
+                  "\tlookups: hit:%"PRIu64" missed:%"PRIu64" lost:%"PRIu64"\n",
+                  s.n_hit, s.n_missed, s.n_lost);
+    ds_put_format(ds, "\tflows: %"PRIu64"\n", s.n_flows);
+
+    ports = shash_sort(&ofproto->up.port_by_name);
+    for (i = 0; i < shash_count(&ofproto->up.port_by_name); i++) {
+        const struct shash_node *node = ports[i];
+        struct ofport *ofport = node->data;
+        const char *name = netdev_get_name(ofport->netdev);
+        const char *type = netdev_get_type(ofport->netdev);
+
+        ds_put_format(ds, "\t%s %u/%u:", name, ofport->ofp_port,
+                      ofp_port_to_odp_port(ofproto, ofport->ofp_port));
+        if (strcmp(type, "system")) {
+            struct netdev *netdev;
+            int error;
+
+            ds_put_format(ds, " (%s", type);
+
+            error = netdev_open(name, type, &netdev);
+            if (!error) {
+                struct smap config;
+
+                smap_init(&config);
+                error = netdev_get_config(netdev, &config);
+                if (!error) {
+                    const struct smap_node **nodes;
+                    size_t i;
+
+                    nodes = smap_sort(&config);
+                    for (i = 0; i < smap_count(&config); i++) {
+                        const struct smap_node *node = nodes[i];
+                        ds_put_format(ds, "%c %s=%s", i ? ',' : ':',
+                                      node->key, node->value);
+                    }
+                    free(nodes);
+                }
+                smap_destroy(&config);
+
+                netdev_close(netdev);
+            }
+            ds_put_char(ds, ')');
+        }
+        ds_put_char(ds, '\n');
+    }
+    free(ports);
+}
+
+static void
+ofproto_unixctl_dpif_show(struct unixctl_conn *conn, int argc,
+                          const char *argv[], void *aux OVS_UNUSED)
+{
+    struct ds ds = DS_EMPTY_INITIALIZER;
+    const struct ofproto_dpif *ofproto;
+
+    if (argc > 1) {
+        int i;
+        for (i = 1; i < argc; i++) {
+            ofproto = ofproto_dpif_lookup(argv[i]);
+            if (!ofproto) {
+                ds_put_format(&ds, "Unknown bridge %s (use dpif/dump-dps "
+                                   "for help)", argv[i]);
+                unixctl_command_reply_error(conn, ds_cstr(&ds));
+                return;
+            }
+            show_dp_format(ofproto, &ds);
+        }
+    } else {
+        struct shash ofproto_shash;
+        const struct shash_node **sorted_ofprotos;
+        int i;
+
+        shash_init(&ofproto_shash);
+        sorted_ofprotos = get_ofprotos(&ofproto_shash);
+        for (i = 0; i < shash_count(&ofproto_shash); i++) {
+            const struct shash_node *node = sorted_ofprotos[i];
+            show_dp_format(node->data, &ds);
+        }
+
+        shash_destroy(&ofproto_shash);
+        free(sorted_ofprotos);
+    }
+
+    unixctl_command_reply(conn, ds_cstr(&ds));
+    ds_destroy(&ds);
+}
+
+static void
+ofproto_unixctl_dpif_dump_flows(struct unixctl_conn *conn,
+                                int argc OVS_UNUSED, const char *argv[],
+                                void *aux OVS_UNUSED)
+{
+    struct ds ds = DS_EMPTY_INITIALIZER;
+    const struct ofproto_dpif *ofproto;
+    struct subfacet *subfacet;
+
+    ofproto = ofproto_dpif_lookup(argv[1]);
+    if (!ofproto) {
+        unixctl_command_reply_error(conn, "no such bridge");
+        return;
+    }
+
+    HMAP_FOR_EACH (subfacet, hmap_node, &ofproto->subfacets) {
+        struct odputil_keybuf keybuf;
+        struct ofpbuf key;
+
+        subfacet_get_key(subfacet, &keybuf, &key);
+        odp_flow_key_format(key.data, key.size, &ds);
+
+        ds_put_format(&ds, ", packets:%"PRIu64", bytes:%"PRIu64", used:",
+                      subfacet->dp_packet_count, subfacet->dp_byte_count);
+        if (subfacet->used) {
+            ds_put_format(&ds, "%.3fs",
+                          (time_msec() - subfacet->used) / 1000.0);
+        } else {
+            ds_put_format(&ds, "never");
+        }
+        if (subfacet->facet->tcp_flags) {
+            ds_put_cstr(&ds, ", flags:");
+            packet_format_tcp_flags(&ds, subfacet->facet->tcp_flags);
+        }
+
+        ds_put_cstr(&ds, ", actions:");
+        format_odp_actions(&ds, subfacet->actions, subfacet->actions_len);
+        ds_put_char(&ds, '\n');
+    }
+
+    unixctl_command_reply(conn, ds_cstr(&ds));
+    ds_destroy(&ds);
+}
+
+static void
+ofproto_unixctl_dpif_del_flows(struct unixctl_conn *conn,
+                               int argc OVS_UNUSED, const char *argv[],
+                               void *aux OVS_UNUSED)
+{
+    struct ds ds = DS_EMPTY_INITIALIZER;
+    struct ofproto_dpif *ofproto;
+
+    ofproto = ofproto_dpif_lookup(argv[1]);
+    if (!ofproto) {
+        unixctl_command_reply_error(conn, "no such bridge");
+        return;
+    }
+
+    flush(&ofproto->up);
+
+    unixctl_command_reply(conn, ds_cstr(&ds));
+    ds_destroy(&ds);
+}
+
 static void
 ofproto_dpif_unixctl_init(void)
 {
@@ -7066,6 +7269,14 @@ ofproto_dpif_unixctl_init(void)
                              ofproto_dpif_unclog, NULL);
     unixctl_command_register("ofproto/self-check", "[bridge]", 0, 1,
                              ofproto_dpif_self_check, NULL);
+    unixctl_command_register("dpif/dump-dps", "", 0, 0,
+                             ofproto_unixctl_dpif_dump_dps, NULL);
+    unixctl_command_register("dpif/show", "[bridge]", 0, INT_MAX,
+                             ofproto_unixctl_dpif_show, NULL);
+    unixctl_command_register("dpif/dump-flows", "bridge", 1, 1,
+                             ofproto_unixctl_dpif_dump_flows, NULL);
+    unixctl_command_register("dpif/del-flows", "bridge", 1, 1,
+                             ofproto_unixctl_dpif_del_flows, NULL);
 }
 
 /* Linux VLAN device support (e.g. "eth0.10" for VLAN 10.)

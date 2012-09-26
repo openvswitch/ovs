@@ -31,4 +31,4 @@ ofproto_libofproto_a_SOURCES = \
 	ofproto/pinsched.c \
 	ofproto/pinsched.h
 
-MAN_FRAGMENTS += ofproto/ofproto-unixctl.man
+MAN_FRAGMENTS += ofproto/ofproto-unixctl.man ofproto/ofproto-dpif-unixctl.man
