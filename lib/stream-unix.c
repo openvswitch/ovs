@@ -92,7 +92,7 @@ punix_open(const char *name OVS_UNUSED, char *suffix,
         return error;
     }
 
-    return new_fd_pstream(name, fd, punix_accept,
+    return new_fd_pstream(name, fd, punix_accept, NULL,
                           xstrdup(suffix), pstreamp);
 }
 
@@ -118,6 +118,7 @@ const struct pstream_class punix_pstream_class = {
     punix_open,
     NULL,
     NULL,
-    NULL
+    NULL,
+    NULL,
 };
 

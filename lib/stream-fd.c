@@ -169,6 +169,7 @@ struct fd_pstream
     int fd;
     int (*accept_cb)(int fd, const struct sockaddr *, size_t sa_len,
                      struct stream **);
+    int (*set_dscp_cb)(int fd, uint8_t dscp);
     char *unlink_path;
 };
 
@@ -199,12 +200,14 @@ int
 new_fd_pstream(const char *name, int fd,
                int (*accept_cb)(int fd, const struct sockaddr *sa,
                                 size_t sa_len, struct stream **streamp),
+               int (*set_dscp_cb)(int fd, uint8_t dscp),
                char *unlink_path, struct pstream **pstreamp)
 {
     struct fd_pstream *ps = xmalloc(sizeof *ps);
     pstream_init(&ps->pstream, &fd_pstream_class, name);
     ps->fd = fd;
     ps->accept_cb = accept_cb;
+    ps->set_dscp_cb = set_dscp_cb;
     ps->unlink_path = unlink_path;
     *pstreamp = &ps->pstream;
     return 0;
@@ -254,13 +257,24 @@ pfd_wait(struct pstream *pstream)
     poll_fd_wait(ps->fd, POLLIN);
 }
 
+static int
+pfd_set_dscp(struct pstream *pstream, uint8_t dscp)
+{
+    struct fd_pstream *ps = fd_pstream_cast(pstream);
+    if (ps->set_dscp_cb) {
+        return ps->set_dscp_cb(ps->fd, dscp);
+    }
+    return 0;
+}
+
 static struct pstream_class fd_pstream_class = {
     "pstream",
     false,
     NULL,
     pfd_close,
     pfd_accept,
-    pfd_wait
+    pfd_wait,
+    pfd_set_dscp,
 };
 
 /* Helper functions. */

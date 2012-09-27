@@ -65,6 +65,7 @@ void pstream_close(struct pstream *);
 int pstream_accept(struct pstream *, struct stream **);
 int pstream_accept_block(struct pstream *, struct stream **);
 void pstream_wait(struct pstream *);
+int pstream_set_dscp(struct pstream *, uint8_t dscp);
 
 /* Convenience functions. */
 

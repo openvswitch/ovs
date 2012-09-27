@@ -190,6 +190,9 @@ struct pstream_class {
     /* Arranges for the poll loop to wake up when a connection is ready to be
      * accepted on 'pstream'. */
     void (*wait)(struct pstream *pstream);
+
+    /* Set DSCP value of the listening socket. */
+    int (*set_dscp)(struct pstream *pstream, uint8_t dscp);
 };
 
 /* Active and passive stream classes. */

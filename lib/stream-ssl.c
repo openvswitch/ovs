@@ -862,6 +862,13 @@ pssl_wait(struct pstream *pstream)
     poll_fd_wait(pssl->fd, POLLIN);
 }
 
+static int
+pssl_set_dscp(struct pstream *pstream, uint8_t dscp)
+{
+    struct pssl_pstream *pssl = pssl_pstream_cast(pstream);
+    return set_dscp(pssl->fd, dscp);
+}
+
 const struct pstream_class pssl_pstream_class = {
     "pssl",
     true,
@@ -869,6 +876,7 @@ const struct pstream_class pssl_pstream_class = {
     pssl_close,
     pssl_accept,
     pssl_wait,
+    pssl_set_dscp,
 };
 
 /*

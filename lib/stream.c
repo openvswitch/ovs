@@ -613,6 +613,15 @@ pstream_wait(struct pstream *pstream)
 {
     (pstream->class->wait)(pstream);
 }
+
+int
+pstream_set_dscp(struct pstream *pstream, uint8_t dscp)
+{
+    if (pstream->class->set_dscp) {
+        return pstream->class->set_dscp(pstream, dscp);
+    }
+    return 0;
+}
 
 /* Initializes 'stream' as a new stream named 'name', implemented via 'class'.
  * The initial connection status, supplied as 'connect_status', is interpreted

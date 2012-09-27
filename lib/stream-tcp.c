@@ -117,7 +117,8 @@ ptcp_open(const char *name OVS_UNUSED, char *suffix, struct pstream **pstreamp,
 
     sprintf(bound_name, "ptcp:%"PRIu16":"IP_FMT,
             ntohs(sin.sin_port), IP_ARGS(&sin.sin_addr.s_addr));
-    return new_fd_pstream(bound_name, fd, ptcp_accept, NULL, pstreamp);
+    return new_fd_pstream(bound_name, fd, ptcp_accept, set_dscp, NULL,
+                          pstreamp);
 }
 
 static int
@@ -142,6 +143,7 @@ const struct pstream_class ptcp_pstream_class = {
     ptcp_open,
     NULL,
     NULL,
-    NULL
+    NULL,
+    NULL,
 };
 
