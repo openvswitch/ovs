@@ -84,6 +84,41 @@ def check_connection_completion(sock):
         return errno.EAGAIN
 
 
+def inet_parse_active(target, default_port):
+    address = target.split(":")
+    host_name = address[0]
+    if not host_name:
+        raise Exception("%s: bad peer name format" % target)
+    if len(address) >= 2:
+        port = int(address[1])
+    elif default_port:
+        port = default_port
+    else:
+        raise Exception("%s: port number must be specified" % target)
+    return (host_name, port)
+
+
+def inet_open_active(style, target, default_port, dscp):
+    address = inet_parse_active(target, default_port)
+    try:
+        sock = socket.socket(socket.AF_INET, style, 0)
+    except socket.error, e:
+        return get_exception_errno(e), None
+
+    try:
+        set_nonblocking(sock)
+        set_dscp(sock, dscp)
+        try:
+            sock.connect(address)
+        except socket.error, e:
+            if get_exception_errno(e) != errno.EINPROGRESS:
+                raise
+        return 0, sock
+    except socket.error, e:
+        sock.close()
+        return get_exception_errno(e), None
+
+
 def get_socket_error(sock):
     """Returns the errno value associated with 'socket' (0 if no error) and
     resets the socket's error status."""
@@ -148,3 +183,10 @@ def set_nonblocking(sock):
     except socket.error, e:
         vlog.err("could not set nonblocking mode on socket: %s"
                  % os.strerror(get_socket_error(e)))
+
+
+def set_dscp(sock, dscp):
+    if dscp > 63:
+        raise Exception("Invalid dscp %d" % dscp)
+    val = dscp << 2
+    sock.setsockopt(socket.IPPROTO_IP, socket.IP_TOS, val)
