@@ -51,12 +51,28 @@ class Stream(object):
     W_RECV = 1                  # Data received.
     W_SEND = 2                  # Send buffer room available.
 
+    _SOCKET_METHODS = {}
+
+    @staticmethod
+    def register_method(method):
+        def _register_method(cls):
+            Stream._SOCKET_METHODS[method + ":"] = cls
+            return cls
+        return _register_method
+
+    @staticmethod
+    def _find_method(name):
+        for method, cls in Stream._SOCKET_METHODS.items():
+            if name.startswith(method):
+                return cls
+        return None
+
     @staticmethod
     def is_valid_name(name):
         """Returns True if 'name' is a stream name in the form "TYPE:ARGS" and
-        TYPE is a supported stream type (currently only "unix:"), otherwise
-        False."""
-        return name.startswith("unix:")
+        TYPE is a supported stream type (currently only "unix:" and "tcp:"),
+        otherwise False."""
+        return bool(Stream._find_method(name))
 
     def __init__(self, socket, name, status):
         self.socket = socket
@@ -70,12 +86,18 @@ class Stream(object):
 
         self.error = 0
 
+    # Default value of dscp bits for connection between controller and manager.
+    # Value of IPTOS_PREC_INTERNETCONTROL = 0xc0 which is defined
+    # in <netinet/ip.h> is used.
+    IPTOS_PREC_INTERNETCONTROL = 0xc0
+    DSCP_DEFAULT = IPTOS_PREC_INTERNETCONTROL >> 2
+
     @staticmethod
-    def open(name):
+    def open(name, dscp=DSCP_DEFAULT):
         """Attempts to connect a stream to a remote peer.  'name' is a
         connection name in the form "TYPE:ARGS", where TYPE is an active stream
         class's name and ARGS are stream class-specific.  Currently the only
-        supported TYPE is "unix".
+        supported TYPEs are "unix" and "tcp".
 
         Returns (error, stream): on success 'error' is 0 and 'stream' is the
         new Stream, on failure 'error' is a positive errno value and 'stream'
@@ -84,18 +106,21 @@ class Stream(object):
         Never returns errno.EAGAIN or errno.EINPROGRESS.  Instead, returns 0
         and a new Stream.  The connect() method can be used to check for
         successful connection completion."""
-        if not Stream.is_valid_name(name):
+        cls = Stream._find_method(name)
+        if not cls:
             return errno.EAFNOSUPPORT, None
 
-        connect_path = name[5:]
-        error, sock = ovs.socket_util.make_unix_socket(socket.SOCK_STREAM,
-                                                       True, None,
-                                                       connect_path)
+        suffix = name.split(":", 1)[1]
+        error, sock = cls._open(suffix, dscp)
         if error:
             return error, None
         else:
             status = ovs.socket_util.check_connection_completion(sock)
             return 0, Stream(sock, name, status)
+
+    @staticmethod
+    def _open(suffix, dscp):
+        raise NotImplementedError("This method must be overrided by subclass")
 
     @staticmethod
     def open_block((error, stream)):
@@ -313,6 +338,27 @@ def usage(name):
     return """
 Active %s connection methods:
   unix:FILE               Unix domain socket named FILE
+  tcp:IP:PORT             TCP socket to IP with port no of PORT
 
 Passive %s connection methods:
   punix:FILE              Listen on Unix domain socket FILE""" % (name, name)
+
+
+@Stream.register_method("unix")
+class UnixStream(Stream):
+    @staticmethod
+    def _open(suffix, dscp):
+        connect_path = suffix
+        return  ovs.socket_util.make_unix_socket(socket.SOCK_STREAM,
+                                                 True, None, connect_path)
+
+
+@Stream.register_method("tcp")
+class TCPStream(Stream):
+    @staticmethod
+    def _open(suffix, dscp):
+        error, sock = ovs.socket_util.inet_open_active(socket.SOCK_STREAM,
+                                                       suffix, 0, dscp)
+        if not error:
+            sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+        return error, sock

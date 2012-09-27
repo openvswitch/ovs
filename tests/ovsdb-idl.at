@@ -48,9 +48,29 @@ m4_define([OVSDB_CHECK_IDL_PY],
    OVSDB_SERVER_SHUTDOWN
    AT_CLEANUP])
 
+# same as OVSDB_CHECK_IDL but uses the Python IDL implementation with tcp
+m4_define([OVSDB_CHECK_IDL_TCP_PY],
+  [AT_SETUP([$1 - Python tcp])
+   AT_SKIP_IF([test $HAVE_PYTHON = no])
+   AT_KEYWORDS([ovsdb server idl positive Python with tcp socket $5])
+   AT_CHECK([ovsdb-tool create db $abs_srcdir/idltest.ovsschema],
+                  [0], [stdout], [ignore])
+   AT_CHECK([perl $srcdir/choose-port.pl], [0], [stdout])
+   TCP_PORT=`cat stdout`
+   AT_CHECK([ovsdb-server '-vPATTERN:console:ovsdb-server|%c|%m' --detach --no-chdir --pidfile="`pwd`"/pid --remote=ptcp:$TCP_PORT:127.0.0.1 --unixctl="`pwd`"/unixctl db], [0], [ignore], [ignore])
+   m4_if([$2], [], [],
+     [AT_CHECK([ovsdb-client transact tcp:127.0.0.1:$TCP_PORT $2], [0], [ignore], [ignore], [kill `cat pid`])])
+   AT_CHECK([$PYTHON $srcdir/test-ovsdb.py  -t10 idl $srcdir/idltest.ovsschema tcp:127.0.0.1:$TCP_PORT $3],
+            [0], [stdout], [ignore], [kill `cat pid`])
+   AT_CHECK([sort stdout | perl $srcdir/uuidfilt.pl]m4_if([$6],,, [[| $6]]),
+            [0], [$4], [], [kill `cat pid`])
+   OVSDB_SERVER_SHUTDOWN
+   AT_CLEANUP])
+
 m4_define([OVSDB_CHECK_IDL],
   [OVSDB_CHECK_IDL_C($@)
-   OVSDB_CHECK_IDL_PY($@)])
+   OVSDB_CHECK_IDL_PY($@)
+   OVSDB_CHECK_IDL_TCP_PY($@)])
 
 OVSDB_CHECK_IDL([simple idl, initially empty, no ops],
   [],
