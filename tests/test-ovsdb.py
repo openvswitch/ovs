@@ -321,6 +321,14 @@ def idl_set(idl, commands, step):
             l1_1.i = 2
             l1_1.k = [l1_0]
             l1_1.ka = [l1_0, l1_1]
+        elif name == 'getattrtest':
+            l1 = txn.insert(idl.tables["link1"])
+            i = getattr(l1, 'i', 1)
+            assert i == 1
+            l1.i = 2
+            i = getattr(l1, 'i', 1)
+            assert i == 2
+            l1.k = [l1]
         else:
             sys.stderr.write("unknown command %s\n" % name)
             sys.exit(1)

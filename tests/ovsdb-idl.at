@@ -439,3 +439,12 @@ OVSDB_CHECK_IDL_PY([external-linking idl, insert ops],
 002: i=2 k=1 ka=[1 2] l2= uuid=<1>
 003: done
 ]])
+
+OVSDB_CHECK_IDL_PY([getattr idl, insert ops],
+  [],
+  [['getattrtest']],
+  [[000: empty
+001: commit, status=success
+002: i=2 k=2 ka=[] l2= uuid=<0>
+003: done
+]])

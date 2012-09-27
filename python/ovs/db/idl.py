@@ -548,6 +548,9 @@ class Row(object):
 
         datum = self._changes.get(column_name)
         if datum is None:
+            if self._data is None:
+                raise AttributeError("%s instance has no attribute '%s'" %
+                                     (self.__class__.__name__, column_name))
             datum = self._data[column_name]
 
         return datum.to_python(_uuid_to_row)
