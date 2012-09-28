@@ -64,6 +64,7 @@ int fsync_parent_dir(const char *file_name);
 int get_mtime(const char *file_name, struct timespec *mtime);
 
 void xpipe(int fds[2]);
+void xpipe_nonblocking(int fds[2]);
 
 char *describe_fd(int fd);
 

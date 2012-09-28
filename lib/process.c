@@ -82,9 +82,7 @@ process_init(void)
     inited = true;
 
     /* Create notification pipe. */
-    xpipe(fds);
-    xset_nonblocking(fds[0]);
-    xset_nonblocking(fds[1]);
+    xpipe_nonblocking(fds);
 
     /* Set up child termination signal handler. */
     memset(&sa, 0, sizeof sa);

@@ -63,9 +63,7 @@ signal_init(void)
     static bool inited;
     if (!inited) {
         inited = true;
-        xpipe(fds);
-        xset_nonblocking(fds[0]);
-        xset_nonblocking(fds[1]);
+        xpipe_nonblocking(fds);
     }
 }
 

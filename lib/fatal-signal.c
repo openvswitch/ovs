@@ -74,9 +74,7 @@ fatal_signal_init(void)
 
         inited = true;
 
-        xpipe(signal_fds);
-        xset_nonblocking(signal_fds[0]);
-        xset_nonblocking(signal_fds[1]);
+        xpipe_nonblocking(signal_fds);
 
         sigemptyset(&fatal_signal_set);
         for (i = 0; i < ARRAY_SIZE(fatal_signals); i++) {

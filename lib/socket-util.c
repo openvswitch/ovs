@@ -894,6 +894,14 @@ xpipe(int fds[2])
 }
 
 void
+xpipe_nonblocking(int fds[2])
+{
+    xpipe(fds);
+    xset_nonblocking(fds[0]);
+    xset_nonblocking(fds[1]);
+}
+
+void
 xsocketpair(int domain, int type, int protocol, int fds[2])
 {
     if (socketpair(domain, type, protocol, fds)) {
