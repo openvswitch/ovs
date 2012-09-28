@@ -1005,6 +1005,15 @@ in field \fIdst\fR.
 Example: \fBload:55\->NXM_NX_REG2[0..5]\fR loads value 55 (bit pattern
 \fB110111\fR) into bits 0 through 5, inclusive, in register 2.
 .
+.IP "\fBset_field:\fIvalue\fB\->\fIdst"
+Writes the literal \fIvalue\fR into the field \fIdst\fR, which should
+be specified as a name used for matching.  (This is similar to
+\fBload\fR but more closely matches the set-field action defined in
+Open Flow 1.2 and above.)
+.
+.IP
+Example: \fBset_field:fe80:0123:4567:890a:a6ba:dbff:fefe:59fa\->ipv6_src\fR
+.
 .IP "\fBmultipath(\fIfields\fB, \fIbasis\fB, \fIalgorithm\fB, \fIn_links\fB, \fIarg\fB, \fIdst\fB[\fIstart\fB..\fIend\fB])\fR"
 Hashes \fIfields\fR using \fIbasis\fR as a universal hash parameter,
 then the applies multipath link selection \fIalgorithm\fR (with

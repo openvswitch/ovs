@@ -1892,3 +1892,15 @@ ofpact_pad(struct ofpbuf *ofpacts)
         ofpbuf_put_zeros(ofpacts, OFPACT_ALIGNTO - rem);
     }
 }
+
+void
+ofpact_set_field_init(struct ofpact_reg_load *load, const struct mf_field *mf,
+                      const void *src)
+{
+    load->ofpact.compat = OFPUTIL_OFPAT12_SET_FIELD;
+    load->dst.field = mf;
+    load->dst.ofs = 0;
+    load->dst.n_bits = mf->n_bits;
+    bitwise_copy(src, mf->n_bytes, load->dst.ofs,
+                 &load->subvalue, sizeof load->subvalue, 0, mf->n_bits);
+}

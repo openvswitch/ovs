@@ -35,7 +35,7 @@ OFPAT11_ACTION(OFPAT11_SET_TP_DST,   ofp_action_tp_port,  0, "mod_tp_dst")
 //OFPAT11_ACTION(OFPAT11_SET_QUEUE,    ofp11_action_set_queue, 0, "set_queue")
 //OFPAT11_ACTION(OFPAT11_SET_NW_TTL,   ofp11_action_nw_ttl, 0, "set_nw_ttl")
 //OFPAT11_ACTION(OFPAT11_DEC_NW_TTL,   ofp_action_header,   0, "dec_ttl")
-OFPAT11_ACTION(OFPAT12_SET_FIELD,    ofp12_action_set_field, 1, NULL)
+OFPAT11_ACTION(OFPAT12_SET_FIELD,    ofp12_action_set_field, 1, "set_field")
 
 #ifndef NXAST_ACTION
 #define NXAST_ACTION(ENUM, STRUCT, EXTENSIBLE, NAME)

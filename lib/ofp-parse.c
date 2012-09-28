@@ -315,6 +315,48 @@ parse_dec_ttl(struct ofpbuf *b, char *arg)
 }
 
 static void
+set_field_parse(const char *arg, struct ofpbuf *ofpacts)
+{
+    char *orig = xstrdup(arg);
+    struct ofpact_reg_load *load = ofpact_put_REG_LOAD(ofpacts);
+    char *value;
+    char *delim;
+    char *key;
+    const struct mf_field *mf;
+    const char *error;
+    union mf_value mf_value;
+
+    value = orig;
+    delim = strstr(orig, "->");
+    if (!delim) {
+        ovs_fatal(0, "%s: missing `->'", orig);
+    }
+    if (strlen(delim) <= strlen("->")) {
+        ovs_fatal(0, "%s: missing field name following `->'", orig);
+    }
+
+    key = delim + strlen("->");
+    mf = mf_from_name(key);
+    if (!mf) {
+        ovs_fatal(0, "%s is not valid oxm field name", key);
+    }
+    if (!mf->writable) {
+        ovs_fatal(0, "%s is not allowed to set", key);
+    }
+
+    delim[0] = '\0';
+    error = mf_parse_value(mf, value, &mf_value);
+    if (error) {
+        ovs_fatal(0, "%s", error);
+    }
+    if (!mf_is_value_valid(mf, &mf_value)) {
+        ovs_fatal(0, "%s is not valid valid for field %s", value, key);
+    }
+    ofpact_set_field_init(load, mf, &mf_value);
+    free(orig);
+}
+
+static void
 parse_named_action(enum ofputil_action_code code, const struct flow *flow,
                    char *arg, struct ofpbuf *ofpacts)
 {
@@ -352,9 +394,7 @@ parse_named_action(enum ofputil_action_code code, const struct flow *flow,
         break;
 
     case OFPUTIL_OFPAT12_SET_FIELD:
-        NOT_REACHED();  /* This will be implemented by later patch and
-                         * enabled using a non-NULL name in
-                         * OFPAT12_ACTION(OFPAT12_SET_FIELD, ...) */
+        set_field_parse(arg, ofpacts);
         break;
 
     case OFPUTIL_OFPAT10_STRIP_VLAN:
