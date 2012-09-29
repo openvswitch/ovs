@@ -27,12 +27,12 @@
 #include "ofp-errors.h"
 #include "ofp-util.h"
 #include "shash.h"
+#include "simap.h"
 #include "timeval.h"
 
 struct match;
 struct ofpact;
 struct ofputil_flow_mod;
-struct simap;
 
 /* An OpenFlow switch.
  *
@@ -62,6 +62,9 @@ struct ofproto {
     /* Datapath. */
     struct hmap ports;          /* Contains "struct ofport"s. */
     struct shash port_by_name;
+    unsigned long *ofp_port_ids;/* Bitmap of used OpenFlow port numbers. */
+    struct simap ofp_requests;  /* OpenFlow port number requests. */
+    uint16_t alloc_port_no;     /* Last allocated OpenFlow port number. */
     uint16_t max_ports;         /* Max possible OpenFlow port num, plus one. */
 
     /* Flow tables. */
@@ -536,6 +539,8 @@ struct ofproto_class {
     /* Life-cycle functions for a "struct ofport" (see "Life Cycle" above).
      *
      * ->port_construct() should not modify any base members of the ofport.
+     * An ofproto implementation should use the 'ofp_port' member of
+     * "struct ofport" as the OpenFlow port number.
      *
      * ofports are managed by the base ofproto code.  The ofproto
      * implementation should only create and destroy them in response to calls
@@ -593,18 +598,15 @@ struct ofproto_class {
     int (*port_query_by_name)(const struct ofproto *ofproto,
                               const char *devname, struct ofproto_port *port);
 
-    /* Attempts to add 'netdev' as a port on 'ofproto'.  If '*ofp_portp'
-     * is not OFPP_NONE, attempts to use that as the port's OpenFlow
-     * port number.
-     *
-     * Returns 0 if successful, otherwise a positive errno value.  If
-     * successful, sets '*ofp_portp' to the new port's port number.
+    /* Attempts to add 'netdev' as a port on 'ofproto'.  Returns 0 if
+     * successful, otherwise a positive errno value.  The caller should
+     * inform the implementation of the OpenFlow port through the
+     * ->port_construct() method.
      *
      * It doesn't matter whether the new port will be returned by a later call
      * to ->port_poll(); the implementation may do whatever is more
      * convenient. */
-    int (*port_add)(struct ofproto *ofproto, struct netdev *netdev,
-                    uint16_t *ofp_portp);
+    int (*port_add)(struct ofproto *ofproto, struct netdev *netdev);
 
     /* Deletes port number 'ofp_port' from the datapath for 'ofproto'.  Returns
      * 0 if successful, otherwise a positive errno value.

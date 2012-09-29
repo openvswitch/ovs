@@ -221,6 +221,9 @@ static size_t allocated_ofproto_classes;
 /* Map from datapath name to struct ofproto, for use by unixctl commands. */
 static struct hmap all_ofprotos = HMAP_INITIALIZER(&all_ofprotos);
 
+/* Initial mappings of port to OpenFlow number mappings. */
+static struct shash init_ofp_ports = SHASH_INITIALIZER(&init_ofp_ports);
+
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 
 /* Must be called to initialize the ofproto library.
@@ -235,12 +238,26 @@ static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 void
 ofproto_init(const struct shash *iface_hints)
 {
+    struct shash_node *node;
     size_t i;
 
     ofproto_class_register(&ofproto_dpif_class);
 
+    /* Make a local copy, since we don't own 'iface_hints' elements. */
+    SHASH_FOR_EACH(node, iface_hints) {
+        const struct iface_hint *orig_hint = node->data;
+        struct iface_hint *new_hint = xmalloc(sizeof *new_hint);
+        const char *br_type = ofproto_normalize_type(orig_hint->br_type);
+
+        new_hint->br_name = xstrdup(orig_hint->br_name);
+        new_hint->br_type = xstrdup(br_type);
+        new_hint->ofp_port = orig_hint->ofp_port;
+
+        shash_add(&init_ofp_ports, node->name, new_hint);
+    }
+
     for (i = 0; i < n_ofproto_classes; i++) {
-        ofproto_classes[i]->init(iface_hints);
+        ofproto_classes[i]->init(&init_ofp_ports);
     }
 }
 
@@ -397,6 +414,7 @@ ofproto_create(const char *datapath_name, const char *datapath_type,
     ofproto->frag_handling = OFPC_FRAG_NORMAL;
     hmap_init(&ofproto->ports);
     shash_init(&ofproto->port_by_name);
+    simap_init(&ofproto->ofp_requests);
     ofproto->max_ports = OFPP_MAX;
     ofproto->tables = NULL;
     ofproto->n_tables = 0;
@@ -420,6 +438,11 @@ ofproto_create(const char *datapath_name, const char *datapath_type,
         ofproto_destroy__(ofproto);
         return error;
     }
+
+    /* The "max_ports" member should have been set by ->construct(ofproto).
+     * Port 0 is not a valid OpenFlow port, so mark that as unavailable. */
+    ofproto->ofp_port_ids = bitmap_allocate(ofproto->max_ports);
+    bitmap_set1(ofproto->ofp_port_ids, 0);
 
     assert(ofproto->n_tables);
 
@@ -1015,6 +1038,8 @@ ofproto_destroy__(struct ofproto *ofproto)
     free(ofproto->dp_desc);
     hmap_destroy(&ofproto->ports);
     shash_destroy(&ofproto->port_by_name);
+    bitmap_free(ofproto->ofp_port_ids);
+    simap_destroy(&ofproto->ofp_requests);
 
     OFPROTO_FOR_EACH_TABLE (table, ofproto) {
         oftable_destroy(table);
@@ -1367,12 +1392,20 @@ ofproto_port_add(struct ofproto *ofproto, struct netdev *netdev,
     uint16_t ofp_port = ofp_portp ? *ofp_portp : OFPP_NONE;
     int error;
 
-    error = ofproto->ofproto_class->port_add(ofproto, netdev, &ofp_port);
+    error = ofproto->ofproto_class->port_add(ofproto, netdev);
     if (!error) {
-        update_port(ofproto, netdev_get_name(netdev));
+        const char *netdev_name = netdev_get_name(netdev);
+
+        simap_put(&ofproto->ofp_requests, netdev_name, ofp_port);
+        update_port(ofproto, netdev_name);
     }
     if (ofp_portp) {
-        *ofp_portp = error ? OFPP_NONE : ofp_port;
+        struct ofproto_port ofproto_port;
+
+        ofproto_port_query_by_name(ofproto, netdev_get_name(netdev),
+                                   &ofproto_port);
+        *ofp_portp = error ? OFPP_NONE : ofproto_port.ofp_port;
+        ofproto_port_destroy(&ofproto_port);
     }
     return error;
 }
@@ -1403,7 +1436,13 @@ ofproto_port_del(struct ofproto *ofproto, uint16_t ofp_port)
 {
     struct ofport *ofport = ofproto_get_port(ofproto, ofp_port);
     const char *name = ofport ? netdev_get_name(ofport->netdev) : "<unknown>";
+    struct simap_node *ofp_request_node;
     int error;
+
+    ofp_request_node = simap_find(&ofproto->ofp_requests, name);
+    if (ofp_request_node) {
+        simap_delete(&ofproto->ofp_requests, ofp_request_node);
+    }
 
     error = ofproto->ofproto_class->port_del(ofproto, ofp_port);
     if (!error && ofport) {
@@ -1530,12 +1569,57 @@ reinit_ports(struct ofproto *p)
     sset_destroy(&devnames);
 }
 
+static uint16_t
+alloc_ofp_port(struct ofproto *ofproto, const char *netdev_name)
+{
+    uint16_t ofp_port;
+
+    ofp_port = simap_get(&ofproto->ofp_requests, netdev_name);
+    ofp_port = ofp_port ? ofp_port : OFPP_NONE;
+
+    if (ofp_port >= ofproto->max_ports
+            || bitmap_is_set(ofproto->ofp_port_ids, ofp_port)) {
+        bool retry = ofproto->alloc_port_no ? true : false;
+
+        /* Search for a free OpenFlow port number.  We try not to
+         * immediately reuse them to prevent problems due to old
+         * flows. */
+        while (ofp_port >= ofproto->max_ports) {
+            for (ofproto->alloc_port_no++;
+                 ofproto->alloc_port_no < ofproto->max_ports; ) {
+                if (!bitmap_is_set(ofproto->ofp_port_ids,
+                                   ofproto->alloc_port_no)) {
+                    ofp_port = ofproto->alloc_port_no;
+                    break;
+                }
+            }
+            if (ofproto->alloc_port_no >= ofproto->max_ports) {
+                if (retry) {
+                    ofproto->alloc_port_no = 0;
+                    retry = false;
+                } else {
+                    return OFPP_NONE;
+                }
+            }
+        }
+    }
+
+    bitmap_set1(ofproto->ofp_port_ids, ofp_port);
+    return ofp_port;
+}
+
+static void
+dealloc_ofp_port(const struct ofproto *ofproto, uint16_t ofp_port)
+{
+    bitmap_set0(ofproto->ofp_port_ids, ofp_port);
+}
+
 /* Opens and returns a netdev for 'ofproto_port' in 'ofproto', or a null
  * pointer if the netdev cannot be opened.  On success, also fills in
  * 'opp'.  */
 static struct netdev *
-ofport_open(const struct ofproto *ofproto,
-            const struct ofproto_port *ofproto_port,
+ofport_open(struct ofproto *ofproto,
+            struct ofproto_port *ofproto_port,
             struct ofputil_phy_port *pp)
 {
     enum netdev_flags flags;
@@ -1552,6 +1636,14 @@ ofport_open(const struct ofproto *ofproto,
         return NULL;
     }
 
+    if (ofproto_port->ofp_port == OFPP_NONE) {
+        if (!strcmp(ofproto->name, ofproto_port->name)) {
+            ofproto_port->ofp_port = OFPP_LOCAL;
+        } else {
+            ofproto_port->ofp_port = alloc_ofp_port(ofproto,
+                                                    ofproto_port->name);
+        }
+    }
     pp->port_no = ofproto_port->ofp_port;
     netdev_get_etheraddr(netdev, pp->hw_addr);
     ovs_strlcpy(pp->name, ofproto_port->name, sizeof pp->name);
@@ -1721,6 +1813,7 @@ static void
 ofport_destroy(struct ofport *port)
 {
     if (port) {
+        dealloc_ofp_port(port->ofproto, port->ofp_port);
         port->ofproto->ofproto_class->port_destruct(port);
         ofport_destroy__(port);
      }
@@ -1814,23 +1907,39 @@ init_ports(struct ofproto *p)
 {
     struct ofproto_port_dump dump;
     struct ofproto_port ofproto_port;
+    struct shash_node *node, *next;
 
     OFPROTO_PORT_FOR_EACH (&ofproto_port, &dump, p) {
-        uint16_t ofp_port = ofproto_port.ofp_port;
-        if (ofproto_get_port(p, ofp_port)) {
-            VLOG_WARN_RL(&rl, "%s: ignoring duplicate port %"PRIu16" "
-                         "in datapath", p->name, ofp_port);
-        } else if (shash_find(&p->port_by_name, ofproto_port.name)) {
+        const char *name = ofproto_port.name;
+
+        if (shash_find(&p->port_by_name, name)) {
             VLOG_WARN_RL(&rl, "%s: ignoring duplicate device %s in datapath",
-                         p->name, ofproto_port.name);
+                         p->name, name);
         } else {
             struct ofputil_phy_port pp;
             struct netdev *netdev;
+
+            /* Check if an OpenFlow port number had been requested. */
+            node = shash_find(&init_ofp_ports, name);
+            if (node) {
+                const struct iface_hint *iface_hint = node->data;
+                simap_put(&p->ofp_requests, name, iface_hint->ofp_port);
+            }
 
             netdev = ofport_open(p, &ofproto_port, &pp);
             if (netdev) {
                 ofport_install(p, netdev, &pp);
             }
+        }
+    }
+
+    SHASH_FOR_EACH_SAFE(node, next, &init_ofp_ports) {
+        const struct iface_hint *iface_hint = node->data;
+
+        if (!strcmp(iface_hint->br_name, p->name)) {
+            free(iface_hint->br_name);
+            free(iface_hint->br_type);
+            shash_delete(&init_ofp_ports, node);
         }
     }
 

@@ -676,7 +676,7 @@ priority=0,udp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=00:26:b9:8c:b0:f9,dl_
     fi
 
     # OFPT_PORT_STATUS, OFPPR_ADD
-    ovs-vsctl add-port br0 test -- set Interface test type=dummy
+    ovs-vsctl add-port br0 test -- set Interface test type=dummy ofport_request=1
     if test X"$1" = X"OFPPR_ADD"; then shift;
         echo >>expout "OFPT_PORT_STATUS: ADD: 1(test): addr:aa:55:aa:55:00:0x
      config:     PORT_DOWN

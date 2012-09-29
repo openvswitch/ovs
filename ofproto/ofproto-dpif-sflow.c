@@ -46,6 +46,7 @@ struct dpif_sflow_port {
     struct hmap_node hmap_node; /* In struct dpif_sflow's "ports" hmap. */
     SFLDataSource_instance dsi; /* sFlow library's notion of port number. */
     struct ofport *ofport;      /* To retrive port stats. */
+    uint32_t odp_port;
 };
 
 struct dpif_sflow {
@@ -148,7 +149,7 @@ dpif_sflow_find_port(const struct dpif_sflow *ds, uint32_t odp_port)
 
     HMAP_FOR_EACH_IN_BUCKET (dsp, hmap_node,
                              hash_int(odp_port, 0), &ds->ports) {
-        if (ofp_port_to_odp_port(dsp->ofport->ofp_port) == odp_port) {
+        if (dsp->odp_port == odp_port) {
             return dsp;
         }
     }
@@ -339,8 +340,7 @@ dpif_sflow_add_poller(struct dpif_sflow *ds, struct dpif_sflow_port *dsp)
                                             sflow_agent_get_counters);
     sfl_poller_set_sFlowCpInterval(poller, ds->options->polling_interval);
     sfl_poller_set_sFlowCpReceiver(poller, RECEIVER_INDEX);
-    sfl_poller_set_bridgePort(poller,
-                              ofp_port_to_odp_port(dsp->ofport->ofp_port));
+    sfl_poller_set_bridgePort(poller, dsp->odp_port);
 }
 
 static void
@@ -353,10 +353,10 @@ dpif_sflow_add_sampler(struct dpif_sflow *ds, struct dpif_sflow_port *dsp)
 }
 
 void
-dpif_sflow_add_port(struct dpif_sflow *ds, struct ofport *ofport)
+dpif_sflow_add_port(struct dpif_sflow *ds, struct ofport *ofport,
+                    uint32_t odp_port)
 {
     struct dpif_sflow_port *dsp;
-    uint32_t odp_port = ofp_port_to_odp_port(ofport->ofp_port);
     uint32_t ifindex;
 
     dpif_sflow_del_port(ds, odp_port);
@@ -368,6 +368,7 @@ dpif_sflow_add_port(struct dpif_sflow *ds, struct ofport *ofport)
         ifindex = (ds->sflow_agent->subId << 16) + odp_port;
     }
     dsp->ofport = ofport;
+    dsp->odp_port = odp_port;
     SFL_DS_SET(dsp->dsi, 0, ifindex, 0);
     hmap_insert(&ds->ports, &dsp->hmap_node, hash_int(odp_port, 0));
 
@@ -491,7 +492,7 @@ dpif_sflow_odp_port_to_ifindex(const struct dpif_sflow *ds,
 
 void
 dpif_sflow_received(struct dpif_sflow *ds, struct ofpbuf *packet,
-                    const struct flow *flow,
+                    const struct flow *flow, uint32_t odp_in_port,
                     const union user_action_cookie *cookie)
 {
     SFL_FLOW_SAMPLE_TYPE fs;
@@ -507,7 +508,7 @@ dpif_sflow_received(struct dpif_sflow *ds, struct ofpbuf *packet,
     /* Build a flow sample */
     memset(&fs, 0, sizeof fs);
 
-    in_dsp = dpif_sflow_find_port(ds, ofp_port_to_odp_port(flow->in_port));
+    in_dsp = dpif_sflow_find_port(ds, odp_in_port);
     if (!in_dsp) {
         return;
     }

@@ -34,33 +34,6 @@ struct simap;
 
 #define OVSP_NONE UINT32_MAX
 
-static inline uint32_t
-ofp_port_to_odp_port(uint16_t ofp_port)
-{
-    switch (ofp_port) {
-    case OFPP_LOCAL:
-        return OVSP_LOCAL;
-    case OFPP_NONE:
-    case OFPP_CONTROLLER:
-        return OVSP_NONE;
-    default:
-        return ofp_port;
-    }
-}
-
-static inline uint16_t
-odp_port_to_ofp_port(uint32_t odp_port)
-{
-    switch (odp_port) {
-    case OVSP_LOCAL:
-        return OFPP_LOCAL;
-    case OVSP_NONE:
-        return OFPP_NONE;
-    default:
-        return odp_port;
-    }
-}
-
 void format_odp_actions(struct ds *, const struct nlattr *odp_actions,
                         size_t actions_len);
 int odp_actions_from_string(const char *, const struct simap *port_names,

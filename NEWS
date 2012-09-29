@@ -39,6 +39,9 @@ v1.9.0 - xx xxx xxxx
     - ovsdb-server now enforces the immutability of immutable columns.  This
       was not enforced in earlier versions due to an oversight.
     - New support for a nonstandard form of GRE that supports a 64-bit key.
+    - The ofproto library is now responsible for assigning OpenFlow port
+      numbers.  An ofproto implementation should assign them when
+      port_construct() is called.
     - The following features are now deprecated.  They will be removed no
       earlier than February 2013.  Please email dev@openvswitch.org with
       concerns.

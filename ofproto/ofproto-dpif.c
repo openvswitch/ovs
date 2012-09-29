@@ -485,6 +485,7 @@ static void facet_account(struct facet *);
 static bool facet_is_controller_flow(struct facet *);
 
 struct ofport_dpif {
+    struct hmap_node odp_port_node; /* In ofproto-dpif's "odp_to_ofport_map". */
     struct ofport up;
 
     uint32_t odp_port;
@@ -542,6 +543,11 @@ static uint32_t vsp_realdev_to_vlandev(const struct ofproto_dpif *,
 static bool vsp_adjust_flow(const struct ofproto_dpif *, struct flow *);
 static void vsp_remove(struct ofport_dpif *);
 static void vsp_add(struct ofport_dpif *, uint16_t realdev_ofp_port, int vid);
+
+static uint32_t ofp_port_to_odp_port(const struct ofproto_dpif *,
+                                     uint16_t ofp_port);
+static uint16_t odp_port_to_ofp_port(const struct ofproto_dpif *,
+                                     uint32_t odp_port);
 
 static struct ofport_dpif *
 ofport_dpif_cast(const struct ofport *ofport)
@@ -641,6 +647,9 @@ struct ofproto_dpif {
     /* VLAN splinters. */
     struct hmap realdev_vid_map; /* (realdev,vid) -> vlandev. */
     struct hmap vlandev_map;     /* vlandev -> (realdev,vid). */
+
+    /* ODP port to ofp_port mapping. */
+    struct hmap odp_to_ofport_map;
 };
 
 /* Defer flow mod completion until "ovs-appctl ofproto/unclog"?  (Useful only
@@ -808,6 +817,8 @@ construct(struct ofproto *ofproto_)
     hmap_init(&ofproto->vlandev_map);
     hmap_init(&ofproto->realdev_vid_map);
 
+    hmap_init(&ofproto->odp_to_ofport_map);
+
     hmap_insert(&all_ofproto_dpifs, &ofproto->all_ofproto_dpifs_node,
                 hash_string(ofproto->up.name, 0));
     memset(&ofproto->stats, 0, sizeof ofproto->stats);
@@ -931,6 +942,8 @@ destruct(struct ofproto *ofproto_)
 
     hmap_destroy(&ofproto->vlandev_map);
     hmap_destroy(&ofproto->realdev_vid_map);
+
+    hmap_destroy(&ofproto->odp_to_ofport_map);
 
     dpif_close(ofproto->dpif);
 }
@@ -1194,9 +1207,10 @@ port_construct(struct ofport *port_)
 {
     struct ofport_dpif *port = ofport_dpif_cast(port_);
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(port->up.ofproto);
+    struct dpif_port dpif_port;
+    int error;
 
     ofproto->need_revalidate = REV_RECONFIGURE;
-    port->odp_port = ofp_port_to_odp_port(port->up.ofp_port);
     port->bundle = NULL;
     port->cfm = NULL;
     port->tag = tag_create_random();
@@ -1208,8 +1222,28 @@ port_construct(struct ofport *port_)
     port->vlandev_vid = 0;
     port->carrier_seq = netdev_get_carrier_resets(port->up.netdev);
 
+    error = dpif_port_query_by_name(ofproto->dpif,
+                                    netdev_get_name(port->up.netdev),
+                                    &dpif_port);
+    if (error) {
+        return error;
+    }
+
+    port->odp_port = dpif_port.port_no;
+
+    /* Sanity-check that a mapping doesn't already exist.  This
+     * shouldn't happen. */
+    if (odp_port_to_ofp_port(ofproto, port->odp_port) != OFPP_NONE) {
+        VLOG_ERR("port %s already has an OpenFlow port number\n",
+                 dpif_port.name);
+        return EBUSY;
+    }
+
+    hmap_insert(&ofproto->odp_to_ofport_map, &port->odp_port_node,
+                hash_int(port->odp_port, 0));
+
     if (ofproto->sflow) {
-        dpif_sflow_add_port(ofproto->sflow, port_);
+        dpif_sflow_add_port(ofproto->sflow, port_, port->odp_port);
     }
 
     return 0;
@@ -1221,6 +1255,7 @@ port_destruct(struct ofport *port_)
     struct ofport_dpif *port = ofport_dpif_cast(port_);
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(port->up.ofproto);
 
+    hmap_remove(&ofproto->odp_to_ofport_map, &port->odp_port_node);
     ofproto->need_revalidate = REV_RECONFIGURE;
     bundle_remove(port_);
     set_cfm(port_, NULL);
@@ -1273,7 +1308,7 @@ set_sflow(struct ofproto *ofproto_,
 
             ds = ofproto->sflow = dpif_sflow_create(ofproto->dpif);
             HMAP_FOR_EACH (ofport, up.hmap_node, &ofproto->up.ports) {
-                dpif_sflow_add_port(ds, &ofport->up);
+                dpif_sflow_add_port(ds, &ofport->up, ofport->odp_port);
             }
             ofproto->need_revalidate = REV_RECONFIGURE;
         }
@@ -2445,16 +2480,17 @@ get_ofp_port(const struct ofproto_dpif *ofproto, uint16_t ofp_port)
 static struct ofport_dpif *
 get_odp_port(const struct ofproto_dpif *ofproto, uint32_t odp_port)
 {
-    return get_ofp_port(ofproto, odp_port_to_ofp_port(odp_port));
+    return get_ofp_port(ofproto, odp_port_to_ofp_port(ofproto, odp_port));
 }
 
 static void
-ofproto_port_from_dpif_port(struct ofproto_port *ofproto_port,
+ofproto_port_from_dpif_port(struct ofproto_dpif *ofproto,
+                            struct ofproto_port *ofproto_port,
                             struct dpif_port *dpif_port)
 {
     ofproto_port->name = dpif_port->name;
     ofproto_port->type = dpif_port->type;
-    ofproto_port->ofp_port = odp_port_to_ofp_port(dpif_port->port_no);
+    ofproto_port->ofp_port = odp_port_to_ofp_port(ofproto, dpif_port->port_no);
 }
 
 static void
@@ -2527,32 +2563,30 @@ port_query_by_name(const struct ofproto *ofproto_, const char *devname,
 
     error = dpif_port_query_by_name(ofproto->dpif, devname, &dpif_port);
     if (!error) {
-        ofproto_port_from_dpif_port(ofproto_port, &dpif_port);
+        ofproto_port_from_dpif_port(ofproto, ofproto_port, &dpif_port);
     }
     return error;
 }
 
 static int
-port_add(struct ofproto *ofproto_, struct netdev *netdev, uint16_t *ofp_portp)
+port_add(struct ofproto *ofproto_, struct netdev *netdev)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
-    uint32_t odp_port = *ofp_portp != OFPP_NONE ? *ofp_portp : UINT32_MAX;
-    int error;
+    uint32_t odp_port = UINT32_MAX;
 
-    error = dpif_port_add(ofproto->dpif, netdev, &odp_port);
-    if (!error) {
-        *ofp_portp = odp_port_to_ofp_port(odp_port);
-    }
-    return error;
+    return dpif_port_add(ofproto->dpif, netdev, &odp_port);
 }
 
 static int
 port_del(struct ofproto *ofproto_, uint16_t ofp_port)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
-    int error;
+    uint32_t odp_port = ofp_port_to_odp_port(ofproto, ofp_port);
+    int error = 0;
 
-    error = dpif_port_del(ofproto->dpif, ofp_port_to_odp_port(ofp_port));
+    if (odp_port != OFPP_NONE) {
+        error = dpif_port_del(ofproto->dpif, odp_port);
+    }
     if (!error) {
         struct ofport_dpif *ofport = get_ofp_port(ofproto, ofp_port);
         if (ofport) {
@@ -2644,11 +2678,12 @@ static int
 port_dump_next(const struct ofproto *ofproto_ OVS_UNUSED, void *state_,
                struct ofproto_port *port)
 {
+    struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
     struct port_dump_state *state = state_;
     struct dpif_port dpif_port;
 
     if (dpif_port_dump_next(&state->dump, &dpif_port)) {
-        ofproto_port_from_dpif_port(port, &dpif_port);
+        ofproto_port_from_dpif_port(ofproto, port, &dpif_port);
         return 0;
     } else {
         int error = dpif_port_dump_done(&state->dump);
@@ -3050,7 +3085,7 @@ ofproto_dpif_extract_flow_key(const struct ofproto_dpif *ofproto,
     enum odp_key_fitness fitness;
 
     fitness = odp_flow_key_to_flow(key, key_len, flow);
-    flow->in_port = odp_port_to_ofp_port(flow->in_port);
+    flow->in_port = odp_port_to_ofp_port(ofproto, flow->in_port);
     if (fitness == ODP_FIT_ERROR) {
         return fitness;
     }
@@ -3223,6 +3258,7 @@ handle_sflow_upcall(struct ofproto_dpif *ofproto,
     enum odp_key_fitness fitness;
     ovs_be16 initial_tci;
     struct flow flow;
+    uint32_t odp_in_port;
 
     fitness = ofproto_dpif_extract_flow_key(ofproto, upcall->key,
                                             upcall->key_len, &flow,
@@ -3232,7 +3268,9 @@ handle_sflow_upcall(struct ofproto_dpif *ofproto,
     }
 
     memcpy(&cookie, &upcall->userdata, sizeof(cookie));
-    dpif_sflow_received(ofproto->sflow, upcall->packet, &flow, &cookie);
+    odp_in_port = ofp_port_to_odp_port(ofproto, flow.in_port);
+    dpif_sflow_received(ofproto->sflow, upcall->packet, &flow,
+                        odp_in_port, &cookie);
 }
 
 static int
@@ -3683,7 +3721,8 @@ execute_odp_actions(struct ofproto_dpif *ofproto, const struct flow *flow,
     int error;
 
     ofpbuf_use_stack(&key, &keybuf, sizeof keybuf);
-    odp_flow_key_from_flow(&key, flow, ofp_port_to_odp_port(flow->in_port));
+    odp_flow_key_from_flow(&key, flow,
+                           ofp_port_to_odp_port(ofproto, flow->in_port));
 
     error = dpif_execute(ofproto->dpif, key.data, key.size,
                          odp_actions, actions_len, packet);
@@ -4332,7 +4371,7 @@ subfacet_find(struct ofproto_dpif *ofproto,
     struct flow flow;
 
     fitness = odp_flow_key_to_flow(key, key_len, &flow);
-    flow.in_port = odp_port_to_ofp_port(flow.in_port);
+    flow.in_port = odp_port_to_ofp_port(ofproto, flow.in_port);
     if (fitness == ODP_FIT_ERROR) {
         return NULL;
     }
@@ -4380,11 +4419,15 @@ static void
 subfacet_get_key(struct subfacet *subfacet, struct odputil_keybuf *keybuf,
                  struct ofpbuf *key)
 {
+
     if (!subfacet->key) {
+        struct ofproto_dpif *ofproto;
         struct flow *flow = &subfacet->facet->flow;
 
         ofpbuf_use_stack(key, keybuf, sizeof *keybuf);
-        odp_flow_key_from_flow(key, flow, ofp_port_to_odp_port(flow->in_port));
+        ofproto = ofproto_dpif_cast(subfacet->facet->rule->up.ofproto);
+        odp_flow_key_from_flow(key, flow,
+                               ofp_port_to_odp_port(ofproto, flow->in_port));
     } else {
         ofpbuf_use_const(key, subfacet->key, subfacet->key_len);
     }
@@ -4782,7 +4825,8 @@ send_packet(const struct ofport_dpif *ofport, struct ofpbuf *packet)
     }
 
     ofpbuf_use_stack(&key, &keybuf, sizeof keybuf);
-    odp_flow_key_from_flow(&key, &flow, ofp_port_to_odp_port(flow.in_port));
+    odp_flow_key_from_flow(&key, &flow,
+                           ofp_port_to_odp_port(ofproto, flow.in_port));
 
     ofpbuf_init(&odp_actions, 32);
     compose_sflow_action(ofproto, &odp_actions, &flow, odp_port);
@@ -4851,7 +4895,7 @@ put_userspace_action(const struct ofproto_dpif *ofproto,
     uint32_t pid;
 
     pid = dpif_port_get_pid(ofproto->dpif,
-                            ofp_port_to_odp_port(flow->in_port));
+                            ofp_port_to_odp_port(ofproto, flow->in_port));
 
     return odp_put_userspace_action(pid, cookie, odp_actions);
 }
@@ -4959,7 +5003,7 @@ compose_output_action__(struct action_xlate_ctx *ctx, uint16_t ofp_port,
                         bool check_stp)
 {
     const struct ofport_dpif *ofport = get_ofp_port(ctx->ofproto, ofp_port);
-    uint32_t odp_port = ofp_port_to_odp_port(ofp_port);
+    uint32_t odp_port = ofp_port_to_odp_port(ctx->ofproto, ofp_port);
     ovs_be16 flow_vlan_tci = ctx->flow.vlan_tci;
     uint8_t flow_nw_tos = ctx->flow.nw_tos;
     uint16_t out_port;
@@ -6486,7 +6530,8 @@ packet_out(struct ofproto *ofproto_, struct ofpbuf *packet,
     struct ofpbuf odp_actions;
 
     ofpbuf_use_stack(&key, &keybuf, sizeof keybuf);
-    odp_flow_key_from_flow(&key, flow, ofp_port_to_odp_port(flow->in_port));
+    odp_flow_key_from_flow(&key, flow,
+                           ofp_port_to_odp_port(ofproto, flow->in_port));
 
     dpif_flow_stats_extract(flow, packet, time_msec(), &stats);
 
@@ -7080,16 +7125,17 @@ vsp_realdev_to_vlandev(const struct ofproto_dpif *ofproto,
                        uint32_t realdev_odp_port, ovs_be16 vlan_tci)
 {
     if (!hmap_is_empty(&ofproto->realdev_vid_map)) {
-        uint16_t realdev_ofp_port = odp_port_to_ofp_port(realdev_odp_port);
+        uint16_t realdev_ofp_port;
         int vid = vlan_tci_to_vid(vlan_tci);
         const struct vlan_splinter *vsp;
 
+        realdev_ofp_port = odp_port_to_ofp_port(ofproto, realdev_odp_port);
         HMAP_FOR_EACH_WITH_HASH (vsp, realdev_vid_node,
                                  hash_realdev_vid(realdev_ofp_port, vid),
                                  &ofproto->realdev_vid_map) {
             if (vsp->realdev_ofp_port == realdev_ofp_port
                 && vsp->vid == vid) {
-                return ofp_port_to_odp_port(vsp->vlandev_ofp_port);
+                return ofp_port_to_odp_port(ofproto, vsp->vlandev_ofp_port);
             }
         }
     }
@@ -7204,7 +7250,30 @@ vsp_add(struct ofport_dpif *port, uint16_t realdev_ofp_port, int vid)
         VLOG_ERR("duplicate vlan device record");
     }
 }
-
+
+static uint32_t
+ofp_port_to_odp_port(const struct ofproto_dpif *ofproto, uint16_t ofp_port)
+{
+    const struct ofport_dpif *ofport = get_ofp_port(ofproto, ofp_port);
+    return ofport ? ofport->odp_port : OVSP_NONE;
+}
+
+static uint16_t
+odp_port_to_ofp_port(const struct ofproto_dpif *ofproto, uint32_t odp_port)
+{
+    struct ofport_dpif *port;
+
+    HMAP_FOR_EACH_IN_BUCKET (port, odp_port_node,
+                             hash_int(odp_port, 0),
+                             &ofproto->odp_to_ofport_map) {
+        if (port->odp_port == odp_port) {
+            return port->up.ofp_port;
+        }
+    }
+
+    return OFPP_NONE;
+}
+
 const struct ofproto_class ofproto_dpif_class = {
     init,
     enumerate_types,
