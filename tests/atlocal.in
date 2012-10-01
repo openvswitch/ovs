@@ -38,3 +38,7 @@ MALLOC_CHECK_=2
 MALLOC_PERTURB_=165
 export MALLOC_CHECK_
 export MALLOC_PERTURB_
+
+# Enable FreeBSD libc malloc debugging features.
+MALLOC_CONF=AJ
+export MALLOC_CONF
