@@ -140,6 +140,9 @@ start_daemon () {
                 log_failure_msg "strace not installed, running $daemon without it"
             fi
             ;;
+        glibc)
+            set env MALLOC_CHECK_=2 MALLOC_PERTURB_=165 "$@"
+            ;;
         '')
             ;;
         *)

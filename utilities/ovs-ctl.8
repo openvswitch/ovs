@@ -198,15 +198,21 @@ Run the daemon under \fBvalgrind\fR(1), if it is installed, logging to
 .IP "\fBstrace\fR"
 Run the daemon under \fBstrace\fR(1), if it is installed, logging to
 \fIdaemon\fB.strace.log.\fIpid\fR in the log directory.
+.
+.IP "\fBglibc\fR"
+Enable GNU C library features designed to find memory errors.
 .RE
 .
 .IP
 By default, no wrapper is used.
 .
 .IP
-Wrappers greatly slow daemon operations so they should not be used in
-production.  They also produce voluminous logs that can quickly fill
-small disk partitions.
+Each of the wrappers can expose bugs in Open vSwitch that lead to
+incorrect operation, including crashes.  The \fBvalgring\fR and
+\fBstrace\fR wrappers greatly slow daemon operations so they should
+not be used in production.  They also produce voluminous logs that can
+quickly fill small disk partitions.  The \fBglibc\fR wrapper is less
+resource-intensive but still somewhat slows the daemons.
 .
 .PP
 The following options control file locations.  They should only be
