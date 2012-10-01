@@ -32,3 +32,9 @@ if test $HAVE_PYTHON = yes; then
         export PYTHONPATH
     fi
 fi
+
+# Enable glibc malloc debugging features.
+MALLOC_CHECK_=2
+MALLOC_PERTURB_=165
+export MALLOC_CHECK_
+export MALLOC_PERTURB_
