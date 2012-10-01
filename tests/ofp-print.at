@@ -376,7 +376,7 @@ AT_CHECK([ovs-ofctl ofp-print "\
 80 00 01 05 00 00 00 01 00 98 96 80 00 3c 00 78 \
 00 00 00 00 00 12 d6 87 00 00 00 00 6f 68 ba 66 \
 00 01 00 0a 80 00 0c 02 10 09 00 00 00 00 00 00"], [0], [dnl
-OFPT_FLOW_REMOVED (OF1.2) (xid=0x0): dl_vlan=9 reason=hard cookie:0xfedcba9876543210 duration1.01s idle60 hard120 pkts1234567 bytes1869134438
+OFPT_FLOW_REMOVED (OF1.2) (xid=0x0): dl_vlan=9 reason=hard table_id=5 cookie:0xfedcba9876543210 duration1.01s idle60 hard120 pkts1234567 bytes1869134438
 ])
 AT_CLEANUP
 

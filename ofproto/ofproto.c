@@ -3225,6 +3225,7 @@ ofproto_rule_send_removed(struct rule *rule, uint8_t reason)
     fr.priority = rule->cr.priority;
     fr.cookie = rule->flow_cookie;
     fr.reason = reason;
+    fr.table_id = rule->table_id;
     calc_flow_duration__(rule->created, time_msec(),
                          &fr.duration_sec, &fr.duration_nsec);
     fr.idle_timeout = rule->idle_timeout;

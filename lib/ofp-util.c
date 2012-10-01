@@ -1913,7 +1913,7 @@ ofputil_decode_flow_removed(struct ofputil_flow_removed *fr,
         fr->priority = ntohs(ofr->priority);
         fr->cookie = ofr->cookie;
         fr->reason = ofr->reason;
-        /* XXX: ofr->table_id is ignored */
+        fr->table_id = ofr->table_id;
         fr->duration_sec = ntohl(ofr->duration_sec);
         fr->duration_nsec = ntohl(ofr->duration_nsec);
         fr->idle_timeout = ntohs(ofr->idle_timeout);
@@ -1929,6 +1929,7 @@ ofputil_decode_flow_removed(struct ofputil_flow_removed *fr,
         fr->priority = ntohs(ofr->priority);
         fr->cookie = ofr->cookie;
         fr->reason = ofr->reason;
+        fr->table_id = 255;
         fr->duration_sec = ntohl(ofr->duration_sec);
         fr->duration_nsec = ntohl(ofr->duration_nsec);
         fr->idle_timeout = ntohs(ofr->idle_timeout);
@@ -1952,6 +1953,7 @@ ofputil_decode_flow_removed(struct ofputil_flow_removed *fr,
         fr->priority = ntohs(nfr->priority);
         fr->cookie = nfr->cookie;
         fr->reason = nfr->reason;
+        fr->table_id = 255;
         fr->duration_sec = ntohl(nfr->duration_sec);
         fr->duration_nsec = ntohl(nfr->duration_nsec);
         fr->idle_timeout = ntohs(nfr->idle_timeout);
@@ -1985,7 +1987,7 @@ ofputil_encode_flow_removed(const struct ofputil_flow_removed *fr,
         ofr->cookie = fr->cookie;
         ofr->priority = htons(fr->priority);
         ofr->reason = fr->reason;
-        ofr->table_id = 0;
+        ofr->table_id = fr->table_id;
         ofr->duration_sec = htonl(fr->duration_sec);
         ofr->duration_nsec = htonl(fr->duration_nsec);
         ofr->idle_timeout = htons(fr->idle_timeout);

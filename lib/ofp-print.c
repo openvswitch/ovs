@@ -843,6 +843,10 @@ ofp_print_flow_removed(struct ds *string, const struct ofp_header *oh)
     ds_put_format(string, " reason=%s",
                   ofp_flow_removed_reason_to_string(fr.reason));
 
+    if (fr.table_id != 255) {
+        ds_put_format(string, " table_id=%"PRIu8, fr.table_id);
+    }
+
     if (fr.cookie != htonll(0)) {
         ds_put_format(string, " cookie:0x%"PRIx64, ntohll(fr.cookie));
     }

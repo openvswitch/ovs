@@ -243,6 +243,7 @@ struct ofputil_flow_removed {
     uint16_t priority;
     ovs_be64 cookie;
     uint8_t reason;             /* One of OFPRR_*. */
+    uint8_t table_id;           /* 255 if message didn't include table ID. */
     uint32_t duration_sec;
     uint32_t duration_nsec;
     uint16_t idle_timeout;
