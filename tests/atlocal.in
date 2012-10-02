@@ -33,12 +33,22 @@ if test $HAVE_PYTHON = yes; then
     fi
 fi
 
-# Enable glibc malloc debugging features.
-MALLOC_CHECK_=2
-MALLOC_PERTURB_=165
-export MALLOC_CHECK_
-export MALLOC_PERTURB_
-
-# Enable FreeBSD libc malloc debugging features.
-MALLOC_CONF=AJ
-export MALLOC_CONF
+# Enable malloc debugging features.
+case `uname` in
+Linux)
+    MALLOC_CHECK_=2
+    MALLOC_PERTURB_=165
+    export MALLOC_CHECK_
+    export MALLOC_PERTURB_
+    ;;
+FreeBSD)
+    case `uname -r` in
+    [789].*)
+        MALLOC_CONF=AJ
+        ;;
+    *)
+        MALLOC_CONF=abort:true,junk:true,redzone:true
+        ;;
+    esac
+    export MALLOC_CONF
+esac
