@@ -1,0 +1,52 @@
+       How to Install Open vSwitch on Fedora Linux
+       ===========================================
+
+This document describes how to build and install Open vSwitch on a Fedora
+Linux host.  If you want to install Open vSwitch on a generic Linux host,
+see INSTALL.Linux instead.
+
+We have tested these instructions with Fedora 16 and Fedora 17.
+
+Building Open vSwitch for Fedora
+--------------------------------
+
+You may build from an Open vSwitch distribution tarball or from an
+Open vSwitch Git tree.
+
+Before you begin, note the RPM source directory on your version of
+Fedora.  On Fedora 15, it is $HOME/rpmbuild/SOURCES.
+
+1. If you are building from an Open vSwitch Git tree, then you will
+   need to first create a distribution tarball by running "./boot.sh;
+   ./configure; make dist" in the Git tree.
+
+2. Copy the distribution tarball into the RPM source directory.
+
+3. Unpack the distribution tarball into a temporary directory and "cd"
+   into the root of the distribution tarball.
+
+4. To build Open vSwitch userspace, run:
+
+       rpmbuild -bb rhel/openvswitch-fedora.spec
+
+   This produces one RPM: "openvswitch".
+
+5. On Fedora 15, to build the Open vSwitch kernel module, run:
+
+	rpmbuild -bb rhel/openvswitch-kmod-fedora.spec
+
+    You might have to specify a kernel version and/or variants, e.g.:
+
+	rpmbuild -bb \
+		-D "kversion 2.6.32-131.6.1.el6.x86_64" \
+		-D "kflavors default debug kdump" \
+		rhel/openvswitch-kmod-rhel6.spec
+
+    This produces an "kmod-openvswitch" RPM for each kernel variant,
+    in this example: "kmod-openvswitch", "kmod-openvswitch-debug", and
+    "kmod-openvswitch-kdump".
+
+Reporting Bugs
+--------------
+
+Please report problems to bugs@openvswitch.org.

@@ -1,0 +1,12 @@
+[Unit]
+Description=Open vSwitch
+After=syslog.target network.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/share/openvswitch/scripts/openvswitch.init start
+ExecStop=/usr/share/openvswitch/scripts/openvswitch.init stop
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

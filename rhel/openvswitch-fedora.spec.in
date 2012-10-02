@@ -1,0 +1,197 @@
+# Spec file for Open vSwitch.
+
+# Copyright (C) 2009, 2010 Nicira Networks, Inc.
+#
+# Copying and distribution of this file, with or without modification,
+# are permitted in any medium without royalty provided the copyright
+# notice and this notice are preserved.  This file is offered as-is,
+# without warranty of any kind.
+
+#%define kernel 2.6.40.4-5.fc15.x86_64
+
+Name: openvswitch
+Summary: Open vSwitch
+Group: System Environment/Daemons
+URL: http://www.openvswitch.org/
+Version: @VERSION@
+
+# The entire source code is ASL 2.0 except datapath/ which is GPLv2
+License: ASL 2.0
+Release: 1%{?dist}
+Source: openvswitch-%{version}.tar.gz
+#Source1: openvswitch-init
+Buildroot: /tmp/openvswitch-fedora-rpm
+
+Requires(post):  systemd-units
+Requires(preun): systemd-units
+Requires(postun): systemd-units
+
+%description
+Open vSwitch provides standard network bridging functions augmented with
+support for the OpenFlow protocol for remote per-flow control of
+traffic.
+
+%prep
+%setup -q -n openvswitch-%{version}
+
+%build
+./configure --prefix=/usr --sysconfdir=/etc --localstatedir=%{_localstatedir} --enable-ssl %{build_number}
+make %{_smp_mflags}
+
+%install
+rm -rf $RPM_BUILD_ROOT
+make install DESTDIR=$RPM_BUILD_ROOT
+install -d -m 755 $RPM_BUILD_ROOT/etc
+install -d -m 755 $RPM_BUILD_ROOT/etc/openvswitch
+install -p -D -m 0644 rhel/usr_lib_systemd_system_openvswitch.service \
+        $RPM_BUILD_ROOT%{_unitdir}/openvswitch.service
+install -m 755 rhel/etc_init.d_openvswitch \
+        $RPM_BUILD_ROOT%{_datadir}/openvswitch/scripts/openvswitch.init
+install -d -m 755 $RPM_BUILD_ROOT/etc/sysconfig
+install -d -m 755 $RPM_BUILD_ROOT/etc/logrotate.d
+install -m 755 rhel/etc_logrotate.d_openvswitch \
+        $RPM_BUILD_ROOT/etc/logrotate.d/openvswitch
+install -d -m 755 $RPM_BUILD_ROOT/etc/profile.d
+install -m 644 vswitchd/vswitch.ovsschema \
+        $RPM_BUILD_ROOT/usr/share/openvswitch/vswitch.ovsschema
+install -d -m 755 $RPM_BUILD_ROOT/usr/share/openvswitch/scripts
+install -d -m 0755 $RPM_BUILD_ROOT/etc/sysconfig/network-scripts/
+install -p -m 0755 rhel/etc_sysconfig_network-scripts_ifdown-ovs \
+        $RPM_BUILD_ROOT/etc/sysconfig/network-scripts/ifdown-ovs
+install -p -m 0755 rhel/etc_sysconfig_network-scripts_ifup-ovs \
+        $RPM_BUILD_ROOT/etc/sysconfig/network-scripts/ifup-ovs
+install -p -D -m 0644 rhel/usr_share_openvswitch_scripts_sysconfig.template \
+        $RPM_BUILD_ROOT/etc/sysconfig/openvswitch
+install -d -m 755 $RPM_BUILD_ROOT/usr/share/openvswitch/scripts
+
+install python/compat/uuid.py $RPM_BUILD_ROOT/usr/share/openvswitch/python
+install python/compat/argparse.py $RPM_BUILD_ROOT/usr/share/openvswitch/python
+
+install -d -m 755 $RPM_BUILD_ROOT/var/lib/openvswitch
+
+%clean
+rm -rf $RPM_BUILD_ROOT
+
+%preun
+# Package removal, not upgrade
+systemctl stop openvswitch.service
+systemctl disable openvswitch.service
+
+%post
+if test ! -e /etc/openvswitch/conf.db; then
+    install -d -m 755 -o root -g root /etc/openvswitch
+
+    # Create ovs-vswitchd config database
+    ovsdb-tool -vANY:console:emer create /etc/openvswitch/conf.db \
+            /usr/share/openvswitch/vswitch.ovsschema
+
+    # Create initial table in config database
+    ovsdb-tool -vANY:console:emer transact /etc/openvswitch/conf.db \
+            '[{"op": "insert", "table": "Open_vSwitch", "row": {}}]' \
+            > /dev/null
+fi
+# Initial installation
+systemctl enable openvswitch.service
+systemctl start openvswitch.service
+
+%postun
+
+%files
+%defattr(-,root,root)
+%config /etc/sysconfig/openvswitch
+%config /etc/logrotate.d/openvswitch
+%{_unitdir}/openvswitch.service
+%{_datadir}/openvswitch/scripts/openvswitch.init
+%{_sysconfdir}/sysconfig/network-scripts/ifup-ovs
+%{_sysconfdir}/sysconfig/network-scripts/ifdown-ovs
+/usr/share/openvswitch/bugtool-plugins/
+/usr/share/openvswitch/python/ovs/__init__.py
+/usr/share/openvswitch/python/ovs/daemon.py
+/usr/share/openvswitch/python/ovs/db/__init__.py
+/usr/share/openvswitch/python/ovs/db/data.py
+/usr/share/openvswitch/python/ovs/db/error.py
+/usr/share/openvswitch/python/ovs/db/idl.py
+/usr/share/openvswitch/python/ovs/db/parser.py
+/usr/share/openvswitch/python/ovs/db/schema.py
+/usr/share/openvswitch/python/ovs/db/types.py
+/usr/share/openvswitch/python/ovs/dirs.py
+/usr/share/openvswitch/python/ovs/fatal_signal.py
+/usr/share/openvswitch/python/ovs/json.py
+/usr/share/openvswitch/python/ovs/jsonrpc.py
+/usr/share/openvswitch/python/ovs/ovsuuid.py
+/usr/share/openvswitch/python/ovs/poller.py
+/usr/share/openvswitch/python/ovs/process.py
+/usr/share/openvswitch/python/ovs/reconnect.py
+/usr/share/openvswitch/python/ovs/socket_util.py
+/usr/share/openvswitch/python/ovs/stream.py
+/usr/share/openvswitch/python/ovs/timeval.py
+/usr/share/openvswitch/python/ovs/util.py
+/usr/share/openvswitch/python/ovs/version.py
+/usr/share/openvswitch/python/ovs/unixctl/__init__.py
+/usr/share/openvswitch/python/ovs/unixctl/client.py
+/usr/share/openvswitch/python/ovs/unixctl/server.py
+/usr/share/openvswitch/python/uuid.py
+/usr/share/openvswitch/python/argparse.py
+/usr/share/openvswitch/python/ovs/vlog.py
+/usr/share/openvswitch/python/ovstest/__init__.py
+/usr/share/openvswitch/python/ovstest/args.py
+/usr/share/openvswitch/python/ovstest/rpcserver.py
+/usr/share/openvswitch/python/ovstest/tcp.py
+/usr/share/openvswitch/python/ovstest/udp.py
+/usr/share/openvswitch/python/ovstest/util.py
+/usr/share/openvswitch/python/ovstest/vswitch.py
+/usr/share/openvswitch/python/ovstest/tests.py
+/usr/share/openvswitch/scripts/ovs-bugtool-*
+/usr/share/openvswitch/scripts/ovs-check-dead-ifs
+/usr/share/openvswitch/scripts/ovs-lib
+%config /usr/share/openvswitch/vswitch.ovsschema
+/usr/sbin/ovs-brcompatd
+/usr/sbin/ovs-bugtool
+/usr/sbin/ovs-vswitchd
+/usr/sbin/ovsdb-server
+/usr/bin/ovs-appctl
+/usr/bin/ovs-dpctl
+/usr/bin/ovs-ofctl
+/usr/bin/ovs-vsctl
+/usr/bin/ovsdb-client
+/usr/bin/ovsdb-tool
+/usr/bin/ovs-controller
+/usr/bin/ovs-pki
+/usr/bin/ovs-test
+/usr/bin/ovs-l3ping
+%doc /usr/share/man/man8/ovs-controller.8.gz
+%doc /usr/share/man/man8/ovs-pki.8.gz
+%doc /usr/share/man/man1/ovsdb-client.1.gz
+%doc /usr/share/man/man1/ovsdb-server.1.gz
+%doc /usr/share/man/man1/ovsdb-tool.1.gz
+%doc /usr/share/man/man5/ovs-vswitchd.conf.db.5.gz
+%doc /usr/share/man/man8/ovs-appctl.8.gz
+%doc /usr/share/man/man8/ovs-bugtool.8.gz
+%doc /usr/share/man/man8/ovs-brcompatd.8.gz
+%doc /usr/share/man/man8/ovs-dpctl.8.gz
+%doc /usr/share/man/man8/ovs-ofctl.8.gz
+%doc /usr/share/man/man8/ovs-parse-leaks.8.gz
+%doc /usr/share/man/man8/ovs-vsctl.8.gz
+%doc /usr/share/man/man8/ovs-vswitchd.8.gz
+%doc /usr/share/man/man8/ovs-test.8.gz
+%doc /usr/share/man/man8/ovs-l3ping.8.gz
+/var/lib/openvswitch
+/usr/share/openvswitch/scripts/ovs-ctl
+%exclude /etc/openvswitch
+%exclude /usr/bin/ovs-benchmark
+%exclude /usr/bin/ovs-parse-leaks
+%exclude /usr/bin/ovs-pcap
+%exclude /usr/bin/ovs-tcpundump
+%exclude /usr/bin/ovs-vlan-test
+%exclude /usr/sbin/ovs-vlan-bug-workaround
+%exclude /usr/share/man/man1/ovs-benchmark.1.gz
+%exclude /usr/share/man/man1/ovs-pcap.1.gz
+%exclude /usr/share/man/man1/ovs-tcpundump.1.gz
+%exclude /usr/share/man/man8/ovs-ctl.8.gz
+%exclude /usr/share/man/man8/ovs-vlan-bug-workaround.8.gz
+%exclude /usr/share/man/man8/ovs-vlan-test.8.gz
+%exclude /usr/share/openvswitch/scripts/ovs-save
+
+%changelog
+* Wed Jan 12 2011 Ralf Spenneberg <ralf@os-s.net>
+- First build on F14

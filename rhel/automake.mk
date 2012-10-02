@@ -17,9 +17,14 @@ EXTRA_DIST += \
 	rhel/openvswitch-kmod-rhel5.spec.in \
 	rhel/openvswitch-kmod-rhel6.spec \
 	rhel/openvswitch-kmod-rhel6.spec.in \
+	rhel/openvswitch-kmod-fedora.spec \
+	rhel/openvswitch-kmod-fedora.spec.in \
 	rhel/openvswitch.spec \
 	rhel/openvswitch.spec.in \
-	rhel/usr_share_openvswitch_scripts_sysconfig.template
+	rhel/openvswitch-fedora.spec \
+	rhel/openvswitch-fedora.spec.in \
+	rhel/usr_share_openvswitch_scripts_sysconfig.template \
+	rhel/usr_lib_systemd_system_openvswitch.service
 
 update_rhel_spec = \
   ($(ro_shell) && sed -e 's,[@]VERSION[@],$(VERSION),g') \
@@ -32,5 +37,11 @@ $(srcdir)/rhel/openvswitch-kmod-rhel5.spec: rhel/openvswitch-kmod-rhel5.spec.in 
 $(srcdir)/rhel/openvswitch-kmod-rhel6.spec: rhel/openvswitch-kmod-rhel6.spec.in $(top_builddir)/config.status
 	$(update_rhel_spec)
 
+$(srcdir)/rhel/openvswitch-kmod-fedora.spec: rhel/openvswitch-kmod-fedora.spec.in $(top_builddir)/config.status
+	$(update_rhel_spec)
+
 $(srcdir)/rhel/openvswitch.spec: rhel/openvswitch.spec.in $(top_builddir)/config.status
+	$(update_rhel_spec)
+
+$(srcdir)/rhel/openvswitch-fedora.spec: rhel/openvswitch-fedora.spec.in $(top_builddir)/config.status
 	$(update_rhel_spec)
