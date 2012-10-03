@@ -300,13 +300,13 @@ MAN_FRAGMENTS += \
 
 # vswitch IDL
 OVSIDL_BUILT += \
-	lib/vswitch-idl.c \
-	lib/vswitch-idl.h \
-	lib/vswitch-idl.ovsidl
+	$(srcdir)/lib/vswitch-idl.c \
+	$(srcdir)/lib/vswitch-idl.h \
+	$(srcdir)/lib/vswitch-idl.ovsidl
 
-EXTRA_DIST += lib/vswitch-idl.ann
-VSWITCH_IDL_FILES = vswitchd/vswitch.ovsschema lib/vswitch-idl.ann
-lib/vswitch-idl.ovsidl: $(VSWITCH_IDL_FILES)
+EXTRA_DIST += $(srcdir)/lib/vswitch-idl.ann
+VSWITCH_IDL_FILES = vswitchd/vswitch.ovsschema $(srcdir)/lib/vswitch-idl.ann
+$(srcdir)/lib/vswitch-idl.ovsidl: $(VSWITCH_IDL_FILES)
 	$(OVSDB_IDLC) -C $(srcdir) annotate $(VSWITCH_IDL_FILES) > $@.tmp
 	mv $@.tmp $@
 
