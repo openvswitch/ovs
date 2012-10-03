@@ -96,7 +96,8 @@ BUILD_ASSERT_DECL(sizeof(struct flow) % 4 == 0);
 #define FLOW_U32S (sizeof(struct flow) / 4)
 
 /* Remember to update FLOW_WC_SEQ when changing 'struct flow'. */
-BUILD_ASSERT_DECL(sizeof(struct flow) == 168 && FLOW_WC_SEQ == 17);
+BUILD_ASSERT_DECL(sizeof(struct flow) == sizeof(struct flow_tnl) + 144 &&
+                  FLOW_WC_SEQ == 17);
 
 /* Represents the metadata fields of struct flow. */
 struct flow_metadata {
