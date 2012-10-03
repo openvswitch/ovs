@@ -146,7 +146,6 @@ check-valgrind: all tests/atconfig tests/atlocal $(TESTSUITE) \
 clean-local:
 	test ! -f '$(TESTSUITE)' || $(SHELL) '$(TESTSUITE)' -C tests --clean
 
-AUTOM4TE = autom4te
 AUTOTEST = $(AUTOM4TE) --language=autotest
 $(TESTSUITE): package.m4 $(TESTSUITE_AT)
 	$(AUTOTEST) -I '$(srcdir)' -o $@.tmp $@.at
