@@ -1,6 +1,6 @@
 {"name": "Open_vSwitch",
- "version": "6.10.0",
- "cksum": "3699312094 16958",
+ "version": "6.11.0",
+ "cksum": "3699219253 17163",
  "tables": {
    "Open_vSwitch": {
      "columns": {
@@ -178,6 +178,13 @@
        "ofport": {
          "type": {"key": "integer", "min": 0, "max": 1},
          "ephemeral": true},
+       "ofport_request": {
+         "type": {
+           "key": {"type": "integer",
+                   "minInteger": 1,
+                   "maxInteger": 65279},
+           "min": 0,
+           "max": 1}},
        "cfm_mpid": {
          "type": {
            "key": {"type": "integer"},

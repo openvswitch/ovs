@@ -66,6 +66,7 @@ struct if_cfg {
     struct hmap_node hmap_node;         /* Node in bridge's if_cfg_todo. */
     const struct ovsrec_interface *cfg; /* Interface record. */
     const struct ovsrec_port *parent;   /* Parent port record. */
+    int64_t ofport;                     /* Requested OpenFlow port number. */
 };
 
 /* OpenFlow port slated for removal from ofproto. */
@@ -1261,7 +1262,7 @@ bridge_refresh_ofp_port(struct bridge *br)
     }
 }
 
-/* Opens a network device for 'iface_cfg' and configures it.  If '*ofp_portp'
+/* Opens a network device for 'if_cfg' and configures it.  If '*ofp_portp'
  * is negative, adds the network device to br->ofproto and stores the OpenFlow
  * port number in '*ofp_portp'; otherwise leaves br->ofproto and '*ofp_portp'
  * untouched.
@@ -1270,10 +1271,11 @@ bridge_refresh_ofp_port(struct bridge *br)
  * failure, returns a positive errno value and stores NULL in '*netdevp'. */
 static int
 iface_do_create(const struct bridge *br,
-                const struct ovsrec_interface *iface_cfg,
-                const struct ovsrec_port *port_cfg,
+                const struct if_cfg *if_cfg,
                 int *ofp_portp, struct netdev **netdevp)
 {
+    const struct ovsrec_interface *iface_cfg = if_cfg->cfg;
+    const struct ovsrec_port *port_cfg = if_cfg->parent;
     struct netdev *netdev;
     int error;
 
@@ -1291,7 +1293,7 @@ iface_do_create(const struct bridge *br,
     }
 
     if (*ofp_portp < 0) {
-        uint16_t ofp_port;
+        uint16_t ofp_port = if_cfg->ofport;
 
         error = ofproto_port_add(br->ofproto, netdev, &ofp_port);
         if (error) {
@@ -1335,11 +1337,7 @@ iface_create(struct bridge *br, struct if_cfg *if_cfg, int ofp_port)
     struct iface *iface;
     struct port *port;
     int error;
-
-    /* Get rid of 'if_cfg' itself.  We already copied out the interesting
-     * bits. */
-    hmap_remove(&br->if_cfg_todo, &if_cfg->hmap_node);
-    free(if_cfg);
+    bool ok = true;
 
     /* Do the bits that can fail up front.
      *
@@ -1348,11 +1346,12 @@ iface_create(struct bridge *br, struct if_cfg *if_cfg, int ofp_port)
      * additions and deletions are cheaper, these calls should be removed. */
     bridge_run_fast();
     assert(!iface_lookup(br, iface_cfg->name));
-    error = iface_do_create(br, iface_cfg, port_cfg, &ofp_port, &netdev);
+    error = iface_do_create(br, if_cfg, &ofp_port, &netdev);
     bridge_run_fast();
     if (error) {
         iface_clear_db_record(iface_cfg);
-        return false;
+        ok = false;
+        goto done;
     }
 
     /* Get or create the port structure. */
@@ -1390,7 +1389,9 @@ iface_create(struct bridge *br, struct if_cfg *if_cfg, int ofp_port)
 
             error = netdev_open(port->name, "internal", &netdev);
             if (!error) {
-                ofproto_port_add(br->ofproto, netdev, NULL);
+                uint16_t ofp_port = if_cfg->ofport;
+
+                ofproto_port_add(br->ofproto, netdev, &ofp_port);
                 netdev_close(netdev);
             } else {
                 VLOG_WARN("could not open network device %s (%s)",
@@ -1402,7 +1403,11 @@ iface_create(struct bridge *br, struct if_cfg *if_cfg, int ofp_port)
         }
     }
 
-    return true;
+done:
+    hmap_remove(&br->if_cfg_todo, &if_cfg->hmap_node);
+    free(if_cfg);
+
+    return ok;
 }
 
 /* Set Flow eviction threshold */
@@ -2451,6 +2456,7 @@ bridge_queue_if_cfg(struct bridge *br,
 
     if_cfg->cfg = cfg;
     if_cfg->parent = parent;
+    if_cfg->ofport = cfg->n_ofport_request ? *cfg->ofport_request : OFPP_NONE;
     hmap_insert(&br->if_cfg_todo, &if_cfg->hmap_node,
                 hash_string(if_cfg->cfg->name, 0));
 }

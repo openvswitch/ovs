@@ -1159,6 +1159,17 @@
         cannot be added then Open vSwitch sets this column
         to -1.</p>
       </column>
+
+      <column name="ofport_request">
+        <p>Requested OpenFlow port number for this interface.  The port
+        number must be between 1 and 65279, inclusive.  Some datapaths
+        cannot satisfy all requests for particular port numbers.  When
+        this column is empty or the request cannot be fulfilled, the
+        system will choose a free port.  The <ref column="ofport"/>
+        column reports the assigned OpenFlow port number.</p>
+        <p>The port number must be requested in the same transaction
+        that creates the port.</p>
+      </column>
     </group>
 
     <group title="System-Specific Details">

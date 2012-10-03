@@ -583,9 +583,12 @@ struct ofproto_class {
     int (*port_query_by_name)(const struct ofproto *ofproto,
                               const char *devname, struct ofproto_port *port);
 
-    /* Attempts to add 'netdev' as a port on 'ofproto'.  Returns 0 if
-     * successful, otherwise a positive errno value.  If successful, sets
-     * '*ofp_portp' to the new port's port number.
+    /* Attempts to add 'netdev' as a port on 'ofproto'.  If '*ofp_portp'
+     * is not OFPP_NONE, attempts to use that as the port's OpenFlow
+     * port number.
+     *
+     * Returns 0 if successful, otherwise a positive errno value.  If
+     * successful, sets '*ofp_portp' to the new port's port number.
      *
      * It doesn't matter whether the new port will be returned by a later call
      * to ->port_poll(); the implementation may do whatever is more

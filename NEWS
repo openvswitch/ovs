@@ -17,6 +17,8 @@ v1.9.0 - xx xxx xxxx
       - Allow bitwise masking for SHA and THA fields in ARP, SLL and TLL
         fields in IPv6 neighbor discovery messages, and IPv6 flow label.
       - Adds support for writing to the metadata field for a flow.
+      - It is possible to request the OpenFlow port number with the
+        "ofport_request" column in the Interface table.
     - ovs-ofctl:
       - Commands and actions that accept port numbers now also accept keywords
         that represent those ports (such as LOCAL, NONE, and ALL).  This is

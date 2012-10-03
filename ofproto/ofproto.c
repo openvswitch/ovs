@@ -1345,15 +1345,19 @@ ofproto_port_dump_done(struct ofproto_port_dump *dump)
     return dump->error == EOF ? 0 : dump->error;
 }
 
-/* Attempts to add 'netdev' as a port on 'ofproto'.  If successful, returns 0
- * and sets '*ofp_portp' to the new port's OpenFlow port number (if 'ofp_portp'
- * is non-null).  On failure, returns a positive errno value and sets
- * '*ofp_portp' to OFPP_NONE (if 'ofp_portp' is non-null). */
+/* Attempts to add 'netdev' as a port on 'ofproto'.  If 'ofp_portp' is
+ * non-null and '*ofp_portp' is not OFPP_NONE, attempts to use that as
+ * the port's OpenFlow port number.
+ *
+ * If successful, returns 0 and sets '*ofp_portp' to the new port's
+ * OpenFlow port number (if 'ofp_portp' is non-null).  On failure,
+ * returns a positive errno value and sets '*ofp_portp' to OFPP_NONE (if
+ * 'ofp_portp' is non-null). */
 int
 ofproto_port_add(struct ofproto *ofproto, struct netdev *netdev,
                  uint16_t *ofp_portp)
 {
-    uint16_t ofp_port;
+    uint16_t ofp_port = ofp_portp ? *ofp_portp : OFPP_NONE;
     int error;
 
     error = ofproto->ofproto_class->port_add(ofproto, netdev, &ofp_port);
