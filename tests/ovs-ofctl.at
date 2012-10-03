@@ -557,7 +557,7 @@ NXM_NX_REG0_W(a0e0d050/00000000)
 00011e04(12345678)
 00011f08(12345678/12345678)
 ])
-AT_CHECK([ovs-ofctl --strict parse-nx-match < nx-match.txt], [0], [dnl
+AT_CHECK([ovs-ofctl -vPATTERN:'console:%c|%p|%m' --strict parse-nx-match < nx-match.txt], [0], [dnl
 <any>
 
 # in port
@@ -843,7 +843,16 @@ NXM_NX_REG0(12345678)
 NXM_NX_REG0_W(12345678/12345678)
 nx_pull_match() returned error OFPBMC_BAD_FIELD
 nx_pull_match() returned error OFPBMC_BAD_FIELD
+], [stderr])
+
+# Check that at least the first warning made it.  (It's rate-limited
+# so a variable number could show up, especially under valgrind etc.)
+AT_CHECK([grep 'has 1-bits in value' stderr | sed 1q], [0], [dnl
+nx_match|WARN|NXM/OXM entry NXM_OF_ETH_DST_W(ffffffffffff/010000000000) has 1-bits in value for bits wildcarded by the mask.  (Future versions of OVS may report this as an OpenFlow error.)
 ])
+
+# Check that there wasn't any other stderr output.
+AT_CHECK([grep -v 'has 1-bits in value' stderr], [1])
 AT_CLEANUP
 
 AT_SETUP([ovs-ofctl parse-ofp10-match])
@@ -1593,7 +1602,8 @@ OXM_OF_ETH_TYPE(0800) OXM_OF_IP_PROTO(3a) OXM_OF_ICMPV6_TYPE(88) OXM_OF_IPV6_ND_
 # Invalid field number.
 01020304(1111/2222)
 ])
-AT_CHECK([ovs-ofctl --strict parse-oxm < oxm.txt], [0], [dnl
+AT_CHECK([ovs-ofctl '-vPATTERN:console:%c|%p|%m' --strict parse-oxm < oxm.txt],
+  [0], [dnl
 <any>
 
 # in port
@@ -1787,7 +1797,16 @@ nx_pull_match() returned error OFPBMC_BAD_PREREQ
 
 # Invalid field number.
 nx_pull_match() returned error OFPBMC_BAD_FIELD
+], [stderr])
+
+# Check that at least the first warning made it.  (It's rate-limited
+# so a variable number could show up, especially under valgrind etc.)
+AT_CHECK([grep 'has 1-bits in value' stderr | sed 1q], [0], [dnl
+nx_match|WARN|NXM/OXM entry OXM_OF_METADATA_W(1234567890abcdef/ffff0000ffff0000) has 1-bits in value for bits wildcarded by the mask.  (Future versions of OVS may report this as an OpenFlow error.)
 ])
+
+# Check that there wasn't any other stderr output.
+AT_CHECK([grep -v 'has 1-bits in value' stderr], [1])
 AT_CLEANUP
 
 AT_SETUP([ovs-ofctl parse-oxm loose])

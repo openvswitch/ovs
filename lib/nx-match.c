@@ -90,6 +90,31 @@ nx_entry_ok(const void *p, unsigned int match_len)
     return header;
 }
 
+/* Given NXM/OXM value 'value' and mask 'mask', each 'width' bytes long,
+ * checks for any 1-bit in the value where there is a 0-bit in the mask.  If it
+ * finds one, logs a warning. */
+static void
+check_mask_consistency(const uint8_t *p, const struct mf_field *mf)
+{
+    unsigned int width = mf->n_bytes;
+    const uint8_t *value = p + 4;
+    const uint8_t *mask = p + 4 + width;
+    unsigned int i;
+
+    for (i = 0; i < width; i++) {
+        if (value[i] & ~mask[i]) {
+            if (!VLOG_DROP_WARN(&rl)) {
+                char *s = nx_match_to_string(p, width * 2 + 4);
+                VLOG_WARN_RL(&rl, "NXM/OXM entry %s has 1-bits in value for "
+                             "bits wildcarded by the mask.  (Future versions "
+                             "of OVS may report this as an OpenFlow error.)",
+                             s);
+                break;
+            }
+        }
+    }
+}
+
 static enum ofperr
 nx_pull_raw(const uint8_t *p, unsigned int match_len, bool strict,
             struct match *match, ovs_be64 *cookie, ovs_be64 *cookie_mask)
@@ -141,6 +166,7 @@ nx_pull_raw(const uint8_t *p, unsigned int match_len, bool strict,
                     error = OFPERR_OFPBMC_BAD_MASK;
                 } else {
                     error = 0;
+                    check_mask_consistency(p, mf);
                     mf_set(mf, &value, &mask, match);
                 }
             }

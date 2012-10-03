@@ -1208,9 +1208,10 @@ OFP_ASSERT(sizeof(struct nx_action_output_reg) == 24);
  *     value, called "nxm_mask".  For each 1-bit in position J in nxm_mask, the
  *     nx_match matches only packets for which bit J in the given field's value
  *     matches bit J in nxm_value.  A 0-bit in nxm_mask causes the
- *     corresponding bits in nxm_value and the field's value to be ignored.
- *     (The sense of the nxm_mask bits is the opposite of that used by the
- *     "wildcards" member of struct ofp10_match.)
+ *     corresponding bit in nxm_value is ignored (it should be 0; Open vSwitch
+ *     may enforce this someday), as is the corresponding bit in the field's
+ *     value.  (The sense of the nxm_mask bits is the opposite of that used by
+ *     the "wildcards" member of struct ofp10_match.)
  *
  *     When nxm_hasmask is 1, nxm_length is always even.
  *
