@@ -34,10 +34,7 @@ if test "$PERL" = no; then
    AC_MSG_ERROR([Perl interpreter not found in $PATH or $PERL.])
 fi
 
-AC_PATH_PROG([AUTOM4TE], autom4te, no)
-if test "$AUTOM4TE" = no; then
-   AC_MSG_ERROR([autom4te not found in $PATH or $AUTOM4TE.])
-fi
+AM_MISSING_PROG([AUTOM4TE], [autom4te])
 
 AC_USE_SYSTEM_EXTENSIONS
 AC_C_BIGENDIAN
