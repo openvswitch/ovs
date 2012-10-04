@@ -305,9 +305,11 @@ OVSIDL_BUILT += \
 	$(srcdir)/lib/vswitch-idl.ovsidl
 
 EXTRA_DIST += $(srcdir)/lib/vswitch-idl.ann
-VSWITCH_IDL_FILES = vswitchd/vswitch.ovsschema $(srcdir)/lib/vswitch-idl.ann
+VSWITCH_IDL_FILES = \
+	$(srcdir)/vswitchd/vswitch.ovsschema \
+	$(srcdir)/lib/vswitch-idl.ann
 $(srcdir)/lib/vswitch-idl.ovsidl: $(VSWITCH_IDL_FILES)
-	$(OVSDB_IDLC) -C $(srcdir) annotate $(VSWITCH_IDL_FILES) > $@.tmp
+	$(OVSDB_IDLC) annotate $(VSWITCH_IDL_FILES) > $@.tmp
 	mv $@.tmp $@
 
 lib/dirs.c: lib/dirs.c.in Makefile
