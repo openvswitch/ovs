@@ -1085,7 +1085,10 @@ static void
 set_packet_in_format(struct vconn *vconn,
                      enum nx_packet_in_format packet_in_format)
 {
-    struct ofpbuf *spif = ofputil_make_set_packet_in_format(packet_in_format);
+    struct ofpbuf *spif;
+
+    spif = ofputil_make_set_packet_in_format(vconn_get_version(vconn),
+                                             packet_in_format);
     transact_noreply(vconn, spif);
     VLOG_DBG("%s: using user-specified packet in format %s",
              vconn_get_name(vconn),
@@ -1386,7 +1389,8 @@ ofctl_monitor(int argc, char *argv[])
     } else {
         struct ofpbuf *spif, *reply;
 
-        spif = ofputil_make_set_packet_in_format(NXPIF_NXM);
+        spif = ofputil_make_set_packet_in_format(vconn_get_version(vconn),
+                                                 NXPIF_NXM);
         run(vconn_transact_noreply(vconn, spif, &reply),
             "talking to %s", vconn_get_name(vconn));
         if (reply) {
