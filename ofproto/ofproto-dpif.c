@@ -3106,18 +3106,19 @@ handle_miss_upcalls(struct ofproto_dpif *ofproto, struct dpif_upcall *upcalls,
     for (upcall = upcalls; upcall < &upcalls[n_upcalls]; upcall++) {
         struct flow_miss *miss = &misses[n_misses];
         struct flow_miss *existing_miss;
+        struct flow flow;
         uint32_t hash;
 
         /* Obtain metadata and check userspace/kernel agreement on flow match,
          * then set 'flow''s header pointers. */
         miss->key_fitness = ofproto_dpif_extract_flow_key(
             ofproto, upcall->key, upcall->key_len,
-            &miss->flow, &miss->initial_tci, upcall->packet);
+            &flow, &miss->initial_tci, upcall->packet);
         if (miss->key_fitness == ODP_FIT_ERROR) {
             continue;
         }
-        flow_extract(upcall->packet, miss->flow.skb_priority,
-                     &miss->flow.tunnel, miss->flow.in_port, &miss->flow);
+        flow_extract(upcall->packet, flow.skb_priority,
+                     &flow.tunnel, flow.in_port, &miss->flow);
 
         /* Add other packets to a to-do list. */
         hash = flow_hash(&miss->flow, 0);

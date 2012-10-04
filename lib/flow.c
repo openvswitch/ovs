@@ -346,6 +346,7 @@ flow_extract(struct ofpbuf *packet, uint32_t skb_priority,
     memset(flow, 0, sizeof *flow);
 
     if (tnl) {
+        assert(tnl != &flow->tunnel);
         flow->tunnel = *tnl;
     }
     flow->in_port = ofp_in_port;
