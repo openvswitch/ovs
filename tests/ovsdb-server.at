@@ -447,6 +447,55 @@ cat stdout >> output
    AT_CLEANUP])
 
 EXECUTION_EXAMPLES
+
+AT_BANNER([OVSDB -- ovsdb-server transactions (TCP sockets)])
+
+AT_SETUP([ovsdb-client get-schema-version - tcp socket])
+AT_KEYWORDS([ovsdb server positive tcp])
+ordinal_schema > schema
+AT_CHECK([perl $srcdir/choose-port.pl], [0], [stdout])
+TCP_PORT=`cat stdout`
+AT_CHECK([ovsdb-tool create db schema], [0], [ignore], [ignore])
+AT_CHECK([ovsdb-server --detach --no-chdir --pidfile="`pwd`"/pid --unixctl="`pwd`"/unixctl --remote=ptcp:$TCP_PORT:127.0.0.1 db], [0], [ignore], [ignore])
+AT_CHECK([ovsdb-client get-schema-version tcp:127.0.0.1:$TCP_PORT ordinals], [0], [5.1.3
+])
+OVSDB_SERVER_SHUTDOWN
+AT_CLEANUP])
+
+# OVSDB_CHECK_EXECUTION(TITLE, SCHEMA, TRANSACTIONS, OUTPUT, [KEYWORDS])
+#
+# Creates a database with the given SCHEMA, starts an ovsdb-server on
+# that database, and runs each of the TRANSACTIONS (which should be a
+# quoted list of quoted strings) against it with ovsdb-client one at a
+# time.
+#
+# Checks that the overall output is OUTPUT, but UUIDs in the output
+# are replaced by markers of the form <N> where N is a number.  The
+# first unique UUID is replaced by <0>, the next by <1>, and so on.
+# If a given UUID appears more than once it is always replaced by the
+# same marker.
+#
+# TITLE is provided to AT_SETUP and KEYWORDS to AT_KEYWORDS.
+m4_define([OVSDB_CHECK_EXECUTION],
+  [AT_SETUP([$1])
+   AT_KEYWORDS([ovsdb server positive tcp $5])
+   $2 > schema
+   AT_CHECK([perl $srcdir/choose-port.pl], [0], [stdout])
+   TCP_PORT=`cat stdout`
+   PKIDIR=$abs_top_builddir/tests
+   AT_CHECK([ovsdb-tool create db schema], [0], [stdout], [ignore])
+   AT_CHECK([ovsdb-server --detach --no-chdir --pidfile="`pwd`"/pid --remote=ptcp:$TCP_PORT:127.0.0.1 --unixctl="`pwd`"/unixctl db], [0], [ignore], [ignore])
+   m4_foreach([txn], [$3],
+     [AT_CHECK([ovsdb-client transact tcp:127.0.0.1:$TCP_PORT 'txn'], [0], [stdout], [ignore],
+     [test ! -e pid || kill `cat pid`])
+cat stdout >> output
+])
+   AT_CHECK([perl $srcdir/uuidfilt.pl output], [0], [$4], [ignore],
+            [test ! -e pid || kill `cat pid`])
+   OVSDB_SERVER_SHUTDOWN
+   AT_CLEANUP])
+
+EXECUTION_EXAMPLES
 
 AT_BANNER([OVSDB -- transactions on transient ovsdb-server])
 
