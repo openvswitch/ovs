@@ -66,3 +66,14 @@ m4_define([OVS_VSWITCHD_START],
 m4_define([OVS_VSWITCHD_STOP],
   [AT_CHECK([ovs-appctl -t ovs-vswitchd exit])
    AT_CHECK([ovs-appctl -t ovsdb-server exit])])
+
+# ADD_OF_PORTS(BRIDGE, OF_PORT[, OF_PORT...])
+#
+# Creates a dummy interface with an OpenFlow port number of OF_PORT and
+# name of p{OF_PORT}.  The dummy implementation will treat the OF_PORT
+# as the datapath port number, which as the effect of making the
+# OpenFlow and datapath numbers the same.
+m4_define([ADD_OF_PORTS],
+ [ovs-vsctl m4_foreach([of_port], m4_cdr($@),
+    [ \
+    -- add-port $1 p[]of_port -- set Interface p[]of_port type=dummy ofport_request=of_port])])
