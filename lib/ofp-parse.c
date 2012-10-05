@@ -580,8 +580,7 @@ parse_named_instruction(enum ovs_instruction_type type,
         break;
 
     case OVSINST_OFPIT11_CLEAR_ACTIONS:
-        /* TODO:XXX */
-        ovs_fatal(0, "instruction clear-actions is not supported yet");
+        ofpact_put_CLEAR_ACTIONS(ofpacts);
         break;
 
     case OVSINST_OFPIT11_WRITE_METADATA:

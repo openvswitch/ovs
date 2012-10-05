@@ -90,7 +90,8 @@
     DEFINE_OFPACT(EXIT,            ofpact_null,          ofpact)    \
                                                                     \
     /* Instructions */                                              \
-    /* TODO:XXX Clear-Actions, Write-Actions, Write-Metadata */     \
+    /* TODO:XXX Write-Actions, Write-Metadata */                    \
+    DEFINE_OFPACT(CLEAR_ACTIONS,   ofpact_null,          ofpact)    \
     DEFINE_OFPACT(GOTO_TABLE,      ofpact_goto_table,    ofpact)
 
 /* enum ofpact_type, with a member OFPACT_<ENUM> for each action. */
@@ -173,9 +174,10 @@ ofpact_end(const struct ofpact *ofpacts, size_t ofpacts_len)
 
 /* Action structure for each OFPACT_*. */
 
-/* OFPACT_STRIP_VLAN, OFPACT_POP_QUEUE, OFPACT_EXIT.
+/* OFPACT_STRIP_VLAN, OFPACT_POP_QUEUE, OFPACT_EXIT, OFPACT_CLEAR_ACTIONS.
  *
- * Used for OFPAT10_STRIP_VLAN, NXAST_DEC_TTL, NXAST_POP_QUEUE, NXAST_EXIT.
+ * Used for OFPAT10_STRIP_VLAN, NXAST_DEC_TTL, NXAST_POP_QUEUE, NXAST_EXIT,
+ * OFPIT11_CLEAR_ACTIONS.
  *
  * Action structure for actions that do not have any extra data beyond the
  * action type. */
@@ -581,8 +583,9 @@ enum {
 static inline bool
 ofpact_is_instruction(const struct ofpact *a)
 {
-    /* TODO:XXX Clear-Actions, Write-Actions, Write-Metadata */
-    return a->type == OFPACT_GOTO_TABLE;
+    /* TODO:XXX Write-Actions, Write-Metadata */
+    return a->type == OFPACT_CLEAR_ACTIONS
+        || a->type == OFPACT_GOTO_TABLE;
 }
 
 const char *ofpact_instruction_name_from_type(enum ovs_instruction_type type);

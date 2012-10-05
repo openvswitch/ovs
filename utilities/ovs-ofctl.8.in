@@ -1145,6 +1145,9 @@ keep the learned flows separate from the primary flow table 0.)
 Applies the specific action(s) immediately. The syntax of actions are same
 to \fBactions=\fR field.
 .
+.IP \fBclear_actions\fR
+Clears all the actions in the action set immediately.
+.
 .IP \fBgoto_table\fR:\fItable\fR
 Indicates the next table in the process pipeline.
 .RE

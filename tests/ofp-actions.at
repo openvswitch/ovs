@@ -311,9 +311,23 @@ dnl Write-Actions not supported yet.
 # bad OF1.1 instructions: OFPBIC_UNSUP_INST
 0003 0008 01 000000
 
-dnl Clear-Actions not supported yet.
-# bad OF1.1 instructions: OFPBIC_UNSUP_INST
+dnl Clear-Actions too-long
+# bad OF1.1 instructions: OFPBIC_BAD_LEN
+0005 0010 00000000 0000000000000000
+
+dnl Clear-Actions non-zero padding
+# actions=clear_actions
+#  7: 01 -> 00
+0005 0008 00000001
+
+dnl Clear-Actions non-zero padding
+# actions=clear_actions
+#  4: 01 -> 00
 0005 0008 01 000000
+
+dnl Clear-Actions
+# actions=clear_actions
+0005 0008 00000000
 
 dnl Experimenter actions not supported yet.
 # bad OF1.1 instructions: OFPBIC_BAD_EXPERIMENTER
