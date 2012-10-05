@@ -46,6 +46,16 @@ AC_DEFUN([OVS_CHECK_NDEBUG],
      [ndebug=false])
    AM_CONDITIONAL([NDEBUG], [test x$ndebug = xtrue])])
 
+dnl Checks for ESX.
+AC_DEFUN([OVS_CHECK_ESX],
+  [AC_CHECK_HEADER([vmware.h],
+                   [ESX=yes],
+                   [ESX=no])
+   AM_CONDITIONAL([ESX], [test "$ESX" = yes])
+   if test "$ESX" = yes; then
+      AC_DEFINE([ESX], [1], [Define to 1 if building on ESX.])
+   fi])
+
 dnl Checks for Netlink support.
 AC_DEFUN([OVS_CHECK_NETLINK],
   [AC_CHECK_HEADER([linux/netlink.h],

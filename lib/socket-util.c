@@ -39,7 +39,7 @@
 #include "poll-loop.h"
 #include "util.h"
 #include "vlog.h"
-#if AF_PACKET && __linux__
+#if AF_PACKET && LINUX_DATAPATH
 #include <linux/if_packet.h>
 #endif
 #ifdef HAVE_NETLINK
@@ -51,11 +51,9 @@ VLOG_DEFINE_THIS_MODULE(socket_util);
 
 /* #ifdefs make it a pain to maintain code: you have to try to build both ways.
  * Thus, this file compiles all of the code regardless of the target, by
- * writing "if (LINUX)" instead of "#ifdef __linux__". */
-#ifdef __linux__
-#define LINUX 1
-#else
-#define LINUX 0
+ * writing "if (LINUX_DATAPATH)" instead of "#ifdef __linux__". */
+#ifndef LINUX_DATAPATH
+#define LINUX_DATAPATH 0
 #endif
 
 #ifndef O_DIRECTORY
@@ -266,7 +264,7 @@ drain_rcvbuf(int fd)
          *
          * On other Unix-like OSes, MSG_TRUNC has no effect in the flags
          * argument. */
-        char buffer[LINUX ? 1 : 2048];
+        char buffer[LINUX_DATAPATH ? 1 : 2048];
         ssize_t n_bytes = recv(fd, buffer, sizeof buffer,
                                MSG_TRUNC | MSG_DONTWAIT);
         if (n_bytes <= 0 || n_bytes >= rcvbuf) {
@@ -335,7 +333,7 @@ make_sockaddr_un(const char *name, struct sockaddr_un *un, socklen_t *un_len,
     if (strlen(name) > MAX_UN_LEN) {
         static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
 
-        if (LINUX) {
+        if (LINUX_DATAPATH) {
             /* 'name' is too long to fit in a sockaddr_un, but we have a
              * workaround for that on Linux: shorten it by opening a file
              * descriptor for the directory part of the name and indirecting
@@ -988,7 +986,7 @@ describe_sockaddr(struct ds *string, int fd,
             }
         }
 #endif
-#if AF_PACKET && __linux__
+#if AF_PACKET && LINUX_DATAPATH
         else if (ss.ss_family == AF_PACKET) {
             struct sockaddr_ll sll;
 
@@ -1018,7 +1016,7 @@ describe_sockaddr(struct ds *string, int fd,
 }
 
 
-#ifdef __linux__
+#ifdef LINUX_DATAPATH
 static void
 put_fd_filename(struct ds *string, int fd)
 {
@@ -1062,7 +1060,7 @@ describe_fd(int fd)
                               : S_ISFIFO(s.st_mode) ? "FIFO"
                               : S_ISLNK(s.st_mode) ? "symbolic link"
                               : "unknown"));
-#ifdef __linux__
+#ifdef LINUX_DATAPATH
         put_fd_filename(&string, fd);
 #endif
     }

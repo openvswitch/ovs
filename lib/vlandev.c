@@ -28,7 +28,7 @@
 
 VLOG_DEFINE_THIS_MODULE(vlandev);
 
-#ifdef __linux__
+#ifdef LINUX_DATAPATH
 #include "rtnetlink-link.h"
 #include <linux/if_vlan.h>
 #include <linux/sockios.h>
@@ -208,7 +208,7 @@ vlandev_del(const char *vlan_dev)
     }
     return error;
 }
-#else  /* !__linux__ */
+#else  /* !LINUX_DATAPATH */
 /* Stubs. */
 
 int

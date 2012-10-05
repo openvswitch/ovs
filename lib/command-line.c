@@ -92,7 +92,7 @@ run_command(int argc, char *argv[], const struct command commands[])
 
 /* Process title. */
 
-#ifdef __linux__
+#ifdef LINUX_DATAPATH
 static char *argv_start;       /* Start of command-line arguments in memory. */
 static size_t argv_size;       /* Number of bytes of command-line arguments. */
 static char *saved_proctitle;  /* Saved command-line arguments. */
@@ -179,7 +179,7 @@ proctitle_restore(void)
         saved_proctitle = NULL;
     }
 }
-#else  /* !__linux__ */
+#else  /* !LINUX_DATAPATH*/
 /* Stubs that don't do anything on non-Linux systems. */
 
 void
@@ -196,4 +196,4 @@ void
 proctitle_restore(void)
 {
 }
-#endif  /* !__linux__ */
+#endif  /* !LINUX_DATAPATH */

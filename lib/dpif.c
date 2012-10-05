@@ -58,7 +58,7 @@ COVERAGE_DEFINE(dpif_execute);
 COVERAGE_DEFINE(dpif_purge);
 
 static const struct dpif_class *base_dpif_classes[] = {
-#ifdef HAVE_NETLINK
+#ifdef LINUX_DATAPATH
     &dpif_linux_class,
 #endif
     &dpif_netdev_class,

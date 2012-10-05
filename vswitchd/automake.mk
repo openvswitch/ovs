@@ -24,7 +24,7 @@ EXTRA_DIST += vswitchd/INTERNALS
 MAN_ROOTS += vswitchd/ovs-vswitchd.8.in
 
 if BUILD_BRCOMPAT
-if HAVE_NETLINK
+if LINUX_DATAPATH
 sbin_PROGRAMS += vswitchd/ovs-brcompatd
 vswitchd_ovs_brcompatd_SOURCES = \
 	vswitchd/ovs-brcompatd.c

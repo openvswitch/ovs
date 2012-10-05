@@ -45,6 +45,7 @@ AC_SEARCH_LIBS([clock_gettime], [rt])
 AC_SEARCH_LIBS([timer_create], [rt])
 AC_SEARCH_LIBS([pcap_open_live], [pcap])
 
+OVS_CHECK_ESX
 OVS_CHECK_COVERAGE
 OVS_CHECK_NDEBUG
 OVS_CHECK_NETLINK
@@ -111,5 +112,10 @@ AC_CONFIG_COMMANDS([include/openflow/openflow.h.stamp])
 
 AC_CONFIG_COMMANDS([ovsdb/ovsdbmonitor/dummy], [:])
 AC_CONFIG_COMMANDS([utilities/bugtool/dummy], [:])
+
+AM_CONDITIONAL([LINUX_DATAPATH], [test "$HAVE_NETLINK" = yes && test "$ESX" = no])
+if test "$HAVE_NETLINK" = yes && test "$ESX" = no; then
+    AC_DEFINE([LINUX_DATAPATH], [1], [System uses the linux datapath module.])
+fi
 
 AC_OUTPUT

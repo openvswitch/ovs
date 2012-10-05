@@ -48,13 +48,12 @@ VLOG_DEFINE_THIS_MODULE(system_stats);
 
 /* #ifdefs make it a pain to maintain code: you have to try to build both ways.
  * Thus, this file tries to compile as much of the code as possible regardless
- * of the target, by writing "if (LINUX)" instead of "#ifdef __linux__" where
- * this is possible. */
-#ifdef __linux__
+ * of the target, by writing "if (LINUX_DATAPATH)" instead of "#ifdef
+ * __linux__" where this is possible. */
+#ifdef LINUX_DATAPATH
 #include <asm/param.h>
-#define LINUX 1
 #else
-#define LINUX 0
+#define LINUX_DATAPATH 0
 #endif
 
 static void
@@ -97,7 +96,7 @@ get_page_size(void)
 static void
 get_memory_stats(struct smap *stats)
 {
-    if (!LINUX) {
+    if (!LINUX_DATAPATH) {
         unsigned int pagesize = get_page_size();
         long int phys_pages = sysconf(_SC_PHYS_PAGES);
 #ifdef _SC_AVPHYS_PAGES
@@ -170,7 +169,7 @@ get_boot_time(void)
     static long long int cache_expiration = LLONG_MIN;
     static long long int boot_time;
 
-    assert(LINUX);
+    assert(LINUX_DATAPATH);
 
     if (time_msec() >= cache_expiration) {
         static const char stat_file[] = "/proc/stat";
@@ -202,7 +201,7 @@ get_boot_time(void)
 static unsigned long long int
 ticks_to_ms(unsigned long long int ticks)
 {
-    assert(LINUX);
+    assert(LINUX_DATAPATH);
 
 #ifndef USER_HZ
 #define USER_HZ 100
@@ -235,7 +234,7 @@ get_raw_process_info(pid_t pid, struct raw_process_info *raw)
     FILE *stream;
     int n;
 
-    assert(LINUX);
+    assert(LINUX_DATAPATH);
 
     sprintf(file_name, "/proc/%lu/stat", (unsigned long int) pid);
     stream = fopen(file_name, "r");
@@ -320,7 +319,7 @@ count_crashes(pid_t pid)
     int crashes = 0;
     FILE *stream;
 
-    assert(LINUX);
+    assert(LINUX_DATAPATH);
 
     sprintf(file_name, "/proc/%lu/cmdline", (unsigned long int) pid);
     stream = fopen(file_name, "r");
@@ -363,7 +362,7 @@ get_process_info(pid_t pid, struct process_info *pinfo)
 {
     struct raw_process_info child;
 
-    assert(LINUX);
+    assert(LINUX_DATAPATH);
     if (!get_raw_process_info(pid, &child)) {
         return false;
     }
@@ -428,7 +427,7 @@ get_process_stats(struct smap *stats)
         key = xasprintf("process_%.*s",
                         (int) (extension - de->d_name), de->d_name);
         if (!smap_get(stats, key)) {
-            if (LINUX && get_process_info(pid, &pinfo)) {
+            if (LINUX_DATAPATH && get_process_info(pid, &pinfo)) {
                 smap_add_format(stats, key, "%lu,%lu,%lld,%d,%lld,%lld",
                                 pinfo.vsz, pinfo.rss, pinfo.cputime,
                                 pinfo.crashes, pinfo.booted, pinfo.uptime);

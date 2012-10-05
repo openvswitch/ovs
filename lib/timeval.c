@@ -40,15 +40,7 @@ VLOG_DEFINE_THIS_MODULE(timeval);
  * to CLOCK_REALTIME. */
 static clockid_t monotonic_clock;
 
-/* Controls whether or not calls to clock_gettime() are cached.  See
- * time_cached() for a detailed explanation. */
-#if defined __x86_64__ && defined __linux__
-static bool cache_time = false;
-#else
-static bool cache_time = true;
-#endif
-
-/* Has a timer tick occurred? Only relevant if cache_time is true.
+/* Has a timer tick occurred? Only relevant if CACHE_TIME is true.
  *
  * We initialize these to true to force time_init() to get called on the first
  * call to time_msec() or another function that queries the current time. */
@@ -154,15 +146,12 @@ set_up_timer(void)
     static timer_t timer_id;    /* "static" to avoid apparent memory leak. */
     struct itimerspec itimer;
 
-    if (!cache_time) {
+    if (!CACHE_TIME) {
         return;
     }
 
     if (timer_create(monotonic_clock, NULL, &timer_id)) {
-        VLOG_WARN("timer_create failed (%s), disabling cached timing",
-                  strerror(errno));
-        cache_time = false;
-        return;
+        VLOG_FATAL("timer_create failed (%s)", strerror(errno));
     }
 
     itimer.it_interval.tv_sec = 0;
@@ -215,7 +204,7 @@ refresh_monotonic(void)
 /* Forces a refresh of the current time from the kernel.  It is not usually
  * necessary to call this function, since the time will be refreshed
  * automatically at least every TIME_UPDATE_INTERVAL milliseconds.  If
- * cache_time is false, we will always refresh the current time so this
+ * CACHE_TIME is false, we will always refresh the current time so this
  * function has no effect. */
 void
 time_refresh(void)
@@ -356,7 +345,7 @@ time_poll(struct pollfd *pollfds, int n_pollfds, long long int timeout_when,
             break;
         }
 
-        if (!blocked && !cache_time) {
+        if (!blocked && !CACHE_TIME) {
             block_sigalrm(&oldsigs);
             blocked = true;
         }
@@ -370,23 +359,6 @@ time_poll(struct pollfd *pollfds, int n_pollfds, long long int timeout_when,
     return retval;
 }
 
-/* True on systems (particularly x86-64 Linux) where clock_gettime() is
- * inexpensive.  On these systems, we don't bother caching the current time.
- * Instead, we consult clock_gettime() directly when needed.
- *
- * False on systems where clock_gettime() is relatively expensive.  On these
- * systems, we cache the current time and set up a periodic SIGALRM to remind
- * us to update it.
- *
- * Also false on systems (e.g. ESX) that don't support setting up timers based
- * on a monotonically increasing clock. */
-bool
-time_cached(void)
-{
-    time_init();
-    return cache_time;
-}
-
 static void
 sigalrm_handler(int sig_nr OVS_UNUSED)
 {
@@ -397,7 +369,7 @@ sigalrm_handler(int sig_nr OVS_UNUSED)
 static void
 refresh_wall_if_ticked(void)
 {
-    if (!cache_time || wall_tick) {
+    if (!CACHE_TIME || wall_tick) {
         refresh_wall();
     }
 }
@@ -405,7 +377,7 @@ refresh_wall_if_ticked(void)
 static void
 refresh_monotonic_if_ticked(void)
 {
-    if (!cache_time || monotonic_tick) {
+    if (!CACHE_TIME || monotonic_tick) {
         refresh_monotonic();
     }
 }

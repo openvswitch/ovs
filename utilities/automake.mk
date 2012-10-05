@@ -108,7 +108,7 @@ utilities_ovs_ofctl_LDADD = \
 utilities_ovs_vsctl_SOURCES = utilities/ovs-vsctl.c
 utilities_ovs_vsctl_LDADD = lib/libopenvswitch.a $(SSL_LIBS)
 
-if HAVE_NETLINK
+if LINUX_DATAPATH
 sbin_PROGRAMS += utilities/ovs-vlan-bug-workaround
 utilities_ovs_vlan_bug_workaround_SOURCES = utilities/ovs-vlan-bug-workaround.c
 utilities_ovs_vlan_bug_workaround_LDADD = lib/libopenvswitch.a $(SSL_LIBS)

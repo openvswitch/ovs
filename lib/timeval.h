@@ -44,6 +44,22 @@ BUILD_ASSERT_DECL(TYPE_IS_SIGNED(time_t));
  * much time will be wasted in signal handlers and calls to clock_gettime(). */
 #define TIME_UPDATE_INTERVAL 100
 
+/* True on systems (particularly x86-64 Linux) where clock_gettime() is
+ * inexpensive.  On these systems, we don't bother caching the current time.
+ * Instead, we consult clock_gettime() directly when needed.
+ *
+ * False on systems where clock_gettime() is relatively expensive.  On these
+ * systems, we cache the current time and set up a periodic SIGALRM to remind
+ * us to update it.
+ *
+ * Also false on systems (e.g. ESX) that don't support setting up timers based
+ * on a monotonically increasing clock. */
+#if defined ESX || (defined __x86_64__ && defined LINUX_DATAPATH)
+#define CACHE_TIME 0
+#else
+#define CACHE_TIME 1
+#endif
+
 void time_disable_restart(void);
 void time_enable_restart(void);
 void time_postfork(void);

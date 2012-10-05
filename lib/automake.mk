@@ -227,7 +227,7 @@ if HAVE_WNO_UNUSED_PARAMETER
 lib_libsflow_a_CFLAGS += -Wno-unused-parameter
 endif
 
-if HAVE_NETLINK
+if LINUX_DATAPATH
 lib_libopenvswitch_a_SOURCES += \
 	lib/dpif-linux.c \
 	lib/dpif-linux.h \
@@ -244,6 +244,11 @@ lib_libopenvswitch_a_SOURCES += \
 	lib/rtnetlink-link.h \
 	lib/route-table.c \
 	lib/route-table.h
+endif
+
+if ESX
+lib_libopenvswitch_a_SOURCES += \
+        lib/route-table-stub.c
 endif
 
 if HAVE_IF_DL

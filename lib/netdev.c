@@ -75,7 +75,7 @@ netdev_initialize(void)
 
         fatal_signal_add_hook(close_all_netdevs, NULL, NULL, true);
 
-#ifdef HAVE_NETLINK
+#ifdef LINUX_DATAPATH
         netdev_register_provider(&netdev_linux_class);
         netdev_register_provider(&netdev_internal_class);
         netdev_register_provider(&netdev_tap_class);
