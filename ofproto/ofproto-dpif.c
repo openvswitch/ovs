@@ -5599,6 +5599,15 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
             ctx->has_fin_timeout = true;
             xlate_fin_timeout(ctx, ofpact_get_FIN_TIMEOUT(a));
             break;
+
+        case OFPACT_GOTO_TABLE: {
+            /* TODO:XXX remove recursion */
+            /* It is assumed that goto-table is last action */
+            struct ofpact_goto_table *ogt = ofpact_get_GOTO_TABLE(a);
+            assert(ctx->table_id < ogt->table_id);
+            xlate_table_action(ctx, ctx->flow.in_port, ogt->table_id, true);
+            break;
+        }
         }
     }
 

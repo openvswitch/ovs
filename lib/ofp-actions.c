@@ -958,9 +958,20 @@ ofpacts_pull_openflow11_instructions(struct ofpbuf *openflow,
             goto exit;
         }
     }
+    /* TODO:XXX Clear-Actions */
+    /* TODO:XXX Write-Actions */
+    /* TODO:XXX Write-Metadata */
+    if (insts[OVSINST_OFPIT11_GOTO_TABLE]) {
+        const struct ofp11_instruction_goto_table *oigt;
+        struct ofpact_goto_table *ogt;
 
-    if (insts[OVSINST_OFPIT11_GOTO_TABLE] ||
-        insts[OVSINST_OFPIT11_WRITE_METADATA] ||
+        oigt = instruction_get_OFPIT11_GOTO_TABLE(
+            insts[OVSINST_OFPIT11_GOTO_TABLE]);
+        ogt = ofpact_put_GOTO_TABLE(ofpacts);
+        ogt->table_id = oigt->table_id;
+    }
+
+    if (insts[OVSINST_OFPIT11_WRITE_METADATA] ||
         insts[OVSINST_OFPIT11_WRITE_ACTIONS] ||
         insts[OVSINST_OFPIT11_CLEAR_ACTIONS]) {
         error = OFPERR_OFPBIC_UNSUP_INST;
@@ -1038,6 +1049,9 @@ ofpact_check__(const struct ofpact *a, const struct flow *flow, int max_ports)
 
     case OFPACT_NOTE:
     case OFPACT_EXIT:
+        return 0;
+
+    case OFPACT_GOTO_TABLE:
         return 0;
 
     default:
@@ -1255,6 +1269,7 @@ ofpact_to_nxast(const struct ofpact *a, struct ofpbuf *out)
     case OFPACT_SET_IPV4_DSCP:
     case OFPACT_SET_L4_SRC_PORT:
     case OFPACT_SET_L4_DST_PORT:
+    case OFPACT_GOTO_TABLE:
         NOT_REACHED();
     }
 }
@@ -1342,6 +1357,10 @@ ofpact_to_openflow10(const struct ofpact *a, struct ofpbuf *out)
     case OFPACT_SET_L4_DST_PORT:
         ofputil_put_OFPAT10_SET_TP_DST(out)->tp_port
             = htons(ofpact_get_SET_L4_DST_PORT(a)->port);
+        break;
+
+    case OFPACT_GOTO_TABLE:
+        /* TODO:XXX */
         break;
 
     case OFPACT_CONTROLLER:
@@ -1452,6 +1471,9 @@ ofpact_to_openflow11(const struct ofpact *a, struct ofpbuf *out)
             = htons(ofpact_get_SET_L4_DST_PORT(a)->port);
         break;
 
+    case OFPACT_GOTO_TABLE:
+        NOT_REACHED();
+
     case OFPACT_CONTROLLER:
     case OFPACT_OUTPUT_REG:
     case OFPACT_BUNDLE:
@@ -1490,18 +1512,10 @@ ofpacts_put_openflow11_actions(const struct ofpact ofpacts[],
     return openflow->size - start_size;
 }
 
-void
-ofpacts_put_openflow11_instructions(const struct ofpact ofpacts[],
-                                    size_t ofpacts_len,
-                                    struct ofpbuf *openflow)
+static void
+ofpacts_update_instruction_actions(struct ofpbuf *openflow, size_t ofs)
 {
     struct ofp11_instruction_actions *oia;
-    size_t ofs;
-
-    /* Put an OFPIT11_APPLY_ACTIONS instruction and fill it in. */
-    ofs = openflow->size;
-    instruction_put_OFPIT11_APPLY_ACTIONS(openflow);
-    ofpacts_put_openflow11_actions(ofpacts, ofpacts_len, openflow);
 
     /* Update the instruction's length (or, if it's empty, delete it). */
     oia = ofpbuf_at_assert(openflow, ofs, sizeof *oia);
@@ -1509,6 +1523,45 @@ ofpacts_put_openflow11_instructions(const struct ofpact ofpacts[],
         oia->len = htons(openflow->size - ofs);
     } else {
         openflow->size = ofs;
+    }
+}
+
+void
+ofpacts_put_openflow11_instructions(const struct ofpact ofpacts[],
+                                    size_t ofpacts_len,
+                                    struct ofpbuf *openflow)
+{
+    const struct ofpact *a;
+
+    OFPACT_FOR_EACH (a, ofpacts, ofpacts_len) {
+        /* TODO:XXX Clear-Actions */
+        /* TODO:XXX Write-Actions */
+        /* TODO:XXX Write-Metadata */
+        if (a->type == OFPACT_GOTO_TABLE) {
+            struct ofp11_instruction_goto_table *oigt;
+
+            oigt = instruction_put_OFPIT11_GOTO_TABLE(openflow);
+            oigt->table_id = ofpact_get_GOTO_TABLE(a)->table_id;
+            memset(oigt->pad, 0, sizeof oigt->pad);
+        } else if (!ofpact_is_instruction(a)) {
+            /* Apply-actions */
+            const size_t ofs = openflow->size;
+            const size_t ofpacts_len_left =
+                (uint8_t*)ofpact_end(ofpacts, ofpacts_len) - (uint8_t*)a;
+            const struct ofpact *action;
+            const struct ofpact *processed = a;
+
+            instruction_put_OFPIT11_APPLY_ACTIONS(openflow);
+            OFPACT_FOR_EACH(action, a, ofpacts_len_left) {
+                if (ofpact_is_instruction(action)) {
+                    break;
+                }
+                ofpact_to_openflow11(action, openflow);
+                processed = action;
+            }
+            ofpacts_update_instruction_actions(openflow, ofs);
+            a = processed;
+        }
     }
 }
 
@@ -1549,6 +1602,7 @@ ofpact_outputs_to_port(const struct ofpact *ofpact, uint16_t port)
     case OFPACT_AUTOPATH:
     case OFPACT_NOTE:
     case OFPACT_EXIT:
+    case OFPACT_GOTO_TABLE:
     default:
         return false;
     }
@@ -1815,6 +1869,13 @@ ofpact_format(const struct ofpact *a, struct ds *s)
     case OFPACT_EXIT:
         ds_put_cstr(s, "exit");
         break;
+
+    case OFPACT_GOTO_TABLE:
+        ds_put_format(s, "%s:%"PRIu8,
+                      ofpact_instruction_name_from_type(
+                          OVSINST_OFPIT11_GOTO_TABLE),
+                      ofpact_get_GOTO_TABLE(a)->table_id);
+        break;
     }
 }
 
@@ -1834,6 +1895,10 @@ ofpacts_format(const struct ofpact *ofpacts, size_t ofpacts_len,
             if (a != ofpacts) {
                 ds_put_cstr(string, ",");
             }
+
+            /* TODO:XXX clear-actions */
+            /* TODO:XXX write-actions */
+            /* TODO:XXX write-metadata */
             ofpact_format(a, string);
         }
     }

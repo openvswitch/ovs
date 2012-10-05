@@ -243,11 +243,23 @@ AT_CHECK(
 AT_CLEANUP
 
 AT_SETUP([OpenFlow 1.1 instruction translation])
-AT_KEYWORDS([OF1.1])
+AT_KEYWORDS([OF1.1 instruction])
 AT_DATA([test-data], [dnl
 # actions=LOCAL
 0004 0018 00000000 dnl
 0000 0010 fffffffe 04d2 000000000000
+
+dnl Apply-Actions non-zero padding
+# actions=drop
+#  0: 00 -> (none)
+#  1: 04 -> (none)
+#  2: 00 -> (none)
+#  3: 08 -> (none)
+#  4: 00 -> (none)
+#  5: 00 -> (none)
+#  6: 00 -> (none)
+#  7: 01 -> (none)
+0004 0008 00000001
 
 dnl Check that an empty Apply-Actions instruction gets dropped.
 # actions=drop
@@ -274,8 +286,13 @@ dnl Goto-Table instruction too long.
 # bad OF1.1 instructions: OFPBIC_BAD_LEN
 0001 0010 01 000000 0000000000000000
 
-dnl Goto-Table not supported yet.
-# bad OF1.1 instructions: OFPBIC_UNSUP_INST
+dnl Goto-Table 1 instruction non-zero padding
+# actions=goto_table:1
+#  7: 01 -> 00
+0001 0008 01 000001
+
+dnl Goto-Table 1
+# actions=goto_table:1
 0001 0008 01 000000
 
 dnl Write-Metadata not supported yet.

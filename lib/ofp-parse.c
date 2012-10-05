@@ -520,6 +520,34 @@ parse_named_action(enum ofputil_action_code code, const struct flow *flow,
     }
 }
 
+static bool
+str_to_ofpact__(const struct flow *flow, char *pos, char *act, char *arg,
+                struct ofpbuf *ofpacts, int n_actions)
+{
+    int code = ofputil_action_code_from_name(act);
+    if (code >= 0) {
+        parse_named_action(code, flow, arg, ofpacts);
+    } else if (!strcasecmp(act, "drop")) {
+        if (n_actions) {
+            ovs_fatal(0, "Drop actions must not be preceded by other "
+                      "actions");
+        } else if (ofputil_parse_key_value(&pos, &act, &arg)) {
+            ovs_fatal(0, "Drop actions must not be followed by other "
+                      "actions");
+        }
+        return false;
+    } else {
+        uint16_t port = ofputil_port_from_string(act);
+        if (port) {
+            ofpact_put_OUTPUT(ofpacts)->port = port;
+        } else {
+            ovs_fatal(0, "Unknown action: %s", act);
+        }
+    }
+
+    return true;
+}
+
 static void
 str_to_ofpacts(const struct flow *flow, char *str, struct ofpbuf *ofpacts)
 {
@@ -529,26 +557,90 @@ str_to_ofpacts(const struct flow *flow, char *str, struct ofpbuf *ofpacts)
     pos = str;
     n_actions = 0;
     while (ofputil_parse_key_value(&pos, &act, &arg)) {
-        int code = ofputil_action_code_from_name(act);
-        if (code >= 0) {
-            parse_named_action(code, flow, arg, ofpacts);
-        } else if (!strcasecmp(act, "drop")) {
-            if (n_actions) {
-                ovs_fatal(0, "Drop actions must not be preceded by other "
-                          "actions");
-            } else if (ofputil_parse_key_value(&pos, &act, &arg)) {
-                ovs_fatal(0, "Drop actions must not be followed by other "
-                          "actions");
-            }
+        if (!str_to_ofpact__(flow, pos, act, arg, ofpacts, n_actions)) {
             break;
-        } else {
-            uint16_t port = ofputil_port_from_string(act);
-            if (port) {
-                ofpact_put_OUTPUT(ofpacts)->port = port;
-            } else {
-                ovs_fatal(0, "Unknown action: %s", act);
-            }
         }
+        n_actions++;
+    }
+    ofpact_pad(ofpacts);
+}
+
+static void
+parse_named_instruction(enum ovs_instruction_type type,
+                        char *arg, struct ofpbuf *ofpacts)
+{
+    switch (type) {
+    case OVSINST_OFPIT11_APPLY_ACTIONS:
+        NOT_REACHED();  /* This case is handled by str_to_inst_ofpacts() */
+        break;
+
+    case OVSINST_OFPIT11_WRITE_ACTIONS:
+        /* TODO:XXX */
+        ovs_fatal(0, "instruction write-actions is not supported yet");
+        break;
+
+    case OVSINST_OFPIT11_CLEAR_ACTIONS:
+        /* TODO:XXX */
+        ovs_fatal(0, "instruction clear-actions is not supported yet");
+        break;
+
+    case OVSINST_OFPIT11_WRITE_METADATA:
+        /* TODO:XXX */
+        ovs_fatal(0, "instruction write-metadata is not supported yet");
+        break;
+
+    case OVSINST_OFPIT11_GOTO_TABLE: {
+        struct ofpact_goto_table *ogt = ofpact_put_GOTO_TABLE(ofpacts);
+        char *table_s = strsep(&arg, ",");
+        if (!table_s || !table_s[0]) {
+            ovs_fatal(0, "instruction goto-table needs table id");
+        }
+        ogt->table_id = str_to_table_id(table_s);
+        break;
+    }
+    }
+}
+
+static void
+str_to_inst_ofpacts(const struct flow *flow, char *str, struct ofpbuf *ofpacts)
+{
+    char *pos, *inst, *arg;
+    int type;
+    const char *prev_inst = NULL;
+    int prev_type = -1;
+    int n_actions = 0;
+
+    pos = str;
+    while (ofputil_parse_key_value(&pos, &inst, &arg)) {
+        type = ofpact_instruction_type_from_name(inst);
+        if (type < 0) {
+            if (!str_to_ofpact__(flow, pos, inst, arg, ofpacts, n_actions)) {
+                break;
+            }
+
+            type = OVSINST_OFPIT11_APPLY_ACTIONS;
+            if (prev_type == type) {
+                n_actions++;
+                continue;
+            }
+        } else if (type == OVSINST_OFPIT11_APPLY_ACTIONS) {
+            ovs_fatal(0, "%s isn't supported. Just write actions then "
+                      "it is interpreted as apply_actions", inst);
+        } else {
+            parse_named_instruction(type, arg, ofpacts);
+        }
+
+        if (type == prev_type) {
+            ovs_fatal(0, "instruction can be specified at most once: %s",
+                      inst);
+        }
+        if (type <= prev_type) {
+            ovs_fatal(0, "Instruction %s must be specified before %s",
+                      inst, prev_inst);
+        }
+
+        prev_inst = inst;
+        prev_type = type;
         n_actions++;
     }
     ofpact_pad(ofpacts);
@@ -777,7 +869,7 @@ parse_ofp_str(struct ofputil_flow_mod *fm, int command, const char *str_,
         struct ofpbuf ofpacts;
 
         ofpbuf_init(&ofpacts, 32);
-        str_to_ofpacts(&fm->match.flow, act_str, &ofpacts);
+        str_to_inst_ofpacts(&fm->match.flow, act_str, &ofpacts);
         fm->ofpacts_len = ofpacts.size;
         fm->ofpacts = ofpbuf_steal_data(&ofpacts);
     } else {

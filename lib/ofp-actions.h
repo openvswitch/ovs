@@ -87,7 +87,11 @@
                                                                     \
     /* Other. */                                                    \
     DEFINE_OFPACT(NOTE,            ofpact_note,          data)      \
-    DEFINE_OFPACT(EXIT,            ofpact_null,          ofpact)
+    DEFINE_OFPACT(EXIT,            ofpact_null,          ofpact)    \
+                                                                    \
+    /* Instructions */                                              \
+    /* TODO:XXX Clear-Actions, Write-Actions, Write-Metadata */     \
+    DEFINE_OFPACT(GOTO_TABLE,      ofpact_goto_table,    ofpact)
 
 /* enum ofpact_type, with a member OFPACT_<ENUM> for each action. */
 enum OVS_PACKED_ENUM ofpact_type {
@@ -413,7 +417,14 @@ struct ofpact_cnt_ids {
     /* Controller ids. */
     unsigned int n_controllers;
     uint16_t cnt_ids[];
+};
 
+/* OFPACT_GOTO_TABLE
+ *
+ * Used for OFPIT11_GOTO_TABLE */
+struct ofpact_goto_table {
+    struct ofpact ofpact;
+    uint8_t table_id;
 };
 
 /* Converting OpenFlow to ofpacts. */
@@ -565,6 +576,14 @@ enum {
     N_OVS_INSTRUCTIONS = OVS_INSTRUCTIONS
 #undef DEFINE_INST
 };
+
+
+static inline bool
+ofpact_is_instruction(const struct ofpact *a)
+{
+    /* TODO:XXX Clear-Actions, Write-Actions, Write-Metadata */
+    return a->type == OFPACT_GOTO_TABLE;
+}
 
 const char *ofpact_instruction_name_from_type(enum ovs_instruction_type type);
 int ofpact_instruction_type_from_name(const char *name);
