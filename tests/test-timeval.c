@@ -99,7 +99,7 @@ main(int argc, char *argv[])
     } else if (!strcmp(argv[1], "plain")) {
         /* If we're not caching time there isn't much to test and SIGALRM won't
          * be around to pull us out of the select() call, so just skip out */
-        if (!CACHE_TIME) {
+        if (!time_cached()) {
             exit (77);
         }
 
@@ -110,7 +110,7 @@ main(int argc, char *argv[])
         char cwd[1024], *pidfile;
         FILE *success;
 
-        if (!CACHE_TIME) {
+        if (!time_cached()) {
             exit (77);
         }
 
