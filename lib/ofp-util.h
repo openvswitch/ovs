@@ -620,4 +620,19 @@ union ofp_action *ofputil_actions_clone(const union ofp_action *, size_t n);
 /* Handy utility for parsing flows and actions. */
 bool ofputil_parse_key_value(char **stringp, char **keyp, char **valuep);
 
+struct ofpbuf *ofputlil_dump_ports(enum ofp_version ofp_version, int16_t port);
+
+struct ofputil_port_stats {
+    uint16_t port_no;
+    struct netdev_stats stats;
+};
+
+struct ofpbuf *ofputil_encode_dump_ports_request(enum ofp_version ofp_version,
+                                                 int16_t port);
+void ofputil_append_port_stat(struct list *replies,
+                              const struct ofputil_port_stats *ops);
+size_t ofputil_count_port_stats(const struct ofp_header *);
+int ofputil_decode_port_stats(struct ofputil_port_stats *, struct ofpbuf *msg);
+enum ofperr ofputil_decode_port_stats_request(const struct ofp_header *request,
+                                              uint16_t *ofp10_port);
 #endif /* ofp-util.h */

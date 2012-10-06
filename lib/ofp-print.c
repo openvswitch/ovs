@@ -1065,11 +1065,9 @@ ofp_print_aggregate_stats_reply(struct ds *string, const struct ofp_header *oh)
     ds_put_format(string, " flow_count=%"PRIu32, as.flow_count);
 }
 
-static void print_port_stat(struct ds *string, const char *leader,
-                            const ovs_32aligned_be64 *statp, int more)
+static void
+print_port_stat(struct ds *string, const char *leader, uint64_t stat, int more)
 {
-    uint64_t stat = ntohll(get_32aligned_be64(statp));
-
     ds_put_cstr(string, leader);
     if (stat != UINT64_MAX) {
         ds_put_format(string, "%"PRIu64, stat);
@@ -1086,50 +1084,59 @@ static void print_port_stat(struct ds *string, const char *leader,
 static void
 ofp_print_ofpst_port_request(struct ds *string, const struct ofp_header *oh)
 {
-    const struct ofp10_port_stats_request *psr = ofpmsg_body(oh);
-    ds_put_format(string, " port_no=%"PRIu16, ntohs(psr->port_no));
+    uint16_t ofp10_port;
+    enum ofperr error;
+
+    error = ofputil_decode_port_stats_request(oh, &ofp10_port);
+    if (error) {
+        ofp_print_error(string, error);
+        return;
+    }
+
+    ds_put_format(string, " port_no=%2"PRIu16, ofp10_port);
 }
 
 static void
 ofp_print_ofpst_port_reply(struct ds *string, const struct ofp_header *oh,
                            int verbosity)
 {
-    struct ofp10_port_stats *ps;
     struct ofpbuf b;
-    size_t n;
 
-    ofpbuf_use_const(&b, oh, ntohs(oh->length));
-    ofpraw_pull_assert(&b);
-
-    n = b.size / sizeof *ps;
-    ds_put_format(string, " %zu ports\n", n);
+    ds_put_format(string, " %zu ports\n", ofputil_count_port_stats(oh));
     if (verbosity < 1) {
         return;
     }
 
+    ofpbuf_use_const(&b, oh, ntohs(oh->length));
     for (;;) {
-        ps = ofpbuf_try_pull(&b, sizeof *ps);
-        if (!ps) {
+        struct ofputil_port_stats ps;
+        int retval;
+
+        retval = ofputil_decode_port_stats(&ps, &b);
+        if (retval) {
+            if (retval != EOF) {
+                ds_put_cstr(string, " ***parse error***");
+            }
             return;
         }
 
-        ds_put_format(string, "  port %2"PRIu16": ", ntohs(ps->port_no));
+        ds_put_format(string, "  port %2"PRIu16, ps.port_no);
 
-        ds_put_cstr(string, "rx ");
-        print_port_stat(string, "pkts=", &ps->rx_packets, 1);
-        print_port_stat(string, "bytes=", &ps->rx_bytes, 1);
-        print_port_stat(string, "drop=", &ps->rx_dropped, 1);
-        print_port_stat(string, "errs=", &ps->rx_errors, 1);
-        print_port_stat(string, "frame=", &ps->rx_frame_err, 1);
-        print_port_stat(string, "over=", &ps->rx_over_err, 1);
-        print_port_stat(string, "crc=", &ps->rx_crc_err, 0);
+        ds_put_cstr(string, ": rx ");
+        print_port_stat(string, "pkts=", ps.stats.rx_packets, 1);
+        print_port_stat(string, "bytes=", ps.stats.rx_bytes, 1);
+        print_port_stat(string, "drop=", ps.stats.rx_dropped, 1);
+        print_port_stat(string, "errs=", ps.stats.rx_errors, 1);
+        print_port_stat(string, "frame=", ps.stats.rx_frame_errors, 1);
+        print_port_stat(string, "over=", ps.stats.rx_over_errors, 1);
+        print_port_stat(string, "crc=", ps.stats.rx_crc_errors, 0);
 
         ds_put_cstr(string, "           tx ");
-        print_port_stat(string, "pkts=", &ps->tx_packets, 1);
-        print_port_stat(string, "bytes=", &ps->tx_bytes, 1);
-        print_port_stat(string, "drop=", &ps->tx_dropped, 1);
-        print_port_stat(string, "errs=", &ps->tx_errors, 1);
-        print_port_stat(string, "coll=", &ps->collisions, 0);
+        print_port_stat(string, "pkts=", ps.stats.tx_packets, 1);
+        print_port_stat(string, "bytes=", ps.stats.tx_bytes, 1);
+        print_port_stat(string, "drop=", ps.stats.tx_dropped, 1);
+        print_port_stat(string, "errs=", ps.stats.tx_errors, 1);
+        print_port_stat(string, "coll=", ps.stats.collisions, 0);
     }
 }
 
@@ -1329,6 +1336,13 @@ ofp_print_ofpst_queue_request(struct ds *string, const struct ofp_header *oh)
 }
 
 static void
+print_queue_stat(struct ds *string, const char *leader,
+                 const ovs_32aligned_be64 *statp, int more)
+{
+    print_port_stat(string, leader, ntohll(get_32aligned_be64(statp)), more);
+}
+
+static void
 ofp_print_ofpst_queue_reply(struct ds *string, const struct ofp_header *oh,
                             int verbosity)
 {
@@ -1357,9 +1371,9 @@ ofp_print_ofpst_queue_reply(struct ds *string, const struct ofp_header *oh,
         ofp_print_queue_name(string, ntohl(qs->queue_id));
         ds_put_cstr(string, ": ");
 
-        print_port_stat(string, "bytes=", &qs->tx_bytes, 1);
-        print_port_stat(string, "pkts=", &qs->tx_packets, 1);
-        print_port_stat(string, "errors=", &qs->tx_errors, 0);
+        print_queue_stat(string, "bytes=", &qs->tx_bytes, 1);
+        print_queue_stat(string, "pkts=", &qs->tx_packets, 1);
+        print_queue_stat(string, "errors=", &qs->tx_errors, 0);
     }
 }
 

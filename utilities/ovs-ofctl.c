@@ -1418,17 +1418,13 @@ ofctl_snoop(int argc OVS_UNUSED, char *argv[])
 static void
 ofctl_dump_ports(int argc, char *argv[])
 {
-    struct ofp10_port_stats_request *req;
     struct ofpbuf *request;
     struct vconn *vconn;
     uint16_t port;
 
     open_vconn(argv[1], &vconn);
-    request = ofpraw_alloc(OFPRAW_OFPST_PORT_REQUEST,
-                           vconn_get_version(vconn), 0);
-    req = ofpbuf_put_zeros(request, sizeof *req);
     port = argc > 2 ? str_to_port_no(argv[1], argv[2]) : OFPP_NONE;
-    req->port_no = htons(port);
+    request = ofputil_encode_dump_ports_request(vconn_get_version(vconn), port);
     dump_stats_transaction(vconn, request);
     vconn_close(vconn);
 }
