@@ -28,6 +28,7 @@ post-v1.8.0
       program was not included in distribution packaging.)
     - ovsdb-server now enforces the immutability of immutable columns.  This
       was not enforced in earlier versions due to an oversight.
+    - New support for a nonstandard form of GRE that supports a 64-bit key.
     - The following features are now deprecated.  They will be removed no
       earlier than February 2013.  Please email dev@openvswitch.org with
       concerns.

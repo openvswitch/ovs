@@ -185,6 +185,7 @@ enum ovs_vport_type {
 	OVS_VPORT_TYPE_PATCH = 100, /* virtual tunnel connecting two vports */
 	OVS_VPORT_TYPE_GRE,      /* GRE tunnel */
 	OVS_VPORT_TYPE_CAPWAP,   /* CAPWAP tunnel */
+	OVS_VPORT_TYPE_GRE64 = 104, /* GRE tunnel with 64-bit keys */
 	__OVS_VPORT_TYPE_MAX
 };
 

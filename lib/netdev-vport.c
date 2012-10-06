@@ -162,6 +162,14 @@ netdev_vport_get_netdev_type(const struct dpif_linux_vport *vport)
         return (nl_attr_get_u32(a[OVS_TUNNEL_ATTR_FLAGS]) & TNL_F_IPSEC
                 ? "ipsec_gre" : "gre");
 
+    case OVS_VPORT_TYPE_GRE64:
+        if (tnl_port_config_from_nlattr(vport->options, vport->options_len,
+                                        a)) {
+            break;
+        }
+        return (nl_attr_get_u32(a[OVS_TUNNEL_ATTR_FLAGS]) & TNL_F_IPSEC
+                ? "ipsec_gre64" : "gre64");
+
     case OVS_VPORT_TYPE_CAPWAP:
         return "capwap";
 
@@ -583,9 +591,9 @@ parse_tunnel_config(const char *name, const char *type,
     uint32_t flags;
 
     flags = TNL_F_DF_DEFAULT | TNL_F_PMTUD | TNL_F_HDR_CACHE;
-    if (!strcmp(type, "gre")) {
+    if (!strcmp(type, "gre") || !strcmp(type, "gre64")) {
         is_gre = true;
-    } else if (!strcmp(type, "ipsec_gre")) {
+    } else if (!strcmp(type, "ipsec_gre") || !strcmp(type, "ipsec_gre64")) {
         is_gre = true;
         is_ipsec = true;
         flags |= TNL_F_IPSEC;
@@ -968,6 +976,14 @@ netdev_vport_register(void)
 
         { OVS_VPORT_TYPE_GRE,
           { "ipsec_gre", VPORT_FUNCTIONS(netdev_vport_get_drv_info) },
+          parse_tunnel_config, unparse_tunnel_config },
+
+        { OVS_VPORT_TYPE_GRE64,
+          { "gre64", VPORT_FUNCTIONS(netdev_vport_get_drv_info) },
+          parse_tunnel_config, unparse_tunnel_config },
+
+        { OVS_VPORT_TYPE_GRE64,
+          { "ipsec_gre64", VPORT_FUNCTIONS(netdev_vport_get_drv_info) },
           parse_tunnel_config, unparse_tunnel_config },
 
         { OVS_VPORT_TYPE_CAPWAP,

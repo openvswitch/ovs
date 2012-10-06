@@ -40,7 +40,8 @@
  * identifiers.
  */
 #define TNL_T_PROTO_GRE		0
-#define TNL_T_PROTO_CAPWAP	1
+#define TNL_T_PROTO_GRE64	1
+#define TNL_T_PROTO_CAPWAP	2
 
 /* These flags are only needed when calling tnl_find_port(). */
 #define TNL_T_KEY_EXACT		(1 << 10)
