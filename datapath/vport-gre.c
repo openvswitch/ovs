@@ -202,8 +202,11 @@ static int parse_header(struct iphdr *iph, __be16 *flags, __be64 *tun_id,
 			*tunnel_type = TNL_T_PROTO_GRE;
 		}
 		*tun_id = key_to_tunnel_id(gre_key, seq);
-	} else
+	} else {
 		*tun_id = 0;
+		/* Ignore GRE seq if there is no key present. */
+		*tunnel_type = TNL_T_PROTO_GRE;
+	}
 
 	if (greh->flags & GRE_SEQ)
 		hdr_len += GRE_HEADER_SECTION;
