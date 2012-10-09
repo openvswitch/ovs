@@ -320,6 +320,16 @@ struct ofproto_class {
 /* ## Factory Functions ## */
 /* ## ----------------- ## */
 
+    /* Initializes provider.  The caller may pass in 'iface_hints',
+     * which contains an shash of "struct iface_hint" elements indexed
+     * by the interface's name.  The provider may use these hints to
+     * describe the startup configuration in order to reinitialize its
+     * state.  The caller owns the provided data, so a provider must
+     * make copies of anything required.  An ofproto provider must
+     * remove any existing state that is not described by the hint, and
+     * may choose to remove it all. */
+    void (*init)(const struct shash *iface_hints);
+
     /* Enumerates the types of all support ofproto types into 'types'.  The
      * caller has already initialized 'types' and other ofproto classes might
      * already have added names to it. */

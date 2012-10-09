@@ -262,6 +262,48 @@ static void configure_splinter_port(struct port *);
 static void add_vlan_splinter_ports(struct bridge *,
                                     const unsigned long int *splinter_vlans,
                                     struct shash *ports);
+
+static void
+bridge_init_ofproto(const struct ovsrec_open_vswitch *cfg)
+{
+    struct shash iface_hints;
+    static bool initialized = false;
+    int i;
+
+    if (initialized) {
+        return;
+    }
+
+    shash_init(&iface_hints);
+
+    for (i = 0; i < cfg->n_bridges; i++) {
+        const struct ovsrec_bridge *br_cfg = cfg->bridges[i];
+        int j;
+
+        for (j = 0; j < br_cfg->n_ports; j++) {
+            struct ovsrec_port *port_cfg = br_cfg->ports[j];
+            int k;
+
+            for (k = 0; k < port_cfg->n_interfaces; k++) {
+                struct ovsrec_interface *if_cfg = port_cfg->interfaces[k];
+                struct iface_hint *iface_hint;
+
+                iface_hint = xmalloc(sizeof *iface_hint);
+                iface_hint->br_name = br_cfg->name;
+                iface_hint->br_type = br_cfg->datapath_type;
+                iface_hint->ofp_port = if_cfg->n_ofport_request ?
+                                       *if_cfg->ofport_request : OFPP_NONE;
+
+                shash_add(&iface_hints, if_cfg->name, iface_hint);
+            }
+        }
+    }
+
+    ofproto_init(&iface_hints);
+
+    shash_destroy_free_data(&iface_hints);
+    initialized = true;
+}
 
 /* Public functions. */
 
@@ -2075,6 +2117,12 @@ bridge_run(void)
         }
     }
     cfg = ovsrec_open_vswitch_first(idl);
+
+    /* Initialize the ofproto library.  This only needs to run once, but
+     * it must be done after the configuration is set.  If the
+     * initialization has already occurred, bridge_init_ofproto()
+     * returns immediately. */
+    bridge_init_ofproto(cfg);
 
     /* Let each bridge do the work that it needs to do. */
     HMAP_FOR_EACH (br, node, &all_bridges) {

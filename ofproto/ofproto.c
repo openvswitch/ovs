@@ -223,14 +223,24 @@ static struct hmap all_ofprotos = HMAP_INITIALIZER(&all_ofprotos);
 
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 
-static void
-ofproto_initialize(void)
+/* Must be called to initialize the ofproto library.
+ *
+ * The caller may pass in 'iface_hints', which contains an shash of
+ * "iface_hint" elements indexed by the interface's name.  The provider
+ * may use these hints to describe the startup configuration in order to
+ * reinitialize its state.  The caller owns the provided data, so a
+ * provider will make copies of anything required.  An ofproto provider
+ * will remove any existing state that is not described by the hint, and
+ * may choose to remove it all. */
+void
+ofproto_init(const struct shash *iface_hints)
 {
-    static bool inited;
+    size_t i;
 
-    if (!inited) {
-        inited = true;
-        ofproto_class_register(&ofproto_dpif_class);
+    ofproto_class_register(&ofproto_dpif_class);
+
+    for (i = 0; i < n_ofproto_classes; i++) {
+        ofproto_classes[i]->init(iface_hints);
     }
 }
 
@@ -242,7 +252,6 @@ ofproto_class_find__(const char *type)
 {
     size_t i;
 
-    ofproto_initialize();
     for (i = 0; i < n_ofproto_classes; i++) {
         const struct ofproto_class *class = ofproto_classes[i];
         struct sset types;
@@ -313,7 +322,6 @@ ofproto_enumerate_types(struct sset *types)
 {
     size_t i;
 
-    ofproto_initialize();
     for (i = 0; i < n_ofproto_classes; i++) {
         ofproto_classes[i]->enumerate_types(types);
     }
@@ -352,7 +360,6 @@ ofproto_create(const char *datapath_name, const char *datapath_type,
 
     *ofprotop = NULL;
 
-    ofproto_initialize();
     ofproto_unixctl_init();
 
     datapath_type = ofproto_normalize_type(datapath_type);

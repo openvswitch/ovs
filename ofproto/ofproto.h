@@ -144,6 +144,16 @@ const char *ofproto_normalize_type(const char *);
 int ofproto_enumerate_names(const char *type, struct sset *names);
 void ofproto_parse_name(const char *name, char **dp_name, char **dp_type);
 
+/* An interface hint element, which is used by ofproto_init() to
+ * describe the caller's understanding of the startup state. */
+struct iface_hint {
+    char *br_name;              /* Name of owning bridge. */
+    char *br_type;              /* Type of owning bridge. */
+    uint16_t ofp_port;          /* OpenFlow port number. */
+};
+
+void ofproto_init(const struct shash *iface_hints);
+
 int ofproto_create(const char *datapath, const char *datapath_type,
                    struct ofproto **ofprotop);
 void ofproto_destroy(struct ofproto *);

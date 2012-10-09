@@ -694,6 +694,11 @@ static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 /* Factory functions. */
 
 static void
+init(const struct shash *iface_hints OVS_UNUSED)
+{
+}
+
+static void
 enumerate_types(struct sset *types)
 {
     dp_enumerate_types(types);
@@ -7201,6 +7206,7 @@ vsp_add(struct ofport_dpif *port, uint16_t realdev_ofp_port, int vid)
 }
 
 const struct ofproto_class ofproto_dpif_class = {
+    init,
     enumerate_types,
     enumerate_names,
     del,
