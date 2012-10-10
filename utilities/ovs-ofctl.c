@@ -52,6 +52,7 @@
 #include "poll-loop.h"
 #include "random.h"
 #include "stream-ssl.h"
+#include "socket-util.h"
 #include "timeval.h"
 #include "unixctl.h"
 #include "util.h"
@@ -332,14 +333,20 @@ run(int retval, const char *message, ...)
 
 /* Generic commands. */
 
-static void
+static int
 open_vconn_socket(const char *name, struct vconn **vconnp)
 {
     char *vconn_name = xasprintf("unix:%s", name);
-    VLOG_DBG("connecting to %s", vconn_name);
-    run(vconn_open_block(vconn_name, 0, vconnp),
-        "connecting to %s", vconn_name);
+    int error;
+
+    error = vconn_open(vconn_name, 0, vconnp, DSCP_DEFAULT);
+    if (error && error != ENOENT) {
+        ovs_fatal(0, "%s: failed to open socket (%s)", name,
+                  strerror(error));
+    }
     free(vconn_name);
+
+    return error;
 }
 
 static enum ofputil_protocol
@@ -350,7 +357,7 @@ open_vconn__(const char *name, const char *default_suffix,
     enum ofputil_protocol protocol;
     char *bridge_path;
     int ofp_version;
-    struct stat s;
+    int error;
 
     bridge_path = xasprintf("%s/%s.%s", ovs_rundir(), name, default_suffix);
 
@@ -362,22 +369,25 @@ open_vconn__(const char *name, const char *default_suffix,
 
     if (strchr(name, ':')) {
         run(vconn_open_block(name, 0, vconnp), "connecting to %s", name);
-    } else if (!stat(name, &s) && S_ISSOCK(s.st_mode)) {
-        open_vconn_socket(name, vconnp);
-    } else if (!stat(bridge_path, &s) && S_ISSOCK(s.st_mode)) {
-        open_vconn_socket(bridge_path, vconnp);
-    } else if (!stat(socket_name, &s)) {
-        if (!S_ISSOCK(s.st_mode)) {
-            ovs_fatal(0, "cannot connect to %s: %s is not a socket",
-                      name, socket_name);
-        }
-        open_vconn_socket(socket_name, vconnp);
+    } else if (!open_vconn_socket(name, vconnp)) {
+        /* Fall Through. */
+    } else if (!open_vconn_socket(bridge_path, vconnp)) {
+        /* Fall Through. */
+    } else if (!open_vconn_socket(socket_name, vconnp)) {
+        /* Fall Through. */
     } else {
         ovs_fatal(0, "%s is not a bridge or a socket", name);
     }
 
     free(bridge_path);
     free(socket_name);
+
+    VLOG_DBG("connecting to %s", vconn_get_name(*vconnp));
+    error = vconn_connect_block(*vconnp);
+    if (error) {
+        ovs_fatal(0, "%s: failed to connect to socket (%s)", name,
+                  strerror(error));
+    }
 
     ofp_version = vconn_get_version(*vconnp);
     protocol = ofputil_protocol_from_ofp_version(ofp_version);
