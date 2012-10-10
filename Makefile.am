@@ -43,6 +43,7 @@ EXTRA_DIST = \
 	DESIGN \
 	FAQ \
 	INSTALL \
+	INSTALL.Fedora \
 	INSTALL.KVM \
 	INSTALL.Libvirt \
 	INSTALL.RHEL \
