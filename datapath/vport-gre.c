@@ -54,7 +54,11 @@ static int gre_hdr_len(const struct tnl_mutable_config *mutable)
 	if (mutable->flags & TNL_F_CSUM)
 		len += GRE_HEADER_SECTION;
 
-	if (mutable->out_key || mutable->flags & TNL_F_OUT_KEY_ACTION) {
+	/* Set key for GRE64 tunnels, even when key if is zero. */
+	if (mutable->out_key ||
+	    mutable->key.tunnel_type & TNL_T_PROTO_GRE64 ||
+	    mutable->flags & TNL_F_OUT_KEY_ACTION) {
+
 		len += GRE_HEADER_SECTION;
 		if (mutable->key.tunnel_type & TNL_T_PROTO_GRE64)
 			len += GRE_HEADER_SECTION;
@@ -103,7 +107,8 @@ static void gre_build_header(const struct vport *vport,
 		if (mutable->key.tunnel_type & TNL_T_PROTO_GRE64)
 			greh->flags |= GRE_SEQ;
 
-	} else if (mutable->out_key) {
+	} else if (mutable->out_key ||
+		   mutable->key.tunnel_type & TNL_T_PROTO_GRE64) {
 		greh->flags |= GRE_KEY;
 		*options = be64_get_low32(mutable->out_key);
 		if (mutable->key.tunnel_type & TNL_T_PROTO_GRE64) {
@@ -131,7 +136,8 @@ static struct sk_buff *gre_update_header(const struct vport *vport,
 		}
 		*options = be64_get_low32(OVS_CB(skb)->tun_id);
 		options--;
-	} else if (mutable->out_key) {
+	} else if (mutable->out_key ||
+		   mutable->key.tunnel_type & TNL_T_PROTO_GRE64) {
 		options--;
 		if (mutable->key.tunnel_type & TNL_T_PROTO_GRE64)
 			options--;
