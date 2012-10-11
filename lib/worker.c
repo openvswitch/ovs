@@ -335,8 +335,7 @@ worker_main(int fd)
     server_sock = fd;
 
     subprogram_name = "worker";
-    proctitle_set("%s: worker process for pid %lu",
-                  program_name, (unsigned long int) getppid());
+    proctitle_set("worker process for pid %lu", (unsigned long int) getppid());
     VLOG_INFO("worker process started");
 
     rxbuf_init(&rx);

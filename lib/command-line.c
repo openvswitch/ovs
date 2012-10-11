@@ -140,8 +140,8 @@ proctitle_init(int argc, char **argv)
     }
 }
 
-/* Changes the name of the process, as shown by "ps", to 'format', which is
- * formatted as if by printf(). */
+/* Changes the name of the process, as shown by "ps", to the program name
+ * followed by 'format', which is formatted as if by printf(). */
 void
 proctitle_set(const char *format, ...)
 {
@@ -157,7 +157,10 @@ proctitle_set(const char *format, ...)
     }
 
     va_start(args, format);
-    n = vsnprintf(argv_start, argv_size, format, args);
+    n = snprintf(argv_start, argv_size, "%s: ", program_name);
+    if (n < argv_size) {
+        n += vsnprintf(argv_start + n, argv_size - n, format, args);
+    }
     if (n >= argv_size) {
         /* The name is too long, so add an ellipsis at the end. */
         strcpy(&argv_start[argv_size - 4], "...");

@@ -385,9 +385,8 @@ monitor_daemon(pid_t daemon_pid)
         int retval;
         int status;
 
-        proctitle_set("%s: monitoring pid %lu (%s)",
-                      program_name, (unsigned long int) daemon_pid,
-                      status_msg);
+        proctitle_set("monitoring pid %lu (%s)",
+                      (unsigned long int) daemon_pid, status_msg);
 
         do {
             retval = waitpid(daemon_pid, &status, 0);
