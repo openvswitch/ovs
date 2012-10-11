@@ -2173,10 +2173,10 @@ OFP_ASSERT(sizeof(struct nx_flow_update_full) == 24);
  * change in future versions of Open vSwitch.
  *
  * OVS will always send the notifications for a given flow table change before
- * the reply to a OFPT_BARRIER_REQUEST request that precedes the flow table
- * change.  Thus, if the controller does not receive an abbreviated
- * notification for a flow_mod before the next OFPT_BARRIER_REPLY, it will
- * never receive one. */
+ * the reply to a OFPT_BARRIER_REQUEST request that follows the flow table
+ * change.  Thus, if the controller does not receive an abbreviated (or
+ * unabbreviated) notification for a flow_mod before the next
+ * OFPT_BARRIER_REPLY, it will never receive one. */
 struct nx_flow_update_abbrev {
     ovs_be16 length;            /* Length is 8. */
     ovs_be16 event;             /* NXFME_ABBREV. */
