@@ -359,6 +359,37 @@ struct ofproto_class {
      */
     int (*del)(const char *type, const char *name);
 
+/* ## ------------------------ ## */
+/* ## Top-Level type Functions ## */
+/* ## ------------------------ ## */
+
+    /* Performs any periodic activity required on ofprotos of type
+     * 'type'.
+     *
+     * An ofproto provider may implement it or not, depending on whether
+     * it needs type-level maintenance.
+     *
+     * Returns 0 if successful, otherwise a positive errno value. */
+    int (*type_run)(const char *type);
+
+    /* Performs periodic activity required on ofprotos of type 'type'
+     * that needs to be done with the least possible latency.
+     *
+     * This is run multiple times per main loop.  An ofproto provider may
+     * implement it or not, according to whether it provides a performance
+     * boost for that ofproto implementation.
+     *
+     * Returns 0 if successful, otherwise a positive errno value. */
+    int (*type_run_fast)(const char *type);
+
+    /* Causes the poll loop to wake up when a type 'type''s 'run'
+     * function needs to be called, e.g. by calling the timer or fd
+     * waiting functions in poll-loop.h.
+     *
+     * An ofproto provider may implement it or not, depending on whether
+     * it needs type-level maintenance. */
+    void (*type_wait)(const char *type);
+
 /* ## --------------------------- ## */
 /* ## Top-Level ofproto Functions ## */
 /* ## --------------------------- ## */

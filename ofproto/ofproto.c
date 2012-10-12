@@ -1098,6 +1098,53 @@ process_port_change(struct ofproto *ofproto, int error, char *devname)
 }
 
 int
+ofproto_type_run(const char *datapath_type)
+{
+    const struct ofproto_class *class;
+    int error;
+
+    datapath_type = ofproto_normalize_type(datapath_type);
+    class = ofproto_class_find__(datapath_type);
+
+    error = class->type_run ? class->type_run(datapath_type) : 0;
+    if (error && error != EAGAIN) {
+        VLOG_ERR_RL(&rl, "%s: type_run failed (%s)",
+                    datapath_type, strerror(error));
+    }
+    return error;
+}
+
+int
+ofproto_type_run_fast(const char *datapath_type)
+{
+    const struct ofproto_class *class;
+    int error;
+
+    datapath_type = ofproto_normalize_type(datapath_type);
+    class = ofproto_class_find__(datapath_type);
+
+    error = class->type_run_fast ? class->type_run_fast(datapath_type) : 0;
+    if (error && error != EAGAIN) {
+        VLOG_ERR_RL(&rl, "%s: type_run_fast failed (%s)",
+                    datapath_type, strerror(error));
+    }
+    return error;
+}
+
+void
+ofproto_type_wait(const char *datapath_type)
+{
+    const struct ofproto_class *class;
+
+    datapath_type = ofproto_normalize_type(datapath_type);
+    class = ofproto_class_find__(datapath_type);
+
+    if (class->type_wait) {
+        class->type_wait(datapath_type);
+    }
+}
+
+int
 ofproto_run(struct ofproto *p)
 {
     struct sset changed_netdevs;

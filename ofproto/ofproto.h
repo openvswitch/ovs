@@ -154,6 +154,10 @@ struct iface_hint {
 
 void ofproto_init(const struct shash *iface_hints);
 
+int ofproto_type_run(const char *datapath_type);
+int ofproto_type_run_fast(const char *datapath_type);
+void ofproto_type_wait(const char *datapath_type);
+
 int ofproto_create(const char *datapath, const char *datapath_type,
                    struct ofproto **ofprotop);
 void ofproto_destroy(struct ofproto *);

@@ -2078,7 +2078,16 @@ refresh_instant_stats(void)
 void
 bridge_run_fast(void)
 {
+    struct sset types;
+    const char *type;
     struct bridge *br;
+
+    sset_init(&types);
+    ofproto_enumerate_types(&types);
+    SSET_FOR_EACH (type, &types) {
+        ofproto_type_run_fast(type);
+    }
+    sset_destroy(&types);
 
     HMAP_FOR_EACH (br, node, &all_bridges) {
         ofproto_run_fast(br->ofproto);
@@ -2091,6 +2100,8 @@ bridge_run(void)
     static const struct ovsrec_open_vswitch null_cfg;
     const struct ovsrec_open_vswitch *cfg;
     struct ovsdb_idl_txn *reconf_txn = NULL;
+    struct sset types;
+    const char *type;
 
     bool vlan_splinters_changed;
     struct bridge *br;
@@ -2123,6 +2134,14 @@ bridge_run(void)
      * initialization has already occurred, bridge_init_ofproto()
      * returns immediately. */
     bridge_init_ofproto(cfg);
+
+    /* Let each datapath type do the work that it needs to do. */
+    sset_init(&types);
+    ofproto_enumerate_types(&types);
+    SSET_FOR_EACH (type, &types) {
+        ofproto_type_run(type);
+    }
+    sset_destroy(&types);
 
     /* Let each bridge do the work that it needs to do. */
     HMAP_FOR_EACH (br, node, &all_bridges) {
@@ -2226,11 +2245,21 @@ bridge_run(void)
 void
 bridge_wait(void)
 {
+    struct sset types;
+    const char *type;
+
     ovsdb_idl_wait(idl);
 
     if (reconfiguring) {
         poll_immediate_wake();
     }
+
+    sset_init(&types);
+    ofproto_enumerate_types(&types);
+    SSET_FOR_EACH (type, &types) {
+        ofproto_type_wait(type);
+    }
+    sset_destroy(&types);
 
     if (!hmap_is_empty(&all_bridges)) {
         struct bridge *br;

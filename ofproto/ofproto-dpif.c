@@ -7493,6 +7493,9 @@ const struct ofproto_class ofproto_dpif_class = {
     enumerate_types,
     enumerate_names,
     del,
+    NULL,                       /* type_run */
+    NULL,                       /* type_run_fast */
+    NULL,                       /* type_wait */
     alloc,
     construct,
     destruct,
