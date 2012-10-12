@@ -1417,7 +1417,7 @@ bridge_configure_flow_eviction_threshold(struct bridge *br)
     if (threshold_str) {
         threshold = strtoul(threshold_str, NULL, 10);
     } else {
-        threshold = OFPROTO_FLOW_EVICTON_THRESHOLD_DEFAULT;
+        threshold = OFPROTO_FLOW_EVICTION_THRESHOLD_DEFAULT;
     }
     ofproto_set_flow_eviction_threshold(br->ofproto, threshold);
 }

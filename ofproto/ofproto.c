@@ -379,7 +379,7 @@ ofproto_create(const char *datapath_name, const char *datapath_type,
                 hash_string(ofproto->name, 0));
     ofproto->datapath_id = 0;
     ofproto_set_flow_eviction_threshold(ofproto,
-                                        OFPROTO_FLOW_EVICTON_THRESHOLD_DEFAULT);
+                                        OFPROTO_FLOW_EVICTION_THRESHOLD_DEFAULT);
     ofproto->forward_bpdu = false;
     ofproto->fallback_dpid = pick_fallback_dpid();
     ofproto->mfr_desc = xstrdup(DEFAULT_MFR_DESC);

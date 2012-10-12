@@ -190,7 +190,7 @@ int ofproto_port_dump_done(struct ofproto_port_dump *);
           : (ofproto_port_dump_done(DUMP), false));         \
         )
 
-#define OFPROTO_FLOW_EVICTON_THRESHOLD_DEFAULT  1000
+#define OFPROTO_FLOW_EVICTION_THRESHOLD_DEFAULT  1000
 #define OFPROTO_FLOW_EVICTION_THRESHOLD_MIN 100
 
 int ofproto_port_add(struct ofproto *, struct netdev *, uint16_t *ofp_portp);
