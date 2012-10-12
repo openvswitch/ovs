@@ -57,6 +57,8 @@ struct cfm_settings {
     uint16_t ccm_vlan;          /* CCM Vlan tag. Zero if none.
                                    CFM_RANDOM_VLAN if random. */
     uint8_t ccm_pcp;            /* CCM Priority. Zero if none. */
+
+    bool check_tnl_key;         /* Verify inbound packet key? */
 };
 
 void cfm_init(void);

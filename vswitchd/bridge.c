@@ -3312,11 +3312,23 @@ iface_configure_cfm(struct iface *iface)
     const char *opstate_str;
     const char *cfm_ccm_vlan;
     struct cfm_settings s;
+    struct smap netdev_args;
 
     if (!cfg->n_cfm_mpid) {
         ofproto_port_clear_cfm(iface->port->bridge->ofproto, iface->ofp_port);
         return;
     }
+
+    s.check_tnl_key = false;
+    smap_init(&netdev_args);
+    if (!netdev_get_config(iface->netdev, &netdev_args)) {
+        const char *key = smap_get(&netdev_args, "key");
+        const char *in_key = smap_get(&netdev_args, "in_key");
+
+        s.check_tnl_key = (key && !strcmp(key, "flow"))
+                           || (in_key && !strcmp(in_key, "flow"));
+    }
+    smap_destroy(&netdev_args);
 
     s.mpid = *cfg->cfm_mpid;
     s.interval = smap_get_int(&iface->cfg->other_config, "cfm_interval", 0);

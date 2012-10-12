@@ -1718,6 +1718,12 @@
         faulted otherwise.
       </p>
 
+      <p>
+          When operating over tunnels which have no <code>in_key</code>, or an
+          <code>in_key</code> of <code>flow</code>.  CFM will only accept CCMs
+          with a tunnel key of zero.
+      </p>
+
       <column name="cfm_mpid">
         A Maintenance Point ID (MPID) uniquely identifies each endpoint within
         a Maintenance Association.  The MPID is used to identify this endpoint
@@ -1873,7 +1879,7 @@
       <column name="other_config" key="cfm_ccm_pcp"
         type='{"type": "integer", "minInteger": 1, "maxInteger": 7}'>
         When set, the CFM module will apply a VLAN tag to all CCMs it generates
-        with the given PCP value.  The VLAN ID of the tag is governed by the
+        with the given PCP value, the VLAN ID of the tag is governed by the
         value of <ref column="other_config" key="cfm_ccm_vlan"/>. If
         <ref column="other_config" key="cfm_ccm_vlan"/> is unset, a VLAN ID of
         zero is used.

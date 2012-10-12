@@ -86,6 +86,7 @@ struct cfm {
     struct hmap_node hmap_node; /* Node in all_cfms list. */
 
     uint64_t mpid;
+    bool check_tnl_key;    /* Verify the tunnel key of inbound packets? */
     bool extended;         /* Extended mode. */
     bool booted;           /* A full fault interval has occured. */
     enum cfm_fault_reason fault;  /* Connectivity fault status. */
@@ -505,6 +506,7 @@ cfm_configure(struct cfm *cfm, const struct cfm_settings *s)
     }
 
     cfm->mpid = s->mpid;
+    cfm->check_tnl_key = s->check_tnl_key;
     cfm->extended = s->extended;
     cfm->opup = s->opup;
     interval = ms_to_ccm_interval(s->interval);
@@ -533,7 +535,8 @@ bool
 cfm_should_process_flow(const struct cfm *cfm, const struct flow *flow)
 {
     return (ntohs(flow->dl_type) == ETH_TYPE_CFM
-            && eth_addr_equals(flow->dl_dst, cfm_ccm_addr(cfm)));
+            && eth_addr_equals(flow->dl_dst, cfm_ccm_addr(cfm))
+            && (!cfm->check_tnl_key || flow->tunnel.tun_id == htonll(0)));
 }
 
 /* Updates internal statistics relevant to packet 'p'.  Should be called on
