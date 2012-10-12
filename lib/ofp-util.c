@@ -1157,7 +1157,6 @@ ofputil_decode_flow_mod(struct ofputil_flow_mod *fm,
             fm->cookie_mask = htonll(0);
             fm->new_cookie = ofm->cookie;
         } else {
-            /* XXX */
             fm->cookie = ofm->cookie;
             fm->cookie_mask = ofm->cookie_mask;
             fm->new_cookie = htonll(UINT64_MAX);
@@ -1284,7 +1283,11 @@ ofputil_encode_flow_mod(const struct ofputil_flow_mod *fm,
         msg = ofpraw_alloc(OFPRAW_OFPT11_FLOW_MOD, OFP12_VERSION,
                            NXM_TYPICAL_LEN + fm->ofpacts_len);
         ofm = ofpbuf_put_zeros(msg, sizeof *ofm);
-        ofm->cookie = fm->new_cookie;
+        if (fm->command == OFPFC_ADD) {
+            ofm->cookie = fm->new_cookie;
+        } else {
+            ofm->cookie = fm->cookie;
+        }
         ofm->cookie_mask = fm->cookie_mask;
         ofm->table_id = fm->table_id;
         ofm->command = fm->command;
