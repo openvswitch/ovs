@@ -309,10 +309,7 @@ enum ofperr {
     /* OF1.1+(5,0).  Unspecified error. */
     OFPERR_OFPFMFC_UNKNOWN,
 
-    /* OF1.0(3,0).  Flow not added because of full tables. */
-    OFPERR_OFPFMFC_ALL_TABLES_FULL,
-
-    /* OF1.1+(5,1).  Flow not added because table was full. */
+    /* OF1.0(3,0), OF1.1+(5,1).  Flow not added because of full table(s). */
     OFPERR_OFPFMFC_TABLE_FULL,
 
     /* OF1.1+(5,2).  Table does not exist */

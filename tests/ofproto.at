@@ -456,12 +456,12 @@ NXST_FLOW reply:
 # Adding another flow will be refused.
 AT_CHECK([ovs-ofctl add-flow br0 in_port=5,actions=drop], [1], [], [stderr])
 AT_CHECK([head -n 1 stderr | ofctl_strip], [0],
-  [OFPT_ERROR: OFPFMFC_ALL_TABLES_FULL
+  [OFPT_ERROR: OFPFMFC_TABLE_FULL
 ])
 # Also a mod-flow that would add a flow will be refused.
 AT_CHECK([ovs-ofctl mod-flows br0 in_port=5,actions=drop], [1], [], [stderr])
 AT_CHECK([head -n 1 stderr | ofctl_strip], [0],
-  [OFPT_ERROR: OFPFMFC_ALL_TABLES_FULL
+  [OFPT_ERROR: OFPFMFC_TABLE_FULL
 ])
 # Replacing or modifying an existing flow is allowed.
 AT_CHECK([ovs-ofctl add-flow br0 in_port=4,actions=normal])
@@ -522,7 +522,7 @@ NXST_FLOW reply:
 AT_CHECK([ovs-ofctl add-flow br0 in_port=7,actions=normal])
 AT_CHECK([ovs-ofctl add-flow br0 in_port=8,actions=drop], [1], [], [stderr])
 AT_CHECK([head -n 1 stderr | ofctl_strip], [0],
-  [OFPT_ERROR: OFPFMFC_ALL_TABLES_FULL
+  [OFPT_ERROR: OFPFMFC_TABLE_FULL
 ])
 AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | sort], [0], [dnl
  in_port=4 actions=NORMAL

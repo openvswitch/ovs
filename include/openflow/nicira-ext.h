@@ -129,10 +129,9 @@ enum nx_hash_fields {
  *      table.  If an identical flow already exists in that table only, then it
  *      is replaced.  If the flow cannot be placed in the specified table,
  *      either because the table is full or because the table cannot support
- *      flows of the given type, the switch replies with an
- *      OFPFMFC_ALL_TABLES_FULL error.  (A controller can distinguish these
- *      cases by comparing the current and maximum number of entries reported
- *      in ofp_table_stats.)
+ *      flows of the given type, the switch replies with an OFPFMFC_TABLE_FULL
+ *      error.  (A controller can distinguish these cases by comparing the
+ *      current and maximum number of entries reported in ofp_table_stats.)
  *
  *      If the table ID is wildcarded, the switch picks an appropriate table
  *      itself.  If an identical flow already exist in the selected flow table,

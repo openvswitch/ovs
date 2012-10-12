@@ -2988,7 +2988,7 @@ add_flow(struct ofproto *ofproto, struct ofconn *ofconn,
             rule->evictable = was_evictable;
 
             if (!evict) {
-                error = OFPERR_OFPFMFC_ALL_TABLES_FULL;
+                error = OFPERR_OFPFMFC_TABLE_FULL;
                 goto exit;
             } else if (evict->pending) {
                 error = OFPROTO_POSTPONE;
@@ -3304,7 +3304,7 @@ handle_flow_mod(struct ofconn *ofconn, const struct ofp_header *oh)
          * is not required in OpenFlow 1.0.1 and removed from OpenFlow 1.1.
          * There is no good error code, so just state that the flow table
          * is full. */
-        error = OFPERR_OFPFMFC_ALL_TABLES_FULL;
+        error = OFPERR_OFPFMFC_TABLE_FULL;
     }
     if (!error) {
         error = ofpacts_check(fm.ofpacts, fm.ofpacts_len,
