@@ -2775,15 +2775,13 @@ static void
 put_queue_stats(struct queue_stats_cbdata *cbdata, uint32_t queue_id,
                 const struct netdev_queue_stats *stats)
 {
-    struct ofp10_queue_stats *reply;
 
-    reply = ofpmp_append(&cbdata->replies, sizeof *reply);
-    reply->port_no = htons(cbdata->ofport->pp.port_no);
-    memset(reply->pad, 0, sizeof reply->pad);
-    reply->queue_id = htonl(queue_id);
-    put_32aligned_be64(&reply->tx_bytes, htonll(stats->tx_bytes));
-    put_32aligned_be64(&reply->tx_packets, htonll(stats->tx_packets));
-    put_32aligned_be64(&reply->tx_errors, htonll(stats->tx_errors));
+    struct ofputil_queue_stats oqs = {
+        .port_no = cbdata->ofport->pp.port_no,
+        .queue_id = queue_id,
+        .stats = *stats,
+    };
+    ofputil_append_queue_stat(&cbdata->replies, &oqs);
 }
 
 static void
@@ -2821,30 +2819,31 @@ handle_queue_stats_request(struct ofconn *ofconn,
                            const struct ofp_header *rq)
 {
     struct ofproto *ofproto = ofconn_get_ofproto(ofconn);
-    const struct ofp10_queue_stats_request *qsr = ofpmsg_body(rq);
     struct queue_stats_cbdata cbdata;
-    unsigned int port_no;
     struct ofport *port;
-    uint32_t queue_id;
     enum ofperr error;
+    struct ofputil_queue_stats_request oqsr;
 
     COVERAGE_INC(ofproto_queue_req);
 
     ofpmp_init(&cbdata.replies, rq);
 
-    port_no = ntohs(qsr->port_no);
-    queue_id = ntohl(qsr->queue_id);
-    if (port_no == OFPP_ALL) {
+    error = ofputil_decode_queue_stats_request(rq, &oqsr);
+    if (error) {
+        return error;
+    }
+
+    if (oqsr.port_no == OFPP_ALL) {
         error = OFPERR_OFPQOFC_BAD_QUEUE;
         HMAP_FOR_EACH (port, hmap_node, &ofproto->ports) {
-            if (!handle_queue_stats_for_port(port, queue_id, &cbdata)) {
+            if (!handle_queue_stats_for_port(port, oqsr.queue_id, &cbdata)) {
                 error = 0;
             }
         }
     } else {
-        port = ofproto_get_port(ofproto, port_no);
+        port = ofproto_get_port(ofproto, oqsr.port_no);
         error = (port
-                 ? handle_queue_stats_for_port(port, queue_id, &cbdata)
+                 ? handle_queue_stats_for_port(port, oqsr.queue_id, &cbdata)
                  : OFPERR_OFPQOFC_BAD_PORT);
     }
     if (!error) {

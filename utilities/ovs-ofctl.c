@@ -948,28 +948,24 @@ ofctl_dump_aggregate(int argc, char *argv[])
 static void
 ofctl_queue_stats(int argc, char *argv[])
 {
-    struct ofp10_queue_stats_request *req;
     struct ofpbuf *request;
     struct vconn *vconn;
+    struct ofputil_queue_stats_request oqs;
 
     open_vconn(argv[1], &vconn);
-    request = ofpraw_alloc(OFPRAW_OFPST_QUEUE_REQUEST,
-                           vconn_get_version(vconn), 0);
-    req = ofpbuf_put_zeros(request, sizeof *req);
 
     if (argc > 2 && argv[2][0] && strcasecmp(argv[2], "all")) {
-        req->port_no = htons(str_to_port_no(argv[1], argv[2]));
+        oqs.port_no = str_to_port_no(argv[1], argv[2]);
     } else {
-        req->port_no = htons(OFPP_ALL);
+        oqs.port_no = OFPP_ALL;
     }
     if (argc > 3 && argv[3][0] && strcasecmp(argv[3], "all")) {
-        req->queue_id = htonl(atoi(argv[3]));
+        oqs.queue_id = atoi(argv[3]);
     } else {
-        req->queue_id = htonl(OFPQ_ALL);
+        oqs.queue_id = OFPQ_ALL;
     }
 
-    memset(req->pad, 0, sizeof req->pad);
-
+    request = ofputil_encode_queue_stats_request(vconn_get_version(vconn), &oqs);
     dump_stats_transaction(vconn, request);
     vconn_close(vconn);
 }

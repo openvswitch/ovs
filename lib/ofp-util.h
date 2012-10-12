@@ -635,4 +635,28 @@ size_t ofputil_count_port_stats(const struct ofp_header *);
 int ofputil_decode_port_stats(struct ofputil_port_stats *, struct ofpbuf *msg);
 enum ofperr ofputil_decode_port_stats_request(const struct ofp_header *request,
                                               uint16_t *ofp10_port);
+
+struct ofputil_queue_stats_request {
+    uint16_t port_no;
+    uint32_t queue_id;
+};
+
+enum ofperr
+ofputil_decode_queue_stats_request(const struct ofp_header *request,
+                                   struct ofputil_queue_stats_request *oqsr);
+struct ofpbuf *
+ofputil_encode_queue_stats_request(enum ofp_version ofp_version,
+                                   const struct ofputil_queue_stats_request *oqsr);
+
+struct ofputil_queue_stats {
+    uint16_t port_no;
+    uint32_t queue_id;
+    struct netdev_queue_stats stats;
+};
+
+size_t ofputil_count_queue_stats(const struct ofp_header *);
+int ofputil_decode_queue_stats(struct ofputil_queue_stats *qs, struct ofpbuf *msg);
+void ofputil_append_queue_stat(struct list *replies,
+                               const struct ofputil_queue_stats *oqs);
+
 #endif /* ofp-util.h */

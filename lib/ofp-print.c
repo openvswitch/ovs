@@ -1326,54 +1326,55 @@ ofp_print_queue_name(struct ds *string, uint32_t queue_id)
 static void
 ofp_print_ofpst_queue_request(struct ds *string, const struct ofp_header *oh)
 {
-    const struct ofp10_queue_stats_request *qsr = ofpmsg_body(oh);
+    struct ofputil_queue_stats_request oqsr;
+    enum ofperr error;
+
+    error = ofputil_decode_queue_stats_request(oh, &oqsr);
+    if (error) {
+        ds_put_format(string, "***decode error: %s***\n", ofperr_get_name(error));
+        return;
+    }
 
     ds_put_cstr(string, "port=");
-    ofputil_format_port(ntohs(qsr->port_no), string);
+    ofputil_format_port(oqsr.port_no, string);
 
     ds_put_cstr(string, " queue=");
-    ofp_print_queue_name(string, ntohl(qsr->queue_id));
-}
-
-static void
-print_queue_stat(struct ds *string, const char *leader,
-                 const ovs_32aligned_be64 *statp, int more)
-{
-    print_port_stat(string, leader, ntohll(get_32aligned_be64(statp)), more);
+    ofp_print_queue_name(string, oqsr.queue_id);
 }
 
 static void
 ofp_print_ofpst_queue_reply(struct ds *string, const struct ofp_header *oh,
                             int verbosity)
 {
-    struct ofp10_queue_stats *qs;
     struct ofpbuf b;
-    size_t n;
 
-    ofpbuf_use_const(&b, oh, ntohs(oh->length));
-    ofpraw_pull_assert(&b);
-
-    n = b.size / sizeof *qs;
-    ds_put_format(string, " %zu queues\n", n);
+    ds_put_format(string, " %zu queues\n", ofputil_count_queue_stats(oh));
     if (verbosity < 1) {
         return;
     }
 
+    ofpbuf_use_const(&b, oh, ntohs(oh->length));
     for (;;) {
-        qs = ofpbuf_try_pull(&b, sizeof *qs);
-        if (!qs) {
+        struct ofputil_queue_stats qs;
+        int retval;
+
+        retval = ofputil_decode_queue_stats(&qs, &b);
+        if (retval) {
+            if (retval != EOF) {
+                ds_put_cstr(string, " ***parse error***");
+            }
             return;
         }
 
         ds_put_cstr(string, "  port ");
-        ofputil_format_port(ntohs(qs->port_no), string);
+        ofputil_format_port(qs.port_no, string);
         ds_put_cstr(string, " queue ");
-        ofp_print_queue_name(string, ntohl(qs->queue_id));
+        ofp_print_queue_name(string, qs.queue_id);
         ds_put_cstr(string, ": ");
 
-        print_queue_stat(string, "bytes=", &qs->tx_bytes, 1);
-        print_queue_stat(string, "pkts=", &qs->tx_packets, 1);
-        print_queue_stat(string, "errors=", &qs->tx_errors, 0);
+        print_port_stat(string, "bytes=", qs.stats.tx_bytes, 1);
+        print_port_stat(string, "pkts=", qs.stats.tx_packets, 1);
+        print_port_stat(string, "errors=", qs.stats.tx_errors, 0);
     }
 }
 
