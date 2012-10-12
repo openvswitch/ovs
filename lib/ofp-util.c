@@ -4010,8 +4010,7 @@ ofputil_port_stats_to_ofp11(const struct ofputil_port_stats *ops,
     ps11->collisions = htonll(ops->stats.collisions);
 }
 
-/* Encode a ports stat for 'opes' and append it to 'replies'.
- * The encoded message will be for Open Flow version 'ofp_version'. */
+/* Encode a ports stat for 'ops' and append it to 'replies'. */
 void
 ofputil_append_port_stat(struct list *replies,
                          const struct ofputil_port_stats *ops)
