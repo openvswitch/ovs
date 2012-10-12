@@ -18,6 +18,9 @@
 #include "timeval.h"
 #include <assert.h>
 #include <errno.h>
+#if HAVE_EXECINFO_H
+#include <execinfo.h>
+#endif
 #include <poll.h>
 #include <signal.h>
 #include <stdlib.h>
@@ -27,11 +30,16 @@
 #include <unistd.h>
 #include "coverage.h"
 #include "dummy.h"
+#include "dynamic-string.h"
 #include "fatal-signal.h"
 #include "signals.h"
 #include "unixctl.h"
 #include "util.h"
 #include "vlog.h"
+
+#ifndef HAVE_EXECINFO_H
+#define HAVE_EXECINFO_H 0
+#endif
 
 VLOG_DEFINE_THIS_MODULE(timeval);
 
@@ -61,6 +69,16 @@ static bool time_stopped;           /* Disables real-time updates, if true. */
 /* Time in milliseconds at which to die with SIGALRM (if not LLONG_MAX). */
 static long long int deadline = LLONG_MAX;
 
+struct trace {
+    void *backtrace[32]; /* Populated by backtrace(). */
+    size_t n_frames;     /* Number of frames in 'backtrace'. */
+};
+
+#define MAX_TRACES 50
+static struct unixctl_conn *backtrace_conn = NULL;
+static struct trace *traces = NULL;
+static size_t n_traces = 0;
+
 static void set_up_timer(void);
 static void set_up_signal(int flags);
 static void sigalrm_handler(int);
@@ -73,16 +91,28 @@ static struct rusage *get_recent_rusage(void);
 static void refresh_rusage(void);
 static void timespec_add(struct timespec *sum,
                          const struct timespec *a, const struct timespec *b);
+static void trace_run(void);
+static unixctl_cb_func backtrace_cb;
 
 /* Initializes the timetracking module, if not already initialized. */
 static void
 time_init(void)
 {
     static bool inited;
+
+    /* The best place to do this is probably a timeval_run() function.
+     * However, none exists and this function is usually so fast that doing it
+     * here seems fine for now. */
+    trace_run();
+
     if (inited) {
         return;
     }
     inited = true;
+
+    if (HAVE_EXECINFO_H && CACHE_TIME) {
+        unixctl_command_register("backtrace", "", 0, 0, backtrace_cb, NULL);
+    }
 
     coverage_init();
 
@@ -364,6 +394,14 @@ sigalrm_handler(int sig_nr OVS_UNUSED)
 {
     wall_tick = true;
     monotonic_tick = true;
+
+#if HAVE_EXECINFO_H
+    if (backtrace_conn && n_traces < MAX_TRACES) {
+        struct trace *trace = &traces[n_traces++];
+        trace->n_frames = backtrace(trace->backtrace,
+                                    ARRAY_SIZE(trace->backtrace));
+    }
+#endif
 }
 
 static void
@@ -565,6 +603,47 @@ get_cpu_usage(void)
 {
     return cpu_usage;
 }
+
+static void
+trace_run(void)
+{
+#if HAVE_EXECINFO_H
+    if (backtrace_conn && n_traces >= MAX_TRACES) {
+        struct unixctl_conn *reply_conn = backtrace_conn;
+        struct ds ds = DS_EMPTY_INITIALIZER;
+        sigset_t oldsigs;
+        size_t i;
+
+        block_sigalrm(&oldsigs);
+
+        for (i = 0; i < n_traces; i++) {
+            struct trace *trace = &traces[i];
+            char **frame_strs;
+            size_t j;
+
+            frame_strs = backtrace_symbols(trace->backtrace, trace->n_frames);
+
+            ds_put_format(&ds, "Backtrace %zu\n", i + 1);
+            for (j = 0; j < trace->n_frames; j++) {
+                ds_put_format(&ds, "%s\n", frame_strs[j]);
+            }
+            ds_put_cstr(&ds, "\n");
+
+            free(frame_strs);
+        }
+
+        free(traces);
+        traces = NULL;
+        n_traces = 0;
+        backtrace_conn = NULL;
+
+        unblock_sigalrm(&oldsigs);
+
+        unixctl_command_reply(reply_conn, ds_cstr(&ds));
+        ds_destroy(&ds);
+    }
+#endif
+}
 
 /* Unixctl interface. */
 
@@ -602,6 +681,28 @@ timeval_warp_cb(struct unixctl_conn *conn,
     timespec_add(&warp_offset, &warp_offset, &ts);
     timespec_add(&monotonic_time, &monotonic_time, &ts);
     unixctl_command_reply(conn, "warped");
+}
+
+static void
+backtrace_cb(struct unixctl_conn *conn,
+             int argc OVS_UNUSED, const char *argv[] OVS_UNUSED,
+             void *aux OVS_UNUSED)
+{
+    sigset_t oldsigs;
+
+    assert(HAVE_EXECINFO_H && CACHE_TIME);
+
+    if (backtrace_conn) {
+        unixctl_command_reply_error(conn, "In Use");
+        return;
+    }
+    assert(!traces);
+
+    block_sigalrm(&oldsigs);
+    backtrace_conn = conn;
+    traces = xmalloc(MAX_TRACES * sizeof *traces);
+    n_traces = 0;
+    unblock_sigalrm(&oldsigs);
 }
 
 void
