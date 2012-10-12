@@ -1939,7 +1939,7 @@ ofputil_decode_flow_removed(struct ofputil_flow_removed *fr,
         fr->byte_count = ntohll(ofr->byte_count);
     } else if (raw == OFPRAW_NXT_FLOW_REMOVED) {
         struct nx_flow_removed *nfr;
-        int error;
+        enum ofperr error;
 
         nfr = ofpbuf_pull(&b, sizeof *nfr);
         error = nx_pull_match(&b, ntohs(nfr->match_len), &fr->match,
