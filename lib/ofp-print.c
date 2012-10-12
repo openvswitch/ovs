@@ -743,7 +743,7 @@ ofp_print_flow_mod(struct ds *s, const struct ofp_header *oh, int verbosity)
     if (ds_last(s) != ' ') {
         ds_put_char(s, ' ');
     }
-    if (fm.new_cookie != htonll(0)) {
+    if (fm.new_cookie != htonll(0) && fm.new_cookie != htonll(UINT64_MAX)) {
         ds_put_format(s, "cookie:0x%"PRIx64" ", ntohll(fm.new_cookie));
     }
     if (fm.cookie_mask != htonll(0)) {
