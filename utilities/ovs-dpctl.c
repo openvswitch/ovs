@@ -196,6 +196,42 @@ static int if_up(const char *netdev_name)
     return retval;
 }
 
+/* Retrieve the name of the datapath if exactly one exists.  The caller
+ * is responsible for freeing the returned string.  If there is not one
+ * datapath, aborts with an error message. */
+static char *
+get_one_dp(void)
+{
+    struct sset types;
+    const char *type;
+    char *dp_name = NULL;
+    size_t count = 0;
+
+    sset_init(&types);
+    dp_enumerate_types(&types);
+    SSET_FOR_EACH (type, &types) {
+        struct sset names;
+
+        sset_init(&names);
+        if (!dp_enumerate_names(type, &names)) {
+            count += sset_count(&names);
+            if (!dp_name && count == 1) {
+                dp_name = xasprintf("%s@%s", type, SSET_FIRST(&names));
+            }
+        }
+        sset_destroy(&names);
+    }
+    sset_destroy(&types);
+
+    if (!count) {
+        ovs_fatal(0, "no datapaths exist");
+    } else if (count > 1) {
+        ovs_fatal(0, "multiple datapaths, specify one");
+    }
+
+    return dp_name;
+}
+
 static int
 parsed_dpif_open(const char *arg_, bool create, struct dpif **dpifp)
 {
@@ -677,7 +713,7 @@ dpctl_dump_dps(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 }
 
 static void
-dpctl_dump_flows(int argc OVS_UNUSED, char *argv[])
+dpctl_dump_flows(int argc, char *argv[])
 {
     const struct dpif_flow_stats *stats;
     const struct nlattr *actions;
@@ -687,8 +723,11 @@ dpctl_dump_flows(int argc OVS_UNUSED, char *argv[])
     struct dpif *dpif;
     size_t key_len;
     struct ds ds;
+    char *name;
 
-    run(parsed_dpif_open(argv[1], false, &dpif), "opening datapath");
+    name = (argc == 2) ? xstrdup(argv[1]) : get_one_dp();
+    run(parsed_dpif_open(name, false, &dpif), "opening datapath");
+    free(name);
 
     ds_init(&ds);
     dpif_flow_dump_start(&dump, dpif);
@@ -708,11 +747,15 @@ dpctl_dump_flows(int argc OVS_UNUSED, char *argv[])
 }
 
 static void
-dpctl_del_flows(int argc OVS_UNUSED, char *argv[])
+dpctl_del_flows(int argc, char *argv[])
 {
     struct dpif *dpif;
+    char *name;
 
-    run(parsed_dpif_open(argv[1], false, &dpif), "opening datapath");
+    name = (argc == 2) ? xstrdup(argv[1]) : get_one_dp();
+    run(parsed_dpif_open(name, false, &dpif), "opening datapath");
+    free(name);
+
     run(dpif_flow_flush(dpif), "deleting all flows");
     dpif_close(dpif);
 }
@@ -951,8 +994,8 @@ static const struct command all_commands[] = {
     { "set-if", 2, INT_MAX, dpctl_set_if },
     { "dump-dps", 0, 0, dpctl_dump_dps },
     { "show", 0, INT_MAX, dpctl_show },
-    { "dump-flows", 1, 1, dpctl_dump_flows },
-    { "del-flows", 1, 1, dpctl_del_flows },
+    { "dump-flows", 0, 1, dpctl_dump_flows },
+    { "del-flows", 0, 1, dpctl_del_flows },
     { "help", 0, INT_MAX, dpctl_help },
 
     /* Undocumented commands for testing. */

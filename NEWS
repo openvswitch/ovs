@@ -28,6 +28,8 @@ v1.9.0 - xx xxx xxxx
     - ovs-dpctl:
       - Support requesting the port number with the "port_no" option in
         the "add-if" command.
+      - The "dump-flows" and "del-flows" no longer require an argument
+        if only one datapath exists.
     - ovs-appctl:
       - New "dpif/dump-dps", "dpif/show", and "dpif/dump-flows" command
         that mimic the equivalent ovs-dpctl commands.

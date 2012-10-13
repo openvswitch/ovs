@@ -105,17 +105,21 @@ If one or more datapaths are specified, information on only those
 datapaths are displayed.  Otherwise, \fBovs\-dpctl\fR displays information
 about all configured datapaths.
 .
-.IP "\fBdump\-flows \fIdp\fR"
+.IP "\fBdump\-flows\fR [\fIdp\fR]"
 Prints to the console all flow entries in datapath \fIdp\fR's
-flow table.
+flow table.  If \fIdp\fR is not specified and exactly one datapath
+exists, the flows for that datapath will be printed.
 .IP
 This command is primarily useful for debugging Open vSwitch.  The flow
 table entries that it displays are not
 OpenFlow flow entries.  Instead, they are different and considerably
 simpler flows maintained by the Open vSwitch kernel module.  If you wish
 to see the OpenFlow flow entries, use \fBovs\-ofctl dump\-flows\fR.
-.IP "\fBdel\-flows \fIdp\fR"
-Deletes all flow entries from datapath \fIdp\fR's flow table.
+.
+.IP "\fBdel\-flows\fR [\fIdp\fR]"
+Deletes all flow entries from datapath \fIdp\fR's flow table.  If
+\fIdp\fR is not specified and exactly one datapath exists, the flows for
+that datapath will be deleted.
 .IP
 This command is primarily useful for debugging Open vSwitch.  As
 discussed in \fBdump\-flows\fR, these entries are
