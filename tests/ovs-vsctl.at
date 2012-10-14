@@ -378,7 +378,7 @@ AT_SETUP([controllers])
 AT_KEYWORDS([controller ovs-vsctl])
 OVS_VSCTL_SETUP
 AT_CHECK([RUN_OVS_VSCTL_TOGETHER(
-  [add-br br0], 
+  [add-br br0],
 
   [get-controller br0],
   [set-controller br0 tcp:4.5.6.7],
@@ -568,7 +568,7 @@ AT_CHECK(
                           [set o . bridges=@br0])],
   [0], [stdout], [], [OVS_VSCTL_CLEANUP])
 cp stdout out1
-AT_CHECK([RUN_OVS_VSCTL([list b], [get b br0 _uuid])], 
+AT_CHECK([RUN_OVS_VSCTL([list b], [get b br0 _uuid])],
   [0], [stdout], [], [OVS_VSCTL_CLEANUP])
 cp stdout out2
 AT_CHECK([perl $srcdir/uuidfilt.pl out1 out2], [0], 
@@ -624,12 +624,12 @@ AT_CHECK(
       'other_config:datapath_id="0123456789ab"' \
       'other_config:hwaddr="00:11:22:33:44:55"' \
       'external-ids={"uuids"="9c45f225-a7cf-439d-976d-83db6271fda1"}' -- \
-     add bridge br0 external_ids '"roles"="local; remote; cloud"'])], 
+     add bridge br0 external_ids '"roles"="local; remote; cloud"'])],
   [0], [], [], [OVS_VSCTL_CLEANUP])
-AT_CHECK([RUN_OVS_VSCTL_ONELINE([get bridge br0 other_config external-ids])], 
+AT_CHECK([RUN_OVS_VSCTL_ONELINE([get bridge br0 other_config external-ids])],
   [0], [{datapath_id="0123456789ab", hwaddr="00:11:22:33:44:55"}\n{roles="local; remote; cloud", uuids="9c45f225-a7cf-439d-976d-83db6271fda1"}
 ], [], [OVS_VSCTL_CLEANUP])
-AT_CHECK([RUN_OVS_VSCTL([get bridge br0 other_config:hwaddr -- --if-exists get bridge br0 other-config:nonexistent])], 
+AT_CHECK([RUN_OVS_VSCTL([get bridge br0 other_config:hwaddr -- --if-exists get bridge br0 other-config:nonexistent])],
   [0], ["00:11:22:33:44:55"
 
 ], [], [OVS_VSCTL_CLEANUP])

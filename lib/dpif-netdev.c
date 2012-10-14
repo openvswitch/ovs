@@ -198,10 +198,50 @@ create_dpif_netdev(struct dp_netdev *dp)
 }
 
 static int
+choose_port(struct dp_netdev *dp, const char *name)
+{
+    int port_no;
+
+    if (dp->class != &dpif_netdev_class) {
+        const char *p;
+        int start_no = 0;
+
+        /* If the port name begins with "br", start the number search at
+         * 100 to make writing tests easier. */
+        if (!strncmp(name, "br", 2)) {
+            start_no = 100;
+        }
+
+        /* If the port name contains a number, try to assign that port number.
+         * This can make writing unit tests easier because port numbers are
+         * predictable. */
+        for (p = name; *p != '\0'; p++) {
+            if (isdigit((unsigned char) *p)) {
+                port_no = start_no + strtol(p, NULL, 10);
+                if (port_no > 0 && port_no < MAX_PORTS
+                    && !dp->ports[port_no]) {
+                    return port_no;
+                }
+                break;
+            }
+        }
+    }
+
+    for (port_no = 1; port_no < MAX_PORTS; port_no++) {
+        if (!dp->ports[port_no]) {
+            return port_no;
+        }
+    }
+
+    return -1;
+}
+
+static int
 create_dp_netdev(const char *name, const struct dpif_class *class,
                  struct dp_netdev **dpp)
 {
     struct dp_netdev *dp;
+    int port_no;
     int error;
     int i;
 
@@ -214,7 +254,9 @@ create_dp_netdev(const char *name, const struct dpif_class *class,
     }
     hmap_init(&dp->flow_table);
     list_init(&dp->port_list);
-    error = do_add_port(dp, name, "internal", OVSP_LOCAL);
+
+    port_no = !strncmp(name, "br", 2) ? choose_port(dp, name) : OVSP_LOCAL;
+    error = do_add_port(dp, name, "internal", port_no);
     if (error) {
         dp_netdev_free(dp);
         return error;
@@ -371,39 +413,6 @@ do_add_port(struct dp_netdev *dp, const char *devname, const char *type,
 }
 
 static int
-choose_port(struct dpif *dpif, struct netdev *netdev)
-{
-    struct dp_netdev *dp = get_dp_netdev(dpif);
-    int port_no;
-
-    if (dpif->dpif_class != &dpif_netdev_class) {
-        /* If the port name contains a number, try to assign that port number.
-         * This can make writing unit tests easier because port numbers are
-         * predictable. */
-        const char *p;
-
-        for (p = netdev_get_name(netdev); *p != '\0'; p++) {
-            if (isdigit((unsigned char) *p)) {
-                port_no = strtol(p, NULL, 10);
-                if (port_no > 0 && port_no < MAX_PORTS
-                    && !dp->ports[port_no]) {
-                    return port_no;
-                }
-                break;
-            }
-        }
-    }
-
-    for (port_no = 0; port_no < MAX_PORTS; port_no++) {
-        if (!dp->ports[port_no]) {
-            return port_no;
-        }
-    }
-
-    return -1;
-}
-
-static int
 dpif_netdev_port_add(struct dpif *dpif, struct netdev *netdev,
                      uint32_t *port_nop)
 {
@@ -418,7 +427,7 @@ dpif_netdev_port_add(struct dpif *dpif, struct netdev *netdev,
         }
         port_no = *port_nop;
     } else {
-        port_no = choose_port(dpif, netdev);
+        port_no = choose_port(dp, netdev_get_name(netdev));
     }
     if (port_no >= 0) {
         *port_nop = port_no;

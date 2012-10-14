@@ -28,25 +28,29 @@ OVS_VSWITCHD_START(
        [add-port br0 p1 -- set Interface p1 type=dummy --\
         add-port br0 p2 -- set Interface p2 type=dummy ofport_request=99])
 AT_CHECK([ovs-ofctl -vwarn show br0], [0], [stdout])
-AT_CHECK([STRIP_XIDS stdout], [0], [dnl
+AT_CHECK([[sed '
+s/ (xid=0x[0-9a-fA-F]*)//
+s/00:0.$/00:0x/' < stdout]],
+      [0], [dnl
 OFPT_FEATURES_REPLY: dpid:fedcba9876543210
 n_tables:255, n_buffers:256
 capabilities: FLOW_STATS TABLE_STATS PORT_STATS QUEUE_STATS ARP_MATCH_IP
 actions: OUTPUT SET_VLAN_VID SET_VLAN_PCP STRIP_VLAN SET_DL_SRC SET_DL_DST SET_NW_SRC SET_NW_DST SET_NW_TOS SET_TP_SRC SET_TP_DST ENQUEUE
- 1(p1): addr:aa:55:aa:55:00:01
+ 1(p1): addr:aa:55:aa:55:00:0x
      config:     PORT_DOWN
      state:      LINK_DOWN
      speed: 100 Mbps now, 100 Mbps max
- 99(p2): addr:aa:55:aa:55:00:02
+ 99(p2): addr:aa:55:aa:55:00:0x
      config:     PORT_DOWN
      state:      LINK_DOWN
      speed: 100 Mbps now, 100 Mbps max
- LOCAL(br0): addr:aa:55:aa:55:00:00
+ LOCAL(br0): addr:aa:55:aa:55:00:0x
      config:     PORT_DOWN
      state:      LINK_DOWN
      speed: 100 Mbps now, 100 Mbps max
 OFPT_GET_CONFIG_REPLY: frags=normal miss_send_len=0
 ])
+
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
