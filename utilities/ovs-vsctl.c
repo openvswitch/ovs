@@ -3995,7 +3995,7 @@ static const struct vsctl_command_syntax all_commands[] = {
 
     /* Manager commands. */
     {"get-manager", 0, 0, pre_manager, cmd_get_manager, NULL, "", RO},
-    {"del-manager", 0, INT_MAX, pre_manager, cmd_del_manager, NULL, "", RW},
+    {"del-manager", 0, 0, pre_manager, cmd_del_manager, NULL, "", RW},
     {"set-manager", 1, INT_MAX, pre_manager, cmd_set_manager, NULL, "", RW},
 
     /* SSL commands. */
