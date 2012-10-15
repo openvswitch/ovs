@@ -428,6 +428,7 @@ exit 0
 /usr/bin/ovs-appctl
 /usr/bin/ovs-dpctl
 /usr/bin/ovs-ofctl
+/usr/bin/ovs-parse-backtrace
 /usr/bin/ovs-parse-leaks
 /usr/bin/ovs-pcap
 /usr/bin/ovs-tcpundump
@@ -444,6 +445,7 @@ exit 0
 /usr/share/man/man8/ovs-ctl.8.gz
 /usr/share/man/man8/ovs-dpctl.8.gz
 /usr/share/man/man8/ovs-ofctl.8.gz
+/usr/share/man/man8/ovs-parse-backtrace.8.gz
 /usr/share/man/man8/ovs-parse-leaks.8.gz
 /usr/share/man/man1/ovs-pcap.1.gz
 /usr/share/man/man1/ovs-tcpundump.1.gz

@@ -8,6 +8,7 @@ bin_SCRIPTS += utilities/ovs-pki utilities/ovs-parse-leaks
 if HAVE_PYTHON
 bin_SCRIPTS += \
 	utilities/ovs-l3ping \
+	utilities/ovs-parse-backtrace \
 	utilities/ovs-pcap \
 	utilities/ovs-tcpundump \
 	utilities/ovs-test \
@@ -24,6 +25,7 @@ EXTRA_DIST += \
 	utilities/ovs-ctl.in \
 	utilities/ovs-l3ping.in \
 	utilities/ovs-lib.in \
+	utilities/ovs-parse-backtrace.in \
 	utilities/ovs-parse-leaks.in \
 	utilities/ovs-pcap.in \
 	utilities/ovs-pki.in \
@@ -39,6 +41,7 @@ MAN_ROOTS += \
 	utilities/ovs-dpctl.8.in \
 	utilities/ovs-l3ping.8.in \
 	utilities/ovs-ofctl.8.in \
+	utilities/ovs-parse-backtrace.8 \
 	utilities/ovs-parse-leaks.8 \
 	utilities/ovs-pcap.1.in \
 	utilities/ovs-pki.8.in \
@@ -59,6 +62,7 @@ DISTCLEANFILES += \
 	utilities/ovs-l3ping.8 \
 	utilities/ovs-lib \
 	utilities/ovs-ofctl.8 \
+	utilities/ovs-parse-backtrace \
 	utilities/ovs-parse-leaks \
 	utilities/ovs-pcap \
 	utilities/ovs-pcap.1 \
@@ -80,6 +84,7 @@ man_MANS += \
 	utilities/ovs-dpctl.8 \
 	utilities/ovs-l3ping.8 \
 	utilities/ovs-ofctl.8 \
+	utilities/ovs-parse-backtrace.8 \
 	utilities/ovs-parse-leaks.8 \
 	utilities/ovs-pcap.1 \
 	utilities/ovs-pki.8 \

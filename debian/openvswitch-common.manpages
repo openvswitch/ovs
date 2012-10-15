@@ -5,4 +5,5 @@ _debian/utilities/ovs-benchmark.1
 _debian/utilities/ovs-ofctl.8
 _debian/utilities/ovs-pki.8
 utilities/bugtool/ovs-bugtool.8
+utilities/ovs-parse-backtrace.8
 utilities/ovs-parse-leaks.8

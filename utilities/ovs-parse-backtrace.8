@@ -1,0 +1,28 @@
+.TH ovs\-parse\-backtrace 8 "October 2012" "Open vSwitch" "Open vSwitch Manual"
+.
+.SH NAME
+ovs\-parse\-backtrace \- parses ovs-appctl backtrace output
+.
+.SH SYNOPSIS
+\fBovs\-appctl backtrace\fR | \fBovs\-parse\-backtrace\fR [\fIbinary\fR]
+.P
+\fBovs\-parse\-backtrace\fR [\fIbinary\fR] < \fIbacktrace\fR
+.
+.SH DESCRIPTION
+In some configurations, many Open vSwitch daemons can produce a series of
+backtraces using the \fBovs\-appctl backtrace\fR command.  Users can analyze
+these backtraces to figure out what the given Open vSwitch daemon may be
+spending most of its time doing.  \fBovs\-parse\-backtrace\fR makes this output
+easier to interpret.
+.PP
+The \fBovs\-appctl backtrace\fR output must be supplied on standard input.  The
+binary that produced the output should be supplied as the sole non-option
+argument.  For best results, the binary should have debug symbols.
+.
+.SH OPTIONS
+.TP
+\fB\-\-help\fR
+Prints a usage message and exits.
+.P
+\fB\-\-version\fR
+Prints the version and exits.
