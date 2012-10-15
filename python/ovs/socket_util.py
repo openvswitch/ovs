@@ -88,13 +88,13 @@ def inet_parse_active(target, default_port):
     address = target.split(":")
     host_name = address[0]
     if not host_name:
-        raise Exception("%s: bad peer name format" % target)
+        raise ValueError("%s: bad peer name format" % target)
     if len(address) >= 2:
         port = int(address[1])
     elif default_port:
         port = default_port
     else:
-        raise Exception("%s: port number must be specified" % target)
+        raise ValueError("%s: port number must be specified" % target)
     return (host_name, port)
 
 
@@ -187,6 +187,6 @@ def set_nonblocking(sock):
 
 def set_dscp(sock, dscp):
     if dscp > 63:
-        raise Exception("Invalid dscp %d" % dscp)
+        raise ValueError("Invalid dscp %d" % dscp)
     val = dscp << 2
     sock.setsockopt(socket.IPPROTO_IP, socket.IP_TOS, val)
