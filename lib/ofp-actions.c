@@ -1544,8 +1544,7 @@ ofpacts_put_openflow11_instructions(const struct ofpact ofpacts[],
         /* TODO:XXX Write-Actions */
         /* TODO:XXX Write-Metadata */
         if (a->type == OFPACT_CLEAR_ACTIONS) {
-            struct ofp11_instruction *oi;
-            oi = instruction_put_OFPIT11_CLEAR_ACTIONS(openflow);
+            instruction_put_OFPIT11_CLEAR_ACTIONS(openflow);
         } else if (a->type == OFPACT_GOTO_TABLE) {
             struct ofp11_instruction_goto_table *oigt;
 
