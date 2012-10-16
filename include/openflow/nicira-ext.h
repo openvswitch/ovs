@@ -502,6 +502,10 @@ OFP_ASSERT(sizeof(struct nx_action_pop_queue) == 16);
  * The switch will reject actions for which src_ofs+n_bits is greater than the
  * width of 'src' or dst_ofs+n_bits is greater than the width of 'dst' with
  * error type OFPET_BAD_ACTION, code OFPBAC_BAD_ARGUMENT.
+ *
+ * This action behaves properly when 'src' overlaps with 'dst', that is, it
+ * behaves as if 'src' were copied out to a temporary buffer, then the
+ * temporary buffer copied to 'dst'.
  */
 struct nx_action_reg_move {
     ovs_be16 type;                  /* OFPAT_VENDOR. */
