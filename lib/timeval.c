@@ -375,7 +375,7 @@ time_poll(struct pollfd *pollfds, int n_pollfds, long long int timeout_when,
             break;
         }
 
-        if (!blocked && !CACHE_TIME) {
+        if (!blocked && CACHE_TIME && !backtrace_conn) {
             block_sigalrm(&oldsigs);
             blocked = true;
         }
