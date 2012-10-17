@@ -160,6 +160,9 @@ AT_DATA([test-data], [dnl
 # actions=mod_tp_dst:443
 000a 0008 01bb 0000
 
+# actions=strip_vlan
+0012 0008 00000000
+
 # actions=resubmit:5
 ffff 0010 00002320 0001 0005 00000000
 

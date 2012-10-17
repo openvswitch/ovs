@@ -685,6 +685,10 @@ ofpact_from_openflow11(const union ofp_action *a, struct ofpbuf *out)
         ofpact_put_SET_VLAN_PCP(out)->vlan_pcp = a->vlan_pcp.vlan_pcp;
         break;
 
+    case OFPUTIL_OFPAT11_POP_VLAN:
+        ofpact_put_STRIP_VLAN(out);
+        break;
+
     case OFPUTIL_OFPAT11_SET_DL_SRC:
         memcpy(ofpact_put_SET_ETH_SRC(out)->mac,
                ((const struct ofp_action_dl_addr *) a)->dl_addr, ETH_ADDR_LEN);
@@ -1443,7 +1447,7 @@ ofpact_to_openflow11(const struct ofpact *a, struct ofpbuf *out)
         break;
 
     case OFPACT_STRIP_VLAN:
-        /* XXX */
+        ofputil_put_OFPAT11_POP_VLAN(out);
         break;
 
     case OFPACT_SET_ETH_SRC:

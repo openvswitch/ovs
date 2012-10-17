@@ -177,7 +177,7 @@ ofpact_end(const struct ofpact *ofpacts, size_t ofpacts_len)
 /* OFPACT_STRIP_VLAN, OFPACT_POP_QUEUE, OFPACT_EXIT, OFPACT_CLEAR_ACTIONS.
  *
  * Used for OFPAT10_STRIP_VLAN, NXAST_POP_QUEUE, NXAST_EXIT,
- * OFPIT11_CLEAR_ACTIONS.
+ * OFPAT11_POP_VLAN, OFPIT11_CLEAR_ACTIONS.
  *
  * Action structure for actions that do not have any extra data beyond the
  * action type. */
