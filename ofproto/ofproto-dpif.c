@@ -368,6 +368,8 @@ struct subfacet {
     ovs_be16 initial_tci;       /* Initial VLAN TCI value. */
 };
 
+#define SUBFACET_DESTROY_MAX_BATCH 50
+
 static struct subfacet *subfacet_create(struct facet *, enum odp_key_fitness,
                                         const struct nlattr *key,
                                         size_t key_len, ovs_be16 initial_tci,
@@ -376,6 +378,8 @@ static struct subfacet *subfacet_find(struct ofproto_dpif *,
                                       const struct nlattr *key, size_t key_len);
 static void subfacet_destroy(struct subfacet *);
 static void subfacet_destroy__(struct subfacet *);
+static void subfacet_destroy_batch(struct ofproto_dpif *,
+                                   struct subfacet **, int n);
 static void subfacet_get_key(struct subfacet *, struct odputil_keybuf *,
                              struct ofpbuf *key);
 static void subfacet_reset_dp_stats(struct subfacet *,
@@ -3564,35 +3568,6 @@ subfacet_max_idle(const struct ofproto_dpif *ofproto)
     return bucket * BUCKET_WIDTH;
 }
 
-enum { EXPIRE_MAX_BATCH = 50 };
-
-static void
-expire_batch(struct ofproto_dpif *ofproto, struct subfacet **subfacets, int n)
-{
-    struct odputil_keybuf keybufs[EXPIRE_MAX_BATCH];
-    struct dpif_op ops[EXPIRE_MAX_BATCH];
-    struct dpif_op *opsp[EXPIRE_MAX_BATCH];
-    struct ofpbuf keys[EXPIRE_MAX_BATCH];
-    struct dpif_flow_stats stats[EXPIRE_MAX_BATCH];
-    int i;
-
-    for (i = 0; i < n; i++) {
-        ops[i].type = DPIF_OP_FLOW_DEL;
-        subfacet_get_key(subfacets[i], &keybufs[i], &keys[i]);
-        ops[i].u.flow_del.key = keys[i].data;
-        ops[i].u.flow_del.key_len = keys[i].size;
-        ops[i].u.flow_del.stats = &stats[i];
-        opsp[i] = &ops[i];
-    }
-
-    dpif_operate(ofproto->dpif, opsp, n);
-    for (i = 0; i < n; i++) {
-        subfacet_reset_dp_stats(subfacets[i], &stats[i]);
-        subfacets[i]->path = SF_NOT_INSTALLED;
-        subfacet_destroy(subfacets[i]);
-    }
-}
-
 static void
 expire_subfacets(struct ofproto_dpif *ofproto, int dp_max_idle)
 {
@@ -3604,7 +3579,7 @@ expire_subfacets(struct ofproto_dpif *ofproto, int dp_max_idle)
     long long int special_cutoff = time_msec() - 10000;
 
     struct subfacet *subfacet, *next_subfacet;
-    struct subfacet *batch[EXPIRE_MAX_BATCH];
+    struct subfacet *batch[SUBFACET_DESTROY_MAX_BATCH];
     int n_batch;
 
     n_batch = 0;
@@ -3618,8 +3593,8 @@ expire_subfacets(struct ofproto_dpif *ofproto, int dp_max_idle)
         if (subfacet->used < cutoff) {
             if (subfacet->path != SF_NOT_INSTALLED) {
                 batch[n_batch++] = subfacet;
-                if (n_batch >= EXPIRE_MAX_BATCH) {
-                    expire_batch(ofproto, batch, n_batch);
+                if (n_batch >= SUBFACET_DESTROY_MAX_BATCH) {
+                    subfacet_destroy_batch(ofproto, batch, n_batch);
                     n_batch = 0;
                 }
             } else {
@@ -3629,7 +3604,7 @@ expire_subfacets(struct ofproto_dpif *ofproto, int dp_max_idle)
     }
 
     if (n_batch > 0) {
-        expire_batch(ofproto, batch, n_batch);
+        subfacet_destroy_batch(ofproto, batch, n_batch);
     }
 }
 
@@ -4410,6 +4385,34 @@ subfacet_destroy(struct subfacet *subfacet)
         facet_remove(facet);
     } else {
         subfacet_destroy__(subfacet);
+    }
+}
+
+static void
+subfacet_destroy_batch(struct ofproto_dpif *ofproto,
+                       struct subfacet **subfacets, int n)
+{
+    struct odputil_keybuf keybufs[SUBFACET_DESTROY_MAX_BATCH];
+    struct dpif_op ops[SUBFACET_DESTROY_MAX_BATCH];
+    struct dpif_op *opsp[SUBFACET_DESTROY_MAX_BATCH];
+    struct ofpbuf keys[SUBFACET_DESTROY_MAX_BATCH];
+    struct dpif_flow_stats stats[SUBFACET_DESTROY_MAX_BATCH];
+    int i;
+
+    for (i = 0; i < n; i++) {
+        ops[i].type = DPIF_OP_FLOW_DEL;
+        subfacet_get_key(subfacets[i], &keybufs[i], &keys[i]);
+        ops[i].u.flow_del.key = keys[i].data;
+        ops[i].u.flow_del.key_len = keys[i].size;
+        ops[i].u.flow_del.stats = &stats[i];
+        opsp[i] = &ops[i];
+    }
+
+    dpif_operate(ofproto->dpif, opsp, n);
+    for (i = 0; i < n; i++) {
+        subfacet_reset_dp_stats(subfacets[i], &stats[i]);
+        subfacets[i]->path = SF_NOT_INSTALLED;
+        subfacet_destroy(subfacets[i]);
     }
 }
 
