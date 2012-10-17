@@ -75,9 +75,8 @@ struct trace {
 };
 
 #define MAX_TRACES 50
-static struct unixctl_conn *backtrace_conn = NULL;
-static struct trace *traces = NULL;
-static size_t n_traces = 0;
+static struct trace traces[MAX_TRACES];
+static size_t trace_head = 0;
 
 static void set_up_timer(void);
 static void set_up_signal(int flags);
@@ -91,7 +90,6 @@ static struct rusage *get_recent_rusage(void);
 static void refresh_rusage(void);
 static void timespec_add(struct timespec *sum,
                          const struct timespec *a, const struct timespec *b);
-static void trace_run(void);
 static unixctl_cb_func backtrace_cb;
 
 /* Initializes the timetracking module, if not already initialized. */
@@ -100,15 +98,12 @@ time_init(void)
 {
     static bool inited;
 
-    /* The best place to do this is probably a timeval_run() function.
-     * However, none exists and this function is usually so fast that doing it
-     * here seems fine for now. */
-    trace_run();
-
     if (inited) {
         return;
     }
     inited = true;
+
+    memset(traces, 0, sizeof traces);
 
     if (HAVE_EXECINFO_H && CACHE_TIME) {
         unixctl_command_register("backtrace", "", 0, 0, backtrace_cb, NULL);
@@ -377,7 +372,7 @@ time_poll(struct pollfd *pollfds, int n_pollfds, long long int timeout_when,
             break;
         }
 
-        if (!blocked && CACHE_TIME && !backtrace_conn) {
+        if (!blocked && CACHE_TIME) {
             block_sigalrm(&oldsigs);
             blocked = true;
         }
@@ -398,10 +393,12 @@ sigalrm_handler(int sig_nr OVS_UNUSED)
     monotonic_tick = true;
 
 #if HAVE_EXECINFO_H
-    if (backtrace_conn && n_traces < MAX_TRACES) {
-        struct trace *trace = &traces[n_traces++];
+    if (CACHE_TIME) {
+        struct trace *trace = &traces[trace_head];
+
         trace->n_frames = backtrace(trace->backtrace,
                                     ARRAY_SIZE(trace->backtrace));
+        trace_head = (trace_head + 1) % MAX_TRACES;
     }
 #endif
 }
@@ -581,42 +578,38 @@ get_cpu_usage(void)
 }
 
 static void
-trace_run(void)
+format_backtraces(struct ds *ds)
 {
+    time_init();
+
 #if HAVE_EXECINFO_H
-    if (backtrace_conn && n_traces >= MAX_TRACES) {
-        struct unixctl_conn *reply_conn = backtrace_conn;
-        struct ds ds = DS_EMPTY_INITIALIZER;
+    if (CACHE_TIME) {
         sigset_t oldsigs;
         size_t i;
 
         block_sigalrm(&oldsigs);
 
-        for (i = 0; i < n_traces; i++) {
+        for (i = 0; i < MAX_TRACES; i++) {
             struct trace *trace = &traces[i];
             char **frame_strs;
             size_t j;
 
+            if (!trace->n_frames) {
+                continue;
+            }
+
             frame_strs = backtrace_symbols(trace->backtrace, trace->n_frames);
 
-            ds_put_format(&ds, "Backtrace %zu\n", i + 1);
+            ds_put_format(ds, "Backtrace %zu\n", i + 1);
             for (j = 0; j < trace->n_frames; j++) {
-                ds_put_format(&ds, "%s\n", frame_strs[j]);
+                ds_put_format(ds, "%s\n", frame_strs[j]);
             }
-            ds_put_cstr(&ds, "\n");
+            ds_put_cstr(ds, "\n");
 
             free(frame_strs);
         }
-
-        free(traces);
-        traces = NULL;
-        n_traces = 0;
-        backtrace_conn = NULL;
-
+        ds_chomp(ds, '\n');
         unblock_sigalrm(&oldsigs);
-
-        unixctl_command_reply(reply_conn, ds_cstr(&ds));
-        ds_destroy(&ds);
     }
 #endif
 }
@@ -664,21 +657,12 @@ backtrace_cb(struct unixctl_conn *conn,
              int argc OVS_UNUSED, const char *argv[] OVS_UNUSED,
              void *aux OVS_UNUSED)
 {
-    sigset_t oldsigs;
+    struct ds ds = DS_EMPTY_INITIALIZER;
 
     assert(HAVE_EXECINFO_H && CACHE_TIME);
-
-    if (backtrace_conn) {
-        unixctl_command_reply_error(conn, "In Use");
-        return;
-    }
-    assert(!traces);
-
-    block_sigalrm(&oldsigs);
-    backtrace_conn = conn;
-    traces = xmalloc(MAX_TRACES * sizeof *traces);
-    n_traces = 0;
-    unblock_sigalrm(&oldsigs);
+    format_backtraces(&ds);
+    unixctl_command_reply(conn, ds_cstr(&ds));
+    ds_destroy(&ds);
 }
 
 void
