@@ -3562,10 +3562,7 @@ ofputil_port_from_string(const char *s, uint16_t *portp)
 
     *portp = 0;
     if (str_to_uint(s, 10, &port32)) {
-        if (port32 == 0) {
-            VLOG_WARN("port 0 is not a valid OpenFlow port number");
-            return false;
-        } else if (port32 < OFPP_MAX) {
+        if (port32 < OFPP_MAX) {
             *portp = port32;
             return true;
         } else if (port32 < OFPP_FIRST_RESV) {

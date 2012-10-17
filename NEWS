@@ -15,8 +15,6 @@ post-v1.8.0
         also the recommended way to specify these ports, for compatibility
         with OpenFlow 1.1 and later (which use the OpenFlow 1.0 numbers
         for these ports for different purposes).
-      - Commands and actions that accept port numbers no longer accept port 0,
-        which is not a valid port number in OpenFlow 1.0 and later.
     - ovs-dpctl:
       - Support requesting the port number with the "port_no" option in
         the "add-if" command.

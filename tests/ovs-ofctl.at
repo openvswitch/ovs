@@ -11,6 +11,7 @@ udp,nw_src=192.168.0.3,tp_dst=53 actions=pop_queue,output:1
 cookie=0x123456789abcdef hard_timeout=10 priority=60000 actions=controller
 actions=note:41.42.43,note:00.01.02.03.04.05.06.07,note
 actions=set_field:fe80:0123:4567:890a:a6ba:dbff:fefe:59fa->ipv6_src
+in_port=0 actions=resubmit:0
 ]])
 
 AT_CHECK([ovs-ofctl parse-flows flows.txt
@@ -26,6 +27,7 @@ OFPT_FLOW_MOD: ADD udp,nw_src=192.168.0.3,tp_dst=53 actions=pop_queue,output:1
 OFPT_FLOW_MOD: ADD priority=60000 cookie:0x123456789abcdef hard:10 actions=CONTROLLER:65535
 OFPT_FLOW_MOD: ADD actions=note:41.42.43.00.00.00,note:00.01.02.03.04.05.06.07.00.00.00.00.00.00,note:00.00.00.00.00.00
 OFPT_FLOW_MOD: ADD actions=load:0xa6badbfffefe59fa->NXM_NX_IPV6_SRC[0..63],load:0xfe8001234567890a->NXM_NX_IPV6_SRC[64..127]
+OFPT_FLOW_MOD: ADD in_port=0 actions=resubmit:0
 ]])
 AT_CLEANUP
 
