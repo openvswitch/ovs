@@ -54,11 +54,8 @@ class Stream(object):
     _SOCKET_METHODS = {}
 
     @staticmethod
-    def register_method(method):
-        def _register_method(cls):
-            Stream._SOCKET_METHODS[method + ":"] = cls
-            return cls
-        return _register_method
+    def register_method(method, cls):
+        Stream._SOCKET_METHODS[method + ":"] = cls
 
     @staticmethod
     def _find_method(name):
@@ -350,7 +347,7 @@ class UnixStream(Stream):
         connect_path = suffix
         return  ovs.socket_util.make_unix_socket(socket.SOCK_STREAM,
                                                  True, None, connect_path)
-UnixStream = Stream.register_method("unix")(UnixStream)
+Stream.register_method("unix", UnixStream)
 
 
 class TCPStream(Stream):
@@ -361,4 +358,4 @@ class TCPStream(Stream):
         if not error:
             sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         return error, sock
-TCPStream = Stream.register_method("tcp")(TCPStream)
+Stream.register_method("tcp", TCPStream)
