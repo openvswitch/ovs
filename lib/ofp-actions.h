@@ -176,7 +176,7 @@ ofpact_end(const struct ofpact *ofpacts, size_t ofpacts_len)
 
 /* OFPACT_STRIP_VLAN, OFPACT_POP_QUEUE, OFPACT_EXIT, OFPACT_CLEAR_ACTIONS.
  *
- * Used for OFPAT10_STRIP_VLAN, NXAST_DEC_TTL, NXAST_POP_QUEUE, NXAST_EXIT,
+ * Used for OFPAT10_STRIP_VLAN, NXAST_POP_QUEUE, NXAST_EXIT,
  * OFPIT11_CLEAR_ACTIONS.
  *
  * Action structure for actions that do not have any extra data beyond the
@@ -412,7 +412,7 @@ struct ofpact_note {
 
 /* OFPACT_DEC_TTL.
  *
- * Used for NXAST_DEC_TTL and NXAST_DEC_TTL_CNT_IDS. */
+ * Used for OFPAT11_DEC_NW_TTL, NXAST_DEC_TTL and NXAST_DEC_TTL_CNT_IDS. */
 struct ofpact_cnt_ids {
     struct ofpact ofpact;
 

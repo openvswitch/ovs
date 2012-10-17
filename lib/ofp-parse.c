@@ -280,22 +280,29 @@ parse_controller(struct ofpbuf *b, char *arg)
 }
 
 static void
-parse_dec_ttl(struct ofpbuf *b, char *arg)
+parse_noargs_dec_ttl(struct ofpbuf *b, enum ofputil_action_code compat)
 {
     struct ofpact_cnt_ids *ids;
+    uint16_t id = 0;
 
     ids = ofpact_put_DEC_TTL(b);
+    ids->ofpact.compat = compat;
+    ofpbuf_put(b, &id, sizeof id);
+    ids = b->l2;
+    ids->n_controllers++;
+    ofpact_update_len(b, &ids->ofpact);
+}
 
+static void
+parse_dec_ttl(struct ofpbuf *b, char *arg, enum ofputil_action_code compat)
+{
     if (*arg == '\0') {
-        uint16_t id = 0;
-
-        ids->ofpact.compat = OFPUTIL_NXAST_DEC_TTL;
-        ofpbuf_put(b, &id, sizeof id);
-        ids = b->l2;
-        ids->n_controllers++;
+        parse_noargs_dec_ttl(b, compat);
     } else {
+        struct ofpact_cnt_ids *ids;
         char *cntr;
 
+        ids = ofpact_put_DEC_TTL(b);
         ids->ofpact.compat = OFPUTIL_NXAST_DEC_TTL_CNT_IDS;
         for (cntr = strtok_r(arg, ", ", &arg); cntr != NULL;
              cntr = strtok_r(NULL, ", ", &arg)) {
@@ -309,9 +316,8 @@ parse_dec_ttl(struct ofpbuf *b, char *arg)
             ovs_fatal(0, "dec_ttl_cnt_ids: expected at least one controller "
                       "id.");
         }
-
+        ofpact_update_len(b, &ids->ofpact);
     }
-    ofpact_update_len(b, &ids->ofpact);
 }
 
 static void
@@ -432,6 +438,10 @@ parse_named_action(enum ofputil_action_code code, const struct flow *flow,
         ofpact_put_SET_IPV4_DSCP(ofpacts)->dscp = tos;
         break;
 
+    case OFPUTIL_OFPAT11_DEC_NW_TTL:
+        parse_noargs_dec_ttl(ofpacts, code);
+        break;
+
     case OFPUTIL_OFPAT10_SET_TP_SRC:
     case OFPUTIL_OFPAT11_SET_TP_SRC:
         ofpact_put_SET_L4_SRC_PORT(ofpacts)->port = str_to_u32(arg);
@@ -507,7 +517,7 @@ parse_named_action(enum ofputil_action_code code, const struct flow *flow,
         break;
 
     case OFPUTIL_NXAST_DEC_TTL:
-        parse_dec_ttl(ofpacts, arg);
+        parse_dec_ttl(ofpacts, arg, code);
         break;
 
     case OFPUTIL_NXAST_FIN_TIMEOUT:

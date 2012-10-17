@@ -149,14 +149,14 @@ note_from_openflow(const struct nx_action_note *nan, struct ofpbuf *out)
 }
 
 static enum ofperr
-dec_ttl_from_openflow(struct ofpbuf *out)
+dec_ttl_from_openflow(struct ofpbuf *out, enum ofputil_action_code compat)
 {
     uint16_t id = 0;
     struct ofpact_cnt_ids *ids;
     enum ofperr error = 0;
 
     ids = ofpact_put_DEC_TTL(out);
-    ids->ofpact.compat = OFPUTIL_NXAST_DEC_TTL;
+    ids->ofpact.compat = compat;
     ids->n_controllers = 1;
     ofpbuf_put(out, &id, sizeof id);
     ids = out->l2;
@@ -362,7 +362,7 @@ ofpact_from_nxast(const union ofp_action *a, enum ofputil_action_code code,
         break;
 
     case OFPUTIL_NXAST_DEC_TTL:
-        error = dec_ttl_from_openflow(out);
+        error = dec_ttl_from_openflow(out, code);
         break;
 
     case OFPUTIL_NXAST_DEC_TTL_CNT_IDS:
@@ -693,6 +693,10 @@ ofpact_from_openflow11(const union ofp_action *a, struct ofpbuf *out)
     case OFPUTIL_OFPAT11_SET_DL_DST:
         memcpy(ofpact_put_SET_ETH_DST(out)->mac,
                ((const struct ofp_action_dl_addr *) a)->dl_addr, ETH_ADDR_LEN);
+        break;
+
+    case OFPUTIL_OFPAT11_DEC_NW_TTL:
+        dec_ttl_from_openflow(out, code);
         break;
 
     case OFPUTIL_OFPAT11_SET_NW_SRC:
@@ -1477,6 +1481,14 @@ ofpact_to_openflow11(const struct ofpact *a, struct ofpbuf *out)
             = htons(ofpact_get_SET_L4_DST_PORT(a)->port);
         break;
 
+    case OFPACT_DEC_TTL:
+        if (a->compat == OFPUTIL_OFPAT11_DEC_NW_TTL) {
+            ofputil_put_OFPAT11_DEC_NW_TTL(out);
+        } else {
+            ofpact_to_nxast(a, out);
+        }
+        break;
+
     case OFPACT_CLEAR_ACTIONS:
     case OFPACT_GOTO_TABLE:
         NOT_REACHED();
@@ -1486,7 +1498,6 @@ ofpact_to_openflow11(const struct ofpact *a, struct ofpbuf *out)
     case OFPACT_BUNDLE:
     case OFPACT_REG_MOVE:
     case OFPACT_REG_LOAD:
-    case OFPACT_DEC_TTL:
     case OFPACT_SET_TUNNEL:
     case OFPACT_SET_QUEUE:
     case OFPACT_POP_QUEUE:

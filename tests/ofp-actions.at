@@ -218,8 +218,13 @@ ffff 0048 00002320 0010 000a 0014 0050 123456789abcdef0 0000 02 00 0002 0004 dnl
 # actions=exit
 ffff 0010 00002320 0011 000000000000
 
+dnl NXAST_DEC_TTL
 # actions=dec_ttl
 ffff 0010 00002320 0012 000000000000
+
+dnl OpenFlow 1.1 OFPAT_DEC_TTL
+# actions=dec_ttl
+0018 0008 00000000
 
 # actions=fin_timeout(idle_timeout=10,hard_timeout=20)
 ffff 0010 00002320 0013 000a 0014 0000
