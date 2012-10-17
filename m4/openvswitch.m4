@@ -46,6 +46,22 @@ AC_DEFUN([OVS_CHECK_NDEBUG],
      [ndebug=false])
    AM_CONDITIONAL([NDEBUG], [test x$ndebug = xtrue])])
 
+dnl Checks for --enable-cache-time and defines CACHE_TIME if it is specified.
+AC_DEFUN([OVS_CHECK_CACHE_TIME],
+  [AC_ARG_ENABLE(
+     [cache-time],
+     [AC_HELP_STRING([--enable-cache-time],
+                     [Override time caching default (for testing only)])],
+     [case "${enableval}" in
+        (yes) cache_time=1;;
+        (no)  cache_time=0;;
+        (*) AC_MSG_ERROR([bad value ${enableval} for --enable-cache-time]) ;;
+      esac
+      AC_DEFINE_UNQUOTED([CACHE_TIME], [$cache_time],
+          [Define to 1 to enable time caching, to 0 to disable time caching, or
+           leave undefined to use the default (as one should
+           ordinarily do).])])])
+
 dnl Checks for ESX.
 AC_DEFUN([OVS_CHECK_ESX],
   [AC_CHECK_HEADER([vmware.h],

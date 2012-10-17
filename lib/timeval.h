@@ -54,11 +54,13 @@ BUILD_ASSERT_DECL(TYPE_IS_SIGNED(time_t));
  *
  * Also false on systems (e.g. ESX) that don't support setting up timers based
  * on a monotonically increasing clock. */
+#ifndef CACHE_TIME
 #if defined ESX || (defined __x86_64__ && defined LINUX_DATAPATH)
 #define CACHE_TIME 0
 #else
 #define CACHE_TIME 1
 #endif
+#endif /* ifndef CACHE_TIME */
 
 void time_disable_restart(void);
 void time_enable_restart(void);
