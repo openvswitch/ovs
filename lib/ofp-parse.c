@@ -168,8 +168,7 @@ parse_resubmit(char *arg, struct ofpbuf *ofpacts)
 
     in_port_s = strsep(&arg, ",");
     if (in_port_s && in_port_s[0]) {
-        resubmit->in_port = ofputil_port_from_string(in_port_s);
-        if (!resubmit->in_port) {
+        if (!ofputil_port_from_string(in_port_s, &resubmit->in_port)) {
             ovs_fatal(0, "%s: resubmit to unknown port", in_port_s);
         }
     } else {
@@ -547,8 +546,8 @@ str_to_ofpact__(const struct flow *flow, char *pos, char *act, char *arg,
         }
         return false;
     } else {
-        uint16_t port = ofputil_port_from_string(act);
-        if (port) {
+        uint16_t port;
+        if (ofputil_port_from_string(act, &port)) {
             ofpact_put_OUTPUT(ofpacts)->port = port;
         } else {
             ovs_fatal(0, "Unknown action: %s", act);
@@ -823,8 +822,7 @@ parse_ofp_str(struct ofputil_flow_mod *fm, int command, const char *str_,
             if (!strcmp(name, "table")) {
                 fm->table_id = str_to_table_id(value);
             } else if (!strcmp(name, "out_port")) {
-                fm->out_port = ofputil_port_from_string(name);
-                if (!fm->out_port) {
+                if (!ofputil_port_from_string(name, &fm->out_port)) {
                     ofp_fatal(str_, verbose, "%s is not a valid OpenFlow port",
                               name);
                 }

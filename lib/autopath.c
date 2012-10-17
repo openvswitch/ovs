@@ -37,6 +37,7 @@ autopath_parse(struct ofpact_autopath *ap, const char *s_)
 {
     char *s;
     char *id_str, *dst, *save_ptr;
+    uint16_t port;
 
     ofpact_init_AUTOPATH(ap);
 
@@ -49,10 +50,10 @@ autopath_parse(struct ofpact_autopath *ap, const char *s_)
         ovs_fatal(0, "%s: not enough arguments to autopath action", s_);
     }
 
-    ap->port = ofputil_port_from_string(id_str);
-    if (!ap->port) {
+    if (!ofputil_port_from_string(id_str, &port)) {
         ovs_fatal(0, "%s: bad port number", s_);
     }
+    ap->port = port;
 
     mf_parse_subfield(&ap->dst, dst);
     if (ap->dst.n_bits < 16) {

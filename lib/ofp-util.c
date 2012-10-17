@@ -3542,34 +3542,38 @@ ofputil_check_output_port(uint16_t port, int max_ports)
         OFPUTIL_NAMED_PORT(LOCAL)               \
         OFPUTIL_NAMED_PORT(NONE)
 
-/* Returns the port number represented by 's', which may be an integer or, for
- * reserved ports, the standard OpenFlow name for the port (e.g. "LOCAL").
+/* Stores the port number represented by 's' into '*portp'.  's' may be an
+ * integer or, for reserved ports, the standard OpenFlow name for the port
+ * (e.g. "LOCAL").
  *
- * Returns 0 if 's' is not a valid OpenFlow port number or name.  The caller
- * should issue an error message in this case, because this function usually
- * does not.  (This gives the caller an opportunity to look up the port name
- * another way, e.g. by contacting the switch and listing the names of all its
- * ports).
+ * Returns true if successful, false if 's' is not a valid OpenFlow port number
+ * or name.  The caller should issue an error message in this case, because
+ * this function usually does not.  (This gives the caller an opportunity to
+ * look up the port name another way, e.g. by contacting the switch and listing
+ * the names of all its ports).
  *
  * This function accepts OpenFlow 1.0 port numbers.  It also accepts a subset
  * of OpenFlow 1.1+ port numbers, mapping those port numbers into the 16-bit
  * range as described in include/openflow/openflow-1.1.h. */
-uint16_t
-ofputil_port_from_string(const char *s)
+bool
+ofputil_port_from_string(const char *s, uint16_t *portp)
 {
     unsigned int port32;
 
+    *portp = 0;
     if (str_to_uint(s, 10, &port32)) {
         if (port32 == 0) {
             VLOG_WARN("port 0 is not a valid OpenFlow port number");
-            return 0;
+            return false;
         } else if (port32 < OFPP_MAX) {
-            return port32;
+            *portp = port32;
+            return true;
         } else if (port32 < OFPP_FIRST_RESV) {
             VLOG_WARN("port %u is a reserved OF1.0 port number that will "
                       "be translated to %u when talking to an OF1.1 or "
                       "later controller", port32, port32 + OFPP11_OFFSET);
-            return port32;
+            *portp = port32;
+            return true;
         } else if (port32 <= OFPP_LAST_RESV) {
             struct ds s;
 
@@ -3580,14 +3584,16 @@ ofputil_port_from_string(const char *s)
                            ds_cstr(&s), port32);
             ds_destroy(&s);
 
-            return port32;
+            *portp = port32;
+            return true;
         } else if (port32 < OFPP11_MAX) {
             VLOG_WARN("port %u is outside the supported range 0 through "
                       "%"PRIx16"or 0x%x through 0x%"PRIx32, port32,
                       UINT16_MAX, (unsigned int) OFPP11_MAX, UINT32_MAX);
-            return 0;
+            return false;
         } else {
-            return port32 - OFPP11_OFFSET;
+            *portp = port32 - OFPP11_OFFSET;
+            return true;
         }
     } else {
         struct pair {
@@ -3603,10 +3609,11 @@ ofputil_port_from_string(const char *s)
 
         for (p = pairs; p < &pairs[ARRAY_SIZE(pairs)]; p++) {
             if (!strcasecmp(s, p->name)) {
-                return p->value;
+                *portp = p->value;
+                return true;
             }
         }
-        return 0;
+        return false;
     }
 }
 

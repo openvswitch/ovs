@@ -272,8 +272,7 @@ bundle_parse__(const char *s, char **save_ptr,
             break;
         }
 
-        slave_port = ofputil_port_from_string(slave);
-        if (!slave_port) {
+        if (!ofputil_port_from_string(slave, &slave_port)) {
             ovs_fatal(0, "%s: bad port number", slave);
         }
         ofpbuf_put(ofpacts, &slave_port, sizeof slave_port);

@@ -741,8 +741,9 @@ fetch_ofputil_phy_port(const char *vconn_name, const char *port_name,
 static uint16_t
 str_to_port_no(const char *vconn_name, const char *port_name)
 {
-    uint16_t port_no = ofputil_port_from_string(port_name);
-    if (port_no) {
+    uint16_t port_no;
+
+    if (ofputil_port_from_string(port_name, &port_no)) {
         return port_no;
     } else {
         struct ofputil_phy_port pp;
