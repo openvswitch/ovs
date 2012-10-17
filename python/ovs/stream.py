@@ -344,16 +344,15 @@ Passive %s connection methods:
   punix:FILE              Listen on Unix domain socket FILE""" % (name, name)
 
 
-@Stream.register_method("unix")
 class UnixStream(Stream):
     @staticmethod
     def _open(suffix, dscp):
         connect_path = suffix
         return  ovs.socket_util.make_unix_socket(socket.SOCK_STREAM,
                                                  True, None, connect_path)
+UnixStream = Stream.register_method("unix")(UnixStream)
 
 
-@Stream.register_method("tcp")
 class TCPStream(Stream):
     @staticmethod
     def _open(suffix, dscp):
@@ -362,3 +361,4 @@ class TCPStream(Stream):
         if not error:
             sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         return error, sock
+TCPStream = Stream.register_method("tcp")(TCPStream)
