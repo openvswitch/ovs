@@ -279,13 +279,12 @@ parse_controller(struct ofpbuf *b, char *arg)
 }
 
 static void
-parse_noargs_dec_ttl(struct ofpbuf *b, enum ofputil_action_code compat)
+parse_noargs_dec_ttl(struct ofpbuf *b)
 {
     struct ofpact_cnt_ids *ids;
     uint16_t id = 0;
 
     ids = ofpact_put_DEC_TTL(b);
-    ids->ofpact.compat = compat;
     ofpbuf_put(b, &id, sizeof id);
     ids = b->l2;
     ids->n_controllers++;
@@ -293,10 +292,10 @@ parse_noargs_dec_ttl(struct ofpbuf *b, enum ofputil_action_code compat)
 }
 
 static void
-parse_dec_ttl(struct ofpbuf *b, char *arg, enum ofputil_action_code compat)
+parse_dec_ttl(struct ofpbuf *b, char *arg)
 {
     if (*arg == '\0') {
-        parse_noargs_dec_ttl(b, compat);
+        parse_noargs_dec_ttl(b);
     } else {
         struct ofpact_cnt_ids *ids;
         char *cntr;
@@ -516,7 +515,7 @@ parse_named_action(enum ofputil_action_code code, const struct flow *flow,
         break;
 
     case OFPUTIL_NXAST_DEC_TTL:
-        parse_dec_ttl(ofpacts, arg, code);
+        parse_dec_ttl(ofpacts, arg);
         break;
 
     case OFPUTIL_NXAST_FIN_TIMEOUT:

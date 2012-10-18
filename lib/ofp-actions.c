@@ -1426,6 +1426,19 @@ ofpact_output_to_openflow11(const struct ofpact_output *output,
 }
 
 static void
+ofpact_dec_ttl_to_openflow11(const struct ofpact_cnt_ids *dec_ttl,
+                             struct ofpbuf *out)
+{
+    if (dec_ttl->n_controllers == 1 && dec_ttl->cnt_ids[0] == 0
+        && (!dec_ttl->ofpact.compat ||
+            dec_ttl->ofpact.compat == OFPUTIL_OFPAT11_DEC_NW_TTL)) {
+        ofputil_put_OFPAT11_DEC_NW_TTL(out);
+    } else {
+        ofpact_dec_ttl_to_nxast(dec_ttl, out);
+    }
+}
+
+static void
 ofpact_to_openflow11(const struct ofpact *a, struct ofpbuf *out)
 {
     switch (a->type) {
@@ -1486,11 +1499,7 @@ ofpact_to_openflow11(const struct ofpact *a, struct ofpbuf *out)
         break;
 
     case OFPACT_DEC_TTL:
-        if (a->compat == OFPUTIL_OFPAT11_DEC_NW_TTL) {
-            ofputil_put_OFPAT11_DEC_NW_TTL(out);
-        } else {
-            ofpact_to_nxast(a, out);
-        }
+        ofpact_dec_ttl_to_openflow11(ofpact_get_DEC_TTL(a), out);
         break;
 
     case OFPACT_CLEAR_ACTIONS:
