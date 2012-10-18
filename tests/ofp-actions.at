@@ -1,7 +1,7 @@
 AT_BANNER([OpenFlow actions])
 
 AT_SETUP([OpenFlow 1.0 action translation])
-AT_KEYWORDS([OF1.0])
+AT_KEYWORDS([ofp-actions OF1.0])
 AT_DATA([test-data], [dnl
 # actions=LOCAL
 0000 0008 fffe 04d2
@@ -69,6 +69,12 @@ ffff 0018 00002320 0009 000000000000 c426384d49c53d60
 # actions=set_tunnel64:0x885f3298
 ffff 0018 00002320 0009 000000000000 00000000885f3298
 
+# actions=write_metadata:0xfedcba9876543210
+ffff 0020 00002320 0016 000000000000 fedcba9876543210 ffffffffffffffff
+
+# actions=write_metadata:0xfedcba9876543210/0xffff0000ffff0000
+ffff 0020 00002320 0016 000000000000 fedcba9876543210 ffff0000ffff0000
+
 # actions=multipath(eth_src,50,modulo_n,1,0,NXM_NX_REG0[])
 ffff 0020 00002320 000a 0000 0032 0000 0000 0000 0000 0000 0000 001f 00010004
 
@@ -125,7 +131,7 @@ AT_CHECK(
 AT_CLEANUP
 
 AT_SETUP([OpenFlow 1.1 action translation])
-AT_KEYWORDS([OF1.1])
+AT_KEYWORDS([ofp-actions OF1.1])
 AT_DATA([test-data], [dnl
 # actions=LOCAL
 0000 0010 fffffffe 04d2 000000000000
@@ -190,6 +196,53 @@ ffff 0018 00002320 0009 000000000000 c426384d49c53d60
 # actions=set_tunnel64:0x885f3298
 ffff 0018 00002320 0009 000000000000 00000000885f3298
 
+dnl OpenFlow 1.1 uses OFPIT_WRITE_METADATA to express the NXAST_WRITE_METADATA
+dnl action instead, so parse-ofp11-actions will recognise and drop this action.
+# actions=write_metadata:0xfedcba9876543210
+#  0: ff -> (none)
+#  1: ff -> (none)
+#  2: 00 -> (none)
+#  3: 20 -> (none)
+#  4: 00 -> (none)
+#  5: 00 -> (none)
+#  6: 23 -> (none)
+#  7: 20 -> (none)
+#  8: 00 -> (none)
+#  9: 16 -> (none)
+# 10: 00 -> (none)
+# 11: 00 -> (none)
+# 12: 00 -> (none)
+# 13: 00 -> (none)
+# 14: 00 -> (none)
+# 15: 00 -> (none)
+# 16: fe -> (none)
+# 17: dc -> (none)
+# 18: ba -> (none)
+# 19: 98 -> (none)
+# 20: 76 -> (none)
+# 21: 54 -> (none)
+# 22: 32 -> (none)
+# 23: 10 -> (none)
+# 24: ff -> (none)
+# 25: ff -> (none)
+# 26: ff -> (none)
+# 27: ff -> (none)
+# 28: ff -> (none)
+# 29: ff -> (none)
+# 30: ff -> (none)
+# 31: ff -> (none)
+ffff 0020 00002320 0016 000000000000 fedcba9876543210 ffffffffffffffff
+
+dnl Write-Metadata duplicated.
+& ofp_actions|WARN|duplicate write_metadata instruction specified
+# bad OF1.1 actions: OFPBAC_UNSUPPORTED_ORDER
+ffff 0020 00002320 0016 000000000000 fedcba9876543210 ffffffffffffffff ffff 0020 00002320 0016 000000000000 fedcba9876543210 ffffffffffffffff
+
+dnl Write-Metadata in wrong position.
+& ofp_actions|WARN|write_metadata instruction must be specified after other instructions/actions
+# bad OF1.1 actions: OFPBAC_UNSUPPORTED_ORDER
+ffff 0020 00002320 0016 000000000000 fedcba9876543210 ffffffffffffffff ffff 0010 00002320 0002 0000 12345678
+
 # actions=multipath(eth_src,50,modulo_n,1,0,NXM_NX_REG0[])
 ffff 0020 00002320 000a 0000 0032 0000 0000 0000 0000 0000 0000 001f 00010004
 
@@ -251,7 +304,7 @@ AT_CHECK(
 AT_CLEANUP
 
 AT_SETUP([OpenFlow 1.1 instruction translation])
-AT_KEYWORDS([OF1.1 instruction])
+AT_KEYWORDS([OF1.1 instruction ofp-actions])
 AT_DATA([test-data], [dnl
 # actions=LOCAL
 0004 0018 00000000 dnl
@@ -303,9 +356,13 @@ dnl Goto-Table 1
 # actions=goto_table:1
 0001 0008 01 000000
 
-dnl Write-Metadata not supported yet.
-# bad OF1.1 instructions: OFPBIC_UNSUP_INST
+dnl Write-Metadata.
+# actions=write_metadata:0xfedcba9876543210
 0002 0018 00000000 fedcba9876543210 ffffffffffffffff
+
+dnl Write-Metadata with mask.
+# actions=write_metadata:0xfedcba9876543210/0xff00ff00ff00ff00
+0002 0018 00000000 fedcba9876543210 ff00ff00ff00ff00
 
 dnl Write-Metadata too short.
 # bad OF1.1 instructions: OFPBIC_BAD_LEN
@@ -314,6 +371,15 @@ dnl Write-Metadata too short.
 dnl Write-Metadata too long.
 # bad OF1.1 instructions: OFPBIC_BAD_LEN
 0002 0020 00000000 fedcba9876543210 ffffffffffffffff 0000000000000000
+
+dnl Write-Metadata duplicated.
+# bad OF1.1 instructions: OFPIT_BAD_INSTRUCTION
+0002 0018 00000000 fedcba9876543210 ff00ff00ff00ff00 0002 0018 00000000 fedcba9876543210 ff00ff00ff00ff00
+
+dnl Write-Metadata in wrong position.
+& ofp_actions|WARN|write_metadata instruction must be specified after other instructions/actions
+# bad OF1.1 instructions: OFPBAC_UNSUPPORTED_ORDER
+0001 0008 01 000000 0002 0018 00000000 fedcba9876543210 ffffffffffffffff
 
 dnl Write-Actions not supported yet.
 # bad OF1.1 instructions: OFPBIC_UNSUP_INST

@@ -90,7 +90,8 @@
     DEFINE_OFPACT(EXIT,            ofpact_null,          ofpact)    \
                                                                     \
     /* Instructions */                                              \
-    /* TODO:XXX Write-Actions, Write-Metadata */                    \
+    /* TODO:XXX Write-Actions */                                    \
+    DEFINE_OFPACT(WRITE_METADATA,  ofpact_metadata,      ofpact)    \
     DEFINE_OFPACT(CLEAR_ACTIONS,   ofpact_null,          ofpact)    \
     DEFINE_OFPACT(GOTO_TABLE,      ofpact_goto_table,    ofpact)
 
@@ -333,6 +334,15 @@ struct ofpact_fin_timeout {
     uint16_t fin_hard_timeout;
 };
 
+/* OFPACT_WRITE_METADATA.
+ *
+ * Used for NXAST_WRITE_METADATA. */
+struct ofpact_metadata {
+    struct ofpact ofpact;
+    ovs_be64 metadata;
+    ovs_be64 mask;
+};
+
 /* OFPACT_RESUBMIT.
  *
  * Used for NXAST_RESUBMIT, NXAST_RESUBMIT_TABLE. */
@@ -441,6 +451,7 @@ enum ofperr ofpacts_pull_openflow11_instructions(struct ofpbuf *openflow,
                                                  struct ofpbuf *ofpacts);
 enum ofperr ofpacts_check(const struct ofpact[], size_t ofpacts_len,
                           const struct flow *, int max_ports);
+enum ofperr ofpacts_verify(const struct ofpact ofpacts[], size_t ofpacts_len);
 
 /* Converting ofpacts to OpenFlow. */
 void ofpacts_put_openflow10(const struct ofpact[], size_t ofpacts_len,
@@ -583,8 +594,9 @@ enum {
 static inline bool
 ofpact_is_instruction(const struct ofpact *a)
 {
-    /* TODO:XXX Write-Actions, Write-Metadata */
+    /* TODO:XXX Write-Actions */
     return a->type == OFPACT_CLEAR_ACTIONS
+        || a->type == OFPACT_WRITE_METADATA
         || a->type == OFPACT_GOTO_TABLE;
 }
 

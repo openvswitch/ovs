@@ -919,7 +919,6 @@ Sets the TCP or UDP destination port to \fIport\fR.
 Sets the IPv4 ToS/DSCP field to \fItos\fR.  Valid values are between 0 and
 255, inclusive.  Note that the two lower reserved bits are never
 modified.
-.
 .RE
 .IP
 The following actions are Nicira vendor extensions that, as of this writing, are
@@ -1147,6 +1146,14 @@ to \fBactions=\fR field.
 .
 .IP \fBclear_actions\fR
 Clears all the actions in the action set immediately.
+.
+.IP \fBwrite_metadata\fB:\fIvalue\fR[/\fImask\fR]
+Updates the metadata field for the flow. If \fImask\fR is omitted, the
+metadata field is set exactly to \fIvalue\fR; if \fImask\fR is specified, then
+a 1-bit in \fImask\fR indicates that the corresponding bit in the metadata
+field will be replaced with the corresponding bit from \fIvalue\fR. Both
+\fIvalue\fR and \fImask\fR are 64-bit values that are decimal by default; use
+a \fB0x\fR prefix to specify them in hexadecimal.
 .
 .IP \fBgoto_table\fR:\fItable\fR
 Indicates the next table in the process pipeline.

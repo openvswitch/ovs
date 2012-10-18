@@ -135,6 +135,23 @@ controller_from_openflow(const struct nx_action_controller *nac,
     oc->reason = nac->reason;
 }
 
+static enum ofperr
+metadata_from_nxast(const struct nx_action_write_metadata *nawm,
+                    struct ofpbuf *out)
+{
+    struct ofpact_metadata *om;
+
+    if (!is_all_zeros(nawm->zeros, sizeof nawm->zeros)) {
+        return OFPERR_NXBRC_MUST_BE_ZERO;
+    }
+
+    om = ofpact_put_WRITE_METADATA(out);
+    om->metadata = nawm->metadata;
+    om->mask = nawm->mask;
+
+    return 0;
+}
+
 static void
 note_from_openflow(const struct nx_action_note *nan, struct ofpbuf *out)
 {
@@ -276,6 +293,7 @@ ofpact_from_nxast(const union ofp_action *a, enum ofputil_action_code code,
     const struct nx_action_set_queue *nasq;
     const struct nx_action_note *nan;
     const struct nx_action_set_tunnel64 *nast64;
+    const struct nx_action_write_metadata *nawm;
     struct ofpact_tunnel *tunnel;
     enum ofperr error = 0;
 
@@ -295,6 +313,11 @@ ofpact_from_nxast(const union ofp_action *a, enum ofputil_action_code code,
         tunnel = ofpact_put_SET_TUNNEL(out);
         tunnel->ofpact.compat = code;
         tunnel->tun_id = ntohl(nast->tun_id);
+        break;
+
+    case OFPUTIL_NXAST_WRITE_METADATA:
+        nawm = (const struct nx_action_write_metadata *) a;
+        error = metadata_from_nxast(nawm, out);
         break;
 
     case OFPUTIL_NXAST_SET_QUEUE:
@@ -567,6 +590,12 @@ ofpacts_pull_actions(struct ofpbuf *openflow, unsigned int actions_len,
     }
 
     error = translate(actions, actions_len / OFP_ACTION_ALIGN, ofpacts);
+    if (error) {
+        ofpbuf_clear(ofpacts);
+        return error;
+    }
+
+    error = ofpacts_verify(ofpacts->data, ofpacts->size);
     if (error) {
         ofpbuf_clear(ofpacts);
     }
@@ -972,7 +1001,17 @@ ofpacts_pull_openflow11_instructions(struct ofpbuf *openflow,
         ofpact_put_CLEAR_ACTIONS(ofpacts);
     }
     /* TODO:XXX Write-Actions */
-    /* TODO:XXX Write-Metadata */
+    if (insts[OVSINST_OFPIT11_WRITE_METADATA]) {
+        const struct ofp11_instruction_write_metadata *oiwm;
+        struct ofpact_metadata *om;
+
+        oiwm = (const struct ofp11_instruction_write_metadata *)
+            insts[OVSINST_OFPIT11_WRITE_METADATA];
+
+        om = ofpact_put_WRITE_METADATA(ofpacts);
+        om->metadata = oiwm->metadata;
+        om->mask = oiwm->metadata_mask;
+    }
     if (insts[OVSINST_OFPIT11_GOTO_TABLE]) {
         const struct ofp11_instruction_goto_table *oigt;
         struct ofpact_goto_table *ogt;
@@ -983,12 +1022,12 @@ ofpacts_pull_openflow11_instructions(struct ofpbuf *openflow,
         ogt->table_id = oigt->table_id;
     }
 
-    if (insts[OVSINST_OFPIT11_WRITE_METADATA] ||
-        insts[OVSINST_OFPIT11_WRITE_ACTIONS]) {
+    if (insts[OVSINST_OFPIT11_WRITE_ACTIONS]) {
         error = OFPERR_OFPBIC_UNSUP_INST;
         goto exit;
     }
 
+    error = ofpacts_verify(ofpacts->data, ofpacts->size);
 exit:
     if (error) {
         ofpbuf_clear(ofpacts);
@@ -1063,6 +1102,7 @@ ofpact_check__(const struct ofpact *a, const struct flow *flow, int max_ports)
         return 0;
 
     case OFPACT_CLEAR_ACTIONS:
+    case OFPACT_WRITE_METADATA:
     case OFPACT_GOTO_TABLE:
         return 0;
 
@@ -1084,6 +1124,35 @@ ofpacts_check(const struct ofpact ofpacts[], size_t ofpacts_len,
         enum ofperr error = ofpact_check__(a, flow, max_ports);
         if (error) {
             return error;
+        }
+    }
+
+    return 0;
+}
+
+/* Verifies that the 'ofpacts_len' bytes of actions in 'ofpacts' are
+ * in the appropriate order as defined by the OpenFlow spec. */
+enum ofperr
+ofpacts_verify(const struct ofpact ofpacts[], size_t ofpacts_len)
+{
+    const struct ofpact *a;
+    const struct ofpact_metadata *om = NULL;
+
+    OFPACT_FOR_EACH (a, ofpacts, ofpacts_len) {
+        if (om) {
+            if (a->type == OFPACT_WRITE_METADATA) {
+                VLOG_WARN("duplicate write_metadata instruction specified");
+                /* should be OFPERR_OFPET_BAD_ACTION? */
+                return OFPERR_OFPBAC_UNSUPPORTED_ORDER;
+            } else {
+                VLOG_WARN("write_metadata instruction must be specified after "
+                          "other instructions/actions");
+                return OFPERR_OFPBAC_UNSUPPORTED_ORDER;
+            }
+        }
+
+        if (a->type == OFPACT_WRITE_METADATA) {
+            om = (const struct ofpact_metadata *) a;
         }
     }
 
@@ -1132,6 +1201,17 @@ ofpact_set_tunnel_to_nxast(const struct ofpact_tunnel *tunnel,
     } else {
         ofputil_put_NXAST_SET_TUNNEL64(out)->tun_id = htonll(tun_id);
     }
+}
+
+static void
+ofpact_write_metadata_to_nxast(const struct ofpact_metadata *om,
+                               struct ofpbuf *out)
+{
+    struct nx_action_write_metadata *nawm;
+
+    nawm = ofputil_put_NXAST_WRITE_METADATA(out);
+    nawm->metadata = om->metadata;
+    nawm->mask = om->mask;
 }
 
 static void
@@ -1230,6 +1310,10 @@ ofpact_to_nxast(const struct ofpact *a, struct ofpbuf *out)
 
     case OFPACT_SET_TUNNEL:
         ofpact_set_tunnel_to_nxast(ofpact_get_SET_TUNNEL(a), out);
+        break;
+
+    case OFPACT_WRITE_METADATA:
+        ofpact_write_metadata_to_nxast(ofpact_get_WRITE_METADATA(a), out);
         break;
 
     case OFPACT_SET_QUEUE:
@@ -1384,6 +1468,7 @@ ofpact_to_openflow10(const struct ofpact *a, struct ofpbuf *out)
     case OFPACT_REG_LOAD:
     case OFPACT_DEC_TTL:
     case OFPACT_SET_TUNNEL:
+    case OFPACT_WRITE_METADATA:
     case OFPACT_SET_QUEUE:
     case OFPACT_POP_QUEUE:
     case OFPACT_FIN_TIMEOUT:
@@ -1502,6 +1587,10 @@ ofpact_to_openflow11(const struct ofpact *a, struct ofpbuf *out)
         ofpact_dec_ttl_to_openflow11(ofpact_get_DEC_TTL(a), out);
         break;
 
+    case OFPACT_WRITE_METADATA:
+        /* OpenFlow 1.1 uses OFPIT_WRITE_METADATA to express this action. */
+        break;
+
     case OFPACT_CLEAR_ACTIONS:
     case OFPACT_GOTO_TABLE:
         NOT_REACHED();
@@ -1566,7 +1655,7 @@ ofpacts_put_openflow11_instructions(const struct ofpact ofpacts[],
 
     OFPACT_FOR_EACH (a, ofpacts, ofpacts_len) {
         /* TODO:XXX Write-Actions */
-        /* TODO:XXX Write-Metadata */
+
         if (a->type == OFPACT_CLEAR_ACTIONS) {
             instruction_put_OFPIT11_CLEAR_ACTIONS(openflow);
         } else if (a->type == OFPACT_GOTO_TABLE) {
@@ -1575,6 +1664,14 @@ ofpacts_put_openflow11_instructions(const struct ofpact ofpacts[],
             oigt = instruction_put_OFPIT11_GOTO_TABLE(openflow);
             oigt->table_id = ofpact_get_GOTO_TABLE(a)->table_id;
             memset(oigt->pad, 0, sizeof oigt->pad);
+        } else if (a->type == OFPACT_WRITE_METADATA) {
+            const struct ofpact_metadata *om;
+            struct ofp11_instruction_write_metadata *oiwm;
+
+            om = ofpact_get_WRITE_METADATA(a);
+            oiwm = instruction_put_OFPIT11_WRITE_METADATA(openflow);
+            oiwm->metadata = om->metadata;
+            oiwm->metadata_mask = om->mask;
         } else if (!ofpact_is_instruction(a)) {
             /* Apply-actions */
             const size_t ofs = openflow->size;
@@ -1625,6 +1722,7 @@ ofpact_outputs_to_port(const struct ofpact *ofpact, uint16_t port)
     case OFPACT_REG_LOAD:
     case OFPACT_DEC_TTL:
     case OFPACT_SET_TUNNEL:
+    case OFPACT_WRITE_METADATA:
     case OFPACT_SET_QUEUE:
     case OFPACT_POP_QUEUE:
     case OFPACT_FIN_TIMEOUT:
@@ -1724,6 +1822,7 @@ ofpact_format(const struct ofpact *a, struct ds *s)
     const struct ofpact_resubmit *resubmit;
     const struct ofpact_autopath *autopath;
     const struct ofpact_controller *controller;
+    const struct ofpact_metadata *metadata;
     const struct ofpact_tunnel *tunnel;
     uint16_t port;
 
@@ -1909,6 +2008,17 @@ ofpact_format(const struct ofpact *a, struct ds *s)
                           OVSINST_OFPIT11_CLEAR_ACTIONS));
         break;
 
+    case OFPACT_WRITE_METADATA:
+        metadata = ofpact_get_WRITE_METADATA(a);
+        ds_put_format(s, "%s:%#"PRIx64,
+                      ofpact_instruction_name_from_type(
+                          OVSINST_OFPIT11_WRITE_METADATA),
+                      ntohll(metadata->metadata));
+        if (metadata->mask != htonll(UINT64_MAX)) {
+            ds_put_format(s, "/%#"PRIx64, ntohll(metadata->mask));
+        }
+        break;
+
     case OFPACT_GOTO_TABLE:
         ds_put_format(s, "%s:%"PRIu8,
                       ofpact_instruction_name_from_type(
@@ -1936,7 +2046,6 @@ ofpacts_format(const struct ofpact *ofpacts, size_t ofpacts_len,
             }
 
             /* TODO:XXX write-actions */
-            /* TODO:XXX write-metadata */
             ofpact_format(a, string);
         }
     }

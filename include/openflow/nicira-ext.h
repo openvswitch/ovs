@@ -303,6 +303,7 @@ enum nx_action_subtype {
     NXAST_FIN_TIMEOUT,          /* struct nx_action_fin_timeout */
     NXAST_CONTROLLER,           /* struct nx_action_controller */
     NXAST_DEC_TTL_CNT_IDS,      /* struct nx_action_cnt_ids */
+    NXAST_WRITE_METADATA,       /* struct nx_action_write_metadata */
 };
 
 /* Header for Nicira-defined actions. */
@@ -2194,5 +2195,19 @@ struct nx_flow_monitor_cancel {
     ovs_be32 id;                /* 'id' from nx_flow_monitor_request. */
 };
 OFP_ASSERT(sizeof(struct nx_flow_monitor_cancel) == 4);
+
+/* Action structure for NXAST_WRITE_METADATA.
+ *
+ * Modifies the 'mask' bits of the metadata value. */
+struct nx_action_write_metadata {
+    ovs_be16 type;                  /* OFPAT_VENDOR. */
+    ovs_be16 len;                   /* Length is 32. */
+    ovs_be32 vendor;                /* NX_VENDOR_ID. */
+    ovs_be16 subtype;               /* NXAST_WRITE_METADATA. */
+    uint8_t zeros[6];               /* Must be zero. */
+    ovs_be64 metadata;              /* Metadata register. */
+    ovs_be64 mask;                  /* Metadata mask. */
+};
+OFP_ASSERT(sizeof(struct nx_action_write_metadata) == 32);
 
 #endif /* openflow/nicira-ext.h */
