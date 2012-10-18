@@ -439,8 +439,7 @@ parse_named_action(enum ofputil_action_code code, const struct flow *flow,
         break;
 
     case OFPUTIL_OFPAT11_DEC_NW_TTL:
-        parse_noargs_dec_ttl(ofpacts, code);
-        break;
+        NOT_REACHED();
 
     case OFPUTIL_OFPAT10_SET_TP_SRC:
     case OFPUTIL_OFPAT11_SET_TP_SRC:
