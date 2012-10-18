@@ -14,20 +14,25 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-if test "X$1" = X--help; then
+usage() {
+    UTIL=$(basename $0)
     cat <<EOF
-$0: saves the kernel configuration of network interfaces
-usage: $0 NETDEV...
+${UTIL}: Provides helper functions to save Open vSwitch's configuration.
+usage: $0 COMMAND
 
-Outputs a shell script on stdout that will restore the current
-kernel configuration of the specified network interfaces, as
-well as the system iptables configuration.
+Commands:
+ save-interfaces        Outputs a shell script on stdout that will restore
+                        the current kernel configuration of the specified
+                        network interfaces, as well as the system iptables
+                        configuration.
+ save-flows             Outputs a shell script on stdout that will restore
+                        Openflow flows of each Open vSwitch bridge.
+ save-datapaths         Outputs a shell script on stdout that will restore
+                        the datapaths with the same port numbers as before.
 
-This script is meant as a helper for the Open vSwitch init
-script "force-reload-kmod" command.
+This script is meant as a helper for the Open vSwitch init script commands.
 EOF
-    exit 0
-fi
+}
 
 PATH=/sbin:/bin:/usr/sbin:/usr/bin
 
@@ -43,116 +48,233 @@ missing_program () {
     IFS=$save_IFS
     return 0
 }
-if missing_program ip; then 
-    echo "$0: ip not found in $PATH" >&2
-    exit 1
-fi
 
-if test "$#" = 0; then
-    echo "# $0: no parameters given (use \"$0 --help\" for help)"
-fi
-
-devs=$*
-for dev in $devs; do
-    state=`ip link show dev $dev` || continue
-
-    echo "# $dev"
-    # Link state (Ethernet addresses, up/down, ...)
-    linkcmd=
-    case $state in
-        *"state UP"* | *[,\<]"UP"[,\>]* )
-            linkcmd="$linkcmd up"
-            ;;
-        *"state DOWN"*)
-            linkcmd="$linkcmd down"
-            ;;
-    esac
-    if expr "$state" : '.*\bdynamic\b' > /dev/null; then
-        linkcmd="$linkcmd dynamic"
-    fi
-    if qlen=`expr "$state" : '.*qlen \([0-9]+\)'`; then
-        linkcmd="$linkcmd txqueuelen $qlen"
-    fi
-    if hwaddr=`expr "$state" : '.*link/ether \([^ ]*\)'`; then
-        linkcmd="$linkcmd address $hwaddr"
-    fi
-    if brd=`expr "$state" : '.*brd \([^ ]*\)'`; then
-        linkcmd="$linkcmd broadcast $brd"
-    fi
-    if mtu=`expr "$state" : '.*mtu \([0-9]+\)'`; then
-        linkcmd="$linkcmd mtu $mtu"
-    fi
-    if test -n "$linkcmd"; then
-        echo ip link set dev $dev down # Required to change hwaddr.
-        echo ip link set dev $dev $linkcmd
+save_interfaces () {
+    if missing_program ip; then
+        echo "$0: ip not found in $PATH" >&2
+        exit 1
     fi
 
-    # IP addresses (including IPv6).
-    echo "ip addr flush dev $dev 2>/dev/null" # Suppresses "Nothing to flush".
-    ip addr show dev $dev | while read addr; do
-        set -- $addr
+    if test "$#" = 0; then
+        exit 0
+    fi
 
-        # Check and trim family.
-        family=$1
-        shift
-        case $family in
-            inet | inet6) ;;
-            *) continue ;;
+    devs="$@"
+    for dev in $devs; do
+        state=`ip link show dev $dev` || continue
+
+        echo "# $dev"
+        # Link state (Ethernet addresses, up/down, ...)
+        linkcmd=
+        case $state in
+            *"state UP"* | *[,\<]"UP"[,\>]* )
+                linkcmd="$linkcmd up"
+                ;;
+            *"state DOWN"*)
+                linkcmd="$linkcmd down"
+                ;;
         esac
-
-        # Trim device off the end--"ip" insists on having "dev" precede it.
-        addrcmd=
-        while test $# != 0; do
-            case $1 in
-                dynamic)
-                    # Omit kernel-maintained route.
-                    continue 2
-                    ;;
-                scope)
-                    if test "$2" = link; then
-                        # Omit route derived from IP address, e.g.
-                        # 172.16.0.0/16 derived from 172.16.12.34.
-                        continue 2
-                    fi
-                    ;;
-                "$dev"|"$dev:"*)
-                    # Address label string
-                    addrcmd="$addrcmd label $1"
-                    shift
-                    continue
-                    ;;
-            esac
-            addrcmd="$addrcmd $1"
-            shift
-        done
-        if test "$1" != "$dev"; then
-            addrcmd="$addrcmd $1"
+        if expr "$state" : '.*\bdynamic\b' > /dev/null; then
+            linkcmd="$linkcmd dynamic"
+        fi
+        if qlen=`expr "$state" : '.*qlen \([0-9]+\)'`; then
+            linkcmd="$linkcmd txqueuelen $qlen"
+        fi
+        if hwaddr=`expr "$state" : '.*link/ether \([^ ]*\)'`; then
+            linkcmd="$linkcmd address $hwaddr"
+        fi
+        if brd=`expr "$state" : '.*brd \([^ ]*\)'`; then
+            linkcmd="$linkcmd broadcast $brd"
+        fi
+        if mtu=`expr "$state" : '.*mtu \([0-9]+\)'`; then
+            linkcmd="$linkcmd mtu $mtu"
+        fi
+        if test -n "$linkcmd"; then
+            echo ip link set dev $dev down # Required to change hwaddr.
+            echo ip link set dev $dev $linkcmd
         fi
 
-        echo ip -f $family addr add $addrcmd dev $dev
+        # IP addresses (including IPv6).
+        echo "ip addr flush dev $dev 2>/dev/null" # Suppresses "Nothing to flush".
+        ip addr show dev $dev | while read addr; do
+            set -- $addr
+
+            # Check and trim family.
+            family=$1
+            shift
+            case $family in
+                inet | inet6) ;;
+                *) continue ;;
+            esac
+
+            # Trim device off the end--"ip" insists on having "dev" precede it.
+            addrcmd=
+            while test $# != 0; do
+                case $1 in
+                    dynamic)
+                        # Omit kernel-maintained route.
+                        continue 2
+                        ;;
+                    scope)
+                        if test "$2" = link; then
+                            # Omit route derived from IP address, e.g.
+                            # 172.16.0.0/16 derived from 172.16.12.34.
+                            continue 2
+                        fi
+                        ;;
+                    "$dev"|"$dev:"*)
+                        # Address label string
+                        addrcmd="$addrcmd label $1"
+                        shift
+                        continue
+                        ;;
+                esac
+                addrcmd="$addrcmd $1"
+                shift
+            done
+            if test "$1" != "$dev"; then
+                addrcmd="$addrcmd $1"
+            fi
+
+            echo ip -f $family addr add $addrcmd dev $dev
+        done
+
+        # Routes.
+        echo "ip route flush dev $dev proto boot 2>/dev/null" # Suppresses "Nothing to flush".
+        ip route show dev $dev | while read route; do
+            # "proto kernel" routes are installed by the kernel automatically.
+            case $route in
+                *" proto kernel "*) continue ;;
+            esac
+
+            echo "ip route add $route dev $dev"
+        done
+
+        echo
     done
 
-    # Routes.
-    echo "ip route flush dev $dev proto boot 2>/dev/null" # Suppresses "Nothing to flush".
-    ip route show dev $dev | while read route; do
-        # "proto kernel" routes are installed by the kernel automatically.
-        case $route in
-            *" proto kernel "*) continue ;;
-        esac
+    if missing_program iptables-save; then
+        echo "# iptables-save not found in $PATH, not saving iptables state"
+    else
+        echo "# global"
+        echo "iptables-restore <<'EOF'"
+        iptables-save
+        echo "EOF"
+    fi
+}
 
-        echo "ip route add $route dev $dev"
+save_flows () {
+    if missing_program ovs-ofctl; then
+        echo "$0: ovs-ofctl not found in $PATH" >&2
+        exit 1
+    fi
+
+    for bridge in "$@"; do
+        echo "ovs-ofctl add-flows ${bridge} - << EOF"
+        ovs-ofctl dump-flows "${bridge}" | sed -e '/NXST_FLOW/d' \
+            -e 's/\(idle\|hard\)_age=[^,]*,//g'
+        echo "EOF"
     done
+}
 
-    echo
+save_datapaths () {
+    if missing_program ovs-dpctl; then
+        echo "$0: ovs-dpctl not found in $PATH" >&2
+        exit 1
+    fi
+    if missing_program ovs-vsctl; then
+        echo "$0: ovs-vsctl not found in $PATH" >&2
+        exit 1
+    fi
+
+    for dp in "$@"; do
+        echo "ovs-dpctl add-dp ${dp}"
+        ovs-dpctl show $dp | while read line; do
+            # An example 'ovs-dpctl show' output looks like this:
+            # system@br1:
+            # lookups: hit:0 missed:0 lost:0
+            # flows: 0
+            # port 0: br1 (internal)
+            # port 2: gre2886795521 (ipsec_gre: key=flow, pmtud=false, remote_ip=172.17.1.1, tos=inherit)
+            # port 3: gre1 (ipsec_gre: remote_ip=192.168.113.1)
+            # port 14: gre2 (gre: remote_ip=192.168.115.1)
+            # port 15: gre3 (gre64: remote_ip=192.168.116.1)
+            # port 16: eth0
+            # port 17: br1- (patch: peer=br1+)
+
+            # Skip lines which do not have 'port'
+            if port_no=`expr "${line}" : '.*port \([0-9]\+\):'`; then :; else
+                continue
+            fi
+
+            netdev=`echo ${line} | awk '{print $3}'`
+
+            # Do not add port that has the same name as the datapath. It gets
+            # added by default.
+            [ "${dp#system@}" = "${netdev}" ] && continue
+
+            type=`echo ${line} | awk '{print $4}' | sed 's/[:)(]//g'`
+            [ ! -n "${type}" ] && type="system"
+
+            command="ovs-dpctl add-if ${dp}\
+                        ${netdev},type=${type},port_no=${port_no}"
+
+            options=`echo ${line} | awk -F: '{print $3}' | sed 's/[) ]//g'`
+            [ -n "${options}" ] && command="${command},${options}"
+
+            # For ipsec, ovs-dpctl does not show the key value pairs related
+            # to certificates. Get that information from ovs-vsctl.
+            if [ "${type}" = "ipsec_gre" ] ; then
+                if peer_cert=`ovs-vsctl get interface \
+                                "${netdev}" options:peer_cert 2>/dev/null`; then
+                    # The option peer_cert comes with an accompanying
+                    # "certificate" or "use_ssl_cert"
+                    if certificate=`ovs-vsctl get interface "${netdev}" \
+                            options:certificate 2>/dev/null` ; then
+                        command="${command},peer_cert=${peer_cert},certificate=${certificate}"
+                    else
+                        use_ssl_cert=`ovs-vsctl get interface "${netdev}" \
+                                        options:use_ssl_cert 2>/dev/null`
+                        command="${command},peer_cert=${peer_cert},use_ssl_cert=${use_ssl_cert}"
+                    fi
+                else
+                    psk=`ovs-vsctl get interface "${netdev}" \
+                            options:psk 2>/dev/null`
+                    command="${command},psk=${psk}"
+                fi
+            fi
+            echo ${command}
+        done
+    done
+}
+
+while [ $# -ne 0 ]
+do
+    case $1 in
+        "save-datapaths")
+            shift
+            save_datapaths "$@"
+            exit 0
+            ;;
+        "save-flows")
+            shift
+            save_flows "$@"
+            exit 0
+            ;;
+        "save-interfaces")
+            shift
+            save_interfaces "$@"
+            exit 0
+            ;;
+        -h | --help)
+            usage
+            exit 0
+            ;;
+        *)
+            echo >&2 "$0: unknown command \"$1\" (use --help for help)"
+            exit 1
+            ;;
+    esac
 done
-
-if missing_program iptables-save; then
-    echo "# iptables-save not found in $PATH, not saving iptables state"
-else
-    echo "# global"
-    echo "iptables-restore <<'EOF'"
-    iptables-save
-    echo "EOF"
-fi
 
 exit 0

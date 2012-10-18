@@ -250,6 +250,14 @@ modules.
 This command does nothing and finishes successfully if the OVS daemons
 aren't running.
 .
+.SH "The ``restart'' command"
+.
+.PP
+The \fBrestart\fR command performs a \fBstop\fR followed by a \fBstart\fR
+command.  The command can take the same options as that of the \fBstart\fR
+command. In addition, it saves and restores Openflow flows for each
+individual bridge.
+.
 .SH "The ``status'' command"
 .
 .PP
@@ -279,27 +287,32 @@ implemented by Open vSwitch.  The most common examples of these are
 bridge ``local ports''.
 .
 .IP 2.
+Saves the Openflow flows of each bridge and the kernel datapath
+configuration for each of the kernel datapaths.
+.
+.IP 3.
 Stops the Open vSwitch daemons, as if by a call to \fBovs\-ctl
 stop\fR.
 .
-.IP 3.
+.IP 4.
 Saves the kernel configuration state of the OVS internal interfaces
 listed in step 1, including IP and IPv6 addresses and routing table
 entries.
 .
-.IP 4.
+.IP 5.
 Unloads the Open vSwitch kernel module (including the bridge
 compatibility module if it is loaded).
 .
-.IP 5.
-Starts OVS back up, as if by a call to \fBovs\-ctl start\fR.  This
-reloads the kernel module and restarts the OVS daemons (including
-\fBovs\-brcompatd\fR, if \fB\-\-brcompat\fR is specified).
-.
 .IP 6.
-Restores the kernel configuration state that was saved in step 3.
+Starts OVS back up, as if by a call to \fBovs\-ctl start\fR.  This
+reloads the kernel module, restores the saved kernel datapath configuration,
+restarts the OVS daemons (including \fBovs\-brcompatd\fR, if \fB\-\-brcompat\fR
+is specified) and finally restores the saved Openflow flows.
 .
 .IP 7.
+Restores the kernel configuration state that was saved in step 4.
+.
+.IP 8.
 Checks for daemons that may need to be restarted because they have
 packet sockets that are listening on old instances of Open vSwitch
 kernel interfaces and, if it finds any, prints a warning on stdout.
