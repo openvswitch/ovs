@@ -486,6 +486,20 @@ dpif_port_destroy(struct dpif_port *dpif_port)
     free(dpif_port->type);
 }
 
+/* Checks if port named 'devname' exists in 'dpif'.  If so, returns
+ * true; otherwise, returns false. */
+bool
+dpif_port_exists(const struct dpif *dpif, const char *devname)
+{
+    int error = dpif->dpif_class->port_query_by_name(dpif, devname, NULL);
+    if (error != 0 && error != ENODEV) {
+        VLOG_WARN_RL(&error_rl, "%s: failed to query port %s: %s",
+                     dpif_name(dpif), devname, strerror(error));
+    }
+
+    return !error;
+}
+
 /* Looks up port number 'port_no' in 'dpif'.  On success, returns 0 and
  * initializes '*port' appropriately; on failure, returns a positive errno
  * value.

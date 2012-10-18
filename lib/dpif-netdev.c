@@ -522,7 +522,7 @@ dpif_netdev_port_query_by_number(const struct dpif *dpif, uint32_t port_no,
     int error;
 
     error = get_port_by_number(dp, port_no, &port);
-    if (!error) {
+    if (!error && dpif_port) {
         answer_port_query(port, dpif_port);
     }
     return error;
@@ -537,7 +537,7 @@ dpif_netdev_port_query_by_name(const struct dpif *dpif, const char *devname,
     int error;
 
     error = get_port_by_name(dp, devname, &port);
-    if (!error) {
+    if (!error && dpif_port) {
         answer_port_query(port, dpif_port);
     }
     return error;

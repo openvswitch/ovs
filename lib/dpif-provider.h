@@ -122,11 +122,13 @@ struct dpif_class {
     /* Removes port numbered 'port_no' from 'dpif'. */
     int (*port_del)(struct dpif *dpif, uint32_t port_no);
 
-    /* Queries 'dpif' for a port with the given 'port_no' or 'devname'.  Stores
-     * information about the port into '*port' if successful.
+    /* Queries 'dpif' for a port with the given 'port_no' or 'devname'.
+     * If 'port' is not null, stores information about the port into
+     * '*port' if successful.
      *
-     * The caller takes ownership of data in 'port' and must free it with
-     * dpif_port_destroy() when it is no longer needed. */
+     * If 'port' is not null, the caller takes ownership of data in
+     * 'port' and must free it with dpif_port_destroy() when it is no
+     * longer needed. */
     int (*port_query_by_number)(const struct dpif *dpif, uint32_t port_no,
                                 struct dpif_port *port);
     int (*port_query_by_name)(const struct dpif *dpif, const char *devname,
