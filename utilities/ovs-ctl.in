@@ -206,9 +206,9 @@ start_ovsdb () {
         set "$@" -vconsole:emer -vsyslog:err -vfile:info
         set "$@" --remote=punix:"$DB_SOCK"
         set "$@" --remote=db:Open_vSwitch,Open_vSwitch,manager_options
-        set "$@" --private-key=db:SSL,private_key
-        set "$@" --certificate=db:SSL,certificate
-        set "$@" --bootstrap-ca-cert=db:SSL,ca_cert
+        set "$@" --private-key=db:Open_vSwitch,SSL,private_key
+        set "$@" --certificate=db:Open_vSwitch,SSL,certificate
+        set "$@" --bootstrap-ca-cert=db:Open_vSwitch,SSL,ca_cert
         start_daemon "$OVSDB_SERVER_PRIORITY" "$OVSDB_SERVER_WRAPPER" "$@" \
             || return 1
 

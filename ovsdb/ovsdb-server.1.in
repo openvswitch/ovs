@@ -93,11 +93,11 @@ configured remotes.
 The options described below for configuring the SSL public key
 infrastructure accept a special syntax for obtaining their
 configuration from the database.  If any of these options is given
-\fBdb:\fItable\fB,\fIcolumn\fR as its argument, then the actual file
-name is read from the specified \fIcolumn\fR in \fItable\fR within the
-\fBovsdb\-server\fR database.  The \fIcolumn\fR must have type string
-or set of strings.  The first nonempty string in the table is taken as
-the file name.  (This means that ordinarily there should be at most
+\fBdb:\fR[\fIdb\fB,\fR]\fItable\fB,\fIcolumn\fR as its argument, then the
+actual file name is read from the specified \fIcolumn\fR in \fItable\fR
+within the \fBovsdb\-server\fR database.  The \fIcolumn\fR must have type
+string or set of strings.  The first nonempty string in the table is taken
+as the file name.  (This means that ordinarily there should be at most
 one row in \fItable\fR.)
 .so lib/ssl.man
 .so lib/ssl-bootstrap.man
