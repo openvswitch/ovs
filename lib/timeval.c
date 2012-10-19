@@ -331,14 +331,16 @@ int
 time_poll(struct pollfd *pollfds, int n_pollfds, long long int timeout_when,
           int *elapsed)
 {
-    static long long int last_wakeup;
+    static long long int last_wakeup = 0;
     long long int start;
     sigset_t oldsigs;
     bool blocked;
     int retval;
 
     time_refresh();
-    log_poll_interval(last_wakeup);
+    if (last_wakeup) {
+        log_poll_interval(last_wakeup);
+    }
     coverage_clear();
     start = time_msec();
     blocked = false;
@@ -490,65 +492,39 @@ timespec_add(struct timespec *sum,
 static void
 log_poll_interval(long long int last_wakeup)
 {
-    static unsigned int mean_interval; /* In 16ths of a millisecond. */
-    static unsigned int n_samples;
+    long long int interval = time_msec() - last_wakeup;
 
-    long long int now;
-    unsigned int interval;      /* In 16ths of a millisecond. */
+    if (interval >= 1000) {
+        const struct rusage *last_rusage = get_recent_rusage();
+        struct rusage rusage;
 
-    /* Compute interval from last wakeup to now in 16ths of a millisecond,
-     * capped at 10 seconds (16000 in this unit). */
-    now = time_msec();
-    interval = MIN(10000, now - last_wakeup) << 4;
-
-    /* Warn if we took too much time between polls: at least 50 ms and at least
-     * 8X the mean interval. */
-    if (n_samples > 10 && interval > mean_interval * 8 && interval > 50 * 16) {
-        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 3);
-
-        if (!VLOG_DROP_WARN(&rl)) {
-            const struct rusage *last_rusage = get_recent_rusage();
-            struct rusage rusage;
-
-            getrusage(RUSAGE_SELF, &rusage);
-            VLOG_WARN("%lld ms poll interval (%lld ms user, %lld ms system) "
-                      "is over %u times the weighted mean interval %u ms "
-                      "(%u samples)",
-                      now - last_wakeup,
-                      timeval_diff_msec(&rusage.ru_utime,
-                                        &last_rusage->ru_utime),
-                      timeval_diff_msec(&rusage.ru_stime,
-                                        &last_rusage->ru_stime),
-                      interval / mean_interval,
-                      (mean_interval + 8) / 16, n_samples);
-            if (rusage.ru_minflt > last_rusage->ru_minflt
-                || rusage.ru_majflt > last_rusage->ru_majflt) {
-                VLOG_WARN("faults: %ld minor, %ld major",
-                          rusage.ru_minflt - last_rusage->ru_minflt,
-                          rusage.ru_majflt - last_rusage->ru_majflt);
-            }
-            if (rusage.ru_inblock > last_rusage->ru_inblock
-                || rusage.ru_oublock > last_rusage->ru_oublock) {
-                VLOG_WARN("disk: %ld reads, %ld writes",
-                          rusage.ru_inblock - last_rusage->ru_inblock,
-                          rusage.ru_oublock - last_rusage->ru_oublock);
-            }
-            if (rusage.ru_nvcsw > last_rusage->ru_nvcsw
-                || rusage.ru_nivcsw > last_rusage->ru_nivcsw) {
-                VLOG_WARN("context switches: %ld voluntary, %ld involuntary",
-                          rusage.ru_nvcsw - last_rusage->ru_nvcsw,
-                          rusage.ru_nivcsw - last_rusage->ru_nivcsw);
-            }
+        getrusage(RUSAGE_SELF, &rusage);
+        VLOG_WARN("Unreasonably long %lldms poll interval"
+                  " (%lldms user, %lldms system)",
+                  interval,
+                  timeval_diff_msec(&rusage.ru_utime,
+                                    &last_rusage->ru_utime),
+                  timeval_diff_msec(&rusage.ru_stime,
+                                    &last_rusage->ru_stime));
+        if (rusage.ru_minflt > last_rusage->ru_minflt
+            || rusage.ru_majflt > last_rusage->ru_majflt) {
+            VLOG_WARN("faults: %ld minor, %ld major",
+                      rusage.ru_minflt - last_rusage->ru_minflt,
+                      rusage.ru_majflt - last_rusage->ru_majflt);
+        }
+        if (rusage.ru_inblock > last_rusage->ru_inblock
+            || rusage.ru_oublock > last_rusage->ru_oublock) {
+            VLOG_WARN("disk: %ld reads, %ld writes",
+                      rusage.ru_inblock - last_rusage->ru_inblock,
+                      rusage.ru_oublock - last_rusage->ru_oublock);
+        }
+        if (rusage.ru_nvcsw > last_rusage->ru_nvcsw
+            || rusage.ru_nivcsw > last_rusage->ru_nivcsw) {
+            VLOG_WARN("context switches: %ld voluntary, %ld involuntary",
+                      rusage.ru_nvcsw - last_rusage->ru_nvcsw,
+                      rusage.ru_nivcsw - last_rusage->ru_nivcsw);
         }
         coverage_log();
-    }
-
-    /* Update exponentially weighted moving average.  With these parameters, a
-     * given value decays to 1% of its value in about 100 time steps.  */
-    if (n_samples++) {
-        mean_interval = (mean_interval * 122 + interval * 6 + 64) / 128;
-    } else {
-        mean_interval = interval;
     }
 }
 
