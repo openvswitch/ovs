@@ -100,6 +100,7 @@ static unsigned int key_remote_ports __read_mostly;
 static unsigned int key_multicast_ports __read_mostly;
 static unsigned int local_remote_ports __read_mostly;
 static unsigned int remote_ports __read_mostly;
+static unsigned int null_ports __read_mostly;
 static unsigned int multicast_ports __read_mostly;
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,36)
@@ -218,8 +219,10 @@ static unsigned int *find_port_pool(const struct tnl_mutable_config *mutable)
 			return &key_local_remote_ports;
 		else if (is_multicast)
 			return &key_multicast_ports;
-		else
+		else if (mutable->key.daddr)
 			return &key_remote_ports;
+		else
+			return &null_ports;
 	}
 }
 
@@ -364,6 +367,14 @@ struct vport *ovs_tnl_find_port(struct net *net, __be32 saddr, __be32 daddr,
 		}
 	}
 
+	if (null_ports) {
+		lookup.daddr = 0;
+		lookup.saddr = 0;
+		lookup.tunnel_type = tunnel_type;
+		vport = port_table_lookup(&lookup, mutable);
+		if (vport)
+			return vport;
+	}
 	return NULL;
 }
 
@@ -1245,6 +1256,13 @@ int ovs_tnl_send(struct vport *vport, struct sk_buff *skb)
 		daddr = mutable->key.daddr;
 		saddr = mutable->key.saddr;
 
+		if (unlikely(!daddr)) {
+			/* Trying to sent packet from Null-port without
+			 * tunnel info? Drop this packet. */
+			err = VPORT_E_TX_DROPPED;
+			goto error_free;
+		}
+
 		/* ToS */
 		if (skb->protocol == htons(ETH_P_IP))
 			inner_tos = ip_hdr(skb)->tos;
@@ -1428,8 +1446,10 @@ static int tnl_set_config(struct net *net, struct nlattr *options,
 	struct nlattr *a[OVS_TUNNEL_ATTR_MAX + 1];
 	int err;
 
+	port_key_set_net(&mutable->key, net);
+	mutable->key.tunnel_type = tnl_ops->tunnel_type;
 	if (!options)
-		return -EINVAL;
+		goto out;
 
 	err = nla_parse_nested(a, OVS_TUNNEL_ATTR_MAX, options, tnl_policy);
 	if (err)
@@ -1439,9 +1459,8 @@ static int tnl_set_config(struct net *net, struct nlattr *options,
 		return -EINVAL;
 
 	mutable->flags = nla_get_u32(a[OVS_TUNNEL_ATTR_FLAGS]) & TNL_F_PUBLIC;
-
-	port_key_set_net(&mutable->key, net);
 	mutable->key.daddr = nla_get_be32(a[OVS_TUNNEL_ATTR_DST_IPV4]);
+
 	if (a[OVS_TUNNEL_ATTR_SRC_IPV4]) {
 		if (ipv4_is_multicast(mutable->key.daddr))
 			return -EINVAL;
@@ -1458,7 +1477,6 @@ static int tnl_set_config(struct net *net, struct nlattr *options,
 	if (a[OVS_TUNNEL_ATTR_TTL])
 		mutable->ttl = nla_get_u8(a[OVS_TUNNEL_ATTR_TTL]);
 
-	mutable->key.tunnel_type = tnl_ops->tunnel_type;
 	if (!a[OVS_TUNNEL_ATTR_IN_KEY]) {
 		mutable->key.tunnel_type |= TNL_T_KEY_MATCH;
 		mutable->flags |= TNL_F_IN_KEY_MATCH;
@@ -1471,10 +1489,6 @@ static int tnl_set_config(struct net *net, struct nlattr *options,
 		mutable->flags |= TNL_F_OUT_KEY_ACTION;
 	else
 		mutable->out_key = nla_get_be64(a[OVS_TUNNEL_ATTR_OUT_KEY]);
-
-	old_vport = port_table_lookup(&mutable->key, &old_mutable);
-	if (old_vport && old_vport != cur_vport)
-		return -EEXIST;
 
 	mutable->mlink = 0;
 	if (ipv4_is_multicast(mutable->key.daddr)) {
@@ -1492,6 +1506,11 @@ static int tnl_set_config(struct net *net, struct nlattr *options,
 		mutable->mlink = dev->ifindex;
 		ip_mc_inc_group(__in_dev_get_rtnl(dev), mutable->key.daddr);
 	}
+
+out:
+	old_vport = port_table_lookup(&mutable->key, &old_mutable);
+	if (old_vport && old_vport != cur_vport)
+		return -EEXIST;
 
 	return 0;
 }
@@ -1561,6 +1580,10 @@ int ovs_tnl_set_options(struct vport *vport, struct nlattr *options)
 	struct tnl_mutable_config *mutable;
 	int err;
 
+	old_mutable = rtnl_dereference(tnl_vport->mutable);
+	if (!old_mutable->key.daddr)
+		return -EINVAL;
+
 	mutable = kzalloc(sizeof(struct tnl_mutable_config), GFP_KERNEL);
 	if (!mutable) {
 		err = -ENOMEM;
@@ -1568,7 +1591,6 @@ int ovs_tnl_set_options(struct vport *vport, struct nlattr *options)
 	}
 
 	/* Copy fields whose values should be retained. */
-	old_mutable = rtnl_dereference(tnl_vport->mutable);
 	mutable->seq = old_mutable->seq + 1;
 	memcpy(mutable->eth_addr, old_mutable->eth_addr, ETH_ALEN);
 
