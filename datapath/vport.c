@@ -463,7 +463,7 @@ void ovs_vport_receive(struct vport *vport, struct sk_buff *skb)
 		OVS_CB(skb)->flow = NULL;
 
 	if (!(vport->ops->flags & VPORT_F_TUN_ID))
-		OVS_CB(skb)->tun_id = 0;
+		OVS_CB(skb)->tun_key = NULL;
 
 	ovs_dp_process_received_packet(vport, skb);
 }

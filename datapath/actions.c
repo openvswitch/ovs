@@ -37,7 +37,8 @@
 #include "vport.h"
 
 static int do_execute_actions(struct datapath *dp, struct sk_buff *skb,
-			const struct nlattr *attr, int len, bool keep_skb);
+			      const struct nlattr *attr, int len,
+			      struct ovs_key_ipv4_tunnel *tun_key, bool keep_skb);
 
 static int make_writable(struct sk_buff *skb, int write_len)
 {
@@ -308,7 +309,8 @@ static int output_userspace(struct datapath *dp, struct sk_buff *skb,
 }
 
 static int sample(struct datapath *dp, struct sk_buff *skb,
-		  const struct nlattr *attr)
+		  const struct nlattr *attr,
+		  struct ovs_key_ipv4_tunnel *tun_key)
 {
 	const struct nlattr *acts_list = NULL;
 	const struct nlattr *a;
@@ -329,11 +331,12 @@ static int sample(struct datapath *dp, struct sk_buff *skb,
 	}
 
 	return do_execute_actions(dp, skb, nla_data(acts_list),
-						 nla_len(acts_list), true);
+				  nla_len(acts_list), tun_key, true);
 }
 
 static int execute_set_action(struct sk_buff *skb,
-				 const struct nlattr *nested_attr)
+				 const struct nlattr *nested_attr,
+				 struct ovs_key_ipv4_tunnel *tun_key)
 {
 	int err = 0;
 
@@ -343,7 +346,22 @@ static int execute_set_action(struct sk_buff *skb,
 		break;
 
 	case OVS_KEY_ATTR_TUN_ID:
-		OVS_CB(skb)->tun_id = nla_get_be64(nested_attr);
+		if (!OVS_CB(skb)->tun_key) {
+			/* If tun_key is NULL for this skb, assign it to
+			 * a value the caller passed in for action processing
+			 * and output. This can disappear once we drop support
+			 * for setting tun_id outside of tun_key.
+			 */
+			memset(tun_key, 0, sizeof(struct ovs_key_ipv4_tunnel));
+			OVS_CB(skb)->tun_key = tun_key;
+		}
+
+		OVS_CB(skb)->tun_key->tun_id = nla_get_be64(nested_attr);
+		OVS_CB(skb)->tun_key->tun_flags |= OVS_FLOW_TNL_F_KEY;
+		break;
+
+	case OVS_KEY_ATTR_IPV4_TUNNEL:
+		OVS_CB(skb)->tun_key = nla_data(nested_attr);
 		break;
 
 	case OVS_KEY_ATTR_ETHERNET:
@@ -368,7 +386,8 @@ static int execute_set_action(struct sk_buff *skb,
 
 /* Execute a list of actions against 'skb'. */
 static int do_execute_actions(struct datapath *dp, struct sk_buff *skb,
-			const struct nlattr *attr, int len, bool keep_skb)
+			const struct nlattr *attr, int len,
+			struct ovs_key_ipv4_tunnel *tun_key, bool keep_skb)
 {
 	/* Every output action needs a separate clone of 'skb', but the common
 	 * case is just a single output action, so that doing a clone and
@@ -407,11 +426,11 @@ static int do_execute_actions(struct datapath *dp, struct sk_buff *skb,
 			break;
 
 		case OVS_ACTION_ATTR_SET:
-			err = execute_set_action(skb, nla_data(a));
+			err = execute_set_action(skb, nla_data(a), tun_key);
 			break;
 
 		case OVS_ACTION_ATTR_SAMPLE:
-			err = sample(dp, skb, a);
+			err = sample(dp, skb, a, tun_key);
 			break;
 		}
 
@@ -458,6 +477,7 @@ int ovs_execute_actions(struct datapath *dp, struct sk_buff *skb)
 	struct sw_flow_actions *acts = rcu_dereference(OVS_CB(skb)->flow->sf_acts);
 	struct loop_counter *loop;
 	int error;
+	struct ovs_key_ipv4_tunnel tun_key;
 
 	/* Check whether we've looped too much. */
 	loop = &__get_cpu_var(loop_counters);
@@ -469,9 +489,9 @@ int ovs_execute_actions(struct datapath *dp, struct sk_buff *skb)
 		goto out_loop;
 	}
 
-	OVS_CB(skb)->tun_id = 0;
+	OVS_CB(skb)->tun_key = NULL;
 	error = do_execute_actions(dp, skb, acts->actions,
-					 acts->actions_len, false);
+					 acts->actions_len, &tun_key, false);
 
 	/* Check whether sub-actions looped too much. */
 	if (unlikely(loop->looping))

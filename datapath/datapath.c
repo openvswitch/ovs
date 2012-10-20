@@ -587,10 +587,17 @@ static int validate_set(const struct nlattr *a,
 
 	switch (key_type) {
 	const struct ovs_key_ipv4 *ipv4_key;
+	const struct ovs_key_ipv4_tunnel *tun_key;
 
 	case OVS_KEY_ATTR_PRIORITY:
 	case OVS_KEY_ATTR_TUN_ID:
 	case OVS_KEY_ATTR_ETHERNET:
+		break;
+
+	case OVS_KEY_ATTR_IPV4_TUNNEL:
+		tun_key = nla_data(ovs_key);
+		if (!tun_key->ipv4_dst)
+			return -EINVAL;
 		break;
 
 	case OVS_KEY_ATTR_IPV4:
@@ -785,7 +792,7 @@ static int ovs_packet_cmd_execute(struct sk_buff *skb, struct genl_info *info)
 
 	err = ovs_flow_metadata_from_nlattrs(&flow->key.phy.priority,
 					     &flow->key.phy.in_port,
-					     &flow->key.phy.tun_id,
+					     &flow->key.tun.tun_key,
 					     a[OVS_PACKET_ATTR_KEY]);
 	if (err)
 		goto err_flow_put;

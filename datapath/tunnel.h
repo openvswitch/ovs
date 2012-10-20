@@ -109,8 +109,6 @@ struct tnl_mutable_config {
 
 	unsigned seq;
 
-	unsigned tunnel_hlen;
-
 	unsigned char eth_addr[ETH_ALEN];
 
 	/* Configured via OVS_TUNNEL_ATTR_* attributes. */
@@ -132,7 +130,8 @@ struct tnl_ops {
 	 * build_header() (i.e. excludes the IP header).  Returns a negative
 	 * error code if the configuration is invalid.
 	 */
-	int (*hdr_len)(const struct tnl_mutable_config *);
+	int (*hdr_len)(const struct tnl_mutable_config *,
+		       const struct ovs_key_ipv4_tunnel *);
 
 	/*
 	 * Builds the static portion of the tunnel header, which is stored in
@@ -143,7 +142,8 @@ struct tnl_ops {
 	 * called for every packet, so try not to make it too slow.
 	 */
 	void (*build_header)(const struct vport *,
-			     const struct tnl_mutable_config *, void *header);
+			     const struct tnl_mutable_config *,
+			     const struct ovs_key_ipv4_tunnel *, void *header);
 
 	/*
 	 * Updates the cached header of a packet to match the actual packet
@@ -155,7 +155,8 @@ struct tnl_ops {
 	 */
 	struct sk_buff *(*update_header)(const struct vport *,
 					 const struct tnl_mutable_config *,
-					 struct dst_entry *, struct sk_buff *);
+					 struct dst_entry *, struct sk_buff *,
+					 int tunnel_hlen);
 };
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,20)
@@ -270,14 +271,14 @@ int ovs_tnl_set_addr(struct vport *vport, const unsigned char *addr);
 const char *ovs_tnl_get_name(const struct vport *vport);
 const unsigned char *ovs_tnl_get_addr(const struct vport *vport);
 int ovs_tnl_send(struct vport *vport, struct sk_buff *skb);
-void ovs_tnl_rcv(struct vport *vport, struct sk_buff *skb, u8 tos);
+void ovs_tnl_rcv(struct vport *vport, struct sk_buff *skb);
 
 struct vport *ovs_tnl_find_port(struct net *net, __be32 saddr, __be32 daddr,
 				__be64 key, int tunnel_type,
 				const struct tnl_mutable_config **mutable);
 bool ovs_tnl_frag_needed(struct vport *vport,
 			 const struct tnl_mutable_config *mutable,
-			 struct sk_buff *skb, unsigned int mtu, __be64 flow_key);
+			 struct sk_buff *skb, unsigned int mtu);
 void ovs_tnl_free_linked_skbs(struct sk_buff *skb);
 
 int ovs_tnl_init(void);
@@ -285,6 +286,17 @@ void ovs_tnl_exit(void);
 static inline struct tnl_vport *tnl_vport_priv(const struct vport *vport)
 {
 	return vport_priv(vport);
+}
+
+static inline void tnl_tun_key_init(struct ovs_key_ipv4_tunnel *tun_key,
+				    const struct iphdr *iph, __be64 tun_id, u32 tun_flags)
+{
+	tun_key->tun_id = tun_id;
+	tun_key->ipv4_src = iph->saddr;
+	tun_key->ipv4_dst = iph->daddr;
+	tun_key->ipv4_tos = iph->tos;
+	tun_key->ipv4_ttl = iph->ttl;
+	tun_key->tun_flags = tun_flags;
 }
 
 #endif /* tunnel.h */

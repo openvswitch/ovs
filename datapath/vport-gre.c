@@ -45,22 +45,61 @@ struct gre_base_hdr {
 	__be16 protocol;
 };
 
-static int gre_hdr_len(const struct tnl_mutable_config *mutable)
+static int get_gre_param(const struct tnl_mutable_config *mutable,
+			const struct ovs_key_ipv4_tunnel *tun_key,
+			u32 *flags, u32 *tunnel_type, __be64 *out_key)
+{
+	if (tun_key->ipv4_dst) {
+		*flags = 0;
+
+		if (tun_key->tun_flags & OVS_FLOW_TNL_F_KEY)
+			*flags = TNL_F_OUT_KEY_ACTION;
+		if (tun_key->tun_flags & OVS_FLOW_TNL_F_CSUM)
+			*flags |= TNL_F_CSUM;
+		*tunnel_type = TNL_T_PROTO_GRE;
+		*out_key = tun_key->tun_id;
+	} else {
+		*flags = mutable->flags;
+		*tunnel_type = mutable->key.tunnel_type;
+		if (mutable->flags & TNL_F_OUT_KEY_ACTION) {
+			if (likely(tun_key->tun_flags & OVS_FLOW_TNL_F_KEY)) {
+				*out_key = tun_key->tun_id;
+			} else {
+				*out_key = 0;
+				return -EINVAL;
+			}
+		} else
+			*out_key = mutable->out_key;
+
+	}
+	return 0;
+}
+
+static int gre_hdr_len(const struct tnl_mutable_config *mutable,
+		       const struct ovs_key_ipv4_tunnel *tun_key)
 {
 	int len;
+	u32 flags;
+	u32 tunnel_type;
+	__be64 out_key;
+	int err;
+
+	err = get_gre_param(mutable, tun_key, &flags, &tunnel_type, &out_key);
+	if (err)
+		return err;
 
 	len = GRE_HEADER_SECTION;
 
-	if (mutable->flags & TNL_F_CSUM)
+	if (flags & TNL_F_CSUM)
 		len += GRE_HEADER_SECTION;
 
 	/* Set key for GRE64 tunnels, even when key if is zero. */
-	if (mutable->out_key ||
-	    mutable->key.tunnel_type & TNL_T_PROTO_GRE64 ||
-	    mutable->flags & TNL_F_OUT_KEY_ACTION) {
+	if (out_key ||
+	    tunnel_type & TNL_T_PROTO_GRE64 ||
+	    flags & TNL_F_OUT_KEY_ACTION) {
 
 		len += GRE_HEADER_SECTION;
-		if (mutable->key.tunnel_type & TNL_T_PROTO_GRE64)
+		if (tunnel_type & TNL_T_PROTO_GRE64)
 			len += GRE_HEADER_SECTION;
 	}
 	return len;
@@ -88,32 +127,38 @@ static __be32 be64_get_high32(__be64 x)
 
 static void gre_build_header(const struct vport *vport,
 			     const struct tnl_mutable_config *mutable,
+			     const struct ovs_key_ipv4_tunnel *tun_key,
 			     void *header)
 {
 	struct gre_base_hdr *greh = header;
 	__be32 *options = (__be32 *)(greh + 1);
+	u32 flags;
+	u32 tunnel_type;
+	__be64 out_key;
+
+	get_gre_param(mutable, tun_key, &flags, &tunnel_type, &out_key);
 
 	greh->protocol = htons(ETH_P_TEB);
 	greh->flags = 0;
 
-	if (mutable->flags & TNL_F_CSUM) {
+	if (flags & TNL_F_CSUM) {
 		greh->flags |= GRE_CSUM;
 		*options = 0;
 		options++;
 	}
 
-	if (mutable->flags & TNL_F_OUT_KEY_ACTION) {
+	if (flags & TNL_F_OUT_KEY_ACTION) {
 		greh->flags |= GRE_KEY;
-		if (mutable->key.tunnel_type & TNL_T_PROTO_GRE64)
+		if (tunnel_type & TNL_T_PROTO_GRE64)
 			greh->flags |= GRE_SEQ;
 
-	} else if (mutable->out_key ||
-		   mutable->key.tunnel_type & TNL_T_PROTO_GRE64) {
+	} else if (out_key ||
+		   tunnel_type & TNL_T_PROTO_GRE64) {
 		greh->flags |= GRE_KEY;
-		*options = be64_get_low32(mutable->out_key);
-		if (mutable->key.tunnel_type & TNL_T_PROTO_GRE64) {
+		*options = be64_get_low32(out_key);
+		if (tunnel_type & TNL_T_PROTO_GRE64) {
 			options++;
-			*options = be64_get_high32(mutable->out_key);
+			*options = be64_get_high32(out_key);
 			greh->flags |= GRE_SEQ;
 		}
 	}
@@ -122,28 +167,37 @@ static void gre_build_header(const struct vport *vport,
 static struct sk_buff *gre_update_header(const struct vport *vport,
 					 const struct tnl_mutable_config *mutable,
 					 struct dst_entry *dst,
-					 struct sk_buff *skb)
+					 struct sk_buff *skb,
+					 int tunnel_hlen)
 {
-	__be32 *options = (__be32 *)(skb_network_header(skb) + mutable->tunnel_hlen
+	u32 flags;
+	u32 tunnel_type;
+	__be64 out_key;
+	const struct ovs_key_ipv4_tunnel *tun_key = OVS_CB(skb)->tun_key;
+	__be32 *options = (__be32 *)(skb_network_header(skb) + tunnel_hlen
 					       - GRE_HEADER_SECTION);
 
+	if (get_gre_param(mutable, tun_key, &flags, &tunnel_type, &out_key)) {
+		kfree_skb(skb);
+		return NULL;
+	}
+
 	/* Work backwards over the options so the checksum is last. */
-	if (mutable->flags & TNL_F_OUT_KEY_ACTION) {
-		if (mutable->key.tunnel_type & TNL_T_PROTO_GRE64) {
+	if (flags & TNL_F_OUT_KEY_ACTION) {
+		if (tunnel_type & TNL_T_PROTO_GRE64) {
 			/* Set higher 32 bits to seq. */
-			*options = be64_get_high32(OVS_CB(skb)->tun_id);
+			*options = be64_get_high32(out_key);
 			options--;
 		}
-		*options = be64_get_low32(OVS_CB(skb)->tun_id);
+		*options = be64_get_low32(out_key);
 		options--;
-	} else if (mutable->out_key ||
-		   mutable->key.tunnel_type & TNL_T_PROTO_GRE64) {
+	} else if (out_key || tunnel_type & TNL_T_PROTO_GRE64) {
 		options--;
-		if (mutable->key.tunnel_type & TNL_T_PROTO_GRE64)
+		if (tunnel_type & TNL_T_PROTO_GRE64)
 			options--;
 	}
 
-	if (mutable->flags & TNL_F_CSUM)
+	if (flags & TNL_F_CSUM)
 		*(__sum16 *)options = csum_fold(skb_checksum(skb,
 						skb_transport_offset(skb),
 						skb->len - skb_transport_offset(skb),
@@ -335,7 +389,7 @@ static void gre_err(struct sk_buff *skb, u32 info)
 #endif
 
 	__skb_pull(skb, tunnel_hdr_len);
-	ovs_tnl_frag_needed(vport, mutable, skb, mtu, key);
+	ovs_tnl_frag_needed(vport, mutable, skb, mtu);
 	__skb_push(skb, tunnel_hdr_len);
 
 out:
@@ -370,6 +424,24 @@ static bool check_checksum(struct sk_buff *skb)
 	return (csum == 0);
 }
 
+static u32 gre_flags_to_tunnel_flags(const struct tnl_mutable_config *mutable,
+				     __be16 gre_flags)
+{
+	u32 tunnel_flags = 0;
+
+	if (gre_flags & GRE_KEY) {
+		if (mutable->key.daddr && (mutable->flags & TNL_F_IN_KEY_MATCH))
+			tunnel_flags = OVS_FLOW_TNL_F_KEY;
+		else if (!mutable->key.daddr)
+			tunnel_flags = OVS_FLOW_TNL_F_KEY;
+	}
+
+	if (gre_flags & GRE_CSUM)
+		tunnel_flags |= OVS_FLOW_TNL_F_CSUM;
+
+	return tunnel_flags;
+}
+
 /* Called with rcu_read_lock and BH disabled. */
 static int gre_rcv(struct sk_buff *skb)
 {
@@ -377,6 +449,7 @@ static int gre_rcv(struct sk_buff *skb)
 	const struct tnl_mutable_config *mutable;
 	int hdr_len;
 	struct iphdr *iph;
+	struct ovs_key_ipv4_tunnel tun_key;
 	__be16 flags;
 	__be64 key;
 	u32 tunnel_type;
@@ -401,15 +474,13 @@ static int gre_rcv(struct sk_buff *skb)
 		goto error;
 	}
 
-	if (mutable->flags & TNL_F_IN_KEY_MATCH)
-		OVS_CB(skb)->tun_id = key;
-	else
-		OVS_CB(skb)->tun_id = 0;
+	tnl_tun_key_init(&tun_key, iph, key, gre_flags_to_tunnel_flags(mutable, flags));
+	OVS_CB(skb)->tun_key = &tun_key;
 
 	__skb_pull(skb, hdr_len);
 	skb_postpull_rcsum(skb, skb_transport_header(skb), hdr_len + ETH_HLEN);
 
-	ovs_tnl_rcv(vport, skb, iph->tos);
+	ovs_tnl_rcv(vport, skb);
 	return 0;
 
 error:

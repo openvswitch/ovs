@@ -93,6 +93,8 @@ ovs_key_attr_to_string(enum ovs_key_attr attr)
     case OVS_KEY_ATTR_UNSPEC: return "unspec";
     case OVS_KEY_ATTR_ENCAP: return "encap";
     case OVS_KEY_ATTR_PRIORITY: return "priority";
+    case OVS_KEY_ATTR_TUN_ID: return "tun_id";
+    case OVS_KEY_ATTR_IPV4_TUNNEL: return "ipv4_tunnel";
     case OVS_KEY_ATTR_IN_PORT: return "in_port";
     case OVS_KEY_ATTR_ETHERNET: return "eth";
     case OVS_KEY_ATTR_VLAN: return "vlan";
@@ -105,7 +107,6 @@ ovs_key_attr_to_string(enum ovs_key_attr attr)
     case OVS_KEY_ATTR_ICMPV6: return "icmpv6";
     case OVS_KEY_ATTR_ARP: return "arp";
     case OVS_KEY_ATTR_ND: return "nd";
-    case OVS_KEY_ATTR_TUN_ID: return "tun_id";
 
     case __OVS_KEY_ATTR_MAX:
     default:
@@ -602,6 +603,7 @@ odp_flow_key_attr_len(uint16_t type)
     case OVS_KEY_ATTR_ENCAP: return -2;
     case OVS_KEY_ATTR_PRIORITY: return 4;
     case OVS_KEY_ATTR_TUN_ID: return 8;
+    case OVS_KEY_ATTR_IPV4_TUNNEL: return sizeof(struct ovs_key_ipv4_tunnel);
     case OVS_KEY_ATTR_IN_PORT: return 4;
     case OVS_KEY_ATTR_ETHERNET: return sizeof(struct ovs_key_ethernet);
     case OVS_KEY_ATTR_VLAN: return sizeof(ovs_be16);
@@ -668,6 +670,7 @@ format_odp_key_attr(const struct nlattr *a, struct ds *ds)
     const struct ovs_key_icmpv6 *icmpv6_key;
     const struct ovs_key_arp *arp_key;
     const struct ovs_key_nd *nd_key;
+    const struct ovs_key_ipv4_tunnel *ipv4_tun_key;
     enum ovs_key_attr attr = nl_attr_type(a);
     int expected_len;
 
@@ -696,6 +699,16 @@ format_odp_key_attr(const struct nlattr *a, struct ds *ds)
 
     case OVS_KEY_ATTR_TUN_ID:
         ds_put_format(ds, "(%#"PRIx64")", ntohll(nl_attr_get_be64(a)));
+        break;
+
+    case OVS_KEY_ATTR_IPV4_TUNNEL:
+        ipv4_tun_key = nl_attr_get(a);
+        ds_put_format(ds, "(tun_id=0x%"PRIx64",flags=0x%"PRIx32
+                      ",src="IP_FMT",dst="IP_FMT",tos=0x%"PRIx8",ttl=%"PRIu8")",
+                      ntohll(ipv4_tun_key->tun_id), ipv4_tun_key->tun_flags,
+                      IP_ARGS(&ipv4_tun_key->ipv4_src),
+                      IP_ARGS(&ipv4_tun_key->ipv4_dst),
+                      ipv4_tun_key->ipv4_tos, ipv4_tun_key->ipv4_ttl);
         break;
 
     case OVS_KEY_ATTR_IN_PORT:

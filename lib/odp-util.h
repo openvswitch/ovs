@@ -80,6 +80,7 @@ int odp_actions_from_string(const char *, const struct simap *port_names,
  *                         ------  ---  ------  -----
  *  OVS_KEY_ATTR_PRIORITY      4    --     4      8
  *  OVS_KEY_ATTR_TUN_ID        8    --     4     12
+ *  OVS_KEY_ATTR_IPV4_TUNNEL  24    --     4     28
  *  OVS_KEY_ATTR_IN_PORT       4    --     4      8
  *  OVS_KEY_ATTR_ETHERNET     12    --     4     16
  *  OVS_KEY_ATTR_ETHERTYPE     2     2     4      8  (outer VLAN ethertype)
@@ -90,7 +91,7 @@ int odp_actions_from_string(const char *, const struct simap *port_names,
  *  OVS_KEY_ATTR_ICMPV6        2     2     4      8
  *  OVS_KEY_ATTR_ND           28    --     4     32
  *  -------------------------------------------------
- *  total                                       156
+ *  total                                       184
  *
  * We include some slack space in case the calculation isn't quite right or we
  * add another field and forget to adjust this value.

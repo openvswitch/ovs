@@ -629,7 +629,8 @@ int ovs_flow_extract(struct sk_buff *skb, u16 in_port, struct sw_flow_key *key,
 	memset(key, 0, sizeof(*key));
 
 	key->phy.priority = skb->priority;
-	key->phy.tun_id = OVS_CB(skb)->tun_id;
+	if (OVS_CB(skb)->tun_key)
+		memcpy(&key->tun.tun_key, OVS_CB(skb)->tun_key, sizeof(key->tun.tun_key));
 	key->phy.in_port = in_port;
 
 	skb_reset_mac_header(skb);
@@ -847,6 +848,7 @@ const int ovs_key_lens[OVS_KEY_ATTR_MAX + 1] = {
 
 	/* Not upstream. */
 	[OVS_KEY_ATTR_TUN_ID] = sizeof(__be64),
+	[OVS_KEY_ATTR_IPV4_TUNNEL] = sizeof(struct ovs_key_ipv4_tunnel),
 };
 
 static int ipv4_flow_from_nlattrs(struct sw_flow_key *swkey, int *key_len,
@@ -1022,9 +1024,39 @@ int ovs_flow_from_nlattrs(struct sw_flow_key *swkey, int *key_lenp,
 		swkey->phy.in_port = DP_MAX_PORTS;
 	}
 
-	if (attrs & (1ULL << OVS_KEY_ATTR_TUN_ID)) {
-		swkey->phy.tun_id = nla_get_be64(a[OVS_KEY_ATTR_TUN_ID]);
+	if (attrs & (1ULL << OVS_KEY_ATTR_TUN_ID) &&
+	    attrs & (1ULL << OVS_KEY_ATTR_IPV4_TUNNEL)) {
+		struct ovs_key_ipv4_tunnel *tun_key;
+		__be64 tun_id;
+
+		tun_key = nla_data(a[OVS_KEY_ATTR_IPV4_TUNNEL]);
+
+		if (!tun_key->ipv4_dst)
+			return -EINVAL;
+		if (!(tun_key->tun_flags & OVS_FLOW_TNL_F_KEY))
+			return -EINVAL;
+
+		tun_id = nla_get_be64(a[OVS_KEY_ATTR_TUN_ID]);
+		if (tun_id != tun_key->tun_id)
+			return -EINVAL;
+
+		memcpy(&swkey->tun.tun_key, tun_key, sizeof(swkey->tun.tun_key));
 		attrs &= ~(1ULL << OVS_KEY_ATTR_TUN_ID);
+		attrs &= ~(1ULL << OVS_KEY_ATTR_IPV4_TUNNEL);
+	} else if (attrs & (1ULL << OVS_KEY_ATTR_TUN_ID)) {
+		swkey->tun.tun_key.tun_id = nla_get_be64(a[OVS_KEY_ATTR_TUN_ID]);
+		swkey->tun.tun_key.tun_flags |= OVS_FLOW_TNL_F_KEY;
+
+		attrs &= ~(1ULL << OVS_KEY_ATTR_TUN_ID);
+	} else if (attrs & (1ULL << OVS_KEY_ATTR_IPV4_TUNNEL)) {
+		struct ovs_key_ipv4_tunnel *tun_key;
+		tun_key = nla_data(a[OVS_KEY_ATTR_IPV4_TUNNEL]);
+
+		if (!tun_key->ipv4_dst)
+			return -EINVAL;
+
+		memcpy(&swkey->tun.tun_key, tun_key, sizeof(swkey->tun.tun_key));
+		attrs &= ~(1ULL << OVS_KEY_ATTR_IPV4_TUNNEL);
 	}
 
 	/* Data attributes. */
@@ -1162,14 +1194,16 @@ int ovs_flow_from_nlattrs(struct sw_flow_key *swkey, int *key_lenp,
  * get the metadata, that is, the parts of the flow key that cannot be
  * extracted from the packet itself.
  */
-int ovs_flow_metadata_from_nlattrs(u32 *priority, u16 *in_port, __be64 *tun_id,
+int ovs_flow_metadata_from_nlattrs(u32 *priority, u16 *in_port,
+				   struct ovs_key_ipv4_tunnel *tun_key,
 				   const struct nlattr *attr)
 {
 	const struct nlattr *nla;
 	int rem;
+	__be64 tun_id;
 
 	*in_port = DP_MAX_PORTS;
-	*tun_id = 0;
+	memset(tun_key, 0, sizeof(*tun_key));
 	*priority = 0;
 
 	nla_for_each_nested(nla, attr, rem) {
@@ -1185,7 +1219,35 @@ int ovs_flow_metadata_from_nlattrs(u32 *priority, u16 *in_port, __be64 *tun_id,
 				break;
 
 			case OVS_KEY_ATTR_TUN_ID:
-				*tun_id = nla_get_be64(nla);
+				tun_id = nla_get_be64(nla);
+
+				if (tun_key->ipv4_dst) {
+					if (!(tun_key->tun_flags & OVS_FLOW_TNL_F_KEY))
+						return -EINVAL;
+					if (tun_key->tun_id != tun_id)
+						return -EINVAL;
+					break;
+				}
+				tun_key->tun_id = tun_id;
+				tun_key->tun_flags |= OVS_FLOW_TNL_F_KEY;
+
+				break;
+
+			case OVS_KEY_ATTR_IPV4_TUNNEL:
+				if (tun_key->tun_flags & OVS_FLOW_TNL_F_KEY) {
+					tun_id = tun_key->tun_id;
+
+					memcpy(tun_key, nla_data(nla), sizeof(*tun_key));
+					if (!(tun_key->tun_flags & OVS_FLOW_TNL_F_KEY))
+						return -EINVAL;
+
+					if (tun_key->tun_id != tun_id)
+						return -EINVAL;
+				} else
+					memcpy(tun_key, nla_data(nla), sizeof(*tun_key));
+
+				if (!tun_key->ipv4_dst)
+					return -EINVAL;
 				break;
 
 			case OVS_KEY_ATTR_IN_PORT:
@@ -1210,8 +1272,16 @@ int ovs_flow_to_nlattrs(const struct sw_flow_key *swkey, struct sk_buff *skb)
 	    nla_put_u32(skb, OVS_KEY_ATTR_PRIORITY, swkey->phy.priority))
 		goto nla_put_failure;
 
-	if (swkey->phy.tun_id != cpu_to_be64(0) &&
-	    nla_put_be64(skb, OVS_KEY_ATTR_TUN_ID, swkey->phy.tun_id))
+	if (swkey->tun.tun_key.ipv4_dst) {
+		struct ovs_key_ipv4_tunnel *tun_key;
+		nla = nla_reserve(skb, OVS_KEY_ATTR_IPV4_TUNNEL, sizeof(*tun_key));
+		if (!nla)
+			goto nla_put_failure;
+		tun_key = nla_data(nla);
+		memcpy(tun_key, &swkey->tun.tun_key, sizeof(*tun_key));
+	}
+	if ((swkey->tun.tun_key.tun_flags & OVS_FLOW_TNL_F_KEY) &&
+	    nla_put_be64(skb, OVS_KEY_ATTR_TUN_ID, swkey->tun.tun_key.tun_id))
 		goto nla_put_failure;
 
 	if (swkey->phy.in_port != DP_MAX_PORTS &&
