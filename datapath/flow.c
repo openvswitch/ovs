@@ -365,6 +365,14 @@ struct sw_flow *ovs_flow_tbl_next(struct flow_table *table, u32 *bucket, u32 *la
 	return NULL;
 }
 
+static void __flow_tbl_insert(struct flow_table *table, struct sw_flow *flow)
+{
+	struct hlist_head *head;
+	head = find_bucket(table, flow->hash);
+	hlist_add_head_rcu(&flow->hash_node[table->node_ver], head);
+	table->count++;
+}
+
 static void flow_table_copy_flows(struct flow_table *old, struct flow_table *new)
 {
 	int old_ver;
@@ -382,7 +390,7 @@ static void flow_table_copy_flows(struct flow_table *old, struct flow_table *new
 		head = flex_array_get(old->buckets, i);
 
 		hlist_for_each_entry(flow, n, head, hash_node[old_ver])
-			ovs_flow_tbl_insert(new, flow);
+			__flow_tbl_insert(new, flow);
 	}
 	old->keep_flows = true;
 }
@@ -630,7 +638,7 @@ int ovs_flow_extract(struct sk_buff *skb, u16 in_port, struct sw_flow_key *key,
 
 	key->phy.priority = skb->priority;
 	if (OVS_CB(skb)->tun_key)
-		memcpy(&key->tun.tun_key, OVS_CB(skb)->tun_key, sizeof(key->tun.tun_key));
+		memcpy(&key->phy.tun.tun_key, OVS_CB(skb)->tun_key, sizeof(key->phy.tun.tun_key));
 	key->phy.in_port = in_port;
 
 	skb_reset_mac_header(skb);
@@ -787,9 +795,18 @@ out:
 	return error;
 }
 
-u32 ovs_flow_hash(const struct sw_flow_key *key, int key_len)
+static u32 ovs_flow_hash(const struct sw_flow_key *key, int key_start, int key_len)
 {
-	return jhash2((u32 *)key, DIV_ROUND_UP(key_len, sizeof(u32)), 0);
+	return jhash2((u32 *)((u8 *)key + key_start),
+		      DIV_ROUND_UP(key_len - key_start, sizeof(u32)), 0);
+}
+
+static int flow_key_start(struct sw_flow_key *key)
+{
+	if (key->phy.tun.tun_key.ipv4_dst)
+		return 0;
+	else
+		return offsetof(struct sw_flow_key, phy.priority);
 }
 
 struct sw_flow *ovs_flow_tbl_lookup(struct flow_table *table,
@@ -798,28 +815,31 @@ struct sw_flow *ovs_flow_tbl_lookup(struct flow_table *table,
 	struct sw_flow *flow;
 	struct hlist_node *n;
 	struct hlist_head *head;
+	u8 *_key;
+	int key_start;
 	u32 hash;
 
-	hash = ovs_flow_hash(key, key_len);
+	key_start = flow_key_start(key);
+	hash = ovs_flow_hash(key, key_start, key_len);
 
+	_key = (u8 *) key + key_start;
 	head = find_bucket(table, hash);
 	hlist_for_each_entry_rcu(flow, n, head, hash_node[table->node_ver]) {
 
 		if (flow->hash == hash &&
-		    !memcmp(&flow->key, key, key_len)) {
+		    !memcmp((u8 *)&flow->key + key_start, _key, key_len - key_start)) {
 			return flow;
 		}
 	}
 	return NULL;
 }
 
-void ovs_flow_tbl_insert(struct flow_table *table, struct sw_flow *flow)
+void ovs_flow_tbl_insert(struct flow_table *table, struct sw_flow *flow,
+			 struct sw_flow_key *key, int key_len)
 {
-	struct hlist_head *head;
-
-	head = find_bucket(table, flow->hash);
-	hlist_add_head_rcu(&flow->hash_node[table->node_ver], head);
-	table->count++;
+	flow->hash = ovs_flow_hash(key, flow_key_start(key), key_len);
+	memcpy(&flow->key, key, sizeof(flow->key));
+	__flow_tbl_insert(table, flow);
 }
 
 void ovs_flow_tbl_remove(struct flow_table *table, struct sw_flow *flow)
@@ -1040,12 +1060,12 @@ int ovs_flow_from_nlattrs(struct sw_flow_key *swkey, int *key_lenp,
 		if (tun_id != tun_key->tun_id)
 			return -EINVAL;
 
-		memcpy(&swkey->tun.tun_key, tun_key, sizeof(swkey->tun.tun_key));
+		memcpy(&swkey->phy.tun.tun_key, tun_key, sizeof(swkey->phy.tun.tun_key));
 		attrs &= ~(1ULL << OVS_KEY_ATTR_TUN_ID);
 		attrs &= ~(1ULL << OVS_KEY_ATTR_IPV4_TUNNEL);
 	} else if (attrs & (1ULL << OVS_KEY_ATTR_TUN_ID)) {
-		swkey->tun.tun_key.tun_id = nla_get_be64(a[OVS_KEY_ATTR_TUN_ID]);
-		swkey->tun.tun_key.tun_flags |= OVS_FLOW_TNL_F_KEY;
+		swkey->phy.tun.tun_key.tun_id = nla_get_be64(a[OVS_KEY_ATTR_TUN_ID]);
+		swkey->phy.tun.tun_key.tun_flags |= OVS_FLOW_TNL_F_KEY;
 
 		attrs &= ~(1ULL << OVS_KEY_ATTR_TUN_ID);
 	} else if (attrs & (1ULL << OVS_KEY_ATTR_IPV4_TUNNEL)) {
@@ -1055,7 +1075,7 @@ int ovs_flow_from_nlattrs(struct sw_flow_key *swkey, int *key_lenp,
 		if (!tun_key->ipv4_dst)
 			return -EINVAL;
 
-		memcpy(&swkey->tun.tun_key, tun_key, sizeof(swkey->tun.tun_key));
+		memcpy(&swkey->phy.tun.tun_key, tun_key, sizeof(swkey->phy.tun.tun_key));
 		attrs &= ~(1ULL << OVS_KEY_ATTR_IPV4_TUNNEL);
 	}
 
@@ -1194,17 +1214,17 @@ int ovs_flow_from_nlattrs(struct sw_flow_key *swkey, int *key_lenp,
  * get the metadata, that is, the parts of the flow key that cannot be
  * extracted from the packet itself.
  */
-int ovs_flow_metadata_from_nlattrs(u32 *priority, u16 *in_port,
-				   struct ovs_key_ipv4_tunnel *tun_key,
-				   const struct nlattr *attr)
+
+int ovs_flow_metadata_from_nlattrs(struct sw_flow *flow, int key_len, const struct nlattr *attr)
 {
+	struct ovs_key_ipv4_tunnel *tun_key = &flow->key.phy.tun.tun_key;
 	const struct nlattr *nla;
 	int rem;
-	__be64 tun_id;
+	__be64 tun_id = 0;
 
-	*in_port = DP_MAX_PORTS;
-	memset(tun_key, 0, sizeof(*tun_key));
-	*priority = 0;
+	flow->key.phy.in_port = DP_MAX_PORTS;
+	flow->key.phy.priority = 0;
+	memset(tun_key, 0, sizeof(flow->key.phy.tun.tun_key));
 
 	nla_for_each_nested(nla, attr, rem) {
 		int type = nla_type(nla);
@@ -1215,7 +1235,7 @@ int ovs_flow_metadata_from_nlattrs(u32 *priority, u16 *in_port,
 
 			switch (type) {
 			case OVS_KEY_ATTR_PRIORITY:
-				*priority = nla_get_u32(nla);
+				flow->key.phy.priority = nla_get_u32(nla);
 				break;
 
 			case OVS_KEY_ATTR_TUN_ID:
@@ -1253,13 +1273,17 @@ int ovs_flow_metadata_from_nlattrs(u32 *priority, u16 *in_port,
 			case OVS_KEY_ATTR_IN_PORT:
 				if (nla_get_u32(nla) >= DP_MAX_PORTS)
 					return -EINVAL;
-				*in_port = nla_get_u32(nla);
+				flow->key.phy.in_port = nla_get_u32(nla);
 				break;
 			}
 		}
 	}
 	if (rem)
 		return -EINVAL;
+
+	flow->hash = ovs_flow_hash(&flow->key,
+				   flow_key_start(&flow->key), key_len);
+
 	return 0;
 }
 
@@ -1272,16 +1296,16 @@ int ovs_flow_to_nlattrs(const struct sw_flow_key *swkey, struct sk_buff *skb)
 	    nla_put_u32(skb, OVS_KEY_ATTR_PRIORITY, swkey->phy.priority))
 		goto nla_put_failure;
 
-	if (swkey->tun.tun_key.ipv4_dst) {
+	if (swkey->phy.tun.tun_key.ipv4_dst) {
 		struct ovs_key_ipv4_tunnel *tun_key;
 		nla = nla_reserve(skb, OVS_KEY_ATTR_IPV4_TUNNEL, sizeof(*tun_key));
 		if (!nla)
 			goto nla_put_failure;
 		tun_key = nla_data(nla);
-		memcpy(tun_key, &swkey->tun.tun_key, sizeof(*tun_key));
+		memcpy(tun_key, &swkey->phy.tun.tun_key, sizeof(*tun_key));
 	}
-	if ((swkey->tun.tun_key.tun_flags & OVS_FLOW_TNL_F_KEY) &&
-	    nla_put_be64(skb, OVS_KEY_ATTR_TUN_ID, swkey->tun.tun_key.tun_id))
+	if ((swkey->phy.tun.tun_key.tun_flags & OVS_FLOW_TNL_F_KEY) &&
+	    nla_put_be64(skb, OVS_KEY_ATTR_TUN_ID, swkey->phy.tun.tun_key.tun_id))
 		goto nla_put_failure;
 
 	if (swkey->phy.in_port != DP_MAX_PORTS &&

@@ -42,12 +42,12 @@ struct sw_flow_actions {
 
 struct sw_flow_key {
 	struct {
+		union {
+			struct ovs_key_ipv4_tunnel tun_key;  /* Encapsulating tunnel key. */
+		} tun;
 		u32	priority;	/* Packet QoS priority. */
 		u16	in_port;	/* Input switch port (or DP_MAX_PORTS). */
 	} phy;
-	struct {
-		struct ovs_key_ipv4_tunnel tun_key;  /* Encapsulating tunnel key. */
-	} tun;
 	struct {
 		u8     src[ETH_ALEN];	/* Ethernet source address. */
 		u8     dst[ETH_ALEN];	/* Ethernet destination address. */
@@ -170,9 +170,8 @@ u64 ovs_flow_used_time(unsigned long flow_jiffies);
 int ovs_flow_to_nlattrs(const struct sw_flow_key *, struct sk_buff *);
 int ovs_flow_from_nlattrs(struct sw_flow_key *swkey, int *key_lenp,
 		      const struct nlattr *);
-int ovs_flow_metadata_from_nlattrs(u32 *priority, u16 *in_port,
-				   struct ovs_key_ipv4_tunnel *tun_key,
-				   const struct nlattr *);
+int ovs_flow_metadata_from_nlattrs(struct sw_flow *flow, int key_len,
+				   const struct nlattr *attr);
 
 #define MAX_ACTIONS_BUFSIZE	(16 * 1024)
 #define TBL_MIN_BUCKETS		1024
@@ -203,9 +202,9 @@ void ovs_flow_tbl_deferred_destroy(struct flow_table *table);
 struct flow_table *ovs_flow_tbl_alloc(int new_size);
 struct flow_table *ovs_flow_tbl_expand(struct flow_table *table);
 struct flow_table *ovs_flow_tbl_rehash(struct flow_table *table);
-void ovs_flow_tbl_insert(struct flow_table *table, struct sw_flow *flow);
+void ovs_flow_tbl_insert(struct flow_table *table, struct sw_flow *flow,
+			 struct sw_flow_key *key, int key_len);
 void ovs_flow_tbl_remove(struct flow_table *table, struct sw_flow *flow);
-u32 ovs_flow_hash(const struct sw_flow_key *key, int key_len);
 
 struct sw_flow *ovs_flow_tbl_next(struct flow_table *table, u32 *bucket, u32 *idx);
 extern const int ovs_key_lens[OVS_KEY_ATTR_MAX + 1];

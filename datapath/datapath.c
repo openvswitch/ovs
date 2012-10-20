@@ -790,18 +790,13 @@ static int ovs_packet_cmd_execute(struct sk_buff *skb, struct genl_info *info)
 	if (err)
 		goto err_flow_put;
 
-	err = ovs_flow_metadata_from_nlattrs(&flow->key.phy.priority,
-					     &flow->key.phy.in_port,
-					     &flow->key.tun.tun_key,
-					     a[OVS_PACKET_ATTR_KEY]);
+	err = ovs_flow_metadata_from_nlattrs(flow, key_len, a[OVS_PACKET_ATTR_KEY]);
 	if (err)
 		goto err_flow_put;
 
 	err = validate_actions(a[OVS_PACKET_ATTR_ACTIONS], &flow->key, 0);
 	if (err)
 		goto err_flow_put;
-
-	flow->hash = ovs_flow_hash(&flow->key, key_len);
 
 	acts = ovs_flow_actions_alloc(a[OVS_PACKET_ATTR_ACTIONS]);
 	err = PTR_ERR(acts);
@@ -1073,7 +1068,6 @@ static int ovs_flow_cmd_new_or_set(struct sk_buff *skb, struct genl_info *info)
 			error = PTR_ERR(flow);
 			goto error;
 		}
-		flow->key = key;
 		clear_stats(flow);
 
 		/* Obtain actions. */
@@ -1084,8 +1078,7 @@ static int ovs_flow_cmd_new_or_set(struct sk_buff *skb, struct genl_info *info)
 		rcu_assign_pointer(flow->sf_acts, acts);
 
 		/* Put flow in bucket. */
-		flow->hash = ovs_flow_hash(&key, key_len);
-		ovs_flow_tbl_insert(table, flow);
+		ovs_flow_tbl_insert(table, flow, &key, key_len);
 
 		reply = ovs_flow_cmd_build_info(flow, dp, info->snd_pid,
 						info->snd_seq,
