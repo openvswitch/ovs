@@ -615,9 +615,12 @@ trace_map_lookup(struct hmap *trace_map, struct trace *key)
     return NULL;
 }
 
-
-static void
-format_backtraces(struct ds *ds)
+/*  Appends a string to 'ds' representing backtraces recorded at regular
+ *  intervals in the recent past.  This information can be used to get a sense
+ *  of what the process has been spending the majority of time doing.  Will
+ *  ommit any backtraces which have not occurred at least 'min_count' times. */
+void
+format_backtraces(struct ds *ds, size_t min_count)
 {
     time_init();
 
@@ -651,6 +654,10 @@ format_backtraces(struct ds *ds)
             size_t j;
 
             hmap_remove(&trace_map, &trace->node);
+
+            if (trace->count < min_count) {
+                continue;
+            }
 
             frame_strs = backtrace_symbols(trace->backtrace, trace->n_frames);
 
@@ -715,7 +722,7 @@ backtrace_cb(struct unixctl_conn *conn,
     struct ds ds = DS_EMPTY_INITIALIZER;
 
     assert(HAVE_EXECINFO_H && CACHE_TIME);
-    format_backtraces(&ds);
+    format_backtraces(&ds, 0);
     unixctl_command_reply(conn, ds_cstr(&ds));
     ds_destroy(&ds);
 }

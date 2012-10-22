@@ -25,6 +25,7 @@
 extern "C" {
 #endif
 
+struct ds;
 struct pollfd;
 struct timespec;
 struct timeval;
@@ -83,6 +84,7 @@ long long int timeval_to_msec(const struct timeval *);
 void xgettimeofday(struct timeval *);
 
 int get_cpu_usage(void);
+void format_backtraces(struct ds *, size_t min_count);
 
 long long int time_boot_msec(void);
 
