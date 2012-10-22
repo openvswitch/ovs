@@ -32,14 +32,12 @@
 #include "dummy.h"
 #include "dynamic-string.h"
 #include "fatal-signal.h"
+#include "hash.h"
+#include "hmap.h"
 #include "signals.h"
 #include "unixctl.h"
 #include "util.h"
 #include "vlog.h"
-
-#ifndef HAVE_EXECINFO_H
-#define HAVE_EXECINFO_H 0
-#endif
 
 VLOG_DEFINE_THIS_MODULE(timeval);
 
@@ -72,6 +70,10 @@ static long long int deadline = LLONG_MAX;
 struct trace {
     void *backtrace[32]; /* Populated by backtrace(). */
     size_t n_frames;     /* Number of frames in 'backtrace'. */
+
+    /* format_backtraces() helper data. */
+    struct hmap_node node;
+    size_t count;
 };
 
 #define MAX_TRACES 50
@@ -91,6 +93,22 @@ static void refresh_rusage(void);
 static void timespec_add(struct timespec *sum,
                          const struct timespec *a, const struct timespec *b);
 static unixctl_cb_func backtrace_cb;
+
+#ifndef HAVE_EXECINFO_H
+#define HAVE_EXECINFO_H 0
+
+static int
+backtrace(void **buffer OVS_UNUSED, int size OVS_UNUSED)
+{
+    NOT_REACHED();
+}
+
+static char **
+backtrace_symbols(void *const *buffer OVS_UNUSED, int size OVS_UNUSED)
+{
+    NOT_REACHED();
+}
+#endif
 
 /* Initializes the timetracking module, if not already initialized. */
 static void
@@ -392,15 +410,13 @@ sigalrm_handler(int sig_nr OVS_UNUSED)
     wall_tick = true;
     monotonic_tick = true;
 
-#if HAVE_EXECINFO_H
-    if (CACHE_TIME) {
+    if (HAVE_EXECINFO_H && CACHE_TIME) {
         struct trace *trace = &traces[trace_head];
 
         trace->n_frames = backtrace(trace->backtrace,
                                     ARRAY_SIZE(trace->backtrace));
         trace_head = (trace_head + 1) % MAX_TRACES;
     }
-#endif
 }
 
 static void
@@ -577,13 +593,37 @@ get_cpu_usage(void)
     return cpu_usage;
 }
 
+static uint32_t
+hash_trace(struct trace *trace)
+{
+    return hash_bytes(trace->backtrace,
+                      trace->n_frames * sizeof *trace->backtrace, 0);
+}
+
+static struct trace *
+trace_map_lookup(struct hmap *trace_map, struct trace *key)
+{
+    struct trace *value;
+
+    HMAP_FOR_EACH_WITH_HASH (value, node, hash_trace(key), trace_map) {
+        if (key->n_frames == value->n_frames
+            && !memcmp(key->backtrace, value->backtrace,
+                       key->n_frames * sizeof *key->backtrace)) {
+            return value;
+        }
+    }
+    return NULL;
+}
+
+
 static void
 format_backtraces(struct ds *ds)
 {
     time_init();
 
-#if HAVE_EXECINFO_H
-    if (CACHE_TIME) {
+    if (HAVE_EXECINFO_H && CACHE_TIME) {
+        struct hmap trace_map = HMAP_INITIALIZER(&trace_map);
+        struct trace *trace, *next;
         sigset_t oldsigs;
         size_t i;
 
@@ -591,16 +631,30 @@ format_backtraces(struct ds *ds)
 
         for (i = 0; i < MAX_TRACES; i++) {
             struct trace *trace = &traces[i];
-            char **frame_strs;
-            size_t j;
+            struct trace *map_trace;
 
             if (!trace->n_frames) {
                 continue;
             }
 
+            map_trace = trace_map_lookup(&trace_map, trace);
+            if (map_trace) {
+                map_trace->count++;
+            } else {
+                hmap_insert(&trace_map, &trace->node, hash_trace(trace));
+                trace->count = 1;
+            }
+        }
+
+        HMAP_FOR_EACH_SAFE (trace, next, node, &trace_map) {
+            char **frame_strs;
+            size_t j;
+
+            hmap_remove(&trace_map, &trace->node);
+
             frame_strs = backtrace_symbols(trace->backtrace, trace->n_frames);
 
-            ds_put_format(ds, "Backtrace %zu\n", i + 1);
+            ds_put_format(ds, "Count %zu\n", trace->count);
             for (j = 0; j < trace->n_frames; j++) {
                 ds_put_format(ds, "%s\n", frame_strs[j]);
             }
@@ -608,10 +662,11 @@ format_backtraces(struct ds *ds)
 
             free(frame_strs);
         }
+        hmap_destroy(&trace_map);
+
         ds_chomp(ds, '\n');
         unblock_sigalrm(&oldsigs);
     }
-#endif
 }
 
 /* Unixctl interface. */

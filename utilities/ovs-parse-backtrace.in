@@ -73,23 +73,19 @@ result.  Expected usage is for ovs-appctl backtrace to be piped in.""")
     print "Binary: %s\n" % binary
 
     stdin = sys.stdin.read()
-    trace_list = stdin.strip().split("\n\n")
 
-    try:
-        #Remove the first line from each trace.
-        trace_list = [trace[(trace.index("\n") + 1):] for trace in trace_list]
-    except ValueError:
-        sys.stdout.write(stdin)
-        sys.exit(1)
-
-    trace_map = {}
-    for trace in trace_list:
-        trace_map[trace] = trace_map.get(trace, 0) + 1
-
-    sorted_traces = sorted(trace_map.items(), key=(lambda x: x[1]),
-                           reverse=True)
-    for trace, count in sorted_traces:
+    traces = []
+    for trace in stdin.strip().split("\n\n"):
         lines = trace.splitlines()
+        match = re.search(r'Count (\d+)', lines[0])
+        if match:
+            count = int(match.group(1))
+        else:
+            count = 0
+        traces.append((lines[1:], count))
+    traces = sorted(traces, key=(lambda x: x[1]), reverse=True)
+
+    for lines, count in traces:
         longest = max(len(l) for l in lines)
 
         print "Backtrace Count: %d" % count
