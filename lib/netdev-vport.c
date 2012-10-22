@@ -590,7 +590,7 @@ parse_tunnel_config(const char *name, const char *type,
     ovs_be32 saddr = htonl(0);
     uint32_t flags;
 
-    flags = TNL_F_DF_DEFAULT | TNL_F_PMTUD | TNL_F_HDR_CACHE;
+    flags = TNL_F_DF_DEFAULT | TNL_F_HDR_CACHE;
     if (!strcmp(type, "gre") || !strcmp(type, "gre64")) {
         is_gre = true;
     } else if (!strcmp(type, "ipsec_gre") || !strcmp(type, "ipsec_gre64")) {
@@ -647,8 +647,8 @@ parse_tunnel_config(const char *name, const char *type,
                 flags &= ~TNL_F_DF_DEFAULT;
             }
         } else if (!strcmp(node->key, "pmtud")) {
-            if (!strcmp(node->value, "false")) {
-                flags &= ~TNL_F_PMTUD;
+            if (!strcmp(node->value, "true")) {
+                flags |= TNL_F_PMTUD;
             }
         } else if (!strcmp(node->key, "header_cache")) {
             if (!strcmp(node->value, "false")) {
@@ -844,8 +844,8 @@ unparse_tunnel_config(const char *name OVS_UNUSED, const char *type OVS_UNUSED,
     if (!(flags & TNL_F_DF_DEFAULT)) {
         smap_add(args, "df_default", "false");
     }
-    if (!(flags & TNL_F_PMTUD)) {
-        smap_add(args, "pmtud", "false");
+    if (flags & TNL_F_PMTUD) {
+        smap_add(args, "pmtud", "true");
     }
 
     return 0;
