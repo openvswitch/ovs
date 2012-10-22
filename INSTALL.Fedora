@@ -14,7 +14,7 @@ You may build from an Open vSwitch distribution tarball or from an
 Open vSwitch Git tree.
 
 Before you begin, note the RPM source directory on your version of
-Fedora.  On Fedora 15, it is $HOME/rpmbuild/SOURCES.
+Fedora.  On Fedora 17, it is $HOME/rpmbuild/SOURCES.
 
 1. If you are building from an Open vSwitch Git tree, then you will
    need to first create a distribution tarball by running "./boot.sh;
@@ -31,7 +31,7 @@ Fedora.  On Fedora 15, it is $HOME/rpmbuild/SOURCES.
 
    This produces one RPM: "openvswitch".
 
-5. On Fedora 15, to build the Open vSwitch kernel module, run:
+5. On Fedora 17, to build the Open vSwitch kernel module, run:
 
 	rpmbuild -bb rhel/openvswitch-kmod-fedora.spec
 
