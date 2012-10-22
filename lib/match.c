@@ -822,10 +822,12 @@ match_format(const struct match *match, struct ds *s, unsigned int priority)
                       f->nw_frag & FLOW_NW_FRAG_LATER ? "later" : "not_later");
         break;
     }
-    if (f->nw_proto == IPPROTO_ICMP) {
+    if (f->dl_type == htons(ETH_TYPE_IP) &&
+        f->nw_proto == IPPROTO_ICMP) {
         format_be16_masked(s, "icmp_type", f->tp_src, wc->masks.tp_src);
         format_be16_masked(s, "icmp_code", f->tp_dst, wc->masks.tp_dst);
-    } else if (f->nw_proto == IPPROTO_ICMPV6) {
+    } else if (f->dl_type == htons(ETH_TYPE_IPV6) &&
+               f->nw_proto == IPPROTO_ICMPV6) {
         format_be16_masked(s, "icmp_type", f->tp_src, wc->masks.tp_src);
         format_be16_masked(s, "icmp_code", f->tp_dst, wc->masks.tp_dst);
         format_ipv6_netmask(s, "nd_target", &f->nd_target,
