@@ -31,6 +31,7 @@
 #include "csum.h"
 #include "dynamic-string.h"
 #include "hash.h"
+#include "match.h"
 #include "ofpbuf.h"
 #include "openflow/openflow.h"
 #include "packets.h"
@@ -479,94 +480,13 @@ flow_to_string(const struct flow *flow)
     return ds_cstr(&ds);
 }
 
-static void format_tunnel_flags(uint16_t flags, struct ds *ds)
-{
-    flags &= ~FLOW_TNL_F_KEY;
-
-    if (flags & FLOW_TNL_F_DONT_FRAGMENT) {
-        ds_put_cstr(ds, ",df");
-        flags &= ~FLOW_TNL_F_DONT_FRAGMENT;
-    }
-
-    if (flags & FLOW_TNL_F_CSUM) {
-        ds_put_cstr(ds, ",csum");
-        flags &= ~FLOW_TNL_F_CSUM;
-    }
-
-    if (flags) {
-        ds_put_format(ds, ",flags:%#"PRIx16, flags);
-    }
-}
-
 void
 flow_format(struct ds *ds, const struct flow *flow)
 {
-    ds_put_format(ds, "priority:%"PRIu32, flow->skb_priority);
+    struct match match;
 
-    if (flow->tunnel.ip_dst || flow->tunnel.tun_id) {
-        ds_put_cstr(ds, ",tunnel(");
-        ds_put_format(ds, IP_FMT"->"IP_FMT, IP_ARGS(&flow->tunnel.ip_src),
-                                            IP_ARGS(&flow->tunnel.ip_dst));
-
-        if (flow->tunnel.flags & FLOW_TNL_F_KEY) {
-            ds_put_format(ds, ",key:%#"PRIx64, ntohll(flow->tunnel.tun_id));
-        }
-        ds_put_format(ds, ",tos:%#"PRIx8",ttl:%"PRIu8, flow->tunnel.ip_tos,
-                                                       flow->tunnel.ip_ttl);
-        format_tunnel_flags(flow->tunnel.flags, ds);
-        ds_put_char(ds, ')');
-    }
-
-    ds_put_format(ds, ",metadata:%#"PRIx64
-                      ",in_port:%04"PRIx16,
-                      ntohll(flow->metadata),
-                      flow->in_port);
-
-    ds_put_format(ds, ",tci(");
-    if (flow->vlan_tci) {
-        ds_put_format(ds, "vlan:%"PRIu16",pcp:%d",
-                      vlan_tci_to_vid(flow->vlan_tci),
-                      vlan_tci_to_pcp(flow->vlan_tci));
-    } else {
-        ds_put_char(ds, '0');
-    }
-    ds_put_format(ds, ") mac("ETH_ADDR_FMT"->"ETH_ADDR_FMT
-                      ") type:%04"PRIx16,
-                  ETH_ADDR_ARGS(flow->dl_src),
-                  ETH_ADDR_ARGS(flow->dl_dst),
-                  ntohs(flow->dl_type));
-
-    if (flow->dl_type == htons(ETH_TYPE_IPV6)) {
-        ds_put_format(ds, " label:%#"PRIx32" proto:%"PRIu8" tos:%#"PRIx8
-                          " ttl:%"PRIu8" ipv6(",
-                      ntohl(flow->ipv6_label), flow->nw_proto,
-                      flow->nw_tos, flow->nw_ttl);
-        print_ipv6_addr(ds, &flow->ipv6_src);
-        ds_put_cstr(ds, "->");
-        print_ipv6_addr(ds, &flow->ipv6_dst);
-        ds_put_char(ds, ')');
-    } else if (flow->dl_type == htons(ETH_TYPE_IP) ||
-               flow->dl_type == htons(ETH_TYPE_ARP)) {
-        ds_put_format(ds, " proto:%"PRIu8" tos:%#"PRIx8" ttl:%"PRIu8
-                          " ip("IP_FMT"->"IP_FMT")",
-                          flow->nw_proto, flow->nw_tos, flow->nw_ttl,
-                          IP_ARGS(&flow->nw_src), IP_ARGS(&flow->nw_dst));
-    }
-    if (flow->nw_frag) {
-        ds_put_format(ds, " frag(%s)",
-                      flow->nw_frag == FLOW_NW_FRAG_ANY ? "first"
-                      : flow->nw_frag == (FLOW_NW_FRAG_ANY | FLOW_NW_FRAG_LATER)
-                      ? "later" : "<error>");
-    }
-    if (flow->tp_src || flow->tp_dst) {
-        ds_put_format(ds, " port(%"PRIu16"->%"PRIu16")",
-                ntohs(flow->tp_src), ntohs(flow->tp_dst));
-    }
-    if (!eth_addr_is_zero(flow->arp_sha) || !eth_addr_is_zero(flow->arp_tha)) {
-        ds_put_format(ds, " arp_ha("ETH_ADDR_FMT"->"ETH_ADDR_FMT")",
-                ETH_ADDR_ARGS(flow->arp_sha),
-                ETH_ADDR_ARGS(flow->arp_tha));
-    }
+    match_wc_init(&match, flow);
+    match_format(&match, ds, flow->skb_priority);
 }
 
 void
