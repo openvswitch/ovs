@@ -780,6 +780,9 @@ match_format(const struct match *match, struct ds *s, unsigned int priority)
                               ntohl(wc->masks.ipv6_label));
             }
         }
+    } else if (f->dl_type == htons(ETH_TYPE_ARP)) {
+        format_ip_netmask(s, "arp_spa", f->nw_src, wc->masks.nw_src);
+        format_ip_netmask(s, "arp_tpa", f->nw_dst, wc->masks.nw_dst);
     } else {
         format_ip_netmask(s, "nw_src", f->nw_src, wc->masks.nw_src);
         format_ip_netmask(s, "nw_dst", f->nw_dst, wc->masks.nw_dst);
