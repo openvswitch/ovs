@@ -159,8 +159,15 @@ test_refuse_connection(int argc OVS_UNUSED, char *argv[])
             ovs_fatal(0, "unexpected vconn_connect() return value %d (%s)",
                       error, strerror(error));
         }
+    } else if (!strcmp(type, "unix")) {
+        CHECK_ERRNO(error, EPIPE);
+    } else if (!strcmp(type, "ssl")) {
+        if (error != EPROTO && error != ECONNRESET) {
+            ovs_fatal(0, "unexpected vconn_connect() return value %d (%s)",
+                      error, strerror(error));
+        }
     } else {
-        CHECK_ERRNO(error, !strcmp(type, "unix") ? EPIPE : EPROTO);
+        ovs_fatal(0, "invalid connection type %s", type);
     }
 
     vconn_close(vconn);
