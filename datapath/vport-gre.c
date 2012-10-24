@@ -45,7 +45,7 @@ struct gre_base_hdr {
 	__be16 protocol;
 };
 
-static int get_gre_param(const struct tnl_mutable_config *mutable,
+static void get_gre_param(const struct tnl_mutable_config *mutable,
 			const struct ovs_key_ipv4_tunnel *tun_key,
 			u32 *flags, u32 *tunnel_type, __be64 *out_key)
 {
@@ -61,18 +61,12 @@ static int get_gre_param(const struct tnl_mutable_config *mutable,
 	} else {
 		*flags = mutable->flags;
 		*tunnel_type = mutable->key.tunnel_type;
-		if (mutable->flags & TNL_F_OUT_KEY_ACTION) {
-			if (likely(tun_key->tun_flags & OVS_FLOW_TNL_F_KEY)) {
-				*out_key = tun_key->tun_id;
-			} else {
-				*out_key = 0;
-				return -EINVAL;
-			}
-		} else
+		if (mutable->flags & TNL_F_OUT_KEY_ACTION)
+			*out_key = tun_key->tun_id;
+		else
 			*out_key = mutable->out_key;
 
 	}
-	return 0;
 }
 
 static int gre_hdr_len(const struct tnl_mutable_config *mutable,
@@ -82,12 +76,8 @@ static int gre_hdr_len(const struct tnl_mutable_config *mutable,
 	u32 flags;
 	u32 tunnel_type;
 	__be64 out_key;
-	int err;
 
-	err = get_gre_param(mutable, tun_key, &flags, &tunnel_type, &out_key);
-	if (err)
-		return err;
-
+	get_gre_param(mutable, tun_key, &flags, &tunnel_type, &out_key);
 	len = GRE_HEADER_SECTION;
 
 	if (flags & TNL_F_CSUM)
@@ -177,10 +167,7 @@ static struct sk_buff *gre_update_header(const struct vport *vport,
 	__be32 *options = (__be32 *)(skb_network_header(skb) + tunnel_hlen
 					       - GRE_HEADER_SECTION);
 
-	if (get_gre_param(mutable, tun_key, &flags, &tunnel_type, &out_key)) {
-		kfree_skb(skb);
-		return NULL;
-	}
+	get_gre_param(mutable, tun_key, &flags, &tunnel_type, &out_key);
 
 	/* Work backwards over the options so the checksum is last. */
 	if (flags & TNL_F_OUT_KEY_ACTION) {

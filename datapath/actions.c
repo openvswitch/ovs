@@ -357,7 +357,6 @@ static int execute_set_action(struct sk_buff *skb,
 		}
 
 		OVS_CB(skb)->tun_key->tun_id = nla_get_be64(nested_attr);
-		OVS_CB(skb)->tun_key->tun_flags |= OVS_FLOW_TNL_F_KEY;
 		break;
 
 	case OVS_KEY_ATTR_IPV4_TUNNEL:
