@@ -405,10 +405,12 @@ force_reload_kmod () {
 ## ------- ##
 
 restart () {
-    script_flows=`mktemp`
-    trap 'rm -f "${script_flows}"' 0 1 2 13 15
+    if daemon_is_running ovsdb-server && daemon_is_running ovs-vswitchd; then
+        script_flows=`mktemp`
+        trap 'rm -f "${script_flows}"' 0 1 2 13 15
 
-    action "Saving flows" save_flows
+        action "Saving flows" save_flows
+    fi
 
     # Restart the database first, since a large database may take a
     # while to load, and we want to minimize forwarding disruption.
