@@ -49,6 +49,10 @@ esac
 OVS_MISSING_KMOD_OK=yes
 export OVS_MISSING_KMOD_OK
 
+# Save and restore openflow flows during a package upgrade.
+OVS_RESTART_SAVE_FLOWS=yes
+export OVS_RESTART_SAVE_FLOWS
+
 #DEBHELPER#
 
 exit 0
