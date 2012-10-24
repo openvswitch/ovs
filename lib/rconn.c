@@ -513,8 +513,21 @@ rconn_run(struct rconn *rc)
     if (rc->vconn) {
         vconn_run(rc->vconn);
     }
-    for (i = 0; i < rc->n_monitors; i++) {
+    for (i = 0; i < rc->n_monitors; ) {
+        struct ofpbuf *msg;
+        int retval;
+
         vconn_run(rc->monitors[i]);
+
+        /* Drain any stray message that came in on the monitor connection. */
+        retval = vconn_recv(rc->monitors[i], &msg);
+        if (!retval) {
+            ofpbuf_delete(msg);
+        } else if (retval != EAGAIN) {
+            close_monitor(rc, i, retval);
+            continue;
+        }
+        i++;
     }
 
     do {
@@ -545,6 +558,7 @@ rconn_run_wait(struct rconn *rc)
     }
     for (i = 0; i < rc->n_monitors; i++) {
         vconn_run_wait(rc->monitors[i]);
+        vconn_recv_wait(rc->monitors[i]);
     }
 
     timeo = timeout(rc);
