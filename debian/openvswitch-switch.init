@@ -78,6 +78,17 @@ stop () {
     ovs_ctl stop
 }
 
+restart () {
+    # OVS_RESTART_SAVE_FLOWS can be set by package postinst script.
+    if [ "$OVS_RESTART_SAVE_FLOWS" = "yes" ] || \
+       [ "$1" = "--save-flows=yes" ]; then
+        start restart
+    else
+        stop
+        start
+    fi
+}
+
 case $1 in
     start)
         start
@@ -89,8 +100,8 @@ case $1 in
         # The OVS daemons keep up-to-date.
         ;;
     restart)
-        stop
-        start
+        shift
+        restart "$@"
         ;;
     status)
         ovs_ctl status

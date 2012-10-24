@@ -107,6 +107,16 @@ stop () {
     rm -f /var/lock/subsys/openvswitch
 }
 
+restart () {
+    if [ "$1" = "--save-flows=yes" ]; then
+        stop_daemon ovs-xapi-sync
+        start restart
+    else
+        stop
+        start
+    fi
+}
+
 ovs_ctl=/usr/share/openvswitch/scripts/ovs-ctl
 case $1 in
     start)
@@ -116,8 +126,8 @@ case $1 in
         stop
         ;;
     restart)
-        stop
-        start
+        shift
+        restart "$@"
         ;;
     reload|force-reload)
         # The main OVS daemons keep up-to-date, but ovs-xapi-sync needs help.

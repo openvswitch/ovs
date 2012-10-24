@@ -61,6 +61,15 @@ stop () {
     rm -f /var/lock/subsys/openvswitch
 }
 
+restart () {
+    if [ "$1" = "--save-flows=yes" ]; then
+        start restart
+    else
+        stop
+        start
+    fi
+}
+
 ovs_ctl=/usr/share/openvswitch/scripts/ovs-ctl
 case $1 in
     start)
@@ -70,8 +79,8 @@ case $1 in
         stop
         ;;
     restart)
-        stop
-        start
+        shift
+        restart "$@"
         ;;
     reload|force-reload)
         # Nothing to do.
