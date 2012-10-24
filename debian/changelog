@@ -1,9 +1,46 @@
-openvswitch (1.8.90-1) unstable; urgency=low
+openvswitch (1.9.0-1) unstable; urgency=low
    [ Open vSwitch team ]
    * New upstream version
-    - Nothing yet!  Try NEWS...
+    - The tunneling code no longer assumes input and output keys are symmetric.
+      If they are not, PMTUD needs to be disabled for tunneling to work. Note
+      this only applies to flow-based keys.
+    - FreeBSD is now a supported platform, thanks to code contributions from
+      Gaetano Catalli, Ed Maste, and Giuseppe Lettieri.
+    - ovs-bugtool: New --ovs option to report only OVS related information.
+    - New %t and %T log escapes to identify the subprogram within a
+      cooperating group of processes or threads that emitted a log message.
+      The default log patterns now include this information.
+    - OpenFlow:
+      - Allow bitwise masking for SHA and THA fields in ARP, SLL and TLL
+        fields in IPv6 neighbor discovery messages, and IPv6 flow label.
+      - Adds support for writing to the metadata field for a flow.
+    - ovs-ofctl:
+      - Commands and actions that accept port numbers now also accept keywords
+        that represent those ports (such as LOCAL, NONE, and ALL).  This is
+        also the recommended way to specify these ports, for compatibility
+        with OpenFlow 1.1 and later (which use the OpenFlow 1.0 numbers
+        for these ports for different purposes).
+    - ovs-dpctl:
+      - Support requesting the port number with the "port_no" option in
+        the "add-if" command.
+    - ovs-pki: The "online PKI" features have been removed, along with
+      the ovs-pki-cgi program that facilitated it, because of some
+      alarmist insecurity claims.  We do not believe that these claims
+      are true, but because we do not know of any users for this
+      feature it seems better on balance to remove it.  (The ovs-pki-cgi
+      program was not included in distribution packaging.)
+    - ovsdb-server now enforces the immutability of immutable columns.  This
+      was not enforced in earlier versions due to an oversight.
+    - New support for a nonstandard form of GRE that supports a 64-bit key.
+    - The following features are now deprecated.  They will be removed no
+      earlier than February 2013.  Please email dev@openvswitch.org with
+      concerns.
+        - Stable bond mode.
+        - The autopath action.
+        - Interface type "null".
+        - Numeric values for reserved ports (see "ovs-ofctl" note above).
 
- -- Open vSwitch team <dev@openvswitch.org>  Mon, 07 May 2012 14:14:52 +0900
+ -- Open vSwitch team <dev@openvswitch.org>  Wed, 24 Oct 2012 16:10:39 -0700
 
 openvswitch (1.8.0-1) unstable; urgency=low
    [ Open vSwitch team ]

@@ -1,5 +1,5 @@
-post-v1.8.0
-------------------------
+v1.9.0 - xx xxx xxxx
+--------------------
     - The tunneling code no longer assumes input and output keys are symmetric.
       If they are not, PMTUD needs to be disabled for tunneling to work. Note
       this only applies to flow-based keys.
