@@ -1266,12 +1266,12 @@ bond_enable_slave(struct bond_slave *slave, bool enable, struct tag_set *tags)
     if (enable != slave->enabled) {
         slave->enabled = enable;
         if (!slave->enabled) {
-            VLOG_WARN("interface %s: disabled", slave->name);
+            VLOG_INFO("interface %s: disabled", slave->name);
             if (tags) {
                 tag_set_add(tags, slave->tag);
             }
         } else {
-            VLOG_WARN("interface %s: enabled", slave->name);
+            VLOG_INFO("interface %s: enabled", slave->name);
             slave->tag = tag_create_random();
         }
     }
@@ -1437,7 +1437,7 @@ bond_choose_active_slave(struct bond *bond, struct tag_set *tags)
 
         bond->send_learning_packets = true;
     } else if (old_active_slave) {
-        VLOG_WARN_RL(&rl, "bond %s: all interfaces disabled", bond->name);
+        VLOG_INFO_RL(&rl, "bond %s: all interfaces disabled", bond->name);
     }
 }
 
