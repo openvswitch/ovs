@@ -169,6 +169,12 @@ AT_DATA([test-data], [dnl
 # actions=strip_vlan
 0012 0008 00000000
 
+dnl 802.1ad isn't supported at the moment
+dnl # actions=push_vlan:0x88a8
+dnl 0011 0008 88a8 0000
+# actions=push_vlan:0x8100
+0011 0008 8100 0000
+
 # actions=resubmit:5
 ffff 0010 00002320 0001 0005 00000000
 

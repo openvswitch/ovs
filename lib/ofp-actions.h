@@ -60,6 +60,7 @@
     DEFINE_OFPACT(SET_VLAN_VID,    ofpact_vlan_vid,      ofpact)    \
     DEFINE_OFPACT(SET_VLAN_PCP,    ofpact_vlan_pcp,      ofpact)    \
     DEFINE_OFPACT(STRIP_VLAN,      ofpact_null,          ofpact)    \
+    DEFINE_OFPACT(PUSH_VLAN,       ofpact_null,          ofpact)    \
     DEFINE_OFPACT(SET_ETH_SRC,     ofpact_mac,           ofpact)    \
     DEFINE_OFPACT(SET_ETH_DST,     ofpact_mac,           ofpact)    \
     DEFINE_OFPACT(SET_IPV4_SRC,    ofpact_ipv4,          ofpact)    \

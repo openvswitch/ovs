@@ -714,6 +714,15 @@ ofpact_from_openflow11(const union ofp_action *a, struct ofpbuf *out)
         ofpact_put_SET_VLAN_PCP(out)->vlan_pcp = a->vlan_pcp.vlan_pcp;
         break;
 
+    case OFPUTIL_OFPAT11_PUSH_VLAN:
+        if (((const struct ofp11_action_push *)a)->ethertype !=
+            htons(ETH_TYPE_VLAN_8021Q)) {
+            /* TODO:XXX 802.1AD(QinQ) isn't supported at the moment */
+            return OFPERR_OFPET_BAD_ACTION;
+        }
+        ofpact_put_PUSH_VLAN(out);
+        break;
+
     case OFPUTIL_OFPAT11_POP_VLAN:
         ofpact_put_STRIP_VLAN(out);
         break;
@@ -1065,6 +1074,7 @@ ofpact_check__(const struct ofpact *a, const struct flow *flow, int max_ports)
     case OFPACT_SET_VLAN_VID:
     case OFPACT_SET_VLAN_PCP:
     case OFPACT_STRIP_VLAN:
+    case OFPACT_PUSH_VLAN:
     case OFPACT_SET_ETH_SRC:
     case OFPACT_SET_ETH_DST:
     case OFPACT_SET_IPV4_SRC:
@@ -1358,6 +1368,7 @@ ofpact_to_nxast(const struct ofpact *a, struct ofpbuf *out)
     case OFPACT_SET_VLAN_VID:
     case OFPACT_SET_VLAN_PCP:
     case OFPACT_STRIP_VLAN:
+    case OFPACT_PUSH_VLAN:
     case OFPACT_SET_ETH_SRC:
     case OFPACT_SET_ETH_DST:
     case OFPACT_SET_IPV4_SRC:
@@ -1456,6 +1467,7 @@ ofpact_to_openflow10(const struct ofpact *a, struct ofpbuf *out)
             = htons(ofpact_get_SET_L4_DST_PORT(a)->port);
         break;
 
+    case OFPACT_PUSH_VLAN:
     case OFPACT_CLEAR_ACTIONS:
     case OFPACT_GOTO_TABLE:
         /* TODO:XXX */
@@ -1546,6 +1558,12 @@ ofpact_to_openflow11(const struct ofpact *a, struct ofpbuf *out)
 
     case OFPACT_STRIP_VLAN:
         ofputil_put_OFPAT11_POP_VLAN(out);
+        break;
+
+    case OFPACT_PUSH_VLAN:
+        /* TODO:XXX ETH_TYPE_VLAN_8021AD case */
+        ofputil_put_OFPAT11_PUSH_VLAN(out)->ethertype =
+            htons(ETH_TYPE_VLAN_8021Q);
         break;
 
     case OFPACT_SET_ETH_SRC:
@@ -1711,6 +1729,7 @@ ofpact_outputs_to_port(const struct ofpact *ofpact, uint16_t port)
     case OFPACT_SET_VLAN_VID:
     case OFPACT_SET_VLAN_PCP:
     case OFPACT_STRIP_VLAN:
+    case OFPACT_PUSH_VLAN:
     case OFPACT_SET_ETH_SRC:
     case OFPACT_SET_ETH_DST:
     case OFPACT_SET_IPV4_SRC:
@@ -1892,6 +1911,11 @@ ofpact_format(const struct ofpact *a, struct ds *s)
 
     case OFPACT_STRIP_VLAN:
         ds_put_cstr(s, "strip_vlan");
+        break;
+
+    case OFPACT_PUSH_VLAN:
+        /* TODO:XXX 802.1AD case*/
+        ds_put_format(s, "push_vlan:%#"PRIx16, ETH_TYPE_VLAN_8021Q);
         break;
 
     case OFPACT_SET_ETH_SRC:

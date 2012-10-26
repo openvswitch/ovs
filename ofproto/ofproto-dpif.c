@@ -5500,6 +5500,11 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
             ctx->flow.vlan_tci = htons(0);
             break;
 
+        case OFPACT_PUSH_VLAN:
+            /* TODO:XXX 802.1AD(QinQ) */
+            ctx->flow.vlan_tci = htons(VLAN_CFI);
+            break;
+
         case OFPACT_SET_ETH_SRC:
             memcpy(ctx->flow.dl_src, ofpact_get_SET_ETH_SRC(a)->mac,
                    ETH_ADDR_LEN);

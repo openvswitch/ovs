@@ -384,6 +384,7 @@ parse_named_action(enum ofputil_action_code code, const struct flow *flow,
 {
     struct ofpact_tunnel *tunnel;
     uint16_t vid;
+    uint16_t ethertype;
     ovs_be32 ip;
     uint8_t pcp;
     uint8_t tos;
@@ -422,6 +423,15 @@ parse_named_action(enum ofputil_action_code code, const struct flow *flow,
     case OFPUTIL_OFPAT10_STRIP_VLAN:
     case OFPUTIL_OFPAT11_POP_VLAN:
         ofpact_put_STRIP_VLAN(ofpacts);
+        break;
+
+    case OFPUTIL_OFPAT11_PUSH_VLAN:
+        ethertype = str_to_u16(arg, "ethertype");
+        if (ethertype != ETH_TYPE_VLAN_8021Q) {
+            /* TODO:XXXX ETH_TYPE_VLAN_8021AD case isn't supported */
+            ovs_fatal(0, "%s: not a valid VLAN ethertype", arg);
+        }
+        ofpact_put_PUSH_VLAN(ofpacts);
         break;
 
     case OFPUTIL_OFPAT10_SET_DL_SRC:

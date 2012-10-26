@@ -897,6 +897,12 @@ as necessary to match the value specified.  Valid values are between 0
 .IP \fBstrip_vlan\fR
 Strips the VLAN tag from a packet if it is present.
 .
+.IP \fBpush_vlan\fR:\fIethertype\fR
+Push a new VLAN tag onto the packet.  Ethertype is used as the the Ethertype
+for the tag. Only ethertype 0x8100 should be used. (0x88a8 which the spec
+allows isn't supported at the moment.)
+A priority of zero and the tag of zero are used for the new tag.
+.
 .IP \fBmod_dl_src\fB:\fImac\fR
 Sets the source Ethernet address to \fImac\fR.
 .

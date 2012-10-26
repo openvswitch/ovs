@@ -177,7 +177,9 @@ void eth_addr_bitand(const uint8_t src[ETH_ADDR_LEN],
 
 #define ETH_TYPE_IP            0x0800
 #define ETH_TYPE_ARP           0x0806
-#define ETH_TYPE_VLAN          0x8100
+#define ETH_TYPE_VLAN_8021Q    0x8100
+#define ETH_TYPE_VLAN          ETH_TYPE_VLAN_8021Q
+#define ETH_TYPE_VLAN_8021AD   0x88a8
 #define ETH_TYPE_IPV6          0x86dd
 #define ETH_TYPE_LACP          0x8809
 #define ETH_TYPE_RARP          0x8035
