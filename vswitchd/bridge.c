@@ -1607,16 +1607,6 @@ bridge_pick_local_hw_addr(struct bridge *br, uint8_t ea[ETH_ADDR_LEN],
             found_addr = true;
         }
     }
-    if (found_addr) {
-        VLOG_DBG("bridge %s: using bridge Ethernet address "ETH_ADDR_FMT,
-                 br->name, ETH_ADDR_ARGS(ea));
-    } else {
-        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 10);
-        memcpy(ea, br->default_ea, ETH_ADDR_LEN);
-        *hw_addr_iface = NULL;
-        VLOG_WARN_RL(&rl, "bridge %s: using default bridge Ethernet "
-                     "address "ETH_ADDR_FMT, br->name, ETH_ADDR_ARGS(ea));
-    }
 
     hmapx_destroy(&mirror_output_ports);
 }
