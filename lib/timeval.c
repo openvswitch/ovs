@@ -121,6 +121,16 @@ time_init(void)
     }
     inited = true;
 
+    /* The implementation of backtrace() in glibc does some one time
+     * initialization which is not signal safe.  This can cause deadlocks if
+     * run from the signal handler.  As a workaround, force the initialization
+     * to happen here. */
+    if (HAVE_EXECINFO_H) {
+        void *bt[1];
+
+        backtrace(bt, ARRAY_SIZE(bt));
+    }
+
     memset(traces, 0, sizeof traces);
 
     if (HAVE_EXECINFO_H && CACHE_TIME) {
