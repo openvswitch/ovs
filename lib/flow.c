@@ -767,6 +767,7 @@ flow_compose(struct ofpbuf *b, const struct flow *flow)
         b->l3 = ip = ofpbuf_put_zeros(b, sizeof *ip);
         ip->ip_ihl_ver = IP_IHL_VER(5, 4);
         ip->ip_tos = flow->nw_tos;
+        ip->ip_ttl = flow->nw_ttl;
         ip->ip_proto = flow->nw_proto;
         ip->ip_src = flow->nw_src;
         ip->ip_dst = flow->nw_dst;
