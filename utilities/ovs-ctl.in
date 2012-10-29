@@ -420,7 +420,8 @@ restart () {
     stop_forwarding
     start_forwarding
 
-    restore_flows
+    # Restore the saved flows. Do not return error if restore fails.
+    restore_flows || true
 }
 
 ## --------------- ##
