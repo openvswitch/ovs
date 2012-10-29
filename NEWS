@@ -32,7 +32,8 @@ v1.9.0 - xx xxx xxxx
       are true, but because we do not know of any users for this
       feature it seems better on balance to remove it.  (The ovs-pki-cgi
       program was not included in distribution packaging.)
-    - Tunnel Path MTU Discovery default value was set to 'disabled'.
+    - Tunnel Path MTU Discovery default value was set to 'disabled'.  This
+      feature is deprecated and will be removed soon.
     - ovsdb-server now enforces the immutability of immutable columns.  This
       was not enforced in earlier versions due to an oversight.
     - New support for a nonstandard form of GRE that supports a 64-bit key.
@@ -43,6 +44,7 @@ v1.9.0 - xx xxx xxxx
         - The autopath action.
         - Interface type "null".
         - Numeric values for reserved ports (see "ovs-ofctl" note above).
+        - Tunnel Path MTU Discovery.
 
 
 v1.8.0 - xx xxx xxxx

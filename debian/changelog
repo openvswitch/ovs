@@ -36,6 +36,8 @@ openvswitch (1.9.0-1) unstable; urgency=low
       are true, but because we do not know of any users for this
       feature it seems better on balance to remove it.  (The ovs-pki-cgi
       program was not included in distribution packaging.)
+    - Tunnel Path MTU Discovery default value was set to 'disabled'.  This
+      feature is deprecated and will be removed soon.
     - ovsdb-server now enforces the immutability of immutable columns.  This
       was not enforced in earlier versions due to an oversight.
     - New support for a nonstandard form of GRE that supports a 64-bit key.
@@ -46,6 +48,7 @@ openvswitch (1.9.0-1) unstable; urgency=low
         - The autopath action.
         - Interface type "null".
         - Numeric values for reserved ports (see "ovs-ofctl" note above).
+        - Tunnel Path MTU Discovery.
 
  -- Open vSwitch team <dev@openvswitch.org>  Wed, 24 Oct 2012 16:10:39 -0700
 

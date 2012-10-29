@@ -648,6 +648,10 @@ parse_tunnel_config(const char *name, const char *type,
             }
         } else if (!strcmp(node->key, "pmtud")) {
             if (!strcmp(node->value, "true")) {
+                VLOG_WARN_ONCE("%s: The tunnel Path MTU discovery is "
+                               "deprecated and may be removed in February "
+                               "2013. Please email dev@openvswitch.org with "
+                               "concerns.", name);
                 flags |= TNL_F_PMTUD;
             }
         } else if (!strcmp(node->key, "header_cache")) {
