@@ -104,9 +104,6 @@ struct sw_flow {
 	struct sw_flow_key key;
 	struct sw_flow_actions __rcu *sf_acts;
 
-	atomic_t refcnt;
-	bool dead;
-
 	spinlock_t lock;	/* Lock for values below. */
 	unsigned long used;	/* Last used time (in jiffies). */
 	u64 packet_count;	/* Number of packets matched. */
@@ -133,12 +130,10 @@ void ovs_flow_exit(void);
 
 struct sw_flow *ovs_flow_alloc(void);
 void ovs_flow_deferred_free(struct sw_flow *);
+void ovs_flow_free(struct sw_flow *);
 
 struct sw_flow_actions *ovs_flow_actions_alloc(const struct nlattr *);
 void ovs_flow_deferred_free_acts(struct sw_flow_actions *);
-
-void ovs_flow_hold(struct sw_flow *);
-void ovs_flow_put(struct sw_flow *);
 
 int ovs_flow_extract(struct sk_buff *, u16 in_port, struct sw_flow_key *,
 		     int *key_lenp);

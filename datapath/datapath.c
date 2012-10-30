@@ -788,20 +788,20 @@ static int ovs_packet_cmd_execute(struct sk_buff *skb, struct genl_info *info)
 
 	err = ovs_flow_extract(packet, -1, &flow->key, &key_len);
 	if (err)
-		goto err_flow_put;
+		goto err_flow_free;
 
 	err = ovs_flow_metadata_from_nlattrs(flow, key_len, a[OVS_PACKET_ATTR_KEY]);
 	if (err)
-		goto err_flow_put;
+		goto err_flow_free;
 
 	err = validate_actions(a[OVS_PACKET_ATTR_ACTIONS], &flow->key, 0);
 	if (err)
-		goto err_flow_put;
+		goto err_flow_free;
 
 	acts = ovs_flow_actions_alloc(a[OVS_PACKET_ATTR_ACTIONS]);
 	err = PTR_ERR(acts);
 	if (IS_ERR(acts))
-		goto err_flow_put;
+		goto err_flow_free;
 	rcu_assign_pointer(flow->sf_acts, acts);
 
 	OVS_CB(packet)->flow = flow;
@@ -818,13 +818,13 @@ static int ovs_packet_cmd_execute(struct sk_buff *skb, struct genl_info *info)
 	local_bh_enable();
 	rcu_read_unlock();
 
-	ovs_flow_put(flow);
+	ovs_flow_free(flow);
 	return err;
 
 err_unlock:
 	rcu_read_unlock();
-err_flow_put:
-	ovs_flow_put(flow);
+err_flow_free:
+	ovs_flow_free(flow);
 err_kfree_skb:
 	kfree_skb(packet);
 err:
@@ -1139,7 +1139,7 @@ static int ovs_flow_cmd_new_or_set(struct sk_buff *skb, struct genl_info *info)
 	return 0;
 
 error_free_flow:
-	ovs_flow_put(flow);
+	ovs_flow_free(flow);
 error:
 	return error;
 }

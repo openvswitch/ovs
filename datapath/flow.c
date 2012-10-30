@@ -226,9 +226,7 @@ struct sw_flow *ovs_flow_alloc(void)
 		return ERR_PTR(-ENOMEM);
 
 	spin_lock_init(&flow->lock);
-	atomic_set(&flow->refcnt, 1);
 	flow->sf_acts = NULL;
-	flow->dead = false;
 
 	return flow;
 }
@@ -290,12 +288,6 @@ struct flow_table *ovs_flow_tbl_alloc(int new_size)
 	return table;
 }
 
-static void flow_free(struct sw_flow *flow)
-{
-	flow->dead = true;
-	ovs_flow_put(flow);
-}
-
 void ovs_flow_tbl_destroy(struct flow_table *table)
 {
 	int i;
@@ -314,7 +306,7 @@ void ovs_flow_tbl_destroy(struct flow_table *table)
 
 		hlist_for_each_entry_safe(flow, node, n, head, hash_node[ver]) {
 			hlist_del_rcu(&flow->hash_node[ver]);
-			flow_free(flow);
+			ovs_flow_free(flow);
 		}
 	}
 
@@ -418,13 +410,21 @@ struct flow_table *ovs_flow_tbl_expand(struct flow_table *table)
 	return __flow_tbl_rehash(table, table->n_buckets * 2);
 }
 
+void ovs_flow_free(struct sw_flow *flow)
+{
+	if (unlikely(!flow))
+		return;
+
+	kfree((struct sf_flow_acts __force *)flow->sf_acts);
+	kmem_cache_free(flow_cache, flow);
+}
+
 /* RCU callback used by ovs_flow_deferred_free. */
 static void rcu_free_flow_callback(struct rcu_head *rcu)
 {
 	struct sw_flow *flow = container_of(rcu, struct sw_flow, rcu);
 
-	flow->dead = true;
-	ovs_flow_put(flow);
+	ovs_flow_free(flow);
 }
 
 /* Schedules 'flow' to be freed after the next RCU grace period.
@@ -432,22 +432,6 @@ static void rcu_free_flow_callback(struct rcu_head *rcu)
 void ovs_flow_deferred_free(struct sw_flow *flow)
 {
 	call_rcu(&flow->rcu, rcu_free_flow_callback);
-}
-
-void ovs_flow_hold(struct sw_flow *flow)
-{
-	atomic_inc(&flow->refcnt);
-}
-
-void ovs_flow_put(struct sw_flow *flow)
-{
-	if (unlikely(!flow))
-		return;
-
-	if (atomic_dec_and_test(&flow->refcnt)) {
-		kfree((struct sf_flow_acts __force *)flow->sf_acts);
-		kmem_cache_free(flow_cache, flow);
-	}
 }
 
 /* RCU callback used by ovs_flow_deferred_free_acts. */
