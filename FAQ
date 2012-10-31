@@ -414,6 +414,14 @@ Q: Is there any documentation on the database tables and fields?
 
 A: Yes.  ovs-vswitchd.conf.db(5) is a comprehensive reference.
 
+Q: When I run ovs-dpctl I no longer see the bridges I created.  Instead,
+   I only see a datapath called "ovs-system".  How can I see datapath
+   information about a particular bridge?
+
+A: In version 1.9.0, OVS switched to using a single datapath that is
+   shared by all bridges of that type.  The "ovs-appctl dpif/*"
+   commands provide similar functionality that is scoped by the bridge.
+
 
 VLANs
 -----

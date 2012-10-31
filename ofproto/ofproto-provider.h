@@ -655,11 +655,9 @@ struct ofproto_class {
      *
      * The client might not be entirely in control of the ports within an
      * ofproto.  Some hardware implementations, for example, might have a fixed
-     * set of ports in a datapath, and the Linux datapath allows the system
-     * administrator to externally add and remove ports with ovs-dpctl.  For
-     * this reason, the client needs a way to iterate through all the ports
-     * that are actually in a datapath.  These functions provide that
-     * functionality.
+     * set of ports in a datapath.  For this reason, the client needs a way to
+     * iterate through all the ports that are actually in a datapath.  These
+     * functions provide that functionality.
      *
      * The 'state' pointer provides the implementation a place to
      * keep track of its position.  Its format is opaque to the caller.

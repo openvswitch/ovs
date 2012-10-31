@@ -47,6 +47,11 @@ v1.9.0 - xx xxx xxxx
     - The ofproto library is now responsible for assigning OpenFlow port
       numbers.  An ofproto implementation should assign them when
       port_construct() is called.
+    - All dpif-based bridges of a particular type share a common
+      datapath called "ovs-<type>", e.g. "ovs-system".  The ovs-dpctl
+      commands will now return information on that shared datapath.  To
+      get the equivalent bridge-specific information, use the new
+      "ovs-appctl dpif/*" commands.
     - The following features are now deprecated.  They will be removed no
       earlier than February 2013.  Please email dev@openvswitch.org with
       concerns.

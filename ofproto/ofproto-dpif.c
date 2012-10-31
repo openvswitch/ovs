@@ -375,7 +375,9 @@ static struct subfacet *subfacet_create(struct facet *, enum odp_key_fitness,
                                         size_t key_len, ovs_be16 initial_tci,
                                         long long int now);
 static struct subfacet *subfacet_find(struct ofproto_dpif *,
-                                      const struct nlattr *key, size_t key_len);
+                                      const struct nlattr *key, size_t key_len,
+                                      uint32_t key_hash,
+                                      const struct flow *flow);
 static void subfacet_destroy(struct subfacet *);
 static void subfacet_destroy__(struct subfacet *);
 static void subfacet_destroy_batch(struct ofproto_dpif *,
@@ -490,7 +492,7 @@ static void facet_account(struct facet *);
 static bool facet_is_controller_flow(struct facet *);
 
 struct ofport_dpif {
-    struct hmap_node odp_port_node; /* In ofproto-dpif's "odp_to_ofport_map". */
+    struct hmap_node odp_port_node; /* In dpif_backer's "odp_to_ofport_map". */
     struct ofport up;
 
     uint32_t odp_port;
@@ -604,10 +606,25 @@ COVERAGE_DEFINE(rev_port_toggled);
 COVERAGE_DEFINE(rev_flow_table);
 COVERAGE_DEFINE(rev_inconsistency);
 
+/* All datapaths of a given type share a single dpif backer instance. */
+struct dpif_backer {
+    char *type;
+    int refcount;
+    struct dpif *dpif;
+    struct timer next_expiration;
+    struct hmap odp_to_ofport_map; /* ODP port to ofport mapping. */
+};
+
+/* All existing ofproto_backer instances, indexed by ofproto->up.type. */
+static struct shash all_dpif_backers = SHASH_INITIALIZER(&all_dpif_backers);
+
+static struct ofport_dpif *
+odp_port_to_ofport(const struct dpif_backer *, uint32_t odp_port);
+
 struct ofproto_dpif {
     struct hmap_node all_ofproto_dpifs_node; /* In 'all_ofproto_dpifs'. */
     struct ofproto up;
-    struct dpif *dpif;
+    struct dpif_backer *backer;
 
     /* Special OpenFlow rules. */
     struct rule_dpif *miss_rule; /* Sends flow table misses to controller. */
@@ -624,9 +641,6 @@ struct ofproto_dpif {
     struct ofmirror *mirrors[MAX_MIRRORS];
     bool has_mirrors;
     bool has_bonded_bundles;
-
-    /* Expiration. */
-    struct timer next_expiration;
 
     /* Facets. */
     struct hmap facets;
@@ -653,8 +667,10 @@ struct ofproto_dpif {
     struct hmap realdev_vid_map; /* (realdev,vid) -> vlandev. */
     struct hmap vlandev_map;     /* vlandev -> (realdev,vid). */
 
-    /* ODP port to ofp_port mapping. */
-    struct hmap odp_to_ofport_map;
+    /* Ports. */
+    struct sset ports;             /* Set of port names. */
+    struct sset port_poll_set;     /* Queued names for port_poll() reply. */
+    int port_poll_errno;           /* Last errno for port_poll() reply. */
 };
 
 /* Defer flow mod completion until "ovs-appctl ofproto/unclog"?  (Useful only
@@ -687,10 +703,10 @@ static void update_learning_table(struct ofproto_dpif *,
                                   struct ofbundle *);
 /* Upcalls. */
 #define FLOW_MISS_MAX_BATCH 50
-static int handle_upcalls(struct ofproto_dpif *, unsigned int max_batch);
+static int handle_upcalls(struct dpif_backer *, unsigned int max_batch);
 
 /* Flow expiration. */
-static int expire(struct ofproto_dpif *);
+static int expire(struct dpif_backer *);
 
 /* NetFlow. */
 static void send_netflow_active_timeouts(struct ofproto_dpif *);
@@ -704,12 +720,28 @@ static void add_mirror_actions(struct action_xlate_ctx *ctx,
                                const struct flow *flow);
 /* Global variables. */
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+
+/* Initial mappings of port to bridge mappings. */
+static struct shash init_ofp_ports = SHASH_INITIALIZER(&init_ofp_ports);
 
 /* Factory functions. */
 
 static void
-init(const struct shash *iface_hints OVS_UNUSED)
+init(const struct shash *iface_hints)
 {
+    struct shash_node *node;
+
+    /* Make a local copy, since we don't own 'iface_hints' elements. */
+    SHASH_FOR_EACH(node, iface_hints) {
+        const struct iface_hint *orig_hint = node->data;
+        struct iface_hint *new_hint = xmalloc(sizeof *new_hint);
+
+        new_hint->br_name = xstrdup(orig_hint->br_name);
+        new_hint->br_type = xstrdup(orig_hint->br_type);
+        new_hint->ofp_port = orig_hint->ofp_port;
+
+        shash_add(&init_ofp_ports, node->name, new_hint);
+    }
 }
 
 static void
@@ -721,7 +753,17 @@ enumerate_types(struct sset *types)
 static int
 enumerate_names(const char *type, struct sset *names)
 {
-    return dp_enumerate_names(type, names);
+    struct ofproto_dpif *ofproto;
+
+    sset_clear(names);
+    HMAP_FOR_EACH (ofproto, all_ofproto_dpifs_node, &all_ofproto_dpifs) {
+        if (strcmp(type, ofproto->up.type)) {
+            continue;
+        }
+        sset_add(names, ofproto->up.name);
+    }
+
+    return 0;
 }
 
 static int
@@ -736,6 +778,132 @@ del(const char *type, const char *name)
         dpif_close(dpif);
     }
     return error;
+}
+
+/* Type functions. */
+
+static int
+type_run(const char *type)
+{
+    struct dpif_backer *backer;
+    char *devname;
+    int error;
+
+    backer = shash_find_data(&all_dpif_backers, type);
+    if (!backer) {
+        /* This is not necessarily a problem, since backers are only
+         * created on demand. */
+        return 0;
+    }
+
+    dpif_run(backer->dpif);
+
+    if (timer_expired(&backer->next_expiration)) {
+        int delay = expire(backer);
+        timer_set_duration(&backer->next_expiration, delay);
+    }
+
+    /* Check for port changes in the dpif. */
+    while ((error = dpif_port_poll(backer->dpif, &devname)) == 0) {
+        struct ofproto_dpif *ofproto = NULL;
+        struct dpif_port port;
+
+        /* Don't report on the datapath's device. */
+        if (!strcmp(devname, dpif_base_name(backer->dpif))) {
+            continue;
+        }
+
+        HMAP_FOR_EACH (ofproto, all_ofproto_dpifs_node,
+                       &all_ofproto_dpifs) {
+            if (sset_contains(&ofproto->ports, devname)) {
+                break;
+            }
+        }
+
+        if (dpif_port_query_by_name(backer->dpif, devname, &port)) {
+            /* The port was removed.  If we know the datapath,
+             * report it through poll_set().  If we don't, it may be
+             * notifying us of a removal we initiated, so ignore it.
+             * If there's a pending ENOBUFS, let it stand, since
+             * everything will be reevaluated. */
+            if (ofproto && ofproto->port_poll_errno != ENOBUFS) {
+                sset_add(&ofproto->port_poll_set, devname);
+                ofproto->port_poll_errno = 0;
+            }
+            dpif_port_destroy(&port);
+        } else if (!ofproto) {
+            /* The port was added, but we don't know with which
+             * ofproto we should associate it.  Delete it. */
+            dpif_port_del(backer->dpif, port.port_no);
+        }
+
+        free(devname);
+    }
+
+    if (error != EAGAIN) {
+        struct ofproto_dpif *ofproto;
+
+        /* There was some sort of error, so propagate it to all
+         * ofprotos that use this backer. */
+        HMAP_FOR_EACH (ofproto, all_ofproto_dpifs_node,
+                       &all_ofproto_dpifs) {
+            if (ofproto->backer == backer) {
+                sset_clear(&ofproto->port_poll_set);
+                ofproto->port_poll_errno = error;
+            }
+        }
+    }
+
+    return 0;
+}
+
+static int
+type_run_fast(const char *type)
+{
+    struct dpif_backer *backer;
+    unsigned int work;
+
+    backer = shash_find_data(&all_dpif_backers, type);
+    if (!backer) {
+        /* This is not necessarily a problem, since backers are only
+         * created on demand. */
+        return 0;
+    }
+
+    /* Handle one or more batches of upcalls, until there's nothing left to do
+     * or until we do a fixed total amount of work.
+     *
+     * We do work in batches because it can be much cheaper to set up a number
+     * of flows and fire off their patches all at once.  We do multiple batches
+     * because in some cases handling a packet can cause another packet to be
+     * queued almost immediately as part of the return flow.  Both
+     * optimizations can make major improvements on some benchmarks and
+     * presumably for real traffic as well. */
+    work = 0;
+    while (work < FLOW_MISS_MAX_BATCH) {
+        int retval = handle_upcalls(backer, FLOW_MISS_MAX_BATCH - work);
+        if (retval <= 0) {
+            return -retval;
+        }
+        work += retval;
+    }
+
+    return 0;
+}
+
+static void
+type_wait(const char *type)
+{
+    struct dpif_backer *backer;
+
+    backer = shash_find_data(&all_dpif_backers, type);
+    if (!backer) {
+        /* This is not necessarily a problem, since backers are only
+         * created on demand. */
+        return;
+    }
+
+    timer_wait(&backer->next_expiration);
 }
 
 /* Basic life-cycle. */
@@ -756,35 +924,145 @@ dealloc(struct ofproto *ofproto_)
     free(ofproto);
 }
 
+static void
+close_dpif_backer(struct dpif_backer *backer)
+{
+    struct shash_node *node;
+
+    assert(backer->refcount > 0);
+
+    if (--backer->refcount) {
+        return;
+    }
+
+    hmap_destroy(&backer->odp_to_ofport_map);
+    node = shash_find(&all_dpif_backers, backer->type);
+    free(backer->type);
+    shash_delete(&all_dpif_backers, node);
+    dpif_close(backer->dpif);
+
+    free(backer);
+}
+
+/* Datapath port slated for removal from datapath. */
+struct odp_garbage {
+    struct list list_node;
+    uint32_t odp_port;
+};
+
+static int
+open_dpif_backer(const char *type, struct dpif_backer **backerp)
+{
+    struct dpif_backer *backer;
+    struct dpif_port_dump port_dump;
+    struct dpif_port port;
+    struct shash_node *node;
+    struct list garbage_list;
+    struct odp_garbage *garbage, *next;
+    struct sset names;
+    char *backer_name;
+    const char *name;
+    int error;
+
+    backer = shash_find_data(&all_dpif_backers, type);
+    if (backer) {
+        backer->refcount++;
+        *backerp = backer;
+        return 0;
+    }
+
+    backer_name = xasprintf("ovs-%s", type);
+
+    /* Remove any existing datapaths, since we assume we're the only
+     * userspace controlling the datapath. */
+    sset_init(&names);
+    dp_enumerate_names(type, &names);
+    SSET_FOR_EACH(name, &names) {
+        struct dpif *old_dpif;
+
+        /* Don't remove our backer if it exists. */
+        if (!strcmp(name, backer_name)) {
+            continue;
+        }
+
+        if (dpif_open(name, type, &old_dpif)) {
+            VLOG_WARN("couldn't open old datapath %s to remove it", name);
+        } else {
+            dpif_delete(old_dpif);
+            dpif_close(old_dpif);
+        }
+    }
+    sset_destroy(&names);
+
+    backer = xmalloc(sizeof *backer);
+
+    error = dpif_create_and_open(backer_name, type, &backer->dpif);
+    free(backer_name);
+    if (error) {
+        VLOG_ERR("failed to open datapath of type %s: %s", type,
+                 strerror(error));
+        return error;
+    }
+
+    backer->type = xstrdup(type);
+    backer->refcount = 1;
+    hmap_init(&backer->odp_to_ofport_map);
+    timer_set_duration(&backer->next_expiration, 1000);
+    *backerp = backer;
+
+    dpif_flow_flush(backer->dpif);
+
+    /* Loop through the ports already on the datapath and remove any
+     * that we don't need anymore. */
+    list_init(&garbage_list);
+    dpif_port_dump_start(&port_dump, backer->dpif);
+    while (dpif_port_dump_next(&port_dump, &port)) {
+        node = shash_find(&init_ofp_ports, port.name);
+        if (!node && strcmp(port.name, dpif_base_name(backer->dpif))) {
+            garbage = xmalloc(sizeof *garbage);
+            garbage->odp_port = port.port_no;
+            list_push_front(&garbage_list, &garbage->list_node);
+        }
+    }
+    dpif_port_dump_done(&port_dump);
+
+    LIST_FOR_EACH_SAFE (garbage, next, list_node, &garbage_list) {
+        dpif_port_del(backer->dpif, garbage->odp_port);
+        list_remove(&garbage->list_node);
+        free(garbage);
+    }
+
+    shash_add(&all_dpif_backers, type, backer);
+
+    error = dpif_recv_set(backer->dpif, true);
+    if (error) {
+        VLOG_ERR("failed to listen on datapath of type %s: %s",
+                 type, strerror(error));
+        close_dpif_backer(backer);
+        return error;
+    }
+
+    return error;
+}
+
 static int
 construct(struct ofproto *ofproto_)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
-    const char *name = ofproto->up.name;
+    struct shash_node *node, *next;
     int max_ports;
     int error;
     int i;
 
-    error = dpif_create_and_open(name, ofproto->up.type, &ofproto->dpif);
+    error = open_dpif_backer(ofproto->up.type, &ofproto->backer);
     if (error) {
-        VLOG_ERR("failed to open datapath %s: %s", name, strerror(error));
         return error;
     }
 
-    max_ports = dpif_get_max_ports(ofproto->dpif);
+    max_ports = dpif_get_max_ports(ofproto->backer->dpif);
     ofproto_init_max_ports(ofproto_, MIN(max_ports, OFPP_MAX));
 
     ofproto->n_matches = 0;
-
-    dpif_flow_flush(ofproto->dpif);
-    dpif_recv_purge(ofproto->dpif);
-
-    error = dpif_recv_set(ofproto->dpif, true);
-    if (error) {
-        VLOG_ERR("failed to listen on datapath %s: %s", name, strerror(error));
-        dpif_close(ofproto->dpif);
-        return error;
-    }
 
     ofproto->netflow = NULL;
     ofproto->sflow = NULL;
@@ -795,8 +1073,6 @@ construct(struct ofproto *ofproto_)
         ofproto->mirrors[i] = NULL;
     }
     ofproto->has_bonded_bundles = false;
-
-    timer_set_duration(&ofproto->next_expiration, 1000);
 
     hmap_init(&ofproto->facets);
     hmap_init(&ofproto->subfacets);
@@ -822,7 +1098,24 @@ construct(struct ofproto *ofproto_)
     hmap_init(&ofproto->vlandev_map);
     hmap_init(&ofproto->realdev_vid_map);
 
-    hmap_init(&ofproto->odp_to_ofport_map);
+    sset_init(&ofproto->ports);
+    sset_init(&ofproto->port_poll_set);
+    ofproto->port_poll_errno = 0;
+
+    SHASH_FOR_EACH_SAFE (node, next, &init_ofp_ports) {
+        const struct iface_hint *iface_hint = node->data;
+
+        if (!strcmp(iface_hint->br_name, ofproto->up.name)) {
+            /* Check if the datapath already has this port. */
+            if (dpif_port_exists(ofproto->backer->dpif, node->name)) {
+                sset_add(&ofproto->ports, node->name);
+            }
+
+            free(iface_hint->br_name);
+            free(iface_hint->br_type);
+            shash_delete(&init_ofp_ports, node);
+        }
+    }
 
     hmap_insert(&all_ofproto_dpifs, &ofproto->all_ofproto_dpifs_node,
                 hash_string(ofproto->up.name, 0));
@@ -948,9 +1241,10 @@ destruct(struct ofproto *ofproto_)
     hmap_destroy(&ofproto->vlandev_map);
     hmap_destroy(&ofproto->realdev_vid_map);
 
-    hmap_destroy(&ofproto->odp_to_ofport_map);
+    sset_destroy(&ofproto->ports);
+    sset_destroy(&ofproto->port_poll_set);
 
-    dpif_close(ofproto->dpif);
+    close_dpif_backer(ofproto->backer);
 }
 
 static int
@@ -958,29 +1252,11 @@ run_fast(struct ofproto *ofproto_)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
     struct ofport_dpif *ofport;
-    unsigned int work;
 
     HMAP_FOR_EACH (ofport, up.hmap_node, &ofproto->up.ports) {
         port_run_fast(ofport);
     }
 
-    /* Handle one or more batches of upcalls, until there's nothing left to do
-     * or until we do a fixed total amount of work.
-     *
-     * We do work in batches because it can be much cheaper to set up a number
-     * of flows and fire off their patches all at once.  We do multiple batches
-     * because in some cases handling a packet can cause another packet to be
-     * queued almost immediately as part of the return flow.  Both
-     * optimizations can make major improvements on some benchmarks and
-     * presumably for real traffic as well. */
-    work = 0;
-    while (work < FLOW_MISS_MAX_BATCH) {
-        int retval = handle_upcalls(ofproto, FLOW_MISS_MAX_BATCH - work);
-        if (retval <= 0) {
-            return -retval;
-        }
-        work += retval;
-    }
     return 0;
 }
 
@@ -995,16 +1271,10 @@ run(struct ofproto *ofproto_)
     if (!clogged) {
         complete_operations(ofproto);
     }
-    dpif_run(ofproto->dpif);
 
     error = run_fast(ofproto_);
     if (error) {
         return error;
-    }
-
-    if (timer_expired(&ofproto->next_expiration)) {
-        int delay = expire(ofproto);
-        timer_set_duration(&ofproto->next_expiration, delay);
     }
 
     if (ofproto->netflow) {
@@ -1098,8 +1368,8 @@ wait(struct ofproto *ofproto_)
         poll_immediate_wake();
     }
 
-    dpif_wait(ofproto->dpif);
-    dpif_recv_wait(ofproto->dpif);
+    dpif_wait(ofproto->backer->dpif);
+    dpif_recv_wait(ofproto->backer->dpif);
     if (ofproto->sflow) {
         dpif_sflow_wait(ofproto->sflow);
     }
@@ -1121,8 +1391,6 @@ wait(struct ofproto *ofproto_)
         /* Shouldn't happen, but if it does just go around again. */
         VLOG_DBG_RL(&rl, "need revalidate in ofproto_wait_cb()");
         poll_immediate_wake();
-    } else {
-        timer_wait(&ofproto->next_expiration);
     }
     if (ofproto->governor) {
         governor_wait(ofproto->governor);
@@ -1142,23 +1410,27 @@ static void
 flush(struct ofproto *ofproto_)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
-    struct facet *facet, *next_facet;
+    struct subfacet *subfacet, *next_subfacet;
+    struct subfacet *batch[SUBFACET_DESTROY_MAX_BATCH];
+    int n_batch;
 
-    HMAP_FOR_EACH_SAFE (facet, next_facet, hmap_node, &ofproto->facets) {
-        /* Mark the facet as not installed so that facet_remove() doesn't
-         * bother trying to uninstall it.  There is no point in uninstalling it
-         * individually since we are about to blow away all the facets with
-         * dpif_flow_flush(). */
-        struct subfacet *subfacet;
-
-        LIST_FOR_EACH (subfacet, list_node, &facet->subfacets) {
-            subfacet->path = SF_NOT_INSTALLED;
-            subfacet->dp_packet_count = 0;
-            subfacet->dp_byte_count = 0;
+    n_batch = 0;
+    HMAP_FOR_EACH_SAFE (subfacet, next_subfacet, hmap_node,
+                        &ofproto->subfacets) {
+        if (subfacet->path != SF_NOT_INSTALLED) {
+            batch[n_batch++] = subfacet;
+            if (n_batch >= SUBFACET_DESTROY_MAX_BATCH) {
+                subfacet_destroy_batch(ofproto, batch, n_batch);
+                n_batch = 0;
+            }
+        } else {
+            subfacet_destroy(subfacet);
         }
-        facet_remove(facet);
     }
-    dpif_flow_flush(ofproto->dpif);
+
+    if (n_batch > 0) {
+        subfacet_destroy_batch(ofproto, batch, n_batch);
+    }
 }
 
 static void
@@ -1188,7 +1460,8 @@ get_tables(struct ofproto *ofproto_, struct ofp12_table_stats *ots)
 
     strcpy(ots->name, "classifier");
 
-    dpif_get_dp_stats(ofproto->dpif, &s);
+    dpif_get_dp_stats(ofproto->backer->dpif, &s);
+
     ots->lookup_count = htonll(s.n_hit + s.n_missed);
     ots->matched_count = htonll(s.n_hit + ofproto->n_matches);
 }
@@ -1227,7 +1500,7 @@ port_construct(struct ofport *port_)
     port->vlandev_vid = 0;
     port->carrier_seq = netdev_get_carrier_resets(port->up.netdev);
 
-    error = dpif_port_query_by_name(ofproto->dpif,
+    error = dpif_port_query_by_name(ofproto->backer->dpif,
                                     netdev_get_name(port->up.netdev),
                                     &dpif_port);
     if (error) {
@@ -1244,7 +1517,7 @@ port_construct(struct ofport *port_)
         return EBUSY;
     }
 
-    hmap_insert(&ofproto->odp_to_ofport_map, &port->odp_port_node,
+    hmap_insert(&ofproto->backer->odp_to_ofport_map, &port->odp_port_node,
                 hash_int(port->odp_port, 0));
 
     if (ofproto->sflow) {
@@ -1259,8 +1532,20 @@ port_destruct(struct ofport *port_)
 {
     struct ofport_dpif *port = ofport_dpif_cast(port_);
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(port->up.ofproto);
+    struct dpif_port dpif_port;
 
-    hmap_remove(&ofproto->odp_to_ofport_map, &port->odp_port_node);
+    if (!dpif_port_query_by_number(ofproto->backer->dpif,
+                                   port->odp_port, &dpif_port)) {
+        /* The underlying device is still there, so delete it.  This
+         * happens when the ofproto is being destroyed, since the caller
+         * assumes that removal of attached ports will happen as part of
+         * destruction. */
+        dpif_port_del(ofproto->backer->dpif, port->odp_port);
+        dpif_port_destroy(&dpif_port);
+    }
+
+    sset_find_and_delete(&ofproto->ports, netdev_get_name(port->up.netdev));
+    hmap_remove(&ofproto->backer->odp_to_ofport_map, &port->odp_port_node);
     ofproto->need_revalidate = REV_RECONFIGURE;
     bundle_remove(port_);
     set_cfm(port_, NULL);
@@ -1688,7 +1973,7 @@ set_queues(struct ofport *ofport_,
         uint8_t dscp;
 
         dscp = (qdscp_list[i].dscp << 2) & IP_DSCP_MASK;
-        if (dpif_queue_to_priority(ofproto->dpif, qdscp_list[i].queue,
+        if (dpif_queue_to_priority(ofproto->backer->dpif, qdscp_list[i].queue,
                                    &priority)) {
             continue;
         }
@@ -2566,7 +2851,11 @@ port_query_by_name(const struct ofproto *ofproto_, const char *devname,
     struct dpif_port dpif_port;
     int error;
 
-    error = dpif_port_query_by_name(ofproto->dpif, devname, &dpif_port);
+    if (!sset_contains(&ofproto->ports, devname)) {
+        return ENODEV;
+    }
+    error = dpif_port_query_by_name(ofproto->backer->dpif,
+                                    devname, &dpif_port);
     if (!error) {
         ofproto_port_from_dpif_port(ofproto, ofproto_port, &dpif_port);
     }
@@ -2578,8 +2867,13 @@ port_add(struct ofproto *ofproto_, struct netdev *netdev)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
     uint32_t odp_port = UINT32_MAX;
+    int error;
 
-    return dpif_port_add(ofproto->dpif, netdev, &odp_port);
+    error = dpif_port_add(ofproto->backer->dpif, netdev, &odp_port);
+    if (!error) {
+        sset_add(&ofproto->ports, netdev_get_name(netdev));
+    }
+    return error;
 }
 
 static int
@@ -2590,7 +2884,7 @@ port_del(struct ofproto *ofproto_, uint16_t ofp_port)
     int error = 0;
 
     if (odp_port != OFPP_NONE) {
-        error = dpif_port_del(ofproto->dpif, odp_port);
+        error = dpif_port_del(ofproto->backer->dpif, odp_port);
     }
     if (!error) {
         struct ofport_dpif *ofport = get_ofp_port(ofproto, ofp_port);
@@ -2663,19 +2957,18 @@ ofproto_update_local_port_stats(const struct ofproto *ofproto_,
 }
 
 struct port_dump_state {
-    struct dpif_port_dump dump;
-    bool done;
+    uint32_t bucket;
+    uint32_t offset;
 };
 
 static int
-port_dump_start(const struct ofproto *ofproto_, void **statep)
+port_dump_start(const struct ofproto *ofproto_ OVS_UNUSED, void **statep)
 {
-    struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
     struct port_dump_state *state;
 
     *statep = state = xmalloc(sizeof *state);
-    dpif_port_dump_start(&state->dump, ofproto->dpif);
-    state->done = false;
+    state->bucket = 0;
+    state->offset = 0;
     return 0;
 }
 
@@ -2685,16 +2978,19 @@ port_dump_next(const struct ofproto *ofproto_ OVS_UNUSED, void *state_,
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
     struct port_dump_state *state = state_;
-    struct dpif_port dpif_port;
+    struct sset_node *node;
 
-    if (dpif_port_dump_next(&state->dump, &dpif_port)) {
-        ofproto_port_from_dpif_port(ofproto, port, &dpif_port);
-        return 0;
-    } else {
-        int error = dpif_port_dump_done(&state->dump);
-        state->done = true;
-        return error ? error : EOF;
+    while ((node = sset_at_position(&ofproto->ports, &state->bucket,
+                               &state->offset))) {
+        int error;
+
+        error = port_query_by_name(ofproto_, node->name, port);
+        if (error != ENODEV) {
+            return error;
+        }
     }
+
+    return EOF;
 }
 
 static int
@@ -2702,9 +2998,6 @@ port_dump_done(const struct ofproto *ofproto_ OVS_UNUSED, void *state_)
 {
     struct port_dump_state *state = state_;
 
-    if (!state->done) {
-        dpif_port_dump_done(&state->dump);
-    }
     free(state);
     return 0;
 }
@@ -2713,14 +3006,26 @@ static int
 port_poll(const struct ofproto *ofproto_, char **devnamep)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
-    return dpif_port_poll(ofproto->dpif, devnamep);
+
+    if (ofproto->port_poll_errno) {
+        int error = ofproto->port_poll_errno;
+        ofproto->port_poll_errno = 0;
+        return error;
+    }
+
+    if (sset_is_empty(&ofproto->port_poll_set)) {
+        return EAGAIN;
+    }
+
+    *devnamep = sset_pop(&ofproto->port_poll_set);
+    return 0;
 }
 
 static void
 port_poll_wait(const struct ofproto *ofproto_)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
-    dpif_port_poll_wait(ofproto->dpif);
+    dpif_port_poll_wait(ofproto->backer->dpif);
 }
 
 static int
@@ -2745,6 +3050,7 @@ port_is_lacp_current(const struct ofport *ofport_)
  * It's possible to batch more than that, but the benefit might be minimal. */
 struct flow_miss {
     struct hmap_node hmap_node;
+    struct ofproto_dpif *ofproto;
     struct flow flow;
     enum odp_key_fitness key_fitness;
     const struct nlattr *key;
@@ -3034,12 +3340,13 @@ handle_flow_miss_with_facet(struct flow_miss *miss, struct facet *facet,
     }
 }
 
-/* Handles flow miss 'miss' on 'ofproto'.  May add any required datapath
- * operations to 'ops', incrementing '*n_ops' for each new op. */
+/* Handles flow miss 'miss'.  May add any required datapath operations
+ * to 'ops', incrementing '*n_ops' for each new op. */
 static void
-handle_flow_miss(struct ofproto_dpif *ofproto, struct flow_miss *miss,
-                 struct flow_miss_op *ops, size_t *n_ops)
+handle_flow_miss(struct flow_miss *miss, struct flow_miss_op *ops,
+                 size_t *n_ops)
 {
+    struct ofproto_dpif *ofproto = miss->ofproto;
     struct facet *facet;
     long long int now;
     uint32_t hash;
@@ -3065,32 +3372,26 @@ handle_flow_miss(struct ofproto_dpif *ofproto, struct flow_miss *miss,
     handle_flow_miss_with_facet(miss, facet, now, ops, n_ops);
 }
 
-/* Like odp_flow_key_to_flow(), this function converts the 'key_len' bytes of
- * OVS_KEY_ATTR_* attributes in 'key' to a flow structure in 'flow' and returns
- * an ODP_FIT_* value that indicates how well 'key' fits our expectations for
- * what a flow key should contain.
- *
- * This function also includes some logic to help make VLAN splinters
- * transparent to the rest of the upcall processing logic.  In particular, if
- * the extracted in_port is a VLAN splinter port, it replaces flow->in_port by
- * the "real" port, sets flow->vlan_tci correctly for the VLAN of the VLAN
- * splinter port, and pushes a VLAN header onto 'packet' (if it is nonnull).
+/* This function does post-processing on data returned from
+ * odp_flow_key_to_flow() to help make VLAN splinters transparent to the
+ * rest of the upcall processing logic.  In particular, if the extracted
+ * in_port is a VLAN splinter port, it replaces flow->in_port by the "real"
+ * port, sets flow->vlan_tci correctly for the VLAN of the VLAN splinter
+ * port, and pushes a VLAN header onto 'packet' (if it is nonnull). The
+ * caller must have called odp_flow_key_to_flow() and supply 'fitness' and
+ * 'flow' from its output.  The 'flow' argument must have had the "in_port"
+ * member converted to the OpenFlow number.
  *
  * Sets '*initial_tci' to the VLAN TCI with which the packet was really
  * received, that is, the actual VLAN TCI extracted by odp_flow_key_to_flow().
  * (This differs from the value returned in flow->vlan_tci only for packets
- * received on VLAN splinters.)
- */
+ * received on VLAN splinters.) */
 static enum odp_key_fitness
-ofproto_dpif_extract_flow_key(const struct ofproto_dpif *ofproto,
-                              const struct nlattr *key, size_t key_len,
-                              struct flow *flow, ovs_be16 *initial_tci,
-                              struct ofpbuf *packet)
+ofproto_dpif_vsp_adjust(const struct ofproto_dpif *ofproto,
+                        enum odp_key_fitness fitness,
+                        struct flow *flow, ovs_be16 *initial_tci,
+                        struct ofpbuf *packet)
 {
-    enum odp_key_fitness fitness;
-
-    fitness = odp_flow_key_to_flow(key, key_len, flow);
-    flow->in_port = odp_port_to_ofp_port(ofproto, flow->in_port);
     if (fitness == ODP_FIT_ERROR) {
         return fitness;
     }
@@ -3125,7 +3426,7 @@ ofproto_dpif_extract_flow_key(const struct ofproto_dpif *ofproto,
 }
 
 static void
-handle_miss_upcalls(struct ofproto_dpif *ofproto, struct dpif_upcall *upcalls,
+handle_miss_upcalls(struct dpif_backer *backer, struct dpif_upcall *upcalls,
                     size_t n_upcalls)
 {
     struct dpif_upcall *upcall;
@@ -3152,14 +3453,30 @@ handle_miss_upcalls(struct ofproto_dpif *ofproto, struct dpif_upcall *upcalls,
     for (upcall = upcalls; upcall < &upcalls[n_upcalls]; upcall++) {
         struct flow_miss *miss = &misses[n_misses];
         struct flow_miss *existing_miss;
+        enum odp_key_fitness fitness;
+        struct ofproto_dpif *ofproto;
+        struct ofport_dpif *port;
         struct flow flow;
         uint32_t hash;
 
+        fitness = odp_flow_key_to_flow(upcall->key, upcall->key_len, &flow);
+        port = odp_port_to_ofport(backer, flow.in_port);
+        if (!port) {
+            /* Received packet on port for which we couldn't associate
+             * an ofproto.  This can happen if a port is removed while
+             * traffic is being received.  Print a rate-limited message
+             * in case it happens frequently. */
+            VLOG_INFO_RL(&rl, "received packet on unassociated port %"PRIu32,
+                         flow.in_port);
+            continue;
+        }
+        ofproto = ofproto_dpif_cast(port->up.ofproto);
+        flow.in_port = port->up.ofp_port;
+
         /* Obtain metadata and check userspace/kernel agreement on flow match,
          * then set 'flow''s header pointers. */
-        miss->key_fitness = ofproto_dpif_extract_flow_key(
-            ofproto, upcall->key, upcall->key_len,
-            &flow, &miss->initial_tci, upcall->packet);
+        miss->key_fitness = ofproto_dpif_vsp_adjust(ofproto, fitness,
+                                &flow, &miss->initial_tci, upcall->packet);
         if (miss->key_fitness == ODP_FIT_ERROR) {
             continue;
         }
@@ -3171,6 +3488,7 @@ handle_miss_upcalls(struct ofproto_dpif *ofproto, struct dpif_upcall *upcalls,
         existing_miss = flow_miss_find(&todo, &miss->flow, hash);
         if (!existing_miss) {
             hmap_insert(&todo, &miss->hmap_node, hash);
+            miss->ofproto = ofproto;
             miss->key = upcall->key;
             miss->key_len = upcall->key_len;
             miss->upcall_type = upcall->type;
@@ -3187,7 +3505,7 @@ handle_miss_upcalls(struct ofproto_dpif *ofproto, struct dpif_upcall *upcalls,
      * operations to batch. */
     n_ops = 0;
     HMAP_FOR_EACH (miss, hmap_node, &todo) {
-        handle_flow_miss(ofproto, miss, flow_miss_ops, &n_ops);
+        handle_flow_miss(miss, flow_miss_ops, &n_ops);
     }
     assert(n_ops <= ARRAY_SIZE(flow_miss_ops));
 
@@ -3195,7 +3513,7 @@ handle_miss_upcalls(struct ofproto_dpif *ofproto, struct dpif_upcall *upcalls,
     for (i = 0; i < n_ops; i++) {
         dpif_ops[i] = &flow_miss_ops[i].dpif_op;
     }
-    dpif_operate(ofproto->dpif, dpif_ops, n_ops);
+    dpif_operate(backer->dpif, dpif_ops, n_ops);
 
     /* Free memory and update facets. */
     for (i = 0; i < n_ops; i++) {
@@ -3256,30 +3574,44 @@ classify_upcall(const struct dpif_upcall *upcall)
 }
 
 static void
-handle_sflow_upcall(struct ofproto_dpif *ofproto,
+handle_sflow_upcall(struct dpif_backer *backer,
                     const struct dpif_upcall *upcall)
 {
+    struct ofproto_dpif *ofproto;
     union user_action_cookie cookie;
     enum odp_key_fitness fitness;
+    struct ofport_dpif *port;
     ovs_be16 initial_tci;
     struct flow flow;
     uint32_t odp_in_port;
 
-    fitness = ofproto_dpif_extract_flow_key(ofproto, upcall->key,
-                                            upcall->key_len, &flow,
-                                            &initial_tci, upcall->packet);
+    fitness = odp_flow_key_to_flow(upcall->key, upcall->key_len, &flow);
+
+    port = odp_port_to_ofport(backer, flow.in_port);
+    if (!port) {
+        return;
+    }
+
+    ofproto = ofproto_dpif_cast(port->up.ofproto);
+    if (!ofproto->sflow) {
+        return;
+    }
+
+    odp_in_port = flow.in_port;
+    flow.in_port = port->up.ofp_port;
+    fitness = ofproto_dpif_vsp_adjust(ofproto, fitness, &flow,
+                                      &initial_tci, upcall->packet);
     if (fitness == ODP_FIT_ERROR) {
         return;
     }
 
     memcpy(&cookie, &upcall->userdata, sizeof(cookie));
-    odp_in_port = ofp_port_to_odp_port(ofproto, flow.in_port);
     dpif_sflow_received(ofproto->sflow, upcall->packet, &flow,
                         odp_in_port, &cookie);
 }
 
 static int
-handle_upcalls(struct ofproto_dpif *ofproto, unsigned int max_batch)
+handle_upcalls(struct dpif_backer *backer, unsigned int max_batch)
 {
     struct dpif_upcall misses[FLOW_MISS_MAX_BATCH];
     struct ofpbuf miss_bufs[FLOW_MISS_MAX_BATCH];
@@ -3298,7 +3630,7 @@ handle_upcalls(struct ofproto_dpif *ofproto, unsigned int max_batch)
 
         ofpbuf_use_stub(buf, miss_buf_stubs[n_misses],
                         sizeof miss_buf_stubs[n_misses]);
-        error = dpif_recv(ofproto->dpif, upcall, buf);
+        error = dpif_recv(backer->dpif, upcall, buf);
         if (error) {
             ofpbuf_uninit(buf);
             break;
@@ -3311,9 +3643,7 @@ handle_upcalls(struct ofproto_dpif *ofproto, unsigned int max_batch)
             break;
 
         case SFLOW_UPCALL:
-            if (ofproto->sflow) {
-                handle_sflow_upcall(ofproto, upcall);
-            }
+            handle_sflow_upcall(backer, upcall);
             ofpbuf_uninit(buf);
             break;
 
@@ -3324,7 +3654,7 @@ handle_upcalls(struct ofproto_dpif *ofproto, unsigned int max_batch)
     }
 
     /* Handle deferred MISS_UPCALL processing. */
-    handle_miss_upcalls(ofproto, misses, n_misses);
+    handle_miss_upcalls(backer, misses, n_misses);
     for (i = 0; i < n_misses; i++) {
         ofpbuf_uninit(&miss_bufs[i]);
     }
@@ -3335,7 +3665,7 @@ handle_upcalls(struct ofproto_dpif *ofproto, unsigned int max_batch)
 /* Flow expiration. */
 
 static int subfacet_max_idle(const struct ofproto_dpif *);
-static void update_stats(struct ofproto_dpif *);
+static void update_stats(struct dpif_backer *);
 static void rule_expire(struct rule_dpif *);
 static void expire_subfacets(struct ofproto_dpif *, int dp_max_idle);
 
@@ -3346,42 +3676,54 @@ static void expire_subfacets(struct ofproto_dpif *, int dp_max_idle);
  *
  * Returns the number of milliseconds after which it should be called again. */
 static int
-expire(struct ofproto_dpif *ofproto)
+expire(struct dpif_backer *backer)
 {
-    struct rule_dpif *rule, *next_rule;
-    struct oftable *table;
-    int dp_max_idle;
+    struct ofproto_dpif *ofproto;
+    int max_idle = INT32_MAX;
 
-    /* Update stats for each flow in the datapath. */
-    update_stats(ofproto);
+    /* Update stats for each flow in the backer. */
+    update_stats(backer);
 
-    /* Expire subfacets that have been idle too long. */
-    dp_max_idle = subfacet_max_idle(ofproto);
-    expire_subfacets(ofproto, dp_max_idle);
+    HMAP_FOR_EACH (ofproto, all_ofproto_dpifs_node, &all_ofproto_dpifs) {
+        struct rule_dpif *rule, *next_rule;
+        struct oftable *table;
+        int dp_max_idle;
 
-    /* Expire OpenFlow flows whose idle_timeout or hard_timeout has passed. */
-    OFPROTO_FOR_EACH_TABLE (table, &ofproto->up) {
-        struct cls_cursor cursor;
-
-        cls_cursor_init(&cursor, &table->cls, NULL);
-        CLS_CURSOR_FOR_EACH_SAFE (rule, next_rule, up.cr, &cursor) {
-            rule_expire(rule);
+        if (ofproto->backer != backer) {
+            continue;
         }
-    }
 
-    /* All outstanding data in existing flows has been accounted, so it's a
-     * good time to do bond rebalancing. */
-    if (ofproto->has_bonded_bundles) {
-        struct ofbundle *bundle;
+        /* Expire subfacets that have been idle too long. */
+        dp_max_idle = subfacet_max_idle(ofproto);
+        expire_subfacets(ofproto, dp_max_idle);
 
-        HMAP_FOR_EACH (bundle, hmap_node, &ofproto->bundles) {
-            if (bundle->bond) {
-                bond_rebalance(bundle->bond, &ofproto->revalidate_set);
+        max_idle = MIN(max_idle, dp_max_idle);
+
+        /* Expire OpenFlow flows whose idle_timeout or hard_timeout
+         * has passed. */
+        OFPROTO_FOR_EACH_TABLE (table, &ofproto->up) {
+            struct cls_cursor cursor;
+
+            cls_cursor_init(&cursor, &table->cls, NULL);
+            CLS_CURSOR_FOR_EACH_SAFE (rule, next_rule, up.cr, &cursor) {
+                rule_expire(rule);
+            }
+        }
+
+        /* All outstanding data in existing flows has been accounted, so it's a
+         * good time to do bond rebalancing. */
+        if (ofproto->has_bonded_bundles) {
+            struct ofbundle *bundle;
+
+            HMAP_FOR_EACH (bundle, hmap_node, &ofproto->bundles) {
+                if (bundle->bond) {
+                    bond_rebalance(bundle->bond, &ofproto->revalidate_set);
+                }
             }
         }
     }
 
-    return MIN(dp_max_idle, 1000);
+    return MIN(max_idle, 1000);
 }
 
 /* Updates flow table statistics given that the datapath just reported 'stats'
@@ -3422,7 +3764,7 @@ update_subfacet_stats(struct subfacet *subfacet,
 /* 'key' with length 'key_len' bytes is a flow in 'dpif' that we know nothing
  * about, or a flow that shouldn't be installed but was anyway.  Delete it. */
 static void
-delete_unexpected_flow(struct dpif *dpif,
+delete_unexpected_flow(struct ofproto_dpif *ofproto,
                        const struct nlattr *key, size_t key_len)
 {
     if (!VLOG_DROP_WARN(&rl)) {
@@ -3430,12 +3772,12 @@ delete_unexpected_flow(struct dpif *dpif,
 
         ds_init(&s);
         odp_flow_key_format(key, key_len, &s);
-        VLOG_WARN("unexpected flow from datapath %s", ds_cstr(&s));
+        VLOG_WARN("unexpected flow on %s: %s", ofproto->up.name, ds_cstr(&s));
         ds_destroy(&s);
     }
 
     COVERAGE_INC(facet_unexpected);
-    dpif_flow_del(dpif, key, key_len, NULL);
+    dpif_flow_del(ofproto->backer->dpif, key, key_len, NULL);
 }
 
 /* Update 'packet_count', 'byte_count', and 'used' members of installed facets.
@@ -3450,18 +3792,44 @@ delete_unexpected_flow(struct dpif *dpif,
  * datapath do not justify the benefit of having perfectly accurate statistics.
  */
 static void
-update_stats(struct ofproto_dpif *p)
+update_stats(struct dpif_backer *backer)
 {
     const struct dpif_flow_stats *stats;
     struct dpif_flow_dump dump;
     const struct nlattr *key;
     size_t key_len;
 
-    dpif_flow_dump_start(&dump, p->dpif);
+    dpif_flow_dump_start(&dump, backer->dpif);
     while (dpif_flow_dump_next(&dump, &key, &key_len, NULL, NULL, &stats)) {
+        struct flow flow;
         struct subfacet *subfacet;
+        enum odp_key_fitness fitness;
+        struct ofproto_dpif *ofproto;
+        struct ofport_dpif *port;
+        uint32_t key_hash;
 
-        subfacet = subfacet_find(p, key, key_len);
+        fitness = odp_flow_key_to_flow(key, key_len, &flow);
+        if (fitness == ODP_FIT_ERROR) {
+            continue;
+        }
+
+        port = odp_port_to_ofport(backer, flow.in_port);
+        if (!port) {
+            /* This flow is for a port for which we couldn't associate an
+             * ofproto.  This can happen if a port is removed while
+             * traffic is being received.  Print a rate-limited message
+             * in case it happens frequently. */
+            VLOG_INFO_RL(&rl,
+                        "stats update for flow with unassociated port %"PRIu32,
+                        flow.in_port);
+            continue;
+        }
+
+        ofproto = ofproto_dpif_cast(port->up.ofproto);
+        flow.in_port = port->up.ofp_port;
+        key_hash = odp_flow_key_hash(key, key_len);
+
+        subfacet = subfacet_find(ofproto, key, key_len, key_hash, &flow);
         switch (subfacet ? subfacet->path : SF_NOT_INSTALLED) {
         case SF_FAST_PATH:
             update_subfacet_stats(subfacet, stats);
@@ -3473,7 +3841,7 @@ update_stats(struct ofproto_dpif *p)
 
         case SF_NOT_INSTALLED:
         default:
-            delete_unexpected_flow(p->dpif, key, key_len);
+            delete_unexpected_flow(ofproto, key, key_len);
             break;
         }
     }
@@ -3700,7 +4068,7 @@ execute_odp_actions(struct ofproto_dpif *ofproto, const struct flow *flow,
     odp_flow_key_from_flow(&key, flow,
                            ofp_port_to_odp_port(ofproto, flow->in_port));
 
-    error = dpif_execute(ofproto->dpif, key.data, key.size,
+    error = dpif_execute(ofproto->backer->dpif, key.data, key.size,
                          odp_actions, actions_len, packet);
 
     ofpbuf_delete(packet);
@@ -4258,9 +4626,9 @@ flow_push_stats(struct rule_dpif *rule,
 /* Subfacets. */
 
 static struct subfacet *
-subfacet_find__(struct ofproto_dpif *ofproto,
-                const struct nlattr *key, size_t key_len, uint32_t key_hash,
-                const struct flow *flow)
+subfacet_find(struct ofproto_dpif *ofproto,
+              const struct nlattr *key, size_t key_len, uint32_t key_hash,
+              const struct flow *flow)
 {
     struct subfacet *subfacet;
 
@@ -4296,8 +4664,8 @@ subfacet_create(struct facet *facet, enum odp_key_fitness key_fitness,
     if (list_is_empty(&facet->subfacets)) {
         subfacet = &facet->one_subfacet;
     } else {
-        subfacet = subfacet_find__(ofproto, key, key_len, key_hash,
-                                   &facet->flow);
+        subfacet = subfacet_find(ofproto, key, key_len, key_hash,
+                                 &facet->flow);
         if (subfacet) {
             if (subfacet->facet == facet) {
                 return subfacet;
@@ -4334,25 +4702,6 @@ subfacet_create(struct facet *facet, enum odp_key_fitness key_fitness,
     subfacet->initial_tci = initial_tci;
 
     return subfacet;
-}
-
-/* Searches 'ofproto' for a subfacet with the given 'key', 'key_len', and
- * 'flow'.  Returns the subfacet if one exists, otherwise NULL. */
-static struct subfacet *
-subfacet_find(struct ofproto_dpif *ofproto,
-              const struct nlattr *key, size_t key_len)
-{
-    uint32_t key_hash = odp_flow_key_hash(key, key_len);
-    enum odp_key_fitness fitness;
-    struct flow flow;
-
-    fitness = odp_flow_key_to_flow(key, key_len, &flow);
-    flow.in_port = odp_port_to_ofp_port(ofproto, flow.in_port);
-    if (fitness == ODP_FIT_ERROR) {
-        return NULL;
-    }
-
-    return subfacet_find__(ofproto, key, key_len, key_hash, &flow);
 }
 
 /* Uninstalls 'subfacet' from the datapath, if it is installed, removes it from
@@ -4408,7 +4757,7 @@ subfacet_destroy_batch(struct ofproto_dpif *ofproto,
         opsp[i] = &ops[i];
     }
 
-    dpif_operate(ofproto->dpif, opsp, n);
+    dpif_operate(ofproto->backer->dpif, opsp, n);
     for (i = 0; i < n; i++) {
         subfacet_reset_dp_stats(subfacets[i], &stats[i]);
         subfacets[i]->path = SF_NOT_INSTALLED;
@@ -4502,7 +4851,7 @@ subfacet_install(struct subfacet *subfacet,
     }
 
     subfacet_get_key(subfacet, &keybuf, &key);
-    ret = dpif_flow_put(ofproto->dpif, flags, key.data, key.size,
+    ret = dpif_flow_put(ofproto->backer->dpif, flags, key.data, key.size,
                         actions, actions_len, stats);
 
     if (stats) {
@@ -4535,7 +4884,8 @@ subfacet_uninstall(struct subfacet *subfacet)
         int error;
 
         subfacet_get_key(subfacet, &keybuf, &key);
-        error = dpif_flow_del(ofproto->dpif, key.data, key.size, &stats);
+        error = dpif_flow_del(ofproto->backer->dpif,
+                              key.data, key.size, &stats);
         subfacet_reset_dp_stats(subfacet, &stats);
         if (!error) {
             subfacet_update_stats(subfacet, &stats);
@@ -4836,7 +5186,7 @@ send_packet(const struct ofport_dpif *ofport, struct ofpbuf *packet)
     compose_sflow_action(ofproto, &odp_actions, &flow, odp_port);
 
     nl_msg_put_u32(&odp_actions, OVS_ACTION_ATTR_OUTPUT, odp_port);
-    error = dpif_execute(ofproto->dpif,
+    error = dpif_execute(ofproto->backer->dpif,
                          key.data, key.size,
                          odp_actions.data, odp_actions.size,
                          packet);
@@ -4881,7 +5231,7 @@ compose_slow_path(const struct ofproto_dpif *ofproto, const struct flow *flow,
 
     ofpbuf_use_stack(&buf, stub, stub_size);
     if (slow & (SLOW_CFM | SLOW_LACP | SLOW_STP)) {
-        uint32_t pid = dpif_port_get_pid(ofproto->dpif, UINT16_MAX);
+        uint32_t pid = dpif_port_get_pid(ofproto->backer->dpif, UINT16_MAX);
         odp_put_userspace_action(pid, &cookie, &buf);
     } else {
         put_userspace_action(ofproto, &buf, flow, &cookie);
@@ -4898,7 +5248,7 @@ put_userspace_action(const struct ofproto_dpif *ofproto,
 {
     uint32_t pid;
 
-    pid = dpif_port_get_pid(ofproto->dpif,
+    pid = dpif_port_get_pid(ofproto->backer->dpif,
                             ofp_port_to_odp_port(ofproto, flow->in_port));
 
     return odp_put_userspace_action(pid, cookie, odp_actions);
@@ -5329,7 +5679,8 @@ xlate_enqueue_action(struct action_xlate_ctx *ctx,
     int error;
 
     /* Translate queue to priority. */
-    error = dpif_queue_to_priority(ctx->ofproto->dpif, queue_id, &priority);
+    error = dpif_queue_to_priority(ctx->ofproto->backer->dpif,
+                                   queue_id, &priority);
     if (error) {
         /* Fall back to ordinary output action. */
         xlate_output_action(ctx, enqueue->port, 0, false);
@@ -5362,7 +5713,8 @@ xlate_set_queue_action(struct action_xlate_ctx *ctx, uint32_t queue_id)
 {
     uint32_t skb_priority;
 
-    if (!dpif_queue_to_priority(ctx->ofproto->dpif, queue_id, &skb_priority)) {
+    if (!dpif_queue_to_priority(ctx->ofproto->backer->dpif,
+                                queue_id, &skb_priority)) {
         ctx->flow.skb_priority = skb_priority;
     } else {
         /* Couldn't translate queue to a priority.  Nothing to do.  A warning
@@ -6546,7 +6898,7 @@ packet_out(struct ofproto *ofproto_, struct ofpbuf *packet,
     ofpbuf_use_stub(&odp_actions,
                     odp_actions_stub, sizeof odp_actions_stub);
     xlate_actions(&ctx, ofpacts, ofpacts_len, &odp_actions);
-    dpif_execute(ofproto->dpif, key.data, key.size,
+    dpif_execute(ofproto->backer->dpif, key.data, key.size,
                  odp_actions.data, odp_actions.size, packet);
     ofpbuf_uninit(&odp_actions);
 
@@ -6579,7 +6931,7 @@ get_netflow_ids(const struct ofproto *ofproto_,
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
 
-    dpif_get_netflow_ids(ofproto->dpif, engine_type, engine_id);
+    dpif_get_netflow_ids(ofproto->backer->dpif, engine_type, engine_id);
 }
 
 static void
@@ -6810,6 +7162,7 @@ ofproto_unixctl_trace(struct unixctl_conn *conn, int argc, const char *argv[],
          * you just say "syntax error" or do you present both error messages?
          * Both choices seem lousy. */
         if (strchr(flow_s, '(')) {
+            enum odp_key_fitness fitness;
             int error;
 
             /* Convert string to datapath key. */
@@ -6820,10 +7173,12 @@ ofproto_unixctl_trace(struct unixctl_conn *conn, int argc, const char *argv[],
                 goto exit;
             }
 
+            fitness = odp_flow_key_to_flow(odp_key.data, odp_key.size, &flow);
+            flow.in_port = odp_port_to_ofp_port(ofproto, flow.in_port);
+
             /* Convert odp_key to flow. */
-            error = ofproto_dpif_extract_flow_key(ofproto, odp_key.data,
-                                                  odp_key.size, &flow,
-                                                  &initial_tci, NULL);
+            error = ofproto_dpif_vsp_adjust(ofproto, fitness, &flow,
+                                            &initial_tci, NULL);
             if (error == ODP_FIT_ERROR) {
                 unixctl_command_reply_error(conn, "Invalid flow");
                 goto exit;
@@ -7094,13 +7449,17 @@ show_dp_format(const struct ofproto_dpif *ofproto, struct ds *ds)
     const struct shash_node **ports;
     int i;
 
-    dpif_get_dp_stats(ofproto->dpif, &s);
+    dpif_get_dp_stats(ofproto->backer->dpif, &s);
 
-    ds_put_format(ds, "%s@%s:\n", ofproto->up.type, ofproto->up.name);
+    ds_put_format(ds, "%s (%s):\n", ofproto->up.name,
+                  dpif_name(ofproto->backer->dpif));
+    /* xxx It would be better to show bridge-specific stats instead
+     * xxx of dp ones. */
     ds_put_format(ds,
                   "\tlookups: hit:%"PRIu64" missed:%"PRIu64" lost:%"PRIu64"\n",
                   s.n_hit, s.n_missed, s.n_lost);
-    ds_put_format(ds, "\tflows: %"PRIu64"\n", s.n_flows);
+    ds_put_format(ds, "\tflows: %zu\n",
+                  hmap_count(&ofproto->subfacets));
 
     ports = shash_sort(&ofproto->up.port_by_name);
     for (i = 0; i < shash_count(&ofproto->up.port_by_name); i++) {
@@ -7472,20 +7831,33 @@ ofp_port_to_odp_port(const struct ofproto_dpif *ofproto, uint16_t ofp_port)
     return ofport ? ofport->odp_port : OVSP_NONE;
 }
 
-static uint16_t
-odp_port_to_ofp_port(const struct ofproto_dpif *ofproto, uint32_t odp_port)
+static struct ofport_dpif *
+odp_port_to_ofport(const struct dpif_backer *backer, uint32_t odp_port)
 {
     struct ofport_dpif *port;
 
     HMAP_FOR_EACH_IN_BUCKET (port, odp_port_node,
                              hash_int(odp_port, 0),
-                             &ofproto->odp_to_ofport_map) {
+                             &backer->odp_to_ofport_map) {
         if (port->odp_port == odp_port) {
-            return port->up.ofp_port;
+            return port;
         }
     }
 
-    return OFPP_NONE;
+    return NULL;
+}
+
+static uint16_t
+odp_port_to_ofp_port(const struct ofproto_dpif *ofproto, uint32_t odp_port)
+{
+    struct ofport_dpif *port;
+
+    port = odp_port_to_ofport(ofproto->backer, odp_port);
+    if (port && ofproto == ofproto_dpif_cast(port->up.ofproto)) {
+        return port->up.ofp_port;
+    } else {
+        return OFPP_NONE;
+    }
 }
 
 const struct ofproto_class ofproto_dpif_class = {
@@ -7493,9 +7865,9 @@ const struct ofproto_class ofproto_dpif_class = {
     enumerate_types,
     enumerate_names,
     del,
-    NULL,                       /* type_run */
-    NULL,                       /* type_run_fast */
-    NULL,                       /* type_wait */
+    type_run,
+    type_run_fast,
+    type_wait,
     alloc,
     construct,
     destruct,
