@@ -925,6 +925,30 @@ parse_odp_key_attr(const char *s, const struct simap *port_names,
     }
 
     {
+        char tun_id_s[32];
+        unsigned long long int flags;
+        int tos, ttl;
+        struct ovs_key_ipv4_tunnel tun_key;
+        int n = -1;
+
+        if (sscanf(s, "ipv4_tunnel(tun_id=%31[x0123456789abcdefABCDEF],"
+                   "flags=%lli,src="IP_SCAN_FMT",dst="IP_SCAN_FMT
+                   ",tos=%i,ttl=%i)%n", tun_id_s, &flags,
+                    IP_SCAN_ARGS(&tun_key.ipv4_src),
+                    IP_SCAN_ARGS(&tun_key.ipv4_dst), &tos, &ttl,
+                    &n) > 0 && n > 0) {
+            tun_key.tun_id = htonll(strtoull(tun_id_s, NULL, 0));
+            tun_key.tun_flags = flags;
+            tun_key.ipv4_tos = tos;
+            tun_key.ipv4_ttl = ttl;
+            memset(&tun_key.pad, 0, sizeof tun_key.pad);
+            nl_msg_put_unspec(key, OVS_KEY_ATTR_IPV4_TUNNEL, &tun_key,
+                              sizeof tun_key);
+            return n;
+        }
+    }
+
+    {
         unsigned long long int in_port;
         int n = -1;
 
