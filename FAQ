@@ -320,6 +320,55 @@ A: No.  ERSPAN is an undocumented proprietary protocol.  As an
    alternative, Open vSwitch supports mirroring to a GRE tunnel (see
    above).
 
+Q: Why are there so many different ways to dump flows?
+
+A: Open vSwitch uses different kinds of flows for different purposes:
+
+      - OpenFlow flows are the most important kind of flow.  OpenFlow
+        controllers use these flows to define a switch's policy.
+        OpenFlow flows support wildcards, priorities, and multiple
+        tables.
+
+        When in-band control is in use, Open vSwitch sets up a few
+        "hidden" flows, with priority higher than a controller or the
+        user can configure, that are not visible via OpenFlow.  (See
+        the "Controller" section of the FAQ for more information
+        about hidden flows.)
+
+      - The Open vSwitch software switch implementation uses a second
+        kind of flow internally.  These flows, called "exact-match"
+        or "datapath" or "kernel" flows, do not support wildcards or
+        priorities and comprise only a single table, which makes them
+        suitable for caching.   OpenFlow flows and exact-match flows
+        also support different actions and number ports differently.
+
+        Exact-match flows are an implementation detail that is
+        subject to change in future versions of Open vSwitch.  Even
+        with the current version of Open vSwitch, hardware switch
+        implementations do not necessarily use exact-match flows.
+
+  Each of the commands for dumping flows has a different purpose:
+
+      - "ovs-ofctl dump-flows <br>" dumps OpenFlow flows, excluding
+        hidden flows.  This is the most commonly useful form of flow
+        dump.  (Unlike the other commands, this should work with any
+        OpenFlow switch, not just Open vSwitch.)
+
+      - "ovs-appctl bridge/dump-flows <br>" dumps OpenFlow flows,
+        including hidden flows.  This is occasionally useful for
+        troubleshooting suspected issues with in-band control.
+
+      - "ovs-dpctl dump-flows [dp]" dumps the exact-match flow table
+        entries for a Linux kernel-based datapath.  In Open vSwitch
+        1.10 and later, ovs-vswitchd later merges multiple switches
+        into a single datapath, so it will show all the flows on all
+        your kernel-based switches.  This command can occasionally be
+        useful for debugging.
+
+      - "ovs-appctl dpif/dump-flows <br>", new in Open vSwitch 1.10,
+        dumps exact-match flows for only the specified bridge,
+        regardless of the type.
+
 
 Configuration Problems
 ----------------------
