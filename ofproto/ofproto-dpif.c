@@ -1311,7 +1311,7 @@ set_sflow(struct ofproto *ofproto_,
         if (!ds) {
             struct ofport_dpif *ofport;
 
-            ds = ofproto->sflow = dpif_sflow_create(ofproto->dpif);
+            ds = ofproto->sflow = dpif_sflow_create();
             HMAP_FOR_EACH (ofport, up.hmap_node, &ofproto->up.ports) {
                 dpif_sflow_add_port(ds, &ofport->up, ofport->odp_port);
             }

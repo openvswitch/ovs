@@ -53,7 +53,6 @@ struct dpif_sflow {
     struct collectors *collectors;
     SFLAgent *sflow_agent;
     struct ofproto_sflow_options *options;
-    struct dpif *dpif;
     time_t next_tick;
     size_t n_flood, n_all;
     struct hmap ports;          /* Contains "struct dpif_sflow_port"s. */
@@ -294,12 +293,11 @@ dpif_sflow_is_enabled(const struct dpif_sflow *ds)
 }
 
 struct dpif_sflow *
-dpif_sflow_create(struct dpif *dpif)
+dpif_sflow_create(void)
 {
     struct dpif_sflow *ds;
 
     ds = xcalloc(1, sizeof *ds);
-    ds->dpif = dpif;
     ds->next_tick = time_now() + 1;
     hmap_init(&ds->ports);
     ds->probability = 0;
