@@ -372,6 +372,13 @@ dpif_base_name(const struct dpif *dpif)
     return dpif->base_name;
 }
 
+/* Returns the type of datapath 'dpif'. */
+const char *
+dpif_type(const struct dpif *dpif)
+{
+    return dpif->dpif_class->type;
+}
+
 /* Returns the fully spelled out name for the given datapath 'type'.
  *
  * Normalized type string can be compared with strcmp().  Unnormalized type

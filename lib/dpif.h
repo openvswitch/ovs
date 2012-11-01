@@ -57,6 +57,7 @@ void dpif_wait(struct dpif *);
 
 const char *dpif_name(const struct dpif *);
 const char *dpif_base_name(const struct dpif *);
+const char *dpif_type(const struct dpif *);
 
 int dpif_delete(struct dpif *);
 
