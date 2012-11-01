@@ -64,6 +64,8 @@ char *sset_pop(struct sset *);
 struct sset_node *sset_find(const struct sset *, const char *);
 bool sset_contains(const struct sset *, const char *);
 bool sset_equals(const struct sset *, const struct sset *);
+struct sset_node *sset_at_position(const struct sset *,
+                                   uint32_t *bucketp, uint32_t *offsetp);
 
 /* Iteration macros. */
 #define SSET_FOR_EACH(NAME, SSET)               \
