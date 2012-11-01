@@ -1590,11 +1590,13 @@ ofputil_decode_flow_mod(struct ofputil_flow_mod *fm,
         if (fm->flags & OFPFF10_EMERG) {
             /* We do not support the OpenFlow 1.0 emergency flow cache, which
              * is not required in OpenFlow 1.0.1 and removed from OpenFlow 1.1.
-             * There is no good error code, so just state that the flow table
-             * is full.
-             * Moreover, OFPFF10_EMERG overlaps with OFPFF12_RESET_COUNTS,
-             * so this check must be here */
-            return OFPERR_OFPFMFC_TABLE_FULL;
+             *
+             * OpenFlow 1.0 specifies the error code to use when idle_timeout
+             * or hard_timeout is nonzero.  Otherwise, there is no good error
+             * code, so just state that the flow table is full. */
+            return (fm->hard_timeout || fm->idle_timeout
+                    ? OFPERR_OFPFMFC_BAD_EMERG_TIMEOUT
+                    : OFPERR_OFPFMFC_TABLE_FULL);
         }
 
         if (protocol & OFPUTIL_P_TID) {
