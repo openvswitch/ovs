@@ -1,6 +1,7 @@
 post-v1.9.0
 --------------------
-
+    - The data in the RARP packets can now be matched in the same way as the
+      data in ARP packets.
 
 v1.9.0 - xx xxx xxxx
 --------------------

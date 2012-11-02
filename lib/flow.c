@@ -424,7 +424,8 @@ flow_extract(struct ofpbuf *packet, uint32_t skb_priority,
                 packet->l7 = b.data;
             }
         }
-    } else if (flow->dl_type == htons(ETH_TYPE_ARP)) {
+    } else if (flow->dl_type == htons(ETH_TYPE_ARP) ||
+               flow->dl_type == htons(ETH_TYPE_RARP)) {
         const struct arp_eth_header *arp = pull_arp(&b);
         if (arp && arp->ar_hrd == htons(1)
             && arp->ar_pro == htons(ETH_TYPE_IP)
@@ -808,7 +809,8 @@ flow_compose(struct ofpbuf *b, const struct flow *flow)
         ip->ip_csum = csum(ip, sizeof *ip);
     } else if (flow->dl_type == htons(ETH_TYPE_IPV6)) {
         /* XXX */
-    } else if (flow->dl_type == htons(ETH_TYPE_ARP)) {
+    } else if (flow->dl_type == htons(ETH_TYPE_ARP) ||
+               flow->dl_type == htons(ETH_TYPE_RARP)) {
         struct arp_eth_header *arp;
 
         b->l3 = arp = ofpbuf_put_zeros(b, sizeof *arp);

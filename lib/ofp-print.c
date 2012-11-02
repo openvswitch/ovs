@@ -617,6 +617,8 @@ ofp10_match_to_string(const struct ofp10_match *om, int verbosity)
             }
         } else if (om->dl_type == htons(ETH_TYPE_ARP)) {
             ds_put_cstr(&f, "arp,");
+        } else if (om->dl_type == htons(ETH_TYPE_RARP)){
+            ds_put_cstr(&f, "rarp,");
         } else {
             skip_type = false;
         }
@@ -642,7 +644,8 @@ ofp10_match_to_string(const struct ofp10_match *om, int verbosity)
                      (w & OFPFW10_NW_DST_MASK) >> OFPFW10_NW_DST_SHIFT,
                      verbosity);
     if (!skip_proto) {
-        if (om->dl_type == htons(ETH_TYPE_ARP)) {
+        if (om->dl_type == htons(ETH_TYPE_ARP) ||
+            om->dl_type == htons(ETH_TYPE_RARP)) {
             print_wild(&f, "arp_op=", w & OFPFW10_NW_PROTO, verbosity,
                        "%u", om->nw_proto);
         } else {

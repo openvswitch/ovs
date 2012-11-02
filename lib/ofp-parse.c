@@ -720,7 +720,8 @@ parse_protocol(const char *name, const struct protocol **p_out)
         { "icmp6", ETH_TYPE_IPV6, IPPROTO_ICMPV6 },
         { "tcp6", ETH_TYPE_IPV6, IPPROTO_TCP },
         { "udp6", ETH_TYPE_IPV6, IPPROTO_UDP },
-    };
+        { "rarp", ETH_TYPE_RARP, 0},
+};
     const struct protocol *p;
 
     for (p = protocols; p < &protocols[ARRAY_SIZE(protocols)]; p++) {

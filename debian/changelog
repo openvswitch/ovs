@@ -1,7 +1,8 @@
 openvswitch (1.9.90-1) unstable; urgency=low
    [ Open vSwitch team ]
    * New upstream version
-     - Nothing yet!  Try NEWS...
+    - The data in the RARP packets can now be matched in the same way as the
+      data in ARP packets.
 
  -- Open vSwitch team <dev@openvswitch.org>  Wed, 24 Oct 2012 16:12:57 -0700
 

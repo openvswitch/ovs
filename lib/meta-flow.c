@@ -834,7 +834,8 @@ mf_are_prereqs_ok(const struct mf_field *mf, const struct flow *flow)
         return true;
 
     case MFP_ARP:
-        return flow->dl_type == htons(ETH_TYPE_ARP);
+      return (flow->dl_type == htons(ETH_TYPE_ARP) ||
+              flow->dl_type == htons(ETH_TYPE_RARP));
     case MFP_IPV4:
         return flow->dl_type == htons(ETH_TYPE_IP);
     case MFP_IPV6:
