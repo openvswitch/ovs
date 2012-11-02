@@ -168,6 +168,21 @@ A: Tunnel and patch virtual ports are not supported, as described in the
    may not be transmitted.
 
 
+Terminology
+-----------
+
+Q: I thought Open vSwitch was a virtual Ethernet switch, but the
+   documentation keeps talking about bridges.  What's a bridge?
+
+A: In networking, the terms "bridge" and "switch" are synonyms.  Open
+   vSwitch implements an Ethernet switch, which means that it is also
+   an Ethernet bridge.
+
+Q: What's a VLAN?
+
+A: See the "VLAN" section below.
+
+
 Basic Configuration
 -------------------
 
