@@ -11,7 +11,7 @@ OVS_VSWITCHD_START
 AT_CHECK([ovs-ofctl -vwarn show br0], [0], [stdout])
 AT_CHECK([STRIP_XIDS stdout], [0], [dnl
 OFPT_FEATURES_REPLY: dpid:fedcba9876543210
-n_tables:255, n_buffers:256
+n_tables:254, n_buffers:256
 capabilities: FLOW_STATS TABLE_STATS PORT_STATS QUEUE_STATS ARP_MATCH_IP
 actions: OUTPUT SET_VLAN_VID SET_VLAN_PCP STRIP_VLAN SET_DL_SRC SET_DL_DST SET_NW_SRC SET_NW_DST SET_NW_TOS SET_TP_SRC SET_TP_DST ENQUEUE
  LOCAL(br0): addr:aa:55:aa:55:00:00
@@ -33,7 +33,7 @@ s/ (xid=0x[0-9a-fA-F]*)//
 s/00:0.$/00:0x/' < stdout]],
       [0], [dnl
 OFPT_FEATURES_REPLY: dpid:fedcba9876543210
-n_tables:255, n_buffers:256
+n_tables:254, n_buffers:256
 capabilities: FLOW_STATS TABLE_STATS PORT_STATS QUEUE_STATS ARP_MATCH_IP
 actions: OUTPUT SET_VLAN_VID SET_VLAN_PCP STRIP_VLAN SET_DL_SRC SET_DL_DST SET_NW_SRC SET_NW_DST SET_NW_TOS SET_TP_SRC SET_TP_DST ENQUEUE
  1(p1): addr:aa:55:aa:55:00:0x
@@ -122,7 +122,7 @@ do
     AT_CHECK([ovs-ofctl -vwarn show br0], [0], [stdout])
     AT_CHECK_UNQUOTED([STRIP_XIDS stdout], [0], [dnl
 OFPT_FEATURES_REPLY: dpid:fedcba9876543210
-n_tables:255, n_buffers:256
+n_tables:254, n_buffers:256
 capabilities: FLOW_STATS TABLE_STATS PORT_STATS QUEUE_STATS ARP_MATCH_IP
 actions: OUTPUT SET_VLAN_VID SET_VLAN_PCP STRIP_VLAN SET_DL_SRC SET_DL_DST SET_NW_SRC SET_NW_DST SET_NW_TOS SET_TP_SRC SET_TP_DST ENQUEUE
  LOCAL(br0): addr:aa:55:aa:55:00:00
@@ -428,7 +428,7 @@ AT_CLEANUP
 AT_SETUP([ofproto - flow table configuration])
 OVS_VSWITCHD_START
 # Check the default configuration.
-(echo "OFPST_TABLE reply (xid=0x2): 255 tables
+(echo "OFPST_TABLE reply (xid=0x2): 254 tables
   0: classifier: wild=0x3fffff, max=1000000, active=0
                lookup=0, matched=0"
  x=1
@@ -437,9 +437,7 @@ OVS_VSWITCHD_START
                lookup=0, matched=0
 " $x table$x
    x=`expr $x + 1`
- done
- echo "  254: table254: wild=0x3fffff, max=1000000, active=2
-               lookup=0, matched=0") > expout
+ done) > expout
 AT_CHECK([ovs-ofctl dump-tables br0], [0], [expout])
 # Change the configuration.
 AT_CHECK(
@@ -453,7 +451,7 @@ AT_CHECK(
 ])
 # Check that the configuration was updated.
 mv expout orig-expout
-(echo "OFPST_TABLE reply (xid=0x2): 255 tables
+(echo "OFPST_TABLE reply (xid=0x2): 254 tables
   0: main    : wild=0x3fffff, max=1000000, active=0
                lookup=0, matched=0
   1: table1  : wild=0x3fffff, max=  1024, active=0

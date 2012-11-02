@@ -374,6 +374,7 @@ ofproto_create(const char *datapath_name, const char *datapath_type,
     const struct ofproto_class *class;
     struct ofproto *ofproto;
     int error;
+    int i;
 
     *ofprotop = NULL;
 
@@ -444,7 +445,14 @@ ofproto_create(const char *datapath_name, const char *datapath_type,
     ofproto->ofp_port_ids = bitmap_allocate(ofproto->max_ports);
     bitmap_set1(ofproto->ofp_port_ids, 0);
 
+    /* Check that hidden tables, if any, are at the end. */
     assert(ofproto->n_tables);
+    for (i = 0; i + 1 < ofproto->n_tables; i++) {
+        enum oftable_flags flags = ofproto->tables[i].flags;
+        enum oftable_flags next_flags = ofproto->tables[i + 1].flags;
+
+        assert(!(flags & OFTABLE_HIDDEN) || next_flags & OFTABLE_HIDDEN);
+    }
 
     ofproto->datapath_id = pick_datapath_id(ofproto);
     init_ports(ofproto);
@@ -2179,14 +2187,26 @@ handle_features_request(struct ofconn *ofconn, const struct ofp_header *oh)
     struct ofport *port;
     bool arp_match_ip;
     struct ofpbuf *b;
+    int n_tables;
+    int i;
 
     ofproto->ofproto_class->get_features(ofproto, &arp_match_ip,
                                          &features.actions);
     assert(features.actions & OFPUTIL_A_OUTPUT); /* sanity check */
 
+    /* Count only non-hidden tables in the number of tables.  (Hidden tables,
+     * if present, are always at the end.) */
+    n_tables = ofproto->n_tables;
+    for (i = 0; i < ofproto->n_tables; i++) {
+        if (ofproto->tables[i].flags & OFTABLE_HIDDEN) {
+            n_tables = i;
+            break;
+        }
+    }
+
     features.datapath_id = ofproto->datapath_id;
     features.n_buffers = pktbuf_capacity();
-    features.n_tables = ofproto->n_tables;
+    features.n_tables = n_tables;
     features.capabilities = (OFPUTIL_C_FLOW_STATS | OFPUTIL_C_TABLE_STATS |
                              OFPUTIL_C_PORT_STATS | OFPUTIL_C_QUEUE_STATS);
     if (arp_match_ip) {
@@ -2411,6 +2431,7 @@ handle_table_stats_request(struct ofconn *ofconn,
     struct ofproto *p = ofconn_get_ofproto(ofconn);
     struct ofp12_table_stats *ots;
     struct ofpbuf *msg;
+    int n_tables;
     size_t i;
 
     /* Set up default values.
@@ -2439,8 +2460,15 @@ handle_table_stats_request(struct ofconn *ofconn,
 
     p->ofproto_class->get_tables(p, ots);
 
+    /* Post-process the tables, dropping hidden tables. */
+    n_tables = p->n_tables;
     for (i = 0; i < p->n_tables; i++) {
         const struct oftable *table = &p->tables[i];
+
+        if (table->flags & OFTABLE_HIDDEN) {
+            n_tables = i;
+            break;
+        }
 
         if (table->name) {
             ovs_strzcpy(ots[i].name, table->name, sizeof ots[i].name);
@@ -2451,7 +2479,7 @@ handle_table_stats_request(struct ofconn *ofconn,
         }
     }
 
-    msg = ofputil_encode_table_stats_reply(ots, p->n_tables, request);
+    msg = ofputil_encode_table_stats_reply(ots, n_tables, request);
     ofconn_send_reply(ofconn, msg);
 
     free(ots);

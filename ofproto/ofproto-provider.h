@@ -119,6 +119,29 @@ struct ofport {
 
 void ofproto_port_set_state(struct ofport *, enum ofputil_port_state);
 
+/* OpenFlow table flags:
+ *
+ *   - "Hidden" tables are not included in OpenFlow operations that operate on
+ *     "all tables".  For example, a request for flow stats on all tables will
+ *     omit flows in hidden tables, table stats requests will omit the table
+ *     entirely, and the switch features reply will not count the hidden table.
+ *
+ *     However, operations that specifically name the particular table still
+ *     operate on it.  For example, flow_mods and flow stats requests on a
+ *     hidden table work.
+ *
+ *     To avoid gaps in table IDs (which have unclear validity in OpenFlow),
+ *     hidden tables must be the highest-numbered tables that a provider
+ *     implements.
+ *
+ *   - "Read-only" tables can't be changed through OpenFlow operations.  (At
+ *     the moment all flow table operations go effectively through OpenFlow, so
+ *     this means that read-only tables can't be changed at all after the
+ *     read-only flag is set.)
+ *
+ * The generic ofproto layer never sets these flags.  An ofproto provider can
+ * set them if it is appropriate.
+ */
 enum oftable_flags {
     OFTABLE_HIDDEN = 1 << 0,   /* Hide from most OpenFlow operations. */
     OFTABLE_READONLY = 1 << 1  /* Don't allow OpenFlow to change this table. */
