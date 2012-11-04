@@ -2668,7 +2668,7 @@ htb_parse_qdisc_details__(struct netdev *netdev,
         enum netdev_features current;
 
         netdev_get_features(netdev, &current, NULL, NULL, NULL);
-        hc->max_rate = netdev_features_to_bps(current) / 8;
+        hc->max_rate = netdev_features_to_bps(current, 100 * 1000 * 1000) / 8;
     }
     hc->min_rate = hc->max_rate;
     hc->burst = 0;
@@ -3147,7 +3147,7 @@ hfsc_parse_qdisc_details__(struct netdev *netdev, const struct smap *details,
         enum netdev_features current;
 
         netdev_get_features(netdev, &current, NULL, NULL, NULL);
-        max_rate = netdev_features_to_bps(current) / 8;
+        max_rate = netdev_features_to_bps(current, 100 * 1000 * 1000) / 8;
     }
 
     class->min_rate = max_rate;

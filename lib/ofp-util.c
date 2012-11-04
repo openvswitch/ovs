@@ -2421,8 +2421,8 @@ ofputil_decode_ofp10_phy_port(struct ofputil_phy_port *pp,
     pp->supported = netdev_port_features_from_ofp10(opp->supported);
     pp->peer = netdev_port_features_from_ofp10(opp->peer);
 
-    pp->curr_speed = netdev_features_to_bps(pp->curr) / 1000;
-    pp->max_speed = netdev_features_to_bps(pp->supported) / 1000;
+    pp->curr_speed = netdev_features_to_bps(pp->curr, 0) / 1000;
+    pp->max_speed = netdev_features_to_bps(pp->supported, 0) / 1000;
 
     return 0;
 }

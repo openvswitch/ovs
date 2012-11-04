@@ -17,7 +17,7 @@ actions: OUTPUT SET_VLAN_VID SET_VLAN_PCP STRIP_VLAN SET_DL_SRC SET_DL_DST SET_N
  LOCAL(br0): addr:aa:55:aa:55:00:00
      config:     PORT_DOWN
      state:      LINK_DOWN
-     speed: 100 Mbps now, 100 Mbps max
+     speed: 0 Mbps now, 0 Mbps max
 OFPT_GET_CONFIG_REPLY: frags=normal miss_send_len=0
 ])
 OVS_VSWITCHD_STOP
@@ -39,15 +39,15 @@ actions: OUTPUT SET_VLAN_VID SET_VLAN_PCP STRIP_VLAN SET_DL_SRC SET_DL_DST SET_N
  1(p1): addr:aa:55:aa:55:00:0x
      config:     PORT_DOWN
      state:      LINK_DOWN
-     speed: 100 Mbps now, 100 Mbps max
+     speed: 0 Mbps now, 0 Mbps max
  99(p2): addr:aa:55:aa:55:00:0x
      config:     PORT_DOWN
      state:      LINK_DOWN
-     speed: 100 Mbps now, 100 Mbps max
+     speed: 0 Mbps now, 0 Mbps max
  LOCAL(br0): addr:aa:55:aa:55:00:0x
      config:     PORT_DOWN
      state:      LINK_DOWN
-     speed: 100 Mbps now, 100 Mbps max
+     speed: 0 Mbps now, 0 Mbps max
 OFPT_GET_CONFIG_REPLY: frags=normal miss_send_len=0
 ])
 
@@ -77,7 +77,7 @@ OFPST_PORT_DESC reply:
  LOCAL(br0): addr:aa:55:aa:55:00:00
      config:     PORT_DOWN
      state:      LINK_DOWN
-     speed: 100 Mbps now, 100 Mbps max
+     speed: 0 Mbps now, 0 Mbps max
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -128,7 +128,7 @@ actions: OUTPUT SET_VLAN_VID SET_VLAN_PCP STRIP_VLAN SET_DL_SRC SET_DL_DST SET_N
  LOCAL(br0): addr:aa:55:aa:55:00:00
      config:     $config
      state:      $state
-     speed: 100 Mbps now, 100 Mbps max
+     speed: 0 Mbps now, 0 Mbps max
 OFPT_GET_CONFIG_REPLY: frags=normal miss_send_len=0
 ])
 done
@@ -683,7 +683,7 @@ priority=0,udp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=00:26:b9:8c:b0:f9,dl_
         echo >>expout "OFPT_PORT_STATUS: ADD: 1(test): addr:aa:55:aa:55:00:0x
      config:     PORT_DOWN
      state:      LINK_DOWN
-     speed: 100 Mbps now, 100 Mbps max"
+     speed: 0 Mbps now, 0 Mbps max"
     fi
 
     # OFPT_PORT_STATUS, OFPPR_DELETE
@@ -692,7 +692,7 @@ priority=0,udp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=00:26:b9:8c:b0:f9,dl_
         echo >>expout "OFPT_PORT_STATUS: DEL: 1(test): addr:aa:55:aa:55:00:0x
      config:     PORT_DOWN
      state:      LINK_DOWN
-     speed: 100 Mbps now, 100 Mbps max"
+     speed: 0 Mbps now, 0 Mbps max"
     fi
 
     # OFPT_FLOW_REMOVED, OFPRR_DELETE

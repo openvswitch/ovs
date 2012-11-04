@@ -996,16 +996,11 @@ port_configure_stp(const struct ofproto *ofproto, struct port *port,
         port_s->path_cost = strtoul(config_str, NULL, 10);
     } else {
         enum netdev_features current;
+        unsigned int mbps;
 
-        if (netdev_get_features(iface->netdev, &current, NULL, NULL, NULL)) {
-            /* Couldn't get speed, so assume 100Mb/s. */
-            port_s->path_cost = 19;
-        } else {
-            unsigned int mbps;
-
-            mbps = netdev_features_to_bps(current) / 1000000;
-            port_s->path_cost = stp_convert_speed_to_cost(mbps);
-        }
+        netdev_get_features(iface->netdev, &current, NULL, NULL, NULL);
+        mbps = netdev_features_to_bps(current, 100 * 1000 * 1000) / 1000000;
+        port_s->path_cost = stp_convert_speed_to_cost(mbps);
     }
 
     config_str = smap_get(&port->cfg->other_config, "stp-port-priority");
@@ -1701,12 +1696,11 @@ iface_refresh_status(struct iface *iface)
     smap_destroy(&smap);
 
     error = netdev_get_features(iface->netdev, &current, NULL, NULL, NULL);
-    if (!error) {
+    bps = !error ? netdev_features_to_bps(current, 0) : 0;
+    if (bps) {
         ovsrec_interface_set_duplex(iface->cfg,
                                     netdev_features_is_full_duplex(current)
                                     ? "full" : "half");
-        /* warning: uint64_t -> int64_t conversion */
-        bps = netdev_features_to_bps(current);
         ovsrec_interface_set_link_speed(iface->cfg, &bps, 1);
     }
     else {

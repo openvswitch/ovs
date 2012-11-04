@@ -146,7 +146,8 @@ int netdev_get_features(const struct netdev *,
                         enum netdev_features *advertised,
                         enum netdev_features *supported,
                         enum netdev_features *peer);
-uint64_t netdev_features_to_bps(enum netdev_features features);
+uint64_t netdev_features_to_bps(enum netdev_features features,
+                                uint64_t default_bps);
 bool netdev_features_is_full_duplex(enum netdev_features features);
 int netdev_set_advertisements(struct netdev *, enum netdev_features advertise);
 

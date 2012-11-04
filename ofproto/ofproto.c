@@ -1707,8 +1707,8 @@ ofport_open(struct ofproto *ofproto,
     pp->state = netdev_get_carrier(netdev) ? 0 : OFPUTIL_PS_LINK_DOWN;
     netdev_get_features(netdev, &pp->curr, &pp->advertised,
                         &pp->supported, &pp->peer);
-    pp->curr_speed = netdev_features_to_bps(pp->curr);
-    pp->max_speed = netdev_features_to_bps(pp->supported);
+    pp->curr_speed = netdev_features_to_bps(pp->curr, 0);
+    pp->max_speed = netdev_features_to_bps(pp->supported, 0);
 
     return netdev;
 }

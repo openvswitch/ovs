@@ -142,7 +142,7 @@ actions: OUTPUT SET_VLAN_VID SET_VLAN_PCP STRIP_VLAN SET_DL_SRC SET_DL_DST SET_N
  LOCAL(br0): addr:50:54:00:00:00:01
      config:     PORT_DOWN
      state:      LINK_DOWN
-     speed: 100 Mbps now, 100 Mbps max
+     speed: 0 Mbps now, 0 Mbps max
 ])
 AT_CLEANUP
 

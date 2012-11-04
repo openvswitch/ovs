@@ -620,9 +620,10 @@ netdev_get_features(const struct netdev *netdev,
 
 /* Returns the maximum speed of a network connection that has the NETDEV_F_*
  * bits in 'features', in bits per second.  If no bits that indicate a speed
- * are set in 'features', assumes 100Mbps. */
+ * are set in 'features', returns 'default_bps'. */
 uint64_t
-netdev_features_to_bps(enum netdev_features features)
+netdev_features_to_bps(enum netdev_features features,
+                       uint64_t default_bps)
 {
     enum {
         F_1000000MB = NETDEV_F_1TB_FD,
@@ -641,7 +642,7 @@ netdev_features_to_bps(enum netdev_features features)
             : features & F_1000MB    ? UINT64_C(1000000000)
             : features & F_100MB     ? UINT64_C(100000000)
             : features & F_10MB      ? UINT64_C(10000000)
-                                     : UINT64_C(100000000));
+                                     : default_bps);
 }
 
 /* Returns true if any of the NETDEV_F_* bits that indicate a full-duplex link

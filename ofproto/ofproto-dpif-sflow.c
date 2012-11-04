@@ -179,7 +179,7 @@ sflow_agent_get_counters(void *ds_, SFLPoller *poller,
     if (!netdev_get_features(dsp->ofport->netdev, &current, NULL, NULL, NULL)) {
         /* The values of ifDirection come from MAU MIB (RFC 2668): 0 = unknown,
            1 = full-duplex, 2 = half-duplex, 3 = in, 4=out */
-        counters->ifSpeed = netdev_features_to_bps(current);
+        counters->ifSpeed = netdev_features_to_bps(current, 0);
         counters->ifDirection = (netdev_features_is_full_duplex(current)
                                  ? 1 : 2);
     } else {
