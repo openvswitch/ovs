@@ -10,4 +10,9 @@ static inline struct udphdr *udp_hdr(const struct sk_buff *skb)
 }
 #endif /* HAVE_SKBUFF_HEADER_HELPERS */
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,5,0)
+static inline void udp_encap_enable(void)
+{
+}
+#endif
 #endif

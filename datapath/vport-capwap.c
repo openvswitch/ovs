@@ -445,7 +445,7 @@ static int init_socket(struct net *net)
 	capwap_net->frag_state.low_thresh	= CAPWAP_FRAG_PRUNE_MEM;
 
 	inet_frags_init_net(&capwap_net->frag_state);
-
+	udp_encap_enable();
 	capwap_net->n_tunnels++;
 	return 0;
 
