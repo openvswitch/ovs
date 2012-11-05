@@ -346,15 +346,17 @@ static int execute_set_action(struct sk_buff *skb,
 		break;
 
 	case OVS_KEY_ATTR_TUN_ID:
-		if (!OVS_CB(skb)->tun_key) {
-			/* If tun_key is NULL for this skb, assign it to
-			 * a value the caller passed in for action processing
-			 * and output. This can disappear once we drop support
-			 * for setting tun_id outside of tun_key.
-			 */
-			memset(tun_key, 0, sizeof(struct ovs_key_ipv4_tunnel));
-			OVS_CB(skb)->tun_key = tun_key;
-		}
+		/* If we're only using the TUN_ID action, store the value in a
+		 * temporary instance of struct ovs_key_ipv4_tunnel on the stack.
+		 * If both IPV4_TUNNEL and TUN_ID are being used together we
+		 * can't write into the IPV4_TUNNEL action, so make a copy and
+		 * write into that version.
+		 */
+		if (!OVS_CB(skb)->tun_key)
+			memset(tun_key, 0, sizeof(*tun_key));
+		else if (OVS_CB(skb)->tun_key != tun_key)
+			memcpy(tun_key, OVS_CB(skb)->tun_key, sizeof(*tun_key));
+		OVS_CB(skb)->tun_key = tun_key;
 
 		OVS_CB(skb)->tun_key->tun_id = nla_get_be64(nested_attr);
 		break;
