@@ -7,7 +7,11 @@
 #endif
 
 #include <linux/version.h>
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,4,0)
+/* BUILD_BUG_ON_NOT_POWER_OF_2 definition */
 #include <linux/bug.h>
+#endif
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,28)
 #undef pr_emerg
 #define pr_emerg(fmt, ...) \
@@ -37,12 +41,6 @@
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,35)
 #define pr_warn pr_warning
-#endif
-
-#ifndef BUILD_BUG_ON_NOT_POWER_OF_2
-/* Force a compilation error if a constant expression is not a power of 2 */
-#define BUILD_BUG_ON_NOT_POWER_OF_2(n)			\
-	BUILD_BUG_ON((n) == 0 || (((n) & ((n) - 1)) != 0))
 #endif
 
 #if defined(CONFIG_PREEMPT) && LINUX_VERSION_CODE < KERNEL_VERSION(2,6,21)
