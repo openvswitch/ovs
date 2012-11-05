@@ -112,6 +112,21 @@ recalc_csum32(ovs_be16 old_csum, ovs_be32 old_u32, ovs_be32 new_u32)
                          old_u32 >> 16, new_u32 >> 16);
 }
 
+/* Returns the new checksum for a packet in which the checksum field previously
+ * contained 'old_csum' and in which a field that contained 'old_u32[4]' was
+ * changed to contain 'new_u32[4]'. */
+ovs_be16
+recalc_csum128(ovs_be16 old_csum, ovs_be32 old_u32[4],
+               const ovs_be32 new_u32[4])
+{
+    ovs_be16 new_csum = old_csum;
+    int i;
+
+    for (i = 0; i < 4; ++i) {
+        new_csum = recalc_csum32(new_csum, old_u32[i], new_u32[i]);
+    }
+    return new_csum;
+}
 #else  /* __CHECKER__ */
 /* Making sparse happy with these functions also makes them unreadable, so
  * don't bother to show it their implementations. */
