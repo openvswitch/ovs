@@ -701,32 +701,34 @@ static bool check_mtu(struct sk_buff *skb,
 	return true;
 }
 
-static struct rtable *find_route(const struct tnl_mutable_config *mutable,
-				   __be32 saddr, __be32 daddr, u8 ipproto,
-				   u8 tos)
+static struct rtable *find_route(struct net *net,
+		__be32 *saddr, __be32 daddr, u8 ipproto,
+		u8 tos)
 {
+	struct rtable *rt;
 	/* Tunnel configuration keeps DSCP part of TOS bits, But Linux
 	 * router expect RT_TOS bits only. */
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,39)
 	struct flowi fl = { .nl_u = { .ip4_u = {
 					.daddr = daddr,
-					.saddr = saddr,
+					.saddr = *saddr,
 					.tos   = RT_TOS(tos) } },
 					.proto = ipproto };
-	struct rtable *rt;
 
-	if (unlikely(ip_route_output_key(port_key_get_net(&mutable->key), &rt, &fl)))
+	if (unlikely(ip_route_output_key(net, &rt, &fl)))
 		return ERR_PTR(-EADDRNOTAVAIL);
-
+	*saddr = fl.nl_u.ip4_u.saddr;
 	return rt;
 #else
 	struct flowi4 fl = { .daddr = daddr,
-			     .saddr = saddr,
+			     .saddr = *saddr,
 			     .flowi4_tos = RT_TOS(tos),
 			     .flowi4_proto = ipproto };
 
-	return ip_route_output_key(port_key_get_net(&mutable->key), &fl);
+	rt = ip_route_output_key(net, &fl);
+	*saddr = fl.saddr;
+	return rt;
 #endif
 }
 
@@ -946,7 +948,8 @@ int ovs_tnl_send(struct vport *vport, struct sk_buff *skb)
 	}
 
 	/* Route lookup */
-	rt = find_route(mutable, saddr, daddr, tnl_vport->tnl_ops->ipproto, tos);
+	rt = find_route(port_key_get_net(&mutable->key), &saddr, daddr,
+			  tnl_vport->tnl_ops->ipproto, tos);
 	if (IS_ERR(rt))
 		goto error_free;
 
@@ -999,8 +1002,8 @@ int ovs_tnl_send(struct vport *vport, struct sk_buff *skb)
 		iph->version	= 4;
 		iph->ihl	= sizeof(struct iphdr) >> 2;
 		iph->protocol	= tnl_vport->tnl_ops->ipproto;
-		iph->daddr	= rt->rt_dst;
-		iph->saddr	= rt->rt_src;
+		iph->daddr	= daddr;
+		iph->saddr	= saddr;
 		iph->tos	= tos;
 		iph->ttl	= ttl;
 		iph->frag_off	= frag_off;
@@ -1101,9 +1104,11 @@ static int tnl_set_config(struct net *net, struct nlattr *options,
 	if (ipv4_is_multicast(mutable->key.daddr)) {
 		struct net_device *dev;
 		struct rtable *rt;
+		__be32 saddr = mutable->key.saddr;
 
-		rt = find_route(mutable, mutable->key.saddr, mutable->key.daddr,
-				  tnl_ops->ipproto, mutable->tos);
+		rt = find_route(port_key_get_net(&mutable->key),
+			     &saddr, mutable->key.daddr,
+			     tnl_ops->ipproto, mutable->tos);
 		if (IS_ERR(rt))
 			return -EADDRNOTAVAIL;
 		dev = rt_dst(rt).dev;
