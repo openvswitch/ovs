@@ -488,6 +488,11 @@ static struct vport *gre_create(const struct vport_parms *parms)
 	return ovs_tnl_create(parms, &ovs_gre_vport_ops, &gre_tnl_ops);
 }
 
+static struct vport *gre_create_ft(const struct vport_parms *parms)
+{
+	return ovs_tnl_create(parms, &ovs_gre_ft_vport_ops, &gre_tnl_ops);
+}
+
 static const struct tnl_ops gre64_tnl_ops = {
 	.tunnel_type	= TNL_T_PROTO_GRE64,
 	.ipproto	= IPPROTO_GRE,
@@ -535,6 +540,24 @@ static void gre_exit(void)
 
 	inet_del_protocol(&gre_protocol_handlers, IPPROTO_GRE);
 }
+
+const struct vport_ops ovs_gre_ft_vport_ops = {
+	.type		= OVS_VPORT_TYPE_FT_GRE,
+	.flags		= VPORT_F_TUN_ID,
+	.init		= gre_init,
+	.exit		= gre_exit,
+	.create		= gre_create_ft,
+	.destroy	= ovs_tnl_destroy,
+	.set_addr	= ovs_tnl_set_addr,
+	.get_name	= ovs_tnl_get_name,
+	.get_addr	= ovs_tnl_get_addr,
+	.get_options	= ovs_tnl_get_options,
+	.set_options	= ovs_tnl_set_options,
+	.get_dev_flags	= ovs_vport_gen_get_dev_flags,
+	.is_running	= ovs_vport_gen_is_running,
+	.get_operstate	= ovs_vport_gen_get_operstate,
+	.send		= ovs_tnl_send,
+};
 
 const struct vport_ops ovs_gre_vport_ops = {
 	.type		= OVS_VPORT_TYPE_GRE,
