@@ -1351,7 +1351,8 @@ odp_flow_key_from_flow(struct ofpbuf *buf, const struct flow *flow)
         ipv6_key->ipv6_tclass = flow->nw_tos;
         ipv6_key->ipv6_hlimit = flow->nw_ttl;
         ipv6_key->ipv6_frag = ovs_to_odp_frag(flow->nw_frag);
-    } else if (flow->dl_type == htons(ETH_TYPE_ARP)) {
+    } else if (flow->dl_type == htons(ETH_TYPE_ARP) ||
+               flow->dl_type == htons(ETH_TYPE_RARP)) {
         struct ovs_key_arp *arp_key;
 
         arp_key = nl_msg_put_unspec_uninit(buf, OVS_KEY_ATTR_ARP,
@@ -1607,7 +1608,8 @@ parse_l3_onward(const struct nlattr *attrs[OVS_KEY_ATTR_MAX + 1],
                 return ODP_FIT_ERROR;
             }
         }
-    } else if (flow->dl_type == htons(ETH_TYPE_ARP)) {
+    } else if (flow->dl_type == htons(ETH_TYPE_ARP) ||
+               flow->dl_type == htons(ETH_TYPE_RARP)) {
         expected_attrs |= UINT64_C(1) << OVS_KEY_ATTR_ARP;
         if (present_attrs & (UINT64_C(1) << OVS_KEY_ATTR_ARP)) {
             const struct ovs_key_arp *arp_key;

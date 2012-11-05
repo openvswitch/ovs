@@ -468,8 +468,12 @@ When \fBdl_type=0x0806\fR or \fBarp\fR is specified, matches the
 \fBar_spa\fR or \fBar_tpa\fR field, respectively, in ARP packets for
 IPv4 and Ethernet.
 .IP
-When \fBdl_type\fR is wildcarded or set to a value other than 0x0800
-or 0x0806, the values of \fBnw_src\fR and \fBnw_dst\fR are ignored
+When \fBdl_type=0x8035\fR or \fBrarp\fR is specified, matches the
+\fBar_spa\fR or \fBar_tpa\fR field, respectively, in RARP packets for
+IPv4 and Ethernet.
+.IP
+When \fBdl_type\fR is wildcarded or set to a value other than 0x0800,
+0x0806, or 0x8035, the values of \fBnw_src\fR and \fBnw_dst\fR are ignored
 (see \fBFlow Syntax\fR above).
 .
 .IP \fBnw_proto=\fIproto\fR
@@ -488,9 +492,13 @@ When \fBarp\fR or \fBdl_type=0x0806\fR is specified, matches the lower
 8 bits of the ARP opcode.  ARP opcodes greater than 255 are treated as
 0.
 .IP
+When \fBrarp\fR or \fBdl_type=0x8035\fR is specified, matches the lower
+8 bits of the ARP opcode.  ARP opcodes greater than 255 are treated as
+0.
+.IP
 When \fBdl_type\fR is wildcarded or set to a value other than 0x0800,
-0x0806, or 0x86dd, the value of \fBnw_proto\fR is ignored (see \fBFlow
-Syntax\fR above).
+0x0806, 0x8035 or 0x86dd, the value of \fBnw_proto\fR is ignored (see
+\fBFlow Syntax\fR above).
 .
 .IP \fBnw_tos=\fItos\fR
 Matches IP ToS/DSCP or IPv6 traffic class field \fItos\fR, which is
@@ -645,6 +653,9 @@ Same as \fBdl_type=0x0800,nw_proto=17\fR.
 .IP \fBarp\fR
 Same as \fBdl_type=0x0806\fR.
 .
+.IP \fBrarp\fR
+Same as \fBdl_type=0x8035\fR.
+.
 .PP
 The following field assignments require support for the NXM (Nicira
 Extended Match) extension to OpenFlow.  When one of these is specified,
@@ -712,9 +723,9 @@ command, above, for more details.
 .
 .IP \fBarp_sha=\fIxx\fB:\fIxx\fB:\fIxx\fB:\fIxx\fB:\fIxx\fB:\fIxx\fR
 .IQ \fBarp_tha=\fIxx\fB:\fIxx\fB:\fIxx\fB:\fIxx\fB:\fIxx\fB:\fIxx\fR
-When \fBdl_type\fR specifies ARP, \fBarp_sha\fR and \fBarp_tha\fR match
-the source and target hardware address, respectively.  An address is
-specified as 6 pairs of hexadecimal digits delimited by colons.
+When \fBdl_type\fR specifies either ARP or RARP, \fBarp_sha\fR and
+\fBarp_tha\fR match the source and target hardware address, respectively.  An
+address is specified as 6 pairs of hexadecimal digits delimited by colons.
 .
 .IP \fBipv6_src=\fIipv6\fR[\fB/\fInetmask\fR]
 .IQ \fBipv6_dst=\fIipv6\fR[\fB/\fInetmask\fR]

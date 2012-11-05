@@ -626,7 +626,8 @@ nx_put_raw(struct ofpbuf *b, bool oxm, const struct match *match,
                                    flow->arp_tha, match->wc.masks.arp_tha);
             }
         }
-    } else if (flow->dl_type == htons(ETH_TYPE_ARP)) {
+    } else if (flow->dl_type == htons(ETH_TYPE_ARP) ||
+               flow->dl_type == htons(ETH_TYPE_RARP)) {
         /* ARP. */
         if (match->wc.masks.nw_proto) {
             nxm_put_16(b, oxm ? OXM_OF_ARP_OP : NXM_OF_ARP_OP,

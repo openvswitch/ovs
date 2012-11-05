@@ -305,7 +305,7 @@ ofputil_match_from_ofp11_match(const struct ofp11_match *ofmatch,
     uint16_t wc = ntohl(ofmatch->wildcards);
     uint8_t dl_src_mask[ETH_ADDR_LEN];
     uint8_t dl_dst_mask[ETH_ADDR_LEN];
-    bool ipv4, arp;
+    bool ipv4, arp, rarp;
     int i;
 
     match_init_catchall(match);
@@ -370,6 +370,7 @@ ofputil_match_from_ofp11_match(const struct ofp11_match *ofmatch,
 
     ipv4 = match->flow.dl_type == htons(ETH_TYPE_IP);
     arp = match->flow.dl_type == htons(ETH_TYPE_ARP);
+    rarp = match->flow.dl_type == htons(ETH_TYPE_RARP);
 
     if (ipv4 && !(wc & OFPFW11_NW_TOS)) {
         if (ofmatch->nw_tos & ~IP_DSCP_MASK) {
@@ -380,7 +381,7 @@ ofputil_match_from_ofp11_match(const struct ofp11_match *ofmatch,
         match_set_nw_dscp(match, ofmatch->nw_tos);
     }
 
-    if (ipv4 || arp) {
+    if (ipv4 || arp || rarp) {
         if (!(wc & OFPFW11_NW_PROTO)) {
             match_set_nw_proto(match, ofmatch->nw_proto);
         }
@@ -3789,7 +3790,8 @@ ofputil_normalize_match__(struct match *match, bool may_log)
                 may_match |= MAY_ND_TARGET | MAY_ARP_THA;
             }
         }
-    } else if (match->flow.dl_type == htons(ETH_TYPE_ARP)) {
+    } else if (match->flow.dl_type == htons(ETH_TYPE_ARP) ||
+               match->flow.dl_type == htons(ETH_TYPE_RARP)) {
         may_match = MAY_NW_PROTO | MAY_NW_ADDR | MAY_ARP_SHA | MAY_ARP_THA;
     } else {
         may_match = 0;

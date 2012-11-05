@@ -81,12 +81,14 @@ match_wc_init(struct match *match, const struct flow *flow)
         memset(&wc->masks.ipv6_dst, 0xff, sizeof wc->masks.ipv6_dst);
         memset(&wc->masks.ipv6_label, 0xff, sizeof wc->masks.ipv6_label);
     } else if (flow->dl_type == htons(ETH_TYPE_IP) ||
-               (flow->dl_type == htons(ETH_TYPE_ARP))) {
+               (flow->dl_type == htons(ETH_TYPE_ARP)) ||
+               (flow->dl_type == htons(ETH_TYPE_RARP))) {
         memset(&wc->masks.nw_src, 0xff, sizeof wc->masks.nw_src);
         memset(&wc->masks.nw_dst, 0xff, sizeof wc->masks.nw_dst);
     }
 
-    if (flow->dl_type == htons(ETH_TYPE_ARP)) {
+    if (flow->dl_type == htons(ETH_TYPE_ARP) ||
+        flow->dl_type == htons(ETH_TYPE_RARP)) {
         memset(&wc->masks.arp_sha, 0xff, sizeof wc->masks.arp_sha);
         memset(&wc->masks.arp_tha, 0xff, sizeof wc->masks.arp_tha);
     }
@@ -695,6 +697,8 @@ match_format(const struct match *match, struct ds *s, unsigned int priority)
             }
         } else if (f->dl_type == htons(ETH_TYPE_ARP)) {
             ds_put_cstr(s, "arp,");
+        } else if (f->dl_type == htons(ETH_TYPE_RARP)) {
+            ds_put_cstr(s, "rarp,");
         } else {
             skip_type = false;
         }
@@ -780,7 +784,8 @@ match_format(const struct match *match, struct ds *s, unsigned int priority)
                               ntohl(wc->masks.ipv6_label));
             }
         }
-    } else if (f->dl_type == htons(ETH_TYPE_ARP)) {
+    } else if (f->dl_type == htons(ETH_TYPE_ARP) ||
+               f->dl_type == htons(ETH_TYPE_RARP)) {
         format_ip_netmask(s, "arp_spa", f->nw_src, wc->masks.nw_src);
         format_ip_netmask(s, "arp_tpa", f->nw_dst, wc->masks.nw_dst);
     } else {
@@ -788,13 +793,15 @@ match_format(const struct match *match, struct ds *s, unsigned int priority)
         format_ip_netmask(s, "nw_dst", f->nw_dst, wc->masks.nw_dst);
     }
     if (!skip_proto && wc->masks.nw_proto) {
-        if (f->dl_type == htons(ETH_TYPE_ARP)) {
+        if (f->dl_type == htons(ETH_TYPE_ARP) ||
+            f->dl_type == htons(ETH_TYPE_RARP)) {
             ds_put_format(s, "arp_op=%"PRIu8",", f->nw_proto);
         } else {
             ds_put_format(s, "nw_proto=%"PRIu8",", f->nw_proto);
         }
     }
-    if (f->dl_type == htons(ETH_TYPE_ARP)) {
+    if (f->dl_type == htons(ETH_TYPE_ARP) ||
+        f->dl_type == htons(ETH_TYPE_RARP)) {
         format_eth_masked(s, "arp_sha", f->arp_sha, wc->masks.arp_sha);
         format_eth_masked(s, "arp_tha", f->arp_tha, wc->masks.arp_tha);
     }

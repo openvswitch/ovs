@@ -1516,7 +1516,7 @@ OFP_ASSERT(sizeof(struct nx_action_output_reg) == 24);
  * otherwise.  Only ARP opcodes between 1 and 255 should be specified for
  * matching.
  *
- * Prereqs: NXM_OF_ETH_TYPE must match 0x0806 exactly.
+ * Prereqs: NXM_OF_ETH_TYPE must match either 0x0806 or 0x8035.
  *
  * Format: 16-bit integer in network byte order.
  *
@@ -1526,7 +1526,7 @@ OFP_ASSERT(sizeof(struct nx_action_output_reg) == 24);
 /* For an Ethernet+IP ARP packet, the source or target protocol address
  * in the ARP header.  Always 0 otherwise.
  *
- * Prereqs: NXM_OF_ETH_TYPE must match 0x0806 exactly.
+ * Prereqs: NXM_OF_ETH_TYPE must match either 0x0806 or 0x8035.
  *
  * Format: 32-bit integer in network byte order.
  *
@@ -1593,7 +1593,7 @@ OFP_ASSERT(sizeof(struct nx_action_output_reg) == 24);
 /* For an Ethernet+IP ARP packet, the source or target hardware address
  * in the ARP header.  Always 0 otherwise.
  *
- * Prereqs: NXM_OF_ETH_TYPE must match 0x0806 exactly.
+ * Prereqs: NXM_OF_ETH_TYPE must match either 0x0806 or 0x8035.
  *
  * Format: 48-bit Ethernet MAC address.
  *
