@@ -102,6 +102,30 @@ static inline void inet_proto_csum_replace4(__sum16 *sum, struct sk_buff *skb,
 }
 #endif
 
+#if defined(NEED_CSUM_NORMALIZE) || LINUX_VERSION_CODE < KERNEL_VERSION(3,7,0)
+#define inet_proto_csum_replace16 rpl_inet_proto_csum_replace16
+static inline void inet_proto_csum_replace16(__sum16 *sum,
+					     struct sk_buff *skb,
+					     const __be32 *from,
+					     const __be32 *to,
+					     int pseudohdr)
+{
+	__be32 diff[] = {
+		~from[0], ~from[1], ~from[2], ~from[3],
+		to[0], to[1], to[2], to[3],
+	};
+	if (get_ip_summed(skb) != OVS_CSUM_PARTIAL) {
+		*sum = csum_fold(csum_partial(diff, sizeof(diff),
+				 ~csum_unfold(*sum)));
+		if (get_ip_summed(skb) == OVS_CSUM_COMPLETE && pseudohdr)
+			skb->csum = ~csum_partial(diff, sizeof(diff),
+						  ~skb->csum);
+	} else if (pseudohdr)
+		*sum = ~csum_fold(csum_partial(diff, sizeof(diff),
+				  csum_unfold(*sum)));
+}
+#endif
+
 #ifdef NEED_CSUM_NORMALIZE
 static inline void update_csum_start(struct sk_buff *skb, int delta)
 {

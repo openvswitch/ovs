@@ -1181,13 +1181,13 @@ execute_set_action(struct ofpbuf *packet, const struct nlattr *a)
 {
     enum ovs_key_attr type = nl_attr_type(a);
     const struct ovs_key_ipv4 *ipv4_key;
+    const struct ovs_key_ipv6 *ipv6_key;
     const struct ovs_key_tcp *tcp_key;
     const struct ovs_key_udp *udp_key;
 
     switch (type) {
     case OVS_KEY_ATTR_TUN_ID:
     case OVS_KEY_ATTR_PRIORITY:
-    case OVS_KEY_ATTR_IPV6:
     case OVS_KEY_ATTR_IPV4_TUNNEL:
         /* not implemented */
         break;
@@ -1201,6 +1201,13 @@ execute_set_action(struct ofpbuf *packet, const struct nlattr *a)
         ipv4_key = nl_attr_get_unspec(a, sizeof(struct ovs_key_ipv4));
         packet_set_ipv4(packet, ipv4_key->ipv4_src, ipv4_key->ipv4_dst,
                         ipv4_key->ipv4_tos, ipv4_key->ipv4_ttl);
+        break;
+
+    case OVS_KEY_ATTR_IPV6:
+        ipv6_key = nl_attr_get_unspec(a, sizeof(struct ovs_key_ipv6));
+        packet_set_ipv6(packet, ipv6_key->ipv6_proto, ipv6_key->ipv6_src,
+                        ipv6_key->ipv6_dst, ipv6_key->ipv6_tclass,
+                        ipv6_key->ipv6_label, ipv6_key->ipv6_hlimit);
         break;
 
     case OVS_KEY_ATTR_TCP:

@@ -11,6 +11,7 @@ openvswitch (1.9.0-1) unstable; urgency=low
     - The tunneling code no longer assumes input and output keys are symmetric.
       If they are not, PMTUD needs to be disabled for tunneling to work. Note
       this only applies to flow-based keys.
+    - Datapath: Support for ipv6 set action.
     - FreeBSD is now a supported platform, thanks to code contributions from
       Gaetano Catalli, Ed Maste, and Giuseppe Lettieri.
     - ovs-bugtool: New --ovs option to report only OVS related information.

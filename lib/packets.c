@@ -20,6 +20,7 @@
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <netinet/ip6.h>
 #include <stdlib.h>
 #include "byte-order.h"
 #include "csum.h"
@@ -472,6 +473,133 @@ packet_set_ipv4_addr(struct ofpbuf *packet, ovs_be32 *addr, ovs_be32 new_addr)
     *addr = new_addr;
 }
 
+/* Returns true, if packet contains at least one routing header where
+ * segements_left > 0.
+ *
+ * This function assumes that L3 and L4 markers are set in the packet. */
+static bool
+packet_rh_present(struct ofpbuf *packet)
+{
+    const struct ip6_hdr *nh;
+    int nexthdr;
+    size_t len;
+    size_t remaining;
+    uint8_t *data = packet->l3;
+
+    remaining = (uint8_t *)packet->l4 - (uint8_t *)packet->l3;
+
+    if (remaining < sizeof *nh) {
+        return false;
+    }
+    nh = (struct ip6_hdr *)data;
+    data += sizeof *nh;
+    remaining -= sizeof *nh;
+    nexthdr = nh->ip6_nxt;
+
+    while (1) {
+        if ((nexthdr != IPPROTO_HOPOPTS)
+                && (nexthdr != IPPROTO_ROUTING)
+                && (nexthdr != IPPROTO_DSTOPTS)
+                && (nexthdr != IPPROTO_AH)
+                && (nexthdr != IPPROTO_FRAGMENT)) {
+            /* It's either a terminal header (e.g., TCP, UDP) or one we
+             * don't understand.  In either case, we're done with the
+             * packet, so use it to fill in 'nw_proto'. */
+            break;
+        }
+
+        /* We only verify that at least 8 bytes of the next header are
+         * available, but many of these headers are longer.  Ensure that
+         * accesses within the extension header are within those first 8
+         * bytes. All extension headers are required to be at least 8
+         * bytes. */
+        if (remaining < 8) {
+            return false;
+        }
+
+        if (nexthdr == IPPROTO_AH) {
+            /* A standard AH definition isn't available, but the fields
+             * we care about are in the same location as the generic
+             * option header--only the header length is calculated
+             * differently. */
+            const struct ip6_ext *ext_hdr = (struct ip6_ext *)data;
+
+            nexthdr = ext_hdr->ip6e_nxt;
+            len = (ext_hdr->ip6e_len + 2) * 4;
+        } else if (nexthdr == IPPROTO_FRAGMENT) {
+            const struct ip6_frag *frag_hdr = (struct ip6_frag *)data;
+
+            nexthdr = frag_hdr->ip6f_nxt;
+            len = sizeof *frag_hdr;
+        } else if (nexthdr == IPPROTO_ROUTING) {
+            const struct ip6_rthdr *rh = (struct ip6_rthdr *)data;
+
+            if (rh->ip6r_segleft > 0) {
+                return true;
+            }
+
+            nexthdr = rh->ip6r_nxt;
+            len = (rh->ip6r_len + 1) * 8;
+        } else {
+            const struct ip6_ext *ext_hdr = (struct ip6_ext *)data;
+
+            nexthdr = ext_hdr->ip6e_nxt;
+            len = (ext_hdr->ip6e_len + 1) * 8;
+        }
+
+        if (remaining < len) {
+            return false;
+        }
+        remaining -= len;
+        data += len;
+    }
+
+    return false;
+}
+
+static void
+packet_update_csum128(struct ofpbuf *packet, uint8_t proto,
+                     ovs_be32 addr[4], const ovs_be32 new_addr[4])
+{
+    if (proto == IPPROTO_TCP && packet->l7) {
+        struct tcp_header *th = packet->l4;
+
+        th->tcp_csum = recalc_csum128(th->tcp_csum, addr, new_addr);
+    } else if (proto == IPPROTO_UDP && packet->l7) {
+        struct udp_header *uh = packet->l4;
+
+        if (uh->udp_csum) {
+            uh->udp_csum = recalc_csum128(uh->udp_csum, addr, new_addr);
+            if (!uh->udp_csum) {
+                uh->udp_csum = htons(0xffff);
+            }
+        }
+    }
+}
+
+static void
+packet_set_ipv6_addr(struct ofpbuf *packet, uint8_t proto,
+                     struct in6_addr *addr, const ovs_be32 new_addr[4],
+                     bool recalculate_csum)
+{
+    if (recalculate_csum) {
+        packet_update_csum128(packet, proto, (ovs_be32 *)addr, new_addr);
+    }
+    memcpy(addr, new_addr, sizeof(*addr));
+}
+
+static void
+packet_set_ipv6_flow_label(ovs_be32 *flow_label, ovs_be32 flow_key)
+{
+    *flow_label = (*flow_label & htonl(~IPV6_LABEL_MASK)) | flow_key;
+}
+
+static void
+packet_set_ipv6_tc(ovs_be32 *flow_label, uint8_t tc)
+{
+    *flow_label = (*flow_label & htonl(0xF00FFFFF)) | htonl(tc << 20);
+}
+
 /* Modifies the IPv4 header fields of 'packet' to be consistent with 'src',
  * 'dst', 'tos', and 'ttl'.  Updates 'packet''s L4 checksums as appropriate.
  * 'packet' must contain a valid IPv4 packet with correctly populated l[347]
@@ -505,6 +633,33 @@ packet_set_ipv4(struct ofpbuf *packet, ovs_be32 src, ovs_be32 dst,
                                     htons(ttl << 8));
         *field = ttl;
     }
+}
+
+/* Modifies the IPv6 header fields of 'packet' to be consistent with 'src',
+ * 'dst', 'traffic class', and 'next hop'.  Updates 'packet''s L4 checksums as
+ * appropriate. 'packet' must contain a valid IPv6 packet with correctly
+ * populated l[347] markers. */
+void
+packet_set_ipv6(struct ofpbuf *packet, uint8_t proto, const ovs_be32 src[4],
+                const ovs_be32 dst[4], uint8_t key_tc, ovs_be32 key_fl,
+                uint8_t key_hl)
+{
+    struct ip6_hdr *nh = packet->l3;
+
+    if (memcmp(&nh->ip6_src, src, sizeof(ovs_be32[4]))) {
+        packet_set_ipv6_addr(packet, proto, &nh->ip6_src, src, true);
+    }
+
+    if (memcmp(&nh->ip6_dst, dst, sizeof(ovs_be32[4]))) {
+        packet_set_ipv6_addr(packet, proto, &nh->ip6_dst, dst,
+                             !packet_rh_present(packet));
+    }
+
+    packet_set_ipv6_tc(&nh->ip6_flow, key_tc);
+
+    packet_set_ipv6_flow_label(&nh->ip6_flow, key_fl);
+
+    nh->ip6_hlim = key_hl;
 }
 
 static void
