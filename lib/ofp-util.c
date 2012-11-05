@@ -1043,7 +1043,7 @@ ofputil_usable_protocols(const struct match *match)
 void
 ofputil_format_version(struct ds *msg, enum ofp_version version)
 {
-    ds_put_format(msg, "0x%02zx", version);
+    ds_put_format(msg, "0x%02x", version);
 }
 
 void
