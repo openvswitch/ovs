@@ -215,14 +215,16 @@ vconn_verify_name(const char *name)
  *
  * The vconn will automatically negotiate an OpenFlow protocol version
  * acceptable to both peers on the connection.  The version negotiated will be
- * no lower than 'min_version' and no higher than OFP10_VERSION.
+ * one of those in the 'allowed_versions' bitmap: version 'x' is allowed if
+ * allowed_versions & (1 << x) is nonzero.  If 'allowed_versions' is zero, then
+ * OFPUTIL_DEFAULT_VERSIONS are allowed.
  *
  * Returns 0 if successful, otherwise a positive errno value.  If successful,
  * stores a pointer to the new connection in '*vconnp', otherwise a null
  * pointer.  */
 int
-vconn_open(const char *name, int min_version, struct vconn **vconnp,
-           uint8_t dscp)
+vconn_open(const char *name, uint32_t allowed_versions,
+           struct vconn **vconnp, uint8_t dscp)
 {
     struct vconn_class *class;
     struct vconn *vconn;
@@ -232,6 +234,10 @@ vconn_open(const char *name, int min_version, struct vconn **vconnp,
     COVERAGE_INC(vconn_open);
     check_vconn_classes();
 
+    if (!allowed_versions) {
+        allowed_versions = OFPUTIL_DEFAULT_VERSIONS;
+    }
+
     /* Look up the class. */
     error = vconn_lookup_class(name, &class);
     if (!class) {
@@ -240,7 +246,7 @@ vconn_open(const char *name, int min_version, struct vconn **vconnp,
 
     /* Call class's "open" function. */
     suffix_copy = xstrdup(strchr(name, ':') + 1);
-    error = class->open(name, suffix_copy, &vconn, dscp);
+    error = class->open(name, allowed_versions, suffix_copy, &vconn, dscp);
     free(suffix_copy);
     if (error) {
         goto error;
@@ -248,7 +254,6 @@ vconn_open(const char *name, int min_version, struct vconn **vconnp,
 
     /* Success. */
     assert(vconn->state != VCS_CONNECTING || vconn->class->connect);
-    vconn->min_version = min_version;
     *vconnp = vconn;
     return 0;
 
@@ -290,7 +295,7 @@ vconn_run_wait(struct vconn *vconn)
 }
 
 int
-vconn_open_block(const char *name, enum ofp_version min_version,
+vconn_open_block(const char *name, uint32_t allowed_versions,
                  struct vconn **vconnp)
 {
     struct vconn *vconn;
@@ -298,7 +303,7 @@ vconn_open_block(const char *name, enum ofp_version min_version,
 
     fatal_signal_run();
 
-    error = vconn_open(name, min_version, &vconn, DSCP_DEFAULT);
+    error = vconn_open(name, allowed_versions, &vconn, DSCP_DEFAULT);
     if (!error) {
         error = vconn_connect_block(vconn);
     }
@@ -328,6 +333,14 @@ const char *
 vconn_get_name(const struct vconn *vconn)
 {
     return vconn->name;
+}
+
+/* Returns the allowed_versions of 'vconn', that is,
+ * the allowed_versions passed to vconn_open(). */
+uint32_t
+vconn_get_allowed_versions(const struct vconn *vconn)
+{
+    return vconn->allowed_versions;
 }
 
 /* Returns the IP address of the peer, or 0 if the peer is not connected over
@@ -393,7 +406,8 @@ vcs_send_hello(struct vconn *vconn)
     struct ofpbuf *b;
     int retval;
 
-    b = ofpraw_alloc(OFPRAW_OFPT_HELLO, OFP10_VERSION, 0);
+    b = ofpraw_alloc(OFPRAW_OFPT_HELLO,
+                     leftmost_1bit_idx(vconn->allowed_versions), 0);
     retval = do_send(vconn, b);
     if (!retval) {
         vconn->state = VCS_RECV_HELLO;
@@ -404,6 +418,28 @@ vcs_send_hello(struct vconn *vconn)
             vconn->error = retval;
         }
     }
+}
+
+static char *
+version_bitmap_to_string(uint32_t bitmap)
+{
+    struct ds s;
+
+    ds_init(&s);
+    if (!bitmap) {
+        ds_put_cstr(&s, "no versions");
+    } else if (is_pow2(bitmap)) {
+        ds_put_cstr(&s, "version ");
+        ofputil_format_version(&s, leftmost_1bit_idx(bitmap));
+    } else if (is_pow2((bitmap >> 1) + 1)) {
+        ds_put_cstr(&s, "version ");
+        ofputil_format_version(&s, leftmost_1bit_idx(bitmap));
+        ds_put_cstr(&s, "and earlier");
+    } else {
+        ds_put_cstr(&s, "versions ");
+        ofputil_format_version_bitmap(&s, bitmap);
+    }
+    return ds_steal_cstr(&s);
 }
 
 static void
@@ -420,6 +456,9 @@ vcs_recv_hello(struct vconn *vconn)
 
         error = ofptype_decode(&type, b->data);
         if (!error && type == OFPTYPE_HELLO) {
+            char *peer_s, *local_s;
+            uint32_t common_versions;
+
             if (b->size > sizeof *oh) {
                 struct ds msg = DS_EMPTY_INITIALIZER;
                 ds_put_format(&msg, "%s: extra-long hello:\n", vconn->name);
@@ -428,23 +467,28 @@ vcs_recv_hello(struct vconn *vconn)
                 ds_destroy(&msg);
             }
 
-            vconn->version = MIN(OFP10_VERSION, oh->version);
-            if (vconn->version < vconn->min_version) {
+            local_s = version_bitmap_to_string(vconn->allowed_versions);
+            peer_s = version_bitmap_to_string(vconn->peer_versions);
+
+            common_versions = vconn->peer_versions & vconn->allowed_versions;
+            if (!common_versions) {
+                vconn->version = leftmost_1bit_idx(vconn->peer_versions);
                 VLOG_WARN_RL(&bad_ofmsg_rl,
-                             "%s: version negotiation failed: we support "
-                             "versions 0x%02x to 0x%02x inclusive but peer "
-                             "supports no later than version 0x%02"PRIx8,
-                             vconn->name, vconn->min_version, OFP10_VERSION,
-                             oh->version);
+                             "%s: version negotiation failed (we support "
+                             "%s, peer supports %s)",
+                             vconn->name, local_s, peer_s);
                 vconn->state = VCS_SEND_ERROR;
             } else {
+                vconn->version = leftmost_1bit_idx(common_versions);
                 VLOG_DBG("%s: negotiated OpenFlow version 0x%02x "
-                         "(we support versions 0x%02x to 0x%02x inclusive, "
-                         "peer no later than version 0x%02"PRIx8")",
-                         vconn->name, vconn->version, vconn->min_version,
-                         OFP10_VERSION, oh->version);
+                         "(we support %s, peer supports %s)", vconn->name,
+                         vconn->version, local_s, peer_s);
                 vconn->state = VCS_CONNECTED;
             }
+
+            free(local_s);
+            free(peer_s);
+
             ofpbuf_delete(b);
             return;
         } else {
@@ -470,10 +514,15 @@ vcs_send_error(struct vconn *vconn)
     struct ofpbuf *b;
     char s[128];
     int retval;
+    char *local_s, *peer_s;
 
-    snprintf(s, sizeof s, "We support versions 0x%02x to 0x%02x inclusive but "
-             "you support no later than version 0x%02"PRIx8".",
-             vconn->min_version, OFP12_VERSION, vconn->version);
+    local_s = version_bitmap_to_string(vconn->allowed_versions);
+    peer_s = version_bitmap_to_string(vconn->peer_versions);
+    snprintf(s, sizeof s, "We support %s, you support %s, no common versions.",
+             local_s, peer_s);
+    free(peer_s);
+    free(local_s);
+
     b = ofperr_encode_hello(OFPERR_OFPHFC_INCOMPATIBLE, vconn->version, s);
     retval = do_send(vconn, b);
     if (retval) {
@@ -494,7 +543,6 @@ vconn_connect(struct vconn *vconn)
 {
     enum vconn_state last_state;
 
-    assert(vconn->min_version > 0);
     do {
         last_state = vconn->state;
         switch (vconn->state) {
@@ -921,11 +969,18 @@ pvconn_verify_name(const char *name)
  * connection name in the form "TYPE:ARGS", where TYPE is an passive vconn
  * class's name and ARGS are vconn class-specific.
  *
+ * vconns accepted by the pvconn will automatically negotiate an OpenFlow
+ * protocol version acceptable to both peers on the connection.  The version
+ * negotiated will be one of those in the 'allowed_versions' bitmap: version
+ * 'x' is allowed if allowed_versions & (1 << x) is nonzero.  If
+ * 'allowed_versions' is zero, then OFPUTIL_DEFAULT_VERSIONS are allowed.
+ *
  * Returns 0 if successful, otherwise a positive errno value.  If successful,
  * stores a pointer to the new connection in '*pvconnp', otherwise a null
  * pointer.  */
 int
-pvconn_open(const char *name, struct pvconn **pvconnp, uint8_t dscp)
+pvconn_open(const char *name, uint32_t allowed_versions,
+            struct pvconn **pvconnp, uint8_t dscp)
 {
     struct pvconn_class *class;
     struct pvconn *pvconn;
@@ -933,6 +988,10 @@ pvconn_open(const char *name, struct pvconn **pvconnp, uint8_t dscp)
     int error;
 
     check_vconn_classes();
+
+    if (!allowed_versions) {
+        allowed_versions = OFPUTIL_DEFAULT_VERSIONS;
+    }
 
     /* Look up the class. */
     error = pvconn_lookup_class(name, &class);
@@ -942,7 +1001,7 @@ pvconn_open(const char *name, struct pvconn **pvconnp, uint8_t dscp)
 
     /* Call class's "open" function. */
     suffix_copy = xstrdup(strchr(name, ':') + 1);
-    error = class->listen(name, suffix_copy, &pvconn, dscp);
+    error = class->listen(name, allowed_versions, suffix_copy, &pvconn, dscp);
     free(suffix_copy);
     if (error) {
         goto error;
@@ -982,12 +1041,12 @@ pvconn_close(struct pvconn *pvconn)
  *
  * The new vconn will automatically negotiate an OpenFlow protocol version
  * acceptable to both peers on the connection.  The version negotiated will be
- * no lower than 'min_version' and no higher than OFP10_VERSION.
+ * no lower than 'min_version' and no higher than 'max_version'.
  *
  * pvconn_accept() will not block waiting for a connection.  If no connection
  * is ready to be accepted, it returns EAGAIN immediately. */
 int
-pvconn_accept(struct pvconn *pvconn, int min_version, struct vconn **new_vconn)
+pvconn_accept(struct pvconn *pvconn, struct vconn **new_vconn)
 {
     int retval = (pvconn->class->accept)(pvconn, new_vconn);
     if (retval) {
@@ -995,7 +1054,6 @@ pvconn_accept(struct pvconn *pvconn, int min_version, struct vconn **new_vconn)
     } else {
         assert((*new_vconn)->state != VCS_CONNECTING
                || (*new_vconn)->class->connect);
-        (*new_vconn)->min_version = min_version;
     }
     return retval;
 }
@@ -1025,7 +1083,7 @@ pvconn_wait(struct pvconn *pvconn)
  * The caller retains ownership of 'name'. */
 void
 vconn_init(struct vconn *vconn, struct vconn_class *class, int connect_status,
-           const char *name)
+           const char *name, uint32_t allowed_versions)
 {
     vconn->class = class;
     vconn->state = (connect_status == EAGAIN ? VCS_CONNECTING
@@ -1033,7 +1091,7 @@ vconn_init(struct vconn *vconn, struct vconn_class *class, int connect_status,
                     : VCS_DISCONNECTED);
     vconn->error = connect_status;
     vconn->version = 0;
-    vconn->min_version = 0;
+    vconn->allowed_versions = allowed_versions;
     vconn->remote_ip = 0;
     vconn->remote_port = 0;
     vconn->local_ip = 0;
@@ -1067,9 +1125,10 @@ vconn_set_local_port(struct vconn *vconn, ovs_be16 port)
 }
 
 void
-pvconn_init(struct pvconn *pvconn, struct pvconn_class *class,
-            const char *name)
+pvconn_init(struct pvconn *pvconn,  struct pvconn_class *class,
+            const char *name, uint32_t allowed_versions)
 {
     pvconn->class = class;
     pvconn->name = xstrdup(name);
+    pvconn->allowed_versions = allowed_versions;
 }

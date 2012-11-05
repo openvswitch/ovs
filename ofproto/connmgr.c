@@ -289,7 +289,7 @@ connmgr_run(struct connmgr *mgr,
         struct vconn *vconn;
         int retval;
 
-        retval = pvconn_accept(ofservice->pvconn, OFP10_VERSION, &vconn);
+        retval = pvconn_accept(ofservice->pvconn, &vconn);
         if (!retval) {
             struct rconn *rconn;
             char *name;
@@ -313,7 +313,7 @@ connmgr_run(struct connmgr *mgr,
         struct vconn *vconn;
         int retval;
 
-        retval = pvconn_accept(mgr->snoops[i], OFP10_VERSION, &vconn);
+        retval = pvconn_accept(mgr->snoops[i], &vconn);
         if (!retval) {
             add_snooper(mgr, vconn);
         } else if (retval != EAGAIN) {
@@ -720,8 +720,7 @@ set_pvconns(struct pvconn ***pvconnsp, size_t *n_pvconnsp,
     SSET_FOR_EACH (name, sset) {
         struct pvconn *pvconn;
         int error;
-
-        error = pvconn_open(name, &pvconn, 0);
+        error = pvconn_open(name, 0, &pvconn, 0);
         if (!error) {
             pvconns[n_pvconns++] = pvconn;
         } else {
@@ -1625,7 +1624,7 @@ ofservice_create(struct connmgr *mgr, const char *target, uint8_t dscp)
     struct pvconn *pvconn;
     int error;
 
-    error = pvconn_open(target, &pvconn, dscp);
+    error = pvconn_open(target, 0, &pvconn, dscp);
     if (error) {
         return error;
     }

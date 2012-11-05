@@ -34,10 +34,11 @@ void vconn_usage(bool active, bool passive, bool bootstrap);
 
 /* Active vconns: virtual connections to OpenFlow devices. */
 int vconn_verify_name(const char *name);
-int vconn_open(const char *name, int min_version,
-               struct vconn **, uint8_t dscp);
+int vconn_open(const char *name, uint32_t allowed_versions,
+               struct vconn **vconnp, uint8_t dscp);
 void vconn_close(struct vconn *);
 const char *vconn_get_name(const struct vconn *);
+uint32_t vconn_get_allowed_versions(const struct vconn *vconn);
 ovs_be32 vconn_get_remote_ip(const struct vconn *);
 ovs_be16 vconn_get_remote_port(const struct vconn *);
 ovs_be32 vconn_get_local_ip(const struct vconn *);
@@ -55,7 +56,7 @@ int vconn_transact_multiple_noreply(struct vconn *, struct list *requests,
 void vconn_run(struct vconn *);
 void vconn_run_wait(struct vconn *);
 
-int vconn_open_block(const char *name, enum ofp_version min_version,
+int vconn_open_block(const char *name, uint32_t allowed_versions,
                      struct vconn **);
 int vconn_connect_block(struct vconn *);
 int vconn_send_block(struct vconn *, struct ofpbuf *);
@@ -73,10 +74,11 @@ void vconn_send_wait(struct vconn *);
 
 /* Passive vconns: virtual listeners for incoming OpenFlow connections. */
 int pvconn_verify_name(const char *name);
-int pvconn_open(const char *name, struct pvconn **, uint8_t dscp);
+int pvconn_open(const char *name, uint32_t allowed_versions,
+                struct pvconn **pvconnp, uint8_t dscp);
 const char *pvconn_get_name(const struct pvconn *);
 void pvconn_close(struct pvconn *);
-int pvconn_accept(struct pvconn *, int min_version, struct vconn **);
+int pvconn_accept(struct pvconn *, struct vconn **);
 void pvconn_wait(struct pvconn *);
 
 #ifdef __cplusplus

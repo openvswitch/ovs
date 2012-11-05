@@ -54,13 +54,14 @@ static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(10, 25);
 static void vconn_stream_clear_txbuf(struct vconn_stream *);
 
 static struct vconn *
-vconn_stream_new(struct stream *stream, int connect_status)
+vconn_stream_new(struct stream *stream, int connect_status,
+                 uint32_t allowed_versions)
 {
     struct vconn_stream *s;
 
     s = xmalloc(sizeof *s);
     vconn_init(&s->vconn, &stream_vconn_class, connect_status,
-               stream_get_name(stream));
+               stream_get_name(stream), allowed_versions);
     s->stream = stream;
     s->txbuf = NULL;
     s->rxbuf = NULL;
@@ -77,8 +78,8 @@ vconn_stream_new(struct stream *stream, int connect_status)
  *
  * Returns 0 if successful, otherwise a positive errno value. */
 static int
-vconn_stream_open(const char *name, char *suffix OVS_UNUSED,
-                  struct vconn **vconnp, uint8_t dscp)
+vconn_stream_open(const char *name, uint32_t allowed_versions,
+                  char *suffix OVS_UNUSED, struct vconn **vconnp, uint8_t dscp)
 {
     struct stream *stream;
     int error;
@@ -88,7 +89,7 @@ vconn_stream_open(const char *name, char *suffix OVS_UNUSED,
     if (!error) {
         error = stream_connect(stream);
         if (!error || error == EAGAIN) {
-            *vconnp = vconn_stream_new(stream, error);
+            *vconnp = vconn_stream_new(stream, error, allowed_versions);
             return 0;
         }
     }
@@ -310,8 +311,9 @@ pvconn_pstream_cast(struct pvconn *pvconn)
  * Returns 0 if successful, otherwise a positive errno value.  (The current
  * implementation never fails.) */
 static int
-pvconn_pstream_listen(const char *name, char *suffix OVS_UNUSED,
-                      struct pvconn **pvconnp, uint8_t dscp)
+pvconn_pstream_listen(const char *name, uint32_t allowed_versions,
+                      char *suffix OVS_UNUSED, struct pvconn **pvconnp,
+                      uint8_t dscp)
 {
     struct pvconn_pstream *ps;
     struct pstream *pstream;
@@ -324,7 +326,7 @@ pvconn_pstream_listen(const char *name, char *suffix OVS_UNUSED,
     }
 
     ps = xmalloc(sizeof *ps);
-    pvconn_init(&ps->pvconn, &pstream_pvconn_class, name);
+    pvconn_init(&ps->pvconn, &pstream_pvconn_class, name, allowed_versions);
     ps->pstream = pstream;
     *pvconnp = &ps->pvconn;
     return 0;
@@ -354,7 +356,7 @@ pvconn_pstream_accept(struct pvconn *pvconn, struct vconn **new_vconnp)
         return error;
     }
 
-    *new_vconnp = vconn_stream_new(stream, 0);
+    *new_vconnp = vconn_stream_new(stream, 0, pvconn->allowed_versions);
     return 0;
 }
 

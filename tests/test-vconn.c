@@ -148,8 +148,7 @@ test_refuse_connection(int argc OVS_UNUSED, char *argv[])
     int error;
 
     fpv_create(type, &fpv);
-    CHECK_ERRNO(vconn_open(fpv.vconn_name, OFP10_VERSION, &vconn,
-                           DSCP_DEFAULT), 0);
+    CHECK_ERRNO(vconn_open(fpv.vconn_name, 0, &vconn, DSCP_DEFAULT), 0);
     fpv_close(&fpv);
     vconn_run(vconn);
 
@@ -186,8 +185,7 @@ test_accept_then_close(int argc OVS_UNUSED, char *argv[])
     int error;
 
     fpv_create(type, &fpv);
-    CHECK_ERRNO(vconn_open(fpv.vconn_name, OFP10_VERSION, &vconn,
-                           DSCP_DEFAULT), 0);
+    CHECK_ERRNO(vconn_open(fpv.vconn_name, 0, &vconn, DSCP_DEFAULT), 0);
     vconn_run(vconn);
     stream_close(fpv_accept(&fpv));
     fpv_close(&fpv);
@@ -219,8 +217,7 @@ test_read_hello(int argc OVS_UNUSED, char *argv[])
     int error;
 
     fpv_create(type, &fpv);
-    CHECK_ERRNO(vconn_open(fpv.vconn_name, OFP10_VERSION, &vconn,
-                           DSCP_DEFAULT), 0);
+    CHECK_ERRNO(vconn_open(fpv.vconn_name, 0, &vconn, DSCP_DEFAULT), 0);
     vconn_run(vconn);
     stream = fpv_accept(&fpv);
     fpv_destroy(&fpv);
@@ -273,8 +270,7 @@ test_send_hello(const char *type, const void *out, size_t out_size,
     size_t n_sent;
 
     fpv_create(type, &fpv);
-    CHECK_ERRNO(vconn_open(fpv.vconn_name, OFP10_VERSION, &vconn,
-                           DSCP_DEFAULT), 0);
+    CHECK_ERRNO(vconn_open(fpv.vconn_name, 0, &vconn, DSCP_DEFAULT), 0);
     vconn_run(vconn);
     stream = fpv_accept(&fpv);
     fpv_destroy(&fpv);

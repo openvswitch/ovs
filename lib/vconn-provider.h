@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2012 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,7 +33,8 @@ struct vconn {
     struct vconn_class *class;
     int state;
     int error;
-    enum ofp_version min_version;
+    uint32_t allowed_versions;
+    uint32_t peer_versions;
     enum ofp_version version;
     ovs_be32 remote_ip;
     ovs_be16 remote_port;
@@ -43,7 +44,8 @@ struct vconn {
 };
 
 void vconn_init(struct vconn *, struct vconn_class *, int connect_status,
-                const char *name);
+                const char *name, uint32_t allowed_versions);
+void vconn_free_data(struct vconn *vconn);
 void vconn_set_remote_ip(struct vconn *, ovs_be32 remote_ip);
 void vconn_set_remote_port(struct vconn *, ovs_be16 remote_port);
 void vconn_set_local_ip(struct vconn *, ovs_be32 local_ip);
@@ -62,6 +64,9 @@ struct vconn_class {
      * connection name provided by the user, e.g. "tcp:1.2.3.4".  This name is
      * useful for error messages but must not be modified.
      *
+     * 'allowed_verions' is the OpenFlow versions that may be
+     * negotiated for a connection.
+     *
      * 'suffix' is a copy of 'name' following the colon and may be modified.
      * 'dscp' is the DSCP value that the new connection should use in the IP
      * packets it sends.
@@ -73,8 +78,8 @@ struct vconn_class {
      * If the connection cannot be completed immediately, it should return
      * EAGAIN (not EINPROGRESS, as returned by the connect system call) and
      * continue the connection in the background. */
-    int (*open)(const char *name, char *suffix, struct vconn **vconnp,
-                uint8_t dscp);
+    int (*open)(const char *name, uint32_t allowed_versions,
+                char *suffix, struct vconn **vconnp, uint8_t dscp);
 
     /* Closes 'vconn' and frees associated memory. */
     void (*close)(struct vconn *vconn);
@@ -135,9 +140,11 @@ struct vconn_class {
 struct pvconn {
     struct pvconn_class *class;
     char *name;
+    uint32_t allowed_versions;
 };
 
-void pvconn_init(struct pvconn *, struct pvconn_class *, const char *name);
+void pvconn_init(struct pvconn *pvconn, struct pvconn_class *class,
+                 const char *name, uint32_t allowed_versions);
 static inline void pvconn_assert_class(const struct pvconn *pvconn,
                                        const struct pvconn_class *class)
 {
@@ -152,6 +159,9 @@ struct pvconn_class {
      * full connection name provided by the user, e.g. "ptcp:1234".  This name
      * is useful for error messages but must not be modified.
      *
+     * 'allowed_versions' is the OpenFlow protocol versions that may
+     * be negotiated for a session.
+     *
      * 'suffix' is a copy of 'name' following the colon and may be modified.
      * 'dscp' is the DSCP value that the new connection should use in the IP
      * packets it sends.
@@ -163,8 +173,8 @@ struct pvconn_class {
      * completed immediately, it should return EAGAIN (not EINPROGRESS, as
      * returned by the connect system call) and continue the connection in the
      * background. */
-    int (*listen)(const char *name, char *suffix, struct pvconn **pvconnp,
-                  uint8_t dscp);
+    int (*listen)(const char *name, uint32_t allowed_versions,
+                  char *suffix, struct pvconn **pvconnp, uint8_t dscp);
 
     /* Closes 'pvconn' and frees associated memory. */
     void (*close)(struct pvconn *pvconn);

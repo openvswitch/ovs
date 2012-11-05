@@ -41,6 +41,7 @@
 #include "vconn.h"
 #include "vlog.h"
 #include "socket-util.h"
+#include "ofp-util.h"
 
 VLOG_DEFINE_THIS_MODULE(controller);
 
@@ -114,7 +115,7 @@ main(int argc, char *argv[])
         const char *name = argv[i];
         struct vconn *vconn;
 
-        retval = vconn_open(name, OFP10_VERSION, &vconn, DSCP_DEFAULT);
+        retval = vconn_open(name, 0, &vconn, DSCP_DEFAULT);
         if (!retval) {
             if (n_switches >= MAX_SWITCHES) {
                 ovs_fatal(0, "max %d switch connections", n_switches);
@@ -123,7 +124,7 @@ main(int argc, char *argv[])
             continue;
         } else if (retval == EAFNOSUPPORT) {
             struct pvconn *pvconn;
-            retval = pvconn_open(name, &pvconn, DSCP_DEFAULT);
+            retval = pvconn_open(name, 0, &pvconn, DSCP_DEFAULT);
             if (!retval) {
                 if (n_listeners >= MAX_LISTENERS) {
                     ovs_fatal(0, "max %d passive connections", n_listeners);
@@ -153,7 +154,7 @@ main(int argc, char *argv[])
         for (i = 0; i < n_listeners && n_switches < MAX_SWITCHES; ) {
             struct vconn *new_vconn;
 
-            retval = pvconn_accept(listeners[i], OFP10_VERSION, &new_vconn);
+            retval = pvconn_accept(listeners[i], &new_vconn);
             if (!retval || retval == EAGAIN) {
                 if (!retval) {
                     new_switch(&switches[n_switches++], new_vconn);
