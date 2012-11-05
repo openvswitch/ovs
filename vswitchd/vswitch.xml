@@ -1388,16 +1388,6 @@
         <p>
           Only <code>gre</code> interfaces support these options.
         </p>
-
-        <column name="options" key="header_cache" type='{"type": "boolean"}'>
-          Enable caching of tunnel headers and the output path.  This can lead
-          to a significant performance increase without changing behavior.  In
-          general it should not be necessary to adjust this setting.  However,
-          the caching can bypass certain components of the IP stack (such as
-          <code>iptables</code>) and it may be useful to disable it if these
-          features are required or as a debugging measure.  Default is enabled,
-          set to <code>false</code> to disable.
-        </column>
       </group>
 
       <group title="Tunnel Options: gre and ipsec_gre only">

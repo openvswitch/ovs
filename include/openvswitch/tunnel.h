@@ -68,8 +68,8 @@ enum {
 #define TNL_F_DF_INHERIT	(1 << 3) /* Inherit DF bit from inner packet. */
 #define TNL_F_DF_DEFAULT	(1 << 4) /* Set DF bit if inherit off or
 					  * not IP. */
+/* Bit 6 is reserved since it was previously used for Tunnel header caching. */
 #define TNL_F_PMTUD		(1 << 5) /* Enable path MTU discovery. */
-#define TNL_F_HDR_CACHE		(1 << 6) /* Enable tunnel header caching. */
 #define TNL_F_IPSEC		(1 << 7) /* Traffic is IPsec encrypted. */
 
 #endif /* openvswitch/tunnel.h */

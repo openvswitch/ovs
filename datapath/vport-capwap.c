@@ -199,12 +199,14 @@ static int capwap_hdr_len(const struct tnl_mutable_config *mutable,
 	return size;
 }
 
-static void capwap_build_header(const struct vport *vport,
-				const struct tnl_mutable_config *mutable,
-				const struct ovs_key_ipv4_tunnel *tun_key,
-				void *header)
+static struct sk_buff *capwap_build_header(const struct vport *vport,
+					    const struct tnl_mutable_config *mutable,
+					    struct dst_entry *dst,
+					    struct sk_buff *skb,
+					    int tunnel_hlen)
 {
-	struct udphdr *udph = header;
+	struct ovs_key_ipv4_tunnel *tun_key = OVS_CB(skb)->tun_key;
+	struct udphdr *udph = udp_hdr(skb);
 	struct capwaphdr *cwh = (struct capwaphdr *)(udph + 1);
 	u32 flags;
 	__be64 out_key;
@@ -218,7 +220,8 @@ static void capwap_build_header(const struct vport *vport,
 	cwh->frag_id = 0;
 	cwh->frag_off = 0;
 
-	if (out_key || (flags & TNL_F_OUT_KEY_ACTION)) {
+	if (out_key || flags & TNL_F_OUT_KEY_ACTION) {
+		/* first field in WSI is key */
 		struct capwaphdr_wsi *wsi = (struct capwaphdr_wsi *)(cwh + 1);
 
 		cwh->begin = CAPWAP_KEYED;
@@ -237,30 +240,6 @@ static void capwap_build_header(const struct vport *vport,
 		/* make packet readable by old capwap code */
 		cwh->begin = CAPWAP_NO_WSI;
 	}
-}
-
-static struct sk_buff *capwap_update_header(const struct vport *vport,
-					    const struct tnl_mutable_config *mutable,
-					    struct dst_entry *dst,
-					    struct sk_buff *skb,
-					    int tunnel_hlen)
-{
-	const struct ovs_key_ipv4_tunnel *tun_key = OVS_CB(skb)->tun_key;
-	struct udphdr *udph = udp_hdr(skb);
-	u32 flags;
-	__be64 out_key;
-
-	get_capwap_param(mutable, tun_key, &flags, &out_key);
-
-	if (flags & TNL_F_OUT_KEY_ACTION) {
-		/* first field in WSI is key */
-		struct capwaphdr *cwh = (struct capwaphdr *)(udph + 1);
-		struct capwaphdr_wsi *wsi = (struct capwaphdr_wsi *)(cwh + 1);
-		struct capwaphdr_wsi_key *opt = (struct capwaphdr_wsi_key *)(wsi + 1);
-
-		opt->key = out_key;
-	}
-
 	udph->len = htons(skb->len - skb_transport_offset(skb));
 
 	if (unlikely(skb->len - skb_network_offset(skb) > dst_mtu(dst))) {
@@ -397,7 +376,6 @@ static const struct tnl_ops capwap_tnl_ops = {
 	.ipproto	= IPPROTO_UDP,
 	.hdr_len	= capwap_hdr_len,
 	.build_header	= capwap_build_header,
-	.update_header	= capwap_update_header,
 };
 
 static inline struct capwap_net *ovs_get_capwap_net(struct net *net)
