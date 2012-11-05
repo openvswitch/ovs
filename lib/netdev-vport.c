@@ -594,14 +594,13 @@ parse_tunnel_config(const char *name, const char *type,
         VLOG_WARN_ONCE("CAPWAP tunnel support is deprecated.");
     }
 
-    flags = TNL_F_DF_DEFAULT | TNL_F_HDR_CACHE;
+    flags = TNL_F_DF_DEFAULT;
     if (!strcmp(type, "gre") || !strcmp(type, "gre64")) {
         is_gre = true;
     } else if (!strcmp(type, "ipsec_gre") || !strcmp(type, "ipsec_gre64")) {
         is_gre = true;
         is_ipsec = true;
         flags |= TNL_F_IPSEC;
-        flags &= ~TNL_F_HDR_CACHE;
     }
 
     SMAP_FOR_EACH (node, args) {
@@ -657,10 +656,6 @@ parse_tunnel_config(const char *name, const char *type,
                                "2013. Please email dev@openvswitch.org with "
                                "concerns.", name);
                 flags |= TNL_F_PMTUD;
-            }
-        } else if (!strcmp(node->key, "header_cache")) {
-            if (!strcmp(node->value, "false")) {
-                flags &= ~TNL_F_HDR_CACHE;
             }
         } else if (!strcmp(node->key, "peer_cert") && is_ipsec) {
             if (smap_get(args, "certificate")) {
@@ -792,11 +787,6 @@ unparse_tunnel_config(const char *name OVS_UNUSED, const char *type OVS_UNUSED,
         return error;
     }
 
-    flags = nl_attr_get_u32(a[OVS_TUNNEL_ATTR_FLAGS]);
-    if (!(flags & TNL_F_HDR_CACHE) == !(flags & TNL_F_IPSEC)) {
-        smap_add(args, "header_cache",
-                 flags & TNL_F_HDR_CACHE ? "true" : "false");
-    }
 
     daddr = nl_attr_get_be32(a[OVS_TUNNEL_ATTR_DST_IPV4]);
     smap_add_format(args, "remote_ip", IP_FMT, IP_ARGS(&daddr));
@@ -829,6 +819,7 @@ unparse_tunnel_config(const char *name OVS_UNUSED, const char *type OVS_UNUSED,
         }
     }
 
+    flags = nl_attr_get_u32(a[OVS_TUNNEL_ATTR_FLAGS]);
     if (flags & TNL_F_TTL_INHERIT) {
         smap_add(args, "ttl", "inherit");
     } else if (a[OVS_TUNNEL_ATTR_TTL]) {
