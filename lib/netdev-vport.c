@@ -590,6 +590,10 @@ parse_tunnel_config(const char *name, const char *type,
     ovs_be32 saddr = htonl(0);
     uint32_t flags;
 
+    if (!strcmp(type, "capwap")) {
+        VLOG_WARN_ONCE("CAPWAP tunnel support is deprecated.");
+    }
+
     flags = TNL_F_DF_DEFAULT | TNL_F_HDR_CACHE;
     if (!strcmp(type, "gre") || !strcmp(type, "gre64")) {
         is_gre = true;

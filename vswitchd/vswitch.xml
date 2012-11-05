@@ -1233,6 +1233,9 @@
             implemented.  UDP ports 58881 and 58882 are used as the source and
             destination ports respectively.  CAPWAP is currently supported only
             with the Linux kernel datapath with kernel version 2.6.26 or later.
+
+            CAPWAP support is deprecated and will be removed no earlier than
+            February 2013.
           </dd>
 
           <dt><code>patch</code></dt>
