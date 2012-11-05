@@ -16,6 +16,7 @@
 
 #include <config.h>
 #include "ofp-print.h"
+#include <ctype.h>
 #include <errno.h>
 #include <inttypes.h>
 #include <sys/types.h>
@@ -846,6 +847,71 @@ ofputil_protocols_from_string(const char *s)
     return protocols;
 }
 
+static enum ofp_version
+ofputil_version_from_string(const char *s)
+{
+    if (!strcasecmp(s, "OpenFlow10")) {
+        return OFP10_VERSION;
+    }
+    if (!strcasecmp(s, "OpenFlow11")) {
+        return OFP11_VERSION;
+    }
+    if (!strcasecmp(s, "OpenFlow12")) {
+        return OFP12_VERSION;
+    }
+    VLOG_FATAL("Unknown OpenFlow version: \"%s\"", s);
+}
+
+static bool
+is_delimiter(char c)
+{
+    return isspace(c) || c == ',';
+}
+
+uint32_t
+ofputil_versions_from_string(const char *s)
+{
+    size_t i = 0;
+    uint32_t bitmap = 0;
+
+    while (s[i]) {
+        size_t j;
+        enum ofp_version version;
+        char *key;
+
+        if (is_delimiter(s[i])) {
+            i++;
+            continue;
+        }
+        j = 0;
+        while (s[i + j] && !is_delimiter(s[i + j])) {
+            j++;
+        }
+        key = xmemdup0(s + i, j);
+        version = ofputil_version_from_string(key);
+        free(key);
+        bitmap |= 1u << version;
+        i += j;
+    }
+
+    return bitmap;
+}
+
+const char *
+ofputil_version_to_string(enum ofp_version ofp_version)
+{
+    switch (ofp_version) {
+    case OFP10_VERSION:
+        return "OpenFlow10";
+    case OFP11_VERSION:
+        return "OpenFlow11";
+    case OFP12_VERSION:
+        return "OpenFlow12";
+    default:
+        NOT_REACHED();
+    }
+}
+
 bool
 ofputil_packet_in_format_is_valid(enum nx_packet_in_format packet_in_format)
 {
@@ -972,6 +1038,44 @@ ofputil_usable_protocols(const struct match *match)
 
     /* Other formats can express this rule. */
     return OFPUTIL_P_ANY;
+}
+
+void
+ofputil_format_version(struct ds *msg, enum ofp_version version)
+{
+    ds_put_format(msg, "0x%02zx", version);
+}
+
+void
+ofputil_format_version_name(struct ds *msg, enum ofp_version version)
+{
+    ds_put_cstr(msg, ofputil_version_to_string(version));
+}
+
+static void
+ofputil_format_version_bitmap__(struct ds *msg, uint32_t bitmap,
+                                void (*format_version)(struct ds *msg,
+                                                       enum ofp_version))
+{
+    while (bitmap) {
+        format_version(msg, raw_ctz(bitmap));
+        bitmap = zero_rightmost_1bit(bitmap);
+        if (bitmap) {
+            ds_put_cstr(msg, ", ");
+        }
+    }
+}
+
+void
+ofputil_format_version_bitmap(struct ds *msg, uint32_t bitmap)
+{
+    ofputil_format_version_bitmap__(msg, bitmap, ofputil_format_version);
+}
+
+void
+ofputil_format_version_bitmap_names(struct ds *msg, uint32_t bitmap)
+{
+    ofputil_format_version_bitmap__(msg, bitmap, ofputil_format_version_name);
 }
 
 /* Returns an OpenFlow message that, sent on an OpenFlow connection whose

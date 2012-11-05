@@ -98,6 +98,32 @@ char *ofputil_protocols_to_string(enum ofputil_protocol);
 enum ofputil_protocol ofputil_protocols_from_string(const char *);
 enum ofputil_protocol ofputil_usable_protocols(const struct match *);
 
+void ofputil_format_version(struct ds *, enum ofp_version);
+void ofputil_format_version_name(struct ds *, enum ofp_version);
+
+/* A bitmap of version numbers
+ *
+ * Bit offsets correspond to ofp_version numbers which in turn correspond to
+ * wire-protocol numbers for Open Flow versions..  E.g. (1u << OFP11_VERSION)
+ * is the mask for Open Flow 1.1.  If the bit for a version is set then it is
+ * allowed, otherwise it is disallowed. */
+
+void ofputil_format_version_bitmap(struct ds *msg, uint32_t bitmap);
+void ofputil_format_version_bitmap_names(struct ds *msg, uint32_t bitmap);
+
+/* Bitmap of OpenFlow versions that Open vSwitch supports. */
+#define OFPUTIL_SUPPORTED_VERSIONS \
+        ((1u << OFP10_VERSION) | (1u << OFP12_VERSION))
+
+/* Bitmap of OpenFlow versions to enable by default (a subset of
+ * OFPUTIL_SUPPORTED_VERSIONS). */
+#define OFPUTIL_DEFAULT_VERSIONS (1u << OFP10_VERSION)
+
+enum ofputil_protocol ofputil_protocols_from_string(const char *s);
+
+const char *ofputil_version_to_string(enum ofp_version ofp_version);
+uint32_t ofputil_versions_from_string(const char *s);
+
 struct ofpbuf *ofputil_encode_set_protocol(enum ofputil_protocol current,
                                            enum ofputil_protocol want,
                                            enum ofputil_protocol *next);
