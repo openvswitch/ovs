@@ -45,6 +45,7 @@ AT_SETUP([OFPT_HELLO - ordinary])
 AT_KEYWORDS([ofp-print])
 AT_CHECK([ovs-ofctl ofp-print 0100000800000000], [0], [dnl
 OFPT_HELLO (xid=0x0):
+ version bitmap: 0x01
 ])
 AT_CLEANUP
 
@@ -53,7 +54,33 @@ AT_KEYWORDS([ofp-print])
 AT_CHECK([ovs-ofctl ofp-print 0100001300000000657874726120646174610a], [0],
 [dnl
 OFPT_HELLO (xid=0x0):
-00000000  65 78 74 72 61 20 64 61-74 61 0a                |extra data.     |
+ version bitmap: 0x01
+ unknown data in hello:
+00000000  01 00 00 13 00 00 00 00-65 78 74 72 61 20 64 61 |........extra da|
+00000010  74 61 0a                                        |ta.             |
+])
+AT_CLEANUP
+
+AT_SETUP([OFPT_HELLO with version bitmap])
+AT_KEYWORDS([ofp-print])
+AT_CHECK([ovs-ofctl ofp-print "01 00 00 10 00 00 00 00 00 01 00 08 00 00 00 f0"], [0],
+[dnl
+OFPT_HELLO (xid=0x0):
+ version bitmap: 0x04, 0x05, 0x06, 0x07
+])
+AT_CLEANUP
+
+AT_SETUP([OFPT_HELLO with version bitmap and extra data])
+AT_KEYWORDS([ofp-print])
+AT_CHECK([ovs-ofctl ofp-print "\
+01 00 00 1b 00 00 00 00 ff ff 00 06 01 02 00 00 \
+00 01 00 08 00 00 00 f0 61 62 63"], [0],
+[dnl
+OFPT_HELLO (xid=0x0):
+ version bitmap: 0x04, 0x05, 0x06, 0x07
+ unknown data in hello:
+00000000  01 00 00 1b 00 00 00 00-ff ff 00 06 01 02 00 00 |................|
+00000010  00 01 00 08 00 00 00 f0-61 62 63                |........abc     |
 ])
 AT_CLEANUP
 

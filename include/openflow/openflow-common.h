@@ -334,4 +334,15 @@ enum ofp_group {
     OFPG_ANY        = 0xffffffff   /* Wildcard, for flow stats requests. */
 };
 
+enum ofp_hello_elem_type {
+    OFPHET_VERSIONBITMAP          = 1, /* Bitmap of version supported. */
+};
+
+/* Common header for all Hello Elements */
+struct ofp_hello_elem_header {
+    ovs_be16    type;        /* One of OFPHET_*. */
+    ovs_be16    length;      /* Length in bytes of this element. */
+};
+OFP_ASSERT(sizeof(struct ofp_hello_elem_header) == 4);
+
 #endif /* openflow/openflow-common.h */

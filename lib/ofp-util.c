@@ -1078,6 +1078,119 @@ ofputil_format_version_bitmap_names(struct ds *msg, uint32_t bitmap)
     ofputil_format_version_bitmap__(msg, bitmap, ofputil_format_version_name);
 }
 
+static bool
+ofputil_decode_hello_bitmap(const struct ofp_hello_elem_header *oheh,
+                            uint32_t *allowed_versions)
+{
+    uint16_t bitmap_len = ntohs(oheh->length) - sizeof *oheh;
+    const ovs_be32 *bitmap = (const ovs_be32 *) (oheh + 1);
+
+    if (!bitmap_len || bitmap_len % sizeof *bitmap) {
+        return false;
+    }
+
+    /* Only use the first 32-bit element of the bitmap as that is all the
+     * current implementation supports.  Subsequent elements are ignored which
+     * should have no effect on session negotiation until Open vSwtich supports
+     * wire-protocol versions greater than 31.
+     */
+    *allowed_versions = ntohl(bitmap[0]);
+
+    if (*allowed_versions & 1) {
+        /* There's no OpenFlow version 0. */
+        VLOG_WARN_RL(&bad_ofmsg_rl, "peer claims to support invalid OpenFlow "
+                     "version 0x00");
+        *allowed_versions &= ~1u;
+    }
+
+    if (!*allowed_versions) {
+        VLOG_WARN_RL(&bad_ofmsg_rl, "peer does not support any OpenFlow "
+                     "version (between 0x01 and 0x1f)");
+        return false;
+    }
+
+    return true;
+}
+
+static uint32_t
+version_bitmap_from_version(uint8_t ofp_version)
+{
+    return ((ofp_version < 32 ? 1u << ofp_version : 0) - 1) << 1;
+}
+
+/* Decodes OpenFlow OFPT_HELLO message 'oh', storing into '*allowed_versions'
+ * the set of OpenFlow versions for which 'oh' announces support.
+ *
+ * Because of how OpenFlow defines OFPT_HELLO messages, this function is always
+ * successful, and thus '*allowed_versions' is always initialized.  However, it
+ * returns false if 'oh' contains some data that could not be fully understood,
+ * true if 'oh' was completely parsed. */
+bool
+ofputil_decode_hello(const struct ofp_header *oh, uint32_t *allowed_versions)
+{
+    struct ofpbuf msg;
+    bool ok = true;
+
+    ofpbuf_use_const(&msg, oh, ntohs(oh->length));
+    ofpbuf_pull(&msg, sizeof *oh);
+
+    *allowed_versions = version_bitmap_from_version(oh->version);
+    while (msg.size) {
+        const struct ofp_hello_elem_header *oheh;
+        unsigned int len;
+
+        if (msg.size < sizeof *oheh) {
+            return false;
+        }
+
+        oheh = msg.data;
+        len = ntohs(oheh->length);
+        if (len < sizeof *oheh || !ofpbuf_try_pull(&msg, ROUND_UP(len, 8))) {
+            return false;
+        }
+
+        if (oheh->type != htons(OFPHET_VERSIONBITMAP)
+            || !ofputil_decode_hello_bitmap(oheh, allowed_versions)) {
+            ok = false;
+        }
+    }
+
+    return ok;
+}
+
+/* Returns true if 'allowed_versions' needs to be accompanied by a version
+ * bitmap to be correctly expressed in an OFPT_HELLO message. */
+static inline bool
+should_send_version_bitmap(uint32_t allowed_versions)
+{
+    return !is_pow2((allowed_versions >> 1) + 1);
+}
+
+/* Create an OFPT_HELLO message that expresses support for the OpenFlow
+ * versions in the 'allowed_versions' bitmaps and returns the message. */
+struct ofpbuf *
+ofputil_encode_hello(uint32_t allowed_versions)
+{
+    enum ofp_version ofp_version;
+    struct ofpbuf *msg;
+
+    ofp_version = leftmost_1bit_idx(allowed_versions);
+    msg = ofpraw_alloc(OFPRAW_OFPT_HELLO, ofp_version, 0);
+
+    if (should_send_version_bitmap(allowed_versions)) {
+        struct ofp_hello_elem_header *oheh;
+        uint16_t map_len;
+
+        map_len = sizeof(uint32_t) / CHAR_BIT;
+        oheh = ofpbuf_put_zeros(msg, ROUND_UP(map_len + sizeof *oheh, 8));
+        oheh->type = htons(OFPHET_VERSIONBITMAP);
+        oheh->length = htons(map_len + sizeof *oheh);
+        *(ovs_be32 *)(oheh + 1) = htonl(allowed_versions);
+    }
+
+    return msg;
+}
+
 /* Returns an OpenFlow message that, sent on an OpenFlow connection whose
  * protocol is 'current', at least partly transitions the protocol to 'want'.
  * Stores in '*next' the protocol that will be in effect on the OpenFlow

@@ -406,8 +406,7 @@ vcs_send_hello(struct vconn *vconn)
     struct ofpbuf *b;
     int retval;
 
-    b = ofpraw_alloc(OFPRAW_OFPT_HELLO,
-                     leftmost_1bit_idx(vconn->allowed_versions), 0);
+    b = ofputil_encode_hello(vconn->allowed_versions);
     retval = do_send(vconn, b);
     if (!retval) {
         vconn->state = VCS_RECV_HELLO;
@@ -450,7 +449,6 @@ vcs_recv_hello(struct vconn *vconn)
 
     retval = do_recv(vconn, &b);
     if (!retval) {
-        const struct ofp_header *oh = b->data;
         enum ofptype type;
         enum ofperr error;
 
@@ -459,9 +457,10 @@ vcs_recv_hello(struct vconn *vconn)
             char *peer_s, *local_s;
             uint32_t common_versions;
 
-            if (b->size > sizeof *oh) {
+            if (!ofputil_decode_hello(b->data, &vconn->peer_versions)) {
                 struct ds msg = DS_EMPTY_INITIALIZER;
-                ds_put_format(&msg, "%s: extra-long hello:\n", vconn->name);
+                ds_put_format(&msg, "%s: unknown data in hello:\n",
+                              vconn->name);
                 ds_put_hex_dump(&msg, b->data, b->size, 0, true);
                 VLOG_WARN_RL(&bad_ofmsg_rl, "%s", ds_cstr(&msg));
                 ds_destroy(&msg);
