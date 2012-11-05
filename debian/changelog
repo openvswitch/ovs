@@ -1,8 +1,7 @@
 openvswitch (1.9.90-1) unstable; urgency=low
    [ Open vSwitch team ]
    * New upstream version
-    - The data in the RARP packets can now be matched in the same way as the
-      data in ARP packets.
+    - Nothing yet!  Try NEWS...
 
  -- Open vSwitch team <dev@openvswitch.org>  Wed, 24 Oct 2012 16:12:57 -0700
 
@@ -50,6 +49,8 @@ openvswitch (1.9.0-1) unstable; urgency=low
         - Interface type "null".
         - Numeric values for reserved ports (see "ovs-ofctl" note above).
         - Tunnel Path MTU Discovery.
+    - The data in the RARP packets can now be matched in the same way as the
+      data in ARP packets.
 
  -- Open vSwitch team <dev@openvswitch.org>  Wed, 24 Oct 2012 16:10:39 -0700
 
