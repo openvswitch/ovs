@@ -6,6 +6,7 @@
 enum {
 	OVS_IP6T_FH_F_FRAG	= (1 << 0),
 	OVS_IP6T_FH_F_AUTH	= (1 << 1),
+	OVS_IP6T_FH_F_SKIP_RH	= (1 << 2),
 };
 
 /* This function is upstream but not the version which supplies the
