@@ -201,4 +201,25 @@ static inline void tnl_tun_key_init(struct ovs_key_ipv4_tunnel *tun_key,
 	tun_key->tun_flags = tun_flags;
 }
 
+static inline void tnl_get_param(const struct tnl_mutable_config *mutable,
+				 const struct ovs_key_ipv4_tunnel *tun_key,
+				 u32 *flags,  __be64 *out_key)
+{
+	if (tun_key->ipv4_dst) {
+		*flags = 0;
+
+		if (tun_key->tun_flags & OVS_TNL_F_KEY)
+			*flags = TNL_F_OUT_KEY_ACTION;
+		if (tun_key->tun_flags & OVS_TNL_F_CSUM)
+			*flags |= TNL_F_CSUM;
+		*out_key = tun_key->tun_id;
+	} else {
+		*flags = mutable->flags;
+		if (mutable->flags & TNL_F_OUT_KEY_ACTION)
+			*out_key = tun_key->tun_id;
+		else
+			*out_key = mutable->out_key;
+	}
+}
+
 #endif /* tunnel.h */
