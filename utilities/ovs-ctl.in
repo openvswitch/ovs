@@ -30,21 +30,13 @@ done
 ## start ##
 ## ----- ##
 
-restore_datapaths () {
-    [ -n "${script_datapaths}" ] && \
-        action "Restoring datapath configuration" "${script_datapaths}"
-}
-
 insert_openvswitch_mod_if_required () {
     # If openvswitch is already loaded then we're done.
     test -e /sys/module/openvswitch -o -e /sys/module/openvswitch_mod && \
      return 0
 
     # Load openvswitch.  If that's successful then we're done.
-    if action "Inserting openvswitch module" modprobe openvswitch; then
-        restore_datapaths
-        return 0
-    fi
+    action "Inserting openvswitch module" modprobe openvswitch && return 0
 
     # If the bridge module is loaded, then that might be blocking
     # openvswitch.  Try to unload it, if there are no bridges.
@@ -58,7 +50,6 @@ insert_openvswitch_mod_if_required () {
 
     # Try loading openvswitch again.
     action "Inserting openvswitch module" modprobe openvswitch
-    restore_datapaths
 }
 
 insert_brcompat_mod_if_required () {
@@ -319,11 +310,6 @@ save_interfaces () {
         > "${script_interfaces}"
 }
 
-save_datapaths () {
-    "$datadir/scripts/ovs-save" save-datapaths ${datapaths} \
-        > "${script_datapaths}"
-}
-
 restore_flows () {
     [ -n "${script_flows}" ] && \
         action "Restoring saved flows" "${script_flows}"
@@ -334,10 +320,8 @@ force_reload_kmod () {
     action "Detected internal interfaces: $ifaces" true
 
     script_interfaces=`mktemp`
-    script_datapaths=`mktemp`
     script_flows=`mktemp`
-    trap 'rm -f "${script_interfaces}" "${script_flows}" \
-        "${script_datapaths}"' 0 1 2 13 15
+    trap 'rm -f "${script_interfaces}" "${script_flows}" ' 0 1 2 13 15
 
     action "Saving flows" save_flows
 
@@ -357,16 +341,7 @@ force_reload_kmod () {
     fi
     chmod +x "$script_interfaces"
 
-    datapaths=`ovs-dpctl dump-dps`
-    if action "Saving datapath configuration" save_datapaths; then
-        chmod +x "${script_datapaths}"
-    else
-        log_warning_msg "Failed to save datapath configuration. The port\
-                         numbers may change after the restart"
-        script_datapaths=""
-    fi
-
-    for dp in ${datapaths}; do
+    for dp in `ovs-dpctl dump-dps`; do
         action "Removing datapath: $dp" ovs-dpctl del-dp "$dp"
     done
 

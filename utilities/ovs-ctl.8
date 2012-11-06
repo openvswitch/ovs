@@ -287,8 +287,7 @@ implemented by Open vSwitch.  The most common examples of these are
 bridge ``local ports''.
 .
 .IP 2.
-Saves the Openflow flows of each bridge and the kernel datapath
-configuration for each of the kernel datapaths.
+Saves the Openflow flows of each bridge.
 .
 .IP 3.
 Stops the Open vSwitch daemons, as if by a call to \fBovs\-ctl
@@ -305,9 +304,9 @@ compatibility module if it is loaded).
 .
 .IP 6.
 Starts OVS back up, as if by a call to \fBovs\-ctl start\fR.  This
-reloads the kernel module, restores the saved kernel datapath configuration,
-restarts the OVS daemons (including \fBovs\-brcompatd\fR, if \fB\-\-brcompat\fR
-is specified) and finally restores the saved Openflow flows.
+reloads the kernel module, restarts the OVS daemons (including
+\fBovs\-brcompatd\fR, if \fB\-\-brcompat\fR is specified) and finally
+restores the saved Openflow flows.
 .
 .IP 7.
 Restores the kernel configuration state that was saved in step 4.

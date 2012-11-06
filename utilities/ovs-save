@@ -27,9 +27,6 @@ Commands:
                         configuration.
  save-flows             Outputs a shell script on stdout that will restore
                         Openflow flows of each Open vSwitch bridge.
- save-datapaths         Outputs a shell script on stdout that will restore
-                        the datapaths with the same port numbers as before.
-
 This script is meant as a helper for the Open vSwitch init script commands.
 EOF
 }
@@ -177,89 +174,10 @@ save_flows () {
     done
 }
 
-ovs_vsctl () {
-    ovs-vsctl --no-wait --timeout=5 "$@"
-}
-
-save_datapaths () {
-    if missing_program ovs-dpctl; then
-        echo "$0: ovs-dpctl not found in $PATH" >&2
-        exit 1
-    fi
-    if missing_program ovs-vsctl; then
-        echo "$0: ovs-vsctl not found in $PATH" >&2
-        exit 1
-    fi
-
-    for dp in "$@"; do
-        echo "ovs-dpctl add-dp ${dp}"
-        ovs-dpctl show $dp | while read line; do
-            # An example 'ovs-dpctl show' output looks like this:
-            # system@br1:
-            # lookups: hit:0 missed:0 lost:0
-            # flows: 0
-            # port 0: br1 (internal)
-            # port 2: gre2886795521 (ipsec_gre: key=flow, remote_ip=172.17.1.1, tos=inherit)
-            # port 3: gre1 (ipsec_gre: remote_ip=192.168.113.1)
-            # port 14: gre2 (gre: remote_ip=192.168.115.1)
-            # port 15: gre3 (gre64: remote_ip=192.168.116.1)
-            # port 16: eth0
-            # port 17: br1- (patch: peer=br1+)
-
-            # Skip lines which do not have 'port'
-            if port_no=`expr "${line}" : '.*port \([0-9]\+\):'`; then :; else
-                continue
-            fi
-
-            netdev=`echo ${line} | awk '{print $3}'`
-
-            # Do not add port that has the same name as the datapath. It gets
-            # added by default.
-            [ "${dp#system@}" = "${netdev}" ] && continue
-
-            type=`echo ${line} | awk '{print $4}' | sed 's/[:)(]//g'`
-            [ ! -n "${type}" ] && type="system"
-
-            command="ovs-dpctl add-if ${dp}\
-                        ${netdev},type=${type},port_no=${port_no}"
-
-            options=`echo ${line} | awk -F: '{print $3}' | sed 's/[) ]//g'`
-            [ -n "${options}" ] && command="${command},${options}"
-
-            # For ipsec, ovs-dpctl does not show the key value pairs related
-            # to certificates. Get that information from ovs-vsctl.
-            if [ "${type}" = "ipsec_gre" ] ; then
-                if peer_cert=`ovs_vsctl get interface \
-                                "${netdev}" options:peer_cert 2>/dev/null`; then
-                    # The option peer_cert comes with an accompanying
-                    # "certificate" or "use_ssl_cert"
-                    if certificate=`ovs_vsctl get interface "${netdev}" \
-                            options:certificate 2>/dev/null` ; then
-                        command="${command},peer_cert=${peer_cert},certificate=${certificate}"
-                    else
-                        use_ssl_cert=`ovs_vsctl get interface "${netdev}" \
-                                        options:use_ssl_cert 2>/dev/null`
-                        command="${command},peer_cert=${peer_cert},use_ssl_cert=${use_ssl_cert}"
-                    fi
-                else
-                    psk=`ovs_vsctl get interface "${netdev}" \
-                            options:psk 2>/dev/null`
-                    command="${command},psk=${psk}"
-                fi
-            fi
-            echo ${command}
-        done
-    done
-}
 
 while [ $# -ne 0 ]
 do
     case $1 in
-        "save-datapaths")
-            shift
-            save_datapaths "$@"
-            exit 0
-            ;;
         "save-flows")
             shift
             save_flows "$@"
