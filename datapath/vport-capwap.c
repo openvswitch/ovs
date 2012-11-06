@@ -162,9 +162,9 @@ static void get_capwap_param(const struct tnl_mutable_config *mutable,
 	if (tun_key->ipv4_dst) {
 		*flags = 0;
 
-		if (tun_key->tun_flags & OVS_FLOW_TNL_F_KEY)
+		if (tun_key->tun_flags & OVS_TNL_F_KEY)
 			*flags = TNL_F_OUT_KEY_ACTION;
-		if (tun_key->tun_flags & OVS_FLOW_TNL_F_CSUM)
+		if (tun_key->tun_flags & OVS_TNL_F_CSUM)
 			*flags |= TNL_F_CSUM;
 		*out_key = tun_key->tun_id;
 	} else {
@@ -359,7 +359,7 @@ static int capwap_rcv(struct sock *sk, struct sk_buff *skb)
 			 !(mutable->flags & TNL_F_IN_KEY_MATCH))
 		key_present = false;
 
-	tnl_tun_key_init(&tun_key, iph, key, key_present ? OVS_FLOW_TNL_F_KEY : 0);
+	tnl_tun_key_init(&tun_key, iph, key, key_present ? OVS_TNL_F_KEY : 0);
 	OVS_CB(skb)->tun_key = &tun_key;
 
 	ovs_tnl_rcv(vport, skb);

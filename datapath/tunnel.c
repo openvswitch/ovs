@@ -636,7 +636,7 @@ static bool check_mtu(struct sk_buff *skb,
 	if (OVS_CB(skb)->tun_key->ipv4_dst) {
 		df_inherit = false;
 		pmtud = false;
-		frag_off = OVS_CB(skb)->tun_key->tun_flags & OVS_FLOW_TNL_F_DONT_FRAGMENT ?
+		frag_off = OVS_CB(skb)->tun_key->tun_flags & OVS_TNL_F_DONT_FRAGMENT ?
 				  htons(IP_DF) : 0;
 	} else {
 		df_inherit = mutable->flags & TNL_F_DF_INHERIT;
