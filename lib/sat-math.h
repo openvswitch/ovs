@@ -17,7 +17,6 @@
 #ifndef SAT_MATH_H
 #define SAT_MATH_H 1
 
-#include <assert.h>
 #include <limits.h>
 
 /* Saturating addition: overflow yields UINT_MAX. */

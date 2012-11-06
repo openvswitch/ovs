@@ -16,7 +16,6 @@
 
 #include <config.h>
 #include "stream-fd.h"
-#include <assert.h>
 #include <errno.h>
 #include <poll.h>
 #include <stdlib.h>

@@ -16,7 +16,6 @@
 
 #include <config.h>
 #include "packets.h"
-#include <assert.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <netinet/in.h>

@@ -17,7 +17,6 @@
 #ifndef OFP_UTIL_H
 #define OFP_UTIL_H 1
 
-#include <assert.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>

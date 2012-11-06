@@ -16,7 +16,6 @@
 
 #include <config.h>
 #include "stream.h"
-#include <assert.h>
 #include <errno.h>
 #include <inttypes.h>
 #include <netdb.h>
