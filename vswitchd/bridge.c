@@ -276,25 +276,27 @@ bridge_init_ofproto(const struct ovsrec_open_vswitch *cfg)
 
     shash_init(&iface_hints);
 
-    for (i = 0; i < cfg->n_bridges; i++) {
-        const struct ovsrec_bridge *br_cfg = cfg->bridges[i];
-        int j;
+    if (cfg) {
+        for (i = 0; i < cfg->n_bridges; i++) {
+            const struct ovsrec_bridge *br_cfg = cfg->bridges[i];
+            int j;
 
-        for (j = 0; j < br_cfg->n_ports; j++) {
-            struct ovsrec_port *port_cfg = br_cfg->ports[j];
-            int k;
+            for (j = 0; j < br_cfg->n_ports; j++) {
+                struct ovsrec_port *port_cfg = br_cfg->ports[j];
+                int k;
 
-            for (k = 0; k < port_cfg->n_interfaces; k++) {
-                struct ovsrec_interface *if_cfg = port_cfg->interfaces[k];
-                struct iface_hint *iface_hint;
+                for (k = 0; k < port_cfg->n_interfaces; k++) {
+                    struct ovsrec_interface *if_cfg = port_cfg->interfaces[k];
+                    struct iface_hint *iface_hint;
 
-                iface_hint = xmalloc(sizeof *iface_hint);
-                iface_hint->br_name = br_cfg->name;
-                iface_hint->br_type = br_cfg->datapath_type;
-                iface_hint->ofp_port = if_cfg->n_ofport_request ?
-                                       *if_cfg->ofport_request : OFPP_NONE;
+                    iface_hint = xmalloc(sizeof *iface_hint);
+                    iface_hint->br_name = br_cfg->name;
+                    iface_hint->br_type = br_cfg->datapath_type;
+                    iface_hint->ofp_port = if_cfg->n_ofport_request ?
+                        *if_cfg->ofport_request : OFPP_NONE;
 
-                shash_add(&iface_hints, if_cfg->name, iface_hint);
+                    shash_add(&iface_hints, if_cfg->name, iface_hint);
+                }
             }
         }
     }
