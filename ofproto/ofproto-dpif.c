@@ -565,7 +565,7 @@ static uint16_t odp_port_to_ofp_port(const struct ofproto_dpif *,
 static struct ofport_dpif *
 ofport_dpif_cast(const struct ofport *ofport)
 {
-    assert(ofport->ofproto->ofproto_class == &ofproto_dpif_class);
+    ovs_assert(ofport->ofproto->ofproto_class == &ofproto_dpif_class);
     return ofport ? CONTAINER_OF(ofport, struct ofport_dpif, up) : NULL;
 }
 
@@ -691,7 +691,7 @@ static void ofproto_dpif_unixctl_init(void);
 static struct ofproto_dpif *
 ofproto_dpif_cast(const struct ofproto *ofproto)
 {
-    assert(ofproto->ofproto_class == &ofproto_dpif_class);
+    ovs_assert(ofproto->ofproto_class == &ofproto_dpif_class);
     return CONTAINER_OF(ofproto, struct ofproto_dpif, up);
 }
 
@@ -950,7 +950,7 @@ close_dpif_backer(struct dpif_backer *backer)
 {
     struct shash_node *node;
 
-    assert(backer->refcount > 0);
+    ovs_assert(backer->refcount > 0);
 
     if (--backer->refcount) {
         return;
@@ -1181,7 +1181,7 @@ add_internal_flow(struct ofproto_dpif *ofproto, int id,
     }
 
     *rulep = rule_dpif_lookup__(ofproto, &fm.match.flow, TBL_INTERNAL);
-    assert(*rulep != NULL);
+    ovs_assert(*rulep != NULL);
 
     return 0;
 }
@@ -2227,8 +2227,8 @@ bundle_set(struct ofproto *ofproto_, void *aux,
         return 0;
     }
 
-    assert(s->n_slaves == 1 || s->bond != NULL);
-    assert((s->lacp != NULL) == (s->lacp_slaves != NULL));
+    ovs_assert(s->n_slaves == 1 || s->bond != NULL);
+    ovs_assert((s->lacp != NULL) == (s->lacp_slaves != NULL));
 
     bundle = bundle_lookup(ofproto, aux);
     if (!bundle) {
@@ -2295,7 +2295,7 @@ bundle_set(struct ofproto *ofproto_, void *aux,
         found: ;
         }
     }
-    assert(list_size(&bundle->ports) <= s->n_slaves);
+    ovs_assert(list_size(&bundle->ports) <= s->n_slaves);
 
     if (list_is_empty(&bundle->ports)) {
         bundle_destroy(bundle);
@@ -3564,7 +3564,7 @@ handle_miss_upcalls(struct dpif_backer *backer, struct dpif_upcall *upcalls,
     HMAP_FOR_EACH (miss, hmap_node, &todo) {
         handle_flow_miss(miss, flow_miss_ops, &n_ops);
     }
-    assert(n_ops <= ARRAY_SIZE(flow_miss_ops));
+    ovs_assert(n_ops <= ARRAY_SIZE(flow_miss_ops));
 
     /* Execute batch. */
     for (i = 0; i < n_ops; i++) {
@@ -3660,7 +3660,7 @@ handle_upcalls(struct dpif_backer *backer, unsigned int max_batch)
     int n_misses;
     int i;
 
-    assert(max_batch <= FLOW_MISS_MAX_BATCH);
+    ovs_assert(max_batch <= FLOW_MISS_MAX_BATCH);
 
     n_misses = 0;
     for (n_processed = 0; n_processed < max_batch; n_processed++) {
@@ -4125,7 +4125,7 @@ facet_remove(struct facet *facet)
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(facet->rule->up.ofproto);
     struct subfacet *subfacet, *next_subfacet;
 
-    assert(!list_is_empty(&facet->subfacets));
+    ovs_assert(!list_is_empty(&facet->subfacets));
 
     /* First uninstall all of the subfacets to get final statistics. */
     LIST_FOR_EACH (subfacet, list_node, &facet->subfacets) {
@@ -4255,8 +4255,8 @@ facet_flush_stats(struct facet *facet)
     struct subfacet *subfacet;
 
     LIST_FOR_EACH (subfacet, list_node, &facet->subfacets) {
-        assert(!subfacet->dp_byte_count);
-        assert(!subfacet->dp_packet_count);
+        ovs_assert(!subfacet->dp_byte_count);
+        ovs_assert(!subfacet->dp_packet_count);
     }
 
     facet_push_stats(facet);
@@ -4613,9 +4613,9 @@ facet_push_stats(struct facet *facet)
 {
     struct dpif_flow_stats stats;
 
-    assert(facet->packet_count >= facet->prev_packet_count);
-    assert(facet->byte_count >= facet->prev_byte_count);
-    assert(facet->used >= facet->prev_used);
+    ovs_assert(facet->packet_count >= facet->prev_packet_count);
+    ovs_assert(facet->byte_count >= facet->prev_byte_count);
+    ovs_assert(facet->used >= facet->prev_used);
 
     stats.n_packets = facet->packet_count - facet->prev_packet_count;
     stats.n_bytes = facet->byte_count - facet->prev_byte_count;
@@ -4932,8 +4932,8 @@ subfacet_uninstall(struct subfacet *subfacet)
         }
         subfacet->path = SF_NOT_INSTALLED;
     } else {
-        assert(subfacet->dp_packet_count == 0);
-        assert(subfacet->dp_byte_count == 0);
+        ovs_assert(subfacet->dp_packet_count == 0);
+        ovs_assert(subfacet->dp_byte_count == 0);
     }
 }
 
@@ -5386,7 +5386,7 @@ fix_sflow_action(struct action_xlate_ctx *ctx)
 
     cookie = ofpbuf_at(ctx->odp_actions, ctx->user_cookie_offset,
                        sizeof(*cookie));
-    assert(cookie->type == USER_ACTION_COOKIE_SFLOW);
+    ovs_assert(cookie->type == USER_ACTION_COOKIE_SFLOW);
 
     compose_sflow_cookie(ctx->ofproto, base->vlan_tci,
                          ctx->sflow_odp_port, ctx->sflow_n_outputs, cookie);
@@ -5580,8 +5580,8 @@ execute_controller_action(struct action_xlate_ctx *ctx, int len,
         /* If the Ethernet type is less than ETH_TYPE_MIN, it's likely an 802.2
          * LLC frame.  Calculating the Ethernet type of these frames is more
          * trouble than seems appropriate for a simple assertion. */
-        assert(ntohs(eh->eth_type) < ETH_TYPE_MIN
-               || eh->eth_type == ctx->flow.dl_type);
+        ovs_assert(ntohs(eh->eth_type) < ETH_TYPE_MIN
+                   || eh->eth_type == ctx->flow.dl_type);
 
         memcpy(eh->eth_src, ctx->flow.dl_src, sizeof eh->eth_src);
         memcpy(eh->eth_dst, ctx->flow.dl_dst, sizeof eh->eth_dst);
@@ -6069,7 +6069,7 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
             /* XXX remove recursion */
             /* It is assumed that goto-table is last action */
             struct ofpact_goto_table *ogt = ofpact_get_GOTO_TABLE(a);
-            assert(ctx->table_id < ogt->table_id);
+            ovs_assert(ctx->table_id < ogt->table_id);
             xlate_table_action(ctx, ctx->flow.in_port, ogt->table_id, true);
             break;
         }

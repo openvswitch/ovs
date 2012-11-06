@@ -15,7 +15,6 @@
  */
 #include <config.h>
 #include "fatal-signal.h"
-#include <assert.h>
 #include <errno.h>
 #include <signal.h>
 #include <stdbool.h>
@@ -112,7 +111,7 @@ fatal_signal_add_hook(void (*hook_cb)(void *aux), void (*cancel_cb)(void *aux),
 {
     fatal_signal_init();
 
-    assert(n_hooks < MAX_HOOKS);
+    ovs_assert(n_hooks < MAX_HOOKS);
     hooks[n_hooks].hook_cb = hook_cb;
     hooks[n_hooks].cancel_cb = cancel_cb;
     hooks[n_hooks].aux = aux;

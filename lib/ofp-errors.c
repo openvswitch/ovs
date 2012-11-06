@@ -110,7 +110,7 @@ ofperr_get_pair__(enum ofperr error, const struct ofperr_domain *domain)
 {
     size_t ofs = error - OFPERR_OFS;
 
-    assert(ofperr_is_valid(error));
+    ovs_assert(ofperr_is_valid(error));
     return &domain->errors[ofs];
 }
 

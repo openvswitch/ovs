@@ -17,7 +17,6 @@
 #include <config.h>
 #include "socket-util.h"
 #include <arpa/inet.h>
-#include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <net/if.h>
@@ -1101,7 +1100,7 @@ send_iovec_and_fds(int sock,
                    const struct iovec *iovs, size_t n_iovs,
                    const int fds[], size_t n_fds)
 {
-    assert(sock >= 0);
+    ovs_assert(sock >= 0);
     if (n_fds > 0) {
         union {
             struct cmsghdr cm;
@@ -1109,8 +1108,8 @@ send_iovec_and_fds(int sock,
         } cmsg;
         struct msghdr msg;
 
-        assert(!iovec_is_empty(iovs, n_iovs));
-        assert(n_fds <= SOUTIL_MAX_FDS);
+        ovs_assert(!iovec_is_empty(iovs, n_iovs));
+        ovs_assert(n_fds <= SOUTIL_MAX_FDS);
 
         memset(&cmsg, 0, sizeof cmsg);
         cmsg.cm.cmsg_len = CMSG_LEN(n_fds * sizeof *fds);
@@ -1285,7 +1284,7 @@ recv_data_and_fds(int sock,
             size_t n_fds = (p->cmsg_len - CMSG_LEN(0)) / sizeof *fds;
             const int *fds_data = (const int *) CMSG_DATA(p);
 
-            assert(n_fds > 0);
+            ovs_assert(n_fds > 0);
             if (n_fds > SOUTIL_MAX_FDS) {
                 VLOG_ERR("%zu fds received but only %d supported",
                          n_fds, SOUTIL_MAX_FDS);

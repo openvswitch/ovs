@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +18,6 @@
 
 #include "meta-flow.h"
 
-#include <assert.h>
 #include <errno.h>
 #include <limits.h>
 #include <netinet/icmp6.h>
@@ -543,7 +542,7 @@ const struct mf_field *mf_from_nxm_header__(uint32_t header);
 const struct mf_field *
 mf_from_id(enum mf_field_id id)
 {
-    assert((unsigned int) id < MFF_N_IDS);
+    ovs_assert((unsigned int) id < MFF_N_IDS);
     return &mf_fields[id];
 }
 
@@ -583,7 +582,7 @@ static void
 nxm_init_add_field(const struct mf_field *mf, uint32_t header)
 {
     if (header) {
-        assert(!mf_from_nxm_header__(header));
+        ovs_assert(!mf_from_nxm_header__(header));
         add_nxm_field(header, mf);
         if (mf->maskable != MFM_NONE) {
             add_nxm_field(NXM_MAKE_WILD_HEADER(header), mf);
@@ -1936,7 +1935,7 @@ mf_from_ethernet_string(const struct mf_field *mf, const char *s,
                         uint8_t mac[ETH_ADDR_LEN],
                         uint8_t mask[ETH_ADDR_LEN])
 {
-    assert(mf->n_bytes == ETH_ADDR_LEN);
+    ovs_assert(mf->n_bytes == ETH_ADDR_LEN);
 
     switch (sscanf(s, ETH_ADDR_SCAN_FMT"/"ETH_ADDR_SCAN_FMT,
                    ETH_ADDR_SCAN_ARGS(mac), ETH_ADDR_SCAN_ARGS(mask))){
@@ -1958,7 +1957,7 @@ mf_from_ipv4_string(const struct mf_field *mf, const char *s,
 {
     int prefix;
 
-    assert(mf->n_bytes == sizeof *ip);
+    ovs_assert(mf->n_bytes == sizeof *ip);
 
     if (sscanf(s, IP_SCAN_FMT"/"IP_SCAN_FMT,
                IP_SCAN_ARGS(ip), IP_SCAN_ARGS(mask)) == IP_SCAN_COUNT * 2) {
@@ -1990,7 +1989,7 @@ mf_from_ipv6_string(const struct mf_field *mf, const char *s,
     const char *name, *netmask;
     int retval;
 
-    assert(mf->n_bytes == sizeof *value);
+    ovs_assert(mf->n_bytes == sizeof *value);
 
     name = strtok_r(str, "/", &save_ptr);
     retval = name ? lookup_ipv6(name, value) : EINVAL;
@@ -2028,7 +2027,7 @@ mf_from_ofp_port_string(const struct mf_field *mf, const char *s,
 {
     uint16_t port;
 
-    assert(mf->n_bytes == sizeof(ovs_be16));
+    ovs_assert(mf->n_bytes == sizeof(ovs_be16));
     if (*s == '-') {
         return xasprintf("%s: negative values not supported for %s",
                          s, mf->name);
@@ -2183,7 +2182,7 @@ mf_parse(const struct mf_field *mf, const char *s,
         return mf_from_frag_string(s, &value->u8, &mask->u8);
 
     case MFS_TNL_FLAGS:
-        assert(mf->n_bytes == sizeof(ovs_be16));
+        ovs_assert(mf->n_bytes == sizeof(ovs_be16));
         return mf_from_tun_flags_string(s, &value->be16, &mask->be16);
     }
     NOT_REACHED();
@@ -2215,7 +2214,7 @@ mf_format_integer_string(const struct mf_field *mf, const uint8_t *valuep,
     unsigned long long int integer;
     int i;
 
-    assert(mf->n_bytes <= 8);
+    ovs_assert(mf->n_bytes <= 8);
 
     integer = 0;
     for (i = 0; i < mf->n_bytes; i++) {

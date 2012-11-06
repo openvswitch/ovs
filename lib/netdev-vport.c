@@ -91,14 +91,14 @@ is_vport_class(const struct netdev_class *class)
 static const struct vport_class *
 vport_class_cast(const struct netdev_class *class)
 {
-    assert(is_vport_class(class));
+    ovs_assert(is_vport_class(class));
     return CONTAINER_OF(class, struct vport_class, netdev_class);
 }
 
 static struct netdev_dev_vport *
 netdev_dev_vport_cast(const struct netdev_dev *netdev_dev)
 {
-    assert(is_vport_class(netdev_dev_get_class(netdev_dev)));
+    ovs_assert(is_vport_class(netdev_dev_get_class(netdev_dev)));
     return CONTAINER_OF(netdev_dev, struct netdev_dev_vport, netdev_dev);
 }
 

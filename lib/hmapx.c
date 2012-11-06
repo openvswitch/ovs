@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 Nicira, Inc.
+ * Copyright (c) 2011, 2012 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,8 +17,6 @@
 #include <config.h>
 
 #include "hmapx.h"
-
-#include <assert.h>
 
 #include "hash.h"
 
@@ -119,7 +117,7 @@ void
 hmapx_add_assert(struct hmapx *map, void *data)
 {
     bool added OVS_UNUSED = hmapx_add(map, data);
-    assert(added);
+    ovs_assert(added);
 }
 
 /* Removes all of the nodes from 'map'. */
@@ -159,7 +157,7 @@ void
 hmapx_find_and_delete_assert(struct hmapx *map, const void *data)
 {
     bool deleted OVS_UNUSED = hmapx_find_and_delete(map, data);
-    assert(deleted);
+    ovs_assert(deleted);
 }
 
 /* Searches for 'data' in 'map'.  Returns its node, if found, otherwise a null

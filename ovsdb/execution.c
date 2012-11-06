@@ -15,7 +15,6 @@
 
 #include <config.h>
 
-#include <assert.h>
 #include <limits.h>
 
 #include "column.h"
@@ -154,7 +153,7 @@ ovsdb_execute(struct ovsdb *db, const struct ovsdb_session *session,
                                          op_name);
             }
         } else {
-            assert(ovsdb_parser_has_error(&parser));
+            ovs_assert(ovsdb_parser_has_error(&parser));
         }
 
         /* A parse error overrides any other error.

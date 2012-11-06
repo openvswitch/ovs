@@ -530,7 +530,7 @@ void *ofpact_put(struct ofpbuf *, enum ofpact_type, size_t len);
     static inline struct STRUCT *                                       \
     ofpact_get_##ENUM(const struct ofpact *ofpact)                      \
     {                                                                   \
-        assert(ofpact->type == OFPACT_##ENUM);                          \
+        ovs_assert(ofpact->type == OFPACT_##ENUM);                      \
         return (struct STRUCT *) ofpact;                                \
     }                                                                   \
                                                                         \

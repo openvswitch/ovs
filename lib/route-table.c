@@ -18,7 +18,6 @@
 
 #include "route-table.h"
 
-#include <assert.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <linux/rtnetlink.h>
@@ -161,8 +160,8 @@ void
 route_table_register(void)
 {
     if (!register_count) {
-        assert(!nln);
-        assert(!route_notifier);
+        ovs_assert(!nln);
+        ovs_assert(!route_notifier);
 
         nln = nln_create(NETLINK_ROUTE, RTNLGRP_IPV4_ROUTE,
                          (nln_parse_func *) route_table_parse, &rtmsg);

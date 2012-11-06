@@ -1,4 +1,4 @@
-/* Copyright (c) 2008, 2009 Nicira, Inc.
+/* Copyright (c) 2008, 2009, 2012 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,7 +15,6 @@
 
 #include <config.h>
 #include "byteq.h"
-#include <assert.h>
 #include <errno.h>
 #include <string.h>
 #include <unistd.h>
@@ -65,7 +64,7 @@ byteq_is_full(const struct byteq *q)
 void
 byteq_put(struct byteq *q, uint8_t c)
 {
-    assert(!byteq_is_full(q));
+    ovs_assert(!byteq_is_full(q));
     *byteq_head(q) = c;
     q->head++;
 }
@@ -76,7 +75,7 @@ void
 byteq_putn(struct byteq *q, const void *p_, size_t n)
 {
     const uint8_t *p = p_;
-    assert(byteq_avail(q) >= n);
+    ovs_assert(byteq_avail(q) >= n);
     while (n > 0) {
         size_t chunk = MIN(n, byteq_headroom(q));
         memcpy(byteq_head(q), p, chunk);
@@ -100,7 +99,7 @@ uint8_t
 byteq_get(struct byteq *q)
 {
     uint8_t c;
-    assert(!byteq_is_empty(q));
+    ovs_assert(!byteq_is_empty(q));
     c = *byteq_tail(q);
     q->tail++;
     return c;
@@ -117,7 +116,7 @@ byteq_write(struct byteq *q, int fd)
         if (n > 0) {
             byteq_advance_tail(q, n);
         } else {
-            assert(n < 0);
+            ovs_assert(n < 0);
             return errno;
         }
     }
@@ -165,7 +164,7 @@ byteq_tail(const struct byteq *q)
 void
 byteq_advance_tail(struct byteq *q, unsigned int n)
 {
-    assert(byteq_tailroom(q) >= n);
+    ovs_assert(byteq_tailroom(q) >= n);
     q->tail += n;
 }
 
@@ -192,6 +191,6 @@ byteq_headroom(const struct byteq *q)
 void
 byteq_advance_head(struct byteq *q, unsigned int n)
 {
-    assert(byteq_headroom(q) >= n);
+    ovs_assert(byteq_headroom(q) >= n);
     q->head += n;
 }

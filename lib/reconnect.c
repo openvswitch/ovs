@@ -17,7 +17,6 @@
 #include <config.h>
 #include "reconnect.h"
 
-#include <assert.h>
 #include <stdlib.h>
 
 #include "poll-loop.h"
@@ -503,7 +502,7 @@ reconnect_transition__(struct reconnect *fsm, long long int now,
 static long long int
 reconnect_deadline__(const struct reconnect *fsm)
 {
-    assert(fsm->state_entered != LLONG_MIN);
+    ovs_assert(fsm->state_entered != LLONG_MIN);
     switch (fsm->state) {
     case S_VOID:
     case S_LISTENING:

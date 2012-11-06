@@ -17,7 +17,6 @@
 
 #include "file.h"
 
-#include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <unistd.h>
@@ -129,7 +128,7 @@ ovsdb_file_open_log(const char *file_name, enum ovsdb_log_open_mode open_mode,
     struct ovsdb_error *error;
     struct json *json = NULL;
 
-    assert(logp || schemap);
+    ovs_assert(logp || schemap);
 
     error = ovsdb_log_open(file_name, open_mode, -1, &log);
     if (error) {
@@ -194,7 +193,7 @@ ovsdb_file_open__(const char *file_name,
     struct ovsdb *db = NULL;
 
     /* In read-only mode there is no ovsdb_file so 'filep' must be null. */
-    assert(!(read_only && filep));
+    ovs_assert(!(read_only && filep));
 
     open_mode = read_only ? OVSDB_LOG_READ_ONLY : OVSDB_LOG_READ_WRITE;
     error = ovsdb_file_open_log(file_name, open_mode, &log,
@@ -504,7 +503,7 @@ ovsdb_file_save_copy(const char *file_name, int locking,
 struct ovsdb_error *
 ovsdb_file_read_schema(const char *file_name, struct ovsdb_schema **schemap)
 {
-    assert(schemap != NULL);
+    ovs_assert(schemap != NULL);
     return ovsdb_file_open_log(file_name, OVSDB_LOG_READ_ONLY, NULL, schemap);
 }
 
@@ -562,7 +561,7 @@ ovsdb_file_create(struct ovsdb *db, struct ovsdb_log *log,
 static struct ovsdb_file *
 ovsdb_file_cast(struct ovsdb_replica *replica)
 {
-    assert(replica->class == &ovsdb_file_class);
+    ovs_assert(replica->class == &ovsdb_file_class);
     return CONTAINER_OF(replica, struct ovsdb_file, replica);
 }
 

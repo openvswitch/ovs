@@ -16,7 +16,6 @@
 
 #include <config.h>
 #include "unixctl.h"
-#include <assert.h>
 #include <errno.h>
 #include <unistd.h>
 #include "coverage.h"
@@ -110,7 +109,7 @@ unixctl_command_register(const char *name, const char *usage,
     struct unixctl_command *command;
     struct unixctl_command *lookup = shash_find_data(&commands, name);
 
-    assert(!lookup || lookup->cb == cb);
+    ovs_assert(!lookup || lookup->cb == cb);
 
     if (lookup) {
         return;
@@ -133,7 +132,7 @@ unixctl_command_reply__(struct unixctl_conn *conn,
     struct jsonrpc_msg *reply;
 
     COVERAGE_INC(unixctl_replied);
-    assert(conn->request_id);
+    ovs_assert(conn->request_id);
 
     if (!body) {
         body = "";

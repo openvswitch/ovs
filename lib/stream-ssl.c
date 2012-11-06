@@ -17,7 +17,6 @@
 #include <config.h>
 #include "stream-ssl.h"
 #include "dhparams.h"
-#include <assert.h>
 #include <ctype.h>
 #include <errno.h>
 #include <inttypes.h>
@@ -599,7 +598,7 @@ ssl_recv(struct stream *stream, void *buffer, size_t n)
     ssize_t ret;
 
     /* Behavior of zero-byte SSL_read is poorly defined. */
-    assert(n > 0);
+    ovs_assert(n > 0);
 
     old_state = SSL_get_state(sslv->ssl);
     ret = SSL_read(sslv->ssl, buffer, n);
@@ -897,7 +896,7 @@ ssl_init(void)
     static int init_status = -1;
     if (init_status < 0) {
         init_status = do_ssl_init();
-        assert(init_status >= 0);
+        ovs_assert(init_status >= 0);
     }
     return init_status;
 }

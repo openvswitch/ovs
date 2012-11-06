@@ -18,7 +18,6 @@
 
 #include "ofproto-dpif-governor.h"
 
-#include <assert.h>
 #include <stdlib.h>
 
 #include "coverage.h"
@@ -121,7 +120,7 @@ governor_should_install_flow(struct governor *g, uint32_t hash, int n)
     bool install_flow;
     uint8_t *e;
 
-    assert(n > 0);
+    ovs_assert(n > 0);
 
     /* Count these packets and begin a new generation if necessary. */
     g->n_packets += n;
@@ -177,8 +176,8 @@ governor_should_install_flow(struct governor *g, uint32_t hash, int n)
 static void
 governor_new_generation(struct governor *g, unsigned int size)
 {
-    assert(size >= MIN_SIZE && size <= MAX_SIZE);
-    assert(is_pow2(size));
+    ovs_assert(size >= MIN_SIZE && size <= MAX_SIZE);
+    ovs_assert(is_pow2(size));
 
     /* Allocate new table, if necessary. */
     if (g->size != size) {

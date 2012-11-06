@@ -16,7 +16,6 @@
 
 #include <config.h>
 #include "netlink-socket.h"
-#include <assert.h>
 #include <errno.h>
 #include <inttypes.h>
 #include <stdlib.h>
@@ -242,7 +241,7 @@ nl_sock_join_mcgroup(struct nl_sock *sock, unsigned int multicast_group)
 int
 nl_sock_leave_mcgroup(struct nl_sock *sock, unsigned int multicast_group)
 {
-    assert(!sock->dump);
+    ovs_assert(!sock->dump);
     if (setsockopt(sock->fd, SOL_NETLINK, NETLINK_DROP_MEMBERSHIP,
                    &multicast_group, sizeof multicast_group) < 0) {
         VLOG_WARN("could not leave multicast group %u (%s)",
@@ -333,7 +332,7 @@ nl_sock_recv__(struct nl_sock *sock, struct ofpbuf *buf, bool wait)
     struct msghdr msg;
     ssize_t retval;
 
-    assert(buf->allocated >= sizeof *nlmsghdr);
+    ovs_assert(buf->allocated >= sizeof *nlmsghdr);
     ofpbuf_clear(buf);
 
     iov[0].iov_base = buf->base;
@@ -881,7 +880,7 @@ nl_dump_done(struct nl_dump *dump)
     while (!dump->status) {
         struct ofpbuf reply;
         if (!nl_dump_next(dump, &reply)) {
-            assert(dump->status);
+            ovs_assert(dump->status);
         }
     }
 
@@ -1100,7 +1099,7 @@ nl_lookup_genl_family(const char *name, int *number)
         }
         ofpbuf_delete(reply);
 
-        assert(*number != 0);
+        ovs_assert(*number != 0);
     }
     return *number > 0 ? 0 : -*number;
 }

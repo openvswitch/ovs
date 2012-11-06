@@ -16,7 +16,6 @@
 
 #include <config.h>
 #include "simap.h"
-#include <assert.h>
 #include "hash.h"
 
 static size_t hash_name(const char *, size_t length);
@@ -196,7 +195,7 @@ simap_sort(const struct simap *simap)
         SIMAP_FOR_EACH (node, simap) {
             nodes[i++] = node;
         }
-        assert(i == n);
+        ovs_assert(i == n);
 
         qsort(nodes, n, sizeof *nodes, compare_nodes_by_name);
 

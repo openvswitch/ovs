@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -807,7 +807,7 @@ ofputil_protocols_to_string(enum ofputil_protocol protocols)
 {
     struct ds s;
 
-    assert(!(protocols & ~OFPUTIL_P_ANY));
+    ovs_assert(!(protocols & ~OFPUTIL_P_ANY));
     if (protocols == 0) {
         return xstrdup("none");
     }
@@ -1367,7 +1367,7 @@ ofputil_encode_set_protocol(enum ofputil_protocol current,
         return ofputil_make_flow_mod_table_id(want_tid);
     }
 
-    assert(current == want);
+    ovs_assert(current == want);
 
     *next = current;
     return NULL;
@@ -1381,7 +1381,7 @@ ofputil_encode_nx_set_flow_format(enum nx_flow_format nxff)
     struct nx_set_flow_format *sff;
     struct ofpbuf *msg;
 
-    assert(ofputil_nx_flow_format_is_valid(nxff));
+    ovs_assert(ofputil_nx_flow_format_is_valid(nxff));
 
     msg = ofpraw_alloc(OFPRAW_NXT_SET_FLOW_FORMAT, OFP10_VERSION, 0);
     sff = ofpbuf_put_zeros(msg, sizeof *sff);
@@ -3226,7 +3226,7 @@ ofputil_decode_port_status(const struct ofp_header *oh,
     ps->reason = ops->reason;
 
     retval = ofputil_pull_phy_port(oh->version, &b, &ps->desc);
-    assert(retval != EOF);
+    ovs_assert(retval != EOF);
     return retval;
 }
 

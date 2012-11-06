@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012 Nicira, Inc.
+ * Copyright (c) 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,6 @@
 
 #include <config.h>
 #include "ofp-msgs.h"
-#include <assert.h>
 #include "byte-order.h"
 #include "dynamic-string.h"
 #include "hash.h"
@@ -253,7 +252,7 @@ ofphdrs_decode_assert(struct ofphdrs *hdrs,
                       const struct ofp_header *oh, size_t length)
 {
     enum ofperr error = ofphdrs_decode(hdrs, oh, length);
-    assert(!error);
+    ovs_assert(!error);
 }
 
 static bool
@@ -416,7 +415,7 @@ ofpraw_pull_assert(struct ofpbuf *msg)
     enum ofpraw raw;
 
     error = ofpraw_pull(&raw, msg);
-    assert(!error);
+    ovs_assert(!error);
     return raw;
 }
 
@@ -525,10 +524,10 @@ ofpraw_alloc_stats_reply(const struct ofp_header *request,
 
     error = ofpraw_decode_partial(&request_raw, request,
                                   ntohs(request->length));
-    assert(!error);
+    ovs_assert(!error);
 
     reply_raw = ofpraw_stats_request_to_reply(request_raw, request->version);
-    assert(reply_raw);
+    ovs_assert(reply_raw);
 
     return ofpraw_alloc_reply(reply_raw, request, extra_tailroom);
 }
@@ -595,10 +594,10 @@ ofpraw_put_stats_reply(const struct ofp_header *request, struct ofpbuf *buf)
     enum ofpraw raw;
 
     error = ofpraw_decode_partial(&raw, request, ntohs(request->length));
-    assert(!error);
+    ovs_assert(!error);
 
     raw = ofpraw_stats_request_to_reply(raw, request->version);
-    assert(raw);
+    ovs_assert(raw);
 
     ofpraw_put__(raw, request->version, request->xid, 0, buf);
 }
@@ -626,7 +625,7 @@ ofpraw_put__(enum ofpraw raw, uint8_t version, ovs_be32 xid,
     if (hdrs->type == OFPT_VENDOR) {
         struct nicira_header *nh = buf->l2;
 
-        assert(hdrs->vendor == NX_VENDOR_ID);
+        ovs_assert(hdrs->vendor == NX_VENDOR_ID);
         nh->vendor = htonl(hdrs->vendor);
         nh->subtype = htonl(hdrs->subtype);
     } else if (version == OFP10_VERSION
@@ -701,13 +700,13 @@ ofpraw_stats_request_to_reply(enum ofpraw raw, uint8_t version)
     hdrs = instance->hdrs;
     switch ((enum ofp_version)hdrs.version) {
     case OFP10_VERSION:
-        assert(hdrs.type == OFPT10_STATS_REQUEST);
+        ovs_assert(hdrs.type == OFPT10_STATS_REQUEST);
         hdrs.type = OFPT10_STATS_REPLY;
         break;
     case OFP11_VERSION:
     case OFP12_VERSION:
     case OFP13_VERSION:
-        assert(hdrs.type == OFPT11_STATS_REQUEST);
+        ovs_assert(hdrs.type == OFPT11_STATS_REQUEST);
         hdrs.type = OFPT11_STATS_REPLY;
         break;
     default:
@@ -715,7 +714,7 @@ ofpraw_stats_request_to_reply(enum ofpraw raw, uint8_t version)
     }
 
     error = ofpraw_from_ofphdrs(&reply_raw, &hdrs);
-    assert(!error);
+    ovs_assert(!error);
 
     return reply_raw;
 }
@@ -866,7 +865,7 @@ ofpmp_postappend(struct list *replies, size_t start_ofs)
 {
     struct ofpbuf *msg = ofpbuf_from_list(list_back(replies));
 
-    assert(start_ofs <= UINT16_MAX);
+    ovs_assert(start_ofs <= UINT16_MAX);
     if (msg->size > UINT16_MAX) {
         size_t len = msg->size - start_ofs;
         memcpy(ofpmp_append(replies, len),
@@ -916,14 +915,14 @@ raw_info_get(enum ofpraw raw)
 {
     ofpmsgs_init();
 
-    assert(raw < ARRAY_SIZE(raw_infos));
+    ovs_assert(raw < ARRAY_SIZE(raw_infos));
     return &raw_infos[raw];
 }
 
 static struct raw_instance *
 raw_instance_get(const struct raw_info *info, uint8_t version)
 {
-    assert(version >= info->min_version && version <= info->max_version);
+    ovs_assert(version >= info->min_version && version <= info->max_version);
     return &info->instances[version - info->min_version];
 }
 

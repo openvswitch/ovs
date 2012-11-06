@@ -20,8 +20,8 @@
 /* Provider interface to vconns, which provide a virtual connection to an
  * OpenFlow device. */
 
-#include <assert.h>
 #include "vconn.h"
+#include "util.h"
 #include "openflow/openflow-common.h"
 
 /* Active virtual connection to an OpenFlow device. */
@@ -53,7 +53,7 @@ void vconn_set_local_port(struct vconn *, ovs_be16 local_port);
 static inline void vconn_assert_class(const struct vconn *vconn,
                                       const struct vconn_class *class)
 {
-    assert(vconn->class == class);
+    ovs_assert(vconn->class == class);
 }
 
 struct vconn_class {
@@ -148,7 +148,7 @@ void pvconn_init(struct pvconn *pvconn, struct pvconn_class *class,
 static inline void pvconn_assert_class(const struct pvconn *pvconn,
                                        const struct pvconn_class *class)
 {
-    assert(pvconn->class == class);
+    ovs_assert(pvconn->class == class);
 }
 
 struct pvconn_class {

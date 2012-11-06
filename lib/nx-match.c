@@ -121,7 +121,7 @@ nx_pull_raw(const uint8_t *p, unsigned int match_len, bool strict,
 {
     uint32_t header;
 
-    assert((cookie != NULL) == (cookie_mask != NULL));
+    ovs_assert((cookie != NULL) == (cookie_mask != NULL));
 
     match_init_catchall(match);
     if (cookie) {
@@ -1053,7 +1053,7 @@ set_field_format(const struct ofpact_reg_load *load, struct ds *s)
     const struct mf_field *mf = load->dst.field;
     union mf_value value;
 
-    assert(load->ofpact.compat == OFPUTIL_OFPAT12_SET_FIELD);
+    ovs_assert(load->ofpact.compat == OFPUTIL_OFPAT12_SET_FIELD);
     ds_put_format(s, "set_field:");
     memset(&value, 0, sizeof value);
     bitwise_copy(&load->subvalue, sizeof load->subvalue, 0,

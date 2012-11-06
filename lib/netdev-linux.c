@@ -18,7 +18,6 @@
 
 #include "netdev-linux.h"
 
-#include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <arpa/inet.h>
@@ -444,7 +443,7 @@ static struct netdev_dev_linux *
 netdev_dev_linux_cast(const struct netdev_dev *netdev_dev)
 {
     const struct netdev_class *netdev_class = netdev_dev_get_class(netdev_dev);
-    assert(is_netdev_linux_class(netdev_class));
+    ovs_assert(is_netdev_linux_class(netdev_class));
 
     return CONTAINER_OF(netdev_dev, struct netdev_dev_linux, netdev_dev);
 }
@@ -454,7 +453,7 @@ netdev_linux_cast(const struct netdev *netdev)
 {
     struct netdev_dev *netdev_dev = netdev_get_dev(netdev);
     const struct netdev_class *netdev_class = netdev_dev_get_class(netdev_dev);
-    assert(is_netdev_linux_class(netdev_class));
+    ovs_assert(is_netdev_linux_class(netdev_class));
 
     return CONTAINER_OF(netdev, struct netdev_linux, netdev);
 }
@@ -583,7 +582,7 @@ static int
 cache_notifier_ref(void)
 {
     if (!cache_notifier_refcount) {
-        assert(!netdev_linux_cache_notifier);
+        ovs_assert(!netdev_linux_cache_notifier);
 
         netdev_linux_cache_notifier =
             rtnetlink_link_notifier_create(netdev_linux_cache_cb, NULL);
@@ -600,9 +599,9 @@ cache_notifier_ref(void)
 static void
 cache_notifier_unref(void)
 {
-    assert(cache_notifier_refcount > 0);
+    ovs_assert(cache_notifier_refcount > 0);
     if (!--cache_notifier_refcount) {
-        assert(netdev_linux_cache_notifier);
+        ovs_assert(netdev_linux_cache_notifier);
         rtnetlink_link_notifier_destroy(netdev_linux_cache_notifier);
         netdev_linux_cache_notifier = NULL;
     }
@@ -1919,11 +1918,11 @@ netdev_linux_set_qos(struct netdev *netdev,
         if (error) {
             return error;
         }
-        assert(netdev_dev->tc == NULL);
+        ovs_assert(netdev_dev->tc == NULL);
 
         /* Install new qdisc. */
         error = new_ops->tc_install(netdev, details);
-        assert((error == 0) == (netdev_dev->tc != NULL));
+        ovs_assert((error == 0) == (netdev_dev->tc != NULL));
 
         return error;
     }
@@ -4145,7 +4144,7 @@ tc_query_qdisc(const struct netdev *netdev)
 
     /* Instantiate it. */
     load_error = ops->tc_load(CONST_CAST(struct netdev *, netdev), qdisc);
-    assert((load_error == 0) == (netdev_dev->tc != NULL));
+    ovs_assert((load_error == 0) == (netdev_dev->tc != NULL));
     ofpbuf_delete(qdisc);
 
     return error ? error : load_error;

@@ -17,7 +17,6 @@
 #include <config.h>
 #include "netdev.h"
 
-#include <assert.h>
 #include <errno.h>
 #include <inttypes.h>
 #include <netinet/in.h>
@@ -228,7 +227,7 @@ netdev_open(const char *name, const char *type, struct netdev **netdevp)
         if (error) {
             return error;
         }
-        assert(netdev_dev->netdev_class == class);
+        ovs_assert(netdev_dev->netdev_class == class);
 
     }
 
@@ -309,7 +308,7 @@ netdev_close(struct netdev *netdev)
     if (netdev) {
         struct netdev_dev *netdev_dev = netdev_get_dev(netdev);
 
-        assert(netdev_dev->ref_cnt);
+        ovs_assert(netdev_dev->ref_cnt);
         netdev_dev->ref_cnt--;
         netdev_uninit(netdev, true);
 
@@ -404,8 +403,8 @@ netdev_recv(struct netdev *netdev, struct ofpbuf *buffer)
     int (*recv)(struct netdev *, void *, size_t);
     int retval;
 
-    assert(buffer->size == 0);
-    assert(ofpbuf_tailroom(buffer) >= ETH_TOTAL_MIN);
+    ovs_assert(buffer->size == 0);
+    ovs_assert(ofpbuf_tailroom(buffer) >= ETH_TOTAL_MIN);
 
     recv = netdev_get_dev(netdev)->netdev_class->recv;
     retval = (recv
@@ -1316,7 +1315,7 @@ void
 netdev_dev_init(struct netdev_dev *netdev_dev, const char *name,
                 const struct netdev_class *netdev_class)
 {
-    assert(!shash_find(&netdev_dev_shash, name));
+    ovs_assert(!shash_find(&netdev_dev_shash, name));
 
     memset(netdev_dev, 0, sizeof *netdev_dev);
     netdev_dev->netdev_class = netdev_class;
@@ -1336,7 +1335,7 @@ netdev_dev_uninit(struct netdev_dev *netdev_dev, bool destroy)
 {
     char *name = netdev_dev->name;
 
-    assert(!netdev_dev->ref_cnt);
+    ovs_assert(!netdev_dev->ref_cnt);
 
     shash_delete(&netdev_dev_shash, netdev_dev->node);
 

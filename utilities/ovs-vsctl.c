@@ -16,7 +16,6 @@
 
 #include <config.h>
 
-#include <assert.h>
 #include <ctype.h>
 #include <errno.h>
 #include <float.h>
@@ -298,7 +297,7 @@ parse_options(int argc, char *argv[], struct shash *local_options)
                 char *equals;
                 int has_arg;
 
-                assert(name[0] == '-' && name[1] == '-' && name[2]);
+                ovs_assert(name[0] == '-' && name[1] == '-' && name[2]);
                 name += 2;
 
                 equals = strchr(name, '=');
@@ -311,8 +310,8 @@ parse_options(int argc, char *argv[], struct shash *local_options)
 
                 o = find_option(name, options, n_options);
                 if (o) {
-                    assert(o - options >= n_global_long_options);
-                    assert(o->has_arg == has_arg);
+                    ovs_assert(o - options >= n_global_long_options);
+                    ovs_assert(o->has_arg == has_arg);
                 } else {
                     o = add_option(&options, &n_options, &allocated_options);
                     o->name = xstrdup(name);
@@ -845,8 +844,8 @@ ovs_delete_bridge(const struct ovsrec_open_vswitch *ovs,
 static void
 del_cached_bridge(struct vsctl_context *ctx, struct vsctl_bridge *br)
 {
-    assert(list_is_empty(&br->ports));
-    assert(hmap_is_empty(&br->children));
+    ovs_assert(list_is_empty(&br->ports));
+    ovs_assert(hmap_is_empty(&br->children));
     if (br->parent) {
         hmap_remove(&br->parent->children, &br->children_node);
     }
@@ -912,7 +911,7 @@ add_port_to_cache(struct vsctl_context *ctx, struct vsctl_bridge *parent,
 static void
 del_cached_port(struct vsctl_context *ctx, struct vsctl_port *port)
 {
-    assert(list_is_empty(&port->ifaces));
+    ovs_assert(list_is_empty(&port->ifaces));
     list_remove(&port->ports_node);
     shash_find_and_delete(&ctx->ports, port->port_cfg->name);
     ovsrec_port_delete(port->port_cfg);
@@ -1133,7 +1132,7 @@ find_bridge(struct vsctl_context *ctx, const char *name, bool must_exist)
 {
     struct vsctl_bridge *br;
 
-    assert(ctx->cache_valid);
+    ovs_assert(ctx->cache_valid);
 
     br = shash_find_data(&ctx->bridges, name);
     if (must_exist && !br) {
@@ -1158,7 +1157,7 @@ find_port(struct vsctl_context *ctx, const char *name, bool must_exist)
 {
     struct vsctl_port *port;
 
-    assert(ctx->cache_valid);
+    ovs_assert(ctx->cache_valid);
 
     port = shash_find_data(&ctx->ports, name);
     if (port && !strcmp(name, port->bridge->name)) {
@@ -1176,7 +1175,7 @@ find_iface(struct vsctl_context *ctx, const char *name, bool must_exist)
 {
     struct vsctl_iface *iface;
 
-    assert(ctx->cache_valid);
+    ovs_assert(ctx->cache_valid);
 
     iface = shash_find_data(&ctx->ifaces, name);
     if (iface && !strcmp(name, iface->port->bridge->name)) {
@@ -2787,7 +2786,7 @@ parse_column_key_value(const char *arg,
     char *column_name;
     char *error;
 
-    assert(!(operatorp && !valuep));
+    ovs_assert(!(operatorp && !valuep));
     *keyp = NULL;
     if (valuep) {
         *valuep = NULL;
@@ -3898,8 +3897,8 @@ run_prerequisites(struct vsctl_command *commands, size_t n_commands,
             (c->syntax->prerequisites)(&ctx);
             vsctl_context_done(&ctx, c);
 
-            assert(!c->output.string);
-            assert(!c->table);
+            ovs_assert(!c->output.string);
+            ovs_assert(!c->table);
         }
     }
 }

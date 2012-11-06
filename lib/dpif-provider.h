@@ -22,7 +22,6 @@
  * exposed over OpenFlow as a single switch.  Datapaths and the collections of
  * ports that they contain may be fixed or dynamic. */
 
-#include <assert.h>
 #include "openflow/openflow.h"
 #include "dpif.h"
 #include "util.h"
@@ -49,7 +48,7 @@ void dpif_uninit(struct dpif *dpif, bool close);
 static inline void dpif_assert_class(const struct dpif *dpif,
                                      const struct dpif_class *dpif_class)
 {
-    assert(dpif->dpif_class == dpif_class);
+    ovs_assert(dpif->dpif_class == dpif_class);
 }
 
 /* Datapath interface class structure, to be defined by each implementation of

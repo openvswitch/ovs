@@ -18,7 +18,6 @@
 
 #include "dpif-linux.h"
 
-#include <assert.h>
 #include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -958,7 +957,7 @@ dpif_linux_operate__(struct dpif *dpif_, struct dpif_op **ops, size_t n_ops)
     struct nl_transaction *txnsp[MAX_OPS];
     size_t i;
 
-    assert(n_ops <= MAX_OPS);
+    ovs_assert(n_ops <= MAX_OPS);
     for (i = 0; i < n_ops; i++) {
         struct op_auxdata *aux = &auxes[i];
         struct dpif_op *op = ops[i];
@@ -1579,7 +1578,7 @@ dpif_linux_vport_transact(const struct dpif_linux_vport *request,
     struct ofpbuf *request_buf;
     int error;
 
-    assert((reply != NULL) == (bufp != NULL));
+    ovs_assert((reply != NULL) == (bufp != NULL));
 
     error = dpif_linux_init();
     if (error) {
@@ -1730,7 +1729,7 @@ dpif_linux_dp_transact(const struct dpif_linux_dp *request,
     struct ofpbuf *request_buf;
     int error;
 
-    assert((reply != NULL) == (bufp != NULL));
+    ovs_assert((reply != NULL) == (bufp != NULL));
 
     request_buf = ofpbuf_new(1024);
     dpif_linux_dp_to_ofpbuf(request, request_buf);
@@ -1851,9 +1850,9 @@ dpif_linux_flow_to_ofpbuf(const struct dpif_linux_flow *flow,
     }
 
     /* We never need to send these to the kernel. */
-    assert(!flow->stats);
-    assert(!flow->tcp_flags);
-    assert(!flow->used);
+    ovs_assert(!flow->stats);
+    ovs_assert(!flow->tcp_flags);
+    ovs_assert(!flow->used);
 
     if (flow->clear) {
         nl_msg_put_flag(buf, OVS_FLOW_ATTR_CLEAR);
@@ -1880,7 +1879,7 @@ dpif_linux_flow_transact(struct dpif_linux_flow *request,
     struct ofpbuf *request_buf;
     int error;
 
-    assert((reply != NULL) == (bufp != NULL));
+    ovs_assert((reply != NULL) == (bufp != NULL));
 
     if (reply) {
         request->nlmsg_flags |= NLM_F_ECHO;

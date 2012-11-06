@@ -1,4 +1,4 @@
-/* Copyright (c) 2011 Nicira, Inc.
+/* Copyright (c) 2011, 2012 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,6 @@
 #include <config.h>
 #include "lacp.h"
 
-#include <assert.h>
 #include <stdlib.h>
 
 #include "dynamic-string.h"
@@ -223,7 +222,7 @@ lacp_destroy(struct lacp *lacp)
 void
 lacp_configure(struct lacp *lacp, const struct lacp_settings *s)
 {
-    assert(!eth_addr_is_zero(s->id));
+    ovs_assert(!eth_addr_is_zero(s->id));
 
     if (!lacp->name || strcmp(s->name, lacp->name)) {
         free(lacp->name);

@@ -16,7 +16,6 @@
 
 #include <config.h>
 #include "signals.h"
-#include <assert.h>
 #include <errno.h>
 #include <limits.h>
 #include <signal.h>
@@ -82,7 +81,7 @@ signal_register(int signr)
     s->signr = signr;
 
     /* Set up signal handler. */
-    assert(signr >= 1 && signr < N_SIGNALS);
+    ovs_assert(signr >= 1 && signr < N_SIGNALS);
     memset(&sa, 0, sizeof sa);
     sa.sa_handler = signal_handler;
     sigemptyset(&sa.sa_mask);

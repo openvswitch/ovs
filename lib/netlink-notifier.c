@@ -18,7 +18,6 @@
 
 #include "netlink-notifier.h"
 
-#include <assert.h>
 #include <errno.h>
 #include <poll.h>
 #include <stdlib.h>
@@ -87,7 +86,7 @@ void
 nln_destroy(struct nln *nln)
 {
     if (nln) {
-        assert(list_is_empty(&nln->all_notifiers));
+        ovs_assert(list_is_empty(&nln->all_notifiers));
         nl_sock_destroy(nln->notify_sock);
         free(nln);
     }

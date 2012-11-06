@@ -16,7 +16,6 @@
 
 #include <config.h>
 #include "match.h"
-#include <assert.h>
 #include <stdlib.h>
 #include "byte-order.h"
 #include "dynamic-string.h"
@@ -177,7 +176,7 @@ void
 match_set_reg_masked(struct match *match, unsigned int reg_idx,
                      uint32_t value, uint32_t mask)
 {
-    assert(reg_idx < FLOW_N_REGS);
+    ovs_assert(reg_idx < FLOW_N_REGS);
     flow_wildcards_set_reg_mask(&match->wc, reg_idx, mask);
     match->flow.regs[reg_idx] = value & mask;
 }

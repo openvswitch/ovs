@@ -15,8 +15,6 @@
 #include <config.h>
 #include "smap.h"
 
-#include <assert.h>
-
 #include "hash.h"
 #include "json.h"
 
@@ -251,7 +249,7 @@ smap_sort(const struct smap *smap)
         SMAP_FOR_EACH (node, smap) {
             nodes[i++] = node;
         }
-        assert(i == n);
+        ovs_assert(i == n);
 
         qsort(nodes, n, sizeof *nodes, compare_nodes_by_key);
 

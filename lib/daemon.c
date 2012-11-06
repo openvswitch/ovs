@@ -16,7 +16,6 @@
 
 #include <config.h>
 #include "daemon.h"
-#include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <signal.h>
@@ -158,7 +157,9 @@ daemon_set_monitor(void)
 void
 daemon_save_fd(int fd)
 {
-    assert(fd == STDIN_FILENO || fd == STDOUT_FILENO || fd == STDERR_FILENO);
+    ovs_assert(fd == STDIN_FILENO ||
+               fd == STDOUT_FILENO ||
+               fd == STDERR_FILENO);
     save_fds[fd] = true;
 }
 

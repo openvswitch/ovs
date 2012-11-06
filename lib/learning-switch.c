@@ -409,7 +409,7 @@ send_features_request(struct lswitch *sw)
     struct ofp_switch_config *osc;
     int ofp_version = rconn_get_version(sw->rconn);
 
-    assert(ofp_version > 0 && ofp_version < 0xff);
+    ovs_assert(ofp_version > 0 && ofp_version < 0xff);
 
     /* Send OFPT_FEATURES_REQUEST. */
     b = ofpraw_alloc(OFPRAW_OFPT_FEATURES_REQUEST, ofp_version, 0);

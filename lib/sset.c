@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 Nicira, Inc.
+ * Copyright (c) 2011, 2012 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,8 +17,6 @@
 #include <config.h>
 
 #include "sset.h"
-
-#include <assert.h>
 
 #include "hash.h"
 
@@ -147,7 +145,7 @@ void
 sset_add_assert(struct sset *set, const char *name)
 {
     bool added OVS_UNUSED = sset_add(set, name);
-    assert(added);
+    ovs_assert(added);
 }
 
 /* Adds a copy of each of the 'n' names in 'names' to 'set'. */
@@ -198,7 +196,7 @@ void
 sset_find_and_delete_assert(struct sset *set, const char *name)
 {
     bool deleted OVS_UNUSED = sset_find_and_delete(set, name);
-    assert(deleted);
+    ovs_assert(deleted);
 }
 
 /* Removes a string from 'set' and returns a copy of it.  The caller must free

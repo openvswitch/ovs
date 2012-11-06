@@ -185,10 +185,10 @@ def printCIDLSource(schemaFile):
 
 #include <config.h>
 #include %s
-#include <assert.h>
 #include <limits.h>
 #include "ovsdb-data.h"
 #include "ovsdb-error.h"
+#include "util.h"
 
 #ifdef __CHECKER__
 /* Sparse dislikes sizeof(bool) ("warning: expression using sizeof bool"). */
@@ -236,7 +236,7 @@ static void
             if type.is_smap():
                 print "    size_t i;"
                 print
-                print "    assert(inited);"
+                print "    ovs_assert(inited);"
                 print "    smap_init(&row->%s);" % columnName
                 print "    for (i = 0; i < datum->n; i++) {"
                 print "        smap_add(&row->%s," % columnName
@@ -245,7 +245,7 @@ static void
                 print "    }"
             elif (type.n_min == 1 and type.n_max == 1) or type.is_optional_pointer():
                 print
-                print "    assert(inited);"
+                print "    ovs_assert(inited);"
                 print "    if (datum->n >= 1) {"
                 if not type.key.ref_table:
                     print "        %s = datum->keys[0].%s;" % (keyVar, type.key.type.to_string())
@@ -270,7 +270,7 @@ static void
                     nMax = "datum->n"
                 print "    size_t i;"
                 print
-                print "    assert(inited);"
+                print "    ovs_assert(inited);"
                 print "    %s = NULL;" % keyVar
                 if valueVar:
                     print "    %s = NULL;" % valueVar
@@ -333,7 +333,7 @@ static void
 {
     struct %(s)s *row = %(s)s_cast(row_);
 
-    assert(inited);''' % {'s': structName, 'c': columnName}
+    ovs_assert(inited);''' % {'s': structName, 'c': columnName}
 
                 if type.is_smap():
                     print "    smap_destroy(&row->%s);" % columnName
@@ -415,7 +415,7 @@ struct %(s)s *
 void
 %(s)s_verify_%(c)s(const struct %(s)s *row)
 {
-    assert(inited);
+    ovs_assert(inited);
     ovsdb_idl_txn_verify(&row->header_, &%(s)s_columns[%(S)s_COL_%(C)s]);
 }''' % {'s': structName,
         'S': structName.upper(),
@@ -426,7 +426,7 @@ void
         for columnName, column in sorted(table.columns.iteritems()):
             if column.type.value:
                 valueParam = ',\n\tenum ovsdb_atomic_type value_type OVS_UNUSED'
-                valueType = '\n    assert(value_type == %s);' % column.type.value.toAtomicType()
+                valueType = '\n    ovs_assert(value_type == %s);' % column.type.value.toAtomicType()
                 valueComment = "\n * 'value_type' must be %s." % column.type.value.toAtomicType()
             else:
                 valueParam = ''
@@ -452,7 +452,7 @@ const struct ovsdb_datum *
 %(s)s_get_%(c)s(const struct %(s)s *row,
 \tenum ovsdb_atomic_type key_type OVS_UNUSED%(v)s)
 {
-    assert(key_type == %(kt)s);%(vt)s
+    ovs_assert(key_type == %(kt)s);%(vt)s
     return ovsdb_idl_read(&row->header_, &%(s)s_col_%(c)s);
 }""" % {'s': structName, 'c': columnName,
        'kt': column.type.key.toAtomicType(),
@@ -469,7 +469,7 @@ void
 {
     struct ovsdb_datum datum;
 
-    assert(inited);
+    ovs_assert(inited);
     if (smap) {
         struct smap_node *node;
         size_t i;
@@ -518,7 +518,7 @@ void
             print "    struct ovsdb_datum datum;"
             if type.n_min == 1 and type.n_max == 1:
                 print
-                print "    assert(inited);"
+                print "    ovs_assert(inited);"
                 print "    datum.n = 1;"
                 print "    datum.keys = xmalloc(sizeof *datum.keys);"
                 print "    " + type.key.copyCValue("datum.keys[0].%s" % type.key.type.to_string(), keyVar)
@@ -529,7 +529,7 @@ void
                     print "    datum.values = NULL;"
             elif type.is_optional_pointer():
                 print
-                print "    assert(inited);"
+                print "    ovs_assert(inited);"
                 print "    if (%s) {" % keyVar
                 print "        datum.n = 1;"
                 print "        datum.keys = xmalloc(sizeof *datum.keys);"
@@ -542,7 +542,7 @@ void
             else:
                 print "    size_t i;"
                 print
-                print "    assert(inited);"
+                print "    ovs_assert(inited);"
                 print "    datum.n = %s;" % nVar
                 print "    datum.keys = xmalloc(%s * sizeof *datum.keys);" % nVar
                 if type.value:

@@ -18,7 +18,6 @@
 
 #include "jsonrpc.h"
 
-#include <assert.h>
 #include <errno.h>
 
 #include "byteq.h"
@@ -83,7 +82,7 @@ jsonrpc_open(struct stream *stream)
 {
     struct jsonrpc *rpc;
 
-    assert(stream != NULL);
+    ovs_assert(stream != NULL);
 
     rpc = xzalloc(sizeof *rpc);
     rpc->name = xstrdup(stream_get_name(stream));
@@ -473,7 +472,7 @@ jsonrpc_received(struct jsonrpc *rpc)
 static void
 jsonrpc_error(struct jsonrpc *rpc, int error)
 {
-    assert(error);
+    ovs_assert(error);
     if (!rpc->status) {
         rpc->status = error;
         jsonrpc_cleanup(rpc);

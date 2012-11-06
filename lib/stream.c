@@ -16,7 +16,6 @@
 
 #include <config.h>
 #include "stream-provider.h"
-#include <assert.h>
 #include <errno.h>
 #include <inttypes.h>
 #include <netinet/in.h>
@@ -74,14 +73,14 @@ check_stream_classes(void)
 
     for (i = 0; i < ARRAY_SIZE(stream_classes); i++) {
         const struct stream_class *class = stream_classes[i];
-        assert(class->name != NULL);
-        assert(class->open != NULL);
+        ovs_assert(class->name != NULL);
+        ovs_assert(class->open != NULL);
         if (class->close || class->recv || class->send || class->run
             || class->run_wait || class->wait) {
-            assert(class->close != NULL);
-            assert(class->recv != NULL);
-            assert(class->send != NULL);
-            assert(class->wait != NULL);
+            ovs_assert(class->close != NULL);
+            ovs_assert(class->recv != NULL);
+            ovs_assert(class->send != NULL);
+            ovs_assert(class->wait != NULL);
         } else {
             /* This class delegates to another one. */
         }
@@ -89,12 +88,12 @@ check_stream_classes(void)
 
     for (i = 0; i < ARRAY_SIZE(pstream_classes); i++) {
         const struct pstream_class *class = pstream_classes[i];
-        assert(class->name != NULL);
-        assert(class->listen != NULL);
+        ovs_assert(class->name != NULL);
+        ovs_assert(class->listen != NULL);
         if (class->close || class->accept || class->wait) {
-            assert(class->close != NULL);
-            assert(class->accept != NULL);
-            assert(class->wait != NULL);
+            ovs_assert(class->close != NULL);
+            ovs_assert(class->accept != NULL);
+            ovs_assert(class->wait != NULL);
         } else {
             /* This class delegates to another one. */
         }
@@ -250,7 +249,7 @@ stream_open_block(int error, struct stream **streamp)
             stream_connect_wait(stream);
             poll_block();
         }
-        assert(error != EINPROGRESS);
+        ovs_assert(error != EINPROGRESS);
     }
 
     if (error) {
@@ -317,7 +316,7 @@ static void
 scs_connecting(struct stream *stream)
 {
     int retval = (stream->class->connect)(stream);
-    assert(retval != EINPROGRESS);
+    ovs_assert(retval != EINPROGRESS);
     if (!retval) {
         stream->state = SCS_CONNECTED;
     } else if (retval != EAGAIN) {
@@ -419,8 +418,8 @@ stream_run_wait(struct stream *stream)
 void
 stream_wait(struct stream *stream, enum stream_wait_type wait)
 {
-    assert(wait == STREAM_CONNECT || wait == STREAM_RECV
-           || wait == STREAM_SEND);
+    ovs_assert(wait == STREAM_CONNECT || wait == STREAM_RECV
+               || wait == STREAM_SEND);
 
     switch (stream->state) {
     case SCS_CONNECTING:
@@ -580,8 +579,8 @@ pstream_accept(struct pstream *pstream, struct stream **new_stream)
     if (retval) {
         *new_stream = NULL;
     } else {
-        assert((*new_stream)->state != SCS_CONNECTING
-               || (*new_stream)->class->connect);
+        ovs_assert((*new_stream)->state != SCS_CONNECTING
+                   || (*new_stream)->class->connect);
     }
     return retval;
 }
@@ -651,7 +650,7 @@ stream_init(struct stream *stream, const struct stream_class *class,
                     : SCS_DISCONNECTED);
     stream->error = connect_status;
     stream->name = xstrdup(name);
-    assert(stream->state != SCS_CONNECTING || class->connect);
+    ovs_assert(stream->state != SCS_CONNECTING || class->connect);
 }
 
 void

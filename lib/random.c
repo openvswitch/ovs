@@ -17,7 +17,6 @@
 #include <config.h>
 #include "random.h"
 
-#include <assert.h>
 #include <errno.h>
 #include <stdlib.h>
 #include <sys/time.h>
@@ -59,7 +58,7 @@ random_init(void)
 void
 random_set_seed(uint32_t seed_)
 {
-    assert(seed_);
+    ovs_assert(seed_);
     seed = seed_;
 }
 

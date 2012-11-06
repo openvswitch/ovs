@@ -27,6 +27,7 @@
 #include "nx-match.h"
 #include "ofp-util.h"
 #include "ofpbuf.h"
+#include "util.h"
 #include "vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(ofp_actions);
@@ -794,7 +795,7 @@ ofpacts_from_openflow11(const union ofp_action *in, size_t n_in,
     static inline const struct STRUCT *                         \
     instruction_get_##ENUM(const struct ofp11_instruction *inst)\
     {                                                           \
-        assert(inst->type == htons(ENUM));                      \
+        ovs_assert(inst->type == htons(ENUM));                  \
         return (struct STRUCT *)inst;                           \
     }                                                           \
                                                                 \
@@ -2131,7 +2132,7 @@ ofpact_init(struct ofpact *ofpact, enum ofpact_type type, size_t len)
 void
 ofpact_update_len(struct ofpbuf *ofpacts, struct ofpact *ofpact)
 {
-    assert(ofpact == ofpacts->l2);
+    ovs_assert(ofpact == ofpacts->l2);
     ofpact->len = (char *) ofpbuf_tail(ofpacts) - (char *) ofpact;
 }
 

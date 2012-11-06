@@ -16,7 +16,6 @@
 
 #include <config.h>
 #include <arpa/inet.h>
-#include <assert.h>
 #include <errno.h>
 #include <getopt.h>
 #include <inttypes.h>
@@ -843,7 +842,7 @@ sort_output_actions__(struct nlattr *first, struct nlattr *end)
     size_t bytes = (uint8_t *) end - (uint8_t *) first;
     size_t n = bytes / NL_A_U32_SIZE;
 
-    assert(bytes % NL_A_U32_SIZE == 0);
+    ovs_assert(bytes % NL_A_U32_SIZE == 0);
     qsort(first, n, NL_A_U32_SIZE, compare_output_actions);
 }
 
@@ -964,7 +963,7 @@ dpctl_normalize_actions(int argc, char *argv[])
     HMAP_FOR_EACH (af, hmap_node, &actions_per_flow) {
         afs[i++] = af;
     }
-    assert(i == n_afs);
+    ovs_assert(i == n_afs);
 
     qsort(afs, n_afs, sizeof *afs, compare_actions_for_flow);
 

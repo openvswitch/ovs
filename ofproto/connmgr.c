@@ -1290,8 +1290,8 @@ ofconn_receives_async_msg(const struct ofconn *ofconn,
 {
     const uint32_t *async_config;
 
-    assert(reason < 32);
-    assert((unsigned int) type < OAM_N_TYPES);
+    ovs_assert(reason < 32);
+    ovs_assert((unsigned int) type < OAM_N_TYPES);
 
     if (ofconn_get_protocol(ofconn) == OFPUTIL_P_NONE
         || !rconn_is_connected(ofconn->rconn)) {

@@ -17,7 +17,6 @@
 
 #include "ovsdb-idl.h"
 
-#include <assert.h>
 #include <errno.h>
 #include <inttypes.h>
 #include <limits.h>
@@ -216,7 +215,7 @@ ovsdb_idl_destroy(struct ovsdb_idl *idl)
     if (idl) {
         size_t i;
 
-        assert(!idl->txn);
+        ovs_assert(!idl->txn);
         ovsdb_idl_clear(idl);
         jsonrpc_session_close(idl->session);
 
@@ -280,7 +279,7 @@ ovsdb_idl_run(struct ovsdb_idl *idl)
 {
     int i;
 
-    assert(!idl->txn);
+    ovs_assert(!idl->txn);
     jsonrpc_session_run(idl->session);
     for (i = 0; jsonrpc_session_is_connected(idl->session) && i < 50; i++) {
         struct jsonrpc_msg *msg;
@@ -420,7 +419,7 @@ ovsdb_idl_get_mode(struct ovsdb_idl *idl,
 {
     size_t i;
 
-    assert(!idl->change_seqno);
+    ovs_assert(!idl->change_seqno);
 
     for (i = 0; i < idl->class->n_tables; i++) {
         const struct ovsdb_idl_table *table = &idl->tables[i];
@@ -836,7 +835,7 @@ ovsdb_idl_row_unparse(struct ovsdb_idl_row *row)
 static void
 ovsdb_idl_row_clear_old(struct ovsdb_idl_row *row)
 {
-    assert(row->old == row->new);
+    ovs_assert(row->old == row->new);
     if (!ovsdb_idl_row_is_orphan(row)) {
         const struct ovsdb_idl_table_class *class = row->table->class;
         size_t i;
@@ -951,7 +950,7 @@ ovsdb_idl_insert_row(struct ovsdb_idl_row *row, const struct json *row_json)
     const struct ovsdb_idl_table_class *class = row->table->class;
     size_t i;
 
-    assert(!row->old && !row->new);
+    ovs_assert(!row->old && !row->new);
     row->old = row->new = xmalloc(class->n_columns * sizeof *row->old);
     for (i = 0; i < class->n_columns; i++) {
         ovsdb_datum_init_default(&row->old[i], &class->columns[i].type);
@@ -1132,13 +1131,13 @@ ovsdb_idl_read(const struct ovsdb_idl_row *row,
     const struct ovsdb_idl_table_class *class;
     size_t column_idx;
 
-    assert(!ovsdb_idl_row_is_synthetic(row));
+    ovs_assert(!ovsdb_idl_row_is_synthetic(row));
 
     class = row->table->class;
     column_idx = column - class->columns;
 
-    assert(row->new != NULL);
-    assert(column_idx < class->n_columns);
+    ovs_assert(row->new != NULL);
+    ovs_assert(column_idx < class->n_columns);
 
     if (row->written && bitmap_is_set(row->written, column_idx)) {
         return &row->new[column_idx];
@@ -1162,8 +1161,8 @@ ovsdb_idl_get(const struct ovsdb_idl_row *row,
               enum ovsdb_atomic_type key_type OVS_UNUSED,
               enum ovsdb_atomic_type value_type OVS_UNUSED)
 {
-    assert(column->type.key.type == key_type);
-    assert(column->type.value.type == value_type);
+    ovs_assert(column->type.key.type == key_type);
+    ovs_assert(column->type.value.type == value_type);
 
     return ovsdb_idl_read(row, column);
 }
@@ -1219,7 +1218,7 @@ ovsdb_idl_txn_create(struct ovsdb_idl *idl)
 {
     struct ovsdb_idl_txn *txn;
 
-    assert(!idl->txn);
+    ovs_assert(!idl->txn);
     idl->txn = txn = xmalloc(sizeof *txn);
     txn->request_id = NULL;
     txn->idl = idl;
@@ -1286,9 +1285,9 @@ ovsdb_idl_txn_increment(struct ovsdb_idl_txn *txn,
                         const struct ovsdb_idl_row *row,
                         const struct ovsdb_idl_column *column)
 {
-    assert(!txn->inc_table);
-    assert(column->type.key.type == OVSDB_TYPE_INTEGER);
-    assert(column->type.value.type == OVSDB_TYPE_VOID);
+    ovs_assert(!txn->inc_table);
+    ovs_assert(column->type.key.type == OVSDB_TYPE_INTEGER);
+    ovs_assert(column->type.value.type == OVSDB_TYPE_VOID);
 
     txn->inc_table = row->table->class->name;
     txn->inc_column = column->name;
@@ -1729,7 +1728,7 @@ ovsdb_idl_txn_commit_block(struct ovsdb_idl_txn *txn)
 int64_t
 ovsdb_idl_txn_get_increment_new_value(const struct ovsdb_idl_txn *txn)
 {
-    assert(txn->status == TXN_SUCCESS);
+    ovs_assert(txn->status == TXN_SUCCESS);
     return txn->inc_new_value;
 }
 
@@ -1792,7 +1791,7 @@ ovsdb_idl_txn_get_insert_uuid(const struct ovsdb_idl_txn *txn,
 {
     const struct ovsdb_idl_txn_insert *insert;
 
-    assert(txn->status == TXN_SUCCESS || txn->status == TXN_UNCHANGED);
+    ovs_assert(txn->status == TXN_SUCCESS || txn->status == TXN_UNCHANGED);
     HMAP_FOR_EACH_IN_BUCKET (insert, hmap_node,
                              uuid_hash(uuid), &txn->inserted_rows) {
         if (uuid_equals(uuid, &insert->dummy)) {
@@ -1846,10 +1845,10 @@ ovsdb_idl_txn_write(const struct ovsdb_idl_row *row_,
     column_idx = column - class->columns;
     write_only = row->table->modes[column_idx] == OVSDB_IDL_MONITOR;
 
-    assert(row->new != NULL);
-    assert(column_idx < class->n_columns);
-    assert(row->old == NULL ||
-           row->table->modes[column_idx] & OVSDB_IDL_MONITOR);
+    ovs_assert(row->new != NULL);
+    ovs_assert(column_idx < class->n_columns);
+    ovs_assert(row->old == NULL ||
+               row->table->modes[column_idx] & OVSDB_IDL_MONITOR);
 
     if (row->table->idl->verify_write_only && !write_only) {
         VLOG_ERR("Bug: Attempt to write to a read/write column (%s:%s) when"
@@ -1938,9 +1937,9 @@ ovsdb_idl_txn_verify(const struct ovsdb_idl_row *row_,
     class = row->table->class;
     column_idx = column - class->columns;
 
-    assert(row->new != NULL);
-    assert(row->old == NULL ||
-           row->table->modes[column_idx] & OVSDB_IDL_MONITOR);
+    ovs_assert(row->new != NULL);
+    ovs_assert(row->old == NULL ||
+               row->table->modes[column_idx] & OVSDB_IDL_MONITOR);
     if (!row->old
         || (row->written && bitmap_is_set(row->written, column_idx))) {
         return;
@@ -1972,11 +1971,11 @@ ovsdb_idl_txn_delete(const struct ovsdb_idl_row *row_)
         return;
     }
 
-    assert(row->new != NULL);
+    ovs_assert(row->new != NULL);
     if (!row->old) {
         ovsdb_idl_row_unparse(row);
         ovsdb_idl_row_clear_new(row);
-        assert(!row->prereqs);
+        ovs_assert(!row->prereqs);
         hmap_remove(&row->table->rows, &row->hmap_node);
         hmap_remove(&row->table->idl->txn->txn_rows, &row->txn_node);
         free(row);
@@ -2010,7 +2009,7 @@ ovsdb_idl_txn_insert(struct ovsdb_idl_txn *txn,
     struct ovsdb_idl_row *row = ovsdb_idl_row_create__(class);
 
     if (uuid) {
-        assert(!ovsdb_idl_txn_get_row(txn, uuid));
+        ovs_assert(!ovsdb_idl_txn_get_row(txn, uuid));
         row->uuid = *uuid;
     } else {
         uuid_generate(&row->uuid);
@@ -2244,7 +2243,7 @@ struct ovsdb_idl_txn *
 ovsdb_idl_txn_get(const struct ovsdb_idl_row *row)
 {
     struct ovsdb_idl_txn *txn = row->table->idl->txn;
-    assert(txn != NULL);
+    ovs_assert(txn != NULL);
     return txn;
 }
 
@@ -2264,8 +2263,8 @@ ovsdb_idl_txn_get_idl (struct ovsdb_idl_txn *txn)
 void
 ovsdb_idl_set_lock(struct ovsdb_idl *idl, const char *lock_name)
 {
-    assert(!idl->txn);
-    assert(hmap_is_empty(&idl->outstanding_txns));
+    ovs_assert(!idl->txn);
+    ovs_assert(hmap_is_empty(&idl->outstanding_txns));
 
     if (idl->lock_name && (!lock_name || strcmp(lock_name, idl->lock_name))) {
         /* Release previous lock. */

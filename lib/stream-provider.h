@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2012 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,7 +17,6 @@
 #ifndef STREAM_PROVIDER_H
 #define STREAM_PROVIDER_H 1
 
-#include <assert.h>
 #include <sys/types.h>
 #include "stream.h"
 
@@ -46,7 +45,7 @@ void stream_set_local_port(struct stream *, ovs_be16 local_port);
 static inline void stream_assert_class(const struct stream *stream,
                                        const struct stream_class *class)
 {
-    assert(stream->class == class);
+    ovs_assert(stream->class == class);
 }
 
 struct stream_class {
@@ -146,7 +145,7 @@ void pstream_init(struct pstream *, const struct pstream_class *, const char *na
 static inline void pstream_assert_class(const struct pstream *pstream,
                                         const struct pstream_class *class)
 {
-    assert(pstream->class == class);
+    ovs_assert(pstream->class == class);
 }
 
 struct pstream_class {

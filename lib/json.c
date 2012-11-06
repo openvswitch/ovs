@@ -18,7 +18,6 @@
 
 #include "json.h"
 
-#include <assert.h>
 #include <ctype.h>
 #include <errno.h>
 #include <float.h>
@@ -288,42 +287,42 @@ json_object_put_string(struct json *json, const char *name, const char *value)
 const char *
 json_string(const struct json *json)
 {
-    assert(json->type == JSON_STRING);
+    ovs_assert(json->type == JSON_STRING);
     return json->u.string;
 }
 
 struct json_array *
 json_array(const struct json *json)
 {
-    assert(json->type == JSON_ARRAY);
+    ovs_assert(json->type == JSON_ARRAY);
     return CONST_CAST(struct json_array *, &json->u.array);
 }
 
 struct shash *
 json_object(const struct json *json)
 {
-    assert(json->type == JSON_OBJECT);
+    ovs_assert(json->type == JSON_OBJECT);
     return CONST_CAST(struct shash *, json->u.object);
 }
 
 bool
 json_boolean(const struct json *json)
 {
-    assert(json->type == JSON_TRUE || json->type == JSON_FALSE);
+    ovs_assert(json->type == JSON_TRUE || json->type == JSON_FALSE);
     return json->type == JSON_TRUE;
 }
 
 double
 json_real(const struct json *json)
 {
-    assert(json->type == JSON_REAL || json->type == JSON_INTEGER);
+    ovs_assert(json->type == JSON_REAL || json->type == JSON_INTEGER);
     return json->type == JSON_REAL ? json->u.real : json->u.integer;
 }
 
 int64_t
 json_integer(const struct json *json)
 {
-    assert(json->type == JSON_INTEGER);
+    ovs_assert(json->type == JSON_INTEGER);
     return json->u.integer;
 }
 
@@ -1130,8 +1129,8 @@ json_parser_finish(struct json_parser *p)
     }
 
     if (!p->error) {
-        assert(p->height == 1);
-        assert(p->stack[0].json != NULL);
+        ovs_assert(p->height == 1);
+        ovs_assert(p->stack[0].json != NULL);
         json = p->stack[--p->height].json;
     } else {
         json = json_string_create_nocopy(p->error);

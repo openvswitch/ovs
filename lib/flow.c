@@ -16,7 +16,6 @@
 #include <config.h>
 #include <sys/types.h>
 #include "flow.h"
-#include <assert.h>
 #include <errno.h>
 #include <inttypes.h>
 #include <limits.h>
@@ -347,7 +346,7 @@ flow_extract(struct ofpbuf *packet, uint32_t skb_priority, uint32_t skb_mark,
     memset(flow, 0, sizeof *flow);
 
     if (tnl) {
-        assert(tnl != &flow->tunnel);
+        ovs_assert(tnl != &flow->tunnel);
         flow->tunnel = *tnl;
     }
     flow->in_port = ofp_in_port;

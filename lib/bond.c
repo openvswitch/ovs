@@ -533,7 +533,7 @@ bond_compose_learning_packet(struct bond *bond,
     tag_type tags = 0;
     struct flow flow;
 
-    assert(may_send_learning_packets(bond));
+    ovs_assert(may_send_learning_packets(bond));
 
     memset(&flow, 0, sizeof flow);
     memcpy(flow.dl_src, eth_src, ETH_ADDR_LEN);
@@ -1373,7 +1373,7 @@ bond_hash_tcp(const struct flow *flow, uint16_t vlan, uint32_t basis)
 static unsigned int
 bond_hash(const struct bond *bond, const struct flow *flow, uint16_t vlan)
 {
-    assert(bond->balance == BM_TCP || bond->balance == BM_SLB);
+    ovs_assert(bond->balance == BM_TCP || bond->balance == BM_SLB);
 
     return (bond->balance == BM_TCP
             ? bond_hash_tcp(flow, vlan, bond->basis)

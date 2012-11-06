@@ -210,7 +210,7 @@ tests_test_jsonrpc_LDADD = lib/libopenvswitch.a $(SSL_LIBS)
 
 noinst_PROGRAMS += tests/test-list
 tests_test_list_SOURCES = tests/test-list.c
-tests_test_list_LDADD = lib/libopenvswitch.a
+tests_test_list_LDADD = lib/libopenvswitch.a $(SSL_LIBS)
 
 noinst_PROGRAMS += tests/test-lockfile
 tests_test_lockfile_SOURCES = tests/test-lockfile.c

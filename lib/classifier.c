@@ -16,7 +16,6 @@
 
 #include <config.h>
 #include "classifier.h"
-#include <assert.h>
 #include <errno.h>
 #include <netinet/in.h>
 #include "byte-order.h"
@@ -208,7 +207,7 @@ void
 classifier_insert(struct classifier *cls, struct cls_rule *rule)
 {
     struct cls_rule *displaced_rule = classifier_replace(cls, rule);
-    assert(!displaced_rule);
+    ovs_assert(!displaced_rule);
 }
 
 /* Removes 'rule' from 'cls'.  It is the caller's responsibility to destroy

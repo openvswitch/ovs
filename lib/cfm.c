@@ -17,7 +17,6 @@
 #include <config.h>
 #include "cfm.h"
 
-#include <assert.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -190,7 +189,7 @@ cfm_generate_maid(struct cfm *cfm)
     md_len = strlen(ovs_md_name);
     ma_len = strlen(ovs_ma_name);
 
-    assert(md_len && ma_len && md_len + ma_len + 4 <= CCM_MAID_LEN);
+    ovs_assert(md_len && ma_len && md_len + ma_len + 4 <= CCM_MAID_LEN);
 
     cfm->maid[0] = 4;                           /* MD name string format. */
     cfm->maid[1] = md_len;                      /* MD name size. */
@@ -368,7 +367,7 @@ cfm_run(struct cfm *cfm)
                 cfm->health = (rmp->num_health_ccm * 100) / exp_ccm_recvd;
                 cfm->health = MIN(cfm->health, 100);
                 rmp->num_health_ccm = 0;
-                assert(cfm->health >= 0 && cfm->health <= 100);
+                ovs_assert(cfm->health >= 0 && cfm->health <= 100);
             }
             cfm->health_interval = 0;
         }
@@ -466,7 +465,7 @@ cfm_compose_ccm(struct cfm *cfm, struct ofpbuf *packet,
     }
 
     if (cfm->ccm_interval == 0) {
-        assert(cfm->extended);
+        ovs_assert(cfm->extended);
         ccm->interval_ms_x = htons(cfm->ccm_interval_ms);
     } else {
         ccm->interval_ms_x = htons(0);

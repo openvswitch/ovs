@@ -17,7 +17,6 @@
 #include <config.h>
 #include "mac-learning.h"
 
-#include <assert.h>
 #include <inttypes.h>
 #include <stdlib.h>
 
@@ -284,7 +283,7 @@ mac_learning_lookup(const struct mac_learning *ml,
     } else {
         struct mac_entry *e = mac_entry_lookup(ml, dst, vlan);
 
-        assert(e == NULL || e->tag != 0);
+        ovs_assert(e == NULL || e->tag != 0);
         if (tag) {
             /* Tag either the learned port or the lack thereof. */
             *tag |= e ? e->tag : make_unknown_mac_tag(ml, dst, vlan);

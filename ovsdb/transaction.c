@@ -17,8 +17,6 @@
 
 #include "transaction.h"
 
-#include <assert.h>
-
 #include "bitmap.h"
 #include "dynamic-string.h"
 #include "hash.h"
@@ -111,7 +109,7 @@ ovsdb_txn_create(struct ovsdb *db)
 static void
 ovsdb_txn_free(struct ovsdb_txn *txn)
 {
-    assert(list_is_empty(&txn->txn_tables));
+    ovs_assert(list_is_empty(&txn->txn_tables));
     ds_destroy(&txn->comment);
     free(txn);
 }
@@ -807,7 +805,7 @@ ovsdb_txn_commit(struct ovsdb_txn *txn, bool durable)
         if (error) {
             /* We don't support two-phase commit so only the first replica is
              * allowed to report an error. */
-            assert(&replica->node == txn->db->replicas.next);
+            ovs_assert(&replica->node == txn->db->replicas.next);
 
             ovsdb_txn_abort(txn);
             return error;
@@ -898,7 +896,7 @@ ovsdb_txn_row_modify(struct ovsdb_txn *txn, const struct ovsdb_row *ro_row_)
     struct ovsdb_row *ro_row = CONST_CAST(struct ovsdb_row *, ro_row_);
 
     if (ro_row->txn_row) {
-        assert(ro_row == ro_row->txn_row->new);
+        ovs_assert(ro_row == ro_row->txn_row->new);
         return ro_row;
     } else {
         struct ovsdb_table *table = ro_row->table;
@@ -940,7 +938,7 @@ ovsdb_txn_row_delete(struct ovsdb_txn *txn, const struct ovsdb_row *row_)
     if (!txn_row) {
         ovsdb_txn_row_create(txn, table, row, NULL);
     } else {
-        assert(txn_row->new == row);
+        ovs_assert(txn_row->new == row);
         if (txn_row->old) {
             txn_row->new = NULL;
         } else {
@@ -987,7 +985,7 @@ ovsdb_txn_table_destroy(struct ovsdb_txn_table *txn_table)
 {
     size_t i;
 
-    assert(hmap_is_empty(&txn_table->txn_rows));
+    ovs_assert(hmap_is_empty(&txn_table->txn_rows));
 
     for (i = 0; i < txn_table->table->schema->n_indexes; i++) {
         hmap_destroy(&txn_table->txn_indexes[i]);

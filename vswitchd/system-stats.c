@@ -17,7 +17,6 @@
 
 #include "system-stats.h"
 
-#include <assert.h>
 #include <ctype.h>
 #include <dirent.h>
 #include <errno.h>
@@ -169,7 +168,7 @@ get_boot_time(void)
     static long long int cache_expiration = LLONG_MIN;
     static long long int boot_time;
 
-    assert(LINUX_DATAPATH);
+    ovs_assert(LINUX_DATAPATH);
 
     if (time_msec() >= cache_expiration) {
         static const char stat_file[] = "/proc/stat";
@@ -201,7 +200,7 @@ get_boot_time(void)
 static unsigned long long int
 ticks_to_ms(unsigned long long int ticks)
 {
-    assert(LINUX_DATAPATH);
+    ovs_assert(LINUX_DATAPATH);
 
 #ifndef USER_HZ
 #define USER_HZ 100
@@ -234,7 +233,7 @@ get_raw_process_info(pid_t pid, struct raw_process_info *raw)
     FILE *stream;
     int n;
 
-    assert(LINUX_DATAPATH);
+    ovs_assert(LINUX_DATAPATH);
 
     sprintf(file_name, "/proc/%lu/stat", (unsigned long int) pid);
     stream = fopen(file_name, "r");
@@ -319,7 +318,7 @@ count_crashes(pid_t pid)
     int crashes = 0;
     FILE *stream;
 
-    assert(LINUX_DATAPATH);
+    ovs_assert(LINUX_DATAPATH);
 
     sprintf(file_name, "/proc/%lu/cmdline", (unsigned long int) pid);
     stream = fopen(file_name, "r");
@@ -362,7 +361,7 @@ get_process_info(pid_t pid, struct process_info *pinfo)
 {
     struct raw_process_info child;
 
-    assert(LINUX_DATAPATH);
+    ovs_assert(LINUX_DATAPATH);
     if (!get_raw_process_info(pid, &child)) {
         return false;
     }
@@ -640,7 +639,7 @@ system_stats_reply_cb(struct ofpbuf *reply,
     smap_init(received_stats);
     smap_from_json(received_stats, json);
 
-    assert(state == S_REQUEST_SENT);
+    ovs_assert(state == S_REQUEST_SENT);
     state = S_REPLY_RECEIVED;
 
     json_destroy(json);

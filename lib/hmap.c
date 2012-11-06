@@ -16,7 +16,6 @@
 
 #include <config.h>
 #include "hmap.h"
-#include <assert.h>
 #include <stdint.h>
 #include <string.h>
 #include "coverage.h"
@@ -91,8 +90,8 @@ resize(struct hmap *hmap, size_t new_mask)
     struct hmap tmp;
     size_t i;
 
-    assert(!(new_mask & (new_mask + 1)));
-    assert(new_mask != SIZE_MAX);
+    ovs_assert(!(new_mask & (new_mask + 1)));
+    ovs_assert(new_mask != SIZE_MAX);
 
     hmap_init(&tmp);
     if (new_mask) {

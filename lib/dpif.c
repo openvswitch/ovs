@@ -17,7 +17,6 @@
 #include <config.h>
 #include "dpif-provider.h"
 
-#include <assert.h>
 #include <ctype.h>
 #include <errno.h>
 #include <inttypes.h>
@@ -265,7 +264,7 @@ do_open(const char *name, const char *type, bool create, struct dpif **dpifp)
     error = registered_class->dpif_class->open(registered_class->dpif_class,
                                                name, create, &dpif);
     if (!error) {
-        assert(dpif->dpif_class == registered_class->dpif_class);
+        ovs_assert(dpif->dpif_class == registered_class->dpif_class);
         registered_class->refcount++;
     }
 
@@ -329,8 +328,8 @@ dpif_close(struct dpif *dpif)
 
         registered_class = shash_find_data(&dpif_classes,
                 dpif->dpif_class->type);
-        assert(registered_class);
-        assert(registered_class->refcount);
+        ovs_assert(registered_class);
+        ovs_assert(registered_class->refcount);
 
         registered_class->refcount--;
         dpif_uninit(dpif, true);
@@ -614,7 +613,7 @@ dpif_port_get_name(struct dpif *dpif, uint32_t port_no,
     struct dpif_port port;
     int error;
 
-    assert(name_size > 0);
+    ovs_assert(name_size > 0);
 
     error = dpif_port_query_by_number(dpif, port_no, &port);
     if (!error) {
@@ -821,8 +820,8 @@ dpif_flow_put__(struct dpif *dpif, const struct dpif_flow_put *put)
     int error;
 
     COVERAGE_INC(dpif_flow_put);
-    assert(!(put->flags & ~(DPIF_FP_CREATE | DPIF_FP_MODIFY
-                            | DPIF_FP_ZERO_STATS)));
+    ovs_assert(!(put->flags & ~(DPIF_FP_CREATE | DPIF_FP_MODIFY
+                                | DPIF_FP_ZERO_STATS)));
 
     error = dpif->dpif_class->flow_put(dpif, put);
     if (error && put->stats) {

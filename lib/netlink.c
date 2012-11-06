@@ -16,7 +16,6 @@
 
 #include <config.h>
 #include "netlink.h"
-#include <assert.h>
 #include <errno.h>
 #include <inttypes.h>
 #include <sys/types.h>
@@ -113,7 +112,7 @@ nl_msg_put_nlmsghdr(struct ofpbuf *msg,
 {
     struct nlmsghdr *nlmsghdr;
 
-    assert(msg->size == 0);
+    ovs_assert(msg->size == 0);
 
     nl_msg_reserve(msg, NLMSG_HDRLEN + expected_payload);
     nlmsghdr = nl_msg_put_uninit(msg, NLMSG_HDRLEN);
@@ -152,7 +151,7 @@ nl_msg_put_genlmsghdr(struct ofpbuf *msg, size_t expected_payload,
     struct genlmsghdr *genlmsghdr;
 
     nl_msg_put_nlmsghdr(msg, GENL_HDRLEN + expected_payload, family, flags);
-    assert(msg->size == NLMSG_HDRLEN);
+    ovs_assert(msg->size == NLMSG_HDRLEN);
     genlmsghdr = nl_msg_put_uninit(msg, GENL_HDRLEN);
     genlmsghdr->cmd = cmd;
     genlmsghdr->version = version;
@@ -214,7 +213,7 @@ nl_msg_put_unspec_uninit(struct ofpbuf *msg, uint16_t type, size_t size)
 {
     size_t total_size = NLA_HDRLEN + size;
     struct nlattr* nla = nl_msg_put_uninit(msg, total_size);
-    assert(NLA_ALIGN(total_size) <= UINT16_MAX);
+    ovs_assert(NLA_ALIGN(total_size) <= UINT16_MAX);
     nla->nla_len = total_size;
     nla->nla_type = type;
     return nla + 1;
@@ -313,7 +312,7 @@ nl_msg_push_unspec_uninit(struct ofpbuf *msg, uint16_t type, size_t size)
 {
     size_t total_size = NLA_HDRLEN + size;
     struct nlattr* nla = nl_msg_push_uninit(msg, total_size);
-    assert(NLA_ALIGN(total_size) <= UINT16_MAX);
+    ovs_assert(NLA_ALIGN(total_size) <= UINT16_MAX);
     nla->nla_len = total_size;
     nla->nla_type = type;
     return nla + 1;
@@ -474,7 +473,7 @@ nl_attr_type(const struct nlattr *nla)
 const void *
 nl_attr_get(const struct nlattr *nla)
 {
-    assert(nla->nla_len >= NLA_HDRLEN);
+    ovs_assert(nla->nla_len >= NLA_HDRLEN);
     return nla + 1;
 }
 
@@ -482,7 +481,7 @@ nl_attr_get(const struct nlattr *nla)
 size_t
 nl_attr_get_size(const struct nlattr *nla)
 {
-    assert(nla->nla_len >= NLA_HDRLEN);
+    ovs_assert(nla->nla_len >= NLA_HDRLEN);
     return nla->nla_len - NLA_HDRLEN;
 }
 
@@ -491,7 +490,7 @@ nl_attr_get_size(const struct nlattr *nla)
 const void *
 nl_attr_get_unspec(const struct nlattr *nla, size_t size)
 {
-    assert(nla->nla_len >= NLA_HDRLEN + size);
+    ovs_assert(nla->nla_len >= NLA_HDRLEN + size);
     return nla + 1;
 }
 
@@ -577,8 +576,8 @@ nl_attr_get_be64(const struct nlattr *nla)
 const char *
 nl_attr_get_string(const struct nlattr *nla)
 {
-    assert(nla->nla_len > NLA_HDRLEN);
-    assert(memchr(nl_attr_get(nla), '\0', nla->nla_len - NLA_HDRLEN) != NULL);
+    ovs_assert(nla->nla_len > NLA_HDRLEN);
+    ovs_assert(memchr(nl_attr_get(nla), '\0', nla->nla_len - NLA_HDRLEN));
     return nl_attr_get(nla);
 }
 

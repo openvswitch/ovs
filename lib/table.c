@@ -18,8 +18,6 @@
 
 #include "table.h"
 
-#include <assert.h>
-
 #include "dynamic-string.h"
 #include "json.h"
 #include "ovsdb-data.h"
@@ -143,7 +141,7 @@ table_add_column(struct table *table, const char *heading, ...)
     struct column *column;
     va_list args;
 
-    assert(!table->n_rows);
+    ovs_assert(!table->n_rows);
     if (table->n_columns >= table->allocated_columns) {
         table->columns = x2nrealloc(table->columns, &table->allocated_columns,
                                     sizeof *table->columns);
@@ -204,8 +202,8 @@ table_add_cell(struct table *table)
 {
     size_t x, y;
 
-    assert(table->n_rows > 0);
-    assert(table->current_column < table->n_columns);
+    ovs_assert(table->n_rows > 0);
+    ovs_assert(table->current_column < table->n_columns);
 
     x = table->current_column++;
     y = table->n_rows - 1;

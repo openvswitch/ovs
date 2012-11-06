@@ -16,7 +16,6 @@
 
 #include <config.h>
 #include "shash.h"
-#include <assert.h>
 #include "hash.h"
 
 static struct shash_node *shash_find__(const struct shash *,
@@ -145,7 +144,7 @@ void
 shash_add_assert(struct shash *sh, const char *name, const void *data)
 {
     bool added OVS_UNUSED = shash_add_once(sh, name, data);
-    assert(added);
+    ovs_assert(added);
 }
 
 /* Searches for 'name' in 'sh'.  If it does not already exist, adds it along
@@ -242,7 +241,7 @@ void *
 shash_find_and_delete_assert(struct shash *sh, const char *name)
 {
     void *data = shash_find_and_delete(sh, name);
-    assert(data != NULL);
+    ovs_assert(data != NULL);
     return data;
 }
 
@@ -277,7 +276,7 @@ shash_sort(const struct shash *sh)
         SHASH_FOR_EACH (node, sh) {
             nodes[i++] = node;
         }
-        assert(i == n);
+        ovs_assert(i == n);
 
         qsort(nodes, n, sizeof *nodes, compare_nodes_by_name);
 

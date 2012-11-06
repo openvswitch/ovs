@@ -17,7 +17,6 @@
 
 #include "row.h"
 
-#include <assert.h>
 #include <stddef.h>
 
 #include "dynamic-string.h"
@@ -376,7 +375,7 @@ ovsdb_row_hash_contains_all(const struct ovsdb_row_hash *a,
 {
     struct ovsdb_row_hash_node *node;
 
-    assert(ovsdb_column_set_equals(&a->columns, &b->columns));
+    ovs_assert(ovsdb_column_set_equals(&a->columns, &b->columns));
     HMAP_FOR_EACH (node, hmap_node, &b->rows) {
         if (!ovsdb_row_hash_contains__(a, node->row, node->hmap_node.hash)) {
             return false;

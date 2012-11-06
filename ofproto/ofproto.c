@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
  * Copyright (c) 2010 Jean Tourrilhes - HP-Labs.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -446,12 +446,12 @@ ofproto_create(const char *datapath_name, const char *datapath_type,
     bitmap_set1(ofproto->ofp_port_ids, 0);
 
     /* Check that hidden tables, if any, are at the end. */
-    assert(ofproto->n_tables);
+    ovs_assert(ofproto->n_tables);
     for (i = 0; i + 1 < ofproto->n_tables; i++) {
         enum oftable_flags flags = ofproto->tables[i].flags;
         enum oftable_flags next_flags = ofproto->tables[i + 1].flags;
 
-        assert(!(flags & OFTABLE_HIDDEN) || next_flags & OFTABLE_HIDDEN);
+        ovs_assert(!(flags & OFTABLE_HIDDEN) || next_flags & OFTABLE_HIDDEN);
     }
 
     ofproto->datapath_id = pick_datapath_id(ofproto);
@@ -469,8 +469,8 @@ ofproto_init_tables(struct ofproto *ofproto, int n_tables)
 {
     struct oftable *table;
 
-    assert(!ofproto->n_tables);
-    assert(n_tables >= 1 && n_tables <= 255);
+    ovs_assert(!ofproto->n_tables);
+    ovs_assert(n_tables >= 1 && n_tables <= 255);
 
     ofproto->n_tables = n_tables;
     ofproto->tables = xmalloc(n_tables * sizeof *ofproto->tables);
@@ -493,7 +493,7 @@ ofproto_init_tables(struct ofproto *ofproto, int n_tables)
 void
 ofproto_init_max_ports(struct ofproto *ofproto, uint16_t max_ports)
 {
-    assert(max_ports <= OFPP_MAX);
+    ovs_assert(max_ports <= OFPP_MAX);
     ofproto->max_ports = max_ports;
 }
 
@@ -910,7 +910,7 @@ ofproto_configure_table(struct ofproto *ofproto, int table_id,
 {
     struct oftable *table;
 
-    assert(table_id >= 0 && table_id < ofproto->n_tables);
+    ovs_assert(table_id >= 0 && table_id < ofproto->n_tables);
     table = &ofproto->tables[table_id];
 
     oftable_set_name(table, s->name);
@@ -992,8 +992,8 @@ ofproto_destroy__(struct ofproto *ofproto)
 {
     struct oftable *table;
 
-    assert(list_is_empty(&ofproto->pending));
-    assert(!ofproto->n_pending);
+    ovs_assert(list_is_empty(&ofproto->pending));
+    ovs_assert(!ofproto->n_pending);
 
     connmgr_destroy(ofproto->connmgr);
 
@@ -2072,7 +2072,7 @@ ofproto_rule_destroy__(struct rule *rule)
 void
 ofproto_rule_destroy(struct rule *rule)
 {
-    assert(!rule->pending);
+    ovs_assert(!rule->pending);
     oftable_remove_rule(rule);
     ofproto_rule_destroy__(rule);
 }
@@ -2122,7 +2122,7 @@ rule_execute(struct rule *rule, uint16_t in_port, struct ofpbuf *packet)
 {
     struct flow flow;
 
-    assert(ofpbuf_headroom(packet) >= sizeof(struct ofp10_packet_in));
+    ovs_assert(ofpbuf_headroom(packet) >= sizeof(struct ofp10_packet_in));
 
     flow_extract(packet, 0, 0, NULL, in_port, &flow);
     return rule->ofproto->ofproto_class->rule_execute(rule, &flow, packet);
@@ -2171,7 +2171,7 @@ handle_features_request(struct ofconn *ofconn, const struct ofp_header *oh)
 
     ofproto->ofproto_class->get_features(ofproto, &arp_match_ip,
                                          &features.actions);
-    assert(features.actions & OFPUTIL_A_OUTPUT); /* sanity check */
+    ovs_assert(features.actions & OFPUTIL_A_OUTPUT); /* sanity check */
 
     /* Count only non-hidden tables in the number of tables.  (Hidden tables,
      * if present, are always at the end.) */
@@ -2239,7 +2239,7 @@ handle_set_config(struct ofconn *ofconn, const struct ofp_header *oh)
         enum ofp_config_flags cur = ofproto->frag_handling;
         enum ofp_config_flags next = flags & OFPC_FRAG_MASK;
 
-        assert((cur & OFPC_FRAG_MASK) == cur);
+        ovs_assert((cur & OFPC_FRAG_MASK) == cur);
         if (cur != next) {
             if (ofproto->ofproto_class->set_frag_handling(ofproto, next)) {
                 ofproto->frag_handling = next;
@@ -3111,7 +3111,7 @@ add_flow(struct ofproto *ofproto, struct ofconn *ofconn,
             if (error) {
                 return error;
             }
-            assert(table_id < ofproto->n_tables);
+            ovs_assert(table_id < ofproto->n_tables);
             table = &ofproto->tables[table_id];
         } else {
             table = &ofproto->tables[0];
@@ -3469,7 +3469,7 @@ ofproto_rule_expire(struct rule *rule, uint8_t reason)
     struct ofproto *ofproto = rule->ofproto;
     struct ofopgroup *group;
 
-    assert(reason == OFPRR_HARD_TIMEOUT || reason == OFPRR_IDLE_TIMEOUT);
+    ovs_assert(reason == OFPRR_HARD_TIMEOUT || reason == OFPRR_IDLE_TIMEOUT);
 
     ofproto_rule_send_removed(rule, reason);
 
@@ -3547,7 +3547,7 @@ handle_flow_mod__(struct ofproto *ofproto, struct ofconn *ofconn,
                   const struct ofp_header *oh)
 {
     if (ofproto->n_pending >= 50) {
-        assert(!list_is_empty(&ofproto->pending));
+        ovs_assert(!list_is_empty(&ofproto->pending));
         return OFPROTO_POSTPONE;
     }
 
@@ -3866,7 +3866,7 @@ ofproto_collect_ofmonitor_refresh_rules(const struct ofmonitor *m,
 
         cls_cursor_init(&cursor, &table->cls, &target);
         CLS_CURSOR_FOR_EACH (rule, cr, &cursor) {
-            assert(!rule->pending); /* XXX */
+            ovs_assert(!rule->pending); /* XXX */
             ofproto_collect_ofmonitor_refresh_rule(m, rule, seqno, rules);
         }
     }
@@ -4172,7 +4172,7 @@ ofopgroup_create(struct ofproto *ofproto, struct ofconn *ofconn,
     if (ofconn) {
         size_t request_len = ntohs(request->length);
 
-        assert(ofconn_get_ofproto(ofconn) == ofproto);
+        ovs_assert(ofconn_get_ofproto(ofconn) == ofproto);
 
         ofconn_add_opgroup(ofconn, &group->ofconn_node);
         group->ofconn = ofconn;
@@ -4210,7 +4210,7 @@ ofopgroup_complete(struct ofopgroup *group)
     struct ofoperation *op, *next_op;
     int error;
 
-    assert(!group->n_running);
+    ovs_assert(!group->n_running);
 
     error = 0;
     LIST_FOR_EACH (op, group_node, &group->ops) {
@@ -4229,7 +4229,7 @@ ofopgroup_complete(struct ofopgroup *group)
                 error = ofconn_pktbuf_retrieve(group->ofconn, group->buffer_id,
                                                &packet, &in_port);
                 if (packet) {
-                    assert(!error);
+                    ovs_assert(!error);
                     error = rule_execute(op->rule, in_port, packet);
                 }
                 break;
@@ -4289,7 +4289,7 @@ ofopgroup_complete(struct ofopgroup *group)
             break;
 
         case OFOPERATION_DELETE:
-            assert(!op->error);
+            ovs_assert(!op->error);
             ofproto_rule_destroy__(rule);
             op->rule = NULL;
             break;
@@ -4319,7 +4319,7 @@ ofopgroup_complete(struct ofopgroup *group)
     ofmonitor_flush(ofproto->connmgr);
 
     if (!list_is_empty(&group->ofproto_node)) {
-        assert(ofproto->n_pending > 0);
+        ovs_assert(ofproto->n_pending > 0);
         ofproto->n_pending--;
         list_remove(&group->ofproto_node);
     }
@@ -4350,7 +4350,7 @@ ofoperation_create(struct ofopgroup *group, struct rule *rule,
     struct ofproto *ofproto = group->ofproto;
     struct ofoperation *op;
 
-    assert(!rule->pending);
+    ovs_assert(!rule->pending);
 
     op = rule->pending = xzalloc(sizeof *op);
     op->group = group;
@@ -4420,9 +4420,9 @@ ofoperation_complete(struct ofoperation *op, enum ofperr error)
 {
     struct ofopgroup *group = op->group;
 
-    assert(op->rule->pending == op);
-    assert(group->n_running > 0);
-    assert(!error || op->type != OFOPERATION_DELETE);
+    ovs_assert(op->rule->pending == op);
+    ovs_assert(group->n_running > 0);
+    ovs_assert(!error || op->type != OFOPERATION_DELETE);
 
     op->error = error;
     if (!--group->n_running && !list_is_empty(&group->ofproto_node)) {
@@ -4433,7 +4433,7 @@ ofoperation_complete(struct ofoperation *op, enum ofperr error)
 struct rule *
 ofoperation_get_victim(struct ofoperation *op)
 {
-    assert(op->type == OFOPERATION_ADD);
+    ovs_assert(op->type == OFOPERATION_ADD);
     return op->victim;
 }
 
@@ -4733,7 +4733,7 @@ oftable_init(struct oftable *table)
 static void
 oftable_destroy(struct oftable *table)
 {
-    assert(classifier_is_empty(&table->cls));
+    ovs_assert(classifier_is_empty(&table->cls));
     oftable_disable_eviction(table);
     classifier_destroy(&table->cls);
     free(table->name);
@@ -4960,7 +4960,7 @@ ofproto_port_set_realdev(struct ofproto *ofproto, uint16_t vlandev_ofp_port,
     struct ofport *ofport;
     int error;
 
-    assert(vlandev_ofp_port != realdev_ofp_port);
+    ovs_assert(vlandev_ofp_port != realdev_ofp_port);
 
     ofport = ofproto_get_port(ofproto, vlandev_ofp_port);
     if (!ofport) {

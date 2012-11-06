@@ -19,8 +19,6 @@
 
 /* Generic interface to network devices. */
 
-#include <assert.h>
-
 #include "netdev.h"
 #include "list.h"
 #include "shash.h"
@@ -55,7 +53,7 @@ void netdev_dev_get_devices(const struct netdev_class *,
 static inline void netdev_dev_assert_class(const struct netdev_dev *netdev_dev,
                                            const struct netdev_class *class_)
 {
-    assert(netdev_dev->netdev_class == class_);
+    ovs_assert(netdev_dev->netdev_class == class_);
 }
 
 /* A instance of an open network device.

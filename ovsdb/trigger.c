@@ -17,7 +17,6 @@
 
 #include "trigger.h"
 
-#include <assert.h>
 #include <limits.h>
 
 #include "json.h"
@@ -124,7 +123,7 @@ ovsdb_trigger_try(struct ovsdb_trigger *t, long long int now)
 static void
 ovsdb_trigger_complete(struct ovsdb_trigger *t)
 {
-    assert(t->result != NULL);
+    ovs_assert(t->result != NULL);
     list_remove(&t->node);
     list_push_back(&t->session->completions, &t->node);
 }

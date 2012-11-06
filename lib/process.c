@@ -16,7 +16,6 @@
 
 #include <config.h>
 #include "process.h"
-#include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <signal.h>
@@ -159,7 +158,7 @@ process_register(const char *name, pid_t pid)
     struct process *p;
     const char *slash;
 
-    assert(sigchld_is_blocked());
+    ovs_assert(sigchld_is_blocked());
 
     p = xzalloc(sizeof *p);
     p->pid = pid;
@@ -308,7 +307,7 @@ process_exited(struct process *p)
 int
 process_status(const struct process *p)
 {
-    assert(p->exited);
+    ovs_assert(p->exited);
     return p->status;
 }
 

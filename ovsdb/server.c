@@ -17,8 +17,6 @@
 
 #include "server.h"
 
-#include <assert.h>
-
 #include "hash.h"
 #include "ovsdb.h"
 
@@ -35,7 +33,7 @@ ovsdb_session_init(struct ovsdb_session *session, struct ovsdb_server *server)
 void
 ovsdb_session_destroy(struct ovsdb_session *session)
 {
-    assert(hmap_is_empty(&session->waiters));
+    ovs_assert(hmap_is_empty(&session->waiters));
     hmap_destroy(&session->waiters);
 }
 
@@ -101,7 +99,7 @@ ovsdb_lock_waiter_remove(struct ovsdb_lock_waiter *waiter)
 void
 ovsdb_lock_waiter_destroy(struct ovsdb_lock_waiter *waiter)
 {
-    assert(!waiter->lock);
+    ovs_assert(!waiter->lock);
     hmap_remove(&waiter->session->waiters, &waiter->session_node);
     free(waiter->lock_name);
     free(waiter);

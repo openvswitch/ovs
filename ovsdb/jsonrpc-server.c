@@ -17,7 +17,6 @@
 
 #include "jsonrpc-server.h"
 
-#include <assert.h>
 #include <errno.h>
 
 #include "bitmap.h"
@@ -1292,7 +1291,7 @@ ovsdb_jsonrpc_monitor_remove_all(struct ovsdb_jsonrpc_session *s)
 static struct ovsdb_jsonrpc_monitor *
 ovsdb_jsonrpc_monitor_cast(struct ovsdb_replica *replica)
 {
-    assert(replica->class == &ovsdb_jsonrpc_replica_class);
+    ovs_assert(replica->class == &ovsdb_jsonrpc_replica_class);
     return CONTAINER_OF(replica, struct ovsdb_jsonrpc_monitor, replica);
 }
 

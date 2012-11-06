@@ -16,7 +16,6 @@
 
 #include <config.h>
 #include "vconn-provider.h"
-#include <assert.h>
 #include <errno.h>
 #include <inttypes.h>
 #include <netinet/in.h>
@@ -97,14 +96,14 @@ check_vconn_classes(void)
 
     for (i = 0; i < ARRAY_SIZE(vconn_classes); i++) {
         struct vconn_class *class = vconn_classes[i];
-        assert(class->name != NULL);
-        assert(class->open != NULL);
+        ovs_assert(class->name != NULL);
+        ovs_assert(class->open != NULL);
         if (class->close || class->recv || class->send
             || class->run || class->run_wait || class->wait) {
-            assert(class->close != NULL);
-            assert(class->recv != NULL);
-            assert(class->send != NULL);
-            assert(class->wait != NULL);
+            ovs_assert(class->close != NULL);
+            ovs_assert(class->recv != NULL);
+            ovs_assert(class->send != NULL);
+            ovs_assert(class->wait != NULL);
         } else {
             /* This class delegates to another one. */
         }
@@ -112,12 +111,12 @@ check_vconn_classes(void)
 
     for (i = 0; i < ARRAY_SIZE(pvconn_classes); i++) {
         struct pvconn_class *class = pvconn_classes[i];
-        assert(class->name != NULL);
-        assert(class->listen != NULL);
+        ovs_assert(class->name != NULL);
+        ovs_assert(class->listen != NULL);
         if (class->close || class->accept || class->wait) {
-            assert(class->close != NULL);
-            assert(class->accept != NULL);
-            assert(class->wait != NULL);
+            ovs_assert(class->close != NULL);
+            ovs_assert(class->accept != NULL);
+            ovs_assert(class->wait != NULL);
         } else {
             /* This class delegates to another one. */
         }
@@ -253,7 +252,7 @@ vconn_open(const char *name, uint32_t allowed_versions, uint8_t dscp,
     }
 
     /* Success. */
-    assert(vconn->state != VCS_CONNECTING || vconn->class->connect);
+    ovs_assert(vconn->state != VCS_CONNECTING || vconn->class->connect);
     *vconnp = vconn;
     return 0;
 
@@ -399,7 +398,7 @@ static void
 vcs_connecting(struct vconn *vconn)
 {
     int retval = (vconn->class->connect)(vconn);
-    assert(retval != EINPROGRESS);
+    ovs_assert(retval != EINPROGRESS);
     if (!retval) {
         vconn->state = VCS_SEND_HELLO;
     } else if (retval != EAGAIN) {
@@ -664,7 +663,7 @@ do_send(struct vconn *vconn, struct ofpbuf *msg)
 {
     int retval;
 
-    assert(msg->size >= sizeof(struct ofp_header));
+    ovs_assert(msg->size >= sizeof(struct ofp_header));
 
     ofpmsg_update_length(msg);
     if (!VLOG_IS_DBG_ENABLED()) {
@@ -695,7 +694,7 @@ vconn_connect_block(struct vconn *vconn)
         vconn_connect_wait(vconn);
         poll_block();
     }
-    assert(error != EINPROGRESS);
+    ovs_assert(error != EINPROGRESS);
 
     return error;
 }
@@ -892,7 +891,7 @@ vconn_transact_multiple_noreply(struct vconn *vconn, struct list *requests,
 void
 vconn_wait(struct vconn *vconn, enum vconn_wait_type wait)
 {
-    assert(wait == WAIT_CONNECT || wait == WAIT_RECV || wait == WAIT_SEND);
+    ovs_assert(wait == WAIT_CONNECT || wait == WAIT_RECV || wait == WAIT_SEND);
 
     switch (vconn->state) {
     case VCS_CONNECTING:
@@ -1059,8 +1058,8 @@ pvconn_accept(struct pvconn *pvconn, struct vconn **new_vconn)
     if (retval) {
         *new_vconn = NULL;
     } else {
-        assert((*new_vconn)->state != VCS_CONNECTING
-               || (*new_vconn)->class->connect);
+        ovs_assert((*new_vconn)->state != VCS_CONNECTING
+                   || (*new_vconn)->class->connect);
     }
     return retval;
 }
@@ -1104,7 +1103,7 @@ vconn_init(struct vconn *vconn, struct vconn_class *class, int connect_status,
     vconn->local_ip = 0;
     vconn->local_port = 0;
     vconn->name = xstrdup(name);
-    assert(vconn->state != VCS_CONNECTING || class->connect);
+    ovs_assert(vconn->state != VCS_CONNECTING || class->connect);
 }
 
 void

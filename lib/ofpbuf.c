@@ -16,7 +16,6 @@
 
 #include <config.h>
 #include "ofpbuf.h"
-#include <assert.h>
 #include <stdlib.h>
 #include <string.h>
 #include "dynamic-string.h"
@@ -421,7 +420,7 @@ ofpbuf_put_hex(struct ofpbuf *b, const char *s, size_t *n)
 void
 ofpbuf_reserve(struct ofpbuf *b, size_t size)
 {
-    assert(!b->size);
+    ovs_assert(!b->size);
     ofpbuf_prealloc_tailroom(b, size);
     b->data = (char*)b->data + size;
 }
@@ -473,7 +472,7 @@ ofpbuf_at(const struct ofpbuf *b, size_t offset, size_t size)
 void *
 ofpbuf_at_assert(const struct ofpbuf *b, size_t offset, size_t size)
 {
-    assert(offset + size <= b->size);
+    ovs_assert(offset + size <= b->size);
     return ((char *) b->data) + offset;
 }
 
@@ -506,7 +505,7 @@ void *
 ofpbuf_pull(struct ofpbuf *b, size_t size)
 {
     void *data = b->data;
-    assert(b->size >= size);
+    ovs_assert(b->size >= size);
     b->data = (char*)b->data + size;
     b->size -= size;
     return data;

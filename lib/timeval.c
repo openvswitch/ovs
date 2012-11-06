@@ -16,7 +16,6 @@
 
 #include <config.h>
 #include "timeval.h"
-#include <assert.h>
 #include <errno.h>
 #if HAVE_EXECINFO_H
 #include <execinfo.h>
@@ -731,7 +730,7 @@ backtrace_cb(struct unixctl_conn *conn,
 {
     struct ds ds = DS_EMPTY_INITIALIZER;
 
-    assert(HAVE_EXECINFO_H && CACHE_TIME);
+    ovs_assert(HAVE_EXECINFO_H && CACHE_TIME);
     format_backtraces(&ds, 0);
     unixctl_command_reply(conn, ds_cstr(&ds));
     ds_destroy(&ds);

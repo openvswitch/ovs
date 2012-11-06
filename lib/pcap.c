@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2012 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,6 @@
 
 #include <config.h>
 #include "pcap.h"
-#include <assert.h>
 #include <errno.h>
 #include <inttypes.h>
 #include <string.h>
@@ -50,7 +49,7 @@ pcap_open(const char *file_name, const char *mode)
 {
     FILE *file;
 
-    assert(!strcmp(mode, "rb") || !strcmp(mode, "wb"));
+    ovs_assert(!strcmp(mode, "rb") || !strcmp(mode, "wb"));
 
     file = fopen(file_name, mode);
     if (file == NULL) {

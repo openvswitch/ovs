@@ -16,7 +16,6 @@
 
 #include <config.h>
 #include "rconn.h"
-#include <assert.h>
 #include <errno.h>
 #include <limits.h>
 #include <stdlib.h>
@@ -293,7 +292,7 @@ void
 rconn_connect_unreliably(struct rconn *rc,
                          struct vconn *vconn, const char *name)
 {
-    assert(vconn != NULL);
+    ovs_assert(vconn != NULL);
     rconn_disconnect(rc);
     rconn_set_target__(rc, vconn_get_name(vconn), name);
     rc->reliable = false;
@@ -469,7 +468,7 @@ run_ACTIVE(struct rconn *rc)
                  rc->name, (unsigned int) (time_now() - base));
 
         version = rconn_get_version(rc);
-        assert(version >= 0 && version <= 0xff);
+        ovs_assert(version >= 0 && version <= 0xff);
 
         /* Ordering is important here: rconn_send() can transition to BACKOFF,
          * and we don't want to transition back to IDLE if so, because then we
@@ -864,7 +863,7 @@ void
 rconn_packet_counter_destroy(struct rconn_packet_counter *c)
 {
     if (c) {
-        assert(c->ref_cnt > 0);
+        ovs_assert(c->ref_cnt > 0);
         if (!--c->ref_cnt && !c->n_packets) {
             free(c);
         }
@@ -881,13 +880,13 @@ rconn_packet_counter_inc(struct rconn_packet_counter *c, unsigned int n_bytes)
 void
 rconn_packet_counter_dec(struct rconn_packet_counter *c, unsigned int n_bytes)
 {
-    assert(c->n_packets > 0);
-    assert(c->n_bytes >= n_bytes);
+    ovs_assert(c->n_packets > 0);
+    ovs_assert(c->n_bytes >= n_bytes);
 
     c->n_bytes -= n_bytes;
     c->n_packets--;
     if (!c->n_packets) {
-        assert(!c->n_bytes);
+        ovs_assert(!c->n_bytes);
         if (!c->ref_cnt) {
             free(c);
         }

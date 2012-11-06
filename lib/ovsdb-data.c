@@ -17,7 +17,6 @@
 
 #include "ovsdb-data.h"
 
-#include <assert.h>
 #include <ctype.h>
 #include <float.h>
 #include <inttypes.h>
@@ -108,7 +107,7 @@ ovsdb_atom_default(enum ovsdb_atomic_type type)
         inited = true;
     }
 
-    assert(ovsdb_atomic_type_is_valid(type));
+    ovs_assert(ovsdb_atomic_type_is_valid(type));
     return &default_atoms[type];
 }
 
@@ -290,7 +289,7 @@ static void
 ovsdb_symbol_referenced(struct ovsdb_symbol *symbol,
                         const struct ovsdb_base_type *base)
 {
-    assert(base->type == OVSDB_TYPE_UUID);
+    ovs_assert(base->type == OVSDB_TYPE_UUID);
 
     if (base->u.uuid.refTableName) {
         switch (base->u.uuid.refType) {
@@ -879,7 +878,7 @@ ovsdb_datum_default(const struct ovsdb_type *type)
         int kt = type->key.type;
         int vt = type->value.type;
 
-        assert(ovsdb_type_is_valid(type));
+        ovs_assert(ovsdb_type_is_valid(type));
 
         d = &default_data[kt][vt];
         if (!d->n) {
@@ -1543,7 +1542,7 @@ ovsdb_datum_from_smap(struct ovsdb_datum *datum, struct smap *smap)
                    &datum->keys[i].string, &datum->values[i].string);
         i++;
     }
-    assert(i == datum->n);
+    ovs_assert(i == datum->n);
 
     smap_destroy(smap);
     ovsdb_datum_sort_unique(datum, OVSDB_TYPE_STRING, OVSDB_TYPE_STRING);
@@ -1802,7 +1801,7 @@ ovsdb_datum_union(struct ovsdb_datum *a, const struct ovsdb_datum *b,
         struct ovsdb_error *error;
         a->n = n;
         error = ovsdb_datum_sort(a, type->key.type);
-        assert(!error);
+        ovs_assert(!error);
     }
 }
 
@@ -1814,9 +1813,9 @@ ovsdb_datum_subtract(struct ovsdb_datum *a, const struct ovsdb_type *a_type,
     bool changed = false;
     size_t i;
 
-    assert(a_type->key.type == b_type->key.type);
-    assert(a_type->value.type == b_type->value.type
-           || b_type->value.type == OVSDB_TYPE_VOID);
+    ovs_assert(a_type->key.type == b_type->key.type);
+    ovs_assert(a_type->value.type == b_type->value.type
+               || b_type->value.type == OVSDB_TYPE_VOID);
 
     /* XXX The big-O of this could easily be improved. */
     for (i = 0; i < a->n; ) {
@@ -1863,7 +1862,7 @@ ovsdb_symbol_table_put(struct ovsdb_symbol_table *symtab, const char *name,
 {
     struct ovsdb_symbol *symbol;
 
-    assert(!ovsdb_symbol_table_get(symtab, name));
+    ovs_assert(!ovsdb_symbol_table_get(symtab, name));
     symbol = xmalloc(sizeof *symbol);
     symbol->uuid = *uuid;
     symbol->created = created;

@@ -23,7 +23,6 @@
 #include <sys/types.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-#include <assert.h>
 #include <inttypes.h>
 #include <stdlib.h>
 #include "byte-order.h"
@@ -481,7 +480,7 @@ stp_check_and_reset_fdb_flush(struct stp *stp)
 struct stp_port *
 stp_get_port(struct stp *stp, int port_no)
 {
-    assert(port_no >= 0 && port_no < ARRAY_SIZE(stp->ports));
+    ovs_assert(port_no >= 0 && port_no < ARRAY_SIZE(stp->ports));
     return &stp->ports[port_no];
 }
 
@@ -669,7 +668,7 @@ int
 stp_port_no(const struct stp_port *p)
 {
     struct stp *stp = p->stp;
-    assert(p >= stp->ports && p < &stp->ports[ARRAY_SIZE(stp->ports)]);
+    ovs_assert(p >= stp->ports && p < &stp->ports[ARRAY_SIZE(stp->ports)]);
     return p - stp->ports;
 }
 
@@ -1228,7 +1227,7 @@ stp_hold_timer_expiry(struct stp_port *p)
 static void
 stp_initialize_port(struct stp_port *p, enum stp_state state)
 {
-    assert(state & (STP_DISABLED | STP_BLOCKING));
+    ovs_assert(state & (STP_DISABLED | STP_BLOCKING));
     stp_become_designated_port(p);
     stp_set_port_state(p, state);
     p->topology_change_ack = false;

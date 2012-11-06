@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009 Nicira, Inc.
+ * Copyright (c) 2009, 2012 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,8 +25,6 @@
 #include <config.h>
 
 #include "aes128.h"
-
-#include <assert.h>
 
 #include "util.h"
 
@@ -748,7 +746,7 @@ aes128_schedule(struct aes128 *aes, const uint8_t key[16])
         rk[6] = rk[2] ^ rk[5];
         rk[7] = rk[3] ^ rk[6];
     }
-    assert(rk == &aes->rk[40]);
+    ovs_assert(rk == &aes->rk[40]);
 }
 
 void

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,6 @@
 
 #include <config.h>
 #include "svec.h"
-#include <assert.h>
 #include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
@@ -141,7 +140,7 @@ svec_sort_unique(struct svec *svec)
 void
 svec_unique(struct svec *svec)
 {
-    assert(svec_is_sorted(svec));
+    ovs_assert(svec_is_sorted(svec));
     if (svec->n > 1) {
         /* This algorithm is lazy and sub-optimal, but it's "obviously correct"
          * and asymptotically optimal . */
@@ -179,8 +178,8 @@ svec_diff(const struct svec *a, const struct svec *b,
 {
     size_t i, j;
 
-    assert(svec_is_sorted(a));
-    assert(svec_is_sorted(b));
+    ovs_assert(svec_is_sorted(a));
+    ovs_assert(svec_is_sorted(b));
     if (a_only) {
         svec_init(a_only);
     }
@@ -233,7 +232,7 @@ svec_find(const struct svec *svec, const char *name)
 {
     char **p;
 
-    assert(svec_is_sorted(svec));
+    ovs_assert(svec_is_sorted(svec));
     p = bsearch(&name, svec->names, svec->n, sizeof *svec->names,
                 compare_strings);
     return p ? p - svec->names : SIZE_MAX;
@@ -261,7 +260,7 @@ svec_is_unique(const struct svec *svec)
 const char *
 svec_get_duplicate(const struct svec *svec)
 {
-    assert(svec_is_sorted(svec));
+    ovs_assert(svec_is_sorted(svec));
     if (svec->n > 1) {
         size_t i;
         for (i = 1; i < svec->n; i++) {
@@ -375,13 +374,13 @@ svec_join(const struct svec *svec,
 const char *
 svec_back(const struct svec *svec)
 {
-    assert(svec->n);
+    ovs_assert(svec->n);
     return svec->names[svec->n - 1];
 }
 
 void
 svec_pop_back(struct svec *svec)
 {
-    assert(svec->n);
+    ovs_assert(svec->n);
     free(svec->names[--svec->n]);
 }

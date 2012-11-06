@@ -16,7 +16,6 @@
 
 #include <config.h>
 #include "dynamic-string.h"
-#include <assert.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
@@ -165,7 +164,7 @@ ds_put_format_valist(struct ds *ds, const char *format, va_list args_)
         needed = vsnprintf(&ds->string[ds->length], available, format, args);
         va_end(args);
 
-        assert(needed < available);
+        ovs_assert(needed < available);
         ds->length += needed;
     }
 }

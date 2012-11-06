@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010, 2011 Nicira, Inc.
+/* Copyright (c) 2009, 2010, 2011, 2012 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,7 +17,6 @@
 
 #include "table.h"
 
-#include <assert.h>
 #include <limits.h>
 
 #include "json.h"
@@ -30,7 +29,7 @@
 static void
 add_column(struct ovsdb_table_schema *ts, struct ovsdb_column *column)
 {
-    assert(!shash_find(&ts->columns, column->name));
+    ovs_assert(!shash_find(&ts->columns, column->name));
     column->index = shash_count(&ts->columns);
     shash_add(&ts->columns, column->name, column);
 }
@@ -51,11 +50,11 @@ ovsdb_table_schema_create(const char *name, bool mutable,
 
     uuid = ovsdb_column_create("_uuid", false, true, &ovsdb_type_uuid);
     add_column(ts, uuid);
-    assert(uuid->index == OVSDB_COL_UUID);
+    ovs_assert(uuid->index == OVSDB_COL_UUID);
 
     version = ovsdb_column_create("_version", false, false, &ovsdb_type_uuid);
     add_column(ts, version);
-    assert(version->index == OVSDB_COL_VERSION);
+    ovs_assert(version->index == OVSDB_COL_VERSION);
 
     ts->n_indexes = 0;
     ts->indexes = NULL;

@@ -17,7 +17,6 @@
 
 #include "log.h"
 
-#include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <stdlib.h>
@@ -75,7 +74,7 @@ ovsdb_log_open(const char *name, enum ovsdb_log_open_mode open_mode,
 
     *filep = NULL;
 
-    assert(locking == -1 || locking == false || locking == true);
+    ovs_assert(locking == -1 || locking == false || locking == true);
     if (locking < 0) {
         locking = open_mode != OVSDB_LOG_READ_ONLY;
     }
@@ -318,7 +317,7 @@ error:
 void
 ovsdb_log_unread(struct ovsdb_log *file)
 {
-    assert(file->mode == OVSDB_LOG_READ);
+    ovs_assert(file->mode == OVSDB_LOG_READ);
     file->offset = file->prev_offset;
 }
 

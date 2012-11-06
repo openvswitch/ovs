@@ -16,7 +16,6 @@
 
 #include <config.h>
 #include "poll-loop.h"
-#include <assert.h>
 #include <errno.h>
 #include <inttypes.h>
 #include <poll.h>
@@ -289,7 +288,7 @@ static struct poll_waiter *
 new_waiter(int fd, short int events, const char *where)
 {
     struct poll_waiter *waiter = xzalloc(sizeof *waiter);
-    assert(fd >= 0);
+    ovs_assert(fd >= 0);
     waiter->fd = fd;
     waiter->events = events;
     waiter->where = where;
