@@ -364,9 +364,9 @@ struct ovs_key_nd {
 };
 
 /* Values for ovs_key_ipv4_tunnel->tun_flags */
-#define OVS_FLOW_TNL_F_DONT_FRAGMENT (1 << 0)
-#define OVS_FLOW_TNL_F_CSUM (1 << 1)
-#define OVS_FLOW_TNL_F_KEY (1 << 2)
+#define OVS_TNL_F_DONT_FRAGMENT (1 << 0)
+#define OVS_TNL_F_CSUM (1 << 1)
+#define OVS_TNL_F_KEY (1 << 2)
 
 struct ovs_key_ipv4_tunnel {
 	__be64 tun_id;

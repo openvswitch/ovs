@@ -52,9 +52,9 @@ static void get_gre_param(const struct tnl_mutable_config *mutable,
 	if (tun_key->ipv4_dst) {
 		*flags = 0;
 
-		if (tun_key->tun_flags & OVS_FLOW_TNL_F_KEY)
+		if (tun_key->tun_flags & OVS_TNL_F_KEY)
 			*flags = TNL_F_OUT_KEY_ACTION;
-		if (tun_key->tun_flags & OVS_FLOW_TNL_F_CSUM)
+		if (tun_key->tun_flags & OVS_TNL_F_CSUM)
 			*flags |= TNL_F_CSUM;
 		*tunnel_type = TNL_T_PROTO_GRE;
 		*out_key = tun_key->tun_id;
@@ -384,13 +384,13 @@ static u32 gre_flags_to_tunnel_flags(const struct tnl_mutable_config *mutable,
 
 	if (gre_flags & GRE_KEY) {
 		if (mutable->key.daddr && (mutable->flags & TNL_F_IN_KEY_MATCH))
-			tunnel_flags = OVS_FLOW_TNL_F_KEY;
+			tunnel_flags = OVS_TNL_F_KEY;
 		else if (!mutable->key.daddr)
-			tunnel_flags = OVS_FLOW_TNL_F_KEY;
+			tunnel_flags = OVS_TNL_F_KEY;
 	}
 
 	if (gre_flags & GRE_CSUM)
-		tunnel_flags |= OVS_FLOW_TNL_F_CSUM;
+		tunnel_flags |= OVS_TNL_F_CSUM;
 
 	return tunnel_flags;
 }

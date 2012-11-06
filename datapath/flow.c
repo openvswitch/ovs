@@ -1034,7 +1034,7 @@ int ovs_flow_from_nlattrs(struct sw_flow_key *swkey, int *key_lenp,
 
 		if (!tun_key->ipv4_dst)
 			return -EINVAL;
-		if (!(tun_key->tun_flags & OVS_FLOW_TNL_F_KEY))
+		if (!(tun_key->tun_flags & OVS_TNL_F_KEY))
 			return -EINVAL;
 
 		tun_id = nla_get_be64(a[OVS_KEY_ATTR_TUN_ID]);
@@ -1223,23 +1223,23 @@ int ovs_flow_metadata_from_nlattrs(struct sw_flow *flow, int key_len, const stru
 				tun_id = nla_get_be64(nla);
 
 				if (tun_key->ipv4_dst) {
-					if (!(tun_key->tun_flags & OVS_FLOW_TNL_F_KEY))
+					if (!(tun_key->tun_flags & OVS_TNL_F_KEY))
 						return -EINVAL;
 					if (tun_key->tun_id != tun_id)
 						return -EINVAL;
 					break;
 				}
 				tun_key->tun_id = tun_id;
-				tun_key->tun_flags |= OVS_FLOW_TNL_F_KEY;
+				tun_key->tun_flags |= OVS_TNL_F_KEY;
 
 				break;
 
 			case OVS_KEY_ATTR_IPV4_TUNNEL:
-				if (tun_key->tun_flags & OVS_FLOW_TNL_F_KEY) {
+				if (tun_key->tun_flags & OVS_TNL_F_KEY) {
 					tun_id = tun_key->tun_id;
 
 					memcpy(tun_key, nla_data(nla), sizeof(*tun_key));
-					if (!(tun_key->tun_flags & OVS_FLOW_TNL_F_KEY))
+					if (!(tun_key->tun_flags & OVS_TNL_F_KEY))
 						return -EINVAL;
 
 					if (tun_key->tun_id != tun_id)
@@ -1285,7 +1285,7 @@ int ovs_flow_to_nlattrs(const struct sw_flow_key *swkey, struct sk_buff *skb)
 		tun_key = nla_data(nla);
 		memcpy(tun_key, &swkey->phy.tun.tun_key, sizeof(*tun_key));
 	}
-	if ((swkey->phy.tun.tun_key.tun_flags & OVS_FLOW_TNL_F_KEY) &&
+	if ((swkey->phy.tun.tun_key.tun_flags & OVS_TNL_F_KEY) &&
 	    nla_put_be64(skb, OVS_KEY_ATTR_TUN_ID, swkey->phy.tun.tun_key.tun_id))
 		goto nla_put_failure;
 
