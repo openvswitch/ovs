@@ -353,15 +353,16 @@ static bool check_checksum(struct sk_buff *skb)
 }
 
 static u32 gre_flags_to_tunnel_flags(const struct tnl_mutable_config *mutable,
-				     __be16 gre_flags)
+				     __be16 gre_flags, __be64 *key)
 {
 	u32 tunnel_flags = 0;
 
 	if (gre_flags & GRE_KEY) {
-		if (mutable->key.daddr && (mutable->flags & TNL_F_IN_KEY_MATCH))
+		if (mutable->flags & TNL_F_IN_KEY_MATCH ||
+		    !mutable->key.daddr)
 			tunnel_flags = OVS_TNL_F_KEY;
-		else if (!mutable->key.daddr)
-			tunnel_flags = OVS_TNL_F_KEY;
+		else
+			*key = 0;
 	}
 
 	if (gre_flags & GRE_CSUM)
@@ -378,7 +379,8 @@ static int gre_rcv(struct sk_buff *skb)
 	int hdr_len;
 	struct iphdr *iph;
 	struct ovs_key_ipv4_tunnel tun_key;
-	__be16 flags;
+	__be16 gre_flags;
+	u32 tnl_flags;
 	__be64 key;
 	u32 tunnel_type;
 
@@ -387,7 +389,7 @@ static int gre_rcv(struct sk_buff *skb)
 	if (unlikely(!check_checksum(skb)))
 		goto error;
 
-	hdr_len = parse_header(ip_hdr(skb), &flags, &key, &tunnel_type);
+	hdr_len = parse_header(ip_hdr(skb), &gre_flags, &key, &tunnel_type);
 	if (unlikely(hdr_len < 0))
 		goto error;
 
@@ -402,7 +404,8 @@ static int gre_rcv(struct sk_buff *skb)
 		goto error;
 	}
 
-	tnl_tun_key_init(&tun_key, iph, key, gre_flags_to_tunnel_flags(mutable, flags));
+	tnl_flags = gre_flags_to_tunnel_flags(mutable, gre_flags, &key);
+	tnl_tun_key_init(&tun_key, iph, key, tnl_flags);
 	OVS_CB(skb)->tun_key = &tun_key;
 
 	__skb_pull(skb, hdr_len);

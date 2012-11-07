@@ -334,8 +334,10 @@ static int capwap_rcv(struct sock *sk, struct sk_buff *skb)
 	}
 
 	if (key_present && mutable->key.daddr &&
-			 !(mutable->flags & TNL_F_IN_KEY_MATCH))
+			 !(mutable->flags & TNL_F_IN_KEY_MATCH)) {
 		key_present = false;
+		key = 0;
+	}
 
 	tnl_tun_key_init(&tun_key, iph, key, key_present ? OVS_TNL_F_KEY : 0);
 	OVS_CB(skb)->tun_key = &tun_key;
