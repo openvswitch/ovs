@@ -1,9 +1,8 @@
 #include <linux/ipv6.h>
+#include <linux/version.h>
 #include <net/ipv6.h>
 
-/* This function is upstream but not the version which supplies the
- * fragment offset.  We plan to propose the extended version.
- */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,3,0)
 int rpl_ipv6_skip_exthdr(const struct sk_buff *skb, int start,
 			 u8 *nexthdrp, __be16 *frag_offp)
 {
@@ -46,6 +45,7 @@ int rpl_ipv6_skip_exthdr(const struct sk_buff *skb, int start,
 	*nexthdrp = nexthdr;
 	return start;
 }
+#endif /* Kernel version < 3.3 */
 
 /*
  * find the offset to specified header or the protocol number of last header
