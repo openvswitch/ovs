@@ -1181,7 +1181,7 @@ ofputil_encode_hello(uint32_t allowed_versions)
         struct ofp_hello_elem_header *oheh;
         uint16_t map_len;
 
-        map_len = sizeof(uint32_t) / CHAR_BIT;
+        map_len = sizeof allowed_versions;
         oheh = ofpbuf_put_zeros(msg, ROUND_UP(map_len + sizeof *oheh, 8));
         oheh->type = htons(OFPHET_VERSIONBITMAP);
         oheh->length = htons(map_len + sizeof *oheh);
