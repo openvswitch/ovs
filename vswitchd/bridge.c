@@ -2797,7 +2797,7 @@ bridge_configure_remotes(struct bridge *br,
         n_ocs++;
     }
 
-    ofproto_set_controllers(br->ofproto, ocs, n_ocs);
+    ofproto_set_controllers(br->ofproto, ocs, n_ocs, 0);
     free(ocs[0].target); /* From bridge_ofproto_controller_for_mgmt(). */
     free(ocs);
 

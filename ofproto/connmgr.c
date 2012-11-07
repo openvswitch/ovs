@@ -296,8 +296,8 @@ connmgr_run(struct connmgr *mgr,
             char *name;
 
             /* Passing default value for creation of the rconn */
-            rconn = rconn_create(ofservice->probe_interval, 0,
-                                 ofservice->dscp, 0);
+            rconn = rconn_create(ofservice->probe_interval, 0, ofservice->dscp,
+                                 vconn_get_allowed_versions(vconn));
             name = ofconn_make_name(mgr, vconn_get_name(vconn));
             rconn_connect_unreliably(rconn, vconn, name);
             free(name);
@@ -400,7 +400,8 @@ connmgr_retry(struct connmgr *mgr)
 
 /* OpenFlow configuration. */
 
-static void add_controller(struct connmgr *, const char *target, uint8_t dscp);
+static void add_controller(struct connmgr *, const char *target, uint8_t dscp,
+                           uint32_t allowed_versions);
 static struct ofconn *find_controller_by_target(struct connmgr *,
                                                 const char *target);
 static void update_fail_open(struct connmgr *);
@@ -491,7 +492,7 @@ connmgr_free_controller_info(struct shash *info)
 void
 connmgr_set_controllers(struct connmgr *mgr,
                         const struct ofproto_controller *controllers,
-                        size_t n_controllers)
+                        size_t n_controllers, uint32_t allowed_versions)
 {
     bool had_controllers = connmgr_has_controllers(mgr);
     struct shash new_controllers;
@@ -509,13 +510,13 @@ connmgr_set_controllers(struct connmgr *mgr,
             if (!find_controller_by_target(mgr, c->target)) {
                 VLOG_INFO("%s: added primary controller \"%s\"",
                           mgr->name, c->target);
-                add_controller(mgr, c->target, c->dscp);
+                add_controller(mgr, c->target, c->dscp, allowed_versions);
             }
         } else if (!pvconn_verify_name(c->target)) {
             if (!ofservice_lookup(mgr, c->target)) {
                 VLOG_INFO("%s: added service controller \"%s\"",
                           mgr->name, c->target);
-                ofservice_create(mgr, c->target, 0, c->dscp);
+                ofservice_create(mgr, c->target, allowed_versions, c->dscp);
             }
         } else {
             VLOG_WARN_RL(&rl, "%s: unsupported controller \"%s\"",
@@ -610,12 +611,13 @@ connmgr_has_snoops(const struct connmgr *mgr)
 /* Creates a new controller for 'target' in 'mgr'.  update_controller() needs
  * to be called later to finish the new ofconn's configuration. */
 static void
-add_controller(struct connmgr *mgr, const char *target, uint8_t dscp)
+add_controller(struct connmgr *mgr, const char *target, uint8_t dscp,
+               uint32_t allowed_versions)
 {
     char *name = ofconn_make_name(mgr, target);
     struct ofconn *ofconn;
 
-    ofconn = ofconn_create(mgr, rconn_create(5, 8, dscp, 0),
+    ofconn = ofconn_create(mgr, rconn_create(5, 8, dscp, allowed_versions),
                            OFCONN_PRIMARY, true);
     ofconn->pktbuf = pktbuf_create();
     rconn_connect(ofconn->rconn, target, name);

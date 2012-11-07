@@ -85,7 +85,8 @@ bool connmgr_has_controllers(const struct connmgr *);
 void connmgr_get_controller_info(struct connmgr *, struct shash *);
 void connmgr_free_controller_info(struct shash *);
 void connmgr_set_controllers(struct connmgr *,
-                             const struct ofproto_controller[], size_t n);
+                             const struct ofproto_controller[], size_t n,
+                             uint32_t allowed_versions);
 void connmgr_reconnect(const struct connmgr *);
 
 int connmgr_set_snoops(struct connmgr *, const struct sset *snoops);

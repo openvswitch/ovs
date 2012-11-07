@@ -218,7 +218,8 @@ int ofproto_port_query_by_name(const struct ofproto *, const char *devname,
 uint64_t ofproto_get_datapath_id(const struct ofproto *);
 void ofproto_set_datapath_id(struct ofproto *, uint64_t datapath_id);
 void ofproto_set_controllers(struct ofproto *,
-                             const struct ofproto_controller *, size_t n);
+                             const struct ofproto_controller *, size_t n,
+                             uint32_t allowed_versions);
 void ofproto_set_fail_mode(struct ofproto *, enum ofproto_fail_mode fail_mode);
 void ofproto_reconnect_controllers(struct ofproto *);
 void ofproto_set_extra_in_band_remotes(struct ofproto *,
