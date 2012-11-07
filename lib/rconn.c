@@ -131,6 +131,8 @@ struct rconn {
 #define MAX_MONITORS 8
     struct vconn *monitors[8];
     size_t n_monitors;
+
+    uint32_t allowed_versions;
 };
 
 static unsigned int elapsed_in_this_state(const struct rconn *);
@@ -163,9 +165,17 @@ static bool rconn_logging_connection_attempts__(const struct rconn *);
  * 8 seconds is used.
  *
  * The new rconn is initially unconnected.  Use rconn_connect() or
- * rconn_connect_unreliably() to connect it. */
+ * rconn_connect_unreliably() to connect it.
+ *
+ * Connections made by the rconn will automatically negotiate an OpenFlow
+ * protocol version acceptable to both peers on the connection.  The version
+ * negotiated will be one of those in the 'allowed_versions' bitmap:
+ * version 'x' is allowed if allowed_versions & (1 << x) is nonzero.  If
+ * 'allowed_versions' is zero, then OFPUTIL_DEFAULT_VERSIONS are allowed.
+ **/
 struct rconn *
-rconn_create(int probe_interval, int max_backoff, uint8_t dscp)
+rconn_create(int probe_interval, int max_backoff, uint8_t dscp,
+             uint32_t allowed_versions)
 {
     struct rconn *rc = xzalloc(sizeof *rc);
 
@@ -203,6 +213,9 @@ rconn_create(int probe_interval, int max_backoff, uint8_t dscp)
     rconn_set_dscp(rc, dscp);
 
     rc->n_monitors = 0;
+    rc->allowed_versions = allowed_versions
+        ? allowed_versions
+        : OFPUTIL_DEFAULT_VERSIONS;
 
     return rc;
 }
@@ -354,7 +367,8 @@ reconnect(struct rconn *rc)
         VLOG_INFO("%s: connecting...", rc->name);
     }
     rc->n_attempted_connections++;
-    retval = vconn_open(rc->target, 0, &rc->vconn, rc->dscp);
+    retval = vconn_open(rc->target, rc->allowed_versions,
+                        &rc->vconn, rc->dscp);
     if (!retval) {
         rc->remote_ip = vconn_get_remote_ip(rc->vconn);
         rc->local_ip = vconn_get_local_ip(rc->vconn);

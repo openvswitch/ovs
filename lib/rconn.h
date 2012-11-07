@@ -38,7 +38,8 @@ struct vconn;
 struct rconn_packet_counter;
 
 struct rconn *rconn_create(int inactivity_probe_interval,
-			   int max_backoff, uint8_t dscp);
+			   int max_backoff, uint8_t dscp,
+			   uint32_t allowed_versions);
 void rconn_set_dscp(struct rconn *rc, uint8_t dscp);
 uint8_t rconn_get_dscp(const struct rconn *rc);
 void rconn_set_max_backoff(struct rconn *, int max_backoff);
