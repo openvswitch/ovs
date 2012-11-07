@@ -622,7 +622,7 @@ int ovs_flow_extract(struct sk_buff *skb, u16 in_port, struct sw_flow_key *key,
 
 	key->phy.priority = skb->priority;
 	if (OVS_CB(skb)->tun_key)
-		memcpy(&key->phy.tun.tun_key, OVS_CB(skb)->tun_key, sizeof(key->phy.tun.tun_key));
+		memcpy(&key->tun_key, OVS_CB(skb)->tun_key, sizeof(key->tun_key));
 	key->phy.in_port = in_port;
 
 	skb_reset_mac_header(skb);
@@ -784,10 +784,10 @@ static u32 ovs_flow_hash(const struct sw_flow_key *key, int key_start, int key_l
 
 static int flow_key_start(struct sw_flow_key *key)
 {
-	if (key->phy.tun.tun_key.ipv4_dst)
+	if (key->tun_key.ipv4_dst)
 		return 0;
 	else
-		return offsetof(struct sw_flow_key, phy.priority);
+		return offsetof(struct sw_flow_key, phy);
 }
 
 struct sw_flow *ovs_flow_tbl_lookup(struct flow_table *table,
@@ -1041,8 +1041,7 @@ int ovs_flow_from_nlattrs(struct sw_flow_key *swkey, int *key_lenp,
 		if (tun_id != tun_key->tun_id)
 			return -EINVAL;
 
-		memcpy(&swkey->phy.tun.tun_key, tun_key,
-			sizeof(swkey->phy.tun.tun_key));
+		memcpy(&swkey->tun_key, tun_key, sizeof(swkey->tun_key));
 
 		attrs &= ~(1ULL << OVS_KEY_ATTR_TUN_ID);
 		attrs &= ~(1ULL << OVS_KEY_ATTR_IPV4_TUNNEL);
@@ -1053,8 +1052,7 @@ int ovs_flow_from_nlattrs(struct sw_flow_key *swkey, int *key_lenp,
 		if (!tun_key->ipv4_dst)
 			return -EINVAL;
 
-		memcpy(&swkey->phy.tun.tun_key, tun_key,
-			sizeof(swkey->phy.tun.tun_key));
+		memcpy(&swkey->tun_key, tun_key, sizeof(swkey->tun_key));
 
 		attrs &= ~(1ULL << OVS_KEY_ATTR_IPV4_TUNNEL);
 	}
@@ -1198,14 +1196,14 @@ int ovs_flow_from_nlattrs(struct sw_flow_key *swkey, int *key_lenp,
 
 int ovs_flow_metadata_from_nlattrs(struct sw_flow *flow, int key_len, const struct nlattr *attr)
 {
-	struct ovs_key_ipv4_tunnel *tun_key = &flow->key.phy.tun.tun_key;
+	struct ovs_key_ipv4_tunnel *tun_key = &flow->key.tun_key;
 	const struct nlattr *nla;
 	int rem;
 	__be64 tun_id = 0;
 
 	flow->key.phy.in_port = DP_MAX_PORTS;
 	flow->key.phy.priority = 0;
-	memset(tun_key, 0, sizeof(flow->key.phy.tun.tun_key));
+	memset(tun_key, 0, sizeof(flow->key.tun_key));
 
 	nla_for_each_nested(nla, attr, rem) {
 		int type = nla_type(nla);
@@ -1277,16 +1275,16 @@ int ovs_flow_to_nlattrs(const struct sw_flow_key *swkey, struct sk_buff *skb)
 	    nla_put_u32(skb, OVS_KEY_ATTR_PRIORITY, swkey->phy.priority))
 		goto nla_put_failure;
 
-	if (swkey->phy.tun.tun_key.ipv4_dst) {
+	if (swkey->tun_key.ipv4_dst) {
 		struct ovs_key_ipv4_tunnel *tun_key;
 		nla = nla_reserve(skb, OVS_KEY_ATTR_IPV4_TUNNEL, sizeof(*tun_key));
 		if (!nla)
 			goto nla_put_failure;
 		tun_key = nla_data(nla);
-		memcpy(tun_key, &swkey->phy.tun.tun_key, sizeof(*tun_key));
+		memcpy(tun_key, &swkey->tun_key, sizeof(*tun_key));
 	}
-	if ((swkey->phy.tun.tun_key.tun_flags & OVS_TNL_F_KEY) &&
-	    nla_put_be64(skb, OVS_KEY_ATTR_TUN_ID, swkey->phy.tun.tun_key.tun_id))
+	if ((swkey->tun_key.tun_flags & OVS_TNL_F_KEY) &&
+	    nla_put_be64(skb, OVS_KEY_ATTR_TUN_ID, swkey->tun_key.tun_id))
 		goto nla_put_failure;
 
 	if (swkey->phy.in_port != DP_MAX_PORTS &&

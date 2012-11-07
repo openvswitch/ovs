@@ -41,10 +41,8 @@ struct sw_flow_actions {
 };
 
 struct sw_flow_key {
+	struct ovs_key_ipv4_tunnel tun_key;  /* Encapsulating tunnel key. */
 	struct {
-		union {
-			struct ovs_key_ipv4_tunnel tun_key;  /* Encapsulating tunnel key. */
-		} tun;
 		u32	priority;	/* Packet QoS priority. */
 		u16	in_port;	/* Input switch port (or DP_MAX_PORTS). */
 	} phy;
