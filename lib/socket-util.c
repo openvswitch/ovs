@@ -612,6 +612,7 @@ exit:
         }
     } else if (fd >= 0) {
         close(fd);
+        fd = -1;
     }
     *fdp = fd;
     return error;
