@@ -343,6 +343,14 @@ vconn_get_allowed_versions(const struct vconn *vconn)
     return vconn->allowed_versions;
 }
 
+/* Sets the allowed_versions of 'vconn', overriding
+ * the allowed_versions passed to vconn_open(). */
+void
+vconn_set_allowed_versions(struct vconn *vconn, uint32_t allowed_versions)
+{
+    vconn->allowed_versions = allowed_versions;
+}
+
 /* Returns the IP address of the peer, or 0 if the peer is not connected over
  * an IP-based protocol or if its IP address is not yet known. */
 ovs_be32

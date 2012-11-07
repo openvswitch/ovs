@@ -39,6 +39,8 @@ int vconn_open(const char *name, uint32_t allowed_versions,
 void vconn_close(struct vconn *);
 const char *vconn_get_name(const struct vconn *);
 uint32_t vconn_get_allowed_versions(const struct vconn *vconn);
+void vconn_set_allowed_versions(struct vconn *vconn,
+                                uint32_t allowed_versions);
 ovs_be32 vconn_get_remote_ip(const struct vconn *);
 ovs_be16 vconn_get_remote_port(const struct vconn *);
 ovs_be32 vconn_get_local_ip(const struct vconn *);
