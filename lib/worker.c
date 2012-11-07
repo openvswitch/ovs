@@ -37,6 +37,11 @@
 
 VLOG_DEFINE_THIS_MODULE(worker);
 
+/* ovs_assert() logs the assertion message and logging sometimes goes through a
+ * worker, so using ovs_assert() in this source file could cause recursion. */
+#undef ovs_assert
+#define ovs_assert use_assert_instead_of_ovs_assert_in_this_module
+
 /* Header for an RPC request. */
 struct worker_request {
     size_t request_len;              /* Length of the payload in bytes. */
