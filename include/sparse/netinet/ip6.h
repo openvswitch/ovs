@@ -44,6 +44,13 @@ struct ip6_hdr {
 #define ip6_hlim  ip6_ctlun.ip6_un1.ip6_un1_hlim
 #define ip6_hops  ip6_ctlun.ip6_un1.ip6_un1_hlim
 
+struct ip6_rthdr {
+    uint8_t ip6r_nxt;
+    uint8_t ip6r_len;
+    uint8_t ip6r_type;
+    uint8_t ip6r_segleft;
+};
+
 struct ip6_ext {
     uint8_t ip6e_nxt;
     uint8_t ip6e_len;
