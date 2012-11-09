@@ -2718,6 +2718,20 @@ ofctl_ofp_print(int argc, char *argv[])
     ofpbuf_uninit(&packet);
 }
 
+/* "encode-hello BITMAP...": Encodes each BITMAP as an OpenFlow hello message
+ * and dumps each message in hex.  */
+static void
+ofctl_encode_hello(int argc OVS_UNUSED, char *argv[])
+{
+    uint32_t bitmap = strtol(argv[1], NULL, 0);
+    struct ofpbuf *hello;
+
+    hello = ofputil_encode_hello(bitmap);
+    ovs_hex_dump(stdout, hello->data, hello->size, 0, false);
+    ofp_print(stdout, hello->data, hello->size, verbosity);
+    ofpbuf_delete(hello);
+}
+
 static const struct command all_commands[] = {
     { "show", 1, 1, ofctl_show },
     { "monitor", 1, 3, ofctl_monitor },
@@ -2758,6 +2772,7 @@ static const struct command all_commands[] = {
     { "check-vlan", 2, 2, ofctl_check_vlan },
     { "print-error", 1, 1, ofctl_print_error },
     { "ofp-print", 1, 2, ofctl_ofp_print },
+    { "encode-hello", 1, 1, ofctl_encode_hello },
 
     { NULL, 0, 0, NULL },
 };

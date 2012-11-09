@@ -84,6 +84,65 @@ OFPT_HELLO (xid=0x0):
 ])
 AT_CLEANUP
 
+AT_SETUP([OFPT_HELLO with higher than supported version])
+AT_KEYWORDS([ofp-print])
+AT_CHECK([ovs-ofctl ofp-print "0f 00 00 08 00 00 00 00"], [0],
+[dnl
+OFPT_HELLO (OF 0x0f) (xid=0x0):
+ version bitmap: 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f
+])
+AT_CHECK([ovs-ofctl ofp-print "40 00 00 08 00 00 00 00"], [0],
+[dnl
+OFPT_HELLO (OF 0x40) (xid=0x0):
+ version bitmap: 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f
+])
+AT_CHECK([ovs-ofctl ofp-print "3f 00 00 18 00 00 00 00 00 01 00 0c aa aa aa aa aa aa aa aa 00 00 00 00"], [0],
+[dnl
+OFPT_HELLO (OF 0x3f) (xid=0x0):
+ version bitmap: 0x01, 0x03, 0x05, 0x07, 0x09, 0x0b, 0x0d, 0x0f, 0x11, 0x13, 0x15, 0x17, 0x19, 0x1b, 0x1d, 0x1f
+])
+AT_CLEANUP
+
+AT_SETUP([OFPT_HELLO with contradictory version bitmaps])
+AT_KEYWORDS([ofp-print])
+dnl Bitmap claims support for no versions at all.
+AT_CHECK([ovs-ofctl '-vPATTERN:console:%c|%p|%m' ofp-print "01 00 00 10 00 00 00 00 00 01 00 08 00 00 00 00"], [0],
+[OFPT_HELLO (xid=0x0):
+ version bitmap: 0x01
+ unknown data in hello:
+00000000  01 00 00 10 00 00 00 00-00 01 00 08 00 00 00 00 |................|
+], [dnl
+ofp_util|WARN|peer does not support any OpenFlow version (between 0x01 and 0x1f)
+])
+dnl Bitmap claims support for only versions above 0x1f.
+AT_CHECK([ovs-ofctl '-vPATTERN:console:%c|%p|%m' ofp-print "3f 00 00 18 00 00 00 00 00 01 00 0c 00 00 00 00 aa aa aa aa 00 00 00 00"], [0],
+[OFPT_HELLO (OF 0x3f) (xid=0x0):
+ version bitmap: 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f
+ unknown data in hello:
+00000000  3f 00 00 18 00 00 00 00-00 01 00 0c 00 00 00 00 |?...............|
+00000010  aa aa aa aa 00 00 00 00-                        |........        |
+], [dnl
+ofp_util|WARN|peer does not support any OpenFlow version (between 0x01 and 0x1f)
+])
+dnl Bitmap claims support for nonexistent version 0x00.
+AT_CHECK([ovs-ofctl '-vPATTERN:console:%c|%p|%m' ofp-print "01 00 00 10 00 00 00 00 00 01 00 08 00 00 00 f1"], [0], [dnl
+OFPT_HELLO (xid=0x0):
+ version bitmap: 0x04, 0x05, 0x06, 0x07
+], [dnl
+ofp_util|WARN|peer claims to support invalid OpenFlow version 0x00
+])
+dnl Bitmap claims support for only nonexistent version 0x00.
+AT_CHECK([ovs-ofctl '-vPATTERN:console:%c|%p|%m' ofp-print "01 00 00 10 00 00 00 00 00 01 00 08 00 00 00 01"], [0], [dnl
+OFPT_HELLO (xid=0x0):
+ version bitmap: 0x01
+ unknown data in hello:
+00000000  01 00 00 10 00 00 00 00-00 01 00 08 00 00 00 01 |................|
+], [dnl
+ofp_util|WARN|peer claims to support invalid OpenFlow version 0x00
+ofp_util|WARN|peer does not support any OpenFlow version (between 0x01 and 0x1f)
+])
+AT_CLEANUP
+
 dnl OFPT_ERROR tests are in ofp-errors.at.
 
 AT_SETUP([OFPT_ECHO_REQUEST, empty payload])

@@ -16,6 +16,7 @@ TESTSUITE_AT = \
 	tests/daemon-py.at \
 	tests/ofp-actions.at \
 	tests/ofp-print.at \
+	tests/ofp-util.at \
 	tests/ofp-errors.at \
 	tests/ovs-ofctl.at \
 	tests/odp.at \
