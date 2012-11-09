@@ -92,19 +92,36 @@ struct list;
  *      to <member>" indicates this, e.g. "struct ofp11_packet_in up to data".
  */
 enum ofpraw {
-/* Standard messages. */
+/* Immutable standard messages.
+ *
+ * The OpenFlow standard promises to preserve these messages and their numbers
+ * in future versions, so we mark them as <all>, which covers every OpenFlow
+ * version numbered 0x01...0xff, rather than as OF1.0+, which covers only
+ * OpenFlow versions that we otherwise implement.
+ *
+ * Without <all> here, then we would fail to decode "hello" messages that
+ * announce a version higher than we understand, even though there still could
+ * be a version in common with the peer that we do understand.  The <all>
+ * keyword is less useful for the other messages, because our OpenFlow channels
+ * accept only OpenFlow messages with a previously negotiated version.
+ */
 
-    /* OFPT 1.0+ (0): uint8_t[]. */
+    /* OFPT <all> (0): uint8_t[]. */
     OFPRAW_OFPT_HELLO,
 
-    /* OFPT 1.0+ (1): struct ofp_error_msg, uint8_t[]. */
+    /* OFPT <all> (1): struct ofp_error_msg, uint8_t[]. */
     OFPRAW_OFPT_ERROR,
 
-    /* OFPT 1.0+ (2): uint8_t[]. */
+    /* OFPT <all> (2): uint8_t[]. */
     OFPRAW_OFPT_ECHO_REQUEST,
 
-    /* OFPT 1.0+ (3): uint8_t[]. */
+    /* OFPT <all> (3): uint8_t[]. */
     OFPRAW_OFPT_ECHO_REPLY,
+
+/* Other standard messages.
+ *
+ * The meanings of these messages can (and often do) change from one version
+ * of OpenFlow to another. */
 
     /* OFPT 1.0+ (5): void. */
     OFPRAW_OFPT_FEATURES_REQUEST,

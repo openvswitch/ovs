@@ -46,6 +46,9 @@ AT_KEYWORDS([ofp-print])
 AT_CHECK([ovs-ofctl ofp-print 0100000800000000], [0], [dnl
 OFPT_HELLO (xid=0x0):
 ])
+AT_CHECK([ovs-ofctl ofp-print 0500000800000000], [0], [dnl
+OFPT_HELLO (OF 0x05) (xid=0x0):
+])
 AT_CLEANUP
 
 AT_SETUP([OFPT_HELLO with extra data])
