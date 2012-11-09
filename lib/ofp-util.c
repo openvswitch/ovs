@@ -1188,6 +1188,8 @@ ofputil_encode_hello(uint32_t allowed_versions)
         oheh->type = htons(OFPHET_VERSIONBITMAP);
         oheh->length = htons(map_len + sizeof *oheh);
         *(ovs_be32 *)(oheh + 1) = htonl(allowed_versions);
+
+        ofpmsg_update_length(msg);
     }
 
     return msg;
