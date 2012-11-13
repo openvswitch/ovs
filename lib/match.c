@@ -125,6 +125,7 @@ match_init_exact(struct match *match, const struct flow *flow)
 
     match->flow = *flow;
     match->flow.skb_priority = 0;
+    match->flow.skb_mark = 0;
     memset(&match->flow.tunnel, 0, sizeof match->flow.tunnel);
     match->flow.tunnel.tun_id = tun_id;
     flow_wildcards_init_exact(&match->wc);
@@ -655,7 +656,7 @@ match_format(const struct match *match, struct ds *s, unsigned int priority)
 
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 17);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 18);
 
     if (priority != OFP_DEFAULT_PRIORITY) {
         ds_put_format(s, "priority=%u,", priority);

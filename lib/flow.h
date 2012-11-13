@@ -36,7 +36,7 @@ struct ofpbuf;
 /* This sequence number should be incremented whenever anything involving flows
  * or the wildcarding of flows changes.  This will cause build assertion
  * failures in places which likely need to be updated. */
-#define FLOW_WC_SEQ 17
+#define FLOW_WC_SEQ 18
 
 #define FLOW_N_REGS 8
 BUILD_ASSERT_DECL(FLOW_N_REGS <= NXM_NX_MAX_REGS);
@@ -77,6 +77,7 @@ struct flow {
     ovs_be32 nw_dst;            /* IPv4 destination address. */
     ovs_be32 ipv6_label;        /* IPv6 flow label. */
     uint16_t in_port;           /* OpenFlow port number of input port. */
+    uint32_t skb_mark;          /* Packet mark. */
     ovs_be16 vlan_tci;          /* If 802.1Q, TCI | VLAN_CFI; otherwise 0. */
     ovs_be16 dl_type;           /* Ethernet frame type. */
     ovs_be16 tp_src;            /* TCP/UDP source port. */
@@ -96,8 +97,8 @@ BUILD_ASSERT_DECL(sizeof(struct flow) % 4 == 0);
 #define FLOW_U32S (sizeof(struct flow) / 4)
 
 /* Remember to update FLOW_WC_SEQ when changing 'struct flow'. */
-BUILD_ASSERT_DECL(sizeof(struct flow) == sizeof(struct flow_tnl) + 144 &&
-                  FLOW_WC_SEQ == 17);
+BUILD_ASSERT_DECL(sizeof(struct flow) == sizeof(struct flow_tnl) + 152 &&
+                  FLOW_WC_SEQ == 18);
 
 /* Represents the metadata fields of struct flow. */
 struct flow_metadata {
@@ -107,8 +108,8 @@ struct flow_metadata {
     uint16_t in_port;                /* OpenFlow port or zero. */
 };
 
-void flow_extract(struct ofpbuf *, uint32_t priority, const struct flow_tnl *,
-                  uint16_t in_port, struct flow *);
+void flow_extract(struct ofpbuf *, uint32_t priority, uint32_t mark,
+                  const struct flow_tnl *, uint16_t in_port, struct flow *);
 void flow_zero_wildcards(struct flow *, const struct flow_wildcards *);
 void flow_get_metadata(const struct flow *, struct flow_metadata *);
 

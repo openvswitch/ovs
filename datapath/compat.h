@@ -81,4 +81,37 @@ static inline void skb_clear_rxhash(struct sk_buff *skb)
 #define SET_NETNSOK    .netnsok = true,
 #endif
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,20)
+#ifdef CONFIG_NETFILTER
+static inline u32 skb_get_mark(struct sk_buff *skb)
+{
+	return skb->nfmark;
+}
+
+static inline void skb_set_mark(struct sk_buff *skb, u32 mark)
+{
+	skb->nfmark = mark;
+}
+#else /* CONFIG_NETFILTER */
+static inline u32 skb_get_mark(struct sk_buff *skb)
+{
+	return 0;
+}
+
+static inline void skb_set_mark(struct sk_buff *skb, u32 mark)
+{
+}
+#endif
+#else /* before 2.6.20 */
+static inline u32 skb_get_mark(struct sk_buff *skb)
+{
+	return skb->mark;
+}
+
+static inline void skb_set_mark(struct sk_buff *skb, u32 mark)
+{
+	skb->mark = mark;
+}
+#endif /* after 2.6.20 */
+
 #endif /* compat.h */

@@ -63,7 +63,7 @@ ofp_packet_to_string(const void *data, size_t len)
     struct flow flow;
 
     ofpbuf_use_const(&buf, data, len);
-    flow_extract(&buf, 0, NULL, 0, &flow);
+    flow_extract(&buf, 0, 0, NULL, 0, &flow);
     flow_format(&ds, &flow);
 
     if (buf.l7) {

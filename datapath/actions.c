@@ -435,6 +435,10 @@ static int execute_set_action(struct sk_buff *skb,
 		skb->priority = nla_get_u32(nested_attr);
 		break;
 
+	case OVS_KEY_ATTR_SKB_MARK:
+		skb_set_mark(skb, nla_get_u32(nested_attr));
+		break;
+
 	case OVS_KEY_ATTR_TUN_ID:
 		/* If we're only using the TUN_ID action, store the value in a
 		 * temporary instance of struct ovs_key_ipv4_tunnel on the stack.

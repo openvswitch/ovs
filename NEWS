@@ -3,7 +3,9 @@ v1.9.0 - xx xxx xxxx
     - The tunneling code no longer assumes input and output keys are symmetric.
       If they are not, PMTUD needs to be disabled for tunneling to work. Note
       this only applies to flow-based keys.
-    - Datapath: Support for ipv6 set action.
+    - Datapath:
+      - Support for ipv6 set action.
+      - SKB mark matching and setting.
     - FreeBSD is now a supported platform, thanks to code contributions from
       Gaetano Catalli, Ed Maste, and Giuseppe Lettieri.
     - ovs-bugtool: New --ovs option to report only OVS related information.
