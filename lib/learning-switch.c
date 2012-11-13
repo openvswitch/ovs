@@ -539,7 +539,7 @@ process_packet_in(struct lswitch *sw, const struct ofp_header *oh)
 
     /* Extract flow data from 'opi' into 'flow'. */
     ofpbuf_use_const(&pkt, pi.packet, pi.packet_len);
-    flow_extract(&pkt, 0, NULL, pi.fmd.in_port, &flow);
+    flow_extract(&pkt, 0, 0, NULL, pi.fmd.in_port, &flow);
     flow.tunnel.tun_id = pi.fmd.tun_id;
 
     /* Choose output port. */

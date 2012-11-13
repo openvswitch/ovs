@@ -624,6 +624,7 @@ int ovs_flow_extract(struct sk_buff *skb, u16 in_port, struct sw_flow_key *key,
 	if (OVS_CB(skb)->tun_key)
 		memcpy(&key->tun_key, OVS_CB(skb)->tun_key, sizeof(key->tun_key));
 	key->phy.in_port = in_port;
+	key->phy.skb_mark = skb_get_mark(skb);
 
 	skb_reset_mac_header(skb);
 
@@ -835,6 +836,7 @@ const int ovs_key_lens[OVS_KEY_ATTR_MAX + 1] = {
 	[OVS_KEY_ATTR_ENCAP] = -1,
 	[OVS_KEY_ATTR_PRIORITY] = sizeof(u32),
 	[OVS_KEY_ATTR_IN_PORT] = sizeof(u32),
+	[OVS_KEY_ATTR_SKB_MARK] = sizeof(u32),
 	[OVS_KEY_ATTR_ETHERNET] = sizeof(struct ovs_key_ethernet),
 	[OVS_KEY_ATTR_VLAN] = sizeof(__be16),
 	[OVS_KEY_ATTR_ETHERTYPE] = sizeof(__be16),
@@ -1024,6 +1026,15 @@ int ovs_flow_from_nlattrs(struct sw_flow_key *swkey, int *key_lenp,
 	} else {
 		swkey->phy.in_port = DP_MAX_PORTS;
 	}
+	if (attrs & (1 << OVS_KEY_ATTR_SKB_MARK)) {
+		uint32_t mark = nla_get_u32(a[OVS_KEY_ATTR_SKB_MARK]);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,20) && !defined(CONFIG_NETFILTER)
+		if (mark != 0)
+			return -EINVAL;
+#endif
+		swkey->phy.skb_mark = mark;
+		attrs &= ~(1 << OVS_KEY_ATTR_SKB_MARK);
+	}
 
 	if (attrs & (1ULL << OVS_KEY_ATTR_TUN_ID) &&
 	    attrs & (1ULL << OVS_KEY_ATTR_IPV4_TUNNEL)) {
@@ -1203,6 +1214,7 @@ int ovs_flow_metadata_from_nlattrs(struct sw_flow *flow, int key_len, const stru
 
 	flow->key.phy.in_port = DP_MAX_PORTS;
 	flow->key.phy.priority = 0;
+	flow->key.phy.skb_mark = 0;
 	memset(tun_key, 0, sizeof(flow->key.tun_key));
 
 	nla_for_each_nested(nla, attr, rem) {
@@ -1254,6 +1266,14 @@ int ovs_flow_metadata_from_nlattrs(struct sw_flow *flow, int key_len, const stru
 					return -EINVAL;
 				flow->key.phy.in_port = nla_get_u32(nla);
 				break;
+
+			case OVS_KEY_ATTR_SKB_MARK:
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,20) && !defined(CONFIG_NETFILTER)
+				if (nla_get_u32(nla) != 0)
+					return -EINVAL;
+#endif
+				flow->key.phy.skb_mark = nla_get_u32(nla);
+				break;
 			}
 		}
 	}
@@ -1289,6 +1309,10 @@ int ovs_flow_to_nlattrs(const struct sw_flow_key *swkey, struct sk_buff *skb)
 
 	if (swkey->phy.in_port != DP_MAX_PORTS &&
 	    nla_put_u32(skb, OVS_KEY_ATTR_IN_PORT, swkey->phy.in_port))
+		goto nla_put_failure;
+
+	if (swkey->phy.skb_mark &&
+	    nla_put_u32(skb, OVS_KEY_ATTR_SKB_MARK, swkey->phy.skb_mark))
 		goto nla_put_failure;
 
 	nla = nla_reserve(skb, OVS_KEY_ATTR_ETHERNET, sizeof(*eth_key));

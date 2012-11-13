@@ -6,7 +6,7 @@ These commands manage the core OpenFlow switch implementation (called
 Lists the names of the running ofproto instances.  These are the names
 that may be used on \fBofproto/trace\fR.
 .
-.IP "\fBofproto/trace \fIswitch priority tun_id in_port packet\fR"
+.IP "\fBofproto/trace \fIswitch priority tun_id in_port mark packet\fR"
 .IQ "\fBofproto/trace \fIswitch flow \fB\-generate\fR"
 Traces the path of an imaginary packet through \fIswitch\fR.  Both
 forms require \fIswitch\fR, the switch on which the packet arrived
@@ -21,6 +21,8 @@ The tunnel ID on which the packet arrived.  Use
 .IP "\fIin_port\fR"
 The OpenFlow port on which the packet arrived.  Use \fB65534\fR if the
 packet arrived on \fBOFPP_LOCAL\fR, the local port.
+.IP "\fImark\fR"
+SKB mark of the packet. Use \fB0\fR if Netfilter marks are not used.
 .IP "\fIpacket\fR"
 A sequence of hex digits specifying the packet's contents.  An
 Ethernet frame is at least 14 bytes long, so there must be at least 28

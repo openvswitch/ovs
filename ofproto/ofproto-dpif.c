@@ -3491,7 +3491,7 @@ handle_miss_upcalls(struct dpif_backer *backer, struct dpif_upcall *upcalls,
         if (miss->key_fitness == ODP_FIT_ERROR) {
             continue;
         }
-        flow_extract(upcall->packet, flow.skb_priority,
+        flow_extract(upcall->packet, flow.skb_priority, flow.skb_mark,
                      &flow.tunnel, flow.in_port, &miss->flow);
 
         /* Add other packets to a to-do list. */
@@ -5182,7 +5182,7 @@ send_packet(const struct ofport_dpif *ofport, struct ofpbuf *packet)
     struct flow flow;
     int error;
 
-    flow_extract(packet, 0, NULL, OFPP_LOCAL, &flow);
+    flow_extract(packet, 0, 0, NULL, OFPP_LOCAL, &flow);
     odp_port = vsp_realdev_to_vlandev(ofproto, ofport->odp_port,
                                       flow.vlan_tci);
     if (odp_port != ofport->odp_port) {
@@ -7214,15 +7214,17 @@ ofproto_unixctl_trace(struct unixctl_conn *conn, int argc, const char *argv[],
             packet = ofpbuf_new(0);
             flow_compose(packet, &flow);
         }
-    } else if (argc == 6) {
-        /* ofproto/trace dpname priority tun_id in_port packet */
+    } else if (argc == 7) {
+        /* ofproto/trace dpname priority tun_id in_port mark packet */
         const char *priority_s = argv[2];
         const char *tun_id_s = argv[3];
         const char *in_port_s = argv[4];
-        const char *packet_s = argv[5];
+        const char *mark_s = argv[5];
+        const char *packet_s = argv[6];
         uint32_t in_port = atoi(in_port_s);
         ovs_be64 tun_id = htonll(strtoull(tun_id_s, NULL, 0));
         uint32_t priority = atoi(priority_s);
+        uint32_t mark = atoi(mark_s);
         const char *msg;
 
         msg = eth_from_hex(packet_s, &packet);
@@ -7236,7 +7238,7 @@ ofproto_unixctl_trace(struct unixctl_conn *conn, int argc, const char *argv[],
         ds_put_cstr(&result, s);
         free(s);
 
-        flow_extract(packet, priority, NULL, in_port, &flow);
+        flow_extract(packet, priority, mark, NULL, in_port, &flow);
         flow.tunnel.tun_id = tun_id;
         initial_tci = flow.vlan_tci;
     } else {
@@ -7631,8 +7633,8 @@ ofproto_dpif_unixctl_init(void)
 
     unixctl_command_register(
         "ofproto/trace",
-        "bridge {priority tun_id in_port packet | odp_flow [-generate]}",
-        2, 5, ofproto_unixctl_trace, NULL);
+        "bridge {priority tun_id in_port mark packet | odp_flow [-generate]}",
+        2, 6, ofproto_unixctl_trace, NULL);
     unixctl_command_register("fdb/flush", "[bridge]", 0, 1,
                              ofproto_unixctl_fdb_flush, NULL);
     unixctl_command_register("fdb/show", "bridge", 1, 1,

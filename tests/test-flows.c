@@ -68,7 +68,7 @@ main(int argc OVS_UNUSED, char *argv[])
             ovs_fatal(retval, "error reading pcap file");
         }
 
-        flow_extract(packet, 0, NULL, 1, &flow);
+        flow_extract(packet, 0, 0, NULL, 1, &flow);
         match_init_exact(&match, &flow);
         ofputil_match_to_ofp10_match(&match, &extracted_match);
 

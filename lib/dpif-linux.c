@@ -1387,7 +1387,7 @@ dpif_linux_vport_send(int dp_ifindex, uint32_t port_no,
     uint64_t action;
 
     ofpbuf_use_const(&packet, data, size);
-    flow_extract(&packet, 0, NULL, 0, &flow);
+    flow_extract(&packet, 0, 0, NULL, 0, &flow);
 
     ofpbuf_use_stack(&key, &keybuf, sizeof keybuf);
     odp_flow_key_from_flow(&key, &flow, OVSP_NONE);

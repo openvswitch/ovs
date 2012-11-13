@@ -85,7 +85,7 @@ ofputil_netmask_to_wcbits(ovs_be32 netmask)
 void
 ofputil_wildcard_from_ofpfw10(uint32_t ofpfw, struct flow_wildcards *wc)
 {
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 17);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 18);
 
     /* Initialize most of wc. */
     flow_wildcards_init_catchall(wc);
@@ -988,7 +988,7 @@ ofputil_usable_protocols(const struct match *match)
 {
     const struct flow_wildcards *wc = &match->wc;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 17);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 18);
 
     /* NXM, OXM, and OF1.1 support bitwise matching on ethernet addresses. */
     if (!eth_mask_is_exact(wc->masks.dl_src)

@@ -335,7 +335,7 @@ invalid:
  *      present and has a correct length, and otherwise NULL.
  */
 void
-flow_extract(struct ofpbuf *packet, uint32_t skb_priority,
+flow_extract(struct ofpbuf *packet, uint32_t skb_priority, uint32_t skb_mark,
              const struct flow_tnl *tnl, uint16_t ofp_in_port,
              struct flow *flow)
 {
@@ -352,6 +352,7 @@ flow_extract(struct ofpbuf *packet, uint32_t skb_priority,
     }
     flow->in_port = ofp_in_port;
     flow->skb_priority = skb_priority;
+    flow->skb_mark = skb_mark;
 
     packet->l2 = b.data;
     packet->l3 = NULL;
@@ -462,7 +463,7 @@ flow_zero_wildcards(struct flow *flow, const struct flow_wildcards *wildcards)
 void
 flow_get_metadata(const struct flow *flow, struct flow_metadata *fmd)
 {
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 17);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 18);
 
     fmd->tun_id = flow->tunnel.tun_id;
     fmd->metadata = flow->metadata;
