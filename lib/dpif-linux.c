@@ -198,9 +198,6 @@ struct dpif_linux {
     struct sset changed_ports;  /* Ports that have changed. */
     struct nln_notifier *port_notifier;
     bool change_error;
-
-    /* Port number allocation. */
-    uint32_t alloc_port_no;
 };
 
 static struct vlog_rate_limit error_rl = VLOG_RATE_LIMIT_INIT(9999, 5);
@@ -399,8 +396,9 @@ dpif_linux_port_add(struct dpif *dpif_, struct netdev *netdev,
     const char *type = netdev_get_type(netdev);
     struct dpif_linux_vport request, reply;
     const struct ofpbuf *options;
+    uint32_t upcall_pid;
     struct ofpbuf *buf;
-    int error, i = 0, max_ports = MAX_PORTS;
+    int error;
 
     dpif_linux_vport_init(&request);
     request.cmd = OVS_VPORT_CMD_NEW;
@@ -424,33 +422,22 @@ dpif_linux_port_add(struct dpif *dpif_, struct netdev *netdev,
         netdev_linux_ethtool_set_flag(netdev, ETH_FLAG_LRO, "LRO", false);
     }
 
-    /* Unless a specific port was requested, loop until we find a port
-     * that isn't used. */
-    do {
-        uint32_t upcall_pid;
+    request.port_no = *port_nop;
+    upcall_pid = dpif_linux_port_get_pid(dpif_, request.port_no);
+    request.upcall_pid = &upcall_pid;
 
-        request.port_no = *port_nop != UINT32_MAX ? *port_nop
-                          : ++dpif->alloc_port_no;
-        upcall_pid = dpif_linux_port_get_pid(dpif_, request.port_no);
-        request.upcall_pid = &upcall_pid;
-        error = dpif_linux_vport_transact(&request, &reply, &buf);
+    error = dpif_linux_vport_transact(&request, &reply, &buf);
 
-        if (!error) {
-            *port_nop = reply.port_no;
-            VLOG_DBG("%s: assigning port %"PRIu32" to netlink pid %"PRIu32,
-                     dpif_name(dpif_), request.port_no, upcall_pid);
-        } else if (error == EFBIG) {
-            /* Older datapath has lower limit. */
-            max_ports = dpif->alloc_port_no;
-            dpif->alloc_port_no = 0;
-        } else if (error == EBUSY && *port_nop != UINT32_MAX) {
-            VLOG_INFO("%s: requested port %"PRIu32" is in use",
-                     dpif_name(dpif_), *port_nop);
-        }
+    if (!error) {
+        *port_nop = reply.port_no;
+        VLOG_DBG("%s: assigning port %"PRIu32" to netlink pid %"PRIu32,
+                 dpif_name(dpif_), request.port_no, upcall_pid);
+    } else if (error == EBUSY && *port_nop != UINT32_MAX) {
+        VLOG_INFO("%s: requested port %"PRIu32" is in use",
+                 dpif_name(dpif_), *port_nop);
+    }
 
-        ofpbuf_delete(buf);
-    } while ((*port_nop == UINT32_MAX) && (i++ < max_ports)
-             && (error == EBUSY || error == EFBIG));
+    ofpbuf_delete(buf);
 
     return error;
 }
