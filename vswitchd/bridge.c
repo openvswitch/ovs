@@ -3141,14 +3141,18 @@ static const char *
 iface_get_type(const struct ovsrec_interface *iface,
                const struct ovsrec_bridge *br)
 {
-    /* The local port always has type "internal" unless the bridge is of
-     * type "dummy".  Other ports take their type from the database and
-     * default to "system" if none is specified. */
+    const char *type;
+
+    /* The local port always has type "internal".  Other ports take
+     * their type from the database and default to "system" if none is
+     * specified. */
     if (!strcmp(iface->name, br->name)) {
-        return !strcmp(br->datapath_type, "dummy") ? "dummy" : "internal";
+        type = "internal";
     } else {
-        return iface->type[0] ? iface->type : "system";
+        type = iface->type[0] ? iface->type : "system";
     }
+
+    return ofproto_port_open_type(br->datapath_type, type);
 }
 
 static void
