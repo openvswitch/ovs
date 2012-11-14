@@ -490,7 +490,7 @@ void packet_set_ipv4(struct ofpbuf *, ovs_be32 src, ovs_be32 dst, uint8_t tos,
                      uint8_t ttl);
 void packet_set_ipv6(struct ofpbuf *, uint8_t proto, const ovs_be32 src[4],
                      const ovs_be32 dst[4], uint8_t tc,
-                     uint32_t fl, uint8_t hlmit);
+                     ovs_be32 fl, uint8_t hlmit);
 void packet_set_tcp_port(struct ofpbuf *, ovs_be16 src, ovs_be16 dst);
 void packet_set_udp_port(struct ofpbuf *, ovs_be16 src, ovs_be16 dst);
 
