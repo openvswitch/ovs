@@ -241,7 +241,6 @@ create_dp_netdev(const char *name, const struct dpif_class *class,
                  struct dp_netdev **dpp)
 {
     struct dp_netdev *dp;
-    int port_no;
     int error;
     int i;
 
@@ -255,8 +254,7 @@ create_dp_netdev(const char *name, const struct dpif_class *class,
     hmap_init(&dp->flow_table);
     list_init(&dp->port_list);
 
-    port_no = !strncmp(name, "br", 2) ? choose_port(dp, name) : OVSP_LOCAL;
-    error = do_add_port(dp, name, "internal", port_no);
+    error = do_add_port(dp, name, "internal", OVSP_LOCAL);
     if (error) {
         dp_netdev_free(dp);
         return error;
