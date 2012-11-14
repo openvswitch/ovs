@@ -207,6 +207,8 @@ int ofproto_port_dump_done(struct ofproto_port_dump *);
 #define OFPROTO_FLOW_EVICTION_THRESHOLD_DEFAULT  1000
 #define OFPROTO_FLOW_EVICTION_THRESHOLD_MIN 100
 
+const char *ofproto_port_open_type(const char *datapath_type,
+                                   const char *port_type);
 int ofproto_port_add(struct ofproto *, struct netdev *, uint16_t *ofp_portp);
 int ofproto_port_del(struct ofproto *, uint16_t ofp_port);
 int ofproto_port_get_stats(const struct ofport *, struct netdev_stats *stats);

@@ -382,6 +382,17 @@ struct ofproto_class {
      */
     int (*del)(const char *type, const char *name);
 
+    /* Returns the type to pass to netdev_open() when a datapath of type
+     * 'datapath_type' has a port of type 'port_type', for a few special
+     * cases when a netdev type differs from a port type.  For example,
+     * when using the userspace datapath, a port of type "internal"
+     * needs to be opened as "tap".
+     *
+     * Returns either 'type' itself or a string literal, which must not
+     * be freed. */
+    const char *(*port_open_type)(const char *datapath_type,
+                                  const char *port_type);
+
 /* ## ------------------------ ## */
 /* ## Top-Level type Functions ## */
 /* ## ------------------------ ## */

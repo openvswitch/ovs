@@ -80,6 +80,17 @@ struct dpif_class {
      * case this function may be a null pointer. */
     int (*enumerate)(struct sset *all_dps);
 
+    /* Returns the type to pass to netdev_open() when a dpif of class
+     * 'dpif_class' has a port of type 'type', for a few special cases
+     * when a netdev type differs from a port type.  For example, when
+     * using the userspace datapath, a port of type "internal" needs to
+     * be opened as "tap".
+     *
+     * Returns either 'type' itself or a string literal, which must not
+     * be freed. */
+    const char *(*port_open_type)(const struct dpif_class *dpif_class,
+                                  const char *type);
+
     /* Attempts to open an existing dpif called 'name', if 'create' is false,
      * or to open an existing dpif or create a new one, if 'create' is true.
      *

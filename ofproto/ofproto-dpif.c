@@ -780,6 +780,12 @@ del(const char *type, const char *name)
     return error;
 }
 
+static const char *
+port_open_type(const char *datapath_type, const char *port_type)
+{
+    return dpif_port_open_type(datapath_type, port_type);
+}
+
 /* Type functions. */
 
 static int
@@ -7865,6 +7871,7 @@ const struct ofproto_class ofproto_dpif_class = {
     enumerate_types,
     enumerate_names,
     del,
+    port_open_type,
     type_run,
     type_run_fast,
     type_wait,

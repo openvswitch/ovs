@@ -1281,6 +1281,7 @@ dpif_linux_recv_purge(struct dpif *dpif_)
 const struct dpif_class dpif_linux_class = {
     "system",
     dpif_linux_enumerate,
+    NULL,
     dpif_linux_open,
     dpif_linux_close,
     dpif_linux_destroy,

@@ -1433,6 +1433,30 @@ ofproto_port_dump_done(struct ofproto_port_dump *dump)
     return dump->error == EOF ? 0 : dump->error;
 }
 
+/* Returns the type to pass to netdev_open() when a datapath of type
+ * 'datapath_type' has a port of type 'port_type', for a few special
+ * cases when a netdev type differs from a port type.  For example, when
+ * using the userspace datapath, a port of type "internal" needs to be
+ * opened as "tap".
+ *
+ * Returns either 'type' itself or a string literal, which must not be
+ * freed. */
+const char *
+ofproto_port_open_type(const char *datapath_type, const char *port_type)
+{
+    const struct ofproto_class *class;
+
+    datapath_type = ofproto_normalize_type(datapath_type);
+    class = ofproto_class_find__(datapath_type);
+    if (!class) {
+        return port_type;
+    }
+
+    return (class->port_open_type
+            ? class->port_open_type(datapath_type, port_type)
+            : port_type);
+}
+
 /* Attempts to add 'netdev' as a port on 'ofproto'.  If 'ofp_portp' is
  * non-null and '*ofp_portp' is not OFPP_NONE, attempts to use that as
  * the port's OpenFlow port number.
