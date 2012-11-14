@@ -244,7 +244,7 @@ start_forwarding () {
         # Increase the limit on the number of open file descriptors.
         # ovs-vswitchd needs 16 per datapath, plus a few extra, so this
         # should allow for 256 (or more) bridges.
-        ulimit -n 5000
+        ulimit -n 6000
 
 	    # Start ovs-vswitchd.
 	    set ovs-vswitchd unix:"$DB_SOCK"
