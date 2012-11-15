@@ -227,6 +227,8 @@ static void mirror_refresh_stats(struct mirror *);
 
 static void iface_configure_lacp(struct iface *, struct lacp_slave_settings *);
 static bool iface_create(struct bridge *, struct if_cfg *, int ofp_port);
+static bool iface_is_internal(const struct ovsrec_interface *iface,
+                              const struct ovsrec_bridge *br);
 static const char *iface_get_type(const struct ovsrec_interface *,
                                   const struct ovsrec_bridge *);
 static void iface_destroy(struct iface *);
@@ -3135,6 +3137,14 @@ port_is_synthetic(const struct port *port)
 
 /* Interface functions. */
 
+static bool
+iface_is_internal(const struct ovsrec_interface *iface,
+                  const struct ovsrec_bridge *br)
+{
+    /* The local port and "internal" ports are always "internal". */
+    return !strcmp(iface->type, "internal") || !strcmp(iface->name, br->name);
+}
+
 /* Returns the correct network device type for interface 'iface' in bridge
  * 'br'. */
 static const char *
@@ -3146,7 +3156,7 @@ iface_get_type(const struct ovsrec_interface *iface,
     /* The local port always has type "internal".  Other ports take
      * their type from the database and default to "system" if none is
      * specified. */
-    if (!strcmp(iface->name, br->name)) {
+    if (iface_is_internal(iface, br)) {
         type = "internal";
     } else {
         type = iface->type[0] ? iface->type : "system";
