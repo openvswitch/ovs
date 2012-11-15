@@ -1349,7 +1349,8 @@ iface_do_create(const struct bridge *br,
                  br->name, iface_cfg->name, *ofp_portp);
     }
 
-    if (port_cfg->vlan_mode && !strcmp(port_cfg->vlan_mode, "splinter")) {
+    if ((port_cfg->vlan_mode && !strcmp(port_cfg->vlan_mode, "splinter"))
+        || iface_is_internal(iface_cfg, br->cfg)) {
         netdev_turn_flags_on(netdev, NETDEV_UP, true);
     }
 
