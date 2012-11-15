@@ -700,6 +700,21 @@ ovs_frag_type_to_string(enum ovs_frag_type type)
     }
 }
 
+static const char *
+tun_flag_to_string(uint32_t flags)
+{
+    switch (flags) {
+    case OVS_TNL_F_DONT_FRAGMENT:
+        return "df";
+    case OVS_TNL_F_CSUM:
+        return "csum";
+    case OVS_TNL_F_KEY:
+        return "key";
+    default:
+        return NULL;
+    }
+}
+
 static void
 format_odp_key_attr(const struct nlattr *a, struct ds *ds)
 {
@@ -745,12 +760,15 @@ format_odp_key_attr(const struct nlattr *a, struct ds *ds)
 
     case OVS_KEY_ATTR_IPV4_TUNNEL:
         ipv4_tun_key = nl_attr_get(a);
-        ds_put_format(ds, "(tun_id=0x%"PRIx64",flags=0x%"PRIx32
-                      ",src="IP_FMT",dst="IP_FMT",tos=0x%"PRIx8",ttl=%"PRIu8")",
-                      ntohll(ipv4_tun_key->tun_id), ipv4_tun_key->tun_flags,
+        ds_put_format(ds, "(tun_id=0x%"PRIx64",src="IP_FMT",dst="IP_FMT","
+                      "tos=0x%"PRIx8",ttl=%"PRIu8",flags",
+                      ntohll(ipv4_tun_key->tun_id),
                       IP_ARGS(&ipv4_tun_key->ipv4_src),
                       IP_ARGS(&ipv4_tun_key->ipv4_dst),
                       ipv4_tun_key->ipv4_tos, ipv4_tun_key->ipv4_ttl);
+
+        format_flags(ds, tun_flag_to_string, ipv4_tun_key->tun_flags);
+        ds_put_format(ds, ")");
         break;
 
     case OVS_KEY_ATTR_IN_PORT:
@@ -968,21 +986,32 @@ parse_odp_key_attr(const char *s, const struct simap *port_names,
 
     {
         char tun_id_s[32];
-        unsigned long long int flags;
         int tos, ttl;
         struct ovs_key_ipv4_tunnel tun_key;
         int n = -1;
 
         if (sscanf(s, "ipv4_tunnel(tun_id=%31[x0123456789abcdefABCDEF],"
-                   "flags=%lli,src="IP_SCAN_FMT",dst="IP_SCAN_FMT
-                   ",tos=%i,ttl=%i)%n", tun_id_s, &flags,
+                   "src="IP_SCAN_FMT",dst="IP_SCAN_FMT
+                   ",tos=%i,ttl=%i,flags%n", tun_id_s,
                     IP_SCAN_ARGS(&tun_key.ipv4_src),
                     IP_SCAN_ARGS(&tun_key.ipv4_dst), &tos, &ttl,
                     &n) > 0 && n > 0) {
+            int res;
+
             tun_key.tun_id = htonll(strtoull(tun_id_s, NULL, 0));
-            tun_key.tun_flags = flags;
             tun_key.ipv4_tos = tos;
             tun_key.ipv4_ttl = ttl;
+
+            res = parse_flags(&s[n], tun_flag_to_string, &tun_key.tun_flags);
+            if (res < 0) {
+                return res;
+            }
+            n += res;
+            if (s[n] != ')') {
+                return -EINVAL;
+            }
+            n++;
+
             memset(&tun_key.pad, 0, sizeof tun_key.pad);
             nl_msg_put_unspec(key, OVS_KEY_ATTR_IPV4_TUNNEL, &tun_key,
                               sizeof tun_key);
