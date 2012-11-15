@@ -175,15 +175,42 @@ make_pidfile(void)
     int error;
 
     /* Create a temporary pidfile. */
-    tmpfile = xasprintf("%s.tmp%ld", pidfile, pid);
-    fatal_signal_add_file_to_unlink(tmpfile);
-    file = fopen(tmpfile, "w+");
+    if (overwrite_pidfile) {
+        tmpfile = xasprintf("%s.tmp%ld", pidfile, pid);
+        fatal_signal_add_file_to_unlink(tmpfile);
+    } else {
+        /* Everyone shares the same file which will be treated as a lock.  To
+         * avoid some uncomfortable race conditions, we can't set up the fatal
+         * signal unlink until we've acquired it. */
+        tmpfile = xasprintf("%s.tmp", pidfile);
+    }
+
+    file = fopen(tmpfile, "a+");
     if (!file) {
         VLOG_FATAL("%s: create failed (%s)", tmpfile, strerror(errno));
     }
 
+    error = lock_pidfile(file, F_SETLK);
+    if (error) {
+        /* Looks like we failed to acquire the lock.  Note that, if we failed
+         * for some other reason (and '!overwrite_pidfile'), we will have
+         * left 'tmpfile' as garbage in the file system. */
+        VLOG_FATAL("%s: fcntl(F_SETLK) failed (%s)", tmpfile, strerror(error));
+    }
+
+    if (!overwrite_pidfile) {
+        /* We acquired the lock.  Make sure to clean up on exit, and verify
+         * that we're allowed to create the actual pidfile. */
+        fatal_signal_add_file_to_unlink(tmpfile);
+        check_already_running();
+    }
+
     if (fstat(fileno(file), &s) == -1) {
         VLOG_FATAL("%s: fstat failed (%s)", tmpfile, strerror(errno));
+    }
+
+    if (ftruncate(fileno(file), 0) == -1) {
+        VLOG_FATAL("%s: truncate failed (%s)", tmpfile, strerror(errno));
     }
 
     fprintf(file, "%ld\n", pid);
@@ -191,40 +218,19 @@ make_pidfile(void)
         VLOG_FATAL("%s: write failed (%s)", tmpfile, strerror(errno));
     }
 
-    error = lock_pidfile(file, F_SETLK);
-    if (error) {
-        VLOG_FATAL("%s: fcntl(F_SETLK) failed (%s)", tmpfile, strerror(error));
-    }
+    error = rename(tmpfile, pidfile);
 
-    /* Rename or link it to the correct name. */
-    if (overwrite_pidfile) {
-        if (rename(tmpfile, pidfile) < 0) {
-            VLOG_FATAL("failed to rename \"%s\" to \"%s\" (%s)",
-                       tmpfile, pidfile, strerror(errno));
-        }
-    } else {
-        do {
-            error = link(tmpfile, pidfile) == -1 ? errno : 0;
-            if (error == EEXIST) {
-                check_already_running();
-            }
-        } while (error == EINTR || error == EEXIST);
-        if (error) {
-            VLOG_FATAL("failed to link \"%s\" as \"%s\" (%s)",
-                       tmpfile, pidfile, strerror(error));
-        }
+    /* Due to a race, 'tmpfile' may be owned by a different process, so we
+     * shouldn't delete it on exit. */
+    fatal_signal_remove_file_to_unlink(tmpfile);
+
+    if (error < 0) {
+        VLOG_FATAL("failed to rename \"%s\" to \"%s\" (%s)",
+                   tmpfile, pidfile, strerror(errno));
     }
 
     /* Ensure that the pidfile will get deleted on exit. */
     fatal_signal_add_file_to_unlink(pidfile);
-
-    /* Delete the temporary pidfile if it still exists. */
-    if (!overwrite_pidfile) {
-        error = fatal_signal_unlink_file_now(tmpfile);
-        if (error) {
-            VLOG_FATAL("%s: unlink failed (%s)", tmpfile, strerror(error));
-        }
-    }
 
     /* Clean up.
      *
