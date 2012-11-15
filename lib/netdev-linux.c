@@ -1028,6 +1028,7 @@ netdev_linux_set_etheraddr(struct netdev *netdev_,
     struct netdev_dev_linux *netdev_dev =
                                 netdev_dev_linux_cast(netdev_get_dev(netdev_));
     int error;
+    bool up_again = false;
 
     if (netdev_dev->cache_valid & VALID_ETHERADDR) {
         if (netdev_dev->ether_addr_error) {
@@ -1039,6 +1040,15 @@ netdev_linux_set_etheraddr(struct netdev *netdev_,
         netdev_dev->cache_valid &= ~VALID_ETHERADDR;
     }
 
+    /* Tap devices must be brought down before setting the address. */
+    if (!strcmp(netdev_get_type(netdev_), "tap")) {
+        enum netdev_flags flags;
+
+        if (!netdev_get_flags(netdev_, &flags) && (flags & NETDEV_UP)) {
+            netdev_turn_flags_off(netdev_, NETDEV_UP, false);
+            up_again = true;
+        }
+    }
     error = set_etheraddr(netdev_get_name(netdev_), mac);
     if (!error || error == ENODEV) {
         netdev_dev->ether_addr_error = error;
@@ -1046,6 +1056,10 @@ netdev_linux_set_etheraddr(struct netdev *netdev_,
         if (!error) {
             memcpy(netdev_dev->etheraddr, mac, ETH_ADDR_LEN);
         }
+    }
+
+    if (up_again) {
+        netdev_turn_flags_on(netdev_, NETDEV_UP, false);
     }
 
     return error;
