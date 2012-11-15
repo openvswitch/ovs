@@ -167,8 +167,10 @@ format_odp_sample_action(struct ds *ds, const struct nlattr *attr)
 }
 
 static const char *
-slow_path_reason_to_string(enum slow_path_reason bit)
+slow_path_reason_to_string(uint32_t data)
 {
+    enum slow_path_reason bit = (enum slow_path_reason) data;
+
     switch (bit) {
     case SLOW_CFM:
         return "cfm";
@@ -188,28 +190,85 @@ slow_path_reason_to_string(enum slow_path_reason bit)
 }
 
 static void
-format_slow_path_reason(struct ds *ds, uint32_t slow)
+format_flags(struct ds *ds, const char *(*bit_to_string)(uint32_t),
+             uint32_t flags)
 {
     uint32_t bad = 0;
 
-    while (slow) {
-        uint32_t bit = rightmost_1bit(slow);
+    ds_put_format(ds, "(");
+    if (!flags) {
+        goto out;
+    }
+    while (flags) {
+        uint32_t bit = rightmost_1bit(flags);
         const char *s;
 
-        s = slow_path_reason_to_string(bit);
+        s = bit_to_string(bit);
         if (s) {
             ds_put_format(ds, "%s,", s);
         } else {
             bad |= bit;
         }
 
-        slow &= ~bit;
+        flags &= ~bit;
     }
 
     if (bad) {
         ds_put_format(ds, "0x%"PRIx32",", bad);
     }
     ds_chomp(ds, ',');
+out:
+    ds_put_format(ds, ")");
+}
+
+static int
+parse_flags(const char *s, const char *(*bit_to_string)(uint32_t),
+            uint32_t *res)
+{
+    uint32_t result = 0;
+    int n = 0;
+
+    if (s[n] != '(') {
+        return -EINVAL;
+    }
+    n++;
+
+    while (s[n] != ')') {
+        unsigned long long int flags;
+        uint32_t bit;
+        int n0;
+
+        if (sscanf(&s[n], "%lli%n", &flags, &n0) > 0 && n0 > 0) {
+            n += n0 + (s[n + n0] == ',');
+            result |= flags;
+            continue;
+        }
+
+        for (bit = 1; bit; bit <<= 1) {
+            const char *name = bit_to_string(bit);
+            size_t len;
+
+            if (!name) {
+                continue;
+            }
+
+            len = strlen(name);
+            if (!strncmp(s + n, name, len) &&
+                (s[n + len] == ',' || s[n + len] == ')')) {
+                result |= bit;
+                n += len + (s[n + len] == ',');
+                break;
+            }
+        }
+
+        if (!bit) {
+            return -EINVAL;
+        }
+    }
+    n++;
+
+    *res = result;
+    return n;
 }
 
 static void
@@ -245,11 +304,8 @@ format_odp_userspace_action(struct ds *ds, const struct nlattr *attr)
             break;
 
         case USER_ACTION_COOKIE_SLOW_PATH:
-            ds_put_cstr(ds, ",slow_path(");
-            if (cookie.slow_path.reason) {
-                format_slow_path_reason(ds, cookie.slow_path.reason);
-            }
-            ds_put_char(ds, ')');
+            ds_put_cstr(ds, ",slow_path");
+            format_flags(ds, slow_path_reason_to_string, cookie.slow_path.reason);
             break;
 
         case USER_ACTION_COOKIE_UNSPEC:
@@ -415,39 +471,25 @@ parse_odp_action(const char *s, const struct simap *port_names,
             cookie.sflow.output = output;
             odp_put_userspace_action(pid, &cookie, actions);
             return n;
-        } else if (sscanf(s, "userspace(pid=%lli,slow_path(%n", &pid, &n) > 0
+        } else if (sscanf(s, "userspace(pid=%lli,slow_path%n", &pid, &n) > 0
                    && n > 0) {
             union user_action_cookie cookie;
+            int res;
 
             cookie.type = USER_ACTION_COOKIE_SLOW_PATH;
             cookie.slow_path.unused = 0;
             cookie.slow_path.reason = 0;
 
-            while (s[n] != ')') {
-                uint32_t bit;
-
-                for (bit = 1; bit; bit <<= 1) {
-                    const char *reason = slow_path_reason_to_string(bit);
-                    size_t len = strlen(reason);
-
-                    if (reason
-                        && !strncmp(s + n, reason, len)
-                        && (s[n + len] == ',' || s[n + len] == ')'))
-                    {
-                        cookie.slow_path.reason |= bit;
-                        n += len + (s[n + len] == ',');
-                        break;
-                    }
-                }
-
-                if (!bit) {
-                    return -EINVAL;
-                }
+            res = parse_flags(&s[n], slow_path_reason_to_string,
+                              &cookie.slow_path.reason);
+            if (res < 0) {
+                return res;
             }
-            if (s[n + 1] != ')') {
+            n += res;
+            if (s[n] != ')') {
                 return -EINVAL;
             }
-            n += 2;
+            n++;
 
             odp_put_userspace_action(pid, &cookie, actions);
             return n;
