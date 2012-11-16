@@ -1538,19 +1538,17 @@ port_destruct(struct ofport *port_)
 {
     struct ofport_dpif *port = ofport_dpif_cast(port_);
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(port->up.ofproto);
-    struct dpif_port dpif_port;
+    const char *devname = netdev_get_name(port->up.netdev);
 
-    if (!dpif_port_query_by_number(ofproto->backer->dpif,
-                                   port->odp_port, &dpif_port)) {
+    if (dpif_port_exists(ofproto->backer->dpif, devname)) {
         /* The underlying device is still there, so delete it.  This
          * happens when the ofproto is being destroyed, since the caller
          * assumes that removal of attached ports will happen as part of
          * destruction. */
         dpif_port_del(ofproto->backer->dpif, port->odp_port);
-        dpif_port_destroy(&dpif_port);
     }
 
-    sset_find_and_delete(&ofproto->ports, netdev_get_name(port->up.netdev));
+    sset_find_and_delete(&ofproto->ports, devname);
     hmap_remove(&ofproto->backer->odp_to_ofport_map, &port->odp_port_node);
     ofproto->need_revalidate = REV_RECONFIGURE;
     bundle_remove(port_);
