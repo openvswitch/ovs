@@ -319,7 +319,8 @@ ofctl_exit(struct unixctl_conn *conn, int argc OVS_UNUSED,
 static void run(int retval, const char *message, ...)
     PRINTF_FORMAT(2, 3);
 
-static void run(int retval, const char *message, ...)
+static void
+run(int retval, const char *message, ...)
 {
     if (retval) {
         va_list args;
