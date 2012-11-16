@@ -46,11 +46,14 @@ int ofputil_netmask_to_wcbits(ovs_be32 netmask);
 
 /* Protocols.
  *
+ * A "protocol" is an OpenFlow version plus, for some OpenFlow versions,
+ * a bit extra about the flow match format in use.
+ *
  * These are arranged from most portable to least portable, or alternatively
- * from least powerful to most powerful.  Formats earlier on the list are more
- * likely to be understood for the purpose of making requests, but formats
- * later on the list are more likely to accurately describe a flow within a
- * switch.
+ * from least powerful to most powerful.  Protocols earlier on the list are
+ * more likely to be understood for the purpose of making requests, but
+ * protocol later on the list are more likely to accurately describe a flow
+ * within a switch.
  *
  * On any given OpenFlow connection, a single protocol is in effect at any
  * given time.  These values use separate bits only because that makes it easy
@@ -58,24 +61,35 @@ int ofputil_netmask_to_wcbits(ovs_be32 netmask);
  * to implement set union and intersection.
  */
 enum ofputil_protocol {
-    /* OpenFlow 1.0-based protocols. */
-    OFPUTIL_P_OF10     = 1 << 0, /* OpenFlow 1.0 flow format. */
-    OFPUTIL_P_OF10_TID = 1 << 1, /* OF1.0 + flow_mod_table_id extension. */
-#define OFPUTIL_P_OF10_ANY (OFPUTIL_P_OF10 | OFPUTIL_P_OF10_TID)
+    /* OpenFlow 1.0 protocols.
+     *
+     * The "STD" protocols use the standard OpenFlow 1.0 flow format.
+     * The "NXM" protocols use the Nicira Extensible Match (NXM) flow format.
+     *
+     * The protocols with "TID" mean that the nx_flow_mod_table_id Nicira
+     * extension has been enabled.  The other protocols have it disabled.
+     */
+    OFPUTIL_P_OF10_STD     = 1 << 0,
+    OFPUTIL_P_OF10_STD_TID = 1 << 1,
+    OFPUTIL_P_OF10_NXM     = 1 << 2,
+    OFPUTIL_P_OF10_NXM_TID = 1 << 3,
+#define OFPUTIL_P_OF10_STD_ANY (OFPUTIL_P_OF10_STD | OFPUTIL_P_OF10_STD_TID)
+#define OFPUTIL_P_OF10_NXM_ANY (OFPUTIL_P_OF10_NXM | OFPUTIL_P_OF10_NXM_TID)
 
-    /* OpenFlow 1.0 with NXM-based flow formats. */
-    OFPUTIL_P_NXM      = 1 << 2, /* Nicira extended match. */
-    OFPUTIL_P_NXM_TID  = 1 << 3, /* NXM + flow_mod_table_id extension. */
-#define OFPUTIL_P_NXM_ANY (OFPUTIL_P_NXM | OFPUTIL_P_NXM_TID)
-
-    /* OpenFlow 1.2 */
-    OFPUTIL_P_OF12      = 1 << 4, /* OpenFlow 1.2 flow format. */
+    /* OpenFlow 1.2 protocol (only one variant).
+     *
+     * This uses the standard OpenFlow Extensible Match (OXM) flow format.
+     *
+     * OpenFlow 1.2 always operates with an equivalent of the
+     * nx_flow_mod_table_id Nicira extension enabled, so there is no "TID"
+     * variant. */
+    OFPUTIL_P_OF12_OXM      = 1 << 4,
 
     /* All protocols. */
-#define OFPUTIL_P_ANY (OFPUTIL_P_OF10_ANY | OFPUTIL_P_NXM_ANY)
+#define OFPUTIL_P_ANY (OFPUTIL_P_OF10_STD_ANY | OFPUTIL_P_OF10_NXM_ANY)
 
     /* Protocols in which a specific table may be specified in flow_mods. */
-#define OFPUTIL_P_TID (OFPUTIL_P_OF10_TID | OFPUTIL_P_NXM_TID)
+#define OFPUTIL_P_TID (OFPUTIL_P_OF10_STD_TID | OFPUTIL_P_OF10_NXM_TID)
 };
 
 /* Protocols to use for flow dumps, from most to least preferred. */

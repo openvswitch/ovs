@@ -581,15 +581,15 @@ struct proto_abbrev {
 /* Most users really don't care about some of the differences between
  * protocols.  These abbreviations help with that. */
 static const struct proto_abbrev proto_abbrevs[] = {
-    { OFPUTIL_P_ANY,      "any" },
-    { OFPUTIL_P_OF10_ANY, "OpenFlow10" },
-    { OFPUTIL_P_NXM_ANY,  "NXM" },
+    { OFPUTIL_P_ANY,          "any" },
+    { OFPUTIL_P_OF10_STD_ANY, "OpenFlow10" },
+    { OFPUTIL_P_OF10_NXM_ANY,  "NXM" },
 };
 #define N_PROTO_ABBREVS ARRAY_SIZE(proto_abbrevs)
 
 enum ofputil_protocol ofputil_flow_dump_protocols[] = {
-    OFPUTIL_P_NXM,
-    OFPUTIL_P_OF10,
+    OFPUTIL_P_OF10_NXM,
+    OFPUTIL_P_OF10_STD,
 };
 size_t ofputil_n_flow_dump_protocols = ARRAY_SIZE(ofputil_flow_dump_protocols);
 
@@ -603,9 +603,9 @@ ofputil_protocol_from_ofp_version(enum ofp_version version)
 {
     switch (version) {
     case OFP10_VERSION:
-        return OFPUTIL_P_OF10;
+        return OFPUTIL_P_OF10_STD;
     case OFP12_VERSION:
-        return OFPUTIL_P_OF12;
+        return OFPUTIL_P_OF12_OXM;
     case OFP11_VERSION:
     default:
         return 0;
@@ -618,12 +618,12 @@ enum ofp_version
 ofputil_protocol_to_ofp_version(enum ofputil_protocol protocol)
 {
     switch (protocol) {
-    case OFPUTIL_P_OF10:
-    case OFPUTIL_P_OF10_TID:
-    case OFPUTIL_P_NXM:
-    case OFPUTIL_P_NXM_TID:
+    case OFPUTIL_P_OF10_STD:
+    case OFPUTIL_P_OF10_STD_TID:
+    case OFPUTIL_P_OF10_NXM:
+    case OFPUTIL_P_OF10_NXM_TID:
         return OFP10_VERSION;
-    case OFPUTIL_P_OF12:
+    case OFPUTIL_P_OF12_OXM:
         return OFP12_VERSION;
     }
 
@@ -652,16 +652,16 @@ enum ofputil_protocol
 ofputil_protocol_set_tid(enum ofputil_protocol protocol, bool enable)
 {
     switch (protocol) {
-    case OFPUTIL_P_OF10:
-    case OFPUTIL_P_OF10_TID:
-        return enable ? OFPUTIL_P_OF10_TID : OFPUTIL_P_OF10;
+    case OFPUTIL_P_OF10_STD:
+    case OFPUTIL_P_OF10_STD_TID:
+        return enable ? OFPUTIL_P_OF10_STD_TID : OFPUTIL_P_OF10_STD;
 
-    case OFPUTIL_P_NXM:
-    case OFPUTIL_P_NXM_TID:
-        return enable ? OFPUTIL_P_NXM_TID : OFPUTIL_P_NXM;
+    case OFPUTIL_P_OF10_NXM:
+    case OFPUTIL_P_OF10_NXM_TID:
+        return enable ? OFPUTIL_P_OF10_NXM_TID : OFPUTIL_P_OF10_NXM;
 
-    case OFPUTIL_P_OF12:
-        return OFPUTIL_P_OF12;
+    case OFPUTIL_P_OF12_OXM:
+        return OFPUTIL_P_OF12_OXM;
 
     default:
         NOT_REACHED();
@@ -686,16 +686,16 @@ ofputil_protocol_set_base(enum ofputil_protocol cur,
     bool tid = (cur & OFPUTIL_P_TID) != 0;
 
     switch (new_base) {
-    case OFPUTIL_P_OF10:
-    case OFPUTIL_P_OF10_TID:
-        return ofputil_protocol_set_tid(OFPUTIL_P_OF10, tid);
+    case OFPUTIL_P_OF10_STD:
+    case OFPUTIL_P_OF10_STD_TID:
+        return ofputil_protocol_set_tid(OFPUTIL_P_OF10_STD, tid);
 
-    case OFPUTIL_P_NXM:
-    case OFPUTIL_P_NXM_TID:
-        return ofputil_protocol_set_tid(OFPUTIL_P_NXM, tid);
+    case OFPUTIL_P_OF10_NXM:
+    case OFPUTIL_P_OF10_NXM_TID:
+        return ofputil_protocol_set_tid(OFPUTIL_P_OF10_NXM, tid);
 
-    case OFPUTIL_P_OF12:
-        return ofputil_protocol_set_tid(OFPUTIL_P_OF12, tid);
+    case OFPUTIL_P_OF12_OXM:
+        return ofputil_protocol_set_tid(OFPUTIL_P_OF12_OXM, tid);
 
     default:
         NOT_REACHED();
@@ -713,19 +713,19 @@ ofputil_protocol_to_string(enum ofputil_protocol protocol)
     /* Use a "switch" statement for single-bit names so that we get a compiler
      * warning if we forget any. */
     switch (protocol) {
-    case OFPUTIL_P_NXM:
+    case OFPUTIL_P_OF10_NXM:
         return "NXM-table_id";
 
-    case OFPUTIL_P_NXM_TID:
+    case OFPUTIL_P_OF10_NXM_TID:
         return "NXM+table_id";
 
-    case OFPUTIL_P_OF10:
+    case OFPUTIL_P_OF10_STD:
         return "OpenFlow10-table_id";
 
-    case OFPUTIL_P_OF10_TID:
+    case OFPUTIL_P_OF10_STD_TID:
         return "OpenFlow10+table_id";
 
-    case OFPUTIL_P_OF12:
+    case OFPUTIL_P_OF12_OXM:
         return NULL;
     }
 
@@ -972,68 +972,68 @@ ofputil_usable_protocols(const struct match *match)
     /* NXM and OF1.1+ supports bitwise matching on ethernet addresses. */
     if (!eth_mask_is_exact(wc->masks.dl_src)
         && !eth_addr_is_zero(wc->masks.dl_src)) {
-        return OFPUTIL_P_NXM_ANY;
+        return OFPUTIL_P_OF10_NXM_ANY;
     }
     if (!eth_mask_is_exact(wc->masks.dl_dst)
         && !eth_addr_is_zero(wc->masks.dl_dst)) {
-        return OFPUTIL_P_NXM_ANY;
+        return OFPUTIL_P_OF10_NXM_ANY;
     }
 
     /* NXM and OF1.1+ support matching metadata. */
     if (wc->masks.metadata != htonll(0)) {
-        return OFPUTIL_P_NXM_ANY;
+        return OFPUTIL_P_OF10_NXM_ANY;
     }
 
     /* Only NXM supports matching ARP hardware addresses. */
     if (!eth_addr_is_zero(wc->masks.arp_sha) ||
         !eth_addr_is_zero(wc->masks.arp_tha)) {
-        return OFPUTIL_P_NXM_ANY;
+        return OFPUTIL_P_OF10_NXM_ANY;
     }
 
     /* Only NXM supports matching IPv6 traffic. */
     if (match->flow.dl_type == htons(ETH_TYPE_IPV6)) {
-        return OFPUTIL_P_NXM_ANY;
+        return OFPUTIL_P_OF10_NXM_ANY;
     }
 
     /* Only NXM supports matching registers. */
     if (!regs_fully_wildcarded(wc)) {
-        return OFPUTIL_P_NXM_ANY;
+        return OFPUTIL_P_OF10_NXM_ANY;
     }
 
     /* Only NXM supports matching tun_id. */
     if (wc->masks.tunnel.tun_id != htonll(0)) {
-        return OFPUTIL_P_NXM_ANY;
+        return OFPUTIL_P_OF10_NXM_ANY;
     }
 
     /* Only NXM supports matching fragments. */
     if (wc->masks.nw_frag) {
-        return OFPUTIL_P_NXM_ANY;
+        return OFPUTIL_P_OF10_NXM_ANY;
     }
 
     /* Only NXM supports matching IPv6 flow label. */
     if (wc->masks.ipv6_label) {
-        return OFPUTIL_P_NXM_ANY;
+        return OFPUTIL_P_OF10_NXM_ANY;
     }
 
     /* Only NXM supports matching IP ECN bits. */
     if (wc->masks.nw_tos & IP_ECN_MASK) {
-        return OFPUTIL_P_NXM_ANY;
+        return OFPUTIL_P_OF10_NXM_ANY;
     }
 
     /* Only NXM supports matching IP TTL/hop limit. */
     if (wc->masks.nw_ttl) {
-        return OFPUTIL_P_NXM_ANY;
+        return OFPUTIL_P_OF10_NXM_ANY;
     }
 
     /* Only NXM supports non-CIDR IPv4 address masks. */
     if (!ip_is_cidr(wc->masks.nw_src) || !ip_is_cidr(wc->masks.nw_dst)) {
-        return OFPUTIL_P_NXM_ANY;
+        return OFPUTIL_P_OF10_NXM_ANY;
     }
 
     /* Only NXM supports bitwise matching on transport port. */
     if ((wc->masks.tp_src && wc->masks.tp_src != htons(UINT16_MAX)) ||
         (wc->masks.tp_dst && wc->masks.tp_dst != htons(UINT16_MAX))) {
-        return OFPUTIL_P_NXM_ANY;
+        return OFPUTIL_P_OF10_NXM_ANY;
     }
 
     /* Other formats can express this rule. */
@@ -1216,17 +1216,17 @@ ofputil_encode_set_protocol(enum ofputil_protocol current,
         *next = ofputil_protocol_set_base(current, want_base);
 
         switch (want_base) {
-        case OFPUTIL_P_NXM:
+        case OFPUTIL_P_OF10_NXM:
             return ofputil_encode_nx_set_flow_format(NXFF_NXM);
 
-        case OFPUTIL_P_OF10:
+        case OFPUTIL_P_OF10_STD:
             return ofputil_encode_nx_set_flow_format(NXFF_OPENFLOW10);
 
-        case OFPUTIL_P_OF12:
+        case OFPUTIL_P_OF12_OXM:
             return ofputil_encode_nx_set_flow_format(NXFF_OPENFLOW12);
 
-        case OFPUTIL_P_OF10_TID:
-        case OFPUTIL_P_NXM_TID:
+        case OFPUTIL_P_OF10_STD_TID:
+        case OFPUTIL_P_OF10_NXM_TID:
             NOT_REACHED();
         }
     }
@@ -1268,13 +1268,13 @@ ofputil_nx_flow_format_to_protocol(enum nx_flow_format flow_format)
 {
     switch (flow_format) {
     case NXFF_OPENFLOW10:
-        return OFPUTIL_P_OF10;
+        return OFPUTIL_P_OF10_STD;
 
     case NXFF_NXM:
-        return OFPUTIL_P_NXM;
+        return OFPUTIL_P_OF10_NXM;
 
     case NXFF_OPENFLOW12:
-        return OFPUTIL_P_OF12;
+        return OFPUTIL_P_OF12_OXM;
 
     default:
         return 0;
@@ -1499,7 +1499,7 @@ ofputil_encode_flow_mod(const struct ofputil_flow_mod *fm,
     struct ofpbuf *msg;
 
     switch (protocol) {
-    case OFPUTIL_P_OF12: {
+    case OFPUTIL_P_OF12_OXM: {
         struct ofp11_flow_mod *ofm;
 
         msg = ofpraw_alloc(OFPRAW_OFPT11_FLOW_MOD, OFP12_VERSION,
@@ -1525,8 +1525,8 @@ ofputil_encode_flow_mod(const struct ofputil_flow_mod *fm,
         break;
     }
 
-    case OFPUTIL_P_OF10:
-    case OFPUTIL_P_OF10_TID: {
+    case OFPUTIL_P_OF10_STD:
+    case OFPUTIL_P_OF10_STD_TID: {
         struct ofp10_flow_mod *ofm;
 
         msg = ofpraw_alloc(OFPRAW_OFPT10_FLOW_MOD, OFP10_VERSION,
@@ -1545,8 +1545,8 @@ ofputil_encode_flow_mod(const struct ofputil_flow_mod *fm,
         break;
     }
 
-    case OFPUTIL_P_NXM:
-    case OFPUTIL_P_NXM_TID: {
+    case OFPUTIL_P_OF10_NXM:
+    case OFPUTIL_P_OF10_NXM_TID: {
         struct nx_flow_mod *nfm;
         int match_len;
 
@@ -1599,7 +1599,7 @@ ofputil_flow_mod_usable_protocols(const struct ofputil_flow_mod *fms,
 
         /* Matching of the cookie is only supported through NXM. */
         if (fm->cookie_mask != htonll(0)) {
-            usable_protocols &= OFPUTIL_P_NXM_ANY;
+            usable_protocols &= OFPUTIL_P_OF10_NXM_ANY;
         }
     }
     assert(usable_protocols);
@@ -1720,7 +1720,7 @@ ofputil_encode_flow_stats_request(const struct ofputil_flow_stats_request *fsr,
     enum ofpraw raw;
 
     switch (protocol) {
-    case OFPUTIL_P_OF12: {
+    case OFPUTIL_P_OF12_OXM: {
         struct ofp11_flow_stats_request *ofsr;
 
         raw = (fsr->aggregate
@@ -1737,8 +1737,8 @@ ofputil_encode_flow_stats_request(const struct ofputil_flow_stats_request *fsr,
         break;
     }
 
-    case OFPUTIL_P_OF10:
-    case OFPUTIL_P_OF10_TID: {
+    case OFPUTIL_P_OF10_STD:
+    case OFPUTIL_P_OF10_STD_TID: {
         struct ofp10_flow_stats_request *ofsr;
 
         raw = (fsr->aggregate
@@ -1752,8 +1752,8 @@ ofputil_encode_flow_stats_request(const struct ofputil_flow_stats_request *fsr,
         break;
     }
 
-    case OFPUTIL_P_NXM:
-    case OFPUTIL_P_NXM_TID: {
+    case OFPUTIL_P_OF10_NXM:
+    case OFPUTIL_P_OF10_NXM_TID: {
         struct nx_flow_stats_request *nfsr;
         int match_len;
 
@@ -1791,7 +1791,7 @@ ofputil_flow_stats_request_usable_protocols(
 
     usable_protocols = ofputil_usable_protocols(&fsr->match);
     if (fsr->cookie_mask != htonll(0)) {
-        usable_protocols &= OFPUTIL_P_NXM_ANY;
+        usable_protocols &= OFPUTIL_P_OF10_NXM_ANY;
     }
     return usable_protocols;
 }
@@ -2203,7 +2203,7 @@ ofputil_encode_flow_removed(const struct ofputil_flow_removed *fr,
     struct ofpbuf *msg;
 
     switch (protocol) {
-    case OFPUTIL_P_OF12: {
+    case OFPUTIL_P_OF12_OXM: {
         struct ofp12_flow_removed *ofr;
 
         msg = ofpraw_alloc_xid(OFPRAW_OFPT11_FLOW_REMOVED,
@@ -2224,8 +2224,8 @@ ofputil_encode_flow_removed(const struct ofputil_flow_removed *fr,
         break;
     }
 
-    case OFPUTIL_P_OF10:
-    case OFPUTIL_P_OF10_TID: {
+    case OFPUTIL_P_OF10_STD:
+    case OFPUTIL_P_OF10_STD_TID: {
         struct ofp_flow_removed *ofr;
 
         msg = ofpraw_alloc_xid(OFPRAW_OFPT10_FLOW_REMOVED, OFP10_VERSION,
@@ -2243,8 +2243,8 @@ ofputil_encode_flow_removed(const struct ofputil_flow_removed *fr,
         break;
     }
 
-    case OFPUTIL_P_NXM:
-    case OFPUTIL_P_NXM_TID: {
+    case OFPUTIL_P_OF10_NXM:
+    case OFPUTIL_P_OF10_NXM_TID: {
         struct nx_flow_removed *nfr;
         int match_len;
 
@@ -2396,7 +2396,7 @@ ofputil_encode_packet_in(const struct ofputil_packet_in *pin,
     struct ofpbuf *packet;
 
     /* Add OFPT_PACKET_IN. */
-    if (protocol == OFPUTIL_P_OF12) {
+    if (protocol == OFPUTIL_P_OF12_OXM) {
         struct ofp12_packet_in *opi;
         struct match match;
 

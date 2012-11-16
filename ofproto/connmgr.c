@@ -840,7 +840,7 @@ ofconn_get_invalid_ttl_to_controller(struct ofconn *ofconn)
 
 /* Returns the currently configured protocol for 'ofconn', one of OFPUTIL_P_*.
  *
- * The default, if no other format has been set, is OFPUTIL_P_OPENFLOW10. */
+ * The default, if no other format has been set, is OFPUTIL_P_OF10_STD. */
 enum ofputil_protocol
 ofconn_get_protocol(struct ofconn *ofconn)
 {
@@ -1034,7 +1034,7 @@ ofconn_flush(struct ofconn *ofconn)
     int i;
 
     ofconn->role = NX_ROLE_OTHER;
-    ofconn->protocol = OFPUTIL_P_OF10;
+    ofconn->protocol = OFPUTIL_P_OF10_STD;
     ofconn->packet_in_format = NXPIF_OPENFLOW10;
 
     /* Disassociate 'ofconn' from all of the ofopgroups that it initiated that
