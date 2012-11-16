@@ -86,10 +86,12 @@ enum ofputil_protocol {
     OFPUTIL_P_OF12_OXM      = 1 << 4,
 
     /* All protocols. */
-#define OFPUTIL_P_ANY (OFPUTIL_P_OF10_STD_ANY | OFPUTIL_P_OF10_NXM_ANY)
+#define OFPUTIL_P_ANY ((1 << 5) - 1)
 
     /* Protocols in which a specific table may be specified in flow_mods. */
-#define OFPUTIL_P_TID (OFPUTIL_P_OF10_STD_TID | OFPUTIL_P_OF10_NXM_TID)
+#define OFPUTIL_P_TID (OFPUTIL_P_OF10_STD_TID | \
+                       OFPUTIL_P_OF10_NXM_TID | \
+                       OFPUTIL_P_OF12_OXM)
 };
 
 /* Protocols to use for flow dumps, from most to least preferred. */
