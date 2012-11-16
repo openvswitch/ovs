@@ -432,8 +432,8 @@ precedence makes it necessary, or unless the operands are themselves
 expressions that use && and ||.  Thus:
 
     if (!isdigit((unsigned char)s[0])
-            || !isdigit((unsigned char)s[1])
-            || !isdigit((unsigned char)s[2])) {
+        || !isdigit((unsigned char)s[1])
+        || !isdigit((unsigned char)s[2])) {
         printf("string %s does not start with 3-digit code\n", s);
     }
 
