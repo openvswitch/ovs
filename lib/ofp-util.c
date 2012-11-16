@@ -1201,14 +1201,24 @@ ofputil_encode_hello(uint32_t allowed_versions)
  * connection if the switch processes the returned message correctly.  (If
  * '*next != want' then the caller will have to iterate.)
  *
- * If 'current == want', returns NULL and stores 'current' in '*next'. */
+ * If 'current == want', or if it is not possible to transition from 'current'
+ * to 'want' (because, for example, 'current' and 'want' use different OpenFlow
+ * protocol versions), returns NULL and stores 'current' in '*next'. */
 struct ofpbuf *
 ofputil_encode_set_protocol(enum ofputil_protocol current,
                             enum ofputil_protocol want,
                             enum ofputil_protocol *next)
 {
+    enum ofp_version cur_version, want_version;
     enum ofputil_protocol cur_base, want_base;
     bool cur_tid, want_tid;
+
+    cur_version = ofputil_protocol_to_ofp_version(current);
+    want_version = ofputil_protocol_to_ofp_version(want);
+    if (cur_version != want_version) {
+        *next = current;
+        return NULL;
+    }
 
     cur_base = ofputil_protocol_to_base(current);
     want_base = ofputil_protocol_to_base(want);

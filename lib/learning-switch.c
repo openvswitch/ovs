@@ -200,15 +200,19 @@ lswitch_handshake(struct lswitch *sw)
                 error = rconn_send(sw->rconn, msg, NULL);
             }
         }
+        if (protocol & usable_protocols) {
+            for (i = 0; !error && i < sw->n_default_flows; i++) {
+                msg = ofputil_encode_flow_mod(&sw->default_flows[i], protocol);
+                error = rconn_send(sw->rconn, msg, NULL);
+            }
 
-        for (i = 0; !error && i < sw->n_default_flows; i++) {
-            msg = ofputil_encode_flow_mod(&sw->default_flows[i], protocol);
-            error = rconn_send(sw->rconn, msg, NULL);
-        }
-
-        if (error) {
-            VLOG_INFO_RL(&rl, "%s: failed to queue default flows (%s)",
-                         rconn_get_name(sw->rconn), strerror(error));
+            if (error) {
+                VLOG_INFO_RL(&rl, "%s: failed to queue default flows (%s)",
+                             rconn_get_name(sw->rconn), strerror(error));
+            }
+        } else {
+            VLOG_INFO_RL(&rl, "%s: failed to set usable protocol",
+                         rconn_get_name(sw->rconn));
         }
     }
     sw->protocol = protocol;

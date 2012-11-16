@@ -763,7 +763,7 @@ try_set_protocol(struct vconn *vconn, enum ofputil_protocol want,
 
         request = ofputil_encode_set_protocol(*cur, want, &next);
         if (!request) {
-            return true;
+            return *cur == want;
         }
 
         run(vconn_transact_noreply(vconn, request, &reply),
