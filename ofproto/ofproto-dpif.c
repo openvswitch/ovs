@@ -76,6 +76,7 @@ BUILD_ASSERT_DECL(N_TABLES >= 2 && N_TABLES <= 255);
 
 struct ofport_dpif;
 struct ofproto_dpif;
+struct flow_miss;
 
 struct rule_dpif {
     struct rule up;
@@ -366,13 +367,18 @@ struct subfacet {
      * splinters can cause it to differ.  This value should be removed when
      * the VLAN splinters feature is no longer needed.  */
     ovs_be16 initial_tci;       /* Initial VLAN TCI value. */
+
+    /* Datapath port the packet arrived on.  This is needed to remove
+     * flows for ports that are no longer part of the bridge.  Since the
+     * flow definition only has the OpenFlow port number and the port is
+     * no longer part of the bridge, we can't determine the datapath port
+     * number needed to delete the flow from the datapath. */
+    uint32_t odp_in_port;
 };
 
 #define SUBFACET_DESTROY_MAX_BATCH 50
 
-static struct subfacet *subfacet_create(struct facet *, enum odp_key_fitness,
-                                        const struct nlattr *key,
-                                        size_t key_len, ovs_be16 initial_tci,
+static struct subfacet *subfacet_create(struct facet *, struct flow_miss *miss,
                                         long long int now);
 static struct subfacet *subfacet_find(struct ofproto_dpif *,
                                       const struct nlattr *key, size_t key_len,
@@ -3062,6 +3068,7 @@ struct flow_miss {
     ovs_be16 initial_tci;
     struct list packets;
     enum dpif_upcall_type upcall_type;
+    uint32_t odp_in_port;
 };
 
 struct flow_miss_op {
@@ -3281,9 +3288,7 @@ handle_flow_miss_with_facet(struct flow_miss *miss, struct facet *facet,
     struct subfacet *subfacet;
     struct ofpbuf *packet;
 
-    subfacet = subfacet_create(facet,
-                               miss->key_fitness, miss->key, miss->key_len,
-                               miss->initial_tci, now);
+    subfacet = subfacet_create(facet, miss, now);
 
     LIST_FOR_EACH (packet, list_node, &miss->packets) {
         struct flow_miss_op *op = &ops[*n_ops];
@@ -3460,6 +3465,7 @@ handle_miss_upcalls(struct dpif_backer *backer, struct dpif_upcall *upcalls,
         enum odp_key_fitness fitness;
         struct ofproto_dpif *ofproto;
         struct ofport_dpif *port;
+        uint32_t odp_in_port;
         struct flow flow;
         uint32_t hash;
 
@@ -3475,6 +3481,7 @@ handle_miss_upcalls(struct dpif_backer *backer, struct dpif_upcall *upcalls,
             continue;
         }
         ofproto = ofproto_dpif_cast(port->up.ofproto);
+        odp_in_port = flow.in_port;
         flow.in_port = port->up.ofp_port;
 
         /* Obtain metadata and check userspace/kernel agreement on flow match,
@@ -3496,6 +3503,7 @@ handle_miss_upcalls(struct dpif_backer *backer, struct dpif_upcall *upcalls,
             miss->key = upcall->key;
             miss->key_len = upcall->key_len;
             miss->upcall_type = upcall->type;
+            miss->odp_in_port = odp_in_port;
             list_init(&miss->packets);
 
             n_misses++;
@@ -3821,11 +3829,8 @@ update_stats(struct dpif_backer *backer)
         if (!port) {
             /* This flow is for a port for which we couldn't associate an
              * ofproto.  This can happen if a port is removed while
-             * traffic is being received.  Print a rate-limited message
-             * in case it happens frequently. */
-            VLOG_INFO_RL(&rl,
-                        "stats update for flow with unassociated port %"PRIu32,
-                        flow.in_port);
+             * traffic is being received.  Ignore this flow, since it
+             * will get timed out. */
             continue;
         }
 
@@ -4650,20 +4655,25 @@ subfacet_find(struct ofproto_dpif *ofproto,
 }
 
 /* Searches 'facet' (within 'ofproto') for a subfacet with the specified
- * 'key_fitness', 'key', and 'key_len'.  Returns the existing subfacet if
- * there is one, otherwise creates and returns a new subfacet.
+ * 'key_fitness', 'key', and 'key_len' members in 'miss'.  Returns the
+ * existing subfacet if there is one, otherwise creates and returns a
+ * new subfacet.
  *
  * If the returned subfacet is new, then subfacet->actions will be NULL, in
  * which case the caller must populate the actions with
  * subfacet_make_actions(). */
 static struct subfacet *
-subfacet_create(struct facet *facet, enum odp_key_fitness key_fitness,
-                const struct nlattr *key, size_t key_len,
-                ovs_be16 initial_tci, long long int now)
+subfacet_create(struct facet *facet, struct flow_miss *miss,
+                long long int now)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(facet->rule->up.ofproto);
-    uint32_t key_hash = odp_flow_key_hash(key, key_len);
+    enum odp_key_fitness key_fitness = miss->key_fitness;
+    const struct nlattr *key = miss->key;
+    size_t key_len = miss->key_len;
+    uint32_t key_hash;
     struct subfacet *subfacet;
+
+    key_hash = odp_flow_key_hash(key, key_len);
 
     if (list_is_empty(&facet->subfacets)) {
         subfacet = &facet->one_subfacet;
@@ -4703,7 +4713,8 @@ subfacet_create(struct facet *facet, enum odp_key_fitness key_fitness,
                       ? SLOW_MATCH
                       : 0);
     subfacet->path = SF_NOT_INSTALLED;
-    subfacet->initial_tci = initial_tci;
+    subfacet->initial_tci = miss->initial_tci;
+    subfacet->odp_in_port = miss->odp_in_port;
 
     return subfacet;
 }
@@ -4778,13 +4789,10 @@ subfacet_get_key(struct subfacet *subfacet, struct odputil_keybuf *keybuf,
 {
 
     if (!subfacet->key) {
-        struct ofproto_dpif *ofproto;
         struct flow *flow = &subfacet->facet->flow;
 
         ofpbuf_use_stack(key, keybuf, sizeof *keybuf);
-        ofproto = ofproto_dpif_cast(subfacet->facet->rule->up.ofproto);
-        odp_flow_key_from_flow(key, flow,
-                               ofp_port_to_odp_port(ofproto, flow->in_port));
+        odp_flow_key_from_flow(key, flow, subfacet->odp_in_port);
     } else {
         ofpbuf_use_const(key, subfacet->key, subfacet->key_len);
     }
