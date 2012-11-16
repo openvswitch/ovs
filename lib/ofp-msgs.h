@@ -271,7 +271,7 @@ enum ofpraw {
     /* NXT 1.0+ (11): struct nx_role_request. */
     OFPRAW_NXT_ROLE_REPLY,
 
-    /* NXT 1.0+ (12): struct nx_set_flow_format. */
+    /* NXT 1.0 (12): struct nx_set_flow_format. */
     OFPRAW_NXT_SET_FLOW_FORMAT,
 
     /* NXT 1.0+ (15): struct nx_flow_mod_table_id. */

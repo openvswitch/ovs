@@ -1233,7 +1233,9 @@ ofputil_encode_set_protocol(enum ofputil_protocol current,
             return ofputil_encode_nx_set_flow_format(NXFF_OPENFLOW10);
 
         case OFPUTIL_P_OF12_OXM:
-            return ofputil_encode_nx_set_flow_format(NXFF_OPENFLOW12);
+            /* There's only one OpenFlow 1.2 protocol and we already verified
+             * above that we're not trying to change versions. */
+            NOT_REACHED();
 
         case OFPUTIL_P_OF10_STD_TID:
         case OFPUTIL_P_OF10_NXM_TID:
@@ -1283,9 +1285,6 @@ ofputil_nx_flow_format_to_protocol(enum nx_flow_format flow_format)
     case NXFF_NXM:
         return OFPUTIL_P_OF10_NXM;
 
-    case NXFF_OPENFLOW12:
-        return OFPUTIL_P_OF12_OXM;
-
     default:
         return 0;
     }
@@ -1308,8 +1307,6 @@ ofputil_nx_flow_format_to_string(enum nx_flow_format flow_format)
         return "openflow10";
     case NXFF_NXM:
         return "nxm";
-    case NXFF_OPENFLOW12:
-        return "openflow12";
     default:
         NOT_REACHED();
     }
