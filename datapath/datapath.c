@@ -309,7 +309,7 @@ void ovs_dp_process_received_packet(struct vport *p, struct sk_buff *skb)
 	u64 *stats_counter;
 	int error;
 
-	stats = per_cpu_ptr(dp->stats_percpu, smp_processor_id());
+	stats = this_cpu_ptr(dp->stats_percpu);
 
 	if (!OVS_CB(skb)->flow) {
 		struct sw_flow_key key;
@@ -391,7 +391,7 @@ int ovs_dp_upcall(struct datapath *dp, struct sk_buff *skb,
 	return 0;
 
 err:
-	stats = per_cpu_ptr(dp->stats_percpu, smp_processor_id());
+	stats = this_cpu_ptr(dp->stats_percpu);
 
 	u64_stats_update_begin(&stats->sync);
 	stats->n_lost++;
