@@ -14,7 +14,6 @@
 
 import errno
 import os
-import select
 import socket
 
 import ovs.poller
@@ -236,9 +235,9 @@ class Stream(object):
         if self.state == Stream.__S_CONNECTING:
             wait = Stream.W_CONNECT
         if wait == Stream.W_RECV:
-            poller.fd_wait(self.socket, select.POLLIN)
+            poller.fd_wait(self.socket, ovs.poller.POLLIN)
         else:
-            poller.fd_wait(self.socket, select.POLLOUT)
+            poller.fd_wait(self.socket, ovs.poller.POLLOUT)
 
     def connect_wait(self, poller):
         self.wait(poller, Stream.W_CONNECT)
@@ -324,7 +323,7 @@ class PassiveStream(object):
                 return error, None
 
     def wait(self, poller):
-        poller.fd_wait(self.socket, select.POLLIN)
+        poller.fd_wait(self.socket, ovs.poller.POLLIN)
 
     def __del__(self):
         # Don't delete the file: we might have forked.

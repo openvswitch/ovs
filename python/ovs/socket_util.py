@@ -77,7 +77,7 @@ def make_unix_socket(style, nonblock, bind_path, connect_path):
 
 def check_connection_completion(sock):
     p = ovs.poller.SelectPoll()
-    p.register(sock, select.POLLOUT)
+    p.register(sock, ovs.poller.POLLOUT)
     if len(p.poll(0)) == 1:
         return get_socket_error(sock)
     else:
