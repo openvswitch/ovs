@@ -140,6 +140,7 @@ Use this option more than once to add flows from multiple files.
 .so lib/vlog.man
 .so lib/unixctl.man
 .so lib/common.man
+.so so lib/ofp-version.man
 .
 .SH EXAMPLES
 .PP
