@@ -842,7 +842,7 @@ ofconn_get_invalid_ttl_to_controller(struct ofconn *ofconn)
  *
  * The default, if no other format has been set, is OFPUTIL_P_OF10_STD. */
 enum ofputil_protocol
-ofconn_get_protocol(struct ofconn *ofconn)
+ofconn_get_protocol(const struct ofconn *ofconn)
 {
     return ofconn->protocol;
 }

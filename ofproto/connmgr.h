@@ -99,7 +99,7 @@ enum ofconn_type ofconn_get_type(const struct ofconn *);
 enum nx_role ofconn_get_role(const struct ofconn *);
 void ofconn_set_role(struct ofconn *, enum nx_role);
 
-enum ofputil_protocol ofconn_get_protocol(struct ofconn *);
+enum ofputil_protocol ofconn_get_protocol(const struct ofconn *);
 void ofconn_set_protocol(struct ofconn *, enum ofputil_protocol);
 
 enum nx_packet_in_format ofconn_get_packet_in_format(struct ofconn *);
