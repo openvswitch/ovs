@@ -847,7 +847,7 @@ ofputil_protocols_from_string(const char *s)
     return protocols;
 }
 
-static enum ofp_version
+static int
 ofputil_version_from_string(const char *s)
 {
     if (!strcasecmp(s, "OpenFlow10")) {
@@ -859,7 +859,7 @@ ofputil_version_from_string(const char *s)
     if (!strcasecmp(s, "OpenFlow12")) {
         return OFP12_VERSION;
     }
-    VLOG_FATAL("Unknown OpenFlow version: \"%s\"", s);
+    return 0;
 }
 
 static bool
@@ -876,7 +876,7 @@ ofputil_versions_from_string(const char *s)
 
     while (s[i]) {
         size_t j;
-        enum ofp_version version;
+        int version;
         char *key;
 
         if (is_delimiter(s[i])) {
@@ -889,9 +889,29 @@ ofputil_versions_from_string(const char *s)
         }
         key = xmemdup0(s + i, j);
         version = ofputil_version_from_string(key);
+        if (!version) {
+            VLOG_FATAL("Unknown OpenFlow version: \"%s\"", key);
+        }
         free(key);
         bitmap |= 1u << version;
         i += j;
+    }
+
+    return bitmap;
+}
+
+uint32_t
+ofputil_versions_from_strings(char ** const s, size_t count)
+{
+    uint32_t bitmap = 0;
+
+    while (count--) {
+        int version = ofputil_version_from_string(s[count]);
+        if (!version) {
+            VLOG_WARN("Unknown OpenFlow version: \"%s\"", s[count]);
+        } else {
+            bitmap |= 1u << version;
+        }
     }
 
     return bitmap;

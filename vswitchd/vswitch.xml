@@ -453,6 +453,12 @@
         QoS configured, or if the port does not have a queue with the specified
         ID, the default queue is used instead.
       </column>
+
+      <column name="protocols">
+        List of OpenFlow protocols that may be used when negotiating a
+        connection with a controller.  A default value of
+        <code>OpenFlow10</code> will be used if this column is empty.
+      </column>
     </group>
 
     <group title="Spanning Tree Configuration">

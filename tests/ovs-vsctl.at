@@ -587,6 +587,7 @@ name                : "br0"
 netflow             : []
 other_config        : {}
 ports               : []
+protocols           : []
 sflow               : []
 status              : {}
 stp_enable          : false
@@ -1042,6 +1043,7 @@ name                : "br0"
 netflow             : []
 other_config        : {}
 ports               : []
+protocols           : []
 sflow               : []
 status              : {}
 stp_enable          : false

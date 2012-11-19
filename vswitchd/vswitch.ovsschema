@@ -1,6 +1,6 @@
 {"name": "Open_vSwitch",
- "version": "6.11.0",
- "cksum": "3699219253 17163",
+ "version": "6.11.1",
+ "cksum": "2684374538 17324",
  "tables": {
    "Open_vSwitch": {
      "columns": {
@@ -74,6 +74,10 @@
          "type": {"key": {"type": "uuid",
                           "refTable": "Controller"},
                   "min": 0, "max": "unlimited"}},
+       "protocols": {
+         "type": {"key": {"type": "string",
+           "enum": ["set", ["OpenFlow10", "OpenFlow12"]]},
+	   "min": 0, "max": "unlimited"}},
        "fail_mode": {
          "type": {"key": {"type": "string",
                           "enum": ["set", ["standalone", "secure"]]},

@@ -140,6 +140,7 @@ enum ofputil_protocol ofputil_protocols_from_string(const char *s);
 
 const char *ofputil_version_to_string(enum ofp_version ofp_version);
 uint32_t ofputil_versions_from_string(const char *s);
+uint32_t ofputil_versions_from_strings(char ** const s, size_t count);
 
 bool ofputil_decode_hello(const struct ofp_header *,
                           uint32_t *allowed_versions);

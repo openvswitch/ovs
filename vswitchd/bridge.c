@@ -36,6 +36,7 @@
 #include "meta-flow.h"
 #include "netdev.h"
 #include "ofp-print.h"
+#include "ofp-util.h"
 #include "ofpbuf.h"
 #include "ofproto/ofproto.h"
 #include "poll-loop.h"
@@ -812,6 +813,18 @@ bridge_configure_datapath_id(struct bridge *br)
     dpid_string = xasprintf("%016"PRIx64, dpid);
     ovsrec_bridge_set_datapath_id(br->cfg, dpid_string);
     free(dpid_string);
+}
+
+/* Returns a bitmap of "enum ofputil_protocol"s that are allowed for use with
+ * 'br'. */
+static uint32_t
+bridge_get_allowed_versions(struct bridge *br)
+{
+    if (!br->cfg->n_protocols)
+        return 0;
+
+    return ofputil_versions_from_strings(br->cfg->protocols,
+                                         br->cfg->n_protocols);
 }
 
 /* Set NetFlow configuration on 'br'. */
@@ -2800,7 +2813,8 @@ bridge_configure_remotes(struct bridge *br,
         n_ocs++;
     }
 
-    ofproto_set_controllers(br->ofproto, ocs, n_ocs, 0);
+    ofproto_set_controllers(br->ofproto, ocs, n_ocs,
+                            bridge_get_allowed_versions(br));
     free(ocs[0].target); /* From bridge_ofproto_controller_for_mgmt(). */
     free(ocs);
 
