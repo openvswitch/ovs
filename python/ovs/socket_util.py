@@ -78,8 +78,22 @@ def make_unix_socket(style, nonblock, bind_path, connect_path):
 def check_connection_completion(sock):
     p = ovs.poller.SelectPoll()
     p.register(sock, ovs.poller.POLLOUT)
-    if len(p.poll(0)) == 1:
-        return get_socket_error(sock)
+    pfds = p.poll(0)
+    if len(pfds) == 1:
+        revents = pfds[0][1]
+        if revents & ovs.poller.POLLERR:
+            try:
+                # The following should raise an exception.
+                socket.send("\0", socket.MSG_DONTWAIT)
+
+                # (Here's where we end up if it didn't.)
+                # XXX rate-limit
+                vlog.err("poll return POLLERR but send succeeded")
+                return errno.EPROTO
+            except socket.error, e:
+                return get_exception_errno(e)
+        else:
+            return 0
     else:
         return errno.EAGAIN
 
