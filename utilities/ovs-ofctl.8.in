@@ -1343,6 +1343,8 @@ passing through the flow.
 \fB\-\-strict\fR
 Uses strict matching when running flow modification commands.
 .
+.so lib/ofp-version.man
+.
 .IP "\fB\-F \fIformat\fR[\fB,\fIformat\fR...]"
 .IQ "\fB\-\-flow\-format=\fIformat\fR[\fB,\fIformat\fR...]"
 \fBovs\-ofctl\fR supports the following individual flow formats, any
