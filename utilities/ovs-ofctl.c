@@ -1419,19 +1419,32 @@ ofctl_monitor(int argc, char *argv[])
     if (preferred_packet_in_format >= 0) {
         set_packet_in_format(vconn, preferred_packet_in_format);
     } else {
-        struct ofpbuf *spif, *reply;
+        enum ofp_version version = vconn_get_version(vconn);
 
-        spif = ofputil_make_set_packet_in_format(vconn_get_version(vconn),
-                                                 NXPIF_NXM);
-        run(vconn_transact_noreply(vconn, spif, &reply),
-            "talking to %s", vconn_get_name(vconn));
-        if (reply) {
-            char *s = ofp_to_string(reply->data, reply->size, 2);
-            VLOG_DBG("%s: failed to set packet in format to nxm, controller"
-                     " replied: %s. Falling back to the switch default.",
-                     vconn_get_name(vconn), s);
-            free(s);
-            ofpbuf_delete(reply);
+        switch (version) {
+        case OFP10_VERSION: {
+            struct ofpbuf *spif, *reply;
+
+            spif = ofputil_make_set_packet_in_format(vconn_get_version(vconn),
+                                                     NXPIF_NXM);
+            run(vconn_transact_noreply(vconn, spif, &reply),
+                "talking to %s", vconn_get_name(vconn));
+            if (reply) {
+                char *s = ofp_to_string(reply->data, reply->size, 2);
+                VLOG_DBG("%s: failed to set packet in format to nxm, controller"
+                        " replied: %s. Falling back to the switch default.",
+                        vconn_get_name(vconn), s);
+                free(s);
+                ofpbuf_delete(reply);
+            }
+            break;
+        }
+        case OFP11_VERSION:
+        case OFP12_VERSION:
+        case OFP13_VERSION:
+            break;
+        default:
+            NOT_REACHED();
         }
     }
 
