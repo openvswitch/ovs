@@ -205,19 +205,6 @@ lookup_hostname(const char *host_name, struct in_addr *addr)
             : EINVAL);
 }
 
-/* Returns the error condition associated with socket 'fd' and resets the
- * socket's error status. */
-int
-get_socket_error(int fd)
-{
-    int error;
-
-    if (getsockopt_int(fd, SOL_SOCKET, SO_ERROR, "SO_ERROR", &error)) {
-        error = errno;
-    }
-    return error;
-}
-
 int
 check_connection_completion(int fd)
 {

@@ -133,12 +133,6 @@ def inet_open_active(style, target, default_port, dscp):
         return get_exception_errno(e), None
 
 
-def get_socket_error(sock):
-    """Returns the errno value associated with 'socket' (0 if no error) and
-    resets the socket's error status."""
-    return sock.getsockopt(socket.SOL_SOCKET, socket.SO_ERROR)
-
-
 def get_exception_errno(e):
     """A lot of methods on Python socket objects raise socket.error, but that
     exception is documented as having two completely different forms of

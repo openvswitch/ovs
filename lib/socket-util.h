@@ -36,7 +36,6 @@ int lookup_ipv6(const char *host_name, struct in6_addr *address);
 
 int lookup_hostname(const char *host_name, struct in_addr *);
 
-int get_socket_error(int sock);
 int get_socket_rcvbuf(int sock);
 int check_connection_completion(int fd);
 int drain_rcvbuf(int fd);
