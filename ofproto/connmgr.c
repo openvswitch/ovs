@@ -840,10 +840,24 @@ ofconn_get_invalid_ttl_to_controller(struct ofconn *ofconn)
 
 /* Returns the currently configured protocol for 'ofconn', one of OFPUTIL_P_*.
  *
- * The default, if no other format has been set, is OFPUTIL_P_OF10_STD. */
+ * Returns OFPUTIL_P_NONE, which is not a valid protocol, if 'ofconn' hasn't
+ * completed version negotiation.  This can't happen if at least one OpenFlow
+ * message, other than OFPT_HELLO, has been received on the connection (such as
+ * in ofproto.c's message handling code), since version negotiation is a
+ * prerequisite for starting to receive messages.  This means that
+ * OFPUTIL_P_NONE is a special case that most callers need not worry about. */
 enum ofputil_protocol
 ofconn_get_protocol(const struct ofconn *ofconn)
 {
+    if (ofconn->protocol == OFPUTIL_P_NONE &&
+        rconn_is_connected(ofconn->rconn)) {
+        int version = rconn_get_version(ofconn->rconn);
+        if (version > 0) {
+            ofconn_set_protocol(CONST_CAST(struct ofconn *, ofconn),
+                                ofputil_protocol_from_ofp_version(version));
+        }
+    }
+
     return ofconn->protocol;
 }
 
@@ -1034,7 +1048,7 @@ ofconn_flush(struct ofconn *ofconn)
     int i;
 
     ofconn->role = NX_ROLE_OTHER;
-    ofconn->protocol = OFPUTIL_P_OF10_STD;
+    ofconn_set_protocol(ofconn, OFPUTIL_P_NONE);
     ofconn->packet_in_format = NXPIF_OPENFLOW10;
 
     /* Disassociate 'ofconn' from all of the ofopgroups that it initiated that
@@ -1234,7 +1248,8 @@ ofconn_receives_async_msg(const struct ofconn *ofconn,
     assert(reason < 32);
     assert((unsigned int) type < OAM_N_TYPES);
 
-    if (!rconn_is_connected(ofconn->rconn)) {
+    if (ofconn_get_protocol(ofconn) == OFPUTIL_P_NONE
+        || !rconn_is_connected(ofconn->rconn)) {
         return false;
     }
 
@@ -1317,7 +1332,7 @@ connmgr_send_port_status(struct connmgr *mgr,
         if (ofconn_receives_async_msg(ofconn, OAM_PORT_STATUS, reason)) {
             struct ofpbuf *msg;
 
-            msg = ofputil_encode_port_status(&ps, ofconn->protocol);
+            msg = ofputil_encode_port_status(&ps, ofconn_get_protocol(ofconn));
             ofconn_send(ofconn, msg, NULL);
         }
     }
@@ -1340,7 +1355,7 @@ connmgr_send_flow_removed(struct connmgr *mgr,
              * also prevents new flows from being added (and expiring).  (It
              * also prevents processing OpenFlow requests that would not add
              * new flows, so it is imperfect.) */
-            msg = ofputil_encode_flow_removed(fr, ofconn->protocol);
+            msg = ofputil_encode_flow_removed(fr, ofconn_get_protocol(ofconn));
             ofconn_send_reply(ofconn, msg);
         }
     }
@@ -1411,7 +1426,7 @@ schedule_packet_in(struct ofconn *ofconn, struct ofputil_packet_in pin)
      * while (until a later call to pinsched_run()). */
     pinsched_send(ofconn->schedulers[pin.reason == OFPR_NO_MATCH ? 0 : 1],
                   pin.fmd.in_port,
-                  ofputil_encode_packet_in(&pin, ofconn->protocol,
+                  ofputil_encode_packet_in(&pin, ofconn_get_protocol(ofconn),
                                            ofconn->packet_in_format),
                   do_send_packet_in, ofconn);
 }

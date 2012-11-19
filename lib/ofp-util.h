@@ -69,6 +69,7 @@ enum ofputil_protocol {
      * The protocols with "TID" mean that the nx_flow_mod_table_id Nicira
      * extension has been enabled.  The other protocols have it disabled.
      */
+#define OFPUTIL_P_NONE 0
     OFPUTIL_P_OF10_STD     = 1 << 0,
     OFPUTIL_P_OF10_STD_TID = 1 << 1,
     OFPUTIL_P_OF10_NXM     = 1 << 2,
