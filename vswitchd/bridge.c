@@ -1245,7 +1245,7 @@ bridge_refresh_one_ofp_port(struct bridge *br,
              * configured as the user requested, so we must destroy it. */
             return false;
         } else {
-            /* It's the right type and configured correctly.  keep it. */
+            /* It's the right type and configured correctly.  Keep it. */
             iface_set_ofp_port(iface, ofp_port);
             return true;
         }
