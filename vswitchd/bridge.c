@@ -247,6 +247,7 @@ static void iface_refresh_cfm_stats(struct iface *);
 static void iface_refresh_stats(struct iface *);
 static void iface_refresh_status(struct iface *);
 static bool iface_is_synthetic(const struct iface *);
+static int64_t iface_pick_ofport(const struct ovsrec_interface *);
 
 /* Linux VLAN device support (e.g. "eth0.10" for VLAN 10.)
  *
@@ -295,8 +296,7 @@ bridge_init_ofproto(const struct ovsrec_open_vswitch *cfg)
                     iface_hint = xmalloc(sizeof *iface_hint);
                     iface_hint->br_name = br_cfg->name;
                     iface_hint->br_type = br_cfg->datapath_type;
-                    iface_hint->ofp_port = if_cfg->n_ofport_request ?
-                        *if_cfg->ofport_request : OFPP_NONE;
+                    iface_hint->ofp_port = iface_pick_ofport(if_cfg);
 
                     shash_add(&iface_hints, if_cfg->name, iface_hint);
                 }
@@ -1404,6 +1404,7 @@ iface_create(struct bridge *br, struct if_cfg *if_cfg, int ofp_port)
     error = iface_do_create(br, if_cfg, &ofp_port, &netdev);
     bridge_run_fast();
     if (error) {
+        iface_set_ofport(iface_cfg, -1);
         iface_clear_db_record(iface_cfg);
         ok = false;
         goto done;
@@ -2545,7 +2546,7 @@ bridge_queue_if_cfg(struct bridge *br,
 
     if_cfg->cfg = cfg;
     if_cfg->parent = parent;
-    if_cfg->ofport = cfg->n_ofport_request ? *cfg->ofport_request : OFPP_NONE;
+    if_cfg->ofport = iface_pick_ofport(cfg);
     hmap_insert(&br->if_cfg_todo, &if_cfg->hmap_node,
                 hash_string(if_cfg->cfg->name, 0));
 }
@@ -3308,7 +3309,6 @@ static void
 iface_clear_db_record(const struct ovsrec_interface *if_cfg)
 {
     if (!ovsdb_idl_row_is_synthetic(&if_cfg->header_)) {
-        iface_set_ofport(if_cfg, -1);
         ovsrec_interface_set_status(if_cfg, NULL);
         ovsrec_interface_set_admin_state(if_cfg, NULL);
         ovsrec_interface_set_duplex(if_cfg, NULL);
@@ -3476,6 +3476,13 @@ static bool
 iface_is_synthetic(const struct iface *iface)
 {
     return ovsdb_idl_row_is_synthetic(&iface->cfg->header_);
+}
+
+static int64_t
+iface_pick_ofport(const struct ovsrec_interface *cfg)
+{
+    int64_t ofport = cfg->n_ofport ? *cfg->ofport : OFPP_NONE;
+    return cfg->n_ofport_request ? *cfg->ofport_request : ofport;
 }
 
 

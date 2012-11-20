@@ -1164,6 +1164,9 @@
         port number for the OpenFlow ``local port'').  If the interface
         cannot be added then Open vSwitch sets this column
         to -1.</p>
+        <p>When <ref column="ofport_request"/> is not set, Open vSwitch picks
+        an appropriate value for this column and then tries to keep the value
+        constant across restarts.</p>
       </column>
 
       <column name="ofport_request">
