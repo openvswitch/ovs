@@ -7631,7 +7631,7 @@ ofproto_dpif_unixctl_init(void)
 
     unixctl_command_register(
         "ofproto/trace",
-        "bridge {tun_id in_port packet | odp_flow [-generate]}",
+        "bridge {priority tun_id in_port packet | odp_flow [-generate]}",
         2, 5, ofproto_unixctl_trace, NULL);
     unixctl_command_register("fdb/flush", "[bridge]", 0, 1,
                              ofproto_unixctl_fdb_flush, NULL);
