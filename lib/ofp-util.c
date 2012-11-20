@@ -588,6 +588,7 @@ static const struct proto_abbrev proto_abbrevs[] = {
 #define N_PROTO_ABBREVS ARRAY_SIZE(proto_abbrevs)
 
 enum ofputil_protocol ofputil_flow_dump_protocols[] = {
+    OFPUTIL_P_OF12_OXM,
     OFPUTIL_P_OF10_NXM,
     OFPUTIL_P_OF10_STD,
 };
