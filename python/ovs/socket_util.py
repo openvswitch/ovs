@@ -182,7 +182,7 @@ def set_nonblocking(sock):
         sock.setblocking(0)
     except socket.error, e:
         vlog.err("could not set nonblocking mode on socket: %s"
-                 % os.strerror(get_socket_error(e)))
+                 % os.strerror(get_exception_errno(e)))
 
 
 def set_dscp(sock, dscp):
