@@ -1666,7 +1666,8 @@ alloc_ofp_port(struct ofproto *ofproto, const char *netdev_name)
          * flows. */
         while (ofp_port >= ofproto->max_ports) {
             for (ofproto->alloc_port_no++;
-                 ofproto->alloc_port_no < ofproto->max_ports; ) {
+                 ofproto->alloc_port_no < ofproto->max_ports;
+                 ofproto->alloc_port_no++) {
                 if (!bitmap_is_set(ofproto->ofp_port_ids,
                                    ofproto->alloc_port_no)) {
                     ofp_port = ofproto->alloc_port_no;
