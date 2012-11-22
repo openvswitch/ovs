@@ -56,7 +56,4 @@ int dpif_linux_vport_get(const char *name, struct dpif_linux_vport *reply,
 
 bool dpif_linux_is_internal_device(const char *name);
 
-int dpif_linux_vport_send(int dp_ifindex, uint32_t port_no,
-                          const void *data, size_t size);
-
 #endif /* dpif-linux.h */

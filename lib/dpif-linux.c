@@ -1376,33 +1376,6 @@ dpif_linux_is_internal_device(const char *name)
     return reply.type == OVS_VPORT_TYPE_INTERNAL;
 }
 
-int
-dpif_linux_vport_send(int dp_ifindex, uint32_t port_no,
-                      const void *data, size_t size)
-{
-    struct ofpbuf actions, key, packet;
-    struct odputil_keybuf keybuf;
-    struct dpif_execute execute;
-    struct flow flow;
-    uint64_t action;
-
-    ofpbuf_use_const(&packet, data, size);
-    flow_extract(&packet, 0, 0, NULL, 0, &flow);
-
-    ofpbuf_use_stack(&key, &keybuf, sizeof keybuf);
-    odp_flow_key_from_flow(&key, &flow, OVSP_NONE);
-
-    ofpbuf_use_stack(&actions, &action, sizeof action);
-    nl_msg_put_u32(&actions, OVS_ACTION_ATTR_OUTPUT, port_no);
-
-    execute.key = key.data;
-    execute.key_len = key.size;
-    execute.actions = actions.data;
-    execute.actions_len = actions.size;
-    execute.packet = &packet;
-    return dpif_linux_execute__(dp_ifindex, &execute);
-}
-
 static bool
 dpif_linux_nln_parse(struct ofpbuf *buf, void *vport_)
 {

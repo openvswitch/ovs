@@ -55,8 +55,6 @@ VLOG_DEFINE_THIS_MODULE(netdev_vport);
 struct netdev_dev_vport {
     struct netdev_dev netdev_dev;
     struct ofpbuf *options;
-    int dp_ifindex;             /* -1 if unknown. */
-    uint32_t port_no;           /* UINT32_MAX if unknown. */
     unsigned int change_seq;
 };
 
@@ -198,8 +196,6 @@ netdev_vport_create(const struct netdev_class *netdev_class, const char *name,
     dev = xmalloc(sizeof *dev);
     netdev_dev_init(&dev->netdev_dev, name, netdev_class);
     dev->options = NULL;
-    dev->dp_ifindex = -1;
-    dev->port_no = UINT32_MAX;
     dev->change_seq = 1;
 
     *netdev_devp = &dev->netdev_dev;
@@ -258,8 +254,6 @@ netdev_vport_get_config(struct netdev_dev *dev_, struct smap *args)
         }
 
         dev->options = ofpbuf_clone_data(reply.options, reply.options_len);
-        dev->dp_ifindex = reply.dp_ifindex;
-        dev->port_no = reply.port_no;
         ofpbuf_delete(buf);
     }
 
@@ -312,32 +306,6 @@ netdev_vport_set_config(struct netdev_dev *dev_, const struct smap *args)
     ofpbuf_delete(options);
 
     return error;
-}
-
-static int
-netdev_vport_send(struct netdev *netdev, const void *data, size_t size)
-{
-    struct netdev_dev *dev_ = netdev_get_dev(netdev);
-    struct netdev_dev_vport *dev = netdev_dev_vport_cast(dev_);
-
-    if (dev->dp_ifindex == -1) {
-        const char *name = netdev_get_name(netdev);
-        struct dpif_linux_vport reply;
-        struct ofpbuf *buf;
-        int error;
-
-        error = dpif_linux_vport_get(name, &reply, &buf);
-        if (error) {
-            VLOG_ERR_RL(&rl, "%s: failed to query vport for send (%s)",
-                        name, strerror(error));
-            return error;
-        }
-        dev->dp_ifindex = reply.dp_ifindex;
-        dev->port_no = reply.port_no;
-        ofpbuf_delete(buf);
-    }
-
-    return dpif_linux_vport_send(dev->dp_ifindex, dev->port_no, data, size);
 }
 
 static int
@@ -952,7 +920,7 @@ unparse_patch_config(const char *name OVS_UNUSED, const char *type OVS_UNUSED,
     NULL,                       /* recv_wait */             \
     NULL,                       /* drain */                 \
                                                             \
-    netdev_vport_send,          /* send */                  \
+    NULL,                       /* send */                  \
     NULL,                       /* send_wait */             \
                                                             \
     netdev_vport_set_etheraddr,                             \
