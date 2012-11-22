@@ -31,6 +31,18 @@ OFPT_FLOW_MOD: ADD in_port=0 actions=resubmit:0
 ]])
 AT_CLEANUP
 
+AT_SETUP([ovs-ofctl parse-flows (With Tunnel-Parameters)])
+AT_DATA([flows.txt], [[
+tun_id=0x1234000056780000/0xffff0000ffff0000,tun_src=1.1.1.1,tun_dst=2.2.2.2,tun_tos=0x3,tun_ttl=20,tun_flags=key|csum actions=drop
+]])
+
+AT_CHECK([ovs-ofctl parse-flows flows.txt
+], [1], [usable protocols: none
+], [stderr])
+
+AT_CLEANUP
+
+
 AT_SETUP([ovs-ofctl parse-flows (NXM)])
 AT_DATA([flows.txt], [[
 # comment

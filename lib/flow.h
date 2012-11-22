@@ -56,6 +56,9 @@ BUILD_ASSERT_DECL(FLOW_NW_FRAG_LATER == NX_IP_FRAG_LATER);
 #define FLOW_TNL_F_DONT_FRAGMENT (1 << 0)
 #define FLOW_TNL_F_CSUM (1 << 1)
 #define FLOW_TNL_F_KEY (1 << 2)
+
+const char *flow_tun_flag_to_string(uint32_t flags);
+
 struct flow_tnl {
     ovs_be64 tun_id;
     ovs_be32 ip_src;
@@ -123,6 +126,9 @@ void flow_zero_wildcards(struct flow *, const struct flow_wildcards *);
 void flow_get_metadata(const struct flow *, struct flow_metadata *);
 
 char *flow_to_string(const struct flow *);
+void format_flags(struct ds *ds, const char *(*bit_to_string)(uint32_t),
+                  uint32_t flags, char del);
+
 void flow_format(struct ds *, const struct flow *);
 void flow_print(FILE *, const struct flow *);
 static inline int flow_compare_3way(const struct flow *, const struct flow *);

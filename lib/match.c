@@ -62,14 +62,19 @@ match_wc_init(struct match *match, const struct flow *flow)
         }
     }
 
-    if (flow->tunnel.ip_dst || flow->tunnel.tun_id) {
-        memset(&wc->masks.tunnel.tun_id, 0xff, sizeof wc->masks.tunnel.tun_id);
+    if (flow->tunnel.ip_dst) {
+        if (flow->tunnel.flags & FLOW_TNL_F_KEY) {
+            memset(&wc->masks.tunnel.tun_id, 0xff, sizeof wc->masks.tunnel.tun_id);
+        }
         memset(&wc->masks.tunnel.ip_src, 0xff, sizeof wc->masks.tunnel.ip_src);
         memset(&wc->masks.tunnel.ip_dst, 0xff, sizeof wc->masks.tunnel.ip_dst);
         memset(&wc->masks.tunnel.flags, 0xff, sizeof wc->masks.tunnel.flags);
         memset(&wc->masks.tunnel.ip_tos, 0xff, sizeof wc->masks.tunnel.ip_tos);
         memset(&wc->masks.tunnel.ip_ttl, 0xff, sizeof wc->masks.tunnel.ip_ttl);
+    } else if (flow->tunnel.tun_id) {
+        memset(&wc->masks.tunnel.tun_id, 0xff, sizeof wc->masks.tunnel.tun_id);
     }
+
     memset(&wc->masks.metadata, 0xff, sizeof wc->masks.metadata);
     memset(&wc->masks.in_port, 0xff, sizeof wc->masks.in_port);
     memset(&wc->masks.vlan_tci, 0xff, sizeof wc->masks.vlan_tci);
@@ -193,6 +198,71 @@ match_set_tun_id_masked(struct match *match, ovs_be64 tun_id, ovs_be64 mask)
 {
     match->wc.masks.tunnel.tun_id = mask;
     match->flow.tunnel.tun_id = tun_id & mask;
+}
+
+void
+match_set_tun_src(struct match *match, ovs_be32 src)
+{
+    match_set_tun_src_masked(match, src, htonl(UINT32_MAX));
+}
+
+void
+match_set_tun_src_masked(struct match *match, ovs_be32 src, ovs_be32 mask)
+{
+    match->wc.masks.tunnel.ip_src = mask;
+    match->flow.tunnel.ip_src = src & mask;
+}
+
+void
+match_set_tun_dst(struct match *match, ovs_be32 dst)
+{
+    match_set_tun_dst_masked(match, dst, htonl(UINT32_MAX));
+}
+
+void
+match_set_tun_dst_masked(struct match *match, ovs_be32 dst, ovs_be32 mask)
+{
+    match->wc.masks.tunnel.ip_dst = mask;
+    match->flow.tunnel.ip_dst = dst & mask;
+}
+
+void
+match_set_tun_ttl(struct match *match, uint8_t ttl)
+{
+    match_set_tun_ttl_masked(match, ttl, UINT8_MAX);
+}
+
+void
+match_set_tun_ttl_masked(struct match *match, uint8_t ttl, uint8_t mask)
+{
+    match->wc.masks.tunnel.ip_ttl = mask;
+    match->flow.tunnel.ip_ttl = ttl & mask;
+}
+
+void
+match_set_tun_tos(struct match *match, uint8_t tos)
+{
+    match_set_tun_tos_masked(match, tos, UINT8_MAX);
+}
+
+void
+match_set_tun_tos_masked(struct match *match, uint8_t tos, uint8_t mask)
+{
+    match->wc.masks.tunnel.ip_tos = mask;
+    match->flow.tunnel.ip_tos = tos & mask;
+}
+
+void
+match_set_tun_flags(struct match *match, uint16_t flags)
+{
+    match_set_tun_flags_masked(match, flags, UINT16_MAX);
+}
+
+void
+match_set_tun_flags_masked(struct match *match, uint16_t flags, uint16_t mask)
+{
+    match->wc.masks.tunnel.flags = mask;
+    match->flow.tunnel.flags = flags & mask;
 }
 
 void
@@ -643,6 +713,39 @@ format_be16_masked(struct ds *s, const char *name,
     }
 }
 
+static void
+format_flow_tunnel(struct ds *s, const struct match *match)
+{
+    const struct flow_wildcards *wc = &match->wc;
+    const struct flow_tnl *tnl = &match->flow.tunnel;
+
+    switch (wc->masks.tunnel.tun_id) {
+    case 0:
+        break;
+    case CONSTANT_HTONLL(UINT64_MAX):
+        ds_put_format(s, "tun_id=%#"PRIx64",", ntohll(tnl->tun_id));
+        break;
+    default:
+        ds_put_format(s, "tun_id=%#"PRIx64"/%#"PRIx64",",
+                      ntohll(tnl->tun_id),
+                      ntohll(wc->masks.tunnel.tun_id));
+        break;
+    }
+    format_ip_netmask(s, "tun_src", tnl->ip_src, wc->masks.tunnel.ip_src);
+    format_ip_netmask(s, "tun_dst", tnl->ip_dst, wc->masks.tunnel.ip_dst);
+
+    if (wc->masks.tunnel.ip_tos) {
+        ds_put_format(s, "tun_tos=%"PRIx8",", tnl->ip_tos);
+    }
+    if (wc->masks.tunnel.ip_ttl) {
+        ds_put_format(s, "tun_ttl=%"PRIu8",", tnl->ip_ttl);
+    }
+    if (wc->masks.tunnel.flags) {
+        format_flags(s, flow_tun_flag_to_string, tnl->flags, '|');
+        ds_put_char(s, ',');
+    }
+}
+
 /* Appends a string representation of 'match' to 's'.  If 'priority' is
  * different from OFP_DEFAULT_PRIORITY, includes it in 's'. */
 void
@@ -717,18 +820,9 @@ match_format(const struct match *match, struct ds *s, unsigned int priority)
             break;
         }
     }
-    switch (wc->masks.tunnel.tun_id) {
-    case 0:
-        break;
-    case CONSTANT_HTONLL(UINT64_MAX):
-        ds_put_format(s, "tun_id=%#"PRIx64",", ntohll(f->tunnel.tun_id));
-        break;
-    default:
-        ds_put_format(s, "tun_id=%#"PRIx64"/%#"PRIx64",",
-                      ntohll(f->tunnel.tun_id),
-                      ntohll(wc->masks.tunnel.tun_id));
-        break;
-    }
+
+    format_flow_tunnel(s, match);
+
     switch (wc->masks.metadata) {
     case 0:
         break;

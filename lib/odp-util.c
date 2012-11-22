@@ -190,38 +190,6 @@ slow_path_reason_to_string(uint32_t data)
     }
 }
 
-static void
-format_flags(struct ds *ds, const char *(*bit_to_string)(uint32_t),
-             uint32_t flags)
-{
-    uint32_t bad = 0;
-
-    ds_put_format(ds, "(");
-    if (!flags) {
-        goto out;
-    }
-    while (flags) {
-        uint32_t bit = rightmost_1bit(flags);
-        const char *s;
-
-        s = bit_to_string(bit);
-        if (s) {
-            ds_put_format(ds, "%s,", s);
-        } else {
-            bad |= bit;
-        }
-
-        flags &= ~bit;
-    }
-
-    if (bad) {
-        ds_put_format(ds, "0x%"PRIx32",", bad);
-    }
-    ds_chomp(ds, ',');
-out:
-    ds_put_format(ds, ")");
-}
-
 static int
 parse_flags(const char *s, const char *(*bit_to_string)(uint32_t),
             uint32_t *res)
@@ -305,8 +273,10 @@ format_odp_userspace_action(struct ds *ds, const struct nlattr *attr)
             break;
 
         case USER_ACTION_COOKIE_SLOW_PATH:
-            ds_put_cstr(ds, ",slow_path");
-            format_flags(ds, slow_path_reason_to_string, cookie.slow_path.reason);
+            ds_put_cstr(ds, ",slow_path(");
+            format_flags(ds, slow_path_reason_to_string,
+                         cookie.slow_path.reason, ',');
+            ds_put_format(ds, ")");
             break;
 
         case USER_ACTION_COOKIE_UNSPEC:
@@ -703,7 +673,7 @@ ovs_frag_type_to_string(enum ovs_frag_type type)
 }
 
 static const char *
-tun_flag_to_string(uint32_t flags)
+odp_tun_flag_to_string(uint32_t flags)
 {
     switch (flags) {
     case OVS_TNL_F_DONT_FRAGMENT:
@@ -767,14 +737,15 @@ format_odp_key_attr(const struct nlattr *a, struct ds *ds)
     case OVS_KEY_ATTR_IPV4_TUNNEL:
         ipv4_tun_key = nl_attr_get(a);
         ds_put_format(ds, "(tun_id=0x%"PRIx64",src="IP_FMT",dst="IP_FMT","
-                      "tos=0x%"PRIx8",ttl=%"PRIu8",flags",
+                      "tos=0x%"PRIx8",ttl=%"PRIu8",flags(",
                       ntohll(ipv4_tun_key->tun_id),
                       IP_ARGS(&ipv4_tun_key->ipv4_src),
                       IP_ARGS(&ipv4_tun_key->ipv4_dst),
                       ipv4_tun_key->ipv4_tos, ipv4_tun_key->ipv4_ttl);
 
-        format_flags(ds, tun_flag_to_string, ipv4_tun_key->tun_flags);
-        ds_put_format(ds, ")");
+        format_flags(ds, odp_tun_flag_to_string,
+                     ipv4_tun_key->tun_flags, ',');
+        ds_put_format(ds, "))");
         break;
 
     case OVS_KEY_ATTR_IN_PORT:
@@ -1018,7 +989,8 @@ parse_odp_key_attr(const char *s, const struct simap *port_names,
             tun_key.ipv4_tos = tos;
             tun_key.ipv4_ttl = ttl;
 
-            res = parse_flags(&s[n], tun_flag_to_string, &tun_key.tun_flags);
+            res = parse_flags(&s[n], odp_tun_flag_to_string,
+                              &tun_key.tun_flags);
             if (res < 0) {
                 return res;
             }
