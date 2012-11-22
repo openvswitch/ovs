@@ -103,6 +103,7 @@ struct flow {
     uint8_t arp_tha[6];         /* ARP/ND target hardware address. */
     uint8_t nw_ttl;             /* IP TTL/Hop Limit. */
     uint8_t nw_frag;            /* FLOW_FRAG_* flags. */
+    uint8_t zeros[4];
 };
 BUILD_ASSERT_DECL(sizeof(struct flow) % 4 == 0);
 
