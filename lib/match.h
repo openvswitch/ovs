@@ -50,6 +50,16 @@ void match_set_metadata_masked(struct match *,
                                ovs_be64 metadata, ovs_be64 mask);
 void match_set_tun_id(struct match *, ovs_be64 tun_id);
 void match_set_tun_id_masked(struct match *, ovs_be64 tun_id, ovs_be64 mask);
+void match_set_tun_src(struct match *match, ovs_be32 src);
+void match_set_tun_src_masked(struct match *match, ovs_be32 src, ovs_be32 mask);
+void match_set_tun_dst(struct match *match, ovs_be32 dst);
+void match_set_tun_dst_masked(struct match *match, ovs_be32 dst, ovs_be32 mask);
+void match_set_tun_ttl(struct match *match, uint8_t ttl);
+void match_set_tun_ttl_masked(struct match *match, uint8_t ttl, uint8_t mask);
+void match_set_tun_tos(struct match *match, uint8_t tos);
+void match_set_tun_tos_masked(struct match *match, uint8_t tos, uint8_t mask);
+void match_set_tun_flags(struct match *match, uint16_t flags);
+void match_set_tun_flags_masked(struct match *match, uint16_t flags, uint16_t mask);
 void match_set_in_port(struct match *, uint16_t ofp_port);
 void match_set_dl_type(struct match *, ovs_be16);
 void match_set_dl_src(struct match *, const uint8_t[6]);

@@ -892,6 +892,16 @@ regs_fully_wildcarded(const struct flow_wildcards *wc)
     return true;
 }
 
+static bool
+tun_parms_fully_wildcarded(const struct flow_wildcards *wc)
+{
+    return (!wc->masks.tunnel.ip_src &&
+            !wc->masks.tunnel.ip_dst &&
+            !wc->masks.tunnel.ip_ttl &&
+            !wc->masks.tunnel.ip_tos &&
+            !wc->masks.tunnel.flags);
+}
+
 /* Returns a bit-mask of ofputil_protocols that can be used for sending 'match'
  * to a switch (e.g. to add or remove a flow).  Only NXM can handle tunnel IDs,
  * registers, or fixing the Ethernet multicast bit.  Otherwise, it's better to
@@ -902,6 +912,11 @@ ofputil_usable_protocols(const struct match *match)
     const struct flow_wildcards *wc = &match->wc;
 
     BUILD_ASSERT_DECL(FLOW_WC_SEQ == 18);
+
+    /* tunnel params other than tun_id can't be sent in a flow_mod */
+    if (!tun_parms_fully_wildcarded(wc)) {
+        return 0;
+    }
 
     /* NXM and OF1.1+ supports bitwise matching on ethernet addresses. */
     if (!eth_mask_is_exact(wc->masks.dl_src)
@@ -1381,7 +1396,6 @@ ofputil_flow_mod_usable_protocols(const struct ofputil_flow_mod *fms,
             usable_protocols &= OFPUTIL_P_NXM_ANY;
         }
     }
-    assert(usable_protocols);
 
     return usable_protocols;
 }
