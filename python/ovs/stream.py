@@ -161,15 +161,17 @@ class Stream(object):
         is complete, returns 0 if the connection was successful or a positive
         errno value if it failed.  If the connection is still in progress,
         returns errno.EAGAIN."""
-        last_state = -1         # Always differs from initial self.state
-        while self.state != last_state:
-            last_state = self.state
-            if self.state == Stream.__S_CONNECTING:
-                self.__scs_connecting()
-            elif self.state == Stream.__S_CONNECTED:
-                return 0
-            elif self.state == Stream.__S_DISCONNECTED:
-                return self.error
+
+        if self.state == Stream.__S_CONNECTING:
+            self.__scs_connecting()
+
+        if self.state == Stream.__S_CONNECTING:
+            return errno.EAGAIN
+        elif self.state == Stream.__S_CONNECTED:
+            return 0
+        else:
+            assert self.state == Stream.__S_DISCONNECTED
+            return self.error
 
     def recv(self, n):
         """Tries to receive up to 'n' bytes from this stream.  Returns a
