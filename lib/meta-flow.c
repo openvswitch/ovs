@@ -54,7 +54,7 @@ static const struct mf_field mf_fields[MFF_N_IDS] = {
         MFP_NONE,
         true,
         NXM_NX_TUN_ID, "NXM_NX_TUN_ID",
-        NXM_NX_TUN_ID, "NXM_NX_TUN_ID",
+        OXM_OF_TUNNEL_ID, "OXM_OF_TUNNEL_ID",
     }, {
         MFF_TUN_SRC, "tun_src", NULL,
         MF_FIELD_SIZES(be32),
