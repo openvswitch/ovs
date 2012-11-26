@@ -1435,7 +1435,9 @@ ofputil_decode_flow_mod(struct ofputil_flow_mod *fm,
         if (error) {
             return error;
         }
-        if (ofm->out_group != htonl(OFPG_ANY)) {
+        if ((ofm->command == OFPFC_DELETE
+             || ofm->command == OFPFC_DELETE_STRICT)
+            && ofm->out_group != htonl(OFPG_ANY)) {
             return OFPERR_OFPFMFC_UNKNOWN;
         }
         fm->flags = ntohs(ofm->flags);
