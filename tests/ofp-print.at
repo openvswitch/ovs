@@ -1149,7 +1149,7 @@ AT_CHECK([ovs-ofctl ofp-print "\
 01 10 00 14 00 00 00 01 00 05 00 00 ff fc 00 00 \
 ff ff ff ff \
 "], [0], [dnl
-OFPST_QUEUE request (xid=0x1):port=ALL queue=ALL
+OFPST_QUEUE request (xid=0x1):port=ANY queue=ALL
 ])
 AT_CLEANUP
 
@@ -1157,9 +1157,9 @@ AT_SETUP([OFPST_QUEUE request - OF1.1])
 AT_KEYWORDS([ofp-print OFPT_STATS_REQUEST])
 AT_CHECK([ovs-ofctl ofp-print "\
 02 12 00 18 00 00 00 02 00 05 00 00 00 00 00 00 \
-ff ff ff fc ff ff ff ff \
+ff ff ff ff ff ff ff ff \
 "], [0], [dnl
-OFPST_QUEUE request (OF1.1) (xid=0x2):port=ALL queue=ALL
+OFPST_QUEUE request (OF1.1) (xid=0x2):port=ANY queue=ALL
 ])
 AT_CLEANUP
 
@@ -1167,9 +1167,9 @@ AT_SETUP([OFPST_QUEUE request - OF1.2])
 AT_KEYWORDS([ofp-print OFPT_STATS_REQUEST])
 AT_CHECK([ovs-ofctl ofp-print "\
 03 12 00 18 00 00 00 02 00 05 00 00 00 00 00 00 \
-ff ff ff fc ff ff ff ff \
+ff ff ff ff ff ff ff ff \
 "], [0], [dnl
-OFPST_QUEUE request (OF1.2) (xid=0x2):port=ALL queue=ALL
+OFPST_QUEUE request (OF1.2) (xid=0x2):port=ANY queue=ALL
 ])
 AT_CLEANUP
 

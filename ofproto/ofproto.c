@@ -2129,7 +2129,7 @@ ofproto_rule_destroy(struct rule *rule)
 bool
 ofproto_rule_has_out_port(const struct rule *rule, uint16_t port)
 {
-    return (port == OFPP_NONE
+    return (port == OFPP_ANY
             || ofpacts_output_to_port(rule->ofpacts, rule->ofpacts_len, port));
 }
 
@@ -2542,7 +2542,7 @@ handle_port_stats_request(struct ofconn *ofconn,
     }
 
     ofpmp_init(&replies, request);
-    if (port_no != OFPP_NONE) {
+    if (port_no != OFPP_ANY) {
         port = ofproto_get_port(p, port_no);
         if (port) {
             append_port_stat(port, &replies);
@@ -2659,7 +2659,7 @@ next_matching_table(const struct ofproto *ofproto,
  * OpenFlow OFPFC_MODIFY and OFPFC_DELETE requests and puts them on list
  * 'rules'.
  *
- * If 'out_port' is anything other than OFPP_NONE, then only rules that output
+ * If 'out_port' is anything other than OFPP_ANY, then only rules that output
  * to 'out_port' are included.
  *
  * Hidden rules are always omitted.
@@ -2710,7 +2710,7 @@ exit:
  * OpenFlow OFPFC_MODIFY_STRICT and OFPFC_DELETE_STRICT requests and puts them
  * on list 'rules'.
  *
- * If 'out_port' is anything other than OFPP_NONE, then only rules that output
+ * If 'out_port' is anything other than OFPP_ANY, then only rules that output
  * to 'out_port' are included.
  *
  * Hidden rules are always omitted.
@@ -3054,7 +3054,7 @@ handle_queue_stats_request(struct ofconn *ofconn,
         return error;
     }
 
-    if (oqsr.port_no == OFPP_ALL) {
+    if (oqsr.port_no == OFPP_ANY) {
         error = OFPERR_OFPQOFC_BAD_QUEUE;
         HMAP_FOR_EACH (port, hmap_node, &ofproto->ports) {
             if (!handle_queue_stats_for_port(port, oqsr.queue_id, &cbdata)) {
@@ -3327,7 +3327,7 @@ modify_flows_loose(struct ofproto *ofproto, struct ofconn *ofconn,
 
     error = collect_rules_loose(ofproto, fm->table_id, &fm->match,
                                 fm->cookie, fm->cookie_mask,
-                                OFPP_NONE, &rules);
+                                OFPP_ANY, &rules);
     if (error) {
         return error;
     } else if (list_is_empty(&rules)) {
@@ -3352,7 +3352,7 @@ modify_flow_strict(struct ofproto *ofproto, struct ofconn *ofconn,
 
     error = collect_rules_strict(ofproto, fm->table_id, &fm->match,
                                  fm->priority, fm->cookie, fm->cookie_mask,
-                                 OFPP_NONE, &rules);
+                                 OFPP_ANY, &rules);
 
     if (error) {
         return error;

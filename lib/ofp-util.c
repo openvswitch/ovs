@@ -3804,6 +3804,11 @@ ofputil_check_output_port(uint16_t port, int max_ports)
         OFPUTIL_NAMED_PORT(ALL)                 \
         OFPUTIL_NAMED_PORT(CONTROLLER)          \
         OFPUTIL_NAMED_PORT(LOCAL)               \
+        OFPUTIL_NAMED_PORT(ANY)
+
+/* For backwards compatibility, so that "none" is recognized as OFPP_ANY */
+#define OFPUTIL_NAMED_PORTS_WITH_NONE           \
+        OFPUTIL_NAMED_PORTS                     \
         OFPUTIL_NAMED_PORT(NONE)
 
 /* Stores the port number represented by 's' into '*portp'.  's' may be an
@@ -3863,7 +3868,7 @@ ofputil_port_from_string(const char *s, uint16_t *portp)
         };
         static const struct pair pairs[] = {
 #define OFPUTIL_NAMED_PORT(NAME) {#NAME, OFPP_##NAME},
-            OFPUTIL_NAMED_PORTS
+            OFPUTIL_NAMED_PORTS_WITH_NONE
 #undef OFPUTIL_NAMED_PORT
         };
         const struct pair *p;
@@ -4467,9 +4472,13 @@ ofputil_decode_queue_stats_request(const struct ofp_header *request,
     }
 
     case OFP10_VERSION: {
-        const struct ofp10_queue_stats_request *qsr11 = ofpmsg_body(request);
-        oqsr->queue_id = ntohl(qsr11->queue_id);
-        oqsr->port_no = ntohs(qsr11->port_no);
+        const struct ofp10_queue_stats_request *qsr10 = ofpmsg_body(request);
+        oqsr->queue_id = ntohl(qsr10->queue_id);
+        oqsr->port_no = ntohs(qsr10->port_no);
+        /* OF 1.0 uses OFPP_ALL for OFPP_ANY */
+        if (oqsr->port_no == OFPP_ALL) {
+            oqsr->port_no = OFPP_ANY;
+        }
         return 0;
     }
 
@@ -4501,7 +4510,9 @@ ofputil_encode_queue_stats_request(enum ofp_version ofp_version,
         struct ofp10_queue_stats_request *req;
         request = ofpraw_alloc(OFPRAW_OFPST10_QUEUE_REQUEST, ofp_version, 0);
         req = ofpbuf_put_zeros(request, sizeof *req);
-        req->port_no = htons(oqsr->port_no);
+        /* OpenFlow 1.0 needs OFPP_ALL instead of OFPP_ANY */
+        req->port_no = htons(oqsr->port_no == OFPP_ANY
+                             ? OFPP_ALL : oqsr->port_no);
         req->queue_id = htonl(oqsr->queue_id);
         break;
     }

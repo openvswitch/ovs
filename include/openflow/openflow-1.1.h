@@ -70,6 +70,14 @@
 #define OFPP11_MAX    0xffffff00
 #define OFPP11_OFFSET (OFPP11_MAX - OFPP_MAX)
 
+/* Reserved wildcard port used only for flow mod (delete) and flow stats
+ * requests. Selects all flows regardless of output port
+ * (including flows with no output port)
+ *
+ * Define it via OFPP_NONE (0xFFFF) so that OFPP_ANY is still an enum ofp_port
+ */
+#define OFPP_ANY OFPP_NONE
+
 /* OpenFlow 1.1 port config flags are just the common flags. */
 #define OFPPC11_ALL \
     (OFPPC_PORT_DOWN | OFPPC_NO_RECV | OFPPC_NO_FWD | OFPPC_NO_PACKET_IN)

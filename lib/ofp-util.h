@@ -686,7 +686,7 @@ enum ofperr ofputil_decode_port_stats_request(const struct ofp_header *request,
                                               uint16_t *ofp10_port);
 
 struct ofputil_queue_stats_request {
-    uint16_t port_no;
+    uint16_t port_no;           /* OFPP_ANY means "all ports". */
     uint32_t queue_id;
 };
 

@@ -968,7 +968,7 @@ ofctl_queue_stats(int argc, char *argv[])
     if (argc > 2 && argv[2][0] && strcasecmp(argv[2], "all")) {
         oqs.port_no = str_to_port_no(argv[1], argv[2]);
     } else {
-        oqs.port_no = OFPP_ALL;
+        oqs.port_no = OFPP_ANY;
     }
     if (argc > 3 && argv[3][0] && strcasecmp(argv[3], "all")) {
         oqs.queue_id = atoi(argv[3]);
@@ -1430,7 +1430,7 @@ ofctl_dump_ports(int argc, char *argv[])
     uint16_t port;
 
     open_vconn(argv[1], &vconn);
-    port = argc > 2 ? str_to_port_no(argv[1], argv[2]) : OFPP_NONE;
+    port = argc > 2 ? str_to_port_no(argv[1], argv[2]) : OFPP_ANY;
     request = ofputil_encode_dump_ports_request(vconn_get_version(vconn), port);
     dump_stats_transaction(vconn, request);
     vconn_close(vconn);
@@ -1940,7 +1940,7 @@ read_flows_from_switch(struct vconn *vconn,
 
     fsr.aggregate = false;
     match_init_catchall(&fsr.match);
-    fsr.out_port = OFPP_NONE;
+    fsr.out_port = OFPP_ANY;
     fsr.table_id = 0xff;
     fsr.cookie = fsr.cookie_mask = htonll(0);
     request = ofputil_encode_flow_stats_request(&fsr, protocol);
@@ -1983,7 +1983,7 @@ fte_make_flow_mod(const struct fte *fte, int index, uint16_t command,
     fm.idle_timeout = version->idle_timeout;
     fm.hard_timeout = version->hard_timeout;
     fm.buffer_id = UINT32_MAX;
-    fm.out_port = OFPP_NONE;
+    fm.out_port = OFPP_ANY;
     fm.flags = version->flags;
     if (command == OFPFC_ADD || command == OFPFC_MODIFY ||
         command == OFPFC_MODIFY_STRICT) {

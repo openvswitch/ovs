@@ -765,7 +765,7 @@ ofp_print_flow_mod(struct ds *s, const struct ofp_header *oh, int verbosity)
     if (fm.buffer_id != UINT32_MAX) {
         ds_put_format(s, "buf:0x%"PRIx32" ", fm.buffer_id);
     }
-    if (fm.out_port != OFPP_NONE) {
+    if (fm.out_port != OFPP_ANY) {
         ds_put_format(s, "out_port:");
         ofputil_format_port(fm.out_port, s);
         ds_put_char(s, ' ');
@@ -1003,7 +1003,7 @@ ofp_print_flow_stats_request(struct ds *string, const struct ofp_header *oh)
         ds_put_format(string, " table=%"PRIu8, fsr.table_id);
     }
 
-    if (fsr.out_port != OFPP_NONE) {
+    if (fsr.out_port != OFPP_ANY) {
         ds_put_cstr(string, " out_port=");
         ofputil_format_port(fsr.out_port, string);
     }

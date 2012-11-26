@@ -90,9 +90,9 @@ AT_CHECK([ovs-ofctl -vwarn queue-stats br0], [0], [stdout])
 AT_CHECK([STRIP_XIDS stdout], [0], [dnl
 OFPST_QUEUE reply: 0 queues
 ])
-AT_CHECK([ovs-ofctl -vwarn queue-stats br0 ALL 5], [0],
+AT_CHECK([ovs-ofctl -vwarn queue-stats br0 ANY 5], [0],
   [OFPT_ERROR (xid=0x2): OFPQOFC_BAD_QUEUE
-OFPST_QUEUE request (xid=0x2):port=ALL queue=5
+OFPST_QUEUE request (xid=0x2):port=ANY queue=5
 ])
 AT_CHECK([ovs-ofctl -vwarn queue-stats br0 10], [0],
   [OFPT_ERROR (xid=0x2): OFPQOFC_BAD_PORT
@@ -657,23 +657,23 @@ check_async () {
     : > expout
 
     # OFPT_PACKET_IN, OFPR_ACTION (controller_id=0)
-    ovs-ofctl -v packet-out br0 none controller '0001020304050010203040501234'
+    ovs-ofctl -v packet-out br0 controller controller '0001020304050010203040501234'
     if test X"$1" = X"OFPR_ACTION"; then shift;
-        echo >>expout "OFPT_PACKET_IN: total_len=14 in_port=NONE (via action) data_len=14 (unbuffered)
+        echo >>expout "OFPT_PACKET_IN: total_len=14 in_port=CONTROLLER (via action) data_len=14 (unbuffered)
 priority=0,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=00:10:20:30:40:50,dl_dst=00:01:02:03:04:05,dl_type=0x1234"
     fi
 
     # OFPT_PACKET_IN, OFPR_NO_MATCH (controller_id=123)
-    ovs-ofctl -v packet-out br0 none 'controller(reason=no_match,id=123)' '0001020304050010203040501234'
+    ovs-ofctl -v packet-out br0 controller 'controller(reason=no_match,id=123)' '0001020304050010203040501234'
     if test X"$1" = X"OFPR_NO_MATCH"; then shift;
-        echo >>expout "OFPT_PACKET_IN: total_len=14 in_port=NONE (via no_match) data_len=14 (unbuffered)
+        echo >>expout "OFPT_PACKET_IN: total_len=14 in_port=CONTROLLER (via no_match) data_len=14 (unbuffered)
 priority=0,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=00:10:20:30:40:50,dl_dst=00:01:02:03:04:05,dl_type=0x1234"
     fi
 
     # OFPT_PACKET_IN, OFPR_INVALID_TTL (controller_id=0)
-    ovs-ofctl packet-out br0 none dec_ttl '002583dfb4000026b98cb0f908004500003fb7e200000011339bac11370dac100002d7730035002b8f6d86fb0100000100000000000006626c702d7873066e696369726103636f6d00000f00'
+    ovs-ofctl packet-out br0 controller dec_ttl '002583dfb4000026b98cb0f908004500003fb7e200000011339bac11370dac100002d7730035002b8f6d86fb0100000100000000000006626c702d7873066e696369726103636f6d00000f00'
     if test X"$1" = X"OFPR_INVALID_TTL"; then shift;
-        echo >>expout "OFPT_PACKET_IN: total_len=76 in_port=NONE (via invalid_ttl) data_len=76 (unbuffered)
+        echo >>expout "OFPT_PACKET_IN: total_len=76 in_port=CONTROLLER (via invalid_ttl) data_len=76 (unbuffered)
 priority=0,udp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=00:26:b9:8c:b0:f9,dl_dst=00:25:83:df:b4:00,nw_src=172.17.55.13,nw_dst=172.16.0.2,nw_tos=0,nw_ecn=0,nw_ttl=0,tp_src=55155,tp_dst=53 udp_csum:8f6d"
     fi
 
@@ -771,7 +771,7 @@ ovs-appctl -t ovs-ofctl ofctl/barrier
 ovs-appctl -t ovs-ofctl exit
 
 AT_CHECK([sed 's/ (xid=0x[[0-9a-fA-F]]*)//' monitor.log], [0], [dnl
-OFPT_PACKET_IN: total_len=14 in_port=NONE (via action) data_len=14 (unbuffered)
+OFPT_PACKET_IN: total_len=14 in_port=ANY (via action) data_len=14 (unbuffered)
 priority=0,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=00:10:20:30:40:50,dl_dst=00:01:02:03:04:05,dl_type=0x1234
 OFPT_PACKET_IN: total_len=14 in_port=CONTROLLER (via action) data_len=14 (unbuffered)
 priority=0,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=00:10:20:30:40:50,dl_dst=00:01:02:03:04:05,dl_type=0x5678
@@ -794,14 +794,14 @@ ovs-appctl -t ovs-ofctl ofctl/set-output-file monitor.log
 AT_CAPTURE_FILE([monitor.log])
 
 # Send a packet-out with a load action to set some metadata, and forward to controller
-AT_CHECK([ovs-ofctl packet-out br0 none 'load(0xfafafafa5a5a5a5a->OXM_OF_METADATA[[0..63]]), controller' '0001020304050010203040501234'])
+AT_CHECK([ovs-ofctl packet-out br0 controller 'load(0xfafafafa5a5a5a5a->OXM_OF_METADATA[[0..63]]), controller' '0001020304050010203040501234'])
 
 # Stop the monitor and check its output.
 ovs-appctl -t ovs-ofctl ofctl/barrier
 ovs-appctl -t ovs-ofctl exit
 
 AT_CHECK([sed 's/ (xid=0x[[0-9a-fA-F]]*)//' monitor.log], [0], [dnl
-NXT_PACKET_IN: total_len=14 in_port=NONE metadata=0xfafafafa5a5a5a5a (via action) data_len=14 (unbuffered)
+NXT_PACKET_IN: total_len=14 in_port=CONTROLLER metadata=0xfafafafa5a5a5a5a (via action) data_len=14 (unbuffered)
 priority=0,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=00:10:20:30:40:50,dl_dst=00:01:02:03:04:05,dl_type=0x1234
 OFPT_BARRIER_REPLY:
 ])
