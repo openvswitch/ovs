@@ -529,7 +529,7 @@ flow_format(struct ds *ds, const struct flow *flow)
     struct match match;
 
     match_wc_init(&match, flow);
-    match_format(&match, ds, flow->skb_priority);
+    match_format(&match, ds, OFP_DEFAULT_PRIORITY);
 }
 
 void
