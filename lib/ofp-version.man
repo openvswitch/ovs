@@ -1,0 +1,33 @@
+.de IQ
+.  br
+.  ns
+.  IP "\\$1"
+..
+.IP "\fB\-O \fR[\fIversion\fR[\fB,\fIversion\fR]...]\fR"
+.IQ "\fB\-\-protocols=\fR[\fIversion\fR[\fB,\fIversion\fR]...]\fR"
+Sets the OpenFlow protocol versions that are allowed when establishing
+an OpenFlow session.
+.
+.IP
+The following versions are considered to be ready for general use.
+These protocol versions are enabled by default:
+.
+.RS
+.IP \(bu
+\fBOpenFlow10\fR, for OpenFlow 1.0.
+.RE
+.
+.IP
+Support for the following protocol versions is provided for testing
+and development purposes.  They are not enabled by default:
+.
+.RS
+.IP \(bu
+\fBOpenFlow11\fR, for OpenFlow 1.1.
+.
+.IP \(bu
+\fBOpenFlow12\fR, for OpenFlow 1.2.
+.
+.IP \(bu
+\fBOpenFlow13\fR, for OpenFlow 1.3.
+.RE
