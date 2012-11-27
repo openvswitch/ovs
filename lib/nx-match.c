@@ -1202,6 +1202,7 @@ nxm_reg_load_to_nxast(const struct ofpact_reg_load *load,
         struct ofp_header *oh = (struct ofp_header *)openflow->l2;
 
         switch(oh->version) {
+        case OFP13_VERSION:
         case OFP12_VERSION:
             set_field_to_ofast(load, openflow);
             break;

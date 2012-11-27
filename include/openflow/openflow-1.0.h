@@ -61,6 +61,8 @@ enum ofp_config_flags {
     OFPC_FRAG_NX_MATCH = 3,  /* Make first fragments available for matching. */
     OFPC_FRAG_MASK     = 3,
 
+    /* OFPC_INVALID_TTL_TO_CONTROLLER is deprecated in OpenFlow 1.3 */
+
     /* TTL processing - applicable for IP and MPLS packets. */
     OFPC_INVALID_TTL_TO_CONTROLLER = 1 << 2, /* Send packets with invalid TTL
                                                 to the controller. */

@@ -128,8 +128,10 @@ enum ofpraw {
 
     /* OFPT 1.0 (6): struct ofp_switch_features, struct ofp10_phy_port[]. */
     OFPRAW_OFPT10_FEATURES_REPLY,
-    /* OFPT 1.1+ (6): struct ofp_switch_features, struct ofp11_port[]. */
+    /* OFPT 1.1-1.2 (6): struct ofp_switch_features, struct ofp11_port[]. */
     OFPRAW_OFPT11_FEATURES_REPLY,
+    /* OFPT 1.3+ (6): struct ofp_switch_features. */
+    OFPRAW_OFPT13_FEATURES_REPLY,
 
     /* OFPT 1.0+ (7): void. */
     OFPRAW_OFPT_GET_CONFIG_REQUEST,
@@ -146,6 +148,8 @@ enum ofpraw {
     OFPRAW_OFPT11_PACKET_IN,
     /* OFPT 1.2 (10): struct ofp12_packet_in, uint8_t[]. */
     OFPRAW_OFPT12_PACKET_IN,
+    /* OFPT 1.3 (10): struct ofp13_packet_in, uint8_t[]. */
+    OFPRAW_OFPT13_PACKET_IN,
     /* NXT 1.0+ (17): struct nx_packet_in, uint8_t[]. */
     OFPRAW_NXT_PACKET_IN,
 
@@ -188,6 +192,18 @@ enum ofpraw {
     /* OFPT 1.1+ (21): void. */
     OFPRAW_OFPT11_BARRIER_REPLY,
 
+    /* OFPT 1.3+ (26): void. */
+    OFPRAW_OFPT13_GET_ASYNC_REQUEST,
+    /* OFPT 1.3+ (27): struct ofp13_async_config. */
+    OFPRAW_OFPT13_GET_ASYNC_REPLY,
+    /* OFPT 1.3+ (28): struct ofp13_async_config. */
+    OFPRAW_OFPT13_SET_ASYNC,
+    /* NXT 1.0+ (19): struct nx_async_config. */
+    OFPRAW_NXT_SET_ASYNC_CONFIG,
+
+    /* OFPT 1.3+ (29): struct ofp13_meter_mod. */
+    OFPRAW_OFPT13_METER_MOD,
+
 /* Standard statistics. */
 
     /* OFPST 1.0+ (0): void. */
@@ -205,8 +221,10 @@ enum ofpraw {
 
     /* OFPST 1.0 (1): uint8_t[]. */
     OFPRAW_OFPST10_FLOW_REPLY,
-    /* OFPST 1.1+ (1): uint8_t[]. */
+    /* OFPST 1.1-1.2 (1): uint8_t[]. */
     OFPRAW_OFPST11_FLOW_REPLY,
+    /* OFPST 1.3+ (1): uint8_t[]. */
+    OFPRAW_OFPST13_FLOW_REPLY,
     /* NXST 1.0 (0): uint8_t[]. */
     OFPRAW_NXST_FLOW_REPLY,
 
@@ -222,7 +240,7 @@ enum ofpraw {
     /* NXST 1.0 (1): struct ofp_aggregate_stats_reply. */
     OFPRAW_NXST_AGGREGATE_REPLY,
 
-    /* OFPST 1.0-1.2 (3): void. */
+    /* OFPST 1.0+ (3): void. */
     OFPRAW_OFPST_TABLE_REQUEST,
 
     /* OFPST 1.0 (3): struct ofp10_table_stats[]. */
@@ -231,6 +249,8 @@ enum ofpraw {
     OFPRAW_OFPST11_TABLE_REPLY,
     /* OFPST 1.2 (3): struct ofp12_table_stats[]. */
     OFPRAW_OFPST12_TABLE_REPLY,
+    /* OFPST 1.3 (3): struct ofp13_table_stats[]. */
+    OFPRAW_OFPST13_TABLE_REPLY,
 
     /* OFPST 1.0 (4): struct ofp10_port_stats_request. */
     OFPRAW_OFPST10_PORT_REQUEST,
@@ -239,8 +259,10 @@ enum ofpraw {
 
     /* OFPST 1.0 (4): struct ofp10_port_stats[]. */
     OFPRAW_OFPST10_PORT_REPLY,
-    /* OFPST 1.1+ (4): struct ofp11_port_stats[]. */
+    /* OFPST 1.1-1.2 (4): struct ofp11_port_stats[]. */
     OFPRAW_OFPST11_PORT_REPLY,
+    /* OFPST 1.3+ (4): struct ofp13_port_stats[]. */
+    OFPRAW_OFPST13_PORT_REPLY,
 
     /* OFPST 1.0 (5): struct ofp10_queue_stats_request. */
     OFPRAW_OFPST10_QUEUE_REQUEST,
@@ -249,8 +271,54 @@ enum ofpraw {
 
     /* OFPST 1.0 (5): struct ofp10_queue_stats[]. */
     OFPRAW_OFPST10_QUEUE_REPLY,
-    /* OFPST 1.1+ (5): struct ofp11_queue_stats[]. */
+    /* OFPST 1.1-1.2 (5): struct ofp11_queue_stats[]. */
     OFPRAW_OFPST11_QUEUE_REPLY,
+    /* OFPST 1.3+ (5): struct ofp13_queue_stats[]. */
+    OFPRAW_OFPST13_QUEUE_REPLY,
+
+    /* OFPST 1.1+ (6): struct ofp11_group_stats_request. */
+    OFPRAW_OFPST11_GROUP_REQUEST,
+
+    /* OFPST 1.1-1.2 (6): struct ofp11_group_stats[]. */
+    OFPRAW_OFPST11_GROUP_REPLY,
+    /* OFPST 1.3 (6): struct ofp13_group_stats[]. */
+    OFPRAW_OFPST13_GROUP_REPLY,
+
+    /* OFPST 1.1+ (7): void. */
+    OFPRAW_OFPST11_GROUP_DESC_REQUEST,
+
+    /* OFPST 1.1+ (7): struct ofp11_group_desc_stats[]. */
+    OFPRAW_OFPST11_GROUP_DESC_REPLY,
+
+    /* OFPST 1.2+ (8): void. */
+    OFPRAW_OFPST12_GROUP_FEATURES_REQUEST,
+
+    /* OFPST 1.2+ (8): struct ofp12_group_features_stats. */
+    OFPRAW_OFPST12_GROUP_FEATURES_REPLY,
+
+    /* OFPST 1.3+ (9): struct ofp13_meter_multipart_request. */
+    OFPRAW_OFPST13_METER_REQUEST,
+
+    /* OFPST 1.3+ (9): struct ofp13_meter_stats[]. */
+    OFPRAW_OFPST13_METER_REPLY,
+
+    /* OFPST 1.3+ (10): struct ofp13_meter_multipart_request. */
+    OFPRAW_OFPST13_METER_CONFIG_REQUEST,
+
+    /* OFPST 1.3+ (10): struct ofp13_meter_config[]. */
+    OFPRAW_OFPST13_METER_CONFIG_REPLY,
+
+    /* OFPST 1.3+ (11): void. */
+    OFPRAW_OFPST13_METER_FEATURES_REQUEST,
+
+    /* OFPST 1.3+ (11): struct ofp13_meter_features. */
+    OFPRAW_OFPST13_METER_FEATURES_REPLY,
+
+    /* OFPST 1.3+ (12): struct ofp13_table_features[]. */
+    OFPRAW_OFPST13_TABLE_FEATURES_REQUEST,
+
+    /* OFPST 1.3+ (12): struct ofp13_table_features[]. */
+    OFPRAW_OFPST13_TABLE_FEATURES_REPLY,
 
     /* OFPST 1.0+ (13): void. */
     OFPRAW_OFPST_PORT_DESC_REQUEST,
@@ -282,9 +350,6 @@ enum ofpraw {
 
     /* NXT 1.0+ (18): void. */
     OFPRAW_NXT_FLOW_AGE,
-
-    /* NXT 1.0+ (19): struct nx_async_config. */
-    OFPRAW_NXT_SET_ASYNC_CONFIG,
 
     /* NXT 1.0+ (20): struct nx_controller_id. */
     OFPRAW_NXT_SET_CONTROLLER_ID,
@@ -360,7 +425,8 @@ enum ofptype {
     /* Switch configuration messages. */
     OFPTYPE_FEATURES_REQUEST,    /* OFPRAW_OFPT_FEATURES_REQUEST. */
     OFPTYPE_FEATURES_REPLY,      /* OFPRAW_OFPT10_FEATURES_REPLY.
-                                  * OFPRAW_OFPT11_FEATURES_REPLY. */
+                                  * OFPRAW_OFPT11_FEATURES_REPLY.
+                                  * OFPRAW_OFPT13_FEATURES_REPLY. */
     OFPTYPE_GET_CONFIG_REQUEST,  /* OFPRAW_OFPT_GET_CONFIG_REQUEST. */
     OFPTYPE_GET_CONFIG_REPLY,    /* OFPRAW_OFPT_GET_CONFIG_REPLY. */
     OFPTYPE_SET_CONFIG,          /* OFPRAW_OFPT_SET_CONFIG. */
@@ -369,6 +435,7 @@ enum ofptype {
     OFPTYPE_PACKET_IN,           /* OFPRAW_OFPT10_PACKET_IN.
                                   * OFPRAW_OFPT11_PACKET_IN.
                                   * OFPRAW_OFPT12_PACKET_IN.
+                                  * OFPRAW_OFPT13_PACKET_IN.
                                   * OFPRAW_NXT_PACKET_IN. */
     OFPTYPE_FLOW_REMOVED,        /* OFPRAW_OFPT10_FLOW_REMOVED.
                                   * OFPRAW_OFPT11_FLOW_REMOVED.
@@ -391,6 +458,15 @@ enum ofptype {
     OFPTYPE_BARRIER_REPLY,       /* OFPRAW_OFPT10_BARRIER_REPLY.
                                   * OFPRAW_OFPT11_BARRIER_REPLY. */
 
+    /* Asynchronous message configuration. */
+    OFPTYPE_GET_ASYNC_REQUEST,    /* OFPRAW_OFPT13_GET_ASYNC_REQUEST. */
+    OFPTYPE_GET_ASYNC_REPLY,      /* OFPRAW_OFPT13_GET_ASYNC_REPLY. */
+    OFPTYPE_SET_ASYNC_CONFIG,     /* OFPRAW_NXT_SET_ASYNC_CONFIG.
+                                   * OFPRAW_OFPT13_SET_ASYNC. */
+
+    /* Meters and rate limiters configuration messages. */
+    OFPTYPE_METER_MOD,            /* OFPRAW_OFPT13_METER_MOD. */
+
     /* Statistics. */
     OFPTYPE_DESC_STATS_REQUEST,      /* OFPRAW_OFPST_DESC_REQUEST. */
     OFPTYPE_DESC_STATS_REPLY,        /* OFPRAW_OFPST_DESC_REPLY. */
@@ -399,6 +475,7 @@ enum ofptype {
                                       * OFPRAW_NXST_FLOW_REQUEST. */
     OFPTYPE_FLOW_STATS_REPLY,        /* OFPRAW_OFPST10_FLOW_REPLY.
                                       * OFPRAW_OFPST11_FLOW_REPLY.
+                                      * OFPRAW_OFPST13_FLOW_REPLY.
                                       * OFPRAW_NXST_FLOW_REPLY. */
     OFPTYPE_AGGREGATE_STATS_REQUEST, /* OFPRAW_OFPST10_AGGREGATE_REQUEST.
                                       * OFPRAW_OFPST11_AGGREGATE_REQUEST.
@@ -408,15 +485,48 @@ enum ofptype {
     OFPTYPE_TABLE_STATS_REQUEST,     /* OFPRAW_OFPST_TABLE_REQUEST. */
     OFPTYPE_TABLE_STATS_REPLY,       /* OFPRAW_OFPST10_TABLE_REPLY.
                                       * OFPRAW_OFPST11_TABLE_REPLY.
-                                      * OFPRAW_OFPST12_TABLE_REPLY. */
+                                      * OFPRAW_OFPST12_TABLE_REPLY.
+                                      * OFPRAW_OFPST13_TABLE_REPLY. */
     OFPTYPE_PORT_STATS_REQUEST,      /* OFPRAW_OFPST10_PORT_REQUEST.
                                       * OFPRAW_OFPST11_PORT_REQUEST. */
     OFPTYPE_PORT_STATS_REPLY,        /* OFPRAW_OFPST10_PORT_REPLY.
-                                      * OFPRAW_OFPST11_PORT_REPLY. */
+                                      * OFPRAW_OFPST11_PORT_REPLY.
+                                      * OFPRAW_OFPST13_PORT_REPLY. */
     OFPTYPE_QUEUE_STATS_REQUEST,     /* OFPRAW_OFPST10_QUEUE_REQUEST.
                                       * OFPRAW_OFPST11_QUEUE_REQUEST. */
     OFPTYPE_QUEUE_STATS_REPLY,       /* OFPRAW_OFPST10_QUEUE_REPLY.
-                                      * OFPRAW_OFPST11_QUEUE_REPLY. */
+                                      * OFPRAW_OFPST11_QUEUE_REPLY.
+                                      * OFPRAW_OFPST13_QUEUE_REPLY. */
+
+    OFPTYPE_GROUP_REQUEST,           /* OFPRAW_OFPST11_GROUP_REQUEST. */
+
+    OFPTYPE_GROUP_REPLY,             /* OFPRAW_OFPST11_GROUP_REPLY.
+                                      * OFPRAW_OFPST13_GROUP_REPLY. */
+
+    OFPTYPE_GROUP_DESC_REQUEST,      /* OFPRAW_OFPST11_GROUP_DESC_REQUEST. */
+
+    OFPTYPE_GROUP_DESC_REPLY,        /* OFPRAW_OFPST11_GROUP_DESC_REPLY. */
+
+    OFPTYPE_GROUP_FEATURES_REQUEST, /* OFPRAW_OFPST12_GROUP_FEATURES_REQUEST. */
+
+    OFPTYPE_GROUP_FEATURES_REPLY,    /* OFPRAW_OFPST12_GROUP_FEATURES_REPLY. */
+
+    OFPTYPE_METER_REQUEST,           /* OFPRAW_OFPST13_METER_REQUEST. */
+
+    OFPTYPE_METER_REPLY,             /* OFPRAW_OFPST13_METER_REPLY. */
+
+    OFPTYPE_METER_CONFIG_REQUEST,    /* OFPRAW_OFPST13_METER_CONFIG_REQUEST. */
+
+    OFPTYPE_METER_CONFIG_REPLY,      /* OFPRAW_OFPST13_METER_CONFIG_REPLY. */
+
+    OFPTYPE_METER_FEATURES_REQUEST, /* OFPRAW_OFPST13_METER_FEATURES_REQUEST. */
+
+    OFPTYPE_METER_FEATURES_REPLY,    /* OFPRAW_OFPST13_METER_FEATURES_REPLY. */
+
+    OFPTYPE_TABLE_FEATURES_REQUEST, /* OFPRAW_OFPST13_TABLE_FEATURES_REQUEST. */
+
+    OFPTYPE_TABLE_FEATURES_REPLY,    /* OFPRAW_OFPST13_TABLE_FEATURES_REPLY. */
+
     OFPTYPE_PORT_DESC_STATS_REQUEST, /* OFPRAW_OFPST_PORT_DESC_REQUEST. */
 
     OFPTYPE_PORT_DESC_STATS_REPLY,   /* OFPRAW_OFPST10_PORT_DESC_REPLY.
@@ -429,7 +539,6 @@ enum ofptype {
     OFPTYPE_FLOW_MOD_TABLE_ID,    /* OFPRAW_NXT_FLOW_MOD_TABLE_ID. */
     OFPTYPE_SET_PACKET_IN_FORMAT, /* OFPRAW_NXT_SET_PACKET_IN_FORMAT. */
     OFPTYPE_FLOW_AGE,             /* OFPRAW_NXT_FLOW_AGE. */
-    OFPTYPE_SET_ASYNC_CONFIG,     /* OFPRAW_NXT_SET_ASYNC_CONFIG. */
     OFPTYPE_SET_CONTROLLER_ID,    /* OFPRAW_NXT_SET_CONTROLLER_ID. */
 
     /* Flow monitor extension. */

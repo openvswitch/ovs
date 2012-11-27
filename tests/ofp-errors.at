@@ -90,11 +90,13 @@ AT_CHECK([ovs-ofctl print-error OFPBIC_BAD_EXPERIMENTER], [0], [dnl
 OpenFlow 1.0: -1,-1
 OpenFlow 1.1: 3,5
 OpenFlow 1.2: 3,5
+OpenFlow 1.3: 3,5
 ])
 AT_CHECK([ovs-ofctl print-error OFPBIC_BAD_EXP_TYPE], [0], [dnl
 OpenFlow 1.0: -1,-1
 OpenFlow 1.1: 3,5
 OpenFlow 1.2: 3,6
+OpenFlow 1.3: 3,6
 ])
 AT_CLEANUP
 

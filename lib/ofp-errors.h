@@ -130,6 +130,9 @@ enum ofperr {
     /* OF1.2+(1,12).  Invalid packet in packet-out. */
     OFPERR_OFPBRC_BAD_PACKET,
 
+    /* OF1.3+(1,13).  Multipart request overflowed the assigned buffer. */
+    OFPERR_OFPBRC_MULTIPART_BUFFER_OVERFLOW,
+
     /* NX1.0+(1,256).  Invalid NXM flow match. */
     OFPERR_NXBRC_NXM_INVALID,
 
@@ -491,6 +494,77 @@ enum ofperr {
 
     /* NX1.0(1,513), NX1.1(1,513), OF1.2+(11,2).  Invalid role. */
     OFPERR_OFPRRFC_BAD_ROLE,
+
+/* ## ---------------------- ## */
+/* ## OFPET_METER_MOD_FAILED ## */
+/* ## ---------------------- ## */
+
+    /* OF1.3+(12).  Error in meter. */
+    OFPERR_OFPET_METER_MOD_FAILED,
+
+    /* OF1.3+(12,0).  Unspecified error. */
+    OFPERR_OFPMMFC_UNKNOWN,
+
+    /* OF1.3+(12,1).  Meter not added because a Meter ADD attempted to
+     * replace an existing Meter. */
+    OFPERR_OFPMMFC_METER_EXISTS,
+
+    /* OF1.3+(12,2).  Meter not added because Meter specified is invalid. */
+    OFPERR_OFPMMFC_INVALID_METER,
+
+    /* OF1.3+(12,3).  Meter not modified because a Meter MODIFY attempted
+     * to modify a non-existent Meter. */
+    OFPERR_OFPMMFC_UNKNOWN_METER,
+
+    /* OF1.3+(12,4).  Unsupported or unknown command. */
+    OFPERR_OFPMMFC_BAD_COMMAND,
+
+    /* OF1.3+(12,5).  Flag configuration unsupported. */
+    OFPERR_OFPMMFC_BAD_FLAGS,
+
+    /* OF1.3+(12,6).  Rate unsupported. */
+    OFPERR_OFPMMFC_BAD_RATE,
+
+    /* OF1.3+(12,7).  Burst size unsupported. */
+    OFPERR_OFPMMFC_BAD_BURST,
+
+    /* OF1.3+(12,8).  Band unsupported. */
+    OFPERR_OFPMMFC_BAD_BAND,
+
+    /* OF1.3+(12,9).  Band value unsupported. */
+    OFPERR_OFPMMFC_BAD_BAND_VALUE,
+
+    /* OF1.3+(12,10).  No more meters available. */
+    OFPERR_OFPMMFC_OUT_OF_METERS,
+
+    /* OF1.3+(12,11).  The maximum number of properties for a meter has
+     * been exceeded. */
+    OFPERR_OFPMMFC_OUT_OF_BANDS,
+
+/* ## --------------------------- ## */
+/* ## OFPET_TABLE_FEATURES_FAILED ## */
+/* ## --------------------------- ## */
+
+    /* OF1.3+(13).  Setting table features failed. */
+    OFPERR_OFPET_TABLE_FEATURES_FAILED,
+
+    /* OF1.3+(13,0).  Specified table does not exist. */
+    OFPERR_OFPTFFC_BAD_TABLE,
+
+    /* OF1.3+(13,1).  Invalid metadata mask. */
+    OFPERR_OFPTFFC_BAD_METADATA,
+
+    /* OF1.3+(13,2).  Unknown property type. */
+    OFPERR_OFPTFFC_BAD_TYPE,
+
+    /* OF1.3+(13,3).  Length problem in properties. */
+    OFPERR_OFPTFFC_BAD_LEN,
+
+    /* OF1.3+(13,4).  Unsupported property value. */
+    OFPERR_OFPTFFC_BAD_ARGUMENT,
+
+    /* OF1.3+(13,5).  Permissions error. */
+    OFPERR_OFPTFFC_EPERM,
 
 /* ## ------------------ ## */
 /* ## OFPET_EXPERIMENTER ## */

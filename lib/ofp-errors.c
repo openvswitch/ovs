@@ -31,6 +31,8 @@ ofperr_domain_from_version(enum ofp_version version)
         return &ofperr_of11;
     case OFP12_VERSION:
         return &ofperr_of12;
+    case OFP13_VERSION:
+        return &ofperr_of13;
     default:
         return NULL;
     }
@@ -257,6 +259,7 @@ ofperr_encode_hello(enum ofperr error, enum ofp_version ofp_version,
     case OFP10_VERSION:
     case OFP11_VERSION:
     case OFP12_VERSION:
+    case OFP13_VERSION:
         break;
 
     default:

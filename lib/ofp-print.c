@@ -492,8 +492,13 @@ ofp_print_switch_features(struct ds *string, const struct ofp_header *oh)
     }
 
     ds_put_format(string, " dpid:%016"PRIx64"\n", features.datapath_id);
-    ds_put_format(string, "n_tables:%"PRIu8", n_buffers:%"PRIu32"\n",
+
+    ds_put_format(string, "n_tables:%"PRIu8", n_buffers:%"PRIu32,
                   features.n_tables, features.n_buffers);
+    if (features.auxiliary_id) {
+        ds_put_format(string, ", auxiliary_id:%"PRIu8, features.auxiliary_id);
+    }
+    ds_put_char(string, '\n');
 
     ds_put_cstr(string, "capabilities: ");
     ofp_print_bit_names(string, features.capabilities,
@@ -510,6 +515,8 @@ ofp_print_switch_features(struct ds *string, const struct ofp_header *oh)
     case OFP11_VERSION:
     case OFP12_VERSION:
         break;
+    case OFP13_VERSION:
+        return; /* no ports in ofp13_switch_features */
     default:
         NOT_REACHED();
     }
@@ -673,6 +680,33 @@ ofp10_match_to_string(const struct ofp10_match *om, int verbosity)
 }
 
 static void
+ofp_print_flow_flags(struct ds *s, uint16_t flags)
+{
+    if (flags & OFPFF_SEND_FLOW_REM) {
+        ds_put_cstr(s, "send_flow_rem ");
+    }
+    if (flags & OFPFF_CHECK_OVERLAP) {
+        ds_put_cstr(s, "check_overlap ");
+    }
+    if (flags & OFPFF12_RESET_COUNTS) {
+        ds_put_cstr(s, "reset_counts ");
+    }
+    if (flags & OFPFF13_NO_PKT_COUNTS) {
+        ds_put_cstr(s, "no_packet_counts ");
+    }
+    if (flags & OFPFF13_NO_BYT_COUNTS) {
+        ds_put_cstr(s, "no_byte_counts ");
+    }
+
+    flags &= ~(OFPFF_SEND_FLOW_REM | OFPFF_CHECK_OVERLAP
+               | OFPFF12_RESET_COUNTS
+               | OFPFF13_NO_PKT_COUNTS | OFPFF13_NO_BYT_COUNTS);
+    if (flags) {
+        ds_put_format(s, "flags:0x%"PRIx16" ", flags);
+    }
+}
+
+static void
 ofp_print_flow_mod(struct ds *s, const struct ofp_header *oh, int verbosity)
 {
     struct ofputil_flow_mod fm;
@@ -771,22 +805,7 @@ ofp_print_flow_mod(struct ds *s, const struct ofp_header *oh, int verbosity)
         ds_put_char(s, ' ');
     }
     if (fm.flags != 0) {
-        uint16_t flags = fm.flags;
-
-        if (flags & OFPFF_SEND_FLOW_REM) {
-            ds_put_cstr(s, "send_flow_rem ");
-        }
-        if (flags & OFPFF_CHECK_OVERLAP) {
-            ds_put_cstr(s, "check_overlap ");
-        }
-        if (flags & OFPFF10_EMERG) {
-            ds_put_cstr(s, "emerg ");
-        }
-
-        flags &= ~(OFPFF_SEND_FLOW_REM | OFPFF_CHECK_OVERLAP | OFPFF10_EMERG);
-        if (flags) {
-            ds_put_format(s, "flags:0x%"PRIx16" ", flags);
-        }
+        ofp_print_flow_flags(s, fm.flags);
     }
 
     ofpacts_format(fm.ofpacts, fm.ofpacts_len, s);
@@ -1028,6 +1047,9 @@ ofp_print_flow_stats(struct ds *string, struct ofputil_flow_stats *fs)
     if (fs->hard_timeout != OFP_FLOW_PERMANENT) {
         ds_put_format(string, "hard_timeout=%"PRIu16", ", fs->hard_timeout);
     }
+    if (fs->flags) {
+        ofp_print_flow_flags(string, fs->flags);
+    }
     if (fs->idle_age >= 0) {
         ds_put_format(string, "idle_age=%d, ", fs->idle_age);
     }
@@ -1166,6 +1188,11 @@ ofp_print_one_ofpst_table_reply(struct ds *string, enum ofp_version ofp_version,
 {
     char name_[OFP_MAX_TABLE_NAME_LEN + 1];
 
+    /* ofp13_table_stats is different */
+    if (ofp_version > OFP12_VERSION) {
+        return;
+    }
+
     ovs_strlcpy(name_, name, sizeof name_);
 
     ds_put_format(string, "  %d: %-8s: ", ts->table_id, name_);
@@ -1207,6 +1234,36 @@ ofp_print_one_ofpst_table_reply(struct ds *string, enum ofp_version ofp_version,
     ds_put_cstr(string, "               ");
     ds_put_format(string, "metadata_write=0x%016"PRIx64"\n",
                   ntohll(ts->metadata_write));
+}
+
+static void
+ofp_print_ofpst_table_reply13(struct ds *string, const struct ofp_header *oh,
+                              int verbosity)
+{
+    struct ofp13_table_stats *ts;
+    struct ofpbuf b;
+    size_t n;
+
+    ofpbuf_use_const(&b, oh, ntohs(oh->length));
+    ofpraw_pull_assert(&b);
+
+    n = b.size / sizeof *ts;
+    ds_put_format(string, " %zu tables\n", n);
+    if (verbosity < 1) {
+        return;
+    }
+
+    for (;;) {
+        ts = ofpbuf_try_pull(&b, sizeof *ts);
+        if (!ts) {
+            return;
+        }
+        ds_put_format(string,
+                      "  %d: active=%"PRIu32", lookup=%"PRIu64  \
+                      ", matched=%"PRIu64"\n",
+                      ts->table_id, ntohl(ts->active_count),
+                      ntohll(ts->lookup_count), ntohll(ts->matched_count));
+    }
 }
 
 static void
@@ -1316,6 +1373,10 @@ ofp_print_ofpst_table_reply(struct ds *string, const struct ofp_header *oh,
                             int verbosity)
 {
     switch ((enum ofp_version)oh->version) {
+    case OFP13_VERSION:
+        ofp_print_ofpst_table_reply13(string, oh, verbosity);
+        break;
+
     case OFP12_VERSION:
         ofp_print_ofpst_table_reply12(string, oh, verbosity);
         break;
@@ -1722,6 +1783,9 @@ ofp_print_version(const struct ofp_header *oh,
     case OFP12_VERSION:
         ds_put_cstr(string, " (OF1.2)");
         break;
+    case OFP13_VERSION:
+        ds_put_cstr(string, " (OF1.3)");
+        break;
     default:
         ds_put_format(string, " (OF 0x%02"PRIx8")", oh->version);
         break;
@@ -1738,6 +1802,12 @@ ofp_header_to_string__(const struct ofp_header *oh, enum ofpraw raw,
 }
 
 static void
+ofp_print_not_implemented(struct ds *string)
+{
+    ds_put_cstr(string, "NOT IMPLEMENTED YET!\n");
+}
+
+static void
 ofp_to_string__(const struct ofp_header *oh, enum ofpraw raw,
                 struct ds *string, int verbosity)
 {
@@ -1745,6 +1815,28 @@ ofp_to_string__(const struct ofp_header *oh, enum ofpraw raw,
 
     ofp_header_to_string__(oh, raw, string);
     switch (ofptype_from_ofpraw(raw)) {
+
+        /* FIXME: Change the following once they are implemented: */
+    case OFPTYPE_GET_ASYNC_REQUEST:
+    case OFPTYPE_GET_ASYNC_REPLY:
+    case OFPTYPE_METER_MOD:
+    case OFPTYPE_GROUP_REQUEST:
+    case OFPTYPE_GROUP_REPLY:
+    case OFPTYPE_GROUP_DESC_REQUEST:
+    case OFPTYPE_GROUP_DESC_REPLY:
+    case OFPTYPE_GROUP_FEATURES_REQUEST:
+    case OFPTYPE_GROUP_FEATURES_REPLY:
+    case OFPTYPE_METER_REQUEST:
+    case OFPTYPE_METER_REPLY:
+    case OFPTYPE_METER_CONFIG_REQUEST:
+    case OFPTYPE_METER_CONFIG_REPLY:
+    case OFPTYPE_METER_FEATURES_REQUEST:
+    case OFPTYPE_METER_FEATURES_REPLY:
+    case OFPTYPE_TABLE_FEATURES_REQUEST:
+    case OFPTYPE_TABLE_FEATURES_REPLY:
+        ofp_print_not_implemented(string);
+        break;
+
     case OFPTYPE_HELLO:
         ofp_print_hello(string, oh);
         break;

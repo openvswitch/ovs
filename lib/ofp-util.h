@@ -77,22 +77,24 @@ enum ofputil_protocol {
 #define OFPUTIL_P_OF10_STD_ANY (OFPUTIL_P_OF10_STD | OFPUTIL_P_OF10_STD_TID)
 #define OFPUTIL_P_OF10_NXM_ANY (OFPUTIL_P_OF10_NXM | OFPUTIL_P_OF10_NXM_TID)
 
-    /* OpenFlow 1.2 protocol (only one variant).
+    /* OpenFlow 1.2+ protocols (only one variant each).
      *
-     * This uses the standard OpenFlow Extensible Match (OXM) flow format.
+     * These use the standard OpenFlow Extensible Match (OXM) flow format.
      *
-     * OpenFlow 1.2 always operates with an equivalent of the
+     * OpenFlow 1.2+ always operates with an equivalent of the
      * nx_flow_mod_table_id Nicira extension enabled, so there is no "TID"
      * variant. */
     OFPUTIL_P_OF12_OXM      = 1 << 4,
+    OFPUTIL_P_OF13_OXM      = 1 << 5,
 
     /* All protocols. */
-#define OFPUTIL_P_ANY ((1 << 5) - 1)
+#define OFPUTIL_P_ANY ((1 << 6) - 1)
 
     /* Protocols in which a specific table may be specified in flow_mods. */
 #define OFPUTIL_P_TID (OFPUTIL_P_OF10_STD_TID | \
                        OFPUTIL_P_OF10_NXM_TID | \
-                       OFPUTIL_P_OF12_OXM)
+                       OFPUTIL_P_OF12_OXM | \
+                       OFPUTIL_P_OF13_OXM)
 };
 
 /* Protocols to use for flow dumps, from most to least preferred. */
@@ -130,7 +132,7 @@ void ofputil_format_version_bitmap_names(struct ds *msg, uint32_t bitmap);
 
 /* Bitmap of OpenFlow versions that Open vSwitch supports. */
 #define OFPUTIL_SUPPORTED_VERSIONS \
-        ((1u << OFP10_VERSION) | (1u << OFP12_VERSION))
+    ((1u << OFP10_VERSION) | (1u << OFP12_VERSION) | (1u << OFP13_VERSION))
 
 /* Bitmap of OpenFlow versions to enable by default (a subset of
  * OFPUTIL_SUPPORTED_VERSIONS). */
@@ -263,6 +265,7 @@ struct ofputil_flow_stats {
     uint64_t byte_count;        /* Byte count, UINT64_MAX if unknown. */
     struct ofpact *ofpacts;
     size_t ofpacts_len;
+    uint16_t flags;             /* Added for OF 1.3 */
 };
 
 int ofputil_decode_flow_stats_reply(struct ofputil_flow_stats *,
@@ -399,7 +402,7 @@ struct ofputil_phy_port {
 };
 
 enum ofputil_capabilities {
-    /* OpenFlow 1.0, 1.1 and 1.2 share these values for these capabilities. */
+    /* OpenFlow 1.0, 1.1, 1.2, and 1.3 share these capability values. */
     OFPUTIL_C_FLOW_STATS     = 1 << 0,  /* Flow statistics. */
     OFPUTIL_C_TABLE_STATS    = 1 << 1,  /* Table statistics. */
     OFPUTIL_C_PORT_STATS     = 1 << 2,  /* Port statistics. */
@@ -412,10 +415,10 @@ enum ofputil_capabilities {
     /* OpenFlow 1.0 only. */
     OFPUTIL_C_STP            = 1 << 3,  /* 802.1d spanning tree. */
 
-    /* OpenFlow 1.1 and 1.2 share this capability. */
+    /* OpenFlow 1.1, 1.2, and 1.3 share this capability. */
     OFPUTIL_C_GROUP_STATS    = 1 << 4,  /* Group statistics. */
 
-    /* OpenFlow 1.2 only */
+    /* OpenFlow 1.2 and 1.3 share this capability */
     OFPUTIL_C_PORT_BLOCKED   = 1 << 8,  /* Switch will block looping ports */
 };
 
@@ -455,6 +458,7 @@ struct ofputil_switch_features {
     uint64_t datapath_id;       /* Datapath unique ID. */
     uint32_t n_buffers;         /* Max packets buffered at once. */
     uint8_t n_tables;           /* Number of tables supported by datapath. */
+    uint8_t auxiliary_id;       /* Identify auxiliary connections */
     enum ofputil_capabilities capabilities;
     enum ofputil_action_bitmap actions;
 };

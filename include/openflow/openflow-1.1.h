@@ -127,6 +127,7 @@ struct ofp11_port {
     ovs_be32 curr_speed;    /* Current port bitrate in kbps. */
     ovs_be32 max_speed;     /* Max port bitrate in kbps */
 };
+OFP_ASSERT(sizeof(struct ofp11_port) == 64);
 
 /* Modify behavior of the physical port */
 struct ofp11_port_mod {
@@ -588,7 +589,8 @@ struct ofp11_flow_stats {
                                   when this is not an exact-match entry. */
     ovs_be16 idle_timeout;     /* Number of seconds idle before expiration. */
     ovs_be16 hard_timeout;     /* Number of seconds before expiration. */
-    uint8_t pad2[6];           /* Align to 64-bits. */
+    ovs_be16 flags;            /* OF 1.3: Set of OFPFF*. */
+    uint8_t  pad2[4];          /* Align to 64-bits. */
     ovs_be64 cookie;           /* Opaque controller-issued identifier. */
     ovs_be64 packet_count;     /* Number of packets in flow. */
     ovs_be64 byte_count;       /* Number of bytes in flow. */

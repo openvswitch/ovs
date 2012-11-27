@@ -2238,7 +2238,8 @@ handle_features_request(struct ofconn *ofconn, const struct ofp_header *oh)
     if (arp_match_ip) {
         features.capabilities |= OFPUTIL_C_ARP_MATCH_IP;
     }
-
+    /* FIXME: Fill in proper features.auxiliary_id for auxiliary connections */
+    features.auxiliary_id = 0;
     b = ofputil_encode_switch_features(&features, ofconn_get_protocol(ofconn),
                                        oh->xid);
     HMAP_FOR_EACH (port, hmap_node, &ofproto->ports) {
@@ -2261,7 +2262,9 @@ handle_get_config_request(struct ofconn *ofconn, const struct ofp_header *oh)
     buf = ofpraw_alloc_reply(OFPRAW_OFPT_GET_CONFIG_REPLY, oh, 0);
     osc = ofpbuf_put_uninit(buf, sizeof *osc);
     flags = ofproto->frag_handling;
-    if (ofconn_get_invalid_ttl_to_controller(ofconn)) {
+    /* OFPC_INVALID_TTL_TO_CONTROLLER is deprecated in OF 1.3 */
+    if (oh->version < OFP13_VERSION
+        && ofconn_get_invalid_ttl_to_controller(ofconn)) {
         flags |= OFPC_INVALID_TTL_TO_CONTROLLER;
     }
     osc->flags = htons(flags);
@@ -2294,8 +2297,10 @@ handle_set_config(struct ofconn *ofconn, const struct ofp_header *oh)
             }
         }
     }
+    /* OFPC_INVALID_TTL_TO_CONTROLLER is deprecated in OF 1.3 */
     ofconn_set_invalid_ttl_to_controller(ofconn,
-             (flags & OFPC_INVALID_TTL_TO_CONTROLLER));
+             (oh->version < OFP13_VERSION
+              && flags & OFPC_INVALID_TTL_TO_CONTROLLER));
 
     ofconn_set_miss_send_len(ofconn, ntohs(osc->miss_send_len));
 
@@ -2808,6 +2813,12 @@ handle_flow_stats_request(struct ofconn *ofconn,
                                                &fs.byte_count);
         fs.ofpacts = rule->ofpacts;
         fs.ofpacts_len = rule->ofpacts_len;
+        fs.flags = 0;
+        if (rule->send_flow_removed) {
+            fs.flags |= OFPFF_SEND_FLOW_REM;
+            /* FIXME: Implement OF 1.3 flags OFPFF13_NO_PKT_COUNTS
+               and OFPFF13_NO_BYT_COUNTS */
+        }
         ofputil_append_flow_stats_reply(&fs, &replies);
     }
     ofconn_send_replies(ofconn, &replies);
@@ -3174,6 +3185,8 @@ add_flow(struct ofproto *ofproto, struct ofconn *ofconn,
         return OFPERR_OFPFMFC_OVERLAP;
     }
 
+    /* FIXME: Implement OFPFF12_RESET_COUNTS */
+
     rule->ofproto = ofproto;
     rule->pending = NULL;
     rule->flow_cookie = fm->new_cookie;
@@ -3182,6 +3195,8 @@ add_flow(struct ofproto *ofproto, struct ofconn *ofconn,
     rule->hard_timeout = fm->hard_timeout;
     rule->table_id = table - ofproto->tables;
     rule->send_flow_removed = (fm->flags & OFPFF_SEND_FLOW_REM) != 0;
+    /* FIXME: Implement OF 1.3 flags OFPFF13_NO_PKT_COUNTS
+       and OFPFF13_NO_BYT_COUNTS */
     rule->ofpacts = xmemdup(fm->ofpacts, fm->ofpacts_len);
     rule->ofpacts_len = fm->ofpacts_len;
     rule->evictable = true;
@@ -3266,6 +3281,8 @@ modify_flows__(struct ofproto *ofproto, struct ofconn *ofconn,
         struct ofoperation *op;
         bool actions_changed;
         ovs_be64 new_cookie;
+
+        /* FIXME: Implement OFPFF12_RESET_COUNTS */
 
         if (rule_is_modifiable(rule)) {
             /* At least one rule is modifiable, don't report EPERM error. */
@@ -3516,17 +3533,6 @@ handle_flow_mod(struct ofconn *ofconn, const struct ofp_header *oh)
     ofpbuf_use_stub(&ofpacts, ofpacts_stub, sizeof ofpacts_stub);
     error = ofputil_decode_flow_mod(&fm, oh, ofconn_get_protocol(ofconn),
                                     &ofpacts);
-    if (error) {
-        goto exit_free_ofpacts;
-    }
-
-    if (fm.flags & OFPFF10_EMERG) {
-        /* We do not support the OpenFlow 1.0 emergency flow cache, which
-         * is not required in OpenFlow 1.0.1 and removed from OpenFlow 1.1.
-         * There is no good error code, so just state that the flow table
-         * is full. */
-        error = OFPERR_OFPFMFC_TABLE_FULL;
-    }
     if (!error) {
         error = ofpacts_check(fm.ofpacts, fm.ofpacts_len,
                               &fm.match.flow, ofproto->max_ports);
@@ -3537,7 +3543,7 @@ handle_flow_mod(struct ofconn *ofconn, const struct ofp_header *oh)
     if (error) {
         goto exit_free_ofpacts;
     }
-
+    
     /* Record the operation for logging a summary report. */
     switch (fm.command) {
     case OFPFC_ADD:
@@ -4095,6 +4101,18 @@ handle_openflow__(struct ofconn *ofconn, const struct ofpbuf *msg)
     case OFPTYPE_FLOW_MONITOR_STATS_REQUEST:
         return handle_flow_monitor_request(ofconn, oh);
 
+        /* FIXME: Change the following once they are implemented: */
+    case OFPTYPE_GET_ASYNC_REQUEST:
+    case OFPTYPE_METER_MOD:
+    case OFPTYPE_GROUP_REQUEST:
+    case OFPTYPE_GROUP_DESC_REQUEST:
+    case OFPTYPE_GROUP_FEATURES_REQUEST:
+    case OFPTYPE_METER_REQUEST:
+    case OFPTYPE_METER_CONFIG_REQUEST:
+    case OFPTYPE_METER_FEATURES_REQUEST:
+    case OFPTYPE_TABLE_FEATURES_REQUEST:
+        return OFPERR_OFPBRC_BAD_TYPE;
+
     case OFPTYPE_HELLO:
     case OFPTYPE_ERROR:
     case OFPTYPE_FEATURES_REPLY:
@@ -4114,6 +4132,14 @@ handle_openflow__(struct ofconn *ofconn, const struct ofpbuf *msg)
     case OFPTYPE_FLOW_MONITOR_PAUSED:
     case OFPTYPE_FLOW_MONITOR_RESUMED:
     case OFPTYPE_FLOW_MONITOR_STATS_REPLY:
+    case OFPTYPE_GET_ASYNC_REPLY:
+    case OFPTYPE_GROUP_REPLY:
+    case OFPTYPE_GROUP_DESC_REPLY:
+    case OFPTYPE_GROUP_FEATURES_REPLY:
+    case OFPTYPE_METER_REPLY:
+    case OFPTYPE_METER_CONFIG_REPLY:
+    case OFPTYPE_METER_FEATURES_REPLY:
+    case OFPTYPE_TABLE_FEATURES_REPLY:
     default:
         return OFPERR_OFPBRC_BAD_TYPE;
     }

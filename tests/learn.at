@@ -24,7 +24,7 @@ table=0 actions=learn(table=1,hard_timeout=10, NXM_OF_VLAN_TCI[0..11],output:NXM
 table=1 priority=0 actions=flood
 ]])
 AT_CHECK([ovs-ofctl parse-flows flows.txt], [0],
-[[usable protocols: OpenFlow10+table_id,NXM+table_id,OXM
+[[usable protocols: OpenFlow10+table_id,NXM+table_id,OXM,OpenFlow13
 chosen protocol: OpenFlow10+table_id
 OFPT_FLOW_MOD (xid=0x1): ADD table:255 actions=learn(table=1,in_port=99,NXM_OF_ETH_DST[]=NXM_OF_ETH_SRC[],load:NXM_OF_IN_PORT[]->NXM_NX_REG1[16..31])
 OFPT_FLOW_MOD (xid=0x2): ADD table:255 actions=learn(table=1,NXM_OF_VLAN_TCI[0..11],NXM_OF_ETH_DST[]=NXM_OF_ETH_SRC[],output:NXM_OF_IN_PORT[])

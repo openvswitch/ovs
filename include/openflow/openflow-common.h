@@ -75,6 +75,7 @@ enum ofp_version {
     OFP10_VERSION = 0x01,
     OFP11_VERSION = 0x02,
     OFP12_VERSION = 0x03,
+    OFP13_VERSION = 0x04
 };
 
 #define OFP_MAX_TABLE_NAME_LEN 32
@@ -166,14 +167,17 @@ struct ofp_switch_features {
     ovs_be32 n_buffers;     /* Max packets buffered at once. */
 
     uint8_t n_tables;       /* Number of tables supported by datapath. */
-    uint8_t pad[3];         /* Align to 64-bits. */
+    uint8_t auxiliary_id;   /* OF 1.3: Identify auxiliary connections */
+    uint8_t pad[2];         /* Align to 64-bits. */
 
     /* Features. */
     ovs_be32 capabilities;  /* OFPC_*, OFPC10_*, OFPC11_*, OFPC12_*. */
-    ovs_be32 actions;       /* Bitmap of supported "ofp_action_type"s. */
+    ovs_be32 actions;       /* Bitmap of supported "ofp_action_type"s.
+                             * DEPRECATED in OpenFlow 1.1 */
 
     /* Followed by an array of struct ofp10_phy_port or struct ofp11_port
-     * structures.  The number is inferred from header.length. */
+     * structures.  The number is inferred from header.length.
+     * REMOVED in OpenFlow 1.3 */
 };
 OFP_ASSERT(sizeof(struct ofp_switch_features) == 24);
 

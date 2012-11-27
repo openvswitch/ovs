@@ -265,6 +265,7 @@ ofphdrs_is_stat(const struct ofphdrs *hdrs)
                 hdrs->type == OFPT10_STATS_REPLY);
     case OFP11_VERSION:
     case OFP12_VERSION:
+    case OFP13_VERSION:
         return (hdrs->type == OFPT11_STATS_REQUEST ||
                 hdrs->type == OFPT11_STATS_REPLY);
     }
@@ -291,6 +292,7 @@ ofphdrs_len(const struct ofphdrs *hdrs)
 
     case OFP11_VERSION:
     case OFP12_VERSION:
+    case OFP13_VERSION:
         if (hdrs->type == OFPT11_STATS_REQUEST ||
             hdrs->type == OFPT11_STATS_REPLY) {
             return (hdrs->stat == OFPST_VENDOR
@@ -704,6 +706,7 @@ ofpraw_stats_request_to_reply(enum ofpraw raw, uint8_t version)
         break;
     case OFP11_VERSION:
     case OFP12_VERSION:
+    case OFP13_VERSION:
         assert(hdrs.type == OFPT11_STATS_REQUEST);
         hdrs.type = OFPT11_STATS_REPLY;
         break;
@@ -880,6 +883,7 @@ ofpmp_flags__(const struct ofp_header *oh)
         return &((struct ofp10_stats_msg *) oh)->flags;
     case OFP11_VERSION:
     case OFP12_VERSION:
+    case OFP13_VERSION:
         return &((struct ofp11_stats_msg *) oh)->flags;
     default:
         NOT_REACHED();

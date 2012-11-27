@@ -3,6 +3,7 @@ noinst_HEADERS += \
 	include/openflow/openflow-1.0.h \
 	include/openflow/openflow-1.1.h \
 	include/openflow/openflow-1.2.h \
+	include/openflow/openflow-1.3.h \
 	include/openflow/openflow-common.h \
 	include/openflow/openflow.h
 

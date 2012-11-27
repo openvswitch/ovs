@@ -106,6 +106,11 @@ enum oxm12_ofb_match_fields {
     OFPXMT12_OFB_IPV6_ND_TLL,    /* Target link-layer for ND. */
     OFPXMT12_OFB_MPLS_LABEL,     /* MPLS label. */
     OFPXMT12_OFB_MPLS_TC,        /* MPLS TC. */
+    /* Following added in OpenFlow 1.3 */
+    OFPXMT12_OFB_MPLS_BOS,       /* MPLS BoS bit. */
+    OFPXMT12_OFB_PBB_ISID,       /* PBB I-SID. */
+    OFPXMT12_OFB_TUNNEL_ID,      /* Logical Port Metadata */
+    OFPXMT12_OFB_IPV6_EXTHDR,    /* IPv6 Extension Header pseudo-field */
 
     /* End Marker */
     OFPXMT12_OFB_MAX,
@@ -172,6 +177,13 @@ enum oxm12_ofb_match_fields {
 #define OXM_OF_IPV6_ND_TLL    OXM_HEADER   (OFPXMT12_OFB_IPV6_ND_TLL, 6)
 #define OXM_OF_MPLS_LABEL     OXM_HEADER   (OFPXMT12_OFB_MPLS_LABEL, 4)
 #define OXM_OF_MPLS_TC        OXM_HEADER   (OFPXMT12_OFB_MPLS_TC, 1)
+#define OXM_OF_MPLS_BOS       OXM_HEADER   (OFPXMT12_OFB_MPLS_BOS, 1)
+#define OXM_OF_PBB_ISID       OXM_HEADER   (OFPXMT12_OFB_PBB_ISID, 4)
+#define OXM_OF_PBB_ISID_W     OXM_HEADER_W (OFPXMT12_OFB_PBB_ISID, 4)
+#define OXM_OF_TUNNEL_ID      OXM_HEADER   (OFPXMT12_OFB_TUNNEL_ID, 8)
+#define OXM_OF_TUNNEL_ID_W    OXM_HEADER_W (OFPXMT12_OFB_TUNNEL_ID, 8)
+#define OXM_OF_IPV6_EXTHDR    OXM_HEADER   (OFPXMT12_OFB_IPV6_EXTHDR, 2)
+#define OXM_OF_IPV6_EXTHDR_W  OXM_HEADER_W (OFPXMT12_OFB_IPV6_EXTHDR, 2)
 
 /* The VLAN id is 12-bits, so we can use the entire 16 bits to indicate
  * special conditions.
@@ -179,6 +191,19 @@ enum oxm12_ofb_match_fields {
 enum ofp12_vlan_id {
     OFPVID12_PRESENT = 0x1000, /* Bit that indicate that a VLAN id is set */
     OFPVID12_NONE    = 0x0000, /* No VLAN id was set. */
+};
+
+/* Bit definitions for IPv6 Extension Header pseudo-field. */
+enum ofp12_ipv6exthdr_flags {
+    OFPIEH12_NONEXT = 1 << 0,   /* "No next header" encountered. */
+    OFPIEH12_ESP    = 1 << 1,   /* Encrypted Sec Payload header present. */
+    OFPIEH12_AUTH   = 1 << 2,   /* Authentication header present. */
+    OFPIEH12_DEST   = 1 << 3,   /* 1 or 2 dest headers present. */
+    OFPIEH12_FRAG   = 1 << 4,   /* Fragment header present. */
+    OFPIEH12_ROUTER = 1 << 5,   /* Router header present. */
+    OFPIEH12_HOP    = 1 << 6,   /* Hop-by-hop header present. */
+    OFPIEH12_UNREP  = 1 << 7,   /* Unexpected repeats encountered. */
+    OFPIEH12_UNSEQ  = 1 << 8    /* Unexpected sequencing encountered. */
 };
 
 /* Header for OXM experimenter match fields. */
