@@ -173,6 +173,15 @@ error:
 	return ERR_PTR(err);
 }
 
+static void free_port_rcu(struct rcu_head *rcu)
+{
+	struct netdev_vport *netdev_vport = container_of(rcu,
+					struct netdev_vport, rcu);
+
+	dev_put(netdev_vport->dev);
+	ovs_vport_free(vport_from_priv(netdev_vport));
+}
+
 static void netdev_destroy(struct vport *vport)
 {
 	struct netdev_vport *netdev_vport = netdev_vport_priv(vport);
@@ -181,10 +190,7 @@ static void netdev_destroy(struct vport *vport)
 	netdev_rx_handler_unregister(netdev_vport->dev);
 	dev_set_promiscuity(netdev_vport->dev, -1);
 
-	synchronize_rcu();
-
-	dev_put(netdev_vport->dev);
-	ovs_vport_free(vport);
+	call_rcu(&netdev_vport->rcu, free_port_rcu);
 }
 
 int ovs_netdev_set_addr(struct vport *vport, const unsigned char *addr)
