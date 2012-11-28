@@ -47,6 +47,7 @@ case "$TYPE" in
 		if [ "${OVSBOOTPROTO}" != "dhcp" ] && [ -z "${OVSINTF}" ]; then
 			${OTHERSCRIPT} ${CONFIG}
 		fi
+		[ -n "${STP}" ] && ovs-vsctl --no-wait set bridge "${DEVICE}" stp_enable="${STP}"
 		;;
 	OVSPort)
 		/sbin/ifup "$OVS_BRIDGE"
