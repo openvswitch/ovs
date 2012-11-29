@@ -61,6 +61,8 @@ void match_set_tun_tos_masked(struct match *match, uint8_t tos, uint8_t mask);
 void match_set_tun_flags(struct match *match, uint16_t flags);
 void match_set_tun_flags_masked(struct match *match, uint16_t flags, uint16_t mask);
 void match_set_in_port(struct match *, uint16_t ofp_port);
+void match_set_skb_mark(struct match *, uint32_t skb_mark);
+void match_set_skb_priority(struct match *, uint32_t skb_priority);
 void match_set_dl_type(struct match *, ovs_be16);
 void match_set_dl_src(struct match *, const uint8_t[6]);
 void match_set_dl_src_masked(struct match *, const uint8_t dl_src[6],

@@ -1067,6 +1067,11 @@ ofputil_usable_protocols(const struct match *match)
         return OFPUTIL_P_NONE;
     }
 
+    /* skb_mark and skb_priority can't be sent in a flow_mod */
+    if (wc->masks.skb_mark || wc->masks.skb_priority) {
+        return OFPUTIL_P_NONE;
+    }
+
     /* NXM, OXM, and OF1.1 support bitwise matching on ethernet addresses. */
     if (!eth_mask_is_exact(wc->masks.dl_src)
         && !eth_addr_is_zero(wc->masks.dl_src)) {

@@ -39,6 +39,8 @@ enum mf_field_id {
     MFF_TUN_TOS,                /* u8 */
     MFF_METADATA,               /* be64 */
     MFF_IN_PORT,                /* be16 */
+    MFF_SKB_PRIORITY,           /* be32 */
+    MFF_SKB_MARK,               /* be32 */
 
 #if FLOW_N_REGS > 0
     MFF_REG0,                   /* be32 */

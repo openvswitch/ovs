@@ -143,11 +143,11 @@ AT_CHECK([ovs-appctl ofproto/trace br0 'in_port(9),eth(src=50:54:00:00:00:05,dst
 AT_CHECK([tail -1 stdout], [0],
   [Datapath actions: dnl
 100,dnl
-set(ipv4(src=1.1.1.1,dst=2.2.2.2,proto=1,tos=0x7,ttl=128,frag=no)),set(priority(1)),1,dnl
-set(ipv4(src=1.1.1.1,dst=2.2.2.2,proto=1,tos=0xb,ttl=128,frag=no)),set(priority(2)),1,dnl
+set(ipv4(src=1.1.1.1,dst=2.2.2.2,proto=1,tos=0x7,ttl=128,frag=no)),set(skb_priority(0x1)),1,dnl
+set(ipv4(src=1.1.1.1,dst=2.2.2.2,proto=1,tos=0xb,ttl=128,frag=no)),set(skb_priority(0x2)),1,dnl
 1,dnl
-set(ipv4(src=1.1.1.1,dst=2.2.2.2,proto=1,tos=0x7,ttl=128,frag=no)),set(priority(1)),1,dnl
-set(ipv4(src=1.1.1.1,dst=2.2.2.2,proto=1,tos=0xff,ttl=128,frag=no)),set(priority(0)),1,dnl
+set(ipv4(src=1.1.1.1,dst=2.2.2.2,proto=1,tos=0x7,ttl=128,frag=no)),set(skb_priority(0x1)),1,dnl
+set(ipv4(src=1.1.1.1,dst=2.2.2.2,proto=1,tos=0xff,ttl=128,frag=no)),set(skb_priority(0)),1,dnl
 set(ipv4(src=1.1.1.1,dst=2.2.2.2,proto=1,tos=0x3,ttl=128,frag=no)),1,dnl
 100
 ])
@@ -207,7 +207,7 @@ AT_CHECK([tail -1 stdout], [0],
 
 AT_CHECK([ovs-appctl ofproto/trace br0 'in_port(4),eth(src=00:00:00:00:00:01,dst=00:00:00:00:00:02),eth_type(0x0900)'], [0], [stdout])
 AT_CHECK([tail -1 stdout], [0],
-  [Datapath actions: set(priority(1)),100,1,2,set(priority(2)),3,set(priority(1)),6,7
+  [Datapath actions: set(skb_priority(0x1)),100,1,2,set(skb_priority(0x2)),3,set(skb_priority(0x1)),6,7
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP

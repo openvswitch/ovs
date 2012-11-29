@@ -74,6 +74,18 @@ AT_CHECK([ovs-ofctl parse-flows flows.txt
 AT_CLEANUP
 
 
+AT_SETUP([ovs-ofctl parse-flows (skb_mark and skb_priority)])
+AT_DATA([flows.txt], [[
+skb_mark=0x12345678,skb_priority=0x12341234,tcp,tp_src=123,actions=flood
+]])
+
+AT_CHECK([ovs-ofctl parse-flows flows.txt
+], [1], [usable protocols: none
+], [stderr])
+
+AT_CLEANUP
+
+
 AT_SETUP([ovs-ofctl parse-flows (NXM)])
 AT_DATA([flows.txt], [[
 # comment

@@ -118,6 +118,24 @@ static const struct mf_field mf_fields[MFF_N_IDS] = {
         false,
         NXM_OF_IN_PORT, "NXM_OF_IN_PORT",
         OXM_OF_IN_PORT, "OXM_OF_IN_PORT",
+    }, {
+        MFF_SKB_PRIORITY, "skb_priority", NULL,
+        MF_FIELD_SIZES(be32),
+        MFM_NONE,
+        MFS_HEXADECIMAL,
+        MFP_NONE,
+        false,
+        0, NULL,
+        0, NULL,
+    }, {
+        MFF_SKB_MARK, "skb_mark", NULL,
+        MF_FIELD_SIZES(be32),
+        MFM_NONE,
+        MFS_HEXADECIMAL,
+        MFP_NONE,
+        false,
+        0, NULL,
+        0, NULL,
     },
 
 #define REGISTER(IDX)                           \
@@ -629,6 +647,10 @@ mf_is_all_wild(const struct mf_field *mf, const struct flow_wildcards *wc)
         return !wc->masks.metadata;
     case MFF_IN_PORT:
         return !wc->masks.in_port;
+    case MFF_SKB_PRIORITY:
+        return !wc->masks.skb_priority;
+    case MFF_SKB_MARK:
+        return !wc->masks.skb_mark;
     CASE_MFF_REGS:
         return !wc->masks.regs[mf->id - MFF_REG0];
 
@@ -829,6 +851,8 @@ mf_is_value_valid(const struct mf_field *mf, const union mf_value *value)
     case MFF_TUN_FLAGS:
     case MFF_METADATA:
     case MFF_IN_PORT:
+    case MFF_SKB_PRIORITY:
+    case MFF_SKB_MARK:
     CASE_MFF_REGS:
     case MFF_ETH_SRC:
     case MFF_ETH_DST:
@@ -917,6 +941,14 @@ mf_get_value(const struct mf_field *mf, const struct flow *flow,
 
     case MFF_IN_PORT:
         value->be16 = htons(flow->in_port);
+        break;
+
+    case MFF_SKB_PRIORITY:
+        value->be32 = flow->skb_priority;
+        break;
+
+    case MFF_SKB_MARK:
+        value->be32 = flow->skb_mark;
         break;
 
     CASE_MFF_REGS:
@@ -1078,6 +1110,14 @@ mf_set_value(const struct mf_field *mf,
         match_set_in_port(match, ntohs(value->be16));
         break;
 
+    case MFF_SKB_PRIORITY:
+        match_set_skb_priority(match, ntohl(value->be32));
+        break;
+
+    case MFF_SKB_MARK:
+        match_set_skb_mark(match, ntohl(value->be32));
+        break;
+
     CASE_MFF_REGS:
         match_set_reg(match, mf->id - MFF_REG0, ntohl(value->be32));
         break;
@@ -1235,6 +1275,14 @@ mf_set_flow_value(const struct mf_field *mf,
 
     case MFF_IN_PORT:
         flow->in_port = ntohs(value->be16);
+        break;
+
+    case MFF_SKB_PRIORITY:
+        flow->skb_priority = ntohl(value->be32);
+        break;
+
+    case MFF_SKB_MARK:
+        flow->skb_mark = ntohl(value->be32);
         break;
 
     CASE_MFF_REGS:
@@ -1411,6 +1459,16 @@ mf_set_wild(const struct mf_field *mf, struct match *match)
         match->wc.masks.in_port = 0;
         break;
 
+    case MFF_SKB_PRIORITY:
+        match->flow.skb_priority = 0;
+        match->wc.masks.skb_priority = 0;
+        break;
+
+    case MFF_SKB_MARK:
+        match->flow.skb_mark = 0;
+        match->wc.masks.skb_mark = 0;
+        break;
+
     CASE_MFF_REGS:
         match_set_reg_masked(match, mf->id - MFF_REG0, 0, 0);
         break;
@@ -1565,6 +1623,8 @@ mf_set(const struct mf_field *mf,
 
     switch (mf->id) {
     case MFF_IN_PORT:
+    case MFF_SKB_MARK:
+    case MFF_SKB_PRIORITY:
     case MFF_ETH_TYPE:
     case MFF_DL_VLAN:
     case MFF_DL_VLAN_PCP:
@@ -1764,6 +1824,8 @@ mf_random_value(const struct mf_field *mf, union mf_value *value)
     case MFF_TUN_FLAGS:
     case MFF_METADATA:
     case MFF_IN_PORT:
+    case MFF_SKB_MARK:
+    case MFF_SKB_PRIORITY:
     CASE_MFF_REGS:
     case MFF_ETH_SRC:
     case MFF_ETH_DST:
