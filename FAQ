@@ -569,6 +569,25 @@ A: It's possible that you have the VLAN configured on your physical
          equally well.  Refer to the documentation for the Port table
          in ovs-vswitchd.conf.db(5) for more information.
 
+Q: I added a pair of VMs on different VLANs, like this:
+
+       ovs-vsctl add-br br0
+       ovs-vsctl add-port br0 eth0
+       ovs-vsctl add-port br0 tap0 tag=9
+       ovs-vsctl add-port br0 tap1 tag=10
+
+    but the VMs can't access each other, the external network, or the
+    Internet.
+
+A: It is to be expected that the VMs can't access each other.  VLANs
+   are a means to partition a network.  When you configured tap0 and
+   tap1 as access ports for different VLANs, you indicated that they
+   should be isolated from each other.
+
+   As for the external network and the Internet, it seems likely that
+   the machines you are trying to access are not on VLAN 9 (or 10) and
+   that the Internet is not available on VLAN 9 (or 10).
+
 Q: Can I configure an IP address on a VLAN?
 
 A: Yes.  Use an "internal port" configured as an access port.  For
