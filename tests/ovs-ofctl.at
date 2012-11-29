@@ -78,7 +78,7 @@ actions=controller(max_len=123,reason=invalid_ttl,id=555)
 AT_CHECK([ovs-ofctl parse-flows flows.txt
 ], [0], [stdout])
 AT_CHECK([[sed 's/ (xid=0x[0-9a-fA-F]*)//' stdout]], [0],
-[[usable protocols: NXM+table_id,OXM,OpenFlow13
+[[usable protocols: OXM,NXM+table_id
 chosen protocol: NXM+table_id
 NXT_FLOW_MOD: ADD table:255 tcp,tp_src=123 actions=FLOOD
 NXT_FLOW_MOD: ADD table:255 in_port=65534,dl_vlan=9,dl_src=00:0a:e4:25:6b:b0 actions=drop
@@ -143,7 +143,7 @@ dl_dst=aa:bb:cc:dd:ee:ff/00:00:00:00:00:00,actions=drop
 ])
 AT_CHECK([ovs-ofctl -F nxm parse-flows flows.txt], [0], [stdout])
 AT_CHECK([[sed 's/ (xid=0x[0-9a-fA-F]*)//' stdout]], [0], [dnl
-usable protocols: NXM,OXM,OpenFlow13
+usable protocols: NXM,OXM
 chosen protocol: NXM-table_id
 NXT_FLOW_MOD: ADD tcp,tp_src=123 actions=FLOOD
 NXT_FLOW_MOD: ADD in_port=65534,dl_vlan=9,dl_src=00:0a:e4:25:6b:b0 actions=drop
@@ -205,7 +205,7 @@ vlan_tci=0x1123/0x1fff,actions=drop
 ]])
 AT_CHECK([ovs-ofctl -F nxm -mmm parse-flows flows.txt], [0], [stdout], [stderr])
 AT_CHECK([[sed 's/ (xid=0x[0-9a-fA-F]*)//' stdout]], [0],
-[[usable protocols: NXM,OXM,OpenFlow13
+[[usable protocols: NXM,OXM
 chosen protocol: NXM-table_id
 NXT_FLOW_MOD: ADD NXM_OF_ETH_TYPE(0800), NXM_OF_IP_PROTO(06), NXM_OF_TCP_SRC(007b) actions=FLOOD
 NXT_FLOW_MOD: ADD NXM_OF_IN_PORT(fffe), NXM_OF_ETH_SRC(000ae4256bb0), NXM_OF_VLAN_TCI_W(1009/1fff) actions=drop
@@ -1875,10 +1875,10 @@ dnl Check that "-F openflow10" rejects a flow_mod with unsupported features,
 dnl such as tunnels and metadata.
 AT_SETUP([ovs-ofctl -F option and NXM features])
 AT_CHECK([ovs-ofctl -F openflow10 add-flow dummy tun_id=123,actions=drop],
-  [1], [], [ovs-ofctl: none of the usable flow formats (NXM,OXM,OpenFlow13) is among the allowed flow formats (OpenFlow10)
+  [1], [], [ovs-ofctl: none of the usable flow formats (NXM,OXM) is among the allowed flow formats (OpenFlow10)
 ])
 AT_CHECK([ovs-ofctl -F openflow10 add-flow dummy metadata=123,actions=drop],
-  [1], [], [ovs-ofctl: none of the usable flow formats (NXM,OXM,OpenFlow13) is among the allowed flow formats (OpenFlow10)
+  [1], [], [ovs-ofctl: none of the usable flow formats (NXM,OXM) is among the allowed flow formats (OpenFlow10)
 ])
 AT_CLEANUP
 
@@ -1913,7 +1913,7 @@ dnl can't be represented in OpenFlow 1.0.
 AT_SETUP([ovs-ofctl dump-flows rejects bad -F option])
 OVS_VSWITCHD_START
 AT_CHECK([ovs-ofctl -F openflow10 dump-flows unix:br0.mgmt reg0=0xabcdef], [1], [],
-  [ovs-ofctl: none of the usable flow formats (NXM,OXM,OpenFlow13) is among the allowed flow formats (OpenFlow10)
+  [ovs-ofctl: none of the usable flow formats (NXM,OXM) is among the allowed flow formats (OpenFlow10)
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP

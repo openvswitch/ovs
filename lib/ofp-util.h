@@ -86,6 +86,7 @@ enum ofputil_protocol {
      * variant. */
     OFPUTIL_P_OF12_OXM      = 1 << 4,
     OFPUTIL_P_OF13_OXM      = 1 << 5,
+#define OFPUTIL_P_ANY_OXM (OFPUTIL_P_OF12_OXM | OFPUTIL_P_OF13_OXM)
 
     /* All protocols. */
 #define OFPUTIL_P_ANY ((1 << 6) - 1)

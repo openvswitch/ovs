@@ -584,6 +584,7 @@ static const struct proto_abbrev proto_abbrevs[] = {
     { OFPUTIL_P_ANY,          "any" },
     { OFPUTIL_P_OF10_STD_ANY, "OpenFlow10" },
     { OFPUTIL_P_OF10_NXM_ANY, "NXM" },
+    { OFPUTIL_P_ANY_OXM,      "OXM" },
 };
 #define N_PROTO_ABBREVS ARRAY_SIZE(proto_abbrevs)
 
@@ -738,10 +739,10 @@ ofputil_protocol_to_string(enum ofputil_protocol protocol)
         return "OpenFlow10+table_id";
 
     case OFPUTIL_P_OF12_OXM:
-        return "OXM";
+        return "OXM-OpenFlow12";
 
     case OFPUTIL_P_OF13_OXM:
-        return "OpenFlow13";
+        return "OXM-OpenFlow13";
     }
 
     /* Check abbreviations. */

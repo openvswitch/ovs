@@ -1369,6 +1369,11 @@ registers.  Open vSwitch 1.1 and later supports this flow format.
 This combines Nicira Extended match with the ability to place a flow
 in a specific table.  Open vSwitch 1.2 and later supports this flow
 format.
+.
+.IP "\fBOXM-OpenFlow12\fR"
+.IQ "\fBOXM-OpenFlow13\fR"
+These are the standard OXM (OpenFlow Extensible Match) flow format in
+OpenFlow 1.2 and 1.3, respectively.
 .RE
 .
 .IP
@@ -1381,6 +1386,8 @@ Any supported flow format.
 \fBOpenFlow10\-table_id\fR or \fBOpenFlow10+table_id\fR.
 .IP "\fBNXM\fR"
 \fBNXM\-table_id\fR or \fBNXM+table_id\fR.
+.IP "\fBOXM\fR"
+\fBOXM-OpenFlow12\fR or \fBOXM-OpenFlow13\fR.
 .RE
 .
 .IP
