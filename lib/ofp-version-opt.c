@@ -29,7 +29,7 @@ ofp_version_usage(void)
     printf(
         "\nOpen Flow Version options:\n"
         "  -V, --version           display version information\n"
-        "  --allowed-ofp-versions  list of allowed Open Flow versions\n"
+        "  -O, --protocols         set allowed Open Flow versions\n"
         "                          (default: %s)\n",
         ds_cstr(&msg));
     ds_destroy(&msg);
