@@ -596,17 +596,16 @@ enum ofputil_protocol ofputil_flow_dump_protocols[] = {
 };
 size_t ofputil_n_flow_dump_protocols = ARRAY_SIZE(ofputil_flow_dump_protocols);
 
-/* Returns the ofputil_protocol that is initially in effect on an OpenFlow
- * connection that has negotiated the given 'version'.  'version' should
- * normally be an 8-bit OpenFlow version identifier (e.g. 0x01 for OpenFlow
- * 1.0, 0x02 for OpenFlow 1.1).  Returns 0 if 'version' is not supported or
- * outside the valid range.  */
+/* Returns the set of ofputil_protocols that are supported with the given
+ * OpenFlow 'version'.  'version' should normally be an 8-bit OpenFlow version
+ * identifier (e.g. 0x01 for OpenFlow 1.0, 0x02 for OpenFlow 1.1).  Returns 0
+ * if 'version' is not supported or outside the valid range.  */
 enum ofputil_protocol
-ofputil_protocol_from_ofp_version(enum ofp_version version)
+ofputil_protocols_from_ofp_version(enum ofp_version version)
 {
     switch (version) {
     case OFP10_VERSION:
-        return OFPUTIL_P_OF10_STD;
+        return OFPUTIL_P_OF10_STD_ANY | OFPUTIL_P_OF10_NXM_ANY;
     case OFP12_VERSION:
         return OFPUTIL_P_OF12_OXM;
     case OFP13_VERSION:
@@ -615,6 +614,17 @@ ofputil_protocol_from_ofp_version(enum ofp_version version)
     default:
         return 0;
     }
+}
+
+/* Returns the ofputil_protocol that is initially in effect on an OpenFlow
+ * connection that has negotiated the given 'version'.  'version' should
+ * normally be an 8-bit OpenFlow version identifier (e.g. 0x01 for OpenFlow
+ * 1.0, 0x02 for OpenFlow 1.1).  Returns 0 if 'version' is not supported or
+ * outside the valid range.  */
+enum ofputil_protocol
+ofputil_protocol_from_ofp_version(enum ofp_version version)
+{
+    return rightmost_1bit(ofputil_protocols_from_ofp_version(version));
 }
 
 /* Returns the OpenFlow protocol version number (e.g. OFP10_VERSION,
@@ -635,6 +645,38 @@ ofputil_protocol_to_ofp_version(enum ofputil_protocol protocol)
     }
 
     NOT_REACHED();
+}
+
+/* Returns a bitmap of OpenFlow versions that are supported by at
+ * least one of the 'protocols'. */
+uint32_t
+ofputil_protocols_to_version_bitmap(enum ofputil_protocol protocols)
+{
+    uint32_t bitmap = 0;
+
+    for (; protocols; protocols = zero_rightmost_1bit(protocols)) {
+        enum ofputil_protocol protocol = rightmost_1bit(protocols);
+
+        bitmap |= 1u << ofputil_protocol_to_ofp_version(protocol);
+    }
+
+    return bitmap;
+}
+
+/* Returns the set of protocols that are supported on top of the
+ * OpenFlow versions included in 'bitmap'. */
+enum ofputil_protocol
+ofputil_protocols_from_version_bitmap(uint32_t bitmap)
+{
+    enum ofputil_protocol protocols = 0;
+
+    for (; bitmap; bitmap = zero_rightmost_1bit(bitmap)) {
+        enum ofp_version version = rightmost_1bit_idx(bitmap);
+
+        protocols |= ofputil_protocols_from_ofp_version(version);
+    }
+
+    return protocols;
 }
 
 /* Returns true if 'protocol' is a single OFPUTIL_P_* value, false
