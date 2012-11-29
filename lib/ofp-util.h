@@ -101,8 +101,7 @@ enum ofputil_protocol {
 extern enum ofputil_protocol ofputil_flow_dump_protocols[];
 extern size_t ofputil_n_flow_dump_protocols;
 
-enum ofputil_protocol
-ofputil_protocol_from_ofp_version(enum ofp_version version);
+enum ofputil_protocol ofputil_protocol_from_ofp_version(enum ofp_version);
 enum ofp_version  ofputil_protocol_to_ofp_version(enum ofputil_protocol);
 
 bool ofputil_protocol_is_valid(enum ofputil_protocol);

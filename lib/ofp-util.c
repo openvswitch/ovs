@@ -583,7 +583,7 @@ struct proto_abbrev {
 static const struct proto_abbrev proto_abbrevs[] = {
     { OFPUTIL_P_ANY,          "any" },
     { OFPUTIL_P_OF10_STD_ANY, "OpenFlow10" },
-    { OFPUTIL_P_OF10_NXM_ANY,  "NXM" },
+    { OFPUTIL_P_OF10_NXM_ANY, "NXM" },
 };
 #define N_PROTO_ABBREVS ARRAY_SIZE(proto_abbrevs)
 
