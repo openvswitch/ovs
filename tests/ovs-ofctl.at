@@ -2068,3 +2068,24 @@ AT_CHECK([ovs-ofctl diff-flows flows.txt br0], [2], [dnl
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
+
+AT_SETUP([ovs-ofctl -F and -O interaction])
+AT_CHECK([ovs-ofctl -F oxm -O openflow10], [1], [],
+  [ovs-ofctl: None of the enabled OpenFlow versions (OpenFlow10) supports any of the enabled flow formats (OXM).  (Use -O to enable additional OpenFlow versions or -F to enable additional flow formats.)
+])
+AT_CHECK([ovs-ofctl -F oxm -O openflow11], [1], [],
+  [ovs-ofctl: None of the enabled OpenFlow versions (OpenFlow11) supports any of the enabled flow formats (OXM).  (Use -O to enable additional OpenFlow versions or -F to enable additional flow formats.)
+])
+AT_CHECK([ovs-ofctl -F oxm -O openflow10,openflow11], [1], [],
+  [ovs-ofctl: None of the enabled OpenFlow versions (OpenFlow10, OpenFlow11) supports any of the enabled flow formats (OXM).  (Use -O to enable additional OpenFlow versions or -F to enable additional flow formats.)
+])
+AT_CHECK([ovs-ofctl -F oxm -O openflow10,openflow12], [1], [],
+ [ovs-ofctl: missing command name; use --help for help
+])
+AT_CHECK([ovs-ofctl -F oxm -O openflow12], [1], [],
+  [ovs-ofctl: missing command name; use --help for help
+])
+AT_CHECK([ovs-ofctl -F oxm -O openflow13], [1], [],
+  [ovs-ofctl: missing command name; use --help for help
+])
+AT_CLEANUP

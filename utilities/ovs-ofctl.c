@@ -169,6 +169,8 @@ parse_options(int argc, char *argv[])
         {NULL, 0, NULL, 0},
     };
     char *short_options = long_options_to_short_options(long_options);
+    uint32_t versions;
+    enum ofputil_protocol version_protocols;
 
     for (;;) {
         unsigned long int timeout;
@@ -251,6 +253,22 @@ parse_options(int argc, char *argv[])
     }
 
     free(short_options);
+
+    versions = get_allowed_ofp_versions();
+    version_protocols = ofputil_protocols_from_version_bitmap(versions);
+    if (!(allowed_protocols & version_protocols)) {
+        char *protocols = ofputil_protocols_to_string(allowed_protocols);
+        struct ds version_s = DS_EMPTY_INITIALIZER;
+
+        ofputil_format_version_bitmap_names(&version_s, versions);
+        ovs_fatal(0, "None of the enabled OpenFlow versions (%s) supports "
+                  "any of the enabled flow formats (%s).  (Use -O to enable "
+                  "additional OpenFlow versions or -F to enable additional "
+                  "flow formats.)", ds_cstr(&version_s), protocols);
+    }
+    allowed_protocols &= version_protocols;
+    mask_allowed_ofp_versions(ofputil_protocols_to_version_bitmap(
+                                  allowed_protocols));
 }
 
 static void

@@ -21,6 +21,12 @@ set_allowed_ofp_versions(const char *string)
 }
 
 void
+mask_allowed_ofp_versions(uint32_t bitmap)
+{
+    allowed_versions &= bitmap;
+}
+
+void
 ofp_version_usage(void)
 {
     struct ds msg = DS_EMPTY_INITIALIZER;
