@@ -56,6 +56,14 @@ match_wc_init(struct match *match, const struct flow *flow)
         memset(&wc->masks.nw_proto, 0xff, sizeof wc->masks.nw_proto);
     }
 
+    if (flow->skb_priority) {
+        memset(&wc->masks.skb_priority, 0xff, sizeof wc->masks.skb_priority);
+    }
+
+    if (flow->skb_mark) {
+        memset(&wc->masks.skb_mark, 0xff, sizeof wc->masks.skb_mark);
+    }
+
     for (i = 0; i < FLOW_N_REGS; i++) {
         if (flow->regs[i]) {
             memset(&wc->masks.regs[i], 0xff, sizeof wc->masks.regs[i]);
@@ -270,6 +278,20 @@ match_set_in_port(struct match *match, uint16_t ofp_port)
 {
     match->wc.masks.in_port = UINT16_MAX;
     match->flow.in_port = ofp_port;
+}
+
+void
+match_set_skb_priority(struct match *match, uint32_t skb_priority)
+{
+    match->wc.masks.skb_priority = UINT32_MAX;
+    match->flow.skb_priority = skb_priority;
+}
+
+void
+match_set_skb_mark(struct match *match, uint32_t skb_mark)
+{
+    match->wc.masks.skb_mark = UINT32_MAX;
+    match->flow.skb_mark = skb_mark;
 }
 
 void
@@ -763,6 +785,14 @@ match_format(const struct match *match, struct ds *s, unsigned int priority)
 
     if (priority != OFP_DEFAULT_PRIORITY) {
         ds_put_format(s, "priority=%u,", priority);
+    }
+
+    if (wc->masks.skb_mark) {
+        ds_put_format(s, "skb_mark=%#"PRIx32",", f->skb_mark);
+    }
+
+    if (wc->masks.skb_priority) {
+        ds_put_format(s, "skb_priority=%#"PRIx32",", f->skb_priority);
     }
 
     if (wc->masks.dl_type) {

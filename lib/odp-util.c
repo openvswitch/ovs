@@ -92,7 +92,7 @@ ovs_key_attr_to_string(enum ovs_key_attr attr)
     switch (attr) {
     case OVS_KEY_ATTR_UNSPEC: return "unspec";
     case OVS_KEY_ATTR_ENCAP: return "encap";
-    case OVS_KEY_ATTR_PRIORITY: return "priority";
+    case OVS_KEY_ATTR_PRIORITY: return "skb_priority";
     case OVS_KEY_ATTR_SKB_MARK: return "skb_mark";
     case OVS_KEY_ATTR_TUN_ID: return "tun_id";
     case OVS_KEY_ATTR_IPV4_TUNNEL: return "ipv4_tunnel";
@@ -723,11 +723,11 @@ format_odp_key_attr(const struct nlattr *a, struct ds *ds)
         break;
 
     case OVS_KEY_ATTR_PRIORITY:
-        ds_put_format(ds, "(%"PRIu32")", nl_attr_get_u32(a));
+        ds_put_format(ds, "(%#"PRIx32")", nl_attr_get_u32(a));
         break;
 
     case OVS_KEY_ATTR_SKB_MARK:
-        ds_put_format(ds, "(%"PRIu32")", nl_attr_get_u32(a));
+        ds_put_format(ds, "(%#"PRIx32")", nl_attr_get_u32(a));
         break;
 
     case OVS_KEY_ATTR_TUN_ID:
@@ -943,7 +943,7 @@ parse_odp_key_attr(const char *s, const struct simap *port_names,
         unsigned long long int priority;
         int n = -1;
 
-        if (sscanf(s, "priority(%lli)%n", &priority, &n) > 0 && n > 0) {
+        if (sscanf(s, "skb_priority(%llx)%n", &priority, &n) > 0 && n > 0) {
             nl_msg_put_u32(key, OVS_KEY_ATTR_PRIORITY, priority);
             return n;
         }
@@ -953,7 +953,7 @@ parse_odp_key_attr(const char *s, const struct simap *port_names,
         unsigned long long int mark;
         int n = -1;
 
-        if (sscanf(s, "skb_mark(%lli)%n", &mark, &n) > 0 && n > 0) {
+        if (sscanf(s, "skb_mark(%llx)%n", &mark, &n) > 0 && n > 0) {
             nl_msg_put_u32(key, OVS_KEY_ATTR_SKB_MARK, mark);
             return n;
         }
