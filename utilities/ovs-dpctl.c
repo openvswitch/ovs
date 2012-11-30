@@ -161,7 +161,9 @@ usage(void)
            "Interface table in ovs-vswitchd.conf.db(5) for an options list.\n",
            program_name, program_name);
     vlog_usage();
-    printf("\nOther options:\n"
+    printf("\nOptions for show:\n"
+           "  -s,  --statistics           print port statistics\n"
+           "\nOther options:\n"
            "  -t, --timeout=SECS          give up after SECS seconds\n"
            "  -h, --help                  display this help message\n"
            "  -V, --version               display version information\n");
