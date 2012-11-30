@@ -295,7 +295,7 @@ ofperr_get_code(enum ofperr error, enum ofp_version version)
     return domain ? ofperr_get_pair__(error, domain)->code : -1;
 }
 
-/* Tries to decodes 'oh', which should be an OpenFlow OFPT_ERROR message.
+/* Tries to decode 'oh', which should be an OpenFlow OFPT_ERROR message.
  * Returns an OFPERR_* constant on success, 0 on failure.
  *
  * If 'payload' is nonnull, on success '*payload' is initialized to the
