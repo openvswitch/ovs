@@ -727,6 +727,11 @@ ofpact_from_openflow11(const union ofp_action *a, struct ofpbuf *out)
         ofpact_put_STRIP_VLAN(out);
         break;
 
+    case OFPUTIL_OFPAT11_SET_QUEUE:
+        ofpact_put_SET_QUEUE(out)->queue_id =
+            ntohl(((const struct ofp11_action_set_queue *)a)->queue_id);
+        break;
+
     case OFPUTIL_OFPAT11_SET_DL_SRC:
         memcpy(ofpact_put_SET_ETH_SRC(out)->mac,
                ((const struct ofp_action_dl_addr *) a)->dl_addr, ETH_ADDR_LEN);
@@ -1566,6 +1571,11 @@ ofpact_to_openflow11(const struct ofpact *a, struct ofpbuf *out)
             htons(ETH_TYPE_VLAN_8021Q);
         break;
 
+    case OFPACT_SET_QUEUE:
+        ofputil_put_OFPAT11_SET_QUEUE(out)->queue_id
+            = htonl(ofpact_get_SET_QUEUE(a)->queue_id);
+        break;
+
     case OFPACT_SET_ETH_SRC:
         memcpy(ofputil_put_OFPAT11_SET_DL_SRC(out)->dl_addr,
                ofpact_get_SET_ETH_SRC(a)->mac, ETH_ADDR_LEN);
@@ -1619,7 +1629,6 @@ ofpact_to_openflow11(const struct ofpact *a, struct ofpbuf *out)
     case OFPACT_REG_MOVE:
     case OFPACT_REG_LOAD:
     case OFPACT_SET_TUNNEL:
-    case OFPACT_SET_QUEUE:
     case OFPACT_POP_QUEUE:
     case OFPACT_FIN_TIMEOUT:
     case OFPACT_RESUBMIT:

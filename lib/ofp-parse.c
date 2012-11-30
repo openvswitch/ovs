@@ -434,6 +434,11 @@ parse_named_action(enum ofputil_action_code code, const struct flow *flow,
         ofpact_put_PUSH_VLAN(ofpacts);
         break;
 
+    case OFPUTIL_OFPAT11_SET_QUEUE:
+        ofpact_put_SET_QUEUE(ofpacts)->queue_id = str_to_u32(arg);
+        break;
+
+
     case OFPUTIL_OFPAT10_SET_DL_SRC:
     case OFPUTIL_OFPAT11_SET_DL_SRC:
         str_to_mac(arg, ofpact_put_SET_ETH_SRC(ofpacts)->mac);

@@ -169,6 +169,9 @@ AT_DATA([test-data], [dnl
 # actions=strip_vlan
 0012 0008 00000000
 
+# actions=set_queue:2309737729
+0015 0008 89abcd01
+
 dnl 802.1ad isn't supported at the moment
 dnl # actions=push_vlan:0x88a8
 dnl 0011 0008 88a8 0000
@@ -180,9 +183,6 @@ ffff 0010 00002320 0001 0005 00000000
 
 # actions=set_tunnel:0x12345678
 ffff 0010 00002320 0002 0000 12345678
-
-# actions=set_queue:2309737729
-ffff 0010 00002320 0004 0000 89abcd01
 
 # actions=pop_queue
 ffff 0010 00002320 0005 000000000000
