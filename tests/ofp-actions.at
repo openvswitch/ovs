@@ -341,7 +341,7 @@ dnl Check that an empty Apply-Actions instruction gets dropped.
 0004 0008 00000000
 
 dnl Duplicate instruction type:
-# bad OF1.1 instructions: OFPIT_BAD_INSTRUCTION
+# bad OF1.1 instructions: OFPBAC_UNSUPPORTED_ORDER
 0004 0008 00000000 0004 0008 00000000
 
 dnl Instructions not multiple of 8 in length.
@@ -379,7 +379,7 @@ dnl Write-Metadata too long.
 0002 0020 00000000 fedcba9876543210 ffffffffffffffff 0000000000000000
 
 dnl Write-Metadata duplicated.
-# bad OF1.1 instructions: OFPIT_BAD_INSTRUCTION
+# bad OF1.1 instructions: OFPBAC_UNSUPPORTED_ORDER
 0002 0018 00000000 fedcba9876543210 ff00ff00ff00ff00 0002 0018 00000000 fedcba9876543210 ff00ff00ff00ff00
 
 dnl Write-Metadata in wrong position.

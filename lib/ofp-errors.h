@@ -161,6 +161,11 @@ enum ofperr {
      * the id of any existing monitor. */
     OFPERR_NXBRC_FM_BAD_ID,
 
+    /* NX1.0+(1,520).  The 'event' in an NXST_FLOW_MONITOR reply does not
+     * specify one of the NXFME_ABBREV, NXFME_ADD, NXFME_DELETE, or
+     * NXFME_MODIFY. */
+    OFPERR_NXBRC_FM_BAD_EVENT,
+
 /* ## ---------------- ## */
 /* ## OFPET_BAD_ACTION ## */
 /* ## ---------------- ## */

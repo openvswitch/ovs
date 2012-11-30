@@ -3681,7 +3681,7 @@ ofputil_decode_flow_update(struct ofputil_flow_update *update,
         VLOG_WARN_RL(&bad_ofmsg_rl,
                      "NXST_FLOW_MONITOR reply has bad event %"PRIu16,
                      ntohs(nfuh->event));
-        return OFPERR_OFPET_BAD_REQUEST;
+        return OFPERR_NXBRC_FM_BAD_EVENT;
     }
 
 bad_len:
