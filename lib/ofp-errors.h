@@ -583,7 +583,6 @@ const char *ofperr_domain_get_name(enum ofp_version);
 
 bool ofperr_is_valid(enum ofperr);
 bool ofperr_is_category(enum ofperr);
-bool ofperr_is_nx_extension(enum ofperr);
 bool ofperr_is_encodable(enum ofperr, enum ofp_version);
 
 enum ofperr ofperr_decode(enum ofp_version, uint16_t type, uint16_t code);

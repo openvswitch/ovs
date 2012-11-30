@@ -63,17 +63,6 @@ ofperr_is_category(enum ofperr error)
             && ofperr_of10.errors[error - OFPERR_OFS].code == -1
             && ofperr_of11.errors[error - OFPERR_OFS].code == -1);
 }
-
-/* Returns true if 'error' is a valid OFPERR_* value that is a Nicira
- * extension, e.g. if it is an OFPERR_NX* value, and false otherwise. */
-bool
-ofperr_is_nx_extension(enum ofperr error)
-{
-    return (ofperr_is_valid(error)
-            && (ofperr_of10.errors[error - OFPERR_OFS].code >= 0x100 ||
-                ofperr_of11.errors[error - OFPERR_OFS].code >= 0x100));
-}
-
 /* Returns true if 'error' can be encoded as an OpenFlow error message in
  * 'domain', false otherwise.
  *
@@ -192,7 +181,7 @@ ofperr_encode_msg__(enum ofperr error, enum ofp_version ofp_version,
     }
 
     pair = ofperr_get_pair__(error, domain);
-    if (!ofperr_is_nx_extension(error)) {
+    if (pair->code < 0x100) {
         buf = ofpraw_alloc_xid(OFPRAW_OFPT_ERROR, domain->version, xid,
                                sizeof *oem + data_len);
 
@@ -216,6 +205,7 @@ ofperr_encode_msg__(enum ofperr error, enum ofp_version ofp_version,
     }
 
     ofpbuf_put(buf, data, data_len);
+    ofpmsg_update_length(buf);
 
     return buf;
 }

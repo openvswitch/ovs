@@ -2751,6 +2751,40 @@ ofctl_print_error(int argc OVS_UNUSED, char *argv[])
     }
 }
 
+/* "encode-error-reply ENUM REQUEST": Encodes an error reply to REQUEST for the
+ * error named ENUM and prints the error reply in hex. */
+static void
+ofctl_encode_error_reply(int argc OVS_UNUSED, char *argv[])
+{
+    const struct ofp_header *oh;
+    struct ofpbuf request, *reply;
+    enum ofperr error;
+
+    error = ofperr_from_name(argv[1]);
+    if (!error) {
+        ovs_fatal(0, "unknown error \"%s\"", argv[1]);
+    }
+
+    ofpbuf_init(&request, 0);
+    if (ofpbuf_put_hex(&request, argv[2], NULL)[0] != '\0') {
+        ovs_fatal(0, "Trailing garbage in hex data");
+    }
+    if (request.size < sizeof(struct ofp_header)) {
+        ovs_fatal(0, "Request too short");
+    }
+
+    oh = request.data;
+    if (request.size != ntohs(oh->length)) {
+        ovs_fatal(0, "Request size inconsistent");
+    }
+
+    reply = ofperr_encode_reply(error, request.data);
+    ofpbuf_uninit(&request);
+
+    ovs_hex_dump(stdout, reply->data, reply->size, 0, false);
+    ofpbuf_delete(reply);
+}
+
 /* "ofp-print HEXSTRING [VERBOSITY]": Converts the hex digits in HEXSTRING into
  * binary data, interpreting them as an OpenFlow message, and prints the
  * OpenFlow message on stdout, at VERBOSITY (level 2 by default).  */
@@ -2820,6 +2854,7 @@ static const struct command all_commands[] = {
     { "parse-ofp11-instructions", 0, 0, ofctl_parse_ofp11_instructions },
     { "check-vlan", 2, 2, ofctl_check_vlan },
     { "print-error", 1, 1, ofctl_print_error },
+    { "encode-error-reply", 2, 2, ofctl_encode_error_reply },
     { "ofp-print", 1, 2, ofctl_ofp_print },
     { "encode-hello", 1, 1, ofctl_encode_hello },
 

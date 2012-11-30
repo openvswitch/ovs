@@ -100,6 +100,27 @@ OpenFlow 1.3: 3,6
 ])
 AT_CLEANUP
 
+dnl The "bad role" error was a Nicira extension in OpenFlow 1.0 and 1.1.
+dnl It was adopted as an official error code in OpenFlow 1.2.
+AT_SETUP([encoding errors extension that became official])
+AT_KEYWORDS([ofp-print ofp-errors])
+AT_CHECK(
+  [ovs-ofctl encode-error-reply OFPRRFC_BAD_ROLE 0100000812345678], [0], [dnl
+00000000  01 01 00 1c 12 34 56 78-b0 c2 00 00 00 00 23 20 @&t@
+00000010  00 01 02 01 01 00 00 08-12 34 56 78 @&t@
+])
+AT_CHECK(
+  [ovs-ofctl encode-error-reply OFPRRFC_BAD_ROLE 0200000812345678], [0], [dnl
+00000000  02 01 00 1c 12 34 56 78-b0 c2 00 00 00 00 23 20 @&t@
+00000010  00 01 02 01 02 00 00 08-12 34 56 78 @&t@
+])
+AT_CHECK(
+  [ovs-ofctl encode-error-reply OFPRRFC_BAD_ROLE 0300000812345678], [0], [dnl
+00000000  03 01 00 14 12 34 56 78-00 0b 00 02 03 00 00 08 @&t@
+00000010  12 34 56 78 @&t@
+])
+AT_CLEANUP
+
 AT_SETUP([decoding OFPBIC_* experimenter errors])
 AT_KEYWORDS([ofp-print ofp-errors])
 AT_CHECK([ovs-ofctl ofp-print '0201001455555555 00030005 0102000811111111'], [0], [dnl
