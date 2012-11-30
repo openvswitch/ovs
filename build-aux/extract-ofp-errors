@@ -294,7 +294,6 @@ struct ofperr_domain {
     const char *name;
     uint8_t version;
     enum ofperr (*decode)(uint16_t type, uint16_t code);
-    enum ofperr (*decode_type)(uint16_t type);
     struct pair errors[OFPERR_N_ERRORS];
 };
 
@@ -333,24 +332,6 @@ static enum ofperr
     }
 
     return 0;
-}
-
-static enum ofperr
-%s_decode_type(uint16_t type)
-{
-    switch (type) {""" % name
-        for enum in names:
-            if enum not in map:
-                continue
-            type_, code = map[enum]
-            if code is not None:
-                continue
-            print "    case %d:" % type_
-            print "        return OFPERR_%s;" % enum
-        print """\
-    }
-
-    return 0;
 }"""
 
         print """
@@ -358,8 +339,7 @@ static const struct ofperr_domain %s = {
     "%s",
     %d,
     %s_decode,
-    %s_decode_type,
-    {""" % (name, description, version, name, name)
+    {""" % (name, description, version, name)
         for enum in names:
             if enum in map:
                 type_, code = map[enum]

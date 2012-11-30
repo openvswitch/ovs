@@ -68,11 +68,8 @@ enum ofperr {
 /* ## OFPET_HELLO_FAILED ## */
 /* ## ------------------ ## */
 
-    /* OF1.0+(0).  Hello protocol failed. */
-    OFPERR_OFPET_HELLO_FAILED = OFPERR_OFS,
-
     /* OF1.0+(0,0).  No compatible version. */
-    OFPERR_OFPHFC_INCOMPATIBLE,
+    OFPERR_OFPHFC_INCOMPATIBLE = OFPERR_OFS,
 
     /* OF1.0+(0,1).  Permissions error. */
     OFPERR_OFPHFC_EPERM,
@@ -80,9 +77,6 @@ enum ofperr {
 /* ## ----------------- ## */
 /* ## OFPET_BAD_REQUEST ## */
 /* ## ----------------- ## */
-
-    /* OF1.0+(1).  Request was not understood. */
-    OFPERR_OFPET_BAD_REQUEST,
 
     /* OF1.0+(1,0).  ofp_header.version not supported. */
     OFPERR_OFPBRC_BAD_VERSION,
@@ -170,9 +164,6 @@ enum ofperr {
 /* ## OFPET_BAD_ACTION ## */
 /* ## ---------------- ## */
 
-    /* OF1.0+(2).  Error in action description. */
-    OFPERR_OFPET_BAD_ACTION,
-
     /* OF1.0+(2,0).  Unknown action type. */
     OFPERR_OFPBAC_BAD_TYPE,
 
@@ -229,9 +220,6 @@ enum ofperr {
 /* ## OFPET_BAD_INSTRUCTION ## */
 /* ## --------------------- ## */
 
-    /* OF1.1+(3).  Error in instruction list. */
-    OFPERR_OFPIT_BAD_INSTRUCTION,
-
     /* OF1.1+(3,0).  Unknown instruction. */
     OFPERR_OFPBIC_UNKNOWN_INST,
 
@@ -262,9 +250,6 @@ enum ofperr {
 /* ## --------------- ## */
 /* ## OFPET_BAD_MATCH ## */
 /* ## --------------- ## */
-
-    /* OF1.1+(4).  Error in match. */
-    OFPERR_OFPET_BAD_MATCH,
 
     /* OF1.1+(4,0).  Unsupported match type specified by the match */
     OFPERR_OFPBMC_BAD_TYPE,
@@ -311,9 +296,6 @@ enum ofperr {
 /* ## OFPET_FLOW_MOD_FAILED ## */
 /* ## --------------------- ## */
 
-    /* OF1.0(3), OF1.1+(5).  Problem modifying flow entry. */
-    OFPERR_OFPET_FLOW_MOD_FAILED,
-
     /* OF1.1+(5,0).  Unspecified error. */
     OFPERR_OFPFMFC_UNKNOWN,
 
@@ -358,9 +340,6 @@ enum ofperr {
 /* ## ---------------------- ## */
 /* ## OFPET_GROUP_MOD_FAILED ## */
 /* ## ---------------------- ## */
-
-    /* OF1.1+(6).  Problem modifying group entry. */
-    OFPERR_OFPET_GROUP_MOD_FAILED,
 
     /* OF1.1+(6,0).  Group not added because a group ADD attempted to replace
      * an already-present group. */
@@ -417,9 +396,6 @@ enum ofperr {
 /* ## OFPET_PORT_MOD_FAILED ## */
 /* ## --------------------- ## */
 
-    /* OF1.0(4), OF1.1+(7).  OFPT_PORT_MOD failed. */
-    OFPERR_OFPET_PORT_MOD_FAILED,
-
     /* OF1.0(4,0), OF1.1+(7,0).  Specified port does not exist. */
     OFPERR_OFPPMFC_BAD_PORT,
 
@@ -440,9 +416,6 @@ enum ofperr {
 /* ## OFPET_TABLE_MOD_FAILED ## */
 /* ## ---------------------- ## */
 
-    /* OF1.1+(8).  Table mod request failed. */
-    OFPERR_OFPET_TABLE_MOD_FAILED,
-
     /* OF1.1+(8,0).  Specified table does not exist. */
     OFPERR_OFPTMFC_BAD_TABLE,
 
@@ -455,9 +428,6 @@ enum ofperr {
 /* ## --------------------- ## */
 /* ## OFPET_QUEUE_OP_FAILED ## */
 /* ## --------------------- ## */
-
-    /* OF1.0(5), OF1.1+(9).  Queue operation failed. */
-    OFPERR_OFPET_QUEUE_OP_FAILED,
 
     /* OF1.0(5,0), OF1.1+(9,0).  Invalid port (or port does not exist). */
     OFPERR_OFPQOFC_BAD_PORT,
@@ -472,9 +442,6 @@ enum ofperr {
 /* ## OFPET_SWITCH_CONFIG_FAILED ## */
 /* ## -------------------------- ## */
 
-    /* OF1.1+(10).  Switch config request failed. */
-    OFPERR_OFPET_SWITCH_CONFIG_FAILED,
-
     /* OF1.1+(10,0).  Specified flags is invalid. */
     OFPERR_OFPSCFC_BAD_FLAGS,
 
@@ -488,9 +455,6 @@ enum ofperr {
 /* ## OFPET_ROLE_REQUEST_FAILED ## */
 /* ## ------------------------- ## */
 
-    /* OF1.2+(11).  Controller Role request failed. */
-    OFPERR_OFPET_ROLE_REQUEST_FAILED,
-
     /* OF1.2+(11,0).  Stale Message: old generation_id. */
     OFPERR_OFPRRFC_STALE,
 
@@ -503,9 +467,6 @@ enum ofperr {
 /* ## ---------------------- ## */
 /* ## OFPET_METER_MOD_FAILED ## */
 /* ## ---------------------- ## */
-
-    /* OF1.3+(12).  Error in meter. */
-    OFPERR_OFPET_METER_MOD_FAILED,
 
     /* OF1.3+(12,0).  Unspecified error. */
     OFPERR_OFPMMFC_UNKNOWN,
@@ -550,9 +511,6 @@ enum ofperr {
 /* ## OFPET_TABLE_FEATURES_FAILED ## */
 /* ## --------------------------- ## */
 
-    /* OF1.3+(13).  Setting table features failed. */
-    OFPERR_OFPET_TABLE_FEATURES_FAILED,
-
     /* OF1.3+(13,0).  Specified table does not exist. */
     OFPERR_OFPTFFC_BAD_TABLE,
 
@@ -574,19 +532,14 @@ enum ofperr {
 /* ## ------------------ ## */
 /* ## OFPET_EXPERIMENTER ## */
 /* ## ------------------ ## */
-
-    /* OF1.2+(0xffff).  Experimenter error messages. */
-    OFPERR_OFPET_EXPERIMENTER,
 };
 
 const char *ofperr_domain_get_name(enum ofp_version);
 
 bool ofperr_is_valid(enum ofperr);
-bool ofperr_is_category(enum ofperr);
 bool ofperr_is_encodable(enum ofperr, enum ofp_version);
 
 enum ofperr ofperr_decode(enum ofp_version, uint16_t type, uint16_t code);
-enum ofperr ofperr_decode_type(enum ofp_version, uint16_t type);
 enum ofperr ofperr_from_name(const char *);
 
 enum ofperr ofperr_decode_msg(const struct ofp_header *,

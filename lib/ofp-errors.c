@@ -53,16 +53,6 @@ ofperr_is_valid(enum ofperr error)
     return error >= OFPERR_OFS && error < OFPERR_OFS + OFPERR_N_ERRORS;
 }
 
-/* Returns true if 'error' is a valid OFPERR_* value that designates a whole
- * category of errors instead of a particular error, e.g. if it is an
- * OFPERR_OFPET_* value, and false otherwise.  */
-bool
-ofperr_is_category(enum ofperr error)
-{
-    return (ofperr_is_valid(error)
-            && ofperr_of10.errors[error - OFPERR_OFS].code == -1
-            && ofperr_of11.errors[error - OFPERR_OFS].code == -1);
-}
 /* Returns true if 'error' can be encoded as an OpenFlow error message in
  * 'domain', false otherwise.
  *
@@ -84,16 +74,6 @@ ofperr_decode(enum ofp_version version, uint16_t type, uint16_t code)
 {
     const struct ofperr_domain *domain = ofperr_domain_from_version(version);
     return domain ? domain->decode(type, code) : 0;
-}
-
-/* Returns the OFPERR_* value that corresponds to the category 'type' within
- * 'version', or 0 if either no such OFPERR_* value exists or 'version' is
- * unknown. */
-enum ofperr
-ofperr_decode_type(enum ofp_version version, uint16_t type)
-{
-    const struct ofperr_domain *domain = ofperr_domain_from_version(version);
-    return domain ? domain->decode_type(type) : 0;
 }
 
 /* Returns the name of 'error', e.g. "OFPBRC_BAD_TYPE" if 'error' is
@@ -331,12 +311,8 @@ ofperr_decode_msg(const struct ofp_header *oh, struct ofpbuf *payload)
         code = ntohs(nve->code);
     }
 
-    /* Translate the error type and code into an ofperr.
-     * If we don't know the error type and code, at least try for the type. */
+    /* Translate the error type and code into an ofperr. */
     error = ofperr_decode(oh->version, type, code);
-    if (!error) {
-        error = ofperr_decode_type(oh->version, type);
-    }
     if (error && payload) {
         ofpbuf_use_const(payload, b.data, b.size);
     }
