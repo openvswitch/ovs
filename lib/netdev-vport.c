@@ -56,6 +56,7 @@ struct netdev_dev_vport {
     struct netdev_dev netdev_dev;
     struct ofpbuf *options;
     unsigned int change_seq;
+    uint8_t etheraddr[ETH_ADDR_LEN];
 };
 
 struct netdev_vport {
@@ -207,6 +208,7 @@ netdev_vport_create(const struct netdev_class *netdev_class, const char *name,
     netdev_dev_init(&dev->netdev_dev, name, netdev_class);
     dev->options = NULL;
     dev->change_seq = 1;
+    eth_addr_random(dev->etheraddr);
 
     *netdev_devp = &dev->netdev_dev;
     route_table_register();
@@ -322,39 +324,17 @@ static int
 netdev_vport_set_etheraddr(struct netdev *netdev,
                            const uint8_t mac[ETH_ADDR_LEN])
 {
-    struct dpif_linux_vport vport;
-    int error;
-
-    dpif_linux_vport_init(&vport);
-    vport.cmd = OVS_VPORT_CMD_SET;
-    vport.name = netdev_get_name(netdev);
-    vport.address = mac;
-
-    error = dpif_linux_vport_transact(&vport, NULL, NULL);
-    if (!error) {
-        netdev_vport_poll_notify(netdev);
-    }
-    return error;
+    memcpy(netdev_vport_get_dev(netdev)->etheraddr, mac, ETH_ADDR_LEN);
+    netdev_vport_poll_notify(netdev);
+    return 0;
 }
 
 static int
 netdev_vport_get_etheraddr(const struct netdev *netdev,
                            uint8_t mac[ETH_ADDR_LEN])
 {
-    struct dpif_linux_vport reply;
-    struct ofpbuf *buf;
-    int error;
-
-    error = dpif_linux_vport_get(netdev_get_name(netdev), &reply, &buf);
-    if (!error) {
-        if (reply.address) {
-            memcpy(mac, reply.address, ETH_ADDR_LEN);
-        } else {
-            error = EOPNOTSUPP;
-        }
-        ofpbuf_delete(buf);
-    }
-    return error;
+    memcpy(mac, netdev_vport_get_dev(netdev)->etheraddr, ETH_ADDR_LEN);
+    return 0;
 }
 
 /* Copies 'src' into 'dst', performing format conversion in the process.
