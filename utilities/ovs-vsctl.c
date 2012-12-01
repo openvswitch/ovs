@@ -1582,13 +1582,23 @@ cmd_list_br(struct vsctl_context *ctx)
 {
     struct shash_node *node;
     struct svec bridges;
+    bool real = shash_find(&ctx->options, "--real");
+    bool fake = shash_find(&ctx->options, "--fake");
+
+    /* If neither fake nor real were requested, return both. */
+    if (!real && !fake) {
+        real = fake = true;
+    }
 
     vsctl_context_populate_cache(ctx);
 
     svec_init(&bridges);
     SHASH_FOR_EACH (node, &ctx->bridges) {
         struct vsctl_bridge *br = node->data;
-        svec_add(&bridges, br->name);
+
+        if (br->parent ? fake : real) {
+            svec_add(&bridges, br->name);
+        }
     }
     output_sorted(&bridges, &ctx->output);
     svec_destroy(&bridges);
@@ -3961,7 +3971,7 @@ static const struct vsctl_command_syntax all_commands[] = {
     /* Bridge commands. */
     {"add-br", 1, 3, pre_get_info, cmd_add_br, NULL, "--may-exist", RW},
     {"del-br", 1, 1, pre_get_info, cmd_del_br, NULL, "--if-exists", RW},
-    {"list-br", 0, 0, pre_get_info, cmd_list_br, NULL, "", RO},
+    {"list-br", 0, 0, pre_get_info, cmd_list_br, NULL, "--real,--fake", RO},
     {"br-exists", 1, 1, pre_get_info, cmd_br_exists, NULL, "", RO},
     {"br-to-vlan", 1, 1, pre_get_info, cmd_br_to_vlan, NULL, "", RO},
     {"br-to-parent", 1, 1, pre_get_info, cmd_br_to_parent, NULL, "", RO},
