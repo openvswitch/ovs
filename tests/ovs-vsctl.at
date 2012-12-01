@@ -439,6 +439,22 @@ CHECK_IFACES([xapi1], [eth0.$1])
 OVS_VSCTL_CLEANUP
 AT_CLEANUP
 
+AT_SETUP([list bridges -- real and fake (VLAN $1)])
+AT_KEYWORDS([ovs-vsctl fake-bridge])
+OVS_VSCTL_SETUP
+OVS_VSCTL_SETUP_SIMPLE_FAKE_CONF([$1])
+AT_CHECK([RUN_OVS_VSCTL_ONELINE([-- list-br])], [0],
+  [xapi1\nxenbr0
+], [], [OVS_VSCTL_CLEANUP])
+AT_CHECK([RUN_OVS_VSCTL_ONELINE([-- --real list-br])], [0],
+  [xenbr0
+], [], [OVS_VSCTL_CLEANUP])
+AT_CHECK([RUN_OVS_VSCTL_ONELINE([-- --fake list-br])], [0],
+  [xapi1
+], [], [OVS_VSCTL_CLEANUP])
+OVS_VSCTL_CLEANUP
+AT_CLEANUP
+
 AT_SETUP([simple fake bridge + del-br fake bridge (VLAN $1)])
 AT_KEYWORDS([ovs-vsctl fake-bridge])
 OVS_VSCTL_SETUP

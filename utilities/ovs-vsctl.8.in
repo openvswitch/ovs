@@ -195,9 +195,10 @@ Without \fB\-\-if\-exists\fR, attempting to delete a bridge that does
 not exist is an error.  With \fB\-\-if\-exists\fR, attempting to
 delete a bridge that does not exist has no effect.
 .
-.IP "\fBlist\-br\fR"
+.IP "[\fB\-\-real\fR|\fB\-\-fake\fR] \fBlist\-br\fR"
 Lists all existing real and fake bridges on standard output, one per
-line.
+line.  With \fB\-\-real\fR or \fB\-\-fake\fR, only bridges of that type
+are returned.
 .
 .IP "\fBbr\-exists \fIbridge\fR"
 Tests whether \fIbridge\fR exists as a real or fake bridge.  If so,
