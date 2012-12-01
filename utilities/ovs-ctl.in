@@ -294,7 +294,7 @@ internal_interfaces () {
 }
 
 save_flows () {
-   if set X `ovs_vsctl list-br`; then
+   if set X `ovs_vsctl -- --real list-br`; then
         shift
         if "$datadir/scripts/ovs-save" save-flows "$@" > "$script_flows"; then
             chmod +x "$script_flows"
