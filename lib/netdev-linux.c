@@ -1499,6 +1499,41 @@ netdev_internal_get_stats(const struct netdev *netdev_,
     return netdev_dev->vport_stats_error;
 }
 
+static int
+netdev_internal_set_stats(struct netdev *netdev,
+                          const struct netdev_stats *stats)
+{
+    struct ovs_vport_stats vport_stats;
+    struct dpif_linux_vport vport;
+    int err;
+
+    vport_stats.rx_packets = stats->rx_packets;
+    vport_stats.tx_packets = stats->tx_packets;
+    vport_stats.rx_bytes = stats->rx_bytes;
+    vport_stats.tx_bytes = stats->tx_bytes;
+    vport_stats.rx_errors = stats->rx_errors;
+    vport_stats.tx_errors = stats->tx_errors;
+    vport_stats.rx_dropped = stats->rx_dropped;
+    vport_stats.tx_dropped = stats->tx_dropped;
+
+    dpif_linux_vport_init(&vport);
+    vport.cmd = OVS_VPORT_CMD_SET;
+    vport.name = netdev_get_name(netdev);
+    vport.stats = &vport_stats;
+
+    err = dpif_linux_vport_transact(&vport, NULL, NULL);
+
+    /* If the vport layer doesn't know about the device, that doesn't mean it
+     * doesn't exist (after all were able to open it when netdev_open() was
+     * called), it just means that it isn't attached and we'll be getting
+     * stats a different way. */
+    if (err == ENODEV) {
+        err = EOPNOTSUPP;
+    }
+
+    return err;
+}
+
 static void
 netdev_linux_read_features(struct netdev_dev_linux *netdev_dev)
 {
@@ -2481,7 +2516,7 @@ const struct netdev_class netdev_internal_class =
         "internal",
         netdev_linux_create,
         netdev_internal_get_stats,
-        netdev_vport_set_stats,
+        netdev_internal_set_stats,
         NULL,                  /* get_features */
         netdev_internal_get_drv_info);
 

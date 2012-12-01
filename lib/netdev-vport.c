@@ -377,21 +377,6 @@ netdev_stats_from_ovs_vport_stats(struct netdev_stats *dst,
     dst->tx_window_errors = 0;
 }
 
-/* Copies 'src' into 'dst', performing format conversion in the process. */
-static void
-netdev_stats_to_ovs_vport_stats(struct ovs_vport_stats *dst,
-                                const struct netdev_stats *src)
-{
-    dst->rx_packets = src->rx_packets;
-    dst->tx_packets = src->tx_packets;
-    dst->rx_bytes = src->rx_bytes;
-    dst->tx_bytes = src->tx_bytes;
-    dst->rx_errors = src->rx_errors;
-    dst->tx_errors = src->tx_errors;
-    dst->rx_dropped = src->rx_dropped;
-    dst->tx_dropped = src->tx_dropped;
-}
-
 int
 netdev_vport_get_stats(const struct netdev *netdev, struct netdev_stats *stats)
 {
@@ -412,33 +397,6 @@ netdev_vport_get_stats(const struct netdev *netdev, struct netdev_stats *stats)
     ofpbuf_delete(buf);
 
     return 0;
-}
-
-int
-netdev_vport_set_stats(struct netdev *netdev, const struct netdev_stats *stats)
-{
-    struct ovs_vport_stats rtnl_stats;
-    struct dpif_linux_vport vport;
-    int err;
-
-    netdev_stats_to_ovs_vport_stats(&rtnl_stats, stats);
-
-    dpif_linux_vport_init(&vport);
-    vport.cmd = OVS_VPORT_CMD_SET;
-    vport.name = netdev_get_name(netdev);
-    vport.stats = &rtnl_stats;
-
-    err = dpif_linux_vport_transact(&vport, NULL, NULL);
-
-    /* If the vport layer doesn't know about the device, that doesn't mean it
-     * doesn't exist (after all were able to open it when netdev_open() was
-     * called), it just means that it isn't attached and we'll be getting
-     * stats a different way. */
-    if (err == ENODEV) {
-        err = EOPNOTSUPP;
-    }
-
-    return err;
 }
 
 static int
@@ -932,7 +890,7 @@ unparse_patch_config(const char *name OVS_UNUSED, const char *type OVS_UNUSED,
     NULL,                       /* get_carrier_resets */    \
     NULL,                       /* get_miimon */            \
     netdev_vport_get_stats,                                 \
-    netdev_vport_set_stats,                                 \
+    NULL,                       /* set_stats */             \
                                                             \
     NULL,                       /* get_features */          \
     NULL,                       /* set_advertisements */    \
