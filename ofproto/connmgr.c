@@ -976,29 +976,26 @@ void
 ofconn_send_error(const struct ofconn *ofconn,
                   const struct ofp_header *request, enum ofperr error)
 {
+    static struct vlog_rate_limit err_rl = VLOG_RATE_LIMIT_INIT(10, 10);
     struct ofpbuf *reply;
 
     reply = ofperr_encode_reply(error, request);
-    if (reply) {
-        static struct vlog_rate_limit err_rl = VLOG_RATE_LIMIT_INIT(10, 10);
+    if (!VLOG_DROP_INFO(&err_rl)) {
+        const char *type_name;
+        size_t request_len;
+        enum ofpraw raw;
 
-        if (!VLOG_DROP_INFO(&err_rl)) {
-            const char *type_name;
-            size_t request_len;
-            enum ofpraw raw;
+        request_len = ntohs(request->length);
+        type_name = (!ofpraw_decode_partial(&raw, request,
+                                            MIN(64, request_len))
+                     ? ofpraw_get_name(raw)
+                     : "invalid");
 
-            request_len = ntohs(request->length);
-            type_name = (!ofpraw_decode_partial(&raw, request,
-                                                MIN(64, request_len))
-                         ? ofpraw_get_name(raw)
-                         : "invalid");
-
-            VLOG_INFO("%s: sending %s error reply to %s message",
-                      rconn_get_name(ofconn->rconn), ofperr_to_string(error),
-                      type_name);
-        }
-        ofconn_send_reply(ofconn, reply);
+        VLOG_INFO("%s: sending %s error reply to %s message",
+                  rconn_get_name(ofconn->rconn), ofperr_to_string(error),
+                  type_name);
     }
+    ofconn_send_reply(ofconn, reply);
 }
 
 /* Same as pktbuf_retrieve(), using the pktbuf owned by 'ofconn'. */

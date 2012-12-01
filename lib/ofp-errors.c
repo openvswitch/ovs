@@ -53,19 +53,6 @@ ofperr_is_valid(enum ofperr error)
     return error >= OFPERR_OFS && error < OFPERR_OFS + OFPERR_N_ERRORS;
 }
 
-/* Returns true if 'error' can be encoded as an OpenFlow error message in
- * 'domain', false otherwise.
- *
- * A given error may not be encodable in some domains because each OpenFlow
- * version tends to introduce new errors and retire some old ones. */
-bool
-ofperr_is_encodable(enum ofperr error, enum ofp_version version)
-{
-    const struct ofperr_domain *domain = ofperr_domain_from_version(version);
-    return (ofperr_is_valid(error)
-            && domain && domain->errors[error - OFPERR_OFS].code >= 0);
-}
-
 /* Returns the OFPERR_* value that corresponds to 'type' and 'code' within
  * 'version', or 0 if either no such OFPERR_* value exists or 'version' is
  * unknown. */
@@ -131,33 +118,30 @@ static struct ofpbuf *
 ofperr_encode_msg__(enum ofperr error, enum ofp_version ofp_version,
                     ovs_be32 xid, const void *data, size_t data_len)
 {
+    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+    const struct ofperr_domain *domain;
     struct ofp_error_msg *oem;
     const struct pair *pair;
     struct ofpbuf *buf;
-    const struct ofperr_domain *domain;
 
+    /* Get the error domain for 'ofp_version', or fall back to OF1.0. */
     domain = ofperr_domain_from_version(ofp_version);
     if (!domain) {
-        return NULL;
+        VLOG_ERR_RL(&rl, "cannot encode error for unknown OpenFlow "
+                    "version 0x%02x", ofp_version);
+        domain = &ofperr_of10;
     }
 
-    if (!ofperr_is_encodable(error, ofp_version)) {
-        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
-
-        if (!ofperr_is_valid(error)) {
-            /* 'error' seems likely to be a system errno value. */
-            VLOG_WARN_RL(&rl, "invalid OpenFlow error code %d (%s)",
-                         error, strerror(error));
-        } else {
-            const char *s = ofperr_get_name(error);
-            if (ofperr_is_category(error)) {
-                VLOG_WARN_RL(&rl, "cannot encode error category (%s)", s);
-            } else {
-                VLOG_WARN_RL(&rl, "cannot encode %s for %s", s, domain->name);
-            }
-        }
-
-        return NULL;
+    /* Make sure 'error' is valid in 'domain', or use a fallback error. */
+    if (!ofperr_is_valid(error)) {
+        /* 'error' seems likely to be a system errno value. */
+        VLOG_ERR_RL(&rl, "invalid OpenFlow error code %d (%s)",
+                    error, strerror(error));
+        error = OFPERR_NXBRC_UNENCODABLE_ERROR;
+    } else if (domain->errors[error - OFPERR_OFS].code < 0) {
+        VLOG_ERR_RL(&rl, "cannot encode %s for %s",
+                    ofperr_get_name(error), domain->name);
+        error = OFPERR_NXBRC_UNENCODABLE_ERROR;
     }
 
     pair = ofperr_get_pair__(error, domain);
@@ -198,9 +182,6 @@ ofperr_encode_msg__(enum ofperr error, enum ofp_version ofp_version,
  * The error reply will contain an initial subsequence of 'oh', up to
  * 'oh->length' or 64 bytes, whichever is shorter.
  *
- * Returns NULL if 'error' is not an OpenFlow error code or if 'error' cannot
- * be encoded as OpenFlow version 'oh->version'.
- *
  * This function isn't appropriate for encoding OFPET_HELLO_FAILED error
  * messages.  Use ofperr_encode_hello() instead. */
 struct ofpbuf *
@@ -217,25 +198,11 @@ ofperr_encode_reply(enum ofperr error, const struct ofp_header *oh)
  *
  * If 'version' is an unknown version then OFP10_VERSION is used.
  * OFPET_HELLO_FAILED error messages are supposed to be backward-compatible,
- * so in theory this should work.
- *
- * Returns NULL if 'error' is not an OpenFlow error code or if 'error' cannot
- * be encoded in 'domain'. */
+ * so in theory this should work. */
 struct ofpbuf *
 ofperr_encode_hello(enum ofperr error, enum ofp_version ofp_version,
                     const char *s)
 {
-    switch (ofp_version) {
-    case OFP10_VERSION:
-    case OFP11_VERSION:
-    case OFP12_VERSION:
-    case OFP13_VERSION:
-        break;
-
-    default:
-        ofp_version = OFP10_VERSION;
-    }
-
     return ofperr_encode_msg__(error, ofp_version, htonl(0), s, strlen(s));
 }
 

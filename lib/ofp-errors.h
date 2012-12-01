@@ -160,6 +160,10 @@ enum ofperr {
      * NXFME_MODIFY. */
     OFPERR_NXBRC_FM_BAD_EVENT,
 
+    /* NX1.0+(1,521).  The error that occurred cannot be represented in this
+     * OpenFlow version. */
+    OFPERR_NXBRC_UNENCODABLE_ERROR,
+
 /* ## ---------------- ## */
 /* ## OFPET_BAD_ACTION ## */
 /* ## ---------------- ## */
@@ -537,7 +541,6 @@ enum ofperr {
 const char *ofperr_domain_get_name(enum ofp_version);
 
 bool ofperr_is_valid(enum ofperr);
-bool ofperr_is_encodable(enum ofperr, enum ofp_version);
 
 enum ofperr ofperr_decode(enum ofp_version, uint16_t type, uint16_t code);
 enum ofperr ofperr_from_name(const char *);
