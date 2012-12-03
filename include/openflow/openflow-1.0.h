@@ -51,31 +51,6 @@ enum ofp_port {
     OFPP_NONE       = 0xffff   /* Not associated with a physical port. */
 };
 
-#define OFP_DEFAULT_MISS_SEND_LEN   128
-
-enum ofp_config_flags {
-    /* Handling of IP fragments. */
-    OFPC_FRAG_NORMAL   = 0,  /* No special handling for fragments. */
-    OFPC_FRAG_DROP     = 1,  /* Drop fragments. */
-    OFPC_FRAG_REASM    = 2,  /* Reassemble (only if OFPC_IP_REASM set). */
-    OFPC_FRAG_NX_MATCH = 3,  /* Make first fragments available for matching. */
-    OFPC_FRAG_MASK     = 3,
-
-    /* OFPC_INVALID_TTL_TO_CONTROLLER is deprecated in OpenFlow 1.3 */
-
-    /* TTL processing - applicable for IP and MPLS packets. */
-    OFPC_INVALID_TTL_TO_CONTROLLER = 1 << 2, /* Send packets with invalid TTL
-                                                to the controller. */
-};
-
-/* Switch configuration. */
-struct ofp_switch_config {
-    ovs_be16 flags;             /* OFPC_* flags. */
-    ovs_be16 miss_send_len;     /* Max bytes of new flow that datapath should
-                                   send to the controller. */
-};
-OFP_ASSERT(sizeof(struct ofp_switch_config) == 4);
-
 /* OpenFlow 1.0 specific capabilities supported by the datapath (struct
  * ofp_switch_features, member capabilities). */
 enum ofp10_capabilities {
@@ -177,7 +152,7 @@ struct ofp10_queue_get_config_reply {
 OFP_ASSERT(sizeof(struct ofp10_queue_get_config_reply) == 8);
 
 /* Packet received on port (datapath -> controller). */
-struct ofp_packet_in {
+struct ofp10_packet_in {
     ovs_be32 buffer_id;     /* ID assigned by datapath. */
     ovs_be16 total_len;     /* Full length of frame. */
     ovs_be16 in_port;       /* Port on which frame was received. */
@@ -190,7 +165,7 @@ struct ofp_packet_in {
                                offsetof(struct ofp_packet_in, data) ==
                                sizeof(struct ofp_packet_in) - 2. */
 };
-OFP_ASSERT(sizeof(struct ofp_packet_in) == 12);
+OFP_ASSERT(sizeof(struct ofp10_packet_in) == 12);
 
 enum ofp10_action_type {
     OFPAT10_OUTPUT,             /* Output to switch port. */
@@ -220,30 +195,8 @@ struct ofp10_action_output {
 };
 OFP_ASSERT(sizeof(struct ofp10_action_output) == 8);
 
-/* Action header for OFPAT10_VENDOR. The rest of the body is vendor-defined. */
-struct ofp_action_vendor_header {
-    ovs_be16 type;                  /* OFPAT10_VENDOR. */
-    ovs_be16 len;                   /* Length is a multiple of 8. */
-    ovs_be32 vendor;                /* Vendor ID, which takes the same form
-                                       as in "struct ofp_vendor_header". */
-};
-OFP_ASSERT(sizeof(struct ofp_action_vendor_header) == 8);
-
-/* Action header that is common to all actions.  The length includes the
- * header and any padding used to make the action 64-bit aligned.
- * NB: The length of an action *must* always be a multiple of eight. */
-struct ofp_action_header {
-    ovs_be16 type;                  /* One of OFPAT10_*. */
-    ovs_be16 len;                   /* Length of action, including this
-                                       header.  This is the length of action,
-                                       including any padding to make it
-                                       64-bit aligned. */
-    uint8_t pad[4];
-};
-OFP_ASSERT(sizeof(struct ofp_action_header) == 8);
-
 /* OFPAT10_ENQUEUE action struct: send packets to given queue on port. */
-struct ofp_action_enqueue {
+struct ofp10_action_enqueue {
     ovs_be16 type;            /* OFPAT10_ENQUEUE. */
     ovs_be16 len;             /* Len is 16. */
     ovs_be16 port;            /* Port that queue belongs. Should
@@ -252,7 +205,7 @@ struct ofp_action_enqueue {
     uint8_t pad[6];           /* Pad for 64-bit alignment. */
     ovs_be32 queue_id;        /* Where to enqueue the packets. */
 };
-OFP_ASSERT(sizeof(struct ofp_action_enqueue) == 16);
+OFP_ASSERT(sizeof(struct ofp10_action_enqueue) == 16);
 
 union ofp_action {
     ovs_be16 type;
@@ -268,7 +221,7 @@ union ofp_action {
 OFP_ASSERT(sizeof(union ofp_action) == 8);
 
 /* Send packet (controller -> datapath). */
-struct ofp_packet_out {
+struct ofp10_packet_out {
     ovs_be32 buffer_id;           /* ID assigned by datapath or UINT32_MAX. */
     ovs_be16 in_port;             /* Packet's input port (OFPP_NONE if none). */
     ovs_be16 actions_len;         /* Size of action array in bytes. */
@@ -279,10 +232,10 @@ struct ofp_packet_out {
      *     of the message length.
      */
 };
-OFP_ASSERT(sizeof(struct ofp_packet_out) == 8);
+OFP_ASSERT(sizeof(struct ofp10_packet_out) == 8);
 
 /* Flow wildcards. */
-enum ofp_flow_wildcards {
+enum ofp10_flow_wildcards {
     OFPFW10_IN_PORT    = 1 << 0,  /* Switch input port. */
     OFPFW10_DL_VLAN    = 1 << 1,  /* VLAN vid. */
     OFPFW10_DL_SRC     = 1 << 2,  /* Ethernet source address. */
@@ -321,17 +274,6 @@ enum ofp_flow_wildcards {
 #define OFPFW10_ICMP_TYPE OFPFW10_TP_SRC
 #define OFPFW10_ICMP_CODE OFPFW10_TP_DST
 
-/* Values below this cutoff are 802.3 packets and the two bytes
- * following MAC addresses are used as a frame length.  Otherwise, the
- * two bytes are used as the Ethernet type.
- */
-#define OFP_DL_TYPE_ETH2_CUTOFF   0x0600
-
-/* Value of dl_type to indicate that the frame does not include an
- * Ethernet type.
- */
-#define OFP_DL_TYPE_NOT_ETH_TYPE  0x05ff
-
 /* The VLAN id is 12-bits, so we can use the entire 16 bits to indicate
  * special conditions.  All ones indicates that 802.1Q header is not present.
  */
@@ -357,13 +299,6 @@ struct ofp10_match {
     ovs_be16 tp_dst;           /* TCP/UDP destination port. */
 };
 OFP_ASSERT(sizeof(struct ofp10_match) == 40);
-
-/* Value used in "idle_timeout" and "hard_timeout" to indicate that the entry
- * is permanent. */
-#define OFP_FLOW_PERMANENT 0
-
-/* By default, choose a priority in the middle. */
-#define OFP_DEFAULT_PRIORITY 0x8000
 
 enum ofp10_flow_mod_flags {
     OFPFF10_EMERG       = 1 << 2   /* Ramark this is for emergency. */
@@ -393,7 +328,7 @@ struct ofp10_flow_mod {
 OFP_ASSERT(sizeof(struct ofp10_flow_mod) == 64);
 
 /* Flow removed (datapath -> controller). */
-struct ofp_flow_removed {
+struct ofp10_flow_removed {
     struct ofp10_match match; /* Description of fields. */
     ovs_be64 cookie;          /* Opaque controller-issued identifier. */
 
@@ -409,16 +344,7 @@ struct ofp_flow_removed {
     ovs_be64 packet_count;
     ovs_be64 byte_count;
 };
-OFP_ASSERT(sizeof(struct ofp_flow_removed) == 80);
-
-/* OFPT_ERROR: Error message (datapath -> controller). */
-struct ofp_error_msg {
-    ovs_be16 type;
-    ovs_be16 code;
-    uint8_t data[0];          /* Variable-length data.  Interpreted based
-                                 on the type and code. */
-};
-OFP_ASSERT(sizeof(struct ofp_error_msg) == 4);
+OFP_ASSERT(sizeof(struct ofp10_flow_removed) == 80);
 
 /* Statistics request or reply message. */
 struct ofp10_stats_msg {
@@ -428,10 +354,6 @@ struct ofp10_stats_msg {
                                  * Replies: 0 or OFPSF_REPLY_MORE. */
 };
 OFP_ASSERT(sizeof(struct ofp10_stats_msg) == 12);
-
-enum ofp_stats_reply_flags {
-    OFPSF_REPLY_MORE  = 1 << 0  /* More replies to follow. */
-};
 
 /* Stats request of type OFPST_AGGREGATE or OFPST_FLOW. */
 struct ofp10_flow_stats_request {
@@ -547,16 +469,5 @@ struct ofp10_vendor_stats_msg {
     /* Followed by vendor-defined arbitrary additional data. */
 };
 OFP_ASSERT(sizeof(struct ofp10_vendor_stats_msg) == 16);
-
-/* Vendor extension. */
-struct ofp_vendor_header {
-    struct ofp_header header;   /* Type OFPT_VENDOR. */
-    ovs_be32 vendor;            /* Vendor ID:
-                                 * - MSB 0: low-order bytes are IEEE OUI.
-                                 * - MSB != 0: defined by OpenFlow
-                                 *   consortium. */
-    /* Vendor-defined arbitrary additional data. */
-};
-OFP_ASSERT(sizeof(struct ofp_vendor_header) == 12);
 
 #endif /* openflow/openflow-1.0.h */

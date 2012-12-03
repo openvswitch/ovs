@@ -190,7 +190,7 @@ def parseStruct():
         forceMatch(';')
     if size % alignment:
         shortage = alignment - (size % alignment)
-        if (structName == "struct ofp_packet_in" and
+        if (structName == "struct ofp10_packet_in" and
             shortage == 2 and
             memberName == 'data' and
             count == 0):

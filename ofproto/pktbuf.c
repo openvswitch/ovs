@@ -120,7 +120,7 @@ pktbuf_save(struct pktbuf *pb, const void *buffer, size_t buffer_size,
         p->cookie = 0;
     }
     p->buffer = ofpbuf_clone_data_with_headroom(buffer, buffer_size,
-                                                sizeof(struct ofp_packet_in));
+                                                sizeof(struct ofp10_packet_in));
 
 
     p->timeout = time_msec() + OVERWRITE_MSECS;
@@ -165,7 +165,7 @@ pktbuf_get_null(void)
  *
  * 'in_port' may be NULL if the input port is not of interest.
  *
- * A returned packet will have at least sizeof(struct ofp_packet_in) bytes of
+ * A returned packet will have at least sizeof(struct ofp10_packet_in) bytes of
  * headroom.
  *
  * On failure, stores NULL in in '*bufferp' and UINT16_MAX in '*in_port'. */

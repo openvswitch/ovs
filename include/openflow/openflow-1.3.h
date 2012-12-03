@@ -119,8 +119,8 @@ enum ofp13_table_config {
 /* OpenFlow 1.3 specific flags
  * (struct ofp12_flow_mod, member flags). */
 enum ofp13_flow_mod_flags {
-    OFPFF13_NO_PKT_COUNTS = 1 << 3, /* Don’t keep track of packet count. */
-    OFPFF13_NO_BYT_COUNTS = 1 << 4  /* Don’t keep track of byte count. */
+    OFPFF13_NO_PKT_COUNTS = 1 << 3, /* Don't keep track of packet count. */
+    OFPFF13_NO_BYT_COUNTS = 1 << 4  /* Don't keep track of byte count. */
 };
 
 /* Common header for all meter bands */
@@ -137,7 +137,7 @@ struct ofp13_meter_mod {
     ovs_be16          command;      /* One of OFPMC_*. */
     ovs_be16          flags;        /* Set of OFPMF_*. */
     ovs_be32          meter_id;     /* Meter instance. */
-    struct ofp13_meter_band_header bands[0];  /* The bands length is inferred
+    /* struct ofp13_meter_band_header bands[0];  The bands length is inferred
                                                  from the length field in the
                                                  header. */
 };
@@ -246,7 +246,7 @@ struct ofp13_table_features {
     ovs_be32 max_entries;     /* Max number of entries supported. */
 
     /* Table Feature Property list */
-    struct ofp13_table_feature_prop_header properties[0];
+    /* struct ofp13_table_feature_prop_header properties[0]; */
 };
 OFP_ASSERT(sizeof(struct ofp13_table_features) == 64);
 
@@ -281,8 +281,8 @@ struct ofp13_table_feature_prop_instructions {
      *   - Exactly (length - 4) bytes containing the instruction ids, then
      *   - Exactly (length + 7)/8*8 - (length) (between 0 and 7)
      *     bytes of all-zero bytes */
-    struct ofp11_instruction instruction_ids[0]; /* List of instructions
-                                                    without any data */
+    /* struct ofp11_instruction instruction_ids[0];  List of instructions
+                                                     without any data */
 };
 OFP_ASSERT(sizeof(struct ofp13_table_feature_prop_instructions) == 4);
 
@@ -295,7 +295,7 @@ struct ofp13_table_feature_prop_next_tables {
      *   - Exactly (length - 4) bytes containing the table_ids, then
      *   - Exactly (length + 7)/8*8 - (length) (between 0 and 7)
      *     bytes of all-zero bytes */
-    uint8_t     next_table_ids[0];
+    /* uint8_t     next_table_ids[0]; */
 };
 OFP_ASSERT(sizeof(struct ofp13_table_feature_prop_next_tables) == 4);
 
@@ -310,7 +310,7 @@ struct ofp13_table_feature_prop_actions {
      *   - Exactly (length - 4) bytes containing the action_ids, then
      *   - Exactly (length + 7)/8*8 - (length) (between 0 and 7)
      *     bytes of all-zero bytes */
-    struct ofp_action_header action_ids[0];     /* List of actions
+    /* struct ofp_action_header action_ids[0];     List of actions
                                                    without any data */
 };
 OFP_ASSERT(sizeof(struct ofp13_table_feature_prop_actions) == 4);
@@ -328,7 +328,7 @@ struct ofp13_table_feature_prop_oxm {
      *   - Exactly (length - 4) bytes containing the oxm_ids, then
      *   - Exactly (length + 7)/8*8 - (length) (between 0 and 7)
      *     bytes of all-zero bytes */
-    ovs_be32    oxm_ids[0];     /* Array of OXM headers */
+    /* ovs_be32    oxm_ids[0];     Array of OXM headers */
 };
 OFP_ASSERT(sizeof(struct ofp13_table_feature_prop_oxm) == 4);
 
@@ -344,7 +344,7 @@ struct ofp13_table_feature_prop_experimenter {
      *   - Exactly (length - 12) bytes containing the experimenter data, then
      *   - Exactly (length + 7)/8*8 - (length) (between 0 and 7)
      *     bytes of all-zero bytes */
-    ovs_be32    experimenter_data[0];
+    /* ovs_be32    experimenter_data[0]; */
 };
 OFP_ASSERT(sizeof(struct ofp13_table_feature_prop_experimenter) == 12);
 
@@ -402,7 +402,7 @@ struct ofp13_meter_stats {
     ovs_be32  duration_sec;      /* Time meter has been alive in seconds. */
     ovs_be32  duration_nsec;     /* Time meter has been alive in nanoseconds
                                     beyond duration_sec. */
-    struct ofp13_meter_band_stats band_stats[0]; /* The band_stats length is
+    /* struct ofp13_meter_band_stats band_stats[0];  The band_stats length is
                                              inferred from the length field. */
 };
 OFP_ASSERT(sizeof(struct ofp13_meter_stats) == 40);
@@ -412,7 +412,7 @@ struct ofp13_meter_config {
     ovs_be16          length;       /* Length of this entry. */
     ovs_be16          flags;        /* Set of OFPMC_* that apply. */
     ovs_be32          meter_id;     /* Meter instance. */
-    struct ofp13_meter_band_header bands[0];  /* The bands length is inferred
+    /* struct ofp13_meter_band_header bands[0];   The bands length is inferred
                                                from the length field. */
 };
 OFP_ASSERT(sizeof(struct ofp13_meter_config) == 8);

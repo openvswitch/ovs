@@ -2288,7 +2288,7 @@ ofputil_decode_flow_removed(struct ofputil_flow_removed *fr,
         fr->packet_count = ntohll(ofr->packet_count);
         fr->byte_count = ntohll(ofr->byte_count);
     } else if (raw == OFPRAW_OFPT10_FLOW_REMOVED) {
-        const struct ofp_flow_removed *ofr;
+        const struct ofp10_flow_removed *ofr;
 
         ofr = ofpbuf_pull(&b, sizeof *ofr);
 
@@ -2368,7 +2368,7 @@ ofputil_encode_flow_removed(const struct ofputil_flow_removed *fr,
 
     case OFPUTIL_P_OF10_STD:
     case OFPUTIL_P_OF10_STD_TID: {
-        struct ofp_flow_removed *ofr;
+        struct ofp10_flow_removed *ofr;
 
         msg = ofpraw_alloc_xid(OFPRAW_OFPT10_FLOW_REMOVED, OFP10_VERSION,
                                htonl(0), 0);
@@ -2472,9 +2472,9 @@ ofputil_decode_packet_in(struct ofputil_packet_in *pin,
 
         ofputil_decode_packet_in_finish(pin, &match, &b);
     } else if (raw == OFPRAW_OFPT10_PACKET_IN) {
-        const struct ofp_packet_in *opi;
+        const struct ofp10_packet_in *opi;
 
-        opi = ofpbuf_pull(&b, offsetof(struct ofp_packet_in, data));
+        opi = ofpbuf_pull(&b, offsetof(struct ofp10_packet_in, data));
 
         pin->packet = opi->data;
         pin->packet_len = b.size;
@@ -2585,11 +2585,11 @@ ofputil_encode_packet_in(const struct ofputil_packet_in *pin,
             opi->cookie = pin->cookie;
         }
     } else if (packet_in_format == NXPIF_OPENFLOW10) {
-        struct ofp_packet_in *opi;
+        struct ofp10_packet_in *opi;
 
         packet = ofpraw_alloc_xid(OFPRAW_OFPT10_PACKET_IN, OFP10_VERSION,
                                   htonl(0), send_len);
-        opi = ofpbuf_put_zeros(packet, offsetof(struct ofp_packet_in, data));
+        opi = ofpbuf_put_zeros(packet, offsetof(struct ofp10_packet_in, data));
         opi->total_len = htons(pin->total_len);
         opi->in_port = htons(pin->fmd.in_port);
         opi->reason = pin->reason;
@@ -2698,7 +2698,7 @@ ofputil_decode_packet_out(struct ofputil_packet_out *po,
         }
     } else if (raw == OFPRAW_OFPT10_PACKET_OUT) {
         enum ofperr error;
-        const struct ofp_packet_out *opo = ofpbuf_pull(&b, sizeof *opo);
+        const struct ofp10_packet_out *opo = ofpbuf_pull(&b, sizeof *opo);
 
         po->buffer_id = ntohl(opo->buffer_id);
         po->in_port = ntohs(opo->in_port);
@@ -3353,7 +3353,7 @@ ofputil_put_ofp10_table_stats(const struct ofp12_table_stats *in,
                               struct ofpbuf *buf)
 {
     struct wc_map {
-        enum ofp_flow_wildcards wc10;
+        enum ofp10_flow_wildcards wc10;
         enum oxm12_ofb_match_fields mf12;
     };
 
@@ -3778,7 +3778,7 @@ ofputil_encode_packet_out(const struct ofputil_packet_out *po,
 
     switch (ofp_version) {
     case OFP10_VERSION: {
-        struct ofp_packet_out *opo;
+        struct ofp10_packet_out *opo;
         size_t actions_ofs;
 
         msg = ofpraw_alloc(OFPRAW_OFPT10_PACKET_OUT, OFP10_VERSION, size);

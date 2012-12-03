@@ -14,7 +14,7 @@ OFPAT10_ACTION(OFPAT10_SET_NW_DST,   ofp_action_nw_addr,  "mod_nw_dst")
 OFPAT10_ACTION(OFPAT10_SET_NW_TOS,   ofp_action_nw_tos,   "mod_nw_tos")
 OFPAT10_ACTION(OFPAT10_SET_TP_SRC,   ofp_action_tp_port,  "mod_tp_src")
 OFPAT10_ACTION(OFPAT10_SET_TP_DST,   ofp_action_tp_port,  "mod_tp_dst")
-OFPAT10_ACTION(OFPAT10_ENQUEUE,      ofp_action_enqueue,  "enqueue")
+OFPAT10_ACTION(OFPAT10_ENQUEUE,      ofp10_action_enqueue,  "enqueue")
 
 #ifndef OFPAT11_ACTION
 #define OFPAT11_ACTION(ENUM, STRUCT, EXTENSIBLE, NAME)

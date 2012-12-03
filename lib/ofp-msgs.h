@@ -142,9 +142,9 @@ enum ofpraw {
     /* OFPT 1.0+ (9): struct ofp_switch_config. */
     OFPRAW_OFPT_SET_CONFIG,
 
-    /* OFPT 1.0 (10): struct ofp_packet_in up to data, uint8_t[]. */
+    /* OFPT 1.0 (10): struct ofp10_packet_in up to data, uint8_t[]. */
     OFPRAW_OFPT10_PACKET_IN,
-    /* OFPT 1.1 (10): struct ofp11_packet_in up to data, uint8_t[]. */
+    /* OFPT 1.1 (10): struct ofp11_packet_in, uint8_t[]. */
     OFPRAW_OFPT11_PACKET_IN,
     /* OFPT 1.2 (10): struct ofp12_packet_in, uint8_t[]. */
     OFPRAW_OFPT12_PACKET_IN,
@@ -153,7 +153,7 @@ enum ofpraw {
     /* NXT 1.0+ (17): struct nx_packet_in, uint8_t[]. */
     OFPRAW_NXT_PACKET_IN,
 
-    /* OFPT 1.0 (11): struct ofp_flow_removed. */
+    /* OFPT 1.0 (11): struct ofp10_flow_removed. */
     OFPRAW_OFPT10_FLOW_REMOVED,
     /* OFPT 1.1+ (11): struct ofp11_flow_removed, uint8_t[8][]. */
     OFPRAW_OFPT11_FLOW_REMOVED,
@@ -165,7 +165,7 @@ enum ofpraw {
     /* OFPT 1.1+ (12): struct ofp_port_status, struct ofp11_port. */
     OFPRAW_OFPT11_PORT_STATUS,
 
-    /* OFPT 1.0 (13): struct ofp_packet_out, uint8_t[]. */
+    /* OFPT 1.0 (13): struct ofp10_packet_out, uint8_t[]. */
     OFPRAW_OFPT10_PACKET_OUT,
     /* OFPT 1.1+ (13): struct ofp11_packet_out, uint8_t[]. */
     OFPRAW_OFPT11_PACKET_OUT,
