@@ -17,22 +17,58 @@ Before you begin, note the RPM source directory on your version of
 RHEL.  On RHEL 5, the default RPM source directory is
 /usr/src/redhat/SOURCES.  On RHEL 6, it is $HOME/rpmbuild/SOURCES.
 
-1. If you are building from an Open vSwitch Git tree, then you will
+1. Install build prerequisites:
+
+   yum install gcc make python-devel openssl-devel kernel-devel \
+       kernel-debug-devel
+
+2. Some versions of the RHEL 6 kernel-devel package contain a broken
+   "build" symlink.  If you are using such a version, you must fix
+   the problem before continuing.
+
+   To find out whether you are affected, run:
+
+       cd /lib/modules/<version>
+       ls -l build/
+
+   where <version> is the version number of the RHEL 6 kernel.  (The
+   trailing slash in the final command is important.  Be sure to include
+   it.)  If the "ls" command produces a directory listing, your
+   kernel-devel package is OK.  If it produces a "No such file or
+   directory" error, your kernel-devel package is buggy.
+
+   If your kernel-devel package is buggy, then you can fix it with:
+
+       cd /lib/modules/<version>
+       rm build
+       ln -s /usr/src/kernels/<target> build
+
+   where <target> is the name of an existing directory under
+   /usr/src/kernels, whose name should be similar to <version> but may
+   contain some extra parts.  Once you have done this, verify the fix with
+   the same procedure you used above to check for the problem.
+
+3. If you are building from an Open vSwitch Git tree, then you will
    need to first create a distribution tarball by running "./boot.sh;
    ./configure; make dist" in the Git tree.
 
-2. Copy the distribution tarball into the RPM source directory.
+4. Copy the distribution tarball into the RPM source directory.
 
-3. Unpack the distribution tarball into a temporary directory and "cd"
+5. Unpack the distribution tarball into a temporary directory and "cd"
    into the root of the distribution tarball.
 
-4. To build Open vSwitch userspace, run:
+6. To build Open vSwitch userspace, run:
 
        rpmbuild -bb rhel/openvswitch.spec
 
    This produces two RPMs: "openvswitch" and "openvswitch-debuginfo".
 
-5a. On RHEL 5, to build the Open vSwitch kernel module, copy
+   If the build fails with "configure: error: source dir
+   /lib/modules/2.6.32-279.el6.x86_64/build doesn't exist" or similar,
+   then the kernel-devel package is missing or buggy.  Go back to step
+   1 or 2 and fix the problem.
+
+7a. On RHEL 5, to build the Open vSwitch kernel module, copy
     rhel/kmodtool-openvswitch-el5.sh into the RPM source directory and
     run:
 
@@ -49,7 +85,7 @@ RHEL.  On RHEL 5, the default RPM source directory is
     which is usually: "kmod-openvswitch", "kmod-openvswitch-xen", and
     "kmod-openvswitch-PAE".
 
-5b. On RHEL 6, to build the Open vSwitch kernel module, run:
+7b. On RHEL 6, to build the Open vSwitch kernel module, run:
 
 	rpmbuild -bb rhel/openvswitch-kmod-rhel6.spec
 
