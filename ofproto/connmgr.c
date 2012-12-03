@@ -133,6 +133,8 @@ struct ofservice {
     int burst_limit;            /* Limit on accumulating packet credits. */
     bool enable_async_msgs;     /* Initially enable async messages? */
     uint8_t dscp;               /* DSCP Value for controller connection */
+    uint32_t allowed_versions;  /* OpenFlow protocol versions that may
+                                 * be negotiated for a session. */
 };
 
 static void ofservice_reconfigure(struct ofservice *,
@@ -507,15 +509,36 @@ connmgr_set_controllers(struct connmgr *mgr,
         const struct ofproto_controller *c = &controllers[i];
 
         if (!vconn_verify_name(c->target)) {
-            if (!find_controller_by_target(mgr, c->target)) {
+            bool add = false;
+            ofconn = find_controller_by_target(mgr, c->target);
+            if (!ofconn) {
                 VLOG_INFO("%s: added primary controller \"%s\"",
                           mgr->name, c->target);
+                add = true;
+            } else if (rconn_get_allowed_versions(ofconn->rconn) !=
+                       allowed_versions) {
+                VLOG_INFO("%s: re-added primary controller \"%s\"",
+                          mgr->name, c->target);
+                add = true;
+                ofconn_destroy(ofconn);
+            }
+            if (add) {
                 add_controller(mgr, c->target, c->dscp, allowed_versions);
             }
         } else if (!pvconn_verify_name(c->target)) {
-            if (!ofservice_lookup(mgr, c->target)) {
+            bool add = false;
+            ofservice = ofservice_lookup(mgr, c->target);
+            if (!ofservice) {
                 VLOG_INFO("%s: added service controller \"%s\"",
                           mgr->name, c->target);
+                add = true;
+            } else if (ofservice->allowed_versions != allowed_versions) {
+                VLOG_INFO("%s: re-added service controller \"%s\"",
+                          mgr->name, c->target);
+                ofservice_destroy(mgr, ofservice);
+                add = true;
+            }
+            if (add) {
                 ofservice_create(mgr, c->target, allowed_versions, c->dscp);
             }
         } else {
@@ -1653,6 +1676,7 @@ ofservice_create(struct connmgr *mgr, const char *target,
     ofservice = xzalloc(sizeof *ofservice);
     hmap_insert(&mgr->services, &ofservice->node, hash_string(target, 0));
     ofservice->pvconn = pvconn;
+    ofservice->allowed_versions = allowed_versions;
 
     return 0;
 }
