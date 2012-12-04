@@ -16,4 +16,20 @@ static inline void eth_hw_addr_random(struct net_device *dev)
 }
 #endif
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,6,0)
+#define eth_mac_addr rpl_eth_mac_addr
+static inline int eth_mac_addr(struct net_device *dev, void *p)
+{
+	struct sockaddr *addr = p;
+
+	if (!is_valid_ether_addr(addr->sa_data))
+		return -EADDRNOTAVAIL;
+#ifdef NET_ADDR_RANDOM
+	dev->addr_assign_type &= ~NET_ADDR_RANDOM;
+#endif
+	memcpy(dev->dev_addr, addr->sa_data, dev->addr_len);
+	return 0;
+}
+#endif
+
 #endif

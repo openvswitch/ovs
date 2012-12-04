@@ -18,4 +18,8 @@
 #define IFF_OVS_DATAPATH 0
 #endif
 
+#ifndef IFF_LIVE_ADDR_CHANGE
+#define IFF_LIVE_ADDR_CHANGE 0
+#endif
+
 #endif
