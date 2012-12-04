@@ -84,19 +84,6 @@ static struct net_device_stats *internal_dev_sys_stats(struct net_device *netdev
 	return stats;
 }
 
-static int internal_dev_mac_addr(struct net_device *dev, void *p)
-{
-	struct sockaddr *addr = p;
-
-	if (!is_valid_ether_addr(addr->sa_data))
-		return -EADDRNOTAVAIL;
-#ifdef NET_ADDR_RANDOM
-	dev->addr_assign_type &= ~NET_ADDR_RANDOM;
-#endif
-	memcpy(dev->dev_addr, addr->sa_data, dev->addr_len);
-	return 0;
-}
-
 /* Called with rcu_read_lock_bh. */
 static int internal_dev_xmit(struct sk_buff *skb, struct net_device *netdev)
 {
@@ -176,7 +163,7 @@ static const struct net_device_ops internal_dev_netdev_ops = {
 	.ndo_open = internal_dev_open,
 	.ndo_stop = internal_dev_stop,
 	.ndo_start_xmit = internal_dev_xmit,
-	.ndo_set_mac_address = internal_dev_mac_addr,
+	.ndo_set_mac_address = eth_mac_addr,
 	.ndo_do_ioctl = internal_dev_do_ioctl,
 	.ndo_change_mtu = internal_dev_change_mtu,
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,36)
@@ -204,6 +191,7 @@ static void do_setup(struct net_device *netdev)
 #endif
 
 	netdev->priv_flags &= ~IFF_TX_SKB_SHARING;
+	netdev->priv_flags |= IFF_LIVE_ADDR_CHANGE;
 	netdev->destructor = internal_dev_destructor;
 	SET_ETHTOOL_OPS(netdev, &internal_dev_ethtool_ops);
 	netdev->tx_queue_len = 0;
