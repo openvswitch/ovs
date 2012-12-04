@@ -88,26 +88,27 @@ Open vSwitch also provides some tools:
 What other documentation is available?
 --------------------------------------
 
-To install Open vSwitch on a regular Linux machine, read INSTALL.
+To install Open vSwitch on a regular Linux or FreeBSD host, please
+read INSTALL.  For specifics around installation on a specific
+platform, please see one of these files:
+
+    - INSTALL.Debian
+    - INSTALL.Fedora
+    - INSTALL.RHEL
+    - INSTALL.XenServer
+
+To use Open vSwitch...
+
+    - ...with KVM on Linux, read INSTALL, read INSTALL.KVM.
+
+    - ...with Libvirt, read INSTALL.Libvirt.
+
+    - ...as a drop-in replacement for the Linux bridge, read
+      INSTALL.bridge.
+
+    - ...without using a kernel module, read INSTALL.userspace.
 
 For answers to common questions, read FAQ.
-
-To use Open vSwitch as a drop-in replacement for the Linux bridge,
-read INSTALL.bridge.
-
-To build RPMs for installing Open vSwitch on a Citrix XenServer host
-or resource pool, read INSTALL.XenServer.
-
-To build RPMs for installing Open vSwitch on a Red Hat Enterprise
-Linux host, read INSTALL.RHEL.
-
-To use Open vSwitch with KVM on Linux, read INSTALL, then
-INSTALL.KVM.
-
-To use Open vSwitch with Libvirt, read INSTALL.Libvirt.
-
-To install Open vSwitch without using a kernel module, read
-INSTALL.userspace.
 
 To learn how to set up SSL support for Open vSwitch, read INSTALL.SSL.
 

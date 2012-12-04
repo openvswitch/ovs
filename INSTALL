@@ -2,12 +2,13 @@
            ================================================
 
 This document describes how to build and install Open vSwitch on a
-generic Linux or FreeBSD host.  If you want to install Open vSwitch on
-a Citrix XenServer, see INSTALL.XenServer instead.
+generic Linux or FreeBSD host. For specifics around installation on a
+specific platform, please see one of these files:
 
-This version of Open vSwitch may be built manually with "configure"
-and "make", as described below.  You may also build Debian packages by
-running "dpkg-buildpackage".
+    - INSTALL.Debian
+    - INSTALL.Fedora
+    - INSTALL.RHEL
+    - INSTALL.XenServer
 
 Build Requirements
 ------------------
