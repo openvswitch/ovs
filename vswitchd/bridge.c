@@ -1608,6 +1608,11 @@ bridge_pick_local_hw_addr(struct bridge *br, uint8_t ea[ETH_ADDR_LEN],
         }
     }
 
+    if (!found_addr) {
+        memcpy(ea, br->default_ea, ETH_ADDR_LEN);
+        *hw_addr_iface = NULL;
+    }
+
     hmapx_destroy(&mirror_output_ports);
 }
 
