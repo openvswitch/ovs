@@ -128,6 +128,32 @@ A: All official releases have been through a comprehensive testing
    supplanted by the next major release.  The current LTS release is
    1.4.x.
 
+Q: What Linux kernel versions does each Open vSwitch release work with?
+
+A: The following table lists the Linux kernel versions against which the
+   given versions of the Open vSwitch kernel module will successfully
+   build.  The Linux kernel versions are upstream kernel versions, so
+   modified Linux kernels modified from the upstream sources may not
+   build in some cases even if they are based on a supported version.
+   This is most notably true of Red Hat Enterprise Linux (RHEL) kernels,
+   which are extensively modified from upstream.
+
+   Open vSwitch   Linux kernel
+   ------------   -------------
+       1.4.x      2.6.18 to 3.2
+       1.5.x      2.6.18 to 3.2
+       1.6.x      2.6.18 to 3.2
+       1.7.x      2.6.18 to 3.3
+       1.8.x      2.6.18 to 3.4
+       1.9.x      2.6.18 to 3.6
+
+   Open vSwitch userspace should also work with the Linux kernel module
+   built into Linux 3.3 and later.
+
+   Open vSwitch userspace is not sensitive to the Linux kernel version.
+   It should build against almost any kernel, certainly against 2.6.18
+   and later.
+
 Q: What features are not available in the Open vSwitch kernel datapath
    that ships as part of the upstream Linux kernel?
 
