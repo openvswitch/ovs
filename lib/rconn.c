@@ -174,10 +174,10 @@ static bool rconn_logging_connection_attempts__(const struct rconn *);
  *
  * Connections made by the rconn will automatically negotiate an OpenFlow
  * protocol version acceptable to both peers on the connection.  The version
- * negotiated will be one of those in the 'allowed_versions' bitmap:
- * version 'x' is allowed if allowed_versions & (1 << x) is nonzero.  If
- * 'allowed_versions' is zero, then OFPUTIL_DEFAULT_VERSIONS are allowed.
- **/
+ * negotiated will be one of those in the 'allowed_versions' bitmap: version
+ * 'x' is allowed if allowed_versions & (1 << x) is nonzero.  (The underlying
+ * vconn will treat an 'allowed_versions' of 0 as OFPUTIL_DEFAULT_VERSIONS.)
+ */
 struct rconn *
 rconn_create(int probe_interval, int max_backoff, uint8_t dscp,
              uint32_t allowed_versions)
@@ -218,9 +218,7 @@ rconn_create(int probe_interval, int max_backoff, uint8_t dscp,
     rconn_set_dscp(rc, dscp);
 
     rc->n_monitors = 0;
-    rc->allowed_versions = allowed_versions
-        ? allowed_versions
-        : OFPUTIL_DEFAULT_VERSIONS;
+    rc->allowed_versions = allowed_versions;
 
     return rc;
 }
