@@ -1042,6 +1042,7 @@ static const struct nla_policy tnl_policy[OVS_TUNNEL_ATTR_MAX + 1] = {
 	[OVS_TUNNEL_ATTR_IN_KEY]   = { .type = NLA_U64 },
 	[OVS_TUNNEL_ATTR_TOS]      = { .type = NLA_U8 },
 	[OVS_TUNNEL_ATTR_TTL]      = { .type = NLA_U8 },
+	[OVS_TUNNEL_ATTR_DST_PORT] = { .type = NLA_U16 },
 };
 
 /* Sets OVS_TUNNEL_ATTR_* fields in 'mutable', which must initially be
@@ -1086,6 +1087,10 @@ static int tnl_set_config(struct net *net, struct nlattr *options,
 
 	if (a[OVS_TUNNEL_ATTR_TTL])
 		mutable->ttl = nla_get_u8(a[OVS_TUNNEL_ATTR_TTL]);
+
+	if (a[OVS_TUNNEL_ATTR_DST_PORT])
+		mutable->dst_port =
+			htons(nla_get_u16(a[OVS_TUNNEL_ATTR_DST_PORT]));
 
 	if (!a[OVS_TUNNEL_ATTR_IN_KEY]) {
 		mutable->key.tunnel_type |= TNL_T_KEY_MATCH;
@@ -1241,6 +1246,9 @@ int ovs_tnl_get_options(const struct vport *vport, struct sk_buff *skb)
 	if (mutable->tos && nla_put_u8(skb, OVS_TUNNEL_ATTR_TOS, mutable->tos))
 		goto nla_put_failure;
 	if (mutable->ttl && nla_put_u8(skb, OVS_TUNNEL_ATTR_TTL, mutable->ttl))
+		goto nla_put_failure;
+	if (mutable->dst_port && nla_put_u16(skb, OVS_TUNNEL_ATTR_DST_PORT,
+					     ntohs(mutable->dst_port)))
 		goto nla_put_failure;
 
 	return 0;

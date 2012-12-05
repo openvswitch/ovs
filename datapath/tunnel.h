@@ -42,6 +42,7 @@
 #define TNL_T_PROTO_GRE		0
 #define TNL_T_PROTO_GRE64	1
 #define TNL_T_PROTO_CAPWAP	2
+#define TNL_T_PROTO_VXLAN	3
 
 /* These flags are only needed when calling tnl_find_port(). */
 #define TNL_T_KEY_EXACT		(1 << 10)
@@ -116,6 +117,7 @@ struct tnl_mutable_config {
 	u32	flags;
 	u8	tos;
 	u8	ttl;
+	__be16	dst_port;
 
 	/* Multicast configuration. */
 	int	mlink;

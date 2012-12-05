@@ -1209,8 +1209,7 @@
           <dt><code>gre</code></dt>
           <dd>
             An Ethernet over RFC 2890 Generic Routing Encapsulation over IPv4
-            tunnel.  See <ref group="Tunnel Options"/> for information on
-            configuring GRE tunnels.
+            tunnel.
           </dd>
 
           <dt><code>ipsec_gre</code></dt>
@@ -1247,6 +1246,23 @@
             February 2013.
           </dd>
 
+          <dt><code>vxlan</code></dt>
+          <dd>
+	    <p>
+	      An Ethernet tunnel over the experimental, UDP-based VXLAN
+	      protocol described at
+	      <code>http://tools.ietf.org/html/draft-mahalingam-dutt-dcops-vxlan-02</code>.
+	      VXLAN is currently supported only with the Linux kernel datapath
+	      with kernel version 2.6.26 or later.
+	    </p>
+	    <p>
+	      As an experimental protocol, VXLAN has no officially assigned UDP
+	      port.  Open vSwitch currently uses UDP destination port 8472.
+	      The source port used for VXLAN traffic varies on a per-flow basis
+	      and is in the ephemeral port range.
+	    </p>
+          </dd>
+
           <dt><code>patch</code></dt>
           <dd>
             A pair of virtual devices that act as a patch cable.
@@ -1263,7 +1279,8 @@
       <p>
         These options apply to interfaces with <ref column="type"/> of
         <code>gre</code>, <code>ipsec_gre</code>, <code>gre64</code>,
-        <code>ipsec_gre64</code>, and <code>capwap</code>.
+        <code>ipsec_gre64</code>, <code>capwap</code>, and
+        <code>vxlan</code>.
       </p>
 
       <p>
@@ -1306,8 +1323,9 @@
             key="in_key"/> at all.
           </li>
           <li>
-            A positive 32-bit (for GRE) or 64-bit (for CAPWAP) number.  The
-            tunnel receives only packets with the specified key.
+            A positive 24-bit (for VXLAN), 32-bit (for GRE) or 64-bit (for
+            CAPWAP) number.  The tunnel receives only packets with the
+            specified key.
           </li>
           <li>
             The word <code>flow</code>.  The tunnel accepts packets with any
@@ -1332,8 +1350,9 @@
             key="out_key"/> at all.
           </li>
           <li>
-            A positive 32-bit (for GRE) or 64-bit (for CAPWAP) number.  Packets
-            sent through the tunnel will have the specified key.
+            A positive 24-bit (for VXLAN), 32-bit (for GRE) or 64-bit (for
+            CAPWAP) number.  Packets sent through the tunnel will have the
+            specified key.
           </li>
           <li>
             The word <code>flow</code>.  Packets sent through the tunnel will
@@ -1392,12 +1411,6 @@
         disabled; set to <code>true</code> to enable.  This feature is
         deprecated and will be removed soon.
       </column>
-
-      <group title="Tunnel Options: gre only">
-        <p>
-          Only <code>gre</code> interfaces support these options.
-        </p>
-      </group>
 
       <group title="Tunnel Options: gre and ipsec_gre only">
         <p>

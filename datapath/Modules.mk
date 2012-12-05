@@ -26,7 +26,8 @@ openvswitch_sources = \
 	vport-gre.c \
 	vport-internal_dev.c \
 	vport-netdev.c \
-	vport-patch.c
+	vport-patch.c \
+	vport-vxlan.c
 
 openvswitch_headers = \
 	checksum.h \

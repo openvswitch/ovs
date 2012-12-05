@@ -1,5 +1,7 @@
 post-v1.9.0
 --------------------
+    - New support for the VXLAN tunnel protocol (see the IETF draft here:
+      http://tools.ietf.org/html/draft-mahalingam-dutt-dcops-vxlan-02).
 
 
 v1.9.0 - xx xxx xxxx
@@ -67,6 +69,7 @@ v1.9.0 - xx xxx xxxx
         - CAPWAP tunnel support.
     - The data in the RARP packets can now be matched in the same way as the
       data in ARP packets.
+
 
 v1.8.0 - xx xxx xxxx
 ------------------------

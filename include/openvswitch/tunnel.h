@@ -57,6 +57,7 @@ enum {
 	OVS_TUNNEL_ATTR_IN_KEY,   /* __be64 key to match on input. */
 	OVS_TUNNEL_ATTR_TOS,      /* 8-bit TOS value. */
 	OVS_TUNNEL_ATTR_TTL,      /* 8-bit TTL value. */
+	OVS_TUNNEL_ATTR_DST_PORT, /* 16-bit UDP port, used by VXLAN. */
 	__OVS_TUNNEL_ATTR_MAX
 };
 

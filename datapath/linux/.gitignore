@@ -39,5 +39,6 @@
 /vport-internal_dev.c
 /vport-netdev.c
 /vport-patch.c
+/vport-vxlan.c
 /vport.c
 /workqueue.c
