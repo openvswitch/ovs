@@ -177,7 +177,7 @@ netdev_vport_get_netdev_type(const struct dpif_linux_vport *vport)
         return "capwap";
 
     case OVS_VPORT_TYPE_VXLAN:
-        return ("vxlan");
+        return "vxlan";
 
     case OVS_VPORT_TYPE_FT_GRE:
     case __OVS_VPORT_TYPE_MAX:
