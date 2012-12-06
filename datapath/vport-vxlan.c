@@ -222,7 +222,7 @@ static int vxlan_socket_init(struct vxlan_port *vxlan_port, struct net *net)
 	return 0;
 
 error_sock:
-	sock_release(vxlan_port->vxlan_rcv_socket);
+	sk_release_kernel(vxlan_port->vxlan_rcv_socket->sk);
 error:
 	pr_warn("cannot register vxlan protocol handler\n");
 	return err;
@@ -234,7 +234,7 @@ static void vxlan_tunnel_release(struct vxlan_port *vxlan_port)
 
 	if (vxlan_port->count == 0) {
 		/* Release old socket */
-		sock_release(vxlan_port->vxlan_rcv_socket);
+		sk_release_kernel(vxlan_port->vxlan_rcv_socket->sk);
 		list_del(&vxlan_port->list);
 		kfree(vxlan_port);
 	}
