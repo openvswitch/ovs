@@ -169,6 +169,20 @@ CLEANFILES += distfiles
 endif
 .PHONY: dist-hook-git
 
+# Check that every .c file includes <config.h>.
+ALL_LOCAL += config-h-check
+config-h-check:
+	@cd $(srcdir); \
+	if test -e .git && (git --version) >/dev/null 2>&1 && \
+	   git grep -L '#include <config\.h>' `git ls-files | grep '\.c$$' | \
+               grep -vE '^datapath|^lib/sflow'`; \
+	then \
+	    echo "See above for list of violations of the rule that"; \
+	    echo "every C source file must #include <config.h>."; \
+	    exit 1; \
+	fi
+.PHONY: config-h-check
+
 # Check that "struct vlog_ratelimit" is always declared "static".
 ALL_LOCAL += rate-limit-check
 rate-limit-check:
