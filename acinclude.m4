@@ -144,7 +144,8 @@ AC_DEFUN([OVS_CHECK_LINUX], [
          AC_ERROR([Linux kernel in build tree $KBUILD (source tree $KSRC) is version $kversion, but version 2.6 or later is required])
        fi
     fi
-    if test ! -e "$KBUILD"/include/linux/version.h || \
+    if (test ! -e "$KBUILD"/include/linux/version.h && \
+        test ! -e "$KBUILD"/include/generated/uapi/linux/version.h)|| \
        (test ! -e "$KBUILD"/include/linux/autoconf.h && \
         test ! -e "$KBUILD"/include/generated/autoconf.h); then
 	AC_MSG_ERROR([Linux kernel source in $KBUILD is not configured])

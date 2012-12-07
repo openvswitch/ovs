@@ -53,7 +53,10 @@ endif
 
 VERSION_FILE := $(KOBJ)/include/linux/version.h
 ifeq (,$(wildcard $(VERSION_FILE)))
-  $(error Linux kernel source not configured - missing version.h)
+  VERSION_FILE := $(KOBJ)/include/generated/uapi/linux/version.h
+  ifeq (,$(wildcard $(VERSION_FILE)))
+    $(error Linux kernel source not configured - missing version.h)
+  endif
 endif
 
 CONFIG_FILE := $(KSRC)/include/generated/autoconf.h
