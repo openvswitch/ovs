@@ -1214,6 +1214,106 @@ ovs-appctl -t ovs-ofctl exit
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([ofproto - asynchronous message control (OpenFlow 1.3)])
+OVS_VSWITCHD_START
+AT_CHECK([ovs-ofctl -O OpenFlow13 monitor br0 --detach --no-chdir --pidfile])
+check_async () {
+    printf '\n\n--- check_async %d ---\n\n\n' $1
+    INDEX=$1
+    shift
+
+    ovs-appctl -t ovs-ofctl ofctl/barrier
+    ovs-appctl -t ovs-ofctl ofctl/set-output-file monitor.log
+    : > expout
+
+    # OFPT_PACKET_IN, OFPR_ACTION (controller_id=0)
+    ovs-ofctl -O OpenFlow13 -v packet-out br0 none controller '0001020304050010203040501234'
+    if test X"$1" = X"OFPR_ACTION"; then shift;
+        echo >>expout "OFPT_PACKET_IN (OF1.3): total_len=14 in_port=ANY (via action) data_len=14 (unbuffered)
+metadata=0,in_port=0,vlan_tci=0x0000,dl_src=00:10:20:30:40:50,dl_dst=00:01:02:03:04:05,dl_type=0x1234"
+    fi
+
+    # OFPT_PACKET_IN, OFPR_NO_MATCH (controller_id=123)
+    ovs-ofctl -O OpenFlow13 -v packet-out br0 none 'controller(reason=no_match,id=123)' '0001020304050010203040501234'
+    if test X"$1" = X"OFPR_NO_MATCH"; then shift;
+        echo >>expout "OFPT_PACKET_IN (OF1.3): total_len=14 in_port=ANY (via no_match) data_len=14 (unbuffered)
+metadata=0,in_port=0,vlan_tci=0x0000,dl_src=00:10:20:30:40:50,dl_dst=00:01:02:03:04:05,dl_type=0x1234"
+    fi
+
+    # OFPT_PACKET_IN, OFPR_INVALID_TTL (controller_id=0)
+    ovs-ofctl -O OpenFlow13 packet-out br0 none dec_ttl '002583dfb4000026b98cb0f908004500003fb7e200000011339bac11370dac100002d7730035002b8f6d86fb0100000100000000000006626c702d7873066e696369726103636f6d00000f00'
+    if test X"$1" = X"OFPR_INVALID_TTL"; then shift;
+        echo >>expout "OFPT_PACKET_IN (OF1.3): total_len=76 in_port=ANY (via invalid_ttl) data_len=76 (unbuffered)
+udp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=00:26:b9:8c:b0:f9,dl_dst=00:25:83:df:b4:00,nw_src=172.17.55.13,nw_dst=172.16.0.2,nw_tos=0,nw_ecn=0,nw_ttl=0,tp_src=55155,tp_dst=53 udp_csum:8f6d"
+    fi
+
+    # OFPT_PORT_STATUS, OFPPR_ADD
+    ovs-vsctl add-port br0 test -- set Interface test type=dummy
+    if test X"$1" = X"OFPPR_ADD"; then shift;
+        echo >>expout "OFPT_PORT_STATUS (OF1.3): ADD: ${INDEX}(test): addr:aa:55:aa:55:00:0x
+     config:     PORT_DOWN
+     state:      LINK_DOWN
+     speed: 0 Mbps now, 0 Mbps max"
+    fi
+
+    # OFPT_PORT_STATUS, OFPPR_DELETE
+    ovs-vsctl del-port br0 test
+    if test X"$1" = X"OFPPR_DELETE"; then shift;
+        echo >>expout "OFPT_PORT_STATUS (OF1.3): DEL: ${INDEX}(test): addr:aa:55:aa:55:00:0x
+     config:     PORT_DOWN
+     state:      LINK_DOWN
+     speed: 0 Mbps now, 0 Mbps max"
+    fi
+
+    # OFPT_FLOW_REMOVED, OFPRR_DELETE
+    ovs-ofctl -O OpenFlow13 add-flow br0 send_flow_rem,actions=drop
+    ovs-ofctl -O OpenFlow13 --strict del-flows br0 ''
+    if test X"$1" = X"OFPRR_DELETE"; then shift;
+        echo >>expout "OFPT_FLOW_REMOVED (OF1.3):  reason=delete table_id=0"
+    fi
+    AT_FAIL_IF([test X"$1" != X])
+
+    ovs-appctl -t ovs-ofctl ofctl/barrier
+    echo >>expout "OFPT_BARRIER_REPLY (OF1.3):"
+
+    AT_CHECK(
+      [[sed '
+s/ (xid=0x[0-9a-fA-F]*)//
+s/ *duration.*//
+s/00:0.$/00:0x/' < monitor.log]],
+      [0], [expout])
+}
+
+# It's a service connection so initially there should be no async messages.
+check_async 1
+
+# Set miss_send_len to 128, turning on packet-ins for our service connection.
+ovs-appctl -t ovs-ofctl ofctl/send 0409000c0123456700000080
+check_async 2 OFPR_ACTION OFPPR_ADD OFPPR_DELETE OFPRR_DELETE
+
+# Become slave (OF 1.3), which should disable everything except port status.
+ovs-appctl -t ovs-ofctl ofctl/send 041800180000000200000003000000000000000000000001
+check_async 3 OFPPR_ADD OFPPR_DELETE
+
+# Use OF 1.3 OFPT_SET_ASYNC to enable a patchwork of asynchronous messages.
+ovs-appctl -t ovs-ofctl ofctl/send 041c002000000002000000020000000500000005000000020000000200000005
+check_async 4 OFPR_INVALID_TTL OFPPR_DELETE OFPRR_DELETE
+
+# Set controller ID 123.
+ovs-appctl -t ovs-ofctl ofctl/send 04040018000000030000232000000014000000000000007b
+check_async 5 OFPR_NO_MATCH OFPPR_DELETE OFPRR_DELETE
+
+# Restore controller ID 0.
+ovs-appctl -t ovs-ofctl ofctl/send 040400180000000300002320000000140000000000000000
+
+# Become master (OF 1.3).
+ovs-appctl -t ovs-ofctl ofctl/send 041800180000000400000002000000000000000000000002
+check_async 6 OFPR_ACTION OFPPR_ADD
+
+ovs-appctl -t ovs-ofctl exit
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 dnl This test checks that the role request/response messaging works
 dnl and that generation_id is handled properly.
 AT_SETUP([ofproto - controller role (OpenFlow 1.2)])
