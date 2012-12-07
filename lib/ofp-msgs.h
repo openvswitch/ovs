@@ -192,6 +192,12 @@ enum ofpraw {
     /* OFPT 1.1+ (21): void. */
     OFPRAW_OFPT11_BARRIER_REPLY,
 
+    /* OFPT 1.1+ (22): struct ofp11_queue_get_config_request. */
+    OFPRAW_OFPT11_QUEUE_GET_CONFIG_REQUEST,
+
+    /* OFPT 1.1+ (23): struct ofp11_queue_get_config_reply, struct ofp_packet_queue[]. */
+    OFPRAW_OFPT11_QUEUE_GET_CONFIG_REPLY,
+
     /* OFPT 1.3+ (26): void. */
     OFPRAW_OFPT13_GET_ASYNC_REQUEST,
     /* OFPT 1.3+ (27): struct ofp13_async_config. */
@@ -457,6 +463,10 @@ enum ofptype {
                                   * OFPRAW_OFPT11_BARRIER_REQUEST. */
     OFPTYPE_BARRIER_REPLY,       /* OFPRAW_OFPT10_BARRIER_REPLY.
                                   * OFPRAW_OFPT11_BARRIER_REPLY. */
+
+    /* Queue Configuration messages. */
+    OFPTYPE_QUEUE_GET_CONFIG_REQUEST, /* OFPRAW_OFPT11_QUEUE_GET_CONFIG_REQUEST. */
+    OFPTYPE_QUEUE_GET_CONFIG_REPLY, /* OFPRAW_OFPT11_QUEUE_GET_CONFIG_REPLY. */
 
     /* Asynchronous message configuration. */
     OFPTYPE_GET_ASYNC_REQUEST,    /* OFPRAW_OFPT13_GET_ASYNC_REQUEST. */

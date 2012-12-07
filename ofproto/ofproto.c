@@ -4105,6 +4105,7 @@ handle_openflow__(struct ofconn *ofconn, const struct ofpbuf *msg)
         return handle_flow_monitor_request(ofconn, oh);
 
         /* FIXME: Change the following once they are implemented: */
+    case OFPTYPE_QUEUE_GET_CONFIG_REQUEST:
     case OFPTYPE_GET_ASYNC_REQUEST:
     case OFPTYPE_METER_MOD:
     case OFPTYPE_GROUP_REQUEST:
@@ -4124,6 +4125,7 @@ handle_openflow__(struct ofconn *ofconn, const struct ofpbuf *msg)
     case OFPTYPE_FLOW_REMOVED:
     case OFPTYPE_PORT_STATUS:
     case OFPTYPE_BARRIER_REPLY:
+    case OFPTYPE_QUEUE_GET_CONFIG_REPLY:
     case OFPTYPE_DESC_STATS_REPLY:
     case OFPTYPE_FLOW_STATS_REPLY:
     case OFPTYPE_QUEUE_STATS_REPLY:

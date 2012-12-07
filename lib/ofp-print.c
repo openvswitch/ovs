@@ -1817,6 +1817,8 @@ ofp_to_string__(const struct ofp_header *oh, enum ofpraw raw,
     switch (ofptype_from_ofpraw(raw)) {
 
         /* FIXME: Change the following once they are implemented: */
+    case OFPTYPE_QUEUE_GET_CONFIG_REQUEST:
+    case OFPTYPE_QUEUE_GET_CONFIG_REPLY:
     case OFPTYPE_GET_ASYNC_REQUEST:
     case OFPTYPE_GET_ASYNC_REPLY:
     case OFPTYPE_METER_MOD:

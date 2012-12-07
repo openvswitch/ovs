@@ -1122,6 +1122,8 @@ is_admitted_msg(const struct ofpbuf *b)
     case OFPTYPE_GET_CONFIG_REPLY:
     case OFPTYPE_SET_CONFIG:
         /* FIXME: Change the following once they are implemented: */
+    case OFPTYPE_QUEUE_GET_CONFIG_REQUEST:
+    case OFPTYPE_QUEUE_GET_CONFIG_REPLY:
     case OFPTYPE_GET_ASYNC_REQUEST:
     case OFPTYPE_GET_ASYNC_REPLY:
     case OFPTYPE_METER_MOD:
