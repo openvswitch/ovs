@@ -398,7 +398,6 @@ netdev_bsd_destroy(struct netdev_dev *netdev_dev_)
 static int
 netdev_bsd_open_system(struct netdev_dev *netdev_dev_, struct netdev **netdevp)
 {
-    struct netdev_dev_bsd *netdev_dev = netdev_dev_bsd_cast(netdev_dev_);
     struct netdev_bsd *netdev;
     int error;
     enum netdev_flags flags;
@@ -412,15 +411,6 @@ netdev_bsd_open_system(struct netdev_dev *netdev_dev_, struct netdev **netdevp)
     error = netdev_get_flags(&netdev->netdev, &flags);
     if (error == ENXIO) {
         goto error;
-    }
-
-    /* The first user that opens a tap port(from dpif_create_and_open()) will
-     * receive the file descriptor associated with the tap device. Instead, the
-     * following users will open the tap device as a normal 'system' device. */
-    if (!strcmp(netdev_dev_get_type(netdev_dev_), "tap") &&
-            !netdev_dev->tap_opened) {
-        netdev_dev->tap_opened = true;
-        netdev->netdev_fd = netdev_dev->tap_fd;
     }
 
     *netdevp = &netdev->netdev;
@@ -450,12 +440,22 @@ static int
 netdev_bsd_listen(struct netdev *netdev_)
 {
     struct netdev_bsd *netdev = netdev_bsd_cast(netdev_);
+    struct netdev_dev_bsd *netdev_dev =
+                              netdev_dev_bsd_cast(netdev_get_dev(netdev_));
+
     char errbuf[PCAP_ERRBUF_SIZE];
     int error;
     int fd = -1;
     int one = 1;
 
     if (netdev->netdev_fd >= 0) {
+        return 0;
+    }
+
+    if (!strcmp(netdev_get_type(netdev_), "tap") &&
+            !netdev_dev->tap_opened) {
+        netdev->netdev_fd = netdev_dev->tap_fd;
+        netdev_dev->tap_opened = true;
         return 0;
     }
 
