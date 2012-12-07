@@ -174,7 +174,7 @@ ALL_LOCAL += config-h-check
 config-h-check:
 	@cd $(srcdir); \
 	if test -e .git && (git --version) >/dev/null 2>&1 && \
-	   git grep -L '#include <config\.h>' `git ls-files | grep '\.c$$' | \
+	   git --no-pager grep -L '#include <config\.h>' `git ls-files | grep '\.c$$' | \
                grep -vE '^datapath|^lib/sflow|^third-party'`; \
 	then \
 	    echo "See above for list of violations of the rule that"; \
