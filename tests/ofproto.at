@@ -1463,6 +1463,7 @@ OFPT_BARRIER_REPLY:
 ovs-appctl -t ovs-ofctl ofctl/set-output-file monitor.log
 ovs-ofctl add-flow br0 in_port=1,actions=output:2
 ovs-ofctl add-flow br0 in_port=2,actions=output:1
+ovs-appctl -t ovs-ofctl ofctl/barrier
 ovs-appctl -t ovs-ofctl ofctl/send 010e004812345678003fffff00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000003000000000000ffffffffffff0000
 ovs-appctl -t ovs-ofctl ofctl/barrier
 AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip], [0], [NXST_FLOW reply:
@@ -1472,6 +1473,7 @@ AT_CHECK([sed 's/ (xid=0x[[1-9a-fA-F]][[0-9a-fA-F]]*)//' monitor.log], [0],
  event=ADDED table=0 cookie=0 in_port=1 actions=output:2
 NXST_FLOW_MONITOR reply (xid=0x0):
  event=ADDED table=0 cookie=0 in_port=2 actions=output:1
+OFPT_BARRIER_REPLY:
 send: OFPT_FLOW_MOD: DEL priority=0 actions=drop
 NXST_FLOW_MONITOR reply (xid=0x0):
  event=ABBREV xid=0x12345678
