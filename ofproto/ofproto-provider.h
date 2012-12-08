@@ -1279,9 +1279,14 @@ struct ofproto_class {
      * will be invoked. */
     void (*forward_bpdu_changed)(struct ofproto *ofproto);
 
-    /* Sets the MAC aging timeout for the OFPP_NORMAL action to 'idle_time',
-     * in seconds. */
-    void (*set_mac_idle_time)(struct ofproto *ofproto, unsigned int idle_time);
+    /* Sets the MAC aging timeout for the OFPP_NORMAL action to 'idle_time', in
+     * seconds, and the maximum number of MAC table entries to
+     * 'max_entries'.
+     *
+     * An implementation that doesn't support configuring these features may
+     * set this function to NULL or implement it as a no-op. */
+    void (*set_mac_table_config)(struct ofproto *ofproto,
+                                 unsigned int idle_time, size_t max_entries);
 
 /* Linux VLAN device support (e.g. "eth0.10" for VLAN 10.)
  *

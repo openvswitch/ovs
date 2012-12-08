@@ -623,6 +623,15 @@
           transmit packets.
         </p>
       </column>
+
+      <column name="other_config" key="mac-table-size"
+              type='{"type": "integer", "minInteger": 1}'>
+        <p>
+          The maximum number of MAC addresses to learn.  The default is
+          currently 2048.  The value, if specified, is forced into a reasonable
+          range, currently 10 to 1,000,000.
+        </p>
+      </column>
     </group>
 
     <group title="Bridge Status">

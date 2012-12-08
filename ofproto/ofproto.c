@@ -585,12 +585,15 @@ ofproto_set_forward_bpdu(struct ofproto *ofproto, bool forward_bpdu)
 }
 
 /* Sets the MAC aging timeout for the OFPP_NORMAL action on 'ofproto' to
- * 'idle_time', in seconds. */
+ * 'idle_time', in seconds, and the maximum number of MAC table entries to
+ * 'max_entries'. */
 void
-ofproto_set_mac_idle_time(struct ofproto *ofproto, unsigned idle_time)
+ofproto_set_mac_table_config(struct ofproto *ofproto, unsigned idle_time,
+                             size_t max_entries)
 {
-    if (ofproto->ofproto_class->set_mac_idle_time) {
-        ofproto->ofproto_class->set_mac_idle_time(ofproto, idle_time);
+    if (ofproto->ofproto_class->set_mac_table_config) {
+        ofproto->ofproto_class->set_mac_table_config(ofproto, idle_time,
+                                                     max_entries);
     }
 }
 

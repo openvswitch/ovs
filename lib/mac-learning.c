@@ -110,7 +110,8 @@ normalize_idle_time(unsigned int idle_time)
 }
 
 /* Creates and returns a new MAC learning table with an initial MAC aging
- * timeout of 'idle_time' seconds. */
+ * timeout of 'idle_time' seconds and an initial maximum of MAC_DEFAULT_MAX
+ * entries. */
 struct mac_learning *
 mac_learning_create(unsigned int idle_time)
 {
@@ -122,6 +123,7 @@ mac_learning_create(unsigned int idle_time)
     ml->secret = random_uint32();
     ml->flood_vlans = NULL;
     ml->idle_time = normalize_idle_time(idle_time);
+    ml->max_entries = MAC_DEFAULT_MAX;
     return ml;
 }
 
@@ -176,6 +178,16 @@ mac_learning_set_idle_time(struct mac_learning *ml, unsigned int idle_time)
     }
 }
 
+/* Sets the maximum number of entries in 'ml' to 'max_entries', adjusting it
+ * to be within a reasonable range. */
+void
+mac_learning_set_max_entries(struct mac_learning *ml, size_t max_entries)
+{
+    ml->max_entries = (max_entries < 10 ? 10
+                       : max_entries > 1000 * 1000 ? 1000 * 1000
+                       : max_entries);
+}
+
 static bool
 is_learning_vlan(const struct mac_learning *ml, uint16_t vlan)
 {
@@ -212,7 +224,7 @@ mac_learning_insert(struct mac_learning *ml,
     if (!e) {
         uint32_t hash = mac_table_hash(ml, src_mac, vlan);
 
-        if (hmap_count(&ml->table) >= MAC_MAX) {
+        if (hmap_count(&ml->table) >= ml->max_entries) {
             get_lru(ml, &e);
             mac_learning_expire(ml, e);
         }
@@ -311,7 +323,9 @@ void
 mac_learning_run(struct mac_learning *ml, struct tag_set *set)
 {
     struct mac_entry *e;
-    while (get_lru(ml, &e) && time_now() >= e->expires) {
+    while (get_lru(ml, &e)
+           && (hmap_count(&ml->table) > ml->max_entries
+               || time_now() >= e->expires)) {
         COVERAGE_INC(mac_learning_expired);
         if (set) {
             tag_set_add(set, e->tag);
@@ -323,7 +337,9 @@ mac_learning_run(struct mac_learning *ml, struct tag_set *set)
 void
 mac_learning_wait(struct mac_learning *ml)
 {
-    if (!list_is_empty(&ml->lrus)) {
+    if (hmap_count(&ml->table) > ml->max_entries) {
+        poll_immediate_wake();
+    } else if (!list_is_empty(&ml->lrus)) {
         struct mac_entry *e = mac_entry_from_lru_node(ml->lrus.next);
         poll_timer_wait_until(e->expires * 1000LL);
     }

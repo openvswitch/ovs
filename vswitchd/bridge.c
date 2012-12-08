@@ -182,7 +182,7 @@ static void bridge_configure_datapath_id(struct bridge *);
 static void bridge_configure_flow_eviction_threshold(struct bridge *);
 static void bridge_configure_netflow(struct bridge *);
 static void bridge_configure_forward_bpdu(struct bridge *);
-static void bridge_configure_mac_idle_time(struct bridge *);
+static void bridge_configure_mac_table(struct bridge *);
 static void bridge_configure_sflow(struct bridge *, int *sflow_bridge_number);
 static void bridge_configure_stp(struct bridge *);
 static void bridge_configure_tables(struct bridge *);
@@ -591,7 +591,7 @@ bridge_reconfigure_continue(const struct ovsrec_open_vswitch *ovs_cfg)
         bridge_configure_mirrors(br);
         bridge_configure_flow_eviction_threshold(br);
         bridge_configure_forward_bpdu(br);
-        bridge_configure_mac_idle_time(br);
+        bridge_configure_mac_table(br);
         bridge_configure_remotes(br, managers, n_managers);
         bridge_configure_netflow(br);
         bridge_configure_sflow(br, &sflow_bridge_number);
@@ -1493,18 +1493,27 @@ bridge_configure_forward_bpdu(struct bridge *br)
                                            false));
 }
 
-/* Set MAC aging time for 'br'. */
+/* Set MAC learning table configuration for 'br'. */
 static void
-bridge_configure_mac_idle_time(struct bridge *br)
+bridge_configure_mac_table(struct bridge *br)
 {
     const char *idle_time_str;
     int idle_time;
+
+    const char *mac_table_size_str;
+    int mac_table_size;
 
     idle_time_str = smap_get(&br->cfg->other_config, "mac-aging-time");
     idle_time = (idle_time_str && atoi(idle_time_str)
                  ? atoi(idle_time_str)
                  : MAC_ENTRY_DEFAULT_IDLE_TIME);
-    ofproto_set_mac_idle_time(br->ofproto, idle_time);
+
+    mac_table_size_str = smap_get(&br->cfg->other_config, "mac-table-size");
+    mac_table_size = (mac_table_size_str && atoi(mac_table_size_str)
+                      ? atoi(mac_table_size_str)
+                      : MAC_DEFAULT_MAX);
+
+    ofproto_set_mac_table_config(br->ofproto, idle_time, mac_table_size);
 }
 
 static void

@@ -930,6 +930,68 @@ AT_CHECK_UNQUOTED([ovs-appctl fdb/show br1 | sed 's/[[0-9]]\{1,\}$/?/'], [0], [d
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([ofproto-dpif - MAC table overflow])
+OVS_VSWITCHD_START(
+  [set bridge br0 fail-mode=standalone other-config:mac-table-size=10 -- \
+   add-port br0 p1 -- set Interface p1 type=dummy -- \
+   add-port br0 p2 -- set Interface p2 type=dummy -- \
+   add-port br0 p3 -- set Interface p3 type=dummy])
+
+arp='eth_type(0x0806),arp(sip=192.168.0.1,tip=192.168.0.2,op=1,sha=50:54:00:00:00:05,tha=00:00:00:00:00:00)'
+
+AT_CHECK([ovs-appctl time/stop])
+
+# Trace 10 ARP packets arriving on p3, to create MAC learning entries.
+for i in 0 1 2 3 4 5 6 7 8 9; do
+    OFPROTO_TRACE(
+      [br0],
+      [in_port(3),eth(src=50:54:00:00:00:0$i,dst=ff:ff:ff:ff:ff:ff),$arp],
+      [-generate],
+      [1,2,100])
+    ovs-appctl time/warp 1000
+done
+
+# Check for the MAC learning entries.
+AT_CHECK_UNQUOTED([ovs-appctl fdb/show br0 | sed 's/ *[[0-9]]\{1,\}$//' | sort],
+  [0], [dnl
+    3     0  50:54:00:00:00:00
+    3     0  50:54:00:00:00:01
+    3     0  50:54:00:00:00:02
+    3     0  50:54:00:00:00:03
+    3     0  50:54:00:00:00:04
+    3     0  50:54:00:00:00:05
+    3     0  50:54:00:00:00:06
+    3     0  50:54:00:00:00:07
+    3     0  50:54:00:00:00:08
+    3     0  50:54:00:00:00:09
+ port  VLAN  MAC                Age
+])
+
+# Trace another ARP packet on another MAC.
+OFPROTO_TRACE(
+  [br0],
+  [in_port(3),eth(src=50:54:00:00:00:10,dst=ff:ff:ff:ff:ff:ff),$arp],
+  [-generate],
+  [1,2,100])
+
+# Check that the new one chased the oldest one out of the table.
+AT_CHECK_UNQUOTED([ovs-appctl fdb/show br0 | sed 's/[[0-9]]\{1,\}$/?/' | sort],
+  [0], [dnl
+    3     0  50:54:00:00:00:01    ?
+    3     0  50:54:00:00:00:02    ?
+    3     0  50:54:00:00:00:03    ?
+    3     0  50:54:00:00:00:04    ?
+    3     0  50:54:00:00:00:05    ?
+    3     0  50:54:00:00:00:06    ?
+    3     0  50:54:00:00:00:07    ?
+    3     0  50:54:00:00:00:08    ?
+    3     0  50:54:00:00:00:09    ?
+    3     0  50:54:00:00:00:10    ?
+ port  VLAN  MAC                Age
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 dnl Test that basic NetFlow reports flow statistics correctly:
 dnl - The initial packet of a flow are correctly accounted.
 dnl - Later packets within a flow are correctly accounted.

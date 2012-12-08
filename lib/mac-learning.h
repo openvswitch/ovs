@@ -26,7 +26,8 @@
 
 struct mac_learning;
 
-#define MAC_MAX 2048
+/* Default maximum size of a MAC learning table, in entries. */
+#define MAC_DEFAULT_MAX 2048
 
 /* Time, in seconds, before expiring a mac_entry due to inactivity. */
 #define MAC_ENTRY_DEFAULT_IDLE_TIME 300
@@ -83,6 +84,7 @@ struct mac_learning {
     uint32_t secret;            /* Secret for randomizing hash table. */
     unsigned long *flood_vlans; /* Bitmap of learning disabled VLANs. */
     unsigned int idle_time;     /* Max age before deleting an entry. */
+    size_t max_entries;         /* Max number of learned MACs. */
 };
 
 /* Basics. */
@@ -96,6 +98,7 @@ void mac_learning_wait(struct mac_learning *);
 bool mac_learning_set_flood_vlans(struct mac_learning *,
                                   const unsigned long *bitmap);
 void mac_learning_set_idle_time(struct mac_learning *, unsigned int idle_time);
+void mac_learning_set_max_entries(struct mac_learning *, size_t max_entries);
 
 /* Learning. */
 bool mac_learning_may_learn(const struct mac_learning *,

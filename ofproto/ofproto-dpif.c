@@ -2762,10 +2762,12 @@ forward_bpdu_changed(struct ofproto *ofproto_)
 }
 
 static void
-set_mac_idle_time(struct ofproto *ofproto_, unsigned int idle_time)
+set_mac_table_config(struct ofproto *ofproto_, unsigned int idle_time,
+                     size_t max_entries)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
     mac_learning_set_idle_time(ofproto->ml, idle_time);
+    mac_learning_set_max_entries(ofproto->ml, max_entries);
 }
 
 /* Ports. */
@@ -7940,6 +7942,6 @@ const struct ofproto_class ofproto_dpif_class = {
     set_flood_vlans,
     is_mirror_output_bundle,
     forward_bpdu_changed,
-    set_mac_idle_time,
+    set_mac_table_config,
     set_realdev,
 };
