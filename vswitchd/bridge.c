@@ -2114,7 +2114,7 @@ bridge_run_fast(void)
 void
 bridge_run(void)
 {
-    static const struct ovsrec_open_vswitch null_cfg;
+    static struct ovsrec_open_vswitch null_cfg;
     const struct ovsrec_open_vswitch *cfg;
     struct ovsdb_idl_txn *reconf_txn = NULL;
     struct sset types;
@@ -2123,7 +2123,7 @@ bridge_run(void)
     bool vlan_splinters_changed;
     struct bridge *br;
 
-    ovsrec_open_vswitch_init((struct ovsrec_open_vswitch *) &null_cfg);
+    ovsrec_open_vswitch_init(&null_cfg);
 
     /* (Re)configure if necessary. */
     if (!reconfiguring) {
