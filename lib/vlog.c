@@ -480,6 +480,55 @@ vlog_unixctl_reopen(struct unixctl_conn *conn, int argc OVS_UNUSED,
     }
 }
 
+static void
+set_all_rate_limits(bool enable)
+{
+    struct vlog_module **mp;
+
+    for (mp = vlog_modules; mp < &vlog_modules[n_vlog_modules]; mp++) {
+        (*mp)->honor_rate_limits = enable;
+    }
+}
+
+static void
+set_rate_limits(struct unixctl_conn *conn, int argc,
+                const char *argv[], bool enable)
+{
+    if (argc > 1) {
+        int i;
+
+        for (i = 1; i < argc; i++) {
+            if (!strcasecmp(argv[i], "ANY")) {
+                set_all_rate_limits(enable);
+            } else {
+                struct vlog_module *module = vlog_module_from_name(argv[i]);
+                if (!module) {
+                    unixctl_command_reply_error(conn, "unknown module");
+                    return;
+                }
+                module->honor_rate_limits = enable;
+            }
+        }
+    } else {
+        set_all_rate_limits(enable);
+    }
+    unixctl_command_reply(conn, NULL);
+}
+
+static void
+vlog_enable_rate_limit(struct unixctl_conn *conn, int argc,
+                       const char *argv[], void *aux OVS_UNUSED)
+{
+    set_rate_limits(conn, argc, argv, true);
+}
+
+static void
+vlog_disable_rate_limit(struct unixctl_conn *conn, int argc,
+                       const char *argv[], void *aux OVS_UNUSED)
+{
+    set_rate_limits(conn, argc, argv, false);
+}
+
 /* Initializes the logging subsystem and registers its unixctl server
  * commands. */
 void
@@ -515,6 +564,10 @@ vlog_init(void)
         "vlog/set", "{spec | PATTERN:facility:pattern}",
         1, INT_MAX, vlog_unixctl_set, NULL);
     unixctl_command_register("vlog/list", "", 0, 0, vlog_unixctl_list, NULL);
+    unixctl_command_register("vlog/enable-rate-limit", "[module]...",
+                             0, INT_MAX, vlog_enable_rate_limit, NULL);
+    unixctl_command_register("vlog/disable-rate-limit", "[module]...",
+                             0, INT_MAX, vlog_disable_rate_limit, NULL);
     unixctl_command_register("vlog/reopen", "", 0, 0,
                              vlog_unixctl_reopen, NULL);
 }
@@ -543,12 +596,20 @@ vlog_get_levels(void)
     ds_put_format(&s, "                 -------    ------    ------\n");
 
     for (mp = vlog_modules; mp < &vlog_modules[n_vlog_modules]; mp++) {
-        line = xasprintf("%-16s  %4s       %4s       %4s\n",
-           vlog_get_module_name(*mp),
-           vlog_get_level_name(vlog_get_level(*mp, VLF_CONSOLE)),
-           vlog_get_level_name(vlog_get_level(*mp, VLF_SYSLOG)),
-           vlog_get_level_name(vlog_get_level(*mp, VLF_FILE)));
-        svec_add_nocopy(&lines, line);
+        struct ds line;
+
+        ds_init(&line);
+        ds_put_format(&line, "%-16s  %4s       %4s       %4s",
+                      vlog_get_module_name(*mp),
+                      vlog_get_level_name(vlog_get_level(*mp, VLF_CONSOLE)),
+                      vlog_get_level_name(vlog_get_level(*mp, VLF_SYSLOG)),
+                      vlog_get_level_name(vlog_get_level(*mp, VLF_FILE)));
+        if (!(*mp)->honor_rate_limits) {
+            ds_put_cstr(&line, "    (rate limiting disabled)");
+        }
+        ds_put_char(&line, '\n');
+
+        svec_add_nocopy(&lines, ds_steal_cstr(&line));
     }
 
     svec_sort(&lines);
@@ -826,6 +887,10 @@ bool
 vlog_should_drop(const struct vlog_module *module, enum vlog_level level,
                  struct vlog_rate_limit *rl)
 {
+    if (!module->honor_rate_limits) {
+        return false;
+    }
+
     if (!vlog_is_enabled(module, level)) {
         return true;
     }

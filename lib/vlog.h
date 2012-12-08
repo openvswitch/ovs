@@ -71,6 +71,7 @@ struct vlog_module {
     const char *name;             /* User-visible name. */
     int levels[VLF_N_FACILITIES]; /* Minimum log level for each facility. */
     int min_level;                /* Minimum log level for any facility. */
+    bool honor_rate_limits;       /* Set false to ignore rate limits. */
 };
 
 /* Creates and initializes a global instance of a module named MODULE. */
@@ -241,9 +242,10 @@ void vlog_usage(void);
         extern struct vlog_module VLM_##MODULE;                         \
         struct vlog_module VLM_##MODULE =                               \
         {                                                               \
-            #MODULE,                                      /* name */    \
+            #MODULE,                                        /* name */  \
             { [ 0 ... VLF_N_FACILITIES - 1] = VLL_INFO }, /* levels */  \
-            VLL_INFO,                                     /* min_level */ \
+            VLL_INFO,                                  /* min_level */  \
+            true                               /* honor_rate_limits */  \
         };
 
 #ifdef  __cplusplus

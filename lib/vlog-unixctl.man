@@ -1,3 +1,8 @@
+.de IQ
+.  br
+.  ns
+.  IP "\\$1"
+..
 .SS "VLOG COMMANDS"
 These commands manage \fB\*(PN\fR's logging settings.
 .IP "\fBvlog/set\fR [\fIspec\fR]"
@@ -48,3 +53,20 @@ after rotating log files, to cause a new log file to be used.)
 .IP
 This has no effect unless \fB\*(PN\fR was invoked with the
 \fB\-\-log\-file\fR option.
+.
+.IP "\fBvlog/disable\-rate\-limit \fR[\fImodule\fR]..."
+.IQ "\fBvlog/enable\-rate\-limit \fR[\fImodule\fR]..."
+By default, \fB\*(PN\fR limits the rate at which certain messages can
+be logged.  When a message would appear more frequently than the
+limit, it is suppressed.  This saves disk space, makes logs easier to
+read, and speeds up execution, but occasionally troubleshooting
+requires more detail.  Therefore, \fBvlog/disable\-rate\-limit\fR
+allows rate limits to be disabled at the level of an individual log
+module.  Specify one or more module names, as displayed by the
+\fBvlog/list\fR command.  Specifying either no module names at all or
+the keyword \fBany\fR disables rate limits for every log module.
+.
+.IP
+The \fBvlog/enable\-rate\-limit\fR command, whose syntax is the same
+as \fBvlog/disable\-rate\-limit\fR, can be used to re-enable a rate
+limit that was previously disabled.
