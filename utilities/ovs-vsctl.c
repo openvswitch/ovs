@@ -131,12 +131,14 @@ static void vsctl_exit(int status) NO_RETURN;
 static void vsctl_fatal(const char *, ...) PRINTF_FORMAT(1, 2) NO_RETURN;
 static char *default_db(void);
 static void usage(void) NO_RETURN;
-static void parse_options(int argc, char *argv[]);
+static void parse_options(int argc, char *argv[], struct shash *local_options);
 static bool might_write_to_db(char **argv);
 
 static struct vsctl_command *parse_commands(int argc, char *argv[],
+                                            struct shash *local_options,
                                             size_t *n_commandsp);
-static void parse_command(int argc, char *argv[], struct vsctl_command *);
+static void parse_command(int argc, char *argv[], struct shash *local_options,
+                          struct vsctl_command *);
 static const struct vsctl_command_syntax *find_command(const char *name);
 static void run_prerequisites(struct vsctl_command[], size_t n_commands,
                               struct ovsdb_idl *);
@@ -159,6 +161,7 @@ main(int argc, char *argv[])
     extern struct vlog_module VLM_reconnect;
     struct ovsdb_idl *idl;
     struct vsctl_command *commands;
+    struct shash local_options;
     unsigned int seqno;
     size_t n_commands;
     char *args;
@@ -174,8 +177,10 @@ main(int argc, char *argv[])
     VLOG(might_write_to_db(argv) ? VLL_INFO : VLL_DBG, "Called as %s", args);
 
     /* Parse command line. */
-    parse_options(argc, argv);
-    commands = parse_commands(argc - optind, argv + optind, &n_commands);
+    shash_init(&local_options);
+    parse_options(argc, argv, &local_options);
+    commands = parse_commands(argc - optind, argv + optind, &local_options,
+                              &n_commands);
 
     if (timeout) {
         time_alarm(timeout);
@@ -208,8 +213,32 @@ main(int argc, char *argv[])
     }
 }
 
+static struct option *
+find_option(const char *name, struct option *options, size_t n_options)
+{
+    size_t i;
+
+    for (i = 0; i < n_options; i++) {
+        if (!strcmp(options[i].name, name)) {
+            return &options[i];
+        }
+    }
+    return NULL;
+}
+
+static struct option *
+add_option(struct option **optionsp, size_t *n_optionsp,
+           size_t *allocated_optionsp)
+{
+    if (*n_optionsp >= *allocated_optionsp) {
+        *optionsp = x2nrealloc(*optionsp, allocated_optionsp,
+                               sizeof **optionsp);
+    }
+    return &(*optionsp)[(*n_optionsp)++];
+}
+
 static void
-parse_options(int argc, char *argv[])
+parse_options(int argc, char *argv[], struct shash *local_options)
 {
     enum {
         OPT_DB = UCHAR_MAX + 1,
@@ -218,10 +247,11 @@ parse_options(int argc, char *argv[])
         OPT_NO_WAIT,
         OPT_DRY_RUN,
         OPT_PEER_CA_CERT,
+        OPT_LOCAL,
         VLOG_OPTION_ENUMS,
         TABLE_OPTION_ENUMS
     };
-    static struct option long_options[] = {
+    static const struct option global_long_options[] = {
         {"db", required_argument, NULL, OPT_DB},
         {"no-syslog", no_argument, NULL, OPT_NO_SYSLOG},
         {"no-wait", no_argument, NULL, OPT_NO_WAIT},
@@ -236,18 +266,75 @@ parse_options(int argc, char *argv[])
         {"peer-ca-cert", required_argument, NULL, OPT_PEER_CA_CERT},
         {NULL, 0, NULL, 0},
     };
+    const int n_global_long_options = ARRAY_SIZE(global_long_options) - 1;
     char *tmp, *short_options;
 
-    tmp = long_options_to_short_options(long_options);
+    const struct vsctl_command_syntax *p;
+    struct option *options, *o;
+    size_t allocated_options;
+    size_t n_options;
+    size_t i;
+
+    tmp = long_options_to_short_options(global_long_options);
     short_options = xasprintf("+%s", tmp);
     free(tmp);
+
+    /* We want to parse both global and command-specific options here, but
+     * getopt_long() isn't too convenient for the job.  We copy our global
+     * options into a dynamic array, then append all of the command-specific
+     * options. */
+    options = xmemdup(global_long_options, sizeof global_long_options);
+    allocated_options = ARRAY_SIZE(global_long_options);
+    n_options = n_global_long_options;
+    for (p = all_commands; p->name; p++) {
+        if (p->options[0]) {
+            char *save_ptr = NULL;
+            char *name;
+            char *s;
+
+            s = xstrdup(p->options);
+            for (name = strtok_r(s, ",", &save_ptr); name != NULL;
+                 name = strtok_r(NULL, ",", &save_ptr)) {
+                char *equals;
+                int has_arg;
+
+                assert(name[0] == '-' && name[1] == '-' && name[2]);
+                name += 2;
+
+                equals = strchr(name, '=');
+                if (equals) {
+                    has_arg = required_argument;
+                    *equals = '\0';
+                } else {
+                    has_arg = no_argument;
+                }
+
+                o = find_option(name, options, n_options);
+                if (o) {
+                    assert(o - options >= n_global_long_options);
+                    assert(o->has_arg == has_arg);
+                } else {
+                    o = add_option(&options, &n_options, &allocated_options);
+                    o->name = xstrdup(name);
+                    o->has_arg = has_arg;
+                    o->flag = NULL;
+                    o->val = OPT_LOCAL;
+                }
+            }
+
+            free(s);
+        }
+    }
+    o = add_option(&options, &n_options, &allocated_options);
+    memset(o, 0, sizeof *o);
 
     table_style.format = TF_LIST;
 
     for (;;) {
+        int idx;
         int c;
 
-        c = getopt_long(argc, argv, short_options, long_options, NULL);
+        c = getopt_long(argc, argv, short_options, options, &idx);
         if (c == -1) {
             break;
         }
@@ -271,6 +358,16 @@ parse_options(int argc, char *argv[])
 
         case OPT_DRY_RUN:
             dry_run = true;
+            break;
+
+        case OPT_LOCAL:
+            if (shash_find(local_options, options[idx].name)) {
+                vsctl_fatal("'%s' option specified multiple times",
+                            options[idx].name);
+            }
+            shash_add_nocopy(local_options,
+                             xasprintf("--%s", options[idx].name),
+                             optarg ? xstrdup(optarg) : NULL);
             break;
 
         case 'h':
@@ -309,10 +406,16 @@ parse_options(int argc, char *argv[])
     if (!db) {
         db = default_db();
     }
+
+    for (i = n_global_long_options; options[i].name; i++) {
+        free(CONST_CAST(char *, options[i].name));
+    }
+    free(options);
 }
 
 static struct vsctl_command *
-parse_commands(int argc, char *argv[], size_t *n_commandsp)
+parse_commands(int argc, char *argv[], struct shash *local_options,
+               size_t *n_commandsp)
 {
     struct vsctl_command *commands;
     size_t n_commands, allocated_commands;
@@ -333,8 +436,10 @@ parse_commands(int argc, char *argv[], size_t *n_commandsp)
                         shash_moved(&c->options);
                     }
                 }
-                parse_command(i - start, &argv[start],
+                parse_command(i - start, &argv[start], local_options,
                               &commands[n_commands++]);
+            } else if (!shash_is_empty(local_options)) {
+                vsctl_fatal("missing command name (use --help for help)");
             }
             start = i + 1;
         }
@@ -347,7 +452,8 @@ parse_commands(int argc, char *argv[], size_t *n_commandsp)
 }
 
 static void
-parse_command(int argc, char *argv[], struct vsctl_command *command)
+parse_command(int argc, char *argv[], struct shash *local_options,
+              struct vsctl_command *command)
 {
     const struct vsctl_command_syntax *p;
     struct shash_node *node;
@@ -355,6 +461,7 @@ parse_command(int argc, char *argv[], struct vsctl_command *command)
     int i;
 
     shash_init(&command->options);
+    shash_swap(local_options, &command->options);
     for (i = 0; i < argc; i++) {
         const char *option = argv[i];
         const char *equals;
@@ -379,7 +486,7 @@ parse_command(int argc, char *argv[], struct vsctl_command *command)
         shash_add_nocopy(&command->options, key, value);
     }
     if (i == argc) {
-        vsctl_fatal("missing command name");
+        vsctl_fatal("missing command name (use --help for help)");
     }
 
     p = find_command(argv[i]);

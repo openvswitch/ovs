@@ -15,7 +15,7 @@ dnl RUN_OVS_VSCTL(COMMAND, ...)
 dnl
 dnl Executes each ovs-vsctl COMMAND.
 m4_define([RUN_OVS_VSCTL],
-  [m4_foreach([command], [$@], [ovs-vsctl --timeout=5 --no-wait -vreconnect:emer --db=unix:socket -- command
+  [m4_foreach([command], [$@], [ovs-vsctl --timeout=5 --no-wait -vreconnect:emer --db=unix:socket command
 ])])
 m4_define([RUN_OVS_VSCTL_ONELINE],
   [m4_foreach([command], [$@], [ovs-vsctl --timeout=5 --no-wait -vreconnect:emer --db=unix:socket --oneline -- command
@@ -672,6 +672,17 @@ AT_CLEANUP
 AT_SETUP([database commands -- negative checks])
 AT_KEYWORDS([ovs-vsctl])
 OVS_VSCTL_SETUP
+
+AT_CHECK([ovs-vsctl --may-exist],
+  [1], [ignore], [ovs-vsctl: missing command name (use --help for help)
+], [OVS_VSCTL_CLEANUP])
+AT_CHECK([ovs-vsctl --may-exist --],
+  [1], [ignore], [ovs-vsctl: missing command name (use --help for help)
+], [OVS_VSCTL_CLEANUP])
+AT_CHECK([ovs-vsctl -- --may-exist],
+  [1], [ignore], [ovs-vsctl: missing command name (use --help for help)
+], [OVS_VSCTL_CLEANUP])
+
 AT_CHECK([RUN_OVS_VSCTL([add-br br0])],
   [0], [ignore], [], [OVS_VSCTL_CLEANUP])
 AT_CHECK([RUN_OVS_VSCTL([add-br br1])], 

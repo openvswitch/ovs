@@ -43,9 +43,9 @@ implemented as a single atomic transaction against the database.
 The \fBovs\-vsctl\fR command line begins with global options (see
 \fBOPTIONS\fR below for details).  The global options are followed by
 one or more commands.  Each command should begin with \fB\-\-\fR by
-itself as a command-line argument, to separate it from the global
-options and following commands.  (If the first command does not have
-any options, then the first \fB\-\-\fR may be omitted.)  The command
+itself as a command-line argument, to separate it from the following
+commands.  (The \fB\-\-\fR before the first command is optional.)  The
+command
 itself starts with command-specific options, if any, followed by the
 command name and any arguments.  See \fBEXAMPLES\fR below for syntax
 examples.
@@ -770,10 +770,9 @@ Delete bridge \fBbr0\fR, reporting an error if it does not exist:
 .IP
 .B "ovs\-vsctl del\-br br0"
 .PP
-Delete bridge \fBbr0\fR if it exists (the \fB\-\-\fR is required to
-separate \fBdel\-br\fR's options from the global options):
+Delete bridge \fBbr0\fR if it exists:
 .IP
-.B "ovs\-vsctl \-\- \-\-if\-exists del\-br br0"
+.B "ovs\-vsctl \-\-if\-exists del\-br br0"
 .PP
 Set the \fBqos\fR column of the \fBPort\fR record for \fBeth0\fR to
 point to a new \fBQoS\fR record, which in turn points with its queue 0
