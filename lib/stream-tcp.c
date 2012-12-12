@@ -116,7 +116,7 @@ ptcp_open(const char *name OVS_UNUSED, char *suffix, struct pstream **pstreamp,
     }
 
     sprintf(bound_name, "ptcp:%"PRIu16":"IP_FMT,
-            ntohs(sin.sin_port), IP_ARGS(&sin.sin_addr.s_addr));
+            ntohs(sin.sin_port), IP_ARGS(sin.sin_addr.s_addr));
     return new_fd_pstream(bound_name, fd, ptcp_accept, set_dscp, NULL,
                           pstreamp);
 }
@@ -129,7 +129,7 @@ ptcp_accept(int fd, const struct sockaddr *sa, size_t sa_len,
     char name[128];
 
     if (sa_len == sizeof(struct sockaddr_in) && sin->sin_family == AF_INET) {
-        sprintf(name, "tcp:"IP_FMT, IP_ARGS(&sin->sin_addr));
+        sprintf(name, "tcp:"IP_FMT, IP_ARGS(sin->sin_addr.s_addr));
         sprintf(strchr(name, '\0'), ":%"PRIu16, ntohs(sin->sin_port));
     } else {
         strcpy(name, "tcp");

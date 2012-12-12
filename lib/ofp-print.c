@@ -578,7 +578,7 @@ print_ip_netmask(struct ds *string, const char *leader, ovs_be32 ip,
     }
     ds_put_cstr(string, leader);
     if (wild_bits < 32) {
-        ds_put_format(string, IP_FMT, IP_ARGS(&ip));
+        ds_put_format(string, IP_FMT, IP_ARGS(ip));
         if (wild_bits) {
             ds_put_format(string, "/%d", 32 - wild_bits);
         }

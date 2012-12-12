@@ -2338,7 +2338,7 @@ netdev_linux_arp_lookup(const struct netdev *netdev,
         memcpy(mac, r.arp_ha.sa_data, ETH_ADDR_LEN);
     } else if (retval != ENXIO) {
         VLOG_WARN_RL(&rl, "%s: could not look up ARP entry for "IP_FMT": %s",
-                     netdev_get_name(netdev), IP_ARGS(&ip), strerror(retval));
+                     netdev_get_name(netdev), IP_ARGS(ip), strerror(retval));
     }
     return retval;
 }

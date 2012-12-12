@@ -941,7 +941,7 @@ describe_sockaddr(struct ds *string, int fd,
 
             memcpy(&sin, &ss, sizeof sin);
             ds_put_format(string, IP_FMT":%"PRIu16,
-                          IP_ARGS(&sin.sin_addr.s_addr), ntohs(sin.sin_port));
+                          IP_ARGS(sin.sin_addr.s_addr), ntohs(sin.sin_port));
         } else if (ss.ss_family == AF_UNIX) {
             struct sockaddr_un sun;
             const char *null;

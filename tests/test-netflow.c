@@ -75,7 +75,7 @@ print_netflow(struct ofpbuf *buf)
         }
 
         printf("seq %"PRIu32": "IP_FMT" > "IP_FMT, ntohl(hdr->flow_seq),
-               IP_ARGS(&rec->src_addr), IP_ARGS(&rec->dst_addr));
+               IP_ARGS(rec->src_addr), IP_ARGS(rec->dst_addr));
 
         printf(", if %"PRIu16" > %"PRIu16,
                ntohs(rec->input), ntohs(rec->output));
@@ -137,7 +137,7 @@ print_netflow(struct ofpbuf *buf)
                ntohl(rec->init_time), ntohl(rec->used_time));
 
         if (rec->nexthop != htonl(0)) {
-            printf(", nexthop "IP_FMT, IP_ARGS(&rec->nexthop));
+            printf(", nexthop "IP_FMT, IP_ARGS(rec->nexthop));
         }
         if (rec->src_as != htons(0) || rec->dst_as != htons(0)) {
             printf(", AS %"PRIu16" > %"PRIu16,

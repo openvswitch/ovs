@@ -2712,7 +2712,7 @@ bridge_configure_local_iface_netdev(struct bridge *br,
     }
     if (!netdev_set_in4(netdev, ip, mask)) {
         VLOG_INFO("bridge %s: configured IP address "IP_FMT", netmask "IP_FMT,
-                  br->name, IP_ARGS(&ip.s_addr), IP_ARGS(&mask.s_addr));
+                  br->name, IP_ARGS(ip.s_addr), IP_ARGS(mask.s_addr));
     }
 
     /* Configure the default gateway. */
@@ -2721,7 +2721,7 @@ bridge_configure_local_iface_netdev(struct bridge *br,
         && gateway.s_addr) {
         if (!netdev_add_router(netdev, gateway)) {
             VLOG_INFO("bridge %s: configured gateway "IP_FMT,
-                      br->name, IP_ARGS(&gateway.s_addr));
+                      br->name, IP_ARGS(gateway.s_addr));
         }
     }
 }

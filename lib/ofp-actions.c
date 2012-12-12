@@ -1940,12 +1940,12 @@ ofpact_format(const struct ofpact *a, struct ds *s)
 
     case OFPACT_SET_IPV4_SRC:
         ds_put_format(s, "mod_nw_src:"IP_FMT,
-                      IP_ARGS(&ofpact_get_SET_IPV4_SRC(a)->ipv4));
+                      IP_ARGS(ofpact_get_SET_IPV4_SRC(a)->ipv4));
         break;
 
     case OFPACT_SET_IPV4_DST:
         ds_put_format(s, "mod_nw_dst:"IP_FMT,
-                      IP_ARGS(&ofpact_get_SET_IPV4_DST(a)->ipv4));
+                      IP_ARGS(ofpact_get_SET_IPV4_DST(a)->ipv4));
         break;
 
     case OFPACT_SET_IPV4_DSCP:

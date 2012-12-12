@@ -810,11 +810,11 @@ unparse_tunnel_config(const char *name OVS_UNUSED, const char *type OVS_UNUSED,
 
 
     daddr = nl_attr_get_be32(a[OVS_TUNNEL_ATTR_DST_IPV4]);
-    smap_add_format(args, "remote_ip", IP_FMT, IP_ARGS(&daddr));
+    smap_add_format(args, "remote_ip", IP_FMT, IP_ARGS(daddr));
 
     if (a[OVS_TUNNEL_ATTR_SRC_IPV4]) {
         ovs_be32 saddr = nl_attr_get_be32(a[OVS_TUNNEL_ATTR_SRC_IPV4]);
-        smap_add_format(args, "local_ip", IP_FMT, IP_ARGS(&saddr));
+        smap_add_format(args, "local_ip", IP_FMT, IP_ARGS(saddr));
     }
 
     if (!a[OVS_TUNNEL_ATTR_IN_KEY] && !a[OVS_TUNNEL_ATTR_OUT_KEY]) {

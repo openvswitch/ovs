@@ -805,7 +805,7 @@ pssl_open(const char *name OVS_UNUSED, char *suffix, struct pstream **pstreamp,
         return -fd;
     }
     sprintf(bound_name, "pssl:%"PRIu16":"IP_FMT,
-            ntohs(sin.sin_port), IP_ARGS(&sin.sin_addr.s_addr));
+            ntohs(sin.sin_port), IP_ARGS(sin.sin_addr.s_addr));
 
     pssl = xmalloc(sizeof *pssl);
     pstream_init(&pssl->pstream, &pssl_pstream_class, bound_name);
@@ -847,7 +847,7 @@ pssl_accept(struct pstream *pstream, struct stream **new_streamp)
         return error;
     }
 
-    sprintf(name, "ssl:"IP_FMT, IP_ARGS(&sin.sin_addr));
+    sprintf(name, "ssl:"IP_FMT, IP_ARGS(sin.sin_addr.s_addr));
     if (sin.sin_port != htons(OFP_SSL_PORT)) {
         sprintf(strchr(name, '\0'), ":%"PRIu16, ntohs(sin.sin_port));
     }

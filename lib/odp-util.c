@@ -739,8 +739,8 @@ format_odp_key_attr(const struct nlattr *a, struct ds *ds)
         ds_put_format(ds, "(tun_id=0x%"PRIx64",src="IP_FMT",dst="IP_FMT","
                       "tos=0x%"PRIx8",ttl=%"PRIu8",flags(",
                       ntohll(ipv4_tun_key->tun_id),
-                      IP_ARGS(&ipv4_tun_key->ipv4_src),
-                      IP_ARGS(&ipv4_tun_key->ipv4_dst),
+                      IP_ARGS(ipv4_tun_key->ipv4_src),
+                      IP_ARGS(ipv4_tun_key->ipv4_dst),
                       ipv4_tun_key->ipv4_tos, ipv4_tun_key->ipv4_ttl);
 
         format_flags(ds, odp_tun_flag_to_string,
@@ -774,8 +774,8 @@ format_odp_key_attr(const struct nlattr *a, struct ds *ds)
         ipv4_key = nl_attr_get(a);
         ds_put_format(ds, "(src="IP_FMT",dst="IP_FMT",proto=%"PRIu8
                       ",tos=%#"PRIx8",ttl=%"PRIu8",frag=%s)",
-                      IP_ARGS(&ipv4_key->ipv4_src),
-                      IP_ARGS(&ipv4_key->ipv4_dst),
+                      IP_ARGS(ipv4_key->ipv4_src),
+                      IP_ARGS(ipv4_key->ipv4_dst),
                       ipv4_key->ipv4_proto, ipv4_key->ipv4_tos,
                       ipv4_key->ipv4_ttl,
                       ovs_frag_type_to_string(ipv4_key->ipv4_frag));
@@ -826,7 +826,7 @@ format_odp_key_attr(const struct nlattr *a, struct ds *ds)
         arp_key = nl_attr_get(a);
         ds_put_format(ds, "(sip="IP_FMT",tip="IP_FMT",op=%"PRIu16","
                       "sha="ETH_ADDR_FMT",tha="ETH_ADDR_FMT")",
-                      IP_ARGS(&arp_key->arp_sip), IP_ARGS(&arp_key->arp_tip),
+                      IP_ARGS(arp_key->arp_sip), IP_ARGS(arp_key->arp_tip),
                       ntohs(arp_key->arp_op), ETH_ADDR_ARGS(arp_key->arp_sha),
                       ETH_ADDR_ARGS(arp_key->arp_tha));
         break;
