@@ -1,4 +1,4 @@
-# Copyright (c) 2010, 2011 Nicira, Inc.
+# Copyright (c) 2010, 2011, 2012 Nicira, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -362,7 +362,9 @@ def daemonize_start():
         if _fork_and_wait_for_startup() > 0:
             # Running in parent process.
             sys.exit(0)
+
         # Running in daemon or monitor process.
+        os.setsid()
 
     if _monitor:
         saved_daemonize_fd = _daemonize_fd
@@ -384,7 +386,6 @@ def daemonize_complete():
     _fork_notify_startup(_daemonize_fd)
 
     if _detach:
-        os.setsid()
         if _chdir:
             os.chdir("/")
         _close_standard_fds()
