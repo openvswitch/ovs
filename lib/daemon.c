@@ -492,7 +492,9 @@ daemonize_start(void)
             /* Running in parent process. */
             exit(0);
         }
+
         /* Running in daemon or monitor process. */
+        setsid();
     }
 
     if (monitor) {
@@ -546,7 +548,6 @@ void
 daemonize_post_detach(void)
 {
     if (detach) {
-        setsid();
         if (chdir_) {
             ignore(chdir("/"));
         }
