@@ -1148,7 +1148,7 @@ miniflow_hash_in_minimask(const struct miniflow *flow,
         }
     }
 
-    return mhash_finish(hash, p - mask->masks.values);
+    return mhash_finish(hash, (p - mask->masks.values) * 4);
 }
 
 /* Returns a hash value for the bits of 'flow' where there are 1-bits in
@@ -1177,7 +1177,7 @@ flow_hash_in_minimask(const struct flow *flow, const struct minimask *mask,
         }
     }
 
-    return mhash_finish(hash, p - mask->masks.values);
+    return mhash_finish(hash, (p - mask->masks.values) * 4);
 }
 
 /* Initializes 'dst' as a copy of 'src'.  The caller must eventually free 'dst'

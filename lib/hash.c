@@ -115,5 +115,5 @@ mhash_words(const uint32_t p[], size_t n_words, uint32_t basis)
     for (i = 0; i < n_words; i++) {
         hash = mhash_add(hash, p[i]);
     }
-    return mhash_finish(hash, n_words);
+    return mhash_finish(hash, n_words * 4);
 }

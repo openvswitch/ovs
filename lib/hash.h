@@ -149,9 +149,9 @@ static inline uint32_t mhash_add(uint32_t hash, uint32_t data)
     return hash * 5 + 0xe6546b64;
 }
 
-static inline uint32_t mhash_finish(uint32_t hash, size_t n)
+static inline uint32_t mhash_finish(uint32_t hash, size_t n_bytes)
 {
-    hash ^= n * 4;
+    hash ^= n_bytes;
     hash ^= hash >> 16;
     hash *= 0x85ebca6b;
     hash ^= hash >> 13;
