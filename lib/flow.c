@@ -596,7 +596,7 @@ flow_wildcards_combine(struct flow_wildcards *dst,
 uint32_t
 flow_wildcards_hash(const struct flow_wildcards *wc, uint32_t basis)
 {
-    return flow_hash(&wc->masks, basis);;
+    return flow_hash(&wc->masks, basis);
 }
 
 /* Returns true if 'a' and 'b' represent the same wildcards, false if they are
