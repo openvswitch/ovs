@@ -1927,7 +1927,10 @@ mf_from_ofp_port_string(const struct mf_field *mf, const char *s,
     uint16_t port;
 
     assert(mf->n_bytes == sizeof(ovs_be16));
-    if (ofputil_port_from_string(s, &port)) {
+    if (*s == '-') {
+        return xasprintf("%s: negative values not supported for %s",
+                         s, mf->name);
+    } else if (ofputil_port_from_string(s, &port)) {
         *valuep = htons(port);
         *maskp = htons(UINT16_MAX);
         return NULL;
