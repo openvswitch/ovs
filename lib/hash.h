@@ -152,11 +152,11 @@ static inline uint32_t mhash_add(uint32_t hash, uint32_t data)
 static inline uint32_t mhash_finish(uint32_t hash, size_t n)
 {
     hash ^= n * 4;
-    hash ^= hash_rot(hash, 16);
+    hash ^= hash >> 16;
     hash *= 0x85ebca6b;
-    hash ^= hash_rot(hash, 13);
+    hash ^= hash >> 13;
     hash *= 0xc2b2ae35;
-    hash ^= hash_rot(hash, 16);
+    hash ^= hash >> 16;
     return hash;
 }
 
