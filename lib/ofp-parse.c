@@ -428,7 +428,7 @@ parse_named_action(enum ofputil_action_code code, const struct flow *flow,
     case OFPUTIL_OFPAT11_PUSH_VLAN:
         ethertype = str_to_u16(arg, "ethertype");
         if (ethertype != ETH_TYPE_VLAN_8021Q) {
-            /* TODO:XXXX ETH_TYPE_VLAN_8021AD case isn't supported */
+            /* XXX ETH_TYPE_VLAN_8021AD case isn't supported */
             ovs_fatal(0, "%s: not a valid VLAN ethertype", arg);
         }
         ofpact_put_PUSH_VLAN(ofpacts);
@@ -629,7 +629,7 @@ parse_named_instruction(enum ovs_instruction_type type,
         break;
 
     case OVSINST_OFPIT11_WRITE_ACTIONS:
-        /* TODO:XXX */
+        /* XXX */
         ovs_fatal(0, "instruction write-actions is not supported yet");
         break;
 

@@ -1102,7 +1102,7 @@ jsonrpc_session_set_dscp(struct jsonrpc_session *s,
                          reconnect_get_name(s->reconnect), strerror(error));
             }
             /*
-             * TODO:XXX race window between setting dscp to listening socket
+             * XXX race window between setting dscp to listening socket
              * and accepting socket. accepted socket may have old dscp value.
              * Ignore this race window for now.
              */

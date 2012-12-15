@@ -532,7 +532,7 @@ ovsdb_jsonrpc_session_set_all_options(
             remote->dscp = options->dscp;
         }
         /*
-         * TODO:XXX race window between setting dscp to listening socket
+         * XXX race window between setting dscp to listening socket
          * and accepting socket. Accepted socket may have old dscp value.
          * Ignore this race window for now.
          */

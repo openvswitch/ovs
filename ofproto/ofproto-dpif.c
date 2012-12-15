@@ -5468,7 +5468,7 @@ xlate_table_action(struct action_xlate_ctx *ctx,
         }
 
         if (rule == NULL && may_packet_in) {
-            /* TODO:XXX
+            /* XXX
              * check if table configuration flags
              * OFPTC_TABLE_MISS_CONTROLLER, default.
              * OFPTC_TABLE_MISS_CONTINUE,
@@ -5934,7 +5934,7 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
             break;
 
         case OFPACT_PUSH_VLAN:
-            /* TODO:XXX 802.1AD(QinQ) */
+            /* XXX 802.1AD(QinQ) */
             ctx->flow.vlan_tci = htons(VLAN_CFI);
             break;
 
@@ -6040,7 +6040,7 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
             break;
 
         case OFPACT_CLEAR_ACTIONS:
-            /* TODO:XXX
+            /* XXX
              * Nothing to do because writa-actions is not supported for now.
              * When writa-actions is supported, clear-actions also must
              * be supported at the same time.
@@ -6054,7 +6054,7 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
             break;
 
         case OFPACT_GOTO_TABLE: {
-            /* TODO:XXX remove recursion */
+            /* XXX remove recursion */
             /* It is assumed that goto-table is last action */
             struct ofpact_goto_table *ogt = ofpact_get_GOTO_TABLE(a);
             assert(ctx->table_id < ogt->table_id);

@@ -717,7 +717,7 @@ ofpact_from_openflow11(const union ofp_action *a, struct ofpbuf *out)
     case OFPUTIL_OFPAT11_PUSH_VLAN:
         if (((const struct ofp11_action_push *)a)->ethertype !=
             htons(ETH_TYPE_VLAN_8021Q)) {
-            /* TODO:XXX 802.1AD(QinQ) isn't supported at the moment */
+            /* XXX 802.1AD(QinQ) isn't supported at the moment */
             return OFPERR_OFPBAC_BAD_ARGUMENT;
         }
         ofpact_put_PUSH_VLAN(out);
@@ -1016,7 +1016,7 @@ ofpacts_pull_openflow11_instructions(struct ofpbuf *openflow,
             insts[OVSINST_OFPIT11_CLEAR_ACTIONS]);
         ofpact_put_CLEAR_ACTIONS(ofpacts);
     }
-    /* TODO:XXX Write-Actions */
+    /* XXX Write-Actions */
     if (insts[OVSINST_OFPIT11_WRITE_METADATA]) {
         const struct ofp11_instruction_write_metadata *oiwm;
         struct ofpact_metadata *om;
@@ -1476,7 +1476,7 @@ ofpact_to_openflow10(const struct ofpact *a, struct ofpbuf *out)
     case OFPACT_PUSH_VLAN:
     case OFPACT_CLEAR_ACTIONS:
     case OFPACT_GOTO_TABLE:
-        /* TODO:XXX */
+        /* XXX */
         break;
 
     case OFPACT_CONTROLLER:
@@ -1567,7 +1567,7 @@ ofpact_to_openflow11(const struct ofpact *a, struct ofpbuf *out)
         break;
 
     case OFPACT_PUSH_VLAN:
-        /* TODO:XXX ETH_TYPE_VLAN_8021AD case */
+        /* XXX ETH_TYPE_VLAN_8021AD case */
         ofputil_put_OFPAT11_PUSH_VLAN(out)->ethertype =
             htons(ETH_TYPE_VLAN_8021Q);
         break;
@@ -1682,7 +1682,7 @@ ofpacts_put_openflow11_instructions(const struct ofpact ofpacts[],
     const struct ofpact *a;
 
     OFPACT_FOR_EACH (a, ofpacts, ofpacts_len) {
-        /* TODO:XXX Write-Actions */
+        /* XXX Write-Actions */
 
         if (a->type == OFPACT_CLEAR_ACTIONS) {
             instruction_put_OFPIT11_CLEAR_ACTIONS(openflow);
@@ -1924,7 +1924,7 @@ ofpact_format(const struct ofpact *a, struct ds *s)
         break;
 
     case OFPACT_PUSH_VLAN:
-        /* TODO:XXX 802.1AD case*/
+        /* XXX 802.1AD case*/
         ds_put_format(s, "push_vlan:%#"PRIx16, ETH_TYPE_VLAN_8021Q);
         break;
 
@@ -2079,7 +2079,7 @@ ofpacts_format(const struct ofpact *ofpacts, size_t ofpacts_len,
                 ds_put_cstr(string, ",");
             }
 
-            /* TODO:XXX write-actions */
+            /* XXX write-actions */
             ofpact_format(a, string);
         }
     }
