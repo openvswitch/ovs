@@ -5384,28 +5384,24 @@ compose_output_action__(struct action_xlate_ctx *ctx, uint16_t ofp_port,
     uint32_t odp_port = ofp_port_to_odp_port(ctx->ofproto, ofp_port);
     ovs_be16 flow_vlan_tci = ctx->flow.vlan_tci;
     uint8_t flow_nw_tos = ctx->flow.nw_tos;
+    struct priority_to_dscp *pdscp;
     uint32_t out_port;
 
-    if (ofport) {
-        struct priority_to_dscp *pdscp;
+    if (!ofport) {
+        xlate_report(ctx, "Nonexistent output port");
+        return;
+    } else if (ofport->up.pp.config & OFPUTIL_PC_NO_FWD) {
+        xlate_report(ctx, "OFPPC_NO_FWD set, skipping output");
+        return;
+    } else if (check_stp && !stp_forward_in_state(ofport->stp_state)) {
+        xlate_report(ctx, "STP not in forwarding state, skipping output");
+        return;
+    }
 
-        if (ofport->up.pp.config & OFPUTIL_PC_NO_FWD) {
-            xlate_report(ctx, "OFPPC_NO_FWD set, skipping output");
-            return;
-        } else if (check_stp && !stp_forward_in_state(ofport->stp_state)) {
-            xlate_report(ctx, "STP not in forwarding state, skipping output");
-            return;
-        }
-
-        pdscp = get_priority(ofport, ctx->flow.skb_priority);
-        if (pdscp) {
-            ctx->flow.nw_tos &= ~IP_DSCP_MASK;
-            ctx->flow.nw_tos |= pdscp->dscp;
-        }
-    } else {
-        /* We may not have an ofport record for this port, but it doesn't hurt
-         * to allow forwarding to it anyhow.  Maybe such a port will appear
-         * later and we're pre-populating the flow table.  */
+    pdscp = get_priority(ofport, ctx->flow.skb_priority);
+    if (pdscp) {
+        ctx->flow.nw_tos &= ~IP_DSCP_MASK;
+        ctx->flow.nw_tos |= pdscp->dscp;
     }
 
     out_port = vsp_realdev_to_vlandev(ctx->ofproto, odp_port,
