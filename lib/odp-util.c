@@ -2040,6 +2040,15 @@ odp_put_userspace_action(uint32_t pid, const union user_action_cookie *cookie,
 
     return cookie ? odp_actions->size - NLA_ALIGN(sizeof *cookie) : 0;
 }
+
+void
+odp_put_tunnel_action(const struct flow_tnl *tunnel,
+                      struct ofpbuf *odp_actions)
+{
+    size_t offset = nl_msg_start_nested(odp_actions, OVS_ACTION_ATTR_SET);
+    tun_key_to_attr(odp_actions, tunnel);
+    nl_msg_end_nested(odp_actions, offset);
+}
 
 /* The commit_odp_actions() function and its helpers. */
 
@@ -2052,8 +2061,14 @@ commit_set_action(struct ofpbuf *odp_actions, enum ovs_key_attr key_type,
     nl_msg_end_nested(odp_actions, offset);
 }
 
-static void
-commit_set_tunnel_action(const struct flow *flow, struct flow *base,
+/* If any of the flow key data that ODP actions can modify are different in
+ * 'base->tunnel' and 'flow->tunnel', appends a set_tunnel ODP action to
+ * 'odp_actions' that change the flow tunneling information in key from
+ * 'base->tunnel' into 'flow->tunnel', and then changes 'base->tunnel' in the
+ * same way.  In other words, operates the same as commit_odp_actions(), but
+ * only on tunneling information. */
+void
+commit_odp_tunnel_action(const struct flow *flow, struct flow *base,
                          struct ofpbuf *odp_actions)
 {
     if (!memcmp(&base->tunnel, &flow->tunnel, sizeof base->tunnel)) {
@@ -2063,11 +2078,7 @@ commit_set_tunnel_action(const struct flow *flow, struct flow *base,
 
     /* A valid IPV4_TUNNEL must have non-zero ip_dst. */
     if (flow->tunnel.ip_dst) {
-        size_t offset;
-
-        offset = nl_msg_start_nested(odp_actions, OVS_ACTION_ATTR_SET);
-        tun_key_to_attr(odp_actions, &base->tunnel);
-        nl_msg_end_nested(odp_actions, offset);
+        odp_put_tunnel_action(&base->tunnel, odp_actions);
     } else {
         commit_set_action(odp_actions, OVS_KEY_ATTR_TUN_ID,
                           &base->tunnel.tun_id, sizeof base->tunnel.tun_id);
@@ -2249,12 +2260,13 @@ commit_set_skb_mark_action(const struct flow *flow, struct flow *base,
 }
 /* If any of the flow key data that ODP actions can modify are different in
  * 'base' and 'flow', appends ODP actions to 'odp_actions' that change the flow
- * key from 'base' into 'flow', and then changes 'base' the same way. */
+ * key from 'base' into 'flow', and then changes 'base' the same way.  Does not
+ * commit set_tunnel actions.  Users should call commit_odp_tunnel_action()
+ * in addition to this function if needed. */
 void
 commit_odp_actions(const struct flow *flow, struct flow *base,
                    struct ofpbuf *odp_actions)
 {
-    commit_set_tunnel_action(flow, base, odp_actions);
     commit_set_ether_addr_action(flow, base, odp_actions);
     commit_vlan_action(flow, base, odp_actions);
     commit_set_nw_action(flow, base, odp_actions);

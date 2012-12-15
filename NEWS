@@ -26,6 +26,8 @@ post-v1.9.0
     - Inheritance of the Don't Fragment bit in IP tunnels (df_inherit) is
       no longer supported.
     - Patch ports are implemented in userspace.
+    - Tunneling requires the version of the kernel module paired with Open
+      vSwitch 1.9.0 or later.
 
 
 v1.9.0 - xx xxx xxxx

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,6 +28,7 @@
 
 struct ds;
 struct flow;
+struct flow_tnl;
 struct nlattr;
 struct ofpbuf;
 struct simap;
@@ -113,6 +114,8 @@ enum odp_key_fitness odp_flow_key_to_flow(const struct nlattr *, size_t,
                                           struct flow *);
 const char *odp_key_fitness_to_string(enum odp_key_fitness);
 
+void commit_odp_tunnel_action(const struct flow *, struct flow *base,
+                              struct ofpbuf *odp_actions);
 void commit_odp_actions(const struct flow *, struct flow *base,
                         struct ofpbuf *odp_actions);
 
@@ -151,6 +154,8 @@ BUILD_ASSERT_DECL(sizeof(union user_action_cookie) == 8);
 size_t odp_put_userspace_action(uint32_t pid,
                                 const union user_action_cookie *,
                                 struct ofpbuf *odp_actions);
+void odp_put_tunnel_action(const struct flow_tnl *tunnel,
+                           struct ofpbuf *odp_actions);
 
 /* Reasons why a subfacet might not be fast-pathable. */
 enum slow_path_reason {

@@ -212,25 +212,6 @@ AT_CHECK([tail -1 stdout], [0],
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
-AT_SETUP([ofproto-dpif - set_tunnel])
-OVS_VSWITCHD_START
-ADD_OF_PORTS([br0], [1], [2], [3], [4], [5], [90])
-AT_DATA([flows.txt], [dnl
-in_port=90 actions=resubmit:1,resubmit:2,resubmit:3,resubmit:4,resubmit:5
-in_port=1 actions=set_tunnel:1,output:1
-in_port=2 actions=set_tunnel:1,output:2
-in_port=3 actions=set_tunnel:2,set_tunnel:3,output:3
-in_port=4 actions=set_tunnel:4,set_tunnel:3,output:4
-in_port=5 actions=set_tunnel:5
-])
-AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
-AT_CHECK([ovs-appctl ofproto/trace br0 'tun_id(0x1),in_port(90),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)'], [0], [stdout])
-AT_CHECK([tail -1 stdout], [0],
-  [Datapath actions: set(tun_id(0x1)),1,2,set(tun_id(0x3)),3,4
-])
-OVS_VSWITCHD_STOP
-AT_CLEANUP
-
 AT_SETUP([ofproto-dpif - controller])
 OVS_VSWITCHD_START([dnl
    add-port br0 p1 -- set Interface p1 type=dummy

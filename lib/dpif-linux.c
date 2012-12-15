@@ -421,6 +421,40 @@ dpif_linux_get_stats(const struct dpif *dpif_, struct dpif_dp_stats *stats)
     return error;
 }
 
+static const char *
+get_vport_type(const struct dpif_linux_vport *vport)
+{
+    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
+
+    switch (vport->type) {
+    case OVS_VPORT_TYPE_NETDEV:
+        return "system";
+
+    case OVS_VPORT_TYPE_INTERNAL:
+        return "internal";
+
+    case OVS_VPORT_TYPE_GRE:
+        return "gre";
+
+    case OVS_VPORT_TYPE_GRE64:
+        return "gre64";
+
+    case OVS_VPORT_TYPE_CAPWAP:
+        return "capwap";
+
+    case OVS_VPORT_TYPE_VXLAN:
+        return "vxlan";
+
+    case OVS_VPORT_TYPE_UNSPEC:
+    case __OVS_VPORT_TYPE_MAX:
+        break;
+    }
+
+    VLOG_WARN_RL(&rl, "dp%d: port `%s' has unsupported type %u",
+                 vport->dp_ifindex, vport->name, (unsigned int) vport->type);
+    return "unknown";
+}
+
 static int
 dpif_linux_port_add(struct dpif *dpif_, struct netdev *netdev,
                     uint32_t *port_nop)
@@ -429,7 +463,6 @@ dpif_linux_port_add(struct dpif *dpif_, struct netdev *netdev,
     const char *name = netdev_vport_get_dpif_port(netdev);
     const char *type = netdev_get_type(netdev);
     struct dpif_linux_vport request, reply;
-    const struct ofpbuf *options;
     struct nl_sock *sock = NULL;
     uint32_t upcall_pid;
     struct ofpbuf *buf;
@@ -454,12 +487,6 @@ dpif_linux_port_add(struct dpif *dpif_, struct netdev *netdev,
         return EINVAL;
     }
     request.name = name;
-
-    options = netdev_vport_get_options(netdev);
-    if (options && options->size) {
-        request.options = options->data;
-        request.options_len = options->size;
-    }
 
     if (request.type == OVS_VPORT_TYPE_NETDEV) {
         netdev_linux_ethtool_set_flag(netdev, ETH_FLAG_LRO, "LRO", false);
@@ -547,7 +574,7 @@ dpif_linux_port_query__(const struct dpif *dpif, uint32_t port_no,
             error = ENODEV;
         } else if (dpif_port) {
             dpif_port->name = xstrdup(reply.name);
-            dpif_port->type = xstrdup(netdev_vport_get_netdev_type(&reply));
+            dpif_port->type = xstrdup(get_vport_type(&reply));
             dpif_port->port_no = reply.port_no;
         }
         ofpbuf_delete(buf);
@@ -647,7 +674,7 @@ dpif_linux_port_dump_next(const struct dpif *dpif OVS_UNUSED, void *state_,
     }
 
     dpif_port->name = CONST_CAST(char *, vport.name);
-    dpif_port->type = CONST_CAST(char *, netdev_vport_get_netdev_type(&vport));
+    dpif_port->type = CONST_CAST(char *, get_vport_type(&vport));
     dpif_port->port_no = vport.port_no;
     return 0;
 }
