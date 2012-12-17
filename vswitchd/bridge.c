@@ -1,4 +1,4 @@
-/* Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira, Inc.
+/* Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1712,7 +1712,7 @@ iface_refresh_status(struct iface *iface)
 
     smap_init(&smap);
 
-    if (!netdev_get_drv_info(iface->netdev, &smap)) {
+    if (!netdev_get_status(iface->netdev, &smap)) {
         ovsrec_interface_set_status(iface->cfg, &smap);
     } else {
         ovsrec_interface_set_status(iface->cfg, NULL);

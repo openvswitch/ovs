@@ -81,8 +81,6 @@ static int tnl_port_config_from_nlattr(const struct nlattr *options,
                                        size_t options_len,
                                        struct nlattr *a[OVS_TUNNEL_ATTR_MAX + 1]);
 
-static const char *netdev_vport_get_tnl_iface(const struct netdev *netdev);
-
 static bool
 is_vport_class(const struct netdev_class *class)
 {
@@ -406,11 +404,27 @@ netdev_vport_get_stats(const struct netdev *netdev, struct netdev_stats *stats)
 }
 
 static int
-netdev_vport_get_drv_info(const struct netdev *netdev, struct smap *smap)
+tunnel_get_status(const struct netdev *netdev, struct smap *smap)
 {
-    const char *iface = netdev_vport_get_tnl_iface(netdev);
+    struct nlattr *a[OVS_TUNNEL_ATTR_MAX + 1];
+    struct netdev_dev_vport *ndv;
+    static char iface[IFNAMSIZ];
+    ovs_be32 route;
 
-    if (iface) {
+    ndv = netdev_dev_vport_cast(netdev_get_dev(netdev));
+    if (!ndv->options) {
+        /* Race condition when 'ndv' was created, but did not have it's
+         * configuration set yet. */
+        return 0;
+    }
+
+    if (tnl_port_config_from_nlattr(ndv->options->data,
+                                    ndv->options->size, a)) {
+        return 0;
+    }
+    route = nl_attr_get_be32(a[OVS_TUNNEL_ATTR_DST_IPV4]);
+
+    if (route_table_get_name(route, iface)) {
         struct netdev *egress_netdev;
 
         smap_add(smap, "tunnel_egress_iface", iface);
@@ -454,35 +468,6 @@ static void
 netdev_vport_wait(void)
 {
     route_table_wait();
-}
-
-/* get_tnl_iface() implementation. */
-static const char *
-netdev_vport_get_tnl_iface(const struct netdev *netdev)
-{
-    struct nlattr *a[OVS_TUNNEL_ATTR_MAX + 1];
-    struct netdev_dev_vport *ndv;
-    static char name[IFNAMSIZ];
-
-    ndv = netdev_dev_vport_cast(netdev_get_dev(netdev));
-    if (!ndv->options) {
-        /* Race condition when 'ndv' was created, but did not have its
-         * configuration set yet. */
-        return NULL;
-    }
-
-    if (tnl_port_config_from_nlattr(ndv->options->data, ndv->options->size,
-                                    a)) {
-        return NULL;
-    }
-    if (a[OVS_TUNNEL_ATTR_DST_IPV4]) {
-        ovs_be32 route = nl_attr_get_be32(a[OVS_TUNNEL_ATTR_DST_IPV4]);
-
-        if (route_table_get_name(route, name)) {
-            return name;
-        }
-    }
-    return NULL;
 }
 
 /* Helper functions. */
@@ -937,27 +922,27 @@ netdev_vport_register(void)
 {
     static const struct vport_class vport_classes[] = {
         { OVS_VPORT_TYPE_GRE,
-          { "gre", VPORT_FUNCTIONS(netdev_vport_get_drv_info) },
+          { "gre", VPORT_FUNCTIONS(tunnel_get_status) },
           parse_tunnel_config, unparse_tunnel_config },
 
         { OVS_VPORT_TYPE_GRE,
-          { "ipsec_gre", VPORT_FUNCTIONS(netdev_vport_get_drv_info) },
+          { "ipsec_gre", VPORT_FUNCTIONS(tunnel_get_status) },
           parse_tunnel_config, unparse_tunnel_config },
 
         { OVS_VPORT_TYPE_GRE64,
-          { "gre64", VPORT_FUNCTIONS(netdev_vport_get_drv_info) },
+          { "gre64", VPORT_FUNCTIONS(tunnel_get_status) },
           parse_tunnel_config, unparse_tunnel_config },
 
         { OVS_VPORT_TYPE_GRE64,
-          { "ipsec_gre64", VPORT_FUNCTIONS(netdev_vport_get_drv_info) },
+          { "ipsec_gre64", VPORT_FUNCTIONS(tunnel_get_status) },
           parse_tunnel_config, unparse_tunnel_config },
 
         { OVS_VPORT_TYPE_CAPWAP,
-          { "capwap", VPORT_FUNCTIONS(netdev_vport_get_drv_info) },
+          { "capwap", VPORT_FUNCTIONS(tunnel_get_status) },
           parse_tunnel_config, unparse_tunnel_config },
 
         { OVS_VPORT_TYPE_VXLAN,
-          { "vxlan", VPORT_FUNCTIONS(netdev_vport_get_drv_info) },
+          { "vxlan", VPORT_FUNCTIONS(tunnel_get_status) },
           parse_tunnel_config, unparse_tunnel_config },
 
         { OVS_VPORT_TYPE_PATCH,

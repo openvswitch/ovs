@@ -1297,7 +1297,7 @@ const struct netdev_class netdev_bsd_class = {
     netdev_bsd_get_in6,
     NULL, /* add_router */
     NULL, /* get_next_hop */
-    NULL, /* get_drv_info */
+    NULL, /* get_status */
     NULL, /* arp_lookup */
 
     netdev_bsd_update_flags,
@@ -1357,7 +1357,7 @@ const struct netdev_class netdev_tap_class = {
     netdev_bsd_get_in6,
     NULL, /* add_router */
     NULL, /* get_next_hop */
-    NULL, /* get_drv_info */
+    NULL, /* get_status */
     NULL, /* arp_lookup */
 
     netdev_bsd_update_flags,

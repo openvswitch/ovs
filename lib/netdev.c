@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -771,12 +771,12 @@ netdev_get_next_hop(const struct netdev *netdev,
  * information may be used to populate the status column of the Interface table
  * as defined in ovs-vswitchd.conf.db(5). */
 int
-netdev_get_drv_info(const struct netdev *netdev, struct smap *smap)
+netdev_get_status(const struct netdev *netdev, struct smap *smap)
 {
     struct netdev_dev *dev = netdev_get_dev(netdev);
 
-    return (dev->netdev_class->get_drv_info
-            ? dev->netdev_class->get_drv_info(netdev, smap)
+    return (dev->netdev_class->get_status
+            ? dev->netdev_class->get_status(netdev, smap)
             : EOPNOTSUPP);
 }
 

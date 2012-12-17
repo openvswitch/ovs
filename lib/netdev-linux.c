@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -495,28 +495,6 @@ netdev_linux_wait(void)
 {
     rtnetlink_link_wait();
     netdev_linux_miimon_wait();
-}
-
-static int
-netdev_linux_get_drvinfo(struct netdev_dev_linux *netdev_dev)
-{
-
-    int error;
-
-    if (netdev_dev->cache_valid & VALID_DRVINFO) {
-        return 0;
-    }
-
-    COVERAGE_INC(netdev_get_ethtool);
-    memset(&netdev_dev->drvinfo, 0, sizeof netdev_dev->drvinfo);
-    error = netdev_linux_do_ethtool(netdev_dev->netdev_dev.name,
-                                    (struct ethtool_cmd *)&netdev_dev->drvinfo,
-                                    ETHTOOL_GDRVINFO,
-                                    "ETHTOOL_GDRVINFO");
-    if (!error) {
-        netdev_dev->cache_valid |= VALID_DRVINFO;
-    }
-    return error;
 }
 
 static void
@@ -2323,13 +2301,26 @@ netdev_linux_get_next_hop(const struct in_addr *host, struct in_addr *next_hop,
 }
 
 static int
-netdev_linux_get_drv_info(const struct netdev *netdev, struct smap *smap)
+netdev_linux_get_status(const struct netdev *netdev, struct smap *smap)
 {
-    int error;
-    struct netdev_dev_linux *netdev_dev =
-                                netdev_dev_linux_cast(netdev_get_dev(netdev));
+    struct netdev_dev_linux *netdev_dev;
+    int error = 0;
 
-    error = netdev_linux_get_drvinfo(netdev_dev);
+    netdev_dev = netdev_dev_linux_cast(netdev_get_dev(netdev));
+    if (!(netdev_dev->cache_valid & VALID_DRVINFO)) {
+        struct ethtool_cmd *cmd = (struct ethtool_cmd *) &netdev_dev->drvinfo;
+
+        COVERAGE_INC(netdev_get_ethtool);
+        memset(&netdev_dev->drvinfo, 0, sizeof netdev_dev->drvinfo);
+        error = netdev_linux_do_ethtool(netdev_dev->netdev_dev.name,
+                                        cmd,
+                                        ETHTOOL_GDRVINFO,
+                                        "ETHTOOL_GDRVINFO");
+        if (!error) {
+            netdev_dev->cache_valid |= VALID_DRVINFO;
+        }
+    }
+
     if (!error) {
         smap_add(smap, "driver_name", netdev_dev->drvinfo.driver);
         smap_add(smap, "driver_version", netdev_dev->drvinfo.version);
@@ -2339,8 +2330,8 @@ netdev_linux_get_drv_info(const struct netdev *netdev, struct smap *smap)
 }
 
 static int
-netdev_internal_get_drv_info(const struct netdev *netdev OVS_UNUSED,
-                             struct smap *smap)
+netdev_internal_get_status(const struct netdev *netdev OVS_UNUSED,
+                           struct smap *smap)
 {
     smap_add(smap, "driver_name", "openvswitch");
     return 0;
@@ -2500,7 +2491,7 @@ const struct netdev_class netdev_linux_class =
         netdev_linux_get_stats,
         NULL,                    /* set_stats */
         netdev_linux_get_features,
-        netdev_linux_get_drv_info);
+        netdev_linux_get_status);
 
 const struct netdev_class netdev_tap_class =
     NETDEV_LINUX_CLASS(
@@ -2509,7 +2500,7 @@ const struct netdev_class netdev_tap_class =
         netdev_tap_get_stats,
         NULL,                   /* set_stats */
         netdev_linux_get_features,
-        netdev_linux_get_drv_info);
+        netdev_linux_get_status);
 
 const struct netdev_class netdev_internal_class =
     NETDEV_LINUX_CLASS(
@@ -2518,7 +2509,7 @@ const struct netdev_class netdev_internal_class =
         netdev_internal_get_stats,
         netdev_internal_set_stats,
         NULL,                  /* get_features */
-        netdev_internal_get_drv_info);
+        netdev_internal_get_status);
 
 /* HTB traffic control class. */
 

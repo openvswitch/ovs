@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010, 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2010, 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -362,7 +362,7 @@ static const struct netdev_class dummy_class = {
     NULL,                       /* get_in6 */
     NULL,                       /* add_router */
     NULL,                       /* get_next_hop */
-    NULL,                       /* get_drv_info */
+    NULL,                       /* get_status */
     NULL,                       /* arp_lookup */
 
     netdev_dummy_update_flags,
