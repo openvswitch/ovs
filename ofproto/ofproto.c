@@ -3547,7 +3547,7 @@ handle_flow_mod(struct ofconn *ofconn, const struct ofp_header *oh)
     if (error) {
         goto exit_free_ofpacts;
     }
-    
+
     /* Record the operation for logging a summary report. */
     switch (fm.command) {
     case OFPFC_ADD:
