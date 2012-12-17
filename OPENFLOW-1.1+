@@ -1,0 +1,211 @@
+                OpenFlow 1.1+ support in Open vSwitch
+                =====================================
+
+Open vSwitch support for OpenFlow 1.1, 1.2, and 1.3 is a work in
+progress.  This file describes the work still to be done.
+
+The Plan
+--------
+
+OpenFlow version support is not a build-time option.  A single build
+of Open vSwitch must be able to handle all supported versions of
+OpenFlow.  Ideally, even at runtime it should be able to support all
+protocol versions at the same time on different OpenFlow bridges (and
+perhaps even on the same bridge).
+
+At the same time, it would be a shame to litter the core of the OVS
+code with lots of ugly code concerned with the details of various
+OpenFlow protocol versions.
+
+The primary approach to compatibility is to abstract most of the
+details of the differences from the core code, by adding a protocol
+layer that translates between OF1.x and a slightly higher-level
+abstract representation.  The core of this approach is the many struct
+ofputil_* structures in lib/ofp-util.h.
+
+As a consequence of this approach, OVS cannot use OpenFlow protocol
+definitions that closely resemble those in the OpenFlow specification,
+because openflow.h in different versions of the OpenFlow specification
+defines the same identifier with different values.  Instead,
+openflow-common.h contains definitions that are common to all the
+specifications and separate protocol version-specific headers contain
+protocol-specific definitions renamed so as not to conflict,
+e.g. OFPAT10_ENQUEUE and OFPAT11_ENQUEUE for the OpenFlow 1.0 and 1.1
+values for OFPAT_ENQUEUE.  Generally, in cases of conflict, the
+protocol layer will define a more abstract OFPUTIL_* or struct
+ofputil_*.
+
+Here are the current approaches in a few tricky areas:
+
+    * Port numbering.  OpenFlow 1.0 has 16-bit port numbers and later
+      OpenFlow versions have 32-bit port numbers.  For now, OVS
+      support for later protocol versions requires all port numbers to
+      fall into the 16-bit range, translating the reserved OFPP_* port
+      numbers.
+
+    * Actions.  OpenFlow 1.0 and later versions have very different
+      ideas of actions.  OVS reconciles by translating all the
+      versions' actions (and instructions) to and from a common
+      internal representation.
+
+OpenFlow 1.1
+------------
+
+The list of remaining work items for OpenFlow 1.1 is below.  It is
+probably incomplete.
+
+    * Implement Write-Actions instruction.
+
+    * The new in_phy_port field in OFPT_PACKET_IN needs some kind of
+      implementation.  It has a sensible interpretation for tunnels
+      but in general the physical port is not in the datapath for OVS
+      so the value is not necessarily meaningful.  We might have to
+      just fix it as the same as in_port.
+
+    * On OF1.1+ flow_mods, updates by MODIFY are now much better
+      specified.  Check that OVS implements the new behavior, fix it
+      if not.
+
+    * On OF1.1+ flow_mods, DELETE now ignores buffer_id.
+
+    * OFPST_PORT and OFPST_QUEUE stats.  These differ little from
+      OF1.0 to OF1.1 (just the size of the port number field) but do
+      require abstraction (Done?).
+
+    * OFPT_TABLE_MOD stats.  This is new in OF1.1, so we need to
+      implement it.  It should be implemented so that the default OVS
+      behavior does not change.
+
+    * Document how OVS does packet buffering.
+
+    * MPLS.  Simon Horman maintains a patch series that adds this
+      feature.  It needs review and possible revision before it is
+      merged.
+
+    * SCTP.  Joe Stringer maintains a patch series that adds this
+      feature.  It has received review comments that need to be
+      addressed before it is merged.
+
+    * Match and set double-tagged VLANs (QinQ).  This requires kernel
+      work for reasonable performance.
+
+    * VLANs tagged with 88a8 Ethertype.  This requires kernel work for
+      reasonable performance.
+
+    * Groups.
+
+OpenFlow 1.2
+------------
+
+OpenFlow 1.2 support requires OpenFlow 1.1 as a prerequisite, plus the
+following additional work.  (This is based on the change log at the
+end of the OF1.2 spec.  I didn’t compare the specs carefully yet.)
+
+    * Use new OpenFlow extensible error infrastructure, on OF1.2+
+      only, instead of the OVS-specific extension used until now.
+
+    * OFPT_FLOW_MOD:
+
+        * MODIFY and MODIFY_STRICT commands now never insert new flows
+          in the table.  We will still need variations that do,
+          though, both to support older OpenFlow protocols and to get
+          sensible behavior for the internal implementation of the
+          NXAST_LEARN action.
+
+        * New flag OFPFF_RESET_COUNTS.
+
+        * New cookie field behavior.
+
+        * Add ability to delete flow in all tables.
+
+        * Update DESIGN to describe OF1.2 behavior also.
+
+    * Implement OFPT_ROLE_REQUEST.  Patch submitted by Jarno
+      Rajahalme, currently under revision.
+
+    * Add ability to turn off packet buffering with OFPCML_NO_BUFFER.
+
+OpenFlow 1.3
+------------
+
+OpenFlow 1.3 support requires OpenFlow 1.2 as a prerequisite, plus the
+following additional work.  (This is based on the change log at the
+end of the OF1.3 spec, reusing most of the section titles directly.  I
+didn’t compare the specs carefully yet.)
+
+    * Add support for multipart requests.
+
+    * Add OFPMP_TABLE_FEATURES statistics.
+
+    * More flexible table miss support.
+
+    * IPv6 extension header handling support.  Fully implementing this
+      requires kernel support.  This likely will take some careful and
+      probably time-consuming design work.  The actual coding, once
+      that is all done, is probably 2 or 3 days work.
+
+    * Per-flow meters.  Similar to IPv6 extension headers in kernel
+      and design requirements.  Might be politically difficult to add
+      directly to the kernel module, since its functionality overlaps
+      with tc.  Ideally, therefore, we could implement these somehow
+      with tc, but I haven’t investigated whether that makes sense.
+
+    * Per-connection event filtering.  OF1.3 adopted Open vSwitch’s
+      existing design for this feature so implementation should be
+      easy.
+
+    * Auxiliary connections.  These are optional, so a minimal
+      implementation would not need them.  An implementation in
+      generic code might be a week’s worth of work.  The value of an
+      implementation in generic code is questionable, though, since
+      much of the benefit of axuiliary connections is supposed to be
+      to take advantage of hardware support.  (We could make the
+      kernel module somehow send packets across the auxiliary
+      connections directly, for some kind of “hardware” support, if we
+      judged it useful enough.)
+
+    * MPLS BoS matching.  (Included in Simon's MPLS series?)
+
+    * Provider Backbone Bridge tagging.  I don’t plan to implement
+      this (but we’d accept an implementation).
+
+    * Rework tag order.  I’m not sure whether we need to do anything
+      for this.
+
+    * Duration for stats.
+
+    * On-demand flow counters.  I think this might be a real
+      optimization in some cases for the software switch.
+
+How to contribute
+-----------------
+
+If you plan to contribute code for a feature, please let everyone know
+on ovs-dev before you start work.  This will help avoid duplicating
+work.
+
+Please consider the following:
+
+    * Testing.  Please test your code.
+
+    * Unit tests.  Please consider writing some.  The tests directory
+      has many examples that you can use as a starting point.
+
+    * ovs-ofctl.  If you add a feature that is useful for some
+      ovs-ofctl command then you should add support for it there.
+
+    * Documentation.  If you add a user-visible feature, then you
+      should document it in the appropriate manpage and mention it in
+      NEWS as well.
+
+    * Coding style (see the CodingStyle file at the top of the source
+      tree).
+
+    * The patch submission guidelines (see SubmittingPatches).  I
+      recommend using “git send-email”, which automatically follows a
+      lot of those guidelines.
+
+Bug Reporting
+-------------
+
+Please report problems to bugs@openvswitch.org.

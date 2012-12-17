@@ -54,6 +54,7 @@ EXTRA_DIST = \
 	INSTALL.userspace \
 	IntegrationGuide \
 	NOTICE \
+	OPENFLOW-1.1+ \
 	PORTING \
 	README-gcov \
 	REPORTING-BUGS \
