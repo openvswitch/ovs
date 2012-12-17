@@ -273,6 +273,7 @@ struct vport *ovs_tnl_find_port(struct net *net, __be32 saddr, __be32 daddr,
 	if (null_ports) {
 		lookup.daddr = 0;
 		lookup.saddr = 0;
+		lookup.in_key = 0;
 		lookup.tunnel_type = tunnel_type;
 		vport = port_table_lookup(&lookup, mutable);
 		if (vport)
