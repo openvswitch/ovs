@@ -151,6 +151,12 @@ netdev_vport_is_patch(const struct netdev *netdev)
     return class->get_config == get_patch_config; 
 }
 
+const char *
+netdev_vport_get_dpif_port(const struct netdev *netdev)
+{
+    return netdev_get_name(netdev);
+}
+
 static uint32_t
 get_u32_or_zero(const struct nlattr *a)
 {

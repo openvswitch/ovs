@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -426,7 +426,7 @@ dpif_linux_port_add(struct dpif *dpif_, struct netdev *netdev,
                     uint32_t *port_nop)
 {
     struct dpif_linux *dpif = dpif_linux_cast(dpif_);
-    const char *name = netdev_get_name(netdev);
+    const char *name = netdev_vport_get_dpif_port(netdev);
     const char *type = netdev_get_type(netdev);
     struct dpif_linux_vport request, reply;
     const struct ofpbuf *options;

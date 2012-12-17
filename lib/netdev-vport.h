@@ -41,4 +41,6 @@ void netdev_vport_patch_inc_rx(const struct netdev *,
 void netdev_vport_patch_inc_tx(const struct netdev *,
                                const struct dpif_flow_stats *);
 
+const char *netdev_vport_get_dpif_port(const struct netdev *);
+
 #endif /* netdev-vport.h */
