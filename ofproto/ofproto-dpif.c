@@ -850,12 +850,12 @@ type_run(const char *type)
                 sset_add(&ofproto->port_poll_set, devname);
                 ofproto->port_poll_errno = 0;
             }
-            dpif_port_destroy(&port);
         } else if (!ofproto) {
             /* The port was added, but we don't know with which
              * ofproto we should associate it.  Delete it. */
             dpif_port_del(backer->dpif, port.port_no);
         }
+        dpif_port_destroy(&port);
 
         free(devname);
     }
