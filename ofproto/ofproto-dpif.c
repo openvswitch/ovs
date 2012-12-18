@@ -1124,7 +1124,7 @@ construct(struct ofproto *ofproto_)
     ofproto->port_poll_errno = 0;
 
     SHASH_FOR_EACH_SAFE (node, next, &init_ofp_ports) {
-        const struct iface_hint *iface_hint = node->data;
+        struct iface_hint *iface_hint = node->data;
 
         if (!strcmp(iface_hint->br_name, ofproto->up.name)) {
             /* Check if the datapath already has this port. */
@@ -1134,6 +1134,7 @@ construct(struct ofproto *ofproto_)
 
             free(iface_hint->br_name);
             free(iface_hint->br_type);
+            free(iface_hint);
             shash_delete(&init_ofp_ports, node);
         }
     }

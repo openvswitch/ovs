@@ -2018,11 +2018,12 @@ init_ports(struct ofproto *p)
     }
 
     SHASH_FOR_EACH_SAFE(node, next, &init_ofp_ports) {
-        const struct iface_hint *iface_hint = node->data;
+        struct iface_hint *iface_hint = node->data;
 
         if (!strcmp(iface_hint->br_name, p->name)) {
             free(iface_hint->br_name);
             free(iface_hint->br_type);
+            free(iface_hint);
             shash_delete(&init_ofp_ports, node);
         }
     }
