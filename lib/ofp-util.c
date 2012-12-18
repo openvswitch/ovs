@@ -3197,7 +3197,9 @@ ofputil_put_switch_features_port(const struct ofputil_phy_port *pp,
 {
     const struct ofp_header *oh = b->data;
 
-    ofputil_put_phy_port(oh->version, pp, b);
+    if (oh->version < OFP13_VERSION) {
+        ofputil_put_phy_port(oh->version, pp, b);
+    }
 }
 
 /* ofputil_port_status */
