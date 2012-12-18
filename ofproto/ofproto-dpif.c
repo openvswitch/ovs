@@ -836,7 +836,7 @@ type_run(const char *type)
 
         /* Don't report on the datapath's device. */
         if (!strcmp(devname, dpif_base_name(backer->dpif))) {
-            continue;
+            goto next;
         }
 
         ofproto = lookup_ofproto_dpif_by_port_name(devname);
@@ -857,6 +857,7 @@ type_run(const char *type)
         }
         dpif_port_destroy(&port);
 
+    next:
         free(devname);
     }
 
