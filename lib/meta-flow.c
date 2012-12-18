@@ -944,11 +944,11 @@ mf_get_value(const struct mf_field *mf, const struct flow *flow,
         break;
 
     case MFF_SKB_PRIORITY:
-        value->be32 = flow->skb_priority;
+        value->be32 = htonl(flow->skb_priority);
         break;
 
     case MFF_SKB_MARK:
-        value->be32 = flow->skb_mark;
+        value->be32 = htonl(flow->skb_mark);
         break;
 
     CASE_MFF_REGS:
