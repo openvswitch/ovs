@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -3393,32 +3393,68 @@ handle_flow_miss(struct flow_miss *miss, struct flow_miss_op *ops,
     handle_flow_miss_with_facet(miss, facet, now, ops, n_ops);
 }
 
-/* This function does post-processing on data returned from
- * odp_flow_key_to_flow() to help make VLAN splinters transparent to the
- * rest of the upcall processing logic.  In particular, if the extracted
- * in_port is a VLAN splinter port, it replaces flow->in_port by the "real"
- * port, sets flow->vlan_tci correctly for the VLAN of the VLAN splinter
- * port, and pushes a VLAN header onto 'packet' (if it is nonnull). The
- * caller must have called odp_flow_key_to_flow() and supply 'fitness' and
- * 'flow' from its output.  The 'flow' argument must have had the "in_port"
- * member converted to the OpenFlow number.
+/* Given a datpath, packet, and flow metadata ('backer', 'packet', and 'key'
+ * respectively), populates 'flow' with the result of odp_flow_key_to_flow().
+ * Optionally, if nonnull, populates 'fitnessp' with the fitness of 'flow' as
+ * returned by odp_flow_key_to_flow().  Also, optionally populates 'ofproto'
+ * with the ofproto_dpif, and 'odp_in_port' with the datapath in_port, that
+ * 'packet' ingressed.
  *
- * Sets '*initial_tci' to the VLAN TCI with which the packet was really
- * received, that is, the actual VLAN TCI extracted by odp_flow_key_to_flow().
- * (This differs from the value returned in flow->vlan_tci only for packets
- * received on VLAN splinters.) */
-static enum odp_key_fitness
-ofproto_dpif_vsp_adjust(const struct ofproto_dpif *ofproto,
-                        enum odp_key_fitness fitness,
-                        struct flow *flow, ovs_be16 *initial_tci,
-                        struct ofpbuf *packet)
+ * If 'ofproto' is nonnull, requires 'flow''s in_port to exist.  Otherwise sets
+ * 'flow''s in_port to OFPP_NONE.
+ *
+ * This function does post-processing on data returned from
+ * odp_flow_key_to_flow() to help make VLAN splinters transparent to the rest
+ * of the upcall processing logic.  In particular, if the extracted in_port is
+ * a VLAN splinter port, it replaces flow->in_port by the "real" port, sets
+ * flow->vlan_tci correctly for the VLAN of the VLAN splinter port, and pushes
+ * a VLAN header onto 'packet' (if it is nonnull).
+ *
+ * Optionally, if nonnull, sets '*initial_tci' to the VLAN TCI with which the
+ * packet was really received, that is, the actual VLAN TCI extracted by
+ * odp_flow_key_to_flow().  (This differs from the value returned in
+ * flow->vlan_tci only for packets received on VLAN splinters.)
+ *
+ * Returns 0 if successful, ENODEV if the parsed flow has no associated ofport,
+ * or some other positive errno if there are other problems. */
+static int
+ofproto_receive(const struct dpif_backer *backer, struct ofpbuf *packet,
+                const struct nlattr *key, size_t key_len,
+                struct flow *flow, enum odp_key_fitness *fitnessp,
+                struct ofproto_dpif **ofproto, uint32_t *odp_in_port,
+                ovs_be16 *initial_tci)
 {
-    if (fitness == ODP_FIT_ERROR) {
-        return fitness;
-    }
-    *initial_tci = flow->vlan_tci;
+    const struct ofport_dpif *port;
+    enum odp_key_fitness fitness;
+    int error;
 
-    if (vsp_adjust_flow(ofproto, flow)) {
+    fitness = odp_flow_key_to_flow(key, key_len, flow);
+    if (fitness == ODP_FIT_ERROR) {
+        error = EINVAL;
+        goto exit;
+    }
+
+    if (initial_tci) {
+        *initial_tci = flow->vlan_tci;
+    }
+
+    if (odp_in_port) {
+        *odp_in_port = flow->in_port;
+    }
+
+    port = odp_port_to_ofport(backer, flow->in_port);
+    if (!port) {
+        flow->in_port = OFPP_NONE;
+        error = ofproto ? ENODEV : 0;
+        goto exit;
+    }
+
+    if (ofproto) {
+        *ofproto = ofproto_dpif_cast(port->up.ofproto);
+    }
+
+    flow->in_port = port->up.ofp_port;
+    if (vsp_adjust_flow(ofproto_dpif_cast(port->up.ofproto), flow)) {
         if (packet) {
             /* Make the packet resemble the flow, so that it gets sent to an
              * OpenFlow controller properly, so that it looks correct for
@@ -3442,8 +3478,13 @@ ofproto_dpif_vsp_adjust(const struct ofproto_dpif *ofproto,
             fitness = ODP_FIT_TOO_MUCH;
         }
     }
+    error = 0;
 
-    return fitness;
+exit:
+    if (fitnessp) {
+        *fitnessp = fitness;
+    }
+    return error;
 }
 
 static void
@@ -3474,33 +3515,24 @@ handle_miss_upcalls(struct dpif_backer *backer, struct dpif_upcall *upcalls,
     for (upcall = upcalls; upcall < &upcalls[n_upcalls]; upcall++) {
         struct flow_miss *miss = &misses[n_misses];
         struct flow_miss *existing_miss;
-        enum odp_key_fitness fitness;
         struct ofproto_dpif *ofproto;
-        struct ofport_dpif *port;
         uint32_t odp_in_port;
         struct flow flow;
         uint32_t hash;
+        int error;
 
-        fitness = odp_flow_key_to_flow(upcall->key, upcall->key_len, &flow);
-        port = odp_port_to_ofport(backer, flow.in_port);
-        if (!port) {
+        error = ofproto_receive(backer, upcall->packet, upcall->key,
+                                upcall->key_len, &flow, &miss->key_fitness,
+                                &ofproto, &odp_in_port, &miss->initial_tci);
+        if (error == ENODEV) {
             /* Received packet on port for which we couldn't associate
              * an ofproto.  This can happen if a port is removed while
              * traffic is being received.  Print a rate-limited message
              * in case it happens frequently. */
             VLOG_INFO_RL(&rl, "received packet on unassociated port %"PRIu32,
                          flow.in_port);
-            continue;
         }
-        ofproto = ofproto_dpif_cast(port->up.ofproto);
-        odp_in_port = flow.in_port;
-        flow.in_port = port->up.ofp_port;
-
-        /* Obtain metadata and check userspace/kernel agreement on flow match,
-         * then set 'flow''s header pointers. */
-        miss->key_fitness = ofproto_dpif_vsp_adjust(ofproto, fitness,
-                                &flow, &miss->initial_tci, upcall->packet);
-        if (miss->key_fitness == ODP_FIT_ERROR) {
+        if (error) {
             continue;
         }
         flow_extract(upcall->packet, flow.skb_priority, flow.skb_mark,
@@ -3603,29 +3635,12 @@ handle_sflow_upcall(struct dpif_backer *backer,
 {
     struct ofproto_dpif *ofproto;
     union user_action_cookie cookie;
-    enum odp_key_fitness fitness;
-    struct ofport_dpif *port;
-    ovs_be16 initial_tci;
     struct flow flow;
     uint32_t odp_in_port;
 
-    fitness = odp_flow_key_to_flow(upcall->key, upcall->key_len, &flow);
-
-    port = odp_port_to_ofport(backer, flow.in_port);
-    if (!port) {
-        return;
-    }
-
-    ofproto = ofproto_dpif_cast(port->up.ofproto);
-    if (!ofproto->sflow) {
-        return;
-    }
-
-    odp_in_port = flow.in_port;
-    flow.in_port = port->up.ofp_port;
-    fitness = ofproto_dpif_vsp_adjust(ofproto, fitness, &flow,
-                                      &initial_tci, upcall->packet);
-    if (fitness == ODP_FIT_ERROR) {
+    if (ofproto_receive(backer, upcall->packet, upcall->key, upcall->key_len,
+                        &flow, NULL, &ofproto, &odp_in_port, NULL)
+        || !ofproto->sflow) {
         return;
     }
 
@@ -7182,7 +7197,6 @@ ofproto_unixctl_trace(struct unixctl_conn *conn, int argc, const char *argv[],
          * you just say "syntax error" or do you present both error messages?
          * Both choices seem lousy. */
         if (strchr(flow_s, '(')) {
-            enum odp_key_fitness fitness;
             int error;
 
             /* Convert string to datapath key. */
@@ -7193,13 +7207,13 @@ ofproto_unixctl_trace(struct unixctl_conn *conn, int argc, const char *argv[],
                 goto exit;
             }
 
-            fitness = odp_flow_key_to_flow(odp_key.data, odp_key.size, &flow);
-            flow.in_port = odp_port_to_ofp_port(ofproto, flow.in_port);
-
-            /* Convert odp_key to flow. */
-            error = ofproto_dpif_vsp_adjust(ofproto, fitness, &flow,
-                                            &initial_tci, NULL);
-            if (error == ODP_FIT_ERROR) {
+            /* XXX: Since we allow the user to specify an ofproto, it's
+             * possible they will specify a different ofproto than the one the
+             * port actually belongs too.  Ideally we should simply remove the
+             * ability to specify the ofproto. */
+            if (ofproto_receive(ofproto->backer, NULL, odp_key.data,
+                                odp_key.size, &flow, NULL, NULL, NULL,
+                                &initial_tci)) {
                 unixctl_command_reply_error(conn, "Invalid flow");
                 goto exit;
             }
@@ -7214,7 +7228,6 @@ ofproto_unixctl_trace(struct unixctl_conn *conn, int argc, const char *argv[],
             }
 
             initial_tci = flow.vlan_tci;
-            vsp_adjust_flow(ofproto, &flow);
         }
 
         /* Generate a packet, if requested. */
