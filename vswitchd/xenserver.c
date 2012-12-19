@@ -36,7 +36,7 @@ read_host_uuid(void)
     file = fopen(filename, "r");
     if (!file) {
         if (errno == ENOENT) {
-            VLOG_INFO("not running on a XenServer");
+            VLOG_DBG("not running on a XenServer");
         } else {
             VLOG_INFO("%s: open: %s", filename, strerror(errno));
         }
