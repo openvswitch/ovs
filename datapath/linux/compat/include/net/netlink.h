@@ -145,7 +145,7 @@ static inline int nlmsg_report(const struct nlmsghdr *nlh)
 }
 
 extern int		nlmsg_notify(struct sock *sk, struct sk_buff *skb,
-				     u32 pid, unsigned int group, int report,
+				     u32 portid, unsigned int group, int report,
 				     gfp_t flags);
 #endif	/* linux kernel < 2.6.19 */
 
@@ -156,13 +156,13 @@ extern int		nlmsg_notify(struct sock *sk, struct sk_buff *skb,
  * argument. */
 #define nlmsg_multicast rpl_nlmsg_multicast
 static inline int nlmsg_multicast(struct sock *sk, struct sk_buff *skb,
-				  u32 pid, unsigned int group, gfp_t flags)
+				  u32 portid, unsigned int group, gfp_t flags)
 {
 	int err;
 
 	NETLINK_CB(skb).dst_group = group;
 
-	err = netlink_broadcast(sk, skb, pid, group, flags);
+	err = netlink_broadcast(sk, skb, portid, group, flags);
 	if (err > 0)
 		err = 0;
 
