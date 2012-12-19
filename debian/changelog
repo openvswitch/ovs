@@ -7,6 +7,7 @@ openvswitch (1.9.0-1) unstable; urgency=low
     - Datapath:
       - Support for ipv6 set action.
       - SKB mark matching and setting.
+      - support for Linux kernels up to 3.7
     - FreeBSD is now a supported platform, thanks to code contributions from
       Gaetano Catalli, Ed Maste, and Giuseppe Lettieri.
     - ovs-bugtool: New --ovs option to report only OVS related information.

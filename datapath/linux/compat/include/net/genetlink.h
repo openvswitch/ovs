@@ -5,6 +5,17 @@
 #include <linux/netlink.h>
 #include <net/net_namespace.h>
 
+/*
+ * 15e473046cb6e5d18a4d0057e61d76315230382b renames pid to portid
+ * the affected structures are
+ * netlink_skb_parms::pid -> portid
+ * genl_info::snd_pid -> snd_portid
+ */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,7,0)
+#define snd_portid snd_pid
+#define portid pid
+#endif
+
 /* Very special super-nasty workaround here:
  *
  * Before 2.6.19, nlmsg_multicast() lacked a 'flags' parameter.  We work
@@ -126,7 +137,7 @@ static inline void *genlmsg_put_reply(struct sk_buff *skb,
 			struct genl_info *info, struct genl_family *family,
 			int flags, u8 cmd)
 {
-	return genlmsg_put(skb, info->snd_pid, info->snd_seq, family,
+	return genlmsg_put(skb, info->snd_portid, info->snd_seq, family,
 				flags, cmd);
 }
 
@@ -137,7 +148,7 @@ static inline void *genlmsg_put_reply(struct sk_buff *skb,
  */
 static inline int genlmsg_reply(struct sk_buff *skb, struct genl_info *info)
 {
-	return genlmsg_unicast(skb, info->snd_pid);
+	return genlmsg_unicast(skb, info->snd_portid);
 }
 
 /**

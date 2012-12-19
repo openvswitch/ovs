@@ -143,7 +143,11 @@ static struct sk_buff *defrag(struct sk_buff *, bool frag_last);
 
 static void capwap_frag_init(struct inet_frag_queue *, void *match);
 static unsigned int capwap_frag_hash(struct inet_frag_queue *);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,7,0)
 static int capwap_frag_match(struct inet_frag_queue *, void *match);
+#else
+static bool capwap_frag_match(struct inet_frag_queue *, void *match);
+#endif
 static void capwap_frag_expire(unsigned long ifq);
 
 static struct inet_frags frag_state = {
@@ -769,8 +773,7 @@ static struct sk_buff *defrag(struct sk_buff *skb, bool frag_last)
 	u16 frag_off;
 	struct frag_queue *fq;
 
-	if (atomic_read(&ns_frag_state->mem) > ns_frag_state->high_thresh)
-		inet_frag_evictor(ns_frag_state, &frag_state);
+	inet_frag_evictor(ns_frag_state, &frag_state, false);
 
 	match.daddr = iph->daddr;
 	match.saddr = iph->saddr;
@@ -804,7 +807,11 @@ static unsigned int capwap_frag_hash(struct inet_frag_queue *ifq)
 	return frag_hash(&ifq_cast(ifq)->match);
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,7,0)
 static int capwap_frag_match(struct inet_frag_queue *ifq, void *a_)
+#else
+static bool capwap_frag_match(struct inet_frag_queue *ifq, void *a_)
+#endif
 {
 	struct frag_match *a = a_;
 	struct frag_match *b = &ifq_cast(ifq)->match;

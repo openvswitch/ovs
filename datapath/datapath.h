@@ -125,7 +125,7 @@ struct ovs_skb_cb {
  * @key: Becomes %OVS_PACKET_ATTR_KEY.  Must be nonnull.
  * @userdata: If nonnull, its u64 value is extracted and passed to userspace as
  * %OVS_PACKET_ATTR_USERDATA.
- * @pid: Netlink PID to which packet should be sent.  If @pid is 0 then no
+ * @portid: Netlink PID to which packet should be sent.  If @portid is 0 then no
  * packet is sent and the packet is accounted in the datapath's @n_lost
  * counter.
  */
@@ -133,7 +133,7 @@ struct dp_upcall_info {
 	u8 cmd;
 	const struct sw_flow_key *key;
 	const struct nlattr *userdata;
-	u32 pid;
+	u32 portid;
 };
 
 /**
@@ -189,7 +189,7 @@ int ovs_dp_upcall(struct datapath *, struct sk_buff *,
 		  const struct dp_upcall_info *);
 
 const char *ovs_dp_name(const struct datapath *dp);
-struct sk_buff *ovs_vport_cmd_build_info(struct vport *, u32 pid, u32 seq,
+struct sk_buff *ovs_vport_cmd_build_info(struct vport *, u32 portid, u32 seq,
 					 u8 cmd);
 
 int ovs_execute_actions(struct datapath *dp, struct sk_buff *skb);

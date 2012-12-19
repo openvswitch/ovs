@@ -80,7 +80,7 @@ struct vport_err_stats {
  * @linkname: The name of the link from /sys/class/net/<datapath>/brif to this
  * &struct vport.  (We keep this around so that we can delete it if the
  * device gets renamed.)  Set to the null string when no link exists.
- * @upcall_pid: The Netlink port to use for packets received on this port that
+ * @upcall_portid: The Netlink port to use for packets received on this port that
  * miss the flow table.
  * @hash_node: Element in @dev_table hash table in vport.c.
  * @dp_hash_node: Element in @datapath->ports hash table in datapath.c.
@@ -97,7 +97,7 @@ struct vport {
 	struct datapath	*dp;
 	struct kobject kobj;
 	char linkname[IFNAMSIZ];
-	u32 upcall_pid;
+	u32 upcall_portid;
 
 	struct hlist_node hash_node;
 	struct hlist_node dp_hash_node;
@@ -132,7 +132,7 @@ struct vport_parms {
 	/* For ovs_vport_alloc(). */
 	struct datapath *dp;
 	u16 port_no;
-	u32 upcall_pid;
+	u32 upcall_portid;
 };
 
 /**
