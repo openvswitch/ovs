@@ -5384,7 +5384,7 @@ compose_output_action__(struct action_xlate_ctx *ctx, uint16_t ofp_port,
     uint32_t odp_port = ofp_port_to_odp_port(ctx->ofproto, ofp_port);
     ovs_be16 flow_vlan_tci = ctx->flow.vlan_tci;
     uint8_t flow_nw_tos = ctx->flow.nw_tos;
-    uint16_t out_port;
+    uint32_t out_port;
 
     if (ofport) {
         struct priority_to_dscp *pdscp;
