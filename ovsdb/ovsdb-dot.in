@@ -37,7 +37,7 @@ def printEdge(tableName, type, baseType, label):
             baseType.ref_table_name,
             ', '.join(['%s=%s' % (k,v) for k,v in options.items()]))
 
-def schemaToDot(schemaFile):
+def schemaToDot(schemaFile, arrows):
     schema = ovs.db.schema.DbSchema.from_json(ovs.json.from_file(schemaFile))
 
     print "digraph %s {" % schema.name
@@ -45,7 +45,8 @@ def schemaToDot(schemaFile):
     print '\tsize="6.5,4";'
     print '\tmargin="0";'
     print "\tnode [shape=box];"
-    print "\tedge [dir=none, arrowhead=none, arrowtail=none];"
+    if not arrows:
+        print "\tedge [dir=none, arrowhead=none, arrowtail=none];"
     for tableName, table in schema.tables.iteritems():
         options = {}
         if table.is_root:
@@ -69,6 +70,7 @@ usage: %(argv0)s [OPTIONS] SCHEMA
 where SCHEMA is an OVSDB schema in JSON format
 
 The following options are also available:
+  --no-arrows                 omit arrows from diagram
   -h, --help                  display this help message
   -V, --version               display version information\
 """ % {'argv0': argv0}
@@ -78,13 +80,17 @@ if __name__ == "__main__":
     try:
         try:
             options, args = getopt.gnu_getopt(sys.argv[1:], 'hV',
-                                              ['help', 'version'])
+                                              ['no-arrows',
+                                               'help', 'version',])
         except getopt.GetoptError, geo:
             sys.stderr.write("%s: %s\n" % (argv0, geo.msg))
             sys.exit(1)
 
+        arrows = True
         for key, value in options:
-            if key in ['-h', '--help']:
+            if key == '--no-arrows':
+                arrows = False
+            elif key in ['-h', '--help']:
                 usage()
             elif key in ['-V', '--version']:
                 print "ovsdb-dot (Open vSwitch) @VERSION@"
@@ -96,7 +102,7 @@ if __name__ == "__main__":
                              "(use --help for help)\n" % argv0)
             sys.exit(1)
 
-        schemaToDot(args[0])
+        schemaToDot(args[0], arrows)
 
     except ovs.db.error.Error, e:
         sys.stderr.write("%s: %s\n" % (argv0, e.msg))

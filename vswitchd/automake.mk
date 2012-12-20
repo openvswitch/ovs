@@ -30,7 +30,7 @@ pkgdata_DATA += vswitchd/vswitch.ovsschema
 if HAVE_PYTHON
 if HAVE_DOT
 vswitchd/vswitch.gv: ovsdb/ovsdb-dot.in vswitchd/vswitch.ovsschema
-	$(OVSDB_DOT) $(srcdir)/vswitchd/vswitch.ovsschema > $@
+	$(OVSDB_DOT) --no-arrows $(srcdir)/vswitchd/vswitch.ovsschema > $@
 vswitchd/vswitch.pic: vswitchd/vswitch.gv ovsdb/dot2pic
 	(dot -T plain < vswitchd/vswitch.gv | $(srcdir)/ovsdb/dot2pic -f 3) > $@;
 VSWITCH_PIC = vswitchd/vswitch.pic
