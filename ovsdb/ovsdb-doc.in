@@ -280,6 +280,7 @@ def docsToNroff(schemaFile, xmlFile, erFile, title=None):
 ..
 .SH NAME
 %s \- %s database schema
+.PP
 ''' % (title, d.strftime("%B %Y"), textToNroff(title), schema.name)
 
     tables = ""
