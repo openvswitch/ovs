@@ -1324,3 +1324,60 @@ in_port(3),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP
+
+AT_SETUP([ofproto-dpif - patch ports])
+OVS_VSWITCHD_START([add-br br1 \
+-- set bridge br1 datapath-type=dummy fail-mode=secure \
+-- add-port br1 pbr1 -- set int pbr1 type=patch options:peer=pbr0 \
+-- add-port br0 pbr0 -- set int pbr0 type=patch options:peer=pbr1])
+
+ADD_OF_PORTS([br0], [2])
+ADD_OF_PORTS([br1], [3])
+
+AT_CHECK([ovs-ofctl add-flow br0 actions=LOCAL,output:1,output:2])
+AT_CHECK([ovs-ofctl add-flow br1 actions=LOCAL,output:1,output:3])
+
+for i in $(seq 1 10); do
+    ovs-appctl netdev-dummy/receive br0 'in_port(100),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'
+done
+
+for i in $(seq 1 5); do
+    ovs-appctl netdev-dummy/receive br1 'in_port(101),eth(src=50:54:00:00:00:07,dst=50:54:00:00:00:05),eth_type(0x0800),ipv4(src=192.168.0.2,dst=192.168.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'
+done
+
+AT_CHECK([ovs-appctl dpif/show], [0], [dnl
+br0 (dummy@ovs-dummy):
+	lookups: hit:13 missed:2 lost:0
+	flows: 1
+	br0 65534/100: (dummy)
+	p2 2/2: (dummy)
+	pbr0 1/none: (patch: peer=pbr1)
+br1 (dummy@ovs-dummy):
+	lookups: hit:13 missed:2 lost:0
+	flows: 1
+	br1 65534/101: (dummy)
+	p3 3/3: (dummy)
+	pbr1 1/none: (patch: peer=pbr0)
+])
+
+AT_CHECK([ovs-appctl dpif/dump-flows br0 | STRIP_USED], [0], [dnl
+in_port(100),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0), packets:9, bytes:540, used:0.0s, actions:101,3,2
+]),
+AT_CHECK([ovs-appctl dpif/dump-flows br1 | STRIP_USED], [0], [dnl
+in_port(101),eth(src=50:54:00:00:00:07,dst=50:54:00:00:00:05),eth_type(0x0800),ipv4(src=192.168.0.2,dst=192.168.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0), packets:4, bytes:240, used:0.0s, actions:100,2,3
+])
+
+AT_CHECK([ovs-ofctl dump-ports br0 pbr0], [0], [dnl
+OFPST_PORT reply (xid=0x4): 1 ports
+  port  1: rx pkts=5, bytes=300, drop=0, errs=0, frame=0, over=0, crc=0
+           tx pkts=10, bytes=600, drop=0, errs=0, coll=0
+])
+
+AT_CHECK([ovs-ofctl dump-ports br1 pbr1], [0], [dnl
+OFPST_PORT reply (xid=0x4): 1 ports
+  port  1: rx pkts=10, bytes=600, drop=0, errs=0, frame=0, over=0, crc=0
+           tx pkts=5, bytes=300, drop=0, errs=0, coll=0
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP

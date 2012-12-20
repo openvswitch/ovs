@@ -158,28 +158,25 @@ Q: What features are not available in the Open vSwitch kernel datapath
    that ships as part of the upstream Linux kernel?
 
 A: The kernel module in upstream Linux 3.3 and later does not include
-   the following features:
+   tunnel virtual ports, that is, interfaces with type "gre",
+   "ipsec_gre", "gre64", "ipsec_gre64", "vxlan", or "capwap".  It is
+   possible to create tunnels in Linux and attach them to Open vSwitch
+   as system devices.  However, they cannot be dynamically created
+   through the OVSDB protocol or set the tunnel ids as a flow action.
 
-       - Tunnel virtual ports, that is, interfaces with type "gre",
-         "ipsec_gre", "capwap".  It is possible to create tunnels in
-         Linux and attach them to Open vSwitch as system devices.
-         However, they cannot be dynamically created through the OVSDB
-         protocol or set the tunnel ids as a flow action.
+   Work is in progress in adding tunnel virtual ports to the upstream
+   Linux version of the Open vSwitch kernel module.  For now, if you
+   need these features, use the kernel module from the Open vSwitch
+   distribution instead of the upstream Linux kernel module.
 
-         Work is in progress in adding these features to the upstream
-         Linux version of the Open vSwitch kernel module.  For now, if
-         you need these features, use the kernel module from the Open
-         vSwitch distribution instead of the upstream Linux kernel
-         module.
-
-       - Patch virtual ports, that is, interfaces with type "patch".
-         You can use Linux "veth" devices as a substitute.
-
-         We don't have any plans to add patch ports upstream.
+   The upstream kernel module does not include patch ports, but this
+   only matters for Open vSwitch 1.9 and earlier, because Open vSwitch
+   1.10 and later implement patch ports without using this kernel
+   feature.
 
 Q: What features are not available when using the userspace datapath?
 
-A: Tunnel and patch virtual ports are not supported, as described in the
+A: Tunnel virtual ports are not supported, as described in the
    previous answer.  It is also not possible to use queue-related
    actions.  On Linux kernels before 2.6.39, maximum-sized VLAN packets
    may not be transmitted.

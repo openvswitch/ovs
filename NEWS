@@ -25,6 +25,7 @@ post-v1.9.0
         retire that meaning of ANY in favor of the OpenFlow 1.1 meaning.
     - Inheritance of the Don't Fragment bit in IP tunnels (df_inherit) is
       no longer supported.
+    - Patch ports are implemented in userspace.
 
 
 v1.9.0 - xx xxx xxxx

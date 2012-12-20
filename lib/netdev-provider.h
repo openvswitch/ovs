@@ -601,6 +601,7 @@ const struct netdev_class *netdev_lookup_provider(const char *type);
 extern const struct netdev_class netdev_linux_class;
 extern const struct netdev_class netdev_internal_class;
 extern const struct netdev_class netdev_tap_class;
+extern const struct netdev_class netdev_patch_class;
 #ifdef __FreeBSD__
 extern const struct netdev_class netdev_bsd_class;
 #endif

@@ -36,6 +36,7 @@
 #include "mac-learning.h"
 #include "meta-flow.h"
 #include "multipath.h"
+#include "netdev-vport.h"
 #include "netdev.h"
 #include "netlink.h"
 #include "nx-match.h"
@@ -295,6 +296,8 @@ static void xlate_actions(struct action_xlate_ctx *,
 static void xlate_actions_for_side_effects(struct action_xlate_ctx *,
                                            const struct ofpact *ofpacts,
                                            size_t ofpacts_len);
+static void xlate_table_action(struct action_xlate_ctx *, uint16_t in_port,
+                               uint8_t table_id, bool may_packet_in);
 
 static size_t put_userspace_action(const struct ofproto_dpif *,
                                    struct ofpbuf *odp_actions,
@@ -676,7 +679,8 @@ struct ofproto_dpif {
     struct hmap vlandev_map;     /* vlandev -> (realdev,vid). */
 
     /* Ports. */
-    struct sset ports;             /* Set of port names. */
+    struct sset ports;             /* Set of standard port names. */
+    struct sset ghost_ports;       /* Ports with no datapath port. */
     struct sset port_poll_set;     /* Queued names for port_poll() reply. */
     int port_poll_errno;           /* Last errno for port_poll() reply. */
 };
@@ -1158,6 +1162,7 @@ construct(struct ofproto *ofproto_)
     hmap_init(&ofproto->realdev_vid_map);
 
     sset_init(&ofproto->ports);
+    sset_init(&ofproto->ghost_ports);
     sset_init(&ofproto->port_poll_set);
     ofproto->port_poll_errno = 0;
 
@@ -1302,6 +1307,7 @@ destruct(struct ofproto *ofproto_)
     hmap_destroy(&ofproto->realdev_vid_map);
 
     sset_destroy(&ofproto->ports);
+    sset_destroy(&ofproto->ghost_ports);
     sset_destroy(&ofproto->port_poll_set);
 
     close_dpif_backer(ofproto->backer);
@@ -1535,6 +1541,12 @@ port_construct(struct ofport *port_)
     port->vlandev_vid = 0;
     port->carrier_seq = netdev_get_carrier_resets(port->up.netdev);
 
+    if (netdev_vport_is_patch(port->up.netdev)) {
+        /* XXX By bailing out here, we don't do required sFlow work. */
+        port->odp_port = OVSP_NONE;
+        return 0;
+    }
+
     error = dpif_port_query_by_name(ofproto->backer->dpif,
                                     netdev_get_name(port->up.netdev),
                                     &dpif_port);
@@ -1577,8 +1589,12 @@ port_destruct(struct ofport *port_)
         dpif_port_del(ofproto->backer->dpif, port->odp_port);
     }
 
+    if (port->odp_port != OVSP_NONE) {
+        hmap_remove(&ofproto->backer->odp_to_ofport_map, &port->odp_port_node);
+    }
+
     sset_find_and_delete(&ofproto->ports, devname);
-    hmap_remove(&ofproto->backer->odp_to_ofport_map, &port->odp_port_node);
+    sset_find_and_delete(&ofproto->ghost_ports, devname);
     ofproto->backer->need_revalidate = REV_RECONFIGURE;
     bundle_remove(port_);
     set_cfm(port_, NULL);
@@ -2820,6 +2836,28 @@ ofproto_port_from_dpif_port(struct ofproto_dpif *ofproto,
     ofproto_port->ofp_port = odp_port_to_ofp_port(ofproto, dpif_port->port_no);
 }
 
+static struct ofport_dpif *
+ofport_get_peer(const struct ofport_dpif *ofport_dpif)
+{
+    const struct ofproto_dpif *ofproto;
+    const char *peer;
+
+    peer = netdev_vport_patch_peer(ofport_dpif->up.netdev);
+    if (!peer) {
+        return NULL;
+    }
+
+    HMAP_FOR_EACH (ofproto, all_ofproto_dpifs_node, &all_ofproto_dpifs) {
+        struct ofport *ofport;
+
+        ofport = shash_find_data(&ofproto->up.port_by_name, peer);
+        if (ofport && ofport->ofproto->ofproto_class == &ofproto_dpif_class) {
+            return ofport_dpif_cast(ofport);
+        }
+    }
+    return NULL;
+}
+
 static void
 port_run_fast(struct ofport_dpif *ofport)
 {
@@ -2888,6 +2926,24 @@ port_query_by_name(const struct ofproto *ofproto_, const char *devname,
     struct dpif_port dpif_port;
     int error;
 
+    if (sset_contains(&ofproto->ghost_ports, devname)) {
+        const char *type = netdev_get_type_from_name(devname);
+
+        /* We may be called before ofproto->up.port_by_name is populated with
+         * the appropriate ofport.  For this reason, we must get the name and
+         * type from the netdev layer directly. */
+        if (type) {
+            const struct ofport *ofport;
+
+            ofport = shash_find_data(&ofproto->up.port_by_name, devname);
+            ofproto_port->ofp_port = ofport ? ofport->ofp_port : OFPP_NONE;
+            ofproto_port->name = xstrdup(devname);
+            ofproto_port->type = xstrdup(type);
+            return 0;
+        }
+        return ENODEV;
+    }
+
     if (!sset_contains(&ofproto->ports, devname)) {
         return ENODEV;
     }
@@ -2905,6 +2961,11 @@ port_add(struct ofproto *ofproto_, struct netdev *netdev)
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
     uint32_t odp_port = UINT32_MAX;
     int error;
+
+    if (netdev_vport_is_patch(netdev)) {
+        sset_add(&ofproto->ghost_ports, netdev_get_name(netdev));
+        return 0;
+    }
 
     error = dpif_port_add(ofproto->backer->dpif, netdev, &odp_port);
     if (!error) {
@@ -2996,16 +3057,13 @@ ofproto_update_local_port_stats(const struct ofproto *ofproto_,
 struct port_dump_state {
     uint32_t bucket;
     uint32_t offset;
+    bool ghost;
 };
 
 static int
 port_dump_start(const struct ofproto *ofproto_ OVS_UNUSED, void **statep)
 {
-    struct port_dump_state *state;
-
-    *statep = state = xmalloc(sizeof *state);
-    state->bucket = 0;
-    state->offset = 0;
+    *statep = xzalloc(sizeof(struct port_dump_state));
     return 0;
 }
 
@@ -3015,16 +3073,24 @@ port_dump_next(const struct ofproto *ofproto_ OVS_UNUSED, void *state_,
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
     struct port_dump_state *state = state_;
+    const struct sset *sset;
     struct sset_node *node;
 
-    while ((node = sset_at_position(&ofproto->ports, &state->bucket,
-                               &state->offset))) {
+    sset = state->ghost ? &ofproto->ghost_ports : &ofproto->ports;
+    while ((node = sset_at_position(sset, &state->bucket, &state->offset))) {
         int error;
 
         error = port_query_by_name(ofproto_, node->name, port);
         if (error != ENODEV) {
             return error;
         }
+    }
+
+    if (!state->ghost) {
+        state->ghost = true;
+        state->bucket = 0;
+        state->offset = 0;
+        return port_dump_next(ofproto_, state_, port);
     }
 
     return EOF;
@@ -4103,9 +4169,7 @@ facet_free(struct facet *facet)
 }
 
 /* Executes, within 'ofproto', the 'n_actions' actions in 'actions' on
- * 'packet', which arrived on 'in_port'.
- *
- * Takes ownership of 'packet'. */
+ * 'packet', which arrived on 'in_port'. */
 static bool
 execute_odp_actions(struct ofproto_dpif *ofproto, const struct flow *flow,
                     const struct nlattr *odp_actions, size_t actions_len,
@@ -4121,8 +4185,6 @@ execute_odp_actions(struct ofproto_dpif *ofproto, const struct flow *flow,
 
     error = dpif_execute(ofproto->backer->dpif, key.data, key.size,
                          odp_actions, actions_len, packet);
-
-    ofpbuf_delete(packet);
     return !error;
 }
 
@@ -5174,11 +5236,10 @@ rule_get_stats(struct rule *rule_, uint64_t *packets, uint64_t *bytes)
     }
 }
 
-static enum ofperr
-rule_execute(struct rule *rule_, const struct flow *flow,
-             struct ofpbuf *packet)
+static void
+rule_dpif_execute(struct rule_dpif *rule, const struct flow *flow,
+                  struct ofpbuf *packet)
 {
-    struct rule_dpif *rule = rule_dpif_cast(rule_);
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(rule->up.ofproto);
 
     struct dpif_flow_stats stats;
@@ -5200,7 +5261,14 @@ rule_execute(struct rule *rule_, const struct flow *flow,
                         odp_actions.size, packet);
 
     ofpbuf_uninit(&odp_actions);
+}
 
+static enum ofperr
+rule_execute(struct rule *rule, const struct flow *flow,
+             struct ofpbuf *packet)
+{
+    rule_dpif_execute(rule_dpif_cast(rule), flow, packet);
+    ofpbuf_delete(packet);
     return 0;
 }
 
@@ -5226,6 +5294,29 @@ send_packet(const struct ofport_dpif *ofport, struct ofpbuf *packet)
     int error;
 
     flow_extract(packet, 0, 0, NULL, OFPP_LOCAL, &flow);
+    if (netdev_vport_is_patch(ofport->up.netdev)) {
+        struct ofproto_dpif *peer_ofproto;
+        struct dpif_flow_stats stats;
+        struct ofport_dpif *peer;
+        struct rule_dpif *rule;
+
+        peer = ofport_get_peer(ofport);
+        if (!peer) {
+            return ENODEV;
+        }
+
+        dpif_flow_stats_extract(&flow, packet, time_msec(), &stats);
+        netdev_vport_patch_inc_tx(ofport->up.netdev, &stats);
+        netdev_vport_patch_inc_rx(peer->up.netdev, &stats);
+
+        flow.in_port = peer->up.ofp_port;
+        peer_ofproto = ofproto_dpif_cast(peer->up.ofproto);
+        rule = rule_dpif_lookup(peer_ofproto, &flow);
+        rule_dpif_execute(rule, &flow, packet);
+
+        return 0;
+    }
+
     odp_port = vsp_realdev_to_vlandev(ofproto, ofport->odp_port,
                                       flow.vlan_tci);
     if (odp_port != ofport->odp_port) {
@@ -5412,11 +5503,14 @@ compose_output_action__(struct action_xlate_ctx *ctx, uint16_t ofp_port,
                         bool check_stp)
 {
     const struct ofport_dpif *ofport = get_ofp_port(ctx->ofproto, ofp_port);
-    uint32_t odp_port = ofp_port_to_odp_port(ctx->ofproto, ofp_port);
     ovs_be16 flow_vlan_tci = ctx->flow.vlan_tci;
     uint8_t flow_nw_tos = ctx->flow.nw_tos;
     struct priority_to_dscp *pdscp;
-    uint32_t out_port;
+    uint32_t out_port, odp_port;
+
+    /* If 'struct flow' gets additional metadata, we'll need to zero it out
+     * before traversing a patch port. */
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 18);
 
     if (!ofport) {
         xlate_report(ctx, "Nonexistent output port");
@@ -5429,12 +5523,46 @@ compose_output_action__(struct action_xlate_ctx *ctx, uint16_t ofp_port,
         return;
     }
 
+    if (netdev_vport_is_patch(ofport->up.netdev)) {
+        struct ofport_dpif *peer = ofport_get_peer(ofport);
+        struct flow old_flow = ctx->flow;
+        const struct ofproto_dpif *peer_ofproto;
+
+        if (!peer) {
+            xlate_report(ctx, "Nonexistent patch port peer");
+            return;
+        }
+
+        peer_ofproto = ofproto_dpif_cast(peer->up.ofproto);
+        if (peer_ofproto->backer != ctx->ofproto->backer) {
+            xlate_report(ctx, "Patch port peer on a different datapath");
+            return;
+        }
+
+        ctx->ofproto = ofproto_dpif_cast(peer->up.ofproto);
+        ctx->flow.in_port = peer->up.ofp_port;
+        ctx->flow.metadata = htonll(0);
+        memset(&ctx->flow.tunnel, 0, sizeof ctx->flow.tunnel);
+        memset(ctx->flow.regs, 0, sizeof ctx->flow.regs);
+        xlate_table_action(ctx, ctx->flow.in_port, 0, true);
+        ctx->flow = old_flow;
+        ctx->ofproto = ofproto_dpif_cast(ofport->up.ofproto);
+
+        if (ctx->resubmit_stats) {
+            netdev_vport_patch_inc_tx(ofport->up.netdev, ctx->resubmit_stats);
+            netdev_vport_patch_inc_rx(peer->up.netdev, ctx->resubmit_stats);
+        }
+
+        return;
+    }
+
     pdscp = get_priority(ofport, ctx->flow.skb_priority);
     if (pdscp) {
         ctx->flow.nw_tos &= ~IP_DSCP_MASK;
         ctx->flow.nw_tos |= pdscp->dscp;
     }
 
+    odp_port = ofp_port_to_odp_port(ctx->ofproto, ofp_port);
     out_port = vsp_realdev_to_vlandev(ctx->ofproto, odp_port,
                                       ctx->flow.vlan_tci);
     if (out_port != odp_port) {
@@ -7544,9 +7672,17 @@ show_dp_format(const struct ofproto_dpif *ofproto, struct ds *ds)
         struct ofport *ofport = node->data;
         const char *name = netdev_get_name(ofport->netdev);
         const char *type = netdev_get_type(ofport->netdev);
+        uint32_t odp_port;
 
-        ds_put_format(ds, "\t%s %u/%u:", name, ofport->ofp_port,
-                      ofp_port_to_odp_port(ofproto, ofport->ofp_port));
+        ds_put_format(ds, "\t%s %u/", name, ofport->ofp_port);
+
+        odp_port = ofp_port_to_odp_port(ofproto, ofport->ofp_port);
+        if (odp_port != OVSP_NONE) {
+            ds_put_format(ds, "%"PRIu32":", odp_port);
+        } else {
+            ds_put_cstr(ds, "none:");
+        }
+
         if (strcmp(type, "system")) {
             struct netdev *netdev;
             int error;

@@ -18,9 +18,9 @@
 #define NETDEV_VPORT_H 1
 
 #include <stdbool.h>
-#include "openvswitch/types.h"
 
 struct dpif_linux_vport;
+struct dpif_flow_stats;
 struct netdev;
 struct netdev_stats;
 
@@ -30,7 +30,15 @@ const struct ofpbuf *netdev_vport_get_options(const struct netdev *);
 
 enum ovs_vport_type netdev_vport_get_vport_type(const struct netdev *);
 const char *netdev_vport_get_netdev_type(const struct dpif_linux_vport *);
+bool netdev_vport_is_patch(const struct netdev *);
 
 int netdev_vport_get_stats(const struct netdev *, struct netdev_stats *);
+
+const char *netdev_vport_patch_peer(const struct netdev *netdev);
+
+void netdev_vport_patch_inc_rx(const struct netdev *,
+                               const struct dpif_flow_stats *);
+void netdev_vport_patch_inc_tx(const struct netdev *,
+                               const struct dpif_flow_stats *);
 
 #endif /* netdev-vport.h */

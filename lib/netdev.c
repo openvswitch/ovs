@@ -1441,6 +1441,14 @@ netdev_get_type(const struct netdev *netdev)
     return netdev_get_dev(netdev)->netdev_class->type;
 }
 
+
+const char *
+netdev_get_type_from_name(const char *name)
+{
+    const struct netdev_dev *dev = netdev_dev_from_name(name);
+    return dev ? netdev_dev_get_type(dev) : NULL;
+}
+
 struct netdev_dev *
 netdev_get_dev(const struct netdev *netdev)
 {
