@@ -1342,6 +1342,27 @@ ovs_to_odp_frag(uint8_t nw_frag)
           : OVS_FRAG_TYPE_LATER);
 }
 
+/* The set of kernel flags we understand. Used to detect if ODP_FIT_TOO_MUCH */
+#define OVS_TNL_F_KNOWN_MASK \
+    (OVS_TNL_F_DONT_FRAGMENT | OVS_TNL_F_CSUM | OVS_TNL_F_KEY)
+
+/* These allow the flow/kernel view of the flags to change in future */
+static uint32_t
+flow_to_odp_flags(uint16_t flags)
+{
+    return (flags & FLOW_TNL_F_DONT_FRAGMENT ? OVS_TNL_F_DONT_FRAGMENT : 0)
+        | (flags & FLOW_TNL_F_CSUM ? OVS_TNL_F_CSUM : 0)
+        | (flags & FLOW_TNL_F_KEY ? OVS_TNL_F_KEY : 0);
+}
+
+static uint16_t
+odp_to_flow_flags(uint32_t tun_flags)
+{
+    return (tun_flags & OVS_TNL_F_DONT_FRAGMENT ? FLOW_TNL_F_DONT_FRAGMENT : 0)
+        | (tun_flags & OVS_TNL_F_CSUM ? FLOW_TNL_F_CSUM : 0)
+        | (tun_flags & OVS_TNL_F_KEY ? FLOW_TNL_F_KEY : 0);
+}
+
 /* Appends a representation of 'flow' as OVS_KEY_ATTR_* attributes to 'buf'.
  * 'flow->in_port' is ignored (since it is likely to be an OpenFlow port
  * number rather than a datapath port number).  Instead, if 'odp_in_port'
@@ -1361,7 +1382,20 @@ odp_flow_key_from_flow(struct ofpbuf *buf, const struct flow *flow,
         nl_msg_put_u32(buf, OVS_KEY_ATTR_PRIORITY, flow->skb_priority);
     }
 
-    if (flow->tunnel.tun_id != htonll(0)) {
+    if (flow->tunnel.ip_dst) {
+        struct ovs_key_ipv4_tunnel *ipv4_tun_key;
+
+        ipv4_tun_key = nl_msg_put_unspec_uninit(buf, OVS_KEY_ATTR_IPV4_TUNNEL,
+                                            sizeof *ipv4_tun_key);
+        /* layouts differ, flags has different size */
+        ipv4_tun_key->tun_id = flow->tunnel.tun_id;
+        ipv4_tun_key->tun_flags = flow_to_odp_flags(flow->tunnel.flags);
+        ipv4_tun_key->ipv4_src = flow->tunnel.ip_src;
+        ipv4_tun_key->ipv4_dst = flow->tunnel.ip_dst;
+        ipv4_tun_key->ipv4_tos = flow->tunnel.ip_tos;
+        ipv4_tun_key->ipv4_ttl = flow->tunnel.ip_ttl;
+        memset(ipv4_tun_key->pad, 0, sizeof ipv4_tun_key->pad);
+    } else if (flow->tunnel.tun_id != htonll(0)) {
         nl_msg_put_be64(buf, OVS_KEY_ATTR_TUN_ID, flow->tunnel.tun_id);
     }
 
@@ -1871,6 +1905,26 @@ odp_flow_key_to_flow(const struct nlattr *key, size_t key_len,
         expected_attrs |= UINT64_C(1) << OVS_KEY_ATTR_TUN_ID;
     }
 
+    if (present_attrs & (UINT64_C(1) << OVS_KEY_ATTR_IPV4_TUNNEL)) {
+        const struct ovs_key_ipv4_tunnel *ipv4_tun_key;
+
+        ipv4_tun_key = nl_attr_get(attrs[OVS_KEY_ATTR_IPV4_TUNNEL]);
+
+        flow->tunnel.tun_id = ipv4_tun_key->tun_id;
+        flow->tunnel.ip_src = ipv4_tun_key->ipv4_src;
+        flow->tunnel.ip_dst = ipv4_tun_key->ipv4_dst;
+        flow->tunnel.flags = odp_to_flow_flags(ipv4_tun_key->tun_flags);
+        flow->tunnel.ip_tos = ipv4_tun_key->ipv4_tos;
+        flow->tunnel.ip_ttl = ipv4_tun_key->ipv4_ttl;
+
+        /* Allow this to show up as unexpected, if there are unknown flags,
+         * eventually resulting in ODP_FIT_TOO_MUCH.
+         * OVS_TNL_F_KNOWN_MASK defined locally above. */
+        if (!(ipv4_tun_key->tun_flags & ~OVS_TNL_F_KNOWN_MASK)) {
+            expected_attrs |= UINT64_C(1) << OVS_KEY_ATTR_IPV4_TUNNEL;
+        }
+    }
+
     if (present_attrs & (UINT64_C(1) << OVS_KEY_ATTR_IN_PORT)) {
         flow->in_port = nl_attr_get_u32(attrs[OVS_KEY_ATTR_IN_PORT]);
         expected_attrs |= UINT64_C(1) << OVS_KEY_ATTR_IN_PORT;
@@ -1953,16 +2007,32 @@ commit_set_action(struct ofpbuf *odp_actions, enum ovs_key_attr key_type,
 }
 
 static void
-commit_set_tun_id_action(const struct flow *flow, struct flow *base,
+commit_set_tunnel_action(const struct flow *flow, struct flow *base,
                          struct ofpbuf *odp_actions)
 {
-    if (base->tunnel.tun_id == flow->tunnel.tun_id) {
+    if (!memcmp(&base->tunnel, &flow->tunnel, sizeof base->tunnel)) {
         return;
     }
-    base->tunnel.tun_id = flow->tunnel.tun_id;
+    memcpy(&base->tunnel, &flow->tunnel, sizeof base->tunnel);
 
-    commit_set_action(odp_actions, OVS_KEY_ATTR_TUN_ID,
-                      &base->tunnel.tun_id, sizeof(base->tunnel.tun_id));
+    /* A valid IPV4_TUNNEL must have non-zero ip_dst. */
+    if (flow->tunnel.ip_dst) {
+        struct ovs_key_ipv4_tunnel ipv4_tun_key;
+
+        ipv4_tun_key.tun_id = base->tunnel.tun_id;
+        ipv4_tun_key.tun_flags = flow_to_odp_flags(base->tunnel.flags);
+        ipv4_tun_key.ipv4_src = base->tunnel.ip_src;
+        ipv4_tun_key.ipv4_dst = base->tunnel.ip_dst;
+        ipv4_tun_key.ipv4_tos = base->tunnel.ip_tos;
+        ipv4_tun_key.ipv4_ttl = base->tunnel.ip_ttl;
+        memset(&ipv4_tun_key.pad, 0, sizeof ipv4_tun_key.pad);
+
+        commit_set_action(odp_actions, OVS_KEY_ATTR_IPV4_TUNNEL,
+                          &ipv4_tun_key, sizeof ipv4_tun_key);
+    } else {
+        commit_set_action(odp_actions, OVS_KEY_ATTR_TUN_ID,
+                          &base->tunnel.tun_id, sizeof base->tunnel.tun_id);
+    }
 }
 
 static void
@@ -2145,7 +2215,7 @@ void
 commit_odp_actions(const struct flow *flow, struct flow *base,
                    struct ofpbuf *odp_actions)
 {
-    commit_set_tun_id_action(flow, base, odp_actions);
+    commit_set_tunnel_action(flow, base, odp_actions);
     commit_set_ether_addr_action(flow, base, odp_actions);
     commit_vlan_action(flow, base, odp_actions);
     commit_set_nw_action(flow, base, odp_actions);
