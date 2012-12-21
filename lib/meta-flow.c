@@ -2138,9 +2138,10 @@ out:
 }
 
 static char *
-mf_from_tun_flags_string(const char *s, ovs_be16 *valuep)
+mf_from_tun_flags_string(const char *s, ovs_be16 *valuep, ovs_be16 *maskp)
 {
     if (!parse_flow_tun_flags(s, flow_tun_flag_to_string, valuep)) {
+        *maskp = htons(UINT16_MAX);
         return NULL;
     }
 
@@ -2182,7 +2183,8 @@ mf_parse(const struct mf_field *mf, const char *s,
         return mf_from_frag_string(s, &value->u8, &mask->u8);
 
     case MFS_TNL_FLAGS:
-        return mf_from_tun_flags_string(s, &value->be16);
+        assert(mf->n_bytes == sizeof(ovs_be16));
+        return mf_from_tun_flags_string(s, &value->be16, &mask->be16);
     }
     NOT_REACHED();
 }
