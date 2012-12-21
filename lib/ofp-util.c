@@ -3482,9 +3482,9 @@ ofputil_put_ofp10_table_stats(const struct ofp12_table_stats *in,
     struct ofp10_table_stats *out;
     const struct wc_map *p;
 
-    out = ofpbuf_put_uninit(buf, sizeof *out);
+    out = ofpbuf_put_zeros(buf, sizeof *out);
     out->table_id = in->table_id;
-    strcpy(out->name, in->name);
+    ovs_strlcpy(out->name, in->name, sizeof out->name);
     out->wildcards = 0;
     for (p = wc_map; p < &wc_map[ARRAY_SIZE(wc_map)]; p++) {
         if (in->wildcards & htonll(1ULL << p->mf12)) {
@@ -3542,9 +3542,9 @@ ofputil_put_ofp11_table_stats(const struct ofp12_table_stats *in,
 {
     struct ofp11_table_stats *out;
 
-    out = ofpbuf_put_uninit(buf, sizeof *out);
+    out = ofpbuf_put_zeros(buf, sizeof *out);
     out->table_id = in->table_id;
-    strcpy(out->name, in->name);
+    ovs_strlcpy(out->name, in->name, sizeof out->name);
     out->wildcards = oxm12_to_ofp11_flow_match_fields(in->wildcards);
     out->match = oxm12_to_ofp11_flow_match_fields(in->match);
     out->instructions = in->instructions;
