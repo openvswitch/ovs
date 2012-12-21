@@ -146,9 +146,7 @@ classifier_destroy(struct classifier *cls)
         struct cls_table *table, *next_table;
 
         HMAP_FOR_EACH_SAFE (table, next_table, hmap_node, &cls->tables) {
-            hmap_destroy(&table->rules);
-            hmap_remove(&cls->tables, &table->hmap_node);
-            free(table);
+            destroy_table(cls, table);
         }
         hmap_destroy(&cls->tables);
     }
