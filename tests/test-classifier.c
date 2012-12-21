@@ -95,6 +95,15 @@ test_rule_from_cls_rule(const struct cls_rule *rule)
     return rule ? CONTAINER_OF(rule, struct test_rule, cls_rule) : NULL;
 }
 
+static void
+test_rule_destroy(struct test_rule *rule)
+{
+    if (rule) {
+        cls_rule_destroy(&rule->cls_rule);
+        free(rule);
+    }
+}
+
 static struct test_rule *make_rule(int wc_fields, unsigned int priority,
                                    int value_pat);
 static void free_rule(struct test_rule *);
@@ -122,7 +131,7 @@ tcls_destroy(struct tcls *tcls)
         size_t i;
 
         for (i = 0; i < tcls->n_rules; i++) {
-            free(tcls->rules[i]);
+            test_rule_destroy(tcls->rules[i]);
         }
         free(tcls->rules);
     }
@@ -172,9 +181,11 @@ tcls_remove(struct tcls *cls, const struct test_rule *rule)
     for (i = 0; i < cls->n_rules; i++) {
         struct test_rule *pos = cls->rules[i];
         if (pos == rule) {
-            free(pos);
+            test_rule_destroy(pos);
+
             memmove(&cls->rules[i], &cls->rules[i + 1],
                     sizeof *cls->rules * (cls->n_rules - i - 1));
+
             cls->n_rules--;
             return;
         }
@@ -1221,6 +1232,8 @@ test_minimask_has_extra(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 
         minimask_destroy(&minimask);
     }
+
+    minimask_destroy(&minicatchall);
 }
 
 static void
@@ -1260,6 +1273,8 @@ test_minimask_combine(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
         minimask_destroy(&minimask);
         minimask_destroy(&minimask2);
     }
+
+    minimask_destroy(&minicatchall);
 }
 
 static const struct command commands[] = {
