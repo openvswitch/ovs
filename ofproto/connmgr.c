@@ -1807,6 +1807,7 @@ void
 ofmonitor_destroy(struct ofmonitor *m)
 {
     if (m) {
+        minimatch_destroy(&m->match);
         hmap_remove(&m->ofconn->monitors, &m->ofconn_node);
         free(m);
     }
