@@ -597,56 +597,6 @@ ofproto_set_mac_table_config(struct ofproto *ofproto, unsigned idle_time,
     }
 }
 
-void
-ofproto_set_desc(struct ofproto *p,
-                 const char *mfr_desc, const char *hw_desc,
-                 const char *sw_desc, const char *serial_desc,
-                 const char *dp_desc)
-{
-    struct ofp_desc_stats *ods;
-
-    if (mfr_desc) {
-        if (strlen(mfr_desc) >= sizeof ods->mfr_desc) {
-            VLOG_WARN("%s: truncating mfr_desc, must be less than %zu bytes",
-                      p->name, sizeof ods->mfr_desc);
-        }
-        free(p->mfr_desc);
-        p->mfr_desc = xstrdup(mfr_desc);
-    }
-    if (hw_desc) {
-        if (strlen(hw_desc) >= sizeof ods->hw_desc) {
-            VLOG_WARN("%s: truncating hw_desc, must be less than %zu bytes",
-                      p->name, sizeof ods->hw_desc);
-        }
-        free(p->hw_desc);
-        p->hw_desc = xstrdup(hw_desc);
-    }
-    if (sw_desc) {
-        if (strlen(sw_desc) >= sizeof ods->sw_desc) {
-            VLOG_WARN("%s: truncating sw_desc, must be less than %zu bytes",
-                      p->name, sizeof ods->sw_desc);
-        }
-        free(p->sw_desc);
-        p->sw_desc = xstrdup(sw_desc);
-    }
-    if (serial_desc) {
-        if (strlen(serial_desc) >= sizeof ods->serial_num) {
-            VLOG_WARN("%s: truncating serial_desc, must be less than %zu "
-                      "bytes", p->name, sizeof ods->serial_num);
-        }
-        free(p->serial_desc);
-        p->serial_desc = xstrdup(serial_desc);
-    }
-    if (dp_desc) {
-        if (strlen(dp_desc) >= sizeof ods->dp_desc) {
-            VLOG_WARN("%s: truncating dp_desc, must be less than %zu bytes",
-                      p->name, sizeof ods->dp_desc);
-        }
-        free(p->dp_desc);
-        p->dp_desc = xstrdup(dp_desc);
-    }
-}
-
 int
 ofproto_set_snoops(struct ofproto *ofproto, const struct sset *snoops)
 {
