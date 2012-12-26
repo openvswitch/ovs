@@ -597,6 +597,13 @@ ofproto_set_mac_table_config(struct ofproto *ofproto, unsigned idle_time,
     }
 }
 
+void
+ofproto_set_dp_desc(struct ofproto *p, const char *dp_desc)
+{
+    free(p->dp_desc);
+    p->dp_desc = dp_desc ? xstrdup(dp_desc) : NULL;
+}
+
 int
 ofproto_set_snoops(struct ofproto *ofproto, const struct sset *snoops)
 {

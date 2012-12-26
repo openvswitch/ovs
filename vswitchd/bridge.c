@@ -186,6 +186,7 @@ static void bridge_configure_mac_table(struct bridge *);
 static void bridge_configure_sflow(struct bridge *, int *sflow_bridge_number);
 static void bridge_configure_stp(struct bridge *);
 static void bridge_configure_tables(struct bridge *);
+static void bridge_configure_dp_desc(struct bridge *);
 static void bridge_configure_remotes(struct bridge *,
                                      const struct sockaddr_in *managers,
                                      size_t n_managers);
@@ -597,6 +598,7 @@ bridge_reconfigure_continue(const struct ovsrec_open_vswitch *ovs_cfg)
         bridge_configure_sflow(br, &sflow_bridge_number);
         bridge_configure_stp(br);
         bridge_configure_tables(br);
+        bridge_configure_dp_desc(br);
     }
     free(managers);
 
@@ -2900,6 +2902,13 @@ bridge_configure_tables(struct bridge *br)
                      "%"PRId64" not supported by this datapath", br->name,
                      br->cfg->key_flow_tables[j]);
     }
+}
+
+static void
+bridge_configure_dp_desc(struct bridge *br)
+{
+    ofproto_set_dp_desc(br->ofproto,
+                        smap_get(&br->cfg->other_config, "dp-desc"));
 }
 
 /* Port functions. */
