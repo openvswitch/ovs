@@ -321,7 +321,7 @@ force_reload_kmod () {
 
     script_interfaces=`mktemp`
     script_flows=`mktemp`
-    trap 'rm -f "${script_interfaces}" "${script_flows}" ' 0 1 2 13 15
+    trap 'rm -f "${script_interfaces}" "${script_flows}" ' 0
 
     action "Saving flows" save_flows
 
@@ -382,7 +382,7 @@ force_reload_kmod () {
 restart () {
     if daemon_is_running ovsdb-server && daemon_is_running ovs-vswitchd; then
         script_flows=`mktemp`
-        trap 'rm -f "${script_flows}"' 0 1 2 13 15
+        trap 'rm -f "${script_flows}"' 0
 
         action "Saving flows" save_flows
     fi
