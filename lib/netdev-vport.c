@@ -59,10 +59,6 @@ struct netdev_dev_vport {
     uint8_t etheraddr[ETH_ADDR_LEN];
 };
 
-struct netdev_vport {
-    struct netdev netdev;
-};
-
 struct vport_class {
     enum ovs_vport_type type;
     struct netdev_class netdev_class;
@@ -106,14 +102,6 @@ static struct netdev_dev_vport *
 netdev_vport_get_dev(const struct netdev *netdev)
 {
     return netdev_dev_vport_cast(netdev_get_dev(netdev));
-}
-
-static struct netdev_vport *
-netdev_vport_cast(const struct netdev *netdev)
-{
-    struct netdev_dev *netdev_dev = netdev_get_dev(netdev);
-    assert(is_vport_class(netdev_dev_get_class(netdev_dev)));
-    return CONTAINER_OF(netdev, struct netdev_vport, netdev);
 }
 
 /* If 'netdev' is a vport netdev, returns an ofpbuf that contains Netlink
@@ -227,21 +215,16 @@ netdev_vport_destroy(struct netdev_dev *netdev_dev_)
 }
 
 static int
-netdev_vport_open(struct netdev_dev *netdev_dev_, struct netdev **netdevp)
+netdev_vport_open(struct netdev_dev *netdev_dev, struct netdev **netdevp)
 {
-    struct netdev_vport *netdev;
-
-    netdev = xmalloc(sizeof *netdev);
-    netdev_init(&netdev->netdev, netdev_dev_);
-
-    *netdevp = &netdev->netdev;
+    *netdevp = xmalloc(sizeof **netdevp);
+    netdev_init(*netdevp, netdev_dev);
     return 0;
 }
 
 static void
-netdev_vport_close(struct netdev *netdev_)
+netdev_vport_close(struct netdev *netdev)
 {
-    struct netdev_vport *netdev = netdev_vport_cast(netdev_);
     free(netdev);
 }
 
