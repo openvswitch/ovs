@@ -337,7 +337,7 @@ force_reload_kmod () {
     script_datapaths=`mktemp`
     script_flows=`mktemp`
     trap 'rm -f "${script_interfaces}" "${script_flows}" \
-        "${script_datapaths}"' 0 1 2 13 15
+        "${script_datapaths}"' 0
 
     action "Saving flows" save_flows
 
@@ -406,7 +406,7 @@ force_reload_kmod () {
 
 restart () {
     script_flows=`mktemp`
-    trap 'rm -f "${script_flows}"' 0 1 2 13 15
+    trap 'rm -f "${script_flows}"' 0
 
     action "Saving flows" save_flows
 
