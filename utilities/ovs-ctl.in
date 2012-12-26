@@ -293,7 +293,7 @@ force_reload_kmod () {
     stop
 
     script=`mktemp`
-    trap 'rm -f "$script"' 0 1 2 13 15
+    trap 'rm -f "$script"' 0
     if action "Saving interface configuration" save_interfaces; then
         :
     else
