@@ -132,12 +132,6 @@ struct ofproto_controller {
     uint8_t dscp;               /* DSCP value for controller connection. */
 };
 
-#define DEFAULT_MFR_DESC "Nicira, Inc."
-#define DEFAULT_HW_DESC "Open vSwitch"
-#define DEFAULT_SW_DESC VERSION
-#define DEFAULT_SERIAL_DESC "None"
-#define DEFAULT_DP_DESC "None"
-
 void ofproto_enumerate_types(struct sset *types);
 const char *ofproto_normalize_type(const char *);
 

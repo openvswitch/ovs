@@ -52,11 +52,11 @@ struct ofproto {
                                        * ofproto-dpif implementation */
     bool forward_bpdu;          /* Option to allow forwarding of BPDU frames
                                  * when NORMAL action is invoked. */
-    char *mfr_desc;             /* Manufacturer. */
-    char *hw_desc;              /* Hardware. */
-    char *sw_desc;              /* Software version. */
-    char *serial_desc;          /* Serial number. */
-    char *dp_desc;              /* Datapath description. */
+    char *mfr_desc;             /* Manufacturer (NULL for default)b. */
+    char *hw_desc;              /* Hardware (NULL for default). */
+    char *sw_desc;              /* Software version (NULL for default). */
+    char *serial_desc;          /* Serial number (NULL for default). */
+    char *dp_desc;              /* Datapath description (NULL for default). */
     enum ofp_config_flags frag_handling; /* One of OFPC_*.  */
 
     /* Datapath. */

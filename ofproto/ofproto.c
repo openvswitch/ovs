@@ -407,11 +407,11 @@ ofproto_create(const char *datapath_name, const char *datapath_type,
                                         OFPROTO_FLOW_EVICTION_THRESHOLD_DEFAULT);
     ofproto->forward_bpdu = false;
     ofproto->fallback_dpid = pick_fallback_dpid();
-    ofproto->mfr_desc = xstrdup(DEFAULT_MFR_DESC);
-    ofproto->hw_desc = xstrdup(DEFAULT_HW_DESC);
-    ofproto->sw_desc = xstrdup(DEFAULT_SW_DESC);
-    ofproto->serial_desc = xstrdup(DEFAULT_SERIAL_DESC);
-    ofproto->dp_desc = xstrdup(DEFAULT_DP_DESC);
+    ofproto->mfr_desc = NULL;
+    ofproto->hw_desc = NULL;
+    ofproto->sw_desc = NULL;
+    ofproto->serial_desc = NULL;
+    ofproto->dp_desc = NULL;
     ofproto->frag_handling = OFPC_FRAG_NORMAL;
     hmap_init(&ofproto->ports);
     shash_init(&ofproto->port_by_name);
@@ -2393,17 +2393,29 @@ static enum ofperr
 handle_desc_stats_request(struct ofconn *ofconn,
                           const struct ofp_header *request)
 {
+    static const char *default_mfr_desc = "Nicira, Inc.";
+    static const char *default_hw_desc = "Open vSwitch";
+    static const char *default_sw_desc = VERSION;
+    static const char *default_serial_desc = "None";
+    static const char *default_dp_desc = "None";
+
     struct ofproto *p = ofconn_get_ofproto(ofconn);
     struct ofp_desc_stats *ods;
     struct ofpbuf *msg;
 
     msg = ofpraw_alloc_stats_reply(request, 0);
     ods = ofpbuf_put_zeros(msg, sizeof *ods);
-    ovs_strlcpy(ods->mfr_desc, p->mfr_desc, sizeof ods->mfr_desc);
-    ovs_strlcpy(ods->hw_desc, p->hw_desc, sizeof ods->hw_desc);
-    ovs_strlcpy(ods->sw_desc, p->sw_desc, sizeof ods->sw_desc);
-    ovs_strlcpy(ods->serial_num, p->serial_desc, sizeof ods->serial_num);
-    ovs_strlcpy(ods->dp_desc, p->dp_desc, sizeof ods->dp_desc);
+    ovs_strlcpy(ods->mfr_desc, p->mfr_desc ? p->mfr_desc : default_mfr_desc,
+                sizeof ods->mfr_desc);
+    ovs_strlcpy(ods->hw_desc, p->hw_desc ? p->hw_desc : default_hw_desc,
+                sizeof ods->hw_desc);
+    ovs_strlcpy(ods->sw_desc, p->sw_desc ? p->sw_desc : default_sw_desc,
+                sizeof ods->sw_desc);
+    ovs_strlcpy(ods->serial_num,
+                p->serial_desc ? p->serial_desc : default_serial_desc,
+                sizeof ods->serial_num);
+    ovs_strlcpy(ods->dp_desc, p->dp_desc ? p->dp_desc : default_dp_desc,
+                sizeof ods->dp_desc);
     ofconn_send_reply(ofconn, msg);
 
     return 0;
