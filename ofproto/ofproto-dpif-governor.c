@@ -71,6 +71,7 @@ governor_destroy(struct governor *g)
 {
     if (g) {
         VLOG_INFO("%s: disengaging", g->name);
+        free(g->name);
         free(g->table);
         free(g);
     }
