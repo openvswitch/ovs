@@ -523,6 +523,10 @@ write_string_string_column(struct ovsdb_row *row, const char *column_name,
     datum = get_datum(row, column_name, OVSDB_TYPE_STRING, OVSDB_TYPE_STRING,
                       UINT_MAX);
     if (!datum) {
+        for (i = 0; i < n; i++) {
+            free(keys[i]);
+            free(values[i]);
+        }
         return;
     }
 
