@@ -45,9 +45,6 @@ start () {
     if test X"$VSWITCHD_MLOCKALL" != X; then
 	set "$@" --mlockall="$VSWITCHD_MLOCKALL"
     fi
-    if test X"$BRCOMPAT" = Xyes; then
-	set "$@" --brcompat
-    fi
     set "$@" $OVS_CTL_OPTS
     "$@"
 

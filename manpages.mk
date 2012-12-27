@@ -220,18 +220,6 @@ ovsdb/remote-active.man:
 ovsdb/remote-passive.man:
 ovsdb/remote-passive.man:
 
-vswitchd/ovs-brcompatd.8: \
-	vswitchd/ovs-brcompatd.8.in \
-	lib/common.man \
-	lib/daemon.man \
-	lib/leak-checker.man \
-	lib/vlog.man
-vswitchd/ovs-brcompatd.8.in:
-lib/common.man:
-lib/daemon.man:
-lib/leak-checker.man:
-lib/vlog.man:
-
 vswitchd/ovs-vswitchd.8: \
 	vswitchd/ovs-vswitchd.8.in \
 	lib/common.man \

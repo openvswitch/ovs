@@ -25,7 +25,6 @@
 #include "compat.h"
 #include "datapath.h"
 #include "vport.h"
-#include "vport-generic.h"
 
 struct patch_config {
 	struct rcu_head rcu;
@@ -312,8 +311,5 @@ const struct vport_ops ovs_patch_vport_ops = {
 	.get_addr	= patch_get_addr,
 	.get_options	= patch_get_options,
 	.set_options	= patch_set_options,
-	.get_dev_flags	= ovs_vport_gen_get_dev_flags,
-	.is_running	= ovs_vport_gen_is_running,
-	.get_operstate	= ovs_vport_gen_get_operstate,
 	.send		= patch_send,
 };

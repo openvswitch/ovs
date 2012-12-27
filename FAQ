@@ -160,15 +160,6 @@ Q: What features are not available in the Open vSwitch kernel datapath
 A: The kernel module in upstream Linux 3.3 and later does not include
    the following features:
 
-       - Bridge compatibility, that is, support for the ovs-brcompatd
-         daemon that (if you enable it) lets "brctl" and other Linux
-         bridge tools transparently work with Open vSwitch instead.
-
-         We do not expect bridge compatibility to ever be available in
-         upstream Linux.  If you need bridge compatibility, use the
-         kernel module from the Open vSwitch distribution instead of the
-         upstream Linux kernel module.
-
        - Tunnel virtual ports, that is, interfaces with type "gre",
          "ipsec_gre", "capwap".  It is possible to create tunnels in
          Linux and attach them to Open vSwitch as system devices.

@@ -145,7 +145,6 @@ systemctl start openvswitch.service
 /usr/share/openvswitch/scripts/ovs-check-dead-ifs
 /usr/share/openvswitch/scripts/ovs-lib
 %config /usr/share/openvswitch/vswitch.ovsschema
-/usr/sbin/ovs-brcompatd
 /usr/sbin/ovs-bugtool
 /usr/sbin/ovs-vswitchd
 /usr/sbin/ovsdb-server
@@ -167,7 +166,6 @@ systemctl start openvswitch.service
 %doc /usr/share/man/man5/ovs-vswitchd.conf.db.5.gz
 %doc /usr/share/man/man8/ovs-appctl.8.gz
 %doc /usr/share/man/man8/ovs-bugtool.8.gz
-%doc /usr/share/man/man8/ovs-brcompatd.8.gz
 %doc /usr/share/man/man8/ovs-dpctl.8.gz
 %doc /usr/share/man/man8/ovs-ofctl.8.gz
 %doc /usr/share/man/man8/ovs-parse-backtrace.8.gz

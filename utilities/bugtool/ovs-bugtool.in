@@ -135,7 +135,6 @@ KRB5_CONF = '/etc/krb5.conf'
 
 os.environ['PATH'] = '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:@pkgdatadir@/scripts'
 ARP = 'arp'
-BRCTL = 'brctl'
 CAT = 'cat'
 CHKCONFIG = 'chkconfig'
 DF = 'df'
@@ -584,7 +583,6 @@ exclude those logs from the archive.
     cmd_output(CAP_NETWORK_STATUS, [NETSTAT, '-an'])
     for dir in DHCP_LEASE_DIR:
         tree_output(CAP_NETWORK_STATUS, dir)
-    cmd_output(CAP_NETWORK_STATUS, [BRCTL, 'show'])
     cmd_output(CAP_NETWORK_STATUS, [IPTABLES, '-nL'])
     for p in os.listdir('/sys/class/net/'):
         try:
@@ -634,7 +632,7 @@ exclude those logs from the archive.
              [ 'crit.log', 'kern.log', 'daemon.log', 'user.log',
              'syslog', 'messages', 'secure', 'debug', 'dmesg', 'boot' ]]
             + [ OPENVSWITCH_LOG_DIR + x for x in
-                [ 'ovs-vswitchd.log', 'ovs-brcompatd.log', 'ovsdb-server.log',
+                [ 'ovs-vswitchd.log', 'ovsdb-server.log',
                   'ovs-xapi-sync.log', 'ovs-monitor-ipsec.log' ]])
     file_output(CAP_SYSTEM_LOGS, logs)
     file_output(CAP_SYSTEM_LOGS,

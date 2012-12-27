@@ -7,10 +7,6 @@ EXTRA_DIST += \
 	debian/copyright.in \
 	debian/dkms.conf.in \
 	debian/dirs \
-	debian/openvswitch-brcompat.install \
-	debian/openvswitch-brcompat.manpages \
-	debian/openvswitch-brcompat.postinst \
-	debian/openvswitch-brcompat.postrm \
 	debian/openvswitch-common.dirs \
 	debian/openvswitch-common.docs \
 	debian/openvswitch-common.install \

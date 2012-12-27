@@ -49,7 +49,6 @@
 #include "tunnel.h"
 #include "vlan.h"
 #include "vport.h"
-#include "vport-generic.h"
 #include "vport-internal_dev.h"
 
 #define PORT_TABLE_SIZE  1024

@@ -56,7 +56,6 @@ depmod %{kernel}
 %files
 %defattr(-,root,root)
 /lib/modules/%{kernel}/kernel/extra/openvswitch/openvswitch.ko
-/lib/modules/%{kernel}/kernel/extra/openvswitch/brcompat.ko
 
 %changelog
 * Wed Sep 21 2011 Kyle Mestery <kmestery@cisco.com>

@@ -30,11 +30,6 @@
 . /usr/share/openvswitch/scripts/ovs-lib
 test -e /etc/default/openvswitch-switch && . /etc/default/openvswitch-switch
 
-if test X"$BRCOMPAT" = Xyes && test ! -x /usr/sbin/ovs-brcompatd; then
-    BRCOMPAT=no
-    log_warning_msg "ovs-brcompatd missing, disabling bridge compatibility"
-fi
-
 network_interfaces () {
     INTERFACES="/etc/network/interfaces"
     [ -e "${INTERFACES}" ] || return
@@ -44,9 +39,6 @@ network_interfaces () {
 
 ovs_ctl () {
     set /usr/share/openvswitch/scripts/ovs-ctl "$@"
-    if test X"$BRCOMPAT" = Xyes; then
-        set "$@" --brcompat
-    fi
     "$@"
 }
 

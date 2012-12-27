@@ -4,7 +4,6 @@ export srcdir = @abs_srcdir@
 export top_srcdir = @abs_top_srcdir@
 export KSRC = @KBUILD@
 export VERSION = @VERSION@
-export BUILD_BRCOMPAT = @BUILD_BRCOMPAT@
 
 include $(srcdir)/../Modules.mk
 include $(srcdir)/Modules.mk

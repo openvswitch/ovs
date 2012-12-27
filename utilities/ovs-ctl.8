@@ -69,40 +69,29 @@ bridge module and tries loading the Open vSwitch kernel module again.
 (This is because the Open vSwitch kernel module cannot coexist with
 the Linux bridge module before 2.6.37.)
 .
-.IP 2.
-If \fB\-\-brcompat\fR was specified, loads the Open vSwitch bridge
-compatibility module.
-.
 .PP
 The \fBstart\fR command skips the following steps if
 \fBovsdb\-server\fR is already running:
-.IP 3.
+.IP 2.
 If the Open vSwitch database file does not exist, it creates it.
 If the database does exist, but it has an obsolete version, it
 upgrades it to the latest schema.
 .
-.IP 4.
+.IP 3.
 Starts \fBovsdb-server\fR.
 .
-.IP 5.
+.IP 4.
 Initializes a few values inside the database.
 .
-.IP 6.
+.IP 5.
 If the \fB\-\-delete\-bridges\fR option was used, deletes all of the
 bridges from the database.
 .
 .PP
 The \fBstart\fR command skips the following step if
 \fBovs\-vswitchd\fR is already running:
-.IP 7.
+.IP 6.
 Starts \fBovs\-vswitchd\fR.
-.
-.PP
-The \fBstart\fR command skips the following step if
-\fBovs\-brcompatd\fR is already running or if \fB\-\-brcompat\fR is
-not specified:
-.IP 8.
-Starts \fBovs\-brcompatd\fR.
 .
 .SS "Options"
 .PP
@@ -179,13 +168,11 @@ suppresses that behavior.
 .
 .IP "\fB\-\-ovsdb\-server\-priority=\fIniceness\fR"
 .IQ "\fB\-\-ovs\-vswitchd\-priority=\fIniceness\fR"
-.IQ "\fB\-\-ovs\-brcompatd\-priority=\fIniceness\fR"
 Sets the \fBnice\fR(1) level used for each daemon.  All of them
 default to \fB\-10\fR.
 .
 .IP "\fB\-\-ovsdb\-server\-wrapper=\fIwrapper\fR"
 .IQ "\fB\-\-ovs\-vswitchd\-wrapper=\fIwrapper\fR"
-.IQ "\fB\-\-ovs\-brcompatd\-wrapper=\fIwrapper\fR"
 .
 Configures the specified daemon to run under \fIwrapper\fR, which is
 one of the following:
@@ -238,11 +225,6 @@ taken as relative to \fIdbdir\fR.
 .SH "The ``stop'' command"
 .
 .PP
-The \fBstop\fR command shuts down Open vSwitch.  It kills any running
-\fBovs\-brcompatd\fR, \fBovs\-vswitchd\fR, or \fBovsdb\-server\fR
-daemons and waits for them to terminate.
-.
-.PP
 The \fBstop\fR command does not unload the Open vSwitch kernel
 modules.
 .
@@ -263,16 +245,14 @@ individual bridge.
 .PP
 The \fBstatus\fR command checks whether the OVS daemons
 \fBovs-vswitchd\fR and \fBovsdb\-server\fR are running and prints
-messages with that information.  If \fB\-\-brcompat\fR is specified,
-it also checks for \fBovs\-brcompatd\fR.  It exits with status 0 if
+messages with that information.  It exits with status 0 if
 the daemons are running, 1 otherwise.
 .
 .SH "The ``version'' command"
 .
 .PP
 The \fBversion\fR command runs \fBovsdb\-server \-\-version\fR and
-\fBovs\-vswitchd \-\-version\fR.  If \fB\-\-brcompat\fR is specified,
-it also runs \fBovs\-brcompatd \-\-version\fR.
+\fBovs\-vswitchd \-\-version\fR.
 .
 .SH "The ``force\-reload\-kmod'' command"
 .
@@ -304,8 +284,7 @@ compatibility module if it is loaded).
 .
 .IP 6.
 Starts OVS back up, as if by a call to \fBovs\-ctl start\fR.  This
-reloads the kernel module, restarts the OVS daemons (including
-\fBovs\-brcompatd\fR, if \fB\-\-brcompat\fR is specified) and finally
+reloads the kernel module, restarts the OVS daemons and finally
 restores the saved Openflow flows.
 .
 .IP 7.
@@ -336,8 +315,7 @@ from other errors that may occur when running the \fBstart\fR command.
 .
 .PP
 By default the \fBload\-kmod\fR command attempts to load the
-openvswitch kernel module. If the \fB\-\-brcompat\fR option is
-specified then the brcompat kernel module is also loaded.
+openvswitch kernel module.
 .
 .SH "The ``enable\-protocol'' command"
 .
@@ -389,16 +367,6 @@ Prints a usage message and exits successfully.
 .PP
 In addition to the options listed for each command above, this option
 controls the behavior of several of \fBovs\-ctl\fR's commands.
-.
-.IP "\fB\-\-brcompat\fR"
-By default, \fBovs\-ctl\fR does not load the Open vSwitch bridge
-compatibility module and does not start or check the status or report
-the version of the \fBovs\-brcompatd\fR daemon.  This option enables
-all of those behaviors.
-.
-.IP
-The \fBstop\fR command always stops \fBovs\-brcompatd\fR, if it is
-running, regardless of this option.
 .
 .SH "EXIT STATUS"
 .

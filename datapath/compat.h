@@ -53,26 +53,6 @@ static inline void skb_clear_rxhash(struct sk_buff *skb)
 #endif
 }
 
-/*
- * Enforces, mutual exclusion with the Linux bridge module, by declaring and
- * exporting br_should_route_hook.  Because the bridge module also exports the
- * same symbol, the module loader will refuse to load both modules at the same
- * time (e.g. "bridge: exports duplicate symbol br_should_route_hook (owned by
- * openvswitch)").
- *
- * Before Linux 2.6.36, Open vSwitch cannot safely coexist with the Linux
- * bridge module, so openvswitch uses this macro in those versions.  In
- * Linux 2.6.36 and later, Open vSwitch can coexist with the bridge module,
- * but it makes no sense to load both bridge and brcompat, so brcompat uses
- * this macro in those versions.
- *
- * The use of "typeof" here avoids the need to track changes in the type of
- * br_should_route_hook over various kernel versions.
- */
-#define BRIDGE_MUTUAL_EXCLUSION					\
-	typeof(br_should_route_hook) br_should_route_hook;	\
-	EXPORT_SYMBOL(br_should_route_hook)
-
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,32)
 #define GENL_SOCK(net) (genl_sock)
 #define SET_NETNSOK

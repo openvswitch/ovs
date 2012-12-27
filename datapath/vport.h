@@ -75,7 +75,6 @@ struct vport_err_stats {
  * struct vport - one port within a datapath
  * @rcu: RCU callback head for deferred destruction.
  * @dp: Datapath to which this port belongs.
- * @kobj: Represents /sys/class/net/<devname>/brport.
  * @linkname: The name of the link from /sys/class/net/<datapath>/brif to this
  * &struct vport.  (We keep this around so that we can delete it if the
  * device gets renamed.)  Set to the null string when no link exists.
@@ -94,7 +93,6 @@ struct vport_err_stats {
 struct vport {
 	struct rcu_head rcu;
 	struct datapath	*dp;
-	struct kobject kobj;
 	char linkname[IFNAMSIZ];
 	u32 upcall_portid;
 	u16 port_no;
@@ -158,15 +156,8 @@ struct vport_parms {
  * @get_name: Get the device's name.
  * @get_addr: Get the device's MAC address.
  * @get_config: Get the device's configuration.
- * @get_kobj: Get the kobj associated with the device (may return null).
- * @get_dev_flags: Get the device's flags.
- * @is_running: Checks whether the device is running.
- * @get_operstate: Get the device's operating state.
  * @get_ifindex: Get the system interface index associated with the device.
  * May be null if the device does not have an ifindex.
- * @get_mtu: Get the device's MTU.  May be %NULL if the device does not have an
- * MTU (as e.g. some tunnels do not).  Must be implemented if @get_ifindex is
- * implemented.
  * @send: Send a packet on the device.  Returns the length of the packet sent.
  */
 struct vport_ops {
@@ -190,16 +181,7 @@ struct vport_ops {
 	const char *(*get_name)(const struct vport *);
 	const unsigned char *(*get_addr)(const struct vport *);
 	void (*get_config)(const struct vport *, void *);
-	struct kobject *(*get_kobj)(const struct vport *);
-
-	unsigned (*get_dev_flags)(const struct vport *);
-	int (*is_running)(const struct vport *);
-	unsigned char (*get_operstate)(const struct vport *);
-
 	int (*get_ifindex)(const struct vport *);
-
-	int (*get_mtu)(const struct vport *);
-
 	int (*send)(struct vport *, struct sk_buff *);
 };
 

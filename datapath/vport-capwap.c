@@ -27,7 +27,6 @@
 #include "datapath.h"
 #include "tunnel.h"
 #include "vport.h"
-#include "vport-generic.h"
 
 #define CAPWAP_SRC_PORT 58881
 #define CAPWAP_DST_PORT 58882
@@ -847,9 +846,6 @@ const struct vport_ops ovs_capwap_vport_ops = {
 	.get_addr	= ovs_tnl_get_addr,
 	.get_options	= ovs_tnl_get_options,
 	.set_options	= ovs_tnl_set_options,
-	.get_dev_flags	= ovs_vport_gen_get_dev_flags,
-	.is_running	= ovs_vport_gen_is_running,
-	.get_operstate	= ovs_vport_gen_get_operstate,
 	.send		= ovs_tnl_send,
 };
 #else

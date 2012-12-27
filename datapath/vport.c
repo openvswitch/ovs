@@ -151,19 +151,6 @@ struct vport *ovs_vport_locate(struct net *net, const char *name)
 	return NULL;
 }
 
-static void release_vport(struct kobject *kobj)
-{
-	struct vport *p = container_of(kobj, struct vport, kobj);
-	kfree(p);
-}
-
-static struct kobj_type brport_ktype = {
-#ifdef CONFIG_SYSFS
-	.sysfs_ops = &ovs_brport_sysfs_ops,
-#endif
-	.release = release_vport
-};
-
 /**
  *	ovs_vport_alloc - allocate and initialize new vport
  *
@@ -197,11 +184,6 @@ struct vport *ovs_vport_alloc(int priv_size, const struct vport_ops *ops,
 	vport->ops = ops;
 	INIT_HLIST_NODE(&vport->dp_hash_node);
 
-	/* Initialize kobject for bridge.  This will be added as
-	 * /sys/class/net/<devname>/brport later, if sysfs is enabled. */
-	vport->kobj.kset = NULL;
-	kobject_init(&vport->kobj, &brport_ktype);
-
 	vport->percpu_stats = alloc_percpu(struct vport_percpu_stats);
 	if (!vport->percpu_stats) {
 		kfree(vport);
@@ -226,8 +208,7 @@ struct vport *ovs_vport_alloc(int priv_size, const struct vport_ops *ops,
 void ovs_vport_free(struct vport *vport)
 {
 	free_percpu(vport->percpu_stats);
-
-	kobject_put(&vport->kobj);
+	kfree(vport);
 }
 
 /**

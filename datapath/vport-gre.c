@@ -32,7 +32,6 @@
 #include "datapath.h"
 #include "tunnel.h"
 #include "vport.h"
-#include "vport-generic.h"
 
 /*
  * The GRE header is composed of a series of sections: a base and then a variable
@@ -495,9 +494,6 @@ const struct vport_ops ovs_gre_ft_vport_ops = {
 	.get_addr	= ovs_tnl_get_addr,
 	.get_options	= ovs_tnl_get_options,
 	.set_options	= ovs_tnl_set_options,
-	.get_dev_flags	= ovs_vport_gen_get_dev_flags,
-	.is_running	= ovs_vport_gen_is_running,
-	.get_operstate	= ovs_vport_gen_get_operstate,
 	.send		= ovs_tnl_send,
 };
 
@@ -513,9 +509,6 @@ const struct vport_ops ovs_gre_vport_ops = {
 	.get_addr	= ovs_tnl_get_addr,
 	.get_options	= ovs_tnl_get_options,
 	.set_options	= ovs_tnl_set_options,
-	.get_dev_flags	= ovs_vport_gen_get_dev_flags,
-	.is_running	= ovs_vport_gen_is_running,
-	.get_operstate	= ovs_vport_gen_get_operstate,
 	.send		= ovs_tnl_send,
 };
 
@@ -531,8 +524,5 @@ const struct vport_ops ovs_gre64_vport_ops = {
 	.get_addr	= ovs_tnl_get_addr,
 	.get_options	= ovs_tnl_get_options,
 	.set_options	= ovs_tnl_set_options,
-	.get_dev_flags	= ovs_vport_gen_get_dev_flags,
-	.is_running	= ovs_vport_gen_is_running,
-	.get_operstate	= ovs_vport_gen_get_operstate,
 	.send		= ovs_tnl_send,
 };

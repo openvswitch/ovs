@@ -35,7 +35,6 @@
 #include "datapath.h"
 #include "tunnel.h"
 #include "vport.h"
-#include "vport-generic.h"
 
 #define VXLAN_FLAGS 0x08000000  /* struct vxlanhdr.vx_flags required value. */
 
@@ -377,9 +376,6 @@ const struct vport_ops ovs_vxlan_vport_ops = {
 	.get_addr	= ovs_tnl_get_addr,
 	.get_options	= ovs_tnl_get_options,
 	.set_options	= vxlan_set_options,
-	.get_dev_flags	= ovs_vport_gen_get_dev_flags,
-	.is_running	= ovs_vport_gen_is_running,
-	.get_operstate	= ovs_vport_gen_get_operstate,
 	.send		= ovs_tnl_send,
 };
 #else

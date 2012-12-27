@@ -2,9 +2,7 @@
                  ====================================
 
 This document describes how to use Open vSwitch with Libvirt 0.9.11 or
-later. The Open vSwitch support in Libvirt 0.9.11 eliminates the need to
-use OVS Linux Bridge compatibility layer (brcompatd) and interface up/down
-scripts. This document assumes that you followed INSTALL or installed
+later. This document assumes that you followed INSTALL or installed
 Open vSwitch from distribution packaging such as a .deb or .rpm. The Open
 vSwitch support is included by default in Libvirt 0.9.11. Consult
 www.libvirt.org for instructions on how to build the latest Libvirt, if your

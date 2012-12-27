@@ -135,28 +135,6 @@ Description: Open vSwitch controller implementation
  The Open vSwitch controller enables OpenFlow switches that connect to it
  to act as MAC-learning Ethernet switches.
 
-Package: openvswitch-brcompat
-Architecture: linux-any
-Depends:
- ${shlibs:Depends}, openvswitch-switch (= ${binary:Version}), ${misc:Depends}
-Recommends: bridge-utils
-Description: Open vSwitch bridge compatibility support
- Open vSwitch is a production quality, multilayer, software-based, Ethernet
- virtual switch. It is designed to enable massive network automation through
- programmatic extension, while still supporting standard management interfaces
- and protocols (e.g. NetFlow, sFlow, SPAN, RSPAN, CLI, LACP, 802.1ag). In
- addition, it is designed to support distribution across multiple physical
- servers similar to VMware's vNetwork distributed vswitch or Cisco's Nexus
- 1000V.
- .
- openvswitch-brcompat provides a way for applications that use the
- Linux bridge to gradually migrate to Open vSwitch.  Programs that
- ordinarily control the Linux bridge module, such as "brctl", instead
- control the Open vSwitch kernel-based switch.
- .
- Once this package is installed, adding BRCOMPAT=yes in
- /etc/default/openvswitch-switch enables bridge compatibility.
-
 Package: openvswitch-dbg
 Section: debug
 Architecture: linux-any

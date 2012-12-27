@@ -390,23 +390,3 @@ AC_DEFUN([OVS_CHECK_GROFF],
        ovs_cv_groff=no
      fi])
    AM_CONDITIONAL([HAVE_GROFF], [test "$ovs_cv_groff" = yes])])
-
-dnl Checks for --disable-brcompat and undefines BUILD_BRCOMPAT if it is specified.
-AC_DEFUN([OVS_CHECK_BRCOMPAT],
-  [AC_ARG_ENABLE(
-     [brcompat],
-     [AC_HELP_STRING([--disable-brcompat],
-                     [Disable building brcompat])],
-     [case "${enableval}" in
-        (yes) brcompat=true ;;
-        (no)  brcompat=false ;;
-        (*) AC_MSG_ERROR([bad value ${enableval} for --enable-brcompat]) ;;
-      esac],
-     [brcompat=true])
-   if test x$brcompat = xtrue; then
-      BUILD_BRCOMPAT=yes
-   else
-      BUILD_BRCOMPAT=""
-   fi
-   AC_SUBST([BUILD_BRCOMPAT])
-   AM_CONDITIONAL([BUILD_BRCOMPAT], [test x$brcompat = xtrue])])

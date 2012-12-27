@@ -76,7 +76,6 @@ License:
   GNU General Public License version 2 and the Apache License Version 2.0.
 
 	include/linux/openvswitch.h
-	include/openvswitch/brcompat-netlink.h
 	include/openvswitch/datapath-compat.h
 	include/openvswitch/tunnel.h
 

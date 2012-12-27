@@ -216,40 +216,10 @@ const unsigned char *ovs_netdev_get_addr(const struct vport *vport)
 	return netdev_vport->dev->dev_addr;
 }
 
-struct kobject *ovs_netdev_get_kobj(const struct vport *vport)
-{
-	const struct netdev_vport *netdev_vport = netdev_vport_priv(vport);
-	return &netdev_vport->dev->NETDEV_DEV_MEMBER.kobj;
-}
-
-unsigned ovs_netdev_get_dev_flags(const struct vport *vport)
-{
-	const struct netdev_vport *netdev_vport = netdev_vport_priv(vport);
-	return dev_get_flags(netdev_vport->dev);
-}
-
-int ovs_netdev_is_running(const struct vport *vport)
-{
-	const struct netdev_vport *netdev_vport = netdev_vport_priv(vport);
-	return netif_running(netdev_vport->dev);
-}
-
-unsigned char ovs_netdev_get_operstate(const struct vport *vport)
-{
-	const struct netdev_vport *netdev_vport = netdev_vport_priv(vport);
-	return netdev_vport->dev->operstate;
-}
-
 int ovs_netdev_get_ifindex(const struct vport *vport)
 {
 	const struct netdev_vport *netdev_vport = netdev_vport_priv(vport);
 	return netdev_vport->dev->ifindex;
-}
-
-int ovs_netdev_get_mtu(const struct vport *vport)
-{
-	const struct netdev_vport *netdev_vport = netdev_vport_priv(vport);
-	return netdev_vport->dev->mtu;
 }
 
 /* Must be called with rcu_read_lock. */
@@ -415,21 +385,25 @@ const struct vport_ops ovs_netdev_vport_ops = {
 	.set_addr	= ovs_netdev_set_addr,
 	.get_name	= ovs_netdev_get_name,
 	.get_addr	= ovs_netdev_get_addr,
-	.get_kobj	= ovs_netdev_get_kobj,
-	.get_dev_flags	= ovs_netdev_get_dev_flags,
-	.is_running	= ovs_netdev_is_running,
-	.get_operstate	= ovs_netdev_get_operstate,
 	.get_ifindex	= ovs_netdev_get_ifindex,
-	.get_mtu	= ovs_netdev_get_mtu,
 	.send		= netdev_send,
 };
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,36)
 /*
- * In kernels earlier than 2.6.36, Open vSwitch cannot safely coexist with the
- * Linux bridge module, because there is only a single bridge hook function and
- * only a single br_port member in struct net_device, so this prevents loading
- * both bridge and openvswitch at the same time.
+ * Enforces, mutual exclusion with the Linux bridge module, by declaring and
+ * exporting br_should_route_hook.  Because the bridge module also exports the
+ * same symbol, the module loader will refuse to load both modules at the same
+ * time (e.g. "bridge: exports duplicate symbol br_should_route_hook (owned by
+ * openvswitch)").
+ *
+ * Before Linux 2.6.36, Open vSwitch cannot safely coexist with the Linux
+ * bridge module, so openvswitch uses this macro in those versions.  In
+ * Linux 2.6.36 and later, Open vSwitch can coexist with the bridge module.
+ *
+ * The use of "typeof" here avoids the need to track changes in the type of
+ * br_should_route_hook over various kernel versions.
  */
-BRIDGE_MUTUAL_EXCLUSION;
+typeof(br_should_route_hook) br_should_route_hook;
+EXPORT_SYMBOL(br_should_route_hook);
 #endif

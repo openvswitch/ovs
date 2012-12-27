@@ -1,7 +1,5 @@
 /Makefile
 /Makefile.in
-/ovs-brcompatd
-/ovs-brcompatd.8
 /ovs-vswitchd
 /ovs-vswitchd.8
 /ovs-vswitchd.conf.db.5

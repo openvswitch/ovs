@@ -28,7 +28,6 @@ vSwitch supports the following features:
     * 802.1ag connectivity fault management
     * OpenFlow 1.0 plus numerous extensions
     * Transactional configuration database with C and Python bindings
-    * Compatibility layer for Linux bridging code
     * High-performance forwarding using a Linux kernel module
 
 The included Linux kernel module supports Linux 2.6.18 and up, with
@@ -51,11 +50,6 @@ The main components of this distribution are:
 
     * ovsdb-server, a lightweight database server that ovs-vswitchd
       queries to obtain its configuration.
-
-    * ovs-brcompatd, a daemon that allows ovs-vswitchd to act as a
-      drop-in replacement for the Linux bridge in many environments, 
-      along with a companion Linux kernel module to intercept bridge 
-      ioctls.
 
     * ovs-dpctl, a tool for configuring the switch kernel module.
 
@@ -102,9 +96,6 @@ To use Open vSwitch...
     - ...with KVM on Linux, read INSTALL, read INSTALL.KVM.
 
     - ...with Libvirt, read INSTALL.Libvirt.
-
-    - ...as a drop-in replacement for the Linux bridge, read
-      INSTALL.bridge.
 
     - ...without using a kernel module, read INSTALL.userspace.
 

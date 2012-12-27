@@ -285,7 +285,7 @@ done
 # provided by OVS. Any time a replacement script is removed from OVS,
 # it should be added here to ensure correct reversion from old versions of
 # OVS that don't clean up dangling symlinks during the uninstall phase.
-for orig in /usr/sbin/brctl /usr/sbin/xen-bugtool $keep_files; do
+for orig in /usr/sbin/xen-bugtool $keep_files; do
     saved=/usr/lib/openvswitch/xs-saved/$(basename "$orig")
     [ -e "$saved" ] && mv -f "$saved" "$orig"
 done
@@ -357,7 +357,6 @@ fi
 # this restore-on-upgrade logic.
 for f in \
     /etc/xensource/scripts/vif \
-    /usr/sbin/brctl \
     /usr/sbin/xen-bugtool \
     /opt/xensource/libexec/interface-reconfigure \
     /opt/xensource/libexec/InterfaceReconfigure.py \
@@ -455,8 +454,6 @@ exit 0
 /usr/share/man/man8/ovs-vswitchd.8.gz
 /var/lib/openvswitch
 %exclude /usr/lib/xsconsole/plugins-base/*.py[co]
-%exclude /usr/sbin/ovs-brcompatd
-%exclude /usr/share/man/man8/ovs-brcompatd.8.gz
 %exclude /usr/share/openvswitch/scripts/*.py[co]
 %exclude /usr/share/openvswitch/python/*.py[co]
 %exclude /usr/share/openvswitch/python/ovs/*.py[co]
@@ -464,4 +461,3 @@ exit 0
 
 %files %{module_package}
 /lib/modules/%{xen_version}/extra/openvswitch/openvswitch.ko
-%exclude /lib/modules/%{xen_version}/extra/openvswitch/brcompat.ko

@@ -52,25 +52,8 @@ insert_openvswitch_mod_if_required () {
     action "Inserting openvswitch module" modprobe openvswitch
 }
 
-insert_brcompat_mod_if_required () {
-    if test -e /sys/module/bridge; then
-        log_warning_msg "bridge module is loaded, not loading brcompat"
-        return 1
-    fi
-    test -e /sys/module/brcompat -o -e /sys/module/brcompat_mod && return 0
-    action "Inserting brcompat module" modprobe brcompat
-}
-
 insert_mod_if_required () {
     insert_openvswitch_mod_if_required || return 1
-    if test X"$BRCOMPAT" = Xyes; then
-        if insert_brcompat_mod_if_required; then
-            :
-        else
-            log_warning_msg "could not load brcompat module, disabling bridge compatibility"
-            BRCOMPAT=no
-        fi
-    fi
 }
 
 ovs_vsctl () {
@@ -245,14 +228,6 @@ start_forwarding () {
 	    fi
 	    start_daemon "$OVS_VSWITCHD_PRIORITY" "$OVS_VSWITCHD_WRAPPER" "$@"
     fi
-
-    if daemon_is_running ovs-brcompatd; then
-	    log_success_msg "ovs-brcompatd is already running"
-    elif test X"$BRCOMPAT" = Xyes; then
-        set ovs-brcompatd
-	    set "$@" -vconsole:emer -vsyslog:err -vfile:info
-	    start_daemon "$OVS_BRCOMPATD_PRIORITY" "$OVS_BRCOMPATD_WRAPPER" "$@"
-    fi
 }
 
 ## ---- ##
@@ -264,7 +239,6 @@ stop_ovsdb () {
 }
 
 stop_forwarding () {
-    stop_daemon ovs-brcompatd
     stop_daemon ovs-vswitchd
 }
 
@@ -346,11 +320,6 @@ force_reload_kmod () {
     done
 
     # try both old and new names in case this is post upgrade
-    if test -e /sys/module/brcompat_mod; then
-        action "Removing brcompat module" rmmod brcompat_mod
-    elif test -e /sys/module/brcompat; then
-        action "Removing brcompat module" rmmod brcompat
-    fi
     if test -e /sys/module/openvswitch_mod; then
         action "Removing openvswitch module" rmmod openvswitch_mod
     elif test -e /sys/module/openvswitch; then
@@ -453,17 +422,14 @@ set_defaults () {
     SYSTEM_ID=
 
     DELETE_BRIDGES=no
-    BRCOMPAT=no
 
     DAEMON_CWD=/
     FORCE_COREFILES=yes
     MLOCKALL=yes
     OVSDB_SERVER_PRIORITY=-10
     OVS_VSWITCHD_PRIORITY=-10
-    OVS_BRCOMPATD_PRIORITY=-10
     OVSDB_SERVER_WRAPPER=
     OVS_VSWITCHD_WRAPPER=
-    OVS_BRCOMPATD_WRAPPER=
 
     DB_FILE=$dbdir/conf.db
     DB_SOCK=$rundir/db.sock
@@ -529,16 +495,12 @@ Less important options for "start", "restart" and "force-reload-kmod":
   --no-mlockall                  do not lock all of ovs-vswitchd into memory
   --ovsdb-server-priority=NICE   set ovsdb-server's niceness (default: $OVSDB_SERVER_PRIORITY)
   --ovs-vswitchd-priority=NICE   set ovs-vswitchd's niceness (default: $OVS_VSWITCHD_PRIORITY)
-  --ovs-brcompatd-priority=NICE  set ovs-brcompatd's niceness (default: $OVS_BRCOMPATD_PRIORITY)
 
 Debugging options for "start", "restart" and "force-reload-kmod":
   --ovsdb-server-wrapper=WRAPPER
   --ovs-vswitchd-wrapper=WRAPPER
   --ovs-vswitchd-wrapper=WRAPPER
      run specified daemon under WRAPPER (either 'valgrind' or 'strace')
-
-Options for "start", "restart", "force-reload-kmod", "load-kmod", "status", and "version":
-  --brcompat         enable Linux bridge compatibility module and daemon
 
 File location options:
   --db-file=FILE     database file name (default: $DB_FILE)
@@ -584,9 +546,6 @@ set_option () {
 
 daemons () {
     echo ovsdb-server ovs-vswitchd
-    if test X"$BRCOMPAT" = Xyes; then
-        echo ovs-brcompatd
-    fi
 }
 
 set_defaults

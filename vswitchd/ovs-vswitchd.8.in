@@ -254,6 +254,5 @@ time linear in the number of flows.
 .
 .SH "SEE ALSO"
 .BR ovs\-appctl (8),
-.BR ovs\-brcompatd (8),
 .BR ovsdb\-server (1),
 \fBINSTALL.Linux\fR in the Open vSwitch distribution.

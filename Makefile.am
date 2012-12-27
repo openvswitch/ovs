@@ -50,7 +50,6 @@ EXTRA_DIST = \
 	INSTALL.RHEL \
 	INSTALL.SSL \
 	INSTALL.XenServer \
-	INSTALL.bridge \
 	INSTALL.userspace \
 	IntegrationGuide \
 	NOTICE \

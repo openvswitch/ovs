@@ -69,11 +69,4 @@ openvswitch_headers += \
 	linux/compat/include/net/protocol.h \
 	linux/compat/include/net/route.h \
 	linux/compat/include/net/sock.h \
-	linux/compat/include/net/netns/generic.h \
-	linux/compat/genetlink.inc
-
-# always distribute brcompat source regardless of local build configuration
-dist_modules += brcompat
-build_modules += $(if $(BUILD_BRCOMPAT),brcompat)
-brcompat_sources = linux/compat/genetlink-brcompat.c brcompat_main.c
-brcompat_headers =
+	linux/compat/include/net/netns/generic.h
