@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010, 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2010, 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -465,6 +465,12 @@ netdev_vport_get_tnl_iface(const struct netdev *netdev)
     static char name[IFNAMSIZ];
 
     ndv = netdev_dev_vport_cast(netdev_get_dev(netdev));
+    if (!ndv->options) {
+        /* Race condition when 'ndv' was created, but did not have its
+         * configuration set yet. */
+        return NULL;
+    }
+
     if (tnl_port_config_from_nlattr(ndv->options->data, ndv->options->size,
                                     a)) {
         return NULL;
