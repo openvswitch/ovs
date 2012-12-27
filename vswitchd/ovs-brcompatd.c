@@ -805,6 +805,8 @@ main(int argc, char *argv[])
     set_program_name(argv[0]);
     vlog_set_levels(&VLM_reconnect, VLF_ANY_FACILITY, VLL_WARN);
 
+    VLOG_WARN("Bridge compatibility is deprecated and may be removed "
+              "no earlier than February 2013");
     parse_options(argc, argv);
     signal(SIGPIPE, SIG_IGN);
     process_init();

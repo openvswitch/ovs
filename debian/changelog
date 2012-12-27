@@ -49,6 +49,7 @@ openvswitch (1.9.0-1) unstable; urgency=low
     - The following features are now deprecated.  They will be removed no
       earlier than February 2013.  Please email dev@openvswitch.org with
       concerns.
+        - Bridge compatibility.
         - Stable bond mode.
         - The autopath action.
         - Interface type "null".
