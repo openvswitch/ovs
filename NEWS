@@ -7,6 +7,7 @@ post-v1.9.0
       available through ovs-appctl allow control over logging rate limits.
     - The OpenFlow "dp_desc" may now be configured by setting the value of 
       other-config:dp-desc in the Bridge table.
+    - Path MTU discovery is no longer supported.
 
 
 v1.9.0 - xx xxx xxxx

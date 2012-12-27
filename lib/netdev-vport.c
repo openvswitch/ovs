@@ -590,14 +590,6 @@ parse_tunnel_config(const char *name, const char *type,
             if (!strcmp(node->value, "false")) {
                 flags &= ~TNL_F_DF_DEFAULT;
             }
-        } else if (!strcmp(node->key, "pmtud")) {
-            if (!strcmp(node->value, "true")) {
-                VLOG_WARN_ONCE("%s: The tunnel Path MTU discovery is "
-                               "deprecated and may be removed in February "
-                               "2013. Please email dev@openvswitch.org with "
-                               "concerns.", name);
-                flags |= TNL_F_PMTUD;
-            }
         } else if (!strcmp(node->key, "peer_cert") && is_ipsec) {
             if (smap_get(args, "certificate")) {
                 ipsec_mech_set = true;
@@ -797,9 +789,6 @@ unparse_tunnel_config(const char *name OVS_UNUSED, const char *type OVS_UNUSED,
     }
     if (!(flags & TNL_F_DF_DEFAULT)) {
         smap_add(args, "df_default", "false");
-    }
-    if (flags & TNL_F_PMTUD) {
-        smap_add(args, "pmtud", "true");
     }
 
     return 0;

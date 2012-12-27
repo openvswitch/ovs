@@ -1415,18 +1415,6 @@
         <code>false</code> to disable.
       </column>
 
-      <column name="options" key="pmtud" type='{"type": "boolean"}'>
-        Optional.  Enable tunnel path MTU discovery.  If enabled ``ICMP
-        Destination Unreachable - Fragmentation Needed'' messages will be
-        generated for IPv4 packets with the DF bit set and IPv6 packets above
-        the minimum MTU if the packet size exceeds the path MTU minus the size
-        of the tunnel headers.  Note that this option causes behavior that is
-        typically reserved for routers and therefore is not entirely in
-        compliance with the IEEE 802.1D specification for bridges.  Default is
-        disabled; set to <code>true</code> to enable.  This feature is
-        deprecated and will be removed soon.
-      </column>
-
       <group title="Tunnel Options: gre and ipsec_gre only">
         <p>
           Only <code>gre</code> and <code>ipsec_gre</code> interfaces support
