@@ -101,6 +101,12 @@ netdev_dev_vport_cast(const struct netdev_dev *netdev_dev)
     return CONTAINER_OF(netdev_dev, struct netdev_dev_vport, netdev_dev);
 }
 
+static struct netdev_dev_vport *
+netdev_vport_get_dev(const struct netdev *netdev)
+{
+    return netdev_dev_vport_cast(netdev_get_dev(netdev));
+}
+
 static struct netdev_vport *
 netdev_vport_cast(const struct netdev *netdev)
 {
@@ -406,12 +412,11 @@ netdev_vport_get_stats(const struct netdev *netdev, struct netdev_stats *stats)
 static int
 tunnel_get_status(const struct netdev *netdev, struct smap *smap)
 {
+    struct netdev_dev_vport *ndv = netdev_vport_get_dev(netdev);
     struct nlattr *a[OVS_TUNNEL_ATTR_MAX + 1];
-    struct netdev_dev_vport *ndv;
     static char iface[IFNAMSIZ];
     ovs_be32 route;
 
-    ndv = netdev_dev_vport_cast(netdev_get_dev(netdev));
     if (!ndv->options) {
         /* Race condition when 'ndv' was created, but did not have it's
          * configuration set yet. */
@@ -455,7 +460,7 @@ netdev_vport_update_flags(struct netdev *netdev OVS_UNUSED,
 static unsigned int
 netdev_vport_change_seq(const struct netdev *netdev)
 {
-    return netdev_dev_vport_cast(netdev_get_dev(netdev))->change_seq;
+    return netdev_vport_get_dev(netdev)->change_seq;
 }
 
 static void
@@ -475,9 +480,7 @@ netdev_vport_wait(void)
 static void
 netdev_vport_poll_notify(const struct netdev *netdev)
 {
-    struct netdev_dev_vport *ndv;
-
-    ndv = netdev_dev_vport_cast(netdev_get_dev(netdev));
+    struct netdev_dev_vport *ndv = netdev_vport_get_dev(netdev);
 
     ndv->change_seq++;
     if (!ndv->change_seq) {
