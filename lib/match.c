@@ -20,6 +20,7 @@
 #include <stdlib.h>
 #include "byte-order.h"
 #include "dynamic-string.h"
+#include "ofp-util.h"
 #include "packets.h"
 #include "vlog.h"
 
@@ -865,7 +866,9 @@ match_format(const struct match *match, struct ds *s, unsigned int priority)
         break;
     }
     if (wc->masks.in_port) {
-        ds_put_format(s, "in_port=%"PRIu16",", f->in_port);
+        ds_put_cstr(s, "in_port=");
+        ofputil_format_port(f->in_port, s);
+        ds_put_char(s, ',');
     }
     if (wc->masks.vlan_tci) {
         ovs_be16 vid_mask = wc->masks.vlan_tci & htons(VLAN_VID_MASK);
