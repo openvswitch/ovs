@@ -154,6 +154,9 @@ struct connmgr {
     /* OpenFlow connections. */
     struct hmap controllers;   /* Controller "struct ofconn"s. */
     struct list all_conns;     /* Contains "struct ofconn"s. */
+    uint64_t master_election_id; /* monotonically increasing sequence number
+                                  * for master election */
+    bool master_election_id_defined;
 
     /* OpenFlow listeners. */
     struct hmap services;       /* Contains "struct ofservice"s. */
@@ -193,6 +196,8 @@ connmgr_create(struct ofproto *ofproto,
 
     hmap_init(&mgr->controllers);
     list_init(&mgr->all_conns);
+    mgr->master_election_id = 0;
+    mgr->master_election_id_defined = false;
 
     hmap_init(&mgr->services);
     mgr->snoops = NULL;
@@ -815,6 +820,26 @@ enum ofconn_type
 ofconn_get_type(const struct ofconn *ofconn)
 {
     return ofconn->type;
+}
+
+/* Sets the master election id.
+ *
+ * Returns true if successful, false if the id is stale
+ */
+bool
+ofconn_set_master_election_id(struct ofconn *ofconn, uint64_t id)
+{
+    if (ofconn->connmgr->master_election_id_defined
+        &&
+        /* Unsigned difference interpreted as a two's complement signed
+         * value */
+        (int64_t)(id - ofconn->connmgr->master_election_id) < 0) {
+        return false;
+    }
+    ofconn->connmgr->master_election_id = id;
+    ofconn->connmgr->master_election_id_defined = true;
+
+    return true;
 }
 
 /* Returns the role configured for 'ofconn'.

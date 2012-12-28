@@ -1511,20 +1511,39 @@ ofp_print_echo(struct ds *string, const struct ofp_header *oh, int verbosity)
 }
 
 static void
-ofp_print_nxt_role_message(struct ds *string,
-                           const struct nx_role_request *nrr)
+ofp_print_role_message(struct ds *string, const struct ofp_header *oh)
 {
-    unsigned int role = ntohl(nrr->role);
+    struct ofputil_role_request rr;
+    enum ofperr error;
+
+    error = ofputil_decode_role_message(oh, &rr);
+    if (error) {
+        ofp_print_error(string, error);
+        return;
+    }
 
     ds_put_cstr(string, " role=");
-    if (role == NX_ROLE_OTHER) {
-        ds_put_cstr(string, "other");
-    } else if (role == NX_ROLE_MASTER) {
+    if (rr.request_current_role_only) {
+        ds_put_cstr(string, "nochange");
+        return;
+    }
+
+    switch (rr.role) {
+    case NX_ROLE_OTHER:
+        ds_put_cstr(string, "equal"); /* OF 1.2 wording */
+        break;
+    case NX_ROLE_MASTER:
         ds_put_cstr(string, "master");
-    } else if (role == NX_ROLE_SLAVE) {
+        break;
+    case NX_ROLE_SLAVE:
         ds_put_cstr(string, "slave");
-    } else {
-        ds_put_format(string, "%u", role);
+        break;
+    default:
+        NOT_REACHED();
+    }
+
+    if (rr.have_generation_id) {
+        ds_put_format(string, " generation_id=%"PRIu64, rr.generation_id);
     }
 }
 
@@ -1895,6 +1914,11 @@ ofp_to_string__(const struct ofp_header *oh, enum ofpraw raw,
     case OFPTYPE_BARRIER_REPLY:
         break;
 
+    case OFPTYPE_ROLE_REQUEST:
+    case OFPTYPE_ROLE_REPLY:
+        ofp_print_role_message(string, oh);
+        break;
+
     case OFPTYPE_DESC_STATS_REQUEST:
     case OFPTYPE_PORT_DESC_STATS_REQUEST:
         ofp_print_stats_request(string, oh);
@@ -1953,11 +1977,6 @@ ofp_to_string__(const struct ofp_header *oh, enum ofpraw raw,
     case OFPTYPE_PORT_DESC_STATS_REPLY:
         ofp_print_stats_reply(string, oh);
         ofp_print_ofpst_port_desc_reply(string, oh);
-        break;
-
-    case OFPTYPE_ROLE_REQUEST:
-    case OFPTYPE_ROLE_REPLY:
-        ofp_print_nxt_role_message(string, ofpmsg_body(oh));
         break;
 
     case OFPTYPE_FLOW_MOD_TABLE_ID:

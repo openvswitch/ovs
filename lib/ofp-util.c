@@ -3355,6 +3355,104 @@ ofputil_encode_port_mod(const struct ofputil_port_mod *pm,
     return b;
 }
 
+/* ofputil_role_request */
+
+/* Decodes the OpenFlow "role request" or "role reply" message in '*oh' into
+ * an abstract form in '*rr'.  Returns 0 if successful, otherwise an
+ * OFPERR_* value. */
+enum ofperr
+ofputil_decode_role_message(const struct ofp_header *oh,
+                            struct ofputil_role_request *rr)
+{
+    const struct ofp12_role_request *orr = ofpmsg_body(oh);
+    uint32_t role = ntohl(orr->role);
+    struct ofpbuf b;
+    enum ofpraw raw;
+
+    memset(rr, 0, sizeof *rr);
+
+    ofpbuf_use_const(&b, oh, ntohs(oh->length));
+    raw = ofpraw_pull_assert(&b);
+
+    if (raw == OFPRAW_OFPT12_ROLE_REQUEST
+        || raw == OFPRAW_OFPT12_ROLE_REPLY) {
+
+        if (raw == OFPRAW_OFPT12_ROLE_REQUEST) {
+            if (role == OFPCR12_ROLE_NOCHANGE) {
+                rr->request_current_role_only = true;
+                return 0;
+            }
+            if (role == OFPCR12_ROLE_MASTER || role == OFPCR12_ROLE_SLAVE) {
+                rr->generation_id = ntohll(orr->generation_id);
+                rr->have_generation_id = true;
+            }
+        }
+
+        /* Map to enum nx_role */
+        role -= 1; /* OFPCR12_ROLE_MASTER -> NX_ROLE_MASTER etc. */
+    } else if (raw != OFPRAW_NXT_ROLE_REQUEST
+               && raw != OFPRAW_NXT_ROLE_REPLY) {
+        return OFPERR_OFPBRC_BAD_TYPE;
+    }
+
+    if (role != NX_ROLE_OTHER && role != NX_ROLE_MASTER
+        && role != NX_ROLE_SLAVE) {
+        return OFPERR_OFPRRFC_BAD_ROLE;
+    }
+
+    rr->role = role;
+    return 0;
+}
+
+/* Returns an encoded form of a role reply suitable for the "request" in a
+ * buffer owned by the caller. */
+struct ofpbuf *
+ofputil_encode_role_reply(const struct ofp_header *request,
+                          enum nx_role role)
+{
+    struct ofp12_role_request *reply;
+    struct ofpbuf *buf;
+    size_t reply_size;
+
+    struct ofpbuf b;
+    enum ofpraw raw;
+
+    ofpbuf_use_const(&b, request, ntohs(request->length));
+    raw = ofpraw_pull_assert(&b);
+    if (raw == OFPRAW_OFPT12_ROLE_REQUEST) {
+        reply_size = sizeof (struct ofp12_role_request);
+        raw = OFPRAW_OFPT12_ROLE_REPLY;
+    }
+    else if (raw == OFPRAW_NXT_ROLE_REQUEST) {
+        reply_size = sizeof (struct nx_role_request);
+        raw = OFPRAW_NXT_ROLE_REPLY;
+    } else {
+        NOT_REACHED();
+    }
+
+    buf = ofpraw_alloc_reply(raw, request, 0);
+    reply = ofpbuf_put_zeros(buf, reply_size);
+
+    if (raw == OFPRAW_OFPT12_ROLE_REPLY) {
+        /* Map to OpenFlow enum ofp12_controller_role */
+        role += 1; /* NX_ROLE_MASTER -> OFPCR12_ROLE_MASTER etc. */
+        /*
+         * OpenFlow specification does not specify use of generation_id field
+         * on reply messages.  Intuitively, it would seem a good idea to return
+         * the current value.  However, the current value is undefined
+         * initially, and there is no way to insert an undefined value in the
+         * message.  Therefore we leave the generation_id zeroed on reply
+         * messages.
+         *
+         * A request for clarification has been filed with the Open Networking
+         * Foundation as EXT-272.
+         */
+    }
+    reply->role = htonl(role);
+
+    return buf;
+}
+
 /* Table stats. */
 
 static void

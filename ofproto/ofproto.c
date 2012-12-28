@@ -3588,27 +3588,38 @@ handle_flow_mod__(struct ofproto *ofproto, struct ofconn *ofconn,
 static enum ofperr
 handle_role_request(struct ofconn *ofconn, const struct ofp_header *oh)
 {
-    const struct nx_role_request *nrr = ofpmsg_body(oh);
-    struct nx_role_request *reply;
+    struct ofputil_role_request rr;
     struct ofpbuf *buf;
     uint32_t role;
+    enum ofperr error;
 
-    role = ntohl(nrr->role);
-    if (role != NX_ROLE_OTHER && role != NX_ROLE_MASTER
-        && role != NX_ROLE_SLAVE) {
-        return OFPERR_OFPRRFC_BAD_ROLE;
+    error = ofputil_decode_role_message(oh, &rr);
+    if (error) {
+        return error;
     }
+
+    if (rr.request_current_role_only) {
+        role = ofconn_get_role(ofconn); /* NX_ROLE_* */
+        goto reply;
+    }
+
+    role = rr.role;
 
     if (ofconn_get_role(ofconn) != role
         && ofconn_has_pending_opgroups(ofconn)) {
         return OFPROTO_POSTPONE;
     }
 
+    if (rr.have_generation_id) {
+        if (!ofconn_set_master_election_id(ofconn, rr.generation_id)) {
+            return OFPERR_OFPRRFC_STALE;
+        }
+    }
+
     ofconn_set_role(ofconn, role);
 
-    buf = ofpraw_alloc_reply(OFPRAW_NXT_ROLE_REPLY, oh, 0);
-    reply = ofpbuf_put_zeros(buf, sizeof *reply);
-    reply->role = htonl(role);
+reply:
+    buf = ofputil_encode_role_reply(oh, role);
     ofconn_send_reply(ofconn, buf);
 
     return 0;
@@ -4019,14 +4030,14 @@ handle_openflow__(struct ofconn *ofconn, const struct ofpbuf *msg)
     case OFPTYPE_BARRIER_REQUEST:
         return handle_barrier_request(ofconn, oh);
 
+    case OFPTYPE_ROLE_REQUEST:
+        return handle_role_request(ofconn, oh);
+
         /* OpenFlow replies. */
     case OFPTYPE_ECHO_REPLY:
         return 0;
 
         /* Nicira extension requests. */
-    case OFPTYPE_ROLE_REQUEST:
-        return handle_role_request(ofconn, oh);
-
     case OFPTYPE_FLOW_MOD_TABLE_ID:
         return handle_nxt_flow_mod_table_id(ofconn, oh);
 

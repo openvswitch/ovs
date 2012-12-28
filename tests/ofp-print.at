@@ -1515,6 +1515,26 @@ OFPT_SET_ASYNC (OF1.3) (xid=0x0):
 ])
 AT_CLEANUP
 
+AT_SETUP([OFPT_ROLE_REQUEST - OF1.2])
+AT_KEYWORDS([ofp-print])
+AT_CHECK([ovs-ofctl ofp-print "\
+03 18 00 18 00 00 00 02 00 00 00 02 00 00 00 00 \
+00 00 00 00 00 00 00 03 \
+"], [0], [dnl
+OFPT_ROLE_REQUEST (OF1.2) (xid=0x2): role=master generation_id=3
+])
+AT_CLEANUP
+
+AT_SETUP([OFPT_ROLE_REQUEST - nochange - OF1.2])
+AT_KEYWORDS([ofp-print])
+AT_CHECK([ovs-ofctl ofp-print "\
+03 18 00 18 00 00 00 02 00 00 00 00 00 00 00 00 \
+00 00 00 00 00 00 00 00 \
+"], [0], [dnl
+OFPT_ROLE_REQUEST (OF1.2) (xid=0x2): role=nochange
+])
+AT_CLEANUP
+
 AT_SETUP([NXT_ROLE_REQUEST])
 AT_KEYWORDS([ofp-print])
 AT_CHECK([ovs-ofctl ofp-print "\
@@ -1522,6 +1542,16 @@ AT_CHECK([ovs-ofctl ofp-print "\
 00 00 00 01 \
 "], [0], [dnl
 NXT_ROLE_REQUEST (xid=0x2): role=master
+])
+AT_CLEANUP
+
+AT_SETUP([OFPT_ROLE_REPLY - OF1.2])
+AT_KEYWORDS([ofp-print])
+AT_CHECK([ovs-ofctl ofp-print "\
+03 19 00 18 00 00 00 02 00 00 00 03 00 00 00 00 \
+00 00 00 00 00 00 00 00 \
+"], [0], [dnl
+OFPT_ROLE_REPLY (OF1.2) (xid=0x2): role=slave
 ])
 AT_CLEANUP
 

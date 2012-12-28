@@ -198,6 +198,16 @@ enum ofpraw {
     /* OFPT 1.1+ (23): struct ofp11_queue_get_config_reply, struct ofp_packet_queue[]. */
     OFPRAW_OFPT11_QUEUE_GET_CONFIG_REPLY,
 
+    /* OFPT 1.2+ (24): struct ofp12_role_request. */
+    OFPRAW_OFPT12_ROLE_REQUEST,
+    /* NXT 1.0+ (10): struct nx_role_request. */
+    OFPRAW_NXT_ROLE_REQUEST,
+
+    /* OFPT 1.2+ (25): struct ofp12_role_request. */
+    OFPRAW_OFPT12_ROLE_REPLY,
+    /* NXT 1.0+ (11): struct nx_role_request. */
+    OFPRAW_NXT_ROLE_REPLY,
+
     /* OFPT 1.3+ (26): void. */
     OFPRAW_OFPT13_GET_ASYNC_REQUEST,
     /* OFPT 1.3+ (27): struct ofp13_async_config. */
@@ -339,12 +349,6 @@ enum ofpraw {
  * Nicira extensions that correspond to standard OpenFlow messages are listed
  * alongside the standard versions above. */
 
-    /* NXT 1.0+ (10): struct nx_role_request. */
-    OFPRAW_NXT_ROLE_REQUEST,
-
-    /* NXT 1.0+ (11): struct nx_role_request. */
-    OFPRAW_NXT_ROLE_REPLY,
-
     /* NXT 1.0 (12): struct nx_set_flow_format. */
     OFPRAW_NXT_SET_FLOW_FORMAT,
 
@@ -468,6 +472,12 @@ enum ofptype {
     OFPTYPE_QUEUE_GET_CONFIG_REQUEST, /* OFPRAW_OFPT11_QUEUE_GET_CONFIG_REQUEST. */
     OFPTYPE_QUEUE_GET_CONFIG_REPLY, /* OFPRAW_OFPT11_QUEUE_GET_CONFIG_REPLY. */
 
+    /* Controller role change request messages. */
+    OFPTYPE_ROLE_REQUEST,         /* OFPRAW_OFPT12_ROLE_REQUEST.
+                                   * OFPRAW_NXT_ROLE_REQUEST. */
+    OFPTYPE_ROLE_REPLY,           /* OFPRAW_OFPT12_ROLE_REPLY.
+                                   * OFPRAW_NXT_ROLE_REPLY. */
+
     /* Asynchronous message configuration. */
     OFPTYPE_GET_ASYNC_REQUEST,    /* OFPRAW_OFPT13_GET_ASYNC_REQUEST. */
     OFPTYPE_GET_ASYNC_REPLY,      /* OFPRAW_OFPT13_GET_ASYNC_REPLY. */
@@ -543,8 +553,6 @@ enum ofptype {
                                       * OFPRAW_OFPST11_PORT_DESC_REPLY. */
 
     /* Nicira extensions. */
-    OFPTYPE_ROLE_REQUEST,         /* OFPRAW_NXT_ROLE_REQUEST. */
-    OFPTYPE_ROLE_REPLY,           /* OFPRAW_NXT_ROLE_REPLY. */
     OFPTYPE_SET_FLOW_FORMAT,      /* OFPRAW_NXT_SET_FLOW_FORMAT. */
     OFPTYPE_FLOW_MOD_TABLE_ID,    /* OFPRAW_NXT_FLOW_MOD_TABLE_ID. */
     OFPTYPE_SET_PACKET_IN_FORMAT, /* OFPRAW_NXT_SET_PACKET_IN_FORMAT. */

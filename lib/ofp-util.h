@@ -507,6 +507,19 @@ enum ofperr ofputil_decode_port_mod(const struct ofp_header *,
 struct ofpbuf *ofputil_encode_port_mod(const struct ofputil_port_mod *,
                                        enum ofputil_protocol);
 
+/* Abstract ofp_role_request and reply. */
+struct ofputil_role_request {
+    bool request_current_role_only; /* no role change */
+    bool have_generation_id;
+    enum nx_role role;
+    uint64_t generation_id;
+};
+
+enum ofperr ofputil_decode_role_message(const struct ofp_header *,
+                                        struct ofputil_role_request *);
+struct ofpbuf *ofputil_encode_role_reply(const struct ofp_header *,
+                                         enum nx_role current_role);
+
 /* Abstract table stats.
  *
  * For now we use ofp12_table_stats as a superset of the other protocol

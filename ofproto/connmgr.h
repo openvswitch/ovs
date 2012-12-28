@@ -96,6 +96,7 @@ void connmgr_get_snoops(const struct connmgr *, struct sset *snoops);
 /* Individual connections to OpenFlow controllers. */
 enum ofconn_type ofconn_get_type(const struct ofconn *);
 
+bool ofconn_set_master_election_id(struct ofconn *, uint64_t);
 enum nx_role ofconn_get_role(const struct ofconn *);
 void ofconn_set_role(struct ofconn *, enum nx_role);
 

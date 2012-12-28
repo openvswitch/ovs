@@ -1191,8 +1191,8 @@ check_async 2 OFPR_ACTION OFPPR_ADD OFPPR_DELETE OFPRR_DELETE
 ovs-appctl -t ovs-ofctl ofctl/send 0309000c0123456700040080
 check_async 3 OFPR_ACTION OFPR_INVALID_TTL OFPPR_ADD OFPPR_DELETE OFPRR_DELETE
 
-# Become slave, which should disable everything except port status.
-ovs-appctl -t ovs-ofctl ofctl/send 0304001400000002000023200000000a00000002
+# Become slave (OF 1.2), which should disable everything except port status.
+ovs-appctl -t ovs-ofctl ofctl/send 031800180000000200000003000000000000000000000001
 check_async 4 OFPPR_ADD OFPPR_DELETE
 
 # Use NXT_SET_ASYNC_CONFIG to enable a patchwork of asynchronous messages.
@@ -1206,9 +1206,48 @@ check_async 6 OFPR_NO_MATCH OFPPR_DELETE OFPRR_DELETE
 # Restore controller ID 0.
 ovs-appctl -t ovs-ofctl ofctl/send 030400180000000300002320000000140000000000000000
 
-# Become master.
-ovs-appctl -t ovs-ofctl ofctl/send 0304001400000002000023200000000a00000001
+# Become master (OF 1.2).
+ovs-appctl -t ovs-ofctl ofctl/send 031800180000000400000002000000000000000000000002
 check_async 7 OFPR_ACTION OFPPR_ADD
+
+ovs-appctl -t ovs-ofctl exit
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+dnl This test checks that the role request/response messaging works
+dnl and that generation_id is handled properly.
+AT_SETUP([ofproto - controller role (OpenFlow 1.2)])
+OVS_VSWITCHD_START
+AT_CHECK([ovs-ofctl -O OpenFlow12 monitor br0 --detach --no-chdir --pidfile])
+
+ovs-appctl -t ovs-ofctl ofctl/barrier
+ovs-appctl -t ovs-ofctl ofctl/set-output-file monitor.log
+: > expout
+
+# find out current role
+ovs-appctl -t ovs-ofctl ofctl/send 031800180000000200000000000000000000000000000000
+echo >>expout "send: OFPT_ROLE_REQUEST (OF1.2) (xid=0x2): role=nochange"
+echo >>expout "OFPT_ROLE_REPLY (OF1.2) (xid=0x2): role=equal"
+
+# Become slave (generation_id is initially undefined, so 2^63+2 should not be stale)
+ovs-appctl -t ovs-ofctl ofctl/send 031800180000000300000003000000008000000000000002
+echo >>expout "send: OFPT_ROLE_REQUEST (OF1.2) (xid=0x3): role=slave generation_id=9223372036854775810"
+echo >>expout "OFPT_ROLE_REPLY (OF1.2) (xid=0x3): role=slave"
+
+# Try to become the master using a stale generation ID
+ovs-appctl -t ovs-ofctl ofctl/send 031800180000000400000002000000000000000000000002
+echo >>expout "send: OFPT_ROLE_REQUEST (OF1.2) (xid=0x4): role=master generation_id=2"
+echo >>expout "OFPT_ERROR (OF1.2) (xid=0x4): OFPRRFC_STALE"
+echo >>expout "OFPT_ROLE_REQUEST (OF1.2) (xid=0x4): role=master generation_id=2"
+
+# Become master using a valid generation ID
+ovs-appctl -t ovs-ofctl ofctl/send 031800180000000500000002000000000000000000000001
+echo >>expout "send: OFPT_ROLE_REQUEST (OF1.2) (xid=0x5): role=master generation_id=1"
+echo >>expout "OFPT_ROLE_REPLY (OF1.2) (xid=0x5): role=master"
+ovs-appctl -t ovs-ofctl ofctl/barrier
+echo >>expout "OFPT_BARRIER_REPLY (OF1.2) (xid=0x3):"
+
+AT_CHECK([cat monitor.log], [0], [expout])
 
 ovs-appctl -t ovs-ofctl exit
 OVS_VSWITCHD_STOP
