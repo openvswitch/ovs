@@ -1066,11 +1066,21 @@ static int tnl_set_config(struct net *net, struct nlattr *options,
 	if (err)
 		return err;
 
-	if (!a[OVS_TUNNEL_ATTR_FLAGS] || !a[OVS_TUNNEL_ATTR_DST_IPV4])
-		return -EINVAL;
+	/* Process attributes possibly useful for null_ports first */
+	if (a[OVS_TUNNEL_ATTR_DST_PORT])
+		mutable->dst_port =
+			htons(nla_get_u16(a[OVS_TUNNEL_ATTR_DST_PORT]));
 
-	mutable->flags = nla_get_u32(a[OVS_TUNNEL_ATTR_FLAGS]) & TNL_F_PUBLIC;
-	mutable->key.daddr = nla_get_be32(a[OVS_TUNNEL_ATTR_DST_IPV4]);
+	if (a[OVS_TUNNEL_ATTR_DST_IPV4])
+		mutable->key.daddr = nla_get_be32(a[OVS_TUNNEL_ATTR_DST_IPV4]);
+
+	/* Skip the rest if configuring a null_port */
+	if (!mutable->key.daddr)
+		goto out;
+
+	if (a[OVS_TUNNEL_ATTR_FLAGS])
+		mutable->flags = nla_get_u32(a[OVS_TUNNEL_ATTR_FLAGS])
+			& TNL_F_PUBLIC;
 
 	if (a[OVS_TUNNEL_ATTR_SRC_IPV4]) {
 		if (ipv4_is_multicast(mutable->key.daddr))
@@ -1087,10 +1097,6 @@ static int tnl_set_config(struct net *net, struct nlattr *options,
 
 	if (a[OVS_TUNNEL_ATTR_TTL])
 		mutable->ttl = nla_get_u8(a[OVS_TUNNEL_ATTR_TTL]);
-
-	if (a[OVS_TUNNEL_ATTR_DST_PORT])
-		mutable->dst_port =
-			htons(nla_get_u16(a[OVS_TUNNEL_ATTR_DST_PORT]));
 
 	if (!a[OVS_TUNNEL_ATTR_IN_KEY]) {
 		mutable->key.tunnel_type |= TNL_T_KEY_MATCH;
@@ -1229,11 +1235,19 @@ int ovs_tnl_get_options(const struct vport *vport, struct sk_buff *skb)
 	const struct tnl_vport *tnl_vport = tnl_vport_priv(vport);
 	const struct tnl_mutable_config *mutable = rcu_dereference_rtnl(tnl_vport->mutable);
 
-	if (nla_put_u32(skb, OVS_TUNNEL_ATTR_FLAGS,
-		      mutable->flags & TNL_F_PUBLIC) ||
-	    nla_put_be32(skb, OVS_TUNNEL_ATTR_DST_IPV4, mutable->key.daddr))
+	if (mutable->dst_port && nla_put_u16(skb, OVS_TUNNEL_ATTR_DST_PORT,
+					     ntohs(mutable->dst_port)))
 		goto nla_put_failure;
 
+	/* Skip the rest for null_ports */
+	if (!mutable->key.daddr)
+		return 0;
+
+	if (nla_put_be32(skb, OVS_TUNNEL_ATTR_DST_IPV4, mutable->key.daddr))
+		goto nla_put_failure;
+	if (nla_put_u32(skb, OVS_TUNNEL_ATTR_FLAGS,
+			mutable->flags & TNL_F_PUBLIC))
+		goto nla_put_failure;
 	if (!(mutable->flags & TNL_F_IN_KEY_MATCH) &&
 	    nla_put_be64(skb, OVS_TUNNEL_ATTR_IN_KEY, mutable->key.in_key))
 		goto nla_put_failure;
@@ -1246,9 +1260,6 @@ int ovs_tnl_get_options(const struct vport *vport, struct sk_buff *skb)
 	if (mutable->tos && nla_put_u8(skb, OVS_TUNNEL_ATTR_TOS, mutable->tos))
 		goto nla_put_failure;
 	if (mutable->ttl && nla_put_u8(skb, OVS_TUNNEL_ATTR_TTL, mutable->ttl))
-		goto nla_put_failure;
-	if (mutable->dst_port && nla_put_u16(skb, OVS_TUNNEL_ATTR_DST_PORT,
-					     ntohs(mutable->dst_port)))
 		goto nla_put_failure;
 
 	return 0;

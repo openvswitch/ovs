@@ -137,6 +137,12 @@ netdev_vport_get_vport_type(const struct netdev *netdev)
             : OVS_VPORT_TYPE_UNSPEC);
 }
 
+static uint32_t
+get_u32_or_zero(const struct nlattr *a)
+{
+    return a ? nl_attr_get_u32(a) : 0;
+}
+
 const char *
 netdev_vport_get_netdev_type(const struct dpif_linux_vport *vport)
 {
@@ -160,7 +166,7 @@ netdev_vport_get_netdev_type(const struct dpif_linux_vport *vport)
                                         a)) {
             break;
         }
-        return (nl_attr_get_u32(a[OVS_TUNNEL_ATTR_FLAGS]) & TNL_F_IPSEC
+        return (get_u32_or_zero(a[OVS_TUNNEL_ATTR_FLAGS]) & TNL_F_IPSEC
                 ? "ipsec_gre" : "gre");
 
     case OVS_VPORT_TYPE_GRE64:
@@ -168,7 +174,7 @@ netdev_vport_get_netdev_type(const struct dpif_linux_vport *vport)
                                         a)) {
             break;
         }
-        return (nl_attr_get_u32(a[OVS_TUNNEL_ATTR_FLAGS]) & TNL_F_IPSEC
+        return (get_u32_or_zero(a[OVS_TUNNEL_ATTR_FLAGS]) & TNL_F_IPSEC
                 ? "ipsec_gre64" : "gre64");
 
     case OVS_VPORT_TYPE_CAPWAP:
@@ -455,7 +461,6 @@ static const char *
 netdev_vport_get_tnl_iface(const struct netdev *netdev)
 {
     struct nlattr *a[OVS_TUNNEL_ATTR_MAX + 1];
-    ovs_be32 route;
     struct netdev_dev_vport *ndv;
     static char name[IFNAMSIZ];
 
@@ -464,12 +469,13 @@ netdev_vport_get_tnl_iface(const struct netdev *netdev)
                                     a)) {
         return NULL;
     }
-    route = nl_attr_get_be32(a[OVS_TUNNEL_ATTR_DST_IPV4]);
+    if (a[OVS_TUNNEL_ATTR_DST_IPV4]) {
+        ovs_be32 route = nl_attr_get_be32(a[OVS_TUNNEL_ATTR_DST_IPV4]);
 
-    if (route_table_get_name(route, name)) {
-        return name;
+        if (route_table_get_name(route, name)) {
+            return name;
+        }
     }
-
     return NULL;
 }
 
@@ -694,8 +700,8 @@ tnl_port_config_from_nlattr(const struct nlattr *options, size_t options_len,
                             struct nlattr *a[OVS_TUNNEL_ATTR_MAX + 1])
 {
     static const struct nl_policy ovs_tunnel_policy[] = {
-        [OVS_TUNNEL_ATTR_FLAGS] = { .type = NL_A_U32 },
-        [OVS_TUNNEL_ATTR_DST_IPV4] = { .type = NL_A_BE32 },
+        [OVS_TUNNEL_ATTR_FLAGS] = { .type = NL_A_U32, .optional = true },
+        [OVS_TUNNEL_ATTR_DST_IPV4] = { .type = NL_A_BE32, .optional = true },
         [OVS_TUNNEL_ATTR_SRC_IPV4] = { .type = NL_A_BE32, .optional = true },
         [OVS_TUNNEL_ATTR_IN_KEY] = { .type = NL_A_BE64, .optional = true },
         [OVS_TUNNEL_ATTR_OUT_KEY] = { .type = NL_A_BE64, .optional = true },
@@ -725,7 +731,6 @@ unparse_tunnel_config(const char *name OVS_UNUSED, const char *type OVS_UNUSED,
                       struct smap *args)
 {
     struct nlattr *a[OVS_TUNNEL_ATTR_MAX + 1];
-    ovs_be32 daddr;
     uint32_t flags;
     int error;
 
@@ -734,9 +739,10 @@ unparse_tunnel_config(const char *name OVS_UNUSED, const char *type OVS_UNUSED,
         return error;
     }
 
-
-    daddr = nl_attr_get_be32(a[OVS_TUNNEL_ATTR_DST_IPV4]);
-    smap_add_format(args, "remote_ip", IP_FMT, IP_ARGS(daddr));
+    if (a[OVS_TUNNEL_ATTR_DST_IPV4]) {
+        ovs_be32 daddr = nl_attr_get_be32(a[OVS_TUNNEL_ATTR_DST_IPV4]);
+        smap_add_format(args, "remote_ip", IP_FMT, IP_ARGS(daddr));
+    }
 
     if (a[OVS_TUNNEL_ATTR_SRC_IPV4]) {
         ovs_be32 saddr = nl_attr_get_be32(a[OVS_TUNNEL_ATTR_SRC_IPV4]);
@@ -766,7 +772,8 @@ unparse_tunnel_config(const char *name OVS_UNUSED, const char *type OVS_UNUSED,
         }
     }
 
-    flags = nl_attr_get_u32(a[OVS_TUNNEL_ATTR_FLAGS]);
+    flags = get_u32_or_zero(a[OVS_TUNNEL_ATTR_FLAGS]);
+
     if (flags & TNL_F_TTL_INHERIT) {
         smap_add(args, "ttl", "inherit");
     } else if (a[OVS_TUNNEL_ATTR_TTL]) {

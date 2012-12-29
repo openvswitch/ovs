@@ -45,14 +45,15 @@
 
 /* OVS_VPORT_ATTR_OPTIONS attributes for tunnels.
  *
- * OVS_TUNNEL_ATTR_FLAGS and OVS_TUNNEL_ATTR_DST_IPV4 are required.  All other
+ * OVS_TUNNEL_ATTR_DST_IPV4 is required for kernel tunnel ports, all other
  * attributes are optional.
+ * For flow-based tunnels, only the OVS_TUNNEL_ATTR_DST_PORT is useful.
  */
 enum {
 	OVS_TUNNEL_ATTR_UNSPEC,
 	OVS_TUNNEL_ATTR_FLAGS,    /* 32-bit TNL_F_*. */
-	OVS_TUNNEL_ATTR_DST_IPV4, /* IPv4 destination address. */
-	OVS_TUNNEL_ATTR_SRC_IPV4, /* IPv4 source address. */
+	OVS_TUNNEL_ATTR_DST_IPV4, /* Remote IPv4 address. */
+	OVS_TUNNEL_ATTR_SRC_IPV4, /* Local IPv4 address. */
 	OVS_TUNNEL_ATTR_OUT_KEY,  /* __be64 key to use on output. */
 	OVS_TUNNEL_ATTR_IN_KEY,   /* __be64 key to match on input. */
 	OVS_TUNNEL_ATTR_TOS,      /* 8-bit TOS value. */
