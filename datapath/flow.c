@@ -1053,6 +1053,7 @@ int ovs_flow_from_nlattrs(struct sw_flow_key *swkey, int *key_lenp,
 			return -EINVAL;
 
 		memcpy(&swkey->tun_key, tun_key, sizeof(swkey->tun_key));
+		memset(swkey->tun_key.pad, 0, sizeof(swkey->tun_key.pad));
 
 		attrs &= ~(1ULL << OVS_KEY_ATTR_TUN_ID);
 		attrs &= ~(1ULL << OVS_KEY_ATTR_IPV4_TUNNEL);
@@ -1064,6 +1065,7 @@ int ovs_flow_from_nlattrs(struct sw_flow_key *swkey, int *key_lenp,
 			return -EINVAL;
 
 		memcpy(&swkey->tun_key, tun_key, sizeof(swkey->tun_key));
+		memset(swkey->tun_key.pad, 0, sizeof(swkey->tun_key.pad));
 
 		attrs &= ~(1ULL << OVS_KEY_ATTR_IPV4_TUNNEL);
 	}
