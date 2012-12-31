@@ -6080,8 +6080,8 @@ action_xlate_ctx_init(struct action_xlate_ctx *ctx,
 {
     ctx->ofproto = ofproto;
     ctx->flow = *flow;
+    memset(&ctx->flow.tunnel, 0, sizeof ctx->flow.tunnel);
     ctx->base_flow = ctx->flow;
-    memset(&ctx->base_flow.tunnel, 0, sizeof ctx->base_flow.tunnel);
     ctx->base_flow.vlan_tci = initial_tci;
     ctx->rule = rule;
     ctx->packet = packet;
