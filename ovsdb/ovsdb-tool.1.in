@@ -5,7 +5,7 @@
 .  IP "\\$1"
 ..
 .\" -*- nroff -*-
-.TH ovsdb\-tool 1 "November 2009" "Open vSwitch" "Open vSwitch Manual"
+.TH ovsdb\-tool 1 "@VERSION@" "Open vSwitch" "Open vSwitch Manual"
 .ds PN ovsdb\-tool
 .
 .SH NAME

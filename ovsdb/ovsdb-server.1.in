@@ -1,5 +1,5 @@
 .\" -*- nroff -*-
-.TH ovsdb\-server 1 "November 2009" "Open vSwitch" "Open vSwitch Manual"
+.TH ovsdb\-server 1 "@VERSION@" "Open vSwitch" "Open vSwitch Manual"
 .\" This program's name:
 .ds PN ovsdb\-server
 .\" SSL peer program's name:

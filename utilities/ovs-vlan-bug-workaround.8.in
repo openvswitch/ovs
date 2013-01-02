@@ -4,7 +4,7 @@
 .  ns
 .  IP "\\$1"
 ..
-.TH ovs\-vlan\-bug\-workaround 8 "February 2011" "Open vSwitch" "Open vSwitch Manual"
+.TH ovs\-vlan\-bug\-workaround 8 "@VERSION@" "Open vSwitch" "Open vSwitch Manual"
 .ds PN ovs\-vlan\-bug\-workaround
 .
 .SH NAME

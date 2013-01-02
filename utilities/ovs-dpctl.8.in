@@ -3,7 +3,7 @@
 .  ns
 .  IP "\\$1"
 ..
-.TH ovs\-dpctl 8 "August 2009" "Open vSwitch" "Open vSwitch Manual"
+.TH ovs\-dpctl 8 "@VERSION@" "Open vSwitch" "Open vSwitch Manual"
 .ds PN ovs\-dpctl
 .
 .SH NAME

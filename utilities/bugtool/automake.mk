@@ -1,8 +1,10 @@
 if HAVE_PYTHON
 sbin_SCRIPTS += utilities/bugtool/ovs-bugtool
 CLEANFILES += utilities/bugtool/ovs-bugtool
+
 man_MANS += utilities/bugtool/ovs-bugtool.8
-MAN_ROOTS += utilities/bugtool/ovs-bugtool.8
+MAN_ROOTS += utilities/bugtool/ovs-bugtool.8.in
+DISTCLEANFILES += utilities/bugtool/ovs-ofctl.8
 
 bugtool_plugins = \
 	utilities/bugtool/plugins/kernel-info/openvswitch.xml \

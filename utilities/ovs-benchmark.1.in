@@ -1,6 +1,6 @@
 .\" -*- nroff -*-
 .so lib/ovs.tmac
-.TH ovs\-benchmark 1 "July 2011" "Open vSwitch" "Open vSwitch Manual"
+.TH ovs\-benchmark 1 "@VERSION@" "Open vSwitch" "Open vSwitch Manual"
 .
 .SH NAME
 ovs\-benchmark \- flow setup benchmark utility for Open vSwitch

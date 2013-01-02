@@ -4,7 +4,7 @@
 .  ns
 .  IP "\\$1"
 ..
-.TH ovs\-vswitchd 8 "June 2009" "Open vSwitch" "Open vSwitch Manual"
+.TH ovs\-vswitchd 8 "@VERSION@" "Open vSwitch" "Open vSwitch Manual"
 .\" This program's name:
 .ds PN ovs\-vswitchd
 .\" SSL peer program's name:

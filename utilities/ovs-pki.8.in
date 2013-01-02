@@ -3,7 +3,7 @@
 .  ns
 .  IP "\\$1"
 ..
-.TH ovs\-pki 8 "May 2008" "Open vSwitch" "Open vSwitch Manual"
+.TH ovs\-pki 8 "@VERSION@" "Open vSwitch" "Open vSwitch Manual"
 
 .SH NAME
 ovs\-pki \- OpenFlow public key infrastructure management utility

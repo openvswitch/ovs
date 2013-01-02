@@ -1,4 +1,4 @@
-.TH ovs\-pcap 1 "December 2010" "Open vSwitch" "Open vSwitch Manual"
+.TH ovs\-pcap 1 "@VERSION@" "Open vSwitch" "Open vSwitch Manual"
 .
 .SH NAME
 ovs\-pcap \- print packets from a pcap file as hex

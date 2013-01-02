@@ -10,7 +10,7 @@
 .  I "\\$1"
 .  RE
 ..
-.TH ovs\-vsctl 8 "November 2009" "Open vSwitch" "Open vSwitch Manual"
+.TH ovs\-vsctl 8 "@VERSION@" "Open vSwitch" "Open vSwitch Manual"
 .\" This program's name:
 .ds PN ovs\-vsctl
 .\" SSL peer program's name:

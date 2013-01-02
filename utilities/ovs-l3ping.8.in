@@ -3,7 +3,7 @@
 .  ns
 .  IP "\\$1"
 ..
-.TH ovs\-l3ping 1 "June 2012" "Open vSwitch" "Open vSwitch Manual"
+.TH ovs\-l3ping 1 "@VERSION@" "Open vSwitch" "Open vSwitch Manual"
 .
 .SH NAME
 \fBovs\-l3ping\fR \- check network deployment for L3 tunneling

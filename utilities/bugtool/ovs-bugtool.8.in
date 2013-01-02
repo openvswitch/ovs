@@ -4,7 +4,7 @@
 .  ns
 .  IP "\\$1"
 ..
-.TH ovs\-bugtool 8 "June 2011" "Open vSwitch" "Open vSwitch Manual"
+.TH ovs\-bugtool 8 "@VERSION@" "Open vSwitch" "Open vSwitch Manual"
 .\" This program's name:
 .ds PN ovs\-bugtool
 .

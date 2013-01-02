@@ -5,7 +5,7 @@
 .  IP "\\$1"
 ..
 .\" -*- nroff -*-
-.TH ovsdb\-client 1 "November 2009" "Open vSwitch" "Open vSwitch Manual"
+.TH ovsdb\-client 1 "@VERSION@" "Open vSwitch" "Open vSwitch Manual"
 .\" This program's name:
 .ds PN ovsdb\-client
 .\" SSL peer program's name:

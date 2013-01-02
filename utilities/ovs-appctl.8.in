@@ -4,7 +4,7 @@
 .  ns
 .  IP "\\$1"
 ..
-.TH ovs\-appctl 8 "November 2009" "Open vSwitch" "Open vSwitch Manual"
+.TH ovs\-appctl 8 "@VERSION@" "Open vSwitch" "Open vSwitch Manual"
 .ds PN ovs\-appctl
 .
 .SH NAME
