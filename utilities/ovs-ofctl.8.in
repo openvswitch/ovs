@@ -20,6 +20,7 @@ The
 program is a command line tool for monitoring and administering
 OpenFlow switches.  It can also show the current state of an OpenFlow
 switch, including features, configuration, and table entries.
+It should work with any OpenFlow switch, not just Open vSwitch.
 .
 .SS "OpenFlow Switch Management Commands"
 .PP
