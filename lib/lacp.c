@@ -750,7 +750,9 @@ lacp_print_details(struct ds *ds, struct lacp *lacp)
     ds_put_format(ds, "\tsys_priority: %u\n", lacp->sys_priority);
     ds_put_cstr(ds, "\taggregation key: ");
     if (lacp->key_slave) {
-        ds_put_format(ds, "%u", lacp->key_slave->port_id);
+        ds_put_format(ds, "%u", lacp->key_slave->key
+                                ? lacp->key_slave->key
+                                : lacp->key_slave->port_id);
     } else {
         ds_put_cstr(ds, "none");
     }
