@@ -240,12 +240,12 @@ dnl action instead, so parse-ofp11-actions will recognise and drop this action.
 ffff 0020 00002320 0016 000000000000 fedcba9876543210 ffffffffffffffff
 
 dnl Write-Metadata duplicated.
-& ofp_actions|WARN|duplicate write_metadata instruction specified
+& ofp_actions|WARN|duplicate write_metadata instruction not allowed, for OpenFlow 1.1+ compatibility
 # bad OF1.1 actions: OFPBAC_UNSUPPORTED_ORDER
 ffff 0020 00002320 0016 000000000000 fedcba9876543210 ffffffffffffffff ffff 0020 00002320 0016 000000000000 fedcba9876543210 ffffffffffffffff
 
 dnl Write-Metadata in wrong position.
-& ofp_actions|WARN|write_metadata instruction must be specified after other instructions/actions
+& ofp_actions|WARN|invalid instruction ordering: apply_actions must appear before write_metadata, for OpenFlow 1.1+ compatibility
 # bad OF1.1 actions: OFPBAC_UNSUPPORTED_ORDER
 ffff 0020 00002320 0016 000000000000 fedcba9876543210 ffffffffffffffff ffff 0010 00002320 0002 0000 12345678
 
@@ -382,9 +382,36 @@ dnl Write-Metadata duplicated.
 # bad OF1.1 instructions: OFPBAC_UNSUPPORTED_ORDER
 0002 0018 00000000 fedcba9876543210 ff00ff00ff00ff00 0002 0018 00000000 fedcba9876543210 ff00ff00ff00ff00
 
-dnl Write-Metadata in wrong position.
-& ofp_actions|WARN|write_metadata instruction must be specified after other instructions/actions
-# bad OF1.1 instructions: OFPBAC_UNSUPPORTED_ORDER
+dnl Write-Metadata in wrong position (OpenFlow 1.1+ disregards the order
+dnl and OVS reorders it to the canonical order)
+# actions=write_metadata:0xfedcba9876543210,goto_table:1
+#  1: 01 -> 02
+#  3: 08 -> 18
+#  4: 01 -> 00
+#  8: 00 -> fe
+#  9: 02 -> dc
+# 10: 00 -> ba
+# 11: 18 -> 98
+# 12: 00 -> 76
+# 13: 00 -> 54
+# 14: 00 -> 32
+# 15: 00 -> 10
+# 16: fe -> ff
+# 17: dc -> ff
+# 18: ba -> ff
+# 19: 98 -> ff
+# 20: 76 -> ff
+# 21: 54 -> ff
+# 22: 32 -> ff
+# 23: 10 -> ff
+# 24: ff -> 00
+# 25: ff -> 01
+# 26: ff -> 00
+# 27: ff -> 08
+# 28: ff -> 01
+# 29: ff -> 00
+# 30: ff -> 00
+# 31: ff -> 00
 0001 0008 01 000000 0002 0018 00000000 fedcba9876543210 ffffffffffffffff
 
 dnl Write-Actions not supported yet.

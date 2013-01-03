@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1153,23 +1153,38 @@ enum ofperr
 ofpacts_verify(const struct ofpact ofpacts[], size_t ofpacts_len)
 {
     const struct ofpact *a;
-    const struct ofpact_metadata *om = NULL;
+    enum ovs_instruction_type inst;
 
+    inst = OVSINST_OFPIT11_APPLY_ACTIONS;
     OFPACT_FOR_EACH (a, ofpacts, ofpacts_len) {
-        if (om) {
-            if (a->type == OFPACT_WRITE_METADATA) {
-                VLOG_WARN("duplicate write_metadata instruction specified");
-                return OFPERR_OFPBAC_UNSUPPORTED_ORDER;
-            } else {
-                VLOG_WARN("write_metadata instruction must be specified after "
-                          "other instructions/actions");
-                return OFPERR_OFPBAC_UNSUPPORTED_ORDER;
-            }
+        enum ovs_instruction_type next;
+
+        if (a->type == OFPACT_CLEAR_ACTIONS) {
+            next = OVSINST_OFPIT11_CLEAR_ACTIONS;
+        } else if (a->type == OFPACT_WRITE_METADATA) {
+            next = OVSINST_OFPIT11_WRITE_METADATA;
+        } else if (a->type == OFPACT_GOTO_TABLE) {
+            next = OVSINST_OFPIT11_GOTO_TABLE;
+        } else {
+            next = OVSINST_OFPIT11_APPLY_ACTIONS;
         }
 
-        if (a->type == OFPACT_WRITE_METADATA) {
-            om = (const struct ofpact_metadata *) a;
+        if (inst != OVSINST_OFPIT11_APPLY_ACTIONS && next <= inst) {
+            const char *name = ofpact_instruction_name_from_type(inst);
+            const char *next_name = ofpact_instruction_name_from_type(next);
+
+            if (next == inst) {
+                VLOG_WARN("duplicate %s instruction not allowed, for OpenFlow "
+                          "1.1+ compatibility", name);
+            } else {
+                VLOG_WARN("invalid instruction ordering: %s must appear "
+                          "before %s, for OpenFlow 1.1+ compatibility",
+                          next_name, name);
+            }
+            return OFPERR_OFPBAC_UNSUPPORTED_ORDER;
         }
+
+        inst = next;
     }
 
     return 0;
