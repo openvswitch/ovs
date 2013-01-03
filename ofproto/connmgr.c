@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -753,7 +753,7 @@ set_pvconns(struct pvconn ***pvconnsp, size_t *n_pvconnsp,
     SSET_FOR_EACH (name, sset) {
         struct pvconn *pvconn;
         int error;
-        error = pvconn_open(name, 0, &pvconn, 0);
+        error = pvconn_open(name, 0, 0, &pvconn);
         if (!error) {
             pvconns[n_pvconns++] = pvconn;
         } else {
@@ -1690,7 +1690,7 @@ ofservice_create(struct connmgr *mgr, const char *target,
     struct pvconn *pvconn;
     int error;
 
-    error = pvconn_open(target, allowed_versions, &pvconn, dscp);
+    error = pvconn_open(target, allowed_versions, dscp, &pvconn);
     if (error) {
         return error;
     }

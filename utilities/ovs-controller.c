@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -116,8 +116,8 @@ main(int argc, char *argv[])
         const char *name = argv[i];
         struct vconn *vconn;
 
-        retval = vconn_open(name, get_allowed_ofp_versions(),
-                            &vconn, DSCP_DEFAULT);
+        retval = vconn_open(name, get_allowed_ofp_versions(), DSCP_DEFAULT,
+                            &vconn);
         if (!retval) {
             if (n_switches >= MAX_SWITCHES) {
                 ovs_fatal(0, "max %d switch connections", n_switches);
@@ -127,7 +127,7 @@ main(int argc, char *argv[])
         } else if (retval == EAFNOSUPPORT) {
             struct pvconn *pvconn;
             retval = pvconn_open(name, get_allowed_ofp_versions(),
-                                 &pvconn, DSCP_DEFAULT);
+                                 DSCP_DEFAULT, &pvconn);
             if (!retval) {
                 if (n_listeners >= MAX_LISTENERS) {
                     ovs_fatal(0, "max %d passive connections", n_listeners);

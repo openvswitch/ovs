@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -223,8 +223,8 @@ vconn_verify_name(const char *name)
  * stores a pointer to the new connection in '*vconnp', otherwise a null
  * pointer.  */
 int
-vconn_open(const char *name, uint32_t allowed_versions,
-           struct vconn **vconnp, uint8_t dscp)
+vconn_open(const char *name, uint32_t allowed_versions, uint8_t dscp,
+           struct vconn **vconnp)
 {
     struct vconn_class *class;
     struct vconn *vconn;
@@ -295,7 +295,7 @@ vconn_run_wait(struct vconn *vconn)
 }
 
 int
-vconn_open_block(const char *name, uint32_t allowed_versions,
+vconn_open_block(const char *name, uint32_t allowed_versions, uint8_t dscp,
                  struct vconn **vconnp)
 {
     struct vconn *vconn;
@@ -303,7 +303,7 @@ vconn_open_block(const char *name, uint32_t allowed_versions,
 
     fatal_signal_run();
 
-    error = vconn_open(name, allowed_versions, &vconn, DSCP_DEFAULT);
+    error = vconn_open(name, allowed_versions, dscp, &vconn);
     if (!error) {
         error = vconn_connect_block(vconn);
     }
@@ -986,8 +986,8 @@ pvconn_verify_name(const char *name)
  * stores a pointer to the new connection in '*pvconnp', otherwise a null
  * pointer.  */
 int
-pvconn_open(const char *name, uint32_t allowed_versions,
-            struct pvconn **pvconnp, uint8_t dscp)
+pvconn_open(const char *name, uint32_t allowed_versions, uint8_t dscp,
+            struct pvconn **pvconnp)
 {
     struct pvconn_class *class;
     struct pvconn *pvconn;

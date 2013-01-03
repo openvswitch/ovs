@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -357,8 +357,8 @@ open_vconn_socket(const char *name, struct vconn **vconnp)
     char *vconn_name = xasprintf("unix:%s", name);
     int error;
 
-    error = vconn_open(vconn_name, get_allowed_ofp_versions(), vconnp,
-                       DSCP_DEFAULT);
+    error = vconn_open(vconn_name, get_allowed_ofp_versions(), DSCP_DEFAULT,
+                       vconnp);
     if (error && error != ENOENT) {
         ovs_fatal(0, "%s: failed to open socket (%s)", name,
                   strerror(error));
@@ -387,7 +387,8 @@ open_vconn__(const char *name, const char *default_suffix,
     free(datapath_type);
 
     if (strchr(name, ':')) {
-        run(vconn_open_block(name, get_allowed_ofp_versions(), vconnp),
+        run(vconn_open_block(name, get_allowed_ofp_versions(), DSCP_DEFAULT,
+                             vconnp),
             "connecting to %s", name);
     } else if (!open_vconn_socket(name, vconnp)) {
         /* Fall Through. */
