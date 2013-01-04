@@ -368,21 +368,23 @@ open_vconn_socket(const char *name, struct vconn **vconnp)
     return error;
 }
 
+enum open_target { MGMT, SNOOP };
+
 static enum ofputil_protocol
-open_vconn__(const char *name, const char *default_suffix,
+open_vconn__(const char *name, enum open_target target,
              struct vconn **vconnp)
 {
+    const char *suffix = target == MGMT ? "mgmt" : "snoop";
     char *datapath_name, *datapath_type, *socket_name;
     enum ofputil_protocol protocol;
     char *bridge_path;
     int ofp_version;
     int error;
 
-    bridge_path = xasprintf("%s/%s.%s", ovs_rundir(), name, default_suffix);
+    bridge_path = xasprintf("%s/%s.%s", ovs_rundir(), name, suffix);
 
     ofproto_parse_name(name, &datapath_name, &datapath_type);
-    socket_name = xasprintf("%s/%s.%s",
-                            ovs_rundir(), datapath_name, default_suffix);
+    socket_name = xasprintf("%s/%s.%s", ovs_rundir(), datapath_name, suffix);
     free(datapath_name);
     free(datapath_type);
 
@@ -397,6 +399,10 @@ open_vconn__(const char *name, const char *default_suffix,
         /* Fall Through. */
     } else {
         ovs_fatal(0, "%s is not a bridge or a socket", name);
+    }
+
+    if (target == SNOOP) {
+        vconn_set_recv_any_version(*vconnp);
     }
 
     free(bridge_path);
@@ -421,7 +427,7 @@ open_vconn__(const char *name, const char *default_suffix,
 static enum ofputil_protocol
 open_vconn(const char *name, struct vconn **vconnp)
 {
-    return open_vconn__(name, "mgmt", vconnp);
+    return open_vconn__(name, MGMT, vconnp);
 }
 
 static void
@@ -1456,7 +1462,7 @@ ofctl_snoop(int argc OVS_UNUSED, char *argv[])
 {
     struct vconn *vconn;
 
-    open_vconn__(argv[1], "snoop", &vconn);
+    open_vconn__(argv[1], SNOOP, &vconn);
     monitor_vconn(vconn);
 }
 

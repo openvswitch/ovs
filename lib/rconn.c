@@ -672,14 +672,6 @@ void
 rconn_add_monitor(struct rconn *rc, struct vconn *vconn)
 {
     if (rc->n_monitors < ARRAY_SIZE(rc->monitors)) {
-        int version = vconn_get_version(rc->vconn);
-
-        /* Override the allowed versions of the snoop vconn so that
-         * only the version of the controller connection is allowed.
-         * This is because the snoop will see the same messages as the
-         * controller */
-        vconn_set_allowed_versions(vconn, 1u << version);
-
         VLOG_INFO("new monitor connection from %s", vconn_get_name(vconn));
         rc->monitors[rc->n_monitors++] = vconn;
     } else {

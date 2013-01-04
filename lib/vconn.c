@@ -394,6 +394,27 @@ vconn_get_version(const struct vconn *vconn)
     return vconn->version ? vconn->version : -1;
 }
 
+/* By default, a vconn accepts only OpenFlow messages whose version matches the
+ * one negotiated for the connection.  A message received with a different
+ * version is an error that causes the vconn to drop the connection.
+ *
+ * This functions allows 'vconn' to accept messages with any OpenFlow version.
+ * This is useful in the special case where 'vconn' is used as an rconn
+ * "monitor" connection (see rconn_add_monitor()), that is, where 'vconn' is
+ * used as a target for mirroring OpenFlow messages for debugging and
+ * troubleshooting.
+ *
+ * This function should be called after a successful vconn_open() or
+ * pvconn_accept() but before the connection completes, that is, before
+ * vconn_connect() returns success.  Otherwise, messages that arrive on 'vconn'
+ * beforehand with an unexpected version will the vconn to drop the
+ * connection. */
+void
+vconn_set_recv_any_version(struct vconn *vconn)
+{
+    vconn->recv_any_version = true;
+}
+
 static void
 vcs_connecting(struct vconn *vconn)
 {
@@ -600,7 +621,7 @@ vconn_recv(struct vconn *vconn, struct ofpbuf **msgp)
     if (!retval) {
         retval = do_recv(vconn, &msg);
     }
-    if (!retval) {
+    if (!retval && !vconn->recv_any_version) {
         const struct ofp_header *oh = msg->data;
         if (oh->version != vconn->version) {
             enum ofptype type;
