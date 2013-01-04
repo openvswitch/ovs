@@ -649,14 +649,13 @@ int
 rconn_send_with_limit(struct rconn *rc, struct ofpbuf *b,
                       struct rconn_packet_counter *counter, int queue_limit)
 {
-    int retval;
-    retval = (counter->n_packets >= queue_limit
-              ? EAGAIN
-              : rconn_send(rc, b, counter));
-    if (retval) {
+    if (counter->n_packets < queue_limit) {
+        return rconn_send(rc, b, counter);
+    } else {
         COVERAGE_INC(rconn_overflow);
+        ofpbuf_delete(b);
+        return EAGAIN;
     }
-    return retval;
 }
 
 /* Returns the total number of packets successfully sent on the underlying
