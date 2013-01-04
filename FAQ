@@ -133,10 +133,10 @@ Q: What Linux kernel versions does each Open vSwitch release work with?
 A: The following table lists the Linux kernel versions against which the
    given versions of the Open vSwitch kernel module will successfully
    build.  The Linux kernel versions are upstream kernel versions, so
-   modified Linux kernels modified from the upstream sources may not
-   build in some cases even if they are based on a supported version.
-   This is most notably true of Red Hat Enterprise Linux (RHEL) kernels,
-   which are extensively modified from upstream.
+   Linux kernels modified from the upstream sources may not build in
+   some cases even if they are based on a supported version.  This is
+   most notably true of Red Hat Enterprise Linux (RHEL) kernels, which
+   are extensively modified from upstream.
 
    Open vSwitch   Linux kernel
    ------------   -------------
