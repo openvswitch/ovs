@@ -387,8 +387,7 @@ open_vconn__(const char *name, const char *default_suffix,
     free(datapath_type);
 
     if (strchr(name, ':')) {
-        run(vconn_open_block(name, get_allowed_ofp_versions(), DSCP_DEFAULT,
-                             vconnp),
+        run(vconn_open(name, get_allowed_ofp_versions(), DSCP_DEFAULT, vconnp),
             "connecting to %s", name);
     } else if (!open_vconn_socket(name, vconnp)) {
         /* Fall Through. */
