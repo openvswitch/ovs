@@ -5271,7 +5271,7 @@ compose_slow_path(const struct ofproto_dpif *ofproto, const struct flow *flow,
 
     ofpbuf_use_stack(&buf, stub, stub_size);
     if (slow & (SLOW_CFM | SLOW_LACP | SLOW_STP)) {
-        uint32_t pid = dpif_port_get_pid(ofproto->backer->dpif, UINT16_MAX);
+        uint32_t pid = dpif_port_get_pid(ofproto->backer->dpif, UINT32_MAX);
         odp_put_userspace_action(pid, &cookie, &buf);
     } else {
         put_userspace_action(ofproto, &buf, flow, &cookie);
