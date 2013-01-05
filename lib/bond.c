@@ -51,7 +51,7 @@ VLOG_DEFINE_THIS_MODULE(bond);
 struct bond_entry {
     struct bond_slave *slave;   /* Assigned slave, NULL if unassigned. */
     uint64_t tx_bytes;          /* Count of bytes recently transmitted. */
-    tag_type tag;               /* Tag for entry<->slave association. */
+    tag_type tag;               /* Tag for entry<->facet association. */
     struct list list_node;      /* In bond_slave's 'entries' list. */
 };
 
