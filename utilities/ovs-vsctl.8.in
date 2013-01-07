@@ -911,6 +911,13 @@ Deconfigure STP from above:
 .IP
 .B "ovs\-vsctl clear Bridge br0 stp_enable"
 .PP
+.SS "OpenFlow Version"
+.PP
+Configure bridge \fBbr0\fR to support OpenFlow versions 1.0, 1.2, and
+1.3:
+.IP
+.B "ovs\-vsctl set bridge br0 protocols=openflow10,openflow12,openflow13"
+.
 .SH "EXIT STATUS"
 .IP "0"
 Successful program execution.
