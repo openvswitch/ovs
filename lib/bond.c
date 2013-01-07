@@ -21,6 +21,7 @@
 #include <limits.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <math.h>
 
 #include "coverage.h"
 #include "dynamic-string.h"
@@ -754,8 +755,12 @@ choose_entry_to_migrate(const struct bond_slave *from, uint64_t to_tx_bytes)
         delta = e->tx_bytes;
         old_ratio = (double)from->tx_bytes / to_tx_bytes;
         new_ratio = (double)(from->tx_bytes - delta) / (to_tx_bytes + delta);
-        if (old_ratio - new_ratio > 0.1) {
-            /* Would decrease the ratio, move it. */
+        if (old_ratio - new_ratio > 0.1
+            && fabs(new_ratio - 1.0) < fabs(old_ratio - 1.0)) {
+            /* We're aiming for an ideal ratio of 1, meaning both the 'from'
+               and 'to' slave have the same load.  Therefore, we only move an
+               entry if it decreases the load on 'from', and brings us closer
+               to equal traffic load. */
             return e;
         }
     }
