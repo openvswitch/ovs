@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -742,7 +742,8 @@ bond_shift_load(struct bond_entry *hash, struct bond_slave *to,
     hash->tag = tag_create_random();
 }
 
-/* Pick and returns a bond_entry to migrate to 'to' (the least-loaded slave),
+/* Picks and returns a bond_entry to migrate from 'from' (the most heavily
+ * loaded bond slave) to a bond slave that has 'to_tx_bytes' bytes of load,
  * given that doing so must decrease the ratio of the load on the two slaves by
  * at least 0.1.  Returns NULL if there is no appropriate entry.
  *
@@ -859,8 +860,8 @@ bond_rebalance(struct bond *bond, struct tag_set *tags)
             break;
         }
 
-        /* 'from' is carrying significantly more load than 'to', and that load
-         * is split across at least two different hashes. */
+        /* 'from' is carrying significantly more load than 'to'.  Pick a hash
+         * to move from 'from' to 'to'. */
         e = choose_entry_to_migrate(from, to->tx_bytes);
         if (e) {
             bond_shift_load(e, to, tags);
