@@ -17,6 +17,8 @@ post-v1.9.0
         syntax.  OpenFlow 1.1 adds a port named ANY, which introduces a
         conflict.  ANY was rarely used in flow syntax, so we chose to
         retire that meaning of ANY in favor of the OpenFlow 1.1 meaning.
+    - Inheritance of the Don't Fragment bit in IP tunnels (df_inherit) is
+      no longer supported.
 
 
 v1.9.0 - xx xxx xxxx

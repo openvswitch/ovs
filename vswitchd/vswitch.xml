@@ -1400,19 +1400,11 @@
         system default, typically 64).  Default is the system default TTL.
       </column>
 
-      <column name="options" key="df_inherit" type='{"type": "boolean"}'>
-        Optional.  If enabled, the Don't Fragment bit will be copied from the
-        inner IP headers (those of the encapsulated traffic) to the outer
-        (tunnel) headers.  Default is disabled; set to <code>true</code> to
-        enable.
-      </column>
-
       <column name="options" key="df_default"
               type='{"type": "boolean"}'>
-        Optional.  If enabled, the Don't Fragment bit will be set by default on
-        tunnel headers if the <code>df_inherit</code> option is not set, or if
-        the encapsulated packet is not IP.  Default is enabled; set to
-        <code>false</code> to disable.
+        Optional.  If enabled, the Don't Fragment bit will be set on tunnel
+        outer headers to allow path MTU discovery. Default is enabled; set
+        to <code>false</code> to disable.
       </column>
 
       <group title="Tunnel Options: gre and ipsec_gre only">

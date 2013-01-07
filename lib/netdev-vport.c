@@ -545,10 +545,6 @@ parse_tunnel_config(const char *name, const char *type,
             if (!strcmp(node->value, "true")) {
                 flags |= TNL_F_CSUM;
             }
-        } else if (!strcmp(node->key, "df_inherit")) {
-            if (!strcmp(node->value, "true")) {
-                flags |= TNL_F_DF_INHERIT;
-            }
         } else if (!strcmp(node->key, "df_default")) {
             if (!strcmp(node->value, "false")) {
                 flags &= ~TNL_F_DF_DEFAULT;
@@ -748,6 +744,8 @@ unparse_tunnel_config(const char *name OVS_UNUSED, const char *type OVS_UNUSED,
         smap_add(args, "csum", "true");
     }
     if (flags & TNL_F_DF_INHERIT) {
+        /* Shouldn't happen as "df_inherit" is no longer supported.  However,
+         * for completeness we report it if it's there. */
         smap_add(args, "df_inherit", "true");
     }
     if (!(flags & TNL_F_DF_DEFAULT)) {
