@@ -82,6 +82,10 @@ lib/common.man:
 lib/vlog-syn.man:
 lib/vlog.man:
 
+utilities/bugtool/ovs-bugtool.8: \
+	utilities/bugtool/ovs-bugtool.8.in
+utilities/bugtool/ovs-bugtool.8.in:
+
 utilities/ovs-appctl.8: \
 	utilities/ovs-appctl.8.in \
 	lib/common.man
