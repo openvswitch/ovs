@@ -2155,7 +2155,7 @@ char *
 mf_parse(const struct mf_field *mf, const char *s,
          union mf_value *value, union mf_value *mask)
 {
-    if (!strcasecmp(s, "any") || !strcmp(s, "*")) {
+    if (!strcmp(s, "*")) {
         memset(value, 0, mf->n_bytes);
         memset(mask, 0, mf->n_bytes);
         return NULL;

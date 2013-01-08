@@ -8,6 +8,11 @@ post-v1.9.0
     - The OpenFlow "dp_desc" may now be configured by setting the value of 
       other-config:dp-desc in the Bridge table.
     - Path MTU discovery is no longer supported.
+    - Backward-incompatible changes:
+      - Earlier Open vSwitch versions treated ANY as a wildcard in flow
+        syntax.  OpenFlow 1.1 adds a port named ANY, which introduces a
+        conflict.  ANY was rarely used in flow syntax, so we chose to
+        retire that meaning of ANY in favor of the OpenFlow 1.1 meaning.
 
 
 v1.9.0 - xx xxx xxxx

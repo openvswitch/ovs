@@ -393,8 +393,8 @@ flows not in normal form.
 The following field assignments describe how a flow matches a packet.
 If any of these assignments is omitted from the flow syntax, the field
 is treated as a wildcard; thus, if all of them are omitted, the
-resulting flow matches all packets.  The string \fB*\fR or \fBANY\fR
-may be specified to explicitly mark any of these fields as a wildcard.  
+resulting flow matches all packets.  The string \fB*\fR may be specified
+to explicitly mark any of these fields as a wildcard.
 (\fB*\fR should be quoted to protect it from shell expansion.)
 .
 .IP \fBin_port=\fIport\fR
