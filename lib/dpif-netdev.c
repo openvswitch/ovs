@@ -180,11 +180,17 @@ dpif_netdev_enumerate(struct sset *all_dps)
     return 0;
 }
 
+static bool
+dpif_netdev_class_is_dummy(const struct dpif_class *class)
+{
+    return class != &dpif_netdev_class;
+}
+
 static const char *
 dpif_netdev_port_open_type(const struct dpif_class *class, const char *type)
 {
     return strcmp(type, "internal") ? type
-                  : class != &dpif_netdev_class ? "dummy"
+                  : dpif_netdev_class_is_dummy(class) ? "dummy"
                   : "tap";
 }
 
@@ -385,7 +391,8 @@ do_add_port(struct dp_netdev *dp, const char *devname, const char *type,
     /* XXX reject non-Ethernet devices */
 
     error = netdev_listen(netdev);
-    if (error) {
+    if (error
+        && !(error == EOPNOTSUPP && dpif_netdev_class_is_dummy(dp->class))) {
         VLOG_ERR("%s: cannot receive packets on this network device (%s)",
                  devname, strerror(errno));
         netdev_close(netdev);
