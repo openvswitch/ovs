@@ -52,18 +52,22 @@ VLOG_DEFINE_THIS_MODULE(netdev_vport);
 /* Default to the OTV port, per the VXLAN IETF draft. */
 #define VXLAN_DST_PORT 8472
 
+#define DEFAULT_TTL 64
+
 struct netdev_dev_vport {
     struct netdev_dev netdev_dev;
     struct ofpbuf *options;
     unsigned int change_seq;
     uint8_t etheraddr[ETH_ADDR_LEN];
+    struct netdev_tunnel_config tnl_cfg;
 };
 
 struct vport_class {
     enum ovs_vport_type type;
     struct netdev_class netdev_class;
     int (*parse_config)(const char *name, const char *type,
-                        const struct smap *args, struct ofpbuf *options);
+                        const struct smap *args, struct ofpbuf *options,
+                        struct netdev_tunnel_config *tnl_cfg);
     int (*unparse_config)(const char *name, const char *type,
                           const struct nlattr *options, size_t options_len,
                           struct smap *args);
@@ -102,6 +106,12 @@ static struct netdev_dev_vport *
 netdev_vport_get_dev(const struct netdev *netdev)
 {
     return netdev_dev_vport_cast(netdev_get_dev(netdev));
+}
+
+static const struct netdev_tunnel_config *
+get_netdev_tunnel_config(const struct netdev_dev *netdev_dev)
+{
+    return &netdev_dev_vport_cast(netdev_dev)->tnl_cfg;
 }
 
 /* If 'netdev' is a vport netdev, returns an ofpbuf that contains Netlink
@@ -192,9 +202,8 @@ netdev_vport_create(const struct netdev_class *netdev_class, const char *name,
 {
     struct netdev_dev_vport *dev;
 
-    dev = xmalloc(sizeof *dev);
+    dev = xzalloc(sizeof *dev);
     netdev_dev_init(&dev->netdev_dev, name, netdev_class);
-    dev->options = NULL;
     dev->change_seq = 1;
     eth_addr_random(dev->etheraddr);
 
@@ -270,12 +279,13 @@ netdev_vport_set_config(struct netdev_dev *dev_, const struct smap *args)
     const struct vport_class *vport_class = vport_class_cast(netdev_class);
     struct netdev_dev_vport *dev = netdev_dev_vport_cast(dev_);
     const char *name = netdev_dev_get_name(dev_);
+    struct netdev_tunnel_config tnl_cfg;
     struct ofpbuf *options;
     int error;
 
     options = ofpbuf_new(64);
     error = vport_class->parse_config(name, netdev_dev_get_type(dev_),
-                                      args, options);
+                                      args, options, &tnl_cfg);
     if (!error
         && (!dev->options
             || options->size != dev->options->size
@@ -294,6 +304,7 @@ netdev_vport_set_config(struct netdev_dev *dev_, const struct smap *args)
              * dpif_port_add()). */
             ofpbuf_delete(dev->options);
             dev->options = options;
+            dev->tnl_cfg = tnl_cfg;
             options = NULL;
             error = 0;
         }
@@ -375,23 +386,10 @@ netdev_vport_get_stats(const struct netdev *netdev, struct netdev_stats *stats)
 static int
 tunnel_get_status(const struct netdev *netdev, struct smap *smap)
 {
-    struct netdev_dev_vport *ndv = netdev_vport_get_dev(netdev);
-    struct nlattr *a[OVS_TUNNEL_ATTR_MAX + 1];
     static char iface[IFNAMSIZ];
     ovs_be32 route;
 
-    if (!ndv->options) {
-        /* Race condition when 'ndv' was created, but did not have it's
-         * configuration set yet. */
-        return 0;
-    }
-
-    if (tnl_port_config_from_nlattr(ndv->options->data,
-                                    ndv->options->size, a)) {
-        return 0;
-    }
-    route = nl_attr_get_be32(a[OVS_TUNNEL_ATTR_DST_IPV4]);
-
+    route = netdev_vport_get_dev(netdev)->tnl_cfg.ip_dst;
     if (route_table_get_name(route, iface)) {
         struct netdev *egress_netdev;
 
@@ -453,55 +451,58 @@ netdev_vport_poll_notify(const struct netdev *netdev)
 
 /* Code specific to individual vport types. */
 
-static void
-set_key(const struct smap *args, const char *name, uint16_t type,
-        struct ofpbuf *options)
+static ovs_be64
+parse_key(const struct smap *args, const char *name,
+          bool *present, bool *flow)
 {
     const char *s;
+
+    *present = false;
+    *flow = false;
 
     s = smap_get(args, name);
     if (!s) {
         s = smap_get(args, "key");
         if (!s) {
-            s = "0";
+            return 0;
         }
     }
 
+    *present = true;
+
     if (!strcmp(s, "flow")) {
-        /* This is the default if no attribute is present. */
+        *flow = true;
+        return 0;
     } else {
-        nl_msg_put_be64(options, type, htonll(strtoull(s, NULL, 0)));
+        return htonll(strtoull(s, NULL, 0));
     }
 }
 
 static int
 parse_tunnel_config(const char *name, const char *type,
-                    const struct smap *args, struct ofpbuf *options)
+                    const struct smap *args, struct ofpbuf *options,
+                    struct netdev_tunnel_config *tnl_cfg_)
 {
-    bool is_gre = false;
-    bool is_ipsec = false;
-    bool needs_dst_port = false;
-    bool found_dst_port = false;
+    bool ipsec_mech_set, needs_dst_port, has_csum;
+    struct netdev_tunnel_config tnl_cfg;
     struct smap_node *node;
-    bool ipsec_mech_set = false;
-    ovs_be32 daddr = htonl(0);
-    ovs_be32 saddr = htonl(0);
-    uint32_t flags;
+    uint8_t flags;
+
+    flags = TNL_F_DF_DEFAULT;
+    has_csum = strstr(type, "gre");
+    ipsec_mech_set = false;
+    memset(&tnl_cfg, 0, sizeof tnl_cfg);
 
     if (!strcmp(type, "capwap")) {
         VLOG_WARN_ONCE("CAPWAP tunnel support is deprecated.");
     }
 
-    flags = TNL_F_DF_DEFAULT;
-    if (!strcmp(type, "gre") || !strcmp(type, "gre64")) {
-        is_gre = true;
-    } else if (!strcmp(type, "ipsec_gre") || !strcmp(type, "ipsec_gre64")) {
-        is_gre = true;
-        is_ipsec = true;
+    needs_dst_port = !strcmp(type, "vxlan");
+    tnl_cfg.ipsec = strstr(type, "ipsec");
+    if (tnl_cfg.ipsec) {
         flags |= TNL_F_IPSEC;
-    } else if (!strcmp(type, "vxlan")) {
-        needs_dst_port = true;
     }
+    tnl_cfg.dont_fragment = true;
 
     SMAP_FOR_EACH (node, args) {
         if (!strcmp(node->key, "remote_ip")) {
@@ -509,24 +510,26 @@ parse_tunnel_config(const char *name, const char *type,
             if (lookup_ip(node->value, &in_addr)) {
                 VLOG_WARN("%s: bad %s 'remote_ip'", name, type);
             } else {
-                daddr = in_addr.s_addr;
+                tnl_cfg.ip_dst = in_addr.s_addr;
             }
         } else if (!strcmp(node->key, "local_ip")) {
             struct in_addr in_addr;
             if (lookup_ip(node->value, &in_addr)) {
                 VLOG_WARN("%s: bad %s 'local_ip'", name, type);
             } else {
-                saddr = in_addr.s_addr;
+                tnl_cfg.ip_src = in_addr.s_addr;
             }
         } else if (!strcmp(node->key, "tos")) {
             if (!strcmp(node->value, "inherit")) {
                 flags |= TNL_F_TOS_INHERIT;
+                tnl_cfg.tos_inherit = true;
             } else {
                 char *endptr;
                 int tos;
                 tos = strtol(node->value, &endptr, 0);
                 if (*endptr == '\0' && tos == (tos & IP_DSCP_MASK)) {
                     nl_msg_put_u8(options, OVS_TUNNEL_ATTR_TOS, tos);
+                    tnl_cfg.tos = tos;
                 } else {
                     VLOG_WARN("%s: invalid TOS %s", name, node->value);
                 }
@@ -534,22 +537,26 @@ parse_tunnel_config(const char *name, const char *type,
         } else if (!strcmp(node->key, "ttl")) {
             if (!strcmp(node->value, "inherit")) {
                 flags |= TNL_F_TTL_INHERIT;
+                tnl_cfg.ttl_inherit = true;
             } else {
                 nl_msg_put_u8(options, OVS_TUNNEL_ATTR_TTL, atoi(node->value));
+                tnl_cfg.ttl = atoi(node->value);
             }
         } else if (!strcmp(node->key, "dst_port") && needs_dst_port) {
+            tnl_cfg.dst_port = htons(atoi(node->value));
             nl_msg_put_u16(options, OVS_TUNNEL_ATTR_DST_PORT,
                            atoi(node->value));
-            found_dst_port = true;
-        } else if (!strcmp(node->key, "csum") && is_gre) {
+        } else if (!strcmp(node->key, "csum") && has_csum) {
             if (!strcmp(node->value, "true")) {
                 flags |= TNL_F_CSUM;
+                tnl_cfg.csum = true;
             }
         } else if (!strcmp(node->key, "df_default")) {
             if (!strcmp(node->value, "false")) {
                 flags &= ~TNL_F_DF_DEFAULT;
+                tnl_cfg.dont_fragment = false;
             }
-        } else if (!strcmp(node->key, "peer_cert") && is_ipsec) {
+        } else if (!strcmp(node->key, "peer_cert") && tnl_cfg.ipsec) {
             if (smap_get(args, "certificate")) {
                 ipsec_mech_set = true;
             } else {
@@ -569,9 +576,9 @@ parse_tunnel_config(const char *name, const char *type,
                 }
                 ipsec_mech_set = true;
             }
-        } else if (!strcmp(node->key, "psk") && is_ipsec) {
+        } else if (!strcmp(node->key, "psk") && tnl_cfg.ipsec) {
             ipsec_mech_set = true;
-        } else if (is_ipsec
+        } else if (tnl_cfg.ipsec
                 && (!strcmp(node->key, "certificate")
                     || !strcmp(node->key, "private_key")
                     || !strcmp(node->key, "use_ssl_cert"))) {
@@ -586,11 +593,12 @@ parse_tunnel_config(const char *name, const char *type,
     }
 
     /* Add a default destination port for VXLAN if none specified. */
-    if (needs_dst_port && !found_dst_port) {
+    if (needs_dst_port && !tnl_cfg.dst_port) {
         nl_msg_put_u16(options, OVS_TUNNEL_ATTR_DST_PORT, VXLAN_DST_PORT);
+        tnl_cfg.dst_port = htons(VXLAN_DST_PORT);
     }
 
-    if (is_ipsec) {
+    if (tnl_cfg.ipsec) {
         static pid_t pid = 0;
         if (pid <= 0) {
             char *file_name = xasprintf("%s/%s", ovs_rundir(),
@@ -617,25 +625,42 @@ parse_tunnel_config(const char *name, const char *type,
         }
     }
 
-    set_key(args, "in_key", OVS_TUNNEL_ATTR_IN_KEY, options);
-    set_key(args, "out_key", OVS_TUNNEL_ATTR_OUT_KEY, options);
-
-    if (!daddr) {
+    if (!tnl_cfg.ip_dst) {
         VLOG_ERR("%s: %s type requires valid 'remote_ip' argument",
                  name, type);
         return EINVAL;
     }
-    nl_msg_put_be32(options, OVS_TUNNEL_ATTR_DST_IPV4, daddr);
+    nl_msg_put_be32(options, OVS_TUNNEL_ATTR_DST_IPV4, tnl_cfg.ip_dst);
 
-    if (saddr) {
-        if (ip_is_multicast(daddr)) {
+    if (tnl_cfg.ip_src) {
+        if (ip_is_multicast(tnl_cfg.ip_dst)) {
             VLOG_WARN("%s: remote_ip is multicast, ignoring local_ip", name);
+            tnl_cfg.ip_src = 0;
         } else {
-            nl_msg_put_be32(options, OVS_TUNNEL_ATTR_SRC_IPV4, saddr);
+            nl_msg_put_be32(options, OVS_TUNNEL_ATTR_SRC_IPV4, tnl_cfg.ip_src);
         }
     }
 
+    if (!tnl_cfg.ttl) {
+        tnl_cfg.ttl = DEFAULT_TTL;
+    }
+
+    tnl_cfg.in_key = parse_key(args, "in_key",
+                               &tnl_cfg.in_key_present,
+                               &tnl_cfg.in_key_flow);
+    if (tnl_cfg.in_key_present && !tnl_cfg.in_key_flow) {
+        nl_msg_put_be64(options, OVS_TUNNEL_ATTR_IN_KEY, tnl_cfg.in_key);
+    }
+
+    tnl_cfg.out_key = parse_key(args, "out_key",
+                               &tnl_cfg.out_key_present,
+                               &tnl_cfg.out_key_flow);
+    if (tnl_cfg.out_key_present && !tnl_cfg.out_key_flow) {
+        nl_msg_put_be64(options, OVS_TUNNEL_ATTR_OUT_KEY, tnl_cfg.out_key);
+    }
     nl_msg_put_u32(options, OVS_TUNNEL_ATTR_FLAGS, flags);
+
+    *tnl_cfg_ = tnl_cfg;
 
     return 0;
 }
@@ -757,9 +782,12 @@ unparse_tunnel_config(const char *name OVS_UNUSED, const char *type OVS_UNUSED,
 
 static int
 parse_patch_config(const char *name, const char *type OVS_UNUSED,
-                   const struct smap *args, struct ofpbuf *options)
+                   const struct smap *args, struct ofpbuf *options,
+                   struct netdev_tunnel_config *tnl_cfg)
 {
     const char *peer;
+
+    memset(tnl_cfg, 0, sizeof *tnl_cfg);
 
     peer = smap_get(args, "peer");
     if (!peer) {
@@ -811,7 +839,7 @@ unparse_patch_config(const char *name OVS_UNUSED, const char *type OVS_UNUSED,
     return 0;
 }
 
-#define VPORT_FUNCTIONS(GET_STATUS)                         \
+#define VPORT_FUNCTIONS(GET_TUNNEL_CONFIG, GET_STATUS)      \
     NULL,                                                   \
     netdev_vport_run,                                       \
     netdev_vport_wait,                                      \
@@ -820,6 +848,7 @@ unparse_patch_config(const char *name OVS_UNUSED, const char *type OVS_UNUSED,
     netdev_vport_destroy,                                   \
     netdev_vport_get_config,                                \
     netdev_vport_set_config,                                \
+    GET_TUNNEL_CONFIG,                                      \
                                                             \
     netdev_vport_open,                                      \
     netdev_vport_close,                                     \
@@ -872,7 +901,8 @@ unparse_patch_config(const char *name OVS_UNUSED, const char *type OVS_UNUSED,
 
 #define TUNNEL_CLASS(NAME, VPORT_TYPE)                      \
     { VPORT_TYPE,                                           \
-        { NAME, VPORT_FUNCTIONS(tunnel_get_status) },       \
+        { NAME, VPORT_FUNCTIONS(get_netdev_tunnel_config,   \
+                                tunnel_get_status) },       \
             parse_tunnel_config, unparse_tunnel_config }
 
 void
@@ -887,7 +917,7 @@ netdev_vport_register(void)
         TUNNEL_CLASS("vxlan", OVS_VPORT_TYPE_VXLAN),
 
         { OVS_VPORT_TYPE_PATCH,
-          { "patch", VPORT_FUNCTIONS(NULL) },
+          { "patch", VPORT_FUNCTIONS(NULL, NULL) },
           parse_patch_config, unparse_patch_config }
     };
 

@@ -290,6 +290,18 @@ netdev_get_config(const struct netdev *netdev, struct smap *args)
     return error;
 }
 
+const struct netdev_tunnel_config *
+netdev_get_tunnel_config(const struct netdev *netdev)
+{
+    struct netdev_dev *netdev_dev = netdev_get_dev(netdev);
+
+    if (netdev_dev->netdev_class->get_tunnel_config) {
+        return netdev_dev->netdev_class->get_tunnel_config(netdev_dev);
+    } else {
+        return NULL;
+    }
+}
+
 /* Closes and destroys 'netdev'. */
 void
 netdev_close(struct netdev *netdev)

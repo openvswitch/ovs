@@ -319,6 +319,7 @@ static const struct netdev_class dummy_class = {
     netdev_dummy_destroy,
     NULL,                       /* get_config */
     NULL,                       /* set_config */
+    NULL,                       /* get_tunnel_config */
 
     netdev_dummy_open,
     netdev_dummy_close,

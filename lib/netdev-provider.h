@@ -139,6 +139,13 @@ struct netdev_class {
      * pointer. */
     int (*set_config)(struct netdev_dev *netdev_dev, const struct smap *args);
 
+    /* Returns the tunnel configuration of 'netdev_dev'.  If 'netdev_dev' is
+     * not a tunnel, returns null.
+     *
+     * If this function would always return null, it may be null instead. */
+    const struct netdev_tunnel_config *
+        (*get_tunnel_config)(const struct netdev_dev *netdev_dev);
+
     /* Attempts to open a network device.  On success, sets 'netdevp'
      * to the new network device. */
     int (*open)(struct netdev_dev *netdev_dev, struct netdev **netdevp);

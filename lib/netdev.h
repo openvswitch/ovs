@@ -75,6 +75,32 @@ struct netdev_stats {
     uint64_t tx_window_errors;
 };
 
+/* Configuration specific to tunnels. */
+struct netdev_tunnel_config {
+    bool in_key_present;
+    bool in_key_flow;
+    ovs_be64 in_key;
+
+    bool out_key_present;
+    bool out_key_flow;
+    ovs_be64 out_key;
+
+    ovs_be16 dst_port;
+
+    ovs_be32 ip_src;
+    ovs_be32 ip_dst;
+
+    uint8_t ttl;
+    bool ttl_inherit;
+
+    uint8_t tos;
+    bool tos_inherit;
+
+    bool csum;
+    bool ipsec;
+    bool dont_fragment;
+};
+
 struct netdev;
 struct netdev_class;
 
@@ -95,6 +121,8 @@ void netdev_parse_name(const char *netdev_name, char **name, char **type);
 /* Options. */
 int netdev_set_config(struct netdev *, const struct smap *args);
 int netdev_get_config(const struct netdev *, struct smap *);
+const struct netdev_tunnel_config *
+    netdev_get_tunnel_config(const struct netdev *);
 
 /* Basic properties. */
 const char *netdev_get_name(const struct netdev *);

@@ -2433,6 +2433,7 @@ netdev_linux_change_seq(const struct netdev *netdev)
     netdev_linux_destroy,                                       \
     NULL,                       /* get_config */                \
     NULL,                       /* set_config */                \
+    NULL,                       /* get_tunnel_config */         \
                                                                 \
     netdev_linux_open,                                          \
     netdev_linux_close,                                         \
