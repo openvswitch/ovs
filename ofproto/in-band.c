@@ -256,7 +256,7 @@ in_band_msg_in_hook(struct in_band *in_band, const struct flow *flow,
 /* Returns true if the rule that would match 'flow' with 'actions' is
  * allowed to be set up in the datapath. */
 bool
-in_band_rule_check(const struct flow *flow,
+in_band_rule_check(const struct flow *flow, uint32_t local_odp_port,
                    const struct nlattr *actions, size_t actions_len)
 {
     /* Don't allow flows that would prevent DHCP replies from being seen
@@ -270,7 +270,7 @@ in_band_rule_check(const struct flow *flow,
 
         NL_ATTR_FOR_EACH_UNSAFE (a, left, actions, actions_len) {
             if (nl_attr_type(a) == OVS_ACTION_ATTR_OUTPUT
-                && nl_attr_get_u32(a) == OVSP_LOCAL) {
+                && nl_attr_get_u32(a) == local_odp_port) {
                 return true;
             }
         }

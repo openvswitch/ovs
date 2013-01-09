@@ -2930,7 +2930,7 @@ port_get_stats(const struct ofport *ofport_, struct netdev_stats *stats)
 
     error = netdev_get_stats(ofport->up.netdev, stats);
 
-    if (!error && ofport->odp_port == OVSP_LOCAL) {
+    if (!error && ofport_->ofp_port == OFPP_LOCAL) {
         struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofport->up.ofproto);
 
         /* ofproto->stats.tx_packets represents packets that we created
@@ -6180,6 +6180,7 @@ xlate_actions(struct action_xlate_ctx *ctx,
     } else {
         static struct vlog_rate_limit trace_rl = VLOG_RATE_LIMIT_INIT(1, 1);
         ovs_be16 initial_tci = ctx->base_flow.vlan_tci;
+        uint32_t local_odp_port;
 
         add_sflow_action(ctx);
         do_xlate_actions(ofpacts, ofpacts_len, ctx);
@@ -6200,7 +6201,9 @@ xlate_actions(struct action_xlate_ctx *ctx,
             }
         }
 
+        local_odp_port = ofp_port_to_odp_port(ctx->ofproto, OFPP_LOCAL);
         if (!connmgr_may_set_up_flow(ctx->ofproto->up.connmgr, &ctx->flow,
+                                     local_odp_port,
                                      ctx->odp_actions->data,
                                      ctx->odp_actions->size)) {
             ctx->slow |= SLOW_IN_BAND;

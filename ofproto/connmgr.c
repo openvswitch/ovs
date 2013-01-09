@@ -1638,10 +1638,12 @@ connmgr_msg_in_hook(struct connmgr *mgr, const struct flow *flow,
 
 bool
 connmgr_may_set_up_flow(struct connmgr *mgr, const struct flow *flow,
+                        uint32_t local_odp_port,
                         const struct nlattr *odp_actions,
                         size_t actions_len)
 {
-    return !mgr->in_band || in_band_rule_check(flow, odp_actions, actions_len);
+    return !mgr->in_band || in_band_rule_check(flow, local_odp_port,
+                                               odp_actions, actions_len);
 }
 
 /* Fail-open and in-band implementation. */
