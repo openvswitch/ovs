@@ -33,6 +33,7 @@ TESTSUITE_AT = \
 	tests/jsonrpc.at \
 	tests/jsonrpc-py.at \
 	tests/timeval.at \
+	tests/tunnel.at \
 	tests/lockfile.at \
 	tests/reconnect.at \
 	tests/ofproto-dpif.at \

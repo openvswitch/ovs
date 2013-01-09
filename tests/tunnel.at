@@ -1,0 +1,312 @@
+AT_BANNER([tunnel])
+
+AT_SETUP([tunnel - input])
+OVS_VSWITCHD_START([add-port br0 p1 -- set Interface p1 type=gre \
+                    options:remote_ip=1.1.1.1 ofport_request=1\
+                    -- add-port br0 p2 -- set Interface p2 type=gre \
+                    options:local_ip=2.2.2.2 options:remote_ip=1.1.1.1 \
+                    ofport_request=2 \
+                    -- add-port br0 p3 -- set Interface p3 type=gre \
+                    options:remote_ip=2.2.2.2 ofport_request=3])
+AT_DATA([flows.txt], [dnl
+actions=IN_PORT
+])
+
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+AT_CHECK([ovs-appctl dpif/show], [0], [dnl
+br0 (dummy@ovs-dummy):
+	lookups: hit:0 missed:0 lost:0
+	flows: 0
+	br0 65534/100: (dummy)
+	p1 1/1: (gre: remote_ip=1.1.1.1)
+	p2 2/1: (gre: local_ip=2.2.2.2, remote_ip=1.1.1.1)
+	p3 3/1: (gre: remote_ip=2.2.2.2)
+])
+
+dnl remote_ip
+AT_CHECK([ovs-appctl ofproto/trace br0 'tunnel(tun_id=0x0,src=1.1.1.1,dst=1.2.3.4,tos=0x0,ttl=64,flags()),in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=9)'], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0],
+  [Datapath actions: set(tunnel(tun_id=0x0,src=0.0.0.0,dst=1.1.1.1,tos=0x0,ttl=64,flags(df))),1
+])
+
+dnl local_ip, remote_ip
+AT_CHECK([ovs-appctl ofproto/trace br0 'tunnel(tun_id=0x0,src=1.1.1.1,dst=2.2.2.2,tos=0x0,ttl=64,flags()),in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=9)'], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0],
+  [Datapath actions: set(tunnel(tun_id=0x0,src=2.2.2.2,dst=1.1.1.1,tos=0x0,ttl=64,flags(df))),1
+])
+
+dnl reconfigure, local_ip, remote_ip
+AT_CHECK([ovs-vsctl set Interface p2 type=gre options:local_ip=2.2.2.3 \
+          options:df_default=false options:ttl=1 options:csum=true \
+          -- set Interface p3 type=gre64])
+AT_CHECK([ovs-appctl dpif/show], [0], [dnl
+br0 (dummy@ovs-dummy):
+	lookups: hit:0 missed:0 lost:0
+	flows: 0
+	br0 65534/100: (dummy)
+	p1 1/1: (gre: remote_ip=1.1.1.1)
+	p2 2/1: (gre: csum=true, df_default=false, local_ip=2.2.2.3, remote_ip=1.1.1.1, ttl=1)
+	p3 3/64: (gre64: remote_ip=2.2.2.2)
+])
+AT_CHECK([ovs-appctl ofproto/trace br0 'tunnel(tun_id=0x0,src=1.1.1.1,dst=2.2.2.2,tos=0x0,ttl=64,flags()),in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=9)'], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0],
+  [Datapath actions: set(tunnel(tun_id=0x0,src=0.0.0.0,dst=1.1.1.1,tos=0x0,ttl=64,flags(df))),1
+])
+AT_CHECK([ovs-appctl ofproto/trace br0 'tunnel(tun_id=0x0,src=1.1.1.1,dst=2.2.2.3,tos=0x0,ttl=64,flags()),in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=9)'], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0],
+  [Datapath actions: set(tunnel(tun_id=0x0,src=2.2.2.3,dst=1.1.1.1,tos=0x0,ttl=1,flags(csum))),1
+])
+
+dnl nonexistent tunnel
+AT_CHECK([ovs-appctl ofproto/trace br0 'tunnel(tun_id=0x0,src=5.5.5.5,dst=6.6.6.6,tos=0x0,ttl=64,flags()),in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=9)'], [2], [ignore], [dnl
+Invalid flow
+ovs-appctl: ovs-vswitchd: server returned an error
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([tunnel - ECN decapsulation])
+OVS_VSWITCHD_START([add-port br0 p1 -- set Interface p1 type=gre \
+                    options:remote_ip=1.1.1.1 ofport_request=1 \
+                    -- add-port br0 p2 -- set Interface p2 type=dummy \
+                    ofport_request=2])
+AT_DATA([flows.txt], [dnl
+actions=2
+])
+
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+AT_CHECK([ovs-appctl dpif/show], [0], [dnl
+br0 (dummy@ovs-dummy):
+	lookups: hit:0 missed:0 lost:0
+	flows: 0
+	br0 65534/100: (dummy)
+	p1 1/1: (gre: remote_ip=1.1.1.1)
+	p2 2/2: (dummy)
+])
+
+AT_CHECK([ovs-appctl ofproto/trace br0 'tunnel(tun_id=0x0,src=1.1.1.1,dst=2.2.2.2,tos=0x3,ttl=64,flags()),in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=1,ttl=64,frag=no),tcp(src=8,dst=9)'], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0],
+  [Datapath actions: 2
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([tunnel - output])
+OVS_VSWITCHD_START([add-port br0 p1 -- set Interface p1 type=gre \
+                    options:remote_ip=1.1.1.1 options:local_ip=2.2.2.2 \
+                    options:key=5 ofport_request=1\
+                    -- add-port br0 p2 -- set Interface p2 type=dummy \
+                    ofport_request=2 ofport_request=2])
+AT_DATA([flows.txt], [dnl
+actions=output:1
+])
+
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+AT_CHECK([ovs-appctl dpif/show], [0], [dnl
+br0 (dummy@ovs-dummy):
+	lookups: hit:0 missed:0 lost:0
+	flows: 0
+	br0 65534/100: (dummy)
+	p1 1/1: (gre: key=5, local_ip=2.2.2.2, remote_ip=1.1.1.1)
+	p2 2/2: (dummy)
+])
+
+dnl Basic
+AT_CHECK([ovs-appctl ofproto/trace br0 'in_port(2),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=4,ttl=128,frag=no),tcp(src=8,dst=9)'], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0],
+  [Datapath actions: set(tunnel(tun_id=0x5,src=2.2.2.2,dst=1.1.1.1,tos=0x0,ttl=64,flags(df,key))),1
+])
+
+dnl ECN
+AT_CHECK([ovs-appctl ofproto/trace br0 'in_port(2),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=1,ttl=64,frag=no),tcp(src=8,dst=9)'], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0],
+  [Datapath actions: set(tunnel(tun_id=0x5,src=2.2.2.2,dst=1.1.1.1,tos=0x1,ttl=64,flags(df,key))),1
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([tunnel - ToS and TTL inheritance])
+OVS_VSWITCHD_START([add-port br0 p1 -- set Interface p1 type=gre \
+                    options:remote_ip=1.1.1.1 options:tos=inherit \
+                    options:ttl=inherit ofport_request=1 \
+                    -- add-port br0 p2 -- set Interface p2 type=dummy \
+                    ofport_request=2 ofport_request=2])
+AT_DATA([flows.txt], [dnl
+actions=output:1
+])
+
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+AT_CHECK([ovs-appctl dpif/show], [0], [dnl
+br0 (dummy@ovs-dummy):
+	lookups: hit:0 missed:0 lost:0
+	flows: 0
+	br0 65534/100: (dummy)
+	p1 1/1: (gre: remote_ip=1.1.1.1, tos=inherit, ttl=inherit)
+	p2 2/2: (dummy)
+])
+
+dnl Basic
+AT_CHECK([ovs-appctl ofproto/trace br0 'in_port(2),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=4,ttl=128,frag=no),tcp(src=8,dst=9)'], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0],
+  [Datapath actions: set(tunnel(tun_id=0x0,src=0.0.0.0,dst=1.1.1.1,tos=0x4,ttl=128,flags(df))),1
+])
+
+dnl ECN
+AT_CHECK([ovs-appctl ofproto/trace br0 'in_port(2),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=5,ttl=128,frag=no),tcp(src=8,dst=9)'], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0],
+  [Datapath actions: set(tunnel(tun_id=0x0,src=0.0.0.0,dst=1.1.1.1,tos=0x5,ttl=128,flags(df))),1
+])
+
+dnl non-IP
+AT_CHECK([ovs-appctl ofproto/trace br0 'in_port(2),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0806),arp(sip=1.2.3.4,tip=5.6.7.8,op=1,sha=00:0f:10:11:12:13,tha=00:14:15:16:17:18)'], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0],
+  [Datapath actions: set(tunnel(tun_id=0x0,src=0.0.0.0,dst=1.1.1.1,tos=0x0,ttl=64,flags(df))),1
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([tunnel - set_tunnel])
+OVS_VSWITCHD_START([dnl
+    add-port br0 p1 -- set Interface p1 type=gre options:key=flow \
+        options:remote_ip=1.1.1.1 ofport_request=1 \
+    -- add-port br0 p2 -- set Interface p2 type=gre options:key=flow \
+        options:remote_ip=2.2.2.2 ofport_request=2 \
+    -- add-port br0 p3 -- set Interface p3 type=gre options:key=flow \
+        options:remote_ip=3.3.3.3 ofport_request=3 \
+    -- add-port br0 p4 -- set Interface p4 type=gre options:key=flow \
+        options:remote_ip=4.4.4.4 ofport_request=4])
+AT_DATA([flows.txt], [dnl
+actions=set_tunnel:1,output:1,set_tunnel:2,output:2,set_tunnel:3,output:3,set_tunnel:5,output:4
+])
+
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+AT_CHECK([ovs-appctl dpif/show], [0], [dnl
+br0 (dummy@ovs-dummy):
+	lookups: hit:0 missed:0 lost:0
+	flows: 0
+	br0 65534/100: (dummy)
+	p1 1/1: (gre: key=flow, remote_ip=1.1.1.1)
+	p2 2/1: (gre: key=flow, remote_ip=2.2.2.2)
+	p3 3/1: (gre: key=flow, remote_ip=3.3.3.3)
+	p4 4/1: (gre: key=flow, remote_ip=4.4.4.4)
+])
+
+AT_CHECK([ovs-appctl ofproto/trace br0 'in_port(100),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)'], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0], [Datapath actions: dnl
+set(tunnel(tun_id=0x1,src=0.0.0.0,dst=1.1.1.1,tos=0x0,ttl=64,flags(df,key))),1,dnl
+set(tunnel(tun_id=0x2,src=0.0.0.0,dst=2.2.2.2,tos=0x0,ttl=64,flags(df,key))),1,dnl
+set(tunnel(tun_id=0x3,src=0.0.0.0,dst=3.3.3.3,tos=0x0,ttl=64,flags(df,key))),1,dnl
+set(tunnel(tun_id=0x5,src=0.0.0.0,dst=4.4.4.4,tos=0x0,ttl=64,flags(df,key))),1
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([tunnel - key])
+OVS_VSWITCHD_START([dnl
+    add-port br0 p1 -- set Interface p1 type=gre options:key=1 \
+        options:remote_ip=1.1.1.1 ofport_request=1 \
+    -- add-port br0 p2 -- set Interface p2 type=gre options:in_key=2 \
+        options:out_key=3 options:remote_ip=1.1.1.1 ofport_request=2 \
+    -- add-port br0 p3 -- set Interface p3 type=gre options:out_key=5 \
+        options:remote_ip=1.1.1.1 ofport_request=3])
+AT_DATA([flows.txt], [dnl
+actions=IN_PORT,output:1,output:2,output:3
+])
+
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+AT_CHECK([ovs-appctl dpif/show], [0], [dnl
+br0 (dummy@ovs-dummy):
+	lookups: hit:0 missed:0 lost:0
+	flows: 0
+	br0 65534/100: (dummy)
+	p1 1/1: (gre: key=1, remote_ip=1.1.1.1)
+	p2 2/1: (gre: in_key=2, out_key=3, remote_ip=1.1.1.1)
+	p3 3/1: (gre: out_key=5, remote_ip=1.1.1.1)
+])
+
+AT_CHECK([ovs-appctl ofproto/trace br0 'tunnel(tun_id=0x1,src=1.1.1.1,dst=2.2.2.2,tos=0x0,ttl=64,flags(key)),in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=9)'], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0], [Datapath actions: dnl
+set(tunnel(tun_id=0x1,src=0.0.0.0,dst=1.1.1.1,tos=0x0,ttl=64,flags(df,key))),1,dnl
+set(tunnel(tun_id=0x3,src=0.0.0.0,dst=1.1.1.1,tos=0x0,ttl=64,flags(df,key))),1,dnl
+set(tunnel(tun_id=0x5,src=0.0.0.0,dst=1.1.1.1,tos=0x0,ttl=64,flags(df,key))),1
+])
+
+AT_CHECK([ovs-appctl ofproto/trace br0 'tunnel(tun_id=0x2,src=1.1.1.1,dst=2.2.2.2,tos=0x0,ttl=64,flags(key)),in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=9)'], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0], [Datapath actions: dnl
+set(tunnel(tun_id=0x3,src=0.0.0.0,dst=1.1.1.1,tos=0x0,ttl=64,flags(df,key))),1,dnl
+set(tunnel(tun_id=0x1,src=0.0.0.0,dst=1.1.1.1,tos=0x0,ttl=64,flags(df,key))),1,dnl
+set(tunnel(tun_id=0x5,src=0.0.0.0,dst=1.1.1.1,tos=0x0,ttl=64,flags(df,key))),1
+])
+
+AT_CHECK([ovs-appctl ofproto/trace br0 'tunnel(tun_id=0x0,src=1.1.1.1,dst=2.2.2.2,tos=0x0,ttl=64,flags()),in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=9)'], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0], [Datapath actions: dnl
+set(tunnel(tun_id=0x5,src=0.0.0.0,dst=1.1.1.1,tos=0x0,ttl=64,flags(df,key))),1,dnl
+set(tunnel(tun_id=0x1,src=0.0.0.0,dst=1.1.1.1,tos=0x0,ttl=64,flags(df,key))),1,dnl
+set(tunnel(tun_id=0x3,src=0.0.0.0,dst=1.1.1.1,tos=0x0,ttl=64,flags(df,key))),1
+])
+
+AT_CHECK([ovs-appctl ofproto/trace br0 'tunnel(tun_id=0xf,src=1.1.1.1,dst=2.2.2.2,tos=0x0,ttl=64,flags(key)),in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=9)'], [2], [ignore], [dnl
+Invalid flow
+ovs-appctl: ovs-vswitchd: server returned an error
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([tunnel - key match])
+OVS_VSWITCHD_START([dnl
+    add-port br0 p1 -- set Interface p1 type=gre options:key=flow \
+        options:remote_ip=1.1.1.1 ofport_request=1 \
+    -- add-port br0 p2 -- set Interface p2 type=gre options:key=3 \
+        options:remote_ip=3.3.3.3 ofport_request=2 \
+    -- add-port br0 p3 -- set Interface p3 type=dummy ofport_request=3 \
+    -- add-port br0 p4 -- set Interface p4 type=dummy ofport_request=4 \
+    -- add-port br0 p5 -- set Interface p5 type=dummy ofport_request=5])
+AT_DATA([flows.txt], [dnl
+tun_id=2,actions=output:3
+tun_id=3,actions=output:4,set_tunnel:2,resubmit:99,set_tunnel:4,output:2,resubmit:99
+tun_id=4,actions=output:5
+])
+
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+AT_CHECK([ovs-appctl dpif/show], [0], [dnl
+br0 (dummy@ovs-dummy):
+	lookups: hit:0 missed:0 lost:0
+	flows: 0
+	br0 65534/100: (dummy)
+	p1 1/1: (gre: key=flow, remote_ip=1.1.1.1)
+	p2 2/1: (gre: key=3, remote_ip=3.3.3.3)
+	p3 3/3: (dummy)
+	p4 4/4: (dummy)
+	p5 5/5: (dummy)
+])
+
+AT_CHECK([ovs-appctl ofproto/trace br0 'tunnel(tun_id=0x2,src=1.1.1.1,dst=2.2.2.2,tos=0x0,ttl=64,flags(key)),in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=9)'], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0], [dnl
+Datapath actions: 3
+])
+
+AT_CHECK([ovs-appctl ofproto/trace br0 'tunnel(tun_id=0x3,src=1.1.1.1,dst=2.2.2.2,tos=0x0,ttl=64,flags(key)),in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=9)'], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0], [dnl
+Datapath actions: 4,3,set(tunnel(tun_id=0x3,src=0.0.0.0,dst=3.3.3.3,tos=0x0,ttl=64,flags(df,key))),1,5
+])
+
+AT_CHECK([ovs-appctl ofproto/trace br0 'tunnel(tun_id=0x3,src=3.3.3.3,dst=2.2.2.2,tos=0x0,ttl=64,flags(key)),in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=9)'], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0], [dnl
+Datapath actions: 4,3,5
+])
+
+AT_CHECK([ovs-appctl ofproto/trace br0 'tunnel(tun_id=0x0,src=1.1.1.1,dst=2.2.2.2,tos=0x0,ttl=64,flags(key)),in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=9)'], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0], [dnl
+	- Sends "packet-in" messages to the OpenFlow controller.
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
