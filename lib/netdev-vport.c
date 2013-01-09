@@ -872,33 +872,21 @@ unparse_patch_config(const char *name OVS_UNUSED, const char *type OVS_UNUSED,
                                                             \
     netdev_vport_change_seq
 
+#define TUNNEL_CLASS(NAME, VPORT_TYPE)                      \
+    { VPORT_TYPE,                                           \
+        { NAME, VPORT_FUNCTIONS(tunnel_get_status) },       \
+            parse_tunnel_config, unparse_tunnel_config }
+
 void
 netdev_vport_register(void)
 {
     static const struct vport_class vport_classes[] = {
-        { OVS_VPORT_TYPE_GRE,
-          { "gre", VPORT_FUNCTIONS(tunnel_get_status) },
-          parse_tunnel_config, unparse_tunnel_config },
-
-        { OVS_VPORT_TYPE_GRE,
-          { "ipsec_gre", VPORT_FUNCTIONS(tunnel_get_status) },
-          parse_tunnel_config, unparse_tunnel_config },
-
-        { OVS_VPORT_TYPE_GRE64,
-          { "gre64", VPORT_FUNCTIONS(tunnel_get_status) },
-          parse_tunnel_config, unparse_tunnel_config },
-
-        { OVS_VPORT_TYPE_GRE64,
-          { "ipsec_gre64", VPORT_FUNCTIONS(tunnel_get_status) },
-          parse_tunnel_config, unparse_tunnel_config },
-
-        { OVS_VPORT_TYPE_CAPWAP,
-          { "capwap", VPORT_FUNCTIONS(tunnel_get_status) },
-          parse_tunnel_config, unparse_tunnel_config },
-
-        { OVS_VPORT_TYPE_VXLAN,
-          { "vxlan", VPORT_FUNCTIONS(tunnel_get_status) },
-          parse_tunnel_config, unparse_tunnel_config },
+        TUNNEL_CLASS("gre", OVS_VPORT_TYPE_GRE),
+        TUNNEL_CLASS("ipsec_gre", OVS_VPORT_TYPE_GRE),
+        TUNNEL_CLASS("gre64", OVS_VPORT_TYPE_GRE64),
+        TUNNEL_CLASS("ipsec_gre64", OVS_VPORT_TYPE_GRE64),
+        TUNNEL_CLASS("capwap", OVS_VPORT_TYPE_CAPWAP),
+        TUNNEL_CLASS("vxlan", OVS_VPORT_TYPE_VXLAN),
 
         { OVS_VPORT_TYPE_PATCH,
           { "patch", VPORT_FUNCTIONS(NULL) },
