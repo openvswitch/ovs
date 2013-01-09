@@ -7889,7 +7889,7 @@ odp_port_to_ofp_port(const struct ofproto_dpif *ofproto, uint32_t odp_port)
     struct ofport_dpif *port;
 
     port = odp_port_to_ofport(ofproto->backer, odp_port);
-    if (port && ofproto == ofproto_dpif_cast(port->up.ofproto)) {
+    if (port && &ofproto->up == port->up.ofproto) {
         return port->up.ofp_port;
     } else {
         return OFPP_NONE;
