@@ -267,6 +267,7 @@ static int vxlan_tunnel_setup(struct net *net, struct nlattr *options,
 	if (vxlan_port) {
 		vxlan_port->count++;
 		err = 0;
+		*vxport = vxlan_port;
 		goto out;
 	}
 
