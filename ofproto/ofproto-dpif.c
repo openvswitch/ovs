@@ -2792,7 +2792,8 @@ get_ofp_port(const struct ofproto_dpif *ofproto, uint16_t ofp_port)
 static struct ofport_dpif *
 get_odp_port(const struct ofproto_dpif *ofproto, uint32_t odp_port)
 {
-    return get_ofp_port(ofproto, odp_port_to_ofp_port(ofproto, odp_port));
+    struct ofport_dpif *port = odp_port_to_ofport(ofproto->backer, odp_port);
+    return port && &ofproto->up == port->up.ofproto ? port : NULL;
 }
 
 static void
