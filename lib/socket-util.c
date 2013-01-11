@@ -1120,7 +1120,7 @@ send_iovec_and_fds(int sock,
 
         msg.msg_name = NULL;
         msg.msg_namelen = 0;
-        msg.msg_iov = (struct iovec *) iovs;
+        msg.msg_iov = CONST_CAST(struct iovec *, iovs);
         msg.msg_iovlen = n_iovs;
         msg.msg_control = &cmsg.cm;
         msg.msg_controllen = CMSG_SPACE(n_fds * sizeof *fds);
