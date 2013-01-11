@@ -27,6 +27,8 @@ Commands:
                         configuration.
  save-flows             Outputs a shell script on stdout that will restore
                         Openflow flows of each Open vSwitch bridge.
+ save-ofports           Outputs a shell script on stdout that will restore
+                        the ofport value across a force-reload-kmod.
 This script is meant as a helper for the Open vSwitch init script commands.
 EOF
 }
@@ -174,6 +176,32 @@ save_flows () {
     done
 }
 
+ovs_vsctl () {
+    ovs-vsctl --no-wait --timeout=1 "$@"
+}
+
+save_ofports ()
+{
+    if missing_program ovs-vsctl; then
+        echo "$0: ovs-vsctl not found in $PATH" >&2
+        exit 1
+    fi
+
+    for bridge in "$@"; do
+        count=0
+        for iface in `ovs_vsctl list-ifaces ${bridge}`; do
+            ofport=`ovs_vsctl get interface ${iface} ofport`
+            [ "${count}" -eq 0 ] && cmd="ovs-vsctl --no-wait --timeout=1"
+            cmd="${cmd} -- --if-exists set interface "${iface}" \
+                     ofport_request="${ofport}""
+
+            # Run set interface command on 50 ports at a time.
+            count=`expr ${count} + 1`
+            [ "${count}" -eq 50 ] && count=0 && echo "${cmd}" && cmd=""
+        done
+        echo "${cmd}"
+    done
+}
 
 while [ $# -ne 0 ]
 do
@@ -186,6 +214,11 @@ do
         "save-interfaces")
             shift
             save_interfaces "$@"
+            exit 0
+            ;;
+        "save-ofports")
+            shift
+            save_ofports "$@"
             exit 0
             ;;
         -h | --help)
