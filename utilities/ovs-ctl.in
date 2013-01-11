@@ -267,21 +267,37 @@ internal_interfaces () {
     done
 }
 
-save_flows () {
-   if set X `ovs_vsctl -- --real list-br`; then
-        shift
-        if "$datadir/scripts/ovs-save" save-flows "$@" > "$script_flows"; then
-            chmod +x "$script_flows"
-            return 0
-        fi
+ovs_save () {
+    bridges=`ovs_vsctl -- --real list-br`
+    if [ -n "${bridges}" ] && \
+        "$datadir/scripts/ovs-save" "$1" ${bridges} > "$2"; then
+        chmod +x "$2"
+        return 0
     fi
-    script_flows=
-    return 1
+    eval $3=""
+    [ -z "${bridges}" ] && return 0
+}
+
+save_ofports_if_required () {
+    # Save ofports if we are upgrading from a pre-1.10 branch.
+    case `ovs-appctl version | sed 1q` in
+        "ovs-vswitchd (Open vSwitch) 1."[0-9].*)
+            action "Saving ofport values" ovs_save save-ofports \
+                "${script_ofports}" script_ofports
+            ;;
+        *)
+            ;;
+    esac
 }
 
 save_interfaces () {
     "$datadir/scripts/ovs-save" save-interfaces ${ifaces} \
         > "${script_interfaces}"
+}
+
+restore_ofports () {
+    [ -n "${script_ofports}" ] && \
+        action "Restoring ofport values" "${script_ofports}"
 }
 
 restore_flows () {
@@ -295,14 +311,20 @@ force_reload_kmod () {
 
     script_interfaces=`mktemp`
     script_flows=`mktemp`
-    trap 'rm -f "${script_interfaces}" "${script_flows}" ' 0
+    script_ofports=`mktemp`
+    trap 'rm -f "${script_interfaces}" "${script_flows}" "${script_ofports}"' 0
 
-    action "Saving flows" save_flows
+    action "Saving flows" ovs_save save-flows "${script_flows}" script_flows
+
+    save_ofports_if_required
 
     # Restart the database first, since a large database may take a
     # while to load, and we want to minimize forwarding disruption.
     stop_ovsdb
     start_ovsdb
+
+    # Restore of ofports should happen before vswitchd is restarted.
+    restore_ofports
 
     stop_forwarding
 
@@ -353,7 +375,8 @@ restart () {
         script_flows=`mktemp`
         trap 'rm -f "${script_flows}"' 0
 
-        action "Saving flows" save_flows
+        action "Saving flows" ovs_save save-flows "${script_flows}" \
+            script_flows
     fi
 
     # Restart the database first, since a large database may take a
