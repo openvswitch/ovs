@@ -237,11 +237,14 @@ worker_request_iovec(const struct iovec iovs[], size_t n_iovs,
                      worker_request_func *request_cb,
                      worker_reply_func *reply_cb, void *aux)
 {
+    static bool recursing = false;
     struct worker_request rq;
     struct iovec *all_iovs;
     int error;
 
     assert(worker_is_running());
+    assert(!recursing);
+    recursing = true;
 
     rq.request_len = iovec_len(iovs, n_iovs);
     rq.request_cb = request_cb;
@@ -255,6 +258,8 @@ worker_request_iovec(const struct iovec iovs[], size_t n_iovs,
         VLOG_ABORT("send failed (%s)", strerror(error));
     }
     free(all_iovs);
+
+    recursing = false;
 }
 
 /* Closes the client socket, if any, so that worker_is_running() will return
