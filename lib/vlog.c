@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,6 +28,7 @@
 #include <syslog.h>
 #include <time.h>
 #include <unistd.h>
+#include "coverage.h"
 #include "dirs.h"
 #include "dynamic-string.h"
 #include "ofpbuf.h"
@@ -39,6 +40,8 @@
 #include "worker.h"
 
 VLOG_DEFINE_THIS_MODULE(vlog);
+
+COVERAGE_DEFINE(vlog_recursive);
 
 /* Name for each logging level. */
 static const char *level_names[VLL_N_LEVELS] = {
@@ -952,13 +955,26 @@ static void
 vlog_write_file(struct ds *s)
 {
     if (worker_is_running()) {
-        worker_request(s->string, s->length,
-                       &log_fd, vlog_async_inited ? 0 : 1,
-                       vlog_async_write_request_cb, NULL, NULL);
-        vlog_async_inited = true;
-    } else {
-        ignore(write(log_fd, s->string, s->length));
+        static bool in_worker_request = false;
+        if (!in_worker_request) {
+            in_worker_request = true;
+
+            worker_request(s->string, s->length,
+                           &log_fd, vlog_async_inited ? 0 : 1,
+                           vlog_async_write_request_cb, NULL, NULL);
+            vlog_async_inited = true;
+
+            in_worker_request = false;
+            return;
+        } else {
+            /* We've been entered recursively.  This can happen if
+             * worker_request(), or a function that it calls, tries to log
+             * something.  We can't call worker_request() recursively, so fall
+             * back to writing the log file directly. */
+            COVERAGE_INC(vlog_recursive);
+        }
     }
+    ignore(write(log_fd, s->string, s->length));
 }
 
 static void
