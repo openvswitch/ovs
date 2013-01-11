@@ -447,8 +447,6 @@ rxbuf_run(struct rxbuf *rx, int sock, size_t header_len)
             }
         }
     }
-
-    return EAGAIN;
 }
 
 static struct iovec *
