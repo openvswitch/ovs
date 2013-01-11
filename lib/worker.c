@@ -1,4 +1,4 @@
-/* Copyright (c) 2012 Nicira, Inc.
+/* Copyright (c) 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -198,6 +198,7 @@ worker_send_iovec(const struct iovec iovs[], size_t n_iovs,
     size_t sent = 0;
 
     for (;;) {
+        struct pollfd pfd;
         int error;
 
         /* Try to send the rest of the request. */
@@ -210,8 +211,21 @@ worker_send_iovec(const struct iovec iovs[], size_t n_iovs,
         /* Process replies to avoid deadlock. */
         worker_run();
 
-        poll_fd_wait(client_sock, POLLIN | POLLOUT);
-        poll_block();
+        /* Wait for 'client_sock' to become ready before trying again.  We
+         * can't use poll_block() because it sometimes calls into vlog, which
+         * calls indirectly into worker_send_iovec().  To be usable here,
+         * poll_block() would therefore need to be reentrant, but it isn't
+         * (calling it recursively causes memory corruption and an eventual
+         * crash). */
+        pfd.fd = client_sock;
+        pfd.events = POLLIN | POLLOUT;
+        do {
+            error = poll(&pfd, 1, -1) < 0 ? errno : 0;
+        } while (error == EINTR);
+        if (error) {
+            worker_broke();
+            VLOG_ABORT("poll failed (%s)", strerror(error));
+        }
     }
 }
 
