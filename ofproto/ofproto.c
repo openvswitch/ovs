@@ -1613,38 +1613,30 @@ static uint16_t
 alloc_ofp_port(struct ofproto *ofproto, const char *netdev_name)
 {
     uint16_t ofp_port;
+    uint16_t end_port_no = ofproto->alloc_port_no;
 
     ofp_port = simap_get(&ofproto->ofp_requests, netdev_name);
     ofp_port = ofp_port ? ofp_port : OFPP_NONE;
 
     if (ofp_port >= ofproto->max_ports
             || bitmap_is_set(ofproto->ofp_port_ids, ofp_port)) {
-        bool retry = ofproto->alloc_port_no ? true : false;
-
         /* Search for a free OpenFlow port number.  We try not to
          * immediately reuse them to prevent problems due to old
          * flows. */
-        while (ofp_port >= ofproto->max_ports) {
-            for (ofproto->alloc_port_no++;
-                 ofproto->alloc_port_no < ofproto->max_ports;
-                 ofproto->alloc_port_no++) {
-                if (!bitmap_is_set(ofproto->ofp_port_ids,
-                                   ofproto->alloc_port_no)) {
-                    ofp_port = ofproto->alloc_port_no;
-                    break;
-                }
+        for (;;) {
+            if (++ofproto->alloc_port_no >= ofproto->max_ports) {
+                ofproto->alloc_port_no = 0;
             }
-            if (ofproto->alloc_port_no >= ofproto->max_ports) {
-                if (retry) {
-                    ofproto->alloc_port_no = 0;
-                    retry = false;
-                } else {
-                    return OFPP_NONE;
-                }
+            if (!bitmap_is_set(ofproto->ofp_port_ids,
+                               ofproto->alloc_port_no)) {
+                ofp_port = ofproto->alloc_port_no;
+                break;
+            }
+            if (ofproto->alloc_port_no == end_port_no) {
+                return OFPP_NONE;
             }
         }
     }
-
     bitmap_set1(ofproto->ofp_port_ids, ofp_port);
     return ofp_port;
 }
