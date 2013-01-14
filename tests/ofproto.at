@@ -61,7 +61,7 @@ OVS_VSWITCHD_START
 AT_CHECK([ovs-ofctl -vwarn dump-ports br0], [0], [stdout])
 AT_CHECK([STRIP_XIDS stdout], [0], [dnl
 OFPST_PORT reply: 1 ports
-  port 65534: rx pkts=0, bytes=0, drop=0, errs=0, frame=0, over=0, crc=0
+  port LOCAL: rx pkts=0, bytes=0, drop=0, errs=0, frame=0, over=0, crc=0
            tx pkts=0, bytes=0, drop=0, errs=0, coll=0
 ])
 OVS_VSWITCHD_STOP
@@ -72,7 +72,7 @@ OVS_VSWITCHD_START
 AT_CHECK([ovs-ofctl -O OpenFlow12 -vwarn dump-ports br0], [0], [stdout])
 AT_CHECK([STRIP_XIDS stdout], [0], [dnl
 OFPST_PORT reply (OF1.2): 1 ports
-  port 65534: rx pkts=0, bytes=0, drop=0, errs=0, frame=0, over=0, crc=0
+  port LOCAL: rx pkts=0, bytes=0, drop=0, errs=0, frame=0, over=0, crc=0
            tx pkts=0, bytes=0, drop=0, errs=0, coll=0
 ])
 OVS_VSWITCHD_STOP

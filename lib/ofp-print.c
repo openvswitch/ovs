@@ -570,6 +570,22 @@ static void print_wild(struct ds *string, const char *leader, int is_wild,
 }
 
 static void
+print_wild_port(struct ds *string, const char *leader, int is_wild,
+                int verbosity, uint16_t port)
+{
+    if (is_wild && verbosity < 2) {
+        return;
+    }
+    ds_put_cstr(string, leader);
+    if (!is_wild) {
+        ofputil_format_port(port, string);
+    } else {
+        ds_put_char(string, '*');
+    }
+    ds_put_char(string, ',');
+}
+
+static void
 print_ip_netmask(struct ds *string, const char *leader, ovs_be32 ip,
                  uint32_t wild_bits, int verbosity)
 {
@@ -630,8 +646,8 @@ ofp10_match_to_string(const struct ofp10_match *om, int verbosity)
             skip_type = false;
         }
     }
-    print_wild(&f, "in_port=", w & OFPFW10_IN_PORT, verbosity,
-               "%d", ntohs(om->in_port));
+    print_wild_port(&f, "in_port=", w & OFPFW10_IN_PORT, verbosity,
+                    ntohs(om->in_port));
     print_wild(&f, "dl_vlan=", w & OFPFW10_DL_VLAN, verbosity,
                "%d", ntohs(om->dl_vlan));
     print_wild(&f, "dl_vlan_pcp=", w & OFPFW10_DL_VLAN_PCP, verbosity,
@@ -896,20 +912,22 @@ ofp_print_port_mod(struct ds *string, const struct ofp_header *oh)
         return;
     }
 
-    ds_put_format(string, "port: %"PRIu16": addr:"ETH_ADDR_FMT"\n",
-                  pm.port_no, ETH_ADDR_ARGS(pm.hw_addr));
+    ds_put_cstr(string, "port: ");
+    ofputil_format_port(pm.port_no, string);
+    ds_put_format(string, ": addr:"ETH_ADDR_FMT"\n",
+                  ETH_ADDR_ARGS(pm.hw_addr));
 
-    ds_put_format(string, "     config: ");
+    ds_put_cstr(string, "     config: ");
     ofp_print_port_config(string, pm.config);
 
-    ds_put_format(string, "     mask:   ");
+    ds_put_cstr(string, "     mask:   ");
     ofp_print_port_config(string, pm.mask);
 
-    ds_put_format(string, "     advertise: ");
+    ds_put_cstr(string, "     advertise: ");
     if (pm.advertise) {
         ofp_print_port_features(string, pm.advertise);
     } else {
-        ds_put_format(string, "UNCHANGED\n");
+        ds_put_cstr(string, "UNCHANGED\n");
     }
 }
 
@@ -1135,7 +1153,8 @@ ofp_print_ofpst_port_request(struct ds *string, const struct ofp_header *oh)
         return;
     }
 
-    ds_put_format(string, " port_no=%2"PRIu16, ofp10_port);
+    ds_put_cstr(string, " port_no=");
+    ofputil_format_port(ofp10_port, string);
 }
 
 static void
@@ -1162,7 +1181,11 @@ ofp_print_ofpst_port_reply(struct ds *string, const struct ofp_header *oh,
             return;
         }
 
-        ds_put_format(string, "  port %2"PRIu16, ps.port_no);
+        ds_put_cstr(string, "  port ");
+        if (ps.port_no < 10) {
+            ds_put_char(string, ' ');
+        }
+        ofputil_format_port(ps.port_no, string);
 
         ds_put_cstr(string, ": rx ");
         print_port_stat(string, "pkts=", ps.stats.rx_packets, 1);

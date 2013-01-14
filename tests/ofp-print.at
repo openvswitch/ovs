@@ -1180,7 +1180,7 @@ AT_CHECK([ovs-ofctl ofp-print "\
 01 10 00 14 00 00 00 01 00 04 00 00 ff ff 00 00 \
 00 00 00 00 \
 "], [0], [dnl
-OFPST_PORT request (xid=0x1): port_no=65535
+OFPST_PORT request (xid=0x1): port_no=ANY
 ])
 AT_CLEANUP
 
@@ -1190,7 +1190,7 @@ AT_CHECK([ovs-ofctl ofp-print "\
 02 12 00 18 00 00 00 02 00 04 00 00 00 00 00 00 \
 ff ff ff ff 00 00 00 00 \
 "], [0], [dnl
-OFPST_PORT request (OF1.1) (xid=0x2): port_no=65535
+OFPST_PORT request (OF1.1) (xid=0x2): port_no=ANY
 ])
 AT_CLEANUP
 
@@ -1200,7 +1200,7 @@ AT_CHECK([ovs-ofctl ofp-print "\
 03 12 00 18 00 00 00 02 00 04 00 00 00 00 00 00 \
 ff ff ff ff 00 00 00 00 \
 "], [0], [dnl
-OFPST_PORT request (OF1.2) (xid=0x2): port_no=65535
+OFPST_PORT request (OF1.2) (xid=0x2): port_no=ANY
 ])
 AT_CLEANUP
 
@@ -1210,7 +1210,7 @@ AT_CHECK([ovs-ofctl ofp-print "\
 04 12 00 18 00 00 00 02 00 04 00 00 00 00 00 00 \
 ff ff ff ff 00 00 00 00 \
 "], [0], [dnl
-OFPST_PORT request (OF1.3) (xid=0x2): port_no=65535
+OFPST_PORT request (OF1.3) (xid=0x2): port_no=ANY
 ])
 AT_CLEANUP
 
@@ -1248,7 +1248,7 @@ AT_CHECK([ovs-ofctl ofp-print "\
 OFPST_PORT reply (xid=0x1): 4 ports
   port  3: rx pkts=19744, bytes=1007694, drop=0, errs=0, frame=0, over=0, crc=0
            tx pkts=5170, bytes=356796, drop=0, errs=0, coll=0
-  port 65534: rx pkts=684, bytes=68748, drop=0, errs=0, frame=0, over=0, crc=0
+  port LOCAL: rx pkts=684, bytes=68748, drop=0, errs=0, frame=0, over=0, crc=0
            tx pkts=501, bytes=56092, drop=0, errs=0, coll=0
   port  2: rx pkts=1726, bytes=144564, drop=0, errs=0, frame=0, over=0, crc=0
            tx pkts=1412, bytes=140244, drop=0, errs=0, coll=0
@@ -1285,7 +1285,7 @@ AT_CHECK([ovs-ofctl ofp-print "\
 OFPST_PORT reply (OF1.2) (xid=0x2): 3 ports
   port  2: rx pkts=103766, bytes=39651480, drop=0, errs=0, frame=0, over=0, crc=0
            tx pkts=136, bytes=11512, drop=0, errs=0, coll=0
-  port 65534: rx pkts=68, bytes=5756, drop=0, errs=0, frame=0, over=0, crc=0
+  port LOCAL: rx pkts=68, bytes=5756, drop=0, errs=0, frame=0, over=0, crc=0
            tx pkts=40236, bytes=18757188, drop=0, errs=0, coll=0
   port  1: rx pkts=68, bytes=5756, drop=0, errs=0, frame=0, over=0, crc=0
            tx pkts=40236, bytes=18757188, drop=0, errs=0, coll=0
