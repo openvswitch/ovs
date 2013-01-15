@@ -2730,11 +2730,18 @@ bridge_configure_local_iface_netdev(struct bridge *br,
 
 /* Returns true if 'a' and 'b' are the same except that any number of slashes
  * in either string are treated as equal to any number of slashes in the other,
- * e.g. "x///y" is equal to "x/y". */
+ * e.g. "x///y" is equal to "x/y".
+ *
+ * Also, if 'b_stoplen' bytes from 'b' are found to be equal to corresponding
+ * bytes from 'a', the function considers this success.  Specify 'b_stoplen' as
+ * SIZE_MAX to compare all of 'a' to all of 'b' rather than just a prefix of
+ * 'b' against a prefix of 'a'.
+ */
 static bool
-equal_pathnames(const char *a, const char *b)
+equal_pathnames(const char *a, const char *b, size_t b_stoplen)
 {
-    while (*a == *b) {
+    const char *b_start = b;
+    while (b - b_start < b_stoplen && *a == *b) {
         if (*a == '/') {
             a += strspn(a, "/");
             b += strspn(b, "/");
@@ -2792,21 +2799,40 @@ bridge_configure_remotes(struct bridge *br,
             static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
             char *whitelist;
 
-            whitelist = xasprintf("unix:%s/%s.controller",
+            if (!strncmp(c->target, "unix:", 5)) {
+                /* Connect to a listening socket */
+                whitelist = xasprintf("unix:%s/", ovs_rundir());
+                if (!equal_pathnames(c->target, whitelist,
+                                     strlen(whitelist))) {
+                    VLOG_ERR_RL(&rl, "bridge %s: Not connecting to socket "
+                                  "controller \"%s\" due to possibility for "
+                                  "remote exploit.  Instead, specify socket "
+                                  "in whitelisted \"%s\" or connect to "
+                                  "\"unix:%s/%s.mgmt\" (which is always "
+                                  "available without special configuration).",
+                                  br->name, c->target, whitelist,
                                   ovs_rundir(), br->name);
-            if (!equal_pathnames(c->target, whitelist)) {
-                /* Prevent remote ovsdb-server users from accessing arbitrary
-                 * Unix domain sockets and overwriting arbitrary local
-                 * files. */
-                VLOG_ERR_RL(&rl, "bridge %s: Not adding Unix domain socket "
-                            "controller \"%s\" due to possibility for remote "
-                            "exploit.  Instead, specify whitelisted \"%s\" or "
-                            "connect to \"unix:%s/%s.mgmt\" (which is always "
-                            "available without special configuration).",
-                            br->name, c->target, whitelist,
-                            ovs_rundir(), br->name);
-                free(whitelist);
-                continue;
+                    free(whitelist);
+                    continue;
+                }
+            } else {
+               whitelist = xasprintf("punix:%s/%s.controller",
+                                     ovs_rundir(), br->name);
+               if (!equal_pathnames(c->target, whitelist, SIZE_MAX)) {
+                   /* Prevent remote ovsdb-server users from accessing
+                    * arbitrary Unix domain sockets and overwriting arbitrary
+                    * local files. */
+                   VLOG_ERR_RL(&rl, "bridge %s: Not adding Unix domain socket "
+                                  "controller \"%s\" due to possibility of "
+                                  "overwriting local files. Instead, specify "
+                                  "whitelisted \"%s\" or connect to "
+                                  "\"unix:%s/%s.mgmt\" (which is always "
+                                  "available without special configuration).",
+                                  br->name, c->target, whitelist,
+                                  ovs_rundir(), br->name);
+                   free(whitelist);
+                   continue;
+               }
             }
 
             free(whitelist);
