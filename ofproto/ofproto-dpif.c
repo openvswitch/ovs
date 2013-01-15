@@ -3805,8 +3805,7 @@ expire(struct dpif_backer *backer)
     update_stats(backer);
 
     HMAP_FOR_EACH (ofproto, all_ofproto_dpifs_node, &all_ofproto_dpifs) {
-        struct rule_dpif *rule, *next_rule;
-        struct oftable *table;
+        struct rule *rule, *next_rule;
         int dp_max_idle;
 
         if (ofproto->backer != backer) {
@@ -3821,13 +3820,9 @@ expire(struct dpif_backer *backer)
 
         /* Expire OpenFlow flows whose idle_timeout or hard_timeout
          * has passed. */
-        OFPROTO_FOR_EACH_TABLE (table, &ofproto->up) {
-            struct cls_cursor cursor;
-
-            cls_cursor_init(&cursor, &table->cls, NULL);
-            CLS_CURSOR_FOR_EACH_SAFE (rule, next_rule, up.cr, &cursor) {
-                rule_expire(rule);
-            }
+        LIST_FOR_EACH_SAFE (rule, next_rule, expirable,
+                            &ofproto->up.expirable) {
+            rule_expire(rule_dpif_cast(rule));
         }
 
         /* All outstanding data in existing flows has been accounted, so it's a

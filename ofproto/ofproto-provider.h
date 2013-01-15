@@ -71,6 +71,10 @@ struct ofproto {
     struct oftable *tables;
     int n_tables;
 
+    /* Optimisation for flow expiry.
+     * These flows should all be present in tables. */
+    struct list expirable;      /* Expirable 'struct rule"s in all tables. */
+
     /* OpenFlow connections. */
     struct connmgr *connmgr;
 
@@ -221,6 +225,10 @@ struct rule {
     enum nx_flow_monitor_flags monitor_flags;
     uint64_t add_seqno;         /* Sequence number when added. */
     uint64_t modify_seqno;      /* Sequence number when changed. */
+
+    /* Optimisation for flow expiry. */
+    struct list expirable;      /* In ofproto's 'expirable' list if this rule
+                                 * is expirable, otherwise empty. */
 };
 
 static inline struct rule *
