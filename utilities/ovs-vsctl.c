@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -2646,7 +2646,8 @@ get_row_by_id(struct vsctl_context *ctx, const struct vsctl_table_class *table,
 
 static const struct ovsdb_idl_row *
 get_row (struct vsctl_context *ctx,
-         const struct vsctl_table_class *table, const char *record_id)
+         const struct vsctl_table_class *table, const char *record_id,
+         bool must_exist)
 {
     const struct ovsdb_idl_row *row;
     struct uuid uuid;
@@ -2663,15 +2664,7 @@ get_row (struct vsctl_context *ctx,
             }
         }
     }
-    return row;
-}
-
-static const struct ovsdb_idl_row *
-must_get_row(struct vsctl_context *ctx,
-             const struct vsctl_table_class *table, const char *record_id)
-{
-    const struct ovsdb_idl_row *row = get_row(ctx, table, record_id);
-    if (!row) {
+    if (must_exist && !row) {
         vsctl_fatal("no row \"%s\" in table %s",
                     record_id, table->class->name);
     }
@@ -2943,7 +2936,7 @@ static void
 cmd_get(struct vsctl_context *ctx)
 {
     const char *id = shash_find_data(&ctx->options, "--id");
-    bool if_exists = shash_find(&ctx->options, "--if-exists");
+    bool must_exist = !shash_find(&ctx->options, "--if-exists");
     const char *table_name = ctx->argv[1];
     const char *record_id = ctx->argv[2];
     const struct vsctl_table_class *table;
@@ -2951,8 +2944,16 @@ cmd_get(struct vsctl_context *ctx)
     struct ds *out = &ctx->output;
     int i;
 
+    if (id && !must_exist) {
+        vsctl_fatal("--if-exists and --id may not be specified together");
+    }
+
     table = get_table(table_name);
-    row = must_get_row(ctx, table, record_id);
+    row = get_row(ctx, table, record_id, must_exist);
+    if (!row) {
+        return;
+    }
+
     if (id) {
         struct ovsdb_symbol *symbol;
         bool new;
@@ -3004,7 +3005,7 @@ cmd_get(struct vsctl_context *ctx)
             idx = ovsdb_datum_find_key(datum, &key,
                                        column->type.key.type);
             if (idx == UINT_MAX) {
-                if (!if_exists) {
+                if (must_exist) {
                     vsctl_fatal("no key \"%s\" in %s record \"%s\" column %s",
                                 key_string, table->class->name, record_id,
                                 column->name);
@@ -3130,6 +3131,10 @@ list_record(const struct ovsdb_idl_row *row,
 {
     size_t i;
 
+    if (!row) {
+        return;
+    }
+
     table_add_row(out);
     for (i = 0; i < n_columns; i++) {
         const struct ovsdb_idl_column *column = columns[i];
@@ -3160,6 +3165,7 @@ static void
 cmd_list(struct vsctl_context *ctx)
 {
     const char *column_names = shash_find_data(&ctx->options, "--columns");
+    bool must_exist = !shash_find(&ctx->options, "--if-exists");
     const struct ovsdb_idl_column **columns;
     const char *table_name = ctx->argv[1];
     const struct vsctl_table_class *table;
@@ -3172,7 +3178,7 @@ cmd_list(struct vsctl_context *ctx)
     out = ctx->table = list_make_table(columns, n_columns);
     if (ctx->argc > 2) {
         for (i = 2; i < ctx->argc; i++) {
-            list_record(must_get_row(ctx, table, ctx->argv[i]),
+            list_record(get_row(ctx, table, ctx->argv[i], must_exist),
                         columns, n_columns, out);
         }
     } else {
@@ -3302,6 +3308,7 @@ set_column(const struct vsctl_table_class *table,
 static void
 cmd_set(struct vsctl_context *ctx)
 {
+    bool must_exist = !shash_find(&ctx->options, "--if-exists");
     const char *table_name = ctx->argv[1];
     const char *record_id = ctx->argv[2];
     const struct vsctl_table_class *table;
@@ -3309,7 +3316,11 @@ cmd_set(struct vsctl_context *ctx)
     int i;
 
     table = get_table(table_name);
-    row = must_get_row(ctx, table, record_id);
+    row = get_row(ctx, table, record_id, must_exist);
+    if (!row) {
+        return;
+    }
+
     for (i = 3; i < ctx->argc; i++) {
         set_column(table, row, ctx->argv[i], ctx->symtab);
     }
@@ -3333,6 +3344,7 @@ pre_cmd_add(struct vsctl_context *ctx)
 static void
 cmd_add(struct vsctl_context *ctx)
 {
+    bool must_exist = !shash_find(&ctx->options, "--if-exists");
     const char *table_name = ctx->argv[1];
     const char *record_id = ctx->argv[2];
     const char *column_name = ctx->argv[3];
@@ -3344,8 +3356,11 @@ cmd_add(struct vsctl_context *ctx)
     int i;
 
     table = get_table(table_name);
-    row = must_get_row(ctx, table, record_id);
     die_if_error(get_column(table, column_name, &column));
+    row = get_row(ctx, table, record_id, must_exist);
+    if (!row) {
+        return;
+    }
 
     type = &column->type;
     ovsdb_datum_clone(&old, ovsdb_idl_read(row, column), &column->type);
@@ -3390,6 +3405,7 @@ pre_cmd_remove(struct vsctl_context *ctx)
 static void
 cmd_remove(struct vsctl_context *ctx)
 {
+    bool must_exist = !shash_find(&ctx->options, "--if-exists");
     const char *table_name = ctx->argv[1];
     const char *record_id = ctx->argv[2];
     const char *column_name = ctx->argv[3];
@@ -3401,8 +3417,11 @@ cmd_remove(struct vsctl_context *ctx)
     int i;
 
     table = get_table(table_name);
-    row = must_get_row(ctx, table, record_id);
     die_if_error(get_column(table, column_name, &column));
+    row = get_row(ctx, table, record_id, must_exist);
+    if (!row) {
+        return;
+    }
 
     type = &column->type;
     ovsdb_datum_clone(&old, ovsdb_idl_read(row, column), &column->type);
@@ -3457,6 +3476,7 @@ pre_cmd_clear(struct vsctl_context *ctx)
 static void
 cmd_clear(struct vsctl_context *ctx)
 {
+    bool must_exist = !shash_find(&ctx->options, "--if-exists");
     const char *table_name = ctx->argv[1];
     const char *record_id = ctx->argv[2];
     const struct vsctl_table_class *table;
@@ -3464,7 +3484,11 @@ cmd_clear(struct vsctl_context *ctx)
     int i;
 
     table = get_table(table_name);
-    row = must_get_row(ctx, table, record_id);
+    row = get_row(ctx, table, record_id, must_exist);
+    if (!row) {
+        return;
+    }
+
     for (i = 3; i < ctx->argc; i++) {
         const struct ovsdb_idl_column *column;
         const struct ovsdb_type *type;
@@ -3597,7 +3621,7 @@ cmd_destroy(struct vsctl_context *ctx)
         for (i = 2; i < ctx->argc; i++) {
             const struct ovsdb_idl_row *row;
 
-            row = (must_exist ? must_get_row : get_row)(ctx, table, ctx->argv[i]);
+            row = get_row(ctx, table, ctx->argv[i], must_exist);
             if (row) {
                 ovsdb_idl_txn_delete(row);
             }
@@ -3778,7 +3802,7 @@ cmd_wait_until(struct vsctl_context *ctx)
 
     table = get_table(table_name);
 
-    row = get_row(ctx, table, record_id);
+    row = get_row(ctx, table, record_id, false);
     if (!row) {
         ctx->try_again = true;
         return;
@@ -4126,12 +4150,14 @@ static const struct vsctl_command_syntax all_commands[] = {
     /* Database commands. */
     {"comment", 0, INT_MAX, NULL, NULL, NULL, "", RO},
     {"get", 2, INT_MAX, pre_cmd_get, cmd_get, NULL, "--if-exists,--id=", RO},
-    {"list", 1, INT_MAX, pre_cmd_list, cmd_list, NULL, "--columns=", RO},
+    {"list", 1, INT_MAX, pre_cmd_list, cmd_list, NULL,
+     "--if-exists,--columns=", RO},
     {"find", 1, INT_MAX, pre_cmd_find, cmd_find, NULL, "--columns=", RO},
-    {"set", 3, INT_MAX, pre_cmd_set, cmd_set, NULL, "", RW},
-    {"add", 4, INT_MAX, pre_cmd_add, cmd_add, NULL, "", RW},
-    {"remove", 4, INT_MAX, pre_cmd_remove, cmd_remove, NULL, "", RW},
-    {"clear", 3, INT_MAX, pre_cmd_clear, cmd_clear, NULL, "", RW},
+    {"set", 3, INT_MAX, pre_cmd_set, cmd_set, NULL, "--if-exists", RW},
+    {"add", 4, INT_MAX, pre_cmd_add, cmd_add, NULL, "--if-exists", RW},
+    {"remove", 4, INT_MAX, pre_cmd_remove, cmd_remove, NULL, "--if-exists",
+     RW},
+    {"clear", 3, INT_MAX, pre_cmd_clear, cmd_clear, NULL, "--if-exists", RW},
     {"create", 2, INT_MAX, pre_create, cmd_create, post_create, "--id=", RW},
     {"destroy", 1, INT_MAX, pre_cmd_destroy, cmd_destroy, NULL,
      "--if-exists,--all", RW},

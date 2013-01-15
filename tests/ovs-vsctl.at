@@ -666,6 +666,18 @@ AT_CHECK([RUN_OVS_VSCTL_TOGETHER([destroy b br0],
   [0], [stdout], [], [OVS_VSCTL_CLEANUP])
 AT_CHECK([RUN_OVS_VSCTL([list b])], 
   [0], [], [], [OVS_VSCTL_CLEANUP])
+AT_CHECK([RUN_OVS_VSCTL([--if-exists get b x datapath_id])],
+  [0], [], [], [OVS_VSCTL_CLEANUP])
+AT_CHECK([RUN_OVS_VSCTL([--if-exists list b x])],
+  [0], [], [], [OVS_VSCTL_CLEANUP])
+AT_CHECK([RUN_OVS_VSCTL([--if-exists set controller x connection_mode=standalone])],
+  [0], [], [], [OVS_VSCTL_CLEANUP])
+AT_CHECK(
+  [RUN_OVS_VSCTL([--if-exists remove netflow x targets '"1.2.3.4:567"'])],
+  [0], [], [], [OVS_VSCTL_CLEANUP])
+AT_CHECK(
+  [RUN_OVS_VSCTL([--if-exists clear netflow x targets])],
+  [0], [], [], [OVS_VSCTL_CLEANUP])
 OVS_VSCTL_CLEANUP
 AT_CLEANUP
 
@@ -713,6 +725,9 @@ AT_CHECK([RUN_OVS_VSCTL([list interx x])],
 AT_CHECK([RUN_OVS_VSCTL([list b x])], 
   [1], [], [ovs-vsctl: no row "x" in table Bridge
 ], [OVS_VSCTL_CLEANUP])
+AT_CHECK([RUN_OVS_VSCTL([get b x datapath_id])],
+  [1], [], [ovs-vsctl: no row "x" in table Bridge
+], [OVS_VSCTL_CLEANUP])
 AT_CHECK([RUN_OVS_VSCTL([get b br0 d])], 
   [1], [], [ovs-vsctl: Bridge contains more than one column whose name matches "d"
 ], [OVS_VSCTL_CLEANUP])
@@ -727,6 +742,9 @@ AT_CHECK([RUN_OVS_VSCTL([get b br0 datapath_id:y=z])],
 ], [OVS_VSCTL_CLEANUP])
 AT_CHECK([RUN_OVS_VSCTL([set b br0 'datapath_id:y>=z'])], 
   [1], [], [ovs-vsctl: datapath_id:y>=z: argument does not end in "=" followed by a value.
+], [OVS_VSCTL_CLEANUP])
+AT_CHECK([RUN_OVS_VSCTL([set controller x connection_mode=standalone])],
+  [1], [], [ovs-vsctl: no row "x" in table Controller
 ], [OVS_VSCTL_CLEANUP])
 AT_CHECK([RUN_OVS_VSCTL([wait-until b br0 datapath_id:y,z])], 
   [1], [], [ovs-vsctl: datapath_id:y,z: argument does not end in "=", "!=", "<", ">", "<=", ">=", "{=}", "{!=}", "{<}", "{>}", "{<=}", or "{>=}" followed by a value.
@@ -757,6 +775,12 @@ AT_CHECK([RUN_OVS_VSCTL([add b br1 datapath_id x y])],
 ], [OVS_VSCTL_CLEANUP])
 AT_CHECK([RUN_OVS_VSCTL([remove netflow `cat netflow-uuid` targets '"1.2.3.4:567"'])], 
   [1], [], [ovs-vsctl: "remove" operation would put 0 values in column targets of table NetFlow but the minimum number is 1
+], [OVS_VSCTL_CLEANUP])
+AT_CHECK([RUN_OVS_VSCTL([remove netflow x targets '"1.2.3.4:567"'])], 
+  [1], [], [ovs-vsctl: no row "x" in table NetFlow
+], [OVS_VSCTL_CLEANUP])
+AT_CHECK([RUN_OVS_VSCTL([clear netflow x targets])],
+  [1], [], [ovs-vsctl: no row "x" in table NetFlow
 ], [OVS_VSCTL_CLEANUP])
 AT_CHECK([RUN_OVS_VSCTL([clear netflow `cat netflow-uuid` targets])], 
   [1], [], [ovs-vsctl: "clear" operation cannot be applied to column targets of table NetFlow, which is not allowed to be empty

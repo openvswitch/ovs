@@ -567,13 +567,19 @@ well (but use quotes to prevent the shell from expanding
 other-config=1=y\fR, which may not have the desired effect).
 .
 .ST "Database Command Syntax"
-.IP "[\fB\-\-columns=\fIcolumn\fR[\fB,\fIcolumn\fR]...] \fBlist \fItable \fR[\fIrecord\fR]..."
+.
+.IP "[\fB\-\-if\-exists\fR] [\fB\-\-columns=\fIcolumn\fR[\fB,\fIcolumn\fR]...] \fBlist \fItable \fR[\fIrecord\fR]..."
 Lists the data in each specified \fIrecord\fR.  If no
 records are specified, lists all the records in \fItable\fR.
 .IP
 If \fB\-\-columns\fR is specified, only the requested columns are
 listed, in the specified order.  Otherwise, all columns are listed, in
 alphabetical order by column name.
+.IP
+Without \fB\-\-if-exists\fR, it is an error if any specified
+\fIrecord\fR does not exist.  With \fB\-\-if-exists\fR, the command
+ignores any \fIrecord\fR that does not exist, without producing any
+output.
 .
 .IP "[\fB\-\-columns=\fIcolumn\fR[\fB,\fIcolumn\fR]...] \fBfind \fItable \fR[\fIcolumn\fR[\fB:\fIkey\fR]\fB=\fIvalue\fR]..."
 Lists the data in each record in \fItable\fR whose \fIcolumn\fR equals
@@ -636,16 +642,16 @@ alphabetical order by column name.
 The UUIDs shown for rows created in the same \fBovs\-vsctl\fR
 invocation will be wrong.
 .
-.IP "[\fB\-\-id=@\fIname\fR] [\fB\-\-if\-exists\fR] \fBget \fItable record \fR[\fIcolumn\fR[\fB:\fIkey\fR]]..."
+.IP "[\fB\-\-if\-exists\fR] [\fB\-\-id=@\fIname\fR] \fBget \fItable record \fR[\fIcolumn\fR[\fB:\fIkey\fR]]..."
 Prints the value of each specified \fIcolumn\fR in the given
 \fIrecord\fR in \fItable\fR.  For map columns, a \fIkey\fR may
 optionally be specified, in which case the value associated with
 \fIkey\fR in the column is printed, instead of the entire map.
 .IP
-For a map column, without \fB\-\-if\-exists\fR it is an error if
-\fIkey\fR does not exist; with it, a blank line is printed.  If
-\fIcolumn\fR is not a map column or if \fIkey\fR is not specified,
-\fB\-\-if\-exists\fR has no effect.
+Without \fB\-\-if\-exists\fR, it is an error if \fIrecord\fR does not
+exist or \fIkey\fR is specified, if \fIkey\fR does not exist in
+\fIrecord\fR.  With \fB\-\-if\-exists\fR, a missing \fIrecord\fR
+yields no output and a missing \fIkey\fR prints a blank line.
 .IP
 If \fB@\fIname\fR is specified, then the UUID for \fIrecord\fR may be
 referred to by that name later in the same \fBovs\-vsctl\fR
@@ -655,24 +661,34 @@ Both \fB\-\-id\fR and the \fIcolumn\fR arguments are optional, but
 usually at least one or the other should be specified.  If both are
 omitted, then \fBget\fR has no effect except to verify that
 \fIrecord\fR exists in \fItable\fR.
+.IP
+\fB\-\-id\fR and \fB\-\-if\-exists\fR cannot be used together.
 .
-.IP "\fBset \fItable record column\fR[\fB:\fIkey\fR]\fB=\fIvalue\fR..."
+.IP "[\fB\-\-if\-exists\fR] \fBset \fItable record column\fR[\fB:\fIkey\fR]\fB=\fIvalue\fR..."
 Sets the value of each specified \fIcolumn\fR in the given
 \fIrecord\fR in \fItable\fR to \fIvalue\fR.  For map columns, a
 \fIkey\fR may optionally be specified, in which case the value
 associated with \fIkey\fR in that column is changed (or added, if none
 exists), instead of the entire map.
+.IP
+Without \fB\-\-if-exists\fR, it is an error if \fIrecord\fR does not
+exist.  With \fB\-\-if-exists\fR, this command does nothing if
+\fIrecord\fR does not exist.
 .
-.IP "\fBadd \fItable record column \fR[\fIkey\fB=\fR]\fIvalue\fR..."
+.IP "[\fB\-\-if\-exists\fR] \fBadd \fItable record column \fR[\fIkey\fB=\fR]\fIvalue\fR..."
 Adds the specified value or key-value pair to \fIcolumn\fR in
 \fIrecord\fR in \fItable\fR.  If \fIcolumn\fR is a map, then \fIkey\fR
 is required, otherwise it is prohibited.  If \fIkey\fR already exists
 in a map column, then the current \fIvalue\fR is not replaced (use the
 \fBset\fR command to replace an existing value).
+.IP
+Without \fB\-\-if-exists\fR, it is an error if \fIrecord\fR does not
+exist.  With \fB\-\-if-exists\fR, this command does nothing if
+\fIrecord\fR does not exist.
 .
-.IP "\fBremove \fItable record column \fR\fIvalue\fR..."
-.IQ "\fBremove \fItable record column \fR\fIkey\fR..."
-.IQ "\fBremove \fItable record column \fR\fIkey\fB=\fR\fIvalue\fR..."
+.IP "[\fB\-\-if\-exists\fR] \fBremove \fItable record column \fR\fIvalue\fR..."
+.IQ "[\fB\-\-if\-exists\fR] \fBremove \fItable record column \fR\fIkey\fR..."
+.IQ "[\fB\-\-if\-exists\fR] \fBremove \fItable record column \fR\fIkey\fB=\fR\fIvalue\fR..."
 Removes the specified values or key-value pairs from \fIcolumn\fR in
 \fIrecord\fR in \fItable\fR.  The first form applies to columns that
 are not maps: each specified \fIvalue\fR is removed from the column.
@@ -683,11 +699,19 @@ pair is removed only if both key and value match.
 .IP
 It is not an error if the column does not contain the specified key or
 value or pair.
+.IP
+Without \fB\-\-if-exists\fR, it is an error if \fIrecord\fR does not
+exist.  With \fB\-\-if-exists\fR, this command does nothing if
+\fIrecord\fR does not exist.
 .
-.IP "\fBclear\fR \fItable record column\fR..."
+.IP "[\fB\-\-if\-exists\fR] \fBclear\fR \fItable record column\fR..."
 Sets each \fIcolumn\fR in \fIrecord\fR in \fItable\fR to the empty set
 or empty map, as appropriate.  This command applies only to columns
 that are allowed to be empty.
+.IP
+Without \fB\-\-if-exists\fR, it is an error if \fIrecord\fR does not
+exist.  With \fB\-\-if-exists\fR, this command does nothing if
+\fIrecord\fR does not exist.
 .
 .IP "[\fB\-\-id=@\fIname\fR] \fBcreate\fR \fItable column\fR[\fB:\fIkey\fR]\fB=\fIvalue\fR..."
 Creates a new record in \fItable\fR and sets the initial values of

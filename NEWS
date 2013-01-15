@@ -7,6 +7,8 @@ post-v1.9.0
       separately on a per-port basis, so it should no longer be
       possible for a large number of new flows arriving on one port to
       prevent new flows from being processed on other ports.
+    - Many "ovs-vsctl" database commands now accept an --if-exists option.
+      Please refer to the ovs-vsctl manpage for details.
     - New "vlog/disable-rate-limit" and "vlog/enable-rate-limit" commands
       available through ovs-appctl allow control over logging rate limits.
     - The OpenFlow "dp_desc" may now be configured by setting the value of 
