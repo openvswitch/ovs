@@ -7636,6 +7636,8 @@ ofproto_unixctl_dpif_dump_flows(struct unixctl_conn *conn,
         return;
     }
 
+    update_stats(ofproto->backer);
+
     HMAP_FOR_EACH (subfacet, hmap_node, &ofproto->subfacets) {
         struct odputil_keybuf keybuf;
         struct ofpbuf key;
