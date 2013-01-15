@@ -1,3 +1,9 @@
+openvswitch (1.4.4-1) unstable; urgency=low
+
+  * New upstream version containing bug fixes.
+
+ -- Open vSwitch team <dev@openvswitch.org>  Tue, 15 Jan 2012 15:55:00 -0700
+
 openvswitch (1.4.3-1) unstable; urgency=low
 
   * New upstream version containing bug fixes.
