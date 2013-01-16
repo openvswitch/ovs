@@ -6,7 +6,7 @@ v1.9.0 - xx xxx xxxx
     - Datapath:
       - Support for ipv6 set action.
       - SKB mark matching and setting.
-      - support for Linux kernels up to 3.7
+      - support for Linux kernels up to 3.8
     - FreeBSD is now a supported platform, thanks to code contributions from
       Gaetano Catalli, Ed Maste, and Giuseppe Lettieri.
     - ovs-bugtool: New --ovs option to report only OVS related information.
