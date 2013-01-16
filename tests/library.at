@@ -124,17 +124,7 @@ dnl is about 100 bytes.  On Linux, we work around this by indirecting through
 dnl a directory fd using /proc/self/fd/<dirfd>.  We do not have a workaround
 dnl for other platforms, so we skip the test there.
 AT_SETUP([test unix socket -- long pathname])
-AT_CHECK([dnl
-    case `uname` in dnl (
-      *[[lL]]inux*)
-        exit 0
-        ;; dnl (
-      *)
-        dnl Magic exit code to tell Autotest to skip this test.
-        exit 77
-        ;;
-    esac
-])
+AT_SKIP_IF([test ! -d /proc/self/fd])
 dnl Linux has a 108 byte limit; this is 150 bytes long.
 mkdir 012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789
 cd 012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789
