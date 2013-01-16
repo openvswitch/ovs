@@ -1255,6 +1255,7 @@ const struct netdev_class netdev_bsd_class = {
     netdev_bsd_destroy,
     NULL, /* get_config */
     NULL, /* set_config */
+    NULL, /* get_tunnel_config */
     netdev_bsd_open_system,
     netdev_bsd_close,
 
@@ -1315,6 +1316,7 @@ const struct netdev_class netdev_tap_class = {
     netdev_bsd_destroy,
     NULL, /* get_config */
     NULL, /* set_config */
+    NULL, /* get_tunnel_config */
     netdev_bsd_open_system,
     netdev_bsd_close,
 
