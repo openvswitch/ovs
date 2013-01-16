@@ -70,9 +70,44 @@ def make_unix_socket(style, nonblock, bind_path, connect_path):
         return 0, sock
     except socket.error, e:
         sock.close()
-        if bind_path is not None:
+        if (bind_path is not None and
+            os.path.exists(bind_path)):
             ovs.fatal_signal.unlink_file_now(bind_path)
-        return get_exception_errno(e), None
+        eno = ovs.socket_util.get_exception_errno(e)
+        if (eno == "AF_UNIX path too long" and
+            os.uname()[0] == "Linux"):
+            short_connect_path = None
+            short_bind_path = None
+            connect_dirfd = None
+            bind_dirfd = None
+            # Try workaround using /proc/self/fd
+            if connect_path is not None:
+                dirname = os.path.dirname(connect_path)
+                basename = os.path.basename(connect_path)
+                try:
+                    connect_dirfd = os.open(dirname, os.O_DIRECTORY | os.O_RDONLY)
+                except OSError, err:
+                    return get_exception_errno(e), None
+                short_connect_path = "/proc/self/fd/%d/%s" % (connect_dirfd, basename)
+
+            if bind_path is not None:
+                dirname = os.path.dirname(bind_path)
+                basename = os.path.basename(bind_path)
+                try:
+                    bind_dirfd = os.open(dirname, os.O_DIRECTORY | os.O_RDONLY)
+                except OSError, err:
+                    return get_exception_errno(e), None
+                short_bind_path = "/proc/self/fd/%d/%s" % (bind_dirfd, basename)
+
+            try:
+                return make_unix_socket(style, nonblock, short_bind_path, short_connect_path)
+            finally:
+                if connect_dirfd is not None:
+                    os.close(connect_dirfd)
+                if bind_dirfd is not None:
+                    os.close(bind_dirfd)
+        else:
+            return get_exception_errno(e), None
 
 
 def check_connection_completion(sock):
