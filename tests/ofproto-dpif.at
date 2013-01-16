@@ -601,15 +601,12 @@ AT_CLEANUP
 
 
 AT_SETUP([ofproto-dpif - mirroring, select_all])
-OVS_VSWITCHD_START(
-       [add-port br0 p1 -- set Interface p1 type=dummy --\
-        add-port br0 p2 -- set Interface p2 type=dummy --\
-        add-port br0 p3 -- set Interface p3 type=dummy --\
+OVS_VSWITCHD_START
+ADD_OF_PORTS([br0], 1, 2, 3)
+ovs-vsctl \
         set Bridge br0 mirrors=@m --\
         --id=@p3 get Port p3 --\
-        --id=@m create Mirror name=mymirror \
-        select_all=true output_port=@p3], [<0>
-])
+        --id=@m create Mirror name=mymirror select_all=true output_port=@p3
 
 AT_DATA([flows.txt], [dnl
 in_port=1 actions=output:2
@@ -634,15 +631,12 @@ AT_CLEANUP
 
 
 AT_SETUP([ofproto-dpif - mirroring, select_src])
-OVS_VSWITCHD_START(
-       [add-port br0 p1 -- set Interface p1 type=dummy --\
-        add-port br0 p2 -- set Interface p2 type=dummy --\
-        add-port br0 p3 -- set Interface p3 type=dummy --\
+OVS_VSWITCHD_START
+ADD_OF_PORTS([br0], 1, 2, 3)
+ovs-vsctl \
         set Bridge br0 mirrors=@m --\
         --id=@p1 get Port p1 -- --id=@p3 get Port p3 --\
-        --id=@m create Mirror name=mymirror \
-        select_src_port=@p1 output_port=@p3], [<0>
-])
+        --id=@m create Mirror name=mymirror select_src_port=@p1 output_port=@p3
 
 AT_DATA([flows.txt], [dnl
 in_port=1 actions=output:2
@@ -665,14 +659,12 @@ OVS_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([ofproto-dpif - mirroring, OFPP_NONE ingress port])
-OVS_VSWITCHD_START(
-       [add-port br0 p1 -- set Interface p1 type=dummy --\
-        add-port br0 p2 -- set Interface p2 type=dummy --\
+OVS_VSWITCHD_START
+ADD_OF_PORTS([br0], 1, 2)
+ovs-vsctl \
         set Bridge br0 mirrors=@m --\
         --id=@p2 get Port p2 --\
-        --id=@m create Mirror name=mymirror \
-        select_all=true output_port=@p2], [<0>
-])
+        --id=@m create Mirror name=mymirror select_all=true output_port=@p2
 
 AT_CHECK([ovs-ofctl add-flow br0 action=output:1])
 
@@ -688,15 +680,12 @@ AT_CLEANUP
 
 
 AT_SETUP([ofproto-dpif - mirroring, select_dst])
-OVS_VSWITCHD_START(
-       [add-port br0 p1 -- set Interface p1 type=dummy ofport_request=1 --\
-        add-port br0 p2 -- set Interface p2 type=dummy ofport_request=2 --\
-        add-port br0 p3 -- set Interface p3 type=dummy ofport_request=3 --\
+OVS_VSWITCHD_START
+ADD_OF_PORTS([br0], 1, 2, 3)
+ovs-vsctl \
         set Bridge br0 mirrors=@m --\
         --id=@p2 get Port p2 -- --id=@p3 get Port p3 --\
-        --id=@m create Mirror name=mymirror \
-        select_dst_port=@p2 output_port=@p3], [<0>
-])
+        --id=@m create Mirror name=mymirror select_dst_port=@p2 output_port=@p3
 
 AT_DATA([flows.txt], [dnl
 in_port=1 actions=output:2
@@ -721,15 +710,12 @@ AT_CLEANUP
 
 
 AT_SETUP([ofproto-dpif - mirroring, select_vlan])
-OVS_VSWITCHD_START(
-       [add-port br0 p1 -- set Interface p1 type=dummy --\
-        add-port br0 p2 -- set Interface p2 type=dummy --\
-        add-port br0 p3 -- set Interface p3 type=dummy --\
+OVS_VSWITCHD_START
+ADD_OF_PORTS([br0], 1, 2, 3)
+ovs-vsctl \
         set Bridge br0 mirrors=@m --\
         --id=@p2 get Port p2 -- --id=@p3 get Port p3 --\
-        --id=@m create Mirror name=mymirror \
-        select_all=true select_vlan=11 output_port=@p3], [<0>
-])
+        --id=@m create Mirror name=mymirror select_all=true select_vlan=11 output_port=@p3
 
 AT_DATA([flows.txt], [dnl
 in_port=1, actions=output:2
@@ -759,15 +745,12 @@ AT_CLEANUP
 
 
 AT_SETUP([ofproto-dpif - mirroring, output_port])
-OVS_VSWITCHD_START(
-       [add-port br0 p1 -- set Interface p1 type=dummy --\
-        add-port br0 p2 -- set Interface p2 type=dummy --\
-        add-port br0 p3 -- set Interface p3 type=dummy --\
+OVS_VSWITCHD_START
+ADD_OF_PORTS([br0], 1, 2, 3)
+ovs-vsctl \
         set Bridge br0 mirrors=@m --\
         --id=@p3 get Port p3 --\
-        --id=@m create Mirror name=mymirror \
-        select_all=true output_port=@p3], [<0>
-])
+        --id=@m create Mirror name=mymirror select_all=true output_port=@p3
 
 AT_DATA([flows.txt], [dnl
 in_port=1 actions=mod_vlan_vid:17,output:2
@@ -791,13 +774,11 @@ OVS_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([ofproto-dpif - mirroring, output_vlan])
-OVS_VSWITCHD_START(
-       [add-port br0 p1 -- set Interface p1 type=dummy --\
-        add-port br0 p2 -- set Interface p2 type=dummy --\
+OVS_VSWITCHD_START
+ADD_OF_PORTS([br0], 1, 2)
+ovs-vsctl \
         set Bridge br0 mirrors=@m --\
-        --id=@m create Mirror name=mymirror \
-        select_all=true output_vlan=12], [<0>
-])
+        --id=@m create Mirror name=mymirror select_all=true output_vlan=12
 
 AT_DATA([flows.txt], [dnl
 in_port=1 actions=output:2
@@ -838,11 +819,8 @@ m4_define([OFPROTO_TRACE],
      [0], [expout])])
 
 AT_SETUP([ofproto-dpif - MAC learning])
-OVS_VSWITCHD_START(
-  [set bridge br0 fail-mode=standalone -- \
-   add-port br0 p1 -- set Interface p1 type=dummy -- \
-   add-port br0 p2 -- set Interface p2 type=dummy -- \
-   add-port br0 p3 -- set Interface p3 type=dummy])
+OVS_VSWITCHD_START([set bridge br0 fail-mode=standalone])
+ADD_OF_PORTS([br0], 1, 2, 3)
 
 arp='eth_type(0x0806),arp(sip=192.168.0.1,tip=192.168.0.2,op=1,sha=50:54:00:00:00:05,tha=00:00:00:00:00:00)'
 
@@ -1002,15 +980,12 @@ AT_SETUP([ofproto-dpif - NetFlow flow expiration])
 AT_CHECK([perl $srcdir/choose-port.pl], [0], [stdout])
 NETFLOW_PORT=`cat stdout`
 
-OVS_VSWITCHD_START(
-  [set Bridge br0 fail-mode=standalone -- \
-   add-port br0 p1 -- set Interface p1 type=dummy -- \
-   add-port br0 p2 -- set Interface p2 type=dummy -- \
+OVS_VSWITCHD_START([set Bridge br0 fail-mode=standalone])
+ADD_OF_PORTS([br0], 1, 2)
+ovs-vsctl \
    set Bridge br0 netflow=@nf -- \
    --id=@nf create NetFlow targets=\"127.0.0.1:$NETFLOW_PORT\" \
-     engine_id=1 engine_type=2 active_timeout=30 \
-     add-id-to-interface=false], [<0>
-])
+     engine_id=1 engine_type=2 active_timeout=30 add-id-to-interface=false
 
 ON_EXIT([kill `cat test-netflow.pid`])
 AT_CHECK([test-netflow --detach --no-chdir --pidfile $NETFLOW_PORT:127.0.0.1 > netflow.log])
@@ -1047,15 +1022,12 @@ AT_SETUP([ofproto-dpif - NetFlow active expiration])
 AT_CHECK([perl $srcdir/choose-port.pl], [0], [stdout])
 NETFLOW_PORT=`cat stdout`
 
-OVS_VSWITCHD_START(
-  [set Bridge br0 fail-mode=standalone -- \
-   add-port br0 p1 -- set Interface p1 type=dummy -- \
-   add-port br0 p2 -- set Interface p2 type=dummy -- \
+OVS_VSWITCHD_START([set Bridge br0 fail-mode=standalone])
+ADD_OF_PORTS([br0], 1, 2)
+ovs-vsctl \
    set Bridge br0 netflow=@nf -- \
    --id=@nf create NetFlow targets=\"127.0.0.1:$NETFLOW_PORT\" \
-     engine_id=1 engine_type=2 active_timeout=10 \
-     add-id-to-interface=false], [<0>
-])
+     engine_id=1 engine_type=2 active_timeout=10 add-id-to-interface=false
 
 ON_EXIT([kill `test-netflow.pid`])
 AT_CHECK([test-netflow --detach --no-chdir --pidfile $NETFLOW_PORT:127.0.0.1 > netflow.log])AT_CAPTURE_FILE([netflow.log])
