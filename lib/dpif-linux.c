@@ -474,9 +474,11 @@ dpif_linux_port_add(struct dpif *dpif_, struct netdev *netdev,
         *port_nop = reply.port_no;
         VLOG_DBG("%s: assigning port %"PRIu32" to netlink pid %"PRIu32,
                  dpif_name(dpif_), reply.port_no, upcall_pid);
-    } else if (error == EBUSY && *port_nop != UINT32_MAX) {
-        VLOG_INFO("%s: requested port %"PRIu32" is in use",
-                  dpif_name(dpif_), *port_nop);
+    } else {
+        if (error == EBUSY && *port_nop != UINT32_MAX) {
+            VLOG_INFO("%s: requested port %"PRIu32" is in use",
+                      dpif_name(dpif_), *port_nop);
+        }
         nl_sock_destroy(sock);
         ofpbuf_delete(buf);
         return error;
