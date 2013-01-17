@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2012 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,57 +18,11 @@
 #include <string.h>
 #include "unaligned.h"
 
-/* Returns the hash of the 'n' 32-bit words at 'p', starting from 'basis'.
- * 'p' must be properly aligned. */
-uint32_t
-hash_words(const uint32_t *p, size_t n, uint32_t basis)
-{
-    uint32_t a, b, c;
-
-    a = b = c = 0xdeadbeef + (((uint32_t) n) << 2) + basis;
-
-    while (n > 3) {
-        a += p[0];
-        b += p[1];
-        c += p[2];
-        hash_mix(&a, &b, &c);
-        n -= 3;
-        p += 3;
-    }
-
-    switch (n) {
-    case 3:
-        c += p[2];
-        /* fall through */
-    case 2:
-        b += p[1];
-        /* fall through */
-    case 1:
-        a += p[0];
-        hash_final(&a, &b, &c);
-        /* fall through */
-    case 0:
-        break;
-    }
-    return c;
-}
-
 /* Returns the hash of 'a', 'b', and 'c'. */
 uint32_t
 hash_3words(uint32_t a, uint32_t b, uint32_t c)
 {
-    a += 0xdeadbeef;
-    b += 0xdeadbeef;
-    c += 0xdeadbeef;
-    hash_final(&a, &b, &c);
-    return c;
-}
-
-/* Returns the hash of 'a' and 'b'. */
-uint32_t
-hash_2words(uint32_t a, uint32_t b)
-{
-    return hash_3words(a, b, 0);
+    return mhash_finish(mhash_add(mhash_add(mhash_add(a, 0), b), c), 12);
 }
 
 /* Returns the hash of the 'n' bytes at 'p', starting from 'basis'. */
@@ -76,37 +30,30 @@ uint32_t
 hash_bytes(const void *p_, size_t n, uint32_t basis)
 {
     const uint8_t *p = p_;
-    uint32_t a, b, c;
+    size_t orig_n = n;
+    uint32_t hash;
 
-    a = b = c = 0xdeadbeef + n + basis;
-
-    while (n >= 12) {
-        a += get_unaligned_u32((uint32_t *) p);
-        b += get_unaligned_u32((uint32_t *) (p + 4));
-        c += get_unaligned_u32((uint32_t *) (p + 8));
-        hash_mix(&a, &b, &c);
-        n -= 12;
-        p += 12;
+    hash = basis;
+    while (n >= 4) {
+        hash = mhash_add(hash, get_unaligned_u32((const uint32_t *) p));
+        n -= 4;
+        p += 4;
     }
 
     if (n) {
-        uint32_t tmp[3];
+        uint32_t tmp = 0;
 
-        tmp[0] = tmp[1] = tmp[2] = 0;
-        memcpy(tmp, p, n);
-        a += tmp[0];
-        b += tmp[1];
-        c += tmp[2];
-        hash_final(&a, &b, &c);
+        memcpy(&tmp, p, n);
+        hash = mhash_add__(hash, tmp);
     }
 
-    return c;
+    return mhash_finish(hash, orig_n);
 }
 
 /* Returns the hash of the 'n' 32-bit words at 'p', starting from 'basis'.
  * 'p' must be properly aligned. */
 uint32_t
-mhash_words(const uint32_t p[], size_t n_words, uint32_t basis)
+hash_words(const uint32_t p[], size_t n_words, uint32_t basis)
 {
     uint32_t hash;
     size_t i;
@@ -116,4 +63,14 @@ mhash_words(const uint32_t p[], size_t n_words, uint32_t basis)
         hash = mhash_add(hash, p[i]);
     }
     return mhash_finish(hash, n_words * 4);
+}
+
+uint32_t
+hash_double(double x, uint32_t basis)
+{
+    uint32_t value[2];
+    BUILD_ASSERT_DECL(sizeof x == sizeof value);
+
+    memcpy(value, &x, sizeof value);
+    return hash_3words(value[0], value[1], basis);
 }

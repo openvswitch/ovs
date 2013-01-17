@@ -20,6 +20,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "hash.h"
+#include "jhash.h"
 
 #undef NDEBUG
 #include <assert.h>
@@ -41,9 +42,9 @@ hash_words_cb(uint32_t input)
 }
 
 static uint32_t
-mhash_words_cb(uint32_t input)
+jhash_words_cb(uint32_t input)
 {
-    return mhash_words(&input, 1, 0);
+    return jhash_words(&input, 1, 0);
 }
 
 static uint32_t
@@ -130,7 +131,7 @@ main(void)
      * independence must be a bad assumption :-)
      */
     check_word_hash(hash_words_cb, "hash_words", 11);
-    check_word_hash(mhash_words_cb, "mhash_words", 11);
+    check_word_hash(jhash_words_cb, "jhash_words", 11);
 
     /* Check that all hash functions of with one 1-bit (or no 1-bits) set
      * within three 32-bit words have different values in their lowest 12
@@ -146,24 +147,26 @@ main(void)
      * so we are doing pretty well to not have any collisions in 12 bits.
      */
     check_3word_hash(hash_words, "hash_words");
-    check_3word_hash(mhash_words, "mhash_words");
+    check_3word_hash(jhash_words, "jhash_words");
 
     /* Check that all hashes computed with hash_int with one 1-bit (or no
      * 1-bits) set within a single 32-bit word have different values in all
-     * 14-bit consecutive runs.
+     * 12-bit consecutive runs.
      *
      * Given a random distribution, the probability of at least one collision
-     * in any set of 14 bits is approximately
+     * in any set of 12 bits is approximately
      *
-     *                      1 - ((2**14 - 1)/2**14)**C(33,2)
-     *                   == 1 - (16,383/16,834)**528
-     *                   =~ 0.031
+     *                      1 - ((2**12 - 1)/2**12)**C(33,2)
+     *                   == 1 - (4,095/4,096)**528
+     *                   =~ 0.12
      *
-     * There are 18 ways to pick 14 consecutive bits in a 32-bit word, so if we
+     * There are 20 ways to pick 12 consecutive bits in a 32-bit word, so if we
      * assumed independence then the chance of having no collisions in any of
-     * those 14-bit runs would be (1-0.03)**18 =~ 0.56.  This seems reasonable.
+     * those 12-bit runs would be (1-0.12)**20 =~ 0.078.  This refutes our
+     * assumption of independence, which makes it seem like a good hash
+     * function.
      */
-    check_word_hash(hash_int_cb, "hash_int", 14);
+    check_word_hash(hash_int_cb, "hash_int", 12);
 
     return 0;
 }
