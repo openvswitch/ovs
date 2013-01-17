@@ -1249,7 +1249,6 @@ dp_netdev_execute_actions(struct dp_netdev *dp,
     unsigned int left;
 
     NL_ATTR_FOR_EACH_UNSAFE (a, left, actions, actions_len) {
-        const struct ovs_action_push_vlan *vlan;
         int type = nl_attr_type(a);
 
         switch ((enum ovs_action_attr) type) {
@@ -1261,10 +1260,11 @@ dp_netdev_execute_actions(struct dp_netdev *dp,
             dp_netdev_action_userspace(dp, packet, key, a);
             break;
 
-        case OVS_ACTION_ATTR_PUSH_VLAN:
-            vlan = nl_attr_get(a);
+        case OVS_ACTION_ATTR_PUSH_VLAN: {
+            const struct ovs_action_push_vlan *vlan = nl_attr_get(a);
             eth_push_vlan(packet, vlan->vlan_tci);
             break;
+        }
 
         case OVS_ACTION_ATTR_POP_VLAN:
             eth_pop_vlan(packet);
