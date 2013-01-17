@@ -16,6 +16,7 @@
 
 #include <config.h>
 
+#include <getopt.h>
 #include <inttypes.h>
 #include <limits.h>
 #include <stdio.h>
@@ -25,6 +26,7 @@
 #include "command-line.h"
 #include "random.h"
 #include "util.h"
+#include "vlog.h"
 
 #undef NDEBUG
 #include <assert.h>
@@ -335,6 +337,12 @@ test_follow_symlinks(int argc, char *argv[])
         free(target);
     }
 }
+
+static void
+test_assert(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
+{
+    ovs_assert(false);
+}
 
 static const struct command commands[] = {
     {"ctz", 0, 0, test_ctz},
@@ -345,13 +353,46 @@ static const struct command commands[] = {
     {"bitwise_one", 0, 0, test_bitwise_one},
     {"bitwise_is_all_zeros", 0, 0, test_bitwise_is_all_zeros},
     {"follow-symlinks", 1, INT_MAX, test_follow_symlinks},
+    {"assert", 0, 0, test_assert},
     {NULL, 0, 0, NULL},
 };
+
+static void
+parse_options(int argc, char *argv[])
+{
+    enum {
+        VLOG_OPTION_ENUMS
+    };
+    static struct option long_options[] = {
+        VLOG_LONG_OPTIONS,
+        {NULL, 0, NULL, 0},
+    };
+    char *short_options = long_options_to_short_options(long_options);
+
+    for (;;) {
+        int c = getopt_long(argc, argv, short_options, long_options, NULL);
+        if (c == -1) {
+            break;
+        }
+
+        switch (c) {
+        VLOG_OPTION_HANDLERS
+
+        case '?':
+            exit(EXIT_FAILURE);
+
+        default:
+            abort();
+        }
+    }
+    free(short_options);
+}
 
 int
 main(int argc, char *argv[])
 {
     set_program_name(argv[0]);
-    run_command(argc - 1, argv + 1, commands);
+    parse_options(argc, argv);
+    run_command(argc - optind, argv + optind, commands);
     return 0;
 }

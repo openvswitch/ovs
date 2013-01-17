@@ -26,6 +26,8 @@
 #define ALWAYS_INLINE __attribute__((always_inline))
 #define WARN_UNUSED_RESULT __attribute__((__warn_unused_result__))
 #define SENTINEL(N) __attribute__((sentinel(N)))
+#define OVS_LIKELY(CONDITION) __builtin_expect(!!(CONDITION), 1)
+#define OVS_UNLIKELY(CONDITION) __builtin_expect(!!(CONDITION), 0)
 #else
 #define NO_RETURN
 #define OVS_UNUSED
@@ -35,6 +37,8 @@
 #define ALWAYS_INLINE
 #define WARN_UNUSED_RESULT
 #define SENTINEL(N)
+#define OVS_LIKELY(CONDITION) (!!(CONDITION))
+#define OVS_UNLIKELY(CONDITION) (!!(CONDITION))
 #endif
 
 /* ISO C says that a C implementation may choose any integer type for an enum

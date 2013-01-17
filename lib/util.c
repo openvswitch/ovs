@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,6 @@
 
 #include <config.h>
 #include "util.h"
-#include <assert.h>
 #include <errno.h>
 #include <limits.h>
 #include <stdarg.h>
@@ -44,6 +43,30 @@ const char *subprogram_name = "";
 
 /* --version option output. */
 static char *program_version;
+
+void
+ovs_assert_failure(const char *where, const char *function,
+                   const char *condition)
+{
+    /* Prevent an infinite loop (or stack overflow) in case VLOG_ABORT happens
+     * to trigger an assertion failure of its own. */
+    static int reentry = 0;
+
+    switch (reentry++) {
+    case 0:
+        VLOG_ABORT("%s: assertion %s failed in %s()",
+                   where, condition, function);
+        NOT_REACHED();
+
+    case 1:
+        fprintf(stderr, "%s: assertion %s failed in %s()",
+                where, condition, function);
+        abort();
+
+    default:
+        abort();
+    }
+}
 
 void
 out_of_memory(void)
@@ -756,7 +779,7 @@ english_list_delimiter(size_t index, size_t total)
 int
 log_2_floor(uint32_t n)
 {
-    assert(n);
+    ovs_assert(n);
 
 #if !defined(UINT_MAX) || !defined(UINT32_MAX)
 #error "Someone screwed up the #includes."
