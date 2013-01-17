@@ -1,5 +1,9 @@
 post-v1.9.0
 --------------------
+    - Bridge compatibility support has been removed.  Any uses that
+      rely on ovs-brcompatd will have to stick with Open vSwitch 1.9.x
+      or adapt to native Open vSwitch support (e.g. use ovs-vsctl instead
+      of brctl).
     - The maximum size of the MAC learning table is now configurable.
     - New support for the VXLAN tunnel protocol (see the IETF draft here:
       http://tools.ietf.org/html/draft-mahalingam-dutt-dcops-vxlan-02).
