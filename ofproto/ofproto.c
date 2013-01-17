@@ -2809,11 +2809,7 @@ flow_stats_ds(struct rule *rule, struct ds *results)
     ds_put_format(results, "n_bytes=%"PRIu64", ", byte_count);
     cls_rule_format(&rule->cr, results);
     ds_put_char(results, ',');
-    if (rule->ofpacts_len > 0) {
-        ofpacts_format(rule->ofpacts, rule->ofpacts_len, results);
-    } else {
-        ds_put_cstr(results, "drop");
-    }
+    ofpacts_format(rule->ofpacts, rule->ofpacts_len, results);
     ds_put_cstr(results, "\n");
 }
 
