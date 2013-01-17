@@ -7,17 +7,21 @@ set -e
 
 #DEBHELPER#
 
-# If the switch is running, restart it.  This ensures that we are using the
-# latest kernel module, because the init script will unload and reload the
-# module.
+# If the kernel module is already loaded, we have nothing to do here.
+# A force-reload-kmod should be run manually to use the new kernel module.
+if [ -e /sys/module/openvswitch ] || [ -e /sys/module/openvswitch_mod ]; then
+    exit 0
+fi
+
+# If the kernel module is not loaded, then it is likely because none
+# was installed before and therefore Open vSwitch couldn't be started.
+# Try to start it now.
 #
 # (Ideally we'd only want to do this if this package corresponds to the
 # running kernel, but I don't know a reliable way to check.)
 INIT=/etc/init.d/openvswitch-switch
-if test -x $INIT && $INIT status; then
-    $INIT restart || true
+if test -x $INIT; then
+    $INIT start || true
 fi
 
 exit 0
-
-
