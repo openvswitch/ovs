@@ -1189,6 +1189,7 @@ ofconn_destroy(struct ofconn *ofconn)
         hmap_remove(&ofconn->connmgr->controllers, &ofconn->hmap_node);
     }
 
+    hmap_destroy(&ofconn->monitors);
     list_remove(&ofconn->node);
     rconn_destroy(ofconn->rconn);
     rconn_packet_counter_destroy(ofconn->packet_in_counter);
