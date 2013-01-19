@@ -199,7 +199,6 @@ static inline void tnl_tun_key_init(struct ovs_key_ipv4_tunnel *tun_key,
 	tun_key->ipv4_tos = iph->tos;
 	tun_key->ipv4_ttl = iph->ttl;
 	tun_key->tun_flags = tun_flags;
-	memset(tun_key->pad, 0, sizeof(tun_key->pad));
 }
 
 static inline void tnl_get_param(const struct tnl_mutable_config *mutable,

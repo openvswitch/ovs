@@ -40,6 +40,20 @@ struct sw_flow_actions {
 	struct nlattr actions[];
 };
 
+/* Tunnel flow flags. */
+#define OVS_TNL_F_DONT_FRAGMENT		(1 << 0)
+#define OVS_TNL_F_CSUM			(1 << 1)
+#define OVS_TNL_F_KEY			(1 << 2)
+
+struct ovs_key_ipv4_tunnel {
+	__be64 tun_id;
+	__be32 ipv4_src;
+	__be32 ipv4_dst;
+	u16  tun_flags;
+	u8   ipv4_tos;
+	u8   ipv4_ttl;
+};
+
 struct sw_flow_key {
 	struct {
 		union {
@@ -133,7 +147,7 @@ struct sw_flow *ovs_flow_alloc(void);
 void ovs_flow_deferred_free(struct sw_flow *);
 void ovs_flow_free(struct sw_flow *);
 
-struct sw_flow_actions *ovs_flow_actions_alloc(const struct nlattr *);
+struct sw_flow_actions *ovs_flow_actions_alloc(int actions_len);
 void ovs_flow_deferred_free_acts(struct sw_flow_actions *);
 
 int ovs_flow_extract(struct sk_buff *, u16 in_port, struct sw_flow_key *,
@@ -205,5 +219,9 @@ void ovs_flow_tbl_remove(struct flow_table *table, struct sw_flow *flow);
 
 struct sw_flow *ovs_flow_tbl_next(struct flow_table *table, u32 *bucket, u32 *idx);
 extern const int ovs_key_lens[OVS_KEY_ATTR_MAX + 1];
+int ipv4_tun_from_nlattr(const struct nlattr *attr,
+			 struct ovs_key_ipv4_tunnel *tun_key);
+int ipv4_tun_to_nlattr(struct sk_buff *skb,
+			const struct ovs_key_ipv4_tunnel *tun_key);
 
 #endif /* flow.h */
