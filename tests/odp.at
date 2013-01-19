@@ -32,7 +32,7 @@ skb_mark(0x1234),in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth
 
  echo
  echo '# Valid forms with tunnel header.'
- sed 's/^/ipv4_tunnel(tun_id=0x7f10354,src=10.10.10.10,dst=20.20.20.20,tos=0x0,ttl=64,flags(csum,key)),/' odp-base.txt
+ sed 's/^/tunnel(tun_id=0x7f10354,src=10.10.10.10,dst=20.20.20.20,tos=0x0,ttl=64,flags(csum,key)),/' odp-base.txt
 
  echo
  echo '# Valid forms with VLAN header.'
@@ -45,13 +45,13 @@ s/$/)/' odp-base.txt
 
  echo
  echo '# Valid forms with tunnel and VLAN headers.'
- sed 's/^/ipv4_tunnel(tun_id=0xfedcba9876543210,src=10.0.0.1,dst=10.0.0.2,tos=0x8,ttl=128,flags()),/
+ sed 's/^/tunnel(tun_id=0xfedcba9876543210,src=10.0.0.1,dst=10.0.0.2,tos=0x8,ttl=128,flags(key)),/
 s/\(eth([[^)]]*)\),*/\1,eth_type(0x8100),vlan(vid=99,pcp=7),encap(/
 s/$/)/' odp-base.txt
 
  echo
  echo '# Valid forms with QOS priority, tunnel, and VLAN headers.'
- sed 's/^/skb_priority(0x1234),ipv4_tunnel(tun_id=0xfedcba9876543210,src=10.10.10.10,dst=20.20.20.20,tos=0x8,ttl=64,flags(key)),/
+ sed 's/^/skb_priority(0x1234),tunnel(tun_id=0xfedcba9876543210,src=10.10.10.10,dst=20.20.20.20,tos=0x8,ttl=64,flags(key)),/
 s/\(eth([[^)]]*)\),*/\1,eth_type(0x8100),vlan(vid=99,pcp=7),encap(/
 s/$/)/' odp-base.txt
 
@@ -92,9 +92,8 @@ push_vlan(tpid=0x9100,vid=13,pcp=5)
 push_vlan(tpid=0x9100,vid=13,pcp=5,cfi=0)
 pop_vlan
 sample(sample=9.7%,actions(1,2,3,push_vlan(vid=1,pcp=2)))
-set(ipv4_tunnel(tun_id=0xabcdef1234567890,src=1.1.1.1,dst=2.2.2.2,tos=0x0,ttl=64,flags(df,csum,key)))
-set(ipv4_tunnel(tun_id=0xabcdef1234567890,src=1.1.1.1,dst=2.2.2.2,tos=0x0,ttl=64,flags(df,csum,key,0x20)))
-set(ipv4_tunnel(tun_id=0xabcdef1234567890,src=1.1.1.1,dst=2.2.2.2,tos=0x0,ttl=64,flags()))
+set(tunnel(tun_id=0xabcdef1234567890,src=1.1.1.1,dst=2.2.2.2,tos=0x0,ttl=64,flags(df,csum,key)))
+set(tunnel(tun_id=0xabcdef1234567890,src=1.1.1.1,dst=2.2.2.2,tos=0x0,ttl=64,flags(key)))
 ])
 AT_CHECK_UNQUOTED([test-odp parse-actions < actions.txt], [0],
   [`cat actions.txt`

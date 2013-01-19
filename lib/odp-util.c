@@ -95,7 +95,7 @@ ovs_key_attr_to_string(enum ovs_key_attr attr)
     case OVS_KEY_ATTR_PRIORITY: return "skb_priority";
     case OVS_KEY_ATTR_SKB_MARK: return "skb_mark";
     case OVS_KEY_ATTR_TUN_ID: return "tun_id";
-    case OVS_KEY_ATTR_IPV4_TUNNEL: return "ipv4_tunnel";
+    case OVS_KEY_ATTR_TUNNEL: return "tunnel";
     case OVS_KEY_ATTR_IN_PORT: return "in_port";
     case OVS_KEY_ATTR_ETHERNET: return "eth";
     case OVS_KEY_ATTR_VLAN: return "vlan";
@@ -617,7 +617,7 @@ odp_flow_key_attr_len(uint16_t type)
     case OVS_KEY_ATTR_PRIORITY: return 4;
     case OVS_KEY_ATTR_SKB_MARK: return 4;
     case OVS_KEY_ATTR_TUN_ID: return 8;
-    case OVS_KEY_ATTR_IPV4_TUNNEL: return sizeof(struct ovs_key_ipv4_tunnel);
+    case OVS_KEY_ATTR_TUNNEL: return -2;
     case OVS_KEY_ATTR_IN_PORT: return 4;
     case OVS_KEY_ATTR_ETHERNET: return sizeof(struct ovs_key_ethernet);
     case OVS_KEY_ATTR_VLAN: return sizeof(ovs_be16);
@@ -672,19 +672,109 @@ ovs_frag_type_to_string(enum ovs_frag_type type)
     }
 }
 
-static const char *
-odp_tun_flag_to_string(uint32_t flags)
+static int
+tunnel_key_attr_len(int type)
 {
-    switch (flags) {
-    case OVS_TNL_F_DONT_FRAGMENT:
-        return "df";
-    case OVS_TNL_F_CSUM:
-        return "csum";
-    case OVS_TNL_F_KEY:
-        return "key";
-    default:
-        return NULL;
+    switch (type) {
+    case OVS_TUNNEL_KEY_ATTR_ID: return 8;
+    case OVS_TUNNEL_KEY_ATTR_IPV4_SRC: return 4;
+    case OVS_TUNNEL_KEY_ATTR_IPV4_DST: return 4;
+    case OVS_TUNNEL_KEY_ATTR_TOS: return 1;
+    case OVS_TUNNEL_KEY_ATTR_TTL: return 1;
+    case OVS_TUNNEL_KEY_ATTR_DONT_FRAGMENT: return 0;
+    case OVS_TUNNEL_KEY_ATTR_CSUM: return 0;
+    case __OVS_TUNNEL_KEY_ATTR_MAX:
+        return -1;
     }
+    return -1;
+}
+
+static enum odp_key_fitness
+tun_key_from_attr(const struct nlattr *attr, struct flow_tnl *tun)
+{
+    unsigned int left;
+    const struct nlattr *a;
+    bool ttl = false;
+    bool unknown = false;
+
+    NL_NESTED_FOR_EACH(a, left, attr) {
+        uint16_t type = nl_attr_type(a);
+        size_t len = nl_attr_get_size(a);
+        int expected_len = tunnel_key_attr_len(type);
+
+        if (len != expected_len && expected_len >= 0) {
+            return ODP_FIT_ERROR;
+        }
+
+        switch (type) {
+        case OVS_TUNNEL_KEY_ATTR_ID:
+            tun->tun_id = nl_attr_get_be64(a);
+            tun->flags |= FLOW_TNL_F_KEY;
+            break;
+        case OVS_TUNNEL_KEY_ATTR_IPV4_SRC:
+            tun->ip_src = nl_attr_get_be32(a);
+            break;
+        case OVS_TUNNEL_KEY_ATTR_IPV4_DST:
+            tun->ip_dst = nl_attr_get_be32(a);
+            break;
+        case OVS_TUNNEL_KEY_ATTR_TOS:
+            tun->ip_tos = nl_attr_get_u8(a);
+            break;
+        case OVS_TUNNEL_KEY_ATTR_TTL:
+            tun->ip_ttl = nl_attr_get_u8(a);
+            ttl = true;
+            break;
+        case OVS_TUNNEL_KEY_ATTR_DONT_FRAGMENT:
+            tun->flags |= FLOW_TNL_F_DONT_FRAGMENT;
+            break;
+        case OVS_TUNNEL_KEY_ATTR_CSUM:
+            tun->flags |= FLOW_TNL_F_CSUM;
+            break;
+        default:
+            /* Allow this to show up as unexpected, if there are unknown
+             * tunnel attribute, eventually resulting in ODP_FIT_TOO_MUCH. */
+            unknown = true;
+            break;
+        }
+    }
+
+    if (!ttl) {
+        return ODP_FIT_ERROR;
+    }
+    if (unknown) {
+            return ODP_FIT_TOO_MUCH;
+    }
+    return ODP_FIT_PERFECT;
+}
+
+static void
+tun_key_to_attr(struct ofpbuf *a, const struct flow_tnl *tun_key)
+{
+    size_t tun_key_ofs;
+
+    tun_key_ofs = nl_msg_start_nested(a, OVS_KEY_ATTR_TUNNEL);
+
+    if (tun_key->flags & FLOW_TNL_F_KEY) {
+        nl_msg_put_be64(a, OVS_TUNNEL_KEY_ATTR_ID, tun_key->tun_id);
+    }
+    if (tun_key->ip_src) {
+        nl_msg_put_be32(a, OVS_TUNNEL_KEY_ATTR_IPV4_SRC, tun_key->ip_src);
+    }
+    if (tun_key->ip_dst) {
+        nl_msg_put_be32(a, OVS_TUNNEL_KEY_ATTR_IPV4_DST, tun_key->ip_dst);
+    }
+    if (tun_key->ip_tos) {
+        nl_msg_put_u8(a, OVS_TUNNEL_KEY_ATTR_TOS, tun_key->ip_tos);
+    }
+    nl_msg_put_u8(a, OVS_TUNNEL_KEY_ATTR_TTL, tun_key->ip_ttl);
+    if (tun_key->flags & FLOW_TNL_F_DONT_FRAGMENT) {
+        nl_msg_put_flag(a, OVS_TUNNEL_KEY_ATTR_DONT_FRAGMENT);
+    }
+    if (tun_key->flags & FLOW_TNL_F_CSUM) {
+        nl_msg_put_flag(a, OVS_TUNNEL_KEY_ATTR_CSUM);
+    }
+
+    nl_msg_end_nested(a, tun_key_ofs);
 }
 
 static void
@@ -699,7 +789,7 @@ format_odp_key_attr(const struct nlattr *a, struct ds *ds)
     const struct ovs_key_icmpv6 *icmpv6_key;
     const struct ovs_key_arp *arp_key;
     const struct ovs_key_nd *nd_key;
-    const struct ovs_key_ipv4_tunnel *ipv4_tun_key;
+    struct flow_tnl tun_key;
     enum ovs_key_attr attr = nl_attr_type(a);
     int expected_len;
 
@@ -734,18 +824,22 @@ format_odp_key_attr(const struct nlattr *a, struct ds *ds)
         ds_put_format(ds, "(%#"PRIx64")", ntohll(nl_attr_get_be64(a)));
         break;
 
-    case OVS_KEY_ATTR_IPV4_TUNNEL:
-        ipv4_tun_key = nl_attr_get(a);
-        ds_put_format(ds, "(tun_id=0x%"PRIx64",src="IP_FMT",dst="IP_FMT","
-                      "tos=0x%"PRIx8",ttl=%"PRIu8",flags(",
-                      ntohll(ipv4_tun_key->tun_id),
-                      IP_ARGS(ipv4_tun_key->ipv4_src),
-                      IP_ARGS(ipv4_tun_key->ipv4_dst),
-                      ipv4_tun_key->ipv4_tos, ipv4_tun_key->ipv4_ttl);
+    case OVS_KEY_ATTR_TUNNEL:
+        memset(&tun_key, 0, sizeof tun_key);
+        if (tun_key_from_attr(a, &tun_key) == ODP_FIT_ERROR) {
+            ds_put_format(ds, "(error)");
+        } else {
+            ds_put_format(ds, "(tun_id=0x%"PRIx64",src="IP_FMT",dst="IP_FMT","
+                          "tos=0x%"PRIx8",ttl=%"PRIu8",flags(",
+                          ntohll(tun_key.tun_id),
+                          IP_ARGS(tun_key.ip_src),
+                          IP_ARGS(tun_key.ip_dst),
+                          tun_key.ip_tos, tun_key.ip_ttl);
 
-        format_flags(ds, odp_tun_flag_to_string,
-                     ipv4_tun_key->tun_flags, ',');
-        ds_put_format(ds, "))");
+            format_flags(ds, flow_tun_flag_to_string,
+                         (uint32_t) tun_key.flags, ',');
+            ds_put_format(ds, "))");
+        }
         break;
 
     case OVS_KEY_ATTR_IN_PORT:
@@ -974,23 +1068,24 @@ parse_odp_key_attr(const char *s, const struct simap *port_names,
     {
         char tun_id_s[32];
         int tos, ttl;
-        struct ovs_key_ipv4_tunnel tun_key;
+        struct flow_tnl tun_key;
         int n = -1;
 
-        if (sscanf(s, "ipv4_tunnel(tun_id=%31[x0123456789abcdefABCDEF],"
+        if (sscanf(s, "tunnel(tun_id=%31[x0123456789abcdefABCDEF],"
                    "src="IP_SCAN_FMT",dst="IP_SCAN_FMT
                    ",tos=%i,ttl=%i,flags%n", tun_id_s,
-                    IP_SCAN_ARGS(&tun_key.ipv4_src),
-                    IP_SCAN_ARGS(&tun_key.ipv4_dst), &tos, &ttl,
+                    IP_SCAN_ARGS(&tun_key.ip_src),
+                    IP_SCAN_ARGS(&tun_key.ip_dst), &tos, &ttl,
                     &n) > 0 && n > 0) {
             int res;
+            uint32_t flags;
 
             tun_key.tun_id = htonll(strtoull(tun_id_s, NULL, 0));
-            tun_key.ipv4_tos = tos;
-            tun_key.ipv4_ttl = ttl;
+            tun_key.ip_tos = tos;
+            tun_key.ip_ttl = ttl;
+            res = parse_flags(&s[n], flow_tun_flag_to_string, &flags);
+            tun_key.flags = (uint16_t) flags;
 
-            res = parse_flags(&s[n], odp_tun_flag_to_string,
-                              &tun_key.tun_flags);
             if (res < 0) {
                 return res;
             }
@@ -999,10 +1094,7 @@ parse_odp_key_attr(const char *s, const struct simap *port_names,
                 return -EINVAL;
             }
             n++;
-
-            memset(&tun_key.pad, 0, sizeof tun_key.pad);
-            nl_msg_put_unspec(key, OVS_KEY_ATTR_IPV4_TUNNEL, &tun_key,
-                              sizeof tun_key);
+            tun_key_to_attr(key, &tun_key);
             return n;
         }
     }
@@ -1342,27 +1434,6 @@ ovs_to_odp_frag(uint8_t nw_frag)
           : OVS_FRAG_TYPE_LATER);
 }
 
-/* The set of kernel flags we understand. Used to detect if ODP_FIT_TOO_MUCH */
-#define OVS_TNL_F_KNOWN_MASK \
-    (OVS_TNL_F_DONT_FRAGMENT | OVS_TNL_F_CSUM | OVS_TNL_F_KEY)
-
-/* These allow the flow/kernel view of the flags to change in future */
-static uint32_t
-flow_to_odp_flags(uint16_t flags)
-{
-    return (flags & FLOW_TNL_F_DONT_FRAGMENT ? OVS_TNL_F_DONT_FRAGMENT : 0)
-        | (flags & FLOW_TNL_F_CSUM ? OVS_TNL_F_CSUM : 0)
-        | (flags & FLOW_TNL_F_KEY ? OVS_TNL_F_KEY : 0);
-}
-
-static uint16_t
-odp_to_flow_flags(uint32_t tun_flags)
-{
-    return (tun_flags & OVS_TNL_F_DONT_FRAGMENT ? FLOW_TNL_F_DONT_FRAGMENT : 0)
-        | (tun_flags & OVS_TNL_F_CSUM ? FLOW_TNL_F_CSUM : 0)
-        | (tun_flags & OVS_TNL_F_KEY ? FLOW_TNL_F_KEY : 0);
-}
-
 /* Appends a representation of 'flow' as OVS_KEY_ATTR_* attributes to 'buf'.
  * 'flow->in_port' is ignored (since it is likely to be an OpenFlow port
  * number rather than a datapath port number).  Instead, if 'odp_in_port'
@@ -1383,18 +1454,7 @@ odp_flow_key_from_flow(struct ofpbuf *buf, const struct flow *flow,
     }
 
     if (flow->tunnel.ip_dst) {
-        struct ovs_key_ipv4_tunnel *ipv4_tun_key;
-
-        ipv4_tun_key = nl_msg_put_unspec_uninit(buf, OVS_KEY_ATTR_IPV4_TUNNEL,
-                                            sizeof *ipv4_tun_key);
-        /* layouts differ, flags has different size */
-        ipv4_tun_key->tun_id = flow->tunnel.tun_id;
-        ipv4_tun_key->tun_flags = flow_to_odp_flags(flow->tunnel.flags);
-        ipv4_tun_key->ipv4_src = flow->tunnel.ip_src;
-        ipv4_tun_key->ipv4_dst = flow->tunnel.ip_dst;
-        ipv4_tun_key->ipv4_tos = flow->tunnel.ip_tos;
-        ipv4_tun_key->ipv4_ttl = flow->tunnel.ip_ttl;
-        memset(ipv4_tun_key->pad, 0, sizeof ipv4_tun_key->pad);
+        tun_key_to_attr(buf, &flow->tunnel);
     } else if (flow->tunnel.tun_id != htonll(0)) {
         nl_msg_put_be64(buf, OVS_KEY_ATTR_TUN_ID, flow->tunnel.tun_id);
     }
@@ -1905,23 +1965,14 @@ odp_flow_key_to_flow(const struct nlattr *key, size_t key_len,
         expected_attrs |= UINT64_C(1) << OVS_KEY_ATTR_TUN_ID;
     }
 
-    if (present_attrs & (UINT64_C(1) << OVS_KEY_ATTR_IPV4_TUNNEL)) {
-        const struct ovs_key_ipv4_tunnel *ipv4_tun_key;
+    if (present_attrs & (UINT64_C(1) << OVS_KEY_ATTR_TUNNEL)) {
+        enum odp_key_fitness res;
 
-        ipv4_tun_key = nl_attr_get(attrs[OVS_KEY_ATTR_IPV4_TUNNEL]);
-
-        flow->tunnel.tun_id = ipv4_tun_key->tun_id;
-        flow->tunnel.ip_src = ipv4_tun_key->ipv4_src;
-        flow->tunnel.ip_dst = ipv4_tun_key->ipv4_dst;
-        flow->tunnel.flags = odp_to_flow_flags(ipv4_tun_key->tun_flags);
-        flow->tunnel.ip_tos = ipv4_tun_key->ipv4_tos;
-        flow->tunnel.ip_ttl = ipv4_tun_key->ipv4_ttl;
-
-        /* Allow this to show up as unexpected, if there are unknown flags,
-         * eventually resulting in ODP_FIT_TOO_MUCH.
-         * OVS_TNL_F_KNOWN_MASK defined locally above. */
-        if (!(ipv4_tun_key->tun_flags & ~OVS_TNL_F_KNOWN_MASK)) {
-            expected_attrs |= UINT64_C(1) << OVS_KEY_ATTR_IPV4_TUNNEL;
+        res = tun_key_from_attr(attrs[OVS_KEY_ATTR_TUNNEL], &flow->tunnel);
+        if (res == ODP_FIT_ERROR) {
+            return ODP_FIT_ERROR;
+        } else if (res == ODP_FIT_PERFECT) {
+            expected_attrs |= UINT64_C(1) << OVS_KEY_ATTR_TUNNEL;
         }
     }
 
@@ -2017,18 +2068,11 @@ commit_set_tunnel_action(const struct flow *flow, struct flow *base,
 
     /* A valid IPV4_TUNNEL must have non-zero ip_dst. */
     if (flow->tunnel.ip_dst) {
-        struct ovs_key_ipv4_tunnel ipv4_tun_key;
+        size_t offset;
 
-        ipv4_tun_key.tun_id = base->tunnel.tun_id;
-        ipv4_tun_key.tun_flags = flow_to_odp_flags(base->tunnel.flags);
-        ipv4_tun_key.ipv4_src = base->tunnel.ip_src;
-        ipv4_tun_key.ipv4_dst = base->tunnel.ip_dst;
-        ipv4_tun_key.ipv4_tos = base->tunnel.ip_tos;
-        ipv4_tun_key.ipv4_ttl = base->tunnel.ip_ttl;
-        memset(&ipv4_tun_key.pad, 0, sizeof ipv4_tun_key.pad);
-
-        commit_set_action(odp_actions, OVS_KEY_ATTR_IPV4_TUNNEL,
-                          &ipv4_tun_key, sizeof ipv4_tun_key);
+        offset = nl_msg_start_nested(odp_actions, OVS_ACTION_ATTR_SET);
+        tun_key_to_attr(odp_actions, &base->tunnel);
+        nl_msg_end_nested(odp_actions, offset);
     } else {
         commit_set_action(odp_actions, OVS_KEY_ATTR_TUN_ID,
                           &base->tunnel.tun_id, sizeof base->tunnel.tun_id);

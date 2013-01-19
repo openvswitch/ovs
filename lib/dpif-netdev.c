@@ -1192,7 +1192,7 @@ execute_set_action(struct ofpbuf *packet, const struct nlattr *a)
     case OVS_KEY_ATTR_TUN_ID:
     case OVS_KEY_ATTR_PRIORITY:
     case OVS_KEY_ATTR_SKB_MARK:
-    case OVS_KEY_ATTR_IPV4_TUNNEL:
+    case OVS_KEY_ATTR_TUNNEL:
         /* not implemented */
         break;
 

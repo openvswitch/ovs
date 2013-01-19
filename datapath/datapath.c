@@ -423,16 +423,89 @@ static int flush_flows(struct datapath *dp)
 	return 0;
 }
 
-static int validate_actions(const struct nlattr *attr,
-				const struct sw_flow_key *key, int depth);
+static struct nlattr *reserve_sfa_size(struct sw_flow_actions **sfa, int attr_len)
+{
 
-static int validate_sample(const struct nlattr *attr,
-				const struct sw_flow_key *key, int depth)
+	struct sw_flow_actions *acts;
+	int new_acts_size;
+	int req_size = NLA_ALIGN(attr_len);
+	int next_offset = offsetof(struct sw_flow_actions, actions) +
+					(*sfa)->actions_len;
+
+	if (req_size <= (ksize(*sfa) - next_offset))
+		goto out;
+
+	new_acts_size = ksize(*sfa) * 2;
+
+	if (new_acts_size > MAX_ACTIONS_BUFSIZE) {
+		if ((MAX_ACTIONS_BUFSIZE - next_offset) < req_size)
+			return ERR_PTR(-EMSGSIZE);
+		new_acts_size = MAX_ACTIONS_BUFSIZE;
+	}
+
+	acts = ovs_flow_actions_alloc(new_acts_size);
+	if (IS_ERR(acts))
+		return (void *)acts;
+
+	memcpy(acts->actions, (*sfa)->actions, (*sfa)->actions_len);
+	acts->actions_len = (*sfa)->actions_len;
+	kfree(*sfa);
+	*sfa = acts;
+
+out:
+	(*sfa)->actions_len += req_size;
+	return  (struct nlattr *) ((unsigned char *)(*sfa) + next_offset);
+}
+
+static int add_action(struct sw_flow_actions **sfa, int attrtype, void *data, int len)
+{
+	struct nlattr *a;
+
+	a = reserve_sfa_size(sfa, nla_attr_size(len));
+	if (IS_ERR(a))
+		return PTR_ERR(a);
+
+	a->nla_type = attrtype;
+	a->nla_len = nla_attr_size(len);
+
+	if (data)
+		memcpy(nla_data(a), data, len);
+	memset((unsigned char *) a + a->nla_len, 0, nla_padlen(len));
+
+	return 0;
+}
+
+static inline int add_nested_action_start(struct sw_flow_actions **sfa, int attrtype)
+{
+	int used = (*sfa)->actions_len;
+	int err;
+
+	err = add_action(sfa, attrtype, NULL, 0);
+	if (err)
+		return err;
+
+	return used;
+}
+
+static inline void add_nested_action_end(struct sw_flow_actions *sfa, int st_offset)
+{
+	struct nlattr *a = (struct nlattr *) ((unsigned char *)sfa->actions + st_offset);
+
+	a->nla_len = sfa->actions_len - st_offset;
+}
+
+static int validate_and_copy_actions(const struct nlattr *attr,
+				const struct sw_flow_key *key, int depth,
+				struct sw_flow_actions **sfa);
+
+static int validate_and_copy_sample(const struct nlattr *attr,
+			   const struct sw_flow_key *key, int depth,
+			   struct sw_flow_actions **sfa)
 {
 	const struct nlattr *attrs[OVS_SAMPLE_ATTR_MAX + 1];
 	const struct nlattr *probability, *actions;
 	const struct nlattr *a;
-	int rem;
+	int rem, start, err, st_acts;
 
 	memset(attrs, 0, sizeof(attrs));
 	nla_for_each_nested(a, attr, rem) {
@@ -451,7 +524,26 @@ static int validate_sample(const struct nlattr *attr,
 	actions = attrs[OVS_SAMPLE_ATTR_ACTIONS];
 	if (!actions || (nla_len(actions) && nla_len(actions) < NLA_HDRLEN))
 		return -EINVAL;
-	return validate_actions(actions, key, depth + 1);
+
+	/* validation done, copy sample action. */
+	start = add_nested_action_start(sfa, OVS_ACTION_ATTR_SAMPLE);
+	if (start < 0)
+		return start;
+	err = add_action(sfa, OVS_SAMPLE_ATTR_PROBABILITY, nla_data(probability), sizeof(u32));
+	if (err)
+		return err;
+	st_acts = add_nested_action_start(sfa, OVS_SAMPLE_ATTR_ACTIONS);
+	if (st_acts < 0)
+		return st_acts;
+
+	err = validate_and_copy_actions(actions, key, depth + 1, sfa);
+	if (err)
+		return err;
+
+	add_nested_action_end(*sfa, st_acts);
+	add_nested_action_end(*sfa, start);
+
+	return 0;
 }
 
 static int validate_tp_port(const struct sw_flow_key *flow_key)
@@ -467,8 +559,30 @@ static int validate_tp_port(const struct sw_flow_key *flow_key)
 	return -EINVAL;
 }
 
+static int validate_and_copy_set_tun(const struct nlattr *attr,
+				     struct sw_flow_actions **sfa)
+{
+	struct ovs_key_ipv4_tunnel tun_key;
+	int err, start;
+
+	err = ipv4_tun_from_nlattr(nla_data(attr), &tun_key);
+	if (err)
+		return err;
+
+	start = add_nested_action_start(sfa, OVS_ACTION_ATTR_SET);
+	if (start < 0)
+		return start;
+
+	err = add_action(sfa, OVS_KEY_ATTR_IPV4_TUNNEL, &tun_key, sizeof(tun_key));
+	add_nested_action_end(*sfa, start);
+
+	return err;
+}
+
 static int validate_set(const struct nlattr *a,
-			const struct sw_flow_key *flow_key)
+			const struct sw_flow_key *flow_key,
+			struct sw_flow_actions **sfa,
+			bool *set_tun)
 {
 	const struct nlattr *ovs_key = nla_data(a);
 	int key_type = nla_type(ovs_key);
@@ -478,13 +592,14 @@ static int validate_set(const struct nlattr *a,
 		return -EINVAL;
 
 	if (key_type > OVS_KEY_ATTR_MAX ||
-	    nla_len(ovs_key) != ovs_key_lens[key_type])
+	    (ovs_key_lens[key_type] != nla_len(ovs_key) &&
+	     ovs_key_lens[key_type] != -1))
 		return -EINVAL;
 
 	switch (key_type) {
 	const struct ovs_key_ipv4 *ipv4_key;
-	const struct ovs_key_ipv4_tunnel *tun_key;
 	const struct ovs_key_ipv6 *ipv6_key;
+	int err;
 
 	case OVS_KEY_ATTR_PRIORITY:
 	case OVS_KEY_ATTR_TUN_ID:
@@ -498,10 +613,11 @@ static int validate_set(const struct nlattr *a,
 #endif
 		break;
 
-	case OVS_KEY_ATTR_IPV4_TUNNEL:
-		tun_key = nla_data(ovs_key);
-		if (!tun_key->ipv4_dst)
-			return -EINVAL;
+	case OVS_KEY_ATTR_TUNNEL:
+		*set_tun = true;
+		err = validate_and_copy_set_tun(a, sfa);
+		if (err)
+			return err;
 		break;
 
 	case OVS_KEY_ATTR_IPV4:
@@ -579,8 +695,24 @@ static int validate_userspace(const struct nlattr *attr)
 	return 0;
 }
 
-static int validate_actions(const struct nlattr *attr,
-				const struct sw_flow_key *key,  int depth)
+static int copy_action(const struct nlattr *from,
+		      struct sw_flow_actions **sfa)
+{
+	int totlen = NLA_ALIGN(from->nla_len);
+	struct nlattr *to;
+
+	to = reserve_sfa_size(sfa, from->nla_len);
+	if (IS_ERR(to))
+		return PTR_ERR(to);
+
+	memcpy(to, from, totlen);
+	return 0;
+}
+
+static int validate_and_copy_actions(const struct nlattr *attr,
+				const struct sw_flow_key *key,
+				int depth,
+				struct sw_flow_actions **sfa)
 {
 	const struct nlattr *a;
 	int rem, err;
@@ -600,12 +732,14 @@ static int validate_actions(const struct nlattr *attr,
 		};
 		const struct ovs_action_push_vlan *vlan;
 		int type = nla_type(a);
+		bool skip_copy;
 
 		if (type > OVS_ACTION_ATTR_MAX ||
 		    (action_lens[type] != nla_len(a) &&
 		     action_lens[type] != (u32)-1))
 			return -EINVAL;
 
+		skip_copy = false;
 		switch (type) {
 		case OVS_ACTION_ATTR_UNSPEC:
 			return -EINVAL;
@@ -634,19 +768,25 @@ static int validate_actions(const struct nlattr *attr,
 			break;
 
 		case OVS_ACTION_ATTR_SET:
-			err = validate_set(a, key);
+			err = validate_set(a, key, sfa, &skip_copy);
 			if (err)
 				return err;
 			break;
 
 		case OVS_ACTION_ATTR_SAMPLE:
-			err = validate_sample(a, key, depth);
+			err = validate_and_copy_sample(a, key, depth, sfa);
 			if (err)
 				return err;
+			skip_copy = true;
 			break;
 
 		default:
 			return -EINVAL;
+		}
+		if (!skip_copy) {
+			err = copy_action(a, sfa);
+			if (err)
+				return err;
 		}
 	}
 
@@ -716,16 +856,15 @@ static int ovs_packet_cmd_execute(struct sk_buff *skb, struct genl_info *info)
 	err = ovs_flow_metadata_from_nlattrs(flow, key_len, a[OVS_PACKET_ATTR_KEY]);
 	if (err)
 		goto err_flow_free;
-
-	err = validate_actions(a[OVS_PACKET_ATTR_ACTIONS], &flow->key, 0);
-	if (err)
-		goto err_flow_free;
-
-	acts = ovs_flow_actions_alloc(a[OVS_PACKET_ATTR_ACTIONS]);
+	acts = ovs_flow_actions_alloc(nla_len(a[OVS_PACKET_ATTR_ACTIONS]));
 	err = PTR_ERR(acts);
 	if (IS_ERR(acts))
 		goto err_flow_free;
+
+	err = validate_and_copy_actions(a[OVS_PACKET_ATTR_ACTIONS], &flow->key, 0, &acts);
 	rcu_assign_pointer(flow->sf_acts, acts);
+	if (err)
+		goto err_flow_free;
 
 	OVS_CB(packet)->flow = flow;
 	packet->priority = flow->key.phy.priority;
@@ -814,6 +953,99 @@ static struct genl_multicast_group ovs_dp_flow_multicast_group = {
 	.name = OVS_FLOW_MCGROUP
 };
 
+static int actions_to_attr(const struct nlattr *attr, int len, struct sk_buff *skb);
+static int sample_action_to_attr(const struct nlattr *attr, struct sk_buff *skb)
+{
+	const struct nlattr *a;
+	struct nlattr *start;
+	int err = 0, rem;
+
+	start = nla_nest_start(skb, OVS_ACTION_ATTR_SAMPLE);
+	if (!start)
+		return -EMSGSIZE;
+
+	nla_for_each_nested(a, attr, rem) {
+		int type = nla_type(a);
+		struct nlattr *st_sample;
+
+		switch (type) {
+		case OVS_SAMPLE_ATTR_PROBABILITY:
+			if (nla_put(skb, OVS_SAMPLE_ATTR_PROBABILITY, sizeof(u32), nla_data(a)))
+				return -EMSGSIZE;
+			break;
+		case OVS_SAMPLE_ATTR_ACTIONS:
+			st_sample = nla_nest_start(skb, OVS_SAMPLE_ATTR_ACTIONS);
+			if (!st_sample)
+				return -EMSGSIZE;
+			err = actions_to_attr(nla_data(a), nla_len(a), skb);
+			if (err)
+				return err;
+			nla_nest_end(skb, st_sample);
+			break;
+		}
+	}
+
+	nla_nest_end(skb, start);
+	return err;
+}
+
+static int set_action_to_attr(const struct nlattr *a, struct sk_buff *skb)
+{
+	const struct nlattr *ovs_key = nla_data(a);
+	int key_type = nla_type(ovs_key);
+	struct nlattr *start;
+	int err;
+
+	switch (key_type) {
+	case OVS_KEY_ATTR_IPV4_TUNNEL:
+		start = nla_nest_start(skb, OVS_ACTION_ATTR_SET);
+		if (!start)
+			return -EMSGSIZE;
+
+		err = ipv4_tun_to_nlattr(skb, nla_data(ovs_key));
+		if (err)
+			return err;
+		nla_nest_end(skb, start);
+		break;
+	default:
+		if (nla_put(skb, OVS_ACTION_ATTR_SET, nla_len(a), ovs_key))
+			return -EMSGSIZE;
+		break;
+	}
+
+	return 0;
+}
+
+static int actions_to_attr(const struct nlattr *attr, int len, struct sk_buff *skb)
+{
+	const struct nlattr *a;
+	int rem, err;
+
+	nla_for_each_attr(a, attr, len, rem) {
+		int type = nla_type(a);
+
+		switch (type) {
+		case OVS_ACTION_ATTR_SET:
+			err = set_action_to_attr(a, skb);
+			if (err)
+				return err;
+			break;
+
+		case OVS_ACTION_ATTR_SAMPLE:
+			err = sample_action_to_attr(a, skb);
+			if (err)
+				return err;
+			break;
+		default:
+			if (nla_put(skb, type, nla_len(a), nla_data(a)))
+				return -EMSGSIZE;
+			break;
+		}
+	}
+
+	return 0;
+}
+
 /* Called with genl_lock. */
 static int ovs_flow_cmd_fill_info(struct sw_flow *flow, struct datapath *dp,
 				  struct sk_buff *skb, u32 portid,
@@ -821,6 +1053,7 @@ static int ovs_flow_cmd_fill_info(struct sw_flow *flow, struct datapath *dp,
 {
 	const int skb_orig_len = skb->len;
 	const struct sw_flow_actions *sf_acts;
+	struct nlattr *start;
 	struct ovs_flow_stats stats;
 	struct ovs_header *ovs_header;
 	struct nlattr *nla;
@@ -875,10 +1108,11 @@ static int ovs_flow_cmd_fill_info(struct sw_flow *flow, struct datapath *dp,
 	 * This can only fail for dump operations because the skb is always
 	 * properly sized for single flows.
 	 */
-	err = nla_put(skb, OVS_FLOW_ATTR_ACTIONS, sf_acts->actions_len,
-		      sf_acts->actions);
+	start = nla_nest_start(skb, OVS_FLOW_ATTR_ACTIONS);
+	err = actions_to_attr(sf_acts->actions, sf_acts->actions_len, skb);
 	if (err < 0 && skb_orig_len)
 		goto error;
+	nla_nest_end(skb, start);
 
 	return genlmsg_end(skb, ovs_header);
 
@@ -938,6 +1172,7 @@ static int ovs_flow_cmd_new_or_set(struct sk_buff *skb, struct genl_info *info)
 	struct sk_buff *reply;
 	struct datapath *dp;
 	struct flow_table *table;
+	struct sw_flow_actions *acts = NULL;
 	int error;
 	int key_len;
 
@@ -951,9 +1186,14 @@ static int ovs_flow_cmd_new_or_set(struct sk_buff *skb, struct genl_info *info)
 
 	/* Validate actions. */
 	if (a[OVS_FLOW_ATTR_ACTIONS]) {
-		error = validate_actions(a[OVS_FLOW_ATTR_ACTIONS], &key,  0);
-		if (error)
+		acts = ovs_flow_actions_alloc(nla_len(a[OVS_FLOW_ATTR_ACTIONS]));
+		error = PTR_ERR(acts);
+		if (IS_ERR(acts))
 			goto error;
+
+		error = validate_and_copy_actions(a[OVS_FLOW_ATTR_ACTIONS], &key,  0, &acts);
+		if (error)
+			goto err_kfree;
 	} else if (info->genlhdr->cmd == OVS_FLOW_CMD_NEW) {
 		error = -EINVAL;
 		goto error;
@@ -962,17 +1202,15 @@ static int ovs_flow_cmd_new_or_set(struct sk_buff *skb, struct genl_info *info)
 	dp = get_dp(sock_net(skb->sk), ovs_header->dp_ifindex);
 	error = -ENODEV;
 	if (!dp)
-		goto error;
+		goto err_kfree;
 
 	table = genl_dereference(dp->table);
 	flow = ovs_flow_tbl_lookup(table, &key, key_len);
 	if (!flow) {
-		struct sw_flow_actions *acts;
-
 		/* Bail out if we're not allowed to create a new flow. */
 		error = -ENOENT;
 		if (info->genlhdr->cmd == OVS_FLOW_CMD_SET)
-			goto error;
+			goto err_kfree;
 
 		/* Expand table, if necessary, to make room. */
 		if (ovs_flow_tbl_need_to_expand(table)) {
@@ -990,15 +1228,10 @@ static int ovs_flow_cmd_new_or_set(struct sk_buff *skb, struct genl_info *info)
 		flow = ovs_flow_alloc();
 		if (IS_ERR(flow)) {
 			error = PTR_ERR(flow);
-			goto error;
+			goto err_kfree;
 		}
 		clear_stats(flow);
 
-		/* Obtain actions. */
-		acts = ovs_flow_actions_alloc(a[OVS_FLOW_ATTR_ACTIONS]);
-		error = PTR_ERR(acts);
-		if (IS_ERR(acts))
-			goto error_free_flow;
 		rcu_assign_pointer(flow->sf_acts, acts);
 
 		/* Put flow in bucket. */
@@ -1010,7 +1243,6 @@ static int ovs_flow_cmd_new_or_set(struct sk_buff *skb, struct genl_info *info)
 	} else {
 		/* We found a matching flow. */
 		struct sw_flow_actions *old_acts;
-		struct nlattr *acts_attrs;
 
 		/* Bail out if we're not allowed to modify an existing flow.
 		 * We accept NLM_F_CREATE in place of the intended NLM_F_EXCL
@@ -1021,26 +1253,13 @@ static int ovs_flow_cmd_new_or_set(struct sk_buff *skb, struct genl_info *info)
 		error = -EEXIST;
 		if (info->genlhdr->cmd == OVS_FLOW_CMD_NEW &&
 		    info->nlhdr->nlmsg_flags & (NLM_F_CREATE | NLM_F_EXCL))
-			goto error;
+			goto err_kfree;
 
 		/* Update actions. */
 		old_acts = rcu_dereference_protected(flow->sf_acts,
 						     lockdep_genl_is_held());
-		acts_attrs = a[OVS_FLOW_ATTR_ACTIONS];
-		if (acts_attrs &&
-		   (old_acts->actions_len != nla_len(acts_attrs) ||
-		   memcmp(old_acts->actions, nla_data(acts_attrs),
-			  old_acts->actions_len))) {
-			struct sw_flow_actions *new_acts;
-
-			new_acts = ovs_flow_actions_alloc(acts_attrs);
-			error = PTR_ERR(new_acts);
-			if (IS_ERR(new_acts))
-				goto error;
-
-			rcu_assign_pointer(flow->sf_acts, new_acts);
-			ovs_flow_deferred_free_acts(old_acts);
-		}
+		rcu_assign_pointer(flow->sf_acts, acts);
+		ovs_flow_deferred_free_acts(old_acts);
 
 		reply = ovs_flow_cmd_build_info(flow, dp, info->snd_portid,
 					       info->snd_seq, OVS_FLOW_CMD_NEW);
@@ -1062,8 +1281,8 @@ static int ovs_flow_cmd_new_or_set(struct sk_buff *skb, struct genl_info *info)
 				ovs_dp_flow_multicast_group.id,	PTR_ERR(reply));
 	return 0;
 
-error_free_flow:
-	ovs_flow_free(flow);
+err_kfree:
+	kfree(acts);
 error:
 	return error;
 }
