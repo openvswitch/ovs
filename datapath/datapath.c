@@ -387,8 +387,6 @@ static int queue_gso_packets(int dp_ifindex, struct sk_buff *skb,
 	segs = skb_gso_segment(skb, NETIF_F_SG | NETIF_F_HW_CSUM);
 	if (IS_ERR(segs))
 		return PTR_ERR(segs);
-	if (!segs)
-		return queue_userspace_packet(dp_ifindex, skb, upcall_info);
 
 	/* Queue all of the segments. */
 	skb = segs;
