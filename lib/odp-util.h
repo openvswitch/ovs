@@ -50,23 +50,30 @@ int odp_actions_from_string(const char *, const struct simap *port_names,
  * The longest nlattr-formatted flow key appended by odp_flow_key_from_flow()
  * would be:
  *
- *                         struct  pad  nl hdr  total
- *                         ------  ---  ------  -----
- *  OVS_KEY_ATTR_PRIORITY      4    --     4      8
- *  OVS_KEY_ATTR_TUN_ID        8    --     4     12
- *  OVS_KEY_ATTR_IPV4_TUNNEL  24    --     4     28
- *  OVS_KEY_ATTR_IN_PORT       4    --     4      8
- *  OVS_KEY_ATTR_SKB_MARK      4    --     4      8
- *  OVS_KEY_ATTR_ETHERNET     12    --     4     16
- *  OVS_KEY_ATTR_ETHERTYPE     2     2     4      8  (outer VLAN ethertype)
- *  OVS_KEY_ATTR_8021Q         4    --     4      8
- *  OVS_KEY_ATTR_ENCAP         0    --     4      4  (VLAN encapsulation)
- *  OVS_KEY_ATTR_ETHERTYPE     2     2     4      8  (inner VLAN ethertype)
- *  OVS_KEY_ATTR_IPV6         40    --     4     44
- *  OVS_KEY_ATTR_ICMPV6        2     2     4      8
- *  OVS_KEY_ATTR_ND           28    --     4     32
- *  -------------------------------------------------
- *  total                                       192
+ *                                     struct  pad  nl hdr  total
+ *                                     ------  ---  ------  -----
+ *  OVS_KEY_ATTR_PRIORITY                4    --     4      8
+ *  OVS_KEY_ATTR_TUN_ID                  8    --     4     12
+ *  OVS_KEY_ATTR_TUNNEL                  0    --     4      4
+ *  - OVS_TUNNEL_KEY_ATTR_ID             8    --     4     12
+ *  - OVS_TUNNEL_KEY_ATTR_IPV4_SRC       4    --     4      8
+ *  - OVS_TUNNEL_KEY_ATTR_IPV4_DST       4    --     4      8
+ *  - OVS_TUNNEL_KEY_ATTR_TOS            1    3      4      8
+ *  - OVS_TUNNEL_KEY_ATTR_TTL            1    3      4      8
+ *  - OVS_TUNNEL_KEY_ATTR_DONT_FRAGMENT  0    --     4      4
+ *  - OVS_TUNNEL_KEY_ATTR_CSUM           0    --     4      4
+ *  OVS_KEY_ATTR_IN_PORT                 4    --     4      8
+ *  OVS_KEY_ATTR_SKB_MARK                4    --     4      8
+ *  OVS_KEY_ATTR_ETHERNET               12    --     4     16
+ *  OVS_KEY_ATTR_ETHERTYPE               2     2     4      8  (outer VLAN ethertype)
+ *  OVS_KEY_ATTR_8021Q                   4    --     4      8
+ *  OVS_KEY_ATTR_ENCAP                   0    --     4      4  (VLAN encapsulation)
+ *  OVS_KEY_ATTR_ETHERTYPE               2     2     4      8  (inner VLAN ethertype)
+ *  OVS_KEY_ATTR_IPV6                   40    --     4     44
+ *  OVS_KEY_ATTR_ICMPV6                  2     2     4      8
+ *  OVS_KEY_ATTR_ND                     28    --     4     32
+ *  ----------------------------------------------------------
+ *  total                                                 220
  *
  * We include some slack space in case the calculation isn't quite right or we
  * add another field and forget to adjust this value.
