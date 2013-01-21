@@ -1223,10 +1223,8 @@ static int ovs_flow_cmd_fill_info(struct sw_flow *flow, struct datapath *dp,
 
 			nla_nest_cancel(skb, start);
 		}
-	} else if (skb_orig_len) {
-		err = -ENOMEM;
-		goto error;
-	}
+	} else if (skb_orig_len)
+		goto nla_put_failure;
 
 	return genlmsg_end(skb, ovs_header);
 
