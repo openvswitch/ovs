@@ -1213,10 +1213,15 @@ static int ovs_flow_cmd_fill_info(struct sw_flow *flow, struct datapath *dp,
 	 * properly sized for single flows.
 	 */
 	start = nla_nest_start(skb, OVS_FLOW_ATTR_ACTIONS);
-	err = actions_to_attr(sf_acts->actions, sf_acts->actions_len, skb);
-	if (err < 0 && skb_orig_len)
+	if (start) {
+		err = actions_to_attr(sf_acts->actions, sf_acts->actions_len, skb);
+		if (err < 0 && skb_orig_len)
+			goto error;
+		nla_nest_end(skb, start);
+	} else if (skb_orig_len) {
+		err = -ENOMEM;
 		goto error;
-	nla_nest_end(skb, start);
+	}
 
 	return genlmsg_end(skb, ovs_header);
 
