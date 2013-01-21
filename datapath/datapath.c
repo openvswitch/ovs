@@ -1111,9 +1111,14 @@ static int ovs_flow_cmd_fill_info(struct sw_flow *flow, struct datapath *dp,
 	start = nla_nest_start(skb, OVS_FLOW_ATTR_ACTIONS);
 	if (start) {
 		err = actions_to_attr(sf_acts->actions, sf_acts->actions_len, skb);
-		if (err < 0 && skb_orig_len)
-			goto error;
-		nla_nest_end(skb, start);
+		if (!err)
+			nla_nest_end(skb, start);
+		else {
+			if (skb_orig_len)
+				goto error;
+
+			nla_nest_cancel(skb, start);
+		}
 	} else if (skb_orig_len) {
 		err = -ENOMEM;
 		goto error;
