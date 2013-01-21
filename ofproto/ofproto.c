@@ -3499,7 +3499,7 @@ handle_flow_mod(struct ofconn *ofconn, const struct ofp_header *oh)
                               &fm.match.flow, ofproto->max_ports);
     }
     if (!error) {
-        error = handle_flow_mod__(ofconn_get_ofproto(ofconn), ofconn, &fm, oh);
+        error = handle_flow_mod__(ofproto, ofconn, &fm, oh);
     }
     if (error) {
         goto exit_free_ofpacts;
