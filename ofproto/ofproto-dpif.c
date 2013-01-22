@@ -1022,6 +1022,7 @@ open_dpif_backer(const char *type, struct dpif_backer **backerp)
     if (error) {
         VLOG_ERR("failed to open datapath of type %s: %s", type,
                  strerror(error));
+        free(backer);
         return error;
     }
 
