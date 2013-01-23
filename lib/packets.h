@@ -23,13 +23,13 @@
 #include <stdint.h>
 #include <string.h>
 #include "compiler.h"
+#include "flow.h"
 #include "openvswitch/types.h"
 #include "random.h"
 #include "util.h"
 
 struct ofpbuf;
 struct ds;
-struct flow;
 
 bool dpid_from_string(const char *s, uint64_t *dpidp);
 
@@ -466,6 +466,12 @@ static inline bool ipv6_mask_is_any(const struct in6_addr *mask) {
 
 static inline bool ipv6_mask_is_exact(const struct in6_addr *mask) {
     return ipv6_addr_equals(mask, &in6addr_exact);
+}
+
+static inline bool is_ip_any(const struct flow *flow)
+{
+    return flow->dl_type == htons(ETH_TYPE_IP)
+        || flow->dl_type == htons(ETH_TYPE_IPV6);
 }
 
 void format_ipv6_addr(char *addr_str, const struct in6_addr *addr);

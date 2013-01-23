@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -710,9 +710,7 @@ packet_set_udp_port(struct ofpbuf *packet, ovs_be16 src, ovs_be16 dst)
 uint8_t
 packet_get_tcp_flags(const struct ofpbuf *packet, const struct flow *flow)
 {
-    if ((flow->dl_type == htons(ETH_TYPE_IP) ||
-         flow->dl_type == htons(ETH_TYPE_IPV6)) &&
-        flow->nw_proto == IPPROTO_TCP && packet->l7) {
+    if (is_ip_any(flow) && flow->nw_proto == IPPROTO_TCP && packet->l7) {
         const struct tcp_header *tcp = packet->l4;
         return TCP_FLAGS(tcp->tcp_ctl);
     } else {

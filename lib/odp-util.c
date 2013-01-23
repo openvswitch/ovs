@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1526,10 +1526,7 @@ odp_flow_key_from_flow(struct ofpbuf *buf, const struct flow *flow,
         memcpy(arp_key->arp_tha, flow->arp_tha, ETH_ADDR_LEN);
     }
 
-    if ((flow->dl_type == htons(ETH_TYPE_IP)
-         || flow->dl_type == htons(ETH_TYPE_IPV6))
-        && !(flow->nw_frag & FLOW_NW_FRAG_LATER)) {
-
+    if (is_ip_any(flow) && !(flow->nw_frag & FLOW_NW_FRAG_LATER)) {
         if (flow->nw_proto == IPPROTO_TCP) {
             struct ovs_key_tcp *tcp_key;
 
@@ -1790,8 +1787,7 @@ parse_l3_onward(const struct nlattr *attrs[OVS_KEY_ATTR_MAX + 1],
     }
 
     if (flow->nw_proto == IPPROTO_TCP
-        && (flow->dl_type == htons(ETH_TYPE_IP) ||
-            flow->dl_type == htons(ETH_TYPE_IPV6))
+        && is_ip_any(flow)
         && !(flow->nw_frag & FLOW_NW_FRAG_LATER)) {
         expected_attrs |= UINT64_C(1) << OVS_KEY_ATTR_TCP;
         if (present_attrs & (UINT64_C(1) << OVS_KEY_ATTR_TCP)) {
@@ -1802,8 +1798,7 @@ parse_l3_onward(const struct nlattr *attrs[OVS_KEY_ATTR_MAX + 1],
             flow->tp_dst = tcp_key->tcp_dst;
         }
     } else if (flow->nw_proto == IPPROTO_UDP
-               && (flow->dl_type == htons(ETH_TYPE_IP) ||
-                   flow->dl_type == htons(ETH_TYPE_IPV6))
+               && is_ip_any(flow)
                && !(flow->nw_frag & FLOW_NW_FRAG_LATER)) {
         expected_attrs |= UINT64_C(1) << OVS_KEY_ATTR_UDP;
         if (present_attrs & (UINT64_C(1) << OVS_KEY_ATTR_UDP)) {

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -106,8 +106,7 @@ match_wc_init(struct match *match, const struct flow *flow)
         memset(&wc->masks.arp_tha, 0xff, sizeof wc->masks.arp_tha);
     }
 
-    if (flow->dl_type == htons(ETH_TYPE_IPV6) ||
-        flow->dl_type == htons(ETH_TYPE_IP)) {
+    if (is_ip_any(flow)) {
         memset(&wc->masks.nw_tos, 0xff, sizeof wc->masks.nw_tos);
         memset(&wc->masks.nw_ttl, 0xff, sizeof wc->masks.nw_ttl);
     }

@@ -761,13 +761,6 @@ mf_is_mask_valid(const struct mf_field *mf, const union mf_value *mask)
 }
 
 static bool
-is_ip_any(const struct flow *flow)
-{
-    return (flow->dl_type == htons(ETH_TYPE_IP) ||
-            flow->dl_type == htons(ETH_TYPE_IPV6));
-}
-
-static bool
 is_icmpv4(const struct flow *flow)
 {
     return (flow->dl_type == htons(ETH_TYPE_IP)
