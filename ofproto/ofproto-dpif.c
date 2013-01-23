@@ -615,6 +615,15 @@ COVERAGE_DEFINE(rev_port_toggled);
 COVERAGE_DEFINE(rev_flow_table);
 COVERAGE_DEFINE(rev_inconsistency);
 
+/* Drop keys are odp flow keys which have drop flows installed in the kernel.
+ * These are datapath flows which have no associated ofproto, if they did we
+ * would use facets. */
+struct drop_key {
+    struct hmap_node hmap_node;
+    struct nlattr *key;
+    size_t key_len;
+};
+
 /* All datapaths of a given type share a single dpif backer instance. */
 struct dpif_backer {
     char *type;
@@ -626,11 +635,14 @@ struct dpif_backer {
     /* Facet revalidation flags applying to facets which use this backer. */
     enum revalidate_reason need_revalidate; /* Revalidate every facet. */
     struct tag_set revalidate_set; /* Revalidate only matching facets. */
+
+    struct hmap drop_keys; /* Set of dropped odp keys. */
 };
 
 /* All existing ofproto_backer instances, indexed by ofproto->up.type. */
 static struct shash all_dpif_backers = SHASH_INITIALIZER(&all_dpif_backers);
 
+static void drop_key_clear(struct dpif_backer *);
 static struct ofport_dpif *
 odp_port_to_ofport(const struct dpif_backer *, uint32_t odp_port);
 
@@ -844,6 +856,12 @@ type_run(const char *type)
         case REV_INCONSISTENCY: COVERAGE_INC(rev_inconsistency); break;
         }
 
+        if (backer->need_revalidate) {
+            /* Clear the drop_keys in case we should now be accepting some
+             * formerly dropped flows. */
+            drop_key_clear(backer);
+        }
+
         HMAP_FOR_EACH (ofproto, all_ofproto_dpifs_node, &all_ofproto_dpifs) {
             struct facet *facet;
 
@@ -862,7 +880,6 @@ type_run(const char *type)
                 }
             }
         }
-
     }
 
     if (timer_expired(&backer->next_expiration)) {
@@ -997,6 +1014,9 @@ close_dpif_backer(struct dpif_backer *backer)
         return;
     }
 
+    drop_key_clear(backer);
+    hmap_destroy(&backer->drop_keys);
+
     hmap_destroy(&backer->odp_to_ofport_map);
     node = shash_find(&all_dpif_backers, backer->type);
     free(backer->type);
@@ -1070,6 +1090,7 @@ open_dpif_backer(const char *type, struct dpif_backer **backerp)
     backer->type = xstrdup(type);
     backer->refcount = 1;
     hmap_init(&backer->odp_to_ofport_map);
+    hmap_init(&backer->drop_keys);
     timer_set_duration(&backer->next_expiration, 1000);
     backer->need_revalidate = 0;
     tag_set_init(&backer->revalidate_set);
@@ -3474,6 +3495,47 @@ handle_flow_miss(struct flow_miss *miss, struct flow_miss_op *ops,
     handle_flow_miss_with_facet(miss, facet, now, ops, n_ops);
 }
 
+static struct drop_key *
+drop_key_lookup(const struct dpif_backer *backer, const struct nlattr *key,
+                size_t key_len)
+{
+    struct drop_key *drop_key;
+
+    HMAP_FOR_EACH_WITH_HASH (drop_key, hmap_node, hash_bytes(key, key_len, 0),
+                             &backer->drop_keys) {
+        if (drop_key->key_len == key_len
+            && !memcmp(drop_key->key, key, key_len)) {
+            return drop_key;
+        }
+    }
+    return NULL;
+}
+
+static void
+drop_key_clear(struct dpif_backer *backer)
+{
+    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 15);
+    struct drop_key *drop_key, *next;
+
+    HMAP_FOR_EACH_SAFE (drop_key, next, hmap_node, &backer->drop_keys) {
+        int error;
+
+        error = dpif_flow_del(backer->dpif, drop_key->key, drop_key->key_len,
+                              NULL);
+        if (error && !VLOG_DROP_WARN(&rl)) {
+            struct ds ds = DS_EMPTY_INITIALIZER;
+            odp_flow_key_format(drop_key->key, drop_key->key_len, &ds);
+            VLOG_WARN("Failed to delete drop key (%s) (%s)", strerror(error),
+                      ds_cstr(&ds));
+            ds_destroy(&ds);
+        }
+
+        hmap_remove(&backer->drop_keys, &drop_key->hmap_node);
+        free(drop_key->key);
+        free(drop_key);
+    }
+}
+
 /* Given a datpath, packet, and flow metadata ('backer', 'packet', and 'key'
  * respectively), populates 'flow' with the result of odp_flow_key_to_flow().
  * Optionally, if nonnull, populates 'fitnessp' with the fitness of 'flow' as
@@ -3606,12 +3668,29 @@ handle_miss_upcalls(struct dpif_backer *backer, struct dpif_upcall *upcalls,
                                 upcall->key_len, &flow, &miss->key_fitness,
                                 &ofproto, &odp_in_port, &miss->initial_tci);
         if (error == ENODEV) {
+            struct drop_key *drop_key;
+
             /* Received packet on port for which we couldn't associate
              * an ofproto.  This can happen if a port is removed while
              * traffic is being received.  Print a rate-limited message
-             * in case it happens frequently. */
+             * in case it happens frequently.  Install a drop flow so
+             * that future packets of the flow are inexpensively dropped
+             * in the kernel. */
             VLOG_INFO_RL(&rl, "received packet on unassociated port %"PRIu32,
                          flow.in_port);
+
+            drop_key = drop_key_lookup(backer, upcall->key, upcall->key_len);
+            if (!drop_key) {
+                drop_key = xmalloc(sizeof *drop_key);
+                drop_key->key = xmemdup(upcall->key, upcall->key_len);
+                drop_key->key_len = upcall->key_len;
+
+                hmap_insert(&backer->drop_keys, &drop_key->hmap_node,
+                            hash_bytes(drop_key->key, drop_key->key_len, 0));
+                dpif_flow_put(backer->dpif, DPIF_FP_CREATE | DPIF_FP_MODIFY,
+                              drop_key->key, drop_key->key_len, NULL, 0, NULL);
+            }
+            continue;
         }
         if (error) {
             continue;
@@ -3800,6 +3879,10 @@ expire(struct dpif_backer *backer)
 {
     struct ofproto_dpif *ofproto;
     int max_idle = INT32_MAX;
+
+    /* Periodically clear out the drop keys in an effort to keep them
+     * relatively few. */
+    drop_key_clear(backer);
 
     /* Update stats for each flow in the backer. */
     update_stats(backer);
