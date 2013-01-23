@@ -2740,8 +2740,12 @@ static bool
 equal_pathnames(const char *a, const char *b, size_t b_stoplen)
 {
     const char *b_start = b;
-    while (b - b_start < b_stoplen && *a == *b) {
-        if (*a == '/') {
+    for (;;) {
+        if (b - b_start >= b_stoplen) {
+            return true;
+        } else if (*a != *b) {
+            return false;
+        } else if (*a == '/') {
             a += strspn(a, "/");
             b += strspn(b, "/");
         } else if (*a == '\0') {
@@ -2751,7 +2755,6 @@ equal_pathnames(const char *a, const char *b, size_t b_stoplen)
             b++;
         }
     }
-    return false;
 }
 
 static void
