@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011 Nicira Networks.
+ * Copyright (c) 2009, 2010, 2011, 2013 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -393,8 +393,8 @@ print_db_changes(struct shash *tables, struct shash *names,
                              ? shash_find_data(&table_schema->columns, column)
                              : NULL);
                         if (column_schema) {
-                            const struct ovsdb_error *error;
                             const struct ovsdb_type *type;
+                            struct ovsdb_error *error;
                             struct ovsdb_datum datum;
 
                             type = &column_schema->type;
@@ -406,6 +406,8 @@ print_db_changes(struct shash *tables, struct shash *names,
                                 ds_init(&s);
                                 ovsdb_datum_to_string(&datum, type, &s);
                                 value_string = ds_steal_cstr(&s);
+                            } else {
+                                ovsdb_error_destroy(error);
                             }
                         }
                         if (!value_string) {
