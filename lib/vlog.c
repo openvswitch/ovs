@@ -431,6 +431,16 @@ exit:
     return msg;
 }
 
+/* Set debugging levels.  Abort with an error message if 's' is invalid. */
+void
+vlog_set_levels_from_string_assert(const char *s)
+{
+    char *error = vlog_set_levels_from_string(s);
+    if (error) {
+        ovs_fatal(0, "%s", error);
+    }
+}
+
 /* If 'arg' is null, configure maximum verbosity.  Otherwise, sets
  * configuration according to 'arg' (see vlog_set_levels_from_string()). */
 void

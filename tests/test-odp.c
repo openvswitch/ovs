@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,7 +32,7 @@ parse_keys(void)
     struct ds in;
 
     ds_init(&in);
-    vlog_set_levels_from_string("odp_util:console:dbg");
+    vlog_set_levels_from_string_assert("odp_util:console:dbg");
     while (!ds_get_test_line(&in, stdin)) {
         enum odp_key_fitness fitness;
         struct ofpbuf odp_key;
@@ -98,7 +98,7 @@ parse_actions(void)
     struct ds in;
 
     ds_init(&in);
-    vlog_set_levels_from_string("odp_util:console:dbg");
+    vlog_set_levels_from_string_assert("odp_util:console:dbg");
     while (!ds_get_test_line(&in, stdin)) {
         struct ofpbuf odp_actions;
         struct ds out;

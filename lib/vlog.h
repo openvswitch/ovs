@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -114,7 +114,8 @@ struct vlog_rate_limit {
 enum vlog_level vlog_get_level(const struct vlog_module *, enum vlog_facility);
 void vlog_set_levels(struct vlog_module *,
                      enum vlog_facility, enum vlog_level);
-char *vlog_set_levels_from_string(const char *);
+char *vlog_set_levels_from_string(const char *) WARN_UNUSED_RESULT;
+void vlog_set_levels_from_string_assert(const char *);
 char *vlog_get_levels(void);
 bool vlog_is_enabled(const struct vlog_module *, enum vlog_level);
 bool vlog_should_drop(const struct vlog_module *, enum vlog_level,
