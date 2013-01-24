@@ -1445,6 +1445,7 @@ mf_set_wild(const struct mf_field *mf, struct match *match)
 
     case MFF_METADATA:
         match_set_metadata_masked(match, htonll(0), htonll(0));
+        break;
 
     case MFF_IN_PORT:
         match->flow.in_port = 0;
