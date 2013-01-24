@@ -3526,7 +3526,7 @@ ofproto_receive(const struct dpif_backer *backer, struct ofpbuf *packet,
     port = odp_port_to_ofport(backer, flow->in_port);
     if (!port) {
         flow->in_port = OFPP_NONE;
-        error = ofproto ? ENODEV : 0;
+        error = ENODEV;
         goto exit;
     }
 

@@ -1149,6 +1149,10 @@ parse_ofp_exact_flow(struct flow *flow, const char *s)
         }
     }
 
+    if (!flow->in_port) {
+        flow->in_port = OFPP_NONE;
+    }
+
 exit:
     free(copy);
 

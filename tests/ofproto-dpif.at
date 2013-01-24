@@ -116,20 +116,20 @@ ADD_OF_PORTS([br0], [1], [2])
 AT_CHECK([ovs-ofctl add-flow br0 action=normal])
 
 # "in_port" defaults to OFPP_NONE if it's not specified.
-flow="eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)"
+flow="icmp,dl_src=50:54:00:00:00:05,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,icmp_type=8,icmp_code=0"
 AT_CHECK([ovs-appctl ofproto/trace br0 "$flow"], [0], [stdout])
-actual=`tail -1 stdout | sed 's/Datapath actions: //'`
-
-expected="1,2,100"
-AT_CHECK([ovs-dpctl normalize-actions "$flow" "$expected"], [0], [stdout])
-mv stdout expout
-AT_CHECK([ovs-dpctl normalize-actions "$flow" "$actual"], [0], [expout])
+AT_CHECK([tail -1 stdout | sed 's/Datapath actions: //' | tr "," "\n" | sort -n], [0], [dnl
+1
+2
+100
+])
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([ofproto-dpif - DSCP])
 OVS_VSWITCHD_START([add-port br0 p1 -- set Interface p1 type=dummy])
+ADD_OF_PORTS([br0], [9])
 AT_DATA([flows.txt], [dnl
 actions=output:65534,enqueue:1:1,enqueue:1:2,enqueue:1:2,enqueue:1:1,output:1,mod_nw_tos:0,output:1,output:65534
 ])
@@ -536,7 +536,7 @@ AT_CLEANUP
 
 AT_SETUP([ofproto-dpif - fragment handling])
 OVS_VSWITCHD_START
-ADD_OF_PORTS([br0], [1], [2], [3], [4], [5], [6])
+ADD_OF_PORTS([br0], [1], [2], [3], [4], [5], [6], [90])
 AT_DATA([flows.txt], [dnl
 priority=75 tcp ip_frag=no    tp_dst=80 actions=output:1
 priority=75 tcp ip_frag=first tp_dst=80 actions=output:2
@@ -669,7 +669,7 @@ ovs-vsctl \
 AT_CHECK([ovs-ofctl add-flow br0 action=output:1])
 
 # "in_port" defaults to OFPP_NONE if it's not specified.
-flow="eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)"
+flow="icmp,dl_src=50:54:00:00:00:05,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_ttl=128,icmp_type=8,icmp_code=0"
 AT_CHECK([ovs-appctl ofproto/trace br0 "$flow"], [0], [stdout])
 AT_CHECK_UNQUOTED([tail -1 stdout], [0],
   [Datapath actions: 1,2
