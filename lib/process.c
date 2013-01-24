@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -408,14 +408,20 @@ struct stream {
 static int
 stream_open(struct stream *s, size_t max_size)
 {
+    int error;
+
     s->max_size = max_size;
     ds_init(&s->log);
     if (pipe(s->fds)) {
         VLOG_WARN("failed to create pipe: %s", strerror(errno));
         return errno;
     }
-    set_nonblocking(s->fds[0]);
-    return 0;
+    error = set_nonblocking(s->fds[0]);
+    if (error) {
+        close(s->fds[0]);
+        close(s->fds[1]);
+    }
+    return error;
 }
 
 static void
