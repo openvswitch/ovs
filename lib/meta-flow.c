@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1333,6 +1333,7 @@ mf_set_wild(const struct mf_field *mf, struct cls_rule *rule)
         break;
     case MFF_METADATA:
         cls_rule_set_metadata_masked(rule, htonll(0), htonll(0));
+        break;
 
     case MFF_IN_PORT:
         rule->wc.wildcards |= FWW_IN_PORT;
