@@ -1446,9 +1446,9 @@ iface_create(struct bridge *br, struct if_cfg *if_cfg, int ofp_port)
 
             error = netdev_open(port->name, "internal", &netdev);
             if (!error) {
-                uint16_t ofp_port = if_cfg->ofport;
+                uint16_t fake_ofp_port = if_cfg->ofport;
 
-                ofproto_port_add(br->ofproto, netdev, &ofp_port);
+                ofproto_port_add(br->ofproto, netdev, &fake_ofp_port);
                 netdev_close(netdev);
             } else {
                 VLOG_WARN("could not open network device %s (%s)",
