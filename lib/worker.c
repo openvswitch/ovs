@@ -379,7 +379,7 @@ worker_main(int fd)
             /* Main process closed the IPC socket.  Exit cleanly. */
             break;
         } else if (error != EAGAIN) {
-            VLOG_FATAL("RPC receive failed (%s)", strerror(error));
+            VLOG_FATAL("RPC receive failed (%s)", ovs_retval_to_string(error));
         }
 
         poll_fd_wait(server_sock, POLLIN);
