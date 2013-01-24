@@ -4639,7 +4639,11 @@ af_packet_sock(void)
     if (sock == INT_MIN) {
         sock = socket(AF_PACKET, SOCK_RAW, 0);
         if (sock >= 0) {
-            set_nonblocking(sock);
+            int error = set_nonblocking(sock);
+            if (error) {
+                close(sock);
+                sock = -error;
+            }
         } else {
             sock = -errno;
             VLOG_ERR("failed to create packet socket: %s", strerror(errno));
