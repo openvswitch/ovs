@@ -1644,7 +1644,9 @@ alloc_ofp_port(struct ofproto *ofproto, const char *netdev_name)
 static void
 dealloc_ofp_port(const struct ofproto *ofproto, uint16_t ofp_port)
 {
-    bitmap_set0(ofproto->ofp_port_ids, ofp_port);
+    if (ofp_port < ofproto->max_ports) {
+        bitmap_set0(ofproto->ofp_port_ids, ofp_port);
+    }
 }
 
 /* Opens and returns a netdev for 'ofproto_port' in 'ofproto', or a null
