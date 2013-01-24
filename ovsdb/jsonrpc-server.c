@@ -384,6 +384,11 @@ ovsdb_jsonrpc_session_close(struct ovsdb_jsonrpc_session *s)
 {
     ovsdb_jsonrpc_monitor_remove_all(s);
     ovsdb_jsonrpc_session_unlock_all(s);
+    ovsdb_jsonrpc_trigger_complete_all(s);
+
+    hmap_destroy(&s->monitors);
+    hmap_destroy(&s->triggers);
+
     jsonrpc_session_close(s->js);
     list_remove(&s->node);
     s->remote->server->n_sessions--;
