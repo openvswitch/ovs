@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -462,7 +462,7 @@ unixctl_client_transact(struct jsonrpc *client, const char *command, int argc,
     error = jsonrpc_transact_block(client, request, &reply);
     if (error) {
         VLOG_WARN("error communicating with %s: %s", jsonrpc_get_name(client),
-                  strerror(error));
+                  ovs_retval_to_string(error));
         return error;
     }
 
