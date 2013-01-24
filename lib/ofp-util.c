@@ -4115,14 +4115,14 @@ ofputil_port_from_string(const char *s, uint16_t *portp)
             *portp = port32;
             return true;
         } else if (port32 <= OFPP_LAST_RESV) {
-            struct ds s;
+            struct ds msg;
 
-            ds_init(&s);
-            ofputil_format_port(port32, &s);
+            ds_init(&msg);
+            ofputil_format_port(port32, &msg);
             VLOG_WARN_ONCE("referring to port %s as %u is deprecated for "
                            "compatibility with future versions of OpenFlow",
-                           ds_cstr(&s), port32);
-            ds_destroy(&s);
+                           ds_cstr(&msg), port32);
+            ds_destroy(&msg);
 
             *portp = port32;
             return true;
