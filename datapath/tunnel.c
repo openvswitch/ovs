@@ -358,343 +358,6 @@ void ovs_tnl_rcv(struct vport *vport, struct sk_buff *skb)
 	ovs_vport_receive(vport, skb);
 }
 
-static bool check_ipv4_address(__be32 addr)
-{
-	if (ipv4_is_multicast(addr) || ipv4_is_lbcast(addr)
-	    || ipv4_is_loopback(addr) || ipv4_is_zeronet(addr))
-		return false;
-
-	return true;
-}
-
-static bool ipv4_should_icmp(struct sk_buff *skb)
-{
-	struct iphdr *old_iph = ip_hdr(skb);
-
-	/* Don't respond to L2 broadcast. */
-	if (is_multicast_ether_addr(eth_hdr(skb)->h_dest))
-		return false;
-
-	/* Don't respond to L3 broadcast or invalid addresses. */
-	if (!check_ipv4_address(old_iph->daddr) ||
-	    !check_ipv4_address(old_iph->saddr))
-		return false;
-
-	/* Only respond to the first fragment. */
-	if (old_iph->frag_off & htons(IP_OFFSET))
-		return false;
-
-	/* Don't respond to ICMP error messages. */
-	if (old_iph->protocol == IPPROTO_ICMP) {
-		u8 icmp_type, *icmp_typep;
-
-		icmp_typep = skb_header_pointer(skb, (u8 *)old_iph +
-						(old_iph->ihl << 2) +
-						offsetof(struct icmphdr, type) -
-						skb->data, sizeof(icmp_type),
-						&icmp_type);
-
-		if (!icmp_typep)
-			return false;
-
-		if (*icmp_typep > NR_ICMP_TYPES
-			|| (*icmp_typep <= ICMP_PARAMETERPROB
-				&& *icmp_typep != ICMP_ECHOREPLY
-				&& *icmp_typep != ICMP_ECHO))
-			return false;
-	}
-
-	return true;
-}
-
-static void ipv4_build_icmp(struct sk_buff *skb, struct sk_buff *nskb,
-			    unsigned int mtu, unsigned int payload_length)
-{
-	struct iphdr *iph, *old_iph = ip_hdr(skb);
-	struct icmphdr *icmph;
-	u8 *payload;
-
-	iph = (struct iphdr *)skb_put(nskb, sizeof(struct iphdr));
-	icmph = (struct icmphdr *)skb_put(nskb, sizeof(struct icmphdr));
-	payload = skb_put(nskb, payload_length);
-
-	/* IP */
-	iph->version		=	4;
-	iph->ihl		=	sizeof(struct iphdr) >> 2;
-	iph->tos		=	(old_iph->tos & IPTOS_TOS_MASK) |
-					IPTOS_PREC_INTERNETCONTROL;
-	iph->tot_len		=	htons(sizeof(struct iphdr)
-					      + sizeof(struct icmphdr)
-					      + payload_length);
-	get_random_bytes(&iph->id, sizeof(iph->id));
-	iph->frag_off		=	0;
-	iph->ttl		=	IPDEFTTL;
-	iph->protocol		=	IPPROTO_ICMP;
-	iph->daddr		=	old_iph->saddr;
-	iph->saddr		=	old_iph->daddr;
-
-	ip_send_check(iph);
-
-	/* ICMP */
-	icmph->type		=	ICMP_DEST_UNREACH;
-	icmph->code		=	ICMP_FRAG_NEEDED;
-	icmph->un.gateway	=	htonl(mtu);
-	icmph->checksum		=	0;
-
-	nskb->csum = csum_partial((u8 *)icmph, sizeof(struct icmphdr), 0);
-	nskb->csum = skb_copy_and_csum_bits(skb, (u8 *)old_iph - skb->data,
-					    payload, payload_length,
-					    nskb->csum);
-	icmph->checksum = csum_fold(nskb->csum);
-}
-
-#if defined(CONFIG_IPV6) || defined(CONFIG_IPV6_MODULE)
-static bool ipv6_should_icmp(struct sk_buff *skb)
-{
-	struct ipv6hdr *old_ipv6h = ipv6_hdr(skb);
-	int addr_type;
-	int payload_off = (u8 *)(old_ipv6h + 1) - skb->data;
-	u8 nexthdr = ipv6_hdr(skb)->nexthdr;
-	__be16 frag_off;
-
-	/* Check source address is valid. */
-	addr_type = ipv6_addr_type(&old_ipv6h->saddr);
-	if (addr_type & IPV6_ADDR_MULTICAST || addr_type == IPV6_ADDR_ANY)
-		return false;
-
-	/* Don't reply to unspecified addresses. */
-	if (ipv6_addr_type(&old_ipv6h->daddr) == IPV6_ADDR_ANY)
-		return false;
-
-	/* Don't respond to ICMP error messages. */
-	payload_off = ipv6_skip_exthdr(skb, payload_off, &nexthdr, &frag_off);
-	if (payload_off < 0)
-		return false;
-
-	if (nexthdr == NEXTHDR_ICMP) {
-		u8 icmp_type, *icmp_typep;
-
-		icmp_typep = skb_header_pointer(skb, payload_off +
-						offsetof(struct icmp6hdr,
-							icmp6_type),
-						sizeof(icmp_type), &icmp_type);
-
-		if (!icmp_typep || !(*icmp_typep & ICMPV6_INFOMSG_MASK))
-			return false;
-	}
-
-	return true;
-}
-
-static void ipv6_build_icmp(struct sk_buff *skb, struct sk_buff *nskb,
-			    unsigned int mtu, unsigned int payload_length)
-{
-	struct ipv6hdr *ipv6h, *old_ipv6h = ipv6_hdr(skb);
-	struct icmp6hdr *icmp6h;
-	u8 *payload;
-
-	ipv6h = (struct ipv6hdr *)skb_put(nskb, sizeof(struct ipv6hdr));
-	icmp6h = (struct icmp6hdr *)skb_put(nskb, sizeof(struct icmp6hdr));
-	payload = skb_put(nskb, payload_length);
-
-	/* IPv6 */
-	ipv6h->version		=	6;
-	ipv6h->priority		=	0;
-	memset(&ipv6h->flow_lbl, 0, sizeof(ipv6h->flow_lbl));
-	ipv6h->payload_len	=	htons(sizeof(struct icmp6hdr)
-					      + payload_length);
-	ipv6h->nexthdr		=	NEXTHDR_ICMP;
-	ipv6h->hop_limit	=	IPV6_DEFAULT_HOPLIMIT;
-	ipv6h->daddr		=	old_ipv6h->saddr;
-	ipv6h->saddr		=	old_ipv6h->daddr;
-
-	/* ICMPv6 */
-	icmp6h->icmp6_type	=	ICMPV6_PKT_TOOBIG;
-	icmp6h->icmp6_code	=	0;
-	icmp6h->icmp6_cksum	=	0;
-	icmp6h->icmp6_mtu	=	htonl(mtu);
-
-	nskb->csum = csum_partial((u8 *)icmp6h, sizeof(struct icmp6hdr), 0);
-	nskb->csum = skb_copy_and_csum_bits(skb, (u8 *)old_ipv6h - skb->data,
-					    payload, payload_length,
-					    nskb->csum);
-	icmp6h->icmp6_cksum = csum_ipv6_magic(&ipv6h->saddr, &ipv6h->daddr,
-						sizeof(struct icmp6hdr)
-						+ payload_length,
-						ipv6h->nexthdr, nskb->csum);
-}
-#endif /* IPv6 */
-
-bool ovs_tnl_frag_needed(struct vport *vport,
-			 const struct tnl_mutable_config *mutable,
-			 struct sk_buff *skb, unsigned int mtu)
-{
-	unsigned int eth_hdr_len = ETH_HLEN;
-	unsigned int total_length = 0, header_length = 0, payload_length;
-	struct ethhdr *eh, *old_eh = eth_hdr(skb);
-	struct sk_buff *nskb;
-
-	/* Sanity check */
-	if (skb->protocol == htons(ETH_P_IP)) {
-		if (mtu < IP_MIN_MTU)
-			return false;
-
-		if (!ipv4_should_icmp(skb))
-			return true;
-	}
-#if defined(CONFIG_IPV6) || defined(CONFIG_IPV6_MODULE)
-	else if (skb->protocol == htons(ETH_P_IPV6)) {
-		if (mtu < IPV6_MIN_MTU)
-			return false;
-
-		/*
-		 * In theory we should do PMTUD on IPv6 multicast messages but
-		 * we don't have an address to send from so just fragment.
-		 */
-		if (ipv6_addr_type(&ipv6_hdr(skb)->daddr) & IPV6_ADDR_MULTICAST)
-			return false;
-
-		if (!ipv6_should_icmp(skb))
-			return true;
-	}
-#endif
-	else
-		return false;
-
-	/* Allocate */
-	if (old_eh->h_proto == htons(ETH_P_8021Q))
-		eth_hdr_len = VLAN_ETH_HLEN;
-
-	payload_length = skb->len - eth_hdr_len;
-	if (skb->protocol == htons(ETH_P_IP)) {
-		header_length = sizeof(struct iphdr) + sizeof(struct icmphdr);
-		total_length = min_t(unsigned int, header_length +
-						   payload_length, 576);
-	}
-#if defined(CONFIG_IPV6) || defined(CONFIG_IPV6_MODULE)
-	else {
-		header_length = sizeof(struct ipv6hdr) +
-				sizeof(struct icmp6hdr);
-		total_length = min_t(unsigned int, header_length +
-						  payload_length, IPV6_MIN_MTU);
-	}
-#endif
-
-	payload_length = total_length - header_length;
-
-	nskb = dev_alloc_skb(NET_IP_ALIGN + eth_hdr_len + header_length +
-			     payload_length);
-	if (!nskb)
-		return false;
-
-	skb_reserve(nskb, NET_IP_ALIGN);
-
-	/* Ethernet / VLAN */
-	eh = (struct ethhdr *)skb_put(nskb, eth_hdr_len);
-	memcpy(eh->h_dest, old_eh->h_source, ETH_ALEN);
-	memcpy(eh->h_source, mutable->eth_addr, ETH_ALEN);
-	nskb->protocol = eh->h_proto = old_eh->h_proto;
-	if (old_eh->h_proto == htons(ETH_P_8021Q)) {
-		struct vlan_ethhdr *vh = (struct vlan_ethhdr *)eh;
-
-		vh->h_vlan_TCI = vlan_eth_hdr(skb)->h_vlan_TCI;
-		vh->h_vlan_encapsulated_proto = skb->protocol;
-	} else
-		vlan_set_tci(nskb, vlan_get_tci(skb));
-	skb_reset_mac_header(nskb);
-
-	/* Protocol */
-	if (skb->protocol == htons(ETH_P_IP))
-		ipv4_build_icmp(skb, nskb, mtu, payload_length);
-#if defined(CONFIG_IPV6) || defined(CONFIG_IPV6_MODULE)
-	else
-		ipv6_build_icmp(skb, nskb, mtu, payload_length);
-#endif
-
-	if (unlikely(compute_ip_summed(nskb, false))) {
-		kfree_skb(nskb);
-		return false;
-	}
-
-	ovs_vport_receive(vport, nskb);
-
-	return true;
-}
-
-static bool check_mtu(struct sk_buff *skb,
-		      struct vport *vport,
-		      const struct tnl_mutable_config *mutable,
-		      const struct rtable *rt, __be16 *frag_offp,
-		      int tunnel_hlen)
-{
-	bool pmtud;
-	__be16 frag_off;
-	int mtu = 0;
-	unsigned int packet_length = skb->len - ETH_HLEN;
-
-	if (OVS_CB(skb)->tun_key->ipv4_dst) {
-		pmtud = false;
-		frag_off = OVS_CB(skb)->tun_key->tun_flags & OVS_TNL_F_DONT_FRAGMENT ?
-				  htons(IP_DF) : 0;
-	} else {
-		pmtud = mutable->flags & TNL_F_PMTUD;
-		frag_off = mutable->flags & TNL_F_DF_DEFAULT ? htons(IP_DF) : 0;
-	}
-
-	/* Allow for one level of tagging in the packet length. */
-	if (!vlan_tx_tag_present(skb) &&
-	    eth_hdr(skb)->h_proto == htons(ETH_P_8021Q))
-		packet_length -= VLAN_HLEN;
-
-	if (pmtud) {
-		int vlan_header = 0;
-
-		/* The tag needs to go in packet regardless of where it
-		 * currently is, so subtract it from the MTU.
-		 */
-		if (vlan_tx_tag_present(skb) ||
-		    eth_hdr(skb)->h_proto == htons(ETH_P_8021Q))
-			vlan_header = VLAN_HLEN;
-
-		mtu = dst_mtu(&rt_dst(rt))
-			- ETH_HLEN
-			- tunnel_hlen
-			- vlan_header;
-	}
-
-	if (skb->protocol == htons(ETH_P_IP)) {
-		struct iphdr *iph = ip_hdr(skb);
-
-		if (pmtud && iph->frag_off & htons(IP_DF)) {
-			mtu = max(mtu, IP_MIN_MTU);
-
-			if (packet_length > mtu &&
-			    ovs_tnl_frag_needed(vport, mutable, skb, mtu))
-				return false;
-		}
-	}
-#if defined(CONFIG_IPV6) || defined(CONFIG_IPV6_MODULE)
-	else if (skb->protocol == htons(ETH_P_IPV6)) {
-		/* IPv6 requires end hosts to do fragmentation
-		 * if the packet is above the minimum MTU.
-		 */
-		if (packet_length > IPV6_MIN_MTU)
-			frag_off = htons(IP_DF);
-
-		if (pmtud) {
-			mtu = max(mtu, IPV6_MIN_MTU);
-
-			if (packet_length > mtu &&
-			    ovs_tnl_frag_needed(vport, mutable, skb, mtu))
-				return false;
-		}
-	}
-#endif
-
-	*frag_offp = frag_off;
-	return true;
-}
-
 static struct rtable *find_route(struct net *net,
 		__be32 *saddr, __be32 daddr, u8 ipproto,
 		u8 tos)
@@ -850,7 +513,7 @@ int ovs_tnl_send(struct vport *vport, struct sk_buff *skb)
 	struct ovs_key_ipv4_tunnel tun_key;
 	int sent_len = 0;
 	int tunnel_hlen;
-	__be16 frag_off = 0;
+	__be16 frag_off;
 	__be32 daddr;
 	__be32 saddr;
 	u8 ttl;
@@ -899,6 +562,8 @@ int ovs_tnl_send(struct vport *vport, struct sk_buff *skb)
 		saddr = OVS_CB(skb)->tun_key->ipv4_src;
 		tos = OVS_CB(skb)->tun_key->ipv4_tos;
 		ttl = OVS_CB(skb)->tun_key->ipv4_ttl;
+                frag_off = OVS_CB(skb)->tun_key->tun_flags &
+				OVS_TNL_F_DONT_FRAGMENT ?  htons(IP_DF) : 0;
 	} else {
 		u8 inner_tos;
 		daddr = mutable->key.daddr;
@@ -939,6 +604,7 @@ int ovs_tnl_send(struct vport *vport, struct sk_buff *skb)
 #endif
 		}
 
+		frag_off = mutable->flags & TNL_F_DF_DEFAULT ? htons(IP_DF) : 0;
 	}
 
 	/* Route lookup */
@@ -957,12 +623,6 @@ int ovs_tnl_send(struct vport *vport, struct sk_buff *skb)
 	skb = handle_offloads(skb, mutable, rt, tunnel_hlen);
 	if (IS_ERR(skb)) {
 		skb = NULL;
-		goto err_free_rt;
-	}
-
-	/* MTU */
-	if (unlikely(!check_mtu(skb, vport, mutable, rt, &frag_off, tunnel_hlen))) {
-		err = VPORT_E_TX_DROPPED;
 		goto err_free_rt;
 	}
 

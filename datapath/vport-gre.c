@@ -201,130 +201,6 @@ static int parse_header(struct iphdr *iph, __be16 *flags, __be64 *tun_id,
 	return hdr_len;
 }
 
-/* Called with rcu_read_lock and BH disabled. */
-static void gre_err(struct sk_buff *skb, u32 info)
-{
-	struct vport *vport;
-	const struct tnl_mutable_config *mutable;
-	const int type = icmp_hdr(skb)->type;
-	const int code = icmp_hdr(skb)->code;
-	int mtu = ntohs(icmp_hdr(skb)->un.frag.mtu);
-	u32 tunnel_type;
-
-	struct iphdr *iph;
-	__be16 flags;
-	__be64 key;
-	int tunnel_hdr_len, tot_hdr_len;
-	unsigned int orig_mac_header;
-	unsigned int orig_nw_header;
-
-	if (type != ICMP_DEST_UNREACH || code != ICMP_FRAG_NEEDED)
-		return;
-
-	/*
-	 * The mimimum size packet that we would actually be able to process:
-	 * encapsulating IP header, minimum GRE header, Ethernet header,
-	 * inner IPv4 header.
-	 */
-	if (!pskb_may_pull(skb, sizeof(struct iphdr) + GRE_HEADER_SECTION +
-				ETH_HLEN + sizeof(struct iphdr)))
-		return;
-
-	iph = (struct iphdr *)skb->data;
-	if (ipv4_is_multicast(iph->daddr))
-		return;
-
-	tunnel_hdr_len = parse_header(iph, &flags, &key, &tunnel_type);
-	if (tunnel_hdr_len < 0)
-		return;
-
-	vport = ovs_tnl_find_port(dev_net(skb->dev), iph->saddr, iph->daddr, key,
-				  tunnel_type, &mutable);
-	if (!vport)
-		return;
-
-	/*
-	 * Packets received by this function were previously sent by us, so
-	 * any comparisons should be to the output values, not the input.
-	 * However, it's not really worth it to have a hash table based on
-	 * output keys (especially since ICMP error handling of tunneled packets
-	 * isn't that reliable anyways).  Therefore, we do a lookup based on the
-	 * out key as if it were the in key and then check to see if the input
-	 * and output keys are the same.
-	 */
-	if (mutable->key.in_key != mutable->out_key)
-		return;
-
-	if (!!(mutable->flags & TNL_F_IN_KEY_MATCH) !=
-	    !!(mutable->flags & TNL_F_OUT_KEY_ACTION))
-		return;
-
-	if ((mutable->flags & TNL_F_CSUM) && !(flags & GRE_CSUM))
-		return;
-
-	tunnel_hdr_len += iph->ihl << 2;
-
-	orig_mac_header = skb_mac_header(skb) - skb->data;
-	orig_nw_header = skb_network_header(skb) - skb->data;
-	skb_set_mac_header(skb, tunnel_hdr_len);
-
-	tot_hdr_len = tunnel_hdr_len + ETH_HLEN;
-
-	skb->protocol = eth_hdr(skb)->h_proto;
-	if (skb->protocol == htons(ETH_P_8021Q)) {
-		tot_hdr_len += VLAN_HLEN;
-		skb->protocol = vlan_eth_hdr(skb)->h_vlan_encapsulated_proto;
-	}
-
-	skb_set_network_header(skb, tot_hdr_len);
-	mtu -= tot_hdr_len;
-
-	if (skb->protocol == htons(ETH_P_IP))
-		tot_hdr_len += sizeof(struct iphdr);
-#if defined(CONFIG_IPV6) || defined(CONFIG_IPV6_MODULE)
-	else if (skb->protocol == htons(ETH_P_IPV6))
-		tot_hdr_len += sizeof(struct ipv6hdr);
-#endif
-	else
-		goto out;
-
-	if (!pskb_may_pull(skb, tot_hdr_len))
-		goto out;
-
-	if (skb->protocol == htons(ETH_P_IP)) {
-		if (mtu < IP_MIN_MTU) {
-			if (ntohs(ip_hdr(skb)->tot_len) >= IP_MIN_MTU)
-				mtu = IP_MIN_MTU;
-			else
-				goto out;
-		}
-
-	}
-#if defined(CONFIG_IPV6) || defined(CONFIG_IPV6_MODULE)
-	else if (skb->protocol == htons(ETH_P_IPV6)) {
-		if (mtu < IPV6_MIN_MTU) {
-			unsigned int packet_length = sizeof(struct ipv6hdr) +
-					      ntohs(ipv6_hdr(skb)->payload_len);
-
-			if (packet_length >= IPV6_MIN_MTU
-			    || ntohs(ipv6_hdr(skb)->payload_len) == 0)
-				mtu = IPV6_MIN_MTU;
-			else
-				goto out;
-		}
-	}
-#endif
-
-	__skb_pull(skb, tunnel_hdr_len);
-	ovs_tnl_frag_needed(vport, mutable, skb, mtu);
-	__skb_push(skb, tunnel_hdr_len);
-
-out:
-	skb_set_mac_header(skb, orig_mac_header);
-	skb_set_network_header(skb, orig_nw_header);
-	skb->protocol = htons(ETH_P_IP);
-}
-
 static bool check_checksum(struct sk_buff *skb)
 {
 	struct iphdr *iph = ip_hdr(skb);
@@ -449,7 +325,6 @@ static struct vport *gre_create64(const struct vport_parms *parms)
 
 static const struct net_protocol gre_protocol_handlers = {
 	.handler	=	gre_rcv,
-	.err_handler	=	gre_err,
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,32)
 	.netns_ok	=	1,
 #endif

@@ -70,8 +70,8 @@ enum {
 /* Bit 3 was previously used for Don't Fragment inheritance. " */
 #define TNL_F_DF_DEFAULT	(1 << 4) /* Set DF bit if inherit off or
 					  * not IP. */
+/* Bit 5 was previously used for path MTU discovery. " */
 /* Bit 6 is reserved since it was previously used for Tunnel header caching. */
-#define TNL_F_PMTUD		(1 << 5) /* Enable path MTU discovery. */
 #define TNL_F_IPSEC		(1 << 7) /* Traffic is IPsec encrypted. */
 
 #endif /* openvswitch/tunnel.h */
