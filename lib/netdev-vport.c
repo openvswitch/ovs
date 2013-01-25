@@ -747,11 +747,7 @@ get_tunnel_config(struct netdev_dev *dev_, struct smap *args)
     if (flags & TNL_F_CSUM) {
         smap_add(args, "csum", "true");
     }
-    if (flags & TNL_F_DF_INHERIT) {
-        /* Shouldn't happen as "df_inherit" is no longer supported.  However,
-         * for completeness we report it if it's there. */
-        smap_add(args, "df_inherit", "true");
-    }
+
     if (!(flags & TNL_F_DF_DEFAULT)) {
         smap_add(args, "df_default", "false");
     }

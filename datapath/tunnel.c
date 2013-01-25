@@ -627,19 +627,16 @@ static bool check_mtu(struct sk_buff *skb,
 		      const struct rtable *rt, __be16 *frag_offp,
 		      int tunnel_hlen)
 {
-	bool df_inherit;
 	bool pmtud;
 	__be16 frag_off;
 	int mtu = 0;
 	unsigned int packet_length = skb->len - ETH_HLEN;
 
 	if (OVS_CB(skb)->tun_key->ipv4_dst) {
-		df_inherit = false;
 		pmtud = false;
 		frag_off = OVS_CB(skb)->tun_key->tun_flags & OVS_TNL_F_DONT_FRAGMENT ?
 				  htons(IP_DF) : 0;
 	} else {
-		df_inherit = mutable->flags & TNL_F_DF_INHERIT;
 		pmtud = mutable->flags & TNL_F_PMTUD;
 		frag_off = mutable->flags & TNL_F_DF_DEFAULT ? htons(IP_DF) : 0;
 	}
@@ -668,9 +665,6 @@ static bool check_mtu(struct sk_buff *skb,
 	if (skb->protocol == htons(ETH_P_IP)) {
 		struct iphdr *iph = ip_hdr(skb);
 
-		if (df_inherit)
-			frag_off = iph->frag_off & htons(IP_DF);
-
 		if (pmtud && iph->frag_off & htons(IP_DF)) {
 			mtu = max(mtu, IP_MIN_MTU);
 
@@ -684,7 +678,7 @@ static bool check_mtu(struct sk_buff *skb,
 		/* IPv6 requires end hosts to do fragmentation
 		 * if the packet is above the minimum MTU.
 		 */
-		if (df_inherit && packet_length > IPV6_MIN_MTU)
+		if (packet_length > IPV6_MIN_MTU)
 			frag_off = htons(IP_DF);
 
 		if (pmtud) {
