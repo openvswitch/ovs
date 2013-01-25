@@ -34,6 +34,8 @@ if [ ! -x ${OTHERSCRIPT} ]; then
     OTHERSCRIPT="/etc/sysconfig/network-scripts/ifdown-eth"
 fi
 
+[ -f /var/lock/subsys/openvswitch ] || /sbin/service openvswitch start
+
 case "$TYPE" in
 	OVSBridge)
 		${OTHERSCRIPT} ${CONFIG} $2
