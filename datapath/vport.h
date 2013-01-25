@@ -45,7 +45,6 @@ void ovs_vport_del(struct vport *);
 
 struct vport *ovs_vport_locate(struct net *net, const char *name);
 
-int ovs_vport_set_addr(struct vport *, const unsigned char *);
 void ovs_vport_set_stats(struct vport *, struct ovs_vport_stats *);
 void ovs_vport_get_stats(struct vport *, struct ovs_vport_stats *);
 
@@ -152,9 +151,7 @@ struct vport_parms {
  * @get_options: Appends vport-specific attributes for the configuration of an
  * existing vport to a &struct sk_buff.  May be %NULL for a vport that does not
  * have any configuration.
- * @set_addr: Set the device's MAC address.  May be null if not supported.
  * @get_name: Get the device's name.
- * @get_addr: Get the device's MAC address.
  * @get_config: Get the device's configuration.
  * @get_ifindex: Get the system interface index associated with the device.
  * May be null if the device does not have an ifindex.
@@ -175,11 +172,8 @@ struct vport_ops {
 	int (*set_options)(struct vport *, struct nlattr *);
 	int (*get_options)(const struct vport *, struct sk_buff *);
 
-	int (*set_addr)(struct vport *, const unsigned char *);
-
 	/* Called with rcu_read_lock or RTNL lock. */
 	const char *(*get_name)(const struct vport *);
-	const unsigned char *(*get_addr)(const struct vport *);
 	void (*get_config)(const struct vport *, void *);
 	int (*get_ifindex)(const struct vport *);
 	int (*send)(struct vport *, struct sk_buff *);

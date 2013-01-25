@@ -819,8 +819,6 @@ struct vport *ovs_tnl_create(const struct vport_parms *parms,
 		goto error_free_vport;
 	}
 
-	random_ether_addr(mutable->eth_addr);
-
 	get_random_bytes(&initial_frag_id, sizeof(int));
 	atomic_set(&tnl_vport->frag_id, initial_frag_id);
 
@@ -860,9 +858,7 @@ int ovs_tnl_set_options(struct vport *vport, struct nlattr *options)
 		goto error;
 	}
 
-	/* Copy fields whose values should be retained. */
 	mutable->seq = old_mutable->seq + 1;
-	memcpy(mutable->eth_addr, old_mutable->eth_addr, ETH_ALEN);
 
 	/* Parse the others configured by userspace. */
 	err = tnl_set_config(ovs_dp_get_net(vport->dp), options, tnl_vport->tnl_ops,
@@ -942,34 +938,10 @@ void ovs_tnl_destroy(struct vport *vport)
 	call_rcu(&tnl_vport->rcu, free_port_rcu);
 }
 
-int ovs_tnl_set_addr(struct vport *vport, const unsigned char *addr)
-{
-	struct tnl_vport *tnl_vport = tnl_vport_priv(vport);
-	struct tnl_mutable_config *old_mutable, *mutable;
-
-	old_mutable = rtnl_dereference(tnl_vport->mutable);
-	mutable = kmemdup(old_mutable, sizeof(struct tnl_mutable_config), GFP_KERNEL);
-	if (!mutable)
-		return -ENOMEM;
-
-	old_mutable->mlink = 0;
-
-	memcpy(mutable->eth_addr, addr, ETH_ALEN);
-	assign_config_rcu(vport, mutable);
-
-	return 0;
-}
-
 const char *ovs_tnl_get_name(const struct vport *vport)
 {
 	const struct tnl_vport *tnl_vport = tnl_vport_priv(vport);
 	return tnl_vport->name;
-}
-
-const unsigned char *ovs_tnl_get_addr(const struct vport *vport)
-{
-	const struct tnl_vport *tnl_vport = tnl_vport_priv(vport);
-	return rcu_dereference_rtnl(tnl_vport->mutable)->eth_addr;
 }
 
 void ovs_tnl_free_linked_skbs(struct sk_buff *skb)

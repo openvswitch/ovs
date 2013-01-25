@@ -1787,10 +1787,8 @@ static const struct nla_policy vport_policy[OVS_VPORT_ATTR_MAX + 1] = {
 #ifdef HAVE_NLA_NUL_STRING
 	[OVS_VPORT_ATTR_NAME] = { .type = NLA_NUL_STRING, .len = IFNAMSIZ - 1 },
 	[OVS_VPORT_ATTR_STATS] = { .len = sizeof(struct ovs_vport_stats) },
-	[OVS_VPORT_ATTR_ADDRESS] = { .len = ETH_ALEN },
 #else
 	[OVS_VPORT_ATTR_STATS] = { .minlen = sizeof(struct ovs_vport_stats) },
-	[OVS_VPORT_ATTR_ADDRESS] = { .minlen = ETH_ALEN },
 #endif
 	[OVS_VPORT_ATTR_PORT_NO] = { .type = NLA_U32 },
 	[OVS_VPORT_ATTR_TYPE] = { .type = NLA_U32 },
@@ -1835,10 +1833,6 @@ static int ovs_vport_cmd_fill_info(struct vport *vport, struct sk_buff *skb,
 	ovs_vport_get_stats(vport, &vport_stats);
 	if (nla_put(skb, OVS_VPORT_ATTR_STATS, sizeof(struct ovs_vport_stats),
 		    &vport_stats))
-		goto nla_put_failure;
-
-	if (nla_put(skb, OVS_VPORT_ATTR_ADDRESS, ETH_ALEN,
-		    vport->ops->get_addr(vport)))
 		goto nla_put_failure;
 
 	err = ovs_vport_get_options(vport, skb);
@@ -1912,21 +1906,6 @@ static struct vport *lookup_vport(struct net *net,
 		return ERR_PTR(-EINVAL);
 }
 
-/* Called with RTNL lock. */
-static int change_vport(struct vport *vport,
-			struct nlattr *a[OVS_VPORT_ATTR_MAX + 1])
-{
-	int err = 0;
-
-	if (a[OVS_VPORT_ATTR_STATS])
-		ovs_vport_set_stats(vport, nla_data(a[OVS_VPORT_ATTR_STATS]));
-
-	if (a[OVS_VPORT_ATTR_ADDRESS])
-		err = ovs_vport_set_addr(vport, nla_data(a[OVS_VPORT_ATTR_ADDRESS]));
-
-	return err;
-}
-
 static int ovs_vport_cmd_new(struct sk_buff *skb, struct genl_info *info)
 {
 	struct nlattr **a = info->attrs;
@@ -1988,15 +1967,13 @@ static int ovs_vport_cmd_new(struct sk_buff *skb, struct genl_info *info)
 	if (IS_ERR(vport))
 		goto exit_unlock;
 
-	err = change_vport(vport, a);
-	if (!err) {
-		reply = ovs_vport_cmd_build_info(vport, info->snd_portid,
-						 info->snd_seq,
-						 OVS_VPORT_CMD_NEW);
-		if (IS_ERR(reply))
-			err = PTR_ERR(reply);
-	}
-	if (err) {
+	if (a[OVS_VPORT_ATTR_STATS])
+		ovs_vport_set_stats(vport, nla_data(a[OVS_VPORT_ATTR_STATS]));
+
+	reply = ovs_vport_cmd_build_info(vport, info->snd_portid, info->snd_seq,
+					 OVS_VPORT_CMD_NEW);
+	if (IS_ERR(reply)) {
+		err = PTR_ERR(reply);
 		ovs_dp_detach_port(vport);
 		goto exit_unlock;
 	}
@@ -2033,11 +2010,13 @@ static int ovs_vport_cmd_set(struct sk_buff *skb, struct genl_info *info)
 
 	if (!err && a[OVS_VPORT_ATTR_OPTIONS])
 		err = ovs_vport_set_options(vport, a[OVS_VPORT_ATTR_OPTIONS]);
-	if (!err)
-		err = change_vport(vport, a);
-	else
+	if (err)
 		goto exit_unlock;
-	if (!err && a[OVS_VPORT_ATTR_UPCALL_PID])
+
+	if (a[OVS_VPORT_ATTR_STATS])
+		ovs_vport_set_stats(vport, nla_data(a[OVS_VPORT_ATTR_STATS]));
+
+	if (a[OVS_VPORT_ATTR_UPCALL_PID])
 		vport->upcall_portid = nla_get_u32(a[OVS_VPORT_ATTR_UPCALL_PID]);
 
 	reply = ovs_vport_cmd_build_info(vport, info->snd_portid,

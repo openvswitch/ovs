@@ -286,29 +286,6 @@ void ovs_vport_del(struct vport *vport)
 }
 
 /**
- *	ovs_vport_set_addr - set device Ethernet address (for kernel callers)
- *
- * @vport: vport on which to set Ethernet address.
- * @addr: New address.
- *
- * Sets the Ethernet address of the given device.  Some devices may not support
- * setting the Ethernet address, in which case the result will always be
- * -EOPNOTSUPP.  RTNL lock must be held.
- */
-int ovs_vport_set_addr(struct vport *vport, const unsigned char *addr)
-{
-	ASSERT_RTNL();
-
-	if (!is_valid_ether_addr(addr))
-		return -EADDRNOTAVAIL;
-
-	if (vport->ops->set_addr)
-		return vport->ops->set_addr(vport, addr);
-	else
-		return -EOPNOTSUPP;
-}
-
-/**
  *	ovs_vport_set_stats - sets offset device stats
  *
  * @vport: vport on which to set stats

@@ -41,7 +41,6 @@ struct dpif_linux_vport {
     const char *name;                      /* OVS_VPORT_ATTR_NAME. */
     const uint32_t *upcall_pid;            /* OVS_VPORT_ATTR_UPCALL_PID. */
     const struct ovs_vport_stats *stats;   /* OVS_VPORT_ATTR_STATS. */
-    const uint8_t *address;                /* OVS_VPORT_ATTR_ADDRESS. */
     const struct nlattr *options;          /* OVS_VPORT_ATTR_OPTIONS. */
     size_t options_len;
 };

@@ -30,7 +30,6 @@ struct patch_config {
 	struct rcu_head rcu;
 
 	char peer_name[IFNAMSIZ];
-	unsigned char eth_addr[ETH_ALEN];
 };
 
 struct patch_vport {
@@ -159,8 +158,6 @@ static struct vport *patch_create(const struct vport_parms *parms)
 	if (err)
 		goto error_free_patchconf;
 
-	random_ether_addr(patchconf->eth_addr);
-
 	rcu_assign_pointer(patch_vport->patchconf, patchconf);
 
 	peer_name = patchconf->peer_name;
@@ -246,33 +243,10 @@ static void update_peers(struct net *net, const char *name, struct vport *vport)
 	}
 }
 
-static int patch_set_addr(struct vport *vport, const unsigned char *addr)
-{
-	struct patch_vport *patch_vport = patch_vport_priv(vport);
-	struct patch_config *patchconf;
-
-	patchconf = kmemdup(rtnl_dereference(patch_vport->patchconf),
-			  sizeof(struct patch_config), GFP_KERNEL);
-	if (!patchconf)
-		return -ENOMEM;
-
-	memcpy(patchconf->eth_addr, addr, ETH_ALEN);
-	assign_config_rcu(vport, patchconf);
-
-	return 0;
-}
-
-
 static const char *patch_get_name(const struct vport *vport)
 {
 	const struct patch_vport *patch_vport = patch_vport_priv(vport);
 	return patch_vport->name;
-}
-
-static const unsigned char *patch_get_addr(const struct vport *vport)
-{
-	const struct patch_vport *patch_vport = patch_vport_priv(vport);
-	return rcu_dereference_rtnl(patch_vport->patchconf)->eth_addr;
 }
 
 static int patch_get_options(const struct vport *vport, struct sk_buff *skb)
@@ -306,9 +280,7 @@ const struct vport_ops ovs_patch_vport_ops = {
 	.exit		= patch_exit,
 	.create		= patch_create,
 	.destroy	= patch_destroy,
-	.set_addr	= patch_set_addr,
 	.get_name	= patch_get_name,
-	.get_addr	= patch_get_addr,
 	.get_options	= patch_get_options,
 	.set_options	= patch_set_options,
 	.send		= patch_send,

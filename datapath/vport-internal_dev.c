@@ -292,9 +292,7 @@ const struct vport_ops ovs_internal_vport_ops = {
 	.flags		= VPORT_F_REQUIRED | VPORT_F_FLOW,
 	.create		= internal_dev_create,
 	.destroy	= internal_dev_destroy,
-	.set_addr	= ovs_netdev_set_addr,
 	.get_name	= ovs_netdev_get_name,
-	.get_addr	= ovs_netdev_get_addr,
 	.get_ifindex	= ovs_netdev_get_ifindex,
 	.send		= internal_dev_recv,
 };

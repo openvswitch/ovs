@@ -38,9 +38,7 @@ netdev_vport_priv(const struct vport *vport)
 	return vport_priv(vport);
 }
 
-int ovs_netdev_set_addr(struct vport *, const unsigned char *addr);
 const char *ovs_netdev_get_name(const struct vport *);
-const unsigned char *ovs_netdev_get_addr(const struct vport *);
 const char *ovs_netdev_get_config(const struct vport *);
 int ovs_netdev_get_ifindex(const struct vport *);
 

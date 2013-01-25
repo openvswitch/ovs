@@ -193,27 +193,10 @@ static void netdev_destroy(struct vport *vport)
 	call_rcu(&netdev_vport->rcu, free_port_rcu);
 }
 
-int ovs_netdev_set_addr(struct vport *vport, const unsigned char *addr)
-{
-	struct netdev_vport *netdev_vport = netdev_vport_priv(vport);
-	struct sockaddr sa;
-
-	sa.sa_family = ARPHRD_ETHER;
-	memcpy(sa.sa_data, addr, ETH_ALEN);
-
-	return dev_set_mac_address(netdev_vport->dev, &sa);
-}
-
 const char *ovs_netdev_get_name(const struct vport *vport)
 {
 	const struct netdev_vport *netdev_vport = netdev_vport_priv(vport);
 	return netdev_vport->dev->name;
-}
-
-const unsigned char *ovs_netdev_get_addr(const struct vport *vport)
-{
-	const struct netdev_vport *netdev_vport = netdev_vport_priv(vport);
-	return netdev_vport->dev->dev_addr;
 }
 
 int ovs_netdev_get_ifindex(const struct vport *vport)
@@ -383,9 +366,7 @@ const struct vport_ops ovs_netdev_vport_ops = {
 	.exit		= netdev_exit,
 	.create		= netdev_create,
 	.destroy	= netdev_destroy,
-	.set_addr	= ovs_netdev_set_addr,
 	.get_name	= ovs_netdev_get_name,
-	.get_addr	= ovs_netdev_get_addr,
 	.get_ifindex	= ovs_netdev_get_ifindex,
 	.send		= netdev_send,
 };
