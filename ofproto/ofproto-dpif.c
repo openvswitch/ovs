@@ -3918,29 +3918,15 @@ update_stats(struct dpif_backer *backer)
     while (dpif_flow_dump_next(&dump, &key, &key_len, NULL, NULL, &stats)) {
         struct flow flow;
         struct subfacet *subfacet;
-        enum odp_key_fitness fitness;
         struct ofproto_dpif *ofproto;
-        struct ofport_dpif *port;
         uint32_t key_hash;
 
-        fitness = odp_flow_key_to_flow(key, key_len, &flow);
-        if (fitness == ODP_FIT_ERROR) {
+        if (ofproto_receive(backer, NULL, key, key_len, &flow, NULL, &ofproto,
+                            NULL, NULL)) {
             continue;
         }
 
-        port = odp_port_to_ofport(backer, flow.in_port);
-        if (!port) {
-            /* This flow is for a port for which we couldn't associate an
-             * ofproto.  This can happen if a port is removed while
-             * traffic is being received.  Ignore this flow, since it
-             * will get timed out. */
-            continue;
-        }
-
-        ofproto = ofproto_dpif_cast(port->up.ofproto);
-        flow.in_port = port->up.ofp_port;
         key_hash = odp_flow_key_hash(key, key_len);
-
         subfacet = subfacet_find(ofproto, key, key_len, key_hash, &flow);
         switch (subfacet ? subfacet->path : SF_NOT_INSTALLED) {
         case SF_FAST_PATH:
