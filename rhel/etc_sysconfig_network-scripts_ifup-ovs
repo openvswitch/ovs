@@ -34,6 +34,25 @@ if [ ! -x ${OTHERSCRIPT} ]; then
 	OTHERSCRIPT="/etc/sysconfig/network-scripts/ifup-eth"
 fi
 
+check_recursion()
+{
+	[ -n "${UPPEDSTACK}" ] && for _r in ${UPPEDSTACK}; do
+		[ "$_r" = "$1" ] && return 1
+	done
+
+	return 0
+}
+
+if [ -z "${UPPEDSTACK}" ]; then
+	UPPEDSTACK="${DEVICE}"
+fi
+
+[ -n "${OVSREQUIRES}" ] && for _i in ${OVSREQUIRES}; do
+	if ( check_recursion "$_i" ); then
+		UPPEDSTACK="${UPPEDSTACK} $_i" /sbin/ifup "$_i"
+	fi
+done
+
 [ -f /var/lock/subsys/openvswitch ] || /sbin/service openvswitch start
 
 case "$TYPE" in
