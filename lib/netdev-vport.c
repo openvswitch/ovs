@@ -78,6 +78,7 @@ static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
 
 static int netdev_vport_create(const struct netdev_class *, const char *,
                                struct netdev_dev **);
+static int get_patch_config(struct netdev_dev *, struct smap *args);
 static void netdev_vport_poll_notify(const struct netdev *);
 static int tnl_port_config_from_nlattr(const struct nlattr *options,
                                        size_t options_len,
@@ -144,7 +145,10 @@ netdev_vport_get_vport_type(const struct netdev *netdev)
 bool
 netdev_vport_is_patch(const struct netdev *netdev)
 {
-    return netdev_vport_get_vport_type(netdev) == OVS_VPORT_TYPE_PATCH;
+    const struct netdev_dev *dev = netdev_get_dev(netdev);
+    const struct netdev_class *class = netdev_dev_get_class(dev);
+
+    return class->get_config == get_patch_config; 
 }
 
 static uint32_t
@@ -167,9 +171,6 @@ netdev_vport_get_netdev_type(const struct dpif_linux_vport *vport)
 
     case OVS_VPORT_TYPE_INTERNAL:
         return "internal";
-
-    case OVS_VPORT_TYPE_PATCH:
-        return "patch";
 
     case OVS_VPORT_TYPE_GRE:
         if (tnl_port_config_from_nlattr(vport->options, vport->options_len,
@@ -915,7 +916,7 @@ netdev_vport_register(void)
         TUNNEL_CLASS("capwap", OVS_VPORT_TYPE_CAPWAP),
         TUNNEL_CLASS("vxlan", OVS_VPORT_TYPE_VXLAN),
 
-        { OVS_VPORT_TYPE_PATCH,
+        { OVS_VPORT_TYPE_UNSPEC,
           { "patch", VPORT_FUNCTIONS(get_patch_config,
                                      set_patch_config,
                                      NULL,

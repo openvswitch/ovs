@@ -228,7 +228,6 @@ void ovs_vport_record_error(struct vport *, enum vport_err_type err_type);
  * add yours to the list at the top of vport.c. */
 extern const struct vport_ops ovs_netdev_vport_ops;
 extern const struct vport_ops ovs_internal_vport_ops;
-extern const struct vport_ops ovs_patch_vport_ops;
 extern const struct vport_ops ovs_gre_vport_ops;
 extern const struct vport_ops ovs_gre64_vport_ops;
 extern const struct vport_ops ovs_capwap_vport_ops;
