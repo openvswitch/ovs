@@ -23,6 +23,7 @@
 #include "flow.h"
 #include "list.h"
 #include "netdev-provider.h"
+#include "netdev-vport.h"
 #include "odp-util.h"
 #include "ofp-print.h"
 #include "ofpbuf.h"
@@ -34,6 +35,12 @@
 #include "vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(netdev_dummy);
+
+#ifdef __FreeBSD__
+#define FREE_BSD 1
+#else
+#define FREE_BSD 0
+#endif
 
 struct netdev_dev_dummy {
     struct netdev_dev netdev_dev;
@@ -530,4 +537,8 @@ netdev_dummy_register(bool override)
         sset_destroy(&types);
     }
     netdev_register_provider(&dummy_class);
+
+    if (FREE_BSD) {
+        netdev_vport_tunnel_register();
+    }
 }

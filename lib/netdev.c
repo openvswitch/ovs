@@ -73,12 +73,13 @@ netdev_initialize(void)
         inited = true;
 
         fatal_signal_add_hook(close_all_netdevs, NULL, NULL, true);
+        netdev_vport_patch_register();
 
 #ifdef LINUX_DATAPATH
         netdev_register_provider(&netdev_linux_class);
         netdev_register_provider(&netdev_internal_class);
         netdev_register_provider(&netdev_tap_class);
-        netdev_vport_register();
+        netdev_vport_tunnel_register();
 #endif
 #ifdef __FreeBSD__
         netdev_register_provider(&netdev_tap_class);

@@ -324,7 +324,6 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-#include <linux/openvswitch.h>
 #include "openflow/openflow.h"
 #include "netdev.h"
 #include "util.h"

@@ -55,18 +55,19 @@
 #include "hmap.h"
 #include "netdev-provider.h"
 #include "netdev-vport.h"
-#include "netlink.h"
 #include "netlink-notifier.h"
 #include "netlink-socket.h"
+#include "netlink.h"
 #include "ofpbuf.h"
 #include "openflow/openflow.h"
 #include "packets.h"
 #include "poll-loop.h"
 #include "rtnetlink-link.h"
-#include "socket-util.h"
 #include "shash.h"
+#include "socket-util.h"
 #include "sset.h"
 #include "timer.h"
+#include "unaligned.h"
 #include "vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(netdev_linux);
@@ -1309,6 +1310,58 @@ swap_uint64(uint64_t *a, uint64_t *b)
     *b = tmp;
 }
 
+/* Copies 'src' into 'dst', performing format conversion in the process.
+ *
+ * 'src' is allowed to be misaligned. */
+static void
+netdev_stats_from_ovs_vport_stats(struct netdev_stats *dst,
+                                  const struct ovs_vport_stats *src)
+{
+    dst->rx_packets = get_unaligned_u64(&src->rx_packets);
+    dst->tx_packets = get_unaligned_u64(&src->tx_packets);
+    dst->rx_bytes = get_unaligned_u64(&src->rx_bytes);
+    dst->tx_bytes = get_unaligned_u64(&src->tx_bytes);
+    dst->rx_errors = get_unaligned_u64(&src->rx_errors);
+    dst->tx_errors = get_unaligned_u64(&src->tx_errors);
+    dst->rx_dropped = get_unaligned_u64(&src->rx_dropped);
+    dst->tx_dropped = get_unaligned_u64(&src->tx_dropped);
+    dst->multicast = 0;
+    dst->collisions = 0;
+    dst->rx_length_errors = 0;
+    dst->rx_over_errors = 0;
+    dst->rx_crc_errors = 0;
+    dst->rx_frame_errors = 0;
+    dst->rx_fifo_errors = 0;
+    dst->rx_missed_errors = 0;
+    dst->tx_aborted_errors = 0;
+    dst->tx_carrier_errors = 0;
+    dst->tx_fifo_errors = 0;
+    dst->tx_heartbeat_errors = 0;
+    dst->tx_window_errors = 0;
+}
+
+static int
+get_stats_via_vport__(const struct netdev *netdev, struct netdev_stats *stats)
+{
+    struct dpif_linux_vport reply;
+    struct ofpbuf *buf;
+    int error;
+
+    error = dpif_linux_vport_get(netdev_get_name(netdev), &reply, &buf);
+    if (error) {
+        return error;
+    } else if (!reply.stats) {
+        ofpbuf_delete(buf);
+        return EOPNOTSUPP;
+    }
+
+    netdev_stats_from_ovs_vport_stats(stats, reply.stats);
+
+    ofpbuf_delete(buf);
+
+    return 0;
+}
+
 static void
 get_stats_via_vport(const struct netdev *netdev_,
                     struct netdev_stats *stats)
@@ -1320,7 +1373,7 @@ get_stats_via_vport(const struct netdev *netdev_,
         !(netdev_dev->cache_valid & VALID_VPORT_STAT_ERROR)) {
         int error;
 
-        error = netdev_vport_get_stats(netdev_, stats);
+        error = get_stats_via_vport__(netdev_, stats);
         if (error && error != ENOENT) {
             VLOG_WARN_RL(&rl, "%s: obtaining netdev stats via vport failed "
                          "(%s)", netdev_get_name(netdev_), strerror(error));

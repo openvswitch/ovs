@@ -21,8 +21,6 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <sys/socket.h>
-#include <linux/openvswitch.h>
-#include <linux/rtnetlink.h>
 #include <net/if.h>
 #include <sys/ioctl.h>
 
@@ -30,22 +28,15 @@
 #include "daemon.h"
 #include "dirs.h"
 #include "dpif.h"
-#include "dpif-linux.h"
 #include "hash.h"
 #include "hmap.h"
 #include "list.h"
-#include "netdev-linux.h"
 #include "netdev-provider.h"
-#include "netlink.h"
-#include "netlink-notifier.h"
-#include "netlink-socket.h"
 #include "ofpbuf.h"
-#include "openvswitch/tunnel.h"
 #include "packets.h"
 #include "route-table.h"
 #include "shash.h"
 #include "socket-util.h"
-#include "unaligned.h"
 #include "vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(netdev_vport);
@@ -69,7 +60,6 @@ struct netdev_dev_vport {
 };
 
 struct vport_class {
-    enum ovs_vport_type type;
     const char *dpif_port;
     struct netdev_class netdev_class;
 };
@@ -111,26 +101,13 @@ get_netdev_tunnel_config(const struct netdev_dev *netdev_dev)
     return &netdev_dev_vport_cast(netdev_dev)->tnl_cfg;
 }
 
-enum ovs_vport_type
-netdev_vport_get_vport_type(const struct netdev *netdev)
-{
-    const struct netdev_dev *dev = netdev_get_dev(netdev);
-    const struct netdev_class *class = netdev_dev_get_class(dev);
-
-    return (is_vport_class(class) ? vport_class_cast(class)->type
-            : class == &netdev_internal_class ? OVS_VPORT_TYPE_INTERNAL
-            : (class == &netdev_linux_class ||
-               class == &netdev_tap_class) ? OVS_VPORT_TYPE_NETDEV
-            : OVS_VPORT_TYPE_UNSPEC);
-}
-
 bool
 netdev_vport_is_patch(const struct netdev *netdev)
 {
     const struct netdev_dev *dev = netdev_get_dev(netdev);
     const struct netdev_class *class = netdev_dev_get_class(dev);
 
-    return class->get_config == get_patch_config; 
+    return class->get_config == get_patch_config;
 }
 
 const char *
@@ -202,58 +179,6 @@ netdev_vport_get_etheraddr(const struct netdev *netdev,
                            uint8_t mac[ETH_ADDR_LEN])
 {
     memcpy(mac, netdev_vport_get_dev(netdev)->etheraddr, ETH_ADDR_LEN);
-    return 0;
-}
-
-/* Copies 'src' into 'dst', performing format conversion in the process.
- *
- * 'src' is allowed to be misaligned. */
-static void
-netdev_stats_from_ovs_vport_stats(struct netdev_stats *dst,
-                                  const struct ovs_vport_stats *src)
-{
-    dst->rx_packets = get_unaligned_u64(&src->rx_packets);
-    dst->tx_packets = get_unaligned_u64(&src->tx_packets);
-    dst->rx_bytes = get_unaligned_u64(&src->rx_bytes);
-    dst->tx_bytes = get_unaligned_u64(&src->tx_bytes);
-    dst->rx_errors = get_unaligned_u64(&src->rx_errors);
-    dst->tx_errors = get_unaligned_u64(&src->tx_errors);
-    dst->rx_dropped = get_unaligned_u64(&src->rx_dropped);
-    dst->tx_dropped = get_unaligned_u64(&src->tx_dropped);
-    dst->multicast = 0;
-    dst->collisions = 0;
-    dst->rx_length_errors = 0;
-    dst->rx_over_errors = 0;
-    dst->rx_crc_errors = 0;
-    dst->rx_frame_errors = 0;
-    dst->rx_fifo_errors = 0;
-    dst->rx_missed_errors = 0;
-    dst->tx_aborted_errors = 0;
-    dst->tx_carrier_errors = 0;
-    dst->tx_fifo_errors = 0;
-    dst->tx_heartbeat_errors = 0;
-    dst->tx_window_errors = 0;
-}
-
-int
-netdev_vport_get_stats(const struct netdev *netdev, struct netdev_stats *stats)
-{
-    struct dpif_linux_vport reply;
-    struct ofpbuf *buf;
-    int error;
-
-    error = dpif_linux_vport_get(netdev_get_name(netdev), &reply, &buf);
-    if (error) {
-        return error;
-    } else if (!reply.stats) {
-        ofpbuf_delete(buf);
-        return EOPNOTSUPP;
-    }
-
-    netdev_stats_from_ovs_vport_stats(stats, reply.stats);
-
-    ofpbuf_delete(buf);
-
     return 0;
 }
 
@@ -721,29 +646,23 @@ get_stats(const struct netdev *netdev, struct netdev_stats *stats)
                                                             \
     netdev_vport_change_seq
 
-#define TUNNEL_CLASS(NAME, VPORT_TYPE, DPIF_PORT)           \
-    { VPORT_TYPE, DPIF_PORT,                                \
+#define TUNNEL_CLASS(NAME, DPIF_PORT)                       \
+    { DPIF_PORT,                                            \
         { NAME, VPORT_FUNCTIONS(get_tunnel_config,          \
                                 set_tunnel_config,          \
                                 get_netdev_tunnel_config,   \
                                 tunnel_get_status) }}
 
 void
-netdev_vport_register(void)
+netdev_vport_tunnel_register(void)
 {
     static const struct vport_class vport_classes[] = {
-        TUNNEL_CLASS("gre", OVS_VPORT_TYPE_GRE, "gre_system"),
-        TUNNEL_CLASS("ipsec_gre", OVS_VPORT_TYPE_GRE, "gre_system"),
-        TUNNEL_CLASS("gre64", OVS_VPORT_TYPE_GRE64, "gre64_system"),
-        TUNNEL_CLASS("ipsec_gre64", OVS_VPORT_TYPE_GRE64, "gre64_system"),
-        TUNNEL_CLASS("capwap", OVS_VPORT_TYPE_CAPWAP, "capwap_system"),
-        TUNNEL_CLASS("vxlan", OVS_VPORT_TYPE_VXLAN, "vxlan_system"),
-
-        { OVS_VPORT_TYPE_UNSPEC, NULL,
-          { "patch", VPORT_FUNCTIONS(get_patch_config,
-                                     set_patch_config,
-                                     NULL,
-                                     NULL) }},
+        TUNNEL_CLASS("gre", "gre_system"),
+        TUNNEL_CLASS("ipsec_gre", "gre_system"),
+        TUNNEL_CLASS("gre64", "gre64_system"),
+        TUNNEL_CLASS("ipsec_gre64", "gre64_system"),
+        TUNNEL_CLASS("capwap", "capwap_system"),
+        TUNNEL_CLASS("vxlan", "vxlan_system")
     };
 
     int i;
@@ -751,4 +670,16 @@ netdev_vport_register(void)
     for (i = 0; i < ARRAY_SIZE(vport_classes); i++) {
         netdev_register_provider(&vport_classes[i].netdev_class);
     }
+}
+
+void
+netdev_vport_patch_register(void)
+{
+    static const struct vport_class patch_class =
+        { NULL,
+            { "patch", VPORT_FUNCTIONS(get_patch_config,
+                                       set_patch_config,
+                                       NULL,
+                                       NULL) }};
+    netdev_register_provider(&patch_class.netdev_class);
 }

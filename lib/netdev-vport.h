@@ -24,12 +24,10 @@ struct dpif_flow_stats;
 struct netdev;
 struct netdev_stats;
 
-void netdev_vport_register(void);
+void netdev_vport_tunnel_register(void);
+void netdev_vport_patch_register(void);
 
-enum ovs_vport_type netdev_vport_get_vport_type(const struct netdev *);
 bool netdev_vport_is_patch(const struct netdev *);
-
-int netdev_vport_get_stats(const struct netdev *, struct netdev_stats *);
 
 const char *netdev_vport_patch_peer(const struct netdev *netdev);
 
