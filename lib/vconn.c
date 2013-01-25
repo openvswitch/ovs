@@ -1112,17 +1112,13 @@ void
 vconn_init(struct vconn *vconn, struct vconn_class *class, int connect_status,
            const char *name, uint32_t allowed_versions)
 {
+    memset(vconn, 0, sizeof *vconn);
     vconn->class = class;
     vconn->state = (connect_status == EAGAIN ? VCS_CONNECTING
                     : !connect_status ? VCS_SEND_HELLO
                     : VCS_DISCONNECTED);
     vconn->error = connect_status;
-    vconn->version = 0;
     vconn->allowed_versions = allowed_versions;
-    vconn->remote_ip = 0;
-    vconn->remote_port = 0;
-    vconn->local_ip = 0;
-    vconn->local_port = 0;
     vconn->name = xstrdup(name);
     ovs_assert(vconn->state != VCS_CONNECTING || class->connect);
 }
