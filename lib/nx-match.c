@@ -573,7 +573,7 @@ nx_put_raw(struct ofpbuf *b, bool oxm, const struct match *match,
     int match_len;
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 18);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 19);
 
     /* Metadata. */
     if (match->wc.masks.in_port) {
@@ -613,6 +613,22 @@ nx_put_raw(struct ofpbuf *b, bool oxm, const struct match *match,
     } else {
         nxm_put_16m(b, NXM_OF_VLAN_TCI, flow->vlan_tci,
                     match->wc.masks.vlan_tci);
+    }
+
+    /* MPLS. */
+    if (eth_type_mpls(flow->dl_type)) {
+        if (match->wc.masks.mpls_lse & htonl(MPLS_TC_MASK)) {
+            nxm_put_8(b, OXM_OF_MPLS_TC, mpls_lse_to_tc(flow->mpls_lse));
+        }
+
+        if (match->wc.masks.mpls_lse & htonl(MPLS_BOS_MASK)) {
+            nxm_put_8(b, OXM_OF_MPLS_BOS, mpls_lse_to_bos(flow->mpls_lse));
+        }
+
+        if (match->wc.masks.mpls_lse & htonl(MPLS_LABEL_MASK)) {
+            nxm_put_32(b, OXM_OF_MPLS_LABEL,
+                       htonl(mpls_lse_to_label(flow->mpls_lse)));
+        }
     }
 
     /* L3. */

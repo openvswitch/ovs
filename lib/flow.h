@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,7 +36,7 @@ struct ofpbuf;
 /* This sequence number should be incremented whenever anything involving flows
  * or the wildcarding of flows changes.  This will cause build assertion
  * failures in places which likely need to be updated. */
-#define FLOW_WC_SEQ 18
+#define FLOW_WC_SEQ 19
 
 #define FLOW_N_REGS 8
 BUILD_ASSERT_DECL(FLOW_N_REGS <= NXM_NX_MAX_REGS);
@@ -91,8 +91,11 @@ struct flow {
                                    unless in DPIF code, in which case it
                                    is the datapath port number. */
     uint32_t skb_mark;          /* Packet mark. */
+    ovs_be32 mpls_lse;          /* MPLS label stack entry. */
+    uint16_t mpls_depth;        /* Depth of MPLS stack. */
     ovs_be16 vlan_tci;          /* If 802.1Q, TCI | VLAN_CFI; otherwise 0. */
     ovs_be16 dl_type;           /* Ethernet frame type. */
+    ovs_be16 encap_dl_type;     /* MPLS encapsulated Ethernet frame type */
     ovs_be16 tp_src;            /* TCP/UDP source port. */
     ovs_be16 tp_dst;            /* TCP/UDP destination port. */
     uint8_t dl_src[6];          /* Ethernet source address. */
@@ -110,8 +113,8 @@ BUILD_ASSERT_DECL(sizeof(struct flow) % 4 == 0);
 #define FLOW_U32S (sizeof(struct flow) / 4)
 
 /* Remember to update FLOW_WC_SEQ when changing 'struct flow'. */
-BUILD_ASSERT_DECL(sizeof(struct flow) == sizeof(struct flow_tnl) + 152 &&
-                  FLOW_WC_SEQ == 18);
+BUILD_ASSERT_DECL(sizeof(struct flow) == sizeof(struct flow_tnl) + 160 &&
+                  FLOW_WC_SEQ == 19);
 
 /* Represents the metadata fields of struct flow. */
 struct flow_metadata {
@@ -125,6 +128,18 @@ void flow_extract(struct ofpbuf *, uint32_t priority, uint32_t mark,
                   const struct flow_tnl *, uint16_t in_port, struct flow *);
 void flow_extract_l3_onwards(struct ofpbuf *, struct flow *,
                              ovs_be16 dl_type);
+
+/* Returns the innermost dl_type.
+ * If there's an outer and an inner type then the inner type is returned.
+ * Otherwise, if there is only one type then it is returned. */
+static inline ovs_be16
+flow_innermost_dl_type(const struct flow *flow)
+{
+    return (flow->encap_dl_type == htons(0)
+            ? flow->dl_type
+            : flow->encap_dl_type);
+}
+
 void flow_zero_wildcards(struct flow *, const struct flow_wildcards *);
 void flow_get_metadata(const struct flow *, struct flow_metadata *);
 
@@ -141,6 +156,11 @@ static inline size_t flow_hash(const struct flow *, uint32_t basis);
 void flow_set_dl_vlan(struct flow *, ovs_be16 vid);
 void flow_set_vlan_vid(struct flow *, ovs_be16 vid);
 void flow_set_vlan_pcp(struct flow *, uint8_t pcp);
+
+void flow_set_mpls_label(struct flow *flow, ovs_be32 label);
+void flow_set_mpls_ttl(struct flow *flow, uint8_t ttl);
+void flow_set_mpls_tc(struct flow *flow, uint8_t tc);
+void flow_set_mpls_bos(struct flow *flow, uint8_t stack);
 
 void flow_compose(struct ofpbuf *, const struct flow *);
 

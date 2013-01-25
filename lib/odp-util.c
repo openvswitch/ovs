@@ -73,6 +73,8 @@ odp_action_len(uint16_t type)
     case OVS_ACTION_ATTR_USERSPACE: return -2;
     case OVS_ACTION_ATTR_PUSH_VLAN: return sizeof(struct ovs_action_push_vlan);
     case OVS_ACTION_ATTR_POP_VLAN: return 0;
+    case OVS_ACTION_ATTR_PUSH_MPLS: return sizeof(struct ovs_action_push_mpls);
+    case OVS_ACTION_ATTR_POP_MPLS: return sizeof(ovs_be16);
     case OVS_ACTION_ATTR_SET: return -2;
     case OVS_ACTION_ATTR_SAMPLE: return -2;
 
@@ -108,6 +110,7 @@ ovs_key_attr_to_string(enum ovs_key_attr attr)
     case OVS_KEY_ATTR_ICMPV6: return "icmpv6";
     case OVS_KEY_ATTR_ARP: return "arp";
     case OVS_KEY_ATTR_ND: return "nd";
+    case OVS_KEY_ATTR_MPLS: return "mpls";
 
     case __OVS_KEY_ATTR_MAX:
     default:
@@ -301,6 +304,16 @@ format_vlan_tci(struct ds *ds, ovs_be16 vlan_tci)
 }
 
 static void
+format_mpls_lse(struct ds *ds, ovs_be32 mpls_lse)
+{
+    ds_put_format(ds, "label=%"PRIu32",tc=%d,ttl=%d,bos=%d",
+                  mpls_lse_to_label(mpls_lse),
+                  mpls_lse_to_tc(mpls_lse),
+                  mpls_lse_to_ttl(mpls_lse),
+                  mpls_lse_to_bos(mpls_lse));
+}
+
+static void
 format_odp_action(struct ds *ds, const struct nlattr *a)
 {
     int expected_len;
@@ -339,6 +352,18 @@ format_odp_action(struct ds *ds, const struct nlattr *a)
     case OVS_ACTION_ATTR_POP_VLAN:
         ds_put_cstr(ds, "pop_vlan");
         break;
+    case OVS_ACTION_ATTR_PUSH_MPLS: {
+        const struct ovs_action_push_mpls *mpls = nl_attr_get(a);
+        ds_put_cstr(ds, "push_mpls(");
+        format_mpls_lse(ds, mpls->mpls_lse);
+        ds_put_format(ds, ",eth_type=0x%"PRIx16")", ntohs(mpls->mpls_ethertype));
+        break;
+    }
+    case OVS_ACTION_ATTR_POP_MPLS: {
+        ovs_be16 ethertype = nl_attr_get_be16(a);
+        ds_put_format(ds, "pop_mpls(eth_type=0x%"PRIx16")", ntohs(ethertype));
+        break;
+    }
     case OVS_ACTION_ATTR_SAMPLE:
         format_odp_sample_action(ds, a);
         break;
@@ -622,6 +647,7 @@ odp_flow_key_attr_len(uint16_t type)
     case OVS_KEY_ATTR_ETHERNET: return sizeof(struct ovs_key_ethernet);
     case OVS_KEY_ATTR_VLAN: return sizeof(ovs_be16);
     case OVS_KEY_ATTR_ETHERTYPE: return 2;
+    case OVS_KEY_ATTR_MPLS: return sizeof(struct ovs_key_mpls);
     case OVS_KEY_ATTR_IPV4: return sizeof(struct ovs_key_ipv4);
     case OVS_KEY_ATTR_IPV6: return sizeof(struct ovs_key_ipv6);
     case OVS_KEY_ATTR_TCP: return sizeof(struct ovs_key_tcp);
@@ -859,6 +885,14 @@ format_odp_key_attr(const struct nlattr *a, struct ds *ds)
         ds_put_char(ds, ')');
         break;
 
+    case OVS_KEY_ATTR_MPLS: {
+        const struct ovs_key_mpls *mpls_key = nl_attr_get(a);
+        ds_put_char(ds, '(');
+        format_mpls_lse(ds, mpls_key->mpls_top_lse);
+        ds_put_char(ds, ')');
+        break;
+    }
+
     case OVS_KEY_ATTR_ETHERTYPE:
         ds_put_format(ds, "(0x%04"PRIx16")",
                       ntohs(nl_attr_get_be16(a)));
@@ -1019,6 +1053,15 @@ ovs_frag_type_from_string(const char *s, enum ovs_frag_type *type)
     return true;
 }
 
+static ovs_be32
+mpls_lse_from_components(int mpls_label, int mpls_tc, int mpls_ttl, int mpls_bos)
+{
+    return (htonl((mpls_label << MPLS_LABEL_SHIFT) |
+                  (mpls_tc << MPLS_TC_SHIFT)       |
+                  (mpls_ttl << MPLS_TTL_SHIFT)     |
+                  (mpls_bos << MPLS_BOS_SHIFT)));
+}
+
 static int
 parse_odp_key_attr(const char *s, const struct simap *port_names,
                    struct ofpbuf *key)
@@ -1167,6 +1210,22 @@ parse_odp_key_attr(const char *s, const struct simap *port_names,
 
         if (sscanf(s, "eth_type(%i)%n", &eth_type, &n) > 0 && n > 0) {
             nl_msg_put_be16(key, OVS_KEY_ATTR_ETHERTYPE, htons(eth_type));
+            return n;
+        }
+    }
+
+    {
+        int label, tc, ttl, bos;
+        int n = -1;
+
+        if (sscanf(s, "mpls(label=%"SCNi32",tc=%i,ttl=%i,bos=%i)%n",
+                    &label, &tc, &ttl, &bos, &n) > 0 &&
+                    n > 0) {
+            struct ovs_key_mpls *mpls;
+
+            mpls = nl_msg_put_unspec_uninit(key, OVS_KEY_ATTR_MPLS,
+                                            sizeof *mpls);
+            mpls->mpls_top_lse = mpls_lse_from_components(label, tc, ttl, bos);
             return n;
         }
     }
@@ -1526,6 +1585,14 @@ odp_flow_key_from_flow(struct ofpbuf *buf, const struct flow *flow,
         memcpy(arp_key->arp_tha, flow->arp_tha, ETH_ADDR_LEN);
     }
 
+    if (flow->mpls_depth) {
+        struct ovs_key_mpls *mpls_key;
+
+        mpls_key = nl_msg_put_unspec_uninit(buf, OVS_KEY_ATTR_MPLS,
+                                            sizeof *mpls_key);
+        mpls_key->mpls_top_lse = flow->mpls_lse;
+    }
+
     if (is_ip_any(flow) && !(flow->nw_frag & FLOW_NW_FRAG_LATER)) {
         if (flow->nw_proto == IPPROTO_TCP) {
             struct ovs_key_tcp *tcp_key;
@@ -1728,14 +1795,38 @@ parse_ethertype(const struct nlattr *attrs[OVS_KEY_ATTR_MAX + 1],
 }
 
 static enum odp_key_fitness
-parse_l3_onward(const struct nlattr *attrs[OVS_KEY_ATTR_MAX + 1],
-                uint64_t present_attrs, int out_of_range_attr,
-                uint64_t expected_attrs, struct flow *flow,
-                const struct nlattr *key, size_t key_len)
+parse_l2_5_onward(const struct nlattr *attrs[OVS_KEY_ATTR_MAX + 1],
+                  uint64_t present_attrs, int out_of_range_attr,
+                  uint64_t expected_attrs, struct flow *flow,
+                  const struct nlattr *key, size_t key_len)
 {
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+    ovs_be16 dl_type;
 
-    if (flow->dl_type == htons(ETH_TYPE_IP)) {
+    /* Parse MPLS label stack entry */
+    if (eth_type_mpls(flow->dl_type)) {
+        /* Calculate fitness of outer attributes. */
+        expected_attrs |= (UINT64_C(1) << OVS_KEY_ATTR_MPLS);
+
+        /* Get the MPLS LSE value. */
+        if (!(present_attrs & (UINT64_C(1) << OVS_KEY_ATTR_MPLS))) {
+            return ODP_FIT_TOO_LITTLE;
+        }
+        flow->mpls_lse = nl_attr_get_be32(attrs[OVS_KEY_ATTR_MPLS]);
+        flow->mpls_depth++;
+
+        if (present_attrs & (UINT64_C(1) << OVS_KEY_ATTR_IPV4)) {
+            flow->encap_dl_type = htons(ETH_TYPE_IP);
+        } else if (present_attrs & (UINT64_C(1) << OVS_KEY_ATTR_IPV6)) {
+            flow->encap_dl_type = htons(ETH_TYPE_IPV6);
+        } else if (present_attrs & (UINT64_C(1) << OVS_KEY_ATTR_ARP)) {
+            flow->encap_dl_type = htons(ETH_TYPE_ARP);
+        }
+    }
+
+    dl_type = flow_innermost_dl_type(flow);
+
+    if (dl_type == htons(ETH_TYPE_IP)) {
         expected_attrs |= UINT64_C(1) << OVS_KEY_ATTR_IPV4;
         if (present_attrs & (UINT64_C(1) << OVS_KEY_ATTR_IPV4)) {
             const struct ovs_key_ipv4 *ipv4_key;
@@ -1750,7 +1841,7 @@ parse_l3_onward(const struct nlattr *attrs[OVS_KEY_ATTR_MAX + 1],
                 return ODP_FIT_ERROR;
             }
         }
-    } else if (flow->dl_type == htons(ETH_TYPE_IPV6)) {
+    } else if (dl_type == htons(ETH_TYPE_IPV6)) {
         expected_attrs |= UINT64_C(1) << OVS_KEY_ATTR_IPV6;
         if (present_attrs & (UINT64_C(1) << OVS_KEY_ATTR_IPV6)) {
             const struct ovs_key_ipv6 *ipv6_key;
@@ -1766,8 +1857,8 @@ parse_l3_onward(const struct nlattr *attrs[OVS_KEY_ATTR_MAX + 1],
                 return ODP_FIT_ERROR;
             }
         }
-    } else if (flow->dl_type == htons(ETH_TYPE_ARP) ||
-               flow->dl_type == htons(ETH_TYPE_RARP)) {
+    } else if (dl_type == htons(ETH_TYPE_ARP) ||
+               dl_type == htons(ETH_TYPE_RARP)) {
         expected_attrs |= UINT64_C(1) << OVS_KEY_ATTR_ARP;
         if (present_attrs & (UINT64_C(1) << OVS_KEY_ATTR_ARP)) {
             const struct ovs_key_arp *arp_key;
@@ -1787,7 +1878,8 @@ parse_l3_onward(const struct nlattr *attrs[OVS_KEY_ATTR_MAX + 1],
     }
 
     if (flow->nw_proto == IPPROTO_TCP
-        && is_ip_any(flow)
+        && (dl_type == htons(ETH_TYPE_IP) ||
+            dl_type == htons(ETH_TYPE_IPV6))
         && !(flow->nw_frag & FLOW_NW_FRAG_LATER)) {
         expected_attrs |= UINT64_C(1) << OVS_KEY_ATTR_TCP;
         if (present_attrs & (UINT64_C(1) << OVS_KEY_ATTR_TCP)) {
@@ -1798,7 +1890,8 @@ parse_l3_onward(const struct nlattr *attrs[OVS_KEY_ATTR_MAX + 1],
             flow->tp_dst = tcp_key->tcp_dst;
         }
     } else if (flow->nw_proto == IPPROTO_UDP
-               && is_ip_any(flow)
+               && (dl_type == htons(ETH_TYPE_IP) ||
+                   dl_type == htons(ETH_TYPE_IPV6))
                && !(flow->nw_frag & FLOW_NW_FRAG_LATER)) {
         expected_attrs |= UINT64_C(1) << OVS_KEY_ATTR_UDP;
         if (present_attrs & (UINT64_C(1) << OVS_KEY_ATTR_UDP)) {
@@ -1809,7 +1902,7 @@ parse_l3_onward(const struct nlattr *attrs[OVS_KEY_ATTR_MAX + 1],
             flow->tp_dst = udp_key->udp_dst;
         }
     } else if (flow->nw_proto == IPPROTO_ICMP
-               && flow->dl_type == htons(ETH_TYPE_IP)
+               && dl_type == htons(ETH_TYPE_IP)
                && !(flow->nw_frag & FLOW_NW_FRAG_LATER)) {
         expected_attrs |= UINT64_C(1) << OVS_KEY_ATTR_ICMP;
         if (present_attrs & (UINT64_C(1) << OVS_KEY_ATTR_ICMP)) {
@@ -1820,7 +1913,7 @@ parse_l3_onward(const struct nlattr *attrs[OVS_KEY_ATTR_MAX + 1],
             flow->tp_dst = htons(icmp_key->icmp_code);
         }
     } else if (flow->nw_proto == IPPROTO_ICMPV6
-               && flow->dl_type == htons(ETH_TYPE_IPV6)
+               && dl_type == htons(ETH_TYPE_IPV6)
                && !(flow->nw_frag & FLOW_NW_FRAG_LATER)) {
         expected_attrs |= UINT64_C(1) << OVS_KEY_ATTR_ICMPV6;
         if (present_attrs & (UINT64_C(1) << OVS_KEY_ATTR_ICMPV6)) {
@@ -1904,8 +1997,8 @@ parse_8021q_onward(const struct nlattr *attrs[OVS_KEY_ATTR_MAX + 1],
     if (!parse_ethertype(attrs, present_attrs, &expected_attrs, flow)) {
         return ODP_FIT_ERROR;
     }
-    encap_fitness = parse_l3_onward(attrs, present_attrs, out_of_range_attr,
-                                    expected_attrs, flow, key, key_len);
+    encap_fitness = parse_l2_5_onward(attrs, present_attrs, out_of_range_attr,
+                                      expected_attrs, flow, key, key_len);
 
     /* The overall fitness is the worse of the outer and inner attributes. */
     return MAX(fitness, encap_fitness);
@@ -1997,8 +2090,8 @@ odp_flow_key_to_flow(const struct nlattr *key, size_t key_len,
         return parse_8021q_onward(attrs, present_attrs, out_of_range_attr,
                                   expected_attrs, flow, key, key_len);
     }
-    return parse_l3_onward(attrs, present_attrs, out_of_range_attr,
-                           expected_attrs, flow, key, key_len);
+    return parse_l2_5_onward(attrs, present_attrs, out_of_range_attr,
+                             expected_attrs, flow, key, key_len);
 }
 
 /* Returns 'fitness' as a string, for use in debug messages. */
@@ -2127,6 +2220,50 @@ commit_vlan_action(const struct flow *flow, struct flow *base,
                           &vlan, sizeof vlan);
     }
     base->vlan_tci = flow->vlan_tci;
+}
+
+static void
+commit_mpls_action(const struct flow *flow, struct flow *base,
+                   struct ofpbuf *odp_actions)
+{
+    if (flow->mpls_lse == base->mpls_lse &&
+        flow->mpls_depth == base->mpls_depth) {
+        return;
+    }
+
+    if (flow->mpls_depth < base->mpls_depth) {
+        if (base->mpls_depth - flow->mpls_depth > 1) {
+            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(10, 10);
+            VLOG_WARN_RL(&rl, "Multiple mpls_pop actions reduced to "
+                         " a single mpls_pop action");
+        }
+
+        nl_msg_put_be16(odp_actions, OVS_ACTION_ATTR_POP_MPLS, flow->dl_type);
+    } else if (flow->mpls_depth > base->mpls_depth) {
+        struct ovs_action_push_mpls *mpls;
+
+        if (flow->mpls_depth - base->mpls_depth > 1) {
+            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(10, 10);
+            VLOG_WARN_RL(&rl, "Multiple mpls_push actions reduced to "
+                         " a single mpls_push action");
+        }
+
+        mpls = nl_msg_put_unspec_uninit(odp_actions, OVS_ACTION_ATTR_PUSH_MPLS,
+                                        sizeof *mpls);
+        memset(mpls, 0, sizeof *mpls);
+        mpls->mpls_ethertype = flow->dl_type;
+        mpls->mpls_lse = flow->mpls_lse;
+    } else {
+        struct ovs_key_mpls mpls_key;
+
+        mpls_key.mpls_top_lse = flow->mpls_lse;
+        commit_set_action(odp_actions, OVS_KEY_ATTR_MPLS,
+                          &mpls_key, sizeof(mpls_key));
+    }
+
+    base->dl_type = flow->dl_type;
+    base->mpls_lse = flow->mpls_lse;
+    base->mpls_depth = flow->mpls_depth;
 }
 
 static void
@@ -2269,6 +2406,7 @@ commit_odp_actions(const struct flow *flow, struct flow *base,
 {
     commit_set_ether_addr_action(flow, base, odp_actions);
     commit_vlan_action(flow, base, odp_actions);
+    commit_mpls_action(flow, base, odp_actions);
     commit_set_nw_action(flow, base, odp_actions);
     commit_set_port_action(flow, base, odp_actions);
     commit_set_priority_action(flow, base, odp_actions);

@@ -460,6 +460,57 @@ match_set_dl_vlan_pcp(struct match *match, uint8_t dl_vlan_pcp)
     match->wc.masks.vlan_tci |= htons(VLAN_CFI | VLAN_PCP_MASK);
 }
 
+/* Modifies 'match' so that the MPLS label is wildcarded. */
+void
+match_set_any_mpls_label(struct match *match)
+{
+    match->wc.masks.mpls_lse &= ~htonl(MPLS_LABEL_MASK);
+    flow_set_mpls_label(&match->flow, htonl(0));
+}
+
+/* Modifies 'match' so that it matches only packets with an MPLS header whose
+ * label equals the low 20 bits of 'mpls_label'. */
+void
+match_set_mpls_label(struct match *match, ovs_be32 mpls_label)
+{
+    match->wc.masks.mpls_lse |= htonl(MPLS_LABEL_MASK);
+    flow_set_mpls_label(&match->flow, mpls_label);
+}
+
+/* Modifies 'match' so that the MPLS TC is wildcarded. */
+void
+match_set_any_mpls_tc(struct match *match)
+{
+    match->wc.masks.mpls_lse &= ~htonl(MPLS_TC_MASK);
+    flow_set_mpls_tc(&match->flow, 0);
+}
+
+/* Modifies 'match' so that it matches only packets with an MPLS header whose
+ * Traffic Class equals the low 3 bits of 'mpls_tc'. */
+void
+match_set_mpls_tc(struct match *match, uint8_t mpls_tc)
+{
+    match->wc.masks.mpls_lse |= htonl(MPLS_TC_MASK);
+    flow_set_mpls_tc(&match->flow, mpls_tc);
+}
+
+/* Modifies 'match' so that the MPLS stack flag is wildcarded. */
+void
+match_set_any_mpls_bos(struct match *match)
+{
+    match->wc.masks.mpls_lse &= ~htonl(MPLS_BOS_MASK);
+    flow_set_mpls_bos(&match->flow, 0);
+}
+
+/* Modifies 'match' so that it matches only packets with an MPLS header whose
+ * Stack Flag equals the lower bit of 'mpls_bos' */
+void
+match_set_mpls_bos(struct match *match, uint8_t mpls_bos)
+{
+    match->wc.masks.mpls_lse |= htonl(MPLS_BOS_MASK);
+    flow_set_mpls_bos(&match->flow, mpls_bos);
+}
+
 void
 match_set_tp_src(struct match *match, ovs_be16 tp_src)
 {
@@ -767,6 +818,24 @@ format_flow_tunnel(struct ds *s, const struct match *match)
     }
 }
 
+static void
+flow_format_mpls(const struct flow *flow, struct ds *s)
+{
+    if (flow->dl_type == htons(ETH_TYPE_MPLS)) {
+        ds_put_cstr(s, "mpls");
+    } else if (flow->dl_type == htons(ETH_TYPE_MPLS_MCAST)) {
+        ds_put_cstr(s, "mplsm");
+    } else {
+        return;
+    }
+
+    ds_put_format(s, "(label:%"PRIu32",tc:%d,ttl:%d,bos:%d),",
+                  mpls_lse_to_label(flow->mpls_lse),
+                  mpls_lse_to_tc(flow->mpls_lse),
+                  mpls_lse_to_ttl(flow->mpls_lse),
+                  mpls_lse_to_bos(flow->mpls_lse));
+}
+
 /* Appends a string representation of 'match' to 's'.  If 'priority' is
  * different from OFP_DEFAULT_PRIORITY, includes it in 's'. */
 void
@@ -780,7 +849,7 @@ match_format(const struct match *match, struct ds *s, unsigned int priority)
 
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 18);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 19);
 
     if (priority != OFP_DEFAULT_PRIORITY) {
         ds_put_format(s, "priority=%u,", priority);
@@ -832,6 +901,8 @@ match_format(const struct match *match, struct ds *s, unsigned int priority)
             ds_put_cstr(s, "arp,");
         } else if (f->dl_type == htons(ETH_TYPE_RARP)) {
             ds_put_cstr(s, "rarp,");
+        } else if (f->mpls_depth) {
+            flow_format_mpls(f, s);
         } else {
             skip_type = false;
         }
@@ -939,6 +1010,18 @@ match_format(const struct match *match, struct ds *s, unsigned int priority)
     }
     if (wc->masks.nw_ttl) {
         ds_put_format(s, "nw_ttl=%"PRIu8",", f->nw_ttl);
+    }
+    if (wc->masks.mpls_lse & htonl(MPLS_LABEL_MASK)) {
+        ds_put_format(s, "mpls_label=%"PRIu32",",
+                 mpls_lse_to_label(f->mpls_lse));
+    }
+    if (wc->masks.mpls_lse & htonl(MPLS_TC_MASK)) {
+        ds_put_format(s, "mpls_tc=%"PRIu8",",
+                 mpls_lse_to_tc(f->mpls_lse));
+    }
+    if (wc->masks.mpls_lse & htonl(MPLS_BOS_MASK)) {
+        ds_put_format(s, "mpls_bos=%"PRIu8",",
+                 mpls_lse_to_bos(f->mpls_lse));
     }
     switch (wc->masks.nw_frag) {
     case FLOW_NW_FRAG_ANY | FLOW_NW_FRAG_LATER:

@@ -192,7 +192,8 @@ eth_push_vlan(struct ofpbuf *packet, ovs_be16 tci)
 
 /* Removes outermost VLAN header (if any is present) from 'packet'.
  *
- * 'packet->l2' must initially point to 'packet''s Ethernet header. */
+ * 'packet->l2_5' should initially point to 'packet''s outer-most MPLS header
+ * or may be NULL if there are no MPLS headers. */
 void
 eth_pop_vlan(struct ofpbuf *packet)
 {
@@ -208,6 +209,182 @@ eth_pop_vlan(struct ofpbuf *packet)
         ofpbuf_pull(packet, VLAN_HEADER_LEN);
         packet->l2 = (char*)packet->l2 + VLAN_HEADER_LEN;
         memcpy(packet->data, &tmp, sizeof tmp);
+    }
+}
+
+/* Return depth of mpls stack.
+ *
+ * 'packet->l2_5' should initially point to 'packet''s outer-most MPLS header
+ * or may be NULL if there are no MPLS headers. */
+uint16_t
+eth_mpls_depth(const struct ofpbuf *packet)
+{
+    struct mpls_hdr *mh = packet->l2_5;
+    uint16_t depth;
+
+    if (!mh) {
+        return 0;
+    }
+
+    depth = 0;
+    while (packet->size >= ((char *)mh - (char *)packet->data) + sizeof *mh) {
+        depth++;
+        if (mh->mpls_lse & htonl(MPLS_BOS_MASK)) {
+            break;
+        }
+        mh++;
+    }
+
+    return depth;
+}
+
+/* Set ethertype of the packet. */
+void
+set_ethertype(struct ofpbuf *packet, ovs_be16 eth_type)
+{
+    struct eth_header *eh = packet->data;
+
+    if (eh->eth_type == htons(ETH_TYPE_VLAN)) {
+        ovs_be16 *p;
+        p = (ovs_be16 *)((char *)(packet->l2_5 ? packet->l2_5 : packet->l3) - 2);
+        *p = eth_type;
+    } else {
+        eh->eth_type = eth_type;
+    }
+}
+
+static bool is_mpls(struct ofpbuf *packet)
+{
+    return packet->l2_5 != NULL;
+}
+
+/* Set time to live (TTL) of an MPLS label stack entry (LSE). */
+static void
+set_mpls_lse_ttl(ovs_be32 *lse, uint8_t ttl)
+{
+    *lse &= ~htonl(MPLS_TTL_MASK);
+    *lse |= htonl((ttl << MPLS_TTL_SHIFT) & MPLS_TTL_MASK);
+}
+
+/* Set traffic class (TC) of an MPLS label stack entry (LSE). */
+void
+set_mpls_lse_tc(ovs_be32 *lse, uint8_t tc)
+{
+    *lse &= ~htonl(MPLS_TC_MASK);
+    *lse |= htonl((tc << MPLS_TC_SHIFT) & MPLS_TC_MASK);
+}
+
+/* Set label of an MPLS label stack entry (LSE). */
+void
+set_mpls_lse_label(ovs_be32 *lse, ovs_be32 label)
+{
+    *lse &= ~htonl(MPLS_LABEL_MASK);
+    *lse |= htonl((ntohl(label) << MPLS_LABEL_SHIFT) & MPLS_LABEL_MASK);
+}
+
+/* Set bottom of stack (BoS) bit of an MPLS label stack entry (LSE). */
+void
+set_mpls_lse_bos(ovs_be32 *lse, uint8_t bos)
+{
+    *lse &= ~htonl(MPLS_BOS_MASK);
+    *lse |= htonl((bos << MPLS_BOS_SHIFT) & MPLS_BOS_MASK);
+}
+
+/* Compose an MPLS label stack entry (LSE) from its components:
+ * label, traffic class (TC), time to live (TTL) and
+ * bottom of stack (BoS) bit. */
+ovs_be32
+set_mpls_lse_values(uint8_t ttl, uint8_t tc, uint8_t bos, ovs_be32 label)
+{
+    ovs_be32 lse = htonl(0);
+    set_mpls_lse_ttl(&lse, ttl);
+    set_mpls_lse_tc(&lse, tc);
+    set_mpls_lse_bos(&lse, bos);
+    set_mpls_lse_label(&lse, label);
+    return lse;
+}
+
+/* Push an new MPLS stack entry onto the MPLS stack and adjust 'packet->l2' and
+ * 'packet->l2_5' accordingly.  The new entry will be the outermost entry on
+ * the stack.
+ *
+ * Previous to calling this function, 'packet->l2_5' must be set; if the MPLS
+ * label to be pushed will be the first label in 'packet', then it should be
+ * the same as 'packet->l3'. */
+static void
+push_mpls_lse(struct ofpbuf *packet, struct mpls_hdr *mh)
+{
+    char * header;
+    size_t len;
+    header = ofpbuf_push_uninit(packet, MPLS_HLEN);
+    len = (char *)packet->l2_5 - (char *)packet->l2;
+    memmove(header, packet->l2, len);
+    memcpy(header + len, mh, sizeof *mh);
+    packet->l2 = (char*)packet->l2 - MPLS_HLEN;
+    packet->l2_5 = (char*)packet->l2_5 - MPLS_HLEN;
+}
+
+/* Set MPLS label stack entry to outermost MPLS header.*/
+void
+set_mpls_lse(struct ofpbuf *packet, ovs_be32 mpls_lse)
+{
+    struct mpls_hdr *mh = packet->l2_5;
+
+    /* Packet type should be MPLS to set label stack entry. */
+    if (is_mpls(packet)) {
+        /* Update mpls label stack entry. */
+        mh->mpls_lse = mpls_lse;
+    }
+}
+
+/* Push MPLS label stack entry 'lse' onto 'packet' as the the outermost MPLS
+ * header.  If 'packet' does not already have any MPLS labels, then its
+ * Ethertype is changed to 'ethtype' (which must be an MPLS Ethertype). */
+void
+push_mpls(struct ofpbuf *packet, ovs_be16 ethtype, ovs_be32 lse)
+{
+    struct mpls_hdr mh;
+
+    if (!eth_type_mpls(ethtype)) {
+        return;
+    }
+
+    if (!is_mpls(packet)) {
+        /* Set ethtype and MPLS label stack entry. */
+        set_ethertype(packet, ethtype);
+        packet->l2_5 = packet->l3;
+    }
+
+    /* Push new MPLS shim header onto packet. */
+    mh.mpls_lse = lse;
+    push_mpls_lse(packet, &mh);
+}
+
+/* If 'packet' is an MPLS packet, removes its outermost MPLS label stack entry.
+ * If the label that was removed was the only MPLS label, changes 'packet''s
+ * Ethertype to 'ethtype' (which ordinarily should not be an MPLS
+ * Ethertype). */
+void
+pop_mpls(struct ofpbuf *packet, ovs_be16 ethtype)
+{
+    struct mpls_hdr *mh = NULL;
+
+    if (is_mpls(packet)) {
+        size_t len;
+        mh = packet->l2_5;
+        len = (char*)packet->l2_5 - (char*)packet->l2;
+        /* If bottom of the stack set ethertype. */
+        if (mh->mpls_lse & htonl(MPLS_BOS_MASK)) {
+            packet->l2_5 = NULL;
+            set_ethertype(packet, ethtype);
+        } else {
+            packet->l2_5 = (char*)packet->l2_5 + MPLS_HLEN;
+        }
+        /* Shift the l2 header forward. */
+        memmove((char*)packet->data + MPLS_HLEN, packet->data, len);
+        packet->size -= MPLS_HLEN;
+        packet->data = (char*)packet->data + MPLS_HLEN;
+        packet->l2 = (char*)packet->l2 + MPLS_HLEN;
     }
 }
 

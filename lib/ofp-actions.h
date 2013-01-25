@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012 Nicira, Inc.
+ * Copyright (c) 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -71,6 +71,8 @@
     DEFINE_OFPACT(REG_MOVE,        ofpact_reg_move,      ofpact)    \
     DEFINE_OFPACT(REG_LOAD,        ofpact_reg_load,      ofpact)    \
     DEFINE_OFPACT(DEC_TTL,         ofpact_cnt_ids,       cnt_ids)   \
+    DEFINE_OFPACT(PUSH_MPLS,       ofpact_push_mpls,     ofpact)    \
+    DEFINE_OFPACT(POP_MPLS,        ofpact_pop_mpls,      ofpact)    \
                                                                     \
     /* Metadata. */                                                 \
     DEFINE_OFPACT(SET_TUNNEL,      ofpact_tunnel,        ofpact)    \
@@ -308,6 +310,22 @@ struct ofpact_reg_load {
     struct ofpact ofpact;
     struct mf_subfield dst;
     union mf_subvalue subvalue; /* Least-significant bits are used. */
+};
+
+/* OFPACT_PUSH_VLAN/MPLS/PBB
+ *
+ * Used for NXAST_PUSH_MPLS, OFPAT11_PUSH_MPLS. */
+struct ofpact_push_mpls {
+    struct ofpact ofpact;
+    ovs_be16 ethertype;
+};
+
+/* OFPACT_POP_MPLS
+ *
+ * Used for NXAST_POP_MPLS, OFPAT11_POP_MPLS.. */
+struct ofpact_pop_mpls {
+    struct ofpact ofpact;
+    ovs_be16 ethertype;
 };
 
 /* OFPACT_SET_TUNNEL.

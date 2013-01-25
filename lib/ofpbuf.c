@@ -29,7 +29,7 @@ ofpbuf_use__(struct ofpbuf *b, void *base, size_t allocated,
     b->allocated = allocated;
     b->source = source;
     b->size = 0;
-    b->l2 = b->l3 = b->l4 = b->l7 = NULL;
+    b->l2 = b->l2_5 = b->l3 = b->l4 = b->l7 = NULL;
     list_poison(&b->list_node);
     b->private_p = NULL;
 }
@@ -176,6 +176,9 @@ ofpbuf_clone_with_headroom(const struct ofpbuf *buffer, size_t headroom)
     if (buffer->l2) {
         new_buffer->l2 = (char *) buffer->l2 + data_delta;
     }
+    if (buffer->l2_5) {
+        new_buffer->l2_5 = (char *) buffer->l2_5 + data_delta;
+    }
     if (buffer->l3) {
         new_buffer->l3 = (char *) buffer->l3 + data_delta;
     }
@@ -294,6 +297,9 @@ ofpbuf_resize__(struct ofpbuf *b, size_t new_headroom, size_t new_tailroom)
         b->data = new_data;
         if (b->l2) {
             b->l2 = (char *) b->l2 + data_delta;
+        }
+        if (b->l2_5) {
+            b->l2_5 = (char *) b->l2_5 + data_delta;
         }
         if (b->l3) {
             b->l3 = (char *) b->l3 + data_delta;

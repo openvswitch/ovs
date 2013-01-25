@@ -25,6 +25,11 @@ in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x86dd),ipv
 in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x86dd),ipv6(src=::1,dst=::2,label=0,proto=58,tclass=0,hlimit=128,frag=no),icmpv6(type=136,code=0),nd(target=::3,sll=00:05:06:07:08:09,tll=00:0a:0b:0c:0d:0e)
 in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x0806),arp(sip=1.2.3.4,tip=5.6.7.8,op=1,sha=00:0f:10:11:12:13,tha=00:14:15:16:17:18)
 skb_mark(0x1234),in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x86dd),ipv6(src=::1,dst=::2,label=0,proto=58,tclass=0,hlimit=128,frag=no),icmpv6(type=136,code=0),nd(target=::3,sll=00:05:06:07:08:09,tll=00:0a:0b:0c:0d:0e)
+in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x8847),mpls(label=100,tc=3,ttl=64,bos=1)
+in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x8847),mpls(label=100,tc=7,ttl=100,bos=1)
+in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x8847),mpls(label=100,tc=7,ttl=100,bos=0)
+in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x8848),mpls(label=1000,tc=4,ttl=200,bos=1)
+in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x8848),mpls(label=1000,tc=4,ttl=200,bos=0)
 ])
 
 (echo '# Valid forms without tun_id or VLAN header.'
@@ -38,6 +43,14 @@ skb_mark(0x1234),in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth
  echo '# Valid forms with VLAN header.'
  sed 's/\(eth([[^)]]*)\),*/\1,eth_type(0x8100),vlan(vid=99,pcp=7),encap(/
 s/$/)/' odp-base.txt
+
+ echo
+ echo '# Valid forms with MPLS header.'
+ sed 's/\(eth([[^)]]*),?\)/\1,eth_type(0x8847),mpls(label=100,tc=7,ttl=64,bos=1)/' odp-base.txt
+
+ echo
+ echo '# Valid forms with MPLS multicast header.'
+ sed 's/\(eth([[^)]]*),?\)/\1,eth_type(0x8848),mpls(label=100,tc=7,ttl=64,bos=1)/' odp-base.txt
 
  echo
  echo '# Valid forms with QoS priority.'

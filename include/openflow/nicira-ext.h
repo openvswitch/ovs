@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -304,6 +304,8 @@ enum nx_action_subtype {
     NXAST_CONTROLLER,           /* struct nx_action_controller */
     NXAST_DEC_TTL_CNT_IDS,      /* struct nx_action_cnt_ids */
     NXAST_WRITE_METADATA,       /* struct nx_action_write_metadata */
+    NXAST_PUSH_MPLS,            /* struct nx_action_push_mpls */
+    NXAST_POP_MPLS,             /* struct nx_action_pop_mpls */
 };
 
 /* Header for Nicira-defined actions. */
@@ -2211,5 +2213,27 @@ struct nx_action_write_metadata {
     ovs_be64 mask;                  /* Metadata mask. */
 };
 OFP_ASSERT(sizeof(struct nx_action_write_metadata) == 32);
+
+/* Action structure for NXAST_PUSH_MPLS. */
+struct nx_action_push_mpls {
+    ovs_be16 type;                  /* OFPAT_VENDOR. */
+    ovs_be16 len;                   /* Length is 8. */
+    ovs_be32 vendor;                /* NX_VENDOR_ID. */
+    ovs_be16 subtype;               /* NXAST_PUSH_MPLS. */
+    ovs_be16 ethertype;             /* Ethertype */
+    uint8_t  pad[4];
+};
+OFP_ASSERT(sizeof(struct nx_action_push_mpls) == 16);
+
+/* Action structure for NXAST_POP_MPLS. */
+struct nx_action_pop_mpls {
+    ovs_be16 type;                  /* OFPAT_VENDOR. */
+    ovs_be16 len;                   /* Length is 8. */
+    ovs_be32 vendor;                /* NX_VENDOR_ID. */
+    ovs_be16 subtype;               /* NXAST_POP_MPLS. */
+    ovs_be16 ethertype;             /* Ethertype */
+    uint8_t  pad[4];
+};
+OFP_ASSERT(sizeof(struct nx_action_pop_mpls) == 16);
 
 #endif /* openflow/nicira-ext.h */

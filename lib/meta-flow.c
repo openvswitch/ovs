@@ -256,6 +256,38 @@ static const struct mf_field mf_fields[MFF_N_IDS] = {
         OXM_OF_VLAN_PCP, "OXM_OF_VLAN_PCP",
     },
 
+    /* ## ---- ## */
+    /* ## L2.5 ## */
+    /* ## ---- ## */
+    {
+        MFF_MPLS_LABEL, "mpls_label", NULL,
+        4, 20,
+        MFM_NONE,
+        MFS_DECIMAL,
+        MFP_MPLS,
+        true,
+        OXM_OF_MPLS_LABEL, "OXM_OF_MPLS_LABEL",
+        OXM_OF_MPLS_LABEL, "OXM_OF_MPLS_LABEL",
+    }, {
+        MFF_MPLS_TC, "mpls_tc", NULL,
+        1, 3,
+        MFM_NONE,
+        MFS_DECIMAL,
+        MFP_MPLS,
+        true,
+        OXM_OF_MPLS_TC, "OXM_OF_MPLS_TC",
+        OXM_OF_MPLS_TC, "OXM_OF_MPLS_TC",
+    }, {
+        MFF_MPLS_BOS, "mpls_bos", NULL,
+        1, 1,
+        MFM_NONE,
+        MFS_DECIMAL,
+        MFP_MPLS,
+        false,
+        OXM_OF_MPLS_BOS, "OXM_OF_MPLS_BOS",
+        OXM_OF_MPLS_BOS, "OXM_OF_MPLS_BOS",
+    },
+
     /* ## -- ## */
     /* ## L3 ## */
     /* ## -- ## */
@@ -678,6 +710,13 @@ mf_is_all_wild(const struct mf_field *mf, const struct flow_wildcards *wc)
     case MFF_VLAN_PCP:
         return !(wc->masks.vlan_tci & htons(VLAN_PCP_MASK));
 
+    case MFF_MPLS_LABEL:
+        return !(wc->masks.mpls_lse & htonl(MPLS_LABEL_MASK));
+    case MFF_MPLS_TC:
+        return !(wc->masks.mpls_lse & htonl(MPLS_TC_MASK));
+    case MFF_MPLS_BOS:
+        return !(wc->masks.mpls_lse & htonl(MPLS_BOS_MASK));
+
     case MFF_IPV4_SRC:
         return !wc->masks.nw_src;
     case MFF_IPV4_DST:
@@ -791,6 +830,8 @@ mf_are_prereqs_ok(const struct mf_field *mf, const struct flow *flow)
         return flow->dl_type == htons(ETH_TYPE_IPV6);
     case MFP_VLAN_VID:
         return (flow->vlan_tci & htons(VLAN_CFI)) != 0;
+    case MFP_MPLS:
+        return eth_type_mpls(flow->dl_type);
     case MFP_IP_ANY:
         return is_ip_any(flow);
 
@@ -895,6 +936,15 @@ mf_is_value_valid(const struct mf_field *mf, const union mf_value *value)
     case MFF_IPV6_LABEL:
         return !(value->be32 & ~htonl(IPV6_LABEL_MASK));
 
+    case MFF_MPLS_LABEL:
+        return !(value->be32 & ~htonl(MPLS_LABEL_MASK >> MPLS_LABEL_SHIFT));
+
+    case MFF_MPLS_TC:
+        return !(value->u8 & ~(MPLS_TC_MASK >> MPLS_TC_SHIFT));
+
+    case MFF_MPLS_BOS:
+        return !(value->u8 & ~(MPLS_BOS_MASK >> MPLS_BOS_SHIFT));
+
     case MFF_N_IDS:
     default:
         NOT_REACHED();
@@ -973,6 +1023,18 @@ mf_get_value(const struct mf_field *mf, const struct flow *flow,
     case MFF_DL_VLAN_PCP:
     case MFF_VLAN_PCP:
         value->u8 = vlan_tci_to_pcp(flow->vlan_tci);
+        break;
+
+    case MFF_MPLS_LABEL:
+        value->be32 = htonl(mpls_lse_to_label(flow->mpls_lse));
+        break;
+
+    case MFF_MPLS_TC:
+        value->u8 = mpls_lse_to_tc(flow->mpls_lse);
+        break;
+
+    case MFF_MPLS_BOS:
+        value->u8 = mpls_lse_to_bos(flow->mpls_lse);
         break;
 
     case MFF_IPV4_SRC:
@@ -1142,6 +1204,18 @@ mf_set_value(const struct mf_field *mf,
         match_set_dl_vlan_pcp(match, value->u8);
         break;
 
+    case MFF_MPLS_LABEL:
+        match_set_mpls_label(match, value->be32);
+        break;
+
+    case MFF_MPLS_TC:
+        match_set_mpls_tc(match, value->u8);
+        break;
+
+    case MFF_MPLS_BOS:
+        match_set_mpls_bos(match, value->u8);
+        break;
+
     case MFF_IPV4_SRC:
         match_set_nw_src(match, value->be32);
         break;
@@ -1307,6 +1381,18 @@ mf_set_flow_value(const struct mf_field *mf,
     case MFF_DL_VLAN_PCP:
     case MFF_VLAN_PCP:
         flow_set_vlan_pcp(flow, value->u8);
+        break;
+
+    case MFF_MPLS_LABEL:
+        flow_set_mpls_label(flow, value->be32);
+        break;
+
+    case MFF_MPLS_TC:
+        flow_set_mpls_tc(flow, value->u8);
+        break;
+
+    case MFF_MPLS_BOS:
+        flow_set_mpls_bos(flow, value->u8);
         break;
 
     case MFF_IPV4_SRC:
@@ -1495,6 +1581,18 @@ mf_set_wild(const struct mf_field *mf, struct match *match)
         match_set_any_pcp(match);
         break;
 
+    case MFF_MPLS_LABEL:
+        match_set_any_mpls_label(match);
+        break;
+
+    case MFF_MPLS_TC:
+        match_set_any_mpls_tc(match);
+        break;
+
+    case MFF_MPLS_BOS:
+        match_set_any_mpls_bos(match);
+        break;
+
     case MFF_IPV4_SRC:
     case MFF_ARP_SPA:
         match_set_nw_src_masked(match, htonl(0), htonl(0));
@@ -1622,6 +1720,9 @@ mf_set(const struct mf_field *mf,
     case MFF_DL_VLAN:
     case MFF_DL_VLAN_PCP:
     case MFF_VLAN_PCP:
+    case MFF_MPLS_LABEL:
+    case MFF_MPLS_TC:
+    case MFF_MPLS_BOS:
     case MFF_IP_PROTO:
     case MFF_IP_TTL:
     case MFF_IP_DSCP:
@@ -1877,6 +1978,18 @@ mf_random_value(const struct mf_field *mf, union mf_value *value)
     case MFF_DL_VLAN_PCP:
     case MFF_VLAN_PCP:
         value->u8 &= 0x07;
+        break;
+
+    case MFF_MPLS_LABEL:
+        value->be32 &= htonl(MPLS_LABEL_MASK >> MPLS_LABEL_SHIFT);
+        break;
+
+    case MFF_MPLS_TC:
+        value->u8 &= MPLS_TC_MASK >> MPLS_TC_SHIFT;
+        break;
+
+    case MFF_MPLS_BOS:
+        value->u8 &= MPLS_BOS_MASK >> MPLS_BOS_SHIFT;
         break;
 
     case MFF_N_IDS:

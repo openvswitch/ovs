@@ -204,8 +204,8 @@ enum ofp11_action_type {
 
     OFPAT11_PUSH_VLAN,        /* Push a new VLAN tag */
     OFPAT11_POP_VLAN,         /* Pop the outer VLAN tag */
-    OFPAT11_PUSH_MPLS,        /* Push a new MPLS tag */
-    OFPAT11_POP_MPLS,         /* Pop the outer MPLS tag */
+    OFPAT11_PUSH_MPLS,        /* Push a new MPLS Label Stack Entry */
+    OFPAT11_POP_MPLS,         /* Pop the outer MPLS Label Stack Entry */
     OFPAT11_SET_QUEUE,        /* Set queue id when outputting to a port */
     OFPAT11_GROUP,            /* Apply group. */
     OFPAT11_SET_NW_TTL,       /* IP TTL. */

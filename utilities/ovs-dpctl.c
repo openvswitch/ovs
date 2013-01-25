@@ -939,14 +939,13 @@ dpctl_normalize_actions(int argc, char *argv[])
 
     hmap_init(&actions_per_flow);
     NL_ATTR_FOR_EACH (a, left, odp_actions.data, odp_actions.size) {
-        if (nl_attr_type(a) == OVS_ACTION_ATTR_POP_VLAN) {
+        const struct ovs_action_push_vlan *push;
+        switch(nl_attr_type(a)) {
+        case OVS_ACTION_ATTR_POP_VLAN:
             flow.vlan_tci = htons(0);
             continue;
-        }
 
-        if (nl_attr_type(a) == OVS_ACTION_ATTR_PUSH_VLAN) {
-            const struct ovs_action_push_vlan *push;
-
+        case OVS_ACTION_ATTR_PUSH_VLAN:
             push = nl_attr_get_unspec(a, sizeof *push);
             flow.vlan_tci = push->vlan_tci;
             continue;
@@ -978,6 +977,15 @@ dpctl_normalize_actions(int argc, char *argv[])
                    vlan_tci_to_pcp(af->flow.vlan_tci));
         } else {
             printf("no vlan: ");
+        }
+
+        if (af->flow.mpls_depth) {
+            printf("mpls(label=%"PRIu32",tc=%d,ttl=%d): ",
+                   mpls_lse_to_label(af->flow.mpls_lse),
+                   mpls_lse_to_tc(af->flow.mpls_lse),
+                   mpls_lse_to_ttl(af->flow.mpls_lse));
+        } else {
+            printf("no mpls: ");
         }
 
         ds_clear(&s);

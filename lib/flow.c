@@ -94,6 +94,21 @@ pull_icmpv6(struct ofpbuf *packet)
 }
 
 static void
+parse_mpls(struct ofpbuf *b, struct flow *flow)
+{
+    struct mpls_hdr *mh;
+
+    while ((mh = ofpbuf_try_pull(b, sizeof *mh))) {
+        if (flow->mpls_depth++ == 0) {
+            flow->mpls_lse = mh->mpls_lse;
+        }
+        if (mh->mpls_lse & htonl(MPLS_BOS_MASK)) {
+            break;
+        }
+    }
+}
+
+static void
 parse_vlan(struct ofpbuf *b, struct flow *flow)
 {
     struct qtag_prefix {
@@ -324,6 +339,8 @@ invalid:
  *
  *    - packet->l2 to the start of the Ethernet header.
  *
+ *    - packet->l2_5 to the start of the MPLS shim header.
+ *
  *    - packet->l3 to just past the Ethernet header, or just past the
  *      vlan_header if one is present, to the first byte of the payload of the
  *      Ethernet frame.
@@ -354,10 +371,11 @@ flow_extract(struct ofpbuf *packet, uint32_t skb_priority, uint32_t skb_mark,
     flow->skb_priority = skb_priority;
     flow->skb_mark = skb_mark;
 
-    packet->l2 = b.data;
-    packet->l3 = NULL;
-    packet->l4 = NULL;
-    packet->l7 = NULL;
+    packet->l2   = b.data;
+    packet->l2_5 = NULL;
+    packet->l3   = NULL;
+    packet->l4   = NULL;
+    packet->l7   = NULL;
 
     if (b.size < sizeof *eth) {
         return;
@@ -374,6 +392,12 @@ flow_extract(struct ofpbuf *packet, uint32_t skb_priority, uint32_t skb_mark,
         parse_vlan(&b, flow);
     }
     flow->dl_type = parse_ethertype(&b);
+
+    /* Parse mpls, copy l3 ttl. */
+    if (eth_type_mpls(flow->dl_type)) {
+        packet->l2_5 = b.data;
+        parse_mpls(&b, flow);
+    }
 
     packet->l3 = b.data;
     flow_extract_l3_onwards(packet, flow, flow->dl_type);
@@ -487,7 +511,7 @@ flow_zero_wildcards(struct flow *flow, const struct flow_wildcards *wildcards)
 void
 flow_get_metadata(const struct flow *flow, struct flow_metadata *fmd)
 {
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 18);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 19);
 
     fmd->tun_id = flow->tunnel.tun_id;
     fmd->metadata = flow->metadata;
@@ -811,6 +835,29 @@ flow_set_vlan_pcp(struct flow *flow, uint8_t pcp)
     flow->vlan_tci |= htons((pcp << VLAN_PCP_SHIFT) | VLAN_CFI);
 }
 
+/* Sets the MPLS Label that 'flow' matches to 'label', which is interpreted
+ * as an OpenFlow 1.1 "mpls_label" value. */
+void
+flow_set_mpls_label(struct flow *flow, ovs_be32 label)
+{
+    set_mpls_lse_label(&flow->mpls_lse, label);
+}
+
+/* Sets the MPLS TC that 'flow' matches to 'tc', which should be in the
+ * range 0...7. */
+void
+flow_set_mpls_tc(struct flow *flow, uint8_t tc)
+{
+    set_mpls_lse_tc(&flow->mpls_lse, tc);
+}
+
+/* Sets the MPLS BOS bit that 'flow' matches to which should be 0 or 1. */
+void
+flow_set_mpls_bos(struct flow *flow, uint8_t bos)
+{
+    set_mpls_lse_bos(&flow->mpls_lse, bos);
+}
+
 /* Puts into 'b' a packet that flow_extract() would parse as having the given
  * 'flow'.
  *
@@ -820,6 +867,9 @@ flow_set_vlan_pcp(struct flow *flow, uint8_t pcp)
 void
 flow_compose(struct ofpbuf *b, const struct flow *flow)
 {
+    ovs_be16 inner_dl_type;
+
+    inner_dl_type = flow_innermost_dl_type(flow);
     eth_compose(b, flow->dl_dst, flow->dl_src, ntohs(flow->dl_type), 0);
     if (flow->dl_type == htons(FLOW_DL_TYPE_NONE)) {
         struct eth_header *eth = b->l2;
@@ -831,7 +881,7 @@ flow_compose(struct ofpbuf *b, const struct flow *flow)
         eth_push_vlan(b, flow->vlan_tci);
     }
 
-    if (flow->dl_type == htons(ETH_TYPE_IP)) {
+    if (inner_dl_type == htons(ETH_TYPE_IP)) {
         struct ip_header *ip;
 
         b->l3 = ip = ofpbuf_put_zeros(b, sizeof *ip);
@@ -877,10 +927,10 @@ flow_compose(struct ofpbuf *b, const struct flow *flow)
         ip->ip_tot_len = htons((uint8_t *) b->data + b->size
                                - (uint8_t *) b->l3);
         ip->ip_csum = csum(ip, sizeof *ip);
-    } else if (flow->dl_type == htons(ETH_TYPE_IPV6)) {
+    } else if (inner_dl_type == htons(ETH_TYPE_IPV6)) {
         /* XXX */
-    } else if (flow->dl_type == htons(ETH_TYPE_ARP) ||
-               flow->dl_type == htons(ETH_TYPE_RARP)) {
+    } else if (inner_dl_type == htons(ETH_TYPE_ARP) ||
+               inner_dl_type == htons(ETH_TYPE_RARP)) {
         struct arp_eth_header *arp;
 
         b->l3 = arp = ofpbuf_put_zeros(b, sizeof *arp);
@@ -897,6 +947,11 @@ flow_compose(struct ofpbuf *b, const struct flow *flow)
             memcpy(arp->ar_sha, flow->arp_sha, ETH_ADDR_LEN);
             memcpy(arp->ar_tha, flow->arp_tha, ETH_ADDR_LEN);
         }
+    }
+
+    if (eth_type_mpls(flow->dl_type)) {
+        b->l2_5 = b->l3;
+        push_mpls(b, flow->dl_type, flow->mpls_lse);
     }
 }
 

@@ -32,6 +32,8 @@ OFPAT11_ACTION(OFPAT11_SET_TP_SRC,   ofp_action_tp_port,  0, "mod_tp_src")
 OFPAT11_ACTION(OFPAT11_SET_TP_DST,   ofp_action_tp_port,  0, "mod_tp_dst")
 OFPAT11_ACTION(OFPAT11_PUSH_VLAN,    ofp11_action_push,   0, "push_vlan")
 OFPAT11_ACTION(OFPAT11_POP_VLAN,     ofp_action_header,   0, "pop_vlan")
+OFPAT11_ACTION(OFPAT11_PUSH_MPLS,    ofp11_action_push,   0, "push_mpls")
+OFPAT11_ACTION(OFPAT11_POP_MPLS,     ofp11_action_pop_mpls, 0, "pop_mpls")
 OFPAT11_ACTION(OFPAT11_SET_QUEUE,    ofp11_action_set_queue, 0, "set_queue")
 //OFPAT11_ACTION(OFPAT11_SET_NW_TTL,   ofp11_action_nw_ttl, 0, "set_nw_ttl")
 OFPAT11_ACTION(OFPAT11_DEC_NW_TTL,   ofp_action_header,   0, NULL)
@@ -62,6 +64,8 @@ NXAST_ACTION(NXAST_CONTROLLER,      nx_action_controller,   0, "controller")
 NXAST_ACTION(NXAST_DEC_TTL_CNT_IDS, nx_action_cnt_ids,      1, NULL)
 NXAST_ACTION(NXAST_WRITE_METADATA,  nx_action_write_metadata, 0,
              "write_metadata")
+NXAST_ACTION(NXAST_PUSH_MPLS,       nx_action_push_mpls,    0, "push_mpls")
+NXAST_ACTION(NXAST_POP_MPLS,        nx_action_pop_mpls,     0, "pop_mpls")
 
 #undef OFPAT10_ACTION
 #undef OFPAT11_ACTION

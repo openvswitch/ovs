@@ -1233,6 +1233,10 @@ execute_set_action(struct ofpbuf *packet, const struct nlattr *a)
         packet_set_udp_port(packet, udp_key->udp_src, udp_key->udp_dst);
         break;
 
+     case OVS_KEY_ATTR_MPLS:
+         set_mpls_lse(packet, nl_attr_get_be32(a));
+         break;
+
      case OVS_KEY_ATTR_UNSPEC:
      case OVS_KEY_ATTR_ENCAP:
      case OVS_KEY_ATTR_ETHERTYPE:
@@ -1277,6 +1281,16 @@ dp_netdev_execute_actions(struct dp_netdev *dp,
 
         case OVS_ACTION_ATTR_POP_VLAN:
             eth_pop_vlan(packet);
+            break;
+
+        case OVS_ACTION_ATTR_PUSH_MPLS: {
+            const struct ovs_action_push_mpls *mpls = nl_attr_get(a);
+            push_mpls(packet, mpls->mpls_ethertype, mpls->mpls_lse);
+            break;
+         }
+
+        case OVS_ACTION_ATTR_POP_MPLS:
+            pop_mpls(packet, nl_attr_get_be16(a));
             break;
 
         case OVS_ACTION_ATTR_SET:

@@ -402,6 +402,24 @@ ofpact_from_nxast(const union ofp_action *a, enum ofputil_action_code code,
     case OFPUTIL_NXAST_CONTROLLER:
         controller_from_openflow((const struct nx_action_controller *) a, out);
         break;
+
+    case OFPUTIL_NXAST_PUSH_MPLS: {
+        struct nx_action_push_mpls *nxapm = (struct nx_action_push_mpls *)a;
+        if (!eth_type_mpls(nxapm->ethertype)) {
+            return OFPERR_OFPBAC_BAD_ARGUMENT;
+        }
+        ofpact_put_PUSH_MPLS(out)->ethertype = nxapm->ethertype;
+        break;
+    }
+
+    case OFPUTIL_NXAST_POP_MPLS: {
+        struct nx_action_pop_mpls *nxapm = (struct nx_action_pop_mpls *)a;
+        if (eth_type_mpls(nxapm->ethertype)) {
+            return OFPERR_OFPBAC_BAD_ARGUMENT;
+        }
+        ofpact_put_POP_MPLS(out)->ethertype = nxapm->ethertype;
+        break;
+    }
     }
 
     return error;
@@ -774,6 +792,24 @@ ofpact_from_openflow11(const union ofp_action *a, struct ofpbuf *out)
         return nxm_reg_load_from_openflow12_set_field(
             (const struct ofp12_action_set_field *)a, out);
 
+    case OFPUTIL_OFPAT11_PUSH_MPLS: {
+        struct ofp11_action_push *oap = (struct ofp11_action_push *)a;
+        if (!eth_type_mpls(oap->ethertype)) {
+            return OFPERR_OFPBAC_BAD_ARGUMENT;
+        }
+        ofpact_put_PUSH_MPLS(out)->ethertype = oap->ethertype;
+        break;
+    }
+
+    case OFPUTIL_OFPAT11_POP_MPLS: {
+        struct ofp11_action_pop_mpls *oapm = (struct ofp11_action_pop_mpls *)a;
+        if (eth_type_mpls(oapm->ethertype)) {
+            return OFPERR_OFPBAC_BAD_ARGUMENT;
+        }
+        ofpact_put_POP_MPLS(out)->ethertype = oapm->ethertype;
+        break;
+    }
+
 #define NXAST_ACTION(ENUM, STRUCT, EXTENSIBLE, NAME) case OFPUTIL_##ENUM:
 #include "ofp-util.def"
         return ofpact_from_nxast(a, code, out);
@@ -1053,7 +1089,8 @@ exit:
 }
 
 static enum ofperr
-ofpact_check__(const struct ofpact *a, const struct flow *flow, int max_ports)
+ofpact_check__(const struct ofpact *a, const struct flow *flow, int max_ports,
+               ovs_be16 *dl_type)
 {
     const struct ofpact_enqueue *enqueue;
 
@@ -1096,7 +1133,13 @@ ofpact_check__(const struct ofpact *a, const struct flow *flow, int max_ports)
         return nxm_reg_move_check(ofpact_get_REG_MOVE(a), flow);
 
     case OFPACT_REG_LOAD:
-        return nxm_reg_load_check(ofpact_get_REG_LOAD(a), flow);
+        if (*dl_type != flow->dl_type) {
+            struct flow updated_flow = *flow;
+            updated_flow.dl_type = *dl_type;
+            return nxm_reg_load_check(ofpact_get_REG_LOAD(a), &updated_flow);
+        } else {
+            return nxm_reg_load_check(ofpact_get_REG_LOAD(a), flow);
+        }
 
     case OFPACT_DEC_TTL:
     case OFPACT_SET_TUNNEL:
@@ -1119,6 +1162,14 @@ ofpact_check__(const struct ofpact *a, const struct flow *flow, int max_ports)
     case OFPACT_EXIT:
         return 0;
 
+    case OFPACT_PUSH_MPLS:
+        *dl_type = ofpact_get_PUSH_MPLS(a)->ethertype;
+        return 0;
+
+    case OFPACT_POP_MPLS:
+        *dl_type = ofpact_get_POP_MPLS(a)->ethertype;
+        return 0;
+
     case OFPACT_CLEAR_ACTIONS:
     case OFPACT_WRITE_METADATA:
     case OFPACT_GOTO_TABLE:
@@ -1137,9 +1188,10 @@ ofpacts_check(const struct ofpact ofpacts[], size_t ofpacts_len,
               const struct flow *flow, int max_ports)
 {
     const struct ofpact *a;
+    ovs_be16 dl_type = flow->dl_type;
 
     OFPACT_FOR_EACH (a, ofpacts, ofpacts_len) {
-        enum ofperr error = ofpact_check__(a, flow, max_ports);
+        enum ofperr error = ofpact_check__(a, flow, max_ports, &dl_type);
         if (error) {
             return error;
         }
@@ -1385,6 +1437,16 @@ ofpact_to_nxast(const struct ofpact *a, struct ofpbuf *out)
         ofputil_put_NXAST_EXIT(out);
         break;
 
+    case OFPACT_PUSH_MPLS:
+        ofputil_put_NXAST_PUSH_MPLS(out)->ethertype =
+            ofpact_get_PUSH_MPLS(a)->ethertype;
+        break;
+
+    case OFPACT_POP_MPLS:
+        ofputil_put_NXAST_POP_MPLS(out)->ethertype =
+            ofpact_get_POP_MPLS(a)->ethertype;
+        break;
+
     case OFPACT_OUTPUT:
     case OFPACT_ENQUEUE:
     case OFPACT_SET_VLAN_VID:
@@ -1512,6 +1574,8 @@ ofpact_to_openflow10(const struct ofpact *a, struct ofpbuf *out)
     case OFPACT_AUTOPATH:
     case OFPACT_NOTE:
     case OFPACT_EXIT:
+    case OFPACT_PUSH_MPLS:
+    case OFPACT_POP_MPLS:
         ofpact_to_nxast(a, out);
         break;
     }
@@ -1634,6 +1698,17 @@ ofpact_to_openflow11(const struct ofpact *a, struct ofpbuf *out)
 
     case OFPACT_WRITE_METADATA:
         /* OpenFlow 1.1 uses OFPIT_WRITE_METADATA to express this action. */
+        break;
+
+    case OFPACT_PUSH_MPLS:
+        ofputil_put_OFPAT11_PUSH_MPLS(out)->ethertype =
+            ofpact_get_PUSH_MPLS(a)->ethertype;
+        break;
+
+    case OFPACT_POP_MPLS:
+        ofputil_put_OFPAT11_POP_MPLS(out)->ethertype =
+            ofpact_get_POP_MPLS(a)->ethertype;
+
         break;
 
     case OFPACT_CLEAR_ACTIONS:
@@ -1777,6 +1852,8 @@ ofpact_outputs_to_port(const struct ofpact *ofpact, uint16_t port)
     case OFPACT_AUTOPATH:
     case OFPACT_NOTE:
     case OFPACT_EXIT:
+    case OFPACT_PUSH_MPLS:
+    case OFPACT_POP_MPLS:
     case OFPACT_CLEAR_ACTIONS:
     case OFPACT_GOTO_TABLE:
     default:
@@ -2046,6 +2123,16 @@ ofpact_format(const struct ofpact *a, struct ds *s)
 
     case OFPACT_NOTE:
         print_note(ofpact_get_NOTE(a), s);
+        break;
+
+    case OFPACT_PUSH_MPLS:
+        ds_put_format(s, "push_mpls:0x%04"PRIx16,
+                      ntohs(ofpact_get_PUSH_MPLS(a)->ethertype));
+        break;
+
+    case OFPACT_POP_MPLS:
+        ds_put_format(s, "pop_mpls:0x%04"PRIx16,
+                      ntohs(ofpact_get_POP_MPLS(a)->ethertype));
         break;
 
     case OFPACT_EXIT:

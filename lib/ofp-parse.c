@@ -562,6 +562,18 @@ parse_named_action(enum ofputil_action_code code, const struct flow *flow,
     case OFPUTIL_NXAST_CONTROLLER:
         parse_controller(ofpacts, arg);
         break;
+
+    case OFPUTIL_OFPAT11_PUSH_MPLS:
+    case OFPUTIL_NXAST_PUSH_MPLS:
+        ofpact_put_PUSH_MPLS(ofpacts)->ethertype =
+            htons(str_to_u16(arg, "push_mpls"));
+        break;
+
+    case OFPUTIL_OFPAT11_POP_MPLS:
+    case OFPUTIL_NXAST_POP_MPLS:
+        ofpact_put_POP_MPLS(ofpacts)->ethertype =
+            htons(str_to_u16(arg, "pop_mpls"));
+        break;
     }
 }
 
@@ -726,7 +738,9 @@ parse_protocol(const char *name, const struct protocol **p_out)
         { "tcp6", ETH_TYPE_IPV6, IPPROTO_TCP },
         { "udp6", ETH_TYPE_IPV6, IPPROTO_UDP },
         { "rarp", ETH_TYPE_RARP, 0},
-};
+        { "mpls", ETH_TYPE_MPLS, 0 },
+        { "mplsm", ETH_TYPE_MPLS_MCAST, 0 },
+    };
     const struct protocol *p;
 
     for (p = protocols; p < &protocols[ARRAY_SIZE(protocols)]; p++) {
