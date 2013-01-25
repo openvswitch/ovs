@@ -122,6 +122,81 @@ NXST_FLOW reply:
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+dnl This test checks that repeated uses of a "learn" action cause the
+dnl modified time of the learned flow to advance.  Otherwise, the
+dnl learned flow will expire after its hard timeout even though it's
+dnl supposed to be refreshed.  (The expiration can be hard to see since
+dnl it gets re-learned again the next time a packet appears, but
+dnl sometimes the expiration can cause temporary flooding etc.)
+AT_SETUP([learning action - learn refreshes hard_age])
+OVS_VSWITCHD_START(
+  [add-port br0 p1 -- set Interface p1 type=dummy ofport_request=1 -- \
+   add-port br0 p2 -- set Interface p2 type=dummy ofport_request=2 -- \
+   add-port br0 p3 -- set Interface p3 type=dummy ofport_request=3])
+
+ovs-appctl time/stop
+
+# Set up flow table for MAC learning.
+AT_DATA([flows.txt], [[
+table=0 actions=learn(table=1, hard_timeout=10, NXM_OF_ETH_DST[]=NXM_OF_ETH_SRC[], output:NXM_OF_IN_PORT[]), resubmit(,1)
+table=1 priority=0 actions=flood
+]])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+# Trace an ICMP packet arriving on port 3, to create a MAC learning entry.
+flow="in_port(3),eth(src=50:54:00:00:00:07,dst=50:54:00:00:00:05),eth_type(0x0800),ipv4(src=192.168.0.2,dst=192.168.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=0,code=0)"
+AT_CHECK([ovs-appctl ofproto/trace br0 "$flow" -generate], [0], [stdout])
+actual=`tail -1 stdout | sed 's/Datapath actions: //'`
+
+expected="1,2,100"
+AT_CHECK([ovs-dpctl normalize-actions "$flow" "$expected"], [0], [stdout])
+mv stdout expout
+AT_CHECK([ovs-dpctl normalize-actions "$flow" "$actual"], [0], [expout])
+
+# Check that the MAC learning entry appeared.
+AT_CHECK([ovs-ofctl dump-flows br0 table=1 | ofctl_strip | sort], [0], [dnl
+ table=1, hard_timeout=10, dl_dst=50:54:00:00:00:07 actions=output:3
+ table=1, priority=0 actions=FLOOD
+NXST_FLOW reply:
+])
+
+# For 25 seconds, make sure that the MAC learning entry doesn't
+# disappear as long as we refresh it every second.
+for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25; do
+    ovs-appctl time/warp 1000
+    AT_CHECK([ovs-appctl ofproto/trace br0 "$flow" -generate], [0], [stdout])
+
+    # Check that the entry is there.
+    AT_CHECK([ovs-ofctl dump-flows br0 table=1], [0], [stdout])
+    AT_CHECK([ofctl_strip < stdout | sort], [0], [dnl
+ table=1, hard_timeout=10, dl_dst=50:54:00:00:00:07 actions=output:3
+ table=1, priority=0 actions=FLOOD
+NXST_FLOW reply:
+])
+
+    if test $i != 1; then
+        # Check that hard_age has appeared.  We need to do this separately
+        # from the above check because ofctl_strip removes it.  dump-flows
+        # only prints hard_age when it is different from the flow's duration
+        # (that is, the number of seconds from the time it was created),
+        # so we only check for it after we've refreshed the flow once.
+        AT_CHECK([grep dl_dst=50:54:00:00:00:07 stdout | grep -c hard_age],
+                 [0], [1
+])
+    fi
+done
+
+# Make sure that 15 seconds without refreshing makes the flow time out.
+ovs-appctl time/warp 5000
+ovs-appctl time/warp 5000
+ovs-appctl time/warp 5000
+    AT_CHECK([ovs-ofctl dump-flows br0 table=1 | ofctl_strip | sort], [0], [dnl
+ table=1, priority=0 actions=FLOOD
+NXST_FLOW reply:
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([learning action - TCPv4 port learning])
 OVS_VSWITCHD_START(
   [add-port br0 p1 -- set Interface p1 type=dummy -- \

@@ -3261,10 +3261,6 @@ modify_flows__(struct ofproto *ofproto, struct ofconn *ofconn,
         new_cookie = (fm->new_cookie != htonll(UINT64_MAX)
                       ? fm->new_cookie
                       : rule->flow_cookie);
-        if (!actions_changed && new_cookie == rule->flow_cookie) {
-            /* No change at all. */
-            continue;
-        }
 
         op = ofoperation_create(group, rule, OFOPERATION_MODIFY, 0);
         rule->flow_cookie = new_cookie;
@@ -4247,7 +4243,19 @@ ofopgroup_complete(struct ofopgroup *group)
     LIST_FOR_EACH_SAFE (op, next_op, group_node, &group->ops) {
         struct rule *rule = op->rule;
 
-        if (!op->error && !ofproto_rule_is_hidden(rule)) {
+        /* We generally want to report the change to active OpenFlow flow
+           monitors (e.g. NXST_FLOW_MONITOR).  There are three exceptions:
+
+              - The operation failed.
+
+              - The affected rule is not visible to controllers.
+
+              - The operation's only effect was to update rule->modified. */
+        if (!(op->error
+              || ofproto_rule_is_hidden(rule)
+              || (op->type == OFOPERATION_MODIFY
+                  && op->ofpacts
+                  && rule->flow_cookie == op->flow_cookie))) {
             /* Check that we can just cast from ofoperation_type to
              * nx_flow_update_event. */
             BUILD_ASSERT_DECL((enum nx_flow_update_event) OFOPERATION_ADD
