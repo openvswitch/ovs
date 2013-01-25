@@ -1929,7 +1929,7 @@ report_loss(struct dpif *dpif_, struct dpif_channel *ch)
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 5);
     struct ds s;
 
-    if (VLOG_DROP_ERR(&rl)) {
+    if (VLOG_DROP_WARN(&rl)) {
         return;
     }
 
