@@ -858,8 +858,6 @@ int ovs_tnl_set_options(struct vport *vport, struct nlattr *options)
 		goto error;
 	}
 
-	mutable->seq = old_mutable->seq + 1;
-
 	/* Parse the others configured by userspace. */
 	err = tnl_set_config(ovs_dp_get_net(vport->dp), options, tnl_vport->tnl_ops,
 			     vport, mutable);

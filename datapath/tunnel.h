@@ -94,7 +94,6 @@ static inline void port_key_set_net(struct port_lookup_key *key, struct net *net
  * @key: Used as key for tunnel port.  Configured via OVS_TUNNEL_ATTR_*
  * attributes.
  * @rcu: RCU callback head for deferred destruction.
- * @seq: Sequence number for distinguishing configuration versions.
  * @tunnel_hlen: Tunnel header length.
  * @out_key: Key to use on output, 0 if this tunnel has no fixed output key.
  * @flags: TNL_F_* flags.
@@ -104,8 +103,6 @@ static inline void port_key_set_net(struct port_lookup_key *key, struct net *net
 struct tnl_mutable_config {
 	struct port_lookup_key key;
 	struct rcu_head rcu;
-
-	unsigned seq;
 
 	/* Configured via OVS_TUNNEL_ATTR_* attributes. */
 	__be64	out_key;
