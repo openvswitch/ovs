@@ -45,3 +45,8 @@ void
 route_table_run(void)
 {
 }
+
+void
+route_table_wait(void)
+{
+}
