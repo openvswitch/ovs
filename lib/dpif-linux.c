@@ -1973,7 +1973,7 @@ report_loss(struct dpif *dpif_, struct dpif_channel *ch)
     struct dpif_sketch *sk;
     struct ds s;
 
-    if (VLOG_DROP_ERR(&rl)) {
+    if (VLOG_DROP_WARN(&rl)) {
         return;
     }
 
