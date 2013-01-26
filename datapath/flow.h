@@ -45,6 +45,11 @@ struct sw_flow_actions {
 #define OVS_TNL_F_CSUM			(1 << 1)
 #define OVS_TNL_F_KEY			(1 << 2)
 
+/* Used to memset ovs_key_ipv4_tunnel padding. */
+#define OVS_TUNNEL_KEY_SIZE					\
+        (offsetof(struct ovs_key_ipv4_tunnel, ipv4_ttl) + 	\
+         FIELD_SIZEOF(struct ovs_key_ipv4_tunnel, ipv4_ttl))
+
 struct ovs_key_ipv4_tunnel {
 	__be64 tun_id;
 	__be32 ipv4_src;
