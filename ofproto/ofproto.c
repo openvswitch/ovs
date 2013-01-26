@@ -4858,6 +4858,9 @@ oftable_replace_rule(struct rule *rule)
 
     victim = rule_from_cls_rule(classifier_replace(&table->cls, &rule->cr));
     if (victim) {
+        if (!list_is_empty(&victim->expirable)) {
+            list_remove(&victim->expirable);
+        }
         eviction_group_remove_rule(victim);
     }
     eviction_group_add_rule(rule);
