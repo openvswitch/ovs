@@ -335,7 +335,7 @@ worker_reply_iovec(const struct iovec *iovs, size_t n_iovs,
          * to avoid missing log messages. */
         VLOG_INFO("send failed (%s)", strerror(error));
     } else if (error) {
-        VLOG_ABORT("send failed (%s)", strerror(error));
+        VLOG_FATAL("send failed (%s)", strerror(error));
     }
 
     free(all_iovs);
@@ -369,7 +369,7 @@ worker_main(int fd)
             /* Main process closed the IPC socket.  Exit cleanly. */
             break;
         } else if (error != EAGAIN) {
-            VLOG_ABORT("RPC receive failed (%s)", strerror(error));
+            VLOG_FATAL("RPC receive failed (%s)", strerror(error));
         }
 
         poll_fd_wait(server_sock, POLLIN);
