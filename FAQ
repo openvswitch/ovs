@@ -154,6 +154,14 @@ A: The following table lists the Linux kernel versions against which the
    It should build against almost any kernel, certainly against 2.6.18
    and later.
 
+Q: Should userspace or kernel be upgraded first to minimize downtime?
+
+   In general, the Open vSwitch userspace should be used with the
+   kernel version included in the same release or with the version
+   from upstream Linux.  However, when upgrading between two releases
+   of Open vSwitch it is best to migrate userspace first to reduce
+   the possbility of incompatibilities.
+
 Q: What features are not available in the Open vSwitch kernel datapath
    that ships as part of the upstream Linux kernel?
 
