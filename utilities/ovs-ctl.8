@@ -195,7 +195,7 @@ By default, no wrapper is used.
 .
 .IP
 Each of the wrappers can expose bugs in Open vSwitch that lead to
-incorrect operation, including crashes.  The \fBvalgring\fR and
+incorrect operation, including crashes.  The \fBvalgrind\fR and
 \fBstrace\fR wrappers greatly slow daemon operations so they should
 not be used in production.  They also produce voluminous logs that can
 quickly fill small disk partitions.  The \fBglibc\fR wrapper is less
@@ -400,7 +400,7 @@ for the other Open vSwitch programs that it runs.
 .
 \fBovs\-ctl\fR uses the following files:
 .
-.IP "\fBovs\-lib.sh"
+.IP "\fBovs\-lib"
 Shell function library used internally by \fBovs\-ctl\fR.  It must be
 installed in the same directory as \fBovs\-ctl\fR.
 .
