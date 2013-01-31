@@ -1601,12 +1601,14 @@ port_construct(struct ofport *port_)
         if (odp_port_to_ofp_port(ofproto, port->odp_port) != OFPP_NONE) {
             VLOG_ERR("port %s already has an OpenFlow port number",
                      dpif_port.name);
+            dpif_port_destroy(&dpif_port);
             return EBUSY;
         }
 
         hmap_insert(&ofproto->backer->odp_to_ofport_map, &port->odp_port_node,
                     hash_int(port->odp_port, 0));
     }
+    dpif_port_destroy(&dpif_port);
 
     if (ofproto->sflow) {
         dpif_sflow_add_port(ofproto->sflow, port_, port->odp_port);
@@ -3163,6 +3165,9 @@ struct port_dump_state {
     uint32_t bucket;
     uint32_t offset;
     bool ghost;
+
+    struct ofproto_port port;
+    bool has_port;
 };
 
 static int
@@ -3181,12 +3186,20 @@ port_dump_next(const struct ofproto *ofproto_, void *state_,
     const struct sset *sset;
     struct sset_node *node;
 
+    if (state->has_port) {
+        ofproto_port_destroy(&state->port);
+        state->has_port = false;
+    }
     sset = state->ghost ? &ofproto->ghost_ports : &ofproto->ports;
     while ((node = sset_at_position(sset, &state->bucket, &state->offset))) {
         int error;
 
-        error = port_query_by_name(ofproto_, node->name, port);
-        if (error != ENODEV) {
+        error = port_query_by_name(ofproto_, node->name, &state->port);
+        if (!error) {
+            *port = state->port;
+            state->has_port = true;
+            return 0;
+        } else if (error != ENODEV) {
             return error;
         }
     }
@@ -3206,6 +3219,9 @@ port_dump_done(const struct ofproto *ofproto_ OVS_UNUSED, void *state_)
 {
     struct port_dump_state *state = state_;
 
+    if (state->has_port) {
+        ofproto_port_destroy(&state->port);
+    }
     free(state);
     return 0;
 }
