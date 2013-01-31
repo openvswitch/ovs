@@ -1,5 +1,5 @@
 #! /bin/sh
-# Copyright (C) 2009, 2010, 2011, 2012 Nicira, Inc.
+# Copyright (C) 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -216,8 +216,9 @@ start_forwarding () {
         log_success_msg "ovs-vswitchd is already running"
     else
         # Increase the limit on the number of open file descriptors.
-        # ovs-vswitchd needs 16 per datapath, plus a few extra, so this
-        # should allow for 256 (or more) bridges.
+        # On Linux, ovs-vswitchd needs about one file descriptor per
+        # switch port, so this allows a very large number of switch
+        # ports.
         ulimit -n 5000
 
 	    # Start ovs-vswitchd.
