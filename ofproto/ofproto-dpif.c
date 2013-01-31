@@ -867,16 +867,16 @@ type_run(const char *type)
             drop_key_clear(backer);
         }
 
+        /* Clear the revalidation flags. */
+        tag_set_init(&backer->revalidate_set);
+        backer->need_revalidate = 0;
+
         HMAP_FOR_EACH (ofproto, all_ofproto_dpifs_node, &all_ofproto_dpifs) {
             struct facet *facet;
 
             if (ofproto->backer != backer) {
                 continue;
             }
-
-            /* Clear the revalidation flags. */
-            tag_set_init(&backer->revalidate_set);
-            backer->need_revalidate = 0;
 
             HMAP_FOR_EACH (facet, hmap_node, &ofproto->facets) {
                 if (need_revalidate
