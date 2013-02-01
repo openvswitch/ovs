@@ -516,7 +516,7 @@ log_poll_interval(long long int last_wakeup)
 {
     long long int interval = time_msec() - last_wakeup;
 
-    if (interval >= 1000) {
+    if (interval >= 1000 && !warp_offset.tv_sec && !warp_offset.tv_nsec) {
         const struct rusage *last_rusage = get_recent_rusage();
         struct rusage rusage;
 
