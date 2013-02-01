@@ -399,10 +399,8 @@ static int gre_rcv(struct sk_buff *skb)
 	iph = ip_hdr(skb);
 	vport = ovs_tnl_find_port(dev_net(skb->dev), iph->daddr, iph->saddr, key,
 				  tunnel_type, &mutable);
-	if (unlikely(!vport)) {
-		icmp_send(skb, ICMP_DEST_UNREACH, ICMP_PORT_UNREACH, 0);
+	if (unlikely(!vport))
 		goto error;
-	}
 
 	tnl_flags = gre_flags_to_tunnel_flags(mutable, gre_flags, &key);
 	tnl_tun_key_init(&tun_key, iph, key, tnl_flags);
