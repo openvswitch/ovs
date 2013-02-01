@@ -252,6 +252,41 @@ NXST_FLOW reply:
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+# In this use of a learn action, the first packet in the flow creates
+# a new flow that changes the behavior of subsequent packets in the
+# flow.
+AT_SETUP([learning action - self-modifying flow])
+OVS_VSWITCHD_START
+ADD_OF_PORTS([br0], 1, 2, 3)
+
+# Set up flow table for TCPv4 port learning.
+AT_CHECK([[ovs-ofctl add-flow br0 'actions=load:3->NXM_NX_REG0[0..15],learn(table=0,priority=65535,NXM_OF_ETH_SRC[],NXM_OF_VLAN_TCI[0..11],output:NXM_NX_REG0[0..15]),output:2']])
+
+# Trace some packets arriving.  The particular packets don't matter.
+for i in 1 2 3 4 5 6 7 8 9 10; do
+    ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=9)'
+done
+
+# Check for the learning entry.
+AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | sort], [0],
+[[ n_packets=1, n_bytes=60, actions=load:0x3->NXM_NX_REG0[0..15],learn(table=0,priority=65535,NXM_OF_ETH_SRC[],NXM_OF_VLAN_TCI[0..11],output:NXM_NX_REG0[0..15]),output:2
+ priority=65535,vlan_tci=0x0000/0x0fff,dl_src=50:54:00:00:00:05 actions=output:3
+NXST_FLOW reply:
+]])
+
+# Check that the first packet went out port 2 and the rest out port 3.
+AT_CHECK(
+  [(ovs-ofctl dump-ports br0 2; ovs-ofctl dump-ports br0 3) | STRIP_XIDS], [0],
+  [OFPST_PORT reply: 1 ports
+  port  2: rx pkts=0, bytes=0, drop=0, errs=0, frame=0, over=0, crc=0
+           tx pkts=1, bytes=60, drop=0, errs=0, coll=0
+OFPST_PORT reply: 1 ports
+  port  3: rx pkts=0, bytes=0, drop=0, errs=0, frame=0, over=0, crc=0
+           tx pkts=9, bytes=540, drop=0, errs=0, coll=0
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([learning action - fin_timeout feature])
 # This is a totally artificial use of the "learn" action.  The only purpose
 # is to check that specifying fin_idle_timeout or fin_hard_timeout causes
