@@ -2182,7 +2182,7 @@ ofctl_parse_flows__(struct ofputil_flow_mod *fms, size_t n_fms)
             break;
         }
     }
-    ovs_assert(IS_POW2(protocol));
+    ovs_assert(is_pow2(protocol));
 
     printf("chosen protocol: %s\n", ofputil_protocol_to_string(protocol));
 

@@ -810,7 +810,7 @@ log_2_floor(uint32_t n)
 int
 log_2_ceil(uint32_t n)
 {
-    return log_2_floor(n) + !IS_POW2(n);
+    return log_2_floor(n) + !is_pow2(n);
 }
 
 /* Returns the number of trailing 0-bits in 'n'.  Undefined if 'n' == 0. */
