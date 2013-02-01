@@ -1139,7 +1139,7 @@ ovs-vsctl \
    --id=@nf create NetFlow targets=\"127.0.0.1:$NETFLOW_PORT\" \
      engine_id=1 engine_type=2 active_timeout=10 add-id-to-interface=false
 
-ON_EXIT([kill `test-netflow.pid`])
+ON_EXIT([kill `cat test-netflow.pid`])
 AT_CHECK([test-netflow --detach --no-chdir --pidfile $NETFLOW_PORT:127.0.0.1 > netflow.log])AT_CAPTURE_FILE([netflow.log])
 
 AT_CHECK([ovs-appctl time/stop])
