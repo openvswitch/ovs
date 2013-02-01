@@ -669,7 +669,9 @@ parse_ofp_str(struct ofputil_flow_mod *fm, int command, const char *str_,
                 parse_field(mf_from_name(name), value, &fm->cr);
             } else if (!strcmp(name, "duration")
                        || !strcmp(name, "n_packets")
-                       || !strcmp(name, "n_bytes")) {
+                       || !strcmp(name, "n_bytes")
+                       || !strcmp(name, "idle_age")
+                       || !strcmp(name, "hard_age")) {
                 /* Ignore these, so that users can feed the output of
                  * "ovs-ofctl dump-flows" back into commands that parse
                  * flows. */
