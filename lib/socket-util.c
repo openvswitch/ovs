@@ -409,13 +409,8 @@ make_unix_socket(int style, bool nonblock,
      * it will only happen if style is SOCK_STREAM or SOCK_SEQPACKET, and only
      * if a backlog of un-accepted connections has built up in the kernel.)  */
     if (nonblock) {
-        int flags = fcntl(fd, F_GETFL, 0);
-        if (flags == -1) {
-            error = errno;
-            goto error;
-        }
-        if (fcntl(fd, F_SETFL, flags | O_NONBLOCK) == -1) {
-            error = errno;
+        error = set_nonblocking(fd);
+        if (error) {
             goto error;
         }
     }
