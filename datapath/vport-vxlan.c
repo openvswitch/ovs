@@ -166,10 +166,8 @@ static int vxlan_rcv(struct sock *sk, struct sk_buff *skb)
 	iph = ip_hdr(skb);
 	vport = ovs_tnl_find_port(dev_net(skb->dev), iph->daddr, iph->saddr,
 		key, TNL_T_PROTO_VXLAN, &mutable);
-	if (unlikely(!vport)) {
-		icmp_send(skb, ICMP_DEST_UNREACH, ICMP_PORT_UNREACH, 0);
+	if (unlikely(!vport))
 		goto error;
-	}
 
 	if (mutable->flags & TNL_F_IN_KEY_MATCH || !mutable->key.daddr)
 		tunnel_flags = OVS_TNL_F_KEY;
