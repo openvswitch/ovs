@@ -447,6 +447,12 @@ A: Wireless base stations generally only allow packets with the source
    point, so the same problems will show up with the Linux bridge or
    any other way to do bridging.
 
+Q: I can't seem to add my PPP interface to an Open vSwitch bridge.
+
+A: PPP most commonly carries IP packets, but Open vSwitch works only
+   with Ethernet frames.  The correct way to interface PPP to an
+   Ethernet network is usually to use routing instead of switching.
+
 Q: Is there any documentation on the database tables and fields?
 
 A: Yes.  ovs-vswitchd.conf.db(5) is a comprehensive reference.
