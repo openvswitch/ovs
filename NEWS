@@ -1,5 +1,5 @@
-post-v1.9.0
---------------------
+v1.10.0 - xx xxx xxxx
+---------------------
     - Bridge compatibility support has been removed.  Any uses that
       rely on ovs-brcompatd will have to stick with Open vSwitch 1.9.x
       or adapt to native Open vSwitch support (e.g. use ovs-vsctl instead
