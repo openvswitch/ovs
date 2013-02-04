@@ -14,6 +14,9 @@ post-v1.9.0
     - Many "ovs-vsctl" database commands now accept an --if-exists option.
       Please refer to the ovs-vsctl manpage for details.
     - OpenFlow:
+      - Experimental support for newer versions of OpenFlow.  See
+        the "What versions of OpenFlow does Open vSwitch support?"
+        question in the FAQ for more details.
       - The OpenFlow "dp_desc" may now be configured by setting the
         value of other-config:dp-desc in the Bridge table.
       - It is possible to request the OpenFlow port number with the
