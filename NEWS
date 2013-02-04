@@ -13,11 +13,28 @@ post-v1.9.0
       prevent new flows from being processed on other ports.
     - Many "ovs-vsctl" database commands now accept an --if-exists option.
       Please refer to the ovs-vsctl manpage for details.
-    - New "vlog/disable-rate-limit" and "vlog/enable-rate-limit" commands
-      available through ovs-appctl allow control over logging rate limits.
-    - The OpenFlow "dp_desc" may now be configured by setting the value of 
-      other-config:dp-desc in the Bridge table.
+    - OpenFlow:
+      - The OpenFlow "dp_desc" may now be configured by setting the
+        value of other-config:dp-desc in the Bridge table.
+      - It is possible to request the OpenFlow port number with the
+        "ofport_request" column in the Interface table.
+    - ovs-dpctl:
+      - The "dump-flows" and "del-flows" no longer require an argument
+        if only one datapath exists.
+    - ovs-appctl:
+      - New "vlog/disable-rate-limit" and "vlog/enable-rate-limit"
+        commands available allow control over logging rate limits.
+      - New "dpif/dump-dps", "dpif/show", and "dpif/dump-flows" command
+        that mimic the equivalent ovs-dpctl commands.
     - Path MTU discovery is no longer supported.
+    - The ofproto library is now responsible for assigning OpenFlow port
+      numbers.  An ofproto implementation should assign them when
+      port_construct() is called.
+    - All dpif-based bridges of a particular type share a common
+      datapath called "ovs-<type>", e.g. "ovs-system".  The ovs-dpctl
+      commands will now return information on that shared datapath.  To
+      get the equivalent bridge-specific information, use the new
+      "ovs-appctl dpif/*" commands.
     - Backward-incompatible changes:
       - Earlier Open vSwitch versions treated ANY as a wildcard in flow
         syntax.  OpenFlow 1.1 adds a port named ANY, which introduces a
@@ -49,8 +66,6 @@ v1.9.0 - xx xxx xxxx
       - Allow bitwise masking for SHA and THA fields in ARP, SLL and TLL
         fields in IPv6 neighbor discovery messages, and IPv6 flow label.
       - Adds support for writing to the metadata field for a flow.
-      - It is possible to request the OpenFlow port number with the
-        "ofport_request" column in the Interface table.
     - ovs-ofctl:
       - Commands and actions that accept port numbers now also accept keywords
         that represent those ports (such as LOCAL, NONE, and ALL).  This is
@@ -60,11 +75,6 @@ v1.9.0 - xx xxx xxxx
     - ovs-dpctl:
       - Support requesting the port number with the "port_no" option in
         the "add-if" command.
-      - The "dump-flows" and "del-flows" no longer require an argument
-        if only one datapath exists.
-    - ovs-appctl:
-      - New "dpif/dump-dps", "dpif/show", and "dpif/dump-flows" command
-        that mimic the equivalent ovs-dpctl commands.
     - ovs-pki: The "online PKI" features have been removed, along with
       the ovs-pki-cgi program that facilitated it, because of some
       alarmist insecurity claims.  We do not believe that these claims
@@ -76,15 +86,6 @@ v1.9.0 - xx xxx xxxx
     - ovsdb-server now enforces the immutability of immutable columns.  This
       was not enforced in earlier versions due to an oversight.
     - New support for a nonstandard form of GRE that supports a 64-bit key.
-    - The ofproto library is now responsible for assigning OpenFlow port
-      numbers.  An ofproto implementation should assign them when
-      port_construct() is called.
-    - All dpif-based bridges of a particular type share a common
-      datapath called "ovs-<type>", e.g. "ovs-system".  The ovs-dpctl
-      commands will now return information on that shared datapath.  To
-      get the equivalent bridge-specific information, use the new
-      "ovs-appctl dpif/*" commands.
-    - Tunnel header caching removed.
     - The following features are now deprecated.  They will be removed no
       earlier than February 2013.  Please email dev@openvswitch.org with
       concerns.
@@ -97,6 +98,7 @@ v1.9.0 - xx xxx xxxx
         - CAPWAP tunnel support.
     - The data in the RARP packets can now be matched in the same way as the
       data in ARP packets.
+    - Tunnel header caching removed.
 
 
 v1.8.0 - xx xxx xxxx
