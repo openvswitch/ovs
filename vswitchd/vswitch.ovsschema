@@ -1,6 +1,6 @@
 {"name": "Open_vSwitch",
- "version": "6.11.3",
- "cksum": "2234602985 17310",
+ "version": "7.0.0",
+ "cksum": "3537583872 17299",
  "tables": {
    "Open_vSwitch": {
      "columns": {
@@ -134,7 +134,7 @@
                   "min": 0, "max": 1}},
        "bond_mode": {
          "type": {"key": {"type": "string",
-           "enum": ["set", ["balance-tcp", "balance-slb", "active-backup", "stable"]]},
+           "enum": ["set", ["balance-tcp", "balance-slb", "active-backup"]]},
          "min": 0, "max": 1}},
        "lacp": {
          "type": {"key": {"type": "string",

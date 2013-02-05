@@ -212,8 +212,7 @@ static struct port *port_lookup(const struct bridge *, const char *name);
 static void port_configure(struct port *);
 static struct lacp_settings *port_configure_lacp(struct port *,
                                                  struct lacp_settings *);
-static void port_configure_bond(struct port *, struct bond_settings *,
-                                uint32_t *bond_stable_ids);
+static void port_configure_bond(struct port *, struct bond_settings *);
 static bool port_is_synthetic(const struct port *);
 
 static void reconfigure_system_stats(const struct ovsrec_open_vswitch *);
@@ -761,12 +760,9 @@ port_configure(struct port *port)
     /* Get bond settings. */
     if (s.n_slaves > 1) {
         s.bond = &bond_settings;
-        s.bond_stable_ids = xmalloc(s.n_slaves * sizeof *s.bond_stable_ids);
-        port_configure_bond(port, &bond_settings, s.bond_stable_ids);
+        port_configure_bond(port, &bond_settings);
     } else {
         s.bond = NULL;
-        s.bond_stable_ids = NULL;
-
         LIST_FOR_EACH (iface, port_elem, &port->ifaces) {
             netdev_set_miimon_interval(iface->netdev, 0);
         }
@@ -779,7 +775,6 @@ port_configure(struct port *port)
     free(s.slaves);
     free(s.trunks);
     free(s.lacp_slaves);
-    free(s.bond_stable_ids);
 }
 
 /* Pick local port hardware address and datapath ID for 'br'. */
@@ -3111,13 +3106,11 @@ iface_configure_lacp(struct iface *iface, struct lacp_slave_settings *s)
 }
 
 static void
-port_configure_bond(struct port *port, struct bond_settings *s,
-                    uint32_t *bond_stable_ids)
+port_configure_bond(struct port *port, struct bond_settings *s)
 {
     const char *detect_s;
     struct iface *iface;
     int miimon_interval;
-    size_t i;
 
     s->name = port->name;
     s->balance = BM_AB;
@@ -3169,17 +3162,7 @@ port_configure_bond(struct port *port, struct bond_settings *s,
 
     s->fake_iface = port->cfg->bond_fake_iface;
 
-    i = 0;
     LIST_FOR_EACH (iface, port_elem, &port->ifaces) {
-        long long stable_id;
-
-        stable_id = smap_get_int(&iface->cfg->other_config, "bond-stable-id",
-                                 0);
-        if (stable_id <= 0 || stable_id >= UINT32_MAX) {
-            stable_id = iface->ofp_port;
-        }
-        bond_stable_ids[i++] = stable_id;
-
         netdev_set_miimon_interval(iface->netdev, miimon_interval);
     }
 }

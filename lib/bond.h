@@ -32,7 +32,6 @@ enum lacp_status;
 enum bond_mode {
     BM_TCP, /* Transport Layer Load Balance. */
     BM_SLB, /* Source Load Balance. */
-    BM_STABLE, /* Stable. */
     BM_AB   /* Active Backup. */
 };
 
@@ -65,8 +64,7 @@ struct bond *bond_create(const struct bond_settings *);
 void bond_destroy(struct bond *);
 
 bool bond_reconfigure(struct bond *, const struct bond_settings *);
-void bond_slave_register(struct bond *, void *slave_,
-                         uint32_t stable_id, struct netdev *);
+void bond_slave_register(struct bond *, void *slave_, struct netdev *);
 void bond_slave_set_netdev(struct bond *, void *slave_, struct netdev *);
 void bond_slave_unregister(struct bond *, const void *slave);
 

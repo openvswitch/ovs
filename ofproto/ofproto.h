@@ -282,7 +282,6 @@ struct ofproto_bundle_settings {
     bool use_priority_tags;     /* Use 802.1p tag for frames in VLAN 0? */
 
     struct bond_settings *bond; /* Must be nonnull iff if n_slaves > 1. */
-    uint32_t *bond_stable_ids;  /* Array of n_slaves elements. */
 
     struct lacp_settings *lacp;              /* Nonnull to enable LACP. */
     struct lacp_slave_settings *lacp_slaves; /* Array of n_slaves elements. */

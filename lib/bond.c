@@ -75,9 +75,6 @@ struct bond_slave {
     struct list bal_node;       /* In bond_rebalance()'s 'bals' list. */
     struct list entries;        /* 'struct bond_entry's assigned here. */
     uint64_t tx_bytes;          /* Sum across 'tx_bytes' of entries. */
-
-    /* BM_STABLE specific bonding info. */
-    uint32_t stb_id;            /* ID used for 'stb_slaves' ordering. */
 };
 
 /* A bond, that is, a set of network devices grouped to improve performance or
@@ -103,9 +100,6 @@ struct bond {
     int rebalance_interval;      /* Interval between rebalances, in ms. */
     long long int next_rebalance; /* Next rebalancing time. */
     bool send_learning_packets;
-
-    /* BM_STABLE specific bonding info. */
-    tag_type stb_tag;               /* Tag associated with this bond. */
 
     /* Legacy compatibility. */
     long long int next_fake_iface_update; /* LLONG_MAX if disabled. */
@@ -147,8 +141,6 @@ bond_mode_from_string(enum bond_mode *balance, const char *s)
         *balance = BM_TCP;
     } else if (!strcmp(s, bond_mode_to_string(BM_SLB))) {
         *balance = BM_SLB;
-    } else if (!strcmp(s, bond_mode_to_string(BM_STABLE))) {
-        *balance = BM_STABLE;
     } else if (!strcmp(s, bond_mode_to_string(BM_AB))) {
         *balance = BM_AB;
     } else {
@@ -165,8 +157,6 @@ bond_mode_to_string(enum bond_mode balance) {
         return "balance-tcp";
     case BM_SLB:
         return "balance-slb";
-    case BM_STABLE:
-        return "stable";
     case BM_AB:
         return "active-backup";
     }
@@ -187,7 +177,6 @@ bond_create(const struct bond_settings *s)
     bond = xzalloc(sizeof *bond);
     hmap_init(&bond->slaves);
     bond->no_slaves_tag = tag_create_random();
-    bond->stb_tag = tag_create_random();
     bond->next_fake_iface_update = LLONG_MAX;
 
     bond_reconfigure(bond, s);
@@ -256,12 +245,6 @@ bond_reconfigure(struct bond *bond, const struct bond_settings *s)
     if (bond->balance != s->balance) {
         bond->balance = s->balance;
         revalidate = true;
-
-        if (bond->balance == BM_STABLE) {
-            VLOG_WARN_ONCE("Stable bond mode is deprecated and may be removed"
-                           " in February 2013. Please email"
-                           " dev@openvswitch.org with concerns.");
-        }
     }
 
     if (bond->basis != s->basis) {
@@ -303,17 +286,12 @@ bond_slave_set_netdev__(struct bond_slave *slave, struct netdev *netdev)
  * bond.  If 'slave_' already exists within 'bond' then this function
  * reconfigures the existing slave.
  *
- * 'stb_id' is used in BM_STABLE bonds to guarantee consistent slave choices
- * across restarts and distributed vswitch instances.  It should be unique per
- * slave, and preferably consistent across restarts and reconfigurations.
- *
  * 'netdev' must be the network device that 'slave_' represents.  It is owned
  * by the client, so the client must not close it before either unregistering
  * 'slave_' or destroying 'bond'.
  */
 void
-bond_slave_register(struct bond *bond, void *slave_, uint32_t stb_id,
-                    struct netdev *netdev)
+bond_slave_register(struct bond *bond, void *slave_, struct netdev *netdev)
 {
     struct bond_slave *slave = bond_slave_lookup(bond, slave_);
 
@@ -329,11 +307,6 @@ bond_slave_register(struct bond *bond, void *slave_, uint32_t stb_id,
 
         slave->enabled = false;
         bond_enable_slave(slave, netdev_get_carrier(netdev), NULL);
-    }
-
-    if (slave->stb_id != stb_id) {
-        slave->stb_id = stb_id;
-        bond->bond_revalidate = true;
     }
 
     bond_slave_set_netdev__(slave, netdev);
@@ -438,17 +411,12 @@ bond_run(struct bond *bond, struct tag_set *tags, enum lacp_status lacp_status)
     }
 
     if (bond->bond_revalidate) {
+        struct bond_slave *slave;
+
         bond->bond_revalidate = false;
-
         bond_entry_reset(bond);
-        if (bond->balance != BM_STABLE) {
-            struct bond_slave *slave;
-
-            HMAP_FOR_EACH (slave, hmap_node, &bond->slaves) {
-                tag_set_add(tags, slave->tag);
-            }
-        } else {
-            tag_set_add(tags, bond->stb_tag);
+        HMAP_FOR_EACH (slave, hmap_node, &bond->slaves) {
+            tag_set_add(tags, slave->tag);
         }
         tag_set_add(tags, bond->no_slaves_tag);
     }
@@ -621,9 +589,6 @@ bond_check_admissibility(struct bond *bond, const void *slave_,
          * exception is if we locked the learning table to avoid reflections on
          * bond slaves. */
         return BV_DROP_IF_MOVED;
-
-    case BM_STABLE:
-        return BV_ACCEPT;
     }
 
     NOT_REACHED();
@@ -647,7 +612,7 @@ bond_choose_output_slave(struct bond *bond, const struct flow *flow,
 {
     struct bond_slave *slave = choose_output_slave(bond, flow, vlan, tags);
     if (slave) {
-        *tags |= bond->balance == BM_STABLE ? bond->stb_tag : slave->tag;
+        *tags |= slave->tag;
         return slave->aux;
     } else {
         *tags |= bond->no_slaves_tag;
@@ -1297,7 +1262,6 @@ bond_slave_lookup(struct bond *bond, const void *slave_)
 static void
 bond_enable_slave(struct bond_slave *slave, bool enable, struct tag_set *tags)
 {
-    struct bond *bond = slave->bond;
     slave->delay_expires = LLONG_MAX;
     if (enable != slave->enabled) {
         slave->enabled = enable;
@@ -1309,10 +1273,6 @@ bond_enable_slave(struct bond_slave *slave, bool enable, struct tag_set *tags)
         } else {
             VLOG_WARN("interface %s: enabled", slave->name);
             slave->tag = tag_create_random();
-        }
-
-        if (bond->balance == BM_STABLE) {
-            bond->bond_revalidate = true;
         }
     }
 }
@@ -1387,35 +1347,6 @@ lookup_bond_entry(const struct bond *bond, const struct flow *flow,
     return &bond->hash[bond_hash(bond, flow, vlan) & BOND_MASK];
 }
 
-/* This function uses Highest Random Weight hashing to choose an output slave.
- * This approach only reassigns a minimal number of flows when slaves are
- * enabled or disabled.  Unfortunately, it has O(n) performance against the
- * number of slaves.  There exist algorithms which are O(1), but have slightly
- * more complex implementations and require the use of memory.  This may need
- * to be reimplemented if it becomes a performance bottleneck. */
-static struct bond_slave *
-choose_stb_slave(const struct bond *bond, uint32_t flow_hash)
-{
-    struct bond_slave *best, *slave;
-    uint32_t best_hash;
-
-    best = NULL;
-    best_hash = 0;
-    HMAP_FOR_EACH (slave, hmap_node, &bond->slaves) {
-        if (slave->enabled) {
-            uint32_t hash;
-
-            hash = hash_2words(flow_hash, slave->stb_id);
-            if (!best || hash > best_hash) {
-                best = slave;
-                best_hash = hash;
-            }
-        }
-    }
-
-    return best;
-}
-
 static struct bond_slave *
 choose_output_slave(const struct bond *bond, const struct flow *flow,
                     uint16_t vlan, tag_type *tags)
@@ -1432,9 +1363,6 @@ choose_output_slave(const struct bond *bond, const struct flow *flow,
     case BM_AB:
         return bond->active_slave;
 
-    case BM_STABLE:
-        return choose_stb_slave(bond, bond_hash_tcp(flow, vlan, bond->basis));
-
     case BM_TCP:
         if (bond->lacp_status != LACP_NEGOTIATED) {
             /* Must have LACP negotiations for TCP balanced bonds. */
@@ -1442,9 +1370,6 @@ choose_output_slave(const struct bond *bond, const struct flow *flow,
         }
         /* Fall Through. */
     case BM_SLB:
-        if (!bond_is_balanced(bond)) {
-            return choose_stb_slave(bond, bond_hash(bond, flow, vlan));
-        }
         e = lookup_bond_entry(bond, flow, vlan);
         if (!e->slave || !e->slave->enabled) {
             e->slave = CONTAINER_OF(hmap_random_node(&bond->slaves),
