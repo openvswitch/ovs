@@ -1,8 +1,5 @@
 v1.9.0 - xx xxx xxxx
 --------------------
-    - The tunneling code no longer assumes input and output keys are symmetric.
-      If they are not, PMTUD needs to be disabled for tunneling to work. Note
-      this only applies to flow-based keys.
     - Datapath:
       - Support for ipv6 set action.
       - SKB mark matching and setting.
@@ -17,6 +14,14 @@ v1.9.0 - xx xxx xxxx
       - Allow bitwise masking for SHA and THA fields in ARP, SLL and TLL
         fields in IPv6 neighbor discovery messages, and IPv6 flow label.
       - Adds support for writing to the metadata field for a flow.
+    - Tunneling:
+      - The tunneling code no longer assumes input and output keys are
+        symmetric.  If they are not, PMTUD needs to be disabled for
+        tunneling to work. Note this only applies to flow-based keys.
+      - New support for a nonstandard form of GRE that supports a 64-bit key.
+      - Tunnel Path MTU Discovery default value was set to 'disabled'.
+        This feature is deprecated and will be removed soon.
+      - Tunnel header caching removed.
     - ovs-ofctl:
       - Commands and actions that accept port numbers now also accept keywords
         that represent those ports (such as LOCAL, NONE, and ALL).  This is
@@ -32,11 +37,8 @@ v1.9.0 - xx xxx xxxx
       are true, but because we do not know of any users for this
       feature it seems better on balance to remove it.  (The ovs-pki-cgi
       program was not included in distribution packaging.)
-    - Tunnel Path MTU Discovery default value was set to 'disabled'.  This
-      feature is deprecated and will be removed soon.
     - ovsdb-server now enforces the immutability of immutable columns.  This
       was not enforced in earlier versions due to an oversight.
-    - New support for a nonstandard form of GRE that supports a 64-bit key.
     - The following features are now deprecated.  They will be removed no
       earlier than February 2013.  Please email dev@openvswitch.org with
       concerns.
@@ -49,7 +51,6 @@ v1.9.0 - xx xxx xxxx
         - CAPWAP tunnel support.
     - The data in the RARP packets can now be matched in the same way as the
       data in ARP packets.
-    - Tunnel header caching removed.
 
 
 v1.8.0 - xx xxx xxxx
