@@ -78,10 +78,6 @@ ffff 0020 00002320 0016 000000000000 fedcba9876543210 ffff0000ffff0000
 # actions=multipath(eth_src,50,modulo_n,1,0,NXM_NX_REG0[])
 ffff 0020 00002320 000a 0000 0032 0000 0000 0000 0000 0000 0000 001f 00010004
 
-# actions=autopath(2,NXM_NX_REG0[2..30])
-& autopath|WARN|The autopath action is deprecated and may be removed in February 2013.  Please email dev@openvswitch.org with concerns.
-ffff 0018 00002320 000b 009c 00010004 00000002 00000000
-
 # actions=bundle(eth_src,0,hrw,ofport,slaves:4,8)
 ffff 0028 00002320 000c 0001 0000 0000 00000002 0002 0000 00000000 00000000 dnl
 0004 0008 00000000
@@ -251,10 +247,6 @@ ffff 0020 00002320 0016 000000000000 fedcba9876543210 ffffffffffffffff ffff 0010
 
 # actions=multipath(eth_src,50,modulo_n,1,0,NXM_NX_REG0[])
 ffff 0020 00002320 000a 0000 0032 0000 0000 0000 0000 0000 0000 001f 00010004
-
-# actions=autopath(2,NXM_NX_REG0[2..30])
-& autopath|WARN|The autopath action is deprecated and may be removed in February 2013.  Please email dev@openvswitch.org with concerns.
-ffff 0018 00002320 000b 009c 00010004 00000002 00000000
 
 # actions=bundle(eth_src,0,hrw,ofport,slaves:4,8)
 ffff 0028 00002320 000c 0001 0000 0000 00000002 0002 0000 00000000 00000000 dnl

@@ -1074,21 +1074,6 @@ the \fBiter_hash\fR algorithm uses \fIarg\fR.
 .IP
 Refer to \fBnicira\-ext.h\fR for more details.
 .
-.IP "\fBautopath(\fIid\fB, \fIdst\fB[\fIstart\fB..\fIend\fB])\fR"
-Deprecated and slated for removal in Feburary 2013.
-.IP
-Given \fIid\fR, chooses an OpenFlow port and populates it in
-\fIdst\fB[\fIstart\fB..\fIend\fB]\fR, which must be an NXM field as
-described above.
-.IP
-Currently, \fIid\fR should be the OpenFlow port number of an interface on the
-bridge.  If it isn't then \fIdst\fB[\fIstart\fB..\fIend\fB]\fR will be
-populated with the OpenFlow port "none".  If \fIid\fR is a member of a bond,
-the normal bond selection logic will be used to choose the destination port.
-Otherwise, the register will be populated with \fIid\fR itself.
-.IP
-Refer to \fBnicira\-ext.h\fR for more details.
-.
 .IP "\fBbundle(\fIfields\fB, \fIbasis\fB, \fIalgorithm\fB, \fIslave_type\fB, slaves:[\fIs1\fB, \fIs2\fB, ...])\fR"
 Hashes \fIfields\fR using \fIbasis\fR as a universal hash parameter, then
 applies the bundle link selection \fIalgorithm\fR to choose one of the listed

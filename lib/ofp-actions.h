@@ -86,7 +86,6 @@
                                                                     \
     /* Arithmetic. */                                               \
     DEFINE_OFPACT(MULTIPATH,       ofpact_multipath,     ofpact)    \
-    DEFINE_OFPACT(AUTOPATH,        ofpact_autopath,      ofpact)    \
                                                                     \
     /* Other. */                                                    \
     DEFINE_OFPACT(NOTE,            ofpact_note,          data)      \
@@ -419,15 +418,6 @@ struct ofpact_multipath {
 
     /* Where to store the result. */
     struct mf_subfield dst;
-};
-
-/* OFPACT_AUTOPATH.
- *
- * Used for NXAST_AUTOPATH. */
-struct ofpact_autopath {
-    struct ofpact ofpact;
-    struct mf_subfield dst;
-    uint32_t port;
 };
 
 /* OFPACT_NOTE.

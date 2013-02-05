@@ -292,7 +292,7 @@ enum nx_action_subtype {
     NXAST_NOTE,                 /* struct nx_action_note */
     NXAST_SET_TUNNEL64,         /* struct nx_action_set_tunnel64 */
     NXAST_MULTIPATH,            /* struct nx_action_multipath */
-    NXAST_AUTOPATH__DEPRECATED, /* struct nx_action_autopath */
+    NXAST_AUTOPATH__OBSOLETE,   /* No longer used. */
     NXAST_BUNDLE,               /* struct nx_action_bundle */
     NXAST_BUNDLE_LOAD,          /* struct nx_action_bundle */
     NXAST_RESUBMIT_TABLE,       /* struct nx_action_resubmit */
@@ -943,50 +943,6 @@ struct nx_action_fin_timeout {
     ovs_be16 pad;               /* Must be zero. */
 };
 OFP_ASSERT(sizeof(struct nx_action_fin_timeout) == 16);
-
-/* Action structure for NXAST_AUTOPATH.
- *
- * This action performs the following steps in sequence:
- *
- *    1. Hashes the flow using an implementation-defined hash function.
- *
- *       The hashed fields' values are drawn from the current state of the
- *       flow, including all modifications that have been made by actions up to
- *       this point.
- *
- *    2. Selects an OpenFlow 'port'.
- *
- *       'port' is selected in an implementation-defined manner, taking into
- *       account 'id' and the hash value calculated in step 1.
- *
- *       Generally a switch will have been configured with a set of ports that
- *       may be chosen given 'id'.  The switch may take into account any number
- *       of factors when choosing 'port' from its configured set.  Factors may
- *       include carrier, load, and the results of configuration protocols such
- *       as LACP.
- *
- *    3. Stores 'port' in dst[ofs:ofs+n_bits].
- *
- *       The format and semantics of 'dst' and 'ofs_nbits' are similar to those
- *       for the NXAST_REG_LOAD action.
- *
- * The switch will reject actions in which ofs+n_bits is greater than the width
- * of 'dst', with error type OFPET_BAD_ACTION, code OFPBAC_BAD_ARGUMENT.
- */
-struct nx_action_autopath {
-    ovs_be16 type;              /* OFPAT_VENDOR. */
-    ovs_be16 len;               /* Length is 24. */
-    ovs_be32 vendor;            /* NX_VENDOR_ID. */
-    ovs_be16 subtype;           /* NXAST_AUTOPATH. */
-
-    /* Where to store the result. */
-    ovs_be16 ofs_nbits;         /* (ofs << 6) | (n_bits - 1). */
-    ovs_be32 dst;               /* Destination. */
-
-    ovs_be32 id;                /* Autopath ID. */
-    ovs_be32 pad;
-};
-OFP_ASSERT(sizeof(struct nx_action_autopath) == 24);
 
 /* Action structure for NXAST_BUNDLE and NXAST_BUNDLE_LOAD.
  *

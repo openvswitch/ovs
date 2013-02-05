@@ -23,7 +23,6 @@
 #include <netinet/in.h>
 #include <netinet/icmp6.h>
 #include <stdlib.h>
-#include "autopath.h"
 #include "bundle.h"
 #include "byte-order.h"
 #include "classifier.h"

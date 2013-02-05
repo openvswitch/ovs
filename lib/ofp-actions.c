@@ -16,7 +16,6 @@
 
 #include <config.h>
 #include "ofp-actions.h"
-#include "autopath.h"
 #include "bundle.h"
 #include "byte-order.h"
 #include "compiler.h"
@@ -355,11 +354,6 @@ ofpact_from_nxast(const union ofp_action *a, enum ofputil_action_code code,
     case OFPUTIL_NXAST_MULTIPATH:
         error = multipath_from_openflow((const struct nx_action_multipath *) a,
                                         ofpact_put_MULTIPATH(out));
-        break;
-
-    case OFPUTIL_NXAST_AUTOPATH__DEPRECATED:
-        error = autopath_from_openflow((const struct nx_action_autopath *) a,
-                                       ofpact_put_AUTOPATH(out));
         break;
 
     case OFPUTIL_NXAST_BUNDLE:
@@ -1155,9 +1149,6 @@ ofpact_check__(const struct ofpact *a, const struct flow *flow, int max_ports,
     case OFPACT_MULTIPATH:
         return multipath_check(ofpact_get_MULTIPATH(a), flow);
 
-    case OFPACT_AUTOPATH:
-        return autopath_check(ofpact_get_AUTOPATH(a), flow);
-
     case OFPACT_NOTE:
     case OFPACT_EXIT:
         return 0;
@@ -1425,10 +1416,6 @@ ofpact_to_nxast(const struct ofpact *a, struct ofpbuf *out)
         multipath_to_nxast(ofpact_get_MULTIPATH(a), out);
         break;
 
-    case OFPACT_AUTOPATH:
-        autopath_to_nxast(ofpact_get_AUTOPATH(a), out);
-        break;
-
     case OFPACT_NOTE:
         ofpact_note_to_nxast(ofpact_get_NOTE(a), out);
         break;
@@ -1571,7 +1558,6 @@ ofpact_to_openflow10(const struct ofpact *a, struct ofpbuf *out)
     case OFPACT_RESUBMIT:
     case OFPACT_LEARN:
     case OFPACT_MULTIPATH:
-    case OFPACT_AUTOPATH:
     case OFPACT_NOTE:
     case OFPACT_EXIT:
     case OFPACT_PUSH_MPLS:
@@ -1726,7 +1712,6 @@ ofpact_to_openflow11(const struct ofpact *a, struct ofpbuf *out)
     case OFPACT_RESUBMIT:
     case OFPACT_LEARN:
     case OFPACT_MULTIPATH:
-    case OFPACT_AUTOPATH:
     case OFPACT_NOTE:
     case OFPACT_EXIT:
         ofpact_to_nxast(a, out);
@@ -1849,7 +1834,6 @@ ofpact_outputs_to_port(const struct ofpact *ofpact, uint16_t port)
     case OFPACT_RESUBMIT:
     case OFPACT_LEARN:
     case OFPACT_MULTIPATH:
-    case OFPACT_AUTOPATH:
     case OFPACT_NOTE:
     case OFPACT_EXIT:
     case OFPACT_PUSH_MPLS:
@@ -1942,7 +1926,6 @@ ofpact_format(const struct ofpact *a, struct ds *s)
 {
     const struct ofpact_enqueue *enqueue;
     const struct ofpact_resubmit *resubmit;
-    const struct ofpact_autopath *autopath;
     const struct ofpact_controller *controller;
     const struct ofpact_metadata *metadata;
     const struct ofpact_tunnel *tunnel;
@@ -2110,15 +2093,6 @@ ofpact_format(const struct ofpact *a, struct ds *s)
 
     case OFPACT_MULTIPATH:
         multipath_format(ofpact_get_MULTIPATH(a), s);
-        break;
-
-    case OFPACT_AUTOPATH:
-        autopath = ofpact_get_AUTOPATH(a);
-        ds_put_cstr(s, "autopath(");
-        ofputil_format_port(autopath->port, s);
-        ds_put_char(s, ',');
-        mf_format_subfield(&autopath->dst, s);
-        ds_put_char(s, ')');
         break;
 
     case OFPACT_NOTE:

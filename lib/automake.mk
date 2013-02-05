@@ -10,8 +10,6 @@ noinst_LIBRARIES += lib/libopenvswitch.a
 lib_libopenvswitch_a_SOURCES = \
 	lib/aes128.c \
 	lib/aes128.h \
-	lib/autopath.c \
-	lib/autopath.h \
 	lib/backtrace.c \
 	lib/backtrace.h \
 	lib/bitmap.c \

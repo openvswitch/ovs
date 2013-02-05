@@ -993,9 +993,6 @@ A: Yes, Open vSwitch makes individual bond interfaces visible as
          controller is not configured, this happens implicitly to
          every packet.)
 
-       - The "autopath" Nicira extension action.  However, "autopath"
-         is deprecated and scheduled for removal in February 2013.
-
        - Mirrors configured for output to a bonded port.
 
    It would make a lot of sense for Open vSwitch to present a bond as

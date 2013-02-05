@@ -20,7 +20,6 @@
 
 #include <errno.h>
 
-#include "autopath.h"
 #include "bond.h"
 #include "bundle.h"
 #include "byte-order.h"
@@ -6169,26 +6168,6 @@ struct xlate_reg_state {
     ovs_be64 tun_id;
 };
 
-static void
-xlate_autopath(struct action_xlate_ctx *ctx,
-               const struct ofpact_autopath *ap)
-{
-    uint16_t ofp_port = ap->port;
-    struct ofport_dpif *port = get_ofp_port(ctx->ofproto, ofp_port);
-
-    if (!port || !port->bundle) {
-        ofp_port = OFPP_NONE;
-    } else if (port->bundle->bond) {
-        /* Autopath does not support VLAN hashing. */
-        struct ofport_dpif *slave = bond_choose_output_slave(
-            port->bundle->bond, &ctx->flow, 0, &ctx->tags);
-        if (slave) {
-            ofp_port = slave->up.ofp_port;
-        }
-    }
-    nxm_reg_load(&ap->dst, ofp_port, &ctx->flow);
-}
-
 static bool
 slave_enabled_cb(uint16_t ofp_port, void *ofproto_)
 {
@@ -6434,10 +6413,6 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
 
         case OFPACT_MULTIPATH:
             multipath_execute(ofpact_get_MULTIPATH(a), &ctx->flow);
-            break;
-
-        case OFPACT_AUTOPATH:
-            xlate_autopath(ctx, ofpact_get_AUTOPATH(a));
             break;
 
         case OFPACT_BUNDLE:

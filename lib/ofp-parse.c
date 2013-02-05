@@ -22,7 +22,6 @@
 #include <errno.h>
 #include <stdlib.h>
 
-#include "autopath.h"
 #include "bundle.h"
 #include "byte-order.h"
 #include "dynamic-string.h"
@@ -524,10 +523,6 @@ parse_named_action(enum ofputil_action_code code, const struct flow *flow,
 
     case OFPUTIL_NXAST_MULTIPATH:
         multipath_parse(ofpact_put_MULTIPATH(ofpacts), arg);
-        break;
-
-    case OFPUTIL_NXAST_AUTOPATH__DEPRECATED:
-        autopath_parse(ofpact_put_AUTOPATH(ofpacts), arg);
         break;
 
     case OFPUTIL_NXAST_BUNDLE:

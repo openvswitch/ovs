@@ -21,7 +21,6 @@ TESTSUITE_AT = \
 	tests/ovs-ofctl.at \
 	tests/odp.at \
 	tests/multipath.at \
-	tests/autopath.at \
 	tests/lacp.at \
 	tests/learn.at \
 	tests/vconn.at \
