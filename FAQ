@@ -798,8 +798,16 @@ A: The configuration for VLANs in the Open vSwitch database (e.g. via
    You can use "normal switching" as a component of your OpenFlow
    actions, e.g. by putting "normal" into the lists of actions on
    ovs-ofctl or by outputting to OFPP_NORMAL from an OpenFlow
-   controller.  This will only be suitable for some situations,
-   though.
+   controller.  In situations where this is not suitable, you can
+   implement VLAN handling yourself, e.g.:
+
+       - If a packet comes in on an access port, and the flow table
+         needs to send it out on a trunk port, then the flow can add
+         the appropriate VLAN tag with the "mod_vlan_vid" action.
+
+       - If a packet comes in on a trunk port, and the flow table
+         needs to send it out on an access port, then the flow can
+         strip the VLAN tag with the "strip_vlan" action.
 
 Q: I configured ports on a bridge as access ports with different VLAN
    tags, like this:
