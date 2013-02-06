@@ -548,10 +548,15 @@ static inline bool ipv6_mask_is_exact(const struct in6_addr *mask) {
     return ipv6_addr_equals(mask, &in6addr_exact);
 }
 
+static inline bool dl_type_is_ip_any(ovs_be16 dl_type)
+{
+    return dl_type == htons(ETH_TYPE_IP)
+        || dl_type == htons(ETH_TYPE_IPV6);
+}
+
 static inline bool is_ip_any(const struct flow *flow)
 {
-    return flow->dl_type == htons(ETH_TYPE_IP)
-        || flow->dl_type == htons(ETH_TYPE_IPV6);
+    return dl_type_is_ip_any(flow->dl_type);
 }
 
 void format_ipv6_addr(char *addr_str, const struct in6_addr *addr);
