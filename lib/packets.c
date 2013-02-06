@@ -375,8 +375,8 @@ pop_mpls(struct ofpbuf *packet, ovs_be16 ethtype)
         len = (char*)packet->l2_5 - (char*)packet->l2;
         /* If bottom of the stack set ethertype. */
         if (mh->mpls_lse & htonl(MPLS_BOS_MASK)) {
-            packet->l2_5 = NULL;
             set_ethertype(packet, ethtype);
+            packet->l2_5 = NULL;
         } else {
             packet->l2_5 = (char*)packet->l2_5 + MPLS_HLEN;
         }
