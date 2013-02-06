@@ -360,9 +360,9 @@ A: Open vSwitch uses different kinds of flows for different purposes:
 
       - "ovs-dpctl dump-flows [dp]" dumps the exact-match flow table
         entries for a Linux kernel-based datapath.  In Open vSwitch
-        1.10 and later, ovs-vswitchd later merges multiple switches
-        into a single datapath, so it will show all the flows on all
-        your kernel-based switches.  This command can occasionally be
+        1.10 and later, ovs-vswitchd merges multiple switches into a
+        single datapath, so it will show all the flows on all your
+        kernel-based switches.  This command can occasionally be
         useful for debugging.
 
       - "ovs-appctl dpif/dump-flows <br>", new in Open vSwitch 1.10,
