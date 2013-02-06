@@ -154,4 +154,17 @@ static inline int rpl_netif_needs_gso(struct sk_buff *skb, int features)
 }
 #endif
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,3,0)
+typedef u32 netdev_features_t;
+#endif
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,9,0)
+static inline struct sk_buff *__skb_gso_segment(struct sk_buff *skb,
+						netdev_features_t features,
+						bool tx_path)
+{
+	return skb_gso_segment(skb, features);
+}
+#endif
+
 #endif

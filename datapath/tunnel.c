@@ -435,7 +435,7 @@ static struct sk_buff *handle_offloads(struct sk_buff *skb,
 	if (skb_is_gso(skb)) {
 		struct sk_buff *nskb;
 
-		nskb = skb_gso_segment(skb, 0);
+		nskb = __skb_gso_segment(skb, 0, false);
 		if (IS_ERR(nskb)) {
 			kfree_skb(skb);
 			err = PTR_ERR(nskb);
