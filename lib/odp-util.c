@@ -2325,14 +2325,16 @@ static void
 commit_set_nw_action(const struct flow *flow, struct flow *base,
                      struct ofpbuf *odp_actions)
 {
+    ovs_be16 dl_type = flow_innermost_dl_type(flow);
+
     /* Check if flow really have an IP header. */
     if (!flow->nw_proto) {
         return;
     }
 
-    if (base->dl_type == htons(ETH_TYPE_IP)) {
+    if (dl_type == htons(ETH_TYPE_IP)) {
         commit_set_ipv4_action(flow, base, odp_actions);
-    } else if (base->dl_type == htons(ETH_TYPE_IPV6)) {
+    } else if (dl_type == htons(ETH_TYPE_IPV6)) {
         commit_set_ipv6_action(flow, base, odp_actions);
     }
 }
