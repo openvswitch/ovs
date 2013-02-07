@@ -463,6 +463,8 @@ check_tables(const struct classifier *cls,
 
     HMAP_FOR_EACH (table, hmap_node, &cls->tables) {
         const struct cls_rule *head;
+        unsigned int max_priority = 0;
+        unsigned int max_count = 0;
 
         assert(!hmap_is_empty(&table->rules));
 
@@ -471,15 +473,26 @@ check_tables(const struct classifier *cls,
             unsigned int prev_priority = UINT_MAX;
             const struct cls_rule *rule;
 
+            if (head->priority > max_priority) {
+                max_priority = head->priority;
+                max_count = 1;
+            } else if (head->priority == max_priority) {
+                ++max_count;
+            }
+
             found_rules++;
             LIST_FOR_EACH (rule, list, &head->list) {
                 assert(rule->priority < prev_priority);
+                assert(rule->priority <= table->max_priority);
+
                 prev_priority = rule->priority;
                 found_rules++;
                 found_dups++;
                 assert(classifier_find_rule_exactly(cls, rule) == rule);
             }
         }
+        assert(table->max_priority == max_priority);
+        assert(table->max_count == max_count);
     }
 
     assert(found_tables == hmap_count(&cls->tables));

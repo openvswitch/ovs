@@ -235,8 +235,21 @@ classifier_remove(struct classifier *cls, struct cls_rule *rule)
 
     if (--table->n_table_rules == 0) {
         destroy_table(cls, table);
-    }
+    } else if (rule->priority == table->max_priority
+               && --table->max_count == 0) {
+        /* Maintain table's max_priority. */
+        struct cls_rule *head;
 
+        table->max_priority = 0;
+        HMAP_FOR_EACH (head, hmap_node, &table->rules) {
+            if (head->priority > table->max_priority) {
+                table->max_priority = head->priority;
+                table->max_count = 1;
+            } else if (head->priority == table->max_priority) {
+                ++table->max_count;
+            }
+        }
+    }
     cls->n_rules--;
 }
 
@@ -251,9 +264,14 @@ classifier_lookup(const struct classifier *cls, const struct flow *flow)
 
     best = NULL;
     HMAP_FOR_EACH (table, hmap_node, &cls->tables) {
-        struct cls_rule *rule = find_match(table, flow);
-        if (rule && (!best || rule->priority > best->priority)) {
-            best = rule;
+        /* Find only if there is hope.
+         * Would be even better to search the tables in the descending
+         * order of max_priority. */
+        if (!best || table->max_priority > best->priority) {
+            struct cls_rule *rule = find_match(table, flow);
+            if (rule && (!best || rule->priority > best->priority)) {
+                best = rule;
+            }
         }
     }
     return best;
@@ -271,6 +289,11 @@ classifier_find_rule_exactly(const struct classifier *cls,
 
     table = find_table(cls, &target->match.mask);
     if (!table) {
+        return NULL;
+    }
+
+    /* Skip if there is no hope. */
+    if (target->priority > table->max_priority) {
         return NULL;
     }
 
@@ -317,11 +340,18 @@ classifier_rule_overlaps(const struct classifier *cls,
         struct minimask mask;
         struct cls_rule *head;
 
+        if (target->priority > table->max_priority) {
+            continue; /* Can skip this table. */
+        }
+
         minimask_combine(&mask, &target->match.mask, &table->mask, storage);
         HMAP_FOR_EACH (head, hmap_node, &table->rules) {
             struct cls_rule *rule;
 
             FOR_EACH_RULE_IN_LIST (rule, head) {
+                if (rule->priority < target->priority) {
+                    break; /* Rules in descending priority order. */
+                }
                 if (rule->priority == target->priority
                     && miniflow_equal_in_minimask(&target->match.flow,
                                                   &rule->match.flow, &mask)) {
@@ -540,6 +570,7 @@ static struct cls_rule *
 insert_rule(struct cls_table *table, struct cls_rule *new)
 {
     struct cls_rule *head;
+    struct cls_rule *old = NULL;
 
     new->hmap_node.hash = miniflow_hash_in_minimask(&new->match.flow,
                                                     &new->match.mask, 0);
@@ -548,7 +579,7 @@ insert_rule(struct cls_table *table, struct cls_rule *new)
     if (!head) {
         hmap_insert(&table->rules, &new->hmap_node, new->hmap_node.hash);
         list_init(&new->list);
-        return NULL;
+        goto out;
     } else {
         /* Scan the list for the insertion point that will keep the list in
          * order of decreasing priority. */
@@ -563,18 +594,29 @@ insert_rule(struct cls_table *table, struct cls_rule *new)
 
                 if (new->priority == rule->priority) {
                     list_replace(&new->list, &rule->list);
-                    return rule;
+                    old = rule;
+                    goto out;
                 } else {
                     list_insert(&rule->list, &new->list);
-                    return NULL;
+                    goto out;
                 }
             }
         }
 
         /* Insert 'new' at the end of the list. */
         list_push_back(&head->list, &new->list);
-        return NULL;
     }
+
+ out:
+    if (new->priority > table->max_priority) {
+        table->max_priority = new->priority;
+        table->max_count = 1;
+    } else if (!old && new->priority == table->max_priority) {
+        /* Only if we are not replacing an old entry. */
+        ++table->max_count;
+    }
+
+    return old;
 }
 
 static struct cls_rule *

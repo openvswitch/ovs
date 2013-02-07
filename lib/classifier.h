@@ -49,6 +49,8 @@ struct cls_table {
     struct hmap rules;          /* Contains "struct cls_rule"s. */
     struct minimask mask;       /* Wildcards for fields. */
     int n_table_rules;          /* Number of rules, including duplicates. */
+    unsigned int max_priority;  /* Max priority of any rule in the table. */
+    unsigned int max_count;     /* Count of max_priority rules. */
 };
 
 /* Returns true if 'table' is a "catch-all" table that will match every
