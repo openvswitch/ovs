@@ -60,8 +60,16 @@ bool list_is_short(const struct list *);
     for (ASSIGN_CONTAINER(ITER, (LIST)->next, MEMBER);                  \
          &(ITER)->MEMBER != (LIST);                                     \
          ASSIGN_CONTAINER(ITER, (ITER)->MEMBER.next, MEMBER))
+#define LIST_FOR_EACH_CONTINUE(ITER, MEMBER, LIST)                      \
+    for (ASSIGN_CONTAINER(ITER, (ITER)->MEMBER.next, MEMBER);           \
+         &(ITER)->MEMBER != (LIST);                                     \
+         ASSIGN_CONTAINER(ITER, (ITER)->MEMBER.next, MEMBER))
 #define LIST_FOR_EACH_REVERSE(ITER, MEMBER, LIST)                       \
     for (ASSIGN_CONTAINER(ITER, (LIST)->prev, MEMBER);                  \
+         &(ITER)->MEMBER != (LIST);                                     \
+         ASSIGN_CONTAINER(ITER, (ITER)->MEMBER.prev, MEMBER))
+#define LIST_FOR_EACH_REVERSE_CONTINUE(ITER, MEMBER, LIST)              \
+    for (ASSIGN_CONTAINER(ITER, (ITER)->MEMBER.prev, MEMBER);           \
          &(ITER)->MEMBER != (LIST);                                     \
          ASSIGN_CONTAINER(ITER, (ITER)->MEMBER.prev, MEMBER))
 #define LIST_FOR_EACH_SAFE(ITER, NEXT, MEMBER, LIST)            \
