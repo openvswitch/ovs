@@ -407,8 +407,8 @@ tnl_port_mod_log(const struct tnl_port *tnl_port, const char *action)
         struct ds ds = DS_EMPTY_INITIALIZER;
 
         tnl_match_fmt(&tnl_port->match, &ds);
-        VLOG_DBG("%s tunnel port %s (%s)", action, tnl_port_get_name(tnl_port),
-                 ds_cstr(&ds));
+        VLOG_INFO("%s tunnel port %s (%s)", action,
+                  tnl_port_get_name(tnl_port), ds_cstr(&ds));
         ds_destroy(&ds);
     }
 }
