@@ -668,8 +668,7 @@ find_match(const struct cls_table *table, const struct flow *flow)
     struct cls_rule *rule;
 
     HMAP_FOR_EACH_WITH_HASH (rule, hmap_node, hash, &table->rules) {
-        if (miniflow_equal_flow_in_minimask(&rule->match.flow, flow,
-                                            &table->mask)) {
+        if (minimatch_matches_flow(&rule->match, flow)) {
             return rule;
         }
     }

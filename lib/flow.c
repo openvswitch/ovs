@@ -1093,13 +1093,38 @@ miniflow_alloc_values(struct miniflow *flow, int n)
     }
 }
 
+/* Completes an initialization of 'dst' as a miniflow copy of 'src' begun by
+ * the caller.  The caller must have already initialized 'dst->map' properly
+ * to indicate the nonzero uint32_t elements of 'src'.  'n' must be the number
+ * of 1-bits in 'dst->map'.
+ *
+ * This function initializes 'dst->values' (either inline if possible or with
+ * malloc() otherwise) and copies the nonzero uint32_t elements of 'src' into
+ * it. */
+static void
+miniflow_init__(struct miniflow *dst, const struct flow *src, int n)
+{
+    const uint32_t *src_u32 = (const uint32_t *) src;
+    unsigned int ofs;
+    int i;
+
+    dst->values = miniflow_alloc_values(dst, n);
+    ofs = 0;
+    for (i = 0; i < MINI_N_MAPS; i++) {
+        uint32_t map;
+
+        for (map = dst->map[i]; map; map = zero_rightmost_1bit(map)) {
+            dst->values[ofs++] = src_u32[raw_ctz(map) + i * 32];
+        }
+    }
+}
+
 /* Initializes 'dst' as a copy of 'src'.  The caller must eventually free 'dst'
  * with miniflow_destroy(). */
 void
 miniflow_init(struct miniflow *dst, const struct flow *src)
 {
     const uint32_t *src_u32 = (const uint32_t *) src;
-    unsigned int ofs;
     unsigned int i;
     int n;
 
@@ -1113,16 +1138,17 @@ miniflow_init(struct miniflow *dst, const struct flow *src)
         }
     }
 
-    /* Initialize dst->values. */
-    dst->values = miniflow_alloc_values(dst, n);
-    ofs = 0;
-    for (i = 0; i < MINI_N_MAPS; i++) {
-        uint32_t map;
+    miniflow_init__(dst, src, n);
+}
 
-        for (map = dst->map[i]; map; map = zero_rightmost_1bit(map)) {
-            dst->values[ofs++] = src_u32[raw_ctz(map) + i * 32];
-        }
-    }
+/* Initializes 'dst' as a copy of 'src', using 'mask->map' as 'dst''s map.  The
+ * caller must eventually free 'dst' with miniflow_destroy(). */
+void
+miniflow_init_with_minimask(struct miniflow *dst, const struct flow *src,
+                            const struct minimask *mask)
+{
+    memcpy(dst->map, mask->masks.map, sizeof dst->map);
+    miniflow_init__(dst, src, miniflow_n_values(dst));
 }
 
 /* Initializes 'dst' as a copy of 'src'.  The caller must eventually free 'dst'
@@ -1220,16 +1246,35 @@ miniflow_get_vid(const struct miniflow *flow)
 bool
 miniflow_equal(const struct miniflow *a, const struct miniflow *b)
 {
+    const uint32_t *ap = a->values;
+    const uint32_t *bp = b->values;
     int i;
 
     for (i = 0; i < MINI_N_MAPS; i++) {
-        if (a->map[i] != b->map[i]) {
-            return false;
+        const uint32_t a_map = a->map[i];
+        const uint32_t b_map = b->map[i];
+        uint32_t map;
+
+        if (a_map == b_map) {
+            for (map = a_map; map; map = zero_rightmost_1bit(map)) {
+                if (*ap++ != *bp++) {
+                    return false;
+                }
+            }
+        } else {
+            for (map = a_map | b_map; map; map = zero_rightmost_1bit(map)) {
+                uint32_t bit = rightmost_1bit(map);
+                uint32_t a_value = a_map & bit ? *ap++ : 0;
+                uint32_t b_value = b_map & bit ? *bp++ : 0;
+
+                if (a_value != b_value) {
+                    return false;
+                }
+            }
         }
     }
 
-    return !memcmp(a->values, b->values,
-                   miniflow_n_values(a) * sizeof *a->values);
+    return true;
 }
 
 /* Returns true if 'a' and 'b' are equal at the places where there are 1-bits
@@ -1289,10 +1334,24 @@ miniflow_equal_flow_in_minimask(const struct miniflow *a, const struct flow *b,
 uint32_t
 miniflow_hash(const struct miniflow *flow, uint32_t basis)
 {
-    BUILD_ASSERT_DECL(MINI_N_MAPS == 2);
-    return hash_3words(flow->map[0], flow->map[1],
-                       hash_words(flow->values, miniflow_n_values(flow),
-                                  basis));
+    const uint32_t *p = flow->values;
+    uint32_t hash = basis;
+    int i;
+
+    for (i = 0; i < MINI_N_MAPS; i++) {
+        uint32_t hash_map = 0;
+        uint32_t map;
+
+        for (map = flow->map[i]; map; map = zero_rightmost_1bit(map)) {
+            if (*p) {
+                hash = mhash_add(hash, *p);
+                hash_map |= rightmost_1bit(map);
+            }
+            p++;
+        }
+        hash = mhash_add(hash, hash_map);
+    }
+    return mhash_finish(hash, p - flow->values);
 }
 
 /* Returns a hash value for the bits of 'flow' where there are 1-bits in
@@ -1313,9 +1372,10 @@ miniflow_hash_in_minimask(const struct miniflow *flow,
         uint32_t map;
 
         for (map = mask->masks.map[i]; map; map = zero_rightmost_1bit(map)) {
-            int ofs = raw_ctz(map) + i * 32;
-
-            hash = mhash_add(hash, miniflow_get(flow, ofs) & *p);
+            if (*p) {
+                int ofs = raw_ctz(map) + i * 32;
+                hash = mhash_add(hash, miniflow_get(flow, ofs) & *p);
+            }
             p++;
         }
     }
@@ -1332,21 +1392,23 @@ uint32_t
 flow_hash_in_minimask(const struct flow *flow, const struct minimask *mask,
                       uint32_t basis)
 {
-    const uint32_t *flow_u32 = (const uint32_t *) flow;
+    const uint32_t *flow_u32;
     const uint32_t *p = mask->masks.values;
     uint32_t hash;
     int i;
 
     hash = basis;
+    flow_u32 = (const uint32_t *) flow;
     for (i = 0; i < MINI_N_MAPS; i++) {
         uint32_t map;
 
         for (map = mask->masks.map[i]; map; map = zero_rightmost_1bit(map)) {
-            int ofs = raw_ctz(map) + i * 32;
-
-            hash = mhash_add(hash, flow_u32[ofs] & *p);
+            if (*p) {
+                hash = mhash_add(hash, flow_u32[raw_ctz(map)] & *p);
+            }
             p++;
         }
+        flow_u32 += 32;
     }
 
     return mhash_finish(hash, (p - mask->masks.values) * 4);
@@ -1487,7 +1549,17 @@ bool
 minimask_is_catchall(const struct minimask *mask_)
 {
     const struct miniflow *mask = &mask_->masks;
+    const uint32_t *p = mask->values;
+    int i;
 
-    BUILD_ASSERT(MINI_N_MAPS == 2);
-    return !(mask->map[0] | mask->map[1]);
+    for (i = 0; i < MINI_N_MAPS; i++) {
+        uint32_t map;
+
+        for (map = mask->map[i]; map; map = zero_rightmost_1bit(map)) {
+            if (*p++) {
+                return false;
+            }
+        }
+    }
+    return true;
 }

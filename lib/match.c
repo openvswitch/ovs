@@ -1091,8 +1091,8 @@ match_print(const struct match *match)
 void
 minimatch_init(struct minimatch *dst, const struct match *src)
 {
-    miniflow_init(&dst->flow, &src->flow);
     minimask_init(&dst->mask, &src->wc);
+    miniflow_init_with_minimask(&dst->flow, &src->flow, &dst->mask);
 }
 
 /* Initializes 'dst' as a copy of 'src'.  The caller must eventually free 'dst'
@@ -1143,6 +1143,35 @@ uint32_t
 minimatch_hash(const struct minimatch *match, uint32_t basis)
 {
     return miniflow_hash(&match->flow, minimask_hash(&match->mask, basis));
+}
+
+/* Returns true if 'target' satisifies 'match', that is, if each bit for which
+ * 'match' specifies a particular value has the correct value in 'target'.
+ *
+ * This function is equivalent to miniflow_equal_flow_in_minimask(&match->flow,
+ * target, &match->mask) but it is faster because of the invariant that
+ * match->flow.map and match->mask.map are the same. */
+bool
+minimatch_matches_flow(const struct minimatch *match,
+                       const struct flow *target)
+{
+    const uint32_t *target_u32 = (const uint32_t *) target;
+    const uint32_t *flowp = match->flow.values;
+    const uint32_t *maskp = match->mask.masks.values;
+    int i;
+
+    for (i = 0; i < MINI_N_MAPS; i++) {
+        uint32_t map;
+
+        for (map = match->flow.map[i]; map; map = zero_rightmost_1bit(map)) {
+            if ((*flowp++ ^ target_u32[raw_ctz(map)]) & *maskp++) {
+                return false;
+            }
+        }
+        target_u32 += 32;
+    }
+
+    return true;
 }
 
 /* Appends a string representation of 'match' to 's'.  If 'priority' is

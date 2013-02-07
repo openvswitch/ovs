@@ -291,7 +291,7 @@ bool flow_equal_except(const struct flow *a, const struct flow *b,
  *
  * The 'map' member holds one bit for each uint32_t in a "struct flow".  Each
  * 0-bit indicates that the corresponding uint32_t is zero, each 1-bit that it
- * is nonzero.
+ * *may* be nonzero.
  *
  * 'values' points to the start of an array that has one element for each 1-bit
  * in 'map'.  The least-numbered 1-bit is in values[0], the next 1-bit is in
@@ -309,9 +309,9 @@ bool flow_equal_except(const struct flow *a, const struct flow *b,
  *       that makes sense.  So far that's only proved useful for
  *       minimask_combine(), but the principle works elsewhere.
  *
- * The implementation maintains and depends on the invariant that every element
- * in 'values' is nonzero; that is, wherever a 1-bit appears in 'map', the
- * corresponding element of 'values' must be nonzero.
+ * Elements in 'values' are allowed to be zero.  This is useful for "struct
+ * minimatch", for which ensuring that the miniflow and minimask members have
+ * same 'map' allows optimization .
  */
 struct miniflow {
     uint32_t *values;
@@ -320,6 +320,8 @@ struct miniflow {
 };
 
 void miniflow_init(struct miniflow *, const struct flow *);
+void miniflow_init_with_minimask(struct miniflow *, const struct flow *,
+                                 const struct minimask *);
 void miniflow_clone(struct miniflow *, const struct miniflow *);
 void miniflow_move(struct miniflow *dst, struct miniflow *);
 void miniflow_destroy(struct miniflow *);
