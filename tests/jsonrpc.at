@@ -1,6 +1,7 @@
 AT_BANNER([JSON-RPC - C])
 
 AT_SETUP([JSON-RPC request and successful reply])
+OVS_RUNDIR=`pwd`; export OVS_RUNDIR
 AT_CHECK([test-jsonrpc --detach --no-chdir --pidfile="`pwd`"/pid listen punix:socket])
 AT_CHECK([test -s pid])
 AT_CHECK([kill -0 `cat pid`])
@@ -12,6 +13,7 @@ AT_CHECK([kill `cat pid`])
 AT_CLEANUP
 
 AT_SETUP([JSON-RPC request and error reply])
+OVS_RUNDIR=`pwd`; export OVS_RUNDIR
 AT_CHECK([test-jsonrpc --detach --no-chdir --pidfile="`pwd`"/pid listen punix:socket])
 AT_CHECK([test -s pid])
 AT_CHECK([kill -0 `cat pid`])
@@ -23,6 +25,7 @@ AT_CHECK([kill `cat pid`])
 AT_CLEANUP
 
 AT_SETUP([JSON-RPC notification])
+OVS_RUNDIR=`pwd`; export OVS_RUNDIR
 AT_CHECK([test-jsonrpc --detach --no-chdir --pidfile="`pwd`"/pid listen punix:socket])
 AT_CHECK([test -s pid])
 # When a daemon dies it deletes its pidfile, so make a copy.
