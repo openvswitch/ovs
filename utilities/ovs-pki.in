@@ -272,7 +272,7 @@ certificate    = $dir/cacert.pem       # The CA cert
 serial         = $dir/serial           # serial no file
 private_key    = $dir/private/cakey.pem# CA private key
 RANDFILE       = $dir/private/.rand    # random number file
-default_days   = 365                   # how long to certify for
+default_days   = 36525                 # how long to certify for
 default_crl_days= 30                   # how long before next CRL
 default_md     = md5                   # md to use
 policy         = policy                # default policy
@@ -303,7 +303,7 @@ EOF
             -newkey $newkey -keyout private/cakey.pem -out careq.pem \
             1>&3 2>&3
         openssl ca -config ca.cnf -create_serial -out cacert.pem \
-            -days 2191 -batch -keyfile private/cakey.pem -selfsign \
+            -days 36525 -batch -keyfile private/cakey.pem -selfsign \
             -infiles careq.pem 1>&3 2>&3
         chmod 0700 private/cakey.pem
 
@@ -514,7 +514,7 @@ elif test "$command" = self-sign; then
     # Create both the private key and certificate with restricted permissions.
     (umask 077 && \
      openssl x509 -in "$arg1-req.pem" -out "$arg1-cert.pem.tmp" \
-        -signkey "$arg1-privkey.pem" -req -days 2191 -text) 2>&3 || exit $?
+        -signkey "$arg1-privkey.pem" -req -days 36525 -text) 2>&3 || exit $?
 
     # Reset the permissions on the certificate to the user's default.
     cat "$arg1-cert.pem.tmp" > "$arg1-cert.pem"
