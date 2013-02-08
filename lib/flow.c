@@ -132,7 +132,12 @@ parse_ethertype(struct ofpbuf *b)
     }
 
     ofpbuf_pull(b, sizeof *llc);
-    return llc->snap.snap_type;
+
+    if (ntohs(llc->snap.snap_type) >= ETH_TYPE_MIN) {
+        return llc->snap.snap_type;
+    }
+
+    return htons(FLOW_DL_TYPE_NONE);
 }
 
 static int
