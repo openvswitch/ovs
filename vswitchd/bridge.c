@@ -2804,8 +2804,10 @@ bridge_configure_remotes(struct bridge *br,
             if (!strncmp(c->target, "unix:", 5)) {
                 /* Connect to a listening socket */
                 whitelist = xasprintf("unix:%s/", ovs_rundir());
-                if (!equal_pathnames(c->target, whitelist,
-                                     strlen(whitelist))) {
+                if (strchr(c->target, '/') &&
+                   !equal_pathnames(c->target, whitelist,
+                     strlen(whitelist))) {
+                    /* Absolute path specified, but not in ovs_rundir */
                     VLOG_ERR_RL(&rl, "bridge %s: Not connecting to socket "
                                   "controller \"%s\" due to possibility for "
                                   "remote exploit.  Instead, specify socket "

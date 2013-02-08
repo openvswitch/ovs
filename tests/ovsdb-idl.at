@@ -1,5 +1,6 @@
 AT_BANNER([OVSDB -- interface description language (IDL)])
 
+OVS_RUNDIR=`pwd`; export OVS_RUNDIR
 # OVSDB_CHECK_IDL_C(TITLE, [PRE-IDL-TXN], TRANSACTIONS, OUTPUT, [KEYWORDS],
 #                   [FILTER])
 #
@@ -19,6 +20,7 @@ AT_BANNER([OVSDB -- interface description language (IDL)])
 m4_define([OVSDB_CHECK_IDL_C],
   [AT_SETUP([$1 - C])
    AT_KEYWORDS([ovsdb server idl positive $5])
+   OVS_RUNDIR=`pwd`; export OVS_RUNDIR
    AT_CHECK([ovsdb-tool create db $abs_srcdir/idltest.ovsschema],
                   [0], [stdout], [ignore])
    AT_CHECK([ovsdb-server '-vPATTERN:console:ovsdb-server|%c|%m' --detach --no-chdir --pidfile="`pwd`"/pid --remote=punix:socket --unixctl="`pwd`"/unixctl db], [0], [ignore], [ignore])
@@ -36,6 +38,7 @@ m4_define([OVSDB_CHECK_IDL_PY],
   [AT_SETUP([$1 - Python])
    AT_SKIP_IF([test $HAVE_PYTHON = no])
    AT_KEYWORDS([ovsdb server idl positive Python $5])
+   OVS_RUNDIR=`pwd`; export OVS_RUNDIR
    AT_CHECK([ovsdb-tool create db $abs_srcdir/idltest.ovsschema],
                   [0], [stdout], [ignore])
    AT_CHECK([ovsdb-server '-vPATTERN:console:ovsdb-server|%c|%m' --detach --no-chdir --pidfile="`pwd`"/pid --remote=punix:socket --unixctl="`pwd`"/unixctl db], [0], [ignore], [ignore])
@@ -53,6 +56,7 @@ m4_define([OVSDB_CHECK_IDL_TCP_PY],
   [AT_SETUP([$1 - Python tcp])
    AT_SKIP_IF([test $HAVE_PYTHON = no])
    AT_KEYWORDS([ovsdb server idl positive Python with tcp socket $5])
+   OVS_RUNDIR=`pwd`; export OVS_RUNDIR
    AT_CHECK([ovsdb-tool create db $abs_srcdir/idltest.ovsschema],
                   [0], [stdout], [ignore])
    AT_CHECK([perl $srcdir/choose-port.pl], [0], [stdout])

@@ -21,6 +21,7 @@ m4_define([OVSDB_SERVER_SHUTDOWN],
 # TITLE is provided to AT_SETUP and KEYWORDS to AT_KEYWORDS.
 m4_define([OVSDB_CHECK_EXECUTION], 
   [AT_SETUP([$1])
+  OVS_RUNDIR=`pwd`; export OVS_RUNDIR
    AT_KEYWORDS([ovsdb server positive unix $5])
    $2 > schema
    AT_CHECK([ovsdb-tool create db schema], [0], [stdout], [ignore])
@@ -39,6 +40,7 @@ EXECUTION_EXAMPLES
 
 AT_SETUP([truncating corrupted database log])
 AT_KEYWORDS([ovsdb server positive unix])
+OVS_RUNDIR=`pwd`; export OVS_RUNDIR
 ordinal_schema > schema
 AT_CHECK([ovsdb-tool create db schema], [0], [stdout], [ignore])
 dnl Do one transaction and save the output.
@@ -85,6 +87,7 @@ AT_CLEANUP
 
 AT_SETUP([truncating database log with bad transaction])
 AT_KEYWORDS([ovsdb server positive unix])
+OVS_RUNDIR=`pwd`; export OVS_RUNDIR
 ordinal_schema > schema
 AT_CHECK([ovsdb-tool create db schema], [0], [stdout], [ignore])
 dnl Do one transaction and save the output.
@@ -132,6 +135,7 @@ AT_CLEANUP
 
 AT_SETUP([ovsdb-client get-schema-version])
 AT_KEYWORDS([ovsdb server positive])
+OVS_RUNDIR=`pwd`; export OVS_RUNDIR
 ordinal_schema > schema
 AT_CHECK([ovsdb-tool create db schema], [0], [ignore], [ignore])
 AT_CHECK([ovsdb-server --detach --no-chdir --pidfile="`pwd`"/pid --unixctl="`pwd`"/unixctl --remote=punix:socket db], [0], [ignore], [ignore])
@@ -142,6 +146,7 @@ AT_CLEANUP
 
 AT_SETUP([database multiplexing implementation])
 AT_KEYWORDS([ovsdb server positive])
+OVS_RUNDIR=`pwd`; export OVS_RUNDIR
 ordinal_schema > schema1
 constraint_schema > schema2
 AT_CHECK([ovsdb-tool create db1 schema1], [0], [ignore], [ignore])
@@ -280,6 +285,7 @@ AT_CLEANUP
 
 AT_SETUP([compacting online])
 AT_KEYWORDS([ovsdb server compact])
+OVS_RUNDIR=`pwd`; export OVS_RUNDIR
 ordinal_schema > schema
 dnl Make sure that "ovsdb-tool create" works with a dangling symlink for
 dnl the database and the lockfile, creating the target of each symlink rather
@@ -430,6 +436,7 @@ m4_define([OVSDB_CHECK_EXECUTION],
   [AT_SETUP([$1])
    AT_KEYWORDS([ovsdb server positive ssl $5])
    AT_SKIP_IF([test "$HAVE_OPENSSL" = no])
+   OVS_RUNDIR=`pwd`; export OVS_RUNDIR
    $2 > schema
    AT_CHECK([perl $srcdir/choose-port.pl], [0], [stdout])
    SSL_PORT=`cat stdout`
@@ -479,6 +486,7 @@ AT_CLEANUP])
 m4_define([OVSDB_CHECK_EXECUTION],
   [AT_SETUP([$1])
    AT_KEYWORDS([ovsdb server positive tcp $5])
+   OVS_RUNDIR=`pwd`; export OVS_RUNDIR
    $2 > schema
    AT_CHECK([perl $srcdir/choose-port.pl], [0], [stdout])
    TCP_PORT=`cat stdout`
@@ -519,6 +527,7 @@ AT_BANNER([OVSDB -- transactions on transient ovsdb-server])
 m4_define([OVSDB_CHECK_EXECUTION], 
   [AT_SETUP([$1])
    AT_KEYWORDS([ovsdb server positive transient $5])
+   OVS_RUNDIR=`pwd`; export OVS_RUNDIR
    $2 > schema
    AT_CHECK([ovsdb-tool create db schema], [0], [stdout], [ignore])
    m4_foreach([txn], [$3], 

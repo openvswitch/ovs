@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,6 +29,7 @@
 #include "packets.h"
 #include "poll-loop.h"
 #include "socket-util.h"
+#include "dirs.h"
 #include "util.h"
 #include "stream-provider.h"
 #include "stream-fd.h"
@@ -42,15 +43,19 @@ static int
 unix_open(const char *name, char *suffix, struct stream **streamp,
           uint8_t dscp OVS_UNUSED)
 {
-    const char *connect_path = suffix;
+    char *connect_path;
     int fd;
 
+    connect_path = abs_file_name(ovs_rundir(), suffix);
     fd = make_unix_socket(SOCK_STREAM, true, NULL, connect_path);
+
     if (fd < 0) {
         VLOG_DBG("%s: connection failed (%s)", connect_path, strerror(-fd));
+        free(connect_path);
         return -fd;
     }
 
+    free(connect_path);
     return new_fd_stream(name, fd, check_connection_completion(fd), streamp);
 }
 
@@ -76,11 +81,14 @@ static int
 punix_open(const char *name OVS_UNUSED, char *suffix,
            struct pstream **pstreamp, uint8_t dscp OVS_UNUSED)
 {
+    char *bind_path;
     int fd, error;
 
-    fd = make_unix_socket(SOCK_STREAM, true, suffix, NULL);
+    bind_path = abs_file_name(ovs_rundir(), suffix);
+    fd = make_unix_socket(SOCK_STREAM, true, bind_path, NULL);
     if (fd < 0) {
-        VLOG_ERR("%s: binding failed: %s", suffix, strerror(errno));
+        VLOG_ERR("%s: binding failed: %s", bind_path, strerror(errno));
+        free(bind_path);
         return errno;
     }
 
@@ -88,11 +96,11 @@ punix_open(const char *name OVS_UNUSED, char *suffix,
         error = errno;
         VLOG_ERR("%s: listen: %s", name, strerror(error));
         close(fd);
+        free(bind_path);
         return error;
     }
 
-    return new_fd_pstream(name, fd, punix_accept, NULL,
-                          xstrdup(suffix), pstreamp);
+    return new_fd_pstream(name, fd, punix_accept, NULL, bind_path, pstreamp);
 }
 
 static int

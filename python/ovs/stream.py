@@ -107,6 +107,8 @@ class Stream(object):
             return errno.EAFNOSUPPORT, None
 
         suffix = name.split(":", 1)[1]
+        if name.startswith("unix:"):
+            suffix = ovs.util.abs_file_name(ovs.dirs.RUNDIR, suffix)
         error, sock = cls._open(suffix, dscp)
         if error:
             return error, None
@@ -282,6 +284,8 @@ class PassiveStream(object):
             return errno.EAFNOSUPPORT, None
 
         bind_path = name[6:]
+        if name.startswith("punix:"):
+            bind_path = ovs.util.abs_file_name(ovs.dirs.RUNDIR, bind_path)
         error, sock = ovs.socket_util.make_unix_socket(socket.SOCK_STREAM,
                                                        True, bind_path, None)
         if error:

@@ -11,6 +11,7 @@ m4_define([TEST_VCONN_CLASS],
       [send-short-hello],
       [send-invalid-version-hello]],
      [AT_SETUP([$1 vconn - m4_bpatsubst(testname, [-], [ ])])
+     OVS_RUNDIR=`pwd`; export OVS_RUNDIR
       m4_if([$1], [ssl], [
         AT_SKIP_IF([test "$HAVE_OPENSSL" = no])
         AT_CHECK([cp $abs_top_builddir/tests/testpki*.pem .])])
