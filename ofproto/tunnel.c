@@ -46,7 +46,6 @@ struct tnl_match {
     ovs_be32 ip_src;
     ovs_be32 ip_dst;
     uint32_t odp_port;
-    bool in_key_present;
     bool in_key_flow;
 };
 
@@ -95,7 +94,6 @@ tnl_port_add__(const struct ofport *ofport, uint32_t odp_port,
     tnl_port->match.in_key = cfg->in_key;
     tnl_port->match.ip_src = cfg->ip_src;
     tnl_port->match.ip_dst = cfg->ip_dst;
-    tnl_port->match.in_key_present = cfg->in_key_present;
     tnl_port->match.in_key_flow = cfg->in_key_flow;
     tnl_port->match.odp_port = odp_port;
 
@@ -185,7 +183,6 @@ tnl_port_receive(struct flow *flow)
     match.ip_src = flow->tunnel.ip_dst;
     match.ip_dst = flow->tunnel.ip_src;
     match.in_key = flow->tunnel.tun_id;
-    match.in_key_present = flow->tunnel.flags & FLOW_TNL_F_KEY;
 
     tnl_port = tnl_find(&match);
     if (!tnl_port) {
@@ -389,12 +386,10 @@ tnl_match_fmt(const struct tnl_match *match, struct ds *ds)
     ds_put_format(ds, IP_FMT"->"IP_FMT, IP_ARGS(match->ip_src),
                   IP_ARGS(match->ip_dst));
 
-    if (match->in_key_present) {
-        if (match->in_key_flow) {
-            ds_put_cstr(ds, ", key=flow");
-        } else {
-            ds_put_format(ds, ", key=%#"PRIx64, ntohll(match->in_key));
-        }
+    if (match->in_key_flow) {
+        ds_put_cstr(ds, ", key=flow");
+    } else {
+        ds_put_format(ds, ", key=%#"PRIx64, ntohll(match->in_key));
     }
 
     ds_put_format(ds, ", dp port=%"PRIu32, match->odp_port);
