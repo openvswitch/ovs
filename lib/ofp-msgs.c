@@ -832,6 +832,8 @@ ofpmp_reserve(struct list *replies, size_t len)
 
         next = ofpbuf_new(MAX(1024, hdrs_len + len));
         ofpbuf_put(next, msg->data, hdrs_len);
+        next->l2 = next->data;
+        next->l3 = ofpbuf_tail(next);
         list_push_back(replies, &next->list_node);
 
         *ofpmp_flags__(msg->data) |= htons(OFPSF_REPLY_MORE);
