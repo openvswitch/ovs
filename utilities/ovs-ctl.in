@@ -287,6 +287,7 @@ save_ofports_if_required () {
                 "${script_ofports}" script_ofports
             ;;
         *)
+            script_ofports=""
             ;;
     esac
 }
