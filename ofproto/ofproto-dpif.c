@@ -3318,15 +3318,11 @@ send_packet_in_miss(struct ofproto_dpif *ofproto, const struct ofpbuf *packet,
 
 static enum slow_path_reason
 process_special(struct ofproto_dpif *ofproto, const struct flow *flow,
-                const struct ofpbuf *packet)
+                const struct ofport_dpif *ofport, const struct ofpbuf *packet)
 {
-    struct ofport_dpif *ofport = get_ofp_port(ofproto, flow->in_port);
-
     if (!ofport) {
         return 0;
-    }
-
-    if (ofport->cfm && cfm_should_process_flow(ofport->cfm, flow)) {
+    } else if (ofport->cfm && cfm_should_process_flow(ofport->cfm, flow)) {
         if (packet) {
             cfm_process_heartbeat(ofport->cfm, packet);
         }
@@ -3342,8 +3338,9 @@ process_special(struct ofproto_dpif *ofproto, const struct flow *flow,
             stp_process_packet(ofport, packet);
         }
         return SLOW_STP;
+    } else {
+        return 0;
     }
-    return 0;
 }
 
 static struct flow_miss *
@@ -5554,6 +5551,7 @@ send_packet(const struct ofport_dpif *ofport, struct ofpbuf *packet)
 
 /* OpenFlow to datapath action translation. */
 
+static bool may_receive(const struct ofport_dpif *, struct action_xlate_ctx *);
 static void do_xlate_actions(const struct ofpact *, size_t ofpacts_len,
                              struct action_xlate_ctx *);
 static void xlate_normal(struct action_xlate_ctx *);
@@ -5734,6 +5732,7 @@ compose_output_action__(struct action_xlate_ctx *ctx, uint16_t ofp_port,
         struct ofport_dpif *peer = ofport_get_peer(ofport);
         struct flow old_flow = ctx->flow;
         const struct ofproto_dpif *peer_ofproto;
+        struct ofport_dpif *in_port;
 
         if (!peer) {
             xlate_report(ctx, "Nonexistent patch port peer");
@@ -5751,7 +5750,22 @@ compose_output_action__(struct action_xlate_ctx *ctx, uint16_t ofp_port,
         ctx->flow.metadata = htonll(0);
         memset(&ctx->flow.tunnel, 0, sizeof ctx->flow.tunnel);
         memset(ctx->flow.regs, 0, sizeof ctx->flow.regs);
-        xlate_table_action(ctx, ctx->flow.in_port, 0, true);
+
+        in_port = get_ofp_port(ctx->ofproto, ctx->flow.in_port);
+        if (!in_port || may_receive(in_port, ctx)) {
+            if (!in_port || stp_forward_in_state(in_port->stp_state)) {
+                xlate_table_action(ctx, ctx->flow.in_port, 0, true);
+            } else {
+                /* Forwarding is disabled by STP.  Let OFPP_NORMAL and the
+                 * learning action look at the packet, then drop it. */
+                struct flow old_base_flow = ctx->base_flow;
+                size_t old_size = ctx->odp_actions->size;
+                xlate_table_action(ctx, ctx->flow.in_port, 0, true);
+                ctx->base_flow = old_base_flow;
+                ctx->odp_actions->size = old_size;
+            }
+        }
+
         ctx->flow = old_flow;
         ctx->ofproto = ofproto_dpif_cast(ofport->up.ofproto);
 
@@ -6254,15 +6268,8 @@ static void
 do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
                  struct action_xlate_ctx *ctx)
 {
-    const struct ofport_dpif *port;
     bool was_evictable = true;
     const struct ofpact *a;
-
-    port = get_ofp_port(ctx->ofproto, ctx->flow.in_port);
-    if (port && !may_receive(port, ctx)) {
-        /* Drop this flow. */
-        return;
-    }
 
     if (ctx->rule) {
         /* Don't let the rule we're working on get evicted underneath us. */
@@ -6443,12 +6450,6 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
     }
 
 out:
-    /* We've let OFPP_NORMAL and the learning action look at the packet,
-     * so drop it now if forwarding is disabled. */
-    if (port && !stp_forward_in_state(port->stp_state)) {
-        ofpbuf_clear(ctx->odp_actions);
-        add_sflow_action(ctx);
-    }
     if (ctx->rule) {
         ctx->rule->up.evictable = was_evictable;
     }
@@ -6511,6 +6512,7 @@ xlate_actions(struct action_xlate_ctx *ctx,
     static bool hit_resubmit_limit;
 
     enum slow_path_reason special;
+    struct ofport_dpif *in_port;
 
     COVERAGE_INC(ofproto_dpif_xlate);
 
@@ -6564,7 +6566,8 @@ xlate_actions(struct action_xlate_ctx *ctx,
         }
     }
 
-    special = process_special(ctx->ofproto, &ctx->flow, ctx->packet);
+    in_port = get_ofp_port(ctx->ofproto, ctx->flow.in_port);
+    special = process_special(ctx->ofproto, &ctx->flow, in_port, ctx->packet);
     if (special) {
         ctx->slow |= special;
     } else {
@@ -6573,7 +6576,17 @@ xlate_actions(struct action_xlate_ctx *ctx,
         uint32_t local_odp_port;
 
         add_sflow_action(ctx);
-        do_xlate_actions(ofpacts, ofpacts_len, ctx);
+
+        if (!in_port || may_receive(in_port, ctx)) {
+            do_xlate_actions(ofpacts, ofpacts_len, ctx);
+
+            /* We've let OFPP_NORMAL and the learning action look at the
+             * packet, so drop it now if forwarding is disabled. */
+            if (in_port && !stp_forward_in_state(in_port->stp_state)) {
+                ofpbuf_clear(ctx->odp_actions);
+                add_sflow_action(ctx);
+            }
+        }
 
         if (ctx->max_resubmit_trigger && !ctx->resubmit_hook) {
             if (!hit_resubmit_limit) {
