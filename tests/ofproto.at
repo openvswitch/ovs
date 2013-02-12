@@ -1332,7 +1332,7 @@ echo >>expout "OFPT_ROLE_REPLY (OF1.2) (xid=0x2): role=equal"
 # Become slave (generation_id is initially undefined, so 2^63+2 should not be stale)
 ovs-appctl -t ovs-ofctl ofctl/send 031800180000000300000003000000008000000000000002
 echo >>expout "send: OFPT_ROLE_REQUEST (OF1.2) (xid=0x3): role=slave generation_id=9223372036854775810"
-echo >>expout "OFPT_ROLE_REPLY (OF1.2) (xid=0x3): role=slave"
+echo >>expout "OFPT_ROLE_REPLY (OF1.2) (xid=0x3): role=slave generation_id=9223372036854775810"
 
 # Try to become the master using a stale generation ID
 ovs-appctl -t ovs-ofctl ofctl/send 031800180000000400000002000000000000000000000002
@@ -1343,7 +1343,7 @@ echo >>expout "OFPT_ROLE_REQUEST (OF1.2) (xid=0x4): role=master generation_id=2"
 # Become master using a valid generation ID
 ovs-appctl -t ovs-ofctl ofctl/send 031800180000000500000002000000000000000000000001
 echo >>expout "send: OFPT_ROLE_REQUEST (OF1.2) (xid=0x5): role=master generation_id=1"
-echo >>expout "OFPT_ROLE_REPLY (OF1.2) (xid=0x5): role=master"
+echo >>expout "OFPT_ROLE_REPLY (OF1.2) (xid=0x5): role=master generation_id=1"
 ovs-appctl -t ovs-ofctl ofctl/barrier
 echo >>expout "OFPT_BARRIER_REPLY (OF1.2) (xid=0x3):"
 

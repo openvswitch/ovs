@@ -1549,9 +1549,9 @@ AT_SETUP([OFPT_ROLE_REPLY - OF1.2])
 AT_KEYWORDS([ofp-print])
 AT_CHECK([ovs-ofctl ofp-print "\
 03 19 00 18 00 00 00 02 00 00 00 03 00 00 00 00 \
-00 00 00 00 00 00 00 00 \
+12 34 56 78 ab cd ef 90 \
 "], [0], [dnl
-OFPT_ROLE_REPLY (OF1.2) (xid=0x2): role=slave
+OFPT_ROLE_REPLY (OF1.2) (xid=0x2): role=slave generation_id=1311768467750121360
 ])
 AT_CLEANUP
 

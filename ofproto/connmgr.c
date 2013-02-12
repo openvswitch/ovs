@@ -823,6 +823,17 @@ ofconn_get_type(const struct ofconn *ofconn)
     return ofconn->type;
 }
 
+/* If a master election id is defined, stores it into '*idp' and returns
+ * true.  Otherwise, stores UINT64_MAX into '*idp' and returns false. */
+bool
+ofconn_get_master_election_id(const struct ofconn *ofconn, uint64_t *idp)
+{
+    *idp = (ofconn->connmgr->master_election_id_defined
+            ? ofconn->connmgr->master_election_id
+            : UINT64_MAX);
+    return ofconn->connmgr->master_election_id_defined;
+}
+
 /* Sets the master election id.
  *
  * Returns true if successful, false if the id is stale

@@ -3601,8 +3601,8 @@ handle_role_request(struct ofconn *ofconn, const struct ofp_header *oh)
     }
 
     reply.role = ofconn_get_role(ofconn);
-    reply.have_generation_id = false;
-    reply.generation_id = 0;
+    reply.have_generation_id = ofconn_get_master_election_id(
+        ofconn, &reply.generation_id);
     buf = ofputil_encode_role_reply(oh, &reply);
     ofconn_send_reply(ofconn, buf);
 

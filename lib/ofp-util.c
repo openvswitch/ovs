@@ -3400,8 +3400,9 @@ ofputil_decode_role_message(const struct ofp_header *oh,
         }
 
         rr->role = ntohl(orr->role);
-        if (raw == OFPRAW_OFPT12_ROLE_REPLY
-            || orr->role == htonl(OFPCR12_ROLE_NOCHANGE)) {
+        if (raw == OFPRAW_OFPT12_ROLE_REQUEST
+            ? orr->role == htonl(OFPCR12_ROLE_NOCHANGE)
+            : orr->generation_id == htonll(UINT64_MAX)) {
             rr->have_generation_id = false;
             rr->generation_id = 0;
         } else {
@@ -3447,20 +3448,11 @@ ofputil_encode_role_reply(const struct ofp_header *request,
 
         buf = ofpraw_alloc_reply(OFPRAW_OFPT12_ROLE_REPLY, request, 0);
         orr = ofpbuf_put_zeros(buf, sizeof *orr);
-        orr->role = htonl(rr->role);
 
-        /*
-         * OpenFlow specification does not specify use of generation_id field
-         * on reply messages.  Intuitively, it would seem a good idea to return
-         * the current value.  However, the current value is undefined
-         * initially, and there is no way to insert an undefined value in the
-         * message.  Therefore we leave the generation_id zeroed on reply
-         * messages.
-         *
-         * A request for clarification has been filed with the Open Networking
-         * Foundation as EXT-272.
-         */
-        orr->generation_id = htonll(0);
+        orr->role = htonl(rr->role);
+        orr->generation_id = htonll(rr->have_generation_id
+                                    ? rr->generation_id
+                                    : UINT64_MAX);
     } else if (raw == OFPRAW_NXT_ROLE_REQUEST) {
         struct nx_role_request *nrr;
 
