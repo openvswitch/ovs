@@ -403,11 +403,11 @@ ofpraw_pull(enum ofpraw *rawp, struct ofpbuf *msg)
 }
 
 /* Does the same job as ofpraw_pull(), except that it assert-fails if
- * ofpbuf_pull() would have reported an error.  Thus, it's able to use the
+ * ofpraw_pull() would have reported an error.  Thus, it's able to use the
  * return value for the OFPRAW_* message type instead of an error code.
  *
  * (It only makes sense to use this function if you previously called
- * ofpbuf_decode() on the message and thus know that it's OK.) */
+ * ofpraw_decode() on the message and thus know that it's OK.) */
 enum ofpraw
 ofpraw_pull_assert(struct ofpbuf *msg)
 {
