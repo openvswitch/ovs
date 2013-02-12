@@ -1,6 +1,6 @@
 {"name": "Open_vSwitch",
  "version": "7.0.0",
- "cksum": "438518409 17329",
+ "cksum": "3537583872 17299",
  "tables": {
    "Open_vSwitch": {
      "columns": {
@@ -428,8 +428,7 @@
          "ephemeral": true},
        "status": {
          "type": {"key": "string", "value": "string", "min": 0, "max": "unlimited"},
-         "ephemeral": true}},
-     "indexes": [["target"]]},
+         "ephemeral": true}}},
    "Manager": {
      "columns": {
        "target": {
