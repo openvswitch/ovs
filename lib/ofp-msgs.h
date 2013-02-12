@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012 Nicira, Inc.
+ * Copyright (c) 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -387,6 +387,7 @@ enum ofpraw {
 
 /* Decoding messages into OFPRAW_* values. */
 enum ofperr ofpraw_decode(enum ofpraw *, const struct ofp_header *);
+enum ofpraw ofpraw_decode_assert(const struct ofp_header *);
 enum ofperr ofpraw_pull(enum ofpraw *, struct ofpbuf *);
 enum ofpraw ofpraw_pull_assert(struct ofpbuf *);
 
