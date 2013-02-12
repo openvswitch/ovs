@@ -3382,43 +3382,53 @@ enum ofperr
 ofputil_decode_role_message(const struct ofp_header *oh,
                             struct ofputil_role_request *rr)
 {
-    const struct ofp12_role_request *orr = ofpmsg_body(oh);
-    uint32_t role = ntohl(orr->role);
     struct ofpbuf b;
     enum ofpraw raw;
-
-    memset(rr, 0, sizeof *rr);
 
     ofpbuf_use_const(&b, oh, ntohs(oh->length));
     raw = ofpraw_pull_assert(&b);
 
-    if (raw == OFPRAW_OFPT12_ROLE_REQUEST
-        || raw == OFPRAW_OFPT12_ROLE_REPLY) {
+    if (raw == OFPRAW_OFPT12_ROLE_REQUEST ||
+        raw == OFPRAW_OFPT12_ROLE_REPLY) {
+        const struct ofp12_role_request *orr = b.l3;
 
-        if (raw == OFPRAW_OFPT12_ROLE_REQUEST) {
-            if (role == OFPCR12_ROLE_NOCHANGE) {
-                rr->request_current_role_only = true;
-                return 0;
-            }
-            if (role == OFPCR12_ROLE_MASTER || role == OFPCR12_ROLE_SLAVE) {
-                rr->generation_id = ntohll(orr->generation_id);
-                rr->have_generation_id = true;
-            }
+        if (orr->role != htonl(OFPCR12_ROLE_NOCHANGE) &&
+            orr->role != htonl(OFPCR12_ROLE_EQUAL) &&
+            orr->role != htonl(OFPCR12_ROLE_MASTER) &&
+            orr->role != htonl(OFPCR12_ROLE_SLAVE)) {
+            return OFPERR_OFPRRFC_BAD_ROLE;
         }
 
-        /* Map to enum nx_role */
-        role -= 1; /* OFPCR12_ROLE_MASTER -> NX_ROLE_MASTER etc. */
-    } else if (raw != OFPRAW_NXT_ROLE_REQUEST
-               && raw != OFPRAW_NXT_ROLE_REPLY) {
-        return OFPERR_OFPBRC_BAD_TYPE;
+        rr->role = ntohl(orr->role);
+        if (raw == OFPRAW_OFPT12_ROLE_REPLY
+            || orr->role == htonl(OFPCR12_ROLE_NOCHANGE)) {
+            rr->have_generation_id = false;
+            rr->generation_id = 0;
+        } else {
+            rr->have_generation_id = true;
+            rr->generation_id = ntohll(orr->generation_id);
+        }
+    } else if (raw == OFPRAW_NXT_ROLE_REQUEST ||
+               raw == OFPRAW_NXT_ROLE_REPLY) {
+        const struct nx_role_request *nrr = b.l3;
+
+        BUILD_ASSERT(NX_ROLE_OTHER + 1 == OFPCR12_ROLE_EQUAL);
+        BUILD_ASSERT(NX_ROLE_MASTER + 1 == OFPCR12_ROLE_MASTER);
+        BUILD_ASSERT(NX_ROLE_SLAVE + 1 == OFPCR12_ROLE_SLAVE);
+
+        if (nrr->role != htonl(NX_ROLE_OTHER) &&
+            nrr->role != htonl(NX_ROLE_MASTER) &&
+            nrr->role != htonl(NX_ROLE_SLAVE)) {
+            return OFPERR_OFPRRFC_BAD_ROLE;
+        }
+
+        rr->role = ntohl(nrr->role) + 1;
+        rr->have_generation_id = false;
+        rr->generation_id = 0;
+    } else {
+        NOT_REACHED();
     }
 
-    if (role != NX_ROLE_OTHER && role != NX_ROLE_MASTER
-        && role != NX_ROLE_SLAVE) {
-        return OFPERR_OFPRRFC_BAD_ROLE;
-    }
-
-    rr->role = role;
     return 0;
 }
 
@@ -3426,34 +3436,19 @@ ofputil_decode_role_message(const struct ofp_header *oh,
  * buffer owned by the caller. */
 struct ofpbuf *
 ofputil_encode_role_reply(const struct ofp_header *request,
-                          enum nx_role role)
+                          const struct ofputil_role_request *rr)
 {
-    struct ofp12_role_request *reply;
     struct ofpbuf *buf;
-    size_t reply_size;
-
-    struct ofpbuf b;
     enum ofpraw raw;
 
-    ofpbuf_use_const(&b, request, ntohs(request->length));
-    raw = ofpraw_pull_assert(&b);
+    raw = ofpraw_decode_assert(request);
     if (raw == OFPRAW_OFPT12_ROLE_REQUEST) {
-        reply_size = sizeof (struct ofp12_role_request);
-        raw = OFPRAW_OFPT12_ROLE_REPLY;
-    }
-    else if (raw == OFPRAW_NXT_ROLE_REQUEST) {
-        reply_size = sizeof (struct nx_role_request);
-        raw = OFPRAW_NXT_ROLE_REPLY;
-    } else {
-        NOT_REACHED();
-    }
+        struct ofp12_role_request *orr;
 
-    buf = ofpraw_alloc_reply(raw, request, 0);
-    reply = ofpbuf_put_zeros(buf, reply_size);
+        buf = ofpraw_alloc_reply(OFPRAW_OFPT12_ROLE_REPLY, request, 0);
+        orr = ofpbuf_put_zeros(buf, sizeof *orr);
+        orr->role = htonl(rr->role);
 
-    if (raw == OFPRAW_OFPT12_ROLE_REPLY) {
-        /* Map to OpenFlow enum ofp12_controller_role */
-        role += 1; /* NX_ROLE_MASTER -> OFPCR12_ROLE_MASTER etc. */
         /*
          * OpenFlow specification does not specify use of generation_id field
          * on reply messages.  Intuitively, it would seem a good idea to return
@@ -3465,8 +3460,20 @@ ofputil_encode_role_reply(const struct ofp_header *request,
          * A request for clarification has been filed with the Open Networking
          * Foundation as EXT-272.
          */
+        orr->generation_id = htonll(0);
+    } else if (raw == OFPRAW_NXT_ROLE_REQUEST) {
+        struct nx_role_request *nrr;
+
+        BUILD_ASSERT(NX_ROLE_OTHER == OFPCR12_ROLE_EQUAL - 1);
+        BUILD_ASSERT(NX_ROLE_MASTER == OFPCR12_ROLE_MASTER - 1);
+        BUILD_ASSERT(NX_ROLE_SLAVE == OFPCR12_ROLE_SLAVE - 1);
+
+        buf = ofpraw_alloc_reply(OFPRAW_NXT_ROLE_REPLY, request, 0);
+        nrr = ofpbuf_put_zeros(buf, sizeof *nrr);
+        nrr->role = htonl(rr->role - 1);
+    } else {
+        NOT_REACHED();
     }
-    reply->role = htonl(role);
 
     return buf;
 }

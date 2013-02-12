@@ -2238,7 +2238,7 @@ handle_set_config(struct ofconn *ofconn, const struct ofp_header *oh)
     uint16_t flags = ntohs(osc->flags);
 
     if (ofconn_get_type(ofconn) != OFCONN_PRIMARY
-        || ofconn_get_role(ofconn) != NX_ROLE_SLAVE) {
+        || ofconn_get_role(ofconn) != OFPCR12_ROLE_SLAVE) {
         enum ofp_config_flags cur = ofproto->frag_handling;
         enum ofp_config_flags next = flags & OFPC_FRAG_MASK;
 
@@ -2272,7 +2272,7 @@ static enum ofperr
 reject_slave_controller(struct ofconn *ofconn)
 {
     if (ofconn_get_type(ofconn) == OFCONN_PRIMARY
-        && ofconn_get_role(ofconn) == NX_ROLE_SLAVE) {
+        && ofconn_get_role(ofconn) == OFPCR12_ROLE_SLAVE) {
         return OFPERR_OFPBRC_EPERM;
     } else {
         return 0;
@@ -3576,38 +3576,34 @@ handle_flow_mod__(struct ofproto *ofproto, struct ofconn *ofconn,
 static enum ofperr
 handle_role_request(struct ofconn *ofconn, const struct ofp_header *oh)
 {
-    struct ofputil_role_request rr;
+    struct ofputil_role_request request;
+    struct ofputil_role_request reply;
     struct ofpbuf *buf;
-    uint32_t role;
     enum ofperr error;
 
-    error = ofputil_decode_role_message(oh, &rr);
+    error = ofputil_decode_role_message(oh, &request);
     if (error) {
         return error;
     }
 
-    if (rr.request_current_role_only) {
-        role = ofconn_get_role(ofconn); /* NX_ROLE_* */
-        goto reply;
-    }
-
-    role = rr.role;
-
-    if (ofconn_get_role(ofconn) != role
-        && ofconn_has_pending_opgroups(ofconn)) {
-        return OFPROTO_POSTPONE;
-    }
-
-    if (rr.have_generation_id) {
-        if (!ofconn_set_master_election_id(ofconn, rr.generation_id)) {
-            return OFPERR_OFPRRFC_STALE;
+    if (request.role != OFPCR12_ROLE_NOCHANGE) {
+        if (ofconn_get_role(ofconn) != request.role
+            && ofconn_has_pending_opgroups(ofconn)) {
+            return OFPROTO_POSTPONE;
         }
+
+        if (request.have_generation_id
+            && !ofconn_set_master_election_id(ofconn, request.generation_id)) {
+                return OFPERR_OFPRRFC_STALE;
+        }
+
+        ofconn_set_role(ofconn, request.role);
     }
 
-    ofconn_set_role(ofconn, role);
-
-reply:
-    buf = ofputil_encode_role_reply(oh, role);
+    reply.role = ofconn_get_role(ofconn);
+    reply.have_generation_id = false;
+    reply.generation_id = 0;
+    buf = ofputil_encode_role_reply(oh, &reply);
     ofconn_send_reply(ofconn, buf);
 
     return 0;

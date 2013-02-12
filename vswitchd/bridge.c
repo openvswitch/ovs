@@ -1961,15 +1961,16 @@ run_system_stats(void)
 }
 
 static inline const char *
-nx_role_to_str(enum nx_role role)
+ofp12_controller_role_to_str(enum ofp12_controller_role role)
 {
     switch (role) {
-    case NX_ROLE_OTHER:
+    case OFPCR12_ROLE_EQUAL:
         return "other";
-    case NX_ROLE_MASTER:
+    case OFPCR12_ROLE_MASTER:
         return "master";
-    case NX_ROLE_SLAVE:
+    case OFPCR12_ROLE_SLAVE:
         return "slave";
+    case OFPCR12_ROLE_NOCHANGE:
     default:
         return "*** INVALID ROLE ***";
     }
@@ -2005,7 +2006,8 @@ refresh_controller_status(void)
             }
 
             ovsrec_controller_set_is_connected(cfg, cinfo->is_connected);
-            ovsrec_controller_set_role(cfg, nx_role_to_str(cinfo->role));
+            ovsrec_controller_set_role(cfg, ofp12_controller_role_to_str(
+                                           cinfo->role));
             ovsrec_controller_set_status(cfg, &smap);
             smap_destroy(&smap);
         } else {

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1550,19 +1550,18 @@ ofp_print_role_message(struct ds *string, const struct ofp_header *oh)
     }
 
     ds_put_cstr(string, " role=");
-    if (rr.request_current_role_only) {
-        ds_put_cstr(string, "nochange");
-        return;
-    }
 
     switch (rr.role) {
-    case NX_ROLE_OTHER:
+    case OFPCR12_ROLE_NOCHANGE:
+        ds_put_cstr(string, "nochange");
+        break;
+    case OFPCR12_ROLE_EQUAL:
         ds_put_cstr(string, "equal"); /* OF 1.2 wording */
         break;
-    case NX_ROLE_MASTER:
+    case OFPCR12_ROLE_MASTER:
         ds_put_cstr(string, "master");
         break;
-    case NX_ROLE_SLAVE:
+    case OFPCR12_ROLE_SLAVE:
         ds_put_cstr(string, "slave");
         break;
     default:

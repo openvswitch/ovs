@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -508,16 +508,15 @@ struct ofpbuf *ofputil_encode_port_mod(const struct ofputil_port_mod *,
 
 /* Abstract ofp_role_request and reply. */
 struct ofputil_role_request {
-    bool request_current_role_only; /* no role change */
+    enum ofp12_controller_role role;
     bool have_generation_id;
-    enum nx_role role;
     uint64_t generation_id;
 };
 
 enum ofperr ofputil_decode_role_message(const struct ofp_header *,
                                         struct ofputil_role_request *);
 struct ofpbuf *ofputil_encode_role_reply(const struct ofp_header *,
-                                         enum nx_role current_role);
+                                         const struct ofputil_role_request *);
 
 /* Abstract table stats.
  *

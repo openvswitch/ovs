@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -96,9 +96,10 @@ void connmgr_get_snoops(const struct connmgr *, struct sset *snoops);
 /* Individual connections to OpenFlow controllers. */
 enum ofconn_type ofconn_get_type(const struct ofconn *);
 
+bool ofconn_get_master_election_id(const struct ofconn *, uint64_t *idp);
 bool ofconn_set_master_election_id(struct ofconn *, uint64_t);
-enum nx_role ofconn_get_role(const struct ofconn *);
-void ofconn_set_role(struct ofconn *, enum nx_role);
+enum ofp12_controller_role ofconn_get_role(const struct ofconn *);
+void ofconn_set_role(struct ofconn *, enum ofp12_controller_role);
 
 enum ofputil_protocol ofconn_get_protocol(const struct ofconn *);
 void ofconn_set_protocol(struct ofconn *, enum ofputil_protocol);

@@ -60,7 +60,7 @@ struct ofconn {
 /* State that should be cleared from one connection to the next. */
 
     /* OpenFlow state. */
-    enum nx_role role;           /* Role. */
+    enum ofp12_controller_role role;           /* Role. */
     enum ofputil_protocol protocol; /* Current protocol variant. */
     enum nx_packet_in_format packet_in_format; /* OFPT_PACKET_IN format. */
 
@@ -777,12 +777,13 @@ static int
 snoop_preference(const struct ofconn *ofconn)
 {
     switch (ofconn->role) {
-    case NX_ROLE_MASTER:
+    case OFPCR12_ROLE_MASTER:
         return 3;
-    case NX_ROLE_OTHER:
+    case OFPCR12_ROLE_EQUAL:
         return 2;
-    case NX_ROLE_SLAVE:
+    case OFPCR12_ROLE_SLAVE:
         return 1;
+    case OFPCR12_ROLE_NOCHANGE:
     default:
         /* Shouldn't happen. */
         return 0;
@@ -844,24 +845,24 @@ ofconn_set_master_election_id(struct ofconn *ofconn, uint64_t id)
 
 /* Returns the role configured for 'ofconn'.
  *
- * The default role, if no other role has been set, is NX_ROLE_OTHER. */
-enum nx_role
+ * The default role, if no other role has been set, is OFPCR12_ROLE_EQUAL. */
+enum ofp12_controller_role
 ofconn_get_role(const struct ofconn *ofconn)
 {
     return ofconn->role;
 }
 
-/* Changes 'ofconn''s role to 'role'.  If 'role' is NX_ROLE_MASTER then any
- * existing master is demoted to a slave. */
+/* Changes 'ofconn''s role to 'role'.  If 'role' is OFPCR12_ROLE_MASTER then
+ * any existing master is demoted to a slave. */
 void
-ofconn_set_role(struct ofconn *ofconn, enum nx_role role)
+ofconn_set_role(struct ofconn *ofconn, enum ofp12_controller_role role)
 {
-    if (role == NX_ROLE_MASTER) {
+    if (role == OFPCR12_ROLE_MASTER) {
         struct ofconn *other;
 
         HMAP_FOR_EACH (other, hmap_node, &ofconn->connmgr->controllers) {
-            if (other->role == NX_ROLE_MASTER) {
-                other->role = NX_ROLE_SLAVE;
+            if (other->role == OFPCR12_ROLE_MASTER) {
+                other->role = OFPCR12_ROLE_SLAVE;
             }
         }
     }
@@ -1092,7 +1093,7 @@ ofconn_flush(struct ofconn *ofconn)
     struct ofmonitor *monitor, *next_monitor;
     int i;
 
-    ofconn->role = NX_ROLE_OTHER;
+    ofconn->role = OFPCR12_ROLE_EQUAL;
     ofconn_set_protocol(ofconn, OFPUTIL_P_NONE);
     ofconn->packet_in_format = NXPIF_OPENFLOW10;
 
@@ -1307,7 +1308,7 @@ ofconn_receives_async_msg(const struct ofconn *ofconn,
         return false;
     }
 
-    async_config = (ofconn->role == NX_ROLE_SLAVE
+    async_config = (ofconn->role == OFPCR12_ROLE_SLAVE
                     ? ofconn->slave_async_config
                     : ofconn->master_async_config);
     if (!(async_config[type] & (1u << reason))) {
