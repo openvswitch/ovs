@@ -72,7 +72,7 @@ ofperr_is_valid(enum ofperr error)
 /* Returns the OFPERR_* value that corresponds to 'type' and 'code' within
  * 'version', or 0 if either no such OFPERR_* value exists or 'version' is
  * unknown. */
-enum ofperr
+static enum ofperr
 ofperr_decode(enum ofp_version version, uint16_t type, uint16_t code)
 {
     const struct ofperr_domain *domain = ofperr_domain_from_version(version);

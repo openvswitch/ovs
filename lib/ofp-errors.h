@@ -542,7 +542,6 @@ const char *ofperr_domain_get_name(enum ofp_version);
 
 bool ofperr_is_valid(enum ofperr);
 
-enum ofperr ofperr_decode(enum ofp_version, uint16_t type, uint16_t code);
 enum ofperr ofperr_from_name(const char *);
 
 enum ofperr ofperr_decode_msg(const struct ofp_header *,
