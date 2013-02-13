@@ -212,17 +212,13 @@ def extract_ofp_errors(filenames):
             names.append(enum)
 
             for dst in dsts.split(', '):
-                m = re.match(r'([A-Z0-9.+]+)\((\d+|(0x)[0-9a-fA-F]+)(?:,(\d+))?\)$', dst)
+                m = re.match(r'([A-Z0-9.+]+)\((\d+)(?:,(\d+))?\)$', dst)
                 if not m:
                     fatal("%s: syntax error in destination" % dst)
                 targets = m.group(1)
+                type_ = int(m.group(2))
                 if m.group(3):
-                    base = 16
-                else:
-                    base = 10
-                type_ = int(m.group(2), base)
-                if m.group(4):
-                    code = int(m.group(4))
+                    code = int(m.group(3))
                 else:
                     code = None
 
