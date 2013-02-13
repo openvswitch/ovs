@@ -228,6 +228,7 @@ CAP_MULTIPATH            = 'multipath'
 CAP_NETWORK_CONFIG       = 'network-config'
 CAP_NETWORK_STATUS       = 'network-status'
 CAP_OEM                  = 'oem'
+CAP_OPENVSWITCH_LOGS	 = 'ovs-system-logs'
 CAP_PAM                  = 'pam'
 CAP_PROCESS_LIST         = 'process-list'
 CAP_PERSISTENT_STATS     = 'persistent-stats'
@@ -276,12 +277,14 @@ cap(CAP_NETWORK_CONFIG,      PII_IF_CUSTOMIZED,
                                         min_size=0,     max_size=40*KB)
 cap(CAP_NETWORK_STATUS,      PII_YES,                   max_size=50*KB,
     max_time=30)
+cap(CAP_OPENVSWITCH_LOGS,    PII_MAYBE,                 max_size=-1,
+    max_time=5)
 cap(CAP_PAM,                 PII_NO,                    max_size=50*KB)
 cap(CAP_PERSISTENT_STATS,    PII_MAYBE,                 max_size=50*MB,
     max_time=60)
 cap(CAP_PROCESS_LIST,        PII_YES,                   max_size=30*KB,
     max_time=20)
-cap(CAP_SYSTEM_LOGS,         PII_MAYBE,                 max_size=50*MB,
+cap(CAP_SYSTEM_LOGS,         PII_MAYBE,                 max_size=200*MB,
     max_time=5)
 cap(CAP_SYSTEM_SERVICES,     PII_NO,                    max_size=5*KB,
     max_time=20)
@@ -628,17 +631,16 @@ exclude those logs from the archive.
     cmd_output(CAP_PROCESS_LIST, [PS, 'wwwaxf', '-eo', 'pid,tty,stat,time,nice,psr,pcpu,pmem,nwchan,wchan:25,args'], label='process-tree')
     func_output(CAP_PROCESS_LIST, 'fd_usage', fd_usage)
 
-    logs = ([ VAR_LOG_DIR + x for x in
-             [ 'crit.log', 'kern.log', 'daemon.log', 'user.log',
-             'syslog', 'messages', 'secure', 'debug', 'dmesg', 'boot' ]]
-            + [ OPENVSWITCH_LOG_DIR + x for x in
-                [ 'ovs-vswitchd.log', 'ovsdb-server.log',
-                  'ovs-xapi-sync.log', 'ovs-monitor-ipsec.log' ]])
-    file_output(CAP_SYSTEM_LOGS, logs)
-    file_output(CAP_SYSTEM_LOGS,
-                [ '%s.%d' % (f, n) for n in range(20) for f in logs ])
-    file_output(CAP_SYSTEM_LOGS,
-                [ '%s.%d.gz' % (f, n) for n in range(20) for f in logs ])
+    system_logs = (CAP_SYSTEM_LOGS, [ VAR_LOG_DIR + x for x in
+        ['crit.log', 'kern.log', 'daemon.log', 'user.log',
+        'syslog', 'messages', 'secure', 'debug', 'dmesg', 'boot']])
+    ovs_logs = (CAP_OPENVSWITCH_LOGS, [ OPENVSWITCH_LOG_DIR + x for x in
+        ['ovs-vswitchd.log', 'ovsdb-server.log',
+        'ovs-xapi-sync.log', 'ovs-monitor-ipsec.log']])
+    for cap, logs in [system_logs, ovs_logs]:
+        file_output(cap, logs)
+        file_output(cap, ['%s.%d' % (f, n) for n in range(20) for f in logs])
+        file_output(cap, ['%s.%d.gz' % (f, n) for n in range(20) for f in logs])
 
     if not os.path.exists('/var/log/dmesg') and not os.path.exists('/var/log/boot'):
         cmd_output(CAP_SYSTEM_LOGS, [DMESG])
