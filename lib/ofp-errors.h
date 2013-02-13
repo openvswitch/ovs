@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -108,7 +108,7 @@ enum ofperr {
 
     /* NX1.0(1,512), OF1.1+(1,9).  Specified table-id invalid or does not exist.
      * [ A non-standard error (1,512), formerly OFPERR_NXBRC_BAD_TABLE_ID,
-     *   is used for OpenFlow 1.0 as there seems to be no appropriste error
+     *   is used for OpenFlow 1.0 as there seems to be no appropriate error
      *   code defined the specification. ] */
     OFPERR_OFPBRC_BAD_TABLE_ID,
 
@@ -118,7 +118,7 @@ enum ofperr {
     /* NX1.0(1,514), NX1.1(1,514), OF1.2+(1,11).  Invalid port.
      * [ A non-standard error (1,514), formerly
      *   OFPERR_NXBRC_BAD_IN_PORT is used for OpenFlow 1.0 and 1.1 as there
-     *   seems to be no appropriste error code defined the specifications. ] */
+     *   seems to be no appropriate error code defined the specifications. ] */
     OFPERR_OFPBRC_BAD_PORT,
 
     /* OF1.2+(1,12).  Invalid packet in packet-out. */
