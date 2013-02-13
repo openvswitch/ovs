@@ -114,7 +114,7 @@ m4_foreach(
    AT_CHECK([test-util testname], [0], [], [])
    AT_CLEANUP])
 
-AT_SETUP([test unix socket -- short pathname])
+AT_SETUP([test unix socket, short pathname - C])
 AT_CHECK([test-unix-socket x])
 AT_CLEANUP
 
@@ -123,13 +123,33 @@ dnl go in a fixed-length field in struct sockaddr_un.  Generally the limit
 dnl is about 100 bytes.  On Linux, we work around this by indirecting through
 dnl a directory fd using /proc/self/fd/<dirfd>.  We do not have a workaround
 dnl for other platforms, so we skip the test there.
-AT_SETUP([test unix socket -- long pathname])
+AT_SETUP([test unix socket, long pathname - C])
 AT_SKIP_IF([test ! -d /proc/self/fd])
 dnl Linux has a 108 byte limit; this is 150 bytes long.
 longname=012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789
 mkdir $longname
 cd $longname
 AT_CHECK([test-unix-socket ../$longname/socket socket])
+AT_CLEANUP
+
+AT_SETUP([test unix socket, short pathname - Python])
+AT_SKIP_IF([test $HAVE_PYTHON = no])
+AT_CHECK([$PYTHON $srcdir/test-unix-socket.py x])
+AT_CLEANUP
+
+dnl Unix sockets with long names are problematic because the name has to
+dnl go in a fixed-length field in struct sockaddr_un.  Generally the limit
+dnl is about 100 bytes.  On Linux, we work around this by indirecting through
+dnl a directory fd using /proc/self/fd/<dirfd>.  We do not have a workaround
+dnl for other platforms, so we skip the test there.
+AT_SETUP([test unix socket, long pathname - Python])
+AT_SKIP_IF([test $HAVE_PYTHON = no])
+AT_SKIP_IF([test ! -d /proc/self/fd])
+dnl Linux has a 108 byte limit; this is 150 bytes long.
+longname=012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789
+mkdir $longname
+cd $longname
+AT_CHECK([$PYTHON $abs_srcdir/test-unix-socket.py ../$longname/socket socket])
 AT_CLEANUP
 
 AT_SETUP([ovs_assert])

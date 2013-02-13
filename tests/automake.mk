@@ -307,6 +307,7 @@ CHECK_PYFILES = \
 	tests/test-ovsdb.py \
 	tests/test-reconnect.py \
 	tests/MockXenAPI.py \
+	tests/test-unix-socket.py \
 	tests/test-unixctl.py \
 	tests/test-vlog.py
 EXTRA_DIST += $(CHECK_PYFILES)
