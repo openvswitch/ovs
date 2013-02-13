@@ -32,7 +32,6 @@
 
 /* XXX:
  *
- * Ability to generate actions on input for ECN
  * Ability to generate metadata for packet-outs
  * Disallow netdevs with names like "gre64_system" to prevent collisions. */
 
