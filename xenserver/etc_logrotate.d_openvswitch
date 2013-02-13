@@ -6,6 +6,8 @@
 # without warranty of any kind.
 
 /var/log/openvswitch/*.log {
+	daily
+	compress
 	sharedscripts
 	missingok
 	postrotate
