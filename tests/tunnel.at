@@ -87,11 +87,30 @@ br0 (dummy@ovs-dummy):
 	p2 2/2: (dummy)
 ])
 
+dnl Tunnel CE and encapsulated packet CE
+AT_CHECK([ovs-appctl ofproto/trace br0 'tunnel(tun_id=0x0,src=1.1.1.1,dst=2.2.2.2,tos=0x3,ttl=64,flags()),in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=3,ttl=64,frag=no),tcp(src=8,dst=9)'], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0],
+  [Datapath actions: 2
+])
+
+dnl Tunnel CE and encapsulated packet ECT(1)
 AT_CHECK([ovs-appctl ofproto/trace br0 'tunnel(tun_id=0x0,src=1.1.1.1,dst=2.2.2.2,tos=0x3,ttl=64,flags()),in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=1,ttl=64,frag=no),tcp(src=8,dst=9)'], [0], [stdout])
 AT_CHECK([tail -1 stdout], [0],
   [Datapath actions: 2
 ])
-OVS_VSWITCHD_STOP
+
+dnl Tunnel CE and encapsulated packet ECT(2)
+AT_CHECK([ovs-appctl ofproto/trace br0 'tunnel(tun_id=0x0,src=1.1.1.1,dst=2.2.2.2,tos=0x3,ttl=64,flags()),in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=2,ttl=64,frag=no),tcp(src=8,dst=9)'], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0],
+  [Datapath actions: 2
+])
+
+dnl Tunnel CE and encapsulated packet Non-ECT
+AT_CHECK([ovs-appctl ofproto/trace br0 'tunnel(tun_id=0x0,src=1.1.1.1,dst=2.2.2.2,tos=0x3,ttl=64,flags()),in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=9)'], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0],
+  [Datapath actions: drop
+])
+OVS_VSWITCHD_STOP(["/dropping tunnel packet marked ECN CE but is not ECN capable/d"])
 AT_CLEANUP
 
 AT_SETUP([tunnel - output])

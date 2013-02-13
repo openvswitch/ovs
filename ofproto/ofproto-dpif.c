@@ -6317,6 +6317,20 @@ may_receive(const struct ofport_dpif *port, struct action_xlate_ctx *ctx)
     return true;
 }
 
+static bool
+tunnel_ecn_ok(struct action_xlate_ctx *ctx)
+{
+    if (is_ip_any(&ctx->base_flow)
+        && (ctx->base_flow.tunnel.ip_tos & IP_ECN_MASK) == IP_ECN_CE
+        && (ctx->base_flow.nw_tos & IP_ECN_MASK) == IP_ECN_NOT_ECT) {
+        VLOG_WARN_RL(&rl, "dropping tunnel packet marked ECN CE but is not ECN"
+                     " capable");
+        return false;
+    }
+
+    return true;
+}
+
 static void
 do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
                  struct action_xlate_ctx *ctx)
@@ -6660,7 +6674,7 @@ xlate_actions(struct action_xlate_ctx *ctx,
 
         add_sflow_action(ctx);
 
-        if (!in_port || may_receive(in_port, ctx)) {
+        if (tunnel_ecn_ok(ctx) && (!in_port || may_receive(in_port, ctx))) {
             do_xlate_actions(ofpacts, ofpacts_len, ctx);
 
             /* We've let OFPP_NORMAL and the learning action look at the
