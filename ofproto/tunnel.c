@@ -197,14 +197,6 @@ tnl_port_receive(struct flow *flow)
         return NULL;
     }
 
-    if (is_ip_any(flow)
-        && ((flow->tunnel.ip_tos & IP_ECN_MASK) == IP_ECN_CE)
-        && (flow->nw_tos & IP_ECN_MASK) == IP_ECN_NOT_ECT) {
-        VLOG_WARN_RL(&rl, "dropping tunnel packet marked ECN CE but is not ECN"
-                     " capable");
-        return NULL;
-    }
-
     if (!VLOG_DROP_DBG(&dbg_rl)) {
         pre_flow_str = flow_to_string(flow);
     }
