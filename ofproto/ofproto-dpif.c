@@ -283,7 +283,6 @@ struct action_xlate_ctx {
     uint32_t sflow_odp_port;    /* Output port for composing sFlow action. */
     uint16_t user_cookie_offset;/* Used for user_action_cookie fixup. */
     bool exit;                  /* No further actions should be processed. */
-    struct flow orig_flow;      /* Copy of original flow. */
 };
 
 static void action_xlate_ctx_init(struct action_xlate_ctx *,
@@ -6536,6 +6535,7 @@ xlate_actions(struct action_xlate_ctx *ctx,
 
     enum slow_path_reason special;
     struct ofport_dpif *in_port;
+    struct flow orig_flow;
 
     COVERAGE_INC(ofproto_dpif_xlate);
 
@@ -6558,12 +6558,8 @@ xlate_actions(struct action_xlate_ctx *ctx,
 
     if (ctx->ofproto->has_mirrors || hit_resubmit_limit) {
         /* Do this conditionally because the copy is expensive enough that it
-         * shows up in profiles.
-         *
-         * We keep orig_flow in 'ctx' only because I couldn't make GCC 4.4
-         * believe that I wasn't using it without initializing it if I kept it
-         * in a local variable. */
-        ctx->orig_flow = ctx->flow;
+         * shows up in profiles. */
+        orig_flow = ctx->flow;
     }
 
     if (ctx->flow.nw_frag & FLOW_NW_FRAG_ANY) {
@@ -6619,7 +6615,7 @@ xlate_actions(struct action_xlate_ctx *ctx,
             } else if (!VLOG_DROP_ERR(&trace_rl)) {
                 struct ds ds = DS_EMPTY_INITIALIZER;
 
-                ofproto_trace(ctx->ofproto, &ctx->orig_flow, ctx->packet,
+                ofproto_trace(ctx->ofproto, &orig_flow, ctx->packet,
                               initial_tci, &ds);
                 VLOG_ERR("Trace triggered by excessive resubmit "
                          "recursion:\n%s", ds_cstr(&ds));
@@ -6640,7 +6636,7 @@ xlate_actions(struct action_xlate_ctx *ctx,
             }
         }
         if (ctx->ofproto->has_mirrors) {
-            add_mirror_actions(ctx, &ctx->orig_flow);
+            add_mirror_actions(ctx, &orig_flow);
         }
         fix_sflow_action(ctx);
     }
