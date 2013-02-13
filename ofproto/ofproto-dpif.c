@@ -6321,11 +6321,15 @@ static bool
 tunnel_ecn_ok(struct action_xlate_ctx *ctx)
 {
     if (is_ip_any(&ctx->base_flow)
-        && (ctx->base_flow.tunnel.ip_tos & IP_ECN_MASK) == IP_ECN_CE
-        && (ctx->base_flow.nw_tos & IP_ECN_MASK) == IP_ECN_NOT_ECT) {
-        VLOG_WARN_RL(&rl, "dropping tunnel packet marked ECN CE but is not ECN"
-                     " capable");
-        return false;
+        && (ctx->base_flow.tunnel.ip_tos & IP_ECN_MASK) == IP_ECN_CE) {
+        if ((ctx->base_flow.nw_tos & IP_ECN_MASK) == IP_ECN_NOT_ECT) {
+            VLOG_WARN_RL(&rl, "dropping tunnel packet marked ECN CE"
+                         " but is not ECN capable");
+            return false;
+        } else {
+            /* Set the ECN CE value in the tunneled packet. */
+            ctx->flow.nw_tos |= IP_ECN_CE;
+        }
     }
 
     return true;
