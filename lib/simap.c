@@ -147,6 +147,19 @@ simap_delete(struct simap *simap, struct simap_node *node)
     free(node);
 }
 
+/* Searches for 'name' in 'simap'.  If found, deletes it and returns true.  If
+ * not found, returns false without modifying 'simap'. */
+bool
+simap_find_and_delete(struct simap *simap, const char *name)
+{
+    struct simap_node *node = simap_find(simap, name);
+    if (node) {
+        simap_delete(simap, node);
+        return true;
+    }
+    return false;
+}
+
 /* Searches 'simap' for a mapping with the given 'name'.  Returns it, if found,
  * or a null pointer if not. */
 struct simap_node *
@@ -170,6 +183,13 @@ simap_get(const struct simap *simap, const char *name)
 {
     struct simap_node *node = simap_find(simap, name);
     return node ? node->data : 0;
+}
+
+/* Returns true if 'simap' contains a copy of 'name', false otherwise. */
+bool
+simap_contains(const struct simap *simap, const char *name)
+{
+    return simap_find(simap, name) != NULL;
 }
 
 /* Returns an array that contains a pointer to each mapping in 'simap',
