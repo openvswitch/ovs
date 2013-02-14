@@ -1008,6 +1008,88 @@ A: Yes, Open vSwitch makes individual bond interfaces visible as
    implementation of such a feature, please bring it up on the Open
    vSwitch development mailing list at dev@openvswitch.org.
 
+Q: I have a sophisticated network setup involving Open vSwitch, VMs or
+   multiple hosts, and other components.  The behavior isn't what I
+   expect.  Help!
+
+A: To debug network behavior problems, trace the path of a packet,
+   hop-by-hop, from its origin in one host to a remote host.  If
+   that's correct, then trace the path of the response packet back to
+   the origin.
+
+   Usually a simple ICMP echo request and reply ("ping") packet is
+   good enough.  Start by initiating an ongoing "ping" from the origin
+   host to a remote host.  If you are tracking down a connectivity
+   problem, the "ping" will not display any successful output, but
+   packets are still being sent.  (In this case the packets being sent
+   are likely ARP rather than ICMP.)
+
+   Tools available for tracing include the following:
+
+       - "tcpdump" and "wireshark" for observing hops across network
+         devices, such as Open vSwitch internal devices and physical
+         wires.
+
+       - "ovs-appctl dpif/dump-flows <br>" in Open vSwitch 1.10 and
+         later or "ovs-dpctl dump-flows <br>" in earlier versions.
+         These tools allow one to observe the actions being taken on
+         packets in ongoing flows.
+
+         See ovs-vswitchd(8) for "ovs-appctl dpif/dump-flows"
+         documentation, ovs-dpctl(8) for "ovs-dpctl dump-flows"
+         documentation, and "Why are there so many different ways to
+         dump flows?" above for some background.
+
+       - "ovs-appctl ofproto/trace" to observe the logic behind how
+         ovs-vswitchd treats packets.  See ovs-vswitchd(8) for
+         documentation.  You can out more details about a given flow
+         that "ovs-dpctl dump-flows" displays, by cutting and pasting
+         a flow from the output into an "ovs-appctl ofproto/trace"
+         command.
+
+       - SPAN, RSPAN, and ERSPAN features of physical switches, to
+         observe what goes on at these physical hops.
+
+   Starting at the origin of a given packet, observe the packet at
+   each hop in turn.  For example, in one plausible scenario, you
+   might:
+
+       1. "tcpdump" the "eth" interface through which an ARP egresses
+          a VM, from inside the VM.
+
+       2. "tcpdump" the "vif" or "tap" interface through which the ARP
+          ingresses the host machine.
+
+       3. Use "ovs-dpctl dump-flows" to spot the ARP flow and observe
+          the host interface through which the ARP egresses the
+          physical machine.  You may need to use "ovs-dpctl show" to
+          interpret the port numbers.  If the output seems surprising,
+          you can use "ovs-appctl ofproto/trace" to observe details of
+          how ovs-vswitchd determined the actions in the "ovs-dpctl
+          dump-flows" output.
+
+       4. "tcpdump" the "eth" interface through which the ARP egresses
+          the physical machine.
+
+       5. "tcpdump" the "eth" interface through which the ARP
+          ingresses the physical machine, at the remote host that
+          receives the ARP.
+
+       6. Use "ovs-dpctl dump-flows" to spot the ARP flow on the
+          remote host that receives the ARP and observe the VM "vif"
+          or "tap" interface to which the flow is directed.  Again,
+          "ovs-dpctl show" and "ovs-appctl ofproto/trace" might help.
+
+       7. "tcpdump" the "vif" or "tap" interface to which the ARP is
+          directed.
+
+       8. "tcpdump" the "eth" interface through which the ARP
+          ingresses a VM, from inside the VM.
+
+   It is likely that during one of these steps you will figure out the
+   problem.  If not, then follow the ARP reply back to the origin, in
+   reverse.
+
 Contact 
 -------
 
