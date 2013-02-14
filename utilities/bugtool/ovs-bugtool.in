@@ -416,7 +416,7 @@ def main(argv=None):
         return 1
 
     output_file = None
-    output_type = 'tar.bz2'
+    output_type = 'tar.gz'
     output_fd = -1
 
     # Default value for the number of rotated logs.
