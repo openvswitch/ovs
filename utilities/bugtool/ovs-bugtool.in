@@ -419,6 +419,9 @@ def main(argv=None):
     output_type = 'tar.bz2'
     output_fd = -1
 
+    # Default value for the number of rotated logs.
+    log_days = 20
+
     if argv is None:
         argv = sys.argv
 
@@ -426,7 +429,7 @@ def main(argv=None):
         (options, params) = getopt.gnu_getopt(
             argv, 'sy', ['capabilities', 'silent', 'yestoall', 'entries=',
                          'output=', 'outfd=', 'outfile=', 'all', 'unlimited',
-                         'debug', 'ovs'])
+                         'debug', 'ovs', 'log-days='])
     except getopt.GetoptError, opterr:
         print >>sys.stderr, opterr
         return 2
@@ -487,6 +490,9 @@ def main(argv=None):
         if k == '--ovs':
             only_ovs_info = True
             collect_all_info = False
+
+        if k == '--log-days':
+            log_days = int(v) + 1
 
     if len(params) != 1:
         print >>sys.stderr, "Invalid additional arguments", str(params)
@@ -639,8 +645,10 @@ exclude those logs from the archive.
         'ovs-xapi-sync.log', 'ovs-monitor-ipsec.log']])
     for cap, logs in [system_logs, ovs_logs]:
         file_output(cap, logs)
-        file_output(cap, ['%s.%d' % (f, n) for n in range(20) for f in logs])
-        file_output(cap, ['%s.%d.gz' % (f, n) for n in range(20) for f in logs])
+        file_output(cap,
+            ['%s.%d' % (f, n) for n in range(log_days) for f in logs])
+        file_output(cap,
+            ['%s.%d.gz' % (f, n) for n in range(log_days) for f in logs])
 
     if not os.path.exists('/var/log/dmesg') and not os.path.exists('/var/log/boot'):
         cmd_output(CAP_SYSTEM_LOGS, [DMESG])
