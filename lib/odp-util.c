@@ -2183,6 +2183,14 @@ commit_set_action(struct ofpbuf *odp_actions, enum ovs_key_attr key_type,
     nl_msg_end_nested(odp_actions, offset);
 }
 
+void
+odp_put_skb_mark_action(const uint32_t skb_mark,
+                        struct ofpbuf *odp_actions)
+{
+    commit_set_action(odp_actions, OVS_KEY_ATTR_SKB_MARK, &skb_mark,
+                      sizeof(skb_mark));
+}
+
 /* If any of the flow key data that ODP actions can modify are different in
  * 'base->tunnel' and 'flow->tunnel', appends a set_tunnel ODP action to
  * 'odp_actions' that change the flow tunneling information in key from
@@ -2423,8 +2431,7 @@ commit_set_skb_mark_action(const struct flow *flow, struct flow *base,
     }
     base->skb_mark = flow->skb_mark;
 
-    commit_set_action(odp_actions, OVS_KEY_ATTR_SKB_MARK,
-                      &base->skb_mark, sizeof(base->skb_mark));
+    odp_put_skb_mark_action(base->skb_mark, odp_actions);
 }
 /* If any of the flow key data that ODP actions can modify are different in
  * 'base' and 'flow', appends ODP actions to 'odp_actions' that change the flow
