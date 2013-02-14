@@ -686,8 +686,6 @@ union ofp_action *ofputil_actions_clone(const union ofp_action *, size_t n);
 /* Handy utility for parsing flows and actions. */
 bool ofputil_parse_key_value(char **stringp, char **keyp, char **valuep);
 
-struct ofpbuf *ofputlil_dump_ports(enum ofp_version ofp_version, int16_t port);
-
 struct ofputil_port_stats {
     uint16_t port_no;
     struct netdev_stats stats;
