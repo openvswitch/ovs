@@ -482,12 +482,15 @@ dpif_linux_port_add(struct dpif *dpif_, struct netdev *netdev,
                     uint32_t *port_nop)
 {
     struct dpif_linux *dpif = dpif_linux_cast(dpif_);
+    const struct netdev_tunnel_config *tnl_cfg;
     const char *name = netdev_vport_get_dpif_port(netdev);
     const char *type = netdev_get_type(netdev);
     struct dpif_linux_vport request, reply;
     struct nl_sock *sock = NULL;
     uint32_t upcall_pid;
     struct ofpbuf *buf;
+    uint64_t options_stub[64 / 8];
+    struct ofpbuf options;
     int error;
 
     if (dpif->epoll_fd >= 0) {
@@ -512,6 +515,15 @@ dpif_linux_port_add(struct dpif *dpif_, struct netdev *netdev,
 
     if (request.type == OVS_VPORT_TYPE_NETDEV) {
         netdev_linux_ethtool_set_flag(netdev, ETH_FLAG_LRO, "LRO", false);
+    }
+
+    tnl_cfg = netdev_get_tunnel_config(netdev);
+    if (tnl_cfg && tnl_cfg->dst_port != 0) {
+        ofpbuf_use_stack(&options, options_stub, sizeof options_stub);
+        nl_msg_put_u16(&options, OVS_TUNNEL_ATTR_DST_PORT,
+                       htons(tnl_cfg->dst_port));
+        request.options = options.data;
+        request.options_len = options.size;
     }
 
     request.port_no = *port_nop;
