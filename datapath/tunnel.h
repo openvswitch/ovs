@@ -56,7 +56,7 @@
 
 /* All public tunnel flags. */
 #define TNL_F_PUBLIC (TNL_F_CSUM | TNL_F_TOS_INHERIT | TNL_F_TTL_INHERIT | \
-		      TNL_F_DF_DEFAULT | TNL_F_IPSEC)
+		      TNL_F_DF_DEFAULT)
 
 /**
  * struct port_lookup_key - Tunnel port key, used as hash table key.

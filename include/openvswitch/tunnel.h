@@ -72,6 +72,6 @@ enum {
 					  * not IP. */
 /* Bit 5 was previously used for path MTU discovery. " */
 /* Bit 6 is reserved since it was previously used for Tunnel header caching. */
-#define TNL_F_IPSEC		(1 << 7) /* Traffic is IPsec encrypted. */
+/* Bit 7 was previously used for IPsec tunnel ports. */
 
 #endif /* openvswitch/tunnel.h */
