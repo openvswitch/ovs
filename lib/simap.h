@@ -58,8 +58,10 @@ unsigned int simap_get(const struct simap *, const char *);
 struct simap_node *simap_find(const struct simap *, const char *);
 struct simap_node *simap_find_len(const struct simap *,
                                   const char *, size_t len);
+bool simap_contains(const struct simap *, const char *);
 
 void simap_delete(struct simap *, struct simap_node *);
+bool simap_find_and_delete(struct simap *, const char *);
 
 const struct simap_node **simap_sort(const struct simap *);
 
