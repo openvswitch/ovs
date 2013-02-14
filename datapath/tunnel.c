@@ -45,6 +45,7 @@
 #include <net/xfrm.h>
 
 #include "checksum.h"
+#include "compat.h"
 #include "datapath.h"
 #include "tunnel.h"
 #include "vlan.h"
@@ -360,7 +361,7 @@ void ovs_tnl_rcv(struct vport *vport, struct sk_buff *skb)
 
 static struct rtable *find_route(struct net *net,
 		__be32 *saddr, __be32 daddr, u8 ipproto,
-		u8 tos)
+		u8 tos, u32 skb_mark)
 {
 	struct rtable *rt;
 	/* Tunnel configuration keeps DSCP part of TOS bits, But Linux
@@ -370,7 +371,13 @@ static struct rtable *find_route(struct net *net,
 	struct flowi fl = { .nl_u = { .ip4_u = {
 					.daddr = daddr,
 					.saddr = *saddr,
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,20)
+					.fwmark = skb_mark,
+#endif
 					.tos   = RT_TOS(tos) } },
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,20)
+					.mark = skb_mark,
+#endif
 					.proto = ipproto };
 
 	if (unlikely(ip_route_output_key(net, &rt, &fl)))
@@ -381,6 +388,7 @@ static struct rtable *find_route(struct net *net,
 	struct flowi4 fl = { .daddr = daddr,
 			     .saddr = *saddr,
 			     .flowi4_tos = RT_TOS(tos),
+			     .flowi4_mark = skb_mark,
 			     .flowi4_proto = ipproto };
 
 	rt = ip_route_output_key(net, &fl);
@@ -516,6 +524,7 @@ int ovs_tnl_send(struct vport *vport, struct sk_buff *skb)
 	__be16 frag_off;
 	__be32 daddr;
 	__be32 saddr;
+	u32 skb_mark;
 	u8 ttl;
 	u8 tos;
 
@@ -608,8 +617,9 @@ int ovs_tnl_send(struct vport *vport, struct sk_buff *skb)
 	}
 
 	/* Route lookup */
+	skb_mark = skb_get_mark(skb);
 	rt = find_route(port_key_get_net(&mutable->key), &saddr, daddr,
-			  tnl_vport->tnl_ops->ipproto, tos);
+			  tnl_vport->tnl_ops->ipproto, tos, skb_mark);
 	if (IS_ERR(rt))
 		goto error_free;
 
@@ -773,7 +783,7 @@ static int tnl_set_config(struct net *net, struct nlattr *options,
 
 		rt = find_route(port_key_get_net(&mutable->key),
 			     &saddr, mutable->key.daddr,
-			     tnl_ops->ipproto, mutable->tos);
+			     tnl_ops->ipproto, mutable->tos, 0);
 		if (IS_ERR(rt))
 			return -EADDRNOTAVAIL;
 		dev = rt_dst(rt).dev;
