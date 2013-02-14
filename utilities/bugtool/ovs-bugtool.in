@@ -76,8 +76,6 @@ FSTAB = '/etc/fstab'
 PROC_MOUNTS = '/proc/mounts'
 ISCSI_CONF = '/etc/iscsi/iscsid.conf'
 ISCSI_INITIATOR = '/etc/iscsi/initiatorname.iscsi'
-LVM_CACHE = '/etc/lvm/cache/.cache'
-LVM_CONFIG = '/etc/lvm/lvm.conf'
 PROC_CPUINFO = '/proc/cpuinfo'
 PROC_MEMINFO = '/proc/meminfo'
 PROC_IOPORTS = '/proc/ioports'
@@ -90,7 +88,6 @@ PROC_FILESYSTEMS = '/proc/filesystems'
 PROC_CMDLINE = '/proc/cmdline'
 PROC_CONFIG = '/proc/config.gz'
 PROC_USB_DEV = '/proc/bus/usb/devices'
-PROC_XEN_BALLOON = '/proc/xen/balloon'
 PROC_NET_BONDING_DIR = '/proc/net/bonding'
 IFCFG_RE = re.compile(r'^.*/ifcfg-.*')
 ROUTE_RE = re.compile(r'^.*/route-.*')
@@ -117,17 +114,10 @@ OPENVSWITCH_SYSCONFIG_SWITCH = '/etc/sysconfig/openvswitch'    # RHEL
 OPENVSWITCH_DEFAULT_CONTROLLER = '/etc/default/openvswitch-controller'
 OPENVSWITCH_CONF_DB = '@DBDIR@/conf.db'
 OPENVSWITCH_VSWITCHD_PID = '@RUNDIR@/ovs-vswitchd.pid'
-COLLECTD_LOGS_DIR = '/var/lib/collectd/rrd'
 VAR_LOG_DIR = '/var/log/'
 VAR_LOG_CORE_DIR = '/var/log/core'
-X11_LOGS_DIR = VAR_LOG_DIR
-X11_LOGS_RE = re.compile(r'.*/Xorg\..*$')
-X11_AUTH_DIR = '/root/'
-X11_AUTH_RE = re.compile(r'.*/\.((Xauthority)|(serverauth\.[0-9]*))$')
 YUM_LOG = '/var/log/yum.log'
 YUM_REPOS_DIR = '/etc/yum.repos.d'
-PAM_DIR = '/etc/pam.d'
-KRB5_CONF = '/etc/krb5.conf'
 
 #
 # External programs
@@ -145,15 +135,12 @@ DPKG_QUERY = 'dpkg-query'
 ETHTOOL = 'ethtool'
 FDISK = 'fdisk'
 FIND = 'find'
-HDPARM = 'hdparm'
 IFCONFIG = 'ifconfig'
 IPTABLES = 'iptables'
 ISCSIADM = 'iscsiadm'
 LOSETUP = 'losetup'
 LS = 'ls'
 LSPCI = 'lspci'
-LVDISPLAY = 'lvdisplay'
-LVS = 'lvs'
 MD5SUM = 'md5sum'
 MODINFO = 'modinfo'
 MPPUTIL = 'mppUtil'
@@ -164,15 +151,12 @@ OVS_OFCTL = 'ovs-ofctl'
 OVS_VSCTL = 'ovs-vsctl'
 OVS_APPCTL = 'ovs-appctl'
 PS = 'ps'
-PVS = 'pvs'
 ROUTE = 'route'
 RPM = 'rpm'
 SG_MAP = 'sg_map'
 SYSCTL = 'sysctl'
 TC = 'tc'
 UPTIME = 'uptime'
-VGS = 'vgs'
-VGSCAN = 'vgscan'
 ZCAT = 'zcat'
 
 #
@@ -214,30 +198,18 @@ CAP_XML_ROOT = "system-status-capabilities"
 CAP_XML_ELEMENT = 'capability'
 
 
-CAP_BLOBS                = 'blobs'
 CAP_BOOT_LOADER          = 'boot-loader'
-CAP_COLLECTD_LOGS        = 'collectd-logs'
 CAP_DISK_INFO            = 'disk-info'
-CAP_FIRSTBOOT            = 'firstboot'
 CAP_HARDWARE_INFO        = 'hardware-info'
-CAP_HDPARM_T             = 'hdparm-t'
-CAP_HIGH_AVAILABILITY    = 'high-availability'
 CAP_KERNEL_INFO          = 'kernel-info'
 CAP_LOSETUP_A            = 'loopback-devices'
 CAP_MULTIPATH            = 'multipath'
 CAP_NETWORK_CONFIG       = 'network-config'
 CAP_NETWORK_STATUS       = 'network-status'
-CAP_OEM                  = 'oem'
 CAP_OPENVSWITCH_LOGS	 = 'ovs-system-logs'
-CAP_PAM                  = 'pam'
 CAP_PROCESS_LIST         = 'process-list'
-CAP_PERSISTENT_STATS     = 'persistent-stats'
 CAP_SYSTEM_LOGS          = 'system-logs'
 CAP_SYSTEM_SERVICES      = 'system-services'
-CAP_VNCTERM              = 'vncterm'
-CAP_WLB                  = 'wlb'
-CAP_X11_LOGS             = 'X11'
-CAP_X11_AUTH             = 'X11-auth'
 CAP_YUM                  = 'yum'
 
 KB = 1024
@@ -255,19 +227,12 @@ def cap(key, pii=PII_MAYBE, min_size=-1, max_size=-1, min_time=-1,
     cap_sizes[key] = 0
 
 
-cap(CAP_BLOBS,               PII_NO,                    max_size=5*MB)
 cap(CAP_BOOT_LOADER,         PII_NO,                    max_size=3*KB,
-    max_time=5)
-cap(CAP_COLLECTD_LOGS,       PII_MAYBE,                 max_size=50*MB,
     max_time=5)
 cap(CAP_DISK_INFO,           PII_MAYBE,                 max_size=50*KB,
     max_time=20)
-cap(CAP_FIRSTBOOT,           PII_YES,   min_size=60*KB, max_size=80*KB)
 cap(CAP_HARDWARE_INFO,       PII_MAYBE,                 max_size=30*KB,
     max_time=20)
-cap(CAP_HDPARM_T,            PII_NO,    min_size=0,     max_size=5*KB,
-    min_time=20, max_time=90, checked=False, hidden=True)
-cap(CAP_HIGH_AVAILABILITY,   PII_MAYBE,                 max_size=5*MB)
 cap(CAP_KERNEL_INFO,         PII_MAYBE,                 max_size=120*KB,
     max_time=5)
 cap(CAP_LOSETUP_A,           PII_MAYBE,                 max_size=KB, max_time=5)
@@ -279,20 +244,12 @@ cap(CAP_NETWORK_STATUS,      PII_YES,                   max_size=50*MB,
     max_time=30)
 cap(CAP_OPENVSWITCH_LOGS,    PII_MAYBE,                 max_size=-1,
     max_time=5)
-cap(CAP_PAM,                 PII_NO,                    max_size=50*KB)
-cap(CAP_PERSISTENT_STATS,    PII_MAYBE,                 max_size=50*MB,
-    max_time=60)
 cap(CAP_PROCESS_LIST,        PII_YES,                   max_size=30*KB,
     max_time=20)
 cap(CAP_SYSTEM_LOGS,         PII_MAYBE,                 max_size=200*MB,
     max_time=5)
 cap(CAP_SYSTEM_SERVICES,     PII_NO,                    max_size=5*KB,
     max_time=20)
-cap(CAP_VNCTERM,             PII_MAYBE, checked = False)
-cap(CAP_WLB,                 PII_NO,                    max_size=3*MB,
-    max_time=20)
-cap(CAP_X11_LOGS,            PII_NO,                    max_size=100*KB)
-cap(CAP_X11_AUTH,            PII_NO,                    max_size=100*KB)
 cap(CAP_YUM,                 PII_IF_CUSTOMIZED,         max_size=10*KB,
     max_time=30)
 
@@ -529,27 +486,18 @@ exclude those logs from the archive.
     cmd_output(CAP_BOOT_LOADER, [LS, '-lR', '/boot'])
     cmd_output(CAP_BOOT_LOADER, [MD5SUM, BOOT_KERNEL, BOOT_INITRD], label='vmlinuz-initrd.md5sum')
 
-    tree_output(CAP_COLLECTD_LOGS, COLLECTD_LOGS_DIR)
     cmd_output(CAP_DISK_INFO, [FDISK, '-l'])
     file_output(CAP_DISK_INFO, [PROC_PARTITIONS, PROC_MOUNTS])
     file_output(CAP_DISK_INFO, [FSTAB, ISCSI_CONF, ISCSI_INITIATOR])
     cmd_output(CAP_DISK_INFO, [DF, '-alT'])
     cmd_output(CAP_DISK_INFO, [DF, '-alTi'])
-    for d in disk_list():
-        cmd_output(CAP_DISK_INFO, [HDPARM, '-I', '/dev/%s' % d])
     if len(pidof('iscsid')) != 0:
         cmd_output(CAP_DISK_INFO, [ISCSIADM, '-m', 'node'])
-    cmd_output(CAP_DISK_INFO, [VGSCAN])
-    cmd_output(CAP_DISK_INFO, [PVS])
-    cmd_output(CAP_DISK_INFO, [VGS])
-    cmd_output(CAP_DISK_INFO, [LVS])
-    file_output(CAP_DISK_INFO, [LVM_CACHE, LVM_CONFIG])
     cmd_output(CAP_DISK_INFO, [LS, '-R', '/sys/class/scsi_host'])
     cmd_output(CAP_DISK_INFO, [LS, '-R', '/sys/class/scsi_disk'])
     cmd_output(CAP_DISK_INFO, [LS, '-R', '/sys/class/fc_transport'])
     cmd_output(CAP_DISK_INFO, [SG_MAP, '-x'])
     func_output(CAP_DISK_INFO, 'scsi-hosts', dump_scsi_hosts)
-    cmd_output(CAP_DISK_INFO, [LVDISPLAY, '--map'])
 
     file_output(CAP_HARDWARE_INFO, [PROC_CPUINFO, PROC_MEMINFO, PROC_IOPORTS, PROC_INTERRUPTS])
     cmd_output(CAP_HARDWARE_INFO, [DMIDECODE])
@@ -558,10 +506,7 @@ exclude those logs from the archive.
     file_output(CAP_HARDWARE_INFO, [PROC_USB_DEV, PROC_SCSI])
     file_output(CAP_HARDWARE_INFO, [SYSCONFIG_HWCONF])
     cmd_output(CAP_HARDWARE_INFO, [LS, '-lR', '/dev'])
-    # FIXME IDE?
 
-    for d in disk_list():
-        cmd_output(CAP_HDPARM_T, [HDPARM, '-tT', '/dev/%s' % d])
 
     file_output(CAP_KERNEL_INFO, [PROC_VERSION, PROC_MODULES, PROC_DEVICES,
                                   PROC_FILESYSTEMS, PROC_CMDLINE])
@@ -632,9 +577,6 @@ exclude those logs from the archive.
         except e:
             pass
 
-    tree_output(CAP_PAM, PAM_DIR)
-    file_output(CAP_PAM, [KRB5_CONF])
-
     cmd_output(CAP_PROCESS_LIST, [PS, 'wwwaxf', '-eo', 'pid,tty,stat,time,nice,psr,pcpu,pmem,nwchan,wchan:25,args'], label='process-tree')
     func_output(CAP_PROCESS_LIST, 'fd_usage', fd_usage)
 
@@ -656,8 +598,6 @@ exclude those logs from the archive.
 
     cmd_output(CAP_SYSTEM_SERVICES, [CHKCONFIG, '--list'])
 
-    tree_output(CAP_X11_LOGS, X11_LOGS_DIR, X11_LOGS_RE)
-    tree_output(CAP_X11_AUTH, X11_AUTH_DIR, X11_AUTH_RE)
     tree_output(CAP_SYSTEM_LOGS, VAR_LOG_CORE_DIR)
 
     file_output(CAP_YUM, [YUM_LOG])
@@ -735,47 +675,12 @@ exclude those logs from the archive.
     else:
         make_zip(subdir, output_file)
 
-    clean_tapdisk_logs()
-
     if dbg:
         print >>sys.stderr, "Category sizes (max, actual):\n"
         for c in caps.keys():
             print >>sys.stderr, "    %s (%d, %d)" % (c, caps[c][MAX_SIZE],
                                                      cap_sizes[c])
     return 0
-
-def find_tapdisk_logs():
-    return glob.glob('/var/log/blktap/*.log*')
-
-def generate_tapdisk_logs():
-    for pid in pidof('tapdisk'):
-	try:
-	    os.kill(pid, SIGUSR1)
-            output_ts("Including logs for tapdisk process %d" % pid)
-        except :
-            pass
-    # give processes a second to write their logs
-    time.sleep(1)
-
-def clean_tapdisk_logs():
-    for filename in find_tapdisk_logs():
-        try:
-            os.remove(filename)
-        except :
-            pass
-
-def filter_db_pii(str, state):
-    if 'in_secret_table' not in state:
-        state['in_secret_table'] = False
-
-    if str.startswith('<table ') and 'name="secret"' in str:
-        state['in_secret_table'] = True
-    elif str.startswith('</table>'):
-        state['in_secret_table'] = False
-
-    if state['in_secret_table'] and str.startswith("<row"): # match only on DB rows
-        str = re.sub(r'(value=")[^"]+(")', r'\1REMOVED\2', str)
-    return str
 
 def dump_scsi_hosts(cap):
     output = ''
