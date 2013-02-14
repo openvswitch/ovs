@@ -67,6 +67,7 @@ struct vport_class {
 static int netdev_vport_create(const struct netdev_class *, const char *,
                                struct netdev_dev **);
 static int get_patch_config(struct netdev_dev *, struct smap *args);
+static int get_tunnel_config(struct netdev_dev *, struct smap *args);
 static void netdev_vport_poll_notify(struct netdev_dev_vport *);
 
 static bool
@@ -110,6 +111,17 @@ netdev_vport_is_patch(const struct netdev *netdev)
     return class->get_config == get_patch_config;
 }
 
+static bool
+netdev_vport_is_vxlan(const struct netdev *netdev)
+{
+    const struct netdev_dev *dev = netdev_get_dev(netdev);
+    const struct netdev_class *class = netdev_dev_get_class(dev);
+    const char *type = netdev_dev_get_type(dev);
+
+    return (class->get_config == get_tunnel_config
+            && !strcmp("vxlan", type));
+}
+
 const char *
 netdev_vport_get_dpif_port(const struct netdev *netdev)
 {
@@ -117,9 +129,26 @@ netdev_vport_get_dpif_port(const struct netdev *netdev)
     const struct netdev_class *class = netdev_dev_get_class(dev);
     const char *dpif_port;
 
-    dpif_port = (is_vport_class(class)
-                 ? vport_class_cast(class)->dpif_port
-                 : NULL);
+    if (netdev_vport_is_vxlan(netdev)) {
+        const struct netdev_dev_vport *vport = netdev_vport_get_dev(netdev);
+        const char *type = netdev_dev_get_type(dev);
+        static char dpif_port_vxlan[IFNAMSIZ];
+
+        /*
+         * Note: IFNAMSIZ is 16 bytes long. The maximum length of a VXLAN
+         * port name below is 15 bytes. Still, assert here on the size of
+         * strlen(type) in case that changes in the future.
+         */
+        ovs_assert(strlen(type) + 10 < IFNAMSIZ);
+        snprintf(dpif_port_vxlan, IFNAMSIZ, "%s_sys_%d", type,
+                 ntohs(vport->tnl_cfg.dst_port));
+        return dpif_port_vxlan;
+    } else {
+        dpif_port = (is_vport_class(class)
+                     ? vport_class_cast(class)->dpif_port
+                     : NULL);
+    }
+
     return dpif_port ? dpif_port : netdev_get_name(netdev);
 }
 
