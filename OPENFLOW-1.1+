@@ -66,12 +66,6 @@ probably incomplete.
       specified.  Check that OVS implements the new behavior, fix it
       if not.
 
-    * On OF1.1+ flow_mods, DELETE now ignores buffer_id.
-
-    * OFPST_PORT and OFPST_QUEUE stats.  These differ little from
-      OF1.0 to OF1.1 (just the size of the port number field) but do
-      require abstraction (Done?).
-
     * OFPT_TABLE_MOD stats.  This is new in OF1.1, so we need to
       implement it.  It should be implemented so that the default OVS
       behavior does not change.
@@ -79,8 +73,7 @@ probably incomplete.
     * Document how OVS does packet buffering.
 
     * MPLS.  Simon Horman maintains a patch series that adds this
-      feature.  It needs review and possible revision before it is
-      merged.
+      feature.  This is partially merged.
 
     * SCTP.  Joe Stringer maintains a patch series that adds this
       feature.  It has received review comments that need to be
@@ -120,9 +113,6 @@ end of the OF1.2 spec.  I didn’t compare the specs carefully yet.)
 
         * Update DESIGN to describe OF1.2 behavior also.
 
-    * Implement OFPT_ROLE_REQUEST.  Patch submitted by Jarno
-      Rajahalme, currently under revision.
-
     * Add ability to turn off packet buffering with OFPCML_NO_BUFFER.
 
 OpenFlow 1.3
@@ -150,7 +140,7 @@ didn’t compare the specs carefully yet.)
       with tc.  Ideally, therefore, we could implement these somehow
       with tc, but I haven’t investigated whether that makes sense.
 
-    * Per-connection event filtering.  OF1.3 adopted Open vSwitch’s
+    * Per-connection event filtering.  OF1.3 adopted Open vSwitch's
       existing design for this feature so implementation should be
       easy.
 
