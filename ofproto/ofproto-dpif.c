@@ -631,7 +631,7 @@ struct dpif_backer {
     struct timer next_expiration;
     struct hmap odp_to_ofport_map; /* ODP port to ofport mapping. */
 
-    struct sset tnl_backers;       /* Set of dpif ports backing tunnels. */
+    struct simap tnl_backers;      /* Set of dpif ports backing tunnels. */
 
     /* Facet revalidation flags applying to facets which use this backer. */
     enum revalidate_reason need_revalidate; /* Revalidate every facet. */
@@ -901,7 +901,7 @@ type_run(const char *type)
 
         HMAP_FOR_EACH (ofproto, all_ofproto_dpifs_node,
                        &all_ofproto_dpifs) {
-            if (sset_contains(&ofproto->backer->tnl_backers, devname)) {
+            if (simap_contains(&ofproto->backer->tnl_backers, devname)) {
                 goto next;
             }
         }
@@ -1026,7 +1026,7 @@ close_dpif_backer(struct dpif_backer *backer)
     drop_key_clear(backer);
     hmap_destroy(&backer->drop_keys);
 
-    sset_destroy(&backer->tnl_backers);
+    simap_destroy(&backer->tnl_backers);
     hmap_destroy(&backer->odp_to_ofport_map);
     node = shash_find(&all_dpif_backers, backer->type);
     free(backer->type);
@@ -1103,7 +1103,7 @@ open_dpif_backer(const char *type, struct dpif_backer **backerp)
     hmap_init(&backer->drop_keys);
     timer_set_duration(&backer->next_expiration, 1000);
     backer->need_revalidate = 0;
-    sset_init(&backer->tnl_backers);
+    simap_init(&backer->tnl_backers);
     tag_set_init(&backer->revalidate_set);
     *backerp = backer;
 
@@ -1629,7 +1629,7 @@ port_destruct(struct ofport *port_)
          * assumes that removal of attached ports will happen as part of
          * destruction. */
         dpif_port_del(ofproto->backer->dpif, port->odp_port);
-        sset_find_and_delete(&ofproto->backer->tnl_backers, dp_port_name);
+        simap_find_and_delete(&ofproto->backer->tnl_backers, dp_port_name);
     }
 
     if (port->odp_port != OVSP_NONE && !port->tnl_port) {
@@ -3014,15 +3014,20 @@ port_add(struct ofproto *ofproto_, struct netdev *netdev)
     }
 
     if (!dpif_port_exists(ofproto->backer->dpif, dp_port_name)) {
-        int error = dpif_port_add(ofproto->backer->dpif, netdev, NULL);
+        uint32_t port_no = UINT32_MAX;
+        int error;
+
+        error = dpif_port_add(ofproto->backer->dpif, netdev, &port_no);
         if (error) {
             return error;
+        }
+        if (netdev_get_tunnel_config(netdev)) {
+            simap_put(&ofproto->backer->tnl_backers, dp_port_name, port_no);
         }
     }
 
     if (netdev_get_tunnel_config(netdev)) {
         sset_add(&ofproto->ghost_ports, devname);
-        sset_add(&ofproto->backer->tnl_backers, dp_port_name);
     } else {
         sset_add(&ofproto->ports, devname);
     }
@@ -3089,7 +3094,7 @@ port_del(struct ofproto *ofproto_, uint16_t ofp_port)
              * from the bond.  The client will need to reconfigure everything
              * after deleting ports, so then the slave will get re-added. */
             dpif_port = netdev_vport_get_dpif_port(ofport->up.netdev);
-            sset_find_and_delete(&ofproto->backer->tnl_backers, dpif_port);
+            simap_find_and_delete(&ofproto->backer->tnl_backers, dpif_port);
             bundle_remove(&ofport->up);
         }
     }
