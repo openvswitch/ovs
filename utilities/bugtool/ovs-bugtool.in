@@ -275,7 +275,7 @@ cap(CAP_MULTIPATH,           PII_MAYBE,                 max_size=20*KB,
     max_time=10)
 cap(CAP_NETWORK_CONFIG,      PII_IF_CUSTOMIZED,
                                         min_size=0,     max_size=40*KB)
-cap(CAP_NETWORK_STATUS,      PII_YES,                   max_size=50*KB,
+cap(CAP_NETWORK_STATUS,      PII_YES,                   max_size=50*MB,
     max_time=30)
 cap(CAP_OPENVSWITCH_LOGS,    PII_MAYBE,                 max_size=-1,
     max_time=5)
@@ -600,11 +600,12 @@ exclude those logs from the archive.
             f.close()
             if os.path.islink('/sys/class/net/%s/device' % p) and int(t) == 1:
                 # ARPHRD_ETHER
-                cmd_output(CAP_NETWORK_STATUS, [ETHTOOL, p])
                 cmd_output(CAP_NETWORK_STATUS, [ETHTOOL, '-S', p])
-                cmd_output(CAP_NETWORK_STATUS, [ETHTOOL, '-k', p])
-                cmd_output(CAP_NETWORK_STATUS, [ETHTOOL, '-i', p])
-                cmd_output(CAP_NETWORK_STATUS, [ETHTOOL, '-c', p])
+                if not p.startswith('vif') and not p.startswith('tap'):
+                    cmd_output(CAP_NETWORK_STATUS, [ETHTOOL, p])
+                    cmd_output(CAP_NETWORK_STATUS, [ETHTOOL, '-k', p])
+                    cmd_output(CAP_NETWORK_STATUS, [ETHTOOL, '-i', p])
+                    cmd_output(CAP_NETWORK_STATUS, [ETHTOOL, '-c', p])
             if int(t) == 1:
                 cmd_output(CAP_NETWORK_STATUS,
                            [TC, '-s', '-d', 'class', 'show', 'dev', p])
