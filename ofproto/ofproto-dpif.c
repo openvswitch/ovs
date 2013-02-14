@@ -5521,6 +5521,7 @@ send_packet(const struct ofport_dpif *ofport, struct ofpbuf *packet)
         dpif_flow_stats_extract(&flow, packet, time_msec(), &stats);
         netdev_vport_inc_tx(ofport->up.netdev, &stats);
         odp_put_tunnel_action(&flow.tunnel, &odp_actions);
+        odp_put_skb_mark_action(flow.skb_mark, &odp_actions);
     } else {
         odp_port = vsp_realdev_to_vlandev(ofproto, ofport->odp_port,
                                           flow.vlan_tci);

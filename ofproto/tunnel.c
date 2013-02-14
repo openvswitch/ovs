@@ -34,18 +34,21 @@
  *
  * Ability to generate actions on input for ECN
  * Ability to generate metadata for packet-outs
- * IPsec using skb mark.
  * VXLAN.
  * Multicast group management (possibly).
  * Disallow netdevs with names like "gre64_system" to prevent collisions. */
 
 VLOG_DEFINE_THIS_MODULE(tunnel);
 
+/* skb mark used for IPsec tunnel packets */
+#define IPSEC_MARK 1
+
 struct tnl_match {
     ovs_be64 in_key;
     ovs_be32 ip_src;
     ovs_be32 ip_dst;
     uint32_t odp_port;
+    uint32_t skb_mark;
     bool in_key_flow;
 };
 
@@ -94,6 +97,7 @@ tnl_port_add__(const struct ofport *ofport, uint32_t odp_port,
     tnl_port->match.in_key = cfg->in_key;
     tnl_port->match.ip_src = cfg->ip_src;
     tnl_port->match.ip_dst = cfg->ip_dst;
+    tnl_port->match.skb_mark = cfg->ipsec ? IPSEC_MARK : 0;
     tnl_port->match.in_key_flow = cfg->in_key_flow;
     tnl_port->match.odp_port = odp_port;
 
@@ -183,6 +187,7 @@ tnl_port_receive(struct flow *flow)
     match.ip_src = flow->tunnel.ip_dst;
     match.ip_dst = flow->tunnel.ip_src;
     match.in_key = flow->tunnel.tun_id;
+    match.skb_mark = flow->skb_mark;
 
     tnl_port = tnl_find(&match);
     if (!tnl_port) {
@@ -248,6 +253,7 @@ tnl_port_send(const struct tnl_port *tnl_port, struct flow *flow)
 
     flow->tunnel.ip_src = tnl_port->match.ip_src;
     flow->tunnel.ip_dst = tnl_port->match.ip_dst;
+    flow->skb_mark = tnl_port->match.skb_mark;
 
     if (!cfg->out_key_flow) {
         flow->tunnel.tun_id = cfg->out_key;
@@ -393,6 +399,7 @@ tnl_match_fmt(const struct tnl_match *match, struct ds *ds)
     }
 
     ds_put_format(ds, ", dp port=%"PRIu32, match->odp_port);
+    ds_put_format(ds, ", skb mark=%"PRIu32, match->skb_mark);
 }
 
 static void
