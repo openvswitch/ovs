@@ -521,7 +521,7 @@ dpif_linux_port_add(struct dpif *dpif_, struct netdev *netdev,
     if (tnl_cfg && tnl_cfg->dst_port != 0) {
         ofpbuf_use_stack(&options, options_stub, sizeof options_stub);
         nl_msg_put_u16(&options, OVS_TUNNEL_ATTR_DST_PORT,
-                       htons(tnl_cfg->dst_port));
+                       ntohs(tnl_cfg->dst_port));
         request.options = options.data;
         request.options_len = options.size;
     }
