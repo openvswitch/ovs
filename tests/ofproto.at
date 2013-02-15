@@ -340,7 +340,7 @@ OVS_VSWITCHD_STOP
 AT_CLEANUP
 
 dnl The OpenFlow 1.2 spec states that the cookie may not be modified
-AT_SETUP([ofproto - no mod flow with cookie change (OpenFlow1.2)])
+AT_SETUP([ofproto - no mod flow with cookie change (OpenFlow 1.2)])
 OVS_VSWITCHD_START
 AT_CHECK([ovs-ofctl -O OpenFlow12 add-flow br0 cookie=0x1,in_port=1,actions=1])
 AT_CHECK([ovs-ofctl -O OpenFlow12 dump-flows br0 | ofctl_strip | sort], [0], [dnl
