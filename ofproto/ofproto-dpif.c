@@ -724,7 +724,6 @@ static struct ofport_dpif *get_odp_port(const struct ofproto_dpif *,
 static void ofproto_trace(struct ofproto_dpif *, const struct flow *,
                           const struct ofpbuf *, ovs_be16 initial_tci,
                           struct ds *);
-static bool may_dpif_port_del(struct ofport_dpif *);
 
 /* Packet processing. */
 static void update_learning_table(struct ofproto_dpif *,
@@ -852,6 +851,58 @@ type_run(const char *type)
         struct tag_set revalidate_set = backer->revalidate_set;
         bool need_revalidate = backer->need_revalidate;
         struct ofproto_dpif *ofproto;
+        struct simap_node *node;
+        struct simap tmp_backers;
+
+        /* Handle tunnel garbage collection. */
+        simap_init(&tmp_backers);
+        simap_swap(&backer->tnl_backers, &tmp_backers);
+
+        HMAP_FOR_EACH (ofproto, all_ofproto_dpifs_node, &all_ofproto_dpifs) {
+            struct ofport_dpif *iter;
+
+            if (backer != ofproto->backer) {
+                continue;
+            }
+
+            HMAP_FOR_EACH (iter, up.hmap_node, &ofproto->up.ports) {
+                const char *dp_port;
+
+                if (!iter->tnl_port) {
+                    continue;
+                }
+
+                dp_port = netdev_vport_get_dpif_port(iter->up.netdev);
+                node = simap_find(&tmp_backers, dp_port);
+                if (node) {
+                    simap_put(&backer->tnl_backers, dp_port, node->data);
+                    simap_delete(&tmp_backers, node);
+                    node = simap_find(&backer->tnl_backers, dp_port);
+                } else {
+                    node = simap_find(&backer->tnl_backers, dp_port);
+                    if (!node) {
+                        uint32_t odp_port = UINT32_MAX;
+
+                        if (!dpif_port_add(backer->dpif, iter->up.netdev,
+                                           &odp_port)) {
+                            simap_put(&backer->tnl_backers, dp_port, odp_port);
+                            node = simap_find(&backer->tnl_backers, dp_port);
+                        }
+                    }
+                }
+
+                iter->odp_port = node ? node->data : OVSP_NONE;
+                if (tnl_port_reconfigure(&iter->up, iter->odp_port,
+                                         &iter->tnl_port)) {
+                    backer->need_revalidate = REV_RECONFIGURE;
+                }
+            }
+        }
+
+        SIMAP_FOR_EACH (node, &tmp_backers) {
+            dpif_port_del(backer->dpif, node->data);
+        }
+        simap_destroy(&tmp_backers);
 
         switch (backer->need_revalidate) {
         case REV_RECONFIGURE:   COVERAGE_INC(rev_reconfigure);   break;
@@ -1625,14 +1676,15 @@ port_destruct(struct ofport *port_)
     const char *dp_port_name = netdev_vport_get_dpif_port(port->up.netdev);
     const char *devname = netdev_get_name(port->up.netdev);
 
-    if (dpif_port_exists(ofproto->backer->dpif, dp_port_name)
-        && may_dpif_port_del(port)) {
+    if (dpif_port_exists(ofproto->backer->dpif, dp_port_name)) {
         /* The underlying device is still there, so delete it.  This
          * happens when the ofproto is being destroyed, since the caller
          * assumes that removal of attached ports will happen as part of
          * destruction. */
-        dpif_port_del(ofproto->backer->dpif, port->odp_port);
-        simap_find_and_delete(&ofproto->backer->tnl_backers, dp_port_name);
+        if (!port->tnl_port) {
+            dpif_port_del(ofproto->backer->dpif, port->odp_port);
+        }
+        ofproto->backer->need_revalidate = REV_RECONFIGURE;
     }
 
     if (port->odp_port != OVSP_NONE && !port->tnl_port) {
@@ -3042,43 +3094,6 @@ port_add(struct ofproto *ofproto_, struct netdev *netdev)
     return 0;
 }
 
-/* Returns true if the odp_port backing 'ofport' may be deleted from the
- * datapath. In most cases, this function simply returns true. However, for
- * tunnels it's possible that multiple ofports use the same odp_port, in which
- * case we need to keep the odp_port backer around until the last ofport is
- * deleted. */
-static bool
-may_dpif_port_del(struct ofport_dpif *ofport)
-{
-    struct dpif_backer *backer = ofproto_dpif_cast(ofport->up.ofproto)->backer;
-    struct ofproto_dpif *ofproto_iter;
-
-    if (!ofport->tnl_port) {
-        return true;
-    }
-
-    HMAP_FOR_EACH (ofproto_iter, all_ofproto_dpifs_node, &all_ofproto_dpifs) {
-        struct ofport_dpif *iter;
-
-        if (backer != ofproto_iter->backer) {
-            continue;
-        }
-
-        HMAP_FOR_EACH (iter, up.hmap_node, &ofproto_iter->up.ports) {
-            if (ofport == iter) {
-                continue;
-            }
-
-            if (!strcmp(netdev_vport_get_dpif_port(ofport->up.netdev),
-                        netdev_vport_get_dpif_port(iter->up.netdev))) {
-                return false;
-            }
-        }
-    }
-
-    return true;
-}
-
 static int
 port_del(struct ofproto *ofproto_, uint16_t ofp_port)
 {
@@ -3092,17 +3107,14 @@ port_del(struct ofproto *ofproto_, uint16_t ofp_port)
 
     sset_find_and_delete(&ofproto->ghost_ports,
                          netdev_get_name(ofport->up.netdev));
-    if (may_dpif_port_del(ofport)) {
+    ofproto->backer->need_revalidate = REV_RECONFIGURE;
+    if (!ofport->tnl_port) {
         error = dpif_port_del(ofproto->backer->dpif, ofport->odp_port);
         if (!error) {
-            const char *dpif_port;
-
             /* The caller is going to close ofport->up.netdev.  If this is a
              * bonded port, then the bond is using that netdev, so remove it
              * from the bond.  The client will need to reconfigure everything
              * after deleting ports, so then the slave will get re-added. */
-            dpif_port = netdev_vport_get_dpif_port(ofport->up.netdev);
-            simap_find_and_delete(&ofproto->backer->tnl_backers, dpif_port);
             bundle_remove(&ofport->up);
         }
     }
