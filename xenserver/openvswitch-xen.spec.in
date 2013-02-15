@@ -118,18 +118,16 @@ install python/compat/uuid.py $RPM_BUILD_ROOT/usr/share/openvswitch/python
 install python/compat/argparse.py $RPM_BUILD_ROOT/usr/share/openvswitch/python
 
 install -d -m 755 $RPM_BUILD_ROOT/etc/xensource/bugtool
-mv $RPM_BUILD_ROOT/usr/share/openvswitch/bugtool-plugins/* $RPM_BUILD_ROOT/etc/xensource/bugtool
+cp -rf $RPM_BUILD_ROOT/usr/share/openvswitch/bugtool-plugins/* $RPM_BUILD_ROOT/etc/xensource/bugtool
 
 # Get rid of stuff we don't want to make RPM happy.
 rm \
     $RPM_BUILD_ROOT/usr/bin/ovs-benchmark \
-    $RPM_BUILD_ROOT/usr/sbin/ovs-bugtool \
     $RPM_BUILD_ROOT/usr/bin/ovs-controller \
     $RPM_BUILD_ROOT/usr/bin/ovs-l3ping \
     $RPM_BUILD_ROOT/usr/bin/ovs-pki \
     $RPM_BUILD_ROOT/usr/bin/ovs-test \
     $RPM_BUILD_ROOT/usr/share/man/man1/ovs-benchmark.1 \
-    $RPM_BUILD_ROOT/usr/share/man/man8/ovs-bugtool.8 \
     $RPM_BUILD_ROOT/usr/share/man/man8/ovs-controller.8 \
     $RPM_BUILD_ROOT/usr/share/man/man8/ovs-l3ping.8 \
     $RPM_BUILD_ROOT/usr/share/man/man8/ovs-pki.8 \
@@ -408,6 +406,7 @@ exit 0
 /etc/logrotate.d/openvswitch
 /etc/profile.d/openvswitch.sh
 /usr/share/openvswitch/python/
+/usr/share/openvswitch/bugtool-plugins/*
 /usr/share/openvswitch/scripts/ovs-check-dead-ifs
 /usr/share/openvswitch/scripts/ovs-xapi-sync
 /usr/share/openvswitch/scripts/interface-reconfigure
@@ -421,6 +420,7 @@ exit 0
 /usr/share/openvswitch/scripts/ovs-ctl
 /usr/share/openvswitch/scripts/ovs-lib
 /usr/share/openvswitch/vswitch.ovsschema
+/usr/sbin/ovs-bugtool
 /usr/sbin/ovs-vlan-bug-workaround
 /usr/sbin/ovs-vswitchd
 /usr/sbin/ovsdb-server
@@ -441,6 +441,7 @@ exit 0
 /usr/share/man/man1/ovsdb-tool.1.gz
 /usr/share/man/man5/ovs-vswitchd.conf.db.5.gz
 /usr/share/man/man8/ovs-appctl.8.gz
+/usr/share/man/man8/ovs-bugtool.8.gz
 /usr/share/man/man8/ovs-ctl.8.gz
 /usr/share/man/man8/ovs-dpctl.8.gz
 /usr/share/man/man8/ovs-ofctl.8.gz
