@@ -5738,6 +5738,7 @@ compose_output_action__(struct action_xlate_ctx *ctx, uint16_t ofp_port,
         struct ofport_dpif *peer = ofport_get_peer(ofport);
         struct flow old_flow = ctx->flow;
         const struct ofproto_dpif *peer_ofproto;
+        enum slow_path_reason special;
         struct ofport_dpif *in_port;
 
         if (!peer) {
@@ -5758,7 +5759,11 @@ compose_output_action__(struct action_xlate_ctx *ctx, uint16_t ofp_port,
         memset(ctx->flow.regs, 0, sizeof ctx->flow.regs);
 
         in_port = get_ofp_port(ctx->ofproto, ctx->flow.in_port);
-        if (!in_port || may_receive(in_port, ctx)) {
+        special = process_special(ctx->ofproto, &ctx->flow, in_port,
+                                  ctx->packet);
+        if (special) {
+            ctx->slow |= special;
+        } else if (!in_port || may_receive(in_port, ctx)) {
             if (!in_port || stp_forward_in_state(in_port->stp_state)) {
                 xlate_table_action(ctx, ctx->flow.in_port, 0, true);
             } else {
