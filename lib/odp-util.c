@@ -248,9 +248,11 @@ format_odp_userspace_action(struct ds *ds, const struct nlattr *attr)
 {
     static const struct nl_policy ovs_userspace_policy[] = {
         [OVS_USERSPACE_ATTR_PID] = { .type = NL_A_U32 },
-        [OVS_USERSPACE_ATTR_USERDATA] = { .type = NL_A_U64, .optional = true },
+        [OVS_USERSPACE_ATTR_USERDATA] = { .type = NL_A_UNSPEC,
+                                          .optional = true },
     };
     struct nlattr *a[ARRAY_SIZE(ovs_userspace_policy)];
+    const struct nlattr *userdata_attr;
 
     if (!nl_parse_nested(attr, ovs_userspace_policy, a, ARRAY_SIZE(a))) {
         ds_put_cstr(ds, "userspace(error)");
@@ -260,7 +262,8 @@ format_odp_userspace_action(struct ds *ds, const struct nlattr *attr)
     ds_put_format(ds, "userspace(pid=%"PRIu32,
                   nl_attr_get_u32(a[OVS_USERSPACE_ATTR_PID]));
 
-    if (a[OVS_USERSPACE_ATTR_USERDATA]) {
+    userdata_attr = a[OVS_USERSPACE_ATTR_USERDATA];
+    if (userdata_attr && nl_attr_get_size(userdata_attr) == sizeof(uint64_t)) {
         uint64_t userdata = nl_attr_get_u64(a[OVS_USERSPACE_ATTR_USERDATA]);
         union user_action_cookie cookie;
 
@@ -287,6 +290,16 @@ format_odp_userspace_action(struct ds *ds, const struct nlattr *attr)
             ds_put_format(ds, ",userdata=0x%"PRIx64, userdata);
             break;
         }
+    } else if (userdata_attr) {
+        const uint8_t *userdata = nl_attr_get(userdata_attr);
+        size_t len = nl_attr_get_size(userdata_attr);
+        size_t i;
+
+        ds_put_format(ds, ",userdata(");
+        for (i = 0; i < len; i++) {
+            ds_put_format(ds, "%02x", userdata[i]);
+        }
+        ds_put_char(ds, ')');
     }
 
     ds_put_char(ds, ')');
@@ -449,7 +462,7 @@ parse_odp_action(const char *s, const struct simap *port_names,
         int n = -1;
 
         if (sscanf(s, "userspace(pid=%lli)%n", &pid, &n) > 0 && n > 0) {
-            odp_put_userspace_action(pid, NULL, actions);
+            odp_put_userspace_action(pid, NULL, 0, actions);
             return n;
         } else if (sscanf(s, "userspace(pid=%lli,sFlow(vid=%i,"
                           "pcp=%i,output=%lli))%n",
@@ -465,7 +478,7 @@ parse_odp_action(const char *s, const struct simap *port_names,
             cookie.type = USER_ACTION_COOKIE_SFLOW;
             cookie.sflow.vlan_tci = htons(tci);
             cookie.sflow.output = output;
-            odp_put_userspace_action(pid, &cookie, actions);
+            odp_put_userspace_action(pid, &cookie, sizeof cookie, actions);
             return n;
         } else if (sscanf(s, "userspace(pid=%lli,slow_path%n", &pid, &n) > 0
                    && n > 0) {
@@ -487,18 +500,29 @@ parse_odp_action(const char *s, const struct simap *port_names,
             }
             n++;
 
-            odp_put_userspace_action(pid, &cookie, actions);
+            odp_put_userspace_action(pid, &cookie, sizeof cookie, actions);
             return n;
         } else if (sscanf(s, "userspace(pid=%lli,userdata="
                           "%31[x0123456789abcdefABCDEF])%n", &pid, userdata_s,
                           &n) > 0 && n > 0) {
-            union user_action_cookie cookie;
             uint64_t userdata;
 
             userdata = strtoull(userdata_s, NULL, 0);
-            memcpy(&cookie, &userdata, sizeof cookie);
-            odp_put_userspace_action(pid, &cookie, actions);
+            odp_put_userspace_action(pid, &userdata, sizeof(userdata),
+                                     actions);
             return n;
+        } else if (sscanf(s, "userspace(pid=%lli,userdata(%n", &pid, &n) > 0
+                   && n > 0) {
+            struct ofpbuf buf;
+            char *end;
+
+            ofpbuf_init(&buf, 16);
+            end = ofpbuf_put_hex(&buf, &s[n], NULL);
+            if (end[0] == ')' && end[1] == ')') {
+                odp_put_userspace_action(pid, buf.data, buf.size, actions);
+                ofpbuf_uninit(&buf);
+                return (end + 2) - s;
+            }
         }
     }
 
@@ -2113,25 +2137,30 @@ odp_key_fitness_to_string(enum odp_key_fitness fitness)
 }
 
 /* Appends an OVS_ACTION_ATTR_USERSPACE action to 'odp_actions' that specifies
- * Netlink PID 'pid'.  If 'cookie' is nonnull, adds a userdata attribute whose
- * contents contains 'cookie' and returns the offset within 'odp_actions' of
- * the start of the cookie.  (If 'cookie' is null, then the return value is not
- * meaningful.) */
+ * Netlink PID 'pid'.  If 'userdata' is nonnull, adds a userdata attribute
+ * whose contents are the 'userdata_size' bytes at 'userdata' and returns the
+ * offset within 'odp_actions' of the start of the cookie.  (If 'userdata' is
+ * null, then the return value is not meaningful.) */
 size_t
-odp_put_userspace_action(uint32_t pid, const union user_action_cookie *cookie,
+odp_put_userspace_action(uint32_t pid,
+                         const void *userdata, size_t userdata_size,
                          struct ofpbuf *odp_actions)
 {
+    size_t userdata_ofs;
     size_t offset;
 
     offset = nl_msg_start_nested(odp_actions, OVS_ACTION_ATTR_USERSPACE);
     nl_msg_put_u32(odp_actions, OVS_USERSPACE_ATTR_PID, pid);
-    if (cookie) {
+    if (userdata) {
+        userdata_ofs = odp_actions->size + NLA_HDRLEN;
         nl_msg_put_unspec(odp_actions, OVS_USERSPACE_ATTR_USERDATA,
-                          cookie, sizeof *cookie);
+                          userdata, userdata_size);
+    } else {
+        userdata_ofs = 0;
     }
     nl_msg_end_nested(odp_actions, offset);
 
-    return cookie ? odp_actions->size - NLA_ALIGN(sizeof *cookie) : 0;
+    return userdata_ofs;
 }
 
 void

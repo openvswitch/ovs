@@ -540,10 +540,10 @@ const char *dpif_upcall_type_to_string(enum dpif_upcall_type);
 
 /* A packet passed up from the datapath to userspace.
  *
- * If 'key' or 'actions' is nonnull, then it points into data owned by
- * 'packet', so their memory cannot be freed separately.  (This is hardly a
- * great way to do things but it works out OK for the dpif providers and
- * clients that exist so far.)
+ * If 'key', 'actions', or 'userdata' is nonnull, then it points into data
+ * owned by 'packet', so their memory cannot be freed separately.  (This is
+ * hardly a great way to do things but it works out OK for the dpif providers
+ * and clients that exist so far.)
  */
 struct dpif_upcall {
     /* All types. */
@@ -553,7 +553,7 @@ struct dpif_upcall {
     size_t key_len;             /* Length of 'key' in bytes. */
 
     /* DPIF_UC_ACTION only. */
-    uint64_t userdata;          /* Argument to OVS_ACTION_ATTR_USERSPACE. */
+    struct nlattr *userdata;    /* Argument to OVS_ACTION_ATTR_USERSPACE. */
 };
 
 int dpif_recv_set(struct dpif *, bool enable);

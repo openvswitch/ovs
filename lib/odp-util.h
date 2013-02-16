@@ -152,7 +152,7 @@ union user_action_cookie {
 BUILD_ASSERT_DECL(sizeof(union user_action_cookie) == 8);
 
 size_t odp_put_userspace_action(uint32_t pid,
-                                const union user_action_cookie *,
+                                const void *userdata, size_t userdata_size,
                                 struct ofpbuf *odp_actions);
 void odp_put_tunnel_action(const struct flow_tnl *tunnel,
                            struct ofpbuf *odp_actions);

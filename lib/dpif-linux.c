@@ -1237,7 +1237,7 @@ parse_odp_packet(struct ofpbuf *buf, struct dpif_upcall *upcall,
         [OVS_PACKET_ATTR_KEY] = { .type = NL_A_NESTED },
 
         /* OVS_PACKET_CMD_ACTION only. */
-        [OVS_PACKET_ATTR_USERDATA] = { .type = NL_A_U64, .optional = true },
+        [OVS_PACKET_ATTR_USERDATA] = { .type = NL_A_UNSPEC, .optional = true },
     };
 
     struct ovs_header *ovs_header;
@@ -1275,9 +1275,7 @@ parse_odp_packet(struct ofpbuf *buf, struct dpif_upcall *upcall,
     upcall->key = CONST_CAST(struct nlattr *,
                              nl_attr_get(a[OVS_PACKET_ATTR_KEY]));
     upcall->key_len = nl_attr_get_size(a[OVS_PACKET_ATTR_KEY]);
-    upcall->userdata = (a[OVS_PACKET_ATTR_USERDATA]
-                        ? nl_attr_get_u64(a[OVS_PACKET_ATTR_USERDATA])
-                        : 0);
+    upcall->userdata = a[OVS_PACKET_ATTR_USERDATA];
     *dp_ifindex = ovs_header->dp_ifindex;
 
     return 0;
