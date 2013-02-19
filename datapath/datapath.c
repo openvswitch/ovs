@@ -393,7 +393,7 @@ static int queue_userspace_packet(struct net *net, int dp_ifindex,
 
 	if (upcall_info->userdata)
 		__nla_put(user_skb, OVS_PACKET_ATTR_USERDATA,
-			  upcall_info->userdata->nla_len - NLA_HDRLEN,
+			  nla_len(upcall_info->userdata),
 			  nla_data(upcall_info->userdata));
 
 	nla = __nla_reserve(user_skb, OVS_PACKET_ATTR_PACKET, skb->len);
