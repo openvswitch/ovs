@@ -78,6 +78,7 @@ BUILD_ASSERT_DECL(N_TABLES >= 2 && N_TABLES <= 255);
 struct ofport_dpif;
 struct ofproto_dpif;
 struct flow_miss;
+struct facet;
 
 struct rule_dpif {
     struct rule up;
@@ -118,8 +119,7 @@ static struct rule_dpif *rule_dpif_miss_rule(struct ofproto_dpif *ofproto,
 
 static void rule_credit_stats(struct rule_dpif *,
                               const struct dpif_flow_stats *);
-static void flow_push_stats(struct rule_dpif *, const struct flow *,
-                            const struct dpif_flow_stats *);
+static void flow_push_stats(struct facet *, const struct dpif_flow_stats *);
 static tag_type rule_calculate_tag(const struct flow *,
                                    const struct minimask *, uint32_t basis);
 static void rule_invalidate(const struct rule_dpif *);
@@ -4891,7 +4891,7 @@ facet_push_stats(struct facet *facet)
         facet->prev_byte_count = facet->byte_count;
         facet->prev_used = facet->used;
 
-        flow_push_stats(facet->rule, &facet->flow, &stats);
+        flow_push_stats(facet, &stats);
 
         update_mirror_stats(ofproto_dpif_cast(facet->rule->up.ofproto),
                             facet->mirrors, stats.n_packets, stats.n_bytes);
@@ -4906,19 +4906,19 @@ rule_credit_stats(struct rule_dpif *rule, const struct dpif_flow_stats *stats)
     ofproto_rule_update_used(&rule->up, stats->used);
 }
 
-/* Pushes flow statistics to the rules which 'flow' resubmits into given
- * 'rule''s actions and mirrors. */
+/* Pushes flow statistics to the rules which 'facet->flow' resubmits
+ * into given 'facet->rule''s actions and mirrors. */
 static void
-flow_push_stats(struct rule_dpif *rule,
-                const struct flow *flow, const struct dpif_flow_stats *stats)
+flow_push_stats(struct facet *facet, const struct dpif_flow_stats *stats)
 {
+    struct rule_dpif *rule = facet->rule;
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(rule->up.ofproto);
     struct action_xlate_ctx ctx;
 
     ofproto_rule_update_used(&rule->up, stats->used);
 
-    action_xlate_ctx_init(&ctx, ofproto, flow, flow->vlan_tci, rule,
-                          0, NULL);
+    action_xlate_ctx_init(&ctx, ofproto, &facet->flow, facet->flow.vlan_tci,
+                          rule, 0, NULL);
     ctx.resubmit_stats = stats;
     xlate_actions_for_side_effects(&ctx, rule->up.ofpacts,
                                    rule->up.ofpacts_len);
