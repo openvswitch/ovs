@@ -439,9 +439,6 @@ get_vport_type(const struct dpif_linux_vport *vport)
     case OVS_VPORT_TYPE_GRE64:
         return "gre64";
 
-    case OVS_VPORT_TYPE_CAPWAP:
-        return "capwap";
-
     case OVS_VPORT_TYPE_VXLAN:
         return "vxlan";
 
@@ -468,8 +465,6 @@ netdev_to_ovs_vport_type(const struct netdev *netdev)
         return OVS_VPORT_TYPE_GRE64;
     } else if (strstr(type, "gre")) {
         return OVS_VPORT_TYPE_GRE;
-    } else if (!strcmp(type, "capwap")) {
-        return OVS_VPORT_TYPE_CAPWAP;
     } else if (!strcmp(type, "vxlan")) {
         return OVS_VPORT_TYPE_VXLAN;
     } else {

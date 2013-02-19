@@ -41,7 +41,6 @@
  */
 #define TNL_T_PROTO_GRE		0
 #define TNL_T_PROTO_GRE64	1
-#define TNL_T_PROTO_CAPWAP	2
 #define TNL_T_PROTO_VXLAN	3
 
 /* These flags are only needed when calling tnl_find_port(). */
@@ -147,13 +146,6 @@ struct tnl_vport {
 	const struct tnl_ops *tnl_ops;
 
 	struct tnl_mutable_config __rcu *mutable;
-
-	/*
-	 * ID of last fragment sent (for tunnel protocols with direct support
-	 * fragmentation).  If the protocol relies on IP fragmentation then
-	 * this is not needed.
-	 */
-	atomic_t frag_id;
 };
 
 struct vport *ovs_tnl_create(const struct vport_parms *, const struct vport_ops *,

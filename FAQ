@@ -167,7 +167,7 @@ Q: What features are not available in the Open vSwitch kernel datapath
 
 A: The kernel module in upstream Linux 3.3 and later does not include
    tunnel virtual ports, that is, interfaces with type "gre",
-   "ipsec_gre", "gre64", "ipsec_gre64", "vxlan", or "capwap".  It is
+   "ipsec_gre", "gre64", "ipsec_gre64", or "vxlan".  It is
    possible to create tunnels in Linux and attach them to Open vSwitch
    as system devices.  However, they cannot be dynamically created
    through the OVSDB protocol or set the tunnel ids as a flow action.

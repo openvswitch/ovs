@@ -318,10 +318,6 @@ set_tunnel_config(struct netdev_dev *dev_, const struct smap *args)
     ipsec_mech_set = false;
     memset(&tnl_cfg, 0, sizeof tnl_cfg);
 
-    if (!strcmp(type, "capwap")) {
-        VLOG_WARN_ONCE("CAPWAP tunnel support is deprecated.");
-    }
-
     needs_dst_port = !strcmp(type, "vxlan");
     tnl_cfg.ipsec = strstr(type, "ipsec");
     tnl_cfg.dont_fragment = true;
@@ -690,7 +686,6 @@ netdev_vport_tunnel_register(void)
         TUNNEL_CLASS("ipsec_gre", "gre_system"),
         TUNNEL_CLASS("gre64", "gre64_system"),
         TUNNEL_CLASS("ipsec_gre64", "gre64_system"),
-        TUNNEL_CLASS("capwap", "capwap_system"),
         TUNNEL_CLASS("vxlan", "vxlan_system")
     };
 

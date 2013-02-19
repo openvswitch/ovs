@@ -1232,19 +1232,6 @@
             Same as IPSEC_GRE except 64 bit key.
           </dd>
 
-          <dt><code>capwap</code></dt>
-          <dd>
-            An Ethernet tunnel over the UDP transport portion of CAPWAP (RFC
-            5415).  This allows interoperability with certain switches that do
-            not support GRE.  Only the tunneling component of the protocol is
-            implemented.  UDP ports 58881 and 58882 are used as the source and
-            destination ports respectively.  CAPWAP is currently supported only
-            with the Linux kernel datapath with kernel version 2.6.26 or later.
-
-            CAPWAP support is deprecated and will be removed no earlier than
-            February 2013.
-          </dd>
-
           <dt><code>vxlan</code></dt>
           <dd>
 	    <p>
@@ -1278,8 +1265,7 @@
       <p>
         These options apply to interfaces with <ref column="type"/> of
         <code>gre</code>, <code>ipsec_gre</code>, <code>gre64</code>,
-        <code>ipsec_gre64</code>, <code>capwap</code>, and
-        <code>vxlan</code>.
+        <code>ipsec_gre64</code>, and <code>vxlan</code>.
       </p>
 
       <p>
@@ -1323,7 +1309,7 @@
           </li>
           <li>
             A positive 24-bit (for VXLAN), 32-bit (for GRE) or 64-bit (for
-            CAPWAP) number.  The tunnel receives only packets with the
+            GRE64) number.  The tunnel receives only packets with the
             specified key.
           </li>
           <li>
@@ -1350,7 +1336,7 @@
           </li>
           <li>
             A positive 24-bit (for VXLAN), 32-bit (for GRE) or 64-bit (for
-            CAPWAP) number.  Packets sent through the tunnel will have the
+            GRE64) number.  Packets sent through the tunnel will have the
             specified key.
           </li>
           <li>
@@ -1550,15 +1536,15 @@
 
       <column name="status" key="source_ip">
         The source IP address used for an IPv4 tunnel end-point, such as
-        <code>gre</code> or <code>capwap</code>.
+        <code>gre</code>.
       </column>
 
       <column name="status" key="tunnel_egress_iface">
-        Egress interface for tunnels.  Currently only relevant for GRE and
-        CAPWAP tunnels.  On Linux systems, this column will show the name of
-        the interface which is responsible for routing traffic destined for the
-        configured <ref column="options" key="remote_ip"/>.  This could be an
-        internal interface such as a bridge port.
+        Egress interface for tunnels.  Currently only relevant for GRE tunnels
+        On Linux systems, this column will show the name of the interface
+        which is responsible for routing traffic destined for the configured
+        <ref column="options" key="remote_ip"/>.  This could be an internal
+        interface such as a bridge port.
       </column>
 
       <column name="status" key="tunnel_egress_iface_carrier"

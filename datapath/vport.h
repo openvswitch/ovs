@@ -26,14 +26,8 @@
 #include <linux/spinlock.h>
 #include <linux/u64_stats_sync.h>
 
-#include "vport-capwap.h"
-
 struct vport;
 struct vport_parms;
-
-struct vport_net {
-	struct capwap_net capwap;
-};
 
 /* The following definitions are for users of the vport subsytem: */
 
@@ -230,7 +224,6 @@ extern const struct vport_ops ovs_netdev_vport_ops;
 extern const struct vport_ops ovs_internal_vport_ops;
 extern const struct vport_ops ovs_gre_vport_ops;
 extern const struct vport_ops ovs_gre64_vport_ops;
-extern const struct vport_ops ovs_capwap_vport_ops;
 extern const struct vport_ops ovs_vxlan_vport_ops;
 
 #endif /* vport.h */

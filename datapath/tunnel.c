@@ -799,7 +799,6 @@ struct vport *ovs_tnl_create(const struct vport_parms *parms,
 	struct vport *vport;
 	struct tnl_vport *tnl_vport;
 	struct tnl_mutable_config *mutable;
-	int initial_frag_id;
 	int err;
 
 	vport = ovs_vport_alloc(sizeof(struct tnl_vport), vport_ops, parms);
@@ -818,9 +817,6 @@ struct vport *ovs_tnl_create(const struct vport_parms *parms,
 		err = -ENOMEM;
 		goto error_free_vport;
 	}
-
-	get_random_bytes(&initial_frag_id, sizeof(int));
-	atomic_set(&tnl_vport->frag_id, initial_frag_id);
 
 	err = tnl_set_config(ovs_dp_get_net(parms->dp), parms->options, tnl_ops,
 			     NULL, mutable);
