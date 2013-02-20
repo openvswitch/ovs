@@ -219,6 +219,8 @@ caps = {}
 cap_sizes = {}
 unlimited_data = False
 dbg = False
+# Default value for the number of rotated logs.
+log_days = 20
 
 def cap(key, pii=PII_MAYBE, min_size=-1, max_size=-1, min_time=-1,
         max_time=-1, mime=MIME_TEXT, checked=True, hidden=False):
@@ -321,6 +323,16 @@ def func_output(cap, label, func):
         t = str(func).split()
         data[label] = {'cap': cap, 'func': func}
 
+def log_output(cap, logs, newest_first=False):
+    global log_days
+    file_output(cap, logs)
+    file_output(cap,
+        ['%s.%d' % (f, n) for n in range(1, log_days+1) for f in logs], \
+        newest_first=newest_first)
+    file_output(cap,
+        ['%s.%d.gz' % (f, n) for n in range(1, log_days+1) for f in logs], \
+        newest_first=newest_first)
+
 def collect_data():
     process_lists = {}
 
@@ -364,7 +376,7 @@ def collect_data():
 
 def main(argv=None):
     global ANSWER_YES_TO_ALL, SILENT_MODE
-    global entries, data, dbg, unlimited_data
+    global entries, data, dbg, unlimited_data, log_days
 
     # Filter flags
     only_ovs_info = False
@@ -378,9 +390,6 @@ def main(argv=None):
     output_file = None
     output_type = 'tar.gz'
     output_fd = -1
-
-    # Default value for the number of rotated logs.
-    log_days = 20
 
     if argv is None:
         argv = sys.argv
@@ -452,7 +461,7 @@ def main(argv=None):
             collect_all_info = False
 
         if k == '--log-days':
-            log_days = int(v) + 1
+            log_days = int(v)
 
     if len(params) != 1:
         print >>sys.stderr, "Invalid additional arguments", str(params)
@@ -583,18 +592,14 @@ exclude those logs from the archive.
     cmd_output(CAP_PROCESS_LIST, [PS, 'wwwaxf', '-eo', 'pid,tty,stat,time,nice,psr,pcpu,pmem,nwchan,wchan:25,args'], label='process-tree')
     func_output(CAP_PROCESS_LIST, 'fd_usage', fd_usage)
 
-    system_logs = (CAP_SYSTEM_LOGS, [ VAR_LOG_DIR + x for x in
+    system_logs = ([ VAR_LOG_DIR + x for x in
         ['crit.log', 'kern.log', 'daemon.log', 'user.log',
         'syslog', 'messages', 'secure', 'debug', 'dmesg', 'boot']])
-    ovs_logs = (CAP_OPENVSWITCH_LOGS, [ OPENVSWITCH_LOG_DIR + x for x in
+    ovs_logs = ([ OPENVSWITCH_LOG_DIR + x for x in
         ['ovs-vswitchd.log', 'ovsdb-server.log',
         'ovs-xapi-sync.log', 'ovs-monitor-ipsec.log']])
-    for cap, logs in [system_logs, ovs_logs]:
-        file_output(cap, logs)
-        file_output(cap,
-            ['%s.%d' % (f, n) for n in range(log_days) for f in logs])
-        file_output(cap,
-            ['%s.%d.gz' % (f, n) for n in range(log_days) for f in logs])
+    log_output(CAP_SYSTEM_LOGS, system_logs)
+    log_output(CAP_OPENVSWITCH_LOGS, ovs_logs)
 
     if not os.path.exists('/var/log/dmesg') and not os.path.exists('/var/log/boot'):
         cmd_output(CAP_SYSTEM_LOGS, [DMESG])
@@ -851,8 +856,12 @@ def load_plugins(just_capabilities=False, filter=None):
                     continue
                 if el.tagName == "files":
                     newest_first = getBoolAttr(el, 'newest_first')
-                    file_output(dir, getText(el.childNodes).split(),
-                                newest_first=newest_first)
+                    if el.getAttribute("type") == "logs":
+                        log_output(dir, getText(el.childNodes).split(),
+                                    newest_first=newest_first)
+                    else:
+                        file_output(dir, getText(el.childNodes).split(),
+                                    newest_first=newest_first)
                 elif el.tagName == "directory":
                     pattern = el.getAttribute("pattern")
                     if pattern == '': pattern = None
