@@ -142,7 +142,6 @@ Depends:
  ${shlibs:Depends}, ${misc:Depends},
  openvswitch-common (= ${binary:Version}),
  openvswitch-controller (= ${binary:Version}),
- openvswitch-ipsec (= ${binary:Version}),
  openvswitch-switch (= ${binary:Version})
 Description: Debug symbols for Open vSwitch packages
  Open vSwitch is a production quality, multilayer, software-based, Ethernet
