@@ -267,7 +267,7 @@ def output(x):
 def output_ts(x):
     output("[%s]  %s" % (time.strftime("%x %X %Z"), x))
 
-def cmd_output(cap, args, label=None, filter=None):
+def cmd_output(cap, args, label=None, filter=None, binary=False):
     if cap in entries:
         if not label:
             if isinstance(args, list):
@@ -276,7 +276,8 @@ def cmd_output(cap, args, label=None, filter=None):
                 label = ' '.join(a)
             else:
                 label = args
-        data[label] = {'cap': cap, 'cmd_args': args, 'filter': filter}
+        data[label] = {'cap': cap, 'cmd_args': args, 'filter': filter,
+                       'binary': binary}
 
 def file_output(cap, path_list, newest_first=False):
     """
@@ -329,7 +330,9 @@ def collect_data():
             v['output'] = StringIOmtime()
             if not process_lists.has_key(cap):
                 process_lists[cap] = []
-            process_lists[cap].append(ProcOutput(v['cmd_args'], caps[cap][MAX_TIME], v['output'], v['filter']))
+            process_lists[cap].append(
+                ProcOutput(v['cmd_args'], caps[cap][MAX_TIME], v['output'],
+                           v['filter'], v['binary']))
         elif v.has_key('filename') and v['filename'].startswith('/proc/'):
             # proc files must be read into memory
             try:
@@ -861,7 +864,8 @@ def load_plugins(just_capabilities=False, filter=None):
                 elif el.tagName == "command":
                     label = el.getAttribute("label")
                     if label == '': label = None
-                    cmd_output(dir, getText(el.childNodes), label)
+                    binary = getBoolAttr(el, 'binary')
+                    cmd_output(dir, getText(el.childNodes), label, binary=binary)
 
 def make_tar(subdir, suffix, output_fd, output_file):
     global SILENT_MODE, data
@@ -1099,7 +1103,7 @@ def disk_list():
 class ProcOutput:
     debug = False
 
-    def __init__(self, command, max_time, inst=None, filter=None):
+    def __init__(self, command, max_time, inst=None, filter=None, binary=False):
         self.command = command
         self.max_time = max_time
         self.inst = inst
@@ -1110,6 +1114,10 @@ class ProcOutput:
         self.timeout = int(time.time()) + self.max_time
         self.filter = filter
         self.filter_state = {}
+        if binary:
+            self.bufsize = 1048576  # 1MB buffer
+        else:
+            self.bufsize = 1        # line buffered
 
     def __del__(self):
         self.terminate()
@@ -1122,7 +1130,9 @@ class ProcOutput:
         try:
             if ProcOutput.debug:
                 output_ts("Starting '%s'" % self.cmdAsStr())
-            self.proc = Popen(self.command, bufsize=1, stdin=dev_null, stdout=PIPE, stderr=dev_null, shell=isinstance(self.command, str))
+            self.proc = Popen(self.command, bufsize=self.bufsize,
+                              stdin=dev_null, stdout=PIPE, stderr=dev_null,
+                              shell=isinstance(self.command, str))
             old = fcntl.fcntl(self.proc.stdout.fileno(), fcntl.F_GETFD)
             fcntl.fcntl(self.proc.stdout.fileno(), fcntl.F_SETFD, old | fcntl.FD_CLOEXEC)
             self.running = True
@@ -1145,7 +1155,10 @@ class ProcOutput:
 
     def read_line(self):
         assert self.running
-        line = self.proc.stdout.readline()
+        if self.bufsize == 1:
+            line = self.proc.stdout.readline()
+        else:
+            line = self.proc.stdout.read(self.bufsize)
         if line == '':
             # process exited
             self.proc.stdout.close()
