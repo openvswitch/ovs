@@ -3,6 +3,9 @@ post-v1.10.0
     - Stable bond mode has been removed.
     - The autopath action has been removed.
     - CAPWAP tunneling support removed.
+    - New support for the data encapsulation format of the LISP tunnel
+      protocol (RFC 6830).  An external control plane or manual flow
+      setup is required for EID-to-RLOC mapping.
 
 
 v1.10.0 - xx xxx xxxx

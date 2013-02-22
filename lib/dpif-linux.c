@@ -442,6 +442,9 @@ get_vport_type(const struct dpif_linux_vport *vport)
     case OVS_VPORT_TYPE_VXLAN:
         return "vxlan";
 
+    case OVS_VPORT_TYPE_LISP:
+        return "lisp";
+
     case OVS_VPORT_TYPE_UNSPEC:
     case __OVS_VPORT_TYPE_MAX:
         break;
@@ -467,6 +470,8 @@ netdev_to_ovs_vport_type(const struct netdev *netdev)
         return OVS_VPORT_TYPE_GRE;
     } else if (!strcmp(type, "vxlan")) {
         return OVS_VPORT_TYPE_VXLAN;
+    } else if (!strcmp(type, "lisp")) {
+        return OVS_VPORT_TYPE_LISP;
     } else {
         return OVS_VPORT_TYPE_UNSPEC;
     }

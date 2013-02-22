@@ -44,6 +44,8 @@ VLOG_DEFINE_THIS_MODULE(netdev_vport);
 /* Default to the OTV port, per the VXLAN IETF draft. */
 #define VXLAN_DST_PORT 8472
 
+#define LISP_DST_PORT 4341
+
 #define DEFAULT_TTL 64
 
 struct netdev_dev_vport {
@@ -112,14 +114,13 @@ netdev_vport_is_patch(const struct netdev *netdev)
 }
 
 static bool
-netdev_vport_is_vxlan(const struct netdev *netdev)
+netdev_vport_needs_dst_port(const struct netdev_dev *dev)
 {
-    const struct netdev_dev *dev = netdev_get_dev(netdev);
     const struct netdev_class *class = netdev_dev_get_class(dev);
     const char *type = netdev_dev_get_type(dev);
 
-    return (class->get_config == get_tunnel_config
-            && !strcmp("vxlan", type));
+    return (class->get_config == get_tunnel_config &&
+            (!strcmp("vxlan", type) || !strcmp("lisp", type)));
 }
 
 const char *
@@ -129,20 +130,21 @@ netdev_vport_get_dpif_port(const struct netdev *netdev)
     const struct netdev_class *class = netdev_dev_get_class(dev);
     const char *dpif_port;
 
-    if (netdev_vport_is_vxlan(netdev)) {
+    if (netdev_vport_needs_dst_port(dev)) {
         const struct netdev_dev_vport *vport = netdev_vport_get_dev(netdev);
         const char *type = netdev_dev_get_type(dev);
-        static char dpif_port_vxlan[IFNAMSIZ];
+        static char dpif_port_combined[IFNAMSIZ];
 
         /*
          * Note: IFNAMSIZ is 16 bytes long. The maximum length of a VXLAN
-         * port name below is 15 bytes. Still, assert here on the size of
-         * strlen(type) in case that changes in the future.
+         * or LISP port name below is 15 or 14 bytes respectively. Still,
+         * assert here on the size of strlen(type) in case that changes
+         * in the future.
          */
         ovs_assert(strlen(type) + 10 < IFNAMSIZ);
-        snprintf(dpif_port_vxlan, IFNAMSIZ, "%s_sys_%d", type,
+        snprintf(dpif_port_combined, IFNAMSIZ, "%s_sys_%d", type,
                  ntohs(vport->tnl_cfg.dst_port));
-        return dpif_port_vxlan;
+        return dpif_port_combined;
     } else {
         dpif_port = (is_vport_class(class)
                      ? vport_class_cast(class)->dpif_port
@@ -318,7 +320,7 @@ set_tunnel_config(struct netdev_dev *dev_, const struct smap *args)
     ipsec_mech_set = false;
     memset(&tnl_cfg, 0, sizeof tnl_cfg);
 
-    needs_dst_port = !strcmp(type, "vxlan");
+    needs_dst_port = netdev_vport_needs_dst_port(dev_);
     tnl_cfg.ipsec = strstr(type, "ipsec");
     tnl_cfg.dont_fragment = true;
 
@@ -403,8 +405,13 @@ set_tunnel_config(struct netdev_dev *dev_, const struct smap *args)
     }
 
     /* Add a default destination port for VXLAN if none specified. */
-    if (needs_dst_port && !tnl_cfg.dst_port) {
+    if (!strcmp(type, "vxlan") && !tnl_cfg.dst_port) {
         tnl_cfg.dst_port = htons(VXLAN_DST_PORT);
+    }
+
+    /* Add a default destination port for LISP if none specified. */
+    if (!strcmp(type, "lisp") && !tnl_cfg.dst_port) {
+        tnl_cfg.dst_port = htons(LISP_DST_PORT);
     }
 
     if (tnl_cfg.ipsec) {
@@ -686,7 +693,8 @@ netdev_vport_tunnel_register(void)
         TUNNEL_CLASS("ipsec_gre", "gre_system"),
         TUNNEL_CLASS("gre64", "gre64_system"),
         TUNNEL_CLASS("ipsec_gre64", "gre64_system"),
-        TUNNEL_CLASS("vxlan", "vxlan_system")
+        TUNNEL_CLASS("vxlan", "vxlan_system"),
+        TUNNEL_CLASS("lisp", "lisp_system")
     };
 
     int i;

@@ -56,6 +56,7 @@ EXTRA_DIST = \
 	OPENFLOW-1.1+ \
 	PORTING \
 	README-gcov \
+	README-lisp \
 	REPORTING-BUGS \
 	SubmittingPatches \
 	WHY-OVS \

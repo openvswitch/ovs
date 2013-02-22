@@ -42,6 +42,7 @@
 #define TNL_T_PROTO_GRE		0
 #define TNL_T_PROTO_GRE64	1
 #define TNL_T_PROTO_VXLAN	3
+#define TNL_T_PROTO_LISP	4
 
 /* These flags are only needed when calling tnl_find_port(). */
 #define TNL_T_KEY_EXACT		(1 << 10)
@@ -158,6 +159,7 @@ int ovs_tnl_get_options(const struct vport *, struct sk_buff *);
 const char *ovs_tnl_get_name(const struct vport *vport);
 int ovs_tnl_send(struct vport *vport, struct sk_buff *skb);
 void ovs_tnl_rcv(struct vport *vport, struct sk_buff *skb);
+u16 ovs_tnl_get_src_port(struct sk_buff *skb);
 
 struct vport *ovs_tnl_find_port(struct net *net, __be32 saddr, __be32 daddr,
 				__be64 key, int tunnel_type,

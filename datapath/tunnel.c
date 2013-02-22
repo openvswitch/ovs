@@ -512,6 +512,21 @@ free_frags:
 	return sent_len;
 }
 
+/* Compute source UDP port for outgoing packet.
+ * Currently we use the flow hash.
+ */
+u16 ovs_tnl_get_src_port(struct sk_buff *skb)
+{
+	int low;
+	int high;
+	unsigned int range;
+	u32 hash = OVS_CB(skb)->flow->hash;
+
+	inet_get_local_port_range(&low, &high);
+	range = (high - low) + 1;
+	return (((u64) hash * range) >> 32) + low;
+}
+
 int ovs_tnl_send(struct vport *vport, struct sk_buff *skb)
 {
 	struct tnl_vport *tnl_vport = tnl_vport_priv(vport);

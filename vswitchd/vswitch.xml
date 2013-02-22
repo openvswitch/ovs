@@ -1249,6 +1249,13 @@
 	    </p>
           </dd>
 
+          <dt><code>lisp</code></dt>
+          <dd>
+            A layer 3 tunnel over the experimental, UDP-based Locator/ID
+            Separation Protocol (RFC 6830). LISP is currently supported only
+            with the Linux kernel datapath with kernel version 2.6.26 or later.
+          </dd>
+
           <dt><code>patch</code></dt>
           <dd>
             A pair of virtual devices that act as a patch cable.
@@ -1265,7 +1272,7 @@
       <p>
         These options apply to interfaces with <ref column="type"/> of
         <code>gre</code>, <code>ipsec_gre</code>, <code>gre64</code>,
-        <code>ipsec_gre64</code>, and <code>vxlan</code>.
+        <code>ipsec_gre64</code>, <code>vxlan</code>, and <code>lisp</code>.
       </p>
 
       <p>
@@ -1308,8 +1315,8 @@
             key="in_key"/> at all.
           </li>
           <li>
-            A positive 24-bit (for VXLAN), 32-bit (for GRE) or 64-bit (for
-            GRE64) number.  The tunnel receives only packets with the
+            A positive 24-bit (for VXLAN and LISP), 32-bit (for GRE) or 64-bit
+            (for GRE64) number.  The tunnel receives only packets with the
             specified key.
           </li>
           <li>
@@ -1335,8 +1342,8 @@
             key="out_key"/> at all.
           </li>
           <li>
-            A positive 24-bit (for VXLAN), 32-bit (for GRE) or 64-bit (for
-            GRE64) number.  Packets sent through the tunnel will have the
+            A positive 24-bit (for VXLAN and LISP), 32-bit (for GRE) or 64-bit
+            (for GRE64) number.  Packets sent through the tunnel will have the
             specified key.
           </li>
           <li>

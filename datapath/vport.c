@@ -43,6 +43,7 @@ static const struct vport_ops *base_vport_ops_list[] = {
 	&ovs_gre64_vport_ops,
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,26)
 	&ovs_vxlan_vport_ops,
+	&ovs_lisp_vport_ops,
 #endif
 };
 
