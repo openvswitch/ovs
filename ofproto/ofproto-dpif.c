@@ -3341,12 +3341,13 @@ process_special(struct ofproto_dpif *ofproto, const struct flow *flow,
 }
 
 static struct flow_miss *
-flow_miss_find(struct hmap *todo, const struct flow *flow, uint32_t hash)
+flow_miss_find(struct hmap *todo, const struct ofproto_dpif *ofproto,
+               const struct flow *flow, uint32_t hash)
 {
     struct flow_miss *miss;
 
     HMAP_FOR_EACH_WITH_HASH (miss, hmap_node, hash, todo) {
-        if (flow_equal(&miss->flow, flow)) {
+        if (miss->ofproto == ofproto && flow_equal(&miss->flow, flow)) {
             return miss;
         }
     }
@@ -3814,7 +3815,7 @@ handle_miss_upcalls(struct dpif_backer *backer, struct dpif_upcall *upcalls,
 
         /* Add other packets to a to-do list. */
         hash = flow_hash(&miss->flow, 0);
-        existing_miss = flow_miss_find(&todo, &miss->flow, hash);
+        existing_miss = flow_miss_find(&todo, ofproto, &miss->flow, hash);
         if (!existing_miss) {
             hmap_insert(&todo, &miss->hmap_node, hash);
             miss->ofproto = ofproto;
