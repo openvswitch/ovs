@@ -1053,7 +1053,8 @@ match_format(const struct match *match, struct ds *s, unsigned int priority)
                             &wc->masks.nd_target);
         format_eth_masked(s, "nd_sll", f->arp_sha, wc->masks.arp_sha);
         format_eth_masked(s, "nd_tll", f->arp_tha, wc->masks.arp_tha);
-    } else {
+    } else if (f->nw_proto == IPPROTO_TCP ||
+               f->nw_proto == IPPROTO_UDP) {
         format_be16_masked(s, "tp_src", f->tp_src, wc->masks.tp_src);
         format_be16_masked(s, "tp_dst", f->tp_dst, wc->masks.tp_dst);
     }
