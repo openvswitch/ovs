@@ -464,7 +464,7 @@ in_band_create(struct ofproto *ofproto, const char *local_name,
     int error;
 
     *in_bandp = NULL;
-    error = netdev_open(local_name, "system", &local_netdev);
+    error = netdev_open(local_name, "internal", &local_netdev);
     if (error) {
         VLOG_ERR("failed to initialize in-band control: cannot open "
                  "datapath local port %s (%s)", local_name, strerror(error));
