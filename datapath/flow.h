@@ -37,6 +37,7 @@ struct sk_buff;
 struct sw_flow_actions {
 	struct rcu_head rcu;
 	u32 actions_len;
+	int buf_size;
 	struct nlattr actions[];
 };
 
@@ -151,6 +152,7 @@ void ovs_flow_deferred_free(struct sw_flow *);
 void ovs_flow_free(struct sw_flow *);
 
 struct sw_flow_actions *ovs_flow_actions_alloc(int actions_len);
+void ovs_flow_actions_free(struct sw_flow_actions *sfa);
 void ovs_flow_deferred_free_acts(struct sw_flow_actions *);
 
 int ovs_flow_extract(struct sk_buff *, u16 in_port, struct sw_flow_key *,
@@ -194,7 +196,8 @@ int ovs_flow_from_nlattrs(struct sw_flow_key *swkey, int *key_lenp,
 int ovs_flow_metadata_from_nlattrs(struct sw_flow *flow, int key_len,
 				   const struct nlattr *attr);
 
-#define MAX_ACTIONS_BUFSIZE	(16 * 1024)
+#define MAX_ACTIONS_BUFSIZE		(32 * 1024)
+#define MAX_ACTIONS_BUFSIZE_KMALLOC	PAGE_SIZE
 #define TBL_MIN_BUCKETS		1024
 
 struct flow_table {

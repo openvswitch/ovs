@@ -207,12 +207,27 @@ struct sw_flow_actions *ovs_flow_actions_alloc(int size)
 	if (size > MAX_ACTIONS_BUFSIZE)
 		return ERR_PTR(-EINVAL);
 
-	sfa = kmalloc(sizeof(*sfa) + size, GFP_KERNEL);
+	size += sizeof(*sfa);
+	if (size <= MAX_ACTIONS_BUFSIZE_KMALLOC)
+		sfa = kmalloc(size, GFP_KERNEL);
+	else
+		sfa = vmalloc(size);
+
 	if (!sfa)
 		return ERR_PTR(-ENOMEM);
 
 	sfa->actions_len = 0;
+	sfa->buf_size = size;
+
 	return sfa;
+}
+
+void ovs_flow_actions_free(struct sw_flow_actions *sfa)
+{
+	if (sfa->buf_size <= MAX_ACTIONS_BUFSIZE_KMALLOC)
+		kfree(sfa);
+	else
+		vfree(sfa);
 }
 
 struct sw_flow *ovs_flow_alloc(void)
@@ -437,7 +452,7 @@ static void rcu_free_acts_callback(struct rcu_head *rcu)
 {
 	struct sw_flow_actions *sf_acts = container_of(rcu,
 			struct sw_flow_actions, rcu);
-	kfree(sf_acts);
+	ovs_flow_actions_free(sf_acts);
 }
 
 /* Schedules 'sf_acts' to be freed after the next RCU grace period.

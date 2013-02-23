@@ -433,10 +433,10 @@ static struct nlattr *reserve_sfa_size(struct sw_flow_actions **sfa, int attr_le
 	int next_offset = offsetof(struct sw_flow_actions, actions) +
 					(*sfa)->actions_len;
 
-	if (req_size <= (ksize(*sfa) - next_offset))
+	if (req_size <= ((*sfa)->buf_size - next_offset))
 		goto out;
 
-	new_acts_size = ksize(*sfa) * 2;
+	new_acts_size = (*sfa)->buf_size * 2;
 
 	if (new_acts_size > MAX_ACTIONS_BUFSIZE) {
 		if ((MAX_ACTIONS_BUFSIZE - next_offset) < req_size)
@@ -450,7 +450,7 @@ static struct nlattr *reserve_sfa_size(struct sw_flow_actions **sfa, int attr_le
 
 	memcpy(acts->actions, (*sfa)->actions, (*sfa)->actions_len);
 	acts->actions_len = (*sfa)->actions_len;
-	kfree(*sfa);
+	ovs_flow_actions_free(*sfa);
 	*sfa = acts;
 
 out:
@@ -1291,7 +1291,7 @@ static int ovs_flow_cmd_new_or_set(struct sk_buff *skb, struct genl_info *info)
 	return 0;
 
 err_kfree:
-	kfree(acts);
+	ovs_flow_actions_free(acts);
 error:
 	return error;
 }
