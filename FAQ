@@ -575,6 +575,11 @@ A: Suppose that you want to set up bridge br0 connected to physical
 
        ovs-vsctl -- --all destroy QoS -- --all destroy Queue
 
+   If you do want to keep some QoS or Queue records, or the Open
+   vSwitch you are using is older than version 1.8 (which added the
+   --all option), then you will have to destroy QoS and Queue records
+   individually.
+
 Q: I configured Quality of Service (QoS) in my OpenFlow network by
    adding records to the QoS and Queue table, but the results aren't
    what I expect.
