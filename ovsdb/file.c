@@ -598,8 +598,8 @@ ovsdb_file_commit(struct ovsdb_replica *replica,
     }
     file->n_transactions++;
 
-    /* If it has been at least COMPACT_MIN_MSEC millseconds since the last time
-     * we compacted (or at least COMPACT_RETRY_MSEC since the last time we
+    /* If it has been at least COMPACT_MIN_MSEC ms since the last time we
+     * compacted (or at least COMPACT_RETRY_MSEC ms since the last time we
      * tried), and if there are at least 100 transactions in the database, and
      * if the database is at least 10 MB, then compact the database. */
     if (time_msec() >= file->next_compact
