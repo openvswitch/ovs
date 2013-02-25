@@ -1237,7 +1237,7 @@
 	    <p>
 	      An Ethernet tunnel over the experimental, UDP-based VXLAN
 	      protocol described at
-	      <code>http://tools.ietf.org/html/draft-mahalingam-dutt-dcops-vxlan-02</code>.
+	      <code>http://tools.ietf.org/html/draft-mahalingam-dutt-dcops-vxlan-03</code>.
 	      VXLAN is currently supported only with the Linux kernel datapath
 	      with kernel version 2.6.26 or later.
 	    </p>
