@@ -70,8 +70,8 @@ v1.10.0 - xx xxx xxxx
       with FreeBSD and the kernel module built into Linux 3.3 and later.
 
 
-v1.9.0 - xx xxx xxxx
---------------------
+v1.9.0 - 26 Feb 2013
+------------------------
     - Datapath:
       - Support for ipv6 set action.
       - SKB mark matching and setting.
@@ -125,8 +125,9 @@ v1.9.0 - xx xxx xxxx
       data in ARP packets.
 
 
-v1.8.0 - xx xxx xxxx
+v1.8.0 - 26 Feb 2013
 ------------------------
+    *** Internal only release ***
     - New FAQ.  Please send updates and additions!
     - Authors of controllers, please read the new section titled "Action
       Reproduction" in DESIGN, which describes an Open vSwitch change in
