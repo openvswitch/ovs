@@ -939,7 +939,7 @@ netdev_linux_send(struct netdev *netdev_, const void *data, size_t size)
 
             sock = af_packet_sock();
             if (sock < 0) {
-                return sock;
+                return -sock;
             }
 
             error = get_ifindex(netdev_, &ifindex);
