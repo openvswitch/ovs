@@ -1956,6 +1956,11 @@
           two different hypervisors.  That is, <code>active</code> means that
           this <ref column="external_ids" key="iface-id"/> is the active
           instance within a single hypervisor, not in a broader scope.
+          There is one exception: some hypervisors support ``migration'' from a
+          given hypervisor to itself (most often for test purposes).  During
+          such a ``migration,'' two instances of a single <ref
+          column="external_ids" key="iface-id"/> might both be briefly marked
+          <code>active</code> on a single hypervisor.
         </p>
       </column>
 
