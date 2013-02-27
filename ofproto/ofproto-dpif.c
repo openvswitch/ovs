@@ -912,13 +912,13 @@ type_run(const char *type)
         backer->need_revalidate = 0;
 
         HMAP_FOR_EACH (ofproto, all_ofproto_dpifs_node, &all_ofproto_dpifs) {
-            struct facet *facet;
+            struct facet *facet, *next;
 
             if (ofproto->backer != backer) {
                 continue;
             }
 
-            HMAP_FOR_EACH (facet, hmap_node, &ofproto->facets) {
+            HMAP_FOR_EACH_SAFE (facet, next, hmap_node, &ofproto->facets) {
                 if (need_revalidate
                     || tag_set_intersects(&revalidate_set, facet->tags)) {
                     facet_revalidate(facet);
@@ -4582,6 +4582,9 @@ facet_lookup_valid(struct ofproto_dpif *ofproto, const struct flow *flow,
             || tag_set_intersects(&ofproto->backer->revalidate_set,
                                   facet->tags))) {
         facet_revalidate(facet);
+
+        /* facet_revalidate() may have destroyed 'facet'. */
+        facet = facet_find(ofproto, flow, hash);
     }
 
     return facet;
@@ -4741,7 +4744,10 @@ facet_check_consistency(struct facet *facet)
  *     'facet' to the new rule and recompiles its actions.
  *
  *   - If the rule found is the same as 'facet''s current rule, leaves 'facet'
- *     where it is and recompiles its actions anyway. */
+ *     where it is and recompiles its actions anyway.
+ *
+ *   - If any of 'facet''s subfacets correspond to a new flow according to
+ *     ofproto_receive(), 'facet' is removed. */
 static void
 facet_revalidate(struct facet *facet)
 {
@@ -4761,6 +4767,25 @@ facet_revalidate(struct facet *facet)
     int i;
 
     COVERAGE_INC(facet_revalidate);
+
+    /* Check that child subfacets still correspond to this facet.  Tunnel
+     * configuration changes could cause a subfacet's OpenFlow in_port to
+     * change. */
+    LIST_FOR_EACH (subfacet, list_node, &facet->subfacets) {
+        struct ofproto_dpif *recv_ofproto;
+        struct flow recv_flow;
+        int error;
+
+        error = ofproto_receive(ofproto->backer, NULL, subfacet->key,
+                                subfacet->key_len, &recv_flow, NULL,
+                                &recv_ofproto, NULL, NULL);
+        if (error
+            || recv_ofproto != ofproto
+            || memcmp(&recv_flow, &facet->flow, sizeof recv_flow)) {
+            facet_remove(facet);
+            return;
+        }
+    }
 
     new_rule = rule_dpif_lookup(ofproto, &facet->flow);
 
