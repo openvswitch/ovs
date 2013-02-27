@@ -202,12 +202,15 @@ Prerequisites section, follow the procedure below to build.
    For improved warnings if you installed "sparse" (see
    "Prerequisites"), add C=1 to the "make" command line.
 
-4. Become root by running "su" or another program.
+4. Consider running the testsuite.  Refer to "Running the Testsuite"
+   below, for instructions.
 
-5. Run "make install" to install the executables and manpages into the
+5. Become root by running "su" or another program.
+
+6. Run "make install" to install the executables and manpages into the
    running system, by default under /usr/local.
 
-6. If you built kernel modules, you may load them with "insmod", e.g.:
+7. If you built kernel modules, you may load them with "insmod", e.g.:
 
       % insmod datapath/linux/openvswitch.ko
 
@@ -267,7 +270,7 @@ Prerequisites section, follow the procedure below to build.
 
       % make modules_install
 
-7. Initialize the configuration database using ovsdb-tool, e.g.:
+8. Initialize the configuration database using ovsdb-tool, e.g.:
 
       % mkdir -p /usr/local/etc/openvswitch
       % ovsdb-tool create /usr/local/etc/openvswitch/conf.db vswitchd/vswitch.ovsschema
@@ -340,6 +343,59 @@ also upgrade the database schema:
 
 4. Start the Open vSwitch daemons as described under "Building and
    Installing Open vSwitch for Linux or FreeBSD" above.
+
+Running the Testsuite
+=====================
+
+Open vSwitch includes a testsuite.  Before you submit patches
+upstream, we advise that you run the tests and ensure that they pass.
+If you add new features to Open vSwitch, then adding tests for those
+features will ensure your features don't break as developers modify
+other areas of Open vSwitch.
+
+You must configure and build Open vSwitch (steps 1 through 3 in
+"Building and Installing Open vSwitch for Linux or FreeBSD" above)
+before you run the testsuite.  You do not need to install Open vSwitch
+or to build or load the kernel module to run the testsuite.  You do
+not need supervisor privilege to run the testsuite.
+
+To run all the unit tests in Open vSwitch, one at a time:
+      make check
+This takes under 5 minutes on a modern desktop system.
+
+To run all the unit tests in Open vSwitch, up to 8 in parallel:
+      make check TESTSUITEFLAGS=-j8
+This takes under a minute on a modern 4-core desktop system.
+
+To see a list of all the available tests, run:
+      make check TESTSUITEFLAGS=--list
+
+To run only a subset of tests, e.g. test 123 and tests 477 through 484:
+      make check TESTSUITEFLAGS='123 477-484'
+(Tests do not have inter-dependencies, so you may run any subset.)
+
+To run tests matching a keyword, e.g. "ovsdb":
+      make check TESTSUITEFLAGS='-k ovsdb'
+
+To see a complete list of test options:
+      make check TESTSUITEFLAGS=--help
+
+The results of a testing run are reported in tests/testsuite.log.
+Please report test failures as bugs and include the testsuite.log in
+your report.
+
+If you have "valgrind" installed, then you can also run the testsuite
+under valgrind by using "make check-valgrind" in place of "make
+check".  All the same options are available via TESTSUITEFLAGS.  When
+you do this, the "valgrind" results for test <N> are reported in files
+named tests/testsuite.dir/<N>/valgrind.*.  You may find that the
+valgrind results are easier to interpret if you put "-q" in
+~/.valgrindrc, since that reduces the amount of
+
+Sometimes a few tests may fail on some runs but not others.  This is
+usually a bug in the testsuite, not a bug in Open vSwitch itself.  If
+you find that a test fails intermittently, please report it, since the
+developers may not have noticed.
 
 Bug Reporting
 -------------
