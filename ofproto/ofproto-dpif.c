@@ -3296,7 +3296,6 @@ struct flow_miss {
 
 struct flow_miss_op {
     struct dpif_op dpif_op;
-    struct subfacet *subfacet;  /* Subfacet  */
     void *garbage;              /* Pointer to pass to free(), NULL if none. */
     uint64_t stub[1024 / 8];    /* Temporary buffer. */
 };
@@ -3386,7 +3385,6 @@ init_flow_miss_execute_op(struct flow_miss *miss, struct ofpbuf *packet,
         eth_pop_vlan(packet);
     }
 
-    op->subfacet = NULL;
     op->garbage = NULL;
     op->dpif_op.type = DPIF_OP_EXECUTE;
     op->dpif_op.u.execute.key = miss->key;
@@ -3530,7 +3528,6 @@ handle_flow_miss_with_facet(struct flow_miss *miss, struct facet *facet,
             struct dpif_execute *execute = &op->dpif_op.u.execute;
 
             init_flow_miss_execute_op(miss, packet, op);
-            op->subfacet = subfacet;
             if (!subfacet->slow) {
                 execute->actions = subfacet->actions;
                 execute->actions_len = subfacet->actions_len;
@@ -3552,7 +3549,8 @@ handle_flow_miss_with_facet(struct flow_miss *miss, struct facet *facet,
         struct flow_miss_op *op = &ops[(*n_ops)++];
         struct dpif_flow_put *put = &op->dpif_op.u.flow_put;
 
-        op->subfacet = subfacet;
+        subfacet->path = want_path;
+
         op->garbage = NULL;
         op->dpif_op.type = DPIF_OP_FLOW_PUT;
         put->flags = DPIF_FP_CREATE | DPIF_FP_MODIFY;
@@ -3858,25 +3856,9 @@ handle_miss_upcalls(struct dpif_backer *backer, struct dpif_upcall *upcalls,
     }
     dpif_operate(backer->dpif, dpif_ops, n_ops);
 
-    /* Free memory and update facets. */
+    /* Free memory. */
     for (i = 0; i < n_ops; i++) {
-        struct flow_miss_op *op = &flow_miss_ops[i];
-
-        switch (op->dpif_op.type) {
-        case DPIF_OP_EXECUTE:
-            break;
-
-        case DPIF_OP_FLOW_PUT:
-            if (!op->dpif_op.error) {
-                op->subfacet->path = subfacet_want_path(op->subfacet->slow);
-            }
-            break;
-
-        case DPIF_OP_FLOW_DEL:
-            NOT_REACHED();
-        }
-
-        free(op->garbage);
+        free(flow_miss_ops[i].garbage);
     }
     hmap_destroy(&todo);
 }
