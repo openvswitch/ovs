@@ -310,3 +310,72 @@ AT_CHECK([tail -1 stdout], [0], [dnl
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP
+
+AT_SETUP([tunnel - VXLAN])
+OVS_VSWITCHD_START([add-port br0 p1 -- set Interface p1 type=vxlan \
+                    options:remote_ip=1.1.1.1 ofport_request=1])
+
+AT_CHECK([ovs-appctl dpif/show], [0], [dnl
+br0 (dummy@ovs-dummy):
+	lookups: hit:0 missed:0 lost:0
+	flows: 0
+	br0 65534/100: (dummy)
+	p1 1/1: (vxlan: remote_ip=1.1.1.1)
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([tunnel - LISP])
+OVS_VSWITCHD_START([add-port br0 p1 -- set Interface p1 type=lisp \
+                    options:remote_ip=1.1.1.1 ofport_request=1])
+
+AT_CHECK([ovs-appctl dpif/show], [0], [dnl
+br0 (dummy@ovs-dummy):
+	lookups: hit:0 missed:0 lost:0
+	flows: 0
+	br0 65534/100: (dummy)
+	p1 1/1: (lisp: dst_port=4341, remote_ip=1.1.1.1)
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([tunnel - different VXLAN UDP port])
+OVS_VSWITCHD_START([add-port br0 p1 -- set Interface p1 type=vxlan \
+                    options:remote_ip=1.1.1.1 ofport_request=1 options:dst_port=4341])
+
+AT_CHECK([ovs-appctl dpif/show], [0], [dnl
+br0 (dummy@ovs-dummy):
+	lookups: hit:0 missed:0 lost:0
+	flows: 0
+	br0 65534/100: (dummy)
+	p1 1/1: (vxlan: dst_port=4341, remote_ip=1.1.1.1)
+])
+
+dnl change UDP port
+
+AT_CHECK([ovs-vsctl -- set Interface p1 options:dst_port=5000])
+
+AT_CHECK([ovs-appctl dpif/show], [0], [dnl
+br0 (dummy@ovs-dummy):
+	lookups: hit:0 missed:0 lost:0
+	flows: 0
+	br0 65534/100: (dummy)
+	p1 1/2: (vxlan: dst_port=5000, remote_ip=1.1.1.1)
+])
+
+dnl change UDP port to default
+
+AT_CHECK([ovs-vsctl -- set Interface p1 options:dst_port=8472])
+
+AT_CHECK([ovs-appctl dpif/show], [0], [dnl
+br0 (dummy@ovs-dummy):
+	lookups: hit:0 missed:0 lost:0
+	flows: 0
+	br0 65534/100: (dummy)
+	p1 1/1: (vxlan: remote_ip=1.1.1.1)
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
