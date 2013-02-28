@@ -275,7 +275,6 @@ ovs_save () {
         chmod +x "$2"
         return 0
     fi
-    eval $3=""
     [ -z "${bridges}" ] && return 0
 }
 
@@ -284,10 +283,9 @@ save_ofports_if_required () {
     case `ovs-appctl version | sed 1q` in
         "ovs-vswitchd (Open vSwitch) 1."[0-9].*)
             action "Saving ofport values" ovs_save save-ofports \
-                "${script_ofports}" script_ofports
+                "${script_ofports}"
             ;;
         *)
-            script_ofports=""
             ;;
     esac
 }
@@ -298,25 +296,43 @@ save_interfaces () {
 }
 
 restore_ofports () {
-    [ -n "${script_ofports}" ] && \
+    [ -x "${script_ofports}" ] && \
         action "Restoring ofport values" "${script_ofports}"
 }
 
 restore_flows () {
-    [ -n "${script_flows}" ] && \
+    [ -x "${script_flows}" ] && \
         action "Restoring saved flows" "${script_flows}"
+}
+
+restore_interfaces () {
+    [ ! -x "${script_interfaces}" ] && return 0
+    action "Restoring interface configuration" "${script_interfaces}"
+    rc=$?
+    if test $rc = 0; then
+        level=debug
+    else
+        level=err
+    fi
+    log="logger -p daemon.$level -t ovs-save"
+    $log "force-reload-kmod interface restore script exited with status $rc:"
+    $log -f "$script_interfaces"
+}
+
+init_restore_scripts () {
+    script_interfaces=`mktemp`
+    script_flows=`mktemp`
+    script_ofports=`mktemp`
+    trap 'rm -f "${script_interfaces}" "${script_flows}" "${script_ofports}"' 0
 }
 
 force_reload_kmod () {
     ifaces=`internal_interfaces`
     action "Detected internal interfaces: $ifaces" true
 
-    script_interfaces=`mktemp`
-    script_flows=`mktemp`
-    script_ofports=`mktemp`
-    trap 'rm -f "${script_interfaces}" "${script_flows}" "${script_ofports}"' 0
+    init_restore_scripts
 
-    action "Saving flows" ovs_save save-flows "${script_flows}" script_flows
+    action "Saving flows" ovs_save save-flows "${script_flows}"
 
     save_ofports_if_required
 
@@ -354,16 +370,7 @@ force_reload_kmod () {
 
     restore_flows
 
-    action "Restoring interface configuration" "$script_interfaces"
-    rc=$?
-    if test $rc = 0; then
-        level=debug
-    else
-        level=err
-    fi
-    log="logger -p daemon.$level -t ovs-save"
-    $log "force-reload-kmod interface restore script exited with status $rc:"
-    $log -f "$script_interfaces"
+    restore_interfaces
 
     "$datadir/scripts/ovs-check-dead-ifs"
 }
