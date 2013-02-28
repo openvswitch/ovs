@@ -521,7 +521,10 @@ get_tunnel_config(struct netdev_dev *dev, struct smap *args)
 
     if (tnl_cfg->dst_port) {
         uint16_t dst_port = ntohs(tnl_cfg->dst_port);
-        if (dst_port != VXLAN_DST_PORT) {
+        const char *type = netdev_dev_get_type(dev);
+
+        if ((!strcmp("vxlan", type) && dst_port != VXLAN_DST_PORT) ||
+            (!strcmp("lisp", type) && dst_port != LISP_DST_PORT)) {
             smap_add_format(args, "dst_port", "%d", dst_port);
         }
     }

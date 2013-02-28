@@ -335,7 +335,7 @@ br0 (dummy@ovs-dummy):
 	lookups: hit:0 missed:0 lost:0
 	flows: 0
 	br0 65534/100: (dummy)
-	p1 1/1: (lisp: dst_port=4341, remote_ip=1.1.1.1)
+	p1 1/1: (lisp: remote_ip=1.1.1.1)
 ])
 
 OVS_VSWITCHD_STOP
