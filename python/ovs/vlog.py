@@ -61,8 +61,8 @@ class Vlog:
             return
 
         now = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
-        message = ("%s|%s|%s|%s|%s"
-                   % (now, Vlog.__msg_num, self.name, level, message))
+        syslog_message = ("%s|%s|%s|%s"
+                           % (Vlog.__msg_num, self.name, level, message))
 
         level = LEVELS.get(level.lower(), logging.DEBUG)
         Vlog.__msg_num += 1
@@ -70,6 +70,10 @@ class Vlog:
         for f, f_level in Vlog.__mfl[self.name].iteritems():
             f_level = LEVELS.get(f_level, logging.CRITICAL)
             if level >= f_level:
+                if f == "syslog":
+                    message = syslog_message
+                else:
+                    message = "%s|%s" % (now, syslog_message)
                 logging.getLogger(f).log(level, message, **kwargs)
 
     def emer(self, message, **kwargs):
