@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -52,7 +52,7 @@ ofpbuf_use(struct ofpbuf *b, void *base, size_t allocated)
  *
  * 'base' should be appropriately aligned.  Using an array of uint32_t or
  * uint64_t for the buffer is a reasonable way to ensure appropriate alignment
- * for 32- or 64-bit data.  OFPBUF_STACK_BUFFER is a convenient way to do so.
+ * for 32- or 64-bit data.
  *
  * An ofpbuf operation that requires reallocating data will assert-fail if this
  * function was used to initialize it.  Thus, one need not call ofpbuf_uninit()
@@ -72,7 +72,7 @@ ofpbuf_use_stack(struct ofpbuf *b, void *base, size_t allocated)
  *
  * 'base' should be appropriately aligned.  Using an array of uint32_t or
  * uint64_t for the buffer is a reasonable way to ensure appropriate alignment
- * for 32- or 64-bit data.  OFPBUF_STACK_BUFFER is a convenient way to do so.
+ * for 32- or 64-bit data.
  *
  * An ofpbuf operation that requires reallocating data will copy the provided
  * buffer into a malloc()'d buffer.  Thus, it is wise to call ofpbuf_uninit()

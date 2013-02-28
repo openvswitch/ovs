@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -51,10 +51,6 @@ struct ofpbuf {
     struct list list_node;      /* Private list element for use by owner. */
     void *private_p;            /* Private pointer for use by owner. */
 };
-
-/* Declares NAME as a SIZE-byte array aligned properly for storing any kind of
- * data.  For use with ofpbuf_use_stack(). */
-#define OFPBUF_STACK_BUFFER(NAME, SIZE) uint64_t NAME[DIV_ROUND_UP(SIZE, 8)]
 
 void ofpbuf_use(struct ofpbuf *, void *, size_t);
 void ofpbuf_use_stack(struct ofpbuf *, void *, size_t);
