@@ -285,8 +285,6 @@ save_ofports_if_required () {
             action "Saving ofport values" ovs_save save-ofports \
                 "${script_ofports}"
             ;;
-        *)
-            ;;
     esac
 }
 
@@ -315,7 +313,7 @@ restore_interfaces () {
         level=err
     fi
     log="logger -p daemon.$level -t ovs-save"
-    $log "force-reload-kmod interface restore script exited with status $rc:"
+    $log "interface restore script exited with status $rc:"
     $log -f "$script_interfaces"
 }
 
@@ -379,13 +377,25 @@ force_reload_kmod () {
 ## restart ##
 ## ------- ##
 
+save_interfaces_if_required () {
+    # Save interfaces if we are upgrading from a pre-1.10 branch.
+    case `ovs-appctl version | sed 1q` in
+        "ovs-vswitchd (Open vSwitch) 1."[0-9].*)
+            ifaces=`internal_interfaces`
+            action "Detected internal interfaces: $ifaces" true
+            if action "Saving interface configuration" save_interfaces; then
+                chmod +x "$script_interfaces"
+            fi
+            ;;
+    esac
+}
+
 restart () {
     if daemon_is_running ovsdb-server && daemon_is_running ovs-vswitchd; then
-        script_flows=`mktemp`
-        trap 'rm -f "${script_flows}"' 0
-
-        action "Saving flows" ovs_save save-flows "${script_flows}" \
-            script_flows
+        init_restore_scripts
+        save_interfaces_if_required
+        action "Saving flows" ovs_save save-flows "${script_flows}"
+        save_ofports_if_required
     fi
 
     # Restart the database first, since a large database may take a
@@ -393,11 +403,18 @@ restart () {
     stop_ovsdb
     start_ovsdb
 
+    # Restore of ofports, if required, should happen before vswitchd is
+    # restarted.
+    restore_ofports
+
     stop_forwarding
     start_forwarding
 
-    # Restore the saved flows. Do not return error if restore fails.
-    restore_flows || true
+    # Restore the saved flows.
+    restore_flows
+
+    # Restore the interfaces if required. Return true even if restore fails.
+    restore_interfaces || true
 }
 
 ## --------------- ##
