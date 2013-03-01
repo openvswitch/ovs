@@ -249,6 +249,18 @@ details.  (Some compilers also assume that the "if" branch is the more
 common case, so this can be a real form of optimization as well.)
 
 
+RETURN VALUES
+
+  For functions that return a success or failure indication, prefer
+one of the following return value conventions:
+
+    * An "int" where 0 indicates success and a positive errno value
+      indicates a reason for failure.
+
+    * A "bool" where true indicates success and false indicates
+      failure.
+
+
 MACROS
 
   Don't define an object-like macro if an enum can be used instead.
