@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1604,8 +1604,8 @@ mf_set_wild(const struct mf_field *mf, struct cls_rule *rule)
         break;
 
     case MFF_IP_FRAG:
-        rule->wc.nw_frag_mask |= FLOW_NW_FRAG_MASK;
-        rule->flow.nw_frag &= ~FLOW_NW_FRAG_MASK;
+        rule->wc.nw_frag_mask = 0;
+        rule->flow.nw_frag = 0;
         break;
 
     case MFF_ARP_OP:
