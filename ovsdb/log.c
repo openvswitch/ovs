@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010, 2011, 2012 Nicira, Inc.
+/* Copyright (c) 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -49,7 +49,7 @@ struct ovsdb_log {
     struct lockfile *lockfile;
     FILE *stream;
     struct ovsdb_error *read_error;
-    struct ovsdb_error *write_error;
+    bool write_error;
     enum ovsdb_log_mode mode;
 };
 
@@ -134,7 +134,7 @@ ovsdb_log_open(const char *name, enum ovsdb_log_open_mode open_mode,
     file->prev_offset = 0;
     file->offset = 0;
     file->read_error = NULL;
-    file->write_error = NULL;
+    file->write_error = false;
     file->mode = OVSDB_LOG_READ;
     *filep = file;
     return NULL;
@@ -155,7 +155,6 @@ ovsdb_log_close(struct ovsdb_log *file)
         fclose(file->stream);
         lockfile_unlock(file->lockfile);
         ovsdb_error_destroy(file->read_error);
-        ovsdb_error_destroy(file->write_error);
         free(file);
     }
 }
@@ -333,10 +332,9 @@ ovsdb_log_write(struct ovsdb_log *file, struct json *json)
 
     json_string = NULL;
 
-    if (file->write_error) {
-        return ovsdb_error_clone(file->write_error);
-    } else if (file->mode == OVSDB_LOG_READ) {
+    if (file->mode == OVSDB_LOG_READ || file->write_error) {
         file->mode = OVSDB_LOG_WRITE;
+        file->write_error = false;
         if (fseeko(file->stream, file->offset, SEEK_SET)) {
             error = ovsdb_io_error(errno, "%s: cannot seek to offset %lld",
                                    file->name, (long long int) file->offset);
@@ -384,7 +382,7 @@ ovsdb_log_write(struct ovsdb_log *file, struct json *json)
     return NULL;
 
 error:
-    file->write_error = ovsdb_error_clone(error);
+    file->write_error = true;
     free(json_string);
     return error;
 }
