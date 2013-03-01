@@ -194,7 +194,7 @@ int ovs_flow_from_nlattrs(struct sw_flow_key *swkey, int *key_lenp,
 int ovs_flow_metadata_from_nlattrs(struct sw_flow *flow, int key_len,
 				   const struct nlattr *attr);
 
-#define MAX_ACTIONS_BUFSIZE	(16 * 1024)
+#define MAX_ACTIONS_BUFSIZE	(32 * 1024)
 #define TBL_MIN_BUCKETS		1024
 
 struct flow_table {
