@@ -194,6 +194,34 @@ static inline struct page *skb_frag_page(const skb_frag_t *frag)
 {
 	return frag->page;
 }
+
+static inline void __skb_frag_set_page(skb_frag_t *frag, struct page *page)
+{
+	frag->page = page;
+}
+static inline void skb_frag_size_set(skb_frag_t *frag, unsigned int size)
+{
+	frag->size = size;
+}
+static inline void __skb_frag_ref(skb_frag_t *frag)
+{
+	get_page(skb_frag_page(frag));
+}
+static inline void __skb_frag_unref(skb_frag_t *frag)
+{
+	put_page(skb_frag_page(frag));
+}
+
+static inline void skb_frag_ref(struct sk_buff *skb, int f)
+{
+	__skb_frag_ref(&skb_shinfo(skb)->frags[f]);
+}
+
+static inline void skb_frag_unref(struct sk_buff *skb, int f)
+{
+	__skb_frag_unref(&skb_shinfo(skb)->frags[f]);
+}
+
 #endif
 
 #ifndef HAVE_SKB_RESET_MAC_LEN
