@@ -851,9 +851,6 @@ const int ovs_key_lens[OVS_KEY_ATTR_MAX + 1] = {
 	[OVS_KEY_ATTR_ARP] = sizeof(struct ovs_key_arp),
 	[OVS_KEY_ATTR_ND] = sizeof(struct ovs_key_nd),
 	[OVS_KEY_ATTR_TUNNEL] = -1,
-
-	/* Not upstream. */
-	[OVS_KEY_ATTR_TUN_ID] = sizeof(__be64),
 };
 
 static int ipv4_flow_from_nlattrs(struct sw_flow_key *swkey, int *key_len,
@@ -1137,25 +1134,7 @@ int ovs_flow_from_nlattrs(struct sw_flow_key *swkey, int *key_lenp,
 		attrs &= ~(1 << OVS_KEY_ATTR_SKB_MARK);
 	}
 
-	if (attrs & (1ULL << OVS_KEY_ATTR_TUN_ID) &&
-	    attrs & (1ULL << OVS_KEY_ATTR_TUNNEL)) {
-		__be64 tun_id;
-
-		err = ipv4_tun_from_nlattr(a[OVS_KEY_ATTR_TUNNEL], &swkey->tun_key);
-		if (err)
-			return err;
-
-		if (!(swkey->tun_key.tun_flags & OVS_TNL_F_KEY))
-			return -EINVAL;
-
-		tun_id = nla_get_be64(a[OVS_KEY_ATTR_TUN_ID]);
-		if (tun_id != swkey->tun_key.tun_id)
-			return -EINVAL;
-
-		attrs &= ~(1ULL << OVS_KEY_ATTR_TUN_ID);
-		attrs &= ~(1ULL << OVS_KEY_ATTR_TUNNEL);
-	} else if (attrs & (1ULL << OVS_KEY_ATTR_TUNNEL)) {
-
+	if (attrs & (1ULL << OVS_KEY_ATTR_TUNNEL)) {
 		err = ipv4_tun_from_nlattr(a[OVS_KEY_ATTR_TUNNEL], &swkey->tun_key);
 		if (err)
 			return err;
@@ -1305,7 +1284,6 @@ int ovs_flow_metadata_from_nlattrs(struct sw_flow *flow, int key_len, const stru
 	struct ovs_key_ipv4_tunnel *tun_key = &flow->key.tun_key;
 	const struct nlattr *nla;
 	int rem;
-	__be64 tun_id = 0;
 
 	flow->key.phy.in_port = DP_MAX_PORTS;
 	flow->key.phy.priority = 0;
@@ -1326,38 +1304,10 @@ int ovs_flow_metadata_from_nlattrs(struct sw_flow *flow, int key_len, const stru
 				flow->key.phy.priority = nla_get_u32(nla);
 				break;
 
-			case OVS_KEY_ATTR_TUN_ID:
-				tun_id = nla_get_be64(nla);
-
-				if (tun_key->ipv4_dst) {
-					if (!(tun_key->tun_flags & OVS_TNL_F_KEY))
-						return -EINVAL;
-					if (tun_key->tun_id != tun_id)
-						return -EINVAL;
-					break;
-				}
-				tun_key->tun_id = tun_id;
-				tun_key->tun_flags |= OVS_TNL_F_KEY;
-
-				break;
-
 			case OVS_KEY_ATTR_TUNNEL:
-				if (tun_key->tun_flags & OVS_TNL_F_KEY) {
-					tun_id = tun_key->tun_id;
-					err = ipv4_tun_from_nlattr(nla, tun_key);
-					if (err)
-						return err;
-
-					if (!(tun_key->tun_flags & OVS_TNL_F_KEY))
-						return -EINVAL;
-
-					if (tun_key->tun_id != tun_id)
-						return -EINVAL;
-				} else {
-					err = ipv4_tun_from_nlattr(nla, tun_key);
-					if (err)
-						return err;
-				}
+				err = ipv4_tun_from_nlattr(nla, tun_key);
+				if (err)
+					return err;
 				break;
 
 			case OVS_KEY_ATTR_IN_PORT:
@@ -1396,10 +1346,6 @@ int ovs_flow_to_nlattrs(const struct sw_flow_key *swkey, struct sk_buff *skb)
 
 	if (swkey->tun_key.ipv4_dst &&
 	    ipv4_tun_to_nlattr(skb, &swkey->tun_key))
-		goto nla_put_failure;
-
-	if ((swkey->tun_key.tun_flags & OVS_TNL_F_KEY) &&
-	    nla_put_be64(skb, OVS_KEY_ATTR_TUN_ID, swkey->tun_key.tun_id))
 		goto nla_put_failure;
 
 	if (swkey->phy.in_port != DP_MAX_PORTS &&

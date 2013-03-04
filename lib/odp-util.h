@@ -54,7 +54,6 @@ int odp_actions_from_string(const char *, const struct simap *port_names,
  *                                     struct  pad  nl hdr  total
  *                                     ------  ---  ------  -----
  *  OVS_KEY_ATTR_PRIORITY                4    --     4      8
- *  OVS_KEY_ATTR_TUN_ID                  8    --     4     12
  *  OVS_KEY_ATTR_TUNNEL                  0    --     4      4
  *  - OVS_TUNNEL_KEY_ATTR_ID             8    --     4     12
  *  - OVS_TUNNEL_KEY_ATTR_IPV4_SRC       4    --     4      8
@@ -74,7 +73,7 @@ int odp_actions_from_string(const char *, const struct simap *port_names,
  *  OVS_KEY_ATTR_ICMPV6                  2     2     4      8
  *  OVS_KEY_ATTR_ND                     28    --     4     32
  *  ----------------------------------------------------------
- *  total                                                 220
+ *  total                                                 208
  *
  * We include some slack space in case the calculation isn't quite right or we
  * add another field and forget to adjust this value.

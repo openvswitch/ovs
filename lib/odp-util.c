@@ -96,7 +96,6 @@ ovs_key_attr_to_string(enum ovs_key_attr attr)
     case OVS_KEY_ATTR_ENCAP: return "encap";
     case OVS_KEY_ATTR_PRIORITY: return "skb_priority";
     case OVS_KEY_ATTR_SKB_MARK: return "skb_mark";
-    case OVS_KEY_ATTR_TUN_ID: return "tun_id";
     case OVS_KEY_ATTR_TUNNEL: return "tunnel";
     case OVS_KEY_ATTR_IN_PORT: return "in_port";
     case OVS_KEY_ATTR_ETHERNET: return "eth";
@@ -665,7 +664,6 @@ odp_flow_key_attr_len(uint16_t type)
     case OVS_KEY_ATTR_ENCAP: return -2;
     case OVS_KEY_ATTR_PRIORITY: return 4;
     case OVS_KEY_ATTR_SKB_MARK: return 4;
-    case OVS_KEY_ATTR_TUN_ID: return 8;
     case OVS_KEY_ATTR_TUNNEL: return -2;
     case OVS_KEY_ATTR_IN_PORT: return 4;
     case OVS_KEY_ATTR_ETHERNET: return sizeof(struct ovs_key_ethernet);
@@ -868,10 +866,6 @@ format_odp_key_attr(const struct nlattr *a, struct ds *ds)
 
     case OVS_KEY_ATTR_SKB_MARK:
         ds_put_format(ds, "(%#"PRIx32")", nl_attr_get_u32(a));
-        break;
-
-    case OVS_KEY_ATTR_TUN_ID:
-        ds_put_format(ds, "(%#"PRIx64")", ntohll(nl_attr_get_be64(a)));
         break;
 
     case OVS_KEY_ATTR_TUNNEL:
@@ -1116,18 +1110,6 @@ parse_odp_key_attr(const char *s, const struct simap *port_names,
 
         if (sscanf(s, "skb_mark(%llx)%n", &mark, &n) > 0 && n > 0) {
             nl_msg_put_u32(key, OVS_KEY_ATTR_SKB_MARK, mark);
-            return n;
-        }
-    }
-
-    {
-        char tun_id_s[32];
-        int n = -1;
-
-        if (sscanf(s, "tun_id(%31[x0123456789abcdefABCDEF])%n",
-                   tun_id_s, &n) > 0 && n > 0) {
-            uint64_t tun_id = strtoull(tun_id_s, NULL, 0);
-            nl_msg_put_be64(key, OVS_KEY_ATTR_TUN_ID, htonll(tun_id));
             return n;
         }
     }
@@ -1538,8 +1520,6 @@ odp_flow_key_from_flow(struct ofpbuf *buf, const struct flow *flow,
 
     if (flow->tunnel.ip_dst) {
         tun_key_to_attr(buf, &flow->tunnel);
-    } else if (flow->tunnel.tun_id != htonll(0)) {
-        nl_msg_put_be64(buf, OVS_KEY_ATTR_TUN_ID, flow->tunnel.tun_id);
     }
 
     if (flow->skb_mark) {
@@ -2072,11 +2052,6 @@ odp_flow_key_to_flow(const struct nlattr *key, size_t key_len,
         expected_attrs |= UINT64_C(1) << OVS_KEY_ATTR_SKB_MARK;
     }
 
-    if (present_attrs & (UINT64_C(1) << OVS_KEY_ATTR_TUN_ID)) {
-        flow->tunnel.tun_id = nl_attr_get_be64(attrs[OVS_KEY_ATTR_TUN_ID]);
-        expected_attrs |= UINT64_C(1) << OVS_KEY_ATTR_TUN_ID;
-    }
-
     if (present_attrs & (UINT64_C(1) << OVS_KEY_ATTR_TUNNEL)) {
         enum odp_key_fitness res;
 
@@ -2209,9 +2184,6 @@ commit_odp_tunnel_action(const struct flow *flow, struct flow *base,
     /* A valid IPV4_TUNNEL must have non-zero ip_dst. */
     if (flow->tunnel.ip_dst) {
         odp_put_tunnel_action(&base->tunnel, odp_actions);
-    } else {
-        commit_set_action(odp_actions, OVS_KEY_ATTR_TUN_ID,
-                          &base->tunnel.tun_id, sizeof base->tunnel.tun_id);
     }
 }
 

@@ -47,7 +47,6 @@
 #include "odp-util.h"
 #include "ofpbuf.h"
 #include "openvswitch/datapath-compat.h"
-#include "openvswitch/tunnel.h"
 #include "packets.h"
 #include "poll-loop.h"
 #include "random.h"

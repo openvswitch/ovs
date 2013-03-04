@@ -24,8 +24,8 @@
 
 #include <linux/in.h>
 #include <linux/ip.h>
-#include <linux/list.h>
 #include <linux/net.h>
+#include <linux/rculist.h>
 #include <linux/udp.h>
 
 #include <net/icmp.h>
@@ -94,8 +94,7 @@ struct lisphdr {
 
 #define LISP_HLEN (sizeof(struct udphdr) + sizeof(struct lisphdr))
 
-static inline int lisp_hdr_len(const struct tnl_mutable_config *mutable,
-			       const struct ovs_key_ipv4_tunnel *tun_key)
+static inline int lisp_hdr_len(const struct ovs_key_ipv4_tunnel *tun_key)
 {
 	return LISP_HLEN;
 }
@@ -103,25 +102,26 @@ static inline int lisp_hdr_len(const struct tnl_mutable_config *mutable,
 /**
  * struct lisp_port - Keeps track of open UDP ports
  * @list: list element.
- * @port: The UDP port number in network byte order.
+ * @vport: vport for the tunnel.
  * @socket: The socket created for this port number.
- * @count: How many ports are using this socket/port.
  */
 struct lisp_port {
 	struct list_head list;
-	__be16 port;
+	struct vport *vport;
 	struct socket *lisp_rcv_socket;
-	int count;
+	struct rcu_head rcu;
 };
 
 static LIST_HEAD(lisp_ports);
 
-static struct lisp_port *lisp_port_exists(struct net *net, __be16 port)
+static struct lisp_port *lisp_find_port(struct net *net, __be16 port)
 {
 	struct lisp_port *lisp_port;
 
-	list_for_each_entry(lisp_port, &lisp_ports, list) {
-		if (lisp_port->port == port &&
+	list_for_each_entry_rcu(lisp_port, &lisp_ports, list) {
+		struct tnl_vport *tnl_vport = tnl_vport_priv(lisp_port->vport);
+
+		if (tnl_vport->dst_port == port &&
 			net_eq(sock_net(lisp_port->lisp_rcv_socket->sk), net))
 			return lisp_port;
 	}
@@ -180,21 +180,16 @@ static __be64 instance_id_to_tunnel_id(__u8 *iid)
 #endif
 }
 
-static struct sk_buff *lisp_build_header(const struct vport *vport,
-					 const struct tnl_mutable_config *mutable,
-					 struct dst_entry *dst,
-					 struct sk_buff *skb,
-					 int tunnel_hlen)
+static void lisp_build_header(const struct vport *vport,
+			      struct sk_buff *skb,
+			      int tunnel_hlen)
 {
+	struct tnl_vport *tnl_vport = tnl_vport_priv(vport);
 	struct udphdr *udph = udp_hdr(skb);
 	struct lisphdr *lisph = (struct lisphdr *)(udph + 1);
 	const struct ovs_key_ipv4_tunnel *tun_key = OVS_CB(skb)->tun_key;
-	__be64 out_key;
-	u32 flags;
 
-	tnl_get_param(mutable, tun_key, &flags, &out_key);
-
-	udph->dest = mutable->dst_port;
+	udph->dest = tnl_vport->dst_port;
 	udph->source = htons(ovs_tnl_get_src_port(skb));
 	udph->check = 0;
 	udph->len = htons(skb->len - skb_transport_offset(skb));
@@ -210,7 +205,7 @@ static struct sk_buff *lisp_build_header(const struct vport *vport,
 	lisph->u1.nonce[1] = 0;
 	lisph->u1.nonce[2] = 0;
 
-	tunnel_id_to_instance_id(out_key, &lisph->u2.word2.instance_id[0]);
+	tunnel_id_to_instance_id(tun_key->tun_id, &lisph->u2.word2.instance_id[0]);
 	lisph->u2.word2.locator_status_bits = 1;
 
 	/*
@@ -220,23 +215,23 @@ static struct sk_buff *lisp_build_header(const struct vport *vport,
 	 * packet originally had DF set.
 	 */
 	skb->local_df = 1;
-	__ip_select_ident(ip_hdr(skb), dst, 0);
-
-	return skb;
+	__ip_select_ident(ip_hdr(skb), skb_dst(skb), 0);
 }
 
 /* Called with rcu_read_lock and BH disabled. */
 static int lisp_rcv(struct sock *sk, struct sk_buff *skb)
 {
-	struct vport *vport;
+	struct lisp_port *lisp_port;
 	struct lisphdr *lisph;
-	const struct tnl_mutable_config *mutable;
 	struct iphdr *iph, *inner_iph;
 	struct ovs_key_ipv4_tunnel tun_key;
 	__be64 key;
-	u32 tunnel_flags = 0;
 	struct ethhdr *ethh;
 	__be16 protocol;
+
+	lisp_port = lisp_find_port(dev_net(skb->dev), udp_hdr(skb)->dest);
+	if (unlikely(!lisp_port))
+		goto error;
 
 	if (unlikely(!pskb_may_pull(skb, LISP_HLEN)))
 		goto error;
@@ -250,19 +245,9 @@ static int lisp_rcv(struct sock *sk, struct sk_buff *skb)
 	else
 		key = instance_id_to_tunnel_id(&lisph->u2.word2.instance_id[0]);
 
-	iph = ip_hdr(skb);
-	vport = ovs_tnl_find_port(dev_net(skb->dev), iph->daddr, iph->saddr,
-		key, TNL_T_PROTO_LISP, &mutable);
-	if (unlikely(!vport))
-		goto error;
-
-	if (mutable->flags & TNL_F_IN_KEY_MATCH || !mutable->key.daddr)
-		tunnel_flags = OVS_TNL_F_KEY;
-	else
-		key = 0;
-
 	/* Save outer tunnel values */
-	tnl_tun_key_init(&tun_key, iph, key, tunnel_flags);
+	iph = ip_hdr(skb);
+	tnl_tun_key_init(&tun_key, iph, key, OVS_TNL_F_KEY);
 	OVS_CB(skb)->tun_key = &tun_key;
 
 	/* Drop non-IP inner packets */
@@ -285,7 +270,7 @@ static int lisp_rcv(struct sock *sk, struct sk_buff *skb)
 	ethh->h_source[0] = 0x02;
 	ethh->h_proto = protocol;
 
-	ovs_tnl_rcv(vport, skb);
+	ovs_tnl_rcv(lisp_port->vport, skb);
 	goto out;
 
 error:
@@ -300,6 +285,7 @@ static int lisp_socket_init(struct lisp_port *lisp_port, struct net *net)
 {
 	int err;
 	struct sockaddr_in sin;
+	struct tnl_vport *tnl_vport = tnl_vport_priv(lisp_port->vport);
 
 	err = sock_create_kern(AF_INET, SOCK_DGRAM, 0,
 			       &lisp_port->lisp_rcv_socket);
@@ -311,7 +297,7 @@ static int lisp_socket_init(struct lisp_port *lisp_port, struct net *net)
 
 	sin.sin_family = AF_INET;
 	sin.sin_addr.s_addr = htonl(INADDR_ANY);
-	sin.sin_port = lisp_port->port;
+	sin.sin_port = tnl_vport->dst_port;
 
 	err = kernel_bind(lisp_port->lisp_rcv_socket, (struct sockaddr *)&sin,
 			  sizeof(struct sockaddr_in));
@@ -332,27 +318,33 @@ error:
 	return err;
 }
 
-static void lisp_tunnel_release(struct lisp_port *lisp_port)
-{
-	lisp_port->count--;
 
-	if (lisp_port->count == 0) {
-		/* Release old socket */
-		sk_release_kernel(lisp_port->lisp_rcv_socket->sk);
-		list_del(&lisp_port->list);
-		kfree(lisp_port);
-	}
+static void free_port_rcu(struct rcu_head *rcu)
+{
+	struct lisp_port *lisp_port = container_of(rcu,
+			struct lisp_port, rcu);
+
+	kfree(lisp_port);
 }
 
-static int lisp_tunnel_setup(struct net *net, struct nlattr *options,
-			     struct lisp_port **lport)
+static void lisp_tunnel_release(struct lisp_port *lisp_port)
 {
+	if (!lisp_port)
+		return;
+	list_del_rcu(&lisp_port->list);
+	/* Release socket */
+	sk_release_kernel(lisp_port->lisp_rcv_socket->sk);
+	call_rcu(&lisp_port->rcu, free_port_rcu);
+}
+
+static int lisp_tunnel_setup(struct net *net, struct vport *vport,
+			     struct nlattr *options)
+{
+	struct tnl_vport *tnl_vport = tnl_vport_priv(vport);
+	struct lisp_port *lisp_port;
 	struct nlattr *a;
 	int err;
 	u16 dst_port;
-	struct lisp_port *lisp_port = NULL;
-
-	*lport = NULL;
 
 	if (!options) {
 		err = -EINVAL;
@@ -369,11 +361,9 @@ static int lisp_tunnel_setup(struct net *net, struct nlattr *options,
 	}
 
 	/* Verify if we already have a socket created for this port */
-	lisp_port = lisp_port_exists(net, htons(dst_port));
+	lisp_port = lisp_find_port(net, htons(dst_port));
 	if (lisp_port) {
-		lisp_port->count++;
-		err = 0;
-		*lport = lisp_port;
+		err = -EEXIST;
 		goto out;
 	}
 
@@ -384,55 +374,33 @@ static int lisp_tunnel_setup(struct net *net, struct nlattr *options,
 		goto out;
 	}
 
-	lisp_port->port = htons(dst_port);
-	lisp_port->count = 1;
-	list_add_tail(&lisp_port->list, &lisp_ports);
+	tnl_vport->dst_port = htons(dst_port);
+	lisp_port->vport = vport;
+	list_add_tail_rcu(&lisp_port->list, &lisp_ports);
 
 	err = lisp_socket_init(lisp_port, net);
 	if (err)
 		goto error;
 
-	*lport = lisp_port;
-	goto out;
+	return 0;
 
 error:
-	list_del(&lisp_port->list);
+	list_del_rcu(&lisp_port->list);
 	kfree(lisp_port);
 out:
 	return err;
 }
 
-static int lisp_tnl_set_options(struct vport *vport, struct nlattr *options)
+static int lisp_get_options(const struct vport *vport, struct sk_buff *skb)
 {
-	int err;
-	struct net *net = ovs_dp_get_net(vport->dp);
-	struct tnl_vport *tnl_vport = tnl_vport_priv(vport);
-	struct tnl_mutable_config *config;
-	struct lisp_port *old_port = NULL;
-	struct lisp_port *lisp_port = NULL;
+	const struct tnl_vport *tnl_vport = tnl_vport_priv(vport);
 
-	config = rtnl_dereference(tnl_vport->mutable);
-
-	old_port = lisp_port_exists(net, config->dst_port);
-
-	err = lisp_tunnel_setup(net, options, &lisp_port);
-	if (err)
-		goto out;
-
-	err = ovs_tnl_set_options(vport, options);
-
-	if (err)
-		lisp_tunnel_release(lisp_port);
-	else {
-		/* Release old socket */
-		lisp_tunnel_release(old_port);
-	}
-out:
-	return err;
+	if (nla_put_u16(skb, OVS_TUNNEL_ATTR_DST_PORT, ntohs(tnl_vport->dst_port)))
+		return -EMSGSIZE;
+	return 0;
 }
 
 static const struct tnl_ops ovs_lisp_tnl_ops = {
-	.tunnel_type	= TNL_T_PROTO_LISP,
 	.ipproto	= IPPROTO_UDP,
 	.hdr_len	= lisp_hdr_len,
 	.build_header	= lisp_build_header,
@@ -442,33 +410,29 @@ static void lisp_tnl_destroy(struct vport *vport)
 {
 	struct lisp_port *lisp_port;
 	struct tnl_vport *tnl_vport = tnl_vport_priv(vport);
-	struct tnl_mutable_config *config;
 
-	config = rtnl_dereference(tnl_vport->mutable);
-
-	lisp_port = lisp_port_exists(ovs_dp_get_net(vport->dp),
-				     config->dst_port);
+	lisp_port = lisp_find_port(ovs_dp_get_net(vport->dp),
+				   tnl_vport->dst_port);
 
 	lisp_tunnel_release(lisp_port);
-
 	ovs_tnl_destroy(vport);
 }
 
 static struct vport *lisp_tnl_create(const struct vport_parms *parms)
 {
-	int err;
 	struct vport *vport;
-	struct lisp_port *lisp_port = NULL;
-
-	err = lisp_tunnel_setup(ovs_dp_get_net(parms->dp), parms->options,
-				&lisp_port);
-	if (err)
-		return ERR_PTR(err);
+	int err;
 
 	vport = ovs_tnl_create(parms, &ovs_lisp_vport_ops, &ovs_lisp_tnl_ops);
-
 	if (IS_ERR(vport))
-		lisp_tunnel_release(lisp_port);
+		return vport;
+
+	err = lisp_tunnel_setup(ovs_dp_get_net(parms->dp), vport,
+				parms->options);
+	if (err) {
+		ovs_tnl_destroy(vport);
+		return ERR_PTR(err);
+	}
 
 	return vport;
 }
@@ -479,8 +443,7 @@ const struct vport_ops ovs_lisp_vport_ops = {
 	.create		= lisp_tnl_create,
 	.destroy	= lisp_tnl_destroy,
 	.get_name	= ovs_tnl_get_name,
-	.get_options	= ovs_tnl_get_options,
-	.set_options	= lisp_tnl_set_options,
+	.get_options	= lisp_get_options,
 	.send		= lisp_tnl_send,
 };
 #else

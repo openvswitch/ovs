@@ -164,7 +164,6 @@ u64 ovs_flow_used_time(unsigned long flow_jiffies);
  *                                     struct  pad  nl hdr  total
  *                                     ------  ---  ------  -----
  *  OVS_KEY_ATTR_PRIORITY                4    --     4      8
- *  OVS_KEY_ATTR_TUN_ID                  8    --     4     12
  *  OVS_KEY_ATTR_TUNNEL                  0    --     4      4
  *  - OVS_TUNNEL_KEY_ATTR_ID             8    --     4     12
  *  - OVS_TUNNEL_KEY_ATTR_IPV4_SRC       4    --     4      8
@@ -184,9 +183,9 @@ u64 ovs_flow_used_time(unsigned long flow_jiffies);
  *  OVS_KEY_ATTR_ICMPV6                  2     2     4      8
  *  OVS_KEY_ATTR_ND                     28    --     4     32
  *  ----------------------------------------------------------
- *  total                                                 220
+ *  total                                                 208
  */
-#define FLOW_BUFSIZE 220
+#define FLOW_BUFSIZE 208
 
 int ovs_flow_to_nlattrs(const struct sw_flow_key *, struct sk_buff *);
 int ovs_flow_from_nlattrs(struct sw_flow_key *swkey, int *key_lenp,

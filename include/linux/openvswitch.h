@@ -243,6 +243,16 @@ enum {
 
 #define OVS_PATCH_ATTR_MAX (__OVS_PATCH_ATTR_MAX - 1)
 
+/* OVS_VPORT_ATTR_OPTIONS attributes for tunnels.
+ */
+enum {
+	OVS_TUNNEL_ATTR_UNSPEC,
+	OVS_TUNNEL_ATTR_DST_PORT, /* 16-bit UDP port, used by L4 tunnels. */
+	__OVS_TUNNEL_ATTR_MAX
+};
+
+#define OVS_TUNNEL_ATTR_MAX (__OVS_TUNNEL_ATTR_MAX - 1)
+
 /* Flows. */
 
 #define OVS_FLOW_FAMILY  "ovs_flow"
@@ -286,7 +296,6 @@ enum ovs_key_attr {
 #endif
 
 	OVS_KEY_ATTR_MPLS = 62, /* struct ovs_key_mpls */
-	OVS_KEY_ATTR_TUN_ID = 63,  /* be64 tunnel ID */
 	__OVS_KEY_ATTR_MAX
 };
 

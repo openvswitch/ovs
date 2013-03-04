@@ -1210,7 +1210,6 @@ execute_set_action(struct ofpbuf *packet, const struct nlattr *a)
     const struct ovs_key_udp *udp_key;
 
     switch (type) {
-    case OVS_KEY_ATTR_TUN_ID:
     case OVS_KEY_ATTR_PRIORITY:
     case OVS_KEY_ATTR_SKB_MARK:
     case OVS_KEY_ATTR_TUNNEL:
