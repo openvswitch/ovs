@@ -1,4 +1,4 @@
-# Copyright (c) 2009, 2010, 2011, 2012 Nicira, Inc.
+# Copyright (c) 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -350,6 +350,15 @@ class BaseType(object):
             return ("%(dst)s = %(src)s->header_.uuid;") % args
         elif self.type == StringType:
             return "%(dst)s = xstrdup(%(src)s);" % args
+        else:
+            return "%(dst)s = %(src)s;" % args
+
+    def assign_c_value_casting_away_const(self, dst, src):
+        args = {'dst': dst, 'src': src}
+        if self.ref_table_name:
+            return ("%(dst)s = %(src)s->header_.uuid;") % args
+        elif self.type == StringType:
+            return "%(dst)s = CONST_CAST(char *, %(src)s);" % args
         else:
             return "%(dst)s = %(src)s;" % args
 

@@ -517,34 +517,54 @@ void
             print "{"
             print "    struct ovsdb_datum datum;"
             if type.n_min == 1 and type.n_max == 1:
+                print "    union ovsdb_atom key;"
+                if type.value:
+                    print "    union ovsdb_atom value;"
                 print
                 print "    ovs_assert(inited);"
                 print "    datum.n = 1;"
-                print "    datum.keys = xmalloc(sizeof *datum.keys);"
-                print "    " + type.key.copyCValue("datum.keys[0].%s" % type.key.type.to_string(), keyVar)
+                print "    datum.keys = &key;"
+                print "    " + type.key.assign_c_value_casting_away_const("key.%s" % type.key.type.to_string(), keyVar)
                 if type.value:
-                    print "    datum.values = xmalloc(sizeof *datum.values);"
-                    print "    "+ type.value.copyCValue("datum.values[0].%s" % type.value.type.to_string(), valueVar)
+                    print "    datum.values = &value;"
+                    print "    "+ type.value.assign_c_value_casting_away_const("value.%s" % type.value.type.to_string(), valueVar)
                 else:
                     print "    datum.values = NULL;"
+                txn_write_func = "ovsdb_idl_txn_write_clone"
             elif type.is_optional_pointer():
+                print "    union ovsdb_atom key;"
                 print
                 print "    ovs_assert(inited);"
                 print "    if (%s) {" % keyVar
                 print "        datum.n = 1;"
-                print "        datum.keys = xmalloc(sizeof *datum.keys);"
-                print "        " + type.key.copyCValue("datum.keys[0].%s" % type.key.type.to_string(), keyVar)
+                print "        datum.keys = &key;"
+                print "        " + type.key.assign_c_value_casting_away_const("key.%s" % type.key.type.to_string(), keyVar)
                 print "    } else {"
                 print "        datum.n = 0;"
                 print "        datum.keys = NULL;"
                 print "    }"
                 print "    datum.values = NULL;"
+                txn_write_func = "ovsdb_idl_txn_write_clone"
+            elif type.n_max == 1:
+                print "    union ovsdb_atom key;"
+                print
+                print "    ovs_assert(inited);"
+                print "    if (%s) {" % nVar
+                print "        datum.n = 1;"
+                print "        datum.keys = &key;"
+                print "        " + type.key.assign_c_value_casting_away_const("key.%s" % type.key.type.to_string(), "*" + keyVar)
+                print "    } else {"
+                print "        datum.n = 0;"
+                print "        datum.keys = NULL;"
+                print "    }"
+                print "    datum.values = NULL;"
+                txn_write_func = "ovsdb_idl_txn_write_clone"
             else:
                 print "    size_t i;"
                 print
                 print "    ovs_assert(inited);"
                 print "    datum.n = %s;" % nVar
-                print "    datum.keys = xmalloc(%s * sizeof *datum.keys);" % nVar
+                print "    datum.keys = %s ? xmalloc(%s * sizeof *datum.keys) : NULL;" % (nVar, nVar)
                 if type.value:
                     print "    datum.values = xmalloc(%s * sizeof *datum.values);" % nVar
                 else:
@@ -560,8 +580,10 @@ void
                     valueType = "OVSDB_TYPE_VOID"
                 print "    ovsdb_datum_sort_unique(&datum, %s, %s);" % (
                     type.key.toAtomicType(), valueType)
-            print "    ovsdb_idl_txn_write(&row->header_, &%(s)s_columns[%(S)s_COL_%(C)s], &datum);" \
-                % {'s': structName,
+                txn_write_func = "ovsdb_idl_txn_write"
+            print "    %(f)s(&row->header_, &%(s)s_columns[%(S)s_COL_%(C)s], &datum);" \
+                % {'f': txn_write_func,
+                   's': structName,
                    'S': structName.upper(),
                    'C': columnName.upper()}
             print "}"
