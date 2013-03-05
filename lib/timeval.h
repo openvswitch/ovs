@@ -43,7 +43,7 @@ BUILD_ASSERT_DECL(TYPE_IS_SIGNED(time_t));
 /* Interval between updates to the reported time, in ms.  This should not be
  * adjusted much below 10 ms or so with the current implementation, or too
  * much time will be wasted in signal handlers and calls to clock_gettime(). */
-#define TIME_UPDATE_INTERVAL 100
+#define TIME_UPDATE_INTERVAL 25
 
 /* True on systems that support a monotonic clock.  Compared to just getting
  * the value of a variable, clock_gettime() is somewhat expensive, even on
