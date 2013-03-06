@@ -221,7 +221,6 @@ u16 ovs_tnl_get_src_port(struct sk_buff *skb)
 int ovs_tnl_send(struct vport *vport, struct sk_buff *skb)
 {
 	struct tnl_vport *tnl_vport = tnl_vport_priv(vport);
-	enum vport_err_type err = VPORT_E_TX_ERROR;
 	struct rtable *rt;
 	__be32 saddr;
 	int sent_len = 0;
@@ -261,6 +260,7 @@ int ovs_tnl_send(struct vport *vport, struct sk_buff *skb)
 		struct sk_buff *next_skb = skb->next;
 		struct iphdr *iph;
 		int frag_len;
+		int err;
 
 		skb->next = NULL;
 
@@ -314,7 +314,7 @@ err_free_rt:
 	ip_rt_put(rt);
 error_free:
 	kfree_skb(skb);
-	ovs_vport_record_error(vport, err);
+	ovs_vport_record_error(vport, VPORT_E_TX_ERROR);
 	return sent_len;
 }
 
