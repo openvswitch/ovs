@@ -7,8 +7,8 @@ post-v1.10.0
       protocol (RFC 6830).  An external control plane or manual flow
       setup is required for EID-to-RLOC mapping.
     - OpenFlow:
-      * The "dec_mpls_ttl" action from OpenFlow 1.1 and later is now
-        implemented.
+      * The "dec_mpls_ttl" and "set_mpls_ttl" actions from OpenFlow
+        1.1 and later are now implemented.
 
 
 v1.10.0 - xx xxx xxxx

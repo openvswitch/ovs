@@ -306,6 +306,7 @@ enum nx_action_subtype {
     NXAST_WRITE_METADATA,       /* struct nx_action_write_metadata */
     NXAST_PUSH_MPLS,            /* struct nx_action_push_mpls */
     NXAST_POP_MPLS,             /* struct nx_action_pop_mpls */
+    NXAST_SET_MPLS_TTL,         /* struct nx_action_ttl */
     NXAST_DEC_MPLS_TTL,         /* struct nx_action_header */
 };
 
@@ -2192,5 +2193,16 @@ struct nx_action_pop_mpls {
     uint8_t  pad[4];
 };
 OFP_ASSERT(sizeof(struct nx_action_pop_mpls) == 16);
+
+/* Action structure for NXAST_SET_MPLS_TTL. */
+struct nx_action_mpls_ttl {
+    ovs_be16 type;                  /* OFPAT_VENDOR. */
+    ovs_be16 len;                   /* Length is 8. */
+    ovs_be32 vendor;                /* NX_VENDOR_ID. */
+    ovs_be16 subtype;               /* NXAST_SET_MPLS_TTL. */
+    uint8_t  ttl;                   /* TTL */
+    uint8_t  pad[5];
+};
+OFP_ASSERT(sizeof(struct nx_action_mpls_ttl) == 16);
 
 #endif /* openflow/nicira-ext.h */

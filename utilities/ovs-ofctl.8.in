@@ -1018,6 +1018,10 @@ invalid ttl packets.  If controller ids are not specified, the
 ``packet_in'' message will be sent only to the controllers having
 controller id zero which have registered for the invalid ttl packets.
 .
+.IP \fBset_mpls_ttl\fR:\fIttl\fR
+Set the TTL of the outer MPLS label stack entry of a packet.
+\fIttl\fR should be in the range 0 to 255 inclusive.
+.
 .IP \fBdec_mpls_ttl\fR
 Decrement TTL of the outer MPLS label stack entry of a packet.  If the TTL
 is initially zero, no decrement occurs.  Instead, a ``packet-in'' message

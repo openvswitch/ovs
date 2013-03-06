@@ -71,6 +71,7 @@
     DEFINE_OFPACT(REG_MOVE,        ofpact_reg_move,      ofpact)    \
     DEFINE_OFPACT(REG_LOAD,        ofpact_reg_load,      ofpact)    \
     DEFINE_OFPACT(DEC_TTL,         ofpact_cnt_ids,       cnt_ids)   \
+    DEFINE_OFPACT(SET_MPLS_TTL,    ofpact_mpls_ttl,      ofpact)    \
     DEFINE_OFPACT(DEC_MPLS_TTL,    ofpact_null,          ofpact)    \
     DEFINE_OFPACT(PUSH_MPLS,       ofpact_push_mpls,     ofpact)    \
     DEFINE_OFPACT(POP_MPLS,        ofpact_pop_mpls,      ofpact)    \
@@ -439,6 +440,15 @@ struct ofpact_cnt_ids {
     /* Controller ids. */
     unsigned int n_controllers;
     uint16_t cnt_ids[];
+};
+
+/* OFPACT_SET_MPLS_TTL.
+ *
+ * Used for NXAST_SET_MPLS_TTL */
+struct ofpact_mpls_ttl {
+    struct ofpact ofpact;
+
+    uint8_t ttl;
 };
 
 /* OFPACT_GOTO_TABLE

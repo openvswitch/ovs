@@ -6059,6 +6059,17 @@ compose_dec_ttl(struct action_xlate_ctx *ctx, struct ofpact_cnt_ids *ids)
 }
 
 static bool
+execute_set_mpls_ttl_action(struct action_xlate_ctx *ctx, uint8_t ttl)
+{
+    if (!eth_type_mpls(ctx->flow.dl_type)) {
+        return true;
+    }
+
+    set_mpls_lse_ttl(&ctx->flow.mpls_lse, ttl);
+    return false;
+}
+
+static bool
 execute_dec_mpls_ttl_action(struct action_xlate_ctx *ctx)
 {
     uint8_t ttl = mpls_lse_to_ttl(ctx->flow.mpls_lse);
@@ -6420,6 +6431,12 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
 
         case OFPACT_POP_MPLS:
             execute_mpls_pop_action(ctx, ofpact_get_POP_MPLS(a)->ethertype);
+            break;
+
+        case OFPACT_SET_MPLS_TTL:
+            if (execute_set_mpls_ttl_action(ctx, ofpact_get_SET_MPLS_TTL(a)->ttl)) {
+                goto out;
+            }
             break;
 
         case OFPACT_DEC_MPLS_TTL:

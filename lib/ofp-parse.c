@@ -318,6 +318,18 @@ parse_dec_ttl(struct ofpbuf *b, char *arg)
 }
 
 static void
+parse_set_mpls_ttl(struct ofpbuf *b, const char *arg)
+{
+    struct ofpact_mpls_ttl *mpls_ttl = ofpact_put_SET_MPLS_TTL(b);
+
+    if (*arg == '\0') {
+        ovs_fatal(0, "parse_set_mpls_ttl: expected ttl.");
+    }
+
+    mpls_ttl->ttl = atoi(arg);
+}
+
+static void
 set_field_parse(const char *arg, struct ofpbuf *ofpacts)
 {
     char *orig = xstrdup(arg);
@@ -548,6 +560,11 @@ parse_named_action(enum ofputil_action_code code, const struct flow *flow,
 
     case OFPUTIL_NXAST_DEC_TTL:
         parse_dec_ttl(ofpacts, arg);
+        break;
+
+    case OFPUTIL_NXAST_SET_MPLS_TTL:
+    case OFPUTIL_OFPAT11_SET_MPLS_TTL:
+        parse_set_mpls_ttl(ofpacts, arg);
         break;
 
     case OFPUTIL_OFPAT11_DEC_MPLS_TTL:
