@@ -33,7 +33,6 @@
 extern "C" {
 #endif
 
-struct cfm_settings;
 struct cls_rule;
 struct netdev;
 struct ofproto;
