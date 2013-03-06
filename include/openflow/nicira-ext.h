@@ -1789,12 +1789,18 @@ struct nx_flow_mod {
 };
 OFP_ASSERT(sizeof(struct nx_flow_mod) == 32);
 
-/* NXT_FLOW_REMOVED (analogous to OFPT_FLOW_REMOVED). */
+/* NXT_FLOW_REMOVED (analogous to OFPT_FLOW_REMOVED).
+ *
+ * 'table_id' is present only in Open vSwitch 1.11 and later.  In earlier
+ * versions of Open vSwitch, this is a padding byte that is always zeroed.
+ * Therefore, a 'table_id' value of 0 indicates that the table ID is not known,
+ * and other values may be interpreted as one more than the flow's former table
+ * ID. */
 struct nx_flow_removed {
     ovs_be64 cookie;          /* Opaque controller-issued identifier. */
     ovs_be16 priority;        /* Priority level of flow entry. */
     uint8_t reason;           /* One of OFPRR_*. */
-    uint8_t pad[1];           /* Align to 32-bits. */
+    uint8_t table_id;         /* Flow's former table ID, plus one. */
     ovs_be32 duration_sec;    /* Time flow was alive in seconds. */
     ovs_be32 duration_nsec;   /* Time flow was alive in nanoseconds beyond
                                  duration_sec. */

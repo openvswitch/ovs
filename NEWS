@@ -11,6 +11,8 @@ post-v1.10.0
         1.1 and later are now implemented.
       * New "stack" extension for use in actions, to push and pop from
         NXM fields.
+      * The NXM flow_removed message now reports the OpenFlow table ID
+        from which the flow was removed.
 
 
 v1.10.0 - xx xxx xxxx
