@@ -7647,16 +7647,16 @@ ofproto_unixctl_trace(struct unixctl_conn *conn, int argc, const char *argv[],
                 goto exit;
             }
 
-            /* XXX: Since we allow the user to specify an ofproto, it's
-             * possible they will specify a different ofproto than the one the
-             * port actually belongs too.  Ideally we should simply remove the
-             * ability to specify the ofproto. */
+            /* The user might have specified the wrong ofproto but within the
+             * same backer.  That's OK, ofproto_receive() can find the right
+             * one for us. */
             if (ofproto_receive(ofproto->backer, NULL, odp_key.data,
-                                odp_key.size, &flow, NULL, NULL, NULL,
+                                odp_key.size, &flow, NULL, &ofproto, NULL,
                                 &initial_vals)) {
                 unixctl_command_reply_error(conn, "Invalid flow");
                 goto exit;
             }
+            ds_put_format(&result, "Bridge: %s\n", ofproto->up.name);
         } else {
             char *error_s;
 
