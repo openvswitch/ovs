@@ -13,7 +13,6 @@ openvswitch_sources += \
 	linux/compat/time.c	\
 	linux/compat/workqueue.c
 openvswitch_headers += \
-	linux/compat/include/linux/bug.h \
 	linux/compat/include/linux/compiler.h \
 	linux/compat/include/linux/compiler-gcc.h \
 	linux/compat/include/linux/cpumask.h \
