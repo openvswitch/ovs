@@ -362,14 +362,19 @@ void ofproto_free_ofproto_controller_info(struct shash *);
 
 /* CFM status query. */
 struct ofproto_cfm_status {
-    enum cfm_fault_reason faults; /* 0 if not faulted. */
-    int health;                   /* Health status in [0,100] range. */
+    /* 0 if not faulted, otherwise a combination of one or more reasons. */
+    enum cfm_fault_reason faults;
 
     /* 0 if the remote CFM endpoint is operationally down,
      * 1 if the remote CFM endpoint is operationally up,
      * -1 if we don't know because the remote CFM endpoint is not in extended
      * mode. */
     int remote_opstate;
+
+    /* Ordinarily a "health status" in the range 0...100 inclusive, with 0
+     * being worst and 100 being best, or -1 if the health status is not
+     * well-defined. */
+    int health;
 
     /* MPIDs of remote maintenance points whose CCMs have been received. */
     const uint64_t *rmps;

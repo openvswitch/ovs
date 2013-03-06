@@ -1779,7 +1779,11 @@ iface_refresh_cfm_stats(struct iface *iface)
         ovsrec_interface_set_cfm_remote_mpids(cfg,
                                               (const int64_t *)status.rmps,
                                               status.n_rmps);
-        ovsrec_interface_set_cfm_health(cfg, &cfm_health, 1);
+        if (cfm_health >= 0) {
+            ovsrec_interface_set_cfm_health(cfg, &cfm_health, 1);
+        } else {
+            ovsrec_interface_set_cfm_health(cfg, NULL, 0);
+        }
     }
 }
 
