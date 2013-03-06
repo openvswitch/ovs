@@ -591,6 +591,12 @@ parse_named_action(enum ofputil_action_code code, const struct flow *flow,
         ofpact_put_POP_MPLS(ofpacts)->ethertype =
             htons(str_to_u16(arg, "pop_mpls"));
         break;
+    case OFPUTIL_NXAST_STACK_PUSH:
+        nxm_parse_stack_action(ofpact_put_STACK_PUSH(ofpacts), arg);
+        break;
+    case OFPUTIL_NXAST_STACK_POP:
+        nxm_parse_stack_action(ofpact_put_STACK_POP(ofpacts), arg);
+        break;
     }
 }
 

@@ -70,6 +70,8 @@
     DEFINE_OFPACT(SET_L4_DST_PORT, ofpact_l4_port,       ofpact)    \
     DEFINE_OFPACT(REG_MOVE,        ofpact_reg_move,      ofpact)    \
     DEFINE_OFPACT(REG_LOAD,        ofpact_reg_load,      ofpact)    \
+    DEFINE_OFPACT(STACK_PUSH,      ofpact_stack,         ofpact)    \
+    DEFINE_OFPACT(STACK_POP,       ofpact_stack,         ofpact)    \
     DEFINE_OFPACT(DEC_TTL,         ofpact_cnt_ids,       cnt_ids)   \
     DEFINE_OFPACT(SET_MPLS_TTL,    ofpact_mpls_ttl,      ofpact)    \
     DEFINE_OFPACT(DEC_MPLS_TTL,    ofpact_null,          ofpact)    \
@@ -302,6 +304,14 @@ struct ofpact_reg_move {
     struct ofpact ofpact;
     struct mf_subfield src;
     struct mf_subfield dst;
+};
+
+/* OFPACT_STACK_PUSH.
+ *
+ * Used for NXAST_STACK_PUSH and NXAST_STACK_POP. */
+struct ofpact_stack {
+    struct ofpact ofpact;
+    struct mf_subfield subfield;
 };
 
 /* OFPACT_REG_LOAD.

@@ -1063,6 +1063,23 @@ in field \fIdst\fR.
 Example: \fBload:55\->NXM_NX_REG2[0..5]\fR loads value 55 (bit pattern
 \fB110111\fR) into bits 0 through 5, inclusive, in register 2.
 .
+.IP "\fBpush:\fIsrc\fB[\fIstart\fB..\fIend\fB]"
+Pushes \fIstart\fR to \fIend\fR bits inclusive, in fields
+on top of the stack.
+.IP
+Example: \fBpush:NXM_NX_REG2[0..5]\fR push the value stored in register
+2 bits 0 through 5, inclusive, on to the internal stack.
+.
+.IP "\fBpop:\fIdst\fB[\fIstart\fB..\fIend\fB]"
+Pops from the top of the stack, retrieves the \fIstart\fR to \fIend\fR bits
+inclusive, from the value popped and store them into the corresponding
+bits in \fIdst\fR.
+.
+.IP
+Example: \fBpop:NXM_NX_REG2[0..5]\fR pops the value from top of the stack.
+Set register 2 bits 0 through 5, inclusive, based on bits 0 through 5 from the
+value just popped.
+.
 .IP "\fBset_field:\fIvalue\fB\->\fIdst"
 Writes the literal \fIvalue\fR into the field \fIdst\fR, which should
 be specified as a name used for matching.  (This is similar to

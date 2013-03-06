@@ -308,6 +308,8 @@ enum nx_action_subtype {
     NXAST_POP_MPLS,             /* struct nx_action_pop_mpls */
     NXAST_SET_MPLS_TTL,         /* struct nx_action_ttl */
     NXAST_DEC_MPLS_TTL,         /* struct nx_action_header */
+    NXAST_STACK_PUSH,           /* struct nx_action_stack */
+    NXAST_STACK_POP,            /* struct nx_action_stack */
 };
 
 /* Header for Nicira-defined actions. */
@@ -561,6 +563,23 @@ struct nx_action_reg_load {
     ovs_be64 value;                 /* Immediate value. */
 };
 OFP_ASSERT(sizeof(struct nx_action_reg_load) == 24);
+
+/* Action structure for NXAST_STACK_PUSH and NXAST_STACK_POP.
+ *
+ * Pushes (or pops) field[offset: offset + n_bits] to (or from)
+ * top of the stack.
+ */
+struct nx_action_stack {
+    ovs_be16 type;                  /* OFPAT_VENDOR. */
+    ovs_be16 len;                   /* Length is 16. */
+    ovs_be32 vendor;                /* NX_VENDOR_ID. */
+    ovs_be16 subtype;               /* NXAST_REG_PUSH or NXAST_REG_POP. */
+    ovs_be16 offset;                /* Bit offset into the field. */
+    ovs_be32 field;                 /* The field used for push or pop. */
+    ovs_be16 n_bits;                /* (n_bits + 1) bits of the field. */
+    uint8_t zero[6];                /* Reserved, must be zero. */
+};
+OFP_ASSERT(sizeof(struct nx_action_stack) == 24);
 
 /* Action structure for NXAST_NOTE.
  *

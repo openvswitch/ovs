@@ -29,9 +29,11 @@ struct match;
 struct mf_subfield;
 struct ofpact_reg_move;
 struct ofpact_reg_load;
+struct ofpact_stack;
 struct ofpbuf;
 struct nx_action_reg_load;
 struct nx_action_reg_move;
+
 
 /* Nicira Extended Match (NXM) flexible flow match helper functions.
  *
@@ -82,6 +84,30 @@ void nxm_execute_reg_move(const struct ofpact_reg_move *, struct flow *);
 void nxm_execute_reg_load(const struct ofpact_reg_load *, struct flow *);
 void nxm_reg_load(const struct mf_subfield *, uint64_t src_data,
                   struct flow *);
+
+void nxm_parse_stack_action(struct ofpact_stack *, const char *);
+
+void nxm_format_stack_push(const struct ofpact_stack *, struct ds *);
+void nxm_format_stack_pop(const struct ofpact_stack *, struct ds *);
+
+enum ofperr nxm_stack_push_from_openflow(const struct nx_action_stack *,
+                                       struct ofpbuf *ofpacts);
+enum ofperr nxm_stack_pop_from_openflow(const struct nx_action_stack *,
+                                       struct ofpbuf *ofpacts);
+enum ofperr nxm_stack_push_check(const struct ofpact_stack *,
+                                 const  struct flow *);
+enum ofperr nxm_stack_pop_check(const struct ofpact_stack *,
+                               const struct flow *);
+
+void nxm_stack_push_to_nxast(const struct ofpact_stack *,
+                           struct ofpbuf *openflow);
+void nxm_stack_pop_to_nxast(const struct ofpact_stack *,
+                           struct ofpbuf *openflow);
+
+void nxm_execute_stack_push(const struct ofpact_stack *,
+                            const struct flow *, struct ofpbuf *);
+void nxm_execute_stack_pop(const struct ofpact_stack *,
+                            struct flow *, struct ofpbuf *);
 
 int nxm_field_bytes(uint32_t header);
 int nxm_field_bits(uint32_t header);

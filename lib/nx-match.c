@@ -1312,3 +1312,149 @@ nxm_reg_load(const struct mf_subfield *dst, uint64_t src_data,
                  sizeof src_data_be * 8);
     mf_write_subfield_flow(dst, &src_subvalue, flow);
 }
+
+/* nxm_parse_stack_action, works for both push() and pop(). */
+void
+nxm_parse_stack_action(struct ofpact_stack *stack_action, const char *s)
+{
+    s = mf_parse_subfield(&stack_action->subfield, s);
+    if (*s != '\0') {
+        ovs_fatal(0, "%s: trailing garbage following push or pop", s);
+    }
+}
+
+void
+nxm_format_stack_push(const struct ofpact_stack *push, struct ds *s)
+{
+    ds_put_cstr(s, "push:");
+    mf_format_subfield(&push->subfield, s);
+}
+
+void
+nxm_format_stack_pop(const struct ofpact_stack *pop, struct ds *s)
+{
+    ds_put_cstr(s, "pop:");
+    mf_format_subfield(&pop->subfield, s);
+}
+
+/* Common set for both push and pop actions. */
+static void
+stack_action_from_openflow__(const struct nx_action_stack *nasp,
+                                    struct ofpact_stack *stack_action)
+{
+    stack_action->subfield.field = mf_from_nxm_header(ntohl(nasp->field));
+    stack_action->subfield.ofs = ntohs(nasp->offset);
+    stack_action->subfield.n_bits = ntohs(nasp->n_bits);
+}
+
+static void
+nxm_stack_to_nxast__(const struct ofpact_stack *stack_action,
+                            struct nx_action_stack *nasp)
+{
+    nasp->offset = htons(stack_action->subfield.ofs);
+    nasp->n_bits = htons(stack_action->subfield.n_bits);
+    nasp->field = htonl(stack_action->subfield.field->nxm_header);
+}
+
+enum ofperr
+nxm_stack_push_from_openflow(const struct nx_action_stack *nasp,
+                             struct ofpbuf *ofpacts)
+{
+    struct ofpact_stack *push;
+
+    push = ofpact_put_STACK_PUSH(ofpacts);
+    stack_action_from_openflow__(nasp, push);
+
+    return nxm_stack_push_check(push, NULL);
+}
+
+enum ofperr
+nxm_stack_pop_from_openflow(const struct nx_action_stack *nasp,
+                             struct ofpbuf *ofpacts)
+{
+    struct ofpact_stack *pop;
+
+    pop = ofpact_put_STACK_POP(ofpacts);
+    stack_action_from_openflow__(nasp, pop);
+
+    return nxm_stack_pop_check(pop, NULL);
+}
+
+enum ofperr
+nxm_stack_push_check(const struct ofpact_stack *push,
+                     const struct flow *flow)
+{
+    return mf_check_src(&push->subfield, flow);
+}
+
+enum ofperr
+nxm_stack_pop_check(const struct ofpact_stack *pop,
+                    const struct flow *flow)
+{
+    return mf_check_dst(&pop->subfield, flow);
+}
+
+void
+nxm_stack_push_to_nxast(const struct ofpact_stack *stack,
+                        struct ofpbuf *openflow)
+{
+    nxm_stack_to_nxast__(stack, ofputil_put_NXAST_STACK_PUSH(openflow));
+}
+
+void
+nxm_stack_pop_to_nxast(const struct ofpact_stack *stack,
+                       struct ofpbuf *openflow)
+{
+    nxm_stack_to_nxast__(stack, ofputil_put_NXAST_STACK_POP(openflow));
+}
+
+/* nxm_execute_stack_push(), nxm_execute_stack_pop(). */
+static void
+nx_stack_push(struct ofpbuf *stack, union mf_subvalue *v)
+{
+    ofpbuf_put(stack, v, sizeof *v);
+}
+
+static union mf_subvalue *
+nx_stack_pop(struct ofpbuf *stack)
+{
+    union mf_subvalue *v = NULL;
+
+    if (stack->size) {
+        stack->size -= sizeof *v;
+        v = (union mf_subvalue *) ofpbuf_tail(stack);
+    }
+
+    return v;
+}
+
+void
+nxm_execute_stack_push(const struct ofpact_stack *push,
+                       const struct flow *flow, struct ofpbuf *stack)
+{
+    union mf_subvalue dst_value;
+
+    mf_read_subfield(&push->subfield, flow, &dst_value);
+    nx_stack_push(stack, &dst_value);
+}
+
+void
+nxm_execute_stack_pop(const struct ofpact_stack *pop,
+                      struct flow *flow, struct ofpbuf *stack)
+{
+    union mf_subvalue *src_value;
+
+    src_value = nx_stack_pop(stack);
+
+    /* Only pop if stack is not empty. Otherwise, give warning. */
+    if (src_value) {
+        mf_write_subfield_flow(&pop->subfield, src_value, flow);
+    } else {
+        if (!VLOG_DROP_WARN(&rl)) {
+            char *flow_str = flow_to_string(flow);
+            VLOG_WARN_RL(&rl, "Failed to pop from an empty stack. On flow \n"
+                           " %s", flow_str);
+            free(flow_str);
+        }
+    }
+}

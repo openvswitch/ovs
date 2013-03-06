@@ -339,6 +339,16 @@ ofpact_from_nxast(const union ofp_action *a, enum ofputil_action_code code,
             (const struct nx_action_reg_load *) a, out);
         break;
 
+    case OFPUTIL_NXAST_STACK_PUSH:
+        error = nxm_stack_push_from_openflow(
+            (const struct nx_action_stack *) a, out);
+        break;
+
+    case OFPUTIL_NXAST_STACK_POP:
+        error = nxm_stack_pop_from_openflow(
+            (const struct nx_action_stack *) a, out);
+        break;
+
     case OFPUTIL_NXAST_NOTE:
         nan = (const struct nx_action_note *) a;
         note_from_openflow(nan, out);
@@ -1155,6 +1165,12 @@ ofpact_check__(const struct ofpact *a, const struct flow *flow, int max_ports,
             return nxm_reg_load_check(ofpact_get_REG_LOAD(a), flow);
         }
 
+    case OFPACT_STACK_PUSH:
+        return nxm_stack_push_check(ofpact_get_STACK_PUSH(a), flow);
+
+    case OFPACT_STACK_POP:
+        return nxm_stack_pop_check(ofpact_get_STACK_POP(a), flow);
+
     case OFPACT_DEC_TTL:
     case OFPACT_SET_MPLS_TTL:
     case OFPACT_DEC_MPLS_TTL:
@@ -1401,6 +1417,14 @@ ofpact_to_nxast(const struct ofpact *a, struct ofpbuf *out)
         nxm_reg_load_to_nxast(ofpact_get_REG_LOAD(a), out);
         break;
 
+    case OFPACT_STACK_PUSH:
+        nxm_stack_push_to_nxast(ofpact_get_STACK_PUSH(a), out);
+        break;
+
+    case OFPACT_STACK_POP:
+        nxm_stack_pop_to_nxast(ofpact_get_STACK_POP(a), out);
+        break;
+
     case OFPACT_DEC_TTL:
         ofpact_dec_ttl_to_nxast(ofpact_get_DEC_TTL(a), out);
         break;
@@ -1580,6 +1604,8 @@ ofpact_to_openflow10(const struct ofpact *a, struct ofpbuf *out)
     case OFPACT_BUNDLE:
     case OFPACT_REG_MOVE:
     case OFPACT_REG_LOAD:
+    case OFPACT_STACK_PUSH:
+    case OFPACT_STACK_POP:
     case OFPACT_DEC_TTL:
     case OFPACT_SET_MPLS_TTL:
     case OFPACT_DEC_MPLS_TTL:
@@ -1748,6 +1774,8 @@ ofpact_to_openflow11(const struct ofpact *a, struct ofpbuf *out)
     case OFPACT_BUNDLE:
     case OFPACT_REG_MOVE:
     case OFPACT_REG_LOAD:
+    case OFPACT_STACK_PUSH:
+    case OFPACT_STACK_POP:
     case OFPACT_SET_TUNNEL:
     case OFPACT_POP_QUEUE:
     case OFPACT_FIN_TIMEOUT:
@@ -1867,6 +1895,8 @@ ofpact_outputs_to_port(const struct ofpact *ofpact, uint16_t port)
     case OFPACT_SET_L4_DST_PORT:
     case OFPACT_REG_MOVE:
     case OFPACT_REG_LOAD:
+    case OFPACT_STACK_PUSH:
+    case OFPACT_STACK_POP:
     case OFPACT_DEC_TTL:
     case OFPACT_SET_MPLS_TTL:
     case OFPACT_DEC_MPLS_TTL:
@@ -2086,6 +2116,14 @@ ofpact_format(const struct ofpact *a, struct ds *s)
 
     case OFPACT_REG_LOAD:
         nxm_format_reg_load(ofpact_get_REG_LOAD(a), s);
+        break;
+
+    case OFPACT_STACK_PUSH:
+        nxm_format_stack_push(ofpact_get_STACK_PUSH(a), s);
+        break;
+
+    case OFPACT_STACK_POP:
+        nxm_format_stack_pop(ofpact_get_STACK_POP(a), s);
         break;
 
     case OFPACT_DEC_TTL:

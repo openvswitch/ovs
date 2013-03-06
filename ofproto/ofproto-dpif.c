@@ -216,6 +216,11 @@ struct action_xlate_ctx {
      * this flow when actions change header fields. */
     struct flow flow;
 
+    /* stack for the push and pop actions.
+     * Each stack element is of the type "union mf_subvalue". */
+    struct ofpbuf stack;
+    union mf_subvalue init_stack[1024 / sizeof(union mf_subvalue)];
+
     /* The packet corresponding to 'flow', or a null pointer if we are
      * revalidating without a packet to refer to. */
     const struct ofpbuf *packet;
@@ -6404,6 +6409,16 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
             nxm_execute_reg_load(ofpact_get_REG_LOAD(a), &ctx->flow);
             break;
 
+        case OFPACT_STACK_PUSH:
+            nxm_execute_stack_push(ofpact_get_STACK_PUSH(a), &ctx->flow,
+                                   &ctx->stack);
+            break;
+
+        case OFPACT_STACK_POP:
+            nxm_execute_stack_pop(ofpact_get_STACK_POP(a), &ctx->flow,
+                                  &ctx->stack);
+            break;
+
         case OFPACT_PUSH_MPLS:
             execute_mpls_push_action(ctx, ofpact_get_PUSH_MPLS(a)->ethertype);
             break;
@@ -6573,6 +6588,8 @@ xlate_actions(struct action_xlate_ctx *ctx,
     ctx->table_id = 0;
     ctx->exit = false;
 
+    ofpbuf_use_stub(&ctx->stack, ctx->init_stack, sizeof ctx->init_stack);
+
     if (ctx->ofproto->has_mirrors || hit_resubmit_limit) {
         /* Do this conditionally because the copy is expensive enough that it
          * shows up in profiles. */
@@ -6657,6 +6674,8 @@ xlate_actions(struct action_xlate_ctx *ctx,
         }
         fix_sflow_action(ctx);
     }
+
+    ofpbuf_uninit(&ctx->stack);
 }
 
 /* Translates the 'ofpacts_len' bytes of "struct ofpact"s starting at 'ofpacts'
