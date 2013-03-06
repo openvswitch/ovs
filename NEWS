@@ -19,6 +19,8 @@ v1.10.0 - xx xxx xxxx
         value of other-config:dp-desc in the Bridge table.
       - It is possible to request the OpenFlow port number with the
         "ofport_request" column in the Interface table.
+      - The NXM flow_removed message now reports the OpenFlow table ID
+        from which the flow was removed.
     - Tunneling:
       - New support for the VXLAN tunnel protocol (see the IETF draft here:
         http://tools.ietf.org/html/draft-mahalingam-dutt-dcops-vxlan-03).
