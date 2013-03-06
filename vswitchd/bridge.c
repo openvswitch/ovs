@@ -1743,57 +1743,38 @@ static void
 iface_refresh_cfm_stats(struct iface *iface)
 {
     const struct ovsrec_interface *cfg = iface->cfg;
-    int fault, opup, error;
-    const uint64_t *rmps;
-    size_t n_rmps;
-    int health;
+    struct ofproto_cfm_status status;
 
-    fault = ofproto_port_get_cfm_fault(iface->port->bridge->ofproto,
-                                       iface->ofp_port);
-    if (fault >= 0) {
+    if (!ofproto_port_get_cfm_status(iface->port->bridge->ofproto,
+                                    iface->ofp_port, &status)) {
+        ovsrec_interface_set_cfm_fault(cfg, NULL, 0);
+        ovsrec_interface_set_cfm_fault_status(cfg, NULL, 0);
+        ovsrec_interface_set_cfm_remote_opstate(cfg, NULL);
+        ovsrec_interface_set_cfm_health(cfg, NULL, 0);
+        ovsrec_interface_set_cfm_remote_mpids(cfg, NULL, 0);
+    } else {
         const char *reasons[CFM_FAULT_N_REASONS];
-        bool fault_bool = fault;
+        int64_t cfm_health = status.health;
+        bool faulted = status.faults != 0;
         size_t i, j;
+
+        ovsrec_interface_set_cfm_fault(cfg, &faulted, 1);
 
         j = 0;
         for (i = 0; i < CFM_FAULT_N_REASONS; i++) {
             int reason = 1 << i;
-            if (fault & reason) {
+            if (status.faults & reason) {
                 reasons[j++] = cfm_fault_reason_to_str(reason);
             }
         }
-
-        ovsrec_interface_set_cfm_fault(cfg, &fault_bool, 1);
         ovsrec_interface_set_cfm_fault_status(cfg, (char **) reasons, j);
-    } else {
-        ovsrec_interface_set_cfm_fault(cfg, NULL, 0);
-        ovsrec_interface_set_cfm_fault_status(cfg, NULL, 0);
-    }
 
-    opup = ofproto_port_get_cfm_opup(iface->port->bridge->ofproto,
-                                     iface->ofp_port);
-    if (opup >= 0) {
-        ovsrec_interface_set_cfm_remote_opstate(cfg, opup ? "up" : "down");
-    } else {
-        ovsrec_interface_set_cfm_remote_opstate(cfg, NULL);
-    }
-
-    error = ofproto_port_get_cfm_remote_mpids(iface->port->bridge->ofproto,
-                                              iface->ofp_port, &rmps, &n_rmps);
-    if (error >= 0) {
-        ovsrec_interface_set_cfm_remote_mpids(cfg, (const int64_t *)rmps,
-                                              n_rmps);
-    } else {
-        ovsrec_interface_set_cfm_remote_mpids(cfg, NULL, 0);
-    }
-
-    health = ofproto_port_get_cfm_health(iface->port->bridge->ofproto,
-                                        iface->ofp_port);
-    if (health >= 0) {
-        int64_t cfm_health = health;
+        ovsrec_interface_set_cfm_remote_opstate(cfg, (status.remote_opstate
+                                                      ? "up" : "down"));
+        ovsrec_interface_set_cfm_remote_mpids(cfg,
+                                              (const int64_t *)status.rmps,
+                                              status.n_rmps);
         ovsrec_interface_set_cfm_health(cfg, &cfm_health, 1);
-    } else {
-        ovsrec_interface_set_cfm_health(cfg, NULL, 0);
     }
 }
 

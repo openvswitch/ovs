@@ -2843,62 +2843,21 @@ ofproto_get_netflow_ids(const struct ofproto *ofproto,
     ofproto->ofproto_class->get_netflow_ids(ofproto, engine_type, engine_id);
 }
 
-/* Checks the fault status of CFM for 'ofp_port' within 'ofproto'.  Returns a
- * bitmask of 'cfm_fault_reason's to indicate a CFM fault (generally
- * indicating a connectivity problem).  Returns zero if CFM is not faulted,
- * and -1 if CFM is not enabled on 'ofp_port'. */
-int
-ofproto_port_get_cfm_fault(const struct ofproto *ofproto, uint16_t ofp_port)
+/* Checks the status of CFM configured on 'ofp_port' within 'ofproto'.  Returns
+ * true if the port's CFM status was successfully stored into '*status'.
+ * Returns false if the port did not have CFM configured, in which case
+ * '*status' is indeterminate.
+ *
+ * The caller must provide and owns '*status', but it does not own and must not
+ * modify or free the array returned in 'status->rmps'. */
+bool
+ofproto_port_get_cfm_status(const struct ofproto *ofproto, uint16_t ofp_port,
+                            struct ofproto_cfm_status *status)
 {
     struct ofport *ofport = ofproto_get_port(ofproto, ofp_port);
-    return (ofport && ofproto->ofproto_class->get_cfm_fault
-            ? ofproto->ofproto_class->get_cfm_fault(ofport)
-            : -1);
-}
-
-/* Checks the operational status reported by the remote CFM endpoint of
- * 'ofp_port'  Returns 1 if operationally up, 0 if operationally down, and -1
- * if CFM is not enabled on 'ofp_port' or does not support operational status.
- */
-int
-ofproto_port_get_cfm_opup(const struct ofproto *ofproto, uint16_t ofp_port)
-{
-    struct ofport *ofport = ofproto_get_port(ofproto, ofp_port);
-    return (ofport && ofproto->ofproto_class->get_cfm_opup
-            ? ofproto->ofproto_class->get_cfm_opup(ofport)
-            : -1);
-}
-
-/* Gets the MPIDs of the remote maintenance points broadcasting to 'ofp_port'
- * within 'ofproto'.  Populates 'rmps' with an array of MPIDs owned by
- * 'ofproto', and 'n_rmps' with the number of MPIDs in 'rmps'.  Returns a
- * number less than 0 if CFM is not enabled on 'ofp_port'. */
-int
-ofproto_port_get_cfm_remote_mpids(const struct ofproto *ofproto,
-                                  uint16_t ofp_port, const uint64_t **rmps,
-                                  size_t *n_rmps)
-{
-    struct ofport *ofport = ofproto_get_port(ofproto, ofp_port);
-
-    *rmps = NULL;
-    *n_rmps = 0;
-    return (ofport && ofproto->ofproto_class->get_cfm_remote_mpids
-            ? ofproto->ofproto_class->get_cfm_remote_mpids(ofport, rmps,
-                                                           n_rmps)
-            : -1);
-}
-
-/* Checks the health of the CFM for 'ofp_port' within 'ofproto'.  Returns an
- * integer value between 0 and 100 to indicate the health of the port as a
- * percentage which is the average of cfm health of all the remote_mpids or
- * returns -1 if CFM is not enabled on 'ofport'. */
-int
-ofproto_port_get_cfm_health(const struct ofproto *ofproto, uint16_t ofp_port)
-{
-    struct ofport *ofport = ofproto_get_port(ofproto, ofp_port);
-    return (ofport && ofproto->ofproto_class->get_cfm_health
-            ? ofproto->ofproto_class->get_cfm_health(ofport)
-            : -1);
+    return (ofport
+            && ofproto->ofproto_class->get_cfm_status
+            && ofproto->ofproto_class->get_cfm_status(ofport, status));
 }
 
 static enum ofperr

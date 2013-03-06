@@ -1778,42 +1778,21 @@ set_cfm(struct ofport *ofport_, const struct cfm_settings *s)
     return error;
 }
 
-static int
-get_cfm_fault(const struct ofport *ofport_)
-{
-    struct ofport_dpif *ofport = ofport_dpif_cast(ofport_);
-
-    return ofport->cfm ? cfm_get_fault(ofport->cfm) : -1;
-}
-
-static int
-get_cfm_opup(const struct ofport *ofport_)
-{
-    struct ofport_dpif *ofport = ofport_dpif_cast(ofport_);
-
-    return ofport->cfm ? cfm_get_opup(ofport->cfm) : -1;
-}
-
-static int
-get_cfm_remote_mpids(const struct ofport *ofport_, const uint64_t **rmps,
-                     size_t *n_rmps)
+static bool
+get_cfm_status(const struct ofport *ofport_,
+               struct ofproto_cfm_status *status)
 {
     struct ofport_dpif *ofport = ofport_dpif_cast(ofport_);
 
     if (ofport->cfm) {
-        cfm_get_remote_mpids(ofport->cfm, rmps, n_rmps);
-        return 0;
+        status->faults = cfm_get_fault(ofport->cfm);
+        status->remote_opstate = cfm_get_opup(ofport->cfm);
+        status->health = cfm_get_health(ofport->cfm);
+        cfm_get_remote_mpids(ofport->cfm, &status->rmps, &status->n_rmps);
+        return true;
     } else {
-        return -1;
+        return false;
     }
-}
-
-static int
-get_cfm_health(const struct ofport *ofport_)
-{
-    struct ofport_dpif *ofport = ofport_dpif_cast(ofport_);
-
-    return ofport->cfm ? cfm_get_health(ofport->cfm) : -1;
 }
 
 /* Spanning Tree. */
@@ -8414,10 +8393,7 @@ const struct ofproto_class ofproto_dpif_class = {
     get_netflow_ids,
     set_sflow,
     set_cfm,
-    get_cfm_fault,
-    get_cfm_opup,
-    get_cfm_remote_mpids,
-    get_cfm_health,
+    get_cfm_status,
     set_stp,
     get_stp_status,
     set_stp_port,

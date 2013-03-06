@@ -356,15 +356,23 @@ void ofproto_get_snoops(const struct ofproto *, struct sset *);
 void ofproto_get_all_flows(struct ofproto *p, struct ds *);
 void ofproto_get_netflow_ids(const struct ofproto *,
                              uint8_t *engine_type, uint8_t *engine_id);
-int ofproto_port_get_cfm_fault(const struct ofproto *, uint16_t ofp_port);
-int ofproto_port_get_cfm_opup(const struct ofproto *, uint16_t ofp_port);
-int ofproto_port_get_cfm_remote_mpids(const struct ofproto *,
-                                      uint16_t ofp_port, const uint64_t **rmps,
-                                      size_t *n_rmps);
-int ofproto_port_get_cfm_health(const struct ofproto *ofproto,
-                                uint16_t ofp_port);
+
 void ofproto_get_ofproto_controller_info(const struct ofproto *, struct shash *);
 void ofproto_free_ofproto_controller_info(struct shash *);
+
+/* CFM status query. */
+struct ofproto_cfm_status {
+    enum cfm_fault_reason faults; /* 0 if not faulted. */
+    bool remote_opstate;          /* True if remote CFM endpoint is up.  */
+    int health;                   /* Health status in [0,100] range. */
+
+    /* MPIDs of remote maintenance points whose CCMs have been received. */
+    const uint64_t *rmps;
+    size_t n_rmps;
+};
+
+bool ofproto_port_get_cfm_status(const struct ofproto *, uint16_t ofp_port,
+                                 struct ofproto_cfm_status *);
 
 /* Linux VLAN device support (e.g. "eth0.10" for VLAN 10.)
  *

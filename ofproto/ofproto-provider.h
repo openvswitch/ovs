@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1120,44 +1120,15 @@ struct ofproto_class {
      * support CFM, as does a null pointer. */
     int (*set_cfm)(struct ofport *ofport, const struct cfm_settings *s);
 
-    /* Checks the fault status of CFM configured on 'ofport'.  Returns a
-     * bitmask of 'cfm_fault_reason's to indicate a CFM fault (generally
-     * indicating a connectivity problem).  Returns zero if CFM is not faulted,
-     * and -1 if CFM is not enabled on 'port'.
+    /* Checks the status of CFM configured on 'ofport'.  Returns true if the
+     * port's CFM status was successfully stored into '*status'.  Returns false
+     * if the port did not have CFM configured, in which case '*status' is
+     * indeterminate.
      *
-     * This function may be a null pointer if the ofproto implementation does
-     * not support CFM. */
-    int (*get_cfm_fault)(const struct ofport *ofport);
-
-    /* Check the operational status reported by the remote CFM endpoint of
-     * 'ofp_port'  Returns 1 if operationally up, 0 if operationally down, and
-     * -1 if CFM is not enabled on 'ofp_port' or does not support operational
-     * status.
-     *
-     * This function may be a null pointer if the ofproto implementation does
-     * not support CFM. */
-    int (*get_cfm_opup)(const struct ofport *ofport);
-
-    /* Gets the MPIDs of the remote maintenance points broadcasting to
-     * 'ofport'.  Populates 'rmps' with a provider owned array of MPIDs, and
-     * 'n_rmps' with the number of MPIDs in 'rmps'. Returns a number less than
-     * 0 if CFM is not enabled of 'ofport'.
-     *
-     * This function may be a null pointer if the ofproto implementation does
-     * not support CFM. */
-    int (*get_cfm_remote_mpids)(const struct ofport *ofport,
-                                const uint64_t **rmps, size_t *n_rmps);
-
-    /* Checks the health of CFM configured on 'ofport'.  Returns an integer
-     * to indicate the health percentage of the 'ofport' which is an average of
-     * the health of all the remote_mps.  Returns an integer between 0 and 100
-     * where 0 means that the 'ofport' is very unhealthy and 100 means the
-     * 'ofport' is perfectly healthy.  Returns -1 if CFM is not enabled on
-     * 'port' or if the number of remote_mpids is > 1.
-     *
-     * This function may be a null pointer if the ofproto implementation does
-     * not support CFM. */
-    int (*get_cfm_health)(const struct ofport *ofport);
+     * The caller must provide and owns '*status', but it does not own and must
+     * not modify or free the array returned in 'status->rmps'. */
+    bool (*get_cfm_status)(const struct ofport *ofport,
+                           struct ofproto_cfm_status *status);
 
     /* Configures spanning tree protocol (STP) on 'ofproto' using the
      * settings defined in 's'.
