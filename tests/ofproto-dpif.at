@@ -233,6 +233,7 @@ cookie=0x9 table=7 in_port=86 actions=mod_tp_dst:86,controller,controller
 cookie=0xa dl_src=40:44:44:44:44:42 actions=push_mpls:0x8847,load:10->OXM_OF_MPLS_LABEL[[]],load:3->OXM_OF_MPLS_TC[[]],controller
 cookie=0xa dl_src=40:44:44:44:44:43 actions=push_mpls:0x8847,load:10->OXM_OF_MPLS_LABEL[[]],load:3->OXM_OF_MPLS_TC[[]],controller
 cookie=0xa dl_src=40:44:44:44:44:44 actions=push_mpls:0x8847,load:10->OXM_OF_MPLS_LABEL[[]],load:3->OXM_OF_MPLS_TC[[]],controller
+cookie=0xa dl_src=40:44:44:44:44:45 actions=push_mpls:0x8847,load:10->OXM_OF_MPLS_LABEL[[]],load:3->OXM_OF_MPLS_TC[[]],dec_mpls_ttl,controller
 cookie=0xb dl_src=50:55:55:55:55:55 dl_type=0x8847 actions=load:1000->OXM_OF_MPLS_LABEL[[]],controller
 cookie=0xd dl_src=60:66:66:66:66:66 actions=pop_mpls:0x0800,controller
 cookie=0xc dl_src=70:77:77:77:77:77 actions=push_mpls:0x8848,load:1000->OXM_OF_MPLS_LABEL[[]],load:7->OXM_OF_MPLS_TC[[]],controller
@@ -353,6 +354,25 @@ mpls(label:10,tc:3,ttl:64,bos:1),metadata=0,in_port=0,dl_vlan=99,dl_vlan_pcp=7,d
 dnl
 NXT_PACKET_IN (xid=0x0): cookie=0xa total_len=64 in_port=1 (via action) data_len=64 (unbuffered)
 mpls(label:10,tc:3,ttl:64,bos:1),metadata=0,in_port=0,dl_vlan=99,dl_vlan_pcp=7,dl_src=40:44:44:44:44:44,dl_dst=50:54:00:00:00:07
+])
+
+dnl Modified MPLS controller action.
+AT_CHECK([ovs-ofctl monitor br0 65534 -P nxm --detach --pidfile 2> ofctl_monitor.log])
+
+for i in 1 2 3; do
+    ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=40:44:44:44:44:45,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no)'
+done
+
+OVS_WAIT_UNTIL([ovs-appctl -t ovs-ofctl exit])
+AT_CHECK([cat ofctl_monitor.log], [0], [dnl
+NXT_PACKET_IN (xid=0x0): cookie=0xa total_len=64 in_port=1 (via action) data_len=64 (unbuffered)
+mpls(label:10,tc:3,ttl:63,bos:1),metadata=0,in_port=0,vlan_tci=0x0000,dl_src=40:44:44:44:44:45,dl_dst=50:54:00:00:00:07
+dnl
+NXT_PACKET_IN (xid=0x0): cookie=0xa total_len=64 in_port=1 (via action) data_len=64 (unbuffered)
+mpls(label:10,tc:3,ttl:63,bos:1),metadata=0,in_port=0,vlan_tci=0x0000,dl_src=40:44:44:44:44:45,dl_dst=50:54:00:00:00:07
+dnl
+NXT_PACKET_IN (xid=0x0): cookie=0xa total_len=64 in_port=1 (via action) data_len=64 (unbuffered)
+mpls(label:10,tc:3,ttl:63,bos:1),metadata=0,in_port=0,vlan_tci=0x0000,dl_src=40:44:44:44:44:45,dl_dst=50:54:00:00:00:07
 ])
 
 dnl Modified MPLS actions.
@@ -500,6 +520,7 @@ AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | sort], [0], [dnl
  cookie=0xa, n_packets=3, n_bytes=180, dl_src=40:44:44:44:44:42 actions=push_mpls:0x8847,load:0xa->OXM_OF_MPLS_LABEL[[]],load:0x3->OXM_OF_MPLS_TC[[]],CONTROLLER:65535
  cookie=0xa, n_packets=3, n_bytes=180, dl_src=40:44:44:44:44:43 actions=push_mpls:0x8847,load:0xa->OXM_OF_MPLS_LABEL[[]],load:0x3->OXM_OF_MPLS_TC[[]],CONTROLLER:65535
  cookie=0xa, n_packets=3, n_bytes=180, dl_src=40:44:44:44:44:44 actions=push_mpls:0x8847,load:0xa->OXM_OF_MPLS_LABEL[[]],load:0x3->OXM_OF_MPLS_TC[[]],CONTROLLER:65535
+ cookie=0xa, n_packets=3, n_bytes=180, dl_src=40:44:44:44:44:45 actions=push_mpls:0x8847,load:0xa->OXM_OF_MPLS_LABEL[[]],load:0x3->OXM_OF_MPLS_TC[[]],dec_mpls_ttl,CONTROLLER:65535
  cookie=0xb, n_packets=3, n_bytes=180, dl_src=50:55:55:55:55:55,dl_type=0x8847 actions=load:0x3e8->OXM_OF_MPLS_LABEL[[]],CONTROLLER:65535
  cookie=0xc, n_packets=3, n_bytes=180, dl_src=70:77:77:77:77:77 actions=push_mpls:0x8848,load:0x3e8->OXM_OF_MPLS_LABEL[[]],load:0x7->OXM_OF_MPLS_TC[[]],CONTROLLER:65535
  cookie=0xd, n_packets=3, n_bytes=180, dl_src=60:66:66:66:66:66 actions=pop_mpls:0x0800,CONTROLLER:65535

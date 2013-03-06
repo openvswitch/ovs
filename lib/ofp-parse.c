@@ -550,6 +550,11 @@ parse_named_action(enum ofputil_action_code code, const struct flow *flow,
         parse_dec_ttl(ofpacts, arg);
         break;
 
+    case OFPUTIL_OFPAT11_DEC_MPLS_TTL:
+    case OFPUTIL_NXAST_DEC_MPLS_TTL:
+        ofpact_put_DEC_MPLS_TTL(ofpacts);
+        break;
+
     case OFPUTIL_NXAST_FIN_TIMEOUT:
         parse_fin_timeout(ofpacts, arg);
         break;

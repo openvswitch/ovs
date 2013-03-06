@@ -6,6 +6,9 @@ post-v1.10.0
     - New support for the data encapsulation format of the LISP tunnel
       protocol (RFC 6830).  An external control plane or manual flow
       setup is required for EID-to-RLOC mapping.
+    - OpenFlow:
+      * The "dec_mpls_ttl" action from OpenFlow 1.1 and later is now
+        implemented.
 
 
 v1.10.0 - xx xxx xxxx

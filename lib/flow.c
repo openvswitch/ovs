@@ -848,6 +848,14 @@ flow_set_mpls_label(struct flow *flow, ovs_be32 label)
     set_mpls_lse_label(&flow->mpls_lse, label);
 }
 
+/* Sets the MPLS TTL that 'flow' matches to 'ttl', which should be in the
+ * range 0...255. */
+void
+flow_set_mpls_ttl(struct flow *flow, uint8_t ttl)
+{
+    set_mpls_lse_ttl(&flow->mpls_lse, ttl);
+}
+
 /* Sets the MPLS TC that 'flow' matches to 'tc', which should be in the
  * range 0...7. */
 void

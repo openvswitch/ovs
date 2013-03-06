@@ -155,6 +155,7 @@ void set_mpls_lse(struct ofpbuf *, ovs_be32 label);
 void push_mpls(struct ofpbuf *packet, ovs_be16 ethtype, ovs_be32 lse);
 void pop_mpls(struct ofpbuf *, ovs_be16 ethtype);
 
+void set_mpls_lse_ttl(ovs_be32 *lse, uint8_t ttl);
 void set_mpls_lse_tc(ovs_be32 *lse, uint8_t tc);
 void set_mpls_lse_label(ovs_be32 *lse, ovs_be32 label);
 void set_mpls_lse_bos(ovs_be32 *lse, uint8_t bos);

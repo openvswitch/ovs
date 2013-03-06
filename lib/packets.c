@@ -259,7 +259,7 @@ static bool is_mpls(struct ofpbuf *packet)
 }
 
 /* Set time to live (TTL) of an MPLS label stack entry (LSE). */
-static void
+void
 set_mpls_lse_ttl(ovs_be32 *lse, uint8_t ttl)
 {
     *lse &= ~htonl(MPLS_TTL_MASK);

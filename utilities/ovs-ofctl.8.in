@@ -1018,6 +1018,15 @@ invalid ttl packets.  If controller ids are not specified, the
 ``packet_in'' message will be sent only to the controllers having
 controller id zero which have registered for the invalid ttl packets.
 .
+.IP \fBdec_mpls_ttl\fR
+Decrement TTL of the outer MPLS label stack entry of a packet.  If the TTL
+is initially zero, no decrement occurs.  Instead, a ``packet-in'' message
+with reason code \fBOFPR_INVALID_TTL\fR is sent to each connected
+controller with controller id zer that has enabled receiving them.
+Processing the current set of actions then stops.  However, if the current
+set of actions was reached through ``resubmit'' then remaining actions in
+outer levels resume processing.
+.
 .IP \fBnote:\fR[\fIhh\fR]...
 Does nothing at all.  Any number of bytes represented as hex digits
 \fIhh\fR may be included.  Pairs of hex digits may be separated by
