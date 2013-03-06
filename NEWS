@@ -50,6 +50,7 @@ v1.10.0 - xx xxx xxxx
         retire that meaning of ANY in favor of the OpenFlow 1.1 meaning.
     - Patch ports no longer require kernel support, so they now work
       with FreeBSD and the kernel module built into Linux 3.3 and later.
+    - CAPWAP tunneling support removed.
 
 
 v1.9.0 - xx xxx xxxx

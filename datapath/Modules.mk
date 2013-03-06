@@ -16,7 +16,6 @@ openvswitch_sources = \
 	tunnel.c \
 	vlan.c \
 	vport.c \
-	vport-capwap.c \
 	vport-gre.c \
 	vport-internal_dev.c \
 	vport-netdev.c \
@@ -31,13 +30,11 @@ openvswitch_headers = \
 	tunnel.h \
 	vlan.h \
 	vport.h \
-	vport-capwap.h \
 	vport-internal_dev.h \
 	vport-netdev.h
 
 openvswitch_extras = \
-	README \
-	CAPWAP.txt
+	README
 
 dist_sources = $(foreach module,$(dist_modules),$($(module)_sources))
 dist_headers = $(foreach module,$(dist_modules),$($(module)_headers))
