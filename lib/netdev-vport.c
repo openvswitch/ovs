@@ -327,6 +327,10 @@ set_tunnel_config(struct netdev_dev *dev_, const struct smap *args)
             struct in_addr in_addr;
             if (lookup_ip(node->value, &in_addr)) {
                 VLOG_WARN("%s: bad %s 'remote_ip'", name, type);
+            } else if (ip_is_multicast(in_addr.s_addr)) {
+                VLOG_WARN("%s: multicast remote_ip="IP_FMT" not allowed",
+                          name, IP_ARGS(in_addr.s_addr));
+                return EINVAL;
             } else {
                 tnl_cfg.ip_dst = in_addr.s_addr;
             }
@@ -439,14 +443,6 @@ set_tunnel_config(struct netdev_dev *dev_, const struct smap *args)
                  name, type);
         return EINVAL;
     }
-
-    if (tnl_cfg.ip_src) {
-        if (ip_is_multicast(tnl_cfg.ip_dst)) {
-            VLOG_WARN("%s: remote_ip is multicast, ignoring local_ip", name);
-            tnl_cfg.ip_src = 0;
-        }
-    }
-
     if (!tnl_cfg.ttl) {
         tnl_cfg.ttl = DEFAULT_TTL;
     }

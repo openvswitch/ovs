@@ -603,7 +603,6 @@ static int validate_set(const struct nlattr *a,
 	int err;
 
 	case OVS_KEY_ATTR_PRIORITY:
-	case OVS_KEY_ATTR_TUN_ID:
 	case OVS_KEY_ATTR_ETHERNET:
 		break;
 
@@ -2315,13 +2314,9 @@ static int __init dp_init(void)
 	if (err)
 		goto error_genl_exec;
 
-	err = ovs_tnl_init();
-	if (err)
-		goto error_wq;
-
 	err = ovs_flow_init();
 	if (err)
-		goto error_tnl_exit;
+		goto error_wq;
 
 	err = ovs_vport_init();
 	if (err)
@@ -2351,8 +2346,6 @@ error_vport_exit:
 	ovs_vport_exit();
 error_flow_exit:
 	ovs_flow_exit();
-error_tnl_exit:
-	ovs_tnl_exit();
 error_wq:
 	ovs_workqueues_exit();
 error_genl_exec:
@@ -2370,7 +2363,6 @@ static void dp_cleanup(void)
 	rcu_barrier();
 	ovs_vport_exit();
 	ovs_flow_exit();
-	ovs_tnl_exit();
 	ovs_workqueues_exit();
 	genl_exec_exit();
 }
