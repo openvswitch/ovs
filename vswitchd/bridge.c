@@ -1769,8 +1769,13 @@ iface_refresh_cfm_stats(struct iface *iface)
         }
         ovsrec_interface_set_cfm_fault_status(cfg, (char **) reasons, j);
 
-        ovsrec_interface_set_cfm_remote_opstate(cfg, (status.remote_opstate
-                                                      ? "up" : "down"));
+        if (status.remote_opstate >= 0) {
+            const char *remote_opstate = status.remote_opstate ? "up" : "down";
+            ovsrec_interface_set_cfm_remote_opstate(cfg, remote_opstate);
+        } else {
+            ovsrec_interface_set_cfm_remote_opstate(cfg, NULL);
+        }
+
         ovsrec_interface_set_cfm_remote_mpids(cfg,
                                               (const int64_t *)status.rmps,
                                               status.n_rmps);
