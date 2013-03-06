@@ -7,10 +7,6 @@
 #endif
 
 #include <linux/version.h>
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,4,0)
-/* BUILD_BUG_ON_NOT_POWER_OF_2 definition */
-#include <linux/bug.h>
-#endif
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,28)
 #undef pr_emerg
