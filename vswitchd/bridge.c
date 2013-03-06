@@ -1721,8 +1721,7 @@ iface_refresh_status(struct iface *iface)
                                     netdev_features_is_full_duplex(current)
                                     ? "full" : "half");
         ovsrec_interface_set_link_speed(iface->cfg, &bps, 1);
-    }
-    else {
+    } else {
         ovsrec_interface_set_duplex(iface->cfg, NULL);
         ovsrec_interface_set_link_speed(iface->cfg, NULL, 0);
     }
