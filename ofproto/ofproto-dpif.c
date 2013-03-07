@@ -6087,7 +6087,7 @@ execute_dec_mpls_ttl_action(struct action_xlate_ctx *ctx)
         return false;
     }
 
-    if (ttl > 0) {
+    if (ttl > 1) {
         ttl--;
         set_mpls_lse_ttl(&ctx->flow.mpls_lse, ttl);
         return false;
