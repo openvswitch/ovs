@@ -8144,7 +8144,18 @@ ofproto_unixctl_dpif_dump_flows(struct unixctl_conn *conn,
         }
 
         ds_put_cstr(&ds, ", actions:");
-        format_odp_actions(&ds, subfacet->actions, subfacet->actions_len);
+        if (subfacet->slow) {
+            uint64_t slow_path_stub[128 / 8];
+            const struct nlattr *actions;
+            size_t actions_len;
+
+            compose_slow_path(ofproto, &subfacet->facet->flow, subfacet->slow,
+                              slow_path_stub, sizeof slow_path_stub,
+                              &actions, &actions_len);
+            format_odp_actions(&ds, actions, actions_len);
+        } else {
+            format_odp_actions(&ds, subfacet->actions, subfacet->actions_len);
+        }
         ds_put_char(&ds, '\n');
     }
 
