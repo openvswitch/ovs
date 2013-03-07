@@ -487,7 +487,9 @@ struct facet {
 
     /* Storage for a single subfacet, to reduce malloc() time and space
      * overhead.  (A facet always has at least one subfacet and in the common
-     * case has exactly one subfacet.) */
+     * case has exactly one subfacet.  However, 'one_subfacet' may not
+     * always be valid, since it could have been removed after newer
+     * subfacets were pushed onto the 'subfacets' list.) */
     struct subfacet one_subfacet;
 };
 
