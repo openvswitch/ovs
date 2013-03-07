@@ -16,7 +16,7 @@ Build Requirements
 To compile the userspace programs in the Open vSwitch distribution,
 you will need the following software:
 
-    - A make program, e.g. GNU make.  BSD make should also work.
+    - GNU make.
 
     - The GNU C compiler.  We generally test with version 4.1, 4.2, or
       4.3.
@@ -192,15 +192,16 @@ Prerequisites section, follow the procedure below to build.
    additional environment variables.  For a full list, invoke
    configure with the --help option.
 
-3. Run make in the top source directory:
+3. Run GNU make in the top source directory, e.g.:
 
       % make
 
-   On FreeBSD you may need to use GNU make (gmake) or NetBSD make
-   (bmake) instead of the native make.
+   or if GNU make is installed as "gmake":
+
+      % gmake
 
    For improved warnings if you installed "sparse" (see
-   "Prerequisites"), add C=1 to the "make" command line.
+   "Prerequisites"), add C=1 to the command line.
 
 4. Consider running the testsuite.  Refer to "Running the Testsuite"
    below, for instructions.
