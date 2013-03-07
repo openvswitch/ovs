@@ -513,6 +513,8 @@ static void facet_push_stats(struct facet *);
 static void facet_learn(struct facet *);
 static void facet_account(struct facet *);
 
+static struct subfacet *facet_get_subfacet(struct facet *);
+
 static bool facet_is_controller_flow(struct facet *);
 
 struct ofport_dpif {
@@ -4441,7 +4443,7 @@ static void
 facet_account(struct facet *facet)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(facet->rule->up.ofproto);
-    struct subfacet *subfacet;
+    struct subfacet *subfacet = facet_get_subfacet(facet);
     const struct nlattr *a;
     unsigned int left;
     ovs_be16 vlan_tci;
@@ -4460,8 +4462,6 @@ facet_account(struct facet *facet)
      *
      * We use the actions from an arbitrary subfacet because they should all
      * be equally valid for our purpose. */
-    subfacet = CONTAINER_OF(list_front(&facet->subfacets),
-                            struct subfacet, list_node);
     vlan_tci = facet->flow.vlan_tci;
     NL_ATTR_FOR_EACH_UNSAFE (a, left,
                              subfacet->actions, subfacet->actions_len) {
@@ -4596,6 +4596,14 @@ facet_lookup_valid(struct ofproto_dpif *ofproto, const struct flow *flow,
     }
 
     return facet;
+}
+
+/* Return a subfacet from 'facet'.  A facet consists of one or more
+ * subfacets, and this function returns one of them. */
+static struct subfacet *facet_get_subfacet(struct facet *facet)
+{
+    return CONTAINER_OF(list_front(&facet->subfacets), struct subfacet,
+                        list_node);
 }
 
 static const char *
@@ -4937,8 +4945,7 @@ flow_push_stats(struct facet *facet, const struct dpif_flow_stats *stats)
 {
     struct rule_dpif *rule = facet->rule;
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(rule->up.ofproto);
-    struct subfacet *subfacet = CONTAINER_OF(list_front(&facet->subfacets),
-                                             struct subfacet, list_node);
+    struct subfacet *subfacet = facet_get_subfacet(facet);
     struct action_xlate_ctx ctx;
 
     ofproto_rule_update_used(&rule->up, stats->used);
