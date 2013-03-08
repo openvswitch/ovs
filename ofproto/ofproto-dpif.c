@@ -5825,60 +5825,72 @@ compose_output_action(struct action_xlate_ctx *ctx, uint16_t ofp_port)
 }
 
 static void
+tag_the_flow(struct action_xlate_ctx *ctx, struct rule_dpif *rule)
+{
+    struct ofproto_dpif *ofproto = ctx->ofproto;
+    uint8_t table_id = ctx->table_id;
+
+    if (table_id > 0 && table_id < N_TABLES) {
+        struct table_dpif *table = &ofproto->tables[table_id];
+        if (table->other_table) {
+            ctx->tags |= (rule && rule->tag
+                          ? rule->tag
+                          : rule_calculate_tag(&ctx->flow,
+                                               &table->other_table->mask,
+                                               table->basis));
+        }
+    }
+}
+
+/* Common rule processing in one place to avoid duplicating code. */
+static struct rule_dpif *
+ctx_rule_hooks(struct action_xlate_ctx *ctx, struct rule_dpif *rule,
+               bool may_packet_in)
+{
+    if (ctx->resubmit_hook) {
+        ctx->resubmit_hook(ctx, rule);
+    }
+    if (rule == NULL && may_packet_in) {
+        /* XXX
+         * check if table configuration flags
+         * OFPTC_TABLE_MISS_CONTROLLER, default.
+         * OFPTC_TABLE_MISS_CONTINUE,
+         * OFPTC_TABLE_MISS_DROP
+         * When OF1.0, OFPTC_TABLE_MISS_CONTINUE is used. What to do?
+         */
+        rule = rule_dpif_miss_rule(ctx->ofproto, &ctx->flow);
+    }
+    if (rule && ctx->resubmit_stats) {
+        rule_credit_stats(rule, ctx->resubmit_stats);
+    }
+    return rule;
+}
+
+static void
 xlate_table_action(struct action_xlate_ctx *ctx,
                    uint16_t in_port, uint8_t table_id, bool may_packet_in)
 {
     if (ctx->recurse < MAX_RESUBMIT_RECURSION) {
-        struct ofproto_dpif *ofproto = ctx->ofproto;
         struct rule_dpif *rule;
-        uint16_t old_in_port;
-        uint8_t old_table_id;
+        uint16_t old_in_port = ctx->flow.in_port;
+        uint8_t old_table_id = ctx->table_id;
 
-        old_table_id = ctx->table_id;
         ctx->table_id = table_id;
 
         /* Look up a flow with 'in_port' as the input port. */
-        old_in_port = ctx->flow.in_port;
         ctx->flow.in_port = in_port;
-        rule = rule_dpif_lookup__(ofproto, &ctx->flow, table_id);
+        rule = rule_dpif_lookup__(ctx->ofproto, &ctx->flow, table_id);
 
-        /* Tag the flow. */
-        if (table_id > 0 && table_id < N_TABLES) {
-            struct table_dpif *table = &ofproto->tables[table_id];
-            if (table->other_table) {
-                ctx->tags |= (rule && rule->tag
-                              ? rule->tag
-                              : rule_calculate_tag(&ctx->flow,
-                                                   &table->other_table->mask,
-                                                   table->basis));
-            }
-        }
+        tag_the_flow(ctx, rule);
 
         /* Restore the original input port.  Otherwise OFPP_NORMAL and
          * OFPP_IN_PORT will have surprising behavior. */
         ctx->flow.in_port = old_in_port;
 
-        if (ctx->resubmit_hook) {
-            ctx->resubmit_hook(ctx, rule);
-        }
-
-        if (rule == NULL && may_packet_in) {
-            /* XXX
-             * check if table configuration flags
-             * OFPTC_TABLE_MISS_CONTROLLER, default.
-             * OFPTC_TABLE_MISS_CONTINUE,
-             * OFPTC_TABLE_MISS_DROP
-             * When OF1.0, OFPTC_TABLE_MISS_CONTINUE is used. What to do?
-             */
-            rule = rule_dpif_miss_rule(ofproto, &ctx->flow);
-        }
+        rule = ctx_rule_hooks(ctx, rule, may_packet_in);
 
         if (rule) {
             struct rule_dpif *old_rule = ctx->rule;
-
-            if (ctx->resubmit_stats) {
-                rule_credit_stats(rule, ctx->resubmit_stats);
-            }
 
             ctx->recurse++;
             ctx->rule = rule;
@@ -6356,6 +6368,8 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
         was_evictable = ctx->rule->up.evictable;
         ctx->rule->up.evictable = false;
     }
+
+ do_xlate_actions_again:
     OFPACT_FOR_EACH (a, ofpacts, ofpacts_len) {
         struct ofpact_controller *controller;
         const struct ofpact_metadata *metadata;
@@ -6545,11 +6559,34 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
             break;
 
         case OFPACT_GOTO_TABLE: {
-            /* XXX remove recursion */
-            /* It is assumed that goto-table is last action */
+            /* It is assumed that goto-table is the last action. */
             struct ofpact_goto_table *ogt = ofpact_get_GOTO_TABLE(a);
+            struct rule_dpif *rule;
+
             ovs_assert(ctx->table_id < ogt->table_id);
-            xlate_table_action(ctx, ctx->flow.in_port, ogt->table_id, true);
+
+            ctx->table_id = ogt->table_id;
+
+            /* Look up a flow from the new table. */
+            rule = rule_dpif_lookup__(ctx->ofproto, &ctx->flow, ctx->table_id);
+
+            tag_the_flow(ctx, rule);
+
+            rule = ctx_rule_hooks(ctx, rule, true);
+
+            if (rule) {
+                if (ctx->rule) {
+                    ctx->rule->up.evictable = was_evictable;
+                }
+                ctx->rule = rule;
+                was_evictable = rule->up.evictable;
+                rule->up.evictable = false;
+
+                /* Tail recursion removal. */
+                ofpacts = rule->up.ofpacts;
+                ofpacts_len = rule->up.ofpacts_len;
+                goto do_xlate_actions_again;
+            }
             break;
         }
         }
