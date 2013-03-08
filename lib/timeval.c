@@ -17,9 +17,6 @@
 #include <config.h>
 #include "timeval.h"
 #include <errno.h>
-#if HAVE_EXECINFO_H
-#include <execinfo.h>
-#endif
 #include <poll.h>
 #include <signal.h>
 #include <stdlib.h>
@@ -37,6 +34,15 @@
 #include "unixctl.h"
 #include "util.h"
 #include "vlog.h"
+
+/* backtrace() from <execinfo.h> is really useful, but it is not signal safe
+ * everywhere, such as on x86-64.  */
+#if HAVE_EXECINFO_H && !defined __x86_64__
+#  define USE_BACKTRACE 1
+#  include <execinfo.h>
+#else
+#  define USE_BACKTRACE 0
+#endif
 
 VLOG_DEFINE_THIS_MODULE(timeval);
 
@@ -93,9 +99,7 @@ static void timespec_add(struct timespec *sum,
                          const struct timespec *a, const struct timespec *b);
 static unixctl_cb_func backtrace_cb;
 
-#ifndef HAVE_EXECINFO_H
-#define HAVE_EXECINFO_H 0
-
+#if !USE_BACKTRACE
 static int
 backtrace(void **buffer OVS_UNUSED, int size OVS_UNUSED)
 {
@@ -107,7 +111,7 @@ backtrace_symbols(void *const *buffer OVS_UNUSED, int size OVS_UNUSED)
 {
     NOT_REACHED();
 }
-#endif
+#endif  /* !USE_BACKTRACE */
 
 /* Initializes the timetracking module, if not already initialized. */
 static void
@@ -124,7 +128,7 @@ time_init(void)
      * initialization which is not signal safe.  This can cause deadlocks if
      * run from the signal handler.  As a workaround, force the initialization
      * to happen here. */
-    if (HAVE_EXECINFO_H) {
+    if (USE_BACKTRACE) {
         void *bt[1];
 
         backtrace(bt, ARRAY_SIZE(bt));
@@ -132,7 +136,7 @@ time_init(void)
 
     memset(traces, 0, sizeof traces);
 
-    if (HAVE_EXECINFO_H && CACHE_TIME) {
+    if (USE_BACKTRACE && CACHE_TIME) {
         unixctl_command_register("backtrace", "", 0, 0, backtrace_cb, NULL);
     }
 
@@ -419,7 +423,7 @@ sigalrm_handler(int sig_nr OVS_UNUSED)
     wall_tick = true;
     monotonic_tick = true;
 
-    if (HAVE_EXECINFO_H && CACHE_TIME) {
+    if (USE_BACKTRACE && CACHE_TIME) {
         struct trace *trace = &traces[trace_head];
 
         trace->n_frames = backtrace(trace->backtrace,
@@ -633,7 +637,7 @@ format_backtraces(struct ds *ds, size_t min_count)
 {
     time_init();
 
-    if (HAVE_EXECINFO_H && CACHE_TIME) {
+    if (USE_BACKTRACE && CACHE_TIME) {
         struct hmap trace_map = HMAP_INITIALIZER(&trace_map);
         struct trace *trace, *next;
         sigset_t oldsigs;
@@ -730,7 +734,7 @@ backtrace_cb(struct unixctl_conn *conn,
 {
     struct ds ds = DS_EMPTY_INITIALIZER;
 
-    ovs_assert(HAVE_EXECINFO_H && CACHE_TIME);
+    ovs_assert(USE_BACKTRACE && CACHE_TIME);
     format_backtraces(&ds, 0);
     unixctl_command_reply(conn, ds_cstr(&ds));
     ds_destroy(&ds);
