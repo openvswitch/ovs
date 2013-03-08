@@ -43,7 +43,7 @@ VLOG_DEFINE_THIS_MODULE(netdev_dummy);
 #endif
 
 struct netdev_dev_dummy {
-    struct netdev_dev netdev_dev;
+    struct netdev_dev up;
     uint8_t hwaddr[ETH_ADDR_LEN];
     int mtu;
     struct netdev_stats stats;
@@ -55,7 +55,7 @@ struct netdev_dev_dummy {
 };
 
 struct netdev_dummy {
-    struct netdev netdev;
+    struct netdev up;
 };
 
 struct netdev_rx_dummy {
@@ -87,7 +87,7 @@ static struct netdev_dev_dummy *
 netdev_dev_dummy_cast(const struct netdev_dev *netdev_dev)
 {
     ovs_assert(is_dummy_class(netdev_dev_get_class(netdev_dev)));
-    return CONTAINER_OF(netdev_dev, struct netdev_dev_dummy, netdev_dev);
+    return CONTAINER_OF(netdev_dev, struct netdev_dev_dummy, up);
 }
 
 static struct netdev_dummy *
@@ -95,7 +95,7 @@ netdev_dummy_cast(const struct netdev *netdev)
 {
     struct netdev_dev *netdev_dev = netdev_get_dev(netdev);
     ovs_assert(is_dummy_class(netdev_dev_get_class(netdev_dev)));
-    return CONTAINER_OF(netdev, struct netdev_dummy, netdev);
+    return CONTAINER_OF(netdev, struct netdev_dummy, up);
 }
 
 static struct netdev_rx_dummy *
@@ -113,7 +113,7 @@ netdev_dummy_create(const struct netdev_class *class, const char *name,
     struct netdev_dev_dummy *netdev_dev;
 
     netdev_dev = xzalloc(sizeof *netdev_dev);
-    netdev_dev_init(&netdev_dev->netdev_dev, name, class);
+    netdev_dev_init(&netdev_dev->up, name, class);
     netdev_dev->hwaddr[0] = 0xaa;
     netdev_dev->hwaddr[1] = 0x55;
     netdev_dev->hwaddr[2] = n >> 24;
@@ -130,7 +130,7 @@ netdev_dummy_create(const struct netdev_class *class, const char *name,
 
     n++;
 
-    *netdev_devp = &netdev_dev->netdev_dev;
+    *netdev_devp = &netdev_dev->up;
 
     return 0;
 }
@@ -172,9 +172,9 @@ netdev_dummy_open(struct netdev_dev *netdev_dev_, struct netdev **netdevp)
     struct netdev_dummy *netdev;
 
     netdev = xmalloc(sizeof *netdev);
-    netdev_init(&netdev->netdev, netdev_dev_);
+    netdev_init(&netdev->up, netdev_dev_);
 
-    *netdevp = &netdev->netdev;
+    *netdevp = &netdev->up;
     return 0;
 }
 
@@ -193,7 +193,7 @@ netdev_dummy_rx_open(struct netdev *netdev_, struct netdev_rx **rxp)
     struct netdev_rx_dummy *rx;
 
     rx = xmalloc(sizeof *rx);
-    netdev_rx_init(&rx->up, &dev->netdev_dev, &netdev_rx_dummy_class);
+    netdev_rx_init(&rx->up, &dev->up, &netdev_rx_dummy_class);
     list_push_back(&dev->rxes, &rx->node);
     list_init(&rx->recv_queue);
 

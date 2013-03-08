@@ -79,7 +79,7 @@ VLOG_DEFINE_THIS_MODULE(netdev_bsd);
  * struct, and using CONTAINER_OF to access the parent structure.
  */
 struct netdev_bsd {
-    struct netdev netdev;
+    struct netdev up;
 };
 
 struct netdev_rx_bsd {
@@ -97,7 +97,7 @@ struct netdev_rx_bsd {
 static const struct netdev_rx_class netdev_rx_bsd_class;
 
 struct netdev_dev_bsd {
-    struct netdev_dev netdev_dev;
+    struct netdev_dev up;
     unsigned int cache_valid;
     unsigned int change_seq;
 
@@ -172,14 +172,14 @@ netdev_bsd_cast(const struct netdev *netdev)
 {
     ovs_assert(is_netdev_bsd_class(netdev_dev_get_class(
                                        netdev_get_dev(netdev))));
-    return CONTAINER_OF(netdev, struct netdev_bsd, netdev);
+    return CONTAINER_OF(netdev, struct netdev_bsd, up);
 }
 
 static struct netdev_dev_bsd *
 netdev_dev_bsd_cast(const struct netdev_dev *netdev_dev)
 {
     ovs_assert(is_netdev_bsd_class(netdev_dev_get_class(netdev_dev)));
-    return CONTAINER_OF(netdev_dev, struct netdev_dev_bsd, netdev_dev);
+    return CONTAINER_OF(netdev_dev, struct netdev_dev_bsd, up);
 }
 
 static struct netdev_rx_bsd *
@@ -318,9 +318,9 @@ netdev_bsd_create_system(const struct netdev_class *class, const char *name,
 
     netdev_dev = xzalloc(sizeof *netdev_dev);
     netdev_dev->change_seq = 1;
-    netdev_dev_init(&netdev_dev->netdev_dev, name, class);
+    netdev_dev_init(&netdev_dev->up, name, class);
     netdev_dev->tap_fd = -1;
-    *netdev_devp = &netdev_dev->netdev_dev;
+    *netdev_devp = &netdev_dev->up;
 
     return 0;
 }
@@ -390,8 +390,8 @@ netdev_bsd_create_tap(const struct netdev_class *class, const char *name,
 
     /* initialize the device structure and
      * link the structure to its netdev */
-    netdev_dev_init(&netdev_dev->netdev_dev, name, class);
-    *netdev_devp = &netdev_dev->netdev_dev;
+    netdev_dev_init(&netdev_dev->up, name, class);
+    *netdev_devp = &netdev_dev->up;
 
     return 0;
 
@@ -428,19 +428,19 @@ netdev_bsd_open_system(struct netdev_dev *netdev_dev_, struct netdev **netdevp)
 
     /* Allocate network device. */
     netdev = xcalloc(1, sizeof *netdev);
-    netdev_init(&netdev->netdev, netdev_dev_);
+    netdev_init(&netdev->up, netdev_dev_);
 
     /* Verify that the netdev really exists by attempting to read its flags */
-    error = netdev_get_flags(&netdev->netdev, &flags);
+    error = netdev_get_flags(&netdev->up, &flags);
     if (error == ENXIO) {
         goto error;
     }
 
-    *netdevp = &netdev->netdev;
+    *netdevp = &netdev->up;
     return 0;
 
 error:
-    netdev_uninit(&netdev->netdev, true);
+    netdev_uninit(&netdev->up, true);
     return error;
 }
 

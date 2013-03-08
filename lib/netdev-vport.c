@@ -47,7 +47,7 @@ VLOG_DEFINE_THIS_MODULE(netdev_vport);
 #define DEFAULT_TTL 64
 
 struct netdev_dev_vport {
-    struct netdev_dev netdev_dev;
+    struct netdev_dev up;
     unsigned int change_seq;
     uint8_t etheraddr[ETH_ADDR_LEN];
     struct netdev_stats stats;
@@ -87,7 +87,7 @@ static struct netdev_dev_vport *
 netdev_dev_vport_cast(const struct netdev_dev *netdev_dev)
 {
     ovs_assert(is_vport_class(netdev_dev_get_class(netdev_dev)));
-    return CONTAINER_OF(netdev_dev, struct netdev_dev_vport, netdev_dev);
+    return CONTAINER_OF(netdev_dev, struct netdev_dev_vport, up);
 }
 
 static struct netdev_dev_vport *
@@ -159,11 +159,11 @@ netdev_vport_create(const struct netdev_class *netdev_class, const char *name,
     struct netdev_dev_vport *dev;
 
     dev = xzalloc(sizeof *dev);
-    netdev_dev_init(&dev->netdev_dev, name, netdev_class);
+    netdev_dev_init(&dev->up, name, netdev_class);
     dev->change_seq = 1;
     eth_addr_random(dev->etheraddr);
 
-    *netdev_devp = &dev->netdev_dev;
+    *netdev_devp = &dev->up;
     route_table_register();
 
     return 0;

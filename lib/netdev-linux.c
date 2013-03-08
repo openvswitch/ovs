@@ -355,7 +355,7 @@ static void tc_put_rtab(struct ofpbuf *, uint16_t type,
 static int tc_calc_buffer(unsigned int Bps, int mtu, uint64_t burst_bytes);
 
 struct netdev_dev_linux {
-    struct netdev_dev netdev_dev;
+    struct netdev_dev up;
 
     struct shash_node *shash_node;
     unsigned int cache_valid;
@@ -398,7 +398,7 @@ struct netdev_dev_linux {
 };
 
 struct netdev_linux {
-    struct netdev netdev;
+    struct netdev up;
 };
 
 struct netdev_rx_linux {
@@ -460,7 +460,7 @@ netdev_dev_linux_cast(const struct netdev_dev *netdev_dev)
     const struct netdev_class *netdev_class = netdev_dev_get_class(netdev_dev);
     ovs_assert(is_netdev_linux_class(netdev_class));
 
-    return CONTAINER_OF(netdev_dev, struct netdev_dev_linux, netdev_dev);
+    return CONTAINER_OF(netdev_dev, struct netdev_dev_linux, up);
 }
 
 static struct netdev_linux *
@@ -470,7 +470,7 @@ netdev_linux_cast(const struct netdev *netdev)
     const struct netdev_class *netdev_class = netdev_dev_get_class(netdev_dev);
     ovs_assert(is_netdev_linux_class(netdev_class));
 
-    return CONTAINER_OF(netdev, struct netdev_linux, netdev);
+    return CONTAINER_OF(netdev, struct netdev_linux, up);
 }
 
 static struct netdev_rx_linux *
@@ -593,7 +593,7 @@ netdev_linux_cache_cb(const struct rtnetlink_link_change *change,
 
             dev = node->data;
 
-            get_flags(&dev->netdev_dev, &flags);
+            get_flags(&dev->up, &flags);
             netdev_dev_linux_changed(dev, flags, 0);
         }
         shash_destroy(&device_shash);
@@ -644,10 +644,10 @@ netdev_linux_create(const struct netdev_class *class, const char *name,
 
     netdev_dev = xzalloc(sizeof *netdev_dev);
     netdev_dev->change_seq = 1;
-    netdev_dev_init(&netdev_dev->netdev_dev, name, class);
-    get_flags(&netdev_dev->netdev_dev, &netdev_dev->ifi_flags);
+    netdev_dev_init(&netdev_dev->up, name, class);
+    get_flags(&netdev_dev->up, &netdev_dev->ifi_flags);
 
-    *netdev_devp = &netdev_dev->netdev_dev;
+    *netdev_devp = &netdev_dev->up;
     return 0;
 }
 
@@ -699,8 +699,8 @@ netdev_linux_create_tap(const struct netdev_class *class OVS_UNUSED,
         goto error_unref_notifier;
     }
 
-    netdev_dev_init(&netdev_dev->netdev_dev, name, &netdev_tap_class);
-    *netdev_devp = &netdev_dev->netdev_dev;
+    netdev_dev_init(&netdev_dev->up, name, &netdev_tap_class);
+    *netdev_devp = &netdev_dev->up;
     return 0;
 
 error_unref_notifier:
@@ -748,7 +748,7 @@ netdev_linux_open(struct netdev_dev *netdev_dev_, struct netdev **netdevp)
 
     /* Allocate network device. */
     netdev = xzalloc(sizeof *netdev);
-    netdev_init(&netdev->netdev, netdev_dev_);
+    netdev_init(&netdev->up, netdev_dev_);
 
     /* Verify that the device really exists, by attempting to read its flags.
      * (The flags might be cached, in which case this won't actually do an
@@ -759,17 +759,17 @@ netdev_linux_open(struct netdev_dev *netdev_dev_, struct netdev **netdevp)
      * creating them in the kernel happens by passing a netdev object to
      * dpif_port_add(). */
     if (netdev_dev_get_class(netdev_dev_) != &netdev_internal_class) {
-        error = netdev_get_flags(&netdev->netdev, &flags);
+        error = netdev_get_flags(&netdev->up, &flags);
         if (error == ENODEV) {
             goto error;
         }
     }
 
-    *netdevp = &netdev->netdev;
+    *netdevp = &netdev->up;
     return 0;
 
 error:
-    netdev_uninit(&netdev->netdev, true);
+    netdev_uninit(&netdev->up, true);
     return error;
 }
 
@@ -814,7 +814,7 @@ netdev_linux_rx_open(struct netdev *netdev_, struct netdev_rx **rxp)
         }
 
         /* Get ethernet device index. */
-        error = get_ifindex(&netdev->netdev, &ifindex);
+        error = get_ifindex(&netdev->up, &ifindex);
         if (error) {
             goto error;
         }
@@ -1257,7 +1257,7 @@ netdev_linux_miimon_run(void)
             continue;
         }
 
-        netdev_linux_get_miimon(dev->netdev_dev.name, &miimon);
+        netdev_linux_get_miimon(dev->up.name, &miimon);
         if (miimon != dev->miimon) {
             dev->miimon = miimon;
             netdev_dev_linux_changed(dev, dev->ifi_flags, 0);
@@ -1590,7 +1590,7 @@ netdev_linux_read_features(struct netdev_dev_linux *netdev_dev)
 
     COVERAGE_INC(netdev_get_ethtool);
     memset(&ecmd, 0, sizeof ecmd);
-    error = netdev_linux_do_ethtool(netdev_dev->netdev_dev.name, &ecmd,
+    error = netdev_linux_do_ethtool(netdev_dev->up.name, &ecmd,
                                     ETHTOOL_GSET, "ETHTOOL_GSET");
     if (error) {
         goto out;
@@ -2377,7 +2377,7 @@ netdev_linux_get_status(const struct netdev *netdev, struct smap *smap)
 
         COVERAGE_INC(netdev_get_ethtool);
         memset(&netdev_dev->drvinfo, 0, sizeof netdev_dev->drvinfo);
-        error = netdev_linux_do_ethtool(netdev_dev->netdev_dev.name,
+        error = netdev_linux_do_ethtool(netdev_dev->up.name,
                                         cmd,
                                         ETHTOOL_GDRVINFO,
                                         "ETHTOOL_GDRVINFO");
@@ -2474,7 +2474,7 @@ netdev_linux_update_flags(struct netdev_dev *dev_, enum netdev_flags off,
     new_flags = (old_flags & ~nd_to_iff_flags(off)) | nd_to_iff_flags(on);
     if (new_flags != old_flags) {
         error = set_flags(netdev_dev_get_name(dev_), new_flags);
-        get_flags(&netdev_dev->netdev_dev, &netdev_dev->ifi_flags);
+        get_flags(&netdev_dev->up, &netdev_dev->ifi_flags);
     }
     return error;
 }
