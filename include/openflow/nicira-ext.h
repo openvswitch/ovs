@@ -116,12 +116,14 @@ enum nx_hash_fields {
 /* This command enables or disables an Open vSwitch extension that allows a
  * controller to specify the OpenFlow table to which a flow should be added,
  * instead of having the switch decide which table is most appropriate as
- * required by OpenFlow 1.0.  By default, the extension is disabled.
+ * required by OpenFlow 1.0.  Because NXM was designed as an extension to
+ * OpenFlow 1.0, the extension applies equally to ofp10_flow_mod and
+ * nx_flow_mod.  By default, the extension is disabled.
  *
  * When this feature is enabled, Open vSwitch treats struct ofp10_flow_mod's
- * 16-bit 'command' member as two separate fields.  The upper 8 bits are used
- * as the table ID, the lower 8 bits specify the command as usual.  A table ID
- * of 0xff is treated like a wildcarded table ID.
+ * and struct nx_flow_mod's 16-bit 'command' member as two separate fields.
+ * The upper 8 bits are used as the table ID, the lower 8 bits specify the
+ * command as usual.  A table ID of 0xff is treated like a wildcarded table ID.
  *
  * The specific treatment of the table ID depends on the type of flow mod:
  *
@@ -1766,7 +1768,8 @@ OFP_ASSERT(sizeof(struct nx_set_flow_format) == 4);
  */
 struct nx_flow_mod {
     ovs_be64 cookie;              /* Opaque controller-issued identifier. */
-    ovs_be16 command;             /* One of OFPFC_*. */
+    ovs_be16 command;             /* OFPFC_* + possibly a table ID (see comment
+                                   * on struct nx_flow_mod_table_id). */
     ovs_be16 idle_timeout;        /* Idle time before discarding (seconds). */
     ovs_be16 hard_timeout;        /* Max time before discarding (seconds). */
     ovs_be16 priority;            /* Priority level of flow entry. */
