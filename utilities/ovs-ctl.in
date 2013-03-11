@@ -157,7 +157,7 @@ set_system_ids () {
 
 check_force_cores () {
     if test X"$FORCE_COREFILES" = Xyes; then
-        ulimit -Sc 67108864
+        ulimit -c 67108864
     fi
 }
 
