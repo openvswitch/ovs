@@ -2,7 +2,6 @@ post-v1.10.0
 ---------------------
     - Stable bond mode has been removed.
     - The autopath action has been removed.
-    - CAPWAP tunneling support removed.
     - New support for the data encapsulation format of the LISP tunnel
       protocol (RFC 6830).  An external control plane or manual flow
       setup is required for EID-to-RLOC mapping.
@@ -44,6 +43,8 @@ v1.10.0 - xx xxx xxxx
       - Inheritance of the Don't Fragment bit in IP tunnels (df_inherit)
         is no longer supported.
       - Path MTU discovery is no longer supported.
+      - CAPWAP tunneling support removed.
+      - Tunnels with multicast destination ports are no longer supported.
     - ovs-dpctl:
       - The "dump-flows" and "del-flows" no longer require an argument
         if only one datapath exists.
