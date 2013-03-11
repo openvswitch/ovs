@@ -29,6 +29,8 @@ v1.10.0 - xx xxx xxxx
       - Inheritance of the Don't Fragment bit in IP tunnels (df_inherit)
         is no longer supported.
       - Path MTU discovery is no longer supported.
+      - CAPWAP tunneling support removed.
+      - Tunnels with multicast destination ports are no longer supported.
     - ovs-dpctl:
       - The "dump-flows" and "del-flows" no longer require an argument
         if only one datapath exists.
