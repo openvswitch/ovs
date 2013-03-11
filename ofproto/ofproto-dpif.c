@@ -5786,7 +5786,6 @@ compose_output_action__(struct action_xlate_ctx *ctx, uint16_t ofp_port,
         ctx->flow.nw_tos |= pdscp->dscp;
     }
 
-    odp_port = ofp_port_to_odp_port(ctx->ofproto, ofp_port);
     if (ofport->tnl_port) {
         odp_port = tnl_port_send(ofport->tnl_port, &ctx->flow);
         if (odp_port == OVSP_NONE) {
@@ -5801,6 +5800,7 @@ compose_output_action__(struct action_xlate_ctx *ctx, uint16_t ofp_port,
         commit_odp_tunnel_action(&ctx->flow, &ctx->base_flow,
                                  ctx->odp_actions);
     } else {
+        odp_port = ofport->odp_port;
         out_port = vsp_realdev_to_vlandev(ctx->ofproto, odp_port,
                                           ctx->flow.vlan_tci);
         if (out_port != odp_port) {
