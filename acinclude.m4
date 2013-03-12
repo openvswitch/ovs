@@ -215,6 +215,10 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
 
   OVS_GREP_IFELSE([$KSRC/include/linux/err.h], [ERR_CAST])
 
+  OVS_GREP_IFELSE([$KSRC/include/linux/etherdevice.h], [eth_hw_addr_random])
+
+  OVS_GREP_IFELSE([$KSRC/include/linux/if_vlan.h], [vlan_set_encap_proto])
+
   OVS_GREP_IFELSE([$KSRC/include/linux/in.h], [ipv4_is_multicast])
 
   OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [dev_disable_lro])
@@ -249,6 +253,7 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
                   [OVS_DEFINE([HAVE_SKB_WARN_LRO])])
   OVS_GREP_IFELSE([$KSRC/include/linux/skbuff.h], [consume_skb])
   OVS_GREP_IFELSE([$KSRC/include/linux/skbuff.h], [skb_frag_page])
+  OVS_GREP_IFELSE([$KSRC/include/linux/skbuff.h], [skb_reset_mac_len])
 
   OVS_GREP_IFELSE([$KSRC/include/linux/string.h], [kmemdup], [],
                   [OVS_GREP_IFELSE([$KSRC/include/linux/slab.h], [kmemdup])])
