@@ -532,7 +532,7 @@ static int do_execute_actions(struct datapath *dp, struct sk_buff *skb,
 
 /* We limit the number of times that we pass into execute_actions()
  * to avoid blowing out the stack in the event that we have a loop. */
-#define MAX_LOOPS 5
+#define MAX_LOOPS 4
 
 struct loop_counter {
 	u8 count;		/* Count. */
