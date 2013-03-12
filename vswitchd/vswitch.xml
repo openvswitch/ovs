@@ -1131,6 +1131,10 @@
         on a host.
       </column>
 
+      <column name="mac_in_use">
+        The MAC address in use by this interface.
+      </column>
+
       <column name="mac">
         <p>Ethernet address to set for this interface.  If unset then the
         default MAC address is used:</p>
