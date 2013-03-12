@@ -346,6 +346,7 @@ bridge_init(const char *remote)
     ovsdb_idl_omit_alert(idl, &ovsrec_interface_col_link_speed);
     ovsdb_idl_omit_alert(idl, &ovsrec_interface_col_link_state);
     ovsdb_idl_omit_alert(idl, &ovsrec_interface_col_link_resets);
+    ovsdb_idl_omit_alert(idl, &ovsrec_interface_col_mac_in_use);
     ovsdb_idl_omit_alert(idl, &ovsrec_interface_col_mtu);
     ovsdb_idl_omit_alert(idl, &ovsrec_interface_col_ofport);
     ovsdb_idl_omit_alert(idl, &ovsrec_interface_col_statistics);
@@ -1703,6 +1704,7 @@ iface_refresh_status(struct iface *iface)
     int64_t bps;
     int mtu;
     int64_t mtu_64;
+    uint8_t mac[ETH_ADDR_LEN];
     int error;
 
     if (iface_is_synthetic(iface)) {
@@ -1739,6 +1741,16 @@ iface_refresh_status(struct iface *iface)
     }
     else {
         ovsrec_interface_set_mtu(iface->cfg, NULL, 0);
+    }
+
+    error = netdev_get_etheraddr(iface->netdev, mac);
+    if (!error) {
+        char mac_string[32];
+
+        sprintf(mac_string, ETH_ADDR_FMT, ETH_ADDR_ARGS(mac));
+        ovsrec_interface_set_mac_in_use(iface->cfg, mac_string);
+    } else {
+        ovsrec_interface_set_mac_in_use(iface->cfg, NULL);
     }
 }
 
@@ -3357,6 +3369,7 @@ iface_clear_db_record(const struct ovsrec_interface *if_cfg)
         ovsrec_interface_set_duplex(if_cfg, NULL);
         ovsrec_interface_set_link_speed(if_cfg, NULL, 0);
         ovsrec_interface_set_link_state(if_cfg, NULL);
+        ovsrec_interface_set_mac_in_use(if_cfg, NULL);
         ovsrec_interface_set_mtu(if_cfg, NULL, 0);
         ovsrec_interface_set_cfm_fault(if_cfg, NULL, 0);
         ovsrec_interface_set_cfm_fault_status(if_cfg, NULL, 0);
