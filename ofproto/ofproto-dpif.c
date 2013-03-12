@@ -665,6 +665,9 @@ static void drop_key_clear(struct dpif_backer *);
 static struct ofport_dpif *
 odp_port_to_ofport(const struct dpif_backer *, uint32_t odp_port);
 
+static void dpif_stats_update_hit_count(struct ofproto_dpif *ofproto,
+                                        uint64_t delta);
+
 struct ofproto_dpif {
     struct hmap_node all_ofproto_dpifs_node; /* In 'all_ofproto_dpifs'. */
     struct ofproto up;
@@ -714,6 +717,10 @@ struct ofproto_dpif {
     struct sset ghost_ports;       /* Ports with no datapath port. */
     struct sset port_poll_set;     /* Queued names for port_poll() reply. */
     int port_poll_errno;           /* Last errno for port_poll() reply. */
+
+    /* Per ofproto's dpif stats. */
+    uint64_t n_hit;
+    uint64_t n_missed;
 };
 
 /* Defer flow mod completion until "ovs-appctl ofproto/unclog"?  (Useful only
@@ -1290,6 +1297,9 @@ construct(struct ofproto *ofproto_)
     ofproto_init_tables(ofproto_, N_TABLES);
     error = add_internal_flows(ofproto);
     ofproto->up.tables[TBL_INTERNAL].flags = OFTABLE_HIDDEN | OFTABLE_READONLY;
+
+    ofproto->n_hit = 0;
+    ofproto->n_missed = 0;
 
     return error;
 }
@@ -3820,6 +3830,8 @@ handle_miss_upcalls(struct dpif_backer *backer, struct dpif_upcall *upcalls,
         if (error) {
             continue;
         }
+
+        ofproto->n_missed++;
         flow_extract(upcall->packet, flow.skb_priority, flow.skb_mark,
                      &flow.tunnel, flow.in_port, &miss->flow);
 
@@ -4107,6 +4119,11 @@ delete_unexpected_flow(struct ofproto_dpif *ofproto,
  * avoided by calling update_stats() whenever rules are created or
  * deleted.  However, the performance impact of making so many calls to the
  * datapath do not justify the benefit of having perfectly accurate statistics.
+ *
+ * In addition, this function maintains per ofproto flow hit counts. The patch
+ * port is not treated specially. e.g. A packet ingress from br0 patched into
+ * br1 will increase the hit count of br0 by 1, however, does not affect
+ * the hit or miss counts of br1.
  */
 static void
 update_stats(struct dpif_backer *backer)
@@ -4138,6 +4155,12 @@ update_stats(struct dpif_backer *backer)
         subfacet = subfacet_find(ofproto, key, key_len, key_hash);
         switch (subfacet ? subfacet->path : SF_NOT_INSTALLED) {
         case SF_FAST_PATH:
+            /* Update ofproto_dpif's hit count. */
+            if (stats->n_packets > subfacet->dp_packet_count) {
+                uint64_t delta = stats->n_packets - subfacet->dp_packet_count;
+                dpif_stats_update_hit_count(ofproto, delta);
+            }
+
             update_subfacet_stats(subfacet, stats);
             break;
 
@@ -8040,19 +8063,14 @@ ofproto_unixctl_dpif_dump_dps(struct unixctl_conn *conn, int argc OVS_UNUSED,
 static void
 show_dp_format(const struct ofproto_dpif *ofproto, struct ds *ds)
 {
-    struct dpif_dp_stats s;
     const struct shash_node **ports;
     int i;
 
-    dpif_get_dp_stats(ofproto->backer->dpif, &s);
-
     ds_put_format(ds, "%s (%s):\n", ofproto->up.name,
                   dpif_name(ofproto->backer->dpif));
-    /* xxx It would be better to show bridge-specific stats instead
-     * xxx of dp ones. */
     ds_put_format(ds,
-                  "\tlookups: hit:%"PRIu64" missed:%"PRIu64" lost:%"PRIu64"\n",
-                  s.n_hit, s.n_missed, s.n_lost);
+                  "\tlookups: hit:%"PRIu64" missed:%"PRIu64"\n",
+                  ofproto->n_hit, ofproto->n_missed);
     ds_put_format(ds, "\tflows: %zu\n",
                   hmap_count(&ofproto->subfacets));
 
@@ -8470,6 +8488,12 @@ odp_port_to_ofp_port(const struct ofproto_dpif *ofproto, uint32_t odp_port)
     } else {
         return OFPP_NONE;
     }
+}
+
+static void
+dpif_stats_update_hit_count(struct ofproto_dpif *ofproto, uint64_t delta)
+{
+    ofproto->n_hit += delta;
 }
 
 const struct ofproto_class ofproto_dpif_class = {
