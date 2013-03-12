@@ -1730,8 +1730,7 @@ iface_refresh_status(struct iface *iface)
     if (!error) {
         mtu_64 = mtu;
         ovsrec_interface_set_mtu(iface->cfg, &mtu_64, 1);
-    }
-    else {
+    } else {
         ovsrec_interface_set_mtu(iface->cfg, NULL, 0);
     }
 }
