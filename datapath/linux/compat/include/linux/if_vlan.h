@@ -55,7 +55,7 @@ static inline struct sk_buff *__vlan_put_tag(struct sk_buff *skb, u16 vlan_tci)
 #define VLAN_TAG_PRESENT	VLAN_CFI_MASK
 #endif
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,3,0)
+#ifndef HAVE_VLAN_SET_ENCAP_PROTO
 static inline void vlan_set_encap_proto(struct sk_buff *skb, struct vlan_hdr *vhdr)
 {
 	__be16 proto;
