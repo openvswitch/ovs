@@ -37,6 +37,11 @@ else
     dbdir='@DBDIR@'
 fi
 
+ovs_ctl () {
+    echo "`date -u`:$@" >> "${logdir}/ovs-ctl.log"
+    "${datadir}/scripts/ovs-ctl" "$@" 2>&1 | tee -a "${logdir}/ovs-ctl.log"
+}
+
 VERSION='@VERSION@'
 
 DAEMON_CWD=/
