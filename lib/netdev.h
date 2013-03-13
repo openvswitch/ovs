@@ -114,8 +114,6 @@ void netdev_enumerate_types(struct sset *types);
 int netdev_open(const char *name, const char *type, struct netdev **);
 void netdev_close(struct netdev *);
 
-bool netdev_is_open(const char *name);
-
 void netdev_parse_name(const char *netdev_name, char **name, char **type);
 
 /* Options. */
