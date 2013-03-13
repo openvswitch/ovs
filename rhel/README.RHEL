@@ -42,10 +42,14 @@ assignments.  The following OVS-specific variable names are supported:
 Note
 ----
 
-"ifdown" on a bridge will not bring individual ports on the bridge
+* "ifdown" on a bridge will not bring individual ports on the bridge
 down.  "ifup" on a bridge will not add ports to the bridge.  This
 behavior should be compatible with standard bridges (with
 TYPE=Bridge).
+
+* If 'ifup' on an interface is called multiple times, one can see
+"RTNETLINK answers: File exists" printed on the console. This comes from
+ifup-eth trying to add zeroconf route multiple times and is harmless.
 
 Examples
 --------
