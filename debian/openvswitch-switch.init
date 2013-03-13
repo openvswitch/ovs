@@ -37,11 +37,6 @@ network_interfaces () {
     [ -n "${bridges}" ] && $1 --allow=ovs ${bridges}
 }
 
-ovs_ctl () {
-    set /usr/share/openvswitch/scripts/ovs-ctl "$@"
-    "$@"
-}
-
 load_kmod () {
     ovs_ctl load-kmod || exit $?
 }
