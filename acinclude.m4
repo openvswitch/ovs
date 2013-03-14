@@ -1,6 +1,6 @@
 # -*- autoconf -*-
 
-# Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira, Inc.
+# Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -295,6 +295,8 @@ AC_DEFUN([OVS_CHECK_IF_PACKET],
    fi])
 
 dnl Checks for net/if_dl.h.
+dnl
+dnl (We use this as a proxy for checking whether we're building on FreeBSD.)
 AC_DEFUN([OVS_CHECK_IF_DL],
   [AC_CHECK_HEADER([net/if_dl.h],
                    [HAVE_IF_DL=yes],
@@ -303,6 +305,9 @@ AC_DEFUN([OVS_CHECK_IF_DL],
    if test "$HAVE_IF_DL" = yes; then
       AC_DEFINE([HAVE_IF_DL], [1],
                 [Define to 1 if net/if_dl.h is available.])
+
+      # On FreeBSD we use libpcap to access network devices.
+      AC_SEARCH_LIBS([pcap_open_live], [pcap])
    fi])
 
 dnl Checks for buggy strtok_r.
