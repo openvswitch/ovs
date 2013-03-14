@@ -37,9 +37,6 @@
 
 VLOG_DEFINE_THIS_MODULE(tunnel);
 
-/* skb mark used for IPsec tunnel packets */
-#define IPSEC_MARK 1
-
 struct tnl_match {
     ovs_be64 in_key;
     ovs_be32 ip_src;

@@ -5811,6 +5811,7 @@ compose_output_action__(struct action_xlate_ctx *ctx, uint16_t ofp_port,
         if (out_port != odp_port) {
             ctx->flow.vlan_tci = htons(0);
         }
+        ctx->flow.skb_mark &= ~IPSEC_MARK;
     }
     commit_odp_actions(&ctx->flow, &ctx->base_flow, ctx->odp_actions);
     nl_msg_put_u32(ctx->odp_actions, OVS_ACTION_ATTR_OUTPUT, out_port);

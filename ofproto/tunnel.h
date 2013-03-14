@@ -20,6 +20,9 @@
 #include <stdint.h>
 #include "flow.h"
 
+/* skb mark used for IPsec tunnel packets */
+#define IPSEC_MARK 1
+
 /* Tunnel port emulation layer.
  *
  * These functions emulate tunnel virtual ports based on the outer
