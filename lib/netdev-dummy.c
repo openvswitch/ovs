@@ -42,8 +42,8 @@ VLOG_DEFINE_THIS_MODULE(netdev_dummy);
 #define FREE_BSD 0
 #endif
 
-struct netdev_dev_dummy {
-    struct netdev_dev up;
+struct netdev_dummy {
+    struct netdev up;
     uint8_t hwaddr[ETH_ADDR_LEN];
     int mtu;
     struct netdev_stats stats;
@@ -54,28 +54,20 @@ struct netdev_dev_dummy {
     struct list rxes;           /* List of child "netdev_rx_dummy"s. */
 };
 
-struct netdev_dummy {
-    struct netdev up;
-};
-
 struct netdev_rx_dummy {
     struct netdev_rx up;
-    struct list node;           /* In netdev_dev_dummy's "rxes" list. */
+    struct list node;           /* In netdev_dummy's "rxes" list. */
     struct list recv_queue;
 };
 
-static struct shash dummy_netdev_devs = SHASH_INITIALIZER(&dummy_netdev_devs);
+static struct shash dummy_netdevs = SHASH_INITIALIZER(&dummy_netdevs);
 
 static const struct netdev_rx_class netdev_rx_dummy_class;
 
 static unixctl_cb_func netdev_dummy_set_admin_state;
 static int netdev_dummy_create(const struct netdev_class *, const char *,
-                               struct netdev_dev **);
-static void netdev_dev_dummy_poll_notify(struct netdev_dev_dummy *);
-static int netdev_dev_dummy_update_flags(struct netdev_dev_dummy *,
-                                         enum netdev_flags off,
-                                         enum netdev_flags on,
-                                         enum netdev_flags *old_flagsp);
+                               struct netdev **);
+static void netdev_dummy_poll_notify(struct netdev_dummy *);
 
 static bool
 is_dummy_class(const struct netdev_class *class)
@@ -83,18 +75,10 @@ is_dummy_class(const struct netdev_class *class)
     return class->create == netdev_dummy_create;
 }
 
-static struct netdev_dev_dummy *
-netdev_dev_dummy_cast(const struct netdev_dev *netdev_dev)
-{
-    ovs_assert(is_dummy_class(netdev_dev_get_class(netdev_dev)));
-    return CONTAINER_OF(netdev_dev, struct netdev_dev_dummy, up);
-}
-
 static struct netdev_dummy *
 netdev_dummy_cast(const struct netdev *netdev)
 {
-    struct netdev_dev *netdev_dev = netdev_get_dev(netdev);
-    ovs_assert(is_dummy_class(netdev_dev_get_class(netdev_dev)));
+    ovs_assert(is_dummy_class(netdev_get_class(netdev)));
     return CONTAINER_OF(netdev, struct netdev_dummy, up);
 }
 
@@ -107,94 +91,73 @@ netdev_rx_dummy_cast(const struct netdev_rx *rx)
 
 static int
 netdev_dummy_create(const struct netdev_class *class, const char *name,
-                    struct netdev_dev **netdev_devp)
+                    struct netdev **netdevp)
 {
     static unsigned int n = 0xaa550000;
-    struct netdev_dev_dummy *netdev_dev;
+    struct netdev_dummy *netdev;
 
-    netdev_dev = xzalloc(sizeof *netdev_dev);
-    netdev_dev_init(&netdev_dev->up, name, class);
-    netdev_dev->hwaddr[0] = 0xaa;
-    netdev_dev->hwaddr[1] = 0x55;
-    netdev_dev->hwaddr[2] = n >> 24;
-    netdev_dev->hwaddr[3] = n >> 16;
-    netdev_dev->hwaddr[4] = n >> 8;
-    netdev_dev->hwaddr[5] = n;
-    netdev_dev->mtu = 1500;
-    netdev_dev->flags = 0;
-    netdev_dev->change_seq = 1;
-    netdev_dev->ifindex = -EOPNOTSUPP;
-    list_init(&netdev_dev->rxes);
+    netdev = xzalloc(sizeof *netdev);
+    netdev_init(&netdev->up, name, class);
+    netdev->hwaddr[0] = 0xaa;
+    netdev->hwaddr[1] = 0x55;
+    netdev->hwaddr[2] = n >> 24;
+    netdev->hwaddr[3] = n >> 16;
+    netdev->hwaddr[4] = n >> 8;
+    netdev->hwaddr[5] = n;
+    netdev->mtu = 1500;
+    netdev->flags = 0;
+    netdev->change_seq = 1;
+    netdev->ifindex = -EOPNOTSUPP;
+    list_init(&netdev->rxes);
 
-    shash_add(&dummy_netdev_devs, name, netdev_dev);
+    shash_add(&dummy_netdevs, name, netdev);
 
     n++;
 
-    *netdev_devp = &netdev_dev->up;
+    *netdevp = &netdev->up;
 
     return 0;
 }
 
 static void
-netdev_dummy_destroy(struct netdev_dev *netdev_dev_)
+netdev_dummy_destroy(struct netdev *netdev_)
 {
-    struct netdev_dev_dummy *netdev_dev = netdev_dev_dummy_cast(netdev_dev_);
+    struct netdev_dummy *netdev = netdev_dummy_cast(netdev_);
 
-    shash_find_and_delete(&dummy_netdev_devs,
-                          netdev_dev_get_name(netdev_dev_));
-    free(netdev_dev);
+    shash_find_and_delete(&dummy_netdevs,
+                          netdev_get_name(netdev_));
+    free(netdev);
 }
 
 static int
-netdev_dummy_get_config(struct netdev_dev *netdev_dev_, struct smap *args)
+netdev_dummy_get_config(const struct netdev *netdev_, struct smap *args)
 {
-    struct netdev_dev_dummy *netdev_dev = netdev_dev_dummy_cast(netdev_dev_);
+    struct netdev_dummy *netdev = netdev_dummy_cast(netdev_);
 
-    if (netdev_dev->ifindex >= 0) {
-        smap_add_format(args, "ifindex", "%d", netdev_dev->ifindex);
+    if (netdev->ifindex >= 0) {
+        smap_add_format(args, "ifindex", "%d", netdev->ifindex);
     }
     return 0;
 }
 
 static int
-netdev_dummy_set_config(struct netdev_dev *netdev_dev_,
-                        const struct smap *args)
-{
-    struct netdev_dev_dummy *netdev_dev = netdev_dev_dummy_cast(netdev_dev_);
-
-    netdev_dev->ifindex = smap_get_int(args, "ifindex", -EOPNOTSUPP);
-    return 0;
-}
-
-static int
-netdev_dummy_open(struct netdev_dev *netdev_dev_, struct netdev **netdevp)
-{
-    struct netdev_dummy *netdev;
-
-    netdev = xmalloc(sizeof *netdev);
-    netdev_init(&netdev->up, netdev_dev_);
-
-    *netdevp = &netdev->up;
-    return 0;
-}
-
-static void
-netdev_dummy_close(struct netdev *netdev_)
+netdev_dummy_set_config(struct netdev *netdev_, const struct smap *args)
 {
     struct netdev_dummy *netdev = netdev_dummy_cast(netdev_);
-    free(netdev);
+
+    netdev->ifindex = smap_get_int(args, "ifindex", -EOPNOTSUPP);
+    return 0;
 }
 
 static int
 netdev_dummy_rx_open(struct netdev *netdev_, struct netdev_rx **rxp)
 {
-    struct netdev_dev_dummy *dev
-        = netdev_dev_dummy_cast(netdev_get_dev(netdev_));
+    struct netdev_dummy *netdev = netdev_dummy_cast(netdev_);
     struct netdev_rx_dummy *rx;
 
     rx = xmalloc(sizeof *rx);
-    netdev_rx_init(&rx->up, &dev->up, &netdev_rx_dummy_class);
-    list_push_back(&dev->rxes, &rx->node);
+    netdev_rx_init(&rx->up, &netdev->up, &netdev_rx_dummy_class);
+    list_push_back(&netdev->rxes, &rx->node);
     list_init(&rx->recv_queue);
 
     *rxp = &rx->up;
@@ -254,8 +217,7 @@ static int
 netdev_dummy_send(struct netdev *netdev, const void *buffer OVS_UNUSED,
                   size_t size)
 {
-    struct netdev_dev_dummy *dev =
-        netdev_dev_dummy_cast(netdev_get_dev(netdev));
+    struct netdev_dummy *dev = netdev_dummy_cast(netdev);
 
     dev->stats.tx_packets++;
     dev->stats.tx_bytes += size;
@@ -267,12 +229,11 @@ static int
 netdev_dummy_set_etheraddr(struct netdev *netdev,
                            const uint8_t mac[ETH_ADDR_LEN])
 {
-    struct netdev_dev_dummy *dev =
-        netdev_dev_dummy_cast(netdev_get_dev(netdev));
+    struct netdev_dummy *dev = netdev_dummy_cast(netdev);
 
     if (!eth_addr_equals(dev->hwaddr, mac)) {
         memcpy(dev->hwaddr, mac, ETH_ADDR_LEN);
-        netdev_dev_dummy_poll_notify(dev);
+        netdev_dummy_poll_notify(dev);
     }
 
     return 0;
@@ -282,8 +243,7 @@ static int
 netdev_dummy_get_etheraddr(const struct netdev *netdev,
                            uint8_t mac[ETH_ADDR_LEN])
 {
-    const struct netdev_dev_dummy *dev =
-        netdev_dev_dummy_cast(netdev_get_dev(netdev));
+    const struct netdev_dummy *dev = netdev_dummy_cast(netdev);
 
     memcpy(mac, dev->hwaddr, ETH_ADDR_LEN);
     return 0;
@@ -292,8 +252,7 @@ netdev_dummy_get_etheraddr(const struct netdev *netdev,
 static int
 netdev_dummy_get_mtu(const struct netdev *netdev, int *mtup)
 {
-    const struct netdev_dev_dummy *dev =
-        netdev_dev_dummy_cast(netdev_get_dev(netdev));
+    const struct netdev_dummy *dev = netdev_dummy_cast(netdev);
 
     *mtup = dev->mtu;
     return 0;
@@ -302,8 +261,7 @@ netdev_dummy_get_mtu(const struct netdev *netdev, int *mtup)
 static int
 netdev_dummy_set_mtu(const struct netdev *netdev, int mtu)
 {
-    struct netdev_dev_dummy *dev =
-        netdev_dev_dummy_cast(netdev_get_dev(netdev));
+    struct netdev_dummy *dev = netdev_dummy_cast(netdev);
 
     dev->mtu = mtu;
     return 0;
@@ -312,8 +270,7 @@ netdev_dummy_set_mtu(const struct netdev *netdev, int mtu)
 static int
 netdev_dummy_get_stats(const struct netdev *netdev, struct netdev_stats *stats)
 {
-    const struct netdev_dev_dummy *dev =
-        netdev_dev_dummy_cast(netdev_get_dev(netdev));
+    const struct netdev_dummy *dev = netdev_dummy_cast(netdev);
 
     *stats = dev->stats;
     return 0;
@@ -322,8 +279,7 @@ netdev_dummy_get_stats(const struct netdev *netdev, struct netdev_stats *stats)
 static int
 netdev_dummy_set_stats(struct netdev *netdev, const struct netdev_stats *stats)
 {
-    struct netdev_dev_dummy *dev =
-        netdev_dev_dummy_cast(netdev_get_dev(netdev));
+    struct netdev_dummy *dev = netdev_dummy_cast(netdev);
 
     dev->stats = *stats;
     return 0;
@@ -332,36 +288,27 @@ netdev_dummy_set_stats(struct netdev *netdev, const struct netdev_stats *stats)
 static int
 netdev_dummy_get_ifindex(const struct netdev *netdev)
 {
-    struct netdev_dev_dummy *dev =
-        netdev_dev_dummy_cast(netdev_get_dev(netdev));
+    struct netdev_dummy *dev = netdev_dummy_cast(netdev);
 
     return dev->ifindex;
 }
 
 static int
-netdev_dummy_update_flags(struct netdev_dev *dev_,
+netdev_dummy_update_flags(struct netdev *netdev_,
                           enum netdev_flags off, enum netdev_flags on,
                           enum netdev_flags *old_flagsp)
 {
-    struct netdev_dev_dummy *dev = netdev_dev_dummy_cast(dev_);
+    struct netdev_dummy *netdev = netdev_dummy_cast(netdev_);
 
-    return netdev_dev_dummy_update_flags(dev, off, on, old_flagsp);
-}
-
-static int
-netdev_dev_dummy_update_flags(struct netdev_dev_dummy *dev,
-                              enum netdev_flags off, enum netdev_flags on,
-                              enum netdev_flags *old_flagsp)
-{
     if ((off | on) & ~(NETDEV_UP | NETDEV_PROMISC)) {
         return EINVAL;
     }
 
-    *old_flagsp = dev->flags;
-    dev->flags |= on;
-    dev->flags &= ~off;
-    if (*old_flagsp != dev->flags) {
-        netdev_dev_dummy_poll_notify(dev);
+    *old_flagsp = netdev->flags;
+    netdev->flags |= on;
+    netdev->flags &= ~off;
+    if (*old_flagsp != netdev->flags) {
+        netdev_dummy_poll_notify(netdev);
     }
     return 0;
 }
@@ -369,13 +316,13 @@ netdev_dev_dummy_update_flags(struct netdev_dev_dummy *dev,
 static unsigned int
 netdev_dummy_change_seq(const struct netdev *netdev)
 {
-    return netdev_dev_dummy_cast(netdev_get_dev(netdev))->change_seq;
+    return netdev_dummy_cast(netdev)->change_seq;
 }
 
 /* Helper functions. */
 
 static void
-netdev_dev_dummy_poll_notify(struct netdev_dev_dummy *dev)
+netdev_dummy_poll_notify(struct netdev_dummy *dev)
 {
     dev->change_seq++;
     if (!dev->change_seq) {
@@ -394,9 +341,6 @@ static const struct netdev_class dummy_class = {
     netdev_dummy_get_config,
     netdev_dummy_set_config,
     NULL,                       /* get_tunnel_config */
-
-    netdev_dummy_open,
-    netdev_dummy_close,
 
     netdev_dummy_rx_open,
 
@@ -493,11 +437,11 @@ static void
 netdev_dummy_receive(struct unixctl_conn *conn,
                      int argc, const char *argv[], void *aux OVS_UNUSED)
 {
-    struct netdev_dev_dummy *dummy_dev;
+    struct netdev_dummy *dummy_dev;
     int n_listeners;
     int i;
 
-    dummy_dev = shash_find_data(&dummy_netdev_devs, argv[1]);
+    dummy_dev = shash_find_data(&dummy_netdevs, argv[1]);
     if (!dummy_dev) {
         unixctl_command_reply_error(conn, "no such dummy netdev");
         return;
@@ -534,15 +478,14 @@ netdev_dummy_receive(struct unixctl_conn *conn,
 }
 
 static void
-netdev_dev_dummy_set_admin_state(struct netdev_dev_dummy *dev,
-                                 bool admin_state)
+netdev_dummy_set_admin_state__(struct netdev_dummy *dev, bool admin_state)
 {
     enum netdev_flags old_flags;
 
     if (admin_state) {
-        netdev_dev_dummy_update_flags(dev, 0, NETDEV_UP, &old_flags);
+        netdev_dummy_update_flags(&dev->up, 0, NETDEV_UP, &old_flags);
     } else {
-        netdev_dev_dummy_update_flags(dev, NETDEV_UP, 0, &old_flags);
+        netdev_dummy_update_flags(&dev->up, NETDEV_UP, 0, &old_flags);
     }
 }
 
@@ -562,11 +505,11 @@ netdev_dummy_set_admin_state(struct unixctl_conn *conn, int argc,
     }
 
     if (argc > 2) {
-        struct netdev_dev_dummy *dummy_dev;
+        struct netdev_dummy *dummy_dev;
 
-        dummy_dev  = shash_find_data(&dummy_netdev_devs, argv[1]);
+        dummy_dev = shash_find_data(&dummy_netdevs, argv[1]);
         if (dummy_dev) {
-            netdev_dev_dummy_set_admin_state(dummy_dev, up);
+            netdev_dummy_set_admin_state__(dummy_dev, up);
         } else {
             unixctl_command_reply_error(conn, "Unknown Dummy Interface");
             return;
@@ -574,8 +517,8 @@ netdev_dummy_set_admin_state(struct unixctl_conn *conn, int argc,
     } else {
         struct shash_node *node;
 
-        SHASH_FOR_EACH (node, &dummy_netdev_devs) {
-            netdev_dev_dummy_set_admin_state(node->data, up);
+        SHASH_FOR_EACH (node, &dummy_netdevs) {
+            netdev_dummy_set_admin_state__(node->data, up);
         }
     }
     unixctl_command_reply(conn, "OK");

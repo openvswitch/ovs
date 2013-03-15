@@ -30,9 +30,8 @@ extern "C" {
 
 /* A network device (e.g. an Ethernet device).
  *
- * This structure should be treated as opaque by network device
- * implementations. */
-struct netdev_dev {
+ * Network device implementations should treat this structure as opaque. */
+struct netdev {
     char *name;                         /* Name of network device. */
     const struct netdev_class *netdev_class; /* Functions to control
                                                 this device. */
@@ -41,39 +40,20 @@ struct netdev_dev {
     struct list saved_flags_list; /* Contains "struct netdev_saved_flags". */
 };
 
-void netdev_dev_init(struct netdev_dev *, const char *name,
-                     const struct netdev_class *);
-void netdev_dev_uninit(struct netdev_dev *, bool destroy);
-const char *netdev_dev_get_type(const struct netdev_dev *);
-const struct netdev_class *netdev_dev_get_class(const struct netdev_dev *);
-const char *netdev_dev_get_name(const struct netdev_dev *);
-struct netdev_dev *netdev_dev_from_name(const char *name);
-void netdev_dev_get_devices(const struct netdev_class *,
-                            struct shash *device_list);
-
-static inline void netdev_dev_assert_class(const struct netdev_dev *netdev_dev,
-                                           const struct netdev_class *class_)
-{
-    ovs_assert(netdev_dev->netdev_class == class_);
-}
-
-/* A instance of an open network device.
- *
- * This structure should be treated as opaque by network device
- * implementations. */
-struct netdev {
-    struct netdev_dev *netdev_dev;   /* Parent netdev_dev. */
-    struct list node;                /* Element in global list. */
-};
-
-void netdev_init(struct netdev *, struct netdev_dev *);
-void netdev_uninit(struct netdev *, bool close);
-struct netdev_dev *netdev_get_dev(const struct netdev *);
+void netdev_init(struct netdev *, const char *name,
+                 const struct netdev_class *);
+void netdev_uninit(struct netdev *, bool destroy);
+const char *netdev_get_type(const struct netdev *);
+const struct netdev_class *netdev_get_class(const struct netdev *);
+const char *netdev_get_name(const struct netdev *);
+struct netdev *netdev_from_name(const char *name);
+void netdev_get_devices(const struct netdev_class *,
+                        struct shash *device_list);
 
 static inline void netdev_assert_class(const struct netdev *netdev,
-                                       const struct netdev_class *netdev_class)
+                                           const struct netdev_class *class_)
 {
-    netdev_dev_assert_class(netdev_get_dev(netdev), netdev_class);
+    ovs_assert(netdev->netdev_class == class_);
 }
 
 /* Network device class structure, to be defined by each implementation of a
@@ -110,44 +90,37 @@ struct netdev_class {
     void (*wait)(void);
 
     /* Attempts to create a network device named 'name' in 'netdev_class'.  On
-     * success sets 'netdev_devp' to the newly created device. */
+     * success sets 'netdevp' to the newly created device. */
     int (*create)(const struct netdev_class *netdev_class, const char *name,
-                  struct netdev_dev **netdev_devp);
+                  struct netdev **netdevp);
 
-    /* Destroys 'netdev_dev'.
+    /* Destroys 'netdev'.
      *
      * Netdev devices maintain a reference count that is incremented on
-     * netdev_open() and decremented on netdev_close().  If 'netdev_dev'
+     * netdev_open() and decremented on netdev_close().  If 'netdev'
      * has a non-zero reference count, then this function will not be
      * called. */
-    void (*destroy)(struct netdev_dev *netdev_dev);
+    void (*destroy)(struct netdev *netdev);
 
-    /* Fetches the device 'netdev_dev''s configuration, storing it in 'args'.
+    /* Fetches the device 'netdev''s configuration, storing it in 'args'.
      * The caller owns 'args' and pre-initializes it to an empty smap.
      *
      * If this netdev class does not have any configuration options, this may
      * be a null pointer. */
-    int (*get_config)(struct netdev_dev *netdev_dev, struct smap *args);
+    int (*get_config)(const struct netdev *netdev, struct smap *args);
 
-    /* Changes the device 'netdev_dev''s configuration to 'args'.
+    /* Changes the device 'netdev''s configuration to 'args'.
      *
      * If this netdev class does not support configuration, this may be a null
      * pointer. */
-    int (*set_config)(struct netdev_dev *netdev_dev, const struct smap *args);
+    int (*set_config)(struct netdev *netdev, const struct smap *args);
 
-    /* Returns the tunnel configuration of 'netdev_dev'.  If 'netdev_dev' is
+    /* Returns the tunnel configuration of 'netdev'.  If 'netdev' is
      * not a tunnel, returns null.
      *
      * If this function would always return null, it may be null instead. */
     const struct netdev_tunnel_config *
-        (*get_tunnel_config)(const struct netdev_dev *netdev_dev);
-
-    /* Attempts to open a network device.  On success, sets 'netdevp'
-     * to the new network device. */
-    int (*open)(struct netdev_dev *netdev_dev, struct netdev **netdevp);
-
-    /* Closes 'netdev'. */
-    void (*close)(struct netdev *netdev);
+        (*get_tunnel_config)(const struct netdev *netdev);
 
     /* Attempts to open a netdev_rx for receiving packets from 'netdev'.
      * Returns 0 if successful, otherwise a positive errno value.  Returns
@@ -531,14 +504,14 @@ struct netdev_class {
     int (*arp_lookup)(const struct netdev *netdev, ovs_be32 ip,
                       uint8_t mac[6]);
 
-    /* Retrieves the current set of flags on 'dev' into '*old_flags'.  Then,
+    /* Retrieves the current set of flags on 'netdev' into '*old_flags'.  Then,
      * turns off the flags that are set to 1 in 'off' and turns on the flags
      * that are set to 1 in 'on'.  (No bit will be set to 1 in both 'off' and
      * 'on'; that is, off & on == 0.)
      *
      * This function may be invoked from a signal handler.  Therefore, it
      * should not do anything that is not signal-safe (such as logging). */
-    int (*update_flags)(struct netdev_dev *dev, enum netdev_flags off,
+    int (*update_flags)(struct netdev *netdev, enum netdev_flags off,
                         enum netdev_flags on, enum netdev_flags *old_flags);
 
     /* Returns a sequence number which indicates changes in one of 'netdev''s
@@ -559,13 +532,13 @@ struct netdev_class {
  * implementations. */
 struct netdev_rx {
     const struct netdev_rx_class *rx_class;
-    struct netdev_dev *netdev_dev;
+    struct netdev *netdev;
 };
 
-void netdev_rx_init(struct netdev_rx *, struct netdev_dev *,
+void netdev_rx_init(struct netdev_rx *, struct netdev *,
                     const struct netdev_rx_class *);
 void netdev_rx_uninit(struct netdev_rx *);
-struct netdev_dev *netdev_rx_get_dev(const struct netdev_rx *);
+struct netdev *netdev_rx_get_netdev(const struct netdev_rx *);
 
 struct netdev_rx_class {
     /* Destroys 'rx'. */

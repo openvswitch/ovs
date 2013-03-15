@@ -55,33 +55,6 @@
 VLOG_DEFINE_THIS_MODULE(netdev_bsd);
 
 
-/*
- * This file implements objects to access interfaces.
- * Externally, interfaces are represented by three structures:
- *   + struct netdev_dev, representing a network device,
- *     containing e.g. name and a refcount;
- *     We can have private variables by embedding the
- *     struct netdev_dev into our own structure
- *     (e.g. netdev_dev_bsd)
- *
- *   + struct netdev, representing an instance of an open netdev_dev.
- *     The structure contains a pointer to the 'struct netdev'
- *     representing the device.
- *
- *   + struct netdev_rx, which represents a netdev open to capture received
- *     packets.  Again, private information such as file descriptor etc. are
- *     stored in our own struct netdev_rx_bsd which includes a struct
- *     netdev_rx.
- *
- * 'struct netdev', 'struct netdev_dev', and 'struct netdev_rx' are referenced
- * in containers which hold pointers to the data structures.  We can reach our
- * own struct netdev_XXX_bsd by putting a struct netdev_XXX within our own
- * struct, and using CONTAINER_OF to access the parent structure.
- */
-struct netdev_bsd {
-    struct netdev up;
-};
-
 struct netdev_rx_bsd {
     struct netdev_rx up;
 
@@ -96,8 +69,8 @@ struct netdev_rx_bsd {
 
 static const struct netdev_rx_class netdev_rx_bsd_class;
 
-struct netdev_dev_bsd {
-    struct netdev_dev up;
+struct netdev_bsd {
+    struct netdev up;
     unsigned int cache_valid;
     unsigned int change_seq;
 
@@ -149,7 +122,7 @@ static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
 static int netdev_bsd_do_ioctl(const char *, struct ifreq *, unsigned long cmd,
                                const char *cmd_name);
 static void destroy_tap(int fd, const char *name);
-static int get_flags(const struct netdev_dev *, int *flagsp);
+static int get_flags(const struct netdev *, int *flagsp);
 static int set_flags(const char *, int flags);
 static int do_set_addr(struct netdev *netdev,
                        int ioctl_nr, const char *ioctl_name,
@@ -170,16 +143,8 @@ is_netdev_bsd_class(const struct netdev_class *netdev_class)
 static struct netdev_bsd *
 netdev_bsd_cast(const struct netdev *netdev)
 {
-    ovs_assert(is_netdev_bsd_class(netdev_dev_get_class(
-                                       netdev_get_dev(netdev))));
+    ovs_assert(is_netdev_bsd_class(netdev_get_class(netdev)));
     return CONTAINER_OF(netdev, struct netdev_bsd, up);
-}
-
-static struct netdev_dev_bsd *
-netdev_dev_bsd_cast(const struct netdev_dev *netdev_dev)
-{
-    ovs_assert(is_netdev_bsd_class(netdev_dev_get_class(netdev_dev)));
-    return CONTAINER_OF(netdev_dev, struct netdev_dev_bsd, up);
 }
 
 static struct netdev_rx_bsd *
@@ -230,7 +195,7 @@ netdev_bsd_wait(void)
 }
 
 static void
-netdev_dev_bsd_changed(struct netdev_dev_bsd *dev)
+netdev_bsd_changed(struct netdev_bsd *dev)
 {
     dev->change_seq++;
     if (!dev->change_seq) {
@@ -243,19 +208,19 @@ static void
 netdev_bsd_cache_cb(const struct rtbsd_change *change,
                     void *aux OVS_UNUSED)
 {
-    struct netdev_dev_bsd *dev;
+    struct netdev_bsd *dev;
 
     if (change) {
-        struct netdev_dev *base_dev = netdev_dev_from_name(change->if_name);
+        struct netdev *base_dev = netdev_from_name(change->if_name);
 
         if (base_dev) {
             const struct netdev_class *netdev_class =
-                                                netdev_dev_get_class(base_dev);
+                                                netdev_get_class(base_dev);
 
             if (is_netdev_bsd_class(netdev_class)) {
-                dev = netdev_dev_bsd_cast(base_dev);
+                dev = netdev_bsd_cast(base_dev);
                 dev->cache_valid = 0;
-                netdev_dev_bsd_changed(dev);
+                netdev_bsd_changed(dev);
             }
         }
     } else {
@@ -267,11 +232,11 @@ netdev_bsd_cache_cb(const struct rtbsd_change *change,
         struct shash_node *node;
 
         shash_init(&device_shash);
-        netdev_dev_get_devices(&netdev_bsd_class, &device_shash);
+        netdev_get_devices(&netdev_bsd_class, &device_shash);
         SHASH_FOR_EACH (node, &device_shash) {
             dev = node->data;
             dev->cache_valid = 0;
-            netdev_dev_bsd_changed(dev);
+            netdev_bsd_changed(dev);
         }
         shash_destroy(&device_shash);
     }
@@ -303,12 +268,13 @@ cache_notifier_unref(void)
     return 0;
 }
 
-/* Allocate a netdev_dev_bsd structure */
+/* Allocate a netdev_bsd structure */
 static int
 netdev_bsd_create_system(const struct netdev_class *class, const char *name,
-                  struct netdev_dev **netdev_devp)
+                  struct netdev **netdevp)
 {
-    struct netdev_dev_bsd *netdev_dev;
+    struct netdev_bsd *netdev;
+    enum netdev_flags flags;
     int error;
 
     error = cache_notifier_ref();
@@ -316,23 +282,32 @@ netdev_bsd_create_system(const struct netdev_class *class, const char *name,
         return error;
     }
 
-    netdev_dev = xzalloc(sizeof *netdev_dev);
-    netdev_dev->change_seq = 1;
-    netdev_dev_init(&netdev_dev->up, name, class);
-    netdev_dev->tap_fd = -1;
-    *netdev_devp = &netdev_dev->up;
+    netdev = xzalloc(sizeof *netdev);
+    netdev->change_seq = 1;
+    netdev_init(&netdev->up, name, class);
+    netdev->tap_fd = -1;
 
+    /* Verify that the netdev really exists by attempting to read its flags */
+    error = netdev_get_flags(&netdev->up, &flags);
+    if (error == ENXIO) {
+        netdev_uninit(&netdev->up, false);
+        free(netdev);
+        cache_notifier_unref();
+        return error;
+    }
+
+    *netdevp = &netdev->up;
     return 0;
 }
 
 /*
- * Allocate a netdev_dev_bsd structure with 'tap' class.
+ * Allocate a netdev_bsd structure with 'tap' class.
  */
 static int
 netdev_bsd_create_tap(const struct netdev_class *class, const char *name,
-                  struct netdev_dev **netdev_devp)
+                  struct netdev **netdevp)
 {
-    struct netdev_dev_bsd *netdev_dev = NULL;
+    struct netdev_bsd *netdev = NULL;
     int error = 0;
     struct ifreq ifr;
 
@@ -342,22 +317,22 @@ netdev_bsd_create_tap(const struct netdev_class *class, const char *name,
     }
 
     /* allocate the device structure and set the internal flag */
-    netdev_dev = xzalloc(sizeof *netdev_dev);
+    netdev = xzalloc(sizeof *netdev);
 
     memset(&ifr, 0, sizeof(ifr));
 
     /* Create a tap device by opening /dev/tap.  The TAPGIFNAME ioctl is used
      * to retrieve the name of the tap device. */
-    netdev_dev->tap_fd = open("/dev/tap", O_RDWR);
-    netdev_dev->change_seq = 1;
-    if (netdev_dev->tap_fd < 0) {
+    netdev->tap_fd = open("/dev/tap", O_RDWR);
+    netdev->change_seq = 1;
+    if (netdev->tap_fd < 0) {
         error = errno;
         VLOG_WARN("opening \"/dev/tap\" failed: %s", strerror(error));
         goto error_undef_notifier;
     }
 
     /* Retrieve tap name (e.g. tap0) */
-    if (ioctl(netdev_dev->tap_fd, TAPGIFNAME, &ifr) == -1) {
+    if (ioctl(netdev->tap_fd, TAPGIFNAME, &ifr) == -1) {
         /* XXX Need to destroy the device? */
         error = errno;
         goto error_undef_notifier;
@@ -367,14 +342,14 @@ netdev_bsd_create_tap(const struct netdev_class *class, const char *name,
     ifr.ifr_data = (void *)name;
     if (ioctl(af_inet_sock, SIOCSIFNAME, &ifr) == -1) {
         error = errno;
-        destroy_tap(netdev_dev->tap_fd, ifr.ifr_name);
+        destroy_tap(netdev->tap_fd, ifr.ifr_name);
         goto error_undef_notifier;
     }
 
     /* set non-blocking. */
-    error = set_nonblocking(netdev_dev->tap_fd);
+    error = set_nonblocking(netdev->tap_fd);
     if (error) {
-        destroy_tap(netdev_dev->tap_fd, name);
+        destroy_tap(netdev->tap_fd, name);
         goto error_undef_notifier;
     }
 
@@ -384,74 +359,37 @@ netdev_bsd_create_tap(const struct netdev_class *class, const char *name,
     strncpy(ifr.ifr_name, name, sizeof ifr.ifr_name);
     if (ioctl(af_inet_sock, SIOCSIFFLAGS, &ifr) == -1) {
         error = errno;
-        destroy_tap(netdev_dev->tap_fd, name);
+        destroy_tap(netdev->tap_fd, name);
         goto error_undef_notifier;
     }
 
     /* initialize the device structure and
      * link the structure to its netdev */
-    netdev_dev_init(&netdev_dev->up, name, class);
-    *netdev_devp = &netdev_dev->up;
+    netdev_init(&netdev->up, name, class);
+    *netdevp = &netdev->up;
 
     return 0;
 
 error_undef_notifier:
     cache_notifier_unref();
 error:
-    free(netdev_dev);
+    free(netdev);
     return error;
 }
 
 static void
-netdev_bsd_destroy(struct netdev_dev *netdev_dev_)
-{
-    struct netdev_dev_bsd *netdev_dev = netdev_dev_bsd_cast(netdev_dev_);
-
-    cache_notifier_unref();
-
-    if (netdev_dev->tap_fd >= 0) {
-        destroy_tap(netdev_dev->tap_fd, netdev_dev_get_name(netdev_dev_));
-    }
-    if (netdev_dev->pcap) {
-        pcap_close(netdev_dev->pcap);
-    }
-    free(netdev_dev);
-}
-
-
-static int
-netdev_bsd_open_system(struct netdev_dev *netdev_dev_, struct netdev **netdevp)
-{
-    struct netdev_bsd *netdev;
-    int error;
-    enum netdev_flags flags;
-
-    /* Allocate network device. */
-    netdev = xcalloc(1, sizeof *netdev);
-    netdev_init(&netdev->up, netdev_dev_);
-
-    /* Verify that the netdev really exists by attempting to read its flags */
-    error = netdev_get_flags(&netdev->up, &flags);
-    if (error == ENXIO) {
-        goto error;
-    }
-
-    *netdevp = &netdev->up;
-    return 0;
-
-error:
-    netdev_uninit(&netdev->up, true);
-    return error;
-}
-
-
-
-/* Close a 'netdev'. */
-static void
-netdev_bsd_close(struct netdev *netdev_)
+netdev_bsd_destroy(struct netdev *netdev_)
 {
     struct netdev_bsd *netdev = netdev_bsd_cast(netdev_);
 
+    cache_notifier_unref();
+
+    if (netdev->tap_fd >= 0) {
+        destroy_tap(netdev->tap_fd, netdev_get_name(netdev_));
+    }
+    if (netdev->pcap) {
+        pcap_close(netdev->pcap);
+    }
     free(netdev);
 }
 
@@ -527,8 +465,7 @@ error:
 static int
 netdev_bsd_rx_open(struct netdev *netdev_, struct netdev_rx **rxp)
 {
-    struct netdev_dev_bsd *netdev_dev =
-                              netdev_dev_bsd_cast(netdev_get_dev(netdev_));
+    struct netdev_bsd *netdev = netdev_bsd_cast(netdev_);
 
     struct netdev_rx_bsd *rx;
     pcap_t *pcap;
@@ -536,18 +473,18 @@ netdev_bsd_rx_open(struct netdev *netdev_, struct netdev_rx **rxp)
 
     if (!strcmp(netdev_get_type(netdev_), "tap")) {
         pcap = NULL;
-        fd = netdev_dev->tap_fd;
+        fd = netdev->tap_fd;
     } else {
         int error = netdev_bsd_open_pcap(netdev_get_name(netdev_), &pcap, &fd);
         if (error) {
             return error;
         }
 
-        netdev_dev_bsd_changed(netdev_dev);
+        netdev_bsd_changed(netdev);
     }
 
     rx = xmalloc(sizeof *rx);
-    netdev_rx_init(&rx->up, netdev_get_dev(netdev_), &netdev_rx_bsd_class);
+    netdev_rx_init(&rx->up, netdev_, &netdev_rx_bsd_class);
     rx->pcap_handle = pcap;
     rx->fd = fd;
 
@@ -707,7 +644,7 @@ netdev_rx_bsd_drain(struct netdev_rx *rx_)
 static int
 netdev_bsd_send(struct netdev *netdev_, const void *data, size_t size)
 {
-    struct netdev_dev_bsd *dev = netdev_dev_bsd_cast(netdev_get_dev(netdev_));
+    struct netdev_bsd *dev = netdev_bsd_cast(netdev_);
     const char *name = netdev_get_name(netdev_);
 
     if (dev->tap_fd < 0 && !dev->pcap) {
@@ -750,7 +687,7 @@ netdev_bsd_send(struct netdev *netdev_, const void *data, size_t size)
 static void
 netdev_bsd_send_wait(struct netdev *netdev_)
 {
-    struct netdev_dev_bsd *dev = netdev_dev_bsd_cast(netdev_get_dev(netdev_));
+    struct netdev_bsd *dev = netdev_bsd_cast(netdev_);
 
     if (dev->tap_fd >= 0) {
         /* TAP device always accepts packets. */
@@ -771,18 +708,17 @@ static int
 netdev_bsd_set_etheraddr(struct netdev *netdev_,
                          const uint8_t mac[ETH_ADDR_LEN])
 {
-    struct netdev_dev_bsd *netdev_dev =
-                                netdev_dev_bsd_cast(netdev_get_dev(netdev_));
+    struct netdev_bsd *netdev = netdev_bsd_cast(netdev_);
     int error;
 
-    if (!(netdev_dev->cache_valid & VALID_ETHERADDR)
-        || !eth_addr_equals(netdev_dev->etheraddr, mac)) {
+    if (!(netdev->cache_valid & VALID_ETHERADDR)
+        || !eth_addr_equals(netdev->etheraddr, mac)) {
         error = set_etheraddr(netdev_get_name(netdev_), AF_LINK, ETH_ADDR_LEN,
                               mac);
         if (!error) {
-            netdev_dev->cache_valid |= VALID_ETHERADDR;
-            memcpy(netdev_dev->etheraddr, mac, ETH_ADDR_LEN);
-            netdev_dev_bsd_changed(netdev_dev);
+            netdev->cache_valid |= VALID_ETHERADDR;
+            memcpy(netdev->etheraddr, mac, ETH_ADDR_LEN);
+            netdev_bsd_changed(netdev);
         }
     } else {
         error = 0;
@@ -798,18 +734,17 @@ static int
 netdev_bsd_get_etheraddr(const struct netdev *netdev_,
                          uint8_t mac[ETH_ADDR_LEN])
 {
-    struct netdev_dev_bsd *netdev_dev =
-        netdev_dev_bsd_cast(netdev_get_dev(netdev_));
+    struct netdev_bsd *netdev = netdev_bsd_cast(netdev_);
 
-    if (!(netdev_dev->cache_valid & VALID_ETHERADDR)) {
+    if (!(netdev->cache_valid & VALID_ETHERADDR)) {
         int error = get_etheraddr(netdev_get_name(netdev_),
-                                  netdev_dev->etheraddr);
+                                  netdev->etheraddr);
         if (error) {
             return error;
         }
-        netdev_dev->cache_valid |= VALID_ETHERADDR;
+        netdev->cache_valid |= VALID_ETHERADDR;
     }
-    memcpy(mac, netdev_dev->etheraddr, ETH_ADDR_LEN);
+    memcpy(mac, netdev->etheraddr, ETH_ADDR_LEN);
 
     return 0;
 }
@@ -822,10 +757,9 @@ netdev_bsd_get_etheraddr(const struct netdev *netdev_,
 static int
 netdev_bsd_get_mtu(const struct netdev *netdev_, int *mtup)
 {
-    struct netdev_dev_bsd *netdev_dev =
-        netdev_dev_bsd_cast(netdev_get_dev(netdev_));
+    struct netdev_bsd *netdev = netdev_bsd_cast(netdev_);
 
-    if (!(netdev_dev->cache_valid & VALID_MTU)) {
+    if (!(netdev->cache_valid & VALID_MTU)) {
         struct ifreq ifr;
         int error;
 
@@ -834,11 +768,11 @@ netdev_bsd_get_mtu(const struct netdev *netdev_, int *mtup)
         if (error) {
             return error;
         }
-        netdev_dev->mtu = ifr.ifr_mtu;
-        netdev_dev->cache_valid |= VALID_MTU;
+        netdev->mtu = ifr.ifr_mtu;
+        netdev->cache_valid |= VALID_MTU;
     }
 
-    *mtup = netdev_dev->mtu;
+    *mtup = netdev->mtu;
     return 0;
 }
 
@@ -854,10 +788,9 @@ netdev_bsd_get_ifindex(const struct netdev *netdev)
 static int
 netdev_bsd_get_carrier(const struct netdev *netdev_, bool *carrier)
 {
-    struct netdev_dev_bsd *netdev_dev =
-        netdev_dev_bsd_cast(netdev_get_dev(netdev_));
+    struct netdev_bsd *netdev = netdev_bsd_cast(netdev_);
 
-    if (!(netdev_dev->cache_valid & VALID_CARRIER)) {
+    if (!(netdev->cache_valid & VALID_CARRIER)) {
         struct ifmediareq ifmr;
 
         memset(&ifmr, 0, sizeof(ifmr));
@@ -869,16 +802,16 @@ netdev_bsd_get_carrier(const struct netdev *netdev_, bool *carrier)
             return errno;
         }
 
-        netdev_dev->carrier = (ifmr.ifm_status & IFM_ACTIVE) == IFM_ACTIVE;
-        netdev_dev->cache_valid |= VALID_CARRIER;
+        netdev->carrier = (ifmr.ifm_status & IFM_ACTIVE) == IFM_ACTIVE;
+        netdev->cache_valid |= VALID_CARRIER;
 
         /* If the interface doesn't report whether the media is active,
          * just assume it is active. */
         if ((ifmr.ifm_status & IFM_AVALID) == 0) {
-            netdev_dev->carrier = true;
+            netdev->carrier = true;
         }
     }
-    *carrier = netdev_dev->carrier;
+    *carrier = netdev->carrier;
 
     return 0;
 }
@@ -1097,10 +1030,9 @@ static int
 netdev_bsd_get_in4(const struct netdev *netdev_, struct in_addr *in4,
                    struct in_addr *netmask)
 {
-    struct netdev_dev_bsd *netdev_dev =
-        netdev_dev_bsd_cast(netdev_get_dev(netdev_));
+    struct netdev_bsd *netdev = netdev_bsd_cast(netdev_);
 
-    if (!(netdev_dev->cache_valid & VALID_IN4)) {
+    if (!(netdev->cache_valid & VALID_IN4)) {
         const struct sockaddr_in *sin;
         struct ifreq ifr;
         int error;
@@ -1113,8 +1045,8 @@ netdev_bsd_get_in4(const struct netdev *netdev_, struct in_addr *in4,
         }
 
         sin = (struct sockaddr_in *) &ifr.ifr_addr;
-        netdev_dev->in4 = sin->sin_addr;
-        netdev_dev->cache_valid |= VALID_IN4;
+        netdev->in4 = sin->sin_addr;
+        netdev->cache_valid |= VALID_IN4;
         error = netdev_bsd_do_ioctl(netdev_get_name(netdev_), &ifr,
                                     SIOCGIFNETMASK, "SIOCGIFNETMASK");
         if (error) {
@@ -1122,7 +1054,7 @@ netdev_bsd_get_in4(const struct netdev *netdev_, struct in_addr *in4,
         }
         *netmask = ((struct sockaddr_in*)&ifr.ifr_addr)->sin_addr;
     }
-    *in4 = netdev_dev->in4;
+    *in4 = netdev->in4;
 
     return in4->s_addr == INADDR_ANY ? EADDRNOTAVAIL : 0;
 }
@@ -1136,19 +1068,18 @@ static int
 netdev_bsd_set_in4(struct netdev *netdev_, struct in_addr addr,
                    struct in_addr mask)
 {
-    struct netdev_dev_bsd *netdev_dev =
-        netdev_dev_bsd_cast(netdev_get_dev(netdev_));
+    struct netdev_bsd *netdev = netdev_bsd_cast(netdev_);
     int error;
 
     error = do_set_addr(netdev_, SIOCSIFADDR, "SIOCSIFADDR", addr);
     if (!error) {
-        netdev_dev->cache_valid |= VALID_IN4;
-        netdev_dev->in4 = addr;
+        netdev->cache_valid |= VALID_IN4;
+        netdev->in4 = addr;
         if (addr.s_addr != INADDR_ANY) {
             error = do_set_addr(netdev_, SIOCSIFNETMASK,
                                 "SIOCSIFNETMASK", mask);
         }
-        netdev_dev_bsd_changed(netdev_dev);
+        netdev_bsd_changed(netdev);
     }
     return error;
 }
@@ -1156,9 +1087,8 @@ netdev_bsd_set_in4(struct netdev *netdev_, struct in_addr addr,
 static int
 netdev_bsd_get_in6(const struct netdev *netdev_, struct in6_addr *in6)
 {
-    struct netdev_dev_bsd *netdev_dev =
-                                netdev_dev_bsd_cast(netdev_get_dev(netdev_));
-    if (!(netdev_dev->cache_valid & VALID_IN6)) {
+    struct netdev_bsd *netdev = netdev_bsd_cast(netdev_);
+    if (!(netdev->cache_valid & VALID_IN6)) {
         struct ifaddrs *ifa, *head;
         struct sockaddr_in6 *sin6;
         const char *netdev_name = netdev_get_name(netdev_);
@@ -1174,9 +1104,9 @@ netdev_bsd_get_in6(const struct netdev *netdev_, struct in6_addr *in6)
                     !strcmp(ifa->ifa_name, netdev_name)) {
                 sin6 = (struct sockaddr_in6 *)ifa->ifa_addr;
                 if (sin6) {
-                    memcpy(&netdev_dev->in6, &sin6->sin6_addr, sin6->sin6_len);
-                    netdev_dev->cache_valid |= VALID_IN6;
-                    *in6 = netdev_dev->in6;
+                    memcpy(&netdev->in6, &sin6->sin6_addr, sin6->sin6_len);
+                    netdev->cache_valid |= VALID_IN6;
+                    *in6 = netdev->in6;
                     freeifaddrs(head);
                     return 0;
                 }
@@ -1184,7 +1114,7 @@ netdev_bsd_get_in6(const struct netdev *netdev_, struct in6_addr *in6)
         }
         return EADDRNOTAVAIL;
     }
-    *in6 = netdev_dev->in6;
+    *in6 = netdev->in6;
     return 0;
 }
 
@@ -1238,21 +1168,20 @@ iff_to_nd_flags(int iff)
 }
 
 static int
-netdev_bsd_update_flags(struct netdev_dev *dev_, enum netdev_flags off,
+netdev_bsd_update_flags(struct netdev *netdev_, enum netdev_flags off,
                         enum netdev_flags on, enum netdev_flags *old_flagsp)
 {
-    struct netdev_dev_bsd *netdev_dev;
+    struct netdev_bsd *netdev = netdev_bsd_cast(netdev_);
     int old_flags, new_flags;
     int error;
 
-    netdev_dev = netdev_dev_bsd_cast(dev_);
-    error = get_flags(dev_, &old_flags);
+    error = get_flags(netdev_, &old_flags);
     if (!error) {
         *old_flagsp = iff_to_nd_flags(old_flags);
         new_flags = (old_flags & ~nd_to_iff_flags(off)) | nd_to_iff_flags(on);
         if (new_flags != old_flags) {
-            error = set_flags(netdev_dev_get_name(dev_), new_flags);
-            netdev_dev_bsd_changed(netdev_dev);
+            error = set_flags(netdev_get_name(netdev_), new_flags);
+            netdev_bsd_changed(netdev);
         }
     }
     return error;
@@ -1261,7 +1190,7 @@ netdev_bsd_update_flags(struct netdev_dev *dev_, enum netdev_flags off,
 static unsigned int
 netdev_bsd_change_seq(const struct netdev *netdev)
 {
-    return netdev_dev_bsd_cast(netdev_get_dev(netdev))->change_seq;
+    return netdev_bsd_cast(netdev)->change_seq;
 }
 
 
@@ -1276,8 +1205,6 @@ const struct netdev_class netdev_bsd_class = {
     NULL, /* get_config */
     NULL, /* set_config */
     NULL, /* get_tunnel_config */
-    netdev_bsd_open_system,
-    netdev_bsd_close,
 
     netdev_bsd_rx_open,
 
@@ -1333,8 +1260,6 @@ const struct netdev_class netdev_tap_class = {
     NULL, /* get_config */
     NULL, /* set_config */
     NULL, /* get_tunnel_config */
-    netdev_bsd_open_system,
-    netdev_bsd_close,
 
     netdev_bsd_rx_open,
 
@@ -1399,12 +1324,13 @@ destroy_tap(int fd, const char *name)
 }
 
 static int
-get_flags(const struct netdev_dev *dev, int *flags)
+get_flags(const struct netdev *netdev, int *flags)
 {
     struct ifreq ifr;
     int error;
 
-    error = netdev_bsd_do_ioctl(dev->name, &ifr, SIOCGIFFLAGS, "SIOCGIFFLAGS");
+    error = netdev_bsd_do_ioctl(netdev->name, &ifr,
+                                SIOCGIFFLAGS, "SIOCGIFFLAGS");
 
     *flags = 0xFFFF0000 & (ifr.ifr_flagshigh << 16);
     *flags |= 0x0000FFFF & ifr.ifr_flags;
@@ -1426,18 +1352,17 @@ set_flags(const char *name, int flags)
 static int
 get_ifindex(const struct netdev *netdev_, int *ifindexp)
 {
-    struct netdev_dev_bsd *netdev_dev =
-                                netdev_dev_bsd_cast(netdev_get_dev(netdev_));
+    struct netdev_bsd *netdev = netdev_bsd_cast(netdev_);
     *ifindexp = 0;
-    if (!(netdev_dev->cache_valid & VALID_IFINDEX)) {
+    if (!(netdev->cache_valid & VALID_IFINDEX)) {
         int ifindex = if_nametoindex(netdev_get_name(netdev_));
         if (ifindex <= 0) {
             return errno;
         }
-        netdev_dev->cache_valid |= VALID_IFINDEX;
-        netdev_dev->ifindex = ifindex;
+        netdev->cache_valid |= VALID_IFINDEX;
+        netdev->ifindex = ifindex;
     }
-    *ifindexp = netdev_dev->ifindex;
+    *ifindexp = netdev->ifindex;
     return 0;
 }
 

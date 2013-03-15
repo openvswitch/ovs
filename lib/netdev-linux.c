@@ -354,8 +354,8 @@ static void tc_put_rtab(struct ofpbuf *, uint16_t type,
                         const struct tc_ratespec *rate);
 static int tc_calc_buffer(unsigned int Bps, int mtu, uint64_t burst_bytes);
 
-struct netdev_dev_linux {
-    struct netdev_dev up;
+struct netdev_linux {
+    struct netdev up;
 
     struct shash_node *shash_node;
     unsigned int cache_valid;
@@ -397,10 +397,6 @@ struct netdev_dev_linux {
     } state;
 };
 
-struct netdev_linux {
-    struct netdev up;
-};
-
 struct netdev_rx_linux {
     struct netdev_rx up;
     bool is_tap;
@@ -427,7 +423,7 @@ static int netdev_linux_do_ioctl(const char *name, struct ifreq *, int cmd,
                                  const char *cmd_name);
 static int netdev_linux_get_ipv4(const struct netdev *, struct in_addr *,
                                  int cmd, const char *cmd_name);
-static int get_flags(const struct netdev_dev *, unsigned int *flags);
+static int get_flags(const struct netdev *, unsigned int *flags);
 static int set_flags(const char *, unsigned int flags);
 static int do_get_ifindex(const char *netdev_name);
 static int get_ifindex(const struct netdev *, int *ifindexp);
@@ -451,24 +447,13 @@ is_netdev_linux_class(const struct netdev_class *netdev_class)
 static bool
 is_tap_netdev(const struct netdev *netdev)
 {
-    return netdev_dev_get_class(netdev_get_dev(netdev)) == &netdev_tap_class;
-}
-
-static struct netdev_dev_linux *
-netdev_dev_linux_cast(const struct netdev_dev *netdev_dev)
-{
-    const struct netdev_class *netdev_class = netdev_dev_get_class(netdev_dev);
-    ovs_assert(is_netdev_linux_class(netdev_class));
-
-    return CONTAINER_OF(netdev_dev, struct netdev_dev_linux, up);
+    return netdev_get_class(netdev) == &netdev_tap_class;
 }
 
 static struct netdev_linux *
 netdev_linux_cast(const struct netdev *netdev)
 {
-    struct netdev_dev *netdev_dev = netdev_get_dev(netdev);
-    const struct netdev_class *netdev_class = netdev_dev_get_class(netdev_dev);
-    ovs_assert(is_netdev_linux_class(netdev_class));
+    ovs_assert(is_netdev_linux_class(netdev_get_class(netdev)));
 
     return CONTAINER_OF(netdev, struct netdev_linux, up);
 }
@@ -519,9 +504,8 @@ netdev_linux_wait(void)
 }
 
 static void
-netdev_dev_linux_changed(struct netdev_dev_linux *dev,
-                         unsigned int ifi_flags,
-                         unsigned int mask)
+netdev_linux_changed(struct netdev_linux *dev,
+                     unsigned int ifi_flags, unsigned int mask)
 {
     dev->change_seq++;
     if (!dev->change_seq) {
@@ -537,12 +521,12 @@ netdev_dev_linux_changed(struct netdev_dev_linux *dev,
 }
 
 static void
-netdev_dev_linux_update(struct netdev_dev_linux *dev,
-                         const struct rtnetlink_link_change *change)
+netdev_linux_update(struct netdev_linux *dev,
+                    const struct rtnetlink_link_change *change)
 {
     if (change->nlmsg_type == RTM_NEWLINK) {
         /* Keep drv-info */
-        netdev_dev_linux_changed(dev, change->ifi_flags, VALID_DRVINFO);
+        netdev_linux_changed(dev, change->ifi_flags, VALID_DRVINFO);
 
         /* Update netdev from rtnl-change msg. */
         if (change->mtu) {
@@ -562,7 +546,7 @@ netdev_dev_linux_update(struct netdev_dev_linux *dev,
         dev->get_ifindex_error = 0;
 
     } else {
-        netdev_dev_linux_changed(dev, change->ifi_flags, 0);
+        netdev_linux_changed(dev, change->ifi_flags, 0);
     }
 }
 
@@ -570,31 +554,25 @@ static void
 netdev_linux_cache_cb(const struct rtnetlink_link_change *change,
                       void *aux OVS_UNUSED)
 {
-    struct netdev_dev_linux *dev;
+    struct netdev_linux *dev;
     if (change) {
-        struct netdev_dev *base_dev = netdev_dev_from_name(change->ifname);
-        if (base_dev) {
-            const struct netdev_class *netdev_class =
-                                                netdev_dev_get_class(base_dev);
-
-            if (is_netdev_linux_class(netdev_class)) {
-                dev = netdev_dev_linux_cast(base_dev);
-                netdev_dev_linux_update(dev, change);
-            }
+        struct netdev *base_dev = netdev_from_name(change->ifname);
+        if (base_dev && is_netdev_linux_class(netdev_get_class(base_dev))) {
+            netdev_linux_update(netdev_linux_cast(base_dev), change);
         }
     } else {
         struct shash device_shash;
         struct shash_node *node;
 
         shash_init(&device_shash);
-        netdev_dev_get_devices(&netdev_linux_class, &device_shash);
+        netdev_get_devices(&netdev_linux_class, &device_shash);
         SHASH_FOR_EACH (node, &device_shash) {
             unsigned int flags;
 
             dev = node->data;
 
             get_flags(&dev->up, &flags);
-            netdev_dev_linux_changed(dev, flags, 0);
+            netdev_linux_changed(dev, flags, 0);
         }
         shash_destroy(&device_shash);
     }
@@ -632,9 +610,9 @@ cache_notifier_unref(void)
 /* Creates system and internal devices. */
 static int
 netdev_linux_create(const struct netdev_class *class, const char *name,
-                    struct netdev_dev **netdev_devp)
+                    struct netdev **netdevp)
 {
-    struct netdev_dev_linux *netdev_dev;
+    struct netdev_linux *netdev;
     int error;
 
     error = cache_notifier_ref();
@@ -642,12 +620,26 @@ netdev_linux_create(const struct netdev_class *class, const char *name,
         return error;
     }
 
-    netdev_dev = xzalloc(sizeof *netdev_dev);
-    netdev_dev->change_seq = 1;
-    netdev_dev_init(&netdev_dev->up, name, class);
-    get_flags(&netdev_dev->up, &netdev_dev->ifi_flags);
+    netdev = xzalloc(sizeof *netdev);
+    netdev->change_seq = 1;
+    netdev_init(&netdev->up, name, class);
+    error = get_flags(&netdev->up, &netdev->ifi_flags);
+    if (error == ENODEV) {
+        if (class != &netdev_internal_class) {
+            /* The device does not exist, so don't allow it to be opened. */
+            netdev_uninit(&netdev->up, false);
+            cache_notifier_unref();
+            free(netdev);
+            return ENODEV;
+        } else {
+            /* "Internal" netdevs have to be created as netdev objects before
+             * they exist in the kernel, because creating them in the kernel
+             * happens by passing a netdev object to dpif_port_add().
+             * Therefore, ignore the error. */
+        }
+    }
 
-    *netdev_devp = &netdev_dev->up;
+    *netdevp = &netdev->up;
     return 0;
 }
 
@@ -659,16 +651,16 @@ netdev_linux_create(const struct netdev_class *class, const char *name,
  * be unavailable to other reads for tap devices. */
 static int
 netdev_linux_create_tap(const struct netdev_class *class OVS_UNUSED,
-                        const char *name, struct netdev_dev **netdev_devp)
+                        const char *name, struct netdev **netdevp)
 {
-    struct netdev_dev_linux *netdev_dev;
+    struct netdev_linux *netdev;
     struct tap_state *state;
     static const char tap_dev[] = "/dev/net/tun";
     struct ifreq ifr;
     int error;
 
-    netdev_dev = xzalloc(sizeof *netdev_dev);
-    state = &netdev_dev->state.tap;
+    netdev = xzalloc(sizeof *netdev);
+    state = &netdev->state.tap;
 
     error = cache_notifier_ref();
     if (error) {
@@ -699,102 +691,56 @@ netdev_linux_create_tap(const struct netdev_class *class OVS_UNUSED,
         goto error_unref_notifier;
     }
 
-    netdev_dev_init(&netdev_dev->up, name, &netdev_tap_class);
-    *netdev_devp = &netdev_dev->up;
+    netdev_init(&netdev->up, name, &netdev_tap_class);
+    *netdevp = &netdev->up;
     return 0;
 
 error_unref_notifier:
     cache_notifier_unref();
 error:
-    free(netdev_dev);
+    free(netdev);
     return error;
 }
 
 static void
-destroy_tap(struct netdev_dev_linux *netdev_dev)
+destroy_tap(struct netdev_linux *netdev)
 {
-    struct tap_state *state = &netdev_dev->state.tap;
+    struct tap_state *state = &netdev->state.tap;
 
     if (state->fd >= 0) {
         close(state->fd);
     }
 }
 
-/* Destroys the netdev device 'netdev_dev_'. */
+/* Destroys the netdev device 'netdev_'. */
 static void
-netdev_linux_destroy(struct netdev_dev *netdev_dev_)
-{
-    struct netdev_dev_linux *netdev_dev = netdev_dev_linux_cast(netdev_dev_);
-    const struct netdev_class *class = netdev_dev_get_class(netdev_dev_);
-
-    if (netdev_dev->tc && netdev_dev->tc->ops->tc_destroy) {
-        netdev_dev->tc->ops->tc_destroy(netdev_dev->tc);
-    }
-
-    if (class == &netdev_tap_class) {
-        destroy_tap(netdev_dev);
-    }
-    free(netdev_dev);
-
-    cache_notifier_unref();
-}
-
-static int
-netdev_linux_open(struct netdev_dev *netdev_dev_, struct netdev **netdevp)
-{
-    struct netdev_linux *netdev;
-    enum netdev_flags flags;
-    int error;
-
-    /* Allocate network device. */
-    netdev = xzalloc(sizeof *netdev);
-    netdev_init(&netdev->up, netdev_dev_);
-
-    /* Verify that the device really exists, by attempting to read its flags.
-     * (The flags might be cached, in which case this won't actually do an
-     * ioctl.)
-     *
-     * Don't do this for "internal" netdevs, though, because those have to be
-     * created as netdev objects before they exist in the kernel, because
-     * creating them in the kernel happens by passing a netdev object to
-     * dpif_port_add(). */
-    if (netdev_dev_get_class(netdev_dev_) != &netdev_internal_class) {
-        error = netdev_get_flags(&netdev->up, &flags);
-        if (error == ENODEV) {
-            goto error;
-        }
-    }
-
-    *netdevp = &netdev->up;
-    return 0;
-
-error:
-    netdev_uninit(&netdev->up, true);
-    return error;
-}
-
-/* Closes and destroys 'netdev'. */
-static void
-netdev_linux_close(struct netdev *netdev_)
+netdev_linux_destroy(struct netdev *netdev_)
 {
     struct netdev_linux *netdev = netdev_linux_cast(netdev_);
 
+    if (netdev->tc && netdev->tc->ops->tc_destroy) {
+        netdev->tc->ops->tc_destroy(netdev->tc);
+    }
+
+    if (netdev_get_class(netdev_) == &netdev_tap_class) {
+        destroy_tap(netdev);
+    }
     free(netdev);
+
+    cache_notifier_unref();
 }
 
 static int
 netdev_linux_rx_open(struct netdev *netdev_, struct netdev_rx **rxp)
 {
     struct netdev_linux *netdev = netdev_linux_cast(netdev_);
-    struct netdev_dev_linux *netdev_dev =
-                                netdev_dev_linux_cast(netdev_get_dev(netdev_));
     bool is_tap = is_tap_netdev(netdev_);
     struct netdev_rx_linux *rx;
     int error;
     int fd;
 
     if (is_tap) {
-        fd = netdev_dev->state.tap.fd;
+        fd = netdev->state.tap.fd;
     } else {
         struct sockaddr_ll sll;
         int ifindex;
@@ -833,7 +779,7 @@ netdev_linux_rx_open(struct netdev *netdev_, struct netdev_rx **rxp)
     }
 
     rx = xmalloc(sizeof *rx);
-    netdev_rx_init(&rx->up, netdev_get_dev(netdev_), &netdev_rx_linux_class);
+    netdev_rx_init(&rx->up, netdev_, &netdev_rx_linux_class);
     rx->is_tap = is_tap;
     rx->fd = fd;
 
@@ -965,10 +911,9 @@ netdev_linux_send(struct netdev *netdev_, const void *data, size_t size)
              * tap devices, because packets sent to a tap device with an
              * AF_PACKET socket will loop back to be *received* again on the
              * tap device. */
-            struct netdev_dev_linux *dev
-                = netdev_dev_linux_cast(netdev_get_dev(netdev_));
+            struct netdev_linux *netdev = netdev_linux_cast(netdev_);
 
-            retval = write(dev->state.tap.fd, data, size);
+            retval = write(netdev->state.tap.fd, data, size);
         }
 
         if (retval < 0) {
@@ -1016,19 +961,18 @@ static int
 netdev_linux_set_etheraddr(struct netdev *netdev_,
                            const uint8_t mac[ETH_ADDR_LEN])
 {
-    struct netdev_dev_linux *netdev_dev =
-                                netdev_dev_linux_cast(netdev_get_dev(netdev_));
+    struct netdev_linux *netdev = netdev_linux_cast(netdev_);
     struct netdev_saved_flags *sf = NULL;
     int error;
 
-    if (netdev_dev->cache_valid & VALID_ETHERADDR) {
-        if (netdev_dev->ether_addr_error) {
-            return netdev_dev->ether_addr_error;
+    if (netdev->cache_valid & VALID_ETHERADDR) {
+        if (netdev->ether_addr_error) {
+            return netdev->ether_addr_error;
         }
-        if (eth_addr_equals(netdev_dev->etheraddr, mac)) {
+        if (eth_addr_equals(netdev->etheraddr, mac)) {
             return 0;
         }
-        netdev_dev->cache_valid &= ~VALID_ETHERADDR;
+        netdev->cache_valid &= ~VALID_ETHERADDR;
     }
 
     /* Tap devices must be brought down before setting the address. */
@@ -1041,10 +985,10 @@ netdev_linux_set_etheraddr(struct netdev *netdev_,
     }
     error = set_etheraddr(netdev_get_name(netdev_), mac);
     if (!error || error == ENODEV) {
-        netdev_dev->ether_addr_error = error;
-        netdev_dev->cache_valid |= VALID_ETHERADDR;
+        netdev->ether_addr_error = error;
+        netdev->cache_valid |= VALID_ETHERADDR;
         if (!error) {
-            memcpy(netdev_dev->etheraddr, mac, ETH_ADDR_LEN);
+            memcpy(netdev->etheraddr, mac, ETH_ADDR_LEN);
         }
     }
 
@@ -1058,22 +1002,21 @@ static int
 netdev_linux_get_etheraddr(const struct netdev *netdev_,
                            uint8_t mac[ETH_ADDR_LEN])
 {
-    struct netdev_dev_linux *netdev_dev =
-                                netdev_dev_linux_cast(netdev_get_dev(netdev_));
+    struct netdev_linux *netdev = netdev_linux_cast(netdev_);
 
-    if (!(netdev_dev->cache_valid & VALID_ETHERADDR)) {
+    if (!(netdev->cache_valid & VALID_ETHERADDR)) {
         int error = get_etheraddr(netdev_get_name(netdev_),
-                                  netdev_dev->etheraddr);
+                                  netdev->etheraddr);
 
-        netdev_dev->ether_addr_error = error;
-        netdev_dev->cache_valid |= VALID_ETHERADDR;
+        netdev->ether_addr_error = error;
+        netdev->cache_valid |= VALID_ETHERADDR;
     }
 
-    if (!netdev_dev->ether_addr_error) {
-        memcpy(mac, netdev_dev->etheraddr, ETH_ADDR_LEN);
+    if (!netdev->ether_addr_error) {
+        memcpy(mac, netdev->etheraddr, ETH_ADDR_LEN);
     }
 
-    return netdev_dev->ether_addr_error;
+    return netdev->ether_addr_error;
 }
 
 /* Returns the maximum size of transmitted (and received) packets on 'netdev',
@@ -1082,24 +1025,23 @@ netdev_linux_get_etheraddr(const struct netdev *netdev_,
 static int
 netdev_linux_get_mtu(const struct netdev *netdev_, int *mtup)
 {
-    struct netdev_dev_linux *netdev_dev =
-                                netdev_dev_linux_cast(netdev_get_dev(netdev_));
-    if (!(netdev_dev->cache_valid & VALID_MTU)) {
+    struct netdev_linux *netdev = netdev_linux_cast(netdev_);
+    if (!(netdev->cache_valid & VALID_MTU)) {
         struct ifreq ifr;
         int error;
 
         error = netdev_linux_do_ioctl(netdev_get_name(netdev_), &ifr,
                                       SIOCGIFMTU, "SIOCGIFMTU");
 
-        netdev_dev->netdev_mtu_error = error;
-        netdev_dev->mtu = ifr.ifr_mtu;
-        netdev_dev->cache_valid |= VALID_MTU;
+        netdev->netdev_mtu_error = error;
+        netdev->mtu = ifr.ifr_mtu;
+        netdev->cache_valid |= VALID_MTU;
     }
 
-    if (!netdev_dev->netdev_mtu_error) {
-        *mtup = netdev_dev->mtu;
+    if (!netdev->netdev_mtu_error) {
+        *mtup = netdev->mtu;
     }
-    return netdev_dev->netdev_mtu_error;
+    return netdev->netdev_mtu_error;
 }
 
 /* Sets the maximum size of transmitted (MTU) for given device using linux
@@ -1108,27 +1050,26 @@ netdev_linux_get_mtu(const struct netdev *netdev_, int *mtup)
 static int
 netdev_linux_set_mtu(const struct netdev *netdev_, int mtu)
 {
-    struct netdev_dev_linux *netdev_dev =
-                                netdev_dev_linux_cast(netdev_get_dev(netdev_));
+    struct netdev_linux *netdev = netdev_linux_cast(netdev_);
     struct ifreq ifr;
     int error;
 
-    if (netdev_dev->cache_valid & VALID_MTU) {
-        if (netdev_dev->netdev_mtu_error) {
-            return netdev_dev->netdev_mtu_error;
+    if (netdev->cache_valid & VALID_MTU) {
+        if (netdev->netdev_mtu_error) {
+            return netdev->netdev_mtu_error;
         }
-        if (netdev_dev->mtu == mtu) {
+        if (netdev->mtu == mtu) {
             return 0;
         }
-        netdev_dev->cache_valid &= ~VALID_MTU;
+        netdev->cache_valid &= ~VALID_MTU;
     }
     ifr.ifr_mtu = mtu;
     error = netdev_linux_do_ioctl(netdev_get_name(netdev_), &ifr,
                                   SIOCSIFMTU, "SIOCSIFMTU");
     if (!error || error == ENODEV) {
-        netdev_dev->netdev_mtu_error = error;
-        netdev_dev->mtu = ifr.ifr_mtu;
-        netdev_dev->cache_valid |= VALID_MTU;
+        netdev->netdev_mtu_error = error;
+        netdev->mtu = ifr.ifr_mtu;
+        netdev->cache_valid |= VALID_MTU;
     }
     return error;
 }
@@ -1147,13 +1088,12 @@ netdev_linux_get_ifindex(const struct netdev *netdev)
 static int
 netdev_linux_get_carrier(const struct netdev *netdev_, bool *carrier)
 {
-    struct netdev_dev_linux *netdev_dev =
-                                netdev_dev_linux_cast(netdev_get_dev(netdev_));
+    struct netdev_linux *netdev = netdev_linux_cast(netdev_);
 
-    if (netdev_dev->miimon_interval > 0) {
-        *carrier = netdev_dev->miimon;
+    if (netdev->miimon_interval > 0) {
+        *carrier = netdev->miimon;
     } else {
-        *carrier = (netdev_dev->ifi_flags & IFF_RUNNING) != 0;
+        *carrier = (netdev->ifi_flags & IFF_RUNNING) != 0;
     }
 
     return 0;
@@ -1162,7 +1102,7 @@ netdev_linux_get_carrier(const struct netdev *netdev_, bool *carrier)
 static long long int
 netdev_linux_get_carrier_resets(const struct netdev *netdev)
 {
-    return netdev_dev_linux_cast(netdev_get_dev(netdev))->carrier_resets;
+    return netdev_linux_cast(netdev)->carrier_resets;
 }
 
 static int
@@ -1228,14 +1168,12 @@ static int
 netdev_linux_set_miimon_interval(struct netdev *netdev_,
                                  long long int interval)
 {
-    struct netdev_dev_linux *netdev_dev;
-
-    netdev_dev = netdev_dev_linux_cast(netdev_get_dev(netdev_));
+    struct netdev_linux *netdev = netdev_linux_cast(netdev_);
 
     interval = interval > 0 ? MAX(interval, 100) : 0;
-    if (netdev_dev->miimon_interval != interval) {
-        netdev_dev->miimon_interval = interval;
-        timer_set_expired(&netdev_dev->miimon_timer);
+    if (netdev->miimon_interval != interval) {
+        netdev->miimon_interval = interval;
+        timer_set_expired(&netdev->miimon_timer);
     }
 
     return 0;
@@ -1248,9 +1186,9 @@ netdev_linux_miimon_run(void)
     struct shash_node *node;
 
     shash_init(&device_shash);
-    netdev_dev_get_devices(&netdev_linux_class, &device_shash);
+    netdev_get_devices(&netdev_linux_class, &device_shash);
     SHASH_FOR_EACH (node, &device_shash) {
-        struct netdev_dev_linux *dev = node->data;
+        struct netdev_linux *dev = node->data;
         bool miimon;
 
         if (dev->miimon_interval <= 0 || !timer_expired(&dev->miimon_timer)) {
@@ -1260,7 +1198,7 @@ netdev_linux_miimon_run(void)
         netdev_linux_get_miimon(dev->up.name, &miimon);
         if (miimon != dev->miimon) {
             dev->miimon = miimon;
-            netdev_dev_linux_changed(dev, dev->ifi_flags, 0);
+            netdev_linux_changed(dev, dev->ifi_flags, 0);
         }
 
         timer_set_duration(&dev->miimon_timer, dev->miimon_interval);
@@ -1276,9 +1214,9 @@ netdev_linux_miimon_wait(void)
     struct shash_node *node;
 
     shash_init(&device_shash);
-    netdev_dev_get_devices(&netdev_linux_class, &device_shash);
+    netdev_get_devices(&netdev_linux_class, &device_shash);
     SHASH_FOR_EACH (node, &device_shash) {
-        struct netdev_dev_linux *dev = node->data;
+        struct netdev_linux *dev = node->data;
 
         if (dev->miimon_interval > 0) {
             timer_wait(&dev->miimon_timer);
@@ -1379,11 +1317,10 @@ static void
 get_stats_via_vport(const struct netdev *netdev_,
                     struct netdev_stats *stats)
 {
-    struct netdev_dev_linux *netdev_dev =
-                                netdev_dev_linux_cast(netdev_get_dev(netdev_));
+    struct netdev_linux *netdev = netdev_linux_cast(netdev_);
 
-    if (!netdev_dev->vport_stats_error ||
-        !(netdev_dev->cache_valid & VALID_VPORT_STAT_ERROR)) {
+    if (!netdev->vport_stats_error ||
+        !(netdev->cache_valid & VALID_VPORT_STAT_ERROR)) {
         int error;
 
         error = get_stats_via_vport__(netdev_, stats);
@@ -1391,8 +1328,8 @@ get_stats_via_vport(const struct netdev *netdev_,
             VLOG_WARN_RL(&rl, "%s: obtaining netdev stats via vport failed "
                          "(%s)", netdev_get_name(netdev_), strerror(error));
         }
-        netdev_dev->vport_stats_error = error;
-        netdev_dev->cache_valid |= VALID_VPORT_STAT_ERROR;
+        netdev->vport_stats_error = error;
+        netdev->cache_valid |= VALID_VPORT_STAT_ERROR;
     }
 }
 
@@ -1431,8 +1368,7 @@ static int
 netdev_linux_get_stats(const struct netdev *netdev_,
                        struct netdev_stats *stats)
 {
-    struct netdev_dev_linux *netdev_dev =
-                                netdev_dev_linux_cast(netdev_get_dev(netdev_));
+    struct netdev_linux *netdev = netdev_linux_cast(netdev_);
     struct netdev_stats dev_stats;
     int error;
 
@@ -1441,14 +1377,14 @@ netdev_linux_get_stats(const struct netdev *netdev_,
     error = netdev_linux_sys_get_stats(netdev_, &dev_stats);
 
     if (error) {
-        if (netdev_dev->vport_stats_error) {
+        if (netdev->vport_stats_error) {
             return error;
         } else {
             return 0;
         }
     }
 
-    if (netdev_dev->vport_stats_error) {
+    if (netdev->vport_stats_error) {
         /* stats not available from OVS then use ioctl stats. */
         *stats = dev_stats;
     } else {
@@ -1479,8 +1415,7 @@ static int
 netdev_tap_get_stats(const struct netdev *netdev_,
                         struct netdev_stats *stats)
 {
-    struct netdev_dev_linux *netdev_dev =
-                                netdev_dev_linux_cast(netdev_get_dev(netdev_));
+    struct netdev_linux *netdev = netdev_linux_cast(netdev_);
     struct netdev_stats dev_stats;
     int error;
 
@@ -1488,7 +1423,7 @@ netdev_tap_get_stats(const struct netdev *netdev_,
 
     error = netdev_linux_sys_get_stats(netdev_, &dev_stats);
     if (error) {
-        if (netdev_dev->vport_stats_error) {
+        if (netdev->vport_stats_error) {
             return error;
         } else {
             return 0;
@@ -1501,7 +1436,7 @@ netdev_tap_get_stats(const struct netdev *netdev_,
      * them back here. This does not apply if we are getting stats from the
      * vport layer because it always tracks stats from the perspective of the
      * switch. */
-    if (netdev_dev->vport_stats_error) {
+    if (netdev->vport_stats_error) {
         *stats = dev_stats;
         swap_uint64(&stats->rx_packets, &stats->tx_packets);
         swap_uint64(&stats->rx_bytes, &stats->tx_bytes);
@@ -1535,11 +1470,10 @@ static int
 netdev_internal_get_stats(const struct netdev *netdev_,
                           struct netdev_stats *stats)
 {
-    struct netdev_dev_linux *netdev_dev =
-                                netdev_dev_linux_cast(netdev_get_dev(netdev_));
+    struct netdev_linux *netdev = netdev_linux_cast(netdev_);
 
     get_stats_via_vport(netdev_, stats);
-    return netdev_dev->vport_stats_error;
+    return netdev->vport_stats_error;
 }
 
 static int
@@ -1578,138 +1512,138 @@ netdev_internal_set_stats(struct netdev *netdev,
 }
 
 static void
-netdev_linux_read_features(struct netdev_dev_linux *netdev_dev)
+netdev_linux_read_features(struct netdev_linux *netdev)
 {
     struct ethtool_cmd ecmd;
     uint32_t speed;
     int error;
 
-    if (netdev_dev->cache_valid & VALID_FEATURES) {
+    if (netdev->cache_valid & VALID_FEATURES) {
         return;
     }
 
     COVERAGE_INC(netdev_get_ethtool);
     memset(&ecmd, 0, sizeof ecmd);
-    error = netdev_linux_do_ethtool(netdev_dev->up.name, &ecmd,
+    error = netdev_linux_do_ethtool(netdev->up.name, &ecmd,
                                     ETHTOOL_GSET, "ETHTOOL_GSET");
     if (error) {
         goto out;
     }
 
     /* Supported features. */
-    netdev_dev->supported = 0;
+    netdev->supported = 0;
     if (ecmd.supported & SUPPORTED_10baseT_Half) {
-        netdev_dev->supported |= NETDEV_F_10MB_HD;
+        netdev->supported |= NETDEV_F_10MB_HD;
     }
     if (ecmd.supported & SUPPORTED_10baseT_Full) {
-        netdev_dev->supported |= NETDEV_F_10MB_FD;
+        netdev->supported |= NETDEV_F_10MB_FD;
     }
     if (ecmd.supported & SUPPORTED_100baseT_Half)  {
-        netdev_dev->supported |= NETDEV_F_100MB_HD;
+        netdev->supported |= NETDEV_F_100MB_HD;
     }
     if (ecmd.supported & SUPPORTED_100baseT_Full) {
-        netdev_dev->supported |= NETDEV_F_100MB_FD;
+        netdev->supported |= NETDEV_F_100MB_FD;
     }
     if (ecmd.supported & SUPPORTED_1000baseT_Half) {
-        netdev_dev->supported |= NETDEV_F_1GB_HD;
+        netdev->supported |= NETDEV_F_1GB_HD;
     }
     if (ecmd.supported & SUPPORTED_1000baseT_Full) {
-        netdev_dev->supported |= NETDEV_F_1GB_FD;
+        netdev->supported |= NETDEV_F_1GB_FD;
     }
     if (ecmd.supported & SUPPORTED_10000baseT_Full) {
-        netdev_dev->supported |= NETDEV_F_10GB_FD;
+        netdev->supported |= NETDEV_F_10GB_FD;
     }
     if (ecmd.supported & SUPPORTED_TP) {
-        netdev_dev->supported |= NETDEV_F_COPPER;
+        netdev->supported |= NETDEV_F_COPPER;
     }
     if (ecmd.supported & SUPPORTED_FIBRE) {
-        netdev_dev->supported |= NETDEV_F_FIBER;
+        netdev->supported |= NETDEV_F_FIBER;
     }
     if (ecmd.supported & SUPPORTED_Autoneg) {
-        netdev_dev->supported |= NETDEV_F_AUTONEG;
+        netdev->supported |= NETDEV_F_AUTONEG;
     }
     if (ecmd.supported & SUPPORTED_Pause) {
-        netdev_dev->supported |= NETDEV_F_PAUSE;
+        netdev->supported |= NETDEV_F_PAUSE;
     }
     if (ecmd.supported & SUPPORTED_Asym_Pause) {
-        netdev_dev->supported |= NETDEV_F_PAUSE_ASYM;
+        netdev->supported |= NETDEV_F_PAUSE_ASYM;
     }
 
     /* Advertised features. */
-    netdev_dev->advertised = 0;
+    netdev->advertised = 0;
     if (ecmd.advertising & ADVERTISED_10baseT_Half) {
-        netdev_dev->advertised |= NETDEV_F_10MB_HD;
+        netdev->advertised |= NETDEV_F_10MB_HD;
     }
     if (ecmd.advertising & ADVERTISED_10baseT_Full) {
-        netdev_dev->advertised |= NETDEV_F_10MB_FD;
+        netdev->advertised |= NETDEV_F_10MB_FD;
     }
     if (ecmd.advertising & ADVERTISED_100baseT_Half) {
-        netdev_dev->advertised |= NETDEV_F_100MB_HD;
+        netdev->advertised |= NETDEV_F_100MB_HD;
     }
     if (ecmd.advertising & ADVERTISED_100baseT_Full) {
-        netdev_dev->advertised |= NETDEV_F_100MB_FD;
+        netdev->advertised |= NETDEV_F_100MB_FD;
     }
     if (ecmd.advertising & ADVERTISED_1000baseT_Half) {
-        netdev_dev->advertised |= NETDEV_F_1GB_HD;
+        netdev->advertised |= NETDEV_F_1GB_HD;
     }
     if (ecmd.advertising & ADVERTISED_1000baseT_Full) {
-        netdev_dev->advertised |= NETDEV_F_1GB_FD;
+        netdev->advertised |= NETDEV_F_1GB_FD;
     }
     if (ecmd.advertising & ADVERTISED_10000baseT_Full) {
-        netdev_dev->advertised |= NETDEV_F_10GB_FD;
+        netdev->advertised |= NETDEV_F_10GB_FD;
     }
     if (ecmd.advertising & ADVERTISED_TP) {
-        netdev_dev->advertised |= NETDEV_F_COPPER;
+        netdev->advertised |= NETDEV_F_COPPER;
     }
     if (ecmd.advertising & ADVERTISED_FIBRE) {
-        netdev_dev->advertised |= NETDEV_F_FIBER;
+        netdev->advertised |= NETDEV_F_FIBER;
     }
     if (ecmd.advertising & ADVERTISED_Autoneg) {
-        netdev_dev->advertised |= NETDEV_F_AUTONEG;
+        netdev->advertised |= NETDEV_F_AUTONEG;
     }
     if (ecmd.advertising & ADVERTISED_Pause) {
-        netdev_dev->advertised |= NETDEV_F_PAUSE;
+        netdev->advertised |= NETDEV_F_PAUSE;
     }
     if (ecmd.advertising & ADVERTISED_Asym_Pause) {
-        netdev_dev->advertised |= NETDEV_F_PAUSE_ASYM;
+        netdev->advertised |= NETDEV_F_PAUSE_ASYM;
     }
 
     /* Current settings. */
     speed = ecmd.speed;
     if (speed == SPEED_10) {
-        netdev_dev->current = ecmd.duplex ? NETDEV_F_10MB_FD : NETDEV_F_10MB_HD;
+        netdev->current = ecmd.duplex ? NETDEV_F_10MB_FD : NETDEV_F_10MB_HD;
     } else if (speed == SPEED_100) {
-        netdev_dev->current = ecmd.duplex ? NETDEV_F_100MB_FD : NETDEV_F_100MB_HD;
+        netdev->current = ecmd.duplex ? NETDEV_F_100MB_FD : NETDEV_F_100MB_HD;
     } else if (speed == SPEED_1000) {
-        netdev_dev->current = ecmd.duplex ? NETDEV_F_1GB_FD : NETDEV_F_1GB_HD;
+        netdev->current = ecmd.duplex ? NETDEV_F_1GB_FD : NETDEV_F_1GB_HD;
     } else if (speed == SPEED_10000) {
-        netdev_dev->current = NETDEV_F_10GB_FD;
+        netdev->current = NETDEV_F_10GB_FD;
     } else if (speed == 40000) {
-        netdev_dev->current = NETDEV_F_40GB_FD;
+        netdev->current = NETDEV_F_40GB_FD;
     } else if (speed == 100000) {
-        netdev_dev->current = NETDEV_F_100GB_FD;
+        netdev->current = NETDEV_F_100GB_FD;
     } else if (speed == 1000000) {
-        netdev_dev->current = NETDEV_F_1TB_FD;
+        netdev->current = NETDEV_F_1TB_FD;
     } else {
-        netdev_dev->current = 0;
+        netdev->current = 0;
     }
 
     if (ecmd.port == PORT_TP) {
-        netdev_dev->current |= NETDEV_F_COPPER;
+        netdev->current |= NETDEV_F_COPPER;
     } else if (ecmd.port == PORT_FIBRE) {
-        netdev_dev->current |= NETDEV_F_FIBER;
+        netdev->current |= NETDEV_F_FIBER;
     }
 
     if (ecmd.autoneg) {
-        netdev_dev->current |= NETDEV_F_AUTONEG;
+        netdev->current |= NETDEV_F_AUTONEG;
     }
 
     /* Peer advertisements. */
-    netdev_dev->peer = 0;                  /* XXX */
+    netdev->peer = 0;                  /* XXX */
 
 out:
-    netdev_dev->cache_valid |= VALID_FEATURES;
-    netdev_dev->get_features_error = error;
+    netdev->cache_valid |= VALID_FEATURES;
+    netdev->get_features_error = error;
 }
 
 /* Stores the features supported by 'netdev' into each of '*current',
@@ -1723,18 +1657,17 @@ netdev_linux_get_features(const struct netdev *netdev_,
                           enum netdev_features *supported,
                           enum netdev_features *peer)
 {
-    struct netdev_dev_linux *netdev_dev =
-                                netdev_dev_linux_cast(netdev_get_dev(netdev_));
+    struct netdev_linux *netdev = netdev_linux_cast(netdev_);
 
-    netdev_linux_read_features(netdev_dev);
+    netdev_linux_read_features(netdev);
 
-    if (!netdev_dev->get_features_error) {
-        *current = netdev_dev->current;
-        *advertised = netdev_dev->advertised;
-        *supported = netdev_dev->supported;
-        *peer = netdev_dev->peer;
+    if (!netdev->get_features_error) {
+        *current = netdev->current;
+        *advertised = netdev->advertised;
+        *supported = netdev->supported;
+        *peer = netdev->peer;
     }
-    return netdev_dev->get_features_error;
+    return netdev->get_features_error;
 }
 
 /* Set the features advertised by 'netdev' to 'advertise'. */
@@ -1798,12 +1731,11 @@ netdev_linux_set_advertisements(struct netdev *netdev,
 /* Attempts to set input rate limiting (policing) policy.  Returns 0 if
  * successful, otherwise a positive errno value. */
 static int
-netdev_linux_set_policing(struct netdev *netdev,
+netdev_linux_set_policing(struct netdev *netdev_,
                           uint32_t kbits_rate, uint32_t kbits_burst)
 {
-    struct netdev_dev_linux *netdev_dev =
-        netdev_dev_linux_cast(netdev_get_dev(netdev));
-    const char *netdev_name = netdev_get_name(netdev);
+    struct netdev_linux *netdev = netdev_linux_cast(netdev_);
+    const char *netdev_name = netdev_get_name(netdev_);
     int error;
 
 
@@ -1811,22 +1743,22 @@ netdev_linux_set_policing(struct netdev *netdev,
                    : !kbits_burst ? 1000 /* Default to 1000 kbits if 0. */
                    : kbits_burst);       /* Stick with user-specified value. */
 
-    if (netdev_dev->cache_valid & VALID_POLICING) {
-        if (netdev_dev->netdev_policing_error) {
-            return netdev_dev->netdev_policing_error;
+    if (netdev->cache_valid & VALID_POLICING) {
+        if (netdev->netdev_policing_error) {
+            return netdev->netdev_policing_error;
         }
 
-        if (netdev_dev->kbits_rate == kbits_rate &&
-            netdev_dev->kbits_burst == kbits_burst) {
+        if (netdev->kbits_rate == kbits_rate &&
+            netdev->kbits_burst == kbits_burst) {
             /* Assume that settings haven't changed since we last set them. */
             return 0;
         }
-        netdev_dev->cache_valid &= ~VALID_POLICING;
+        netdev->cache_valid &= ~VALID_POLICING;
     }
 
     COVERAGE_INC(netdev_set_policing);
     /* Remove any existing ingress qdisc. */
-    error = tc_add_del_ingress_qdisc(netdev, false);
+    error = tc_add_del_ingress_qdisc(netdev_, false);
     if (error) {
         VLOG_WARN_RL(&rl, "%s: removing policing failed: %s",
                      netdev_name, strerror(error));
@@ -1834,14 +1766,14 @@ netdev_linux_set_policing(struct netdev *netdev,
     }
 
     if (kbits_rate) {
-        error = tc_add_del_ingress_qdisc(netdev, true);
+        error = tc_add_del_ingress_qdisc(netdev_, true);
         if (error) {
             VLOG_WARN_RL(&rl, "%s: adding policing qdisc failed: %s",
                          netdev_name, strerror(error));
             goto out;
         }
 
-        error = tc_add_policer(netdev, kbits_rate, kbits_burst);
+        error = tc_add_policer(netdev_, kbits_rate, kbits_burst);
         if (error){
             VLOG_WARN_RL(&rl, "%s: adding policing action failed: %s",
                     netdev_name, strerror(error));
@@ -1849,13 +1781,13 @@ netdev_linux_set_policing(struct netdev *netdev,
         }
     }
 
-    netdev_dev->kbits_rate = kbits_rate;
-    netdev_dev->kbits_burst = kbits_burst;
+    netdev->kbits_rate = kbits_rate;
+    netdev->kbits_burst = kbits_burst;
 
 out:
     if (!error || error == ENODEV) {
-        netdev_dev->netdev_policing_error = error;
-        netdev_dev->cache_valid |= VALID_POLICING;
+        netdev->netdev_policing_error = error;
+        netdev->cache_valid |= VALID_POLICING;
     }
     return error;
 }
@@ -1904,14 +1836,13 @@ tc_lookup_linux_name(const char *name)
 }
 
 static struct tc_queue *
-tc_find_queue__(const struct netdev *netdev, unsigned int queue_id,
+tc_find_queue__(const struct netdev *netdev_, unsigned int queue_id,
                 size_t hash)
 {
-    struct netdev_dev_linux *netdev_dev =
-                                netdev_dev_linux_cast(netdev_get_dev(netdev));
+    struct netdev_linux *netdev = netdev_linux_cast(netdev_);
     struct tc_queue *queue;
 
-    HMAP_FOR_EACH_IN_BUCKET (queue, hmap_node, hash, &netdev_dev->tc->queues) {
+    HMAP_FOR_EACH_IN_BUCKET (queue, hmap_node, hash, &netdev->tc->queues) {
         if (queue->queue_id == queue_id) {
             return queue;
         }
@@ -1939,30 +1870,28 @@ netdev_linux_get_qos_capabilities(const struct netdev *netdev OVS_UNUSED,
 }
 
 static int
-netdev_linux_get_qos(const struct netdev *netdev,
+netdev_linux_get_qos(const struct netdev *netdev_,
                      const char **typep, struct smap *details)
 {
-    struct netdev_dev_linux *netdev_dev =
-                                netdev_dev_linux_cast(netdev_get_dev(netdev));
+    struct netdev_linux *netdev = netdev_linux_cast(netdev_);
     int error;
 
-    error = tc_query_qdisc(netdev);
+    error = tc_query_qdisc(netdev_);
     if (error) {
         return error;
     }
 
-    *typep = netdev_dev->tc->ops->ovs_name;
-    return (netdev_dev->tc->ops->qdisc_get
-            ? netdev_dev->tc->ops->qdisc_get(netdev, details)
+    *typep = netdev->tc->ops->ovs_name;
+    return (netdev->tc->ops->qdisc_get
+            ? netdev->tc->ops->qdisc_get(netdev_, details)
             : 0);
 }
 
 static int
-netdev_linux_set_qos(struct netdev *netdev,
+netdev_linux_set_qos(struct netdev *netdev_,
                      const char *type, const struct smap *details)
 {
-    struct netdev_dev_linux *netdev_dev =
-                                netdev_dev_linux_cast(netdev_get_dev(netdev));
+    struct netdev_linux *netdev = netdev_linux_cast(netdev_);
     const struct tc_ops *new_ops;
     int error;
 
@@ -1971,105 +1900,101 @@ netdev_linux_set_qos(struct netdev *netdev,
         return EOPNOTSUPP;
     }
 
-    error = tc_query_qdisc(netdev);
+    error = tc_query_qdisc(netdev_);
     if (error) {
         return error;
     }
 
-    if (new_ops == netdev_dev->tc->ops) {
-        return new_ops->qdisc_set ? new_ops->qdisc_set(netdev, details) : 0;
+    if (new_ops == netdev->tc->ops) {
+        return new_ops->qdisc_set ? new_ops->qdisc_set(netdev_, details) : 0;
     } else {
         /* Delete existing qdisc. */
-        error = tc_del_qdisc(netdev);
+        error = tc_del_qdisc(netdev_);
         if (error) {
             return error;
         }
-        ovs_assert(netdev_dev->tc == NULL);
+        ovs_assert(netdev->tc == NULL);
 
         /* Install new qdisc. */
-        error = new_ops->tc_install(netdev, details);
-        ovs_assert((error == 0) == (netdev_dev->tc != NULL));
+        error = new_ops->tc_install(netdev_, details);
+        ovs_assert((error == 0) == (netdev->tc != NULL));
 
         return error;
     }
 }
 
 static int
-netdev_linux_get_queue(const struct netdev *netdev,
+netdev_linux_get_queue(const struct netdev *netdev_,
                        unsigned int queue_id, struct smap *details)
 {
-    struct netdev_dev_linux *netdev_dev =
-                                netdev_dev_linux_cast(netdev_get_dev(netdev));
+    struct netdev_linux *netdev = netdev_linux_cast(netdev_);
     int error;
 
-    error = tc_query_qdisc(netdev);
+    error = tc_query_qdisc(netdev_);
     if (error) {
         return error;
     } else {
-        struct tc_queue *queue = tc_find_queue(netdev, queue_id);
+        struct tc_queue *queue = tc_find_queue(netdev_, queue_id);
         return (queue
-                ? netdev_dev->tc->ops->class_get(netdev, queue, details)
+                ? netdev->tc->ops->class_get(netdev_, queue, details)
                 : ENOENT);
     }
 }
 
 static int
-netdev_linux_set_queue(struct netdev *netdev,
+netdev_linux_set_queue(struct netdev *netdev_,
                        unsigned int queue_id, const struct smap *details)
 {
-    struct netdev_dev_linux *netdev_dev =
-                                netdev_dev_linux_cast(netdev_get_dev(netdev));
+    struct netdev_linux *netdev = netdev_linux_cast(netdev_);
     int error;
 
-    error = tc_query_qdisc(netdev);
+    error = tc_query_qdisc(netdev_);
     if (error) {
         return error;
-    } else if (queue_id >= netdev_dev->tc->ops->n_queues
-               || !netdev_dev->tc->ops->class_set) {
+    } else if (queue_id >= netdev->tc->ops->n_queues
+               || !netdev->tc->ops->class_set) {
         return EINVAL;
     }
 
-    return netdev_dev->tc->ops->class_set(netdev, queue_id, details);
+    return netdev->tc->ops->class_set(netdev_, queue_id, details);
 }
 
 static int
-netdev_linux_delete_queue(struct netdev *netdev, unsigned int queue_id)
+netdev_linux_delete_queue(struct netdev *netdev_, unsigned int queue_id)
 {
-    struct netdev_dev_linux *netdev_dev =
-                                netdev_dev_linux_cast(netdev_get_dev(netdev));
+    struct netdev_linux *netdev = netdev_linux_cast(netdev_);
     int error;
 
-    error = tc_query_qdisc(netdev);
+    error = tc_query_qdisc(netdev_);
     if (error) {
         return error;
-    } else if (!netdev_dev->tc->ops->class_delete) {
+    } else if (!netdev->tc->ops->class_delete) {
         return EINVAL;
     } else {
-        struct tc_queue *queue = tc_find_queue(netdev, queue_id);
+        struct tc_queue *queue = tc_find_queue(netdev_, queue_id);
         return (queue
-                ? netdev_dev->tc->ops->class_delete(netdev, queue)
+                ? netdev->tc->ops->class_delete(netdev_, queue)
                 : ENOENT);
     }
 }
 
 static int
-netdev_linux_get_queue_stats(const struct netdev *netdev,
+netdev_linux_get_queue_stats(const struct netdev *netdev_,
                              unsigned int queue_id,
                              struct netdev_queue_stats *stats)
 {
-    struct netdev_dev_linux *netdev_dev =
-                                netdev_dev_linux_cast(netdev_get_dev(netdev));
+    struct netdev_linux *netdev = netdev_linux_cast(netdev_);
     int error;
 
-    error = tc_query_qdisc(netdev);
+    error = tc_query_qdisc(netdev_);
     if (error) {
         return error;
-    } else if (!netdev_dev->tc->ops->class_get_stats) {
+    } else if (!netdev->tc->ops->class_get_stats) {
         return EOPNOTSUPP;
     } else {
-        const struct tc_queue *queue = tc_find_queue(netdev, queue_id);
+        const struct tc_queue *queue = tc_find_queue(netdev_, queue_id);
         return (queue
-                ? netdev_dev->tc->ops->class_get_stats(netdev, queue, stats)
+                ? netdev->tc->ops->class_get_stats(netdev_, queue, stats)
                 : ENOENT);
     }
 }
@@ -2091,30 +2016,29 @@ start_queue_dump(const struct netdev *netdev, struct nl_dump *dump)
 }
 
 static int
-netdev_linux_dump_queues(const struct netdev *netdev,
+netdev_linux_dump_queues(const struct netdev *netdev_,
                          netdev_dump_queues_cb *cb, void *aux)
 {
-    struct netdev_dev_linux *netdev_dev =
-                                netdev_dev_linux_cast(netdev_get_dev(netdev));
+    struct netdev_linux *netdev = netdev_linux_cast(netdev_);
     struct tc_queue *queue, *next_queue;
     struct smap details;
     int last_error;
     int error;
 
-    error = tc_query_qdisc(netdev);
+    error = tc_query_qdisc(netdev_);
     if (error) {
         return error;
-    } else if (!netdev_dev->tc->ops->class_get) {
+    } else if (!netdev->tc->ops->class_get) {
         return EOPNOTSUPP;
     }
 
     last_error = 0;
     smap_init(&details);
     HMAP_FOR_EACH_SAFE (queue, next_queue, hmap_node,
-                        &netdev_dev->tc->queues) {
+                        &netdev->tc->queues) {
         smap_clear(&details);
 
-        error = netdev_dev->tc->ops->class_get(netdev, queue, &details);
+        error = netdev->tc->ops->class_get(netdev_, queue, &details);
         if (!error) {
             (*cb)(queue->queue_id, &details, aux);
         } else {
@@ -2127,29 +2051,28 @@ netdev_linux_dump_queues(const struct netdev *netdev,
 }
 
 static int
-netdev_linux_dump_queue_stats(const struct netdev *netdev,
+netdev_linux_dump_queue_stats(const struct netdev *netdev_,
                               netdev_dump_queue_stats_cb *cb, void *aux)
 {
-    struct netdev_dev_linux *netdev_dev =
-                                netdev_dev_linux_cast(netdev_get_dev(netdev));
+    struct netdev_linux *netdev = netdev_linux_cast(netdev_);
     struct nl_dump dump;
     struct ofpbuf msg;
     int last_error;
     int error;
 
-    error = tc_query_qdisc(netdev);
+    error = tc_query_qdisc(netdev_);
     if (error) {
         return error;
-    } else if (!netdev_dev->tc->ops->class_dump_stats) {
+    } else if (!netdev->tc->ops->class_dump_stats) {
         return EOPNOTSUPP;
     }
 
     last_error = 0;
-    if (!start_queue_dump(netdev, &dump)) {
+    if (!start_queue_dump(netdev_, &dump)) {
         return ENODEV;
     }
     while (nl_dump_next(&dump, &msg)) {
-        error = netdev_dev->tc->ops->class_dump_stats(netdev, &msg, cb, aux);
+        error = netdev->tc->ops->class_dump_stats(netdev_, &msg, cb, aux);
         if (error) {
             last_error = error;
         }
@@ -2163,28 +2086,27 @@ static int
 netdev_linux_get_in4(const struct netdev *netdev_,
                      struct in_addr *address, struct in_addr *netmask)
 {
-    struct netdev_dev_linux *netdev_dev =
-                                netdev_dev_linux_cast(netdev_get_dev(netdev_));
+    struct netdev_linux *netdev = netdev_linux_cast(netdev_);
 
-    if (!(netdev_dev->cache_valid & VALID_IN4)) {
+    if (!(netdev->cache_valid & VALID_IN4)) {
         int error;
 
-        error = netdev_linux_get_ipv4(netdev_, &netdev_dev->address,
+        error = netdev_linux_get_ipv4(netdev_, &netdev->address,
                                       SIOCGIFADDR, "SIOCGIFADDR");
         if (error) {
             return error;
         }
 
-        error = netdev_linux_get_ipv4(netdev_, &netdev_dev->netmask,
+        error = netdev_linux_get_ipv4(netdev_, &netdev->netmask,
                                       SIOCGIFNETMASK, "SIOCGIFNETMASK");
         if (error) {
             return error;
         }
 
-        netdev_dev->cache_valid |= VALID_IN4;
+        netdev->cache_valid |= VALID_IN4;
     }
-    *address = netdev_dev->address;
-    *netmask = netdev_dev->netmask;
+    *address = netdev->address;
+    *netmask = netdev->netmask;
     return address->s_addr == INADDR_ANY ? EADDRNOTAVAIL : 0;
 }
 
@@ -2192,15 +2114,14 @@ static int
 netdev_linux_set_in4(struct netdev *netdev_, struct in_addr address,
                      struct in_addr netmask)
 {
-    struct netdev_dev_linux *netdev_dev =
-                                netdev_dev_linux_cast(netdev_get_dev(netdev_));
+    struct netdev_linux *netdev = netdev_linux_cast(netdev_);
     int error;
 
     error = do_set_addr(netdev_, SIOCSIFADDR, "SIOCSIFADDR", address);
     if (!error) {
-        netdev_dev->cache_valid |= VALID_IN4;
-        netdev_dev->address = address;
-        netdev_dev->netmask = netmask;
+        netdev->cache_valid |= VALID_IN4;
+        netdev->address = address;
+        netdev->netmask = netmask;
         if (address.s_addr != INADDR_ANY) {
             error = do_set_addr(netdev_, SIOCSIFNETMASK,
                                 "SIOCSIFNETMASK", netmask);
@@ -2230,13 +2151,12 @@ parse_if_inet6_line(const char *line,
 static int
 netdev_linux_get_in6(const struct netdev *netdev_, struct in6_addr *in6)
 {
-    struct netdev_dev_linux *netdev_dev =
-                                netdev_dev_linux_cast(netdev_get_dev(netdev_));
-    if (!(netdev_dev->cache_valid & VALID_IN6)) {
+    struct netdev_linux *netdev = netdev_linux_cast(netdev_);
+    if (!(netdev->cache_valid & VALID_IN6)) {
         FILE *file;
         char line[128];
 
-        netdev_dev->in6 = in6addr_any;
+        netdev->in6 = in6addr_any;
 
         file = fopen("/proc/net/if_inet6", "r");
         if (file != NULL) {
@@ -2247,15 +2167,15 @@ netdev_linux_get_in6(const struct netdev *netdev_, struct in6_addr *in6)
                 if (parse_if_inet6_line(line, &in6_tmp, ifname)
                     && !strcmp(name, ifname))
                 {
-                    netdev_dev->in6 = in6_tmp;
+                    netdev->in6 = in6_tmp;
                     break;
                 }
             }
             fclose(file);
         }
-        netdev_dev->cache_valid |= VALID_IN6;
+        netdev->cache_valid |= VALID_IN6;
     }
-    *in6 = netdev_dev->in6;
+    *in6 = netdev->in6;
     return 0;
 }
 
@@ -2366,30 +2286,29 @@ netdev_linux_get_next_hop(const struct in_addr *host, struct in_addr *next_hop,
 }
 
 static int
-netdev_linux_get_status(const struct netdev *netdev, struct smap *smap)
+netdev_linux_get_status(const struct netdev *netdev_, struct smap *smap)
 {
-    struct netdev_dev_linux *netdev_dev;
+    struct netdev_linux *netdev = netdev_linux_cast(netdev_);
     int error = 0;
 
-    netdev_dev = netdev_dev_linux_cast(netdev_get_dev(netdev));
-    if (!(netdev_dev->cache_valid & VALID_DRVINFO)) {
-        struct ethtool_cmd *cmd = (struct ethtool_cmd *) &netdev_dev->drvinfo;
+    if (!(netdev->cache_valid & VALID_DRVINFO)) {
+        struct ethtool_cmd *cmd = (struct ethtool_cmd *) &netdev->drvinfo;
 
         COVERAGE_INC(netdev_get_ethtool);
-        memset(&netdev_dev->drvinfo, 0, sizeof netdev_dev->drvinfo);
-        error = netdev_linux_do_ethtool(netdev_dev->up.name,
+        memset(&netdev->drvinfo, 0, sizeof netdev->drvinfo);
+        error = netdev_linux_do_ethtool(netdev->up.name,
                                         cmd,
                                         ETHTOOL_GDRVINFO,
                                         "ETHTOOL_GDRVINFO");
         if (!error) {
-            netdev_dev->cache_valid |= VALID_DRVINFO;
+            netdev->cache_valid |= VALID_DRVINFO;
         }
     }
 
     if (!error) {
-        smap_add(smap, "driver_name", netdev_dev->drvinfo.driver);
-        smap_add(smap, "driver_version", netdev_dev->drvinfo.version);
-        smap_add(smap, "firmware_version", netdev_dev->drvinfo.fw_version);
+        smap_add(smap, "driver_name", netdev->drvinfo.driver);
+        smap_add(smap, "driver_version", netdev->drvinfo.version);
+        smap_add(smap, "firmware_version", netdev->drvinfo.fw_version);
     }
     return error;
 }
@@ -2461,20 +2380,19 @@ iff_to_nd_flags(int iff)
 }
 
 static int
-netdev_linux_update_flags(struct netdev_dev *dev_, enum netdev_flags off,
+netdev_linux_update_flags(struct netdev *netdev_, enum netdev_flags off,
                           enum netdev_flags on, enum netdev_flags *old_flagsp)
 {
-    struct netdev_dev_linux *netdev_dev;
+    struct netdev_linux *netdev = netdev_linux_cast(netdev_);
     int old_flags, new_flags;
     int error = 0;
 
-    netdev_dev = netdev_dev_linux_cast(dev_);
-    old_flags = netdev_dev->ifi_flags;
+    old_flags = netdev->ifi_flags;
     *old_flagsp = iff_to_nd_flags(old_flags);
     new_flags = (old_flags & ~nd_to_iff_flags(off)) | nd_to_iff_flags(on);
     if (new_flags != old_flags) {
-        error = set_flags(netdev_dev_get_name(dev_), new_flags);
-        get_flags(&netdev_dev->up, &netdev_dev->ifi_flags);
+        error = set_flags(netdev_get_name(netdev_), new_flags);
+        get_flags(netdev_, &netdev->ifi_flags);
     }
     return error;
 }
@@ -2482,7 +2400,7 @@ netdev_linux_update_flags(struct netdev_dev *dev_, enum netdev_flags off,
 static unsigned int
 netdev_linux_change_seq(const struct netdev *netdev)
 {
-    return netdev_dev_linux_cast(netdev_get_dev(netdev))->change_seq;
+    return netdev_linux_cast(netdev)->change_seq;
 }
 
 #define NETDEV_LINUX_CLASS(NAME, CREATE, GET_STATS, SET_STATS,  \
@@ -2499,9 +2417,6 @@ netdev_linux_change_seq(const struct netdev *netdev)
     NULL,                       /* get_config */                \
     NULL,                       /* set_config */                \
     NULL,                       /* get_tunnel_config */         \
-                                                                \
-    netdev_linux_open,                                          \
-    netdev_linux_close,                                         \
                                                                 \
     netdev_linux_rx_open,                                       \
                                                                 \
@@ -2599,25 +2514,23 @@ struct htb_class {
 };
 
 static struct htb *
-htb_get__(const struct netdev *netdev)
+htb_get__(const struct netdev *netdev_)
 {
-    struct netdev_dev_linux *netdev_dev =
-                                netdev_dev_linux_cast(netdev_get_dev(netdev));
-    return CONTAINER_OF(netdev_dev->tc, struct htb, tc);
+    struct netdev_linux *netdev = netdev_linux_cast(netdev_);
+    return CONTAINER_OF(netdev->tc, struct htb, tc);
 }
 
 static void
-htb_install__(struct netdev *netdev, uint64_t max_rate)
+htb_install__(struct netdev *netdev_, uint64_t max_rate)
 {
-    struct netdev_dev_linux *netdev_dev =
-                                netdev_dev_linux_cast(netdev_get_dev(netdev));
+    struct netdev_linux *netdev = netdev_linux_cast(netdev_);
     struct htb *htb;
 
     htb = xmalloc(sizeof *htb);
     tc_init(&htb->tc, &tc_ops_htb);
     htb->max_rate = max_rate;
 
-    netdev_dev->tc = &htb->tc;
+    netdev->tc = &htb->tc;
 }
 
 /* Create an HTB qdisc.
@@ -3078,11 +2991,10 @@ struct hfsc_class {
 };
 
 static struct hfsc *
-hfsc_get__(const struct netdev *netdev)
+hfsc_get__(const struct netdev *netdev_)
 {
-    struct netdev_dev_linux *netdev_dev;
-    netdev_dev = netdev_dev_linux_cast(netdev_get_dev(netdev));
-    return CONTAINER_OF(netdev_dev->tc, struct hfsc, tc);
+    struct netdev_linux *netdev = netdev_linux_cast(netdev_);
+    return CONTAINER_OF(netdev->tc, struct hfsc, tc);
 }
 
 static struct hfsc_class *
@@ -3092,16 +3004,15 @@ hfsc_class_cast__(const struct tc_queue *queue)
 }
 
 static void
-hfsc_install__(struct netdev *netdev, uint32_t max_rate)
+hfsc_install__(struct netdev *netdev_, uint32_t max_rate)
 {
-    struct netdev_dev_linux * netdev_dev;
+    struct netdev_linux *netdev = netdev_linux_cast(netdev_);
     struct hfsc *hfsc;
 
-    netdev_dev = netdev_dev_linux_cast(netdev_get_dev(netdev));
     hfsc = xmalloc(sizeof *hfsc);
     tc_init(&hfsc->tc, &tc_ops_hfsc);
     hfsc->max_rate = max_rate;
-    netdev_dev->tc = &hfsc->tc;
+    netdev->tc = &hfsc->tc;
 }
 
 static void
@@ -3572,15 +3483,14 @@ static const struct tc_ops tc_ops_hfsc = {
  * the "" (empty string) QoS type in the OVS database. */
 
 static void
-default_install__(struct netdev *netdev)
+default_install__(struct netdev *netdev_)
 {
-    struct netdev_dev_linux *netdev_dev =
-                                netdev_dev_linux_cast(netdev_get_dev(netdev));
+    struct netdev_linux *netdev = netdev_linux_cast(netdev_);
     static const struct tc tc = TC_INITIALIZER(&tc, &tc_ops_default);
 
     /* Nothing but a tc class implementation is allowed to write to a tc.  This
      * class never does that, so we can legitimately use a const tc object. */
-    netdev_dev->tc = CONST_CAST(struct tc *, &tc);
+    netdev->tc = CONST_CAST(struct tc *, &tc);
 }
 
 static int
@@ -3619,15 +3529,14 @@ static const struct tc_ops tc_ops_default = {
  * */
 
 static int
-other_tc_load(struct netdev *netdev, struct ofpbuf *nlmsg OVS_UNUSED)
+other_tc_load(struct netdev *netdev_, struct ofpbuf *nlmsg OVS_UNUSED)
 {
-    struct netdev_dev_linux *netdev_dev =
-                                netdev_dev_linux_cast(netdev_get_dev(netdev));
+    struct netdev_linux *netdev = netdev_linux_cast(netdev_);
     static const struct tc tc = TC_INITIALIZER(&tc, &tc_ops_other);
 
     /* Nothing but a tc class implementation is allowed to write to a tc.  This
      * class never does that, so we can legitimately use a const tc object. */
-    netdev_dev->tc = CONST_CAST(struct tc *, &tc);
+    netdev->tc = CONST_CAST(struct tc *, &tc);
     return 0;
 }
 
@@ -4109,15 +4018,14 @@ tc_delete_class(const struct netdev *netdev, unsigned int handle)
 
 /* Equivalent to "tc qdisc del dev <name> root". */
 static int
-tc_del_qdisc(struct netdev *netdev)
+tc_del_qdisc(struct netdev *netdev_)
 {
-    struct netdev_dev_linux *netdev_dev =
-                                netdev_dev_linux_cast(netdev_get_dev(netdev));
+    struct netdev_linux *netdev = netdev_linux_cast(netdev_);
     struct ofpbuf request;
     struct tcmsg *tcmsg;
     int error;
 
-    tcmsg = tc_make_request(netdev, RTM_DELQDISC, 0, &request);
+    tcmsg = tc_make_request(netdev_, RTM_DELQDISC, 0, &request);
     if (!tcmsg) {
         return ENODEV;
     }
@@ -4130,11 +4038,11 @@ tc_del_qdisc(struct netdev *netdev)
          * case we've accomplished our purpose. */
         error = 0;
     }
-    if (!error && netdev_dev->tc) {
-        if (netdev_dev->tc->ops->tc_destroy) {
-            netdev_dev->tc->ops->tc_destroy(netdev_dev->tc);
+    if (!error && netdev->tc) {
+        if (netdev->tc->ops->tc_destroy) {
+            netdev->tc->ops->tc_destroy(netdev->tc);
         }
-        netdev_dev->tc = NULL;
+        netdev->tc = NULL;
     }
     return error;
 }
@@ -4143,17 +4051,16 @@ tc_del_qdisc(struct netdev *netdev)
  * kernel to determine what they are.  Returns 0 if successful, otherwise a
  * positive errno value. */
 static int
-tc_query_qdisc(const struct netdev *netdev)
+tc_query_qdisc(const struct netdev *netdev_)
 {
-    struct netdev_dev_linux *netdev_dev =
-                                netdev_dev_linux_cast(netdev_get_dev(netdev));
+    struct netdev_linux *netdev = netdev_linux_cast(netdev_);
     struct ofpbuf request, *qdisc;
     const struct tc_ops *ops;
     struct tcmsg *tcmsg;
     int load_error;
     int error;
 
-    if (netdev_dev->tc) {
+    if (netdev->tc) {
         return 0;
     }
 
@@ -4171,7 +4078,7 @@ tc_query_qdisc(const struct netdev *netdev)
      *
      * We could check for Linux 2.6.35+ and use a more straightforward method
      * there. */
-    tcmsg = tc_make_request(netdev, RTM_GETQDISC, NLM_F_ECHO, &request);
+    tcmsg = tc_make_request(netdev_, RTM_GETQDISC, NLM_F_ECHO, &request);
     if (!tcmsg) {
         return ENODEV;
     }
@@ -4204,13 +4111,13 @@ tc_query_qdisc(const struct netdev *netdev)
     } else {
         /* Who knows?  Maybe the device got deleted. */
         VLOG_WARN_RL(&rl, "query %s qdisc failed (%s)",
-                     netdev_get_name(netdev), strerror(error));
+                     netdev_get_name(netdev_), strerror(error));
         ops = &tc_ops_other;
     }
 
     /* Instantiate it. */
-    load_error = ops->tc_load(CONST_CAST(struct netdev *, netdev), qdisc);
-    ovs_assert((load_error == 0) == (netdev_dev->tc != NULL));
+    load_error = ops->tc_load(CONST_CAST(struct netdev *, netdev_), qdisc);
+    ovs_assert((load_error == 0) == (netdev->tc != NULL));
     ofpbuf_delete(qdisc);
 
     return error ? error : load_error;
@@ -4481,7 +4388,7 @@ get_stats_via_proc(const char *netdev_name, struct netdev_stats *stats)
 }
 
 static int
-get_flags(const struct netdev_dev *dev, unsigned int *flags)
+get_flags(const struct netdev *dev, unsigned int *flags)
 {
     struct ifreq ifr;
     int error;
@@ -4522,24 +4429,23 @@ do_get_ifindex(const char *netdev_name)
 static int
 get_ifindex(const struct netdev *netdev_, int *ifindexp)
 {
-    struct netdev_dev_linux *netdev_dev =
-                                netdev_dev_linux_cast(netdev_get_dev(netdev_));
+    struct netdev_linux *netdev = netdev_linux_cast(netdev_);
 
-    if (!(netdev_dev->cache_valid & VALID_IFINDEX)) {
+    if (!(netdev->cache_valid & VALID_IFINDEX)) {
         int ifindex = do_get_ifindex(netdev_get_name(netdev_));
 
         if (ifindex < 0) {
-            netdev_dev->get_ifindex_error = -ifindex;
-            netdev_dev->ifindex = 0;
+            netdev->get_ifindex_error = -ifindex;
+            netdev->ifindex = 0;
         } else {
-            netdev_dev->get_ifindex_error = 0;
-            netdev_dev->ifindex = ifindex;
+            netdev->get_ifindex_error = 0;
+            netdev->ifindex = ifindex;
         }
-        netdev_dev->cache_valid |= VALID_IFINDEX;
+        netdev->cache_valid |= VALID_IFINDEX;
     }
 
-    *ifindexp = netdev_dev->ifindex;
-    return netdev_dev->get_ifindex_error;
+    *ifindexp = netdev->ifindex;
+    return netdev->get_ifindex_error;
 }
 
 static int

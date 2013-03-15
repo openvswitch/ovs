@@ -46,8 +46,8 @@ VLOG_DEFINE_THIS_MODULE(netdev_vport);
 
 #define DEFAULT_TTL 64
 
-struct netdev_dev_vport {
-    struct netdev_dev up;
+struct netdev_vport {
+    struct netdev up;
     unsigned int change_seq;
     uint8_t etheraddr[ETH_ADDR_LEN];
     struct netdev_stats stats;
@@ -65,10 +65,10 @@ struct vport_class {
 };
 
 static int netdev_vport_create(const struct netdev_class *, const char *,
-                               struct netdev_dev **);
-static int get_patch_config(struct netdev_dev *, struct smap *args);
-static int get_tunnel_config(struct netdev_dev *, struct smap *args);
-static void netdev_vport_poll_notify(struct netdev_dev_vport *);
+                               struct netdev **);
+static int get_patch_config(const struct netdev *, struct smap *args);
+static int get_tunnel_config(const struct netdev *, struct smap *args);
+static void netdev_vport_poll_notify(struct netdev_vport *);
 
 static bool
 is_vport_class(const struct netdev_class *class)
@@ -83,39 +83,32 @@ vport_class_cast(const struct netdev_class *class)
     return CONTAINER_OF(class, struct vport_class, netdev_class);
 }
 
-static struct netdev_dev_vport *
-netdev_dev_vport_cast(const struct netdev_dev *netdev_dev)
+static struct netdev_vport *
+netdev_vport_cast(const struct netdev *netdev)
 {
-    ovs_assert(is_vport_class(netdev_dev_get_class(netdev_dev)));
-    return CONTAINER_OF(netdev_dev, struct netdev_dev_vport, up);
-}
-
-static struct netdev_dev_vport *
-netdev_vport_get_dev(const struct netdev *netdev)
-{
-    return netdev_dev_vport_cast(netdev_get_dev(netdev));
+    ovs_assert(is_vport_class(netdev_get_class(netdev)));
+    return CONTAINER_OF(netdev, struct netdev_vport, up);
 }
 
 static const struct netdev_tunnel_config *
-get_netdev_tunnel_config(const struct netdev_dev *netdev_dev)
+get_netdev_tunnel_config(const struct netdev *netdev)
 {
-    return &netdev_dev_vport_cast(netdev_dev)->tnl_cfg;
+    return &netdev_vport_cast(netdev)->tnl_cfg;
 }
 
 bool
 netdev_vport_is_patch(const struct netdev *netdev)
 {
-    const struct netdev_dev *dev = netdev_get_dev(netdev);
-    const struct netdev_class *class = netdev_dev_get_class(dev);
+    const struct netdev_class *class = netdev_get_class(netdev);
 
     return class->get_config == get_patch_config;
 }
 
 static bool
-netdev_vport_needs_dst_port(const struct netdev_dev *dev)
+netdev_vport_needs_dst_port(const struct netdev *dev)
 {
-    const struct netdev_class *class = netdev_dev_get_class(dev);
-    const char *type = netdev_dev_get_type(dev);
+    const struct netdev_class *class = netdev_get_class(dev);
+    const char *type = netdev_get_type(dev);
 
     return (class->get_config == get_tunnel_config &&
             (!strcmp("vxlan", type) || !strcmp("lisp", type)));
@@ -124,13 +117,11 @@ netdev_vport_needs_dst_port(const struct netdev_dev *dev)
 const char *
 netdev_vport_get_dpif_port(const struct netdev *netdev)
 {
-    const struct netdev_dev *dev = netdev_get_dev(netdev);
-    const struct netdev_class *class = netdev_dev_get_class(dev);
     const char *dpif_port;
 
-    if (netdev_vport_needs_dst_port(dev)) {
-        const struct netdev_dev_vport *vport = netdev_vport_get_dev(netdev);
-        const char *type = netdev_dev_get_type(dev);
+    if (netdev_vport_needs_dst_port(netdev)) {
+        const struct netdev_vport *vport = netdev_vport_cast(netdev);
+        const char *type = netdev_get_type(netdev);
         static char dpif_port_combined[IFNAMSIZ];
 
         /*
@@ -144,6 +135,7 @@ netdev_vport_get_dpif_port(const struct netdev *netdev)
                  ntohs(vport->tnl_cfg.dst_port));
         return dpif_port_combined;
     } else {
+        const struct netdev_class *class = netdev_get_class(netdev);
         dpif_port = (is_vport_class(class)
                      ? vport_class_cast(class)->dpif_port
                      : NULL);
@@ -154,52 +146,38 @@ netdev_vport_get_dpif_port(const struct netdev *netdev)
 
 static int
 netdev_vport_create(const struct netdev_class *netdev_class, const char *name,
-                    struct netdev_dev **netdev_devp)
+                    struct netdev **netdevp)
 {
-    struct netdev_dev_vport *dev;
+    struct netdev_vport *dev;
 
     dev = xzalloc(sizeof *dev);
-    netdev_dev_init(&dev->up, name, netdev_class);
+    netdev_init(&dev->up, name, netdev_class);
     dev->change_seq = 1;
     eth_addr_random(dev->etheraddr);
 
-    *netdev_devp = &dev->up;
+    *netdevp = &dev->up;
     route_table_register();
 
     return 0;
 }
 
 static void
-netdev_vport_destroy(struct netdev_dev *netdev_dev_)
+netdev_vport_destroy(struct netdev *netdev_)
 {
-    struct netdev_dev_vport *netdev_dev = netdev_dev_vport_cast(netdev_dev_);
+    struct netdev_vport *netdev = netdev_vport_cast(netdev_);
 
     route_table_unregister();
-    free(netdev_dev->peer);
-    free(netdev_dev);
-}
-
-static int
-netdev_vport_open(struct netdev_dev *netdev_dev, struct netdev **netdevp)
-{
-    *netdevp = xmalloc(sizeof **netdevp);
-    netdev_init(*netdevp, netdev_dev);
-    return 0;
-}
-
-static void
-netdev_vport_close(struct netdev *netdev)
-{
+    free(netdev->peer);
     free(netdev);
 }
 
 static int
-netdev_vport_set_etheraddr(struct netdev *netdev,
+netdev_vport_set_etheraddr(struct netdev *netdev_,
                            const uint8_t mac[ETH_ADDR_LEN])
 {
-    struct netdev_dev_vport *dev = netdev_vport_get_dev(netdev);
-    memcpy(dev->etheraddr, mac, ETH_ADDR_LEN);
-    netdev_vport_poll_notify(dev);
+    struct netdev_vport *netdev = netdev_vport_cast(netdev_);
+    memcpy(netdev->etheraddr, mac, ETH_ADDR_LEN);
+    netdev_vport_poll_notify(netdev);
     return 0;
 }
 
@@ -207,7 +185,7 @@ static int
 netdev_vport_get_etheraddr(const struct netdev *netdev,
                            uint8_t mac[ETH_ADDR_LEN])
 {
-    memcpy(mac, netdev_vport_get_dev(netdev)->etheraddr, ETH_ADDR_LEN);
+    memcpy(mac, netdev_vport_cast(netdev)->etheraddr, ETH_ADDR_LEN);
     return 0;
 }
 
@@ -217,7 +195,7 @@ tunnel_get_status(const struct netdev *netdev, struct smap *smap)
     static char iface[IFNAMSIZ];
     ovs_be32 route;
 
-    route = netdev_vport_get_dev(netdev)->tnl_cfg.ip_dst;
+    route = netdev_vport_cast(netdev)->tnl_cfg.ip_dst;
     if (route_table_get_name(route, iface)) {
         struct netdev *egress_netdev;
 
@@ -234,9 +212,10 @@ tunnel_get_status(const struct netdev *netdev, struct smap *smap)
 }
 
 static int
-netdev_vport_update_flags(struct netdev_dev *netdev_dev OVS_UNUSED,
-                        enum netdev_flags off, enum netdev_flags on OVS_UNUSED,
-                        enum netdev_flags *old_flagsp)
+netdev_vport_update_flags(struct netdev *netdev OVS_UNUSED,
+                          enum netdev_flags off,
+                          enum netdev_flags on OVS_UNUSED,
+                          enum netdev_flags *old_flagsp)
 {
     if (off & (NETDEV_UP | NETDEV_PROMISC)) {
         return EOPNOTSUPP;
@@ -249,7 +228,7 @@ netdev_vport_update_flags(struct netdev_dev *netdev_dev OVS_UNUSED,
 static unsigned int
 netdev_vport_change_seq(const struct netdev *netdev)
 {
-    return netdev_vport_get_dev(netdev)->change_seq;
+    return netdev_vport_cast(netdev)->change_seq;
 }
 
 static void
@@ -267,7 +246,7 @@ netdev_vport_wait(void)
 /* Helper functions. */
 
 static void
-netdev_vport_poll_notify(struct netdev_dev_vport *ndv)
+netdev_vport_poll_notify(struct netdev_vport *ndv)
 {
     ndv->change_seq++;
     if (!ndv->change_seq) {
@@ -305,11 +284,11 @@ parse_key(const struct smap *args, const char *name,
 }
 
 static int
-set_tunnel_config(struct netdev_dev *dev_, const struct smap *args)
+set_tunnel_config(struct netdev *dev_, const struct smap *args)
 {
-    struct netdev_dev_vport *dev = netdev_dev_vport_cast(dev_);
-    const char *name = netdev_dev_get_name(dev_);
-    const char *type = netdev_dev_get_type(dev_);
+    struct netdev_vport *dev = netdev_vport_cast(dev_);
+    const char *name = netdev_get_name(dev_);
+    const char *type = netdev_get_type(dev_);
     bool ipsec_mech_set, needs_dst_port, has_csum;
     struct netdev_tunnel_config tnl_cfg;
     struct smap_node *node;
@@ -478,10 +457,10 @@ set_tunnel_config(struct netdev_dev *dev_, const struct smap *args)
 }
 
 static int
-get_tunnel_config(struct netdev_dev *dev, struct smap *args)
+get_tunnel_config(const struct netdev *dev, struct smap *args)
 {
     const struct netdev_tunnel_config *tnl_cfg =
-        &netdev_dev_vport_cast(dev)->tnl_cfg;
+        &netdev_vport_cast(dev)->tnl_cfg;
 
     if (tnl_cfg->ip_dst) {
         smap_add_format(args, "remote_ip", IP_FMT, IP_ARGS(tnl_cfg->ip_dst));
@@ -530,7 +509,7 @@ get_tunnel_config(struct netdev_dev *dev, struct smap *args)
 
     if (tnl_cfg->dst_port) {
         uint16_t dst_port = ntohs(tnl_cfg->dst_port);
-        const char *type = netdev_dev_get_type(dev);
+        const char *type = netdev_get_type(dev);
 
         if ((!strcmp("vxlan", type) && dst_port != VXLAN_DST_PORT) ||
             (!strcmp("lisp", type) && dst_port != LISP_DST_PORT)) {
@@ -554,17 +533,17 @@ get_tunnel_config(struct netdev_dev *dev, struct smap *args)
 const char *
 netdev_vport_patch_peer(const struct netdev *netdev)
 {
-    return netdev_vport_is_patch(netdev)
-        ? netdev_vport_get_dev(netdev)->peer
-        : NULL;
+    return (netdev_vport_is_patch(netdev)
+            ? netdev_vport_cast(netdev)->peer
+            : NULL);
 }
 
 void
 netdev_vport_inc_rx(const struct netdev *netdev,
                           const struct dpif_flow_stats *stats)
 {
-    if (is_vport_class(netdev_dev_get_class(netdev_get_dev(netdev)))) {
-        struct netdev_dev_vport *dev = netdev_vport_get_dev(netdev);
+    if (is_vport_class(netdev_get_class(netdev))) {
+        struct netdev_vport *dev = netdev_vport_cast(netdev);
         dev->stats.rx_packets += stats->n_packets;
         dev->stats.rx_bytes += stats->n_bytes;
     }
@@ -574,17 +553,17 @@ void
 netdev_vport_inc_tx(const struct netdev *netdev,
                     const struct dpif_flow_stats *stats)
 {
-    if (is_vport_class(netdev_dev_get_class(netdev_get_dev(netdev)))) {
-        struct netdev_dev_vport *dev = netdev_vport_get_dev(netdev);
+    if (is_vport_class(netdev_get_class(netdev))) {
+        struct netdev_vport *dev = netdev_vport_cast(netdev);
         dev->stats.tx_packets += stats->n_packets;
         dev->stats.tx_bytes += stats->n_bytes;
     }
 }
 
 static int
-get_patch_config(struct netdev_dev *dev_, struct smap *args)
+get_patch_config(const struct netdev *dev_, struct smap *args)
 {
-    struct netdev_dev_vport *dev = netdev_dev_vport_cast(dev_);
+    struct netdev_vport *dev = netdev_vport_cast(dev_);
 
     if (dev->peer) {
         smap_add(args, "peer", dev->peer);
@@ -593,10 +572,10 @@ get_patch_config(struct netdev_dev *dev_, struct smap *args)
 }
 
 static int
-set_patch_config(struct netdev_dev *dev_, const struct smap *args)
+set_patch_config(struct netdev *dev_, const struct smap *args)
 {
-    struct netdev_dev_vport *dev = netdev_dev_vport_cast(dev_);
-    const char *name = netdev_dev_get_name(dev_);
+    struct netdev_vport *dev = netdev_vport_cast(dev_);
+    const char *name = netdev_get_name(dev_);
     const char *peer;
 
     peer = smap_get(args, "peer");
@@ -624,7 +603,7 @@ set_patch_config(struct netdev_dev *dev_, const struct smap *args)
 static int
 get_stats(const struct netdev *netdev, struct netdev_stats *stats)
 {
-    struct netdev_dev_vport *dev = netdev_vport_get_dev(netdev);
+    struct netdev_vport *dev = netdev_vport_cast(netdev);
     memcpy(stats, &dev->stats, sizeof *stats);
     return 0;
 }
@@ -640,9 +619,6 @@ get_stats(const struct netdev *netdev, struct netdev_stats *stats)
     GET_CONFIG,                                             \
     SET_CONFIG,                                             \
     GET_TUNNEL_CONFIG,                                      \
-                                                            \
-    netdev_vport_open,                                      \
-    netdev_vport_close,                                     \
                                                             \
     NULL,                       /* rx_open */               \
                                                             \
