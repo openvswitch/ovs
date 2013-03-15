@@ -633,7 +633,7 @@ exclude those logs from the archive.
              'syslog', 'messages', 'secure', 'debug', 'dmesg', 'boot' ]]
             + [ OPENVSWITCH_LOG_DIR + x for x in
                 [ 'ovs-vswitchd.log', 'ovsdb-server.log',
-                  'ovs-xapi-sync.log', 'ovs-monitor-ipsec.log' ]])
+                  'ovs-xapi-sync.log', 'ovs-monitor-ipsec.log', 'ovs-ctl.log' ]])
     file_output(CAP_SYSTEM_LOGS, logs)
     file_output(CAP_SYSTEM_LOGS,
                 [ '%s.%d' % (f, n) for n in range(20) for f in logs ])
