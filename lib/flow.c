@@ -492,7 +492,7 @@ flow_zero_wildcards(struct flow *flow, const struct flow_wildcards *wildcards)
 void
 flow_get_metadata(const struct flow *flow, struct flow_metadata *fmd)
 {
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 19);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 20);
 
     fmd->tun_id = flow->tunnel.tun_id;
     fmd->metadata = flow->metadata;
@@ -856,9 +856,6 @@ flow_set_mpls_bos(struct flow *flow, uint8_t bos)
 void
 flow_compose(struct ofpbuf *b, const struct flow *flow)
 {
-    ovs_be16 inner_dl_type;
-
-    inner_dl_type = flow_innermost_dl_type(flow);
     eth_compose(b, flow->dl_dst, flow->dl_src, ntohs(flow->dl_type), 0);
     if (flow->dl_type == htons(FLOW_DL_TYPE_NONE)) {
         struct eth_header *eth = b->l2;
@@ -870,7 +867,7 @@ flow_compose(struct ofpbuf *b, const struct flow *flow)
         eth_push_vlan(b, flow->vlan_tci);
     }
 
-    if (inner_dl_type == htons(ETH_TYPE_IP)) {
+    if (flow->dl_type == htons(ETH_TYPE_IP)) {
         struct ip_header *ip;
 
         b->l3 = ip = ofpbuf_put_zeros(b, sizeof *ip);
@@ -916,10 +913,10 @@ flow_compose(struct ofpbuf *b, const struct flow *flow)
         ip->ip_tot_len = htons((uint8_t *) b->data + b->size
                                - (uint8_t *) b->l3);
         ip->ip_csum = csum(ip, sizeof *ip);
-    } else if (inner_dl_type == htons(ETH_TYPE_IPV6)) {
+    } else if (flow->dl_type == htons(ETH_TYPE_IPV6)) {
         /* XXX */
-    } else if (inner_dl_type == htons(ETH_TYPE_ARP) ||
-               inner_dl_type == htons(ETH_TYPE_RARP)) {
+    } else if (flow->dl_type == htons(ETH_TYPE_ARP) ||
+               flow->dl_type == htons(ETH_TYPE_RARP)) {
         struct arp_eth_header *arp;
 
         b->l3 = arp = ofpbuf_put_zeros(b, sizeof *arp);

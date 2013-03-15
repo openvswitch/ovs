@@ -5736,7 +5736,7 @@ compose_output_action__(struct action_xlate_ctx *ctx, uint16_t ofp_port,
 
     /* If 'struct flow' gets additional metadata, we'll need to zero it out
      * before traversing a patch port. */
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 19);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 20);
 
     if (!ofport) {
         xlate_report(ctx, "Nonexistent output port");
@@ -6065,7 +6065,6 @@ execute_mpls_push_action(struct action_xlate_ctx *ctx, ovs_be16 eth_type)
         tc = (ctx->flow.nw_tos & IP_DSCP_MASK) >> 2;
         ttl = ctx->flow.nw_ttl ? ctx->flow.nw_ttl : 0x40;
         ctx->flow.mpls_lse = set_mpls_lse_values(ttl, tc, 1, label);
-        ctx->flow.encap_dl_type = ctx->flow.dl_type;
         ctx->flow.mpls_depth = 1;
     }
     ctx->flow.dl_type = eth_type;
@@ -6082,7 +6081,6 @@ execute_mpls_pop_action(struct action_xlate_ctx *ctx, ovs_be16 eth_type)
         ctx->flow.mpls_lse = htonl(0);
         if (!ctx->flow.mpls_depth) {
             ctx->flow.dl_type = eth_type;
-            ctx->flow.encap_dl_type = htons(0);
         }
     }
 }
