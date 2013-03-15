@@ -20,4 +20,12 @@ static inline void hlist_del_init_rcu(struct hlist_node *n)
 }
 #endif
 
+#undef hlist_for_each_entry_rcu
+#define hlist_for_each_entry_rcu(pos, head, member)			\
+	for (pos = hlist_entry_safe (rcu_dereference_raw(hlist_first_rcu(head)),\
+			typeof(*(pos)), member);			\
+		pos;							\
+		pos = hlist_entry_safe(rcu_dereference_raw(hlist_next_rcu(\
+			&(pos)->member)), typeof(*(pos)), member))
+
 #endif
