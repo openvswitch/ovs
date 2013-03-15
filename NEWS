@@ -10,6 +10,8 @@ post-v1.10.0
         1.1 and later are now implemented.
       * New "stack" extension for use in actions, to push and pop from
         NXM fields.
+    - ovs-dpctl:
+      * New debugging commands "add-flow", "mod-flow", "del-flow".
 
 
 v1.10.0 - xx xxx xxxx

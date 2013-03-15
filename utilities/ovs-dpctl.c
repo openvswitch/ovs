@@ -51,8 +51,14 @@
 
 VLOG_DEFINE_THIS_MODULE(dpctl);
 
-/* -s, --statistics: Print port statistics? */
+/* -s, --statistics: Print port/flow statistics? */
 static bool print_statistics;
+
+/* --clear: Reset existing statistics to zero when modifying a flow? */
+static bool zero_statistics;
+
+/* --may-create: Allow mod-flows command to create a new flow? */
+static bool may_create;
 
 /* -m, --more: Output verbosity.
  *
@@ -79,11 +85,14 @@ static void
 parse_options(int argc, char *argv[])
 {
     enum {
-        OPT_DUMMY = UCHAR_MAX + 1,
+        OPT_CLEAR = UCHAR_MAX + 1,
+        OPT_MAY_CREATE,
         VLOG_OPTION_ENUMS
     };
     static struct option long_options[] = {
         {"statistics", no_argument, NULL, 's'},
+        {"clear", no_argument, NULL, OPT_CLEAR},
+        {"may-create", no_argument, NULL, OPT_MAY_CREATE},
         {"more", no_argument, NULL, 'm'},
         {"timeout", required_argument, NULL, 't'},
         {"help", no_argument, NULL, 'h'},
@@ -105,6 +114,14 @@ parse_options(int argc, char *argv[])
         switch (c) {
         case 's':
             print_statistics = true;
+            break;
+
+        case OPT_CLEAR:
+            zero_statistics = true;
+            break;
+
+        case OPT_MAY_CREATE:
+            may_create = true;
             break;
 
         case 'm':
@@ -154,14 +171,20 @@ usage(void)
            "  show                     show basic info on all datapaths\n"
            "  show DP...               show basic info on each DP\n"
            "  dump-flows DP            display flows in DP\n"
+           "  add-flow DP FLOW ACTIONS add FLOW with ACTIONS to DP\n"
+           "  mod-flow DP FLOW ACTIONS change FLOW actions to ACTIONS in DP\n"
+           "  del-flow DP FLOW         delete FLOW from DP\n"
            "  del-flows DP             delete all flows from DP\n"
            "Each IFACE on add-dp, add-if, and set-if may be followed by\n"
            "comma-separated options.  See ovs-dpctl(8) for syntax, or the\n"
            "Interface table in ovs-vswitchd.conf.db(5) for an options list.\n",
            program_name, program_name);
     vlog_usage();
-    printf("\nOptions for show:\n"
-           "  -s,  --statistics           print port statistics\n"
+    printf("\nOptions for show and mod-flow:\n"
+           "  -s,  --statistics           print statistics for port or flow\n"
+           "\nOptions for mod-flow:\n"
+           "  --may-create                create flow if it doesn't exist\n"
+           "  --clear                     reset existing stats to zero\n"
            "\nOther options:\n"
            "  -t, --timeout=SECS          give up after SECS seconds\n"
            "  -h, --help                  display this help message\n"
@@ -748,6 +771,100 @@ dpctl_dump_flows(int argc, char *argv[])
 }
 
 static void
+dpctl_put_flow(int argc, char *argv[], enum dpif_flow_put_flags flags)
+{
+    const char *key_s = argv[argc - 2];
+    const char *actions_s = argv[argc - 1];
+    struct dpif_flow_stats stats;
+    struct ofpbuf actions;
+    struct ofpbuf key;
+    struct dpif *dpif;
+    char *dp_name;
+
+    ofpbuf_init(&key, 0);
+    run(odp_flow_key_from_string(key_s, NULL, &key), "parsing flow key");
+
+    ofpbuf_init(&actions, 0);
+    run(odp_actions_from_string(actions_s, NULL, &actions), "parsing actions");
+
+    dp_name = argc == 3 ? xstrdup(argv[1]) : get_one_dp();
+    run(parsed_dpif_open(dp_name, false, &dpif), "opening datapath");
+    free(dp_name);
+
+    run(dpif_flow_put(dpif, flags,
+                      key.data, key.size,
+                      actions.data, actions.size,
+                      print_statistics ? &stats : NULL),
+        "updating flow table");
+
+    ofpbuf_uninit(&key);
+    ofpbuf_uninit(&actions);
+
+    if (print_statistics) {
+        struct ds s;
+
+        ds_init(&s);
+        dpif_flow_stats_format(&stats, &s);
+        puts(ds_cstr(&s));
+        ds_destroy(&s);
+    }
+}
+
+static void
+dpctl_add_flow(int argc, char *argv[])
+{
+    dpctl_put_flow(argc, argv, DPIF_FP_CREATE);
+}
+
+static void
+dpctl_mod_flow(int argc OVS_UNUSED, char *argv[])
+{
+    enum dpif_flow_put_flags flags;
+
+    flags = DPIF_FP_MODIFY;
+    if (may_create) {
+        flags |= DPIF_FP_CREATE;
+    }
+    if (zero_statistics) {
+        flags |= DPIF_FP_ZERO_STATS;
+    }
+
+    dpctl_put_flow(argc, argv, flags);
+}
+
+static void
+dpctl_del_flow(int argc, char *argv[])
+{
+    const char *key_s = argv[argc - 1];
+    struct dpif_flow_stats stats;
+    struct ofpbuf key;
+    struct dpif *dpif;
+    char *dp_name;
+
+    ofpbuf_init(&key, 0);
+    run(odp_flow_key_from_string(key_s, NULL, &key), "parsing flow key");
+
+    dp_name = argc == 2 ? xstrdup(argv[1]) : get_one_dp();
+    run(parsed_dpif_open(dp_name, false, &dpif), "opening datapath");
+    free(dp_name);
+
+    run(dpif_flow_del(dpif,
+                      key.data, key.size,
+                      print_statistics ? &stats : NULL), "deleting flow");
+
+    ofpbuf_uninit(&key);
+
+    if (print_statistics) {
+        struct ds s;
+
+        ds_init(&s);
+        dpif_flow_stats_format(&stats, &s);
+        puts(ds_cstr(&s));
+        ds_destroy(&s);
+    }
+}
+
+static void
 dpctl_del_flows(int argc, char *argv[])
 {
     struct dpif *dpif;
@@ -1004,6 +1121,9 @@ static const struct command all_commands[] = {
     { "dump-dps", 0, 0, dpctl_dump_dps },
     { "show", 0, INT_MAX, dpctl_show },
     { "dump-flows", 0, 1, dpctl_dump_flows },
+    { "add-flow", 2, 3, dpctl_add_flow },
+    { "mod-flow", 2, 3, dpctl_mod_flow },
+    { "del-flow", 1, 2, dpctl_del_flow },
     { "del-flows", 0, 1, dpctl_del_flows },
     { "help", 0, INT_MAX, dpctl_help },
 

@@ -104,27 +104,54 @@ port.
 If one or more datapaths are specified, information on only those
 datapaths are displayed.  Otherwise, \fBovs\-dpctl\fR displays information
 about all configured datapaths.
+.SS "DEBUGGING COMMANDS"
+The following commands are primarily useful for debugging Open
+vSwitch.  The flow table entries (both matches and actions) that they
+work with are not OpenFlow flow entries.  Instead, they are different
+and considerably simpler flows maintained by the Open vSwitch kernel
+module.  Use \fBovs\-ofctl\fR(8), instead, to work with OpenFlow flow
+entries.
+.
+.PP
+The \fIdp\fR argument to each of these commands is optional when
+exactly one datapath exists, in which case that datapath is the
+default.  When multiple datapaths exist, then a datapath name is
+required.
 .
 .IP "\fBdump\-flows\fR [\fIdp\fR]"
 Prints to the console all flow entries in datapath \fIdp\fR's
-flow table.  If \fIdp\fR is not specified and exactly one datapath
-exists, the flows for that datapath will be printed.
+flow table.
+.
+.IP "\fBadd\-flow\fR [\fIdp\fR] \fIflow actions\fR"
+.IQ "[\fB\-\-clear\fR] [\fB\-\-may-create\fR] [\fB\-s\fR | \fB\-\-statistics\fR] \fBmod\-flow\fR [\fIdp\fR] \fIflow actions\fR"
+Adds or modifies a flow in \fIdp\fR's flow table that, when a packet
+matching \fIflow\fR arrives, causes \fIactions\fR to be executed.
 .IP
-This command is primarily useful for debugging Open vSwitch.  The flow
-table entries that it displays are not
-OpenFlow flow entries.  Instead, they are different and considerably
-simpler flows maintained by the Open vSwitch kernel module.  If you wish
-to see the OpenFlow flow entries, use \fBovs\-ofctl dump\-flows\fR.
+The \fBadd\-flow\fR command succeeds only if \fIflow\fR does not
+already exist in \fIdp\fR.  Contrariwise, \fBmod\-flow\fR without
+\fB\-\-may\-create\fR only modifies the actions for an existing flow.
+With \fB\-\-may\-create\fR, \fBmod\-flow\fR will add a new flow or
+modify an existing one.
+.IP
+If \fB\-s\fR or \fB\-\-statistics\fR is specified, then
+\fBmod\-flows\fR prints the modified flow's statistics.  A flow's
+statistics are the number of packets and bytes that have passed
+through the flow, the elapsed time since the flow last processed a
+packet (if ever), and (for TCP flows) the union of the TCP flags
+processed through the flow.
+.IP
+With \fB\-\-clear\fR, \fBmod\-flows\fR zeros out the flow's
+statistics.  The statistics printed if \fB\-s\fR or
+\fB\-\-statistics\fR is also specified are those from just before
+clearing the statistics.
+.
+.IP "[\fB\-s\fR | \fB\-\-statistics\fR] \fBdel\-flow\fR [\fIdp\fR] \fIflow\fR"
+Deletes the flow from \fIdp\fR's flow table that matches \fIflow\fR.
+If \fB\-s\fR or \fB\-\-statistics\fR is specified, then
+\fBmod\-flows\fR prints the deleted flow's statistics.
 .
 .IP "\fBdel\-flows\fR [\fIdp\fR]"
-Deletes all flow entries from datapath \fIdp\fR's flow table.  If
-\fIdp\fR is not specified and exactly one datapath exists, the flows for
-that datapath will be deleted.
-.IP
-This command is primarily useful for debugging Open vSwitch.  As
-discussed in \fBdump\-flows\fR, these entries are
-not OpenFlow flow entries.  By deleting them, the process that set them
-up may be confused about their disappearance.
+Deletes all flow entries from datapath \fIdp\fR's flow table.
 .
 .SH OPTIONS
 .IP "\fB\-s\fR"
