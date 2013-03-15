@@ -234,15 +234,6 @@ enum ovs_vport_attr {
 
 #define OVS_VPORT_ATTR_MAX (__OVS_VPORT_ATTR_MAX - 1)
 
-/* OVS_VPORT_ATTR_OPTIONS attributes for patch vports. */
-enum {
-	OVS_PATCH_ATTR_UNSPEC,
-	OVS_PATCH_ATTR_PEER,	/* name of peer vport, as a string */
-	__OVS_PATCH_ATTR_MAX
-};
-
-#define OVS_PATCH_ATTR_MAX (__OVS_PATCH_ATTR_MAX - 1)
-
 /* OVS_VPORT_ATTR_OPTIONS attributes for tunnels.
  */
 enum {
