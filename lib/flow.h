@@ -126,8 +126,6 @@ struct flow_metadata {
 
 void flow_extract(struct ofpbuf *, uint32_t priority, uint32_t mark,
                   const struct flow_tnl *, uint16_t in_port, struct flow *);
-void flow_extract_l3_onwards(struct ofpbuf *, struct flow *,
-                             ovs_be16 dl_type);
 
 /* Returns the innermost dl_type.
  * If there's an outer and an inner type then the inner type is returned.

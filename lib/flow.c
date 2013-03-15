@@ -404,33 +404,9 @@ flow_extract(struct ofpbuf *packet, uint32_t skb_priority, uint32_t skb_mark,
         parse_mpls(&b, flow);
     }
 
-    packet->l3 = b.data;
-    flow_extract_l3_onwards(packet, flow, flow->dl_type);
-}
-
-/* Initializes l3 and higher 'flow' members from 'packet'
- *
- * This should be called by or after flow_extract()
- *
- * Initializes 'packet' header pointers as follows:
- *
- *    - packet->l4 to just past the IPv4 header, if one is present and has a
- *      correct length, and otherwise NULL.
- *
- *    - packet->l7 to just past the TCP or UDP or ICMP header, if one is
- *      present and has a correct length, and otherwise NULL.
- */
-void
-flow_extract_l3_onwards(struct ofpbuf *packet, struct flow *flow,
-                        ovs_be16 dl_type)
-{
-    struct ofpbuf b;
-
-    ofpbuf_use_const(&b, packet->l3, packet->size -
-                     (size_t)((char *)packet->l3 - (char *)packet->l2));
-
     /* Network layer. */
-    if (dl_type == htons(ETH_TYPE_IP)) {
+    packet->l3 = b.data;
+    if (flow->dl_type == htons(ETH_TYPE_IP)) {
         const struct ip_header *nh = pull_ip(&b);
         if (nh) {
             packet->l4 = b.data;
@@ -463,7 +439,7 @@ flow_extract_l3_onwards(struct ofpbuf *packet, struct flow *flow,
                 }
             }
         }
-    } else if (dl_type == htons(ETH_TYPE_IPV6)) {
+    } else if (flow->dl_type == htons(ETH_TYPE_IPV6)) {
         if (parse_ipv6(&b, flow)) {
             return;
         }
@@ -478,8 +454,8 @@ flow_extract_l3_onwards(struct ofpbuf *packet, struct flow *flow,
                 packet->l7 = b.data;
             }
         }
-    } else if (dl_type == htons(ETH_TYPE_ARP) ||
-               dl_type == htons(ETH_TYPE_RARP)) {
+    } else if (flow->dl_type == htons(ETH_TYPE_ARP) ||
+               flow->dl_type == htons(ETH_TYPE_RARP)) {
         const struct arp_eth_header *arp = pull_arp(&b);
         if (arp && arp->ar_hrd == htons(1)
             && arp->ar_pro == htons(ETH_TYPE_IP)
