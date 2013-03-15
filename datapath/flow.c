@@ -299,10 +299,10 @@ void ovs_flow_tbl_destroy(struct flow_table *table)
 	for (i = 0; i < table->n_buckets; i++) {
 		struct sw_flow *flow;
 		struct hlist_head *head = flex_array_get(table->buckets, i);
-		struct hlist_node *node, *n;
+		struct hlist_node *n;
 		int ver = table->node_ver;
 
-		hlist_for_each_entry_safe(flow, node, n, head, hash_node[ver]) {
+		hlist_for_each_entry_safe(flow, n, head, hash_node[ver]) {
 			hlist_del_rcu(&flow->hash_node[ver]);
 			ovs_flow_free(flow);
 		}
@@ -332,7 +332,6 @@ struct sw_flow *ovs_flow_tbl_next(struct flow_table *table, u32 *bucket, u32 *la
 {
 	struct sw_flow *flow;
 	struct hlist_head *head;
-	struct hlist_node *n;
 	int ver;
 	int i;
 
@@ -340,7 +339,7 @@ struct sw_flow *ovs_flow_tbl_next(struct flow_table *table, u32 *bucket, u32 *la
 	while (*bucket < table->n_buckets) {
 		i = 0;
 		head = flex_array_get(table->buckets, *bucket);
-		hlist_for_each_entry_rcu(flow, n, head, hash_node[ver]) {
+		hlist_for_each_entry_rcu(flow, head, hash_node[ver]) {
 			if (i < *last) {
 				i++;
 				continue;
@@ -375,11 +374,10 @@ static void flow_table_copy_flows(struct flow_table *old, struct flow_table *new
 	for (i = 0; i < old->n_buckets; i++) {
 		struct sw_flow *flow;
 		struct hlist_head *head;
-		struct hlist_node *n;
 
 		head = flex_array_get(old->buckets, i);
 
-		hlist_for_each_entry(flow, n, head, hash_node[old_ver])
+		hlist_for_each_entry(flow, head, hash_node[old_ver])
 			__flow_tbl_insert(new, flow);
 	}
 	old->keep_flows = true;
@@ -797,7 +795,6 @@ struct sw_flow *ovs_flow_tbl_lookup(struct flow_table *table,
 				struct sw_flow_key *key, int key_len)
 {
 	struct sw_flow *flow;
-	struct hlist_node *n;
 	struct hlist_head *head;
 	u8 *_key;
 	int key_start;
@@ -808,7 +805,7 @@ struct sw_flow *ovs_flow_tbl_lookup(struct flow_table *table,
 
 	_key = (u8 *) key + key_start;
 	head = find_bucket(table, hash);
-	hlist_for_each_entry_rcu(flow, n, head, hash_node[table->node_ver]) {
+	hlist_for_each_entry_rcu(flow, head, hash_node[table->node_ver]) {
 
 		if (flow->hash == hash &&
 		    !memcmp((u8 *)&flow->key + key_start, _key, key_len - key_start)) {
