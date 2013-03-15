@@ -11,6 +11,10 @@
 #define rcu_dereference_protected(p, c) (p)
 #endif
 
+#ifndef rcu_dereference_raw
+#define rcu_dereference_raw(p) rcu_dereference_check(p, 1)
+#endif
+
 #ifndef HAVE_RCU_READ_LOCK_HELD
 static inline int rcu_read_lock_held(void)
 {
