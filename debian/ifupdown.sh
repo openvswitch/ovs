@@ -1,6 +1,6 @@
 #! /bin/sh
 
-# Copyright (c) 2012 Nicira, Inc.
+# Copyright (c) 2012, 2013 Nicira, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -22,7 +22,7 @@ if [ -z "${IF_OVS_TYPE}" ]; then
 fi
 
 ovs_vsctl() {
-    ovs-vsctl --timeout=5 "$@"
+    ovs-vsctl "$@"
 }
 
 if (ovs_vsctl --version) > /dev/null 2>&1; then :; else

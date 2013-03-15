@@ -1,5 +1,11 @@
 post-v1.10.0
 ---------------------
+    - ovs-vsctl:
+      * Previously ovs-vsctl would retry connecting to the database forever,
+        causing it to hang if ovsdb-server was not running.  Now, ovs-vsctl
+        only tries once by default (use --retry to try forever).  This change
+        means that you may want to remove uses of --timeout to avoid hangs
+        in ovs-vsctl calls.
     - Stable bond mode has been removed.
     - The autopath action has been removed.
     - New support for the data encapsulation format of the LISP tunnel

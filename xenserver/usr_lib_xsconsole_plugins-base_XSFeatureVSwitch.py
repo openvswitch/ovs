@@ -1,5 +1,5 @@
+# Copyright (c) 2009,2010,2011,2012,2013 Nicira, Inc.
 # Copyright (c) 2007-2011 Citrix Systems Inc.
-# Copyright (c) 2009,2010,2011,2012 Nicira, Inc.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -86,7 +86,7 @@ class VSwitchConfig:
     @staticmethod
     def Get(action):
         try:
-            arg = [vsctl, "--timeout=30", "-vconsole:off"] + action.split()
+            arg = [vsctl, "-vconsole:off"] + action.split()
             output = ShellPipe(arg).Stdout()
         except StandardError, e:
             XSLogError("config retrieval error: " + str(e))

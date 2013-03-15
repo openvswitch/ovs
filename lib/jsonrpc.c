@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -744,6 +744,7 @@ struct jsonrpc_session {
     struct jsonrpc *rpc;
     struct stream *stream;
     struct pstream *pstream;
+    int last_error;
     unsigned int seqno;
     uint8_t dscp;
 };
@@ -752,14 +753,18 @@ struct jsonrpc_session {
  * acceptable to stream_open() or pstream_open().
  *
  * If 'name' is an active connection method, e.g. "tcp:127.1.2.3", the new
- * jsonrpc_session connects and reconnects, with back-off, to 'name'.
+ * jsonrpc_session connects to 'name'.  If 'retry' is true, then the new
+ * session connects and reconnects to 'name', with backoff.  If 'retry' is
+ * false, the new session will only try to connect once and after a connection
+ * failure or a disconnection jsonrpc_session_is_alive() will return false for
+ * the new session.
  *
  * If 'name' is a passive connection method, e.g. "ptcp:", the new
  * jsonrpc_session listens for connections to 'name'.  It maintains at most one
  * connection at any given time.  Any new connection causes the previous one
  * (if any) to be dropped. */
 struct jsonrpc_session *
-jsonrpc_session_open(const char *name)
+jsonrpc_session_open(const char *name, bool retry)
 {
     struct jsonrpc_session *s;
 
@@ -772,9 +777,13 @@ jsonrpc_session_open(const char *name)
     s->pstream = NULL;
     s->seqno = 0;
     s->dscp = 0;
+    s->last_error = 0;
 
     if (!pstream_verify_name(name)) {
         reconnect_set_passive(s->reconnect, true, time_msec());
+    } else if (!retry) {
+        reconnect_set_max_tries(s->reconnect, 1);
+        reconnect_set_backoff(s->reconnect, INT_MAX, INT_MAX);
     }
 
     if (!stream_or_pstream_needs_probes(name)) {
@@ -847,6 +856,8 @@ jsonrpc_session_connect(struct jsonrpc_session *s)
         error = jsonrpc_stream_open(name, &s->stream, s->dscp);
         if (!error) {
             reconnect_connecting(s->reconnect, time_msec());
+        } else {
+            s->last_error = error;
         }
     } else {
         error = s->pstream ? 0 : jsonrpc_pstream_open(name, &s->pstream,
@@ -908,6 +919,7 @@ jsonrpc_session_run(struct jsonrpc_session *s)
         if (error) {
             reconnect_disconnected(s->reconnect, time_msec(), error);
             jsonrpc_session_disconnect(s);
+            s->last_error = error;
         }
     } else if (s->stream) {
         int error;
@@ -1059,6 +1071,12 @@ int
 jsonrpc_session_get_status(const struct jsonrpc_session *s)
 {
     return s && s->rpc ? jsonrpc_get_status(s->rpc) : 0;
+}
+
+int
+jsonrpc_session_get_last_error(const struct jsonrpc_session *s)
+{
+    return s->last_error;
 }
 
 void

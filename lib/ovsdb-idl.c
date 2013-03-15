@@ -157,6 +157,9 @@ static void ovsdb_idl_parse_lock_notify(struct ovsdb_idl *,
  * 'class'.  (Ordinarily 'class' is compiled from an OVSDB schema automatically
  * by ovsdb-idlc.)
  *
+ * Passes 'retry' to jsonrpc_session_open().  See that function for
+ * documentation.
+ *
  * If 'monitor_everything_by_default' is true, then everything in the remote
  * database will be replicated by default.  ovsdb_idl_omit() and
  * ovsdb_idl_omit_alert() may be used to selectively drop some columns from
@@ -168,7 +171,7 @@ static void ovsdb_idl_parse_lock_notify(struct ovsdb_idl *,
  */
 struct ovsdb_idl *
 ovsdb_idl_create(const char *remote, const struct ovsdb_idl_class *class,
-                 bool monitor_everything_by_default)
+                 bool monitor_everything_by_default, bool retry)
 {
     struct ovsdb_idl *idl;
     uint8_t default_mode;
@@ -180,7 +183,7 @@ ovsdb_idl_create(const char *remote, const struct ovsdb_idl_class *class,
 
     idl = xzalloc(sizeof *idl);
     idl->class = class;
-    idl->session = jsonrpc_session_open(remote);
+    idl->session = jsonrpc_session_open(remote, retry);
     shash_init(&idl->table_by_name);
     idl->tables = xmalloc(class->n_tables * sizeof *idl->tables);
     for (i = 0; i < class->n_tables; i++) {
@@ -411,6 +414,18 @@ void
 ovsdb_idl_verify_write_only(struct ovsdb_idl *idl)
 {
     idl->verify_write_only = true;
+}
+
+bool
+ovsdb_idl_is_alive(const struct ovsdb_idl *idl)
+{
+    return jsonrpc_session_is_alive(idl->session);
+}
+
+int
+ovsdb_idl_get_last_error(const struct ovsdb_idl *idl)
+{
+    return jsonrpc_session_get_last_error(idl->session);
 }
 
 static unsigned char *

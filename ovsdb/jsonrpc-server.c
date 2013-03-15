@@ -210,7 +210,7 @@ ovsdb_jsonrpc_server_add_remote(struct ovsdb_jsonrpc_server *svr,
     shash_add(&svr->remotes, name, remote);
 
     if (!listener) {
-        ovsdb_jsonrpc_session_create(remote, jsonrpc_session_open(name));
+        ovsdb_jsonrpc_session_create(remote, jsonrpc_session_open(name, true));
     }
     return remote;
 }

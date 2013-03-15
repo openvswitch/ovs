@@ -15,17 +15,17 @@ dnl RUN_OVS_VSCTL(COMMAND, ...)
 dnl
 dnl Executes each ovs-vsctl COMMAND.
 m4_define([RUN_OVS_VSCTL],
-  [m4_foreach([command], [$@], [ovs-vsctl --timeout=5 --no-wait -vreconnect:emer --db=unix:socket command
+  [m4_foreach([command], [$@], [ovs-vsctl --no-wait -vreconnect:emer --db=unix:socket command
 ])])
 m4_define([RUN_OVS_VSCTL_ONELINE],
-  [m4_foreach([command], [$@], [ovs-vsctl --timeout=5 --no-wait -vreconnect:emer --db=unix:socket --oneline -- command
+  [m4_foreach([command], [$@], [ovs-vsctl --no-wait -vreconnect:emer --db=unix:socket --oneline -- command
 ])])
 
 dnl RUN_OVS_VSCTL_TOGETHER(COMMAND, ...)
 dnl
 dnl Executes each ovs-vsctl COMMAND in a single run of ovs-vsctl.
 m4_define([RUN_OVS_VSCTL_TOGETHER],
-  [ovs-vsctl --timeout=5 --no-wait -vreconnect:emer --db=unix:socket --oneline dnl
+  [ovs-vsctl --no-wait -vreconnect:emer --db=unix:socket --oneline dnl
 m4_foreach([command], [$@], [ -- command])])
 
 dnl CHECK_BRIDGES([BRIDGE, PARENT, VLAN], ...)
@@ -138,6 +138,40 @@ m4_define([CHECK_IFACES],
      [AT_CHECK([RUN_OVS_VSCTL([[iface-to-br] iface])], [0], [$1
 ],
                [], [OVS_VSCTL_CLEANUP])])])
+
+dnl ----------------------------------------------------------------------
+AT_BANNER([ovs-vsctl unit tests])
+
+AT_SETUP([ovs-vsctl connection retry])
+OVS_RUNDIR=$PWD; export OVS_RUNDIR
+
+dnl Without --retry, there should be no retry for active connections.
+AT_CHECK([ovs-vsctl --db=unix:foo --timeout=10 -vreconnect:emer -- init],
+  [1], [], [stderr])
+AT_CHECK([[sed 's/([^()]*)/(...reason...)/' stderr]], [0],
+  [ovs-vsctl: unix:foo: database connection failed (...reason...)
+])
+
+dnl With --retry, we should retry for active connections.
+AT_CHECK(
+  [ovs-vsctl --db=unix:foo --timeout=1 --retry -vreconnect:emer -vPATTERN:console:'%c|%p|%m' -- init
+   echo $? > status],
+  [0], [], [stderr])
+AT_CHECK([grep -c 'terminating with signal' stderr], [0], [1
+])
+AT_CHECK([kill -l `cat status`], [0], [ALRM
+])
+
+dnl Without --retry, we should retry for passive connections.
+AT_CHECK(
+  [ovs-vsctl --db=punix:foo --timeout=1 -vreconnect:emer -vPATTERN:console:'%c|%p|%m' -- init
+   echo $? > status],
+  [0], [], [stderr])
+AT_CHECK([grep -c 'terminating with signal' stderr], [0], [1
+])
+AT_CHECK([kill -l `cat status`], [0], [ALRM
+])
+AT_CLEANUP
 
 dnl ----------------------------------------------------------------------
 AT_BANNER([ovs-vsctl unit tests -- real bridges])
@@ -833,7 +867,7 @@ AT_CHECK(
 
 ])
 m4_define([VSCTL_CHECK_FIND],
-  [AT_CHECK([echo `ovs-vsctl --bare --timeout=5 --no-wait -vreconnect:emer --db=unix:socket -- --columns=name find bridge '$1' | sort`], [0], [$2
+  [AT_CHECK([echo `ovs-vsctl --bare --no-wait -vreconnect:emer --db=unix:socket -- --columns=name find bridge '$1' | sort`], [0], [$2
 ])])
 
 # Arithmetic relational operators without keys.
@@ -1044,19 +1078,19 @@ AT_SETUP([unreferenced record warnings])
 AT_KEYWORDS([ovs-vsctl])
 OVS_VSCTL_SETUP
 AT_CHECK(
-  [ovs-vsctl -vPATTERN:console:'%c|%p|%m' --timeout=5 --no-wait -vreconnect:emer --db=unix:socket \
+  [ovs-vsctl -vPATTERN:console:'%c|%p|%m' --no-wait -vreconnect:emer --db=unix:socket \
      -- create Bridge name=br0 | $srcdir/uuidfilt.pl],
   [0], [<0>
 ], [vsctl|WARN|applying "create" command to table Bridge without --id option will have no effect
 ], [OVS_VSCTL_CLEANUP])
 AT_CHECK(
-  [ovs-vsctl -vPATTERN:console:'%c|%p|%m' --timeout=5 --no-wait -vreconnect:emer --db=unix:socket \
+  [ovs-vsctl -vPATTERN:console:'%c|%p|%m' --no-wait -vreconnect:emer --db=unix:socket \
      -- --id=@br0 create Bridge name=br0 | $srcdir/uuidfilt.pl],
   [0], [<0>
 ], [vsctl|WARN|row id "@br0" was created but no reference to it was inserted, so it will not actually appear in the database
 ], [OVS_VSCTL_CLEANUP])
 AT_CHECK(
-  [ovs-vsctl -vPATTERN:console:'%c|%p|%m' --timeout=5 --no-wait -vreconnect:emer --db=unix:socket \
+  [ovs-vsctl -vPATTERN:console:'%c|%p|%m' --no-wait -vreconnect:emer --db=unix:socket \
      -- --id=@eth0_iface create Interface name=eth0 \
      -- --id=@eth0 create Port name=eth0 interfaces=@eth0_iface \
      -- --id=@m0 create Mirror name=m0 output_port=@eth0 \

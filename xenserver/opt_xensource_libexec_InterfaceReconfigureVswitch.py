@@ -1,5 +1,5 @@
 # Copyright (c) 2008,2009,2011 Citrix Systems, Inc.
-# Copyright (c) 2009,2010,2011,2012 Nicira, Inc.
+# Copyright (c) 2009,2010,2011,2012,2013 Nicira, Inc.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License as published
@@ -721,7 +721,7 @@ class DatapathVswitch(Datapath):
 
 def vswitchCfgQuery(action_args):
     cmd = ['%s/usr/bin/ovs-vsctl' % root_prefix(),
-        '--timeout=5', '-vconsole:off'] + action_args
+           '-vconsole:off'] + action_args
     output = subprocess.Popen(cmd, stdout=subprocess.PIPE).communicate()
     if len(output) == 0 or output[0] == None:
         output = ""

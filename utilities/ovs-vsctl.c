@@ -114,6 +114,16 @@ static bool wait_for_reload = true;
 /* --timeout: Time to wait for a connection to 'db'. */
 static int timeout;
 
+/* --retry: If true, ovs-vsctl will retry connecting to the database forever.
+ * If false and --db says to use an active connection method (e.g. "unix:",
+ * "tcp:", "ssl:"), then ovs-vsctl will try to connect once and exit with an
+ * error if the database server cannot be contacted (e.g. ovsdb-server is not
+ * running).
+ *
+ * Regardless of this setting, --timeout always limits how long ovs-vsctl will
+ * wait. */
+static bool retry;
+
 /* Format for table output. */
 static struct table_style table_style = TABLE_STYLE_DEFAULT;
 
@@ -186,7 +196,7 @@ main(int argc, char *argv[])
     }
 
     /* Initialize IDL. */
-    idl = the_idl = ovsdb_idl_create(db, &ovsrec_idl_class, false);
+    idl = the_idl = ovsdb_idl_create(db, &ovsrec_idl_class, false, retry);
     run_prerequisites(commands, n_commands, idl);
 
     /* Execute the commands.
@@ -199,6 +209,11 @@ main(int argc, char *argv[])
     seqno = ovsdb_idl_get_seqno(idl);
     for (;;) {
         ovsdb_idl_run(idl);
+        if (!ovsdb_idl_is_alive(idl)) {
+            int retval = ovsdb_idl_get_last_error(idl);
+            vsctl_fatal("%s: database connection failed (%s)",
+                        db, ovs_retval_to_string(retval));
+        }
 
         if (seqno != ovsdb_idl_get_seqno(idl)) {
             seqno = ovsdb_idl_get_seqno(idl);
@@ -247,6 +262,7 @@ parse_options(int argc, char *argv[], struct shash *local_options)
         OPT_DRY_RUN,
         OPT_PEER_CA_CERT,
         OPT_LOCAL,
+        OPT_RETRY,
         VLOG_OPTION_ENUMS,
         TABLE_OPTION_ENUMS
     };
@@ -257,6 +273,7 @@ parse_options(int argc, char *argv[], struct shash *local_options)
         {"dry-run", no_argument, NULL, OPT_DRY_RUN},
         {"oneline", no_argument, NULL, OPT_ONELINE},
         {"timeout", required_argument, NULL, 't'},
+        {"retry", no_argument, NULL, OPT_RETRY},
         {"help", no_argument, NULL, 'h'},
         {"version", no_argument, NULL, 'V'},
         VLOG_LONG_OPTIONS,
@@ -382,6 +399,10 @@ parse_options(int argc, char *argv[], struct shash *local_options)
                 vsctl_fatal("value %s on -t or --timeout is invalid",
                             optarg);
             }
+            break;
+
+        case OPT_RETRY:
+            retry = true;
             break;
 
         VLOG_OPTION_HANDLERS
@@ -662,6 +683,7 @@ Options:\n\
   --db=DATABASE               connect to DATABASE\n\
                               (default: %s)\n\
   --no-wait                   do not wait for ovs-vswitchd to reconfigure\n\
+  --retry                     keep trying to connect to server forever\n\
   -t, --timeout=SECS          wait at most SECS seconds for ovs-vswitchd\n\
   --dry-run                   do not commit changes to database\n\
   --oneline                   print exactly one line of output per command\n",
