@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef PCAP_H
-#define PCAP_H 1
+#ifndef PCAP_FILE_H
+#define PCAP_FILE_H 1
 
 #include <stdio.h>
 
@@ -27,4 +27,4 @@ void pcap_write_header(FILE *);
 int pcap_read(FILE *, struct ofpbuf **);
 void pcap_write(FILE *, struct ofpbuf *);
 
-#endif /* dhcp.h */
+#endif /* pcap-file.h */

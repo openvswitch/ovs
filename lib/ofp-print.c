@@ -44,7 +44,6 @@
 #include "openflow/openflow.h"
 #include "openflow/nicira-ext.h"
 #include "packets.h"
-#include "pcap.h"
 #include "type-props.h"
 #include "unaligned.h"
 #include "util.h"

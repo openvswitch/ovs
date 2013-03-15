@@ -130,8 +130,8 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/ovsdb-types.h \
 	lib/packets.c \
 	lib/packets.h \
-	lib/pcap.c \
-	lib/pcap.h \
+	lib/pcap-file.c \
+	lib/pcap-file.h \
 	lib/poll-loop.c \
 	lib/poll-loop.h \
 	lib/process.c \

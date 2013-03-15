@@ -15,7 +15,7 @@
  */
 
 #include <config.h>
-#include "pcap.h"
+#include "pcap-file.h"
 #include <errno.h>
 #include <inttypes.h>
 #include <string.h>

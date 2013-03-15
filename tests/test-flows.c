@@ -25,7 +25,7 @@
 #include "ofpbuf.h"
 #include "ofp-print.h"
 #include "ofp-util.h"
-#include "pcap.h"
+#include "pcap-file.h"
 #include "util.h"
 #include "vlog.h"
 
