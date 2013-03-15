@@ -22,7 +22,7 @@ mkdir var var/run
 touch var/run/xapi_init_complete.cookie
 
 ovs_vsctl () {
-    ovs-vsctl --timeout=5 --no-wait -vreconnect:emer --db=unix:socket "$@"
+    ovs-vsctl --no-wait -vreconnect:emer --db=unix:socket "$@"
 }
 
 # Start ovsdb-server.

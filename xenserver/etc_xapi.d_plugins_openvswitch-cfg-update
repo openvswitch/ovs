@@ -4,7 +4,7 @@
 # ovs-vswitchd configuration that are managed in the xapi database when 
 # integrated with Citrix management tools.
 
-# Copyright (C) 2009, 2010, 2011, 2012 Nicira, Inc.
+# Copyright (C) 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -213,7 +213,7 @@ def setControllerCfg(controller):
                    "--", "set-manager", 'ssl:' + controller + ':6632'])
 
 def vswitchCfgQuery(action_args):
-    cmd = [vsctl, "--timeout=5", "-vconsole:off"] + action_args
+    cmd = [vsctl, "-vconsole:off"] + action_args
     output = subprocess.Popen(cmd, stdout=subprocess.PIPE).communicate()
     if len(output) == 0 or output[0] == None:
         output = ""

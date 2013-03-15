@@ -9,8 +9,14 @@ v1.10.0 - xx xxx xxxx
       separately on a per-port basis, so it should no longer be
       possible for a large number of new flows arriving on one port to
       prevent new flows from being processed on other ports.
-    - Many "ovs-vsctl" database commands now accept an --if-exists option.
-      Please refer to the ovs-vsctl manpage for details.
+    - ovs-vsctl:
+      * Previously ovs-vsctl would retry connecting to the database forever,
+        causing it to hang if ovsdb-server was not running.  Now, ovs-vsctl
+        only tries once by default (use --retry to try forever).  This change
+        means that you may want to remove uses of --timeout to avoid hangs
+        in ovs-vsctl calls.
+      * Many "ovs-vsctl" database commands now accept an --if-exists option.
+        Please refer to the ovs-vsctl manpage for details.
     - OpenFlow:
       - Experimental support for newer versions of OpenFlow.  See
         the "What versions of OpenFlow does Open vSwitch support?"

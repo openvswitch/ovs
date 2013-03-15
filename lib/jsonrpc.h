@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2012 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -98,7 +98,7 @@ struct json *jsonrpc_msg_to_json(struct jsonrpc_msg *);
 
 /* A JSON-RPC session with reconnection. */
 
-struct jsonrpc_session *jsonrpc_session_open(const char *name);
+struct jsonrpc_session *jsonrpc_session_open(const char *name, bool retry);
 struct jsonrpc_session *jsonrpc_session_open_unreliably(struct jsonrpc *,
                                                         uint8_t);
 void jsonrpc_session_close(struct jsonrpc_session *);
@@ -117,6 +117,7 @@ bool jsonrpc_session_is_alive(const struct jsonrpc_session *);
 bool jsonrpc_session_is_connected(const struct jsonrpc_session *);
 unsigned int jsonrpc_session_get_seqno(const struct jsonrpc_session *);
 int jsonrpc_session_get_status(const struct jsonrpc_session *);
+int jsonrpc_session_get_last_error(const struct jsonrpc_session *);
 void jsonrpc_session_get_reconnect_stats(const struct jsonrpc_session *,
                                          struct reconnect_stats *);
 

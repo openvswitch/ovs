@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1880,7 +1880,7 @@ do_idl(int argc, char *argv[])
 
     idltest_init();
 
-    idl = ovsdb_idl_create(argv[1], &idltest_idl_class, true);
+    idl = ovsdb_idl_create(argv[1], &idltest_idl_class, true, true);
     if (argc > 2) {
         struct stream *stream;
 

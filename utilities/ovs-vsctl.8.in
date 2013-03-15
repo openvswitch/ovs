@@ -127,6 +127,20 @@ to approximately \fIsecs\fR seconds.  If the timeout expires,
 would normally happen only if the database cannot be contacted, or if
 the system is overloaded.)
 .
+.IP "\fB\-\-retry\fR"
+Without this option, if \fBovs\-vsctl\fR connects outward to the
+database server (the default) then \fBovs\-vsctl\fR will try to
+connect once and exit with an error if the connection fails (which
+usually means that \fBovsdb\-server\fR is not running).
+.IP
+With this option, or if \fB\-\-db\fR specifies that \fBovs\-vsctl\fR
+should listen for an incoming connection from the database server,
+then \fBovs\-vsctl\fR will wait for a connection to the database
+forever.
+.IP
+Regardless of this setting, \fB\-\-timeout\fR always limits how long
+\fBovs\-vsctl\fR will wait.
+.
 .SS "Table Formatting Options"
 These options control the format of output from the \fBlist\fR and
 \fBfind\fR commands.

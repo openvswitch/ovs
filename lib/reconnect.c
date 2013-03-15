@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2012 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -207,7 +207,8 @@ reconnect_get_max_tries(struct reconnect *fsm)
 
 /* Configures the backoff parameters for 'fsm'.  'min_backoff' is the minimum
  * number of milliseconds, and 'max_backoff' is the maximum, between connection
- * attempts.
+ * attempts.  The current backoff is also the duration that 'fsm' is willing to
+ * wait for a given connection to succeed or fail.
  *
  * 'min_backoff' must be at least 1000, and 'max_backoff' must be greater than
  * or equal to 'min_backoff'.

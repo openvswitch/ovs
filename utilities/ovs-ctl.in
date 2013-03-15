@@ -57,7 +57,7 @@ insert_mod_if_required () {
 }
 
 ovs_vsctl () {
-    ovs-vsctl --no-wait --timeout=5 "$@"
+    ovs-vsctl --no-wait "$@"
 }
 
 ovsdb_tool () {
