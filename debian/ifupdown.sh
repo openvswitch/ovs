@@ -22,7 +22,7 @@ if [ -z "${IF_OVS_TYPE}" ]; then
 fi
 
 ovs_vsctl() {
-    ovs-vsctl "$@"
+    ovs-vsctl --timeout=5 "$@"
 }
 
 if (ovs_vsctl --version) > /dev/null 2>&1; then :; else
