@@ -415,9 +415,6 @@ void ovs_vport_receive(struct vport *vport, struct sk_buff *skb)
 	stats->rx_bytes += skb->len;
 	u64_stats_update_end(&stats->sync);
 
-	if (!(vport->ops->flags & VPORT_F_FLOW))
-		OVS_CB(skb)->flow = NULL;
-
 	if (!(vport->ops->flags & VPORT_F_TUN_ID))
 		OVS_CB(skb)->tun_key = NULL;
 

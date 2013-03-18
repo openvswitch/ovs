@@ -106,8 +106,7 @@ struct vport {
 };
 
 #define VPORT_F_REQUIRED	(1 << 0) /* If init fails, module loading fails. */
-#define VPORT_F_FLOW		(1 << 1) /* Sets OVS_CB(skb)->flow. */
-#define VPORT_F_TUN_ID		(1 << 2) /* Sets OVS_CB(skb)->tun_id. */
+#define VPORT_F_TUN_ID		(1 << 1) /* Sets OVS_CB(skb)->tun_id. */
 
 /**
  * struct vport_parms - parameters for creating a new vport

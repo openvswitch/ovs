@@ -201,40 +201,36 @@ void ovs_dp_process_received_packet(struct vport *p, struct sk_buff *skb)
 	struct datapath *dp = p->dp;
 	struct sw_flow *flow;
 	struct dp_stats_percpu *stats;
+	struct sw_flow_key key;
 	u64 *stats_counter;
 	int error;
+	int key_len;
 
 	stats = this_cpu_ptr(dp->stats_percpu);
 
-	if (!OVS_CB(skb)->flow) {
-		struct sw_flow_key key;
-		int key_len;
-
-		/* Extract flow from 'skb' into 'key'. */
-		error = ovs_flow_extract(skb, p->port_no, &key, &key_len);
-		if (unlikely(error)) {
-			kfree_skb(skb);
-			return;
-		}
-
-		/* Look up flow. */
-		flow = ovs_flow_tbl_lookup(rcu_dereference(dp->table),
-					   &key, key_len);
-		if (unlikely(!flow)) {
-			struct dp_upcall_info upcall;
-
-			upcall.cmd = OVS_PACKET_CMD_MISS;
-			upcall.key = &key;
-			upcall.userdata = NULL;
-			upcall.portid = p->upcall_portid;
-			ovs_dp_upcall(dp, skb, &upcall);
-			consume_skb(skb);
-			stats_counter = &stats->n_missed;
-			goto out;
-		}
-
-		OVS_CB(skb)->flow = flow;
+	/* Extract flow from 'skb' into 'key'. */
+	error = ovs_flow_extract(skb, p->port_no, &key, &key_len);
+	if (unlikely(error)) {
+		kfree_skb(skb);
+		return;
 	}
+
+	/* Look up flow. */
+	flow = ovs_flow_tbl_lookup(rcu_dereference(dp->table), &key, key_len);
+	if (unlikely(!flow)) {
+		struct dp_upcall_info upcall;
+
+		upcall.cmd = OVS_PACKET_CMD_MISS;
+		upcall.key = &key;
+		upcall.userdata = NULL;
+		upcall.portid = p->upcall_portid;
+		ovs_dp_upcall(dp, skb, &upcall);
+		consume_skb(skb);
+		stats_counter = &stats->n_missed;
+		goto out;
+	}
+
+	OVS_CB(skb)->flow = flow;
 
 	stats_counter = &stats->n_hit;
 	ovs_flow_used(OVS_CB(skb)->flow, skb);

@@ -92,7 +92,6 @@ static int internal_dev_xmit(struct sk_buff *skb, struct net_device *netdev)
 	}
 
 	vlan_copy_skb_tci(skb);
-	OVS_CB(skb)->flow = NULL;
 
 	rcu_read_lock();
 	ovs_vport_receive(internal_dev_priv(netdev)->vport, skb);
@@ -289,7 +288,7 @@ static int internal_dev_recv(struct vport *vport, struct sk_buff *skb)
 
 const struct vport_ops ovs_internal_vport_ops = {
 	.type		= OVS_VPORT_TYPE_INTERNAL,
-	.flags		= VPORT_F_REQUIRED | VPORT_F_FLOW,
+	.flags		= VPORT_F_REQUIRED,
 	.create		= internal_dev_create,
 	.destroy	= internal_dev_destroy,
 	.get_name	= ovs_netdev_get_name,
