@@ -70,7 +70,8 @@ case "$TYPE" in
 		# because it remained in the OVSDB for some reason, but it won't be up.
 		if check_device_down "${DEVICE}"; then
 			ovs-vsctl -t ${TIMEOUT} -- --may-exist add-br "$DEVICE" $OVS_OPTIONS \
-			${OVS_EXTRA+-- $OVS_EXTRA}
+			${OVS_EXTRA+-- $OVS_EXTRA} \
+			${STP+-- set bridge "$DEVICE" stp_enable="${STP}"}
 		else
 			OVSBRIDGECONFIGURED="yes"
 		fi
@@ -94,7 +95,6 @@ case "$TYPE" in
 			[ "${OVSBRIDGECONFIGURED}" != "yes" ]; then
 			${OTHERSCRIPT} ${CONFIG}
 		fi
-		[ -n "${STP}" ] && ovs-vsctl --no-wait set bridge "${DEVICE}" stp_enable="${STP}"
 		exit 0
 		;;
 	OVSPort)
