@@ -1772,12 +1772,18 @@ ofproto_port_add(struct ofproto *ofproto, struct netdev *netdev,
         update_port(ofproto, netdev_name);
     }
     if (ofp_portp) {
-        struct ofproto_port ofproto_port;
+        *ofp_portp = OFPP_NONE;
+        if (!error) {
+            struct ofproto_port ofproto_port;
 
-        ofproto_port_query_by_name(ofproto, netdev_get_name(netdev),
-                                   &ofproto_port);
-        *ofp_portp = error ? OFPP_NONE : ofproto_port.ofp_port;
-        ofproto_port_destroy(&ofproto_port);
+            error = ofproto_port_query_by_name(ofproto,
+                                               netdev_get_name(netdev),
+                                               &ofproto_port);
+            if (!error) {
+                *ofp_portp = ofproto_port.ofp_port;
+                ofproto_port_destroy(&ofproto_port);
+            }
+        }
     }
     return error;
 }
