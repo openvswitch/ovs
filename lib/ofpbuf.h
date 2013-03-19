@@ -107,6 +107,12 @@ static inline struct ofpbuf *ofpbuf_from_list(const struct list *list)
 }
 void ofpbuf_list_delete(struct list *);
 
+static inline bool
+ofpbuf_equal(const struct ofpbuf *a, const struct ofpbuf *b)
+{
+    return a->size == b->size && memcmp(a->data, b->data, a->size) == 0;
+}
+
 #ifdef  __cplusplus
 }
 #endif
