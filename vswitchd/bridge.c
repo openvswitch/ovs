@@ -2034,17 +2034,61 @@ refresh_controller_status(void)
 
     ofproto_free_ofproto_controller_info(&info);
 }
+
+/* "Instant" stats.
+ *
+ * Some information in the database must be kept as up-to-date as possible to
+ * allow controllers to respond rapidly to network outages.  We call these
+ * statistics "instant" stats.
+ *
+ * We wish to update these statistics every INSTANT_INTERVAL_MSEC milliseconds,
+ * assuming that they've changed.  The only means we have to determine whether
+ * they have changed are:
+ *
+ *   - Try to commit changes to the database.  If nothing changed, then
+ *     ovsdb_idl_txn_commit() returns TXN_UNCHANGED, otherwise some other
+ *     value.
+ *
+ *   - instant_stats_run() is called late in the run loop, after anything that
+ *     might change any of the instant stats.
+ *
+ * We use these two facts together to avoid waking the process up every
+ * INSTANT_INTERVAL_MSEC whether there is any change or not.
+ */
+
+/* Minimum interval between writing updates to the instant stats to the
+ * database. */
+#define INSTANT_INTERVAL_MSEC 100
+
+/* Current instant stats database transaction, NULL if there is no ongoing
+ * transaction. */
+static struct ovsdb_idl_txn *instant_txn;
+
+/* Next time (in msec on monotonic clock) at which we will update the instant
+ * stats.  */
+static long long int instant_next_txn = LLONG_MIN;
+
+/* True if the run loop has run since we last saw that the instant stats were
+ * unchanged, that is, this is true if we need to wake up at 'instant_next_txn'
+ * to refresh the instant stats. */
+static bool instant_stats_could_have_changed;
 
 static void
-refresh_instant_stats(void)
+instant_stats_run(void)
 {
-    static struct ovsdb_idl_txn *txn = NULL;
+    enum ovsdb_idl_txn_status status;
 
-    if (!txn) {
+    instant_stats_could_have_changed = true;
+
+    if (!instant_txn) {
         struct bridge *br;
 
-        txn = ovsdb_idl_txn_create(idl);
+        if (time_msec() < instant_next_txn) {
+            return;
+        }
+        instant_next_txn = time_msec() + INSTANT_INTERVAL_MSEC;
 
+        instant_txn = ovsdb_idl_txn_create(idl);
         HMAP_FOR_EACH (br, node, &all_bridges) {
             struct iface *iface;
             struct port *port;
@@ -2093,12 +2137,26 @@ refresh_instant_stats(void)
         }
     }
 
-    if (ovsdb_idl_txn_commit(txn) != TXN_INCOMPLETE) {
-        ovsdb_idl_txn_destroy(txn);
-        txn = NULL;
+    status = ovsdb_idl_txn_commit(instant_txn);
+    if (status != TXN_INCOMPLETE) {
+        ovsdb_idl_txn_destroy(instant_txn);
+        instant_txn = NULL;
+    }
+    if (status == TXN_UNCHANGED) {
+        instant_stats_could_have_changed = false;
     }
 }
 
+static void
+instant_stats_wait(void)
+{
+    if (instant_txn) {
+        ovsdb_idl_txn_wait(instant_txn);
+    } else if (instant_stats_could_have_changed) {
+        poll_timer_wait_until(instant_next_txn);
+    }
+}
+
 /* Performs periodic activity required by bridges that needs to be done with
  * the least possible latency.
  *
@@ -2269,7 +2327,7 @@ bridge_run(void)
     }
 
     run_system_stats();
-    refresh_instant_stats();
+    instant_stats_run();
 }
 
 void
@@ -2301,6 +2359,7 @@ bridge_wait(void)
     }
 
     system_stats_wait();
+    instant_stats_wait();
 }
 
 /* Adds some memory usage statistics for bridges into 'usage', for use with
