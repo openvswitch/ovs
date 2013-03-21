@@ -5269,7 +5269,6 @@ subfacet_update_stats(struct subfacet *subfacet,
         facet->packet_count += stats->n_packets;
         facet->byte_count += stats->n_bytes;
         facet->tcp_flags |= stats->tcp_flags;
-        facet_push_stats(facet);
         netflow_flow_update_flags(&facet->nf_flow, stats->tcp_flags);
     }
 }
