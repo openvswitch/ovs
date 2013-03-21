@@ -575,7 +575,7 @@ struct nx_action_stack {
     ovs_be16 type;                  /* OFPAT_VENDOR. */
     ovs_be16 len;                   /* Length is 16. */
     ovs_be32 vendor;                /* NX_VENDOR_ID. */
-    ovs_be16 subtype;               /* NXAST_REG_PUSH or NXAST_REG_POP. */
+    ovs_be16 subtype;               /* NXAST_STACK_PUSH or NXAST_STACK_POP. */
     ovs_be16 offset;                /* Bit offset into the field. */
     ovs_be32 field;                 /* The field used for push or pop. */
     ovs_be16 n_bits;                /* (n_bits + 1) bits of the field. */
