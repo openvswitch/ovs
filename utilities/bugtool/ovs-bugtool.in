@@ -575,8 +575,6 @@ exclude those logs from the archive.
     if os.path.exists(OPENVSWITCH_VSWITCHD_PID):
         cmd_output(CAP_NETWORK_STATUS, [OVS_DPCTL, 'show', '-s'])
         for d in dp_list():
-            cmd_output(CAP_NETWORK_STATUS, [OVS_OFCTL, 'show', d])
-            cmd_output(CAP_NETWORK_STATUS, [OVS_OFCTL, 'dump-flows', d])
             cmd_output(CAP_NETWORK_STATUS, [OVS_DPCTL, 'dump-flows', d])
         try:
             vspidfile = open(OPENVSWITCH_VSWITCHD_PID)
