@@ -684,6 +684,7 @@ struct ofproto_dpif {
     struct hmap facets;
     struct hmap subfacets;
     struct governor *governor;
+    long long int consistency_rl;
 
     /* Revalidation. */
     struct table_dpif tables[N_TABLES];
@@ -1237,6 +1238,7 @@ construct(struct ofproto *ofproto_)
     hmap_init(&ofproto->facets);
     hmap_init(&ofproto->subfacets);
     ofproto->governor = NULL;
+    ofproto->consistency_rl = LLONG_MIN;
 
     for (i = 0; i < N_TABLES; i++) {
         struct table_dpif *table = &ofproto->tables[i];
@@ -1458,9 +1460,12 @@ run(struct ofproto *ofproto_)
     mac_learning_run(ofproto->ml, &ofproto->backer->revalidate_set);
 
     /* Check the consistency of a random facet, to aid debugging. */
-    if (!hmap_is_empty(&ofproto->facets)
+    if (time_msec() >= ofproto->consistency_rl
+        && !hmap_is_empty(&ofproto->facets)
         && !ofproto->backer->need_revalidate) {
         struct facet *facet;
+
+        ofproto->consistency_rl = time_msec() + 250;
 
         facet = CONTAINER_OF(hmap_random_node(&ofproto->facets),
                              struct facet, hmap_node);
