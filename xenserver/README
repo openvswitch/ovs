@@ -86,6 +86,8 @@ debugging.  The sources for the extensions are in
             * ovs-bugtool-ovsdb-dump
             * ovs-bugtool-tc-class-show
             * ovs-bugtool-bond-show
+            * ovs-bugtool-ovs-ofctl-show
+            * ovs-bugtool-ovs-ofctl-dump-flows
 
     system-configuration/openvswitch.xml
 
@@ -121,6 +123,14 @@ scripts are located in ../utilities/bugtool:
     ovs-bugtool-tc-class-show
 
         Script to dump tc class configuration for all network interfaces.
+
+    ovs-bugtool-ovs-ofctl-show
+
+        Script to dump information about flow tables and ports of each bridge.
+
+    ovs-bugtool-ovs-ofctl-dump-flows
+
+        Script to dump openflow flows of each bridge.
 
     ovs-bugtool-daemons-ver
 
