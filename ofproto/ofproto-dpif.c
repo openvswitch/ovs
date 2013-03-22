@@ -491,6 +491,8 @@ struct facet {
      * always be valid, since it could have been removed after newer
      * subfacets were pushed onto the 'subfacets' list.) */
     struct subfacet one_subfacet;
+
+    long long int learn_rl;      /* Rate limiter for facet_learn(). */
 };
 
 static struct facet *facet_create(struct rule_dpif *,
@@ -4376,6 +4378,8 @@ facet_create(struct rule_dpif *rule, const struct flow *flow, uint32_t hash)
     netflow_flow_init(&facet->nf_flow);
     netflow_flow_update_time(ofproto->netflow, &facet->nf_flow, facet->used);
 
+    facet->learn_rl = time_msec() + 500;
+
     return facet;
 }
 
@@ -4451,6 +4455,12 @@ facet_learn(struct facet *facet)
     struct subfacet *subfacet= CONTAINER_OF(list_front(&facet->subfacets),
                                             struct subfacet, list_node);
     struct action_xlate_ctx ctx;
+
+    if (time_msec() < facet->learn_rl) {
+        return;
+    }
+
+    facet->learn_rl = time_msec() + 500;
 
     if (!facet->has_learn
         && !facet->has_normal
