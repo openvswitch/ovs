@@ -1714,6 +1714,7 @@ parse_flow_nlattrs(const struct nlattr *key, size_t key_len,
     uint64_t present_attrs;
     size_t left;
 
+    BUILD_ASSERT(OVS_KEY_ATTR_MAX < CHAR_BIT * sizeof present_attrs);
     present_attrs = 0;
     *out_of_range_attrp = 0;
     NL_ATTR_FOR_EACH (nla, left, key, key_len) {
@@ -1728,7 +1729,7 @@ parse_flow_nlattrs(const struct nlattr *key, size_t key_len,
             return false;
         }
 
-        if (type >= CHAR_BIT * sizeof present_attrs) {
+        if (type > OVS_KEY_ATTR_MAX) {
             *out_of_range_attrp = type;
         } else {
             if (present_attrs & (UINT64_C(1) << type)) {
