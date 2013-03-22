@@ -903,6 +903,7 @@ lookup_ofproto_dpif_by_port_name(const char *name)
 static int
 type_run(const char *type)
 {
+    static long long int push_timer = LLONG_MIN;
     struct dpif_backer *backer;
     char *devname;
     int error;
@@ -915,6 +916,16 @@ type_run(const char *type)
     }
 
     dpif_run(backer->dpif);
+
+    /* The most natural place to push facet statistics is when they're pulled
+     * from the datapath.  However, when there are many flows in the datapath,
+     * this expensive operation can occur so frequently, that it reduces our
+     * ability to quickly set up flows.  To reduce the cost, we push statistics
+     * here instead. */
+    if (time_msec() > push_timer) {
+        push_timer = time_msec() + 2000;
+        push_all_stats();
+    }
 
     if (backer->need_revalidate
         || !tag_set_is_empty(&backer->revalidate_set)) {
@@ -4220,7 +4231,6 @@ update_subfacet_stats(struct subfacet *subfacet,
         facet_account(facet);
         facet->accounted_bytes = facet->byte_count;
     }
-    facet_push_stats(facet);
 }
 
 /* 'key' with length 'key_len' bytes is a flow in 'dpif' that we know nothing
