@@ -113,25 +113,25 @@ def parseTaggedName():
     return name
 
 def print_enum(tag, constants, storage_class):
-    print """
+    print ("""
 %(storage_class)sconst char *
 %(tag)s_to_string(uint16_t value)
 {
     switch (value) {\
 """ % {"tag": tag,
        "bufferlen": len(tag) + 32,
-       "storage_class": storage_class}
+       "storage_class": storage_class})
     for constant in constants:
-        print "    case %s: return \"%s\";" % (constant, constant)
-    print """\
+        print ("    case %s: return \"%s\";" % (constant, constant))
+    print ("""\
     }
     return NULL;
 }\
-""" % {"tag": tag}
+""" % {"tag": tag})
 
 def usage():
     argv0 = os.path.basename(sys.argv[0])
-    print '''\
+    print ('''\
 %(argv0)s, for extracting OpenFlow error codes from header files
 usage: %(argv0)s FILE [FILE...]
 
@@ -141,7 +141,7 @@ strings, for use as lib/ofp-errors.c in the Open vSwitch source tree.
 
 This program is specialized for reading lib/ofp-errors.h.  It will not
 work on arbitrary header files without extensions.\
-''' % {"argv0": argv0}
+''' % {"argv0": argv0})
     sys.exit(0)
 
 def extract_ofp_errors(filenames):
@@ -278,14 +278,14 @@ def extract_ofp_errors(filenames):
 
         inputFile.close()
 
-    for fn, ln in expected_errors.itervalues():
+    for fn, ln in expected_errors.values():
         sys.stderr.write("%s:%d: expected duplicate not used.\n" % (fn, ln))
         n_errors += 1
 
     if n_errors:
         sys.exit(1)
 
-    print """\
+    print ("""\
 /* Generated automatically; do not modify!     -*- buffer-read-only: t -*- */
 
 #define OFPERR_N_ERRORS %d
@@ -307,14 +307,14 @@ static const char *error_comments[OFPERR_N_ERRORS] = {
 """ % (len(names),
        '\n'.join('    "%s",' % name for name in names),
        '\n'.join('    "%s",' % re.sub(r'(["\\])', r'\\\1', comment)
-                 for comment in comments))
+                 for comment in comments)))
 
     def output_domain(map, name, description, version):
-        print """
+        print ("""
 static enum ofperr
 %s_decode(uint16_t type, uint16_t code)
 {
-    switch ((type << 16) | code) {""" % name
+    switch ((type << 16) | code) {""" % name)
         found = set()
         for enum in names:
             if enum not in map:
@@ -326,20 +326,20 @@ static enum ofperr
             if value in found:
                 continue
             found.add(value)
-            print "    case (%d << 16) | %d:" % (type_, code)
-            print "        return OFPERR_%s;" % enum
-        print """\
+            print ("    case (%d << 16) | %d:" % (type_, code))
+            print ("        return OFPERR_%s;" % enum)
+        print ("""\
     }
 
     return 0;
-}"""
+}""")
 
-        print """
+        print ("""
 static const struct ofperr_domain %s = {
     "%s",
     %d,
     %s_decode,
-    {""" % (name, description, version, name)
+    {""" % (name, description, version, name))
         for enum in names:
             if enum in map:
                 type_, code = map[enum]
@@ -347,10 +347,10 @@ static const struct ofperr_domain %s = {
                     code = -1
             else:
                 type_ = code = -1
-            print "        { %2d, %3d }, /* %s */" % (type_, code, enum)
-        print """\
+            print ("        { %2d, %3d }, /* %s */" % (type_, code, enum))
+        print ("""\
     },
-};"""
+};""")
 
     output_domain(reverse["OF1.0"], "ofperr_of10", "OpenFlow 1.0", 0x01)
     output_domain(reverse["OF1.1"], "ofperr_of11", "OpenFlow 1.1", 0x02)
