@@ -5425,8 +5425,13 @@ rule_destruct(struct rule *rule_)
 static void
 rule_get_stats(struct rule *rule_, uint64_t *packets, uint64_t *bytes)
 {
+    struct ofproto_dpif *ofproto = ofproto_dpif_cast(rule_->ofproto);
     struct rule_dpif *rule = rule_dpif_cast(rule_);
     struct facet *facet;
+
+    HMAP_FOR_EACH (facet, hmap_node, &ofproto->facets) {
+        facet_push_stats(facet);
+    }
 
     /* Start from historical data for 'rule' itself that are no longer tracked
      * in facets.  This counts, for example, facets that have expired. */
