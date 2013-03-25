@@ -280,15 +280,6 @@ int ovs_tnl_send(struct vport *vport, struct sk_buff *skb)
 		/* Push Tunnel header. */
 		tnl_vport->tnl_ops->build_header(vport, skb, tunnel_hlen);
 
-		/*
-		 * Allow our local IP stack to fragment the outer packet even
-		 * if the DF bit is set as a last resort.  We also need to
-		 * force selection of an IP ID here because Linux will
-		 * otherwise leave it at 0 if the packet originally had DF set.
-		 */
-		skb->local_df = 1;
-		__ip_select_ident(ip_hdr(skb), skb_dst(skb), 0);
-
 		/* Push IP header. */
 		iph = ip_hdr(skb);
 		iph->version	= 4;
@@ -300,7 +291,15 @@ int ovs_tnl_send(struct vport *vport, struct sk_buff *skb)
 		iph->ttl	= OVS_CB(skb)->tun_key->ipv4_ttl;
 		iph->frag_off	= OVS_CB(skb)->tun_key->tun_flags &
 				  OVS_TNL_F_DONT_FRAGMENT ?  htons(IP_DF) : 0;
-		ip_select_ident(iph, &rt_dst(rt), NULL);
+		/*
+		 * Allow our local IP stack to fragment the outer packet even
+		 * if the DF bit is set as a last resort.  We also need to
+		 * force selection of an IP ID here with __ip_select_ident(),
+		 * as ip_select_ident() assumes a proper ID is not needed when
+		 * when the DF bit is set.
+		 */
+		skb->local_df = 1;
+		__ip_select_ident(iph, skb_dst(skb), 0);
 
 		memset(IPCB(skb), 0, sizeof(*IPCB(skb)));
 
