@@ -207,15 +207,6 @@ static void lisp_build_header(const struct vport *vport,
 
 	tunnel_id_to_instance_id(tun_key->tun_id, &lisph->u2.word2.instance_id[0]);
 	lisph->u2.word2.locator_status_bits = 1;
-
-	/*
-	 * Allow our local IP stack to fragment the outer packet even if the
-	 * DF bit is set as a last resort.  We also need to force selection of
-	 * an IP ID here because Linux will otherwise leave it at 0 if the
-	 * packet originally had DF set.
-	 */
-	skb->local_df = 1;
-	__ip_select_ident(ip_hdr(skb), skb_dst(skb), 0);
 }
 
 /* Called with rcu_read_lock and BH disabled. */

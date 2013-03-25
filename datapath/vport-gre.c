@@ -95,8 +95,6 @@ static void __gre_build_header(struct sk_buff *skb,
 	__be32 *options = (__be32 *)(skb_network_header(skb) + tunnel_hlen
 			- GRE_HEADER_SECTION);
 	struct gre_base_hdr *greh = (struct gre_base_hdr *) skb_transport_header(skb);
-	struct dst_entry *dst = skb_dst(skb);
-
 	greh->protocol = htons(ETH_P_TEB);
 	greh->flags = 0;
 
@@ -121,14 +119,6 @@ static void __gre_build_header(struct sk_buff *skb,
 						skb->len - skb_transport_offset(skb),
 						0));
 	}
-	/*
-	 * Allow our local IP stack to fragment the outer packet even if the
-	 * DF bit is set as a last resort.  We also need to force selection of
-	 * an IP ID here because Linux will otherwise leave it at 0 if the
-	 * packet originally had DF set.
-	 */
-	skb->local_df = 1;
-	__ip_select_ident(ip_hdr(skb), dst, 0);
 }
 
 static void gre_build_header(const struct vport *vport,
