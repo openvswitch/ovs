@@ -227,6 +227,7 @@ ovsdb/remote-passive.man:
 vswitchd/ovs-vswitchd.8: \
 	vswitchd/ovs-vswitchd.8.in \
 	lib/common.man \
+	lib/coverage-unixctl.man \
 	lib/daemon.man \
 	lib/leak-checker.man \
 	lib/memory-unixctl.man \
@@ -241,6 +242,7 @@ vswitchd/ovs-vswitchd.8: \
 	ovsdb/remote-passive.man
 vswitchd/ovs-vswitchd.8.in:
 lib/common.man:
+lib/coverage-unixctl.man:
 lib/daemon.man:
 lib/leak-checker.man:
 lib/memory-unixctl.man:
