@@ -88,6 +88,7 @@ debugging.  The sources for the extensions are in
             * ovs-bugtool-bond-show
             * ovs-bugtool-ovs-ofctl-show
             * ovs-bugtool-ovs-ofctl-dump-flows
+            * ovs-bugtool-ovs-appctl-dpif
 
     system-configuration/openvswitch.xml
 
@@ -131,6 +132,10 @@ scripts are located in ../utilities/bugtool:
     ovs-bugtool-ovs-ofctl-dump-flows
 
         Script to dump openflow flows of each bridge.
+
+    ovs-bugtool-ovs-appctl-dpif
+
+        Script to collect a summary of configured datapaths and datapath flows.
 
     ovs-bugtool-daemons-ver
 
