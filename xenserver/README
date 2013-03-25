@@ -82,13 +82,16 @@ debugging.  The sources for the extensions are in
         the following scripts, which are described below:
 
             * ovs-bugtool-cfm-show
-            * ovs-bugtool-lcap-show
+            * ovs-bugtool-lacp-show
             * ovs-bugtool-ovsdb-dump
             * ovs-bugtool-tc-class-show
             * ovs-bugtool-bond-show
             * ovs-bugtool-ovs-ofctl-show
             * ovs-bugtool-ovs-ofctl-dump-flows
             * ovs-bugtool-ovs-appctl-dpif
+            * ovs-bugtool-coverage-show
+            * ovs-bugtool-memory-show
+            * ovs-bugtool-vsctl-show
 
     system-configuration/openvswitch.xml
 
@@ -136,6 +139,19 @@ scripts are located in ../utilities/bugtool:
     ovs-bugtool-ovs-appctl-dpif
 
         Script to collect a summary of configured datapaths and datapath flows.
+
+    ovs-bugtool-coverage-show
+
+        Script to count the number of times particular events occur during
+        ovs-vswitchd's runtime.
+
+    ovs-bugtool-memory-show
+
+        Script to show some basic statistics about ovs-vswitchd's memory usage.
+
+    ovs-bugtool-vsctl-show
+
+        Script to show a brief overview of the database contents.
 
     ovs-bugtool-daemons-ver
 
