@@ -549,7 +549,8 @@ exclude those logs from the archive.
     cmd_output(CAP_NETWORK_STATUS, [NETSTAT, '-an'])
     for dir in DHCP_LEASE_DIR:
         tree_output(CAP_NETWORK_STATUS, dir)
-    cmd_output(CAP_NETWORK_STATUS, [IPTABLES, '-nL'])
+    for table in ['filter', 'nat', 'mangle', 'raw', 'security']:
+        cmd_output(CAP_NETWORK_STATUS, [IPTABLES, '-t', table, '-nL'])
     for p in os.listdir('/sys/class/net/'):
         try:
             f = open('/sys/class/net/%s/type' % p, 'r')
