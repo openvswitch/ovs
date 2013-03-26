@@ -367,6 +367,7 @@ struct subfacet {
     int key_len;
 
     long long int used;         /* Time last used; time created if not used. */
+    long long int created;      /* Time created. */
 
     uint64_t dp_packet_count;   /* Last known packet count in the datapath. */
     uint64_t dp_byte_count;     /* Last known byte count in the datapath. */
@@ -663,6 +664,13 @@ odp_port_to_ofport(const struct dpif_backer *, uint32_t odp_port);
 
 static void dpif_stats_update_hit_count(struct ofproto_dpif *ofproto,
                                         uint64_t delta);
+struct avg_subfacet_rates {
+    double add_rate;     /* Moving average of new flows created per minute. */
+    double del_rate;     /* Moving average of flows deleted per minute. */
+};
+static void show_dp_rates(struct ds *ds, const char *heading,
+                          const struct avg_subfacet_rates *rates);
+static void exp_mavg(double *avg, int base, double new);
 
 struct ofproto_dpif {
     struct hmap_node all_ofproto_dpifs_node; /* In 'all_ofproto_dpifs'. */
@@ -718,7 +726,48 @@ struct ofproto_dpif {
     /* Per ofproto's dpif stats. */
     uint64_t n_hit;
     uint64_t n_missed;
+
+    /* Subfacet statistics.
+     *
+     * These keep track of the total number of subfacets added and deleted and
+     * flow life span.  They are useful for computing the flow rates stats
+     * exposed via "ovs-appctl dpif/show".  The goal is to learn about
+     * traffic patterns in ways that we can use later to improve Open vSwitch
+     * performance in new situations.  */
+    long long int created;         /* Time when it is created. */
+    unsigned int max_n_subfacet;   /* Maximum number of flows */
+
+    /* The average number of subfacets... */
+    struct avg_subfacet_rates hourly; /* ...over the last hour. */
+    struct avg_subfacet_rates daily;  /* ...over the last day. */
+    long long int last_minute;        /* Last time 'hourly' was updated. */
+
+    /* Number of subfacets added or deleted since 'last_minute'. */
+    unsigned int subfacet_add_count;
+    unsigned int subfacet_del_count;
+
+    /* Number of subfacets added or deleted from 'created' to 'last_minute.' */
+    unsigned long long int total_subfacet_add_count;
+    unsigned long long int total_subfacet_del_count;
+
+    /* Sum of the number of milliseconds that each subfacet existed,
+     * over the subfacets that have been added and then later deleted. */
+    unsigned long long int total_subfacet_life_span;
+
+    /* Incremented by the number of currently existing subfacets, each
+     * time we pull statistics from the kernel. */
+    unsigned long long int total_subfacet_count;
+
+    /* Number of times we pull statistics from the kernel. */
+    unsigned long long int n_update_stats;
 };
+static unsigned long long int avg_subfacet_life_span(
+                                        const struct ofproto_dpif *);
+static double avg_subfacet_count(const struct ofproto_dpif *ofproto);
+static void update_moving_averages(struct ofproto_dpif *ofproto);
+static void dpif_stats_update_hit_count(struct ofproto_dpif *ofproto,
+                                        uint64_t delta);
+static void update_max_subfacet_count(struct ofproto_dpif *ofproto);
 
 /* Defer flow mod completion until "ovs-appctl ofproto/unclog"?  (Useful only
  * for debugging the asynchronous flow_mod implementation.) */
@@ -1298,6 +1347,19 @@ construct(struct ofproto *ofproto_)
 
     ofproto->n_hit = 0;
     ofproto->n_missed = 0;
+
+    ofproto->max_n_subfacet = 0;
+    ofproto->created = time_msec();
+    ofproto->last_minute = ofproto->created;
+    memset(&ofproto->hourly, 0, sizeof ofproto->hourly);
+    memset(&ofproto->daily, 0, sizeof ofproto->daily);
+    ofproto->subfacet_add_count = 0;
+    ofproto->subfacet_del_count = 0;
+    ofproto->total_subfacet_add_count = 0;
+    ofproto->total_subfacet_del_count = 0;
+    ofproto->total_subfacet_life_span = 0;
+    ofproto->total_subfacet_count = 0;
+    ofproto->n_update_stats = 0;
 
     return error;
 }
@@ -4043,6 +4105,9 @@ expire(struct dpif_backer *backer)
             continue;
         }
 
+        /* Keep track of the max number of flows per ofproto_dpif. */
+        update_max_subfacet_count(ofproto);
+
         /* Expire subfacets that have been idle too long. */
         dp_max_idle = subfacet_max_idle(ofproto);
         expire_subfacets(ofproto, dp_max_idle);
@@ -4162,6 +4227,10 @@ update_stats(struct dpif_backer *backer)
                             NULL, NULL)) {
             continue;
         }
+
+        ofproto->total_subfacet_count += hmap_count(&ofproto->subfacets);
+        ofproto->n_update_stats++;
+        update_moving_averages(ofproto);
 
         ofport = get_ofp_port(ofproto, flow.in_port);
         if (ofport && ofport->tnl_port) {
@@ -5064,6 +5133,7 @@ subfacet_create(struct facet *facet, struct flow_miss *miss,
     subfacet->key = xmemdup(key, key_len);
     subfacet->key_len = key_len;
     subfacet->used = now;
+    subfacet->created = now;
     subfacet->dp_packet_count = 0;
     subfacet->dp_byte_count = 0;
     subfacet->actions_len = 0;
@@ -5075,6 +5145,7 @@ subfacet_create(struct facet *facet, struct flow_miss *miss,
     subfacet->initial_vals = miss->initial_vals;
     subfacet->odp_in_port = miss->odp_in_port;
 
+    ofproto->subfacet_add_count++;
     return subfacet;
 }
 
@@ -5085,6 +5156,10 @@ subfacet_destroy__(struct subfacet *subfacet)
 {
     struct facet *facet = subfacet->facet;
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(facet->rule->up.ofproto);
+
+    /* Update ofproto stats before uninstall the subfacet. */
+    ofproto->subfacet_del_count++;
+    ofproto->total_subfacet_life_span += (time_msec() - subfacet->created);
 
     subfacet_uninstall(subfacet);
     hmap_remove(&ofproto->subfacets, &subfacet->hmap_node);
@@ -7967,14 +8042,40 @@ show_dp_format(const struct ofproto_dpif *ofproto, struct ds *ds)
 {
     const struct shash_node **ports;
     int i;
+    struct avg_subfacet_rates lifetime;
+    unsigned long long int minutes;
+    const int min_ms = 60 * 1000; /* milliseconds in one minute. */
+
+    minutes = (time_msec() - ofproto->created) / min_ms;
+
+    if (minutes > 0) {
+        lifetime.add_rate = (double)ofproto->total_subfacet_add_count
+                            / minutes;
+        lifetime.del_rate = (double)ofproto->total_subfacet_del_count
+                            / minutes;
+    }else {
+        lifetime.add_rate = 0.0;
+        lifetime.del_rate = 0.0;
+    }
 
     ds_put_format(ds, "%s (%s):\n", ofproto->up.name,
                   dpif_name(ofproto->backer->dpif));
     ds_put_format(ds,
                   "\tlookups: hit:%"PRIu64" missed:%"PRIu64"\n",
                   ofproto->n_hit, ofproto->n_missed);
-    ds_put_format(ds, "\tflows: %zu\n",
-                  hmap_count(&ofproto->subfacets));
+    ds_put_format(ds, "\tflows: cur: %zu, avg: %5.3f, max: %d,"
+                  " life span: %llu(ms)\n",
+                  hmap_count(&ofproto->subfacets),
+                  avg_subfacet_count(ofproto),
+                  ofproto->max_n_subfacet,
+                  avg_subfacet_life_span(ofproto));
+    if (minutes >= 60) {
+        show_dp_rates(ds, "\t\thourly avg:", &ofproto->hourly);
+    }
+    if (minutes >= 60 * 24) {
+        show_dp_rates(ds, "\t\tdaily avg:",  &ofproto->daily);
+    }
+    show_dp_rates(ds, "\t\toverall avg:",  &lifetime);
 
     ports = shash_sort(&ofproto->up.port_by_name);
     for (i = 0; i < shash_count(&ofproto->up.port_by_name); i++) {
@@ -8389,6 +8490,79 @@ odp_port_to_ofp_port(const struct ofproto_dpif *ofproto, uint32_t odp_port)
         return port->up.ofp_port;
     } else {
         return OFPP_NONE;
+    }
+}
+static unsigned long long int
+avg_subfacet_life_span(const struct ofproto_dpif *ofproto)
+{
+    unsigned long long int dc;
+    unsigned long long int avg;
+
+    dc = ofproto->total_subfacet_del_count + ofproto->subfacet_del_count;
+    avg = dc ? ofproto->total_subfacet_life_span / dc : 0;
+
+    return avg;
+}
+
+static double
+avg_subfacet_count(const struct ofproto_dpif *ofproto)
+{
+    double avg_c = 0.0;
+
+    if (ofproto->n_update_stats) {
+        avg_c = (double)ofproto->total_subfacet_count
+                / ofproto->n_update_stats;
+    }
+
+    return avg_c;
+}
+
+static void
+show_dp_rates(struct ds *ds, const char *heading,
+              const struct avg_subfacet_rates *rates)
+{
+    ds_put_format(ds, "%s add rate: %5.3f/min, del rate: %5.3f/min\n",
+                  heading, rates->add_rate, rates->del_rate);
+}
+
+static void
+update_max_subfacet_count(struct ofproto_dpif *ofproto)
+{
+    ofproto->max_n_subfacet = MAX(ofproto->max_n_subfacet,
+                                  hmap_count(&ofproto->subfacets));
+}
+
+/* Compute exponentially weighted moving average, adding 'new' as the newest,
+ * most heavily weighted element.  'base' designates the rate of decay: after
+ * 'base' further updates, 'new''s weight in the EWMA decays to about 1/e
+ * (about .37). */
+static void
+exp_mavg(double *avg, int base, double new)
+{
+    *avg = (*avg * (base - 1) + new) / base;
+}
+
+static void
+update_moving_averages(struct ofproto_dpif *ofproto)
+{
+    const int min_ms = 60 * 1000; /* milliseconds in one minute. */
+
+    /* Update hourly averages on the minute boundaries. */
+    if (time_msec() - ofproto->last_minute >= min_ms) {
+        exp_mavg(&ofproto->hourly.add_rate, 60, ofproto->subfacet_add_count);
+        exp_mavg(&ofproto->hourly.del_rate, 60, ofproto->subfacet_del_count);
+
+        /* Update daily averages on the hour boundaries. */
+        if ((ofproto->last_minute - ofproto->created) / min_ms % 60 == 59) {
+            exp_mavg(&ofproto->daily.add_rate, 24, ofproto->hourly.add_rate);
+            exp_mavg(&ofproto->daily.del_rate, 24, ofproto->hourly.del_rate);
+        }
+
+        ofproto->total_subfacet_add_count += ofproto->subfacet_add_count;
+        ofproto->total_subfacet_del_count += ofproto->subfacet_del_count;
+        ofproto->subfacet_add_count = 0;
+        ofproto->subfacet_del_count = 0;
+        ofproto->last_minute += min_ms;
     }
 }
 
