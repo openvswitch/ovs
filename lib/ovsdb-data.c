@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010, 2011, 2012 Nicira, Inc.
+/* Copyright (c) 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -464,6 +464,47 @@ ovsdb_atom_to_json(const union ovsdb_atom *atom, enum ovsdb_atomic_type type)
     default:
         NOT_REACHED();
     }
+}
+
+/* Returns strlen(json_to_string(ovsdb_atom_to_json(atom, type), 0)). */
+size_t
+ovsdb_atom_json_length(const union ovsdb_atom *atom,
+                       enum ovsdb_atomic_type type)
+{
+    struct json json;
+
+    switch (type) {
+    case OVSDB_TYPE_VOID:
+        NOT_REACHED();
+
+    case OVSDB_TYPE_INTEGER:
+        json.type = JSON_INTEGER;
+        json.u.integer = atom->integer;
+        break;
+
+    case OVSDB_TYPE_REAL:
+        json.type = JSON_REAL;
+        json.u.real = atom->real;
+        break;
+
+    case OVSDB_TYPE_BOOLEAN:
+        json.type = atom->boolean ? JSON_TRUE : JSON_FALSE;
+        break;
+
+    case OVSDB_TYPE_STRING:
+        json.type = JSON_STRING;
+        json.u.string = atom->string;
+        break;
+
+    case OVSDB_TYPE_UUID:
+        return strlen("[\"uuid\",\"00000000-0000-0000-0000-000000000000\"]");
+
+    case OVSDB_N_TYPES:
+    default:
+        NOT_REACHED();
+    }
+
+    return json_serialized_length(&json);
 }
 
 static char *
@@ -1304,6 +1345,56 @@ ovsdb_datum_to_json(const struct ovsdb_datum *datum,
         }
 
         return wrap_json("set", json_array_create(elems, datum->n));
+    }
+}
+
+/* Returns strlen(json_to_string(ovsdb_datum_to_json(datum, type), 0)). */
+size_t
+ovsdb_datum_json_length(const struct ovsdb_datum *datum,
+                        const struct ovsdb_type *type)
+{
+    if (ovsdb_type_is_map(type)) {
+        size_t length;
+
+        /* ["map",[...]]. */
+        length = 10;
+        if (datum->n > 0) {
+            size_t i;
+
+            /* Commas between pairs in the inner [...] */
+            length += datum->n - 1;
+
+            /* [,] in each pair. */
+            length += datum->n * 3;
+
+            /* Data. */
+            for (i = 0; i < datum->n; i++) {
+                length += ovsdb_atom_json_length(&datum->keys[i],
+                                                 type->key.type);
+                length += ovsdb_atom_json_length(&datum->values[i],
+                                                 type->value.type);
+            }
+        }
+        return length;
+    } else if (datum->n == 1) {
+        return ovsdb_atom_json_length(&datum->keys[0], type->key.type);
+    } else {
+        size_t length;
+        size_t i;
+
+        /* ["set",[...]]. */
+        length = 10;
+        if (datum->n > 0) {
+            /* Commas between elements in the inner [...]. */
+            length += datum->n - 1;
+
+            /* Data. */
+            for (i = 0; i < datum->n; i++) {
+                length += ovsdb_atom_json_length(&datum->keys[i],
+                                                 type->key.type);
+            }
+        }
+        return length;
     }
 }
 
