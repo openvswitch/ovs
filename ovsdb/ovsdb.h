@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010, 2011, 2012 Nicira, Inc.
+/* Copyright (c) 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -68,10 +68,6 @@ struct ovsdb *ovsdb_create(struct ovsdb_schema *);
 void ovsdb_destroy(struct ovsdb *);
 
 void ovsdb_get_memory_usage(const struct ovsdb *, struct simap *usage);
-
-struct ovsdb_error *ovsdb_from_json(const struct json *, struct ovsdb **)
-    WARN_UNUSED_RESULT;
-struct json *ovsdb_to_json(const struct ovsdb *);
 
 struct ovsdb_table *ovsdb_get_table(const struct ovsdb *, const char *);
 
