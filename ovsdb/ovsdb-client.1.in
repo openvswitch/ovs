@@ -30,6 +30,8 @@ ovsdb\-client \- command-line interface to \fBovsdb-server\fR(1)
 \fBovsdb\-client \fR[\fIoptions\fR] \fBmonitor\fI \fR[\fIserver\fR] \fR[\fIdatabase\fR] \fItable\fR
 [\fIcolumn\fR[\fB,\fIcolumn\fR]...]...
 .br
+\fBovsdb\-client \fR[\fIoptions\fR] \fBmonitor\fI \fR[\fIserver\fR] \fR[\fIdatabase\fR] \fBALL\fR
+.br
 \fBovsdb\-client help\fR
 .IP "Output formatting options:"
 [\fB\-\-format=\fIformat\fR]
@@ -128,6 +130,14 @@ line.
 If \fB\-\-detach\fR is used with \fBmonitor\fR, then \fBovsdb\-client\fR
 detaches after it has successfully received and printed the initial
 contents of \fItable\fR.
+.
+.IP "\fBmonitor\fI \fR[\fIserver\fR] \fR[\fIdatabase\fR] \fBALL\fR"
+Connects to \fIserver\fR and monitors the contents of all tables in
+\fIdatabase\fR.  Prints initial values and all kinds of changes to all
+columns in the database.  The \fB\-\-detach\fR option causes
+\fBovsdb\-client\fR to detach after it successfully receives and
+prints the initial database contents.
+.
 .SH OPTIONS
 .SS "Output Formatting Options"
 Much of the output from \fBovsdb\-client\fR is in the form of tables.

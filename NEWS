@@ -51,6 +51,9 @@ Post-v2.0.0
      incorrectly that ovs-controller was a necessary or desirable part
      of an Open vSwitch deployment.
    - Added vlog option to export to a UDP syslog sink.
+   - ovsdb-client:
+     * The "monitor" command can now monitor all tables in a database,
+       instead of being limited to a single table.
 
 
 v2.0.0 - 15 Oct 2013
