@@ -592,6 +592,7 @@ static void port_run_fast(struct ofport_dpif *);
 static void port_wait(struct ofport_dpif *);
 static int set_cfm(struct ofport *, const struct cfm_settings *);
 static void ofport_clear_priorities(struct ofport_dpif *);
+static void run_fast_rl(void);
 
 struct dpif_completion {
     struct list list_node;
@@ -1002,6 +1003,7 @@ type_run(const char *type)
                 if (need_revalidate
                     || tag_set_intersects(&revalidate_set, facet->tags)) {
                     facet_revalidate(facet);
+                    run_fast_rl();
                 }
             }
         }
@@ -1069,17 +1071,9 @@ type_run(const char *type)
 }
 
 static int
-type_run_fast(const char *type)
+dpif_backer_run_fast(struct dpif_backer *backer, int max_batch)
 {
-    struct dpif_backer *backer;
     unsigned int work;
-
-    backer = shash_find_data(&all_dpif_backers, type);
-    if (!backer) {
-        /* This is not necessarily a problem, since backers are only
-         * created on demand. */
-        return 0;
-    }
 
     /* Handle one or more batches of upcalls, until there's nothing left to do
      * or until we do a fixed total amount of work.
@@ -1091,8 +1085,8 @@ type_run_fast(const char *type)
      * optimizations can make major improvements on some benchmarks and
      * presumably for real traffic as well. */
     work = 0;
-    while (work < FLOW_MISS_MAX_BATCH) {
-        int retval = handle_upcalls(backer, FLOW_MISS_MAX_BATCH - work);
+    while (work < max_batch) {
+        int retval = handle_upcalls(backer, max_batch - work);
         if (retval <= 0) {
             return -retval;
         }
@@ -1100,6 +1094,58 @@ type_run_fast(const char *type)
     }
 
     return 0;
+}
+
+static int
+type_run_fast(const char *type)
+{
+    struct dpif_backer *backer;
+
+    backer = shash_find_data(&all_dpif_backers, type);
+    if (!backer) {
+        /* This is not necessarily a problem, since backers are only
+         * created on demand. */
+        return 0;
+    }
+
+    return dpif_backer_run_fast(backer, FLOW_MISS_MAX_BATCH);
+}
+
+static void
+run_fast_rl(void)
+{
+    static long long int port_rl = LLONG_MIN;
+    static unsigned int backer_rl = 0;
+
+    if (time_msec() >= port_rl) {
+        struct ofproto_dpif *ofproto;
+        struct ofport_dpif *ofport;
+
+        HMAP_FOR_EACH (ofproto, all_ofproto_dpifs_node, &all_ofproto_dpifs) {
+
+            HMAP_FOR_EACH (ofport, up.hmap_node, &ofproto->up.ports) {
+                port_run_fast(ofport);
+            }
+        }
+        port_rl = time_msec() + 200;
+    }
+
+    /* XXX: We have to be careful not to do too much work in this function.  If
+     * we call dpif_backer_run_fast() too often, or with too large a batch,
+     * performance improves signifcantly, but at a cost.  It's possible for the
+     * number of flows in the datapath to increase without bound, and for poll
+     * loops to take 10s of seconds.   The correct solution to this problem,
+     * long term, is to separate flow miss handling into it's own thread so it
+     * isn't affected by revalidations, and expirations.  Until then, this is
+     * the best we can do. */
+    if (++backer_rl >= 10) {
+        struct shash_node *node;
+
+        backer_rl = 0;
+        SHASH_FOR_EACH (node, &all_dpif_backers) {
+            dpif_backer_run_fast(node->data, 1);
+        }
+    }
 }
 
 static void
@@ -4264,6 +4310,7 @@ update_stats(struct dpif_backer *backer)
             delete_unexpected_flow(ofproto, key, key_len);
             break;
         }
+        run_fast_rl();
     }
     dpif_flow_dump_done(&dump);
 }
@@ -5061,6 +5108,7 @@ push_all_stats(void)
 
         HMAP_FOR_EACH (facet, hmap_node, &ofproto->facets) {
             facet_push_stats(facet);
+            run_fast_rl();
         }
     }
 
@@ -5234,6 +5282,7 @@ subfacet_destroy_batch(struct ofproto_dpif *ofproto,
         subfacet_reset_dp_stats(subfacets[i], &stats[i]);
         subfacets[i]->path = SF_NOT_INSTALLED;
         subfacet_destroy(subfacets[i]);
+        run_fast_rl();
     }
 }
 
