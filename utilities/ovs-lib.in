@@ -172,7 +172,10 @@ start_daemon () {
 stop_daemon () {
     if test -e "$rundir/$1.pid"; then
         if pid=`cat "$rundir/$1.pid"`; then
-            for action in TERM .1 .25 .65 1 1 1 1 KILL 1 1 1 1 FAIL; do
+            for action in TERM .1 .25 .65 1 1 1 1 KILL 1 1 1 2 10 15 30 FAIL; do
+                if pid_exists "$pid" >/dev/null 2>&1; then :; else
+                    return 0
+                fi
                 case $action in
                     TERM)
                         action "Killing $1 ($pid)" kill $pid
@@ -185,11 +188,7 @@ stop_daemon () {
                         return 1
                         ;;
                     *)
-                        if pid_exists $pid >/dev/null 2>&1; then
-                            sleep $action
-                        else
-                            return 0
-                        fi
+                        sleep $action
                         ;;
                 esac
             done
