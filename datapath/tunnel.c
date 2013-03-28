@@ -65,7 +65,7 @@ void ovs_tnl_rcv(struct vport *vport, struct sk_buff *skb)
 	skb_reset_mac_header(skb);
 	eh = eth_hdr(skb);
 
-	if (likely(ntohs(eh->h_proto) >= 1536))
+	if (likely(ntohs(eh->h_proto) >= ETH_P_802_3_MIN))
 		skb->protocol = eh->h_proto;
 	else
 		skb->protocol = htons(ETH_P_802_2);

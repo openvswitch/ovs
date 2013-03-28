@@ -16,4 +16,8 @@
 
 #endif /* linux kernel < 2.6.30 */
 
+#ifndef ETH_P_802_3_MIN
+#define ETH_P_802_3_MIN        0x0600
+#endif
+
 #endif
