@@ -105,7 +105,7 @@ OFP_ASSERT(sizeof(struct ofp13_instruction_meter) == 8);
 
 enum ofp13_action_type {
     OFPAT13_PUSH_PBB = 26,     /* Push a new PBB service tag (I-TAG) */
-    OFPAT13_PPO_PBB  = 27      /* Pop the outer PBB service tag (I-TAG) */
+    OFPAT13_POP_PBB  = 27      /* Pop the outer PBB service tag (I-TAG) */
 };
 
 /* enum ofp_config_flags value OFPC_INVALID_TTL_TO_CONTROLLER
