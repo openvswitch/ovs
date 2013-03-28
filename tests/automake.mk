@@ -232,6 +232,10 @@ noinst_PROGRAMS += tests/test-stp
 tests_test_stp_SOURCES = tests/test-stp.c
 tests_test_stp_LDADD = lib/libopenvswitch.a $(SSL_LIBS)
 
+noinst_PROGRAMS += tests/test-sflow
+tests_test_sflow_SOURCES = tests/test-sflow.c
+tests_test_sflow_LDADD = lib/libopenvswitch.a $(SSL_LIBS)
+
 noinst_PROGRAMS += tests/test-netflow
 tests_test_netflow_SOURCES = tests/test-netflow.c
 tests_test_netflow_LDADD = lib/libopenvswitch.a $(SSL_LIBS)

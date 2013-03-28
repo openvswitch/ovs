@@ -51,6 +51,7 @@ struct netdev_dev_dummy {
     unsigned int change_seq;
 
     struct list devs;           /* List of child "netdev_dummy"s. */
+    int ifindex;
 };
 
 struct netdev_dummy {
@@ -110,6 +111,7 @@ netdev_dummy_create(const struct netdev_class *class, const char *name,
     netdev_dev->mtu = 1500;
     netdev_dev->flags = 0;
     netdev_dev->change_seq = 1;
+    netdev_dev->ifindex = -EOPNOTSUPP;
     list_init(&netdev_dev->devs);
 
     shash_add(&dummy_netdev_devs, name, netdev_dev);
@@ -129,6 +131,27 @@ netdev_dummy_destroy(struct netdev_dev *netdev_dev_)
     shash_find_and_delete(&dummy_netdev_devs,
                           netdev_dev_get_name(netdev_dev_));
     free(netdev_dev);
+}
+
+static int
+netdev_dummy_get_config(struct netdev_dev *netdev_dev_, struct smap *args)
+{
+    struct netdev_dev_dummy *netdev_dev = netdev_dev_dummy_cast(netdev_dev_);
+
+    if (netdev_dev->ifindex >= 0) {
+        smap_add_format(args, "ifindex", "%d", netdev_dev->ifindex);
+    }
+    return 0;
+}
+
+static int
+netdev_dummy_set_config(struct netdev_dev *netdev_dev_,
+                        const struct smap *args)
+{
+    struct netdev_dev_dummy *netdev_dev = netdev_dev_dummy_cast(netdev_dev_);
+
+    netdev_dev->ifindex = smap_get_int(args, "ifindex", -EOPNOTSUPP);
+    return 0;
 }
 
 static int
@@ -284,6 +307,15 @@ netdev_dummy_set_stats(struct netdev *netdev, const struct netdev_stats *stats)
 }
 
 static int
+netdev_dummy_get_ifindex(const struct netdev *netdev)
+{
+    struct netdev_dev_dummy *dev =
+        netdev_dev_dummy_cast(netdev_get_dev(netdev));
+
+    return dev->ifindex;
+}
+
+static int
 netdev_dummy_update_flags(struct netdev *netdev,
                           enum netdev_flags off, enum netdev_flags on,
                           enum netdev_flags *old_flagsp)
@@ -337,8 +369,8 @@ static const struct netdev_class dummy_class = {
 
     netdev_dummy_create,
     netdev_dummy_destroy,
-    NULL,                       /* get_config */
-    NULL,                       /* set_config */
+    netdev_dummy_get_config,
+    netdev_dummy_set_config,
     NULL,                       /* get_tunnel_config */
 
     netdev_dummy_open,
@@ -356,7 +388,7 @@ static const struct netdev_class dummy_class = {
     netdev_dummy_get_etheraddr,
     netdev_dummy_get_mtu,
     netdev_dummy_set_mtu,
-    NULL,                       /* get_ifindex */
+    netdev_dummy_get_ifindex,
     NULL,                       /* get_carrier */
     NULL,                       /* get_carrier_resets */
     NULL,                       /* get_miimon */

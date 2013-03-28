@@ -1206,6 +1206,297 @@ AT_CHECK_UNQUOTED([ovs-appctl fdb/show br0 | sed 's/[[0-9]]\{1,\}$/?/' | sort],
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+dnl Test that sFlow samples packets correctly.
+AT_SETUP([ofproto-dpif - sFlow packet sampling])
+AT_CHECK([perl $srcdir/choose-port.pl], [0], [stdout])
+SFLOW_PORT=`cat stdout`
+OVS_VSWITCHD_START([set Bridge br0 fail-mode=standalone])
+
+ovs-appctl time/stop
+
+ADD_OF_PORTS([br0], 1, 2)
+ovs-vsctl \
+   set Interface br0 options:ifindex=1002 -- \
+   set Interface p1 options:ifindex=1004 -- \
+   set Interface p2 options:ifindex=1003 -- \
+   set Bridge br0 sflow=@sf -- \
+   --id=@sf create sflow targets=\"127.0.0.1:$SFLOW_PORT\" \
+     header=128 sampling=1 polling=1
+ON_EXIT([kill `cat test-sflow.pid`])
+AT_CHECK([test-sflow --detach --no-chdir --pidfile $SFLOW_PORT:127.0.0.1 > sflow.log])
+AT_CAPTURE_FILE([sflow.log])
+
+dnl open with ARP packets to seed the bridge-learning.  The output
+dnl ifIndex numbers should be reported predictably after that.
+dnl Since we set sampling=1 we should see all of these packets
+dnl reported. Sorting the output by data-source and seqNo makes
+dnl it deterministic. Ensuring that we send at least two packets
+dnl into each port means we get to check the seq nos are
+dnl incrementing correctly.
+
+ovs-appctl netdev-dummy/receive p1 'in_port(2),eth(src=50:54:00:00:00:05,dst=FF:FF:FF:FF:FF:FF),eth_type(0x0806),arp(sip=192.168.0.2,tip=192.168.0.1,op=1,sha=50:54:00:00:00:05,tha=00:00:00:00:00:00)'
+ovs-appctl netdev-dummy/receive p2 'in_port(1),eth(src=50:54:00:00:00:07,dst=FF:FF:FF:FF:FF:FF),eth_type(0x0806),arp(sip=192.168.0.1,tip=192.168.0.2,op=1,sha=50:54:00:00:00:07,tha=00:00:00:00:00:00)'
+ovs-appctl netdev-dummy/receive p1 'in_port(2),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'
+ovs-appctl netdev-dummy/receive p2 'in_port(1),eth(src=50:54:00:00:00:07,dst=50:54:00:00:00:05),eth_type(0x0800),ipv4(src=192.168.0.2,dst=192.168.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=0,code=0)'
+ovs-appctl netdev-dummy/receive p2 'in_port(1),eth(src=50:54:00:00:00:07,dst=50:54:00:00:00:05),eth_type(0x86dd),ipv6(src=fe80::1,dst=fe80::2,label=0,proto=10,tclass=0x70,hlimit=128,frag=no)'
+
+dnl sleep long enough to get more than one counter sample
+dnl from each datasource so we can check sequence numbers
+for i in `seq 1 30`; do
+    ovs-appctl time/warp 100
+done
+OVS_VSWITCHD_STOP
+ovs-appctl -t test-sflow exit
+
+AT_CHECK([[sort sflow.log | $EGREP 'HEADER|ERROR' | sed 's/ /\
+	/g']], [0], [dnl
+HEADER
+	dgramSeqNo=1
+	ds=127.0.0.1>0:1003
+	fsSeqNo=1
+	in_vlan=0
+	in_priority=0
+	out_vlan=0
+	out_priority=0
+	meanSkip=1
+	samplePool=1
+	dropEvents=0
+	in_ifindex=1003
+	in_format=0
+	out_ifindex=2
+	out_format=2
+	hdr_prot=1
+	pkt_len=64
+	stripped=4
+	hdr_len=60
+	hdr=FF-FF-FF-FF-FF-FF-50-54-00-00-00-07-08-06-00-01-08-00-06-04-00-01-50-54-00-00-00-07-C0-A8-00-01-00-00-00-00-00-00-C0-A8-00-02-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00
+HEADER
+	dgramSeqNo=1
+	ds=127.0.0.1>0:1003
+	fsSeqNo=2
+	in_vlan=0
+	in_priority=0
+	out_vlan=0
+	out_priority=0
+	meanSkip=1
+	samplePool=2
+	dropEvents=0
+	in_ifindex=1003
+	in_format=0
+	out_ifindex=1004
+	out_format=0
+	hdr_prot=1
+	pkt_len=64
+	stripped=4
+	hdr_len=60
+	hdr=50-54-00-00-00-05-50-54-00-00-00-07-08-00-45-00-00-1C-00-00-00-00-40-01-F9-8D-C0-A8-00-02-C0-A8-00-01-00-00-FF-FF-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00
+HEADER
+	dgramSeqNo=1
+	ds=127.0.0.1>0:1003
+	fsSeqNo=3
+	in_vlan=0
+	in_priority=0
+	out_vlan=0
+	out_priority=0
+	meanSkip=1
+	samplePool=3
+	dropEvents=0
+	in_ifindex=1003
+	in_format=0
+	out_ifindex=1004
+	out_format=0
+	hdr_prot=1
+	pkt_len=64
+	stripped=4
+	hdr_len=60
+	hdr=50-54-00-00-00-05-50-54-00-00-00-07-86-DD-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00
+HEADER
+	dgramSeqNo=1
+	ds=127.0.0.1>0:1004
+	fsSeqNo=1
+	in_vlan=0
+	in_priority=0
+	out_vlan=0
+	out_priority=0
+	meanSkip=1
+	samplePool=1
+	dropEvents=0
+	in_ifindex=1004
+	in_format=0
+	out_ifindex=2
+	out_format=2
+	hdr_prot=1
+	pkt_len=64
+	stripped=4
+	hdr_len=60
+	hdr=FF-FF-FF-FF-FF-FF-50-54-00-00-00-05-08-06-00-01-08-00-06-04-00-01-50-54-00-00-00-05-C0-A8-00-02-00-00-00-00-00-00-C0-A8-00-01-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00
+HEADER
+	dgramSeqNo=1
+	ds=127.0.0.1>0:1004
+	fsSeqNo=2
+	in_vlan=0
+	in_priority=0
+	out_vlan=0
+	out_priority=0
+	meanSkip=1
+	samplePool=2
+	dropEvents=0
+	in_ifindex=1004
+	in_format=0
+	out_ifindex=1003
+	out_format=0
+	hdr_prot=1
+	pkt_len=64
+	stripped=4
+	hdr_len=60
+	hdr=50-54-00-00-00-07-50-54-00-00-00-05-08-00-45-00-00-1C-00-00-00-00-40-01-F9-8D-C0-A8-00-01-C0-A8-00-02-08-00-F7-FF-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00
+])
+
+AT_CHECK([[sort sflow.log | $EGREP 'IFCOUNTERS|ERROR' | head -6 | sed 's/ /\
+	/g']], [0], [dnl
+IFCOUNTERS
+	dgramSeqNo=2
+	ds=127.0.0.1>0:1002
+	csSeqNo=1
+	ifindex=1002
+	type=6
+	ifspeed=100000000
+	direction=0
+	status=3
+	in_octets=0
+	in_unicasts=0
+	in_multicasts=0
+	in_broadcasts=4294967295
+	in_discards=0
+	in_errors=0
+	in_unknownprotos=4294967295
+	out_octets=120
+	out_unicasts=2
+	out_multicasts=4294967295
+	out_broadcasts=4294967295
+	out_discards=0
+	out_errors=0
+	promiscuous=0
+IFCOUNTERS
+	dgramSeqNo=2
+	ds=127.0.0.1>0:1003
+	csSeqNo=1
+	ifindex=1003
+	type=6
+	ifspeed=100000000
+	direction=0
+	status=0
+	in_octets=98
+	in_unicasts=3
+	in_multicasts=0
+	in_broadcasts=4294967295
+	in_discards=0
+	in_errors=0
+	in_unknownprotos=4294967295
+	out_octets=120
+	out_unicasts=2
+	out_multicasts=4294967295
+	out_broadcasts=4294967295
+	out_discards=0
+	out_errors=0
+	promiscuous=0
+IFCOUNTERS
+	dgramSeqNo=2
+	ds=127.0.0.1>0:1004
+	csSeqNo=1
+	ifindex=1004
+	type=6
+	ifspeed=100000000
+	direction=0
+	status=0
+	in_octets=84
+	in_unicasts=2
+	in_multicasts=0
+	in_broadcasts=4294967295
+	in_discards=0
+	in_errors=0
+	in_unknownprotos=4294967295
+	out_octets=180
+	out_unicasts=3
+	out_multicasts=4294967295
+	out_broadcasts=4294967295
+	out_discards=0
+	out_errors=0
+	promiscuous=0
+IFCOUNTERS
+	dgramSeqNo=3
+	ds=127.0.0.1>0:1002
+	csSeqNo=2
+	ifindex=1002
+	type=6
+	ifspeed=100000000
+	direction=0
+	status=3
+	in_octets=0
+	in_unicasts=0
+	in_multicasts=0
+	in_broadcasts=4294967295
+	in_discards=0
+	in_errors=0
+	in_unknownprotos=4294967295
+	out_octets=120
+	out_unicasts=2
+	out_multicasts=4294967295
+	out_broadcasts=4294967295
+	out_discards=0
+	out_errors=0
+	promiscuous=0
+IFCOUNTERS
+	dgramSeqNo=3
+	ds=127.0.0.1>0:1003
+	csSeqNo=2
+	ifindex=1003
+	type=6
+	ifspeed=100000000
+	direction=0
+	status=0
+	in_octets=98
+	in_unicasts=3
+	in_multicasts=0
+	in_broadcasts=4294967295
+	in_discards=0
+	in_errors=0
+	in_unknownprotos=4294967295
+	out_octets=120
+	out_unicasts=2
+	out_multicasts=4294967295
+	out_broadcasts=4294967295
+	out_discards=0
+	out_errors=0
+	promiscuous=0
+IFCOUNTERS
+	dgramSeqNo=3
+	ds=127.0.0.1>0:1004
+	csSeqNo=2
+	ifindex=1004
+	type=6
+	ifspeed=100000000
+	direction=0
+	status=0
+	in_octets=84
+	in_unicasts=2
+	in_multicasts=0
+	in_broadcasts=4294967295
+	in_discards=0
+	in_errors=0
+	in_unknownprotos=4294967295
+	out_octets=180
+	out_unicasts=3
+	out_multicasts=4294967295
+	out_broadcasts=4294967295
+	out_discards=0
+	out_errors=0
+	promiscuous=0
+])
+AT_CLEANUP
+
+
+
 dnl Test that basic NetFlow reports flow statistics correctly:
 dnl - The initial packet of a flow are correctly accounted.
 dnl - Later packets within a flow are correctly accounted.
