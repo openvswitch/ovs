@@ -290,13 +290,13 @@ AT_CHECK([grep 'active slave' stdout], [0], [dnl
 ])
 
 # Redirect the patch link between p0 and p2 so that no packets get
-# back and forth across them anymore.  Then wait 4 simulated
+# back and forth across them anymore.  Then wait 2.5 simulated
 # seconds.  The LACP state should become "expired" for p0 and p2.
 AT_CHECK([ovs-vsctl \
 -- add-port br0 null0 -- set int null0 type=patch options:peer=p2 -- set int p2 options:peer=null0 \
 -- add-port br1 null1 -- set int null1 type=patch options:peer=p0 -- set int p0 options:peer=null1])
 
-for i in `seq 0 40`; do ovs-appctl time/warp 100; done
+for i in `seq 0 25`; do ovs-appctl time/warp 100; done
 AT_CHECK(
   [ovs-appctl lacp/show bond0
 ovs-appctl lacp/show bond1
