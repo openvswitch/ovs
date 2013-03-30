@@ -515,6 +515,7 @@ static void facet_reset_counters(struct facet *);
 static void facet_push_stats(struct facet *);
 static void facet_learn(struct facet *);
 static void facet_account(struct facet *);
+static void push_all_stats(void);
 
 static struct subfacet *facet_get_subfacet(struct facet *);
 
@@ -2937,6 +2938,8 @@ mirror_get_stats(struct ofproto *ofproto_, void *aux,
         return 0;
     }
 
+    push_all_stats();
+
     *packets = mirror->packet_count;
     *bytes = mirror->byte_count;
 
@@ -3194,6 +3197,8 @@ port_get_stats(const struct ofport *ofport_, struct netdev_stats *stats)
 {
     struct ofport_dpif *ofport = ofport_dpif_cast(ofport_);
     int error;
+
+    push_all_stats();
 
     error = netdev_get_stats(ofport->up.netdev, stats);
 
@@ -5038,6 +5043,27 @@ facet_push_stats(struct facet *facet)
 }
 
 static void
+push_all_stats(void)
+{
+    static long long int rl = LLONG_MIN;
+    struct ofproto_dpif *ofproto;
+
+    if (time_msec() < rl) {
+        return;
+    }
+
+    HMAP_FOR_EACH (ofproto, all_ofproto_dpifs_node, &all_ofproto_dpifs) {
+        struct facet *facet;
+
+        HMAP_FOR_EACH (facet, hmap_node, &ofproto->facets) {
+            facet_push_stats(facet);
+        }
+    }
+
+    rl = time_msec() + 100;
+}
+
+static void
 rule_credit_stats(struct rule_dpif *rule, const struct dpif_flow_stats *stats)
 {
     rule->packet_count += stats->n_packets;
@@ -5515,13 +5541,10 @@ rule_destruct(struct rule *rule_)
 static void
 rule_get_stats(struct rule *rule_, uint64_t *packets, uint64_t *bytes)
 {
-    struct ofproto_dpif *ofproto = ofproto_dpif_cast(rule_->ofproto);
     struct rule_dpif *rule = rule_dpif_cast(rule_);
     struct facet *facet;
 
-    HMAP_FOR_EACH (facet, hmap_node, &ofproto->facets) {
-        facet_push_stats(facet);
-    }
+    push_all_stats();
 
     /* Start from historical data for 'rule' itself that are no longer tracked
      * in facets.  This counts, for example, facets that have expired. */
