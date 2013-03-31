@@ -17,6 +17,7 @@ EXTRA_DIST += \
 	rhel/openvswitch-kmod-rhel5.spec.in \
 	rhel/openvswitch-kmod-rhel6.spec \
 	rhel/openvswitch-kmod-rhel6.spec.in \
+	rhel/openvswitch-kmod.files \
 	rhel/openvswitch-kmod-fedora.spec \
 	rhel/openvswitch-kmod-fedora.spec.in \
 	rhel/openvswitch.spec \
