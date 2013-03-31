@@ -85,7 +85,8 @@ RHEL.  On RHEL 5, the default RPM source directory is
     which is usually: "kmod-openvswitch", "kmod-openvswitch-xen", and
     "kmod-openvswitch-PAE".
 
-7b. On RHEL 6, to build the Open vSwitch kernel module, run:
+7b. On RHEL 6, to build the Open vSwitch kernel module, copy
+    rhel/openvswitch-kmod.files into the RPM source directory and run:
 
 	rpmbuild -bb rhel/openvswitch-kmod-rhel6.spec
 
