@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -42,6 +42,7 @@ print_and_free_json(struct json *json)
         ok = false;
     } else {
         char *s = json_to_string(json, JSSF_SORT | (pretty ? JSSF_PRETTY : 0));
+        ovs_assert(pretty || json_serialized_length(json) == strlen(s));
         puts(s);
         free(s);
         ok = true;
