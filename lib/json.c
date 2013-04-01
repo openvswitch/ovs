@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1638,4 +1638,117 @@ json_serialize_string(const char *string, struct ds *ds)
         }
     }
     ds_put_char(ds, '"');
+}
+
+static size_t
+json_string_serialized_length(const char *string)
+{
+    size_t length;
+    uint8_t c;
+
+    length = strlen("\"\"");
+
+    while ((c = *string++) != '\0') {
+        switch (c) {
+        case '"':
+        case '\\':
+        case '\b':
+        case '\f':
+        case '\n':
+        case '\r':
+        case '\t':
+            length += 2;
+            break;
+
+        default:
+            if (c >= 32) {
+                length++;
+            } else {
+                /* \uXXXX */
+                length += 6;
+            }
+            break;
+        }
+    }
+
+    return length;
+}
+
+static size_t
+json_object_serialized_length(const struct shash *object)
+{
+    size_t length = strlen("{}");
+
+    if (!shash_is_empty(object)) {
+        struct shash_node *node;
+
+        /* Commas and colons. */
+        length += 2 * shash_count(object) - 1;
+
+        SHASH_FOR_EACH (node, object) {
+            const struct json *value = node->data;
+
+            length += json_string_serialized_length(node->name);
+            length += json_serialized_length(value);
+        }
+    }
+
+    return length;
+}
+
+static size_t
+json_array_serialized_length(const struct json_array *array)
+{
+    size_t length = strlen("[]");
+
+    if (array->n) {
+        size_t i;
+
+        /* Commas. */
+        length += array->n - 1;
+
+        for (i = 0; i < array->n; i++) {
+            length += json_serialized_length(array->elems[i]);
+        }
+    }
+
+    return length;
+}
+
+/* Returns strlen(json_to_string(json, 0)), that is, the number of bytes in the
+ * JSON output by json_to_string() for 'json' when JSSF_PRETTY is not
+ * requested.  (JSSF_SORT does not affect the length of json_to_string()'s
+ * output.) */
+size_t
+json_serialized_length(const struct json *json)
+{
+    switch (json->type) {
+    case JSON_NULL:
+        return strlen("null");
+
+    case JSON_FALSE:
+        return strlen("false");
+
+    case JSON_TRUE:
+        return strlen("true");
+
+    case JSON_OBJECT:
+        return json_object_serialized_length(json->u.object);
+
+    case JSON_ARRAY:
+        return json_array_serialized_length(&json->u.array);
+
+    case JSON_INTEGER:
+        return snprintf(NULL, 0, "%lld", json->u.integer);
+
+    case JSON_REAL:
+        return snprintf(NULL, 0, "%.*g", DBL_DIG, json->u.real);
+
+    case JSON_STRING:
+        return json_string_serialized_length(json->u.string);
+
+    case JSON_N_TYPES:
+    default:
+        NOT_REACHED();
+    }
 }
