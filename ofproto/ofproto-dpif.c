@@ -4585,13 +4585,14 @@ facet_learn(struct facet *facet)
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(facet->rule->up.ofproto);
     struct subfacet *subfacet= CONTAINER_OF(list_front(&facet->subfacets),
                                             struct subfacet, list_node);
+    long long int now = time_msec();
     struct action_xlate_ctx ctx;
 
-    if (time_msec() < facet->learn_rl) {
+    if (!facet->has_fin_timeout && now < facet->learn_rl) {
         return;
     }
 
-    facet->learn_rl = time_msec() + 500;
+    facet->learn_rl = now + 500;
 
     if (!facet->has_learn
         && !facet->has_normal
