@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012 Nicira, Inc.
+ * Copyright (c) 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -137,7 +137,7 @@ memory_report(const struct simap *usage)
     ds_init(&s);
     compose_report(usage, &s);
 
-    if (want_report) {
+    if (want_report && s.length) {
         VLOG_INFO("%s", ds_cstr(&s));
         want_report = false;
     }
