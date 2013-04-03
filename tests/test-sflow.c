@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2011, 2012, 2013 Nicira, Inc.
  * Copyright (c) 2013 InMon Corp.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -556,12 +556,14 @@ static void
 parse_options(int argc, char *argv[])
 {
     enum {
-        DAEMON_OPTION_ENUMS
+        DAEMON_OPTION_ENUMS,
+        VLOG_OPTION_ENUMS
     };
     static struct option long_options[] = {
         {"verbose", optional_argument, NULL, 'v'},
         {"help", no_argument, NULL, 'h'},
         DAEMON_LONG_OPTIONS,
+        VLOG_LONG_OPTIONS,
         {NULL, 0, NULL, 0},
     };
     char *short_options = long_options_to_short_options(long_options);
@@ -576,11 +578,8 @@ parse_options(int argc, char *argv[])
         case 'h':
             usage();
 
-        case 'v':
-            vlog_set_verbosity(optarg);
-            break;
-
-            DAEMON_OPTION_HANDLERS
+        DAEMON_OPTION_HANDLERS
+        VLOG_OPTION_HANDLERS
 
         case '?':
             exit(EXIT_FAILURE);
