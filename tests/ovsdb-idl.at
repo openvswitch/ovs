@@ -57,11 +57,12 @@ m4_define([OVSDB_CHECK_IDL_TCP_PY],
    AT_SKIP_IF([test $HAVE_PYTHON = no])
    AT_KEYWORDS([ovsdb server idl positive Python with tcp socket $5])
    OVS_RUNDIR=`pwd`; export OVS_RUNDIR
+   OVS_LOGDIR=`pwd`; export OVS_LOGDIR
    AT_CHECK([ovsdb-tool create db $abs_srcdir/idltest.ovsschema],
                   [0], [stdout], [ignore])
-   AT_CHECK([perl $srcdir/choose-port.pl], [0], [stdout])
-   TCP_PORT=`cat stdout`
-   AT_CHECK([ovsdb-server '-vPATTERN:console:ovsdb-server|%c|%m' --detach --no-chdir --pidfile="`pwd`"/pid --remote=ptcp:$TCP_PORT:127.0.0.1 --unixctl="`pwd`"/unixctl db], [0], [ignore], [ignore])
+   AT_CHECK([ovsdb-server --log-file '-vPATTERN:console:ovsdb-server|%c|%m' --detach --no-chdir --pidfile="`pwd`"/pid --remote=punix:socket --remote=ptcp:0:127.0.0.1 --unixctl="`pwd`"/unixctl db], [0], [ignore], [ignore])
+   TCP_PORT=`parse_listening_port < ovsdb-server.log`
+
    m4_if([$2], [], [],
      [AT_CHECK([ovsdb-client transact tcp:127.0.0.1:$TCP_PORT $2], [0], [ignore], [ignore], [kill `cat pid`])])
    AT_CHECK([$PYTHON $srcdir/test-ovsdb.py  -t10 idl $srcdir/idltest.ovsschema tcp:127.0.0.1:$TCP_PORT $3],

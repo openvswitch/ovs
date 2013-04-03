@@ -1208,9 +1208,11 @@ AT_CLEANUP
 
 dnl Test that sFlow samples packets correctly.
 AT_SETUP([ofproto-dpif - sFlow packet sampling])
-AT_CHECK([perl $srcdir/choose-port.pl], [0], [stdout])
-SFLOW_PORT=`cat stdout`
 OVS_VSWITCHD_START([set Bridge br0 fail-mode=standalone])
+
+AT_CHECK([test-sflow --log-file --detach --no-chdir --pidfile 0:127.0.0.1 > sflow.log], [0], [], [ignore])
+AT_CAPTURE_FILE([sflow.log])
+SFLOW_PORT=`parse_listening_port < test-sflow.log`
 
 ovs-appctl time/stop
 
@@ -1223,8 +1225,6 @@ ovs-vsctl \
    --id=@sf create sflow targets=\"127.0.0.1:$SFLOW_PORT\" \
      header=128 sampling=1 polling=1
 ON_EXIT([kill `cat test-sflow.pid`])
-AT_CHECK([test-sflow --detach --no-chdir --pidfile $SFLOW_PORT:127.0.0.1 > sflow.log])
-AT_CAPTURE_FILE([sflow.log])
 
 dnl open with ARP packets to seed the bridge-learning.  The output
 dnl ifIndex numbers should be reported predictably after that.
@@ -1504,19 +1504,18 @@ dnl - Flow actions changing (in this case, due to MAC learning)
 dnl   cause a record to be sent.
 AT_SETUP([ofproto-dpif - NetFlow flow expiration])
 
-AT_CHECK([perl $srcdir/choose-port.pl], [0], [stdout])
-NETFLOW_PORT=`cat stdout`
-
 OVS_VSWITCHD_START([set Bridge br0 fail-mode=standalone])
 ADD_OF_PORTS([br0], 1, 2)
+
+ON_EXIT([kill `cat test-netflow.pid`])
+AT_CHECK([test-netflow --log-file --detach --no-chdir --pidfile 0:127.0.0.1 > netflow.log], [0], [], [ignore])
+AT_CAPTURE_FILE([netflow.log])
+NETFLOW_PORT=`parse_listening_port < test-netflow.log`
+
 ovs-vsctl \
    set Bridge br0 netflow=@nf -- \
    --id=@nf create NetFlow targets=\"127.0.0.1:$NETFLOW_PORT\" \
      engine_id=1 engine_type=2 active_timeout=30 add-id-to-interface=false
-
-ON_EXIT([kill `cat test-netflow.pid`])
-AT_CHECK([test-netflow --detach --no-chdir --pidfile $NETFLOW_PORT:127.0.0.1 > netflow.log])
-AT_CAPTURE_FILE([netflow.log])
 
 for delay in 1000 30000; do
     ovs-appctl netdev-dummy/receive p1 'in_port(2),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'
@@ -1546,18 +1545,18 @@ AT_CLEANUP
 dnl Test that basic NetFlow reports active expirations correctly.
 AT_SETUP([ofproto-dpif - NetFlow active expiration])
 
-AT_CHECK([perl $srcdir/choose-port.pl], [0], [stdout])
-NETFLOW_PORT=`cat stdout`
-
 OVS_VSWITCHD_START([set Bridge br0 fail-mode=standalone])
 ADD_OF_PORTS([br0], 1, 2)
+
+ON_EXIT([kill `cat test-netflow.pid`])
+AT_CHECK([test-netflow --log-file --detach --no-chdir --pidfile 0:127.0.0.1 > netflow.log], [0], [], [ignore])
+AT_CAPTURE_FILE([netflow.log])
+NETFLOW_PORT=`parse_listening_port < test-netflow.log`
+
 ovs-vsctl \
    set Bridge br0 netflow=@nf -- \
    --id=@nf create NetFlow targets=\"127.0.0.1:$NETFLOW_PORT\" \
      engine_id=1 engine_type=2 active_timeout=10 add-id-to-interface=false
-
-ON_EXIT([kill `cat test-netflow.pid`])
-AT_CHECK([test-netflow --detach --no-chdir --pidfile $NETFLOW_PORT:127.0.0.1 > netflow.log])AT_CAPTURE_FILE([netflow.log])
 
 AT_CHECK([ovs-appctl time/stop])
 n=1
