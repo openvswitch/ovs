@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -684,6 +684,7 @@ int
 inet_open_passive(int style, const char *target, int default_port,
                   struct sockaddr_in *sinp, uint8_t dscp)
 {
+    bool kernel_chooses_port;
     struct sockaddr_in sin;
     int fd = 0, error;
     unsigned int yes = 1;
@@ -733,9 +734,10 @@ inet_open_passive(int style, const char *target, int default_port,
         goto error;
     }
 
-    if (sinp) {
+    kernel_chooses_port = sin.sin_port == htons(0);
+    if (sinp || kernel_chooses_port) {
         socklen_t sin_len = sizeof sin;
-        if (getsockname(fd, (struct sockaddr *) &sin, &sin_len) < 0){
+        if (getsockname(fd, (struct sockaddr *) &sin, &sin_len) < 0) {
             error = errno;
             VLOG_ERR("%s: getsockname: %s", target, strerror(error));
             goto error;
@@ -745,7 +747,13 @@ inet_open_passive(int style, const char *target, int default_port,
             VLOG_ERR("%s: getsockname: invalid socket name", target);
             goto error;
         }
-        *sinp = sin;
+        if (sinp) {
+            *sinp = sin;
+        }
+        if (kernel_chooses_port) {
+            VLOG_INFO("%s: listening on port %"PRIu16,
+                      target, ntohs(sin.sin_port));
+        }
     }
 
     return fd;
