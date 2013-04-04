@@ -4274,13 +4274,13 @@ update_stats(struct dpif_backer *backer)
     const struct dpif_flow_stats *stats;
     struct dpif_flow_dump dump;
     const struct nlattr *key;
+    struct ofproto_dpif *ofproto;
     size_t key_len;
 
     dpif_flow_dump_start(&dump, backer->dpif);
     while (dpif_flow_dump_next(&dump, &key, &key_len, NULL, NULL, &stats)) {
         struct flow flow;
         struct subfacet *subfacet;
-        struct ofproto_dpif *ofproto;
         struct ofport_dpif *ofport;
         uint32_t key_hash;
 
@@ -4291,7 +4291,6 @@ update_stats(struct dpif_backer *backer)
 
         ofproto->total_subfacet_count += hmap_count(&ofproto->subfacets);
         ofproto->n_update_stats++;
-        update_moving_averages(ofproto);
 
         ofport = get_ofp_port(ofproto, flow.in_port);
         if (ofport && ofport->tnl_port) {
@@ -4323,6 +4322,11 @@ update_stats(struct dpif_backer *backer)
         run_fast_rl();
     }
     dpif_flow_dump_done(&dump);
+
+    HMAP_FOR_EACH (ofproto, all_ofproto_dpifs_node, &all_ofproto_dpifs) {
+        update_moving_averages(ofproto);
+    }
+
 }
 
 /* Calculates and returns the number of milliseconds of idle time after which
