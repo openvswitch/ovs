@@ -1937,8 +1937,8 @@ AT_CHECK([ovs-appctl dpif/show | sed 's/ 10[[0-9]]\{3\}(ms)$/ 10000(ms)/'], [0],
 br0 (dummy@ovs-dummy):
 	lookups: hit:0 missed:61
 	flows: cur: 0, avg: 1.000, max: 1, life span: 10000(ms)
-		hourly avg: add rate: 0.641/min, del rate: 0.635/min
-		overall avg: add rate: 1.000/min, del rate: 0.984/min
+		hourly avg: add rate: 0.641/min, del rate: 0.641/min
+		overall avg: add rate: 1.000/min, del rate: 1.000/min
 	br0 65534/100: (dummy)
 	p1 1/1: (dummy)
 	p2 2/2: (dummy)
