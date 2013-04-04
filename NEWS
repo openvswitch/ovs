@@ -12,6 +12,7 @@ post-v1.10.0
         NXM fields.
     - ovs-dpctl:
       * New debugging commands "add-flow", "mod-flow", "del-flow".
+    - New syslog format, prefixed with "ovs|", to be easier to filter.
 
 
 v1.10.0 - xx xxx xxxx

@@ -71,7 +71,7 @@ class Vlog:
             f_level = LEVELS.get(f_level, logging.CRITICAL)
             if level >= f_level:
                 if f == "syslog":
-                    message = syslog_message
+                    message = "ovs|" + syslog_message
                 else:
                     message = "%s|%s" % (now, syslog_message)
                 logging.getLogger(f).log(level, message, **kwargs)
