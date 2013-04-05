@@ -454,13 +454,13 @@ block_sigalrm(sigset_t *oldsigs)
     sigset_t sigalrm;
     sigemptyset(&sigalrm);
     sigaddset(&sigalrm, SIGALRM);
-    xsigprocmask(SIG_BLOCK, &sigalrm, oldsigs);
+    xpthread_sigmask(SIG_BLOCK, &sigalrm, oldsigs);
 }
 
 static void
 unblock_sigalrm(const sigset_t *oldsigs)
 {
-    xsigprocmask(SIG_SETMASK, oldsigs, NULL);
+    xpthread_sigmask(SIG_SETMASK, oldsigs, NULL);
 }
 
 long long int

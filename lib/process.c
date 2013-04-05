@@ -640,7 +640,7 @@ sigchld_is_blocked(void)
 {
     sigset_t sigs;
 
-    xsigprocmask(SIG_SETMASK, NULL, &sigs);
+    xpthread_sigmask(SIG_SETMASK, NULL, &sigs);
     return sigismember(&sigs, SIGCHLD);
 }
 
@@ -651,11 +651,11 @@ block_sigchld(sigset_t *oldsigs)
 
     sigemptyset(&sigchld);
     sigaddset(&sigchld, SIGCHLD);
-    xsigprocmask(SIG_BLOCK, &sigchld, oldsigs);
+    xpthread_sigmask(SIG_BLOCK, &sigchld, oldsigs);
 }
 
 static void
 unblock_sigchld(const sigset_t *oldsigs)
 {
-    xsigprocmask(SIG_SETMASK, oldsigs, NULL);
+    xpthread_sigmask(SIG_SETMASK, oldsigs, NULL);
 }

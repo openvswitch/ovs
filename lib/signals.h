@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2011 Nicira, Inc.
+ * Copyright (c) 2008, 2011, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,6 +31,6 @@ void signal_wait(struct signal *);
 const char *signal_name(int signum);
 
 void xsigaction(int signum, const struct sigaction *, struct sigaction *old);
-void xsigprocmask(int how, const sigset_t *, sigset_t *old);
+void xpthread_sigmask(int how, const sigset_t *, sigset_t *old);
 
 #endif /* signals.h */

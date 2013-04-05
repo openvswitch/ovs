@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -168,9 +168,10 @@ xsigaction(int signum, const struct sigaction *new, struct sigaction *old)
 }
 
 void
-xsigprocmask(int how, const sigset_t *new, sigset_t *old)
+xpthread_sigmask(int how, const sigset_t *new, sigset_t *old)
 {
-    if (sigprocmask(how, new, old)) {
-        VLOG_FATAL("sigprocmask failed (%s)", strerror(errno));
+    int error = pthread_sigmask(how, new, old);
+    if (error) {
+        VLOG_FATAL("pthread_sigmask failed (%s)", strerror(error));
     }
 }
