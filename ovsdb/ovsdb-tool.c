@@ -519,9 +519,10 @@ do_show_log(int argc, char *argv[])
             date = shash_find_data(json_object(json), "_date");
             if (date && date->type == JSON_INTEGER) {
                 time_t t = json_integer(date);
+                struct tm tm;
                 char s[128];
 
-                strftime(s, sizeof s, "%Y-%m-%d %H:%M:%S", gmtime(&t));
+                strftime(s, sizeof s, "%Y-%m-%d %H:%M:%S", gmtime_r(&t, &tm));
                 printf(" %s", s);
             }
 

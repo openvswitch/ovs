@@ -1358,9 +1358,11 @@ monitor_vconn(struct vconn *vconn)
 
             if (timestamp) {
                 time_t now = time_wall();
+                struct tm tm;
                 char s[32];
 
-                strftime(s, sizeof s, "%Y-%m-%d %H:%M:%S: ", gmtime(&now));
+                strftime(s, sizeof s, "%Y-%m-%d %H:%M:%S: ",
+                         gmtime_r(&now, &tm));
                 fputs(s, stderr);
             }
 

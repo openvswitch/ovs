@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -222,7 +222,8 @@ static void
 table_format_timestamp__(char *s, size_t size)
 {
     time_t now = time_wall();
-    strftime(s, size, "%Y-%m-%d %H:%M:%S", gmtime(&now));
+    struct tm tm;
+    strftime(s, size, "%Y-%m-%d %H:%M:%S", gmtime_r(&now, &tm));
 }
 
 static void

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -184,21 +184,21 @@ ds_put_printable(struct ds *ds, const char *s, size_t n)
 }
 
 /* Writes the current time to 'string' based on 'template'.
- * The current time is either localtime or UTC based on 'utc'. */
+ * The current time is either local time or UTC based on 'utc'. */
 void
 ds_put_strftime(struct ds *ds, const char *template, bool utc)
 {
-    const struct tm *tm;
+    struct tm tm;
     time_t now = time_wall();
     if (utc) {
-        tm = gmtime(&now);
+        gmtime_r(&now, &tm);
     } else {
-        tm = localtime(&now);
+        localtime_r(&now, &tm);
     }
 
     for (;;) {
         size_t avail = ds->string ? ds->allocated - ds->length + 1 : 0;
-        size_t used = strftime(&ds->string[ds->length], avail, template, tm);
+        size_t used = strftime(&ds->string[ds->length], avail, template, &tm);
         if (used) {
             ds->length += used;
             return;
