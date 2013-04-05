@@ -210,6 +210,20 @@ check-assert-h-usage:
 	 fi
 .PHONY: check-assert-h-usage
 
+ALL_LOCAL += thread-safety-check
+thread-safety-check:
+	@if test -e '$(srcdir)'/.git && (git --version) >/dev/null 2>&1 && \
+	   grep -n -f '$(srcdir)'/build-aux/thread-safety-blacklist \
+	       `git ls-files '$(srcdir)' | grep '\.[ch]$$' \
+                | $(EGREP) -v '^datapath|^lib/sflow|^third-party'` \
+	       | $(EGREP) -v ':[ 	]*/?\*'; \
+	then \
+	    echo "See above for list of calls to functions that are"; \
+	    echo "blacklisted due to thread safety issues"; \
+	    exit 1; \
+	fi
+EXTRA_DIST += build-aux/thread-safety-blacklist
+
 if HAVE_GROFF
 ALL_LOCAL += manpage-check
 manpage-check: $(man_MANS) $(dist_man_MANS) $(noinst_man_MANS)
