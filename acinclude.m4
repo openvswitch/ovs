@@ -478,13 +478,23 @@ AC_DEFUN([OVS_CHECK_SPARSE_TARGET],
    AC_SUBST([SPARSEFLAGS])
    AC_SUBST([CGCCFLAGS])])
 
+dnl OVS_SPARSE_EXTRA_INCLUDES
+dnl
+dnl The cgcc script from "sparse" does not search gcc's default
+dnl search path. Get the default search path from GCC and pass
+dnl them to sparse.
+AC_DEFUN([OVS_SPARSE_EXTRA_INCLUDES],
+    AC_SUBST([SPARSE_EXTRA_INCLUDES],
+           [`$CC -v -E - </dev/null 2>&1 >/dev/null | sed -n -e '/^#include.*search.*starts.*here:/,/^End.*of.*search.*list\./s/^ \(.*\)/-I \1/p' |grep -v /usr/lib | grep -x -v '\-I /usr/include' | tr \\\n ' ' `] ))
+
 dnl OVS_ENABLE_SPARSE
 AC_DEFUN([OVS_ENABLE_SPARSE],
   [AC_REQUIRE([OVS_CHECK_SPARSE_TARGET])
    AC_REQUIRE([OVS_CHECK_MAKE_IF])
+   AC_REQUIRE([OVS_SPARSE_EXTRA_INCLUDES])
    : ${SPARSE=sparse}
    AC_SUBST([SPARSE])
    AC_CONFIG_COMMANDS_PRE(
      [if test $ovs_cv_gnu_make_if = yes; then
-        CC='$(if $(C),REAL_CC="'"$CC"'" CHECK="$(SPARSE) -I $(top_srcdir)/include/sparse $(SPARSEFLAGS)" cgcc $(CGCCFLAGS),'"$CC"')'
+        CC='$(if $(C),REAL_CC="'"$CC"'" CHECK="$(SPARSE) -I $(top_srcdir)/include/sparse $(SPARSEFLAGS) $(SPARSE_EXTRA_INCLUDES) " cgcc $(CGCCFLAGS),'"$CC"')'
       fi])])
