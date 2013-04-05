@@ -59,10 +59,11 @@ OVS_CHECK_DOT
 OVS_CHECK_IF_PACKET
 OVS_CHECK_IF_DL
 OVS_CHECK_STRTOK_R
+AC_CHECK_DECLS([sys_siglist], [], [], [[#include <signal.h>]])
 AC_CHECK_MEMBERS([struct stat.st_mtim.tv_nsec, struct stat.st_mtimensec],
   [], [], [[#include <sys/stat.h>]])
 AC_CHECK_MEMBERS([struct ifreq.ifr_flagshigh], [], [], [[#include <net/if.h>]])
-AC_CHECK_FUNCS([mlockall strnlen strsignal getloadavg statvfs getmntent_r])
+AC_CHECK_FUNCS([mlockall strnlen getloadavg statvfs getmntent_r])
 AC_CHECK_HEADERS([mntent.h sys/statvfs.h linux/types.h linux/if_ether.h])
 AC_CHECK_HEADERS([net/if_mib.h], [], [], [[#include <sys/types.h>
 #include <net/if.h>]])

@@ -147,9 +147,13 @@ const char *
 signal_name(int signum)
 {
     const char *name = NULL;
-#ifdef HAVE_STRSIGNAL
-    name = strsignal(signum);
+
+#if HAVE_DECL_SYS_SIGLIST
+    if (signum >= 0 && signum < ARRAY_SIZE(sys_siglist)) {
+        name = sys_siglist[signum];
+    }
 #endif
+
     if (!name) {
         static char buffer[7 + INT_STRLEN(int) + 1];
         sprintf(buffer, "signal %d", signum);
