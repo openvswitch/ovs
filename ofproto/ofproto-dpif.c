@@ -5109,7 +5109,7 @@ facet_push_stats(struct facet *facet)
 }
 
 static void
-push_all_stats(void)
+push_all_stats__(bool run_fast)
 {
     static long long int rl = LLONG_MIN;
     struct ofproto_dpif *ofproto;
@@ -5123,11 +5123,19 @@ push_all_stats(void)
 
         HMAP_FOR_EACH (facet, hmap_node, &ofproto->facets) {
             facet_push_stats(facet);
-            run_fast_rl();
+            if (run_fast) {
+                run_fast_rl();
+            }
         }
     }
 
     rl = time_msec() + 100;
+}
+
+static void
+push_all_stats(void)
+{
+    push_all_stats__(true);
 }
 
 static void
@@ -5613,7 +5621,11 @@ rule_get_stats(struct rule *rule_, uint64_t *packets, uint64_t *bytes)
     struct rule_dpif *rule = rule_dpif_cast(rule_);
     struct facet *facet;
 
-    push_all_stats();
+    /* push_all_stats() can handle flow misses which, when using the learn
+     * action, can cause rules to be added and deleted.  This can corrupt our
+     * caller's datastructures which assume that rule_get_stats() doesn't have
+     * an impact on the flow table. To be safe, we disable miss handling. */
+    push_all_stats__(false);
 
     /* Start from historical data for 'rule' itself that are no longer tracked
      * in facets.  This counts, for example, facets that have expired. */
