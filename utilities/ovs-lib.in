@@ -38,8 +38,18 @@ else
 fi
 
 ovs_ctl () {
-    echo "`date -u`:$@" >> "${logdir}/ovs-ctl.log"
-    "${datadir}/scripts/ovs-ctl" "$@" 2>&1 | tee -a "${logdir}/ovs-ctl.log"
+    case "$@" in
+        *"=strace"*)
+            # In case of running the daemon with strace, piping the o/p causes
+            # the script to block (strace probably does not close the inherited
+            # pipe). So, do not log the o/p to ovs-ctl.log.
+            "${datadir}/scripts/ovs-ctl" "$@"
+        ;;
+        *)
+            echo "`date -u`:$@" >> "${logdir}/ovs-ctl.log"
+            "${datadir}/scripts/ovs-ctl" "$@" 2>&1 | tee -a "${logdir}/ovs-ctl.log"
+        ;;
+    esac
 }
 
 VERSION='@VERSION@'
