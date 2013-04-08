@@ -2274,7 +2274,8 @@ bridge_run(void)
             struct bridge *br, *next_br;
 
             VLOG_ERR_RL(&rl, "another ovs-vswitchd process is running, "
-                        "disabling this process until it goes away");
+                        "disabling this process (pid %ld) until it goes away",
+                        (long int) getpid());
 
             HMAP_FOR_EACH_SAFE (br, next_br, node, &all_bridges) {
                 bridge_destroy(br);
