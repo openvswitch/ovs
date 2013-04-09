@@ -907,6 +907,7 @@ vlog_should_drop(const struct vlog_module *module, enum vlog_level level,
         return true;
     }
 
+    xpthread_mutex_lock(&rl->mutex);
     if (!token_bucket_withdraw(&rl->token_bucket, VLOG_MSG_TOKENS)) {
         time_t now = time_now();
         if (!rl->n_dropped) {
@@ -914,21 +915,26 @@ vlog_should_drop(const struct vlog_module *module, enum vlog_level level,
         }
         rl->last_dropped = now;
         rl->n_dropped++;
+        xpthread_mutex_unlock(&rl->mutex);
         return true;
     }
 
-    if (rl->n_dropped) {
+    if (!rl->n_dropped) {
+        xpthread_mutex_unlock(&rl->mutex);
+    } else {
         time_t now = time_now();
+        unsigned int n_dropped = rl->n_dropped;
         unsigned int first_dropped_elapsed = now - rl->first_dropped;
         unsigned int last_dropped_elapsed = now - rl->last_dropped;
+        rl->n_dropped = 0;
+        xpthread_mutex_unlock(&rl->mutex);
 
         vlog(module, level,
              "Dropped %u log messages in last %u seconds (most recently, "
              "%u seconds ago) due to excessive rate",
-             rl->n_dropped, first_dropped_elapsed, last_dropped_elapsed);
-
-        rl->n_dropped = 0;
+             n_dropped, first_dropped_elapsed, last_dropped_elapsed);
     }
+
     return false;
 }
 
