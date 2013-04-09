@@ -6447,11 +6447,6 @@ xlate_set_queue_action(struct action_xlate_ctx *ctx, uint32_t queue_id)
     }
 }
 
-struct xlate_reg_state {
-    ovs_be16 vlan_tci;
-    ovs_be64 tun_id;
-};
-
 static bool
 slave_enabled_cb(uint16_t ofp_port, void *ofproto_)
 {
