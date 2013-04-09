@@ -29,6 +29,7 @@
 /test-packets
 /test-random
 /test-reconnect
+/test-sflow
 /test-sha1
 /test-stp
 /test-strtok_r
