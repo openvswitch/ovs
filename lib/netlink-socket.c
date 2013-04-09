@@ -59,8 +59,7 @@ static void log_nlmsg(const char *function, int error,
 
 /* Netlink sockets. */
 
-struct nl_sock
-{
+struct nl_sock {
     int fd;
     uint32_t next_seq;
     uint32_t pid;
