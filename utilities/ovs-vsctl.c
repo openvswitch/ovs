@@ -4105,6 +4105,7 @@ try_again:
     if (txn) {
         ovsdb_idl_txn_abort(txn);
         ovsdb_idl_txn_destroy(txn);
+        the_idl_txn = NULL;
     }
     ovsdb_symbol_table_destroy(symtab);
     for (c = commands; c < &commands[n_commands]; c++) {
