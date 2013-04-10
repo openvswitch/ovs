@@ -1,4 +1,9 @@
 .\" -*- nroff -*-
+.de IQ
+.  br
+.  ns
+.  IP "\\$1"
+..
 .TH ovsdb\-server 1 "@VERSION@" "Open vSwitch" "Open vSwitch Manual"
 .\" This program's name:
 .ds PN ovsdb\-server
@@ -123,6 +128,29 @@ connections to database clients and reconnect.
 .IP
 This command might be useful for debugging issues with database
 clients.
+.
+.IP "\fBovsdb\-server/add\-remote \fIremote\fR"
+Adds a remote, as if \fB\-\-remote=\fIremote\fR had been specified on
+the \fBovsdb\-server\fR command line.  (If \fIremote\fR is already a
+remote, this command succeeds without changing the configuration.)
+.
+.IP "\fBovsdb\-server/remove\-remote \fIremote\fR"
+Removes the specified \fIremote\fR from the configuration, failing
+with an error if \fIremote\fR is not configured as a remote.  This
+command only works with remotes that were named on \fB\-\-remote\fR or
+\fBovsdb\-server/add\-remote\fR, that is, it will not remove remotes
+added indirectly because they were read from the database by
+configuring a \fBdb:\fR[\fIdb\fB,\fR]\fItable\fB,\fIcolumn\fR remote.
+(You can remove a database source with \fBovsdb\-server/remove\-remote
+\fBdb:\fR[\fIdb\fB,\fR]\fItable\fB,\fIcolumn\fR, but not individual
+remotes found indirectly through the database.)
+.
+.IP "\fBovsdb\-server/list\-remotes"
+Outputs a list of the currently configured remotes named on
+\fB\-\-remote\fR or \fBovsdb\-server/add\-remote\fR, that is, it does
+not list remotes added indirectly because they were read from the
+database by configuring a
+\fBdb:\fR[\fIdb\fB,\fR]\fItable\fB,\fIcolumn\fR remote.
 .
 .so lib/vlog-unixctl.man
 .so lib/memory-unixctl.man
