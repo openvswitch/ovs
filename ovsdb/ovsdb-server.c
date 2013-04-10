@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010, 2011, 2012 Nicira, Inc.
+/* Copyright (c) 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -76,6 +76,15 @@ static unixctl_cb_func ovsdb_server_exit;
 static unixctl_cb_func ovsdb_server_compact;
 static unixctl_cb_func ovsdb_server_reconnect;
 
+struct add_remote_aux {
+    struct sset *remotes;
+    struct db *dbs;
+    size_t n_dbs;
+};
+static unixctl_cb_func ovsdb_server_add_remote;
+static unixctl_cb_func ovsdb_server_remove_remote;
+static unixctl_cb_func ovsdb_server_list_remotes;
+
 static void parse_options(int *argc, char **argvp[],
                           struct sset *remotes, char **unixctl_pathp,
                           char **run_command);
@@ -101,6 +110,7 @@ main(int argc, char *argv[])
     bool exiting;
     int retval;
     long long int status_timer = LLONG_MIN;
+    struct add_remote_aux add_remote_aux;
 
     struct db *dbs;
     int n_dbs;
@@ -181,6 +191,16 @@ main(int argc, char *argv[])
     unixctl_command_register("ovsdb-server/reconnect", "", 0, 0,
                              ovsdb_server_reconnect, jsonrpc);
 
+    add_remote_aux.remotes = &remotes;
+    add_remote_aux.dbs = dbs;
+    add_remote_aux.n_dbs = n_dbs;
+    unixctl_command_register("ovsdb-server/add-remote", "REMOTE", 1, 1,
+                             ovsdb_server_add_remote, &add_remote_aux);
+    unixctl_command_register("ovsdb-server/remove-remote", "REMOTE", 1, 1,
+                             ovsdb_server_remove_remote, &remotes);
+    unixctl_command_register("ovsdb-server/list-remotes", "", 0, 0,
+                             ovsdb_server_list_remotes, &remotes);
+
     exiting = false;
     while (!exiting) {
         int i;
@@ -198,9 +218,13 @@ main(int argc, char *argv[])
             simap_destroy(&usage);
         }
 
+        /* Run unixctl_server_run() before reconfigure_from_db() because
+         * ovsdb-server/add-remote and ovsdb-server/remove-remote can change
+         * the set of remotes that reconfigure_from_db() uses. */
+        unixctl_server_run(unixctl);
+
         reconfigure_from_db(jsonrpc, dbs, n_dbs, &remotes);
         ovsdb_jsonrpc_server_run(jsonrpc);
-        unixctl_server_run(unixctl);
 
         for (i = 0; i < n_dbs; i++) {
             ovsdb_trigger_run(dbs[i].db, time_msec());
@@ -869,6 +893,72 @@ ovsdb_server_reconnect(struct unixctl_conn *conn, int argc OVS_UNUSED,
 
     ovsdb_jsonrpc_server_reconnect(jsonrpc);
     unixctl_command_reply(conn, NULL);
+}
+
+/* "ovsdb-server/add-remote REMOTE": adds REMOTE to the set of remotes that
+ * ovsdb-server services. */
+static void
+ovsdb_server_add_remote(struct unixctl_conn *conn, int argc OVS_UNUSED,
+                        const char *argv[], void *aux_)
+{
+    struct add_remote_aux *aux = aux_;
+    const char *remote = argv[1];
+
+    const struct ovsdb_column *column;
+    const struct ovsdb_table *table;
+    const struct db *db;
+    char *retval;
+
+    retval = (strncmp("db:", remote, 3)
+              ? NULL
+              : parse_db_column(aux->dbs, aux->n_dbs, remote,
+                                &db, &table, &column));
+    if (!retval) {
+        sset_add(aux->remotes, remote);
+        unixctl_command_reply(conn, NULL);
+    } else {
+        unixctl_command_reply_error(conn, retval);
+        free(retval);
+    }
+}
+
+/* "ovsdb-server/remove-remote REMOTE": removes REMOTE frmo the set of remotes
+ * that ovsdb-server services. */
+static void
+ovsdb_server_remove_remote(struct unixctl_conn *conn, int argc OVS_UNUSED,
+                           const char *argv[], void *remotes_)
+{
+    struct sset *remotes = remotes_;
+    struct sset_node *node;
+
+    node = sset_find(remotes, argv[1]);
+    if (node) {
+        sset_delete(remotes, node);
+        unixctl_command_reply(conn, NULL);
+    } else {
+        unixctl_command_reply_error(conn, "no such remote");
+    }
+}
+
+/* "ovsdb-server/list-remotes": outputs a list of configured rmeotes. */
+static void
+ovsdb_server_list_remotes(struct unixctl_conn *conn, int argc OVS_UNUSED,
+                          const char *argv[] OVS_UNUSED, void *remotes_)
+{
+    struct sset *remotes = remotes_;
+    const char **list, **p;
+    struct ds s;
+
+    ds_init(&s);
+
+    list = sset_sort(remotes);
+    for (p = list; *p; p++) {
+        ds_put_format(&s, "%s\n", *p);
+    }
+    free(list);
+
+    unixctl_command_reply(conn, ds_cstr(&s));
+    ds_destroy(&s);
 }
 
 static void
