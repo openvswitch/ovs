@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -267,4 +267,38 @@ sset_at_position(const struct sset *set, uint32_t *bucketp, uint32_t *offsetp)
 
     hmap_node = hmap_at_position(&set->map, bucketp, offsetp);
     return SSET_NODE_FROM_HMAP_NODE(hmap_node);
+}
+
+static int
+compare_string_pointers(const void *a_, const void *b_)
+{
+    const char *const *a = a_;
+    const char *const *b = b_;
+
+    return strcmp(*a, *b);
+}
+
+/* Returns a null-terminated array of pointers to the strings in 'set', sorted
+ * alphabetically.  The caller must free the returned array when it is no
+ * longer needed, but the strings in the array belong to 'set' and thus must
+ * not be modified or freed. */
+const char **
+sset_sort(const struct sset *set)
+{
+    size_t n = sset_count(set);
+    const char **array;
+    const char *s;
+    size_t i;
+
+    array = xmalloc(sizeof *array * (n + 1));
+    i = 0;
+    SSET_FOR_EACH (s, set) {
+        array[i++] = s;
+    }
+    ovs_assert(i == n);
+    array[n] = NULL;
+
+    qsort(array, n, sizeof *array, compare_string_pointers);
+
+    return array;
 }
