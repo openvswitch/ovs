@@ -146,6 +146,23 @@ static struct hmap all_bridges = HMAP_INITIALIZER(&all_bridges);
 /* OVSDB IDL used to obtain configuration. */
 static struct ovsdb_idl *idl;
 
+/* We want to complete daemonization, fully detaching from our parent process,
+ * only after we have completed our initial configuration, committed our state
+ * to the database, and received confirmation back from the database server
+ * that it applied the commit.  This allows our parent process to know that,
+ * post-detach, ephemeral fields such as datapath-id and ofport are very likely
+ * to have already been filled in.  (It is only "very likely" rather than
+ * certain because there is always a slim possibility that the transaction will
+ * fail or that some other client has added new bridges, ports, etc. while
+ * ovs-vswitchd was configuring using an old configuration.)
+ *
+ * We only need to do this once for our initial configuration at startup, so
+ * 'initial_config_done' tracks whether we've already done it.  While we are
+ * waiting for a response to our commit, 'daemonize_txn' tracks the transaction
+ * itself and is otherwise NULL. */
+static bool initial_config_done;
+static struct ovsdb_idl_txn *daemonize_txn;
+
 /* Most recently processed IDL sequence number. */
 static unsigned int idl_seqno;
 
@@ -600,15 +617,6 @@ bridge_reconfigure_continue(const struct ovsrec_open_vswitch *ovs_cfg)
         bridge_configure_dp_desc(br);
     }
     free(managers);
-
-    if (done) {
-        /* ovs-vswitchd has completed initialization, so allow the process that
-         * forked us to exit successfully. */
-        daemonize_complete();
-        reconfiguring = false;
-
-        VLOG_INFO_ONCE("%s (Open vSwitch) %s", program_name, VERSION);
-    }
 
     return done;
 }
@@ -2267,6 +2275,16 @@ bridge_run(void)
             }
             if (bridge_reconfigure_continue(cfg)) {
                 ovsrec_open_vswitch_set_cur_cfg(cfg, cfg->next_cfg);
+                reconfiguring = false;
+
+                /* If we are completing our initial configuration for this run
+                 * of ovs-vswitchd, then keep the transaction around to monitor
+                 * it for completion. */
+                if (!initial_config_done) {
+                    initial_config_done = true;
+                    daemonize_txn = reconf_txn;
+                    reconf_txn = NULL;
+                }
             }
         } else {
             bridge_reconfigure_continue(&null_cfg);
@@ -2277,6 +2295,20 @@ bridge_run(void)
         ovsdb_idl_txn_commit(reconf_txn);
         ovsdb_idl_txn_destroy(reconf_txn);
         reconf_txn = NULL;
+    }
+
+    if (daemonize_txn) {
+        enum ovsdb_idl_txn_status status = ovsdb_idl_txn_commit(daemonize_txn);
+        if (status != TXN_INCOMPLETE) {
+            ovsdb_idl_txn_destroy(daemonize_txn);
+            daemonize_txn = NULL;
+
+            /* ovs-vswitchd has completed initialization, so allow the
+             * process that forked us to exit successfully. */
+            daemonize_complete();
+
+            VLOG_INFO_ONCE("%s (Open vSwitch) %s", program_name, VERSION);
+        }
     }
 
     /* Refresh interface and mirror stats if necessary. */
@@ -2322,6 +2354,9 @@ bridge_wait(void)
     const char *type;
 
     ovsdb_idl_wait(idl);
+    if (daemonize_txn) {
+        ovsdb_idl_txn_wait(daemonize_txn);
+    }
 
     if (reconfiguring) {
         poll_immediate_wake();
