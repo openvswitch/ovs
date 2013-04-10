@@ -358,6 +358,7 @@ del_channel(struct dpif_linux *dpif, uint32_t port_no)
     }
 
     epoll_ctl(dpif->epoll_fd, EPOLL_CTL_DEL, nl_sock_fd(ch->sock), NULL);
+    dpif->event_offset = dpif->n_events = 0;
 
     nl_sock_destroy(ch->sock);
     ch->sock = NULL;
