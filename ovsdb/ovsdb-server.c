@@ -262,12 +262,12 @@ find_db(const struct db dbs[], size_t n_dbs, const char *db_name)
     return NULL;
 }
 
-static void
-parse_db_column(const struct db dbs[], size_t n_dbs,
-                const char *name_,
-                const struct db **dbp,
-                const struct ovsdb_table **tablep,
-                const struct ovsdb_column **columnp)
+static char * WARN_UNUSED_RESULT
+parse_db_column__(const struct db dbs[], size_t n_dbs,
+                  const char *name_, char *name,
+                  const struct db **dbp,
+                  const struct ovsdb_table **tablep,
+                  const struct ovsdb_column **columnp)
 {
     const char *table_name, *column_name;
     const struct ovsdb_column *column;
@@ -275,15 +275,17 @@ parse_db_column(const struct db dbs[], size_t n_dbs,
     const char *tokens[3];
     char *save_ptr = NULL;
     const struct db *db;
-    char *name;
 
-    name = xstrdup(name_);
+    *dbp = NULL;
+    *tablep = NULL;
+    *columnp = NULL;
+
     strtok_r(name, ":", &save_ptr); /* "db:" */
     tokens[0] = strtok_r(NULL, ",", &save_ptr);
     tokens[1] = strtok_r(NULL, ",", &save_ptr);
     tokens[2] = strtok_r(NULL, ",", &save_ptr);
     if (!tokens[0] || !tokens[1]) {
-        ovs_fatal(0, "\"%s\": invalid syntax", name_);
+        return xasprintf("\"%s\": invalid syntax", name_);
     }
     if (tokens[2]) {
         const char *db_name = tokens[0];
@@ -292,12 +294,13 @@ parse_db_column(const struct db dbs[], size_t n_dbs,
 
         db = find_db(dbs, n_dbs, tokens[0]);
         if (!db) {
-            ovs_fatal(0, "\"%s\": no database named %s", name_, db_name);
+            return xasprintf("\"%s\": no database named %s", name_, db_name);
         }
     } else {
         if (n_dbs > 1) {
-            ovs_fatal(0, "\"%s\": database name must be specified (because "
-                      "multiple databases are configured)", name_);
+            return xasprintf("\"%s\": database name must be specified "
+                             "(because multiple databases are configured)",
+                             name_);
         }
 
         table_name = tokens[0];
@@ -307,44 +310,61 @@ parse_db_column(const struct db dbs[], size_t n_dbs,
 
     table = ovsdb_get_table(db->db, table_name);
     if (!table) {
-        ovs_fatal(0, "\"%s\": no table named %s", name_, table_name);
+        return xasprintf("\"%s\": no table named %s", name_, table_name);
     }
 
     column = ovsdb_table_schema_get_column(table->schema, column_name);
     if (!column) {
-        ovs_fatal(0, "\"%s\": table \"%s\" has no column \"%s\"",
-                  name_, table_name, column_name);
+        return xasprintf("\"%s\": table \"%s\" has no column \"%s\"",
+                         name_, table_name, column_name);
     }
-    free(name);
 
     *dbp = db;
     *columnp = column;
     *tablep = table;
+    return NULL;
 }
 
-static void
+/* Returns NULL if successful, otherwise a malloc()'d string describing the
+ * error. */
+static char * WARN_UNUSED_RESULT
+parse_db_column(const struct db dbs[], size_t n_dbs,
+                const char *name_,
+                const struct db **dbp,
+                const struct ovsdb_table **tablep,
+                const struct ovsdb_column **columnp)
+{
+    char *name = xstrdup(name_);
+    char *retval = parse_db_column__(dbs, n_dbs, name_, name,
+                                     dbp, tablep, columnp);
+    free(name);
+    return retval;
+}
+
+/* Returns NULL if successful, otherwise a malloc()'d string describing the
+ * error. */
+static char * WARN_UNUSED_RESULT
 parse_db_string_column(const struct db dbs[], size_t n_dbs,
                        const char *name,
                        const struct db **dbp,
                        const struct ovsdb_table **tablep,
                        const struct ovsdb_column **columnp)
 {
-    const struct ovsdb_column *column;
-    const struct ovsdb_table *table;
-    const struct db *db;
+    char *retval;
 
-    parse_db_column(dbs, n_dbs, name, &db, &table, &column);
-
-    if (column->type.key.type != OVSDB_TYPE_STRING
-        || column->type.value.type != OVSDB_TYPE_VOID) {
-        ovs_fatal(0, "\"%s\": table \"%s\" column \"%s\" is "
-                  "not string or set of strings",
-                  name, table->schema->name, column->name);
+    retval = parse_db_column(dbs, n_dbs, name, dbp, tablep, columnp);
+    if (retval) {
+        return retval;
     }
 
-    *dbp = db;
-    *columnp = column;
-    *tablep = table;
+    if ((*columnp)->type.key.type != OVSDB_TYPE_STRING
+        || (*columnp)->type.value.type != OVSDB_TYPE_VOID) {
+        return xasprintf("\"%s\": table \"%s\" column \"%s\" is "
+                         "not string or set of strings",
+                         name, (*tablep)->schema->name, (*columnp)->name);
+    }
+
+    return NULL;
 }
 
 static OVS_UNUSED const char *
@@ -357,8 +377,13 @@ query_db_string(const struct db dbs[], size_t n_dbs, const char *name)
         const struct ovsdb_table *table;
         const struct ovsdb_row *row;
         const struct db *db;
+        char *retval;
 
-        parse_db_string_column(dbs, n_dbs, name, &db, &table, &column);
+        retval = parse_db_string_column(dbs, n_dbs, name,
+                                        &db, &table, &column);
+        if (retval) {
+            ovs_fatal(0, "%s", retval);
+        }
 
         HMAP_FOR_EACH (row, hmap_node, &table->rows) {
             const struct ovsdb_datum *datum;
@@ -588,8 +613,12 @@ query_db_remotes(const char *name, const struct db dbs[], size_t n_dbs,
     const struct ovsdb_table *table;
     const struct ovsdb_row *row;
     const struct db *db;
+    char *retval;
 
-    parse_db_column(dbs, n_dbs, name, &db, &table, &column);
+    retval = parse_db_column(dbs, n_dbs, name, &db, &table, &column);
+    if (retval) {
+        ovs_fatal(0, "%s", retval);
+    }
 
     if (column->type.key.type == OVSDB_TYPE_STRING
         && column->type.value.type == OVSDB_TYPE_VOID) {
@@ -691,12 +720,16 @@ update_remote_rows(const struct db dbs[], size_t n_dbs,
     const struct ovsdb_column *column;
     const struct ovsdb_row *row;
     const struct db *db;
+    char *retval;
 
     if (strncmp("db:", remote_name, 3)) {
         return;
     }
 
-    parse_db_column(dbs, n_dbs, remote_name, &db, &table, &column);
+    retval = parse_db_column(dbs, n_dbs, remote_name, &db, &table, &column);
+    if (retval) {
+        ovs_fatal(0, "%s", retval);
+    }
 
     if (column->type.key.type != OVSDB_TYPE_UUID
         || !column->type.key.u.uuid.refTable
