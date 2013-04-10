@@ -30,7 +30,7 @@ done
 ## start ##
 ## ----- ##
 
-insert_openvswitch_mod_if_required () {
+insert_mod_if_required () {
     # If openvswitch is already loaded then we're done.
     test -e /sys/module/openvswitch -o -e /sys/module/openvswitch_mod && \
      return 0
@@ -50,10 +50,6 @@ insert_openvswitch_mod_if_required () {
 
     # Try loading openvswitch again.
     action "Inserting openvswitch module" modprobe openvswitch
-}
-
-insert_mod_if_required () {
-    insert_openvswitch_mod_if_required || return 1
 }
 
 ovs_vsctl () {
