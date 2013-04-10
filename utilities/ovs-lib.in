@@ -37,6 +37,10 @@ else
     dbdir='@DBDIR@'
 fi
 
+ovs_ctl_log () {
+    echo "$@" >> "${logdir}/ovs-ctl.log"
+}
+
 ovs_ctl () {
     case "$@" in
         *"=strace"*)

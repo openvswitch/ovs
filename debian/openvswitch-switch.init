@@ -75,10 +75,35 @@ stop () {
 }
 
 restart () {
-    # OVS_RESTART_SAVE_FLOWS can be set by package postinst script.
-    if [ "$OVS_RESTART_SAVE_FLOWS" = "yes" ] || \
-       [ "$1" = "--save-flows=yes" ]; then
+    # OVS_FORCE_RELOAD_KMOD can be set by package postinst script.
+    if [ "$1" = "--save-flows=yes" ] || \
+        [ "${OVS_FORCE_RELOAD_KMOD}" = "no" ]; then
         start restart
+    elif [ "${OVS_FORCE_RELOAD_KMOD}" = "yes" ]; then
+        depmod -a
+
+        if [ -e /sys/module/openvswitch ]; then
+            LOADED_SRCVERSION=`cat /sys/module/openvswitch/srcversion`
+            LOADED_VERSION=`cat /sys/module/openvswitch/version`
+        elif [ -e /sys/module/openvswitch_mod ]; then
+            LOADED_SRCVERSION=`cat /sys/module/openvswitch_mod/srcversion`
+            LOADED_VERSION=`cat /sys/module/openvswitch_mod/version`
+        fi
+        SRCVERSION=`modinfo -F srcversion openvswitch 2>/dev/null`
+        VERSION=`modinfo -F version openvswitch 2>/dev/null`
+
+        ovs_ctl_log "Package upgrading:\n"\
+                    "Loaded version: ${LOADED_VERSION} ${LOADED_SRCVERSION}.\n"\
+                    "Version on disk: ${VERSION} ${SRCVERSION}."
+
+        # If the kernel module was previously loaded and it is different than
+        # the kernel module on disk, then do a 'force-reload-kmod'.
+        if [ -n "${LOADED_SRCVERSION}" ] && [ -n "${SRCVERSION}" ] && \
+            [ "${SRCVERSION}" != "${LOADED_SRCVERSION}" ]; then
+            start force-reload-kmod
+        else
+            start restart
+        fi
     else
         stop
         start

@@ -49,9 +49,10 @@ esac
 OVS_MISSING_KMOD_OK=yes
 export OVS_MISSING_KMOD_OK
 
-# Save and restore openflow flows during a package upgrade.
-OVS_RESTART_SAVE_FLOWS=yes
-export OVS_RESTART_SAVE_FLOWS
+# force-reload-kmod during upgrade. If a user wants to override this,
+# they can set the variable OVS_FORCE_RELOAD_KMOD=no while installing.
+[ -z "${OVS_FORCE_RELOAD_KMOD}" ] && OVS_FORCE_RELOAD_KMOD=yes || true
+export OVS_FORCE_RELOAD_KMOD
 
 #DEBHELPER#
 
