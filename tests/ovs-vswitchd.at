@@ -1,0 +1,27 @@
+AT_BANNER([ovs-vswitchd])
+
+dnl The OVS initscripts never make an empty database (one without even an
+dnl Open_vSwitch record) visible to ovs-vswitchd, but hand-rolled scripts
+dnl sometimes do.  At one point, "ovs-vswitchd --detach" would never detach
+dnl and use 100% CPU if this happened, so this test checks for regression.
+AT_SETUP([ovs-vswitchd detaches correctly with empty db])
+OVS_RUNDIR=`pwd`; export OVS_RUNDIR
+OVS_LOGDIR=`pwd`; export OVS_LOGDIR
+OVS_DBDIR=`pwd`; export OVS_DBDIR
+OVS_SYSCONFDIR=`pwd`; export OVS_SYSCONFDIR
+ON_EXIT([kill `cat ovsdb-server.pid ovs-vswitchd.pid`])
+
+dnl Create database.
+touch .conf.db.~lock~
+AT_CHECK([ovsdb-tool create conf.db $abs_top_srcdir/vswitchd/vswitch.ovsschema])
+
+dnl Start ovsdb-server.  *Don't* initialize database.
+AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --log-file --remote=punix:$OVS_RUNDIR/db.sock], [0], [ignore], [ignore])
+AT_CAPTURE_FILE([ovsdb-server.log])
+
+dnl Start ovs-vswitchd.
+AT_CHECK([ovs-vswitchd --detach --no-chdir --pidfile --enable-dummy --disable-system --log-file], [0], [], [stderr])
+AT_CAPTURE_FILE([ovs-vswitchd.log])
+
+dnl ovs-vswitchd detached OK or we wouldn't have made it this far.  Success.
+AT_CLEANUP

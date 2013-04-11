@@ -1,6 +1,6 @@
 AT_INIT
 
-AT_COPYRIGHT([Copyright (c) 2009, 2010, 2011, 2012 Nicira, Inc.
+AT_COPYRIGHT([Copyright (c) 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -95,6 +95,7 @@ m4_include([tests/timeval.at])
 m4_include([tests/tunnel.at])
 m4_include([tests/lockfile.at])
 m4_include([tests/reconnect.at])
+m4_include([tests/ovs-vswitchd.at])
 m4_include([tests/ofproto.at])
 m4_include([tests/ofproto-dpif.at])
 m4_include([tests/ovsdb.at])

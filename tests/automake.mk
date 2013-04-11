@@ -35,6 +35,7 @@ TESTSUITE_AT = \
 	tests/tunnel.at \
 	tests/lockfile.at \
 	tests/reconnect.at \
+	tests/ovs-vswitchd.at \
 	tests/ofproto-dpif.at \
 	tests/ofproto-macros.at \
 	tests/ofproto.at \
