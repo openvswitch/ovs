@@ -137,8 +137,10 @@ memory_report(const struct simap *usage)
     ds_init(&s);
     compose_report(usage, &s);
 
-    if (want_report && s.length) {
-        VLOG_INFO("%s", ds_cstr(&s));
+    if (want_report) {
+        if (s.length) {
+            VLOG_INFO("%s", ds_cstr(&s));
+        }
         want_report = false;
     }
     if (n_conns) {
