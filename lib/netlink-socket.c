@@ -130,7 +130,7 @@ nl_sock_create(int protocol, struct nl_sock **sockp)
                    &rcvbuf, sizeof rcvbuf)) {
         /* Only root can use SO_RCVBUFFORCE.  Everyone else gets EPERM.
          * Warn only if the failure is therefore unexpected. */
-        if (errno != EPERM || !getuid()) {
+        if (errno != EPERM) {
             VLOG_WARN_RL(&rl, "setting %d-byte socket receive buffer failed "
                          "(%s)", rcvbuf, strerror(errno));
         }
