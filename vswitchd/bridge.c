@@ -2269,25 +2269,25 @@ bridge_run(void)
     }
 
     if (reconfiguring) {
-        if (cfg) {
-            if (!reconf_txn) {
-                reconf_txn = ovsdb_idl_txn_create(idl);
-            }
-            if (bridge_reconfigure_continue(cfg)) {
-                ovsrec_open_vswitch_set_cur_cfg(cfg, cfg->next_cfg);
-                reconfiguring = false;
+        if (!reconf_txn) {
+            reconf_txn = ovsdb_idl_txn_create(idl);
+        }
 
-                /* If we are completing our initial configuration for this run
-                 * of ovs-vswitchd, then keep the transaction around to monitor
-                 * it for completion. */
-                if (!initial_config_done) {
-                    initial_config_done = true;
-                    daemonize_txn = reconf_txn;
-                    reconf_txn = NULL;
-                }
+        if (bridge_reconfigure_continue(cfg ? cfg : &null_cfg)) {
+            reconfiguring = false;
+
+            if (cfg) {
+                ovsrec_open_vswitch_set_cur_cfg(cfg, cfg->next_cfg);
             }
-        } else {
-            bridge_reconfigure_continue(&null_cfg);
+
+            /* If we are completing our initial configuration for this run
+             * of ovs-vswitchd, then keep the transaction around to monitor
+             * it for completion. */
+            if (!initial_config_done) {
+                initial_config_done = true;
+                daemonize_txn = reconf_txn;
+                reconf_txn = NULL;
+            }
         }
     }
 
