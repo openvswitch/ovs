@@ -48,8 +48,6 @@ start () {
     set "$@" $OVS_CTL_OPTS
     "$@"
 
-    ovs_ctl --protocol=gre enable-protocol
-
     touch /var/lock/subsys/openvswitch
 }
 

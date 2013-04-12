@@ -101,6 +101,12 @@ RHEL.  On RHEL 5, the default RPM source directory is
     in this example: "kmod-openvswitch", "kmod-openvswitch-debug", and
     "kmod-openvswitch-kdump".
 
+A RHEL host has default firewall rules that prevent any Open vSwitch tunnel
+traffic from passing through. If a user configures Open vSwitch tunnels like
+GRE, VXLAN, LISP etc., they will either have to manually add iptables firewall
+rules to allow the tunnel traffic or add it through a startup script (Please
+refer to the "enable-protocol" command in the ovs-ctl(8) manpage).
+
 Red Hat Network Scripts Integration
 -----------------------------------
 
