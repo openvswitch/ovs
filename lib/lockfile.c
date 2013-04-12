@@ -251,9 +251,7 @@ lockfile_try_lock(const char *name, pid_t *pidp, struct lockfile **lockfilep)
     l.l_start = 0;
     l.l_len = 0;
 
-    time_disable_restart();
     error = fcntl(fd, F_SETLK, &l) == -1 ? errno : 0;
-    time_enable_restart();
 
     if (!error) {
         *lockfilep = lockfile_register(name, s.st_dev, s.st_ino, fd);
