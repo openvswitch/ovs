@@ -72,7 +72,6 @@ struct vport_err_stats {
  * struct vport - one port within a datapath
  * @rcu: RCU callback head for deferred destruction.
  * @dp: Datapath to which this port belongs.
- * @linkname: The name of the link from /sys/class/net/<datapath>/brif to this
  * &struct vport.  (We keep this around so that we can delete it if the
  * device gets renamed.)  Set to the null string when no link exists.
  * @upcall_portid: The Netlink port to use for packets received on this port that
@@ -90,7 +89,6 @@ struct vport_err_stats {
 struct vport {
 	struct rcu_head rcu;
 	struct datapath	*dp;
-	char linkname[IFNAMSIZ];
 	u32 upcall_portid;
 	u16 port_no;
 
