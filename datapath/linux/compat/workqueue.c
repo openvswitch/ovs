@@ -29,20 +29,31 @@ static wait_queue_head_t more_work;
 static struct task_struct *workq_thread;
 static struct work_struct *current_work;
 
-static void queue_work(struct work_struct *work)
+static void add_work_to_ovs_wq(struct work_struct *work)
+{
+	list_add_tail(&work->entry, &workq);
+	wake_up(&more_work);
+}
+static void __queue_work(struct work_struct *work)
 {
 	unsigned long flags;
 
 	spin_lock_irqsave(&wq_lock, flags);
-	list_add_tail(&work->entry, &workq);
-	wake_up(&more_work);
+	add_work_to_ovs_wq(work);
 	spin_unlock_irqrestore(&wq_lock, flags);
+}
+
+void queue_work(struct work_struct *work)
+{
+	if (test_and_set_bit(WORK_STRUCT_PENDING, work_data_bits(work)))
+		return;
+	__queue_work(work);
 }
 
 static void _delayed_work_timer_fn(unsigned long __data)
 {
 	struct delayed_work *dwork = (struct delayed_work *)__data;
-	queue_work(&dwork->work);
+	__queue_work(&dwork->work);
 }
 
 static void __queue_delayed_work(struct delayed_work *dwork,
@@ -67,7 +78,7 @@ int schedule_delayed_work(struct delayed_work *dwork, unsigned long delay)
 		return 0;
 
 	if (delay == 0)
-		queue_work(&dwork->work);
+		__queue_work(&dwork->work);
 	else
 		__queue_delayed_work(dwork, delay);
 
@@ -96,8 +107,7 @@ static void workqueue_barrier(struct work_struct *work)
 	else {
 		INIT_WORK(&barr.work, wq_barrier_func);
 		init_completion(&barr.done);
-		list_add(&barr.work.entry, &workq);
-		wake_up(&more_work);
+		add_work_to_ovs_wq(&barr.work);
 		need_barrier = true;
 	}
 	spin_unlock_irq(&wq_lock);
@@ -150,6 +160,11 @@ static int __cancel_work_timer(struct work_struct *work,
 int cancel_delayed_work_sync(struct delayed_work *dwork)
 {
 	return __cancel_work_timer(&dwork->work, &dwork->timer);
+}
+
+bool cancel_work_sync(struct work_struct *work)
+{
+	return __cancel_work_timer(work, NULL);
 }
 
 static void run_workqueue(void)

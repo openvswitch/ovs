@@ -68,5 +68,7 @@ int cancel_delayed_work_sync(struct delayed_work *dwork);
 	} while (0)
 
 extern void flush_scheduled_work(void);
+extern void queue_work(struct work_struct *work);
+extern bool cancel_work_sync(struct work_struct *work);
 
 #endif
