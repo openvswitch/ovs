@@ -167,35 +167,6 @@ set_up_signal(int flags)
     xsigaction(SIGALRM, &sa, NULL);
 }
 
-/* Remove SA_RESTART from the flags for SIGALRM, so that any system call that
- * is interrupted by the periodic timer interrupt will return EINTR instead of
- * continuing after the signal handler returns.
- *
- * time_disable_restart() and time_enable_restart() may be usefully wrapped
- * around function calls that might otherwise block forever unless interrupted
- * by a signal, e.g.:
- *
- *   time_disable_restart();
- *   fcntl(fd, F_SETLKW, &lock);
- *   time_enable_restart();
- */
-void
-time_disable_restart(void)
-{
-    time_init();
-    set_up_signal(0);
-}
-
-/* Add SA_RESTART to the flags for SIGALRM, so that any system call that
- * is interrupted by the periodic timer interrupt will continue after the
- * signal handler returns instead of returning EINTR. */
-void
-time_enable_restart(void)
-{
-    time_init();
-    set_up_signal(SA_RESTART);
-}
-
 static void
 set_up_timer(void)
 {
