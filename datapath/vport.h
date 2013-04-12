@@ -162,14 +162,14 @@ struct vport_ops {
 	int (*init)(void);
 	void (*exit)(void);
 
-	/* Called with RTNL lock. */
+	/* Called with ovs_mutex. */
 	struct vport *(*create)(const struct vport_parms *);
 	void (*destroy)(struct vport *);
 
 	int (*set_options)(struct vport *, struct nlattr *);
 	int (*get_options)(const struct vport *, struct sk_buff *);
 
-	/* Called with rcu_read_lock or RTNL lock. */
+	/* Called with rcu_read_lock or ovs_mutex. */
 	const char *(*get_name)(const struct vport *);
 	void (*get_config)(const struct vport *, void *);
 	int (*get_ifindex)(const struct vport *);

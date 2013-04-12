@@ -331,7 +331,7 @@ static struct vport *gre_create(const struct vport_parms *parms)
 	struct vport *vport;
 
 	ovs_net = net_generic(net, ovs_net_id);
-	if (rtnl_dereference(ovs_net->vport_net.gre_vport))
+	if (ovsl_dereference(ovs_net->vport_net.gre_vport))
 		return ERR_PTR(-EEXIST);
 
 	vport = ovs_tnl_create(parms, &ovs_gre_vport_ops, &gre_tnl_ops);
@@ -376,7 +376,7 @@ static struct vport *gre64_create(const struct vport_parms *parms)
 	struct vport *vport;
 
 	ovs_net = net_generic(net, ovs_net_id);
-	if (rtnl_dereference(ovs_net->vport_net.gre64_vport))
+	if (ovsl_dereference(ovs_net->vport_net.gre64_vport))
 		return ERR_PTR(-EEXIST);
 
 	vport = ovs_tnl_create(parms, &ovs_gre64_vport_ops, &gre64_tnl_ops);

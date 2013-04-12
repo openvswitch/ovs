@@ -50,7 +50,7 @@ static const struct vport_ops *base_vport_ops_list[] = {
 static const struct vport_ops **vport_ops_list;
 static int n_vport_types;
 
-/* Protected by RCU read lock for reading, RTNL lock for writing. */
+/* Protected by RCU read lock for reading, ovs_mutex for writing. */
 static struct hlist_head *dev_table;
 #define VPORT_HASH_BUCKETS 1024
 
@@ -133,7 +133,7 @@ static struct hlist_head *hash_bucket(struct net *net, const char *name)
  *
  * @name: name of port to find
  *
- * Must be called with RTNL or RCU read lock.
+ * Must be called with ovs or RCU read lock.
  */
 struct vport *ovs_vport_locate(struct net *net, const char *name)
 {
@@ -214,15 +214,13 @@ void ovs_vport_free(struct vport *vport)
  * @parms: Information about new vport.
  *
  * Creates a new vport with the specified configuration (which is dependent on
- * device type).  RTNL lock must be held.
+ * device type).  ovs_mutex must be held.
  */
 struct vport *ovs_vport_add(const struct vport_parms *parms)
 {
 	struct vport *vport;
 	int err = 0;
 	int i;
-
-	ASSERT_RTNL();
 
 	for (i = 0; i < n_vport_types; i++) {
 		if (vport_ops_list[i]->type == parms->type) {
@@ -254,12 +252,10 @@ out:
  * @port: New configuration.
  *
  * Modifies an existing device with the specified configuration (which is
- * dependent on device type).  RTNL lock must be held.
+ * dependent on device type).  ovs_mutex must be held.
  */
 int ovs_vport_set_options(struct vport *vport, struct nlattr *options)
 {
-	ASSERT_RTNL();
-
 	if (!vport->ops->set_options)
 		return -EOPNOTSUPP;
 	return vport->ops->set_options(vport, options);
@@ -271,14 +267,13 @@ int ovs_vport_set_options(struct vport *vport, struct nlattr *options)
  * @vport: vport to delete.
  *
  * Detaches @vport from its datapath and destroys it.  It is possible to fail
- * for reasons such as lack of memory.  RTNL lock must be held.
+ * for reasons such as lack of memory.  ovs_mutex must be held.
  */
 void ovs_vport_del(struct vport *vport)
 {
-	ASSERT_RTNL();
+	ASSERT_OVSL();
 
 	hlist_del_rcu(&vport->hash_node);
-
 	vport->ops->destroy(vport);
 }
 
@@ -293,12 +288,10 @@ void ovs_vport_del(struct vport *vport)
  * support setting the stats, in which case the result will always be
  * -EOPNOTSUPP.
  *
- * Must be called with RTNL lock.
+ * Must be called with ovs_mutex.
  */
 void ovs_vport_set_stats(struct vport *vport, struct ovs_vport_stats *stats)
 {
-	ASSERT_RTNL();
-
 	spin_lock_bh(&vport->stats_lock);
 	vport->offset_stats = *stats;
 	spin_unlock_bh(&vport->stats_lock);
@@ -312,7 +305,7 @@ void ovs_vport_set_stats(struct vport *vport, struct ovs_vport_stats *stats)
  *
  * Retrieves transmit, receive, and error stats for the given device.
  *
- * Must be called with RTNL lock or rcu_read_lock.
+ * Must be called with ovs_mutex or rcu_read_lock.
  */
 void ovs_vport_get_stats(struct vport *vport, struct ovs_vport_stats *stats)
 {
@@ -373,7 +366,7 @@ void ovs_vport_get_stats(struct vport *vport, struct ovs_vport_stats *stats)
  * negative error code if a real error occurred.  If an error occurs, @skb is
  * left unmodified.
  *
- * Must be called with RTNL lock or rcu_read_lock.
+ * Must be called with ovs_mutex or rcu_read_lock.
  */
 int ovs_vport_get_options(const struct vport *vport, struct sk_buff *skb)
 {
@@ -429,7 +422,7 @@ void ovs_vport_receive(struct vport *vport, struct sk_buff *skb)
  * @vport: vport on which to send the packet
  * @skb: skb to send
  *
- * Sends the given packet and returns the length of data sent.  Either RTNL
+ * Sends the given packet and returns the length of data sent.  Either ovs
  * lock or rcu_read_lock must be held.
  */
 int ovs_vport_send(struct vport *vport, struct sk_buff *skb)
