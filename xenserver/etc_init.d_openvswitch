@@ -82,7 +82,6 @@ start () {
     start_ovs_xapi_sync
 
     ovs_ctl --protocol=gre enable-protocol
-    ovs_ctl --protocol=udp --dport=8472 enable-protocol
 
     touch /var/lock/subsys/openvswitch
 }
