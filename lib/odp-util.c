@@ -86,11 +86,13 @@ odp_action_len(uint16_t type)
     return -1;
 }
 
+/* Returns a string form of 'attr'.  The return value is either a statically
+ * allocated constant string or the 'bufsize'-byte buffer 'namebuf'.  'bufsize'
+ * should be at least OVS_KEY_ATTR_BUFSIZE. */
+enum { OVS_KEY_ATTR_BUFSIZE = 3 + INT_STRLEN(unsigned int) + 1 };
 static const char *
-ovs_key_attr_to_string(enum ovs_key_attr attr)
+ovs_key_attr_to_string(enum ovs_key_attr attr, char *namebuf, size_t bufsize)
 {
-    static char unknown_attr[3 + INT_STRLEN(unsigned int) + 1];
-
     switch (attr) {
     case OVS_KEY_ATTR_UNSPEC: return "unspec";
     case OVS_KEY_ATTR_ENCAP: return "encap";
@@ -113,9 +115,8 @@ ovs_key_attr_to_string(enum ovs_key_attr attr)
 
     case __OVS_KEY_ATTR_MAX:
     default:
-        snprintf(unknown_attr, sizeof unknown_attr, "key%u",
-                 (unsigned int) attr);
-        return unknown_attr;
+        snprintf(namebuf, bufsize, "key%u", (unsigned int) attr);
+        return namebuf;
     }
 }
 
@@ -888,9 +889,10 @@ format_odp_key_attr(const struct nlattr *a, struct ds *ds)
     const struct ovs_key_nd *nd_key;
     struct flow_tnl tun_key;
     enum ovs_key_attr attr = nl_attr_type(a);
+    char namebuf[OVS_KEY_ATTR_BUFSIZE];
     int expected_len;
 
-    ds_put_cstr(ds, ovs_key_attr_to_string(attr));
+    ds_put_cstr(ds, ovs_key_attr_to_string(attr, namebuf, sizeof namebuf));
     expected_len = odp_flow_key_attr_len(nl_attr_type(a));
     if (expected_len != -2 && nl_attr_get_size(a) != expected_len) {
         ds_put_format(ds, "(bad length %zu, expected %d)",
@@ -1720,7 +1722,10 @@ log_odp_key_attributes(struct vlog_rate_limit *rl, const char *title,
     ds_init(&s);
     for (i = 0; i < 64; i++) {
         if (attrs & (UINT64_C(1) << i)) {
-            ds_put_format(&s, " %s", ovs_key_attr_to_string(i));
+            char namebuf[OVS_KEY_ATTR_BUFSIZE];
+
+            ds_put_format(&s, " %s",
+                          ovs_key_attr_to_string(i, namebuf, sizeof namebuf));
         }
     }
     if (out_of_range_attr) {
@@ -1772,8 +1777,11 @@ parse_flow_nlattrs(const struct nlattr *key, size_t key_len,
         int expected_len = odp_flow_key_attr_len(type);
 
         if (len != expected_len && expected_len >= 0) {
+            char namebuf[OVS_KEY_ATTR_BUFSIZE];
+
             VLOG_ERR_RL(&rl, "attribute %s has length %zu but should have "
-                        "length %d", ovs_key_attr_to_string(type),
+                        "length %d", ovs_key_attr_to_string(type, namebuf,
+                                                            sizeof namebuf),
                         len, expected_len);
             return false;
         }
@@ -1782,8 +1790,11 @@ parse_flow_nlattrs(const struct nlattr *key, size_t key_len,
             *out_of_range_attrp = type;
         } else {
             if (present_attrs & (UINT64_C(1) << type)) {
+                char namebuf[OVS_KEY_ATTR_BUFSIZE];
+
                 VLOG_ERR_RL(&rl, "duplicate %s attribute in flow key",
-                            ovs_key_attr_to_string(type));
+                            ovs_key_attr_to_string(type,
+                                                   namebuf, sizeof namebuf));
                 return false;
             }
 
