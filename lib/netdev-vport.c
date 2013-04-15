@@ -124,8 +124,6 @@ const char *
 netdev_vport_get_dpif_port(const struct netdev *netdev,
                            char namebuf[], size_t bufsize)
 {
-    const char *dpif_port;
-
     if (netdev_vport_needs_dst_port(netdev)) {
         const struct netdev_vport *vport = netdev_vport_cast(netdev);
         const char *type = netdev_get_type(netdev);
@@ -143,10 +141,9 @@ netdev_vport_get_dpif_port(const struct netdev *netdev,
         return namebuf;
     } else {
         const struct netdev_class *class = netdev_get_class(netdev);
-        dpif_port = netdev_vport_class_get_dpif_port(class);
+        const char *dpif_port = netdev_vport_class_get_dpif_port(class);
+        return dpif_port ? dpif_port : netdev_get_name(netdev);
     }
-
-    return dpif_port ? dpif_port : netdev_get_name(netdev);
 }
 
 char *
