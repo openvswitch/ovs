@@ -22,6 +22,7 @@ PARALLEL =
 endif
 MAKEFLAGS += $(PARALLEL)
 
+CFLAGS += -g
 ifneq (,$(filter noopt,$(DEB_BUILD_OPTIONS)))
 CFLAGS += -O0
 else
