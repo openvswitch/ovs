@@ -26,6 +26,7 @@
 #include "json.h"
 #include "list.h"
 #include "ofpbuf.h"
+#include "ovs-thread.h"
 #include "poll-loop.h"
 #include "reconnect.h"
 #include "stream.h"
@@ -514,8 +515,15 @@ jsonrpc_create(enum jsonrpc_msg_type type, const char *method,
 static struct json *
 jsonrpc_create_id(void)
 {
-    static unsigned int id;
-    return json_integer_create(id++);
+    static pthread_mutex_t mutex = PTHREAD_ADAPTIVE_MUTEX_INITIALIZER;
+    static unsigned int next_id;
+    unsigned int id;
+
+    xpthread_mutex_lock(&mutex);
+    id = next_id++;
+    xpthread_mutex_unlock(&mutex);
+
+    return json_integer_create(id);
 }
 
 struct jsonrpc_msg *
