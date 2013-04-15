@@ -196,7 +196,7 @@ netdev_vport_get_etheraddr(const struct netdev *netdev,
 static int
 tunnel_get_status(const struct netdev *netdev, struct smap *smap)
 {
-    static char iface[IFNAMSIZ];
+    char iface[IFNAMSIZ];
     ovs_be32 route;
 
     route = netdev_vport_cast(netdev)->tnl_cfg.ip_dst;
