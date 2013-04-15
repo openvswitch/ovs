@@ -158,13 +158,24 @@ command.  The plugin script does roughly the following:
         * If XAPI is configured for a manager, configures the OVS
           manager to match with "ovs-vsctl set-manager".
 
-The Open vSwitch boot sequence only configures an OVS configuration
+Notes
+-----
+
+* The Open vSwitch boot sequence only configures an OVS configuration
 database manager.  There is no way to directly configure an OpenFlow
 controller on XenServer and, as a consequence of the step above that
 deletes all of the bridges at boot time, controller configuration only
 persists until XenServer reboot.  The configuration database manager
 can, however, configure controllers for bridges.  See the BUGS section
 of ovs-controller(8) for more information on this topic.
+
+* The Open vSwitch startup script automatically adds a firewall rule
+to allow GRE traffic. This rule is needed for the XenServer feature
+called "Cross-Host Internal Networks" (CHIN) that uses GRE. If a user
+configures tunnels other than GRE (ex: VXLAN, LISP), they will have
+to either manually add a iptables firewall rule to allow the tunnel traffic
+or add it through a startup script (Please refer to the "enable-protocol"
+command in the ovs-ctl(8) manpage).
 
 Reporting Bugs
 --------------
