@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -46,8 +46,9 @@ list_insert(struct list *before, struct list *elem)
 void
 list_splice(struct list *before, struct list *first, struct list *last)
 {
-    if (first == last)
+    if (first == last) {
         return;
+    }
     last = last->prev;
 
     /* Cleanly remove 'first'...'last' from its current list. */
@@ -160,8 +161,9 @@ list_size(const struct list *list)
     const struct list *e;
     size_t cnt = 0;
 
-    for (e = list->next; e != list; e = e->next)
+    for (e = list->next; e != list; e = e->next) {
         cnt++;
+    }
     return cnt;
 }
 
