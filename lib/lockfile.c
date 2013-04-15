@@ -27,6 +27,7 @@
 #include "coverage.h"
 #include "hash.h"
 #include "hmap.h"
+#include "ovs-thread.h"
 #include "timeval.h"
 #include "util.h"
 #include "vlog.h"
@@ -53,6 +54,9 @@ struct lockfile {
  * that file.  That means that we can't afford to open a lockfile more than
  * once. */
 static struct hmap lock_table = HMAP_INITIALIZER(&lock_table);
+
+/* Protects 'lock_table'. */
+static pthread_mutex_t lock_table_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 static void lockfile_unhash(struct lockfile *);
 static int lockfile_try_lock(const char *name, pid_t *pidp,
@@ -106,7 +110,9 @@ lockfile_lock(const char *file, struct lockfile **lockfilep)
 
     lock_name = lockfile_name(file);
 
+    xpthread_mutex_lock(&lock_table_mutex);
     error = lockfile_try_lock(lock_name, &pid, lockfilep);
+    xpthread_mutex_unlock(&lock_table_mutex);
 
     if (error) {
         COVERAGE_INC(lockfile_error);
@@ -132,8 +138,11 @@ void
 lockfile_unlock(struct lockfile *lockfile)
 {
     if (lockfile) {
-        COVERAGE_INC(lockfile_unlock);
+        xpthread_mutex_lock(&lock_table_mutex);
         lockfile_unhash(lockfile);
+        xpthread_mutex_unlock(&lock_table_mutex);
+
+        COVERAGE_INC(lockfile_unlock);
         free(lockfile->name);
         free(lockfile);
     }
