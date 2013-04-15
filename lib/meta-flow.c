@@ -27,6 +27,7 @@
 #include "dynamic-string.h"
 #include "ofp-errors.h"
 #include "ofp-util.h"
+#include "ovs-thread.h"
 #include "packets.h"
 #include "random.h"
 #include "shash.h"
@@ -580,13 +581,17 @@ struct nxm_field {
 };
 
 /* Contains 'struct nxm_field's. */
-static struct hmap all_fields = HMAP_INITIALIZER(&all_fields);
+static struct hmap all_fields;
+
+/* Maps from an mf_field's 'name' or 'extra_name' to the mf_field. */
+static struct shash mf_by_name;
 
 /* Rate limit for parse errors.  These always indicate a bug in an OpenFlow
  * controller and so there's not much point in showing a lot of them. */
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 
 const struct mf_field *mf_from_nxm_header__(uint32_t header);
+static void nxm_init(void);
 
 /* Returns the field with the given 'id'. */
 const struct mf_field *
@@ -601,19 +606,7 @@ mf_from_id(enum mf_field_id id)
 const struct mf_field *
 mf_from_name(const char *name)
 {
-    static struct shash mf_by_name = SHASH_INITIALIZER(&mf_by_name);
-
-    if (shash_is_empty(&mf_by_name)) {
-        const struct mf_field *mf;
-
-        for (mf = mf_fields; mf < &mf_fields[MFF_N_IDS]; mf++) {
-            shash_add_once(&mf_by_name, mf->name, mf);
-            if (mf->extra_name) {
-                shash_add_once(&mf_by_name, mf->extra_name, mf);
-            }
-        }
-    }
-
+    nxm_init();
     return shash_find_data(&mf_by_name, name);
 }
 
@@ -641,24 +634,36 @@ nxm_init_add_field(const struct mf_field *mf, uint32_t header)
 }
 
 static void
-nxm_init(void)
+nxm_do_init(void)
 {
     const struct mf_field *mf;
 
+    hmap_init(&all_fields);
+    shash_init(&mf_by_name);
     for (mf = mf_fields; mf < &mf_fields[MFF_N_IDS]; mf++) {
         nxm_init_add_field(mf, mf->nxm_header);
         if (mf->oxm_header != mf->nxm_header) {
             nxm_init_add_field(mf, mf->oxm_header);
         }
+
+        shash_add_once(&mf_by_name, mf->name, mf);
+        if (mf->extra_name) {
+            shash_add_once(&mf_by_name, mf->extra_name, mf);
+        }
     }
+}
+
+static void
+nxm_init(void)
+{
+    static pthread_once_t once = PTHREAD_ONCE_INIT;
+    pthread_once(&once, nxm_do_init);
 }
 
 const struct mf_field *
 mf_from_nxm_header(uint32_t header)
 {
-    if (hmap_is_empty(&all_fields)) {
-        nxm_init();
-    }
+    nxm_init();
     return mf_from_nxm_header__(header);
 }
 
