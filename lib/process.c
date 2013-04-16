@@ -348,9 +348,15 @@ process_status_msg(int status)
     if (WIFEXITED(status)) {
         ds_put_format(&ds, "exit status %d", WEXITSTATUS(status));
     } else if (WIFSIGNALED(status)) {
-        ds_put_format(&ds, "killed (%s)", signal_name(WTERMSIG(status)));
+        char namebuf[SIGNAL_NAME_BUFSIZE];
+
+        ds_put_format(&ds, "killed (%s)",
+                      signal_name(WTERMSIG(status), namebuf, sizeof namebuf));
     } else if (WIFSTOPPED(status)) {
-        ds_put_format(&ds, "stopped (%s)", signal_name(WSTOPSIG(status)));
+        char namebuf[SIGNAL_NAME_BUFSIZE];
+
+        ds_put_format(&ds, "stopped (%s)",
+                      signal_name(WSTOPSIG(status), namebuf, sizeof namebuf));
     } else {
         ds_put_format(&ds, "terminated abnormally (%x)", status);
     }

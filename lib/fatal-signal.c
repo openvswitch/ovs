@@ -155,8 +155,10 @@ fatal_signal_run(void)
 
     sig_nr = stored_sig_nr;
     if (sig_nr != SIG_ATOMIC_MAX) {
+        char namebuf[SIGNAL_NAME_BUFSIZE];
+
         VLOG_WARN("terminating with signal %d (%s)",
-                  (int)sig_nr, signal_name(sig_nr));
+                  (int)sig_nr, signal_name(sig_nr, namebuf, sizeof namebuf));
         call_hooks(sig_nr);
 
         /* Re-raise the signal with the default handling so that the program
