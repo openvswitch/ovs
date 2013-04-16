@@ -2090,8 +2090,11 @@ ofpact_format(const struct ofpact *a, struct ds *s)
 
             ds_put_cstr(s, "controller(");
             if (reason != OFPR_ACTION) {
+                char reasonbuf[OFPUTIL_PACKET_IN_REASON_BUFSIZE];
+
                 ds_put_format(s, "reason=%s,",
-                              ofputil_packet_in_reason_to_string(reason));
+                              ofputil_packet_in_reason_to_string(
+                                  reason, reasonbuf, sizeof reasonbuf));
             }
             if (controller->max_len != UINT16_MAX) {
                 ds_put_format(s, "max_len=%"PRIu16",", controller->max_len);

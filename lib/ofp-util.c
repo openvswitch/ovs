@@ -2656,11 +2656,13 @@ ofputil_encode_packet_in(const struct ofputil_packet_in *pin,
     return packet;
 }
 
+/* Returns a string form of 'reason'.  The return value is either a statically
+ * allocated constant string or the 'bufsize'-byte buffer 'reasonbuf'.
+ * 'bufsize' should be at least OFPUTIL_PACKET_IN_REASON_BUFSIZE. */
 const char *
-ofputil_packet_in_reason_to_string(enum ofp_packet_in_reason reason)
+ofputil_packet_in_reason_to_string(enum ofp_packet_in_reason reason,
+                                   char *reasonbuf, size_t bufsize)
 {
-    static char s[INT_STRLEN(int) + 1];
-
     switch (reason) {
     case OFPR_NO_MATCH:
         return "no_match";
@@ -2671,8 +2673,8 @@ ofputil_packet_in_reason_to_string(enum ofp_packet_in_reason reason)
 
     case OFPR_N_REASONS:
     default:
-        sprintf(s, "%d", (int) reason);
-        return s;
+        snprintf(reasonbuf, bufsize, "%d", (int) reason);
+        return reasonbuf;
     }
 }
 
@@ -2683,7 +2685,12 @@ ofputil_packet_in_reason_from_string(const char *s,
     int i;
 
     for (i = 0; i < OFPR_N_REASONS; i++) {
-        if (!strcasecmp(s, ofputil_packet_in_reason_to_string(i))) {
+        char reasonbuf[OFPUTIL_PACKET_IN_REASON_BUFSIZE];
+        const char *reason_s;
+
+        reason_s = ofputil_packet_in_reason_to_string(i, reasonbuf,
+                                                      sizeof reasonbuf);
+        if (!strcasecmp(s, reason_s)) {
             *reason = i;
             return true;
         }

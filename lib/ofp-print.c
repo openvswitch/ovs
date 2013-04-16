@@ -86,6 +86,7 @@ static void
 ofp_print_packet_in(struct ds *string, const struct ofp_header *oh,
                     int verbosity)
 {
+    char reasonbuf[OFPUTIL_PACKET_IN_REASON_BUFSIZE];
     struct ofputil_packet_in pin;
     int error;
     int i;
@@ -130,7 +131,8 @@ ofp_print_packet_in(struct ds *string, const struct ofp_header *oh,
     }
 
     ds_put_format(string, " (via %s)",
-                  ofputil_packet_in_reason_to_string(pin.reason));
+                  ofputil_packet_in_reason_to_string(pin.reason, reasonbuf,
+                                                     sizeof reasonbuf));
 
     ds_put_format(string, " data_len=%zu", pin.packet_len);
     if (pin.buffer_id == UINT32_MAX) {
@@ -1661,8 +1663,12 @@ ofp_print_nxt_set_async_config(struct ds *string,
         ds_put_cstr(string, "       PACKET_IN:");
         for (j = 0; j < 32; j++) {
             if (nac->packet_in_mask[i] & htonl(1u << j)) {
-                ds_put_format(string, " %s",
-                              ofputil_packet_in_reason_to_string(j));
+                char reasonbuf[OFPUTIL_PACKET_IN_REASON_BUFSIZE];
+                const char *reason;
+
+                reason = ofputil_packet_in_reason_to_string(j, reasonbuf,
+                                                            sizeof reasonbuf);
+                ds_put_format(string, " %s", reason);
             }
         }
         if (!nac->packet_in_mask[i]) {

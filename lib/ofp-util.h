@@ -27,6 +27,7 @@
 #include "netdev.h"
 #include "openflow/nicira-ext.h"
 #include "openvswitch/types.h"
+#include "type-props.h"
 
 struct ofpbuf;
 
@@ -334,7 +335,10 @@ struct ofpbuf *ofputil_encode_packet_in(const struct ofputil_packet_in *,
                                         enum ofputil_protocol protocol,
                                         enum nx_packet_in_format);
 
-const char *ofputil_packet_in_reason_to_string(enum ofp_packet_in_reason);
+enum { OFPUTIL_PACKET_IN_REASON_BUFSIZE = INT_STRLEN(int) + 1 };
+const char *ofputil_packet_in_reason_to_string(enum ofp_packet_in_reason,
+                                               char *reasonbuf,
+                                               size_t bufsize);
 bool ofputil_packet_in_reason_from_string(const char *,
                                           enum ofp_packet_in_reason *);
 
