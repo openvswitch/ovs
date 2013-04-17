@@ -1093,6 +1093,7 @@ add_internal_flow(struct ofproto_dpif *ofproto, int id,
     fm.new_cookie = htonll(0);
     fm.cookie = htonll(0);
     fm.cookie_mask = htonll(0);
+    fm.modify_cookie = false;
     fm.table_id = TBL_INTERNAL;
     fm.command = OFPFC_ADD;
     fm.idle_timeout = 0;

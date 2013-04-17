@@ -2079,6 +2079,7 @@ fte_make_flow_mod(const struct fte *fte, int index, uint16_t command,
     fm.cookie = htonll(0);
     fm.cookie_mask = htonll(0);
     fm.new_cookie = version->cookie;
+    fm.modify_cookie = true;
     fm.table_id = 0xff;
     fm.command = command;
     fm.idle_timeout = version->idle_timeout;

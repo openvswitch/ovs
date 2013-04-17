@@ -303,6 +303,7 @@ learn_execute(const struct ofpact_learn *learn, const struct flow *flow,
     fm->cookie = htonll(0);
     fm->cookie_mask = htonll(0);
     fm->new_cookie = htonll(learn->cookie);
+    fm->modify_cookie = fm->new_cookie != htonll(UINT64_MAX);
     fm->table_id = learn->table_id;
     fm->command = OFPFC_MODIFY_STRICT;
     fm->idle_timeout = learn->idle_timeout;

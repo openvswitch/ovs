@@ -3475,7 +3475,7 @@ modify_flows__(struct ofproto *ofproto, struct ofconn *ofconn,
 
         op = ofoperation_create(group, rule, OFOPERATION_MODIFY, 0);
 
-        if (fm->new_cookie != htonll(UINT64_MAX)) {
+        if (fm->modify_cookie && fm->new_cookie != htonll(UINT64_MAX)) {
             ofproto_rule_change_cookie(ofproto, rule, fm->new_cookie);
         }
         if (actions_changed) {

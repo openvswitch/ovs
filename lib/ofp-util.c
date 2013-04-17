@@ -1523,6 +1523,7 @@ ofputil_decode_flow_mod(struct ofputil_flow_mod *fm,
             fm->cookie_mask = ofm->cookie_mask;
             fm->new_cookie = htonll(UINT64_MAX);
         }
+        fm->modify_cookie = false;
         fm->command = ofm->command;
         fm->table_id = ofm->table_id;
         fm->idle_timeout = ntohs(ofm->idle_timeout);
@@ -1568,6 +1569,7 @@ ofputil_decode_flow_mod(struct ofputil_flow_mod *fm,
             fm->cookie = htonll(0);
             fm->cookie_mask = htonll(0);
             fm->new_cookie = ofm->cookie;
+            fm->modify_cookie = fm->new_cookie != htonll(UINT64_MAX);
             fm->idle_timeout = ntohs(ofm->idle_timeout);
             fm->hard_timeout = ntohs(ofm->hard_timeout);
             fm->buffer_id = ntohl(ofm->buffer_id);
@@ -1599,6 +1601,7 @@ ofputil_decode_flow_mod(struct ofputil_flow_mod *fm,
             }
             fm->priority = ntohs(nfm->priority);
             fm->new_cookie = nfm->cookie;
+            fm->modify_cookie = fm->new_cookie != htonll(UINT64_MAX);
             fm->idle_timeout = ntohs(nfm->idle_timeout);
             fm->hard_timeout = ntohs(nfm->hard_timeout);
             fm->buffer_id = ntohl(nfm->buffer_id);

@@ -1125,6 +1125,7 @@ parse_ofp_str__(struct ofputil_flow_mod *fm, int command, char *string)
     } else{
         fm->new_cookie = htonll(0);
     }
+    fm->modify_cookie = false;
     fm->table_id = 0xff;
     fm->command = command;
     fm->idle_timeout = OFP_FLOW_PERMANENT;
@@ -1212,6 +1213,7 @@ parse_ofp_str__(struct ofputil_flow_mod *fm, int command, char *string)
                         return xstrdup("cannot set cookie");
                     }
                     error = str_to_be64(value, &fm->new_cookie);
+                    fm->modify_cookie = true;
                 }
             } else if (mf_from_name(name)) {
                 error = parse_field(mf_from_name(name), value, &fm->match);
