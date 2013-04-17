@@ -423,7 +423,7 @@ NXST_FLOW reply:
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
-AT_SETUP([ofproto - mod flow with cookie miss (mask==0)])
+AT_SETUP([ofproto - mod flow with cookie miss (mask==0) - NXM])
 OVS_VSWITCHD_START
 AT_CHECK([ovs-ofctl -F nxm mod-flows br0 in_port=1,actions=1])
 AT_CHECK([ovs-ofctl -F nxm dump-flows br0 | ofctl_strip | sort], [0], [dnl
@@ -433,11 +433,29 @@ NXST_FLOW reply:
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
-AT_SETUP([ofproto - mod flow with cookie miss (mask!=0)])
+AT_SETUP([ofproto - mod flow with cookie miss (mask==0) - OF1.2])
+OVS_VSWITCHD_START
+AT_CHECK([ovs-ofctl -O openflow12 mod-flows br0 in_port=1,actions=1])
+AT_CHECK([ovs-ofctl -O openflow12 dump-flows br0 | ofctl_strip | sort], [0], [dnl
+OFPST_FLOW reply (OF1.2):
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto - mod flow with cookie miss (mask!=0) - NXM])
 OVS_VSWITCHD_START
 AT_CHECK([ovs-ofctl -F nxm mod-flows br0 cookie=1/1,in_port=1,actions=1])
 AT_CHECK([ovs-ofctl -F nxm dump-flows br0 | ofctl_strip | sort], [0], [dnl
 NXST_FLOW reply:
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto - mod flow with cookie miss (mask!=0) - OF1.2])
+OVS_VSWITCHD_START
+AT_CHECK([ovs-ofctl -O openflow12 mod-flows br0 cookie=1/1,in_port=1,actions=1])
+AT_CHECK([ovs-ofctl -O openflow12 dump-flows br0 | ofctl_strip | sort], [0], [dnl
+OFPST_FLOW reply (OF1.2):
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
