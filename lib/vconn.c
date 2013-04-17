@@ -461,7 +461,7 @@ version_bitmap_to_string(uint32_t bitmap)
     } else if (is_pow2((bitmap >> 1) + 1)) {
         ds_put_cstr(&s, "version ");
         ofputil_format_version(&s, leftmost_1bit_idx(bitmap));
-        ds_put_cstr(&s, "and earlier");
+        ds_put_cstr(&s, " and earlier");
     } else {
         ds_put_cstr(&s, "versions ");
         ofputil_format_version_bitmap(&s, bitmap);
