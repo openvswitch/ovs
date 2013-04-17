@@ -62,10 +62,6 @@ probably incomplete.
       so the value is not necessarily meaningful.  We might have to
       just fix it as the same as in_port.
 
-    * On OF1.1+ flow_mods, updates by MODIFY are now much better
-      specified.  Check that OVS implements the new behavior, fix it
-      if not.
-
     * OFPT_TABLE_MOD stats.  This is new in OF1.1, so we need to
       implement it.  It should be implemented so that the default OVS
       behavior does not change.
@@ -94,15 +90,7 @@ end of the OF1.2 spec.  I didn't compare the specs carefully yet.)
 
     * OFPT_FLOW_MOD:
 
-        * MODIFY and MODIFY_STRICT commands now never insert new flows
-          in the table.  We will still need variations that do,
-          though, both to support older OpenFlow protocols and to get
-          sensible behavior for the internal implementation of the
-          NXAST_LEARN action.
-
         * New flag OFPFF_RESET_COUNTS.
-
-        * New cookie field behavior.
 
         * Add ability to delete flow in all tables.
 
