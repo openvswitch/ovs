@@ -5921,9 +5921,9 @@ compose_output_action__(struct action_xlate_ctx *ctx, uint16_t ofp_port,
                         bool check_stp)
 {
     const struct ofport_dpif *ofport = get_ofp_port(ctx->ofproto, ofp_port);
-    ovs_be16 flow_vlan_tci = ctx->flow.vlan_tci;
-    ovs_be64 flow_tun_id = ctx->flow.tunnel.tun_id;
-    uint8_t flow_nw_tos = ctx->flow.nw_tos;
+    ovs_be16 flow_vlan_tci;
+    uint32_t flow_skb_mark;
+    uint8_t flow_nw_tos;
     struct priority_to_dscp *pdscp;
     uint32_t out_port, odp_port;
 
@@ -5996,6 +5996,10 @@ compose_output_action__(struct action_xlate_ctx *ctx, uint16_t ofp_port,
         return;
     }
 
+    flow_vlan_tci = ctx->flow.vlan_tci;
+    flow_skb_mark = ctx->flow.skb_mark;
+    flow_nw_tos = ctx->flow.nw_tos;
+
     pdscp = get_priority(ofport, ctx->flow.skb_priority);
     if (pdscp) {
         ctx->flow.nw_tos &= ~IP_DSCP_MASK;
@@ -6003,6 +6007,11 @@ compose_output_action__(struct action_xlate_ctx *ctx, uint16_t ofp_port,
     }
 
     if (ofport->tnl_port) {
+         /* Save tunnel metadata so that changes made due to
+          * the Logical (tunnel) Port are not visible for any further
+          * matches, while explicit set actions on tunnel metadata are.
+          */
+        struct flow_tnl flow_tnl = ctx->flow.tunnel;
         odp_port = tnl_port_send(ofport->tnl_port, &ctx->flow);
         if (odp_port == OVSP_NONE) {
             xlate_report(ctx, "Tunneling decided against output");
@@ -6015,6 +6024,7 @@ compose_output_action__(struct action_xlate_ctx *ctx, uint16_t ofp_port,
         out_port = odp_port;
         commit_odp_tunnel_action(&ctx->flow, &ctx->base_flow,
                                  ctx->odp_actions);
+        ctx->flow.tunnel = flow_tnl; /* Restore tunnel metadata */
     } else {
         odp_port = ofport->odp_port;
         out_port = vsp_realdev_to_vlandev(ctx->ofproto, odp_port,
@@ -6030,8 +6040,10 @@ compose_output_action__(struct action_xlate_ctx *ctx, uint16_t ofp_port,
     ctx->sflow_odp_port = odp_port;
     ctx->sflow_n_outputs++;
     ctx->nf_output_iface = ofp_port;
-    ctx->flow.tunnel.tun_id = flow_tun_id;
+
+    /* Restore flow */
     ctx->flow.vlan_tci = flow_vlan_tci;
+    ctx->flow.skb_mark = flow_skb_mark;
  out:
     ctx->flow.nw_tos = flow_nw_tos;
 }
