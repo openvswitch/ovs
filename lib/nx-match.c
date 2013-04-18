@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010, 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2010, 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -517,8 +517,11 @@ nxm_put_ip(struct ofpbuf *b, const struct match *match,
     nxm_put_frag(b, match);
 
     if (match->wc.masks.nw_tos & IP_DSCP_MASK) {
-        nxm_put_8(b, oxm ? OXM_OF_IP_DSCP : NXM_OF_IP_TOS,
-                  flow->nw_tos & IP_DSCP_MASK);
+        if (oxm) {
+            nxm_put_8(b, OXM_OF_IP_DSCP, flow->nw_tos >> 2);
+        } else {
+            nxm_put_8(b, NXM_OF_IP_TOS, flow->nw_tos & IP_DSCP_MASK);
+        }
     }
 
     if (match->wc.masks.nw_tos & IP_ECN_MASK) {

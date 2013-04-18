@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -91,8 +91,18 @@ enum mf_field_id {
     MFF_IPV6_DST,               /* ipv6 */
     MFF_IPV6_LABEL,             /* be32 */
 
+    /* The IPv4/IPv6 DSCP field has two different views:
+     *
+     *   - MFF_IP_DSCP has the DSCP in bits 2-7, their bit positions in the
+     *     IPv4 and IPv6 "traffic class" field, as used in OpenFlow 1.0 and 1.1
+     *     flow format and in NXM's NXM_OF_IP_TOS
+     *
+     *   - MFF_IP_DSCP has the DSCP in bits 0-5, shifted right two bits from
+     *     their positions in the IPv4 and IPv6 "traffic class" field, as used
+     *     in OpenFlow 1.2+ OXM's OXM_OF_IP_DSCP. */
     MFF_IP_PROTO,               /* u8 (used for IPv4 or IPv6) */
     MFF_IP_DSCP,                /* u8 (used for IPv4 or IPv6) */
+    MFF_IP_DSCP_SHIFTED,        /* u8 (used for IPv4 or IPv6) (OF1.2 compat) */
     MFF_IP_ECN,                 /* u8 (used for IPv4 or IPv6) */
     MFF_IP_TTL,                 /* u8 (used for IPv4 or IPv6) */
     MFF_IP_FRAG,                /* u8 (used for IPv4 or IPv6) */

@@ -359,6 +359,15 @@ static const struct mf_field mf_fields[MFF_N_IDS] = {
         MFP_IP_ANY,
         true,
         NXM_OF_IP_TOS, "NXM_OF_IP_TOS",
+        NXM_OF_IP_TOS, "NXM_OF_IP_TOS",
+    }, {
+        MFF_IP_DSCP_SHIFTED, "nw_tos_shifted", NULL,
+        MF_FIELD_SIZES(u8),
+        MFM_NONE,
+        MFS_DECIMAL,
+        MFP_IP_ANY,
+        true,
+        OXM_OF_IP_DSCP, "OXM_OF_IP_DSCP",
         OXM_OF_IP_DSCP, "OXM_OF_IP_DSCP",
     }, {
         MFF_IP_ECN, "nw_ecn", NULL,
@@ -733,6 +742,7 @@ mf_is_all_wild(const struct mf_field *mf, const struct flow_wildcards *wc)
     case MFF_IP_PROTO:
         return !wc->masks.nw_proto;
     case MFF_IP_DSCP:
+    case MFF_IP_DSCP_SHIFTED:
         return !(wc->masks.nw_tos & IP_DSCP_MASK);
     case MFF_IP_ECN:
         return !(wc->masks.nw_tos & IP_ECN_MASK);
@@ -916,6 +926,8 @@ mf_is_value_valid(const struct mf_field *mf, const union mf_value *value)
 
     case MFF_IP_DSCP:
         return !(value->u8 & ~IP_DSCP_MASK);
+    case MFF_IP_DSCP_SHIFTED:
+        return !(value->u8 & (~IP_DSCP_MASK >> 2));
     case MFF_IP_ECN:
         return !(value->u8 & ~IP_ECN_MASK);
     case MFF_IP_FRAG:
@@ -1063,6 +1075,10 @@ mf_get_value(const struct mf_field *mf, const struct flow *flow,
 
     case MFF_IP_DSCP:
         value->u8 = flow->nw_tos & IP_DSCP_MASK;
+        break;
+
+    case MFF_IP_DSCP_SHIFTED:
+        value->u8 = flow->nw_tos >> 2;
         break;
 
     case MFF_IP_ECN:
@@ -1244,6 +1260,10 @@ mf_set_value(const struct mf_field *mf,
         match_set_nw_dscp(match, value->u8);
         break;
 
+    case MFF_IP_DSCP_SHIFTED:
+        match_set_nw_dscp(match, value->u8 << 2);
+        break;
+
     case MFF_IP_ECN:
         match_set_nw_ecn(match, value->u8);
         break;
@@ -1422,6 +1442,11 @@ mf_set_flow_value(const struct mf_field *mf,
     case MFF_IP_DSCP:
         flow->nw_tos &= ~IP_DSCP_MASK;
         flow->nw_tos |= value->u8 & IP_DSCP_MASK;
+        break;
+
+    case MFF_IP_DSCP_SHIFTED:
+        flow->nw_tos &= ~IP_DSCP_MASK;
+        flow->nw_tos |= value->u8 << 2;
         break;
 
     case MFF_IP_ECN:
@@ -1624,6 +1649,7 @@ mf_set_wild(const struct mf_field *mf, struct match *match)
         break;
 
     case MFF_IP_DSCP:
+    case MFF_IP_DSCP_SHIFTED:
         match->wc.masks.nw_tos &= ~IP_DSCP_MASK;
         match->flow.nw_tos &= ~IP_DSCP_MASK;
         break;
@@ -1726,6 +1752,7 @@ mf_set(const struct mf_field *mf,
     case MFF_IP_PROTO:
     case MFF_IP_TTL:
     case MFF_IP_DSCP:
+    case MFF_IP_DSCP_SHIFTED:
     case MFF_IP_ECN:
     case MFF_ARP_OP:
     case MFF_ICMPV4_TYPE:
@@ -1954,6 +1981,10 @@ mf_random_value(const struct mf_field *mf, union mf_value *value)
 
     case MFF_IP_DSCP:
         value->u8 &= IP_DSCP_MASK;
+        break;
+
+    case MFF_IP_DSCP_SHIFTED:
+        value->u8 &= IP_DSCP_MASK >> 2;
         break;
 
     case MFF_IP_ECN:
