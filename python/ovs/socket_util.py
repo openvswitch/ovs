@@ -87,7 +87,7 @@ def make_unix_socket(style, nonblock, bind_path, connect_path):
                 try:
                     connect_dirfd = os.open(dirname, os.O_DIRECTORY | os.O_RDONLY)
                 except OSError, err:
-                    return get_exception_errno(e), None
+                    return get_exception_errno(err), None
                 short_connect_path = "/proc/self/fd/%d/%s" % (connect_dirfd, basename)
 
             if bind_path is not None:
@@ -96,7 +96,7 @@ def make_unix_socket(style, nonblock, bind_path, connect_path):
                 try:
                     bind_dirfd = os.open(dirname, os.O_DIRECTORY | os.O_RDONLY)
                 except OSError, err:
-                    return get_exception_errno(e), None
+                    return get_exception_errno(err), None
                 short_bind_path = "/proc/self/fd/%d/%s" % (bind_dirfd, basename)
 
             try:
