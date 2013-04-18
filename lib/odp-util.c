@@ -2161,13 +2161,12 @@ void
 commit_odp_tunnel_action(const struct flow *flow, struct flow *base,
                          struct ofpbuf *odp_actions)
 {
-    if (!memcmp(&base->tunnel, &flow->tunnel, sizeof base->tunnel)) {
-        return;
-    }
-    memcpy(&base->tunnel, &flow->tunnel, sizeof base->tunnel);
-
     /* A valid IPV4_TUNNEL must have non-zero ip_dst. */
     if (flow->tunnel.ip_dst) {
+        if (!memcmp(&base->tunnel, &flow->tunnel, sizeof base->tunnel)) {
+            return;
+        }
+        memcpy(&base->tunnel, &flow->tunnel, sizeof base->tunnel);
         odp_put_tunnel_action(&base->tunnel, odp_actions);
     }
 }
