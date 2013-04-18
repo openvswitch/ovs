@@ -1265,9 +1265,9 @@ int ovs_flow_from_nlattrs(struct sw_flow_key *swkey, int *key_lenp,
 
 /**
  * ovs_flow_metadata_from_nlattrs - parses Netlink attributes into a flow key.
- * @in_port: receives the extracted input port.
- * @tun_id: receives the extracted tunnel ID.
- * @key: Netlink attribute holding nested %OVS_KEY_ATTR_* Netlink attribute
+ * @flow: Receives extracted in_port, priority, tun_key and skb_mark.
+ * @key_len: Length of key in @flow.  Used for calculating flow hash.
+ * @attr: Netlink attribute holding nested %OVS_KEY_ATTR_* Netlink attribute
  * sequence.
  *
  * This parses a series of Netlink attributes that form a flow key, which must
