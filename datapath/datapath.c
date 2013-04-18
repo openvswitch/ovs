@@ -2130,9 +2130,8 @@ static int ovs_vport_cmd_set(struct sk_buff *skb, struct genl_info *info)
 				      info->snd_seq, 0, OVS_VPORT_CMD_NEW);
 	BUG_ON(err < 0);
 
-	ovs_notify(reply, info, &ovs_dp_vport_multicast_group);
-
 	ovs_unlock();
+	ovs_notify(reply, info, &ovs_dp_vport_multicast_group);
 	return 0;
 
 exit_free:
