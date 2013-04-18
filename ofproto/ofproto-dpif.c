@@ -6006,7 +6006,7 @@ compose_output_action__(struct action_xlate_ctx *ctx, uint16_t ofp_port,
         odp_port = tnl_port_send(ofport->tnl_port, &ctx->flow);
         if (odp_port == OVSP_NONE) {
             xlate_report(ctx, "Tunneling decided against output");
-            return;
+            goto out; /* restore flow_nw_tos */
         }
 
         if (ctx->resubmit_stats) {
@@ -6032,6 +6032,7 @@ compose_output_action__(struct action_xlate_ctx *ctx, uint16_t ofp_port,
     ctx->nf_output_iface = ofp_port;
     ctx->flow.tunnel.tun_id = flow_tun_id;
     ctx->flow.vlan_tci = flow_vlan_tci;
+ out:
     ctx->flow.nw_tos = flow_nw_tos;
 }
 
