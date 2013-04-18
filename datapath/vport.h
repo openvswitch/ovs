@@ -72,8 +72,6 @@ struct vport_err_stats {
  * struct vport - one port within a datapath
  * @rcu: RCU callback head for deferred destruction.
  * @dp: Datapath to which this port belongs.
- * &struct vport.  (We keep this around so that we can delete it if the
- * device gets renamed.)  Set to the null string when no link exists.
  * @upcall_portid: The Netlink port to use for packets received on this port that
  * miss the flow table.
  * @port_no: Index into @dp's @ports array.
