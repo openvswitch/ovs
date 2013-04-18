@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2012 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -139,9 +139,11 @@ struct stream_class {
 struct pstream {
     const struct pstream_class *class;
     char *name;
+    ovs_be16 bound_port;
 };
 
 void pstream_init(struct pstream *, const struct pstream_class *, const char *name);
+void pstream_set_bound_port(struct pstream *, ovs_be16 bound_port);
 static inline void pstream_assert_class(const struct pstream *pstream,
                                         const struct pstream_class *class)
 {

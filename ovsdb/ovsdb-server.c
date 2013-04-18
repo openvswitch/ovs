@@ -17,6 +17,7 @@
 
 #include <errno.h>
 #include <getopt.h>
+#include <inttypes.h>
 #include <signal.h>
 #include <unistd.h>
 
@@ -683,7 +684,7 @@ update_remote_row(const struct ovsdb_row *row, struct ovsdb_txn *txn,
     struct ovsdb_jsonrpc_remote_status status;
     struct ovsdb_row *rw_row;
     const char *target;
-    char *keys[8], *values[8];
+    char *keys[9], *values[9];
     size_t n = 0;
 
     /* Get the "target" (protocol/host/port) spec. */
@@ -729,6 +730,10 @@ update_remote_row(const struct ovsdb_row *row, struct ovsdb_txn *txn,
     if (status.n_connections > 1) {
         keys[n] = xstrdup("n_connections");
         values[n++] = xasprintf("%d", status.n_connections);
+    }
+    if (status.bound_port != htons(0)) {
+        keys[n] = xstrdup("bound_port");
+        values[n++] = xasprintf("%"PRIu16, ntohs(status.bound_port));
     }
     write_string_string_column(rw_row, "status", keys, values, n);
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -621,6 +621,14 @@ pstream_set_dscp(struct pstream *pstream, uint8_t dscp)
     }
     return 0;
 }
+
+/* Returns the transport port on which 'pstream' is listening, or 0 if the
+ * concept doesn't apply. */
+ovs_be16
+pstream_get_bound_port(const struct pstream *pstream)
+{
+    return pstream->bound_port;
+}
 
 /* Initializes 'stream' as a new stream named 'name', implemented via 'class'.
  * The initial connection status, supplied as 'connect_status', is interpreted
@@ -681,8 +689,15 @@ void
 pstream_init(struct pstream *pstream, const struct pstream_class *class,
             const char *name)
 {
+    memset(pstream, 0, sizeof *pstream);
     pstream->class = class;
     pstream->name = xstrdup(name);
+}
+
+void
+pstream_set_bound_port(struct pstream *pstream, ovs_be16 port)
+{
+    pstream->bound_port = port;
 }
 
 static int

@@ -2836,9 +2836,11 @@
           <dd>
             <p>
               Listens for SSL connections on the specified TCP <var>port</var>
-              (default: 6632).  If <var>ip</var>, which must be expressed as an
-              IP address (not a DNS name), is specified, then connections are
-              restricted to the specified local IP address.
+              (default: 6632).  Specify 0 for <var>port</var> to have the
+              kernel automatically choose an available port.  If <var>ip</var>,
+              which must be expressed as an IP address (not a DNS name), is
+              specified, then connections are restricted to the specified local
+              IP address.
             </p>
             <p>
               The <ref table="Open_vSwitch" column="ssl"/> column in the <ref
@@ -2853,9 +2855,10 @@
           <dt><code>ptcp:</code>[<var>port</var>][<code>:<var>ip</var></code>]</dt>
           <dd>
             Listens for connections on the specified TCP <var>port</var>
-            (default: 6632).  If <var>ip</var>, which must be expressed as an
-            IP address (not a DNS name), is specified, then connections are
-            restricted to the specified local IP address.
+            (default: 6632).  Specify 0 for <var>port</var> to have the kernel
+            automatically choose an available port.  If <var>ip</var>, which
+            must be expressed as an IP address (not a DNS name), is specified,
+            then connections are restricted to the specified local IP address.
           </dd>
         </dl>
         <p>When multiple managers are configured, the <ref column="target"/>
@@ -2998,6 +3001,14 @@
           pairs (other than this one) report the status of one arbitrarily
           chosen connection.
         </p>
+      </column>
+
+      <column name="status" key="bound_port" type='{"type": "integer"}'>
+          When <ref column="target"/> is <code>ptcp:</code> or
+          <code>pssl:</code>, this is the TCP port on which the OVSDB server is
+          listening.  (This is is particularly useful when <ref
+          column="target"/> specifies a port of 0, allowing the kernel to
+          choose any available port.)
       </column>
     </group>
 

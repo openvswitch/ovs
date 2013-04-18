@@ -1210,6 +1210,7 @@ dnl Test that sFlow samples packets correctly.
 AT_SETUP([ofproto-dpif - sFlow packet sampling])
 OVS_VSWITCHD_START([set Bridge br0 fail-mode=standalone])
 
+ON_EXIT([kill `cat test-sflow.pid`])
 AT_CHECK([test-sflow --log-file --detach --no-chdir --pidfile 0:127.0.0.1 > sflow.log], [0], [], [ignore])
 AT_CAPTURE_FILE([sflow.log])
 SFLOW_PORT=`parse_listening_port < test-sflow.log`
@@ -1224,7 +1225,6 @@ ovs-vsctl \
    set Bridge br0 sflow=@sf -- \
    --id=@sf create sflow targets=\"127.0.0.1:$SFLOW_PORT\" \
      header=128 sampling=1 polling=1
-ON_EXIT([kill `cat test-sflow.pid`])
 
 dnl open with ARP packets to seed the bridge-learning.  The output
 dnl ifIndex numbers should be reported predictably after that.

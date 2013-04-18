@@ -597,6 +597,10 @@ ovsdb_jsonrpc_session_get_status(const struct ovsdb_jsonrpc_remote *remote,
     struct reconnect_stats rstats;
     struct ds locks_held, locks_waiting, locks_lost;
 
+    status->bound_port = (remote->listener
+                          ? pstream_get_bound_port(remote->listener)
+                          : htons(0));
+
     if (list_is_empty(&remote->sessions)) {
         return false;
     }
