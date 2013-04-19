@@ -1,0 +1,7 @@
+#! /bin/sh -ve
+
+ovs-ofctl add-flow br0 \
+    "table=2 actions=learn(table=10, NXM_OF_VLAN_TCI[0..11], \
+                           NXM_OF_ETH_DST[]=NXM_OF_ETH_SRC[], \
+                           load:NXM_OF_IN_PORT[]->NXM_NX_REG0[0..15]), \
+                     resubmit(,3)"

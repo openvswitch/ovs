@@ -1,0 +1,15 @@
+#! /bin/sh -ve
+
+ovs-ofctl add-flow br0 "table=4 reg0=1 actions=1"
+
+ovs-ofctl add-flows br0 - <<'EOF'
+    table=4 reg0=2 actions=strip_vlan,2
+    table=4 reg0=3 actions=strip_vlan,3
+    table=4 reg0=4 actions=strip_vlan,4
+EOF
+
+ovs-ofctl add-flows br0 - <<'EOF'
+    table=4 reg0=0 priority=99 dl_vlan=20 actions=1,strip_vlan,2
+    table=4 reg0=0 priority=99 dl_vlan=30 actions=1,strip_vlan,3,4
+    table=4 reg0=0 priority=50            actions=1
+EOF

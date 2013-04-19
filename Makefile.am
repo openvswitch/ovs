@@ -1,4 +1,4 @@
-# Copyright (C) 2007, 2008, 2009, 2010, 2011, 2012 Nicira, Inc.
+# Copyright (C) 2007, 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
 #
 # Copying and distribution of this file, with or without modification,
 # are permitted in any medium without royalty provided the copyright
@@ -258,3 +258,4 @@ include rhel/automake.mk
 include xenserver/automake.mk
 include python/automake.mk
 include python/compat/automake.mk
+include tutorial/automake.mk

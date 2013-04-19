@@ -1,5 +1,7 @@
 post-v1.10.0
 ---------------------
+    - The "tutorial" directory contains a new tutorial for some advanced
+      Open vSwitch features.
     - Stable bond mode has been removed.
     - The autopath action has been removed.
     - New support for the data encapsulation format of the LISP tunnel

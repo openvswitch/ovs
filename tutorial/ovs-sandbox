@@ -1,0 +1,234 @@
+#! /bin/sh
+#
+# Copyright (c) 2013 Nicira, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at:
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+set -e
+
+run () {
+    echo "$@"
+    (cd "$sandbox" && "$@") || exit 1
+}
+
+builddir=
+srcdir=
+schema=
+installed=false
+built=false
+for option; do
+    # This option-parsing mechanism borrowed from a Autoconf-generated
+    # configure script under the following license:
+
+    # Copyright (C) 1992, 1993, 1994, 1995, 1996, 1998, 1999, 2000, 2001,
+    # 2002, 2003, 2004, 2005, 2006, 2009, 2013 Free Software Foundation, Inc.
+    # This configure script is free software; the Free Software Foundation
+    # gives unlimited permission to copy, distribute and modify it.
+
+    # If the previous option needs an argument, assign it.
+    if test -n "$prev"; then
+        eval $prev=\$option
+        prev=
+        continue
+    fi
+    case $option in
+        *=*) optarg=`expr "X$option" : '[^=]*=\(.*\)'` ;;
+        *) optarg=yes ;;
+    esac
+
+    case $dashdash$option in
+        --)
+            dashdash=yes ;;
+        -h|--help)
+            cat <<EOF
+ovs-sandbox, for starting a sandboxed dummy Open vSwitch environment
+usage: $0 [OPTION...]
+
+If you run ovs-sandbox from an OVS build directory, it uses the OVS that
+you built.  Otherwise, if you have an installed Open vSwitch, it uses
+the installed version.
+
+These options force ovs-sandbox to use a particular OVS build:
+  -b, --builddir=DIR   specify Open vSwitch build directory
+  -s, --srcdir=DIR     specify Open vSwitch source directory
+These options force ovs-sandbox to use an installed Open vSwitch:
+  -i, --installed      use installed Open vSwitch
+  -S, --schema=FILE    use FILE as vswitch.ovsschema
+
+Other options:
+  -h, --help           Print this usage message.
+EOF
+            exit 0
+            ;;
+
+        --b*=*)
+            builddir=$optarg
+            built=:
+            ;;
+        -b|--b*)
+            prev=builddir
+            built=:
+            ;;
+        --sr*=*)
+            srcdir=$optarg
+            built=false
+            ;;
+        -s|--sr*)
+            prev=srcdir
+            built=false
+            ;;
+        -i|--installed)
+            installed=:
+            ;;
+        --sc*=*)
+            schema=$optarg
+            installed=:
+            ;;
+        -S|--sc*)
+            prev=schema
+            installed=:
+            ;;
+        -*)
+            echo "unrecognized option $option (use --help for help)" >&2
+            exit 1
+            ;;
+        *)
+            echo "$option: non-option arguments not supported (use --help for help)" >&2
+            exit 1
+            ;;
+    esac
+    shift
+done
+
+if $installed && $built; then
+    echo "sorry, conflicting options (use --help for help)" >&2
+    exit 1
+elif $installed || $built; then
+    :
+elif test -e vswitchd/ovs-vswitchd; then
+    built=:
+    builddir=.
+elif (ovs-vswitchd --version) >/dev/null 2>&1; then
+    installed=:
+else
+    echo "can't find an OVS build or install (use --help for help)" >&2
+    exit 1
+fi
+
+if $built; then
+    if test ! -e "$builddir"/vswitchd/ovs-vswitchd; then
+        echo "$builddir does not appear to be an OVS build directory" >&2
+        exit 1
+    fi
+    builddir=`cd $builddir && pwd`
+
+    # Find srcdir.
+    case $srcdir in
+        '')
+            srcdir=$builddir
+            if test ! -e "$srcdir"/WHY-OVS; then
+                srcdir=`cd $builddir/.. && pwd`
+            fi
+            ;;
+        /*) ;;
+        *) srcdir=`pwd`/$srcdir ;;
+    esac
+    schema=$srcdir/vswitchd/vswitch.ovsschema
+    if test ! -e "$schema"; then
+        echo >&2 'source directory not found, please use --srcdir'
+        exit 1
+    fi
+
+    # Put built tools early in $PATH.
+    if test ! -e $builddir/vswitchd/ovs-vswitchd; then
+        echo >&2 'build not found, please change set $builddir or change directory'
+        exit 1
+    fi
+    PATH=$builddir/ovsdb:$builddir/vswitchd:$builddir/utilities:$PATH
+    export PATH
+else
+    case $schema in
+        '')
+            for schema in \
+                /usr/local/share/openvswitch/vswitch.ovsschema \
+                /usr/share/openvswitch/vswitch.ovsschema \
+                none; do
+                if test -r $schema; then
+                    break
+                fi
+            done
+            ;;
+        /*) ;;
+        *) schema=`pwd`/$schema ;;
+    esac
+    if test ! -r "$schema"; then
+        echo "can't find vswitch.ovsschema, please specify --schema" >&2
+        exit 1
+    fi
+fi
+
+# Create sandbox.
+rm -rf sandbox
+mkdir sandbox
+sandbox=`cd sandbox && pwd`
+
+# Set up environment for OVS programs to sandbox themselves.
+OVS_RUNDIR=$sandbox; export OVS_RUNDIR
+OVS_LOGDIR=$sandbox; export OVS_LOGDIR
+OVS_DBDIR=$sandbox; export OVS_DBDIR
+OVS_SYSCONFDIR=$sandbox; export OVS_SYSCONFDIR
+
+if $built; then
+    # Easy access to OVS manpages.
+    (cd "$builddir" && make install-man mandir="$sandbox"/man)
+    MANPATH=$sandbox/man:; export MANPATH
+fi
+
+# Ensure cleanup.
+trap 'kill `cat "$sandbox"/*.pid`' 0 1 2 3 13 14 15
+
+# Create database and start ovsdb-server.
+touch "$sandbox"/.conf.db.~lock~
+run ovsdb-tool create conf.db "$srcdir"/vswitchd/vswitch.ovsschema
+run ovsdb-server --detach --no-chdir --pidfile -vconsole:off --log-file \
+    --remote=punix:"$sandbox"/db.sock
+
+# Start ovs-vswitchd.
+run ovs-vswitchd --detach --no-chdir --pidfile -vconsole:off --log-file \
+    --enable-dummy=override -vvconn -vnetdev_dummy
+
+cat <<EOF
+
+
+
+----------------------------------------------------------------------
+You are running in a dummy Open vSwitch environment.  You can use
+ovs-vsctl, ovs-ofctl, ovs-appctl, and other tools to work with the
+dummy switch.  
+
+Log files, pidfiles, and the configuration database are in the
+"sandbox" subdirectory.
+
+Exit the shell to kill the running daemons.
+EOF
+
+status=0; $SHELL || status=$?
+
+cat <<EOF
+----------------------------------------------------------------------
+
+
+
+EOF
+
+exit $status
