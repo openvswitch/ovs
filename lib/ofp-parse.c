@@ -390,6 +390,34 @@ parse_metadata(struct ofpbuf *b, char *arg)
 }
 
 static void
+parse_sample(struct ofpbuf *b, char *arg)
+{
+    struct ofpact_sample *os = ofpact_put_SAMPLE(b);
+    char *key, *value;
+
+    while (ofputil_parse_key_value(&arg, &key, &value)) {
+        if (!strcmp(key, "probability")) {
+            os->probability = str_to_u16(value, "probability");
+            if (os->probability == 0) {
+                ovs_fatal(0, "invalid probability value \"%s\"", value);
+            }
+        } else if (!strcmp(key, "collector_set_id")) {
+            os->collector_set_id = str_to_u32(value);
+        } else if (!strcmp(key, "obs_domain_id")) {
+            os->obs_domain_id = str_to_u32(value);
+        } else if (!strcmp(key, "obs_point_id")) {
+            os->obs_point_id = str_to_u32(value);
+        } else {
+            ovs_fatal(0, "invalid key \"%s\" in \"sample\" argument",
+                      key);
+        }
+    }
+    if (os->probability == 0) {
+        ovs_fatal(0, "non-zero \"probability\" must be specified on sample");
+    }
+}
+
+static void
 parse_named_action(enum ofputil_action_code code, const struct flow *flow,
                    char *arg, struct ofpbuf *ofpacts)
 {
@@ -591,11 +619,16 @@ parse_named_action(enum ofputil_action_code code, const struct flow *flow,
         ofpact_put_POP_MPLS(ofpacts)->ethertype =
             htons(str_to_u16(arg, "pop_mpls"));
         break;
+
     case OFPUTIL_NXAST_STACK_PUSH:
         nxm_parse_stack_action(ofpact_put_STACK_PUSH(ofpacts), arg);
         break;
     case OFPUTIL_NXAST_STACK_POP:
         nxm_parse_stack_action(ofpact_put_STACK_POP(ofpacts), arg);
+        break;
+
+    case OFPUTIL_NXAST_SAMPLE:
+        parse_sample(ofpacts, arg);
         break;
     }
 }

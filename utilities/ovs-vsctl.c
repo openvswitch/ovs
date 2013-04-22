@@ -1453,6 +1453,7 @@ pre_cmd_emer_reset(struct vsctl_context *ctx)
     ovsdb_idl_add_column(ctx->idl, &ovsrec_bridge_col_mirrors);
     ovsdb_idl_add_column(ctx->idl, &ovsrec_bridge_col_netflow);
     ovsdb_idl_add_column(ctx->idl, &ovsrec_bridge_col_sflow);
+    ovsdb_idl_add_column(ctx->idl, &ovsrec_bridge_col_ipfix);
     ovsdb_idl_add_column(ctx->idl, &ovsrec_bridge_col_flood_vlans);
     ovsdb_idl_add_column(ctx->idl, &ovsrec_bridge_col_other_config);
 
@@ -1477,6 +1478,8 @@ cmd_emer_reset(struct vsctl_context *ctx)
     const struct ovsrec_netflow *nf, *next_nf;
     const struct ovsrec_ssl *ssl, *next_ssl;
     const struct ovsrec_sflow *sflow, *next_sflow;
+    const struct ovsrec_ipfix *ipfix, *next_ipfix;
+    const struct ovsrec_flow_sample_collector_set *fscset, *next_fscset;
 
     /* Reset the Open_vSwitch table. */
     ovsrec_open_vswitch_set_manager_options(ctx->ovs, NULL, 0);
@@ -1490,6 +1493,7 @@ cmd_emer_reset(struct vsctl_context *ctx)
         ovsrec_bridge_set_mirrors(br, NULL, 0);
         ovsrec_bridge_set_netflow(br, NULL);
         ovsrec_bridge_set_sflow(br, NULL);
+        ovsrec_bridge_set_ipfix(br, NULL);
         ovsrec_bridge_set_flood_vlans(br, NULL, 0);
 
         /* We only want to save the "hwaddr" key from other_config. */
@@ -1537,6 +1541,14 @@ cmd_emer_reset(struct vsctl_context *ctx)
 
     OVSREC_SFLOW_FOR_EACH_SAFE (sflow, next_sflow, idl) {
         ovsrec_sflow_delete(sflow);
+    }
+
+    OVSREC_IPFIX_FOR_EACH_SAFE (ipfix, next_ipfix, idl) {
+        ovsrec_ipfix_delete(ipfix);
+    }
+
+    OVSREC_FLOW_SAMPLE_COLLECTOR_SET_FOR_EACH_SAFE (fscset, next_fscset, idl) {
+        ovsrec_flow_sample_collector_set_delete(fscset);
     }
 
     vsctl_context_invalidate_cache(ctx);
@@ -1668,6 +1680,7 @@ del_bridge(struct vsctl_context *ctx, struct vsctl_bridge *br)
 {
     struct vsctl_bridge *child, *next_child;
     struct vsctl_port *port, *next_port;
+    const struct ovsrec_flow_sample_collector_set *fscset, *next_fscset;
 
     HMAP_FOR_EACH_SAFE (child, next_child, children_node, &br->children) {
         del_bridge(ctx, child);
@@ -1675,6 +1688,13 @@ del_bridge(struct vsctl_context *ctx, struct vsctl_bridge *br)
 
     LIST_FOR_EACH_SAFE (port, next_port, ports_node, &br->ports) {
         del_port(ctx, port);
+    }
+
+    OVSREC_FLOW_SAMPLE_COLLECTOR_SET_FOR_EACH_SAFE (fscset, next_fscset,
+                                                    ctx->idl) {
+        if (fscset->bridge == br->br_cfg) {
+            ovsrec_flow_sample_collector_set_delete(fscset);
+        }
     }
 
     del_cached_bridge(ctx, br);
@@ -2464,7 +2484,8 @@ struct vsctl_table_class {
 static const struct vsctl_table_class tables[] = {
     {&ovsrec_table_bridge,
      {{&ovsrec_table_bridge, &ovsrec_bridge_col_name, NULL},
-      {NULL, NULL, NULL}}},
+      {&ovsrec_table_flow_sample_collector_set, NULL,
+       &ovsrec_flow_sample_collector_set_col_bridge}}},
 
     {&ovsrec_table_controller,
      {{&ovsrec_table_bridge,
@@ -2516,6 +2537,17 @@ static const struct vsctl_table_class tables[] = {
 
     {&ovsrec_table_flow_table,
      {{&ovsrec_table_flow_table, &ovsrec_flow_table_col_name, NULL},
+      {NULL, NULL, NULL}}},
+
+    {&ovsrec_table_ipfix,
+     {{&ovsrec_table_bridge,
+       &ovsrec_bridge_col_name,
+       &ovsrec_bridge_col_ipfix},
+      {&ovsrec_table_flow_sample_collector_set, NULL,
+       &ovsrec_flow_sample_collector_set_col_ipfix}}},
+
+    {&ovsrec_table_flow_sample_collector_set,
+     {{NULL, NULL, NULL},
       {NULL, NULL, NULL}}},
 
     {NULL, {{NULL, NULL, NULL}, {NULL, NULL, NULL}}}

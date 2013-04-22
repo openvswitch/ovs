@@ -172,10 +172,11 @@ Prints a brief overview of the database contents.
 .IP "\fBemer\-reset\fR"
 Reset the configuration into a clean state.  It deconfigures OpenFlow
 controllers, OVSDB servers, and SSL, and deletes port mirroring,
-\fBfail_mode\fR, NetFlow, and sFlow configuration.  This command also
-removes all \fBother\-config\fR keys from all database records, except
-that \fBother\-config:hwaddr\fR is preserved if it is present in a
-Bridge record.  Other networking configuration is left as-is.
+\fBfail_mode\fR, NetFlow, sFlow, and IPFIX configuration.  This
+command also removes all \fBother\-config\fR keys from all database
+records, except that \fBother\-config:hwaddr\fR is preserved if it is
+present in a Bridge record.  Other networking configuration is left
+as-is.
 .
 .SS "Bridge Commands"
 These commands examine and manipulate Open vSwitch bridges.
@@ -526,8 +527,14 @@ The global SSL configuration for \fBovs\-vswitchd\fR.  The record
 attached to the \fBOpen_vSwitch\fR table may be identified by
 specifying \fB.\fR as the record name.
 .IP "\fBsFlow\fR"
-An sFlow configuration attached to a bridge.  Records may be
+An sFlow exporter configuration attached to a bridge.  Records may be
 identified by bridge name.
+.IP "\fBIPFIX\fR"
+An IPFIX exporter configuration attached to a bridge.  Records may be
+identified by bridge name.
+.IP "\fBFlow_Sample_Collector_Set\fR"
+An IPFIX exporter configuration attached to a bridge for sampling
+packets on a per-flow basis using OpenFlow \fBsample\fR actions.
 .PP
 Record names must be specified in full and with correct
 capitalization.  Names of tables and columns are not case-sensitive,
@@ -931,6 +938,20 @@ Deconfigure sFlow from \fBbr0\fR, which also destroys the sFlow record
 (since it is now unreferenced):
 .IP
 .B "ovs\-vsctl \-\- clear Bridge br0 sflow"
+.SS "IPFIX"
+.PP
+Configure bridge \fBbr0\fR to send one IPFIX flow record per packet
+sample to UDP port 4739 on host 192.168.0.34, with Observation Domain
+ID 123 and Observation Point ID 456:
+.IP
+.B "ovs\-vsctl \-\- set Bridge br0 ipfix=@i \(rs"
+.IP
+.B "\-\- \-\-id=@i create IPFIX targets=\(rs\(dq192.168.0.34:4739\(rs\(dq obs_domain_id=123 obs_point_id=456"
+.PP
+Deconfigure the IPFIX settings from \fBbr0\fR, which also destroys the
+IPFIX record (since it is now unreferenced):
+.IP
+.B "ovs\-vsctl clear Bridge br0 ipfix"
 .SS "802.1D Spanning Tree Protocol (STP)"
 .PP
 Configure bridge \fBbr0\fR to participate in an 802.1D spanning tree:

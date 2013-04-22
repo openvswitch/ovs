@@ -1241,6 +1241,30 @@ flow's creation, not since the receipt of the FIN or RST.)
 .RE
 .IP
 This action was added in Open vSwitch 1.5.90.
+.
+.IP "\fBsample(\fIargument\fR[\fB,\fIargument\fR]...\fB)\fR"
+Samples packets and sends one sample for every sampled packet.
+.IP
+\fIargument\fR takes the following forms:
+.RS
+.IP "\fBprobability=\fIpackets\fR"
+The number of sampled packets out of 65535.  Must be greater or equal to 1.
+.IP "\fBcollector_set_id=\fIid\fR"
+The unsigned 32-bit integer identifier of the set of sample collectors
+to send sampled packets to.  Defaults to 0.
+.IP "\fBobs_domain_id=\fIid\fR"
+When sending samples to IPFIX collectors, the unsigned 32-bit integer
+Observation Domain ID sent in every IPFIX flow record.  Defaults to 0.
+.IP "\fBobs_point_id=\fIid\fR"
+When sending samples to IPFIX collectors, the unsigned 32-bit integer
+Observation Point ID sent in every IPFIX flow record.  Defaults to 0.
+.RE
+.IP
+Refer to \fBovs\-vswitchd.conf.db\fR(8) for more details on
+configuring sample collector sets.
+.IP
+This action was added in Open vSwitch 1.10.90.
+.
 .IP "\fBexit\fR"
 This action causes Open vSwitch to immediately halt execution of further
 actions.  Those actions which have already been executed are unaffected.  Any
@@ -1555,3 +1579,4 @@ Prints the flow entries in the switch.
 .BR ovs\-appctl (8),
 .BR ovs\-controller (8),
 .BR ovs\-vswitchd (8)
+.BR ovs\-vswitchd.conf.db (8)

@@ -312,6 +312,7 @@ enum nx_action_subtype {
     NXAST_DEC_MPLS_TTL,         /* struct nx_action_header */
     NXAST_STACK_PUSH,           /* struct nx_action_stack */
     NXAST_STACK_POP,            /* struct nx_action_stack */
+    NXAST_SAMPLE,               /* struct nx_action_sample */
 };
 
 /* Header for Nicira-defined actions. */
@@ -2232,5 +2233,30 @@ struct nx_action_mpls_ttl {
     uint8_t  pad[5];
 };
 OFP_ASSERT(sizeof(struct nx_action_mpls_ttl) == 16);
+
+/* Action structure for NXAST_SAMPLE.
+ *
+ * Samples matching packets with the given probability and sends them
+ * each to the set of collectors identified with the given ID.  The
+ * probability is expressed as a number of packets to be sampled out
+ * of USHRT_MAX packets, and must be >0.
+ *
+ * When sending packet samples to IPFIX collectors, the IPFIX flow
+ * record sent for each sampled packet is associated with the given
+ * observation domain ID and observation point ID.  Each IPFIX flow
+ * record contain the sampled packet's headers when executing this
+ * rule.  If a sampled packet's headers are modified by previous
+ * actions in the flow, those modified headers are sent. */
+struct nx_action_sample {
+    ovs_be16 type;                  /* OFPAT_VENDOR. */
+    ovs_be16 len;                   /* Length is 24. */
+    ovs_be32 vendor;                /* NX_VENDOR_ID. */
+    ovs_be16 subtype;               /* NXAST_SAMPLE. */
+    ovs_be16 probability;           /* Fraction of packets to sample. */
+    ovs_be32 collector_set_id;      /* ID of collector set in OVSDB. */
+    ovs_be32 obs_domain_id;         /* ID of sampling observation domain. */
+    ovs_be32 obs_point_id;          /* ID of sampling observation point. */
+};
+OFP_ASSERT(sizeof(struct nx_action_sample) == 24);
 
 #endif /* openflow/nicira-ext.h */

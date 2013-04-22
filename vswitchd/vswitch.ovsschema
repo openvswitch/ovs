@@ -1,6 +1,6 @@
 {"name": "Open_vSwitch",
  "version": "7.1.0",
- "cksum": "2234055133 17444",
+ "cksum": "432130924 19191",
  "tables": {
    "Open_vSwitch": {
      "columns": {
@@ -69,6 +69,10 @@
        "sflow": {
          "type": {"key": {"type": "uuid",
                           "refTable": "sFlow"},
+                  "min": 0, "max": 1}},
+       "ipfix": {
+         "type": {"key": {"type": "uuid",
+                          "refTable": "IPFIX"},
                   "min": 0, "max": 1}},
        "controller": {
          "type": {"key": {"type": "uuid",
@@ -383,6 +387,48 @@
        "external_ids": {
          "type": {"key": "string", "value": "string",
                   "min": 0, "max": "unlimited"}}}},
+   "IPFIX": {
+     "columns": {
+       "targets": {
+         "type": {"key": "string", "min": 1, "max": "unlimited"}},
+       "sampling": {
+         "type": {"key": {"type": "integer",
+                          "minInteger": 1,
+                          "maxInteger": 4294967295},
+                  "min": 0, "max": 1}},
+       "obs_domain_id": {
+         "type": {"key": {"type": "integer",
+                          "minInteger": 0,
+                          "maxInteger": 4294967295},
+                  "min": 0, "max": 1}},
+       "obs_point_id": {
+         "type": {"key": {"type": "integer",
+                          "minInteger": 0,
+                          "maxInteger": 4294967295},
+                  "min": 0, "max": 1}},
+       "external_ids": {
+         "type": {"key": "string", "value": "string",
+                  "min": 0, "max": "unlimited"}}}},
+   "Flow_Sample_Collector_Set": {
+     "columns": {
+       "id": {
+         "type": {"key": {"type": "integer",
+                          "minInteger": 0,
+                          "maxInteger": 4294967295},
+                  "min": 1, "max": 1}},
+       "bridge": {
+         "type": {"key": {"type": "uuid",
+                          "refTable": "Bridge"},
+                  "min": 1, "max": 1}},
+       "ipfix": {
+         "type": {"key": {"type": "uuid",
+                          "refTable": "IPFIX"},
+                  "min": 0, "max": 1}},
+       "external_ids": {
+         "type": {"key": "string", "value": "string",
+                  "min": 0, "max": "unlimited"}}},
+     "isRoot": true,
+     "indexes": [["id", "bridge"]]},
    "Controller": {
      "columns": {
        "target": {

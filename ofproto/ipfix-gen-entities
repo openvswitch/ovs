@@ -1,0 +1,140 @@
+#!/usr/bin/python
+#
+# Copyright (C) 2012 Nicira, Inc.
+#
+# Copying and distribution of this file, with or without modification,
+# are permitted in any medium without royalty provided the copyright
+# notice and this notice are preserved.  This file is offered as-is,
+# without warranty of any kind.
+
+import getopt
+import re
+import sys
+import xml.sax
+import xml.sax.handler
+
+class IpfixEntityHandler(xml.sax.handler.ContentHandler):
+
+    RECORD_FIELDS = ['name', 'dataType', 'elementId', 'status']
+
+    # Cf. RFC 5101, Section 6.
+    DATA_TYPE_SIZE = {
+        'unsigned8': 1,
+        'unsigned16': 2,
+        'unsigned32': 4,
+        'unsigned64': 8,
+        'signed8': 1,
+        'signed16': 2,
+        'signed32': 4,
+        'signed64': 8,
+        'float32': 4,
+        'float64': 8,
+        'boolean': 1,  # Not clear.
+        'macAddress': 6,
+        'octetArray': 0,  # Not clear.
+        'string': 0,  # Not clear.
+        'dateTimeSeconds': 4,
+        'dateTimeMilliseconds': 8,
+        'dateTimeMicroseconds': 8,
+        'dateTimeNanoseconds': 8,
+        'ipv4Address': 4,
+        'ipv6Address': 16,
+        }
+
+    def __init__(self):
+        self.current_field_name = None
+        self.current_field_value = []
+        self.current_record = dict()
+
+    def startDocument(self):
+        print """\
+/* IPFIX entities. */
+#ifndef IPFIX_ENTITY
+#define IPFIX_ENTITY(ENUM, ID, SIZE, NAME)
+#endif
+"""
+
+    def endDocument(self):
+        print """
+#undef IPFIX_ENTITY"""
+
+    def startElement(self, name, attrs):
+        if name in self.RECORD_FIELDS:
+            self.current_field_name = name
+        else:
+            self.current_field_name = None
+        self.current_field_value = []
+
+    @staticmethod
+    def camelcase_to_uppercase(s):
+        return re.sub('(.)([A-Z]+)', r'\1_\2', s).upper()
+
+    def endElement(self, name):
+        if self.current_field_name is not None:
+            self.current_record[self.current_field_name] = ''.join(
+                self.current_field_value).strip()
+        elif (name == 'record'
+              and self.current_record.get('status') == 'current'
+              and 'dataType' in self.current_record):
+
+            self.current_record['enumName'] = self.camelcase_to_uppercase(
+                self.current_record['name'])
+            self.current_record['dataTypeSize'] = self.DATA_TYPE_SIZE.get(
+                self.current_record['dataType'], 0)
+
+            print 'IPFIX_ENTITY(%(enumName)s, %(elementId)s, ' \
+                  '%(dataTypeSize)i, %(name)s)' % self.current_record
+            self.current_record.clear()
+
+    def characters(self, content):
+        if self.current_field_name is not None:
+            self.current_field_value.append(content)
+
+def print_ipfix_entity_macros(xml_file):
+    xml.sax.parse(xml_file, IpfixEntityHandler())
+
+def usage(name):
+    print """\
+%(name)s: IPFIX entity definition generator
+Prints C macros defining IPFIX entities from the standard IANA file at
+<http://www.iana.org/assignments/ipfix/ipfix.xml>
+usage: %(name)s [OPTIONS] XML
+where XML is the standard IANA XML file defining IPFIX entities
+
+The following options are also available:
+  -h, --help                  display this help message
+  -V, --version               display version information\
+""" % {'name': name}
+    sys.exit(0)
+
+if __name__ == '__main__':
+#    try:
+        try:
+            options, args = getopt.gnu_getopt(sys.argv[1:], 'hV',
+                                              ['help', 'version'])
+        except getopt.GetoptError, geo:
+            sys.stderr.write('%s: %s\n' % (sys.argv[0], geo.msg))
+            sys.exit(1)
+
+        for key, value in options:
+            if key in ['-h', '--help']:
+                usage()
+            elif key in ['-V', '--version']:
+                print 'ipfix-gen-entities (Open vSwitch)'
+            else:
+                sys.exit(0)
+
+        if len(args) != 1:
+            sys.stderr.write('%s: exactly 1 non-option arguments required '
+                             '(use --help for help)\n' % sys.argv[0])
+            sys.exit(1)
+
+        print_ipfix_entity_macros(args[0])
+
+#    except Exception, e:
+#        sys.stderr.write('%s: %s\n' % (sys.argv[0], e))
+#        sys.exit(1)
+
+# Local variables:
+# mode: python
+# End:

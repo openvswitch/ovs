@@ -6,6 +6,7 @@ digraph Open_vSwitch {
 	Bridge [];
 	Bridge -> sFlow [label="sflow?"];
 	Bridge -> Mirror [label="mirrors*"];
+	Bridge -> IPFIX [label="ipfix?"];
 	Bridge -> Port [label="ports*"];
 	Bridge -> Controller [label="controller*"];
 	Bridge -> Flow_Table [label="flow_tables value*"];
@@ -13,6 +14,10 @@ digraph Open_vSwitch {
 	QoS [style=bold];
 	QoS -> Queue [label="queues value*"];
 	sFlow [];
+	Flow_Sample_Collector_Set [style=bold];
+	Flow_Sample_Collector_Set -> Bridge [label="bridge"];
+	Flow_Sample_Collector_Set -> IPFIX [label="ipfix?"];
+	IPFIX [];
 	Open_vSwitch [style=bold];
 	Open_vSwitch -> Bridge [label="bridges*"];
 	Open_vSwitch -> SSL [label="ssl?"];

@@ -1109,6 +1109,20 @@ struct ofproto_class {
     int (*set_sflow)(struct ofproto *ofproto,
                      const struct ofproto_sflow_options *sflow_options);
 
+    /* Configures IPFIX on 'ofproto' according to the options in
+     * 'bridge_exporter_options' and the 'flow_exporters_options'
+     * array, or turns off IPFIX if 'bridge_exporter_options' and
+     * 'flow_exporters_options' is NULL.
+     *
+     * EOPNOTSUPP as a return value indicates that 'ofproto' does not support
+     * IPFIX, as does a null pointer. */
+    int (*set_ipfix)(
+        struct ofproto *ofproto,
+        const struct ofproto_ipfix_bridge_exporter_options
+            *bridge_exporter_options,
+        const struct ofproto_ipfix_flow_exporter_options
+            *flow_exporters_options, size_t n_flow_exporters_options);
+
     /* Configures connectivity fault management on 'ofport'.
      *
      * If 'cfm_settings' is nonnull, configures CFM according to its members.

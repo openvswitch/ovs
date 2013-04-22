@@ -127,8 +127,10 @@ void commit_odp_actions(const struct flow *, struct flow *base,
 
 enum user_action_cookie_type {
     USER_ACTION_COOKIE_UNSPEC,
-    USER_ACTION_COOKIE_SFLOW,        /* Packet for sFlow sampling. */
-    USER_ACTION_COOKIE_SLOW_PATH     /* Userspace must process this flow. */
+    USER_ACTION_COOKIE_SFLOW,        /* Packet for per-bridge sFlow sampling. */
+    USER_ACTION_COOKIE_SLOW_PATH,    /* Userspace must process this flow. */
+    USER_ACTION_COOKIE_FLOW_SAMPLE,  /* Packet for per-flow sampling. */
+    USER_ACTION_COOKIE_IPFIX,        /* Packet for per-bridge IPFIX sampling. */
 };
 
 /* user_action_cookie is passed as argument to OVS_ACTION_ATTR_USERSPACE.
@@ -147,8 +149,20 @@ union user_action_cookie {
         uint16_t unused;
         uint32_t reason;        /* enum slow_path_reason. */
     } slow_path;
+
+    struct {
+        uint16_t type;          /* USER_ACTION_COOKIE_FLOW_SAMPLE. */
+        uint16_t probability;   /* Sampling probability. */
+        uint32_t collector_set_id; /* ID of IPFIX collector set. */
+        uint32_t obs_domain_id; /* Observation Domain ID. */
+        uint32_t obs_point_id;  /* Observation Point ID. */
+    } flow_sample;
+
+    struct {
+        uint16_t type;          /* USER_ACTION_COOKIE_IPFIX. */
+    } ipfix;
 };
-BUILD_ASSERT_DECL(sizeof(union user_action_cookie) == 8);
+BUILD_ASSERT_DECL(sizeof(union user_action_cookie) == 16);
 
 size_t odp_put_userspace_action(uint32_t pid,
                                 const void *userdata, size_t userdata_size,

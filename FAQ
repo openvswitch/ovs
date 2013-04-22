@@ -9,12 +9,13 @@ General
 Q: What is Open vSwitch?
 
 A: Open vSwitch is a production quality open source software switch
-   designed to be used as a vswitch in virtualized server environments.  A
-   vswitch forwards traffic between different VMs on the same physical host
-   and also forwards traffic between VMs and the physical network.  Open
-   vSwitch supports standard management interfaces (e.g. sFlow, NetFlow,
-   RSPAN, CLI), and is open to programmatic extension and control using
-   OpenFlow and the OVSDB management protocol.
+   designed to be used as a vswitch in virtualized server
+   environments.  A vswitch forwards traffic between different VMs on
+   the same physical host and also forwards traffic between VMs and
+   the physical network.  Open vSwitch supports standard management
+   interfaces (e.g. sFlow, NetFlow, IPFIX, RSPAN, CLI), and is open to
+   programmatic extension and control using OpenFlow and the OVSDB
+   management protocol.
 
    Open vSwitch as designed to be compatible with modern switching
    chipsets.  This means that it can be ported to existing high-fanout
@@ -152,6 +153,11 @@ A: The following table lists the Linux kernel versions against which the
    Open vSwitch userspace is not sensitive to the Linux kernel version.
    It should build against almost any kernel, certainly against 2.6.18
    and later.
+
+Q: What Linux kernel versions does IPFIX flow monitoring work with?
+
+A: IPFIX flow monitoring requires the Linux kernel module from Open
+   vSwitch version 1.10.90 or later.
 
 Q: Should userspace or kernel be upgraded first to minimize downtime?
 

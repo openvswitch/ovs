@@ -632,6 +632,7 @@ external_ids        : {}
 fail_mode           : []
 flood_vlans         : []
 flow_tables         : {}
+ipfix               : []
 mirrors             : []
 name                : "br0"
 netflow             : []
@@ -822,7 +823,7 @@ AT_CHECK([RUN_OVS_VSCTL([clear netflow `cat netflow-uuid` targets])],
 AT_CHECK([RUN_OVS_VSCTL([destroy b br2])], 
   [1], [], [ovs-vsctl: no row "br2" in table Bridge
 ], [OVS_VSCTL_CLEANUP])
-AT_CHECK([RUN_OVS_VSCTL([add i br1 name x])],
+AT_CHECK([RUN_OVS_VSCTL([add in br1 name x])],
   [1], [], [ovs-vsctl: cannot modify read-only column name in table Interface
 ], [OVS_VSCTL_CLEANUP])
 AT_CHECK([RUN_OVS_VSCTL([set port br1 name br2])],
@@ -1123,6 +1124,7 @@ external_ids        : {}
 fail_mode           : []
 flood_vlans         : []
 flow_tables         : {}
+ipfix               : []
 mirrors             : []
 name                : "br0"
 netflow             : []

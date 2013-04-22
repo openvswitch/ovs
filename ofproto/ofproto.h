@@ -68,6 +68,19 @@ struct ofproto_sflow_options {
     char *control_ip;
 };
 
+
+struct ofproto_ipfix_bridge_exporter_options {
+    struct sset targets;
+    uint32_t sampling_rate;
+    uint32_t obs_domain_id;  /* Bridge-wide Observation Domain ID. */
+    uint32_t obs_point_id;  /* Bridge-wide Observation Point ID. */
+};
+
+struct ofproto_ipfix_flow_exporter_options {
+    uint32_t collector_set_id;
+    struct sset targets;
+};
+
 struct ofproto_stp_settings {
     stp_identifier system_id;
     uint16_t priority;
@@ -229,6 +242,10 @@ int ofproto_set_snoops(struct ofproto *, const struct sset *snoops);
 int ofproto_set_netflow(struct ofproto *,
                         const struct netflow_options *nf_options);
 int ofproto_set_sflow(struct ofproto *, const struct ofproto_sflow_options *);
+int ofproto_set_ipfix(struct ofproto *,
+                      const struct ofproto_ipfix_bridge_exporter_options *,
+                      const struct ofproto_ipfix_flow_exporter_options *,
+                      size_t);
 int ofproto_set_stp(struct ofproto *, const struct ofproto_stp_settings *);
 int ofproto_get_stp_status(struct ofproto *, struct ofproto_stp_status *);
 

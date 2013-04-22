@@ -94,6 +94,7 @@
     /* Other. */                                                    \
     DEFINE_OFPACT(NOTE,            ofpact_note,          data)      \
     DEFINE_OFPACT(EXIT,            ofpact_null,          ofpact)    \
+    DEFINE_OFPACT(SAMPLE,          ofpact_sample,        ofpact)    \
                                                                     \
     /* Instructions */                                              \
     /* XXX Write-Actions */                                         \
@@ -439,6 +440,17 @@ struct ofpact_note {
     struct ofpact ofpact;
     size_t length;
     uint8_t data[];
+};
+
+/* OFPACT_SAMPLE.
+ *
+ * Used for NXAST_SAMPLE. */
+struct ofpact_sample {
+    struct ofpact ofpact;
+    uint16_t probability;  // Always >0.
+    uint32_t collector_set_id;
+    uint32_t obs_domain_id;
+    uint32_t obs_point_id;
 };
 
 /* OFPACT_DEC_TTL.

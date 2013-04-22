@@ -218,6 +218,25 @@ dec_ttl_cnt_ids_from_openflow(const struct nx_action_cnt_ids *nac_ids,
 }
 
 static enum ofperr
+sample_from_openflow(const struct nx_action_sample *nas,
+                     struct ofpbuf *out)
+{
+    struct ofpact_sample *sample;
+
+    sample = ofpact_put_SAMPLE(out);
+    sample->probability = ntohs(nas->probability);
+    sample->collector_set_id = ntohl(nas->collector_set_id);
+    sample->obs_domain_id = ntohl(nas->obs_domain_id);
+    sample->obs_point_id = ntohl(nas->obs_point_id);
+
+    if (sample->probability == 0) {
+        return OFPERR_OFPBAC_BAD_ARGUMENT;
+    }
+
+    return 0;
+}
+
+static enum ofperr
 decode_nxast_action(const union ofp_action *a, enum ofputil_action_code *code)
 {
     const struct nx_action_header *nah = (const struct nx_action_header *) a;
@@ -434,6 +453,11 @@ ofpact_from_nxast(const union ofp_action *a, enum ofputil_action_code code,
         ofpact_put_POP_MPLS(out)->ethertype = nxapm->ethertype;
         break;
     }
+
+    case OFPUTIL_NXAST_SAMPLE:
+        error = sample_from_openflow(
+            (const struct nx_action_sample *) a, out);
+        break;
     }
 
     return error;
@@ -1199,6 +1223,9 @@ ofpact_check__(const struct ofpact *a, const struct flow *flow, int max_ports,
         *dl_type = ofpact_get_POP_MPLS(a)->ethertype;
         return 0;
 
+    case OFPACT_SAMPLE:
+        return 0;
+
     case OFPACT_CLEAR_ACTIONS:
     case OFPACT_WRITE_METADATA:
     case OFPACT_GOTO_TABLE:
@@ -1394,6 +1421,19 @@ ofpact_fin_timeout_to_nxast(const struct ofpact_fin_timeout *fin_timeout,
 }
 
 static void
+ofpact_sample_to_nxast(const struct ofpact_sample *os,
+                       struct ofpbuf *out)
+{
+    struct nx_action_sample *nas;
+
+    nas = ofputil_put_NXAST_SAMPLE(out);
+    nas->probability = htons(os->probability);
+    nas->collector_set_id = htonl(os->collector_set_id);
+    nas->obs_domain_id = htonl(os->obs_domain_id);
+    nas->obs_point_id = htonl(os->obs_point_id);
+}
+
+static void
 ofpact_to_nxast(const struct ofpact *a, struct ofpbuf *out)
 {
     switch (a->type) {
@@ -1487,6 +1527,10 @@ ofpact_to_nxast(const struct ofpact *a, struct ofpbuf *out)
     case OFPACT_POP_MPLS:
         ofputil_put_NXAST_POP_MPLS(out)->ethertype =
             ofpact_get_POP_MPLS(a)->ethertype;
+        break;
+
+    case OFPACT_SAMPLE:
+        ofpact_sample_to_nxast(ofpact_get_SAMPLE(a), out);
         break;
 
     case OFPACT_OUTPUT:
@@ -1621,6 +1665,7 @@ ofpact_to_openflow10(const struct ofpact *a, struct ofpbuf *out)
     case OFPACT_EXIT:
     case OFPACT_PUSH_MPLS:
     case OFPACT_POP_MPLS:
+    case OFPACT_SAMPLE:
         ofpact_to_nxast(a, out);
         break;
     }
@@ -1784,6 +1829,7 @@ ofpact_to_openflow11(const struct ofpact *a, struct ofpbuf *out)
     case OFPACT_MULTIPATH:
     case OFPACT_NOTE:
     case OFPACT_EXIT:
+    case OFPACT_SAMPLE:
         ofpact_to_nxast(a, out);
         break;
     }
@@ -1912,6 +1958,7 @@ ofpact_outputs_to_port(const struct ofpact *ofpact, uint16_t port)
     case OFPACT_EXIT:
     case OFPACT_PUSH_MPLS:
     case OFPACT_POP_MPLS:
+    case OFPACT_SAMPLE:
     case OFPACT_CLEAR_ACTIONS:
     case OFPACT_GOTO_TABLE:
     default:
@@ -2003,6 +2050,7 @@ ofpact_format(const struct ofpact *a, struct ds *s)
     const struct ofpact_controller *controller;
     const struct ofpact_metadata *metadata;
     const struct ofpact_tunnel *tunnel;
+    const struct ofpact_sample *sample;
     uint16_t port;
 
     switch (a->type) {
@@ -2202,6 +2250,15 @@ ofpact_format(const struct ofpact *a, struct ds *s)
 
     case OFPACT_EXIT:
         ds_put_cstr(s, "exit");
+        break;
+
+    case OFPACT_SAMPLE:
+        sample = ofpact_get_SAMPLE(a);
+        ds_put_format(
+            s, "sample(probability=%"PRIu16",collector_set_id=%"PRIu32
+            ",obs_domain_id=%"PRIu32",obs_point_id=%"PRIu32")",
+            sample->probability, sample->collector_set_id,
+            sample->obs_domain_id, sample->obs_point_id);
         break;
 
     case OFPACT_CLEAR_ACTIONS:

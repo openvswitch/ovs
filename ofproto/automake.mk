@@ -23,6 +23,8 @@ ofproto_libofproto_a_SOURCES = \
 	ofproto/ofproto-dpif.c \
 	ofproto/ofproto-dpif-governor.c \
 	ofproto/ofproto-dpif-governor.h \
+	ofproto/ofproto-dpif-ipfix.c \
+	ofproto/ofproto-dpif-ipfix.h \
 	ofproto/ofproto-dpif-sflow.c \
 	ofproto/ofproto-dpif-sflow.h \
 	ofproto/ofproto-provider.h \
@@ -33,4 +35,18 @@ ofproto_libofproto_a_SOURCES = \
 	ofproto/tunnel.c \
 	ofproto/tunnel.h
 
+# Distribute this generated file in order not to require Python at
+# build time if ofproto/ipfix.xml is not modified.
+ofproto_libofproto_a_SOURCES += ofproto/ipfix-entities.def
+
+BUILT_SOURCES += ofproto/ipfix-entities.def
+
+CLEANFILES += ofproto/ipfix-entities.def
+
 MAN_FRAGMENTS += ofproto/ofproto-unixctl.man ofproto/ofproto-dpif-unixctl.man
+
+# IPFIX entity definition macros generation from IANA's XML definition.
+EXTRA_DIST += ofproto/ipfix.xml
+dist_noinst_SCRIPTS = ofproto/ipfix-gen-entities
+ofproto/ipfix-entities.def: ofproto/ipfix.xml ofproto/ipfix-gen-entities
+	$(run_python) $(srcdir)/ofproto/ipfix-gen-entities $< > $@

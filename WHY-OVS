@@ -21,7 +21,7 @@ vSwitch cope with the above requirements.
   migratable between different hosts.  This may include traditional
   "soft state" (such as an entry in an L2 learning table), L3 forwarding
   state, policy routing state, ACLs, QoS policy, monitoring
-  configuration (e.g. NetFlow, sFlow), etc.
+  configuration (e.g. NetFlow, IPFIX, sFlow), etc.
 
   Open vSwitch has support for both configuring and migrating both slow
   (configuration) and fast network state between instances.  For
@@ -38,13 +38,14 @@ vSwitch cope with the above requirements.
   environments, and so forth.
 
   Open vSwitch supports a number of features that allow a network
-  control system to respond and adapt as the environment changes.  This
-  includes simple accounting and visibility support such as NetFlow and
-  sFlow.  But perhaps more useful, Open vSwitch supports a network state
-  database (OVSDB) that supports remote triggers.  Therefore, a piece of
-  orchestration software can "watch" various aspects of the network and
-  respond if/when they change.  This is used heavily today, for example,
-  to respond to and track VM migrations.
+  control system to respond and adapt as the environment changes.
+  This includes simple accounting and visibility support such as
+  NetFlow, IPFIX, and sFlow.  But perhaps more useful, Open vSwitch
+  supports a network state database (OVSDB) that supports remote
+  triggers.  Therefore, a piece of orchestration software can "watch"
+  various aspects of the network and respond if/when they change.
+  This is used heavily today, for example, to respond to and track VM
+  migrations.
 
   Open vSwitch also supports OpenFlow as a method of exporting remote
   access to control traffic.  There are a number of uses for this
