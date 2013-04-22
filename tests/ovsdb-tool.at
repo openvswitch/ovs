@@ -24,7 +24,7 @@ m4_define([OVSDB_CHECK_EXECUTION],
      [AT_CHECK([ovsdb-tool transact db 'txn'], [0], [stdout], [ignore])
 cat stdout >> output
 ])
-   AT_CHECK([perl $srcdir/uuidfilt.pl output], [0], [$4])
+   AT_CHECK([${PERL} $srcdir/uuidfilt.pl output], [0], [$4])
    AT_CLEANUP])
 
 EXECUTION_EXAMPLES
@@ -41,7 +41,7 @@ AT_CHECK([[ovsdb-tool transact db '
       "row": {"name": "five", "number": 5}},
      {"op": "comment",
       "comment": "add row for 5"}]']], [0], [stdout], [ignore])
-AT_CHECK([perl $srcdir/uuidfilt.pl stdout], [0],
+AT_CHECK([${PERL} $srcdir/uuidfilt.pl stdout], [0],
  [[[{"uuid":["uuid","<0>"]},{}]
 ]])
 AT_CHECK([grep "add row for 5" db], [0], [ignore])
@@ -91,7 +91,7 @@ AT_CHECK(
     done]],
   [0], [stdout], [ignore])
 dnl Check that all the crap is in fact in the database log.
-AT_CHECK([[perl $srcdir/uuidfilt.pl db | grep -v ^OVSDB | sed 's/"_date":[0-9]*/"_date":0/' | test-json --multiple -]], [0],
+AT_CHECK([[${PERL} $srcdir/uuidfilt.pl db | grep -v ^OVSDB | sed 's/"_date":[0-9]*/"_date":0/' | test-json --multiple -]], [0],
   [[{"cksum":"12345678 9","name":"ordinals","tables":{"ordinals":{"columns":{"name":{"type":"string"},"number":{"type":"integer"}},"indexes":[["number"]]}},"version":"5.1.3"}
 {"_comment":"add row for zero 0","_date":0,"ordinals":{"<0>":{"name":"zero"}}}
 {"_comment":"delete row for 0","_date":0,"ordinals":{"<0>":null}}
@@ -115,7 +115,7 @@ AT_CHECK([[perl $srcdir/uuidfilt.pl db | grep -v ^OVSDB | sed 's/"_date":[0-9]*/
 dnl Dump out and check the actual database contents.
 AT_CHECK([[ovsdb-server --unixctl="`pwd`"/unixctl --remote=punix:socket --run "ovsdb-client dump unix:socket ordinals" db]],
   [0], [stdout], [ignore])
-AT_CHECK([perl $srcdir/uuidfilt.pl stdout], [0], [dnl
+AT_CHECK([${PERL} $srcdir/uuidfilt.pl stdout], [0], [dnl
 ordinals table
 _uuid                                name  number
 ------------------------------------ ----- ------
@@ -142,7 +142,7 @@ AT_CHECK([test `wc -l < db` -eq 4])
 dnl And check that the dumped data is the same too:
 AT_CHECK([[ovsdb-server --unixctl="`pwd`"/unixctl --remote=punix:socket --run "ovsdb-client dump unix:socket ordinals" db]],
   [0], [stdout], [ignore])
-AT_CHECK([perl $srcdir/uuidfilt.pl stdout], [0], [dnl
+AT_CHECK([${PERL} $srcdir/uuidfilt.pl stdout], [0], [dnl
 ordinals table
 _uuid                                name  number
 ------------------------------------ ----- ------
@@ -184,7 +184,7 @@ AT_CHECK(
 dnl Dump out and check the actual database contents.
 AT_CHECK([[ovsdb-server --unixctl="`pwd`"/unixctl --remote=punix:socket --run "ovsdb-client dump unix:socket ordinals" db]],
   [0], [stdout], [ignore])
-AT_CHECK([perl $srcdir/uuidfilt.pl stdout], [0], [dnl
+AT_CHECK([${PERL} $srcdir/uuidfilt.pl stdout], [0], [dnl
 ordinals table
 _uuid                                name  number
 ------------------------------------ ----- ------
@@ -206,7 +206,7 @@ AT_CHECK([test `wc -l < db` -eq 4])
 dnl And check that the dumped data is the same except for the removed column:
 AT_CHECK([[ovsdb-server --unixctl="`pwd`"/unixctl --remote=punix:socket --run "ovsdb-client dump unix:socket ordinals" db]],
   [0], [stdout], [ignore])
-AT_CHECK([perl $srcdir/uuidfilt.pl stdout], [0], [dnl
+AT_CHECK([${PERL} $srcdir/uuidfilt.pl stdout], [0], [dnl
 ordinals table
 _uuid                                number
 ------------------------------------ ------
@@ -247,7 +247,7 @@ AT_CHECK(
 dnl Dump out and check the actual database contents.
 AT_CHECK([[ovsdb-server --unixctl="`pwd`"/unixctl --remote=punix:socket --run "ovsdb-client dump unix:socket ordinals" db]],
   [0], [stdout], [ignore])
-AT_CHECK([perl $srcdir/uuidfilt.pl stdout], [0], [dnl
+AT_CHECK([${PERL} $srcdir/uuidfilt.pl stdout], [0], [dnl
 ordinals table
 _uuid                                number
 ------------------------------------ ------
@@ -269,7 +269,7 @@ AT_CHECK([test `wc -l < db` -eq 4])
 dnl And check that the dumped data is the same except for the added column:
 AT_CHECK([[ovsdb-server --unixctl="`pwd`"/unixctl --remote=punix:socket --run "ovsdb-client dump unix:socket ordinals" db]],
   [0], [stdout], [ignore])
-AT_CHECK([perl $srcdir/uuidfilt.pl stdout], [0], [dnl
+AT_CHECK([${PERL} $srcdir/uuidfilt.pl stdout], [0], [dnl
 ordinals table
 _uuid                                name number
 ------------------------------------ ---- ------

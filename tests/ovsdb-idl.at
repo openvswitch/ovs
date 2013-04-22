@@ -28,7 +28,7 @@ m4_define([OVSDB_CHECK_IDL_C],
      [AT_CHECK([ovsdb-client transact unix:socket $2], [0], [ignore], [ignore], [kill `cat pid`])])
    AT_CHECK([test-ovsdb '-vPATTERN:console:test-ovsdb|%c|%m' -vjsonrpc -t10 idl unix:socket $3],
             [0], [stdout], [ignore], [kill `cat pid`])
-   AT_CHECK([sort stdout | perl $srcdir/uuidfilt.pl]m4_if([$6],,, [[| $6]]),
+   AT_CHECK([sort stdout | ${PERL} $srcdir/uuidfilt.pl]m4_if([$6],,, [[| $6]]),
             [0], [$4], [], [kill `cat pid`])
    OVSDB_SERVER_SHUTDOWN
    AT_CLEANUP])
@@ -46,7 +46,7 @@ m4_define([OVSDB_CHECK_IDL_PY],
      [AT_CHECK([ovsdb-client transact unix:socket $2], [0], [ignore], [ignore], [kill `cat pid`])])
    AT_CHECK([$PYTHON $srcdir/test-ovsdb.py  -t10 idl $srcdir/idltest.ovsschema unix:socket $3],
             [0], [stdout], [ignore], [kill `cat pid`])
-   AT_CHECK([sort stdout | perl $srcdir/uuidfilt.pl]m4_if([$6],,, [[| $6]]),
+   AT_CHECK([sort stdout | ${PERL} $srcdir/uuidfilt.pl]m4_if([$6],,, [[| $6]]),
             [0], [$4], [], [kill `cat pid`])
    OVSDB_SERVER_SHUTDOWN
    AT_CLEANUP])
@@ -67,7 +67,7 @@ m4_define([OVSDB_CHECK_IDL_TCP_PY],
      [AT_CHECK([ovsdb-client transact tcp:127.0.0.1:$TCP_PORT $2], [0], [ignore], [ignore], [kill `cat pid`])])
    AT_CHECK([$PYTHON $srcdir/test-ovsdb.py  -t10 idl $srcdir/idltest.ovsschema tcp:127.0.0.1:$TCP_PORT $3],
             [0], [stdout], [ignore], [kill `cat pid`])
-   AT_CHECK([sort stdout | perl $srcdir/uuidfilt.pl]m4_if([$6],,, [[| $6]]),
+   AT_CHECK([sort stdout | ${PERL} $srcdir/uuidfilt.pl]m4_if([$6],,, [[| $6]]),
             [0], [$4], [], [kill `cat pid`])
    OVSDB_SERVER_SHUTDOWN
    AT_CLEANUP])

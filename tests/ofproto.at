@@ -585,7 +585,7 @@ AT_CHECK(
      -- --id=@t0 create Flow_Table name=main \
      -- --id=@t1 create Flow_Table flow-limit=1024 \
      -- set bridge br0 'flow_tables={1=@t1,0=@t0}' \
-   | perl $srcdir/uuidfilt.pl],
+   | ${PERL} $srcdir/uuidfilt.pl],
   [0], [<0>
 <1>
 ])
@@ -628,7 +628,7 @@ AT_CHECK(
      -- --id=@t0 create Flow_Table name=main \
      -- --id=@t1 create Flow_Table flow-limit=1024 \
      -- set bridge br0 'flow_tables={1=@t1,0=@t0}' \
-   | perl $srcdir/uuidfilt.pl],
+   | ${PERL} $srcdir/uuidfilt.pl],
   [0], [<0>
 <1>
 ])
@@ -650,7 +650,7 @@ AT_CHECK(
   [ovs-vsctl \
      -- --id=@t0 create Flow_Table flow-limit=4 \
      -- set bridge br0 flow_tables:0=@t0 \
-   | perl $srcdir/uuidfilt.pl],
+   | ${PERL} $srcdir/uuidfilt.pl],
   [0], [<0>
 ])
 # Add 4 flows.
@@ -694,7 +694,7 @@ AT_CHECK(
   [ovs-vsctl \
      -- --id=@t0 create Flow_Table flow-limit=4 \
      -- set bridge br0 flow_tables:0=@t0 \
-   | perl $srcdir/uuidfilt.pl],
+   | ${PERL} $srcdir/uuidfilt.pl],
   [0], [<0>
 ])
 # Add 4 flows.
@@ -733,7 +733,7 @@ AT_CHECK(
   [ovs-vsctl \
      -- --id=@t0 create Flow_Table flow-limit=4 overflow-policy=evict \
      -- set bridge br0 flow_tables:0=@t0 \
-   | perl $srcdir/uuidfilt.pl],
+   | ${PERL} $srcdir/uuidfilt.pl],
   [0], [<0>
 ])
 # Add 4 flows.
@@ -791,7 +791,7 @@ AT_CHECK(
   [ovs-vsctl \
      -- --id=@t0 create Flow_Table flow-limit=4 overflow-policy=evict \
      -- set bridge br0 flow_tables:0=@t0 \
-   | perl $srcdir/uuidfilt.pl],
+   | ${PERL} $srcdir/uuidfilt.pl],
   [0], [<0>
 ])
 # Add 4 flows.
@@ -852,7 +852,7 @@ AT_CHECK(
                                    overflow-policy=evict \
                                    groups='"NXM_OF_IN_PORT[[]]"' \
      -- set bridge br0 flow_tables:0=@t0 \
-   | perl $srcdir/uuidfilt.pl],
+   | ${PERL} $srcdir/uuidfilt.pl],
   [0], [<0>
 ])
 # Add 4 flows.
@@ -934,7 +934,7 @@ AT_CHECK(
                                    overflow-policy=evict \
                                    groups='"NXM_OF_IN_PORT[[]]"' \
      -- set bridge br0 flow_tables:0=@t0 \
-   | perl $srcdir/uuidfilt.pl],
+   | ${PERL} $srcdir/uuidfilt.pl],
   [0], [<0>
 ])
 # Add 4 flows.
@@ -1534,7 +1534,7 @@ sort='
     }
     print $_ foreach sort(@buffer);
 '
-AT_CHECK([sed 's/ (xid=0x[[1-9a-fA-F]][[0-9a-fA-F]]*)//' monitor.log | perl -e "$sort"], [0],
+AT_CHECK([sed 's/ (xid=0x[[1-9a-fA-F]][[0-9a-fA-F]]*)//' monitor.log | ${PERL} -e "$sort"], [0],
 [NXST_FLOW_MONITOR reply (xid=0x0):
  event=ADDED table=0 cookie=0 in_port=0,dl_vlan=124 actions=output:2
 NXST_FLOW_MONITOR reply (xid=0x0):
@@ -1657,7 +1657,7 @@ ovs-appctl -t ovs-ofctl ofctl/block
 
 # Add $n_msgs flows.
 (echo "in_port=2,actions=output:2"
-perl -e '
+${PERL} -e '
     for ($i = 0; $i < '$n_msgs'; $i++) {
         print "cookie=1,reg1=$i,actions=drop\n";
     }
