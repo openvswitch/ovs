@@ -1037,7 +1037,7 @@ netdev_bsd_get_features(const struct netdev *netdev,
     media_list = xcalloc(ifmr.ifm_count, sizeof(int));
     ifmr.ifm_ulist = media_list;
 
-    if (!IFM_TYPE(ifmr.ifm_current) & IFM_ETHER) {
+    if (IFM_TYPE(ifmr.ifm_current) != IFM_ETHER) {
         VLOG_DBG_RL(&rl, "%s: doesn't appear to be ethernet",
                     netdev_get_name(netdev));
         error = EINVAL;
