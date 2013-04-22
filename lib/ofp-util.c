@@ -922,7 +922,7 @@ ofputil_version_from_string(const char *s)
 }
 
 static bool
-is_delimiter(char c)
+is_delimiter(unsigned char c)
 {
     return isspace(c) || c == ',';
 }

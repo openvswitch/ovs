@@ -620,11 +620,11 @@ json_lex_number(struct json_parser *p)
     significand = 0;
     if (*cp == '0') {
         cp++;
-        if (isdigit(*cp)) {
+        if (isdigit((unsigned char) *cp)) {
             json_error(p, "leading zeros not allowed");
             return;
         }
-    } else if (isdigit(*cp)) {
+    } else if (isdigit((unsigned char) *cp)) {
         do {
             if (significand <= ULLONG_MAX / 10) {
                 significand = significand * 10 + (*cp - '0');
@@ -635,7 +635,7 @@ json_lex_number(struct json_parser *p)
                 }
             }
             cp++;
-        } while (isdigit(*cp));
+        } while (isdigit((unsigned char) *cp));
     } else {
         json_error(p, "'-' must be followed by digit");
         return;
@@ -644,7 +644,7 @@ json_lex_number(struct json_parser *p)
     /* Optional fraction. */
     if (*cp == '.') {
         cp++;
-        if (!isdigit(*cp)) {
+        if (!isdigit((unsigned char) *cp)) {
             json_error(p, "decimal point must be followed by digit");
             return;
         }
@@ -656,7 +656,7 @@ json_lex_number(struct json_parser *p)
                 imprecise = true;
             }
             cp++;
-        } while (isdigit(*cp));
+        } while (isdigit((unsigned char) *cp));
     }
 
     /* Optional exponent. */
@@ -672,7 +672,7 @@ json_lex_number(struct json_parser *p)
             cp++;
         }
 
-        if (!isdigit(*cp)) {
+        if (!isdigit((unsigned char) *cp)) {
             json_error(p, "exponent must contain at least one digit");
             return;
         }
@@ -685,7 +685,7 @@ json_lex_number(struct json_parser *p)
             }
             exponent = exponent * 10 + (*cp - '0');
             cp++;
-        } while (isdigit(*cp));
+        } while (isdigit((unsigned char) *cp));
 
         if (negative_exponent) {
             pow10 -= exponent;
