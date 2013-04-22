@@ -97,7 +97,13 @@ route_table_get_name(ovs_be32 ip, char name[IFNAMSIZ])
                 name[namelen] = '\0';
                 return true;
             }
+#if defined(__FreeBSD__)
             sa = (struct sockaddr *)((char *)sa + SA_SIZE(sa));
+#elif defined(__NetBSD__)
+            sa = (struct sockaddr *)((char *)sa + RT_ROUNDUP(sa->sa_len));
+#else
+#error unimplemented
+#endif
         }
     }
     return false;
