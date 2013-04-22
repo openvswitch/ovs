@@ -265,7 +265,7 @@ ctz(uint32_t n)
 
 int log_2_floor(uint32_t);
 int log_2_ceil(uint32_t);
-int popcount(uint32_t);
+unsigned int popcount(uint32_t);
 
 /* Returns the rightmost 1-bit in 'x' (e.g. 01011000 => 00001000), or 0 if 'x'
  * is 0. */

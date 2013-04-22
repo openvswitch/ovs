@@ -843,7 +843,7 @@ raw_ctz(uint32_t n)
 #endif
 
 /* Returns the number of 1-bits in 'x', between 0 and 32 inclusive. */
-int
+unsigned int
 popcount(uint32_t x)
 {
     /* In my testing, this implementation is over twice as fast as any other
