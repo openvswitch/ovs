@@ -97,7 +97,11 @@ get_memory_stats(struct smap *stats)
 {
     if (!LINUX_DATAPATH) {
         unsigned int pagesize = get_page_size();
+#ifdef _SC_PHYS_PAGES
         long int phys_pages = sysconf(_SC_PHYS_PAGES);
+#else
+        long int phys_pages = 0;
+#endif
 #ifdef _SC_AVPHYS_PAGES
         long int avphys_pages = sysconf(_SC_AVPHYS_PAGES);
 #else
