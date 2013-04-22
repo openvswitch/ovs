@@ -167,10 +167,9 @@ AC_DEFUN([OVS_CHECK_DBDIR],
      [DBDIR='${sysconfdir}/${PACKAGE}'])
    AC_SUBST([DBDIR])])
 
-dnl Defines HAVE_BACKTRACE if backtrace() is declared in <execinfo.h>
-dnl and exists in libc.
+dnl Defines HAVE_BACKTRACE if backtrace() is found.
 AC_DEFUN([OVS_CHECK_BACKTRACE],
-  [AC_CHECK_HEADER([execinfo.h], [AC_CHECK_FUNCS([backtrace])])])
+  [AC_SEARCH_LIBS([backtrace], [execinfo ubacktrace])])
 
 dnl Checks for __malloc_hook, etc., supported by glibc.
 AC_DEFUN([OVS_CHECK_MALLOC_HOOKS],
