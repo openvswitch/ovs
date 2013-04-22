@@ -15,6 +15,8 @@
 #include <config.h>
 #include "smap.h"
 
+#include <strings.h>
+
 #include "hash.h"
 #include "json.h"
 
