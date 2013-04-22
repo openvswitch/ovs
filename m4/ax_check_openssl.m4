@@ -11,13 +11,13 @@
 #   Look for OpenSSL in a number of default spots, or in a user-selected
 #   spot (via --with-openssl).  Sets
 #
-#     OPENSSL_INCLUDES to the include directives required
-#     OPENSSL_LIBS to the -l directives required
-#     OPENSSL_LDFLAGS to the -L or -R flags required
+#     SSL_INCLUDES to the include directives required
+#     SSL_LIBS to the -l directives required
+#     SSL_LDFLAGS to the -L or -R flags required
 #
 #   and calls ACTION-IF-FOUND or ACTION-IF-NOT-FOUND appropriately
 #
-#   This macro sets OPENSSL_INCLUDES such that source files should use the
+#   This macro sets SSL_INCLUDES such that source files should use the
 #   openssl/ directory in include directives:
 #
 #     #include <openssl/hmac.h>
@@ -53,10 +53,10 @@ AC_DEFUN([AX_CHECK_OPENSSL], [
             # then use that information and don't search ssldirs
             AC_PATH_PROG([PKG_CONFIG], [pkg-config])
             if test x"$PKG_CONFIG" != x""; then
-                OPENSSL_LDFLAGS=`$PKG_CONFIG openssl --libs-only-L 2>/dev/null`
+                SSL_LDFLAGS=`$PKG_CONFIG openssl --libs-only-L 2>/dev/null`
                 if test $? = 0; then
-                    OPENSSL_LIBS=`$PKG_CONFIG openssl --libs-only-l 2>/dev/null`
-                    OPENSSL_INCLUDES=`$PKG_CONFIG openssl --cflags-only-I 2>/dev/null`
+                    SSL_LIBS=`$PKG_CONFIG openssl --libs-only-l 2>/dev/null`
+                    SSL_INCLUDES=`$PKG_CONFIG openssl --cflags-only-I 2>/dev/null`
                     found=true
                 fi
             fi
@@ -73,13 +73,13 @@ AC_DEFUN([AX_CHECK_OPENSSL], [
     # an 'openssl' subdirectory
 
     if ! $found; then
-        OPENSSL_INCLUDES=
+        SSL_INCLUDES=
         for ssldir in $ssldirs; do
             AC_MSG_CHECKING([for openssl/ssl.h in $ssldir])
             if test -f "$ssldir/include/openssl/ssl.h"; then
-                OPENSSL_INCLUDES="-I$ssldir/include"
-                OPENSSL_LDFLAGS="-L$ssldir/lib"
-                OPENSSL_LIBS="-lssl -lcrypto"
+                SSL_INCLUDES="-I$ssldir/include"
+                SSL_LDFLAGS="-L$ssldir/lib"
+                SSL_LIBS="-lssl -lcrypto"
                 found=true
                 AC_MSG_RESULT([yes])
                 break
@@ -96,15 +96,15 @@ AC_DEFUN([AX_CHECK_OPENSSL], [
     # being careful not to pollute the global LIBS, LDFLAGS, and CPPFLAGS
 
     AC_MSG_CHECKING([whether compiling and linking against OpenSSL works])
-    echo "Trying link with OPENSSL_LDFLAGS=$OPENSSL_LDFLAGS;" \
-        "OPENSSL_LIBS=$OPENSSL_LIBS; OPENSSL_INCLUDES=$OPENSSL_INCLUDES" >&AS_MESSAGE_LOG_FD
+    echo "Trying link with SSL_LDFLAGS=$SSL_LDFLAGS;" \
+        "SSL_LIBS=$SSL_LIBS; SSL_INCLUDES=$SSL_INCLUDES" >&AS_MESSAGE_LOG_FD
 
     save_LIBS="$LIBS"
     save_LDFLAGS="$LDFLAGS"
     save_CPPFLAGS="$CPPFLAGS"
-    LDFLAGS="$LDFLAGS $OPENSSL_LDFLAGS"
-    LIBS="$OPENSSL_LIBS $LIBS"
-    CPPFLAGS="$OPENSSL_INCLUDES $CPPFLAGS"
+    LDFLAGS="$LDFLAGS $SSL_LDFLAGS"
+    LIBS="$SSL_LIBS $LIBS"
+    CPPFLAGS="$SSL_INCLUDES $CPPFLAGS"
     AC_LINK_IFELSE(
         [AC_LANG_PROGRAM([#include <openssl/ssl.h>], [SSL_new(NULL)])],
         [
@@ -118,7 +118,7 @@ AC_DEFUN([AX_CHECK_OPENSSL], [
     LDFLAGS="$save_LDFLAGS"
     LIBS="$save_LIBS"
 
-    AC_SUBST([OPENSSL_INCLUDES])
-    AC_SUBST([OPENSSL_LIBS])
-    AC_SUBST([OPENSSL_LDFLAGS])
+    AC_SUBST([SSL_INCLUDES])
+    AC_SUBST([SSL_LIBS])
+    AC_SUBST([SSL_LDFLAGS])
 ])

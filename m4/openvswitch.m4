@@ -99,8 +99,7 @@ AC_DEFUN([OVS_CHECK_OPENSSL],
      [ssl=check])
 
    if test "$ssl" != false; then
-       m4_ifndef([PKG_CHECK_MODULES], [m4_fatal([Please install pkg-config.])])
-       PKG_CHECK_MODULES([SSL], [openssl],
+       AX_CHECK_OPENSSL(
          [HAVE_OPENSSL=yes],
          [HAVE_OPENSSL=no
           if test "$ssl" = check; then
