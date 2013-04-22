@@ -21,8 +21,6 @@ you will need the following software:
     - The GNU C compiler.  We generally test with version 4.1, 4.2, or
       4.3.
 
-    - pkg-config.  We test with version 0.22.
-
     - libssl, from OpenSSL, is optional but recommended if you plan to
       connect the Open vSwitch to an OpenFlow controller.  libssl is
       required to establish confidentiality and authenticity in the
