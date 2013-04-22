@@ -23,6 +23,7 @@
 #include <netinet/in.h>
 #include <stdbool.h>
 #include "openvswitch/types.h"
+#include <netinet/in_systm.h>
 #include <netinet/ip.h>
 
 int set_nonblocking(int fd);

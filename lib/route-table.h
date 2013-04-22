@@ -17,6 +17,7 @@
 #ifndef ROUTE_TABLE_H
 #define ROUTE_TABLE_H 1
 
+#include <sys/types.h>
 #include <sys/socket.h>
 #include <net/if.h>
 #include <stdbool.h>
