@@ -37,7 +37,7 @@
 
 /* backtrace() from <execinfo.h> is really useful, but it is not signal safe
  * everywhere, such as on x86-64.  */
-#if HAVE_EXECINFO_H && !defined __x86_64__
+#if HAVE_BACKTRACE && !defined __x86_64__
 #  define USE_BACKTRACE 1
 #  include <execinfo.h>
 #else
