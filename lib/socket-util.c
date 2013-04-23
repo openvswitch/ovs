@@ -132,8 +132,10 @@ rlim_is_finite(rlim_t limit)
 int
 get_max_fds(void)
 {
-    static int max_fds = -1;
-    if (max_fds < 0) {
+    static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
+    static int max_fds;
+
+    if (ovsthread_once_start(&once)) {
         struct rlimit r;
         if (!getrlimit(RLIMIT_NOFILE, &r) && rlim_is_finite(r.rlim_cur)) {
             max_fds = r.rlim_cur;
@@ -141,7 +143,9 @@ get_max_fds(void)
             VLOG_WARN("failed to obtain fd limit, defaulting to 1024");
             max_fds = 1024;
         }
+        ovsthread_once_done(&once);
     }
+
     return max_fds;
 }
 
@@ -802,15 +806,19 @@ error:
 int
 get_null_fd(void)
 {
-    static int null_fd = -1;
-    if (null_fd < 0) {
+    static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
+    static int null_fd;
+
+    if (ovsthread_once_start(&once)) {
         null_fd = open("/dev/null", O_RDWR);
         if (null_fd < 0) {
             int error = errno;
             VLOG_ERR("could not open /dev/null: %s", ovs_strerror(error));
-            return -error;
+            null_fd = -error;
         }
+        ovsthread_once_done(&once);
     }
+
     return null_fd;
 }
 
