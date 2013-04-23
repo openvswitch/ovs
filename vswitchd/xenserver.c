@@ -17,6 +17,7 @@
 #include "xenserver.h"
 #include <ctype.h>
 #include <errno.h>
+#include <pthread.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -26,7 +27,11 @@
 
 VLOG_DEFINE_THIS_MODULE(xenserver);
 
-static char *
+/* If running on a XenServer, the XenServer host UUID as a 36-character string,
+ * otherwise null. */
+static char *host_uuid;
+
+static void
 read_host_uuid(void)
 {
     static const char filename[] = "/etc/xensource-inventory";
@@ -40,7 +45,7 @@ read_host_uuid(void)
         } else {
             VLOG_INFO("%s: open: %s", filename, ovs_strerror(errno));
         }
-        return NULL;
+        return;
     }
 
     while (fgets(line, sizeof line, file)) {
@@ -53,27 +58,21 @@ read_host_uuid(void)
         if (strlen(line) == leader_len + uuid_len + trailer_len
             && !memcmp(line, leader, leader_len)
             && !memcmp(line + leader_len + uuid_len, trailer, trailer_len)) {
-            char *host_uuid = xmemdup0(line + leader_len, uuid_len);
+            host_uuid = xmemdup0(line + leader_len, uuid_len);
             VLOG_INFO("running on XenServer, host-uuid %s", host_uuid);
             fclose(file);
-            return host_uuid;
+            return;
         }
     }
     fclose(file);
     VLOG_ERR("%s: INSTALLATION_UUID not found", filename);
-    return NULL;
 }
 
 const char *
 xenserver_get_host_uuid(void)
 {
-    static char *host_uuid;
-    static bool inited;
-
-    if (!inited) {
-        host_uuid = read_host_uuid();
-        inited = true;
-    }
+    static pthread_once_t once = PTHREAD_ONCE_INIT;
+    pthread_once(&once, read_host_uuid);
     return host_uuid;
 }
 
