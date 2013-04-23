@@ -229,7 +229,6 @@ vswitchd/ovs-vswitchd.8: \
 	lib/common.man \
 	lib/coverage-unixctl.man \
 	lib/daemon.man \
-	lib/leak-checker.man \
 	lib/memory-unixctl.man \
 	lib/ssl-bootstrap.man \
 	lib/ssl.man \
@@ -244,7 +243,6 @@ vswitchd/ovs-vswitchd.8.in:
 lib/common.man:
 lib/coverage-unixctl.man:
 lib/daemon.man:
-lib/leak-checker.man:
 lib/memory-unixctl.man:
 lib/ssl-bootstrap.man:
 lib/ssl.man:

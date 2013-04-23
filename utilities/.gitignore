@@ -19,7 +19,6 @@
 /ovs-ofctl
 /ovs-ofctl.8
 /ovs-parse-backtrace
-/ovs-parse-leaks
 /ovs-pcap
 /ovs-pcap.1
 /ovs-pki

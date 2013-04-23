@@ -22,7 +22,6 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include "fatal-signal.h"
-#include "leak-checker.h"
 #include "ofpbuf.h"
 #include "openflow/openflow.h"
 #include "poll-loop.h"
@@ -210,7 +209,6 @@ vconn_stream_send(struct vconn *vconn, struct ofpbuf *buffer)
         ofpbuf_delete(buffer);
         return 0;
     } else if (retval >= 0 || retval == -EAGAIN) {
-        leak_checker_claim(buffer);
         s->txbuf = buffer;
         if (retval > 0) {
             ofpbuf_pull(buffer, retval);

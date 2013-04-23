@@ -32,7 +32,6 @@
 #include "json.h"
 #include "jsonrpc.h"
 #include "jsonrpc-server.h"
-#include "leak-checker.h"
 #include "list.h"
 #include "memory.h"
 #include "ovsdb.h"
@@ -1013,7 +1012,6 @@ parse_options(int *argcp, char **argvp[],
         OPT_BOOTSTRAP_CA_CERT,
         OPT_ENABLE_DUMMY,
         VLOG_OPTION_ENUMS,
-        LEAK_CHECKER_OPTION_ENUMS,
         DAEMON_OPTION_ENUMS
     };
     static const struct option long_options[] = {
@@ -1024,7 +1022,6 @@ parse_options(int *argcp, char **argvp[],
         {"version",     no_argument, NULL, 'V'},
         DAEMON_LONG_OPTIONS,
         VLOG_LONG_OPTIONS,
-        LEAK_CHECKER_LONG_OPTIONS,
         {"bootstrap-ca-cert", required_argument, NULL, OPT_BOOTSTRAP_CA_CERT},
         {"private-key", required_argument, NULL, 'p'},
         {"certificate", required_argument, NULL, 'c'},
@@ -1067,7 +1064,6 @@ parse_options(int *argcp, char **argvp[],
 
         VLOG_OPTION_HANDLERS
         DAEMON_OPTION_HANDLERS
-        LEAK_CHECKER_OPTION_HANDLERS
 
         case 'p':
             private_key_file = optarg;
@@ -1122,7 +1118,6 @@ usage(void)
            "  --unixctl=SOCKET        override default control socket name\n"
            "  -h, --help              display this help message\n"
            "  -V, --version           display version information\n");
-    leak_checker_usage();
     exit(EXIT_SUCCESS);
 }
 

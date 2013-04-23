@@ -24,7 +24,6 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include "fatal-signal.h"
-#include "leak-checker.h"
 #include "poll-loop.h"
 #include "socket-util.h"
 #include "stress.h"

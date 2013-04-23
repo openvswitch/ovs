@@ -32,7 +32,6 @@
 #include "dirs.h"
 #include "dpif.h"
 #include "dummy.h"
-#include "leak-checker.h"
 #include "memory.h"
 #include "netdev.h"
 #include "openflow/openflow.h"
@@ -152,7 +151,6 @@ parse_options(int argc, char *argv[], char **unixctl_pathp)
         OPT_MLOCKALL,
         OPT_UNIXCTL,
         VLOG_OPTION_ENUMS,
-        LEAK_CHECKER_OPTION_ENUMS,
         OPT_BOOTSTRAP_CA_CERT,
         OPT_ENABLE_DUMMY,
         OPT_DISABLE_SYSTEM,
@@ -165,7 +163,6 @@ parse_options(int argc, char *argv[], char **unixctl_pathp)
         {"unixctl",     required_argument, NULL, OPT_UNIXCTL},
         DAEMON_LONG_OPTIONS,
         VLOG_LONG_OPTIONS,
-        LEAK_CHECKER_LONG_OPTIONS,
         STREAM_SSL_LONG_OPTIONS,
         {"peer-ca-cert", required_argument, NULL, OPT_PEER_CA_CERT},
         {"bootstrap-ca-cert", required_argument, NULL, OPT_BOOTSTRAP_CA_CERT},
@@ -201,7 +198,6 @@ parse_options(int argc, char *argv[], char **unixctl_pathp)
 
         VLOG_OPTION_HANDLERS
         DAEMON_OPTION_HANDLERS
-        LEAK_CHECKER_OPTION_HANDLERS
         STREAM_SSL_OPTION_HANDLERS
 
         case OPT_PEER_CA_CERT:
@@ -260,7 +256,6 @@ usage(void)
            "  --unixctl=SOCKET        override default control socket name\n"
            "  -h, --help              display this help message\n"
            "  -V, --version           display version information\n");
-    leak_checker_usage();
     exit(EXIT_SUCCESS);
 }
 

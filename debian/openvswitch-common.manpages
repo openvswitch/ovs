@@ -6,4 +6,3 @@ _debian/utilities/ovs-ofctl.8
 _debian/utilities/ovs-pki.8
 _debian/utilities/bugtool/ovs-bugtool.8
 utilities/ovs-parse-backtrace.8
-utilities/ovs-parse-leaks.8

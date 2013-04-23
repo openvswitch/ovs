@@ -98,7 +98,6 @@ configuration.
 .so lib/ssl-bootstrap.man
 .so lib/vlog.man
 .so lib/common.man
-.so lib/leak-checker.man
 .
 .SH "RUNTIME MANAGEMENT COMMANDS"
 \fBovs\-appctl\fR(8) can send commands to a running

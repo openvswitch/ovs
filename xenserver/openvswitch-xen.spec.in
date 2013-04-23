@@ -1,6 +1,6 @@
 # Spec file for Open vSwitch.
 
-# Copyright (C) 2009, 2010, 2011, 2012 Nicira, Inc.
+# Copyright (C) 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
 #
 # Copying and distribution of this file, with or without modification,
 # are permitted in any medium without royalty provided the copyright
@@ -428,7 +428,6 @@ exit 0
 /usr/bin/ovs-dpctl
 /usr/bin/ovs-ofctl
 /usr/bin/ovs-parse-backtrace
-/usr/bin/ovs-parse-leaks
 /usr/bin/ovs-pcap
 /usr/bin/ovs-tcpundump
 /usr/bin/ovs-vlan-test
@@ -446,7 +445,6 @@ exit 0
 /usr/share/man/man8/ovs-dpctl.8.gz
 /usr/share/man/man8/ovs-ofctl.8.gz
 /usr/share/man/man8/ovs-parse-backtrace.8.gz
-/usr/share/man/man8/ovs-parse-leaks.8.gz
 /usr/share/man/man1/ovs-pcap.1.gz
 /usr/share/man/man1/ovs-tcpundump.1.gz
 /usr/share/man/man8/ovs-vlan-bug-workaround.8.gz

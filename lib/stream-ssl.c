@@ -35,7 +35,6 @@
 #include "coverage.h"
 #include "dynamic-string.h"
 #include "entropy.h"
-#include "leak-checker.h"
 #include "ofpbuf.h"
 #include "openflow/openflow.h"
 #include "packets.h"
@@ -674,7 +673,6 @@ ssl_send(struct stream *stream, const void *buffer, size_t n)
             ssl_clear_txbuf(sslv);
             return n;
         case EAGAIN:
-            leak_checker_claim(buffer);
             return n;
         default:
             sslv->txbuf = NULL;
