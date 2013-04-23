@@ -1,4 +1,4 @@
-/* Copyright (c) 2008, 2009, 2010, 2011 Nicira, Inc.
+/* Copyright (c) 2008, 2009, 2010, 2011, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@
 
 #include "aes128.h"
 #include "entropy.h"
+#include "ovs-thread.h"
 #include "sha1.h"
 #include "timeval.h"
 #include "util.h"
@@ -49,11 +50,8 @@ static void do_init(void);
 void
 uuid_init(void)
 {
-    static bool inited;
-    if (!inited) {
-        do_init();
-        inited = true;
-    }
+    static pthread_once_t once = PTHREAD_ONCE_INIT;
+    pthread_once(&once, do_init);
 }
 
 /* Generates a new random UUID in 'uuid'.
@@ -83,15 +81,22 @@ uuid_init(void)
 void
 uuid_generate(struct uuid *uuid)
 {
+    static pthread_mutex_t mutex = PTHREAD_ADAPTIVE_MUTEX_INITIALIZER;
+    uint64_t copy[2];
+
     uuid_init();
 
-    /* Increment the counter. */
+    /* Copy out the counter's current value, then increment it. */
+    xpthread_mutex_lock(&mutex);
+    copy[0] = counter[0];
+    copy[1] = counter[1];
     if (++counter[1] == 0) {
         counter[0]++;
     }
+    xpthread_mutex_unlock(&mutex);
 
     /* AES output is exactly 16 bytes, so we encrypt directly into 'uuid'. */
-    aes128_encrypt(&key, counter, uuid);
+    aes128_encrypt(&key, copy, uuid);
 
     /* Set bits to indicate a random UUID.  See RFC 4122 section 4.4. */
     uuid->parts[2] &= ~0xc0000000;
