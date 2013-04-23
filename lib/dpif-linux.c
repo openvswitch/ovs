@@ -795,7 +795,7 @@ static void
 dpif_linux_init_flow_put(struct dpif *dpif_, const struct dpif_flow_put *put,
                          struct dpif_linux_flow *request)
 {
-    static struct nlattr dummy_action;
+    static const struct nlattr dummy_action;
 
     struct dpif_linux *dpif = dpif_linux_cast(dpif_);
 
@@ -806,7 +806,9 @@ dpif_linux_init_flow_put(struct dpif *dpif_, const struct dpif_flow_put *put,
     request->key = put->key;
     request->key_len = put->key_len;
     /* Ensure that OVS_FLOW_ATTR_ACTIONS will always be included. */
-    request->actions = put->actions ? put->actions : &dummy_action;
+    request->actions = (put->actions
+                        ? put->actions
+                        : CONST_CAST(struct nlattr *, &dummy_action));
     request->actions_len = put->actions_len;
     if (put->flags & DPIF_FP_ZERO_STATS) {
         request->clear = true;
