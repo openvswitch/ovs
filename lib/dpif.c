@@ -97,15 +97,15 @@ static void log_execute_message(struct dpif *, const struct dpif_execute *,
 static void
 dp_initialize(void)
 {
-    static int status = -1;
+    static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
 
-    if (status < 0) {
+    if (ovsthread_once_start(&once)) {
         int i;
 
-        status = 0;
         for (i = 0; i < ARRAY_SIZE(base_dpif_classes); i++) {
             dp_register_provider(base_dpif_classes[i]);
         }
+        ovsthread_once_done(&once);
     }
 }
 

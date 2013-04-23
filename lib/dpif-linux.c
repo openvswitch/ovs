@@ -1440,9 +1440,10 @@ const struct dpif_class dpif_linux_class = {
 static int
 dpif_linux_init(void)
 {
-    static int error = -1;
+    static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
+    static int error;
 
-    if (error < 0) {
+    if (ovsthread_once_start(&once)) {
         unsigned int ovs_vport_mcgroup;
 
         error = nl_lookup_genl_family(OVS_DATAPATH_FAMILY,
@@ -1472,6 +1473,8 @@ dpif_linux_init(void)
             nln = nln_create(NETLINK_GENERIC, ovs_vport_mcgroup,
                              dpif_linux_nln_parse, &vport);
         }
+
+        ovsthread_once_done(&once);
     }
 
     return error;
