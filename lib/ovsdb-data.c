@@ -24,6 +24,7 @@
 
 #include "dynamic-string.h"
 #include "hash.h"
+#include "ovs-thread.h"
 #include "ovsdb-error.h"
 #include "ovsdb-parser.h"
 #include "json.h"
@@ -94,9 +95,9 @@ const union ovsdb_atom *
 ovsdb_atom_default(enum ovsdb_atomic_type type)
 {
     static union ovsdb_atom default_atoms[OVSDB_N_TYPES];
-    static bool inited;
+    static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
 
-    if (!inited) {
+    if (ovsthread_once_start(&once)) {
         int i;
 
         for (i = 0; i < OVSDB_N_TYPES; i++) {
@@ -104,7 +105,7 @@ ovsdb_atom_default(enum ovsdb_atomic_type type)
                 ovsdb_atom_init_default(&default_atoms[i], i);
             }
         }
-        inited = true;
+        ovsthread_once_done(&once);
     }
 
     ovs_assert(ovsdb_atomic_type_is_valid(type));
