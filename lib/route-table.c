@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -225,7 +225,7 @@ route_table_reset(void)
     struct nl_dump dump;
     struct rtgenmsg *rtmsg;
     struct ofpbuf request, reply;
-    static struct nl_sock *rtnl_sock;
+    struct nl_sock *rtnl_sock;
 
     route_map_clear();
     route_table_valid = true;
@@ -272,7 +272,7 @@ route_table_parse(struct ofpbuf *buf, struct route_table_msg *change)
         [RTA_OIF] = { .type = NL_A_U32, .optional = false },
     };
 
-    static struct nlattr *attrs[ARRAY_SIZE(policy)];
+    struct nlattr *attrs[ARRAY_SIZE(policy)];
 
     parsed = nl_policy_parse(buf, NLMSG_HDRLEN + sizeof(struct rtmsg),
                              policy, attrs, ARRAY_SIZE(policy));
@@ -421,7 +421,7 @@ name_table_reset(void)
     struct nl_dump dump;
     struct rtgenmsg *rtmsg;
     struct ofpbuf request, reply;
-    static struct nl_sock *rtnl_sock;
+    struct nl_sock *rtnl_sock;
 
     name_table_valid = true;
     name_map_clear();
