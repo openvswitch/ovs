@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010, 2011 Nicira, Inc.
+/* Copyright (c) 2009, 2010, 2011, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@
 
 #include "dynamic-string.h"
 #include "json.h"
+#include "ovs-thread.h"
 #include "ovsdb-data.h"
 #include "ovsdb-error.h"
 #include "ovsdb-parser.h"
@@ -158,16 +159,23 @@ ovsdb_base_type_init(struct ovsdb_base_type *base, enum ovsdb_atomic_type type)
 const struct ovsdb_type *
 ovsdb_base_type_get_enum_type(enum ovsdb_atomic_type atomic_type)
 {
+    static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
     static struct ovsdb_type *types[OVSDB_N_TYPES];
 
-    if (!types[atomic_type]) {
-        struct ovsdb_type *type;
+    if (ovsthread_once_start(&once)) {
+        enum ovsdb_atomic_type i;
 
-        types[atomic_type] = type = xmalloc(sizeof *type);
-        ovsdb_base_type_init(&type->key, atomic_type);
-        ovsdb_base_type_init(&type->value, OVSDB_TYPE_VOID);
-        type->n_min = 1;
-        type->n_max = UINT_MAX;
+        for (i = 0; i < OVSDB_N_TYPES; i++) {
+            struct ovsdb_type *type;
+
+            types[i] = type = xmalloc(sizeof *type);
+            ovsdb_base_type_init(&type->key, i);
+            ovsdb_base_type_init(&type->value, OVSDB_TYPE_VOID);
+            type->n_min = 1;
+            type->n_max = UINT_MAX;
+        }
+
+        ovsthread_once_done(&once);
     }
     return types[atomic_type];
 }
