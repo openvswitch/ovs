@@ -838,8 +838,8 @@ A: Do you have a controller configured on br0 (as the commands above
    can refer to the answer there for more information.
 
 
-Controllers
------------
+Using OpenFlow (Manually or Via Controller)
+-------------------------------------------
 
 Q: What versions of OpenFlow does Open vSwitch support?
 
@@ -1099,6 +1099,23 @@ A: To debug network behavior problems, trace the path of a packet,
    It is likely that during one of these steps you will figure out the
    problem.  If not, then follow the ARP reply back to the origin, in
    reverse.
+
+Q: How do I make a flow drop packets?
+
+A: An empty set of actions causes a packet to be dropped.  You can
+   specify an empty set of actions with "actions=" on the ovs-ofctl
+   command line.  For example:
+
+       ovs-ofctl add-flow br0 priority=65535,actions=
+
+   would cause every packet entering switch br0 to be dropped.
+
+   You can write "drop" explicitly if you like.  The effect is the
+   same.  Thus, the following command also causes every packet
+   entering switch br0 to be dropped:
+
+       ovs-ofctl add-flow br0 priority=65535,actions=drop
+
 
 Contact 
 -------
