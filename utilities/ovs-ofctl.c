@@ -151,7 +151,7 @@ parse_options(int argc, char *argv[])
         OFP_VERSION_OPTION_ENUMS,
         VLOG_OPTION_ENUMS
     };
-    static struct option long_options[] = {
+    static const struct option long_options[] = {
         {"timeout", required_argument, NULL, 't'},
         {"strict", no_argument, NULL, OPT_STRICT},
         {"readd", no_argument, NULL, OPT_READD},

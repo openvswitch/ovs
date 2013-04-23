@@ -159,7 +159,7 @@ parse_options(int argc, char *argv[], char **unixctl_pathp)
         OPT_DISABLE_SYSTEM,
         DAEMON_OPTION_ENUMS
     };
-    static struct option long_options[] = {
+    static const struct option long_options[] = {
         {"help",        no_argument, NULL, 'h'},
         {"version",     no_argument, NULL, 'V'},
         {"mlockall",    no_argument, NULL, OPT_MLOCKALL},

@@ -980,7 +980,7 @@ parse_options(int *argcp, char **argvp[],
         LEAK_CHECKER_OPTION_ENUMS,
         DAEMON_OPTION_ENUMS
     };
-    static struct option long_options[] = {
+    static const struct option long_options[] = {
         {"remote",      required_argument, NULL, OPT_REMOTE},
         {"unixctl",     required_argument, NULL, OPT_UNIXCTL},
         {"run",         required_argument, NULL, OPT_RUN},

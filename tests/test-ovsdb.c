@@ -68,7 +68,7 @@ main(int argc, char *argv[])
 static void
 parse_options(int argc, char *argv[])
 {
-    static struct option long_options[] = {
+    static const struct option long_options[] = {
         {"timeout", required_argument, NULL, 't'},
         {"verbose", optional_argument, NULL, 'v'},
         {"help", no_argument, NULL, 'h'},

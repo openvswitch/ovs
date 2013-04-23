@@ -89,7 +89,7 @@ parse_options(int argc, char *argv[])
         OPT_MAY_CREATE,
         VLOG_OPTION_ENUMS
     };
-    static struct option long_options[] = {
+    static const struct option long_options[] = {
         {"statistics", no_argument, NULL, 's'},
         {"clear", no_argument, NULL, OPT_CLEAR},
         {"may-create", no_argument, NULL, OPT_MAY_CREATE},

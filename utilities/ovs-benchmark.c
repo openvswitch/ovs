@@ -118,7 +118,7 @@ parse_target(const char *s_, struct in_addr *addr,
 static void
 parse_options(int argc, char *argv[])
 {
-    static struct option long_options[] = {
+    static const struct option long_options[] = {
         {"local", required_argument, NULL, 'l'},
         {"remote", required_argument, NULL, 'r'},
         {"batches", required_argument, NULL, 'b'},

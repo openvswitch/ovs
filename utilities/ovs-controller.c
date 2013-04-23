@@ -255,7 +255,7 @@ parse_options(int argc, char *argv[])
         DAEMON_OPTION_ENUMS,
         OFP_VERSION_OPTION_ENUMS
     };
-    static struct option long_options[] = {
+    static const struct option long_options[] = {
         {"hub",         no_argument, NULL, 'H'},
         {"noflow",      no_argument, NULL, 'n'},
         {"normal",      no_argument, NULL, 'N'},

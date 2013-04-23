@@ -363,7 +363,7 @@ parse_options(int argc, char *argv[])
     enum {
         VLOG_OPTION_ENUMS
     };
-    static struct option long_options[] = {
+    static const struct option long_options[] = {
         VLOG_LONG_OPTIONS,
         {NULL, 0, NULL, 0},
     };
