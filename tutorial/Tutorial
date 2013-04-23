@@ -277,7 +277,7 @@ one way or another, perhaps with common network testing tools like
 difficult with our simulated switch, since it's not visible to the
 operating system.
 
-Bur our simulated switch has a few specialized testing tools.  The
+But our simulated switch has a few specialized testing tools.  The
 most powerful of these tools is "ofproto/trace".  Given a switch and
 the specification of a flow, "ofproto/trace" shows, step-by-step, how
 such a flow would be treated as it goes through the switch.
@@ -511,7 +511,7 @@ Here's how you can interpret each part of the "learn" action above:
         Make the flow that we add to flow table 10 match the same VLAN
         ID that the packet we're currently processing contains.  This
         effectively scopes the MAC learning entry to a single VLAN,
-        which is the ordinary behavior for a VLAN-aware siwtch.
+        which is the ordinary behavior for a VLAN-aware switch.
 
     NXM_OF_ETH_DST[]=NXM_OF_ETH_SRC[]
 
