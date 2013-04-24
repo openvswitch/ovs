@@ -231,13 +231,13 @@ void vlog_usage(void);
             vlog_rate_limit(THIS_MODULE, level__, RL, __VA_ARGS__); \
         }                                                           \
     } while (0)
-#define VLOG_ONCE(LEVEL, ...)                       \
-    do {                                            \
-        static bool already_logged;                 \
-        if (!already_logged) {                      \
-            already_logged = true;                  \
-            vlog(THIS_MODULE, LEVEL, __VA_ARGS__);  \
-        }                                           \
+#define VLOG_ONCE(LEVEL, ...)                                           \
+    do {                                                                \
+        static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER; \
+        if (ovsthread_once_start(&once)) {                              \
+            vlog(THIS_MODULE, LEVEL, __VA_ARGS__);                      \
+            ovsthread_once_done(&once);                                 \
+        }                                                               \
     } while (0)
 
 #define VLOG_DEFINE_MODULE__(MODULE)                                    \
