@@ -816,6 +816,21 @@ A: It is to be expected that the VMs can't access each other.  VLANs
    the machines you are trying to access are not on VLAN 9 (or 10) and
    that the Internet is not available on VLAN 9 (or 10).
 
+Q: I added a pair of VMs on the same VLAN, like this:
+
+       ovs-vsctl add-br br0
+       ovs-vsctl add-port br0 eth0
+       ovs-vsctl add-port br0 tap0 tag=9
+       ovs-vsctl add-port br0 tap1 tag=9
+
+    The VMs can access each other, but not the external network or the
+    Internet.
+
+A: It seems likely that the machines you are trying to access in the
+   external network are not on VLAN 9 and that the Internet is not
+   available on VLAN 9.  Also, ensure VLAN 9 is set up as an allowed
+   trunk VLAN on the upstream switch port to which eth0 is connected.
+
 Q: Can I configure an IP address on a VLAN?
 
 A: Yes.  Use an "internal port" configured as an access port.  For
