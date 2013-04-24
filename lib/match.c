@@ -98,6 +98,8 @@ match_wc_init(struct match *match, const struct flow *flow)
                (flow->dl_type == htons(ETH_TYPE_RARP))) {
         memset(&wc->masks.nw_src, 0xff, sizeof wc->masks.nw_src);
         memset(&wc->masks.nw_dst, 0xff, sizeof wc->masks.nw_dst);
+    } else if (eth_type_mpls(flow->dl_type)) {
+        memset(&wc->masks.mpls_lse, 0xff, sizeof wc->masks.mpls_lse);
     }
 
     if (flow->dl_type == htons(ETH_TYPE_ARP) ||
@@ -818,24 +820,6 @@ format_flow_tunnel(struct ds *s, const struct match *match)
     }
 }
 
-static void
-flow_format_mpls(const struct flow *flow, struct ds *s)
-{
-    if (flow->dl_type == htons(ETH_TYPE_MPLS)) {
-        ds_put_cstr(s, "mpls");
-    } else if (flow->dl_type == htons(ETH_TYPE_MPLS_MCAST)) {
-        ds_put_cstr(s, "mplsm");
-    } else {
-        return;
-    }
-
-    ds_put_format(s, "(label:%"PRIu32",tc:%d,ttl:%d,bos:%d),",
-                  mpls_lse_to_label(flow->mpls_lse),
-                  mpls_lse_to_tc(flow->mpls_lse),
-                  mpls_lse_to_ttl(flow->mpls_lse),
-                  mpls_lse_to_bos(flow->mpls_lse));
-}
-
 /* Appends a string representation of 'match' to 's'.  If 'priority' is
  * different from OFP_DEFAULT_PRIORITY, includes it in 's'. */
 void
@@ -901,8 +885,10 @@ match_format(const struct match *match, struct ds *s, unsigned int priority)
             ds_put_cstr(s, "arp,");
         } else if (f->dl_type == htons(ETH_TYPE_RARP)) {
             ds_put_cstr(s, "rarp,");
-        } else if (f->mpls_depth) {
-            flow_format_mpls(f, s);
+        } else if (f->dl_type == htons(ETH_TYPE_MPLS)) {
+            ds_put_cstr(s, "mpls,");
+        } else if (f->dl_type == htons(ETH_TYPE_MPLS_MCAST)) {
+            ds_put_cstr(s, "mplsm,");
         } else {
             skip_type = false;
         }
@@ -1018,6 +1004,10 @@ match_format(const struct match *match, struct ds *s, unsigned int priority)
     if (wc->masks.mpls_lse & htonl(MPLS_TC_MASK)) {
         ds_put_format(s, "mpls_tc=%"PRIu8",",
                  mpls_lse_to_tc(f->mpls_lse));
+    }
+    if (wc->masks.mpls_lse & htonl(MPLS_TTL_MASK)) {
+        ds_put_format(s, "mpls_ttl=%"PRIu8",",
+                 mpls_lse_to_ttl(f->mpls_lse));
     }
     if (wc->masks.mpls_lse & htonl(MPLS_BOS_MASK)) {
         ds_put_format(s, "mpls_bos=%"PRIu8",",
