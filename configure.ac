@@ -60,7 +60,7 @@ OVS_CHECK_IF_DL
 OVS_CHECK_STRTOK_R
 AC_CHECK_MEMBERS([struct stat.st_mtim.tv_nsec, struct stat.st_mtimensec],
   [], [], [[#include <sys/stat.h>]])
-AC_CHECK_FUNCS([mlockall strnlen strsignal getloadavg statvfs setmntent])
+AC_CHECK_FUNCS([mlockall strnlen strsignal getloadavg statvfs getmntent_r])
 AC_CHECK_HEADERS([mntent.h sys/statvfs.h linux/types.h linux/if_ether.h])
 
 OVS_CHECK_PKIDIR
