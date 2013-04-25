@@ -41,6 +41,7 @@ struct jsonrpc {
 
     /* Input. */
     struct byteq input;
+    uint8_t input_buffer[512];
     struct json_parser *parser;
     struct jsonrpc_msg *received;
 
@@ -87,7 +88,7 @@ jsonrpc_open(struct stream *stream)
     rpc = xzalloc(sizeof *rpc);
     rpc->name = xstrdup(stream_get_name(stream));
     rpc->stream = stream;
-    byteq_init(&rpc->input);
+    byteq_init(&rpc->input, rpc->input_buffer, sizeof rpc->input_buffer);
     list_init(&rpc->output);
 
     return rpc;
@@ -330,7 +331,7 @@ jsonrpc_recv(struct jsonrpc *rpc, struct jsonrpc_msg **msgp)
                 jsonrpc_received(rpc);
                 if (rpc->status) {
                     const struct byteq *q = &rpc->input;
-                    if (q->head <= BYTEQ_SIZE) {
+                    if (q->head <= q->size) {
                         stream_report_content(q->buffer, q->head,
                                               STREAM_JSONRPC,
                                               THIS_MODULE, rpc->name);

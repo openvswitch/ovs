@@ -1,4 +1,4 @@
-/* Copyright (c) 2008, 2009 Nicira, Inc.
+/* Copyright (c) 2008, 2009, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,17 +20,15 @@
 #include <stddef.h>
 #include <stdint.h>
 
-/* Maximum number of bytes in a byteq. */
-#define BYTEQ_SIZE 512
-
 /* General-purpose circular queue of bytes. */
 struct byteq {
-    uint8_t buffer[BYTEQ_SIZE]; /* Circular queue. */
+    uint8_t *buffer;            /* Circular queue. */
+    unsigned int size;          /* Number of bytes allocated for 'buffer'. */
     unsigned int head;          /* Head of queue. */
     unsigned int tail;          /* Chases the head. */
 };
 
-void byteq_init(struct byteq *);
+void byteq_init(struct byteq *, uint8_t *buffer, size_t size);
 int byteq_used(const struct byteq *);
 int byteq_avail(const struct byteq *);
 bool byteq_is_empty(const struct byteq *);
