@@ -224,6 +224,8 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
   OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [dev_disable_lro])
   OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [dev_get_stats])
   OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [dev_get_by_index_rcu])
+  OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [__skb_gso_segment])
+  OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [can_checksum_protocol])
 
   OVS_GREP_IFELSE([$KSRC/include/linux/rcupdate.h], [rcu_read_lock_held], [],
                   [OVS_GREP_IFELSE([$KSRC/include/linux/rtnetlink.h],
@@ -268,10 +270,15 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
 
   OVS_GREP_IFELSE([$KSRC/include/net/netlink.h], [NLA_NUL_STRING])
   OVS_GREP_IFELSE([$KSRC/include/net/netlink.h], [nla_get_be16])
+  OVS_GREP_IFELSE([$KSRC/include/net/netlink.h], [nla_put_be16])
+  OVS_GREP_IFELSE([$KSRC/include/net/netlink.h], [nla_put_be32])
+  OVS_GREP_IFELSE([$KSRC/include/net/netlink.h], [nla_put_be64])
   OVS_GREP_IFELSE([$KSRC/include/net/netlink.h], [nla_find_nested])
 
   OVS_GREP_IFELSE([$KSRC/include/linux/if_vlan.h], [ADD_ALL_VLANS_CMD],
                   [OVS_DEFINE([HAVE_VLAN_BUG_WORKAROUND])])
+
+  OVS_GREP_IFELSE([$KSRC/include/linux/percpu.h], [this_cpu_ptr])
 
   OVS_GREP_IFELSE([$KSRC/include/linux/openvswitch.h], [openvswitch_handle_frame_hook],
                   [OVS_DEFINE([HAVE_RHEL_OVS_HOOK])])

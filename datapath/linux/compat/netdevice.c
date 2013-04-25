@@ -2,6 +2,7 @@
 #include <linux/if_vlan.h>
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,38)
+#ifndef HAVE_CAN_CHECKSUM_PROTOCOL
 static bool can_checksum_protocol(unsigned long features, __be16 protocol)
 {
 	return  ((features & NETIF_F_GEN_CSUM) ||
@@ -12,6 +13,7 @@ static bool can_checksum_protocol(unsigned long features, __be16 protocol)
 		((features & NETIF_F_FCOE_CRC) &&
 				protocol == htons(ETH_P_FCOE)));
 }
+#endif
 
 static inline int illegal_highdma(struct net_device *dev, struct sk_buff *skb)
 {

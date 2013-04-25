@@ -3,7 +3,7 @@
 
 #include_next <asm/percpu.h>
 
-#ifndef this_cpu_ptr
+#if !defined this_cpu_ptr && !defined HAVE_THIS_CPU_PTR
 #define this_cpu_ptr(ptr) per_cpu_ptr(ptr, smp_processor_id())
 #endif
 

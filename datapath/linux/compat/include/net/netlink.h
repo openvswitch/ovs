@@ -85,15 +85,21 @@ static inline __be64 nla_get_be64(const struct nlattr *nla)
 }
 #endif
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,5,0)
+#ifndef HAVE_NLA_PUT_BE16
 static inline int nla_put_be16(struct sk_buff *skb, int attrtype, __be16 value)
 {
 	return nla_put(skb, attrtype, sizeof(__be16), &value);
 }
+#endif
+
+#ifndef HAVE_NLA_PUT_BE32
 static inline int nla_put_be32(struct sk_buff *skb, int attrtype, __be32 value)
 {
 	return nla_put(skb, attrtype, sizeof(__be32), &value);
 }
+#endif
+
+#ifndef HAVE_NLA_PUT_BE64
 static inline int nla_put_be64(struct sk_buff *skb, int attrtype, __be64 value)
 {
 	return nla_put(skb, attrtype, sizeof(__be64), &value);
