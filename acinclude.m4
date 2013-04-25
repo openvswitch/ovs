@@ -273,6 +273,9 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
   OVS_GREP_IFELSE([$KSRC/include/linux/if_vlan.h], [ADD_ALL_VLANS_CMD],
                   [OVS_DEFINE([HAVE_VLAN_BUG_WORKAROUND])])
 
+  OVS_GREP_IFELSE([$KSRC/include/linux/openvswitch.h], [openvswitch_handle_frame_hook],
+                  [OVS_DEFINE([HAVE_RHEL_OVS_HOOK])])
+
   OVS_CHECK_LOG2_H
 
   if cmp -s datapath/linux/kcompat.h.new \

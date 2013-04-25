@@ -45,6 +45,12 @@ MODULE_PARM_DESC(vlan_tso, "Enable TSO for VLAN packets");
 #define vlan_tso true
 #endif
 
+#ifdef HAVE_RHEL_OVS_HOOK
+static atomic_t nr_bridges = ATOMIC_INIT(0);
+
+extern struct sk_buff *(*openvswitch_handle_frame_hook)(struct sk_buff *skb);
+#endif
+
 static void netdev_port_receive(struct vport *vport, struct sk_buff *skb);
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,39)
@@ -63,7 +69,8 @@ static rx_handler_result_t netdev_frame_hook(struct sk_buff **pskb)
 
 	return RX_HANDLER_CONSUMED;
 }
-#elif LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,36)
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,36) || \
+      defined HAVE_RHEL_OVS_HOOK
 /* Called with rcu_read_lock and bottom-halves disabled. */
 static struct sk_buff *netdev_frame_hook(struct sk_buff *skb)
 {
@@ -105,7 +112,8 @@ static int netdev_frame_hook(struct net_bridge_port *p, struct sk_buff **pskb)
 #error
 #endif
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,36)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,36) || \
+    defined HAVE_RHEL_OVS_HOOK
 static int netdev_init(void) { return 0; }
 static void netdev_exit(void) { }
 #else
@@ -153,10 +161,16 @@ static struct vport *netdev_create(const struct vport_parms *parms)
 	}
 
 	rtnl_lock();
+#ifdef HAVE_RHEL_OVS_HOOK
+	rcu_assign_pointer(netdev_vport->dev->ax25_ptr, vport);
+	atomic_inc(&nr_bridges);
+	rcu_assign_pointer(openvswitch_handle_frame_hook, netdev_frame_hook);
+#else
 	err = netdev_rx_handler_register(netdev_vport->dev, netdev_frame_hook,
 					 vport);
 	if (err)
 		goto error_unlock;
+#endif
 
 	dev_set_promiscuity(netdev_vport->dev, 1);
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,24)
@@ -167,7 +181,9 @@ static struct vport *netdev_create(const struct vport_parms *parms)
 
 	return vport;
 
+#ifndef HAVE_RHEL_OVS_HOOK
 error_unlock:
+#endif
 	rtnl_unlock();
 error_put:
 	dev_put(netdev_vport->dev);
@@ -182,6 +198,12 @@ static void free_port_rcu(struct rcu_head *rcu)
 	struct netdev_vport *netdev_vport = container_of(rcu,
 					struct netdev_vport, rcu);
 
+#ifdef HAVE_RHEL_OVS_HOOK
+	rcu_assign_pointer(netdev_vport->dev->ax25_ptr, NULL);
+
+	if (atomic_dec_and_test(&nr_bridges))
+		rcu_assign_pointer(openvswitch_handle_frame_hook, NULL);
+#endif
 	dev_put(netdev_vport->dev);
 	ovs_vport_free(vport_from_priv(netdev_vport));
 }
@@ -351,13 +373,18 @@ error:
 /* Returns null if this device is not attached to a datapath. */
 struct vport *ovs_netdev_get_vport(struct net_device *dev)
 {
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,36)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,36) || \
+    defined HAVE_RHEL_OVS_HOOK
 #if IFF_OVS_DATAPATH != 0
 	if (likely(dev->priv_flags & IFF_OVS_DATAPATH))
 #else
 	if (likely(rcu_access_pointer(dev->rx_handler) == netdev_frame_hook))
 #endif
+#ifdef HAVE_RHEL_OVS_HOOK
+		return (struct vport *)rcu_dereference_rtnl(dev->ax25_ptr);
+#else
 		return (struct vport *)rcu_dereference_rtnl(dev->rx_handler_data);
+#endif
 	else
 		return NULL;
 #else
@@ -377,7 +404,8 @@ const struct vport_ops ovs_netdev_vport_ops = {
 	.send		= netdev_send,
 };
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,36)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,36) && \
+    !defined HAVE_RHEL_OVS_HOOK
 /*
  * Enforces, mutual exclusion with the Linux bridge module, by declaring and
  * exporting br_should_route_hook.  Because the bridge module also exports the
