@@ -108,6 +108,25 @@ is_pow2(uintmax_t x)
     return IS_POW2(x);
 }
 
+/* Returns X rounded up to a power of 2.  X must be a constant expression. */
+#define ROUND_UP_POW2(X) RUP2__(X)
+#define RUP2__(X) (RUP2_1(X) + 1)
+#define RUP2_1(X) (RUP2_2(X) | (RUP2_2(X) >> 16))
+#define RUP2_2(X) (RUP2_3(X) | (RUP2_3(X) >> 8))
+#define RUP2_3(X) (RUP2_4(X) | (RUP2_4(X) >> 4))
+#define RUP2_4(X) (RUP2_5(X) | (RUP2_5(X) >> 2))
+#define RUP2_5(X) (RUP2_6(X) | (RUP2_6(X) >> 1))
+#define RUP2_6(X) ((X) - 1)
+
+/* Returns X rounded down to a power of 2.  X must be a constant expression. */
+#define ROUND_DOWN_POW2(X) RDP2__(X)
+#define RDP2__(X) (RDP2_1(X) - (RDP2_1(X) >> 1))
+#define RDP2_1(X) (RDP2_2(X) | (RDP2_2(X) >> 16))
+#define RDP2_2(X) (RDP2_3(X) | (RDP2_3(X) >> 8))
+#define RDP2_3(X) (RDP2_4(X) | (RDP2_4(X) >> 4))
+#define RDP2_4(X) (RDP2_5(X) | (RDP2_5(X) >> 2))
+#define RDP2_5(X) (      (X) | (      (X) >> 1))
+
 #ifndef MIN
 #define MIN(X, Y) ((X) < (Y) ? (X) : (Y))
 #endif

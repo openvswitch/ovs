@@ -112,6 +112,8 @@ AT_CLEANUP
 m4_foreach(
   [testname],
   [[ctz],
+   [round_up_pow2],
+   [round_down_pow2],
    [popcount],
    [log_2_floor],
    [bitwise_copy],

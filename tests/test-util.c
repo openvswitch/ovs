@@ -90,6 +90,69 @@ test_ctz(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
     check_ctz(0, 32);
 }
 
+/* Returns a random number in the range 'min'...'max' inclusive. */
+static uint32_t
+random_in_range(uint32_t min, uint32_t max)
+{
+    return min == max ? min : min + random_range(max - min + 1);
+}
+
+static void
+check_rup2(uint32_t x, int n)
+{
+    uint32_t rup2 = ROUND_UP_POW2(x);
+    if (rup2 != n) {
+        fprintf(stderr, "ROUND_UP_POW2(%#"PRIx32") is %#"PRIx32" "
+                "but should be %#"PRIx32"\n", x, rup2, n);
+        abort();
+    }
+}
+
+static void
+test_round_up_pow2(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
+{
+    int n;
+
+    for (n = 0; n < 32; n++) {
+        /* Min, max value for which ROUND_UP_POW2 should yield (1 << n). */
+        uint32_t min = ((1u << n) >> 1) + 1;
+        uint32_t max = 1u << n;
+
+        check_rup2(min, 1u << n);
+        check_rup2(max, 1u << n);
+        check_rup2(random_in_range(min, max), 1u << n);
+    }
+    check_rup2(0, 0);
+}
+
+static void
+check_rdp2(uint32_t x, int n)
+{
+    uint32_t rdp2 = ROUND_DOWN_POW2(x);
+    if (rdp2 != n) {
+        fprintf(stderr, "ROUND_DOWN_POW2(%#"PRIx32") is %#"PRIx32" "
+                "but should be %#"PRIx32"\n", x, rdp2, n);
+        abort();
+    }
+}
+
+static void
+test_round_down_pow2(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
+{
+    int n;
+
+    for (n = 0; n < 32; n++) {
+        /* Min, max value for which ROUND_DOWN_POW2 should yield (1 << n). */
+        uint32_t min = 1u << n;
+        uint32_t max = ((1u << n) << 1) - 1;
+
+        check_rdp2(min, 1u << n);
+        check_rdp2(max, 1u << n);
+        check_rdp2(random_in_range(min, max), 1u << n);
+    }
+    check_rdp2(0, 0);
+}
+
 static void
 shuffle(unsigned int *p, size_t n)
 {
@@ -346,6 +409,8 @@ test_assert(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 
 static const struct command commands[] = {
     {"ctz", 0, 0, test_ctz},
+    {"round_up_pow2", 0, 0, test_round_up_pow2},
+    {"round_down_pow2", 0, 0, test_round_down_pow2},
     {"popcount", 0, 0, test_popcount},
     {"log_2_floor", 0, 0, test_log_2_floor},
     {"bitwise_copy", 0, 0, test_bitwise_copy},
