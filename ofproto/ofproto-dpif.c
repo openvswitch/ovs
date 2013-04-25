@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012 Nicira Networks.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -2516,10 +2516,9 @@ handle_flow_miss(struct ofproto_dpif *ofproto, struct flow_miss *miss,
                                miss->key_fitness, miss->key, miss->key_len,
                                miss->initial_tci);
 
-    LIST_FOR_EACH_SAFE (packet, next_packet, list_node, &miss->packets) {
+    LIST_FOR_EACH (packet, list_node, &miss->packets) {
         struct dpif_flow_stats stats;
 
-        list_remove(&packet->list_node);
         ofproto->n_matches++;
 
         if (facet->rule->up.cr.priority == FAIL_OPEN_PRIORITY) {
@@ -2710,14 +2709,10 @@ handle_miss_upcalls(struct ofproto_dpif *ofproto, struct dpif_upcall *upcalls,
     /* Process each element in the to-do list, constructing the set of
      * operations to batch. */
     n_ops = 0;
-    HMAP_FOR_EACH_SAFE (miss, next_miss, hmap_node, &todo) {
+    HMAP_FOR_EACH (miss, hmap_node, &todo) {
         handle_flow_miss(ofproto, miss, flow_miss_ops, &n_ops);
-        ofpbuf_list_delete(&miss->packets);
-        hmap_remove(&todo, &miss->hmap_node);
-        free(miss);
     }
     assert(n_ops <= ARRAY_SIZE(flow_miss_ops));
-    hmap_destroy(&todo);
 
     /* Execute batch. */
     for (i = 0; i < n_ops; i++) {
@@ -2737,7 +2732,6 @@ handle_miss_upcalls(struct ofproto_dpif *ofproto, struct dpif_upcall *upcalls,
             if (op->subfacet->actions != execute->actions) {
                 free((struct nlattr *) execute->actions);
             }
-            ofpbuf_delete((struct ofpbuf *) execute->packet);
             break;
 
         case DPIF_OP_FLOW_PUT:
@@ -2748,6 +2742,13 @@ handle_miss_upcalls(struct ofproto_dpif *ofproto, struct dpif_upcall *upcalls,
             break;
         }
     }
+
+    HMAP_FOR_EACH_SAFE (miss, next_miss, hmap_node, &todo) {
+        ofpbuf_list_delete(&miss->packets);
+        hmap_remove(&todo, &miss->hmap_node);
+        free(miss);
+    }
+    hmap_destroy(&todo);
 }
 
 static void
