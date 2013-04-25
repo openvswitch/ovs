@@ -35,7 +35,9 @@
 #include "dirs.h"
 #include "dynamic-string.h"
 #include "json.h"
+#include "latch.h"
 #include "ofpbuf.h"
+#include "ovs-thread.h"
 #include "poll-loop.h"
 #include "shash.h"
 #include "smap.h"
@@ -504,17 +506,33 @@ get_filesys_stats(struct smap *stats OVS_UNUSED)
 
 #define SYSTEM_STATS_INTERVAL (5 * 1000) /* In milliseconds. */
 
-/* The next time to wake up, or LLONG_MAX if stats are disabled. */
-static long long int next_refresh = LLONG_MAX;
+static pthread_mutex_t mutex = PTHREAD_ADAPTIVE_MUTEX_INITIALIZER;
+static pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
+static struct latch latch;
+static bool enabled;
+static bool started;
+static struct smap *system_stats;
+
+static void *system_stats_thread_func(void *);
+static void discard_stats(void);
 
 /* Enables or disables system stats collection, according to 'enable'. */
 void
 system_stats_enable(bool enable)
 {
-    if (!enable) {
-        next_refresh = LLONG_MAX;
-    } else if (next_refresh == LLONG_MAX) {
-        next_refresh = time_msec();
+    if (enabled != enable) {
+        xpthread_mutex_lock(&mutex);
+        if (enable) {
+            if (!started) {
+                xpthread_create(NULL, NULL, system_stats_thread_func, NULL);
+                latch_init(&latch);
+                started = true;
+            }
+            discard_stats();
+            xpthread_cond_signal(&cond);
+        }
+        enabled = enable;
+        xpthread_mutex_unlock(&mutex);
     }
 }
 
@@ -529,8 +547,58 @@ system_stats_enable(bool enable)
 struct smap *
 system_stats_run(void)
 {
-    if (time_msec() >= next_refresh) {
+    struct smap *stats = NULL;
+
+    xpthread_mutex_lock(&mutex);
+    if (system_stats) {
+        latch_poll(&latch);
+
+        if (enabled) {
+            stats = system_stats;
+            system_stats = NULL;
+        } else {
+            discard_stats();
+        }
+    }
+    xpthread_mutex_unlock(&mutex);
+
+    return stats;
+}
+
+/* Causes poll_block() to wake up when system_stats_run() needs to be
+ * called. */
+void
+system_stats_wait(void)
+{
+    if (enabled) {
+        latch_wait(&latch);
+    }
+}
+
+static void
+discard_stats(void)
+{
+    if (system_stats) {
+        smap_destroy(system_stats);
+        free(system_stats);
+        system_stats = NULL;
+    }
+}
+
+static void * NO_RETURN
+system_stats_thread_func(void *arg OVS_UNUSED)
+{
+    pthread_detach(pthread_self());
+
+    for (;;) {
+        long long int next_refresh;
         struct smap *stats;
+
+        xpthread_mutex_lock(&mutex);
+        while (!enabled) {
+            xpthread_cond_wait(&cond, &mutex);
+        }
+        xpthread_mutex_unlock(&mutex);
 
         stats = xmalloc(sizeof *stats);
         smap_init(stats);
@@ -540,20 +608,16 @@ system_stats_run(void)
         get_process_stats(stats);
         get_filesys_stats(stats);
 
+        xpthread_mutex_lock(&mutex);
+        discard_stats();
+        system_stats = stats;
+        latch_set(&latch);
+        xpthread_mutex_unlock(&mutex);
+
         next_refresh = time_msec() + SYSTEM_STATS_INTERVAL;
-
-        return stats;
-    }
-
-    return NULL;
-}
-
-/* Causes poll_block() to wake up when system_stats_run() needs to be
- * called. */
-void
-system_stats_wait(void)
-{
-    if (next_refresh != LLONG_MAX) {
-        poll_timer_wait_until(next_refresh);
+        do {
+            poll_timer_wait_until(next_refresh);
+            poll_block();
+        } while (time_msec() < next_refresh);
     }
 }
