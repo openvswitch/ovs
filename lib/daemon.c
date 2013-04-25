@@ -529,6 +529,8 @@ daemonize_start(void)
         /* Running in daemon process. */
     }
 
+    forbid_forking("running in daemon process");
+
     if (pidfile) {
         make_pidfile();
     }

@@ -202,7 +202,7 @@ ALL_LOCAL += check-assert-h-usage
 check-assert-h-usage:
 	@if test -e $(srcdir)/.git && (git --version) >/dev/null 2>&1 && \
 	    (cd $(srcdir) && git --no-pager grep -l -E '[<]assert.h[>]') | \
-	    $(EGREP) -v '^lib/(sflow_receiver|vlog|worker).c$$|^tests/'; \
+	    $(EGREP) -v '^lib/(sflow_receiver|vlog).c$$|^tests/'; \
          then \
 	    echo "Files listed above unexpectedly #include <""assert.h"">."; \
 	    echo "Please use ovs_assert (from util.h) instead of assert."; \

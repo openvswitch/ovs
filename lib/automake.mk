@@ -220,9 +220,7 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/vlog.c \
 	lib/vlog.h \
 	lib/vswitch-idl.c \
-	lib/vswitch-idl.h \
-	lib/worker.c \
-	lib/worker.h
+	lib/vswitch-idl.h
 
 nodist_lib_libopenvswitch_a_SOURCES = \
 	lib/dirs.c

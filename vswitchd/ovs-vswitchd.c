@@ -50,7 +50,6 @@
 #include "vconn.h"
 #include "vlog.h"
 #include "lib/vswitch-idl.h"
-#include "worker.h"
 
 VLOG_DEFINE_THIS_MODULE(vswitchd);
 
@@ -94,8 +93,6 @@ main(int argc, char *argv[])
 #endif
     }
 
-    worker_start();
-
     retval = unixctl_server_create(unixctl_path, &unixctl);
     if (retval) {
         exit(EXIT_FAILURE);
@@ -107,7 +104,6 @@ main(int argc, char *argv[])
 
     exiting = false;
     while (!exiting) {
-        worker_run();
         if (signal_poll(sighup)) {
             vlog_reopen_log_file();
         }
@@ -126,7 +122,6 @@ main(int argc, char *argv[])
         unixctl_server_run(unixctl);
         netdev_run();
 
-        worker_wait();
         signal_wait(sighup);
         memory_wait();
         bridge_wait();
