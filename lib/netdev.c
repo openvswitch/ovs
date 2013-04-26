@@ -1115,7 +1115,7 @@ netdev_set_qos(struct netdev *netdev,
 
     if (class->set_qos) {
         if (!details) {
-            static struct smap empty = SMAP_INITIALIZER(&empty);
+            static const struct smap empty = SMAP_INITIALIZER(&empty);
             details = &empty;
         }
         return class->set_qos(netdev, type, details);
