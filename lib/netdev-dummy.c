@@ -241,8 +241,15 @@ static int
 netdev_dummy_create(const struct netdev_class *class, const char *name,
                     struct netdev **netdevp)
 {
-    static unsigned int n = 0xaa550000;
+    static unsigned int next_n = 0xaa550000;
+    static pthread_mutex_t mutex = PTHREAD_ADAPTIVE_MUTEX_INITIALIZER;
+
     struct netdev_dummy *netdev;
+    unsigned int n;
+
+    xpthread_mutex_lock(&mutex);
+    n = next_n++;
+    xpthread_mutex_unlock(&mutex);
 
     netdev = xzalloc(sizeof *netdev);
     netdev_init(&netdev->up, name, class);
@@ -264,8 +271,6 @@ netdev_dummy_create(const struct netdev_class *class, const char *name,
     list_init(&netdev->rxes);
 
     shash_add(&dummy_netdevs, name, netdev);
-
-    n++;
 
     *netdevp = &netdev->up;
 
