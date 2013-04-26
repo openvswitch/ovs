@@ -187,6 +187,7 @@ def printCIDLSource(schemaFile):
 #include <config.h>
 #include %s
 #include <limits.h>
+#include "ovs-thread.h"
 #include "ovsdb-data.h"
 #include "ovsdb-error.h"
 #include "util.h"
@@ -643,6 +644,7 @@ void
     if (inited) {
         return;
     }
+    assert_single_threaded();
     inited = true;
 """ % prefix
     for tableName, table in sorted(schema.tables.iteritems()):
