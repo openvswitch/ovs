@@ -34,6 +34,7 @@
 #include "ofp-util.h"
 #include "ofpbuf.h"
 #include "openflow/openflow.h"
+#include "ovs-thread.h"
 #include "packets.h"
 #include "socket-util.h"
 #include "vconn.h"
@@ -1519,12 +1520,16 @@ static char * WARN_UNUSED_RESULT
 parse_flow_monitor_request__(struct ofputil_flow_monitor_request *fmr,
                              const char *str_, char *string)
 {
+    static pthread_mutex_t mutex = PTHREAD_ADAPTIVE_MUTEX_INITIALIZER;
     static uint32_t id;
 
     char *save_ptr = NULL;
     char *name;
 
+    xpthread_mutex_lock(&mutex);
     fmr->id = id++;
+    xpthread_mutex_unlock(&mutex);
+
     fmr->flags = (NXFMF_INITIAL | NXFMF_ADD | NXFMF_DELETE | NXFMF_MODIFY
                   | NXFMF_OWN | NXFMF_ACTIONS);
     fmr->out_port = OFPP_NONE;
