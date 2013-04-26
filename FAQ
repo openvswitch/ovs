@@ -820,6 +820,41 @@ A: Do you have a controller configured on br0 (as the commands above
    can refer to the answer there for more information.
 
 
+VXLANs
+-----
+
+Q: What's a VXLAN?
+
+A: VXLAN stands for Virtual eXtensible Local Area Network, and is a means
+   to solve the scaling challenges of VLAN networks in a multi-tenant
+   environment. VXLAN is an overlay network which transports an L2 network
+   over an existing L3 network. For more information on VXLAN, please see
+   the IETF draft available here:
+
+   http://tools.ietf.org/html/draft-mahalingam-dutt-dcops-vxlan-03
+
+Q: How much of the VXLAN protocol does Open vSwitch currently support?
+
+A: Open vSwitch currently supports the framing format for packets on the
+   wire. There is currently no support for the multicast aspects of VXLAN.
+   To get around the lack of multicast support, it is possible to
+   pre-provision MAC to IP address mappings either manually or from a
+   controller.
+
+Q: What destination UDP port does the VXLAN implementation in Open vSwitch
+   use?
+
+A: By default, Open vSwitch will use the assigned IANA port for VXLAN, which
+   is 4789. However, it is possible to configure the destination UDP port
+   manually on a per-VXLAN tunnel basis. An example of this configuration is
+   provided below.
+
+   ovs-vsctl add-br br0
+   ovs-vsctl add-port br0 vxlan1 -- set interface vxlan1
+       type=vxlan options:remote_ip=192.168.1.2 options:key=flow
+       options:dst_port=8472
+
+
 Controllers
 -----------
 
