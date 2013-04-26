@@ -49,14 +49,14 @@ COVERAGE_DEFINE(vlog_recursive);
 #define ovs_assert use_assert_instead_of_ovs_assert_in_this_module
 
 /* Name for each logging level. */
-static const char *level_names[VLL_N_LEVELS] = {
+static const char *const level_names[VLL_N_LEVELS] = {
 #define VLOG_LEVEL(NAME, SYSLOG_LEVEL) #NAME,
     VLOG_LEVELS
 #undef VLOG_LEVEL
 };
 
 /* Syslog value for each logging level. */
-static int syslog_levels[VLL_N_LEVELS] = {
+static const int syslog_levels[VLL_N_LEVELS] = {
 #define VLOG_LEVEL(NAME, SYSLOG_LEVEL) SYSLOG_LEVEL,
     VLOG_LEVELS
 #undef VLOG_LEVEL
@@ -110,7 +110,7 @@ static void vlog_update_async_log_fd(void);
 /* Searches the 'n_names' in 'names'.  Returns the index of a match for
  * 'target', or 'n_names' if no name matches. */
 static size_t
-search_name_array(const char *target, const char **names, size_t n_names)
+search_name_array(const char *target, const char *const *names, size_t n_names)
 {
     size_t i;
 
