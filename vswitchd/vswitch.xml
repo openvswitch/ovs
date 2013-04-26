@@ -1262,10 +1262,9 @@
 	      with kernel version 2.6.26 or later.
 	    </p>
 	    <p>
-	      As an experimental protocol, VXLAN has no officially assigned UDP
-	      port.  Open vSwitch currently uses UDP destination port 8472.
-	      The source port used for VXLAN traffic varies on a per-flow basis
-	      and is in the ephemeral port range.
+	      Open vSwitch uses UDP destination port 4789.  The source port used for
+	      VXLAN traffic varies on a per-flow basis and is in the ephemeral port
+	      range.
 	    </p>
           </dd>
 

@@ -382,7 +382,7 @@ br0 (dummy@ovs-dummy):
 
 dnl change UDP port to default
 
-AT_CHECK([ovs-vsctl -- set Interface p1 options:dst_port=8472])
+AT_CHECK([ovs-vsctl -- set Interface p1 options:dst_port=4789])
 
 AT_CHECK([ovs-appctl dpif/show], [0], [dnl
 br0 (dummy@ovs-dummy):
