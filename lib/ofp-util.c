@@ -4235,7 +4235,7 @@ size_t ofputil_count_phy_ports(uint8_t ofp_version, struct ofpbuf *b)
 int
 ofputil_action_code_from_name(const char *name)
 {
-    static const char *names[OFPUTIL_N_ACTIONS] = {
+    static const char *const names[OFPUTIL_N_ACTIONS] = {
         NULL,
 #define OFPAT10_ACTION(ENUM, STRUCT, NAME)             NAME,
 #define OFPAT11_ACTION(ENUM, STRUCT, EXTENSIBLE, NAME) NAME,
@@ -4243,7 +4243,7 @@ ofputil_action_code_from_name(const char *name)
 #include "ofp-util.def"
     };
 
-    const char **p;
+    const char *const *p;
 
     for (p = names; p < &names[ARRAY_SIZE(names)]; p++) {
         if (*p && !strcasecmp(name, *p)) {
