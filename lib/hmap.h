@@ -65,7 +65,8 @@ struct hmap {
 };
 
 /* Initializer for an empty hash map. */
-#define HMAP_INITIALIZER(HMAP) { &(HMAP)->one, NULL, 0, 0 }
+#define HMAP_INITIALIZER(HMAP) \
+    { (struct hmap_node **const) &(HMAP)->one, NULL, 0, 0 }
 
 /* Initialization. */
 void hmap_init(struct hmap *);
