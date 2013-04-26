@@ -412,7 +412,7 @@ do_add_port(struct dp_netdev *dp, const char *devname, const char *type,
     port->type = xstrdup(type);
 
     error = netdev_get_mtu(netdev, &mtu);
-    if (!error) {
+    if (!error && mtu > max_mtu) {
         max_mtu = mtu;
     }
 
