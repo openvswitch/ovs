@@ -42,7 +42,7 @@
 VLOG_DEFINE_THIS_MODULE(netdev_vport);
 
 /* Default to the OTV port, per the VXLAN IETF draft. */
-#define VXLAN_DST_PORT 8472
+#define VXLAN_DST_PORT 4789
 
 #define LISP_DST_PORT 4341
 
