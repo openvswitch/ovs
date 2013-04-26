@@ -70,7 +70,6 @@ void time_wall_timespec(struct timespec *);
 void time_alarm(unsigned int secs);
 int time_poll(struct pollfd *, int n_pollfds, long long int timeout_when,
               int *elapsed);
-bool time_cached(void);
 
 long long int timespec_to_msec(const struct timespec *);
 long long int timeval_to_msec(const struct timeval *);
