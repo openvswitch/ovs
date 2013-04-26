@@ -172,7 +172,7 @@ struct fd_pstream
     char *unlink_path;
 };
 
-static struct pstream_class fd_pstream_class;
+static const struct pstream_class fd_pstream_class;
 
 static struct fd_pstream *
 fd_pstream_cast(struct pstream *pstream)
@@ -266,7 +266,7 @@ pfd_set_dscp(struct pstream *pstream, uint8_t dscp)
     return 0;
 }
 
-static struct pstream_class fd_pstream_class = {
+static const struct pstream_class fd_pstream_class = {
     "pstream",
     false,
     NULL,
