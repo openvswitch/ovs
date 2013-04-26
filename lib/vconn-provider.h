@@ -30,7 +30,7 @@
  *
  * This structure should be treated as opaque by vconn implementations. */
 struct vconn {
-    struct vconn_class *class;
+    const struct vconn_class *class;
     int state;
     int error;
 
@@ -48,7 +48,7 @@ struct vconn {
     char *name;
 };
 
-void vconn_init(struct vconn *, struct vconn_class *, int connect_status,
+void vconn_init(struct vconn *, const struct vconn_class *, int connect_status,
                 const char *name, uint32_t allowed_versions);
 void vconn_free_data(struct vconn *vconn);
 void vconn_set_remote_ip(struct vconn *, ovs_be32 remote_ip);
@@ -143,12 +143,12 @@ struct vconn_class {
  *
  * This structure should be treated as opaque by vconn implementations. */
 struct pvconn {
-    struct pvconn_class *class;
+    const struct pvconn_class *class;
     char *name;
     uint32_t allowed_versions;
 };
 
-void pvconn_init(struct pvconn *pvconn, struct pvconn_class *class,
+void pvconn_init(struct pvconn *pvconn, const struct pvconn_class *class,
                  const char *name, uint32_t allowed_versions);
 static inline void pvconn_assert_class(const struct pvconn *pvconn,
                                        const struct pvconn_class *class)
@@ -198,13 +198,13 @@ struct pvconn_class {
 };
 
 /* Active and passive vconn classes. */
-extern struct vconn_class tcp_vconn_class;
-extern struct pvconn_class ptcp_pvconn_class;
-extern struct vconn_class unix_vconn_class;
-extern struct pvconn_class punix_pvconn_class;
+extern const struct vconn_class tcp_vconn_class;
+extern const struct pvconn_class ptcp_pvconn_class;
+extern const struct vconn_class unix_vconn_class;
+extern const struct pvconn_class punix_pvconn_class;
 #ifdef HAVE_OPENSSL
-extern struct vconn_class ssl_vconn_class;
-extern struct pvconn_class pssl_pvconn_class;
+extern const struct vconn_class ssl_vconn_class;
+extern const struct pvconn_class pssl_pvconn_class;
 #endif
 
 #endif /* vconn-provider.h */

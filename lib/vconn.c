@@ -59,7 +59,7 @@ enum vconn_state {
     VCS_DISCONNECTED            /* Connection failed or connection closed. */
 };
 
-static struct vconn_class *vconn_classes[] = {
+static const struct vconn_class *vconn_classes[] = {
     &tcp_vconn_class,
     &unix_vconn_class,
 #ifdef HAVE_OPENSSL
@@ -67,7 +67,7 @@ static struct vconn_class *vconn_classes[] = {
 #endif
 };
 
-static struct pvconn_class *pvconn_classes[] = {
+static const struct pvconn_class *pvconn_classes[] = {
     &ptcp_pvconn_class,
     &punix_pvconn_class,
 #ifdef HAVE_OPENSSL
@@ -95,7 +95,7 @@ check_vconn_classes(void)
     size_t i;
 
     for (i = 0; i < ARRAY_SIZE(vconn_classes); i++) {
-        struct vconn_class *class = vconn_classes[i];
+        const struct vconn_class *class = vconn_classes[i];
         ovs_assert(class->name != NULL);
         ovs_assert(class->open != NULL);
         if (class->close || class->recv || class->send
@@ -110,7 +110,7 @@ check_vconn_classes(void)
     }
 
     for (i = 0; i < ARRAY_SIZE(pvconn_classes); i++) {
-        struct pvconn_class *class = pvconn_classes[i];
+        const struct pvconn_class *class = pvconn_classes[i];
         ovs_assert(class->name != NULL);
         ovs_assert(class->listen != NULL);
         if (class->close || class->accept || class->wait) {
@@ -177,7 +177,7 @@ vconn_usage(bool active, bool passive, bool bootstrap OVS_UNUSED)
  * a null pointer into '*classp' if 'name' is in the wrong form or if no such
  * class exists. */
 static int
-vconn_lookup_class(const char *name, struct vconn_class **classp)
+vconn_lookup_class(const char *name, const struct vconn_class **classp)
 {
     size_t prefix_len;
 
@@ -186,7 +186,7 @@ vconn_lookup_class(const char *name, struct vconn_class **classp)
         size_t i;
 
         for (i = 0; i < ARRAY_SIZE(vconn_classes); i++) {
-            struct vconn_class *class = vconn_classes[i];
+            const struct vconn_class *class = vconn_classes[i];
             if (strlen(class->name) == prefix_len
                 && !memcmp(class->name, name, prefix_len)) {
                 *classp = class;
@@ -204,7 +204,7 @@ vconn_lookup_class(const char *name, struct vconn_class **classp)
 int
 vconn_verify_name(const char *name)
 {
-    struct vconn_class *class;
+    const struct vconn_class *class;
     return vconn_lookup_class(name, &class);
 }
 
@@ -225,7 +225,7 @@ int
 vconn_open(const char *name, uint32_t allowed_versions, uint8_t dscp,
            struct vconn **vconnp)
 {
-    struct vconn_class *class;
+    const struct vconn_class *class;
     struct vconn *vconn;
     char *suffix_copy;
     int error;
@@ -961,7 +961,7 @@ vconn_send_wait(struct vconn *vconn)
  * a null pointer into '*classp' if 'name' is in the wrong form or if no such
  * class exists. */
 static int
-pvconn_lookup_class(const char *name, struct pvconn_class **classp)
+pvconn_lookup_class(const char *name, const struct pvconn_class **classp)
 {
     size_t prefix_len;
 
@@ -970,7 +970,7 @@ pvconn_lookup_class(const char *name, struct pvconn_class **classp)
         size_t i;
 
         for (i = 0; i < ARRAY_SIZE(pvconn_classes); i++) {
-            struct pvconn_class *class = pvconn_classes[i];
+            const struct pvconn_class *class = pvconn_classes[i];
             if (strlen(class->name) == prefix_len
                 && !memcmp(class->name, name, prefix_len)) {
                 *classp = class;
@@ -988,7 +988,7 @@ pvconn_lookup_class(const char *name, struct pvconn_class **classp)
 int
 pvconn_verify_name(const char *name)
 {
-    struct pvconn_class *class;
+    const struct pvconn_class *class;
     return pvconn_lookup_class(name, &class);
 }
 
@@ -1009,7 +1009,7 @@ int
 pvconn_open(const char *name, uint32_t allowed_versions, uint8_t dscp,
             struct pvconn **pvconnp)
 {
-    struct pvconn_class *class;
+    const struct pvconn_class *class;
     struct pvconn *pvconn;
     char *suffix_copy;
     int error;
@@ -1109,8 +1109,8 @@ pvconn_wait(struct pvconn *pvconn)
  *
  * The caller retains ownership of 'name'. */
 void
-vconn_init(struct vconn *vconn, struct vconn_class *class, int connect_status,
-           const char *name, uint32_t allowed_versions)
+vconn_init(struct vconn *vconn, const struct vconn_class *class,
+           int connect_status, const char *name, uint32_t allowed_versions)
 {
     memset(vconn, 0, sizeof *vconn);
     vconn->class = class;
@@ -1148,7 +1148,7 @@ vconn_set_local_port(struct vconn *vconn, ovs_be16 port)
 }
 
 void
-pvconn_init(struct pvconn *pvconn,  struct pvconn_class *class,
+pvconn_init(struct pvconn *pvconn, const struct pvconn_class *class,
             const char *name, uint32_t allowed_versions)
 {
     pvconn->class = class;

@@ -46,7 +46,7 @@ struct vconn_stream
     int n_packets;
 };
 
-static struct vconn_class stream_vconn_class;
+static const struct vconn_class stream_vconn_class;
 
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(10, 25);
 
@@ -296,7 +296,7 @@ struct pvconn_pstream
     struct pstream *pstream;
 };
 
-static struct pvconn_class pstream_pvconn_class;
+static const struct pvconn_class pstream_pvconn_class;
 
 static struct pvconn_pstream *
 pvconn_pstream_cast(struct pvconn *pvconn)
@@ -390,16 +390,16 @@ pvconn_pstream_wait(struct pvconn *pvconn)
             pvconn_pstream_wait                     \
     }
 
-static struct vconn_class stream_vconn_class = STREAM_INIT("stream");
-static struct pvconn_class pstream_pvconn_class = PSTREAM_INIT("pstream");
+static const struct vconn_class stream_vconn_class = STREAM_INIT("stream");
+static const struct pvconn_class pstream_pvconn_class = PSTREAM_INIT("pstream");
 
-struct vconn_class tcp_vconn_class = STREAM_INIT("tcp");
-struct pvconn_class ptcp_pvconn_class = PSTREAM_INIT("ptcp");
+const struct vconn_class tcp_vconn_class = STREAM_INIT("tcp");
+const struct pvconn_class ptcp_pvconn_class = PSTREAM_INIT("ptcp");
 
-struct vconn_class unix_vconn_class = STREAM_INIT("unix");
-struct pvconn_class punix_pvconn_class = PSTREAM_INIT("punix");
+const struct vconn_class unix_vconn_class = STREAM_INIT("unix");
+const struct pvconn_class punix_pvconn_class = PSTREAM_INIT("punix");
 
 #ifdef HAVE_OPENSSL
-struct vconn_class ssl_vconn_class = STREAM_INIT("ssl");
-struct pvconn_class pssl_pvconn_class = PSTREAM_INIT("pssl");
+const struct vconn_class ssl_vconn_class = STREAM_INIT("ssl");
+const struct pvconn_class pssl_pvconn_class = PSTREAM_INIT("pssl");
 #endif
