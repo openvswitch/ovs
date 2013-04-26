@@ -110,10 +110,7 @@ nl_sock_create(int protocol, struct nl_sock **sockp)
     }
 
     *sockp = NULL;
-    sock = malloc(sizeof *sock);
-    if (sock == NULL) {
-        return ENOMEM;
-    }
+    sock = xmalloc(sizeof *sock);
 
     sock->fd = socket(AF_NETLINK, SOCK_RAW, protocol);
     if (sock->fd < 0) {
