@@ -97,6 +97,7 @@ run_command(int argc, char *argv[], const struct command commands[])
 static char *argv_start;       /* Start of command-line arguments in memory. */
 static size_t argv_size;       /* Number of bytes of command-line arguments. */
 static char *saved_proctitle;  /* Saved command-line arguments. */
+static pthread_mutex_t proctitle_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 /* Prepares the process so that proctitle_set() can later succeed.
  *
@@ -154,6 +155,7 @@ proctitle_set(const char *format, ...)
         return;
     }
 
+    xpthread_mutex_lock(&proctitle_mutex);
     if (!saved_proctitle) {
         saved_proctitle = xmemdup(argv_start, argv_size);
     }
@@ -172,17 +174,20 @@ proctitle_set(const char *format, ...)
         memset(&argv_start[n], '\0', argv_size - n);
     }
     va_end(args);
+    xpthread_mutex_unlock(&proctitle_mutex);
 }
 
 /* Restores the process's original command line, as seen by "ps". */
 void
 proctitle_restore(void)
 {
+    xpthread_mutex_lock(&proctitle_mutex);
     if (saved_proctitle) {
         memcpy(argv_start, saved_proctitle, argv_size);
         free(saved_proctitle);
         saved_proctitle = NULL;
     }
+    xpthread_mutex_unlock(&proctitle_mutex);
 }
 #else  /* !LINUX_DATAPATH*/
 /* Stubs that don't do anything on non-Linux systems. */
