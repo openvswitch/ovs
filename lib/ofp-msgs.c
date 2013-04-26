@@ -111,7 +111,14 @@ static ovs_be32
 alloc_xid(void)
 {
     static uint32_t next_xid = 1;
-    return htonl(next_xid++);
+    static pthread_mutex_t mutex = PTHREAD_ADAPTIVE_MUTEX_INITIALIZER;
+    uint32_t xid;
+
+    xpthread_mutex_lock(&mutex);
+    xid = next_xid++;
+    xpthread_mutex_unlock(&mutex);
+
+    return htonl(xid);
 }
 
 static uint32_t
