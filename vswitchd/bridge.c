@@ -2280,6 +2280,10 @@ bridge_run(void)
             HMAP_FOR_EACH_SAFE (br, next_br, node, &all_bridges) {
                 bridge_destroy(br);
             }
+            /* Since we will not be running system_stats_run() in this process
+             * with the current situation of multiple ovs-vswitchd daemons,
+             * disable system stats collection. */
+            system_stats_enable(false);
             return;
         } else if (!ovsdb_idl_has_lock(idl)) {
             return;
