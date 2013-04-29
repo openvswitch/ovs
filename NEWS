@@ -1,7 +1,5 @@
 post-v1.10.0
 ---------------------
-    - The default VXLAN destination UDP port was changed to 4789, which is
-      the one recently assigned by IANA.
     - The "tutorial" directory contains a new tutorial for some advanced
       Open vSwitch features.
     - Stable bond mode has been removed.
