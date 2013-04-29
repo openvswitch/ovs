@@ -1,9 +1,27 @@
-openvswitch (1.10.90-1) unstable; urgency=low
+openvswitch (1.11.0-1) unstable; urgency=low
    [ Open vSwitch team ]
    * New upstream version
-     - Nothing yet!  Try NEWS...
+    - The "tutorial" directory contains a new tutorial for some advanced
+      Open vSwitch features.
+    - Stable bond mode has been removed.
+    - The autopath action has been removed.
+    - New support for the data encapsulation format of the LISP tunnel
+      protocol (RFC 6830).  An external control plane or manual flow
+      setup is required for EID-to-RLOC mapping.
+    - OpenFlow:
+      * The "dec_mpls_ttl" and "set_mpls_ttl" actions from OpenFlow
+        1.1 and later are now implemented.
+      * New "stack" extension for use in actions, to push and pop from
+        NXM fields.
+    - ovs-dpctl:
+      * New debugging commands "add-flow", "mod-flow", "del-flow".
+    - New syslog format, prefixed with "ovs|", to be easier to filter.
+    - RHEL: Removes the default firewall rule that allowed GRE traffic to
+      pass through. Any users that relied on this automatic firewall hole
+      will have to manually configure it. The ovs-ctl(8) manpage documents
+      the "enable-protocol" command that can be used as an alternative.
 
- -- Open vSwitch team <dev@openvswitch.org>  Mon, 04 Feb 2013 21:52:34 -0700
+ -- Open vSwitch team <dev@openvswitch.org>  Mon, 29 Apr 2013 14:30:34 -0700
 
 openvswitch (1.10.0-1) unstable; urgency=low
    [ Open vSwitch team ]
