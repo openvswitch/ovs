@@ -101,6 +101,9 @@ worker_start(void)
     xset_nonblocking(work_fds[0]);
     xset_nonblocking(work_fds[1]);
 
+    /* Don't let the worker process own the responsibility to delete
+     * the pidfile.  Register it again after the fork. */
+    remove_pidfile_from_unlink();
     if (!fork_and_clean_up()) {
         /* In child (worker) process. */
         daemonize_post_detach();
@@ -110,6 +113,7 @@ worker_start(void)
     }
 
     /* In parent (main) process. */
+    add_pidfile_to_unlink();
     close(work_fds[1]);
     client_sock = work_fds[0];
     rxbuf_init(&client_rx);

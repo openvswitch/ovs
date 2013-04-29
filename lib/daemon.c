@@ -163,6 +163,26 @@ daemon_save_fd(int fd)
     save_fds[fd] = true;
 }
 
+/* Unregisters pidfile from being unlinked when the program terminates via
+* exit() or a fatal signal. */
+void
+remove_pidfile_from_unlink(void)
+{
+    if (pidfile) {
+        fatal_signal_remove_file_to_unlink(pidfile);
+    }
+}
+
+/* Registers pidfile to be unlinked when the program terminates via exit() or a
+ * fatal signal. */
+void
+add_pidfile_to_unlink(void)
+{
+    if (pidfile) {
+        fatal_signal_add_file_to_unlink(pidfile);
+    }
+}
+
 /* If a pidfile has been configured, creates it and stores the running
  * process's pid in it.  Ensures that the pidfile will be deleted when the
  * process exits. */
@@ -240,8 +260,6 @@ make_pidfile(void)
     pidfile_dev = s.st_dev;
     pidfile_ino = s.st_ino;
     free(tmpfile);
-    free(pidfile);
-    pidfile = NULL;
 }
 
 /* If configured with set_pidfile() or set_detach(), creates the pid file and
@@ -529,6 +547,11 @@ daemonize_start(void)
 void
 daemonize_complete(void)
 {
+    if (pidfile) {
+        free(pidfile);
+        pidfile = NULL;
+    }
+
     if (!detached) {
         detached = true;
 

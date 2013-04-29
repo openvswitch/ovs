@@ -65,6 +65,8 @@ void set_detach(void);
 bool get_detach(void);
 void daemon_set_monitor(void);
 void daemon_save_fd(int fd);
+void remove_pidfile_from_unlink(void);
+void add_pidfile_to_unlink(void);
 void daemonize(void);
 void daemonize_start(void);
 void daemonize_complete(void);
