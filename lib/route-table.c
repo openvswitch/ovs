@@ -221,21 +221,12 @@ route_table_wait(void)
 static int
 route_table_reset(void)
 {
-    int error;
     struct nl_dump dump;
     struct rtgenmsg *rtmsg;
     struct ofpbuf request, reply;
-    struct nl_sock *rtnl_sock;
 
     route_map_clear();
     route_table_valid = true;
-
-    error = nl_sock_create(NETLINK_ROUTE, &rtnl_sock);
-    if (error) {
-        VLOG_WARN_RL(&rl, "failed to reset routing table, "
-                     "cannot create RTNETLINK_ROUTE socket");
-        return error;
-    }
 
     ofpbuf_init(&request, 0);
 
@@ -244,7 +235,7 @@ route_table_reset(void)
     rtmsg = ofpbuf_put_zeros(&request, sizeof *rtmsg);
     rtmsg->rtgen_family = AF_INET;
 
-    nl_dump_start(&dump, rtnl_sock, &request);
+    nl_dump_start(&dump, NETLINK_ROUTE, &request);
     ofpbuf_uninit(&request);
 
     while (nl_dump_next(&dump, &reply)) {
@@ -255,10 +246,7 @@ route_table_reset(void)
         }
     }
 
-    error = nl_dump_done(&dump);
-    nl_sock_destroy(rtnl_sock);
-
-    return error;
+    return nl_dump_done(&dump);
 }
 
 
@@ -417,26 +405,19 @@ name_table_uninit(void)
 static int
 name_table_reset(void)
 {
-    int error;
     struct nl_dump dump;
     struct rtgenmsg *rtmsg;
     struct ofpbuf request, reply;
-    struct nl_sock *rtnl_sock;
 
     name_table_valid = true;
     name_map_clear();
-    error = nl_sock_create(NETLINK_ROUTE, &rtnl_sock);
-    if (error) {
-        VLOG_WARN_RL(&rl, "failed to create NETLINK_ROUTE socket");
-        return error;
-    }
 
     ofpbuf_init(&request, 0);
     nl_msg_put_nlmsghdr(&request, sizeof *rtmsg, RTM_GETLINK, NLM_F_REQUEST);
     rtmsg = ofpbuf_put_zeros(&request, sizeof *rtmsg);
     rtmsg->rtgen_family = AF_INET;
 
-    nl_dump_start(&dump, rtnl_sock, &request);
+    nl_dump_start(&dump, NETLINK_ROUTE, &request);
     ofpbuf_uninit(&request);
 
     while (nl_dump_next(&dump, &reply)) {
@@ -453,7 +434,6 @@ name_table_reset(void)
             hmap_insert(&name_map, &nn->node, hash_int(nn->ifi_index, 0));
         }
     }
-    nl_sock_destroy(rtnl_sock);
     return nl_dump_done(&dump);
 }
 

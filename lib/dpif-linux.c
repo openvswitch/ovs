@@ -162,7 +162,6 @@ static int ovs_flow_family;
 static int ovs_packet_family;
 
 /* Generic Netlink socket. */
-static struct nl_sock *genl_sock;
 static struct nln *nln = NULL;
 
 static int dpif_linux_init(void);
@@ -692,7 +691,7 @@ dpif_linux_port_dump_start(const struct dpif *dpif_, void **statep)
 
     buf = ofpbuf_new(1024);
     dpif_linux_vport_to_ofpbuf(&request, buf);
-    nl_dump_start(&state->dump, genl_sock, buf);
+    nl_dump_start(&state->dump, NETLINK_GENERIC, buf);
     ofpbuf_delete(buf);
 
     return 0;
@@ -898,7 +897,7 @@ dpif_linux_flow_dump_start(const struct dpif *dpif_, void **statep)
 
     buf = ofpbuf_new(1024);
     dpif_linux_flow_to_ofpbuf(&request, buf);
-    nl_dump_start(&state->dump, genl_sock, buf);
+    nl_dump_start(&state->dump, NETLINK_GENERIC, buf);
     ofpbuf_delete(buf);
 
     state->buf = NULL;
@@ -1005,7 +1004,7 @@ dpif_linux_execute__(int dp_ifindex, const struct dpif_execute *execute)
 
     ofpbuf_use_stub(&request, request_stub, sizeof request_stub);
     dpif_linux_encode_execute(dp_ifindex, execute, &request);
-    error = nl_sock_transact(genl_sock, &request, NULL);
+    error = nl_transact(NETLINK_GENERIC, &request, NULL);
     ofpbuf_uninit(&request);
 
     return error;
@@ -1090,7 +1089,7 @@ dpif_linux_operate__(struct dpif *dpif_, struct dpif_op **ops, size_t n_ops)
     for (i = 0; i < n_ops; i++) {
         txnsp[i] = &auxes[i].txn;
     }
-    nl_sock_transact_multiple(genl_sock, txnsp, n_ops);
+    nl_transact_multiple(NETLINK_GENERIC, txnsp, n_ops);
 
     for (i = 0; i < n_ops; i++) {
         struct op_auxdata *aux = &auxes[i];
@@ -1464,9 +1463,6 @@ dpif_linux_init(void)
                                           &ovs_packet_family);
         }
         if (!error) {
-            error = nl_sock_create(NETLINK_GENERIC, &genl_sock);
-        }
-        if (!error) {
             error = nl_lookup_genl_mcgroup(OVS_VPORT_FAMILY, OVS_VPORT_MCGROUP,
                                            &ovs_vport_mcgroup,
                                            OVS_VPORT_MCGROUP_FALLBACK_ID);
@@ -1659,7 +1655,7 @@ dpif_linux_vport_transact(const struct dpif_linux_vport *request,
 
     request_buf = ofpbuf_new(1024);
     dpif_linux_vport_to_ofpbuf(request, request_buf);
-    error = nl_sock_transact(genl_sock, request_buf, bufp);
+    error = nl_transact(NETLINK_GENERIC, request_buf, bufp);
     ofpbuf_delete(request_buf);
 
     if (reply) {
@@ -1780,7 +1776,7 @@ dpif_linux_dp_dump_start(struct nl_dump *dump)
 
     buf = ofpbuf_new(1024);
     dpif_linux_dp_to_ofpbuf(&request, buf);
-    nl_dump_start(dump, genl_sock, buf);
+    nl_dump_start(dump, NETLINK_GENERIC, buf);
     ofpbuf_delete(buf);
 }
 
@@ -1801,7 +1797,7 @@ dpif_linux_dp_transact(const struct dpif_linux_dp *request,
 
     request_buf = ofpbuf_new(1024);
     dpif_linux_dp_to_ofpbuf(request, request_buf);
-    error = nl_sock_transact(genl_sock, request_buf, bufp);
+    error = nl_transact(NETLINK_GENERIC, request_buf, bufp);
     ofpbuf_delete(request_buf);
 
     if (reply) {
@@ -1965,7 +1961,7 @@ dpif_linux_flow_transact(struct dpif_linux_flow *request,
 
     request_buf = ofpbuf_new(1024);
     dpif_linux_flow_to_ofpbuf(request, request_buf);
-    error = nl_sock_transact(genl_sock, request_buf, bufp);
+    error = nl_transact(NETLINK_GENERIC, request_buf, bufp);
     ofpbuf_delete(request_buf);
 
     if (reply) {

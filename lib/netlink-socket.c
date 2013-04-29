@@ -63,7 +63,6 @@ struct nl_sock {
     uint32_t next_seq;
     uint32_t pid;
     int protocol;
-    struct nl_dump *dump;
     unsigned int rcvbuf;        /* Receive buffer size (SO_RCVBUF). */
 };
 
@@ -77,11 +76,12 @@ struct nl_sock {
  * Initialized by nl_sock_create(). */
 static int max_iovs;
 
-static int nl_sock_cow__(struct nl_sock *);
+static int nl_pool_alloc(int protocol, struct nl_sock **sockp);
+static void nl_pool_release(struct nl_sock *);
 
 /* Creates a new netlink socket for the given netlink 'protocol'
  * (NETLINK_ROUTE, NETLINK_GENERIC, ...).  Returns 0 and sets '*sockp' to the
- * new socket if successful, otherwise returns a positive errno value.  */
+ * new socket if successful, otherwise returns a positive errno value. */
 int
 nl_sock_create(int protocol, struct nl_sock **sockp)
 {
@@ -117,7 +117,6 @@ nl_sock_create(int protocol, struct nl_sock **sockp)
         goto error;
     }
     sock->protocol = protocol;
-    sock->dump = NULL;
     sock->next_seq = 1;
 
     rcvbuf = 1024 * 1024;
@@ -191,12 +190,8 @@ void
 nl_sock_destroy(struct nl_sock *sock)
 {
     if (sock) {
-        if (sock->dump) {
-            sock->dump = NULL;
-        } else {
-            close(sock->fd);
-            free(sock);
-        }
+        close(sock->fd);
+        free(sock);
     }
 }
 
@@ -214,10 +209,6 @@ nl_sock_destroy(struct nl_sock *sock)
 int
 nl_sock_join_mcgroup(struct nl_sock *sock, unsigned int multicast_group)
 {
-    int error = nl_sock_cow__(sock);
-    if (error) {
-        return error;
-    }
     if (setsockopt(sock->fd, SOL_NETLINK, NETLINK_ADD_MEMBERSHIP,
                    &multicast_group, sizeof multicast_group) < 0) {
         VLOG_WARN("could not join multicast group %u (%s)",
@@ -240,7 +231,6 @@ nl_sock_join_mcgroup(struct nl_sock *sock, unsigned int multicast_group)
 int
 nl_sock_leave_mcgroup(struct nl_sock *sock, unsigned int multicast_group)
 {
-    ovs_assert(!sock->dump);
     if (setsockopt(sock->fd, SOL_NETLINK, NETLINK_DROP_MEMBERSHIP,
                    &multicast_group, sizeof multicast_group) < 0) {
         VLOG_WARN("could not leave multicast group %u (%s)",
@@ -301,10 +291,6 @@ int
 nl_sock_send_seq(struct nl_sock *sock, const struct ofpbuf *msg,
                  uint32_t nlmsg_seq, bool wait)
 {
-    int error = nl_sock_cow__(sock);
-    if (error) {
-        return error;
-    }
     return nl_sock_send__(sock, msg, nlmsg_seq, wait);
 }
 
@@ -395,10 +381,6 @@ nl_sock_recv__(struct nl_sock *sock, struct ofpbuf *buf, bool wait)
 int
 nl_sock_recv(struct nl_sock *sock, struct ofpbuf *buf, bool wait)
 {
-    int error = nl_sock_cow__(sock);
-    if (error) {
-        return error;
-    }
     return nl_sock_recv__(sock, buf, wait);
 }
 
@@ -571,12 +553,6 @@ nl_sock_transact_multiple(struct nl_sock *sock,
         return;
     }
 
-    error = nl_sock_cow__(sock);
-    if (error) {
-        nl_sock_record_errors__(transactions, n, error);
-        return;
-    }
-
     /* In theory, every request could have a 64 kB reply.  But the default and
      * maximum socket rcvbuf size with typical Dom0 memory sizes both tend to
      * be a bit below 128 kB, so that would only allow a single message in a
@@ -690,93 +666,36 @@ nl_sock_transact(struct nl_sock *sock, const struct ofpbuf *request,
 int
 nl_sock_drain(struct nl_sock *sock)
 {
-    int error = nl_sock_cow__(sock);
-    if (error) {
-        return error;
-    }
     return drain_rcvbuf(sock->fd);
 }
 
-/* The client is attempting some operation on 'sock'.  If 'sock' has an ongoing
- * dump operation, then replace 'sock''s fd with a new socket and hand 'sock''s
- * old fd over to the dump. */
-static int
-nl_sock_cow__(struct nl_sock *sock)
-{
-    struct nl_sock *copy;
-    uint32_t tmp_pid;
-    int tmp_fd;
-    int error;
-
-    if (!sock->dump) {
-        return 0;
-    }
-
-    error = nl_sock_clone(sock, &copy);
-    if (error) {
-        return error;
-    }
-
-    tmp_fd = sock->fd;
-    sock->fd = copy->fd;
-    copy->fd = tmp_fd;
-
-    tmp_pid = sock->pid;
-    sock->pid = copy->pid;
-    copy->pid = tmp_pid;
-
-    sock->dump->sock = copy;
-    sock->dump = NULL;
-
-    return 0;
-}
-
-/* Starts a Netlink "dump" operation, by sending 'request' to the kernel via
- * 'sock', and initializes 'dump' to reflect the state of the operation.
+/* Starts a Netlink "dump" operation, by sending 'request' to the kernel on a
+ * Netlink socket created with the given 'protocol', and initializes 'dump' to
+ * reflect the state of the operation.
  *
  * nlmsg_len in 'msg' will be finalized to match msg->size, and nlmsg_pid will
- * be set to 'sock''s pid, before the message is sent.  NLM_F_DUMP and
- * NLM_F_ACK will be set in nlmsg_flags.
+ * be set to the Netlink socket's pid, before the message is sent.  NLM_F_DUMP
+ * and NLM_F_ACK will be set in nlmsg_flags.
  *
- * This Netlink socket library is designed to ensure that the dump is reliable
- * and that it will not interfere with other operations on 'sock', including
- * destroying or sending and receiving messages on 'sock'.  One corner case is
- * not handled:
- *
- *   - If 'sock' has been used to send a request (e.g. with nl_sock_send())
- *     whose response has not yet been received (e.g. with nl_sock_recv()).
- *     This is unusual: usually nl_sock_transact() is used to send a message
- *     and receive its reply all in one go.
+ * The design of this Netlink socket library ensures that the dump is reliable.
  *
  * This function provides no status indication.  An error status for the entire
  * dump operation is provided when it is completed by calling nl_dump_done().
  *
  * The caller is responsible for destroying 'request'.
- *
- * The new 'dump' is independent of 'sock'.  'sock' and 'dump' may be destroyed
- * in either order.
  */
 void
-nl_dump_start(struct nl_dump *dump,
-              struct nl_sock *sock, const struct ofpbuf *request)
+nl_dump_start(struct nl_dump *dump, int protocol, const struct ofpbuf *request)
 {
     ofpbuf_init(&dump->buffer, 4096);
-    if (sock->dump) {
-        /* 'sock' already has an ongoing dump.  Clone the socket because
-         * Netlink only allows one dump at a time. */
-        dump->status = nl_sock_clone(sock, &dump->sock);
-        if (dump->status) {
-            return;
-        }
-    } else {
-        sock->dump = dump;
-        dump->sock = sock;
-        dump->status = 0;
+    dump->status = nl_pool_alloc(protocol, &dump->sock);
+    if (dump->status) {
+        return;
     }
 
     nl_msg_nlmsghdr(request)->nlmsg_flags |= NLM_F_DUMP | NLM_F_ACK;
-    dump->status = nl_sock_send__(sock, request, nl_sock_allocate_seq(sock, 1),
-                                  true);
+    dump->status = nl_sock_send__(dump->sock, request,
+                                  nl_sock_allocate_seq(dump->sock, 1), true);
     dump->seq = nl_msg_nlmsghdr(request)->nlmsg_seq;
 }
 
@@ -862,21 +781,16 @@ int
 nl_dump_done(struct nl_dump *dump)
 {
     /* Drain any remaining messages that the client didn't read.  Otherwise the
-     * kernel will continue to queue them up and waste buffer space. */
+     * kernel will continue to queue them up and waste buffer space.
+     *
+     * XXX We could just destroy and discard the socket in this case. */
     while (!dump->status) {
         struct ofpbuf reply;
         if (!nl_dump_next(dump, &reply)) {
             ovs_assert(dump->status);
         }
     }
-
-    if (dump->sock) {
-        if (dump->sock->dump) {
-            dump->sock->dump = NULL;
-        } else {
-            nl_sock_destroy(dump->sock);
-        }
-    }
+    nl_pool_release(dump->sock);
     ofpbuf_uninit(&dump->buffer);
     return dump->status == EOF ? 0 : dump->status;
 }
@@ -1089,6 +1003,79 @@ nl_lookup_genl_family(const char *name, int *number)
     }
     return *number > 0 ? 0 : -*number;
 }
+
+struct nl_pool {
+    struct nl_sock *socks[16];
+    int n;
+};
+
+static struct nl_pool pools[MAX_LINKS];
+
+static int
+nl_pool_alloc(int protocol, struct nl_sock **sockp)
+{
+    struct nl_pool *pool;
+
+    ovs_assert(protocol >= 0 && protocol < ARRAY_SIZE(pools));
+
+    pool = &pools[protocol];
+    if (pool->n > 0) {
+        *sockp = pool->socks[--pool->n];
+        return 0;
+    } else {
+        return nl_sock_create(protocol, sockp);
+    }
+}
+
+static void
+nl_pool_release(struct nl_sock *sock)
+{
+    if (sock) {
+        struct nl_pool *pool = &pools[sock->protocol];
+
+        if (pool->n < ARRAY_SIZE(pool->socks)) {
+            pool->socks[pool->n++] = sock;
+        } else {
+            nl_sock_destroy(sock);
+        }
+    }
+}
+
+int
+nl_transact(int protocol, const struct ofpbuf *request,
+            struct ofpbuf **replyp)
+{
+    struct nl_sock *sock;
+    int error;
+
+    error = nl_pool_alloc(protocol, &sock);
+    if (error) {
+        *replyp = NULL;
+        return error;
+    }
+
+    error = nl_sock_transact(sock, request, replyp);
+
+    nl_pool_release(sock);
+    return error;
+}
+
+void
+nl_transact_multiple(int protocol,
+                     struct nl_transaction **transactions, size_t n)
+{
+    struct nl_sock *sock;
+    int error;
+
+    error = nl_pool_alloc(protocol, &sock);
+    if (!error) {
+        nl_sock_transact_multiple(sock, transactions, n);
+        nl_pool_release(sock);
+    } else {
+        nl_sock_record_errors__(transactions, n, error);
+    }
+}
+
 
 static uint32_t
 nl_sock_allocate_seq(struct nl_sock *sock, unsigned int n)

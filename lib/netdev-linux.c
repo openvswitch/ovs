@@ -409,9 +409,6 @@ static const struct netdev_rx_class netdev_rx_linux_class;
 /* Sockets used for ioctl operations. */
 static int af_inet_sock = -1;   /* AF_INET, SOCK_DGRAM. */
 
-/* A Netlink routing socket that is not subscribed to any multicast groups. */
-static struct nl_sock *rtnl_sock;
-
 /* This is set pretty low because we probably won't learn anything from the
  * additional log messages. */
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
@@ -476,15 +473,6 @@ netdev_linux_init(void)
         status = af_inet_sock >= 0 ? 0 : errno;
         if (status) {
             VLOG_ERR("failed to create inet socket: %s", ovs_strerror(status));
-        }
-
-        /* Create rtnetlink socket. */
-        if (!status) {
-            status = nl_sock_create(NETLINK_ROUTE, &rtnl_sock);
-            if (status) {
-                VLOG_ERR_RL(&rl, "failed to create rtnetlink socket: %s",
-                            ovs_strerror(status));
-            }
         }
     }
     return status;
@@ -2025,7 +2013,7 @@ start_queue_dump(const struct netdev *netdev, struct nl_dump *dump)
         return false;
     }
     tcmsg->tcm_parent = 0;
-    nl_dump_start(dump, rtnl_sock, &request);
+    nl_dump_start(dump, NETLINK_ROUTE, &request);
     ofpbuf_uninit(&request);
     return true;
 }
@@ -3644,7 +3632,7 @@ tc_make_request(const struct netdev *netdev, int type, unsigned int flags,
 static int
 tc_transact(struct ofpbuf *request, struct ofpbuf **replyp)
 {
-    int error = nl_sock_transact(rtnl_sock, request, replyp);
+    int error = nl_transact(NETLINK_ROUTE, request, replyp);
     ofpbuf_uninit(request);
     return error;
 }
@@ -4320,7 +4308,7 @@ get_stats_via_netlink(int ifindex, struct netdev_stats *stats)
     ifi = ofpbuf_put_zeros(&request, sizeof *ifi);
     ifi->ifi_family = PF_UNSPEC;
     ifi->ifi_index = ifindex;
-    error = nl_sock_transact(rtnl_sock, &request, &reply);
+    error = nl_transact(NETLINK_ROUTE, &request, &reply);
     ofpbuf_uninit(&request);
     if (error) {
         return error;
