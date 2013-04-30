@@ -6073,7 +6073,7 @@ fix_sflow_action(struct action_xlate_ctx *ctx)
     }
 
     cookie = ofpbuf_at(ctx->odp_actions, ctx->user_cookie_offset,
-                       sizeof(*cookie));
+                       sizeof cookie->sflow);
     ovs_assert(cookie->type == USER_ACTION_COOKIE_SFLOW);
 
     compose_sflow_cookie(ctx->ofproto, base->vlan_tci,
