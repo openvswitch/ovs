@@ -60,6 +60,7 @@
 #include "vlan.h"
 #include "tunnel.h"
 #include "vport-internal_dev.h"
+#include "vport-netdev.h"
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,18) || \
     LINUX_VERSION_CODE >= KERNEL_VERSION(3,9,0)
@@ -159,7 +160,7 @@ static int get_dpifindex(struct datapath *dp)
 
 	local = ovs_vport_rcu(dp, OVSP_LOCAL);
 	if (local)
-		ifindex = local->ops->get_ifindex(local);
+		ifindex = netdev_vport_priv(local)->dev->ifindex;
 	else
 		ifindex = 0;
 
