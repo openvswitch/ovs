@@ -312,7 +312,7 @@ add_channel(struct dpif_linux *dpif, uint32_t port_no, struct nl_sock *sock)
         int new_size = port_no + 1;
         int i;
 
-        if (new_size > 65535) {
+        if (new_size > MAX_PORTS) {
             VLOG_WARN_RL(&error_rl, "%s: datapath port %"PRIu32" too big",
                          dpif_name(&dpif->dpif), port_no);
             return EFBIG;
