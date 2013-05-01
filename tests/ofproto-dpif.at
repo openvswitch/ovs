@@ -1252,67 +1252,7 @@ AT_CHECK([[sort sflow.log | $EGREP 'HEADER|ERROR' | sed 's/ /\
 	/g']], [0], [dnl
 HEADER
 	dgramSeqNo=1
-	ds=127.0.0.1>0:1003
-	fsSeqNo=1
-	in_vlan=0
-	in_priority=0
-	out_vlan=0
-	out_priority=0
-	meanSkip=1
-	samplePool=1
-	dropEvents=0
-	in_ifindex=1003
-	in_format=0
-	out_ifindex=2
-	out_format=2
-	hdr_prot=1
-	pkt_len=64
-	stripped=4
-	hdr_len=60
-	hdr=FF-FF-FF-FF-FF-FF-50-54-00-00-00-07-08-06-00-01-08-00-06-04-00-01-50-54-00-00-00-07-C0-A8-00-01-00-00-00-00-00-00-C0-A8-00-02-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00
-HEADER
-	dgramSeqNo=1
-	ds=127.0.0.1>0:1003
-	fsSeqNo=2
-	in_vlan=0
-	in_priority=0
-	out_vlan=0
-	out_priority=0
-	meanSkip=1
-	samplePool=2
-	dropEvents=0
-	in_ifindex=1003
-	in_format=0
-	out_ifindex=1004
-	out_format=0
-	hdr_prot=1
-	pkt_len=64
-	stripped=4
-	hdr_len=60
-	hdr=50-54-00-00-00-05-50-54-00-00-00-07-08-00-45-00-00-1C-00-00-00-00-40-01-F9-8D-C0-A8-00-02-C0-A8-00-01-00-00-FF-FF-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00
-HEADER
-	dgramSeqNo=1
-	ds=127.0.0.1>0:1003
-	fsSeqNo=3
-	in_vlan=0
-	in_priority=0
-	out_vlan=0
-	out_priority=0
-	meanSkip=1
-	samplePool=3
-	dropEvents=0
-	in_ifindex=1003
-	in_format=0
-	out_ifindex=1004
-	out_format=0
-	hdr_prot=1
-	pkt_len=64
-	stripped=4
-	hdr_len=60
-	hdr=50-54-00-00-00-05-50-54-00-00-00-07-86-DD-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00
-HEADER
-	dgramSeqNo=1
-	ds=127.0.0.1>0:1004
+	ds=127.0.0.1>2:1000
 	fsSeqNo=1
 	in_vlan=0
 	in_priority=0
@@ -1332,7 +1272,7 @@ HEADER
 	hdr=FF-FF-FF-FF-FF-FF-50-54-00-00-00-05-08-06-00-01-08-00-06-04-00-01-50-54-00-00-00-05-C0-A8-00-02-00-00-00-00-00-00-C0-A8-00-01-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00
 HEADER
 	dgramSeqNo=1
-	ds=127.0.0.1>0:1004
+	ds=127.0.0.1>2:1000
 	fsSeqNo=2
 	in_vlan=0
 	in_priority=0
@@ -1340,6 +1280,26 @@ HEADER
 	out_priority=0
 	meanSkip=1
 	samplePool=2
+	dropEvents=0
+	in_ifindex=1003
+	in_format=0
+	out_ifindex=2
+	out_format=2
+	hdr_prot=1
+	pkt_len=64
+	stripped=4
+	hdr_len=60
+	hdr=FF-FF-FF-FF-FF-FF-50-54-00-00-00-07-08-06-00-01-08-00-06-04-00-01-50-54-00-00-00-07-C0-A8-00-01-00-00-00-00-00-00-C0-A8-00-02-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00
+HEADER
+	dgramSeqNo=1
+	ds=127.0.0.1>2:1000
+	fsSeqNo=3
+	in_vlan=0
+	in_priority=0
+	out_vlan=0
+	out_priority=0
+	meanSkip=1
+	samplePool=3
 	dropEvents=0
 	in_ifindex=1004
 	in_format=0
@@ -1350,6 +1310,46 @@ HEADER
 	stripped=4
 	hdr_len=60
 	hdr=50-54-00-00-00-07-50-54-00-00-00-05-08-00-45-00-00-1C-00-00-00-00-40-01-F9-8D-C0-A8-00-01-C0-A8-00-02-08-00-F7-FF-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00
+HEADER
+	dgramSeqNo=1
+	ds=127.0.0.1>2:1000
+	fsSeqNo=4
+	in_vlan=0
+	in_priority=0
+	out_vlan=0
+	out_priority=0
+	meanSkip=1
+	samplePool=4
+	dropEvents=0
+	in_ifindex=1003
+	in_format=0
+	out_ifindex=1004
+	out_format=0
+	hdr_prot=1
+	pkt_len=64
+	stripped=4
+	hdr_len=60
+	hdr=50-54-00-00-00-05-50-54-00-00-00-07-08-00-45-00-00-1C-00-00-00-00-40-01-F9-8D-C0-A8-00-02-C0-A8-00-01-00-00-FF-FF-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00
+HEADER
+	dgramSeqNo=1
+	ds=127.0.0.1>2:1000
+	fsSeqNo=5
+	in_vlan=0
+	in_priority=0
+	out_vlan=0
+	out_priority=0
+	meanSkip=1
+	samplePool=5
+	dropEvents=0
+	in_ifindex=1003
+	in_format=0
+	out_ifindex=1004
+	out_format=0
+	hdr_prot=1
+	pkt_len=64
+	stripped=4
+	hdr_len=60
+	hdr=50-54-00-00-00-05-50-54-00-00-00-07-86-DD-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00
 ])
 
 AT_CHECK([[sort sflow.log | $EGREP 'IFCOUNTERS|ERROR' | head -6 | sed 's/ /\
