@@ -387,6 +387,7 @@ struct subfacet {
     struct hmap_node hmap_node; /* In struct ofproto_dpif 'subfacets' list. */
     struct list list_node;      /* In struct facet's 'facets' list. */
     struct facet *facet;        /* Owning facet. */
+    struct dpif_backer *backer; /* Owning backer. */
 
     enum odp_key_fitness key_fitness;
     struct nlattr *key;
@@ -405,12 +406,12 @@ struct subfacet {
 
 static struct subfacet *subfacet_create(struct facet *, struct flow_miss *miss,
                                         long long int now);
-static struct subfacet *subfacet_find(struct ofproto_dpif *,
+static struct subfacet *subfacet_find(struct dpif_backer *,
                                       const struct nlattr *key, size_t key_len,
                                       uint32_t key_hash);
 static void subfacet_destroy(struct subfacet *);
 static void subfacet_destroy__(struct subfacet *);
-static void subfacet_destroy_batch(struct ofproto_dpif *,
+static void subfacet_destroy_batch(struct dpif_backer *,
                                    struct subfacet **, int n);
 static void subfacet_reset_dp_stats(struct subfacet *,
                                     struct dpif_flow_stats *);
@@ -658,6 +659,9 @@ struct dpif_backer {
     struct hmap drop_keys; /* Set of dropped odp keys. */
     bool recv_set_enable; /* Enables or disables receiving packets. */
 
+    struct hmap subfacets;
+    struct governor *governor;
+
     /* Subfacet statistics.
      *
      * These keep track of the total number of subfacets added and deleted and
@@ -715,8 +719,6 @@ struct ofproto_dpif {
 
     /* Facets. */
     struct hmap facets;
-    struct hmap subfacets;
-    struct governor *governor;
     long long int consistency_rl;
 
     /* Revalidation. */
@@ -1078,6 +1080,24 @@ type_run(const char *type)
         }
     }
 
+    if (backer->governor) {
+        size_t n_subfacets;
+
+        governor_run(backer->governor);
+
+        /* If the governor has shrunk to its minimum size and the number of
+         * subfacets has dwindled, then drop the governor entirely.
+         *
+         * For hysteresis, the number of subfacets to drop the governor is
+         * smaller than the number needed to trigger its creation. */
+        n_subfacets = hmap_count(&backer->subfacets);
+        if (n_subfacets * 4 < flow_eviction_threshold
+            && governor_is_idle(backer->governor)) {
+            governor_destroy(backer->governor);
+            backer->governor = NULL;
+        }
+    }
+
     return 0;
 }
 
@@ -1176,6 +1196,10 @@ type_wait(const char *type)
         return;
     }
 
+    if (backer->governor) {
+        governor_wait(backer->governor);
+    }
+
     timer_wait(&backer->next_expiration);
 }
 
@@ -1217,6 +1241,10 @@ close_dpif_backer(struct dpif_backer *backer)
     free(backer->type);
     shash_delete(&all_dpif_backers, node);
     dpif_close(backer->dpif);
+
+    ovs_assert(hmap_is_empty(&backer->subfacets));
+    hmap_destroy(&backer->subfacets);
+    governor_destroy(backer->governor);
 
     free(backer);
 }
@@ -1283,9 +1311,11 @@ open_dpif_backer(const char *type, struct dpif_backer **backerp)
     }
 
     backer->type = xstrdup(type);
+    backer->governor = NULL;
     backer->refcount = 1;
     hmap_init(&backer->odp_to_ofport_map);
     hmap_init(&backer->drop_keys);
+    hmap_init(&backer->subfacets);
     timer_set_duration(&backer->next_expiration, 1000);
     backer->need_revalidate = 0;
     simap_init(&backer->tnl_backers);
@@ -1372,8 +1402,6 @@ construct(struct ofproto *ofproto_)
     ofproto->has_bonded_bundles = false;
 
     hmap_init(&ofproto->facets);
-    hmap_init(&ofproto->subfacets);
-    ofproto->governor = NULL;
     ofproto->consistency_rl = LLONG_MIN;
 
     for (i = 0; i < N_TABLES; i++) {
@@ -1542,8 +1570,6 @@ destruct(struct ofproto *ofproto_)
     mac_learning_destroy(ofproto->ml);
 
     hmap_destroy(&ofproto->facets);
-    hmap_destroy(&ofproto->subfacets);
-    governor_destroy(ofproto->governor);
 
     hmap_destroy(&ofproto->vlandev_map);
     hmap_destroy(&ofproto->realdev_vid_map);
@@ -1634,24 +1660,6 @@ run(struct ofproto *ofproto_)
         }
     }
 
-    if (ofproto->governor) {
-        size_t n_subfacets;
-
-        governor_run(ofproto->governor);
-
-        /* If the governor has shrunk to its minimum size and the number of
-         * subfacets has dwindled, then drop the governor entirely.
-         *
-         * For hysteresis, the number of subfacets to drop the governor is
-         * smaller than the number needed to trigger its creation. */
-        n_subfacets = hmap_count(&ofproto->subfacets);
-        if (n_subfacets * 4 < flow_eviction_threshold
-            && governor_is_idle(ofproto->governor)) {
-            governor_destroy(ofproto->governor);
-            ofproto->governor = NULL;
-        }
-    }
-
     return 0;
 }
 
@@ -1694,18 +1702,20 @@ wait(struct ofproto *ofproto_)
         VLOG_DBG_RL(&rl, "need revalidate in ofproto_wait_cb()");
         poll_immediate_wake();
     }
-    if (ofproto->governor) {
-        governor_wait(ofproto->governor);
-    }
 }
 
 static void
 get_memory_usage(const struct ofproto *ofproto_, struct simap *usage)
 {
     const struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
+    size_t n_subfacets = 0;
+    struct facet *facet;
 
     simap_increase(usage, "facets", hmap_count(&ofproto->facets));
-    simap_increase(usage, "subfacets", hmap_count(&ofproto->subfacets));
+    HMAP_FOR_EACH (facet, hmap_node, &ofproto->facets) {
+        n_subfacets += list_size(&facet->subfacets);
+    }
+    simap_increase(usage, "subfacets", n_subfacets);
 }
 
 static void
@@ -1718,11 +1728,15 @@ flush(struct ofproto *ofproto_)
 
     n_batch = 0;
     HMAP_FOR_EACH_SAFE (subfacet, next_subfacet, hmap_node,
-                        &ofproto->subfacets) {
+                        &ofproto->backer->subfacets) {
+        if (ofproto_dpif_cast(subfacet->facet->rule->up.ofproto) != ofproto) {
+            continue;
+        }
+
         if (subfacet->path != SF_NOT_INSTALLED) {
             batch[n_batch++] = subfacet;
             if (n_batch >= SUBFACET_DESTROY_MAX_BATCH) {
-                subfacet_destroy_batch(ofproto, batch, n_batch);
+                subfacet_destroy_batch(ofproto->backer, batch, n_batch);
                 n_batch = 0;
             }
         } else {
@@ -1731,7 +1745,7 @@ flush(struct ofproto *ofproto_)
     }
 
     if (n_batch > 0) {
-        subfacet_destroy_batch(ofproto, batch, n_batch);
+        subfacet_destroy_batch(ofproto->backer, batch, n_batch);
     }
 }
 
@@ -3668,21 +3682,22 @@ handle_flow_miss_common(struct rule_dpif *rule,
  * the benefits, so when the datapath holds a large number of flows we impose
  * some heuristics to decide which flows are likely to be worth tracking. */
 static bool
-flow_miss_should_make_facet(struct ofproto_dpif *ofproto,
-                            struct flow_miss *miss, uint32_t hash)
+flow_miss_should_make_facet(struct flow_miss *miss, uint32_t hash)
 {
-    if (!ofproto->governor) {
+    struct dpif_backer *backer = miss->ofproto->backer;
+
+    if (!backer->governor) {
         size_t n_subfacets;
 
-        n_subfacets = hmap_count(&ofproto->subfacets);
+        n_subfacets = hmap_count(&backer->subfacets);
         if (n_subfacets * 2 <= flow_eviction_threshold) {
             return true;
         }
 
-        ofproto->governor = governor_create(ofproto->up.name);
+        backer->governor = governor_create(dpif_name(backer->dpif));
     }
 
-    return governor_should_install_flow(ofproto->governor, hash,
+    return governor_should_install_flow(backer->governor, hash,
                                         list_size(&miss->packets));
 }
 
@@ -3824,7 +3839,7 @@ handle_flow_miss(struct flow_miss *miss, struct flow_miss_op *ops,
          * Since we have to handle these misses in userspace anyway, we simply
          * skip facet creation, avoiding the problem altogether. */
         if (miss->key_fitness == ODP_FIT_TOO_LITTLE
-            || !flow_miss_should_make_facet(ofproto, miss, hash)) {
+            || !flow_miss_should_make_facet(miss, hash)) {
             handle_flow_miss_without_facet(miss, ops, n_ops);
             return;
         }
@@ -4275,10 +4290,10 @@ handle_upcalls(struct dpif_backer *backer, unsigned int max_batch)
 
 /* Flow expiration. */
 
-static int subfacet_max_idle(const struct ofproto_dpif *);
+static int subfacet_max_idle(const struct dpif_backer *);
 static void update_stats(struct dpif_backer *);
 static void rule_expire(struct rule_dpif *);
-static void expire_subfacets(struct ofproto_dpif *, int dp_max_idle);
+static void expire_subfacets(struct dpif_backer *, int dp_max_idle);
 
 /* This function is called periodically by run().  Its job is to collect
  * updates for the flows that have been installed into the datapath, most
@@ -4289,10 +4304,9 @@ static void expire_subfacets(struct ofproto_dpif *, int dp_max_idle);
 static int
 expire(struct dpif_backer *backer)
 {
-    long long int total_subfacet_life, now;
     struct ofproto_dpif *ofproto;
-    int max_idle = INT32_MAX;
     size_t n_subfacets;
+    int max_idle;
 
     /* Periodically clear out the drop keys in an effort to keep them
      * relatively few. */
@@ -4301,27 +4315,34 @@ expire(struct dpif_backer *backer)
     /* Update stats for each flow in the backer. */
     update_stats(backer);
 
-    now = time_msec();
-    total_subfacet_life = n_subfacets = 0;
+    n_subfacets = hmap_count(&backer->subfacets);
+    if (n_subfacets) {
+        struct subfacet *subfacet;
+        long long int total, now;
+
+        total = 0;
+        now = time_msec();
+        HMAP_FOR_EACH (subfacet, hmap_node, &backer->subfacets) {
+            total += now - subfacet->created;
+        }
+        backer->avg_subfacet_life += total / n_subfacets;
+    }
+    backer->avg_subfacet_life /= 2;
+
+    backer->avg_n_subfacet += n_subfacets;
+    backer->avg_n_subfacet /= 2;
+
+    backer->max_n_subfacet = MAX(backer->max_n_subfacet, n_subfacets);
+
+    max_idle = subfacet_max_idle(backer);
+    expire_subfacets(backer, max_idle);
+
     HMAP_FOR_EACH (ofproto, all_ofproto_dpifs_node, &all_ofproto_dpifs) {
         struct rule *rule, *next_rule;
-        struct subfacet *subfacet;
-        int dp_max_idle;
 
         if (ofproto->backer != backer) {
             continue;
         }
-
-        n_subfacets += hmap_count(&ofproto->subfacets);
-        HMAP_FOR_EACH (subfacet, hmap_node, &ofproto->subfacets) {
-            total_subfacet_life += now - subfacet->created;
-        }
-
-        /* Expire subfacets that have been idle too long. */
-        dp_max_idle = subfacet_max_idle(ofproto);
-        expire_subfacets(ofproto, dp_max_idle);
-
-        max_idle = MIN(max_idle, dp_max_idle);
 
         /* Expire OpenFlow flows whose idle_timeout or hard_timeout
          * has passed. */
@@ -4342,16 +4363,6 @@ expire(struct dpif_backer *backer)
             }
         }
     }
-
-    if (n_subfacets) {
-        backer->avg_subfacet_life += total_subfacet_life / n_subfacets;
-    }
-    backer->avg_subfacet_life /= 2;
-
-    backer->avg_n_subfacet += n_subfacets;
-    backer->avg_n_subfacet /= 2;
-
-    backer->max_n_subfacet = MAX(backer->max_n_subfacet, n_subfacets);
 
     return MIN(max_idle, 1000);
 }
@@ -4398,7 +4409,7 @@ update_subfacet_stats(struct subfacet *subfacet,
 /* 'key' with length 'key_len' bytes is a flow in 'dpif' that we know nothing
  * about, or a flow that shouldn't be installed but was anyway.  Delete it. */
 static void
-delete_unexpected_flow(struct ofproto_dpif *ofproto,
+delete_unexpected_flow(struct dpif_backer *backer,
                        const struct nlattr *key, size_t key_len)
 {
     if (!VLOG_DROP_WARN(&rl)) {
@@ -4406,12 +4417,12 @@ delete_unexpected_flow(struct ofproto_dpif *ofproto,
 
         ds_init(&s);
         odp_flow_key_format(key, key_len, &s);
-        VLOG_WARN("unexpected flow on %s: %s", ofproto->up.name, ds_cstr(&s));
+        VLOG_WARN("unexpected flow: %s", ds_cstr(&s));
         ds_destroy(&s);
     }
 
     COVERAGE_INC(facet_unexpected);
-    dpif_flow_del(ofproto->backer->dpif, key, key_len, NULL);
+    dpif_flow_del(backer->dpif, key, key_len, NULL);
 }
 
 /* Update 'packet_count', 'byte_count', and 'used' members of installed facets.
@@ -4440,18 +4451,11 @@ update_stats(struct dpif_backer *backer)
 
     dpif_flow_dump_start(&dump, backer->dpif);
     while (dpif_flow_dump_next(&dump, &key, &key_len, NULL, NULL, &stats)) {
-        struct ofproto_dpif *ofproto;
-        struct flow flow;
         struct subfacet *subfacet;
         uint32_t key_hash;
 
-        if (ofproto_receive(backer, NULL, key, key_len, &flow, NULL, &ofproto,
-                            NULL, NULL)) {
-            continue;
-        }
-
         key_hash = odp_flow_key_hash(key, key_len);
-        subfacet = subfacet_find(ofproto, key, key_len, key_hash);
+        subfacet = subfacet_find(backer, key, key_len, key_hash);
         switch (subfacet ? subfacet->path : SF_NOT_INSTALLED) {
         case SF_FAST_PATH:
             update_subfacet_stats(subfacet, stats);
@@ -4463,7 +4467,7 @@ update_stats(struct dpif_backer *backer)
 
         case SF_NOT_INSTALLED:
         default:
-            delete_unexpected_flow(ofproto, key, key_len);
+            delete_unexpected_flow(backer, key, key_len);
             break;
         }
         run_fast_rl();
@@ -4478,7 +4482,7 @@ update_stats(struct dpif_backer *backer)
  * its statistics into its facet, and when a facet's last subfacet expires, we
  * fold its statistic into its rule. */
 static int
-subfacet_max_idle(const struct ofproto_dpif *ofproto)
+subfacet_max_idle(const struct dpif_backer *backer)
 {
     /*
      * Idle time histogram.
@@ -4519,14 +4523,14 @@ subfacet_max_idle(const struct ofproto_dpif *ofproto)
     long long int now;
     int i;
 
-    total = hmap_count(&ofproto->subfacets);
+    total = hmap_count(&backer->subfacets);
     if (total <= flow_eviction_threshold) {
         return N_BUCKETS * BUCKET_WIDTH;
     }
 
     /* Build histogram. */
     now = time_msec();
-    HMAP_FOR_EACH (subfacet, hmap_node, &ofproto->subfacets) {
+    HMAP_FOR_EACH (subfacet, hmap_node, &backer->subfacets) {
         long long int idle = now - subfacet->used;
         int bucket = (idle <= 0 ? 0
                       : idle >= BUCKET_WIDTH * N_BUCKETS ? N_BUCKETS - 1
@@ -4554,7 +4558,7 @@ subfacet_max_idle(const struct ofproto_dpif *ofproto)
                 ds_put_format(&s, " %d:%d", i * BUCKET_WIDTH, buckets[i]);
             }
         }
-        VLOG_INFO("%s: %s (msec:count)", ofproto->up.name, ds_cstr(&s));
+        VLOG_INFO("%s (msec:count)", ds_cstr(&s));
         ds_destroy(&s);
     }
 
@@ -4562,7 +4566,7 @@ subfacet_max_idle(const struct ofproto_dpif *ofproto)
 }
 
 static void
-expire_subfacets(struct ofproto_dpif *ofproto, int dp_max_idle)
+expire_subfacets(struct dpif_backer *backer, int dp_max_idle)
 {
     /* Cutoff time for most flows. */
     long long int normal_cutoff = time_msec() - dp_max_idle;
@@ -4577,7 +4581,7 @@ expire_subfacets(struct ofproto_dpif *ofproto, int dp_max_idle)
 
     n_batch = 0;
     HMAP_FOR_EACH_SAFE (subfacet, next_subfacet, hmap_node,
-                        &ofproto->subfacets) {
+                        &backer->subfacets) {
         long long int cutoff;
 
         cutoff = (subfacet->facet->xout.slow & (SLOW_CFM | SLOW_BFD | SLOW_LACP
@@ -4588,7 +4592,7 @@ expire_subfacets(struct ofproto_dpif *ofproto, int dp_max_idle)
             if (subfacet->path != SF_NOT_INSTALLED) {
                 batch[n_batch++] = subfacet;
                 if (n_batch >= SUBFACET_DESTROY_MAX_BATCH) {
-                    subfacet_destroy_batch(ofproto, batch, n_batch);
+                    subfacet_destroy_batch(backer, batch, n_batch);
                     n_batch = 0;
                 }
             } else {
@@ -4598,7 +4602,7 @@ expire_subfacets(struct ofproto_dpif *ofproto, int dp_max_idle)
     }
 
     if (n_batch > 0) {
-        subfacet_destroy_batch(ofproto, batch, n_batch);
+        subfacet_destroy_batch(backer, batch, n_batch);
     }
 }
 
@@ -5189,13 +5193,13 @@ rule_credit_stats(struct rule_dpif *rule, const struct dpif_flow_stats *stats)
 /* Subfacets. */
 
 static struct subfacet *
-subfacet_find(struct ofproto_dpif *ofproto,
-              const struct nlattr *key, size_t key_len, uint32_t key_hash)
+subfacet_find(struct dpif_backer *backer, const struct nlattr *key,
+              size_t key_len, uint32_t key_hash)
 {
     struct subfacet *subfacet;
 
     HMAP_FOR_EACH_WITH_HASH (subfacet, hmap_node, key_hash,
-                             &ofproto->subfacets) {
+                             &backer->subfacets) {
         if (subfacet->key_len == key_len
             && !memcmp(key, subfacet->key, key_len)) {
             return subfacet;
@@ -5213,7 +5217,7 @@ static struct subfacet *
 subfacet_create(struct facet *facet, struct flow_miss *miss,
                 long long int now)
 {
-    struct ofproto_dpif *ofproto = ofproto_dpif_cast(facet->rule->up.ofproto);
+    struct dpif_backer *backer = miss->ofproto->backer;
     enum odp_key_fitness key_fitness = miss->key_fitness;
     const struct nlattr *key = miss->key;
     size_t key_len = miss->key_len;
@@ -5225,7 +5229,7 @@ subfacet_create(struct facet *facet, struct flow_miss *miss,
     if (list_is_empty(&facet->subfacets)) {
         subfacet = &facet->one_subfacet;
     } else {
-        subfacet = subfacet_find(ofproto, key, key_len, key_hash);
+        subfacet = subfacet_find(backer, key, key_len, key_hash);
         if (subfacet) {
             if (subfacet->facet == facet) {
                 return subfacet;
@@ -5239,7 +5243,7 @@ subfacet_create(struct facet *facet, struct flow_miss *miss,
         subfacet = xmalloc(sizeof *subfacet);
     }
 
-    hmap_insert(&ofproto->subfacets, &subfacet->hmap_node, key_hash);
+    hmap_insert(&backer->subfacets, &subfacet->hmap_node, key_hash);
     list_push_back(&facet->subfacets, &subfacet->list_node);
     subfacet->facet = facet;
     subfacet->key_fitness = key_fitness;
@@ -5250,8 +5254,9 @@ subfacet_create(struct facet *facet, struct flow_miss *miss,
     subfacet->dp_packet_count = 0;
     subfacet->dp_byte_count = 0;
     subfacet->path = SF_NOT_INSTALLED;
+    subfacet->backer = backer;
 
-    ofproto->backer->subfacet_add_count++;
+    backer->subfacet_add_count++;
     return subfacet;
 }
 
@@ -5267,7 +5272,7 @@ subfacet_destroy__(struct subfacet *subfacet)
     ofproto->backer->subfacet_del_count++;
 
     subfacet_uninstall(subfacet);
-    hmap_remove(&ofproto->subfacets, &subfacet->hmap_node);
+    hmap_remove(&subfacet->backer->subfacets, &subfacet->hmap_node);
     list_remove(&subfacet->list_node);
     free(subfacet->key);
     if (subfacet != &facet->one_subfacet) {
@@ -5291,7 +5296,7 @@ subfacet_destroy(struct subfacet *subfacet)
 }
 
 static void
-subfacet_destroy_batch(struct ofproto_dpif *ofproto,
+subfacet_destroy_batch(struct dpif_backer *backer,
                        struct subfacet **subfacets, int n)
 {
     struct dpif_op ops[SUBFACET_DESTROY_MAX_BATCH];
@@ -5307,7 +5312,7 @@ subfacet_destroy_batch(struct ofproto_dpif *ofproto,
         opsp[i] = &ops[i];
     }
 
-    dpif_operate(ofproto->backer->dpif, opsp, n);
+    dpif_operate(backer->dpif, opsp, n);
     for (i = 0; i < n; i++) {
         subfacet_reset_dp_stats(subfacets[i], &stats[i]);
         subfacets[i]->path = SF_NOT_INSTALLED;
@@ -5347,7 +5352,7 @@ subfacet_install(struct subfacet *subfacet, const struct ofpbuf *odp_actions,
                           &actions, &actions_len);
     }
 
-    ret = dpif_flow_put(ofproto->backer->dpif, flags, subfacet->key,
+    ret = dpif_flow_put(subfacet->backer->dpif, flags, subfacet->key,
                         subfacet->key_len, actions, actions_len, stats);
 
     if (stats) {
@@ -8282,16 +8287,15 @@ show_dp_rates(struct ds *ds, const char *heading,
 static void
 dpif_show_backer(const struct dpif_backer *backer, struct ds *ds)
 {
-    size_t n_hit, n_missed, n_subfacets, i;
+    size_t n_hit, n_missed, i;
     const struct shash_node **ofprotos;
     struct ofproto_dpif *ofproto;
     struct shash ofproto_shash;
     long long int minutes;
 
-    n_hit = n_missed = n_subfacets = 0;
+    n_hit = n_missed = 0;
     HMAP_FOR_EACH (ofproto, all_ofproto_dpifs_node, &all_ofproto_dpifs) {
         if (ofproto->backer == backer) {
-            n_subfacets += hmap_count(&ofproto->subfacets);
             n_missed += ofproto->n_missed;
             n_hit += ofproto->n_hit;
         }
@@ -8300,7 +8304,7 @@ dpif_show_backer(const struct dpif_backer *backer, struct ds *ds)
     ds_put_format(ds, "%s: hit:%"PRIu64" missed:%"PRIu64"\n",
                   dpif_name(backer->dpif), n_hit, n_missed);
     ds_put_format(ds, "\tflows: cur: %zu, avg: %u, max: %u,"
-                  " life span: %lldms\n", n_subfacets,
+                  " life span: %lldms\n", hmap_count(&backer->subfacets),
                   backer->avg_n_subfacet, backer->max_n_subfacet,
                   backer->avg_subfacet_life);
 
@@ -8405,8 +8409,12 @@ ofproto_unixctl_dpif_dump_flows(struct unixctl_conn *conn,
 
     update_stats(ofproto->backer);
 
-    HMAP_FOR_EACH (subfacet, hmap_node, &ofproto->subfacets) {
+    HMAP_FOR_EACH (subfacet, hmap_node, &ofproto->backer->subfacets) {
         struct facet *facet = subfacet->facet;
+
+        if (ofproto_dpif_cast(facet->rule->up.ofproto) != ofproto) {
+            continue;
+        }
 
         odp_flow_key_format(subfacet->key, subfacet->key_len, &ds);
 
