@@ -699,15 +699,12 @@ struct dpif_linux_port_state {
     struct nl_dump dump;
 };
 
-static int
-dpif_linux_port_dump_start(const struct dpif *dpif_, void **statep)
+static void
+dpif_linux_port_dump_start__(const struct dpif *dpif_, struct nl_dump *dump)
 {
     const struct dpif_linux *dpif = dpif_linux_cast(dpif_);
-    struct dpif_linux_port_state *state;
     struct dpif_linux_vport request;
     struct ofpbuf *buf;
-
-    *statep = state = xmalloc(sizeof *state);
 
     dpif_linux_vport_init(&request);
     request.cmd = OVS_VPORT_CMD_GET;
@@ -715,10 +712,39 @@ dpif_linux_port_dump_start(const struct dpif *dpif_, void **statep)
 
     buf = ofpbuf_new(1024);
     dpif_linux_vport_to_ofpbuf(&request, buf);
-    nl_dump_start(&state->dump, NETLINK_GENERIC, buf);
+    nl_dump_start(dump, NETLINK_GENERIC, buf);
     ofpbuf_delete(buf);
+}
+
+static int
+dpif_linux_port_dump_start(const struct dpif *dpif, void **statep)
+{
+    struct dpif_linux_port_state *state;
+
+    *statep = state = xmalloc(sizeof *state);
+    dpif_linux_port_dump_start__(dpif, &state->dump);
 
     return 0;
+}
+
+static bool
+dpif_linux_port_dump_next__(const struct dpif *dpif_, struct nl_dump *dump,
+                            struct dpif_linux_vport *vport)
+{
+    struct dpif_linux *dpif = dpif_linux_cast(dpif_);
+    struct ofpbuf buf;
+    int error;
+
+    if (!nl_dump_next(dump, &buf)) {
+        return EOF;
+    }
+
+    error = dpif_linux_vport_from_ofpbuf(vport, &buf);
+    if (error) {
+        VLOG_WARN_RL(&error_rl, "%s: failed to parse vport record (%s)",
+                     dpif_name(&dpif->dpif), ovs_strerror(error));
+    }
+    return error;
 }
 
 static int
@@ -727,18 +753,12 @@ dpif_linux_port_dump_next(const struct dpif *dpif OVS_UNUSED, void *state_,
 {
     struct dpif_linux_port_state *state = state_;
     struct dpif_linux_vport vport;
-    struct ofpbuf buf;
     int error;
 
-    if (!nl_dump_next(&state->dump, &buf)) {
-        return EOF;
-    }
-
-    error = dpif_linux_vport_from_ofpbuf(&vport, &buf);
+    error = dpif_linux_port_dump_next__(dpif, &state->dump, &vport);
     if (error) {
         return error;
     }
-
     dpif_port->name = CONST_CAST(char *, vport.name);
     dpif_port->type = CONST_CAST(char *, get_vport_type(&vport));
     dpif_port->port_no = vport.port_no;
