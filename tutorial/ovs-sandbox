@@ -199,7 +199,7 @@ trap 'kill `cat "$sandbox"/*.pid`' 0 1 2 3 13 14 15
 
 # Create database and start ovsdb-server.
 touch "$sandbox"/.conf.db.~lock~
-run ovsdb-tool create conf.db "$srcdir"/vswitchd/vswitch.ovsschema
+run ovsdb-tool create conf.db "$schema"
 run ovsdb-server --detach --no-chdir --pidfile -vconsole:off --log-file \
     --remote=punix:"$sandbox"/db.sock
 
