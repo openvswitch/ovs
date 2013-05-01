@@ -957,13 +957,15 @@ type_run(const char *type)
             }
 
             HMAP_FOR_EACH (iter, up.hmap_node, &ofproto->up.ports) {
+                char namebuf[NETDEV_VPORT_NAME_BUFSIZE];
                 const char *dp_port;
 
                 if (!iter->tnl_port) {
                     continue;
                 }
 
-                dp_port = netdev_vport_get_dpif_port(iter->up.netdev);
+                dp_port = netdev_vport_get_dpif_port(iter->up.netdev,
+                                                     namebuf, sizeof namebuf);
                 node = simap_find(&tmp_backers, dp_port);
                 if (node) {
                     simap_put(&backer->tnl_backers, dp_port, node->data);
@@ -1807,6 +1809,7 @@ port_construct(struct ofport *port_)
     struct ofport_dpif *port = ofport_dpif_cast(port_);
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(port->up.ofproto);
     const struct netdev *netdev = port->up.netdev;
+    char namebuf[NETDEV_VPORT_NAME_BUFSIZE];
     struct dpif_port dpif_port;
     int error;
 
@@ -1835,7 +1838,8 @@ port_construct(struct ofport *port_)
     }
 
     error = dpif_port_query_by_name(ofproto->backer->dpif,
-                                    netdev_vport_get_dpif_port(netdev),
+                                    netdev_vport_get_dpif_port(netdev, namebuf,
+                                                               sizeof namebuf),
                                     &dpif_port);
     if (error) {
         return error;
@@ -1872,9 +1876,12 @@ port_destruct(struct ofport *port_)
 {
     struct ofport_dpif *port = ofport_dpif_cast(port_);
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(port->up.ofproto);
-    const char *dp_port_name = netdev_vport_get_dpif_port(port->up.netdev);
     const char *devname = netdev_get_name(port->up.netdev);
+    char namebuf[NETDEV_VPORT_NAME_BUFSIZE];
+    const char *dp_port_name;
 
+    dp_port_name = netdev_vport_get_dpif_port(port->up.netdev, namebuf,
+                                              sizeof namebuf);
     if (dpif_port_exists(ofproto->backer->dpif, dp_port_name)) {
         /* The underlying device is still there, so delete it.  This
          * happens when the ofproto is being destroyed, since the caller
@@ -3318,14 +3325,16 @@ static int
 port_add(struct ofproto *ofproto_, struct netdev *netdev)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
-    const char *dp_port_name = netdev_vport_get_dpif_port(netdev);
     const char *devname = netdev_get_name(netdev);
+    char namebuf[NETDEV_VPORT_NAME_BUFSIZE];
+    const char *dp_port_name;
 
     if (netdev_vport_is_patch(netdev)) {
         sset_add(&ofproto->ghost_ports, netdev_get_name(netdev));
         return 0;
     }
 
+    dp_port_name = netdev_vport_get_dpif_port(netdev, namebuf, sizeof namebuf);
     if (!dpif_port_exists(ofproto->backer->dpif, dp_port_name)) {
         uint32_t port_no = UINT32_MAX;
         int error;

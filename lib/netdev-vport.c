@@ -121,14 +121,14 @@ netdev_vport_class_get_dpif_port(const struct netdev_class *class)
 }
 
 const char *
-netdev_vport_get_dpif_port(const struct netdev *netdev)
+netdev_vport_get_dpif_port(const struct netdev *netdev,
+                           char namebuf[], size_t bufsize)
 {
     const char *dpif_port;
 
     if (netdev_vport_needs_dst_port(netdev)) {
         const struct netdev_vport *vport = netdev_vport_cast(netdev);
         const char *type = netdev_get_type(netdev);
-        static char dpif_port_combined[IFNAMSIZ];
 
         /*
          * Note: IFNAMSIZ is 16 bytes long. The maximum length of a VXLAN
@@ -136,16 +136,26 @@ netdev_vport_get_dpif_port(const struct netdev *netdev)
          * assert here on the size of strlen(type) in case that changes
          * in the future.
          */
+        BUILD_ASSERT(NETDEV_VPORT_NAME_BUFSIZE >= IFNAMSIZ);
         ovs_assert(strlen(type) + 10 < IFNAMSIZ);
-        snprintf(dpif_port_combined, IFNAMSIZ, "%s_sys_%d", type,
+        snprintf(namebuf, bufsize, "%s_sys_%d", type,
                  ntohs(vport->tnl_cfg.dst_port));
-        return dpif_port_combined;
+        return namebuf;
     } else {
         const struct netdev_class *class = netdev_get_class(netdev);
         dpif_port = netdev_vport_class_get_dpif_port(class);
     }
 
     return dpif_port ? dpif_port : netdev_get_name(netdev);
+}
+
+char *
+netdev_vport_get_dpif_port_strdup(const struct netdev *netdev)
+{
+    char namebuf[NETDEV_VPORT_NAME_BUFSIZE];
+
+    return xstrdup(netdev_vport_get_dpif_port(netdev, namebuf,
+                                              sizeof namebuf));
 }
 
 static int

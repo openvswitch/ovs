@@ -440,8 +440,11 @@ dpif_netdev_port_add(struct dpif *dpif, struct netdev *netdev,
                      uint32_t *port_nop)
 {
     struct dp_netdev *dp = get_dp_netdev(dpif);
+    char namebuf[NETDEV_VPORT_NAME_BUFSIZE];
+    const char *dpif_port;
     int port_no;
 
+    dpif_port = netdev_vport_get_dpif_port(netdev, namebuf, sizeof namebuf);
     if (*port_nop != UINT32_MAX) {
         if (*port_nop >= MAX_PORTS) {
             return EFBIG;
@@ -450,12 +453,11 @@ dpif_netdev_port_add(struct dpif *dpif, struct netdev *netdev,
         }
         port_no = *port_nop;
     } else {
-        port_no = choose_port(dp, netdev_vport_get_dpif_port(netdev));
+        port_no = choose_port(dp, dpif_port);
     }
     if (port_no >= 0) {
         *port_nop = port_no;
-        return do_add_port(dp, netdev_vport_get_dpif_port(netdev),
-                           netdev_get_type(netdev), port_no);
+        return do_add_port(dp, dpif_port, netdev_get_type(netdev), port_no);
     }
     return EFBIG;
 }
@@ -1079,6 +1081,7 @@ dpif_netdev_run(struct dpif *dpif)
             dp_netdev_port_input(dp, port, &packet, 0, 0, NULL);
         } else if (error != EAGAIN && error != EOPNOTSUPP) {
             static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+
             VLOG_ERR_RL(&rl, "error receiving data from %s: %s",
                         netdev_get_name(port->netdev), strerror(error));
         }

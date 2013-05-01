@@ -18,6 +18,7 @@
 #define NETDEV_VPORT_H 1
 
 #include <stdbool.h>
+#include <stddef.h>
 
 struct dpif_linux_vport;
 struct dpif_flow_stats;
@@ -37,7 +38,11 @@ void netdev_vport_inc_rx(const struct netdev *,
 void netdev_vport_inc_tx(const struct netdev *,
                          const struct dpif_flow_stats *);
 
-const char *netdev_vport_get_dpif_port(const struct netdev *);
 const char *netdev_vport_class_get_dpif_port(const struct netdev_class *);
+
+enum { NETDEV_VPORT_NAME_BUFSIZE = 16 };
+const char *netdev_vport_get_dpif_port(const struct netdev *,
+                                       char namebuf[], size_t bufsize);
+char *netdev_vport_get_dpif_port_strdup(const struct netdev *);
 
 #endif /* netdev-vport.h */

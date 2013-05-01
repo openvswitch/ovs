@@ -484,7 +484,9 @@ dpif_linux_port_add(struct dpif *dpif_, struct netdev *netdev,
 {
     struct dpif_linux *dpif = dpif_linux_cast(dpif_);
     const struct netdev_tunnel_config *tnl_cfg;
-    const char *name = netdev_vport_get_dpif_port(netdev);
+    char namebuf[NETDEV_VPORT_NAME_BUFSIZE];
+    const char *name = netdev_vport_get_dpif_port(netdev,
+                                                  namebuf, sizeof namebuf);
     const char *type = netdev_get_type(netdev);
     struct dpif_linux_vport request, reply;
     struct nl_sock *sock = NULL;
