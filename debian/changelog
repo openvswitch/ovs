@@ -52,7 +52,7 @@ openvswitch (1.10.0-1) unstable; urgency=low
     - Patch ports no longer require kernel support, so they now work
       with FreeBSD and the kernel module built into Linux 3.3 and later.
 
- -- Open vSwitch team <dev@openvswitch.org>  Mon, 04 Feb 2013 21:52:34 -0700
+ -- Open vSwitch team <dev@openvswitch.org>  Wed, 01 May 2013 14:28:21 -0700
 
 openvswitch (1.9.0-1) unstable; urgency=low
    [ Open vSwitch team ]

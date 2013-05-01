@@ -1,4 +1,4 @@
-v1.10.0 - xx xxx xxxx
+v1.10.0 - 01 May 2013
 ---------------------
     - Bridge compatibility support has been removed.  Any uses that
       rely on ovs-brcompatd will have to stick with Open vSwitch 1.9.x
