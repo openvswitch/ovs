@@ -1789,7 +1789,11 @@ port_construct(struct ofport *port_)
     port->carrier_seq = netdev_get_carrier_resets(netdev);
 
     if (netdev_vport_is_patch(netdev)) {
-        /* XXX By bailing out here, we don't do required sFlow work. */
+        /* By bailing out here, we don't submit the port to the sFlow module
+	 * to be considered for counter polling export.  This is correct
+	 * because the patch port represents an interface that sFlow considers
+	 * to be "internal" to the switch as a whole, and therefore not an
+	 * candidate for counter polling. */
         port->odp_port = OVSP_NONE;
         return 0;
     }

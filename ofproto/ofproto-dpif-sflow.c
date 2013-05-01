@@ -341,39 +341,32 @@ dpif_sflow_add_poller(struct dpif_sflow *ds, struct dpif_sflow_port *dsp)
     sfl_poller_set_bridgePort(poller, dsp->odp_port);
 }
 
-static void
-dpif_sflow_add_sampler(struct dpif_sflow *ds, struct dpif_sflow_port *dsp)
-{
-    SFLSampler *sampler = sfl_agent_addSampler(ds->sflow_agent, &dsp->dsi);
-    sfl_sampler_set_sFlowFsPacketSamplingRate(sampler, ds->options->sampling_rate);
-    sfl_sampler_set_sFlowFsMaximumHeaderSize(sampler, ds->options->header_len);
-    sfl_sampler_set_sFlowFsReceiver(sampler, RECEIVER_INDEX);
-}
-
 void
 dpif_sflow_add_port(struct dpif_sflow *ds, struct ofport *ofport,
                     uint32_t odp_port)
 {
     struct dpif_sflow_port *dsp;
-    uint32_t ifindex;
+    int ifindex;
 
     dpif_sflow_del_port(ds, odp_port);
 
+    ifindex = netdev_get_ifindex(ofport->netdev);
+
+    if (ifindex <= 0) {
+        /* Not an ifindex port, so do not add a cross-reference to it here */
+        return;
+    }
+
     /* Add to table of ports. */
     dsp = xmalloc(sizeof *dsp);
-    ifindex = netdev_get_ifindex(ofport->netdev);
-    if (ifindex <= 0) {
-        ifindex = (ds->sflow_agent->subId << 16) + odp_port;
-    }
     dsp->ofport = ofport;
     dsp->odp_port = odp_port;
-    SFL_DS_SET(dsp->dsi, 0, ifindex, 0);
+    SFL_DS_SET(dsp->dsi, SFL_DSCLASS_IFINDEX, ifindex, 0);
     hmap_insert(&ds->ports, &dsp->hmap_node, hash_int(odp_port, 0));
 
-    /* Add poller and sampler. */
+    /* Add poller. */
     if (ds->sflow_agent) {
         dpif_sflow_add_poller(ds, dsp);
-        dpif_sflow_add_sampler(ds, dsp);
     }
 }
 
@@ -406,6 +399,9 @@ dpif_sflow_set_options(struct dpif_sflow *ds,
     SFLReceiver *receiver;
     SFLAddress agentIP;
     time_t now;
+    SFLDataSource_instance dsi;
+    uint32_t dsIndex;
+    SFLSampler *sampler;
 
     if (sset_is_empty(&options->targets) || !options->sampling_rate) {
         /* No point in doing any work if there are no targets or nothing to
@@ -473,10 +469,20 @@ dpif_sflow_set_options(struct dpif_sflow *ds,
     /* Set the sampling_rate down in the datapath. */
     ds->probability = MAX(1, UINT32_MAX / ds->options->sampling_rate);
 
-    /* Add samplers and pollers for the currently known ports. */
+    /* Add a single sampler for the bridge. This appears as a PHYSICAL_ENTITY
+       because it is associated with the hypervisor, and interacts with the server
+       hardware directly.  The sub_id is used to distinguish this sampler from
+       others on other bridges within the same agent. */
+    dsIndex = 1000 + options->sub_id;
+    SFL_DS_SET(dsi, SFL_DSCLASS_PHYSICAL_ENTITY, dsIndex, 0);
+    sampler = sfl_agent_addSampler(ds->sflow_agent, &dsi);
+    sfl_sampler_set_sFlowFsPacketSamplingRate(sampler, ds->options->sampling_rate);
+    sfl_sampler_set_sFlowFsMaximumHeaderSize(sampler, ds->options->header_len);
+    sfl_sampler_set_sFlowFsReceiver(sampler, RECEIVER_INDEX);
+
+    /* Add pollers for the currently known ifindex-ports */
     HMAP_FOR_EACH (dsp, hmap_node, &ds->ports) {
         dpif_sflow_add_poller(ds, dsp);
-        dpif_sflow_add_sampler(ds, dsp);
     }
 }
 
@@ -499,35 +505,27 @@ dpif_sflow_received(struct dpif_sflow *ds, struct ofpbuf *packet,
     SFLFlow_sample_element switchElem;
     SFLSampler *sampler;
     struct dpif_sflow_port *in_dsp;
-    struct netdev_stats stats;
     ovs_be16 vlan_tci;
-    int error;
 
-    /* Build a flow sample */
+    sampler = ds->sflow_agent->samplers;
+    if (!sampler) {
+        return;
+    }
+
+    /* Build a flow sample. */
     memset(&fs, 0, sizeof fs);
 
+    /* Look up the input ifIndex if this port has one. Otherwise just
+     * leave it as 0 (meaning 'unknown') and continue. */
     in_dsp = dpif_sflow_find_port(ds, odp_in_port);
-    if (!in_dsp) {
-        return;
+    if (in_dsp) {
+        fs.input = SFL_DS_INDEX(in_dsp->dsi);
     }
-    fs.input = SFL_DS_INDEX(in_dsp->dsi);
 
-    error = ofproto_port_get_stats(in_dsp->ofport, &stats);
-    if (error) {
-        VLOG_WARN_RL(&rl, "netdev get-stats error %s", strerror(error));
-        return;
-    }
-    fs.sample_pool = stats.rx_packets;
-
-    /* We are going to give it to the sampler that represents this input port.
-     * By implementing "ingress-only" sampling like this we ensure that we
-     * never have to offer the same sample to more than one sampler. */
-    sampler = sfl_agent_getSamplerByIfIndex(ds->sflow_agent, fs.input);
-    if (!sampler) {
-        VLOG_WARN_RL(&rl, "no sampler for input ifIndex (%"PRIu32")",
-                     fs.input);
-        return;
-    }
+    /* Make the assumption that the random number generator in the datapath converges
+     * to the configured mean, and just increment the samplePool by the configured
+     * sampling rate every time. */
+    sampler->samplePool += sfl_sampler_get_sFlowFsPacketSamplingRate(sampler);
 
     /* Sampled header. */
     memset(&hdrElem, 0, sizeof hdrElem);
@@ -535,7 +533,7 @@ dpif_sflow_received(struct dpif_sflow *ds, struct ofpbuf *packet,
     header = &hdrElem.flowType.header;
     header->header_protocol = SFLHEADER_ETHERNET_ISO8023;
     /* The frame_length should include the Ethernet FCS (4 bytes),
-       but it has already been stripped,  so we need to add 4 here. */
+     * but it has already been stripped,  so we need to add 4 here. */
     header->frame_length = packet->size + 4;
     /* Ethernet FCS stripped off. */
     header->stripped = 4;

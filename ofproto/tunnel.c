@@ -32,7 +32,6 @@
 
 /* XXX:
  *
- * Ability to generate metadata for packet-outs
  * Disallow netdevs with names like "gre64_system" to prevent collisions. */
 
 VLOG_DEFINE_THIS_MODULE(tunnel);
