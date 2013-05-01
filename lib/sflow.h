@@ -8,6 +8,13 @@
 #ifndef SFLOW_H
 #define SFLOW_H 1
 
+typedef enum {
+    SFL_DSCLASS_IFINDEX = 0,
+    SFL_DSCLASS_VLAN = 1,
+    SFL_DSCLASS_PHYSICAL_ENTITY = 2,
+    SFL_DSCLASS_LOGICAL_ENTITY = 3
+} SFL_DSCLASS;
+
 enum SFLAddress_type {
     SFLADDRESSTYPE_IP_V4 = 1,
     SFLADDRESSTYPE_IP_V6 = 2
