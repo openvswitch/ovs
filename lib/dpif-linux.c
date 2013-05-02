@@ -151,6 +151,7 @@ struct dpif_linux {
 
     /* Change notification. */
     struct nl_sock *port_notifier; /* vport multicast group subscriber. */
+    bool refresh_channels;
 };
 
 static struct vlog_rate_limit error_rl = VLOG_RATE_LIMIT_INIT(9999, 5);
@@ -172,6 +173,7 @@ static int dpif_linux_init(void);
 static int open_dpif(const struct dpif_linux_dp *, struct dpif **);
 static uint32_t dpif_linux_port_get_pid(const struct dpif *,
                                         odp_port_t port_no);
+static int dpif_linux_refresh_channels(struct dpif *);
 
 static void dpif_linux_vport_to_ofpbuf(const struct dpif_linux_vport *,
                                        struct ofpbuf *);
@@ -398,6 +400,16 @@ dpif_linux_destroy(struct dpif *dpif_)
     dp.cmd = OVS_DP_CMD_DEL;
     dp.dp_ifindex = dpif->dp_ifindex;
     return dpif_linux_dp_transact(&dp, NULL, NULL);
+}
+
+static void
+dpif_linux_run(struct dpif *dpif_)
+{
+    struct dpif_linux *dpif = dpif_linux_cast(dpif_);
+    if (dpif->refresh_channels) {
+        dpif->refresh_channels = false;
+        dpif_linux_refresh_channels(dpif_);
+    }
 }
 
 static int
@@ -821,6 +833,9 @@ dpif_linux_port_poll(const struct dpif *dpif_, char **devnamep)
                         || vport.cmd == OVS_VPORT_CMD_SET)) {
                     VLOG_DBG("port_changed: dpif:%s vport:%s cmd:%"PRIu8,
                              dpif->dpif.full_name, vport.name, vport.cmd);
+                    if (vport.cmd == OVS_VPORT_CMD_DEL) {
+                        dpif->refresh_channels = true;
+                    }
                     *devnamep = xstrdup(vport.name);
                     ofpbuf_uninit(&buf);
                     return 0;
@@ -1583,7 +1598,7 @@ const struct dpif_class dpif_linux_class = {
     dpif_linux_open,
     dpif_linux_close,
     dpif_linux_destroy,
-    NULL,                       /* run */
+    dpif_linux_run,
     NULL,                       /* wait */
     dpif_linux_get_stats,
     dpif_linux_port_add,
