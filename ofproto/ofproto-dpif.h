@@ -47,8 +47,6 @@ struct rule_dpif {
     uint64_t byte_count;         /* Number of bytes received. */
 
     tag_type tag;                /* Caches rule_calculate_tag() result. */
-
-    struct list facets;          /* List of "struct facet"s. */
 };
 
 static inline struct rule_dpif *rule_dpif_cast(const struct rule *rule)
