@@ -67,7 +67,7 @@ ofpbuf_use_stack(struct ofpbuf *b, void *base, size_t allocated)
 /* Initializes 'b' as an empty ofpbuf that contains the 'allocated' bytes of
  * memory starting at 'base'.  'base' should point to a buffer on the stack.
  * (Nothing actually relies on 'base' being allocated on the stack.  It could
- * be static or malloc()'d memory.  But stack space is the most common usen
+ * be static or malloc()'d memory.  But stack space is the most common use
  * case.)
  *
  * 'base' should be appropriately aligned.  Using an array of uint32_t or
