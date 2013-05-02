@@ -942,7 +942,7 @@ format_odp_key_attr(const struct nlattr *a, struct ds *ds)
     case OVS_KEY_ATTR_MPLS: {
         const struct ovs_key_mpls *mpls_key = nl_attr_get(a);
         ds_put_char(ds, '(');
-        format_mpls_lse(ds, mpls_key->mpls_top_lse);
+        format_mpls_lse(ds, mpls_key->mpls_lse);
         ds_put_char(ds, ')');
         break;
     }
@@ -1267,7 +1267,7 @@ parse_odp_key_attr(const char *s, const struct simap *port_names,
 
             mpls = nl_msg_put_unspec_uninit(key, OVS_KEY_ATTR_MPLS,
                                             sizeof *mpls);
-            mpls->mpls_top_lse = mpls_lse_from_components(label, tc, ttl, bos);
+            mpls->mpls_lse = mpls_lse_from_components(label, tc, ttl, bos);
             return n;
         }
     }
@@ -1630,7 +1630,7 @@ odp_flow_key_from_flow(struct ofpbuf *buf, const struct flow *flow,
 
         mpls_key = nl_msg_put_unspec_uninit(buf, OVS_KEY_ATTR_MPLS,
                                             sizeof *mpls_key);
-        mpls_key->mpls_top_lse = flow->mpls_lse;
+        mpls_key->mpls_lse = flow->mpls_lse;
     }
 
     if (is_ip_any(flow) && !(flow->nw_frag & FLOW_NW_FRAG_LATER)) {
@@ -2285,7 +2285,7 @@ commit_mpls_action(const struct flow *flow, struct flow *base,
     } else {
         struct ovs_key_mpls mpls_key;
 
-        mpls_key.mpls_top_lse = flow->mpls_lse;
+        mpls_key.mpls_lse = flow->mpls_lse;
         commit_set_action(odp_actions, OVS_KEY_ATTR_MPLS,
                           &mpls_key, sizeof(mpls_key));
     }
