@@ -183,17 +183,16 @@ ds_put_printable(struct ds *ds, const char *s, size_t n)
     }
 }
 
-/* Writes the current time to 'string' based on 'template'.
- * The current time is either local time or UTC based on 'utc'. */
+/* Writes time 'when' to 'string' based on 'template', in local time or UTC
+ * based on 'utc'. */
 void
-ds_put_strftime(struct ds *ds, const char *template, bool utc)
+ds_put_strftime(struct ds *ds, const char *template, time_t when, bool utc)
 {
     struct tm tm;
-    time_t now = time_wall();
     if (utc) {
-        gmtime_r(&now, &tm);
+        gmtime_r(&when, &tm);
     } else {
-        localtime_r(&now, &tm);
+        localtime_r(&when, &tm);
     }
 
     for (;;) {
@@ -205,6 +204,18 @@ ds_put_strftime(struct ds *ds, const char *template, bool utc)
         }
         ds_reserve(ds, ds->length + (avail < 32 ? 64 : 2 * avail));
     }
+}
+
+/* Returns a malloc()'d string for time 'when' based on 'template', in local
+ * time or UTC based on 'utc'. */
+char *
+xastrftime(const char *template, time_t when, bool utc)
+{
+    struct ds s;
+
+    ds_init(&s);
+    ds_put_strftime(&s, template, when, utc);
+    return s.string;
 }
 
 int

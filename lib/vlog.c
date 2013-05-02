@@ -570,12 +570,9 @@ vlog_init(void)
 
     now = time_wall();
     if (now < 0) {
-        struct tm tm;
-        char s[128];
-
-        gmtime_r(&now, &tm);
-        strftime(s, sizeof s, "%a, %d %b %Y %H:%M:%S", &tm);
+        char *s = xastrftime("%a, %d %b %Y %H:%M:%S", now, true);
         VLOG_ERR("current time is negative: %s (%ld)", s, (long int) now);
+        free(s);
     }
 
     unixctl_command_register(
@@ -709,11 +706,11 @@ format_log_message(const struct vlog_module *module, enum vlog_level level,
             break;
         case 'd':
             p = fetch_braces(p, "%Y-%m-%d %H:%M:%S", tmp, sizeof tmp);
-            ds_put_strftime(s, tmp, false);
+            ds_put_strftime(s, tmp, time_wall(), false);
             break;
         case 'D':
             p = fetch_braces(p, "%Y-%m-%d %H:%M:%S", tmp, sizeof tmp);
-            ds_put_strftime(s, tmp, true);
+            ds_put_strftime(s, tmp, time_wall(), true);
             break;
         case 'm':
             /* Format user-supplied log message and trim trailing new-lines. */

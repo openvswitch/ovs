@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,9 +22,8 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <time.h>
 #include "compiler.h"
-
-struct tm;
 
 /* A "dynamic string", that is, a buffer that can be used to construct a
  * string across a series of operations that extend or modify it.
@@ -56,13 +55,16 @@ void ds_put_format(struct ds *, const char *, ...) PRINTF_FORMAT(2, 3);
 void ds_put_format_valist(struct ds *, const char *, va_list)
     PRINTF_FORMAT(2, 0);
 void ds_put_printable(struct ds *, const char *, size_t);
-void ds_put_strftime(struct ds *, const char *, bool utc)
-    STRFTIME_FORMAT(2);
 void ds_put_hex_dump(struct ds *ds, const void *buf_, size_t size,
                      uintptr_t ofs, bool ascii);
 int ds_get_line(struct ds *, FILE *);
 int ds_get_preprocessed_line(struct ds *, FILE *);
 int ds_get_test_line(struct ds *, FILE *);
+
+void ds_put_strftime(struct ds *, const char *template, time_t when, bool utc)
+    STRFTIME_FORMAT(2);
+char *xastrftime(const char *template, time_t when, bool utc)
+    STRFTIME_FORMAT(1);
 
 char *ds_cstr(struct ds *);
 const char *ds_cstr_ro(const struct ds *);

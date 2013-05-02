@@ -1361,13 +1361,9 @@ monitor_vconn(struct vconn *vconn, bool reply_to_echo_requests)
             run(retval, "vconn_recv");
 
             if (timestamp) {
-                time_t now = time_wall();
-                struct tm tm;
-                char s[32];
-
-                strftime(s, sizeof s, "%Y-%m-%d %H:%M:%S: ",
-                         gmtime_r(&now, &tm));
+                char *s = xastrftime("%Y-%m-%d %H:%M:%S: ", time_wall(), true);
                 fputs(s, stderr);
+                free(s);
             }
 
             ofptype_decode(&type, b->data);

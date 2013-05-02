@@ -218,22 +218,19 @@ table_print_table_line__(struct ds *line)
     ds_clear(line);
 }
 
-static void
-table_format_timestamp__(char *s, size_t size)
+static char *
+table_format_timestamp__(void)
 {
-    time_t now = time_wall();
-    struct tm tm;
-    strftime(s, size, "%Y-%m-%d %H:%M:%S", gmtime_r(&now, &tm));
+    return xastrftime("%Y-%m-%d %H:%M:%S", time_wall(), true);
 }
 
 static void
 table_print_timestamp__(const struct table *table)
 {
     if (table->timestamp) {
-        char s[32];
-
-        table_format_timestamp__(s, sizeof s);
+        char *s = table_format_timestamp__();
         puts(s);
+        free(s);
     }
 }
 
@@ -500,10 +497,9 @@ table_print_json__(const struct table *table, const struct table_style *style)
         json_object_put_string(json, "caption", table->caption);
     }
     if (table->timestamp) {
-        char s[32];
-
-        table_format_timestamp__(s, sizeof s);
+        char *s = table_format_timestamp__();
         json_object_put_string(json, "time", s);
+        free(s);
     }
 
     headings = json_array_create_empty();
