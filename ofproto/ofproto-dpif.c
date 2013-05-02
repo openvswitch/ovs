@@ -4834,9 +4834,6 @@ facet_flush_stats(struct facet *facet)
         netflow_expire(ofproto->netflow, &facet->nf_flow, &expired);
     }
 
-    facet->rule->packet_count += facet->packet_count;
-    facet->rule->byte_count += facet->byte_count;
-
     /* Reset counters to prevent double counting if 'facet' ever gets
      * reinstalled. */
     facet_reset_counters(facet);
@@ -5218,6 +5215,7 @@ facet_push_stats(struct facet *facet)
         facet->prev_byte_count = facet->byte_count;
         facet->prev_used = facet->used;
 
+        rule_credit_stats(facet->rule, &stats);
         flow_push_stats(facet, &stats);
 
         update_mirror_stats(ofproto_dpif_cast(facet->rule->up.ofproto),
@@ -5735,7 +5733,6 @@ static void
 rule_get_stats(struct rule *rule_, uint64_t *packets, uint64_t *bytes)
 {
     struct rule_dpif *rule = rule_dpif_cast(rule_);
-    struct facet *facet;
 
     /* push_all_stats() can handle flow misses which, when using the learn
      * action, can cause rules to be added and deleted.  This can corrupt our
@@ -5747,14 +5744,6 @@ rule_get_stats(struct rule *rule_, uint64_t *packets, uint64_t *bytes)
      * in facets.  This counts, for example, facets that have expired. */
     *packets = rule->packet_count;
     *bytes = rule->byte_count;
-
-    /* Add any statistics that are tracked by facets.  This includes
-     * statistical data recently updated by ofproto_update_stats() as well as
-     * stats for packets that were executed "by hand" via dpif_execute(). */
-    LIST_FOR_EACH (facet, list_node, &rule->facets) {
-        *packets += facet->packet_count;
-        *bytes += facet->byte_count;
-    }
 }
 
 static void
