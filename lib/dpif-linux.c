@@ -337,6 +337,7 @@ add_channel(struct dpif_linux *dpif, uint32_t port_no, struct nl_sock *sock)
         return errno;
     }
 
+    nl_sock_destroy(dpif->channels[port_no].sock);
     dpif->channels[port_no].sock = sock;
     dpif->channels[port_no].last_poll = LLONG_MIN;
 
