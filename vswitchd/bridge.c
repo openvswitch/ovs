@@ -1898,11 +1898,12 @@ iface_refresh_stats(struct iface *iface)
     IFACE_STAT(rx_crc_errors,   "rx_crc_err")   \
     IFACE_STAT(collisions,      "collisions")
 
-#define IFACE_STAT(MEMBER, NAME) NAME,
-    static char *keys[] = { IFACE_STATS };
+#define IFACE_STAT(MEMBER, NAME) + 1
+    enum { N_IFACE_STATS = IFACE_STATS };
 #undef IFACE_STAT
-    int64_t values[ARRAY_SIZE(keys)];
-    int i;
+    int64_t values[N_IFACE_STATS];
+    char *keys[N_IFACE_STATS];
+    int n;
 
     struct netdev_stats stats;
 
@@ -1914,15 +1915,19 @@ iface_refresh_stats(struct iface *iface)
      * all-1s, and we will deal with that correctly below. */
     netdev_get_stats(iface->netdev, &stats);
 
-    /* Copy statistics into values[] array. */
-    i = 0;
-#define IFACE_STAT(MEMBER, NAME) values[i++] = stats.MEMBER;
+    /* Copy statistics into keys[] and values[]. */
+    n = 0;
+#define IFACE_STAT(MEMBER, NAME)                \
+    if (stats.MEMBER != UINT64_MAX) {           \
+        keys[n] = NAME;                         \
+        values[n] = stats.MEMBER;               \
+        n++;                                    \
+    }
     IFACE_STATS;
 #undef IFACE_STAT
-    ovs_assert(i == ARRAY_SIZE(keys));
+    ovs_assert(n <= N_IFACE_STATS);
 
-    ovsrec_interface_set_statistics(iface->cfg, keys, values,
-                                    ARRAY_SIZE(keys));
+    ovsrec_interface_set_statistics(iface->cfg, keys, values, n);
 #undef IFACE_STATS
 }
 
