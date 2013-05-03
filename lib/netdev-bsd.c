@@ -907,22 +907,22 @@ netdev_bsd_get_stats(const struct netdev *netdev_, struct netdev_stats *stats)
             stats->rx_errors = ifmd.ifmd_data.ifi_ierrors;
             stats->tx_errors = ifmd.ifmd_data.ifi_oerrors;
             stats->rx_dropped = ifmd.ifmd_data.ifi_iqdrops;
-            stats->tx_dropped = 0;
+            stats->tx_dropped = UINT64_MAX;
             stats->multicast = ifmd.ifmd_data.ifi_imcasts;
             stats->collisions = ifmd.ifmd_data.ifi_collisions;
 
-            stats->rx_length_errors = 0;
-            stats->rx_over_errors = 0;
-            stats->rx_crc_errors = 0;
-            stats->rx_frame_errors = 0;
-            stats->rx_fifo_errors = 0;
-            stats->rx_missed_errors = 0;
+            stats->rx_length_errors = UINT64_MAX;
+            stats->rx_over_errors = UINT64_MAX;
+            stats->rx_crc_errors = UINT64_MAX;
+            stats->rx_frame_errors = UINT64_MAX;
+            stats->rx_fifo_errors = UINT64_MAX;
+            stats->rx_missed_errors = UINT64_MAX;
 
-            stats->tx_aborted_errors = 0;
-            stats->tx_carrier_errors = 0;
-            stats->tx_fifo_errors = 0;
-            stats->tx_heartbeat_errors = 0;
-            stats->tx_window_errors = 0;
+            stats->tx_aborted_errors = UINT64_MAX;
+            stats->tx_carrier_errors = UINT64_MAX;
+            stats->tx_fifo_errors = UINT64_MAX;
+            stats->tx_heartbeat_errors = UINT64_MAX;
+            stats->tx_window_errors = UINT64_MAX;
             break;
         }
     }
