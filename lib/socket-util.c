@@ -201,7 +201,9 @@ lookup_hostname(const char *host_name, struct in_addr *addr)
         freeaddrinfo(result);
         return 0;
 
+#ifdef EAI_ADDRFAMILY
     case EAI_ADDRFAMILY:
+#endif
     case EAI_NONAME:
     case EAI_SERVICE:
         return ENOENT;
@@ -220,8 +222,10 @@ lookup_hostname(const char *host_name, struct in_addr *addr)
     case EAI_MEMORY:
         return ENOMEM;
 
+#ifdef EAI_NODATA
     case EAI_NODATA:
         return ENXIO;
+#endif
 
     case EAI_SYSTEM:
         return errno;
