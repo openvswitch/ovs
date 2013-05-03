@@ -4520,7 +4520,7 @@ ofputil_parse_key_value(char **stringp, char **keyp, char **valuep)
  * will be for Open Flow version 'ofp_version'. Returns message
  * as a struct ofpbuf. Returns encoded message on success, NULL on error */
 struct ofpbuf *
-ofputil_encode_dump_ports_request(enum ofp_version ofp_version, int16_t port)
+ofputil_encode_dump_ports_request(enum ofp_version ofp_version, uint16_t port)
 {
     struct ofpbuf *request;
 

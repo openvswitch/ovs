@@ -692,7 +692,7 @@ struct ofputil_port_stats {
 };
 
 struct ofpbuf *ofputil_encode_dump_ports_request(enum ofp_version ofp_version,
-                                                 int16_t port);
+                                                 uint16_t port);
 void ofputil_append_port_stat(struct list *replies,
                               const struct ofputil_port_stats *ops);
 size_t ofputil_count_port_stats(const struct ofp_header *);
