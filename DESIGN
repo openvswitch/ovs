@@ -185,7 +185,7 @@ Each column is interpreted as follows.
 
     - OF1.0 and OF1.1: wwww/x,yy/z means dl_vlan wwww, OFPFW_DL_VLAN
       x, dl_vlan_pcp yy, and OFPFW_DL_VLAN_PCP z.  ? means that the
-      given nibble is ignored (and conventionally 0 for wwww or z,
+      given nibble is ignored (and conventionally 0 for wwww or yy,
       conventionally 1 for x or z).  <none> means that the given match
       is not supported.
 
