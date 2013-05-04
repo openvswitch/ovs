@@ -7137,6 +7137,7 @@ xlate_actions(struct action_xlate_ctx *ctx,
     } else {
         static struct vlog_rate_limit trace_rl = VLOG_RATE_LIMIT_INIT(1, 1);
         struct initial_vals initial_vals;
+        size_t sample_actions_len;
         uint32_t local_odp_port;
 
         initial_vals.vlan_tci = ctx->base_flow.vlan_tci;
@@ -7144,6 +7145,7 @@ xlate_actions(struct action_xlate_ctx *ctx,
 
         add_sflow_action(ctx);
         add_ipfix_action(ctx);
+        sample_actions_len = ctx->odp_actions->size;
 
         if (tunnel_ecn_ok(ctx) && (!in_port || may_receive(in_port, ctx))) {
             do_xlate_actions(ofpacts, ofpacts_len, ctx);
@@ -7151,9 +7153,7 @@ xlate_actions(struct action_xlate_ctx *ctx,
             /* We've let OFPP_NORMAL and the learning action look at the
              * packet, so drop it now if forwarding is disabled. */
             if (in_port && !stp_forward_in_state(in_port->stp_state)) {
-                ofpbuf_clear(ctx->odp_actions);
-                add_sflow_action(ctx);
-                add_ipfix_action(ctx);
+                ctx->odp_actions->size = sample_actions_len;
             }
         }
 
