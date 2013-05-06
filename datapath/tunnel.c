@@ -58,7 +58,8 @@
  * - skb->csum does not include the inner Ethernet header.
  * - The layer pointers are undefined.
  */
-void ovs_tnl_rcv(struct vport *vport, struct sk_buff *skb)
+void ovs_tnl_rcv(struct vport *vport, struct sk_buff *skb,
+		 struct ovs_key_ipv4_tunnel *tun_key)
 {
 	struct ethhdr *eh;
 
@@ -81,7 +82,7 @@ void ovs_tnl_rcv(struct vport *vport, struct sk_buff *skb)
 		return;
 	}
 
-	ovs_vport_receive(vport, skb);
+	ovs_vport_receive(vport, skb, tun_key);
 }
 
 static struct rtable *find_route(struct net *net,

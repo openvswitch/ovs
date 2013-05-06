@@ -263,7 +263,7 @@ static void netdev_port_receive(struct vport *vport, struct sk_buff *skb)
 
 	vlan_copy_skb_tci(skb);
 
-	ovs_vport_receive(vport, skb);
+	ovs_vport_receive(vport, skb, NULL);
 	return;
 
 error:

@@ -137,9 +137,8 @@ static int vxlan_rcv(struct sock *sk, struct sk_buff *skb)
 	/* Save outer tunnel values */
 	iph = ip_hdr(skb);
 	tnl_tun_key_init(&tun_key, iph, key, OVS_TNL_F_KEY);
-	OVS_CB(skb)->tun_key = &tun_key;
 
-	ovs_tnl_rcv(vport_from_priv(vxlan_vport), skb);
+	ovs_tnl_rcv(vport_from_priv(vxlan_vport), skb, &tun_key);
 	goto out;
 
 error:
@@ -274,7 +273,6 @@ static const char *vxlan_get_name(const struct vport *vport)
 
 const struct vport_ops ovs_vxlan_vport_ops = {
 	.type		= OVS_VPORT_TYPE_VXLAN,
-	.flags		= VPORT_F_TUN_ID,
 	.create		= vxlan_tnl_create,
 	.destroy	= vxlan_tnl_destroy,
 	.get_name	= vxlan_get_name,

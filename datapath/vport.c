@@ -354,7 +354,8 @@ int ovs_vport_get_options(const struct vport *vport, struct sk_buff *skb)
  * skb->data should point to the Ethernet header.  The caller must have already
  * called compute_ip_summed() to initialize the checksumming fields.
  */
-void ovs_vport_receive(struct vport *vport, struct sk_buff *skb)
+void ovs_vport_receive(struct vport *vport, struct sk_buff *skb,
+		       struct ovs_key_ipv4_tunnel *tun_key)
 {
 	struct pcpu_tstats *stats;
 
@@ -364,9 +365,7 @@ void ovs_vport_receive(struct vport *vport, struct sk_buff *skb)
 	stats->rx_bytes += skb->len;
 	u64_stats_update_end(&stats->syncp);
 
-	if (!(vport->ops->flags & VPORT_F_TUN_ID))
-		OVS_CB(skb)->tun_key = NULL;
-
+	OVS_CB(skb)->tun_key = tun_key;
 	ovs_dp_process_received_packet(vport, skb);
 }
 

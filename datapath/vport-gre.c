@@ -270,12 +270,11 @@ static int gre_rcv(struct sk_buff *skb)
 	iph = ip_hdr(skb);
 	tnl_flags = gre_flags_to_tunnel_flags(gre_flags, is_gre64);
 	tnl_tun_key_init(&tun_key, iph, key, tnl_flags);
-	OVS_CB(skb)->tun_key = &tun_key;
 
 	__skb_pull(skb, hdr_len);
 	skb_postpull_rcsum(skb, skb_transport_header(skb), hdr_len + ETH_HLEN);
 
-	ovs_tnl_rcv(vport, skb);
+	ovs_tnl_rcv(vport, skb, &tun_key);
 	return 0;
 
 error:
@@ -375,7 +374,6 @@ static int gre_tnl_send(struct vport *vport, struct sk_buff *skb)
 
 const struct vport_ops ovs_gre_vport_ops = {
 	.type		= OVS_VPORT_TYPE_GRE,
-	.flags		= VPORT_F_TUN_ID,
 	.create		= gre_create,
 	.destroy	= gre_tnl_destroy,
 	.get_name	= gre_get_name,
@@ -437,7 +435,6 @@ static int gre64_tnl_send(struct vport *vport, struct sk_buff *skb)
 
 const struct vport_ops ovs_gre64_vport_ops = {
 	.type		= OVS_VPORT_TYPE_GRE64,
-	.flags		= VPORT_F_TUN_ID,
 	.create		= gre64_create,
 	.destroy	= gre64_tnl_destroy,
 	.get_name	= gre_get_name,

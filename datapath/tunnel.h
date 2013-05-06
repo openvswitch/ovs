@@ -33,7 +33,8 @@ int ovs_tnl_send(struct vport *vport, struct sk_buff *skb,
 				      struct sk_buff *,
 				      int tunnel_hlen));
 
-void ovs_tnl_rcv(struct vport *vport, struct sk_buff *skb);
+void ovs_tnl_rcv(struct vport *vport, struct sk_buff *skb,
+		 struct ovs_key_ipv4_tunnel *tun_key);
 u16 ovs_tnl_get_src_port(struct sk_buff *skb);
 
 static inline void tnl_tun_key_init(struct ovs_key_ipv4_tunnel *tun_key,

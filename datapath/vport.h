@@ -94,8 +94,6 @@ struct vport {
 	struct ovs_vport_stats offset_stats;
 };
 
-#define VPORT_F_TUN_ID		(1 << 0) /* Sets OVS_CB(skb)->tun_id. */
-
 /**
  * struct vport_parms - parameters for creating a new vport
  *
@@ -121,8 +119,6 @@ struct vport_parms {
  * struct vport_ops - definition of a type of virtual port
  *
  * @type: %OVS_VPORT_TYPE_* value for this type of virtual port.
- * @flags: Flags of type VPORT_F_* that influence how the generic vport layer
- * handles this vport.
  * @create: Create a new vport configured as specified.  On success returns
  * a new vport allocated with ovs_vport_alloc(), otherwise an ERR_PTR() value.
  * @destroy: Destroys a vport.  Must call vport_free() on the vport but not
@@ -138,7 +134,6 @@ struct vport_parms {
  */
 struct vport_ops {
 	enum ovs_vport_type type;
-	u32 flags;
 
 	/* Called with ovs_mutex. */
 	struct vport *(*create)(const struct vport_parms *);
@@ -196,7 +191,8 @@ static inline struct vport *vport_from_priv(const void *priv)
 	return (struct vport *)(priv - ALIGN(sizeof(struct vport), VPORT_ALIGN));
 }
 
-void ovs_vport_receive(struct vport *, struct sk_buff *);
+void ovs_vport_receive(struct vport *, struct sk_buff *,
+		       struct ovs_key_ipv4_tunnel *);
 void ovs_vport_record_error(struct vport *, enum vport_err_type err_type);
 
 /* List of statically compiled vport implementations.  Don't forget to also
