@@ -152,7 +152,6 @@ static struct sk_buff *handle_offloads(struct sk_buff *skb)
 
 		nskb = __skb_gso_segment(skb, 0, false);
 		if (IS_ERR(nskb)) {
-			kfree_skb(skb);
 			err = PTR_ERR(nskb);
 			goto error;
 		}
@@ -168,20 +167,18 @@ static struct sk_buff *handle_offloads(struct sk_buff *skb)
 		if (unlikely(need_linearize(skb))) {
 			err = __skb_linearize(skb);
 			if (unlikely(err))
-				goto error_free;
+				goto error;
 		}
 
 		err = skb_checksum_help(skb);
 		if (unlikely(err))
-			goto error_free;
+			goto error;
 	}
 
 	set_ip_summed(skb, OVS_CSUM_NONE);
 
 	return skb;
 
-error_free:
-	kfree_skb(skb);
 error:
 	return ERR_PTR(err);
 }
@@ -211,6 +208,8 @@ int ovs_tnl_send(struct vport *vport, struct sk_buff *skb,
 	struct rtable *rt;
 	__be32 saddr;
 	int sent_len = 0;
+	int err;
+	struct sk_buff *nskb;
 
 	/* Route lookup */
 	saddr = OVS_CB(skb)->tun_key->ipv4_src;
@@ -220,8 +219,10 @@ int ovs_tnl_send(struct vport *vport, struct sk_buff *skb,
 			ipproto,
 			OVS_CB(skb)->tun_key->ipv4_tos,
 			skb_get_mark(skb));
-	if (IS_ERR(rt))
-		goto error_free;
+	if (IS_ERR(rt)) {
+		err = PTR_ERR(rt);
+		goto error;
+	}
 
 	tunnel_hlen += sizeof(struct iphdr);
 
@@ -230,7 +231,6 @@ int ovs_tnl_send(struct vport *vport, struct sk_buff *skb,
 			+ (vlan_tx_tag_present(skb) ? VLAN_HLEN : 0);
 
 	if (skb_headroom(skb) < min_headroom || skb_header_cloned(skb)) {
-		int err;
 		int head_delta = SKB_DATA_ALIGN(min_headroom -
 						skb_headroom(skb) +
 						16);
@@ -242,11 +242,12 @@ int ovs_tnl_send(struct vport *vport, struct sk_buff *skb,
 	}
 
 	/* Offloading */
-	skb = handle_offloads(skb);
-	if (IS_ERR(skb)) {
-		skb = NULL;
+	nskb = handle_offloads(skb);
+	if (IS_ERR(nskb)) {
+		err = PTR_ERR(nskb);
 		goto err_free_rt;
 	}
+	skb = nskb;
 
 	/* Reset SKB */
 	nf_reset(skb);
@@ -258,7 +259,6 @@ int ovs_tnl_send(struct vport *vport, struct sk_buff *skb,
 		struct sk_buff *next_skb = skb->next;
 		struct iphdr *iph;
 		int frag_len;
-		int err;
 
 		skb->next = NULL;
 
@@ -311,15 +311,10 @@ next:
 		skb = next_skb;
 	}
 
-	if (unlikely(sent_len == 0))
-		ovs_vport_record_error(vport, VPORT_E_TX_DROPPED);
-
 	return sent_len;
 
 err_free_rt:
 	ip_rt_put(rt);
-error_free:
-	kfree_skb(skb);
-	ovs_vport_record_error(vport, VPORT_E_TX_ERROR);
-	return sent_len;
+error:
+	return err;
 }

@@ -356,11 +356,8 @@ static int gre_tnl_send(struct vport *vport, struct sk_buff *skb)
 {
 	int hlen;
 
-	if (unlikely(!OVS_CB(skb)->tun_key)) {
-		kfree_skb(skb);
-		ovs_vport_record_error(vport, VPORT_E_TX_ERROR);
-		return 0;
-	}
+	if (unlikely(!OVS_CB(skb)->tun_key))
+		return -EINVAL;
 
 	hlen = gre_hdr_len(OVS_CB(skb)->tun_key);
 	return ovs_tnl_send(vport, skb, IPPROTO_GRE, hlen, gre_build_header);
@@ -412,11 +409,8 @@ static int gre64_tnl_send(struct vport *vport, struct sk_buff *skb)
 {
 	int hlen;
 
-	if (unlikely(!OVS_CB(skb)->tun_key)) {
-		ovs_vport_record_error(vport, VPORT_E_TX_ERROR);
-		kfree_skb(skb);
-		return 0;
-	}
+	if (unlikely(!OVS_CB(skb)->tun_key))
+		return -EINVAL;
 
 	hlen = gre64_hdr_len(OVS_CB(skb)->tun_key);
 	return ovs_tnl_send(vport, skb, IPPROTO_GRE, hlen, gre64_build_header);

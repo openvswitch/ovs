@@ -259,11 +259,8 @@ error:
 
 static int vxlan_tnl_send(struct vport *vport, struct sk_buff *skb)
 {
-	if (unlikely(!OVS_CB(skb)->tun_key)) {
-		ovs_vport_record_error(vport, VPORT_E_TX_ERROR);
-		kfree_skb(skb);
-		return 0;
-	}
+	if (unlikely(!OVS_CB(skb)->tun_key))
+		return -EINVAL;
 
 	return ovs_tnl_send(vport, skb, IPPROTO_UDP,
 			VXLAN_HLEN, vxlan_build_header);

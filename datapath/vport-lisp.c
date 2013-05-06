@@ -365,10 +365,8 @@ static int lisp_tnl_send(struct vport *vport, struct sk_buff *skb)
 	int tnl_len;
 	int network_offset = skb_network_offset(skb);
 
-	if (unlikely(!OVS_CB(skb)->tun_key)) {
-		ovs_vport_record_error(vport, VPORT_E_TX_ERROR);
-		goto free;
-	}
+	if (unlikely(!OVS_CB(skb)->tun_key))
+		return -EINVAL;
 
 	/* We only encapsulate IPv4 and IPv6 packets */
 	switch (skb->protocol) {
@@ -380,13 +378,8 @@ static int lisp_tnl_send(struct vport *vport, struct sk_buff *skb)
 				LISP_HLEN, lisp_build_header);
 		return tnl_len > 0 ? tnl_len + network_offset : tnl_len;
 	default:
-		ovs_vport_record_error(vport, VPORT_E_TX_DROPPED);
-		goto free;
+		return 0;
 	}
-
-free:
-	kfree_skb(skb);
-	return 0;
 }
 
 static const char *lisp_get_name(const struct vport *vport)
