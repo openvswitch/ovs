@@ -1036,31 +1036,28 @@ command to be used as input for other commands that parse flows.
 The \fBadd\-flow\fR, \fBadd\-flows\fR, and \fBmod\-flows\fR commands
 require an additional field, which must be the final field specified:
 .
-.IP \fBactions=\fR[\fItarget\fR][\fB,\fItarget\fR...]\fR
+.IP \fBactions=\fR[\fIaction\fR][\fB,\fIaction\fR...]\fR
 Specifies a comma-separated list of actions to take on a packet when the 
-flow entry matches.  If no \fItarget\fR is specified, then packets
-matching the flow are dropped.  The \fItarget\fR may be an OpenFlow port 
-number designating the physical port on which to output the packet, or one 
-of the following keywords:
+flow entry matches.  If no \fIaction\fR is specified, then packets
+matching the flow are dropped.  The following forms of \fIaction\fR
+are supported:
 .
 .RS
-.IP \fBoutput:\fIport\fR
-Outputs the packet to \fIport\fR, which must be an OpenFlow port
-number or keyword (e.g. \fBLOCAL\fR).
+.IP \fIport\fR
+.IQ \fBoutput:\fIport\fR
+Outputs the packet to OpenFlow port number \fIport\fR.  If \fIport\fR
+is the packet's input port, the packet is not output.
 .
 .IP \fBoutput:\fIsrc\fB[\fIstart\fB..\fIend\fB]
 Outputs the packet to the OpenFlow port number read from \fIsrc\fR,
 which must be an NXM field as described above.  For example,
 \fBoutput:NXM_NX_REG0[16..31]\fR outputs to the OpenFlow port number
-written in the upper half of register 0.  This form of \fBoutput\fR
-uses an OpenFlow extension that is not supported by standard OpenFlow
-switches.
-.
-.IP \fBenqueue(\fIport\fB,\fIqueue\fB)\fR
-Enqueues the packet on the specified \fIqueue\fR within port
-\fIport\fR, which must be an OpenFlow port number or keyword
-(e.g. \fBLOCAL\fR).  The number of supported queues depends on the
-switch; some OpenFlow implementations do not support queuing at all.
+written in the upper half of register 0.  If the port number is the
+packet's input port, the packet is not output.
+.IP
+This form of \fBoutput\fR was added in Open vSwitch 1.3.0.  This form
+of \fBoutput\fR uses an OpenFlow extension that is not supported by
+standard OpenFlow switches.
 .
 .IP \fBnormal\fR
 Subjects the packet to the device's normal L2/L3 processing.  (This
@@ -1075,6 +1072,13 @@ tree protocol).
 .IP \fBall\fR
 Outputs the packet on all switch physical ports other than the port on
 which it was received.
+.
+.IP \fBlocal\fR
+Outputs the packet on the ``local port,'' which corresponds to the
+network device that has the same name as the bridge.
+.
+.IP \fBin_port\fR
+Outputs the packet on the port from which it was received.
 .
 .IP \fBcontroller(\fIkey\fB=\fIvalue\fR...\fB)
 Sends the packet to the OpenFlow controller as a ``packet in''
@@ -1096,6 +1100,7 @@ controller connection will only have a nonzero connection ID if its
 controller uses the \fBNXT_SET_CONTROLLER_ID\fR Nicira extension to
 OpenFlow.
 .RE
+.IP
 Any \fIreason\fR other than \fBaction\fR and any nonzero
 \fIcontroller-id\fR uses a Nicira vendor extension that, as of this
 writing, is only known to be implemented by Open vSwitch (version 1.6
@@ -1106,12 +1111,11 @@ or later).
 Shorthand for \fBcontroller()\fR or
 \fBcontroller(max_len=\fInbytes\fB)\fR, respectively.
 .
-.IP \fBlocal\fR
-Outputs the packet on the ``local port,'' which corresponds to the
-network device that has the same name as the bridge.
-.
-.IP \fBin_port\fR
-Outputs the packet on the port from which it was received.
+.IP \fBenqueue(\fIport\fB,\fIqueue\fB)\fR
+Enqueues the packet on the specified \fIqueue\fR within port
+\fIport\fR, which must be an OpenFlow port number or keyword
+(e.g. \fBLOCAL\fR).  The number of supported queues depends on the
+switch; some OpenFlow implementations do not support queuing at all.
 .
 .IP \fBdrop\fR
 Discards the packet, so no further processing or forwarding takes place.
@@ -1319,7 +1323,7 @@ value just popped.
 Writes the literal \fIvalue\fR into the field \fIdst\fR, which should
 be specified as a name used for matching.  (This is similar to
 \fBload\fR but more closely matches the set-field action defined in
-Open Flow 1.2 and above.)
+OpenFlow 1.2 and above.)
 .
 .IP
 Example: \fBset_field:00:11:22:33:44:55->eth_src\fR.
