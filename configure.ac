@@ -44,6 +44,7 @@ AC_SYS_LARGEFILE
 AC_SEARCH_LIBS([pow], [m])
 AC_SEARCH_LIBS([clock_gettime], [rt])
 AC_SEARCH_LIBS([timer_create], [rt])
+AC_SEARCH_LIBS([pthread_sigmask], [pthread])
 
 OVS_CHECK_ESX
 OVS_CHECK_COVERAGE
