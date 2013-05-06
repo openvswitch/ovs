@@ -179,12 +179,13 @@ static char * WARN_UNUSED_RESULT
 parse_enqueue(char *arg, struct ofpbuf *ofpacts)
 {
     char *sp = NULL;
-    char *port = strtok_r(arg, ":q", &sp);
+    char *port = strtok_r(arg, ":q,", &sp);
     char *queue = strtok_r(NULL, "", &sp);
     struct ofpact_enqueue *enqueue;
 
     if (port == NULL || queue == NULL) {
-        return xstrdup("\"enqueue\" syntax is \"enqueue:PORT:QUEUE\"");
+        return xstrdup("\"enqueue\" syntax is \"enqueue:PORT:QUEUE\" or "
+                       "\"enqueue(PORT,QUEUE)\"");
     }
 
     enqueue = ofpact_put_ENQUEUE(ofpacts);

@@ -1056,10 +1056,10 @@ written in the upper half of register 0.  This form of \fBoutput\fR
 uses an OpenFlow extension that is not supported by standard OpenFlow
 switches.
 .
-.IP \fBenqueue:\fIport\fB:\fIqueue\fR
+.IP \fBenqueue(\fIport\fB,\fIqueue\fB)\fR
 Enqueues the packet on the specified \fIqueue\fR within port
 \fIport\fR, which must be an OpenFlow port number or keyword
-(e.g. \fBLOCAL\fR)..  The number of supported queues depends on the
+(e.g. \fBLOCAL\fR).  The number of supported queues depends on the
 switch; some OpenFlow implementations do not support queuing at all.
 .
 .IP \fBnormal\fR

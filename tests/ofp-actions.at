@@ -39,7 +39,7 @@ AT_DATA([test-data], [dnl
 # actions=mod_tp_dst:443
 000a 0008 01bb 0000
 
-# actions=enqueue:10q55
+# actions=enqueue:10:55
 000b 0010 000a 000000000000 00000037
 
 # actions=resubmit:5

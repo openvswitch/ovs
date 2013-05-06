@@ -3281,7 +3281,7 @@ ofpact_format(const struct ofpact *a, struct ds *s)
         enqueue = ofpact_get_ENQUEUE(a);
         ds_put_format(s, "enqueue:");
         ofputil_format_port(enqueue->port, s);
-        ds_put_format(s, "q%"PRIu32, enqueue->queue);
+        ds_put_format(s, ":%"PRIu32, enqueue->queue);
         break;
 
     case OFPACT_OUTPUT_REG:
