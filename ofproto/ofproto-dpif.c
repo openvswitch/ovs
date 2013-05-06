@@ -3930,9 +3930,6 @@ ofproto_receive(const struct dpif_backer *backer, struct ofpbuf *packet,
         }
         port = ofport_dpif_cast(ofport);
 
-        /* We can't reproduce 'key' from 'flow'. */
-        fitness = fitness == ODP_FIT_PERFECT ? ODP_FIT_TOO_MUCH : fitness;
-
         /* XXX: Since the tunnel module is not scoped per backer, it's
          * theoretically possible that we'll receive an ofport belonging to an
          * entirely different datapath.  In practice, this can't happen because
