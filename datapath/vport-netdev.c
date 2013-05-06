@@ -117,17 +117,27 @@ static int netdev_frame_hook(struct net_bridge_port *p, struct sk_buff **pskb)
 static int netdev_init(void) { return 0; }
 static void netdev_exit(void) { }
 #else
-static int netdev_init(void)
+static int port_count;
+
+static void netdev_init(void)
 {
+	port_count++;
+	if (port_count > 1)
+		return;
+
 	/* Hook into callback used by the bridge to intercept packets.
 	 * Parasites we are. */
 	br_handle_frame_hook = netdev_frame_hook;
 
-	return 0;
+	return;
 }
 
 static void netdev_exit(void)
 {
+	port_count--;
+	if (port_count > 0)
+		return;
+
 	br_handle_frame_hook = NULL;
 }
 #endif
@@ -179,6 +189,7 @@ static struct vport *netdev_create(const struct vport_parms *parms)
 	netdev_vport->dev->priv_flags |= IFF_OVS_DATAPATH;
 	rtnl_unlock();
 
+	netdev_init();
 	return vport;
 
 #ifndef HAVE_RHEL_OVS_HOOK
@@ -212,6 +223,7 @@ static void netdev_destroy(struct vport *vport)
 {
 	struct netdev_vport *netdev_vport = netdev_vport_priv(vport);
 
+	netdev_exit();
 	rtnl_lock();
 	netdev_vport->dev->priv_flags &= ~IFF_OVS_DATAPATH;
 	netdev_rx_handler_unregister(netdev_vport->dev);
@@ -383,9 +395,6 @@ struct vport *ovs_netdev_get_vport(struct net_device *dev)
 
 const struct vport_ops ovs_netdev_vport_ops = {
 	.type		= OVS_VPORT_TYPE_NETDEV,
-	.flags          = VPORT_F_REQUIRED,
-	.init		= netdev_init,
-	.exit		= netdev_exit,
 	.create		= netdev_create,
 	.destroy	= netdev_destroy,
 	.get_name	= ovs_netdev_get_name,

@@ -290,16 +290,15 @@ static const struct net_protocol gre_protocol_handlers = {
 #endif
 };
 
-static bool inited;
-
+static int gre_ports;
 static int gre_init(void)
 {
 	int err;
 
-	if (inited)
+	gre_ports++;
+	if (gre_ports > 1)
 		return 0;
 
-	inited = true;
 	err = inet_add_protocol(&gre_protocol_handlers, IPPROTO_GRE);
 	if (err)
 		pr_warn("cannot register gre protocol handler\n");
@@ -309,10 +308,9 @@ static int gre_init(void)
 
 static void gre_exit(void)
 {
-	if (!inited)
+	gre_ports--;
+	if (gre_ports > 0)
 		return;
-
-	inited = false;
 
 	inet_del_protocol(&gre_protocol_handlers, IPPROTO_GRE);
 }
@@ -327,17 +325,28 @@ static struct vport *gre_create(const struct vport_parms *parms)
 	struct net *net = ovs_dp_get_net(parms->dp);
 	struct ovs_net *ovs_net;
 	struct vport *vport;
+	int err;
+
+	err = gre_init();
+	if (err)
+		return ERR_PTR(err);
 
 	ovs_net = net_generic(net, ovs_net_id);
-	if (ovsl_dereference(ovs_net->vport_net.gre_vport))
-		return ERR_PTR(-EEXIST);
+	if (ovsl_dereference(ovs_net->vport_net.gre_vport)) {
+		vport = ERR_PTR(-EEXIST);
+		goto error;
+	}
 
 	vport = ovs_vport_alloc(IFNAMSIZ, &ovs_gre_vport_ops, parms);
 	if (IS_ERR(vport))
-		return vport;
+		goto error;
 
 	strncpy(vport_priv(vport), parms->name, IFNAMSIZ);
 	rcu_assign_pointer(ovs_net->vport_net.gre_vport, vport);
+	return vport;
+
+error:
+	gre_exit();
 	return vport;
 }
 
@@ -350,6 +359,7 @@ static void gre_tnl_destroy(struct vport *vport)
 
 	rcu_assign_pointer(ovs_net->vport_net.gre_vport, NULL);
 	ovs_vport_deferred_free(vport);
+	gre_exit();
 }
 
 static int gre_tnl_send(struct vport *vport, struct sk_buff *skb)
@@ -366,8 +376,6 @@ static int gre_tnl_send(struct vport *vport, struct sk_buff *skb)
 const struct vport_ops ovs_gre_vport_ops = {
 	.type		= OVS_VPORT_TYPE_GRE,
 	.flags		= VPORT_F_TUN_ID,
-	.init		= gre_init,
-	.exit		= gre_exit,
 	.create		= gre_create,
 	.destroy	= gre_tnl_destroy,
 	.get_name	= gre_get_name,
@@ -380,17 +388,27 @@ static struct vport *gre64_create(const struct vport_parms *parms)
 	struct net *net = ovs_dp_get_net(parms->dp);
 	struct ovs_net *ovs_net;
 	struct vport *vport;
+	int err;
+
+	err = gre_init();
+	if (err)
+		return ERR_PTR(err);
 
 	ovs_net = net_generic(net, ovs_net_id);
-	if (ovsl_dereference(ovs_net->vport_net.gre64_vport))
-		return ERR_PTR(-EEXIST);
+	if (ovsl_dereference(ovs_net->vport_net.gre64_vport)) {
+		vport = ERR_PTR(-EEXIST);
+		goto error;
+	}
 
 	vport = ovs_vport_alloc(IFNAMSIZ, &ovs_gre64_vport_ops, parms);
 	if (IS_ERR(vport))
-		return vport;
+		goto error;
 
 	strncpy(vport_priv(vport), parms->name, IFNAMSIZ);
 	rcu_assign_pointer(ovs_net->vport_net.gre64_vport, vport);
+	return vport;
+error:
+	gre_exit();
 	return vport;
 }
 
@@ -403,6 +421,7 @@ static void gre64_tnl_destroy(struct vport *vport)
 
 	rcu_assign_pointer(ovs_net->vport_net.gre64_vport, NULL);
 	ovs_vport_deferred_free(vport);
+	gre_exit();
 }
 
 static int gre64_tnl_send(struct vport *vport, struct sk_buff *skb)
@@ -419,8 +438,6 @@ static int gre64_tnl_send(struct vport *vport, struct sk_buff *skb)
 const struct vport_ops ovs_gre64_vport_ops = {
 	.type		= OVS_VPORT_TYPE_GRE64,
 	.flags		= VPORT_F_TUN_ID,
-	.init		= gre_init,
-	.exit		= gre_exit,
 	.create		= gre64_create,
 	.destroy	= gre64_tnl_destroy,
 	.get_name	= gre_get_name,

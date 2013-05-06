@@ -94,8 +94,7 @@ struct vport {
 	struct ovs_vport_stats offset_stats;
 };
 
-#define VPORT_F_REQUIRED	(1 << 0) /* If init fails, module loading fails. */
-#define VPORT_F_TUN_ID		(1 << 1) /* Sets OVS_CB(skb)->tun_id. */
+#define VPORT_F_TUN_ID		(1 << 0) /* Sets OVS_CB(skb)->tun_id. */
 
 /**
  * struct vport_parms - parameters for creating a new vport
@@ -124,10 +123,6 @@ struct vport_parms {
  * @type: %OVS_VPORT_TYPE_* value for this type of virtual port.
  * @flags: Flags of type VPORT_F_* that influence how the generic vport layer
  * handles this vport.
- * @init: Called at module initialization.  If VPORT_F_REQUIRED is set then the
- * failure of this function will cause the module to not load.  If the flag is
- * not set and initialzation fails then no vports of this type can be created.
- * @exit: Called at module unload.
  * @create: Create a new vport configured as specified.  On success returns
  * a new vport allocated with ovs_vport_alloc(), otherwise an ERR_PTR() value.
  * @destroy: Destroys a vport.  Must call vport_free() on the vport but not
@@ -144,10 +139,6 @@ struct vport_parms {
 struct vport_ops {
 	enum ovs_vport_type type;
 	u32 flags;
-
-	/* Called at module init and exit respectively. */
-	int (*init)(void);
-	void (*exit)(void);
 
 	/* Called with ovs_mutex. */
 	struct vport *(*create)(const struct vport_parms *);

@@ -36,7 +36,7 @@
 
 /* List of statically compiled vport implementations.  Don't forget to also
  * add yours to the list at the bottom of vport.h. */
-static const struct vport_ops *base_vport_ops_list[] = {
+static const struct vport_ops *vport_ops_list[] = {
 	&ovs_netdev_vport_ops,
 	&ovs_internal_vport_ops,
 	&ovs_gre_vport_ops,
@@ -47,9 +47,6 @@ static const struct vport_ops *base_vport_ops_list[] = {
 #endif
 };
 
-static const struct vport_ops **vport_ops_list;
-static int n_vport_types;
-
 /* Protected by RCU read lock for reading, ovs_mutex for writing. */
 static struct hlist_head *dev_table;
 #define VPORT_HASH_BUCKETS 1024
@@ -57,68 +54,25 @@ static struct hlist_head *dev_table;
 /**
  *	ovs_vport_init - initialize vport subsystem
  *
- * Called at module load time to initialize the vport subsystem and any
- * compiled in vport types.
+ * Called at module load time to initialize the vport subsystem.
  */
 int ovs_vport_init(void)
 {
-	int err;
-	int i;
-
 	dev_table = kzalloc(VPORT_HASH_BUCKETS * sizeof(struct hlist_head),
 			    GFP_KERNEL);
-	if (!dev_table) {
-		err = -ENOMEM;
-		goto error;
-	}
-
-	vport_ops_list = kmalloc(ARRAY_SIZE(base_vport_ops_list) *
-				 sizeof(struct vport_ops *), GFP_KERNEL);
-	if (!vport_ops_list) {
-		err = -ENOMEM;
-		goto error_dev_table;
-	}
-
-	for (i = 0; i < ARRAY_SIZE(base_vport_ops_list); i++) {
-		const struct vport_ops *new_ops = base_vport_ops_list[i];
-
-		if (new_ops->init)
-			err = new_ops->init();
-		else
-			err = 0;
-
-		if (!err)
-			vport_ops_list[n_vport_types++] = new_ops;
-		else if (new_ops->flags & VPORT_F_REQUIRED) {
-			ovs_vport_exit();
-			goto error;
-		}
-	}
+	if (!dev_table)
+		return -ENOMEM;
 
 	return 0;
-
-error_dev_table:
-	kfree(dev_table);
-error:
-	return err;
 }
 
 /**
  *	ovs_vport_exit - shutdown vport subsystem
  *
- * Called at module exit time to shutdown the vport subsystem and any
- * initialized vport types.
+ * Called at module exit time to shutdown the vport subsystem.
  */
 void ovs_vport_exit(void)
 {
-	int i;
-
-	for (i = 0; i < n_vport_types; i++) {
-		if (vport_ops_list[i]->exit)
-			vport_ops_list[i]->exit();
-	}
-
-	kfree(vport_ops_list);
 	kfree(dev_table);
 }
 
@@ -222,7 +176,7 @@ struct vport *ovs_vport_add(const struct vport_parms *parms)
 	int err = 0;
 	int i;
 
-	for (i = 0; i < n_vport_types; i++) {
+	for (i = 0; i < ARRAY_SIZE(vport_ops_list); i++) {
 		if (vport_ops_list[i]->type == parms->type) {
 			struct hlist_head *bucket;
 

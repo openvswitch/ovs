@@ -294,7 +294,6 @@ static int internal_dev_recv(struct vport *vport, struct sk_buff *skb)
 
 const struct vport_ops ovs_internal_vport_ops = {
 	.type		= OVS_VPORT_TYPE_INTERNAL,
-	.flags		= VPORT_F_REQUIRED,
 	.create		= internal_dev_create,
 	.destroy	= internal_dev_destroy,
 	.get_name	= ovs_netdev_get_name,
