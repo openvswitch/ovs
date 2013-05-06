@@ -141,26 +141,9 @@ static bool need_linearize(const struct sk_buff *skb)
 	return false;
 }
 
-static struct sk_buff *handle_offloads(struct sk_buff *skb,
-				       const struct rtable *rt,
-				       int tunnel_hlen)
+static struct sk_buff *handle_offloads(struct sk_buff *skb)
 {
-	int min_headroom;
 	int err;
-
-	min_headroom = LL_RESERVED_SPACE(rt_dst(rt).dev) + rt_dst(rt).header_len
-			+ tunnel_hlen
-			+ (vlan_tx_tag_present(skb) ? VLAN_HLEN : 0);
-
-	if (skb_headroom(skb) < min_headroom || skb_header_cloned(skb)) {
-		int head_delta = SKB_DATA_ALIGN(min_headroom -
-						skb_headroom(skb) +
-						16);
-		err = pskb_expand_head(skb, max_t(int, head_delta, 0),
-					0, GFP_ATOMIC);
-		if (unlikely(err))
-			goto error_free;
-	}
 
 	forward_ip_summed(skb, true);
 
@@ -218,33 +201,48 @@ u16 ovs_tnl_get_src_port(struct sk_buff *skb)
 	return (((u64) hash * range) >> 32) + low;
 }
 
-int ovs_tnl_send(struct vport *vport, struct sk_buff *skb)
+int ovs_tnl_send(struct vport *vport, struct sk_buff *skb,
+		 u8 ipproto, int tunnel_hlen,
+		 void (*build_header)(const struct vport *,
+				      struct sk_buff *,
+				      int tunnel_hlen))
 {
-	struct tnl_vport *tnl_vport = tnl_vport_priv(vport);
+	int min_headroom;
 	struct rtable *rt;
 	__be32 saddr;
 	int sent_len = 0;
-	int tunnel_hlen;
-
-	if (unlikely(!OVS_CB(skb)->tun_key))
-		goto error_free;
 
 	/* Route lookup */
 	saddr = OVS_CB(skb)->tun_key->ipv4_src;
 	rt = find_route(ovs_dp_get_net(vport->dp),
 			&saddr,
 			OVS_CB(skb)->tun_key->ipv4_dst,
-			tnl_vport->tnl_ops->ipproto,
+			ipproto,
 			OVS_CB(skb)->tun_key->ipv4_tos,
 			skb_get_mark(skb));
 	if (IS_ERR(rt))
 		goto error_free;
 
-	/* Offloading */
-	tunnel_hlen = tnl_vport->tnl_ops->hdr_len(OVS_CB(skb)->tun_key);
 	tunnel_hlen += sizeof(struct iphdr);
 
-	skb = handle_offloads(skb, rt, tunnel_hlen);
+	min_headroom = LL_RESERVED_SPACE(rt_dst(rt).dev) + rt_dst(rt).header_len
+			+ tunnel_hlen
+			+ (vlan_tx_tag_present(skb) ? VLAN_HLEN : 0);
+
+	if (skb_headroom(skb) < min_headroom || skb_header_cloned(skb)) {
+		int err;
+		int head_delta = SKB_DATA_ALIGN(min_headroom -
+						skb_headroom(skb) +
+						16);
+
+		err = pskb_expand_head(skb, max_t(int, head_delta, 0),
+					0, GFP_ATOMIC);
+		if (unlikely(err))
+			goto err_free_rt;
+	}
+
+	/* Offloading */
+	skb = handle_offloads(skb);
 	if (IS_ERR(skb)) {
 		skb = NULL;
 		goto err_free_rt;
@@ -278,13 +276,13 @@ int ovs_tnl_send(struct vport *vport, struct sk_buff *skb)
 			skb_dst_set(skb, &rt_dst(rt));
 
 		/* Push Tunnel header. */
-		tnl_vport->tnl_ops->build_header(vport, skb, tunnel_hlen);
+		build_header(vport, skb, tunnel_hlen);
 
 		/* Push IP header. */
 		iph = ip_hdr(skb);
 		iph->version	= 4;
 		iph->ihl	= sizeof(struct iphdr) >> 2;
-		iph->protocol	= tnl_vport->tnl_ops->ipproto;
+		iph->protocol	= ipproto;
 		iph->daddr	= OVS_CB(skb)->tun_key->ipv4_dst;
 		iph->saddr	= saddr;
 		iph->tos	= OVS_CB(skb)->tun_key->ipv4_tos;
@@ -324,50 +322,4 @@ error_free:
 	kfree_skb(skb);
 	ovs_vport_record_error(vport, VPORT_E_TX_ERROR);
 	return sent_len;
-}
-
-struct vport *ovs_tnl_create(const struct vport_parms *parms,
-			     const struct vport_ops *vport_ops,
-			     const struct tnl_ops *tnl_ops)
-{
-	struct vport *vport;
-	struct tnl_vport *tnl_vport;
-	int err;
-
-	vport = ovs_vport_alloc(sizeof(struct tnl_vport), vport_ops, parms);
-	if (IS_ERR(vport)) {
-		err = PTR_ERR(vport);
-		goto error;
-	}
-
-	tnl_vport = tnl_vport_priv(vport);
-
-	strcpy(tnl_vport->name, parms->name);
-	tnl_vport->tnl_ops = tnl_ops;
-
-	return vport;
-
-error:
-	return ERR_PTR(err);
-}
-
-static void free_port_rcu(struct rcu_head *rcu)
-{
-	struct tnl_vport *tnl_vport = container_of(rcu,
-						   struct tnl_vport, rcu);
-
-	ovs_vport_free(vport_from_priv(tnl_vport));
-}
-
-void ovs_tnl_destroy(struct vport *vport)
-{
-	struct tnl_vport *tnl_vport = tnl_vport_priv(vport);
-
-	call_rcu(&tnl_vport->rcu, free_port_rcu);
-}
-
-const char *ovs_tnl_get_name(const struct vport *vport)
-{
-	const struct tnl_vport *tnl_vport = tnl_vport_priv(vport);
-	return tnl_vport->name;
 }

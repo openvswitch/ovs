@@ -26,44 +26,15 @@
 #include "flow.h"
 #include "vport.h"
 
-struct tnl_ops {
-	u8 ipproto;		/* The IP protocol for the tunnel. */
 
-	/*
-	 * Returns the length of the tunnel header that will be added in
-	 * build_header() (i.e. excludes the IP header).
-	 */
-	int (*hdr_len)(const struct ovs_key_ipv4_tunnel *);
-	/*
-	* Builds header for given SKB.  Space will have already been
-	* allocated at the start of the packet equal
-	* to sizeof(struct iphdr) + value returned by hdr_len().
-	*/
-	void (*build_header)(const struct vport *, struct sk_buff *,
-			     int tunnel_hlen);
-};
+int ovs_tnl_send(struct vport *vport, struct sk_buff *skb,
+		 u8 ipproto, int tunnel_hlen,
+		 void (*build_header)(const struct vport *,
+				      struct sk_buff *,
+				      int tunnel_hlen));
 
-struct tnl_vport {
-	struct rcu_head rcu;
-
-	__be16 dst_port;
-	char name[IFNAMSIZ];
-	const struct tnl_ops *tnl_ops;
-};
-
-struct vport *ovs_tnl_create(const struct vport_parms *, const struct vport_ops *,
-			     const struct tnl_ops *);
-void ovs_tnl_destroy(struct vport *);
-
-const char *ovs_tnl_get_name(const struct vport *vport);
-int ovs_tnl_send(struct vport *vport, struct sk_buff *skb);
 void ovs_tnl_rcv(struct vport *vport, struct sk_buff *skb);
 u16 ovs_tnl_get_src_port(struct sk_buff *skb);
-
-static inline struct tnl_vport *tnl_vport_priv(const struct vport *vport)
-{
-	return vport_priv(vport);
-}
 
 static inline void tnl_tun_key_init(struct ovs_key_ipv4_tunnel *tun_key,
 				    const struct iphdr *iph, __be64 tun_id, u32 tun_flags)
