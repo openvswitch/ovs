@@ -1,5 +1,9 @@
 post-v1.11.0
 ---------------------
+    - OpenFlow:
+      * The "load" and "set_field" actions can now modify the "in_port".  (This
+        allows one to enable output to a flow's input port by setting the
+        in_port to some unused value, such as OFPP_NONE.)
 
 
 v1.11.0 - xx xxx xxxx

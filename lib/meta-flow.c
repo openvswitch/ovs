@@ -114,7 +114,7 @@ static const struct mf_field mf_fields[MFF_N_IDS] = {
         MFM_NONE,
         MFS_OFP_PORT,
         MFP_NONE,
-        false,
+        true,
         NXM_OF_IN_PORT, "NXM_OF_IN_PORT",
         OXM_OF_IN_PORT, "OXM_OF_IN_PORT",
     }, {

@@ -92,18 +92,19 @@ AT_SETUP([ofproto-dpif - output])
 OVS_VSWITCHD_START
 ADD_OF_PORTS([br0], [1], [9], [10], [11], [55], [66], [77], [88])
 AT_DATA([flows.txt], [dnl
-in_port=1 actions=resubmit:2,resubmit:3,resubmit:4,resubmit:5,resubmit:6,resubmit:7
+in_port=1 actions=resubmit:2,resubmit:3,resubmit:4,resubmit:5,resubmit:6,resubmit:7,resubmit:8
 in_port=2 actions=output:9
 in_port=3 actions=load:55->NXM_NX_REG0[[]],output:NXM_NX_REG0[[]],load:66->NXM_NX_REG1[[]]
 in_port=4 actions=output:10,output:NXM_NX_REG0[[]],output:NXM_NX_REG1[[]],output:11
 in_port=5 actions=load:77->NXM_NX_REG0[[0..15]],load:88->NXM_NX_REG0[[16..31]]
 in_port=6 actions=output:NXM_NX_REG0[[0..15]],output:NXM_NX_REG0[[16..31]]
 in_port=7 actions=load:0x110000ff->NXM_NX_REG0[[]],output:NXM_NX_REG0[[]]
+in_port=8 actions=1,9,load:9->NXM_OF_IN_PORT[[]],1,9
 ])
 AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 AT_CHECK([ovs-appctl ofproto/trace br0 'in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)'], [0], [stdout])
 AT_CHECK([tail -1 stdout], [0],
-  [Datapath actions: 9,55,10,55,66,11,77,88
+  [Datapath actions: 9,55,10,55,66,11,77,88,9,1
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP

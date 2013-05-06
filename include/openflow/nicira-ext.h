@@ -493,6 +493,8 @@ OFP_ASSERT(sizeof(struct nx_action_pop_queue) == 16);
  *     Modifying any of the above fields changes the corresponding packet
  *     header.
  *
+ *   - NXM_OF_IN_PORT
+ *
  *   - NXM_NX_REG(idx) for idx in the switch's accepted range.
  *
  *   - NXM_OF_VLAN_TCI.  Modifying this field's value has side effects on the
