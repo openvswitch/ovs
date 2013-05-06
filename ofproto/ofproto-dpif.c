@@ -7096,12 +7096,12 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
      *   to another device without any modifications this will cause us to
      *   insert a new tag since the original one was stripped off by the
      *   VLAN device.
-     * - Tunnel 'flow' is largely cleared when transitioning between
-     *   the input and output stages since it does not make sense to output
-     *   a packet with the exact headers that it was received with (i.e.
-     *   the destination IP is us).  The one exception is the tun_id, which
-     *   is preserved to allow use in later resubmit lookups and loads into
-     *   registers.
+     * - Tunnel metadata as received is retained in 'flow'. This allows
+     *   tunnel metadata matching also in later tables.
+     *   Since a kernel action for setting the tunnel metadata will only be
+     *   generated with actual tunnel output, changing the tunnel metadata
+     *   values in 'flow' (such as tun_id) will only have effect with a later
+     *   tunnel output action.
      * - Tunnel 'base_flow' is completely cleared since that is what the
      *   kernel does.  If we wish to maintain the original values an action
      *   needs to be generated. */
