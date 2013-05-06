@@ -305,9 +305,6 @@ struct initial_vals {
     * This member should be removed when the VLAN splinters feature is no
     * longer needed. */
     ovs_be16 vlan_tci;
-
-    /* If received on a tunnel, the IP TOS value of the tunnel. */
-    uint8_t tunnel_ip_tos;
 };
 
 static void action_xlate_ctx_init(struct action_xlate_ctx *,
@@ -3892,8 +3889,7 @@ drop_key_clear(struct dpif_backer *backer)
  * to the VLAN TCI with which the packet was really received, that is, the
  * actual VLAN TCI extracted by odp_flow_key_to_flow().  (This differs from
  * the value returned in flow->vlan_tci only for packets received on
- * VLAN splinters.)  Also, if received on an IP tunnel, sets
- * 'initial_vals->tunnel_ip_tos' to the tunnel's IP TOS.
+ * VLAN splinters.)
  *
  * Similarly, this function also includes some logic to help with tunnels.  It
  * may modify 'flow' as necessary to make the tunneling implementation
@@ -3920,7 +3916,6 @@ ofproto_receive(const struct dpif_backer *backer, struct ofpbuf *packet,
 
     if (initial_vals) {
         initial_vals->vlan_tci = flow->vlan_tci;
-        initial_vals->tunnel_ip_tos = flow->tunnel.ip_tos;
     }
 
     if (odp_in_port) {
@@ -5807,7 +5802,6 @@ rule_dpif_execute(struct rule_dpif *rule, const struct flow *flow,
     rule_credit_stats(rule, &stats);
 
     initial_vals.vlan_tci = flow->vlan_tci;
-    initial_vals.tunnel_ip_tos = flow->tunnel.ip_tos;
     ofpbuf_use_stub(&odp_actions, odp_actions_stub, sizeof odp_actions_stub);
     action_xlate_ctx_init(&ctx, ofproto, flow, &initial_vals,
                           rule, stats.tcp_flags, packet);
@@ -6805,7 +6799,7 @@ static bool
 tunnel_ecn_ok(struct action_xlate_ctx *ctx)
 {
     if (is_ip_any(&ctx->base_flow)
-        && (ctx->base_flow.tunnel.ip_tos & IP_ECN_MASK) == IP_ECN_CE) {
+        && (ctx->flow.tunnel.ip_tos & IP_ECN_MASK) == IP_ECN_CE) {
         if ((ctx->base_flow.nw_tos & IP_ECN_MASK) == IP_ECN_NOT_ECT) {
             VLOG_WARN_RL(&rl, "dropping tunnel packet marked ECN CE"
                          " but is not ECN capable");
@@ -7106,7 +7100,6 @@ action_xlate_ctx_init(struct action_xlate_ctx *ctx,
     ctx->base_flow = ctx->flow;
     memset(&ctx->base_flow.tunnel, 0, sizeof ctx->base_flow.tunnel);
     ctx->base_flow.vlan_tci = initial_vals->vlan_tci;
-    ctx->base_flow.tunnel.ip_tos = initial_vals->tunnel_ip_tos;
     ctx->rule = rule;
     ctx->packet = packet;
     ctx->may_learn = packet != NULL;
@@ -7193,7 +7186,6 @@ xlate_actions(struct action_xlate_ctx *ctx,
         uint32_t local_odp_port;
 
         initial_vals.vlan_tci = ctx->base_flow.vlan_tci;
-        initial_vals.tunnel_ip_tos = ctx->base_flow.tunnel.ip_tos;
 
         add_sflow_action(ctx);
         add_ipfix_action(ctx);
@@ -7957,7 +7949,6 @@ packet_out(struct ofproto *ofproto_, struct ofpbuf *packet,
     dpif_flow_stats_extract(flow, packet, time_msec(), &stats);
 
     initial_vals.vlan_tci = flow->vlan_tci;
-    initial_vals.tunnel_ip_tos = 0;
     action_xlate_ctx_init(&ctx, ofproto, flow, &initial_vals, NULL,
                           packet_get_tcp_flags(packet, flow), packet);
     ctx.resubmit_stats = &stats;
@@ -8260,7 +8251,6 @@ ofproto_unixctl_trace(struct unixctl_conn *conn, int argc, const char *argv[],
             }
 
             initial_vals.vlan_tci = flow.vlan_tci;
-            initial_vals.tunnel_ip_tos = flow.tunnel.ip_tos;
         }
 
         /* Generate a packet, if requested. */
@@ -8295,7 +8285,6 @@ ofproto_unixctl_trace(struct unixctl_conn *conn, int argc, const char *argv[],
         flow_extract(packet, priority, mark, NULL, in_port, &flow);
         flow.tunnel.tun_id = tun_id;
         initial_vals.vlan_tci = flow.vlan_tci;
-        initial_vals.tunnel_ip_tos = flow.tunnel.ip_tos;
     } else {
         unixctl_command_reply_error(conn, "Bad command syntax");
         goto exit;
