@@ -197,8 +197,7 @@ tnl_port_receive(struct flow *flow)
     }
 
     flow->in_port = tnl_port->ofport->ofp_port;
-    memset(&flow->tunnel, 0, sizeof flow->tunnel);
-    flow->tunnel.tun_id = match.in_key;
+    /* Keep flow->tunnel to allow matching on tunnel metadata */
 
     if (pre_flow_str) {
         char *post_flow_str = flow_to_string(flow);

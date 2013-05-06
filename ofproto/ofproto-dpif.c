@@ -7080,8 +7080,6 @@ action_xlate_ctx_init(struct action_xlate_ctx *ctx,
                       struct rule_dpif *rule,
                       uint8_t tcp_flags, const struct ofpbuf *packet)
 {
-    ovs_be64 initial_tun_id = flow->tunnel.tun_id;
-
     /* Flow initialization rules:
      * - 'base_flow' must match the kernel's view of the packet at the
      *   time that action processing starts.  'flow' represents any
@@ -7093,23 +7091,22 @@ action_xlate_ctx_init(struct action_xlate_ctx *ctx,
      *   to another device without any modifications this will cause us to
      *   insert a new tag since the original one was stripped off by the
      *   VLAN device.
-     * - Tunnel 'flow' is largely cleared when transitioning between
-     *   the input and output stages since it does not make sense to output
-     *   a packet with the exact headers that it was received with (i.e.
-     *   the destination IP is us).  The one exception is the tun_id, which
-     *   is preserved to allow use in later resubmit lookups and loads into
-     *   registers.
+     * - Tunnel metadata as received is retained in 'flow'. This allows
+     *   tunnel metadata matching also in later tables.
+     *   Since a kernel action for setting the tunnel metadata will only be
+     *   generated with actual tunnel output, changing the tunnel metadata
+     *   values in 'flow' (such as tun_id) will only have effect with a later
+     *   tunnel output action.
      * - Tunnel 'base_flow' is completely cleared since that is what the
      *   kernel does.  If we wish to maintain the original values an action
      *   needs to be generated. */
 
     ctx->ofproto = ofproto;
     ctx->flow = *flow;
-    memset(&ctx->flow.tunnel, 0, sizeof ctx->flow.tunnel);
     ctx->base_flow = ctx->flow;
+    memset(&ctx->base_flow.tunnel, 0, sizeof ctx->base_flow.tunnel);
     ctx->base_flow.vlan_tci = initial_vals->vlan_tci;
     ctx->base_flow.tunnel.ip_tos = initial_vals->tunnel_ip_tos;
-    ctx->flow.tunnel.tun_id = initial_tun_id;
     ctx->rule = rule;
     ctx->packet = packet;
     ctx->may_learn = packet != NULL;
