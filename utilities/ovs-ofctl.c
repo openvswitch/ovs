@@ -516,9 +516,9 @@ dump_trivial_stats_transaction(const char *vconn_name, enum ofpraw raw)
     vconn_close(vconn);
 }
 
-/* Sends 'request', which should be a request that only has a reply if an error
- * occurs, and waits for it to succeed or fail.  If an error does occur, prints
- * it and exits with an error.
+/* Sends all of the 'requests', which should be requests that only have replies
+ * if an error occurs, and waits for them to succeed or fail.  If an error does
+ * occur, prints it and exits with an error.
  *
  * Destroys all of the 'requests'. */
 static void
