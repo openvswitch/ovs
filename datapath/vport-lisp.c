@@ -377,6 +377,7 @@ static int lisp_tnl_send(struct vport *vport, struct sk_buff *skb)
 				LISP_HLEN, lisp_build_header);
 		return tnl_len > 0 ? tnl_len + network_offset : tnl_len;
 	default:
+		kfree_skb(skb);
 		return 0;
 	}
 }
