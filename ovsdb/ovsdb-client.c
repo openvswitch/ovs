@@ -393,7 +393,7 @@ fetch_dbs(struct jsonrpc *rpc, struct svec *dbs)
         svec_add(dbs, name->u.string);
     }
     jsonrpc_msg_destroy(reply);
-    svec_sort(&dbs);
+    svec_sort(dbs);
 }
 
 static void
