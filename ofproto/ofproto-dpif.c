@@ -3374,23 +3374,6 @@ port_get_stats(const struct ofport *ofport_, struct netdev_stats *stats)
     return error;
 }
 
-/* Account packets for LOCAL port. */
-static void
-ofproto_update_local_port_stats(const struct ofproto *ofproto_,
-                                size_t tx_size, size_t rx_size)
-{
-    struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
-
-    if (rx_size) {
-        ofproto->stats.rx_packets++;
-        ofproto->stats.rx_bytes += rx_size;
-    }
-    if (tx_size) {
-        ofproto->stats.tx_packets++;
-        ofproto->stats.tx_bytes += tx_size;
-    }
-}
-
 struct port_dump_state {
     uint32_t bucket;
     uint32_t offset;
@@ -5824,7 +5807,7 @@ rule_modify_actions(struct rule *rule_)
 static int
 send_packet(const struct ofport_dpif *ofport, struct ofpbuf *packet)
 {
-    const struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofport->up.ofproto);
+    struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofport->up.ofproto);
     uint64_t odp_actions_stub[1024 / 8];
     struct ofpbuf key, odp_actions;
     struct odputil_keybuf keybuf;
@@ -5897,7 +5880,9 @@ send_packet(const struct ofport_dpif *ofport, struct ofpbuf *packet)
         VLOG_WARN_RL(&rl, "%s: failed to send packet on port %"PRIu32" (%s)",
                      ofproto->up.name, odp_port, strerror(error));
     }
-    ofproto_update_local_port_stats(ofport->up.ofproto, packet->size, 0);
+
+    ofproto->stats.tx_packets++;
+    ofproto->stats.tx_bytes += packet->size;
     return error;
 }
 
