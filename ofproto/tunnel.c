@@ -159,17 +159,14 @@ tnl_port_del(struct tnl_port *tnl_port)
     }
 }
 
-/* Transforms 'flow' so that it appears to have been received by a tunnel
- * OpenFlow port controlled by this module instead of the datapath port it
- * actually came in on.  Sets 'flow''s in_port to the appropriate OpenFlow port
- * number.  Returns the 'ofport' corresponding to the new in_port.
+/* Looks in the table of tunnels for a tunnel matching the metadata in 'flow'.
+ * Returns the 'ofport' corresponding to the new in_port, or a null pointer if
+ * none is found.
  *
  * Callers should verify that 'flow' needs to be received by calling
- * tnl_port_should_receive() before this function.
- *
- * Leaves 'flow' untouched and returns null if unsuccessful. */
+ * tnl_port_should_receive() before this function. */
 const struct ofport *
-tnl_port_receive(struct flow *flow)
+tnl_port_receive(const struct flow *flow)
 {
     char *pre_flow_str = NULL;
     struct tnl_port *tnl_port;
@@ -195,9 +192,6 @@ tnl_port_receive(struct flow *flow)
     if (!VLOG_DROP_DBG(&dbg_rl)) {
         pre_flow_str = flow_to_string(flow);
     }
-
-    flow->in_port = tnl_port->ofport->ofp_port;
-    /* Keep flow->tunnel to allow matching on tunnel metadata */
 
     if (pre_flow_str) {
         char *post_flow_str = flow_to_string(flow);

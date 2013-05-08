@@ -3927,6 +3927,7 @@ ofproto_receive(const struct dpif_backer *backer, struct ofpbuf *packet,
             flow->in_port = OFPP_NONE;
             goto exit;
         }
+        flow->in_port = ofport->ofp_port;
         port = ofport_dpif_cast(ofport);
 
         /* XXX: Since the tunnel module is not scoped per backer, it's
