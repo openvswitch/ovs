@@ -30,11 +30,6 @@ int process_start(char **argv,
 void process_destroy(struct process *);
 int process_kill(const struct process *, int signr);
 
-int process_run(char **argv,
-                const int *keep_fds, size_t n_keep_fds,
-                const int *null_fds, size_t n_null_fds,
-                int *status);
-
 pid_t process_pid(const struct process *);
 const char *process_name(const struct process *);
 bool process_exited(struct process *);
@@ -44,8 +39,5 @@ char *process_status_msg(int);
 void process_wait(struct process *);
 
 char *process_search_path(const char *);
-
-int process_run_capture(char **argv, char **stdout_log, char **stderr_log,
-                        size_t max_log, int *status);
 
 #endif /* process.h */
