@@ -3921,51 +3921,41 @@ ofproto_receive(const struct dpif_backer *backer, struct ofpbuf *packet,
         *odp_in_port = flow->in_port;
     }
 
-    if (tnl_port_should_receive(flow)) {
-        const struct ofport *ofport = tnl_port_receive(flow);
-        if (!ofport) {
-            flow->in_port = OFPP_NONE;
-            goto exit;
-        }
-        flow->in_port = ofport->ofp_port;
-        port = ofport_dpif_cast(ofport);
+    port = (tnl_port_should_receive(flow)
+            ? ofport_dpif_cast(tnl_port_receive(flow))
+            : odp_port_to_ofport(backer, flow->in_port));
+    flow->in_port = port ? port->up.ofp_port : OFPP_NONE;
+    if (!port) {
+        goto exit;
+    }
 
-        /* XXX: Since the tunnel module is not scoped per backer, it's
-         * theoretically possible that we'll receive an ofport belonging to an
-         * entirely different datapath.  In practice, this can't happen because
-         * no platforms has two separate datapaths which each support
-         * tunneling. */
-        ovs_assert(ofproto_dpif_cast(port->up.ofproto)->backer == backer);
-    } else {
-        port = odp_port_to_ofport(backer, flow->in_port);
-        if (!port) {
-            flow->in_port = OFPP_NONE;
-            goto exit;
-        }
+    /* XXX: Since the tunnel module is not scoped per backer, for a tunnel port
+     * it's theoretically possible that we'll receive an ofport belonging to an
+     * entirely different datapath.  In practice, this can't happen because no
+     * platforms has two separate datapaths which each support tunneling. */
+    ovs_assert(ofproto_dpif_cast(port->up.ofproto)->backer == backer);
 
-        flow->in_port = port->up.ofp_port;
-        if (vsp_adjust_flow(ofproto_dpif_cast(port->up.ofproto), flow)) {
-            if (packet) {
-                /* Make the packet resemble the flow, so that it gets sent to
-                 * an OpenFlow controller properly, so that it looks correct
-                 * for sFlow, and so that flow_extract() will get the correct
-                 * vlan_tci if it is called on 'packet'.
-                 *
-                 * The allocated space inside 'packet' probably also contains
-                 * 'key', that is, both 'packet' and 'key' are probably part of
-                 * a struct dpif_upcall (see the large comment on that
-                 * structure definition), so pushing data on 'packet' is in
-                 * general not a good idea since it could overwrite 'key' or
-                 * free it as a side effect.  However, it's OK in this special
-                 * case because we know that 'packet' is inside a Netlink
-                 * attribute: pushing 4 bytes will just overwrite the 4-byte
-                 * "struct nlattr", which is fine since we don't need that
-                 * header anymore. */
-                eth_push_vlan(packet, flow->vlan_tci);
-            }
-            /* We can't reproduce 'key' from 'flow'. */
-            fitness = fitness == ODP_FIT_PERFECT ? ODP_FIT_TOO_MUCH : fitness;
+    if (vsp_adjust_flow(ofproto_dpif_cast(port->up.ofproto), flow)) {
+        if (packet) {
+            /* Make the packet resemble the flow, so that it gets sent to
+             * an OpenFlow controller properly, so that it looks correct
+             * for sFlow, and so that flow_extract() will get the correct
+             * vlan_tci if it is called on 'packet'.
+             *
+             * The allocated space inside 'packet' probably also contains
+             * 'key', that is, both 'packet' and 'key' are probably part of
+             * a struct dpif_upcall (see the large comment on that
+             * structure definition), so pushing data on 'packet' is in
+             * general not a good idea since it could overwrite 'key' or
+             * free it as a side effect.  However, it's OK in this special
+             * case because we know that 'packet' is inside a Netlink
+             * attribute: pushing 4 bytes will just overwrite the 4-byte
+             * "struct nlattr", which is fine since we don't need that
+             * header anymore. */
+            eth_push_vlan(packet, flow->vlan_tci);
         }
+        /* We can't reproduce 'key' from 'flow'. */
+        fitness = fitness == ODP_FIT_PERFECT ? ODP_FIT_TOO_MUCH : fitness;
     }
     error = 0;
 
