@@ -389,7 +389,7 @@ check".  All the same options are available via TESTSUITEFLAGS.  When
 you do this, the "valgrind" results for test <N> are reported in files
 named tests/testsuite.dir/<N>/valgrind.*.  You may find that the
 valgrind results are easier to interpret if you put "-q" in
-~/.valgrindrc, since that reduces the amount of
+~/.valgrindrc, since that reduces the amount of output.
 
 Sometimes a few tests may fail on some runs but not others.  This is
 usually a bug in the testsuite, not a bug in Open vSwitch itself.  If
