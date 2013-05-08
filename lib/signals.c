@@ -40,66 +40,37 @@ VLOG_DEFINE_THIS_MODULE(signals);
 #endif
 
 struct signal {
-    struct sigaction saved_sa;
-    int signr;
+    int fds[2];
 };
 
-static volatile sig_atomic_t signaled[N_SIGNALS];
-
-static int fds[2];
+static struct signal signals[N_SIGNALS];
 
 static void signal_handler(int signr);
 
-/* Initializes the signals subsystem (if it is not already initialized).  Calls
- * exit() if initialization fails.
- *
- * Calling this function is optional; it will be called automatically by
- * signal_start() if necessary.  Calling it explicitly allows the client to
- * prevent the process from exiting at an unexpected time. */
-void
-signal_init(void)
-{
-    static bool inited;
-    if (!inited) {
-        inited = true;
-        xpipe_nonblocking(fds);
-    }
-}
-
 /* Sets up a handler for 'signr' and returns a structure that represents it.
  *
- * Only one handler for a given signal may be registered at a time. */
+ * Only one handler for a given signal may be registered. */
 struct signal *
 signal_register(int signr)
 {
     struct sigaction sa;
     struct signal *s;
 
-    signal_init();
-
-    s = xmalloc(sizeof *s);
-    s->signr = signr;
-
-    /* Set up signal handler. */
     ovs_assert(signr >= 1 && signr < N_SIGNALS);
+
+    /* Create a pipe. */
+    s = &signals[signr];
+    ovs_assert(!s->fds[0] && !s->fds[1]);
+    xpipe_nonblocking(s->fds);
+
+    /* Install signal handler. */
     memset(&sa, 0, sizeof sa);
     sa.sa_handler = signal_handler;
     sigemptyset(&sa.sa_mask);
     sa.sa_flags = SA_RESTART;
-    xsigaction(signr, &sa, &s->saved_sa);
+    xsigaction(signr, &sa, NULL);
 
     return s;
-}
-
-/* Unregisters the handler for 's', restores the signal handler that was in
- * effect before signal_register() was called, and frees 's'. */
-void
-signal_unregister(struct signal *s)
-{
-    if (s) {
-        xsigaction(s->signr, &s->saved_sa, NULL);
-        free(s);
-    }
 }
 
 /* Returns true if signal 's' has been received since the last call to this
@@ -108,12 +79,8 @@ bool
 signal_poll(struct signal *s)
 {
     char buf[_POSIX_PIPE_BUF];
-    ignore(read(fds[0], buf, sizeof buf));
-    if (signaled[s->signr]) {
-        signaled[s->signr] = 0;
-        return true;
-    }
-    return false;
+
+    return read(s->fds[0], buf, sizeof buf) > 0;
 }
 
 /* Causes the next call to poll_block() to wake up when signal_poll(s) would
@@ -121,19 +88,14 @@ signal_poll(struct signal *s)
 void
 signal_wait(struct signal *s)
 {
-    if (signaled[s->signr]) {
-        poll_immediate_wake();
-    } else {
-        poll_fd_wait(fds[0], POLLIN);
-    }
+    poll_fd_wait(s->fds[0], POLLIN);
 }
 
 static void
 signal_handler(int signr)
 {
     if (signr >= 1 && signr < N_SIGNALS) {
-        ignore(write(fds[1], "", 1));
-        signaled[signr] = true;
+        ignore(write(signals[signr].fds[1], "", 1));
     }
 }
 
