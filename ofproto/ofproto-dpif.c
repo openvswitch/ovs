@@ -590,7 +590,6 @@ static uint16_t odp_port_to_ofp_port(const struct ofproto_dpif *,
 static struct ofport_dpif *
 ofport_dpif_cast(const struct ofport *ofport)
 {
-    ovs_assert(ofport->ofproto->ofproto_class == &ofproto_dpif_class);
     return ofport ? CONTAINER_OF(ofport, struct ofport_dpif, up) : NULL;
 }
 
