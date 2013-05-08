@@ -5810,66 +5810,30 @@ send_packet(const struct ofport_dpif *ofport, struct ofpbuf *packet)
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofport->up.ofproto);
     uint64_t odp_actions_stub[1024 / 8];
     struct ofpbuf key, odp_actions;
+    struct dpif_flow_stats stats;
     struct odputil_keybuf keybuf;
-    uint32_t odp_port;
+    struct ofpact_output output;
+    struct action_xlate_ctx ctx;
     struct flow flow;
     int error;
 
-    flow_extract(packet, 0, 0, NULL, OFPP_LOCAL, &flow);
-    if (netdev_vport_is_patch(ofport->up.netdev)) {
-        struct ofproto_dpif *peer_ofproto;
-        struct dpif_flow_stats stats;
-        struct ofport_dpif *peer;
-        struct rule_dpif *rule;
-
-        peer = ofport_get_peer(ofport);
-        if (!peer) {
-            return ENODEV;
-        }
-
-        dpif_flow_stats_extract(&flow, packet, time_msec(), &stats);
-        netdev_vport_inc_tx(ofport->up.netdev, &stats);
-        netdev_vport_inc_rx(peer->up.netdev, &stats);
-
-        flow.in_port = peer->up.ofp_port;
-        peer_ofproto = ofproto_dpif_cast(peer->up.ofproto);
-        rule = rule_dpif_lookup(peer_ofproto, &flow);
-        rule_dpif_execute(rule, &flow, packet);
-
-        return 0;
-    }
-
     ofpbuf_use_stub(&odp_actions, odp_actions_stub, sizeof odp_actions_stub);
-
-    if (ofport->tnl_port) {
-        struct dpif_flow_stats stats;
-
-        odp_port = tnl_port_send(ofport->tnl_port, &flow);
-        if (odp_port == OVSP_NONE) {
-            return ENODEV;
-        }
-
-        dpif_flow_stats_extract(&flow, packet, time_msec(), &stats);
-        netdev_vport_inc_tx(ofport->up.netdev, &stats);
-        odp_put_tunnel_action(&flow.tunnel, &odp_actions);
-        odp_put_skb_mark_action(flow.skb_mark, &odp_actions);
-    } else {
-        odp_port = vsp_realdev_to_vlandev(ofproto, ofport->odp_port,
-                                          flow.vlan_tci);
-        if (odp_port != ofport->odp_port) {
-            eth_pop_vlan(packet);
-            flow.vlan_tci = htons(0);
-        }
-    }
-
     ofpbuf_use_stack(&key, &keybuf, sizeof keybuf);
-    odp_flow_key_from_flow(&key, &flow,
-                           ofp_port_to_odp_port(ofproto, flow.in_port));
 
-    compose_sflow_action(ofproto, &odp_actions, &flow, odp_port);
-    compose_ipfix_action(ofproto, &odp_actions, &flow);
+    /* Use OFPP_NONE as the in_port to avoid special packet processing. */
+    flow_extract(packet, 0, 0, NULL, OFPP_NONE, &flow);
+    odp_flow_key_from_flow(&key, &flow, ofp_port_to_odp_port(ofproto,
+                                                             OFPP_LOCAL));
+    dpif_flow_stats_extract(&flow, packet, time_msec(), &stats);
 
-    nl_msg_put_u32(&odp_actions, OVS_ACTION_ATTR_OUTPUT, odp_port);
+    ofpact_init(&output.ofpact, OFPACT_OUTPUT, sizeof output);
+    output.port = ofport->up.ofp_port;
+    output.max_len = 0;
+
+    action_xlate_ctx_init(&ctx, ofproto, &flow, NULL, NULL, 0, packet);
+    ctx.resubmit_stats = &stats;
+    xlate_actions(&ctx, &output.ofpact, sizeof output, &odp_actions);
+
     error = dpif_execute(ofproto->backer->dpif,
                          key.data, key.size,
                          odp_actions.data, odp_actions.size,
@@ -5877,8 +5841,9 @@ send_packet(const struct ofport_dpif *ofport, struct ofpbuf *packet)
     ofpbuf_uninit(&odp_actions);
 
     if (error) {
-        VLOG_WARN_RL(&rl, "%s: failed to send packet on port %"PRIu32" (%s)",
-                     ofproto->up.name, odp_port, strerror(error));
+        VLOG_WARN_RL(&rl, "%s: failed to send packet on port %s (%s)",
+                     ofproto->up.name, netdev_get_name(ofport->up.netdev),
+                     strerror(error));
     }
 
     ofproto->stats.tx_packets++;
@@ -7071,7 +7036,6 @@ action_xlate_ctx_init(struct action_xlate_ctx *ctx,
     ctx->flow = *flow;
     ctx->base_flow = ctx->flow;
     memset(&ctx->base_flow.tunnel, 0, sizeof ctx->base_flow.tunnel);
-    ctx->base_flow.vlan_tci = initial_vals->vlan_tci;
     ctx->rule = rule;
     ctx->packet = packet;
     ctx->may_learn = packet != NULL;
@@ -7079,6 +7043,10 @@ action_xlate_ctx_init(struct action_xlate_ctx *ctx,
     ctx->resubmit_hook = NULL;
     ctx->report_hook = NULL;
     ctx->resubmit_stats = NULL;
+
+    if (initial_vals) {
+        ctx->base_flow.vlan_tci = initial_vals->vlan_tci;
+    }
 }
 
 /* Translates the 'ofpacts_len' bytes of "struct ofpacts" starting at 'ofpacts'
