@@ -60,6 +60,8 @@ static void sigchld_handler(int signr OVS_UNUSED);
 /* Initializes the process subsystem (if it is not already initialized).  Calls
  * exit() if initialization fails.
  *
+ * This function may not be called after creating any additional threads.
+ *
  * Calling this function is optional; it will be called automatically by
  * process_start() if necessary.  Calling it explicitly allows the client to
  * prevent the process from exiting at an unexpected time. */
@@ -163,6 +165,8 @@ process_register(const char *name, pid_t pid)
 /* Starts a subprocess with the arguments in the null-terminated argv[] array.
  * argv[0] is used as the name of the process.  Searches the PATH environment
  * variable to find the program to execute.
+ *
+ * This function may not be called after creating any additional threads.
  *
  * All file descriptors are closed before executing the subprocess, except for
  * fds 0, 1, and 2.

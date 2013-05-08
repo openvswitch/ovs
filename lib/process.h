@@ -21,21 +21,27 @@
 #include <sys/types.h>
 
 struct process;
+
+/* Starting and monitoring subprocesses.
+ *
+ * process_init() and process_start() may safely be called only from a
+ * single-threaded parent process.  The parent process may safely create
+ * additional threads afterward, as long as the remaining functions in this
+ * group are called only from a single thread at any given time. */
 void process_init(void);
-char *process_escape_args(char **argv);
 int process_start(char **argv, struct process **);
 void process_destroy(struct process *);
 int process_kill(const struct process *, int signr);
-
 pid_t process_pid(const struct process *);
 const char *process_name(const struct process *);
 bool process_exited(struct process *);
 int process_status(const struct process *);
-char *process_status_msg(int);
-
 void process_run(void);
 void process_wait(struct process *);
 
+/* These functions are thread-safe. */
+char *process_status_msg(int);
+char *process_escape_args(char **argv);
 char *process_search_path(const char *);
 
 #endif /* process.h */
