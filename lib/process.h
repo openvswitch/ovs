@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2011 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2011, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,7 +32,7 @@ int process_kill(const struct process *, int signr);
 
 int process_run(char **argv,
                 const int *keep_fds, size_t n_keep_fds,
-                  const int *null_fds, size_t n_null_fds,
+                const int *null_fds, size_t n_null_fds,
                 int *status);
 
 pid_t process_pid(const struct process *);
