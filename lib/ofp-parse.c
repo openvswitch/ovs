@@ -1004,11 +1004,19 @@ parse_ofp_str(struct ofputil_flow_mod *fm, int command, const char *str_,
     }
     if (fields & F_ACTIONS) {
         struct ofpbuf ofpacts;
+        enum ofperr err;
 
         ofpbuf_init(&ofpacts, 32);
         str_to_inst_ofpacts(&fm->match.flow, act_str, &ofpacts);
         fm->ofpacts_len = ofpacts.size;
         fm->ofpacts = ofpbuf_steal_data(&ofpacts);
+
+        err = ofpacts_check(fm->ofpacts, fm->ofpacts_len, &fm->match.flow,
+                            OFPP_MAX);
+        if (err) {
+            exit(EXIT_FAILURE);
+        }
+
     } else {
         fm->ofpacts_len = 0;
         fm->ofpacts = NULL;
