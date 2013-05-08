@@ -59,7 +59,6 @@ static bool sigchld_is_blocked(void);
 static void block_sigchld(sigset_t *);
 static void unblock_sigchld(const sigset_t *);
 static void sigchld_handler(int signr OVS_UNUSED);
-static bool is_member(int x, const int *array, size_t);
 
 /* Initializes the process subsystem (if it is not already initialized).  Calls
  * exit() if initialization fails.
@@ -174,20 +173,15 @@ process_register(const char *name, pid_t pid)
  * variable to find the program to execute.
  *
  * All file descriptors are closed before executing the subprocess, except for
- * fds 0, 1, and 2 and the 'n_keep_fds' fds listed in 'keep_fds'.  Also, any of
- * the 'n_null_fds' fds listed in 'null_fds' are replaced by /dev/null.
+ * fds 0, 1, and 2.
  *
  * Returns 0 if successful, otherwise a positive errno value indicating the
  * error.  If successful, '*pp' is assigned a new struct process that may be
  * used to query the process's status.  On failure, '*pp' is set to NULL. */
 int
-process_start(char **argv,
-              const int keep_fds[], size_t n_keep_fds,
-              const int null_fds[], size_t n_null_fds,
-              struct process **pp)
+process_start(char **argv, struct process **pp)
 {
     sigset_t oldsigs;
-    int nullfd;
     pid_t pid;
     int error;
 
@@ -196,15 +190,6 @@ process_start(char **argv,
     error = process_prestart(argv);
     if (error) {
         return error;
-    }
-
-    if (n_null_fds) {
-        nullfd = get_null_fd();
-        if (nullfd < 0) {
-            return -nullfd;
-        }
-    } else {
-        nullfd = -1;
     }
 
     block_sigchld(&oldsigs);
@@ -225,18 +210,8 @@ process_start(char **argv,
 
         fatal_signal_fork();
         unblock_sigchld(&oldsigs);
-        for (fd = 0; fd < fd_max; fd++) {
-            if (is_member(fd, null_fds, n_null_fds)) {
-                dup2(nullfd, fd);
-            } else if (fd >= 3 && fd != nullfd
-                       && !is_member(fd, keep_fds, n_keep_fds)) {
-                close(fd);
-            }
-        }
-        if (nullfd >= 0
-            && !is_member(nullfd, keep_fds, n_keep_fds)
-            && !is_member(nullfd, null_fds, n_null_fds)) {
-            close(nullfd);
+        for (fd = 3; fd < fd_max; fd++) {
+            close(fd);
         }
         execvp(argv[0], argv);
         fprintf(stderr, "execvp(\"%s\") failed: %s\n",
@@ -399,19 +374,6 @@ sigchld_handler(int signr OVS_UNUSED)
         }
     }
     ignore(write(fds[1], "", 1));
-}
-
-static bool
-is_member(int x, const int *array, size_t n)
-{
-    size_t i;
-
-    for (i = 0; i < n; i++) {
-        if (array[i] == x) {
-            return true;
-        }
-    }
-    return false;
 }
 
 static bool

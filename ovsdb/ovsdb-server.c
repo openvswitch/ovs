@@ -169,7 +169,7 @@ main(int argc, char *argv[])
         run_argv[2] = run_command;
         run_argv[3] = NULL;
 
-        retval = process_start(run_argv, NULL, 0, NULL, 0, &run_process);
+        retval = process_start(run_argv, &run_process);
         if (retval) {
             ovs_fatal(retval, "%s: process failed to start", run_command);
         }
