@@ -418,7 +418,7 @@ parse_sample(struct ofpbuf *b, char *arg)
 }
 
 static void
-parse_named_action(enum ofputil_action_code code, const struct flow *flow,
+parse_named_action(enum ofputil_action_code code,
                    char *arg, struct ofpbuf *ofpacts)
 {
     struct ofpact_tunnel *tunnel;
@@ -579,7 +579,7 @@ parse_named_action(enum ofputil_action_code code, const struct flow *flow,
         NOT_REACHED();
 
     case OFPUTIL_NXAST_LEARN:
-        learn_parse(arg, flow, ofpacts);
+        learn_parse(arg, ofpacts);
         break;
 
     case OFPUTIL_NXAST_EXIT:
@@ -634,12 +634,12 @@ parse_named_action(enum ofputil_action_code code, const struct flow *flow,
 }
 
 static bool
-str_to_ofpact__(const struct flow *flow, char *pos, char *act, char *arg,
+str_to_ofpact__(char *pos, char *act, char *arg,
                 struct ofpbuf *ofpacts, int n_actions)
 {
     int code = ofputil_action_code_from_name(act);
     if (code >= 0) {
-        parse_named_action(code, flow, arg, ofpacts);
+        parse_named_action(code, arg, ofpacts);
     } else if (!strcasecmp(act, "drop")) {
         if (n_actions) {
             ovs_fatal(0, "Drop actions must not be preceded by other "
@@ -662,7 +662,7 @@ str_to_ofpact__(const struct flow *flow, char *pos, char *act, char *arg,
 }
 
 static void
-str_to_ofpacts(const struct flow *flow, char *str, struct ofpbuf *ofpacts)
+str_to_ofpacts(char *str, struct ofpbuf *ofpacts)
 {
     char *pos, *act, *arg;
     enum ofperr error;
@@ -671,7 +671,7 @@ str_to_ofpacts(const struct flow *flow, char *str, struct ofpbuf *ofpacts)
     pos = str;
     n_actions = 0;
     while (ofputil_parse_key_value(&pos, &act, &arg)) {
-        if (!str_to_ofpact__(flow, pos, act, arg, ofpacts, n_actions)) {
+        if (!str_to_ofpact__(pos, act, arg, ofpacts, n_actions)) {
             break;
         }
         n_actions++;
@@ -729,7 +729,7 @@ parse_named_instruction(enum ovs_instruction_type type,
 }
 
 static void
-str_to_inst_ofpacts(const struct flow *flow, char *str, struct ofpbuf *ofpacts)
+str_to_inst_ofpacts(char *str, struct ofpbuf *ofpacts)
 {
     char *pos, *inst, *arg;
     int type;
@@ -741,7 +741,7 @@ str_to_inst_ofpacts(const struct flow *flow, char *str, struct ofpbuf *ofpacts)
     while (ofputil_parse_key_value(&pos, &inst, &arg)) {
         type = ofpact_instruction_type_from_name(inst);
         if (type < 0) {
-            if (!str_to_ofpact__(flow, pos, inst, arg, ofpacts, n_actions)) {
+            if (!str_to_ofpact__(pos, inst, arg, ofpacts, n_actions)) {
                 break;
             }
 
@@ -1007,7 +1007,7 @@ parse_ofp_str(struct ofputil_flow_mod *fm, int command, const char *str_,
         enum ofperr err;
 
         ofpbuf_init(&ofpacts, 32);
-        str_to_inst_ofpacts(&fm->match.flow, act_str, &ofpacts);
+        str_to_inst_ofpacts(act_str, &ofpacts);
         fm->ofpacts_len = ofpacts.size;
         fm->ofpacts = ofpbuf_steal_data(&ofpacts);
 
@@ -1096,7 +1096,7 @@ void
 parse_ofpacts(const char *s_, struct ofpbuf *ofpacts)
 {
     char *s = xstrdup(s_);
-    str_to_ofpacts(NULL, s, ofpacts);
+    str_to_ofpacts(s, ofpacts);
     free(s);
 }
 

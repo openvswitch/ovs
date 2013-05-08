@@ -39,7 +39,7 @@ void learn_to_nxast(const struct ofpact_learn *, struct ofpbuf *openflow);
 void learn_execute(const struct ofpact_learn *, const struct flow *,
                    struct ofputil_flow_mod *, struct ofpbuf *ofpacts);
 
-void learn_parse(char *, const struct flow *, struct ofpbuf *ofpacts);
+void learn_parse(char *, struct ofpbuf *ofpacts);
 void learn_format(const struct ofpact_learn *, struct ds *);
 
 #endif /* learn.h */

@@ -512,14 +512,13 @@ learn_parse_spec(const char *orig, char *name, char *value,
  *
  * Modifies 'arg'. */
 void
-learn_parse(char *arg, const struct flow *flow, struct ofpbuf *ofpacts)
+learn_parse(char *arg, struct ofpbuf *ofpacts)
 {
     char *orig = xstrdup(arg);
     char *name, *value;
 
     struct ofpact_learn *learn;
     struct match match;
-    enum ofperr error;
 
     learn = ofpact_put_LEARN(ofpacts);
     learn->idle_timeout = OFP_FLOW_PERMANENT;
@@ -556,21 +555,6 @@ learn_parse(char *arg, const struct flow *flow, struct ofpbuf *ofpacts)
 
             learn_parse_spec(orig, name, value, spec);
 
-            /* Check prerequisites. */
-            if (spec->src_type == NX_LEARN_SRC_FIELD
-                && flow && !mf_are_prereqs_ok(spec->src.field, flow)) {
-                ovs_fatal(0, "%s: cannot specify source field %s because "
-                          "prerequisites are not satisfied",
-                          orig, spec->src.field->name);
-            }
-            if ((spec->dst_type == NX_LEARN_DST_MATCH
-                 || spec->dst_type == NX_LEARN_DST_LOAD)
-                && !mf_are_prereqs_ok(spec->dst.field, &match.flow)) {
-                ovs_fatal(0, "%s: cannot specify destination field %s because "
-                          "prerequisites are not satisfied",
-                          orig, spec->dst.field->name);
-            }
-
             /* Update 'match' to allow for satisfying destination
              * prerequisites. */
             if (spec->src_type == NX_LEARN_SRC_IMMEDIATE
@@ -581,13 +565,6 @@ learn_parse(char *arg, const struct flow *flow, struct ofpbuf *ofpacts)
     }
     ofpact_update_len(ofpacts, &learn->ofpact);
 
-    /* In theory the above should have caught any errors, but... */
-    if (flow) {
-        error = learn_check(learn, flow);
-        if (error) {
-            ovs_fatal(0, "%s: %s", orig, ofperr_to_string(error));
-        }
-    }
     free(orig);
 }
 
