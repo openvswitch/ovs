@@ -214,9 +214,8 @@ parse_ipv6(struct ofpbuf *packet, struct flow *flow)
 
             /* We only process the first fragment. */
             if (frag_hdr->ip6f_offlg != htons(0)) {
-                if ((frag_hdr->ip6f_offlg & IP6F_OFF_MASK) == htons(0)) {
-                    flow->nw_frag = FLOW_NW_FRAG_ANY;
-                } else {
+                flow->nw_frag = FLOW_NW_FRAG_ANY;
+                if ((frag_hdr->ip6f_offlg & IP6F_OFF_MASK) != htons(0)) {
                     flow->nw_frag |= FLOW_NW_FRAG_LATER;
                     nexthdr = IPPROTO_FRAGMENT;
                     break;
