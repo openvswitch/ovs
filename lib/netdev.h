@@ -88,6 +88,8 @@ struct netdev_tunnel_config {
 
     ovs_be16 dst_port;
 
+    bool ip_src_flow;
+    bool ip_dst_flow;
     ovs_be32 ip_src;
     ovs_be32 ip_dst;
 

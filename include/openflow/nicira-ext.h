@@ -478,6 +478,8 @@ OFP_ASSERT(sizeof(struct nx_action_pop_queue) == 16);
  *   - NXM_NX_ND_SLL
  *   - NXM_NX_ND_TLL
  *   - NXM_NX_REG(idx) for idx in the switch's accepted range.
+ *   - NXM_NX_TUN_IPV4_SRC
+ *   - NXM_NX_TUN_IPV4_DST
  *
  * The following nxm_header values are potentially acceptable as 'dst':
  *
@@ -503,8 +505,10 @@ OFP_ASSERT(sizeof(struct nx_action_pop_queue) == 16);
  *     adds or modifies the 802.1Q header appropriately, setting the TCI field
  *     to the field's new value (with the CFI bit masked out).
  *
- *   - NXM_NX_TUN_ID.  Modifying this value modifies the tunnel ID used for the
- *     packet's next tunnel encapsulation.
+ *   - NXM_NX_TUN_ID, NXM_NX_TUN_IPV4_SRC, NXM_NX_TUN_IPV4_DST.  Modifying
+ *     any of these values modifies the corresponding tunnel header field used
+ *     for the packet's next tunnel encapsulation, if allowed by the
+ *     configuration of the output tunnel port.
  *
  * A given nxm_header value may be used as 'src' or 'dst' only on a flow whose
  * nx_match satisfies its prerequisites.  For example, NXM_OF_IP_TOS may be
@@ -1747,6 +1751,21 @@ OFP_ASSERT(sizeof(struct nx_action_output_reg) == 24);
  * Masking: Arbitrary masks. */
 #define NXM_NX_COOKIE     NXM_HEADER  (0x0001, 30, 8)
 #define NXM_NX_COOKIE_W   NXM_HEADER_W(0x0001, 30, 8)
+
+/* The source or destination address in the outer IP header of a tunneled
+ * packet.
+ *
+ * For non-tunneled packets, the value is 0.
+ *
+ * Prereqs: None.
+ *
+ * Format: 32-bit integer in network byte order.
+ *
+ * Masking: Fully maskable. */
+#define NXM_NX_TUN_IPV4_SRC   NXM_HEADER  (0x0001, 31, 4)
+#define NXM_NX_TUN_IPV4_SRC_W NXM_HEADER_W(0x0001, 31, 4)
+#define NXM_NX_TUN_IPV4_DST   NXM_HEADER  (0x0001, 32, 4)
+#define NXM_NX_TUN_IPV4_DST_W NXM_HEADER_W(0x0001, 32, 4)
 
 /* ## --------------------- ## */
 /* ## Requests and replies. ## */

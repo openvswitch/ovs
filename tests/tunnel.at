@@ -408,6 +408,34 @@ br0 (dummy@ovs-dummy):
 	br0 65534/100: (dummy)
 	p1 1/1: (vxlan: remote_ip=1.1.1.1)
 ])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
 
+AT_SETUP([ofproto-dpif - set_field - tun_src/tun_dst/tun_id])
+OVS_VSWITCHD_START([dnl
+    add-port br0 p1 -- set Interface p1 type=gre options:key=flow \
+        options:remote_ip=1.1.1.1 ofport_request=1 \
+    -- add-port br0 p2 -- set Interface p2 type=gre options:key=flow \
+        options:remote_ip=flow ofport_request=2 \
+    -- add-port br0 p3 -- set Interface p3 type=gre options:key=flow \
+        options:remote_ip=flow options:local_ip=flow ofport_request=3 \
+    -- add-port br0 p4 -- set Interface p4 type=gre options:key=3 \
+        options:remote_ip=flow ofport_request=4 \
+    -- add-port br0 p5 -- set Interface p5 type=gre options:key=flow \
+        options:remote_ip=5.5.5.5 ofport_request=5])
+ADD_OF_PORTS([br0], [90])
+AT_DATA([flows.txt], [dnl
+in_port=90 actions=resubmit:1,resubmit:2,resubmit:3,resubmit:4,resubmit:5
+in_port=1 actions=set_field:42->tun_id,output:1
+in_port=2 actions=set_field:3.3.3.3->tun_dst,output:2
+in_port=3 actions=set_field:1.1.1.1->tun_src,set_field:4.4.4.4->tun_dst,output:3
+in_port=4 actions=set_field:2.2.2.2->tun_dst,output:4
+in_port=5 actions=set_field:5->tun_id
+])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+AT_CHECK([ovs-appctl ofproto/trace br0 'in_port(90),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)'], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0],
+  [Datapath actions: set(tunnel(tun_id=0x2a,src=0.0.0.0,dst=1.1.1.1,tos=0x0,ttl=64,flags(df,key))),1,set(tunnel(tun_id=0x2a,src=0.0.0.0,dst=3.3.3.3,tos=0x0,ttl=64,flags(df,key))),1,set(tunnel(tun_id=0x2a,src=1.1.1.1,dst=4.4.4.4,tos=0x0,ttl=64,flags(df,key))),1,set(tunnel(tun_id=0x3,src=0.0.0.0,dst=2.2.2.2,tos=0x0,ttl=64,flags(df,key))),1
+])
 OVS_VSWITCHD_STOP
 AT_CLEANUP

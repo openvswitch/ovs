@@ -775,6 +775,17 @@ if \fImask\fR is specified, then a 1-bit in \fImask\fR indicates that the
 corresponding bit in \fItunnel-id\fR must match exactly, and a 0-bit
 wildcards that bit.
 .
+.IP \fBtun_src=\fIip\fR[\fB/\fInetmask\fR]
+.IQ \fBtun_dst=\fIip\fR[\fB/\fInetmask\fR]
+Matches tunnel IPv4 source (or destination) address \fIip\fR. Only packets
+that arrive over a tunnel will have nonzero tunnel addresses.
+The address may be specified as an IP address or host name
+(e.g. \fB192.168.1.1\fR or \fBwww.example.com\fR).  The optional
+\fInetmask\fR allows restricting a match to a masked IPv4 address.
+The netmask may be specified as a dotted quad
+(e.g. \fB192.168.1.0/255.255.255.0\fR) or as a CIDR block
+(e.g. \fB192.168.1.0/24\fR).
+.
 .IP "\fBreg\fIidx\fB=\fIvalue\fR[\fB/\fImask\fR]"
 Matches \fIvalue\fR either exactly or with optional \fImask\fR in
 register number \fIidx\fR.  The valid range of \fIidx\fR depends on

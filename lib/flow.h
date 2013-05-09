@@ -118,6 +118,8 @@ BUILD_ASSERT_DECL(sizeof(struct flow) == sizeof(struct flow_tnl) + 160 &&
 /* Represents the metadata fields of struct flow. */
 struct flow_metadata {
     ovs_be64 tun_id;                 /* Encapsulating tunnel ID. */
+    ovs_be32 tun_src;                /* Tunnel outer IPv4 src addr */
+    ovs_be32 tun_dst;                /* Tunnel outer IPv4 dst addr */
     ovs_be64 metadata;               /* OpenFlow 1.1+ metadata field. */
     uint32_t regs[FLOW_N_REGS];      /* Registers. */
     uint16_t in_port;                /* OpenFlow port or zero. */

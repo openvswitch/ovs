@@ -325,7 +325,10 @@ set_tunnel_config(struct netdev_dev *dev_, const struct smap *args)
     SMAP_FOR_EACH (node, args) {
         if (!strcmp(node->key, "remote_ip")) {
             struct in_addr in_addr;
-            if (lookup_ip(node->value, &in_addr)) {
+            if (!strcmp(node->value, "flow")) {
+                tnl_cfg.ip_dst_flow = true;
+                tnl_cfg.ip_dst = htonl(0);
+            } else if (lookup_ip(node->value, &in_addr)) {
                 VLOG_WARN("%s: bad %s 'remote_ip'", name, type);
             } else if (ip_is_multicast(in_addr.s_addr)) {
                 VLOG_WARN("%s: multicast remote_ip="IP_FMT" not allowed",
@@ -336,7 +339,10 @@ set_tunnel_config(struct netdev_dev *dev_, const struct smap *args)
             }
         } else if (!strcmp(node->key, "local_ip")) {
             struct in_addr in_addr;
-            if (lookup_ip(node->value, &in_addr)) {
+            if (!strcmp(node->value, "flow")) {
+                tnl_cfg.ip_src_flow = true;
+                tnl_cfg.ip_src = htonl(0);
+            } else if (lookup_ip(node->value, &in_addr)) {
                 VLOG_WARN("%s: bad %s 'local_ip'", name, type);
             } else {
                 tnl_cfg.ip_src = in_addr.s_addr;
@@ -443,8 +449,13 @@ set_tunnel_config(struct netdev_dev *dev_, const struct smap *args)
         }
     }
 
-    if (!tnl_cfg.ip_dst) {
+    if (!tnl_cfg.ip_dst && !tnl_cfg.ip_dst_flow) {
         VLOG_ERR("%s: %s type requires valid 'remote_ip' argument",
+                 name, type);
+        return EINVAL;
+    }
+    if (tnl_cfg.ip_src_flow && !tnl_cfg.ip_dst_flow) {
+        VLOG_ERR("%s: %s type requires 'remote_ip=flow' with 'local_ip=flow'",
                  name, type);
         return EINVAL;
     }
@@ -474,10 +485,14 @@ get_tunnel_config(struct netdev_dev *dev, struct smap *args)
 
     if (tnl_cfg->ip_dst) {
         smap_add_format(args, "remote_ip", IP_FMT, IP_ARGS(tnl_cfg->ip_dst));
+    } else if (tnl_cfg->ip_dst_flow) {
+        smap_add(args, "remote_ip", "flow");
     }
 
     if (tnl_cfg->ip_src) {
         smap_add_format(args, "local_ip", IP_FMT, IP_ARGS(tnl_cfg->ip_src));
+    } else if (tnl_cfg->ip_src_flow) {
+        smap_add(args, "local_ip", "flow");
     }
 
     if (tnl_cfg->in_key_flow && tnl_cfg->out_key_flow) {

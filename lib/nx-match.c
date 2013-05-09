@@ -690,7 +690,13 @@ nx_put_raw(struct ofpbuf *b, bool oxm, const struct match *match,
 
     /* Tunnel ID. */
     nxm_put_64m(b, oxm ? OXM_OF_TUNNEL_ID : NXM_NX_TUN_ID,
-		flow->tunnel.tun_id, match->wc.masks.tunnel.tun_id);
+                flow->tunnel.tun_id, match->wc.masks.tunnel.tun_id);
+
+    /* Other tunnel metadata. */
+    nxm_put_32m(b, NXM_NX_TUN_IPV4_SRC,
+                flow->tunnel.ip_src, match->wc.masks.tunnel.ip_src);
+    nxm_put_32m(b, NXM_NX_TUN_IPV4_DST,
+                flow->tunnel.ip_dst, match->wc.masks.tunnel.ip_dst);
 
     /* Registers. */
     for (i = 0; i < FLOW_N_REGS; i++) {

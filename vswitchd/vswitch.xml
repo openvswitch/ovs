@@ -1294,12 +1294,67 @@
       </p>
 
       <column name="options" key="remote_ip">
-          Required.  The tunnel endpoint.  Only unicast endpoints are supported.
+        <p>Required.  The remote tunnel endpoint, one of:</p>
+
+        <ul>
+          <li>
+            An IPv4 address (not a DNS name), e.g. <code>192.168.0.123</code>.
+            Only unicast endpoints are supported.
+          </li>
+          <li>
+            The word <code>flow</code>.  The tunnel accepts packets from any
+            remote tunnel endpoint.  To process only packets from a specific
+            remote tunnel endpoint, the flow entries may match on the
+            <code>tun_src</code> field.  When sending packets to a
+            <code>remote_ip=flow</code> tunnel, the flow actions must
+            explicitly set the <code>tun_dst</code> field to the IP address of
+            the desired remote tunnel endpoint, e.g. with a
+            <code>set_field</code> action.
+          </li>
+        </ul>
+
+        <p>
+         The remote tunnel endpoint for any packet received from a tunnel
+         is available in the <code>tun_src</code> field for matching in the
+         flow table.
+        </p>
       </column>
 
       <column name="options" key="local_ip">
-        Optional.  The destination IP that received packets must match.
-        Default is to match all addresses.
+        <p>
+          Optional.  The tunnel destination IP that received packets must
+          match.  Default is to match all addresses.  If specified, may be one
+          of:
+        </p>
+
+        <ul>
+          <li>
+            An IPv4 address (not a DNS name), e.g. <code>192.168.12.3</code>.
+          </li>
+          <li>
+            The word <code>flow</code>.  The tunnel accepts packets sent to any
+            of the local IP addresses of the system running OVS.  To process
+            only packets sent to a specific IP address, the flow entries may
+            match on the <code>tun_dst</code> field.  When sending packets to a
+            <code>local_ip=flow</code> tunnel, the flow actions may
+            explicitly set the <code>tun_src</code> field to the desired IP
+            address, e.g. with a <code>set_field</code> action.  However, while
+            routing the tunneled packet out, the local system may override the
+            specified address with the local IP address configured for the
+            outgoing system interface.
+
+            <p>
+              This option is valid only for tunnels also configured with the
+              <code>remote_ip=flow</code> option.
+            </p>
+          </li>
+        </ul>
+
+        <p>
+          The tunnel destination IP address for any packet received from a
+          tunnel is available in the <code>tun_dst</code> field for matching in
+          the flow table.
+        </p>
       </column>
 
       <column name="options" key="in_key">

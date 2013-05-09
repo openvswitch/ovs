@@ -135,13 +135,9 @@ match_wc_init(struct match *match, const struct flow *flow)
 void
 match_init_exact(struct match *match, const struct flow *flow)
 {
-    ovs_be64 tun_id = flow->tunnel.tun_id;
-
     match->flow = *flow;
     match->flow.skb_priority = 0;
     match->flow.skb_mark = 0;
-    memset(&match->flow.tunnel, 0, sizeof match->flow.tunnel);
-    match->flow.tunnel.tun_id = tun_id;
     flow_wildcards_init_exact(&match->wc);
 }
 

@@ -57,21 +57,21 @@ static const struct mf_field mf_fields[MFF_N_IDS] = {
     }, {
         MFF_TUN_SRC, "tun_src", NULL,
         MF_FIELD_SIZES(be32),
-        MFM_NONE,
+        MFM_FULLY,
         MFS_IPV4,
         MFP_NONE,
-        false,
-        0, NULL,
-        0, NULL,
+        true,
+        NXM_NX_TUN_IPV4_SRC, "NXM_NX_TUN_IPV4_SRC",
+        NXM_NX_TUN_IPV4_SRC, "NXM_NX_TUN_IPV4_SRC",
     }, {
         MFF_TUN_DST, "tun_dst", NULL,
         MF_FIELD_SIZES(be32),
-        MFM_NONE,
+        MFM_FULLY,
         MFS_IPV4,
         MFP_NONE,
-        false,
-        0, NULL,
-        0, NULL,
+        true,
+        NXM_NX_TUN_IPV4_DST, "NXM_NX_TUN_IPV4_DST",
+        NXM_NX_TUN_IPV4_DST, "NXM_NX_TUN_IPV4_DST",
     }, {
         MFF_TUN_FLAGS, "tun_flags", NULL,
         MF_FIELD_SIZES(be16),
@@ -676,9 +676,11 @@ bool
 mf_is_all_wild(const struct mf_field *mf, const struct flow_wildcards *wc)
 {
     switch (mf->id) {
-    case MFF_TUN_ID:
     case MFF_TUN_SRC:
+        return !wc->masks.tunnel.ip_src;
     case MFF_TUN_DST:
+        return !wc->masks.tunnel.ip_dst;
+    case MFF_TUN_ID:
     case MFF_TUN_TOS:
     case MFF_TUN_TTL:
     case MFF_TUN_FLAGS:

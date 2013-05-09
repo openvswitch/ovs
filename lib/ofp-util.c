@@ -1039,16 +1039,6 @@ regs_fully_wildcarded(const struct flow_wildcards *wc)
     return true;
 }
 
-static bool
-tun_parms_fully_wildcarded(const struct flow_wildcards *wc)
-{
-    return (!wc->masks.tunnel.ip_src &&
-            !wc->masks.tunnel.ip_dst &&
-            !wc->masks.tunnel.ip_ttl &&
-            !wc->masks.tunnel.ip_tos &&
-            !wc->masks.tunnel.flags);
-}
-
 /* Returns a bit-mask of ofputil_protocols that can be used for sending 'match'
  * to a switch (e.g. to add or remove a flow).  Only NXM can handle tunnel IDs,
  * registers, or fixing the Ethernet multicast bit.  Otherwise, it's better to
@@ -1060,8 +1050,9 @@ ofputil_usable_protocols(const struct match *match)
 
     BUILD_ASSERT_DECL(FLOW_WC_SEQ == 20);
 
-    /* tunnel params other than tun_id can't be sent in a flow_mod */
-    if (!tun_parms_fully_wildcarded(wc)) {
+    /* These tunnel params can't be sent in a flow_mod */
+    if (wc->masks.tunnel.ip_ttl
+        || wc->masks.tunnel.ip_tos || wc->masks.tunnel.flags) {
         return OFPUTIL_P_NONE;
     }
 
@@ -1107,8 +1098,10 @@ ofputil_usable_protocols(const struct match *match)
             | OFPUTIL_P_OF13_OXM;
     }
 
-    /* NXM and OXM support matching tun_id. */
-    if (wc->masks.tunnel.tun_id != htonll(0)) {
+    /* NXM and OXM support matching tun_id, tun_src, and tun_dst. */
+    if (wc->masks.tunnel.tun_id != htonll(0)
+        || wc->masks.tunnel.ip_src != htonl(0)
+        || wc->masks.tunnel.ip_dst != htonl(0)) {
         return OFPUTIL_P_OF10_NXM_ANY | OFPUTIL_P_OF12_OXM
             | OFPUTIL_P_OF13_OXM;
     }
@@ -2450,6 +2443,8 @@ ofputil_decode_packet_in_finish(struct ofputil_packet_in *pin,
 
     pin->fmd.in_port = match->flow.in_port;
     pin->fmd.tun_id = match->flow.tunnel.tun_id;
+    pin->fmd.tun_src = match->flow.tunnel.ip_src;
+    pin->fmd.tun_dst = match->flow.tunnel.ip_dst;
     pin->fmd.metadata = match->flow.metadata;
     memcpy(pin->fmd.regs, match->flow.regs, sizeof pin->fmd.regs);
 }
@@ -2549,6 +2544,12 @@ ofputil_packet_in_to_match(const struct ofputil_packet_in *pin,
     match_init_catchall(match);
     if (pin->fmd.tun_id != htonll(0)) {
         match_set_tun_id(match, pin->fmd.tun_id);
+    }
+    if (pin->fmd.tun_src != htonl(0)) {
+        match_set_tun_src(match, pin->fmd.tun_src);
+    }
+    if (pin->fmd.tun_dst != htonl(0)) {
+        match_set_tun_dst(match, pin->fmd.tun_dst);
     }
     if (pin->fmd.metadata != htonll(0)) {
         match_set_metadata(match, pin->fmd.metadata);

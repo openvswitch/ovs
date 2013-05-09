@@ -111,6 +111,14 @@ ofp_print_packet_in(struct ds *string, const struct ofp_header *oh,
         ds_put_format(string, " tun_id=0x%"PRIx64, ntohll(pin.fmd.tun_id));
     }
 
+    if (pin.fmd.tun_src != htonl(0)) {
+        ds_put_format(string, " tun_src="IP_FMT, IP_ARGS(pin.fmd.tun_src));
+    }
+
+    if (pin.fmd.tun_dst != htonl(0)) {
+        ds_put_format(string, " tun_dst="IP_FMT, IP_ARGS(pin.fmd.tun_dst));
+    }
+
     if (pin.fmd.metadata != htonll(0)) {
         ds_put_format(string, " metadata=0x%"PRIx64, ntohll(pin.fmd.metadata));
     }

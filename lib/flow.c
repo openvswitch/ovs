@@ -494,6 +494,8 @@ flow_get_metadata(const struct flow *flow, struct flow_metadata *fmd)
     BUILD_ASSERT_DECL(FLOW_WC_SEQ == 20);
 
     fmd->tun_id = flow->tunnel.tun_id;
+    fmd->tun_src = flow->tunnel.ip_src;
+    fmd->tun_dst = flow->tunnel.ip_dst;
     fmd->metadata = flow->metadata;
     memcpy(fmd->regs, flow->regs, sizeof fmd->regs);
     fmd->in_port = flow->in_port;

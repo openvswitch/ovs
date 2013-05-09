@@ -218,6 +218,17 @@ struct action_xlate_ctx {
      * this flow when actions change header fields. */
     struct flow flow;
 
+    /* Flow at the last commit. */
+    struct flow base_flow;
+
+    /* Tunnel IP destination address as received.  This is stored separately
+     * as the base_flow.tunnel is cleared on init to reflect the datapath
+     * behavior.  Used to make sure not to send tunneled output to ourselves,
+     * which might lead to an infinite loop.  This could happen easily
+     * if a tunnel is marked as 'ip_remote=flow', and the flow does not
+     * actually set the tun_dst field. */
+    ovs_be32 orig_tunnel_ip_dst;
+
     /* stack for the push and pop actions.
      * Each stack element is of the type "union mf_subvalue". */
     struct ofpbuf stack;
@@ -283,7 +294,6 @@ struct action_xlate_ctx {
 
     int recurse;                /* Recursion level, via xlate_table_action. */
     bool max_resubmit_trigger;  /* Recursed too deeply during translation. */
-    struct flow base_flow;      /* Flow at the last commit. */
     uint32_t orig_skb_priority; /* Priority when packet arrived. */
     uint8_t table_id;           /* OpenFlow table ID where flow was found. */
     uint32_t sflow_n_outputs;   /* Number of output ports. */
@@ -6160,7 +6170,10 @@ compose_output_action__(struct action_xlate_ctx *ctx, uint16_t ofp_port,
             xlate_report(ctx, "Tunneling decided against output");
             goto out; /* restore flow_nw_tos */
         }
-
+        if (ctx->flow.tunnel.ip_dst == ctx->orig_tunnel_ip_dst) {
+            xlate_report(ctx, "Not tunneling to our own address");
+            goto out; /* restore flow_nw_tos */
+        }
         if (ctx->resubmit_stats) {
             netdev_vport_inc_tx(ofport->up.netdev, ctx->resubmit_stats);
         }
@@ -7025,6 +7038,7 @@ action_xlate_ctx_init(struct action_xlate_ctx *ctx,
     ctx->flow = *flow;
     ctx->base_flow = ctx->flow;
     memset(&ctx->base_flow.tunnel, 0, sizeof ctx->base_flow.tunnel);
+    ctx->orig_tunnel_ip_dst = flow->tunnel.ip_dst;
     ctx->rule = rule;
     ctx->packet = packet;
     ctx->may_learn = packet != NULL;

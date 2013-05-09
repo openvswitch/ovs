@@ -43,6 +43,8 @@ struct tnl_match {
     uint32_t odp_port;
     uint32_t skb_mark;
     bool in_key_flow;
+    bool ip_src_flow;
+    bool ip_dst_flow;
 };
 
 struct tnl_port {
@@ -90,6 +92,8 @@ tnl_port_add__(const struct ofport *ofport, uint32_t odp_port,
     tnl_port->match.in_key = cfg->in_key;
     tnl_port->match.ip_src = cfg->ip_src;
     tnl_port->match.ip_dst = cfg->ip_dst;
+    tnl_port->match.ip_src_flow = cfg->ip_src_flow;
+    tnl_port->match.ip_dst_flow = cfg->ip_dst_flow;
     tnl_port->match.skb_mark = cfg->ipsec ? IPSEC_MARK : 0;
     tnl_port->match.in_key_flow = cfg->in_key_flow;
     tnl_port->match.odp_port = odp_port;
@@ -229,8 +233,12 @@ tnl_port_send(const struct tnl_port *tnl_port, struct flow *flow)
         pre_flow_str = flow_to_string(flow);
     }
 
-    flow->tunnel.ip_src = tnl_port->match.ip_src;
-    flow->tunnel.ip_dst = tnl_port->match.ip_dst;
+    if (!cfg->ip_src_flow) {
+        flow->tunnel.ip_src = tnl_port->match.ip_src;
+    }
+    if (!cfg->ip_dst_flow) {
+        flow->tunnel.ip_dst = tnl_port->match.ip_dst;
+    }
     flow->skb_mark = tnl_port->match.skb_mark;
 
     if (!cfg->out_key_flow) {
@@ -331,14 +339,36 @@ tnl_find(struct tnl_match *match_)
         return tnl_port;
     }
 
+    /* Flow-based remote */
+    match.ip_dst = 0;
+    match.ip_dst_flow = true;
+    tnl_port = tnl_find_exact(&match);
+    if (tnl_port) {
+        return tnl_port;
+    }
+
+    /* Flow-based everything */
+    match.ip_src = 0;
+    match.ip_src_flow = true;
+    tnl_port = tnl_find_exact(&match);
+    if (tnl_port) {
+        return tnl_port;
+    }
+
     return NULL;
 }
 
 static void
 tnl_match_fmt(const struct tnl_match *match, struct ds *ds)
 {
-    ds_put_format(ds, IP_FMT"->"IP_FMT, IP_ARGS(match->ip_src),
-                  IP_ARGS(match->ip_dst));
+    if (!match->ip_dst_flow) {
+        ds_put_format(ds, IP_FMT"->"IP_FMT, IP_ARGS(match->ip_src),
+                      IP_ARGS(match->ip_dst));
+    } else if (!match->ip_src_flow) {
+        ds_put_format(ds, IP_FMT"->flow", IP_ARGS(match->ip_src));
+    } else {
+        ds_put_cstr(ds, "flow->flow");
+    }
 
     if (match->in_key_flow) {
         ds_put_cstr(ds, ", key=flow");

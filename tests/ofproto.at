@@ -1475,6 +1475,33 @@ OFPT_BARRIER_REPLY (OF1.2):
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+dnl This test checks that tunnel metadata is encoded in packet_in structures.
+AT_SETUP([ofproto - packet-out with tunnel metadata (OpenFlow 1.2)])
+OVS_VSWITCHD_START
+
+# Start a monitor listening for packet-ins.
+AT_CHECK([ovs-ofctl -O OpenFlow12 monitor br0 --detach --no-chdir --pidfile])
+ovs-appctl -t ovs-ofctl ofctl/send 0309000c0123456700000080
+ovs-appctl -t ovs-ofctl ofctl/barrier
+ovs-appctl -t ovs-ofctl ofctl/set-output-file monitor.log
+AT_CAPTURE_FILE([monitor.log])
+
+# Send a packet-out with set field actions to set some tunnel metadata, and forward to controller
+AT_CHECK([ovs-ofctl -O OpenFlow12 packet-out br0 none 'set_field:127.0.0.1->tun_src,set_field:0x01020304->tun_id,set_field:192.168.0.1->tun_dst, controller' '0001020304050010203040501234'])
+
+# Stop the monitor and check its output.
+ovs-appctl -t ovs-ofctl ofctl/barrier
+ovs-appctl -t ovs-ofctl exit
+
+AT_CHECK([sed 's/ (xid=0x[[0-9a-fA-F]]*)//' monitor.log], [0], [dnl
+OFPT_PACKET_IN (OF1.2): total_len=14 in_port=ANY tun_id=0x1020304 tun_src=127.0.0.1 tun_dst=192.168.0.1 (via action) data_len=14 (unbuffered)
+metadata=0,in_port=0,vlan_tci=0x0000,dl_src=00:10:20:30:40:50,dl_dst=00:01:02:03:04:05,dl_type=0x1234
+OFPT_BARRIER_REPLY (OF1.2):
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([ofproto - flow monitoring])
 AT_KEYWORDS([monitor])
 OVS_VSWITCHD_START
