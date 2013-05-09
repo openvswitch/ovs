@@ -56,10 +56,16 @@
  * process with an error message on any error.  The *_trylock() functions are
  * exceptions: they pass through a 0 or EBUSY return value to the caller and
  * abort on any other error. */
+
 void xpthread_mutex_init(pthread_mutex_t *, pthread_mutexattr_t *);
 void xpthread_mutex_lock(pthread_mutex_t *mutex) OVS_ACQUIRES(mutex);
 void xpthread_mutex_unlock(pthread_mutex_t *mutex) OVS_RELEASES(mutex);
 int xpthread_mutex_trylock(pthread_mutex_t *);
+
+void xpthread_mutexattr_init(pthread_mutexattr_t *);
+void xpthread_mutexattr_destroy(pthread_mutexattr_t *);
+void xpthread_mutexattr_settype(pthread_mutexattr_t *, int type);
+void xpthread_mutexattr_gettype(pthread_mutexattr_t *, int *typep);
 
 void xpthread_rwlock_init(pthread_rwlock_t *, pthread_rwlockattr_t *);
 void xpthread_rwlock_rdlock(pthread_rwlock_t *rwlock) OVS_ACQUIRES(rwlock);

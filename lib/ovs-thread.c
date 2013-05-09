@@ -77,6 +77,11 @@ XPTHREAD_FUNC1(pthread_mutex_lock, pthread_mutex_t *);
 XPTHREAD_FUNC1(pthread_mutex_unlock, pthread_mutex_t *);
 XPTHREAD_TRY_FUNC1(pthread_mutex_trylock, pthread_mutex_t *);
 
+XPTHREAD_FUNC1(pthread_mutexattr_init, pthread_mutexattr_t *);
+XPTHREAD_FUNC1(pthread_mutexattr_destroy, pthread_mutexattr_t *);
+XPTHREAD_FUNC2(pthread_mutexattr_settype, pthread_mutexattr_t *, int);
+XPTHREAD_FUNC2(pthread_mutexattr_gettype, pthread_mutexattr_t *, int *);
+
 XPTHREAD_FUNC2(pthread_rwlock_init,
                pthread_rwlock_t *, pthread_rwlockattr_t *);
 XPTHREAD_FUNC1(pthread_rwlock_rdlock, pthread_rwlock_t *);
