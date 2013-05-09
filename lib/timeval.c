@@ -383,7 +383,7 @@ timeval_to_msec(const struct timeval *tv)
 }
 
 /* Returns the monotonic time at which the "time" module was initialized, in
- * milliseconds(). */
+ * milliseconds. */
 long long int
 time_boot_msec(void)
 {
