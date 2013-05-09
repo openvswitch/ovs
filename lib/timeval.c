@@ -326,17 +326,12 @@ time_alarm(unsigned int secs)
     long long int now;
     long long int msecs;
 
-    sigset_t oldsigs;
-
     time_init();
     time_refresh();
 
     now = time_msec();
     msecs = secs * 1000LL;
-
-    block_sigalrm(&oldsigs);
     deadline = now < LLONG_MAX - msecs ? now + msecs : LLONG_MAX;
-    unblock_sigalrm(&oldsigs);
 }
 
 /* Like poll(), except:
