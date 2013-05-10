@@ -38,6 +38,7 @@ struct netdev_dev {
                                                 this device. */
     int ref_cnt;                        /* Times this devices was opened. */
     struct shash_node *node;            /* Pointer to element in global map. */
+    struct list saved_flags_list; /* Contains "struct netdev_saved_flags". */
 };
 
 void netdev_dev_init(struct netdev_dev *, const char *name,
@@ -63,9 +64,6 @@ static inline void netdev_dev_assert_class(const struct netdev_dev *netdev_dev,
 struct netdev {
     struct netdev_dev *netdev_dev;   /* Parent netdev_dev. */
     struct list node;                /* Element in global list. */
-
-    enum netdev_flags save_flags;    /* Initial device flags. */
-    enum netdev_flags changed_flags; /* Flags that we changed. */
 };
 
 void netdev_init(struct netdev *, struct netdev_dev *);
@@ -572,14 +570,14 @@ struct netdev_class {
     int (*arp_lookup)(const struct netdev *netdev, ovs_be32 ip,
                       uint8_t mac[6]);
 
-    /* Retrieves the current set of flags on 'netdev' into '*old_flags'.
-     * Then, turns off the flags that are set to 1 in 'off' and turns on the
-     * flags that are set to 1 in 'on'.  (No bit will be set to 1 in both 'off'
-     * and 'on'; that is, off & on == 0.)
+    /* Retrieves the current set of flags on 'dev' into '*old_flags'.  Then,
+     * turns off the flags that are set to 1 in 'off' and turns on the flags
+     * that are set to 1 in 'on'.  (No bit will be set to 1 in both 'off' and
+     * 'on'; that is, off & on == 0.)
      *
      * This function may be invoked from a signal handler.  Therefore, it
      * should not do anything that is not signal-safe (such as logging). */
-    int (*update_flags)(struct netdev *netdev, enum netdev_flags off,
+    int (*update_flags)(struct netdev_dev *dev, enum netdev_flags off,
                         enum netdev_flags on, enum netdev_flags *old_flags);
 
     /* Returns a sequence number which indicates changes in one of 'netdev''s

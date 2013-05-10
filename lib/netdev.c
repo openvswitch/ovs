@@ -48,6 +48,13 @@ COVERAGE_DEFINE(netdev_sent);
 COVERAGE_DEFINE(netdev_add_router);
 COVERAGE_DEFINE(netdev_get_stats);
 
+struct netdev_saved_flags {
+    struct netdev_dev *dev;
+    struct list node;           /* In struct netdev_dev's saved_flags_list. */
+    enum netdev_flags saved_flags;
+    enum netdev_flags saved_values;
+};
+
 static struct shash netdev_classes = SHASH_INITIALIZER(&netdev_classes);
 
 /* All created network devices. */
@@ -60,8 +67,7 @@ static struct list netdev_list = LIST_INITIALIZER(&netdev_list);
  * additional log messages. */
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
 
-static void close_all_netdevs(void *aux OVS_UNUSED);
-static int restore_flags(struct netdev *netdev);
+static void restore_all_flags(void *aux OVS_UNUSED);
 void update_device_args(struct netdev_dev *, const struct shash *args);
 
 static void
@@ -72,7 +78,7 @@ netdev_initialize(void)
     if (!inited) {
         inited = true;
 
-        fatal_signal_add_hook(close_all_netdevs, NULL, NULL, true);
+        fatal_signal_add_hook(restore_all_flags, NULL, NULL, true);
         netdev_vport_patch_register();
 
 #ifdef LINUX_DATAPATH
@@ -302,21 +308,24 @@ netdev_get_tunnel_config(const struct netdev *netdev)
     }
 }
 
+static void
+netdev_dev_unref(struct netdev_dev *dev)
+{
+    ovs_assert(dev->ref_cnt);
+    if (!--dev->ref_cnt) {
+        netdev_dev_uninit(dev, true);
+    }
+}
+
 /* Closes and destroys 'netdev'. */
 void
 netdev_close(struct netdev *netdev)
 {
     if (netdev) {
-        struct netdev_dev *netdev_dev = netdev_get_dev(netdev);
+        struct netdev_dev *dev = netdev_get_dev(netdev);
 
-        ovs_assert(netdev_dev->ref_cnt);
-        netdev_dev->ref_cnt--;
         netdev_uninit(netdev, true);
-
-        /* If the reference count for the netdev device is zero, destroy it. */
-        if (!netdev_dev->ref_cnt) {
-            netdev_dev_uninit(netdev_dev, true);
-        }
+        netdev_dev_unref(dev);
     }
 }
 
@@ -791,37 +800,44 @@ netdev_get_in6(const struct netdev *netdev, struct in6_addr *in6)
 }
 
 /* On 'netdev', turns off the flags in 'off' and then turns on the flags in
- * 'on'.  If 'permanent' is true, the changes will persist; otherwise, they
- * will be reverted when 'netdev' is closed or the program exits.  Returns 0 if
- * successful, otherwise a positive errno value. */
+ * 'on'.  Returns 0 if successful, otherwise a positive errno value. */
 static int
 do_update_flags(struct netdev *netdev, enum netdev_flags off,
                 enum netdev_flags on, enum netdev_flags *old_flagsp,
-                bool permanent)
+                struct netdev_saved_flags **sfp)
 {
+    struct netdev_dev *dev = netdev_get_dev(netdev);
+    struct netdev_saved_flags *sf = NULL;
     enum netdev_flags old_flags;
     int error;
 
-    error = netdev_get_dev(netdev)->netdev_class->update_flags(netdev,
-                off & ~on, on, &old_flags);
+    error = dev->netdev_class->update_flags(dev, off & ~on, on, &old_flags);
     if (error) {
         VLOG_WARN_RL(&rl, "failed to %s flags for network device %s: %s",
                      off || on ? "set" : "get", netdev_get_name(netdev),
                      strerror(error));
         old_flags = 0;
-    } else if ((off || on) && !permanent) {
+    } else if ((off || on) && sfp) {
         enum netdev_flags new_flags = (old_flags & ~off) | on;
         enum netdev_flags changed_flags = old_flags ^ new_flags;
         if (changed_flags) {
-            if (!netdev->changed_flags) {
-                netdev->save_flags = old_flags;
-            }
-            netdev->changed_flags |= changed_flags;
+            *sfp = sf = xmalloc(sizeof *sf);
+            sf->dev = dev;
+            list_push_front(&dev->saved_flags_list, &sf->node);
+            sf->saved_flags = changed_flags;
+            sf->saved_values = changed_flags & new_flags;
+
+            dev->ref_cnt++;
         }
     }
+
     if (old_flagsp) {
         *old_flagsp = old_flags;
     }
+    if (sfp) {
+        *sfp = sf;
+    }
+
     return error;
 }
 
@@ -832,40 +848,63 @@ int
 netdev_get_flags(const struct netdev *netdev_, enum netdev_flags *flagsp)
 {
     struct netdev *netdev = CONST_CAST(struct netdev *, netdev_);
-    return do_update_flags(netdev, 0, 0, flagsp, false);
+    return do_update_flags(netdev, 0, 0, flagsp, NULL);
 }
 
 /* Sets the flags for 'netdev' to 'flags'.
- * If 'permanent' is true, the changes will persist; otherwise, they
- * will be reverted when 'netdev' is closed or the program exits.
  * Returns 0 if successful, otherwise a positive errno value. */
 int
 netdev_set_flags(struct netdev *netdev, enum netdev_flags flags,
-                 bool permanent)
+                 struct netdev_saved_flags **sfp)
 {
-    return do_update_flags(netdev, -1, flags, NULL, permanent);
+    return do_update_flags(netdev, -1, flags, NULL, sfp);
 }
 
-/* Turns on the specified 'flags' on 'netdev'.
- * If 'permanent' is true, the changes will persist; otherwise, they
- * will be reverted when 'netdev' is closed or the program exits.
- * Returns 0 if successful, otherwise a positive errno value. */
+/* Turns on the specified 'flags' on 'netdev':
+ *
+ *    - On success, returns 0.  If 'sfp' is nonnull, sets '*sfp' to a newly
+ *      allocated 'struct netdev_saved_flags *' that may be passed to
+ *      netdev_restore_flags() to restore the original values of 'flags' on
+ *      'netdev' (this will happen automatically at program termination if
+ *      netdev_restore_flags() is never called) , or to NULL if no flags were
+ *      actually changed.
+ *
+ *    - On failure, returns a positive errno value.  If 'sfp' is nonnull, sets
+ *      '*sfp' to NULL. */
 int
 netdev_turn_flags_on(struct netdev *netdev, enum netdev_flags flags,
-                     bool permanent)
+                     struct netdev_saved_flags **sfp)
 {
-    return do_update_flags(netdev, 0, flags, NULL, permanent);
+    return do_update_flags(netdev, 0, flags, NULL, sfp);
 }
 
-/* Turns off the specified 'flags' on 'netdev'.
- * If 'permanent' is true, the changes will persist; otherwise, they
- * will be reverted when 'netdev' is closed or the program exits.
- * Returns 0 if successful, otherwise a positive errno value. */
+/* Turns off the specified 'flags' on 'netdev'.  See netdev_turn_flags_on() for
+ * details of the interface. */
 int
 netdev_turn_flags_off(struct netdev *netdev, enum netdev_flags flags,
-                      bool permanent)
+                      struct netdev_saved_flags **sfp)
 {
-    return do_update_flags(netdev, flags, 0, NULL, permanent);
+    return do_update_flags(netdev, flags, 0, NULL, sfp);
+}
+
+/* Restores the flags that were saved in 'sf', and destroys 'sf'.
+ * Does nothing if 'sf' is NULL. */
+void
+netdev_restore_flags(struct netdev_saved_flags *sf)
+{
+    if (sf) {
+        struct netdev_dev *dev = sf->dev;
+        enum netdev_flags old_flags;
+
+        dev->netdev_class->update_flags(dev,
+                                        sf->saved_flags & sf->saved_values,
+                                        sf->saved_flags & ~sf->saved_values,
+                                        &old_flags);
+        list_remove(&sf->node);
+        free(sf);
+
+        netdev_dev_unref(dev);
+    }
 }
 
 /* Looks up the ARP table entry for 'ip' on 'netdev'.  If one exists and can be
@@ -1293,6 +1332,7 @@ netdev_dev_init(struct netdev_dev *netdev_dev, const char *name,
     netdev_dev->netdev_class = netdev_class;
     netdev_dev->name = xstrdup(name);
     netdev_dev->node = shash_add(&netdev_dev_shash, name, netdev_dev);
+    list_init(&netdev_dev->saved_flags_list);
 }
 
 /* Undoes the results of initialization.
@@ -1308,6 +1348,7 @@ netdev_dev_uninit(struct netdev_dev *netdev_dev, bool destroy)
     char *name = netdev_dev->name;
 
     ovs_assert(!netdev_dev->ref_cnt);
+    ovs_assert(list_is_empty(&netdev_dev->saved_flags_list));
 
     shash_delete(&netdev_dev_shash, netdev_dev->node);
 
@@ -1390,19 +1431,11 @@ netdev_init(struct netdev *netdev, struct netdev_dev *netdev_dev)
 void
 netdev_uninit(struct netdev *netdev, bool close)
 {
-    /* Restore flags that we changed, if any. */
-    int error = restore_flags(netdev);
     list_remove(&netdev->node);
-    if (error) {
-        VLOG_WARN("failed to restore network device flags on %s: %s",
-                  netdev_get_name(netdev), strerror(error));
-    }
-
     if (close) {
         netdev_get_dev(netdev)->netdev_class->close(netdev);
     }
 }
-
 
 /* Returns the class type of 'netdev'.
  *
@@ -1412,7 +1445,6 @@ netdev_get_type(const struct netdev *netdev)
 {
     return netdev_get_dev(netdev)->netdev_class->type;
 }
-
 
 const char *
 netdev_get_type_from_name(const char *name)
@@ -1427,31 +1459,32 @@ netdev_get_dev(const struct netdev *netdev)
     return netdev->netdev_dev;
 }
 
-/* Restore the network device flags on 'netdev' to those that were active
- * before we changed them.  Returns 0 if successful, otherwise a positive
- * errno value.
- *
- * To avoid reentry, the caller must ensure that fatal signals are blocked. */
-static int
-restore_flags(struct netdev *netdev)
-{
-    if (netdev->changed_flags) {
-        enum netdev_flags restore = netdev->save_flags & netdev->changed_flags;
-        enum netdev_flags old_flags;
-        return netdev_get_dev(netdev)->netdev_class->update_flags(netdev,
-                                           netdev->changed_flags & ~restore,
-                                           restore, &old_flags);
-    }
-    return 0;
-}
-
-/* Close all netdevs on shutdown so they can do any needed cleanup such as
- * destroying devices, restoring flags, etc. */
+/* Restores all flags that have been saved with netdev_save_flags() and not yet
+ * restored with netdev_restore_flags(). */
 static void
-close_all_netdevs(void *aux OVS_UNUSED)
+restore_all_flags(void *aux OVS_UNUSED)
 {
-    struct netdev *netdev, *next;
-    LIST_FOR_EACH_SAFE(netdev, next, node, &netdev_list) {
-        netdev_close(netdev);
+    struct shash_node *node;
+
+    SHASH_FOR_EACH (node, &netdev_dev_shash) {
+        struct netdev_dev *dev = node->data;
+        const struct netdev_saved_flags *sf;
+        enum netdev_flags saved_values;
+        enum netdev_flags saved_flags;
+
+        saved_values = saved_flags = 0;
+        LIST_FOR_EACH (sf, node, &dev->saved_flags_list) {
+            saved_flags |= sf->saved_flags;
+            saved_values &= ~sf->saved_flags;
+            saved_values |= sf->saved_flags & sf->saved_values;
+        }
+        if (saved_flags) {
+            enum netdev_flags old_flags;
+
+            dev->netdev_class->update_flags(dev,
+                                            saved_flags & saved_values,
+                                            saved_flags & ~saved_values,
+                                            &old_flags);
+        }
     }
 }

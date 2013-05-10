@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -214,7 +214,7 @@ static int if_up(const char *netdev_name)
 
     retval = netdev_open(netdev_name, "system", &netdev);
     if (!retval) {
-        retval = netdev_turn_flags_on(netdev, NETDEV_UP, true);
+        retval = netdev_turn_flags_on(netdev, NETDEV_UP, NULL);
         netdev_close(netdev);
     }
     return retval;

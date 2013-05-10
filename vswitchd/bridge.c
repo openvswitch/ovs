@@ -1449,7 +1449,7 @@ iface_do_create(const struct bridge *br,
 
     if ((port_cfg->vlan_mode && !strcmp(port_cfg->vlan_mode, "splinter"))
         || iface_is_internal(iface_cfg, br->cfg)) {
-        netdev_turn_flags_on(netdev, NETDEV_UP, true);
+        netdev_turn_flags_on(netdev, NETDEV_UP, NULL);
     }
 
     *netdevp = netdev;
@@ -2892,7 +2892,7 @@ bridge_configure_local_iface_netdev(struct bridge *br,
 
     /* Bring up the local interface. */
     netdev = local_iface->netdev;
-    netdev_turn_flags_on(netdev, NETDEV_UP, true);
+    netdev_turn_flags_on(netdev, NETDEV_UP, NULL);
 
     /* Configure the IP address and netmask. */
     if (!c->local_netmask

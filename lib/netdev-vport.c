@@ -234,7 +234,7 @@ tunnel_get_status(const struct netdev *netdev, struct smap *smap)
 }
 
 static int
-netdev_vport_update_flags(struct netdev *netdev OVS_UNUSED,
+netdev_vport_update_flags(struct netdev_dev *netdev_dev OVS_UNUSED,
                         enum netdev_flags off, enum netdev_flags on OVS_UNUSED,
                         enum netdev_flags *old_flagsp)
 {

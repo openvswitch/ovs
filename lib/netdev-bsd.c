@@ -133,11 +133,11 @@ static int cache_notifier_refcount;
 
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
 
-static int netdev_bsd_do_ioctl(const struct netdev *, struct ifreq *,
-                                 unsigned long cmd, const char *cmd_name);
+static int netdev_bsd_do_ioctl(const char *, struct ifreq *, unsigned long cmd,
+                               const char *cmd_name);
 static void destroy_tap(int fd, const char *name);
-static int get_flags(const struct netdev *, int *flagsp);
-static int set_flags(struct netdev *, int flags);
+static int get_flags(const struct netdev_dev *, int *flagsp);
+static int set_flags(const char *, int flags);
 static int do_set_addr(struct netdev *netdev,
                        int ioctl_nr, const char *ioctl_name,
                        struct in_addr addr);
@@ -813,7 +813,8 @@ netdev_bsd_get_mtu(const struct netdev *netdev_, int *mtup)
         struct ifreq ifr;
         int error;
 
-        error = netdev_bsd_do_ioctl(netdev_, &ifr, SIOCGIFMTU, "SIOCGIFMTU");
+        error = netdev_bsd_do_ioctl(netdev_get_name(netdev_), &ifr, SIOCGIFMTU,
+                                    "SIOCGIFMTU");
         if (error) {
             return error;
         }
@@ -1089,7 +1090,7 @@ netdev_bsd_get_in4(const struct netdev *netdev_, struct in_addr *in4,
         int error;
 
         ifr.ifr_addr.sa_family = AF_INET;
-        error = netdev_bsd_do_ioctl(netdev_, &ifr,
+        error = netdev_bsd_do_ioctl(netdev_get_name(netdev_), &ifr,
                                       SIOCGIFADDR, "SIOCGIFADDR");
         if (error) {
             return error;
@@ -1098,7 +1099,7 @@ netdev_bsd_get_in4(const struct netdev *netdev_, struct in_addr *in4,
         sin = (struct sockaddr_in *) &ifr.ifr_addr;
         netdev_dev->in4 = sin->sin_addr;
         netdev_dev->cache_valid |= VALID_IN4;
-        error = netdev_bsd_do_ioctl(netdev_, &ifr,
+        error = netdev_bsd_do_ioctl(netdev_get_name(netdev_), &ifr,
                                       SIOCGIFNETMASK, "SIOCGIFNETMASK");
         if (error) {
             return error;
@@ -1221,19 +1222,21 @@ iff_to_nd_flags(int iff)
 }
 
 static int
-netdev_bsd_update_flags(struct netdev *netdev, enum netdev_flags off,
+netdev_bsd_update_flags(struct netdev_dev *dev_, enum netdev_flags off,
                           enum netdev_flags on, enum netdev_flags *old_flagsp)
 {
+    struct netdev_dev_bsd *netdev_dev;
     int old_flags, new_flags;
     int error;
 
-    error = get_flags(netdev, &old_flags);
+    netdev_dev = netdev_dev_bsd_cast(dev_);
+    error = get_flags(dev_, &old_flags);
     if (!error) {
         *old_flagsp = iff_to_nd_flags(old_flags);
         new_flags = (old_flags & ~nd_to_iff_flags(off)) | nd_to_iff_flags(on);
         if (new_flags != old_flags) {
-            error = set_flags(netdev, new_flags);
-            netdev_dev_bsd_changed(netdev_dev_bsd_cast(netdev_get_dev(netdev)));
+            error = set_flags(netdev_dev_get_name(dev_), new_flags);
+            netdev_dev_bsd_changed(netdev_dev);
         }
     }
     return error;
@@ -1381,12 +1384,12 @@ destroy_tap(int fd, const char *name)
 }
 
 static int
-get_flags(const struct netdev *netdev, int *flags)
+get_flags(const struct netdev_dev *dev, int *flags)
 {
     struct ifreq ifr;
     int error;
 
-    error = netdev_bsd_do_ioctl(netdev, &ifr, SIOCGIFFLAGS, "SIOCGIFFLAGS");
+    error = netdev_bsd_do_ioctl(dev->name, &ifr, SIOCGIFFLAGS, "SIOCGIFFLAGS");
 
     *flags = 0xFFFF0000 & (ifr.ifr_flagshigh << 16);
     *flags |= 0x0000FFFF & ifr.ifr_flags;
@@ -1395,14 +1398,14 @@ get_flags(const struct netdev *netdev, int *flags)
 }
 
 static int
-set_flags(struct netdev *netdev, int flags)
+set_flags(const char *name, int flags)
 {
     struct ifreq ifr;
 
     ifr.ifr_flags = 0x0000FFFF & flags;
     ifr.ifr_flagshigh = (0xFFFF0000 & flags) >> 16;
 
-    return netdev_bsd_do_ioctl(netdev, &ifr, SIOCSIFFLAGS, "SIOCSIFFLAGS");
+    return netdev_bsd_do_ioctl(name, &ifr, SIOCSIFFLAGS, "SIOCSIFFLAGS");
 }
 
 static int
@@ -1474,13 +1477,13 @@ set_etheraddr(const char *netdev_name, int hwaddr_family,
 }
 
 static int
-netdev_bsd_do_ioctl(const struct netdev *netdev, struct ifreq *ifr,
-                    unsigned long cmd, const char *cmd_name)
+netdev_bsd_do_ioctl(const char *name, struct ifreq *ifr, unsigned long cmd,
+                    const char *cmd_name)
 {
-    strncpy(ifr->ifr_name, netdev_get_name(netdev), sizeof ifr->ifr_name);
+    strncpy(ifr->ifr_name, name, sizeof ifr->ifr_name);
     if (ioctl(af_inet_sock, cmd, ifr) == -1) {
-        VLOG_DBG_RL(&rl, "%s: ioctl(%s) failed: %s",
-                    netdev_get_name(netdev), cmd_name, strerror(errno));
+        VLOG_DBG_RL(&rl, "%s: ioctl(%s) failed: %s", name, cmd_name,
+                    strerror(errno));
         return errno;
     }
     return 0;

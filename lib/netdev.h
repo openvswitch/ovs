@@ -33,17 +33,12 @@ extern "C" {
  * The PORTING file at the top of the source tree has more information in the
  * "Writing a netdev Provider" section. */
 
+struct netdev_saved_flags;
 struct ofpbuf;
 struct in_addr;
 struct in6_addr;
 struct smap;
 struct sset;
-
-enum netdev_flags {
-    NETDEV_UP = 0x0001,         /* Device enabled? */
-    NETDEV_PROMISC = 0x0002,    /* Promiscuous mode? */
-    NETDEV_LOOPBACK = 0x0004    /* This is a loopback device. */
-};
 
 /* Network device statistics.
  *
@@ -180,6 +175,23 @@ uint64_t netdev_features_to_bps(enum netdev_features features,
 bool netdev_features_is_full_duplex(enum netdev_features features);
 int netdev_set_advertisements(struct netdev *, enum netdev_features advertise);
 
+/* Flags. */
+enum netdev_flags {
+    NETDEV_UP = 0x0001,         /* Device enabled? */
+    NETDEV_PROMISC = 0x0002,    /* Promiscuous mode? */
+    NETDEV_LOOPBACK = 0x0004    /* This is a loopback device. */
+};
+
+int netdev_get_flags(const struct netdev *, enum netdev_flags *);
+int netdev_set_flags(struct netdev *, enum netdev_flags,
+                     struct netdev_saved_flags **);
+int netdev_turn_flags_on(struct netdev *, enum netdev_flags,
+                         struct netdev_saved_flags **);
+int netdev_turn_flags_off(struct netdev *, enum netdev_flags,
+                          struct netdev_saved_flags **);
+
+void netdev_restore_flags(struct netdev_saved_flags *);
+
 /* TCP/IP stack interface. */
 int netdev_get_in4(const struct netdev *, struct in_addr *address,
                    struct in_addr *netmask);
@@ -192,10 +204,6 @@ int netdev_get_next_hop(const struct netdev *, const struct in_addr *host,
 int netdev_get_status(const struct netdev *, struct smap *);
 int netdev_arp_lookup(const struct netdev *, ovs_be32 ip, uint8_t mac[6]);
 
-int netdev_get_flags(const struct netdev *, enum netdev_flags *);
-int netdev_set_flags(struct netdev *, enum netdev_flags, bool permanent);
-int netdev_turn_flags_on(struct netdev *, enum netdev_flags, bool permanent);
-int netdev_turn_flags_off(struct netdev *, enum netdev_flags, bool permanent);
 struct netdev *netdev_find_dev_by_in4(const struct in_addr *);
 
 /* Statistics. */

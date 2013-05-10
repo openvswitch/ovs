@@ -2398,9 +2398,9 @@ update_port_config(struct ofport *port,
     toggle = (config ^ port->pp.config) & mask;
     if (toggle & OFPUTIL_PC_PORT_DOWN) {
         if (config & OFPUTIL_PC_PORT_DOWN) {
-            netdev_turn_flags_off(port->netdev, NETDEV_UP, true);
+            netdev_turn_flags_off(port->netdev, NETDEV_UP, NULL);
         } else {
-            netdev_turn_flags_on(port->netdev, NETDEV_UP, true);
+            netdev_turn_flags_on(port->netdev, NETDEV_UP, NULL);
         }
         toggle &= ~OFPUTIL_PC_PORT_DOWN;
     }

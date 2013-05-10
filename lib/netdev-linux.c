@@ -422,7 +422,7 @@ static int netdev_linux_do_ioctl(const char *name, struct ifreq *, int cmd,
 static int netdev_linux_get_ipv4(const struct netdev *, struct in_addr *,
                                  int cmd, const char *cmd_name);
 static int get_flags(const struct netdev_dev *, unsigned int *flags);
-static int set_flags(struct netdev *, unsigned int flags);
+static int set_flags(const char *, unsigned int flags);
 static int do_get_ifindex(const char *netdev_name);
 static int get_ifindex(const struct netdev *, int *ifindexp);
 static int do_set_addr(struct netdev *netdev,
@@ -1004,8 +1004,8 @@ netdev_linux_set_etheraddr(struct netdev *netdev_,
 {
     struct netdev_dev_linux *netdev_dev =
                                 netdev_dev_linux_cast(netdev_get_dev(netdev_));
+    struct netdev_saved_flags *sf = NULL;
     int error;
-    bool up_again = false;
 
     if (netdev_dev->cache_valid & VALID_ETHERADDR) {
         if (netdev_dev->ether_addr_error) {
@@ -1022,8 +1022,7 @@ netdev_linux_set_etheraddr(struct netdev *netdev_,
         enum netdev_flags flags;
 
         if (!netdev_get_flags(netdev_, &flags) && (flags & NETDEV_UP)) {
-            netdev_turn_flags_off(netdev_, NETDEV_UP, false);
-            up_again = true;
+            netdev_turn_flags_off(netdev_, NETDEV_UP, &sf);
         }
     }
     error = set_etheraddr(netdev_get_name(netdev_), mac);
@@ -1035,9 +1034,7 @@ netdev_linux_set_etheraddr(struct netdev *netdev_,
         }
     }
 
-    if (up_again) {
-        netdev_turn_flags_on(netdev_, NETDEV_UP, false);
-    }
+    netdev_restore_flags(sf);
 
     return error;
 }
@@ -2450,19 +2447,19 @@ iff_to_nd_flags(int iff)
 }
 
 static int
-netdev_linux_update_flags(struct netdev *netdev, enum netdev_flags off,
+netdev_linux_update_flags(struct netdev_dev *dev_, enum netdev_flags off,
                           enum netdev_flags on, enum netdev_flags *old_flagsp)
 {
     struct netdev_dev_linux *netdev_dev;
     int old_flags, new_flags;
     int error = 0;
 
-    netdev_dev = netdev_dev_linux_cast(netdev_get_dev(netdev));
+    netdev_dev = netdev_dev_linux_cast(dev_);
     old_flags = netdev_dev->ifi_flags;
     *old_flagsp = iff_to_nd_flags(old_flags);
     new_flags = (old_flags & ~nd_to_iff_flags(off)) | nd_to_iff_flags(on);
     if (new_flags != old_flags) {
-        error = set_flags(netdev, new_flags);
+        error = set_flags(netdev_dev_get_name(dev_), new_flags);
         get_flags(&netdev_dev->netdev_dev, &netdev_dev->ifi_flags);
     }
     return error;
@@ -4481,13 +4478,12 @@ get_flags(const struct netdev_dev *dev, unsigned int *flags)
 }
 
 static int
-set_flags(struct netdev *netdev, unsigned int flags)
+set_flags(const char *name, unsigned int flags)
 {
     struct ifreq ifr;
 
     ifr.ifr_flags = flags;
-    return netdev_linux_do_ioctl(netdev_get_name(netdev), &ifr, SIOCSIFFLAGS,
-                                 "SIOCSIFFLAGS");
+    return netdev_linux_do_ioctl(name, &ifr, SIOCSIFFLAGS, "SIOCSIFFLAGS");
 }
 
 static int

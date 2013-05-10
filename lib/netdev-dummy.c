@@ -316,12 +316,11 @@ netdev_dummy_get_ifindex(const struct netdev *netdev)
 }
 
 static int
-netdev_dummy_update_flags(struct netdev *netdev,
+netdev_dummy_update_flags(struct netdev_dev *dev_,
                           enum netdev_flags off, enum netdev_flags on,
                           enum netdev_flags *old_flagsp)
 {
-    struct netdev_dev_dummy *dev =
-        netdev_dev_dummy_cast(netdev_get_dev(netdev));
+    struct netdev_dev_dummy *dev = netdev_dev_dummy_cast(dev_);
 
     return netdev_dev_dummy_update_flags(dev, off, on, old_flagsp);
 }
