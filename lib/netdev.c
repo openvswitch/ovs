@@ -348,49 +348,44 @@ netdev_parse_name(const char *netdev_name_, char **name, char **type)
     }
 }
 
-/* Attempts to set up 'netdev' for receiving packets with netdev_recv().
- * Returns 0 if successful, otherwise a positive errno value.  EOPNOTSUPP
- * indicates that the network device does not implement packet reception
- * through this interface. */
 int
-netdev_listen(struct netdev *netdev)
+netdev_rx_open(struct netdev *netdev, struct netdev_rx **rxp)
 {
-    int (*listen)(struct netdev *);
+    struct netdev_dev *dev = netdev_get_dev(netdev);
+    int error;
 
-    listen = netdev_get_dev(netdev)->netdev_class->listen;
-    return listen ? (listen)(netdev) : EOPNOTSUPP;
+    error = (dev->netdev_class->rx_open
+             ? dev->netdev_class->rx_open(netdev, rxp)
+             : EOPNOTSUPP);
+    if (!error) {
+        ovs_assert((*rxp)->netdev_dev == dev);
+        dev->ref_cnt++;
+    } else {
+        *rxp = NULL;
+    }
+    return error;
 }
 
-/* Attempts to receive a packet from 'netdev' into 'buffer', which the caller
- * must have initialized with sufficient room for the packet.  The space
- * required to receive any packet is ETH_HEADER_LEN bytes, plus VLAN_HEADER_LEN
- * bytes, plus the device's MTU (which may be retrieved via netdev_get_mtu()).
- * (Some devices do not allow for a VLAN header, in which case VLAN_HEADER_LEN
- * need not be included.)
- *
- * This function can only be expected to return a packet if ->listen() has
- * been called successfully.
- *
- * If a packet is successfully retrieved, returns 0.  In this case 'buffer' is
- * guaranteed to contain at least ETH_TOTAL_MIN bytes.  Otherwise, returns a
- * positive errno value.  Returns EAGAIN immediately if no packet is ready to
- * be returned.
- *
- * Some network devices may not implement support for this function.  In such
- * cases this function will always return EOPNOTSUPP. */
-int
-netdev_recv(struct netdev *netdev, struct ofpbuf *buffer)
+void
+netdev_rx_close(struct netdev_rx *rx)
 {
-    int (*recv)(struct netdev *, void *, size_t);
+    if (rx) {
+        struct netdev_dev *dev = rx->netdev_dev;
+
+        rx->rx_class->destroy(rx);
+        netdev_dev_unref(dev);
+    }
+}
+
+int
+netdev_rx_recv(struct netdev_rx *rx, struct ofpbuf *buffer)
+{
     int retval;
 
     ovs_assert(buffer->size == 0);
     ovs_assert(ofpbuf_tailroom(buffer) >= ETH_TOTAL_MIN);
 
-    recv = netdev_get_dev(netdev)->netdev_class->recv;
-    retval = (recv
-              ? (recv)(netdev, buffer->data, ofpbuf_tailroom(buffer))
-              : -EOPNOTSUPP);
+    retval = rx->rx_class->recv(rx, buffer->data, ofpbuf_tailroom(buffer));
     if (retval >= 0) {
         COVERAGE_INC(netdev_received);
         buffer->size += retval;
@@ -403,27 +398,16 @@ netdev_recv(struct netdev *netdev, struct ofpbuf *buffer)
     }
 }
 
-/* Registers with the poll loop to wake up from the next call to poll_block()
- * when a packet is ready to be received with netdev_recv() on 'netdev'. */
 void
-netdev_recv_wait(struct netdev *netdev)
+netdev_rx_wait(struct netdev_rx *rx)
 {
-    void (*recv_wait)(struct netdev *);
-
-    recv_wait = netdev_get_dev(netdev)->netdev_class->recv_wait;
-    if (recv_wait) {
-        recv_wait(netdev);
-    }
+    rx->rx_class->wait(rx);
 }
 
-/* Discards all packets waiting to be received from 'netdev'. */
 int
-netdev_drain(struct netdev *netdev)
+netdev_rx_drain(struct netdev_rx *rx)
 {
-    int (*drain)(struct netdev *);
-
-    drain = netdev_get_dev(netdev)->netdev_class->drain;
-    return drain ? drain(netdev) : 0;
+    return rx->rx_class->drain ? rx->rx_class->drain(rx) : 0;
 }
 
 /* Sends 'buffer' on 'netdev'.  Returns 0 if successful, otherwise a positive
@@ -1459,8 +1443,34 @@ netdev_get_dev(const struct netdev *netdev)
     return netdev->netdev_dev;
 }
 
-/* Restores all flags that have been saved with netdev_save_flags() and not yet
- * restored with netdev_restore_flags(). */
+void
+netdev_rx_init(struct netdev_rx *rx, struct netdev_dev *dev,
+               const struct netdev_rx_class *class)
+{
+    ovs_assert(dev->ref_cnt > 0);
+    rx->rx_class = class;
+    rx->netdev_dev = dev;
+}
+
+void
+netdev_rx_uninit(struct netdev_rx *rx OVS_UNUSED)
+{
+    /* Nothing to do. */
+}
+
+struct netdev_dev *
+netdev_rx_get_dev(const struct netdev_rx *rx)
+{
+    ovs_assert(rx->netdev_dev->ref_cnt > 0);
+    return rx->netdev_dev;
+}
+
+const char *
+netdev_rx_get_name(const struct netdev_rx *rx)
+{
+    return netdev_dev_get_name(netdev_rx_get_dev(rx));
+}
+
 static void
 restore_all_flags(void *aux OVS_UNUSED)
 {

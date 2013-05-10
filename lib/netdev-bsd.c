@@ -16,6 +16,7 @@
 
 #include <config.h>
 
+#include "netdev-provider.h"
 #include <stdlib.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -41,7 +42,6 @@
 #include "coverage.h"
 #include "dynamic-string.h"
 #include "fatal-signal.h"
-#include "netdev-provider.h"
 #include "ofpbuf.h"
 #include "openflow/openflow.h"
 #include "packets.h"
@@ -57,7 +57,7 @@ VLOG_DEFINE_THIS_MODULE(netdev_bsd);
 
 /*
  * This file implements objects to access interfaces.
- * Externally, interfaces are represented by two structures:
+ * Externally, interfaces are represented by three structures:
  *   + struct netdev_dev, representing a network device,
  *     containing e.g. name and a refcount;
  *     We can have private variables by embedding the
@@ -66,25 +66,35 @@ VLOG_DEFINE_THIS_MODULE(netdev_bsd);
  *
  *   + struct netdev, representing an instance of an open netdev_dev.
  *     The structure contains a pointer to the 'struct netdev'
- *     representing the device. Again, private information
- *     such as file descriptor etc. are stored in our
- *     own struct netdev_bsd which includes a struct netdev.
+ *     representing the device.
  *
- * Both 'struct netdev' and 'struct netdev_dev' are referenced
- * in containers which hold pointers to the data structures.
- * We can reach our own struct netdev_XXX_bsd by putting a
- * struct netdev_XXX within our own struct, and using CONTAINER_OF
- * to access the parent structure.
+ *   + struct netdev_rx, which represents a netdev open to capture received
+ *     packets.  Again, private information such as file descriptor etc. are
+ *     stored in our own struct netdev_rx_bsd which includes a struct
+ *     netdev_rx.
+ *
+ * 'struct netdev', 'struct netdev_dev', and 'struct netdev_rx' are referenced
+ * in containers which hold pointers to the data structures.  We can reach our
+ * own struct netdev_XXX_bsd by putting a struct netdev_XXX within our own
+ * struct, and using CONTAINER_OF to access the parent structure.
  */
 struct netdev_bsd {
     struct netdev netdev;
-
-    int netdev_fd;   /* Selectable file descriptor for the network device.
-                        This descriptor will be used for polling operations */
-
-    pcap_t *pcap_handle;  /* Packet capture descriptor for a system network
-                             device */
 };
+
+struct netdev_rx_bsd {
+    struct netdev_rx up;
+
+    /* Packet capture descriptor for a system network device.
+     * For a tap device this is NULL. */
+    pcap_t *pcap_handle;
+
+    /* Selectable file descriptor for the network device.
+     * This descriptor will be used for polling operations. */
+    int fd;
+};
+
+static const struct netdev_rx_class netdev_rx_bsd_class;
 
 struct netdev_dev_bsd {
     struct netdev_dev netdev_dev;
@@ -98,8 +108,11 @@ struct netdev_dev_bsd {
     int mtu;
     int carrier;
 
-    bool tap_opened;
-    int tap_fd;         /* TAP character device, if any */
+    int tap_fd;         /* TAP character device, if any, otherwise -1. */
+
+    /* Used for sending packets on non-tap devices. */
+    pcap_t *pcap;
+    int fd;
 };
 
 
@@ -167,6 +180,13 @@ netdev_dev_bsd_cast(const struct netdev_dev *netdev_dev)
 {
     ovs_assert(is_netdev_bsd_class(netdev_dev_get_class(netdev_dev)));
     return CONTAINER_OF(netdev_dev, struct netdev_dev_bsd, netdev_dev);
+}
+
+static struct netdev_rx_bsd *
+netdev_rx_bsd_cast(const struct netdev_rx *rx)
+{
+    netdev_rx_assert_class(rx, &netdev_rx_bsd_class);
+    return CONTAINER_OF(rx, struct netdev_rx_bsd, up);
 }
 
 /* Initialize the AF_INET socket used for ioctl operations */
@@ -299,6 +319,7 @@ netdev_bsd_create_system(const struct netdev_class *class, const char *name,
     netdev_dev = xzalloc(sizeof *netdev_dev);
     netdev_dev->change_seq = 1;
     netdev_dev_init(&netdev_dev->netdev_dev, name, class);
+    netdev_dev->tap_fd = -1;
     *netdev_devp = &netdev_dev->netdev_dev;
 
     return 0;
@@ -388,9 +409,11 @@ netdev_bsd_destroy(struct netdev_dev *netdev_dev_)
 
     cache_notifier_unref();
 
-    if (netdev_dev->tap_fd >= 0 &&
-            !strcmp(netdev_dev_get_type(netdev_dev_), "tap")) {
+    if (netdev_dev->tap_fd >= 0) {
         destroy_tap(netdev_dev->tap_fd, netdev_dev_get_name(netdev_dev_));
+    }
+    if (netdev_dev->pcap) {
+        pcap_close(netdev_dev->pcap);
     }
     free(netdev_dev);
 }
@@ -405,7 +428,6 @@ netdev_bsd_open_system(struct netdev_dev *netdev_dev_, struct netdev **netdevp)
 
     /* Allocate network device. */
     netdev = xcalloc(1, sizeof *netdev);
-    netdev->netdev_fd = -1;
     netdev_init(&netdev->netdev, netdev_dev_);
 
     /* Verify that the netdev really exists by attempting to read its flags */
@@ -430,56 +452,35 @@ netdev_bsd_close(struct netdev *netdev_)
 {
     struct netdev_bsd *netdev = netdev_bsd_cast(netdev_);
 
-    if (netdev->netdev_fd >= 0 && strcmp(netdev_get_type(netdev_), "tap")) {
-        pcap_close(netdev->pcap_handle);
-    }
-
     free(netdev);
 }
 
 static int
-netdev_bsd_listen(struct netdev *netdev_)
+netdev_bsd_open_pcap(const char *name, pcap_t **pcapp, int *fdp)
 {
-    struct netdev_bsd *netdev = netdev_bsd_cast(netdev_);
-    struct netdev_dev_bsd *netdev_dev =
-                              netdev_dev_bsd_cast(netdev_get_dev(netdev_));
-
     char errbuf[PCAP_ERRBUF_SIZE];
-    int error;
-    int fd = -1;
+    pcap_t *pcap = NULL;
     int one = 1;
+    int error;
+    int fd;
 
-    if (netdev->netdev_fd >= 0) {
-        return 0;
-    }
-
-    if (!strcmp(netdev_get_type(netdev_), "tap") &&
-            !netdev_dev->tap_opened) {
-        netdev->netdev_fd = netdev_dev->tap_fd;
-        netdev_dev->tap_opened = true;
-        return 0;
-    }
-
-    /* open the pcap device. The device is opened in non-promiscuous mode
+    /* Open the pcap device.  The device is opened in non-promiscuous mode
      * because the interface flags are manually set by the caller. */
     errbuf[0] = '\0';
-    netdev->pcap_handle = pcap_open_live(netdev_get_name(netdev_), PCAP_SNAPLEN,
-				     0, 1000, errbuf);
-    if (netdev->pcap_handle == NULL) {
-        VLOG_ERR("%s: pcap_open_live failed: %s",
-		netdev_get_name(netdev_), errbuf);
+    pcap = pcap_open_live(name, PCAP_SNAPLEN, 0, 1000, errbuf);
+    if (!pcap) {
+        VLOG_ERR_RL(&rl, "%s: pcap_open_live failed: %s", name, errbuf);
         error = EIO;
         goto error;
-    } else if (errbuf[0] !=  '\0') {
-        VLOG_WARN("%s: pcap_open_live: %s",
-		netdev_get_name(netdev_), errbuf);
+    }
+    if (errbuf[0] != '\0') {
+        VLOG_WARN_RL(&rl, "%s: pcap_open_live: %s", name, errbuf);
     }
 
-    netdev_dev_bsd_changed(netdev_dev_bsd_cast(netdev_get_dev(netdev_)));
-
-    /* initialize netdev->netdev_fd */
-    fd = pcap_get_selectable_fd(netdev->pcap_handle);
+    /* Get the underlying fd. */
+    fd = pcap_get_selectable_fd(pcap);
     if (fd == -1) {
+        VLOG_WARN_RL(&rl, "%s: no selectable file descriptor", name);
         error = errno;
         goto error;
     }
@@ -487,39 +488,83 @@ netdev_bsd_listen(struct netdev *netdev_)
     /* Set non-blocking mode. Also the BIOCIMMEDIATE ioctl must be called
      * on the file descriptor returned by pcap_get_selectable_fd to achieve
      * a real non-blocking behaviour.*/
-    error = pcap_setnonblock(netdev->pcap_handle, 1, errbuf);
+    error = pcap_setnonblock(pcap, 1, errbuf);
     if (error == -1) {
         error = errno;
         goto error;
     }
 
-    /* This call assure that reads return immediately upon packet reception.
-     * Otherwise, a read will block until either the kernel buffer becomes
-     * full or a timeout occurs. */
-    if(ioctl(fd, BIOCIMMEDIATE, &one) < 0 ) {
-        VLOG_ERR("ioctl(BIOCIMMEDIATE) on %s device failed: %s",
-		netdev_get_name(netdev_), strerror(errno));
+    /* This call assure that reads return immediately upon packet
+     * reception.  Otherwise, a read will block until either the kernel
+     * buffer becomes full or a timeout occurs. */
+    if (ioctl(fd, BIOCIMMEDIATE, &one) < 0 ) {
+        VLOG_ERR_RL(&rl, "ioctl(BIOCIMMEDIATE) on %s device failed: %s",
+                    name, strerror(errno));
         error = errno;
         goto error;
     }
 
-    /* Capture only incoming packets */
-    error = pcap_setdirection(netdev->pcap_handle, PCAP_D_IN);
+    /* Capture only incoming packets. */
+    error = pcap_setdirection(pcap, PCAP_D_IN);
     if (error == -1) {
         error = errno;
         goto error;
     }
 
-    netdev->netdev_fd = fd;
+    *pcapp = pcap;
+    *fdp = fd;
     return 0;
 
 error:
-    if (fd >= 0) {
-        close(netdev->netdev_fd);
+    if (pcap) {
+        pcap_close(pcap);
     }
+    *pcapp = NULL;
+    *fdp = -1;
     return error;
 }
 
+static int
+netdev_bsd_rx_open(struct netdev *netdev_, struct netdev_rx **rxp)
+{
+    struct netdev_dev_bsd *netdev_dev =
+                              netdev_dev_bsd_cast(netdev_get_dev(netdev_));
+
+    struct netdev_rx_bsd *rx;
+    pcap_t *pcap;
+    int fd;
+
+    if (!strcmp(netdev_get_type(netdev_), "tap")) {
+        pcap = NULL;
+        fd = netdev_dev->tap_fd;
+    } else {
+        int error = netdev_bsd_open_pcap(netdev_get_name(netdev_), &pcap, &fd);
+        if (error) {
+            return error;
+        }
+
+        netdev_dev_bsd_changed(netdev_dev);
+    }
+
+    rx = xmalloc(sizeof *rx);
+    netdev_rx_init(&rx->up, netdev_get_dev(netdev_), &netdev_rx_bsd_class);
+    rx->pcap_handle = pcap;
+    rx->fd = fd;
+
+    *rxp = &rx->up;
+    return 0;
+}
+
+static void
+netdev_rx_bsd_destroy(struct netdev_rx *rx_)
+{
+    struct netdev_rx_bsd *rx = netdev_rx_bsd_cast(rx_);
+
+    if (rx->pcap_handle) {
+        pcap_close(rx->pcap_handle);
+    }
+    free(rx);
+}
 
 /* The recv callback of the netdev class returns the number of bytes of the
  * received packet.
@@ -566,24 +611,20 @@ proc_pkt(u_char *args_, const struct pcap_pkthdr *hdr, const u_char *packet)
  * This function attempts to receive a packet from the specified network
  * device. It is assumed that the network device is a system device or a tap
  * device opened as a system one. In this case the read operation is performed
- * on the 'netdev' pcap descriptor.
+ * from rx->pcap.
  */
 static int
-netdev_bsd_recv_system(struct netdev_bsd *netdev, void *data, size_t size)
+netdev_rx_bsd_recv_pcap(struct netdev_rx_bsd *rx, void *data, size_t size)
 {
     struct pcap_arg arg;
     int ret;
-
-    if (netdev->netdev_fd < 0) {
-        return -EAGAIN;
-    }
 
     /* prepare the pcap argument to store the packet */
     arg.size = size;
     arg.data = data;
 
     for (;;) {
-        ret = pcap_dispatch(netdev->pcap_handle, 1, proc_pkt, (u_char *)&arg);
+        ret = pcap_dispatch(rx->pcap_handle, 1, proc_pkt, (u_char *) &arg);
 
         if (ret > 0) {
             return arg.retval;	/* arg.retval < 0 is handled in the caller */
@@ -600,25 +641,20 @@ netdev_bsd_recv_system(struct netdev_bsd *netdev, void *data, size_t size)
 
 /*
  * This function attempts to receive a packet from the specified network
- * device. It is assumed that the network device is a tap device and the
- * 'netdev_fd' member of the 'netdev' structure is initialized with the tap
- * file descriptor.
+ * device. It is assumed that the network device is a tap device and
+ * 'rx->fd' is initialized with the tap file descriptor.
  */
 static int
-netdev_bsd_recv_tap(struct netdev_bsd *netdev, void *data, size_t size)
+netdev_rx_bsd_recv_tap(struct netdev_rx_bsd *rx, void *data, size_t size)
 {
-    if (netdev->netdev_fd < 0) {
-        return -EAGAIN;
-    }
-
     for (;;) {
-        ssize_t retval = read(netdev->netdev_fd, data, size);
+        ssize_t retval = read(rx->fd, data, size);
         if (retval >= 0) {
             return retval;
         } else if (errno != EINTR) {
             if (errno != EAGAIN) {
                 VLOG_WARN_RL(&rl, "error receiving Ethernet packet on %s: %s",
-                             strerror(errno), netdev->netdev.netdev_dev->name);
+                             strerror(errno), netdev_rx_get_name(&rx->up));
             }
             return -errno;
         }
@@ -626,58 +662,39 @@ netdev_bsd_recv_tap(struct netdev_bsd *netdev, void *data, size_t size)
 }
 
 
-/*
- * According with the nature of the device a different function must be called.
- * If the device is the bridge local port the 'netdev_bsd_recv_tap' function
- * must be called, otherwise the 'netdev_bsd_recv_system' function is called.
- *
- * type!="tap"                                        --->  system device.
- * type=="tap" && netdev_fd == tap_fd                 --->  internal tap device
- * type=="tap" && netdev_fd != tap_fd                 --->  internal tap device
- *                                                          opened as a system
- *                                                          device.
- */
 static int
-netdev_bsd_recv(struct netdev *netdev_, void* data, size_t size)
+netdev_rx_bsd_recv(struct netdev_rx *rx_, void *data, size_t size)
 {
-    struct netdev_bsd *netdev = netdev_bsd_cast(netdev_);
-    struct netdev_dev_bsd * netdev_dev =
-        netdev_dev_bsd_cast(netdev_get_dev(netdev_));
+    struct netdev_rx_bsd *rx = netdev_rx_bsd_cast(rx_);
 
-    if (!strcmp(netdev_get_type(netdev_), "tap") &&
-            netdev->netdev_fd == netdev_dev->tap_fd) {
-        return netdev_bsd_recv_tap(netdev, data, size);
-    } else {
-        return netdev_bsd_recv_system(netdev, data, size);
-    }
+    return (rx->pcap_handle
+            ? netdev_rx_bsd_recv_pcap(rx, data, size)
+            : netdev_rx_bsd_recv_tap(rx, data, size));
 }
-
 
 /*
  * Registers with the poll loop to wake up from the next call to poll_block()
- * when a packet is ready to be received with netdev_recv() on 'netdev'.
+ * when a packet is ready to be received with netdev_rx_recv() on 'rx'.
  */
 static void
-netdev_bsd_recv_wait(struct netdev *netdev_)
+netdev_rx_bsd_wait(struct netdev_rx *rx_)
 {
-    struct netdev_bsd *netdev = netdev_bsd_cast(netdev_);
+    struct netdev_rx_bsd *rx = netdev_rx_bsd_cast(rx_);
 
-    if (netdev->netdev_fd >= 0) {
-        poll_fd_wait(netdev->netdev_fd, POLLIN);
-    }
+    poll_fd_wait(rx->fd, POLLIN);
 }
 
-/* Discards all packets waiting to be received from 'netdev'. */
+/* Discards all packets waiting to be received from 'rx'. */
 static int
-netdev_bsd_drain(struct netdev *netdev_)
+netdev_rx_bsd_drain(struct netdev_rx *rx_)
 {
     struct ifreq ifr;
-    struct netdev_bsd *netdev = netdev_bsd_cast(netdev_);
+    struct netdev_rx_bsd *rx = netdev_rx_bsd_cast(rx_);
 
-    strcpy(ifr.ifr_name, netdev_get_name(netdev_));
-    if (ioctl(netdev->netdev_fd, BIOCFLUSH, &ifr) == -1) {
+    strcpy(ifr.ifr_name, netdev_rx_get_name(rx_));
+    if (ioctl(rx->fd, BIOCFLUSH, &ifr) == -1) {
         VLOG_DBG_RL(&rl, "%s: ioctl(BIOCFLUSH) failed: %s",
-                    netdev_get_name(netdev_), strerror(errno));
+                    netdev_rx_get_name(rx_), strerror(errno));
         return errno;
     }
     return 0;
@@ -690,34 +707,34 @@ netdev_bsd_drain(struct netdev *netdev_)
 static int
 netdev_bsd_send(struct netdev *netdev_, const void *data, size_t size)
 {
-    struct netdev_bsd *netdev = netdev_bsd_cast(netdev_);
-    struct netdev_dev_bsd * netdev_dev =
-        netdev_dev_bsd_cast(netdev_get_dev(netdev_));
+    struct netdev_dev_bsd *dev = netdev_dev_bsd_cast(netdev_get_dev(netdev_));
+    const char *name = netdev_get_name(netdev_);
 
-    if (netdev->netdev_fd < 0) {
-        return EPIPE;
+    if (dev->tap_fd < 0 && !dev->pcap) {
+        int error = netdev_bsd_open_pcap(name, &dev->pcap, &dev->fd);
+        if (error) {
+            return error;
+        }
     }
 
     for (;;) {
         ssize_t retval;
-        if (!strcmp(netdev_get_type(netdev_), "tap") &&
-                netdev_dev->tap_fd == netdev->netdev_fd) {
-            retval = write(netdev->netdev_fd, data, size);
+        if (dev->tap_fd >= 0) {
+            retval = write(dev->tap_fd, data, size);
         } else {
-            retval = pcap_inject(netdev->pcap_handle, data, size);
+            retval = pcap_inject(dev->pcap, data, size);
         }
         if (retval < 0) {
             if (errno == EINTR) {
                 continue;
             } else if (errno != EAGAIN) {
                 VLOG_WARN_RL(&rl, "error sending Ethernet packet on %s: %s",
-                             netdev_get_name(netdev_), strerror(errno));
+                             name, strerror(errno));
             }
             return errno;
         } else if (retval != size) {
             VLOG_WARN_RL(&rl, "sent partial Ethernet packet (%zd bytes of "
-                         "%zu) on %s", retval, size,
-                         netdev_get_name(netdev_));
+                         "%zu) on %s", retval, size, name);
            return EMSGSIZE;
         } else {
             return 0;
@@ -733,16 +750,15 @@ netdev_bsd_send(struct netdev *netdev_, const void *data, size_t size)
 static void
 netdev_bsd_send_wait(struct netdev *netdev_)
 {
-    struct netdev_bsd *netdev = netdev_bsd_cast(netdev_);
+    struct netdev_dev_bsd *dev = netdev_dev_bsd_cast(netdev_get_dev(netdev_));
 
-    if (netdev->netdev_fd < 0) { /* Nothing to do. */
-        return;
-    }
-
-    if (strcmp(netdev_get_type(netdev_), "tap")) {
-        poll_fd_wait(netdev->netdev_fd, POLLOUT);
-    } else {
+    if (dev->tap_fd >= 0) {
         /* TAP device always accepts packets. */
+        poll_immediate_wake();
+    } else if (dev->pcap) {
+        poll_fd_wait(dev->fd, POLLOUT);
+    } else {
+        /* We haven't even tried to send a packet yet. */
         poll_immediate_wake();
     }
 }
@@ -1263,11 +1279,7 @@ const struct netdev_class netdev_bsd_class = {
     netdev_bsd_open_system,
     netdev_bsd_close,
 
-    netdev_bsd_listen,
-
-    netdev_bsd_recv,
-    netdev_bsd_recv_wait,
-    netdev_bsd_drain,
+    netdev_bsd_rx_open,
 
     netdev_bsd_send,
     netdev_bsd_send_wait,
@@ -1324,11 +1336,7 @@ const struct netdev_class netdev_tap_class = {
     netdev_bsd_open_system,
     netdev_bsd_close,
 
-    netdev_bsd_listen,
-
-    netdev_bsd_recv,
-    netdev_bsd_recv_wait,
-    netdev_bsd_drain,
+    netdev_bsd_rx_open,
 
     netdev_bsd_send,
     netdev_bsd_send_wait,
@@ -1369,6 +1377,13 @@ const struct netdev_class netdev_tap_class = {
     netdev_bsd_update_flags,
 
     netdev_bsd_change_seq
+};
+
+static const struct netdev_rx_class netdev_rx_bsd_class = {
+    netdev_rx_bsd_destroy,
+    netdev_rx_bsd_recv,
+    netdev_rx_bsd_wait,
+    netdev_rx_bsd_drain,
 };
 
 

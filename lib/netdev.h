@@ -33,6 +33,9 @@ extern "C" {
  * The PORTING file at the top of the source tree has more information in the
  * "Writing a netdev Provider" section. */
 
+struct netdev;
+struct netdev_class;
+struct netdev_rx;
 struct netdev_saved_flags;
 struct ofpbuf;
 struct in_addr;
@@ -99,9 +102,6 @@ struct netdev_tunnel_config {
     bool dont_fragment;
 };
 
-struct netdev;
-struct netdev_class;
-
 void netdev_run(void);
 void netdev_wait(void);
 
@@ -127,12 +127,17 @@ int netdev_get_mtu(const struct netdev *, int *mtup);
 int netdev_set_mtu(const struct netdev *, int mtu);
 int netdev_get_ifindex(const struct netdev *);
 
-/* Packet send and receive. */
-int netdev_listen(struct netdev *);
-int netdev_recv(struct netdev *, struct ofpbuf *);
-void netdev_recv_wait(struct netdev *);
-int netdev_drain(struct netdev *);
+/* Packet reception. */
+int netdev_rx_open(struct netdev *, struct netdev_rx **);
+void netdev_rx_close(struct netdev_rx *);
 
+const char *netdev_rx_get_name(const struct netdev_rx *);
+
+int netdev_rx_recv(struct netdev_rx *, struct ofpbuf *);
+void netdev_rx_wait(struct netdev_rx *);
+int netdev_rx_drain(struct netdev_rx *);
+
+/* Packet transmission. */
 int netdev_send(struct netdev *, const struct ofpbuf *);
 void netdev_send_wait(struct netdev *);
 

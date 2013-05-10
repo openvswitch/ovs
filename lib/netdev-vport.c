@@ -644,10 +644,7 @@ get_stats(const struct netdev *netdev, struct netdev_stats *stats)
     netdev_vport_open,                                      \
     netdev_vport_close,                                     \
                                                             \
-    NULL,                       /* listen */                \
-    NULL,                       /* recv */                  \
-    NULL,                       /* recv_wait */             \
-    NULL,                       /* drain */                 \
+    NULL,                       /* rx_open */               \
                                                             \
     NULL,                       /* send */                  \
     NULL,                       /* send_wait */             \

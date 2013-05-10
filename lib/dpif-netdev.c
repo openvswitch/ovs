@@ -107,6 +107,7 @@ struct dp_netdev_port {
     struct list node;           /* Element in dp_netdev's 'port_list'. */
     struct netdev *netdev;
     struct netdev_saved_flags *sf;
+    struct netdev_rx *rx;
     char *type;                 /* Port type as requested by user. */
 };
 
@@ -378,6 +379,7 @@ do_add_port(struct dp_netdev *dp, const char *devname, const char *type,
     struct netdev_saved_flags *sf;
     struct dp_netdev_port *port;
     struct netdev *netdev;
+    struct netdev_rx *rx;
     const char *open_type;
     int mtu;
     int error;
@@ -393,7 +395,7 @@ do_add_port(struct dp_netdev *dp, const char *devname, const char *type,
     /* XXX reject loopback devices */
     /* XXX reject non-Ethernet devices */
 
-    error = netdev_listen(netdev);
+    error = netdev_rx_open(netdev, &rx);
     if (error
         && !(error == EOPNOTSUPP && dpif_netdev_class_is_dummy(dp->class))) {
         VLOG_ERR("%s: cannot receive packets on this network device (%s)",
@@ -404,6 +406,7 @@ do_add_port(struct dp_netdev *dp, const char *devname, const char *type,
 
     error = netdev_turn_flags_on(netdev, NETDEV_PROMISC, &sf);
     if (error) {
+        netdev_rx_close(rx);
         netdev_close(netdev);
         return error;
     }
@@ -412,6 +415,7 @@ do_add_port(struct dp_netdev *dp, const char *devname, const char *type,
     port->port_no = port_no;
     port->netdev = netdev;
     port->sf = sf;
+    port->rx = rx;
     port->type = xstrdup(type);
 
     error = netdev_get_mtu(netdev, &mtu);
@@ -509,6 +513,7 @@ do_del_port(struct dp_netdev *dp, uint32_t port_no)
 
     netdev_close(port->netdev);
     netdev_restore_flags(port->sf);
+    netdev_rx_close(port->rx);
     free(port->type);
     free(port);
 
@@ -1063,7 +1068,7 @@ dpif_netdev_run(struct dpif *dpif)
         ofpbuf_clear(&packet);
         ofpbuf_reserve(&packet, DP_NETDEV_HEADROOM);
 
-        error = netdev_recv(port->netdev, &packet);
+        error = port->rx ? netdev_rx_recv(port->rx, &packet) : EOPNOTSUPP;
         if (!error) {
             dp_netdev_port_input(dp, port, &packet);
         } else if (error != EAGAIN && error != EOPNOTSUPP) {
@@ -1083,7 +1088,9 @@ dpif_netdev_wait(struct dpif *dpif)
     struct dp_netdev_port *port;
 
     LIST_FOR_EACH (port, node, &dp->port_list) {
-        netdev_recv_wait(port->netdev);
+        if (port->rx) {
+            netdev_rx_wait(port->rx);
+        }
     }
 }
 

@@ -148,58 +148,19 @@ struct netdev_class {
 
     /* Closes 'netdev'. */
     void (*close)(struct netdev *netdev);
-
-/* ## ----------------- ## */
-/* ## Receiving Packets ## */
-/* ## ----------------- ## */
 
-/* The network provider interface is mostly used for inspecting and configuring
- * device "metadata", not for sending and receiving packets directly.  It may
- * be impractical to implement these functions on some operating systems and
- * hardware.  These functions may all be NULL in such cases.
- *
- * (However, the "dpif-netdev" implementation, which is the easiest way to
- * integrate Open vSwitch with a new operating system or hardware, does require
- * the ability to receive packets.) */
-
-    /* Attempts to set up 'netdev' for receiving packets with ->recv().
-     * Returns 0 if successful, otherwise a positive errno value.  Return
+    /* Attempts to open a netdev_rx for receiving packets from 'netdev'.
+     * Returns 0 if successful, otherwise a positive errno value.  Returns
      * EOPNOTSUPP to indicate that the network device does not implement packet
      * reception through this interface.  This function may be set to null if
      * it would always return EOPNOTSUPP anyhow.  (This will prevent the
      * network device from being usefully used by the netdev-based "userspace
-     * datapath".)*/
-    int (*listen)(struct netdev *netdev);
+     * datapath".)
+     *
+     * On success, the implementation must set '*rxp' to a 'netdev_rx' for
+     * 'netdev' that it has already initialized (with netdev_rx_init()). */
+    int (*rx_open)(struct netdev *netdev, struct netdev_rx **rxp);
 
-    /* Attempts to receive a packet from 'netdev' into the 'size' bytes in
-     * 'buffer'.  If successful, returns the number of bytes in the received
-     * packet, otherwise a negative errno value.  Returns -EAGAIN immediately
-     * if no packet is ready to be received.
-     *
-     * Returns -EMSGSIZE, and discards the packet, if the received packet is
-     * longer than 'size' bytes.
-     *
-     * This function can only be expected to return a packet if ->listen() has
-     * been called successfully.
-     *
-     * May be null if not needed, such as for a network device that does not
-     * implement packet reception through the 'recv' member function. */
-    int (*recv)(struct netdev *netdev, void *buffer, size_t size);
-
-    /* Registers with the poll loop to wake up from the next call to
-     * poll_block() when a packet is ready to be received with netdev_recv() on
-     * 'netdev'.
-     *
-     * May be null if not needed, such as for a network device that does not
-     * implement packet reception through the 'recv' member function. */
-    void (*recv_wait)(struct netdev *netdev);
-
-    /* Discards all packets waiting to be received from 'netdev'.
-     *
-     * May be null if not needed, such as for a network device that does not
-     * implement packet reception through the 'recv' member function. */
-    int (*drain)(struct netdev *netdev);
-
     /* Sends the 'size'-byte packet in 'buffer' on 'netdev'.  Returns 0 if
      * successful, otherwise a positive errno value.  Returns EAGAIN without
      * blocking if the packet cannot be queued immediately.  Returns EMSGSIZE
@@ -591,6 +552,48 @@ struct netdev_class {
      * change, although implementations should try to avoid this. */
     unsigned int (*change_seq)(const struct netdev *netdev);
 };
+
+/* A data structure for capturing packets received by a network device.
+ *
+ * This structure should be treated as opaque by network device
+ * implementations. */
+struct netdev_rx {
+    const struct netdev_rx_class *rx_class;
+    struct netdev_dev *netdev_dev;
+};
+
+void netdev_rx_init(struct netdev_rx *, struct netdev_dev *,
+                    const struct netdev_rx_class *);
+void netdev_rx_uninit(struct netdev_rx *);
+struct netdev_dev *netdev_rx_get_dev(const struct netdev_rx *);
+
+struct netdev_rx_class {
+    /* Destroys 'rx'. */
+    void (*destroy)(struct netdev_rx *rx);
+
+    /* Attempts to receive a packet from 'rx' into the 'size' bytes in
+     * 'buffer'.  If successful, returns the number of bytes in the received
+     * packet, otherwise a negative errno value.  Returns -EAGAIN immediately
+     * if no packet is ready to be received.
+     *
+     * Must return -EMSGSIZE, and discard the packet, if the received packet
+     * is longer than 'size' bytes. */
+    int (*recv)(struct netdev_rx *rx, void *buffer, size_t size);
+
+    /* Registers with the poll loop to wake up from the next call to
+     * poll_block() when a packet is ready to be received with netdev_rx_recv()
+     * on 'rx'. */
+    void (*wait)(struct netdev_rx *rx);
+
+    /* Discards all packets waiting to be received from 'rx'. */
+    int (*drain)(struct netdev_rx *rx);
+};
+
+static inline void netdev_rx_assert_class(const struct netdev_rx *rx,
+                                          const struct netdev_rx_class *class_)
+{
+    ovs_assert(rx->rx_class == class_);
+}
 
 int netdev_register_provider(const struct netdev_class *);
 int netdev_unregister_provider(const char *type);
