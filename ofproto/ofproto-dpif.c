@@ -5463,11 +5463,11 @@ rule_dpif_lookup__(struct ofproto_dpif *ofproto, const struct flow *flow,
         struct flow ofpc_normal_flow = *flow;
         ofpc_normal_flow.tp_src = htons(0);
         ofpc_normal_flow.tp_dst = htons(0);
-        cls_rule = classifier_lookup(cls, &ofpc_normal_flow);
+        cls_rule = classifier_lookup(cls, &ofpc_normal_flow, NULL);
     } else if (frag && ofproto->up.frag_handling == OFPC_FRAG_DROP) {
         cls_rule = &ofproto->drop_frags_rule->up.cr;
     } else {
-        cls_rule = classifier_lookup(cls, flow);
+        cls_rule = classifier_lookup(cls, flow, NULL);
     }
     return rule_dpif_cast(rule_from_cls_rule(cls_rule));
 }
