@@ -620,6 +620,33 @@ flow_wildcards_combine(struct flow_wildcards *dst,
     }
 }
 
+/* Perform a bitwise OR of miniflow 'src' flow data with the equivalent
+ * fields in 'dst', storing the result in 'dst'. */
+static void
+flow_union_with_miniflow(struct flow *dst, const struct miniflow *src)
+{
+    uint32_t *dst_u32 = (uint32_t *) dst;
+    int ofs;
+    int i;
+
+    ofs = 0;
+    for (i = 0; i < MINI_N_MAPS; i++) {
+        uint32_t map;
+
+        for (map = src->map[i]; map; map = zero_rightmost_1bit(map)) {
+            dst_u32[raw_ctz(map) + i * 32] |= src->values[ofs++];
+        }
+    }
+}
+
+/* Fold minimask 'mask''s wildcard mask into 'wc's wildcard mask. */
+void
+flow_wildcards_fold_minimask(struct flow_wildcards *wc,
+                             const struct minimask *mask)
+{
+    flow_union_with_miniflow(&wc->masks, &mask->masks);
+}
+
 /* Returns a hash of the wildcards in 'wc'. */
 uint32_t
 flow_wildcards_hash(const struct flow_wildcards *wc, uint32_t basis)
@@ -1022,20 +1049,8 @@ miniflow_destroy(struct miniflow *flow)
 void
 miniflow_expand(const struct miniflow *src, struct flow *dst)
 {
-    uint32_t *dst_u32 = (uint32_t *) dst;
-    int ofs;
-    int i;
-
-    memset(dst_u32, 0, sizeof *dst);
-
-    ofs = 0;
-    for (i = 0; i < MINI_N_MAPS; i++) {
-        uint32_t map;
-
-        for (map = src->map[i]; map; map = zero_rightmost_1bit(map)) {
-            dst_u32[raw_ctz(map) + i * 32] = src->values[ofs++];
-        }
-    }
+    memset(dst, 0, sizeof *dst);
+    flow_union_with_miniflow(dst, src);
 }
 
 static const uint32_t *
