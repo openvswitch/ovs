@@ -1181,13 +1181,7 @@ ofpact_check__(const struct ofpact *a, const struct flow *flow, int max_ports,
         return nxm_reg_move_check(ofpact_get_REG_MOVE(a), flow);
 
     case OFPACT_REG_LOAD:
-        if (*dl_type != flow->dl_type) {
-            struct flow updated_flow = *flow;
-            updated_flow.dl_type = *dl_type;
-            return nxm_reg_load_check(ofpact_get_REG_LOAD(a), &updated_flow);
-        } else {
-            return nxm_reg_load_check(ofpact_get_REG_LOAD(a), flow);
-        }
+        return nxm_reg_load_check(ofpact_get_REG_LOAD(a), flow);
 
     case OFPACT_STACK_PUSH:
         return nxm_stack_push_check(ofpact_get_STACK_PUSH(a), flow);
@@ -1245,9 +1239,23 @@ ofpacts_check(const struct ofpact ofpacts[], size_t ofpacts_len,
 {
     const struct ofpact *a;
     ovs_be16 dl_type = flow->dl_type;
+    struct flow updated_flow;
 
     OFPACT_FOR_EACH (a, ofpacts, ofpacts_len) {
-        enum ofperr error = ofpact_check__(a, flow, max_ports, &dl_type);
+        enum ofperr error;
+
+        /* If the dl_type was changed by an action then its new value
+         * should be present in the flow passed to ofpact_check__(). */
+        if (flow->dl_type != dl_type) {
+            /* Only copy flow at most once */
+            if (flow != &updated_flow) {
+                updated_flow = *flow;
+                flow = &updated_flow;
+            }
+            updated_flow.dl_type = dl_type;
+        }
+
+        error = ofpact_check__(a, flow, max_ports, &dl_type);
         if (error) {
             return error;
         }
