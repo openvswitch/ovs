@@ -221,7 +221,7 @@ netdev_dev_bsd_changed(struct netdev_dev_bsd *dev)
 /* Invalidate cache in case of interface status change. */
 static void
 netdev_bsd_cache_cb(const struct rtbsd_change *change,
-                      void *aux OVS_UNUSED)
+                    void *aux OVS_UNUSED)
 {
     struct netdev_dev_bsd *dev;
 
@@ -753,7 +753,7 @@ netdev_bsd_send_wait(struct netdev *netdev_)
  */
 static int
 netdev_bsd_set_etheraddr(struct netdev *netdev_,
-                           const uint8_t mac[ETH_ADDR_LEN])
+                         const uint8_t mac[ETH_ADDR_LEN])
 {
     struct netdev_dev_bsd *netdev_dev =
                                 netdev_dev_bsd_cast(netdev_get_dev(netdev_));
@@ -780,7 +780,7 @@ netdev_bsd_set_etheraddr(struct netdev *netdev_,
  */
 static int
 netdev_bsd_get_etheraddr(const struct netdev *netdev_,
-                           uint8_t mac[ETH_ADDR_LEN])
+                         uint8_t mac[ETH_ADDR_LEN])
 {
     struct netdev_dev_bsd *netdev_dev =
         netdev_dev_bsd_cast(netdev_get_dev(netdev_));
@@ -1012,8 +1012,8 @@ netdev_bsd_parse_media(int media)
  */
 static int
 netdev_bsd_get_features(const struct netdev *netdev,
-                          enum netdev_features *current, uint32_t *advertised,
-                          enum netdev_features *supported, uint32_t *peer)
+                        enum netdev_features *current, uint32_t *advertised,
+                        enum netdev_features *supported, uint32_t *peer)
 {
     struct ifmediareq ifmr;
     int *media_list;
@@ -1091,7 +1091,7 @@ netdev_bsd_get_in4(const struct netdev *netdev_, struct in_addr *in4,
 
         ifr.ifr_addr.sa_family = AF_INET;
         error = netdev_bsd_do_ioctl(netdev_get_name(netdev_), &ifr,
-                                      SIOCGIFADDR, "SIOCGIFADDR");
+                                    SIOCGIFADDR, "SIOCGIFADDR");
         if (error) {
             return error;
         }
@@ -1100,7 +1100,7 @@ netdev_bsd_get_in4(const struct netdev *netdev_, struct in_addr *in4,
         netdev_dev->in4 = sin->sin_addr;
         netdev_dev->cache_valid |= VALID_IN4;
         error = netdev_bsd_do_ioctl(netdev_get_name(netdev_), &ifr,
-                                      SIOCGIFNETMASK, "SIOCGIFNETMASK");
+                                    SIOCGIFNETMASK, "SIOCGIFNETMASK");
         if (error) {
             return error;
         }
@@ -1118,7 +1118,7 @@ netdev_bsd_get_in4(const struct netdev *netdev_, struct in_addr *in4,
  */
 static int
 netdev_bsd_set_in4(struct netdev *netdev_, struct in_addr addr,
-                     struct in_addr mask)
+                   struct in_addr mask)
 {
     struct netdev_dev_bsd *netdev_dev =
         netdev_dev_bsd_cast(netdev_get_dev(netdev_));
@@ -1223,7 +1223,7 @@ iff_to_nd_flags(int iff)
 
 static int
 netdev_bsd_update_flags(struct netdev_dev *dev_, enum netdev_flags off,
-                          enum netdev_flags on, enum netdev_flags *old_flagsp)
+                        enum netdev_flags on, enum netdev_flags *old_flagsp)
 {
     struct netdev_dev_bsd *netdev_dev;
     int old_flags, new_flags;
