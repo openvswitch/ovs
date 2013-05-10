@@ -252,9 +252,15 @@ classifier_remove(struct classifier *cls, struct cls_rule *rule)
 
 /* Finds and returns the highest-priority rule in 'cls' that matches 'flow'.
  * Returns a null pointer if no rules in 'cls' match 'flow'.  If multiple rules
- * of equal priority match 'flow', returns one arbitrarily. */
+ * of equal priority match 'flow', returns one arbitrarily.
+ *
+ * If a rule is found and 'wc' is non-null, bitwise-OR's 'wc' with the
+ * set of bits that were significant in the lookup.  At some point
+ * earlier, 'wc' should have been initialized (e.g., by
+ * flow_wildcards_init_catchall()). */
 struct cls_rule *
-classifier_lookup(const struct classifier *cls, const struct flow *flow)
+classifier_lookup(const struct classifier *cls, const struct flow *flow,
+                  struct flow_wildcards *wc)
 {
     struct cls_table *table;
     struct cls_rule *best;
@@ -262,6 +268,10 @@ classifier_lookup(const struct classifier *cls, const struct flow *flow)
     best = NULL;
     LIST_FOR_EACH (table, list_node, &cls->tables_priority) {
         struct cls_rule *rule = find_match(table, flow);
+
+        if (wc) {
+            flow_wildcards_fold_minimask(wc, &table->mask);
+        }
         if (rule) {
             best = rule;
             LIST_FOR_EACH_CONTINUE (table, list_node, &cls->tables_priority) {
@@ -271,6 +281,9 @@ classifier_lookup(const struct classifier *cls, const struct flow *flow)
                     return best;
                 }
                 rule = find_match(table, flow);
+                if (wc) {
+                    flow_wildcards_fold_minimask(wc, &table->mask);
+                }
                 if (rule && rule->priority > best->priority) {
                     best = rule;
                 }

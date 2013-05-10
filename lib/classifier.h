@@ -96,7 +96,8 @@ void classifier_insert(struct classifier *, struct cls_rule *);
 struct cls_rule *classifier_replace(struct classifier *, struct cls_rule *);
 void classifier_remove(struct classifier *, struct cls_rule *);
 struct cls_rule *classifier_lookup(const struct classifier *,
-                                   const struct flow *);
+                                   const struct flow *,
+                                   struct flow_wildcards *);
 bool classifier_rule_overlaps(const struct classifier *,
                               const struct cls_rule *);
 
