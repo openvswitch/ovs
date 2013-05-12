@@ -2887,7 +2887,7 @@ handle_flow_miss_without_facet(struct flow_miss *miss,
         rule_credit_stats(rule, &stats);
 
         action_xlate_ctx_init(&ctx, ofproto, &miss->flow, miss->initial_tci,
-                              rule, 0, packet);
+                              rule, stats.tcp_flags, packet);
         ctx.resubmit_stats = &stats;
         xlate_actions(&ctx, rule->up.ofpacts, rule->up.ofpacts_len,
                       &odp_actions);
