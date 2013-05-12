@@ -3686,8 +3686,8 @@ handle_flow_miss_without_facet(struct flow_miss *miss,
         dpif_flow_stats_extract(&miss->flow, packet, now, &stats);
         rule_credit_stats(rule, &stats);
 
-        action_xlate_ctx_init(&ctx, ofproto, &miss->flow,
-                              &miss->initial_vals, rule, 0, packet);
+        action_xlate_ctx_init(&ctx, ofproto, &miss->flow, &miss->initial_vals,
+                              rule, stats.tcp_flags, packet);
         ctx.resubmit_stats = &stats;
         xlate_actions(&ctx, rule->up.ofpacts, rule->up.ofpacts_len,
                       &odp_actions);
