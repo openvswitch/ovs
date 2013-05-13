@@ -207,8 +207,8 @@ static int set_stp_port(struct ofport *,
 
 static bool ofbundle_includes_vlan(const struct ofbundle *, uint16_t vlan);
 
-struct action_xlate_ctx {
-/* action_xlate_ctx_init() initializes these members. */
+struct xlate_ctx {
+    /* xlate_ctx_init() initializes these members. */
 
     /* The ofproto. */
     struct ofproto_dpif *ofproto;
@@ -250,19 +250,19 @@ struct action_xlate_ctx {
      * resubmit or OFPP_TABLE action didn't find a matching rule.
      *
      * This is normally null so the client has to set it manually after
-     * calling action_xlate_ctx_init(). */
-    void (*resubmit_hook)(struct action_xlate_ctx *, struct rule_dpif *rule);
+     * calling xlate_ctx_init(). */
+    void (*resubmit_hook)(struct xlate_ctx *, struct rule_dpif *rule);
 
     /* If nonnull, flow translation calls this function to report some
      * significant decision, e.g. to explain why OFPP_NORMAL translation
      * dropped a packet. */
-    void (*report_hook)(struct action_xlate_ctx *, const char *s);
+    void (*report_hook)(struct xlate_ctx *, const char *s);
 
     /* If nonnull, flow translation credits the specified statistics to each
      * rule reached through a resubmit or OFPP_TABLE action.
      *
      * This is normally null so the client has to set it manually after
-     * calling action_xlate_ctx_init(). */
+     * calling xlate_ctx_init(). */
     const struct dpif_flow_stats *resubmit_stats;
 
 /* xlate_actions() initializes and uses these members.  The client might want
@@ -309,18 +309,17 @@ struct initial_vals {
     uint8_t tunnel_ip_tos;
 };
 
-static void action_xlate_ctx_init(struct action_xlate_ctx *,
-                                  struct ofproto_dpif *, const struct flow *,
-                                  const struct initial_vals *initial_vals,
-                                  struct rule_dpif *,
-                                  uint8_t tcp_flags, const struct ofpbuf *);
-static void xlate_actions(struct action_xlate_ctx *,
-                          const struct ofpact *ofpacts, size_t ofpacts_len,
-                          struct ofpbuf *odp_actions);
-static void xlate_actions_for_side_effects(struct action_xlate_ctx *,
+static void xlate_ctx_init(struct xlate_ctx *, struct ofproto_dpif *,
+                           const struct flow *,
+                           const struct initial_vals *initial_vals,
+                           struct rule_dpif *, uint8_t tcp_flags,
+                           const struct ofpbuf *);
+static void xlate_actions(struct xlate_ctx *, const struct ofpact *ofpacts,
+                          size_t ofpacts_len, struct ofpbuf *odp_actions);
+static void xlate_actions_for_side_effects(struct xlate_ctx *,
                                            const struct ofpact *ofpacts,
                                            size_t ofpacts_len);
-static void xlate_table_action(struct action_xlate_ctx *, uint16_t in_port,
+static void xlate_table_action(struct xlate_ctx *, uint16_t in_port,
                                uint8_t table_id, bool may_packet_in);
 
 static size_t put_userspace_action(const struct ofproto_dpif *,
@@ -335,7 +334,7 @@ static void compose_slow_path(const struct ofproto_dpif *, const struct flow *,
                               const struct nlattr **actionsp,
                               size_t *actions_lenp);
 
-static void xlate_report(struct action_xlate_ctx *ctx, const char *s);
+static void xlate_report(struct xlate_ctx *ctx, const char *s);
 
 /* A subfacet (see "struct subfacet" below) has three possible installation
  * states:
@@ -808,7 +807,7 @@ static size_t compose_sflow_action(const struct ofproto_dpif *,
 static void compose_ipfix_action(const struct ofproto_dpif *,
                                  struct ofpbuf *odp_actions,
                                  const struct flow *);
-static void add_mirror_actions(struct action_xlate_ctx *ctx,
+static void add_mirror_actions(struct xlate_ctx *ctx,
                                const struct flow *flow);
 /* Global variables. */
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
@@ -3608,7 +3607,7 @@ handle_flow_miss_without_facet(struct flow_miss *miss,
 {
     struct rule_dpif *rule = rule_dpif_lookup(miss->ofproto, &miss->flow);
     long long int now = time_msec();
-    struct action_xlate_ctx ctx;
+    struct xlate_ctx ctx;
     struct ofpbuf *packet;
 
     LIST_FOR_EACH (packet, list_node, &miss->packets) {
@@ -3625,9 +3624,8 @@ handle_flow_miss_without_facet(struct flow_miss *miss,
         dpif_flow_stats_extract(&miss->flow, packet, now, &stats);
         rule_credit_stats(rule, &stats);
 
-        action_xlate_ctx_init(&ctx, miss->ofproto, &miss->flow,
-                              &miss->initial_vals, rule, stats.tcp_flags,
-                              packet);
+        xlate_ctx_init(&ctx, miss->ofproto, &miss->flow, &miss->initial_vals,
+                       rule, stats.tcp_flags, packet);
         ctx.resubmit_stats = &stats;
         xlate_actions(&ctx, rule->up.ofpacts, rule->up.ofpacts_len,
                       &odp_actions);
@@ -3676,11 +3674,10 @@ handle_flow_miss_with_facet(struct flow_miss *miss, struct facet *facet,
         handle_flow_miss_common(facet->rule, packet, &miss->flow);
 
         if (want_path != SF_FAST_PATH) {
-            struct action_xlate_ctx ctx;
+            struct xlate_ctx ctx;
 
-            action_xlate_ctx_init(&ctx, ofproto, &facet->flow,
-                                  &facet->initial_vals, facet->rule, 0,
-                                  packet);
+            xlate_ctx_init(&ctx, ofproto, &facet->flow, &facet->initial_vals,
+                           facet->rule, 0, packet);
             xlate_actions_for_side_effects(&ctx, facet->rule->up.ofpacts,
                                            facet->rule->up.ofpacts_len);
         }
@@ -4583,7 +4580,7 @@ static struct facet *
 facet_create(const struct flow_miss *miss, uint32_t hash)
 {
     struct ofproto_dpif *ofproto = miss->ofproto;
-    struct action_xlate_ctx ctx;
+    struct xlate_ctx ctx;
     struct facet *facet;
 
     facet = xzalloc(sizeof *facet);
@@ -4601,8 +4598,8 @@ facet_create(const struct flow_miss *miss, uint32_t hash)
 
     ofpbuf_use_stub(&facet->odp_actions, &facet->odp_actions_stub,
                     sizeof facet->odp_actions_stub);
-    action_xlate_ctx_init(&ctx, ofproto, &facet->flow, &facet->initial_vals,
-                          facet->rule, 0, NULL);
+    xlate_ctx_init(&ctx, ofproto, &facet->flow, &facet->initial_vals,
+                   facet->rule, 0, NULL);
     ctx.may_learn = true;
     xlate_actions(&ctx, facet->rule->up.ofpacts, facet->rule->up.ofpacts_len,
                   &facet->odp_actions);
@@ -4690,7 +4687,7 @@ facet_learn(struct facet *facet)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(facet->rule->up.ofproto);
     long long int now = time_msec();
-    struct action_xlate_ctx ctx;
+    struct xlate_ctx ctx;
 
     if (!facet->has_fin_timeout && now < facet->learn_rl) {
         return;
@@ -4705,8 +4702,8 @@ facet_learn(struct facet *facet)
         return;
     }
 
-    action_xlate_ctx_init(&ctx, ofproto, &facet->flow, &facet->initial_vals,
-                          facet->rule, facet->tcp_flags, NULL);
+    xlate_ctx_init(&ctx, ofproto, &facet->flow, &facet->initial_vals,
+                   facet->rule, facet->tcp_flags, NULL);
     ctx.may_learn = true;
     xlate_actions_for_side_effects(&ctx, facet->rule->up.ofpacts,
                                    facet->rule->up.ofpacts_len);
@@ -4878,7 +4875,7 @@ facet_check_consistency(struct facet *facet)
     uint64_t odp_actions_stub[1024 / 8];
     struct ofpbuf odp_actions;
 
-    struct action_xlate_ctx ctx;
+    struct xlate_ctx ctx;
     struct rule_dpif *rule;
     bool ok;
 
@@ -4904,8 +4901,8 @@ facet_check_consistency(struct facet *facet)
 
     /* Check the datapath actions for consistency. */
     ofpbuf_use_stub(&odp_actions, odp_actions_stub, sizeof odp_actions_stub);
-    action_xlate_ctx_init(&ctx, ofproto, &facet->flow, &facet->initial_vals,
-                          rule, 0, NULL);
+    xlate_ctx_init(&ctx, ofproto, &facet->flow, &facet->initial_vals, rule, 0,
+                   NULL);
     xlate_actions(&ctx, rule->up.ofpacts, rule->up.ofpacts_len, &odp_actions);
 
     ok = ofpbuf_equal(&facet->odp_actions, &odp_actions)
@@ -4956,9 +4953,9 @@ facet_revalidate(struct facet *facet)
     uint64_t odp_actions_stub[1024 / 8];
     struct ofpbuf odp_actions;
 
-    struct action_xlate_ctx ctx;
     struct rule_dpif *new_rule;
     struct subfacet *subfacet;
+    struct xlate_ctx ctx;
 
     COVERAGE_INC(facet_revalidate);
 
@@ -4989,8 +4986,8 @@ facet_revalidate(struct facet *facet)
      * emit a NetFlow expiration and, if so, we need to have the old state
      * around to properly compose it. */
     ofpbuf_use_stub(&odp_actions, odp_actions_stub, sizeof odp_actions_stub);
-    action_xlate_ctx_init(&ctx, ofproto, &facet->flow, &facet->initial_vals,
-                          new_rule, 0, NULL);
+    xlate_ctx_init(&ctx, ofproto, &facet->flow, &facet->initial_vals, new_rule,
+                   0, NULL);
     xlate_actions(&ctx, new_rule->up.ofpacts, new_rule->up.ofpacts_len,
                   &odp_actions);
 
@@ -5135,12 +5132,12 @@ flow_push_stats(struct facet *facet, const struct dpif_flow_stats *stats)
 {
     struct rule_dpif *rule = facet->rule;
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(rule->up.ofproto);
-    struct action_xlate_ctx ctx;
+    struct xlate_ctx ctx;
 
     ofproto_rule_update_used(&rule->up, stats->used);
 
-    action_xlate_ctx_init(&ctx, ofproto, &facet->flow,
-                          &facet->initial_vals, rule, 0, NULL);
+    xlate_ctx_init(&ctx, ofproto, &facet->flow, &facet->initial_vals, rule, 0,
+                   NULL);
     ctx.resubmit_stats = stats;
     xlate_actions_for_side_effects(&ctx, rule->up.ofpacts,
                                    rule->up.ofpacts_len);
@@ -5579,7 +5576,7 @@ rule_dpif_execute(struct rule_dpif *rule, const struct flow *flow,
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(rule->up.ofproto);
     struct initial_vals initial_vals;
     struct dpif_flow_stats stats;
-    struct action_xlate_ctx ctx;
+    struct xlate_ctx ctx;
     uint64_t odp_actions_stub[1024 / 8];
     struct ofpbuf odp_actions;
 
@@ -5589,7 +5586,7 @@ rule_dpif_execute(struct rule_dpif *rule, const struct flow *flow,
     initial_vals.vlan_tci = flow->vlan_tci;
     initial_vals.tunnel_ip_tos = flow->tunnel.ip_tos;
     ofpbuf_use_stub(&odp_actions, odp_actions_stub, sizeof odp_actions_stub);
-    action_xlate_ctx_init(&ctx, ofproto, flow, &initial_vals,
+    xlate_ctx_init(&ctx, ofproto, flow, &initial_vals,
                           rule, stats.tcp_flags, packet);
     ctx.resubmit_stats = &stats;
     xlate_actions(&ctx, rule->up.ofpacts, rule->up.ofpacts_len, &odp_actions);
@@ -5702,10 +5699,10 @@ send_packet(const struct ofport_dpif *ofport, struct ofpbuf *packet)
 
 /* OpenFlow to datapath action translation. */
 
-static bool may_receive(const struct ofport_dpif *, struct action_xlate_ctx *);
+static bool may_receive(const struct ofport_dpif *, struct xlate_ctx *);
 static void do_xlate_actions(const struct ofpact *, size_t ofpacts_len,
-                             struct action_xlate_ctx *);
-static void xlate_normal(struct action_xlate_ctx *);
+                             struct xlate_ctx *);
+static void xlate_normal(struct xlate_ctx *);
 
 /* Composes an ODP action for a "slow path" action for 'flow' within 'ofproto'.
  * The action will state 'slow' as the reason that the action is in the slow
@@ -5881,7 +5878,7 @@ compose_ipfix_action(const struct ofproto_dpif *ofproto,
  * actions.  At this point we do not have all information required to
  * build it. So try to build sample action as complete as possible. */
 static void
-add_sflow_action(struct action_xlate_ctx *ctx)
+add_sflow_action(struct xlate_ctx *ctx)
 {
     ctx->user_cookie_offset = compose_sflow_action(ctx->ofproto,
                                                    ctx->odp_actions,
@@ -5893,7 +5890,7 @@ add_sflow_action(struct action_xlate_ctx *ctx)
 /* SAMPLE action for IPFIX must be 1st or 2nd action in any given list
  * of actions, eventually after the SAMPLE action for sFlow. */
 static void
-add_ipfix_action(struct action_xlate_ctx *ctx)
+add_ipfix_action(struct xlate_ctx *ctx)
 {
     compose_ipfix_action(ctx->ofproto, ctx->odp_actions, &ctx->flow);
 }
@@ -5902,7 +5899,7 @@ add_ipfix_action(struct action_xlate_ctx *ctx)
  * We need to fix SAMPLE actions OVS_SAMPLE_ATTR_ACTIONS attribute, i.e. nested
  * USERSPACE action's user-cookie which is required for sflow. */
 static void
-fix_sflow_action(struct action_xlate_ctx *ctx)
+fix_sflow_action(struct xlate_ctx *ctx)
 {
     const struct flow *base = &ctx->base_flow;
     union user_action_cookie *cookie;
@@ -5920,7 +5917,7 @@ fix_sflow_action(struct action_xlate_ctx *ctx)
 }
 
 static void
-compose_output_action__(struct action_xlate_ctx *ctx, uint16_t ofp_port,
+compose_output_action__(struct xlate_ctx *ctx, uint16_t ofp_port,
                         bool check_stp)
 {
     const struct ofport_dpif *ofport = get_ofp_port(ctx->ofproto, ofp_port);
@@ -6052,13 +6049,13 @@ compose_output_action__(struct action_xlate_ctx *ctx, uint16_t ofp_port,
 }
 
 static void
-compose_output_action(struct action_xlate_ctx *ctx, uint16_t ofp_port)
+compose_output_action(struct xlate_ctx *ctx, uint16_t ofp_port)
 {
     compose_output_action__(ctx, ofp_port, true);
 }
 
 static void
-tag_the_flow(struct action_xlate_ctx *ctx, struct rule_dpif *rule)
+tag_the_flow(struct xlate_ctx *ctx, struct rule_dpif *rule)
 {
     struct ofproto_dpif *ofproto = ctx->ofproto;
     uint8_t table_id = ctx->table_id;
@@ -6077,7 +6074,7 @@ tag_the_flow(struct action_xlate_ctx *ctx, struct rule_dpif *rule)
 
 /* Common rule processing in one place to avoid duplicating code. */
 static struct rule_dpif *
-ctx_rule_hooks(struct action_xlate_ctx *ctx, struct rule_dpif *rule,
+ctx_rule_hooks(struct xlate_ctx *ctx, struct rule_dpif *rule,
                bool may_packet_in)
 {
     if (ctx->resubmit_hook) {
@@ -6100,7 +6097,7 @@ ctx_rule_hooks(struct action_xlate_ctx *ctx, struct rule_dpif *rule,
 }
 
 static void
-xlate_table_action(struct action_xlate_ctx *ctx,
+xlate_table_action(struct xlate_ctx *ctx,
                    uint16_t in_port, uint8_t table_id, bool may_packet_in)
 {
     if (ctx->recurse < MAX_RESUBMIT_RECURSION) {
@@ -6143,7 +6140,7 @@ xlate_table_action(struct action_xlate_ctx *ctx,
 }
 
 static void
-xlate_ofpact_resubmit(struct action_xlate_ctx *ctx,
+xlate_ofpact_resubmit(struct xlate_ctx *ctx,
                       const struct ofpact_resubmit *resubmit)
 {
     uint16_t in_port;
@@ -6163,7 +6160,7 @@ xlate_ofpact_resubmit(struct action_xlate_ctx *ctx,
 }
 
 static void
-flood_packets(struct action_xlate_ctx *ctx, bool all)
+flood_packets(struct xlate_ctx *ctx, bool all)
 {
     struct ofport_dpif *ofport;
 
@@ -6185,7 +6182,7 @@ flood_packets(struct action_xlate_ctx *ctx, bool all)
 }
 
 static void
-execute_controller_action(struct action_xlate_ctx *ctx, int len,
+execute_controller_action(struct xlate_ctx *ctx, int len,
                           enum ofp_packet_in_reason reason,
                           uint16_t controller_id)
 {
@@ -6257,7 +6254,7 @@ execute_controller_action(struct action_xlate_ctx *ctx, int len,
 }
 
 static void
-execute_mpls_push_action(struct action_xlate_ctx *ctx, ovs_be16 eth_type)
+execute_mpls_push_action(struct xlate_ctx *ctx, ovs_be16 eth_type)
 {
     ovs_assert(eth_type_mpls(eth_type));
 
@@ -6282,7 +6279,7 @@ execute_mpls_push_action(struct action_xlate_ctx *ctx, ovs_be16 eth_type)
 }
 
 static void
-execute_mpls_pop_action(struct action_xlate_ctx *ctx, ovs_be16 eth_type)
+execute_mpls_pop_action(struct xlate_ctx *ctx, ovs_be16 eth_type)
 {
     ovs_assert(eth_type_mpls(ctx->flow.dl_type));
     ovs_assert(!eth_type_mpls(eth_type));
@@ -6297,7 +6294,7 @@ execute_mpls_pop_action(struct action_xlate_ctx *ctx, ovs_be16 eth_type)
 }
 
 static bool
-compose_dec_ttl(struct action_xlate_ctx *ctx, struct ofpact_cnt_ids *ids)
+compose_dec_ttl(struct xlate_ctx *ctx, struct ofpact_cnt_ids *ids)
 {
     if (ctx->flow.dl_type != htons(ETH_TYPE_IP) &&
         ctx->flow.dl_type != htons(ETH_TYPE_IPV6)) {
@@ -6321,7 +6318,7 @@ compose_dec_ttl(struct action_xlate_ctx *ctx, struct ofpact_cnt_ids *ids)
 }
 
 static bool
-execute_set_mpls_ttl_action(struct action_xlate_ctx *ctx, uint8_t ttl)
+execute_set_mpls_ttl_action(struct xlate_ctx *ctx, uint8_t ttl)
 {
     if (!eth_type_mpls(ctx->flow.dl_type)) {
         return true;
@@ -6332,7 +6329,7 @@ execute_set_mpls_ttl_action(struct action_xlate_ctx *ctx, uint8_t ttl)
 }
 
 static bool
-execute_dec_mpls_ttl_action(struct action_xlate_ctx *ctx)
+execute_dec_mpls_ttl_action(struct xlate_ctx *ctx)
 {
     uint8_t ttl = mpls_lse_to_ttl(ctx->flow.mpls_lse);
 
@@ -6353,7 +6350,7 @@ execute_dec_mpls_ttl_action(struct action_xlate_ctx *ctx)
 }
 
 static void
-xlate_output_action(struct action_xlate_ctx *ctx,
+xlate_output_action(struct xlate_ctx *ctx,
                     uint16_t port, uint16_t max_len, bool may_packet_in)
 {
     uint16_t prev_nf_output_iface = ctx->nf_output_iface;
@@ -6402,7 +6399,7 @@ xlate_output_action(struct action_xlate_ctx *ctx,
 }
 
 static void
-xlate_output_reg_action(struct action_xlate_ctx *ctx,
+xlate_output_reg_action(struct xlate_ctx *ctx,
                         const struct ofpact_output_reg *or)
 {
     uint64_t port = mf_get_subfield(&or->src, &ctx->flow);
@@ -6412,7 +6409,7 @@ xlate_output_reg_action(struct action_xlate_ctx *ctx,
 }
 
 static void
-xlate_enqueue_action(struct action_xlate_ctx *ctx,
+xlate_enqueue_action(struct xlate_ctx *ctx,
                      const struct ofpact_enqueue *enqueue)
 {
     uint16_t ofp_port = enqueue->port;
@@ -6451,7 +6448,7 @@ xlate_enqueue_action(struct action_xlate_ctx *ctx,
 }
 
 static void
-xlate_set_queue_action(struct action_xlate_ctx *ctx, uint32_t queue_id)
+xlate_set_queue_action(struct xlate_ctx *ctx, uint32_t queue_id)
 {
     uint32_t skb_priority;
 
@@ -6487,7 +6484,7 @@ slave_enabled_cb(uint16_t ofp_port, void *ofproto_)
 }
 
 static void
-xlate_bundle_action(struct action_xlate_ctx *ctx,
+xlate_bundle_action(struct xlate_ctx *ctx,
                     const struct ofpact_bundle *bundle)
 {
     uint16_t port;
@@ -6501,7 +6498,7 @@ xlate_bundle_action(struct action_xlate_ctx *ctx,
 }
 
 static void
-xlate_learn_action(struct action_xlate_ctx *ctx,
+xlate_learn_action(struct xlate_ctx *ctx,
                    const struct ofpact_learn *learn)
 {
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
@@ -6533,7 +6530,7 @@ reduce_timeout(uint16_t max, uint16_t *timeout)
 }
 
 static void
-xlate_fin_timeout(struct action_xlate_ctx *ctx,
+xlate_fin_timeout(struct xlate_ctx *ctx,
                   const struct ofpact_fin_timeout *oft)
 {
     if (ctx->tcp_flags & (TCP_FIN | TCP_RST) && ctx->rule) {
@@ -6545,7 +6542,7 @@ xlate_fin_timeout(struct action_xlate_ctx *ctx,
 }
 
 static void
-xlate_sample_action(struct action_xlate_ctx *ctx,
+xlate_sample_action(struct xlate_ctx *ctx,
                     const struct ofpact_sample *os)
 {
   union user_action_cookie cookie;
@@ -6562,7 +6559,7 @@ xlate_sample_action(struct action_xlate_ctx *ctx,
 }
 
 static bool
-may_receive(const struct ofport_dpif *port, struct action_xlate_ctx *ctx)
+may_receive(const struct ofport_dpif *port, struct xlate_ctx *ctx)
 {
     if (port->up.pp.config & (eth_addr_equals(ctx->flow.dl_dst, eth_addr_stp)
                               ? OFPUTIL_PC_NO_RECV_STP
@@ -6583,7 +6580,7 @@ may_receive(const struct ofport_dpif *port, struct action_xlate_ctx *ctx)
 }
 
 static bool
-tunnel_ecn_ok(struct action_xlate_ctx *ctx)
+tunnel_ecn_ok(struct xlate_ctx *ctx)
 {
     if (is_ip_any(&ctx->base_flow)
         && (ctx->base_flow.tunnel.ip_tos & IP_ECN_MASK) == IP_ECN_CE) {
@@ -6602,7 +6599,7 @@ tunnel_ecn_ok(struct action_xlate_ctx *ctx)
 
 static void
 do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
-                 struct action_xlate_ctx *ctx)
+                 struct xlate_ctx *ctx)
 {
     bool was_evictable = true;
     const struct ofpact *a;
@@ -6855,11 +6852,11 @@ out:
 }
 
 static void
-action_xlate_ctx_init(struct action_xlate_ctx *ctx,
-                      struct ofproto_dpif *ofproto, const struct flow *flow,
-                      const struct initial_vals *initial_vals,
-                      struct rule_dpif *rule,
-                      uint8_t tcp_flags, const struct ofpbuf *packet)
+xlate_ctx_init(struct xlate_ctx *ctx, struct ofproto_dpif *ofproto,
+               const struct flow *flow,
+               const struct initial_vals *initial_vals,
+               struct rule_dpif *rule, uint8_t tcp_flags,
+               const struct ofpbuf *packet)
 {
     ovs_be64 initial_tun_id = flow->tunnel.tun_id;
 
@@ -6903,7 +6900,7 @@ action_xlate_ctx_init(struct action_xlate_ctx *ctx,
 /* Translates the 'ofpacts_len' bytes of "struct ofpacts" starting at 'ofpacts'
  * into datapath actions in 'odp_actions', using 'ctx'. */
 static void
-xlate_actions(struct action_xlate_ctx *ctx,
+xlate_actions(struct xlate_ctx *ctx,
               const struct ofpact *ofpacts, size_t ofpacts_len,
               struct ofpbuf *odp_actions)
 {
@@ -7028,7 +7025,7 @@ xlate_actions(struct action_xlate_ctx *ctx,
 /* Translates the 'ofpacts_len' bytes of "struct ofpact"s starting at 'ofpacts'
  * into datapath actions, using 'ctx', and discards the datapath actions. */
 static void
-xlate_actions_for_side_effects(struct action_xlate_ctx *ctx,
+xlate_actions_for_side_effects(struct xlate_ctx *ctx,
                                const struct ofpact *ofpacts,
                                size_t ofpacts_len)
 {
@@ -7041,7 +7038,7 @@ xlate_actions_for_side_effects(struct action_xlate_ctx *ctx,
 }
 
 static void
-xlate_report(struct action_xlate_ctx *ctx, const char *s)
+xlate_report(struct xlate_ctx *ctx, const char *s)
 {
     if (ctx->report_hook) {
         ctx->report_hook(ctx, s);
@@ -7162,7 +7159,7 @@ output_vlan_to_vid(const struct ofbundle *out_bundle, uint16_t vlan)
 }
 
 static void
-output_normal(struct action_xlate_ctx *ctx, const struct ofbundle *out_bundle,
+output_normal(struct xlate_ctx *ctx, const struct ofbundle *out_bundle,
               uint16_t vlan)
 {
     struct ofport_dpif *port;
@@ -7230,7 +7227,7 @@ vlan_is_mirrored(const struct ofmirror *m, int vlan)
 }
 
 static void
-add_mirror_actions(struct action_xlate_ctx *ctx, const struct flow *orig_flow)
+add_mirror_actions(struct xlate_ctx *ctx, const struct flow *orig_flow)
 {
     struct ofproto_dpif *ofproto = ctx->ofproto;
     mirror_mask_t mirrors;
@@ -7458,7 +7455,7 @@ lookup_input_bundle(const struct ofproto_dpif *ofproto, uint16_t in_port,
  * so in one special case.
  */
 static bool
-is_admissible(struct action_xlate_ctx *ctx, struct ofport_dpif *in_port,
+is_admissible(struct xlate_ctx *ctx, struct ofport_dpif *in_port,
               uint16_t vlan)
 {
     struct ofproto_dpif *ofproto = ctx->ofproto;
@@ -7501,7 +7498,7 @@ is_admissible(struct action_xlate_ctx *ctx, struct ofport_dpif *in_port,
 }
 
 static void
-xlate_normal(struct action_xlate_ctx *ctx)
+xlate_normal(struct xlate_ctx *ctx)
 {
     struct ofport_dpif *in_port;
     struct ofbundle *in_bundle;
@@ -7725,7 +7722,7 @@ packet_out(struct ofproto *ofproto_, struct ofpbuf *packet,
 
     struct ofpbuf key;
 
-    struct action_xlate_ctx ctx;
+    struct xlate_ctx ctx;
     uint64_t odp_actions_stub[1024 / 8];
     struct ofpbuf odp_actions;
 
@@ -7737,8 +7734,8 @@ packet_out(struct ofproto *ofproto_, struct ofpbuf *packet,
 
     initial_vals.vlan_tci = flow->vlan_tci;
     initial_vals.tunnel_ip_tos = 0;
-    action_xlate_ctx_init(&ctx, ofproto, flow, &initial_vals, NULL,
-                          packet_get_tcp_flags(packet, flow), packet);
+    xlate_ctx_init(&ctx, ofproto, flow, &initial_vals, NULL,
+                   packet_get_tcp_flags(packet, flow), packet);
     ctx.resubmit_stats = &stats;
 
     ofpbuf_use_stub(&odp_actions,
@@ -7878,7 +7875,7 @@ ofproto_unixctl_fdb_show(struct unixctl_conn *conn, int argc OVS_UNUSED,
 }
 
 struct trace_ctx {
-    struct action_xlate_ctx ctx;
+    struct xlate_ctx ctx;
     struct flow flow;
     struct ds *result;
 };
@@ -7946,7 +7943,7 @@ trace_format_odp(struct ds *result, int level, const char *title,
 }
 
 static void
-trace_resubmit(struct action_xlate_ctx *ctx, struct rule_dpif *rule)
+trace_resubmit(struct xlate_ctx *ctx, struct rule_dpif *rule)
 {
     struct trace_ctx *trace = CONTAINER_OF(ctx, struct trace_ctx, ctx);
     struct ds *result = trace->result;
@@ -7959,7 +7956,7 @@ trace_resubmit(struct action_xlate_ctx *ctx, struct rule_dpif *rule)
 }
 
 static void
-trace_report(struct action_xlate_ctx *ctx, const char *s)
+trace_report(struct xlate_ctx *ctx, const char *s)
 {
     struct trace_ctx *trace = CONTAINER_OF(ctx, struct trace_ctx, ctx);
     struct ds *result = trace->result;
@@ -8122,8 +8119,8 @@ ofproto_trace(struct ofproto_dpif *ofproto, const struct flow *flow,
         trace.flow = *flow;
         ofpbuf_use_stub(&odp_actions,
                         odp_actions_stub, sizeof odp_actions_stub);
-        action_xlate_ctx_init(&trace.ctx, ofproto, flow, initial_vals,
-                              rule, tcp_flags, packet);
+        xlate_ctx_init(&trace.ctx, ofproto, flow, initial_vals, rule,
+                       tcp_flags, packet);
         trace.ctx.resubmit_hook = trace_resubmit;
         trace.ctx.report_hook = trace_report;
         xlate_actions(&trace.ctx, rule->up.ofpacts, rule->up.ofpacts_len,
