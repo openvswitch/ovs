@@ -977,11 +977,7 @@ netdev_linux_set_etheraddr(struct netdev *netdev_,
 
     /* Tap devices must be brought down before setting the address. */
     if (is_tap_netdev(netdev_)) {
-        enum netdev_flags flags;
-
-        if (!netdev_get_flags(netdev_, &flags) && (flags & NETDEV_UP)) {
-            netdev_turn_flags_off(netdev_, NETDEV_UP, &sf);
-        }
+        netdev_turn_flags_off(netdev_, NETDEV_UP, &sf);
     }
     error = set_etheraddr(netdev_get_name(netdev_), mac);
     if (!error || error == ENODEV) {
