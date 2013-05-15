@@ -73,7 +73,7 @@ m4_define([CHECK_BRIDGES],
 
    dnl Check that each bridge exists according to br-exists and that
    dnl a bridge that should not exist does not.
-   m4_foreach([brinfo], [$@], 
+   m4_foreach([brinfo], [$@],
               [AT_CHECK([RUN_OVS_VSCTL([br-exists m4_car(brinfo)])], [0], [],
                         [], [OVS_VSCTL_CLEANUP])])
    AT_CHECK([RUN_OVS_VSCTL([br-exists nonexistent])], [2], [], [],
@@ -111,7 +111,7 @@ m4_define([CHECK_PORTS],
 ],
             [OVS_VSCTL_CLEANUP])
    m4_foreach(
-     [port], m4_cdr($@), 
+     [port], m4_cdr($@),
      [AT_CHECK([RUN_OVS_VSCTL([[port-to-br] port])], [0], [$1
 ], [], [OVS_VSCTL_CLEANUP])])])
 
@@ -134,7 +134,7 @@ m4_define([CHECK_IFACES],
 ],
             [OVS_VSCTL_CLEANUP])
    m4_foreach(
-     [iface], m4_cdr($@), 
+     [iface], m4_cdr($@),
      [AT_CHECK([RUN_OVS_VSCTL([[iface-to-br] iface])], [0], [$1
 ],
                [], [OVS_VSCTL_CLEANUP])])])
@@ -262,7 +262,7 @@ AT_SETUP([add-br a, add-port a a1, add-port a a1])
 AT_KEYWORDS([ovs-vsctl])
 OVS_VSCTL_SETUP
 AT_CHECK([RUN_OVS_VSCTL(
-   [add-br a], 
+   [add-br a],
    [add-port a a1])], [0], [], [], [OVS_VSCTL_CLEANUP])
 AT_CHECK([RUN_OVS_VSCTL([add-port a a1])], [1], [],
   [ovs-vsctl: cannot create a port named a1 because a port named a1 already exists on bridge a
@@ -274,8 +274,8 @@ AT_SETUP([add-br a b, add-port a a1, add-port b b1, del-br a])
 AT_KEYWORDS([ovs-vsctl])
 OVS_VSCTL_SETUP
 AT_CHECK([RUN_OVS_VSCTL_TOGETHER(
-   [add-br a], 
-   [add-br b], 
+   [add-br a],
+   [add-br b],
    [add-port a a1],
    [add-port b b1],
    [--if-exists del-port b b2],
@@ -296,11 +296,11 @@ AT_SETUP([add-br a, add-bond a bond0 a1 a2 a3])
 AT_KEYWORDS([ovs-vsctl])
 OVS_VSCTL_SETUP
 AT_CHECK([RUN_OVS_VSCTL(
-   [add-br a], 
+   [add-br a],
    [add-bond a bond0 a1 a2 a3])], [0], [], [], [OVS_VSCTL_CLEANUP])
 AT_CHECK([RUN_OVS_VSCTL([--may-exist add-bond a bond0 a3 a1 a2])], [0], [], [],
   [OVS_VSCTL_CLEANUP])
-AT_CHECK([RUN_OVS_VSCTL([--may-exist add-bond a bond0 a2 a1])], [1], [], 
+AT_CHECK([RUN_OVS_VSCTL([--may-exist add-bond a bond0 a2 a1])], [1], [],
   [ovs-vsctl: "--may-exist add-bond a bond0 a2 a1" but bond0 actually has interface(s) a1, a2, a3
 ],
   [OVS_VSCTL_CLEANUP])
@@ -314,8 +314,8 @@ AT_SETUP([add-br a b, add-port a a1, add-port b b1, del-port a a1])
 AT_KEYWORDS([ovs-vsctl])
 OVS_VSCTL_SETUP
 AT_CHECK([RUN_OVS_VSCTL(
-  [add-br a], 
-  [add-br b], 
+  [add-br a],
+  [add-br b],
   [add-port a a1 tag=9],
   [get port a1 tag],
   [--may-exist add-port b b1],
@@ -323,7 +323,7 @@ AT_CHECK([RUN_OVS_VSCTL(
 ], [], [OVS_VSCTL_CLEANUP])
 AT_CHECK([RUN_OVS_VSCTL([--may-exist add-port b b1])], [0], [], [],
   [OVS_VSCTL_CLEANUP])
-AT_CHECK([RUN_OVS_VSCTL([--may-exist add-port a b1])], [1], [], 
+AT_CHECK([RUN_OVS_VSCTL([--may-exist add-port a b1])], [1], [],
   [ovs-vsctl: "--may-exist add-port a b1" but b1 is actually attached to bridge b
 ],
   [OVS_VSCTL_CLEANUP])
@@ -339,7 +339,7 @@ AT_SETUP([add-br a, add-bond a bond0 a1 a2 a3, del-port bond0])
 AT_KEYWORDS([ovs-vsctl])
 OVS_VSCTL_SETUP
 AT_CHECK([RUN_OVS_VSCTL_TOGETHER(
-  [add-br a], 
+  [add-br a],
   [add-bond a bond0 a1 a2 a3 tag=9],
   [get Port bond0 tag],
   [del-port bond0])], [0], [
@@ -356,7 +356,7 @@ AT_SETUP([external IDs])
 AT_KEYWORDS([ovs-vsctl])
 OVS_VSCTL_SETUP
 AT_CHECK([RUN_OVS_VSCTL_ONELINE(
-  [add-br a], 
+  [add-br a],
   [add-port a a1],
   [add-bond a bond0 a2 a3],
   [br-set-external-id a key0 value0],
@@ -621,7 +621,7 @@ cp stdout out1
 AT_CHECK([RUN_OVS_VSCTL([list b], [get b br0 _uuid])],
   [0], [stdout], [], [OVS_VSCTL_CLEANUP])
 cp stdout out2
-AT_CHECK([${PERL} $srcdir/uuidfilt.pl out1 out2], [0], 
+AT_CHECK([${PERL} $srcdir/uuidfilt.pl out1 out2], [0],
   [[<0>
 
 _uuid               : <0>
@@ -685,13 +685,13 @@ AT_CHECK([RUN_OVS_VSCTL([get bridge br0 other_config:hwaddr -- --if-exists get b
   [0], ["00:11:22:33:44:55"
 
 ], [], [OVS_VSCTL_CLEANUP])
-AT_CHECK([RUN_OVS_VSCTL([remove br br0 other_config hwaddr 'datapath_id=""' -- get br br0 other_config])], 
+AT_CHECK([RUN_OVS_VSCTL([remove br br0 other_config hwaddr 'datapath_id=""' -- get br br0 other_config])],
   [0], [{datapath_id="0123456789ab"}
 ], [], [OVS_VSCTL_CLEANUP])
-AT_CHECK([RUN_OVS_VSCTL([remove br br0 other_config 'datapath_id="0123456789ab"' -- get br br0 other_config])], 
+AT_CHECK([RUN_OVS_VSCTL([remove br br0 other_config 'datapath_id="0123456789ab"' -- get br br0 other_config])],
   [0], [{}
 ], [], [OVS_VSCTL_CLEANUP])
-AT_CHECK([RUN_OVS_VSCTL([clear br br0 external-ids -- get br br0 external_ids])], 
+AT_CHECK([RUN_OVS_VSCTL([clear br br0 external-ids -- get br br0 external_ids])],
   [0], [{}
 ], [], [OVS_VSCTL_CLEANUP])
 AT_CHECK([RUN_OVS_VSCTL_TOGETHER([destroy b br0],
@@ -699,7 +699,7 @@ AT_CHECK([RUN_OVS_VSCTL_TOGETHER([destroy b br0],
                                  [destroy b br2],
                                  [clear o . bridges])],
   [0], [stdout], [], [OVS_VSCTL_CLEANUP])
-AT_CHECK([RUN_OVS_VSCTL([list b])], 
+AT_CHECK([RUN_OVS_VSCTL([list b])],
   [0], [], [], [OVS_VSCTL_CLEANUP])
 AT_CHECK([RUN_OVS_VSCTL([--if-exists get b x datapath_id])],
   [0], [], [], [OVS_VSCTL_CLEANUP])
@@ -732,9 +732,9 @@ AT_CHECK([ovs-vsctl -- --may-exist],
 
 AT_CHECK([RUN_OVS_VSCTL([add-br br0])],
   [0], [ignore], [], [OVS_VSCTL_CLEANUP])
-AT_CHECK([RUN_OVS_VSCTL([add-br br1])], 
+AT_CHECK([RUN_OVS_VSCTL([add-br br1])],
   [0], [ignore], [], [OVS_VSCTL_CLEANUP])
-AT_CHECK([RUN_OVS_VSCTL([set-controller br1 tcp:127.0.0.1])], 
+AT_CHECK([RUN_OVS_VSCTL([set-controller br1 tcp:127.0.0.1])],
   [0], [ignore], [], [OVS_VSCTL_CLEANUP])
 AT_CHECK([
     RUN_OVS_VSCTL_TOGETHER([--id=@n create netflow targets='"1.2.3.4:567"'],
@@ -743,7 +743,7 @@ AT_CHECK([
 cp stdout netflow-uuid
 AT_CHECK([RUN_OVS_VSCTL([list netflow `cat netflow-uuid`])],
   [0], [stdout], [], [OVS_VSCTL_CLEANUP])
-AT_CHECK([${PERL} $srcdir/uuidfilt.pl netflow-uuid stdout], [0], 
+AT_CHECK([${PERL} $srcdir/uuidfilt.pl netflow-uuid stdout], [0],
   [[<0>
 
 _uuid               : <0>
@@ -754,73 +754,73 @@ engine_type         : []
 external_ids        : {}
 targets             : ["1.2.3.4:567"]
 ]], [ignore], [test ! -e pid || kill `cat pid`])
-AT_CHECK([RUN_OVS_VSCTL([list interx x])], 
+AT_CHECK([RUN_OVS_VSCTL([list interx x])],
   [1], [], [ovs-vsctl: unknown table "interx"
 ], [OVS_VSCTL_CLEANUP])
-AT_CHECK([RUN_OVS_VSCTL([list b x])], 
+AT_CHECK([RUN_OVS_VSCTL([list b x])],
   [1], [], [ovs-vsctl: no row "x" in table Bridge
 ], [OVS_VSCTL_CLEANUP])
 AT_CHECK([RUN_OVS_VSCTL([get b x datapath_id])],
   [1], [], [ovs-vsctl: no row "x" in table Bridge
 ], [OVS_VSCTL_CLEANUP])
-AT_CHECK([RUN_OVS_VSCTL([get b br0 d])], 
+AT_CHECK([RUN_OVS_VSCTL([get b br0 d])],
   [1], [], [ovs-vsctl: Bridge contains more than one column whose name matches "d"
 ], [OVS_VSCTL_CLEANUP])
-AT_CHECK([RUN_OVS_VSCTL([get b br0 x])], 
+AT_CHECK([RUN_OVS_VSCTL([get b br0 x])],
   [1], [], [ovs-vsctl: Bridge does not contain a column whose name matches "x"
 ], [OVS_VSCTL_CLEANUP])
-AT_CHECK([RUN_OVS_VSCTL([get b br0 :y=z])], 
+AT_CHECK([RUN_OVS_VSCTL([get b br0 :y=z])],
   [1], [], [ovs-vsctl: :y=z: missing column name
 ], [OVS_VSCTL_CLEANUP])
-AT_CHECK([RUN_OVS_VSCTL([get b br0 datapath_id:y=z])], 
+AT_CHECK([RUN_OVS_VSCTL([get b br0 datapath_id:y=z])],
   [1], [], [ovs-vsctl: datapath_id:y=z: trailing garbage "=z" in argument
 ], [OVS_VSCTL_CLEANUP])
-AT_CHECK([RUN_OVS_VSCTL([set b br0 'datapath_id:y>=z'])], 
+AT_CHECK([RUN_OVS_VSCTL([set b br0 'datapath_id:y>=z'])],
   [1], [], [ovs-vsctl: datapath_id:y>=z: argument does not end in "=" followed by a value.
 ], [OVS_VSCTL_CLEANUP])
 AT_CHECK([RUN_OVS_VSCTL([set controller x connection_mode=standalone])],
   [1], [], [ovs-vsctl: no row "x" in table Controller
 ], [OVS_VSCTL_CLEANUP])
-AT_CHECK([RUN_OVS_VSCTL([wait-until b br0 datapath_id:y,z])], 
+AT_CHECK([RUN_OVS_VSCTL([wait-until b br0 datapath_id:y,z])],
   [1], [], [ovs-vsctl: datapath_id:y,z: argument does not end in "=", "!=", "<", ">", "<=", ">=", "{=}", "{!=}", "{<}", "{>}", "{<=}", or "{>=}" followed by a value.
 ], [OVS_VSCTL_CLEANUP])
-AT_CHECK([RUN_OVS_VSCTL([get b br0 datapath_id::])], 
+AT_CHECK([RUN_OVS_VSCTL([get b br0 datapath_id::])],
   [1], [], [ovs-vsctl: datapath_id::: trailing garbage ":" in argument
 ], [OVS_VSCTL_CLEANUP])
-AT_CHECK([RUN_OVS_VSCTL([get b br0 datapath_id:x])], 
+AT_CHECK([RUN_OVS_VSCTL([get b br0 datapath_id:x])],
   [1], [], [ovs-vsctl: cannot specify key to get for non-map column datapath_id
 ], [OVS_VSCTL_CLEANUP])
-AT_CHECK([RUN_OVS_VSCTL([get b br0 external_ids:x])], 
+AT_CHECK([RUN_OVS_VSCTL([get b br0 external_ids:x])],
   [1], [], [ovs-vsctl: no key "x" in Bridge record "br0" column external_ids
 ], [OVS_VSCTL_CLEANUP])
-AT_CHECK([RUN_OVS_VSCTL([set b br0 flood_vlans=-1])], 
+AT_CHECK([RUN_OVS_VSCTL([set b br0 flood_vlans=-1])],
   [1], [], [ovs-vsctl: constraint violation: -1 is not in the valid range 0 to 4095 (inclusive)
 ], [OVS_VSCTL_CLEANUP])
-AT_CHECK([RUN_OVS_VSCTL([set b br0 flood_vlans=4096])], 
+AT_CHECK([RUN_OVS_VSCTL([set b br0 flood_vlans=4096])],
   [1], [], [ovs-vsctl: constraint violation: 4096 is not in the valid range 0 to 4095 (inclusive)
 ], [OVS_VSCTL_CLEANUP])
-AT_CHECK([RUN_OVS_VSCTL([set c br1 'connection-mode=xyz'])], 
+AT_CHECK([RUN_OVS_VSCTL([set c br1 'connection-mode=xyz'])],
   [1], [], [[ovs-vsctl: constraint violation: xyz is not one of the allowed values ([in-band, out-of-band])
 ]], [OVS_VSCTL_CLEANUP])
-AT_CHECK([RUN_OVS_VSCTL([set c br1 connection-mode:x=y])], 
+AT_CHECK([RUN_OVS_VSCTL([set c br1 connection-mode:x=y])],
   [1], [], [ovs-vsctl: cannot specify key to set for non-map column connection_mode
 ], [OVS_VSCTL_CLEANUP])
-AT_CHECK([RUN_OVS_VSCTL([add b br1 datapath_id x y])], 
+AT_CHECK([RUN_OVS_VSCTL([add b br1 datapath_id x y])],
   [1], [], [ovs-vsctl: "add" operation would put 2 values in column datapath_id of table Bridge but the maximum number is 1
 ], [OVS_VSCTL_CLEANUP])
-AT_CHECK([RUN_OVS_VSCTL([remove netflow `cat netflow-uuid` targets '"1.2.3.4:567"'])], 
+AT_CHECK([RUN_OVS_VSCTL([remove netflow `cat netflow-uuid` targets '"1.2.3.4:567"'])],
   [1], [], [ovs-vsctl: "remove" operation would put 0 values in column targets of table NetFlow but the minimum number is 1
 ], [OVS_VSCTL_CLEANUP])
-AT_CHECK([RUN_OVS_VSCTL([remove netflow x targets '"1.2.3.4:567"'])], 
+AT_CHECK([RUN_OVS_VSCTL([remove netflow x targets '"1.2.3.4:567"'])],
   [1], [], [ovs-vsctl: no row "x" in table NetFlow
 ], [OVS_VSCTL_CLEANUP])
 AT_CHECK([RUN_OVS_VSCTL([clear netflow x targets])],
   [1], [], [ovs-vsctl: no row "x" in table NetFlow
 ], [OVS_VSCTL_CLEANUP])
-AT_CHECK([RUN_OVS_VSCTL([clear netflow `cat netflow-uuid` targets])], 
+AT_CHECK([RUN_OVS_VSCTL([clear netflow `cat netflow-uuid` targets])],
   [1], [], [ovs-vsctl: "clear" operation cannot be applied to column targets of table NetFlow, which is not allowed to be empty
 ], [OVS_VSCTL_CLEANUP])
-AT_CHECK([RUN_OVS_VSCTL([destroy b br2])], 
+AT_CHECK([RUN_OVS_VSCTL([destroy b br2])],
   [1], [], [ovs-vsctl: no row "br2" in table Bridge
 ], [OVS_VSCTL_CLEANUP])
 AT_CHECK([RUN_OVS_VSCTL([add in br1 name x])],
@@ -977,7 +977,7 @@ AT_SETUP([database commands -- wait-until immediately true])
 AT_KEYWORDS([ovs-vsctl])
 OVS_VSCTL_SETUP
 AT_CHECK([RUN_OVS_VSCTL(
-    [add-br br0], 
+    [add-br br0],
     [add-bond br0 bond0 eth0 eth1],
     [set port bond0 bond_updelay=500 other-config:abc=def])],
   [0], [], [], [OVS_VSCTL_CLEANUP])
@@ -1114,7 +1114,7 @@ AT_KEYWORDS([ovs-vsctl])
 OVS_VSCTL_SETUP
 AT_CHECK([RUN_OVS_VSCTL([--id=@br0 create Bridge name=br0 -- add Open_vSwitch . bridges @br0 -- list b])],
   [0], [stdout], [], [OVS_VSCTL_CLEANUP])
-AT_CHECK([${PERL} $srcdir/uuidfilt.pl stdout], [0], 
+AT_CHECK([${PERL} $srcdir/uuidfilt.pl stdout], [0],
   [[<0>
 _uuid               : <1>
 controller          : []
