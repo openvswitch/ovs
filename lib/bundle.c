@@ -52,11 +52,16 @@ execute_ab(const struct ofpact_bundle *bundle,
 }
 
 static uint16_t
-execute_hrw(const struct ofpact_bundle *bundle, const struct flow *flow,
+execute_hrw(const struct ofpact_bundle *bundle,
+            const struct flow *flow, struct flow_wildcards *wc,
             bool (*slave_enabled)(uint16_t ofp_port, void *aux), void *aux)
 {
     uint32_t flow_hash, best_hash;
     int best, i;
+
+    if (bundle->n_slaves > 1) {
+        flow_mask_hash_fields(wc, bundle->fields);
+    }
 
     flow_hash = flow_hash_fields(flow, bundle->fields, bundle->basis);
     best = -1;
@@ -76,16 +81,18 @@ execute_hrw(const struct ofpact_bundle *bundle, const struct flow *flow,
     return best >= 0 ? bundle->slaves[best] : OFPP_NONE;
 }
 
-/* Executes 'bundle' on 'flow'.  Uses 'slave_enabled' to determine if the slave
- * designated by 'ofp_port' is up.  Returns the chosen slave, or OFPP_NONE if
- * none of the slaves are acceptable. */
+/* Executes 'bundle' on 'flow'.  Sets fields in 'wc' that were used to
+ * calculate the result.  Uses 'slave_enabled' to determine if the slave
+ * designated by 'ofp_port' is up.  Returns the chosen slave, or
+ * OFPP_NONE if none of the slaves are acceptable. */
 uint16_t
-bundle_execute(const struct ofpact_bundle *bundle, const struct flow *flow,
+bundle_execute(const struct ofpact_bundle *bundle,
+               const struct flow *flow, struct flow_wildcards *wc,
                bool (*slave_enabled)(uint16_t ofp_port, void *aux), void *aux)
 {
     switch (bundle->algorithm) {
     case NX_BD_ALG_HRW:
-        return execute_hrw(bundle, flow, slave_enabled, aux);
+        return execute_hrw(bundle, flow, wc, slave_enabled, aux);
 
     case NX_BD_ALG_ACTIVE_BACKUP:
         return execute_ab(bundle, slave_enabled, aux);

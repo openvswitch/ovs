@@ -102,15 +102,18 @@ static uint16_t multipath_algorithm(uint32_t hash, enum nx_mp_algorithm,
                                     unsigned int n_links, unsigned int arg);
 
 /* Executes 'mp' based on the current contents of 'flow', writing the results
- * back into 'flow'. */
+ * back into 'flow'.  Sets fields in 'wc' that were used to calculate
+ * the result. */
 void
-multipath_execute(const struct ofpact_multipath *mp, struct flow *flow)
+multipath_execute(const struct ofpact_multipath *mp, struct flow *flow,
+                  struct flow_wildcards *wc)
 {
     /* Calculate value to store. */
     uint32_t hash = flow_hash_fields(flow, mp->fields, mp->basis);
     uint16_t link = multipath_algorithm(hash, mp->algorithm,
                                         mp->max_link + 1, mp->arg);
 
+    flow_mask_hash_fields(wc, mp->fields);
     nxm_reg_load(&mp->dst, link, flow);
 }
 

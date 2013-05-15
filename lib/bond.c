@@ -128,6 +128,7 @@ static struct bond_entry *lookup_bond_entry(const struct bond *,
 static tag_type bond_get_active_slave_tag(const struct bond *);
 static struct bond_slave *choose_output_slave(const struct bond *,
                                               const struct flow *,
+                                              struct flow_wildcards *,
                                               uint16_t vlan, tag_type *tags);
 static void bond_update_fake_slave_stats(struct bond *);
 
@@ -505,7 +506,7 @@ bond_compose_learning_packet(struct bond *bond,
 
     memset(&flow, 0, sizeof flow);
     memcpy(flow.dl_src, eth_src, ETH_ADDR_LEN);
-    slave = choose_output_slave(bond, &flow, vlan, &tags);
+    slave = choose_output_slave(bond, &flow, NULL, vlan, &tags);
 
     packet = ofpbuf_new(0);
     compose_rarp(packet, eth_src);
@@ -605,12 +606,17 @@ bond_check_admissibility(struct bond *bond, const void *slave_,
  * packet belongs to (so for an access port it will be the access port's VLAN).
  *
  * Adds a tag to '*tags' that associates the flow with the returned slave.
+ *
+ * If 'wc' is non-NULL, bitwise-OR's 'wc' with the set of bits that were
+ * significant in the selection.  At some point earlier, 'wc' should
+ * have been initialized (e.g., by flow_wildcards_init_catchall()).
  */
 void *
 bond_choose_output_slave(struct bond *bond, const struct flow *flow,
-                         uint16_t vlan, tag_type *tags)
+                         struct flow_wildcards *wc, uint16_t vlan,
+                         tag_type *tags)
 {
-    struct bond_slave *slave = choose_output_slave(bond, flow, vlan, tags);
+    struct bond_slave *slave = choose_output_slave(bond, flow, wc, vlan, tags);
     if (slave) {
         *tags |= slave->tag;
         return slave->aux;
@@ -1349,7 +1355,7 @@ lookup_bond_entry(const struct bond *bond, const struct flow *flow,
 
 static struct bond_slave *
 choose_output_slave(const struct bond *bond, const struct flow *flow,
-                    uint16_t vlan, tag_type *tags)
+                    struct flow_wildcards *wc, uint16_t vlan, tag_type *tags)
 {
     struct bond_entry *e;
 
@@ -1368,8 +1374,14 @@ choose_output_slave(const struct bond *bond, const struct flow *flow,
             /* Must have LACP negotiations for TCP balanced bonds. */
             return NULL;
         }
+        if (wc) {
+            flow_mask_hash_fields(wc, NX_HASH_FIELDS_SYMMETRIC_L4);
+        }
         /* Fall Through. */
     case BM_SLB:
+        if (wc) {
+            flow_mask_hash_fields(wc, NX_HASH_FIELDS_ETH_SRC);
+        }
         e = lookup_bond_entry(bond, flow, vlan);
         if (!e->slave || !e->slave->enabled) {
             e->slave = CONTAINER_OF(hmap_random_node(&bond->slaves),

@@ -775,6 +775,32 @@ flow_hash_symmetric_l4(const struct flow *flow, uint32_t basis)
     return jhash_bytes(&fields, sizeof fields, basis);
 }
 
+/* Masks the fields in 'wc' that are used by the flow hash 'fields'. */
+void
+flow_mask_hash_fields(struct flow_wildcards *wc, enum nx_hash_fields fields)
+{
+    switch (fields) {
+    case NX_HASH_FIELDS_ETH_SRC:
+        memset(&wc->masks.dl_src, 0xff, sizeof wc->masks.dl_src);
+        break;
+
+    case NX_HASH_FIELDS_SYMMETRIC_L4:
+        memset(&wc->masks.dl_src, 0xff, sizeof wc->masks.dl_src);
+        memset(&wc->masks.dl_dst, 0xff, sizeof wc->masks.dl_dst);
+        memset(&wc->masks.dl_type, 0xff, sizeof wc->masks.dl_type);
+        memset(&wc->masks.vlan_tci, 0xff, sizeof wc->masks.vlan_tci);
+        memset(&wc->masks.nw_proto, 0xff, sizeof wc->masks.nw_proto);
+        memset(&wc->masks.nw_src, 0xff, sizeof wc->masks.nw_src);
+        memset(&wc->masks.nw_dst, 0xff, sizeof wc->masks.nw_dst);
+        memset(&wc->masks.tp_src, 0xff, sizeof wc->masks.tp_src);
+        memset(&wc->masks.tp_dst, 0xff, sizeof wc->masks.tp_dst);
+        break;
+
+    default:
+        NOT_REACHED();
+    }
+}
+
 /* Hashes the portions of 'flow' designated by 'fields'. */
 uint32_t
 flow_hash_fields(const struct flow *flow, enum nx_hash_fields fields,

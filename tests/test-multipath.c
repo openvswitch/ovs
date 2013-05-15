@@ -57,6 +57,7 @@ main(int argc, char *argv[])
         memset(histogram, 0, sizeof histogram);
         for (i = 0; i < N_FLOWS; i++) {
             int old_link, new_link;
+            struct flow_wildcards wc;
             struct flow flow;
 
             random_bytes(&flow, sizeof flow);
@@ -64,11 +65,11 @@ main(int argc, char *argv[])
             flow.mpls_depth = 0;
 
             mp.max_link = n - 1;
-            multipath_execute(&mp, &flow);
+            multipath_execute(&mp, &flow, &wc);
             old_link = flow.regs[0];
 
             mp.max_link = n;
-            multipath_execute(&mp, &flow);
+            multipath_execute(&mp, &flow, &wc);
             new_link = flow.regs[0];
 
             assert(old_link >= 0 && old_link < n);

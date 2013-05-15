@@ -21,6 +21,7 @@
 
 struct ds;
 struct flow;
+struct flow_wildcards;
 struct ofpbuf;
 struct ofpact_learn;
 struct ofputil_flow_mod;
@@ -38,6 +39,7 @@ void learn_to_nxast(const struct ofpact_learn *, struct ofpbuf *openflow);
 
 void learn_execute(const struct ofpact_learn *, const struct flow *,
                    struct ofputil_flow_mod *, struct ofpbuf *ofpacts);
+void learn_mask(const struct ofpact_learn *, struct flow_wildcards *);
 
 void learn_parse(char *, const struct flow *, struct ofpbuf *ofpacts);
 void learn_format(const struct ofpact_learn *, struct ds *);

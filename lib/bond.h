@@ -88,8 +88,9 @@ enum bond_verdict {
 enum bond_verdict bond_check_admissibility(struct bond *, const void *slave_,
                                            const uint8_t eth_dst[ETH_ADDR_LEN],
                                            tag_type *);
-void *bond_choose_output_slave(struct bond *,
-                               const struct flow *, uint16_t vlan, tag_type *);
+void *bond_choose_output_slave(struct bond *, const struct flow *,
+                               struct flow_wildcards *, uint16_t vlan,
+                               tag_type *);
 
 /* Rebalancing. */
 void bond_account(struct bond *, const struct flow *, uint16_t vlan,

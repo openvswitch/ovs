@@ -1951,3 +1951,382 @@ br0 (dummy@ovs-dummy):
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP
+
+dnl ----------------------------------------------------------------------
+AT_BANNER([ofproto-dpif -- megaflows])
+
+# Strips out uninteresting parts of megaflow output, as well as parts
+# that vary from one run to another (e.g., timing and bond actions).
+m4_define([STRIP_XOUT], [[sed '
+    s/used:[0-9]*\.[0-9]*/used:0.0/
+    s/Datapath actions:.*/Datapath actions: <del>/
+' | sort]])
+
+AT_SETUP([ofproto-dpif megaflow - port classification])
+OVS_VSWITCHD_START
+ADD_OF_PORTS([br0], [1], [2])
+AT_DATA([flows.txt], [dnl
+table=0 in_port=1 actions=output(2)
+])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'], [0], [success
+])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'], [0], [success
+])
+AT_CHECK([ovs-appctl dpif/dump-megaflows br0 | STRIP_XOUT], [0], [dnl
+in_port=1, n_subfacets:2, used:0.0s, Datapath actions: <del>
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto-dpif megaflow - L2 classification])
+OVS_VSWITCHD_START
+ADD_OF_PORTS([br0], [1], [2])
+AT_DATA([flows.txt], [dnl
+table=0 in_port=1,dl_src=50:54:00:00:00:09 actions=output(2)
+])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'], [0], [success
+])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'], [0], [success
+])
+AT_CHECK([ovs-appctl dpif/dump-megaflows br0 | STRIP_XOUT], [0], [dnl
+in_port=1,dl_src=50:54:00:00:00:09, n_subfacets:1, used:0.0s, Datapath actions: <del>
+in_port=1,dl_src=50:54:00:00:00:0b, n_subfacets:1, used:0.0s, Datapath actions: <del>
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto-dpif megaflow - L3 classification])
+OVS_VSWITCHD_START
+ADD_OF_PORTS([br0], [1], [2])
+AT_DATA([flows.txt], [dnl
+table=0 in_port=1,icmp,nw_src=10.0.0.4 actions=output(2)
+])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'], [0], [success
+])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'], [0], [success
+])
+AT_CHECK([ovs-appctl dpif/dump-megaflows br0 | STRIP_XOUT], [0], [dnl
+icmp,in_port=1,nw_src=10.0.0.2, n_subfacets:1, used:0.0s, Datapath actions: <del>
+icmp,in_port=1,nw_src=10.0.0.4, n_subfacets:1, used:0.0s, Datapath actions: <del>
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto-dpif megaflow - L4 classification])
+OVS_VSWITCHD_START
+ADD_OF_PORTS([br0], [1], [2])
+AT_DATA([flows.txt], [dnl
+table=0 in_port=1,icmp,icmp_type=8 actions=output(2)
+])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'], [0], [success
+])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'], [0], [success
+])
+AT_CHECK([ovs-appctl dpif/dump-megaflows br0 | STRIP_XOUT], [0], [dnl
+icmp,in_port=1,icmp_type=8, n_subfacets:2, used:0.0s, Datapath actions: <del>
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto-dpif megaflow - normal])
+OVS_VSWITCHD_START
+ADD_OF_PORTS([br0], [1], [2])
+AT_CHECK([ovs-ofctl add-flow br0 action=normal])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'], [0], [success
+])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'], [0], [success
+])
+AT_CHECK([ovs-appctl dpif/dump-megaflows br0 | STRIP_XOUT], [0], [dnl
+ip,in_port=1,vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a, n_subfacets:1, used:0.0s, Datapath actions: <del>
+ip,in_port=1,vlan_tci=0x0000,dl_src=50:54:00:00:00:0b,dl_dst=50:54:00:00:00:0c, n_subfacets:1, used:0.0s, Datapath actions: <del>
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto-dpif megaflow - mpls])
+OVS_VSWITCHD_START
+ADD_OF_PORTS([br0], [1], [2])
+AT_DATA([flows.txt], [dnl
+table=0 dl_src=50:54:00:00:00:09 actions=push_mpls:0x8847,2
+table=0 dl_src=50:54:00:00:00:0b actions=pop_mpls:0x0800,2
+])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x8847),mpls(label=11,tc=3,ttl=64,bos=1)'], [0], [success
+])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0a),eth_type(0x8847),mpls(label=11,tc=3,ttl=64,bos=1)'], [0], [success
+])
+AT_CHECK([ovs-appctl dpif/dump-megaflows br0 | STRIP_XOUT], [0], [dnl
+mpls,in_port=1,dl_src=50:54:00:00:00:09,mpls_label=11,mpls_tc=3,mpls_ttl=64,mpls_bos=1, n_subfacets:1, used:0.0s, Datapath actions: <del>
+mpls,in_port=1,dl_src=50:54:00:00:00:0b,mpls_label=11,mpls_tc=3,mpls_ttl=64,mpls_bos=1, n_subfacets:1, used:0.0s, Datapath actions: <del>
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto-dpif megaflow - netflow])
+OVS_VSWITCHD_START
+ADD_OF_PORTS([br0], [1], [2])
+
+dnl NetFlow configuration disables wildcarding relevant fields
+ON_EXIT([kill `cat test-netflow.pid`])
+AT_CHECK([test-netflow --log-file --detach --no-chdir --pidfile 0:127.0.0.1 > netflow.log], [0], [], [ignore])
+AT_CAPTURE_FILE([netflow.log])
+NETFLOW_PORT=`parse_listening_port < test-netflow.log`
+ovs-vsctl \
+   set Bridge br0 netflow=@nf -- \
+   --id=@nf create NetFlow targets=\"127.0.0.1:$NETFLOW_PORT\" \
+     engine_id=1 engine_type=2 active_timeout=30 add-id-to-interface=false
+
+AT_CHECK([ovs-ofctl add-flow br0 action=normal])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'], [0], [success
+])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'], [0], [success
+])
+AT_CHECK([ovs-appctl dpif/dump-megaflows br0 | STRIP_XOUT], [0], [dnl
+icmp,in_port=1,vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,nw_src=10.0.0.2,nw_dst=10.0.0.1,icmp_type=8,icmp_code=0, n_subfacets:1, used:0.0s, Datapath actions: <del>
+icmp,in_port=1,vlan_tci=0x0000,dl_src=50:54:00:00:00:0b,dl_dst=50:54:00:00:00:0c,nw_src=10.0.0.4,nw_dst=10.0.0.3,icmp_type=8,icmp_code=0, n_subfacets:1, used:0.0s, Datapath actions: <del>
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto-dpif megaflow - normal, active-backup bonding])
+OVS_VSWITCHD_START(
+  [add-port br0 p1 -- set Interface p1 type=dummy ofport_request=1 -- \
+   add-bond br0 bond0 p2 p3 bond_mode=active-backup -- \
+   set interface p2 type=dummy ofport_request=2 -- \
+   set interface p3 type=dummy ofport_request=3])
+AT_CHECK([ovs-appctl netdev-dummy/set-admin-state up], 0, [OK
+])
+
+AT_CHECK([ovs-ofctl add-flow br0 action=normal])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'], [0], [success
+])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'], [0], [success
+])
+AT_CHECK([ovs-appctl dpif/dump-megaflows br0 | STRIP_XOUT], [0], [dnl
+ip,in_port=1,vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a, n_subfacets:1, used:0.0s, Datapath actions: <del>
+ip,in_port=1,vlan_tci=0x0000,dl_src=50:54:00:00:00:0b,dl_dst=50:54:00:00:00:0c, n_subfacets:1, used:0.0s, Datapath actions: <del>
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto-dpif megaflow - normal, balance-slb bonding])
+OVS_VSWITCHD_START(
+  [add-port br0 p1 -- set Interface p1 type=dummy ofport_request=1 -- \
+   add-bond br0 bond0 p2 p3 bond_mode=balance-slb -- \
+   set interface p2 type=dummy ofport_request=2 -- \
+   set interface p3 type=dummy ofport_request=3])
+AT_CHECK([ovs-appctl netdev-dummy/set-admin-state up], 0, [OK
+])
+
+AT_CHECK([ovs-ofctl add-flow br0 action=normal])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'], [0], [success
+])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'], [0], [success
+])
+AT_CHECK([ovs-appctl dpif/dump-megaflows br0 | STRIP_XOUT], [0], [dnl
+ip,in_port=1,vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a, n_subfacets:1, used:0.0s, Datapath actions: <del>
+ip,in_port=1,vlan_tci=0x0000,dl_src=50:54:00:00:00:0b,dl_dst=50:54:00:00:00:0c, n_subfacets:1, used:0.0s, Datapath actions: <del>
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto-dpif megaflow - normal, balance-tcp bonding])
+# Create bond0 on br0 with interfaces p0 and p1
+#    and bond1 on br1 with interfaces p2 and p3
+# with p0 patched to p2 and p1 patched to p3.
+OVS_VSWITCHD_START(
+  [add-bond br0 bond0 p0 p1 bond_mode=balance-tcp lacp=active \
+                            other-config:lacp-time=fast \
+                            other-config:bond-rebalance-interval=0 -- \
+   set interface p0 type=patch options:peer=p2 ofport_request=1 -- \
+   set interface p1 type=patch options:peer=p3 ofport_request=2 -- \
+   add-br br1 -- \
+   set bridge br1 other-config:hwaddr=aa:66:aa:66:00:00 -- \
+   set bridge br1 datapath-type=dummy other-config:datapath-id=1234 \
+                  fail-mode=secure -- \
+   add-bond br1 bond1 p2 p3 bond_mode=balance-tcp lacp=active \
+                            other-config:lacp-time=fast \
+                            other-config:bond-rebalance-interval=0 -- \
+   set interface p2 type=patch options:peer=p0 ofport_request=3 -- \
+   set interface p3 type=patch options:peer=p1 ofport_request=4 --])
+
+AT_CHECK([ovs-appctl netdev-dummy/set-admin-state up], 0, [OK
+])
+ADD_OF_PORTS([br0], [7])
+AT_CHECK([ovs-ofctl add-flow br0 action=normal])
+AT_CHECK([ovs-ofctl add-flow br1 action=normal])
+ovs-appctl time/warp 5000
+AT_CHECK([ovs-appctl netdev-dummy/receive p7 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'], [0], [success
+])
+AT_CHECK([ovs-appctl netdev-dummy/receive p7 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'], [0], [success
+])
+
+AT_CHECK([ovs-appctl dpif/dump-megaflows br0 | STRIP_XOUT], [0], [dnl
+icmp,in_port=7,vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,nw_src=10.0.0.2,nw_dst=10.0.0.1,icmp_type=8,icmp_code=0, n_subfacets:1, used:0.0s, Datapath actions: <del>
+icmp,in_port=7,vlan_tci=0x0000,dl_src=50:54:00:00:00:0b,dl_dst=50:54:00:00:00:0c,nw_src=10.0.0.4,nw_dst=10.0.0.3,icmp_type=8,icmp_code=0, n_subfacets:1, used:0.0s, Datapath actions: <del>
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto-dpif megaflow - resubmit port action])
+OVS_VSWITCHD_START
+ADD_OF_PORTS([br0], [1], [2])
+AT_DATA([flows.txt], [dnl
+table=0 in_port=1,ip actions=resubmit(90)
+table=0 in_port=90,dl_src=50:54:00:00:00:09 actions=output(2)
+])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'], [0], [success
+])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'], [0], [success
+])
+AT_CHECK([ovs-appctl dpif/dump-megaflows br0 | STRIP_XOUT], [0], [dnl
+ip,in_port=1,dl_src=50:54:00:00:00:09, n_subfacets:1, used:0.0s, Datapath actions: <del>
+ip,in_port=1,dl_src=50:54:00:00:00:0b, n_subfacets:1, used:0.0s, Datapath actions: <del>
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto-dpif megaflow - resubmit table action])
+OVS_VSWITCHD_START
+ADD_OF_PORTS([br0], [1], [2])
+AT_DATA([flows.txt], [dnl
+table=0 in_port=1,ip actions=resubmit(,1)
+table=1 dl_src=50:54:00:00:00:09 actions=output(2)
+])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'], [0], [success
+])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto= 1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'], [0], [success
+])
+AT_CHECK([ovs-appctl dpif/dump-megaflows br0 | STRIP_XOUT], [0], [dnl
+ip,in_port=1,dl_src=50:54:00:00:00:09, n_subfacets:1, used:0.0s, Datapath actions: <del>
+ip,in_port=1,dl_src=50:54:00:00:00:0b, n_subfacets:1, used:0.0s, Datapath actions: <del>
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto-dpif megaflow - goto_table action])
+OVS_VSWITCHD_START
+ADD_OF_PORTS([br0], [1], [2])
+AT_DATA([flows.txt], [dnl
+table=0 in_port=1,ip actions=goto_table(1)
+table=1 dl_src=50:54:00:00:00:09 actions=output(2)
+])
+AT_CHECK([ovs-ofctl -O OpenFlow12 add-flows br0 flows.txt])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'], [0], [success
+])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'], [0], [success
+])
+AT_CHECK([ovs-appctl dpif/dump-megaflows br0 | STRIP_XOUT], [0], [dnl
+ip,in_port=1,dl_src=50:54:00:00:00:09, n_subfacets:1, used:0.0s, Datapath actions: <del>
+ip,in_port=1,dl_src=50:54:00:00:00:0b, n_subfacets:1, used:0.0s, Datapath actions: <del>
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto-dpif megaflow - mirroring, select_all])
+OVS_VSWITCHD_START
+ADD_OF_PORTS([br0], [1], [2], [3])
+ovs-vsctl \
+        set Bridge br0 mirrors=@m --\
+        --id=@p3 get Port p3 --\
+        --id=@m create Mirror name=mymirror select_all=true output_port=@p3
+
+AT_DATA([flows.txt], [dnl
+in_port=1 actions=output:2
+])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'], [0], [success
+])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'], [0], [success
+])
+AT_CHECK([ovs-appctl dpif/dump-megaflows br0 | STRIP_XOUT], [0], [dnl
+in_port=1, n_subfacets:2, used:0.0s, Datapath actions: <del>
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto-dpif megaflow - mirroring, select_vlan])
+OVS_VSWITCHD_START
+ADD_OF_PORTS([br0], [1], [2], [3])
+ovs-vsctl \
+        set Bridge br0 mirrors=@m --\
+        --id=@p2 get Port p2 -- --id=@p3 get Port p3 --\
+        --id=@m create Mirror name=mymirror select_all=true select_vlan=11 output_port=@p3
+
+AT_DATA([flows.txt], [dnl
+in_port=1 actions=output:2
+])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x8100),vlan(vid=11,pcp=7),encap(eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0))'], [0], [success
+])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'], [0], [success
+])
+AT_CHECK([ovs-appctl dpif/dump-megaflows br0 | STRIP_XOUT], [0], [dnl
+in_port=1,dl_vlan=11, n_subfacets:1, used:0.0s, Datapath actions: <del>
+in_port=1,vlan_tci=0x0000/0x1fff, n_subfacets:1, used:0.0s, Datapath actions: <del>
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto-dpif megaflow - move action])
+OVS_VSWITCHD_START
+ADD_OF_PORTS([br0], [1], [2])
+AT_DATA([flows.txt], [dnl
+table=0 in_port=1 ip,actions=move:NXM_OF_IP_SRC[[]]->NXM_NX_REG0[[]],resubmit(90)
+table=0 in_port=90 ip,actions=move:NXM_NX_REG0[[]]->NXM_NX_REG1[[]],resubmit(91)
+table=0 in_port=91 reg0=0x0a000002,actions=output(2)
+])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'], [0], [success
+])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'], [0], [success
+])
+AT_CHECK([ovs-appctl dpif/dump-megaflows br0 | STRIP_XOUT], [0], [dnl
+ip,in_port=1,nw_src=10.0.0.2, n_subfacets:1, used:0.0s, Datapath actions: <del>
+ip,in_port=1,nw_src=10.0.0.4, n_subfacets:1, used:0.0s, Datapath actions: <del>
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto-dpif megaflow - push action])
+OVS_VSWITCHD_START
+ADD_OF_PORTS([br0], [1], [2])
+AT_DATA([flows.txt], [dnl
+table=0 in_port=1 ip,actions=push:NXM_OF_IP_SRC[[]],output(2)
+])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'], [0], [success
+])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'], [0], [success
+])
+AT_CHECK([ovs-appctl dpif/dump-megaflows br0 | STRIP_XOUT], [0], [dnl
+ip,in_port=1,nw_src=10.0.0.2, n_subfacets:1, used:0.0s, Datapath actions: <del>
+ip,in_port=1,nw_src=10.0.0.4, n_subfacets:1, used:0.0s, Datapath actions: <del>
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto-dpif megaflow - learning])
+OVS_VSWITCHD_START
+ADD_OF_PORTS([br0], [1], [2])
+AT_DATA([flows.txt], [dnl
+table=0 in_port=1 actions=load:2->NXM_NX_REG0[[0..15]],learn(table=1,priority=65535,NXM_OF_ETH_SRC[[]],NXM_OF_VLAN_TCI[[0..11]],output:NXM_NX_REG0[[0..15]]),output:2
+])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'], [0], [success
+])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'], [0], [success
+])
+dnl The original flow is missing due to a revalidation.
+AT_CHECK([ovs-appctl dpif/dump-megaflows br0 | STRIP_XOUT], [0], [dnl
+in_port=1,vlan_tci=0x0000/0x0fff,dl_src=50:54:00:00:00:09, n_subfacets:1, used:0.0s, Datapath actions: <del>
+in_port=1,vlan_tci=0x0000/0x0fff,dl_src=50:54:00:00:00:0b, n_subfacets:1, used:0.0s, Datapath actions: <del>
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP

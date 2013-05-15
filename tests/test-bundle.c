@@ -187,9 +187,11 @@ main(int argc, char *argv[])
         for (j = 0; j < N_FLOWS; j++) {
             struct flow *flow = &flows[j];
             uint16_t old_slave_id, ofp_port;
+            struct flow_wildcards wc;
 
             old_slave_id = flow->regs[0];
-            ofp_port = bundle_execute(bundle, flow, slave_enabled_cb, &sg);
+            ofp_port = bundle_execute(bundle, flow, &wc, slave_enabled_cb,
+                                      &sg);
             flow->regs[0] = ofp_port;
 
             if (ofp_port != OFPP_NONE) {
