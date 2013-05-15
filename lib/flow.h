@@ -207,6 +207,7 @@ bool flow_wildcards_equal(const struct flow_wildcards *,
                           const struct flow_wildcards *);
 uint32_t flow_hash_symmetric_l4(const struct flow *flow, uint32_t basis);
 
+void flow_mask_hash_fields(struct flow_wildcards *, enum nx_hash_fields);
 uint32_t flow_hash_fields(const struct flow *, enum nx_hash_fields,
                           uint16_t basis);
 const char *flow_hash_fields_to_str(enum nx_hash_fields);

@@ -27,6 +27,7 @@
 
 struct ds;
 struct flow;
+struct flow_wildcards;
 struct ofpact_bundle;
 struct ofpbuf;
 
@@ -35,6 +36,7 @@ struct ofpbuf;
  * See include/openflow/nicira-ext.h for NXAST_BUNDLE specification. */
 
 uint16_t bundle_execute(const struct ofpact_bundle *, const struct flow *,
+                        struct flow_wildcards *wc,
                         bool (*slave_enabled)(uint16_t ofp_port, void *aux),
                         void *aux);
 enum ofperr bundle_from_openflow(const struct nx_action_bundle *,

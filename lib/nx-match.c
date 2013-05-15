@@ -1279,10 +1279,14 @@ nxm_reg_load_to_nxast(const struct ofpact_reg_load *load,
 
 void
 nxm_execute_reg_move(const struct ofpact_reg_move *move,
-                     struct flow *flow)
+                     struct flow *flow, struct flow_wildcards *wc)
 {
+    union mf_subvalue mask_value;
     union mf_value src_value;
     union mf_value dst_value;
+
+    memset(&mask_value, 0xff, sizeof mask_value);
+    mf_write_subfield_flow(&move->src, &mask_value, &wc->masks);
 
     mf_get_value(move->dst.field, flow, &dst_value);
     mf_get_value(move->src.field, flow, &src_value);
@@ -1428,9 +1432,14 @@ nx_stack_pop(struct ofpbuf *stack)
 
 void
 nxm_execute_stack_push(const struct ofpact_stack *push,
-                       const struct flow *flow, struct ofpbuf *stack)
+                       const struct flow *flow, struct flow_wildcards *wc,
+                       struct ofpbuf *stack)
 {
+    union mf_subvalue mask_value;
     union mf_subvalue dst_value;
+
+    memset(&mask_value, 0xff, sizeof mask_value);
+    mf_write_subfield_flow(&push->subfield, &mask_value, &wc->masks);
 
     mf_read_subfield(&push->subfield, flow, &dst_value);
     nx_stack_push(stack, &dst_value);

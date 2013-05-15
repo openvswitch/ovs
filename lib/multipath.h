@@ -22,6 +22,7 @@
 
 struct ds;
 struct flow;
+struct flow_wildcards;
 struct nx_action_multipath;
 struct ofpact_multipath;
 struct ofpbuf;
@@ -38,7 +39,8 @@ enum ofperr multipath_check(const struct ofpact_multipath *,
 void multipath_to_nxast(const struct ofpact_multipath *,
                         struct ofpbuf *openflow);
 
-void multipath_execute(const struct ofpact_multipath *, struct flow *);
+void multipath_execute(const struct ofpact_multipath *, struct flow *,
+                       struct flow_wildcards *);
 
 void multipath_parse(struct ofpact_multipath *, const char *);
 void multipath_format(const struct ofpact_multipath *, struct ds *);

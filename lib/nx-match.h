@@ -80,7 +80,8 @@ void nxm_reg_move_to_nxast(const struct ofpact_reg_move *,
 void nxm_reg_load_to_nxast(const struct ofpact_reg_load *,
                            struct ofpbuf *openflow);
 
-void nxm_execute_reg_move(const struct ofpact_reg_move *, struct flow *);
+void nxm_execute_reg_move(const struct ofpact_reg_move *, struct flow *,
+                          struct flow_wildcards *);
 void nxm_execute_reg_load(const struct ofpact_reg_load *, struct flow *);
 void nxm_reg_load(const struct mf_subfield *, uint64_t src_data,
                   struct flow *);
@@ -105,7 +106,8 @@ void nxm_stack_pop_to_nxast(const struct ofpact_stack *,
                            struct ofpbuf *openflow);
 
 void nxm_execute_stack_push(const struct ofpact_stack *,
-                            const struct flow *, struct ofpbuf *);
+                            const struct flow *, struct flow_wildcards *,
+                            struct ofpbuf *);
 void nxm_execute_stack_pop(const struct ofpact_stack *,
                             struct flow *, struct ofpbuf *);
 
