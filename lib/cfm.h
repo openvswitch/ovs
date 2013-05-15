@@ -23,6 +23,7 @@
 
 struct flow;
 struct ofpbuf;
+struct netdev;
 
 #define CFM_RANDOM_VLAN UINT16_MAX
 
@@ -53,6 +54,7 @@ struct cfm_settings {
     uint64_t mpid;              /* The MPID of this CFM. */
     int interval;               /* The requested transmission interval. */
     bool extended;              /* Run in extended mode. */
+    bool demand;                /* Run in demand mode. */
     bool opup;                  /* Operational State. */
     uint16_t ccm_vlan;          /* CCM Vlan tag. Zero if none.
                                    CFM_RANDOM_VLAN if random. */
@@ -62,7 +64,7 @@ struct cfm_settings {
 };
 
 void cfm_init(void);
-struct cfm *cfm_create(const char *name);
+struct cfm *cfm_create(const struct netdev *);
 void cfm_destroy(struct cfm *);
 void cfm_run(struct cfm *);
 bool cfm_should_send_ccm(struct cfm *);

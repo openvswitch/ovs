@@ -3667,6 +3667,7 @@ iface_configure_cfm(struct iface *iface)
 
     s.extended = smap_get_bool(&iface->cfg->other_config, "cfm_extended",
                                false);
+    s.demand = smap_get_bool(&iface->cfg->other_config, "cfm_demand", false);
 
     opstate_str = smap_get(&iface->cfg->other_config, "cfm_opstate");
     s.opup = !opstate_str || !strcasecmp("up", opstate_str);
