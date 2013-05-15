@@ -2000,6 +2000,43 @@
         compatibility with 802.1ag compliant implementations.  Defaults to
         <code>false</code>.
       </column>
+
+      <column name="other_config" key="cfm_demand" type='{"type": "boolean"}'>
+        <p>
+          When <code>true</code>, and
+          <ref column="other_config" key="cfm_extended"/> is true, the CFM
+          module operates in demand mode.  When in demand mode, traffic
+          received on the <ref table="Interface"/> is used to indicate
+          liveness.  CCMs are still transmitted and received, but if the
+          <ref table="Interface"/> is receiving traffic, their absence does not
+          cause a connectivity fault.
+        </p>
+
+        <p>
+            Demand mode has a couple of caveats:
+          <ul>
+            <li>
+              To ensure that ovs-vswitchd has enough time to pull statistics
+              from the datapath, the minimum
+              <ref column="other_config" key="cfm_interval"/> is 500ms.
+            </li>
+
+            <li>
+              To avoid ambiguity, demand mode disables itself when there are
+              multiple remote maintenance points.
+            </li>
+
+            <li>
+              If the <ref table="Interface"/> is heavily congested, CCMs
+              containing the <ref column="other_config" key="cfm_opstate"/>
+              status may be dropped causing changes in the operational state to
+              be delayed.  Similarly, if CCMs containing the RDI bit are not
+              received, unidirectional link failures may not be detected.
+            </li>
+          </ul>
+        </p>
+      </column>
+
       <column name="other_config" key="cfm_opstate"
               type='{"type": "string", "enum": ["set", ["down", "up"]]}'>
         When <code>down</code>, the CFM module marks all CCMs it generates as

@@ -1973,7 +1973,7 @@ set_cfm(struct ofport *ofport_, const struct cfm_settings *s)
 
             ofproto = ofproto_dpif_cast(ofport->up.ofproto);
             ofproto->backer->need_revalidate = REV_RECONFIGURE;
-            ofport->cfm = cfm_create(netdev_get_name(ofport->up.netdev));
+            ofport->cfm = cfm_create(ofport->up.netdev);
         }
 
         if (cfm_configure(ofport->cfm, s)) {

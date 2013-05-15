@@ -30,6 +30,8 @@ v1.11.0 - xx xxx xxxx
       pass through. Any users that relied on this automatic firewall hole
       will have to manually configure it. The ovs-ctl(8) manpage documents
       the "enable-protocol" command that can be used as an alternative.
+    - New CFM demand mode which uses data traffic to indicate interface
+      liveness.
 
 v1.10.0 - 01 May 2013
 ---------------------

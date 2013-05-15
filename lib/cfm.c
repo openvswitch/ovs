@@ -26,6 +26,7 @@
 #include "flow.h"
 #include "hash.h"
 #include "hmap.h"
+#include "netdev.h"
 #include "ofpbuf.h"
 #include "packets.h"
 #include "poll-loop.h"
@@ -81,12 +82,16 @@ struct ccm {
 BUILD_ASSERT_DECL(CCM_LEN == sizeof(struct ccm));
 
 struct cfm {
-    char *name;                 /* Name of this CFM object. */
+    const char *name;           /* Name of this CFM object. */
     struct hmap_node hmap_node; /* Node in all_cfms list. */
+
+    struct netdev *netdev;
+    uint64_t rx_packets;        /* Packets received by 'netdev'. */
 
     uint64_t mpid;
     bool check_tnl_key;    /* Verify the tunnel key of inbound packets? */
     bool extended;         /* Extended mode. */
+    bool demand;           /* Demand mode. */
     bool booted;           /* A full fault interval has occured. */
     enum cfm_fault_reason fault;  /* Connectivity fault status. */
     enum cfm_fault_reason recv_fault;  /* Bit mask of faults occuring on
@@ -142,6 +147,18 @@ static struct hmap all_cfms = HMAP_INITIALIZER(&all_cfms);
 
 static unixctl_cb_func cfm_unixctl_show;
 static unixctl_cb_func cfm_unixctl_set_fault;
+
+static uint64_t
+cfm_rx_packets(const struct cfm *cfm)
+{
+    struct netdev_stats stats;
+
+    if (!netdev_get_stats(cfm->netdev, &stats)) {
+        return stats.rx_packets;
+    } else {
+        return 0;
+    }
+}
 
 static const uint8_t *
 cfm_ccm_addr(const struct cfm *cfm)
@@ -287,12 +304,13 @@ cfm_init(void)
 /* Allocates a 'cfm' object called 'name'.  'cfm' should be initialized by
  * cfm_configure() before use. */
 struct cfm *
-cfm_create(const char *name)
+cfm_create(const struct netdev *netdev)
 {
     struct cfm *cfm;
 
     cfm = xzalloc(sizeof *cfm);
-    cfm->name = xstrdup(name);
+    cfm->netdev = netdev_ref(netdev);
+    cfm->name = netdev_get_name(cfm->netdev);
     hmap_init(&cfm->remote_mps);
     cfm_generate_maid(cfm);
     hmap_insert(&all_cfms, &cfm->hmap_node, hash_string(cfm->name, 0));
@@ -319,8 +337,8 @@ cfm_destroy(struct cfm *cfm)
 
     hmap_destroy(&cfm->remote_mps);
     hmap_remove(&all_cfms, &cfm->hmap_node);
+    netdev_close(cfm->netdev);
     free(cfm->rmps_array);
-    free(cfm->name);
     free(cfm);
 }
 
@@ -332,6 +350,7 @@ cfm_run(struct cfm *cfm)
         long long int interval = cfm_fault_interval(cfm);
         struct remote_mp *rmp, *rmp_next;
         bool old_cfm_fault = cfm->fault;
+        bool demand_override;
 
         cfm->fault = cfm->recv_fault;
         cfm->recv_fault = 0;
@@ -373,14 +392,23 @@ cfm_run(struct cfm *cfm)
         }
         cfm->health_interval++;
 
-        HMAP_FOR_EACH_SAFE (rmp, rmp_next, node, &cfm->remote_mps) {
+        demand_override = false;
+        if (cfm->demand) {
+            uint64_t rx_packets = cfm_rx_packets(cfm);
+            demand_override = hmap_count(&cfm->remote_mps) == 1
+                && rx_packets > cfm->rx_packets;
+            cfm->rx_packets = rx_packets;
+        }
 
+        HMAP_FOR_EACH_SAFE (rmp, rmp_next, node, &cfm->remote_mps) {
             if (!rmp->recv) {
                 VLOG_INFO("%s: Received no CCM from RMP %"PRIu64" in the last"
                           " %lldms", cfm->name, rmp->mpid,
                           time_msec() - rmp->last_rx);
-                hmap_remove(&cfm->remote_mps, &rmp->node);
-                free(rmp);
+                if (!demand_override) {
+                    hmap_remove(&cfm->remote_mps, &rmp->node);
+                    free(rmp);
+                }
             } else {
                 rmp->recv = false;
 
@@ -516,6 +544,16 @@ cfm_configure(struct cfm *cfm, const struct cfm_settings *s)
     if (cfm->extended && interval_ms != s->interval) {
         interval = 0;
         interval_ms = MIN(s->interval, UINT16_MAX);
+    }
+
+    if (cfm->extended && s->demand) {
+        interval_ms = MAX(interval_ms, 500);
+        if (!cfm->demand) {
+            cfm->demand = true;
+            cfm->rx_packets = cfm_rx_packets(cfm);
+        }
+    } else {
+        cfm->demand = false;
     }
 
     if (interval != cfm->ccm_interval || interval_ms != cfm->ccm_interval_ms) {
