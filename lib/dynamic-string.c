@@ -358,48 +358,48 @@ void
 ds_put_hex_dump(struct ds *ds, const void *buf_, size_t size,
                 uintptr_t ofs, bool ascii)
 {
-  const uint8_t *buf = buf_;
-  const size_t per_line = 16; /* Maximum bytes per line. */
+    const uint8_t *buf = buf_;
+    const size_t per_line = 16; /* Maximum bytes per line. */
 
-  while (size > 0)
-    {
-      size_t start, end, n;
-      size_t i;
+    while (size > 0) {
+        size_t start, end, n;
+        size_t i;
 
-      /* Number of bytes on this line. */
-      start = ofs % per_line;
-      end = per_line;
-      if (end - start > size)
-        end = start + size;
-      n = end - start;
+        /* Number of bytes on this line. */
+        start = ofs % per_line;
+        end = per_line;
+        if (end - start > size)
+            end = start + size;
+        n = end - start;
 
-      /* Print line. */
-      ds_put_format(ds, "%08jx  ", (uintmax_t) ROUND_DOWN(ofs, per_line));
-      for (i = 0; i < start; i++)
-        ds_put_format(ds, "   ");
-      for (; i < end; i++)
-        ds_put_format(ds, "%02hhx%c",
-                buf[i - start], i == per_line / 2 - 1? '-' : ' ');
-      if (ascii)
-        {
-          for (; i < per_line; i++)
+        /* Print line. */
+        ds_put_format(ds, "%08jx  ", (uintmax_t) ROUND_DOWN(ofs, per_line));
+        for (i = 0; i < start; i++) {
             ds_put_format(ds, "   ");
-          ds_put_format(ds, "|");
-          for (i = 0; i < start; i++)
-            ds_put_format(ds, " ");
-          for (; i < end; i++) {
-              int c = buf[i - start];
-              ds_put_char(ds, c >= 32 && c < 127 ? c : '.');
-          }
-          for (; i < per_line; i++)
-            ds_put_format(ds, " ");
-          ds_put_format(ds, "|");
         }
-      ds_put_format(ds, "\n");
+        for (; i < end; i++) {
+            ds_put_format(ds, "%02hhx%c",
+                          buf[i - start], i == per_line / 2 - 1? '-' : ' ');
+        }
+        if (ascii) {
+            for (; i < per_line; i++)
+                ds_put_format(ds, "   ");
+            ds_put_format(ds, "|");
+            for (i = 0; i < start; i++)
+                ds_put_format(ds, " ");
+            for (; i < end; i++) {
+                int c = buf[i - start];
+                ds_put_char(ds, c >= 32 && c < 127 ? c : '.');
+            }
+            for (; i < per_line; i++)
+                ds_put_format(ds, " ");
+            ds_put_format(ds, "|");
+        }
+        ds_put_format(ds, "\n");
 
-      ofs += n;
-      buf += n;
-      size -= n;
+        ofs += n;
+        buf += n;
+        size -= n;
     }
 }
 
