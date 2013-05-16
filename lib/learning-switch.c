@@ -474,12 +474,12 @@ lswitch_choose_destination(struct lswitch *sw, const struct flow *flow)
     /* Learn the source MAC. */
     if (mac_learning_may_learn(sw->ml, flow->dl_src, 0)) {
         struct mac_entry *mac = mac_learning_insert(sw->ml, flow->dl_src, 0);
-        if (mac_entry_is_new(mac) || mac->port.i != flow->in_port) {
+        if (mac_entry_is_new(mac) || mac->port.ofp_port != flow->in_port) {
             VLOG_DBG_RL(&rl, "%016llx: learned that "ETH_ADDR_FMT" is on "
                         "port %"PRIu16, sw->datapath_id,
                         ETH_ADDR_ARGS(flow->dl_src), flow->in_port);
 
-            mac->port.i = flow->in_port;
+            mac->port.ofp_port = flow->in_port;
             mac_learning_changed(sw->ml, mac);
         }
     }
@@ -495,7 +495,7 @@ lswitch_choose_destination(struct lswitch *sw, const struct flow *flow)
 
         mac = mac_learning_lookup(sw->ml, flow->dl_dst, 0, NULL);
         if (mac) {
-            out_port = mac->port.i;
+            out_port = mac->port.ofp_port;
             if (out_port == flow->in_port) {
                 /* Don't send a packet back out its input port. */
                 return OFPP_NONE;

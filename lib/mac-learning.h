@@ -49,7 +49,7 @@ struct mac_entry {
     /* Learned port. */
     union {
         void *p;
-        int i;
+        uint16_t ofp_port;
     } port;
 };
 
