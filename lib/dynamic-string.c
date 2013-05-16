@@ -394,6 +394,8 @@ ds_put_hex_dump(struct ds *ds, const void *buf_, size_t size,
             for (; i < per_line; i++)
                 ds_put_format(ds, " ");
             ds_put_format(ds, "|");
+        } else {
+            ds_chomp(ds, ' ');
         }
         ds_put_format(ds, "\n");
 
