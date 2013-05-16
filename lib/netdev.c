@@ -25,6 +25,7 @@
 #include <unistd.h>
 
 #include "coverage.h"
+#include "dpif.h"
 #include "dynamic-string.h"
 #include "fatal-signal.h"
 #include "hash.h"
@@ -198,6 +199,43 @@ netdev_enumerate_types(struct sset *types)
         const struct netdev_class *netdev_class = node->data;
         sset_add(types, netdev_class->type);
     }
+}
+
+/* Check that the network device name is not the same as any of the registered
+ * vport providers' dpif_port name (dpif_port is NULL if the vport provider
+ * does not define it) or the datapath internal port name (e.g. ovs-system).
+ *
+ * Returns true if there is a name conflict, false otherwise. */
+bool
+netdev_is_reserved_name(const char *name)
+{
+    struct shash_node *node;
+
+    netdev_initialize();
+    SHASH_FOR_EACH (node, &netdev_classes) {
+        const char *dpif_port;
+        dpif_port = netdev_vport_class_get_dpif_port(node->data);
+        if (dpif_port && !strcmp(dpif_port, name)) {
+            return true;
+        }
+    }
+
+    if (!strncmp(name, "ovs-", 4)) {
+        struct sset types;
+        const char *type;
+
+        sset_init(&types);
+        dp_enumerate_types(&types);
+        SSET_FOR_EACH (type, &types) {
+            if (!strcmp(name+4, type)) {
+                sset_destroy(&types);
+                return true;
+            }
+        }
+        sset_destroy(&types);
+    }
+
+    return false;
 }
 
 /* Opens the network device named 'name' (e.g. "eth0") of the specified 'type'

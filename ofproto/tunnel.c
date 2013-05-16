@@ -30,10 +30,6 @@
 #include "tunnel.h"
 #include "vlog.h"
 
-/* XXX:
- *
- * Disallow netdevs with names like "gre64_system" to prevent collisions. */
-
 VLOG_DEFINE_THIS_MODULE(tunnel);
 
 struct tnl_match {

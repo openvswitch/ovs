@@ -1185,3 +1185,65 @@ AT_CHECK([RUN_OVS_VSCTL(
    [-- list Queue])], [0], [], [], [OVS_VSCTL_CLEANUP])
 OVS_VSCTL_CLEANUP
 AT_CLEANUP
+
+dnl ----------------------------------------------------------------------
+AT_BANNER([ovs-vsctl add-port -- reserved port names])
+
+AT_SETUP([add-port -- reserved names 1])
+OVS_VSWITCHD_START
+
+# Test creating all reserved port names
+m4_foreach(
+[reserved_name],
+[[ovs-netdev],
+[ovs-dummy],
+[gre_system],
+[gre64_system],
+[lisp_system],
+[vxlan_system]],
+[
+# Try creating the port
+AT_CHECK([ovs-vsctl add-port br0 reserved_name], [0], [], [])
+# Detect the warning log message
+AT_CHECK([sed -n "s/^.*\(|bridge|WARN|.*\)$/\1/p" ovs-vswitchd.log], [0], [dnl
+|bridge|WARN|could not create interface reserved_name, name is reserved
+])
+# Delete the warning log message
+AT_CHECK([sed "/|bridge|WARN|/d" ovs-vswitchd.log > ovs-vswitchd.log], [0], [], [])
+# Delete the port
+AT_CHECK([ovs-vsctl del-port br0 reserved_name], [0], [], [])])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([add-port -- reserved names 2])
+# Creates all type of tunnel ports
+OVS_VSWITCHD_START([add-port br0 p1 -- set Interface p1 type=gre \
+                    options:remote_ip=1.1.1.1 ofport_request=1\
+                    -- add-port br0 p2 -- set Interface p2 type=gre64 \
+                    options:local_ip=2.2.2.2 options:remote_ip=1.1.1.1 \
+                    ofport_request=2 \
+                    -- add-port br0 p3 -- set Interface p3 type=lisp \
+                    options:remote_ip=2.2.2.2 ofport_request=3 \
+                    -- add-port br0 p4 -- set Interface p4 type=vxlan \
+                    options:remote_ip=2.2.2.2 ofport_request=4])
+
+# Test creating all reserved tunnel port names
+m4_foreach(
+[reserved_name],
+[[gre_system],
+[gre64_system],
+[lisp_system],
+[vxlan_system]],
+[
+# Try creating the port
+AT_CHECK([ovs-vsctl add-port br0 reserved_name], [0], [], [])
+# Detect the warning log message
+AT_CHECK([sed -n "s/^.*\(|bridge|WARN|.*\)$/\1/p" ovs-vswitchd.log], [0], [dnl
+|bridge|WARN|could not create interface reserved_name, name is reserved
+])
+# Delete the warning log message
+AT_CHECK([sed "/|bridge|WARN|/d" ovs-vswitchd.log > ovs-vswitchd.log], [0], [], [])
+# Delete the port
+AT_CHECK([ovs-vsctl del-port br0 reserved_name], [0], [], [])])
+OVS_VSWITCHD_STOP
+AT_CLEANUP

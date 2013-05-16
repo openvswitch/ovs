@@ -1418,6 +1418,13 @@ iface_do_create(const struct bridge *br,
     struct netdev *netdev;
     int error;
 
+    if (netdev_is_reserved_name(iface_cfg->name)) {
+        VLOG_WARN("could not create interface %s, name is reserved",
+                  iface_cfg->name);
+        error = EINVAL;
+        goto error;
+    }
+
     error = netdev_open(iface_cfg->name,
                         iface_get_type(iface_cfg, br->cfg), &netdev);
     if (error) {

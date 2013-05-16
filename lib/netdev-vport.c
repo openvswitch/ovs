@@ -115,6 +115,12 @@ netdev_vport_needs_dst_port(const struct netdev *dev)
 }
 
 const char *
+netdev_vport_class_get_dpif_port(const struct netdev_class *class)
+{
+    return is_vport_class(class) ? vport_class_cast(class)->dpif_port : NULL;
+}
+
+const char *
 netdev_vport_get_dpif_port(const struct netdev *netdev)
 {
     const char *dpif_port;
@@ -136,9 +142,7 @@ netdev_vport_get_dpif_port(const struct netdev *netdev)
         return dpif_port_combined;
     } else {
         const struct netdev_class *class = netdev_get_class(netdev);
-        dpif_port = (is_vport_class(class)
-                     ? vport_class_cast(class)->dpif_port
-                     : NULL);
+        dpif_port = netdev_vport_class_get_dpif_port(class);
     }
 
     return dpif_port ? dpif_port : netdev_get_name(netdev);
