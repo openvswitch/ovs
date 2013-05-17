@@ -186,7 +186,6 @@ ofp_print_packet_out(struct ds *string, const struct ofp_header *oh,
     } else {
         ds_put_format(string, " buffer=0x%08"PRIx32, po.buffer_id);
     }
-    ds_put_char(string, '\n');
 
     ofpbuf_uninit(&ofpacts);
 }
