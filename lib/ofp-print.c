@@ -151,6 +151,9 @@ ofp_print_packet_in(struct ds *string, const struct ofp_header *oh,
         ds_put_cstr(string, packet);
         free(packet);
     }
+    if (verbosity > 2) {
+        ds_put_hex_dump(string, pin.packet, pin.packet_len, 0, false);
+    }
 }
 
 static void
@@ -182,6 +185,9 @@ ofp_print_packet_out(struct ds *string, const struct ofp_header *oh,
             ds_put_char(string, '\n');
             ds_put_cstr(string, packet);
             free(packet);
+        }
+        if (verbosity > 2) {
+            ds_put_hex_dump(string, po.packet, po.packet_len, 0, false);
         }
     } else {
         ds_put_format(string, " buffer=0x%08"PRIx32, po.buffer_id);

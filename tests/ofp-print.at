@@ -451,6 +451,24 @@ tcp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=50:54:00:00:00:05,dl_dst=50:54:0
 ])
 AT_CLEANUP
 
+AT_SETUP([OFPT_PACKET_IN - OF1.0, with hex output of packet data)])
+AT_KEYWORDS([ofp-print])
+AT_CHECK([ovs-ofctl ofp-print "\
+01 0a 00 4e 00 00 00 00 00 00 01 11 00 3c 00 03 \
+00 00 50 54 00 00 00 06 50 54 00 00 00 05 08 00 \
+45 00 00 28 bd 12 00 00 40 06 3c 6a c0 a8 00 01 \
+c0 a8 00 02 27 2f 00 00 78 50 cc 5b 57 af 42 1e \
+50 00 02 00 26 e8 00 00 00 00 00 00 00 00 \
+" 3], [0], [dnl
+OFPT_PACKET_IN (xid=0x0): total_len=60 in_port=3 (via no_match) data_len=60 buffer=0x00000111
+tcp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=50:54:00:00:00:05,dl_dst=50:54:00:00:00:06,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=10031,tp_dst=0 tcp_csum:26e8
+00000000  50 54 00 00 00 06 50 54-00 00 00 05 08 00 45 00
+00000010  00 28 bd 12 00 00 40 06-3c 6a c0 a8 00 01 c0 a8
+00000020  00 02 27 2f 00 00 78 50-cc 5b 57 af 42 1e 50 00
+00000030  02 00 26 e8 00 00 00 00-00 00 00 00
+])
+AT_CLEANUP
+
 AT_SETUP([OFPT_PACKET_IN - OF1.2])
 AT_KEYWORDS([ofp-print])
 AT_CHECK([ovs-ofctl ofp-print "\
@@ -462,6 +480,23 @@ AT_CHECK([ovs-ofctl ofp-print "\
 "], [0], [dnl
 OFPT_PACKET_IN (OF1.2) (xid=0x0): total_len=42 in_port=LOCAL (via no_match) data_len=42 buffer=0xffffff00
 rarp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=00:23:20:83:c1:5f,dl_dst=ff:ff:ff:ff:ff:ff,arp_spa=0.0.0.0,arp_tpa=0.0.0.0,arp_op=3,arp_sha=00:23:20:83:c1:5f,arp_tha=00:23:20:83:c1:5f
+])
+AT_CLEANUP
+
+AT_SETUP([OFPT_PACKET_IN - OF1.2, with hex output of packet data])
+AT_KEYWORDS([ofp-print])
+AT_CHECK([ovs-ofctl ofp-print "\
+03 0a 00 4c 00 00 00 00 ff ff ff 00 00 2a 00 00 \
+00 01 00 0c 80 00 00 04 ff ff ff fe 00 00 00 00 \
+00 00 ff ff ff ff ff ff 00 23 20 83 c1 5f 80 35 \
+00 01 08 00 06 04 00 03 00 23 20 83 c1 5f 00 00 \
+00 00 00 23 20 83 c1 5f 00 00 00 00 \
+" 3], [0], [dnl
+OFPT_PACKET_IN (OF1.2) (xid=0x0): total_len=42 in_port=LOCAL (via no_match) data_len=42 buffer=0xffffff00
+rarp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=00:23:20:83:c1:5f,dl_dst=ff:ff:ff:ff:ff:ff,arp_spa=0.0.0.0,arp_tpa=0.0.0.0,arp_op=3,arp_sha=00:23:20:83:c1:5f,arp_tha=00:23:20:83:c1:5f
+00000000  ff ff ff ff ff ff 00 23-20 83 c1 5f 80 35 00 01
+00000010  08 00 06 04 00 03 00 23-20 83 c1 5f 00 00 00 00
+00000020  00 23 20 83 c1 5f 00 00-00 00
 ])
 AT_CLEANUP
 
@@ -477,6 +512,24 @@ ff ff ff fe 00 00 00 00 00 00 ff ff ff ff ff ff \
 "], [0], [dnl
 OFPT_PACKET_IN (OF1.3) (xid=0x0): cookie=0x102030405060708 total_len=42 in_port=LOCAL (via no_match) data_len=42 buffer=0xffffff00
 rarp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=00:23:20:83:c1:5f,dl_dst=ff:ff:ff:ff:ff:ff,arp_spa=0.0.0.0,arp_tpa=0.0.0.0,arp_op=3,arp_sha=00:23:20:83:c1:5f,arp_tha=00:23:20:83:c1:5f
+])
+AT_CLEANUP
+
+AT_SETUP([OFPT_PACKET_IN - OF1.3, with hex output of packet data])
+AT_KEYWORDS([ofp-print])
+AT_CHECK([ovs-ofctl ofp-print "\
+04 0a 00 54 00 00 00 00 ff ff ff 00 00 2a 00 00 \
+01 02 03 04 05 06 07 08 00 01 00 0c 80 00 00 04 \
+ff ff ff fe 00 00 00 00 00 00 ff ff ff ff ff ff \
+00 23 20 83 c1 5f 80 35 00 01 08 00 06 04 00 03 \
+00 23 20 83 c1 5f 00 00 00 00 00 23 20 83 c1 5f \
+00 00 00 00 \
+" 3], [0], [dnl
+OFPT_PACKET_IN (OF1.3) (xid=0x0): cookie=0x102030405060708 total_len=42 in_port=LOCAL (via no_match) data_len=42 buffer=0xffffff00
+rarp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=00:23:20:83:c1:5f,dl_dst=ff:ff:ff:ff:ff:ff,arp_spa=0.0.0.0,arp_tpa=0.0.0.0,arp_op=3,arp_sha=00:23:20:83:c1:5f,arp_tha=00:23:20:83:c1:5f
+00000000  ff ff ff ff ff ff 00 23-20 83 c1 5f 80 35 00 01
+00000010  08 00 06 04 00 03 00 23-20 83 c1 5f 00 00 00 00
+00000020  00 23 20 83 c1 5f 00 00-00 00
 ])
 AT_CLEANUP
 
@@ -579,6 +632,25 @@ b9 7c c0 a8 00 02 c0 a8 00 01 00 00 2b 60 00 00 \
 "], [0], [dnl
 OFPT_PACKET_OUT (xid=0x0): in_port=1 actions=output:3 data_len=60
 tcp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=50:54:00:00:00:06,dl_dst=50:54:00:00:00:05,nw_src=192.168.0.2,nw_dst=192.168.0.1,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=0,tp_dst=11104 tcp_csum:6d75
+])
+AT_CLEANUP
+
+AT_SETUP([OFPT_PACKET_OUT - OF1.0, with hex output of packet data])
+AT_KEYWORDS([ofp-print])
+AT_CHECK([ovs-ofctl ofp-print "\
+01 0d 00 54 00 00 00 00 ff ff ff ff 00 01 00 08 \
+00 00 00 08 00 03 00 00 50 54 00 00 00 05 50 54 \
+00 00 00 06 08 00 45 00 00 28 00 00 40 00 40 06 \
+b9 7c c0 a8 00 02 c0 a8 00 01 00 00 2b 60 00 00 \
+00 00 6a 4f 2b 58 50 14 00 00 6d 75 00 00 00 00 \
+00 00 00 00 \
+" 3], [0], [dnl
+OFPT_PACKET_OUT (xid=0x0): in_port=1 actions=output:3 data_len=60
+tcp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=50:54:00:00:00:06,dl_dst=50:54:00:00:00:05,nw_src=192.168.0.2,nw_dst=192.168.0.1,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=0,tp_dst=11104 tcp_csum:6d75
+00000000  50 54 00 00 00 05 50 54-00 00 00 06 08 00 45 00
+00000010  00 28 00 00 40 00 40 06-b9 7c c0 a8 00 02 c0 a8
+00000020  00 01 00 00 2b 60 00 00-00 00 6a 4f 2b 58 50 14
+00000030  00 00 6d 75 00 00 00 00-00 00 00 00
 ])
 AT_CLEANUP
 
@@ -1624,6 +1696,31 @@ ff ff ff ff ff ff 00 00 00 00 82 82 82 82 82 82 \
 "], [0], [dnl
 NXT_PACKET_IN (xid=0x0): table_id=7 cookie=0x9 total_len=64 in_port=1 tun_id=0x6 metadata=0x5a5a5a5a5a5a5a5a reg0=0x1 reg1=0x2 reg2=0x3 reg3=0x4 reg4=0x5 (via action) data_len=64 (unbuffered)
 tcp,metadata=0,in_port=0,dl_vlan=80,dl_vlan_pcp=0,dl_src=80:81:81:81:81:81,dl_dst=82:82:82:82:82:82,nw_src=83.83.83.83,nw_dst=84.84.84.84,nw_tos=0,nw_ecn=0,nw_ttl=0,tp_src=85,tp_dst=86 tcp_csum:316d
+])
+AT_CLEANUP
+
+AT_SETUP([NXT_PACKET_IN, with hex output of packet data])
+AT_KEYWORDS([ofp-print])
+AT_CHECK([ovs-ofctl ofp-print "\
+01 04 00 ba 00 00 00 00 00 00 23 20 00 00 00 11 \
+ff ff ff ff 00 40 01 07 00 00 00 00 00 00 00 09 \
+00 4e 00 00 00 00 00 00 00 00 00 02 00 01 00 01 \
+20 08 00 00 00 00 00 00 00 06 00 01 00 04 00 00 \
+00 01 00 01 02 04 00 00 00 02 00 01 04 04 00 00 \
+00 03 00 01 06 04 00 00 00 04 00 01 08 04 00 00 \
+00 05 80 00 05 10 5a 5a 5a 5a 5a 5a 5a 5a ff ff \
+ff ff ff ff ff ff 00 00 00 00 82 82 82 82 82 82 \
+80 81 81 81 81 81 81 00 00 50 08 00 45 00 00 28 \
+00 00 00 00 00 06 32 05 53 53 53 53 54 54 54 54 \
+00 55 00 56 00 00 00 00 00 00 00 00 50 00 00 00 \
+31 6d 00 00 00 00 00 00 00 00 \
+" 3], [0], [dnl
+NXT_PACKET_IN (xid=0x0): table_id=7 cookie=0x9 total_len=64 in_port=1 tun_id=0x6 metadata=0x5a5a5a5a5a5a5a5a reg0=0x1 reg1=0x2 reg2=0x3 reg3=0x4 reg4=0x5 (via action) data_len=64 (unbuffered)
+tcp,metadata=0,in_port=0,dl_vlan=80,dl_vlan_pcp=0,dl_src=80:81:81:81:81:81,dl_dst=82:82:82:82:82:82,nw_src=83.83.83.83,nw_dst=84.84.84.84,nw_tos=0,nw_ecn=0,nw_ttl=0,tp_src=85,tp_dst=86 tcp_csum:316d
+00000000  82 82 82 82 82 82 80 81-81 81 81 81 81 00 00 50
+00000010  08 00 45 00 00 28 00 00-00 00 00 06 32 05 53 53
+00000020  53 53 54 54 54 54 00 55-00 56 00 00 00 00 00 00
+00000030  00 00 50 00 00 00 31 6d-00 00 00 00 00 00 00 00
 ])
 AT_CLEANUP
 
