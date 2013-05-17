@@ -1415,7 +1415,7 @@ iface_do_create(const struct bridge *br,
 {
     const struct ovsrec_interface *iface_cfg = if_cfg->cfg;
     const struct ovsrec_port *port_cfg = if_cfg->parent;
-    struct netdev *netdev;
+    struct netdev *netdev = NULL;
     int error;
 
     if (netdev_is_reserved_name(iface_cfg->name)) {
