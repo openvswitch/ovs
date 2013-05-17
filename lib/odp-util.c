@@ -187,8 +187,6 @@ slow_path_reason_to_string(uint32_t data)
         return "bfd";
     case SLOW_CONTROLLER:
         return "controller";
-    case SLOW_MATCH:
-        return "match";
     default:
         return NULL;
     }

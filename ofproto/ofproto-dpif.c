@@ -3810,7 +3810,13 @@ handle_flow_miss(struct flow_miss *miss, struct flow_miss_op *ops,
     if (!facet) {
         struct rule_dpif *rule = rule_dpif_lookup(ofproto, &miss->flow);
 
-        if (!flow_miss_should_make_facet(ofproto, miss, hash)) {
+        /* There does not exist a bijection between 'struct flow' and datapath
+         * flow keys with fitness ODP_FIT_TO_LITTLE.  This breaks a fundamental
+         * assumption used throughout the facet and subfacet handling code.
+         * Since we have to handle these misses in userspace anyway, we simply
+         * skip facet creation, avoiding the problem alltogether. */
+        if (miss->key_fitness == ODP_FIT_TOO_LITTLE
+            || !flow_miss_should_make_facet(ofproto, miss, hash)) {
             handle_flow_miss_without_facet(miss, rule, ops, n_ops);
             return;
         }
@@ -5124,19 +5130,16 @@ facet_revalidate(struct facet *facet)
     memset(&ctx, 0, sizeof ctx);
     ofpbuf_use_stub(&odp_actions, odp_actions_stub, sizeof odp_actions_stub);
     LIST_FOR_EACH (subfacet, list_node, &facet->subfacets) {
-        enum slow_path_reason slow;
-
         action_xlate_ctx_init(&ctx, ofproto, &facet->flow,
                               &subfacet->initial_vals, new_rule, 0, NULL);
         xlate_actions(&ctx, new_rule->up.ofpacts, new_rule->up.ofpacts_len,
                       &odp_actions);
 
-        slow = (subfacet->slow & SLOW_MATCH) | ctx.slow;
-        if (subfacet_should_install(subfacet, slow, &odp_actions)) {
+        if (subfacet_should_install(subfacet, ctx.slow, &odp_actions)) {
             struct dpif_flow_stats stats;
 
-            subfacet_install(subfacet,
-                             odp_actions.data, odp_actions.size, &stats, slow);
+            subfacet_install(subfacet, odp_actions.data, odp_actions.size,
+                             &stats, ctx.slow);
             subfacet_update_stats(subfacet, &stats);
 
             if (!new_actions) {
@@ -5166,7 +5169,7 @@ facet_revalidate(struct facet *facet)
 
     i = 0;
     LIST_FOR_EACH (subfacet, list_node, &facet->subfacets) {
-        subfacet->slow = (subfacet->slow & SLOW_MATCH) | ctx.slow;
+        subfacet->slow = ctx.slow;
 
         if (new_actions && new_actions[i].odp_actions) {
             free(subfacet->actions);
@@ -5365,9 +5368,7 @@ subfacet_create(struct facet *facet, struct flow_miss *miss,
     subfacet->dp_byte_count = 0;
     subfacet->actions_len = 0;
     subfacet->actions = NULL;
-    subfacet->slow = (subfacet->key_fitness == ODP_FIT_TOO_LITTLE
-                      ? SLOW_MATCH
-                      : 0);
+    subfacet->slow = 0;
     subfacet->path = SF_NOT_INSTALLED;
     subfacet->initial_vals = miss->initial_vals;
     subfacet->odp_in_port = miss->odp_in_port;
@@ -5462,7 +5463,7 @@ subfacet_make_actions(struct subfacet *subfacet, const struct ofpbuf *packet,
     facet->nf_flow.output_iface = ctx.nf_output_iface;
     facet->mirrors = ctx.mirrors;
 
-    subfacet->slow = (subfacet->slow & SLOW_MATCH) | ctx.slow;
+    subfacet->slow = ctx.slow;
     if (subfacet->actions_len != odp_actions->size
         || memcmp(subfacet->actions, odp_actions->data, odp_actions->size)) {
         free(subfacet->actions);
@@ -8329,18 +8330,9 @@ ofproto_trace(struct ofproto_dpif *ofproto, const struct flow *flow,
                     ds_put_cstr(ds, "\n\t- Sends \"packet-in\" messages "
                                 "to the OpenFlow controller.");
                     break;
-                case SLOW_MATCH:
-                    ds_put_cstr(ds, "\n\t- Needs more specific matching "
-                                "than the datapath supports.");
-                    break;
                 }
 
                 slow &= ~bit;
-            }
-
-            if (slow & ~SLOW_MATCH) {
-                ds_put_cstr(ds, "\nThe datapath actions above do not reflect "
-                            "the special slow-path processing.");
             }
         }
     }
