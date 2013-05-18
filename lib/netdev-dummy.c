@@ -36,12 +36,6 @@
 
 VLOG_DEFINE_THIS_MODULE(netdev_dummy);
 
-#ifdef __FreeBSD__
-#define FREE_BSD 1
-#else
-#define FREE_BSD 0
-#endif
-
 struct netdev_dummy {
     struct netdev up;
     uint8_t hwaddr[ETH_ADDR_LEN];
@@ -553,7 +547,5 @@ netdev_dummy_register(bool override)
     }
     netdev_register_provider(&dummy_class);
 
-    if (FREE_BSD) {
-        netdev_vport_tunnel_register();
-    }
+    netdev_vport_tunnel_register();
 }

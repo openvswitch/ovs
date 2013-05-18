@@ -685,11 +685,15 @@ netdev_vport_tunnel_register(void)
         TUNNEL_CLASS("vxlan", "vxlan_system"),
         TUNNEL_CLASS("lisp", "lisp_system")
     };
+    static bool inited;
 
     int i;
 
-    for (i = 0; i < ARRAY_SIZE(vport_classes); i++) {
-        netdev_register_provider(&vport_classes[i].netdev_class);
+    if (!inited) {
+        inited = true;
+        for (i = 0; i < ARRAY_SIZE(vport_classes); i++) {
+            netdev_register_provider(&vport_classes[i].netdev_class);
+        }
     }
 }
 
