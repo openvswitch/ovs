@@ -2472,7 +2472,7 @@ bundle_del_port(struct ofport_dpif *port)
 }
 
 static bool
-bundle_add_port(struct ofbundle *bundle, uint32_t ofp_port,
+bundle_add_port(struct ofbundle *bundle, uint16_t ofp_port,
                 struct lacp_slave_settings *lacp)
 {
     struct ofport_dpif *port;
