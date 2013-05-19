@@ -88,6 +88,25 @@ def get_network_by_bridge(br_name):
 
     return None
 
+# There are possibilities when multiple xs-network-uuids are set for a bridge.
+# In cases like that, we should choose the bridge-id whose PIF does not have a
+# VLAN associated with it.
+def get_single_bridge_id(bridge_ids, default=None):
+    if not init_session():
+        vlog.warn("Failed to get single bridge id from %s because"
+                  "XAPI session could not be initialized" % bridge_ids)
+        return default
+
+    for bridge_id in bridge_ids:
+       recs = session.xenapi.network.get_all_records_where('field "uuid"="%s"' % bridge_id)
+       if recs:
+           pifs = recs.values()[0]['PIFs']
+           for pif in pifs:
+               rec = session.xenapi.PIF.get_record(pif)
+               if rec['VLAN'] == '-1':
+                   return bridge_id
+
+    return default
 
 # By default, the "bridge-id" external id in the Bridge table is the
 # same as "xs-network-uuids".  This may be overridden by defining a
@@ -286,6 +305,9 @@ def main():
             bridge_id = nbd
             if bridge_id is None:
                 bridge_id = row.external_ids.get("xs-network-uuids")
+                if bridge_id and len(bridge_id.split(";")) > 1:
+                    bridge_ids = bridge_id.split(";")
+                    bridge_id = get_single_bridge_id(bridge_ids, bridge_ids[0])
 
             if bridge_id is not None:
                 set_external_id(row, "bridge-id", bridge_id.split(";")[0])
