@@ -15,6 +15,28 @@ OFPT_FLOW_MOD (xid=0x3): ADD actions=learn(table=1,idle_timeout=10,hard_timeout=
 ]])
 AT_CLEANUP
 
+AT_SETUP([learning action - parsing and formatting - illegal in_port_oxm])
+AT_CHECK([[ovs-ofctl parse-flow 'actions=learn(table=1, in_port_oxm=123456)']],
+  [1], [], [stderr])
+AT_CHECK([sed -e 's/.*|ofp_util|WARN|//' < stderr], [0],
+  [[port 123456 is outside the supported range 0 through ffff or 0xffffff00 through 0xffffffff
+ovs-ofctl: 123456: port value out of range for in_port_oxm
+]], [[]])
+AT_CLEANUP
+
+AT_SETUP([learning action - parsing and formatting - OXM])
+AT_DATA([flows.txt], [[
+actions=learn(output:OXM_OF_IN_PORT[])
+actions=learn(table=1, in_port=1, load:OXM_OF_IN_PORT[]->NXM_NX_REG1[], load:0xfffffffe->OXM_OF_IN_PORT[])
+]])
+AT_CHECK([ovs-ofctl parse-flows flows.txt], [0],
+[[usable protocols: any
+chosen protocol: OpenFlow10-table_id
+OFPT_FLOW_MOD (xid=0x1): ADD actions=learn(table=1,output:OXM_OF_IN_PORT[])
+OFPT_FLOW_MOD (xid=0x2): ADD actions=learn(table=1,in_port=1,load:OXM_OF_IN_PORT[]->NXM_NX_REG1[],load:0xfffffffe->OXM_OF_IN_PORT[])
+]])
+AT_CLEANUP
+
 AT_SETUP([learning action - examples])
 AT_DATA([flows.txt], [[
 # These are the examples from nicira-ext.h.

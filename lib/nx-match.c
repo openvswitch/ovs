@@ -148,7 +148,7 @@ nx_pull_raw(const uint8_t *p, unsigned int match_len, bool strict,
             error = OFPERR_OFPBMC_BAD_PREREQ;
         } else if (!mf_is_all_wild(mf, &match->wc)) {
             error = OFPERR_OFPBMC_DUP_FIELD;
-        } else if (header != OXM_OF_IN_PORT) {
+        } else {
             unsigned int width = mf->n_bytes;
             union mf_value value;
 
@@ -169,17 +169,6 @@ nx_pull_raw(const uint8_t *p, unsigned int match_len, bool strict,
                     check_mask_consistency(p, mf);
                     mf_set(mf, &value, &mask, match);
                 }
-            }
-        } else {
-            /* Special case for 32bit ports when using OXM,
-             * ports are 16 bits wide otherwise. */
-            ovs_be32 port_of11;
-            uint16_t port;
-
-            memcpy(&port_of11, p + 4, sizeof port_of11);
-            error = ofputil_port_from_ofp11(port_of11, &port);
-            if (!error) {
-                match_set_in_port(match, port);
             }
         }
 

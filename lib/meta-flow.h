@@ -39,6 +39,7 @@ enum mf_field_id {
     MFF_TUN_TOS,                /* u8 */
     MFF_METADATA,               /* be64 */
     MFF_IN_PORT,                /* be16 */
+    MFF_IN_PORT_OXM,            /* be32 */
     MFF_SKB_PRIORITY,           /* be32 */
     MFF_SKB_MARK,               /* be32 */
 
@@ -220,6 +221,7 @@ enum mf_string {
     MFS_IPV4,
     MFS_IPV6,
     MFS_OFP_PORT,               /* An OpenFlow port number or name. */
+    MFS_OFP_PORT_OXM,           /* An OpenFlow port number or name (32-bit). */
     MFS_FRAG,                   /* no, yes, first, later, not_later */
     MFS_TNL_FLAGS,              /* FLOW_TNL_F_* flags */
 };
