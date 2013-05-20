@@ -4029,7 +4029,7 @@ ofputil_frag_handling_from_string(const char *s, enum ofp_config_flags *flags)
 /* Converts the OpenFlow 1.1+ port number 'ofp11_port' into an OpenFlow 1.0
  * port number and stores the latter in '*ofp10_port', for the purpose of
  * decoding OpenFlow 1.1+ protocol messages.  Returns 0 if successful,
- * otherwise an OFPERR_* number.
+ * otherwise an OFPERR_* number.  On error, stores OFPP_NONE in '*ofp10_port'.
  *
  * See the definition of OFP11_MAX for an explanation of the mapping. */
 enum ofperr
@@ -4044,6 +4044,7 @@ ofputil_port_from_ofp11(ovs_be32 ofp11_port, uint16_t *ofp10_port)
         *ofp10_port = ofp11_port_h - OFPP11_OFFSET;
         return 0;
     } else {
+        *ofp10_port = OFPP_NONE;
         VLOG_WARN_RL(&bad_ofmsg_rl, "port %"PRIu32" is outside the supported "
                      "range 0 through %d or 0x%"PRIx32" through 0x%"PRIx32,
                      ofp11_port_h, OFPP_MAX - 1,

@@ -1203,9 +1203,7 @@ mf_set_value(const struct mf_field *mf,
 
     case MFF_IN_PORT_OXM: {
         uint16_t port;
-        if (ofputil_port_from_ofp11(value->be32, &port)) {
-            port = OFPP_NONE;
-        }
+        ofputil_port_from_ofp11(value->be32, &port);
         match_set_in_port(match, port);
         break;
     }
@@ -1395,9 +1393,7 @@ mf_set_flow_value(const struct mf_field *mf,
 
     case MFF_IN_PORT_OXM: {
         uint16_t port;
-        if (ofputil_port_from_ofp11(value->be32, &port)) {
-            port = OFPP_NONE;
-        }
+        ofputil_port_from_ofp11(value->be32, &port);
         flow->in_port = port;
         break;
     }
@@ -2481,9 +2477,7 @@ mf_format(const struct mf_field *mf,
     case MFS_OFP_PORT_OXM:
         if (!mask) {
             uint16_t port;
-            if (ofputil_port_from_ofp11(value->be32, &port)) {
-                port = OFPP_NONE;
-            }
+            ofputil_port_from_ofp11(value->be32, &port);
             ofputil_format_port(port, s);
             break;
         }
