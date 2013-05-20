@@ -8128,7 +8128,7 @@ static void
 ofproto_unixctl_trace(struct unixctl_conn *conn, int argc, const char *argv[],
                       void *aux OVS_UNUSED)
 {
-    const char *dpname = argv[1];
+    const struct dpif_backer *backer;
     struct ofproto_dpif *ofproto;
     struct ofpbuf odp_key;
     struct ofpbuf *packet;
@@ -8138,99 +8138,100 @@ ofproto_unixctl_trace(struct unixctl_conn *conn, int argc, const char *argv[],
     char *s;
 
     packet = NULL;
-    ofpbuf_init(&odp_key, 0);
+    backer = NULL;
     ds_init(&result);
+    ofpbuf_init(&odp_key, 0);
 
-    ofproto = ofproto_dpif_lookup(dpname);
-    if (!ofproto) {
-        unixctl_command_reply_error(conn, "Unknown ofproto (use ofproto/list "
-                                    "for help)");
-        goto exit;
+    /* Handle "-generate" or a hex string as the last argument. */
+    if (!strcmp(argv[argc - 1], "-generate")) {
+        packet = ofpbuf_new(0);
+        argc--;
+    } else {
+        const char *error = eth_from_hex(argv[argc - 1], &packet);
+        if (!error) {
+            argc--;
+        } else if (argc == 4) {
+            /* The 3-argument form must end in "-generate' or a hex string. */
+            unixctl_command_reply_error(conn, error);
+            goto exit;
+        }
     }
-    if (argc == 3 || (argc == 4 && !strcmp(argv[3], "-generate"))) {
-        /* ofproto/trace dpname flow [-generate] */
-        const char *flow_s = argv[2];
-        const char *generate_s = argv[3];
 
-        /* Allow 'flow_s' to be either a datapath flow or an OpenFlow-like
-         * flow.  We guess which type it is based on whether 'flow_s' contains
-         * an '(', since a datapath flow always contains '(') but an
-         * OpenFlow-like flow should not (in fact it's allowed but I believe
-         * that's not documented anywhere).
-         *
-         * An alternative would be to try to parse 'flow_s' both ways, but then
-         * it would be tricky giving a sensible error message.  After all, do
-         * you just say "syntax error" or do you present both error messages?
-         * Both choices seem lousy. */
-        if (strchr(flow_s, '(')) {
-            int error;
-
-            /* Convert string to datapath key. */
-            ofpbuf_init(&odp_key, 0);
-            error = odp_flow_key_from_string(flow_s, NULL, &odp_key);
-            if (error) {
-                unixctl_command_reply_error(conn, "Bad flow syntax");
+    /* Parse the flow and determine whether a datapath or
+     * bridge is specified. If function odp_flow_key_from_string()
+     * returns 0, the flow is a odp_flow. If function
+     * parse_ofp_exact_flow() returns 0, the flow is a br_flow. */
+    if (!odp_flow_key_from_string(argv[argc - 1], NULL, &odp_key)) {
+        /* If the odp_flow is the second argument,
+         * the datapath name is the first argument. */
+        if (argc == 3) {
+            const char *dp_type;
+            if (!strncmp(argv[1], "ovs-", 4)) {
+                dp_type = argv[1] + 4;
+            } else {
+                dp_type = argv[1];
+            }
+            backer = shash_find_data(&all_dpif_backers, dp_type);
+            if (!backer) {
+                unixctl_command_reply_error(conn, "Cannot find datapath "
+                               "of this name");
                 goto exit;
             }
-
-            /* The user might have specified the wrong ofproto but within the
-             * same backer.  That's OK, ofproto_receive() can find the right
-             * one for us. */
-            if (ofproto_receive(ofproto->backer, NULL, odp_key.data,
-                                odp_key.size, &flow, NULL, &ofproto, NULL,
-                                &initial_vals)) {
-                unixctl_command_reply_error(conn, "Invalid flow");
-                goto exit;
-            }
-            ds_put_format(&result, "Bridge: %s\n", ofproto->up.name);
         } else {
-            char *error_s;
-
-            error_s = parse_ofp_exact_flow(&flow, argv[2]);
-            if (error_s) {
-                unixctl_command_reply_error(conn, error_s);
-                free(error_s);
+            /* No datapath name specified, so there should be only one
+             * datapath. */
+            struct shash_node *node;
+            if (shash_count(&all_dpif_backers) != 1) {
+                unixctl_command_reply_error(conn, "Must specify datapath "
+                         "name, there is more than one type of datapath");
                 goto exit;
             }
-
-            initial_vals.vlan_tci = flow.vlan_tci;
+            node = shash_first(&all_dpif_backers);
+            backer = node->data;
         }
 
-        /* Generate a packet, if requested. */
-        if (generate_s) {
-            packet = ofpbuf_new(0);
-            flow_compose(packet, &flow);
+        /* Extract the ofproto_dpif object from the ofproto_receive()
+         * function. */
+        if (ofproto_receive(backer, NULL, odp_key.data,
+                            odp_key.size, &flow, NULL, &ofproto, NULL,
+                            &initial_vals)) {
+            unixctl_command_reply_error(conn, "Invalid datapath flow");
+            goto exit;
         }
-    } else if (argc == 7) {
-        /* ofproto/trace dpname priority tun_id in_port mark packet */
-        const char *priority_s = argv[2];
-        const char *tun_id_s = argv[3];
-        const char *in_port_s = argv[4];
-        const char *mark_s = argv[5];
-        const char *packet_s = argv[6];
-        uint32_t in_port = atoi(in_port_s);
-        ovs_be64 tun_id = htonll(strtoull(tun_id_s, NULL, 0));
-        uint32_t priority = atoi(priority_s);
-        uint32_t mark = atoi(mark_s);
-        const char *msg;
-
-        msg = eth_from_hex(packet_s, &packet);
-        if (msg) {
-            unixctl_command_reply_error(conn, msg);
+        ds_put_format(&result, "Bridge: %s\n", ofproto->up.name);
+    } else if (!parse_ofp_exact_flow(&flow, argv[argc - 1])) {
+        if (argc != 3) {
+            unixctl_command_reply_error(conn, "Must specify bridge name");
             goto exit;
         }
 
-        ds_put_cstr(&result, "Packet: ");
-        s = ofp_packet_to_string(packet->data, packet->size);
-        ds_put_cstr(&result, s);
-        free(s);
-
-        flow_extract(packet, priority, mark, NULL, in_port, &flow);
-        flow.tunnel.tun_id = tun_id;
+        ofproto = ofproto_dpif_lookup(argv[1]);
+        if (!ofproto) {
+            unixctl_command_reply_error(conn, "Unknown bridge name");
+            goto exit;
+        }
         initial_vals.vlan_tci = flow.vlan_tci;
     } else {
-        unixctl_command_reply_error(conn, "Bad command syntax");
+        unixctl_command_reply_error(conn, "Bad flow syntax");
         goto exit;
+    }
+
+    /* Generate a packet, if requested. */
+    if (packet) {
+        if (!packet->size) {
+            flow_compose(packet, &flow);
+        } else {
+            ds_put_cstr(&result, "Packet: ");
+            s = ofp_packet_to_string(packet->data, packet->size);
+            ds_put_cstr(&result, s);
+            free(s);
+
+            /* Use the metadata from the flow and the packet argument
+             * to reconstruct the flow. */
+            flow_extract(packet, flow.skb_priority, flow.skb_mark, NULL,
+                         flow.in_port, &flow);
+            initial_vals.vlan_tci = flow.vlan_tci;
+        }
     }
 
     ofproto_trace(ofproto, &flow, packet, &initial_vals, &result);
@@ -8661,8 +8662,8 @@ ofproto_dpif_unixctl_init(void)
 
     unixctl_command_register(
         "ofproto/trace",
-        "bridge {priority tun_id in_port mark packet | odp_flow [-generate]}",
-        2, 6, ofproto_unixctl_trace, NULL);
+        "[dp_name]|bridge odp_flow|br_flow [-generate|packet]",
+        1, 3, ofproto_unixctl_trace, NULL);
     unixctl_command_register("fdb/flush", "[bridge]", 0, 1,
                              ofproto_unixctl_fdb_flush, NULL);
     unixctl_command_register("fdb/show", "bridge", 1, 1,

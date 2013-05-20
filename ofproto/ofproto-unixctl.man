@@ -6,70 +6,98 @@ These commands manage the core OpenFlow switch implementation (called
 Lists the names of the running ofproto instances.  These are the names
 that may be used on \fBofproto/trace\fR.
 .
-.IP "\fBofproto/trace \fIswitch priority tun_id in_port mark packet\fR"
-.IQ "\fBofproto/trace \fIswitch flow \fB\-generate\fR"
-Traces the path of an imaginary packet through \fIswitch\fR.  Both
-forms require \fIswitch\fR, the switch on which the packet arrived
-(one of those listed by \fBofproto/list\fR).  The first form specifies
-a packet's contents explicitly:
-.RS
-.IP "\fIpriority\fR"
-Packet QoS priority. Use \fB0\fR if QoS is not setup.
-.IP "\fItun_id\fR"
-The tunnel ID on which the packet arrived.  Use
-\fB0\fR if the packet did not arrive through a tunnel.
-.IP "\fIin_port\fR"
-The OpenFlow port on which the packet arrived.  Use \fB65534\fR if the
-packet arrived on \fBOFPP_LOCAL\fR, the local port.
-.IP "\fImark\fR"
-SKB mark of the packet. Use \fB0\fR if Netfilter marks are not used.
-.IP "\fIpacket\fR"
-A sequence of hex digits specifying the packet's contents.  An
-Ethernet frame is at least 14 bytes long, so there must be at least 28
-hex digits.  Obviously, it is inconvenient to type in the hex digits
-by hand, so the \fBovs\-pcap\fR(1) and \fBovs\-tcpundump\fR(1)
-utilities provide easier ways.
-.RE
-.IP
-The second form specifies the packet's contents implicitly:
-.RS
-.IP "\fIflow\fR"
-A flow in one of two forms: either the form printed by
-\fBovs\-dpctl\fR(8)'s \fBdump\-flows\fR command, or in a format
-similar to that accepted by \fBovs\-ofctl\fR(8)'s \fBadd\-flow\fR
-command.  This is not an OpenFlow flow: besides other differences, it
-never contains wildcards.  \fB\*(PN\fR generates an arbitrary packet
-that has the specified \fIflow\fR.
-.RE
-.IP
-\fB\*(PN\fR will respond with extensive information on how the packet
-would be handled if it were to be received.  The packet will not
-actually be sent, but side effects such as MAC learning will occur.
+.IP "\fBofproto/trace\fR [\fIdpname\fR] \fIodp_flow\fR [\fB\-generate \fR| \
+\fIpacket\fR]"
+.IQ "\fBofproto/trace\fR \fIbridge\fR \fIbr_flow\fR \
+[\fB\-generate \fR| \fIpacket\fR]"
+Traces the path of an imaginary packet through \fIswitch\fR and
+reports the path that it took.  The packet's headers (e.g. source and
+destination) and metadata (e.g. input port), together called its
+``flow,'' are usually all that matter for this purpose.  You can
+specify the flow in the following ways:
 .
-.IP "\fBofproto/trace \fIswitch flow\fR"
-Traces the path of a packet in an imaginary flow through
-\fIswitch\fR.  The arguments are:
 .RS
-.IP "\fIswitch\fR"
-The switch on which the packet arrived (one of those listed by
-\fBofproto/list\fR).
-.IP "\fIflow\fR"
-A flow in one of two forms: either the form printed by
-\fBovs\-dpctl\fR(8)'s \fBdump\-flows\fR command, or in a format
-similar to that accepted by \fBovs\-ofctl\fR(8)'s \fBadd\-flow\fR
-command.  This is not an OpenFlow flow: besides other differences, it
-never contains wildcards.
+.IP "\fIdpname\fR \fIodp_flow\fR"
+\fIodp_flow\fR is a flow in the form printed by \fBovs\-dpctl\fR(8)'s
+\fBdump\-flows\fR command.  If all of your bridges have the same type,
+which is the common case, then you can omit \fIdpname\fR, but if you
+have bridges of different types (say, both \fBovs-netdev\fR and
+\fBovs-system\fR), then you need to specify a \fIdpname\fR to disambiguate.
+.
+.IP "\fIbridge\fR \fIbr_flow\fR"
+\fIbr_flow\fR is a flow in the form similar to that accepted by
+\fBovs\-ofctl\fR(8)'s \fBadd\-flow\fR command.  (This is not an
+OpenFlow flow: besides other differences, it never contains
+wildcards.)  \fIbridge\fR names of the bridge through which
+\fIbr_flow\fR should be traced.
 .RE
+.
 .IP
-\fB\*(PN\fR will respond with extensive information on how a packet
-in \fIflow\fR would be handled if it were received by
-\fIswitch\fR.  No packet will actually be sent.  Some side effects may
-occur, but MAC learning in particular will not.
+Most commonly, one specifies only a flow, using one of the forms
+above, but sometimes one might need to specify an actual packet
+instead of just a flow:
+.
+.RS
+.IP "Side effects."
+Some actions have side effects.  For example, the \fBnormal\fR action
+can update the MAC learning table, and the \fBlearn\fR action can
+change OpenFlow tables.  \fBofproto/trace\fR only performs side
+effects when a packet is specified.  If you want side effects to take
+place, then you must supply a packet.
+.
 .IP
-This form of \fBofproto/trace\fR cannot determine the complete set of
-datapath actions in some corner cases.  If the results say that this
-is the case, rerun \fBofproto/trace\fR supplying a packet in the flow
-to get complete results.
+(Output actions are obviously side effects too, but
+\fBofproto/trace\fR never executes them, even when one specifies a
+packet.)
+.
+.IP "Incomplete information."
+Most of the time, Open vSwitch can figure out everything about the
+path of a packet using just the flow, but in some special
+circumstances it needs to look at parts of the packet that are not
+included in the flow.  When this is the case, and you do not supply a
+packet, then \fBofproto/trace\fR will tell you it needs a packet.
+.RE
+.
+.IP
+If you wish to include a packet as part of the \fBofproto/trace\fR
+operation, there are two ways to do it:
+.
+.RS
+.IP \fB\-generate\fR
+This option, added to one of the ways to specify a flow already
+described, causes Open vSwitch to internally generate a packet with
+the flow described and then to use that packet.  If your goal is to
+execute side effects, then \fB\-generate\fR is the easiest way to do
+it, but \fB\-generate\fR is not a good way to fill in incomplete
+information, because it generates packets based on only the flow
+information, which means that the packets really do not have any more
+information than the flow.
+.
+.IP \fIpacket\fR
+This form supplies an explicit \fIpacket\fR as a sequence of hex
+digits.  An Ethernet frame is at least 14 bytes long, so there must be
+at least 28 hex digits.  Obviously, it is inconvenient to type in the
+hex digits by hand, so the \fBovs\-pcap\fR(1) and
+\fBovs\-tcpundump\fR(1) utilities provide easier ways.
+.IP
+With this form, packet headers are extracted directly from
+\fIpacket\fR, so the \fIodp_flow\fR or \fIbr_flow\fR should specify
+only metadata. The metadata can be:
+.RS
+.IP \fIskb_priority\fR
+Packet QoS priority.
+.IP \fIskb_mark\fR
+SKB mark of the packet.
+.IP \fItun_id\fR
+The tunnel ID on which the packet arrived.
+.IP \fIin_port\fR
+The port on which the packet arrived.
+.RE
+.
+The in_port value is kernel datapath port number for the first format
+and OpenFlow port number for the second format. The numbering of these
+two types of port usually differs and there is no relationship.
+.RE
 .IP "\fBofproto/self\-check\fR [\fIswitch\fR]"
 Runs an internal consistency check on \fIswitch\fR, if specified,
 otherwise on all ofproto instances, and responds with a brief summary

@@ -26,13 +26,13 @@ br0 (dummy@ovs-dummy):
 ])
 
 dnl remote_ip
-AT_CHECK([ovs-appctl ofproto/trace br0 'tunnel(tun_id=0x0,src=1.1.1.1,dst=1.2.3.4,tos=0x0,ttl=64,flags()),in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=9)'], [0], [stdout])
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'tunnel(tun_id=0x0,src=1.1.1.1,dst=1.2.3.4,tos=0x0,ttl=64,flags()),in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=9)'], [0], [stdout])
 AT_CHECK([tail -1 stdout], [0],
   [Datapath actions: set(tunnel(tun_id=0x0,src=0.0.0.0,dst=1.1.1.1,tos=0x0,ttl=64,flags(df))),1
 ])
 
 dnl local_ip, remote_ip
-AT_CHECK([ovs-appctl ofproto/trace br0 'tunnel(tun_id=0x0,src=1.1.1.1,dst=2.2.2.2,tos=0x0,ttl=64,flags()),in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=9)'], [0], [stdout])
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'tunnel(tun_id=0x0,src=1.1.1.1,dst=2.2.2.2,tos=0x0,ttl=64,flags()),in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=9)'], [0], [stdout])
 AT_CHECK([tail -1 stdout], [0],
   [Datapath actions: set(tunnel(tun_id=0x0,src=2.2.2.2,dst=1.1.1.1,tos=0x0,ttl=64,flags(df))),1
 ])
@@ -51,18 +51,18 @@ br0 (dummy@ovs-dummy):
 	p2 2/1: (gre: csum=true, df_default=false, local_ip=2.2.2.3, remote_ip=1.1.1.1, ttl=1)
 	p3 3/64: (gre64: remote_ip=2.2.2.2)
 ])
-AT_CHECK([ovs-appctl ofproto/trace br0 'tunnel(tun_id=0x0,src=1.1.1.1,dst=2.2.2.2,tos=0x0,ttl=64,flags()),in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=9)'], [0], [stdout])
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'tunnel(tun_id=0x0,src=1.1.1.1,dst=2.2.2.2,tos=0x0,ttl=64,flags()),in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=9)'], [0], [stdout])
 AT_CHECK([tail -1 stdout], [0],
   [Datapath actions: set(tunnel(tun_id=0x0,src=0.0.0.0,dst=1.1.1.1,tos=0x0,ttl=64,flags(df))),1
 ])
-AT_CHECK([ovs-appctl ofproto/trace br0 'tunnel(tun_id=0x0,src=1.1.1.1,dst=2.2.2.3,tos=0x0,ttl=64,flags()),in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=9)'], [0], [stdout])
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'tunnel(tun_id=0x0,src=1.1.1.1,dst=2.2.2.3,tos=0x0,ttl=64,flags()),in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=9)'], [0], [stdout])
 AT_CHECK([tail -1 stdout], [0],
   [Datapath actions: set(tunnel(tun_id=0x0,src=2.2.2.3,dst=1.1.1.1,tos=0x0,ttl=1,flags(csum))),1
 ])
 
 dnl nonexistent tunnel
-AT_CHECK([ovs-appctl ofproto/trace br0 'tunnel(tun_id=0x0,src=5.5.5.5,dst=6.6.6.6,tos=0x0,ttl=64,flags()),in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=9)'], [2], [ignore], [dnl
-Invalid flow
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'tunnel(tun_id=0x0,src=5.5.5.5,dst=6.6.6.6,tos=0x0,ttl=64,flags()),in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=9)'], [2], [ignore], [dnl
+Invalid datapath flow
 ovs-appctl: ovs-vswitchd: server returned an error
 ])
 
@@ -91,25 +91,25 @@ br0 (dummy@ovs-dummy):
 ])
 
 dnl Tunnel CE and encapsulated packet CE
-AT_CHECK([ovs-appctl ofproto/trace br0 'tunnel(tun_id=0x0,src=1.1.1.1,dst=2.2.2.2,tos=0x3,ttl=64,flags()),in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=3,ttl=64,frag=no),tcp(src=8,dst=9)'], [0], [stdout])
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'tunnel(tun_id=0x0,src=1.1.1.1,dst=2.2.2.2,tos=0x3,ttl=64,flags()),in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=3,ttl=64,frag=no),tcp(src=8,dst=9)'], [0], [stdout])
 AT_CHECK([tail -1 stdout], [0],
   [Datapath actions: 2
 ])
 
 dnl Tunnel CE and encapsulated packet ECT(1)
-AT_CHECK([ovs-appctl ofproto/trace br0 'tunnel(tun_id=0x0,src=1.1.1.1,dst=2.2.2.2,tos=0x3,ttl=64,flags()),in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=1,ttl=64,frag=no),tcp(src=8,dst=9)'], [0], [stdout])
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'tunnel(tun_id=0x0,src=1.1.1.1,dst=2.2.2.2,tos=0x3,ttl=64,flags()),in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=1,ttl=64,frag=no),tcp(src=8,dst=9)'], [0], [stdout])
 AT_CHECK([tail -1 stdout], [0],
   [Datapath actions: set(ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0x3,ttl=64,frag=no)),2
 ])
 
 dnl Tunnel CE and encapsulated packet ECT(2)
-AT_CHECK([ovs-appctl ofproto/trace br0 'tunnel(tun_id=0x0,src=1.1.1.1,dst=2.2.2.2,tos=0x3,ttl=64,flags()),in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=2,ttl=64,frag=no),tcp(src=8,dst=9)'], [0], [stdout])
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'tunnel(tun_id=0x0,src=1.1.1.1,dst=2.2.2.2,tos=0x3,ttl=64,flags()),in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=2,ttl=64,frag=no),tcp(src=8,dst=9)'], [0], [stdout])
 AT_CHECK([tail -1 stdout], [0],
   [Datapath actions: set(ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0x3,ttl=64,frag=no)),2
 ])
 
 dnl Tunnel CE and encapsulated packet Non-ECT
-AT_CHECK([ovs-appctl ofproto/trace br0 'tunnel(tun_id=0x0,src=1.1.1.1,dst=2.2.2.2,tos=0x3,ttl=64,flags()),in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=9)'], [0], [stdout])
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'tunnel(tun_id=0x0,src=1.1.1.1,dst=2.2.2.2,tos=0x3,ttl=64,flags()),in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=9)'], [0], [stdout])
 AT_CHECK([tail -1 stdout], [0],
   [Datapath actions: drop
 ])
@@ -139,13 +139,13 @@ br0 (dummy@ovs-dummy):
 ])
 
 dnl Basic
-AT_CHECK([ovs-appctl ofproto/trace br0 'in_port(2),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=4,ttl=128,frag=no),tcp(src=8,dst=9)'], [0], [stdout])
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(2),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=4,ttl=128,frag=no),tcp(src=8,dst=9)'], [0], [stdout])
 AT_CHECK([tail -1 stdout], [0],
   [Datapath actions: set(tunnel(tun_id=0x5,src=2.2.2.2,dst=1.1.1.1,tos=0x0,ttl=64,flags(df,key))),1
 ])
 
 dnl ECN
-AT_CHECK([ovs-appctl ofproto/trace br0 'in_port(2),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=1,ttl=64,frag=no),tcp(src=8,dst=9)'], [0], [stdout])
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(2),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=1,ttl=64,frag=no),tcp(src=8,dst=9)'], [0], [stdout])
 AT_CHECK([tail -1 stdout], [0],
   [Datapath actions: set(tunnel(tun_id=0x5,src=2.2.2.2,dst=1.1.1.1,tos=0x1,ttl=64,flags(df,key))),1
 ])
@@ -175,19 +175,19 @@ br0 (dummy@ovs-dummy):
 ])
 
 dnl Basic
-AT_CHECK([ovs-appctl ofproto/trace br0 'in_port(2),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=4,ttl=128,frag=no),tcp(src=8,dst=9)'], [0], [stdout])
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(2),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=4,ttl=128,frag=no),tcp(src=8,dst=9)'], [0], [stdout])
 AT_CHECK([tail -1 stdout], [0],
   [Datapath actions: set(tunnel(tun_id=0x0,src=0.0.0.0,dst=1.1.1.1,tos=0x4,ttl=128,flags(df))),1
 ])
 
 dnl ECN
-AT_CHECK([ovs-appctl ofproto/trace br0 'in_port(2),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=5,ttl=128,frag=no),tcp(src=8,dst=9)'], [0], [stdout])
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(2),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=5,ttl=128,frag=no),tcp(src=8,dst=9)'], [0], [stdout])
 AT_CHECK([tail -1 stdout], [0],
   [Datapath actions: set(tunnel(tun_id=0x0,src=0.0.0.0,dst=1.1.1.1,tos=0x5,ttl=128,flags(df))),1
 ])
 
 dnl non-IP
-AT_CHECK([ovs-appctl ofproto/trace br0 'in_port(2),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0806),arp(sip=1.2.3.4,tip=5.6.7.8,op=1,sha=00:0f:10:11:12:13,tha=00:14:15:16:17:18)'], [0], [stdout])
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(2),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0806),arp(sip=1.2.3.4,tip=5.6.7.8,op=1,sha=00:0f:10:11:12:13,tha=00:14:15:16:17:18)'], [0], [stdout])
 AT_CHECK([tail -1 stdout], [0],
   [Datapath actions: set(tunnel(tun_id=0x0,src=0.0.0.0,dst=1.1.1.1,tos=0x0,ttl=64,flags(df))),1
 ])
@@ -222,7 +222,7 @@ br0 (dummy@ovs-dummy):
 	p4 4/1: (gre: key=flow, remote_ip=4.4.4.4)
 ])
 
-AT_CHECK([ovs-appctl ofproto/trace br0 'in_port(100),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)'], [0], [stdout])
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(100),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)'], [0], [stdout])
 AT_CHECK([tail -1 stdout], [0], [Datapath actions: dnl
 set(tunnel(tun_id=0x1,src=0.0.0.0,dst=1.1.1.1,tos=0x0,ttl=64,flags(df,key))),1,dnl
 set(tunnel(tun_id=0x2,src=0.0.0.0,dst=2.2.2.2,tos=0x0,ttl=64,flags(df,key))),1,dnl
@@ -257,29 +257,29 @@ br0 (dummy@ovs-dummy):
 	p3 3/1: (gre: out_key=5, remote_ip=1.1.1.1)
 ])
 
-AT_CHECK([ovs-appctl ofproto/trace br0 'tunnel(tun_id=0x1,src=1.1.1.1,dst=2.2.2.2,tos=0x0,ttl=64,flags(key)),in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=9)'], [0], [stdout])
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'tunnel(tun_id=0x1,src=1.1.1.1,dst=2.2.2.2,tos=0x0,ttl=64,flags(key)),in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=9)'], [0], [stdout])
 AT_CHECK([tail -1 stdout], [0], [Datapath actions: dnl
 set(tunnel(tun_id=0x1,src=0.0.0.0,dst=1.1.1.1,tos=0x0,ttl=64,flags(df,key))),1,dnl
 set(tunnel(tun_id=0x3,src=0.0.0.0,dst=1.1.1.1,tos=0x0,ttl=64,flags(df,key))),1,dnl
 set(tunnel(tun_id=0x5,src=0.0.0.0,dst=1.1.1.1,tos=0x0,ttl=64,flags(df,key))),1
 ])
 
-AT_CHECK([ovs-appctl ofproto/trace br0 'tunnel(tun_id=0x2,src=1.1.1.1,dst=2.2.2.2,tos=0x0,ttl=64,flags(key)),in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=9)'], [0], [stdout])
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'tunnel(tun_id=0x2,src=1.1.1.1,dst=2.2.2.2,tos=0x0,ttl=64,flags(key)),in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=9)'], [0], [stdout])
 AT_CHECK([tail -1 stdout], [0], [Datapath actions: dnl
 set(tunnel(tun_id=0x3,src=0.0.0.0,dst=1.1.1.1,tos=0x0,ttl=64,flags(df,key))),1,dnl
 set(tunnel(tun_id=0x1,src=0.0.0.0,dst=1.1.1.1,tos=0x0,ttl=64,flags(df,key))),1,dnl
 set(tunnel(tun_id=0x5,src=0.0.0.0,dst=1.1.1.1,tos=0x0,ttl=64,flags(df,key))),1
 ])
 
-AT_CHECK([ovs-appctl ofproto/trace br0 'tunnel(tun_id=0x0,src=1.1.1.1,dst=2.2.2.2,tos=0x0,ttl=64,flags()),in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=9)'], [0], [stdout])
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'tunnel(tun_id=0x0,src=1.1.1.1,dst=2.2.2.2,tos=0x0,ttl=64,flags()),in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=9)'], [0], [stdout])
 AT_CHECK([tail -1 stdout], [0], [Datapath actions: dnl
 set(tunnel(tun_id=0x5,src=0.0.0.0,dst=1.1.1.1,tos=0x0,ttl=64,flags(df,key))),1,dnl
 set(tunnel(tun_id=0x1,src=0.0.0.0,dst=1.1.1.1,tos=0x0,ttl=64,flags(df,key))),1,dnl
 set(tunnel(tun_id=0x3,src=0.0.0.0,dst=1.1.1.1,tos=0x0,ttl=64,flags(df,key))),1
 ])
 
-AT_CHECK([ovs-appctl ofproto/trace br0 'tunnel(tun_id=0xf,src=1.1.1.1,dst=2.2.2.2,tos=0x0,ttl=64,flags(key)),in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=9)'], [2], [ignore], [dnl
-Invalid flow
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'tunnel(tun_id=0xf,src=1.1.1.1,dst=2.2.2.2,tos=0x0,ttl=64,flags(key)),in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=9)'], [2], [ignore], [dnl
+Invalid datapath flow
 ovs-appctl: ovs-vswitchd: server returned an error
 ])
 OVS_VSWITCHD_STOP(["/receive tunnel port not found/d"])
@@ -315,22 +315,22 @@ br0 (dummy@ovs-dummy):
 	p5 5/5: (dummy)
 ])
 
-AT_CHECK([ovs-appctl ofproto/trace br0 'tunnel(tun_id=0x2,src=1.1.1.1,dst=2.2.2.2,tos=0x0,ttl=64,flags(key)),in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=9)'], [0], [stdout])
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'tunnel(tun_id=0x2,src=1.1.1.1,dst=2.2.2.2,tos=0x0,ttl=64,flags(key)),in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=9)'], [0], [stdout])
 AT_CHECK([tail -1 stdout], [0], [dnl
 Datapath actions: 3
 ])
 
-AT_CHECK([ovs-appctl ofproto/trace br0 'tunnel(tun_id=0x3,src=1.1.1.1,dst=2.2.2.2,tos=0x0,ttl=64,flags(key)),in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=9)'], [0], [stdout])
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'tunnel(tun_id=0x3,src=1.1.1.1,dst=2.2.2.2,tos=0x0,ttl=64,flags(key)),in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=9)'], [0], [stdout])
 AT_CHECK([tail -1 stdout], [0], [dnl
 Datapath actions: 4,3,set(tunnel(tun_id=0x3,src=0.0.0.0,dst=3.3.3.3,tos=0x0,ttl=64,flags(df,key))),1,5
 ])
 
-AT_CHECK([ovs-appctl ofproto/trace br0 'tunnel(tun_id=0x3,src=3.3.3.3,dst=2.2.2.2,tos=0x0,ttl=64,flags(key)),in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=9)'], [0], [stdout])
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'tunnel(tun_id=0x3,src=3.3.3.3,dst=2.2.2.2,tos=0x0,ttl=64,flags(key)),in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=9)'], [0], [stdout])
 AT_CHECK([tail -1 stdout], [0], [dnl
 Datapath actions: 4,3,5
 ])
 
-AT_CHECK([ovs-appctl ofproto/trace br0 'tunnel(tun_id=0x0,src=1.1.1.1,dst=2.2.2.2,tos=0x0,ttl=64,flags(key)),in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=9)'], [0], [stdout])
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'tunnel(tun_id=0x0,src=1.1.1.1,dst=2.2.2.2,tos=0x0,ttl=64,flags(key)),in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=9)'], [0], [stdout])
 AT_CHECK([tail -1 stdout], [0], [dnl
 	- Sends "packet-in" messages to the OpenFlow controller.
 ])
@@ -433,7 +433,7 @@ in_port=4 actions=set_field:2.2.2.2->tun_dst,output:4
 in_port=5 actions=set_field:5->tun_id
 ])
 AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
-AT_CHECK([ovs-appctl ofproto/trace br0 'in_port(90),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)'], [0], [stdout])
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(90),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)'], [0], [stdout])
 AT_CHECK([tail -1 stdout], [0],
   [Datapath actions: set(tunnel(tun_id=0x2a,src=0.0.0.0,dst=1.1.1.1,tos=0x0,ttl=64,flags(df,key))),1,set(tunnel(tun_id=0x2a,src=0.0.0.0,dst=3.3.3.3,tos=0x0,ttl=64,flags(df,key))),1,set(tunnel(tun_id=0x2a,src=1.1.1.1,dst=4.4.4.4,tos=0x0,ttl=64,flags(df,key))),1,set(tunnel(tun_id=0x3,src=0.0.0.0,dst=2.2.2.2,tos=0x0,ttl=64,flags(df,key))),1
 ])
