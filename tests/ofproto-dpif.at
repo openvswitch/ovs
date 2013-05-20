@@ -1044,6 +1044,262 @@ AT_CHECK([ovs-dpctl normalize-actions "$flow" "$actual"], [0], [expout])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+# Two testcases below are for the ofproto/trace command
+# The first one tests all correct syntax:
+# ofproto/trace [dp_name] odp_flow [-generate|packet]
+# ofproto/trace br_name br_flow [-generate|packet]
+AT_SETUP([ofproto-dpif - ofproto/trace command 1])
+OVS_VSWITCHD_START([set bridge br0 fail-mode=standalone])
+ADD_OF_PORTS([br0], 1, 2, 3)
+
+AT_DATA([flows.txt], [dnl
+in_port=1 actions=output:2
+in_port=2 actions=output:1
+])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+odp_flow="in_port(1)"
+br_flow="in_port=1"
+# Test command: ofproto/trace odp_flow
+AT_CHECK([ovs-appctl ofproto/trace "$odp_flow"], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0], [dnl
+Datapath actions: 2
+])
+
+# Test command: ofproto/trace dp_name odp_flow
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy "$odp_flow"], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0], [dnl
+Datapath actions: 2
+])
+# Test commmand: ofproto/trace br_name br_flow
+AT_CHECK([ovs-appctl ofproto/trace br0 "$br_flow"], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0], [dnl
+Datapath actions: 2
+])
+
+# Delete the inserted flows
+AT_CHECK([ovs-ofctl del-flows br0 "in_port=1"], [0], [stdout])
+AT_CHECK([ovs-ofctl del-flows br0 "in_port=2"], [0], [stdout])
+
+# This section beflow tests the [-generate] option
+odp_flow="in_port(3),eth(src=50:54:00:00:00:05,dst=ff:ff:ff:ff:ff:ff)"
+br_flow="arp,metadata=0,in_port=3,vlan_tci=0x0000,dl_src=50:54:00:00:00:05,dl_dst=ff:ff:ff:ff:ff:ff"
+
+# Test command: ofproto/trace odp_flow
+AT_CHECK([ovs-appctl ofproto/trace "$odp_flow"], [0], [stdout])
+# Check for no MAC learning entry
+AT_CHECK_UNQUOTED([ovs-appctl fdb/show br0 | sed 's/[[0-9]]\{1,\}$/?/'], [0], [dnl
+ port  VLAN  MAC                Age
+])
+
+# Test command: ofproto/trace br_name br_flow
+AT_CHECK([ovs-appctl ofproto/trace br0 "$br_flow"], [0], [stdout])
+# Check for no MAC learning entry
+AT_CHECK_UNQUOTED([ovs-appctl fdb/show br0 | sed 's/[[0-9]]\{1,\}$/?/'], [0], [dnl
+ port  VLAN  MAC                Age
+])
+
+# Test command: ofproto/trace odp_flow -generate
+AT_CHECK([ovs-appctl ofproto/trace "$odp_flow" -generate], [0], [stdout])
+# Check for the MAC learning entry
+AT_CHECK_UNQUOTED([ovs-appctl fdb/show br0 | sed 's/[[0-9]]\{1,\}$/?/'], [0], [dnl
+ port  VLAN  MAC                Age
+    3     0  50:54:00:00:00:05    ?
+])
+
+# Test command: ofproto/trace dp_name odp_flow -generate
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy \
+  "in_port(1),eth(src=50:54:00:00:00:06,dst=50:54:00:00:00:05)" \
+  -generate], [0], [stdout])
+# Check for both MAC learning entries
+AT_CHECK_UNQUOTED([ovs-appctl fdb/show br0 | sed 's/[[0-9]]\{1,\}$/?/'], [0], [dnl
+ port  VLAN  MAC                Age
+    3     0  50:54:00:00:00:05    ?
+    1     0  50:54:00:00:00:06    ?
+])
+
+# Test command: ofproto/trace br_name br_flow -generate
+AT_CHECK([ovs-appctl ofproto/trace br0 \
+  "in_port=2,dl_src=50:54:00:00:00:07,dl_dst=50:54:00:00:00:06" \
+  -generate], [0], [stdout])
+# Check for both MAC learning entries.
+AT_CHECK_UNQUOTED([ovs-appctl fdb/show br0 | sed 's/[[0-9]]\{1,\}$/?/'], [0], [dnl
+ port  VLAN  MAC                Age
+    3     0  50:54:00:00:00:05    ?
+    1     0  50:54:00:00:00:06    ?
+    2     0  50:54:00:00:00:07    ?
+])
+
+# This section beflow tests the [packet] option
+# The ovs-tcpundump of packets between port1 and port2
+pkt1to2="50540000000250540000000108064500001C000100004001F98CC0A80001C0A800020800F7FF00000000"
+pkt2to1="50540000000150540000000208064500001C000100004001F98CC0A80002C0A800010800F7FF00000000"
+
+# Construct the MAC learning table
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy \
+  "in_port(1),eth(src=50:54:00:00:00:01,dst=ff:ff:ff:ff:ff:ff)" \
+  -generate], [0], [stdout])
+
+# Construct the MAC learning table
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy \
+  "in_port(2),eth(src=50:54:00:00:00:02,dst=ff:ff:ff:ff:ff:ff)" \
+  -generate], [0], [stdout])
+
+# Test command: ofproto/trace odp_flow packet
+AT_CHECK([ovs-appctl ofproto/trace \
+  "in_port(1),skb_priority(1),skb_mark(2)" "$pkt1to2"], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0], [dnl
+Datapath actions: 2
+])
+AT_CHECK([head -n 3 stdout], [0], [dnl
+Bridge: br0
+Packet: arp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=50:54:00:00:00:01,dl_dst=50:54:00:00:00:02,arp_spa=0.0.0.0,arp_tpa=0.0.0.0,arp_sha=00:00:00:00:00:00,arp_tha=00:00:00:00:00:00
+Flow: skb_mark=0x2,skb_priority=0x1,arp,metadata=0,in_port=1,vlan_tci=0x0000,dl_src=50:54:00:00:00:01,dl_dst=50:54:00:00:00:02,arp_spa=0.0.0.0,arp_tpa=0.0.0.0,arp_sha=00:00:00:00:00:00,arp_tha=00:00:00:00:00:00
+])
+
+# Test command: ofproto/trace dp_name odp_flow packet
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy \
+  "in_port(1),skb_priority(1),skb_mark(2)" "$pkt1to2"], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0], [dnl
+Datapath actions: 2
+])
+AT_CHECK([head -n 3 stdout], [0], [dnl
+Bridge: br0
+Packet: arp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=50:54:00:00:00:01,dl_dst=50:54:00:00:00:02,arp_spa=0.0.0.0,arp_tpa=0.0.0.0,arp_sha=00:00:00:00:00:00,arp_tha=00:00:00:00:00:00
+Flow: skb_mark=0x2,skb_priority=0x1,arp,metadata=0,in_port=1,vlan_tci=0x0000,dl_src=50:54:00:00:00:01,dl_dst=50:54:00:00:00:02,arp_spa=0.0.0.0,arp_tpa=0.0.0.0,arp_sha=00:00:00:00:00:00,arp_tha=00:00:00:00:00:00
+])
+
+# Test command: ofproto/trace br_name br_flow packet
+AT_CHECK([ovs-appctl ofproto/trace br0 \
+  "in_port=2,skb_priority=2,skb_mark=1" "$pkt2to1"], [0], [stdout],[stderr])
+AT_CHECK([tail -1 stdout], [0], [dnl
+Datapath actions: set(skb_mark(0)),1
+])
+AT_CHECK([head -n 2 stdout], [0], [dnl
+Packet: arp,metadata=0,in_port=0,vlan_tci=0x0000,dl_src=50:54:00:00:00:02,dl_dst=50:54:00:00:00:01,arp_spa=0.0.0.0,arp_tpa=0.0.0.0,arp_sha=00:00:00:00:00:00,arp_tha=00:00:00:00:00:00
+Flow: skb_mark=0x1,skb_priority=0x2,arp,metadata=0,in_port=2,vlan_tci=0x0000,dl_src=50:54:00:00:00:02,dl_dst=50:54:00:00:00:01,arp_spa=0.0.0.0,arp_tpa=0.0.0.0,arp_sha=00:00:00:00:00:00,arp_tha=00:00:00:00:00:00
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+# The second test tests the corner cases
+AT_SETUP([ofproto-dpif - ofproto/trace command 2])
+OVS_VSWITCHD_START
+ADD_OF_PORTS([br0], 1, 2)
+
+# Define flows
+odp_flow="in_port(1),eth(src=50:54:00:00:00:01,dst=50:54:00:00:00:02)"
+br_flow="in_port=1,dl_src=50:54:00:00:00:01,dl_dst=50:54:00:00:00:02"
+# Define options
+generate="-generate"
+pkt="50540000000250540000000108064500001C000100004001F98CC0A80001C0A800020800F7FF00000000"
+
+# Test incorrect command: ofproto/trace wrong_name odp_flow [-generate|packet]
+m4_foreach(
+[option],
+[[],
+["$generate"],
+["$pkt"]],
+[AT_CHECK([ovs-appctl ofproto/trace wrong_name "$odp_flow" option],
+  [2], [], [stderr])
+AT_CHECK([tail -2 stderr], [0], [dnl
+Cannot find datapath of this name
+ovs-appctl: ovs-vswitchd: server returned an error
+])])
+
+# Test incorrect command: ofproto/trace empty_string odp_flow [-generate|packet]
+m4_foreach(
+[option],
+[[],
+["$generate"],
+["$pkt"]],
+[AT_CHECK([ovs-appctl ofproto/trace "" "$odp_flow" option],
+  [2], [], [stderr])
+AT_CHECK([tail -2 stderr], [0], [dnl
+Cannot find datapath of this name
+ovs-appctl: ovs-vswitchd: server returned an error
+])])
+
+# Test incorrect command: ofproto/trace nonexist_dp_name odp_flow [-generate|packet]
+m4_foreach(
+[option],
+[[],
+["$generate"],
+["$pkt"]],
+[AT_CHECK([ovs-appctl ofproto/trace ovs-system "$odp_flow" option],
+  [2], [], [stderr])
+AT_CHECK([tail -2 stderr], [0], [dnl
+Cannot find datapath of this name
+ovs-appctl: ovs-vswitchd: server returned an error
+])])
+
+# Test incorrect command: ofproto/trace br_name odp_flow [-generate|packet]
+m4_foreach(
+[option],
+[[],
+["$generate"],
+["$pkt"]],
+[AT_CHECK([ovs-appctl ofproto/trace br0 "$odp_flow" option],
+  [2], [], [stderr])
+AT_CHECK([tail -2 stderr], [0], [dnl
+Cannot find datapath of this name
+ovs-appctl: ovs-vswitchd: server returned an error
+])])
+
+# Test incorrect command: ofproto/trace dp_name br_flow [-generate|packet]
+m4_foreach(
+[option],
+[[],
+["$generate"],
+["$pkt"]],
+[AT_CHECK([ovs-appctl ofproto/trace ovs-dummy "$br_flow" option],
+  [2], [], [stderr])
+AT_CHECK([tail -2 stderr], [0], [dnl
+Unknown bridge name
+ovs-appctl: ovs-vswitchd: server returned an error
+])])
+
+# Test incorrect command: ofproto/trace br_flow [-generate|packet]
+m4_foreach(
+[option],
+[[],
+["$generate"],
+["$pkt"]],
+[AT_CHECK([ovs-appctl ofproto/trace "$br_flow" option],
+  [2], [], [stderr])
+AT_CHECK([tail -2 stderr], [0], [dnl
+Must specify bridge name
+ovs-appctl: ovs-vswitchd: server returned an error
+])])
+
+# Test incorrect command: ofproto/trace dp_name odp_flow garbage_option
+AT_CHECK([ovs-appctl ofproto/trace \
+  ovs-dummy "$odp_flow" garbage_option],
+  [2], [stdout],[stderr])
+AT_CHECK([tail -2 stderr], [0], [dnl
+Trailing garbage in packet data
+ovs-appctl: ovs-vswitchd: server returned an error
+])
+
+# Test incorrect command: ofproto/trace with 4 arguments
+AT_CHECK([ovs-appctl ofproto/trace \
+  arg1, arg2, arg3, arg4], [2], [stdout],[stderr])
+AT_CHECK([tail -2 stderr], [0], [dnl
+"ofproto/trace" command takes at most 3 arguments
+ovs-appctl: ovs-vswitchd: server returned an error
+])
+
+# Test incorrect command: ofproto/trace with 0 argument
+AT_CHECK([ovs-appctl ofproto/trace ], [2], [stdout],[stderr])
+AT_CHECK([tail -2 stderr], [0], [dnl
+"ofproto/trace" command requires at least 1 arguments
+ovs-appctl: ovs-vswitchd: server returned an error
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 m4_define([OFPROTO_TRACE],
   [flow="$2"
    AT_CHECK([ovs-appctl ofproto/trace $1 "$flow" $3], [0], [stdout])
