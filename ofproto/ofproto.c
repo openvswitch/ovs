@@ -812,6 +812,7 @@ ofproto_port_set_bfd(struct ofproto *ofproto, uint16_t ofp_port,
     if (!ofport) {
         VLOG_WARN("%s: cannot configure bfd on nonexistent port %"PRIu16,
                   ofproto->name, ofp_port);
+        return;
     }
 
     error = (ofproto->ofproto_class->set_bfd
