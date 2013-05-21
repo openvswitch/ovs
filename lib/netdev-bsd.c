@@ -189,6 +189,7 @@ netdev_bsd_init(void)
         return status;
     }
 
+#if defined(__NetBSD__)
     af_link_sock = socket(AF_LINK, SOCK_DGRAM, 0);
     status = af_link_sock >= 0 ? 0 : errno;
     if (status) {
@@ -196,6 +197,7 @@ netdev_bsd_init(void)
         close(af_inet_sock);
         af_inet_sock = -1;
     }
+#endif /* defined(__NetBSD__) */
 
     return status;
 }
