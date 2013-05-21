@@ -308,7 +308,8 @@ AC_DEFUN([OVS_CHECK_IF_PACKET],
 
 dnl Checks for net/if_dl.h.
 dnl
-dnl (We use this as a proxy for checking whether we're building on FreeBSD.)
+dnl (We use this as a proxy for checking whether we're building on FreeBSD
+dnl or NetBSD.)
 AC_DEFUN([OVS_CHECK_IF_DL],
   [AC_CHECK_HEADER([net/if_dl.h],
                    [HAVE_IF_DL=yes],
@@ -318,7 +319,7 @@ AC_DEFUN([OVS_CHECK_IF_DL],
       AC_DEFINE([HAVE_IF_DL], [1],
                 [Define to 1 if net/if_dl.h is available.])
 
-      # On FreeBSD we use libpcap to access network devices.
+      # On these platforms we use libpcap to access network devices.
       AC_SEARCH_LIBS([pcap_open_live], [pcap])
    fi])
 
