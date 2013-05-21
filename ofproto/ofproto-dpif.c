@@ -3247,6 +3247,9 @@ struct flow_miss_op {
     struct xlate_out xout;
     bool xout_garbage;           /* 'xout' needs to be uninitialized? */
 
+    struct ofpbuf mask;          /* Flow mask for "put" ops. */
+    struct odputil_keybuf maskbuf;
+
     /* If this is a "put" op, then a pointer to the subfacet that should
      * be marked as uninstalled if the operation fails. */
     struct subfacet *subfacet;
@@ -3318,6 +3321,7 @@ init_flow_miss_execute_op(struct flow_miss *miss, struct ofpbuf *packet,
     op->dpif_op.u.execute.key = miss->key;
     op->dpif_op.u.execute.key_len = miss->key_len;
     op->dpif_op.u.execute.packet = packet;
+    ofpbuf_use_stack(&op->mask, &op->maskbuf, sizeof op->maskbuf);
 }
 
 /* Helper for handle_flow_miss_without_facet() and
@@ -3465,14 +3469,19 @@ handle_flow_miss_with_facet(struct flow_miss *miss, struct facet *facet,
 
         subfacet->path = want_path;
 
+        ofpbuf_use_stack(&op->mask, &op->maskbuf, sizeof op->maskbuf);
+        odp_flow_key_from_mask(&op->mask, &facet->xout.wc.masks,
+                               &miss->flow, UINT32_MAX);
+
         op->xout_garbage = false;
         op->dpif_op.type = DPIF_OP_FLOW_PUT;
         op->subfacet = subfacet;
         put->flags = DPIF_FP_CREATE | DPIF_FP_MODIFY;
         put->key = miss->key;
         put->key_len = miss->key_len;
-        put->mask = NULL;
-        put->mask_len = 0;
+        put->mask = op->mask.data;
+        put->mask_len = op->mask.size;
+
         if (want_path == SF_FAST_PATH) {
             put->actions = facet->xout.odp_actions.data;
             put->actions_len = facet->xout.odp_actions.size;
@@ -5030,6 +5039,8 @@ subfacet_install(struct subfacet *subfacet, const struct ofpbuf *odp_actions,
     enum subfacet_path path = facet->xout.slow ? SF_SLOW_PATH : SF_FAST_PATH;
     const struct nlattr *actions = odp_actions->data;
     size_t actions_len = odp_actions->size;
+    struct odputil_keybuf maskbuf;
+    struct ofpbuf mask;
 
     uint64_t slow_path_stub[128 / 8];
     enum dpif_flow_put_flags flags;
@@ -5046,8 +5057,12 @@ subfacet_install(struct subfacet *subfacet, const struct ofpbuf *odp_actions,
                           &actions, &actions_len);
     }
 
-    ret = dpif_flow_put(ofproto->backer->dpif, flags, subfacet->key,
-                        subfacet->key_len,  NULL, 0,
+    ofpbuf_use_stack(&mask, &maskbuf, sizeof maskbuf);
+    odp_flow_key_from_mask(&mask, &facet->xout.wc.masks,
+                           &facet->flow, UINT32_MAX);
+
+    ret = dpif_flow_put(subfacet->backer->dpif, flags, subfacet->key,
+                        subfacet->key_len,  mask.data, mask.size,
                         actions, actions_len, stats);
 
     if (stats) {

@@ -148,9 +148,9 @@ depends on a few different factors:
 
     * A dpif provider is usually easier to implement, but most
       appropriate for software switching.  It "explodes" wildcard
-      rules into exact-match entries.  This allows fast hash lookups
-      in software, but makes inefficient use of TCAMs in hardware
-      that support wildcarding.
+      rules into exact-match entries (with an optional wildcard mask).
+      This allows fast hash lookups in software, but makes
+      inefficient use of TCAMs in hardware that support wildcarding.
 
 The following sections describe how to implement each kind of port.
 
@@ -175,17 +175,25 @@ Writing a dpif Provider
 
 Open vSwitch has a built-in ofproto provider named "ofproto-dpif",
 which is built on top of a library for manipulating datapaths, called
-"dpif".  A "datapath" is a simple flow table, one that supports only
-exact-match flows, that is, flows without wildcards.  When a packet
-arrives on a network device, the datapath looks for it in this
-exact-match table.  If there is a match, then it performs the
-associated actions.  If there is no match, the datapath passes the
-packet up to ofproto-dpif, which maintains an OpenFlow flow table
-(that supports wildcards).  If the packet matches in this flow table,
-then ofproto-dpif executes its actions and inserts a new exact-match
-entry into the dpif flow table.  (Otherwise, ofproto-dpif passes the
+"dpif".  A "datapath" is a simple flow table, one that is only required
+to support exact-match flows, that is, flows without wildcards.  When a
+packet arrives on a network device, the datapath looks for it in this
+table.  If there is a match, then it performs the associated actions.
+If there is no match, the datapath passes the packet up to ofproto-dpif,
+which maintains the full OpenFlow flow table.  If the packet matches in
+this flow table, then ofproto-dpif executes its actions and inserts a
+new entry into the dpif flow table.  (Otherwise, ofproto-dpif passes the
 packet up to ofproto to send the packet to the OpenFlow controller, if
 one is configured.)
+
+When calculating the dpif flow, ofproto-dpif generates an exact-match
+flow that describes the missed packet.  It makes an effort to figure out
+what fields can be wildcarded based on the switch's configuration and
+OpenFlow flow table.  The dpif is free to ignore the suggested wildcards
+and only support the exact-match entry.  However, if the dpif supports
+wildcarding, then it can use the masks to match multiple flows with
+fewer entries and potentially significantly reduce the number of flow
+misses handled by ofproto-dpif.
 
 The "dpif" library in turn delegates much of its functionality to a
 "dpif provider".  The following diagram shows how dpif providers fit
