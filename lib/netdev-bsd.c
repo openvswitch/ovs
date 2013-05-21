@@ -863,6 +863,35 @@ netdev_bsd_get_carrier(const struct netdev *netdev_, bool *carrier)
     return 0;
 }
 
+static void
+convert_stats(struct netdev_stats *stats, const struct if_data *ifd)
+{
+    /*
+     * note: UINT64_MAX means unsupported
+     */
+    stats->rx_packets = ifd->ifi_ipackets;
+    stats->tx_packets = ifd->ifi_opackets;
+    stats->rx_bytes = ifd->ifi_obytes;
+    stats->tx_bytes = ifd->ifi_ibytes;
+    stats->rx_errors = ifd->ifi_ierrors;
+    stats->tx_errors = ifd->ifi_oerrors;
+    stats->rx_dropped = ifd->ifi_iqdrops;
+    stats->tx_dropped = UINT64_MAX;
+    stats->multicast = ifd->ifi_imcasts;
+    stats->collisions = ifd->ifi_collisions;
+    stats->rx_length_errors = UINT64_MAX;
+    stats->rx_over_errors = UINT64_MAX;
+    stats->rx_crc_errors = UINT64_MAX;
+    stats->rx_frame_errors = UINT64_MAX;
+    stats->rx_fifo_errors = UINT64_MAX;
+    stats->rx_missed_errors = UINT64_MAX;
+    stats->tx_aborted_errors = UINT64_MAX;
+    stats->tx_carrier_errors = UINT64_MAX;
+    stats->tx_fifo_errors = UINT64_MAX;
+    stats->tx_heartbeat_errors = UINT64_MAX;
+    stats->tx_window_errors = UINT64_MAX;
+}
+
 /* Retrieves current device stats for 'netdev'. */
 static int
 netdev_bsd_get_stats(const struct netdev *netdev_, struct netdev_stats *stats)
@@ -898,29 +927,7 @@ netdev_bsd_get_stats(const struct netdev *netdev_, struct netdev_stats *stats)
                         netdev_get_name(netdev_), strerror(errno));
             return errno;
         } else if (!strcmp(ifmd.ifmd_name, netdev_get_name(netdev_))) {
-            stats->rx_packets = ifmd.ifmd_data.ifi_ipackets;
-            stats->tx_packets = ifmd.ifmd_data.ifi_opackets;
-            stats->rx_bytes = ifmd.ifmd_data.ifi_ibytes;
-            stats->tx_bytes = ifmd.ifmd_data.ifi_obytes;
-            stats->rx_errors = ifmd.ifmd_data.ifi_ierrors;
-            stats->tx_errors = ifmd.ifmd_data.ifi_oerrors;
-            stats->rx_dropped = ifmd.ifmd_data.ifi_iqdrops;
-            stats->tx_dropped = UINT64_MAX;
-            stats->multicast = ifmd.ifmd_data.ifi_imcasts;
-            stats->collisions = ifmd.ifmd_data.ifi_collisions;
-
-            stats->rx_length_errors = UINT64_MAX;
-            stats->rx_over_errors = UINT64_MAX;
-            stats->rx_crc_errors = UINT64_MAX;
-            stats->rx_frame_errors = UINT64_MAX;
-            stats->rx_fifo_errors = UINT64_MAX;
-            stats->rx_missed_errors = UINT64_MAX;
-
-            stats->tx_aborted_errors = UINT64_MAX;
-            stats->tx_carrier_errors = UINT64_MAX;
-            stats->tx_fifo_errors = UINT64_MAX;
-            stats->tx_heartbeat_errors = UINT64_MAX;
-            stats->tx_window_errors = UINT64_MAX;
+            convert_stats(stats, &ifmd.ifmd_data);
             break;
         }
     }
@@ -928,7 +935,6 @@ netdev_bsd_get_stats(const struct netdev *netdev_, struct netdev_stats *stats)
     return 0;
 #elif defined(__NetBSD__)
     struct ifdatareq ifdr;
-    struct if_data *ifd;
     int saved_errno;
     int ret;
 
@@ -940,31 +946,7 @@ netdev_bsd_get_stats(const struct netdev *netdev_, struct netdev_stats *stats)
     if (ret == -1) {
         return saved_errno;
     }
-    ifd = &ifdr.ifdr_data;
-    /*
-     * note: UINT64_MAX means unsupported
-     */
-    stats->rx_packets = ifd->ifi_ipackets;
-    stats->tx_packets = ifd->ifi_opackets;
-    stats->rx_bytes = ifd->ifi_obytes;
-    stats->tx_bytes = ifd->ifi_ibytes;
-    stats->rx_errors = ifd->ifi_ierrors;
-    stats->tx_errors = ifd->ifi_oerrors;
-    stats->rx_dropped = ifd->ifi_iqdrops;
-    stats->tx_dropped = UINT64_MAX;
-    stats->multicast = ifd->ifi_imcasts;
-    stats->collisions = ifd->ifi_collisions;
-    stats->rx_length_errors = UINT64_MAX;
-    stats->rx_over_errors = UINT64_MAX;
-    stats->rx_crc_errors = UINT64_MAX;
-    stats->rx_frame_errors = UINT64_MAX;
-    stats->rx_fifo_errors = UINT64_MAX;
-    stats->rx_missed_errors = UINT64_MAX;
-    stats->tx_aborted_errors = UINT64_MAX;
-    stats->tx_carrier_errors = UINT64_MAX;
-    stats->tx_fifo_errors = UINT64_MAX;
-    stats->tx_heartbeat_errors = UINT64_MAX;
-    stats->tx_window_errors = UINT64_MAX;
+    convert_stats(stats, &ifdr.ifdr_data);
     return 0;
 #else
 #error not implemented
