@@ -1659,7 +1659,7 @@ if test -e /proc/sys/net/core/rmem_max; then
     # Linux
     rmem_max=`cat /proc/sys/net/core/rmem_max`
 elif rmem_max=`sysctl -n net.inet.tcp.recvbuf_max 2>/dev/null`; then
-    : # FreeBSD
+    : # FreeBSD, NetBSD
 else
     # Don't know how to get maximum socket receive buffer on this OS
     AT_SKIP_IF([:])
