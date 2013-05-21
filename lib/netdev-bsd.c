@@ -861,8 +861,7 @@ netdev_bsd_get_carrier(const struct netdev *netdev_, bool *carrier)
 
 /* Retrieves current device stats for 'netdev'. */
 static int
-netdev_bsd_get_stats(const struct netdev *netdev_ OVS_UNUSED,
-                     struct netdev_stats *stats)
+netdev_bsd_get_stats(const struct netdev *netdev_, struct netdev_stats *stats)
 {
 #if defined(__FreeBSD__)
     int if_count, i;
@@ -923,10 +922,48 @@ netdev_bsd_get_stats(const struct netdev *netdev_ OVS_UNUSED,
     }
 
     return 0;
-#else
-    /* XXXnotyet */
-    memset(stats, 0, sizeof(*stats));
+#elif defined(__NetBSD__)
+    struct ifdatareq ifdr;
+    struct if_data *ifd;
+    int saved_errno;
+    int ret;
+
+    memset(&ifdr, 0, sizeof(ifdr));
+    strncpy(ifdr.ifdr_name, netdev_get_kernel_name(netdev_),
+            sizeof(ifdr.ifdr_name));
+    ret = ioctl(af_link_sock, SIOCGIFDATA, &ifdr);
+    saved_errno = errno;
+    if (ret == -1) {
+        return saved_errno;
+    }
+    ifd = &ifdr.ifdr_data;
+    /*
+     * note: UINT64_MAX means unsupported
+     */
+    stats->rx_packets = ifd->ifi_ipackets;
+    stats->tx_packets = ifd->ifi_opackets;
+    stats->rx_bytes = ifd->ifi_obytes;
+    stats->tx_bytes = ifd->ifi_ibytes;
+    stats->rx_errors = ifd->ifi_ierrors;
+    stats->tx_errors = ifd->ifi_oerrors;
+    stats->rx_dropped = ifd->ifi_iqdrops;
+    stats->tx_dropped = UINT64_MAX;
+    stats->multicast = ifd->ifi_imcasts;
+    stats->collisions = ifd->ifi_collisions;
+    stats->rx_length_errors = UINT64_MAX;
+    stats->rx_over_errors = UINT64_MAX;
+    stats->rx_crc_errors = UINT64_MAX;
+    stats->rx_frame_errors = UINT64_MAX;
+    stats->rx_fifo_errors = UINT64_MAX;
+    stats->rx_missed_errors = UINT64_MAX;
+    stats->tx_aborted_errors = UINT64_MAX;
+    stats->tx_carrier_errors = UINT64_MAX;
+    stats->tx_fifo_errors = UINT64_MAX;
+    stats->tx_heartbeat_errors = UINT64_MAX;
+    stats->tx_window_errors = UINT64_MAX;
     return 0;
+#else
+#error not implemented
 #endif
 }
 
