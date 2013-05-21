@@ -51,9 +51,9 @@ ovs-vswitchd will create a TAP device as the bridge's local interface,
 named the same as the bridge, as well as for each configured internal
 interface.
 
-Currently, on FreeBSD and NetBSD, the functionality required for in-band
-control support is not implemented.  To avoid related errors, you can
-disable the in-band support with the following command.
+Currently, on FreeBSD, the functionality required for in-band control
+support is not implemented.  To avoid related errors, you can disable
+the in-band support with the following command.
 
     ovs-vsctl set bridge br0 other_config:disable-in-band=true
 

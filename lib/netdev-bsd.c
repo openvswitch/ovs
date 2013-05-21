@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2011 Gaetano Catalli.
+ * Copyright (c) 2013 YAMAMOTO Takashi.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,6 +40,9 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/sysctl.h>
+#if defined(__NetBSD__)
+#include <net/route.h>
+#endif
 
 #include "rtbsd.h"
 #include "coverage.h"
@@ -1205,6 +1209,149 @@ netdev_bsd_get_in6(const struct netdev *netdev_, struct in6_addr *in6)
     return 0;
 }
 
+#if defined(__NetBSD__)
+static struct netdev *
+find_netdev_by_kernel_name(const char *kernel_name)
+{
+    struct shash device_shash;
+    struct shash_node *node;
+
+    shash_init(&device_shash);
+    netdev_get_devices(&netdev_tap_class, &device_shash);
+    SHASH_FOR_EACH(node, &device_shash) {
+        struct netdev_bsd * const dev = node->data;
+
+        if (!strcmp(dev->kernel_name, kernel_name)) {
+            shash_destroy(&device_shash);
+            return &dev->up;
+        }
+    }
+    shash_destroy(&device_shash);
+    return NULL;
+}
+
+static const char *
+netdev_bsd_convert_kernel_name_to_ovs_name(const char *kernel_name)
+{
+    const struct netdev * const netdev =
+      find_netdev_by_kernel_name(kernel_name);
+
+    if (netdev == NULL) {
+        return NULL;
+    }
+    return netdev_get_name(netdev);
+}
+#endif
+
+static int
+netdev_bsd_get_next_hop(const struct in_addr *host, struct in_addr *next_hop,
+                        char **netdev_name)
+{
+#if defined(__NetBSD__)
+    static int seq = 0;
+    struct sockaddr_in sin;
+    struct sockaddr_dl sdl;
+    int s;
+    int i;
+    struct {
+        struct rt_msghdr h;
+        char space[512];
+    } buf;
+    struct rt_msghdr *rtm = &buf.h;
+    const pid_t pid = getpid();
+    char *cp;
+    ssize_t ssz;
+    bool gateway = false;
+    char *ifname = NULL;
+    int saved_errno;
+
+    memset(next_hop, 0, sizeof(*next_hop));
+    *netdev_name = NULL;
+
+    memset(&sin, 0, sizeof(sin));
+    sin.sin_len = sizeof(sin);
+    sin.sin_family = AF_INET;
+    sin.sin_port = 0;
+    sin.sin_addr = *host;
+
+    memset(&sdl, 0, sizeof(sdl));
+    sdl.sdl_len = sizeof(sdl);
+    sdl.sdl_family = AF_LINK;
+
+    s = socket(PF_ROUTE, SOCK_RAW, 0);
+    memset(&buf, 0, sizeof(buf));
+    rtm->rtm_flags = RTF_HOST|RTF_UP;
+    rtm->rtm_version = RTM_VERSION;
+    rtm->rtm_addrs = RTA_DST|RTA_IFP;
+    cp = (void *)&buf.space;
+    memcpy(cp, &sin, sizeof(sin));
+    RT_ADVANCE(cp, (struct sockaddr *)(void *)&sin);
+    memcpy(cp, &sdl, sizeof(sdl));
+    RT_ADVANCE(cp, (struct sockaddr *)(void *)&sdl);
+    rtm->rtm_msglen = cp - (char *)(void *)rtm;
+    rtm->rtm_seq = ++seq;
+    rtm->rtm_type = RTM_GET;
+    rtm->rtm_pid = pid;
+    write(s, rtm, rtm->rtm_msglen);
+    memset(&buf, 0, sizeof(buf));
+    do {
+        ssz = read(s, &buf, sizeof(buf));
+    } while (ssz > 0 && (rtm->rtm_seq != seq || rtm->rtm_pid != pid));
+    saved_errno = errno;
+    close(s);
+    if (ssz <= 0) {
+        if (ssz < 0) {
+            return saved_errno;
+        }
+        return EPIPE; /* XXX */
+    }
+    cp = (void *)&buf.space;
+    for (i = 1; i; i <<= 1) {
+        if ((rtm->rtm_addrs & i) != 0) {
+            const struct sockaddr *sa = (const void *)cp;
+
+            if ((i == RTA_GATEWAY) && sa->sa_family == AF_INET) {
+                const struct sockaddr_in * const sin =
+                  (const struct sockaddr_in *)sa;
+
+                *next_hop = sin->sin_addr;
+                gateway = true;
+            }
+            if ((i == RTA_IFP) && sa->sa_family == AF_LINK) {
+                const struct sockaddr_dl * const sdl =
+                  (const struct sockaddr_dl *)sa;
+                const size_t nlen = sdl->sdl_nlen;
+                char * const kernel_name = xmalloc(nlen + 1);
+                const char *name;
+
+                memcpy(kernel_name, sdl->sdl_data, nlen);
+                kernel_name[nlen] = 0;
+                name = netdev_bsd_convert_kernel_name_to_ovs_name(kernel_name);
+                if (name == NULL) {
+                    ifname = xstrdup(kernel_name);
+                } else {
+                    ifname = xstrdup(name);
+                }
+                free(kernel_name);
+            }
+            RT_ADVANCE(cp, sa);
+        }
+    }
+    if (ifname == NULL) {
+        return ENXIO;
+    }
+    if (!gateway) {
+        *next_hop = *host;
+    }
+    *netdev_name = ifname;
+    VLOG_DBG("host " IP_FMT " next-hop " IP_FMT " if %s",
+      IP_ARGS(host->s_addr), IP_ARGS(next_hop->s_addr), *netdev_name);
+    return 0;
+#else
+    return EOPNOTSUPP;
+#endif
+}
+
 static void
 make_in4_sockaddr(struct sockaddr *sa, struct in_addr addr)
 {
@@ -1330,7 +1477,7 @@ const struct netdev_class netdev_bsd_class = {
     netdev_bsd_set_in4,
     netdev_bsd_get_in6,
     NULL, /* add_router */
-    NULL, /* get_next_hop */
+    netdev_bsd_get_next_hop,
     NULL, /* get_status */
     NULL, /* arp_lookup */
 
@@ -1385,7 +1532,7 @@ const struct netdev_class netdev_tap_class = {
     netdev_bsd_set_in4,
     netdev_bsd_get_in6,
     NULL, /* add_router */
-    NULL, /* get_next_hop */
+    netdev_bsd_get_next_hop,
     NULL, /* get_status */
     NULL, /* arp_lookup */
 
