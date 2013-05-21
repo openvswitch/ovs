@@ -105,6 +105,11 @@ enum {
 /* An AF_INET socket (used for ioctl operations). */
 static int af_inet_sock = -1;
 
+#if defined(__NetBSD__)
+/* AF_LINK socket used for netdev_bsd_get_stats and set_etheraddr */
+static int af_link_sock = -1;
+#endif /* defined(__NetBSD__) */
+
 #define PCAP_SNAPLEN 2048
 
 
@@ -179,9 +184,17 @@ netdev_bsd_init(void)
 
     af_inet_sock = socket(AF_INET, SOCK_DGRAM, 0);
     status = af_inet_sock >= 0 ? 0 : errno;
-
     if (status) {
         VLOG_ERR("failed to create inet socket: %s", strerror(status));
+        return status;
+    }
+
+    af_link_sock = socket(AF_LINK, SOCK_DGRAM, 0);
+    status = af_link_sock >= 0 ? 0 : errno;
+    if (status) {
+        VLOG_ERR("failed to create link socket: %s", strerror(status));
+        close(af_inet_sock);
+        af_inet_sock = -1;
     }
 
     return status;
