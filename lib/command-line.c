@@ -190,8 +190,8 @@ proctitle_init(int argc OVS_UNUSED, char **argv OVS_UNUSED)
 {
 }
 
-#ifndef __FreeBSD__
-/* On FreeBSD we #define this to setproctitle. */
+#if !(defined(__FreeBSD__) || defined(__NetBSD__))
+/* On these platforms we #define this to setproctitle. */
 void
 proctitle_set(const char *format OVS_UNUSED, ...)
 {

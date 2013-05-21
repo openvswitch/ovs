@@ -32,7 +32,9 @@
 #include <net/if_media.h>
 #include <net/if_tap.h>
 #include <netinet/in.h>
+#ifdef HAVE_NET_IF_MIB_H
 #include <net/if_mib.h>
+#endif
 #include <poll.h>
 #include <string.h>
 #include <unistd.h>
@@ -131,6 +133,9 @@ static int get_etheraddr(const char *netdev_name, uint8_t ea[ETH_ADDR_LEN]);
 static int set_etheraddr(const char *netdev_name, int hwaddr_family,
                          int hwaddr_len, const uint8_t[ETH_ADDR_LEN]);
 static int get_ifindex(const struct netdev *, int *ifindexp);
+
+static int ifr_get_flags(const struct ifreq *);
+static void ifr_set_flags(struct ifreq *, int flags);
 
 static int netdev_bsd_init(void);
 
@@ -339,12 +344,21 @@ netdev_bsd_create_tap(const struct netdev_class *class, const char *name,
     }
 
     /* Change the name of the tap device */
+#if defined(SIOCSIFNAME)
     ifr.ifr_data = (void *)name;
     if (ioctl(af_inet_sock, SIOCSIFNAME, &ifr) == -1) {
         error = errno;
         destroy_tap(netdev->tap_fd, ifr.ifr_name);
         goto error_undef_notifier;
     }
+#else
+    /*
+     * XXX
+     * NetBSD doesn't support inteface renaming.
+     */
+    VLOG_INFO("tap %s is created for bridge %s", ifr.ifr_name, name);
+    name = ifr.ifr_name; /* XXX */
+#endif
 
     /* set non-blocking. */
     error = set_nonblocking(netdev->tap_fd);
@@ -354,8 +368,7 @@ netdev_bsd_create_tap(const struct netdev_class *class, const char *name,
     }
 
     /* Turn device UP */
-    ifr.ifr_flags = (uint16_t)IFF_UP;
-    ifr.ifr_flagshigh = 0;
+    ifr_set_flags(&ifr, IFF_UP);
     strncpy(ifr.ifr_name, name, sizeof ifr.ifr_name);
     if (ioctl(af_inet_sock, SIOCSIFFLAGS, &ifr) == -1) {
         error = errno;
@@ -818,8 +831,10 @@ netdev_bsd_get_carrier(const struct netdev *netdev_, bool *carrier)
 
 /* Retrieves current device stats for 'netdev'. */
 static int
-netdev_bsd_get_stats(const struct netdev *netdev_, struct netdev_stats *stats)
+netdev_bsd_get_stats(const struct netdev *netdev_ OVS_UNUSED,
+                     struct netdev_stats *stats)
 {
+#if defined(__FreeBSD__)
     int if_count, i;
     int mib[6];
     size_t len;
@@ -878,6 +893,11 @@ netdev_bsd_get_stats(const struct netdev *netdev_, struct netdev_stats *stats)
     }
 
     return 0;
+#else
+    /* XXXnotyet */
+    memset(stats, 0, sizeof(*stats));
+    return 0;
+#endif
 }
 
 static uint32_t
@@ -1149,7 +1169,9 @@ nd_to_iff_flags(enum netdev_flags nd)
     }
     if (nd & NETDEV_PROMISC) {
         iff |= IFF_PROMISC;
+#if defined(IFF_PPROMISC)
         iff |= IFF_PPROMISC;
+#endif
     }
     return iff;
 }
@@ -1332,8 +1354,7 @@ get_flags(const struct netdev *netdev, int *flags)
     error = netdev_bsd_do_ioctl(netdev->name, &ifr,
                                 SIOCGIFFLAGS, "SIOCGIFFLAGS");
 
-    *flags = 0xFFFF0000 & (ifr.ifr_flagshigh << 16);
-    *flags |= 0x0000FFFF & ifr.ifr_flags;
+    *flags = ifr_get_flags(&ifr);
 
     return error;
 }
@@ -1343,8 +1364,7 @@ set_flags(const char *name, int flags)
 {
     struct ifreq ifr;
 
-    ifr.ifr_flags = 0x0000FFFF & flags;
-    ifr.ifr_flagshigh = (0xFFFF0000 & flags) >> 16;
+    ifr_set_flags(&ifr, flags);
 
     return netdev_bsd_do_ioctl(name, &ifr, SIOCSIFFLAGS, "SIOCSIFFLAGS");
 }
@@ -1398,9 +1418,13 @@ get_etheraddr(const char *netdev_name, uint8_t ea[ETH_ADDR_LEN])
 }
 
 static int
-set_etheraddr(const char *netdev_name, int hwaddr_family,
-              int hwaddr_len, const uint8_t mac[ETH_ADDR_LEN])
+set_etheraddr(const char *netdev_name OVS_UNUSED, int hwaddr_family OVS_UNUSED,
+              int hwaddr_len OVS_UNUSED,
+              const uint8_t mac[ETH_ADDR_LEN] OVS_UNUSED)
 {
+#if defined(__NetBSD__)
+    return ENOTSUP; /* XXX */
+#else
     struct ifreq ifr;
 
     memset(&ifr, 0, sizeof ifr);
@@ -1414,6 +1438,7 @@ set_etheraddr(const char *netdev_name, int hwaddr_family,
         return errno;
     }
     return 0;
+#endif
 }
 
 static int
@@ -1427,4 +1452,23 @@ netdev_bsd_do_ioctl(const char *name, struct ifreq *ifr, unsigned long cmd,
         return errno;
     }
     return 0;
+}
+
+static int
+ifr_get_flags(const struct ifreq *ifr)
+{
+#ifdef HAVE_STRUCT_IFREQ_IFR_FLAGSHIGH
+    return (ifr.ifr_flagshigh << 16) | ifr.ifr_flags;
+#else
+    return ifr.ifr_flags;
+#endif
+}
+
+static void
+ifr_set_flags(struct ifreq *ifr, int flags)
+{
+    ifr->ifr_flags = flags;
+#ifdef HAVE_STRUCT_IFREQ_IFR_FLAGSHIGH
+    ifr->ifr_flagshigh = flags >> 16;
+#endif
 }
