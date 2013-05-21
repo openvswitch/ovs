@@ -1,9 +1,9 @@
-           How to Install Open vSwitch on Linux and FreeBSD
-           ================================================
+      How to Install Open vSwitch on Linux, FreeBSD and NetBSD
+      ========================================================
 
 This document describes how to build and install Open vSwitch on a
-generic Linux or FreeBSD host. For specifics around installation on a
-specific platform, please see one of these files:
+generic Linux, FreeBSD, or NetBSD host. For specifics around installation
+on a specific platform, please see one of these files:
 
     - INSTALL.Debian
     - INSTALL.Fedora
@@ -143,8 +143,8 @@ software:
 (On Debian "lenny" the above can be installed with "apt-get install
 python-json python-qt4 python-zopeinterface python-twisted-conch".)
 
-Building and Installing Open vSwitch for Linux or FreeBSD
-=========================================================
+Building and Installing Open vSwitch for Linux, FreeBSD or NetBSD
+=================================================================
 
 Once you have installed all the prerequisites listed above in the Base
 Prerequisites section, follow the procedure below to build.
@@ -333,7 +333,7 @@ also upgrade the database schema:
       - If there is no important data in your database, then you may
         delete the database file and recreate it with ovsdb-tool,
         following the instructions under "Building and Installing Open
-        vSwitch for Linux or FreeBSD".
+        vSwitch for Linux, FreeBSD or NetBSD".
 
       - If you want to preserve the contents of your database, back it
         up first, then use "ovsdb-tool convert" to upgrade it, e.g.:
@@ -341,7 +341,7 @@ also upgrade the database schema:
         % ovsdb-tool convert /usr/local/etc/openvswitch/conf.db vswitchd/vswitch.ovsschema
 
 4. Start the Open vSwitch daemons as described under "Building and
-   Installing Open vSwitch for Linux or FreeBSD" above.
+   Installing Open vSwitch for Linux, FreeBSD or NetBSD" above.
 
 Running the Testsuite
 =====================
@@ -353,7 +353,7 @@ features will ensure your features don't break as developers modify
 other areas of Open vSwitch.
 
 You must configure and build Open vSwitch (steps 1 through 3 in
-"Building and Installing Open vSwitch for Linux or FreeBSD" above)
+"Building and Installing Open vSwitch for Linux, FreeBSD or NetBSD" above)
 before you run the testsuite.  You do not need to install Open vSwitch
 or to build or load the kernel module to run the testsuite.  You do
 not need supervisor privilege to run the testsuite.
