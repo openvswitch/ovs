@@ -169,7 +169,9 @@ AC_DEFUN([OVS_CHECK_DBDIR],
 
 dnl Defines HAVE_BACKTRACE if backtrace() is found.
 AC_DEFUN([OVS_CHECK_BACKTRACE],
-  [AC_SEARCH_LIBS([backtrace], [execinfo ubacktrace])])
+  [AC_SEARCH_LIBS([backtrace], [execinfo ubacktrace],
+                  [AC_DEFINE([HAVE_BACKTRACE], [1],
+                             [Define to 1 if you have backtrace(3).])])])
 
 dnl Checks for __malloc_hook, etc., supported by glibc.
 AC_DEFUN([OVS_CHECK_MALLOC_HOOKS],
