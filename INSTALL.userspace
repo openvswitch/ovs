@@ -31,9 +31,9 @@ The tun device must also exist as /dev/net/tun.  If it does not exist,
 then create /dev/net (if necessary) with "mkdir /dev/net", then create
 /dev/net/tun with "mknod /dev/net/tun c 10 200".
 
-On FreeBSD, the userspace switch additionally requires the kernel
-tap(4) driver to be available, either built into the kernel or loaded
-as a module.
+On FreeBSD and NetBSD, the userspace switch additionally requires the
+kernel tap(4) driver to be available, either built into the kernel or
+loaded as a module.
 
 Using the Userspace Datapath with ovs-vswitchd
 ----------------------------------------------
@@ -51,6 +51,12 @@ ovs-vswitchd will create a TAP device as the bridge's local interface,
 named the same as the bridge, as well as for each configured internal
 interface.
 
+Currently, on FreeBSD and NetBSD, the functionality required for in-band
+control support is not implemented.  To avoid related errors, you can
+disable the in-band support with the following command.
+
+    ovs-vsctl set bridge br0 other_config:disable-in-band=true
+
 Firewall Rules
 --------------
 
@@ -63,6 +69,14 @@ eth0:
 
     iptables -A INPUT -i eth0 -j DROP
     iptables -A FORWARD -i eth0 -j DROP
+
+Other settings
+--------------
+
+On NetBSD, depending on your network topology and applications, the
+following configuration might help.  See sysctl(7).
+
+	sysctl net.inet.ip.checkinterface=1
 
 Bug Reporting
 -------------
