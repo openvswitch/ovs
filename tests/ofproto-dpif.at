@@ -1368,9 +1368,8 @@ AT_CHECK_UNQUOTED([ovs-appctl fdb/show br0 | sed 's/[[0-9]]\{1,\}$/?/'], [0], [d
 AT_CHECK(
   [ovs-vsctl \
      -- add-br br1 \
-     -- set bridge br1 datapath-type=dummy \
-     -- add-port br1 p4 -- set interface p4 type=dummy \
-     -- add-port br1 p5 -- set interface p5 type=dummy])
+     -- set bridge br1 datapath-type=dummy])
+ADD_OF_PORTS([br1], 4, 5)
 
 # Trace some packet arrivals in br1 to create MAC learning entries there too.
 OFPROTO_TRACE(
@@ -1408,10 +1407,8 @@ AT_CLEANUP
 
 AT_SETUP([ofproto-dpif - MAC table overflow])
 OVS_VSWITCHD_START(
-  [set bridge br0 fail-mode=standalone other-config:mac-table-size=10 -- \
-   add-port br0 p1 -- set Interface p1 type=dummy -- \
-   add-port br0 p2 -- set Interface p2 type=dummy -- \
-   add-port br0 p3 -- set Interface p3 type=dummy])
+  [set bridge br0 fail-mode=standalone other-config:mac-table-size=10])
+ADD_OF_PORTS([br0], 1, 2, 3)
 
 arp='eth_type(0x0806),arp(sip=192.168.0.1,tip=192.168.0.2,op=1,sha=50:54:00:00:00:05,tha=00:00:00:00:00:00)'
 

@@ -5779,9 +5779,12 @@ ofproto_unixctl_fdb_show(struct unixctl_conn *conn, int argc OVS_UNUSED,
     ds_put_cstr(&ds, " port  VLAN  MAC                Age\n");
     LIST_FOR_EACH (e, lru_node, &ofproto->ml->lrus) {
         struct ofbundle *bundle = e->port.p;
-        ds_put_format(&ds, "%5d  %4d  "ETH_ADDR_FMT"  %3d\n",
-                      ofbundle_get_a_port(bundle)->odp_port,
-                      e->vlan, ETH_ADDR_ARGS(e->mac),
+        char name[OFP_MAX_PORT_NAME_LEN];
+
+        ofputil_port_to_string(ofbundle_get_a_port(bundle)->up.ofp_port,
+                               name, sizeof name);
+        ds_put_format(&ds, "%5s  %4d  "ETH_ADDR_FMT"  %3d\n",
+                      name, e->vlan, ETH_ADDR_ARGS(e->mac),
                       mac_entry_age(ofproto->ml, e));
     }
     unixctl_command_reply(conn, ds_cstr(&ds));
