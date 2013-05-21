@@ -1,5 +1,9 @@
 v1.11.0 - xx xxx xxxx
 ---------------------
+    - Support for megaflows, which allows wildcarding in the kernel (and
+      any dpif implementation that supports wildcards).  Depending on
+      the flow table and switch configuration, flow set up rates are
+      close to the Linux bridge.
     - The "tutorial" directory contains a new tutorial for some advanced
       Open vSwitch features.
     - Stable bond mode has been removed.
