@@ -1199,11 +1199,8 @@ dp_netdev_sample(struct dp_netdev *dp,
 static void
 dp_netdev_action_userspace(struct dp_netdev *dp,
                           struct ofpbuf *packet, const struct flow *key,
-                          const struct nlattr *a)
+                          const struct nlattr *userdata)
 {
-    const struct nlattr *userdata;
-
-    userdata = nl_attr_find_nested(a, OVS_USERSPACE_ATTR_USERDATA);
     dp_netdev_output_userspace(dp, packet, DPIF_UC_ACTION, key, userdata);
 }
 
@@ -1287,9 +1284,13 @@ dp_netdev_execute_actions(struct dp_netdev *dp,
             dp_netdev_output_port(dp, packet, nl_attr_get_u32(a));
             break;
 
-        case OVS_ACTION_ATTR_USERSPACE:
-            dp_netdev_action_userspace(dp, packet, key, a);
+        case OVS_ACTION_ATTR_USERSPACE: {
+            const struct nlattr *userdata;
+
+            userdata = nl_attr_find_nested(a, OVS_USERSPACE_ATTR_USERDATA);
+            dp_netdev_action_userspace(dp, packet, key, userdata);
             break;
+        }
 
         case OVS_ACTION_ATTR_PUSH_VLAN: {
             const struct ovs_action_push_vlan *vlan = nl_attr_get(a);
