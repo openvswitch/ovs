@@ -1198,7 +1198,7 @@ dp_netdev_sample(struct dp_netdev *dp,
 
 static void
 dp_netdev_action_userspace(struct dp_netdev *dp,
-                          struct ofpbuf *packet, struct flow *key,
+                          struct ofpbuf *packet, const struct flow *key,
                           const struct nlattr *a)
 {
     const struct nlattr *userdata;
