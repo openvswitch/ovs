@@ -222,37 +222,6 @@ refresh_local(struct in_band *ib)
     return true;
 }
 
-/* Returns true if 'packet' should be sent to the local port regardless
- * of the flow table. */
-bool
-in_band_msg_in_hook(struct in_band *in_band, const struct flow *flow,
-                    const struct ofpbuf *packet)
-{
-    /* Regardless of how the flow table is configured, we want to be
-     * able to see replies to our DHCP requests. */
-    if (flow->dl_type == htons(ETH_TYPE_IP)
-            && flow->nw_proto == IPPROTO_UDP
-            && flow->tp_src == htons(DHCP_SERVER_PORT)
-            && flow->tp_dst == htons(DHCP_CLIENT_PORT)
-            && packet->l7) {
-        struct dhcp_header *dhcp;
-
-        dhcp = ofpbuf_at(packet, (char *)packet->l7 - (char *)packet->data,
-                         sizeof *dhcp);
-        if (!dhcp) {
-            return false;
-        }
-
-        refresh_local(in_band);
-        if (!eth_addr_is_zero(in_band->local_mac)
-            && eth_addr_equals(dhcp->chaddr, in_band->local_mac)) {
-            return true;
-        }
-    }
-
-    return false;
-}
-
 /* Returns true if the rule that would match 'flow' with 'actions' is
  * allowed to be set up in the datapath. */
 bool

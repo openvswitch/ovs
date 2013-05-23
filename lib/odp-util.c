@@ -181,8 +181,6 @@ slow_path_reason_to_string(uint32_t data)
         return "lacp";
     case SLOW_STP:
         return "stp";
-    case SLOW_IN_BAND:
-        return "in_band";
     case SLOW_BFD:
         return "bfd";
     case SLOW_CONTROLLER:

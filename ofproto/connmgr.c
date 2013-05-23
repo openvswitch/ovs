@@ -1643,17 +1643,10 @@ any_extras_changed(const struct connmgr *mgr,
 /* In-band implementation. */
 
 bool
-connmgr_msg_in_hook(struct connmgr *mgr, const struct flow *flow,
-                    const struct ofpbuf *packet)
-{
-    return mgr->in_band && in_band_msg_in_hook(mgr->in_band, flow, packet);
-}
-
-bool
-connmgr_may_set_up_flow(struct connmgr *mgr, const struct flow *flow,
-                        uint32_t local_odp_port,
-                        const struct nlattr *odp_actions,
-                        size_t actions_len)
+connmgr_must_output_local(struct connmgr *mgr, const struct flow *flow,
+                          uint32_t local_odp_port,
+                          const struct nlattr *odp_actions,
+                          size_t actions_len)
 {
     return !mgr->in_band || in_band_rule_check(flow, local_odp_port,
                                                odp_actions, actions_len);
