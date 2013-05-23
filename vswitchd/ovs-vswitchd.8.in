@@ -227,7 +227,9 @@ requires 17 file descriptors per datapath.)
 per bridge due to fixed hash table sizing.
 .
 .IP \(bu
-2,048 MAC learning entries per bridge.
+2,048 MAC learning entries per bridge, by default.  (This is
+configurable via \fBother\-config:mac\-table\-size\fR in the
+\fBBridge\fR table.  See \fBovs\-vswitchd.conf.db\fR(5) for details.)
 .
 .IP \(bu
 Kernel flows are limited only by memory available to the kernel.
