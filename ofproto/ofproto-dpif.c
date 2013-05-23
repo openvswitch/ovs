@@ -415,8 +415,7 @@ static void subfacet_update_time(struct subfacet *, long long int used);
 static void subfacet_update_stats(struct subfacet *,
                                   const struct dpif_flow_stats *);
 static void subfacet_make_actions(struct subfacet *,
-                                  const struct ofpbuf *packet,
-                                  struct ofpbuf *odp_actions);
+                                  const struct ofpbuf *packet);
 static int subfacet_install(struct subfacet *,
                             const struct nlattr *actions, size_t actions_len,
                             struct dpif_flow_stats *, enum slow_path_reason);
@@ -3689,13 +3688,19 @@ handle_flow_miss_with_facet(struct flow_miss *miss, struct facet *facet,
     LIST_FOR_EACH (packet, list_node, &miss->packets) {
         struct flow_miss_op *op = &ops[*n_ops];
         struct dpif_flow_stats stats;
-        struct ofpbuf odp_actions;
 
         handle_flow_miss_common(facet->rule, packet, &miss->flow);
 
-        ofpbuf_use_stub(&odp_actions, op->stub, sizeof op->stub);
-        if (!subfacet->actions || subfacet->slow) {
-            subfacet_make_actions(subfacet, packet, &odp_actions);
+        if (!subfacet->actions) {
+            subfacet_make_actions(subfacet, packet);
+        } else if (subfacet->slow) {
+            struct action_xlate_ctx ctx;
+
+            action_xlate_ctx_init(&ctx, ofproto, &facet->flow,
+                                  &subfacet->initial_vals, facet->rule, 0,
+                                  packet);
+            xlate_actions_for_side_effects(&ctx, facet->rule->up.ofpacts,
+                                           facet->rule->up.ofpacts_len);
         }
 
         dpif_flow_stats_extract(&facet->flow, packet, now, &stats);
@@ -3705,19 +3710,10 @@ handle_flow_miss_with_facet(struct flow_miss *miss, struct facet *facet,
             struct dpif_execute *execute = &op->dpif_op.u.execute;
 
             init_flow_miss_execute_op(miss, packet, op);
-            if (!subfacet->slow) {
-                execute->actions = subfacet->actions;
-                execute->actions_len = subfacet->actions_len;
-                ofpbuf_uninit(&odp_actions);
-            } else {
-                execute->actions = odp_actions.data;
-                execute->actions_len = odp_actions.size;
-                op->garbage = ofpbuf_get_uninit_pointer(&odp_actions);
-            }
+            execute->actions = subfacet->actions;
+            execute->actions_len = subfacet->actions_len;
 
             (*n_ops)++;
-        } else {
-            ofpbuf_uninit(&odp_actions);
         }
     }
 
@@ -4982,11 +4978,6 @@ facet_check_consistency(struct facet *facet)
         }
 
         want_path = subfacet_want_path(subfacet->slow);
-        if (want_path == SF_SLOW_PATH && subfacet->path == SF_SLOW_PATH) {
-            /* The actions for slow-path flows may legitimately vary from one
-             * packet to the next.  We're done. */
-            continue;
-        }
 
         if (!subfacet_should_install(subfacet, subfacet->slow, &odp_actions)) {
             continue;
@@ -5410,22 +5401,22 @@ subfacet_destroy_batch(struct ofproto_dpif *ofproto,
     }
 }
 
-/* Composes the datapath actions for 'subfacet' based on its rule's actions.
- * Translates the actions into 'odp_actions', which the caller must have
- * initialized and is responsible for uninitializing. */
+/* Composes the datapath actions for 'subfacet' based on its rule's actions. */
 static void
-subfacet_make_actions(struct subfacet *subfacet, const struct ofpbuf *packet,
-                      struct ofpbuf *odp_actions)
+subfacet_make_actions(struct subfacet *subfacet, const struct ofpbuf *packet)
 {
     struct facet *facet = subfacet->facet;
     struct rule_dpif *rule = facet->rule;
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(rule->up.ofproto);
 
     struct action_xlate_ctx ctx;
+    struct ofpbuf odp_actions;
+    uint64_t stub[1024 / 8];
 
+    ofpbuf_use_stub(&odp_actions, stub, sizeof stub);
     action_xlate_ctx_init(&ctx, ofproto, &facet->flow,
                           &subfacet->initial_vals, rule, 0, packet);
-    xlate_actions(&ctx, rule->up.ofpacts, rule->up.ofpacts_len, odp_actions);
+    xlate_actions(&ctx, rule->up.ofpacts, rule->up.ofpacts_len, &odp_actions);
     facet->tags = ctx.tags;
     facet->has_learn = ctx.has_learn;
     facet->has_normal = ctx.has_normal;
@@ -5434,12 +5425,10 @@ subfacet_make_actions(struct subfacet *subfacet, const struct ofpbuf *packet,
     facet->mirrors = ctx.mirrors;
 
     subfacet->slow = ctx.slow;
-    if (subfacet->actions_len != odp_actions->size
-        || memcmp(subfacet->actions, odp_actions->data, odp_actions->size)) {
-        free(subfacet->actions);
-        subfacet->actions_len = odp_actions->size;
-        subfacet->actions = xmemdup(odp_actions->data, odp_actions->size);
-    }
+
+    ovs_assert(!subfacet->actions);
+    subfacet->actions_len = odp_actions.size;
+    subfacet->actions = ofpbuf_steal_data(&odp_actions);
 }
 
 /* Updates 'subfacet''s datapath flow, setting its actions to 'actions_len'
@@ -7179,16 +7168,11 @@ xlate_actions(struct action_xlate_ctx *ctx,
         }
 
         local_odp_port = ofp_port_to_odp_port(ctx->ofproto, OFPP_LOCAL);
-        if (!connmgr_may_set_up_flow(ctx->ofproto->up.connmgr, &ctx->flow,
-                                     local_odp_port,
-                                     ctx->odp_actions->data,
-                                     ctx->odp_actions->size)) {
-            ctx->slow |= SLOW_IN_BAND;
-            if (ctx->packet
-                && connmgr_msg_in_hook(ctx->ofproto->up.connmgr, &ctx->flow,
-                                       ctx->packet)) {
-                compose_output_action(ctx, OFPP_LOCAL);
-            }
+        if (!connmgr_must_output_local(ctx->ofproto->up.connmgr, &ctx->flow,
+                                       local_odp_port,
+                                       ctx->odp_actions->data,
+                                       ctx->odp_actions->size)) {
+            compose_output_action(ctx, OFPP_LOCAL);
         }
         if (ctx->ofproto->has_mirrors) {
             add_mirror_actions(ctx, &orig_flow);
@@ -8326,15 +8310,6 @@ ofproto_trace(struct ofproto_dpif *ofproto, const struct flow *flow,
                     break;
                 case SLOW_STP:
                     ds_put_cstr(ds, "\n\t- Consists of STP packets.");
-                    break;
-                case SLOW_IN_BAND:
-                    ds_put_cstr(ds, "\n\t- Needs in-band special case "
-                                "processing.");
-                    if (!packet) {
-                        ds_put_cstr(ds, "\n\t  (The datapath actions are "
-                                    "incomplete--for complete actions, "
-                                    "please supply a packet.)");
-                    }
                     break;
                 case SLOW_CONTROLLER:
                     ds_put_cstr(ds, "\n\t- Sends \"packet-in\" messages "
