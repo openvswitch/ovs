@@ -98,13 +98,23 @@ def get_single_bridge_id(bridge_ids, default=None):
         return default
 
     for bridge_id in bridge_ids:
-       recs = session.xenapi.network.get_all_records_where('field "uuid"="%s"' % bridge_id)
-       if recs:
-           pifs = recs.values()[0]['PIFs']
-           for pif in pifs:
-               rec = session.xenapi.PIF.get_record(pif)
-               if rec['VLAN'] == '-1':
-                   return bridge_id
+        try:
+            recs = session.xenapi.network.get_all_records_where(\
+                                            'field "uuid"="%s"' % bridge_id)
+            if recs:
+                pifs = recs.values()[0]['PIFs']
+                for pif in pifs:
+                    try:
+                        rec = session.xenapi.PIF.get_record(pif)
+                        if rec['VLAN'] == '-1':
+                            return bridge_id
+                    except XenAPI.Failure:
+                        vlog.warn("Could not find XAPI entry for PIF %s" % pif)
+                        continue
+
+        except XenAPI.Failure:
+            vlog.warn("Could not find XAPI entry for bridge_id %s" % bridge_id)
+            continue
 
     return default
 
