@@ -70,8 +70,6 @@ probably incomplete.
       implement it.  It should be implemented so that the default OVS
       behavior does not change.
 
-    * Document how OVS does packet buffering.
-
     * MPLS.  Simon Horman maintains a patch series that adds this
       feature.  This is partially merged.
 
