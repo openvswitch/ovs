@@ -1453,9 +1453,7 @@ set_etheraddr(const char *netdev_name OVS_UNUSED, int hwaddr_family OVS_UNUSED,
               int hwaddr_len OVS_UNUSED,
               const uint8_t mac[ETH_ADDR_LEN] OVS_UNUSED)
 {
-#if defined(__NetBSD__)
-    return ENOTSUP; /* XXX */
-#else
+#if defined(__FreeBSD__)
     struct ifreq ifr;
 
     memset(&ifr, 0, sizeof ifr);
@@ -1469,6 +1467,58 @@ set_etheraddr(const char *netdev_name OVS_UNUSED, int hwaddr_family OVS_UNUSED,
         return errno;
     }
     return 0;
+#elif defined(__NetBSD__)
+    struct if_laddrreq req;
+    struct sockaddr_dl *sdl;
+    struct sockaddr_storage oldaddr;
+    int ret;
+
+    /*
+     * get the old address, add new one, and then remove old one.
+     */
+
+    if (hwaddr_len != ETH_ADDR_LEN) {
+        /* just to be safe about sockaddr storage size */
+        return EOPNOTSUPP;
+    }
+    memset(&req, 0, sizeof(req));
+    strncpy(req.iflr_name, netdev_name, sizeof(req.iflr_name));
+    req.addr.ss_len = sizeof(req.addr);
+    req.addr.ss_family = hwaddr_family;
+    sdl = (struct sockaddr_dl *)&req.addr;
+    sdl->sdl_alen = hwaddr_len;
+    ret = ioctl(af_link_sock, SIOCGLIFADDR, &req);
+    if (ret == -1) {
+        return errno;
+    }
+    if (!memcmp(&sdl->sdl_data[sdl->sdl_nlen], mac, hwaddr_len)) {
+        return 0;
+    }
+    oldaddr = req.addr;
+
+    memset(&req, 0, sizeof(req));
+    strncpy(req.iflr_name, netdev_name, sizeof(req.iflr_name));
+    req.flags = IFLR_ACTIVE;
+    sdl = (struct sockaddr_dl *)&req.addr;
+    sdl->sdl_len = offsetof(struct sockaddr_dl, sdl_data) + hwaddr_len;
+    sdl->sdl_alen = hwaddr_len;
+    sdl->sdl_family = hwaddr_family;
+    memcpy(sdl->sdl_data, mac, hwaddr_len);
+    ret = ioctl(af_link_sock, SIOCALIFADDR, &req);
+    if (ret == -1) {
+        return errno;
+    }
+
+    memset(&req, 0, sizeof(req));
+    strncpy(req.iflr_name, netdev_name, sizeof(req.iflr_name));
+    req.addr = oldaddr;
+    ret = ioctl(af_link_sock, SIOCDLIFADDR, &req);
+    if (ret == -1) {
+        return errno;
+    }
+    return 0;
+#else
+#error not implemented
 #endif
 }
 
