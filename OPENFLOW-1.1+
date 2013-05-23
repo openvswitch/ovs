@@ -113,8 +113,6 @@ end of the OF1.2 spec.  I didn't compare the specs carefully yet.)
 
         * Update DESIGN to describe OF1.2 behavior also.
 
-    * Add ability to turn off packet buffering with OFPCML_NO_BUFFER.
-
 OpenFlow 1.3
 ------------
 
