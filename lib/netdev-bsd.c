@@ -1226,8 +1226,9 @@ netdev_bsd_convert_kernel_name_to_ovs_name(const char *kernel_name)
 #endif
 
 static int
-netdev_bsd_get_next_hop(const struct in_addr *host, struct in_addr *next_hop,
-                        char **netdev_name)
+netdev_bsd_get_next_hop(const struct in_addr *host OVS_UNUSED,
+                        struct in_addr *next_hop OVS_UNUSED,
+                        char **netdev_name OVS_UNUSED)
 {
 #if defined(__NetBSD__)
     static int seq = 0;
