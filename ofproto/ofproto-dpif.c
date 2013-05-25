@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -113,6 +113,7 @@ static struct rule_dpif *rule_dpif_lookup__(struct ofproto_dpif *,
 static struct rule_dpif *rule_dpif_miss_rule(struct ofproto_dpif *ofproto,
                                              const struct flow *flow);
 
+static void rule_get_stats(struct rule *, uint64_t *packets, uint64_t *bytes);
 static void rule_credit_stats(struct rule_dpif *,
                               const struct dpif_flow_stats *);
 static void flow_push_stats(struct rule_dpif *, const struct flow *,
@@ -602,9 +603,6 @@ struct ofproto_dpif {
     struct rule_dpif *miss_rule; /* Sends flow table misses to controller. */
     struct rule_dpif *no_packet_in_rule; /* Drops flow table misses. */
 
-    /* Statistics. */
-    uint64_t n_matches;
-
     /* Bridging. */
     struct netflow *netflow;
     struct dpif_sflow *sflow;
@@ -754,8 +752,6 @@ construct(struct ofproto *ofproto_)
 
     max_ports = dpif_get_max_ports(ofproto->dpif);
     ofproto_init_max_ports(ofproto_, MIN(max_ports, OFPP_MAX));
-
-    ofproto->n_matches = 0;
 
     dpif_flow_flush(ofproto->dpif);
     dpif_recv_purge(ofproto->dpif);
@@ -1162,12 +1158,18 @@ get_tables(struct ofproto *ofproto_, struct ofp12_table_stats *ots)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
     struct dpif_dp_stats s;
+    uint64_t n_miss, n_no_pkt_in, n_bytes;
+    uint64_t n_lookup;
 
     strcpy(ots->name, "classifier");
 
     dpif_get_dp_stats(ofproto->dpif, &s);
-    ots->lookup_count = htonll(s.n_hit + s.n_missed);
-    ots->matched_count = htonll(s.n_hit + ofproto->n_matches);
+    rule_get_stats(&ofproto->miss_rule->up, &n_miss, &n_bytes);
+    rule_get_stats(&ofproto->no_packet_in_rule->up, &n_no_pkt_in, &n_bytes);
+
+    n_lookup = s.n_hit + s.n_missed;
+    ots->lookup_count = htonll(n_lookup);
+    ots->matched_count = htonll(n_lookup - n_miss - n_no_pkt_in);
 }
 
 static struct ofport *
@@ -2818,8 +2820,6 @@ handle_flow_miss_common(struct rule_dpif *rule,
                         struct ofpbuf *packet, const struct flow *flow)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(rule->up.ofproto);
-
-    ofproto->n_matches++;
 
     if (rule->up.cr.priority == FAIL_OPEN_PRIORITY) {
         /*
