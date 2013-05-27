@@ -6,11 +6,12 @@ not carry Ethernet headers, and ARP requests shouldn't be sent over the
 tunnel.  Because of this, there are some additional steps required for setting
 up LISP tunnels in Open vSwitch, until support for L3 tunnels will improve.
 
-This guide assumes a point-to-point tunnel between two VMs connected to OVS
-bridges on different hypervisors connected via IPv4.  Of course, more than one
-VM may be connected to any of the hypervisors, using the same LISP tunnel, and
-a hypervisor may be connected to several hypervisors over different LISP
-tunnels.
+This guide assumes tunneling between two VMs connected to OVS bridges on
+different hypervisors reachable over IPv4.  Of course, more than one VM may be
+connected to any of the hypervisors, and a hypervisor may communicate with
+several different hypervisors over the same lisp tunneling interface.  A LISP
+"map-cache" can be implemented using flows, see example at the bottom of this
+file.
 
 There are several scenarios:
 
@@ -58,11 +59,14 @@ bridge instance, and become numbered 1, 2, and 3 respectively:
     ovs-vsctl add-br br0
     ovs-vsctl add-port br0 tap0
     ovs-vsctl add-port br0 eth0
-    ovs-vsctl add-port br0 lisp0 -- set Interface lisp0 type=lisp options:remote_ip=<OVSx_IP>
+    ovs-vsctl add-port br0 lisp0 -- set Interface lisp0 type=lisp options:remote_ip=flow options:key=flow
 
 Flows on br0 are configured as follows:
 
     priority=3,dl_dst=02:00:00:00:00:00,action=mod_dl_dst:<VMx_MAC>,output:1
     priority=2,in_port=1,dl_type=0x0806,action=NORMAL
-    priority=1,in_port=1,dl_type=0x0800,vlan_tci=0,nw_src=<EID_prefix>,action=output:3
+    priority=1,in_port=1,dl_type=0x0800,vlan_tci=0,nw_src=<EID_prefix>,action=set_field:<OVSx_IP>->tun_dst,output:3
     priority=0,action=NORMAL
+
+Optionally, if you want to use Instance ID in a flow, you can set it with
+"action=set_tunnel:<IID>".
