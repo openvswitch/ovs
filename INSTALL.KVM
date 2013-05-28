@@ -69,7 +69,7 @@ guest will be able to communicate over that bridge.
 To get some more information and for debugging you can use Open
 vSwitch utilities such as ovs-dpctl and ovs-ofctl, For example:
 
-      % ovs-dpctl show br0 
+      % ovs-dpctl show
       % ovs-ofctl show br0
 
 You should see tap devices for each KVM guest added as ports to 
