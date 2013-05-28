@@ -117,6 +117,10 @@
             to <code>false</code> (or remove it entirely from the database).
           </li>
         </ol>
+        <p>
+          The <code>ovs-ctl</code>'s ``restart'' and ``force-reload-kmod''
+          functions use the above config option during hot upgrades.
+        </p>
       </column>
     </group>
 

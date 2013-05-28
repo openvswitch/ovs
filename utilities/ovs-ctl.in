@@ -306,6 +306,15 @@ restore_ofports () {
         action "Restoring ofport values" "${script_ofports}"
 }
 
+flow_restore_wait () {
+    ovs_vsctl set open_vswitch . other_config:flow-restore-wait="true"
+}
+
+flow_restore_complete () {
+    ovs_vsctl --if-exists remove open_vswitch . other_config \
+        flow-restore-wait="true"
+}
+
 restore_flows () {
     [ -x "${script_flows}" ] && \
         action "Restoring saved flows" "${script_flows}"
@@ -373,9 +382,13 @@ force_reload_kmod () {
         action "Removing openvswitch module" rmmod openvswitch
     fi
 
+    # Start vswitchd by asking it to wait till flow restore is finished.
+    flow_restore_wait
     start_forwarding
 
+    # Restore saved flows and inform vswitchd that we are done.
     restore_flows
+    flow_restore_complete
     add_managers
 
     restore_interfaces
@@ -418,10 +431,14 @@ restart () {
     restore_ofports
 
     stop_forwarding
+
+    # Start vswitchd by asking it to wait till flow restore is finished.
+    flow_restore_wait
     start_forwarding
 
-    # Restore the saved flows.
+    # Restore saved flows and inform vswitchd that we are done.
     restore_flows
+    flow_restore_complete
     add_managers
 
     # Restore the interfaces if required. Return true even if restore fails.
