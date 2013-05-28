@@ -4,6 +4,8 @@ post-v1.11.0
       * New support for matching outer source and destination IP address
         of tunneled packets, for tunnel ports configured with the newly
 	added "remote_ip=flow" and "local_ip=flow" options.
+    - New "check-oftest" Makefile target for running OFTest against Open
+      vSwitch.  See README-OFTest for details.
 
 
 v1.11.0 - xx xxx xxxx

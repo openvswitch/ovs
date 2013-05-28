@@ -1,0 +1,94 @@
+#! /bin/sh
+
+set -e
+
+run () {
+    echo "$@"
+    "$@" || exit 1
+}
+
+# Put built tools early in $PATH.
+builddir=`pwd`
+if test ! -e vswitchd/ovs-vswitchd; then
+    echo >&2 'not in build directory, please change directory or run via \"make check-oftest'
+    exit 1
+fi
+PATH=$builddir/ovsdb:$builddir/vswitchd:$builddir/utilities:$PATH; export PATH
+
+# Find srcdir.
+case $srcdir in
+    '') srcdir=$builddir ;;
+    /*) ;;
+    *) srcdir=`pwd`/$srcdir ;;
+esac
+if test ! -e "$srcdir"/WHY-OVS; then
+    echo >&2 'source directory not found, please set $srcdir or run via \"make check-oftest'
+    exit 1
+fi
+
+# Make sure oftest is available.
+if test X"$OFT" = X; then
+    OFT=oft
+fi
+if ($OFT --version) >/dev/null 2>&1; then
+    :
+else
+    echo >&2 'OFTest "oft" binary not found or cannot be run, please add to $PATH or set $OFT'
+    exit 1
+fi
+
+# Create sandbox.
+rm -rf sandbox
+mkdir sandbox
+cd sandbox
+sandbox=`pwd`
+
+# Set up environment for OVS programs to sandbox themselves.
+OVS_RUNDIR=$sandbox; export OVS_RUNDIR
+OVS_LOGDIR=$sandbox; export OVS_LOGDIR
+OVS_DBDIR=$sandbox; export OVS_DBDIR
+OVS_SYSCONFDIR=$sandbox; export OVS_SYSCONFDIR
+
+trap 'kill `cat *.pid`' 0 1 2 3 13 14 15
+
+# Create database and start ovsdb-server.
+touch .conf.db.~lock~
+rm -f conf.db
+run ovsdb-tool create conf.db "$srcdir"/vswitchd/vswitch.ovsschema
+run ovsdb-server --detach --no-chdir --pidfile -vconsole:off --log-file \
+    --remote=punix:"$sandbox"/db.sock
+
+# Start ovs-vswitchd.
+run ovs-vswitchd --detach --no-chdir --pidfile -vconsole:off --log-file \
+    --enable-dummy --disable-system -vvconn -vnetdev_dummy
+
+# Add a bridge and some ports for OFTest to use,
+# and configure ovs-vswitchd to connect to OFTest.
+run ovs-vsctl --no-wait \
+    -- add-br br0 \
+    -- set bridge br0 datapath-type=dummy fail-mode=secure
+for port in p1 p2 p3 p4; do
+    run ovs-vsctl --no-wait \
+	-- add-port br0 $port \
+	-- set interface $port type=dummy \
+                               options:pstream=punix:$OVS_RUNDIR/$port
+done
+run ovs-vsctl \
+    -- set-controller br0 tcp:127.0.0.1 \
+    -- set controller br0 connection-mode=out-of-band max-backoff=1000
+
+# Run OFTest.
+run $OFT -P ovs-dummy $OFTFLAGS; status=$?
+
+cat <<EOF
+
+----------------------------------------------------------------------
+Logs may be found under $sandbox, e.g.:
+	$sandbox/oft.log
+	$sandbox/ovs-vswitchd.log
+	$sandbox/ovsdb-server.log
+----------------------------------------------------------------------
+EOF
+
+# Propagate OFTest exit status.
+exit $status

@@ -145,6 +145,12 @@ check-valgrind: all tests/atconfig tests/atlocal $(TESTSUITE) \
 	@echo 'Valgrind output can be found in tests/testsuite.dir/*/valgrind.*'
 	@echo '----------------------------------------------------------------------'
 
+# OFTest support.
+
+check-oftest: all
+	srcdir='$(srcdir)' $(SHELL) $(srcdir)/tests/run-oftest
+EXTRA_DIST += tests/run-oftest
+
 clean-local:
 	test ! -f '$(TESTSUITE)' || $(SHELL) '$(TESTSUITE)' -C tests --clean
 
