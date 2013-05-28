@@ -246,6 +246,8 @@ int ofproto_set_ipfix(struct ofproto *,
                       const struct ofproto_ipfix_bridge_exporter_options *,
                       const struct ofproto_ipfix_flow_exporter_options *,
                       size_t);
+void ofproto_set_flow_restore_wait(bool flow_restore_wait_db);
+bool ofproto_get_flow_restore_wait(void);
 int ofproto_set_stp(struct ofproto *, const struct ofproto_stp_settings *);
 int ofproto_get_stp_status(struct ofproto *, struct ofproto_stp_status *);
 
