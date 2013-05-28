@@ -6119,7 +6119,7 @@ compose_output_action__(struct action_xlate_ctx *ctx, uint16_t ofp_port,
         special = process_special(ctx->ofproto, &ctx->flow, in_port,
                                   ctx->packet);
         if (special) {
-            ctx->slow |= special;
+            ctx->slow = special;
         } else if (!in_port || may_receive(in_port, ctx)) {
             if (!in_port || stp_forward_in_state(in_port->stp_state)) {
                 xlate_table_action(ctx, ctx->flow.in_port, 0, true);
@@ -6341,7 +6341,8 @@ execute_controller_action(struct action_xlate_ctx *ctx, int len,
     struct ofputil_packet_in pin;
     struct ofpbuf *packet;
 
-    ctx->slow |= SLOW_CONTROLLER;
+    ovs_assert(!ctx->slow || ctx->slow == SLOW_CONTROLLER);
+    ctx->slow = SLOW_CONTROLLER;
     if (!ctx->packet) {
         return;
     }
@@ -7117,7 +7118,7 @@ xlate_actions(struct action_xlate_ctx *ctx,
     in_port = get_ofp_port(ctx->ofproto, ctx->flow.in_port);
     special = process_special(ctx->ofproto, &ctx->flow, in_port, ctx->packet);
     if (special) {
-        ctx->slow |= special;
+        ctx->slow = special;
     } else {
         static struct vlog_rate_limit trace_rl = VLOG_RATE_LIMIT_INIT(1, 1);
         struct initial_vals initial_vals;
@@ -8281,33 +8282,27 @@ ofproto_trace(struct ofproto_dpif *ofproto, const struct flow *flow,
         ofpbuf_uninit(&odp_actions);
 
         if (trace.ctx.slow) {
-            enum slow_path_reason slow;
-
             ds_put_cstr(ds, "\nThis flow is handled by the userspace "
                         "slow path because it:");
-            for (slow = trace.ctx.slow; slow; ) {
-                enum slow_path_reason bit = rightmost_1bit(slow);
-
-                switch (bit) {
-                case SLOW_CFM:
-                    ds_put_cstr(ds, "\n\t- Consists of CFM packets.");
-                    break;
-                case SLOW_LACP:
-                    ds_put_cstr(ds, "\n\t- Consists of LACP packets.");
-                    break;
-                case SLOW_STP:
-                    ds_put_cstr(ds, "\n\t- Consists of STP packets.");
-                    break;
-                case SLOW_BFD:
-                    ds_put_cstr(ds, "\n\t- Consists of BFD packets.");
-                    break;
-                case SLOW_CONTROLLER:
-                    ds_put_cstr(ds, "\n\t- Sends \"packet-in\" messages "
-                                "to the OpenFlow controller.");
-                    break;
-                }
-
-                slow &= ~bit;
+            switch (trace.ctx.slow) {
+            case SLOW_CFM:
+                ds_put_cstr(ds, "\n\t- Consists of CFM packets.");
+                break;
+            case SLOW_LACP:
+                ds_put_cstr(ds, "\n\t- Consists of LACP packets.");
+                break;
+            case SLOW_STP:
+                ds_put_cstr(ds, "\n\t- Consists of STP packets.");
+                break;
+            case SLOW_BFD:
+                ds_put_cstr(ds, "\n\t- Consists of BFD packets.");
+                break;
+            case SLOW_CONTROLLER:
+                ds_put_cstr(ds, "\n\t- Sends \"packet-in\" messages "
+                            "to the OpenFlow controller.");
+                break;
+            case __SLOW_MAX:
+                NOT_REACHED();
             }
         }
     }
