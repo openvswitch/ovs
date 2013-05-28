@@ -649,6 +649,7 @@ struct dpif_backer {
     struct tag_set revalidate_set; /* Revalidate only matching facets. */
 
     struct hmap drop_keys; /* Set of dropped odp keys. */
+    bool recv_set_enable; /* Enables or disables receiving packets. */
 };
 
 /* All existing ofproto_backer instances, indexed by ofproto->up.type. */
@@ -918,6 +919,21 @@ type_run(const char *type)
         push_all_stats();
     }
 
+    /* If vswitchd started with other_config:flow_restore_wait set as "true",
+     * and the configuration has now changed to "false", enable receiving
+     * packets from the datapath. */
+    if (!backer->recv_set_enable && !ofproto_get_flow_restore_wait()) {
+        backer->recv_set_enable = true;
+
+        error = dpif_recv_set(backer->dpif, backer->recv_set_enable);
+        if (error) {
+            VLOG_ERR("Failed to enable receiving packets in dpif.");
+            return error;
+        }
+        dpif_flow_flush(backer->dpif);
+        backer->need_revalidate = REV_RECONFIGURE;
+    }
+
     if (backer->need_revalidate
         || !tag_set_is_empty(&backer->revalidate_set)) {
         struct tag_set revalidate_set = backer->revalidate_set;
@@ -1011,7 +1027,10 @@ type_run(const char *type)
         }
     }
 
-    if (timer_expired(&backer->next_expiration)) {
+    if (!backer->recv_set_enable) {
+        /* Wake up before a max of 1000ms. */
+        timer_set_duration(&backer->next_expiration, 1000);
+    } else if (timer_expired(&backer->next_expiration)) {
         int delay = expire(backer);
         timer_set_duration(&backer->next_expiration, delay);
     }
@@ -1076,6 +1095,11 @@ static int
 dpif_backer_run_fast(struct dpif_backer *backer, int max_batch)
 {
     unsigned int work;
+
+    /* If recv_set_enable is false, we should not handle upcalls. */
+    if (!backer->recv_set_enable) {
+        return 0;
+    }
 
     /* Handle one or more batches of upcalls, until there's nothing left to do
      * or until we do a fixed total amount of work.
@@ -1276,9 +1300,12 @@ open_dpif_backer(const char *type, struct dpif_backer **backerp)
     backer->need_revalidate = 0;
     simap_init(&backer->tnl_backers);
     tag_set_init(&backer->revalidate_set);
+    backer->recv_set_enable = !ofproto_get_flow_restore_wait();
     *backerp = backer;
 
-    dpif_flow_flush(backer->dpif);
+    if (backer->recv_set_enable) {
+        dpif_flow_flush(backer->dpif);
+    }
 
     /* Loop through the ports already on the datapath and remove any
      * that we don't need anymore. */
@@ -1302,7 +1329,7 @@ open_dpif_backer(const char *type, struct dpif_backer **backerp)
 
     shash_add(&all_dpif_backers, type, backer);
 
-    error = dpif_recv_set(backer->dpif, true);
+    error = dpif_recv_set(backer->dpif, backer->recv_set_enable);
     if (error) {
         VLOG_ERR("failed to listen on datapath of type %s: %s",
                  type, strerror(error));
@@ -1538,6 +1565,12 @@ run_fast(struct ofproto *ofproto_)
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
     struct ofport_dpif *ofport;
 
+    /* Do not perform any periodic activity required by 'ofproto' while
+     * waiting for flow restore to complete. */
+    if (ofproto_get_flow_restore_wait()) {
+        return 0;
+    }
+
     HMAP_FOR_EACH (ofport, up.hmap_node, &ofproto->up.ports) {
         port_run_fast(ofport);
     }
@@ -1555,6 +1588,12 @@ run(struct ofproto *ofproto_)
 
     if (!clogged) {
         complete_operations(ofproto);
+    }
+
+    /* Do not perform any periodic activity below required by 'ofproto' while
+     * waiting for flow restore to complete. */
+    if (ofproto_get_flow_restore_wait()) {
+        return 0;
     }
 
     error = run_fast(ofproto_);
@@ -1629,6 +1668,10 @@ wait(struct ofproto *ofproto_)
 
     if (!clogged && !list_is_empty(&ofproto->completions)) {
         poll_immediate_wake();
+    }
+
+    if (ofproto_get_flow_restore_wait()) {
+        return;
     }
 
     dpif_wait(ofproto->backer->dpif);

@@ -2321,6 +2321,13 @@ bridge_run(void)
      * returns immediately. */
     bridge_init_ofproto(cfg);
 
+    /* Once the value of flow-restore-wait is false, we no longer should
+     * check its value from the database. */
+    if (cfg && ofproto_get_flow_restore_wait()) {
+        ofproto_set_flow_restore_wait(smap_get_bool(&cfg->other_config,
+                                        "flow-restore-wait", false));
+    }
+
     /* Let each datapath type do the work that it needs to do. */
     sset_init(&types);
     ofproto_enumerate_types(&types);

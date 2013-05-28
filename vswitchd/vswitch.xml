@@ -71,6 +71,53 @@
         The Citrix XenServer universally unique identifier for the physical
         host as displayed by <code>xe host-list</code>.
       </column>
+
+      <column name="other_config" key="flow-restore-wait"
+              type='{"type": "boolean"}'>
+        <p>
+          When <code>ovs-vswitchd</code> starts up, it has an empty flow table
+          and therefore it handles all arriving packets in its default fashion
+          according to its configuration, by dropping them or sending them to
+          an OpenFlow controller or switching them as a standalone switch.
+          This behavior is ordinarily desirable.  However, if
+          <code>ovs-vswitchd</code> is restarting as part of a ``hot-upgrade,''
+          then this leads to a relatively long period during which packets are
+          mishandled.
+        </p>
+        <p>
+          This option allows for improvement.  When <code>ovs-vswitchd</code>
+          starts with this value set as <code>true</code>, it will neither
+          flush or expire previously set datapath flows nor will it send and
+          receive any packets to or from the datapath.  When this value is
+          later set to <code>false</code>, <code>ovs-vswitchd</code> will
+          start receiving packets from the datapath and re-setup the flows.
+        </p>
+        <p>
+          Thus, with this option, the procedure for a hot-upgrade of
+          <code>ovs-vswitchd</code> becomes roughly the following:
+        </p>
+        <ol>
+          <li>
+            Stop <code>ovs-vswitchd</code>.
+          </li>
+          <li>
+            Set <ref column="other_config" key="flow-restore-wait"/>
+            to <code>true</code>.
+          </li>
+          <li>
+            Start <code>ovs-vswitchd</code>.
+          </li>
+          <li>
+            Use <code>ovs-ofctl</code> (or some other program, such as an
+            OpenFlow controller) to restore the OpenFlow flow table
+            to the desired state.
+          </li>
+          <li>
+            Set <ref column="other_config" key="flow-restore-wait"/>
+            to <code>false</code> (or remove it entirely from the database).
+          </li>
+        </ol>
+      </column>
     </group>
 
     <group title="Status">

@@ -228,6 +228,9 @@ static struct shash init_ofp_ports = SHASH_INITIALIZER(&init_ofp_ports);
 
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 
+/* The default value of true waits for flow restore. */
+static bool flow_restore_wait = true;
+
 /* Must be called to initialize the ofproto library.
  *
  * The caller may pass in 'iface_hints', which contains an shash of
@@ -655,6 +658,19 @@ ofproto_set_ipfix(struct ofproto *ofproto,
         return (bo || fo) ? EOPNOTSUPP : 0;
     }
 }
+
+void
+ofproto_set_flow_restore_wait(bool flow_restore_wait_db)
+{
+    flow_restore_wait = flow_restore_wait_db;
+}
+
+bool
+ofproto_get_flow_restore_wait(void)
+{
+    return flow_restore_wait;
+}
+
 
 /* Spanning Tree Protocol (STP) configuration. */
 
