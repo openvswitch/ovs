@@ -507,7 +507,7 @@ static struct facet *facet_find(struct ofproto_dpif *,
                                 const struct flow *, uint32_t hash);
 static struct facet *facet_lookup_valid(struct ofproto_dpif *,
                                         const struct flow *, uint32_t hash);
-static void facet_revalidate(struct facet *);
+static bool facet_revalidate(struct facet *);
 static bool facet_check_consistency(struct facet *);
 
 static void facet_flush_stats(struct facet *);
@@ -4865,11 +4865,9 @@ facet_lookup_valid(struct ofproto_dpif *ofproto, const struct flow *flow,
     if (facet
         && (ofproto->backer->need_revalidate
             || tag_set_intersects(&ofproto->backer->revalidate_set,
-                                  facet->tags))) {
-        facet_revalidate(facet);
-
-        /* facet_revalidate() may have destroyed 'facet'. */
-        facet = facet_find(ofproto, flow, hash);
+                                  facet->tags))
+        && !facet_revalidate(facet)) {
+        return NULL;
     }
 
     return facet;
@@ -5040,8 +5038,10 @@ facet_check_consistency(struct facet *facet)
  *     where it is and recompiles its actions anyway.
  *
  *   - If any of 'facet''s subfacets correspond to a new flow according to
- *     ofproto_receive(), 'facet' is removed. */
-static void
+ *     ofproto_receive(), 'facet' is removed.
+ *
+ *   Returns true if 'facet' is still valid.  False if 'facet' was removed. */
+static bool
 facet_revalidate(struct facet *facet)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(facet->rule->up.ofproto);
@@ -5076,7 +5076,7 @@ facet_revalidate(struct facet *facet)
             || recv_ofproto != ofproto
             || memcmp(&recv_flow, &facet->flow, sizeof recv_flow)) {
             facet_remove(facet);
-            return;
+            return false;
         }
     }
 
@@ -5156,6 +5156,8 @@ facet_revalidate(struct facet *facet)
         facet->used = new_rule->up.created;
         facet->prev_used = facet->used;
     }
+
+    return true;
 }
 
 /* Updates 'facet''s used time.  Caller is responsible for calling
