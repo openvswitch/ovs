@@ -229,7 +229,8 @@ bfd_get_status(const struct bfd *bfd, struct smap *smap)
 /* Initializes, destroys, or reconfigures the BFD session 'bfd' (named 'name'),
  * according to the database configuration contained in 'cfg'.  Takes ownership
  * of 'bfd', which may be NULL.  Returns a BFD object which may be used as a
- * handle for the session, or NULL if BFD is not enabled according to 'cfg'. */
+ * handle for the session, or NULL if BFD is not enabled according to 'cfg'.
+ * Also returns NULL if cfg is NULL. */
 struct bfd *
 bfd_configure(struct bfd *bfd, const char *name,
               const struct smap *cfg)
@@ -246,7 +247,7 @@ bfd_configure(struct bfd *bfd, const char *name,
         init = true;
     }
 
-    if (!smap_get_bool(cfg, "enable", false)) {
+    if (!cfg || !smap_get_bool(cfg, "enable", false)) {
         if (bfd) {
             hmap_remove(&all_bfds, &bfd->node);
             free(bfd->name);

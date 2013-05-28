@@ -606,6 +606,7 @@ ofport_dpif_cast(const struct ofport *ofport)
 static void port_run(struct ofport_dpif *);
 static void port_run_fast(struct ofport_dpif *);
 static void port_wait(struct ofport_dpif *);
+static int set_bfd(struct ofport *, const struct smap *);
 static int set_cfm(struct ofport *, const struct cfm_settings *);
 static void ofport_clear_priorities(struct ofport_dpif *);
 static void run_fast_rl(void);
@@ -1869,6 +1870,7 @@ port_destruct(struct ofport *port_)
     ofproto->backer->need_revalidate = REV_RECONFIGURE;
     bundle_remove(port_);
     set_cfm(port_, NULL);
+    set_bfd(port_, NULL);
     if (ofproto->sflow) {
         dpif_sflow_del_port(ofproto->sflow, port->odp_port);
     }
