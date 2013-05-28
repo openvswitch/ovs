@@ -4,6 +4,6 @@ ovs-ofctl add-flow br0 \
     "table=0, dl_src=01:00:00:00:00:00/01:00:00:00:00:00, actions=drop"
 
 ovs-ofctl add-flow br0 \
-    "table=0, dl_dst=01:08:c2:00:00:00/ff:ff:ff:ff:ff:f0, actions=drop"
+    "table=0, dl_dst=01:80:c2:00:00:00/ff:ff:ff:ff:ff:f0, actions=drop"
 
 ovs-ofctl add-flow br0 "table=0, priority=0, actions=resubmit(,1)"
