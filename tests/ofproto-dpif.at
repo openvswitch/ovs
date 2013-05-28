@@ -1986,8 +1986,7 @@ AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip], [0],
 # flow stats updates are mainly what implements the fin_timeout
 # feature, we warp forward a couple of times to ensure that flow stats
 # run before re-checking the flow table.)
-AT_CHECK([ovs-appctl netdev-dummy/receive br0 0021853763af0026b98cb0f908004500003c2e2440004006465dac11370dac11370b828b0016751e267b00000000a00216d017360000020405b40402080a2d25085f0000000001030307], [0], [success
-])
+AT_CHECK([ovs-appctl netdev-dummy/receive br0 0021853763af0026b98cb0f908004500003c2e2440004006465dac11370dac11370b828b0016751e267b00000000a00216d017360000020405b40402080a2d25085f0000000001030307])
 AT_CHECK([ovs-appctl time/warp 1000 && ovs-appctl time/warp 1000], [0], [warped
 warped
 ])
@@ -1996,8 +1995,7 @@ AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip], [0],
  n_packets=1, n_bytes=74, idle_timeout=60, actions=fin_timeout(idle_timeout=5)
 ])
 # Check that a TCP FIN packet does change the timeout.
-AT_CHECK([ovs-appctl netdev-dummy/receive br0 0021853763af0026b98cb0f90800451000342e3e40004006463bac11370dac11370b828b0016751e319dfc96399b801100717ae800000101080a2d250a9408579588], [0], [success
-])
+AT_CHECK([ovs-appctl netdev-dummy/receive br0 0021853763af0026b98cb0f90800451000342e3e40004006463bac11370dac11370b828b0016751e319dfc96399b801100717ae800000101080a2d250a9408579588])
 AT_CHECK([ovs-appctl time/warp 1000 && ovs-appctl time/warp 1000], [0], [warped
 warped
 ])
@@ -2059,12 +2057,9 @@ OVS_VSWITCHD_START([add-br br1 -- \
 ADD_OF_PORTS([br0], [1], [2])
 ADD_OF_PORTS([br1], [3])
 
-AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'], [0], [success
-])
-AT_CHECK([ovs-appctl netdev-dummy/receive p2 'in_port(2),eth(src=50:54:00:00:00:07,dst=50:54:00:00:00:05),eth_type(0x0800),ipv4(src=192.168.0.2,dst=192.168.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=0,code=0)'], [0], [success
-])
-AT_CHECK([ovs-appctl netdev-dummy/receive p3 'in_port(3),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'], [0], [success
-])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p2 'in_port(2),eth(src=50:54:00:00:00:07,dst=50:54:00:00:00:05),eth_type(0x0800),ipv4(src=192.168.0.2,dst=192.168.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=0,code=0)'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p3 'in_port(3),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
 
 AT_CHECK([ovs-appctl dpif/dump-flows br0 | sort | STRIP_USED], [0], [dnl
 in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0), packets:0, bytes:0, used:0.0s, actions:userspace(pid=0,slow_path(controller))
@@ -2084,12 +2079,9 @@ OVS_VSWITCHD_START([add-br br1 -- \
 ADD_OF_PORTS([br0], [1], [2])
 ADD_OF_PORTS([br1], [3])
 
-AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'], [0], [success
-])
-AT_CHECK([ovs-appctl netdev-dummy/receive p2 'in_port(2),eth(src=50:54:00:00:00:07,dst=50:54:00:00:00:05),eth_type(0x0800),ipv4(src=192.168.0.2,dst=192.168.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=0,code=0)'], [0], [success
-])
-AT_CHECK([ovs-appctl netdev-dummy/receive p3 'in_port(3),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'], [0], [success
-])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p2 'in_port(2),eth(src=50:54:00:00:00:07,dst=50:54:00:00:00:05),eth_type(0x0800),ipv4(src=192.168.0.2,dst=192.168.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=0,code=0)'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p3 'in_port(3),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
 
 AT_CHECK([ovs-appctl dpif/dump-flows br0 | sort | STRIP_USED], [0], [dnl
 in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0), packets:0, bytes:0, used:0.0s, actions:userspace(pid=0,slow_path(controller))
