@@ -174,11 +174,11 @@ void odp_put_skb_mark_action(const uint32_t skb_mark,
 
 /* Reasons why a subfacet might not be fast-pathable. */
 enum slow_path_reason {
-    /* These reasons are mutually exclusive. */
-    SLOW_CFM = 1 << 0,          /* CFM packets need per-packet processing. */
-    SLOW_LACP = 1 << 1,         /* LACP packets need per-packet processing. */
-    SLOW_STP = 1 << 2,          /* STP packets need per-packet processing. */
-    SLOW_CONTROLLER = 1 << 3,   /* Packets must go to OpenFlow controller. */
+    SLOW_CFM = 1,               /* CFM packets need per-packet processing. */
+    SLOW_LACP,                  /* LACP packets need per-packet processing. */
+    SLOW_STP,                   /* STP packets need per-packet processing. */
+    SLOW_CONTROLLER,            /* Packets must go to OpenFlow controller. */
+    __SLOW_MAX
 };
 
 #endif /* odp-util.h */
