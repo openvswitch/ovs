@@ -3683,6 +3683,8 @@ handle_flow_miss_without_facet(struct flow_miss *miss,
 
         COVERAGE_INC(facet_suppress);
 
+        handle_flow_miss_common(rule, packet, &miss->flow);
+
         ofpbuf_use_stub(&odp_actions, op->stub, sizeof op->stub);
 
         dpif_flow_stats_extract(&miss->flow, packet, now, &stats);
