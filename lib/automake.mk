@@ -100,6 +100,8 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/netlink.h \
 	lib/nx-match.c \
 	lib/nx-match.h \
+	lib/odp-execute.c \
+	lib/odp-execute.h \
 	lib/odp-util.c \
 	lib/odp-util.h \
 	lib/ofp-actions.c \
