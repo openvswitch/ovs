@@ -242,9 +242,11 @@ case "$1" in
         ;;
   restart|force-reload)
         log_daemon_msg "Restarting $DESC" "$NAME"
-        stop_server
-        # Wait some sensible amount, some server need this
-        [ -n "$DODTIME" ] && sleep $DODTIME
+        if running; then
+            stop_server
+            # Wait some sensible amount, some server need this.
+            [ -n "$DODTIME" ] && sleep $DODTIME
+        fi
         start_server
         running
         log_end_msg $?
