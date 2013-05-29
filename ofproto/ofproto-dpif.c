@@ -398,13 +398,6 @@ struct subfacet {
     uint64_t dp_byte_count;     /* Last known byte count in the datapath. */
 
     enum subfacet_path path;    /* Installed in datapath? */
-
-    /* Datapath port the packet arrived on.  This is needed to remove
-     * flows for ports that are no longer part of the bridge.  Since the
-     * flow definition only has the OpenFlow port number and the port is
-     * no longer part of the bridge, we can't determine the datapath port
-     * number needed to delete the flow from the datapath. */
-    uint32_t odp_in_port;
 };
 
 #define SUBFACET_DESTROY_MAX_BATCH 50
@@ -3491,7 +3484,6 @@ struct flow_miss {
     struct initial_vals initial_vals;
     struct list packets;
     enum dpif_upcall_type upcall_type;
-    uint32_t odp_in_port;
 };
 
 struct flow_miss_op {
@@ -4021,7 +4013,6 @@ handle_miss_upcalls(struct dpif_backer *backer, struct dpif_upcall *upcalls,
             miss->key = upcall->key;
             miss->key_len = upcall->key_len;
             miss->upcall_type = upcall->type;
-            miss->odp_in_port = odp_in_port;
             list_init(&miss->packets);
 
             n_misses++;
@@ -5203,7 +5194,6 @@ subfacet_create(struct facet *facet, struct flow_miss *miss,
     subfacet->dp_packet_count = 0;
     subfacet->dp_byte_count = 0;
     subfacet->path = SF_NOT_INSTALLED;
-    subfacet->odp_in_port = miss->odp_in_port;
 
     ofproto->subfacet_add_count++;
     return subfacet;
