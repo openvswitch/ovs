@@ -121,7 +121,6 @@ static struct rule_dpif *rule_dpif_miss_rule(struct ofproto_dpif *ofproto,
 static void rule_get_stats(struct rule *, uint64_t *packets, uint64_t *bytes);
 static void rule_credit_stats(struct rule_dpif *,
                               const struct dpif_flow_stats *);
-static void flow_push_stats(struct facet *, const struct dpif_flow_stats *);
 static tag_type rule_calculate_tag(const struct flow *,
                                    const struct minimask *, uint32_t basis);
 static void rule_invalidate(const struct rule_dpif *);
@@ -415,7 +414,6 @@ static void subfacet_destroy_batch(struct ofproto_dpif *,
                                    struct subfacet **, int n);
 static void subfacet_reset_dp_stats(struct subfacet *,
                                     struct dpif_flow_stats *);
-static void subfacet_update_time(struct subfacet *, long long int used);
 static void subfacet_update_stats(struct subfacet *,
                                   const struct dpif_flow_stats *);
 static int subfacet_install(struct subfacet *,
@@ -503,9 +501,8 @@ static bool facet_check_consistency(struct facet *);
 
 static void facet_flush_stats(struct facet *);
 
-static void facet_update_time(struct facet *, long long int used);
 static void facet_reset_counters(struct facet *);
-static void facet_push_stats(struct facet *);
+static void facet_push_stats(struct facet *, bool may_learn);
 static void facet_learn(struct facet *);
 static void facet_account(struct facet *);
 static void push_all_stats(void);
@@ -4337,26 +4334,29 @@ update_subfacet_stats(struct subfacet *subfacet,
                       const struct dpif_flow_stats *stats)
 {
     struct facet *facet = subfacet->facet;
+    struct dpif_flow_stats diff;
+
+    diff.tcp_flags = stats->tcp_flags;
+    diff.used = stats->used;
 
     if (stats->n_packets >= subfacet->dp_packet_count) {
-        uint64_t extra = stats->n_packets - subfacet->dp_packet_count;
-        facet->packet_count += extra;
+        diff.n_packets = stats->n_packets - subfacet->dp_packet_count;
     } else {
         VLOG_WARN_RL(&rl, "unexpected packet count from the datapath");
+        diff.n_packets = 0;
     }
 
     if (stats->n_bytes >= subfacet->dp_byte_count) {
-        facet->byte_count += stats->n_bytes - subfacet->dp_byte_count;
+        diff.n_bytes = stats->n_bytes - subfacet->dp_byte_count;
     } else {
         VLOG_WARN_RL(&rl, "unexpected byte count from datapath");
+        diff.n_bytes = 0;
     }
 
     subfacet->dp_packet_count = stats->n_packets;
     subfacet->dp_byte_count = stats->n_bytes;
+    subfacet_update_stats(subfacet, &diff);
 
-    facet->tcp_flags |= stats->tcp_flags;
-
-    subfacet_update_time(subfacet, stats->used);
     if (facet->accounted_bytes < facet->byte_count) {
         facet_learn(facet);
         facet_account(facet);
@@ -4412,7 +4412,6 @@ update_stats(struct dpif_backer *backer)
     while (dpif_flow_dump_next(&dump, &key, &key_len, NULL, NULL, &stats)) {
         struct flow flow;
         struct subfacet *subfacet;
-        struct ofport_dpif *ofport;
         uint32_t key_hash;
 
         if (ofproto_receive(backer, NULL, key, key_len, &flow, NULL, &ofproto,
@@ -4422,11 +4421,6 @@ update_stats(struct dpif_backer *backer)
 
         ofproto->total_subfacet_count += hmap_count(&ofproto->subfacets);
         ofproto->n_update_stats++;
-
-        ofport = get_ofp_port(ofproto, flow.in_port);
-        if (ofport && ofport->tnl_port) {
-            netdev_vport_inc_rx(ofport->up.netdev, stats);
-        }
 
         key_hash = odp_flow_key_hash(key, key_len);
         subfacet = subfacet_find(ofproto, key, key_len, key_hash);
@@ -4738,9 +4732,7 @@ facet_remove(struct facet *facet)
 static void
 facet_learn(struct facet *facet)
 {
-    struct ofproto_dpif *ofproto = ofproto_dpif_cast(facet->rule->up.ofproto);
     long long int now = time_msec();
-    struct xlate_in xin;
 
     if (!facet->xout.has_fin_timeout && now < facet->learn_rl) {
         return;
@@ -4755,10 +4747,7 @@ facet_learn(struct facet *facet)
         return;
     }
 
-    xlate_in_init(&xin, ofproto, &facet->flow, &facet->initial_vals,
-                  facet->rule, facet->tcp_flags, NULL);
-    xin.may_learn = true;
-    xlate_actions_for_side_effects(&xin);
+    facet_push_stats(facet, true);
 }
 
 static void
@@ -4845,7 +4834,7 @@ facet_flush_stats(struct facet *facet)
         ovs_assert(!subfacet->dp_packet_count);
     }
 
-    facet_push_stats(facet);
+    facet_push_stats(facet, false);
     if (facet->accounted_bytes < facet->byte_count) {
         facet_account(facet);
         facet->accounted_bytes = facet->byte_count;
@@ -4859,9 +4848,6 @@ facet_flush_stats(struct facet *facet)
         expired.used = facet->used;
         netflow_expire(ofproto->netflow, &facet->nf_flow, &expired);
     }
-
-    facet->rule->packet_count += facet->packet_count;
-    facet->rule->byte_count += facet->byte_count;
 
     /* Reset counters to prevent double counting if 'facet' ever gets
      * reinstalled. */
@@ -5086,19 +5072,6 @@ facet_revalidate(struct facet *facet)
     return true;
 }
 
-/* Updates 'facet''s used time.  Caller is responsible for calling
- * facet_push_stats() to update the flows which 'facet' resubmits into. */
-static void
-facet_update_time(struct facet *facet, long long int used)
-{
-    struct ofproto_dpif *ofproto = ofproto_dpif_cast(facet->rule->up.ofproto);
-    if (used > facet->used) {
-        facet->used = used;
-        ofproto_rule_update_used(&facet->rule->up, used);
-        netflow_flow_update_time(ofproto->netflow, &facet->nf_flow, used);
-    }
-}
-
 static void
 facet_reset_counters(struct facet *facet)
 {
@@ -5110,7 +5083,7 @@ facet_reset_counters(struct facet *facet)
 }
 
 static void
-facet_push_stats(struct facet *facet)
+facet_push_stats(struct facet *facet, bool may_learn)
 {
     struct dpif_flow_stats stats;
 
@@ -5121,18 +5094,36 @@ facet_push_stats(struct facet *facet)
     stats.n_packets = facet->packet_count - facet->prev_packet_count;
     stats.n_bytes = facet->byte_count - facet->prev_byte_count;
     stats.used = facet->used;
-    stats.tcp_flags = 0;
+    stats.tcp_flags = facet->tcp_flags;
 
-    if (stats.n_packets || stats.n_bytes || facet->used > facet->prev_used) {
+    if (may_learn || stats.n_packets || facet->used > facet->prev_used) {
+        struct ofproto_dpif *ofproto =
+            ofproto_dpif_cast(facet->rule->up.ofproto);
+
+        struct ofport_dpif *in_port;
+        struct xlate_in xin;
+
         facet->prev_packet_count = facet->packet_count;
         facet->prev_byte_count = facet->byte_count;
         facet->prev_used = facet->used;
 
-        flow_push_stats(facet, &stats);
+        in_port = get_ofp_port(ofproto, facet->flow.in_port);
+        if (in_port && in_port->tnl_port) {
+            netdev_vport_inc_rx(in_port->up.netdev, &stats);
+        }
 
-        update_mirror_stats(ofproto_dpif_cast(facet->rule->up.ofproto),
-                            facet->xout.mirrors, stats.n_packets,
+        rule_credit_stats(facet->rule, &stats);
+        netflow_flow_update_time(ofproto->netflow, &facet->nf_flow,
+                                 facet->used);
+        netflow_flow_update_flags(&facet->nf_flow, facet->tcp_flags);
+        update_mirror_stats(ofproto, facet->xout.mirrors, stats.n_packets,
                             stats.n_bytes);
+
+        xlate_in_init(&xin, ofproto, &facet->flow, &facet->initial_vals,
+                      facet->rule, stats.tcp_flags, NULL);
+        xin.resubmit_stats = &stats;
+        xin.may_learn = may_learn;
+        xlate_actions_for_side_effects(&xin);
     }
 }
 
@@ -5150,7 +5141,7 @@ push_all_stats__(bool run_fast)
         struct facet *facet;
 
         HMAP_FOR_EACH (facet, hmap_node, &ofproto->facets) {
-            facet_push_stats(facet);
+            facet_push_stats(facet, false);
             if (run_fast) {
                 run_fast_rl();
             }
@@ -5172,23 +5163,6 @@ rule_credit_stats(struct rule_dpif *rule, const struct dpif_flow_stats *stats)
     rule->packet_count += stats->n_packets;
     rule->byte_count += stats->n_bytes;
     ofproto_rule_update_used(&rule->up, stats->used);
-}
-
-/* Pushes flow statistics to the rules which 'facet->flow' resubmits
- * into given 'facet->rule''s actions and mirrors. */
-static void
-flow_push_stats(struct facet *facet, const struct dpif_flow_stats *stats)
-{
-    struct rule_dpif *rule = facet->rule;
-    struct ofproto_dpif *ofproto = ofproto_dpif_cast(rule->up.ofproto);
-    struct xlate_in xin;
-
-    ofproto_rule_update_used(&rule->up, stats->used);
-
-    xlate_in_init(&xin, ofproto, &facet->flow, &facet->initial_vals, rule,
-                  0, NULL);
-    xin.resubmit_stats = stats;
-    xlate_actions_for_side_effects(&xin);
 }
 
 /* Subfacets. */
@@ -5410,17 +5384,6 @@ subfacet_reset_dp_stats(struct subfacet *subfacet,
     subfacet->dp_byte_count = 0;
 }
 
-/* Updates 'subfacet''s used time.  The caller is responsible for calling
- * facet_push_stats() to update the flows which 'subfacet' resubmits into. */
-static void
-subfacet_update_time(struct subfacet *subfacet, long long int used)
-{
-    if (used > subfacet->used) {
-        subfacet->used = used;
-        facet_update_time(subfacet->facet, used);
-    }
-}
-
 /* Folds the statistics from 'stats' into the counters in 'subfacet'.
  *
  * Because of the meaning of a subfacet's counters, it only makes sense to do
@@ -5434,11 +5397,11 @@ subfacet_update_stats(struct subfacet *subfacet,
     if (stats->n_packets || stats->used > subfacet->used) {
         struct facet *facet = subfacet->facet;
 
-        subfacet_update_time(subfacet, stats->used);
+        subfacet->used = MAX(subfacet->used, stats->used);
+        facet->used = MAX(facet->used, stats->used);
         facet->packet_count += stats->n_packets;
         facet->byte_count += stats->n_bytes;
         facet->tcp_flags |= stats->tcp_flags;
-        netflow_flow_update_flags(&facet->nf_flow, stats->tcp_flags);
     }
 }
 
@@ -5597,7 +5560,6 @@ static void
 rule_get_stats(struct rule *rule_, uint64_t *packets, uint64_t *bytes)
 {
     struct rule_dpif *rule = rule_dpif_cast(rule_);
-    struct facet *facet;
 
     /* push_all_stats() can handle flow misses which, when using the learn
      * action, can cause rules to be added and deleted.  This can corrupt our
@@ -5609,14 +5571,6 @@ rule_get_stats(struct rule *rule_, uint64_t *packets, uint64_t *bytes)
      * in facets.  This counts, for example, facets that have expired. */
     *packets = rule->packet_count;
     *bytes = rule->byte_count;
-
-    /* Add any statistics that are tracked by facets.  This includes
-     * statistical data recently updated by ofproto_update_stats() as well as
-     * stats for packets that were executed "by hand" via dpif_execute(). */
-    LIST_FOR_EACH (facet, list_node, &rule->facets) {
-        *packets += facet->packet_count;
-        *bytes += facet->byte_count;
-    }
 }
 
 static void
