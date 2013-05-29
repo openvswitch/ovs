@@ -4882,10 +4882,7 @@ facet_lookup_valid(struct ofproto_dpif *ofproto, const struct flow *flow,
             || tag_set_intersects(&ofproto->backer->revalidate_set,
                                   facet->xout.tags))
         && !facet_revalidate(facet)) {
-        facet_revalidate(facet);
-
-        /* facet_revalidate() may have destroyed 'facet'. */
-        facet = facet_find(ofproto, flow, hash);
+        return NULL;
     }
 
     return facet;
