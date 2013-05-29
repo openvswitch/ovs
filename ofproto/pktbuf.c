@@ -158,7 +158,7 @@ pktbuf_get_null(void)
  * 0 if successful, otherwise an OpenFlow error code.
  *
  * On success, ordinarily stores the buffered packet in '*bufferp' and the
- * datapath port number on which the packet was received in '*in_port'.  The
+ * OpenFlow port number on which the packet was received in '*in_port'.  The
  * caller becomes responsible for freeing the buffer.  However, if 'id'
  * identifies a "null" packet buffer (created with pktbuf_get_null()), stores
  * NULL in '*bufferp' and UINT16_max in '*in_port'.
