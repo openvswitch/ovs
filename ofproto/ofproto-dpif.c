@@ -3974,14 +3974,14 @@ handle_miss_upcalls(struct dpif_backer *backer, struct dpif_upcall *upcalls,
         if (error == ENODEV) {
             struct drop_key *drop_key;
 
-            /* Received packet on port for which we couldn't associate
-             * an ofproto.  This can happen if a port is removed while
-             * traffic is being received.  Print a rate-limited message
+            /* Received packet on datapath port for which we couldn't
+             * associate an ofproto.  This can happen if a port is removed
+             * while traffic is being received.  Print a rate-limited message
              * in case it happens frequently.  Install a drop flow so
              * that future packets of the flow are inexpensively dropped
              * in the kernel. */
-            VLOG_INFO_RL(&rl, "received packet on unassociated port %"PRIu32,
-                         flow.in_port);
+            VLOG_INFO_RL(&rl, "received packet on unassociated datapath port "
+                              "%"PRIu32, odp_in_port);
 
             drop_key = drop_key_lookup(backer, upcall->key, upcall->key_len);
             if (!drop_key) {
