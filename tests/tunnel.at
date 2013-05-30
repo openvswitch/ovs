@@ -17,7 +17,7 @@ AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 AT_CHECK([ovs-appctl dpif/show], [0], [dnl
 br0 (dummy@ovs-dummy):
 	lookups: hit:0 missed:0
-	flows: cur: 0, avg: 0.000, max: 0, life span: 0(ms)
+	flows: cur: 0, avg: 0, max: 0, life span: 0(ms)
 		overall avg: add rate: 0.000/min, del rate: 0.000/min
 	br0 65534/100: (dummy)
 	p1 1/1: (gre: remote_ip=1.1.1.1)
@@ -44,7 +44,7 @@ AT_CHECK([ovs-vsctl set Interface p2 type=gre options:local_ip=2.2.2.3 \
 AT_CHECK([ovs-appctl dpif/show], [0], [dnl
 br0 (dummy@ovs-dummy):
 	lookups: hit:0 missed:0
-	flows: cur: 0, avg: 0.000, max: 0, life span: 0(ms)
+	flows: cur: 0, avg: 0, max: 0, life span: 0(ms)
 		overall avg: add rate: 0.000/min, del rate: 0.000/min
 	br0 65534/100: (dummy)
 	p1 1/1: (gre: remote_ip=1.1.1.1)
@@ -83,7 +83,7 @@ AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 AT_CHECK([ovs-appctl dpif/show], [0], [dnl
 br0 (dummy@ovs-dummy):
 	lookups: hit:0 missed:0
-	flows: cur: 0, avg: 0.000, max: 0, life span: 0(ms)
+	flows: cur: 0, avg: 0, max: 0, life span: 0(ms)
 		overall avg: add rate: 0.000/min, del rate: 0.000/min
 	br0 65534/100: (dummy)
 	p1 1/1: (gre: remote_ip=1.1.1.1)
@@ -131,7 +131,7 @@ AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 AT_CHECK([ovs-appctl dpif/show], [0], [dnl
 br0 (dummy@ovs-dummy):
 	lookups: hit:0 missed:0
-	flows: cur: 0, avg: 0.000, max: 0, life span: 0(ms)
+	flows: cur: 0, avg: 0, max: 0, life span: 0(ms)
 		overall avg: add rate: 0.000/min, del rate: 0.000/min
 	br0 65534/100: (dummy)
 	p1 1/1: (gre: key=5, local_ip=2.2.2.2, remote_ip=1.1.1.1)
@@ -167,7 +167,7 @@ AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 AT_CHECK([ovs-appctl dpif/show], [0], [dnl
 br0 (dummy@ovs-dummy):
 	lookups: hit:0 missed:0
-	flows: cur: 0, avg: 0.000, max: 0, life span: 0(ms)
+	flows: cur: 0, avg: 0, max: 0, life span: 0(ms)
 		overall avg: add rate: 0.000/min, del rate: 0.000/min
 	br0 65534/100: (dummy)
 	p1 1/1: (gre: remote_ip=1.1.1.1, tos=inherit, ttl=inherit)
@@ -213,7 +213,7 @@ AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 AT_CHECK([ovs-appctl dpif/show], [0], [dnl
 br0 (dummy@ovs-dummy):
 	lookups: hit:0 missed:0
-	flows: cur: 0, avg: 0.000, max: 0, life span: 0(ms)
+	flows: cur: 0, avg: 0, max: 0, life span: 0(ms)
 		overall avg: add rate: 0.000/min, del rate: 0.000/min
 	br0 65534/100: (dummy)
 	p1 1/1: (gre: key=flow, remote_ip=1.1.1.1)
@@ -249,7 +249,7 @@ AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 AT_CHECK([ovs-appctl dpif/show], [0], [dnl
 br0 (dummy@ovs-dummy):
 	lookups: hit:0 missed:0
-	flows: cur: 0, avg: 0.000, max: 0, life span: 0(ms)
+	flows: cur: 0, avg: 0, max: 0, life span: 0(ms)
 		overall avg: add rate: 0.000/min, del rate: 0.000/min
 	br0 65534/100: (dummy)
 	p1 1/1: (gre: key=1, remote_ip=1.1.1.1)
@@ -305,7 +305,7 @@ AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 AT_CHECK([ovs-appctl dpif/show], [0], [dnl
 br0 (dummy@ovs-dummy):
 	lookups: hit:0 missed:0
-	flows: cur: 0, avg: 0.000, max: 0, life span: 0(ms)
+	flows: cur: 0, avg: 0, max: 0, life span: 0(ms)
 		overall avg: add rate: 0.000/min, del rate: 0.000/min
 	br0 65534/100: (dummy)
 	p1 1/1: (gre: key=flow, remote_ip=1.1.1.1)
@@ -345,7 +345,7 @@ OVS_VSWITCHD_START([add-port br0 p1 -- set Interface p1 type=vxlan \
 AT_CHECK([ovs-appctl dpif/show], [0], [dnl
 br0 (dummy@ovs-dummy):
 	lookups: hit:0 missed:0
-	flows: cur: 0, avg: 0.000, max: 0, life span: 0(ms)
+	flows: cur: 0, avg: 0, max: 0, life span: 0(ms)
 		overall avg: add rate: 0.000/min, del rate: 0.000/min
 	br0 65534/100: (dummy)
 	p1 1/1: (vxlan: remote_ip=1.1.1.1)
@@ -361,7 +361,7 @@ OVS_VSWITCHD_START([add-port br0 p1 -- set Interface p1 type=lisp \
 AT_CHECK([ovs-appctl dpif/show], [0], [dnl
 br0 (dummy@ovs-dummy):
 	lookups: hit:0 missed:0
-	flows: cur: 0, avg: 0.000, max: 0, life span: 0(ms)
+	flows: cur: 0, avg: 0, max: 0, life span: 0(ms)
 		overall avg: add rate: 0.000/min, del rate: 0.000/min
 	br0 65534/100: (dummy)
 	p1 1/1: (lisp: remote_ip=1.1.1.1)
@@ -377,7 +377,7 @@ OVS_VSWITCHD_START([add-port br0 p1 -- set Interface p1 type=vxlan \
 AT_CHECK([ovs-appctl dpif/show], [0], [dnl
 br0 (dummy@ovs-dummy):
 	lookups: hit:0 missed:0
-	flows: cur: 0, avg: 0.000, max: 0, life span: 0(ms)
+	flows: cur: 0, avg: 0, max: 0, life span: 0(ms)
 		overall avg: add rate: 0.000/min, del rate: 0.000/min
 	br0 65534/100: (dummy)
 	p1 1/1: (vxlan: dst_port=4341, remote_ip=1.1.1.1)
@@ -390,7 +390,7 @@ AT_CHECK([ovs-vsctl -- set Interface p1 options:dst_port=5000])
 AT_CHECK([ovs-appctl dpif/show], [0], [dnl
 br0 (dummy@ovs-dummy):
 	lookups: hit:0 missed:0
-	flows: cur: 0, avg: 0.000, max: 0, life span: 0(ms)
+	flows: cur: 0, avg: 0, max: 0, life span: 0(ms)
 		overall avg: add rate: 0.000/min, del rate: 0.000/min
 	br0 65534/100: (dummy)
 	p1 1/2: (vxlan: dst_port=5000, remote_ip=1.1.1.1)
@@ -403,7 +403,7 @@ AT_CHECK([ovs-vsctl -- set Interface p1 options:dst_port=4789])
 AT_CHECK([ovs-appctl dpif/show], [0], [dnl
 br0 (dummy@ovs-dummy):
 	lookups: hit:0 missed:0
-	flows: cur: 0, avg: 0.000, max: 0, life span: 0(ms)
+	flows: cur: 0, avg: 0, max: 0, life span: 0(ms)
 		overall avg: add rate: 0.000/min, del rate: 0.000/min
 	br0 65534/100: (dummy)
 	p1 1/1: (vxlan: remote_ip=1.1.1.1)
