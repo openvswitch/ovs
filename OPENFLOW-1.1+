@@ -158,7 +158,8 @@ didn't compare the specs carefully yet.)
     * Rework tag order.  I'm not sure whether we need to do anything
       for this.
 
-    * Duration for stats.
+    * Duration for queue stats.  (Duration for port stats is already
+      implemented.)
 
     * On-demand flow counters.  I think this might be a real
       optimization in some cases for the software switch.

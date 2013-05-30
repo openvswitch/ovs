@@ -1218,6 +1218,12 @@ ofp_print_ofpst_port_reply(struct ds *string, const struct ofp_header *oh,
         print_port_stat(string, "drop=", ps.stats.tx_dropped, 1);
         print_port_stat(string, "errs=", ps.stats.tx_errors, 1);
         print_port_stat(string, "coll=", ps.stats.collisions, 0);
+
+        if (ps.duration_sec != UINT32_MAX) {
+            ds_put_cstr(string, "           duration=");
+            ofp_print_duration(string, ps.duration_sec, ps.duration_nsec);
+            ds_put_char(string, '\n');
+        }
     }
 }
 

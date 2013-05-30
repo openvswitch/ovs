@@ -1395,6 +1395,45 @@ OFPST_PORT reply (OF1.2) (xid=0x2): 3 ports
 ])
 AT_CLEANUP
 
+AT_SETUP([OFPST_PORT reply - OF1.3])
+AT_KEYWORDS([ofp-print OFPT_STATS_REPLY])
+AT_CHECK([ovs-ofctl ofp-print "\
+04 13 01 60 00 00 00 02 00 04 00 00 00 00 00 00 \
+00 00 00 02 00 00 00 00 00 00 00 00 00 01 95 56 \
+00 00 00 00 00 00 00 88 00 00 00 00 02 5d 08 98 \
+00 00 00 00 00 00 2c f8 00 00 00 00 00 00 00 00 \
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 \
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 \
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 \
+00 00 00 00 00 00 00 00 00 00 00 01 00 0f 42 40 \
+ff ff ff fe 00 00 00 00 \
+00 00 00 00 00 00 00 44 00 00 00 00 00 00 9d 2c \
+00 00 00 00 00 00 16 7c 00 00 00 00 01 1e 36 44 \
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 \
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 \
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 \
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 \
+ff ff ff ff ff ff ff ff \
+00 00 00 01 00 00 00 00 00 00 00 00 00 00 00 44 \
+00 00 00 00 00 00 9d 2c 00 00 00 00 00 00 16 7c \
+00 00 00 00 01 1e 36 44 00 00 00 00 00 00 00 00 \
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 \
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 \
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 \
+00 00 00 00 00 00 00 00 00 00 00 00 07 54 d4 c0 \
+"], [0], [dnl
+OFPST_PORT reply (OF1.3) (xid=0x2): 3 ports
+  port  2: rx pkts=103766, bytes=39651480, drop=0, errs=0, frame=0, over=0, crc=0
+           tx pkts=136, bytes=11512, drop=0, errs=0, coll=0
+           duration=1.001s
+  port LOCAL: rx pkts=68, bytes=5756, drop=0, errs=0, frame=0, over=0, crc=0
+           tx pkts=40236, bytes=18757188, drop=0, errs=0, coll=0
+  port  1: rx pkts=68, bytes=5756, drop=0, errs=0, frame=0, over=0, crc=0
+           tx pkts=40236, bytes=18757188, drop=0, errs=0, coll=0
+           duration=0.123s
+])
+AT_CLEANUP
+
 AT_SETUP([OFPST_QUEUE request - OF1.0])
 AT_KEYWORDS([ofp-print OFPT_STATS_REQUEST])
 AT_CHECK([ovs-ofctl ofp-print "\

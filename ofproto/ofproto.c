@@ -203,6 +203,8 @@ static bool handle_openflow(struct ofconn *, struct ofpbuf *);
 static enum ofperr handle_flow_mod__(struct ofproto *, struct ofconn *,
                                      const struct ofputil_flow_mod *,
                                      const struct ofp_header *);
+static void calc_duration(long long int start, long long int now,
+                          uint32_t *sec, uint32_t *nsec);
 
 /* ofproto. */
 static uint64_t pick_datapath_id(const struct ofproto *);
@@ -1787,6 +1789,7 @@ ofport_install(struct ofproto *p,
     ofport->change_seq = netdev_change_seq(netdev);
     ofport->pp = *pp;
     ofport->ofp_port = pp->port_no;
+    ofport->created = time_msec();
 
     /* Add port to 'p'. */
     hmap_insert(&p->ports, &ofport->hmap_node, hash_int(ofport->ofp_port, 0));
@@ -2544,6 +2547,9 @@ append_port_stat(struct ofport *port, struct list *replies)
 {
     struct ofputil_port_stats ops = { .port_no = port->pp.port_no };
 
+    calc_duration(port->created, time_msec(),
+                  &ops.duration_sec, &ops.duration_nsec);
+
     /* Intentionally ignore return value, since errors will set
      * 'stats' to all-1s, which is correct for OpenFlow, and
      * netdev_get_stats() will log errors. */
@@ -2604,8 +2610,8 @@ handle_port_desc_stats_request(struct ofconn *ofconn,
 }
 
 static void
-calc_flow_duration__(long long int start, long long int now,
-                     uint32_t *sec, uint32_t *nsec)
+calc_duration(long long int start, long long int now,
+              uint32_t *sec, uint32_t *nsec)
 {
     long long int msecs = now - start;
     *sec = msecs / 1000;
@@ -2824,8 +2830,7 @@ handle_flow_stats_request(struct ofconn *ofconn,
         fs.priority = rule->cr.priority;
         fs.cookie = rule->flow_cookie;
         fs.table_id = rule->table_id;
-        calc_flow_duration__(rule->created, now, &fs.duration_sec,
-                             &fs.duration_nsec);
+        calc_duration(rule->created, now, &fs.duration_sec, &fs.duration_nsec);
         fs.idle_timeout = rule->idle_timeout;
         fs.hard_timeout = rule->hard_timeout;
         fs.idle_age = age_secs(now - rule->used);
@@ -3438,8 +3443,8 @@ ofproto_rule_send_removed(struct rule *rule, uint8_t reason)
     fr.cookie = rule->flow_cookie;
     fr.reason = reason;
     fr.table_id = rule->table_id;
-    calc_flow_duration__(rule->created, time_msec(),
-                         &fr.duration_sec, &fr.duration_nsec);
+    calc_duration(rule->created, time_msec(),
+                  &fr.duration_sec, &fr.duration_nsec);
     fr.idle_timeout = rule->idle_timeout;
     fr.hard_timeout = rule->hard_timeout;
     rule->ofproto->ofproto_class->rule_get_stats(rule, &fr.packet_count,

@@ -4595,11 +4595,8 @@ ofputil_port_stats_to_ofp13(const struct ofputil_port_stats *ops,
                             struct ofp13_port_stats *ps13)
 {
     ofputil_port_stats_to_ofp11(ops, &ps13->ps);
-
-    /* OF 1.3 adds duration fields */
-    /* FIXME: Need to implement port alive duration (sec + nsec) */
-    ps13->duration_sec = htonl(~0);
-    ps13->duration_nsec = htonl(~0);
+    ps13->duration_sec = htonl(ops->duration_sec);
+    ps13->duration_nsec = htonl(ops->duration_nsec);
 }
 
 
@@ -4655,6 +4652,7 @@ ofputil_port_stats_from_ofp10(struct ofputil_port_stats *ops,
     ops->stats.rx_over_errors = ntohll(get_32aligned_be64(&ps10->rx_over_err));
     ops->stats.rx_crc_errors = ntohll(get_32aligned_be64(&ps10->rx_crc_err));
     ops->stats.collisions = ntohll(get_32aligned_be64(&ps10->collisions));
+    ops->duration_sec = ops->duration_nsec = UINT32_MAX;
 
     return 0;
 }
@@ -4683,6 +4681,7 @@ ofputil_port_stats_from_ofp11(struct ofputil_port_stats *ops,
     ops->stats.rx_over_errors = ntohll(ps11->rx_over_err);
     ops->stats.rx_crc_errors = ntohll(ps11->rx_crc_err);
     ops->stats.collisions = ntohll(ps11->collisions);
+    ops->duration_sec = ops->duration_nsec = UINT32_MAX;
 
     return 0;
 }
@@ -4691,13 +4690,11 @@ static enum ofperr
 ofputil_port_stats_from_ofp13(struct ofputil_port_stats *ops,
                               const struct ofp13_port_stats *ps13)
 {
-    enum ofperr error =
-        ofputil_port_stats_from_ofp11(ops, &ps13->ps);
+    enum ofperr error = ofputil_port_stats_from_ofp11(ops, &ps13->ps);
     if (!error) {
-        /* FIXME: Get ps13->duration_sec and ps13->duration_nsec,
-         * Add to netdev_stats? */
+        ops->duration_sec = ntohl(ps13->duration_sec);
+        ops->duration_nsec = ntohl(ps13->duration_nsec);
     }
-
     return error;
 }
 

@@ -689,6 +689,8 @@ bool ofputil_parse_key_value(char **stringp, char **keyp, char **valuep);
 struct ofputil_port_stats {
     uint16_t port_no;
     struct netdev_stats stats;
+    uint32_t duration_sec;      /* UINT32_MAX if unknown. */
+    uint32_t duration_nsec;
 };
 
 struct ofpbuf *ofputil_encode_dump_ports_request(enum ofp_version ofp_version,

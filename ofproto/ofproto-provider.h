@@ -119,6 +119,7 @@ struct ofport {
     struct ofputil_phy_port pp;
     uint16_t ofp_port;          /* OpenFlow port number. */
     unsigned int change_seq;
+    long long int created;      /* Time created, in msec. */
     int mtu;
 };
 
