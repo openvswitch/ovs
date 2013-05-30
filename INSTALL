@@ -343,6 +343,48 @@ also upgrade the database schema:
 4. Start the Open vSwitch daemons as described under "Building and
    Installing Open vSwitch for Linux, FreeBSD or NetBSD" above.
 
+Hot Upgrading
+=============
+Upgrading Open vSwitch from one version to the next version with minimum
+disruption of traffic going through the system that is using that Open vSwitch
+needs some considerations:
+
+1. If the upgrade only involves upgrading the userspace utilities and daemons
+of Open vSwitch, make sure that the new userspace version is compatible with
+the previously loaded kernel module.
+
+2. An upgrade of userspace daemons means that they have to be restarted.
+Restarting the daemons means that the Openflow flows in the ovs-vswitchd daemon
+will be lost.  One way to restore the flows is to let the controller
+re-populate it.  Another way is to save the previous flows using a utility
+like ovs-ofctl and then re-add them after the restart. Restoring the old flows
+is accurate only if the new Open vSwitch interfaces retain the old 'ofport'
+values.
+
+3. When the new userspace daemons get restarted, they automatically flush
+the old flows setup in the kernel. This can be expensive if there are hundreds
+of new flows that are entering the kernel but userspace daemons are busy
+setting up new userspace flows from either the controller or an utility like
+ovs-ofctl. Open vSwitch database provides an option to solve this problem
+through the other_config:flow-restore-wait column of the Open_vSwitch table.
+Refer to the ovs-vswitchd.conf.db(5) manpage for details.
+
+4. If the upgrade also involves upgrading the kernel module, the old kernel
+module needs to be unloaded and the new kernel module should be loaded. This
+means that the kernel network devices belonging to Open vSwitch is recreated
+and the kernel flows are lost. The downtime of the traffic can be reduced
+if the userspace daemons are restarted immediately and the userspace flows
+are restored as soon as possible.
+
+The ovs-ctl utility's "restart" function only restarts the userspace daemons,
+makes sure that the 'ofport' values remain consistent across restarts, restores
+userspace flows using the ovs-ofctl utility and also uses the
+other_config:flow-restore-wait column to keep the traffic downtime to the
+minimum. The ovs-ctl utility's "force-reload-kmod" function does all of the
+above, but also replaces the old kernel module with the new one. Open vSwitch
+startup scripts for Debian, XenServer and RHEL use ovs-ctl's functions and it
+is recommended that these functions be used for other software platforms too.
+
 Running the Testsuite
 =====================
 
