@@ -658,8 +658,6 @@ static void drop_key_clear(struct dpif_backer *);
 static struct ofport_dpif *
 odp_port_to_ofport(const struct dpif_backer *, uint32_t odp_port);
 
-static void dpif_stats_update_hit_count(struct ofproto_dpif *ofproto,
-                                        uint64_t delta);
 struct avg_subfacet_rates {
     double add_rate;     /* Moving average of new flows created per minute. */
     double del_rate;     /* Moving average of flows deleted per minute. */
@@ -759,8 +757,6 @@ static unsigned long long int avg_subfacet_life_span(
                                         const struct ofproto_dpif *);
 static double avg_subfacet_count(const struct ofproto_dpif *ofproto);
 static void update_moving_averages(struct ofproto_dpif *ofproto);
-static void dpif_stats_update_hit_count(struct ofproto_dpif *ofproto,
-                                        uint64_t delta);
 static void update_max_subfacet_count(struct ofproto_dpif *ofproto);
 
 /* Defer flow mod completion until "ovs-appctl ofproto/unclog"?  (Useful only
@@ -4299,6 +4295,7 @@ update_subfacet_stats(struct subfacet *subfacet,
                       const struct dpif_flow_stats *stats)
 {
     struct facet *facet = subfacet->facet;
+    struct ofproto_dpif *ofproto = ofproto_dpif_cast(facet->rule->up.ofproto);
     struct dpif_flow_stats diff;
 
     diff.tcp_flags = stats->tcp_flags;
@@ -4318,6 +4315,7 @@ update_subfacet_stats(struct subfacet *subfacet,
         diff.n_bytes = 0;
     }
 
+    ofproto->n_hit += diff.n_packets;
     subfacet->dp_packet_count = stats->n_packets;
     subfacet->dp_byte_count = stats->n_bytes;
     subfacet_update_stats(subfacet, &diff);
@@ -4391,12 +4389,6 @@ update_stats(struct dpif_backer *backer)
         subfacet = subfacet_find(ofproto, key, key_len, key_hash);
         switch (subfacet ? subfacet->path : SF_NOT_INSTALLED) {
         case SF_FAST_PATH:
-            /* Update ofproto_dpif's hit count. */
-            if (stats->n_packets > subfacet->dp_packet_count) {
-                uint64_t delta = stats->n_packets - subfacet->dp_packet_count;
-                dpif_stats_update_hit_count(ofproto, delta);
-            }
-
             update_subfacet_stats(subfacet, stats);
             break;
 
@@ -8769,12 +8761,6 @@ update_moving_averages(struct ofproto_dpif *ofproto)
         ofproto->subfacet_del_count = 0;
         ofproto->last_minute += min_ms;
     }
-}
-
-static void
-dpif_stats_update_hit_count(struct ofproto_dpif *ofproto, uint64_t delta)
-{
-    ofproto->n_hit += delta;
 }
 
 const struct ofproto_class ofproto_dpif_class = {
