@@ -1116,7 +1116,7 @@ execute_mpls_push_action(struct xlate_ctx *ctx, ovs_be16 eth_type)
     memset(&ctx->xout->wc.masks.mpls_depth, 0xff,
                sizeof ctx->xout->wc.masks.mpls_depth);
 
-    if (ctx->base_flow.mpls_depth) {
+    if (ctx->xin->flow.mpls_depth) {
         ctx->xin->flow.mpls_lse &= ~htonl(MPLS_BOS_MASK);
         ctx->xin->flow.mpls_depth++;
     } else {
