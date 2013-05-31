@@ -565,8 +565,9 @@ struct vlan_splinter {
     int vid;
 };
 
-static uint32_t vsp_realdev_to_vlandev(const struct ofproto_dpif *,
-                                       uint32_t realdev, ovs_be16 vlan_tci);
+static uint16_t vsp_realdev_to_vlandev(const struct ofproto_dpif *,
+                                       uint16_t realdev_ofp_port,
+                                       ovs_be16 vlan_tci);
 static bool vsp_adjust_flow(const struct ofproto_dpif *, struct flow *);
 static void vsp_remove(struct ofport_dpif *);
 static void vsp_add(struct ofport_dpif *, uint16_t realdev_ofp_port, int vid);
@@ -6018,10 +6019,14 @@ compose_output_action__(struct xlate_ctx *ctx, uint16_t ofp_port,
                                  &ctx->xout->odp_actions);
         ctx->xin->flow.tunnel = flow_tnl; /* Restore tunnel metadata */
     } else {
+        uint16_t vlandev_port;
         odp_port = ofport->odp_port;
-        out_port = vsp_realdev_to_vlandev(ctx->ofproto, odp_port,
-                                          ctx->xin->flow.vlan_tci);
-        if (out_port != odp_port) {
+        vlandev_port = vsp_realdev_to_vlandev(ctx->ofproto, ofp_port,
+                                              ctx->xin->flow.vlan_tci);
+        if (vlandev_port == ofp_port) {
+            out_port = odp_port;
+        } else {
+            out_port = ofp_port_to_odp_port(ctx->ofproto, vlandev_port);
             ctx->xin->flow.vlan_tci = htons(0);
         }
         ctx->xin->flow.skb_mark &= ~IPSEC_MARK;
@@ -8580,33 +8585,31 @@ hash_realdev_vid(uint16_t realdev_ofp_port, int vid)
     return hash_2words(realdev_ofp_port, vid);
 }
 
-/* Returns the ODP port number of the Linux VLAN device that corresponds to
- * 'vlan_tci' on the network device with port number 'realdev_odp_port' in
- * 'ofproto'.  For example, given 'realdev_odp_port' of eth0 and 'vlan_tci' 9,
- * it would return the port number of eth0.9.
+/* Returns the OFP port number of the Linux VLAN device that corresponds to
+ * 'vlan_tci' on the network device with port number 'realdev_ofp_port' in
+ * 'struct ofport_dpif'.  For example, given 'realdev_ofp_port' of eth0 and
+ * 'vlan_tci' 9, it would return the port number of eth0.9.
  *
- * Unless VLAN splinters are enabled for port 'realdev_odp_port', this
- * function just returns its 'realdev_odp_port' argument. */
-static uint32_t
+ * Unless VLAN splinters are enabled for port 'realdev_ofp_port', this
+ * function just returns its 'realdev_ofp_port' argument. */
+static uint16_t
 vsp_realdev_to_vlandev(const struct ofproto_dpif *ofproto,
-                       uint32_t realdev_odp_port, ovs_be16 vlan_tci)
+                       uint16_t realdev_ofp_port, ovs_be16 vlan_tci)
 {
     if (!hmap_is_empty(&ofproto->realdev_vid_map)) {
-        uint16_t realdev_ofp_port;
         int vid = vlan_tci_to_vid(vlan_tci);
         const struct vlan_splinter *vsp;
 
-        realdev_ofp_port = odp_port_to_ofp_port(ofproto, realdev_odp_port);
         HMAP_FOR_EACH_WITH_HASH (vsp, realdev_vid_node,
                                  hash_realdev_vid(realdev_ofp_port, vid),
                                  &ofproto->realdev_vid_map) {
             if (vsp->realdev_ofp_port == realdev_ofp_port
                 && vsp->vid == vid) {
-                return ofp_port_to_odp_port(ofproto, vsp->vlandev_ofp_port);
+                return vsp->vlandev_ofp_port;
             }
         }
     }
-    return realdev_odp_port;
+    return realdev_ofp_port;
 }
 
 static struct vlan_splinter *
