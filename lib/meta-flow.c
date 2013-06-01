@@ -1356,9 +1356,8 @@ mf_set_value(const struct mf_field *mf,
     }
 }
 
-/* Makes 'match' match field 'mf' exactly, with the value matched taken from
- * 'value'.  The caller is responsible for ensuring that 'match' meets 'mf''s
- * prerequisites. */
+/* Sets 'flow' member field described by 'mf' to 'value'.  The caller is
+ * responsible for ensuring that 'flow' meets 'mf''s prerequisites.*/
 void
 mf_set_flow_value(const struct mf_field *mf,
                   const union mf_value *value, struct flow *flow)
