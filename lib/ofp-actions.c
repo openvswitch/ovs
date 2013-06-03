@@ -209,9 +209,9 @@ dec_ttl_cnt_ids_from_openflow(const struct nx_action_cnt_ids *nac_ids,
     for (i = 0; i < ids->n_controllers; i++) {
         uint16_t id = ntohs(((ovs_be16 *)(nac_ids + 1))[i]);
         ofpbuf_put(out, &id, sizeof id);
+        ids = out->l2;
     }
 
-    ids = out->l2;
     ofpact_update_len(out, &ids->ofpact);
 
     return 0;
