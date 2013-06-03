@@ -1904,6 +1904,10 @@ port_modified(struct ofport *port_)
     if (port->bundle && port->bundle->bond) {
         bond_slave_set_netdev(port->bundle->bond, port, port->up.netdev);
     }
+
+    if (port->cfm) {
+        cfm_set_netdev(port->cfm, port->up.netdev);
+    }
 }
 
 static void

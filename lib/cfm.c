@@ -567,6 +567,16 @@ cfm_configure(struct cfm *cfm, const struct cfm_settings *s)
     return true;
 }
 
+/* Must be called when the netdev owned by 'cfm' should change. */
+void
+cfm_set_netdev(struct cfm *cfm, const struct netdev *netdev)
+{
+    if (cfm->netdev != netdev) {
+        netdev_close(cfm->netdev);
+        cfm->netdev = netdev_ref(netdev);
+    }
+}
+
 /* Returns true if 'cfm' should process packets from 'flow'. */
 bool
 cfm_should_process_flow(const struct cfm *cfm, const struct flow *flow)
