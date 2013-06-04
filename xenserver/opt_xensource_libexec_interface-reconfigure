@@ -242,7 +242,7 @@ def ipdev_configure_static_routes(interface, oc, f):
           172.18.0.0/16 via 192.168.0.4 dev xenbr1
     """
     if oc.has_key('static-routes'):
-        # The key is present - extract comma seperates entries
+        # The key is present - extract comma separates entries
         lines = oc['static-routes'].split(',')
     else:
         # The key is not present, i.e. there are no static routes

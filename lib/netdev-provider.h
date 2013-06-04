@@ -470,7 +470,7 @@ struct netdev_class {
      * anyhow. */
     int (*add_router)(struct netdev *netdev, struct in_addr router);
 
-    /* Looks up the next hop for 'host'.  If succesful, stores the next hop
+    /* Looks up the next hop for 'host'.  If successful, stores the next hop
      * gateway's address (0 if 'host' is on a directly connected network) in
      * '*next_hop' and a copy of the name of the device to reach 'host' in
      * '*netdev_name', and returns 0.  The caller is responsible for freeing

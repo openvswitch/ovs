@@ -1997,7 +1997,7 @@ parse_8021q_onward(const struct nlattr *attrs[OVS_KEY_ATTR_MAX + 1],
     enum odp_key_fitness fitness;
     ovs_be16 tci;
 
-    /* Calulate fitness of outer attributes. */
+    /* Calculate fitness of outer attributes. */
     expected_attrs |= ((UINT64_C(1) << OVS_KEY_ATTR_VLAN) |
                        (UINT64_C(1) << OVS_KEY_ATTR_ENCAP));
     fitness = check_expectations(present_attrs, out_of_range_attr,
@@ -2449,7 +2449,7 @@ commit_odp_actions(const struct flow *flow, struct flow *base,
     commit_vlan_action(flow, base, odp_actions);
     commit_set_nw_action(flow, base, odp_actions);
     commit_set_port_action(flow, base, odp_actions);
-    /* Commiting MPLS actions should occur after committing nw and port
+    /* Committing MPLS actions should occur after committing nw and port
      * actions. This is because committing MPLS actions may alter a packet so
      * that it is no longer IP and thus nw and port actions are no longer valid.
      */

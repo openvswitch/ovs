@@ -442,7 +442,7 @@ ssl_connect(struct stream *stream)
 
     case STATE_SSL_CONNECTING:
         /* Capture the first few bytes of received data so that we can guess
-         * what kind of funny data we've been sent if SSL negotation fails. */
+         * what kind of funny data we've been sent if SSL negotiation fails. */
         if (sslv->n_head <= 0) {
             sslv->n_head = recv(sslv->fd, sslv->head, sizeof sslv->head,
                                 MSG_PEEK);

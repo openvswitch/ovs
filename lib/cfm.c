@@ -92,9 +92,9 @@ struct cfm {
     bool check_tnl_key;    /* Verify the tunnel key of inbound packets? */
     bool extended;         /* Extended mode. */
     bool demand;           /* Demand mode. */
-    bool booted;           /* A full fault interval has occured. */
+    bool booted;           /* A full fault interval has occurred. */
     enum cfm_fault_reason fault;  /* Connectivity fault status. */
-    enum cfm_fault_reason recv_fault;  /* Bit mask of faults occuring on
+    enum cfm_fault_reason recv_fault;  /* Bit mask of faults occurring on
                                           receive. */
     bool opup;             /* Operational State. */
     bool remote_opup;      /* Remote Operational State. */

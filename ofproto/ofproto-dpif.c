@@ -3819,7 +3819,7 @@ handle_flow_miss(struct flow_miss *miss, struct flow_miss_op *ops,
          * flow keys with fitness ODP_FIT_TO_LITTLE.  This breaks a fundamental
          * assumption used throughout the facet and subfacet handling code.
          * Since we have to handle these misses in userspace anyway, we simply
-         * skip facet creation, avoiding the problem alltogether. */
+         * skip facet creation, avoiding the problem altogether. */
         if (miss->key_fitness == ODP_FIT_TOO_LITTLE
             || !flow_miss_should_make_facet(ofproto, miss, hash)) {
             handle_flow_miss_without_facet(miss, ops, n_ops);

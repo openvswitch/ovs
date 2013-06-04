@@ -53,7 +53,7 @@ struct stress_option {
  *
  * DEFAULT is the default value for the option.  Specify 0 to disable the
  * option by default, which should be the usual choice.  But some options can
- * be left on at low levels without noticable impact to the end user.  An
+ * be left on at low levels without noticeable impact to the end user.  An
  * example would be failing to allocate a buffer for every 100000th packet
  * processed by the system.
  */

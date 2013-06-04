@@ -217,7 +217,7 @@ class TableSchema(object):
         differ from 'default_is_root'.  Ordinarily 'default_is_root' should be
         false, because ordinarily a table would be not be part of the root set
         if its "isRoot" member is omitted.  However, garbage collection was not
-        orginally included in OVSDB, so in older schemas that do not include
+        originally included in OVSDB, so in older schemas that do not include
         any "isRoot" members, every table is implicitly part of the root set.
         To serialize such a schema in a way that can be read by older OVSDB
         tools, specify 'default_is_root' as True.

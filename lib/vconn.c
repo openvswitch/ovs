@@ -754,7 +754,7 @@ vconn_recv_block(struct vconn *vconn, struct ofpbuf **msgp)
     return retval;
 }
 
-/* Waits until a message with a transaction ID matching 'xid' is recived on
+/* Waits until a message with a transaction ID matching 'xid' is received on
  * 'vconn'.  Returns 0 if successful, in which case the reply is stored in
  * '*replyp' for the caller to examine and free.  Otherwise returns a positive
  * errno value, or EOF, and sets '*replyp' to null.

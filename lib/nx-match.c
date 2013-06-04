@@ -280,7 +280,7 @@ oxm_pull_match__(struct ofpbuf *b, bool strict, struct match *match)
                        strict, match, NULL, NULL);
 }
 
-/* Parses the oxm formatted match description preceeded by a struct ofp11_match
+/* Parses the oxm formatted match description preceded by a struct ofp11_match
  * in 'b' with length 'match_len'.  Stores the result in 'match'.
  *
  * Fails with an error when encountering unknown OXM headers.

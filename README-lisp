@@ -34,7 +34,7 @@ Unix based VMs), or have the hypervisor do proxy ARP.
 
 On the receiving side, the packet arrives without the original MAC header.
 The LISP tunneling code attaches a header with harcoded source and destination
-MAC addres 02:00:00:00:00:00.  This address has all bits set to 0, except the
+MAC address 02:00:00:00:00:00.  This address has all bits set to 0, except the
 locally administered bit, in order to avoid potential collisions with existing
 allocations.  In order for packets to reach their intended destination, the
 destination MAC address needs to be rewritten.  This can be done using the

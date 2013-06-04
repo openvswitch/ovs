@@ -923,7 +923,7 @@ class Datapath(object):
 
            Should assume any configuration files changed attached in
            the preconfigure stage are applied and bring up the
-           necesary devices to provide the datapath for the
+           necessary devices to provide the datapath for the
            PIF.
 
            Should not bring up the IPdev.

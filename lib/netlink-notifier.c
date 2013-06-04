@@ -41,7 +41,7 @@ struct nln {
 
     /* Passed in by nln_create(). */
     int multicast_group;         /* Multicast group we listen on. */
-    int protocol;                /* Protocal passed to nl_sock_create(). */
+    int protocol;                /* Protocol passed to nl_sock_create(). */
     nln_parse_func *parse;       /* Message parsing function. */
     void *change;                /* Change passed to parse. */
 };
