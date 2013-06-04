@@ -2202,7 +2202,7 @@ ADD_OF_PORTS([br0], 1, 2)
 ovs-appctl time/warp 10000
 
 AT_CHECK([ovs-ofctl -O openflow13 dump-ports br0], [0], [stdout])
-AT_CHECK([sed 's/=[[0-9]][[0-9]]\(\.[[0-9]]\{1,\}\)\{,1\}s/=?s/' stdout], [0],
+AT_CHECK([sed 's/=[[0-9]][[0-9]]\(\.[[0-9]][[0-9]]*\)\{0,1\}s/=?s/' stdout], [0],
 [dnl
 OFPST_PORT reply (OF1.3) (xid=0x2): 3 ports
   port  1: rx pkts=0, bytes=0, drop=0, errs=0, frame=0, over=0, crc=0
