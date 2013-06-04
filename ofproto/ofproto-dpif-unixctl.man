@@ -5,15 +5,11 @@ equivalent \fBovs\-dpctl\fR commands.
 .IP "\fBdpif/dump\-dps\fR"
 Prints the name of each configured datapath on a separate line.
 .
-.IP "\fBdpif/show\fR [\fIdp\fR...]"
+.IP "\fBdpif/show\fR"
 Prints a summary of configured datapaths, including statistics and a
 list of connected ports.  The port information includes the OpenFlow
 port number, datapath port number, and the type.  (The local port is
 identified as OpenFlow port 65534.)
-.IP
-If one or more datapaths are specified, information on only those
-datapaths are displayed.  Otherwise, information about all configured
-datapaths are shown.
 .
 .IP "\fBdpif/dump\-flows \fIdp\fR"
 Prints to the console all flow entries in datapath \fIdp\fR's
