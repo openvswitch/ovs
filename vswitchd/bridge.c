@@ -197,7 +197,6 @@ static void bridge_add_del_ports(struct bridge *,
                                  const unsigned long int *splinter_vlans);
 static void bridge_refresh_ofp_port(struct bridge *);
 static void bridge_configure_datapath_id(struct bridge *);
-static void bridge_configure_flow_eviction_threshold(struct bridge *);
 static void bridge_configure_netflow(struct bridge *);
 static void bridge_configure_forward_bpdu(struct bridge *);
 static void bridge_configure_mac_table(struct bridge *);
@@ -495,6 +494,10 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
     ovs_assert(!reconfiguring);
     reconfiguring = true;
 
+    ofproto_set_flow_eviction_threshold(
+        smap_get_int(&ovs_cfg->other_config, "flow-eviction-threshold",
+                     OFPROTO_FLOW_EVICTION_THRESHOLD_DEFAULT));
+
     /* Destroy "struct bridge"s, "struct port"s, and "struct iface"s according
      * to 'ovs_cfg' while update the "if_cfg_queue", with only very minimal
      * configuration otherwise.
@@ -613,7 +616,6 @@ bridge_reconfigure_continue(const struct ovsrec_open_vswitch *ovs_cfg)
             }
         }
         bridge_configure_mirrors(br);
-        bridge_configure_flow_eviction_threshold(br);
         bridge_configure_forward_bpdu(br);
         bridge_configure_mac_table(br);
         bridge_configure_remotes(br, managers, n_managers);
@@ -623,6 +625,13 @@ bridge_reconfigure_continue(const struct ovsrec_open_vswitch *ovs_cfg)
         bridge_configure_stp(br);
         bridge_configure_tables(br);
         bridge_configure_dp_desc(br);
+
+        if (smap_get(&br->cfg->other_config, "flow-eviction-threshold")) {
+            /* XXX: Remove this warning message eventually. */
+            VLOG_WARN_ONCE("As of June 2013, flow-eviction-threshold has been"
+                           " moved to the Open_vSwitch table.  Ignoring its"
+                           " setting in the bridge table.");
+        }
     }
     free(managers);
 
@@ -1557,23 +1566,6 @@ done:
     free(if_cfg);
 
     return ok;
-}
-
-/* Set Flow eviction threshold */
-static void
-bridge_configure_flow_eviction_threshold(struct bridge *br)
-{
-    const char *threshold_str;
-    unsigned threshold;
-
-    threshold_str = smap_get(&br->cfg->other_config,
-                             "flow-eviction-threshold");
-    if (threshold_str) {
-        threshold = strtoul(threshold_str, NULL, 10);
-    } else {
-        threshold = OFPROTO_FLOW_EVICTION_THRESHOLD_DEFAULT;
-    }
-    ofproto_set_flow_eviction_threshold(br->ofproto, threshold);
 }
 
 /* Set forward BPDU option. */

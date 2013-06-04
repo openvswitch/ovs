@@ -48,9 +48,6 @@ struct ofproto {
     /* Settings. */
     uint64_t fallback_dpid;     /* Datapath ID if no better choice found. */
     uint64_t datapath_id;       /* Datapath ID. */
-    unsigned flow_eviction_threshold; /* Threshold at which to begin flow
-                                       * table eviction. Only affects the
-                                       * ofproto-dpif implementation */
     bool forward_bpdu;          /* Option to allow forwarding of BPDU frames
                                  * when NORMAL action is invoked. */
     char *mfr_desc;             /* Manufacturer (NULL for default)b. */
@@ -232,6 +229,10 @@ struct rule {
     struct list expirable;      /* In ofproto's 'expirable' list if this rule
                                  * is expirable, otherwise empty. */
 };
+
+/* Threshold at which to begin flow table eviction. Only affects the
+ * ofproto-dpif implementation */
+extern unsigned flow_eviction_threshold;
 
 static inline struct rule *
 rule_from_cls_rule(const struct cls_rule *cls_rule)

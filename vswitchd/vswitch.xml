@@ -122,6 +122,20 @@
           functions use the above config option during hot upgrades.
         </p>
       </column>
+
+      <column name="other_config" key="flow-eviction-threshold"
+              type='{"type": "integer", "minInteger": 0}'>
+        <p>
+          A number of flows as a nonnegative integer.  This sets number of
+          flows at which eviction from the datapath flow table will be
+          triggered.  If there are a large number of flows then increasing this
+          value to around the number of flows present can result in reduced CPU
+          usage and packet loss.
+        </p>
+        <p>
+          The default is 1000.  Values below 100 will be rounded up to 100.
+        </p>
+      </column>
     </group>
 
     <group title="Status">
@@ -596,20 +610,6 @@
         <var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>
         to set the hardware address of the local port and influence the
         datapath ID.
-      </column>
-
-      <column name="other_config" key="flow-eviction-threshold"
-              type='{"type": "integer", "minInteger": 0}'>
-        <p>
-          A number of flows as a nonnegative integer.  This sets number of
-          flows at which eviction from the kernel flow table will be triggered.
-          If there are a large number of flows then increasing this value to
-          around the number of flows present can result in reduced CPU usage
-          and packet loss.
-        </p>
-        <p>
-          The default is 1000.  Values below 100 will be rounded up to 100.
-        </p>
       </column>
 
       <column name="other_config" key="forward-bpdu"

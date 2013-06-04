@@ -6,6 +6,7 @@ post-v1.11.0
 	added "remote_ip=flow" and "local_ip=flow" options.
     - New "check-oftest" Makefile target for running OFTest against Open
       vSwitch.  See README-OFTest for details.
+    - The flow eviction threshold has been moved to the Open_vSwitch table.
 
 
 v1.11.0 - xx xxx xxxx

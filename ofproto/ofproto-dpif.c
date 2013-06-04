@@ -1645,7 +1645,7 @@ run(struct ofproto *ofproto_)
          * For hysteresis, the number of subfacets to drop the governor is
          * smaller than the number needed to trigger its creation. */
         n_subfacets = hmap_count(&ofproto->subfacets);
-        if (n_subfacets * 4 < ofproto->up.flow_eviction_threshold
+        if (n_subfacets * 4 < flow_eviction_threshold
             && governor_is_idle(ofproto->governor)) {
             governor_destroy(ofproto->governor);
             ofproto->governor = NULL;
@@ -3675,7 +3675,7 @@ flow_miss_should_make_facet(struct ofproto_dpif *ofproto,
         size_t n_subfacets;
 
         n_subfacets = hmap_count(&ofproto->subfacets);
-        if (n_subfacets * 2 <= ofproto->up.flow_eviction_threshold) {
+        if (n_subfacets * 2 <= flow_eviction_threshold) {
             return true;
         }
 
@@ -4501,7 +4501,7 @@ subfacet_max_idle(const struct ofproto_dpif *ofproto)
      * that is installed in the kernel gets dropped in the appropriate bucket.
      * After the histogram has been built, we compute the cutoff so that only
      * the most-recently-used 1% of subfacets (but at least
-     * ofproto->up.flow_eviction_threshold flows) are kept cached.  At least
+     * flow_eviction_threshold flows) are kept cached.  At least
      * the most-recently-used bucket of subfacets is kept, so actually an
      * arbitrary number of subfacets can be kept in any given expiration run
      * (though the next run will delete most of those unless they receive
@@ -4520,7 +4520,7 @@ subfacet_max_idle(const struct ofproto_dpif *ofproto)
     int i;
 
     total = hmap_count(&ofproto->subfacets);
-    if (total <= ofproto->up.flow_eviction_threshold) {
+    if (total <= flow_eviction_threshold) {
         return N_BUCKETS * BUCKET_WIDTH;
     }
 
@@ -4539,7 +4539,7 @@ subfacet_max_idle(const struct ofproto_dpif *ofproto)
     do {
         subtotal += buckets[bucket++];
     } while (bucket < N_BUCKETS &&
-             subtotal < MAX(ofproto->up.flow_eviction_threshold, total / 100));
+             subtotal < MAX(flow_eviction_threshold, total / 100));
 
     if (VLOG_IS_DBG_ENABLED()) {
         struct ds s;

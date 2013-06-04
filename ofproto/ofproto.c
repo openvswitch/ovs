@@ -220,6 +220,8 @@ static const struct ofproto_class **ofproto_classes;
 static size_t n_ofproto_classes;
 static size_t allocated_ofproto_classes;
 
+unsigned flow_eviction_threshold = OFPROTO_FLOW_EVICTION_THRESHOLD_DEFAULT;
+
 /* Map from datapath name to struct ofproto, for use by unixctl commands. */
 static struct hmap all_ofprotos = HMAP_INITIALIZER(&all_ofprotos);
 
@@ -408,8 +410,6 @@ ofproto_create(const char *datapath_name, const char *datapath_type,
     hmap_insert(&all_ofprotos, &ofproto->hmap_node,
                 hash_string(ofproto->name, 0));
     ofproto->datapath_id = 0;
-    ofproto_set_flow_eviction_threshold(ofproto,
-                                        OFPROTO_FLOW_EVICTION_THRESHOLD_DEFAULT);
     ofproto->forward_bpdu = false;
     ofproto->fallback_dpid = pick_fallback_dpid();
     ofproto->mfr_desc = NULL;
@@ -566,13 +566,10 @@ ofproto_set_in_band_queue(struct ofproto *ofproto, int queue_id)
 /* Sets the number of flows at which eviction from the kernel flow table
  * will occur. */
 void
-ofproto_set_flow_eviction_threshold(struct ofproto *ofproto, unsigned threshold)
+ofproto_set_flow_eviction_threshold(unsigned threshold)
 {
-    if (threshold < OFPROTO_FLOW_EVICTION_THRESHOLD_MIN) {
-        ofproto->flow_eviction_threshold = OFPROTO_FLOW_EVICTION_THRESHOLD_MIN;
-    } else {
-        ofproto->flow_eviction_threshold = threshold;
-    }
+    flow_eviction_threshold = MAX(OFPROTO_FLOW_EVICTION_THRESHOLD_MIN,
+                                  threshold);
 }
 
 /* If forward_bpdu is true, the NORMAL action will forward frames with
