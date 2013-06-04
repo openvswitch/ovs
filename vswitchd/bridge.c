@@ -67,7 +67,7 @@ struct if_cfg {
     struct hmap_node hmap_node;         /* Node in bridge's if_cfg_todo. */
     const struct ovsrec_interface *cfg; /* Interface record. */
     const struct ovsrec_port *parent;   /* Parent port record. */
-    int64_t ofport;                     /* Requested OpenFlow port number. */
+    uint16_t ofport;                    /* Requested OpenFlow port number. */
 };
 
 /* OpenFlow port slated for removal from ofproto. */
@@ -86,7 +86,8 @@ struct iface {
     /* These members are valid only after bridge_reconfigure() causes them to
      * be initialized. */
     struct hmap_node ofp_port_node; /* In struct bridge's "ifaces" hmap. */
-    int ofp_port;               /* OpenFlow port number, -1 if unknown. */
+    uint16_t ofp_port;          /* OpenFlow port number, */
+                                /* OFPP_NONE if unknown. */
     struct netdev *netdev;      /* Network device. */
     const char *type;           /* Usually same as cfg->type. */
     const struct ovsrec_interface *cfg;
@@ -245,7 +246,7 @@ static bool mirror_configure(struct mirror *);
 static void mirror_refresh_stats(struct mirror *);
 
 static void iface_configure_lacp(struct iface *, struct lacp_slave_settings *);
-static bool iface_create(struct bridge *, struct if_cfg *, int ofp_port);
+static bool iface_create(struct bridge *, struct if_cfg *, uint16_t ofp_port);
 static bool iface_is_internal(const struct ovsrec_interface *iface,
                               const struct ovsrec_bridge *br);
 static const char *iface_get_type(const struct ovsrec_interface *,
@@ -257,7 +258,7 @@ static struct if_cfg *if_cfg_lookup(const struct bridge *, const char *name);
 static struct iface *iface_from_ofp_port(const struct bridge *,
                                          uint16_t ofp_port);
 static void iface_set_mac(struct iface *);
-static void iface_set_ofport(const struct ovsrec_interface *, int64_t ofport);
+static void iface_set_ofport(const struct ovsrec_interface *, uint16_t ofport);
 static void iface_clear_db_record(const struct ovsrec_interface *if_cfg);
 static void iface_configure_qos(struct iface *, const struct ovsrec_qos *);
 static void iface_configure_cfm(struct iface *);
@@ -265,7 +266,7 @@ static void iface_refresh_cfm_stats(struct iface *);
 static void iface_refresh_stats(struct iface *);
 static void iface_refresh_status(struct iface *);
 static bool iface_is_synthetic(const struct iface *);
-static int64_t iface_pick_ofport(const struct ovsrec_interface *);
+static uint16_t iface_pick_ofport(const struct ovsrec_interface *);
 
 /* Linux VLAN device support (e.g. "eth0.10" for VLAN 10.)
  *
@@ -565,7 +566,7 @@ bridge_reconfigure_ofp(void)
         struct if_cfg *if_cfg, *next;
 
         HMAP_FOR_EACH_SAFE (if_cfg, next, hmap_node, &br->if_cfg_todo) {
-            iface_create(br, if_cfg, -1);
+            iface_create(br, if_cfg, OFPP_NONE);
             time_refresh();
             if (time_msec() >= deadline) {
                 return false;
@@ -1267,11 +1268,11 @@ add_del_bridges(const struct ovsrec_open_vswitch *cfg)
 }
 
 static void
-iface_set_ofp_port(struct iface *iface, int ofp_port)
+iface_set_ofp_port(struct iface *iface, uint16_t ofp_port)
 {
     struct bridge *br = iface->port->bridge;
 
-    ovs_assert(iface->ofp_port < 0 && ofp_port >= 0);
+    ovs_assert(iface->ofp_port == OFPP_NONE && ofp_port != OFPP_NONE);
     iface->ofp_port = ofp_port;
     hmap_insert(&br->ifaces, &iface->ofp_port_node, hash_int(ofp_port, 0));
     iface_set_ofport(iface->cfg, ofp_port);
@@ -1313,7 +1314,7 @@ bridge_refresh_one_ofp_port(struct bridge *br,
     struct iface *iface = iface_lookup(br, name);
     if (iface) {
         /* Check that the name-to-number mapping is one-to-one. */
-        if (iface->ofp_port >= 0) {
+        if (iface->ofp_port != OFPP_NONE) {
             VLOG_WARN("bridge %s: interface %s reported twice",
                       br->name, name);
             return false;
@@ -1367,7 +1368,7 @@ bridge_refresh_ofp_port(struct bridge *br)
         struct iface *iface;
 
         LIST_FOR_EACH (iface, port_elem, &port->ifaces) {
-            iface->ofp_port = -1;
+            iface->ofp_port = OFPP_NONE;
         }
     }
 
@@ -1389,7 +1390,7 @@ bridge_refresh_ofp_port(struct bridge *br)
         struct iface *iface, *iface_next;
 
         LIST_FOR_EACH_SAFE (iface, iface_next, port_elem, &port->ifaces) {
-            if (iface->ofp_port < 0) {
+            if (iface->ofp_port == OFPP_NONE) {
                 bridge_queue_if_cfg(br, iface->cfg, port->cfg);
                 iface_destroy(iface);
             }
@@ -1402,7 +1403,7 @@ bridge_refresh_ofp_port(struct bridge *br)
 }
 
 /* Opens a network device for 'if_cfg' and configures it.  If '*ofp_portp'
- * is negative, adds the network device to br->ofproto and stores the OpenFlow
+ * is OFPP_NONE, adds the network device to br->ofproto and stores the OpenFlow
  * port number in '*ofp_portp'; otherwise leaves br->ofproto and '*ofp_portp'
  * untouched.
  *
@@ -1411,7 +1412,7 @@ bridge_refresh_ofp_port(struct bridge *br)
 static int
 iface_do_create(const struct bridge *br,
                 const struct if_cfg *if_cfg,
-                int *ofp_portp, struct netdev **netdevp)
+                uint16_t *ofp_portp, struct netdev **netdevp)
 {
     const struct ovsrec_interface *iface_cfg = if_cfg->cfg;
     const struct ovsrec_port *port_cfg = if_cfg->parent;
@@ -1438,7 +1439,7 @@ iface_do_create(const struct bridge *br,
         goto error;
     }
 
-    if (*ofp_portp < 0) {
+    if (*ofp_portp == OFPP_NONE) {
         uint16_t ofp_port = if_cfg->ofport;
 
         error = ofproto_port_add(br->ofproto, netdev, &ofp_port);
@@ -1469,13 +1470,13 @@ error:
 }
 
 /* Creates a new iface on 'br' based on 'if_cfg'.  The new iface has OpenFlow
- * port number 'ofp_port'.  If ofp_port is negative, an OpenFlow port is
+ * port number 'ofp_port'.  If ofp_port is OFPP_NONE, an OpenFlow port is
  * automatically allocated for the iface.  Takes ownership of and
  * deallocates 'if_cfg'.
  *
  * Return true if an iface is successfully created, false otherwise. */
 static bool
-iface_create(struct bridge *br, struct if_cfg *if_cfg, int ofp_port)
+iface_create(struct bridge *br, struct if_cfg *if_cfg, uint16_t ofp_port)
 {
     const struct ovsrec_interface *iface_cfg = if_cfg->cfg;
     const struct ovsrec_port *port_cfg = if_cfg->parent;
@@ -1496,7 +1497,7 @@ iface_create(struct bridge *br, struct if_cfg *if_cfg, int ofp_port)
     error = iface_do_create(br, if_cfg, &ofp_port, &netdev);
     bridge_run_fast();
     if (error) {
-        iface_set_ofport(iface_cfg, -1);
+        iface_set_ofport(iface_cfg, OFPP_NONE);
         iface_clear_db_record(iface_cfg);
         ok = false;
         goto done;
@@ -1515,7 +1516,7 @@ iface_create(struct bridge *br, struct if_cfg *if_cfg, int ofp_port)
                 hash_string(iface_cfg->name, 0));
     iface->port = port;
     iface->name = xstrdup(iface_cfg->name);
-    iface->ofp_port = -1;
+    iface->ofp_port = OFPP_NONE;
     iface->netdev = netdev;
     iface->type = iface_get_type(iface_cfg, br->cfg);
     iface->cfg = iface_cfg;
@@ -3422,11 +3423,11 @@ iface_destroy(struct iface *iface)
         struct port *port = iface->port;
         struct bridge *br = port->bridge;
 
-        if (br->ofproto && iface->ofp_port >= 0) {
+        if (br->ofproto && iface->ofp_port != OFPP_NONE) {
             ofproto_port_unregister(br->ofproto, iface->ofp_port);
         }
 
-        if (iface->ofp_port >= 0) {
+        if (iface->ofp_port != OFPP_NONE) {
             hmap_remove(&br->ifaces, &iface->ofp_port_node);
         }
 
@@ -3527,10 +3528,12 @@ iface_set_mac(struct iface *iface)
 
 /* Sets the ofport column of 'if_cfg' to 'ofport'. */
 static void
-iface_set_ofport(const struct ovsrec_interface *if_cfg, int64_t ofport)
+iface_set_ofport(const struct ovsrec_interface *if_cfg, uint16_t ofport)
 {
+    int64_t port_;
+    port_ = (ofport == OFPP_NONE) ? -1 : ofport;
     if (if_cfg && !ovsdb_idl_row_is_synthetic(&if_cfg->header_)) {
-        ovsrec_interface_set_ofport(if_cfg, &ofport, 1);
+        ovsrec_interface_set_ofport(if_cfg, &port_, 1);
     }
 }
 
@@ -3636,7 +3639,7 @@ iface_configure_qos(struct iface *iface, const struct ovsrec_qos *qos)
         }
     }
 
-    if (iface->ofp_port >= 0) {
+    if (iface->ofp_port != OFPP_NONE) {
         const struct ofproto_port_queue *port_queues = queues_buf.data;
         size_t n_queues = queues_buf.size / sizeof *port_queues;
 
@@ -3714,10 +3717,10 @@ iface_is_synthetic(const struct iface *iface)
     return ovsdb_idl_row_is_synthetic(&iface->cfg->header_);
 }
 
-static int64_t
+static uint16_t
 iface_pick_ofport(const struct ovsrec_interface *cfg)
 {
-    int64_t ofport = cfg->n_ofport ? *cfg->ofport : OFPP_NONE;
+    uint16_t ofport = cfg->n_ofport ? *cfg->ofport : OFPP_NONE;
     return cfg->n_ofport_request ? *cfg->ofport_request : ofport;
 }
 
