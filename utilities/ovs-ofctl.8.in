@@ -944,9 +944,10 @@ followed by another \fBpush_mpls\fR will result in the first
 \fBpush_mpls\fR being discarded.
 .
 .IP \fBpop_mpls\fR:\fIethertype\fR
-Strips the outermost MPLS label stack entry.  If the MPLS label
-stripped was the only one, changes the ethertype of a packet to
-\fIethertype\fR, which should not ordinarily be an MPLS Ethertype.
+Strips the outermost MPLS label stack entry.
+Currently the implementation restricts \fIethertype\fR to a non-MPLS Ethertype
+and thus \fBpop_mpls\fR should only be applied to packets with
+an MPLS label stack depth of one.
 .
 .IP
 There are some limitations in the implementation.  \fBpop_mpls\fR
