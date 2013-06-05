@@ -170,7 +170,9 @@ odp_execute_actions(void *dp, struct ofpbuf *packet, struct flow *key,
 
         switch ((enum ovs_action_attr) type) {
         case OVS_ACTION_ATTR_OUTPUT:
-            output(dp, packet, nl_attr_get_u32(a));
+            if (output) {
+                output(dp, packet, nl_attr_get_u32(a));
+            }
             break;
 
         case OVS_ACTION_ATTR_USERSPACE: {
