@@ -549,9 +549,14 @@ do
   AT_CHECK([ovs-ofctl set-frags br0 $mode])
   for type in no first later; do
     eval flow=\$${type}_flow exp_output=\$$type
+    printf "\n%s\n" "----$mode $type-----"
     AT_CHECK([ovs-appctl ofproto/trace br0 "$flow"], [0], [stdout])
-    AT_CHECK_UNQUOTED([tail -1 stdout], [0], [Datapath actions: $exp_output
-])
+    : > expout
+    if test $mode = drop && test $type != no; then
+        echo 'Packets dropped because they are IP fragments and the fragment handling mode is "drop".' >> expout
+    fi
+    echo "Datapath actions: $exp_output" >> expout
+    AT_CHECK([grep 'IP fragments' stdout; tail -1 stdout], [0], [expout])
   done
 done
 OVS_VSWITCHD_STOP
