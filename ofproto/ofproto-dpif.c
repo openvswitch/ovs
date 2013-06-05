@@ -4943,8 +4943,9 @@ facet_check_consistency(struct facet *facet)
             ds_put_format(&s, ") (should have been table=%"PRIu8",",
                           rule->up.table_id);
             cls_rule_format(&rule->up.cr, &s);
-            ds_put_cstr(&s, ")\n");
+            ds_put_char(&s, ')');
 
+            VLOG_WARN("%s", ds_cstr(&s));
             ds_destroy(&s);
         }
         return false;
@@ -4970,13 +4971,14 @@ facet_check_consistency(struct facet *facet)
             ds_put_cstr(&s, ") (correct actions: ");
             format_odp_actions(&s, xout.odp_actions.data,
                                xout.odp_actions.size);
-            ds_put_cstr(&s, ")");
+            ds_put_char(&s, ')');
         }
 
         if (facet->xout.slow != xout.slow) {
             ds_put_format(&s, " slow path incorrect. should be %d", xout.slow);
         }
 
+        VLOG_WARN("%s", ds_cstr(&s));
         ds_destroy(&s);
     }
     xlate_out_uninit(&xout);
