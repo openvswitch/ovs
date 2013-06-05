@@ -19,6 +19,7 @@
 
 #include <signal.h>
 #include <stdbool.h>
+#include <stddef.h>
 #include "type-props.h"
 
 void signal_init(void);
