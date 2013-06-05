@@ -1052,6 +1052,7 @@ ofpacts_pull_openflow11_actions(struct ofpbuf *openflow,
 enum ofperr
 ofpacts_pull_openflow11_instructions(struct ofpbuf *openflow,
                                      unsigned int instructions_len,
+                                     uint8_t table_id,
                                      struct ofpbuf *ofpacts)
 {
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
@@ -1119,6 +1120,10 @@ ofpacts_pull_openflow11_instructions(struct ofpbuf *openflow,
 
         oigt = instruction_get_OFPIT11_GOTO_TABLE(
             insts[OVSINST_OFPIT11_GOTO_TABLE]);
+        if (table_id >= oigt->table_id) {
+            error = OFPERR_OFPBRC_BAD_TABLE_ID;
+            goto exit;
+        }
         ogt = ofpact_put_GOTO_TABLE(ofpacts);
         ogt->table_id = oigt->table_id;
     }

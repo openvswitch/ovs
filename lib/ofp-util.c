@@ -1502,7 +1502,8 @@ ofputil_decode_flow_mod(struct ofputil_flow_mod *fm,
             return error;
         }
 
-        error = ofpacts_pull_openflow11_instructions(&b, b.size, ofpacts);
+        error = ofpacts_pull_openflow11_instructions(&b, b.size, ofm->table_id,
+                                                     ofpacts);
         if (error) {
             return error;
         }
@@ -2014,7 +2015,8 @@ ofputil_decode_flow_stats_reply(struct ofputil_flow_stats *fs,
         }
 
         if (ofpacts_pull_openflow11_instructions(msg, length - sizeof *ofs -
-                                                 padded_match_len, ofpacts)) {
+                                                 padded_match_len,
+                                                 ofs->table_id, ofpacts)) {
             VLOG_WARN_RL(&bad_ofmsg_rl, "OFPST_FLOW reply bad instructions");
             return EINVAL;
         }

@@ -356,6 +356,10 @@ dnl Goto-Table 1 instruction non-zero padding
 #  7: 01 -> 00
 0001 0008 01 000001
 
+dnl Goto-Table 1 instruction go back to the previous table.
+# bad OF1.1 instructions: OFPBRC_BAD_TABLE_ID
+2,0001 0008 01 000000
+
 dnl Goto-Table 1
 # actions=goto_table:1
 0001 0008 01 000000

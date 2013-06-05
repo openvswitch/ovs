@@ -2607,18 +2607,29 @@ ofctl_parse_ofp11_instructions(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
         enum ofperr error;
         size_t size;
         struct ds s;
+        const char *table_id;
+        char *instructions;
+
+        /* Parse table_id separated with the follow-up instructions by ",", if
+         * any. */
+        instructions = ds_cstr(&in);
+        table_id = NULL;
+        if (strstr(instructions, ",")) {
+            table_id = strsep(&instructions, ",");
+        }
 
         /* Parse hex bytes. */
         ofpbuf_init(&of11_in, 0);
-        if (ofpbuf_put_hex(&of11_in, ds_cstr(&in), NULL)[0] != '\0') {
+        if (ofpbuf_put_hex(&of11_in, instructions, NULL)[0] != '\0') {
             ovs_fatal(0, "Trailing garbage in hex data");
         }
 
         /* Convert to ofpacts. */
         ofpbuf_init(&ofpacts, 0);
         size = of11_in.size;
-        error = ofpacts_pull_openflow11_instructions(&of11_in, of11_in.size,
-                                                     &ofpacts);
+        error = ofpacts_pull_openflow11_instructions(
+            &of11_in, of11_in.size, table_id ? atoi(table_id) : 0,
+            &ofpacts);
         if (error) {
             printf("bad OF1.1 instructions: %s\n\n", ofperr_get_name(error));
             ofpbuf_uninit(&ofpacts);

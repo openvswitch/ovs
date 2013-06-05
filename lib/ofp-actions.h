@@ -490,6 +490,7 @@ enum ofperr ofpacts_pull_openflow11_actions(struct ofpbuf *openflow,
                                             struct ofpbuf *ofpacts);
 enum ofperr ofpacts_pull_openflow11_instructions(struct ofpbuf *openflow,
                                                  unsigned int instructions_len,
+                                                 uint8_t table_id,
                                                  struct ofpbuf *ofpacts);
 enum ofperr ofpacts_check(const struct ofpact[], size_t ofpacts_len,
                           const struct flow *, int max_ports);
