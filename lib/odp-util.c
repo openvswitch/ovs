@@ -786,8 +786,8 @@ tunnel_key_attr_len(int type)
     return -1;
 }
 
-static enum odp_key_fitness
-tun_key_from_attr(const struct nlattr *attr, struct flow_tnl *tun)
+enum odp_key_fitness
+odp_tun_key_from_attr(const struct nlattr *attr, struct flow_tnl *tun)
 {
     unsigned int left;
     const struct nlattr *a;
@@ -919,7 +919,7 @@ format_odp_key_attr(const struct nlattr *a, struct ds *ds)
 
     case OVS_KEY_ATTR_TUNNEL:
         memset(&tun_key, 0, sizeof tun_key);
-        if (tun_key_from_attr(a, &tun_key) == ODP_FIT_ERROR) {
+        if (odp_tun_key_from_attr(a, &tun_key) == ODP_FIT_ERROR) {
             ds_put_format(ds, "(error)");
         } else {
             ds_put_format(ds, "(tun_id=0x%"PRIx64",src="IP_FMT",dst="IP_FMT","
@@ -2089,7 +2089,7 @@ odp_flow_key_to_flow(const struct nlattr *key, size_t key_len,
     if (present_attrs & (UINT64_C(1) << OVS_KEY_ATTR_TUNNEL)) {
         enum odp_key_fitness res;
 
-        res = tun_key_from_attr(attrs[OVS_KEY_ATTR_TUNNEL], &flow->tunnel);
+        res = odp_tun_key_from_attr(attrs[OVS_KEY_ATTR_TUNNEL], &flow->tunnel);
         if (res == ODP_FIT_ERROR) {
             return ODP_FIT_ERROR;
         } else if (res == ODP_FIT_PERFECT) {

@@ -87,6 +87,9 @@ struct odputil_keybuf {
     uint32_t keybuf[DIV_ROUND_UP(ODPUTIL_FLOW_KEY_BYTES, 4)];
 };
 
+enum odp_key_fitness odp_tun_key_from_attr(const struct nlattr *,
+                                           struct flow_tnl *);
+
 void odp_flow_key_format(const struct nlattr *, size_t, struct ds *);
 int odp_flow_key_from_string(const char *s, const struct simap *port_names,
                              struct ofpbuf *);
