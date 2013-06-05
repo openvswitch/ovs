@@ -407,7 +407,7 @@ OVS_VSWITCHD_START
 " $x table$x
    x=`expr $x + 1`
  done
- echo "  254: table254: wild=0x3fffff, max=1000000, active=2
+ echo "  254: table254: wild=0x3fffff, max=1000000, active=3
                lookup=0, matched=0") > expout
 AT_CHECK([ovs-ofctl dump-tables br0], [0], [expout])
 # Change the configuration.
