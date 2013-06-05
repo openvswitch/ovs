@@ -676,6 +676,7 @@ struct ofproto_dpif {
     /* Special OpenFlow rules. */
     struct rule_dpif *miss_rule; /* Sends flow table misses to controller. */
     struct rule_dpif *no_packet_in_rule; /* Drops flow table misses. */
+    struct rule_dpif *drop_frags_rule; /* Used in OFPC_FRAG_DROP mode. */
 
     /* Bridging. */
     struct netflow *netflow;
@@ -1502,6 +1503,12 @@ add_internal_flows(struct ofproto_dpif *ofproto)
     ofpbuf_clear(&ofpacts);
     error = add_internal_flow(ofproto, id++, &ofpacts,
                               &ofproto->no_packet_in_rule);
+    if (error) {
+        return error;
+    }
+
+    error = add_internal_flow(ofproto, id++, &ofpacts,
+                              &ofproto->drop_frags_rule);
     return error;
 }
 
@@ -1764,7 +1771,7 @@ get_tables(struct ofproto *ofproto_, struct ofp12_table_stats *ots)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
     struct dpif_dp_stats s;
-    uint64_t n_miss, n_no_pkt_in, n_bytes;
+    uint64_t n_miss, n_no_pkt_in, n_bytes, n_dropped_frags;
     uint64_t n_lookup;
 
     strcpy(ots->name, "classifier");
@@ -1772,8 +1779,9 @@ get_tables(struct ofproto *ofproto_, struct ofp12_table_stats *ots)
     dpif_get_dp_stats(ofproto->backer->dpif, &s);
     rule_get_stats(&ofproto->miss_rule->up, &n_miss, &n_bytes);
     rule_get_stats(&ofproto->no_packet_in_rule->up, &n_no_pkt_in, &n_bytes);
+    rule_get_stats(&ofproto->drop_frags_rule->up, &n_dropped_frags, &n_bytes);
 
-    n_lookup = s.n_hit + s.n_missed;
+    n_lookup = s.n_hit + s.n_missed - n_dropped_frags;
     ots->lookup_count = htonll(n_lookup);
     ots->matched_count = htonll(n_lookup - n_miss - n_no_pkt_in);
 }
@@ -5430,20 +5438,22 @@ rule_dpif_lookup__(struct ofproto_dpif *ofproto, const struct flow *flow,
 {
     struct cls_rule *cls_rule;
     struct classifier *cls;
+    bool frag;
 
     if (table_id >= N_TABLES) {
         return NULL;
     }
 
     cls = &ofproto->up.tables[table_id].cls;
-    if (flow->nw_frag & FLOW_NW_FRAG_ANY
-        && ofproto->up.frag_handling == OFPC_FRAG_NORMAL) {
-        /* For OFPC_NORMAL frag_handling, we must pretend that transport ports
-         * are unavailable. */
+    frag = (flow->nw_frag & FLOW_NW_FRAG_ANY) != 0;
+    if (frag && ofproto->up.frag_handling == OFPC_FRAG_NORMAL) {
+        /* We must pretend that transport ports are unavailable. */
         struct flow ofpc_normal_flow = *flow;
         ofpc_normal_flow.tp_src = htons(0);
         ofpc_normal_flow.tp_dst = htons(0);
         cls_rule = classifier_lookup(cls, &ofpc_normal_flow);
+    } else if (frag && ofproto->up.frag_handling == OFPC_FRAG_DROP) {
+        cls_rule = &ofproto->drop_frags_rule->up.cr;
     } else {
         cls_rule = classifier_lookup(cls, flow);
     }
@@ -8121,6 +8131,9 @@ ofproto_trace(struct ofproto_dpif *ofproto, const struct flow *flow,
     } else if (rule == ofproto->no_packet_in_rule) {
         ds_put_cstr(ds, "\nNo match, packets dropped because "
                     "OFPPC_NO_PACKET_IN is set on in_port.\n");
+    } else if (rule == ofproto->drop_frags_rule) {
+        ds_put_cstr(ds, "\nPackets dropped because they are IP fragments "
+                    "and the fragment handling mode is \"drop\".\n");
     }
 
     if (rule) {
