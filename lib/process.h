@@ -33,6 +33,7 @@ bool process_exited(struct process *);
 int process_status(const struct process *);
 char *process_status_msg(int);
 
+void process_run(void);
 void process_wait(struct process *);
 
 char *process_search_path(const char *);

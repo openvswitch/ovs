@@ -44,9 +44,9 @@ struct process {
     char *name;
     pid_t pid;
 
-    /* Modified by signal handler. */
-    volatile bool exited;
-    volatile int status;
+    /* State. */
+    bool exited;
+    int status;
 };
 
 /* Pipe used to signal child termination. */
@@ -55,9 +55,6 @@ static int fds[2];
 /* All processes. */
 static struct list all_processes = LIST_INITIALIZER(&all_processes);
 
-static bool sigchld_is_blocked(void);
-static void block_sigchld(sigset_t *);
-static void unblock_sigchld(const sigset_t *);
 static void sigchld_handler(int signr OVS_UNUSED);
 
 /* Initializes the process subsystem (if it is not already initialized).  Calls
@@ -145,17 +142,12 @@ process_prestart(char **argv)
 }
 
 /* Creates and returns a new struct process with the specified 'name' and
- * 'pid'.
- *
- * This is racy unless SIGCHLD is blocked (and has been blocked since before
- * the fork()) that created the subprocess.  */
+ * 'pid'. */
 static struct process *
 process_register(const char *name, pid_t pid)
 {
     struct process *p;
     const char *slash;
-
-    ovs_assert(sigchld_is_blocked());
 
     p = xzalloc(sizeof *p);
     p->pid = pid;
@@ -181,7 +173,6 @@ process_register(const char *name, pid_t pid)
 int
 process_start(char **argv, struct process **pp)
 {
-    sigset_t oldsigs;
     pid_t pid;
     int error;
 
@@ -192,16 +183,13 @@ process_start(char **argv, struct process **pp)
         return error;
     }
 
-    block_sigchld(&oldsigs);
     pid = fork();
     if (pid < 0) {
-        unblock_sigchld(&oldsigs);
         VLOG_WARN("fork failed: %s", strerror(errno));
         return errno;
     } else if (pid) {
         /* Running in parent process. */
         *pp = process_register(argv[0], pid);
-        unblock_sigchld(&oldsigs);
         return 0;
     } else {
         /* Running in child process. */
@@ -209,7 +197,6 @@ process_start(char **argv, struct process **pp)
         int fd;
 
         fatal_signal_fork();
-        unblock_sigchld(&oldsigs);
         for (fd = 3; fd < fd_max; fd++) {
             close(fd);
         }
@@ -225,12 +212,7 @@ void
 process_destroy(struct process *p)
 {
     if (p) {
-        sigset_t oldsigs;
-
-        block_sigchld(&oldsigs);
         list_remove(&p->node);
-        unblock_sigchld(&oldsigs);
-
         free(p->name);
         free(p);
     }
@@ -265,13 +247,7 @@ process_name(const struct process *p)
 bool
 process_exited(struct process *p)
 {
-    if (p->exited) {
-        return true;
-    } else {
-        char buf[_POSIX_PIPE_BUF];
-        ignore(read(fds[0], buf, sizeof buf));
-        return false;
-    }
+    return p->exited;
 }
 
 /* Returns process 'p''s exit status, as reported by waitpid(2).
@@ -313,6 +289,35 @@ process_status_msg(int status)
     return ds_cstr(&ds);
 }
 
+/* Executes periodic maintenance activities required by the process module. */
+void
+process_run(void)
+{
+    char buf[_POSIX_PIPE_BUF];
+
+    if (!list_is_empty(&all_processes) && read(fds[0], buf, sizeof buf) > 0) {
+        struct process *p;
+
+        LIST_FOR_EACH (p, node, &all_processes) {
+            if (!p->exited) {
+                int retval, status;
+                do {
+                    retval = waitpid(p->pid, &status, WNOHANG);
+                } while (retval == -1 && errno == EINTR);
+                if (retval == p->pid) {
+                    p->exited = true;
+                    p->status = status;
+                } else if (retval < 0) {
+                    VLOG_WARN("waitpid: %s", strerror(errno));
+                    p->exited = true;
+                    p->status = -1;
+                }
+            }
+        }
+    }
+}
+
+
 /* Causes the next call to poll_block() to wake up when process 'p' has
  * exited. */
 void
@@ -353,50 +358,5 @@ process_search_path(const char *name)
 static void
 sigchld_handler(int signr OVS_UNUSED)
 {
-    struct process *p;
-
-    COVERAGE_INC(process_sigchld);
-    LIST_FOR_EACH (p, node, &all_processes) {
-        if (!p->exited) {
-            int retval, status;
-            do {
-                retval = waitpid(p->pid, &status, WNOHANG);
-            } while (retval == -1 && errno == EINTR);
-            if (retval == p->pid) {
-                p->exited = true;
-                p->status = status;
-            } else if (retval < 0) {
-                /* XXX We want to log something but we're in a signal
-                 * handler. */
-                p->exited = true;
-                p->status = -1;
-            }
-        }
-    }
     ignore(write(fds[1], "", 1));
-}
-
-static bool
-sigchld_is_blocked(void)
-{
-    sigset_t sigs;
-
-    xpthread_sigmask(SIG_SETMASK, NULL, &sigs);
-    return sigismember(&sigs, SIGCHLD);
-}
-
-static void
-block_sigchld(sigset_t *oldsigs)
-{
-    sigset_t sigchld;
-
-    sigemptyset(&sigchld);
-    sigaddset(&sigchld, SIGCHLD);
-    xpthread_sigmask(SIG_BLOCK, &sigchld, oldsigs);
-}
-
-static void
-unblock_sigchld(const sigset_t *oldsigs)
-{
-    xpthread_sigmask(SIG_SETMASK, oldsigs, NULL);
 }

@@ -230,8 +230,11 @@ main(int argc, char *argv[])
         for (i = 0; i < n_dbs; i++) {
             ovsdb_trigger_run(dbs[i].db, time_msec());
         }
-        if (run_process && process_exited(run_process)) {
-            exiting = true;
+        if (run_process) {
+            process_run();
+            if (process_exited(run_process)) {
+                exiting = true;
+            }
         }
 
         /* update Manager status(es) every 5 seconds */
