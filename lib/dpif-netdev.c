@@ -481,7 +481,7 @@ get_port_by_name(struct dp_netdev *dp,
     struct dp_netdev_port *port;
 
     LIST_FOR_EACH (port, node, &dp->port_list) {
-        if (!strcmp(netdev_vport_get_dpif_port(port->netdev), devname)) {
+        if (!strcmp(netdev_get_name(port->netdev), devname)) {
             *portp = port;
             return 0;
         }
@@ -519,7 +519,7 @@ static void
 answer_port_query(const struct dp_netdev_port *port,
                   struct dpif_port *dpif_port)
 {
-    dpif_port->name = xstrdup(netdev_vport_get_dpif_port(port->netdev));
+    dpif_port->name = xstrdup(netdev_get_name(port->netdev));
     dpif_port->type = xstrdup(port->type);
     dpif_port->port_no = port->port_no;
 }
@@ -610,7 +610,7 @@ dpif_netdev_port_dump_next(const struct dpif *dpif, void *state_,
         struct dp_netdev_port *port = dp->ports[port_no];
         if (port) {
             free(state->name);
-            state->name = xstrdup(netdev_vport_get_dpif_port(port->netdev));
+            state->name = xstrdup(netdev_get_name(port->netdev));
             dpif_port->name = state->name;
             dpif_port->type = port->type;
             dpif_port->port_no = port->port_no;
@@ -1069,8 +1069,7 @@ dpif_netdev_run(struct dpif *dpif)
         } else if (error != EAGAIN && error != EOPNOTSUPP) {
             static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
             VLOG_ERR_RL(&rl, "error receiving data from %s: %s",
-                        netdev_vport_get_dpif_port(port->netdev),
-                        strerror(error));
+                        netdev_get_name(port->netdev), strerror(error));
         }
     }
     ofpbuf_uninit(&packet);
