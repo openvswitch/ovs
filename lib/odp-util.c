@@ -2249,6 +2249,169 @@ ovs_to_odp_frag(uint8_t nw_frag)
           : OVS_FRAG_TYPE_LATER);
 }
 
+static void
+odp_flow_key_from_flow__(struct ofpbuf *buf, const struct flow *data,
+                         const struct flow *flow, odp_port_t odp_in_port)
+{
+    bool is_mask;
+    struct ovs_key_ethernet *eth_key;
+    size_t encap;
+
+    /* We assume that if 'data' and 'flow' are not the same, we should
+     * treat 'data' as a mask. */
+    is_mask = (data != flow);
+
+    if (flow->skb_priority) {
+        nl_msg_put_u32(buf, OVS_KEY_ATTR_PRIORITY, data->skb_priority);
+    }
+
+    if (flow->tunnel.ip_dst) {
+        tun_key_to_attr(buf, &data->tunnel);
+    }
+
+    if (flow->skb_mark) {
+        nl_msg_put_u32(buf, OVS_KEY_ATTR_SKB_MARK, data->skb_mark);
+    }
+
+    /* Add an ingress port attribute if this is a mask or 'odp_in_port'
+     * is not the magical value "ODPP_NONE". */
+    if (is_mask || odp_in_port != ODPP_NONE) {
+        nl_msg_put_odp_port(buf, OVS_KEY_ATTR_IN_PORT, odp_in_port);
+    }
+
+    eth_key = nl_msg_put_unspec_uninit(buf, OVS_KEY_ATTR_ETHERNET,
+                                       sizeof *eth_key);
+    memcpy(eth_key->eth_src, data->dl_src, ETH_ADDR_LEN);
+    memcpy(eth_key->eth_dst, data->dl_dst, ETH_ADDR_LEN);
+
+    if (flow->vlan_tci != htons(0) || flow->dl_type == htons(ETH_TYPE_VLAN)) {
+        nl_msg_put_be16(buf, OVS_KEY_ATTR_ETHERTYPE, htons(ETH_TYPE_VLAN));
+        nl_msg_put_be16(buf, OVS_KEY_ATTR_VLAN, data->vlan_tci);
+        encap = nl_msg_start_nested(buf, OVS_KEY_ATTR_ENCAP);
+        if (flow->vlan_tci == htons(0)) {
+            goto unencap;
+        }
+    } else {
+        encap = 0;
+    }
+
+    if (ntohs(flow->dl_type) < ETH_TYPE_MIN) {
+        /* For backwards compatibility with kernels that don't support
+         * wildcarding, the following convention is used to encode the
+         * OVS_KEY_ATTR_ETHERTYPE for key and mask:
+         *
+         *   key      mask    matches
+         * -------- --------  -------
+         *  >0x5ff   0xffff   Specified Ethernet II Ethertype.
+         *  >0x5ff      0     Any Ethernet II or non-Ethernet II frame.
+         *  <none>   0xffff   Any non-Ethernet II frame (except valid
+         *                    802.3 SNAP packet with valid eth_type).
+         */
+        if (is_mask) {
+            nl_msg_put_be16(buf, OVS_KEY_ATTR_ETHERTYPE, data->dl_type);
+        }
+        goto unencap;
+    }
+
+    nl_msg_put_be16(buf, OVS_KEY_ATTR_ETHERTYPE, data->dl_type);
+
+    if (flow->dl_type == htons(ETH_TYPE_IP)) {
+        struct ovs_key_ipv4 *ipv4_key;
+
+        ipv4_key = nl_msg_put_unspec_uninit(buf, OVS_KEY_ATTR_IPV4,
+                                            sizeof *ipv4_key);
+        ipv4_key->ipv4_src = data->nw_src;
+        ipv4_key->ipv4_dst = data->nw_dst;
+        ipv4_key->ipv4_proto = data->nw_proto;
+        ipv4_key->ipv4_tos = data->nw_tos;
+        ipv4_key->ipv4_ttl = data->nw_ttl;
+        ipv4_key->ipv4_frag = ovs_to_odp_frag(data->nw_frag);
+    } else if (flow->dl_type == htons(ETH_TYPE_IPV6)) {
+        struct ovs_key_ipv6 *ipv6_key;
+
+        ipv6_key = nl_msg_put_unspec_uninit(buf, OVS_KEY_ATTR_IPV6,
+                                            sizeof *ipv6_key);
+        memcpy(ipv6_key->ipv6_src, &data->ipv6_src, sizeof ipv6_key->ipv6_src);
+        memcpy(ipv6_key->ipv6_dst, &data->ipv6_dst, sizeof ipv6_key->ipv6_dst);
+        ipv6_key->ipv6_label = data->ipv6_label;
+        ipv6_key->ipv6_proto = data->nw_proto;
+        ipv6_key->ipv6_tclass = data->nw_tos;
+        ipv6_key->ipv6_hlimit = data->nw_ttl;
+        ipv6_key->ipv6_frag = ovs_to_odp_frag(flow->nw_frag);
+    } else if (flow->dl_type == htons(ETH_TYPE_ARP) ||
+               flow->dl_type == htons(ETH_TYPE_RARP)) {
+        struct ovs_key_arp *arp_key;
+
+        arp_key = nl_msg_put_unspec_uninit(buf, OVS_KEY_ATTR_ARP,
+                                           sizeof *arp_key);
+        memset(arp_key, 0, sizeof *arp_key);
+        arp_key->arp_sip = data->nw_src;
+        arp_key->arp_tip = data->nw_dst;
+        arp_key->arp_op = htons(data->nw_proto);
+        memcpy(arp_key->arp_sha, data->arp_sha, ETH_ADDR_LEN);
+        memcpy(arp_key->arp_tha, data->arp_tha, ETH_ADDR_LEN);
+    }
+
+    if (flow->mpls_depth) {
+        struct ovs_key_mpls *mpls_key;
+
+        mpls_key = nl_msg_put_unspec_uninit(buf, OVS_KEY_ATTR_MPLS,
+                                            sizeof *mpls_key);
+        mpls_key->mpls_lse = data->mpls_lse;
+    }
+
+    if (is_ip_any(flow) && !(flow->nw_frag & FLOW_NW_FRAG_LATER)) {
+        if (flow->nw_proto == IPPROTO_TCP) {
+            struct ovs_key_tcp *tcp_key;
+
+            tcp_key = nl_msg_put_unspec_uninit(buf, OVS_KEY_ATTR_TCP,
+                                               sizeof *tcp_key);
+            tcp_key->tcp_src = data->tp_src;
+            tcp_key->tcp_dst = data->tp_dst;
+        } else if (flow->nw_proto == IPPROTO_UDP) {
+            struct ovs_key_udp *udp_key;
+
+            udp_key = nl_msg_put_unspec_uninit(buf, OVS_KEY_ATTR_UDP,
+                                               sizeof *udp_key);
+            udp_key->udp_src = data->tp_src;
+            udp_key->udp_dst = data->tp_dst;
+        } else if (flow->dl_type == htons(ETH_TYPE_IP)
+                && flow->nw_proto == IPPROTO_ICMP) {
+            struct ovs_key_icmp *icmp_key;
+
+            icmp_key = nl_msg_put_unspec_uninit(buf, OVS_KEY_ATTR_ICMP,
+                                                sizeof *icmp_key);
+            icmp_key->icmp_type = ntohs(data->tp_src);
+            icmp_key->icmp_code = ntohs(data->tp_dst);
+        } else if (flow->dl_type == htons(ETH_TYPE_IPV6)
+                && flow->nw_proto == IPPROTO_ICMPV6) {
+            struct ovs_key_icmpv6 *icmpv6_key;
+
+            icmpv6_key = nl_msg_put_unspec_uninit(buf, OVS_KEY_ATTR_ICMPV6,
+                                                  sizeof *icmpv6_key);
+            icmpv6_key->icmpv6_type = ntohs(data->tp_src);
+            icmpv6_key->icmpv6_code = ntohs(data->tp_dst);
+
+            if (icmpv6_key->icmpv6_type == ND_NEIGHBOR_SOLICIT
+                    || icmpv6_key->icmpv6_type == ND_NEIGHBOR_ADVERT) {
+                struct ovs_key_nd *nd_key;
+
+                nd_key = nl_msg_put_unspec_uninit(buf, OVS_KEY_ATTR_ND,
+                                                    sizeof *nd_key);
+                memcpy(nd_key->nd_target, &data->nd_target,
+                        sizeof nd_key->nd_target);
+                memcpy(nd_key->nd_sll, data->arp_sha, ETH_ADDR_LEN);
+                memcpy(nd_key->nd_tll, data->arp_tha, ETH_ADDR_LEN);
+            }
+        }
+    }
+
+unencap:
+    if (encap) {
+        nl_msg_end_nested(buf, encap);
+    }
+}
+
 /* Appends a representation of 'flow' as OVS_KEY_ATTR_* attributes to 'buf'.
  * 'flow->in_port' is ignored (since it is likely to be an OpenFlow port
  * number rather than a datapath port number).  Instead, if 'odp_in_port'
@@ -2261,142 +2424,22 @@ void
 odp_flow_key_from_flow(struct ofpbuf *buf, const struct flow *flow,
                        odp_port_t odp_in_port)
 {
-    struct ovs_key_ethernet *eth_key;
-    size_t encap;
+    odp_flow_key_from_flow__(buf, flow, flow, odp_in_port);
+}
 
-    if (flow->skb_priority) {
-        nl_msg_put_u32(buf, OVS_KEY_ATTR_PRIORITY, flow->skb_priority);
-    }
-
-    if (flow->tunnel.ip_dst) {
-        tun_key_to_attr(buf, &flow->tunnel);
-    }
-
-    if (flow->skb_mark) {
-        nl_msg_put_u32(buf, OVS_KEY_ATTR_SKB_MARK, flow->skb_mark);
-    }
-
-    if (odp_in_port != ODPP_NONE) {
-        nl_msg_put_odp_port(buf, OVS_KEY_ATTR_IN_PORT, odp_in_port);
-    }
-
-    eth_key = nl_msg_put_unspec_uninit(buf, OVS_KEY_ATTR_ETHERNET,
-                                       sizeof *eth_key);
-    memcpy(eth_key->eth_src, flow->dl_src, ETH_ADDR_LEN);
-    memcpy(eth_key->eth_dst, flow->dl_dst, ETH_ADDR_LEN);
-
-    if (flow->vlan_tci != htons(0) || flow->dl_type == htons(ETH_TYPE_VLAN)) {
-        nl_msg_put_be16(buf, OVS_KEY_ATTR_ETHERTYPE, htons(ETH_TYPE_VLAN));
-        nl_msg_put_be16(buf, OVS_KEY_ATTR_VLAN, flow->vlan_tci);
-        encap = nl_msg_start_nested(buf, OVS_KEY_ATTR_ENCAP);
-        if (flow->vlan_tci == htons(0)) {
-            goto unencap;
-        }
-    } else {
-        encap = 0;
-    }
-
-    if (ntohs(flow->dl_type) < ETH_TYPE_MIN) {
-        goto unencap;
-    }
-
-    nl_msg_put_be16(buf, OVS_KEY_ATTR_ETHERTYPE, flow->dl_type);
-
-    if (flow->dl_type == htons(ETH_TYPE_IP)) {
-        struct ovs_key_ipv4 *ipv4_key;
-
-        ipv4_key = nl_msg_put_unspec_uninit(buf, OVS_KEY_ATTR_IPV4,
-                                            sizeof *ipv4_key);
-        ipv4_key->ipv4_src = flow->nw_src;
-        ipv4_key->ipv4_dst = flow->nw_dst;
-        ipv4_key->ipv4_proto = flow->nw_proto;
-        ipv4_key->ipv4_tos = flow->nw_tos;
-        ipv4_key->ipv4_ttl = flow->nw_ttl;
-        ipv4_key->ipv4_frag = ovs_to_odp_frag(flow->nw_frag);
-    } else if (flow->dl_type == htons(ETH_TYPE_IPV6)) {
-        struct ovs_key_ipv6 *ipv6_key;
-
-        ipv6_key = nl_msg_put_unspec_uninit(buf, OVS_KEY_ATTR_IPV6,
-                                            sizeof *ipv6_key);
-        memcpy(ipv6_key->ipv6_src, &flow->ipv6_src, sizeof ipv6_key->ipv6_src);
-        memcpy(ipv6_key->ipv6_dst, &flow->ipv6_dst, sizeof ipv6_key->ipv6_dst);
-        ipv6_key->ipv6_label = flow->ipv6_label;
-        ipv6_key->ipv6_proto = flow->nw_proto;
-        ipv6_key->ipv6_tclass = flow->nw_tos;
-        ipv6_key->ipv6_hlimit = flow->nw_ttl;
-        ipv6_key->ipv6_frag = ovs_to_odp_frag(flow->nw_frag);
-    } else if (flow->dl_type == htons(ETH_TYPE_ARP) ||
-               flow->dl_type == htons(ETH_TYPE_RARP)) {
-        struct ovs_key_arp *arp_key;
-
-        arp_key = nl_msg_put_unspec_uninit(buf, OVS_KEY_ATTR_ARP,
-                                           sizeof *arp_key);
-        memset(arp_key, 0, sizeof *arp_key);
-        arp_key->arp_sip = flow->nw_src;
-        arp_key->arp_tip = flow->nw_dst;
-        arp_key->arp_op = htons(flow->nw_proto);
-        memcpy(arp_key->arp_sha, flow->arp_sha, ETH_ADDR_LEN);
-        memcpy(arp_key->arp_tha, flow->arp_tha, ETH_ADDR_LEN);
-    }
-
-    if (flow->mpls_depth) {
-        struct ovs_key_mpls *mpls_key;
-
-        mpls_key = nl_msg_put_unspec_uninit(buf, OVS_KEY_ATTR_MPLS,
-                                            sizeof *mpls_key);
-        mpls_key->mpls_lse = flow->mpls_lse;
-    }
-
-    if (is_ip_any(flow) && !(flow->nw_frag & FLOW_NW_FRAG_LATER)) {
-        if (flow->nw_proto == IPPROTO_TCP) {
-            struct ovs_key_tcp *tcp_key;
-
-            tcp_key = nl_msg_put_unspec_uninit(buf, OVS_KEY_ATTR_TCP,
-                                               sizeof *tcp_key);
-            tcp_key->tcp_src = flow->tp_src;
-            tcp_key->tcp_dst = flow->tp_dst;
-        } else if (flow->nw_proto == IPPROTO_UDP) {
-            struct ovs_key_udp *udp_key;
-
-            udp_key = nl_msg_put_unspec_uninit(buf, OVS_KEY_ATTR_UDP,
-                                               sizeof *udp_key);
-            udp_key->udp_src = flow->tp_src;
-            udp_key->udp_dst = flow->tp_dst;
-        } else if (flow->dl_type == htons(ETH_TYPE_IP)
-                && flow->nw_proto == IPPROTO_ICMP) {
-            struct ovs_key_icmp *icmp_key;
-
-            icmp_key = nl_msg_put_unspec_uninit(buf, OVS_KEY_ATTR_ICMP,
-                                                sizeof *icmp_key);
-            icmp_key->icmp_type = ntohs(flow->tp_src);
-            icmp_key->icmp_code = ntohs(flow->tp_dst);
-        } else if (flow->dl_type == htons(ETH_TYPE_IPV6)
-                && flow->nw_proto == IPPROTO_ICMPV6) {
-            struct ovs_key_icmpv6 *icmpv6_key;
-
-            icmpv6_key = nl_msg_put_unspec_uninit(buf, OVS_KEY_ATTR_ICMPV6,
-                                                  sizeof *icmpv6_key);
-            icmpv6_key->icmpv6_type = ntohs(flow->tp_src);
-            icmpv6_key->icmpv6_code = ntohs(flow->tp_dst);
-
-            if (icmpv6_key->icmpv6_type == ND_NEIGHBOR_SOLICIT
-                    || icmpv6_key->icmpv6_type == ND_NEIGHBOR_ADVERT) {
-                struct ovs_key_nd *nd_key;
-
-                nd_key = nl_msg_put_unspec_uninit(buf, OVS_KEY_ATTR_ND,
-                                                    sizeof *nd_key);
-                memcpy(nd_key->nd_target, &flow->nd_target,
-                        sizeof nd_key->nd_target);
-                memcpy(nd_key->nd_sll, flow->arp_sha, ETH_ADDR_LEN);
-                memcpy(nd_key->nd_tll, flow->arp_tha, ETH_ADDR_LEN);
-            }
-        }
-    }
-
-unencap:
-    if (encap) {
-        nl_msg_end_nested(buf, encap);
-    }
+/* Appends a representation of 'mask' as OVS_KEY_ATTR_* attributes to
+ * 'buf'.  'flow' is used as a template to determine how to interpret
+ * 'mask'.  For example, the 'dl_type' of 'mask' describes the mask, but
+ * it doesn't indicate whether the other fields should be interpreted as
+ * ARP, IPv4, IPv6, etc.
+ *
+ * 'buf' must have at least ODPUTIL_FLOW_KEY_BYTES bytes of space, or be
+ * capable of being expanded to allow for that much space. */
+void
+odp_flow_key_from_mask(struct ofpbuf *buf, const struct flow *mask,
+                       const struct flow *flow, uint32_t odp_in_port_mask)
+{
+    odp_flow_key_from_flow__(buf, mask, flow, u32_to_odp(odp_in_port_mask));
 }
 
 uint32_t

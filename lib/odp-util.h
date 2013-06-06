@@ -102,6 +102,8 @@ int odp_flow_from_string(const char *s,
 
 void odp_flow_key_from_flow(struct ofpbuf *, const struct flow *,
                             odp_port_t odp_in_port);
+void odp_flow_key_from_mask(struct ofpbuf *, const struct flow *mask,
+                            const struct flow *flow, uint32_t odp_in_port);
 
 uint32_t odp_flow_key_hash(const struct nlattr *, size_t);
 
