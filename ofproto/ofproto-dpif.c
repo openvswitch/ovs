@@ -213,21 +213,6 @@ static bool ofbundle_includes_vlan(const struct ofbundle *, uint16_t vlan);
 
 struct xlate_ctx;
 
-/* Initial values of fields of the packet that may be changed during
- * flow processing and needed later. */
-struct initial_vals {
-   /* This is the value of vlan_tci in the packet as actually received from
-    * dpif.  This is the same as the facet's flow.vlan_tci unless the packet
-    * was received via a VLAN splinter.  In that case, this value is 0
-    * (because the packet as actually received from the dpif had no 802.1Q
-    * tag) but the facet's flow.vlan_tci is set to the VLAN that the splinter
-    * represents.
-    *
-    * This member should be removed when the VLAN splinters feature is no
-    * longer needed. */
-    ovs_be16 vlan_tci;
-};
-
 struct xlate_out {
     /* Wildcards relevant in translation.  Any fields that were used to
      * calculate the action must be set for caching and kernel
@@ -256,8 +241,6 @@ struct xlate_in {
     /* Flow to which the OpenFlow actions apply.  xlate_actions() will modify
      * this flow when actions change header fields. */
     struct flow flow;
-
-    struct initial_vals initial_vals;
 
     /* The packet corresponding to 'flow', or a null pointer if we are
      * revalidating without a packet to refer to. */
@@ -344,9 +327,8 @@ struct xlate_ctx {
 };
 
 static void xlate_in_init(struct xlate_in *, struct ofproto_dpif *,
-                          const struct flow *, const struct initial_vals *,
-                          struct rule_dpif *, uint8_t tcp_flags,
-                          const struct ofpbuf *);
+                          const struct flow *, struct rule_dpif *,
+                          uint8_t tcp_flags, const struct ofpbuf *);
 
 static void xlate_out_uninit(struct xlate_out *);
 
@@ -495,9 +477,6 @@ struct facet {
     uint8_t tcp_flags;           /* TCP flags seen for this 'rule'. */
 
     struct xlate_out xout;
-
-    /* Initial values of the packet that may be needed later. */
-    struct initial_vals initial_vals;
 
     /* Storage for a single subfacet, to reduce malloc() time and space
      * overhead.  (A facet always has at least one subfacet and in the common
@@ -792,8 +771,7 @@ static struct ofport_dpif *get_ofp_port(const struct ofproto_dpif *,
 static struct ofport_dpif *get_odp_port(const struct ofproto_dpif *,
                                         uint32_t odp_port);
 static void ofproto_trace(struct ofproto_dpif *, const struct flow *,
-                          const struct ofpbuf *,
-                          const struct initial_vals *, struct ds *);
+                          const struct ofpbuf *, struct ds *);
 
 /* Packet processing. */
 static void update_learning_table(struct ofproto_dpif *, const struct flow *,
@@ -3574,7 +3552,6 @@ struct flow_miss {
     enum odp_key_fitness key_fitness;
     const struct nlattr *key;
     size_t key_len;
-    struct initial_vals initial_vals;
     struct list packets;
     enum dpif_upcall_type upcall_type;
 };
@@ -3667,7 +3644,9 @@ static void
 init_flow_miss_execute_op(struct flow_miss *miss, struct ofpbuf *packet,
                           struct flow_miss_op *op)
 {
-    if (miss->flow.vlan_tci != miss->initial_vals.vlan_tci) {
+    if (miss->flow.in_port
+        != vsp_realdev_to_vlandev(miss->ofproto, miss->flow.in_port,
+                                  miss->flow.vlan_tci)) {
         /* This packet was received on a VLAN splinter port.  We
          * added a VLAN to the packet to make the packet resemble
          * the flow, but the actions were composed assuming that
@@ -3755,8 +3734,7 @@ handle_flow_miss_without_facet(struct rule_dpif *rule, struct xlate_out *xout,
         if (xout->slow) {
             struct xlate_in xin;
 
-            xlate_in_init(&xin, miss->ofproto, &miss->flow,
-                          &miss->initial_vals, rule, 0, packet);
+            xlate_in_init(&xin, miss->ofproto, &miss->flow, rule, 0, packet);
             xlate_actions_for_side_effects(&xin);
         }
 
@@ -3810,8 +3788,7 @@ handle_flow_miss_with_facet(struct flow_miss *miss, struct facet *facet,
         if (want_path != SF_FAST_PATH) {
             struct xlate_in xin;
 
-            xlate_in_init(&xin, ofproto, &facet->flow, &facet->initial_vals,
-                          facet->rule, 0, packet);
+            xlate_in_init(&xin, ofproto, &facet->flow, facet->rule, 0, packet);
             xlate_actions_for_side_effects(&xin);
         }
 
@@ -3881,8 +3858,8 @@ handle_flow_miss(struct flow_miss *miss, struct flow_miss_op *ops,
         rule = rule_dpif_lookup(ofproto, &miss->flow, &wc);
         rule_credit_stats(rule, stats);
 
-        xlate_in_init(&xin, ofproto, &miss->flow, &miss->initial_vals, rule,
-                      stats->tcp_flags, NULL);
+        xlate_in_init(&xin, ofproto, &miss->flow, rule, stats->tcp_flags,
+                      NULL);
         xin.resubmit_stats = stats;
         xin.may_learn = true;
         xlate_actions(&xin, &xout);
@@ -3963,12 +3940,6 @@ drop_key_clear(struct dpif_backer *backer)
  * flow->vlan_tci correctly for the VLAN of the VLAN splinter port, and pushes
  * a VLAN header onto 'packet' (if it is nonnull).
  *
- * Optionally, if 'initial_vals' is nonnull, sets 'initial_vals->vlan_tci'
- * to the VLAN TCI with which the packet was really received, that is, the
- * actual VLAN TCI extracted by odp_flow_key_to_flow().  (This differs from
- * the value returned in flow->vlan_tci only for packets received on
- * VLAN splinters.)
- *
  * Similarly, this function also includes some logic to help with tunnels.  It
  * may modify 'flow' as necessary to make the tunneling implementation
  * transparent to the upcall processing logic.
@@ -3979,8 +3950,7 @@ static int
 ofproto_receive(const struct dpif_backer *backer, struct ofpbuf *packet,
                 const struct nlattr *key, size_t key_len,
                 struct flow *flow, enum odp_key_fitness *fitnessp,
-                struct ofproto_dpif **ofproto, uint32_t *odp_in_port,
-                struct initial_vals *initial_vals)
+                struct ofproto_dpif **ofproto, uint32_t *odp_in_port)
 {
     const struct ofport_dpif *port;
     enum odp_key_fitness fitness;
@@ -3990,10 +3960,6 @@ ofproto_receive(const struct dpif_backer *backer, struct ofpbuf *packet,
     if (fitness == ODP_FIT_ERROR) {
         error = EINVAL;
         goto exit;
-    }
-
-    if (initial_vals) {
-        initial_vals->vlan_tci = flow->vlan_tci;
     }
 
     if (odp_in_port) {
@@ -4085,7 +4051,7 @@ handle_miss_upcalls(struct dpif_backer *backer, struct dpif_upcall *upcalls,
 
         error = ofproto_receive(backer, upcall->packet, upcall->key,
                                 upcall->key_len, &flow, &miss->key_fitness,
-                                &ofproto, &odp_in_port, &miss->initial_vals);
+                                &ofproto, &odp_in_port);
         if (error == ENODEV) {
             struct drop_key *drop_key;
 
@@ -4224,7 +4190,7 @@ handle_sflow_upcall(struct dpif_backer *backer,
     uint32_t odp_in_port;
 
     if (ofproto_receive(backer, upcall->packet, upcall->key, upcall->key_len,
-                        &flow, NULL, &ofproto, &odp_in_port, NULL)
+                        &flow, NULL, &ofproto, &odp_in_port)
         || !ofproto->sflow) {
         return;
     }
@@ -4244,7 +4210,7 @@ handle_flow_sample_upcall(struct dpif_backer *backer,
     struct flow flow;
 
     if (ofproto_receive(backer, upcall->packet, upcall->key, upcall->key_len,
-                        &flow, NULL, &ofproto, NULL, NULL)
+                        &flow, NULL, &ofproto, NULL)
         || !ofproto->ipfix) {
         return;
     }
@@ -4269,7 +4235,7 @@ handle_ipfix_upcall(struct dpif_backer *backer,
     struct flow flow;
 
     if (ofproto_receive(backer, upcall->packet, upcall->key, upcall->key_len,
-                        &flow, NULL, &ofproto, NULL, NULL)
+                        &flow, NULL, &ofproto, NULL)
         || !ofproto->ipfix) {
         return;
     }
@@ -4724,7 +4690,6 @@ facet_create(const struct flow_miss *miss, struct rule_dpif *rule,
     facet->tcp_flags = stats->tcp_flags;
     facet->used = stats->used;
     facet->flow = miss->flow;
-    facet->initial_vals = miss->initial_vals;
     facet->learn_rl = time_msec() + 500;
     facet->rule = rule;
 
@@ -5009,8 +4974,7 @@ facet_check_consistency(struct facet *facet)
     }
 
     /* Check the datapath actions for consistency. */
-    xlate_in_init(&xin, ofproto, &facet->flow, &facet->initial_vals, rule,
-                  0, NULL);
+    xlate_in_init(&xin, ofproto, &facet->flow, rule, 0, NULL);
     xlate_actions(&xin, &xout);
 
     ok = ofpbuf_equal(&facet->xout.odp_actions, &xout.odp_actions)
@@ -5077,7 +5041,7 @@ facet_revalidate(struct facet *facet)
 
         error = ofproto_receive(ofproto->backer, NULL, subfacet->key,
                                 subfacet->key_len, &recv_flow, NULL,
-                                &recv_ofproto, NULL, NULL);
+                                &recv_ofproto, NULL);
         if (error
             || recv_ofproto != ofproto
             || facet != facet_find(ofproto, &recv_flow)) {
@@ -5094,8 +5058,7 @@ facet_revalidate(struct facet *facet)
      * We do not modify any 'facet' state yet, because we might need to, e.g.,
      * emit a NetFlow expiration and, if so, we need to have the old state
      * around to properly compose it. */
-    xlate_in_init(&xin, ofproto, &facet->flow, &facet->initial_vals, new_rule,
-                  0, NULL);
+    xlate_in_init(&xin, ofproto, &facet->flow, new_rule, 0, NULL);
     xlate_actions(&xin, &xout);
     flow_wildcards_or(&xout.wc, &xout.wc, &wc);
 
@@ -5201,8 +5164,8 @@ facet_push_stats(struct facet *facet, bool may_learn)
         update_mirror_stats(ofproto, facet->xout.mirrors, stats.n_packets,
                             stats.n_bytes);
 
-        xlate_in_init(&xin, ofproto, &facet->flow, &facet->initial_vals,
-                      facet->rule, stats.tcp_flags, NULL);
+        xlate_in_init(&xin, ofproto, &facet->flow, facet->rule,
+                      stats.tcp_flags, NULL);
         xin.resubmit_stats = &stats;
         xin.may_learn = may_learn;
         xlate_actions_for_side_effects(&xin);
@@ -5667,7 +5630,6 @@ rule_dpif_execute(struct rule_dpif *rule, const struct flow *flow,
                   struct ofpbuf *packet)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(rule->up.ofproto);
-    struct initial_vals initial_vals;
     struct dpif_flow_stats stats;
     struct xlate_out xout;
     struct xlate_in xin;
@@ -5675,9 +5637,7 @@ rule_dpif_execute(struct rule_dpif *rule, const struct flow *flow,
     dpif_flow_stats_extract(flow, packet, time_msec(), &stats);
     rule_credit_stats(rule, &stats);
 
-    initial_vals.vlan_tci = flow->vlan_tci;
-    xlate_in_init(&xin, ofproto, flow, &initial_vals, rule, stats.tcp_flags,
-                  packet);
+    xlate_in_init(&xin, ofproto, flow, rule, stats.tcp_flags, packet);
     xin.resubmit_stats = &stats;
     xlate_actions(&xin, &xout);
 
@@ -5734,7 +5694,7 @@ send_packet(const struct ofport_dpif *ofport, struct ofpbuf *packet)
     output.port = ofport->up.ofp_port;
     output.max_len = 0;
 
-    xlate_in_init(&xin, ofproto, &flow, NULL, NULL, 0, packet);
+    xlate_in_init(&xin, ofproto, &flow, NULL, 0, packet);
     xin.ofpacts_len = sizeof output;
     xin.ofpacts = &output.ofpact;
     xin.resubmit_stats = &stats;
@@ -6949,10 +6909,8 @@ out:
 
 static void
 xlate_in_init(struct xlate_in *xin, struct ofproto_dpif *ofproto,
-              const struct flow *flow,
-              const struct initial_vals *initial_vals,
-              struct rule_dpif *rule, uint8_t tcp_flags,
-              const struct ofpbuf *packet)
+              const struct flow *flow, struct rule_dpif *rule,
+              uint8_t tcp_flags, const struct ofpbuf *packet)
 {
     xin->ofproto = ofproto;
     xin->flow = *flow;
@@ -6965,12 +6923,6 @@ xlate_in_init(struct xlate_in *xin, struct ofproto_dpif *ofproto,
     xin->resubmit_hook = NULL;
     xin->report_hook = NULL;
     xin->resubmit_stats = NULL;
-
-    if (initial_vals) {
-        xin->initial_vals = *initial_vals;
-    } else {
-        xin->initial_vals.vlan_tci = xin->flow.vlan_tci;
-    }
 }
 
 static void
@@ -7028,7 +6980,6 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
     ctx.rule = xin->rule;
 
     ctx.base_flow = ctx.xin->flow;
-    ctx.base_flow.vlan_tci = xin->initial_vals.vlan_tci;
     memset(&ctx.base_flow.tunnel, 0, sizeof ctx.base_flow.tunnel);
     ctx.orig_tunnel_ip_dst = ctx.xin->flow.tunnel.ip_dst;
 
@@ -7129,11 +7080,14 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
         ctx.xout->slow = special;
     } else {
         static struct vlog_rate_limit trace_rl = VLOG_RATE_LIMIT_INIT(1, 1);
-        struct initial_vals initial_vals;
         size_t sample_actions_len;
         uint32_t local_odp_port;
 
-        initial_vals.vlan_tci = ctx.base_flow.vlan_tci;
+        if (ctx.xin->flow.in_port
+            != vsp_realdev_to_vlandev(ctx.ofproto, ctx.xin->flow.in_port,
+                                      ctx.xin->flow.vlan_tci)) {
+            ctx.base_flow.vlan_tci = 0;
+        }
 
         add_sflow_action(&ctx);
         add_ipfix_action(&ctx);
@@ -7157,8 +7111,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
             } else if (!VLOG_DROP_ERR(&trace_rl)) {
                 struct ds ds = DS_EMPTY_INITIALIZER;
 
-                ofproto_trace(ctx.ofproto, &orig_flow, ctx.xin->packet,
-                              &initial_vals, &ds);
+                ofproto_trace(ctx.ofproto, &orig_flow, ctx.xin->packet, &ds);
                 VLOG_ERR("Trace triggered by excessive resubmit "
                          "recursion:\n%s", ds_cstr(&ds));
                 ds_destroy(&ds);
@@ -7923,7 +7876,6 @@ packet_out(struct ofproto *ofproto_, struct ofpbuf *packet,
            const struct ofpact *ofpacts, size_t ofpacts_len)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
-    struct initial_vals initial_vals;
     struct odputil_keybuf keybuf;
     struct dpif_flow_stats stats;
     struct xlate_out xout;
@@ -7937,9 +7889,7 @@ packet_out(struct ofproto *ofproto_, struct ofpbuf *packet,
 
     dpif_flow_stats_extract(flow, packet, time_msec(), &stats);
 
-    initial_vals.vlan_tci = flow->vlan_tci;
-    xlate_in_init(&xin, ofproto, flow, &initial_vals, NULL, stats.tcp_flags,
-                  packet);
+    xlate_in_init(&xin, ofproto, flow, NULL, stats.tcp_flags, packet);
     xin.resubmit_stats = &stats;
     xin.ofpacts_len = ofpacts_len;
     xin.ofpacts = ofpacts;
@@ -8182,7 +8132,6 @@ ofproto_unixctl_trace(struct unixctl_conn *conn, int argc, const char *argv[],
     struct ofproto_dpif *ofproto;
     struct ofpbuf odp_key;
     struct ofpbuf *packet;
-    struct initial_vals initial_vals;
     struct ds result;
     struct flow flow;
     char *s;
@@ -8243,8 +8192,7 @@ ofproto_unixctl_trace(struct unixctl_conn *conn, int argc, const char *argv[],
         /* Extract the ofproto_dpif object from the ofproto_receive()
          * function. */
         if (ofproto_receive(backer, NULL, odp_key.data,
-                            odp_key.size, &flow, NULL, &ofproto, NULL,
-                            &initial_vals)) {
+                            odp_key.size, &flow, NULL, &ofproto, NULL)) {
             unixctl_command_reply_error(conn, "Invalid datapath flow");
             goto exit;
         }
@@ -8260,7 +8208,6 @@ ofproto_unixctl_trace(struct unixctl_conn *conn, int argc, const char *argv[],
             unixctl_command_reply_error(conn, "Unknown bridge name");
             goto exit;
         }
-        initial_vals.vlan_tci = flow.vlan_tci;
     } else {
         unixctl_command_reply_error(conn, "Bad flow syntax");
         goto exit;
@@ -8280,11 +8227,10 @@ ofproto_unixctl_trace(struct unixctl_conn *conn, int argc, const char *argv[],
              * to reconstruct the flow. */
             flow_extract(packet, flow.skb_priority, flow.skb_mark, NULL,
                          flow.in_port, &flow);
-            initial_vals.vlan_tci = flow.vlan_tci;
         }
     }
 
-    ofproto_trace(ofproto, &flow, packet, &initial_vals, &result);
+    ofproto_trace(ofproto, &flow, packet, &result);
     unixctl_command_reply(conn, ds_cstr(&result));
 
 exit:
@@ -8295,8 +8241,7 @@ exit:
 
 static void
 ofproto_trace(struct ofproto_dpif *ofproto, const struct flow *flow,
-              const struct ofpbuf *packet,
-              const struct initial_vals *initial_vals, struct ds *ds)
+              const struct ofpbuf *packet, struct ds *ds)
 {
     struct rule_dpif *rule;
 
@@ -8329,8 +8274,7 @@ ofproto_trace(struct ofproto_dpif *ofproto, const struct flow *flow,
         trace.flow = *flow;
         ofpbuf_use_stub(&odp_actions,
                         odp_actions_stub, sizeof odp_actions_stub);
-        xlate_in_init(&trace.xin, ofproto, flow, initial_vals, rule, tcp_flags,
-                      packet);
+        xlate_in_init(&trace.xin, ofproto, flow, rule, tcp_flags, packet);
         trace.xin.resubmit_hook = trace_resubmit;
         trace.xin.report_hook = trace_report;
 
