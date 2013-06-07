@@ -3694,7 +3694,7 @@ flow_miss_should_make_facet(struct flow_miss *miss, uint32_t hash)
             return true;
         }
 
-        backer->governor = governor_create(dpif_name(backer->dpif));
+        backer->governor = governor_create();
     }
 
     return governor_should_install_flow(backer->governor, hash,

@@ -45,7 +45,7 @@ struct governor {
     unsigned int n_shortcuts;   /* Number of flows set up based on history. */
 };
 
-struct governor *governor_create(const char *name);
+struct governor *governor_create(void);
 void governor_destroy(struct governor *);
 
 void governor_run(struct governor *);

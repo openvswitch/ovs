@@ -53,13 +53,11 @@ enum { MAX_ELAPSED = 5000 }; /* In milliseconds. */
 
 static void governor_new_generation(struct governor *, unsigned int size);
 
-/* Creates and returns a new governor named 'name' (which is used only for log
- * messages). */
+/* Creates and returns a new governor. */
 struct governor *
-governor_create(const char *name)
+governor_create(void)
 {
     struct governor *g = xzalloc(sizeof *g);
-    g->name = xstrdup(name);
     governor_new_generation(g, MIN_SIZE);
     return g;
 }
@@ -69,8 +67,7 @@ void
 governor_destroy(struct governor *g)
 {
     if (g) {
-        VLOG_INFO("%s: disengaging", g->name);
-        free(g->name);
+        VLOG_INFO("disengaging");
         free(g->table);
         free(g);
     }
@@ -182,13 +179,12 @@ governor_new_generation(struct governor *g, unsigned int size)
     /* Allocate new table, if necessary. */
     if (g->size != size) {
         if (!g->size) {
-            VLOG_INFO("%s: engaging governor with %u kB hash table",
-                      g->name, size / 1024);
+            VLOG_INFO("engaging governor with %u kB hash table", size / 1024);
         } else {
-            VLOG_INFO("%s: processed %u packets in %.2f s, "
+            VLOG_INFO("processed %u packets in %.2f s, "
                       "%s hash table to %u kB "
                       "(%u hashes, %u setups, %u shortcuts)",
-                      g->name, g->n_packets,
+                      g->n_packets,
                       (time_msec() - g->start) / 1000.0,
                       size > g->size ? "enlarging" : "shrinking",
                       size / 1024,
@@ -199,9 +195,9 @@ governor_new_generation(struct governor *g, unsigned int size)
         g->table = xmalloc(size * sizeof *g->table);
         g->size = size;
     } else {
-        VLOG_DBG("%s: processed %u packets in %.2f s with %u kB hash table "
+        VLOG_DBG("processed %u packets in %.2f s with %u kB hash table "
                  "(%u hashes, %u setups, %u shortcuts)",
-                 g->name, g->n_packets, (time_msec() - g->start) / 1000.0,
+                 g->n_packets, (time_msec() - g->start) / 1000.0,
                  size / 1024, g->n_flows, g->n_setups, g->n_shortcuts);
     }
 
