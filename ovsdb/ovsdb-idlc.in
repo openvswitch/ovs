@@ -18,6 +18,7 @@ def annotateSchema(schemaFile, annotationFile):
     schemaJson = ovs.json.from_file(schemaFile)
     execfile(annotationFile, globals(), {"s": schemaJson})
     ovs.json.to_stream(schemaJson, sys.stdout)
+    sys.stdout.write('\n')
 
 def constify(cType, const):
     if (const and cType.endswith('*') and not cType.endswith('**')):
