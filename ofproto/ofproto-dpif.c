@@ -8287,11 +8287,12 @@ show_dp_rates(struct ds *ds, const char *heading,
 static void
 dpif_show_backer(const struct dpif_backer *backer, struct ds *ds)
 {
-    size_t n_hit, n_missed, i;
     const struct shash_node **ofprotos;
     struct ofproto_dpif *ofproto;
     struct shash ofproto_shash;
+    uint64_t n_hit, n_missed;
     long long int minutes;
+    size_t i;
 
     n_hit = n_missed = 0;
     HMAP_FOR_EACH (ofproto, all_ofproto_dpifs_node, &all_ofproto_dpifs) {
