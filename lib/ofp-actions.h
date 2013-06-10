@@ -385,14 +385,14 @@ struct ofpact_resubmit {
 
 /* Part of struct ofpact_learn, below. */
 struct ofpact_learn_spec {
-    int n_bits;
+    int n_bits;                 /* Number of bits in source and dest. */
 
-    int src_type;
-    struct mf_subfield src;
-    union mf_subvalue src_imm;
+    int src_type;               /* One of NX_LEARN_SRC_*. */
+    struct mf_subfield src;     /* NX_LEARN_SRC_FIELD only. */
+    union mf_subvalue src_imm;  /* NX_LEARN_SRC_IMMEDIATE only. */
 
-    int dst_type;
-    struct mf_subfield dst;
+    int dst_type;             /* One of NX_LEARN_DST_*. */
+    struct mf_subfield dst;   /* NX_LEARN_DST_MATCH, NX_LEARN_DST_LOAD only. */
 };
 
 /* OFPACT_LEARN.
