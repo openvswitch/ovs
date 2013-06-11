@@ -190,9 +190,12 @@ bool flow_wildcards_is_catchall(const struct flow_wildcards *);
 void flow_wildcards_set_reg_mask(struct flow_wildcards *,
                                  int idx, uint32_t mask);
 
-void flow_wildcards_combine(struct flow_wildcards *dst,
-                            const struct flow_wildcards *src1,
-                            const struct flow_wildcards *src2);
+void flow_wildcards_and(struct flow_wildcards *dst,
+                        const struct flow_wildcards *src1,
+                        const struct flow_wildcards *src2);
+void flow_wildcards_or(struct flow_wildcards *dst,
+                       const struct flow_wildcards *src1,
+                       const struct flow_wildcards *src2);
 bool flow_wildcards_has_extra(const struct flow_wildcards *,
                               const struct flow_wildcards *);
 
@@ -208,6 +211,10 @@ uint32_t flow_hash_fields(const struct flow *, enum nx_hash_fields,
                           uint16_t basis);
 const char *flow_hash_fields_to_str(enum nx_hash_fields);
 bool flow_hash_fields_valid(enum nx_hash_fields);
+
+uint32_t flow_hash_in_wildcards(const struct flow *,
+                                const struct flow_wildcards *,
+                                uint32_t basis);
 
 bool flow_equal_except(const struct flow *a, const struct flow *b,
                        const struct flow_wildcards *);
