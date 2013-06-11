@@ -1279,7 +1279,7 @@ test_minimask_combine(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
         minimask_init(&minimask2, &mask2);
 
         minimask_combine(&minicombined, &minimask, &minimask2, storage);
-        flow_wildcards_combine(&combined, &mask, &mask2);
+        flow_wildcards_and(&combined, &mask, &mask2);
         minimask_expand(&minicombined, &combined2);
         assert(flow_wildcards_equal(&combined, &combined2));
 

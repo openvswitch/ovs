@@ -602,13 +602,13 @@ flow_wildcards_is_catchall(const struct flow_wildcards *wc)
     return true;
 }
 
-/* Initializes 'dst' as the combination of wildcards in 'src1' and 'src2'.
- * That is, a bit or a field is wildcarded in 'dst' if it is wildcarded in
- * 'src1' or 'src2' or both.  */
+/* Sets 'dst' as the bitwise AND of wildcards in 'src1' and 'src2'.
+ * That is, a bit or a field is wildcarded in 'dst' if it is wildcarded
+ * in 'src1' or 'src2' or both.  */
 void
-flow_wildcards_combine(struct flow_wildcards *dst,
-                       const struct flow_wildcards *src1,
-                       const struct flow_wildcards *src2)
+flow_wildcards_and(struct flow_wildcards *dst,
+                   const struct flow_wildcards *src1,
+                   const struct flow_wildcards *src2)
 {
     uint32_t *dst_u32 = (uint32_t *) &dst->masks;
     const uint32_t *src1_u32 = (const uint32_t *) &src1->masks;
@@ -617,6 +617,24 @@ flow_wildcards_combine(struct flow_wildcards *dst,
 
     for (i = 0; i < FLOW_U32S; i++) {
         dst_u32[i] = src1_u32[i] & src2_u32[i];
+    }
+}
+
+/* Sets 'dst' as the bitwise OR of wildcards in 'src1' and 'src2'.  That
+ * is, a bit or a field is wildcarded in 'dst' if it is neither
+ * wildcarded in 'src1' nor 'src2'. */
+void
+flow_wildcards_or(struct flow_wildcards *dst,
+                  const struct flow_wildcards *src1,
+                  const struct flow_wildcards *src2)
+{
+    uint32_t *dst_u32 = (uint32_t *) &dst->masks;
+    const uint32_t *src1_u32 = (const uint32_t *) &src1->masks;
+    const uint32_t *src2_u32 = (const uint32_t *) &src2->masks;
+    size_t i;
+
+    for (i = 0; i < FLOW_U32S; i++) {
+        dst_u32[i] = src1_u32[i] | src2_u32[i];
     }
 }
 
@@ -791,6 +809,24 @@ flow_hash_fields_valid(enum nx_hash_fields fields)
 {
     return fields == NX_HASH_FIELDS_ETH_SRC
         || fields == NX_HASH_FIELDS_SYMMETRIC_L4;
+}
+
+/* Returns a hash value for the bits of 'flow' that are active based on
+ * 'wc', given 'basis'. */
+uint32_t
+flow_hash_in_wildcards(const struct flow *flow,
+                       const struct flow_wildcards *wc, uint32_t basis)
+{
+    const uint32_t *wc_u32 = (const uint32_t *) &wc->masks;
+    const uint32_t *flow_u32 = (const uint32_t *) flow;
+    uint32_t hash;
+    size_t i;
+
+    hash = basis;
+    for (i = 0; i < FLOW_U32S; i++) {
+        hash = mhash_add(hash, flow_u32[i] & wc_u32[i]);
+    }
+    return mhash_finish(hash, 4 * FLOW_U32S);
 }
 
 /* Sets the VLAN VID that 'flow' matches to 'vid', which is interpreted as an
