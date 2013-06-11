@@ -21,12 +21,15 @@ ofproto_libofproto_a_SOURCES = \
 	ofproto/ofproto.c \
 	ofproto/ofproto.h \
 	ofproto/ofproto-dpif.c \
+	ofproto/ofproto-dpif.h \
 	ofproto/ofproto-dpif-governor.c \
 	ofproto/ofproto-dpif-governor.h \
 	ofproto/ofproto-dpif-ipfix.c \
 	ofproto/ofproto-dpif-ipfix.h \
 	ofproto/ofproto-dpif-sflow.c \
 	ofproto/ofproto-dpif-sflow.h \
+	ofproto/ofproto-dpif-xlate.c \
+	ofproto/ofproto-dpif-xlate.h \
 	ofproto/ofproto-provider.h \
 	ofproto/pktbuf.c \
 	ofproto/pktbuf.h \
