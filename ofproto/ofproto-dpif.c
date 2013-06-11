@@ -8577,8 +8577,7 @@ ofproto_unixctl_dpif_dump_megaflows(struct unixctl_conn *conn,
     CLS_CURSOR_FOR_EACH (facet, cr, &cursor) {
         cls_rule_format(&facet->cr, &ds);
         ds_put_cstr(&ds, ", ");
-        ds_put_format(&ds, "n_subfacets:%"PRIu64", ",
-                      list_size(&facet->subfacets));
+        ds_put_format(&ds, "n_subfacets:%zu, ", list_size(&facet->subfacets));
         ds_put_format(&ds, "used:%.3fs, ", (now - facet->used) / 1000.0);
         ds_put_cstr(&ds, "Datapath actions: ");
         format_odp_actions(&ds, facet->xout.odp_actions.data,
