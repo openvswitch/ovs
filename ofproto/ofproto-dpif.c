@@ -66,6 +66,7 @@ COVERAGE_DEFINE(facet_changed_rule);
 COVERAGE_DEFINE(facet_revalidate);
 COVERAGE_DEFINE(facet_unexpected);
 COVERAGE_DEFINE(facet_suppress);
+COVERAGE_DEFINE(subfacet_install_fail);
 
 /* Maximum depth of flow table recursion (due to resubmit actions) in a
  * flow translation. */
@@ -3548,6 +3549,10 @@ struct flow_miss_op {
     uint64_t slow_stub[128 / 8]; /* Buffer for compose_slow_path() */
     struct xlate_out xout;
     bool xout_garbage;           /* 'xout' needs to be uninitialized? */
+
+    /* If this is a "put" op, then a pointer to the subfacet that should
+     * be marked as uninstalled if the operation fails. */
+    struct subfacet *subfacet;
 };
 
 /* Sends an OFPT_PACKET_IN message for 'packet' of type OFPR_NO_MATCH to each
@@ -3639,6 +3644,7 @@ init_flow_miss_execute_op(struct flow_miss *miss, struct ofpbuf *packet,
         eth_pop_vlan(packet);
     }
 
+    op->subfacet = NULL;
     op->xout_garbage = false;
     op->dpif_op.type = DPIF_OP_EXECUTE;
     op->dpif_op.u.execute.key = miss->key;
@@ -3795,6 +3801,7 @@ handle_flow_miss_with_facet(struct flow_miss *miss, struct facet *facet,
 
         op->xout_garbage = false;
         op->dpif_op.type = DPIF_OP_FLOW_PUT;
+        op->subfacet = subfacet;
         put->flags = DPIF_FP_CREATE | DPIF_FP_MODIFY;
         put->key = miss->key;
         put->key_len = miss->key_len;
@@ -4131,8 +4138,18 @@ handle_miss_upcalls(struct dpif_backer *backer, struct dpif_upcall *upcalls,
     }
     dpif_operate(backer->dpif, dpif_ops, n_ops);
 
-    /* Free memory. */
     for (i = 0; i < n_ops; i++) {
+        if (dpif_ops[i]->error != 0
+            && flow_miss_ops[i].dpif_op.type == DPIF_OP_FLOW_PUT
+            && flow_miss_ops[i].subfacet) {
+            struct subfacet *subfacet = flow_miss_ops[i].subfacet;
+
+            COVERAGE_INC(subfacet_install_fail);
+
+            subfacet->path = SF_NOT_INSTALLED;
+        }
+
+        /* Free memory. */
         if (flow_miss_ops[i].xout_garbage) {
             xlate_out_uninit(&flow_miss_ops[i].xout);
         }
@@ -5403,7 +5420,9 @@ subfacet_install(struct subfacet *subfacet, const struct ofpbuf *odp_actions,
         subfacet_reset_dp_stats(subfacet, stats);
     }
 
-    if (!ret) {
+    if (ret) {
+        COVERAGE_INC(subfacet_install_fail);
+    } else {
         subfacet->path = path;
     }
     return ret;
