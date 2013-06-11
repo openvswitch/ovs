@@ -1261,7 +1261,12 @@ log_operation(const struct dpif *dpif, const char *operation, int error)
 static enum vlog_level
 flow_message_log_level(int error)
 {
-    return error ? VLL_WARN : VLL_DBG;
+    /* If flows arrive in a batch, userspace may push down multiple
+     * unique flow definitions that overlap when wildcards are applied.
+     * Kernels that support flow wildcarding will reject these flows as
+     * duplicates (EEXIST), so lower the log level to debug for these
+     * types of messages. */
+    return (error && error != EEXIST) ? VLL_WARN : VLL_DBG;
 }
 
 static bool
