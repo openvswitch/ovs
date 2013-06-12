@@ -3766,7 +3766,7 @@ handle_flow_miss_with_facet(struct flow_miss *miss, struct facet *facet,
         if (want_path != SF_FAST_PATH) {
             struct xlate_in xin;
 
-            xlate_in_init(&xin, ofproto, &facet->flow, &facet->initial_vals,
+            xlate_in_init(&xin, ofproto, &miss->flow, &miss->initial_vals,
                           facet->rule, 0, packet);
             xlate_actions_for_side_effects(&xin);
         }
@@ -3796,7 +3796,7 @@ handle_flow_miss_with_facet(struct flow_miss *miss, struct facet *facet,
             put->actions = facet->xout.odp_actions.data;
             put->actions_len = facet->xout.odp_actions.size;
         } else {
-            compose_slow_path(ofproto, &facet->flow, facet->xout.slow,
+            compose_slow_path(ofproto, &miss->flow, facet->xout.slow,
                               op->slow_stub, sizeof op->slow_stub,
                               &put->actions, &put->actions_len);
         }
