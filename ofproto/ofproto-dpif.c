@@ -8689,8 +8689,19 @@ ofproto_unixctl_dpif_dump_megaflows(struct unixctl_conn *conn,
                       list_size(&facet->subfacets));
         ds_put_format(&ds, "used:%.3fs, ", (now - facet->used) / 1000.0);
         ds_put_cstr(&ds, "Datapath actions: ");
-        format_odp_actions(&ds, facet->xout.odp_actions.data,
-                           facet->xout.odp_actions.size);
+        if (facet->xout.slow) {
+            uint64_t slow_path_stub[128 / 8];
+            const struct nlattr *actions;
+            size_t actions_len;
+
+            compose_slow_path(ofproto, &facet->flow, facet->xout.slow,
+                              slow_path_stub, sizeof slow_path_stub,
+                              &actions, &actions_len);
+            format_odp_actions(&ds, actions, actions_len);
+        } else {
+            format_odp_actions(&ds, facet->xout.odp_actions.data,
+                               facet->xout.odp_actions.size);
+        }
         ds_put_cstr(&ds, "\n");
     }
 
