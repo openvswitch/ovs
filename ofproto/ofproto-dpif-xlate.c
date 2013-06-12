@@ -43,6 +43,41 @@ COVERAGE_DEFINE(ofproto_dpif_xlate);
 
 VLOG_DEFINE_THIS_MODULE(ofproto_dpif_xlate);
 
+struct xlate_ctx {
+    struct xlate_in *xin;
+    struct xlate_out *xout;
+
+    struct ofproto_dpif *ofproto;
+
+    /* Flow at the last commit. */
+    struct flow base_flow;
+
+    /* Tunnel IP destination address as received.  This is stored separately
+     * as the base_flow.tunnel is cleared on init to reflect the datapath
+     * behavior.  Used to make sure not to send tunneled output to ourselves,
+     * which might lead to an infinite loop.  This could happen easily
+     * if a tunnel is marked as 'ip_remote=flow', and the flow does not
+     * actually set the tun_dst field. */
+    ovs_be32 orig_tunnel_ip_dst;
+
+    /* Stack for the push and pop actions.  Each stack element is of type
+     * "union mf_subvalue". */
+    union mf_subvalue init_stack[1024 / sizeof(union mf_subvalue)];
+    struct ofpbuf stack;
+
+    /* The rule that we are currently translating, or NULL. */
+    struct rule_dpif *rule;
+
+    int recurse;                /* Recursion level, via xlate_table_action. */
+    bool max_resubmit_trigger;  /* Recursed too deeply during translation. */
+    uint32_t orig_skb_priority; /* Priority when packet arrived. */
+    uint8_t table_id;           /* OpenFlow table ID where flow was found. */
+    uint32_t sflow_n_outputs;   /* Number of output ports. */
+    uint32_t sflow_odp_port;    /* Output port for composing sFlow action. */
+    uint16_t user_cookie_offset;/* Used for user_action_cookie fixup. */
+    bool exit;                  /* No further actions should be processed. */
+};
+
 /* A controller may use OFPP_NONE as the ingress port to indicate that
  * it did not arrive on a "real" port.  'ofpp_none_bundle' exists for
  * when an input bundle is needed for validation (e.g., mirroring or
@@ -924,7 +959,7 @@ ctx_rule_hooks(struct xlate_ctx *ctx, struct rule_dpif *rule,
                bool may_packet_in)
 {
     if (ctx->xin->resubmit_hook) {
-        ctx->xin->resubmit_hook(ctx, rule);
+        ctx->xin->resubmit_hook(ctx->xin, rule, ctx->recurse);
     }
     if (rule == NULL && may_packet_in) {
         /* XXX
@@ -1765,7 +1800,7 @@ static void
 xlate_report(struct xlate_ctx *ctx, const char *s)
 {
     if (ctx->xin->report_hook) {
-        ctx->xin->report_hook(ctx, s);
+        ctx->xin->report_hook(ctx->xin, s, ctx->recurse);
     }
 }
 

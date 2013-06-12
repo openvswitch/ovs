@@ -5640,8 +5640,7 @@ struct trace_ctx {
 };
 
 static void
-trace_format_rule(struct ds *result, uint8_t table_id, int level,
-                  const struct rule_dpif *rule)
+trace_format_rule(struct ds *result, int level, const struct rule_dpif *rule)
 {
     ds_put_char_multiple(result, '\t', level);
     if (!rule) {
@@ -5650,7 +5649,7 @@ trace_format_rule(struct ds *result, uint8_t table_id, int level,
     }
 
     ds_put_format(result, "Rule: table=%"PRIu8" cookie=%#"PRIx64" ",
-                  table_id, ntohll(rule->up.flow_cookie));
+                  rule ? rule->up.table_id : 0, ntohll(rule->up.flow_cookie));
     cls_rule_format(&rule->up.cr, result);
     ds_put_char(result, '\n');
 
@@ -5702,25 +5701,25 @@ trace_format_odp(struct ds *result, int level, const char *title,
 }
 
 static void
-trace_resubmit(struct xlate_ctx *ctx, struct rule_dpif *rule)
+trace_resubmit(struct xlate_in *xin, struct rule_dpif *rule, int recurse)
 {
-    struct trace_ctx *trace = CONTAINER_OF(ctx->xin, struct trace_ctx, xin);
+    struct trace_ctx *trace = CONTAINER_OF(xin, struct trace_ctx, xin);
     struct ds *result = trace->result;
 
     ds_put_char(result, '\n');
-    trace_format_flow(result, ctx->recurse + 1, "Resubmitted flow", trace);
-    trace_format_regs(result, ctx->recurse + 1, "Resubmitted regs", trace);
-    trace_format_odp(result,  ctx->recurse + 1, "Resubmitted  odp", trace);
-    trace_format_rule(result, ctx->table_id, ctx->recurse + 1, rule);
+    trace_format_flow(result, recurse + 1, "Resubmitted flow", trace);
+    trace_format_regs(result, recurse + 1, "Resubmitted regs", trace);
+    trace_format_odp(result,  recurse + 1, "Resubmitted  odp", trace);
+    trace_format_rule(result, recurse + 1, rule);
 }
 
 static void
-trace_report(struct xlate_ctx *ctx, const char *s)
+trace_report(struct xlate_in *xin, const char *s, int recurse)
 {
-    struct trace_ctx *trace = CONTAINER_OF(ctx->xin, struct trace_ctx, xin);
+    struct trace_ctx *trace = CONTAINER_OF(xin, struct trace_ctx, xin);
     struct ds *result = trace->result;
 
-    ds_put_char_multiple(result, '\t', ctx->recurse);
+    ds_put_char_multiple(result, '\t', recurse);
     ds_put_cstr(result, s);
     ds_put_char(result, '\n');
 }
@@ -5852,7 +5851,7 @@ ofproto_trace(struct ofproto_dpif *ofproto, const struct flow *flow,
 
     rule = rule_dpif_lookup(ofproto, flow, NULL);
 
-    trace_format_rule(ds, 0, 0, rule);
+    trace_format_rule(ds, 0, rule);
     if (rule == ofproto->miss_rule) {
         ds_put_cstr(ds, "\nNo match, flow generates \"packet in\"s.\n");
     } else if (rule == ofproto->no_packet_in_rule) {

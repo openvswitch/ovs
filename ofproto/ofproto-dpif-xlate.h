@@ -26,8 +26,6 @@
  * flow translation. */
 #define MAX_RESUBMIT_RECURSION 64
 
-struct xlate_ctx;
-
 struct xlate_out {
     /* Wildcards relevant in translation.  Any fields that were used to
      * calculate the action must be set for caching and kernel
@@ -88,14 +86,18 @@ struct xlate_in {
      * 'rule' is the rule being submitted into.  It will be null if the
      * resubmit or OFPP_TABLE action didn't find a matching rule.
      *
+     * 'recurse' is the resubmit recursion depth at time of invocation.
+     *
      * This is normally null so the client has to set it manually after
      * calling xlate_in_init(). */
-    void (*resubmit_hook)(struct xlate_ctx *, struct rule_dpif *rule);
+    void (*resubmit_hook)(struct xlate_in *, struct rule_dpif *rule,
+                          int recurse);
 
     /* If nonnull, flow translation calls this function to report some
      * significant decision, e.g. to explain why OFPP_NORMAL translation
-     * dropped a packet. */
-    void (*report_hook)(struct xlate_ctx *, const char *s);
+     * dropped a packet.  'recurse' is the resubmit recursion depth at time of
+     * invocation. */
+    void (*report_hook)(struct xlate_in *, const char *s, int recurse);
 
     /* If nonnull, flow translation credits the specified statistics to each
      * rule reached through a resubmit or OFPP_TABLE action.
@@ -103,42 +105,6 @@ struct xlate_in {
      * This is normally null so the client has to set it manually after
      * calling xlate_in_init(). */
     const struct dpif_flow_stats *resubmit_stats;
-};
-
-/* Context used by xlate_actions() and its callees. */
-struct xlate_ctx {
-    struct xlate_in *xin;
-    struct xlate_out *xout;
-
-    struct ofproto_dpif *ofproto;
-
-    /* Flow at the last commit. */
-    struct flow base_flow;
-
-    /* Tunnel IP destination address as received.  This is stored separately
-     * as the base_flow.tunnel is cleared on init to reflect the datapath
-     * behavior.  Used to make sure not to send tunneled output to ourselves,
-     * which might lead to an infinite loop.  This could happen easily
-     * if a tunnel is marked as 'ip_remote=flow', and the flow does not
-     * actually set the tun_dst field. */
-    ovs_be32 orig_tunnel_ip_dst;
-
-    /* Stack for the push and pop actions.  Each stack element is of type
-     * "union mf_subvalue". */
-    union mf_subvalue init_stack[1024 / sizeof(union mf_subvalue)];
-    struct ofpbuf stack;
-
-    /* The rule that we are currently translating, or NULL. */
-    struct rule_dpif *rule;
-
-    int recurse;                /* Recursion level, via xlate_table_action. */
-    bool max_resubmit_trigger;  /* Recursed too deeply during translation. */
-    uint32_t orig_skb_priority; /* Priority when packet arrived. */
-    uint8_t table_id;           /* OpenFlow table ID where flow was found. */
-    uint32_t sflow_n_outputs;   /* Number of output ports. */
-    uint32_t sflow_odp_port;    /* Output port for composing sFlow action. */
-    uint16_t user_cookie_offset;/* Used for user_action_cookie fixup. */
-    bool exit;                  /* No further actions should be processed. */
 };
 
 void xlate_actions(struct xlate_in *, struct xlate_out *);
