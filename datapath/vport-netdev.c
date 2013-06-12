@@ -256,10 +256,11 @@ static void netdev_port_receive(struct vport *vport, struct sk_buff *skb)
 	if (unlikely(!skb))
 		return;
 
-	skb_push(skb, ETH_HLEN);
-
 	if (unlikely(compute_ip_summed(skb, false)))
 		goto error;
+
+	skb_push(skb, ETH_HLEN);
+	ovs_skb_postpush_rcsum(skb, skb->data, ETH_HLEN);
 
 	vlan_copy_skb_tci(skb);
 

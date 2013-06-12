@@ -204,4 +204,10 @@ extern const struct vport_ops ovs_gre64_vport_ops;
 extern const struct vport_ops ovs_vxlan_vport_ops;
 extern const struct vport_ops ovs_lisp_vport_ops;
 
+static inline void ovs_skb_postpush_rcsum(struct sk_buff *skb,
+				      const void *start, unsigned int len)
+{
+	if (skb->ip_summed == CHECKSUM_COMPLETE)
+		skb->csum = csum_add(skb->csum, csum_partial(start, len, 0));
+}
 #endif /* vport.h */

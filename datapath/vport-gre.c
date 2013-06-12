@@ -271,8 +271,7 @@ static int gre_rcv(struct sk_buff *skb)
 	tnl_flags = gre_flags_to_tunnel_flags(gre_flags, is_gre64);
 	tnl_tun_key_init(&tun_key, iph, key, tnl_flags);
 
-	__skb_pull(skb, hdr_len);
-	skb_postpull_rcsum(skb, skb_transport_header(skb), hdr_len + ETH_HLEN);
+	skb_pull_rcsum(skb, hdr_len);
 
 	ovs_tnl_rcv(vport, skb, &tun_key);
 	return 0;
