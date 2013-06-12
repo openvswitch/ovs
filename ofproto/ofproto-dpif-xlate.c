@@ -816,18 +816,11 @@ compose_output_action__(struct xlate_ctx *ctx, uint16_t ofp_port,
     if (netdev_vport_is_patch(ofport->up.netdev)) {
         struct ofport_dpif *peer = ofport_get_peer(ofport);
         struct flow old_flow = ctx->xin->flow;
-        const struct ofproto_dpif *peer_ofproto;
         enum slow_path_reason special;
         struct ofport_dpif *in_port;
 
         if (!peer) {
             xlate_report(ctx, "Nonexistent patch port peer");
-            return;
-        }
-
-        peer_ofproto = ofproto_dpif_cast(peer->up.ofproto);
-        if (peer_ofproto->backer != ctx->ofproto->backer) {
-            xlate_report(ctx, "Patch port peer on a different datapath");
             return;
         }
 

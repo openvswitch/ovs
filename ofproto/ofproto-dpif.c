@@ -2737,6 +2737,7 @@ struct ofport_dpif *
 ofport_get_peer(const struct ofport_dpif *ofport_dpif)
 {
     const struct ofproto_dpif *ofproto;
+    const struct dpif_backer *backer;
     const char *peer;
 
     peer = netdev_vport_patch_peer(ofport_dpif->up.netdev);
@@ -2744,11 +2745,16 @@ ofport_get_peer(const struct ofport_dpif *ofport_dpif)
         return NULL;
     }
 
+    backer = ofproto_dpif_cast(ofport_dpif->up.ofproto)->backer;
     HMAP_FOR_EACH (ofproto, all_ofproto_dpifs_node, &all_ofproto_dpifs) {
         struct ofport *ofport;
 
+        if (ofproto->backer != backer) {
+            continue;
+        }
+
         ofport = shash_find_data(&ofproto->up.port_by_name, peer);
-        if (ofport && ofport->ofproto->ofproto_class == &ofproto_dpif_class) {
+        if (ofport) {
             return ofport_dpif_cast(ofport);
         }
     }
