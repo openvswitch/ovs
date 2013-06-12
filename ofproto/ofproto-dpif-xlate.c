@@ -1105,7 +1105,7 @@ execute_controller_action(struct xlate_ctx *ctx, int len,
 }
 
 static void
-execute_mpls_push_action(struct xlate_ctx *ctx, ovs_be16 eth_type)
+compose_mpls_push_action(struct xlate_ctx *ctx, ovs_be16 eth_type)
 {
     ovs_assert(eth_type_mpls(eth_type));
 
@@ -1137,7 +1137,7 @@ execute_mpls_push_action(struct xlate_ctx *ctx, ovs_be16 eth_type)
 }
 
 static void
-execute_mpls_pop_action(struct xlate_ctx *ctx, ovs_be16 eth_type)
+compose_mpls_pop_action(struct xlate_ctx *ctx, ovs_be16 eth_type)
 {
     ovs_assert(eth_type_mpls(ctx->xin->flow.dl_type));
     ovs_assert(!eth_type_mpls(eth_type));
@@ -1183,7 +1183,7 @@ compose_dec_ttl(struct xlate_ctx *ctx, struct ofpact_cnt_ids *ids)
 }
 
 static bool
-execute_set_mpls_ttl_action(struct xlate_ctx *ctx, uint8_t ttl)
+compose_set_mpls_ttl_action(struct xlate_ctx *ctx, uint8_t ttl)
 {
     if (!eth_type_mpls(ctx->xin->flow.dl_type)) {
         return true;
@@ -1194,7 +1194,7 @@ execute_set_mpls_ttl_action(struct xlate_ctx *ctx, uint8_t ttl)
 }
 
 static bool
-execute_dec_mpls_ttl_action(struct xlate_ctx *ctx)
+compose_dec_mpls_ttl_action(struct xlate_ctx *ctx)
 {
     uint8_t ttl = mpls_lse_to_ttl(ctx->xin->flow.mpls_lse);
 
@@ -1637,22 +1637,22 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
             break;
 
         case OFPACT_PUSH_MPLS:
-            execute_mpls_push_action(ctx, ofpact_get_PUSH_MPLS(a)->ethertype);
+            compose_mpls_push_action(ctx, ofpact_get_PUSH_MPLS(a)->ethertype);
             break;
 
         case OFPACT_POP_MPLS:
-            execute_mpls_pop_action(ctx, ofpact_get_POP_MPLS(a)->ethertype);
+            compose_mpls_pop_action(ctx, ofpact_get_POP_MPLS(a)->ethertype);
             break;
 
         case OFPACT_SET_MPLS_TTL:
-            if (execute_set_mpls_ttl_action(ctx,
+            if (compose_set_mpls_ttl_action(ctx,
                                             ofpact_get_SET_MPLS_TTL(a)->ttl)) {
                 goto out;
             }
             break;
 
         case OFPACT_DEC_MPLS_TTL:
-            if (execute_dec_mpls_ttl_action(ctx)) {
+            if (compose_dec_mpls_ttl_action(ctx)) {
                 goto out;
             }
             break;
