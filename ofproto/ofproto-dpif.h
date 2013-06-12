@@ -200,16 +200,6 @@ struct ofmirror {
     int64_t byte_count;         /* Number of bytes sent. */
 };
 
-/* Node in 'ofport_dpif''s 'priorities' map.  Used to maintain a map from
- * 'priority' (the datapath's term for QoS queue) to the dscp bits which all
- * traffic egressing the 'ofport' with that priority should be marked with. */
-struct priority_to_dscp {
-    struct hmap_node hmap_node; /* Node in 'ofport_dpif''s 'priorities' map. */
-    uint32_t priority;          /* Priority of this queue (see struct flow). */
-
-    uint8_t dscp;               /* DSCP bits to mark outgoing traffic with. */
-};
-
 static inline struct rule_dpif *rule_dpif_cast(const struct rule *rule)
 {
     return rule ? CONTAINER_OF(rule, struct rule_dpif, up) : NULL;
@@ -276,8 +266,8 @@ uint16_t vsp_realdev_to_vlandev(const struct ofproto_dpif *,
                                 uint16_t realdev_ofp_port,
                                 ovs_be16 vlan_tci);
 
-struct priority_to_dscp *get_priority(const struct ofport_dpif *,
-                                      uint32_t priority);
+bool ofproto_dpif_dscp_from_priority(const struct ofport_dpif *,
+                                     uint32_t priority, uint8_t *dscp);
 int ofproto_dpif_queue_to_priority(const struct ofproto_dpif *,
                                    uint32_t queue_id, uint32_t *priority);
 

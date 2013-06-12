@@ -258,6 +258,16 @@ static void push_all_stats(void);
 
 static bool facet_is_controller_flow(struct facet *);
 
+/* Node in 'ofport_dpif''s 'priorities' map.  Used to maintain a map from
+ * 'priority' (the datapath's term for QoS queue) to the dscp bits which all
+ * traffic egressing the 'ofport' with that priority should be marked with. */
+struct priority_to_dscp {
+    struct hmap_node hmap_node; /* Node in 'ofport_dpif''s 'priorities' map. */
+    uint32_t priority;          /* Priority of this queue (see struct flow). */
+
+    uint8_t dscp;               /* DSCP bits to mark outgoing traffic with. */
+};
+
 /* Linux VLAN device support (e.g. "eth0.10" for VLAN 10.)
  *
  * This is deprecated.  It is only for compatibility with broken device drivers
@@ -1955,7 +1965,7 @@ ofproto_dpif_queue_to_priority(const struct ofproto_dpif *ofproto,
     return dpif_queue_to_priority(ofproto->backer->dpif, queue_id, priority);
 }
 
-struct priority_to_dscp *
+static struct priority_to_dscp *
 get_priority(const struct ofport_dpif *ofport, uint32_t priority)
 {
     struct priority_to_dscp *pdscp;
@@ -1968,6 +1978,15 @@ get_priority(const struct ofport_dpif *ofport, uint32_t priority)
         }
     }
     return NULL;
+}
+
+bool
+ofproto_dpif_dscp_from_priority(const struct ofport_dpif *ofport,
+                                uint32_t priority, uint8_t *dscp)
+{
+    struct priority_to_dscp *pdscp = get_priority(ofport, priority);
+    *dscp = pdscp ? pdscp->dscp : 0;
+    return pdscp != NULL;
 }
 
 static void

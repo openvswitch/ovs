@@ -795,8 +795,8 @@ compose_output_action__(struct xlate_ctx *ctx, uint16_t ofp_port,
     ovs_be16 flow_vlan_tci;
     uint32_t flow_skb_mark;
     uint8_t flow_nw_tos;
-    struct priority_to_dscp *pdscp;
     uint32_t out_port, odp_port;
+    uint8_t dscp;
 
     /* If 'struct flow' gets additional metadata, we'll need to zero it out
      * before traversing a patch port. */
@@ -864,10 +864,9 @@ compose_output_action__(struct xlate_ctx *ctx, uint16_t ofp_port,
     flow_skb_mark = flow->skb_mark;
     flow_nw_tos = flow->nw_tos;
 
-    pdscp = get_priority(ofport, flow->skb_priority);
-    if (pdscp) {
+    if (ofproto_dpif_dscp_from_priority(ofport, flow->skb_priority, &dscp)) {
         flow->nw_tos &= ~IP_DSCP_MASK;
-        flow->nw_tos |= pdscp->dscp;
+        flow->nw_tos |= dscp;
     }
 
     if (ofport->tnl_port) {
