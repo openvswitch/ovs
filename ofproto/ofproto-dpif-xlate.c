@@ -1279,8 +1279,7 @@ xlate_enqueue_action(struct xlate_ctx *ctx,
     int error;
 
     /* Translate queue to priority. */
-    error = dpif_queue_to_priority(ctx->ofproto->backer->dpif,
-                                   queue_id, &priority);
+    error = ofproto_dpif_queue_to_priority(ctx->ofproto, queue_id, &priority);
     if (error) {
         /* Fall back to ordinary output action. */
         xlate_output_action(ctx, enqueue->port, 0, false);
@@ -1313,8 +1312,8 @@ xlate_set_queue_action(struct xlate_ctx *ctx, uint32_t queue_id)
 {
     uint32_t skb_priority;
 
-    if (!dpif_queue_to_priority(ctx->ofproto->backer->dpif,
-                                queue_id, &skb_priority)) {
+    if (!ofproto_dpif_queue_to_priority(ctx->ofproto, queue_id,
+                                        &skb_priority)) {
         ctx->xin->flow.skb_priority = skb_priority;
     } else {
         /* Couldn't translate queue to a priority.  Nothing to do.  A warning

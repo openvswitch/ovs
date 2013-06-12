@@ -35,22 +35,6 @@ enum { N_TABLES = 255 };
 enum { TBL_INTERNAL = N_TABLES - 1 };    /* Used for internal hidden rules. */
 BUILD_ASSERT_DECL(N_TABLES >= 2 && N_TABLES <= 255);
 
-/* Reasons that we might need to revalidate every facet, and corresponding
- * coverage counters.
- *
- * A value of 0 means that there is no need to revalidate.
- *
- * It would be nice to have some cleaner way to integrate with coverage
- * counters, but with only a few reasons I guess this is good enough for
- * now. */
-enum revalidate_reason {
-    REV_RECONFIGURE = 1,       /* Switch configuration changed. */
-    REV_STP,                   /* Spanning tree protocol port status change. */
-    REV_PORT_TOGGLED,          /* Port enabled or disabled by CFM, LACP, ...*/
-    REV_FLOW_TABLE,            /* Flow table changed. */
-    REV_INCONSISTENCY          /* Facet self-check failed. */
-};
-
 struct rule_dpif {
     struct rule up;
 
@@ -73,58 +57,6 @@ struct rule_dpif {
     tag_type tag;                /* Caches rule_calculate_tag() result. */
 
     struct list facets;          /* List of "struct facet"s. */
-};
-
-struct avg_subfacet_rates {
-    double add_rate;   /* Moving average of new flows created per minute. */
-    double del_rate;   /* Moving average of flows deleted per minute. */
-};
-
-/* All datapaths of a given type share a single dpif backer instance. */
-struct dpif_backer {
-    char *type;
-    int refcount;
-    struct dpif *dpif;
-    struct timer next_expiration;
-    struct hmap odp_to_ofport_map; /* ODP port to ofport mapping. */
-
-    struct simap tnl_backers;      /* Set of dpif ports backing tunnels. */
-
-    /* Facet revalidation flags applying to facets which use this backer. */
-    enum revalidate_reason need_revalidate; /* Revalidate every facet. */
-    struct tag_set revalidate_set; /* Revalidate only matching facets. */
-
-    struct hmap drop_keys; /* Set of dropped odp keys. */
-    bool recv_set_enable; /* Enables or disables receiving packets. */
-
-    struct hmap subfacets;
-    struct governor *governor;
-
-    /* Subfacet statistics.
-     *
-     * These keep track of the total number of subfacets added and deleted and
-     * flow life span.  They are useful for computing the flow rates stats
-     * exposed via "ovs-appctl dpif/show".  The goal is to learn about
-     * traffic patterns in ways that we can use later to improve Open vSwitch
-     * performance in new situations.  */
-    long long int created;           /* Time when it is created. */
-    unsigned max_n_subfacet;         /* Maximum number of flows */
-    unsigned avg_n_subfacet;         /* Average number of flows. */
-    long long int avg_subfacet_life; /* Average life span of subfacets. */
-
-    /* The average number of subfacets... */
-    struct avg_subfacet_rates hourly;   /* ...over the last hour. */
-    struct avg_subfacet_rates daily;    /* ...over the last day. */
-    struct avg_subfacet_rates lifetime; /* ...over the switch lifetime. */
-    long long int last_minute;          /* Last time 'hourly' was updated. */
-
-    /* Number of subfacets added or deleted since 'last_minute'. */
-    unsigned subfacet_add_count;
-    unsigned subfacet_del_count;
-
-    /* Number of subfacets added or deleted from 'created' to 'last_minute.' */
-    unsigned long long int total_subfacet_add_count;
-    unsigned long long int total_subfacet_del_count;
 };
 
 /* Extra information about a classifier table.
@@ -346,6 +278,8 @@ uint16_t vsp_realdev_to_vlandev(const struct ofproto_dpif *,
 
 struct priority_to_dscp *get_priority(const struct ofport_dpif *,
                                       uint32_t priority);
+int ofproto_dpif_queue_to_priority(const struct ofproto_dpif *,
+                                   uint32_t queue_id, uint32_t *priority);
 
 
 #endif /* ofproto-dpif.h */
