@@ -370,6 +370,7 @@ static void
 output_normal(struct xlate_ctx *ctx, const struct ofbundle *out_bundle,
               uint16_t vlan)
 {
+    ovs_be16 *flow_tci = &ctx->xin->flow.vlan_tci;
     struct ofport_dpif *port;
     uint16_t vid;
     ovs_be16 tci, old_tci;
@@ -386,18 +387,18 @@ output_normal(struct xlate_ctx *ctx, const struct ofbundle *out_bundle,
         }
     }
 
-    old_tci = ctx->xin->flow.vlan_tci;
+    old_tci = *flow_tci;
     tci = htons(vid);
     if (tci || out_bundle->use_priority_tags) {
-        tci |= ctx->xin->flow.vlan_tci & htons(VLAN_PCP_MASK);
+        tci |= *flow_tci & htons(VLAN_PCP_MASK);
         if (tci) {
             tci |= htons(VLAN_CFI);
         }
     }
-    ctx->xin->flow.vlan_tci = tci;
+    *flow_tci = tci;
 
     compose_output_action(ctx, port->up.ofp_port);
-    ctx->xin->flow.vlan_tci = old_tci;
+    *flow_tci = old_tci;
 }
 
 /* A VM broadcasts a gratuitous ARP to indicate that it has resumed after
@@ -530,6 +531,8 @@ is_admissible(struct xlate_ctx *ctx, struct ofport_dpif *in_port,
 static void
 xlate_normal(struct xlate_ctx *ctx)
 {
+    struct flow_wildcards *wc = &ctx->xout->wc;
+    struct flow *flow = &ctx->xin->flow;
     struct ofport_dpif *in_port;
     struct ofbundle *in_bundle;
     struct mac_entry *mac;
@@ -539,17 +542,13 @@ xlate_normal(struct xlate_ctx *ctx)
     ctx->xout->has_normal = true;
 
     /* Check the dl_type, since we may check for gratuituous ARP. */
-    memset(&ctx->xout->wc.masks.dl_type, 0xff,
-           sizeof ctx->xout->wc.masks.dl_type);
+    memset(&wc->masks.dl_type, 0xff, sizeof wc->masks.dl_type);
 
-    memset(&ctx->xout->wc.masks.dl_src, 0xff,
-           sizeof ctx->xout->wc.masks.dl_src);
-    memset(&ctx->xout->wc.masks.dl_dst, 0xff,
-           sizeof ctx->xout->wc.masks.dl_dst);
-    memset(&ctx->xout->wc.masks.vlan_tci, 0xff,
-           sizeof ctx->xout->wc.masks.vlan_tci);
+    memset(&wc->masks.dl_src, 0xff, sizeof wc->masks.dl_src);
+    memset(&wc->masks.dl_dst, 0xff, sizeof wc->masks.dl_dst);
+    memset(&wc->masks.vlan_tci, 0xff, sizeof wc->masks.vlan_tci);
 
-    in_bundle = lookup_input_bundle(ctx->ofproto, ctx->xin->flow.in_port,
+    in_bundle = lookup_input_bundle(ctx->ofproto, flow->in_port,
                                     ctx->xin->packet != NULL, &in_port);
     if (!in_bundle) {
         xlate_report(ctx, "no input bundle, dropping");
@@ -557,8 +556,8 @@ xlate_normal(struct xlate_ctx *ctx)
     }
 
     /* Drop malformed frames. */
-    if (ctx->xin->flow.dl_type == htons(ETH_TYPE_VLAN) &&
-        !(ctx->xin->flow.vlan_tci & htons(VLAN_CFI))) {
+    if (flow->dl_type == htons(ETH_TYPE_VLAN) &&
+        !(flow->vlan_tci & htons(VLAN_CFI))) {
         if (ctx->xin->packet != NULL) {
             static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
             VLOG_WARN_RL(&rl, "bridge %s: dropping packet with partial "
@@ -582,7 +581,7 @@ xlate_normal(struct xlate_ctx *ctx)
     }
 
     /* Check VLAN. */
-    vid = vlan_tci_to_vid(ctx->xin->flow.vlan_tci);
+    vid = vlan_tci_to_vid(flow->vlan_tci);
     if (!input_vid_is_valid(vid, in_bundle, ctx->xin->packet != NULL)) {
         xlate_report(ctx, "disallowed VLAN VID for this input port, dropping");
         return;
@@ -596,12 +595,11 @@ xlate_normal(struct xlate_ctx *ctx)
 
     /* Learn source MAC. */
     if (ctx->xin->may_learn) {
-        update_learning_table(ctx->ofproto, &ctx->xin->flow, &ctx->xout->wc,
-                              vlan, in_bundle);
+        update_learning_table(ctx->ofproto, flow, wc, vlan, in_bundle);
     }
 
     /* Determine output bundle. */
-    mac = mac_learning_lookup(ctx->ofproto->ml, ctx->xin->flow.dl_dst, vlan,
+    mac = mac_learning_lookup(ctx->ofproto->ml, flow->dl_dst, vlan,
                               &ctx->xout->tags);
     if (mac) {
         if (mac->port.p != in_bundle) {
@@ -794,6 +792,7 @@ compose_output_action__(struct xlate_ctx *ctx, uint16_t ofp_port,
                         bool check_stp)
 {
     const struct ofport_dpif *ofport = get_ofp_port(ctx->ofproto, ofp_port);
+    struct flow *flow = &ctx->xin->flow;
     ovs_be16 flow_vlan_tci;
     uint32_t flow_skb_mark;
     uint8_t flow_nw_tos;
@@ -834,25 +833,25 @@ compose_output_action__(struct xlate_ctx *ctx, uint16_t ofp_port,
         }
 
         ctx->ofproto = ofproto_dpif_cast(peer->up.ofproto);
-        ctx->xin->flow.in_port = peer->up.ofp_port;
-        ctx->xin->flow.metadata = htonll(0);
-        memset(&ctx->xin->flow.tunnel, 0, sizeof ctx->xin->flow.tunnel);
-        memset(ctx->xin->flow.regs, 0, sizeof ctx->xin->flow.regs);
+        flow->in_port = peer->up.ofp_port;
+        flow->metadata = htonll(0);
+        memset(&flow->tunnel, 0, sizeof flow->tunnel);
+        memset(flow->regs, 0, sizeof flow->regs);
 
-        in_port = get_ofp_port(ctx->ofproto, ctx->xin->flow.in_port);
+        in_port = get_ofp_port(ctx->ofproto, flow->in_port);
         special = process_special(ctx->ofproto, &ctx->xin->flow, in_port,
                                   ctx->xin->packet);
         if (special) {
             ctx->xout->slow = special;
         } else if (!in_port || may_receive(in_port, ctx)) {
             if (!in_port || stp_forward_in_state(in_port->stp_state)) {
-                xlate_table_action(ctx, ctx->xin->flow.in_port, 0, true);
+                xlate_table_action(ctx, flow->in_port, 0, true);
             } else {
                 /* Forwarding is disabled by STP.  Let OFPP_NORMAL and the
                  * learning action look at the packet, then drop it. */
                 struct flow old_base_flow = ctx->base_flow;
                 size_t old_size = ctx->xout->odp_actions.size;
-                xlate_table_action(ctx, ctx->xin->flow.in_port, 0, true);
+                xlate_table_action(ctx, flow->in_port, 0, true);
                 ctx->base_flow = old_base_flow;
                 ctx->xout->odp_actions.size = old_size;
             }
@@ -869,14 +868,14 @@ compose_output_action__(struct xlate_ctx *ctx, uint16_t ofp_port,
         return;
     }
 
-    flow_vlan_tci = ctx->xin->flow.vlan_tci;
-    flow_skb_mark = ctx->xin->flow.skb_mark;
-    flow_nw_tos = ctx->xin->flow.nw_tos;
+    flow_vlan_tci = flow->vlan_tci;
+    flow_skb_mark = flow->skb_mark;
+    flow_nw_tos = flow->nw_tos;
 
-    pdscp = get_priority(ofport, ctx->xin->flow.skb_priority);
+    pdscp = get_priority(ofport, flow->skb_priority);
     if (pdscp) {
-        ctx->xin->flow.nw_tos &= ~IP_DSCP_MASK;
-        ctx->xin->flow.nw_tos |= pdscp->dscp;
+        flow->nw_tos &= ~IP_DSCP_MASK;
+        flow->nw_tos |= pdscp->dscp;
     }
 
     if (ofport->tnl_port) {
@@ -884,13 +883,13 @@ compose_output_action__(struct xlate_ctx *ctx, uint16_t ofp_port,
           * the Logical (tunnel) Port are not visible for any further
           * matches, while explicit set actions on tunnel metadata are.
           */
-        struct flow_tnl flow_tnl = ctx->xin->flow.tunnel;
-        odp_port = tnl_port_send(ofport->tnl_port, &ctx->xin->flow);
+        struct flow_tnl flow_tnl = flow->tunnel;
+        odp_port = tnl_port_send(ofport->tnl_port, flow);
         if (odp_port == OVSP_NONE) {
             xlate_report(ctx, "Tunneling decided against output");
             goto out; /* restore flow_nw_tos */
         }
-        if (ctx->xin->flow.tunnel.ip_dst == ctx->orig_tunnel_ip_dst) {
+        if (flow->tunnel.ip_dst == ctx->orig_tunnel_ip_dst) {
             xlate_report(ctx, "Not tunneling to our own address");
             goto out; /* restore flow_nw_tos */
         }
@@ -898,24 +897,23 @@ compose_output_action__(struct xlate_ctx *ctx, uint16_t ofp_port,
             netdev_vport_inc_tx(ofport->up.netdev, ctx->xin->resubmit_stats);
         }
         out_port = odp_port;
-        commit_odp_tunnel_action(&ctx->xin->flow, &ctx->base_flow,
+        commit_odp_tunnel_action(flow, &ctx->base_flow,
                                  &ctx->xout->odp_actions);
-        ctx->xin->flow.tunnel = flow_tnl; /* Restore tunnel metadata */
+        flow->tunnel = flow_tnl; /* Restore tunnel metadata */
     } else {
         uint16_t vlandev_port;
         odp_port = ofport->odp_port;
         vlandev_port = vsp_realdev_to_vlandev(ctx->ofproto, ofp_port,
-                                              ctx->xin->flow.vlan_tci);
+                                              flow->vlan_tci);
         if (vlandev_port == ofp_port) {
             out_port = odp_port;
         } else {
             out_port = ofp_port_to_odp_port(ctx->ofproto, vlandev_port);
-            ctx->xin->flow.vlan_tci = htons(0);
+            flow->vlan_tci = htons(0);
         }
-        ctx->xin->flow.skb_mark &= ~IPSEC_MARK;
+        flow->skb_mark &= ~IPSEC_MARK;
     }
-    commit_odp_actions(&ctx->xin->flow, &ctx->base_flow,
-                       &ctx->xout->odp_actions);
+    commit_odp_actions(flow, &ctx->base_flow, &ctx->xout->odp_actions);
     nl_msg_put_u32(&ctx->xout->odp_actions, OVS_ACTION_ATTR_OUTPUT, out_port);
 
     ctx->sflow_odp_port = odp_port;
@@ -923,10 +921,10 @@ compose_output_action__(struct xlate_ctx *ctx, uint16_t ofp_port,
     ctx->xout->nf_output_iface = ofp_port;
 
     /* Restore flow */
-    ctx->xin->flow.vlan_tci = flow_vlan_tci;
-    ctx->xin->flow.skb_mark = flow_skb_mark;
+    flow->vlan_tci = flow_vlan_tci;
+    flow->skb_mark = flow_skb_mark;
  out:
-    ctx->xin->flow.nw_tos = flow_nw_tos;
+    flow->nw_tos = flow_nw_tos;
 }
 
 static void
@@ -1107,53 +1105,53 @@ execute_controller_action(struct xlate_ctx *ctx, int len,
 static void
 compose_mpls_push_action(struct xlate_ctx *ctx, ovs_be16 eth_type)
 {
+    struct flow_wildcards *wc = &ctx->xout->wc;
+    struct flow *flow = &ctx->xin->flow;
+
     ovs_assert(eth_type_mpls(eth_type));
 
-    memset(&ctx->xout->wc.masks.dl_type, 0xff,
-               sizeof ctx->xout->wc.masks.dl_type);
-    memset(&ctx->xout->wc.masks.mpls_lse, 0xff,
-               sizeof ctx->xout->wc.masks.mpls_lse);
-    memset(&ctx->xout->wc.masks.mpls_depth, 0xff,
-               sizeof ctx->xout->wc.masks.mpls_depth);
+    memset(&wc->masks.dl_type, 0xff, sizeof wc->masks.dl_type);
+    memset(&wc->masks.mpls_lse, 0xff, sizeof wc->masks.mpls_lse);
+    memset(&wc->masks.mpls_depth, 0xff, sizeof wc->masks.mpls_depth);
 
-    if (ctx->xin->flow.mpls_depth) {
-        ctx->xin->flow.mpls_lse &= ~htonl(MPLS_BOS_MASK);
-        ctx->xin->flow.mpls_depth++;
+    if (flow->mpls_depth) {
+        flow->mpls_lse &= ~htonl(MPLS_BOS_MASK);
+        flow->mpls_depth++;
     } else {
         ovs_be32 label;
         uint8_t tc, ttl;
 
-        if (ctx->xin->flow.dl_type == htons(ETH_TYPE_IPV6)) {
+        if (flow->dl_type == htons(ETH_TYPE_IPV6)) {
             label = htonl(0x2); /* IPV6 Explicit Null. */
         } else {
             label = htonl(0x0); /* IPV4 Explicit Null. */
         }
-        tc = (ctx->xin->flow.nw_tos & IP_DSCP_MASK) >> 2;
-        ttl = ctx->xin->flow.nw_ttl ? ctx->xin->flow.nw_ttl : 0x40;
-        ctx->xin->flow.mpls_lse = set_mpls_lse_values(ttl, tc, 1, label);
-        ctx->xin->flow.mpls_depth = 1;
+        tc = (flow->nw_tos & IP_DSCP_MASK) >> 2;
+        ttl = flow->nw_ttl ? flow->nw_ttl : 0x40;
+        flow->mpls_lse = set_mpls_lse_values(ttl, tc, 1, label);
+        flow->mpls_depth = 1;
     }
-    ctx->xin->flow.dl_type = eth_type;
+    flow->dl_type = eth_type;
 }
 
 static void
 compose_mpls_pop_action(struct xlate_ctx *ctx, ovs_be16 eth_type)
 {
+    struct flow_wildcards *wc = &ctx->xout->wc;
+    struct flow *flow = &ctx->xin->flow;
+
     ovs_assert(eth_type_mpls(ctx->xin->flow.dl_type));
     ovs_assert(!eth_type_mpls(eth_type));
 
-    memset(&ctx->xout->wc.masks.dl_type, 0xff,
-               sizeof ctx->xout->wc.masks.dl_type);
-    memset(&ctx->xout->wc.masks.mpls_lse, 0xff,
-               sizeof ctx->xout->wc.masks.mpls_lse);
-    memset(&ctx->xout->wc.masks.mpls_depth, 0xff,
-               sizeof ctx->xout->wc.masks.mpls_depth);
+    memset(&wc->masks.dl_type, 0xff, sizeof wc->masks.dl_type);
+    memset(&wc->masks.mpls_lse, 0xff, sizeof wc->masks.mpls_lse);
+    memset(&wc->masks.mpls_depth, 0xff, sizeof wc->masks.mpls_depth);
 
-    if (ctx->xin->flow.mpls_depth) {
-        ctx->xin->flow.mpls_depth--;
-        ctx->xin->flow.mpls_lse = htonl(0);
-        if (!ctx->xin->flow.mpls_depth) {
-            ctx->xin->flow.dl_type = eth_type;
+    if (flow->mpls_depth) {
+        flow->mpls_depth--;
+        flow->mpls_lse = htonl(0);
+        if (!flow->mpls_depth) {
+            flow->dl_type = eth_type;
         }
     }
 }
@@ -1161,13 +1159,14 @@ compose_mpls_pop_action(struct xlate_ctx *ctx, ovs_be16 eth_type)
 static bool
 compose_dec_ttl(struct xlate_ctx *ctx, struct ofpact_cnt_ids *ids)
 {
-    if (ctx->xin->flow.dl_type != htons(ETH_TYPE_IP) &&
-        ctx->xin->flow.dl_type != htons(ETH_TYPE_IPV6)) {
+    struct flow *flow = &ctx->xin->flow;
+
+    if (!is_ip_any(flow)) {
         return false;
     }
 
-    if (ctx->xin->flow.nw_ttl > 1) {
-        ctx->xin->flow.nw_ttl--;
+    if (flow->nw_ttl > 1) {
+        flow->nw_ttl--;
         return false;
     } else {
         size_t i;
@@ -1196,15 +1195,16 @@ compose_set_mpls_ttl_action(struct xlate_ctx *ctx, uint8_t ttl)
 static bool
 compose_dec_mpls_ttl_action(struct xlate_ctx *ctx)
 {
-    uint8_t ttl = mpls_lse_to_ttl(ctx->xin->flow.mpls_lse);
+    struct flow *flow = &ctx->xin->flow;
+    uint8_t ttl = mpls_lse_to_ttl(flow->mpls_lse);
 
-    if (!eth_type_mpls(ctx->xin->flow.dl_type)) {
+    if (!eth_type_mpls(flow->dl_type)) {
         return false;
     }
 
     if (ttl > 1) {
         ttl--;
-        set_mpls_lse_ttl(&ctx->xin->flow.mpls_lse, ttl);
+        set_mpls_lse_ttl(&flow->mpls_lse, ttl);
         return false;
     } else {
         execute_controller_action(ctx, UINT16_MAX, OFPR_INVALID_TTL, 0);
@@ -1481,6 +1481,8 @@ static void
 do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
                  struct xlate_ctx *ctx)
 {
+    struct flow_wildcards *wc = &ctx->xout->wc;
+    struct flow *flow = &ctx->xin->flow;
     bool was_evictable = true;
     const struct ofpact *a;
 
@@ -1517,83 +1519,71 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
             break;
 
         case OFPACT_SET_VLAN_VID:
-            ctx->xin->flow.vlan_tci &= ~htons(VLAN_VID_MASK);
-            ctx->xin->flow.vlan_tci |=
-                (htons(ofpact_get_SET_VLAN_VID(a)->vlan_vid)
-                 | htons(VLAN_CFI));
+            flow->vlan_tci &= ~htons(VLAN_VID_MASK);
+            flow->vlan_tci |= (htons(ofpact_get_SET_VLAN_VID(a)->vlan_vid)
+                               | htons(VLAN_CFI));
             break;
 
         case OFPACT_SET_VLAN_PCP:
-            ctx->xin->flow.vlan_tci &= ~htons(VLAN_PCP_MASK);
-            ctx->xin->flow.vlan_tci |=
+            flow->vlan_tci &= ~htons(VLAN_PCP_MASK);
+            flow->vlan_tci |=
                 htons((ofpact_get_SET_VLAN_PCP(a)->vlan_pcp << VLAN_PCP_SHIFT)
                       | VLAN_CFI);
             break;
 
         case OFPACT_STRIP_VLAN:
-            ctx->xin->flow.vlan_tci = htons(0);
+            flow->vlan_tci = htons(0);
             break;
 
         case OFPACT_PUSH_VLAN:
             /* XXX 802.1AD(QinQ) */
-            ctx->xin->flow.vlan_tci = htons(VLAN_CFI);
+            flow->vlan_tci = htons(VLAN_CFI);
             break;
 
         case OFPACT_SET_ETH_SRC:
-            memcpy(ctx->xin->flow.dl_src, ofpact_get_SET_ETH_SRC(a)->mac,
-                   ETH_ADDR_LEN);
+            memcpy(flow->dl_src, ofpact_get_SET_ETH_SRC(a)->mac, ETH_ADDR_LEN);
             break;
 
         case OFPACT_SET_ETH_DST:
-            memcpy(ctx->xin->flow.dl_dst, ofpact_get_SET_ETH_DST(a)->mac,
-                   ETH_ADDR_LEN);
+            memcpy(flow->dl_dst, ofpact_get_SET_ETH_DST(a)->mac, ETH_ADDR_LEN);
             break;
 
         case OFPACT_SET_IPV4_SRC:
-            memset(&ctx->xout->wc.masks.dl_type, 0xff,
-                   sizeof ctx->xout->wc.masks.dl_type);
-            if (ctx->xin->flow.dl_type == htons(ETH_TYPE_IP)) {
-                ctx->xin->flow.nw_src = ofpact_get_SET_IPV4_SRC(a)->ipv4;
+            memset(&wc->masks.dl_type, 0xff, sizeof wc->masks.dl_type);
+            if (flow->dl_type == htons(ETH_TYPE_IP)) {
+                flow->nw_src = ofpact_get_SET_IPV4_SRC(a)->ipv4;
             }
             break;
 
         case OFPACT_SET_IPV4_DST:
-            memset(&ctx->xout->wc.masks.dl_type, 0xff,
-                   sizeof ctx->xout->wc.masks.dl_type);
-            if (ctx->xin->flow.dl_type == htons(ETH_TYPE_IP)) {
-                ctx->xin->flow.nw_dst = ofpact_get_SET_IPV4_DST(a)->ipv4;
+            memset(&wc->masks.dl_type, 0xff, sizeof wc->masks.dl_type);
+            if (flow->dl_type == htons(ETH_TYPE_IP)) {
+                flow->nw_dst = ofpact_get_SET_IPV4_DST(a)->ipv4;
             }
             break;
 
         case OFPACT_SET_IPV4_DSCP:
             /* OpenFlow 1.0 only supports IPv4. */
-            memset(&ctx->xout->wc.masks.dl_type, 0xff,
-                   sizeof ctx->xout->wc.masks.dl_type);
-            if (ctx->xin->flow.dl_type == htons(ETH_TYPE_IP)) {
-                ctx->xin->flow.nw_tos &= ~IP_DSCP_MASK;
-                ctx->xin->flow.nw_tos |= ofpact_get_SET_IPV4_DSCP(a)->dscp;
+            memset(&wc->masks.dl_type, 0xff, sizeof wc->masks.dl_type);
+            if (flow->dl_type == htons(ETH_TYPE_IP)) {
+                flow->nw_tos &= ~IP_DSCP_MASK;
+                flow->nw_tos |= ofpact_get_SET_IPV4_DSCP(a)->dscp;
             }
             break;
 
         case OFPACT_SET_L4_SRC_PORT:
-            memset(&ctx->xout->wc.masks.dl_type, 0xff,
-                   sizeof ctx->xout->wc.masks.dl_type);
-            memset(&ctx->xout->wc.masks.nw_proto, 0xff,
-                    sizeof ctx->xout->wc.masks.nw_proto);
-            if (is_ip_any(&ctx->xin->flow)) {
-                ctx->xin->flow.tp_src =
-                    htons(ofpact_get_SET_L4_SRC_PORT(a)->port);
+            memset(&wc->masks.dl_type, 0xff, sizeof wc->masks.dl_type);
+            memset(&wc->masks.nw_proto, 0xff, sizeof wc->masks.nw_proto);
+            if (is_ip_any(flow)) {
+                flow->tp_src = htons(ofpact_get_SET_L4_SRC_PORT(a)->port);
             }
             break;
 
         case OFPACT_SET_L4_DST_PORT:
-            memset(&ctx->xout->wc.masks.dl_type, 0xff,
-                   sizeof ctx->xout->wc.masks.dl_type);
-            memset(&ctx->xout->wc.masks.nw_proto, 0xff,
-                    sizeof ctx->xout->wc.masks.nw_proto);
-            if (is_ip_any(&ctx->xin->flow)) {
-                ctx->xin->flow.tp_dst =
-                    htons(ofpact_get_SET_L4_DST_PORT(a)->port);
+            memset(&wc->masks.dl_type, 0xff, sizeof wc->masks.dl_type);
+            memset(&wc->masks.nw_proto, 0xff, sizeof wc->masks.nw_proto);
+            if (is_ip_any(flow)) {
+                flow->tp_dst = htons(ofpact_get_SET_L4_DST_PORT(a)->port);
             }
             break;
 
@@ -1602,8 +1592,7 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
             break;
 
         case OFPACT_SET_TUNNEL:
-            ctx->xin->flow.tunnel.tun_id =
-                htonll(ofpact_get_SET_TUNNEL(a)->tun_id);
+            flow->tunnel.tun_id = htonll(ofpact_get_SET_TUNNEL(a)->tun_id);
             break;
 
         case OFPACT_SET_QUEUE:
@@ -1611,29 +1600,27 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
             break;
 
         case OFPACT_POP_QUEUE:
-            memset(&ctx->xout->wc.masks.skb_priority, 0xff,
-                   sizeof ctx->xout->wc.masks.skb_priority);
+            memset(&wc->masks.skb_priority, 0xff,
+                   sizeof wc->masks.skb_priority);
 
-            ctx->xin->flow.skb_priority = ctx->orig_skb_priority;
+            flow->skb_priority = ctx->orig_skb_priority;
             break;
 
         case OFPACT_REG_MOVE:
-            nxm_execute_reg_move(ofpact_get_REG_MOVE(a), &ctx->xin->flow,
-                                 &ctx->xout->wc);
+            nxm_execute_reg_move(ofpact_get_REG_MOVE(a), flow, wc);
             break;
 
         case OFPACT_REG_LOAD:
-            nxm_execute_reg_load(ofpact_get_REG_LOAD(a), &ctx->xin->flow);
+            nxm_execute_reg_load(ofpact_get_REG_LOAD(a), flow);
             break;
 
         case OFPACT_STACK_PUSH:
-            nxm_execute_stack_push(ofpact_get_STACK_PUSH(a), &ctx->xin->flow,
-                                   &ctx->xout->wc, &ctx->stack);
+            nxm_execute_stack_push(ofpact_get_STACK_PUSH(a), flow, wc,
+                                   &ctx->stack);
             break;
 
         case OFPACT_STACK_POP:
-            nxm_execute_stack_pop(ofpact_get_STACK_POP(a), &ctx->xin->flow,
-                                  &ctx->stack);
+            nxm_execute_stack_pop(ofpact_get_STACK_POP(a), flow, &ctx->stack);
             break;
 
         case OFPACT_PUSH_MPLS:
@@ -1658,8 +1645,7 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
             break;
 
         case OFPACT_DEC_TTL:
-            memset(&ctx->xout->wc.masks.dl_type, 0xff,
-                   sizeof ctx->xout->wc.masks.dl_type);
+            memset(&wc->masks.dl_type, 0xff, sizeof wc->masks.dl_type);
             if (compose_dec_ttl(ctx, ofpact_get_DEC_TTL(a))) {
                 goto out;
             }
@@ -1670,8 +1656,7 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
             break;
 
         case OFPACT_MULTIPATH:
-            multipath_execute(ofpact_get_MULTIPATH(a), &ctx->xin->flow,
-                              &ctx->xout->wc);
+            multipath_execute(ofpact_get_MULTIPATH(a), flow, wc);
             break;
 
         case OFPACT_BUNDLE:
@@ -1692,10 +1677,8 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
             break;
 
         case OFPACT_FIN_TIMEOUT:
-            memset(&ctx->xout->wc.masks.dl_type, 0xff,
-                   sizeof ctx->xout->wc.masks.dl_type);
-            memset(&ctx->xout->wc.masks.nw_proto, 0xff,
-                   sizeof ctx->xout->wc.masks.nw_proto);
+            memset(&wc->masks.dl_type, 0xff, sizeof wc->masks.dl_type);
+            memset(&wc->masks.nw_proto, 0xff, sizeof wc->masks.nw_proto);
             ctx->xout->has_fin_timeout = true;
             xlate_fin_timeout(ctx, ofpact_get_FIN_TIMEOUT(a));
             break;
@@ -1710,8 +1693,8 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
 
         case OFPACT_WRITE_METADATA:
             metadata = ofpact_get_WRITE_METADATA(a);
-            ctx->xin->flow.metadata &= ~metadata->mask;
-            ctx->xin->flow.metadata |= metadata->metadata & metadata->mask;
+            flow->metadata &= ~metadata->mask;
+            flow->metadata |= metadata->metadata & metadata->mask;
             break;
 
         case OFPACT_GOTO_TABLE: {
@@ -1724,8 +1707,8 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
             ctx->table_id = ogt->table_id;
 
             /* Look up a flow from the new table. */
-            rule = rule_dpif_lookup_in_table(ctx->ofproto, &ctx->xin->flow,
-                                             &ctx->xout->wc, ctx->table_id);
+            rule = rule_dpif_lookup_in_table(ctx->ofproto, flow, wc,
+                                             ctx->table_id);
 
             tag_the_flow(ctx, rule);
 
@@ -1833,6 +1816,9 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
      * tracing purposes. */
     static bool hit_resubmit_limit;
 
+    struct flow_wildcards *wc = &xout->wc;
+    struct flow *flow = &xin->flow;
+
     enum slow_path_reason special;
     const struct ofpact *ofpacts;
     struct ofport_dpif *in_port;
@@ -1869,39 +1855,28 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
     ctx.ofproto = xin->ofproto;
     ctx.rule = xin->rule;
 
-    ctx.base_flow = ctx.xin->flow;
+    ctx.base_flow = *flow;
     memset(&ctx.base_flow.tunnel, 0, sizeof ctx.base_flow.tunnel);
-    ctx.orig_tunnel_ip_dst = ctx.xin->flow.tunnel.ip_dst;
+    ctx.orig_tunnel_ip_dst = flow->tunnel.ip_dst;
 
-    flow_wildcards_init_catchall(&ctx.xout->wc);
-    memset(&ctx.xout->wc.masks.in_port, 0xff,
-           sizeof ctx.xout->wc.masks.in_port);
+    flow_wildcards_init_catchall(wc);
+    memset(&wc->masks.in_port, 0xff, sizeof wc->masks.in_port);
 
     if (tnl_port_should_receive(&ctx.xin->flow)) {
-        memset(&ctx.xout->wc.masks.tunnel, 0xff,
-               sizeof ctx.xout->wc.masks.tunnel);
+        memset(&wc->masks.tunnel, 0xff, sizeof wc->masks.tunnel);
     }
 
     /* Disable most wildcarding for NetFlow. */
     if (xin->ofproto->netflow) {
-        memset(&ctx.xout->wc.masks.dl_src, 0xff,
-               sizeof ctx.xout->wc.masks.dl_src);
-        memset(&ctx.xout->wc.masks.dl_dst, 0xff,
-               sizeof ctx.xout->wc.masks.dl_dst);
-        memset(&ctx.xout->wc.masks.dl_type, 0xff,
-               sizeof ctx.xout->wc.masks.dl_type);
-        memset(&ctx.xout->wc.masks.vlan_tci, 0xff,
-               sizeof ctx.xout->wc.masks.vlan_tci);
-        memset(&ctx.xout->wc.masks.nw_proto, 0xff,
-               sizeof ctx.xout->wc.masks.nw_proto);
-        memset(&ctx.xout->wc.masks.nw_src, 0xff,
-               sizeof ctx.xout->wc.masks.nw_src);
-        memset(&ctx.xout->wc.masks.nw_dst, 0xff,
-               sizeof ctx.xout->wc.masks.nw_dst);
-        memset(&ctx.xout->wc.masks.tp_src, 0xff,
-               sizeof ctx.xout->wc.masks.tp_src);
-        memset(&ctx.xout->wc.masks.tp_dst, 0xff,
-               sizeof ctx.xout->wc.masks.tp_dst);
+        memset(&wc->masks.dl_src, 0xff, sizeof wc->masks.dl_src);
+        memset(&wc->masks.dl_dst, 0xff, sizeof wc->masks.dl_dst);
+        memset(&wc->masks.dl_type, 0xff, sizeof wc->masks.dl_type);
+        memset(&wc->masks.vlan_tci, 0xff, sizeof wc->masks.vlan_tci);
+        memset(&wc->masks.nw_proto, 0xff, sizeof wc->masks.nw_proto);
+        memset(&wc->masks.nw_src, 0xff, sizeof wc->masks.nw_src);
+        memset(&wc->masks.nw_dst, 0xff, sizeof wc->masks.nw_dst);
+        memset(&wc->masks.tp_src, 0xff, sizeof wc->masks.tp_src);
+        memset(&wc->masks.tp_dst, 0xff, sizeof wc->masks.tp_dst);
     }
 
     ctx.xout->tags = 0;
@@ -1918,7 +1893,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
 
     ctx.recurse = 0;
     ctx.max_resubmit_trigger = false;
-    ctx.orig_skb_priority = ctx.xin->flow.skb_priority;
+    ctx.orig_skb_priority = flow->skb_priority;
     ctx.table_id = 0;
     ctx.exit = false;
 
@@ -1937,15 +1912,15 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
     if (ctx.ofproto->has_mirrors || hit_resubmit_limit) {
         /* Do this conditionally because the copy is expensive enough that it
          * shows up in profiles. */
-        orig_flow = ctx.xin->flow;
+        orig_flow = *flow;
     }
 
-    if (ctx.xin->flow.nw_frag & FLOW_NW_FRAG_ANY) {
+    if (flow->nw_frag & FLOW_NW_FRAG_ANY) {
         switch (ctx.ofproto->up.frag_handling) {
         case OFPC_FRAG_NORMAL:
             /* We must pretend that transport ports are unavailable. */
-            ctx.xin->flow.tp_src = ctx.base_flow.tp_src = htons(0);
-            ctx.xin->flow.tp_dst = ctx.base_flow.tp_dst = htons(0);
+            flow->tp_src = ctx.base_flow.tp_src = htons(0);
+            flow->tp_dst = ctx.base_flow.tp_dst = htons(0);
             break;
 
         case OFPC_FRAG_DROP:
@@ -1963,9 +1938,8 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
         }
     }
 
-    in_port = get_ofp_port(ctx.ofproto, ctx.xin->flow.in_port);
-    special = process_special(ctx.ofproto, &ctx.xin->flow, in_port,
-                              ctx.xin->packet);
+    in_port = get_ofp_port(ctx.ofproto, flow->in_port);
+    special = process_special(ctx.ofproto, flow, in_port, ctx.xin->packet);
     if (special) {
         ctx.xout->slow = special;
     } else {
@@ -1973,9 +1947,9 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
         size_t sample_actions_len;
         uint32_t local_odp_port;
 
-        if (ctx.xin->flow.in_port
-            != vsp_realdev_to_vlandev(ctx.ofproto, ctx.xin->flow.in_port,
-                                      ctx.xin->flow.vlan_tci)) {
+        if (flow->in_port
+            != vsp_realdev_to_vlandev(ctx.ofproto, flow->in_port,
+                                      flow->vlan_tci)) {
             ctx.base_flow.vlan_tci = 0;
         }
 
@@ -2009,7 +1983,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
         }
 
         local_odp_port = ofp_port_to_odp_port(ctx.ofproto, OFPP_LOCAL);
-        if (!connmgr_must_output_local(ctx.ofproto->up.connmgr, &ctx.xin->flow,
+        if (!connmgr_must_output_local(ctx.ofproto->up.connmgr, flow,
                                        local_odp_port,
                                        ctx.xout->odp_actions.data,
                                        ctx.xout->odp_actions.size)) {
@@ -2025,7 +1999,6 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
 
     /* Clear the metadata and register wildcard masks, because we won't
      * use non-header fields as part of the cache. */
-    memset(&ctx.xout->wc.masks.metadata, 0,
-           sizeof ctx.xout->wc.masks.metadata);
-    memset(&ctx.xout->wc.masks.regs, 0, sizeof ctx.xout->wc.masks.regs);
+    memset(&wc->masks.metadata, 0, sizeof wc->masks.metadata);
+    memset(&wc->masks.regs, 0, sizeof wc->masks.regs);
 }
