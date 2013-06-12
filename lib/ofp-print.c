@@ -859,11 +859,14 @@ ofp_print_duration(struct ds *string, unsigned int sec, unsigned int nsec)
     ds_put_char(string, 's');
 }
 
+/* Returns a string form of 'reason'.  The return value is either a statically
+ * allocated constant string or the 'bufsize'-byte buffer 'reasonbuf'.
+ * 'bufsize' should be at least OFP_FLOW_REMOVED_REASON_BUFSIZE. */
+#define OFP_FLOW_REMOVED_REASON_BUFSIZE (INT_STRLEN(int) + 1)
 static const char *
-ofp_flow_removed_reason_to_string(enum ofp_flow_removed_reason reason)
+ofp_flow_removed_reason_to_string(enum ofp_flow_removed_reason reason,
+                                  char *reasonbuf, size_t bufsize)
 {
-    static char s[32];
-
     switch (reason) {
     case OFPRR_IDLE_TIMEOUT:
         return "idle";
@@ -876,14 +879,15 @@ ofp_flow_removed_reason_to_string(enum ofp_flow_removed_reason reason)
     case OFPRR_EVICTION:
         return "eviction";
     default:
-        sprintf(s, "%d", (int) reason);
-        return s;
+        snprintf(reasonbuf, bufsize, "%d", (int) reason);
+        return reasonbuf;
     }
 }
 
 static void
 ofp_print_flow_removed(struct ds *string, const struct ofp_header *oh)
 {
+    char reasonbuf[OFP_FLOW_REMOVED_REASON_BUFSIZE];
     struct ofputil_flow_removed fr;
     enum ofperr error;
 
@@ -897,7 +901,8 @@ ofp_print_flow_removed(struct ds *string, const struct ofp_header *oh)
     match_format(&fr.match, string, fr.priority);
 
     ds_put_format(string, " reason=%s",
-                  ofp_flow_removed_reason_to_string(fr.reason));
+                  ofp_flow_removed_reason_to_string(fr.reason, reasonbuf,
+                                                    sizeof reasonbuf));
 
     if (fr.table_id != 255) {
         ds_put_format(string, " table_id=%"PRIu8, fr.table_id);
@@ -1628,11 +1633,14 @@ ofp_print_nxt_set_packet_in_format(struct ds *string,
     }
 }
 
+/* Returns a string form of 'reason'.  The return value is either a statically
+ * allocated constant string or the 'bufsize'-byte buffer 'reasonbuf'.
+ * 'bufsize' should be at least OFP_PORT_REASON_BUFSIZE. */
+#define OFP_PORT_REASON_BUFSIZE (INT_STRLEN(int) + 1)
 static const char *
-ofp_port_reason_to_string(enum ofp_port_reason reason)
+ofp_port_reason_to_string(enum ofp_port_reason reason,
+                          char *reasonbuf, size_t bufsize)
 {
-    static char s[32];
-
     switch (reason) {
     case OFPPR_ADD:
         return "add";
@@ -1644,8 +1652,8 @@ ofp_port_reason_to_string(enum ofp_port_reason reason)
         return "modify";
 
     default:
-        sprintf(s, "%d", (int) reason);
-        return s;
+        snprintf(reasonbuf, bufsize, "%d", (int) reason);
+        return reasonbuf;
     }
 }
 
@@ -1679,7 +1687,12 @@ ofp_print_nxt_set_async_config(struct ds *string,
         ds_put_cstr(string, "     PORT_STATUS:");
         for (j = 0; j < 32; j++) {
             if (nac->port_status_mask[i] & htonl(1u << j)) {
-                ds_put_format(string, " %s", ofp_port_reason_to_string(j));
+                char reasonbuf[OFP_PORT_REASON_BUFSIZE];
+                const char *reason;
+
+                reason = ofp_port_reason_to_string(j, reasonbuf,
+                                                   sizeof reasonbuf);
+                ds_put_format(string, " %s", reason);
             }
         }
         if (!nac->port_status_mask[i]) {
@@ -1690,8 +1703,12 @@ ofp_print_nxt_set_async_config(struct ds *string,
         ds_put_cstr(string, "    FLOW_REMOVED:");
         for (j = 0; j < 32; j++) {
             if (nac->flow_removed_mask[i] & htonl(1u << j)) {
-                ds_put_format(string, " %s",
-                              ofp_flow_removed_reason_to_string(j));
+                char reasonbuf[OFP_FLOW_REMOVED_REASON_BUFSIZE];
+                const char *reason;
+
+                reason = ofp_flow_removed_reason_to_string(j, reasonbuf,
+                                                           sizeof reasonbuf);
+                ds_put_format(string, " %s", reason);
             }
         }
         if (!nac->flow_removed_mask[i]) {
@@ -1782,6 +1799,7 @@ ofp_print_nxst_flow_monitor_reply(struct ds *string,
     ofpbuf_use_const(&b, oh, ntohs(oh->length));
     ofpbuf_use_stub(&ofpacts, ofpacts_stub, sizeof ofpacts_stub);
     for (;;) {
+        char reasonbuf[OFP_FLOW_REMOVED_REASON_BUFSIZE];
         struct ofputil_flow_update update;
         struct match match;
         int retval;
@@ -1804,7 +1822,9 @@ ofp_print_nxst_flow_monitor_reply(struct ds *string,
 
         case NXFME_DELETED:
             ds_put_format(string, "DELETED reason=%s",
-                          ofp_flow_removed_reason_to_string(update.reason));
+                          ofp_flow_removed_reason_to_string(update.reason,
+                                                            reasonbuf,
+                                                            sizeof reasonbuf));
             break;
 
         case NXFME_MODIFIED:
