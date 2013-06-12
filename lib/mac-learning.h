@@ -85,6 +85,7 @@ struct mac_learning {
     unsigned long *flood_vlans; /* Bitmap of learning disabled VLANs. */
     unsigned int idle_time;     /* Max age before deleting an entry. */
     size_t max_entries;         /* Max number of learned MACs. */
+    struct tag_set tags;        /* Tags which have changed. */
 };
 
 /* Basics. */
@@ -107,7 +108,7 @@ bool mac_learning_may_learn(const struct mac_learning *,
 struct mac_entry *mac_learning_insert(struct mac_learning *,
                                       const uint8_t src[ETH_ADDR_LEN],
                                       uint16_t vlan);
-tag_type mac_learning_changed(struct mac_learning *, struct mac_entry *);
+void mac_learning_changed(struct mac_learning *, struct mac_entry *);
 
 /* Lookup. */
 struct mac_entry *mac_learning_lookup(const struct mac_learning *,

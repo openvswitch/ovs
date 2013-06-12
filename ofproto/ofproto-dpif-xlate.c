@@ -466,8 +466,7 @@ update_learning_table(struct ofproto_dpif *ofproto,
                     in_bundle->name, vlan);
 
         mac->port.p = in_bundle;
-        tag_set_add(&ofproto->backer->revalidate_set,
-                    mac_learning_changed(ofproto->ml, mac));
+        mac_learning_changed(ofproto->ml, mac);
     }
 }
 

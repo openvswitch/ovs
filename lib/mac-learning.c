@@ -123,6 +123,7 @@ mac_learning_create(unsigned int idle_time)
     ml->flood_vlans = NULL;
     ml->idle_time = normalize_idle_time(idle_time);
     ml->max_entries = MAC_DEFAULT_MAX;
+    tag_set_init(&ml->tags);
     return ml;
 }
 
@@ -245,22 +246,23 @@ mac_learning_insert(struct mac_learning *ml,
     return e;
 }
 
-/* Changes 'e''s tag to a new, randomly selected one, and returns the tag that
- * would have been previously used for this entry's MAC and VLAN (either before
- * 'e' was inserted, if it is new, or otherwise before its port was updated.)
+/* Changes 'e''s tag to a new, randomly selected one.  Causes
+ * mac_learning_run() to flag for revalidation the tag that would have been
+ * previously used for this entry's MAC and VLAN (either before 'e' was
+ * inserted, if it is new, or otherwise before its port was updated.)
  *
  * The client should call this function after obtaining a MAC learning entry
  * from mac_learning_insert(), if the entry is either new or if its learned
  * port has changed. */
-tag_type
+void
 mac_learning_changed(struct mac_learning *ml, struct mac_entry *e)
 {
-    tag_type old_tag = e->tag;
+    tag_type tag = e->tag ? e->tag : make_unknown_mac_tag(ml, e->mac, e->vlan);
 
     COVERAGE_INC(mac_learning_learned);
 
     e->tag = tag_create_random();
-    return old_tag ? old_tag : make_unknown_mac_tag(ml, e->mac, e->vlan);
+    tag_set_add(&ml->tags, tag);
 }
 
 /* Looks up MAC 'dst' for VLAN 'vlan' in 'ml' and returns the associated MAC
@@ -322,6 +324,12 @@ void
 mac_learning_run(struct mac_learning *ml, struct tag_set *set)
 {
     struct mac_entry *e;
+
+    if (set) {
+        tag_set_union(set, &ml->tags);
+    }
+    tag_set_init(&ml->tags);
+
     while (get_lru(ml, &e)
            && (hmap_count(&ml->table) > ml->max_entries
                || time_now() >= e->expires)) {
@@ -336,7 +344,8 @@ mac_learning_run(struct mac_learning *ml, struct tag_set *set)
 void
 mac_learning_wait(struct mac_learning *ml)
 {
-    if (hmap_count(&ml->table) > ml->max_entries) {
+    if (hmap_count(&ml->table) > ml->max_entries
+        || !tag_set_is_empty(&ml->tags)) {
         poll_immediate_wake();
     } else if (!list_is_empty(&ml->lrus)) {
         struct mac_entry *e = mac_entry_from_lru_node(ml->lrus.next);
