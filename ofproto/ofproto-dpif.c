@@ -7567,7 +7567,6 @@ update_mirror_stats(struct ofproto_dpif *ofproto, mirror_mask_t mirrors,
 static bool
 is_gratuitous_arp(const struct flow *flow, struct flow_wildcards *wc)
 {
-    memset(&wc->masks.dl_type, 0xff, sizeof wc->masks.dl_type);
     if (flow->dl_type != htons(ETH_TYPE_ARP)) {
         return false;
     }
@@ -7742,6 +7741,10 @@ xlate_normal(struct xlate_ctx *ctx)
     uint16_t vid;
 
     ctx->xout->has_normal = true;
+
+    /* Check the dl_type, since we may check for gratuituous ARP. */
+    memset(&ctx->xout->wc.masks.dl_type, 0xff,
+           sizeof ctx->xout->wc.masks.dl_type);
 
     memset(&ctx->xout->wc.masks.dl_src, 0xff,
            sizeof ctx->xout->wc.masks.dl_src);
