@@ -638,6 +638,12 @@ port_open_type(const char *datapath_type, const char *port_type)
 
 /* Type functions. */
 
+static void process_dpif_port_changes(struct dpif_backer *);
+static void process_dpif_all_ports_changed(struct dpif_backer *);
+static void process_dpif_port_change(struct dpif_backer *,
+                                     const char *devname);
+static void process_dpif_port_error(struct dpif_backer *, int error);
+
 static struct ofproto_dpif *
 lookup_ofproto_dpif_by_port_name(const char *name)
 {
@@ -657,8 +663,6 @@ type_run(const char *type)
 {
     static long long int push_timer = LLONG_MIN;
     struct dpif_backer *backer;
-    char *devname;
-    int error;
 
     backer = shash_find_data(&all_dpif_backers, type);
     if (!backer) {
@@ -683,6 +687,8 @@ type_run(const char *type)
      * and the configuration has now changed to "false", enable receiving
      * packets from the datapath. */
     if (!backer->recv_set_enable && !ofproto_get_flow_restore_wait()) {
+        int error;
+
         backer->recv_set_enable = true;
 
         error = dpif_recv_set(backer->dpif, backer->recv_set_enable);
@@ -830,58 +836,7 @@ type_run(const char *type)
         timer_set_duration(&backer->next_expiration, delay);
     }
 
-    /* Check for port changes in the dpif. */
-    while ((error = dpif_port_poll(backer->dpif, &devname)) == 0) {
-        struct ofproto_dpif *ofproto;
-        struct dpif_port port;
-
-        /* Don't report on the datapath's device. */
-        if (!strcmp(devname, dpif_base_name(backer->dpif))) {
-            goto next;
-        }
-
-        HMAP_FOR_EACH (ofproto, all_ofproto_dpifs_node,
-                       &all_ofproto_dpifs) {
-            if (simap_contains(&ofproto->backer->tnl_backers, devname)) {
-                goto next;
-            }
-        }
-
-        ofproto = lookup_ofproto_dpif_by_port_name(devname);
-        if (dpif_port_query_by_name(backer->dpif, devname, &port)) {
-            /* The port was removed.  If we know the datapath,
-             * report it through poll_set().  If we don't, it may be
-             * notifying us of a removal we initiated, so ignore it.
-             * If there's a pending ENOBUFS, let it stand, since
-             * everything will be reevaluated. */
-            if (ofproto && ofproto->port_poll_errno != ENOBUFS) {
-                sset_add(&ofproto->port_poll_set, devname);
-                ofproto->port_poll_errno = 0;
-            }
-        } else if (!ofproto) {
-            /* The port was added, but we don't know with which
-             * ofproto we should associate it.  Delete it. */
-            dpif_port_del(backer->dpif, port.port_no);
-        }
-        dpif_port_destroy(&port);
-
-    next:
-        free(devname);
-    }
-
-    if (error != EAGAIN) {
-        struct ofproto_dpif *ofproto;
-
-        /* There was some sort of error, so propagate it to all
-         * ofprotos that use this backer. */
-        HMAP_FOR_EACH (ofproto, all_ofproto_dpifs_node,
-                       &all_ofproto_dpifs) {
-            if (ofproto->backer == backer) {
-                sset_clear(&ofproto->port_poll_set);
-                ofproto->port_poll_errno = error;
-            }
-        }
-    }
+    process_dpif_port_changes(backer);
 
     if (backer->governor) {
         size_t n_subfacets;
@@ -902,6 +857,115 @@ type_run(const char *type)
     }
 
     return 0;
+}
+
+/* Check for and handle port changes in 'backer''s dpif. */
+static void
+process_dpif_port_changes(struct dpif_backer *backer)
+{
+    for (;;) {
+        char *devname;
+        int error;
+
+        error = dpif_port_poll(backer->dpif, &devname);
+        switch (error) {
+        case EAGAIN:
+            return;
+
+        case ENOBUFS:
+            process_dpif_all_ports_changed(backer);
+            break;
+
+        case 0:
+            process_dpif_port_change(backer, devname);
+            free(devname);
+            break;
+
+        default:
+            process_dpif_port_error(backer, error);
+            break;
+        }
+    }
+}
+
+static void
+process_dpif_all_ports_changed(struct dpif_backer *backer)
+{
+    struct ofproto_dpif *ofproto;
+    struct dpif_port dpif_port;
+    struct dpif_port_dump dump;
+    struct sset devnames;
+    const char *devname;
+
+    sset_init(&devnames);
+    HMAP_FOR_EACH (ofproto, all_ofproto_dpifs_node, &all_ofproto_dpifs) {
+        if (ofproto->backer == backer) {
+            struct ofport *ofport;
+
+            HMAP_FOR_EACH (ofport, hmap_node, &ofproto->up.ports) {
+                sset_add(&devnames, netdev_get_name(ofport->netdev));
+            }
+        }
+    }
+    DPIF_PORT_FOR_EACH (&dpif_port, &dump, backer->dpif) {
+        sset_add(&devnames, dpif_port.name);
+    }
+
+    SSET_FOR_EACH (devname, &devnames) {
+        process_dpif_port_change(backer, devname);
+    }
+    sset_destroy(&devnames);
+}
+
+static void
+process_dpif_port_change(struct dpif_backer *backer, const char *devname)
+{
+    struct ofproto_dpif *ofproto;
+    struct dpif_port port;
+
+    /* Don't report on the datapath's device. */
+    if (!strcmp(devname, dpif_base_name(backer->dpif))) {
+        return;
+    }
+
+    HMAP_FOR_EACH (ofproto, all_ofproto_dpifs_node,
+                   &all_ofproto_dpifs) {
+        if (simap_contains(&ofproto->backer->tnl_backers, devname)) {
+            return;
+        }
+    }
+
+    ofproto = lookup_ofproto_dpif_by_port_name(devname);
+    if (dpif_port_query_by_name(backer->dpif, devname, &port)) {
+        /* The port was removed.  If we know the datapath,
+         * report it through poll_set().  If we don't, it may be
+         * notifying us of a removal we initiated, so ignore it.
+         * If there's a pending ENOBUFS, let it stand, since
+         * everything will be reevaluated. */
+        if (ofproto && ofproto->port_poll_errno != ENOBUFS) {
+            sset_add(&ofproto->port_poll_set, devname);
+            ofproto->port_poll_errno = 0;
+        }
+    } else if (!ofproto) {
+        /* The port was added, but we don't know with which
+         * ofproto we should associate it.  Delete it. */
+        dpif_port_del(backer->dpif, port.port_no);
+    }
+    dpif_port_destroy(&port);
+}
+
+/* Propagate 'error' to all ofprotos based on 'backer'. */
+static void
+process_dpif_port_error(struct dpif_backer *backer, int error)
+{
+    struct ofproto_dpif *ofproto;
+
+    HMAP_FOR_EACH (ofproto, all_ofproto_dpifs_node, &all_ofproto_dpifs) {
+        if (ofproto->backer == backer) {
+            sset_clear(&ofproto->port_poll_set);
+            ofproto->port_poll_errno = error;
+        }
+    }
 }
 
 static int
