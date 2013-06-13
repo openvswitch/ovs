@@ -22,6 +22,7 @@
 #include <fcntl.h>
 #include <arpa/inet.h>
 #include <inttypes.h>
+#include <linux/filter.h>
 #include <linux/gen_stats.h>
 #include <linux/if_ether.h>
 #include <linux/if_tun.h>
@@ -744,6 +745,14 @@ netdev_linux_rx_open(struct netdev *netdev_, struct netdev_rx **rxp)
     } else {
         struct sockaddr_ll sll;
         int ifindex;
+        /* Result of tcpdump -dd inbound */
+        static struct sock_filter filt[] = {
+            { 0x28, 0, 0, 0xfffff004 }, /* ldh [0] */
+            { 0x15, 0, 1, 0x00000004 }, /* jeq #4     jt 2  jf 3 */
+            { 0x6, 0, 0, 0x00000000 },  /* ret #0 */
+            { 0x6, 0, 0, 0x0000ffff }   /* ret #65535 */
+        };
+        static struct sock_fprog fprog = { ARRAY_SIZE(filt), filt };
 
         /* Create file descriptor. */
         fd = socket(PF_PACKET, SOCK_RAW, 0);
@@ -773,6 +782,16 @@ netdev_linux_rx_open(struct netdev *netdev_, struct netdev_rx **rxp)
         if (bind(fd, (struct sockaddr *) &sll, sizeof sll) < 0) {
             error = errno;
             VLOG_ERR("%s: failed to bind raw socket (%s)",
+                     netdev_get_name(netdev_), strerror(error));
+            goto error;
+        }
+
+        /* Filter for only inbound packets. */
+        error = setsockopt(fd, SOL_SOCKET, SO_ATTACH_FILTER, &fprog,
+                           sizeof fprog);
+        if (error) {
+            error = errno;
+            VLOG_ERR("%s: failed attach filter (%s)",
                      netdev_get_name(netdev_), strerror(error));
             goto error;
         }
@@ -910,7 +929,8 @@ netdev_linux_send(struct netdev *netdev_, const void *data, size_t size)
             /* Use the tap fd to send to this device.  This is essential for
              * tap devices, because packets sent to a tap device with an
              * AF_PACKET socket will loop back to be *received* again on the
-             * tap device. */
+             * tap device.  This doesn't occur on other interface types
+             * because we attach a socket filter to the rx socket. */
             struct netdev_linux *netdev = netdev_linux_cast(netdev_);
 
             retval = write(netdev->state.tap.fd, data, size);
