@@ -213,7 +213,8 @@ tnl_port_receive(const struct flow *flow)
  * port that the output should happen on.  May return OVSP_NONE if the output
  * shouldn't occur. */
 uint32_t
-tnl_port_send(const struct tnl_port *tnl_port, struct flow *flow)
+tnl_port_send(const struct tnl_port *tnl_port, struct flow *flow,
+              struct flow_wildcards *wc)
 {
     const struct netdev_tunnel_config *cfg;
     char *pre_flow_str = NULL;
@@ -242,14 +243,18 @@ tnl_port_send(const struct tnl_port *tnl_port, struct flow *flow)
     }
 
     if (cfg->ttl_inherit && is_ip_any(flow)) {
+        wc->masks.nw_ttl = 0xff;
         flow->tunnel.ip_ttl = flow->nw_ttl;
     } else {
         flow->tunnel.ip_ttl = cfg->ttl;
     }
 
     if (cfg->tos_inherit && is_ip_any(flow)) {
+        wc->masks.nw_tos = 0xff;
         flow->tunnel.ip_tos = flow->nw_tos & IP_DSCP_MASK;
     } else {
+        /* ECN fields are always inherited. */
+        wc->masks.nw_tos |= IP_ECN_MASK;
         flow->tunnel.ip_tos = cfg->tos;
     }
 

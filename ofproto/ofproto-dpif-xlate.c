@@ -873,7 +873,7 @@ compose_output_action__(struct xlate_ctx *ctx, uint16_t ofp_port,
           * matches, while explicit set actions on tunnel metadata are.
           */
         struct flow_tnl flow_tnl = flow->tunnel;
-        odp_port = tnl_port_send(ofport->tnl_port, flow);
+        odp_port = tnl_port_send(ofport->tnl_port, flow, &ctx->xout->wc);
         if (odp_port == OVSP_NONE) {
             xlate_report(ctx, "Tunneling decided against output");
             goto out; /* restore flow_nw_tos */
