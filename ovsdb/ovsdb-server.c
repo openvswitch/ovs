@@ -80,8 +80,14 @@ struct add_remote_aux {
     struct sset *remotes;
     struct db *dbs;
     size_t n_dbs;
+    FILE *config_tmpfile;
 };
 static unixctl_cb_func ovsdb_server_add_remote;
+
+struct remove_remote_aux {
+    struct sset *remotes;
+    FILE *config_tmpfile;
+};
 static unixctl_cb_func ovsdb_server_remove_remote;
 static unixctl_cb_func ovsdb_server_list_remotes;
 
@@ -98,6 +104,9 @@ static void update_remote_status(const struct ovsdb_jsonrpc_server *jsonrpc,
                                  const struct sset *remotes,
                                  struct db dbs[], size_t n_dbs);
 
+static void save_config(FILE *config_file, const struct sset *);
+static void load_config(FILE *config_file, struct sset *);
+
 int
 main(int argc, char *argv[])
 {
@@ -111,6 +120,8 @@ main(int argc, char *argv[])
     int retval;
     long long int status_timer = LLONG_MIN;
     struct add_remote_aux add_remote_aux;
+    struct remove_remote_aux remove_remote_aux;
+    FILE *config_tmpfile;
 
     struct db *dbs;
     int n_dbs;
@@ -124,7 +135,21 @@ main(int argc, char *argv[])
 
     parse_options(&argc, &argv, &remotes, &unixctl_path, &run_command);
 
+    /* Create and initialize 'config_tmpfile' as a temporary file to hold
+     * ovsdb-server's most basic configuration, and then save our initial
+     * configuration to it.  When --monitor is used, this preserves the effects
+     * of ovs-appctl commands such as ovsdb-server/add-remote (which saves the
+     * new configuration) across crashes. */
+    config_tmpfile = tmpfile();
+    if (!config_tmpfile) {
+        ovs_fatal(errno, "failed to create temporary file");
+    }
+    save_config(config_tmpfile, &remotes);
+
     daemonize_start();
+
+    /* Load the saved config. */
+    load_config(config_tmpfile, &remotes);
 
     n_dbs = MAX(1, argc);
     dbs = xcalloc(n_dbs + 1, sizeof *dbs);
@@ -194,10 +219,15 @@ main(int argc, char *argv[])
     add_remote_aux.remotes = &remotes;
     add_remote_aux.dbs = dbs;
     add_remote_aux.n_dbs = n_dbs;
+    add_remote_aux.config_tmpfile = config_tmpfile;
     unixctl_command_register("ovsdb-server/add-remote", "REMOTE", 1, 1,
                              ovsdb_server_add_remote, &add_remote_aux);
+
+    remove_remote_aux.remotes = &remotes;
+    remove_remote_aux.config_tmpfile = config_tmpfile;
     unixctl_command_register("ovsdb-server/remove-remote", "REMOTE", 1, 1,
-                             ovsdb_server_remove_remote, &remotes);
+                             ovsdb_server_remove_remote, &remove_remote_aux);
+
     unixctl_command_register("ovsdb-server/list-remotes", "", 0, 0,
                              ovsdb_server_list_remotes, &remotes);
 
@@ -914,7 +944,9 @@ ovsdb_server_add_remote(struct unixctl_conn *conn, int argc OVS_UNUSED,
               : parse_db_column(aux->dbs, aux->n_dbs, remote,
                                 &db, &table, &column));
     if (!retval) {
-        sset_add(aux->remotes, remote);
+        if (sset_add(aux->remotes, remote)) {
+            save_config(aux->config_tmpfile, aux->remotes);
+        }
         unixctl_command_reply(conn, NULL);
     } else {
         unixctl_command_reply_error(conn, retval);
@@ -926,14 +958,15 @@ ovsdb_server_add_remote(struct unixctl_conn *conn, int argc OVS_UNUSED,
  * that ovsdb-server services. */
 static void
 ovsdb_server_remove_remote(struct unixctl_conn *conn, int argc OVS_UNUSED,
-                           const char *argv[], void *remotes_)
+                           const char *argv[], void *aux_)
 {
-    struct sset *remotes = remotes_;
+    struct remove_remote_aux *aux = aux_;
     struct sset_node *node;
 
-    node = sset_find(remotes, argv[1]);
+    node = sset_find(aux->remotes, argv[1]);
     if (node) {
-        sset_delete(remotes, node);
+        sset_delete(aux->remotes, node);
+        save_config(aux->config_tmpfile, aux->remotes);
         unixctl_command_reply(conn, NULL);
     } else {
         unixctl_command_reply_error(conn, "no such remote");
@@ -1083,4 +1116,57 @@ usage(void)
            "  -V, --version           display version information\n");
     leak_checker_usage();
     exit(EXIT_SUCCESS);
+}
+
+/* Truncates and replaces the contents of 'config_file' by a representation
+ * of 'remotes'. */
+static void
+save_config(FILE *config_file, const struct sset *remotes)
+{
+    const char *remote;
+    struct json *json;
+    char *s;
+
+    if (ftruncate(fileno(config_file), 0) == -1) {
+        VLOG_FATAL("failed to truncate temporary file (%s)", strerror(errno));
+    }
+
+    json = json_array_create_empty();
+    SSET_FOR_EACH (remote, remotes) {
+        json_array_add(json, json_string_create(remote));
+    }
+    s = json_to_string(json, 0);
+    json_destroy(json);
+
+    if (fseek(config_file, 0, SEEK_SET) != 0
+        || fputs(s, config_file) == EOF
+        || fflush(config_file) == EOF) {
+        VLOG_FATAL("failed to write temporary file (%s)", strerror(errno));
+    }
+    free(s);
+}
+
+/* Clears and replaces 'remotes' by a configuration read from 'config_file',
+ * which must have been previously written by save_config(). */
+static void
+load_config(FILE *config_file, struct sset *remotes)
+{
+    struct json *json;
+    size_t i;
+
+    sset_clear(remotes);
+
+    if (fseek(config_file, 0, SEEK_SET) != 0) {
+        VLOG_FATAL("seek failed in temporary file (%s)", strerror(errno));
+    }
+    json = json_from_stream(config_file);
+    if (json->type == JSON_STRING) {
+        VLOG_FATAL("reading json failed (%s)", json_string(json));
+    }
+    ovs_assert(json->type == JSON_ARRAY);
+    for (i = 0; i < json->u.array.n; i++) {
+        const struct json *remote = json->u.array.elems[i];
+        sset_add(remotes, json_string(remote));
+    }
+    json_destroy(json);
 }
