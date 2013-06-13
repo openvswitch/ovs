@@ -5720,9 +5720,10 @@ send_packet(const struct ofport_dpif *ofport, struct ofpbuf *packet)
     ofpbuf_use_stub(&odp_actions, odp_actions_stub, sizeof odp_actions_stub);
 
     if (ofport->tnl_port) {
+        struct flow_wildcards wc;
         struct dpif_flow_stats stats;
 
-        odp_port = tnl_port_send(ofport->tnl_port, &flow);
+        odp_port = tnl_port_send(ofport->tnl_port, &flow, &wc);
         if (odp_port == OVSP_NONE) {
             return ENODEV;
         }
@@ -6078,7 +6079,8 @@ compose_output_action__(struct xlate_ctx *ctx, uint16_t ofp_port,
           * matches, while explicit set actions on tunnel metadata are.
           */
         struct flow_tnl flow_tnl = ctx->xin->flow.tunnel;
-        odp_port = tnl_port_send(ofport->tnl_port, &ctx->xin->flow);
+        odp_port = tnl_port_send(ofport->tnl_port, &ctx->xin->flow,
+                                 &ctx->xout->wc);
         if (odp_port == OVSP_NONE) {
             xlate_report(ctx, "Tunneling decided against output");
             goto out; /* restore flow_nw_tos */

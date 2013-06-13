@@ -2330,3 +2330,36 @@ in_port=1,vlan_tci=0x0000/0x0fff,dl_src=50:54:00:00:00:0b, n_subfacets:1, used:0
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
+
+AT_SETUP([ofproto-dpif megaflow - tunnels])
+OVS_VSWITCHD_START(
+  [add-port br0 p1 -- set Interface p1 type=dummy ofport_request=1 \
+     ofport_request=1 -- \
+   add-port br0 p2 -- set Interface p2 type=gre options:remote_ip=1.1.1.1 \
+     ofport_request=2 options:key=flow -- \
+   add-port br0 p3 -- set Interface p3 type=dummy ofport_request=3 \
+     ofport_request=3 -- \
+   add-port br0 p4 -- set Interface p4 type=gre options:remote_ip=1.1.1.2 \
+     options:tos=inherit options:ttl=inherit ofport_request=4 options:key=flow])
+AT_DATA([flows.txt], [dnl
+in_port=1,actions=output(2)
+in_port=3,actions=output(4)
+])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+dnl ECN bits are always copied out, but don't use 0x3 (CE), since that
+dnl will cause the packet to be dropped.
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0xfd,ttl=128,frag=no),icmp(type=8,code=0)'], [0], [success
+])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0x1,ttl=64,frag=no),icmp(type=8,code=0)'], [0], [success
+])
+AT_CHECK([ovs-appctl netdev-dummy/receive p3 'in_port(3),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0xfd,ttl=128,frag=no),icmp(type=8,code=0)'], [0], [success
+])
+AT_CHECK([ovs-appctl netdev-dummy/receive p3 'in_port(3),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0x1,ttl=64,frag=no),icmp(type=8,code=0)'], [0], [success
+])
+AT_CHECK([ovs-appctl dpif/dump-megaflows br0 | STRIP_XOUT], [0], [dnl
+in_port=1,nw_ecn=1, n_subfacets:2, used:0.0s, Datapath actions: <del>
+in_port=3,nw_tos=0,nw_ecn=1,nw_ttl=64, n_subfacets:1, used:0.0s, Datapath actions: <del>
+in_port=3,nw_tos=252,nw_ecn=1,nw_ttl=128, n_subfacets:1, used:0.0s, Datapath actions: <del>
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
