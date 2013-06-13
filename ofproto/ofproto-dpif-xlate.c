@@ -817,7 +817,6 @@ compose_output_action__(struct xlate_ctx *ctx, uint16_t ofp_port,
         struct ofport_dpif *peer = ofport_get_peer(ofport);
         struct flow old_flow = ctx->xin->flow;
         enum slow_path_reason special;
-        struct ofport_dpif *in_port;
 
         if (!peer) {
             xlate_report(ctx, "Nonexistent patch port peer");
@@ -830,13 +829,12 @@ compose_output_action__(struct xlate_ctx *ctx, uint16_t ofp_port,
         memset(&flow->tunnel, 0, sizeof flow->tunnel);
         memset(flow->regs, 0, sizeof flow->regs);
 
-        in_port = get_ofp_port(ctx->ofproto, flow->in_port);
-        special = process_special(ctx->ofproto, &ctx->xin->flow, in_port,
+        special = process_special(ctx->ofproto, &ctx->xin->flow, peer,
                                   ctx->xin->packet);
         if (special) {
             ctx->xout->slow = special;
-        } else if (!in_port || may_receive(in_port, ctx)) {
-            if (!in_port || stp_forward_in_state(in_port->stp_state)) {
+        } else if (may_receive(peer, ctx)) {
+            if (stp_forward_in_state(peer->stp_state)) {
                 xlate_table_action(ctx, flow->in_port, 0, true);
             } else {
                 /* Forwarding is disabled by STP.  Let OFPP_NORMAL and the
