@@ -22,10 +22,6 @@
 #include "ofproto-dpif.h"
 #include "tag.h"
 
-/* Maximum depth of flow table recursion (due to resubmit actions) in a
- * flow translation. */
-#define MAX_RESUBMIT_RECURSION 64
-
 struct xlate_out {
     /* Wildcards relevant in translation.  Any fields that were used to
      * calculate the action must be set for caching and kernel

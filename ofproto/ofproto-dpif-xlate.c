@@ -43,6 +43,10 @@ COVERAGE_DEFINE(ofproto_dpif_xlate);
 
 VLOG_DEFINE_THIS_MODULE(ofproto_dpif_xlate);
 
+/* Maximum depth of flow table recursion (due to resubmit actions) in a
+ * flow translation. */
+#define MAX_RESUBMIT_RECURSION 64
+
 struct xlate_ctx {
     struct xlate_in *xin;
     struct xlate_out *xout;
