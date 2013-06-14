@@ -41,6 +41,7 @@ vlog = ovs.vlog.Vlog("ovs-xapi-sync")
 session = None
 flush_cache = False
 exiting = False
+xapi_down = False
 
 
 def unixctl_exit(conn, unused_argv, unused_aux):
@@ -92,6 +93,7 @@ def get_network_by_bridge(br_name):
 # In cases like that, we should choose the bridge-id whose PIF does not have a
 # VLAN associated with it.
 def get_single_bridge_id(bridge_ids, default=None):
+    global xapi_down
     if not init_session():
         vlog.warn("Failed to get single bridge id from %s because"
                   "XAPI session could not be initialized" % bridge_ids)
@@ -116,6 +118,8 @@ def get_single_bridge_id(bridge_ids, default=None):
             vlog.warn("Could not find XAPI entry for bridge_id %s" % bridge_id)
             continue
 
+    vlog.warn("Failed to get a single bridge id from Xapi.")
+    xapi_down = True
     return default
 
 # By default, the "bridge-id" external id in the Bridge table is the
@@ -238,7 +242,7 @@ def update_in_band_mgmt(row):
 
 
 def main():
-    global flush_cache
+    global flush_cache, xapi_down
 
     parser = argparse.ArgumentParser()
     parser.add_argument("database", metavar="DATABASE",
@@ -285,12 +289,17 @@ def main():
             break;
 
         idl.run()
-        if not flush_cache and seqno == idl.change_seqno:
+        if not xapi_down and not flush_cache and seqno == idl.change_seqno:
             poller = ovs.poller.Poller()
             unixctl_server.wait(poller)
             idl.wait(poller)
             poller.block()
             continue
+
+        if xapi_down:
+            vlog.warn("Xapi is probably down. Retry again after a second.")
+            time.sleep(1)
+            xapi_down = False
 
         if flush_cache:
             vlog.info("Flushing cache as the result of unixctl.")
@@ -317,7 +326,7 @@ def main():
                 bridge_id = row.external_ids.get("xs-network-uuids")
                 if bridge_id and len(bridge_id.split(";")) > 1:
                     bridge_ids = bridge_id.split(";")
-                    bridge_id = get_single_bridge_id(bridge_ids, bridge_ids[0])
+                    bridge_id = get_single_bridge_id(bridge_ids, "")
 
             if bridge_id is not None:
                 set_external_id(row, "bridge-id", bridge_id.split(";")[0])
