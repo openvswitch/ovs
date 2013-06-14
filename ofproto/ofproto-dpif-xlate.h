@@ -23,6 +23,13 @@
 #include "ofproto-dpif.h"
 #include "tag.h"
 
+struct bfd;
+struct bond;
+struct lacp;
+struct dpif_ipfix;
+struct dpif_sflow;
+struct mac_learning;
+
 struct xlate_out {
     /* Wildcards relevant in translation.  Any fields that were used to
      * calculate the action must be set for caching and kernel
@@ -103,6 +110,28 @@ struct xlate_in {
      * calling xlate_in_init(). */
     const struct dpif_flow_stats *resubmit_stats;
 };
+
+void xlate_ofproto_set(struct ofproto_dpif *, const char *name,
+                       const struct mac_learning *, const struct mbridge *,
+                       const struct dpif_sflow *, const struct dpif_ipfix *,
+                       enum ofp_config_flags, bool forward_bpdu,
+                       bool has_in_band, bool has_netflow, bool has_stp);
+void xlate_remove_ofproto(struct ofproto_dpif *);
+
+void xlate_bundle_set(struct ofproto_dpif *, struct ofbundle *,
+                      const char *name, enum port_vlan_mode, int vlan,
+                      unsigned long *trunks, bool use_priority_tags,
+                      const struct bond *, const struct lacp *,
+                      bool floodable);
+void xlate_bundle_remove(struct ofbundle *);
+
+void xlate_ofport_set(struct ofproto_dpif *, struct ofbundle *,
+                      struct ofport_dpif *, ofp_port_t, odp_port_t,
+                      const struct netdev *, const struct cfm *,
+                      const struct bfd *, struct ofport_dpif *peer,
+                      enum ofputil_port_config, enum stp_state, bool is_tunnel,
+                      bool may_enable);
+void xlate_ofport_remove(struct ofport_dpif *);
 
 void xlate_actions(struct xlate_in *, struct xlate_out *);
 void xlate_in_init(struct xlate_in *, struct ofproto_dpif *,

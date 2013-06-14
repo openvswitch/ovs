@@ -72,6 +72,11 @@ COVERAGE_DEFINE(facet_unexpected);
 COVERAGE_DEFINE(facet_suppress);
 COVERAGE_DEFINE(subfacet_install_fail);
 
+/* Number of implemented OpenFlow tables. */
+enum { N_TABLES = 255 };
+enum { TBL_INTERNAL = N_TABLES - 1 };    /* Used for internal hidden rules. */
+BUILD_ASSERT_DECL(N_TABLES >= 2 && N_TABLES <= 255);
+
 struct flow_miss;
 struct facet;
 
@@ -81,6 +86,26 @@ static struct rule_dpif *rule_dpif_lookup(struct ofproto_dpif *,
 
 static void rule_get_stats(struct rule *, uint64_t *packets, uint64_t *bytes);
 static void rule_invalidate(const struct rule_dpif *);
+
+struct ofbundle {
+    struct hmap_node hmap_node; /* In struct ofproto's "bundles" hmap. */
+    struct ofproto_dpif *ofproto; /* Owning ofproto. */
+    void *aux;                  /* Key supplied by ofproto's client. */
+    char *name;                 /* Identifier for log messages. */
+
+    /* Configuration. */
+    struct list ports;          /* Contains "struct ofport"s. */
+    enum port_vlan_mode vlan_mode; /* VLAN mode */
+    int vlan;                   /* -1=trunk port, else a 12-bit VLAN ID. */
+    unsigned long *trunks;      /* Bitmap of trunked VLANs, if 'vlan' == -1.
+                                 * NULL if all VLANs are trunked. */
+    struct lacp *lacp;          /* LACP if LACP is enabled, otherwise NULL. */
+    struct bond *bond;          /* Nonnull iff more than one port. */
+    bool use_priority_tags;     /* Use 802.1p tag for frames in VLAN 0? */
+
+    /* Status. */
+    bool floodable;          /* True if no port has OFPUTIL_PC_NO_FLOOD set. */
+};
 
 static void bundle_remove(struct ofport *);
 static void bundle_update(struct ofbundle *);
@@ -255,6 +280,38 @@ static void push_all_stats(void);
 
 static bool facet_is_controller_flow(struct facet *);
 
+struct ofport_dpif {
+    struct hmap_node odp_port_node; /* In dpif_backer's "odp_to_ofport_map". */
+    struct ofport up;
+
+    odp_port_t odp_port;
+    struct ofbundle *bundle;    /* Bundle that contains this port, if any. */
+    struct list bundle_node;    /* In struct ofbundle's "ports" list. */
+    struct cfm *cfm;            /* Connectivity Fault Management, if any. */
+    struct bfd *bfd;            /* BFD, if any. */
+    tag_type tag;               /* Tag associated with this port. */
+    bool may_enable;            /* May be enabled in bonds. */
+    bool is_tunnel;             /* This port is a tunnel. */
+    long long int carrier_seq;  /* Carrier status changes. */
+    struct ofport_dpif *peer;   /* Peer if patch port. */
+
+    /* Spanning tree. */
+    struct stp_port *stp_port;  /* Spanning Tree Protocol, if any. */
+    enum stp_state stp_state;   /* Always STP_DISABLED if STP not in use. */
+    long long int stp_state_entered;
+
+    struct hmap priorities;     /* Map of attached 'priority_to_dscp's. */
+
+    /* Linux VLAN device support (e.g. "eth0.10" for VLAN 10.)
+     *
+     * This is deprecated.  It is only for compatibility with broken device
+     * drivers in old versions of Linux that do not properly support VLANs when
+     * VLAN devices are not used.  When broken device drivers are no longer in
+     * widespread use, we will delete these interfaces. */
+    ofp_port_t realdev_ofp_port;
+    int vlandev_vid;
+};
+
 /* Node in 'ofport_dpif''s 'priorities' map.  Used to maintain a map from
  * 'priority' (the datapath's term for QoS queue) to the dscp bits which all
  * traffic egressing the 'ofport' with that priority should be marked with. */
@@ -283,8 +340,11 @@ static bool vsp_adjust_flow(const struct ofproto_dpif *, struct flow *);
 static void vsp_remove(struct ofport_dpif *);
 static void vsp_add(struct ofport_dpif *, ofp_port_t realdev_ofp_port, int vid);
 
+static odp_port_t ofp_port_to_odp_port(const struct ofproto_dpif *,
+                                       ofp_port_t);
+
 static ofp_port_t odp_port_to_ofp_port(const struct ofproto_dpif *,
-                                       odp_port_t odp_port);
+                                       odp_port_t);
 
 static struct ofport_dpif *
 ofport_dpif_cast(const struct ofport *ofport)
@@ -304,6 +364,17 @@ static void run_fast_rl(void);
 struct dpif_completion {
     struct list list_node;
     struct ofoperation *op;
+};
+
+/* Extra information about a classifier table.
+ * Currently used just for optimized flow revalidation. */
+struct table_dpif {
+    /* If either of these is nonnull, then this table has a form that allows
+     * flows to be tagged to avoid revalidating most flows for the most common
+     * kinds of flow table changes. */
+    struct cls_table *catchall_table; /* Table that wildcards all fields. */
+    struct cls_table *other_table;    /* Table with any other wildcard set. */
+    uint32_t basis;                   /* Keeps each table's tags separate. */
 };
 
 /* Reasons that we might need to revalidate every facet, and corresponding
@@ -396,6 +467,57 @@ static struct ofport_dpif *
 odp_port_to_ofport(const struct dpif_backer *, odp_port_t odp_port);
 static void update_moving_averages(struct dpif_backer *backer);
 
+struct ofproto_dpif {
+    struct hmap_node all_ofproto_dpifs_node; /* In 'all_ofproto_dpifs'. */
+    struct ofproto up;
+    struct dpif_backer *backer;
+
+    /* Special OpenFlow rules. */
+    struct rule_dpif *miss_rule; /* Sends flow table misses to controller. */
+    struct rule_dpif *no_packet_in_rule; /* Drops flow table misses. */
+    struct rule_dpif *drop_frags_rule; /* Used in OFPC_FRAG_DROP mode. */
+
+    /* Bridging. */
+    struct netflow *netflow;
+    struct dpif_sflow *sflow;
+    struct dpif_ipfix *ipfix;
+    struct hmap bundles;        /* Contains "struct ofbundle"s. */
+    struct mac_learning *ml;
+    bool has_bonded_bundles;
+    struct mbridge *mbridge;
+
+    /* Facets. */
+    struct classifier facets;     /* Contains 'struct facet's. */
+    long long int consistency_rl;
+
+    /* Revalidation. */
+    struct table_dpif tables[N_TABLES];
+
+    /* Support for debugging async flow mods. */
+    struct list completions;
+
+    struct netdev_stats stats; /* To account packets generated and consumed in
+                                * userspace. */
+
+    /* Spanning tree. */
+    struct stp *stp;
+    long long int stp_last_tick;
+
+    /* VLAN splinters. */
+    struct hmap realdev_vid_map; /* (realdev,vid) -> vlandev. */
+    struct hmap vlandev_map;     /* vlandev -> (realdev,vid). */
+
+    /* Ports. */
+    struct sset ports;             /* Set of standard port names. */
+    struct sset ghost_ports;       /* Ports with no datapath port. */
+    struct sset port_poll_set;     /* Queued names for port_poll() reply. */
+    int port_poll_errno;           /* Last errno for port_poll() reply. */
+
+    /* Per ofproto's dpif stats. */
+    uint64_t n_hit;
+    uint64_t n_missed;
+};
+
 /* Defer flow mod completion until "ovs-appctl ofproto/unclog"?  (Useful only
  * for debugging the asynchronous flow_mod implementation.) */
 static bool clogged;
@@ -408,6 +530,16 @@ static bool enable_megaflows = true;
 static struct hmap all_ofproto_dpifs = HMAP_INITIALIZER(&all_ofproto_dpifs);
 
 static void ofproto_dpif_unixctl_init(void);
+
+static inline struct ofproto_dpif *
+ofproto_dpif_cast(const struct ofproto *ofproto)
+{
+    ovs_assert(ofproto->ofproto_class == &ofproto_dpif_class);
+    return CONTAINER_OF(ofproto, struct ofproto_dpif, up);
+}
+
+static struct ofport_dpif *get_ofp_port(const struct ofproto_dpif *ofproto,
+                                        ofp_port_t ofp_port);
 
 /* Upcalls. */
 #define FLOW_MISS_MAX_BATCH 50
@@ -427,6 +559,20 @@ static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 
 /* Initial mappings of port to bridge mappings. */
 static struct shash init_ofp_ports = SHASH_INITIALIZER(&init_ofp_ports);
+
+int
+ofproto_dpif_flow_mod(struct ofproto_dpif *ofproto,
+                      struct ofputil_flow_mod *fm)
+{
+    return ofproto_flow_mod(&ofproto->up, fm);
+}
+
+void
+ofproto_dpif_send_packet_in(struct ofproto_dpif *ofproto,
+                            struct ofputil_packet_in *pin)
+{
+    connmgr_send_packet_in(ofproto->up.connmgr, pin);
+}
 
 /* Factory functions. */
 
@@ -633,6 +779,36 @@ type_run(const char *type)
 
             if (ofproto->backer != backer) {
                 continue;
+            }
+
+            if (need_revalidate) {
+                struct ofport_dpif *ofport;
+                struct ofbundle *bundle;
+
+                xlate_ofproto_set(ofproto, ofproto->up.name, ofproto->ml,
+                                  ofproto->mbridge, ofproto->sflow,
+                                  ofproto->ipfix, ofproto->up.frag_handling,
+                                  ofproto->up.forward_bpdu,
+                                  connmgr_has_in_band(ofproto->up.connmgr),
+                                  ofproto->netflow != NULL,
+                                  ofproto->stp != NULL);
+
+                HMAP_FOR_EACH (bundle, hmap_node, &ofproto->bundles) {
+                    xlate_bundle_set(ofproto, bundle, bundle->name,
+                                     bundle->vlan_mode, bundle->vlan,
+                                     bundle->trunks, bundle->use_priority_tags,
+                                     bundle->bond, bundle->lacp,
+                                     bundle->floodable);
+                }
+
+                HMAP_FOR_EACH (ofport, up.hmap_node, &ofproto->up.ports) {
+                    xlate_ofport_set(ofproto, ofport->bundle, ofport,
+                                     ofport->up.ofp_port, ofport->odp_port,
+                                     ofport->up.netdev, ofport->cfm,
+                                     ofport->bfd, ofport->peer,
+                                     ofport->up.pp.config, ofport->stp_state,
+                                     ofport->is_tunnel, ofport->may_enable);
+                }
             }
 
             cls_cursor_init(&cursor, &ofproto->facets, NULL);
@@ -1173,6 +1349,8 @@ destruct(struct ofproto *ofproto_)
     struct oftable *table;
 
     ofproto->backer->need_revalidate = REV_RECONFIGURE;
+    xlate_remove_ofproto(ofproto);
+
     hmap_remove(&all_ofproto_dpifs, &ofproto->all_ofproto_dpifs_node);
     complete_operations(ofproto);
 
@@ -1520,6 +1698,7 @@ port_destruct(struct ofport *port_)
     const char *dp_port_name;
 
     ofproto->backer->need_revalidate = REV_RECONFIGURE;
+    xlate_ofport_remove(port);
 
     dp_port_name = netdev_vport_get_dpif_port(port->up.netdev, namebuf,
                                               sizeof namebuf);
@@ -2207,6 +2386,8 @@ bundle_destroy(struct ofbundle *bundle)
     ofproto = bundle->ofproto;
     mbridge_unregister_bundle(ofproto->mbridge, bundle->aux);
 
+    xlate_bundle_remove(bundle);
+
     LIST_FOR_EACH_SAFE (port, next_port, bundle_node, &bundle->ports) {
         bundle_del_port(port);
     }
@@ -2598,14 +2779,14 @@ set_mac_table_config(struct ofproto *ofproto_, unsigned int idle_time,
 
 /* Ports. */
 
-struct ofport_dpif *
+static struct ofport_dpif *
 get_ofp_port(const struct ofproto_dpif *ofproto, ofp_port_t ofp_port)
 {
     struct ofport *ofport = ofproto_get_port(&ofproto->up, ofp_port);
     return ofport ? ofport_dpif_cast(ofport) : NULL;
 }
 
-struct ofport_dpif *
+static struct ofport_dpif *
 get_odp_port(const struct ofproto_dpif *ofproto, odp_port_t odp_port)
 {
     struct ofport_dpif *port = odp_port_to_ofport(ofproto->backer, odp_port);
@@ -5535,6 +5716,13 @@ ofproto_unixctl_fdb_flush(struct unixctl_conn *conn, int argc,
     unixctl_command_reply(conn, "table successfully flushed");
 }
 
+static struct ofport_dpif *
+ofbundle_get_a_port(const struct ofbundle *bundle)
+{
+    return CONTAINER_OF(list_front(&bundle->ports), struct ofport_dpif,
+                        bundle_node);
+}
+
 static void
 ofproto_unixctl_fdb_show(struct unixctl_conn *conn, int argc OVS_UNUSED,
                          const char *argv[], void *aux OVS_UNUSED)
@@ -6344,6 +6532,12 @@ hash_realdev_vid(ofp_port_t realdev_ofp_port, int vid)
     return hash_2words(ofp_to_u16(realdev_ofp_port), vid);
 }
 
+bool
+ofproto_has_vlan_splinters(const struct ofproto_dpif *ofproto)
+{
+    return !hmap_is_empty(&ofproto->realdev_vid_map);
+}
+
 /* Returns the OFP port number of the Linux VLAN device that corresponds to
  * 'vlan_tci' on the network device with port number 'realdev_ofp_port' in
  * 'struct ofport_dpif'.  For example, given 'realdev_ofp_port' of eth0 and
@@ -6481,7 +6675,7 @@ vsp_add(struct ofport_dpif *port, ofp_port_t realdev_ofp_port, int vid)
     }
 }
 
-odp_port_t
+static odp_port_t
 ofp_port_to_odp_port(const struct ofproto_dpif *ofproto, ofp_port_t ofp_port)
 {
     const struct ofport_dpif *ofport = get_ofp_port(ofproto, ofp_port);
