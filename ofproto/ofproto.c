@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
  * Copyright (c) 2010 Jean Tourrilhes - HP-Labs.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -2895,8 +2895,8 @@ add_flow(struct ofproto *ofproto, struct ofconn *ofconn,
     struct oftable *table;
     struct ofopgroup *group;
     struct rule *victim;
-    struct cls_rule cr;
     struct rule *rule;
+    uint8_t table_id;
     int error;
 
     error = check_table_id(ofproto, fm->table_id);
@@ -2906,7 +2906,6 @@ add_flow(struct ofproto *ofproto, struct ofconn *ofconn,
 
     /* Pick table. */
     if (fm->table_id == 0xff) {
-        uint8_t table_id;
         if (ofproto->ofproto_class->rule_choose_table) {
             error = ofproto->ofproto_class->rule_choose_table(ofproto,
                                                               &fm->match,
@@ -2915,15 +2914,16 @@ add_flow(struct ofproto *ofproto, struct ofconn *ofconn,
                 return error;
             }
             assert(table_id < ofproto->n_tables);
-            table = &ofproto->tables[table_id];
         } else {
-            table = &ofproto->tables[0];
+            table_id = 0;
         }
     } else if (fm->table_id < ofproto->n_tables) {
-        table = &ofproto->tables[fm->table_id];
+        table_id = fm->table_id;
     } else {
         return OFPERR_OFPBRC_BAD_TABLE_ID;
     }
+
+    table = &ofproto->tables[table_id];
 
     if (table->flags & OFTABLE_READONLY) {
         return OFPERR_OFPBRC_EPERM;
@@ -2939,7 +2939,7 @@ add_flow(struct ofproto *ofproto, struct ofconn *ofconn,
     cls_rule_init(&rule->cr, &fm->match, fm->priority);
 
     /* Serialize against pending deletion. */
-    if (is_flow_deletion_pending(ofproto, &cr, table - ofproto->tables)) {
+    if (is_flow_deletion_pending(ofproto, &rule->cr, table_id)) {
         cls_rule_destroy(&rule->cr);
         ofproto->ofproto_class->rule_dealloc(rule);
         return OFPROTO_POSTPONE;
