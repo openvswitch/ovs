@@ -1557,6 +1557,11 @@ port_modified(struct ofport *port_)
     if (port->cfm) {
         cfm_set_netdev(port->cfm, port->up.netdev);
     }
+
+    if (port->tnl_port && tnl_port_reconfigure(&port->up, port->odp_port,
+                                               &port->tnl_port)) {
+        ofproto_dpif_cast(port->up.ofproto)->backer->need_revalidate = true;
+    }
 }
 
 static void
@@ -2888,12 +2893,6 @@ port_run(struct ofport_dpif *ofport)
     ofport->carrier_seq = carrier_seq;
 
     port_run_fast(ofport);
-
-    if (ofport->tnl_port
-        && tnl_port_reconfigure(&ofport->up, ofport->odp_port,
-                                &ofport->tnl_port)) {
-        ofproto_dpif_cast(ofport->up.ofproto)->backer->need_revalidate = true;
-    }
 
     if (ofport->cfm) {
         int cfm_opup = cfm_get_opup(ofport->cfm);
