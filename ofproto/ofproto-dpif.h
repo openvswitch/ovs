@@ -136,6 +136,7 @@ struct ofport_dpif {
     bool may_enable;            /* May be enabled in bonds. */
     long long int carrier_seq;  /* Carrier status changes. */
     struct tnl_port *tnl_port;  /* Tunnel handle, or null. */
+    struct ofport_dpif *peer;   /* Peer if patch port. */
 
     /* Spanning tree. */
     struct stp_port *stp_port;  /* Spanning Tree Protocol, if any. */
@@ -231,8 +232,6 @@ struct ofport_dpif *get_ofp_port(const struct ofproto_dpif *,
 
 struct ofport_dpif *get_odp_port(const struct ofproto_dpif *,
                                         uint32_t odp_port);
-
-struct ofport_dpif *ofport_get_peer(const struct ofport_dpif *);
 
 uint32_t ofp_port_to_odp_port(const struct ofproto_dpif *, uint16_t ofp_port);
 

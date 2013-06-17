@@ -301,6 +301,7 @@ static void port_wait(struct ofport_dpif *);
 static int set_bfd(struct ofport *, const struct smap *);
 static int set_cfm(struct ofport *, const struct cfm_settings *);
 static void ofport_clear_priorities(struct ofport_dpif *);
+static void ofport_update_peer(struct ofport_dpif *);
 static void run_fast_rl(void);
 
 struct dpif_completion {
@@ -1455,6 +1456,7 @@ port_construct(struct ofport *port_)
     port->stp_port = NULL;
     port->stp_state = STP_DISABLED;
     port->tnl_port = NULL;
+    port->peer = NULL;
     hmap_init(&port->priorities);
     port->realdev_ofp_port = 0;
     port->vlandev_vid = 0;
@@ -1467,6 +1469,7 @@ port_construct(struct ofport *port_)
 	 * to be "internal" to the switch as a whole, and therefore not an
 	 * candidate for counter polling. */
         port->odp_port = OVSP_NONE;
+        ofport_update_peer(port);
         return 0;
     }
 
@@ -1526,6 +1529,11 @@ port_destruct(struct ofport *port_)
         ofproto->backer->need_revalidate = REV_RECONFIGURE;
     }
 
+    if (port->peer) {
+        port->peer->peer = NULL;
+        port->peer = NULL;
+    }
+
     if (port->odp_port != OVSP_NONE && !port->tnl_port) {
         hmap_remove(&ofproto->backer->odp_to_ofport_map, &port->odp_port_node);
     }
@@ -1562,6 +1570,8 @@ port_modified(struct ofport *port_)
                                                &port->tnl_port)) {
         ofproto_dpif_cast(port->up.ofproto)->backer->need_revalidate = true;
     }
+
+    ofport_update_peer(port);
 }
 
 static void
@@ -2833,32 +2843,54 @@ ofproto_port_from_dpif_port(struct ofproto_dpif *ofproto,
     ofproto_port->ofp_port = odp_port_to_ofp_port(ofproto, dpif_port->port_no);
 }
 
-struct ofport_dpif *
-ofport_get_peer(const struct ofport_dpif *ofport_dpif)
+static void
+ofport_update_peer(struct ofport_dpif *ofport)
 {
     const struct ofproto_dpif *ofproto;
-    const struct dpif_backer *backer;
-    const char *peer;
+    struct dpif_backer *backer;
+    const char *peer_name;
 
-    peer = netdev_vport_patch_peer(ofport_dpif->up.netdev);
-    if (!peer) {
-        return NULL;
+    if (!netdev_vport_is_patch(ofport->up.netdev)) {
+        return;
     }
 
-    backer = ofproto_dpif_cast(ofport_dpif->up.ofproto)->backer;
+    backer = ofproto_dpif_cast(ofport->up.ofproto)->backer;
+    backer->need_revalidate = true;
+
+    if (ofport->peer) {
+        ofport->peer->peer = NULL;
+        ofport->peer = NULL;
+    }
+
+    peer_name = netdev_vport_patch_peer(ofport->up.netdev);
+    if (!peer_name) {
+        return;
+    }
+
     HMAP_FOR_EACH (ofproto, all_ofproto_dpifs_node, &all_ofproto_dpifs) {
-        struct ofport *ofport;
+        struct ofport *peer_ofport;
+        struct ofport_dpif *peer;
+        const char *peer_peer;
 
         if (ofproto->backer != backer) {
             continue;
         }
 
-        ofport = shash_find_data(&ofproto->up.port_by_name, peer);
-        if (ofport) {
-            return ofport_dpif_cast(ofport);
+        peer_ofport = shash_find_data(&ofproto->up.port_by_name, peer_name);
+        if (!peer_ofport) {
+            continue;
         }
+
+        peer = ofport_dpif_cast(peer_ofport);
+        peer_peer = netdev_vport_patch_peer(peer->up.netdev);
+        if (peer_peer && !strcmp(netdev_get_name(ofport->up.netdev),
+                                 peer_peer)) {
+            ofport->peer = peer;
+            ofport->peer->peer = ofport;
+        }
+
+        return;
     }
-    return NULL;
 }
 
 static void

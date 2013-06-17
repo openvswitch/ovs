@@ -855,15 +855,10 @@ compose_output_action__(struct xlate_ctx *ctx, uint16_t ofp_port,
         return;
     }
 
-    if (netdev_vport_is_patch(ofport->up.netdev)) {
-        struct ofport_dpif *peer = ofport_get_peer(ofport);
+    if (ofport->peer) {
+        struct ofport_dpif *peer = ofport->peer;
         struct flow old_flow = ctx->xin->flow;
         enum slow_path_reason special;
-
-        if (!peer) {
-            xlate_report(ctx, "Nonexistent patch port peer");
-            return;
-        }
 
         ctx->ofproto = ofproto_dpif_cast(peer->up.ofproto);
         flow->in_port = peer->up.ofp_port;
@@ -944,17 +939,21 @@ compose_output_action__(struct xlate_ctx *ctx, uint16_t ofp_port,
         }
         flow->skb_mark &= ~IPSEC_MARK;
     }
-    commit_odp_actions(flow, &ctx->base_flow, &ctx->xout->odp_actions);
-    nl_msg_put_u32(&ctx->xout->odp_actions, OVS_ACTION_ATTR_OUTPUT, out_port);
 
-    ctx->sflow_odp_port = odp_port;
-    ctx->sflow_n_outputs++;
-    ctx->xout->nf_output_iface = ofp_port;
+    if (out_port != OVSP_NONE) {
+        commit_odp_actions(flow, &ctx->base_flow, &ctx->xout->odp_actions);
+        nl_msg_put_u32(&ctx->xout->odp_actions, OVS_ACTION_ATTR_OUTPUT,
+                       out_port);
 
+        ctx->sflow_odp_port = odp_port;
+        ctx->sflow_n_outputs++;
+        ctx->xout->nf_output_iface = ofp_port;
+    }
+
+ out:
     /* Restore flow */
     flow->vlan_tci = flow_vlan_tci;
     flow->skb_mark = flow_skb_mark;
- out:
     flow->nw_tos = flow_nw_tos;
 }
 

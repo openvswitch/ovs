@@ -607,7 +607,7 @@ set_patch_config(struct netdev *dev_, const struct smap *args)
 
     free(dev->peer);
     dev->peer = xstrdup(peer);
-
+    netdev_vport_poll_notify(dev);
     return 0;
 }
 
