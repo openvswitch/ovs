@@ -108,7 +108,7 @@ static void ofconn_reconfigure(struct ofconn *,
 
 static void ofconn_run(struct ofconn *,
                        bool (*handle_openflow)(struct ofconn *,
-                                               struct ofpbuf *ofp_msg));
+                                               const struct ofpbuf *ofp_msg));
 static void ofconn_wait(struct ofconn *, bool handling_openflow);
 
 static const char *ofconn_get_target(const struct ofconn *);
@@ -269,7 +269,8 @@ connmgr_destroy(struct connmgr *mgr)
  * fail-open processing) are suppressed too. */
 void
 connmgr_run(struct connmgr *mgr,
-            bool (*handle_openflow)(struct ofconn *, struct ofpbuf *ofp_msg))
+            bool (*handle_openflow)(struct ofconn *,
+                                    const struct ofpbuf *ofp_msg))
 {
     struct ofconn *ofconn, *next_ofconn;
     struct ofservice *ofservice;
@@ -1234,7 +1235,8 @@ ofconn_may_recv(const struct ofconn *ofconn)
 
 static void
 ofconn_run(struct ofconn *ofconn,
-           bool (*handle_openflow)(struct ofconn *, struct ofpbuf *ofp_msg))
+           bool (*handle_openflow)(struct ofconn *,
+                                   const struct ofpbuf *ofp_msg))
 {
     struct connmgr *mgr = ofconn->connmgr;
     size_t i;

@@ -71,7 +71,7 @@ void connmgr_destroy(struct connmgr *);
 
 void connmgr_run(struct connmgr *,
                  bool (*handle_openflow)(struct ofconn *,
-                                         struct ofpbuf *ofp_msg));
+                                         const struct ofpbuf *ofp_msg));
 void connmgr_wait(struct connmgr *, bool handling_openflow);
 
 void connmgr_get_memory_usage(const struct connmgr *, struct simap *usage);

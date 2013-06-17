@@ -199,7 +199,7 @@ static enum ofperr add_flow(struct ofproto *, struct ofconn *,
                             const struct ofputil_flow_mod *,
                             const struct ofp_header *);
 static void delete_flow__(struct rule *, struct ofopgroup *);
-static bool handle_openflow(struct ofconn *, struct ofpbuf *);
+static bool handle_openflow(struct ofconn *, const struct ofpbuf *);
 static enum ofperr handle_flow_mod__(struct ofproto *, struct ofconn *,
                                      const struct ofputil_flow_mod *,
                                      const struct ofp_header *);
@@ -4146,7 +4146,7 @@ handle_openflow__(struct ofconn *ofconn, const struct ofpbuf *msg)
 }
 
 static bool
-handle_openflow(struct ofconn *ofconn, struct ofpbuf *ofp_msg)
+handle_openflow(struct ofconn *ofconn, const struct ofpbuf *ofp_msg)
 {
     int error = handle_openflow__(ofconn, ofp_msg);
     if (error && error != OFPROTO_POSTPONE) {
