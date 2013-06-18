@@ -16,14 +16,17 @@
 
 #include "ofproto/ofproto-dpif-xlate.h"
 
+#include "bfd.h"
 #include "bitmap.h"
 #include "bond.h"
 #include "bundle.h"
 #include "byte-order.h"
+#include "cfm.h"
 #include "connmgr.h"
 #include "coverage.h"
 #include "dpif.h"
 #include "dynamic-string.h"
+#include "lacp.h"
 #include "learn.h"
 #include "mac-learning.h"
 #include "meta-flow.h"
@@ -788,6 +791,38 @@ fix_sflow_action(struct xlate_ctx *ctx)
 
     compose_sflow_cookie(ctx->ofproto, base->vlan_tci,
                          ctx->sflow_odp_port, ctx->sflow_n_outputs, cookie);
+}
+
+static enum slow_path_reason
+process_special(struct ofproto_dpif *ofproto, const struct flow *flow,
+                const struct ofport_dpif *ofport, const struct ofpbuf *packet)
+{
+    if (!ofport) {
+        return 0;
+    } else if (ofport->cfm && cfm_should_process_flow(ofport->cfm, flow)) {
+        if (packet) {
+            cfm_process_heartbeat(ofport->cfm, packet);
+        }
+        return SLOW_CFM;
+    } else if (ofport->bfd && bfd_should_process_flow(flow)) {
+        if (packet) {
+            bfd_process_packet(ofport->bfd, flow, packet);
+        }
+        return SLOW_BFD;
+    } else if (ofport->bundle && ofport->bundle->lacp
+               && flow->dl_type == htons(ETH_TYPE_LACP)) {
+        if (packet) {
+            lacp_process_packet(ofport->bundle->lacp, ofport, packet);
+        }
+        return SLOW_LACP;
+    } else if (ofproto->stp && stp_should_process_flow(flow)) {
+        if (packet) {
+            stp_process_packet(ofport, packet);
+        }
+        return SLOW_STP;
+    } else {
+        return 0;
+    }
 }
 
 static void

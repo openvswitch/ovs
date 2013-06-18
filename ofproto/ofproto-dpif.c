@@ -1928,13 +1928,13 @@ stp_wait(struct ofproto_dpif *ofproto)
 }
 
 /* Returns true if STP should process 'flow'. */
-static bool
+bool
 stp_should_process_flow(const struct flow *flow)
 {
     return eth_addr_equals(flow->dl_dst, eth_addr_stp);
 }
 
-static void
+void
 stp_process_packet(const struct ofport_dpif *ofport,
                    const struct ofpbuf *packet)
 {
@@ -3232,38 +3232,6 @@ send_packet_in_miss(struct ofproto_dpif *ofproto, const struct ofpbuf *packet,
     flow_get_metadata(flow, &pin.fmd);
 
     connmgr_send_packet_in(ofproto->up.connmgr, &pin);
-}
-
-enum slow_path_reason
-process_special(struct ofproto_dpif *ofproto, const struct flow *flow,
-                const struct ofport_dpif *ofport, const struct ofpbuf *packet)
-{
-    if (!ofport) {
-        return 0;
-    } else if (ofport->cfm && cfm_should_process_flow(ofport->cfm, flow)) {
-        if (packet) {
-            cfm_process_heartbeat(ofport->cfm, packet);
-        }
-        return SLOW_CFM;
-    } else if (ofport->bfd && bfd_should_process_flow(flow)) {
-        if (packet) {
-            bfd_process_packet(ofport->bfd, flow, packet);
-        }
-        return SLOW_BFD;
-    } else if (ofport->bundle && ofport->bundle->lacp
-               && flow->dl_type == htons(ETH_TYPE_LACP)) {
-        if (packet) {
-            lacp_process_packet(ofport->bundle->lacp, ofport, packet);
-        }
-        return SLOW_LACP;
-    } else if (ofproto->stp && stp_should_process_flow(flow)) {
-        if (packet) {
-            stp_process_packet(ofport, packet);
-        }
-        return SLOW_STP;
-    } else {
-        return 0;
-    }
 }
 
 static struct flow_miss *

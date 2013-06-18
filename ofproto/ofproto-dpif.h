@@ -257,10 +257,9 @@ size_t put_userspace_action(const struct ofproto_dpif *,
                             const union user_action_cookie *,
                             const size_t cookie_size);
 
-enum slow_path_reason process_special(struct ofproto_dpif *,
-                                      const struct flow *,
-                                      const struct ofport_dpif *,
-                                      const struct ofpbuf *packet);
+bool stp_should_process_flow(const struct flow *);
+void stp_process_packet(const struct ofport_dpif *,
+                        const struct ofpbuf *packet);
 
 uint16_t vsp_realdev_to_vlandev(const struct ofproto_dpif *,
                                 uint16_t realdev_ofp_port,
