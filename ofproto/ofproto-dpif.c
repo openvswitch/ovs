@@ -2246,7 +2246,7 @@ bundle_destroy(struct ofbundle *bundle)
     free(bundle->name);
     free(bundle->trunks);
     lacp_unref(bundle->lacp);
-    bond_destroy(bundle->bond);
+    bond_unref(bundle->bond);
     free(bundle);
 }
 
@@ -2420,7 +2420,7 @@ bundle_set(struct ofproto *ofproto_, void *aux,
             bond_slave_register(bundle->bond, port, port->up.netdev);
         }
     } else {
-        bond_destroy(bundle->bond);
+        bond_unref(bundle->bond);
         bundle->bond = NULL;
     }
 
@@ -2444,7 +2444,7 @@ bundle_remove(struct ofport *port_)
         if (list_is_empty(&bundle->ports)) {
             bundle_destroy(bundle);
         } else if (list_is_short(&bundle->ports)) {
-            bond_destroy(bundle->bond);
+            bond_unref(bundle->bond);
             bundle->bond = NULL;
         }
     }

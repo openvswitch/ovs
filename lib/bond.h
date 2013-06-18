@@ -61,7 +61,8 @@ void bond_init(void);
 
 /* Basics. */
 struct bond *bond_create(const struct bond_settings *);
-void bond_destroy(struct bond *);
+void bond_unref(struct bond *);
+struct bond *bond_ref(const struct bond *);
 
 bool bond_reconfigure(struct bond *, const struct bond_settings *);
 void bond_slave_register(struct bond *, void *slave_, struct netdev *);

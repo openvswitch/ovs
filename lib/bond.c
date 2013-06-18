@@ -108,6 +108,8 @@ struct bond {
      * where we can't otherwise provide revalidation feedback to the client.
      * That's only unixctl commands now; I hope no other cases will arise. */
     struct tag_set unixctl_tags;
+
+    int ref_cnt;
 };
 
 static struct hmap all_bonds = HMAP_INITIALIZER(&all_bonds);
@@ -179,6 +181,7 @@ bond_create(const struct bond_settings *s)
     hmap_init(&bond->slaves);
     bond->no_slaves_tag = tag_create_random();
     bond->next_fake_iface_update = LLONG_MAX;
+    bond->ref_cnt = 1;
 
     bond_reconfigure(bond, s);
 
@@ -187,13 +190,28 @@ bond_create(const struct bond_settings *s)
     return bond;
 }
 
+struct bond *
+bond_ref(const struct bond *bond_)
+{
+    struct bond *bond = CONST_CAST(struct bond *, bond_);
+
+    ovs_assert(bond->ref_cnt > 0);
+    bond->ref_cnt++;
+    return bond;
+}
+
 /* Frees 'bond'. */
 void
-bond_destroy(struct bond *bond)
+bond_unref(struct bond *bond)
 {
     struct bond_slave *slave, *next_slave;
 
     if (!bond) {
+        return;
+    }
+
+    ovs_assert(bond->ref_cnt > 0);
+    if (--bond->ref_cnt) {
         return;
     }
 
