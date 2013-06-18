@@ -28,16 +28,18 @@
  * These functions emulate tunnel virtual ports based on the outer
  * header information from the kernel. */
 
-struct ofport;
+struct ofport_dpif;
+struct netdev;
 struct tnl_port;
 
-bool tnl_port_reconfigure(const struct ofport *, odp_port_t odp_port,
-                          struct tnl_port **);
+bool tnl_port_reconfigure(const struct ofport_dpif *, const struct netdev *,
+                          odp_port_t, struct tnl_port **);
 
-struct tnl_port *tnl_port_add(const struct ofport *, odp_port_t odp_port);
+struct tnl_port *tnl_port_add(const struct ofport_dpif *, const struct netdev *,
+                              odp_port_t);
 void tnl_port_del(struct tnl_port *);
 
-const struct ofport *tnl_port_receive(const struct flow *);
+const struct ofport_dpif *tnl_port_receive(const struct flow *);
 odp_port_t tnl_port_send(const struct tnl_port *, struct flow *,
                          struct flow_wildcards *wc);
 

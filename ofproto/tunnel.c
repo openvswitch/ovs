@@ -17,12 +17,11 @@
 
 #include <errno.h>
 
-#include "ofproto/ofproto-provider.h"
 #include "byte-order.h"
 #include "dynamic-string.h"
 #include "hash.h"
 #include "hmap.h"
-#include "netdev-vport.h"
+#include "netdev.h"
 #include "odp-util.h"
 #include "packets.h"
 #include "smap.h"
@@ -46,8 +45,10 @@ struct tnl_match {
 struct tnl_port {
     struct hmap_node match_node;
 
-    const struct ofport *ofport;
+    const struct ofport_dpif *ofport;
     unsigned int netdev_seq;
+    struct netdev *netdev;
+
     struct tnl_match match;
 };
 
@@ -71,19 +72,20 @@ static void tnl_port_mod_log(const struct tnl_port *, const char *action);
 static const char *tnl_port_get_name(const struct tnl_port *);
 
 static struct tnl_port *
-tnl_port_add__(const struct ofport *ofport, odp_port_t odp_port,
-               bool warn)
+tnl_port_add__(const struct ofport_dpif *ofport, const struct netdev *netdev,
+               odp_port_t odp_port, bool warn)
 {
     const struct netdev_tunnel_config *cfg;
     struct tnl_port *existing_port;
     struct tnl_port *tnl_port;
 
-    cfg = netdev_get_tunnel_config(ofport->netdev);
+    cfg = netdev_get_tunnel_config(netdev);
     ovs_assert(cfg);
 
     tnl_port = xzalloc(sizeof *tnl_port);
     tnl_port->ofport = ofport;
-    tnl_port->netdev_seq = netdev_change_seq(tnl_port->ofport->netdev);
+    tnl_port->netdev = netdev_ref(netdev);
+    tnl_port->netdev_seq = netdev_change_seq(tnl_port->netdev);
 
     tnl_port->match.in_key = cfg->in_key;
     tnl_port->match.ip_src = cfg->ip_src;
@@ -118,9 +120,10 @@ tnl_port_add__(const struct ofport *ofport, odp_port_t odp_port,
  * must be added before they can be used by the module. 'ofport' must be a
  * tunnel. */
 struct tnl_port *
-tnl_port_add(const struct ofport *ofport, odp_port_t odp_port)
+tnl_port_add(const struct ofport_dpif *ofport, const struct netdev *netdev,
+             odp_port_t odp_port)
 {
-    return tnl_port_add__(ofport, odp_port, true);
+    return tnl_port_add__(ofport, netdev, odp_port, true);
 }
 
 /* Checks if the tnl_port pointed to by 'tnl_portp' needs reconfiguration due
@@ -129,20 +132,22 @@ tnl_port_add(const struct ofport *ofport, odp_port_t odp_port)
  * 'ofport' and 'odp_port' should be the same as would be passed to
  * tnl_port_add(). */
 bool
-tnl_port_reconfigure(const struct ofport *ofport, odp_port_t odp_port,
+tnl_port_reconfigure(const struct ofport_dpif *ofport,
+                     const struct netdev *netdev, odp_port_t odp_port,
                      struct tnl_port **tnl_portp)
 {
     struct tnl_port *tnl_port = *tnl_portp;
 
     if (tnl_port == &void_tnl_port) {
-        *tnl_portp = tnl_port_add__(ofport, odp_port, false);
+        *tnl_portp = tnl_port_add__(ofport, netdev, odp_port, false);
         return *tnl_portp != &void_tnl_port;
     } else if (tnl_port->ofport != ofport
+               || tnl_port->netdev != netdev
                || tnl_port->match.odp_port != odp_port
-               || tnl_port->netdev_seq != netdev_change_seq(ofport->netdev)) {
+               || tnl_port->netdev_seq != netdev_change_seq(netdev)) {
         VLOG_DBG("reconfiguring %s", tnl_port_get_name(tnl_port));
         tnl_port_del(tnl_port);
-        *tnl_portp = tnl_port_add(ofport, odp_port);
+        *tnl_portp = tnl_port_add(ofport, netdev, odp_port);
         return true;
     }
     return false;
@@ -155,6 +160,7 @@ tnl_port_del(struct tnl_port *tnl_port)
     if (tnl_port && tnl_port != &void_tnl_port) {
         tnl_port_mod_log(tnl_port, "removing");
         hmap_remove(&tnl_match_map, &tnl_port->match_node);
+        netdev_close(tnl_port->netdev);
         free(tnl_port);
     }
 }
@@ -165,7 +171,7 @@ tnl_port_del(struct tnl_port *tnl_port)
  *
  * Callers should verify that 'flow' needs to be received by calling
  * tnl_port_should_receive() before this function. */
-const struct ofport *
+const struct ofport_dpif *
 tnl_port_receive(const struct flow *flow)
 {
     char *pre_flow_str = NULL;
@@ -223,7 +229,7 @@ tnl_port_send(const struct tnl_port *tnl_port, struct flow *flow,
         return ODPP_NONE;
     }
 
-    cfg = netdev_get_tunnel_config(tnl_port->ofport->netdev);
+    cfg = netdev_get_tunnel_config(tnl_port->netdev);
     ovs_assert(cfg);
 
     if (!VLOG_DROP_DBG(&dbg_rl)) {
@@ -401,12 +407,12 @@ static char *
 tnl_port_fmt(const struct tnl_port *tnl_port)
 {
     const struct netdev_tunnel_config *cfg =
-        netdev_get_tunnel_config(tnl_port->ofport->netdev);
+        netdev_get_tunnel_config(tnl_port->netdev);
     struct ds ds = DS_EMPTY_INITIALIZER;
 
     ds_put_format(&ds, "port %"PRIu32": %s (%s: ", tnl_port->match.odp_port,
                   tnl_port_get_name(tnl_port),
-                  netdev_get_type(tnl_port->ofport->netdev));
+                  netdev_get_type(tnl_port->netdev));
     tnl_match_fmt(&tnl_port->match, &ds);
 
     if (cfg->out_key != cfg->in_key ||
@@ -450,5 +456,5 @@ tnl_port_fmt(const struct tnl_port *tnl_port)
 static const char *
 tnl_port_get_name(const struct tnl_port *tnl_port)
 {
-    return netdev_get_name(tnl_port->ofport->netdev);
+    return netdev_get_name(tnl_port->netdev);
 }

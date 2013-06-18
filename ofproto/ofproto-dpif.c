@@ -597,7 +597,7 @@ type_run(const char *type)
                 }
 
                 iter->odp_port = node ? u32_to_odp(node->data) : ODPP_NONE;
-                if (tnl_port_reconfigure(&iter->up, iter->odp_port,
+                if (tnl_port_reconfigure(iter, iter->up.netdev, iter->odp_port,
                                          &iter->tnl_port)) {
                     backer->need_revalidate = REV_RECONFIGURE;
                 }
@@ -1486,7 +1486,7 @@ port_construct(struct ofport *port_)
     port->odp_port = dpif_port.port_no;
 
     if (netdev_get_tunnel_config(netdev)) {
-        port->tnl_port = tnl_port_add(&port->up, port->odp_port);
+        port->tnl_port = tnl_port_add(port, port->up.netdev, port->odp_port);
     } else {
         /* Sanity-check that a mapping doesn't already exist.  This
          * shouldn't happen for non-tunnel ports. */
@@ -1568,7 +1568,8 @@ port_modified(struct ofport *port_)
         cfm_set_netdev(port->cfm, port->up.netdev);
     }
 
-    if (port->tnl_port && tnl_port_reconfigure(&port->up, port->odp_port,
+    if (port->tnl_port && tnl_port_reconfigure(port, port->up.netdev,
+                                               port->odp_port,
                                                &port->tnl_port)) {
         ofproto_dpif_cast(port->up.ofproto)->backer->need_revalidate =
             REV_RECONFIGURE;
@@ -3641,7 +3642,7 @@ ofproto_receive(const struct dpif_backer *backer, struct ofpbuf *packet,
     }
 
     port = (tnl_port_should_receive(flow)
-            ? ofport_dpif_cast(tnl_port_receive(flow))
+            ? tnl_port_receive(flow)
             : odp_port_to_ofport(backer, flow->in_port.odp_port));
     flow->in_port.ofp_port = port ? port->up.ofp_port : OFPP_NONE;
     if (!port) {
