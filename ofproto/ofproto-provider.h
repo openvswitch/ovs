@@ -23,6 +23,7 @@
 #include "cfm.h"
 #include "classifier.h"
 #include "heap.h"
+#include "hindex.h"
 #include "list.h"
 #include "ofp-errors.h"
 #include "ofp-util.h"
@@ -68,6 +69,8 @@ struct ofproto {
     /* Flow tables. */
     struct oftable *tables;
     int n_tables;
+
+    struct hindex cookies;      /* Rules indexed on their cookie values. */
 
     /* Optimisation for flow expiry.
      * These flows should all be present in tables. */
@@ -203,6 +206,7 @@ struct rule {
     struct ofoperation *pending; /* Operation now in progress, if nonnull. */
 
     ovs_be64 flow_cookie;        /* Controller-issued identifier. */
+    struct hindex_node cookie_node; /* In owning ofproto's 'cookies' index. */
 
     long long int created;       /* Creation time. */
     long long int modified;      /* Time of last modification. */

@@ -424,6 +424,7 @@ ofproto_create(const char *datapath_name, const char *datapath_type,
     ofproto->max_ports = OFPP_MAX;
     ofproto->tables = NULL;
     ofproto->n_tables = 0;
+    hindex_init(&ofproto->cookies);
     list_init(&ofproto->expirable);
     ofproto->connmgr = connmgr_create(ofproto, datapath_name, datapath_name);
     ofproto->state = S_OPENFLOW;
@@ -2622,6 +2623,39 @@ handle_port_desc_stats_request(struct ofconn *ofconn,
     return 0;
 }
 
+static uint32_t
+hash_cookie(ovs_be64 cookie)
+{
+    return hash_2words((OVS_FORCE uint64_t)cookie >> 32,
+                       (OVS_FORCE uint64_t)cookie);
+}
+
+static void
+cookies_insert(struct ofproto *ofproto, struct rule *rule)
+{
+    hindex_insert(&ofproto->cookies, &rule->cookie_node,
+                  hash_cookie(rule->flow_cookie));
+}
+
+static void
+cookies_remove(struct ofproto *ofproto, struct rule *rule)
+{
+    hindex_remove(&ofproto->cookies, &rule->cookie_node);
+}
+
+static void
+ofproto_rule_change_cookie(struct ofproto *ofproto, struct rule *rule,
+                           ovs_be64 new_cookie)
+{
+    if (new_cookie != rule->flow_cookie) {
+        cookies_remove(ofproto, rule);
+
+        rule->flow_cookie = new_cookie;
+
+        cookies_insert(ofproto, rule);
+    }
+}
+
 static void
 calc_duration(long long int start, long long int now,
               uint32_t *sec, uint32_t *nsec)
@@ -2727,6 +2761,32 @@ collect_rules_loose(struct ofproto *ofproto, uint8_t table_id,
 
     list_init(rules);
     cls_rule_init(&cr, match, 0);
+
+    if (cookie_mask == htonll(UINT64_MAX)) {
+        struct rule *rule;
+
+        HINDEX_FOR_EACH_WITH_HASH (rule, cookie_node, hash_cookie(cookie),
+                                   &ofproto->cookies) {
+            if (table_id != rule->table_id && table_id != 0xff) {
+                continue;
+            }
+            if (ofproto_rule_is_hidden(rule)) {
+                continue;
+            }
+            if (cls_rule_is_loose_match(&rule->cr, &cr.match)) {
+                if (rule->pending) {
+                    error = OFPROTO_POSTPONE;
+                    goto exit;
+                }
+                if (rule->flow_cookie == cookie /* Hash collisions possible. */
+                    && ofproto_rule_has_out_port(rule, out_port)) {
+                    list_push_back(rules, &rule->ofproto_node);
+                }
+            }
+        }
+        goto exit;
+    }
+
     FOR_EACH_MATCHING_TABLE (table, table_id, ofproto) {
         struct cls_cursor cursor;
         struct rule *rule;
@@ -2778,6 +2838,32 @@ collect_rules_strict(struct ofproto *ofproto, uint8_t table_id,
 
     list_init(rules);
     cls_rule_init(&cr, match, priority);
+
+    if (cookie_mask == htonll(UINT64_MAX)) {
+        struct rule *rule;
+
+        HINDEX_FOR_EACH_WITH_HASH (rule, cookie_node, hash_cookie(cookie),
+                                   &ofproto->cookies) {
+            if (table_id != rule->table_id && table_id != 0xff) {
+                continue;
+            }
+            if (ofproto_rule_is_hidden(rule)) {
+                continue;
+            }
+            if (cls_rule_equal(&rule->cr, &cr)) {
+                if (rule->pending) {
+                    error = OFPROTO_POSTPONE;
+                    goto exit;
+                }
+                if (rule->flow_cookie == cookie /* Hash collisions possible. */
+                    && ofproto_rule_has_out_port(rule, out_port)) {
+                    list_push_back(rules, &rule->ofproto_node);
+                }
+            }
+        }
+        goto exit;
+    }
+
     FOR_EACH_MATCHING_TABLE (table, table_id, ofproto) {
         struct rule *rule;
 
@@ -3275,7 +3361,6 @@ modify_flows__(struct ofproto *ofproto, struct ofconn *ofconn,
     LIST_FOR_EACH (rule, ofproto_node, rules) {
         struct ofoperation *op;
         bool actions_changed;
-        ovs_be64 new_cookie;
 
         /* FIXME: Implement OFPFF12_RESET_COUNTS */
 
@@ -3288,12 +3373,12 @@ modify_flows__(struct ofproto *ofproto, struct ofconn *ofconn,
 
         actions_changed = !ofpacts_equal(fm->ofpacts, fm->ofpacts_len,
                                          rule->ofpacts, rule->ofpacts_len);
-        new_cookie = (fm->new_cookie != htonll(UINT64_MAX)
-                      ? fm->new_cookie
-                      : rule->flow_cookie);
 
         op = ofoperation_create(group, rule, OFOPERATION_MODIFY, 0);
-        rule->flow_cookie = new_cookie;
+
+        if (fm->new_cookie != htonll(UINT64_MAX)) {
+            ofproto_rule_change_cookie(ofproto, rule, fm->new_cookie);
+        }
         if (actions_changed) {
             op->ofpacts = rule->ofpacts;
             op->ofpacts_len = rule->ofpacts_len;
@@ -4332,7 +4417,7 @@ ofopgroup_complete(struct ofopgroup *group)
             if (!op->error) {
                 rule->modified = time_msec();
             } else {
-                rule->flow_cookie = op->flow_cookie;
+                ofproto_rule_change_cookie(ofproto, rule, op->flow_cookie);
                 if (op->ofpacts) {
                     free(rule->ofpacts);
                     rule->ofpacts = op->ofpacts;
@@ -4861,6 +4946,7 @@ oftable_remove_rule(struct rule *rule)
     struct oftable *table = &ofproto->tables[rule->table_id];
 
     classifier_remove(&table->cls, &rule->cr);
+    cookies_remove(ofproto, rule);
     eviction_group_remove_rule(rule);
     if (!list_is_empty(&rule->expirable)) {
         list_remove(&rule->expirable);
@@ -4881,9 +4967,12 @@ oftable_replace_rule(struct rule *rule)
     if (may_expire) {
         list_insert(&ofproto->expirable, &rule->expirable);
     }
+    cookies_insert(ofproto, rule);
 
     victim = rule_from_cls_rule(classifier_replace(&table->cls, &rule->cr));
     if (victim) {
+        cookies_remove(ofproto, victim);
+
         if (!list_is_empty(&victim->expirable)) {
             list_remove(&victim->expirable);
         }
