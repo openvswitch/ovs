@@ -575,10 +575,17 @@ cfm_set_netdev(struct cfm *cfm, const struct netdev *netdev)
     }
 }
 
-/* Returns true if 'cfm' should process packets from 'flow'. */
+/* Returns true if 'cfm' should process packets from 'flow'.  Sets
+ * fields in 'wc' that were used to make the determination. */
 bool
-cfm_should_process_flow(const struct cfm *cfm, const struct flow *flow)
+cfm_should_process_flow(const struct cfm *cfm, const struct flow *flow,
+                        struct flow_wildcards *wc)
 {
+    memset(&wc->masks.dl_dst, 0xff, sizeof wc->masks.dl_dst);
+    memset(&wc->masks.dl_type, 0xff, sizeof wc->masks.dl_type);
+    if (cfm->check_tnl_key) {
+        memset(&wc->masks.tunnel.tun_id, 0xff, sizeof wc->masks.tunnel.tun_id);
+    }
     return (ntohs(flow->dl_type) == ETH_TYPE_CFM
             && eth_addr_equals(flow->dl_dst, cfm_ccm_addr(cfm))
             && (!cfm->check_tnl_key || flow->tunnel.tun_id == htonll(0)));

@@ -2288,10 +2288,12 @@ stp_wait(struct ofproto_dpif *ofproto)
     }
 }
 
-/* Returns true if STP should process 'flow'. */
+/* Returns true if STP should process 'flow'.  Sets fields in 'wc' that
+ * were used to make the determination.*/
 static bool
-stp_should_process_flow(const struct flow *flow)
+stp_should_process_flow(const struct flow *flow, struct flow_wildcards *wc)
 {
+    memset(&wc->masks.dl_dst, 0xff, sizeof wc->masks.dl_dst);
     return eth_addr_equals(flow->dl_dst, eth_addr_stp);
 }
 
@@ -3573,12 +3575,15 @@ send_packet_in_miss(struct ofproto_dpif *ofproto, const struct ofpbuf *packet,
 }
 
 static enum slow_path_reason
-process_special(struct ofproto_dpif *ofproto, const struct flow *flow,
+process_special(struct xlate_ctx *ctx, const struct flow *flow,
                 const struct ofport_dpif *ofport, const struct ofpbuf *packet)
 {
+    struct ofproto_dpif *ofproto = ctx->ofproto;
+    struct flow_wildcards *wc = &ctx->xout->wc;
+
     if (!ofport) {
         return 0;
-    } else if (ofport->cfm && cfm_should_process_flow(ofport->cfm, flow)) {
+    } else if (ofport->cfm && cfm_should_process_flow(ofport->cfm, flow, wc)) {
         if (packet) {
             cfm_process_heartbeat(ofport->cfm, packet);
         }
@@ -3589,7 +3594,7 @@ process_special(struct ofproto_dpif *ofproto, const struct flow *flow,
             lacp_process_packet(ofport->bundle->lacp, ofport, packet);
         }
         return SLOW_LACP;
-    } else if (ofproto->stp && stp_should_process_flow(flow)) {
+    } else if (ofproto->stp && stp_should_process_flow(flow, wc)) {
         if (packet) {
             stp_process_packet(ofport, packet);
         }
@@ -6034,7 +6039,7 @@ compose_output_action__(struct xlate_ctx *ctx, uint16_t ofp_port,
         memset(ctx->xin->flow.regs, 0, sizeof ctx->xin->flow.regs);
 
         in_port = get_ofp_port(ctx->ofproto, ctx->xin->flow.in_port);
-        special = process_special(ctx->ofproto, &ctx->xin->flow, in_port,
+        special = process_special(ctx, &ctx->xin->flow, in_port,
                                   ctx->xin->packet);
         if (special) {
             ctx->xout->slow = special;
@@ -7160,7 +7165,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
     }
 
     in_port = get_ofp_port(ctx.ofproto, ctx.xin->flow.in_port);
-    special = process_special(ctx.ofproto, &ctx.xin->flow, in_port,
+    special = process_special(&ctx, &ctx.xin->flow, in_port,
                               ctx.xin->packet);
     if (special) {
         ctx.xout->slow = special;

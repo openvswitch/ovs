@@ -24,6 +24,7 @@
 struct flow;
 struct ofpbuf;
 struct netdev;
+struct flow_wildcards;
 
 #define CFM_RANDOM_VLAN UINT16_MAX
 
@@ -72,7 +73,8 @@ void cfm_compose_ccm(struct cfm *, struct ofpbuf *packet, uint8_t eth_src[6]);
 void cfm_wait(struct cfm *);
 bool cfm_configure(struct cfm *, const struct cfm_settings *);
 void cfm_set_netdev(struct cfm *, const struct netdev *);
-bool cfm_should_process_flow(const struct cfm *cfm, const struct flow *);
+bool cfm_should_process_flow(const struct cfm *cfm, const struct flow *,
+                             struct flow_wildcards *);
 void cfm_process_heartbeat(struct cfm *, const struct ofpbuf *packet);
 int cfm_get_fault(const struct cfm *);
 int cfm_get_health(const struct cfm *);
