@@ -20,6 +20,11 @@ AT_CHECK([test-hmap], [0], [.........
 ])
 AT_CLEANUP
 
+AT_SETUP([test hash index])
+AT_CHECK([test-hindex], [0], [..................
+])
+AT_CLEANUP
+
 AT_SETUP([test linked lists])
 AT_CHECK([test-list], [0], [..
 ])

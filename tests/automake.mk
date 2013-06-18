@@ -105,6 +105,7 @@ valgrind_wrappers = \
 	tests/valgrind/test-flows \
 	tests/valgrind/test-hash \
 	tests/valgrind/test-heap \
+	tests/valgrind/test-hindex \
 	tests/valgrind/test-hmap \
 	tests/valgrind/test-json \
 	tests/valgrind/test-jsonrpc \
@@ -202,6 +203,10 @@ tests_test_hash_LDADD = lib/libopenvswitch.a
 noinst_PROGRAMS += tests/test-heap
 tests_test_heap_SOURCES = tests/test-heap.c
 tests_test_heap_LDADD = lib/libopenvswitch.a $(SSL_LIBS)
+
+noinst_PROGRAMS += tests/test-hindex
+tests_test_hindex_SOURCES = tests/test-hindex.c
+tests_test_hindex_LDADD = lib/libopenvswitch.a $(SSL_LIBS)
 
 noinst_PROGRAMS += tests/test-hmap
 tests_test_hmap_SOURCES = tests/test-hmap.c

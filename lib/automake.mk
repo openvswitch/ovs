@@ -1,4 +1,4 @@
-# Copyright (C) 2009, 2010, 2011, 2012 Nicira, Inc.
+# Copyright (C) 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
 #
 # Copying and distribution of this file, with or without modification,
 # are permitted in any medium without royalty provided the copyright
@@ -57,6 +57,8 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/flow.h \
 	lib/hash.c \
 	lib/hash.h \
+	lib/hindex.c \
+	lib/hindex.h \
 	lib/hmap.c \
 	lib/hmap.h \
 	lib/hmapx.c \
