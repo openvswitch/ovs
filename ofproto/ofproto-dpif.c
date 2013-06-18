@@ -1927,10 +1927,12 @@ stp_wait(struct ofproto_dpif *ofproto)
     }
 }
 
-/* Returns true if STP should process 'flow'. */
+/* Returns true if STP should process 'flow'.  Sets fields in 'wc' that
+ * were used to make the determination.*/
 bool
-stp_should_process_flow(const struct flow *flow)
+stp_should_process_flow(const struct flow *flow, struct flow_wildcards *wc)
 {
+    memset(&wc->masks.dl_dst, 0xff, sizeof wc->masks.dl_dst);
     return eth_addr_equals(flow->dl_dst, eth_addr_stp);
 }
 

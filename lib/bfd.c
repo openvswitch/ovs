@@ -414,8 +414,11 @@ bfd_put_packet(struct bfd *bfd, struct ofpbuf *p,
 }
 
 bool
-bfd_should_process_flow(const struct flow *flow)
+bfd_should_process_flow(const struct flow *flow, struct flow_wildcards *wc)
 {
+    memset(&wc->masks.dl_type, 0xff, sizeof wc->masks.dl_type);
+    memset(&wc->masks.nw_proto, 0xff, sizeof wc->masks.nw_proto);
+    memset(&wc->masks.tp_dst, 0xff, sizeof wc->masks.tp_dst);
     return (flow->dl_type == htons(ETH_TYPE_IP)
             && flow->nw_proto == IPPROTO_UDP
             && flow->tp_dst == htons(3784));

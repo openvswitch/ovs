@@ -23,6 +23,7 @@
 
 struct bfd;
 struct flow;
+struct flow_wildcards;
 struct ofpbuf;
 struct smap;
 
@@ -33,7 +34,7 @@ bool bfd_should_send_packet(const struct bfd *);
 void bfd_put_packet(struct bfd *bfd, struct ofpbuf *packet,
                     uint8_t eth_src[6]);
 
-bool bfd_should_process_flow(const struct flow *);
+bool bfd_should_process_flow(const struct flow *, struct flow_wildcards *);
 void bfd_process_packet(struct bfd *, const struct flow *,
                         const struct ofpbuf *);
 
