@@ -43,6 +43,7 @@ struct tnl_match {
 };
 
 struct tnl_port {
+    struct hmap_node ofport_node;
     struct hmap_node match_node;
 
     const struct ofport_dpif *ofport;
@@ -53,25 +54,22 @@ struct tnl_port {
 };
 
 static struct hmap tnl_match_map = HMAP_INITIALIZER(&tnl_match_map);
-
-/* Returned to callers when their ofport will never be used to receive or send
- * tunnel traffic. Alternatively, we could ask the caller to delete their
- * ofport, but this would be unclean in the reconfguration case.  For the first
- * time, an ofproto provider would have to call ofproto_port_del() on itself.*/
-static struct tnl_port void_tnl_port;
+static struct hmap ofport_map = HMAP_INITIALIZER(&ofport_map);
 
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 static struct vlog_rate_limit dbg_rl = VLOG_RATE_LIMIT_INIT(60, 60);
 
 static struct tnl_port *tnl_find(struct tnl_match *);
 static struct tnl_port *tnl_find_exact(struct tnl_match *);
+static struct tnl_port *tnl_find_ofport(const struct ofport_dpif *);
+
 static uint32_t tnl_hash(struct tnl_match *);
 static void tnl_match_fmt(const struct tnl_match *, struct ds *);
 static char *tnl_port_fmt(const struct tnl_port *);
 static void tnl_port_mod_log(const struct tnl_port *, const char *action);
 static const char *tnl_port_get_name(const struct tnl_port *);
 
-static struct tnl_port *
+static bool
 tnl_port_add__(const struct ofport_dpif *ofport, const struct netdev *netdev,
                odp_port_t odp_port, bool warn)
 {
@@ -107,59 +105,59 @@ tnl_port_add__(const struct ofport_dpif *ofport, const struct netdev *netdev,
             ds_destroy(&ds);
             free(tnl_port);
         }
-        return &void_tnl_port;
+        return false;
     }
 
+    hmap_insert(&ofport_map, &tnl_port->ofport_node, hash_pointer(ofport, 0));
     hmap_insert(&tnl_match_map, &tnl_port->match_node,
                 tnl_hash(&tnl_port->match));
     tnl_port_mod_log(tnl_port, "adding");
-    return tnl_port;
+    return true;
 }
 
 /* Adds 'ofport' to the module with datapath port number 'odp_port'. 'ofport's
  * must be added before they can be used by the module. 'ofport' must be a
  * tunnel. */
-struct tnl_port *
+void
 tnl_port_add(const struct ofport_dpif *ofport, const struct netdev *netdev,
              odp_port_t odp_port)
 {
-    return tnl_port_add__(ofport, netdev, odp_port, true);
+    tnl_port_add__(ofport, netdev, odp_port, true);
 }
 
-/* Checks if the tnl_port pointed to by 'tnl_portp' needs reconfiguration due
- * to changes in its netdev_tunnel_config.  If it does, updates 'tnl_portp' to
- * point to a new tnl_port and returns true.  Otherwise, returns false.
- * 'ofport' and 'odp_port' should be the same as would be passed to
+/* Checks if the tunnel represented by 'ofport' reconfiguration due to changes
+ * in its netdev_tunnel_config.  If it does, returns true. Otherwise, returns
+ * false.  'ofport' and 'odp_port' should be the same as would be passed to
  * tnl_port_add(). */
 bool
 tnl_port_reconfigure(const struct ofport_dpif *ofport,
-                     const struct netdev *netdev, odp_port_t odp_port,
-                     struct tnl_port **tnl_portp)
+                     const struct netdev *netdev, odp_port_t odp_port)
 {
-    struct tnl_port *tnl_port = *tnl_portp;
+    struct tnl_port *tnl_port = tnl_find_ofport(ofport);
 
-    if (tnl_port == &void_tnl_port) {
-        *tnl_portp = tnl_port_add__(ofport, netdev, odp_port, false);
-        return *tnl_portp != &void_tnl_port;
-    } else if (tnl_port->ofport != ofport
-               || tnl_port->netdev != netdev
+    if (!tnl_port) {
+        return tnl_port_add__(ofport, netdev, odp_port, false);
+    } else if (tnl_port->netdev != netdev
                || tnl_port->match.odp_port != odp_port
                || tnl_port->netdev_seq != netdev_change_seq(netdev)) {
         VLOG_DBG("reconfiguring %s", tnl_port_get_name(tnl_port));
-        tnl_port_del(tnl_port);
-        *tnl_portp = tnl_port_add(ofport, netdev, odp_port);
+        tnl_port_del(ofport);
+        tnl_port_add(ofport, netdev, odp_port);
         return true;
     }
     return false;
 }
 
-/* Removes 'tnl_port' from the module. */
+/* Removes 'ofport' from the module. */
 void
-tnl_port_del(struct tnl_port *tnl_port)
+tnl_port_del(const struct ofport_dpif *ofport)
 {
-    if (tnl_port && tnl_port != &void_tnl_port) {
+    struct tnl_port *tnl_port = ofport ? tnl_find_ofport(ofport) : NULL;
+
+    if (tnl_port) {
         tnl_port_mod_log(tnl_port, "removing");
         hmap_remove(&tnl_match_map, &tnl_port->match_node);
+        hmap_remove(&ofport_map, &tnl_port->ofport_node);
         netdev_close(tnl_port->netdev);
         free(tnl_port);
     }
@@ -219,13 +217,14 @@ tnl_port_receive(const struct flow *flow)
  * port that the output should happen on.  May return ODPP_NONE if the output
  * shouldn't occur. */
 odp_port_t
-tnl_port_send(const struct tnl_port *tnl_port, struct flow *flow,
+tnl_port_send(const struct ofport_dpif *ofport, struct flow *flow,
               struct flow_wildcards *wc)
 {
+    struct tnl_port *tnl_port = tnl_find_ofport(ofport);
     const struct netdev_tunnel_config *cfg;
     char *pre_flow_str = NULL;
 
-    if (tnl_port == &void_tnl_port) {
+    if (!tnl_port) {
         return ODPP_NONE;
     }
 
@@ -298,6 +297,20 @@ tnl_hash(struct tnl_match *match)
 {
     BUILD_ASSERT_DECL(sizeof *match % sizeof(uint32_t) == 0);
     return hash_words((uint32_t *) match, sizeof *match / sizeof(uint32_t), 0);
+}
+
+static struct tnl_port *
+tnl_find_ofport(const struct ofport_dpif *ofport)
+{
+    struct tnl_port *tnl_port;
+
+    HMAP_FOR_EACH_IN_BUCKET (tnl_port, ofport_node, hash_pointer(ofport, 0),
+                             &ofport_map) {
+        if (tnl_port->ofport == ofport) {
+            return tnl_port;
+        }
+    }
+    return NULL;
 }
 
 static struct tnl_port *

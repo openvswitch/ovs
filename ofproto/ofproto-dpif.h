@@ -133,8 +133,8 @@ struct ofport_dpif {
     struct bfd *bfd;            /* BFD, if any. */
     tag_type tag;               /* Tag associated with this port. */
     bool may_enable;            /* May be enabled in bonds. */
+    bool is_tunnel;             /* This port is a tunnel. */
     long long int carrier_seq;  /* Carrier status changes. */
-    struct tnl_port *tnl_port;  /* Tunnel handle, or null. */
     struct ofport_dpif *peer;   /* Peer if patch port. */
 
     /* Spanning tree. */

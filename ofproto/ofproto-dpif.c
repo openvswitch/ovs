@@ -571,7 +571,7 @@ type_run(const char *type)
                 char namebuf[NETDEV_VPORT_NAME_BUFSIZE];
                 const char *dp_port;
 
-                if (!iter->tnl_port) {
+                if (!iter->is_tunnel) {
                     continue;
                 }
 
@@ -597,8 +597,8 @@ type_run(const char *type)
                 }
 
                 iter->odp_port = node ? u32_to_odp(node->data) : ODPP_NONE;
-                if (tnl_port_reconfigure(iter, iter->up.netdev, iter->odp_port,
-                                         &iter->tnl_port)) {
+                if (tnl_port_reconfigure(iter, iter->up.netdev,
+                                         iter->odp_port)) {
                     backer->need_revalidate = REV_RECONFIGURE;
                 }
             }
@@ -1457,7 +1457,7 @@ port_construct(struct ofport *port_)
     port->may_enable = true;
     port->stp_port = NULL;
     port->stp_state = STP_DISABLED;
-    port->tnl_port = NULL;
+    port->is_tunnel = false;
     port->peer = NULL;
     hmap_init(&port->priorities);
     port->realdev_ofp_port = 0;
@@ -1486,7 +1486,8 @@ port_construct(struct ofport *port_)
     port->odp_port = dpif_port.port_no;
 
     if (netdev_get_tunnel_config(netdev)) {
-        port->tnl_port = tnl_port_add(port, port->up.netdev, port->odp_port);
+        tnl_port_add(port, port->up.netdev, port->odp_port);
+        port->is_tunnel = true;
     } else {
         /* Sanity-check that a mapping doesn't already exist.  This
          * shouldn't happen for non-tunnel ports. */
@@ -1527,7 +1528,7 @@ port_destruct(struct ofport *port_)
          * happens when the ofproto is being destroyed, since the caller
          * assumes that removal of attached ports will happen as part of
          * destruction. */
-        if (!port->tnl_port) {
+        if (!port->is_tunnel) {
             dpif_port_del(ofproto->backer->dpif, port->odp_port);
         }
     }
@@ -1537,11 +1538,11 @@ port_destruct(struct ofport *port_)
         port->peer = NULL;
     }
 
-    if (port->odp_port != ODPP_NONE && !port->tnl_port) {
+    if (port->odp_port != ODPP_NONE && !port->is_tunnel) {
         hmap_remove(&ofproto->backer->odp_to_ofport_map, &port->odp_port_node);
     }
 
-    tnl_port_del(port->tnl_port);
+    tnl_port_del(port);
     sset_find_and_delete(&ofproto->ports, devname);
     sset_find_and_delete(&ofproto->ghost_ports, devname);
     bundle_remove(port_);
@@ -1568,9 +1569,8 @@ port_modified(struct ofport *port_)
         cfm_set_netdev(port->cfm, port->up.netdev);
     }
 
-    if (port->tnl_port && tnl_port_reconfigure(port, port->up.netdev,
-                                               port->odp_port,
-                                               &port->tnl_port)) {
+    if (port->is_tunnel && tnl_port_reconfigure(port, port->up.netdev,
+                                                port->odp_port)) {
         ofproto_dpif_cast(port->up.ofproto)->backer->need_revalidate =
             REV_RECONFIGURE;
     }
@@ -3060,7 +3060,7 @@ port_del(struct ofproto *ofproto_, ofp_port_t ofp_port)
     sset_find_and_delete(&ofproto->ghost_ports,
                          netdev_get_name(ofport->up.netdev));
     ofproto->backer->need_revalidate = REV_RECONFIGURE;
-    if (!ofport->tnl_port) {
+    if (!ofport->is_tunnel) {
         error = dpif_port_del(ofproto->backer->dpif, ofport->odp_port);
         if (!error) {
             /* The caller is going to close ofport->up.netdev.  If this is a
@@ -4840,7 +4840,7 @@ facet_push_stats(struct facet *facet, bool may_learn)
         facet->prev_used = facet->used;
 
         in_port = get_ofp_port(ofproto, facet->flow.in_port.ofp_port);
-        if (in_port && in_port->tnl_port) {
+        if (in_port && in_port->is_tunnel) {
             netdev_vport_inc_rx(in_port->up.netdev, &stats);
         }
 

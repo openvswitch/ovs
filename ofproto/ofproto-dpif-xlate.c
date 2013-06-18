@@ -904,13 +904,13 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
         flow->nw_tos |= dscp;
     }
 
-    if (ofport->tnl_port) {
+    if (ofport->is_tunnel) {
          /* Save tunnel metadata so that changes made due to
           * the Logical (tunnel) Port are not visible for any further
           * matches, while explicit set actions on tunnel metadata are.
           */
         struct flow_tnl flow_tnl = flow->tunnel;
-        odp_port = tnl_port_send(ofport->tnl_port, flow, &ctx->xout->wc);
+        odp_port = tnl_port_send(ofport, flow, &ctx->xout->wc);
         if (odp_port == ODPP_NONE) {
             xlate_report(ctx, "Tunneling decided against output");
             goto out; /* restore flow_nw_tos */

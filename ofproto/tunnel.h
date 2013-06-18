@@ -30,17 +30,16 @@
 
 struct ofport_dpif;
 struct netdev;
-struct tnl_port;
 
 bool tnl_port_reconfigure(const struct ofport_dpif *, const struct netdev *,
-                          odp_port_t, struct tnl_port **);
+                          odp_port_t);
 
-struct tnl_port *tnl_port_add(const struct ofport_dpif *, const struct netdev *,
-                              odp_port_t);
-void tnl_port_del(struct tnl_port *);
+void tnl_port_add(const struct ofport_dpif *, const struct netdev *,
+                  odp_port_t odp_port);
+void tnl_port_del(const struct ofport_dpif *);
 
 const struct ofport_dpif *tnl_port_receive(const struct flow *);
-odp_port_t tnl_port_send(const struct tnl_port *, struct flow *,
+odp_port_t tnl_port_send(const struct ofport_dpif *, struct flow *,
                          struct flow_wildcards *wc);
 
 /* Returns true if 'flow' should be submitted to tnl_port_receive(). */
