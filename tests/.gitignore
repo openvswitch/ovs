@@ -17,6 +17,7 @@
 /test-flows
 /test-hash
 /test-heap
+/test-hindex
 /test-hmap
 /test-json
 /test-jsonrpc
