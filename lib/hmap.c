@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2012 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -90,8 +90,7 @@ resize(struct hmap *hmap, size_t new_mask)
     struct hmap tmp;
     size_t i;
 
-    ovs_assert(!(new_mask & (new_mask + 1)));
-    ovs_assert(new_mask != SIZE_MAX);
+    ovs_assert(is_pow2(new_mask + 1));
 
     hmap_init(&tmp);
     if (new_mask) {
