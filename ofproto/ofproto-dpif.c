@@ -2245,7 +2245,7 @@ bundle_destroy(struct ofbundle *bundle)
     hmap_remove(&ofproto->bundles, &bundle->hmap_node);
     free(bundle->name);
     free(bundle->trunks);
-    lacp_destroy(bundle->lacp);
+    lacp_unref(bundle->lacp);
     bond_destroy(bundle->bond);
     free(bundle);
 }
@@ -2309,7 +2309,7 @@ bundle_set(struct ofproto *ofproto_, void *aux,
         }
         lacp_configure(bundle->lacp, s->lacp);
     } else {
-        lacp_destroy(bundle->lacp);
+        lacp_unref(bundle->lacp);
         bundle->lacp = NULL;
     }
 

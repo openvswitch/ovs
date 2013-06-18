@@ -100,6 +100,8 @@ struct lacp {
     bool fast;               /* True if using fast probe interval. */
     bool negotiated;         /* True if LACP negotiations were successful. */
     bool update;             /* True if lacp_update() needs to be called. */
+
+    int ref_cnt;
 };
 
 struct slave {
@@ -197,14 +199,31 @@ lacp_create(void)
     lacp = xzalloc(sizeof *lacp);
     hmap_init(&lacp->slaves);
     list_push_back(&all_lacps, &lacp->node);
+    lacp->ref_cnt = 1;
+    return lacp;
+}
+
+struct lacp *
+lacp_ref(const struct lacp *lacp_)
+{
+    struct lacp *lacp = CONST_CAST(struct lacp *, lacp_);
+    if (lacp) {
+        ovs_assert(lacp->ref_cnt > 0);
+        lacp->ref_cnt++;
+    }
     return lacp;
 }
 
 /* Destroys 'lacp' and its slaves. Does nothing if 'lacp' is NULL. */
 void
-lacp_destroy(struct lacp *lacp)
+lacp_unref(struct lacp *lacp)
 {
-    if (lacp) {
+    if (!lacp) {
+        return;
+    }
+
+    ovs_assert(lacp->ref_cnt > 0);
+    if (!--lacp->ref_cnt) {
         struct slave *slave, *next;
 
         HMAP_FOR_EACH_SAFE (slave, next, node, &lacp->slaves) {

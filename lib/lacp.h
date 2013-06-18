@@ -39,7 +39,8 @@ struct lacp_settings {
 
 void lacp_init(void);
 struct lacp *lacp_create(void);
-void lacp_destroy(struct lacp *);
+void lacp_unref(struct lacp *);
+struct lacp *lacp_ref(const struct lacp *);
 
 void lacp_configure(struct lacp *, const struct lacp_settings *);
 bool lacp_is_active(const struct lacp *);
