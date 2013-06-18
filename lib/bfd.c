@@ -179,6 +179,8 @@ struct bfd {
     long long int last_tx;        /* Last TX time. */
     long long int next_tx;        /* Next TX time. */
     long long int detect_time;    /* RFC 5880 6.8.4 Detection time. */
+
+    int ref_cnt;
 };
 
 static bool bfd_in_poll(const struct bfd *);
@@ -248,11 +250,7 @@ bfd_configure(struct bfd *bfd, const char *name,
     }
 
     if (!cfg || !smap_get_bool(cfg, "enable", false)) {
-        if (bfd) {
-            hmap_remove(&all_bfds, &bfd->node);
-            free(bfd->name);
-            free(bfd);
-        }
+        bfd_unref(bfd);
         return NULL;
     }
 
@@ -265,6 +263,7 @@ bfd_configure(struct bfd *bfd, const char *name,
         bfd->diag = DIAG_NONE;
         bfd->min_tx = 1000;
         bfd->mult = 3;
+        bfd->ref_cnt = 1;
 
         /* RFC 5881 section 4
          * The source port MUST be in the range 49152 through 65535.  The same
@@ -307,6 +306,30 @@ bfd_configure(struct bfd *bfd, const char *name,
         bfd_poll(bfd);
     }
     return bfd;
+}
+
+struct bfd *
+bfd_ref(const struct bfd *bfd_)
+{
+    struct bfd *bfd = CONST_CAST(struct bfd *, bfd_);
+    if (bfd) {
+        ovs_assert(bfd->ref_cnt > 0);
+        bfd->ref_cnt++;
+    }
+    return bfd;
+}
+
+void
+bfd_unref(struct bfd *bfd)
+{
+    if (bfd) {
+        ovs_assert(bfd->ref_cnt > 0);
+        if (!--bfd->ref_cnt) {
+            hmap_remove(&all_bfds, &bfd->node);
+            free(bfd->name);
+            free(bfd);
+        }
+    }
 }
 
 void

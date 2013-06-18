@@ -40,6 +40,8 @@ void bfd_process_packet(struct bfd *, const struct flow *,
 
 struct bfd *bfd_configure(struct bfd *, const char *name,
                           const struct smap *smap);
+struct bfd *bfd_ref(const struct bfd *);
+void bfd_unref(struct bfd *);
 
 bool bfd_forwarding(const struct bfd *);
 void bfd_get_status(const struct bfd *, struct smap *);
