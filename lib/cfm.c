@@ -125,6 +125,8 @@ struct cfm {
     int health_interval;      /* Number of fault_intervals since health was
                                  recomputed. */
     long long int last_tx;    /* Last CCM transmission time. */
+
+    int ref_cnt;
 };
 
 /* Remote MPs represent foreign network entities that are configured to have
@@ -318,15 +320,21 @@ cfm_create(const struct netdev *netdev)
     cfm->fault_override = -1;
     cfm->health = -1;
     cfm->last_tx = 0;
+    cfm->ref_cnt = 1;
     return cfm;
 }
 
 void
-cfm_destroy(struct cfm *cfm)
+cfm_unref(struct cfm *cfm)
 {
     struct remote_mp *rmp, *rmp_next;
 
     if (!cfm) {
+        return;
+    }
+
+    ovs_assert(cfm->ref_cnt);
+    if (--cfm->ref_cnt) {
         return;
     }
 
@@ -340,6 +348,17 @@ cfm_destroy(struct cfm *cfm)
     netdev_close(cfm->netdev);
     free(cfm->rmps_array);
     free(cfm);
+}
+
+struct cfm *
+cfm_ref(const struct cfm *cfm_)
+{
+    struct cfm *cfm = CONST_CAST(struct cfm *, cfm_);
+    if (cfm) {
+        ovs_assert(cfm->ref_cnt > 0);
+        cfm->ref_cnt++;
+    }
+    return cfm;
 }
 
 /* Should be run periodically to update fault statistics messages. */

@@ -1674,7 +1674,7 @@ set_cfm(struct ofport *ofport_, const struct cfm_settings *s)
 
         error = EINVAL;
     }
-    cfm_destroy(ofport->cfm);
+    cfm_unref(ofport->cfm);
     ofport->cfm = NULL;
     return error;
 }

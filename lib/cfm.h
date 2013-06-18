@@ -66,7 +66,8 @@ struct cfm_settings {
 
 void cfm_init(void);
 struct cfm *cfm_create(const struct netdev *);
-void cfm_destroy(struct cfm *);
+struct cfm *cfm_ref(const struct cfm *);
+void cfm_unref(struct cfm *);
 void cfm_run(struct cfm *);
 bool cfm_should_send_ccm(struct cfm *);
 void cfm_compose_ccm(struct cfm *, struct ofpbuf *packet, uint8_t eth_src[6]);
