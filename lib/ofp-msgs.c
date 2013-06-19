@@ -23,6 +23,7 @@
 #include "ofpbuf.h"
 #include "openflow/nicira-ext.h"
 #include "openflow/openflow.h"
+#include "ovs-thread.h"
 #include "vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(ofp_msgs);
@@ -988,9 +989,10 @@ ofpraw_from_ofphdrs(enum ofpraw *raw, const struct ofphdrs *hdrs)
 static void
 ofpmsgs_init(void)
 {
+    static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
     const struct raw_info *info;
 
-    if (raw_instance_map.buckets) {
+    if (!ovsthread_once_start(&once)) {
         return;
     }
 
@@ -1008,4 +1010,6 @@ ofpmsgs_init(void)
                         ofphdrs_hash(&inst->hdrs));
         }
     }
+
+    ovsthread_once_done(&once);
 }
