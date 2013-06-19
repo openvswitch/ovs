@@ -557,6 +557,10 @@ bond_check_admissibility(struct bond *bond, const void *slave_,
 {
     struct bond_slave *slave = bond_slave_lookup(bond, slave_);
 
+    if (!slave) {
+        return BV_DROP;
+    }
+
     /* LACP bonds have very loose admissibility restrictions because we can
      * assume the remote switch is aware of the bond and will "do the right
      * thing".  However, as a precaution we drop packets on disabled slaves
@@ -574,7 +578,7 @@ bond_check_admissibility(struct bond *bond, const void *slave_,
     /* Drop all multicast packets on inactive slaves. */
     if (eth_addr_is_multicast(eth_dst)) {
         *tags |= bond_get_active_slave_tag(bond);
-        if (bond->active_slave != bond_slave_lookup(bond, slave_)) {
+        if (bond->active_slave != slave) {
             return BV_DROP;
         }
     }
