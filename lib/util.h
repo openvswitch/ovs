@@ -214,6 +214,7 @@ void ovs_error(int err_no, const char *format, ...) PRINTF_FORMAT(2, 3);
 void ovs_error_valist(int err_no, const char *format, va_list)
     PRINTF_FORMAT(2, 0);
 const char *ovs_retval_to_string(int);
+const char *ovs_strerror(int);
 void ovs_hex_dump(FILE *, const void *, size_t, uintptr_t offset, bool ascii);
 
 bool str_to_int(const char *, int base, int *);

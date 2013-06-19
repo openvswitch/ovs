@@ -18,6 +18,7 @@
 #include "util.h"
 #include <errno.h>
 #include <limits.h>
+#include <pthread.h>
 #include <stdarg.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -43,6 +44,9 @@ const char *subprogram_name = "";
 
 /* --version option output. */
 static char *program_version;
+
+/* Buffer used by ovs_strerror(). */
+DEFINE_PER_THREAD_DATA(struct { char s[128]; }, strerror_buffer, { "" });
 
 void
 ovs_assert_failure(const char *where, const char *function,
@@ -306,19 +310,41 @@ ovs_error_valist(int err_no, const char *format, va_list args)
 const char *
 ovs_retval_to_string(int retval)
 {
-    static char unknown[48];
+    return (!retval ? ""
+            : retval == EOF ? "End of file"
+            : ovs_strerror(retval));
+}
 
-    if (!retval) {
-        return "";
+const char *
+ovs_strerror(int error)
+{
+    enum { BUFSIZE = sizeof strerror_buffer_get()->s };
+    int save_errno;
+    char *buffer;
+    char *s;
+
+    save_errno = errno;
+    buffer = strerror_buffer_get()->s;
+
+#if STRERROR_R_CHAR_P
+    /* GNU style strerror_r() might return an immutable static string, or it
+     * might write and return 'buffer', but in either case we can pass the
+     * returned string directly to the caller. */
+    s = strerror_r(error, buffer, BUFSIZE);
+#else  /* strerror_r() returns an int. */
+    s = buffer;
+    if (strerror_r(error, buffer, BUFSIZE)) {
+        /* strerror_r() is only allowed to fail on ERANGE (because the buffer
+         * is too short).  We don't check the actual failure reason because
+         * POSIX requires strerror_r() to return the error but old glibc
+         * (before 2.13) returns -1 and sets errno. */
+        snprintf(buffer, BUFSIZE, "Unknown error %d", error);
     }
-    if (retval > 0) {
-        return strerror(retval);
-    }
-    if (retval == EOF) {
-        return "End of file";
-    }
-    snprintf(unknown, sizeof unknown, "***unknown return value: %d***", retval);
-    return unknown;
+#endif
+
+    errno = save_errno;
+
+    return s;
 }
 
 /* Sets global "program_name" and "program_version" variables.  Should
