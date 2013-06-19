@@ -407,13 +407,13 @@ enum ofperr {
     OFPERR_OFPGMFC_BAD_COMMAND,
 
     /* OF1.2+(6,12).  Error in bucket. */
-    OFPERR_OFPGMFC_OFPGMFC_BAD_BUCKET,
+    OFPERR_OFPGMFC_BAD_BUCKET,
 
     /* OF1.2+(6,13).  Error in watch port/group. */
-    OFPERR_OFPGMFC_OFPGMFC_BAD_WATCH,
+    OFPERR_OFPGMFC_BAD_WATCH,
 
     /* OF1.2+(6,14).  Permissions error. */
-    OFPERR_OFPGMFC_OFPGMFC_EPERM,
+    OFPERR_OFPGMFC_EPERM,
 
 /* ## --------------------- ## */
 /* ## OFPET_PORT_MOD_FAILED ## */
