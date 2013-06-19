@@ -832,9 +832,11 @@ dpif_flow_put__(struct dpif *dpif, const struct dpif_flow_put *put)
 }
 
 /* Adds or modifies a flow in 'dpif'.  The flow is specified by the Netlink
- * attributes with types OVS_KEY_ATTR_* in the 'key_len' bytes starting at
- * 'key'.  The associated actions are specified by the Netlink attributes with
- * types OVS_ACTION_ATTR_* in the 'actions_len' bytes starting at 'actions'.
+ * attribute OVS_FLOW_ATTR_KEY with types OVS_KEY_ATTR_* in the 'key_len' bytes
+ * starting at 'key', and OVS_FLOW_ATTR_MASK with types of OVS_KEY_ATTR_* in the
+ * 'mask_len' bytes starting at 'mask'. The associated actions are specified by
+ * the Netlink attributes with types OVS_ACTION_ATTR_* in the 'actions_len'
+ * bytes starting at 'actions'.
  *
  * - If the flow's key does not exist in 'dpif', then the flow will be added if
  *   'flags' includes DPIF_FP_CREATE.  Otherwise the operation will fail with
@@ -854,6 +856,7 @@ dpif_flow_put__(struct dpif *dpif, const struct dpif_flow_put *put)
 int
 dpif_flow_put(struct dpif *dpif, enum dpif_flow_put_flags flags,
               const struct nlattr *key, size_t key_len,
+              const struct nlattr *mask, size_t mask_len,
               const struct nlattr *actions, size_t actions_len,
               struct dpif_flow_stats *stats)
 {
@@ -862,6 +865,8 @@ dpif_flow_put(struct dpif *dpif, enum dpif_flow_put_flags flags,
     put.flags = flags;
     put.key = key;
     put.key_len = key_len;
+    put.mask = mask;
+    put.mask_len = mask_len;
     put.actions = actions;
     put.actions_len = actions_len;
     put.stats = stats;
@@ -937,6 +942,7 @@ dpif_flow_dump_start(struct dpif_flow_dump *dump, const struct dpif *dpif)
 bool
 dpif_flow_dump_next(struct dpif_flow_dump *dump,
                     const struct nlattr **key, size_t *key_len,
+                    const struct nlattr **mask, size_t *mask_len,
                     const struct nlattr **actions, size_t *actions_len,
                     const struct dpif_flow_stats **stats)
 {
@@ -946,6 +952,7 @@ dpif_flow_dump_next(struct dpif_flow_dump *dump,
     if (!error) {
         error = dpif->dpif_class->flow_dump_next(dpif, dump->state,
                                                  key, key_len,
+                                                 mask, mask_len,
                                                  actions, actions_len,
                                                  stats);
         if (error) {
@@ -956,6 +963,10 @@ dpif_flow_dump_next(struct dpif_flow_dump *dump,
         if (key) {
             *key = NULL;
             *key_len = 0;
+        }
+        if (mask) {
+            *mask = NULL;
+            *mask_len = 0;
         }
         if (actions) {
             *actions = NULL;

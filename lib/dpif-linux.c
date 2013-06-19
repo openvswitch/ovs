@@ -105,6 +105,8 @@ struct dpif_linux_flow {
      * the Netlink version of the command, even if actions_len is zero. */
     const struct nlattr *key;           /* OVS_FLOW_ATTR_KEY. */
     size_t key_len;
+    const struct nlattr *mask;          /* OVS_FLOW_ATTR_MASK. */
+    size_t mask_len;
     const struct nlattr *actions;       /* OVS_FLOW_ATTR_ACTIONS. */
     size_t actions_len;
     const struct ovs_flow_stats *stats; /* OVS_FLOW_ATTR_STATS. */
@@ -807,6 +809,8 @@ dpif_linux_init_flow_put(struct dpif *dpif_, const struct dpif_flow_put *put,
     request->dp_ifindex = dpif->dp_ifindex;
     request->key = put->key;
     request->key_len = put->key_len;
+    request->mask = put->mask;
+    request->mask_len = put->mask_len;
     /* Ensure that OVS_FLOW_ATTR_ACTIONS will always be included. */
     request->actions = (put->actions
                         ? put->actions
@@ -901,6 +905,7 @@ dpif_linux_flow_dump_start(const struct dpif *dpif_, void **statep)
 static int
 dpif_linux_flow_dump_next(const struct dpif *dpif_ OVS_UNUSED, void *state_,
                           const struct nlattr **key, size_t *key_len,
+                          const struct nlattr **mask, size_t *mask_len,
                           const struct nlattr **actions, size_t *actions_len,
                           const struct dpif_flow_stats **stats)
 {
@@ -940,6 +945,10 @@ dpif_linux_flow_dump_next(const struct dpif *dpif_ OVS_UNUSED, void *state_,
     if (key) {
         *key = state->flow.key;
         *key_len = state->flow.key_len;
+    }
+    if (mask) {
+        *mask = state->flow.mask;
+        *mask_len = state->flow.mask ? state->flow.mask_len : 0;
     }
     if (stats) {
         dpif_linux_flow_get_stats(&state->flow, &state->stats);
@@ -1832,6 +1841,7 @@ dpif_linux_flow_from_ofpbuf(struct dpif_linux_flow *flow,
 {
     static const struct nl_policy ovs_flow_policy[] = {
         [OVS_FLOW_ATTR_KEY] = { .type = NL_A_NESTED },
+        [OVS_FLOW_ATTR_MASK] = { .type = NL_A_NESTED, .optional = true },
         [OVS_FLOW_ATTR_ACTIONS] = { .type = NL_A_NESTED, .optional = true },
         [OVS_FLOW_ATTR_STATS] = { NL_POLICY_FOR(struct ovs_flow_stats),
                                   .optional = true },
@@ -1863,6 +1873,11 @@ dpif_linux_flow_from_ofpbuf(struct dpif_linux_flow *flow,
     flow->dp_ifindex = ovs_header->dp_ifindex;
     flow->key = nl_attr_get(a[OVS_FLOW_ATTR_KEY]);
     flow->key_len = nl_attr_get_size(a[OVS_FLOW_ATTR_KEY]);
+
+    if (a[OVS_FLOW_ATTR_MASK]) {
+        flow->mask = nl_attr_get(a[OVS_FLOW_ATTR_MASK]);
+        flow->mask_len = nl_attr_get_size(a[OVS_FLOW_ATTR_MASK]);
+    }
     if (a[OVS_FLOW_ATTR_ACTIONS]) {
         flow->actions = nl_attr_get(a[OVS_FLOW_ATTR_ACTIONS]);
         flow->actions_len = nl_attr_get_size(a[OVS_FLOW_ATTR_ACTIONS]);
@@ -1896,6 +1911,10 @@ dpif_linux_flow_to_ofpbuf(const struct dpif_linux_flow *flow,
 
     if (flow->key_len) {
         nl_msg_put_unspec(buf, OVS_FLOW_ATTR_KEY, flow->key, flow->key_len);
+    }
+
+    if (flow->mask_len) {
+        nl_msg_put_unspec(buf, OVS_FLOW_ATTR_MASK, flow->mask, flow->mask_len);
     }
 
     if (flow->actions || flow->actions_len) {
