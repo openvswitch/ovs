@@ -5614,13 +5614,16 @@ set_netflow(struct ofproto *ofproto_,
     if (netflow_options) {
         if (!ofproto->netflow) {
             ofproto->netflow = netflow_create();
+            ofproto->backer->need_revalidate = REV_RECONFIGURE;
         }
         return netflow_set_options(ofproto->netflow, netflow_options);
-    } else {
+    } else if (ofproto->netflow) {
+        ofproto->backer->need_revalidate = REV_RECONFIGURE;
         netflow_destroy(ofproto->netflow);
         ofproto->netflow = NULL;
-        return 0;
     }
+
+    return 0;
 }
 
 static void
