@@ -29,6 +29,7 @@
 struct ds;
 struct flow;
 struct flow_tnl;
+struct flow_wildcards;
 struct nlattr;
 struct ofpbuf;
 struct simap;
@@ -119,7 +120,8 @@ const char *odp_key_fitness_to_string(enum odp_key_fitness);
 void commit_odp_tunnel_action(const struct flow *, struct flow *base,
                               struct ofpbuf *odp_actions);
 void commit_odp_actions(const struct flow *, struct flow *base,
-                        struct ofpbuf *odp_actions);
+                        struct ofpbuf *odp_actions,
+                        struct flow_wildcards *wc);
 
 /* ofproto-dpif interface.
  *

@@ -549,10 +549,9 @@ xlate_normal(struct xlate_ctx *ctx)
 
     /* Check the dl_type, since we may check for gratuituous ARP. */
     memset(&wc->masks.dl_type, 0xff, sizeof wc->masks.dl_type);
-
     memset(&wc->masks.dl_src, 0xff, sizeof wc->masks.dl_src);
     memset(&wc->masks.dl_dst, 0xff, sizeof wc->masks.dl_dst);
-    memset(&wc->masks.vlan_tci, 0xff, sizeof wc->masks.vlan_tci);
+    wc->masks.vlan_tci |= htons(VLAN_VID_MASK | VLAN_CFI);
 
     in_bundle = lookup_input_bundle(ctx->ofproto, flow->in_port,
                                     ctx->xin->packet != NULL, &in_port);
@@ -814,6 +813,7 @@ process_special(struct xlate_ctx *ctx, const struct flow *flow,
         return SLOW_BFD;
     } else if (ofport->bundle && ofport->bundle->lacp
                && flow->dl_type == htons(ETH_TYPE_LACP)) {
+        memset(&wc->masks.dl_type, 0xff, sizeof wc->masks.dl_type);
         if (packet) {
             lacp_process_packet(ofport->bundle->lacp, ofport, packet);
         }
@@ -833,6 +833,7 @@ compose_output_action__(struct xlate_ctx *ctx, uint16_t ofp_port,
                         bool check_stp)
 {
     const struct ofport_dpif *ofport = get_ofp_port(ctx->ofproto, ofp_port);
+    struct flow_wildcards *wc = &ctx->xout->wc;
     struct flow *flow = &ctx->xin->flow;
     ovs_be16 flow_vlan_tci;
     uint32_t flow_skb_mark;
@@ -900,6 +901,7 @@ compose_output_action__(struct xlate_ctx *ctx, uint16_t ofp_port,
     flow_nw_tos = flow->nw_tos;
 
     if (ofproto_dpif_dscp_from_priority(ofport, flow->skb_priority, &dscp)) {
+        wc->masks.nw_tos |= IP_ECN_MASK;
         flow->nw_tos &= ~IP_DSCP_MASK;
         flow->nw_tos |= dscp;
     }
@@ -928,7 +930,11 @@ compose_output_action__(struct xlate_ctx *ctx, uint16_t ofp_port,
         flow->tunnel = flow_tnl; /* Restore tunnel metadata */
     } else {
         uint16_t vlandev_port;
+
         odp_port = ofport->odp_port;
+        if (!hmap_is_empty(&ctx->ofproto->realdev_vid_map)) {
+            wc->masks.vlan_tci |= htons(VLAN_VID_MASK | VLAN_CFI);
+        }
         vlandev_port = vsp_realdev_to_vlandev(ctx->ofproto, ofp_port,
                                               flow->vlan_tci);
         if (vlandev_port == ofp_port) {
@@ -941,7 +947,8 @@ compose_output_action__(struct xlate_ctx *ctx, uint16_t ofp_port,
     }
 
     if (out_port != OVSP_NONE) {
-        commit_odp_actions(flow, &ctx->base_flow, &ctx->xout->odp_actions);
+        commit_odp_actions(flow, &ctx->base_flow,
+                           &ctx->xout->odp_actions, &ctx->xout->wc);
         nl_msg_put_u32(&ctx->xout->odp_actions, OVS_ACTION_ATTR_OUTPUT,
                        out_port);
 
@@ -1113,7 +1120,7 @@ execute_controller_action(struct xlate_ctx *ctx, int len,
     memset(&key.tunnel, 0, sizeof key.tunnel);
 
     commit_odp_actions(&ctx->xin->flow, &ctx->base_flow,
-                       &ctx->xout->odp_actions);
+                       &ctx->xout->odp_actions, &ctx->xout->wc);
 
     odp_execute_actions(NULL, packet, &key, ctx->xout->odp_actions.data,
                         ctx->xout->odp_actions.size, NULL, NULL);
@@ -1156,6 +1163,8 @@ compose_mpls_push_action(struct xlate_ctx *ctx, ovs_be16 eth_type)
         } else {
             label = htonl(0x0); /* IPV4 Explicit Null. */
         }
+        wc->masks.nw_tos |= IP_DSCP_MASK;
+        wc->masks.nw_ttl = 0xff;
         tc = (flow->nw_tos & IP_DSCP_MASK) >> 2;
         ttl = flow->nw_ttl ? flow->nw_ttl : 0x40;
         flow->mpls_lse = set_mpls_lse_values(ttl, tc, 1, label);
@@ -1195,6 +1204,7 @@ compose_dec_ttl(struct xlate_ctx *ctx, struct ofpact_cnt_ids *ids)
         return false;
     }
 
+    ctx->xout->wc.masks.nw_ttl = 0xff;
     if (flow->nw_ttl > 1) {
         flow->nw_ttl--;
         return false;
@@ -1227,6 +1237,10 @@ compose_dec_mpls_ttl_action(struct xlate_ctx *ctx)
 {
     struct flow *flow = &ctx->xin->flow;
     uint8_t ttl = mpls_lse_to_ttl(flow->mpls_lse);
+    struct flow_wildcards *wc = &ctx->xout->wc;
+
+    memset(&wc->masks.dl_type, 0xff, sizeof wc->masks.dl_type);
+    memset(&wc->masks.mpls_lse, 0xff, sizeof wc->masks.mpls_lse);
 
     if (!eth_type_mpls(flow->dl_type)) {
         return false;
@@ -1458,7 +1472,7 @@ xlate_sample_action(struct xlate_ctx *ctx,
   uint32_t probability = (os->probability << 16) | os->probability;
 
   commit_odp_actions(&ctx->xin->flow, &ctx->base_flow,
-                     &ctx->xout->odp_actions);
+                     &ctx->xout->odp_actions, &ctx->xout->wc);
 
   compose_flow_sample_cookie(os->probability, os->collector_set_id,
                              os->obs_domain_id, os->obs_point_id, &cookie);
@@ -1629,9 +1643,6 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
             break;
 
         case OFPACT_POP_QUEUE:
-            memset(&wc->masks.skb_priority, 0xff,
-                   sizeof wc->masks.skb_priority);
-
             flow->skb_priority = ctx->orig_skb_priority;
             break;
 
@@ -1890,22 +1901,14 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
 
     flow_wildcards_init_catchall(wc);
     memset(&wc->masks.in_port, 0xff, sizeof wc->masks.in_port);
+    memset(&wc->masks.skb_priority, 0xff, sizeof wc->masks.skb_priority);
+    wc->masks.nw_frag |= FLOW_NW_FRAG_MASK;
 
     if (tnl_port_should_receive(&ctx.xin->flow)) {
         memset(&wc->masks.tunnel, 0xff, sizeof wc->masks.tunnel);
     }
-
-    /* Disable most wildcarding for NetFlow. */
     if (xin->ofproto->netflow) {
-        memset(&wc->masks.dl_src, 0xff, sizeof wc->masks.dl_src);
-        memset(&wc->masks.dl_dst, 0xff, sizeof wc->masks.dl_dst);
-        memset(&wc->masks.dl_type, 0xff, sizeof wc->masks.dl_type);
-        memset(&wc->masks.vlan_tci, 0xff, sizeof wc->masks.vlan_tci);
-        memset(&wc->masks.nw_proto, 0xff, sizeof wc->masks.nw_proto);
-        memset(&wc->masks.nw_src, 0xff, sizeof wc->masks.nw_src);
-        memset(&wc->masks.nw_dst, 0xff, sizeof wc->masks.nw_dst);
-        memset(&wc->masks.tp_src, 0xff, sizeof wc->masks.tp_src);
-        memset(&wc->masks.tp_dst, 0xff, sizeof wc->masks.tp_dst);
+        netflow_mask_wc(wc);
     }
 
     ctx.xout->tags = 0;

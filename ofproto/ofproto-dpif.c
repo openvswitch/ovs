@@ -5130,6 +5130,10 @@ rule_dpif_lookup_in_table(struct ofproto_dpif *ofproto,
         return NULL;
     }
 
+    if (wc) {
+        wc->masks.nw_frag |= FLOW_NW_FRAG_MASK;
+    }
+
     cls = &ofproto->up.tables[table_id].cls;
     frag = (flow->nw_frag & FLOW_NW_FRAG_ANY) != 0;
     if (frag && ofproto->up.frag_handling == OFPC_FRAG_NORMAL) {

@@ -790,12 +790,12 @@ flow_mask_hash_fields(struct flow_wildcards *wc, enum nx_hash_fields fields)
         memset(&wc->masks.dl_src, 0xff, sizeof wc->masks.dl_src);
         memset(&wc->masks.dl_dst, 0xff, sizeof wc->masks.dl_dst);
         memset(&wc->masks.dl_type, 0xff, sizeof wc->masks.dl_type);
-        memset(&wc->masks.vlan_tci, 0xff, sizeof wc->masks.vlan_tci);
         memset(&wc->masks.nw_proto, 0xff, sizeof wc->masks.nw_proto);
         memset(&wc->masks.nw_src, 0xff, sizeof wc->masks.nw_src);
         memset(&wc->masks.nw_dst, 0xff, sizeof wc->masks.nw_dst);
         memset(&wc->masks.tp_src, 0xff, sizeof wc->masks.tp_src);
         memset(&wc->masks.tp_dst, 0xff, sizeof wc->masks.tp_dst);
+        wc->masks.vlan_tci |= htons(VLAN_VID_MASK | VLAN_CFI);
         break;
 
     default:

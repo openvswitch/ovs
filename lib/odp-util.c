@@ -2233,7 +2233,8 @@ commit_odp_tunnel_action(const struct flow *flow, struct flow *base,
 
 static void
 commit_set_ether_addr_action(const struct flow *flow, struct flow *base,
-                             struct ofpbuf *odp_actions)
+                             struct ofpbuf *odp_actions,
+                             struct flow_wildcards *wc)
 {
     struct ovs_key_ethernet eth_key;
 
@@ -2241,6 +2242,9 @@ commit_set_ether_addr_action(const struct flow *flow, struct flow *base,
         eth_addr_equals(base->dl_dst, flow->dl_dst)) {
         return;
     }
+
+    memset(&wc->masks.dl_src, 0xff, sizeof wc->masks.dl_src);
+    memset(&wc->masks.dl_dst, 0xff, sizeof wc->masks.dl_dst);
 
     memcpy(base->dl_src, flow->dl_src, ETH_ADDR_LEN);
     memcpy(base->dl_dst, flow->dl_dst, ETH_ADDR_LEN);
@@ -2254,11 +2258,13 @@ commit_set_ether_addr_action(const struct flow *flow, struct flow *base,
 
 static void
 commit_vlan_action(const struct flow *flow, struct flow *base,
-                   struct ofpbuf *odp_actions)
+                   struct ofpbuf *odp_actions, struct flow_wildcards *wc)
 {
     if (base->vlan_tci == flow->vlan_tci) {
         return;
     }
+
+    memset(&wc->masks.vlan_tci, 0xff, sizeof wc->masks.vlan_tci);
 
     if (base->vlan_tci & htons(VLAN_CFI)) {
         nl_msg_put_flag(odp_actions, OVS_ACTION_ATTR_POP_VLAN);
@@ -2277,12 +2283,14 @@ commit_vlan_action(const struct flow *flow, struct flow *base,
 
 static void
 commit_mpls_action(const struct flow *flow, struct flow *base,
-                   struct ofpbuf *odp_actions)
+                   struct ofpbuf *odp_actions, struct flow_wildcards *wc)
 {
     if (flow->mpls_lse == base->mpls_lse &&
         flow->mpls_depth == base->mpls_depth) {
         return;
     }
+
+    memset(&wc->masks.mpls_lse, 0xff, sizeof wc->masks.mpls_lse);
 
     if (flow->mpls_depth < base->mpls_depth) {
         if (base->mpls_depth - flow->mpls_depth > 1) {
@@ -2321,7 +2329,7 @@ commit_mpls_action(const struct flow *flow, struct flow *base,
 
 static void
 commit_set_ipv4_action(const struct flow *flow, struct flow *base,
-                     struct ofpbuf *odp_actions)
+                     struct ofpbuf *odp_actions, struct flow_wildcards *wc)
 {
     struct ovs_key_ipv4 ipv4_key;
 
@@ -2332,6 +2340,13 @@ commit_set_ipv4_action(const struct flow *flow, struct flow *base,
         base->nw_frag == flow->nw_frag) {
         return;
     }
+
+    memset(&wc->masks.nw_src, 0xff, sizeof wc->masks.nw_src);
+    memset(&wc->masks.nw_dst, 0xff, sizeof wc->masks.nw_dst);
+    memset(&wc->masks.nw_tos, 0xff, sizeof wc->masks.nw_tos);
+    memset(&wc->masks.nw_ttl, 0xff, sizeof wc->masks.nw_ttl);
+    memset(&wc->masks.nw_proto, 0xff, sizeof wc->masks.nw_proto);
+    memset(&wc->masks.nw_frag, 0xff, sizeof wc->masks.nw_frag);
 
     ipv4_key.ipv4_src = base->nw_src = flow->nw_src;
     ipv4_key.ipv4_dst = base->nw_dst = flow->nw_dst;
@@ -2346,7 +2361,7 @@ commit_set_ipv4_action(const struct flow *flow, struct flow *base,
 
 static void
 commit_set_ipv6_action(const struct flow *flow, struct flow *base,
-                       struct ofpbuf *odp_actions)
+                       struct ofpbuf *odp_actions, struct flow_wildcards *wc)
 {
     struct ovs_key_ipv6 ipv6_key;
 
@@ -2358,6 +2373,14 @@ commit_set_ipv6_action(const struct flow *flow, struct flow *base,
         base->nw_frag == flow->nw_frag) {
         return;
     }
+
+    memset(&wc->masks.ipv6_src, 0xff, sizeof wc->masks.ipv6_src);
+    memset(&wc->masks.ipv6_dst, 0xff, sizeof wc->masks.ipv6_dst);
+    memset(&wc->masks.ipv6_label, 0xff, sizeof wc->masks.ipv6_label);
+    memset(&wc->masks.nw_tos, 0xff, sizeof wc->masks.nw_tos);
+    memset(&wc->masks.nw_ttl, 0xff, sizeof wc->masks.nw_ttl);
+    memset(&wc->masks.nw_proto, 0xff, sizeof wc->masks.nw_proto);
+    memset(&wc->masks.nw_frag, 0xff, sizeof wc->masks.nw_frag);
 
     base->ipv6_src = flow->ipv6_src;
     memcpy(&ipv6_key.ipv6_src, &base->ipv6_src, sizeof(ipv6_key.ipv6_src));
@@ -2376,7 +2399,7 @@ commit_set_ipv6_action(const struct flow *flow, struct flow *base,
 
 static void
 commit_set_nw_action(const struct flow *flow, struct flow *base,
-                     struct ofpbuf *odp_actions)
+                     struct ofpbuf *odp_actions, struct flow_wildcards *wc)
 {
     /* Check if flow really have an IP header. */
     if (!flow->nw_proto) {
@@ -2384,15 +2407,15 @@ commit_set_nw_action(const struct flow *flow, struct flow *base,
     }
 
     if (base->dl_type == htons(ETH_TYPE_IP)) {
-        commit_set_ipv4_action(flow, base, odp_actions);
+        commit_set_ipv4_action(flow, base, odp_actions, wc);
     } else if (base->dl_type == htons(ETH_TYPE_IPV6)) {
-        commit_set_ipv6_action(flow, base, odp_actions);
+        commit_set_ipv6_action(flow, base, odp_actions, wc);
     }
 }
 
 static void
 commit_set_port_action(const struct flow *flow, struct flow *base,
-                       struct ofpbuf *odp_actions)
+                       struct ofpbuf *odp_actions, struct flow_wildcards *wc)
 {
     if (!is_ip_any(base) || (!base->tp_src && !base->tp_dst)) {
         return;
@@ -2402,6 +2425,9 @@ commit_set_port_action(const struct flow *flow, struct flow *base,
         base->tp_dst == flow->tp_dst) {
         return;
     }
+
+    memset(&wc->masks.tp_src, 0xff, sizeof wc->masks.tp_src);
+    memset(&wc->masks.tp_dst, 0xff, sizeof wc->masks.tp_dst);
 
     if (flow->nw_proto == IPPROTO_TCP) {
         struct ovs_key_tcp port_key;
@@ -2425,11 +2451,14 @@ commit_set_port_action(const struct flow *flow, struct flow *base,
 
 static void
 commit_set_priority_action(const struct flow *flow, struct flow *base,
-                           struct ofpbuf *odp_actions)
+                           struct ofpbuf *odp_actions,
+                           struct flow_wildcards *wc)
 {
     if (base->skb_priority == flow->skb_priority) {
         return;
     }
+
+    memset(&wc->masks.skb_priority, 0xff, sizeof wc->masks.skb_priority);
     base->skb_priority = flow->skb_priority;
 
     commit_set_action(odp_actions, OVS_KEY_ATTR_PRIORITY,
@@ -2438,11 +2467,14 @@ commit_set_priority_action(const struct flow *flow, struct flow *base,
 
 static void
 commit_set_skb_mark_action(const struct flow *flow, struct flow *base,
-                           struct ofpbuf *odp_actions)
+                           struct ofpbuf *odp_actions,
+                           struct flow_wildcards *wc)
 {
     if (base->skb_mark == flow->skb_mark) {
         return;
     }
+
+    memset(&wc->masks.skb_mark, 0xff, sizeof wc->masks.skb_mark);
     base->skb_mark = flow->skb_mark;
 
     odp_put_skb_mark_action(base->skb_mark, odp_actions);
@@ -2451,20 +2483,21 @@ commit_set_skb_mark_action(const struct flow *flow, struct flow *base,
  * 'base' and 'flow', appends ODP actions to 'odp_actions' that change the flow
  * key from 'base' into 'flow', and then changes 'base' the same way.  Does not
  * commit set_tunnel actions.  Users should call commit_odp_tunnel_action()
- * in addition to this function if needed. */
+ * in addition to this function if needed.  Sets fields in 'wc' that are
+ * used as part of the action. */
 void
 commit_odp_actions(const struct flow *flow, struct flow *base,
-                   struct ofpbuf *odp_actions)
+                   struct ofpbuf *odp_actions, struct flow_wildcards *wc)
 {
-    commit_set_ether_addr_action(flow, base, odp_actions);
-    commit_vlan_action(flow, base, odp_actions);
-    commit_set_nw_action(flow, base, odp_actions);
-    commit_set_port_action(flow, base, odp_actions);
+    commit_set_ether_addr_action(flow, base, odp_actions, wc);
+    commit_vlan_action(flow, base, odp_actions, wc);
+    commit_set_nw_action(flow, base, odp_actions, wc);
+    commit_set_port_action(flow, base, odp_actions, wc);
     /* Committing MPLS actions should occur after committing nw and port
      * actions. This is because committing MPLS actions may alter a packet so
      * that it is no longer IP and thus nw and port actions are no longer valid.
      */
-    commit_mpls_action(flow, base, odp_actions);
-    commit_set_priority_action(flow, base, odp_actions);
-    commit_set_skb_mark_action(flow, base, odp_actions);
+    commit_mpls_action(flow, base, odp_actions, wc);
+    commit_set_priority_action(flow, base, odp_actions, wc);
+    commit_set_skb_mark_action(flow, base, odp_actions, wc);
 }

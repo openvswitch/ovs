@@ -51,6 +51,18 @@ struct netflow {
     long long int reconfig_time;  /* When we reconfigured the timeouts. */
 };
 
+void
+netflow_mask_wc(struct flow_wildcards *wc)
+{
+    memset(&wc->masks.dl_type, 0xff, sizeof wc->masks.dl_type);
+    memset(&wc->masks.nw_proto, 0xff, sizeof wc->masks.nw_proto);
+    memset(&wc->masks.nw_src, 0xff, sizeof wc->masks.nw_src);
+    memset(&wc->masks.nw_dst, 0xff, sizeof wc->masks.nw_dst);
+    memset(&wc->masks.tp_src, 0xff, sizeof wc->masks.tp_src);
+    memset(&wc->masks.tp_dst, 0xff, sizeof wc->masks.tp_dst);
+    wc->masks.nw_tos |= IP_DSCP_MASK;
+}
+
 static void
 gen_netflow_rec(struct netflow *nf, struct netflow_flow *nf_flow,
                 struct ofexpired *expired,
