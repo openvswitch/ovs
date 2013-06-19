@@ -87,6 +87,7 @@ struct dp_netdev {
     char *name;
     int open_cnt;
     bool destroyed;
+    int max_mtu;                /* Maximum MTU of any port added so far. */
 
     struct dp_netdev_queue queues[N_QUEUES];
     struct hmap flow_table;     /* Flow table. */
@@ -137,9 +138,6 @@ struct dpif_netdev {
 
 /* All netdev-based datapaths. */
 static struct shash dp_netdevs = SHASH_INITIALIZER(&dp_netdevs);
-
-/* Maximum port MTU seen so far. */
-static int max_mtu = ETH_PAYLOAD_MAX;
 
 static int get_port_by_number(struct dp_netdev *, odp_port_t port_no,
                               struct dp_netdev_port **portp);
@@ -271,6 +269,7 @@ create_dp_netdev(const char *name, const struct dpif_class *class,
     dp->class = class;
     dp->name = xstrdup(name);
     dp->open_cnt = 0;
+    dp->max_mtu = ETH_PAYLOAD_MAX;
     for (i = 0; i < N_QUEUES; i++) {
         dp->queues[i].head = dp->queues[i].tail = 0;
     }
@@ -426,8 +425,8 @@ do_add_port(struct dp_netdev *dp, const char *devname, const char *type,
     port->type = xstrdup(type);
 
     error = netdev_get_mtu(netdev, &mtu);
-    if (!error && mtu > max_mtu) {
-        max_mtu = mtu;
+    if (!error && mtu > dp->max_mtu) {
+        dp->max_mtu = mtu;
     }
 
     list_push_back(&dp->port_list, &port->node);
@@ -1081,7 +1080,8 @@ dpif_netdev_run(struct dpif *dpif)
     struct dp_netdev_port *port;
     struct ofpbuf packet;
 
-    ofpbuf_init(&packet, DP_NETDEV_HEADROOM + VLAN_ETH_HEADER_LEN + max_mtu);
+    ofpbuf_init(&packet,
+                DP_NETDEV_HEADROOM + VLAN_ETH_HEADER_LEN + dp->max_mtu);
 
     LIST_FOR_EACH (port, node, &dp->port_list) {
         int error;
