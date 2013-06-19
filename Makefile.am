@@ -185,17 +185,17 @@ config-h-check:
 	fi
 .PHONY: config-h-check
 
-# Check that "struct vlog_ratelimit" is always declared "static".
-ALL_LOCAL += rate-limit-check
-rate-limit-check:
+# Check that certain data structures are always declared "static".
+ALL_LOCAL += static-check
+static-check:
 	@if test -e $(srcdir)/.git && (git --version) >/dev/null 2>&1 && \
-	    git --no-pager grep -n -E '^[ 	]+struct vlog_rate_limit.*=' $(srcdir); \
+	    git --no-pager grep -n -E '^[ 	]+(struct vlog_rate_limit|pthread_once_t|struct ovsthread_once).*=' $(srcdir); \
          then \
 	    echo "See above for list of violations of the rule that "; \
-	    echo "'struct vlog_rate_limit' must always be 'static'"; \
+	    echo "certain data structures must always be 'static'"; \
 	    exit 1; \
 	 fi
-.PHONY: rate-limit-check
+.PHONY: static-check
 
 # Check that assert.h is not used outside a whitelist of files.
 ALL_LOCAL += check-assert-h-usage

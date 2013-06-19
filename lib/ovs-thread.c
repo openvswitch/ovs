@@ -88,4 +88,22 @@ xpthread_create(pthread_t *threadp, pthread_attr_t *attr,
         ovs_abort(error, "pthread_create failed");
     }
 }
+
+bool
+ovsthread_once_start__(struct ovsthread_once *once)
+{
+    xpthread_mutex_lock(&once->mutex);
+    if (!ovsthread_once_is_done__(once)) {
+        return false;
+    }
+    xpthread_mutex_unlock(&once->mutex);
+    return true;
+}
+
+void OVS_RELEASES(once)
+ovsthread_once_done(struct ovsthread_once *once)
+{
+    atomic_store(&once->done, true);
+    xpthread_mutex_unlock(&once->mutex);
+}
 #endif

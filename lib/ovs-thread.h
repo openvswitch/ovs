@@ -18,6 +18,7 @@
 #define OVS_THREAD_H 1
 
 #include <pthread.h>
+#include "ovs-atomic.h"
 #include "util.h"
 
 /* glibc has some non-portable mutex types and initializers:
@@ -289,5 +290,80 @@ void xpthread_create(pthread_t *, pthread_attr_t *, void *(*)(void *), void *);
         return NAME##_set_unsafe(value);                \
     }
 
+/* Convenient once-only execution.
+ *
+ *
+ * Problem
+ * =======
+ *
+ * POSIX provides pthread_once_t and pthread_once() as primitives for running a
+ * set of code only once per process execution.  They are used like this:
+ *
+ *     static void run_once(void) { ...initialization... }
+ *     static pthread_once_t once = PTHREAD_ONCE_INIT;
+ * ...
+ *     pthread_once(&once, run_once);
+ *
+ * pthread_once() does not allow passing any parameters to the initialization
+ * function, which is often inconvenient, because it means that the function
+ * can only access data declared at file scope.
+ *
+ *
+ * Solution
+ * ========
+ *
+ * Use ovsthread_once, like this, instead:
+ *
+ *     static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
+ *
+ *     if (ovsthread_once_start(&once)) {
+ *         ...initialization...
+ *         ovsthread_once_done(&once);
+ *     }
+ */
+
+struct ovsthread_once {
+    atomic_bool done;
+    pthread_mutex_t mutex;
+};
+
+#define OVSTHREAD_ONCE_INITIALIZER              \
+    {                                           \
+        ATOMIC_VAR_INIT(false),                 \
+        PTHREAD_ADAPTIVE_MUTEX_INITIALIZER,     \
+    }
+
+static inline bool ovsthread_once_start(struct ovsthread_once *);
+void ovsthread_once_done(struct ovsthread_once *once) OVS_RELEASES(once);
+
+bool ovsthread_once_start__(struct ovsthread_once *);
+
+static inline bool
+ovsthread_once_is_done__(const struct ovsthread_once *once)
+{
+    bool done;
+
+    atomic_read_explicit(&once->done, &done, memory_order_relaxed);
+    return done;
+}
+
+/* Returns true if this is the first call to ovsthread_once_start() for
+ * 'once'.  In this case, the caller should perform whatever initialization
+ * actions it needs to do, then call ovsthread_once_done() for 'once'.
+ *
+ * Returns false if this is not the first call to ovsthread_once_start() for
+ * 'once'.  In this case, the call will not return until after
+ * ovsthread_once_done() has been called. */
+static inline bool
+ovsthread_once_start(struct ovsthread_once *once)
+{
+    return OVS_UNLIKELY(!ovsthread_once_is_done__(once)
+                        && !ovsthread_once_start__(once));
+}
+
+#ifdef __CHECKER__
+#define ovsthread_once_start(ONCE) \
+    ((ONCE)->done ? false : ({ OVS_ACQUIRE(ONCE); true; }))
+#endif
 
 #endif /* ovs-thread.h */
