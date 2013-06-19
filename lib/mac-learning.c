@@ -124,14 +124,31 @@ mac_learning_create(unsigned int idle_time)
     ml->idle_time = normalize_idle_time(idle_time);
     ml->max_entries = MAC_DEFAULT_MAX;
     tag_set_init(&ml->tags);
+    ml->ref_cnt = 1;
     return ml;
 }
 
-/* Destroys MAC learning table 'ml'. */
-void
-mac_learning_destroy(struct mac_learning *ml)
+struct mac_learning *
+mac_learning_ref(const struct mac_learning *ml_)
 {
+    struct mac_learning *ml = CONST_CAST(struct mac_learning *, ml_);
     if (ml) {
+        ovs_assert(ml->ref_cnt > 0);
+        ml->ref_cnt++;
+    }
+    return ml;
+}
+
+/* Unreferences (and possibly destroys) MAC learning table 'ml'. */
+void
+mac_learning_unref(struct mac_learning *ml)
+{
+    if (!ml) {
+        return;
+    }
+
+    ovs_assert(ml->ref_cnt > 0);
+    if (!--ml->ref_cnt) {
         struct mac_entry *e, *next;
 
         HMAP_FOR_EACH_SAFE (e, next, hmap_node, &ml->table) {

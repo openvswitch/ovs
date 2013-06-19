@@ -86,11 +86,13 @@ struct mac_learning {
     unsigned int idle_time;     /* Max age before deleting an entry. */
     size_t max_entries;         /* Max number of learned MACs. */
     struct tag_set tags;        /* Tags which have changed. */
+    int ref_cnt;
 };
 
 /* Basics. */
 struct mac_learning *mac_learning_create(unsigned int idle_time);
-void mac_learning_destroy(struct mac_learning *);
+struct mac_learning *mac_learning_ref(const struct mac_learning *);
+void mac_learning_unref(struct mac_learning *);
 
 void mac_learning_run(struct mac_learning *, struct tag_set *);
 void mac_learning_wait(struct mac_learning *);

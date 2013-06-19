@@ -237,7 +237,7 @@ lswitch_destroy(struct lswitch *sw)
             free(node);
         }
         shash_destroy(&sw->queue_names);
-        mac_learning_destroy(sw->ml);
+        mac_learning_unref(sw->ml);
         rconn_packet_counter_destroy(sw->queued);
         free(sw);
     }

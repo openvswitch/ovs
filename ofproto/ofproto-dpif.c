@@ -1197,7 +1197,7 @@ destruct(struct ofproto *ofproto_)
     netflow_destroy(ofproto->netflow);
     dpif_sflow_destroy(ofproto->sflow);
     hmap_destroy(&ofproto->bundles);
-    mac_learning_destroy(ofproto->ml);
+    mac_learning_unref(ofproto->ml);
 
     classifier_destroy(&ofproto->facets);
 
