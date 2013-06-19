@@ -30,6 +30,12 @@
  * are Linux-specific.  For Netlink protocol definitions, see
  * netlink-protocol.h.  For helper functions for working with Netlink messages,
  * see netlink.h.
+ *
+ *
+ * Thread-safety
+ * =============
+ *
+ * Only a single thread may use a given nl_sock or nl_dump at one time.
  */
 
 #include <stdbool.h>

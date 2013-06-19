@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,6 +29,7 @@
 #include "netlink.h"
 #include "netlink-protocol.h"
 #include "ofpbuf.h"
+#include "ovs-thread.h"
 #include "poll-loop.h"
 #include "socket-util.h"
 #include "util.h"
@@ -85,13 +86,14 @@ static void nl_pool_release(struct nl_sock *);
 int
 nl_sock_create(int protocol, struct nl_sock **sockp)
 {
+    static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
     struct nl_sock *sock;
     struct sockaddr_nl local, remote;
     socklen_t local_size;
     int rcvbuf;
     int retval = 0;
 
-    if (!max_iovs) {
+    if (ovsthread_once_start(&once)) {
         int save_errno = errno;
         errno = 0;
 
@@ -106,6 +108,7 @@ nl_sock_create(int protocol, struct nl_sock **sockp)
         }
 
         errno = save_errno;
+        ovsthread_once_done(&once);
     }
 
     *sockp = NULL;
@@ -1010,17 +1013,25 @@ struct nl_pool {
 };
 
 static struct nl_pool pools[MAX_LINKS];
+static pthread_mutex_t pool_mutex = PTHREAD_ADAPTIVE_MUTEX_INITIALIZER;
 
 static int
 nl_pool_alloc(int protocol, struct nl_sock **sockp)
 {
+    struct nl_sock *sock = NULL;
     struct nl_pool *pool;
 
     ovs_assert(protocol >= 0 && protocol < ARRAY_SIZE(pools));
 
+    xpthread_mutex_lock(&pool_mutex);
     pool = &pools[protocol];
     if (pool->n > 0) {
-        *sockp = pool->socks[--pool->n];
+        sock = pool->socks[--pool->n];
+    }
+    xpthread_mutex_unlock(&pool_mutex);
+
+    if (sock) {
+        *sockp = sock;
         return 0;
     } else {
         return nl_sock_create(protocol, sockp);
@@ -1033,11 +1044,14 @@ nl_pool_release(struct nl_sock *sock)
     if (sock) {
         struct nl_pool *pool = &pools[sock->protocol];
 
+        xpthread_mutex_lock(&pool_mutex);
         if (pool->n < ARRAY_SIZE(pool->socks)) {
             pool->socks[pool->n++] = sock;
-        } else {
-            nl_sock_destroy(sock);
+            sock = NULL;
         }
+        xpthread_mutex_unlock(&pool_mutex);
+
+        nl_sock_destroy(sock);
     }
 }
 
