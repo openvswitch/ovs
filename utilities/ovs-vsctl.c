@@ -2016,13 +2016,17 @@ cmd_del_port(struct vsctl_context *ctx)
 {
     bool must_exist = !shash_find(&ctx->options, "--if-exists");
     bool with_iface = shash_find(&ctx->options, "--with-iface") != NULL;
+    const char *target = ctx->argv[ctx->argc - 1];
     struct vsctl_port *port;
 
     vsctl_context_populate_cache(ctx);
-    if (!with_iface) {
-        port = find_port(ctx, ctx->argv[ctx->argc - 1], must_exist);
+    if (find_bridge(ctx, target, false)) {
+        vsctl_fatal("cannot delete port %s because it is the local port "
+                    "for bridge %s (deleting this port requires deleting "
+                    "the entire bridge)", target, target);
+    } else if (!with_iface) {
+        port = find_port(ctx, target, must_exist);
     } else {
-        const char *target = ctx->argv[ctx->argc - 1];
         struct vsctl_iface *iface;
 
         port = find_port(ctx, target, false);
