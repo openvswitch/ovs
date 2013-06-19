@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010, 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2010, 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -954,7 +954,7 @@ parse_ofp_str(struct ofputil_flow_mod *fm, int command, const char *str_,
             if (!strcmp(name, "table")) {
                 fm->table_id = str_to_u8(value, name);
             } else if (!strcmp(name, "out_port")) {
-                if (!ofputil_port_from_string(name, &fm->out_port)) {
+                if (!ofputil_port_from_string(value, &fm->out_port)) {
                     ofp_fatal(str_, verbose, "%s is not a valid OpenFlow port",
                               name);
                 }
