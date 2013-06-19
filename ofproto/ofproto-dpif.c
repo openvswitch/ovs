@@ -1195,7 +1195,7 @@ destruct(struct ofproto *ofproto_)
     }
 
     netflow_destroy(ofproto->netflow);
-    dpif_sflow_destroy(ofproto->sflow);
+    dpif_sflow_unref(ofproto->sflow);
     hmap_destroy(&ofproto->bundles);
     mac_learning_unref(ofproto->ml);
 
@@ -1617,7 +1617,7 @@ set_sflow(struct ofproto *ofproto_,
         dpif_sflow_set_options(ds, sflow_options);
     } else {
         if (ds) {
-            dpif_sflow_destroy(ds);
+            dpif_sflow_unref(ds);
             ofproto->backer->need_revalidate = REV_RECONFIGURE;
             ofproto->sflow = NULL;
         }

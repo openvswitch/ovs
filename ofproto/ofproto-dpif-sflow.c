@@ -57,6 +57,7 @@ struct dpif_sflow {
     size_t n_flood, n_all;
     struct hmap ports;          /* Contains "struct dpif_sflow_port"s. */
     uint32_t probability;
+    int ref_cnt;
 };
 
 static void dpif_sflow_del_port__(struct dpif_sflow *,
@@ -302,7 +303,19 @@ dpif_sflow_create(void)
     hmap_init(&ds->ports);
     ds->probability = 0;
     route_table_register();
+    ds->ref_cnt = 1;
 
+    return ds;
+}
+
+struct dpif_sflow *
+dpif_sflow_ref(const struct dpif_sflow *ds_)
+{
+    struct dpif_sflow *ds = CONST_CAST(struct dpif_sflow *, ds_);
+    if (ds) {
+        ovs_assert(ds->ref_cnt > 0);
+        ds->ref_cnt++;
+    }
     return ds;
 }
 
@@ -316,9 +329,14 @@ dpif_sflow_get_probability(const struct dpif_sflow *ds)
 }
 
 void
-dpif_sflow_destroy(struct dpif_sflow *ds)
+dpif_sflow_unref(struct dpif_sflow *ds)
 {
-    if (ds) {
+    if (!ds) {
+        return;
+    }
+
+    ovs_assert(ds->ref_cnt > 0);
+    if (!--ds->ref_cnt) {
         struct dpif_sflow_port *dsp, *next;
 
         route_table_unregister();

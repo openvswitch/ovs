@@ -29,9 +29,11 @@ struct ofproto_sflow_options;
 struct ofport;
 
 struct dpif_sflow *dpif_sflow_create(void);
+struct dpif_sflow *dpif_sflow_ref(const struct dpif_sflow *);
+void dpif_sflow_unref(struct dpif_sflow *);
+
 uint32_t dpif_sflow_get_probability(const struct dpif_sflow *);
 
-void dpif_sflow_destroy(struct dpif_sflow *);
 void dpif_sflow_set_options(struct dpif_sflow *,
                             const struct ofproto_sflow_options *);
 void dpif_sflow_clear(struct dpif_sflow *);
