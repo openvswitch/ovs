@@ -1174,6 +1174,7 @@ destruct(struct ofproto *ofproto_)
     struct oftable *table;
     int i;
 
+    ofproto->backer->need_revalidate = REV_RECONFIGURE;
     hmap_remove(&all_ofproto_dpifs, &ofproto->all_ofproto_dpifs_node);
     complete_operations(ofproto);
 
