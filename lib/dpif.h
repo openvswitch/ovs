@@ -447,6 +447,7 @@ enum dpif_flow_put_flags {
 int dpif_flow_flush(struct dpif *);
 int dpif_flow_put(struct dpif *, enum dpif_flow_put_flags,
                   const struct nlattr *key, size_t key_len,
+                  const struct nlattr *mask, size_t mask_len,
                   const struct nlattr *actions, size_t actions_len,
                   struct dpif_flow_stats *);
 int dpif_flow_del(struct dpif *,
@@ -464,6 +465,7 @@ struct dpif_flow_dump {
 void dpif_flow_dump_start(struct dpif_flow_dump *, const struct dpif *);
 bool dpif_flow_dump_next(struct dpif_flow_dump *,
                          const struct nlattr **key, size_t *key_len,
+                         const struct nlattr **mask, size_t *mask_len,
                          const struct nlattr **actions, size_t *actions_len,
                          const struct dpif_flow_stats **);
 int dpif_flow_dump_done(struct dpif_flow_dump *);
@@ -492,6 +494,8 @@ struct dpif_flow_put {
     enum dpif_flow_put_flags flags; /* DPIF_FP_*. */
     const struct nlattr *key;       /* Flow to put. */
     size_t key_len;                 /* Length of 'key' in bytes. */
+    const struct nlattr *mask;      /* Mask to put. */
+    size_t mask_len;                /* Length of 'mask' in bytes. */
     const struct nlattr *actions;   /* Actions to perform on flow. */
     size_t actions_len;             /* Length of 'actions' in bytes. */
 

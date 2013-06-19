@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -259,6 +259,7 @@ BUILD_ASSERT_DECL(LLC_SNAP_HEADER_LEN == sizeof(struct llc_snap_header));
 #define VLAN_PCP_SHIFT 13
 
 #define VLAN_CFI 0x1000
+#define VLAN_CFI_SHIFT 12
 
 /* Given the vlan_tci field from an 802.1Q header, in network byte order,
  * returns the VLAN ID in host byte order. */
@@ -274,6 +275,14 @@ static inline int
 vlan_tci_to_pcp(ovs_be16 vlan_tci)
 {
     return (ntohs(vlan_tci) & VLAN_PCP_MASK) >> VLAN_PCP_SHIFT;
+}
+
+/* Given the vlan_tci field from an 802.1Q header, in network byte order,
+ * returns the Canonical Format Indicator (CFI). */
+static inline int
+vlan_tci_to_cfi(ovs_be16 vlan_tci)
+{
+    return (vlan_tci & htons(VLAN_CFI)) != 0;
 }
 
 #define VLAN_HEADER_LEN 4

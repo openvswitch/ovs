@@ -743,9 +743,11 @@ dpctl_dump_flows(int argc, char *argv[])
     const struct nlattr *actions;
     struct dpif_flow_dump dump;
     const struct nlattr *key;
+    const struct nlattr *mask;
     size_t actions_len;
     struct dpif *dpif;
     size_t key_len;
+    size_t mask_len;
     struct ds ds;
     char *name;
 
@@ -756,10 +758,12 @@ dpctl_dump_flows(int argc, char *argv[])
     ds_init(&ds);
     dpif_flow_dump_start(&dump, dpif);
     while (dpif_flow_dump_next(&dump, &key, &key_len,
+                               &mask, &mask_len,
                                &actions, &actions_len, &stats)) {
         ds_clear(&ds);
-        odp_flow_key_format(key, key_len, &ds);
+        odp_flow_format(key, key_len, mask, mask_len, &ds);
         ds_put_cstr(&ds, ", ");
+
         dpif_flow_stats_format(stats, &ds);
         ds_put_cstr(&ds, ", actions:");
         format_odp_actions(&ds, actions, actions_len);
@@ -778,26 +782,32 @@ dpctl_put_flow(int argc, char *argv[], enum dpif_flow_put_flags flags)
     struct dpif_flow_stats stats;
     struct ofpbuf actions;
     struct ofpbuf key;
+    struct ofpbuf mask;
     struct dpif *dpif;
+    struct ds s;
     char *dp_name;
 
+    ds_init(&s);
     ofpbuf_init(&key, 0);
-    run(odp_flow_key_from_string(key_s, NULL, &key), "parsing flow key");
+    ofpbuf_init(&mask, 0);
+    run(odp_flow_from_string(key_s, NULL, &key, &mask), "parsing flow key");
 
     ofpbuf_init(&actions, 0);
     run(odp_actions_from_string(actions_s, NULL, &actions), "parsing actions");
 
-    dp_name = argc == 3 ? xstrdup(argv[1]) : get_one_dp();
+    dp_name = argc == 4 ? xstrdup(argv[1]) : get_one_dp();
     run(parsed_dpif_open(dp_name, false, &dpif), "opening datapath");
     free(dp_name);
 
     run(dpif_flow_put(dpif, flags,
                       key.data, key.size,
+                      mask.size == 0 ? NULL : mask.data, mask.size,
                       actions.data, actions.size,
                       print_statistics ? &stats : NULL),
         "updating flow table");
 
     ofpbuf_uninit(&key);
+    ofpbuf_uninit(&mask);
     ofpbuf_uninit(&actions);
 
     if (print_statistics) {
@@ -838,11 +848,13 @@ dpctl_del_flow(int argc, char *argv[])
     const char *key_s = argv[argc - 1];
     struct dpif_flow_stats stats;
     struct ofpbuf key;
+    struct ofpbuf mask; /* To be ignored. */
     struct dpif *dpif;
     char *dp_name;
 
     ofpbuf_init(&key, 0);
-    run(odp_flow_key_from_string(key_s, NULL, &key), "parsing flow key");
+    ofpbuf_init(&mask, 0);
+    run(odp_flow_from_string(key_s, NULL, &key, &mask), "parsing flow key");
 
     dp_name = argc == 2 ? xstrdup(argv[1]) : get_one_dp();
     run(parsed_dpif_open(dp_name, false, &dpif), "opening datapath");
@@ -853,6 +865,7 @@ dpctl_del_flow(int argc, char *argv[])
                       print_statistics ? &stats : NULL), "deleting flow");
 
     ofpbuf_uninit(&key);
+    ofpbuf_uninit(&mask);
 
     if (print_statistics) {
         struct ds s;
@@ -1032,11 +1045,11 @@ dpctl_normalize_actions(int argc, char *argv[])
 
     /* Parse flow key. */
     ofpbuf_init(&keybuf, 0);
-    run(odp_flow_key_from_string(argv[1], &port_names, &keybuf),
-        "odp_flow_key_from_string");
+    run(odp_flow_from_string(argv[1], &port_names, &keybuf, NULL),
+        "odp_flow_from_string");
 
     ds_clear(&s);
-    odp_flow_key_format(keybuf.data, keybuf.size, &s);
+    odp_flow_format(keybuf.data, keybuf.size, NULL, 0, &s);
     printf("input flow: %s\n", ds_cstr(&s));
 
     run(odp_flow_key_to_flow(keybuf.data, keybuf.size, &flow),

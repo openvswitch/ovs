@@ -3798,6 +3798,8 @@ handle_flow_miss_with_facet(struct flow_miss *miss, struct facet *facet,
         put->flags = DPIF_FP_CREATE | DPIF_FP_MODIFY;
         put->key = miss->key;
         put->key_len = miss->key_len;
+        put->mask = NULL;
+        put->mask_len = 0;
         if (want_path == SF_FAST_PATH) {
             put->actions = facet->xout.odp_actions.data;
             put->actions_len = facet->xout.odp_actions.size;
@@ -4083,7 +4085,8 @@ handle_miss_upcalls(struct dpif_backer *backer, struct dpif_upcall *upcalls,
                 hmap_insert(&backer->drop_keys, &drop_key->hmap_node,
                             hash_bytes(drop_key->key, drop_key->key_len, 0));
                 dpif_flow_put(backer->dpif, DPIF_FP_CREATE | DPIF_FP_MODIFY,
-                              drop_key->key, drop_key->key_len, NULL, 0, NULL);
+                              drop_key->key, drop_key->key_len,
+                              NULL, 0, NULL, 0, NULL);
             }
             continue;
         }
@@ -4466,7 +4469,8 @@ update_stats(struct dpif_backer *backer)
     size_t key_len;
 
     dpif_flow_dump_start(&dump, backer->dpif);
-    while (dpif_flow_dump_next(&dump, &key, &key_len, NULL, NULL, &stats)) {
+    while (dpif_flow_dump_next(&dump, &key, &key_len,
+                               NULL, NULL, NULL, NULL, &stats)) {
         struct flow flow;
         struct subfacet *subfacet;
         uint32_t key_hash;
@@ -5392,7 +5396,8 @@ subfacet_install(struct subfacet *subfacet, const struct ofpbuf *odp_actions,
     }
 
     ret = dpif_flow_put(ofproto->backer->dpif, flags, subfacet->key,
-                        subfacet->key_len, actions, actions_len, stats);
+                        subfacet->key_len,  NULL, 0,
+                        actions, actions_len, stats);
 
     if (stats) {
         subfacet_reset_dp_stats(subfacet, stats);
@@ -8256,7 +8261,7 @@ ofproto_unixctl_trace(struct unixctl_conn *conn, int argc, const char *argv[],
 
             /* Convert string to datapath key. */
             ofpbuf_init(&odp_key, 0);
-            error = odp_flow_key_from_string(flow_s, NULL, &odp_key);
+            error = odp_flow_from_string(flow_s, NULL, &odp_key, NULL);
             if (error) {
                 unixctl_command_reply_error(conn, "Bad flow syntax");
                 goto exit;

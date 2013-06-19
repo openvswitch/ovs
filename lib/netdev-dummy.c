@@ -443,7 +443,7 @@ eth_from_packet_or_flow(const char *s)
      * settle for parsing a datapath key for now.
      */
     ofpbuf_init(&odp_key, 0);
-    error = odp_flow_key_from_string(s, NULL, &odp_key);
+    error = odp_flow_from_string(s, NULL, &odp_key, NULL);
     if (error) {
         ofpbuf_uninit(&odp_key);
         return NULL;

@@ -867,6 +867,7 @@ dpif_netdev_flow_dump_start(const struct dpif *dpif OVS_UNUSED, void **statep)
 static int
 dpif_netdev_flow_dump_next(const struct dpif *dpif, void *state_,
                            const struct nlattr **key, size_t *key_len,
+                           const struct nlattr **mask, size_t *mask_len,
                            const struct nlattr **actions, size_t *actions_len,
                            const struct dpif_flow_stats **stats)
 {
@@ -890,6 +891,11 @@ dpif_netdev_flow_dump_next(const struct dpif *dpif, void *state_,
 
         *key = buf.data;
         *key_len = buf.size;
+    }
+
+    if (mask) {
+        *mask = NULL;
+        *mask_len = 0;
     }
 
     if (actions) {
