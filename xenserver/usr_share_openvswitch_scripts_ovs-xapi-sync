@@ -1,5 +1,5 @@
 #!/usr/bin/python
-# Copyright (c) 2009, 2010, 2011, 2012 Nicira, Inc.
+# Copyright (c) 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -294,27 +294,27 @@ def main():
 
         new_bridges = {}
         for row in idl.tables["Bridge"].rows.itervalues():
-            if row.name in bridges:
-                bridge_id_cache = bridges[row.name]
-            else:
-                # New bridge.
+            bridge_id = bridges.get(row.name)
+            if bridge_id is None:
+                # Configure the new bridge.
                 update_fail_mode(row)
                 update_in_band_mgmt(row)
-                bridge_id_cache = get_bridge_id(row.name)
 
-            bridge_id = bridge_id_cache
-            if bridge_id is None:
-                bridge_id = row.external_ids.get("xs-network-uuids")
-                if bridge_id and len(bridge_id.split(";")) > 1:
-                    bridge_ids = bridge_id.split(";")
-                    bridge_id = get_single_bridge_id(bridge_ids, row.name, "")
-                if bridge_id:
-                    bridge_id_cache = bridge_id
+                # Get the correct bridge_id, if we can.
+                bridge_id = get_bridge_id(row.name)
+                if bridge_id is None:
+                    xs_network_uuids = row.external_ids.get("xs-network-uuids")
+                    if xs_network_uuids:
+                        bridge_ids = xs_network_uuids.split(";")
+                        if len(bridge_ids) == 1:
+                            bridge_id = bridge_ids[0]
+                        else:
+                            bridge_id = get_single_bridge_id(bridge_ids,
+                                                             row.name)
+            set_external_id(row, "bridge-id", bridge_id)
 
             if bridge_id is not None:
-                set_external_id(row, "bridge-id", bridge_id.split(";")[0])
-
-            new_bridges[row.name] = bridge_id_cache
+                new_bridges[row.name] = bridge_id
         bridges = new_bridges
 
         iface_by_name = {}
