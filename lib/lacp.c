@@ -279,6 +279,10 @@ lacp_process_packet(struct lacp *lacp, const void *slave_,
     const struct lacp_pdu *pdu;
     long long int tx_rate;
 
+    if (!slave) {
+        return;
+    }
+
     pdu = parse_lacp_packet(packet);
     if (!pdu) {
         VLOG_WARN_RL(&rl, "%s: received an unparsable LACP PDU.", lacp->name);
@@ -374,6 +378,10 @@ lacp_slave_carrier_changed(const struct lacp *lacp, const void *slave_)
     if (lacp) {
         struct slave *slave = slave_lookup(lacp, slave_);
 
+        if (!slave) {
+            return;
+        }
+
         if (slave->status == LACP_CURRENT || slave->lacp->active) {
             slave_set_expired(slave);
         }
@@ -395,7 +403,8 @@ bool
 lacp_slave_may_enable(const struct lacp *lacp, const void *slave_)
 {
     if (lacp) {
-        return slave_may_enable__(slave_lookup(lacp, slave_));
+        struct slave *slave = slave_lookup(lacp, slave_);
+        return slave ? slave_may_enable__(slave) : false;
     } else {
         return true;
     }
@@ -407,7 +416,8 @@ lacp_slave_may_enable(const struct lacp *lacp, const void *slave_)
 bool
 lacp_slave_is_current(const struct lacp *lacp, const void *slave_)
 {
-    return slave_lookup(lacp, slave_)->status != LACP_DEFAULTED;
+    struct slave *slave = slave_lookup(lacp, slave_);
+    return slave ? slave->status != LACP_DEFAULTED : false;
 }
 
 /* This function should be called periodically to update 'lacp'. */
