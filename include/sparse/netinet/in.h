@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 Nicira, Inc.
+ * Copyright (c) 2011, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -109,7 +109,6 @@ static inline uint16_t ntohs(ovs_be16 x)
 
 in_addr_t inet_addr(const char *);
 int inet_aton (const char *, struct in_addr *);
-char *inet_ntoa(struct in_addr);
 const char *inet_ntop(int, const void *, char *, socklen_t);
 int inet_pton(int, const char *, void *);
 

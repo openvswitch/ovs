@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 Nicira, Inc.
+ * Copyright (c) 2011, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -108,9 +108,6 @@ double jn(int, double);
 double ldexp(double, int);
 float ldexpf(float, int);
 long double ldexpl(long double, int);
-double lgamma(double);
-float lgammaf(float);
-long double lgammal(long double);
 long long llrint(double);
 long long llrintf(float);
 long long llrintl(long double);
