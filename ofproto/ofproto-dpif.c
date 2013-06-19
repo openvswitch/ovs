@@ -1644,7 +1644,7 @@ set_ipfix(
             n_flow_exporters_options);
     } else {
         if (di) {
-            dpif_ipfix_destroy(di);
+            dpif_ipfix_unref(di);
             ofproto->ipfix = NULL;
         }
     }

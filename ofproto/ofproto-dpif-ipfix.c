@@ -62,6 +62,7 @@ struct dpif_ipfix_flow_exporter_map_node {
 struct dpif_ipfix {
     struct dpif_ipfix_bridge_exporter bridge_exporter;
     struct hmap flow_exporter_map;  /* dpif_ipfix_flow_exporter_map_nodes. */
+    int ref_cnt;
 };
 
 #define IPFIX_VERSION 0x000a
@@ -464,6 +465,18 @@ dpif_ipfix_create(void)
     di = xzalloc(sizeof *di);
     dpif_ipfix_exporter_clear(&di->bridge_exporter.exporter);
     hmap_init(&di->flow_exporter_map);
+    di->ref_cnt = 1;
+    return di;
+}
+
+struct dpif_ipfix *
+dpif_ipfix_ref(const struct dpif_ipfix *di_)
+{
+    struct dpif_ipfix *di = CONST_CAST(struct dpif_ipfix *, di_);
+    if (di) {
+        ovs_assert(di->ref_cnt > 0);
+        di->ref_cnt++;
+    }
     return di;
 }
 
@@ -488,9 +501,14 @@ dpif_ipfix_clear(struct dpif_ipfix *di)
 }
 
 void
-dpif_ipfix_destroy(struct dpif_ipfix *di)
+dpif_ipfix_unref(struct dpif_ipfix *di)
 {
-    if (di) {
+    if (!di) {
+        return;
+    }
+
+    ovs_assert(di->ref_cnt > 0);
+    if (!--di->ref_cnt) {
         dpif_ipfix_clear(di);
         hmap_destroy(&di->flow_exporter_map);
         free(di);
