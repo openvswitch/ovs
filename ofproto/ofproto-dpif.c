@@ -1520,6 +1520,8 @@ port_destruct(struct ofport *port_)
     char namebuf[NETDEV_VPORT_NAME_BUFSIZE];
     const char *dp_port_name;
 
+    ofproto->backer->need_revalidate = REV_RECONFIGURE;
+
     dp_port_name = netdev_vport_get_dpif_port(port->up.netdev, namebuf,
                                               sizeof namebuf);
     if (dpif_port_exists(ofproto->backer->dpif, dp_port_name)) {
@@ -1530,7 +1532,6 @@ port_destruct(struct ofport *port_)
         if (!port->tnl_port) {
             dpif_port_del(ofproto->backer->dpif, port->odp_port);
         }
-        ofproto->backer->need_revalidate = REV_RECONFIGURE;
     }
 
     if (port->peer) {
@@ -1545,7 +1546,6 @@ port_destruct(struct ofport *port_)
     tnl_port_del(port->tnl_port);
     sset_find_and_delete(&ofproto->ports, devname);
     sset_find_and_delete(&ofproto->ghost_ports, devname);
-    ofproto->backer->need_revalidate = REV_RECONFIGURE;
     bundle_remove(port_);
     set_cfm(port_, NULL);
     set_bfd(port_, NULL);
@@ -1572,7 +1572,8 @@ port_modified(struct ofport *port_)
 
     if (port->tnl_port && tnl_port_reconfigure(&port->up, port->odp_port,
                                                &port->tnl_port)) {
-        ofproto_dpif_cast(port->up.ofproto)->backer->need_revalidate = true;
+        ofproto_dpif_cast(port->up.ofproto)->backer->need_revalidate =
+            REV_RECONFIGURE;
     }
 
     ofport_update_peer(port);
@@ -2859,7 +2860,7 @@ ofport_update_peer(struct ofport_dpif *ofport)
     }
 
     backer = ofproto_dpif_cast(ofport->up.ofproto)->backer;
-    backer->need_revalidate = true;
+    backer->need_revalidate = REV_RECONFIGURE;
 
     if (ofport->peer) {
         ofport->peer->peer = NULL;
