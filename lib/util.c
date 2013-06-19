@@ -27,6 +27,7 @@
 #include <unistd.h>
 #include "byte-order.h"
 #include "coverage.h"
+#include "ovs-thread.h"
 #include "vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(util);
@@ -339,6 +340,9 @@ set_program_name__(const char *argv0, const char *version, const char *date,
                    const char *time)
 {
     const char *slash = strrchr(argv0, '/');
+
+    assert_single_threaded();
+
     program_name = slash ? slash + 1 : argv0;
 
     free(program_version);

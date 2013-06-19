@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@
 #include <getopt.h>
 #include <limits.h>
 #include <stdlib.h>
+#include "ovs-thread.h"
 #include "util.h"
 #include "vlog.h"
 
@@ -110,6 +111,7 @@ proctitle_init(int argc, char **argv)
 {
     int i;
 
+    assert_single_threaded();
     if (!argc || !argv[0]) {
         /* This situation should never occur, but... */
         return;

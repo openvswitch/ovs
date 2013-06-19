@@ -30,6 +30,7 @@
 #include "fatal-signal.h"
 #include "hash.h"
 #include "hmap.h"
+#include "ovs-thread.h"
 #include "signals.h"
 #include "unixctl.h"
 #include "util.h"
@@ -297,6 +298,7 @@ time_alarm(unsigned int secs)
     long long int now;
     long long int msecs;
 
+    assert_single_threaded();
     time_init();
     time_refresh();
 

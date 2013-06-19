@@ -18,6 +18,8 @@
 #define OVS_THREAD_H 1
 
 #include <pthread.h>
+#include <stddef.h>
+#include <sys/types.h>
 #include "ovs-atomic.h"
 #include "util.h"
 
@@ -365,5 +367,14 @@ ovsthread_once_start(struct ovsthread_once *once)
 #define ovsthread_once_start(ONCE) \
     ((ONCE)->done ? false : ({ OVS_ACQUIRE(ONCE); true; }))
 #endif
+
+void assert_single_threaded(const char *where);
+#define assert_single_threaded() assert_single_threaded(SOURCE_LOCATOR)
+
+pid_t xfork(const char *where);
+#define xfork() xfork(SOURCE_LOCATOR)
+
+void forbid_forking(const char *reason);
+bool may_fork(void);
 
 #endif /* ovs-thread.h */

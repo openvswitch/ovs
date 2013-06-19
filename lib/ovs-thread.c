@@ -17,7 +17,12 @@
 #include <config.h>
 #include "ovs-thread.h"
 #include <errno.h>
+#include <poll.h>
+#include <stdlib.h>
+#include <unistd.h>
 #include "compiler.h"
+#include "poll-loop.h"
+#include "socket-util.h"
 #include "util.h"
 
 #ifdef __CHECKER__
@@ -26,6 +31,18 @@
  * cut-and-paste.  Since "sparse" is just a checker, not a compiler, it
  * doesn't matter that we don't define them. */
 #else
+#include "vlog.h"
+
+VLOG_DEFINE_THIS_MODULE(ovs_thread);
+
+/* If there is a reason that we cannot fork anymore (unless the fork will be
+ * immediately followed by an exec), then this points to a string that
+ * explains why. */
+static const char *must_not_fork;
+
+/* True if we created any threads beyond the main initial thread. */
+static bool multithreaded;
+
 #define XPTHREAD_FUNC1(FUNCTION, PARAM1)                \
     void                                                \
     x##FUNCTION(PARAM1 arg1)                            \
@@ -83,6 +100,9 @@ xpthread_create(pthread_t *threadp, pthread_attr_t *attr,
     pthread_t thread;
     int error;
 
+    forbid_forking("multiple threads exist");
+    multithreaded = true;
+
     error = pthread_create(threadp ? threadp : &thread, attr, start, arg);
     if (error) {
         ovs_abort(error, "pthread_create failed");
@@ -105,5 +125,53 @@ ovsthread_once_done(struct ovsthread_once *once)
 {
     atomic_store(&once->done, true);
     xpthread_mutex_unlock(&once->mutex);
+}
+
+/* Asserts that the process has not yet created any threads (beyond the initial
+ * thread).  */
+void
+(assert_single_threaded)(const char *where)
+{
+    if (multithreaded) {
+        VLOG_FATAL("%s: attempted operation not allowed when multithreaded",
+                   where);
+    }
+}
+
+/* Forks the current process (checking that this is allowed).  Aborts with
+ * VLOG_FATAL if fork() returns an error, and otherwise returns the value
+ * returned by fork().  */
+pid_t
+(xfork)(const char *where)
+{
+    pid_t pid;
+
+    if (must_not_fork) {
+        VLOG_FATAL("%s: attempted to fork but forking not allowed (%s)",
+                   where, must_not_fork);
+    }
+
+    pid = fork();
+    if (pid < 0) {
+        VLOG_FATAL("fork failed (%s)", strerror(errno));
+    }
+    return pid;
+}
+
+/* Notes that the process must not call fork() from now on, for the specified
+ * 'reason'.  (The process may still fork() if it execs itself immediately
+ * afterward.) */
+void
+forbid_forking(const char *reason)
+{
+    ovs_assert(reason != NULL);
+    must_not_fork = reason;
+}
+
+/* Returns true if the process is allowed to fork, false otherwise. */
+bool
+may_fork(void)
+{
+    return !must_not_fork;
 }
 #endif

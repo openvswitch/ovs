@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,6 +29,7 @@
 #include "fatal-signal.h"
 #include "dirs.h"
 #include "lockfile.h"
+#include "ovs-thread.h"
 #include "process.h"
 #include "socket-util.h"
 #include "timeval.h"
@@ -88,6 +89,7 @@ make_pidfile_name(const char *name)
 void
 set_pidfile(const char *name)
 {
+    assert_single_threaded();
     free(pidfile);
     pidfile = make_pidfile_name(name);
 }
@@ -280,9 +282,7 @@ daemonize(void)
 pid_t
 fork_and_clean_up(void)
 {
-    pid_t pid;
-
-    pid = fork();
+    pid_t pid = xfork();
     if (pid > 0) {
         /* Running in parent process. */
         fatal_signal_fork();
@@ -290,10 +290,7 @@ fork_and_clean_up(void)
         /* Running in child process. */
         time_postfork();
         lockfile_postfork();
-    } else {
-        VLOG_FATAL("fork failed (%s)", strerror(errno));
     }
-
     return pid;
 }
 
@@ -504,6 +501,7 @@ close_standard_fds(void)
 void
 daemonize_start(void)
 {
+    assert_single_threaded();
     daemonize_fd = -1;
 
     if (detach) {

@@ -28,6 +28,7 @@
 #include "dynamic-string.h"
 #include "fatal-signal.h"
 #include "list.h"
+#include "ovs-thread.h"
 #include "poll-loop.h"
 #include "signals.h"
 #include "socket-util.h"
@@ -71,6 +72,7 @@ process_init(void)
     static bool inited;
     struct sigaction sa;
 
+    assert_single_threaded();
     if (inited) {
         return;
     }
@@ -179,6 +181,8 @@ process_start(char **argv, struct process **pp)
 {
     pid_t pid;
     int error;
+
+    assert_single_threaded();
 
     *pp = NULL;
     COVERAGE_INC(process_start);
