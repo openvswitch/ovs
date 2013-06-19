@@ -80,7 +80,7 @@ struct xlate_ctx {
     uint32_t orig_skb_priority; /* Priority when packet arrived. */
     uint8_t table_id;           /* OpenFlow table ID where flow was found. */
     uint32_t sflow_n_outputs;   /* Number of output ports. */
-    uint32_t sflow_odp_port;    /* Output port for composing sFlow action. */
+    odp_port_t sflow_odp_port;  /* Output port for composing sFlow action. */
     uint16_t user_cookie_offset;/* Used for user_action_cookie fixup. */
     bool exit;                  /* No further actions should be processed. */
 };
@@ -100,13 +100,13 @@ static void do_xlate_actions(const struct ofpact *, size_t ofpacts_len,
                              struct xlate_ctx *);
 static void xlate_normal(struct xlate_ctx *);
 static void xlate_report(struct xlate_ctx *, const char *);
-static void xlate_table_action(struct xlate_ctx *, uint16_t in_port,
+static void xlate_table_action(struct xlate_ctx *, ofp_port_t in_port,
                                uint8_t table_id, bool may_packet_in);
 static bool input_vid_is_valid(uint16_t vid, struct ofbundle *, bool warn);
 static uint16_t input_vid_to_vlan(const struct ofbundle *, uint16_t vid);
 static void output_normal(struct xlate_ctx *, const struct ofbundle *,
                           uint16_t vlan);
-static void compose_output_action(struct xlate_ctx *, uint16_t ofp_port);
+static void compose_output_action(struct xlate_ctx *, ofp_port_t ofp_port);
 
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 
@@ -130,7 +130,7 @@ vlan_is_mirrored(const struct ofmirror *m, int vlan)
 }
 
 static struct ofbundle *
-lookup_input_bundle(const struct ofproto_dpif *ofproto, uint16_t in_port,
+lookup_input_bundle(const struct ofproto_dpif *ofproto, ofp_port_t in_port,
                     bool warn, struct ofport_dpif **in_ofportp)
 {
     struct ofport_dpif *ofport;
@@ -183,7 +183,7 @@ add_mirror_actions(struct xlate_ctx *ctx, const struct flow *orig_flow)
     const struct nlattr *a;
     size_t left;
 
-    in_bundle = lookup_input_bundle(ctx->ofproto, orig_flow->in_port,
+    in_bundle = lookup_input_bundle(ctx->ofproto, orig_flow->in_port.ofp_port,
                                     ctx->xin->packet != NULL, NULL);
     if (!in_bundle) {
         return;
@@ -219,7 +219,7 @@ add_mirror_actions(struct xlate_ctx *ctx, const struct flow *orig_flow)
             continue;
         }
 
-        ofport = get_odp_port(ofproto, nl_attr_get_u32(a));
+        ofport = get_odp_port(ofproto, nl_attr_get_odp_port(a));
         if (ofport && ofport->bundle) {
             mirrors |= ofport->bundle->dst_mirrors;
         }
@@ -553,7 +553,7 @@ xlate_normal(struct xlate_ctx *ctx)
     memset(&wc->masks.dl_dst, 0xff, sizeof wc->masks.dl_dst);
     wc->masks.vlan_tci |= htons(VLAN_VID_MASK | VLAN_CFI);
 
-    in_bundle = lookup_input_bundle(ctx->ofproto, flow->in_port,
+    in_bundle = lookup_input_bundle(ctx->ofproto, flow->in_port.ofp_port,
                                     ctx->xin->packet != NULL, &in_port);
     if (!in_bundle) {
         xlate_report(ctx, "no input bundle, dropping");
@@ -659,7 +659,7 @@ compose_sample_action(const struct ofproto_dpif *ofproto,
 
 static void
 compose_sflow_cookie(const struct ofproto_dpif *ofproto,
-                     ovs_be16 vlan_tci, uint32_t odp_port,
+                     ovs_be16 vlan_tci, odp_port_t odp_port,
                      unsigned int n_outputs, union user_action_cookie *cookie)
 {
     int ifindex;
@@ -694,18 +694,18 @@ static size_t
 compose_sflow_action(const struct ofproto_dpif *ofproto,
                      struct ofpbuf *odp_actions,
                      const struct flow *flow,
-                     uint32_t odp_port)
+                     odp_port_t odp_port)
 {
     uint32_t probability;
     union user_action_cookie cookie;
 
-    if (!ofproto->sflow || flow->in_port == OFPP_NONE) {
+    if (!ofproto->sflow || flow->in_port.ofp_port == OFPP_NONE) {
         return 0;
     }
 
     probability = dpif_sflow_get_probability(ofproto->sflow);
     compose_sflow_cookie(ofproto, htons(0), odp_port,
-                         odp_port == OVSP_NONE ? 0 : 1, &cookie);
+                         odp_port == ODPP_NONE ? 0 : 1, &cookie);
 
     return compose_sample_action(ofproto, odp_actions, flow,  probability,
                                  &cookie, sizeof cookie.sflow);
@@ -738,7 +738,7 @@ compose_ipfix_action(const struct ofproto_dpif *ofproto,
     uint32_t probability;
     union user_action_cookie cookie;
 
-    if (!ofproto->ipfix || flow->in_port == OFPP_NONE) {
+    if (!ofproto->ipfix || flow->in_port.ofp_port == OFPP_NONE) {
         return;
     }
 
@@ -757,7 +757,7 @@ add_sflow_action(struct xlate_ctx *ctx)
 {
     ctx->user_cookie_offset = compose_sflow_action(ctx->ofproto,
                                                    &ctx->xout->odp_actions,
-                                                   &ctx->xin->flow, OVSP_NONE);
+                                                   &ctx->xin->flow, ODPP_NONE);
     ctx->sflow_odp_port = 0;
     ctx->sflow_n_outputs = 0;
 }
@@ -829,7 +829,7 @@ process_special(struct xlate_ctx *ctx, const struct flow *flow,
 }
 
 static void
-compose_output_action__(struct xlate_ctx *ctx, uint16_t ofp_port,
+compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
                         bool check_stp)
 {
     const struct ofport_dpif *ofport = get_ofp_port(ctx->ofproto, ofp_port);
@@ -838,7 +838,7 @@ compose_output_action__(struct xlate_ctx *ctx, uint16_t ofp_port,
     ovs_be16 flow_vlan_tci;
     uint32_t flow_skb_mark;
     uint8_t flow_nw_tos;
-    uint32_t out_port, odp_port;
+    odp_port_t out_port, odp_port;
     uint8_t dscp;
 
     /* If 'struct flow' gets additional metadata, we'll need to zero it out
@@ -862,7 +862,7 @@ compose_output_action__(struct xlate_ctx *ctx, uint16_t ofp_port,
         enum slow_path_reason special;
 
         ctx->ofproto = ofproto_dpif_cast(peer->up.ofproto);
-        flow->in_port = peer->up.ofp_port;
+        flow->in_port.ofp_port = peer->up.ofp_port;
         flow->metadata = htonll(0);
         memset(&flow->tunnel, 0, sizeof flow->tunnel);
         memset(flow->regs, 0, sizeof flow->regs);
@@ -873,13 +873,13 @@ compose_output_action__(struct xlate_ctx *ctx, uint16_t ofp_port,
             ctx->xout->slow = special;
         } else if (may_receive(peer, ctx)) {
             if (stp_forward_in_state(peer->stp_state)) {
-                xlate_table_action(ctx, flow->in_port, 0, true);
+                xlate_table_action(ctx, flow->in_port.ofp_port, 0, true);
             } else {
                 /* Forwarding is disabled by STP.  Let OFPP_NORMAL and the
                  * learning action look at the packet, then drop it. */
                 struct flow old_base_flow = ctx->base_flow;
                 size_t old_size = ctx->xout->odp_actions.size;
-                xlate_table_action(ctx, flow->in_port, 0, true);
+                xlate_table_action(ctx, flow->in_port.ofp_port, 0, true);
                 ctx->base_flow = old_base_flow;
                 ctx->xout->odp_actions.size = old_size;
             }
@@ -913,7 +913,7 @@ compose_output_action__(struct xlate_ctx *ctx, uint16_t ofp_port,
           */
         struct flow_tnl flow_tnl = flow->tunnel;
         odp_port = tnl_port_send(ofport->tnl_port, flow, &ctx->xout->wc);
-        if (odp_port == OVSP_NONE) {
+        if (odp_port == ODPP_NONE) {
             xlate_report(ctx, "Tunneling decided against output");
             goto out; /* restore flow_nw_tos */
         }
@@ -929,7 +929,7 @@ compose_output_action__(struct xlate_ctx *ctx, uint16_t ofp_port,
                                  &ctx->xout->odp_actions);
         flow->tunnel = flow_tnl; /* Restore tunnel metadata */
     } else {
-        uint16_t vlandev_port;
+        ofp_port_t vlandev_port;
 
         odp_port = ofport->odp_port;
         if (!hmap_is_empty(&ctx->ofproto->realdev_vid_map)) {
@@ -946,11 +946,11 @@ compose_output_action__(struct xlate_ctx *ctx, uint16_t ofp_port,
         flow->skb_mark &= ~IPSEC_MARK;
     }
 
-    if (out_port != OVSP_NONE) {
+    if (out_port != ODPP_NONE) {
         commit_odp_actions(flow, &ctx->base_flow,
                            &ctx->xout->odp_actions, &ctx->xout->wc);
-        nl_msg_put_u32(&ctx->xout->odp_actions, OVS_ACTION_ATTR_OUTPUT,
-                       out_port);
+        nl_msg_put_odp_port(&ctx->xout->odp_actions, OVS_ACTION_ATTR_OUTPUT,
+                            out_port);
 
         ctx->sflow_odp_port = odp_port;
         ctx->sflow_n_outputs++;
@@ -965,7 +965,7 @@ compose_output_action__(struct xlate_ctx *ctx, uint16_t ofp_port,
 }
 
 static void
-compose_output_action(struct xlate_ctx *ctx, uint16_t ofp_port)
+compose_output_action(struct xlate_ctx *ctx, ofp_port_t ofp_port)
 {
     compose_output_action__(ctx, ofp_port, true);
 }
@@ -1014,17 +1014,17 @@ ctx_rule_hooks(struct xlate_ctx *ctx, struct rule_dpif *rule,
 
 static void
 xlate_table_action(struct xlate_ctx *ctx,
-                   uint16_t in_port, uint8_t table_id, bool may_packet_in)
+                   ofp_port_t in_port, uint8_t table_id, bool may_packet_in)
 {
     if (ctx->recurse < MAX_RESUBMIT_RECURSION) {
         struct rule_dpif *rule;
-        uint16_t old_in_port = ctx->xin->flow.in_port;
+        ofp_port_t old_in_port = ctx->xin->flow.in_port.ofp_port;
         uint8_t old_table_id = ctx->table_id;
 
         ctx->table_id = table_id;
 
         /* Look up a flow with 'in_port' as the input port. */
-        ctx->xin->flow.in_port = in_port;
+        ctx->xin->flow.in_port.ofp_port = in_port;
         rule = rule_dpif_lookup_in_table(ctx->ofproto, &ctx->xin->flow,
                                          &ctx->xout->wc, table_id);
 
@@ -1032,7 +1032,7 @@ xlate_table_action(struct xlate_ctx *ctx,
 
         /* Restore the original input port.  Otherwise OFPP_NORMAL and
          * OFPP_IN_PORT will have surprising behavior. */
-        ctx->xin->flow.in_port = old_in_port;
+        ctx->xin->flow.in_port.ofp_port = old_in_port;
 
         rule = ctx_rule_hooks(ctx, rule, may_packet_in);
 
@@ -1060,12 +1060,12 @@ static void
 xlate_ofpact_resubmit(struct xlate_ctx *ctx,
                       const struct ofpact_resubmit *resubmit)
 {
-    uint16_t in_port;
+    ofp_port_t in_port;
     uint8_t table_id;
 
     in_port = resubmit->in_port;
     if (in_port == OFPP_IN_PORT) {
-        in_port = ctx->xin->flow.in_port;
+        in_port = ctx->xin->flow.in_port.ofp_port;
     }
 
     table_id = resubmit->table_id;
@@ -1082,9 +1082,9 @@ flood_packets(struct xlate_ctx *ctx, bool all)
     struct ofport_dpif *ofport;
 
     HMAP_FOR_EACH (ofport, up.hmap_node, &ctx->ofproto->up.ports) {
-        uint16_t ofp_port = ofport->up.ofp_port;
+        ofp_port_t ofp_port = ofport->up.ofp_port;
 
-        if (ofp_port == ctx->xin->flow.in_port) {
+        if (ofp_port == ctx->xin->flow.in_port.ofp_port) {
             continue;
         }
 
@@ -1260,18 +1260,19 @@ compose_dec_mpls_ttl_action(struct xlate_ctx *ctx)
 
 static void
 xlate_output_action(struct xlate_ctx *ctx,
-                    uint16_t port, uint16_t max_len, bool may_packet_in)
+                    ofp_port_t port, uint16_t max_len, bool may_packet_in)
 {
-    uint16_t prev_nf_output_iface = ctx->xout->nf_output_iface;
+    ofp_port_t prev_nf_output_iface = ctx->xout->nf_output_iface;
 
     ctx->xout->nf_output_iface = NF_OUT_DROP;
 
     switch (port) {
     case OFPP_IN_PORT:
-        compose_output_action(ctx, ctx->xin->flow.in_port);
+        compose_output_action(ctx, ctx->xin->flow.in_port.ofp_port);
         break;
     case OFPP_TABLE:
-        xlate_table_action(ctx, ctx->xin->flow.in_port, 0, may_packet_in);
+        xlate_table_action(ctx, ctx->xin->flow.in_port.ofp_port,
+                           0, may_packet_in);
         break;
     case OFPP_NORMAL:
         xlate_normal(ctx);
@@ -1289,7 +1290,7 @@ xlate_output_action(struct xlate_ctx *ctx,
         break;
     case OFPP_LOCAL:
     default:
-        if (port != ctx->xin->flow.in_port) {
+        if (port != ctx->xin->flow.in_port.ofp_port) {
             compose_output_action(ctx, port);
         } else {
             xlate_report(ctx, "skipping output to input port");
@@ -1317,7 +1318,8 @@ xlate_output_reg_action(struct xlate_ctx *ctx,
 
         memset(&value, 0xff, sizeof value);
         mf_write_subfield_flow(&or->src, &value, &ctx->xout->wc.masks);
-        xlate_output_action(ctx, port, or->max_len, false);
+        xlate_output_action(ctx, u16_to_ofp(port),
+                            or->max_len, false);
     }
 }
 
@@ -1325,7 +1327,7 @@ static void
 xlate_enqueue_action(struct xlate_ctx *ctx,
                      const struct ofpact_enqueue *enqueue)
 {
-    uint16_t ofp_port = enqueue->port;
+    ofp_port_t ofp_port = enqueue->port;
     uint32_t queue_id = enqueue->queue;
     uint32_t flow_priority, priority;
     int error;
@@ -1340,8 +1342,8 @@ xlate_enqueue_action(struct xlate_ctx *ctx,
 
     /* Check output port. */
     if (ofp_port == OFPP_IN_PORT) {
-        ofp_port = ctx->xin->flow.in_port;
-    } else if (ofp_port == ctx->xin->flow.in_port) {
+        ofp_port = ctx->xin->flow.in_port.ofp_port;
+    } else if (ofp_port == ctx->xin->flow.in_port.ofp_port) {
         return;
     }
 
@@ -1374,7 +1376,7 @@ xlate_set_queue_action(struct xlate_ctx *ctx, uint32_t queue_id)
 }
 
 static bool
-slave_enabled_cb(uint16_t ofp_port, void *ofproto_)
+slave_enabled_cb(ofp_port_t ofp_port, void *ofproto_)
 {
     struct ofproto_dpif *ofproto = ofproto_;
     struct ofport_dpif *port;
@@ -1399,12 +1401,12 @@ static void
 xlate_bundle_action(struct xlate_ctx *ctx,
                     const struct ofpact_bundle *bundle)
 {
-    uint16_t port;
+    ofp_port_t port;
 
     port = bundle_execute(bundle, &ctx->xin->flow, &ctx->xout->wc,
                           slave_enabled_cb, ctx->ofproto);
     if (bundle->dst.field) {
-        nxm_reg_load(&bundle->dst, port, &ctx->xin->flow);
+        nxm_reg_load(&bundle->dst, ofp_to_u16(port), &ctx->xin->flow);
     } else {
         xlate_output_action(ctx, port, 0, false);
     }
@@ -1970,17 +1972,17 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
         }
     }
 
-    in_port = get_ofp_port(ctx.ofproto, flow->in_port);
+    in_port = get_ofp_port(ctx.ofproto, flow->in_port.ofp_port);
     special = process_special(&ctx, flow, in_port, ctx.xin->packet);
     if (special) {
         ctx.xout->slow = special;
     } else {
         static struct vlog_rate_limit trace_rl = VLOG_RATE_LIMIT_INIT(1, 1);
         size_t sample_actions_len;
-        uint32_t local_odp_port;
+        odp_port_t local_odp_port;
 
-        if (flow->in_port
-            != vsp_realdev_to_vlandev(ctx.ofproto, flow->in_port,
+        if (flow->in_port.ofp_port
+            != vsp_realdev_to_vlandev(ctx.ofproto, flow->in_port.ofp_port,
                                       flow->vlan_tci)) {
             ctx.base_flow.vlan_tci = 0;
         }

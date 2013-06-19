@@ -355,9 +355,9 @@ learn_execute(const struct ofpact_learn *learn, const struct flow *flow,
         case NX_LEARN_DST_OUTPUT:
             if (spec->n_bits <= 16
                 || is_all_zeros(value.u8, sizeof value - 2)) {
-                uint16_t port = ntohs(value.be16[7]);
+                ofp_port_t port = u16_to_ofp(ntohs(value.be16[7]));
 
-                if (port < OFPP_MAX
+                if (ofp_to_u16(port) < ofp_to_u16(OFPP_MAX)
                     || port == OFPP_IN_PORT
                     || port == OFPP_FLOOD
                     || port == OFPP_LOCAL

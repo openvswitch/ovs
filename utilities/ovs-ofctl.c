@@ -632,7 +632,7 @@ ofctl_dump_tables(int argc OVS_UNUSED, char *argv[])
 
 static bool
 fetch_port_by_features(const char *vconn_name,
-                       const char *port_name, unsigned int port_no,
+                       const char *port_name, ofp_port_t port_no,
                        struct ofputil_phy_port *pp, bool *trunc)
 {
     struct ofputil_switch_features features;
@@ -670,7 +670,7 @@ fetch_port_by_features(const char *vconn_name,
     }
 
     while (!ofputil_pull_phy_port(oh->version, &b, pp)) {
-        if (port_no != UINT_MAX
+        if (port_no != OFPP_NONE
             ? port_no == pp->port_no
             : !strcmp(pp->name, port_name)) {
             found = true;
@@ -685,7 +685,7 @@ exit:
 
 static bool
 fetch_port_by_stats(const char *vconn_name,
-                    const char *port_name, unsigned int port_no,
+                    const char *port_name, ofp_port_t port_no,
                     struct ofputil_phy_port *pp)
 {
     struct ofpbuf *request;
@@ -729,8 +729,8 @@ fetch_port_by_stats(const char *vconn_name,
             }
 
             while (!ofputil_pull_phy_port(oh->version, &b, pp)) {
-                if (port_no != UINT_MAX ? port_no == pp->port_no
-                                        : !strcmp(pp->name, port_name)) {
+                if (port_no != OFPP_NONE ? port_no == pp->port_no
+                                         : !strcmp(pp->name, port_name)) {
                     found = true;
                     break;
                 }
@@ -746,6 +746,16 @@ fetch_port_by_stats(const char *vconn_name,
     return found;
 }
 
+static bool
+str_to_ofp(const char *s, ofp_port_t *ofp_port)
+{
+    bool ret;
+    uint32_t port_;
+
+    ret = str_to_uint(s, 10, &port_);
+    *ofp_port = u16_to_ofp(port_);
+    return ret;
+}
 
 /* Opens a connection to 'vconn_name', fetches the port structure for
  * 'port_name' (which may be a port name or number), and copies it into
@@ -754,13 +764,13 @@ static void
 fetch_ofputil_phy_port(const char *vconn_name, const char *port_name,
                        struct ofputil_phy_port *pp)
 {
-    unsigned int port_no;
+    ofp_port_t port_no;
     bool found;
     bool trunc;
 
     /* Try to interpret the argument as a port number. */
-    if (!str_to_uint(port_name, 10, &port_no)) {
-        port_no = UINT_MAX;
+    if (!str_to_ofp(port_name, &port_no)) {
+        port_no = OFPP_NONE;
     }
 
     /* Try to find the port based on the Features Reply.  If it looks
@@ -779,10 +789,10 @@ fetch_ofputil_phy_port(const char *vconn_name, const char *port_name,
 
 /* Returns the port number corresponding to 'port_name' (which may be a port
  * name or number) within the switch 'vconn_name'. */
-static uint16_t
+static ofp_port_t
 str_to_port_no(const char *vconn_name, const char *port_name)
 {
-    uint16_t port_no;
+    ofp_port_t port_no;
 
     if (ofputil_port_from_string(port_name, &port_no)) {
         return port_no;
@@ -1489,7 +1499,7 @@ ofctl_dump_ports(int argc, char *argv[])
 {
     struct ofpbuf *request;
     struct vconn *vconn;
-    uint16_t port;
+    ofp_port_t port;
 
     open_vconn(argv[1], &vconn);
     port = argc > 2 ? str_to_port_no(argv[1], argv[2]) : OFPP_ANY;

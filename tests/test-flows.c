@@ -58,7 +58,7 @@ main(int argc OVS_UNUSED, char *argv[])
         struct ofp10_match extracted_match;
         struct match match;
         struct flow flow;
-
+        union flow_in_port in_port_;
         n++;
 
         retval = pcap_read(pcap, &packet);
@@ -68,7 +68,8 @@ main(int argc OVS_UNUSED, char *argv[])
             ovs_fatal(retval, "error reading pcap file");
         }
 
-        flow_extract(packet, 0, 0, NULL, 1, &flow);
+        in_port_.ofp_port = u16_to_ofp(1);
+        flow_extract(packet, 0, 0, NULL, &in_port_, &flow);
         match_init_exact(&match, &flow);
         ofputil_match_to_ofp10_match(&match, &extracted_match);
 

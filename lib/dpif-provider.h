@@ -127,10 +127,10 @@ struct dpif_class {
      * port number.  Returns EBUSY if caller attempted to choose a port
      * number, and it was in use. */
     int (*port_add)(struct dpif *dpif, struct netdev *netdev,
-                    uint32_t *port_no);
+                    odp_port_t *port_no);
 
     /* Removes port numbered 'port_no' from 'dpif'. */
-    int (*port_del)(struct dpif *dpif, uint32_t port_no);
+    int (*port_del)(struct dpif *dpif, odp_port_t port_no);
 
     /* Queries 'dpif' for a port with the given 'port_no' or 'devname'.
      * If 'port' is not null, stores information about the port into
@@ -139,14 +139,14 @@ struct dpif_class {
      * If 'port' is not null, the caller takes ownership of data in
      * 'port' and must free it with dpif_port_destroy() when it is no
      * longer needed. */
-    int (*port_query_by_number)(const struct dpif *dpif, uint32_t port_no,
+    int (*port_query_by_number)(const struct dpif *dpif, odp_port_t port_no,
                                 struct dpif_port *port);
     int (*port_query_by_name)(const struct dpif *dpif, const char *devname,
                               struct dpif_port *port);
 
     /* Returns one greater than the largest port number accepted in flow
      * actions. */
-    int (*get_max_ports)(const struct dpif *dpif);
+    odp_port_t (*get_max_ports)(const struct dpif *dpif);
 
     /* Returns the Netlink PID value to supply in OVS_ACTION_ATTR_USERSPACE
      * actions as the OVS_USERSPACE_ATTR_PID attribute's value, for use in
@@ -162,7 +162,7 @@ struct dpif_class {
      *
      * A dpif provider that doesn't have meaningful Netlink PIDs can use NULL
      * for this function.  This is equivalent to always returning 0. */
-    uint32_t (*port_get_pid)(const struct dpif *dpif, uint32_t port_no);
+    uint32_t (*port_get_pid)(const struct dpif *dpif, odp_port_t port_no);
 
     /* Attempts to begin dumping the ports in a dpif.  On success, returns 0
      * and initializes '*statep' with any data needed for iteration.  On

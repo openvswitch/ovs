@@ -434,18 +434,18 @@ dpif_port_open_type(const char *datapath_type, const char *port_type)
 }
 
 /* Attempts to add 'netdev' as a port on 'dpif'.  If 'port_nop' is
- * non-null and its value is not UINT32_MAX, then attempts to use the
+ * non-null and its value is not ODPP_NONE, then attempts to use the
  * value as the port number.
  *
  * If successful, returns 0 and sets '*port_nop' to the new port's port
  * number (if 'port_nop' is non-null).  On failure, returns a positive
- * errno value and sets '*port_nop' to UINT32_MAX (if 'port_nop' is
+ * errno value and sets '*port_nop' to ODPP_NONE (if 'port_nop' is
  * non-null). */
 int
-dpif_port_add(struct dpif *dpif, struct netdev *netdev, uint32_t *port_nop)
+dpif_port_add(struct dpif *dpif, struct netdev *netdev, odp_port_t *port_nop)
 {
     const char *netdev_name = netdev_get_name(netdev);
-    uint32_t port_no = UINT32_MAX;
+    odp_port_t port_no = ODPP_NONE;
     int error;
 
     COVERAGE_INC(dpif_port_add);
@@ -461,7 +461,7 @@ dpif_port_add(struct dpif *dpif, struct netdev *netdev, uint32_t *port_nop)
     } else {
         VLOG_WARN_RL(&error_rl, "%s: failed to add %s as port: %s",
                      dpif_name(dpif), netdev_name, strerror(error));
-        port_no = UINT32_MAX;
+        port_no = ODPP_NONE;
     }
     if (port_nop) {
         *port_nop = port_no;
@@ -472,7 +472,7 @@ dpif_port_add(struct dpif *dpif, struct netdev *netdev, uint32_t *port_nop)
 /* Attempts to remove 'dpif''s port number 'port_no'.  Returns 0 if successful,
  * otherwise a positive errno value. */
 int
-dpif_port_del(struct dpif *dpif, uint32_t port_no)
+dpif_port_del(struct dpif *dpif, odp_port_t port_no)
 {
     int error;
 
@@ -530,7 +530,7 @@ dpif_port_exists(const struct dpif *dpif, const char *devname)
  * The caller owns the data in 'port' and must free it with
  * dpif_port_destroy() when it is no longer needed. */
 int
-dpif_port_query_by_number(const struct dpif *dpif, uint32_t port_no,
+dpif_port_query_by_number(const struct dpif *dpif, odp_port_t port_no,
                           struct dpif_port *port)
 {
     int error = dpif->dpif_class->port_query_by_number(dpif, port_no, port);
@@ -576,7 +576,7 @@ dpif_port_query_by_name(const struct dpif *dpif, const char *devname,
 
 /* Returns one greater than the maximum port number accepted in flow
  * actions. */
-int
+odp_port_t
 dpif_get_max_ports(const struct dpif *dpif)
 {
     return dpif->dpif_class->get_max_ports(dpif);
@@ -586,7 +586,7 @@ dpif_get_max_ports(const struct dpif *dpif)
  * as the OVS_USERSPACE_ATTR_PID attribute's value, for use in flows whose
  * packets arrived on port 'port_no'.
  *
- * A 'port_no' of UINT32_MAX is a special case: it returns a reserved PID, not
+ * A 'port_no' of ODPP_NONE is a special case: it returns a reserved PID, not
  * allocated to any port, that the client may use for special purposes.
  *
  * The return value is only meaningful when DPIF_UC_ACTION has been enabled in
@@ -595,7 +595,7 @@ dpif_get_max_ports(const struct dpif *dpif)
  * update all of the flows that it installed that contain
  * OVS_ACTION_ATTR_USERSPACE actions. */
 uint32_t
-dpif_port_get_pid(const struct dpif *dpif, uint32_t port_no)
+dpif_port_get_pid(const struct dpif *dpif, odp_port_t port_no)
 {
     return (dpif->dpif_class->port_get_pid
             ? (dpif->dpif_class->port_get_pid)(dpif, port_no)
@@ -607,7 +607,7 @@ dpif_port_get_pid(const struct dpif *dpif, uint32_t port_no)
  * result is null-terminated.  On failure, returns a positive errno value and
  * makes 'name' the empty string. */
 int
-dpif_port_get_name(struct dpif *dpif, uint32_t port_no,
+dpif_port_get_name(struct dpif *dpif, odp_port_t port_no,
                    char *name, size_t name_size)
 {
     struct dpif_port port;

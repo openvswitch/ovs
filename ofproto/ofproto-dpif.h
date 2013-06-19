@@ -127,7 +127,7 @@ struct ofport_dpif {
     struct hmap_node odp_port_node; /* In dpif_backer's "odp_to_ofport_map". */
     struct ofport up;
 
-    uint32_t odp_port;
+    odp_port_t odp_port;
     struct ofbundle *bundle;    /* Bundle that contains this port, if any. */
     struct list bundle_node;    /* In struct ofbundle's "ports" list. */
     struct cfm *cfm;            /* Connectivity Fault Management, if any. */
@@ -151,7 +151,7 @@ struct ofport_dpif {
      * drivers in old versions of Linux that do not properly support VLANs when
      * VLAN devices are not used.  When broken device drivers are no longer in
      * widespread use, we will delete these interfaces. */
-    uint16_t realdev_ofp_port;
+    ofp_port_t realdev_ofp_port;
     int vlandev_vid;
 };
 
@@ -228,12 +228,13 @@ mirror_mask_ffs(mirror_mask_t mask)
 }
 
 struct ofport_dpif *get_ofp_port(const struct ofproto_dpif *,
-                                 uint16_t ofp_port);
+                                 ofp_port_t ofp_port);
 
 struct ofport_dpif *get_odp_port(const struct ofproto_dpif *,
-                                        uint32_t odp_port);
+                                        odp_port_t odp_port);
 
-uint32_t ofp_port_to_odp_port(const struct ofproto_dpif *, uint16_t ofp_port);
+odp_port_t ofp_port_to_odp_port(const struct ofproto_dpif *,
+                              ofp_port_t ofp_port);
 
 struct rule_dpif *rule_dpif_lookup_in_table(struct ofproto_dpif *,
                                             const struct flow *,
@@ -260,9 +261,9 @@ bool stp_should_process_flow(const struct flow *, struct flow_wildcards *);
 void stp_process_packet(const struct ofport_dpif *,
                         const struct ofpbuf *packet);
 
-uint16_t vsp_realdev_to_vlandev(const struct ofproto_dpif *,
-                                uint16_t realdev_ofp_port,
-                                ovs_be16 vlan_tci);
+ofp_port_t vsp_realdev_to_vlandev(const struct ofproto_dpif *,
+                                  ofp_port_t realdev_ofp_port,
+                                  ovs_be16 vlan_tci);
 
 bool ofproto_dpif_dscp_from_priority(const struct ofport_dpif *,
                                      uint32_t priority, uint8_t *dscp);

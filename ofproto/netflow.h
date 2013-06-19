@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,11 +38,9 @@ struct netflow_options {
     bool add_id_to_iface;
 };
 
-enum netflow_output_ports {
-    NF_OUT_FLOOD = UINT16_MAX,
-    NF_OUT_MULTI = UINT16_MAX - 1,
-    NF_OUT_DROP = UINT16_MAX - 2
-};
+#define NF_OUT_FLOOD OFP_PORT_C(UINT16_MAX)
+#define NF_OUT_MULTI OFP_PORT_C(UINT16_MAX - 1)
+#define NF_OUT_DROP  OFP_PORT_C(UINT16_MAX - 2)
 
 struct netflow_flow {
     long long int last_expired;   /* Time this flow last timed out. */
@@ -51,7 +49,7 @@ struct netflow_flow {
     uint64_t packet_count_off;    /* Packet count at last time out. */
     uint64_t byte_count_off;      /* Byte count at last time out. */
 
-    uint16_t output_iface;        /* Output interface index. */
+    ofp_port_t output_iface;      /* Output interface index. */
     uint8_t tcp_flags;            /* Bitwise-OR of all TCP flags seen. */
 };
 

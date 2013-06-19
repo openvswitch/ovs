@@ -34,7 +34,8 @@ struct nlattr;
 struct ofpbuf;
 struct simap;
 
-#define OVSP_NONE UINT32_MAX
+#define ODPP_LOCAL ODP_PORT_C(OVSP_LOCAL)
+#define ODPP_NONE  ODP_PORT_C(UINT32_MAX)
 
 void format_odp_actions(struct ds *, const struct nlattr *odp_actions,
                         size_t actions_len);
@@ -100,7 +101,7 @@ int odp_flow_from_string(const char *s,
                          struct ofpbuf *, struct ofpbuf *);
 
 void odp_flow_key_from_flow(struct ofpbuf *, const struct flow *,
-                            uint32_t odp_in_port);
+                            odp_port_t odp_in_port);
 
 uint32_t odp_flow_key_hash(const struct nlattr *, size_t);
 

@@ -135,7 +135,7 @@ parse_enqueue(char *arg, struct ofpbuf *ofpacts)
     }
 
     enqueue = ofpact_put_ENQUEUE(ofpacts);
-    enqueue->port = str_to_u32(port);
+    enqueue->port = u16_to_ofp(str_to_u32(port));
     enqueue->queue = str_to_u32(queue);
 }
 
@@ -152,7 +152,7 @@ parse_output(char *arg, struct ofpbuf *ofpacts)
         struct ofpact_output *output;
 
         output = ofpact_put_OUTPUT(ofpacts);
-        output->port = str_to_u32(arg);
+        output->port = u16_to_ofp(str_to_u32(arg));
         output->max_len = output->port == OFPP_CONTROLLER ? UINT16_MAX : 0;
     }
 }
@@ -650,7 +650,7 @@ str_to_ofpact__(char *pos, char *act, char *arg,
         }
         return false;
     } else {
-        uint16_t port;
+        ofp_port_t port;
         if (ofputil_port_from_string(act, &port)) {
             ofpact_put_OUTPUT(ofpacts)->port = port;
         } else {
@@ -1076,7 +1076,7 @@ parse_flow_monitor_request(struct ofputil_flow_monitor_request *fmr,
             if (!strcmp(name, "table")) {
                 fmr->table_id = str_to_table_id(value);
             } else if (!strcmp(name, "out_port")) {
-                fmr->out_port = atoi(value);
+                fmr->out_port = u16_to_ofp(atoi(value));
             } else if (mf_from_name(name)) {
                 parse_field(mf_from_name(name), value, &fmr->match);
             } else {
@@ -1229,8 +1229,8 @@ parse_ofp_exact_flow(struct flow *flow, const char *s)
         }
     }
 
-    if (!flow->in_port) {
-        flow->in_port = OFPP_NONE;
+    if (!flow->in_port.ofp_port) {
+        flow->in_port.ofp_port = OFPP_NONE;
     }
 
 exit:

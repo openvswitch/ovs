@@ -97,11 +97,13 @@ gen_netflow_rec(struct netflow *nf, struct netflow_flow *nf_flow,
     nf_rec->nexthop = htonl(0);
     if (nf->add_id_to_iface) {
         uint16_t iface = (nf->engine_id & 0x7f) << 9;
-        nf_rec->input = htons(iface | (expired->flow.in_port & 0x1ff));
-        nf_rec->output = htons(iface | (nf_flow->output_iface & 0x1ff));
+        nf_rec->input = htons(iface
+            | (ofp_to_u16(expired->flow.in_port.ofp_port) & 0x1ff));
+        nf_rec->output = htons(iface
+            | (ofp_to_u16(nf_flow->output_iface) & 0x1ff));
     } else {
-        nf_rec->input = htons(expired->flow.in_port);
-        nf_rec->output = htons(nf_flow->output_iface);
+        nf_rec->input = htons(ofp_to_u16(expired->flow.in_port.ofp_port));
+        nf_rec->output = htons(ofp_to_u16(nf_flow->output_iface));
     }
     nf_rec->packet_count = htonl(packet_count);
     nf_rec->byte_count = htonl(byte_count);
@@ -275,7 +277,7 @@ netflow_flow_init(struct netflow_flow *nf_flow OVS_UNUSED)
 void
 netflow_flow_clear(struct netflow_flow *nf_flow)
 {
-    uint16_t output_iface = nf_flow->output_iface;
+    ofp_port_t output_iface = nf_flow->output_iface;
 
     memset(nf_flow, 0, sizeof *nf_flow);
     nf_flow->output_iface = output_iface;

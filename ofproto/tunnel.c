@@ -36,7 +36,7 @@ struct tnl_match {
     ovs_be64 in_key;
     ovs_be32 ip_src;
     ovs_be32 ip_dst;
-    uint32_t odp_port;
+    odp_port_t odp_port;
     uint32_t skb_mark;
     bool in_key_flow;
     bool ip_src_flow;
@@ -71,7 +71,7 @@ static void tnl_port_mod_log(const struct tnl_port *, const char *action);
 static const char *tnl_port_get_name(const struct tnl_port *);
 
 static struct tnl_port *
-tnl_port_add__(const struct ofport *ofport, uint32_t odp_port,
+tnl_port_add__(const struct ofport *ofport, odp_port_t odp_port,
                bool warn)
 {
     const struct netdev_tunnel_config *cfg;
@@ -118,7 +118,7 @@ tnl_port_add__(const struct ofport *ofport, uint32_t odp_port,
  * must be added before they can be used by the module. 'ofport' must be a
  * tunnel. */
 struct tnl_port *
-tnl_port_add(const struct ofport *ofport, uint32_t odp_port)
+tnl_port_add(const struct ofport *ofport, odp_port_t odp_port)
 {
     return tnl_port_add__(ofport, odp_port, true);
 }
@@ -129,7 +129,7 @@ tnl_port_add(const struct ofport *ofport, uint32_t odp_port)
  * 'ofport' and 'odp_port' should be the same as would be passed to
  * tnl_port_add(). */
 bool
-tnl_port_reconfigure(const struct ofport *ofport, uint32_t odp_port,
+tnl_port_reconfigure(const struct ofport *ofport, odp_port_t odp_port,
                      struct tnl_port **tnl_portp)
 {
     struct tnl_port *tnl_port = *tnl_portp;
@@ -173,7 +173,7 @@ tnl_port_receive(const struct flow *flow)
     struct tnl_match match;
 
     memset(&match, 0, sizeof match);
-    match.odp_port = flow->in_port;
+    match.odp_port = flow->in_port.odp_port;
     match.ip_src = flow->tunnel.ip_dst;
     match.ip_dst = flow->tunnel.ip_src;
     match.in_key = flow->tunnel.tun_id;
@@ -210,9 +210,9 @@ tnl_port_receive(const struct flow *flow)
 
 /* Given that 'flow' should be output to the ofport corresponding to
  * 'tnl_port', updates 'flow''s tunnel headers and returns the actual datapath
- * port that the output should happen on.  May return OVSP_NONE if the output
+ * port that the output should happen on.  May return ODPP_NONE if the output
  * shouldn't occur. */
-uint32_t
+odp_port_t
 tnl_port_send(const struct tnl_port *tnl_port, struct flow *flow,
               struct flow_wildcards *wc)
 {
@@ -220,7 +220,7 @@ tnl_port_send(const struct tnl_port *tnl_port, struct flow *flow,
     char *pre_flow_str = NULL;
 
     if (tnl_port == &void_tnl_port) {
-        return OVSP_NONE;
+        return ODPP_NONE;
     }
 
     cfg = netdev_get_tunnel_config(tnl_port->ofport->netdev);

@@ -30,10 +30,10 @@ int pktbuf_capacity(void);
 struct pktbuf *pktbuf_create(void);
 void pktbuf_destroy(struct pktbuf *);
 uint32_t pktbuf_save(struct pktbuf *, const void *buffer, size_t buffer_size,
-                     uint16_t in_port);
+                     ofp_port_t in_port);
 uint32_t pktbuf_get_null(void);
 enum ofperr pktbuf_retrieve(struct pktbuf *, uint32_t id,
-                            struct ofpbuf **bufferp, uint16_t *in_port);
+                            struct ofpbuf **bufferp, ofp_port_t *in_port);
 void pktbuf_discard(struct pktbuf *, uint32_t id);
 
 unsigned int pktbuf_count_packets(const struct pktbuf *);

@@ -62,7 +62,7 @@ ofp_packet_to_string(const void *data, size_t len)
     struct flow flow;
 
     ofpbuf_use_const(&buf, data, len);
-    flow_extract(&buf, 0, 0, NULL, 0, &flow);
+    flow_extract(&buf, 0, 0, NULL, NULL, &flow);
     flow_format(&ds, &flow);
 
     if (buf.l7) {
@@ -204,8 +204,8 @@ compare_ports(const void *a_, const void *b_)
 {
     const struct ofputil_phy_port *a = a_;
     const struct ofputil_phy_port *b = b_;
-    uint16_t ap = a->port_no;
-    uint16_t bp = b->port_no;
+    uint16_t ap = ofp_to_u16(a->port_no);
+    uint16_t bp = ofp_to_u16(b->port_no);
 
     return ap < bp ? -1 : ap > bp;
 }
@@ -585,7 +585,7 @@ static void print_wild(struct ds *string, const char *leader, int is_wild,
 
 static void
 print_wild_port(struct ds *string, const char *leader, int is_wild,
-                int verbosity, uint16_t port)
+                int verbosity, ofp_port_t port)
 {
     if (is_wild && verbosity < 2) {
         return;
@@ -665,7 +665,7 @@ ofp10_match_to_string(const struct ofp10_match *om, int verbosity)
         }
     }
     print_wild_port(&f, "in_port=", w & OFPFW10_IN_PORT, verbosity,
-                    ntohs(om->in_port));
+                    u16_to_ofp(ntohs(om->in_port)));
     print_wild(&f, "dl_vlan=", w & OFPFW10_DL_VLAN, verbosity,
                "%d", ntohs(om->dl_vlan));
     print_wild(&f, "dl_vlan_pcp=", w & OFPFW10_DL_VLAN_PCP, verbosity,
@@ -1167,7 +1167,7 @@ print_port_stat(struct ds *string, const char *leader, uint64_t stat, int more)
 static void
 ofp_print_ofpst_port_request(struct ds *string, const struct ofp_header *oh)
 {
-    uint16_t ofp10_port;
+    ofp_port_t ofp10_port;
     enum ofperr error;
 
     error = ofputil_decode_port_stats_request(oh, &ofp10_port);
@@ -1205,7 +1205,7 @@ ofp_print_ofpst_port_reply(struct ds *string, const struct ofp_header *oh,
         }
 
         ds_put_cstr(string, "  port ");
-        if (ps.port_no < 10) {
+        if (ofp_to_u16(ps.port_no) < 10) {
             ds_put_char(string, ' ');
         }
         ofputil_format_port(ps.port_no, string);

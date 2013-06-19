@@ -90,7 +90,7 @@ ofputil_wildcard_from_ofpfw10(uint32_t ofpfw, struct flow_wildcards *wc)
     flow_wildcards_init_catchall(wc);
 
     if (!(ofpfw & OFPFW10_IN_PORT)) {
-        wc->masks.in_port = UINT16_MAX;
+        wc->masks.in_port.ofp_port = u16_to_ofp(UINT16_MAX);
     }
 
     if (!(ofpfw & OFPFW10_NW_TOS)) {
@@ -145,7 +145,7 @@ ofputil_match_from_ofp10_match(const struct ofp10_match *ofmatch,
     /* Initialize most of match->flow. */
     match->flow.nw_src = ofmatch->nw_src;
     match->flow.nw_dst = ofmatch->nw_dst;
-    match->flow.in_port = ntohs(ofmatch->in_port);
+    match->flow.in_port.ofp_port = u16_to_ofp(ntohs(ofmatch->in_port));
     match->flow.dl_type = ofputil_dl_type_from_openflow(ofmatch->dl_type);
     match->flow.tp_src = ofmatch->tp_src;
     match->flow.tp_dst = ofmatch->tp_dst;
@@ -190,7 +190,7 @@ ofputil_match_to_ofp10_match(const struct match *match,
 
     /* Figure out most OpenFlow wildcards. */
     ofpfw = 0;
-    if (!wc->masks.in_port) {
+    if (!wc->masks.in_port.ofp_port) {
         ofpfw |= OFPFW10_IN_PORT;
     }
     if (!wc->masks.dl_type) {
@@ -244,7 +244,7 @@ ofputil_match_to_ofp10_match(const struct match *match,
 
     /* Compose most of the match structure. */
     ofmatch->wildcards = htonl(ofpfw);
-    ofmatch->in_port = htons(match->flow.in_port);
+    ofmatch->in_port = htons(ofp_to_u16(match->flow.in_port.ofp_port));
     memcpy(ofmatch->dl_src, match->flow.dl_src, ETH_ADDR_LEN);
     memcpy(ofmatch->dl_dst, match->flow.dl_dst, ETH_ADDR_LEN);
     ofmatch->dl_type = ofputil_dl_type_to_openflow(match->flow.dl_type);
@@ -311,7 +311,7 @@ ofputil_match_from_ofp11_match(const struct ofp11_match *ofmatch,
     match_init_catchall(match);
 
     if (!(wc & OFPFW11_IN_PORT)) {
-        uint16_t ofp_port;
+        ofp_port_t ofp_port;
         enum ofperr error;
 
         error = ofputil_port_from_ofp11(ofmatch->in_port, &ofp_port);
@@ -466,10 +466,10 @@ ofputil_match_to_ofp11_match(const struct match *match,
     ofmatch->omh.type = htons(OFPMT_STANDARD);
     ofmatch->omh.length = htons(OFPMT11_STANDARD_LENGTH);
 
-    if (!match->wc.masks.in_port) {
+    if (!match->wc.masks.in_port.ofp_port) {
         wc |= OFPFW11_IN_PORT;
     } else {
-        ofmatch->in_port = ofputil_port_to_ofp11(match->flow.in_port);
+        ofmatch->in_port = ofputil_port_to_ofp11(match->flow.in_port.ofp_port);
     }
 
     memcpy(ofmatch->dl_src, match->flow.dl_src, ETH_ADDR_LEN);
@@ -1567,7 +1567,7 @@ ofputil_decode_flow_mod(struct ofputil_flow_mod *fm,
             fm->idle_timeout = ntohs(ofm->idle_timeout);
             fm->hard_timeout = ntohs(ofm->hard_timeout);
             fm->buffer_id = ntohl(ofm->buffer_id);
-            fm->out_port = ntohs(ofm->out_port);
+            fm->out_port = u16_to_ofp(ntohs(ofm->out_port));
             fm->flags = ntohs(ofm->flags);
         } else if (raw == OFPRAW_NXT_FLOW_MOD) {
             /* Nicira extended flow_mod. */
@@ -1598,7 +1598,7 @@ ofputil_decode_flow_mod(struct ofputil_flow_mod *fm,
             fm->idle_timeout = ntohs(nfm->idle_timeout);
             fm->hard_timeout = ntohs(nfm->hard_timeout);
             fm->buffer_id = ntohl(nfm->buffer_id);
-            fm->out_port = ntohs(nfm->out_port);
+            fm->out_port = u16_to_ofp(ntohs(nfm->out_port));
             fm->flags = ntohs(nfm->flags);
         } else {
             NOT_REACHED();
@@ -1653,7 +1653,7 @@ ofputil_encode_flow_mod(const struct ofputil_flow_mod *fm,
     case OFPUTIL_P_OF13_OXM: {
         struct ofp11_flow_mod *ofm;
 
-        msg = ofpraw_alloc(OFPRAW_OFPT11_FLOW_MOD, 
+        msg = ofpraw_alloc(OFPRAW_OFPT11_FLOW_MOD,
                            ofputil_protocol_to_ofp_version(protocol),
                            NXM_TYPICAL_LEN + fm->ofpacts_len);
         ofm = ofpbuf_put_zeros(msg, sizeof *ofm);
@@ -1691,7 +1691,7 @@ ofputil_encode_flow_mod(const struct ofputil_flow_mod *fm,
         ofm->hard_timeout = htons(fm->hard_timeout);
         ofm->priority = htons(fm->priority);
         ofm->buffer_id = htonl(fm->buffer_id);
-        ofm->out_port = htons(fm->out_port);
+        ofm->out_port = htons(ofp_to_u16(fm->out_port));
         ofm->flags = htons(fm->flags);
         ofpacts_put_openflow10(fm->ofpacts, fm->ofpacts_len, msg);
         break;
@@ -1713,7 +1713,7 @@ ofputil_encode_flow_mod(const struct ofputil_flow_mod *fm,
         nfm->hard_timeout = htons(fm->hard_timeout);
         nfm->priority = htons(fm->priority);
         nfm->buffer_id = htonl(fm->buffer_id);
-        nfm->out_port = htons(fm->out_port);
+        nfm->out_port = htons(ofp_to_u16(fm->out_port));
         nfm->flags = htons(fm->flags);
         nfm->match_len = htons(match_len);
         ofpacts_put_openflow10(fm->ofpacts, fm->ofpacts_len, msg);
@@ -1766,7 +1766,7 @@ ofputil_decode_ofpst10_flow_request(struct ofputil_flow_stats_request *fsr,
 {
     fsr->aggregate = aggregate;
     ofputil_match_from_ofp10_match(&ofsr->match, &fsr->match);
-    fsr->out_port = ntohs(ofsr->out_port);
+    fsr->out_port = u16_to_ofp(ntohs(ofsr->out_port));
     fsr->table_id = ofsr->table_id;
     fsr->cookie = fsr->cookie_mask = htonll(0);
 
@@ -1818,7 +1818,7 @@ ofputil_decode_nxst_flow_request(struct ofputil_flow_stats_request *fsr,
     }
 
     fsr->aggregate = aggregate;
-    fsr->out_port = ntohs(nfsr->out_port);
+    fsr->out_port = u16_to_ofp(ntohs(nfsr->out_port));
     fsr->table_id = nfsr->table_id;
 
     return 0;
@@ -1902,7 +1902,7 @@ ofputil_encode_flow_stats_request(const struct ofputil_flow_stats_request *fsr,
         ofsr = ofpbuf_put_zeros(msg, sizeof *ofsr);
         ofputil_match_to_ofp10_match(&fsr->match, &ofsr->match);
         ofsr->table_id = fsr->table_id;
-        ofsr->out_port = htons(fsr->out_port);
+        ofsr->out_port = htons(ofp_to_u16(fsr->out_port));
         break;
     }
 
@@ -1920,7 +1920,7 @@ ofputil_encode_flow_stats_request(const struct ofputil_flow_stats_request *fsr,
                                  fsr->cookie, fsr->cookie_mask);
 
         nfsr = msg->l3;
-        nfsr->out_port = htons(fsr->out_port);
+        nfsr->out_port = htons(ofp_to_u16(fsr->out_port));
         nfsr->match_len = htons(match_len);
         nfsr->table_id = fsr->table_id;
         break;
@@ -2443,7 +2443,7 @@ ofputil_decode_packet_in_finish(struct ofputil_packet_in *pin,
     pin->packet = b->data;
     pin->packet_len = b->size;
 
-    pin->fmd.in_port = match->flow.in_port;
+    pin->fmd.in_port = match->flow.in_port.ofp_port;
     pin->fmd.tun_id = match->flow.tunnel.tun_id;
     pin->fmd.tun_src = match->flow.tunnel.ip_src;
     pin->fmd.tun_dst = match->flow.tunnel.ip_dst;
@@ -2502,7 +2502,7 @@ ofputil_decode_packet_in(struct ofputil_packet_in *pin,
         pin->packet = opi->data;
         pin->packet_len = b.size;
 
-        pin->fmd.in_port = ntohs(opi->in_port);
+        pin->fmd.in_port = u16_to_ofp(ntohs(opi->in_port));
         pin->reason = opi->reason;
         pin->buffer_id = ntohl(opi->buffer_id);
         pin->total_len = ntohs(opi->total_len);
@@ -2620,7 +2620,7 @@ ofputil_encode_packet_in(const struct ofputil_packet_in *pin,
                                   htonl(0), send_len);
         opi = ofpbuf_put_zeros(packet, offsetof(struct ofp10_packet_in, data));
         opi->total_len = htons(pin->total_len);
-        opi->in_port = htons(pin->fmd.in_port);
+        opi->in_port = htons(ofp_to_u16(pin->fmd.in_port));
         opi->reason = pin->reason;
         opi->buffer_id = htonl(pin->buffer_id);
 
@@ -2737,7 +2737,7 @@ ofputil_decode_packet_out(struct ofputil_packet_out *po,
         const struct ofp10_packet_out *opo = ofpbuf_pull(&b, sizeof *opo);
 
         po->buffer_id = ntohl(opo->buffer_id);
-        po->in_port = ntohs(opo->in_port);
+        po->in_port = u16_to_ofp(ntohs(opo->in_port));
 
         error = ofpacts_pull_openflow10(&b, ntohs(opo->actions_len), ofpacts);
         if (error) {
@@ -2747,7 +2747,8 @@ ofputil_decode_packet_out(struct ofputil_packet_out *po,
         NOT_REACHED();
     }
 
-    if (po->in_port >= OFPP_MAX && po->in_port != OFPP_LOCAL
+    if (ofp_to_u16(po->in_port) >= ofp_to_u16(OFPP_MAX)
+        && po->in_port != OFPP_LOCAL
         && po->in_port != OFPP_NONE && po->in_port != OFPP_CONTROLLER) {
         VLOG_WARN_RL(&bad_ofmsg_rl, "packet-out has bad input port %#"PRIx16,
                      po->in_port);
@@ -2834,7 +2835,7 @@ ofputil_decode_ofp10_phy_port(struct ofputil_phy_port *pp,
 {
     memset(pp, 0, sizeof *pp);
 
-    pp->port_no = ntohs(opp->port_no);
+    pp->port_no = u16_to_ofp(ntohs(opp->port_no));
     memcpy(pp->hw_addr, opp->hw_addr, OFP_ETH_ALEN);
     ovs_strlcpy(pp->name, opp->name, OFP_MAX_PORT_NAME_LEN);
 
@@ -2902,7 +2903,7 @@ ofputil_encode_ofp10_phy_port(const struct ofputil_phy_port *pp,
 {
     memset(opp, 0, sizeof *opp);
 
-    opp->port_no = htons(pp->port_no);
+    opp->port_no = htons(ofp_to_u16(pp->port_no));
     memcpy(opp->hw_addr, pp->hw_addr, ETH_ADDR_LEN);
     ovs_strlcpy(opp->name, pp->name, OFP_MAX_PORT_NAME_LEN);
 
@@ -3312,7 +3313,7 @@ ofputil_decode_port_mod(const struct ofp_header *oh,
     if (raw == OFPRAW_OFPT10_PORT_MOD) {
         const struct ofp10_port_mod *opm = b.data;
 
-        pm->port_no = ntohs(opm->port_no);
+        pm->port_no = u16_to_ofp(ntohs(opm->port_no));
         memcpy(pm->hw_addr, opm->hw_addr, ETH_ADDR_LEN);
         pm->config = ntohl(opm->config) & OFPPC10_ALL;
         pm->mask = ntohl(opm->mask) & OFPPC10_ALL;
@@ -3354,7 +3355,7 @@ ofputil_encode_port_mod(const struct ofputil_port_mod *pm,
 
         b = ofpraw_alloc(OFPRAW_OFPT10_PORT_MOD, ofp_version, 0);
         opm = ofpbuf_put_zeros(b, sizeof *opm);
-        opm->port_no = htons(pm->port_no);
+        opm->port_no = htons(ofp_to_u16(pm->port_no));
         memcpy(opm->hw_addr, pm->hw_addr, ETH_ADDR_LEN);
         opm->config = htonl(pm->config & OFPPC10_ALL);
         opm->mask = htonl(pm->mask & OFPPC10_ALL);
@@ -3690,7 +3691,7 @@ ofputil_decode_flow_monitor_request(struct ofputil_flow_monitor_request *rq,
 
     rq->id = ntohl(nfmr->id);
     rq->flags = flags;
-    rq->out_port = ntohs(nfmr->out_port);
+    rq->out_port = u16_to_ofp(ntohs(nfmr->out_port));
     rq->table_id = nfmr->table_id;
 
     return nx_pull_match(msg, ntohs(nfmr->match_len), &rq->match, NULL, NULL);
@@ -3715,7 +3716,7 @@ ofputil_append_flow_monitor_request(
     nfmr = ofpbuf_at_assert(msg, start_ofs, sizeof *nfmr);
     nfmr->id = htonl(rq->id);
     nfmr->flags = htons(rq->flags);
-    nfmr->out_port = htons(rq->out_port);
+    nfmr->out_port = htons(ofp_to_u16(rq->out_port));
     nfmr->match_len = htons(match_len);
     nfmr->table_id = rq->table_id;
 }
@@ -3923,7 +3924,7 @@ ofputil_encode_packet_out(const struct ofputil_packet_out *po,
 
         opo = msg->l3;
         opo->buffer_id = htonl(po->buffer_id);
-        opo->in_port = htons(po->in_port);
+        opo->in_port = htons(ofp_to_u16(po->in_port));
         opo->actions_len = htons(msg->size - actions_ofs);
         break;
     }
@@ -4042,22 +4043,22 @@ ofputil_frag_handling_from_string(const char *s, enum ofp_config_flags *flags)
  *
  * See the definition of OFP11_MAX for an explanation of the mapping. */
 enum ofperr
-ofputil_port_from_ofp11(ovs_be32 ofp11_port, uint16_t *ofp10_port)
+ofputil_port_from_ofp11(ovs_be32 ofp11_port, ofp_port_t *ofp10_port)
 {
     uint32_t ofp11_port_h = ntohl(ofp11_port);
 
-    if (ofp11_port_h < OFPP_MAX) {
-        *ofp10_port = ofp11_port_h;
+    if (ofp11_port_h < ofp_to_u16(OFPP_MAX)) {
+        *ofp10_port = u16_to_ofp(ofp11_port_h);
         return 0;
-    } else if (ofp11_port_h >= OFPP11_MAX) {
-        *ofp10_port = ofp11_port_h - OFPP11_OFFSET;
+    } else if (ofp11_port_h >= ofp11_to_u32(OFPP11_MAX)) {
+        *ofp10_port = u16_to_ofp(ofp11_port_h - OFPP11_OFFSET);
         return 0;
     } else {
         *ofp10_port = OFPP_NONE;
         VLOG_WARN_RL(&bad_ofmsg_rl, "port %"PRIu32" is outside the supported "
                      "range 0 through %d or 0x%"PRIx32" through 0x%"PRIx32,
-                     ofp11_port_h, OFPP_MAX - 1,
-                     (uint32_t) OFPP11_MAX, UINT32_MAX);
+                     ofp11_port_h, ofp_to_u16(OFPP_MAX) - 1,
+                     ofp11_to_u32(OFPP11_MAX), UINT32_MAX);
         return OFPERR_OFPBAC_BAD_OUT_PORT;
     }
 }
@@ -4067,18 +4068,18 @@ ofputil_port_from_ofp11(ovs_be32 ofp11_port, uint16_t *ofp10_port)
  *
  * See the definition of OFP11_MAX for an explanation of the mapping. */
 ovs_be32
-ofputil_port_to_ofp11(uint16_t ofp10_port)
+ofputil_port_to_ofp11(ofp_port_t ofp10_port)
 {
-    return htonl(ofp10_port < OFPP_MAX
-                 ? ofp10_port
-                 : ofp10_port + OFPP11_OFFSET);
+    return htonl(ofp_to_u16(ofp10_port) < ofp_to_u16(OFPP_MAX)
+                 ? ofp_to_u16(ofp10_port)
+                 : ofp_to_u16(ofp10_port) + OFPP11_OFFSET);
 }
 
 /* Checks that 'port' is a valid output port for the OFPAT10_OUTPUT action, given
  * that the switch will never have more than 'max_ports' ports.  Returns 0 if
  * 'port' is valid, otherwise an OpenFlow return code. */
 enum ofperr
-ofputil_check_output_port(uint16_t port, int max_ports)
+ofputil_check_output_port(ofp_port_t port, ofp_port_t max_ports)
 {
     switch (port) {
     case OFPP_IN_PORT:
@@ -4092,7 +4093,7 @@ ofputil_check_output_port(uint16_t port, int max_ports)
         return 0;
 
     default:
-        if (port < max_ports) {
+        if (ofp_to_u16(port) < ofp_to_u16(max_ports)) {
             return 0;
         }
         return OFPERR_OFPBAC_BAD_OUT_PORT;
@@ -4128,46 +4129,42 @@ ofputil_check_output_port(uint16_t port, int max_ports)
  * of OpenFlow 1.1+ port numbers, mapping those port numbers into the 16-bit
  * range as described in include/openflow/openflow-1.1.h. */
 bool
-ofputil_port_from_string(const char *s, uint16_t *portp)
+ofputil_port_from_string(const char *s, ofp_port_t *portp)
 {
-    unsigned int port32;
+    uint32_t port32;
 
     *portp = 0;
     if (str_to_uint(s, 10, &port32)) {
-        if (port32 < OFPP_MAX) {
-            *portp = port32;
-            return true;
-        } else if (port32 < OFPP_FIRST_RESV) {
+        if (port32 < ofp_to_u16(OFPP_MAX)) {
+            /* Pass. */
+        } else if (port32 < ofp_to_u16(OFPP_FIRST_RESV)) {
             VLOG_WARN("port %u is a reserved OF1.0 port number that will "
                       "be translated to %u when talking to an OF1.1 or "
                       "later controller", port32, port32 + OFPP11_OFFSET);
-            *portp = port32;
-            return true;
-        } else if (port32 <= OFPP_LAST_RESV) {
+        } else if (port32 <= ofp_to_u16(OFPP_LAST_RESV)) {
             struct ds msg;
 
             ds_init(&msg);
-            ofputil_format_port(port32, &msg);
+            ofputil_format_port(u16_to_ofp(port32), &msg);
             VLOG_WARN_ONCE("referring to port %s as %u is deprecated for "
                            "compatibility with future versions of OpenFlow",
                            ds_cstr(&msg), port32);
             ds_destroy(&msg);
-
-            *portp = port32;
-            return true;
-        } else if (port32 < OFPP11_MAX) {
+        } else if (port32 < ofp11_to_u32(OFPP11_MAX)) {
             VLOG_WARN("port %u is outside the supported range 0 through "
                       "%"PRIx16" or 0x%x through 0x%"PRIx32, port32,
-                      UINT16_MAX, (unsigned int) OFPP11_MAX, UINT32_MAX);
+                      UINT16_MAX, ofp11_to_u32(OFPP11_MAX), UINT32_MAX);
             return false;
         } else {
-            *portp = port32 - OFPP11_OFFSET;
-            return true;
+            port32 -= OFPP11_OFFSET;
         }
+
+        *portp = u16_to_ofp(port32);
+        return true;
     } else {
         struct pair {
             const char *name;
-            uint16_t value;
+            ofp_port_t value;
         };
         static const struct pair pairs[] = {
 #define OFPUTIL_NAMED_PORT(NAME) {#NAME, OFPP_##NAME},
@@ -4190,7 +4187,7 @@ ofputil_port_from_string(const char *s, uint16_t *portp)
  * Most ports' string representation is just the port number, but for special
  * ports, e.g. OFPP_LOCAL, it is the name, e.g. "LOCAL". */
 void
-ofputil_format_port(uint16_t port, struct ds *s)
+ofputil_format_port(ofp_port_t port, struct ds *s)
 {
     const char *name;
 
@@ -4531,7 +4528,7 @@ ofputil_parse_key_value(char **stringp, char **keyp, char **valuep)
  * will be for Open Flow version 'ofp_version'. Returns message
  * as a struct ofpbuf. Returns encoded message on success, NULL on error */
 struct ofpbuf *
-ofputil_encode_dump_ports_request(enum ofp_version ofp_version, uint16_t port)
+ofputil_encode_dump_ports_request(enum ofp_version ofp_version, ofp_port_t port)
 {
     struct ofpbuf *request;
 
@@ -4540,7 +4537,7 @@ ofputil_encode_dump_ports_request(enum ofp_version ofp_version, uint16_t port)
         struct ofp10_port_stats_request *req;
         request = ofpraw_alloc(OFPRAW_OFPST10_PORT_REQUEST, ofp_version, 0);
         req = ofpbuf_put_zeros(request, sizeof *req);
-        req->port_no = htons(port);
+        req->port_no = htons(ofp_to_u16(port));
         break;
     }
     case OFP11_VERSION:
@@ -4563,7 +4560,7 @@ static void
 ofputil_port_stats_to_ofp10(const struct ofputil_port_stats *ops,
                             struct ofp10_port_stats *ps10)
 {
-    ps10->port_no = htons(ops->port_no);
+    ps10->port_no = htons(ofp_to_u16(ops->port_no));
     memset(ps10->pad, 0, sizeof ps10->pad);
     put_32aligned_be64(&ps10->rx_packets, htonll(ops->stats.rx_packets));
     put_32aligned_be64(&ps10->tx_packets, htonll(ops->stats.tx_packets));
@@ -4647,7 +4644,7 @@ ofputil_port_stats_from_ofp10(struct ofputil_port_stats *ops,
 {
     memset(ops, 0, sizeof *ops);
 
-    ops->port_no = ntohs(ps10->port_no);
+    ops->port_no = u16_to_ofp(ntohs(ps10->port_no));
     ops->stats.rx_packets = ntohll(get_32aligned_be64(&ps10->rx_packets));
     ops->stats.tx_packets = ntohll(get_32aligned_be64(&ps10->tx_packets));
     ops->stats.rx_bytes = ntohll(get_32aligned_be64(&ps10->rx_bytes));
@@ -4787,7 +4784,7 @@ ofputil_decode_port_stats(struct ofputil_port_stats *ps, struct ofpbuf *msg)
  * Returns 0 if successful, otherwise an OFPERR_* number. */
 enum ofperr
 ofputil_decode_port_stats_request(const struct ofp_header *request,
-                                  uint16_t *ofp10_port)
+                                  ofp_port_t *ofp10_port)
 {
     switch ((enum ofp_version)request->version) {
     case OFP13_VERSION:
@@ -4799,7 +4796,7 @@ ofputil_decode_port_stats_request(const struct ofp_header *request,
 
     case OFP10_VERSION: {
         const struct ofp10_port_stats_request *psr10 = ofpmsg_body(request);
-        *ofp10_port = ntohs(psr10->port_no);
+        *ofp10_port = u16_to_ofp(ntohs(psr10->port_no));
         return 0;
     }
 
@@ -4826,7 +4823,7 @@ ofputil_decode_queue_stats_request(const struct ofp_header *request,
     case OFP10_VERSION: {
         const struct ofp10_queue_stats_request *qsr10 = ofpmsg_body(request);
         oqsr->queue_id = ntohl(qsr10->queue_id);
-        oqsr->port_no = ntohs(qsr10->port_no);
+        oqsr->port_no = u16_to_ofp(ntohs(qsr10->port_no));
         /* OF 1.0 uses OFPP_ALL for OFPP_ANY */
         if (oqsr->port_no == OFPP_ALL) {
             oqsr->port_no = OFPP_ANY;
@@ -4864,8 +4861,8 @@ ofputil_encode_queue_stats_request(enum ofp_version ofp_version,
         request = ofpraw_alloc(OFPRAW_OFPST10_QUEUE_REQUEST, ofp_version, 0);
         req = ofpbuf_put_zeros(request, sizeof *req);
         /* OpenFlow 1.0 needs OFPP_ALL instead of OFPP_ANY */
-        req->port_no = htons(oqsr->port_no == OFPP_ANY
-                             ? OFPP_ALL : oqsr->port_no);
+        req->port_no = htons(ofp_to_u16(oqsr->port_no == OFPP_ANY
+                                        ? OFPP_ALL : oqsr->port_no));
         req->queue_id = htonl(oqsr->queue_id);
         break;
     }
@@ -4895,7 +4892,7 @@ static enum ofperr
 ofputil_queue_stats_from_ofp10(struct ofputil_queue_stats *oqs,
                                const struct ofp10_queue_stats *qs10)
 {
-    oqs->port_no = ntohs(qs10->port_no);
+    oqs->port_no = u16_to_ofp(ntohs(qs10->port_no));
     oqs->queue_id = ntohl(qs10->queue_id);
     oqs->stats.tx_bytes = ntohll(get_32aligned_be64(&qs10->tx_bytes));
     oqs->stats.tx_packets = ntohll(get_32aligned_be64(&qs10->tx_packets));
@@ -5000,7 +4997,7 @@ static void
 ofputil_queue_stats_to_ofp10(const struct ofputil_queue_stats *oqs,
                              struct ofp10_queue_stats *qs10)
 {
-    qs10->port_no = htons(oqs->port_no);
+    qs10->port_no = htons(ofp_to_u16(oqs->port_no));
     memset(qs10->pad, 0, sizeof qs10->pad);
     qs10->queue_id = htonl(oqs->queue_id);
     put_32aligned_be64(&qs10->tx_bytes, htonll(oqs->stats.tx_bytes));

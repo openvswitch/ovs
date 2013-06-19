@@ -31,15 +31,15 @@
 struct ofport;
 struct tnl_port;
 
-bool tnl_port_reconfigure(const struct ofport *, uint32_t odp_port,
+bool tnl_port_reconfigure(const struct ofport *, odp_port_t odp_port,
                           struct tnl_port **);
 
-struct tnl_port *tnl_port_add(const struct ofport *, uint32_t odp_port);
+struct tnl_port *tnl_port_add(const struct ofport *, odp_port_t odp_port);
 void tnl_port_del(struct tnl_port *);
 
 const struct ofport *tnl_port_receive(const struct flow *);
-uint32_t tnl_port_send(const struct tnl_port *, struct flow *,
-                       struct flow_wildcards *wc);
+odp_port_t tnl_port_send(const struct tnl_port *, struct flow *,
+                         struct flow_wildcards *wc);
 
 /* Returns true if 'flow' should be submitted to tnl_port_receive(). */
 static inline bool

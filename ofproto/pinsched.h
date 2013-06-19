@@ -18,6 +18,7 @@
 #define PINSCHED_H_H 1
 
 #include <stdint.h>
+#include "flow.h"
 
 struct ofpbuf;
 
@@ -27,7 +28,7 @@ void pinsched_get_limits(const struct pinsched *,
                          int *rate_limit, int *burst_limit);
 void pinsched_set_limits(struct pinsched *, int rate_limit, int burst_limit);
 void pinsched_destroy(struct pinsched *);
-void pinsched_send(struct pinsched *, uint16_t port_no, struct ofpbuf *,
+void pinsched_send(struct pinsched *, ofp_port_t port_no, struct ofpbuf *,
                    pinsched_tx_cb *, void *aux);
 void pinsched_run(struct pinsched *, pinsched_tx_cb *, void *aux);
 void pinsched_wait(struct pinsched *);

@@ -125,7 +125,7 @@ void ofconn_send_error(const struct ofconn *, const struct ofp_header *request,
                        enum ofperr);
 
 enum ofperr ofconn_pktbuf_retrieve(struct ofconn *, uint32_t id,
-                                   struct ofpbuf **bufferp, uint16_t *in_port);
+                                   struct ofpbuf **bufferp, ofp_port_t *in_port);
 
 bool ofconn_has_pending_opgroups(const struct ofconn *);
 void ofconn_add_opgroup(struct ofconn *, struct list *);
@@ -157,7 +157,7 @@ void connmgr_set_in_band_queue(struct connmgr *, int queue_id);
 
 /* In-band implementation. */
 bool connmgr_must_output_local(struct connmgr *, const struct flow *,
-                               uint32_t local_odp_port,
+                               odp_port_t local_odp_port,
                                const struct nlattr *odp_actions,
                                size_t actions_len);
 
@@ -173,7 +173,7 @@ struct ofmonitor {
     enum nx_flow_monitor_flags flags;
 
     /* Matching. */
-    uint16_t out_port;
+    ofp_port_t out_port;
     uint8_t table_id;
     struct minimatch match;
 };

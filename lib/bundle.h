@@ -35,13 +35,13 @@ struct ofpbuf;
  *
  * See include/openflow/nicira-ext.h for NXAST_BUNDLE specification. */
 
-uint16_t bundle_execute(const struct ofpact_bundle *, const struct flow *,
+ofp_port_t bundle_execute(const struct ofpact_bundle *, const struct flow *,
                         struct flow_wildcards *wc,
-                        bool (*slave_enabled)(uint16_t ofp_port, void *aux),
+                        bool (*slave_enabled)(ofp_port_t ofp_port, void *aux),
                         void *aux);
 enum ofperr bundle_from_openflow(const struct nx_action_bundle *,
                                  struct ofpbuf *ofpact);
-enum ofperr bundle_check(const struct ofpact_bundle *, int max_ports,
+enum ofperr bundle_check(const struct ofpact_bundle *, ofp_port_t max_ports,
                          const struct flow *);
 void bundle_to_nxast(const struct ofpact_bundle *, struct ofpbuf *of10);
 void bundle_parse(const char *, struct ofpbuf *ofpacts);

@@ -21,6 +21,7 @@
 #include <stddef.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include "flow.h"
 
 struct flow;
 struct in_band;
@@ -39,7 +40,7 @@ void in_band_set_remotes(struct in_band *,
 bool in_band_run(struct in_band *);
 void in_band_wait(struct in_band *);
 
-bool in_band_rule_check(const struct flow *, uint32_t local_odp_port,
+bool in_band_rule_check(const struct flow *, odp_port_t local_odp_port,
                         const struct nlattr *odp_actions, size_t actions_len);
 
 #endif /* in-band.h */

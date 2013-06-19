@@ -28,28 +28,22 @@
  * 0xff00...0xfff7  "reserved" but not assigned a meaning by OpenFlow 1.0
  * 0xfff8...0xffff  "reserved" OFPP_* ports with assigned meanings
  */
-enum ofp_port {
-    /* Ranges. */
-    OFPP_MAX        = 0xff00,   /* Maximum number of physical switch ports. */
-    OFPP_FIRST_RESV = 0xfff8,   /* First assigned reserved port number. */
-    OFPP_LAST_RESV  = 0xffff,   /* Last assigned reserved port number. */
 
-    /* Reserved output "ports". */
-    OFPP_IN_PORT    = 0xfff8,  /* Send the packet out the input port.  This
-                                  virtual port must be explicitly used
-                                  in order to send back out of the input
-                                  port. */
-    OFPP_TABLE      = 0xfff9,  /* Perform actions in flow table.
-                                  NB: This can only be the destination
-                                  port for packet-out messages. */
-    OFPP_NORMAL     = 0xfffa,  /* Process with normal L2/L3 switching. */
-    OFPP_FLOOD      = 0xfffb,  /* All physical ports except input port and
-                                  those disabled by STP. */
-    OFPP_ALL        = 0xfffc,  /* All physical ports except input port. */
-    OFPP_CONTROLLER = 0xfffd,  /* Send to controller. */
-    OFPP_LOCAL      = 0xfffe,  /* Local openflow "port". */
-    OFPP_NONE       = 0xffff   /* Not associated with a physical port. */
-};
+/* Ranges. */
+#define OFPP_MAX        OFP_PORT_C(0xff00) /* Max # of switch ports. */
+#define OFPP_FIRST_RESV OFP_PORT_C(0xfff8) /* First assigned reserved port. */
+#define OFPP_LAST_RESV  OFP_PORT_C(0xffff) /* Last assigned reserved port. */
+
+/* Reserved output "ports". */
+#define OFPP_IN_PORT    OFP_PORT_C(0xfff8) /* Where the packet came in. */
+#define OFPP_TABLE      OFP_PORT_C(0xfff9) /* Perform actions in flow table. */
+#define OFPP_NORMAL     OFP_PORT_C(0xfffa) /* Process with normal L2/L3. */
+#define OFPP_FLOOD      OFP_PORT_C(0xfffb) /* All ports except input port and
+                                            * ports disabled by STP. */
+#define OFPP_ALL        OFP_PORT_C(0xfffc) /* All ports except input port. */
+#define OFPP_CONTROLLER OFP_PORT_C(0xfffd) /* Send to controller. */
+#define OFPP_LOCAL      OFP_PORT_C(0xfffe) /* Local openflow "port". */
+#define OFPP_NONE       OFP_PORT_C(0xffff) /* Not associated with any port. */
 
 /* OpenFlow 1.0 specific capabilities supported by the datapath (struct
  * ofp_switch_features, member capabilities). */

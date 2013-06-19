@@ -698,7 +698,7 @@ mf_is_all_wild(const struct mf_field *mf, const struct flow_wildcards *wc)
         return !wc->masks.metadata;
     case MFF_IN_PORT:
     case MFF_IN_PORT_OXM:
-        return !wc->masks.in_port;
+        return !wc->masks.in_port.ofp_port;
     case MFF_SKB_PRIORITY:
         return !wc->masks.skb_priority;
     case MFF_SKB_MARK:
@@ -937,7 +937,7 @@ mf_is_value_valid(const struct mf_field *mf, const union mf_value *value)
         return true;
 
     case MFF_IN_PORT_OXM: {
-        uint16_t port;
+        ofp_port_t port;
         return !ofputil_port_from_ofp11(value->be32, &port);
     }
 
@@ -1011,11 +1011,10 @@ mf_get_value(const struct mf_field *mf, const struct flow *flow,
         break;
 
     case MFF_IN_PORT:
-        value->be16 = htons(flow->in_port);
+        value->be16 = htons(ofp_to_u16(flow->in_port.ofp_port));
         break;
-
     case MFF_IN_PORT_OXM:
-        value->be32 = ofputil_port_to_ofp11(flow->in_port);
+        value->be32 = ofputil_port_to_ofp11(flow->in_port.ofp_port);
         break;
 
     case MFF_SKB_PRIORITY:
@@ -1198,11 +1197,11 @@ mf_set_value(const struct mf_field *mf,
         break;
 
     case MFF_IN_PORT:
-        match_set_in_port(match, ntohs(value->be16));
+        match_set_in_port(match, u16_to_ofp(ntohs(value->be16)));
         break;
 
     case MFF_IN_PORT_OXM: {
-        uint16_t port;
+        ofp_port_t port;
         ofputil_port_from_ofp11(value->be32, &port);
         match_set_in_port(match, port);
         break;
@@ -1387,13 +1386,13 @@ mf_set_flow_value(const struct mf_field *mf,
         break;
 
     case MFF_IN_PORT:
-        flow->in_port = ntohs(value->be16);
+        flow->in_port.ofp_port = u16_to_ofp(ntohs(value->be16));
         break;
 
     case MFF_IN_PORT_OXM: {
-        uint16_t port;
+        ofp_port_t port;
         ofputil_port_from_ofp11(value->be32, &port);
-        flow->in_port = port;
+        flow->in_port.ofp_port = port;
         break;
     }
 
@@ -1594,8 +1593,8 @@ mf_set_wild(const struct mf_field *mf, struct match *match)
 
     case MFF_IN_PORT:
     case MFF_IN_PORT_OXM:
-        match->flow.in_port = 0;
-        match->wc.masks.in_port = 0;
+        match->flow.in_port.ofp_port = 0;
+        match->wc.masks.in_port.ofp_port = 0;
         break;
 
     case MFF_SKB_PRIORITY:
@@ -2012,7 +2011,7 @@ mf_random_value(const struct mf_field *mf, union mf_value *value)
         break;
 
     case MFF_IN_PORT_OXM:
-        value->be32 = ofputil_port_to_ofp11(ntohs(value->be16));
+        value->be32 = ofputil_port_to_ofp11(u16_to_ofp(ntohs(value->be16)));
         break;
 
     case MFF_IPV6_LABEL:
@@ -2203,12 +2202,12 @@ static char *
 mf_from_ofp_port_string(const struct mf_field *mf, const char *s,
                         ovs_be16 *valuep, ovs_be16 *maskp)
 {
-    uint16_t port;
+    ofp_port_t port;
 
     ovs_assert(mf->n_bytes == sizeof(ovs_be16));
 
     if (ofputil_port_from_string(s, &port)) {
-        *valuep = htons(port);
+        *valuep = htons(ofp_to_u16(port));
         *maskp = htons(UINT16_MAX);
         return NULL;
     }
@@ -2219,7 +2218,7 @@ static char *
 mf_from_ofp_port_string32(const struct mf_field *mf, const char *s,
                           ovs_be32 *valuep, ovs_be32 *maskp)
 {
-    uint16_t port;
+    ofp_port_t port;
 
     ovs_assert(mf->n_bytes == sizeof(ovs_be32));
     if (ofputil_port_from_string(s, &port)) {
@@ -2475,7 +2474,7 @@ mf_format(const struct mf_field *mf,
     switch (mf->string) {
     case MFS_OFP_PORT_OXM:
         if (!mask) {
-            uint16_t port;
+            ofp_port_t port;
             ofputil_port_from_ofp11(value->be32, &port);
             ofputil_format_port(port, s);
             break;
@@ -2483,7 +2482,7 @@ mf_format(const struct mf_field *mf,
         /* fall through */
     case MFS_OFP_PORT:
         if (!mask) {
-            ofputil_format_port(ntohs(value->be16), s);
+            ofputil_format_port(u16_to_ofp(ntohs(value->be16)), s);
             break;
         }
         /* fall through */

@@ -32,12 +32,14 @@
 struct ofpbuf;
 
 /* Port numbers. */
-enum ofperr ofputil_port_from_ofp11(ovs_be32 ofp11_port, uint16_t *ofp10_port);
-ovs_be32 ofputil_port_to_ofp11(uint16_t ofp10_port);
+enum ofperr ofputil_port_from_ofp11(ovs_be32 ofp11_port,
+                                    ofp_port_t *ofp10_port);
+ovs_be32 ofputil_port_to_ofp11(ofp_port_t ofp10_port);
 
-enum ofperr ofputil_check_output_port(uint16_t ofp_port, int max_ports);
-bool ofputil_port_from_string(const char *, uint16_t *portp);
-void ofputil_format_port(uint16_t port, struct ds *);
+enum ofperr ofputil_check_output_port(ofp_port_t ofp_port,
+                                      ofp_port_t max_ports);
+bool ofputil_port_from_string(const char *, ofp_port_t *portp);
+void ofputil_format_port(ofp_port_t port, struct ds *);
 
 /* Converting OFPFW10_NW_SRC_MASK and OFPFW10_NW_DST_MASK wildcard bit counts
  * to and from IP bitmasks. */
@@ -219,7 +221,7 @@ struct ofputil_flow_mod {
     uint16_t idle_timeout;
     uint16_t hard_timeout;
     uint32_t buffer_id;
-    uint16_t out_port;
+    ofp_port_t out_port;
     uint16_t flags;
     struct ofpact *ofpacts;     /* Series of "struct ofpact"s. */
     size_t ofpacts_len;         /* Length of ofpacts, in bytes. */
@@ -241,7 +243,7 @@ struct ofputil_flow_stats_request {
     struct match match;
     ovs_be64 cookie;
     ovs_be64 cookie_mask;
-    uint16_t out_port;
+    ofp_port_t out_port;
     uint8_t table_id;
 };
 
@@ -350,7 +352,7 @@ struct ofputil_packet_out {
     const void *packet;         /* Packet data, if buffer_id == UINT32_MAX. */
     size_t packet_len;          /* Length of packet data in bytes. */
     uint32_t buffer_id;         /* Buffer id or UINT32_MAX if no buffer. */
-    uint16_t in_port;           /* Packet's input port. */
+    ofp_port_t in_port;         /* Packet's input port. */
     struct ofpact *ofpacts;     /* Actions. */
     size_t ofpacts_len;         /* Size of ofpacts in bytes. */
 };
@@ -390,7 +392,7 @@ enum ofputil_port_state {
 
 /* Abstract ofp10_phy_port or ofp11_port. */
 struct ofputil_phy_port {
-    uint16_t port_no;
+    ofp_port_t port_no;
     uint8_t hw_addr[OFP_ETH_ALEN];
     char name[OFP_MAX_PORT_NAME_LEN];
     enum ofputil_port_config config;
@@ -498,7 +500,7 @@ struct ofpbuf *ofputil_encode_port_status(const struct ofputil_port_status *,
 
 /* Abstract ofp_port_mod. */
 struct ofputil_port_mod {
-    uint16_t port_no;
+    ofp_port_t port_no;
     uint8_t hw_addr[OFP_ETH_ALEN];
     enum ofputil_port_config config;
     enum ofputil_port_config mask;
@@ -535,7 +537,7 @@ struct ofpbuf *ofputil_encode_table_stats_reply(
 struct ofputil_flow_monitor_request {
     uint32_t id;
     enum nx_flow_monitor_flags flags;
-    uint16_t out_port;
+    ofp_port_t out_port;
     uint8_t table_id;
     struct match match;
 };
@@ -677,7 +679,7 @@ void *ofputil_put_action(enum ofputil_action_code, struct ofpbuf *buf);
 #define OFP_ACTION_ALIGN 8      /* Alignment of ofp_actions. */
 
 enum ofperr validate_actions(const union ofp_action *, size_t n_actions,
-                             const struct flow *, int max_ports);
+                             const struct flow *, ofp_port_t max_ports);
 bool action_outputs_to_port(const union ofp_action *, ovs_be16 port);
 
 enum ofperr ofputil_pull_actions(struct ofpbuf *, unsigned int actions_len,
@@ -691,23 +693,23 @@ union ofp_action *ofputil_actions_clone(const union ofp_action *, size_t n);
 bool ofputil_parse_key_value(char **stringp, char **keyp, char **valuep);
 
 struct ofputil_port_stats {
-    uint16_t port_no;
+    ofp_port_t port_no;
     struct netdev_stats stats;
     uint32_t duration_sec;      /* UINT32_MAX if unknown. */
     uint32_t duration_nsec;
 };
 
 struct ofpbuf *ofputil_encode_dump_ports_request(enum ofp_version ofp_version,
-                                                 uint16_t port);
+                                                 ofp_port_t port);
 void ofputil_append_port_stat(struct list *replies,
                               const struct ofputil_port_stats *ops);
 size_t ofputil_count_port_stats(const struct ofp_header *);
 int ofputil_decode_port_stats(struct ofputil_port_stats *, struct ofpbuf *msg);
 enum ofperr ofputil_decode_port_stats_request(const struct ofp_header *request,
-                                              uint16_t *ofp10_port);
+                                              ofp_port_t *ofp10_port);
 
 struct ofputil_queue_stats_request {
-    uint16_t port_no;           /* OFPP_ANY means "all ports". */
+    ofp_port_t port_no;           /* OFPP_ANY means "all ports". */
     uint32_t queue_id;
 };
 
@@ -719,7 +721,7 @@ ofputil_encode_queue_stats_request(enum ofp_version ofp_version,
                                    const struct ofputil_queue_stats_request *oqsr);
 
 struct ofputil_queue_stats {
-    uint16_t port_no;
+    ofp_port_t port_no;
     uint32_t queue_id;
     struct netdev_queue_stats stats;
 };

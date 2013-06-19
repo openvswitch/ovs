@@ -42,7 +42,7 @@ output_from_openflow10(const struct ofp10_action_output *oao,
     struct ofpact_output *output;
 
     output = ofpact_put_OUTPUT(out);
-    output->port = ntohs(oao->port);
+    output->port = u16_to_ofp(ntohs(oao->port));
     output->max_len = ntohs(oao->max_len);
 
     return ofputil_check_output_port(output->port, OFPP_MAX);
@@ -55,9 +55,10 @@ enqueue_from_openflow10(const struct ofp10_action_enqueue *oae,
     struct ofpact_enqueue *enqueue;
 
     enqueue = ofpact_put_ENQUEUE(out);
-    enqueue->port = ntohs(oae->port);
+    enqueue->port = u16_to_ofp(ntohs(oae->port));
     enqueue->queue = ntohl(oae->queue_id);
-    if (enqueue->port >= OFPP_MAX && enqueue->port != OFPP_IN_PORT
+    if (ofp_to_u16(enqueue->port) >= ofp_to_u16(OFPP_MAX)
+        && enqueue->port != OFPP_IN_PORT
         && enqueue->port != OFPP_LOCAL) {
         return OFPERR_OFPBAC_BAD_OUT_PORT;
     }
@@ -72,7 +73,7 @@ resubmit_from_openflow(const struct nx_action_resubmit *nar,
 
     resubmit = ofpact_put_RESUBMIT(out);
     resubmit->ofpact.compat = OFPUTIL_NXAST_RESUBMIT;
-    resubmit->in_port = ntohs(nar->in_port);
+    resubmit->in_port = u16_to_ofp(ntohs(nar->in_port));
     resubmit->table_id = 0xff;
 }
 
@@ -88,7 +89,7 @@ resubmit_table_from_openflow(const struct nx_action_resubmit *nar,
 
     resubmit = ofpact_put_RESUBMIT(out);
     resubmit->ofpact.compat = OFPUTIL_NXAST_RESUBMIT_TABLE;
-    resubmit->in_port = ntohs(nar->in_port);
+    resubmit->in_port = u16_to_ofp(ntohs(nar->in_port));
     resubmit->table_id = nar->table;
     return 0;
 }
@@ -1142,8 +1143,8 @@ exit:
 }
 
 static enum ofperr
-ofpact_check__(const struct ofpact *a, const struct flow *flow, int max_ports,
-               ovs_be16 *dl_type)
+ofpact_check__(const struct ofpact *a, const struct flow *flow,
+               ofp_port_t max_ports, ovs_be16 *dl_type)
 {
     const struct ofpact_enqueue *enqueue;
 
@@ -1157,7 +1158,8 @@ ofpact_check__(const struct ofpact *a, const struct flow *flow, int max_ports,
 
     case OFPACT_ENQUEUE:
         enqueue = ofpact_get_ENQUEUE(a);
-        if (enqueue->port >= max_ports && enqueue->port != OFPP_IN_PORT
+        if (ofp_to_u16(enqueue->port) >= ofp_to_u16(max_ports)
+            && enqueue->port != OFPP_IN_PORT
             && enqueue->port != OFPP_LOCAL) {
             return OFPERR_OFPBAC_BAD_OUT_PORT;
         }
@@ -1240,7 +1242,7 @@ ofpact_check__(const struct ofpact *a, const struct flow *flow, int max_ports,
  * switch with no more than 'max_ports' ports. */
 enum ofperr
 ofpacts_check(const struct ofpact ofpacts[], size_t ofpacts_len,
-              const struct flow *flow, int max_ports)
+              const struct flow *flow, ofp_port_t max_ports)
 {
     const struct ofpact *a;
     ovs_be16 dl_type = flow->dl_type;
@@ -1339,7 +1341,7 @@ ofpact_resubmit_to_nxast(const struct ofpact_resubmit *resubmit,
         nar = ofputil_put_NXAST_RESUBMIT_TABLE(out);
         nar->table = resubmit->table_id;
     }
-    nar->in_port = htons(resubmit->in_port);
+    nar->in_port = htons(ofp_to_u16(resubmit->in_port));
 }
 
 static void
@@ -1574,7 +1576,7 @@ ofpact_output_to_openflow10(const struct ofpact_output *output,
     struct ofp10_action_output *oao;
 
     oao = ofputil_put_OFPAT10_OUTPUT(out);
-    oao->port = htons(output->port);
+    oao->port = htons(ofp_to_u16(output->port));
     oao->max_len = htons(output->max_len);
 }
 
@@ -1585,7 +1587,7 @@ ofpact_enqueue_to_openflow10(const struct ofpact_enqueue *enqueue,
     struct ofp10_action_enqueue *oae;
 
     oae = ofputil_put_OFPAT10_ENQUEUE(out);
-    oae->port = htons(enqueue->port);
+    oae->port = htons(ofp_to_u16(enqueue->port));
     oae->queue_id = htonl(enqueue->queue);
 }
 
@@ -1929,7 +1931,7 @@ ofpacts_put_openflow11_instructions(const struct ofpact ofpacts[],
 
 /* Returns true if 'action' outputs to 'port', false otherwise. */
 static bool
-ofpact_outputs_to_port(const struct ofpact *ofpact, uint16_t port)
+ofpact_outputs_to_port(const struct ofpact *ofpact, ofp_port_t port)
 {
     switch (ofpact->type) {
     case OFPACT_OUTPUT:
@@ -1983,7 +1985,7 @@ ofpact_outputs_to_port(const struct ofpact *ofpact, uint16_t port)
  * to 'port', false otherwise. */
 bool
 ofpacts_output_to_port(const struct ofpact *ofpacts, size_t ofpacts_len,
-                       uint16_t port)
+                       ofp_port_t port)
 {
     const struct ofpact *a;
 
@@ -2064,12 +2066,12 @@ ofpact_format(const struct ofpact *a, struct ds *s)
     const struct ofpact_metadata *metadata;
     const struct ofpact_tunnel *tunnel;
     const struct ofpact_sample *sample;
-    uint16_t port;
+    ofp_port_t port;
 
     switch (a->type) {
     case OFPACT_OUTPUT:
         port = ofpact_get_OUTPUT(a)->port;
-        if (port < OFPP_MAX) {
+        if (ofp_to_u16(port) < ofp_to_u16(OFPP_MAX)) {
             ds_put_format(s, "output:%"PRIu16, port);
         } else {
             ofputil_format_port(port, s);

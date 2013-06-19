@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -48,7 +48,7 @@ VLOG_DEFINE_THIS_MODULE(learning_switch);
 
 struct lswitch_port {
     struct hmap_node hmap_node; /* Hash node for port number. */
-    uint16_t port_no;           /* OpenFlow port number, in host byte order. */
+    ofp_port_t port_no;         /* OpenFlow port number. */
     uint32_t queue_id;          /* OpenFlow queue number. */
 };
 
@@ -460,26 +460,27 @@ process_switch_features(struct lswitch *sw, struct ofp_header *oh)
         if (lp && hmap_node_is_null(&lp->hmap_node)) {
             lp->port_no = port.port_no;
             hmap_insert(&sw->queue_numbers, &lp->hmap_node,
-                        hash_int(lp->port_no, 0));
+                        hash_int(ofp_to_u16(lp->port_no), 0));
         }
     }
     return 0;
 }
 
-static uint16_t
+static ofp_port_t
 lswitch_choose_destination(struct lswitch *sw, const struct flow *flow)
 {
-    uint16_t out_port;
+    ofp_port_t out_port;
 
     /* Learn the source MAC. */
     if (mac_learning_may_learn(sw->ml, flow->dl_src, 0)) {
         struct mac_entry *mac = mac_learning_insert(sw->ml, flow->dl_src, 0);
-        if (mac_entry_is_new(mac) || mac->port.ofp_port != flow->in_port) {
+        if (mac_entry_is_new(mac)
+            || mac->port.ofp_port != flow->in_port.ofp_port) {
             VLOG_DBG_RL(&rl, "%016llx: learned that "ETH_ADDR_FMT" is on "
                         "port %"PRIu16, sw->datapath_id,
-                        ETH_ADDR_ARGS(flow->dl_src), flow->in_port);
+                        ETH_ADDR_ARGS(flow->dl_src), flow->in_port.ofp_port);
 
-            mac->port.ofp_port = flow->in_port;
+            mac->port.ofp_port = flow->in_port.ofp_port;
             mac_learning_changed(sw->ml, mac);
         }
     }
@@ -496,7 +497,7 @@ lswitch_choose_destination(struct lswitch *sw, const struct flow *flow)
         mac = mac_learning_lookup(sw->ml, flow->dl_dst, 0, NULL);
         if (mac) {
             out_port = mac->port.ofp_port;
-            if (out_port == flow->in_port) {
+            if (out_port == flow->in_port.ofp_port) {
                 /* Don't send a packet back out its input port. */
                 return OFPP_NONE;
             }
@@ -512,11 +513,11 @@ lswitch_choose_destination(struct lswitch *sw, const struct flow *flow)
 }
 
 static uint32_t
-get_queue_id(const struct lswitch *sw, uint16_t in_port)
+get_queue_id(const struct lswitch *sw, ofp_port_t in_port)
 {
     const struct lswitch_port *port;
 
-    HMAP_FOR_EACH_WITH_HASH (port, hmap_node, hash_int(in_port, 0),
+    HMAP_FOR_EACH_WITH_HASH (port, hmap_node, hash_int(ofp_to_u16(in_port), 0),
                              &sw->queue_numbers) {
         if (port->port_no == in_port) {
             return port->queue_id;
@@ -531,7 +532,7 @@ process_packet_in(struct lswitch *sw, const struct ofp_header *oh)
 {
     struct ofputil_packet_in pi;
     uint32_t queue_id;
-    uint16_t out_port;
+    ofp_port_t out_port;
 
     uint64_t ofpacts_stub[64 / 8];
     struct ofpbuf ofpacts;
@@ -541,6 +542,7 @@ process_packet_in(struct lswitch *sw, const struct ofp_header *oh)
 
     struct ofpbuf pkt;
     struct flow flow;
+    union flow_in_port in_port_;
 
     error = ofputil_decode_packet_in(&pi, oh);
     if (error) {
@@ -558,7 +560,8 @@ process_packet_in(struct lswitch *sw, const struct ofp_header *oh)
 
     /* Extract flow data from 'opi' into 'flow'. */
     ofpbuf_use_const(&pkt, pi.packet, pi.packet_len);
-    flow_extract(&pkt, 0, 0, NULL, pi.fmd.in_port, &flow);
+    in_port_.ofp_port = pi.fmd.in_port;
+    flow_extract(&pkt, 0, 0, NULL, &in_port_, &flow);
     flow.tunnel.tun_id = pi.fmd.tun_id;
 
     /* Choose output port. */
@@ -569,7 +572,8 @@ process_packet_in(struct lswitch *sw, const struct ofp_header *oh)
     ofpbuf_use_stack(&ofpacts, ofpacts_stub, sizeof ofpacts_stub);
     if (out_port == OFPP_NONE) {
         /* No actions. */
-    } else if (queue_id == UINT32_MAX || out_port >= OFPP_MAX) {
+    } else if (queue_id == UINT32_MAX
+               || ofp_to_u16(out_port) >= ofp_to_u16(OFPP_MAX)) {
         ofpact_put_OUTPUT(&ofpacts)->port = out_port;
     } else {
         struct ofpact_enqueue *enqueue = ofpact_put_ENQUEUE(&ofpacts);

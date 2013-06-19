@@ -377,8 +377,8 @@ int dpif_get_dp_stats(const struct dpif *, struct dpif_dp_stats *);
 
 const char *dpif_port_open_type(const char *datapath_type,
                                 const char *port_type);
-int dpif_port_add(struct dpif *, struct netdev *, uint32_t *port_nop);
-int dpif_port_del(struct dpif *, uint32_t port_no);
+int dpif_port_add(struct dpif *, struct netdev *, odp_port_t *port_nop);
+int dpif_port_del(struct dpif *, odp_port_t port_no);
 
 /* A port within a datapath.
  *
@@ -386,19 +386,19 @@ int dpif_port_del(struct dpif *, uint32_t port_no);
 struct dpif_port {
     char *name;                 /* Network device name, e.g. "eth0". */
     char *type;                 /* Network device type, e.g. "system". */
-    uint32_t port_no;           /* Port number within datapath. */
+    odp_port_t port_no;         /* Port number within datapath. */
 };
 void dpif_port_clone(struct dpif_port *, const struct dpif_port *);
 void dpif_port_destroy(struct dpif_port *);
 bool dpif_port_exists(const struct dpif *dpif, const char *devname);
-int dpif_port_query_by_number(const struct dpif *, uint32_t port_no,
+int dpif_port_query_by_number(const struct dpif *, odp_port_t port_no,
                               struct dpif_port *);
 int dpif_port_query_by_name(const struct dpif *, const char *devname,
                             struct dpif_port *);
-int dpif_port_get_name(struct dpif *, uint32_t port_no,
+int dpif_port_get_name(struct dpif *, odp_port_t port_no,
                        char *name, size_t name_size);
-int dpif_get_max_ports(const struct dpif *);
-uint32_t dpif_port_get_pid(const struct dpif *, uint32_t port_no);
+odp_port_t dpif_get_max_ports(const struct dpif *);
+uint32_t dpif_port_get_pid(const struct dpif *, odp_port_t port_no);
 
 struct dpif_port_dump {
     const struct dpif *dpif;

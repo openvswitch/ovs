@@ -35,14 +35,14 @@
 
 VLOG_DEFINE_THIS_MODULE(bundle);
 
-static uint16_t
+static ofp_port_t
 execute_ab(const struct ofpact_bundle *bundle,
-           bool (*slave_enabled)(uint16_t ofp_port, void *aux), void *aux)
+           bool (*slave_enabled)(ofp_port_t ofp_port, void *aux), void *aux)
 {
     size_t i;
 
     for (i = 0; i < bundle->n_slaves; i++) {
-        uint16_t slave = bundle->slaves[i];
+        ofp_port_t slave = bundle->slaves[i];
         if (slave_enabled(slave, aux)) {
             return slave;
         }
@@ -51,10 +51,10 @@ execute_ab(const struct ofpact_bundle *bundle,
     return OFPP_NONE;
 }
 
-static uint16_t
+static ofp_port_t
 execute_hrw(const struct ofpact_bundle *bundle,
             const struct flow *flow, struct flow_wildcards *wc,
-            bool (*slave_enabled)(uint16_t ofp_port, void *aux), void *aux)
+            bool (*slave_enabled)(ofp_port_t ofp_port, void *aux), void *aux)
 {
     uint32_t flow_hash, best_hash;
     int best, i;
@@ -85,10 +85,11 @@ execute_hrw(const struct ofpact_bundle *bundle,
  * calculate the result.  Uses 'slave_enabled' to determine if the slave
  * designated by 'ofp_port' is up.  Returns the chosen slave, or
  * OFPP_NONE if none of the slaves are acceptable. */
-uint16_t
+ofp_port_t
 bundle_execute(const struct ofpact_bundle *bundle,
                const struct flow *flow, struct flow_wildcards *wc,
-               bool (*slave_enabled)(uint16_t ofp_port, void *aux), void *aux)
+               bool (*slave_enabled)(ofp_port_t ofp_port, void *aux),
+               void *aux)
 {
     switch (bundle->algorithm) {
     case NX_BD_ALG_HRW:
@@ -186,7 +187,7 @@ bundle_from_openflow(const struct nx_action_bundle *nab,
 }
 
 enum ofperr
-bundle_check(const struct ofpact_bundle *bundle, int max_ports,
+bundle_check(const struct ofpact_bundle *bundle, ofp_port_t max_ports,
              const struct flow *flow)
 {
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
@@ -200,7 +201,7 @@ bundle_check(const struct ofpact_bundle *bundle, int max_ports,
     }
 
     for (i = 0; i < bundle->n_slaves; i++) {
-        uint16_t ofp_port = bundle->slaves[i];
+        ofp_port_t ofp_port = bundle->slaves[i];
         enum ofperr error;
 
         error = ofputil_check_output_port(ofp_port, max_ports);
@@ -246,7 +247,7 @@ bundle_to_nxast(const struct ofpact_bundle *bundle, struct ofpbuf *openflow)
 
     slaves = ofpbuf_put_zeros(openflow, slaves_len);
     for (i = 0; i < bundle->n_slaves; i++) {
-        slaves[i] = htons(bundle->slaves[i]);
+        slaves[i] = htons(ofp_to_u16(bundle->slaves[i]));
     }
 }
 
@@ -271,7 +272,7 @@ bundle_parse__(const char *s, char **save_ptr,
     bundle = ofpact_put_BUNDLE(ofpacts);
 
     for (;;) {
-        uint16_t slave_port;
+        ofp_port_t slave_port;
         char *slave;
 
         slave = strtok_r(NULL, ", []", save_ptr);

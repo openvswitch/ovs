@@ -21,6 +21,7 @@
 #include <arpa/inet.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include "flow.h"
 #include "hash.h"
 #include "hmap.h"
 #include "ofpbuf.h"
@@ -35,7 +36,7 @@
 
 struct pinqueue {
     struct hmap_node node;      /* In struct pinsched's 'queues' hmap. */
-    uint16_t port_no;           /* Port number. */
+    ofp_port_t port_no;           /* Port number. */
     struct list packets;        /* Contains "struct ofpbuf"s. */
     int n;                      /* Number of packets in 'packets'. */
 };
@@ -101,9 +102,9 @@ pinqueue_destroy(struct pinsched *ps, struct pinqueue *q)
 }
 
 static struct pinqueue *
-pinqueue_get(struct pinsched *ps, uint16_t port_no)
+pinqueue_get(struct pinsched *ps, ofp_port_t port_no)
 {
-    uint32_t hash = hash_int(port_no, 0);
+    uint32_t hash = hash_int(ofp_to_u16(port_no), 0);
     struct pinqueue *q;
 
     HMAP_FOR_EACH_IN_BUCKET (q, node, hash, &ps->queues) {
@@ -184,7 +185,7 @@ get_token(struct pinsched *ps)
 }
 
 void
-pinsched_send(struct pinsched *ps, uint16_t port_no,
+pinsched_send(struct pinsched *ps, ofp_port_t port_no,
               struct ofpbuf *packet, pinsched_tx_cb *cb, void *aux)
 {
     if (!ps) {

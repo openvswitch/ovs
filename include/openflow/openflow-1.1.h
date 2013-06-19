@@ -67,8 +67,8 @@
  * an OpenFlow 1.0 reserved port number to or from, respectively, the
  * corresponding OpenFlow 1.1 reserved port number.
  */
-#define OFPP11_MAX    0xffffff00
-#define OFPP11_OFFSET (OFPP11_MAX - OFPP_MAX)
+#define OFPP11_MAX    OFP11_PORT_C(0xffffff00)
+#define OFPP11_OFFSET 0xffff0000    /* OFPP11_MAX - OFPP_MAX */
 
 /* Reserved wildcard port used only for flow mod (delete) and flow stats
  * requests. Selects all flows regardless of output port

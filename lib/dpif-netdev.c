@@ -104,7 +104,7 @@ struct dp_netdev {
 
 /* A port in a netdev-based datapath. */
 struct dp_netdev_port {
-    int port_no;                /* Index into dp_netdev's 'ports'. */
+    odp_port_t port_no;         /* Index into dp_netdev's 'ports'. */
     struct list node;           /* Element in dp_netdev's 'port_list'. */
     struct netdev *netdev;
     struct netdev_saved_flags *sf;
@@ -141,15 +141,15 @@ static struct shash dp_netdevs = SHASH_INITIALIZER(&dp_netdevs);
 /* Maximum port MTU seen so far. */
 static int max_mtu = ETH_PAYLOAD_MAX;
 
-static int get_port_by_number(struct dp_netdev *, uint32_t port_no,
+static int get_port_by_number(struct dp_netdev *, odp_port_t port_no,
                               struct dp_netdev_port **portp);
 static int get_port_by_name(struct dp_netdev *, const char *devname,
                             struct dp_netdev_port **portp);
 static void dp_netdev_free(struct dp_netdev *);
 static void dp_netdev_flow_flush(struct dp_netdev *);
 static int do_add_port(struct dp_netdev *, const char *devname,
-                       const char *type, uint32_t port_no);
-static int do_del_port(struct dp_netdev *, uint32_t port_no);
+                       const char *type, odp_port_t port_no);
+static int do_del_port(struct dp_netdev *, odp_port_t port_no);
 static int dpif_netdev_open(const struct dpif_class *, const char *name,
                             bool create, struct dpif **);
 static int dp_netdev_output_userspace(struct dp_netdev *, const struct ofpbuf *,
@@ -218,10 +218,12 @@ create_dpif_netdev(struct dp_netdev *dp)
     return &dpif->dpif;
 }
 
-static int
+/* Choose an unused, non-zero port number and return it on success.
+ * Return ODPP_NONE on failure. */
+static odp_port_t
 choose_port(struct dp_netdev *dp, const char *name)
 {
-    int port_no;
+    uint32_t port_no;
 
     if (dp->class != &dpif_netdev_class) {
         const char *p;
@@ -241,7 +243,7 @@ choose_port(struct dp_netdev *dp, const char *name)
                 port_no = start_no + strtol(p, NULL, 10);
                 if (port_no > 0 && port_no < MAX_PORTS
                     && !dp->ports[port_no]) {
-                    return port_no;
+                    return u32_to_odp(port_no);
                 }
                 break;
             }
@@ -250,11 +252,11 @@ choose_port(struct dp_netdev *dp, const char *name)
 
     for (port_no = 1; port_no < MAX_PORTS; port_no++) {
         if (!dp->ports[port_no]) {
-            return port_no;
+            return u32_to_odp(port_no);
         }
     }
 
-    return -1;
+    return ODPP_NONE;
 }
 
 static int
@@ -275,7 +277,7 @@ create_dp_netdev(const char *name, const struct dpif_class *class,
     hmap_init(&dp->flow_table);
     list_init(&dp->port_list);
 
-    error = do_add_port(dp, name, "internal", OVSP_LOCAL);
+    error = do_add_port(dp, name, "internal", ODPP_LOCAL);
     if (error) {
         dp_netdev_free(dp);
         return error;
@@ -379,7 +381,7 @@ dpif_netdev_get_stats(const struct dpif *dpif, struct dpif_dp_stats *stats)
 
 static int
 do_add_port(struct dp_netdev *dp, const char *devname, const char *type,
-            uint32_t port_no)
+            odp_port_t port_no)
 {
     struct netdev_saved_flags *sf;
     struct dp_netdev_port *port;
@@ -429,7 +431,7 @@ do_add_port(struct dp_netdev *dp, const char *devname, const char *type,
     }
 
     list_push_back(&dp->port_list, &port->node);
-    dp->ports[port_no] = port;
+    dp->ports[odp_to_u32(port_no)] = port;
     dp->serial++;
 
     return 0;
@@ -437,25 +439,26 @@ do_add_port(struct dp_netdev *dp, const char *devname, const char *type,
 
 static int
 dpif_netdev_port_add(struct dpif *dpif, struct netdev *netdev,
-                     uint32_t *port_nop)
+                     odp_port_t *port_nop)
 {
     struct dp_netdev *dp = get_dp_netdev(dpif);
     char namebuf[NETDEV_VPORT_NAME_BUFSIZE];
     const char *dpif_port;
-    int port_no;
+    odp_port_t port_no;
 
     dpif_port = netdev_vport_get_dpif_port(netdev, namebuf, sizeof namebuf);
-    if (*port_nop != UINT32_MAX) {
-        if (*port_nop >= MAX_PORTS) {
+    if (*port_nop != ODPP_NONE) {
+        uint32_t port_idx = odp_to_u32(*port_nop);
+        if (port_idx >= MAX_PORTS) {
             return EFBIG;
-        } else if (dp->ports[*port_nop]) {
+        } else if (dp->ports[port_idx]) {
             return EBUSY;
         }
         port_no = *port_nop;
     } else {
         port_no = choose_port(dp, dpif_port);
     }
-    if (port_no >= 0) {
+    if (port_no != ODPP_NONE) {
         *port_nop = port_no;
         return do_add_port(dp, dpif_port, netdev_get_type(netdev), port_no);
     }
@@ -463,27 +466,28 @@ dpif_netdev_port_add(struct dpif *dpif, struct netdev *netdev,
 }
 
 static int
-dpif_netdev_port_del(struct dpif *dpif, uint32_t port_no)
+dpif_netdev_port_del(struct dpif *dpif, odp_port_t port_no)
 {
     struct dp_netdev *dp = get_dp_netdev(dpif);
-    return port_no == OVSP_LOCAL ? EINVAL : do_del_port(dp, port_no);
+    return (port_no == ODPP_LOCAL ?
+                           EINVAL : do_del_port(dp, port_no));
 }
 
 static bool
-is_valid_port_number(uint32_t port_no)
+is_valid_port_number(odp_port_t port_no)
 {
-    return port_no < MAX_PORTS;
+    return odp_to_u32(port_no) < MAX_PORTS;
 }
 
 static int
 get_port_by_number(struct dp_netdev *dp,
-                   uint32_t port_no, struct dp_netdev_port **portp)
+                   odp_port_t port_no, struct dp_netdev_port **portp)
 {
     if (!is_valid_port_number(port_no)) {
         *portp = NULL;
         return EINVAL;
     } else {
-        *portp = dp->ports[port_no];
+        *portp = dp->ports[odp_to_u32(port_no)];
         return *portp ? 0 : ENOENT;
     }
 }
@@ -504,7 +508,7 @@ get_port_by_name(struct dp_netdev *dp,
 }
 
 static int
-do_del_port(struct dp_netdev *dp, uint32_t port_no)
+do_del_port(struct dp_netdev *dp, odp_port_t port_no)
 {
     struct dp_netdev_port *port;
     int error;
@@ -515,7 +519,7 @@ do_del_port(struct dp_netdev *dp, uint32_t port_no)
     }
 
     list_remove(&port->node);
-    dp->ports[port->port_no] = NULL;
+    dp->ports[odp_to_u32(port_no)] = NULL;
     dp->serial++;
 
     netdev_close(port->netdev);
@@ -537,7 +541,7 @@ answer_port_query(const struct dp_netdev_port *port,
 }
 
 static int
-dpif_netdev_port_query_by_number(const struct dpif *dpif, uint32_t port_no,
+dpif_netdev_port_query_by_number(const struct dpif *dpif, odp_port_t port_no,
                                  struct dpif_port *dpif_port)
 {
     struct dp_netdev *dp = get_dp_netdev(dpif);
@@ -566,10 +570,10 @@ dpif_netdev_port_query_by_name(const struct dpif *dpif, const char *devname,
     return error;
 }
 
-static int
+static odp_port_t
 dpif_netdev_get_max_ports(const struct dpif *dpif OVS_UNUSED)
 {
-    return MAX_PORTS;
+    return u32_to_odp(MAX_PORTS);
 }
 
 static void
@@ -599,7 +603,7 @@ dpif_netdev_flow_flush(struct dpif *dpif)
 }
 
 struct dp_netdev_port_state {
-    uint32_t port_no;
+    odp_port_t port_no;
     char *name;
 };
 
@@ -616,17 +620,18 @@ dpif_netdev_port_dump_next(const struct dpif *dpif, void *state_,
 {
     struct dp_netdev_port_state *state = state_;
     struct dp_netdev *dp = get_dp_netdev(dpif);
-    uint32_t port_no;
+    uint32_t port_idx;
 
-    for (port_no = state->port_no; port_no < MAX_PORTS; port_no++) {
-        struct dp_netdev_port *port = dp->ports[port_no];
+    for (port_idx = odp_to_u32(state->port_no);
+         port_idx < MAX_PORTS; port_idx++) {
+        struct dp_netdev_port *port = dp->ports[port_idx];
         if (port) {
             free(state->name);
             state->name = xstrdup(netdev_get_name(port->netdev));
             dpif_port->name = state->name;
             dpif_port->type = port->type;
             dpif_port->port_no = port->port_no;
-            state->port_no = port_no + 1;
+            state->port_no = u32_to_odp(port_idx + 1);
             return 0;
         }
     }
@@ -708,9 +713,7 @@ dpif_netdev_flow_from_nlattrs(const struct nlattr *key, uint32_t key_len,
         return EINVAL;
     }
 
-    if (flow->in_port < OFPP_MAX
-        ? flow->in_port >= MAX_PORTS
-        : flow->in_port != OFPP_LOCAL && flow->in_port != OFPP_NONE) {
+    if (!is_valid_port_number(flow->in_port.odp_port)) {
         return EINVAL;
     }
 
@@ -899,7 +902,7 @@ dpif_netdev_flow_dump_next(const struct dpif *dpif, void *state_,
         struct ofpbuf buf;
 
         ofpbuf_use_stack(&buf, &state->keybuf, sizeof state->keybuf);
-        odp_flow_key_from_flow(&buf, &flow->key, flow->key.in_port);
+        odp_flow_key_from_flow(&buf, &flow->key, flow->key.in_port.odp_port);
 
         *key = buf.data;
         *key_len = buf.size;
@@ -954,7 +957,7 @@ dpif_netdev_execute(struct dpif *dpif, const struct dpif_execute *execute)
     ofpbuf_reserve(&copy, DP_NETDEV_HEADROOM);
     ofpbuf_put(&copy, execute->packet->data, execute->packet->size);
 
-    flow_extract(&copy, 0, 0, NULL, -1, &key);
+    flow_extract(&copy, 0, 0, NULL, NULL, &key);
     error = dpif_netdev_flow_from_nlattrs(execute->key, execute->key_len,
                                           &key);
     if (!error) {
@@ -1049,11 +1052,13 @@ dp_netdev_port_input(struct dp_netdev *dp, struct dp_netdev_port *port,
 {
     struct dp_netdev_flow *flow;
     struct flow key;
+    union flow_in_port in_port_;
 
     if (packet->size < ETH_HEADER_LEN) {
         return;
     }
-    flow_extract(packet, skb_priority, skb_mark, tnl, port->port_no, &key);
+    in_port_.odp_port = port->port_no;
+    flow_extract(packet, skb_priority, skb_mark, tnl, &in_port_, &key);
     flow = dp_netdev_lookup_flow(dp, &key);
     if (flow) {
         dp_netdev_flow_used(flow, packet);
@@ -1140,7 +1145,7 @@ dp_netdev_output_userspace(struct dp_netdev *dp, const struct ofpbuf *packet,
         ofpbuf_init(buf, buf_size);
 
         /* Put ODP flow. */
-        odp_flow_key_from_flow(buf, flow, flow->in_port);
+        odp_flow_key_from_flow(buf, flow, flow->in_port.odp_port);
         upcall->key = buf->data;
         upcall->key_len = buf->size;
 

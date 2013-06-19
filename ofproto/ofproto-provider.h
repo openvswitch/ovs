@@ -63,8 +63,8 @@ struct ofproto {
     struct shash port_by_name;
     unsigned long *ofp_port_ids;/* Bitmap of used OpenFlow port numbers. */
     struct simap ofp_requests;  /* OpenFlow port number requests. */
-    uint16_t alloc_port_no;     /* Last allocated OpenFlow port number. */
-    uint16_t max_ports;         /* Max possible OpenFlow port num, plus one. */
+    ofp_port_t alloc_port_no;   /* Last allocated OpenFlow port number. */
+    ofp_port_t max_ports;       /* Max possible OpenFlow port num, plus one. */
 
     /* Flow tables. */
     struct oftable *tables;
@@ -103,10 +103,10 @@ struct ofproto {
 };
 
 void ofproto_init_tables(struct ofproto *, int n_tables);
-void ofproto_init_max_ports(struct ofproto *, uint16_t max_ports);
+void ofproto_init_max_ports(struct ofproto *, ofp_port_t max_ports);
 
 struct ofproto *ofproto_lookup(const char *name);
-struct ofport *ofproto_get_port(const struct ofproto *, uint16_t ofp_port);
+struct ofport *ofproto_get_port(const struct ofproto *, ofp_port_t ofp_port);
 
 /* An OpenFlow port within a "struct ofproto".
  *
@@ -117,7 +117,7 @@ struct ofport {
     struct ofproto *ofproto;    /* The ofproto that contains this port. */
     struct netdev *netdev;
     struct ofputil_phy_port pp;
-    uint16_t ofp_port;          /* OpenFlow port number. */
+    ofp_port_t ofp_port;        /* OpenFlow port number. */
     unsigned int change_seq;
     long long int created;      /* Time created, in msec. */
     int mtu;
@@ -248,12 +248,12 @@ void ofproto_rule_update_used(struct rule *, long long int used);
 void ofproto_rule_expire(struct rule *, uint8_t reason);
 void ofproto_rule_destroy(struct rule *);
 
-bool ofproto_rule_has_out_port(const struct rule *, uint16_t out_port);
+bool ofproto_rule_has_out_port(const struct rule *, ofp_port_t out_port);
 
 void ofoperation_complete(struct ofoperation *, enum ofperr);
 struct rule *ofoperation_get_victim(struct ofoperation *);
 
-bool ofoperation_has_out_port(const struct ofoperation *, uint16_t out_port);
+bool ofoperation_has_out_port(const struct ofoperation *, ofp_port_t out_port);
 
 bool ofproto_rule_is_hidden(const struct rule *);
 
@@ -694,7 +694,7 @@ struct ofproto_class {
      * It doesn't matter whether the new port will be returned by a later call
      * to ->port_poll(); the implementation may do whatever is more
      * convenient. */
-    int (*port_del)(struct ofproto *ofproto, uint16_t ofp_port);
+    int (*port_del)(struct ofproto *ofproto, ofp_port_t ofp_port);
 
     /* Get port stats */
     int (*port_get_stats)(const struct ofport *port,
@@ -1320,7 +1320,7 @@ struct ofproto_class {
      * This function should be NULL if a an implementation does not support
      * it. */
     int (*set_realdev)(struct ofport *ofport,
-                       uint16_t realdev_ofp_port, int vid);
+                       ofp_port_t realdev_ofp_port, int vid);
 };
 
 extern const struct ofproto_class ofproto_dpif_class;

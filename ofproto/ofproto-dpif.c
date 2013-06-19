@@ -277,17 +277,17 @@ struct priority_to_dscp {
 struct vlan_splinter {
     struct hmap_node realdev_vid_node;
     struct hmap_node vlandev_node;
-    uint16_t realdev_ofp_port;
-    uint16_t vlandev_ofp_port;
+    ofp_port_t realdev_ofp_port;
+    ofp_port_t vlandev_ofp_port;
     int vid;
 };
 
 static bool vsp_adjust_flow(const struct ofproto_dpif *, struct flow *);
 static void vsp_remove(struct ofport_dpif *);
-static void vsp_add(struct ofport_dpif *, uint16_t realdev_ofp_port, int vid);
+static void vsp_add(struct ofport_dpif *, ofp_port_t realdev_ofp_port, int vid);
 
-static uint16_t odp_port_to_ofp_port(const struct ofproto_dpif *,
-                                     uint32_t odp_port);
+static ofp_port_t odp_port_to_ofp_port(const struct ofproto_dpif *,
+                                       odp_port_t odp_port);
 
 static struct ofport_dpif *
 ofport_dpif_cast(const struct ofport *ofport)
@@ -396,7 +396,7 @@ static struct shash all_dpif_backers = SHASH_INITIALIZER(&all_dpif_backers);
 
 static void drop_key_clear(struct dpif_backer *);
 static struct ofport_dpif *
-odp_port_to_ofport(const struct dpif_backer *, uint32_t odp_port);
+odp_port_to_ofport(const struct dpif_backer *, odp_port_t odp_port);
 static void update_moving_averages(struct dpif_backer *backer);
 
 /* Defer flow mod completion until "ovs-appctl ofproto/unclog"?  (Useful only
@@ -584,17 +584,18 @@ type_run(const char *type)
                 } else {
                     node = simap_find(&backer->tnl_backers, dp_port);
                     if (!node) {
-                        uint32_t odp_port = UINT32_MAX;
+                        odp_port_t odp_port = ODPP_NONE;
 
                         if (!dpif_port_add(backer->dpif, iter->up.netdev,
                                            &odp_port)) {
-                            simap_put(&backer->tnl_backers, dp_port, odp_port);
+                            simap_put(&backer->tnl_backers, dp_port,
+                                      odp_to_u32(odp_port));
                             node = simap_find(&backer->tnl_backers, dp_port);
                         }
                     }
                 }
 
-                iter->odp_port = node ? node->data : OVSP_NONE;
+                iter->odp_port = node ? u32_to_odp(node->data) : ODPP_NONE;
                 if (tnl_port_reconfigure(&iter->up, iter->odp_port,
                                          &iter->tnl_port)) {
                     backer->need_revalidate = REV_RECONFIGURE;
@@ -603,7 +604,7 @@ type_run(const char *type)
         }
 
         SIMAP_FOR_EACH (node, &tmp_backers) {
-            dpif_port_del(backer->dpif, node->data);
+            dpif_port_del(backer->dpif, u32_to_odp(node->data));
         }
         simap_destroy(&tmp_backers);
 
@@ -877,7 +878,7 @@ close_dpif_backer(struct dpif_backer *backer)
 /* Datapath port slated for removal from datapath. */
 struct odp_garbage {
     struct list list_node;
-    uint32_t odp_port;
+    odp_port_t odp_port;
 };
 
 static int
@@ -1003,7 +1004,7 @@ construct(struct ofproto *ofproto_)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
     struct shash_node *node, *next;
-    int max_ports;
+    odp_port_t max_ports;
     int error;
     int i;
 
@@ -1013,7 +1014,8 @@ construct(struct ofproto *ofproto_)
     }
 
     max_ports = dpif_get_max_ports(ofproto->backer->dpif);
-    ofproto_init_max_ports(ofproto_, MIN(max_ports, OFPP_MAX));
+    ofproto_init_max_ports(ofproto_, u16_to_ofp(MIN(odp_to_u32(max_ports),
+                                                    ofp_to_u16(OFPP_MAX))));
 
     ofproto->netflow = NULL;
     ofproto->sflow = NULL;
@@ -1469,7 +1471,7 @@ port_construct(struct ofport *port_)
 	 * because the patch port represents an interface that sFlow considers
 	 * to be "internal" to the switch as a whole, and therefore not an
 	 * candidate for counter polling. */
-        port->odp_port = OVSP_NONE;
+        port->odp_port = ODPP_NONE;
         ofport_update_peer(port);
         return 0;
     }
@@ -1497,7 +1499,7 @@ port_construct(struct ofport *port_)
         }
 
         hmap_insert(&ofproto->backer->odp_to_ofport_map, &port->odp_port_node,
-                    hash_int(port->odp_port, 0));
+                    hash_int(odp_to_u32(port->odp_port), 0));
     }
     dpif_port_destroy(&dpif_port);
 
@@ -1535,7 +1537,7 @@ port_destruct(struct ofport *port_)
         port->peer = NULL;
     }
 
-    if (port->odp_port != OVSP_NONE && !port->tnl_port) {
+    if (port->odp_port != ODPP_NONE && !port->tnl_port) {
         hmap_remove(&ofproto->backer->odp_to_ofport_map, &port->odp_port_node);
     }
 
@@ -2178,7 +2180,7 @@ bundle_del_port(struct ofport_dpif *port)
 }
 
 static bool
-bundle_add_port(struct ofbundle *bundle, uint16_t ofp_port,
+bundle_add_port(struct ofbundle *bundle, ofp_port_t ofp_port,
                 struct lacp_slave_settings *lacp)
 {
     struct ofport_dpif *port;
@@ -2821,14 +2823,14 @@ set_mac_table_config(struct ofproto *ofproto_, unsigned int idle_time,
 /* Ports. */
 
 struct ofport_dpif *
-get_ofp_port(const struct ofproto_dpif *ofproto, uint16_t ofp_port)
+get_ofp_port(const struct ofproto_dpif *ofproto, ofp_port_t ofp_port)
 {
     struct ofport *ofport = ofproto_get_port(&ofproto->up, ofp_port);
     return ofport ? ofport_dpif_cast(ofport) : NULL;
 }
 
 struct ofport_dpif *
-get_odp_port(const struct ofproto_dpif *ofproto, uint32_t odp_port)
+get_odp_port(const struct ofproto_dpif *ofproto, odp_port_t odp_port)
 {
     struct ofport_dpif *port = odp_port_to_ofport(ofproto->backer, odp_port);
     return port && &ofproto->up == port->up.ofproto ? port : NULL;
@@ -3025,7 +3027,7 @@ port_add(struct ofproto *ofproto_, struct netdev *netdev)
 
     dp_port_name = netdev_vport_get_dpif_port(netdev, namebuf, sizeof namebuf);
     if (!dpif_port_exists(ofproto->backer->dpif, dp_port_name)) {
-        uint32_t port_no = UINT32_MAX;
+        odp_port_t port_no = ODPP_NONE;
         int error;
 
         error = dpif_port_add(ofproto->backer->dpif, netdev, &port_no);
@@ -3033,7 +3035,8 @@ port_add(struct ofproto *ofproto_, struct netdev *netdev)
             return error;
         }
         if (netdev_get_tunnel_config(netdev)) {
-            simap_put(&ofproto->backer->tnl_backers, dp_port_name, port_no);
+            simap_put(&ofproto->backer->tnl_backers,
+                      dp_port_name, odp_to_u32(port_no));
         }
     }
 
@@ -3046,7 +3049,7 @@ port_add(struct ofproto *ofproto_, struct netdev *netdev)
 }
 
 static int
-port_del(struct ofproto *ofproto_, uint16_t ofp_port)
+port_del(struct ofproto *ofproto_, ofp_port_t ofp_port)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
     struct ofport_dpif *ofport = get_ofp_port(ofproto, ofp_port);
@@ -3292,8 +3295,8 @@ static void
 init_flow_miss_execute_op(struct flow_miss *miss, struct ofpbuf *packet,
                           struct flow_miss_op *op)
 {
-    if (miss->flow.in_port
-        != vsp_realdev_to_vlandev(miss->ofproto, miss->flow.in_port,
+    if (miss->flow.in_port.ofp_port
+        != vsp_realdev_to_vlandev(miss->ofproto, miss->flow.in_port.ofp_port,
                                   miss->flow.vlan_tci)) {
         /* This packet was received on a VLAN splinter port.  We
          * added a VLAN to the packet to make the packet resemble
@@ -3600,7 +3603,7 @@ static int
 ofproto_receive(const struct dpif_backer *backer, struct ofpbuf *packet,
                 const struct nlattr *key, size_t key_len,
                 struct flow *flow, enum odp_key_fitness *fitnessp,
-                struct ofproto_dpif **ofproto, uint32_t *odp_in_port)
+                struct ofproto_dpif **ofproto, odp_port_t *odp_in_port)
 {
     const struct ofport_dpif *port;
     enum odp_key_fitness fitness;
@@ -3613,13 +3616,13 @@ ofproto_receive(const struct dpif_backer *backer, struct ofpbuf *packet,
     }
 
     if (odp_in_port) {
-        *odp_in_port = flow->in_port;
+        *odp_in_port = flow->in_port.odp_port;
     }
 
     port = (tnl_port_should_receive(flow)
             ? ofport_dpif_cast(tnl_port_receive(flow))
-            : odp_port_to_ofport(backer, flow->in_port));
-    flow->in_port = port ? port->up.ofp_port : OFPP_NONE;
+            : odp_port_to_ofport(backer, flow->in_port.odp_port));
+    flow->in_port.ofp_port = port ? port->up.ofp_port : OFPP_NONE;
     if (!port) {
         goto exit;
     }
@@ -3694,7 +3697,7 @@ handle_miss_upcalls(struct dpif_backer *backer, struct dpif_upcall *upcalls,
         struct flow_miss *miss = &misses[n_misses];
         struct flow_miss *existing_miss;
         struct ofproto_dpif *ofproto;
-        uint32_t odp_in_port;
+        odp_port_t odp_in_port;
         struct flow flow;
         uint32_t hash;
         int error;
@@ -3734,7 +3737,7 @@ handle_miss_upcalls(struct dpif_backer *backer, struct dpif_upcall *upcalls,
 
         ofproto->n_missed++;
         flow_extract(upcall->packet, flow.skb_priority, flow.skb_mark,
-                     &flow.tunnel, flow.in_port, &miss->flow);
+                     &flow.tunnel, &flow.in_port, &miss->flow);
 
         /* Add other packets to a to-do list. */
         hash = flow_hash(&miss->flow, 0);
@@ -3838,7 +3841,7 @@ handle_sflow_upcall(struct dpif_backer *backer,
     struct ofproto_dpif *ofproto;
     union user_action_cookie cookie;
     struct flow flow;
-    uint32_t odp_in_port;
+    odp_port_t odp_in_port;
 
     if (ofproto_receive(backer, upcall->packet, upcall->key, upcall->key_len,
                         &flow, NULL, &ofproto, &odp_in_port)
@@ -4383,7 +4386,7 @@ execute_odp_actions(struct ofproto_dpif *ofproto, const struct flow *flow,
 
     ofpbuf_use_stack(&key, &keybuf, sizeof keybuf);
     odp_flow_key_from_flow(&key, flow,
-                           ofp_port_to_odp_port(ofproto, flow->in_port));
+                           ofp_port_to_odp_port(ofproto, flow->in_port.ofp_port));
 
     error = dpif_execute(ofproto->backer->dpif, key.data, key.size,
                          odp_actions, actions_len, packet);
@@ -4481,7 +4484,7 @@ facet_account(struct facet *facet)
 
         switch (nl_attr_type(a)) {
         case OVS_ACTION_ATTR_OUTPUT:
-            port = get_odp_port(ofproto, nl_attr_get_u32(a));
+            port = get_odp_port(ofproto, nl_attr_get_odp_port(a));
             if (port && port->bundle && port->bundle->bond) {
                 bond_account(port->bundle->bond, &facet->flow,
                              vlan_tci_to_vid(vlan_tci), n_bytes);
@@ -4804,7 +4807,7 @@ facet_push_stats(struct facet *facet, bool may_learn)
         facet->prev_byte_count = facet->byte_count;
         facet->prev_used = facet->used;
 
-        in_port = get_ofp_port(ofproto, facet->flow.in_port);
+        in_port = get_ofp_port(ofproto, facet->flow.in_port.ofp_port);
         if (in_port && in_port->tnl_port) {
             netdev_vport_inc_rx(in_port->up.netdev, &stats);
         }
@@ -5163,9 +5166,10 @@ rule_dpif_miss_rule(struct ofproto_dpif *ofproto, const struct flow *flow)
 {
     struct ofport_dpif *port;
 
-    port = get_ofp_port(ofproto, flow->in_port);
+    port = get_ofp_port(ofproto, flow->in_port.ofp_port);
     if (!port) {
-        VLOG_WARN_RL(&rl, "packet-in on unknown port %"PRIu16, flow->in_port);
+        VLOG_WARN_RL(&rl, "packet-in on unknown OpenFlow port %"PRIu16,
+                     flow->in_port.ofp_port);
         return ofproto->miss_rule;
     }
 
@@ -5337,13 +5341,15 @@ send_packet(const struct ofport_dpif *ofport, struct ofpbuf *packet)
     struct xlate_out xout;
     struct xlate_in xin;
     struct flow flow;
+    union flow_in_port in_port_;
     int error;
 
     ofpbuf_use_stub(&odp_actions, odp_actions_stub, sizeof odp_actions_stub);
     ofpbuf_use_stack(&key, &keybuf, sizeof keybuf);
 
     /* Use OFPP_NONE as the in_port to avoid special packet processing. */
-    flow_extract(packet, 0, 0, NULL, OFPP_NONE, &flow);
+    in_port_.ofp_port = OFPP_NONE;
+    flow_extract(packet, 0, 0, NULL, &in_port_, &flow);
     odp_flow_key_from_flow(&key, &flow, ofp_port_to_odp_port(ofproto,
                                                              OFPP_LOCAL));
     dpif_flow_stats_extract(&flow, packet, time_msec(), &stats);
@@ -5400,7 +5406,8 @@ compose_slow_path(const struct ofproto_dpif *ofproto, const struct flow *flow,
 
     ofpbuf_use_stack(&buf, stub, stub_size);
     if (slow & (SLOW_CFM | SLOW_BFD | SLOW_LACP | SLOW_STP)) {
-        uint32_t pid = dpif_port_get_pid(ofproto->backer->dpif, UINT32_MAX);
+        uint32_t pid = dpif_port_get_pid(ofproto->backer->dpif,
+                                         ODPP_NONE);
         odp_put_userspace_action(pid, &cookie, sizeof cookie.slow_path, &buf);
     } else {
         put_userspace_action(ofproto, &buf, flow, &cookie,
@@ -5420,7 +5427,8 @@ put_userspace_action(const struct ofproto_dpif *ofproto,
     uint32_t pid;
 
     pid = dpif_port_get_pid(ofproto->backer->dpif,
-                            ofp_port_to_odp_port(ofproto, flow->in_port));
+                            ofp_port_to_odp_port(ofproto,
+                                                 flow->in_port.ofp_port));
 
     return odp_put_userspace_action(pid, cookie, cookie_size, odp_actions);
 }
@@ -5596,7 +5604,8 @@ packet_out(struct ofproto *ofproto_, struct ofpbuf *packet,
 
     ofpbuf_use_stack(&key, &keybuf, sizeof keybuf);
     odp_flow_key_from_flow(&key, flow,
-                           ofp_port_to_odp_port(ofproto, flow->in_port));
+                           ofp_port_to_odp_port(ofproto,
+                                      flow->in_port.ofp_port));
 
     dpif_flow_stats_extract(flow, packet, time_msec(), &stats);
 
@@ -5931,6 +5940,9 @@ ofproto_unixctl_trace(struct unixctl_conn *conn, int argc, const char *argv[],
         if (!packet->size) {
             flow_compose(packet, &flow);
         } else {
+            union flow_in_port in_port_;
+
+            in_port_ = flow.in_port;
             ds_put_cstr(&result, "Packet: ");
             s = ofp_packet_to_string(packet->data, packet->size);
             ds_put_cstr(&result, s);
@@ -5939,7 +5951,7 @@ ofproto_unixctl_trace(struct unixctl_conn *conn, int argc, const char *argv[],
             /* Use the metadata from the flow and the packet argument
              * to reconstruct the flow. */
             flow_extract(packet, flow.skb_priority, flow.skb_mark, NULL,
-                         flow.in_port, &flow);
+                         &in_port_, &flow);
         }
     }
 
@@ -6204,13 +6216,13 @@ dpif_show_backer(const struct dpif_backer *backer, struct ds *ds)
             const struct shash_node *node = ports[j];
             struct ofport *ofport = node->data;
             struct smap config;
-            uint32_t odp_port;
+            odp_port_t odp_port;
 
             ds_put_format(ds, "\t\t%s %u/", netdev_get_name(ofport->netdev),
                           ofport->ofp_port);
 
             odp_port = ofp_port_to_odp_port(ofproto, ofport->ofp_port);
-            if (odp_port != OVSP_NONE) {
+            if (odp_port != ODPP_NONE) {
                 ds_put_format(ds, "%"PRIu32":", odp_port);
             } else {
                 ds_put_cstr(ds, "none:");
@@ -6437,7 +6449,7 @@ ofproto_dpif_unixctl_init(void)
  * widespread use, we will delete these interfaces. */
 
 static int
-set_realdev(struct ofport *ofport_, uint16_t realdev_ofp_port, int vid)
+set_realdev(struct ofport *ofport_, ofp_port_t realdev_ofp_port, int vid)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofport_->ofproto);
     struct ofport_dpif *ofport = ofport_dpif_cast(ofport_);
@@ -6469,9 +6481,9 @@ set_realdev(struct ofport *ofport_, uint16_t realdev_ofp_port, int vid)
 }
 
 static uint32_t
-hash_realdev_vid(uint16_t realdev_ofp_port, int vid)
+hash_realdev_vid(ofp_port_t realdev_ofp_port, int vid)
 {
-    return hash_2words(realdev_ofp_port, vid);
+    return hash_2words(ofp_to_u16(realdev_ofp_port), vid);
 }
 
 /* Returns the OFP port number of the Linux VLAN device that corresponds to
@@ -6481,9 +6493,9 @@ hash_realdev_vid(uint16_t realdev_ofp_port, int vid)
  *
  * Unless VLAN splinters are enabled for port 'realdev_ofp_port', this
  * function just returns its 'realdev_ofp_port' argument. */
-uint16_t
+ofp_port_t
 vsp_realdev_to_vlandev(const struct ofproto_dpif *ofproto,
-                       uint16_t realdev_ofp_port, ovs_be16 vlan_tci)
+                       ofp_port_t realdev_ofp_port, ovs_be16 vlan_tci)
 {
     if (!hmap_is_empty(&ofproto->realdev_vid_map)) {
         int vid = vlan_tci_to_vid(vlan_tci);
@@ -6502,11 +6514,12 @@ vsp_realdev_to_vlandev(const struct ofproto_dpif *ofproto,
 }
 
 static struct vlan_splinter *
-vlandev_find(const struct ofproto_dpif *ofproto, uint16_t vlandev_ofp_port)
+vlandev_find(const struct ofproto_dpif *ofproto, ofp_port_t vlandev_ofp_port)
 {
     struct vlan_splinter *vsp;
 
-    HMAP_FOR_EACH_WITH_HASH (vsp, vlandev_node, hash_int(vlandev_ofp_port, 0),
+    HMAP_FOR_EACH_WITH_HASH (vsp, vlandev_node,
+                             hash_int(ofp_to_u16(vlandev_ofp_port), 0),
                              &ofproto->vlandev_map) {
         if (vsp->vlandev_ofp_port == vlandev_ofp_port) {
             return vsp;
@@ -6525,9 +6538,9 @@ vlandev_find(const struct ofproto_dpif *ofproto, uint16_t vlandev_ofp_port)
  * Returns 0 and does not modify '*vid' if 'vlandev_ofp_port' is not a Linux
  * VLAN device.  Unless VLAN splinters are enabled, this is what this function
  * always does.*/
-static uint16_t
+static ofp_port_t
 vsp_vlandev_to_realdev(const struct ofproto_dpif *ofproto,
-                       uint16_t vlandev_ofp_port, int *vid)
+                       ofp_port_t vlandev_ofp_port, int *vid)
 {
     if (!hmap_is_empty(&ofproto->vlandev_map)) {
         const struct vlan_splinter *vsp;
@@ -6552,17 +6565,17 @@ vsp_vlandev_to_realdev(const struct ofproto_dpif *ofproto,
 static bool
 vsp_adjust_flow(const struct ofproto_dpif *ofproto, struct flow *flow)
 {
-    uint16_t realdev;
+    ofp_port_t realdev;
     int vid;
 
-    realdev = vsp_vlandev_to_realdev(ofproto, flow->in_port, &vid);
+    realdev = vsp_vlandev_to_realdev(ofproto, flow->in_port.ofp_port, &vid);
     if (!realdev) {
         return false;
     }
 
     /* Cause the flow to be processed as if it came in on the real device with
      * the VLAN device's VLAN ID. */
-    flow->in_port = realdev;
+    flow->in_port.ofp_port = realdev;
     flow->vlan_tci = htons((vid & VLAN_VID_MASK) | VLAN_CFI);
     return true;
 }
@@ -6586,7 +6599,7 @@ vsp_remove(struct ofport_dpif *port)
 }
 
 static void
-vsp_add(struct ofport_dpif *port, uint16_t realdev_ofp_port, int vid)
+vsp_add(struct ofport_dpif *port, ofp_port_t realdev_ofp_port, int vid)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(port->up.ofproto);
 
@@ -6597,7 +6610,7 @@ vsp_add(struct ofport_dpif *port, uint16_t realdev_ofp_port, int vid)
 
         vsp = xmalloc(sizeof *vsp);
         hmap_insert(&ofproto->vlandev_map, &vsp->vlandev_node,
-                    hash_int(port->up.ofp_port, 0));
+                    hash_int(ofp_to_u16(port->up.ofp_port), 0));
         hmap_insert(&ofproto->realdev_vid_map, &vsp->realdev_vid_node,
                     hash_realdev_vid(realdev_ofp_port, vid));
         vsp->realdev_ofp_port = realdev_ofp_port;
@@ -6610,20 +6623,20 @@ vsp_add(struct ofport_dpif *port, uint16_t realdev_ofp_port, int vid)
     }
 }
 
-uint32_t
-ofp_port_to_odp_port(const struct ofproto_dpif *ofproto, uint16_t ofp_port)
+odp_port_t
+ofp_port_to_odp_port(const struct ofproto_dpif *ofproto, ofp_port_t ofp_port)
 {
     const struct ofport_dpif *ofport = get_ofp_port(ofproto, ofp_port);
-    return ofport ? ofport->odp_port : OVSP_NONE;
+    return ofport ? ofport->odp_port : ODPP_NONE;
 }
 
 static struct ofport_dpif *
-odp_port_to_ofport(const struct dpif_backer *backer, uint32_t odp_port)
+odp_port_to_ofport(const struct dpif_backer *backer, odp_port_t odp_port)
 {
     struct ofport_dpif *port;
 
     HMAP_FOR_EACH_IN_BUCKET (port, odp_port_node,
-                             hash_int(odp_port, 0),
+                             hash_int(odp_to_u32(odp_port), 0),
                              &backer->odp_to_ofport_map) {
         if (port->odp_port == odp_port) {
             return port;
@@ -6633,8 +6646,8 @@ odp_port_to_ofport(const struct dpif_backer *backer, uint32_t odp_port)
     return NULL;
 }
 
-static uint16_t
-odp_port_to_ofp_port(const struct ofproto_dpif *ofproto, uint32_t odp_port)
+static ofp_port_t
+odp_port_to_ofp_port(const struct ofproto_dpif *ofproto, odp_port_t odp_port)
 {
     struct ofport_dpif *port;
 

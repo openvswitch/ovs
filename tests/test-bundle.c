@@ -31,7 +31,7 @@
 #define MAX_SLAVES 8 /* Maximum supported by this test framework. */
 
 struct slave {
-    uint16_t slave_id;
+    ofp_port_t slave_id;
 
     bool enabled;
     size_t flow_count;
@@ -43,7 +43,7 @@ struct slave_group {
 };
 
 static struct slave *
-slave_lookup(struct slave_group *sg, uint16_t slave_id)
+slave_lookup(struct slave_group *sg, ofp_port_t slave_id)
 {
     size_t i;
 
@@ -57,7 +57,7 @@ slave_lookup(struct slave_group *sg, uint16_t slave_id)
 }
 
 static bool
-slave_enabled_cb(uint16_t slave_id, void *aux)
+slave_enabled_cb(ofp_port_t slave_id, void *aux)
 {
     struct slave *slave;
 
@@ -122,7 +122,7 @@ main(int argc, char *argv[])
     /* Generate 'slaves' array. */
     sg.n_slaves = 0;
     for (i = 0; i < bundle->n_slaves; i++) {
-        uint16_t slave_id = bundle->slaves[i];
+        ofp_port_t slave_id = bundle->slaves[i];
 
         if (slave_lookup(&sg, slave_id)) {
             ovs_fatal(0, "Redundant slaves are not supported. ");
@@ -138,7 +138,7 @@ main(int argc, char *argv[])
         random_bytes(&flows[i], sizeof flows[i]);
         memset(flows[i].zeros, 0, sizeof flows[i].zeros);
         flows[i].mpls_depth = 0;
-        flows[i].regs[0] = OFPP_NONE;
+        flows[i].regs[0] = ofp_to_u16(OFPP_NONE);
     }
 
     /* Cycles through each possible liveness permutation for the given
@@ -186,13 +186,13 @@ main(int argc, char *argv[])
         changed = 0;
         for (j = 0; j < N_FLOWS; j++) {
             struct flow *flow = &flows[j];
-            uint16_t old_slave_id, ofp_port;
+            ofp_port_t old_slave_id, ofp_port;
             struct flow_wildcards wc;
 
-            old_slave_id = flow->regs[0];
+            old_slave_id = u16_to_ofp(flow->regs[0]);
             ofp_port = bundle_execute(bundle, flow, &wc, slave_enabled_cb,
                                       &sg);
-            flow->regs[0] = ofp_port;
+            flow->regs[0] = ofp_to_u16(ofp_port);
 
             if (ofp_port != OFPP_NONE) {
                 slave_lookup(&sg, ofp_port)->flow_count++;

@@ -271,10 +271,10 @@ match_set_tun_flags_masked(struct match *match, uint16_t flags, uint16_t mask)
 }
 
 void
-match_set_in_port(struct match *match, uint16_t ofp_port)
+match_set_in_port(struct match *match, ofp_port_t ofp_port)
 {
-    match->wc.masks.in_port = UINT16_MAX;
-    match->flow.in_port = ofp_port;
+    match->wc.masks.in_port.ofp_port = u16_to_ofp(UINT16_MAX);
+    match->flow.in_port.ofp_port = ofp_port;
 }
 
 void
@@ -916,9 +916,9 @@ match_format(const struct match *match, struct ds *s, unsigned int priority)
                       ntohll(f->metadata), ntohll(wc->masks.metadata));
         break;
     }
-    if (wc->masks.in_port) {
+    if (wc->masks.in_port.ofp_port) {
         ds_put_cstr(s, "in_port=");
-        ofputil_format_port(f->in_port, s);
+        ofputil_format_port(f->in_port.ofp_port, s);
         ds_put_char(s, ',');
     }
     if (wc->masks.vlan_tci) {

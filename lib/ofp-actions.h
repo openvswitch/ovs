@@ -198,7 +198,7 @@ struct ofpact_null {
  * Used for OFPAT10_OUTPUT. */
 struct ofpact_output {
     struct ofpact ofpact;
-    uint16_t port;              /* Output port. */
+    ofp_port_t port;            /* Output port. */
     uint16_t max_len;           /* Max send len, for port OFPP_CONTROLLER. */
 };
 
@@ -217,7 +217,7 @@ struct ofpact_controller {
  * Used for OFPAT10_ENQUEUE. */
 struct ofpact_enqueue {
     struct ofpact ofpact;
-    uint16_t port;
+    ofp_port_t port;
     uint32_t queue;
 };
 
@@ -247,7 +247,7 @@ struct ofpact_bundle {
 
     /* Slaves for output. */
     unsigned int n_slaves;
-    uint16_t slaves[];
+    ofp_port_t slaves[];
 };
 
 /* OFPACT_SET_VLAN_VID.
@@ -379,7 +379,7 @@ struct ofpact_metadata {
  * Used for NXAST_RESUBMIT, NXAST_RESUBMIT_TABLE. */
 struct ofpact_resubmit {
     struct ofpact ofpact;
-    uint16_t in_port;
+    ofp_port_t in_port;
     uint8_t table_id;
 };
 
@@ -493,7 +493,7 @@ enum ofperr ofpacts_pull_openflow11_instructions(struct ofpbuf *openflow,
                                                  uint8_t table_id,
                                                  struct ofpbuf *ofpacts);
 enum ofperr ofpacts_check(const struct ofpact[], size_t ofpacts_len,
-                          const struct flow *, int max_ports);
+                          const struct flow *, ofp_port_t max_ports);
 enum ofperr ofpacts_verify(const struct ofpact ofpacts[], size_t ofpacts_len);
 
 /* Converting ofpacts to OpenFlow. */
@@ -507,7 +507,7 @@ void ofpacts_put_openflow11_instructions(const struct ofpact[],
 
 /* Working with ofpacts. */
 bool ofpacts_output_to_port(const struct ofpact[], size_t ofpacts_len,
-                            uint16_t port);
+                            ofp_port_t port);
 bool ofpacts_equal(const struct ofpact a[], size_t a_len,
                    const struct ofpact b[], size_t b_len);
 

@@ -308,7 +308,7 @@ dpctl_add_if(int argc OVS_UNUSED, char *argv[])
         char *save_ptr = NULL;
         struct netdev *netdev = NULL;
         struct smap args;
-        uint32_t port_no = UINT32_MAX;
+        odp_port_t port_no = ODPP_NONE;
         char *option;
         int error;
 
@@ -335,7 +335,7 @@ dpctl_add_if(int argc OVS_UNUSED, char *argv[])
             if (!strcmp(key, "type")) {
                 type = value;
             } else if (!strcmp(key, "port_no")) {
-                port_no = atoi(value);
+                port_no = u32_to_odp(atoi(value));
             } else if (!smap_add_once(&args, key, value)) {
                 ovs_error(0, "duplicate \"%s\" option", key);
             }
@@ -388,7 +388,7 @@ dpctl_set_if(int argc, char *argv[])
         char *type = NULL;
         const char *name;
         struct smap args;
-        uint32_t port_no;
+        odp_port_t port_no;
         char *option;
         int error;
 
@@ -441,7 +441,7 @@ dpctl_set_if(int argc, char *argv[])
                     failure = true;
                 }
             } else if (!strcmp(key, "port_no")) {
-                if (port_no != atoi(value)) {
+                if (port_no != u32_to_odp(atoi(value))) {
                     ovs_error(0, "%s: can't change port number from "
                               "%"PRIu32" to %d",
                               name, port_no, atoi(value));
@@ -476,7 +476,7 @@ next:
 }
 
 static bool
-get_port_number(struct dpif *dpif, const char *name, uint32_t *port)
+get_port_number(struct dpif *dpif, const char *name, odp_port_t *port)
 {
     struct dpif_port dpif_port;
 
@@ -500,11 +500,11 @@ dpctl_del_if(int argc OVS_UNUSED, char *argv[])
     run(parsed_dpif_open(argv[1], false, &dpif), "opening datapath");
     for (i = 2; i < argc; i++) {
         const char *name = argv[i];
-        uint32_t port;
+        odp_port_t port;
         int error;
 
         if (!name[strspn(name, "0123456789")]) {
-            port = atoi(name);
+            port = u32_to_odp(atoi(name));
         } else if (!get_port_number(dpif, name, &port)) {
             failure = true;
             continue;

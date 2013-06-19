@@ -51,7 +51,7 @@ struct packet {
     struct ofpbuf *buffer;
     uint32_t cookie;
     long long int timeout;
-    uint16_t in_port;
+    ofp_port_t in_port;
 };
 
 struct pktbuf {
@@ -104,7 +104,7 @@ make_id(unsigned int buffer_idx, unsigned int cookie)
  * The caller retains ownership of 'buffer'. */
 uint32_t
 pktbuf_save(struct pktbuf *pb, const void *buffer, size_t buffer_size,
-            uint16_t in_port)
+            ofp_port_t in_port)
 {
     struct packet *p = &pb->packets[pb->buffer_idx];
     pb->buffer_idx = (pb->buffer_idx + 1) & PKTBUF_MASK;
@@ -161,7 +161,7 @@ pktbuf_get_null(void)
  * OpenFlow port number on which the packet was received in '*in_port'.  The
  * caller becomes responsible for freeing the buffer.  However, if 'id'
  * identifies a "null" packet buffer (created with pktbuf_get_null()), stores
- * NULL in '*bufferp' and UINT16_max in '*in_port'.
+ * NULL in '*bufferp' and OFPP_NONE in '*in_port'.
  *
  * 'in_port' may be NULL if the input port is not of interest.
  *
@@ -171,7 +171,7 @@ pktbuf_get_null(void)
  * On failure, stores NULL in in '*bufferp' and UINT16_MAX in '*in_port'. */
 enum ofperr
 pktbuf_retrieve(struct pktbuf *pb, uint32_t id, struct ofpbuf **bufferp,
-                uint16_t *in_port)
+                ofp_port_t *in_port)
 {
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 20);
     struct packet *p;
@@ -218,7 +218,7 @@ pktbuf_retrieve(struct pktbuf *pb, uint32_t id, struct ofpbuf **bufferp,
 error:
     *bufferp = NULL;
     if (in_port) {
-        *in_port = UINT16_MAX;
+        *in_port = OFPP_NONE;
     }
     return error;
 }

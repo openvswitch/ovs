@@ -2252,14 +2252,14 @@ ovs_to_odp_frag(uint8_t nw_frag)
 /* Appends a representation of 'flow' as OVS_KEY_ATTR_* attributes to 'buf'.
  * 'flow->in_port' is ignored (since it is likely to be an OpenFlow port
  * number rather than a datapath port number).  Instead, if 'odp_in_port'
- * is anything other than OVSP_NONE, it is included in 'buf' as the input
+ * is anything other than ODPP_NONE, it is included in 'buf' as the input
  * port.
  *
  * 'buf' must have at least ODPUTIL_FLOW_KEY_BYTES bytes of space, or be
  * capable of being expanded to allow for that much space. */
 void
 odp_flow_key_from_flow(struct ofpbuf *buf, const struct flow *flow,
-                       uint32_t odp_in_port)
+                       odp_port_t odp_in_port)
 {
     struct ovs_key_ethernet *eth_key;
     size_t encap;
@@ -2276,8 +2276,8 @@ odp_flow_key_from_flow(struct ofpbuf *buf, const struct flow *flow,
         nl_msg_put_u32(buf, OVS_KEY_ATTR_SKB_MARK, flow->skb_mark);
     }
 
-    if (odp_in_port != OVSP_NONE) {
-        nl_msg_put_u32(buf, OVS_KEY_ATTR_IN_PORT, odp_in_port);
+    if (odp_in_port != ODPP_NONE) {
+        nl_msg_put_odp_port(buf, OVS_KEY_ATTR_IN_PORT, odp_in_port);
     }
 
     eth_key = nl_msg_put_unspec_uninit(buf, OVS_KEY_ATTR_ETHERNET,
@@ -2808,10 +2808,11 @@ odp_flow_key_to_flow(const struct nlattr *key, size_t key_len,
     }
 
     if (present_attrs & (UINT64_C(1) << OVS_KEY_ATTR_IN_PORT)) {
-        flow->in_port = nl_attr_get_u32(attrs[OVS_KEY_ATTR_IN_PORT]);
+        flow->in_port.odp_port
+            = nl_attr_get_odp_port(attrs[OVS_KEY_ATTR_IN_PORT]);
         expected_attrs |= UINT64_C(1) << OVS_KEY_ATTR_IN_PORT;
     } else {
-        flow->in_port = OVSP_NONE;
+        flow->in_port.odp_port = ODPP_NONE;
     }
 
     /* Ethernet header. */

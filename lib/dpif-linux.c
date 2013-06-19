@@ -169,7 +169,8 @@ static int dpif_linux_init(void);
 static void open_dpif(const struct dpif_linux_dp *, struct dpif **);
 static bool dpif_linux_nln_parse(struct ofpbuf *, void *);
 static void dpif_linux_port_changed(const void *vport, void *dpif);
-static uint32_t dpif_linux_port_get_pid(const struct dpif *, uint32_t port_no);
+static uint32_t dpif_linux_port_get_pid(const struct dpif *,
+                                        odp_port_t port_no);
 
 static void dpif_linux_vport_to_ofpbuf(const struct dpif_linux_vport *,
                                        struct ofpbuf *);
@@ -261,7 +262,7 @@ open_dpif(const struct dpif_linux_dp *dp, struct dpif **dpifp)
 static void
 destroy_channels(struct dpif_linux *dpif)
 {
-    int i;
+    unsigned int i;
 
     if (dpif->epoll_fd < 0) {
         return;
@@ -280,7 +281,7 @@ destroy_channels(struct dpif_linux *dpif)
         dpif_linux_vport_init(&vport_request);
         vport_request.cmd = OVS_VPORT_CMD_SET;
         vport_request.dp_ifindex = dpif->dp_ifindex;
-        vport_request.port_no = i;
+        vport_request.port_no = u32_to_odp(i);
         vport_request.upcall_pid = &upcall_pid;
         dpif_linux_vport_transact(&vport_request, NULL, NULL);
 
@@ -300,9 +301,10 @@ destroy_channels(struct dpif_linux *dpif)
 }
 
 static int
-add_channel(struct dpif_linux *dpif, uint32_t port_no, struct nl_sock *sock)
+add_channel(struct dpif_linux *dpif, odp_port_t port_no, struct nl_sock *sock)
 {
     struct epoll_event event;
+    uint32_t port_idx = odp_to_u32(port_no);
 
     if (dpif->epoll_fd < 0) {
         return 0;
@@ -310,9 +312,9 @@ add_channel(struct dpif_linux *dpif, uint32_t port_no, struct nl_sock *sock)
 
     /* We assume that the datapath densely chooses port numbers, which
      * can therefore be used as an index into an array of channels. */
-    if (port_no >= dpif->uc_array_size) {
-        int new_size = port_no + 1;
-        int i;
+    if (port_idx >= dpif->uc_array_size) {
+        uint32_t new_size = port_idx + 1;
+        uint32_t i;
 
         if (new_size > MAX_PORTS) {
             VLOG_WARN_RL(&error_rl, "%s: datapath port %"PRIu32" too big",
@@ -333,29 +335,30 @@ add_channel(struct dpif_linux *dpif, uint32_t port_no, struct nl_sock *sock)
 
     memset(&event, 0, sizeof event);
     event.events = EPOLLIN;
-    event.data.u32 = port_no;
+    event.data.u32 = port_idx;
     if (epoll_ctl(dpif->epoll_fd, EPOLL_CTL_ADD, nl_sock_fd(sock),
                   &event) < 0) {
         return errno;
     }
 
-    nl_sock_destroy(dpif->channels[port_no].sock);
-    dpif->channels[port_no].sock = sock;
-    dpif->channels[port_no].last_poll = LLONG_MIN;
+    nl_sock_destroy(dpif->channels[port_idx].sock);
+    dpif->channels[port_idx].sock = sock;
+    dpif->channels[port_idx].last_poll = LLONG_MIN;
 
     return 0;
 }
 
 static void
-del_channel(struct dpif_linux *dpif, uint32_t port_no)
+del_channel(struct dpif_linux *dpif, odp_port_t port_no)
 {
     struct dpif_channel *ch;
+    uint32_t port_idx = odp_to_u32(port_no);
 
-    if (dpif->epoll_fd < 0 || port_no >= dpif->uc_array_size) {
+    if (dpif->epoll_fd < 0 || port_idx >= dpif->uc_array_size) {
         return;
     }
 
-    ch = &dpif->channels[port_no];
+    ch = &dpif->channels[port_idx];
     if (!ch->sock) {
         return;
     }
@@ -482,7 +485,7 @@ netdev_to_ovs_vport_type(const struct netdev *netdev)
 
 static int
 dpif_linux_port_add(struct dpif *dpif_, struct netdev *netdev,
-                    uint32_t *port_nop)
+                    odp_port_t *port_nop)
 {
     struct dpif_linux *dpif = dpif_linux_cast(dpif_);
     const struct netdev_tunnel_config *tnl_cfg;
@@ -541,7 +544,7 @@ dpif_linux_port_add(struct dpif *dpif_, struct netdev *netdev,
         VLOG_DBG("%s: assigning port %"PRIu32" to netlink pid %"PRIu32,
                  dpif_name(dpif_), reply.port_no, upcall_pid);
     } else {
-        if (error == EBUSY && *port_nop != UINT32_MAX) {
+        if (error == EBUSY && *port_nop != ODPP_NONE) {
             VLOG_INFO("%s: requested port %"PRIu32" is in use",
                       dpif_name(dpif_), *port_nop);
         }
@@ -573,7 +576,7 @@ dpif_linux_port_add(struct dpif *dpif_, struct netdev *netdev,
 }
 
 static int
-dpif_linux_port_del(struct dpif *dpif_, uint32_t port_no)
+dpif_linux_port_del(struct dpif *dpif_, odp_port_t port_no)
 {
     struct dpif_linux *dpif = dpif_linux_cast(dpif_);
     struct dpif_linux_vport vport;
@@ -591,7 +594,7 @@ dpif_linux_port_del(struct dpif *dpif_, uint32_t port_no)
 }
 
 static int
-dpif_linux_port_query__(const struct dpif *dpif, uint32_t port_no,
+dpif_linux_port_query__(const struct dpif *dpif, odp_port_t port_no,
                         const char *port_name, struct dpif_port *dpif_port)
 {
     struct dpif_linux_vport request;
@@ -622,7 +625,7 @@ dpif_linux_port_query__(const struct dpif *dpif, uint32_t port_no,
 }
 
 static int
-dpif_linux_port_query_by_number(const struct dpif *dpif, uint32_t port_no,
+dpif_linux_port_query_by_number(const struct dpif *dpif, odp_port_t port_no,
                                 struct dpif_port *dpif_port)
 {
     return dpif_linux_port_query__(dpif, port_no, NULL, dpif_port);
@@ -635,23 +638,24 @@ dpif_linux_port_query_by_name(const struct dpif *dpif, const char *devname,
     return dpif_linux_port_query__(dpif, 0, devname, dpif_port);
 }
 
-static int
+static odp_port_t
 dpif_linux_get_max_ports(const struct dpif *dpif OVS_UNUSED)
 {
-    return MAX_PORTS;
+    return u32_to_odp(MAX_PORTS);
 }
 
 static uint32_t
-dpif_linux_port_get_pid(const struct dpif *dpif_, uint32_t port_no)
+dpif_linux_port_get_pid(const struct dpif *dpif_, odp_port_t port_no)
 {
     struct dpif_linux *dpif = dpif_linux_cast(dpif_);
+    uint32_t port_idx = odp_to_u32(port_no);
 
     if (dpif->epoll_fd < 0) {
         return 0;
     } else {
-        /* The UINT32_MAX "reserved" port number uses the "ovs-system"'s
+        /* The ODPP_NONE "reserved" port number uses the "ovs-system"'s
          * channel, since it is not heavily loaded. */
-        int idx = (port_no >= dpif->uc_array_size) ? 0 : port_no;
+        uint32_t idx = port_idx >= dpif->uc_array_size ? 0 : port_idx;
         return nl_sock_pid(dpif->channels[idx].sock);
     }
 }
@@ -1562,7 +1566,7 @@ dpif_linux_vport_from_ofpbuf(struct dpif_linux_vport *vport,
 
     vport->cmd = genl->cmd;
     vport->dp_ifindex = ovs_header->dp_ifindex;
-    vport->port_no = nl_attr_get_u32(a[OVS_VPORT_ATTR_PORT_NO]);
+    vport->port_no = nl_attr_get_odp_port(a[OVS_VPORT_ATTR_PORT_NO]);
     vport->type = nl_attr_get_u32(a[OVS_VPORT_ATTR_TYPE]);
     vport->name = nl_attr_get_string(a[OVS_VPORT_ATTR_NAME]);
     if (a[OVS_VPORT_ATTR_UPCALL_PID]) {
@@ -1592,8 +1596,8 @@ dpif_linux_vport_to_ofpbuf(const struct dpif_linux_vport *vport,
     ovs_header = ofpbuf_put_uninit(buf, sizeof *ovs_header);
     ovs_header->dp_ifindex = vport->dp_ifindex;
 
-    if (vport->port_no != UINT32_MAX) {
-        nl_msg_put_u32(buf, OVS_VPORT_ATTR_PORT_NO, vport->port_no);
+    if (vport->port_no != ODPP_NONE) {
+        nl_msg_put_odp_port(buf, OVS_VPORT_ATTR_PORT_NO, vport->port_no);
     }
 
     if (vport->type != OVS_VPORT_TYPE_UNSPEC) {
@@ -1624,7 +1628,7 @@ void
 dpif_linux_vport_init(struct dpif_linux_vport *vport)
 {
     memset(vport, 0, sizeof *vport);
-    vport->port_no = UINT32_MAX;
+    vport->port_no = ODPP_NONE;
 }
 
 /* Executes 'request' in the kernel datapath.  If the command fails, returns a

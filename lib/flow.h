@@ -68,6 +68,14 @@ struct flow_tnl {
     uint8_t ip_ttl;
 };
 
+/* Unfortunately, a "struct flow" sometimes has to handle OpenFlow port
+ * numbers and other times datapath (dpif) port numbers.  This union allows
+ * access to both. */
+union flow_in_port {
+    ofp_port_t ofp_port;
+    odp_port_t odp_port;
+};
+
 /*
 * A flow in the network.
 *
@@ -87,9 +95,7 @@ struct flow {
     ovs_be32 nw_src;            /* IPv4 source address. */
     ovs_be32 nw_dst;            /* IPv4 destination address. */
     ovs_be32 ipv6_label;        /* IPv6 flow label. */
-    uint32_t in_port;           /* Input port. OpenFlow port number
-                                   unless in DPIF code, in which case it
-                                   is the datapath port number. */
+    union flow_in_port in_port; /* Input port.*/
     uint32_t skb_mark;          /* Packet mark. */
     ovs_be32 mpls_lse;          /* MPLS label stack entry. */
     uint16_t mpls_depth;        /* Depth of MPLS stack. */
@@ -122,11 +128,12 @@ struct flow_metadata {
     ovs_be32 tun_dst;                /* Tunnel outer IPv4 dst addr */
     ovs_be64 metadata;               /* OpenFlow 1.1+ metadata field. */
     uint32_t regs[FLOW_N_REGS];      /* Registers. */
-    uint16_t in_port;                /* OpenFlow port or zero. */
+    ofp_port_t in_port;              /* OpenFlow port or zero. */
 };
 
 void flow_extract(struct ofpbuf *, uint32_t priority, uint32_t mark,
-                  const struct flow_tnl *, uint16_t in_port, struct flow *);
+                  const struct flow_tnl *, const union flow_in_port *in_port,
+                  struct flow *);
 
 void flow_zero_wildcards(struct flow *, const struct flow_wildcards *);
 void flow_get_metadata(const struct flow *, struct flow_metadata *);
@@ -168,6 +175,42 @@ static inline size_t
 flow_hash(const struct flow *flow, uint32_t basis)
 {
     return hash_words((const uint32_t *) flow, sizeof *flow / 4, basis);
+}
+
+static inline uint16_t
+ofp_to_u16(ofp_port_t ofp_port)
+{
+    return (OVS_FORCE uint16_t) ofp_port;
+}
+
+static inline uint32_t
+odp_to_u32(odp_port_t odp_port)
+{
+    return (OVS_FORCE uint32_t) odp_port;
+}
+
+static inline uint32_t
+ofp11_to_u32(ofp11_port_t ofp11_port)
+{
+    return (OVS_FORCE uint32_t) ofp11_port;
+}
+
+static inline ofp_port_t
+u16_to_ofp(uint16_t port)
+{
+    return OFP_PORT_C(port);
+}
+
+static inline odp_port_t
+u32_to_odp(uint32_t port)
+{
+    return ODP_PORT_C(port);
+}
+
+static inline ofp11_port_t
+u32_to_ofp11(uint32_t port)
+{
+    return OFP11_PORT_C(port);
 }
 
 uint32_t flow_hash_in_minimask(const struct flow *, const struct minimask *,

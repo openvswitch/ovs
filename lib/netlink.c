@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include "coverage.h"
+#include "flow.h"
 #include "netlink-protocol.h"
 #include "ofpbuf.h"
 #include "timeval.h"
@@ -295,6 +296,15 @@ nl_msg_put_be64(struct ofpbuf *msg, uint16_t type, ovs_be64 value)
     nl_msg_put_unspec(msg, type, &value, sizeof value);
 }
 
+/* Appends a Netlink attribute of the given 'type' and the given odp_port_t
+ * 'value' to 'msg'. */
+void
+nl_msg_put_odp_port(struct ofpbuf *msg, uint16_t type, odp_port_t value)
+{
+    nl_msg_put_u32(msg, type, odp_to_u32(value));
+}
+
+
 /* Appends a Netlink attribute of the given 'type' and the given
  * null-terminated string 'value' to 'msg'. */
 void
@@ -568,6 +578,15 @@ nl_attr_get_be64(const struct nlattr *nla)
 {
     const ovs_32aligned_be64 *x = nl_attr_get_unspec(nla, sizeof *x);
     return get_32aligned_be64(x);
+}
+
+/* Returns the 32-bit odp_port_t value in 'nla''s payload.
+ *
+ * Asserts that 'nla''s payload is at least 4 bytes long. */
+odp_port_t
+nl_attr_get_odp_port(const struct nlattr *nla)
+{
+    return u32_to_odp(nl_attr_get_u32(nla));
 }
 
 /* Returns the null-terminated string value in 'nla''s payload.

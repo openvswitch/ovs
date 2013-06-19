@@ -27,7 +27,6 @@
 #include <unistd.h>
 #include "byte-order.h"
 #include "coverage.h"
-#include "openvswitch/types.h"
 #include "vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(util);

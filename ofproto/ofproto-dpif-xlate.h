@@ -37,7 +37,7 @@ struct xlate_out {
     bool has_learn;             /* Actions include NXAST_LEARN? */
     bool has_normal;            /* Actions output to OFPP_NORMAL? */
     bool has_fin_timeout;       /* Actions include NXAST_FIN_TIMEOUT? */
-    uint16_t nf_output_iface;   /* Output interface index for NetFlow. */
+    ofp_port_t nf_output_iface; /* Output interface index for NetFlow. */
     mirror_mask_t mirrors;      /* Bitmap of associated mirrors. */
 
     uint64_t odp_actions_stub[256 / 8];

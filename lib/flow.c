@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -337,7 +337,7 @@ invalid:
 }
 
 /* Initializes 'flow' members from 'packet', 'skb_priority', 'tnl', and
- * 'ofp_in_port'.
+ * 'in_port'.
  *
  * Initializes 'packet' header pointers as follows:
  *
@@ -357,7 +357,7 @@ invalid:
  */
 void
 flow_extract(struct ofpbuf *packet, uint32_t skb_priority, uint32_t skb_mark,
-             const struct flow_tnl *tnl, uint16_t ofp_in_port,
+             const struct flow_tnl *tnl, const union flow_in_port *in_port,
              struct flow *flow)
 {
     struct ofpbuf b = *packet;
@@ -371,7 +371,9 @@ flow_extract(struct ofpbuf *packet, uint32_t skb_priority, uint32_t skb_mark,
         ovs_assert(tnl != &flow->tunnel);
         flow->tunnel = *tnl;
     }
-    flow->in_port = ofp_in_port;
+    if (in_port) {
+        flow->in_port = *in_port;
+    }
     flow->skb_priority = skb_priority;
     flow->skb_mark = skb_mark;
 
@@ -498,7 +500,7 @@ flow_get_metadata(const struct flow *flow, struct flow_metadata *fmd)
     fmd->tun_dst = flow->tunnel.ip_dst;
     fmd->metadata = flow->metadata;
     memcpy(fmd->regs, flow->regs, sizeof fmd->regs);
-    fmd->in_port = flow->in_port;
+    fmd->in_port = flow->in_port.ofp_port;
 }
 
 char *

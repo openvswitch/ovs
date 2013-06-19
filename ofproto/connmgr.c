@@ -1039,7 +1039,7 @@ ofconn_send_error(const struct ofconn *ofconn,
 /* Same as pktbuf_retrieve(), using the pktbuf owned by 'ofconn'. */
 enum ofperr
 ofconn_pktbuf_retrieve(struct ofconn *ofconn, uint32_t id,
-                       struct ofpbuf **bufferp, uint16_t *in_port)
+                       struct ofpbuf **bufferp, ofp_port_t *in_port)
 {
     return pktbuf_retrieve(ofconn->pktbuf, id, bufferp, in_port);
 }
@@ -1646,7 +1646,7 @@ any_extras_changed(const struct connmgr *mgr,
 
 bool
 connmgr_must_output_local(struct connmgr *mgr, const struct flow *flow,
-                          uint32_t local_odp_port,
+                          odp_port_t local_odp_port,
                           const struct nlattr *odp_actions,
                           size_t actions_len)
 {
