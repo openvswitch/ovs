@@ -678,8 +678,6 @@ void *ofputil_put_action(enum ofputil_action_code, struct ofpbuf *buf);
 
 #define OFP_ACTION_ALIGN 8      /* Alignment of ofp_actions. */
 
-enum ofperr validate_actions(const union ofp_action *, size_t n_actions,
-                             const struct flow *, ofp_port_t max_ports);
 bool action_outputs_to_port(const union ofp_action *, ovs_be16 port);
 
 enum ofperr ofputil_pull_actions(struct ofpbuf *, unsigned int actions_len,
