@@ -133,7 +133,7 @@
           usage and packet loss.
         </p>
         <p>
-          The default is 1000.  Values below 100 will be rounded up to 100.
+          The default is 2500.  Values below 100 will be rounded up to 100.
         </p>
       </column>
     </group>
