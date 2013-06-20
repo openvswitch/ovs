@@ -940,6 +940,11 @@ A: Open vSwitch 1.9 and earlier support only OpenFlow 1.0 (plus
 
        ovs-vsctl set bridge br0 protocols=OpenFlow10,OpenFlow12,OpenFlow13
 
+   Use the -O option to enable support for later versions of OpenFlow
+   in ovs-ofctl.  For example:
+
+       ovs-ofctl -O OpenFlow13 dump-flows br0
+
    Support for OpenFlow 1.1 is incomplete enough that it cannot yet be
    enabled, even experimentally.
 
