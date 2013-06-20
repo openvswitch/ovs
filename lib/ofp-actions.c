@@ -1142,9 +1142,9 @@ exit:
     return error;
 }
 
+/* May modify flow->dl_type, caller must restore it. */
 static enum ofperr
-ofpact_check__(const struct ofpact *a, const struct flow *flow,
-               ofp_port_t max_ports, ovs_be16 *dl_type)
+ofpact_check__(const struct ofpact *a, struct flow *flow, ofp_port_t max_ports)
 {
     const struct ofpact_enqueue *enqueue;
 
@@ -1217,11 +1217,11 @@ ofpact_check__(const struct ofpact *a, const struct flow *flow,
         return 0;
 
     case OFPACT_PUSH_MPLS:
-        *dl_type = ofpact_get_PUSH_MPLS(a)->ethertype;
+        flow->dl_type = ofpact_get_PUSH_MPLS(a)->ethertype;
         return 0;
 
     case OFPACT_POP_MPLS:
-        *dl_type = ofpact_get_POP_MPLS(a)->ethertype;
+        flow->dl_type = ofpact_get_POP_MPLS(a)->ethertype;
         return 0;
 
     case OFPACT_SAMPLE:
@@ -1239,36 +1239,25 @@ ofpact_check__(const struct ofpact *a, const struct flow *flow,
 
 /* Checks that the 'ofpacts_len' bytes of actions in 'ofpacts' are
  * appropriate for a packet with the prerequisites satisfied by 'flow' in a
- * switch with no more than 'max_ports' ports. */
+ * switch with no more than 'max_ports' ports.
+ *
+ * May temporarily modify 'flow', but restores the changes before returning. */
 enum ofperr
 ofpacts_check(const struct ofpact ofpacts[], size_t ofpacts_len,
-              const struct flow *flow, ofp_port_t max_ports)
+              struct flow *flow, ofp_port_t max_ports)
 {
     const struct ofpact *a;
     ovs_be16 dl_type = flow->dl_type;
-    struct flow updated_flow;
+    enum ofperr error = 0;
 
     OFPACT_FOR_EACH (a, ofpacts, ofpacts_len) {
-        enum ofperr error;
-
-        /* If the dl_type was changed by an action then its new value
-         * should be present in the flow passed to ofpact_check__(). */
-        if (flow->dl_type != dl_type) {
-            /* Only copy flow at most once */
-            if (flow != &updated_flow) {
-                updated_flow = *flow;
-                flow = &updated_flow;
-            }
-            updated_flow.dl_type = dl_type;
-        }
-
-        error = ofpact_check__(a, flow, max_ports, &dl_type);
+        error = ofpact_check__(a, flow, max_ports);
         if (error) {
-            return error;
+            break;
         }
     }
-
-    return 0;
+    flow->dl_type = dl_type; /* Restore. */
+    return error;
 }
 
 /* Verifies that the 'ofpacts_len' bytes of actions in 'ofpacts' are
