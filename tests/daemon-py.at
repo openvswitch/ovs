@@ -142,7 +142,7 @@ CHECK([kill -0 `cat daemon`])
 CHECK([ps -o ppid= -p `cat daemon` > monitor])
 CHECK([kill -0 `cat monitor`])
 CHECK([ps -o ppid= -p `cat monitor` > init])
-CHECK([test `cat init` = 1])
+CHECK([test `cat init` != $$])
 # Kill the daemon process, making it look like a segfault,
 # and wait for a new daemon process to get spawned.
 CHECK([cp daemon olddaemon])
@@ -159,7 +159,7 @@ CHECK([ps -o ppid= -p `cat daemon` > newmonitor])
 CHECK([diff monitor newmonitor])
 CHECK([kill -0 `cat newmonitor`])
 CHECK([ps -o ppid= -p `cat newmonitor` > init])
-CHECK([test `cat init` = 1])
+CHECK([test `cat init` != $$])
 # Kill the daemon process with SIGTERM, and wait for the daemon
 # and the monitor processes to go away and the pidfile to get deleted.
 CHECK([kill `cat daemon`], [0], [], [ignore])
