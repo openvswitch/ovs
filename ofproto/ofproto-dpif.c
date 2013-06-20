@@ -50,6 +50,7 @@
 #include "ofp-print.h"
 #include "ofproto-dpif-governor.h"
 #include "ofproto-dpif-ipfix.h"
+#include "ofproto-dpif-mirror.h"
 #include "ofproto-dpif-sflow.h"
 #include "ofproto-dpif-xlate.h"
 #include "poll-loop.h"
@@ -80,11 +81,6 @@ static struct rule_dpif *rule_dpif_lookup(struct ofproto_dpif *,
 
 static void rule_get_stats(struct rule *, uint64_t *packets, uint64_t *bytes);
 static void rule_invalidate(const struct rule_dpif *);
-
-static void mirror_destroy(struct ofmirror *);
-static void update_mirror_stats(struct ofproto_dpif *ofproto,
-                                mirror_mask_t mirrors,
-                                uint64_t packets, uint64_t bytes);
 
 static void bundle_remove(struct ofport *);
 static void bundle_update(struct ofbundle *);
@@ -1028,9 +1024,7 @@ construct(struct ofproto *ofproto_)
     ofproto->stp = NULL;
     hmap_init(&ofproto->bundles);
     ofproto->ml = mac_learning_create(MAC_ENTRY_DEFAULT_IDLE_TIME);
-    for (i = 0; i < MAX_MIRRORS; i++) {
-        ofproto->mirrors[i] = NULL;
-    }
+    ofproto->mbridge = mbridge_create();
     ofproto->has_bonded_bundles = false;
 
     classifier_init(&ofproto->facets);
@@ -1048,7 +1042,6 @@ construct(struct ofproto *ofproto_)
 
     ofproto_dpif_unixctl_init();
 
-    ofproto->has_mirrors = false;
     hmap_init(&ofproto->vlandev_map);
     hmap_init(&ofproto->realdev_vid_map);
 
@@ -1177,7 +1170,6 @@ destruct(struct ofproto *ofproto_)
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
     struct rule_dpif *rule, *next_rule;
     struct oftable *table;
-    int i;
 
     ofproto->backer->need_revalidate = REV_RECONFIGURE;
     hmap_remove(&all_ofproto_dpifs, &ofproto->all_ofproto_dpifs_node);
@@ -1192,9 +1184,7 @@ destruct(struct ofproto *ofproto_)
         }
     }
 
-    for (i = 0; i < MAX_MIRRORS; i++) {
-        mirror_destroy(ofproto->mirrors[i]);
-    }
+    mbridge_unref(ofproto->mbridge);
 
     netflow_destroy(ofproto->netflow);
     dpif_sflow_unref(ofproto->sflow);
@@ -1242,6 +1232,11 @@ run(struct ofproto *ofproto_)
 
     if (!clogged) {
         complete_operations(ofproto);
+    }
+
+    if (mbridge_need_revalidate(ofproto->mbridge)) {
+        ofproto->backer->need_revalidate = REV_RECONFIGURE;
+        mac_learning_flush(ofproto->ml, NULL);
     }
 
     /* Do not perform any periodic activity below required by 'ofproto' while
@@ -2131,24 +2126,6 @@ bundle_lookup(const struct ofproto_dpif *ofproto, void *aux)
     return NULL;
 }
 
-/* Looks up each of the 'n_auxes' pointers in 'auxes' as bundles and adds the
- * ones that are found to 'bundles'. */
-static void
-bundle_lookup_multiple(struct ofproto_dpif *ofproto,
-                       void **auxes, size_t n_auxes,
-                       struct hmapx *bundles)
-{
-    size_t i;
-
-    hmapx_init(bundles);
-    for (i = 0; i < n_auxes; i++) {
-        struct ofbundle *bundle = bundle_lookup(ofproto, auxes[i]);
-        if (bundle) {
-            hmapx_add(bundles, bundle);
-        }
-    }
-}
-
 static void
 bundle_update(struct ofbundle *bundle)
 {
@@ -2221,24 +2198,13 @@ bundle_destroy(struct ofbundle *bundle)
 {
     struct ofproto_dpif *ofproto;
     struct ofport_dpif *port, *next_port;
-    int i;
 
     if (!bundle) {
         return;
     }
 
     ofproto = bundle->ofproto;
-    for (i = 0; i < MAX_MIRRORS; i++) {
-        struct ofmirror *m = ofproto->mirrors[i];
-        if (m) {
-            if (m->out == bundle) {
-                mirror_destroy(m);
-            } else if (hmapx_find_and_delete(&m->srcs, bundle)
-                       || hmapx_find_and_delete(&m->dsts, bundle)) {
-                ofproto->backer->need_revalidate = REV_RECONFIGURE;
-            }
-        }
-    }
+    mbridge_unregister_bundle(ofproto->mbridge, bundle->aux);
 
     LIST_FOR_EACH_SAFE (port, next_port, bundle_node, &bundle->ports) {
         bundle_del_port(port);
@@ -2293,10 +2259,7 @@ bundle_set(struct ofproto *ofproto_, void *aux,
         bundle->bond = NULL;
 
         bundle->floodable = true;
-
-        bundle->src_mirrors = 0;
-        bundle->dst_mirrors = 0;
-        bundle->mirror_out = 0;
+        mbridge_register_bundle(ofproto->mbridge, bundle);
     }
 
     if (!bundle->name || strcmp(s->name, bundle->name)) {
@@ -2557,238 +2520,45 @@ bundle_wait(struct ofbundle *bundle)
 /* Mirrors. */
 
 static int
-mirror_scan(struct ofproto_dpif *ofproto)
-{
-    int idx;
-
-    for (idx = 0; idx < MAX_MIRRORS; idx++) {
-        if (!ofproto->mirrors[idx]) {
-            return idx;
-        }
-    }
-    return -1;
-}
-
-static struct ofmirror *
-mirror_lookup(struct ofproto_dpif *ofproto, void *aux)
-{
-    int i;
-
-    for (i = 0; i < MAX_MIRRORS; i++) {
-        struct ofmirror *mirror = ofproto->mirrors[i];
-        if (mirror && mirror->aux == aux) {
-            return mirror;
-        }
-    }
-
-    return NULL;
-}
-
-/* Update the 'dup_mirrors' member of each of the ofmirrors in 'ofproto'. */
-static void
-mirror_update_dups(struct ofproto_dpif *ofproto)
-{
-    int i;
-
-    for (i = 0; i < MAX_MIRRORS; i++) {
-        struct ofmirror *m = ofproto->mirrors[i];
-
-        if (m) {
-            m->dup_mirrors = MIRROR_MASK_C(1) << i;
-        }
-    }
-
-    for (i = 0; i < MAX_MIRRORS; i++) {
-        struct ofmirror *m1 = ofproto->mirrors[i];
-        int j;
-
-        if (!m1) {
-            continue;
-        }
-
-        for (j = i + 1; j < MAX_MIRRORS; j++) {
-            struct ofmirror *m2 = ofproto->mirrors[j];
-
-            if (m2 && m1->out == m2->out && m1->out_vlan == m2->out_vlan) {
-                m1->dup_mirrors |= MIRROR_MASK_C(1) << j;
-                m2->dup_mirrors |= m1->dup_mirrors;
-            }
-        }
-    }
-}
-
-static int
-mirror_set(struct ofproto *ofproto_, void *aux,
-           const struct ofproto_mirror_settings *s)
+mirror_set__(struct ofproto *ofproto_, void *aux,
+             const struct ofproto_mirror_settings *s)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
-    mirror_mask_t mirror_bit;
-    struct ofbundle *bundle;
-    struct ofmirror *mirror;
-    struct ofbundle *out;
-    struct hmapx srcs;          /* Contains "struct ofbundle *"s. */
-    struct hmapx dsts;          /* Contains "struct ofbundle *"s. */
-    int out_vlan;
+    struct ofbundle **srcs, **dsts;
+    int error;
+    size_t i;
 
-    mirror = mirror_lookup(ofproto, aux);
     if (!s) {
-        mirror_destroy(mirror);
-        return 0;
-    }
-    if (!mirror) {
-        int idx;
-
-        idx = mirror_scan(ofproto);
-        if (idx < 0) {
-            VLOG_WARN("bridge %s: maximum of %d port mirrors reached, "
-                      "cannot create %s",
-                      ofproto->up.name, MAX_MIRRORS, s->name);
-            return EFBIG;
-        }
-
-        mirror = ofproto->mirrors[idx] = xzalloc(sizeof *mirror);
-        mirror->ofproto = ofproto;
-        mirror->idx = idx;
-        mirror->aux = aux;
-        mirror->out_vlan = -1;
-        mirror->name = NULL;
-    }
-
-    if (!mirror->name || strcmp(s->name, mirror->name)) {
-        free(mirror->name);
-        mirror->name = xstrdup(s->name);
-    }
-
-    /* Get the new configuration. */
-    if (s->out_bundle) {
-        out = bundle_lookup(ofproto, s->out_bundle);
-        if (!out) {
-            mirror_destroy(mirror);
-            return EINVAL;
-        }
-        out_vlan = -1;
-    } else {
-        out = NULL;
-        out_vlan = s->out_vlan;
-    }
-    bundle_lookup_multiple(ofproto, s->srcs, s->n_srcs, &srcs);
-    bundle_lookup_multiple(ofproto, s->dsts, s->n_dsts, &dsts);
-
-    /* If the configuration has not changed, do nothing. */
-    if (hmapx_equals(&srcs, &mirror->srcs)
-        && hmapx_equals(&dsts, &mirror->dsts)
-        && vlan_bitmap_equal(mirror->vlans, s->src_vlans)
-        && mirror->out == out
-        && mirror->out_vlan == out_vlan)
-    {
-        hmapx_destroy(&srcs);
-        hmapx_destroy(&dsts);
+        mirror_destroy(ofproto->mbridge, aux);
         return 0;
     }
 
-    hmapx_swap(&srcs, &mirror->srcs);
-    hmapx_destroy(&srcs);
+    srcs = xmalloc(s->n_srcs * sizeof *srcs);
+    dsts = xmalloc(s->n_dsts * sizeof *dsts);
 
-    hmapx_swap(&dsts, &mirror->dsts);
-    hmapx_destroy(&dsts);
-
-    free(mirror->vlans);
-    mirror->vlans = vlan_bitmap_clone(s->src_vlans);
-
-    mirror->out = out;
-    mirror->out_vlan = out_vlan;
-
-    /* Update bundles. */
-    mirror_bit = MIRROR_MASK_C(1) << mirror->idx;
-    HMAP_FOR_EACH (bundle, hmap_node, &mirror->ofproto->bundles) {
-        if (hmapx_contains(&mirror->srcs, bundle)) {
-            bundle->src_mirrors |= mirror_bit;
-        } else {
-            bundle->src_mirrors &= ~mirror_bit;
-        }
-
-        if (hmapx_contains(&mirror->dsts, bundle)) {
-            bundle->dst_mirrors |= mirror_bit;
-        } else {
-            bundle->dst_mirrors &= ~mirror_bit;
-        }
-
-        if (mirror->out == bundle) {
-            bundle->mirror_out |= mirror_bit;
-        } else {
-            bundle->mirror_out &= ~mirror_bit;
-        }
+    for (i = 0; i < s->n_srcs; i++) {
+        srcs[i] = bundle_lookup(ofproto, s->srcs[i]);
     }
 
-    ofproto->backer->need_revalidate = REV_RECONFIGURE;
-    ofproto->has_mirrors = true;
-    mac_learning_flush(ofproto->ml,
-                       &ofproto->backer->revalidate_set);
-    mirror_update_dups(ofproto);
-
-    return 0;
-}
-
-static void
-mirror_destroy(struct ofmirror *mirror)
-{
-    struct ofproto_dpif *ofproto;
-    mirror_mask_t mirror_bit;
-    struct ofbundle *bundle;
-    int i;
-
-    if (!mirror) {
-        return;
+    for (i = 0; i < s->n_dsts; i++) {
+        dsts[i] = bundle_lookup(ofproto, s->dsts[i]);
     }
 
-    ofproto = mirror->ofproto;
-    ofproto->backer->need_revalidate = REV_RECONFIGURE;
-    mac_learning_flush(ofproto->ml, &ofproto->backer->revalidate_set);
-
-    mirror_bit = MIRROR_MASK_C(1) << mirror->idx;
-    HMAP_FOR_EACH (bundle, hmap_node, &ofproto->bundles) {
-        bundle->src_mirrors &= ~mirror_bit;
-        bundle->dst_mirrors &= ~mirror_bit;
-        bundle->mirror_out &= ~mirror_bit;
-    }
-
-    hmapx_destroy(&mirror->srcs);
-    hmapx_destroy(&mirror->dsts);
-    free(mirror->vlans);
-
-    ofproto->mirrors[mirror->idx] = NULL;
-    free(mirror->name);
-    free(mirror);
-
-    mirror_update_dups(ofproto);
-
-    ofproto->has_mirrors = false;
-    for (i = 0; i < MAX_MIRRORS; i++) {
-        if (ofproto->mirrors[i]) {
-            ofproto->has_mirrors = true;
-            break;
-        }
-    }
+    error = mirror_set(ofproto->mbridge, aux, s->name, srcs, s->n_srcs, dsts,
+                       s->n_dsts, s->src_vlans,
+                       bundle_lookup(ofproto, s->out_bundle), s->out_vlan);
+    free(srcs);
+    free(dsts);
+    return error;
 }
 
 static int
-mirror_get_stats(struct ofproto *ofproto_, void *aux,
-                 uint64_t *packets, uint64_t *bytes)
+mirror_get_stats__(struct ofproto *ofproto, void *aux,
+                   uint64_t *packets, uint64_t *bytes)
 {
-    struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
-    struct ofmirror *mirror = mirror_lookup(ofproto, aux);
-
-    if (!mirror) {
-        *packets = *bytes = UINT64_MAX;
-        return 0;
-    }
-
     push_all_stats();
-
-    *packets = mirror->packet_count;
-    *bytes = mirror->byte_count;
-
-    return 0;
+    return mirror_get_stats(ofproto_dpif_cast(ofproto)->mbridge, aux, packets,
+                            bytes);
 }
 
 static int
@@ -2806,7 +2576,7 @@ is_mirror_output_bundle(const struct ofproto *ofproto_, void *aux)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
     struct ofbundle *bundle = bundle_lookup(ofproto, aux);
-    return bundle && bundle->mirror_out != 0;
+    return bundle && mirror_bundle_out(ofproto->mbridge, bundle) != 0;
 }
 
 static void
@@ -4854,8 +4624,8 @@ facet_push_stats(struct facet *facet, bool may_learn)
         netflow_flow_update_time(ofproto->netflow, &facet->nf_flow,
                                  facet->used);
         netflow_flow_update_flags(&facet->nf_flow, facet->tcp_flags);
-        update_mirror_stats(ofproto, facet->xout.mirrors, stats.n_packets,
-                            stats.n_bytes);
+        mirror_update_stats(ofproto->mbridge, facet->xout.mirrors,
+                            stats.n_packets, stats.n_bytes);
 
         xlate_in_init(&xin, ofproto, &facet->flow, facet->rule,
                       stats.tcp_flags, NULL);
@@ -5480,35 +5250,6 @@ put_userspace_action(const struct ofproto_dpif *ofproto,
                                                  flow->in_port.ofp_port));
 
     return odp_put_userspace_action(pid, cookie, cookie_size, odp_actions);
-}
-
-
-static void
-update_mirror_stats(struct ofproto_dpif *ofproto, mirror_mask_t mirrors,
-                    uint64_t packets, uint64_t bytes)
-{
-    if (!mirrors) {
-        return;
-    }
-
-    for (; mirrors; mirrors = zero_rightmost_1bit(mirrors)) {
-        struct ofmirror *m;
-
-        m = ofproto->mirrors[mirror_mask_ffs(mirrors) - 1];
-
-        if (!m) {
-            /* In normal circumstances 'm' will not be NULL.  However,
-             * if mirrors are reconfigured, we can temporarily get out
-             * of sync in facet_revalidate().  We could "correct" the
-             * mirror list before reaching here, but doing that would
-             * not properly account the traffic stats we've currently
-             * accumulated for previous mirror configuration. */
-            continue;
-        }
-
-        m->packet_count += packets;
-        m->byte_count += bytes;
-    }
 }
 
 tag_type
@@ -6880,8 +6621,8 @@ const struct ofproto_class ofproto_dpif_class = {
     set_queues,
     bundle_set,
     bundle_remove,
-    mirror_set,
-    mirror_get_stats,
+    mirror_set__,
+    mirror_get_stats__,
     set_flood_vlans,
     is_mirror_output_bundle,
     forward_bpdu_changed,

@@ -26,6 +26,8 @@ ofproto_libofproto_a_SOURCES = \
 	ofproto/ofproto-dpif-governor.h \
 	ofproto/ofproto-dpif-ipfix.c \
 	ofproto/ofproto-dpif-ipfix.h \
+	ofproto/ofproto-dpif-mirror.c \
+	ofproto/ofproto-dpif-mirror.h \
 	ofproto/ofproto-dpif-sflow.c \
 	ofproto/ofproto-dpif-sflow.h \
 	ofproto/ofproto-dpif-xlate.c \

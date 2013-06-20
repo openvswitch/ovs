@@ -38,6 +38,7 @@
 #include "odp-execute.h"
 #include "ofp-actions.h"
 #include "ofproto/ofproto-dpif-ipfix.h"
+#include "ofproto/ofproto-dpif-mirror.h"
 #include "ofproto/ofproto-dpif-sflow.h"
 #include "ofproto/ofproto-dpif.h"
 #include "tunnel.h"
@@ -124,12 +125,6 @@ ofbundle_includes_vlan(const struct ofbundle *bundle, uint16_t vlan)
     return vlan == bundle->vlan || ofbundle_trunks_vlan(bundle, vlan);
 }
 
-static bool
-vlan_is_mirrored(const struct ofmirror *m, int vlan)
-{
-    return !m->vlans || bitmap_is_set(m->vlans, vlan);
-}
-
 static struct ofbundle *
 lookup_input_bundle(const struct ofproto_dpif *ofproto, ofp_port_t in_port,
                     bool warn, struct ofport_dpif **in_ofportp)
@@ -190,10 +185,10 @@ add_mirror_actions(struct xlate_ctx *ctx, const struct flow *orig_flow)
     if (!in_bundle) {
         return;
     }
-    mirrors |= in_bundle->src_mirrors;
+    mirrors |= mirror_bundle_src(ctx->ofproto->mbridge, in_bundle);
 
     /* Drop frames on bundles reserved for mirroring. */
-    if (in_bundle->mirror_out) {
+    if (mirror_bundle_out(ctx->ofproto->mbridge, in_bundle)) {
         if (ctx->xin->packet != NULL) {
             static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
             VLOG_WARN_RL(&rl, "bridge %s: dropping packet received on port "
@@ -218,31 +213,40 @@ add_mirror_actions(struct xlate_ctx *ctx, const struct flow *orig_flow)
     ctx->xin->flow = *orig_flow;
 
     while (mirrors) {
-        struct ofmirror *m;
+        mirror_mask_t dup_mirrors;
+        struct ofbundle *out;
+        unsigned long *vlans;
+        bool vlan_mirrored;
+        bool has_mirror;
+        int out_vlan;
 
-        m = ofproto->mirrors[mirror_mask_ffs(mirrors) - 1];
+        has_mirror = mirror_get(ofproto->mbridge, mirror_mask_ffs(mirrors) - 1,
+                                &vlans, &dup_mirrors, &out, &out_vlan);
+        ovs_assert(has_mirror);
 
-        if (m->vlans) {
+        if (vlans) {
             ctx->xout->wc.masks.vlan_tci |= htons(VLAN_CFI | VLAN_VID_MASK);
         }
+        vlan_mirrored = !vlans || bitmap_is_set(vlans, vlan);
+        free(vlans);
 
-        if (!vlan_is_mirrored(m, vlan)) {
+        if (!vlan_mirrored) {
             mirrors = zero_rightmost_1bit(mirrors);
             continue;
         }
 
-        mirrors &= ~m->dup_mirrors;
-        ctx->xout->mirrors |= m->dup_mirrors;
-        if (m->out) {
-            output_normal(ctx, m->out, vlan);
-        } else if (vlan != m->out_vlan
+        mirrors &= ~dup_mirrors;
+        ctx->xout->mirrors |= dup_mirrors;
+        if (out) {
+            output_normal(ctx, out, vlan);
+        } else if (vlan != out_vlan
                    && !eth_addr_is_reserved(orig_flow->dl_dst)) {
             struct ofbundle *bundle;
 
             HMAP_FOR_EACH (bundle, hmap_node, &ofproto->bundles) {
-                if (ofbundle_includes_vlan(bundle, m->out_vlan)
-                    && !bundle->mirror_out) {
-                    output_normal(ctx, bundle, m->out_vlan);
+                if (ofbundle_includes_vlan(bundle, out_vlan)
+                    && !mirror_bundle_out(bundle->ofproto->mbridge, bundle)) {
+                    output_normal(ctx, bundle, out_vlan);
                 }
             }
         }
@@ -557,7 +561,7 @@ xlate_normal(struct xlate_ctx *ctx)
     }
 
     /* Drop frames on bundles reserved for mirroring. */
-    if (in_bundle->mirror_out) {
+    if (mirror_bundle_out(ctx->ofproto->mbridge, in_bundle)) {
         if (ctx->xin->packet != NULL) {
             static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
             VLOG_WARN_RL(&rl, "bridge %s: dropping packet received on port "
@@ -604,7 +608,7 @@ xlate_normal(struct xlate_ctx *ctx)
             if (bundle != in_bundle
                 && ofbundle_includes_vlan(bundle, vlan)
                 && bundle->floodable
-                && !bundle->mirror_out) {
+                && !mirror_bundle_out(bundle->ofproto->mbridge, bundle)) {
                 output_normal(ctx, bundle, vlan);
             }
         }
@@ -838,8 +842,10 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
         return;
     }
 
-    if (ctx->ofproto->has_mirrors && ofport->bundle) {
-        ctx->xout->mirrors |= ofport->bundle->dst_mirrors;
+    if (mbridge_has_mirrors(ctx->ofproto->mbridge) && ofport->bundle) {
+        ctx->xout->mirrors |=
+            mirror_bundle_dst(ofport->bundle->ofproto->mbridge,
+                              ofport->bundle);
     }
 
     if (ofport->peer) {
@@ -1925,7 +1931,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
 
     ofpbuf_use_stub(&ctx.stack, ctx.init_stack, sizeof ctx.init_stack);
 
-    if (ctx.ofproto->has_mirrors || hit_resubmit_limit) {
+    if (mbridge_has_mirrors(ctx.ofproto->mbridge) || hit_resubmit_limit) {
         /* Do this conditionally because the copy is expensive enough that it
          * shows up in profiles. */
         orig_flow = *flow;
@@ -2002,7 +2008,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
             && !actions_output_to_local_port(&ctx)) {
             compose_output_action(&ctx, OFPP_LOCAL);
         }
-        if (ctx.ofproto->has_mirrors) {
+        if (mbridge_has_mirrors(ctx.ofproto->mbridge)) {
             add_mirror_actions(&ctx, &orig_flow);
         }
         fix_sflow_action(&ctx);

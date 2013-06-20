@@ -19,6 +19,7 @@
 #include "meta-flow.h"
 #include "odp-util.h"
 #include "ofpbuf.h"
+#include "ofproto-dpif-mirror.h"
 #include "ofproto-dpif.h"
 #include "tag.h"
 

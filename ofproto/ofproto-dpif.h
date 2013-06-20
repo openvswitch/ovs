@@ -25,11 +25,6 @@
 
 union user_action_cookie;
 
-#define MAX_MIRRORS 32
-typedef uint32_t mirror_mask_t;
-#define MIRROR_MASK_C(X) UINT32_C(X)
-BUILD_ASSERT_DECL(sizeof(mirror_mask_t) * CHAR_BIT >= MAX_MIRRORS);
-
 /* Number of implemented OpenFlow tables. */
 enum { N_TABLES = 255 };
 enum { TBL_INTERNAL = N_TABLES - 1 };    /* Used for internal hidden rules. */
@@ -86,9 +81,8 @@ struct ofproto_dpif {
     struct dpif_ipfix *ipfix;
     struct hmap bundles;        /* Contains "struct ofbundle"s. */
     struct mac_learning *ml;
-    struct ofmirror *mirrors[MAX_MIRRORS];
-    bool has_mirrors;
     bool has_bonded_bundles;
+    struct mbridge *mbridge;
 
     /* Facets. */
     struct classifier facets;     /* Contains 'struct facet's. */
@@ -172,32 +166,6 @@ struct ofbundle {
 
     /* Status. */
     bool floodable;          /* True if no port has OFPUTIL_PC_NO_FLOOD set. */
-
-    /* Port mirroring info. */
-    mirror_mask_t src_mirrors;  /* Mirrors triggered when packet received. */
-    mirror_mask_t dst_mirrors;  /* Mirrors triggered when packet sent. */
-    mirror_mask_t mirror_out;   /* Mirrors that output to this bundle. */
-};
-
-struct ofmirror {
-    struct ofproto_dpif *ofproto; /* Owning ofproto. */
-    size_t idx;                 /* In ofproto's "mirrors" array. */
-    void *aux;                  /* Key supplied by ofproto's client. */
-    char *name;                 /* Identifier for log messages. */
-
-    /* Selection criteria. */
-    struct hmapx srcs;          /* Contains "struct ofbundle *"s. */
-    struct hmapx dsts;          /* Contains "struct ofbundle *"s. */
-    unsigned long *vlans;       /* Bitmap of chosen VLANs, NULL selects all. */
-
-    /* Output (exactly one of out == NULL and out_vlan == -1 is true). */
-    struct ofbundle *out;       /* Output port or NULL. */
-    int out_vlan;               /* Output VLAN or -1. */
-    mirror_mask_t dup_mirrors;  /* Bitmap of mirrors with the same output. */
-
-    /* Counters. */
-    int64_t packet_count;       /* Number of packets sent. */
-    int64_t byte_count;         /* Number of bytes sent. */
 };
 
 static inline struct rule_dpif *rule_dpif_cast(const struct rule *rule)
@@ -217,13 +185,6 @@ ofbundle_get_a_port(const struct ofbundle *bundle)
 {
     return CONTAINER_OF(list_front(&bundle->ports), struct ofport_dpif,
                         bundle_node);
-}
-
-static inline int
-mirror_mask_ffs(mirror_mask_t mask)
-{
-    BUILD_ASSERT_DECL(sizeof(unsigned int) >= sizeof(mask));
-    return ffs(mask);
 }
 
 struct ofport_dpif *get_ofp_port(const struct ofproto_dpif *,
