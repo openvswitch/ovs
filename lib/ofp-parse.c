@@ -45,14 +45,14 @@ static void ofp_fatal(const char *flow, bool verbose, const char *format, ...)
     NO_RETURN;
 
 static uint8_t
-str_to_table_id(const char *str)
+str_to_u8(const char *str, const char *name)
 {
-    int table_id;
+    int value;
 
-    if (!str_to_int(str, 10, &table_id) || table_id < 0 || table_id > 255) {
-        ovs_fatal(0, "invalid table \"%s\"", str);
+    if (!str_to_int(str, 10, &value) || value < 0 || value > 255) {
+        ovs_fatal(0, "invalid %s \"%s\"", name, str);
     }
-    return table_id;
+    return value;
 }
 
 static uint16_t
@@ -705,6 +705,10 @@ parse_named_instruction(enum ovs_instruction_type type,
         ofpact_put_CLEAR_ACTIONS(ofpacts);
         break;
 
+    case OVSINST_OFPIT13_METER:
+        ofpact_put_METER(ofpacts)->meter_id = str_to_u32(arg);
+        break;
+
     case OVSINST_OFPIT11_WRITE_METADATA:
         parse_metadata(ofpacts, arg);
         break;
@@ -715,7 +719,7 @@ parse_named_instruction(enum ovs_instruction_type type,
         if (!table_s || !table_s[0]) {
             ovs_fatal(0, "instruction goto-table needs table id");
         }
-        ogt->table_id = str_to_table_id(table_s);
+        ogt->table_id = str_to_u8(table_s, "table");
         break;
     }
     }
@@ -948,7 +952,7 @@ parse_ofp_str(struct ofputil_flow_mod *fm, int command, const char *str_,
             }
 
             if (!strcmp(name, "table")) {
-                fm->table_id = str_to_table_id(value);
+                fm->table_id = str_to_u8(value, name);
             } else if (!strcmp(name, "out_port")) {
                 if (!ofputil_port_from_string(name, &fm->out_port)) {
                     ofp_fatal(str_, verbose, "%s is not a valid OpenFlow port",
@@ -1025,6 +1029,198 @@ parse_ofp_str(struct ofputil_flow_mod *fm, int command, const char *str_,
     free(string);
 }
 
+/* Convert 'str_' (as described in the Flow Syntax section of the ovs-ofctl man
+ * page) into 'mm' for sending the specified meter_mod 'command' to a switch.
+ */
+void
+parse_ofp_meter_mod_str(struct ofputil_meter_mod *mm, const char *str_,
+                        int command, bool verbose)
+{
+    enum {
+        F_METER = 1 << 0,
+        F_FLAGS = 1 << 1,
+        F_BANDS = 1 << 2,
+    } fields;
+    char *string = xstrdup(str_);
+    char *save_ptr = NULL;
+    char *band_str = NULL;
+    char *name;
+
+    switch (command) {
+    case -1:
+        fields = F_METER;
+        break;
+
+    case OFPMC13_ADD:
+        fields = F_METER | F_FLAGS | F_BANDS;
+        break;
+
+    case OFPMC13_DELETE:
+        fields = F_METER;
+        break;
+
+    case OFPMC13_MODIFY:
+        fields = F_METER | F_FLAGS | F_BANDS;
+        break;
+
+    default:
+        NOT_REACHED();
+    }
+
+    mm->command = command;
+    mm->meter.meter_id = 0;
+    mm->meter.flags = 0;
+    if (fields & F_BANDS) {
+        band_str = strstr(string, "band");
+        if (!band_str) {
+            ofp_fatal(str_, verbose, "must specify bands");
+        }
+        *band_str = '\0';
+
+        band_str = strchr(band_str + 1, '=');
+        if (!band_str) {
+            ofp_fatal(str_, verbose, "must specify bands");
+        }
+
+        band_str++;
+    }
+    for (name = strtok_r(string, "=, \t\r\n", &save_ptr); name;
+         name = strtok_r(NULL, "=, \t\r\n", &save_ptr)) {
+
+        if (fields & F_FLAGS && !strcmp(name, "kbps")) {
+            mm->meter.flags |= OFPMF13_KBPS;
+        } else if (fields & F_FLAGS && !strcmp(name, "pktps")) {
+            mm->meter.flags |= OFPMF13_PKTPS;
+        } else if (fields & F_FLAGS && !strcmp(name, "burst")) {
+            mm->meter.flags |= OFPMF13_BURST;
+        } else if (fields & F_FLAGS && !strcmp(name, "stats")) {
+            mm->meter.flags |= OFPMF13_STATS;
+        } else {
+            char *value;
+
+            value = strtok_r(NULL, ", \t\r\n", &save_ptr);
+            if (!value) {
+                ofp_fatal(str_, verbose, "field %s missing value", name);
+            }
+
+            if (!strcmp(name, "meter")) {
+                if (!strcmp(value, "all")) {
+                    mm->meter.meter_id = OFPM13_ALL;
+                } else if (!strcmp(value, "controller")) {
+                    mm->meter.meter_id = OFPM13_CONTROLLER;
+                } else if (!strcmp(value, "slowpath")) {
+                    mm->meter.meter_id = OFPM13_SLOWPATH;
+                } else {
+                    mm->meter.meter_id = str_to_u32(value);
+                    if (mm->meter.meter_id > OFPM13_MAX) {
+                        ofp_fatal(str_, verbose, "invalid value for %s", name);
+                    }
+                }
+            } else {
+                ofp_fatal(str_, verbose, "unknown keyword %s", name);
+            }
+        }
+    }
+    if (fields & F_METER && !mm->meter.meter_id) {
+        ofp_fatal(str_, verbose, "must specify 'meter'");
+    }
+    if (fields & F_FLAGS && !mm->meter.flags) {
+        ofp_fatal(str_, verbose,
+                  "meter must specify either 'kbps' or 'pktps'");
+    }
+
+    if (fields & F_BANDS) {
+        struct ofpbuf bands;
+        uint16_t n_bands = 0;
+        struct ofputil_meter_band *band = NULL;
+        int i;
+
+        ofpbuf_init(&bands, 64);
+
+        for (name = strtok_r(band_str, "=, \t\r\n", &save_ptr); name;
+             name = strtok_r(NULL, "=, \t\r\n", &save_ptr)) {
+
+            char *value;
+
+            value = strtok_r(NULL, ", \t\r\n", &save_ptr);
+            if (!value) {
+                ofp_fatal(str_, verbose, "field %s missing value", name);
+            }
+
+            if (!strcmp(name, "type")) {
+                /* Start a new band */
+                band = ofpbuf_put_zeros(&bands, sizeof *band);
+                n_bands++;
+
+                if (!strcmp(value, "drop")) {
+                    band->type = OFPMBT13_DROP;
+                } else if (!strcmp(value, "dscp_remark")) {
+                    band->type = OFPMBT13_DSCP_REMARK;
+                } else {
+                    ofp_fatal(str_, verbose, "field %s unknown value %s", name,
+                              value);
+                }
+            } else if (!band || !band->type) {
+                ofp_fatal(str_, verbose,
+                          "band must start with the 'type' keyword");
+            } else if (!strcmp(name, "rate")) {
+                band->rate = str_to_u32(value);
+            } else if (!strcmp(name, "burst_size")) {
+                band->burst_size = str_to_u32(value);
+            } else if (!strcmp(name, "prec_level")) {
+                band->prec_level = str_to_u8(value, name);
+            } else {
+                ofp_fatal(str_, verbose, "unknown keyword %s", name);
+            }
+        }
+        /* validate bands */
+        if (!n_bands) {
+            ofp_fatal(str_, verbose, "meter must have bands");
+        }
+
+        mm->meter.n_bands = n_bands;
+        mm->meter.bands = ofpbuf_steal_data(&bands);
+
+        for (i = 0; i < n_bands; ++i) {
+            band = &mm->meter.bands[i];
+
+            if (!band->type) {
+                ofp_fatal(str_, verbose, "band must have 'type'");
+            }
+            if (band->type == OFPMBT13_DSCP_REMARK) {
+                if (!band->prec_level) {
+                    ofp_fatal(str_, verbose, "'dscp_remark' band must have"
+                              " 'prec_level'");
+                }
+            } else {
+                if (band->prec_level) {
+                    ofp_fatal(str_, verbose, "Only 'dscp_remark' band may have"
+                              " 'prec_level'");
+                }
+            }
+            if (!band->rate) {
+                ofp_fatal(str_, verbose, "band must have 'rate'");
+            }
+            if (mm->meter.flags & OFPMF13_BURST) {
+                if (!band->burst_size) {
+                    ofp_fatal(str_, verbose, "band must have 'burst_size' "
+                              "when 'burst' flag is set");
+                }
+            } else {
+                if (band->burst_size) {
+                    ofp_fatal(str_, verbose, "band may have 'burst_size' only "
+                              "when 'burst' flag is set");
+                }
+            }
+        }
+    } else {
+        mm->meter.n_bands = 0;
+        mm->meter.bands = NULL;
+    }
+
+    free(string);
+}
+
 /* Convert 'str_' (as described in the documentation for the "monitor" command
  * in the ovs-ofctl man page) into 'fmr'. */
 void
@@ -1074,7 +1270,7 @@ parse_flow_monitor_request(struct ofputil_flow_monitor_request *fmr,
             }
 
             if (!strcmp(name, "table")) {
-                fmr->table_id = str_to_table_id(value);
+                fmr->table_id = str_to_u8(value, name);
             } else if (!strcmp(name, "out_port")) {
                 fmr->out_port = u16_to_ofp(atoi(value));
             } else if (mf_from_name(name)) {

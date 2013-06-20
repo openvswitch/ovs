@@ -1087,6 +1087,16 @@ ofpacts_pull_openflow11_instructions(struct ofpbuf *openflow,
         goto exit;
     }
 
+    if (insts[OVSINST_OFPIT13_METER]) {
+        const struct ofp13_instruction_meter *oim;
+        struct ofpact_meter *om;
+
+        oim = (const struct ofp13_instruction_meter *)
+            insts[OVSINST_OFPIT13_METER];
+
+        om = ofpact_put_METER(ofpacts);
+        om->meter_id = ntohl(oim->meter_id);
+    }
     if (insts[OVSINST_OFPIT11_APPLY_ACTIONS]) {
         const union ofp_action *actions;
         size_t n_actions;
@@ -1229,6 +1239,7 @@ ofpact_check__(const struct ofpact *a, struct flow *flow, ofp_port_t max_ports)
 
     case OFPACT_CLEAR_ACTIONS:
     case OFPACT_WRITE_METADATA:
+    case OFPACT_METER:
     case OFPACT_GOTO_TABLE:
         return 0;
 
@@ -1272,7 +1283,9 @@ ofpacts_verify(const struct ofpact ofpacts[], size_t ofpacts_len)
     OFPACT_FOR_EACH (a, ofpacts, ofpacts_len) {
         enum ovs_instruction_type next;
 
-        if (a->type == OFPACT_CLEAR_ACTIONS) {
+        if (a->type == OFPACT_METER) {
+            next = OVSINST_OFPIT13_METER;
+        } else if (a->type == OFPACT_CLEAR_ACTIONS) {
             next = OVSINST_OFPIT11_CLEAR_ACTIONS;
         } else if (a->type == OFPACT_WRITE_METADATA) {
             next = OVSINST_OFPIT11_WRITE_METADATA;
@@ -1552,6 +1565,7 @@ ofpact_to_nxast(const struct ofpact *a, struct ofpbuf *out)
     case OFPACT_SET_L4_DST_PORT:
     case OFPACT_CLEAR_ACTIONS:
     case OFPACT_GOTO_TABLE:
+    case OFPACT_METER:
         NOT_REACHED();
     }
 }
@@ -1644,6 +1658,7 @@ ofpact_to_openflow10(const struct ofpact *a, struct ofpbuf *out)
     case OFPACT_PUSH_VLAN:
     case OFPACT_CLEAR_ACTIONS:
     case OFPACT_GOTO_TABLE:
+    case OFPACT_METER:
         /* XXX */
         break;
 
@@ -1816,6 +1831,7 @@ ofpact_to_openflow11(const struct ofpact *a, struct ofpbuf *out)
 
     case OFPACT_CLEAR_ACTIONS:
     case OFPACT_GOTO_TABLE:
+    case OFPACT_METER:
         NOT_REACHED();
 
     case OFPACT_CONTROLLER:
@@ -1896,6 +1912,13 @@ ofpacts_put_openflow11_instructions(const struct ofpact ofpacts[],
             oiwm = instruction_put_OFPIT11_WRITE_METADATA(openflow);
             oiwm->metadata = om->metadata;
             oiwm->metadata_mask = om->mask;
+        } else if (a->type == OFPACT_METER) {
+            const struct ofpact_meter *om;
+            struct ofp13_instruction_meter *oim;
+
+            om = ofpact_get_METER(a);
+            oim = instruction_put_OFPIT13_METER(openflow);
+            oim->meter_id = htonl(om->meter_id);
         } else if (!ofpact_is_instruction(a)) {
             /* Apply-actions */
             const size_t ofs = openflow->size;
@@ -1965,6 +1988,7 @@ ofpact_outputs_to_port(const struct ofpact *ofpact, ofp_port_t port)
     case OFPACT_SAMPLE:
     case OFPACT_CLEAR_ACTIONS:
     case OFPACT_GOTO_TABLE:
+    case OFPACT_METER:
     default:
         return false;
     }
@@ -2290,6 +2314,12 @@ ofpact_format(const struct ofpact *a, struct ds *s)
                       ofpact_instruction_name_from_type(
                           OVSINST_OFPIT11_GOTO_TABLE),
                       ofpact_get_GOTO_TABLE(a)->table_id);
+        break;
+
+    case OFPACT_METER:
+        ds_put_format(s, "%s:%"PRIu32,
+                      ofpact_instruction_name_from_type(OVSINST_OFPIT13_METER),
+                      ofpact_get_METER(a)->meter_id);
         break;
     }
 }

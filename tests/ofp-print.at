@@ -1581,6 +1581,95 @@ OFPST_PORT_DESC reply (xid=0x0):
 ])
 AT_CLEANUP
 
+AT_SETUP([OFPT_METER_MOD request - OF1.3])
+AT_KEYWORDS([ofp-print])
+AT_CHECK([ovs-ofctl ofp-print "\
+04 1d 00 20 00 00 00 02 00 00 00 0d 00 00 00 05 \
+00 01 00 10 00 00 04 00 00 00 00 80 00 00 00 00 \
+"], [0], [dnl
+OFPT_METER_MOD (OF1.3) (xid=0x2): ADD meter=5 kbps burst stats bands=
+type=drop rate=1024 burst_size=128
+])
+AT_CLEANUP
+
+AT_SETUP([OFPST_METER request - OF1.3])
+AT_KEYWORDS([ofp-print OFPT_STATS_REQUEST])
+AT_CHECK([ovs-ofctl ofp-print "041200180000000200090000000000000000000100000000"], [0], [dnl
+OFPST_METER request (OF1.3) (xid=0x2): meter=1
+])
+AT_CLEANUP
+
+AT_SETUP([OFPST_METER_CONFIG request - OF1.3])
+AT_KEYWORDS([ofp-print OFPT_STATS_REQUEST])
+AT_CHECK([ovs-ofctl ofp-print "0412001800000002000a0000000000000000000100000000"], [0], [dnl
+OFPST_METER_CONFIG request (OF1.3) (xid=0x2): meter=1
+])
+AT_CLEANUP
+
+AT_SETUP([OFPST_METER_FEATURES request - OF1.3])
+AT_KEYWORDS([ofp-print OFPT_STATS_REQUEST])
+AT_CHECK([ovs-ofctl ofp-print "0412001000000002000b000000000000"], [0], [dnl
+OFPST_METER_FEATURES request (OF1.3) (xid=0x2):
+])
+AT_CLEANUP
+
+AT_SETUP([OFPST_METER_FEATURES reply - OF1.3])
+AT_KEYWORDS([ofp-print OFPT_STATS_REPLY])
+AT_CHECK([ovs-ofctl ofp-print "\
+04 13 00 20 00 00 00 02 00 0b 00 00 00 00 00 00 \
+00 01 00 00 00 00 00 03 00 00 00 0F 10 02 00 00 \
+"], [0], [dnl
+OFPST_METER_FEATURES reply (OF1.3) (xid=0x2):
+max_meter:65536 max_bands:16 max_color:2
+band_types: drop dscp_remark
+capabilities: kbps pktps burst stats
+])
+AT_CLEANUP
+
+AT_SETUP([OFPST_METER_CONFIG reply - OF1.3])
+AT_KEYWORDS([ofp-print OFPT_STATS_REPLY])
+AT_CHECK([ovs-ofctl ofp-print "\
+04 13 00 50 00 00 00 02 00 0a 00 00 00 00 00 00 \
+00 28 00 05 00 00 00 01 \
+00 01 00 10 00 01 00 00 00 00 05 00 00 00 00 00 \
+00 02 00 10 00 10 00 00 00 00 f0 00 00 00 00 00 \
+00 18 00 09 00 00 00 02 \
+00 01 00 10 00 02 00 00 00 00 00 00 00 00 00 00 \
+"], [0], [dnl
+OFPST_METER_CONFIG reply (OF1.3) (xid=0x2):
+meter=1 kbps burst bands=
+type=drop rate=65536 burst_size=1280
+type=dscp_remark rate=1048576 burst_size=61440 prec_level=0
+
+meter=2 kbps stats bands=
+type=drop rate=131072
+])
+AT_CLEANUP
+
+AT_SETUP([OFPST_METER reply - OF1.3])
+AT_KEYWORDS([ofp-print OFPT_STATS_REPLY])
+AT_CHECK([ovs-ofctl ofp-print "\
+04 13 00 90 00 00 00 02 00 09 00 00 00 00 00 00 \
+00 00 00 01 00 48 00 00 00 00 00 00 00 00 00 05 \
+00 00 00 00 00 00 10 00 00 00 00 00 00 02 30 00 \
+00 00 01 8a 9a 6e 23 44 \
+00 00 00 00 00 00 00 7e 00 00 00 00 00 00 34 33 \
+00 00 00 00 00 00 00 e7 00 00 00 00 00 00 94 2e \
+00 00 00 02 00 38 00 00 00 00 00 00 00 00 00 02 \
+00 00 00 00 00 00 02 00 00 00 00 00 00 00 30 00 \
+00 00 01 87 9a 23 6e 44 \
+00 00 00 00 00 00 00 2a 00 00 00 00 00 00 04 33 \
+"], [0], [dnl
+OFPST_METER reply (OF1.3) (xid=0x2):
+meter:1 flow_count:5 packet_in_count:4096 byte_in_count:143360 duration:394.2590909252s bands:
+0: packet_count:126 byte_count:13363
+1: packet_count:231 byte_count:37934
+
+meter:2 flow_count:2 packet_in_count:512 byte_in_count:12288 duration:391.2586013252s bands:
+0: packet_count:42 byte_count:1075
+])
+AT_CLEANUP
+
 AT_SETUP([OFPT_BARRIER_REQUEST - OF1.0])
 AT_KEYWORDS([ofp-print])
 AT_CHECK([ovs-ofctl ofp-print '01 12 00 08 00 00 00 01'], [0], [dnl

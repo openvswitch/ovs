@@ -1631,6 +1631,368 @@ ofputil_decode_flow_mod(struct ofputil_flow_mod *fm,
     return 0;
 }
 
+static enum ofperr
+ofputil_pull_bands(struct ofpbuf *msg, size_t len, uint16_t *n_bands,
+                   struct ofpbuf *bands)
+{
+    const struct ofp13_meter_band_header *ombh;
+    struct ofputil_meter_band *mb;
+    uint16_t n = 0;
+
+    ombh = ofpbuf_try_pull(msg, len);
+    if (!ombh) {
+        return OFPERR_OFPBRC_BAD_LEN;
+    }
+
+    while (len >= sizeof (struct ofp13_meter_band_drop)) {
+        size_t ombh_len = ntohs(ombh->len);
+        /* All supported band types have the same length */
+        if (ombh_len != sizeof (struct ofp13_meter_band_drop)) {
+            return OFPERR_OFPBRC_BAD_LEN;
+        }
+        mb = ofpbuf_put_uninit(bands, sizeof *mb);
+        mb->type = ntohs(ombh->type);
+        mb->rate = ntohl(ombh->rate);
+        mb->burst_size = ntohl(ombh->burst_size);
+        mb->prec_level = (mb->type == OFPMBT13_DSCP_REMARK) ?
+            ((struct ofp13_meter_band_dscp_remark *)ombh)->prec_level : 0;
+        n++;
+        len -= ombh_len;
+        ombh = (struct ofp13_meter_band_header *)(((char *)ombh) + ombh_len);
+    }
+    if (len) {
+        return OFPERR_OFPBRC_BAD_LEN;
+    }
+    *n_bands = n;
+    return 0;
+}
+
+enum ofperr
+ofputil_decode_meter_mod(const struct ofp_header *oh,
+                         struct ofputil_meter_mod *mm,
+                         struct ofpbuf *bands)
+{
+    const struct ofp13_meter_mod *omm;
+    struct ofpbuf b;
+
+    ofpbuf_use_const(&b, oh, ntohs(oh->length));
+    ofpraw_pull_assert(&b);
+    omm = ofpbuf_pull(&b, sizeof *omm);
+
+    /* Translate the message. */
+    mm->command = ntohs(omm->command);
+    mm->meter.meter_id = ntohl(omm->meter_id);
+
+    if (mm->command == OFPMC13_DELETE) {
+        mm->meter.flags = 0;
+        mm->meter.n_bands = 0;
+        mm->meter.bands = NULL;
+    } else {
+        enum ofperr error;
+
+        mm->meter.flags = ntohs(omm->flags);
+        mm->meter.bands = bands->data;
+
+        error = ofputil_pull_bands(&b, b.size, &mm->meter.n_bands,
+                                   bands);
+        if (error) {
+            return error;
+        }
+    }
+    return 0;
+}
+
+void
+ofputil_decode_meter_request(const struct ofp_header *oh, uint32_t *meter_id)
+{
+    const struct ofp13_meter_multipart_request *omr = ofpmsg_body(oh);
+    *meter_id = ntohl(omr->meter_id);
+}
+
+struct ofpbuf *
+ofputil_encode_meter_request(enum ofp_version ofp_version,
+                             enum ofputil_meter_request_type type,
+                             uint32_t meter_id)
+{
+    struct ofpbuf *msg;
+
+    enum ofpraw raw;
+
+    switch (type) {
+    case OFPUTIL_METER_CONFIG:
+        raw = OFPRAW_OFPST13_METER_CONFIG_REQUEST;
+        break;
+    case OFPUTIL_METER_STATS:
+        raw = OFPRAW_OFPST13_METER_REQUEST;
+        break;
+    default:
+    case OFPUTIL_METER_FEATURES:
+        raw = OFPRAW_OFPST13_METER_FEATURES_REQUEST;
+        break;
+    }
+
+    msg = ofpraw_alloc(raw, ofp_version, 0);
+
+    if (type != OFPUTIL_METER_FEATURES) {
+        struct ofp13_meter_multipart_request *omr;
+        omr = ofpbuf_put_zeros(msg, sizeof *omr);
+        omr->meter_id = htonl(meter_id);
+    }
+    return msg;
+}
+
+static void
+ofputil_put_bands(uint16_t n_bands, const struct ofputil_meter_band *mb,
+                  struct ofpbuf *msg)
+{
+    uint16_t n = 0;
+
+    for (n = 0; n < n_bands; ++n) {
+        /* Currently all band types have same size */
+        struct ofp13_meter_band_dscp_remark *ombh;
+        size_t ombh_len = sizeof *ombh;
+
+        ombh = ofpbuf_put_zeros(msg, ombh_len);
+
+        ombh->type = htons(mb->type);
+        ombh->len = htons(ombh_len);
+        ombh->rate = htonl(mb->rate);
+        ombh->burst_size = htonl(mb->burst_size);
+        ombh->prec_level = mb->prec_level;
+
+        mb++;
+    }
+}
+
+/* Encode a meter stat for 'mc' and append it to 'replies'. */
+void
+ofputil_append_meter_config(struct list *replies,
+                            const struct ofputil_meter_config *mc)
+{
+    struct ofpbuf *msg = ofpbuf_from_list(list_back(replies));
+    size_t start_ofs = msg->size;
+    struct ofp13_meter_config *reply = ofpbuf_put_uninit(msg, sizeof *reply);
+    reply->flags = htons(mc->flags);
+    reply->meter_id = htonl(mc->meter_id);
+
+    ofputil_put_bands(mc->n_bands, mc->bands, msg);
+
+    reply->length = htons(msg->size - start_ofs);
+
+    ofpmp_postappend(replies, start_ofs);
+}
+
+/* Encode a meter stat for 'ms' and append it to 'replies'. */
+void
+ofputil_append_meter_stats(struct list *replies,
+                           const struct ofputil_meter_stats *ms)
+{
+    struct ofp13_meter_stats *reply;
+    uint16_t n = 0;
+    uint16_t len;
+
+    len = sizeof *reply + ms->n_bands * sizeof(struct ofp13_meter_band_stats);
+    reply = ofpmp_append(replies, len);
+
+    reply->meter_id = htonl(ms->meter_id);
+    reply->len = htons(len);
+    memset(reply->pad, 0, sizeof reply->pad);
+    reply->flow_count = htonl(ms->flow_count);
+    reply->packet_in_count = htonll(ms->packet_in_count);
+    reply->byte_in_count = htonll(ms->byte_in_count);
+    reply->duration_sec = htonl(ms->duration_sec);
+    reply->duration_nsec = htonl(ms->duration_nsec);
+
+    for (n = 0; n < ms->n_bands; ++n) {
+        const struct ofputil_meter_band_stats *src = &ms->bands[n];
+        struct ofp13_meter_band_stats *dst = &reply->band_stats[n];
+
+        dst->packet_band_count = htonll(src->packet_count);
+        dst->byte_band_count = htonll(src->byte_count);
+    }
+}
+
+/* Converts an OFPMP_METER_CONFIG reply in 'msg' into an abstract
+ * ofputil_meter_config in 'mc', with mc->bands pointing to bands decoded into
+ * 'bands'.  The caller must have initialized 'bands' and retains ownership of
+ * it across the call.
+ *
+ * Multiple OFPST13_METER_CONFIG replies can be packed into a single OpenFlow
+ * message.  Calling this function multiple times for a single 'msg' iterates
+ * through the replies.  'bands' is cleared for each reply.
+ *
+ * Returns 0 if successful, EOF if no replies were left in this 'msg',
+ * otherwise a positive errno value. */
+int
+ofputil_decode_meter_config(struct ofpbuf *msg,
+                            struct ofputil_meter_config *mc,
+                            struct ofpbuf *bands)
+{
+    const struct ofp13_meter_config *omc;
+    enum ofperr err;
+
+    /* Pull OpenFlow headers for the first call. */
+    if (!msg->l2) {
+        ofpraw_pull_assert(msg);
+    }
+
+    if (!msg->size) {
+        return EOF;
+    }
+
+    omc = ofpbuf_try_pull(msg, sizeof *omc);
+    if (!omc) {
+        VLOG_WARN_RL(&bad_ofmsg_rl, "OFPMP_METER_CONFIG reply has %zu "
+                     "leftover bytes at end", msg->size);
+        return OFPERR_OFPBRC_BAD_LEN;
+    }
+
+    ofpbuf_clear(bands);
+    err = ofputil_pull_bands(msg, ntohs(omc->length) - sizeof *omc,
+                             &mc->n_bands, bands);
+    if (err) {
+        return err;
+    }
+    mc->meter_id = ntohl(omc->meter_id);
+    mc->flags = ntohs(omc->flags);
+    mc->bands = bands->data;
+
+    return 0;
+}
+
+static enum ofperr
+ofputil_pull_band_stats(struct ofpbuf *msg, size_t len, uint16_t *n_bands,
+                        struct ofpbuf *bands)
+{
+    const struct ofp13_meter_band_stats *ombs;
+    struct ofputil_meter_band_stats *mbs;
+    uint16_t n, i;
+
+    n = len / sizeof *ombs;
+    if (len != n * sizeof *ombs) {
+        return OFPERR_OFPBRC_BAD_LEN;
+    }
+
+    ombs = ofpbuf_pull(msg, len);
+
+    mbs = ofpbuf_put_uninit(bands, len);
+
+    for (i = 0; i < n; ++i) {
+        mbs[i].packet_count = ntohll(ombs[i].packet_band_count);
+        mbs[i].byte_count = ntohll(ombs[i].byte_band_count);
+    }
+    *n_bands = n;
+    return 0;
+}
+
+/* Converts an OFPMP_METER reply in 'msg' into an abstract
+ * ofputil_meter_stats in 'ms', with ms->bands pointing to band stats
+ * decoded into 'bands'.
+ *
+ * Multiple OFPMP_METER replies can be packed into a single OpenFlow
+ * message.  Calling this function multiple times for a single 'msg' iterates
+ * through the replies.  'bands' is cleared for each reply.
+ *
+ * Returns 0 if successful, EOF if no replies were left in this 'msg',
+ * otherwise a positive errno value. */
+int
+ofputil_decode_meter_stats(struct ofpbuf *msg,
+                           struct ofputil_meter_stats *ms,
+                           struct ofpbuf *bands)
+{
+    const struct ofp13_meter_stats *oms;
+    uint16_t len;
+    enum ofperr err;
+
+    /* Pull OpenFlow headers for the first call. */
+    if (!msg->l2) {
+        ofpraw_pull_assert(msg);
+    }
+
+    if (!msg->size) {
+        return EOF;
+    }
+
+    oms = ofpbuf_try_pull(msg, sizeof *oms);
+    if (!oms) {
+        VLOG_WARN_RL(&bad_ofmsg_rl, "OFPMP_METER reply has %zu leftover "
+                     "bytes at end", msg->size);
+        return OFPERR_OFPBRC_BAD_LEN;
+    }
+    len = ntohs(oms->len);
+    len -= sizeof *oms;
+
+    ofpbuf_clear(bands);
+    err = ofputil_pull_band_stats(msg, len, &ms->n_bands, bands);
+    if (err) {
+        return err;
+    }
+    ms->meter_id = ntohl(oms->meter_id);
+    ms->flow_count = ntohl(oms->flow_count);
+    ms->packet_in_count = ntohll(oms->packet_in_count);
+    ms->byte_in_count = ntohll(oms->byte_in_count);
+    ms->duration_sec = ntohl(oms->duration_sec);
+    ms->duration_nsec = ntohl(oms->duration_nsec);
+    ms->bands = bands->data;
+
+    return 0;
+}
+
+void
+ofputil_decode_meter_features(const struct ofp_header *oh,
+                              struct ofputil_meter_features *mf)
+{
+    const struct ofp13_meter_features *omf = ofpmsg_body(oh);
+
+    mf->max_meters = ntohl(omf->max_meter);
+    mf->band_types = ntohl(omf->band_types);
+    mf->capabilities = ntohl(omf->capabilities);
+    mf->max_bands = omf->max_bands;
+    mf->max_color = omf->max_color;
+}
+
+struct ofpbuf *
+ofputil_encode_meter_features_reply(const struct ofputil_meter_features *mf,
+                                    const struct ofp_header *request)
+{
+    struct ofpbuf *reply;
+    struct ofp13_meter_features *omf;
+
+    reply = ofpraw_alloc_stats_reply(request, 0);
+    omf = ofpbuf_put_zeros(reply, sizeof *omf);
+
+    omf->max_meter = htonl(mf->max_meters);
+    omf->band_types = htonl(mf->band_types);
+    omf->capabilities = htonl(mf->capabilities);
+    omf->max_bands = mf->max_bands;
+    omf->max_color = mf->max_color;
+
+    return reply;
+}
+
+struct ofpbuf *
+ofputil_encode_meter_mod(enum ofp_version ofp_version,
+                         const struct ofputil_meter_mod *mm)
+{
+    struct ofpbuf *msg;
+
+    struct ofp13_meter_mod *omm;
+
+    msg = ofpraw_alloc(OFPRAW_OFPT13_METER_MOD, ofp_version,
+                       NXM_TYPICAL_LEN + mm->meter.n_bands * 16);
+    omm = ofpbuf_put_zeros(msg, sizeof *omm);
+    omm->command = htons(mm->command);
+    if (mm->command != OFPMC13_DELETE) {
+        omm->flags = htons(mm->meter.flags);
+    }
+    omm->meter_id = htonl(mm->meter.meter_id);
+
+    ofputil_put_bands(mm->meter.n_bands, mm->meter.bands, msg);
+
+    ofpmsg_update_length(msg);
+    return msg;
+}
+
 static ovs_be16
 ofputil_tid_command(const struct ofputil_flow_mod *fm,
                     enum ofputil_protocol protocol)

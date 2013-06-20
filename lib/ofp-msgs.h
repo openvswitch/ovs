@@ -217,7 +217,7 @@ enum ofpraw {
     /* NXT 1.0+ (19): struct nx_async_config. */
     OFPRAW_NXT_SET_ASYNC_CONFIG,
 
-    /* OFPT 1.3+ (29): struct ofp13_meter_mod. */
+    /* OFPT 1.3+ (29): struct ofp13_meter_mod, uint8_t[8][]. */
     OFPRAW_OFPT13_METER_MOD,
 
 /* Standard statistics. */
@@ -315,13 +315,13 @@ enum ofpraw {
     /* OFPST 1.3+ (9): struct ofp13_meter_multipart_request. */
     OFPRAW_OFPST13_METER_REQUEST,
 
-    /* OFPST 1.3+ (9): struct ofp13_meter_stats[]. */
+    /* OFPST 1.3+ (9): uint8_t[8][]. */
     OFPRAW_OFPST13_METER_REPLY,
 
     /* OFPST 1.3+ (10): struct ofp13_meter_multipart_request. */
     OFPRAW_OFPST13_METER_CONFIG_REQUEST,
 
-    /* OFPST 1.3+ (10): struct ofp13_meter_config[]. */
+    /* OFPST 1.3+ (10): uint8_t[8][]. */
     OFPRAW_OFPST13_METER_CONFIG_REPLY,
 
     /* OFPST 1.3+ (11): void. */

@@ -352,6 +352,7 @@ enum ofp_flow_removed_reason {
     OFPRR_DELETE,               /* Evicted by a DELETE flow mod. */
     OFPRR_GROUP_DELETE,         /* Group was removed. */
     OFPRR_EVICTION,             /* Switch eviction to free resources. */
+    OFPRR_METER_DELETE,         /* Meter was removed. */
 };
 
 /* What changed about the physical port */

@@ -402,7 +402,7 @@ struct ofp13_meter_stats {
     ovs_be32  duration_sec;      /* Time meter has been alive in seconds. */
     ovs_be32  duration_nsec;     /* Time meter has been alive in nanoseconds
                                     beyond duration_sec. */
-    /* struct ofp13_meter_band_stats band_stats[0];  The band_stats length is
+    struct ofp13_meter_band_stats band_stats[0];  /* The band_stats length is
                                              inferred from the length field. */
 };
 OFP_ASSERT(sizeof(struct ofp13_meter_stats) == 40);

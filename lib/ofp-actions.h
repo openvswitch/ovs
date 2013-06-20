@@ -97,9 +97,10 @@
     DEFINE_OFPACT(SAMPLE,          ofpact_sample,        ofpact)    \
                                                                     \
     /* Instructions */                                              \
+    DEFINE_OFPACT(METER,           ofpact_meter,         ofpact)    \
     /* XXX Write-Actions */                                         \
-    DEFINE_OFPACT(WRITE_METADATA,  ofpact_metadata,      ofpact)    \
     DEFINE_OFPACT(CLEAR_ACTIONS,   ofpact_null,          ofpact)    \
+    DEFINE_OFPACT(WRITE_METADATA,  ofpact_metadata,      ofpact)    \
     DEFINE_OFPACT(GOTO_TABLE,      ofpact_goto_table,    ofpact)
 
 /* enum ofpact_type, with a member OFPACT_<ENUM> for each action. */
@@ -374,6 +375,14 @@ struct ofpact_metadata {
     ovs_be64 mask;
 };
 
+/* OFPACT_METER.
+ *
+ * Used for OFPIT13_METER. */
+struct ofpact_meter {
+    struct ofpact ofpact;
+    uint32_t meter_id;
+};
+
 /* OFPACT_RESUBMIT.
  *
  * Used for NXAST_RESUBMIT, NXAST_RESUBMIT_TABLE. */
@@ -601,6 +610,10 @@ void ofpact_pad(struct ofpbuf *);
  * It is enforced on parser from text string.
  */
 #define OVS_INSTRUCTIONS                                    \
+    DEFINE_INST(OFPIT13_METER,                              \
+                ofp13_instruction_meter,          false,    \
+                "meter")                                    \
+                                                            \
     DEFINE_INST(OFPIT11_APPLY_ACTIONS,                      \
                 ofp11_instruction_actions,        true,     \
                 "apply_actions")                            \
@@ -639,6 +652,7 @@ ofpact_is_instruction(const struct ofpact *a)
 {
     /* XXX Write-Actions */
     return a->type == OFPACT_CLEAR_ACTIONS
+        || a->type == OFPACT_METER
         || a->type == OFPACT_WRITE_METADATA
         || a->type == OFPACT_GOTO_TABLE;
 }

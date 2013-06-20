@@ -514,6 +514,93 @@ enum ofperr ofputil_decode_port_mod(const struct ofp_header *,
 struct ofpbuf *ofputil_encode_port_mod(const struct ofputil_port_mod *,
                                        enum ofputil_protocol);
 
+struct ofputil_meter_band {
+    uint16_t type;
+    uint8_t pad;
+    uint8_t prec_level;   /* Non-zero if type == OFPMBT_DSCP_REMARK */
+    uint32_t rate;
+    uint32_t burst_size;
+};
+
+struct ofputil_meter_band_stats {
+    uint64_t packet_count;
+    uint64_t byte_count;
+};
+
+struct ofputil_meter_config {
+    uint32_t meter_id;
+    uint16_t flags;
+    uint16_t n_bands;
+    struct ofputil_meter_band *bands;
+};
+
+/* Abstract ofp_meter_mod. */
+struct ofputil_meter_mod {
+    uint16_t command;
+    struct ofputil_meter_config meter;
+};
+
+struct ofputil_meter_stats {
+    uint32_t meter_id;
+    uint32_t flow_count;
+    uint64_t packet_in_count;
+    uint64_t byte_in_count;
+    uint32_t duration_sec;
+    uint32_t duration_nsec;
+    uint16_t n_bands;
+    struct ofputil_meter_band_stats *bands; /* band stats */
+};
+
+struct ofputil_meter_features {
+    uint32_t max_meters; /* Maximum number of meters */
+    uint32_t band_types; /* Can support max 32 band types */
+    uint32_t capabilities; /* Supported flags */
+    uint8_t  max_bands;
+    uint8_t  max_color;
+};
+
+enum ofperr ofputil_decode_meter_mod(const struct ofp_header *,
+                                     struct ofputil_meter_mod *,
+                                    struct ofpbuf *bands);
+struct ofpbuf *ofputil_encode_meter_mod(enum ofp_version ofp_version,
+                                        const struct ofputil_meter_mod *);
+
+void ofputil_decode_meter_features(const struct ofp_header *,
+                                   struct ofputil_meter_features *);
+struct ofpbuf *ofputil_encode_meter_features_reply(const struct
+                                                   ofputil_meter_features *,
+                                                   const struct ofp_header *
+                                                   request);
+void ofputil_decode_meter_request(const struct ofp_header *,
+                                  uint32_t *meter_id);
+
+void ofputil_append_meter_config(struct list *replies,
+                                 const struct ofputil_meter_config *omc);
+
+void ofputil_append_meter_stats(struct list *replies,
+                                const struct ofputil_meter_stats *oms);
+
+enum ofputil_meter_request_type {
+    OFPUTIL_METER_FEATURES,
+    OFPUTIL_METER_CONFIG,
+    OFPUTIL_METER_STATS
+};
+
+struct ofpbuf *ofputil_encode_meter_request(enum ofp_version,
+                                            enum ofputil_meter_request_type,
+                                            uint32_t meter_id);
+
+int ofputil_decode_meter_stats(struct ofpbuf *msg,
+                               struct ofputil_meter_stats *ms,
+                               struct ofpbuf *bands);
+
+int ofputil_decode_meter_config(struct ofpbuf *msg,
+                                struct ofputil_meter_config *mc,
+                                struct ofpbuf *bands);
+
+/* Type for meter_id in ofproto provider interface, UINT32_MAX if none */
+typedef struct { uint32_t uint32; } ofproto_meter_id;
+
 /* Abstract ofp_role_request and reply. */
 struct ofputil_role_request {
     enum ofp12_controller_role role;

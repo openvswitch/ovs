@@ -1739,6 +1739,10 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
             flow->metadata |= metadata->metadata & metadata->mask;
             break;
 
+        case OFPACT_METER:
+            /* Not implemented yet. */
+            break;
+
         case OFPACT_GOTO_TABLE: {
             /* It is assumed that goto-table is the last action. */
             struct ofpact_goto_table *ogt = ofpact_get_GOTO_TABLE(a);
