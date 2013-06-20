@@ -4481,13 +4481,13 @@ update_stats(struct dpif_backer *backer)
 {
     const struct dpif_flow_stats *stats;
     struct dpif_flow_dump dump;
-    const struct nlattr *key;
     struct ofproto_dpif *ofproto;
-    size_t key_len;
+    const struct nlattr *key, *mask;
+    size_t key_len, mask_len;
 
     dpif_flow_dump_start(&dump, backer->dpif);
     while (dpif_flow_dump_next(&dump, &key, &key_len,
-                               NULL, NULL, NULL, NULL, &stats)) {
+                               &mask, &mask_len, NULL, NULL, &stats)) {
         struct flow flow;
         struct subfacet *subfacet;
         uint32_t key_hash;
