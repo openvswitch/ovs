@@ -548,7 +548,7 @@ make_rule(int wc_fields, unsigned int priority, int value_pat)
         } else if (f_idx == CLS_F_IDX_DL_TYPE) {
             match.wc.masks.dl_type = htons(UINT16_MAX);
         } else if (f_idx == CLS_F_IDX_IN_PORT) {
-            match.wc.masks.in_port.ofp_port = OFPP_NONE;
+            match.wc.masks.in_port.ofp_port = u16_to_ofp(UINT16_MAX);
         } else {
             NOT_REACHED();
         }
