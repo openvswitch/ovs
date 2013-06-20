@@ -1342,12 +1342,6 @@ static int ovs_flow_cmd_new_or_set(struct sk_buff *skb, struct genl_info *info)
 		/* We found a matching flow. */
 		struct sw_flow_actions *old_acts;
 
-		/* Make sure the it has the same unmasked key. */
-		if (!ovs_flow_cmp_unmasked_key(flow, &key, match.range.end)) {
-			error = -EINVAL;
-			goto err_unlock_ovs;
-		}
-
 		/* Bail out if we're not allowed to modify an existing flow.
 		 * We accept NLM_F_CREATE in place of the intended NLM_F_EXCL
 		 * because Generic Netlink treats the latter as a dump
@@ -1357,6 +1351,11 @@ static int ovs_flow_cmd_new_or_set(struct sk_buff *skb, struct genl_info *info)
 		error = -EEXIST;
 		if (info->genlhdr->cmd == OVS_FLOW_CMD_NEW &&
 		    info->nlhdr->nlmsg_flags & (NLM_F_CREATE | NLM_F_EXCL))
+			goto err_unlock_ovs;
+
+		/* The unmasked key has to be the same for flow updates. */
+		error = -EINVAL;
+		if (!ovs_flow_cmp_unmasked_key(flow, &key, match.range.end))
 			goto err_unlock_ovs;
 
 		/* Update actions. */
