@@ -181,15 +181,16 @@ add_mirror_actions(struct xlate_ctx *ctx, const struct flow *orig_flow)
     struct ofbundle *in_bundle;
     uint16_t vlan;
     uint16_t vid;
-    const struct nlattr *a;
-    size_t left;
+
+    mirrors = ctx->xout->mirrors;
+    ctx->xout->mirrors = 0;
 
     in_bundle = lookup_input_bundle(ctx->ofproto, orig_flow->in_port.ofp_port,
                                     ctx->xin->packet != NULL, NULL);
     if (!in_bundle) {
         return;
     }
-    mirrors = in_bundle->src_mirrors;
+    mirrors |= in_bundle->src_mirrors;
 
     /* Drop frames on bundles reserved for mirroring. */
     if (in_bundle->mirror_out) {
@@ -208,23 +209,6 @@ add_mirror_actions(struct xlate_ctx *ctx, const struct flow *orig_flow)
         return;
     }
     vlan = input_vid_to_vlan(in_bundle, vid);
-
-    /* Look at the output ports to check for destination selections. */
-
-    NL_ATTR_FOR_EACH (a, left, ctx->xout->odp_actions.data,
-                      ctx->xout->odp_actions.size) {
-        enum ovs_action_attr type = nl_attr_type(a);
-        struct ofport_dpif *ofport;
-
-        if (type != OVS_ACTION_ATTR_OUTPUT) {
-            continue;
-        }
-
-        ofport = get_odp_port(ofproto, nl_attr_get_odp_port(a));
-        if (ofport && ofport->bundle) {
-            mirrors |= ofport->bundle->dst_mirrors;
-        }
-    }
 
     if (!mirrors) {
         return;
@@ -854,6 +838,10 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
         return;
     }
 
+    if (ctx->ofproto->has_mirrors && ofport->bundle) {
+        ctx->xout->mirrors |= ofport->bundle->dst_mirrors;
+    }
+
     if (ofport->peer) {
         struct ofport_dpif *peer = ofport->peer;
         struct flow old_flow = ctx->xin->flow;
@@ -877,7 +865,9 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
                  * learning action look at the packet, then drop it. */
                 struct flow old_base_flow = ctx->base_flow;
                 size_t old_size = ctx->xout->odp_actions.size;
+                mirror_mask_t old_mirrors = ctx->xout->mirrors;
                 xlate_table_action(ctx, flow->in_port.ofp_port, 0, true);
+                ctx->xout->mirrors = old_mirrors;
                 ctx->base_flow = old_base_flow;
                 ctx->xout->odp_actions.size = old_size;
             }
