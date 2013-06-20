@@ -81,6 +81,7 @@ static struct vlog_rate_limit error_rl = VLOG_RATE_LIMIT_INIT(60, 5);
 static void log_flow_message(const struct dpif *dpif, int error,
                              const char *operation,
                              const struct nlattr *key, size_t key_len,
+                             const struct nlattr *mask, size_t mask_len,
                              const struct dpif_flow_stats *stats,
                              const struct nlattr *actions, size_t actions_len);
 static void log_operation(const struct dpif *, const char *operation,
@@ -808,8 +809,8 @@ dpif_flow_get(const struct dpif *dpif,
             actions = NULL;
             actions_len = 0;
         }
-        log_flow_message(dpif, error, "flow_get", key, key_len, stats,
-                         actions, actions_len);
+        log_flow_message(dpif, error, "flow_get", key, key_len,
+                         NULL, 0, stats, actions, actions_len);
     }
     return error;
 }
@@ -982,6 +983,7 @@ dpif_flow_dump_next(struct dpif_flow_dump *dump,
         } else if (should_log_flow_message(error)) {
             log_flow_message(dpif, error, "flow_dump",
                              key ? *key : NULL, key ? *key_len : 0,
+                             mask ? *mask : NULL, mask ? *mask_len : 0,
                              stats ? *stats : NULL, actions ? *actions : NULL,
                              actions ? *actions_len : 0);
         }
@@ -1279,6 +1281,7 @@ should_log_flow_message(int error)
 static void
 log_flow_message(const struct dpif *dpif, int error, const char *operation,
                  const struct nlattr *key, size_t key_len,
+                 const struct nlattr *mask, size_t mask_len,
                  const struct dpif_flow_stats *stats,
                  const struct nlattr *actions, size_t actions_len)
 {
@@ -1291,7 +1294,7 @@ log_flow_message(const struct dpif *dpif, int error, const char *operation,
     if (error) {
         ds_put_format(&ds, "(%s) ", strerror(error));
     }
-    odp_flow_key_format(key, key_len, &ds);
+    odp_flow_format(key, key_len, mask, mask_len, &ds);
     if (stats) {
         ds_put_cstr(&ds, ", ");
         dpif_flow_stats_format(stats, &ds);
@@ -1323,8 +1326,8 @@ log_flow_put_message(struct dpif *dpif, const struct dpif_flow_put *put,
             ds_put_cstr(&s, "[zero]");
         }
         log_flow_message(dpif, error, ds_cstr(&s),
-                         put->key, put->key_len, put->stats,
-                         put->actions, put->actions_len);
+                         put->key, put->key_len, put->mask, put->mask_len,
+                         put->stats, put->actions, put->actions_len);
         ds_destroy(&s);
     }
 }
@@ -1335,7 +1338,7 @@ log_flow_del_message(struct dpif *dpif, const struct dpif_flow_del *del,
 {
     if (should_log_flow_message(error)) {
         log_flow_message(dpif, error, "flow_del", del->key, del->key_len,
-                         !error ? del->stats : NULL, NULL, 0);
+                         NULL, 0, !error ? del->stats : NULL, NULL, 0);
     }
 }
 
