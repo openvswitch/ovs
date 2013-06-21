@@ -191,7 +191,7 @@ struct flow_table {
 	struct flex_array *buckets;
 	unsigned int count, n_buckets;
 	struct rcu_head rcu;
-	struct list_head mask_list;
+	struct list_head *mask_list;
 	int node_ver;
 	u32 hash_seed;
 	bool keep_flows;
