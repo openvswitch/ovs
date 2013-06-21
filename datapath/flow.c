@@ -1477,7 +1477,6 @@ int ovs_match_from_nlattrs(struct sw_flow_match *match,
 			   const struct nlattr *mask)
 {
 	const struct nlattr *a[OVS_KEY_ATTR_MAX + 1];
-	const struct nlattr *m[OVS_KEY_ATTR_MAX + 1];
 	const struct nlattr *encap;
 	u64 key_attrs = 0;
 	u64 mask_attrs = 0;
@@ -1514,19 +1513,19 @@ int ovs_match_from_nlattrs(struct sw_flow_match *match,
 		return err;
 
 	if (mask) {
-		err = parse_flow_mask_nlattrs(mask, m, &mask_attrs);
+		err = parse_flow_mask_nlattrs(mask, a, &mask_attrs);
 		if (err)
 			return err;
 
 		if ((mask_attrs & 1ULL << OVS_KEY_ATTR_ENCAP) && encap_valid) {
 			__be16 eth_type = 0;
 
-			if (m[OVS_KEY_ATTR_ETHERTYPE])
-				eth_type = nla_get_be16(m[OVS_KEY_ATTR_ETHERTYPE]);
+			if (a[OVS_KEY_ATTR_ETHERTYPE])
+				eth_type = nla_get_be16(a[OVS_KEY_ATTR_ETHERTYPE]);
 			if (eth_type == htons(0xffff)) {
 				mask_attrs &= ~(1ULL << OVS_KEY_ATTR_ETHERTYPE);
-				encap = m[OVS_KEY_ATTR_ENCAP];
-				err = parse_flow_mask_nlattrs(encap, m, &mask_attrs);
+				encap = a[OVS_KEY_ATTR_ENCAP];
+				err = parse_flow_mask_nlattrs(encap, a, &mask_attrs);
 			} else
 				err = -EINVAL;
 
@@ -1534,7 +1533,7 @@ int ovs_match_from_nlattrs(struct sw_flow_match *match,
 				return err;
 		}
 
-		err = ovs_key_from_nlattrs(match,  mask_attrs, m, true);
+		err = ovs_key_from_nlattrs(match, mask_attrs, a, true);
 		if (err)
 			return err;
 	} else {
