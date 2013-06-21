@@ -443,7 +443,7 @@ static void free_buckets(struct flex_array *buckets)
 	flex_array_free(buckets);
 }
 
-struct flow_table *ovs_flow_tbl_alloc(int new_size)
+static struct flow_table *__flow_tbl_alloc(int new_size)
 {
 	struct flow_table *table = kmalloc(sizeof(*table), GFP_KERNEL);
 
@@ -461,7 +461,7 @@ struct flow_table *ovs_flow_tbl_alloc(int new_size)
 	table->node_ver = 0;
 	table->keep_flows = false;
 	get_random_bytes(&table->hash_seed, sizeof(u32));
-	INIT_LIST_HEAD(&table->mask_list);
+	table->mask_list = NULL;
 
 	return table;
 }
@@ -485,9 +485,30 @@ static void __flow_tbl_destroy(struct flow_table *table)
 		}
 	}
 
+	BUG_ON(!list_empty(table->mask_list));
+	kfree(table->mask_list);
+
 skip_flows:
 	free_buckets(table->buckets);
 	kfree(table);
+}
+
+struct flow_table *ovs_flow_tbl_alloc(int new_size)
+{
+	struct flow_table *table = __flow_tbl_alloc(new_size);
+
+	if (!table)
+		return NULL;
+
+	table->mask_list = kmalloc(sizeof(struct list_head), GFP_KERNEL);
+	if (!table->mask_list) {
+		table->keep_flows = true;
+		__flow_tbl_destroy(table);
+		return NULL;
+	}
+	INIT_LIST_HEAD(table->mask_list);
+
+	return table;
 }
 
 static void flow_tbl_destroy_rcu_cb(struct rcu_head *rcu)
@@ -571,7 +592,7 @@ static struct flow_table *__flow_tbl_rehash(struct flow_table *table, int n_buck
 {
 	struct flow_table *new_table;
 
-	new_table = ovs_flow_tbl_alloc(n_buckets);
+	new_table = __flow_tbl_alloc(n_buckets);
 	if (!new_table)
 		return ERR_PTR(-ENOMEM);
 
@@ -1028,7 +1049,7 @@ struct sw_flow *ovs_flow_lookup(struct flow_table *tbl,
 	struct sw_flow *flow = NULL;
 	struct sw_flow_mask *mask;
 
-	list_for_each_entry_rcu(mask, &tbl->mask_list, list) {
+	list_for_each_entry_rcu(mask, tbl->mask_list, list) {
 		flow = ovs_masked_flow_lookup(tbl, key, mask);
 		if (flow)  /* Found */
 			break;
@@ -1841,7 +1862,7 @@ struct sw_flow_mask *ovs_sw_flow_mask_find(const struct flow_table *tbl,
 {
 	struct list_head *ml;
 
-	list_for_each(ml, &tbl->mask_list) {
+	list_for_each(ml, tbl->mask_list) {
 		struct sw_flow_mask *m;
 		m = container_of(ml, struct sw_flow_mask, list);
 		if (ovs_sw_flow_mask_equal(mask, m))
@@ -1858,7 +1879,7 @@ struct sw_flow_mask *ovs_sw_flow_mask_find(const struct flow_table *tbl,
  */
 void ovs_sw_flow_mask_insert(struct flow_table *tbl, struct sw_flow_mask *mask)
 {
-	list_add_rcu(&mask->list, &tbl->mask_list);
+	list_add_rcu(&mask->list, tbl->mask_list);
 }
 
 /**
