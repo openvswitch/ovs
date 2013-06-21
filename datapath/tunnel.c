@@ -37,12 +37,6 @@
 #include "vlan.h"
 #include "vport.h"
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,36)
-#define rt_dst(rt) (rt->dst)
-#else
-#define rt_dst(rt) (rt->u.dst)
-#endif
-
 /**
  *	ovs_tnl_rcv - ingress point for generic tunnel code
  *
@@ -85,9 +79,9 @@ void ovs_tnl_rcv(struct vport *vport, struct sk_buff *skb,
 	ovs_vport_receive(vport, skb, tun_key);
 }
 
-static struct rtable *find_route(struct net *net,
-		__be32 *saddr, __be32 daddr, u8 ipproto,
-		u8 tos, u32 skb_mark)
+struct rtable *find_route(struct net *net,
+			  __be32 *saddr, __be32 daddr, u8 ipproto,
+			  u8 tos, u32 skb_mark)
 {
 	struct rtable *rt;
 	/* Tunnel configuration keeps DSCP part of TOS bits, But Linux
@@ -289,7 +283,7 @@ int ovs_tnl_send(struct vport *vport, struct sk_buff *skb,
 		iph->tos	= OVS_CB(skb)->tun_key->ipv4_tos;
 		iph->ttl	= OVS_CB(skb)->tun_key->ipv4_ttl;
 		iph->frag_off	= OVS_CB(skb)->tun_key->tun_flags &
-				  OVS_TNL_F_DONT_FRAGMENT ?  htons(IP_DF) : 0;
+				  TUNNEL_DONT_FRAGMENT ?  htons(IP_DF) : 0;
 		/*
 		 * Allow our local IP stack to fragment the outer packet even
 		 * if the DF bit is set as a last resort.  We also need to

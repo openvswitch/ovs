@@ -20,4 +20,8 @@
 #define ETH_P_802_3_MIN        0x0600
 #endif
 
+#ifndef ETH_P_8021AD
+#define ETH_P_8021AD    0x88A8          /* 802.1ad Service VLAN         */
+#endif
+
 #endif

@@ -94,4 +94,10 @@ static inline void skb_set_mark(struct sk_buff *skb, u32 mark)
 }
 #endif /* after 2.6.20 */
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,36)
+#define rt_dst(rt) (rt->dst)
+#else
+#define rt_dst(rt) (rt->u.dst)
+#endif
+
 #endif /* compat.h */

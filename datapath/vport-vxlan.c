@@ -135,7 +135,7 @@ static int vxlan_rcv(struct sock *sk, struct sk_buff *skb)
 
 	/* Save outer tunnel values */
 	iph = ip_hdr(skb);
-	tnl_tun_key_init(&tun_key, iph, key, OVS_TNL_F_KEY);
+	tnl_tun_key_init(&tun_key, iph, key, TUNNEL_KEY);
 
 	ovs_tnl_rcv(vport_from_priv(vxlan_vport), skb, &tun_key);
 	goto out;

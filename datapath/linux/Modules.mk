@@ -3,8 +3,11 @@ openvswitch_sources += \
 	linux/compat/dev-openvswitch.c \
 	linux/compat/exthdrs_core.c \
 	linux/compat/flex_array.c \
+	linux/compat/gre.c \
+	linux/compat/gso.c \
 	linux/compat/genetlink-openvswitch.c \
 	linux/compat/ip_output-openvswitch.c \
+	linux/compat/ip_tunnels_core.c \
 	linux/compat/kmemdup.c \
 	linux/compat/netdevice.c \
 	linux/compat/net_namespace.c \
@@ -13,6 +16,7 @@ openvswitch_sources += \
 	linux/compat/time.c	\
 	linux/compat/workqueue.c
 openvswitch_headers += \
+	linux/compat/gso.h \
 	linux/compat/include/asm/percpu.h \
 	linux/compat/include/linux/compiler.h \
 	linux/compat/include/linux/compiler-gcc.h \
@@ -61,8 +65,10 @@ openvswitch_headers += \
 	linux/compat/include/net/checksum.h \
 	linux/compat/include/net/dst.h \
 	linux/compat/include/net/genetlink.h \
+	linux/compat/include/net/gre.h \
 	linux/compat/include/net/inet_frag.h \
 	linux/compat/include/net/ip.h \
+	linux/compat/include/net/ip_tunnels.h \
 	linux/compat/include/net/ipv6.h \
 	linux/compat/include/net/net_namespace.h \
 	linux/compat/include/net/netlink.h \

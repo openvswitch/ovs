@@ -26,6 +26,11 @@
 #include "flow.h"
 #include "vport.h"
 
+struct rtable *find_route(struct net *net,
+			  __be32 *saddr, __be32 daddr, u8 ipproto,
+			  u8 tos, u32 skb_mark);
+
+u16 ovs_tnl_get_src_port(struct sk_buff *skb);
 
 int ovs_tnl_send(struct vport *vport, struct sk_buff *skb,
 		 u8 ipproto, int tunnel_hlen,
@@ -35,10 +40,10 @@ int ovs_tnl_send(struct vport *vport, struct sk_buff *skb,
 
 void ovs_tnl_rcv(struct vport *vport, struct sk_buff *skb,
 		 struct ovs_key_ipv4_tunnel *tun_key);
-u16 ovs_tnl_get_src_port(struct sk_buff *skb);
 
 static inline void tnl_tun_key_init(struct ovs_key_ipv4_tunnel *tun_key,
-				    const struct iphdr *iph, __be64 tun_id, u32 tun_flags)
+					 const struct iphdr *iph, __be64 tun_id,
+					 __be16 tun_flags)
 {
 	tun_key->tun_id = tun_id;
 	tun_key->ipv4_src = iph->saddr;
@@ -52,4 +57,4 @@ static inline void tnl_tun_key_init(struct ovs_key_ipv4_tunnel *tun_key,
 	       sizeof(*tun_key) - OVS_TUNNEL_KEY_SIZE);
 }
 
-#endif /* tunnel.h */
+#endif /* TUNNEL_H */

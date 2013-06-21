@@ -77,8 +77,11 @@ extern void unregister_netdevice_many(struct list_head *head);
 extern void dev_disable_lro(struct net_device *dev);
 #endif
 
+#define skb_checksum_help rpl_skb_checksum_help
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,19)
-#define skb_checksum_help(skb) skb_checksum_help((skb), 0)
+extern int skb_checksum_help(struct sk_buff *skb, int);
+#else
+extern int skb_checksum_help(struct sk_buff *skb);
 #endif
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,36)
@@ -166,5 +169,4 @@ static inline struct sk_buff *__skb_gso_segment(struct sk_buff *skb,
 	return skb_gso_segment(skb, features);
 }
 #endif
-
 #endif
