@@ -103,7 +103,7 @@ free:
 int rpl_ip_local_out(struct sk_buff *skb)
 {
 	int ret = NETDEV_TX_OK;
-	int id;
+	int id = -1;
 
 	if (skb_is_gso(skb)) {
 		struct iphdr *iph;
@@ -119,7 +119,6 @@ int rpl_ip_local_out(struct sk_buff *skb)
 		err = skb_checksum_help(skb);
 		if (unlikely(err))
 			return 0;
-		id = -1;
 	}
 
 	while (skb) {
