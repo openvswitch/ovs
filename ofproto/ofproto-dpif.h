@@ -268,6 +268,7 @@ bool ofproto_dpif_dscp_from_priority(const struct ofport_dpif *,
                                      uint32_t priority, uint8_t *dscp);
 int ofproto_dpif_queue_to_priority(const struct ofproto_dpif *,
                                    uint32_t queue_id, uint32_t *priority);
-
+tag_type calculate_flow_tag(struct ofproto_dpif *, const struct flow *,
+                            uint8_t table_id, struct rule_dpif *);
 
 #endif /* ofproto-dpif.h */

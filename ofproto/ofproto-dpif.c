@@ -5502,6 +5502,22 @@ update_mirror_stats(struct ofproto_dpif *ofproto, mirror_mask_t mirrors,
     }
 }
 
+tag_type
+calculate_flow_tag(struct ofproto_dpif *ofproto, const struct flow *flow,
+                   uint8_t table_id, struct rule_dpif *rule)
+{
+    if (table_id > 0 && table_id < N_TABLES) {
+        struct table_dpif *table = &ofproto->tables[table_id];
+        if (table->other_table) {
+            return (rule && rule->tag
+                    ? rule->tag
+                    : rule_calculate_tag(flow, &table->other_table->mask,
+                                         table->basis));
+        }
+    }
+
+    return 0;
+}
 
 /* Optimized flow revalidation.
  *

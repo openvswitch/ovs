@@ -969,24 +969,6 @@ compose_output_action(struct xlate_ctx *ctx, ofp_port_t ofp_port)
     compose_output_action__(ctx, ofp_port, true);
 }
 
-static void
-tag_the_flow(struct xlate_ctx *ctx, struct rule_dpif *rule)
-{
-    struct ofproto_dpif *ofproto = ctx->ofproto;
-    uint8_t table_id = ctx->table_id;
-
-    if (table_id > 0 && table_id < N_TABLES) {
-        struct table_dpif *table = &ofproto->tables[table_id];
-        if (table->other_table) {
-            ctx->xout->tags |= (rule && rule->tag
-                                ? rule->tag
-                                : rule_calculate_tag(&ctx->xin->flow,
-                                                     &table->other_table->mask,
-                                                     table->basis));
-        }
-    }
-}
-
 /* Common rule processing in one place to avoid duplicating code. */
 static struct rule_dpif *
 ctx_rule_hooks(struct xlate_ctx *ctx, struct rule_dpif *rule,
@@ -1027,7 +1009,8 @@ xlate_table_action(struct xlate_ctx *ctx,
         rule = rule_dpif_lookup_in_table(ctx->ofproto, &ctx->xin->flow,
                                          &ctx->xout->wc, table_id);
 
-        tag_the_flow(ctx, rule);
+        ctx->xout->tags |= calculate_flow_tag(ctx->ofproto, &ctx->xin->flow,
+                                              ctx->table_id, rule);
 
         /* Restore the original input port.  Otherwise OFPP_NORMAL and
          * OFPP_IN_PORT will have surprising behavior. */
@@ -1744,7 +1727,8 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
             rule = rule_dpif_lookup_in_table(ctx->ofproto, flow, wc,
                                              ctx->table_id);
 
-            tag_the_flow(ctx, rule);
+            ctx->xout->tags = calculate_flow_tag(ctx->ofproto, &ctx->xin->flow,
+                                                 ctx->table_id, rule);
 
             rule = ctx_rule_hooks(ctx, rule, true);
 
