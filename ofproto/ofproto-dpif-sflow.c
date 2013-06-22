@@ -146,9 +146,8 @@ dpif_sflow_find_port(const struct dpif_sflow *ds, odp_port_t odp_port)
 {
     struct dpif_sflow_port *dsp;
 
-    HMAP_FOR_EACH_IN_BUCKET (dsp, hmap_node,
-                             hash_int(odp_to_u32(odp_port), 0),
-                                      &ds->ports) {
+    HMAP_FOR_EACH_IN_BUCKET (dsp, hmap_node, hash_odp_port(odp_port),
+                             &ds->ports) {
         if (dsp->odp_port == odp_port) {
             return dsp;
         }
@@ -363,7 +362,7 @@ dpif_sflow_add_port(struct dpif_sflow *ds, struct ofport *ofport,
     dsp->ofport = ofport;
     dsp->odp_port = odp_port;
     SFL_DS_SET(dsp->dsi, SFL_DSCLASS_IFINDEX, ifindex, 0);
-    hmap_insert(&ds->ports, &dsp->hmap_node, hash_int(odp_to_u32(odp_port), 0));
+    hmap_insert(&ds->ports, &dsp->hmap_node, hash_odp_port(odp_port));
 
     /* Add poller. */
     if (ds->sflow_agent) {

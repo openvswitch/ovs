@@ -1813,7 +1813,7 @@ ofport_install(struct ofproto *p,
 
     /* Add port to 'p'. */
     hmap_insert(&p->ports, &ofport->hmap_node,
-                hash_int(ofp_to_u16(ofport->ofp_port), 0));
+                hash_ofp_port(ofport->ofp_port));
     shash_add(&p->port_by_name, netdev_name, ofport);
 
     update_mtu(p, ofport);
@@ -1937,8 +1937,7 @@ ofproto_get_port(const struct ofproto *ofproto, ofp_port_t ofp_port)
 {
     struct ofport *port;
 
-    HMAP_FOR_EACH_IN_BUCKET (port, hmap_node,
-                             hash_int(ofp_to_u16(ofp_port), 0),
+    HMAP_FOR_EACH_IN_BUCKET (port, hmap_node, hash_ofp_port(ofp_port),
                              &ofproto->ports) {
         if (port->ofp_port == ofp_port) {
             return port;

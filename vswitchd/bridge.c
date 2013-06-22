@@ -1285,7 +1285,7 @@ iface_set_ofp_port(struct iface *iface, ofp_port_t ofp_port)
     ovs_assert(iface->ofp_port == OFPP_NONE && ofp_port != OFPP_NONE);
     iface->ofp_port = ofp_port;
     hmap_insert(&br->ifaces, &iface->ofp_port_node,
-                hash_int(ofp_to_u16(ofp_port), 0));
+                hash_ofp_port(ofp_port));
     iface_set_ofport(iface->cfg, ofp_port);
 }
 
@@ -3485,8 +3485,7 @@ iface_from_ofp_port(const struct bridge *br, ofp_port_t ofp_port)
 {
     struct iface *iface;
 
-    HMAP_FOR_EACH_IN_BUCKET (iface, ofp_port_node,
-                             hash_int(ofp_to_u16(ofp_port), 0),
+    HMAP_FOR_EACH_IN_BUCKET (iface, ofp_port_node, hash_ofp_port(ofp_port),
                              &br->ifaces) {
         if (iface->ofp_port == ofp_port) {
             return iface;

@@ -213,6 +213,18 @@ u32_to_ofp11(uint32_t port)
     return OFP11_PORT_C(port);
 }
 
+static inline uint32_t
+hash_ofp_port(ofp_port_t ofp_port)
+{
+    return hash_int(ofp_to_u16(ofp_port), 0);
+}
+
+static inline uint32_t
+hash_odp_port(odp_port_t odp_port)
+{
+    return hash_int(odp_to_u32(odp_port), 0);
+}
+
 uint32_t flow_hash_in_minimask(const struct flow *, const struct minimask *,
                                uint32_t basis);
 

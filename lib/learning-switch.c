@@ -460,7 +460,7 @@ process_switch_features(struct lswitch *sw, struct ofp_header *oh)
         if (lp && hmap_node_is_null(&lp->hmap_node)) {
             lp->port_no = port.port_no;
             hmap_insert(&sw->queue_numbers, &lp->hmap_node,
-                        hash_int(ofp_to_u16(lp->port_no), 0));
+                        hash_ofp_port(lp->port_no));
         }
     }
     return 0;
@@ -517,7 +517,7 @@ get_queue_id(const struct lswitch *sw, ofp_port_t in_port)
 {
     const struct lswitch_port *port;
 
-    HMAP_FOR_EACH_WITH_HASH (port, hmap_node, hash_int(ofp_to_u16(in_port), 0),
+    HMAP_FOR_EACH_WITH_HASH (port, hmap_node, hash_ofp_port(in_port),
                              &sw->queue_numbers) {
         if (port->port_no == in_port) {
             return port->queue_id;

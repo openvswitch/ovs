@@ -1500,7 +1500,7 @@ port_construct(struct ofport *port_)
         }
 
         hmap_insert(&ofproto->backer->odp_to_ofport_map, &port->odp_port_node,
-                    hash_int(odp_to_u32(port->odp_port), 0));
+                    hash_odp_port(port->odp_port));
     }
     dpif_port_destroy(&dpif_port);
 
@@ -6557,7 +6557,7 @@ vlandev_find(const struct ofproto_dpif *ofproto, ofp_port_t vlandev_ofp_port)
     struct vlan_splinter *vsp;
 
     HMAP_FOR_EACH_WITH_HASH (vsp, vlandev_node,
-                             hash_int(ofp_to_u16(vlandev_ofp_port), 0),
+                             hash_ofp_port(vlandev_ofp_port),
                              &ofproto->vlandev_map) {
         if (vsp->vlandev_ofp_port == vlandev_ofp_port) {
             return vsp;
@@ -6648,7 +6648,7 @@ vsp_add(struct ofport_dpif *port, ofp_port_t realdev_ofp_port, int vid)
 
         vsp = xmalloc(sizeof *vsp);
         hmap_insert(&ofproto->vlandev_map, &vsp->vlandev_node,
-                    hash_int(ofp_to_u16(port->up.ofp_port), 0));
+                    hash_ofp_port(port->up.ofp_port));
         hmap_insert(&ofproto->realdev_vid_map, &vsp->realdev_vid_node,
                     hash_realdev_vid(realdev_ofp_port, vid));
         vsp->realdev_ofp_port = realdev_ofp_port;
@@ -6673,8 +6673,7 @@ odp_port_to_ofport(const struct dpif_backer *backer, odp_port_t odp_port)
 {
     struct ofport_dpif *port;
 
-    HMAP_FOR_EACH_IN_BUCKET (port, odp_port_node,
-                             hash_int(odp_to_u32(odp_port), 0),
+    HMAP_FOR_EACH_IN_BUCKET (port, odp_port_node, hash_odp_port(odp_port),
                              &backer->odp_to_ofport_map) {
         if (port->odp_port == odp_port) {
             return port;

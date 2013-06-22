@@ -104,7 +104,7 @@ pinqueue_destroy(struct pinsched *ps, struct pinqueue *q)
 static struct pinqueue *
 pinqueue_get(struct pinsched *ps, ofp_port_t port_no)
 {
-    uint32_t hash = hash_int(ofp_to_u16(port_no), 0);
+    uint32_t hash = hash_ofp_port(port_no);
     struct pinqueue *q;
 
     HMAP_FOR_EACH_IN_BUCKET (q, node, hash, &ps->queues) {
