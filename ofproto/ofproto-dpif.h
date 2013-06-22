@@ -100,7 +100,6 @@ struct ofproto_dpif {
     /* Support for debugging async flow mods. */
     struct list completions;
 
-    bool has_bundle_action; /* True when the first bundle action appears. */
     struct netdev_stats stats; /* To account packets generated and consumed in
                                 * userspace. */
 

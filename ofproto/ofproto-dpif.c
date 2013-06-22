@@ -1045,8 +1045,6 @@ construct(struct ofproto *ofproto_)
     ofproto_dpif_unixctl_init();
 
     ofproto->has_mirrors = false;
-    ofproto->has_bundle_action = false;
-
     hmap_init(&ofproto->vlandev_map);
     hmap_init(&ofproto->realdev_vid_map);
 
@@ -2956,10 +2954,7 @@ port_run(struct ofport_dpif *ofport)
 
     if (ofport->may_enable != enable) {
         struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofport->up.ofproto);
-
-        if (ofproto->has_bundle_action) {
-            ofproto->backer->need_revalidate = REV_PORT_TOGGLED;
-        }
+        ofproto->backer->need_revalidate = REV_PORT_TOGGLED;
     }
 
     ofport->may_enable = enable;

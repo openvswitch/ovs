@@ -1691,7 +1691,6 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
             break;
 
         case OFPACT_BUNDLE:
-            ctx->ofproto->has_bundle_action = true;
             xlate_bundle_action(ctx, ofpact_get_BUNDLE(a));
             break;
 
