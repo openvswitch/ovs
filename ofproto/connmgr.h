@@ -156,10 +156,7 @@ void connmgr_set_extra_in_band_remotes(struct connmgr *,
 void connmgr_set_in_band_queue(struct connmgr *, int queue_id);
 
 /* In-band implementation. */
-bool connmgr_must_output_local(struct connmgr *, const struct flow *,
-                               odp_port_t local_odp_port,
-                               const struct nlattr *odp_actions,
-                               size_t actions_len);
+bool connmgr_has_in_band(struct connmgr *);
 
 /* Fail-open and in-band implementation. */
 void connmgr_flushed(struct connmgr *);

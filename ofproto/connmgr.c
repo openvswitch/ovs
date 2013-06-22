@@ -1645,13 +1645,9 @@ any_extras_changed(const struct connmgr *mgr,
 /* In-band implementation. */
 
 bool
-connmgr_must_output_local(struct connmgr *mgr, const struct flow *flow,
-                          odp_port_t local_odp_port,
-                          const struct nlattr *odp_actions,
-                          size_t actions_len)
+connmgr_has_in_band(struct connmgr *mgr)
 {
-    return !mgr->in_band || in_band_rule_check(flow, local_odp_port,
-                                               odp_actions, actions_len);
+    return mgr->in_band != NULL;
 }
 
 /* Fail-open and in-band implementation. */

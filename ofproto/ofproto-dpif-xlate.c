@@ -26,6 +26,7 @@
 #include "coverage.h"
 #include "dpif.h"
 #include "dynamic-string.h"
+#include "in-band.h"
 #include "lacp.h"
 #include "learn.h"
 #include "mac-learning.h"
@@ -2009,10 +2010,10 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
         }
 
         local_odp_port = ofp_port_to_odp_port(ctx.ofproto, OFPP_LOCAL);
-        if (!connmgr_must_output_local(ctx.ofproto->up.connmgr, flow,
-                                       local_odp_port,
-                                       ctx.xout->odp_actions.data,
-                                       ctx.xout->odp_actions.size)) {
+        if (connmgr_has_in_band(ctx.ofproto->up.connmgr)
+            && !in_band_rule_check(flow, local_odp_port,
+                                   ctx.xout->odp_actions.data,
+                                   ctx.xout->odp_actions.size)) {
             compose_output_action(&ctx, OFPP_LOCAL);
         }
         if (ctx.ofproto->has_mirrors) {
