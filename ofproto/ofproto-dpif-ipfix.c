@@ -651,7 +651,7 @@ ipfix_send_template_msg(struct dpif_ipfix_exporter *exporter,
     set_hdr = (struct ipfix_set_header*)((uint8_t*)msg.data + set_hdr_offset);
     set_hdr->length = htons(msg.size - set_hdr_offset);
 
-    /* TODO: Add Options Template Sets, at least to define a Flow Keys
+    /* XXX: Add Options Template Sets, at least to define a Flow Keys
      * Option Template. */
 
     ipfix_send_msg(exporter->collectors, &msg);
