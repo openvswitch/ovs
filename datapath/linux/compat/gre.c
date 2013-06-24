@@ -16,6 +16,9 @@
  * 02110-1301, USA
  */
 
+#include <linux/kconfig.h>
+#if IS_ENABLED(CONFIG_NET_IPGRE_DEMUX)
+
 #include <linux/module.h>
 #include <linux/if.h>
 #include <linux/if_tunnel.h>
@@ -350,3 +353,5 @@ int gre_cisco_unregister(struct gre_cisco_protocol *proto)
 	ret = gre_compat_exit();
 	return ret;
 }
+
+#endif /* CONFIG_NET_IPGRE_DEMUX */

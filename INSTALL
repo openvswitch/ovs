@@ -49,9 +49,9 @@ INSTALL.userspace for more information.
       NET_ACT_POLICE, either built-in or as modules.  (NET_CLS_POLICE is
       obsolete and not needed.)
 
-      If GRE tunneling is being used it is recommended that the kernel
-      be compiled with IPv6 support (CONFIG_IPV6).  This allows for
-      special handling (such as path MTU discovery) of IPv6 packets.
+      To use GRE tunneling on Linux 2.6.37 or newer, kernel support
+      for GRE must be compiled in or available as a module
+      (CONFIG_NET_IPGRE_DEMUX).
 
       To configure HTB or HFSC quality of service with Open vSwitch,
       you must enable the respective configuration options.

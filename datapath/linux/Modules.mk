@@ -37,6 +37,7 @@ openvswitch_headers += \
 	linux/compat/include/linux/ip.h \
 	linux/compat/include/linux/ipv6.h \
 	linux/compat/include/linux/jiffies.h \
+	linux/compat/include/linux/kconfig.h \
 	linux/compat/include/linux/kernel.h \
 	linux/compat/include/linux/kobject.h \
 	linux/compat/include/linux/list.h \

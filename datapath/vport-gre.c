@@ -16,6 +16,8 @@
  * 02110-1301, USA
  */
 
+#include <linux/kconfig.h>
+#if IS_ENABLED(CONFIG_NET_IPGRE_DEMUX)
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
 #include <linux/if.h>
@@ -353,3 +355,4 @@ const struct vport_ops ovs_gre64_vport_ops = {
 	.get_name	= gre_get_name,
 	.send		= gre64_send,
 };
+#endif

@@ -20,6 +20,7 @@
 #include <linux/if.h>
 #include <linux/if_vlan.h>
 #include <linux/jhash.h>
+#include <linux/kconfig.h>
 #include <linux/kernel.h>
 #include <linux/list.h>
 #include <linux/mutex.h>
@@ -39,8 +40,10 @@
 static const struct vport_ops *vport_ops_list[] = {
 	&ovs_netdev_vport_ops,
 	&ovs_internal_vport_ops,
+#if IS_ENABLED(CONFIG_NET_IPGRE_DEMUX)
 	&ovs_gre_vport_ops,
 	&ovs_gre64_vport_ops,
+#endif
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,26)
 	&ovs_vxlan_vport_ops,
 	&ovs_lisp_vport_ops,
