@@ -16,7 +16,10 @@
 /flow.c
 /genetlink-openvswitch.c
 /genl_exec.c
+/gre.c
+/gso.c
 /ip_output-openvswitch.c
+/ip_tunnels_core.c
 /kcompat.h
 /kmemdup.c
 /loop_counter.c
