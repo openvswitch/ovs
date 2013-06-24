@@ -382,14 +382,6 @@ lacp_slave_may_enable(const struct lacp *lacp, const void *slave_)
     }
 }
 
-/* Returns the port ID used for 'slave_' in LACP communications. */
-uint16_t
-lacp_slave_get_port_id(const struct lacp *lacp, const void *slave_)
-{
-    struct slave *slave = slave_lookup(lacp, slave_);
-    return slave->port_id;
-}
-
 /* Returns true if partner information on 'slave_' is up to date.  'slave_'
  * not being current, generally indicates a connectivity problem, or a
  * misconfigured (or broken) partner. */

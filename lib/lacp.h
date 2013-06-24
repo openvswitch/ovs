@@ -60,7 +60,6 @@ void lacp_slave_register(struct lacp *, void *slave_,
 void lacp_slave_unregister(struct lacp *, const void *slave);
 void lacp_slave_carrier_changed(const struct lacp *, const void *slave);
 bool lacp_slave_may_enable(const struct lacp *, const void *slave);
-uint16_t lacp_slave_get_port_id(const struct lacp *, const void *slave);
 bool lacp_slave_is_current(const struct lacp *, const void *slave_);
 
 /* Callback function for lacp_run() for sending a LACP PDU. */
