@@ -92,9 +92,6 @@ OpenFlow 1.2 support requires OpenFlow 1.1 as a prerequisite, plus the
 following additional work.  (This is based on the change log at the
 end of the OF1.2 spec.  I didn't compare the specs carefully yet.)
 
-    * Use new OpenFlow extensible error infrastructure, on OF1.2+
-      only, instead of the OVS-specific extension used until now.
-
     * OFPT_FLOW_MOD:
 
         * MODIFY and MODIFY_STRICT commands now never insert new flows

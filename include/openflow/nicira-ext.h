@@ -24,7 +24,6 @@
  * standardized, so they are not included in openflow.h.  Some of them may be
  * suitable for standardization; others we never expect to standardize. */
 
-#define NX_VENDOR_ID 0x00002320
 
 /* Nicira vendor-specific error messages extension.
  *

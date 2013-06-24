@@ -1,4 +1,4 @@
-/* Copyright (c) 2008, 2011, 2012 The Board of Trustees of The Leland Stanford
+/* Copyright (c) 2008, 2011, 2012, 2013 The Board of Trustees of The Leland Stanford
  * Junior University
  *
  * We are making the OpenFlow specification and associated documentation
@@ -54,6 +54,9 @@
 #define OPENFLOW_12_H 1
 
 #include "openflow/openflow-1.1.h"
+
+/* Error type for experimenter error messages. */
+#define OFPET12_EXPERIMENTER 0xffff
 
 /*
  * OXM Class IDs.

@@ -1,4 +1,4 @@
-/* Copyright (c) 2008, 2011, 2012 The Board of Trustees of The Leland Stanford
+/* Copyright (c) 2008, 2011, 2012, 2013 The Board of Trustees of The Leland Stanford
  * Junior University
  *
  * We are making the OpenFlow specification and associated documentation
@@ -77,6 +77,29 @@ enum ofp_version {
     OFP12_VERSION = 0x03,
     OFP13_VERSION = 0x04
 };
+
+/* Vendor (aka experimenter) IDs.
+ *
+ * These are used in various places in OpenFlow to identify an extension
+ * defined by some vendor, as opposed to a standardized part of the core
+ * OpenFlow protocol.
+ *
+ * Vendor IDs whose top 8 bits are 0 hold an Ethernet OUI in their low 24 bits.
+ * The Open Networking Foundation assigns vendor IDs whose top 8 bits are
+ * nonzero.
+ *
+ * A few vendor IDs are special:
+ *
+ *    - OF_VENDOR_ID is not a real vendor ID and does not appear in the
+ *      OpenFlow protocol itself.  It can occasionally be useful within Open
+ *      vSwitch to identify a standardized part of OpenFlow.
+ *
+ *    - ONF_VENDOR_ID is being used within the ONF "extensibility" working
+ *      group to identify extensions being proposed for standardization.
+ */
+#define OF_VENDOR_ID    0
+#define NX_VENDOR_ID    0x00002320 /* Nicira. */
+#define ONF_VENDOR_ID   0x4f4e4600 /* Open Networking Foundation. */
 
 #define OFP_MAX_TABLE_NAME_LEN 32
 #define OFP_MAX_PORT_NAME_LEN  16

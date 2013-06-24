@@ -2786,13 +2786,16 @@ ofctl_print_error(int argc OVS_UNUSED, char *argv[])
 
     for (version = 0; version <= UINT8_MAX; version++) {
         const char *name = ofperr_domain_get_name(version);
-        if (!name) {
-            continue;
+        if (name) {
+            int vendor = ofperr_get_vendor(error, version);
+            int type = ofperr_get_type(error, version);
+            int code = ofperr_get_code(error, version);
+
+            if (vendor != -1 || type != -1 || code != -1) {
+                printf("%s: vendor %#x, type %d, code %d\n",
+                       name, vendor, type, code);
+            }
         }
-        printf("%s: %d,%d\n",
-               ofperr_domain_get_name(version),
-               ofperr_get_type(error, version),
-               ofperr_get_code(error, version));
     }
 }
 

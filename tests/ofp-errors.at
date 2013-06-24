@@ -87,16 +87,14 @@ dnl Thus, for OF1.1 we translate both of the latter error codes into 3,5.
 AT_SETUP([encoding OFPBIC_* experimenter errors])
 AT_KEYWORDS([ofp-print ofp-errors])
 AT_CHECK([ovs-ofctl print-error OFPBIC_BAD_EXPERIMENTER], [0], [dnl
-OpenFlow 1.0: -1,-1
-OpenFlow 1.1: 3,5
-OpenFlow 1.2: 3,5
-OpenFlow 1.3: 3,5
+OpenFlow 1.1: vendor 0, type 3, code 5
+OpenFlow 1.2: vendor 0, type 3, code 5
+OpenFlow 1.3: vendor 0, type 3, code 5
 ])
 AT_CHECK([ovs-ofctl print-error OFPBIC_BAD_EXP_TYPE], [0], [dnl
-OpenFlow 1.0: -1,-1
-OpenFlow 1.1: 3,5
-OpenFlow 1.2: 3,6
-OpenFlow 1.3: 3,6
+OpenFlow 1.1: vendor 0, type 3, code 5
+OpenFlow 1.2: vendor 0, type 3, code 6
+OpenFlow 1.3: vendor 0, type 3, code 6
 ])
 AT_CLEANUP
 
@@ -127,14 +125,47 @@ AT_CHECK([ovs-ofctl ofp-print '0201001455555555 00030005 0102000811111111'], [0]
 OFPT_ERROR (OF1.1) (xid=0x55555555): OFPBIC_BAD_EXPERIMENTER
 OFPT_ECHO_REQUEST (xid=0x11111111): 0 bytes of payload
 ])
-AT_KEYWORDS([ofp-print ofp-errors])
 AT_CHECK([ovs-ofctl ofp-print '0301001455555555 00030005 0102000811111111'], [0], [dnl
 OFPT_ERROR (OF1.2) (xid=0x55555555): OFPBIC_BAD_EXPERIMENTER
 OFPT_ECHO_REQUEST (xid=0x11111111): 0 bytes of payload
 ])
-AT_KEYWORDS([ofp-print ofp-errors])
 AT_CHECK([ovs-ofctl ofp-print '0301001455555555 00030006 0102000811111111'], [0], [dnl
 OFPT_ERROR (OF1.2) (xid=0x55555555): OFPBIC_BAD_EXP_TYPE
 OFPT_ECHO_REQUEST (xid=0x11111111): 0 bytes of payload
+])
+AT_CLEANUP
+
+AT_SETUP([decoding experimenter errors])
+AT_KEYWORDS([ofp-print ofp-errors])
+AT_CHECK([ovs-ofctl ofp-print '0101001c55555555 b0c20000 0000232000010203 0102000811111111'], [0], [dnl
+OFPT_ERROR (xid=0x55555555): NXBRC_MUST_BE_ZERO
+OFPT_ECHO_REQUEST (xid=0x11111111): 0 bytes of payload
+])
+AT_CHECK([ovs-ofctl ofp-print '0201001c55555555 b0c20000 0000232000010203 0102000811111111'], [0], [dnl
+OFPT_ERROR (OF1.1) (xid=0x55555555): NXBRC_MUST_BE_ZERO
+OFPT_ECHO_REQUEST (xid=0x11111111): 0 bytes of payload
+])
+AT_CHECK([ovs-ofctl ofp-print '0301001855555555 ffff0004 00002320 0102000811111111'], [0], [dnl
+OFPT_ERROR (OF1.2) (xid=0x55555555): NXBRC_MUST_BE_ZERO
+OFPT_ECHO_REQUEST (xid=0x11111111): 0 bytes of payload
+])
+AT_CLEANUP
+
+AT_SETUP([encoding experimenter errors])
+AT_KEYWORDS([ofp-print ofp-errors])
+AT_CHECK(
+  [ovs-ofctl encode-error-reply NXBRC_MUST_BE_ZERO 0100000812345678], [0], [dnl
+00000000  01 01 00 1c 12 34 56 78-b0 c2 00 00 00 00 23 20 @&t@
+00000010  00 01 02 03 01 00 00 08-12 34 56 78 @&t@
+])
+AT_CHECK(
+  [ovs-ofctl encode-error-reply NXBRC_MUST_BE_ZERO 0200000812345678], [0], [dnl
+00000000  02 01 00 1c 12 34 56 78-b0 c2 00 00 00 00 23 20 @&t@
+00000010  00 01 02 03 02 00 00 08-12 34 56 78 @&t@
+])
+AT_CHECK(
+  [ovs-ofctl encode-error-reply NXBRC_MUST_BE_ZERO 0300000812345678], [0], [dnl
+00000000  03 01 00 18 12 34 56 78-ff ff 00 04 00 00 23 20 @&t@
+00000010  03 00 00 08 12 34 56 78-
 ])
 AT_CLEANUP

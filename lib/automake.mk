@@ -336,9 +336,12 @@ lib/dirs.c: lib/dirs.c.in Makefile
 	mv lib/dirs.c.tmp lib/dirs.c
 
 $(srcdir)/lib/ofp-errors.inc: \
-	lib/ofp-errors.h $(srcdir)/build-aux/extract-ofp-errors
+	lib/ofp-errors.h include/openflow/openflow-common.h \
+	$(srcdir)/build-aux/extract-ofp-errors
 	$(run_python) $(srcdir)/build-aux/extract-ofp-errors \
-		$(srcdir)/lib/ofp-errors.h > $@.tmp && mv $@.tmp $@
+		$(srcdir)/lib/ofp-errors.h \
+		$(srcdir)/include/openflow/openflow-common.h > $@.tmp
+	mv $@.tmp $@
 $(srcdir)/lib/ofp-errors.c: $(srcdir)/lib/ofp-errors.inc
 EXTRA_DIST += build-aux/extract-ofp-errors lib/ofp-errors.inc
 
