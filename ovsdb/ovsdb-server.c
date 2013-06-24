@@ -339,7 +339,7 @@ parse_db_column__(const struct shash *all_dbs,
                   const struct ovsdb_table **tablep,
                   const struct ovsdb_column **columnp)
 {
-    const char *table_name, *column_name;
+    const char *db_name, *table_name, *column_name;
     const struct ovsdb_column *column;
     const struct ovsdb_table *table;
     const char *tokens[3];
@@ -354,30 +354,17 @@ parse_db_column__(const struct shash *all_dbs,
     tokens[0] = strtok_r(NULL, ",", &save_ptr);
     tokens[1] = strtok_r(NULL, ",", &save_ptr);
     tokens[2] = strtok_r(NULL, ",", &save_ptr);
-    if (!tokens[0] || !tokens[1]) {
+    if (!tokens[0] || !tokens[1] || !tokens[2]) {
         return xasprintf("\"%s\": invalid syntax", name_);
     }
-    if (tokens[2]) {
-        const char *db_name = tokens[0];
-        table_name = tokens[1];
-        column_name = tokens[2];
 
-        db = find_db(all_dbs, tokens[0]);
-        if (!db) {
-            return xasprintf("\"%s\": no database named %s", name_, db_name);
-        }
-    } else {
-        struct shash_node *node;
-        if (shash_count(all_dbs) > 1) {
-            return xasprintf("\"%s\": database name must be specified "
-                             "(because multiple databases are configured)",
-                             name_);
-        }
+    db_name = tokens[0];
+    table_name = tokens[1];
+    column_name = tokens[2];
 
-        table_name = tokens[0];
-        column_name = tokens[1];
-        node = shash_first(all_dbs);
-        db = (struct db *)node->data;
+    db = find_db(all_dbs, tokens[0]);
+    if (!db) {
+        return xasprintf("\"%s\": no database named %s", name_, db_name);
     }
 
     table = ovsdb_get_table(db->db, table_name);

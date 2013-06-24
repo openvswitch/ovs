@@ -207,7 +207,7 @@ AT_CHECK(
         "uuid-name": "x",
         "row": {"target": "punix:socket2"}}]']], [0], [ignore], [ignore])
 ON_EXIT([kill `cat ovsdb-server.pid`])
-AT_CHECK([ovsdb-server --enable-dummy --detach --no-chdir --pidfile --remote=db:Root,managers --remote=db:Root,manager_options --log-file db], [0], [ignore], [ignore])
+AT_CHECK([ovsdb-server --enable-dummy --detach --no-chdir --pidfile --remote=db:mydb,Root,managers --remote=db:mydb,Root,manager_options --log-file db], [0], [ignore], [ignore])
 for i in 1 2 3 4 5 6; do ovs-appctl -t ovsdb-server time/warp 1000; done
 AT_CHECK(
   [[ovsdb-client transact unix:socket1 \
@@ -344,9 +344,9 @@ AT_CHECK(
 OVS_LOGDIR=`pwd`; export OVS_LOGDIR
 AT_CHECK(
   [ovsdb-server --log-file --detach --no-chdir --pidfile="`pwd`"/pid \
-        --private-key=db:SSL,private_key \
-        --certificate=db:SSL,certificate \
-        --ca-cert=db:SSL,ca_cert \
+        --private-key=db:mydb,SSL,private_key \
+        --certificate=db:mydb,SSL,certificate \
+        --ca-cert=db:mydb,SSL,ca_cert \
         --remote=pssl:0:127.0.0.1 --unixctl="`pwd`"/unixctl db],
   [0], [ignore], [ignore])
 SSL_PORT=`parse_listening_port < ovsdb-server.log`

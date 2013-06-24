@@ -45,12 +45,10 @@ Adds \fIremote\fR as a connection method used by \fBovsdb\-server\fR.
 .so ovsdb/remote-passive.man
 .so ovsdb/remote-active.man
 .
-.IP "\fBdb:\fR[\fIdb\fB,\fR]\fItable\fB,\fIcolumn\fR"
+.IP "\fBdb:\fIdb\fB,\fItable\fB,\fIcolumn\fR"
 Reads additional connection methods from \fIcolumn\fR in all of the
-rows in \fItable\fR within \fIdb\fR.  (If \fBovsdb\-server\fR is
-providing access to only one database, then \fIdb\fR is optional.)  As
-the contents of \fIcolumn\fR changes, \fBovsdb\-server\fR also adds
-and drops connection methods accordingly.
+rows in \fItable\fR within \fIdb\fR.  As the contents of \fIcolumn\fR changes,
+\fBovsdb\-server\fR also adds and drops connection methods accordingly.
 .IP
 If \fIcolumn\fR's type is string or set of strings, then the
 connection methods are taken directly from the column.  The connection
@@ -98,9 +96,9 @@ configured remotes.
 The options described below for configuring the SSL public key
 infrastructure accept a special syntax for obtaining their
 configuration from the database.  If any of these options is given
-\fBdb:\fR[\fIdb\fB,\fR]\fItable\fB,\fIcolumn\fR as its argument, then the
+\fBdb:\fIdb\fB,\fItable\fB,\fIcolumn\fR as its argument, then the
 actual file name is read from the specified \fIcolumn\fR in \fItable\fR
-within the \fBovsdb\-server\fR database.  The \fIcolumn\fR must have type
+within the \fIdb\fR database.  The \fIcolumn\fR must have type
 string or set of strings.  The first nonempty string in the table is taken
 as the file name.  (This means that ordinarily there should be at most
 one row in \fItable\fR.)
@@ -140,9 +138,9 @@ with an error if \fIremote\fR is not configured as a remote.  This
 command only works with remotes that were named on \fB\-\-remote\fR or
 \fBovsdb\-server/add\-remote\fR, that is, it will not remove remotes
 added indirectly because they were read from the database by
-configuring a \fBdb:\fR[\fIdb\fB,\fR]\fItable\fB,\fIcolumn\fR remote.
+configuring a \fBdb:\fIdb\fB,\fItable\fB,\fIcolumn\fR remote.
 (You can remove a database source with \fBovsdb\-server/remove\-remote
-\fBdb:\fR[\fIdb\fB,\fR]\fItable\fB,\fIcolumn\fR, but not individual
+\fBdb:\fIdb\fB,\fItable\fB,\fIcolumn\fR, but not individual
 remotes found indirectly through the database.)
 .
 .IP "\fBovsdb\-server/list\-remotes"
@@ -150,7 +148,7 @@ Outputs a list of the currently configured remotes named on
 \fB\-\-remote\fR or \fBovsdb\-server/add\-remote\fR, that is, it does
 not list remotes added indirectly because they were read from the
 database by configuring a
-\fBdb:\fR[\fIdb\fB,\fR]\fItable\fB,\fIcolumn\fR remote.
+\fBdb:\fIdb\fB,\fItable\fB,\fIcolumn\fR remote.
 .
 .so lib/vlog-unixctl.man
 .so lib/memory-unixctl.man

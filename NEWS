@@ -7,6 +7,9 @@ post-v1.11.0
     - New "check-oftest" Makefile target for running OFTest against Open
       vSwitch.  See README-OFTest for details.
     - The flow eviction threshold has been moved to the Open_vSwitch table.
+    - Database names are now mandatory when specifying ovsdb-server options
+      through database paths (e.g. Private key option with the database name
+      should look like "--private-key=db:Open_vSwitch,SSL,private_key").
 
 
 v1.11.0 - xx xxx xxxx
