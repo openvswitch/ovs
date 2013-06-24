@@ -4142,14 +4142,12 @@ ofputil_port_from_string(const char *s, ofp_port_t *portp)
                       "be translated to %u when talking to an OF1.1 or "
                       "later controller", port32, port32 + OFPP11_OFFSET);
         } else if (port32 <= ofp_to_u16(OFPP_LAST_RESV)) {
-            struct ds msg;
+            char name[OFP_MAX_PORT_NAME_LEN];
 
-            ds_init(&msg);
-            ofputil_format_port(u16_to_ofp(port32), &msg);
-            VLOG_WARN_ONCE("referring to port %s as %u is deprecated for "
-                           "compatibility with future versions of OpenFlow",
-                           ds_cstr(&msg), port32);
-            ds_destroy(&msg);
+            ofputil_port_to_string(u16_to_ofp(port32), name, sizeof name);
+            VLOG_WARN_ONCE("referring to port %s as %"PRIu32" is deprecated "
+                           "for compatibility with OpenFlow 1.1 and later",
+                           name, port32);
         } else if (port32 < ofp11_to_u32(OFPP11_MAX)) {
             VLOG_WARN("port %u is outside the supported range 0 through "
                       "%"PRIx16" or 0x%x through 0x%"PRIx32, port32,
@@ -4189,18 +4187,32 @@ ofputil_port_from_string(const char *s, ofp_port_t *portp)
 void
 ofputil_format_port(ofp_port_t port, struct ds *s)
 {
-    const char *name;
+    char name[OFP_MAX_PORT_NAME_LEN];
 
+    ofputil_port_to_string(port, name, sizeof name);
+    ds_put_cstr(s, name);
+}
+
+/* Puts in the 'bufsize' byte in 'namebuf' a null-terminated string
+ * representation of OpenFlow port number 'port'.  Most ports are represented
+ * as just the port number, but special ports, e.g. OFPP_LOCAL, are represented
+ * by name, e.g. "LOCAL". */
+void
+ofputil_port_to_string(ofp_port_t port,
+                       char namebuf[OFP_MAX_PORT_NAME_LEN], size_t bufsize)
+{
     switch (port) {
-#define OFPUTIL_NAMED_PORT(NAME) case OFPP_##NAME: name = #NAME; break;
+#define OFPUTIL_NAMED_PORT(NAME)                        \
+        case OFPP_##NAME:                               \
+            ovs_strlcpy(namebuf, #NAME, bufsize);       \
+            break;
         OFPUTIL_NAMED_PORTS
 #undef OFPUTIL_NAMED_PORT
 
     default:
-        ds_put_format(s, "%"PRIu16, port);
-        return;
+        snprintf(namebuf, bufsize, "%"PRIu16, port);
+        break;
     }
-    ds_put_cstr(s, name);
 }
 
 /* Given a buffer 'b' that contains an array of OpenFlow ports of type

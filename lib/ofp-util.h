@@ -40,6 +40,8 @@ enum ofperr ofputil_check_output_port(ofp_port_t ofp_port,
                                       ofp_port_t max_ports);
 bool ofputil_port_from_string(const char *, ofp_port_t *portp);
 void ofputil_format_port(ofp_port_t port, struct ds *);
+void ofputil_port_to_string(ofp_port_t, char namebuf[OFP_MAX_PORT_NAME_LEN],
+                            size_t bufsize);
 
 /* Converting OFPFW10_NW_SRC_MASK and OFPFW10_NW_DST_MASK wildcard bit counts
  * to and from IP bitmasks. */
