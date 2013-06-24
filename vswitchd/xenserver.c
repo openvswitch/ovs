@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010 Nicira, Inc.
+/* Copyright (c) 2009, 2010, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,7 +38,7 @@ read_host_uuid(void)
         if (errno == ENOENT) {
             VLOG_DBG("not running on a XenServer");
         } else {
-            VLOG_INFO("%s: open: %s", filename, strerror(errno));
+            VLOG_INFO("%s: open: %s", filename, ovs_strerror(errno));
         }
         return NULL;
     }

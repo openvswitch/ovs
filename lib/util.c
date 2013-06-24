@@ -616,7 +616,7 @@ get_cwd(void)
             int error = errno;
             free(buf);
             if (error != ERANGE) {
-                VLOG_WARN("getcwd failed (%s)", strerror(error));
+                VLOG_WARN("getcwd failed (%s)", ovs_strerror(error));
                 return NULL;
             }
             size *= 2;
@@ -754,7 +754,8 @@ follow_symlinks(const char *filename)
 
         linkname = xreadlink(fn);
         if (!linkname) {
-            VLOG_WARN("%s: readlink failed (%s)", filename, strerror(errno));
+            VLOG_WARN("%s: readlink failed (%s)",
+                      filename, ovs_strerror(errno));
             return fn;
         }
 

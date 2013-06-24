@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -249,7 +249,7 @@ poll_block(void)
     retval = time_poll(pollfds, n_pollfds, timeout_when, &elapsed);
     if (retval < 0) {
         static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
-        VLOG_ERR_RL(&rl, "poll: %s", strerror(-retval));
+        VLOG_ERR_RL(&rl, "poll: %s", ovs_strerror(-retval));
     } else if (!retval) {
         log_wakeup(timeout_where, NULL, elapsed);
     }

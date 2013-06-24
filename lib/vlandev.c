@@ -212,7 +212,7 @@ vlandev_linux_refresh(void)
             return 0;
         }
 
-        VLOG_WARN_RL(&rl, "%s: open failed (%s)", fn, strerror(error));
+        VLOG_WARN_RL(&rl, "%s: open failed (%s)", fn, ovs_strerror(error));
         return error;
     }
 
@@ -250,7 +250,7 @@ do_vlan_ioctl(const char *netdev_name, struct vlan_ioctl_args *via,
     error = ioctl(sock, SIOCSIFVLAN, via) < 0 ? errno : 0;
     if (error) {
         VLOG_WARN_RL(&rl, "%s: VLAN ioctl %s failed (%s)",
-                     netdev_name, cmd_name, strerror(error));
+                     netdev_name, cmd_name, ovs_strerror(error));
     }
     return error;
 }

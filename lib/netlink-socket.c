@@ -99,7 +99,7 @@ nl_sock_create(int protocol, struct nl_sock **sockp)
         max_iovs = sysconf(_SC_UIO_MAXIOV);
         if (max_iovs < _XOPEN_IOV_MAX) {
             if (max_iovs == -1 && errno) {
-                VLOG_WARN("sysconf(_SC_UIO_MAXIOV): %s", strerror(errno));
+                VLOG_WARN("sysconf(_SC_UIO_MAXIOV): %s", ovs_strerror(errno));
             }
             max_iovs = _XOPEN_IOV_MAX;
         } else if (max_iovs > MAX_IOVS) {
@@ -114,7 +114,7 @@ nl_sock_create(int protocol, struct nl_sock **sockp)
 
     sock->fd = socket(AF_NETLINK, SOCK_RAW, protocol);
     if (sock->fd < 0) {
-        VLOG_ERR("fcntl: %s", strerror(errno));
+        VLOG_ERR("fcntl: %s", ovs_strerror(errno));
         goto error;
     }
     sock->protocol = protocol;
@@ -128,7 +128,7 @@ nl_sock_create(int protocol, struct nl_sock **sockp)
          * Warn only if the failure is therefore unexpected. */
         if (errno != EPERM) {
             VLOG_WARN_RL(&rl, "setting %d-byte socket receive buffer failed "
-                         "(%s)", rcvbuf, strerror(errno));
+                         "(%s)", rcvbuf, ovs_strerror(errno));
         }
     }
 
@@ -144,14 +144,14 @@ nl_sock_create(int protocol, struct nl_sock **sockp)
     remote.nl_family = AF_NETLINK;
     remote.nl_pid = 0;
     if (connect(sock->fd, (struct sockaddr *) &remote, sizeof remote) < 0) {
-        VLOG_ERR("connect(0): %s", strerror(errno));
+        VLOG_ERR("connect(0): %s", ovs_strerror(errno));
         goto error;
     }
 
     /* Obtain pid assigned by kernel. */
     local_size = sizeof local;
     if (getsockname(sock->fd, (struct sockaddr *) &local, &local_size) < 0) {
-        VLOG_ERR("getsockname: %s", strerror(errno));
+        VLOG_ERR("getsockname: %s", ovs_strerror(errno));
         goto error;
     }
     if (local_size < sizeof local || local.nl_family != AF_NETLINK) {
@@ -222,7 +222,7 @@ nl_sock_join_mcgroup(struct nl_sock *sock, unsigned int multicast_group)
     if (setsockopt(sock->fd, SOL_NETLINK, NETLINK_ADD_MEMBERSHIP,
                    &multicast_group, sizeof multicast_group) < 0) {
         VLOG_WARN("could not join multicast group %u (%s)",
-                  multicast_group, strerror(errno));
+                  multicast_group, ovs_strerror(errno));
         return errno;
     }
     return 0;
@@ -245,7 +245,7 @@ nl_sock_leave_mcgroup(struct nl_sock *sock, unsigned int multicast_group)
     if (setsockopt(sock->fd, SOL_NETLINK, NETLINK_DROP_MEMBERSHIP,
                    &multicast_group, sizeof multicast_group) < 0) {
         VLOG_WARN("could not leave multicast group %u (%s)",
-                  multicast_group, strerror(errno));
+                  multicast_group, ovs_strerror(errno));
         return errno;
     }
     return 0;
@@ -527,7 +527,7 @@ nl_sock_transact_multiple__(struct nl_sock *sock,
             }
             if (txn->error) {
                 VLOG_DBG_RL(&rl, "received NAK error=%d (%s)",
-                            error, strerror(txn->error));
+                            error, ovs_strerror(txn->error));
             }
         } else {
             txn->error = 0;
@@ -629,7 +629,7 @@ nl_sock_transact_multiple(struct nl_sock *sock,
         if (error == ENOBUFS) {
             VLOG_DBG_RL(&rl, "receive buffer overflow, resending request");
         } else if (error) {
-            VLOG_ERR_RL(&rl, "transaction error (%s)", strerror(error));
+            VLOG_ERR_RL(&rl, "transaction error (%s)", ovs_strerror(error));
             nl_sock_record_errors__(transactions, n, error);
         }
     }
@@ -815,7 +815,7 @@ nl_dump_recv(struct nl_dump *dump)
 
     if (nl_msg_nlmsgerr(&dump->buffer, &retval)) {
         VLOG_INFO_RL(&rl, "netlink dump request error (%s)",
-                     strerror(retval));
+                     ovs_strerror(retval));
         return retval && retval != EAGAIN ? retval : EPROTO;
     }
 
@@ -1187,7 +1187,7 @@ nlmsg_to_string(const struct ofpbuf *buffer, int protocol)
             if (e) {
                 ds_put_format(&ds, " error(%d", e->error);
                 if (e->error < 0) {
-                    ds_put_format(&ds, "(%s)", strerror(-e->error));
+                    ds_put_format(&ds, "(%s)", ovs_strerror(-e->error));
                 }
                 ds_put_cstr(&ds, ", in-reply-to(");
                 nlmsghdr_to_string(&e->msg, protocol, &ds);
@@ -1200,7 +1200,7 @@ nlmsg_to_string(const struct ofpbuf *buffer, int protocol)
             if (error) {
                 ds_put_format(&ds, " done(%d", *error);
                 if (*error < 0) {
-                    ds_put_format(&ds, "(%s)", strerror(-*error));
+                    ds_put_format(&ds, "(%s)", ovs_strerror(-*error));
                 }
                 ds_put_cstr(&ds, ")");
             } else {
@@ -1232,6 +1232,6 @@ log_nlmsg(const char *function, int error,
 
     ofpbuf_use_const(&buffer, message, size);
     nlmsg = nlmsg_to_string(&buffer, protocol);
-    VLOG_DBG_RL(&rl, "%s (%s): %s", function, strerror(error), nlmsg);
+    VLOG_DBG_RL(&rl, "%s (%s): %s", function, ovs_strerror(error), nlmsg);
     free(nlmsg);
 }

@@ -153,7 +153,7 @@ pid_t
 
     pid = fork();
     if (pid < 0) {
-        VLOG_FATAL("fork failed (%s)", strerror(errno));
+        VLOG_FATAL("fork failed (%s)", ovs_strerror(errno));
     }
     return pid;
 }

@@ -129,7 +129,7 @@ netdev_dummy_run(void)
                 list_init(&s->txq);
             } else if (error != EAGAIN) {
                 VLOG_WARN("%s: accept failed (%s)",
-                          pstream_get_name(dev->pstream), strerror(error));
+                          pstream_get_name(dev->pstream), ovs_strerror(error));
                 pstream_close(dev->pstream);
                 dev->pstream = NULL;
             }
@@ -322,7 +322,8 @@ netdev_dummy_set_config(struct netdev *netdev_, const struct smap *args)
 
             error = pstream_open(pstream, &netdev->pstream, DSCP_DEFAULT);
             if (error) {
-                VLOG_WARN("%s: open failed (%s)", pstream, strerror(error));
+                VLOG_WARN("%s: open failed (%s)",
+                          pstream, ovs_strerror(error));
             }
         }
     }

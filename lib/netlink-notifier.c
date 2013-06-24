@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -115,7 +115,8 @@ nln_notifier_create(struct nln *nln, nln_notify_func *cb, void *aux)
         }
         if (error) {
             nl_sock_destroy(sock);
-            VLOG_WARN("could not create netlink socket: %s", strerror(error));
+            VLOG_WARN("could not create netlink socket: %s",
+                      ovs_strerror(error));
             return NULL;
         }
         nln->notify_sock = sock;
@@ -184,7 +185,7 @@ nln_run(struct nln *nln)
                 VLOG_WARN_RL(&rl, "netlink receive buffer overflowed");
             } else {
                 VLOG_WARN_RL(&rl, "error reading netlink socket: %s",
-                             strerror(error));
+                             ovs_strerror(error));
             }
             nln_report(nln, NULL);
         }

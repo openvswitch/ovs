@@ -1,4 +1,4 @@
-/* Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira, Inc.
+/* Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -87,7 +87,7 @@ main(int argc, char *argv[])
     if (want_mlockall) {
 #ifdef HAVE_MLOCKALL
         if (mlockall(MCL_CURRENT | MCL_FUTURE)) {
-            VLOG_ERR("mlockall failed: %s", strerror(errno));
+            VLOG_ERR("mlockall failed: %s", ovs_strerror(errno));
         }
 #else
         VLOG_ERR("mlockall not supported on this system");

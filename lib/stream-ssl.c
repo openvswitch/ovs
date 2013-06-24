@@ -246,7 +246,7 @@ new_ssl_stream(const char *name, int fd, enum session_type type,
     /* Disable Nagle. */
     retval = setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &on, sizeof on);
     if (retval) {
-        VLOG_ERR("%s: setsockopt(TCP_NODELAY): %s", name, strerror(errno));
+        VLOG_ERR("%s: setsockopt(TCP_NODELAY): %s", name, ovs_strerror(errno));
         retval = errno;
         goto error;
     }
@@ -323,7 +323,7 @@ ssl_open(const char *name, char *suffix, struct stream **streamp, uint8_t dscp)
         int state = error ? STATE_TCP_CONNECTING : STATE_SSL_CONNECTING;
         return new_ssl_stream(name, fd, CLIENT, state, &sin, streamp);
     } else {
-        VLOG_ERR("%s: connect: %s", name, strerror(error));
+        VLOG_ERR("%s: connect: %s", name, ovs_strerror(error));
         return error;
     }
 }
@@ -369,7 +369,7 @@ do_ca_cert_bootstrap(struct stream *stream)
             return EPROTO;
         } else {
             VLOG_ERR("could not bootstrap CA cert: creating %s failed: %s",
-                     ca_cert.file_name, strerror(errno));
+                     ca_cert.file_name, ovs_strerror(errno));
             return errno;
         }
     }
@@ -378,7 +378,7 @@ do_ca_cert_bootstrap(struct stream *stream)
     if (!file) {
         error = errno;
         VLOG_ERR("could not bootstrap CA cert: fdopen failed: %s",
-                 strerror(error));
+                 ovs_strerror(error));
         unlink(ca_cert.file_name);
         return error;
     }
@@ -395,7 +395,7 @@ do_ca_cert_bootstrap(struct stream *stream)
     if (fclose(file)) {
         error = errno;
         VLOG_ERR("could not bootstrap CA cert: writing %s failed: %s",
-                 ca_cert.file_name, strerror(error));
+                 ca_cert.file_name, ovs_strerror(error));
         unlink(ca_cert.file_name);
         return error;
     }
@@ -564,7 +564,7 @@ interpret_ssl_error(const char *function, int ret, int error,
             if (ret < 0) {
                 int status = errno;
                 VLOG_WARN_RL(&rl, "%s: system error (%s)",
-                             function, strerror(status));
+                             function, ovs_strerror(status));
                 return status;
             } else {
                 VLOG_WARN_RL(&rl, "%s: unexpected SSL connection close",
@@ -834,7 +834,7 @@ pssl_accept(struct pstream *pstream, struct stream **new_streamp)
     if (new_fd < 0) {
         error = errno;
         if (error != EAGAIN) {
-            VLOG_DBG_RL(&rl, "accept: %s", strerror(error));
+            VLOG_DBG_RL(&rl, "accept: %s", ovs_strerror(error));
         }
         return error;
     }
@@ -1015,7 +1015,8 @@ update_ssl_config(struct ssl_config_file *config, const char *file_name)
      * here. */
     error = get_mtime(file_name, &mtime);
     if (error && error != ENOENT) {
-        VLOG_ERR_RL(&rl, "%s: stat failed (%s)", file_name, strerror(error));
+        VLOG_ERR_RL(&rl, "%s: stat failed (%s)",
+                    file_name, ovs_strerror(error));
     }
     if (config->file_name
         && !strcmp(config->file_name, file_name)
@@ -1123,7 +1124,7 @@ read_cert_file(const char *file_name, X509 ***certs, size_t *n_certs)
     file = fopen(file_name, "r");
     if (!file) {
         VLOG_ERR("failed to open %s for reading: %s",
-                 file_name, strerror(errno));
+                 file_name, ovs_strerror(errno));
         return errno;
     }
 

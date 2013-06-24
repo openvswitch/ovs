@@ -1295,7 +1295,8 @@ save_config__(FILE *config_file, const struct sset *remotes,
     char *s;
 
     if (ftruncate(fileno(config_file), 0) == -1) {
-        VLOG_FATAL("failed to truncate temporary file (%s)", strerror(errno));
+        VLOG_FATAL("failed to truncate temporary file (%s)",
+                   ovs_strerror(errno));
     }
 
     obj = json_object_create();
@@ -1307,7 +1308,7 @@ save_config__(FILE *config_file, const struct sset *remotes,
     if (fseek(config_file, 0, SEEK_SET) != 0
         || fputs(s, config_file) == EOF
         || fflush(config_file) == EOF) {
-        VLOG_FATAL("failed to write temporary file (%s)", strerror(errno));
+        VLOG_FATAL("failed to write temporary file (%s)", ovs_strerror(errno));
     }
     free(s);
 }
@@ -1353,7 +1354,7 @@ load_config(FILE *config_file, struct sset *remotes, struct sset *db_filenames)
     struct json *json;
 
     if (fseek(config_file, 0, SEEK_SET) != 0) {
-        VLOG_FATAL("seek failed in temporary file (%s)", strerror(errno));
+        VLOG_FATAL("seek failed in temporary file (%s)", ovs_strerror(errno));
     }
     json = json_from_stream(config_file);
     if (json->type == JSON_STRING) {

@@ -50,7 +50,8 @@ unix_open(const char *name, char *suffix, struct stream **streamp,
     fd = make_unix_socket(SOCK_STREAM, true, NULL, connect_path);
 
     if (fd < 0) {
-        VLOG_DBG("%s: connection failed (%s)", connect_path, strerror(-fd));
+        VLOG_DBG("%s: connection failed (%s)",
+                 connect_path, ovs_strerror(-fd));
         free(connect_path);
         return -fd;
     }
@@ -87,14 +88,14 @@ punix_open(const char *name OVS_UNUSED, char *suffix,
     bind_path = abs_file_name(ovs_rundir(), suffix);
     fd = make_unix_socket(SOCK_STREAM, true, bind_path, NULL);
     if (fd < 0) {
-        VLOG_ERR("%s: binding failed: %s", bind_path, strerror(errno));
+        VLOG_ERR("%s: binding failed: %s", bind_path, ovs_strerror(errno));
         free(bind_path);
         return errno;
     }
 
     if (listen(fd, 10) < 0) {
         error = errno;
-        VLOG_ERR("%s: listen: %s", name, strerror(error));
+        VLOG_ERR("%s: listen: %s", name, ovs_strerror(error));
         close(fd);
         free(bind_path);
         return error;

@@ -72,11 +72,11 @@ set_nonblocking(int fd)
         if (fcntl(fd, F_SETFL, flags | O_NONBLOCK) != -1) {
             return 0;
         } else {
-            VLOG_ERR("fcntl(F_SETFL) failed: %s", strerror(errno));
+            VLOG_ERR("fcntl(F_SETFL) failed: %s", ovs_strerror(errno));
             return errno;
         }
     } else {
-        VLOG_ERR("fcntl(F_GETFL) failed: %s", strerror(errno));
+        VLOG_ERR("fcntl(F_GETFL) failed: %s", ovs_strerror(errno));
         return errno;
     }
 }
@@ -259,7 +259,7 @@ check_connection_completion(int fd)
         }
         return 0;
     } else if (retval < 0) {
-        VLOG_ERR_RL(&rl, "poll: %s", strerror(errno));
+        VLOG_ERR_RL(&rl, "poll: %s", ovs_strerror(errno));
         return errno;
     } else {
         return EAGAIN;
@@ -452,7 +452,8 @@ make_unix_socket(int style, bool nonblock,
         int dirfd;
 
         if (unlink(bind_path) && errno != ENOENT) {
-            VLOG_WARN("unlinking \"%s\": %s\n", bind_path, strerror(errno));
+            VLOG_WARN("unlinking \"%s\": %s\n",
+                      bind_path, ovs_strerror(errno));
         }
         fatal_signal_add_file_to_unlink(bind_path);
 
@@ -602,7 +603,7 @@ inet_open_active(int style, const char *target, uint16_t default_port,
     /* Create non-blocking socket. */
     fd = socket(AF_INET, style, 0);
     if (fd < 0) {
-        VLOG_ERR("%s: socket: %s", target, strerror(errno));
+        VLOG_ERR("%s: socket: %s", target, ovs_strerror(errno));
         error = errno;
         goto exit;
     }
@@ -616,7 +617,7 @@ inet_open_active(int style, const char *target, uint16_t default_port,
      * connect(), the handshake SYN frames will be sent with a TOS of 0. */
     error = set_dscp(fd, dscp);
     if (error) {
-        VLOG_ERR("%s: socket: %s", target, strerror(error));
+        VLOG_ERR("%s: socket: %s", target, ovs_strerror(error));
         goto exit;
     }
 
@@ -728,7 +729,7 @@ inet_open_passive(int style, const char *target, int default_port,
     fd = socket(AF_INET, style, 0);
     if (fd < 0) {
         error = errno;
-        VLOG_ERR("%s: socket: %s", target, strerror(error));
+        VLOG_ERR("%s: socket: %s", target, ovs_strerror(error));
         return -error;
     }
     error = set_nonblocking(fd);
@@ -738,14 +739,15 @@ inet_open_passive(int style, const char *target, int default_port,
     if (style == SOCK_STREAM
         && setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof yes) < 0) {
         error = errno;
-        VLOG_ERR("%s: setsockopt(SO_REUSEADDR): %s", target, strerror(error));
+        VLOG_ERR("%s: setsockopt(SO_REUSEADDR): %s",
+                 target, ovs_strerror(error));
         goto error;
     }
 
     /* Bind. */
     if (bind(fd, (struct sockaddr *) &sin, sizeof sin) < 0) {
         error = errno;
-        VLOG_ERR("%s: bind: %s", target, strerror(error));
+        VLOG_ERR("%s: bind: %s", target, ovs_strerror(error));
         goto error;
     }
 
@@ -754,14 +756,14 @@ inet_open_passive(int style, const char *target, int default_port,
      * connect(), the handshake SYN frames will be sent with a TOS of 0. */
     error = set_dscp(fd, dscp);
     if (error) {
-        VLOG_ERR("%s: socket: %s", target, strerror(error));
+        VLOG_ERR("%s: socket: %s", target, ovs_strerror(error));
         goto error;
     }
 
     /* Listen. */
     if (style == SOCK_STREAM && listen(fd, 10) < 0) {
         error = errno;
-        VLOG_ERR("%s: listen: %s", target, strerror(error));
+        VLOG_ERR("%s: listen: %s", target, ovs_strerror(error));
         goto error;
     }
 
@@ -770,7 +772,7 @@ inet_open_passive(int style, const char *target, int default_port,
         socklen_t sin_len = sizeof sin;
         if (getsockname(fd, (struct sockaddr *) &sin, &sin_len) < 0) {
             error = errno;
-            VLOG_ERR("%s: getsockname: %s", target, strerror(error));
+            VLOG_ERR("%s: getsockname: %s", target, ovs_strerror(error));
             goto error;
         }
         if (sin.sin_family != AF_INET || sin_len != sizeof sin) {
@@ -805,7 +807,7 @@ get_null_fd(void)
         null_fd = open("/dev/null", O_RDWR);
         if (null_fd < 0) {
             int error = errno;
-            VLOG_ERR("could not open /dev/null: %s", strerror(error));
+            VLOG_ERR("could not open /dev/null: %s", ovs_strerror(error));
             return -error;
         }
     }
@@ -873,13 +875,13 @@ fsync_parent_dir(const char *file_name)
                  * really an error. */
             } else {
                 error = errno;
-                VLOG_ERR("%s: fsync failed (%s)", dir, strerror(error));
+                VLOG_ERR("%s: fsync failed (%s)", dir, ovs_strerror(error));
             }
         }
         close(fd);
     } else {
         error = errno;
-        VLOG_ERR("%s: open failed (%s)", dir, strerror(error));
+        VLOG_ERR("%s: open failed (%s)", dir, ovs_strerror(error));
     }
     free(dir);
 
@@ -917,7 +919,7 @@ void
 xpipe(int fds[2])
 {
     if (pipe(fds)) {
-        VLOG_FATAL("failed to create pipe (%s)", strerror(errno));
+        VLOG_FATAL("failed to create pipe (%s)", ovs_strerror(errno));
     }
 }
 
@@ -933,7 +935,7 @@ void
 xsocketpair(int domain, int type, int protocol, int fds[2])
 {
     if (socketpair(domain, type, protocol, fds)) {
-        VLOG_FATAL("failed to create socketpair (%s)", strerror(errno));
+        VLOG_FATAL("failed to create socketpair (%s)", ovs_strerror(errno));
     }
 }
 
@@ -948,7 +950,7 @@ getsockopt_int(int fd, int level, int option, const char *optname, int *valuep)
     len = sizeof value;
     if (getsockopt(fd, level, option, &value, &len)) {
         error = errno;
-        VLOG_ERR_RL(&rl, "getsockopt(%s): %s", optname, strerror(error));
+        VLOG_ERR_RL(&rl, "getsockopt(%s): %s", optname, ovs_strerror(error));
     } else if (len != sizeof value) {
         error = EINVAL;
         VLOG_ERR_RL(&rl, "getsockopt(%s): value is %u bytes (expected %zu)",
@@ -1076,7 +1078,7 @@ describe_fd(int fd)
 
     ds_init(&string);
     if (fstat(fd, &s)) {
-        ds_put_format(&string, "fstat failed (%s)", strerror(errno));
+        ds_put_format(&string, "fstat failed (%s)", ovs_strerror(errno));
     } else if (S_ISSOCK(s.st_mode)) {
         describe_sockaddr(&string, fd, getsockname);
         ds_put_cstr(&string, "<->");

@@ -475,7 +475,7 @@ netdev_linux_init(void)
         af_inet_sock = socket(AF_INET, SOCK_DGRAM, 0);
         status = af_inet_sock >= 0 ? 0 : errno;
         if (status) {
-            VLOG_ERR("failed to create inet socket: %s", strerror(status));
+            VLOG_ERR("failed to create inet socket: %s", ovs_strerror(status));
         }
 
         /* Create rtnetlink socket. */
@@ -483,7 +483,7 @@ netdev_linux_init(void)
             status = nl_sock_create(NETLINK_ROUTE, &rtnl_sock);
             if (status) {
                 VLOG_ERR_RL(&rl, "failed to create rtnetlink socket: %s",
-                            strerror(status));
+                            ovs_strerror(status));
             }
         }
     }
@@ -672,7 +672,7 @@ netdev_linux_create_tap(const struct netdev_class *class OVS_UNUSED,
     state->fd = open(tap_dev, O_RDWR);
     if (state->fd < 0) {
         error = errno;
-        VLOG_WARN("opening \"%s\" failed: %s", tap_dev, strerror(error));
+        VLOG_WARN("opening \"%s\" failed: %s", tap_dev, ovs_strerror(error));
         goto error_unref_notifier;
     }
 
@@ -681,7 +681,7 @@ netdev_linux_create_tap(const struct netdev_class *class OVS_UNUSED,
     ovs_strzcpy(ifr.ifr_name, name, sizeof ifr.ifr_name);
     if (ioctl(state->fd, TUNSETIFF, &ifr) == -1) {
         VLOG_WARN("%s: creating tap device failed: %s", name,
-                  strerror(errno));
+                  ovs_strerror(errno));
         error = errno;
         goto error_unref_notifier;
     }
@@ -758,7 +758,7 @@ netdev_linux_rx_open(struct netdev *netdev_, struct netdev_rx **rxp)
         fd = socket(PF_PACKET, SOCK_RAW, 0);
         if (fd < 0) {
             error = errno;
-            VLOG_ERR("failed to create raw socket (%s)", strerror(error));
+            VLOG_ERR("failed to create raw socket (%s)", ovs_strerror(error));
             goto error;
         }
 
@@ -782,7 +782,7 @@ netdev_linux_rx_open(struct netdev *netdev_, struct netdev_rx **rxp)
         if (bind(fd, (struct sockaddr *) &sll, sizeof sll) < 0) {
             error = errno;
             VLOG_ERR("%s: failed to bind raw socket (%s)",
-                     netdev_get_name(netdev_), strerror(error));
+                     netdev_get_name(netdev_), ovs_strerror(error));
             goto error;
         }
 
@@ -792,7 +792,7 @@ netdev_linux_rx_open(struct netdev *netdev_, struct netdev_rx **rxp)
         if (error) {
             error = errno;
             VLOG_ERR("%s: failed attach filter (%s)",
-                     netdev_get_name(netdev_), strerror(error));
+                     netdev_get_name(netdev_), ovs_strerror(error));
             goto error;
         }
     }
@@ -842,7 +842,7 @@ netdev_rx_linux_recv(struct netdev_rx *rx_, void *data, size_t size)
     } else {
         if (errno != EAGAIN) {
             VLOG_WARN_RL(&rl, "error receiving Ethernet packet on %s: %s",
-                         strerror(errno), netdev_rx_get_name(rx_));
+                         ovs_strerror(errno), netdev_rx_get_name(rx_));
         }
         return -errno;
     }
@@ -946,7 +946,7 @@ netdev_linux_send(struct netdev *netdev_, const void *data, size_t size)
                 continue;
             } else if (errno != EAGAIN) {
                 VLOG_WARN_RL(&rl, "error sending Ethernet packet on %s: %s",
-                             netdev_get_name(netdev_), strerror(errno));
+                             netdev_get_name(netdev_), ovs_strerror(errno));
             }
             return errno;
         } else if (retval != size) {
@@ -1263,7 +1263,7 @@ check_for_working_netlink_stats(void)
         } else {
             VLOG_INFO("RTM_GETLINK failed (%s), obtaining netdev stats "
                       "via proc (you are probably running a pre-2.6.19 "
-                      "kernel)", strerror(error));
+                      "kernel)", ovs_strerror(error));
             return false;
         }
     }
@@ -1342,7 +1342,8 @@ get_stats_via_vport(const struct netdev *netdev_,
         error = get_stats_via_vport__(netdev_, stats);
         if (error && error != ENOENT) {
             VLOG_WARN_RL(&rl, "%s: obtaining netdev stats via vport failed "
-                         "(%s)", netdev_get_name(netdev_), strerror(error));
+                         "(%s)",
+                         netdev_get_name(netdev_), ovs_strerror(error));
         }
         netdev->vport_stats_error = error;
         netdev->cache_valid |= VALID_VPORT_STAT_ERROR;
@@ -1777,7 +1778,7 @@ netdev_linux_set_policing(struct netdev *netdev_,
     error = tc_add_del_ingress_qdisc(netdev_, false);
     if (error) {
         VLOG_WARN_RL(&rl, "%s: removing policing failed: %s",
-                     netdev_name, strerror(error));
+                     netdev_name, ovs_strerror(error));
         goto out;
     }
 
@@ -1785,14 +1786,14 @@ netdev_linux_set_policing(struct netdev *netdev_,
         error = tc_add_del_ingress_qdisc(netdev_, true);
         if (error) {
             VLOG_WARN_RL(&rl, "%s: adding policing qdisc failed: %s",
-                         netdev_name, strerror(error));
+                         netdev_name, ovs_strerror(error));
             goto out;
         }
 
         error = tc_add_policer(netdev_, kbits_rate, kbits_burst);
         if (error){
             VLOG_WARN_RL(&rl, "%s: adding policing action failed: %s",
-                    netdev_name, strerror(error));
+                    netdev_name, ovs_strerror(error));
             goto out;
         }
     }
@@ -2235,7 +2236,7 @@ netdev_linux_add_router(struct netdev *netdev OVS_UNUSED, struct in_addr router)
     rt.rt_flags = RTF_UP | RTF_GATEWAY;
     error = ioctl(af_inet_sock, SIOCADDRT, &rt) < 0 ? errno : 0;
     if (error) {
-        VLOG_WARN("ioctl(SIOCADDRT): %s", strerror(error));
+        VLOG_WARN("ioctl(SIOCADDRT): %s", ovs_strerror(error));
     }
     return error;
 }
@@ -2252,7 +2253,7 @@ netdev_linux_get_next_hop(const struct in_addr *host, struct in_addr *next_hop,
     *netdev_name = NULL;
     stream = fopen(fn, "r");
     if (stream == NULL) {
-        VLOG_WARN_RL(&rl, "%s: open failed: %s", fn, strerror(errno));
+        VLOG_WARN_RL(&rl, "%s: open failed: %s", fn, ovs_strerror(errno));
         return errno;
     }
 
@@ -2364,7 +2365,8 @@ netdev_linux_arp_lookup(const struct netdev *netdev,
         memcpy(mac, r.arp_ha.sa_data, ETH_ADDR_LEN);
     } else if (retval != ENXIO) {
         VLOG_WARN_RL(&rl, "%s: could not look up ARP entry for "IP_FMT": %s",
-                     netdev_get_name(netdev), IP_ARGS(ip), strerror(retval));
+                     netdev_get_name(netdev), IP_ARGS(ip),
+                     ovs_strerror(retval));
     }
     return retval;
 }
@@ -2633,7 +2635,7 @@ htb_setup_class__(struct netdev *netdev, unsigned int handle,
                      tc_get_major(handle), tc_get_minor(handle),
                      tc_get_major(parent), tc_get_minor(parent),
                      class->min_rate, class->max_rate,
-                     class->burst, class->priority, strerror(error));
+                     class->burst, class->priority, ovs_strerror(error));
     }
     return error;
 }
@@ -3293,7 +3295,7 @@ hfsc_setup_class__(struct netdev *netdev, unsigned int handle,
                      netdev_get_name(netdev),
                      tc_get_major(handle), tc_get_minor(handle),
                      tc_get_major(parent), tc_get_minor(parent),
-                     class->min_rate, class->max_rate, strerror(error));
+                     class->min_rate, class->max_rate, ovs_strerror(error));
     }
 
     return error;
@@ -3798,7 +3800,7 @@ read_psched(void)
 
     stream = fopen(fn, "r");
     if (!stream) {
-        VLOG_WARN("%s: open failed: %s", fn, strerror(errno));
+        VLOG_WARN("%s: open failed: %s", fn, ovs_strerror(errno));
         return;
     }
 
@@ -4002,7 +4004,7 @@ tc_query_class(const struct netdev *netdev,
                      netdev_get_name(netdev),
                      tc_get_major(handle), tc_get_minor(handle),
                      tc_get_major(parent), tc_get_minor(parent),
-                     strerror(error));
+                     ovs_strerror(error));
     }
     return error;
 }
@@ -4027,7 +4029,7 @@ tc_delete_class(const struct netdev *netdev, unsigned int handle)
         VLOG_WARN_RL(&rl, "delete %s class %u:%u failed (%s)",
                      netdev_get_name(netdev),
                      tc_get_major(handle), tc_get_minor(handle),
-                     strerror(error));
+                     ovs_strerror(error));
     }
     return error;
 }
@@ -4127,7 +4129,7 @@ tc_query_qdisc(const struct netdev *netdev_)
     } else {
         /* Who knows?  Maybe the device got deleted. */
         VLOG_WARN_RL(&rl, "query %s qdisc failed (%s)",
-                     netdev_get_name(netdev_), strerror(error));
+                     netdev_get_name(netdev_), ovs_strerror(error));
         ops = &tc_ops_other;
     }
 
@@ -4356,7 +4358,7 @@ get_stats_via_proc(const char *netdev_name, struct netdev_stats *stats)
 
     stream = fopen(fn, "r");
     if (!stream) {
-        VLOG_WARN_RL(&rl, "%s: open failed: %s", fn, strerror(errno));
+        VLOG_WARN_RL(&rl, "%s: open failed: %s", fn, ovs_strerror(errno));
         return errno;
     }
 
@@ -4436,7 +4438,7 @@ do_get_ifindex(const char *netdev_name)
     COVERAGE_INC(netdev_get_ifindex);
     if (ioctl(af_inet_sock, SIOCGIFINDEX, &ifr) < 0) {
         VLOG_WARN_RL(&rl, "ioctl(SIOCGIFINDEX) on %s device failed: %s",
-                     netdev_name, strerror(errno));
+                     netdev_name, ovs_strerror(errno));
         return -errno;
     }
     return ifr.ifr_ifindex;
@@ -4479,7 +4481,7 @@ get_etheraddr(const char *netdev_name, uint8_t ea[ETH_ADDR_LEN])
          * to INFO for that case. */
         VLOG(errno == ENODEV ? VLL_INFO : VLL_ERR,
              "ioctl(SIOCGIFHWADDR) on %s device failed: %s",
-             netdev_name, strerror(errno));
+             netdev_name, ovs_strerror(errno));
         return errno;
     }
     hwaddr_family = ifr.ifr_hwaddr.sa_family;
@@ -4504,7 +4506,7 @@ set_etheraddr(const char *netdev_name,
     COVERAGE_INC(netdev_set_hwaddr);
     if (ioctl(af_inet_sock, SIOCSIFHWADDR, &ifr) < 0) {
         VLOG_ERR("ioctl(SIOCSIFHWADDR) on %s device failed: %s",
-                 netdev_name, strerror(errno));
+                 netdev_name, ovs_strerror(errno));
         return errno;
     }
     return 0;
@@ -4526,7 +4528,7 @@ netdev_linux_do_ethtool(const char *name, struct ethtool_cmd *ecmd,
     } else {
         if (errno != EOPNOTSUPP) {
             VLOG_WARN_RL(&rl, "ethtool command %s on network device %s "
-                         "failed: %s", cmd_name, name, strerror(errno));
+                         "failed: %s", cmd_name, name, ovs_strerror(errno));
         } else {
             /* The device doesn't support this operation.  That's pretty
              * common, so there's no point in logging anything. */
@@ -4542,7 +4544,7 @@ netdev_linux_do_ioctl(const char *name, struct ifreq *ifr, int cmd,
     ovs_strzcpy(ifr->ifr_name, name, sizeof ifr->ifr_name);
     if (ioctl(af_inet_sock, cmd, ifr) == -1) {
         VLOG_DBG_RL(&rl, "%s: ioctl(%s) failed: %s", name, cmd_name,
-                     strerror(errno));
+                     ovs_strerror(errno));
         return errno;
     }
     return 0;
@@ -4580,7 +4582,8 @@ af_packet_sock(void)
             }
         } else {
             sock = -errno;
-            VLOG_ERR("failed to create packet socket: %s", strerror(errno));
+            VLOG_ERR("failed to create packet socket: %s",
+                     ovs_strerror(errno));
         }
     }
 

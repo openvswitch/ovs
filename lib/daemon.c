@@ -210,7 +210,7 @@ make_pidfile(void)
 
     file = fopen(tmpfile, "a+");
     if (!file) {
-        VLOG_FATAL("%s: create failed (%s)", tmpfile, strerror(errno));
+        VLOG_FATAL("%s: create failed (%s)", tmpfile, ovs_strerror(errno));
     }
 
     error = lock_pidfile(file, F_SETLK);
@@ -218,7 +218,8 @@ make_pidfile(void)
         /* Looks like we failed to acquire the lock.  Note that, if we failed
          * for some other reason (and '!overwrite_pidfile'), we will have
          * left 'tmpfile' as garbage in the file system. */
-        VLOG_FATAL("%s: fcntl(F_SETLK) failed (%s)", tmpfile, strerror(error));
+        VLOG_FATAL("%s: fcntl(F_SETLK) failed (%s)", tmpfile,
+                   ovs_strerror(error));
     }
 
     if (!overwrite_pidfile) {
@@ -229,16 +230,16 @@ make_pidfile(void)
     }
 
     if (fstat(fileno(file), &s) == -1) {
-        VLOG_FATAL("%s: fstat failed (%s)", tmpfile, strerror(errno));
+        VLOG_FATAL("%s: fstat failed (%s)", tmpfile, ovs_strerror(errno));
     }
 
     if (ftruncate(fileno(file), 0) == -1) {
-        VLOG_FATAL("%s: truncate failed (%s)", tmpfile, strerror(errno));
+        VLOG_FATAL("%s: truncate failed (%s)", tmpfile, ovs_strerror(errno));
     }
 
     fprintf(file, "%ld\n", pid);
     if (fflush(file) == EOF) {
-        VLOG_FATAL("%s: write failed (%s)", tmpfile, strerror(errno));
+        VLOG_FATAL("%s: write failed (%s)", tmpfile, ovs_strerror(errno));
     }
 
     error = rename(tmpfile, pidfile);
@@ -249,7 +250,7 @@ make_pidfile(void)
 
     if (error < 0) {
         VLOG_FATAL("failed to rename \"%s\" to \"%s\" (%s)",
-                   tmpfile, pidfile, strerror(errno));
+                   tmpfile, pidfile, ovs_strerror(errno));
     }
 
     /* Ensure that the pidfile will get deleted on exit. */
@@ -339,7 +340,7 @@ fork_and_wait_for_startup(int *fdp)
                                status_msg);
                 }
             } else if (retval < 0) {
-                VLOG_FATAL("waitpid failed (%s)", strerror(errno));
+                VLOG_FATAL("waitpid failed (%s)", ovs_strerror(errno));
             } else {
                 NOT_REACHED();
             }
@@ -364,7 +365,7 @@ fork_notify_startup(int fd)
 
         error = write_fully(fd, "", 1, &bytes_written);
         if (error) {
-            VLOG_FATAL("pipe write failed (%s)", strerror(error));
+            VLOG_FATAL("pipe write failed (%s)", ovs_strerror(error));
         }
 
         close(fd);
@@ -415,7 +416,7 @@ monitor_daemon(pid_t daemon_pid)
         } while (retval == -1 && errno == EINTR);
 
         if (retval == -1) {
-            VLOG_FATAL("waitpid failed (%s)", strerror(errno));
+            VLOG_FATAL("waitpid failed (%s)", ovs_strerror(errno));
         } else if (retval == daemon_pid) {
             char *s = process_status_msg(status);
             if (should_restart(status)) {
@@ -433,7 +434,7 @@ monitor_daemon(pid_t daemon_pid)
                     r.rlim_max = 0;
                     if (setrlimit(RLIMIT_CORE, &r) == -1) {
                         VLOG_WARN("failed to disable core dumps: %s",
-                                  strerror(errno));
+                                  ovs_strerror(errno));
                     }
                 }
 
@@ -641,13 +642,13 @@ read_pidfile__(const char *pidfile, bool delete_if_stale)
             return 0;
         }
         error = errno;
-        VLOG_WARN("%s: open: %s", pidfile, strerror(error));
+        VLOG_WARN("%s: open: %s", pidfile, ovs_strerror(error));
         goto error;
     }
 
     error = lock_pidfile__(file, F_GETLK, &lck);
     if (error) {
-        VLOG_WARN("%s: fcntl: %s", pidfile, strerror(error));
+        VLOG_WARN("%s: fcntl: %s", pidfile, ovs_strerror(error));
         goto error;
     }
     if (lck.l_type == F_UNLCK) {
@@ -686,7 +687,7 @@ read_pidfile__(const char *pidfile, bool delete_if_stale)
         if (unlink(pidfile)) {
             error = errno;
             VLOG_WARN("%s: failed to delete stale pidfile (%s)",
-                      pidfile, strerror(error));
+                      pidfile, ovs_strerror(error));
             goto error;
         }
         VLOG_DBG("%s: deleted stale pidfile", pidfile);
@@ -697,7 +698,7 @@ read_pidfile__(const char *pidfile, bool delete_if_stale)
     if (!fgets(line, sizeof line, file)) {
         if (ferror(file)) {
             error = errno;
-            VLOG_WARN("%s: read: %s", pidfile, strerror(error));
+            VLOG_WARN("%s: read: %s", pidfile, ovs_strerror(error));
         } else {
             error = ESRCH;
             VLOG_WARN("%s: read: unexpected end of file", pidfile);
@@ -743,6 +744,6 @@ check_already_running(void)
         VLOG_FATAL("%s: already running as pid %ld, aborting", pidfile, pid);
     } else if (pid < 0) {
         VLOG_FATAL("%s: pidfile check failed (%s), aborting",
-                   pidfile, strerror(-pid));
+                   pidfile, ovs_strerror(-pid));
     }
 }

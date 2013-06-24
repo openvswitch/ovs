@@ -6,6 +6,7 @@
  */
 
 #include "sflow_api.h"
+#include "util.h"
 
 static void * sflAlloc(SFLAgent *agent, size_t bytes);
 static void sflFree(SFLAgent *agent, void *obj);
@@ -469,7 +470,7 @@ void sfl_agent_error(SFLAgent *agent, char *modName, char *msg)
 void sfl_agent_sysError(SFLAgent *agent, char *modName, char *msg)
 {
     char errm[MAX_ERRMSG_LEN];
-    snprintf(errm, sizeof errm, "sfl_agent_sysError: %s: %s (errno = %d - %s)\n", modName, msg, errno, strerror(errno));
+    snprintf(errm, sizeof errm, "sfl_agent_sysError: %s: %s (errno = %d - %s)\n", modName, msg, errno, ovs_strerror(errno));
     if(agent->errorFn) (*agent->errorFn)(agent->magic, agent, errm);
     else {
 	fprintf(stderr, "%s\n", errm);

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -84,7 +84,7 @@ fatal_signal_init(void)
             xsigaction(sig_nr, NULL, &old_sa);
             if (old_sa.sa_handler == SIG_DFL
                 && signal(sig_nr, fatal_signal_handler) == SIG_ERR) {
-                VLOG_FATAL("signal failed (%s)", strerror(errno));
+                VLOG_FATAL("signal failed (%s)", ovs_strerror(errno));
             }
         }
         atexit(atexit_handler);
@@ -238,7 +238,7 @@ fatal_signal_unlink_file_now(const char *file)
 {
     int error = unlink(file) ? errno : 0;
     if (error) {
-        VLOG_WARN("could not unlink \"%s\" (%s)", file, strerror(error));
+        VLOG_WARN("could not unlink \"%s\" (%s)", file, ovs_strerror(error));
     }
 
     fatal_signal_remove_file_to_unlink(file);

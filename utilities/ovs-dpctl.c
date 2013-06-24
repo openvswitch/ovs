@@ -590,13 +590,13 @@ show_dpif(struct dpif *dpif)
                     free(nodes);
                 } else {
                     printf(", could not retrieve configuration (%s)",
-                           strerror(error));
+                           ovs_strerror(error));
                 }
                 smap_destroy(&config);
 
                 netdev_close(netdev);
             } else {
-                printf(": open failed (%s)", strerror(error));
+                printf(": open failed (%s)", ovs_strerror(error));
             }
             putchar(')');
         }
@@ -608,12 +608,12 @@ show_dpif(struct dpif *dpif)
 
             error = netdev_open(dpif_port.name, dpif_port.type, &netdev);
             if (error) {
-                printf(", open failed (%s)", strerror(error));
+                printf(", open failed (%s)", ovs_strerror(error));
                 continue;
             }
             error = netdev_get_stats(netdev, &s);
             if (error) {
-                printf(", could not retrieve stats (%s)", strerror(error));
+                printf(", could not retrieve stats (%s)", ovs_strerror(error));
                 continue;
             }
 

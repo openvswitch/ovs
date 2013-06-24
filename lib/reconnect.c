@@ -331,7 +331,7 @@ reconnect_disconnected(struct reconnect *fsm, long long int now, int error)
         if (fsm->state & (S_ACTIVE | S_IDLE)) {
             if (error > 0) {
                 VLOG_WARN("%s: connection dropped (%s)",
-                          fsm->name, strerror(error));
+                          fsm->name, ovs_strerror(error));
             } else if (error == EOF) {
                 VLOG(fsm->info, "%s: connection closed by peer", fsm->name);
             } else {
@@ -340,7 +340,7 @@ reconnect_disconnected(struct reconnect *fsm, long long int now, int error)
         } else if (fsm->state == S_LISTENING) {
             if (error > 0) {
                 VLOG_WARN("%s: error listening for connections (%s)",
-                          fsm->name, strerror(error));
+                          fsm->name, ovs_strerror(error));
             } else {
                 VLOG(fsm->info, "%s: error listening for connections",
                      fsm->name);
@@ -349,7 +349,7 @@ reconnect_disconnected(struct reconnect *fsm, long long int now, int error)
             const char *type = fsm->passive ? "listen" : "connection";
             if (error > 0) {
                 VLOG_WARN("%s: %s attempt failed (%s)",
-                          fsm->name, type, strerror(error));
+                          fsm->name, type, ovs_strerror(error));
             } else {
                 VLOG(fsm->info, "%s: %s attempt timed out", fsm->name, type);
             }

@@ -695,7 +695,7 @@ bridge_update_ofprotos(void)
                 error = ofproto_port_del(br2->ofproto, ofproto_port.ofp_port);
                 if (error) {
                     VLOG_ERR("failed to delete port %s: %s", ofproto_port.name,
-                             strerror(error));
+                             ovs_strerror(error));
                 }
                 ofproto_port_destroy(&ofproto_port);
             }
@@ -704,7 +704,7 @@ bridge_update_ofprotos(void)
         error = ofproto_create(br->name, br->type, &br->ofproto);
         if (error) {
             VLOG_ERR("failed to create bridge %s: %s", br->name,
-                     strerror(error));
+                     ovs_strerror(error));
             bridge_destroy(br);
         }
     }
@@ -842,7 +842,7 @@ bridge_configure_datapath_id(struct bridge *br)
             static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
             VLOG_ERR_RL(&rl, "bridge %s: failed to set bridge "
                         "Ethernet address: %s",
-                        br->name, strerror(error));
+                        br->name, ovs_strerror(error));
         }
     }
     memcpy(br->ea, ea, ETH_ADDR_LEN);
@@ -1320,7 +1320,7 @@ iface_set_netdev_config(const struct ovsrec_interface *iface_cfg,
     error = netdev_set_config(netdev, &iface_cfg->options);
     if (error) {
         VLOG_WARN("could not configure network device %s (%s)",
-                  iface_cfg->name, strerror(error));
+                  iface_cfg->name, ovs_strerror(error));
     }
     return error;
 }
@@ -1461,7 +1461,7 @@ iface_do_create(const struct bridge *br,
                         iface_get_type(iface_cfg, br->cfg), &netdev);
     if (error) {
         VLOG_WARN("could not open network device %s (%s)",
-                  iface_cfg->name, strerror(error));
+                  iface_cfg->name, ovs_strerror(error));
         goto error;
     }
 
@@ -1575,7 +1575,7 @@ iface_create(struct bridge *br, struct if_cfg *if_cfg, ofp_port_t ofp_port)
                 netdev_close(netdev);
             } else {
                 VLOG_WARN("could not open network device %s (%s)",
-                          port->name, strerror(error));
+                          port->name, ovs_strerror(error));
             }
         } else {
             /* Already exists, nothing to do. */
@@ -2566,7 +2566,7 @@ qos_unixctl_show_cb(unsigned int queue_id,
         }
     } else {
         ds_put_format(ds, "\tFailed to get statistics for queue %u: %s",
-                      queue_id, strerror(error));
+                      queue_id, ovs_strerror(error));
     }
 }
 
@@ -2602,7 +2602,8 @@ qos_unixctl_show(struct unixctl_conn *conn, int argc OVS_UNUSED,
         error = netdev_dump_queues(iface->netdev, qos_unixctl_show_cb, &data);
 
         if (error) {
-            ds_put_format(&ds, "failed to dump queues: %s", strerror(error));
+            ds_put_format(&ds, "failed to dump queues: %s",
+                          ovs_strerror(error));
         }
         unixctl_command_reply(conn, ds_cstr(&ds));
     } else {
@@ -3534,7 +3535,7 @@ iface_set_mac(struct iface *iface)
             int error = netdev_set_etheraddr(iface->netdev, ea);
             if (error) {
                 VLOG_ERR("interface %s: setting MAC failed (%s)",
-                         iface->name, strerror(error));
+                         iface->name, ovs_strerror(error));
             }
         }
     }

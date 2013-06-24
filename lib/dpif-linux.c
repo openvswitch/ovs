@@ -937,7 +937,8 @@ dpif_linux_flow_dump_next(const struct dpif *dpif_ OVS_UNUSED, void *state_,
             if (error == ENOENT) {
                 VLOG_DBG("dumped flow disappeared on get");
             } else if (error) {
-                VLOG_WARN("error fetching dumped flow: %s", strerror(error));
+                VLOG_WARN("error fetching dumped flow: %s",
+                          ovs_strerror(error));
             }
         }
     } while (error);
@@ -1208,7 +1209,7 @@ dpif_linux_recv_set(struct dpif *dpif_, bool enable)
             } else {
                 VLOG_WARN_RL(&error_rl,
                              "%s: failed to set upcall pid on port: %s",
-                             dpif_name(&dpif->dpif), strerror(error));
+                             dpif_name(&dpif->dpif), ovs_strerror(error));
                 nl_sock_destroy(sock);
 
                 if (error == ENODEV || error == ENOENT) {
@@ -1321,7 +1322,7 @@ dpif_linux_recv(struct dpif *dpif_, struct dpif_upcall *upcall,
         } while (retval < 0 && errno == EINTR);
         if (retval < 0) {
             static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
-            VLOG_WARN_RL(&rl, "epoll_wait failed (%s)", strerror(errno));
+            VLOG_WARN_RL(&rl, "epoll_wait failed (%s)", ovs_strerror(errno));
         } else if (retval > 0) {
             dpif->n_events = retval;
         }
@@ -1492,7 +1493,7 @@ dpif_linux_is_internal_device(const char *name)
         ofpbuf_delete(buf);
     } else if (error != ENODEV && error != ENOENT) {
         VLOG_WARN_RL(&error_rl, "%s: vport query failed (%s)",
-                     name, strerror(error));
+                     name, ovs_strerror(error));
     }
 
     return reply.type == OVS_VPORT_TYPE_INTERNAL;

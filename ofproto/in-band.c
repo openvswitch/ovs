@@ -120,7 +120,8 @@ refresh_remote(struct in_band *ib, struct in_band_remote *r)
                                  &next_hop_inaddr, &next_hop_dev);
     if (retval) {
         VLOG_WARN("cannot find route for controller ("IP_FMT"): %s",
-                  IP_ARGS(r->remote_addr.sin_addr.s_addr), strerror(retval));
+                  IP_ARGS(r->remote_addr.sin_addr.s_addr),
+                  ovs_strerror(retval));
         return 1;
     }
     if (!next_hop_inaddr.s_addr) {
@@ -138,7 +139,7 @@ refresh_remote(struct in_band *ib, struct in_band_remote *r)
             VLOG_WARN_RL(&rl, "cannot open netdev %s (next hop "
                          "to controller "IP_FMT"): %s",
                          next_hop_dev, IP_ARGS(r->remote_addr.sin_addr.s_addr),
-                         strerror(retval));
+                         ovs_strerror(retval));
             free(next_hop_dev);
             return 1;
         }
@@ -150,7 +151,7 @@ refresh_remote(struct in_band *ib, struct in_band_remote *r)
                                r->remote_mac);
     if (retval) {
         VLOG_DBG_RL(&rl, "cannot look up remote MAC address ("IP_FMT"): %s",
-                    IP_ARGS(next_hop_inaddr.s_addr), strerror(retval));
+                    IP_ARGS(next_hop_inaddr.s_addr), ovs_strerror(retval));
     }
 
     /* If we don't have a MAC address, then refresh quickly, since we probably
@@ -421,7 +422,8 @@ in_band_create(struct ofproto *ofproto, const char *local_name,
     error = netdev_open(local_name, "internal", &local_netdev);
     if (error) {
         VLOG_ERR("failed to initialize in-band control: cannot open "
-                 "datapath local port %s (%s)", local_name, strerror(error));
+                 "datapath local port %s (%s)",
+                 local_name, ovs_strerror(error));
         return error;
     }
 

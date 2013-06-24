@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -70,7 +70,7 @@ collectors_create(const struct sset *targets, uint16_t default_port,
             static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 
             VLOG_WARN_RL(&rl, "couldn't open connection to collector %s (%s)",
-                         name, strerror(error));
+                         name, ovs_strerror(error));
             if (!retval) {
                 retval = error;
             }
@@ -113,7 +113,7 @@ collectors_send(const struct collectors *c, const void *payload, size_t n)
             static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
             if (send(c->fds[i], payload, n, 0) == -1) {
                 VLOG_WARN_RL(&rl, "sending to collector failed: %s",
-                             strerror(errno));
+                             ovs_strerror(errno));
             }
         }
     }

@@ -1,4 +1,4 @@
-/* Copyright (c) 2010, 2012 Nicira, Inc.
+/* Copyright (c) 2010, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -131,7 +131,8 @@ get_memory_stats(struct smap *stats)
 
         stream = fopen(file_name, "r");
         if (!stream) {
-            VLOG_WARN_ONCE("%s: open failed (%s)", file_name, strerror(errno));
+            VLOG_WARN_ONCE("%s: open failed (%s)",
+                           file_name, ovs_strerror(errno));
             return;
         }
 
@@ -183,7 +184,8 @@ get_boot_time(void)
 
         stream = fopen(stat_file, "r");
         if (!stream) {
-            VLOG_ERR_ONCE("%s: open failed (%s)", stat_file, strerror(errno));
+            VLOG_ERR_ONCE("%s: open failed (%s)",
+                          stat_file, ovs_strerror(errno));
             return boot_time;
         }
 
@@ -242,7 +244,8 @@ get_raw_process_info(pid_t pid, struct raw_process_info *raw)
     sprintf(file_name, "/proc/%lu/stat", (unsigned long int) pid);
     stream = fopen(file_name, "r");
     if (!stream) {
-        VLOG_ERR_ONCE("%s: open failed (%s)", file_name, strerror(errno));
+        VLOG_ERR_ONCE("%s: open failed (%s)",
+                      file_name, ovs_strerror(errno));
         return false;
     }
 
@@ -327,13 +330,13 @@ count_crashes(pid_t pid)
     sprintf(file_name, "/proc/%lu/cmdline", (unsigned long int) pid);
     stream = fopen(file_name, "r");
     if (!stream) {
-        VLOG_WARN_ONCE("%s: open failed (%s)", file_name, strerror(errno));
+        VLOG_WARN_ONCE("%s: open failed (%s)", file_name, ovs_strerror(errno));
         goto exit;
     }
 
     if (!fgets(line, sizeof line, stream)) {
         VLOG_WARN_ONCE("%s: read failed (%s)", file_name,
-                       feof(stream) ? "end of file" : strerror(errno));
+                       feof(stream) ? "end of file" : ovs_strerror(errno));
         goto exit_close;
     }
 
@@ -398,7 +401,8 @@ get_process_stats(struct smap *stats)
 
     dir = opendir(ovs_rundir());
     if (!dir) {
-        VLOG_ERR_ONCE("%s: open failed (%s)", ovs_rundir(), strerror(errno));
+        VLOG_ERR_ONCE("%s: open failed (%s)",
+                      ovs_rundir(), ovs_strerror(errno));
         return;
     }
 
@@ -457,7 +461,7 @@ get_filesys_stats(struct smap *stats OVS_UNUSED)
 
     stream = setmntent(file_name, "r");
     if (!stream) {
-        VLOG_ERR_ONCE("%s: open failed (%s)", file_name, strerror(errno));
+        VLOG_ERR_ONCE("%s: open failed (%s)", file_name, ovs_strerror(errno));
         return;
     }
 

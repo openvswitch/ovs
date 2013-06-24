@@ -510,7 +510,7 @@ main(int argc, char *argv[])
 
     sock = inet_open_passive(SOCK_DGRAM, target, 0, NULL, 0);
     if (sock < 0) {
-        ovs_fatal(0, "%s: failed to open (%s)", argv[1], strerror(-sock));
+        ovs_fatal(0, "%s: failed to open (%s)", argv[1], ovs_strerror(-sock));
     }
 
     daemon_save_fd(STDOUT_FILENO);

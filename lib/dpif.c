@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -216,7 +216,7 @@ dp_enumerate_names(const char *type, struct sset *names)
 
     if (error) {
         VLOG_WARN("failed to enumerate %s datapaths: %s", dpif_class->type,
-                   strerror(error));
+                   ovs_strerror(error));
     }
 
     return error;
@@ -311,10 +311,11 @@ dpif_create_and_open(const char *name, const char *type, struct dpif **dpifp)
         error = dpif_open(name, type, dpifp);
         if (error) {
             VLOG_WARN("datapath %s already exists but cannot be opened: %s",
-                      name, strerror(error));
+                      name, ovs_strerror(error));
         }
     } else if (error) {
-        VLOG_WARN("failed to create datapath %s: %s", name, strerror(error));
+        VLOG_WARN("failed to create datapath %s: %s",
+                  name, ovs_strerror(error));
     }
     return error;
 }
@@ -461,7 +462,7 @@ dpif_port_add(struct dpif *dpif, struct netdev *netdev, odp_port_t *port_nop)
                     dpif_name(dpif), netdev_name, port_no);
     } else {
         VLOG_WARN_RL(&error_rl, "%s: failed to add %s as port: %s",
-                     dpif_name(dpif), netdev_name, strerror(error));
+                     dpif_name(dpif), netdev_name, ovs_strerror(error));
         port_no = ODPP_NONE;
     }
     if (port_nop) {
@@ -518,7 +519,7 @@ dpif_port_exists(const struct dpif *dpif, const char *devname)
     int error = dpif->dpif_class->port_query_by_name(dpif, devname, NULL);
     if (error != 0 && error != ENOENT && error != ENODEV) {
         VLOG_WARN_RL(&error_rl, "%s: failed to query port %s: %s",
-                     dpif_name(dpif), devname, strerror(error));
+                     dpif_name(dpif), devname, ovs_strerror(error));
     }
 
     return !error;
@@ -541,7 +542,7 @@ dpif_port_query_by_number(const struct dpif *dpif, odp_port_t port_no,
     } else {
         memset(port, 0, sizeof *port);
         VLOG_WARN_RL(&error_rl, "%s: failed to query port %"PRIu32": %s",
-                     dpif_name(dpif), port_no, strerror(error));
+                     dpif_name(dpif), port_no, ovs_strerror(error));
     }
     return error;
 }
@@ -570,7 +571,7 @@ dpif_port_query_by_name(const struct dpif *dpif, const char *devname,
         VLOG_RL(&error_rl,
                 error == ENOENT || error == ENODEV ? VLL_DBG : VLL_WARN,
                 "%s: failed to query port %s: %s",
-                dpif_name(dpif), devname, strerror(error));
+                dpif_name(dpif), devname, ovs_strerror(error));
     }
     return error;
 }
@@ -1256,7 +1257,7 @@ log_operation(const struct dpif *dpif, const char *operation, int error)
                      dpif_name(dpif), operation, ofperr_get_name(error));
     } else {
         VLOG_WARN_RL(&error_rl, "%s: %s failed (%s)",
-                     dpif_name(dpif), operation, strerror(error));
+                     dpif_name(dpif), operation, ovs_strerror(error));
     }
 }
 
@@ -1292,7 +1293,7 @@ log_flow_message(const struct dpif *dpif, int error, const char *operation,
     }
     ds_put_format(&ds, "%s ", operation);
     if (error) {
-        ds_put_format(&ds, "(%s) ", strerror(error));
+        ds_put_format(&ds, "(%s) ", ovs_strerror(error));
     }
     odp_flow_format(key, key_len, mask, mask_len, &ds);
     if (stats) {
@@ -1355,7 +1356,7 @@ log_execute_message(struct dpif *dpif, const struct dpif_execute *execute,
         ds_put_format(&ds, "%s: execute ", dpif_name(dpif));
         format_odp_actions(&ds, execute->actions, execute->actions_len);
         if (error) {
-            ds_put_format(&ds, " failed (%s)", strerror(error));
+            ds_put_format(&ds, " failed (%s)", ovs_strerror(error));
         }
         ds_put_format(&ds, " on packet %s", packet);
         vlog(THIS_MODULE, error ? VLL_WARN : VLL_DBG, "%s", ds_cstr(&ds));

@@ -361,7 +361,7 @@ open_vconn_socket(const char *name, struct vconn **vconnp)
                        vconnp);
     if (error && error != ENOENT) {
         ovs_fatal(0, "%s: failed to open socket (%s)", name,
-                  strerror(error));
+                  ovs_strerror(error));
     }
     free(vconn_name);
 
@@ -412,7 +412,7 @@ open_vconn__(const char *name, enum open_target target,
     error = vconn_connect_block(*vconnp);
     if (error) {
         ovs_fatal(0, "%s: failed to connect to socket (%s)", name,
-                  strerror(error));
+                  ovs_strerror(error));
     }
 
     ofp_version = vconn_get_version(*vconnp);
@@ -1233,7 +1233,7 @@ ofctl_send(struct unixctl_conn *conn, int argc,
         error = vconn_send_block(vconn, msg);
         if (error) {
             ofpbuf_delete(msg);
-            ds_put_format(&reply, "%s\n", strerror(error));
+            ds_put_format(&reply, "%s\n", ovs_strerror(error));
             ok = false;
         } else {
             ds_put_cstr(&reply, "sent\n");
@@ -1270,7 +1270,7 @@ ofctl_barrier(struct unixctl_conn *conn, int argc OVS_UNUSED,
     error = vconn_send_block(aux->vconn, msg);
     if (error) {
         ofpbuf_delete(msg);
-        unixctl_command_reply_error(conn, strerror(error));
+        unixctl_command_reply_error(conn, ovs_strerror(error));
     } else {
         aux->conn = conn;
     }
@@ -1284,7 +1284,7 @@ ofctl_set_output_file(struct unixctl_conn *conn, int argc OVS_UNUSED,
 
     fd = open(argv[1], O_CREAT | O_TRUNC | O_WRONLY, 0666);
     if (fd < 0) {
-        unixctl_command_reply_error(conn, strerror(errno));
+        unixctl_command_reply_error(conn, ovs_strerror(errno));
         return;
     }
 

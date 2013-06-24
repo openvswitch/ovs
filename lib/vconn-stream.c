@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -233,7 +233,7 @@ vconn_stream_run(struct vconn *vconn)
     retval = stream_send(s->stream, s->txbuf->data, s->txbuf->size);
     if (retval < 0) {
         if (retval != -EAGAIN) {
-            VLOG_ERR_RL(&rl, "send: %s", strerror(-retval));
+            VLOG_ERR_RL(&rl, "send: %s", ovs_strerror(-retval));
             vconn_stream_clear_txbuf(s);
             return;
         }
@@ -348,7 +348,7 @@ pvconn_pstream_accept(struct pvconn *pvconn, struct vconn **new_vconnp)
     if (error) {
         if (error != EAGAIN) {
             VLOG_DBG_RL(&rl, "%s: accept: %s",
-                        pstream_get_name(ps->pstream), strerror(error));
+                        pstream_get_name(ps->pstream), ovs_strerror(error));
         }
         return error;
     }

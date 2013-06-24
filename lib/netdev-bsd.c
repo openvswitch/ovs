@@ -189,7 +189,7 @@ netdev_bsd_init(void)
     af_inet_sock = socket(AF_INET, SOCK_DGRAM, 0);
     status = af_inet_sock >= 0 ? 0 : errno;
     if (status) {
-        VLOG_ERR("failed to create inet socket: %s", strerror(status));
+        VLOG_ERR("failed to create inet socket: %s", ovs_strerror(status));
         return status;
     }
 
@@ -197,7 +197,7 @@ netdev_bsd_init(void)
     af_link_sock = socket(AF_LINK, SOCK_DGRAM, 0);
     status = af_link_sock >= 0 ? 0 : errno;
     if (status) {
-        VLOG_ERR("failed to create link socket: %s", strerror(status));
+        VLOG_ERR("failed to create link socket: %s", Ovs_strerror(status));
         close(af_inet_sock);
         af_inet_sock = -1;
     }
@@ -361,7 +361,7 @@ netdev_bsd_create_tap(const struct netdev_class *class, const char *name,
     netdev->change_seq = 1;
     if (netdev->tap_fd < 0) {
         error = errno;
-        VLOG_WARN("opening \"/dev/tap\" failed: %s", strerror(error));
+        VLOG_WARN("opening \"/dev/tap\" failed: %s", ovs_strerror(error));
         goto error_undef_notifier;
     }
 
@@ -482,7 +482,7 @@ netdev_bsd_open_pcap(const char *name, pcap_t **pcapp, int *fdp)
      * buffer becomes full or a timeout occurs. */
     if (ioctl(fd, BIOCIMMEDIATE, &one) < 0 ) {
         VLOG_ERR_RL(&rl, "ioctl(BIOCIMMEDIATE) on %s device failed: %s",
-                    name, strerror(errno));
+                    name, ovs_strerror(errno));
         error = errno;
         goto error;
     }
@@ -637,7 +637,7 @@ netdev_rx_bsd_recv_tap(struct netdev_rx_bsd *rx, void *data, size_t size)
         } else if (errno != EINTR) {
             if (errno != EAGAIN) {
                 VLOG_WARN_RL(&rl, "error receiving Ethernet packet on %s: %s",
-                             strerror(errno), netdev_rx_get_name(&rx->up));
+                             ovs_strerror(errno), netdev_rx_get_name(&rx->up));
             }
             return -errno;
         }
@@ -677,7 +677,7 @@ netdev_rx_bsd_drain(struct netdev_rx *rx_)
     strcpy(ifr.ifr_name, netdev_get_kernel_name(netdev_rx_get_netdev(rx_)));
     if (ioctl(rx->fd, BIOCFLUSH, &ifr) == -1) {
         VLOG_DBG_RL(&rl, "%s: ioctl(BIOCFLUSH) failed: %s",
-                    netdev_rx_get_name(rx_), strerror(errno));
+                    netdev_rx_get_name(rx_), ovs_strerror(errno));
         return errno;
     }
     return 0;
@@ -712,7 +712,7 @@ netdev_bsd_send(struct netdev *netdev_, const void *data, size_t size)
                 continue;
             } else if (errno != EAGAIN) {
                 VLOG_WARN_RL(&rl, "error sending Ethernet packet on %s: %s",
-                             name, strerror(errno));
+                             name, ovs_strerror(errno));
             }
             return errno;
         } else if (retval != size) {
@@ -845,7 +845,7 @@ netdev_bsd_get_carrier(const struct netdev *netdev_, bool *carrier)
 
         if (ioctl(af_inet_sock, SIOCGIFMEDIA, &ifmr) == -1) {
             VLOG_DBG_RL(&rl, "%s: ioctl(SIOCGIFMEDIA) failed: %s",
-                        netdev_get_name(netdev_), strerror(errno));
+                        netdev_get_name(netdev_), ovs_strerror(errno));
             return errno;
         }
 
@@ -913,7 +913,7 @@ netdev_bsd_get_stats(const struct netdev *netdev_, struct netdev_stats *stats)
 
     if (sysctl(mib, 5, &if_count, &len, (void *)0, 0) == -1) {
         VLOG_DBG_RL(&rl, "%s: sysctl failed: %s",
-                    netdev_get_name(netdev_), strerror(errno));
+                    netdev_get_name(netdev_), ovs_strerror(errno));
         return errno;
     }
 
@@ -924,7 +924,7 @@ netdev_bsd_get_stats(const struct netdev *netdev_, struct netdev_stats *stats)
         mib[4] = i; //row
         if (sysctl(mib, 6, &ifmd, &len, (void *)0, 0) == -1) {
             VLOG_DBG_RL(&rl, "%s: sysctl failed: %s",
-                        netdev_get_name(netdev_), strerror(errno));
+                        netdev_get_name(netdev_), ovs_strerror(errno));
             return errno;
         } else if (!strcmp(ifmd.ifmd_name, netdev_get_name(netdev_))) {
             convert_stats(stats, &ifmd.ifmd_data);
@@ -1053,7 +1053,7 @@ netdev_bsd_get_features(const struct netdev *netdev,
      * them. */
     if (ioctl(af_inet_sock, SIOCGIFMEDIA, &ifmr) == -1) {
         VLOG_DBG_RL(&rl, "%s: ioctl(SIOCGIFMEDIA) failed: %s",
-                    netdev_get_name(netdev), strerror(errno));
+                    netdev_get_name(netdev), ovs_strerror(errno));
         return errno;
     }
 
@@ -1069,7 +1069,7 @@ netdev_bsd_get_features(const struct netdev *netdev,
 
     if (ioctl(af_inet_sock, SIOCGIFMEDIA, &ifmr) == -1) {
         VLOG_DBG_RL(&rl, "%s: ioctl(SIOCGIFMEDIA) failed: %s",
-                    netdev_get_name(netdev), strerror(errno));
+                    netdev_get_name(netdev), ovs_strerror(errno));
         error = errno;
         goto cleanup;
     }
@@ -1168,7 +1168,7 @@ netdev_bsd_get_in6(const struct netdev *netdev_, struct in6_addr *in6)
 
         if (getifaddrs(&head) != 0) {
             VLOG_ERR("getifaddrs on %s device failed: %s", netdev_name,
-                    strerror(errno));
+                    ovs_strerror(errno));
             return errno;
         }
 
@@ -1593,7 +1593,7 @@ get_etheraddr(const char *netdev_name, uint8_t ea[ETH_ADDR_LEN])
 
     if (getifaddrs(&head) != 0) {
         VLOG_ERR("getifaddrs on %s device failed: %s", netdev_name,
-                strerror(errno));
+                ovs_strerror(errno));
         return errno;
     }
 
@@ -1630,7 +1630,7 @@ set_etheraddr(const char *netdev_name OVS_UNUSED, int hwaddr_family OVS_UNUSED,
     memcpy(ifr.ifr_addr.sa_data, mac, hwaddr_len);
     if (ioctl(af_inet_sock, SIOCSIFLLADDR, &ifr) < 0) {
         VLOG_ERR("ioctl(SIOCSIFLLADDR) on %s device failed: %s",
-                 netdev_name, strerror(errno));
+                 netdev_name, ovs_strerror(errno));
         return errno;
     }
     return 0;
@@ -1696,7 +1696,7 @@ netdev_bsd_do_ioctl(const char *name, struct ifreq *ifr, unsigned long cmd,
     strncpy(ifr->ifr_name, name, sizeof ifr->ifr_name);
     if (ioctl(af_inet_sock, cmd, ifr) == -1) {
         VLOG_DBG_RL(&rl, "%s: ioctl(%s) failed: %s", name, cmd_name,
-                    strerror(errno));
+                    ovs_strerror(errno));
         return errno;
     }
     return 0;

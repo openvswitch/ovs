@@ -53,7 +53,7 @@ new_tcp_stream(const char *name, int fd, int connect_status,
 
     retval = setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &on, sizeof on);
     if (retval) {
-        VLOG_ERR("%s: setsockopt(TCP_NODELAY): %s", name, strerror(errno));
+        VLOG_ERR("%s: setsockopt(TCP_NODELAY): %s", name, ovs_strerror(errno));
         close(fd);
         return errno;
     }
@@ -79,7 +79,7 @@ tcp_open(const char *name, char *suffix, struct stream **streamp, uint8_t dscp)
     if (fd >= 0) {
         return new_tcp_stream(name, fd, error, &sin, streamp);
     } else {
-        VLOG_ERR("%s: connect: %s", name, strerror(error));
+        VLOG_ERR("%s: connect: %s", name, ovs_strerror(error));
         return error;
     }
 }

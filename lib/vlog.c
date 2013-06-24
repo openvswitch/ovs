@@ -320,7 +320,7 @@ vlog_set_log_file(const char *file_name)
     /* Log success or failure. */
     if (log_fd < 0) {
         VLOG_WARN("failed to open %s for logging: %s",
-                  log_file_name, strerror(errno));
+                  log_file_name, ovs_strerror(errno));
         error = errno;
     } else {
         VLOG_INFO("opened log file %s", log_file_name);
@@ -489,7 +489,7 @@ vlog_unixctl_reopen(struct unixctl_conn *conn, int argc OVS_UNUSED,
     if (log_file_name) {
         int error = vlog_reopen_log_file();
         if (error) {
-            unixctl_command_reply_error(conn, strerror(errno));
+            unixctl_command_reply_error(conn, ovs_strerror(errno));
         } else {
             unixctl_command_reply(conn, NULL);
         }

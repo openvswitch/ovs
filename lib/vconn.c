@@ -695,7 +695,7 @@ do_send(struct vconn *vconn, struct ofpbuf *msg)
         retval = (vconn->class->send)(vconn, msg);
         if (retval != EAGAIN) {
             VLOG_DBG_RL(&ofmsg_rl, "%s: sent (%s): %s",
-                        vconn->name, strerror(retval), s);
+                        vconn->name, ovs_strerror(retval), s);
         }
         free(s);
     }

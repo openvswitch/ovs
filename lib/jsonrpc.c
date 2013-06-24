@@ -129,7 +129,7 @@ jsonrpc_run(struct jsonrpc *rpc)
         } else {
             if (retval != -EAGAIN) {
                 VLOG_WARN_RL(&rl, "%s: send error: %s",
-                             rpc->name, strerror(-retval));
+                             rpc->name, ovs_strerror(-retval));
                 jsonrpc_error(rpc, -retval);
             }
             break;
@@ -307,7 +307,7 @@ jsonrpc_recv(struct jsonrpc *rpc, struct jsonrpc_msg **msgp)
                     return EAGAIN;
                 } else {
                     VLOG_WARN_RL(&rl, "%s: receive error: %s",
-                                 rpc->name, strerror(-retval));
+                                 rpc->name, ovs_strerror(-retval));
                     jsonrpc_error(rpc, -retval);
                     return rpc->status;
                 }
@@ -1116,7 +1116,8 @@ jsonrpc_session_set_dscp(struct jsonrpc_session *s,
             error = pstream_set_dscp(s->pstream, dscp);
             if (error) {
                 VLOG_ERR("%s: failed set_dscp %s",
-                         reconnect_get_name(s->reconnect), strerror(error));
+                         reconnect_get_name(s->reconnect),
+                         ovs_strerror(error));
             }
             /*
              * XXX race window between setting dscp to listening socket

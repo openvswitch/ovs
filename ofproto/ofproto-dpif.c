@@ -932,7 +932,7 @@ open_dpif_backer(const char *type, struct dpif_backer **backerp)
     free(backer_name);
     if (error) {
         VLOG_ERR("failed to open datapath of type %s: %s", type,
-                 strerror(error));
+                 ovs_strerror(error));
         free(backer);
         return error;
     }
@@ -979,7 +979,7 @@ open_dpif_backer(const char *type, struct dpif_backer **backerp)
     error = dpif_recv_set(backer->dpif, backer->recv_set_enable);
     if (error) {
         VLOG_ERR("failed to listen on datapath of type %s: %s",
-                 type, strerror(error));
+                 type, ovs_strerror(error));
         close_dpif_backer(backer);
         return error;
     }
@@ -2472,7 +2472,7 @@ send_pdu_cb(void *port_, const void *pdu, size_t pdu_size)
     } else {
         VLOG_ERR_RL(&rl, "port %s: cannot obtain Ethernet address of iface "
                     "%s (%s)", port->bundle->name,
-                    netdev_get_name(port->up.netdev), strerror(error));
+                    netdev_get_name(port->up.netdev), ovs_strerror(error));
     }
 }
 
@@ -2511,7 +2511,7 @@ bundle_send_learning_packets(struct ofbundle *bundle)
         static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
         VLOG_WARN_RL(&rl, "bond %s: %d errors sending %d gratuitous learning "
                      "packets, last error was: %s",
-                     bundle->name, n_errors, n_packets, strerror(error));
+                     bundle->name, n_errors, n_packets, ovs_strerror(error));
     } else {
         VLOG_DBG("bond %s: sent %d gratuitous learning packets",
                  bundle->name, n_packets);
@@ -3587,8 +3587,8 @@ drop_key_clear(struct dpif_backer *backer)
         if (error && !VLOG_DROP_WARN(&rl)) {
             struct ds ds = DS_EMPTY_INITIALIZER;
             odp_flow_key_format(drop_key->key, drop_key->key_len, &ds);
-            VLOG_WARN("Failed to delete drop key (%s) (%s)", strerror(error),
-                      ds_cstr(&ds));
+            VLOG_WARN("Failed to delete drop key (%s) (%s)",
+                      ovs_strerror(error), ds_cstr(&ds));
             ds_destroy(&ds);
         }
 
@@ -5414,7 +5414,7 @@ send_packet(const struct ofport_dpif *ofport, struct ofpbuf *packet)
     if (error) {
         VLOG_WARN_RL(&rl, "%s: failed to send packet on port %s (%s)",
                      ofproto->up.name, netdev_get_name(ofport->up.netdev),
-                     strerror(error));
+                     ovs_strerror(error));
     }
 
     ofproto->stats.tx_packets++;

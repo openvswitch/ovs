@@ -130,7 +130,7 @@ xsigaction(int signum, const struct sigaction *new, struct sigaction *old)
 
         VLOG_FATAL("sigaction(%s) failed (%s)",
                    signal_name(signum, namebuf, sizeof namebuf),
-                   strerror(errno));
+                   ovs_strerror(errno));
     }
 }
 
@@ -139,6 +139,6 @@ xpthread_sigmask(int how, const sigset_t *new, sigset_t *old)
 {
     int error = pthread_sigmask(how, new, old);
     if (error) {
-        VLOG_FATAL("pthread_sigmask failed (%s)", strerror(error));
+        VLOG_FATAL("pthread_sigmask failed (%s)", ovs_strerror(error));
     }
 }

@@ -227,7 +227,7 @@ ovsdb_jsonrpc_server_add_remote(struct ovsdb_jsonrpc_server *svr,
 
     error = jsonrpc_pstream_open(name, &listener, options->dscp);
     if (error && error != EAFNOSUPPORT) {
-        VLOG_ERR_RL(&rl, "%s: listen failed: %s", name, strerror(error));
+        VLOG_ERR_RL(&rl, "%s: listen failed: %s", name, ovs_strerror(error));
         return NULL;
     }
 
@@ -318,7 +318,7 @@ ovsdb_jsonrpc_server_run(struct ovsdb_jsonrpc_server *svr)
             } else if (error != EAGAIN) {
                 VLOG_WARN_RL(&rl, "%s: accept failed: %s",
                              pstream_get_name(remote->listener),
-                             strerror(error));
+                             ovs_strerror(error));
             }
         }
 
@@ -599,7 +599,7 @@ ovsdb_jsonrpc_session_set_all_options(
         error = pstream_set_dscp(remote->listener, options->dscp);
         if (error) {
             VLOG_ERR("%s: set_dscp failed %s",
-                     pstream_get_name(remote->listener), strerror(error));
+                     pstream_get_name(remote->listener), ovs_strerror(error));
         } else {
             remote->dscp = options->dscp;
         }

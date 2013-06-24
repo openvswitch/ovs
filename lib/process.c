@@ -193,7 +193,7 @@ process_start(char **argv, struct process **pp)
 
     pid = fork();
     if (pid < 0) {
-        VLOG_WARN("fork failed: %s", strerror(errno));
+        VLOG_WARN("fork failed: %s", ovs_strerror(errno));
         return errno;
     } else if (pid) {
         /* Running in parent process. */
@@ -210,7 +210,7 @@ process_start(char **argv, struct process **pp)
         }
         execvp(argv[0], argv);
         fprintf(stderr, "execvp(\"%s\") failed: %s\n",
-                argv[0], strerror(errno));
+                argv[0], ovs_strerror(errno));
         _exit(1);
     }
 }
@@ -316,7 +316,7 @@ process_run(void)
                     p->exited = true;
                     p->status = status;
                 } else if (retval < 0) {
-                    VLOG_WARN("waitpid: %s", strerror(errno));
+                    VLOG_WARN("waitpid: %s", ovs_strerror(errno));
                     p->exited = true;
                     p->status = -1;
                 }

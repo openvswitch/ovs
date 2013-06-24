@@ -208,7 +208,7 @@ lswitch_handshake(struct lswitch *sw)
 
             if (error) {
                 VLOG_INFO_RL(&rl, "%s: failed to queue default flows (%s)",
-                             rconn_get_name(sw->rconn), strerror(error));
+                             rconn_get_name(sw->rconn), ovs_strerror(error));
             }
         } else {
             VLOG_INFO_RL(&rl, "%s: failed to set usable protocol",
@@ -433,7 +433,7 @@ queue_tx(struct lswitch *sw, struct ofpbuf *b)
         } else {
             VLOG_WARN_RL(&rl, "%016llx: %s: send: %s",
                          sw->datapath_id, rconn_get_name(sw->rconn),
-                         strerror(retval));
+                         ovs_strerror(retval));
         }
     }
 }

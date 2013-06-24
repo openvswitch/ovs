@@ -136,7 +136,7 @@ main(int argc, char *argv[])
             }
         }
         if (retval) {
-            VLOG_ERR("%s: connect: %s", name, strerror(retval));
+            VLOG_ERR("%s: connect: %s", name, ovs_strerror(retval));
         }
     }
     if (n_switches == 0 && n_listeners == 0) {

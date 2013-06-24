@@ -1,4 +1,4 @@
- /* Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira, Inc.
+ /* Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -118,7 +118,7 @@ lockfile_lock(const char *file, struct lockfile **lockfilep)
                       "pid %ld", lock_name, (long int) pid);
         } else {
             VLOG_WARN("%s: failed to lock file: %s",
-                      lock_name, strerror(error));
+                      lock_name, ovs_strerror(error));
         }
     }
 
@@ -225,7 +225,7 @@ lockfile_try_lock(const char *name, pid_t *pidp, struct lockfile **lockfilep)
         }
     } else if (errno != ENOENT) {
         VLOG_WARN("%s: failed to stat lock file: %s",
-                  name, strerror(errno));
+                  name, ovs_strerror(errno));
         return errno;
     }
 
@@ -233,13 +233,14 @@ lockfile_try_lock(const char *name, pid_t *pidp, struct lockfile **lockfilep)
     fd = open(name, O_RDWR | O_CREAT, 0600);
     if (fd < 0) {
         VLOG_WARN("%s: failed to open lock file: %s",
-                  name, strerror(errno));
+                  name, ovs_strerror(errno));
         return errno;
     }
 
     /* Get the inode and device number for the lock table. */
     if (fstat(fd, &s)) {
-        VLOG_ERR("%s: failed to fstat lock file: %s", name, strerror(errno));
+        VLOG_ERR("%s: failed to fstat lock file: %s",
+                 name, ovs_strerror(errno));
         close(fd);
         return errno;
     }

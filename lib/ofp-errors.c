@@ -154,7 +154,7 @@ ofperr_encode_msg__(enum ofperr error, enum ofp_version ofp_version,
     if (!ofperr_is_valid(error)) {
         /* 'error' seems likely to be a system errno value. */
         VLOG_ERR_RL(&rl, "invalid OpenFlow error code %d (%s)",
-                    error, strerror(error));
+                    error, ovs_strerror(error));
         error = OFPERR_NXBRC_UNENCODABLE_ERROR;
     } else if (domain->errors[error - OFPERR_OFS].code < 0) {
         VLOG_ERR_RL(&rl, "cannot encode %s for %s",
@@ -328,10 +328,12 @@ ofperr_decode_msg(const struct ofp_header *oh, struct ofpbuf *payload)
 
 /* If 'error' is a valid OFPERR_* value, returns its name
  * (e.g. "OFPBRC_BAD_TYPE" for OFPBRC_BAD_TYPE).  Otherwise, assumes that
- * 'error' is a positive errno value and returns what strerror() produces for
- * 'error'.  */
+ * 'error' is a positive errno value and returns what ovs_strerror() produces
+ * for 'error'.  */
 const char *
 ofperr_to_string(enum ofperr error)
 {
-    return ofperr_is_valid(error) ? ofperr_get_name(error) : strerror(error);
+    return (ofperr_is_valid(error)
+            ? ofperr_get_name(error)
+            : ovs_strerror(error));
 }

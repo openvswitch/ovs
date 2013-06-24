@@ -445,7 +445,7 @@ ofproto_create(const char *datapath_name, const char *datapath_type,
     error = ofproto->ofproto_class->construct(ofproto);
     if (error) {
         VLOG_ERR("failed to open datapath %s: %s",
-                 datapath_name, strerror(error));
+                 datapath_name, ovs_strerror(error));
         ofproto_destroy__(ofproto);
         return error;
     }
@@ -831,7 +831,7 @@ ofproto_port_set_cfm(struct ofproto *ofproto, ofp_port_t ofp_port,
     if (error) {
         VLOG_WARN("%s: CFM configuration on port %"PRIu16" (%s) failed (%s)",
                   ofproto->name, ofp_port, netdev_get_name(ofport->netdev),
-                  strerror(error));
+                  ovs_strerror(error));
     }
 }
 
@@ -857,7 +857,7 @@ ofproto_port_set_bfd(struct ofproto *ofproto, ofp_port_t ofp_port,
     if (error) {
         VLOG_WARN("%s: bfd configuration on port %"PRIu16" (%s) failed (%s)",
                   ofproto->name, ofp_port, netdev_get_name(ofport->netdev),
-                  strerror(error));
+                  ovs_strerror(error));
     }
 }
 
@@ -1168,7 +1168,7 @@ ofproto_type_run(const char *datapath_type)
     error = class->type_run ? class->type_run(datapath_type) : 0;
     if (error && error != EAGAIN) {
         VLOG_ERR_RL(&rl, "%s: type_run failed (%s)",
-                    datapath_type, strerror(error));
+                    datapath_type, ovs_strerror(error));
     }
     return error;
 }
@@ -1185,7 +1185,7 @@ ofproto_type_run_fast(const char *datapath_type)
     error = class->type_run_fast ? class->type_run_fast(datapath_type) : 0;
     if (error && error != EAGAIN) {
         VLOG_ERR_RL(&rl, "%s: type_run_fast failed (%s)",
-                    datapath_type, strerror(error));
+                    datapath_type, ovs_strerror(error));
     }
     return error;
 }
@@ -1213,7 +1213,7 @@ ofproto_run(struct ofproto *p)
 
     error = p->ofproto_class->run(p);
     if (error && error != EAGAIN) {
-        VLOG_ERR_RL(&rl, "%s: run failed (%s)", p->name, strerror(error));
+        VLOG_ERR_RL(&rl, "%s: run failed (%s)", p->name, ovs_strerror(error));
     }
 
     if (p->ofproto_class->port_poll) {
@@ -1323,7 +1323,7 @@ ofproto_run_fast(struct ofproto *p)
     error = p->ofproto_class->run_fast ? p->ofproto_class->run_fast(p) : 0;
     if (error && error != EAGAIN) {
         VLOG_ERR_RL(&rl, "%s: fastpath run failed (%s)",
-                    p->name, strerror(error));
+                    p->name, ovs_strerror(error));
     }
     return error;
 }
@@ -1763,7 +1763,7 @@ ofport_open(struct ofproto *ofproto,
                      "cannot be opened (%s)",
                      ofproto->name,
                      ofproto_port->name, ofproto_port->ofp_port,
-                     ofproto_port->name, strerror(error));
+                     ofproto_port->name, ovs_strerror(error));
         return NULL;
     }
 
@@ -1848,7 +1848,7 @@ ofport_install(struct ofproto *p,
 
 error:
     VLOG_WARN_RL(&rl, "%s: could not add port %s (%s)",
-                 p->name, netdev_name, strerror(error));
+                 p->name, netdev_name, ovs_strerror(error));
     if (ofport) {
         ofport_destroy__(ofport);
     } else {
@@ -3335,7 +3335,7 @@ add_flow(struct ofproto *ofproto, struct ofconn *ofconn,
     rule = ofproto->ofproto_class->rule_alloc();
     if (!rule) {
         VLOG_WARN_RL(&rl, "%s: failed to create rule (%s)",
-                     ofproto->name, strerror(error));
+                     ofproto->name, ovs_strerror(error));
         return ENOMEM;
     }
     cls_rule_init(&rule->cr, &fm->match, fm->priority);
@@ -4981,7 +4981,7 @@ pick_datapath_id(const struct ofproto *ofproto)
         }
         VLOG_WARN("%s: could not get MAC address for %s (%s)",
                   ofproto->name, netdev_get_name(port->netdev),
-                  strerror(error));
+                  ovs_strerror(error));
     }
     return ofproto->fallback_dpid;
 }
@@ -5536,7 +5536,7 @@ ofproto_port_set_realdev(struct ofproto *ofproto, ofp_port_t vlandev_ofp_port,
     if (error) {
         VLOG_WARN("%s: setting realdev on port %"PRIu16" (%s) failed (%s)",
                   ofproto->name, vlandev_ofp_port,
-                  netdev_get_name(ofport->netdev), strerror(error));
+                  netdev_get_name(ofport->netdev), ovs_strerror(error));
     }
     return error;
 }

@@ -233,7 +233,7 @@ worker_send_iovec(const struct iovec iovs[], size_t n_iovs,
         } while (error == EINTR);
         if (error) {
             worker_broke();
-            VLOG_ABORT("poll failed (%s)", strerror(error));
+            VLOG_ABORT("poll failed (%s)", ovs_strerror(error));
         }
     }
 }
@@ -264,7 +264,7 @@ worker_request_iovec(const struct iovec iovs[], size_t n_iovs,
     error = worker_send_iovec(all_iovs, n_iovs + 1, fds, n_fds);
     if (error) {
         worker_broke();
-        VLOG_ABORT("send failed (%s)", strerror(error));
+        VLOG_ABORT("send failed (%s)", ovs_strerror(error));
     }
     free(all_iovs);
 
@@ -347,9 +347,9 @@ worker_reply_iovec(const struct iovec *iovs, size_t n_iovs,
     if (error == EPIPE) {
         /* Parent probably died.  Continue processing any RPCs still buffered,
          * to avoid missing log messages. */
-        VLOG_INFO("send failed (%s)", strerror(error));
+        VLOG_INFO("send failed (%s)", ovs_strerror(error));
     } else if (error) {
-        VLOG_FATAL("send failed (%s)", strerror(error));
+        VLOG_FATAL("send failed (%s)", ovs_strerror(error));
     }
 
     free(all_iovs);

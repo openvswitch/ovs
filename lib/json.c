@@ -1026,7 +1026,8 @@ json_from_file(const char *file_name)
     stream = fopen(file_name, "r");
     if (!stream) {
         return json_string_create_nocopy(
-            xasprintf("error opening \"%s\": %s", file_name, strerror(errno)));
+            xasprintf("error opening \"%s\": %s", file_name,
+                      ovs_strerror(errno)));
     }
     json = json_from_stream(stream);
     fclose(stream);
@@ -1063,7 +1064,7 @@ json_from_stream(FILE *stream)
     if (ferror(stream)) {
         json_destroy(json);
         json = json_string_create_nocopy(
-            xasprintf("error reading JSON stream: %s", strerror(errno)));
+            xasprintf("error reading JSON stream: %s", ovs_strerror(errno)));
     }
 
     return json;

@@ -379,7 +379,8 @@ reconnect(struct rconn *rc)
         rc->backoff_deadline = time_now() + rc->backoff;
         state_transition(rc, S_CONNECTING);
     } else {
-        VLOG_WARN("%s: connection failed (%s)", rc->name, strerror(retval));
+        VLOG_WARN("%s: connection failed (%s)",
+                  rc->name, ovs_strerror(retval));
         rc->backoff_deadline = TIME_MAX; /* Prevent resetting backoff. */
         disconnect(rc, retval);
     }
@@ -417,7 +418,7 @@ run_CONNECTING(struct rconn *rc)
     } else if (retval != EAGAIN) {
         if (rconn_logging_connection_attempts__(rc)) {
             VLOG_INFO("%s: connection failed (%s)",
-                      rc->name, strerror(retval));
+                      rc->name, ovs_strerror(retval));
         }
         disconnect(rc, retval);
     } else if (timed_out(rc)) {
@@ -962,7 +963,8 @@ report_error(struct rconn *rc, int error)
         enum vlog_level level = rc->reliable ? VLL_INFO : VLL_DBG;
         VLOG(level, "%s: connection closed by peer", rc->name);
     } else {
-        VLOG_WARN("%s: connection dropped (%s)", rc->name, strerror(error));
+        VLOG_WARN("%s: connection dropped (%s)",
+                  rc->name, ovs_strerror(error));
     }
 }
 

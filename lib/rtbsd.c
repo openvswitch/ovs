@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 Gaetano Catalli.
+ * Copyright (c) 2011, 2013 Gaetano Catalli.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -55,13 +55,13 @@ rtbsd_notifier_register(struct rtbsd_notifier *notifier,
         notify_sock = socket(PF_ROUTE, SOCK_RAW, 0);
         if (notify_sock < 0) {
             VLOG_WARN("could not create PF_ROUTE socket: %s",
-                      strerror(errno));
+                      ovs_strerror(errno));
             return errno;
         }
         error = set_nonblocking(notify_sock);
         if (error) {
             VLOG_WARN("error set_nonblocking PF_ROUTE socket: %s",
-                    strerror(error));
+                    ovs_strerror(error));
             return error;
         }
     } else {
@@ -120,7 +120,7 @@ rtbsd_notifier_run(void)
                 VLOG_WARN_RL(&rl, "PF_ROUTE receive buffer overflowed");
             } else {
                 VLOG_WARN_RL(&rl, "error reading PF_ROUTE socket: %s",
-                             strerror(errno));
+                             ovs_strerror(errno));
             }
             rtbsd_report_notify_error();
         }

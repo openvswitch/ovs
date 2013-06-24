@@ -315,7 +315,7 @@ connmgr_run(struct connmgr *mgr,
             ofconn_set_rate_limit(ofconn, ofservice->rate_limit,
                                   ofservice->burst_limit);
         } else if (retval != EAGAIN) {
-            VLOG_WARN_RL(&rl, "accept failed (%s)", strerror(retval));
+            VLOG_WARN_RL(&rl, "accept failed (%s)", ovs_strerror(retval));
         }
     }
 
@@ -327,7 +327,7 @@ connmgr_run(struct connmgr *mgr,
         if (!retval) {
             add_snooper(mgr, vconn);
         } else if (retval != EAGAIN) {
-            VLOG_WARN_RL(&rl, "accept failed (%s)", strerror(retval));
+            VLOG_WARN_RL(&rl, "accept failed (%s)", ovs_strerror(retval));
         }
     }
 }
@@ -758,7 +758,7 @@ set_pvconns(struct pvconn ***pvconnsp, size_t *n_pvconnsp,
         if (!error) {
             pvconns[n_pvconns++] = pvconn;
         } else {
-            VLOG_ERR("failed to listen on %s: %s", name, strerror(error));
+            VLOG_ERR("failed to listen on %s: %s", name, ovs_strerror(error));
             if (!retval) {
                 retval = error;
             }

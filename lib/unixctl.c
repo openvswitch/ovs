@@ -358,7 +358,7 @@ unixctl_server_run(struct unixctl_server *server)
         } else {
             VLOG_WARN_RL(&rl, "%s: accept failed: %s",
                          pstream_get_name(server->listener),
-                         strerror(error));
+                         ovs_strerror(error));
         }
     }
 

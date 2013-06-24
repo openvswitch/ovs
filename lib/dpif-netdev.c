@@ -406,7 +406,7 @@ do_add_port(struct dp_netdev *dp, const char *devname, const char *type,
     if (error
         && !(error == EOPNOTSUPP && dpif_netdev_class_is_dummy(dp->class))) {
         VLOG_ERR("%s: cannot receive packets on this network device (%s)",
-                 devname, strerror(errno));
+                 devname, ovs_strerror(errno));
         netdev_close(netdev);
         return error;
     }
@@ -1094,7 +1094,7 @@ dpif_netdev_run(struct dpif *dpif)
             static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 
             VLOG_ERR_RL(&rl, "error receiving data from %s: %s",
-                        netdev_get_name(port->netdev), strerror(error));
+                        netdev_get_name(port->netdev), ovs_strerror(error));
         }
     }
     ofpbuf_uninit(&packet);

@@ -179,7 +179,7 @@ set_up_timer(void)
     }
 
     if (timer_create(monotonic_clock, NULL, &timer_id)) {
-        VLOG_FATAL("timer_create failed (%s)", strerror(errno));
+        VLOG_FATAL("timer_create failed (%s)", ovs_strerror(errno));
     }
 
     itimer.it_interval.tv_sec = 0;
@@ -187,7 +187,7 @@ set_up_timer(void)
     itimer.it_value = itimer.it_interval;
 
     if (timer_settime(timer_id, 0, &itimer, NULL)) {
-        VLOG_FATAL("timer_settime failed (%s)", strerror(errno));
+        VLOG_FATAL("timer_settime failed (%s)", ovs_strerror(errno));
     }
 }
 
@@ -456,7 +456,7 @@ void
 xgettimeofday(struct timeval *tv)
 {
     if (gettimeofday(tv, NULL) == -1) {
-        VLOG_FATAL("gettimeofday failed (%s)", strerror(errno));
+        VLOG_FATAL("gettimeofday failed (%s)", ovs_strerror(errno));
     }
 }
 

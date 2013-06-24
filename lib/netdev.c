@@ -139,7 +139,7 @@ netdev_register_provider(const struct netdev_class *new_class)
         int error = new_class->init();
         if (error) {
             VLOG_ERR("failed to initialize %s network device class: %s",
-                     new_class->type, strerror(error));
+                     new_class->type, ovs_strerror(error));
             return error;
         }
     }
@@ -526,7 +526,7 @@ netdev_get_mtu(const struct netdev *netdev, int *mtup)
         *mtup = 0;
         if (error != EOPNOTSUPP) {
             VLOG_DBG_RL(&rl, "failed to retrieve MTU for network device %s: "
-                         "%s", netdev_get_name(netdev), strerror(error));
+                         "%s", netdev_get_name(netdev), ovs_strerror(error));
         }
     }
     return error;
@@ -547,7 +547,7 @@ netdev_set_mtu(const struct netdev *netdev, int mtu)
     error = class->set_mtu ? class->set_mtu(netdev, mtu) : EOPNOTSUPP;
     if (error && error != EOPNOTSUPP) {
         VLOG_DBG_RL(&rl, "failed to set MTU for network device %s: %s",
-                     netdev_get_name(netdev), strerror(error));
+                     netdev_get_name(netdev), ovs_strerror(error));
     }
 
     return error;
@@ -825,7 +825,7 @@ do_update_flags(struct netdev *netdev, enum netdev_flags off,
     if (error) {
         VLOG_WARN_RL(&rl, "failed to %s flags for network device %s: %s",
                      off || on ? "set" : "get", netdev_get_name(netdev),
-                     strerror(error));
+                     ovs_strerror(error));
         old_flags = 0;
     } else if ((off || on) && sfp) {
         enum netdev_flags new_flags = (old_flags & ~off) | on;
@@ -956,7 +956,7 @@ netdev_get_carrier(const struct netdev *netdev)
                                                               &carrier);
     if (error) {
         VLOG_DBG("%s: failed to get network device carrier status, assuming "
-                 "down: %s", netdev_get_name(netdev), strerror(error));
+                 "down: %s", netdev_get_name(netdev), ovs_strerror(error));
         carrier = false;
     }
 

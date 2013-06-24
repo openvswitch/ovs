@@ -1,4 +1,4 @@
-/* Copyright (c) 2008, 2009, 2010, 2011 Nicira, Inc.
+/* Copyright (c) 2008, 2009, 2010, 2011, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,7 +39,7 @@ get_entropy(void *buffer, size_t n)
 
     fd = open(urandom, O_RDONLY);
     if (fd < 0) {
-        VLOG_ERR("%s: open failed (%s)", urandom, strerror(errno));
+        VLOG_ERR("%s: open failed (%s)", urandom, ovs_strerror(errno));
         return errno ? errno : EINVAL;
     }
 
