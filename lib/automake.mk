@@ -121,6 +121,8 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/ofp-version-opt.c \
 	lib/ofpbuf.c \
 	lib/ofpbuf.h \
+	lib/ovs-thread.c \
+	lib/ovs-thread.h \
 	lib/ovsdb-data.c \
 	lib/ovsdb-data.h \
 	lib/ovsdb-error.c \

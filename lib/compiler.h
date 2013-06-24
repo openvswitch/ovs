@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,6 +39,40 @@
 #define SENTINEL(N)
 #define OVS_LIKELY(CONDITION) (!!(CONDITION))
 #define OVS_UNLIKELY(CONDITION) (!!(CONDITION))
+#endif
+
+#ifdef __CHECKER__
+/* "sparse" annotations for mutexes and mutex-like constructs.
+ *
+ * In a function prototype, OVS_ACQUIRES(MUTEX) indicates that the function
+ * must be called without MUTEX acquired and that it returns with MUTEX
+ * acquired.  OVS_RELEASES(MUTEX) indicates the reverse.  OVS_MUST_HOLD
+ * indicates that the function must be called with MUTEX acquired by the
+ * caller and that the function does not release MUTEX.
+ *
+ * In practice, sparse ignores the MUTEX argument.  It need not even be a
+ * valid expression.  It is meant to indicate to human readers what mutex is
+ * being acquired.
+ *
+ * Since sparse ignores MUTEX, it need not be an actual mutex.  It can be
+ * any construct on which paired acquire and release semantics make sense:
+ * read/write locks, temporary memory allocations, whatever.
+ *
+ * OVS_ACQUIRE, OVS_RELEASE, and OVS_HOLDS are suitable for use within macros,
+ * where there is no function prototype to annotate. */
+#define OVS_ACQUIRES(MUTEX) __attribute__((context(MUTEX, 0, 1)))
+#define OVS_RELEASES(MUTEX) __attribute__((context(MUTEX, 1, 0)))
+#define OVS_MUST_HOLD(MUTEX) __attribute__((context(MUTEX, 1, 1)))
+#define OVS_ACQUIRE(MUTEX) __context__(MUTEX, 0, 1)
+#define OVS_RELEASE(MUTEX) __context__(MUTEX, 1, 0)
+#define OVS_HOLDS(MUTEX) __context__(MUTEX, 1, 1)
+#else
+#define OVS_ACQUIRES(MUTEX)
+#define OVS_RELEASES(MUTEX)
+#define OVS_MUST_HOLD(MUTEX)
+#define OVS_ACQUIRE(MUTEX)
+#define OVS_RELEASE(MUTEX)
+#define OVS_HOLDS(MUTEX)
 #endif
 
 /* ISO C says that a C implementation may choose any integer type for an enum
