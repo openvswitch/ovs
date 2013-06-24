@@ -1599,7 +1599,8 @@ int ovs_flow_metadata_from_nlattrs(struct sw_flow *flow,
 	if (err)
 		return -EINVAL;
 
-	ovs_match_init(&match, &flow->key, NULL);
+	memset(&match, 0, sizeof(match));
+	match.key = &flow->key;
 
 	err = metadata_from_nlattrs(&match, &attrs, a, false);
 	if (err)
