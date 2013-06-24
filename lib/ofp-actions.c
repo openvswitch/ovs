@@ -1003,9 +1003,7 @@ decode_openflow11_instructions(const struct ofp11_instruction insts[],
         }
 
         if (out[type]) {
-            return OFPERR_OFPBAC_UNSUPPORTED_ORDER; /* No specific code for
-                                                     * a duplicate instruction
-                                                     * exist */
+            return OFPERR_ONFBIC_DUP_INSTRUCTION;
         }
         out[type] = inst;
     }
