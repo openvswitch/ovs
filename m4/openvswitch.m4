@@ -1,6 +1,6 @@
 # -*- autoconf -*-
 
-# Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira, Inc.
+# Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -390,3 +390,38 @@ AC_DEFUN([OVS_CHECK_GROFF],
        ovs_cv_groff=no
      fi])
    AM_CONDITIONAL([HAVE_GROFF], [test "$ovs_cv_groff" = yes])])
+
+dnl Checks for thread-local storage support.
+dnl
+dnl Checks whether the compiler and linker support the C11
+dnl thread_local macro from <threads.h>, and if so defines
+dnl HAVE_THREAD_LOCAL.  If not, checks whether the compiler and linker
+dnl support the GCC __thread extension, and if so defines
+dnl HAVE___THREAD.
+AC_DEFUN([OVS_CHECK_TLS],
+  [AC_CACHE_CHECK(
+     [whether $CC has <threads.h> that supports thread_local],
+     [ovs_cv_thread_local],
+     [AC_LINK_IFELSE(
+        [AC_LANG_PROGRAM([#include <threads.h>
+static thread_local int var;], [return var;])],
+        [ovs_cv_thread_local=yes],
+        [ovs_cv_thread_local=no])])
+   if test $ovs_cv_thread_local = yes; then
+     AC_DEFINE([HAVE_THREAD_LOCAL], [1],
+               [Define to 1 if the C compiler and linker supports the C11
+                thread_local matcro defined in <threads.h>.])
+   else
+     AC_CACHE_CHECK(
+       [whether $CC supports __thread],
+       [ovs_cv___thread],
+       [AC_LINK_IFELSE(
+          [AC_LANG_PROGRAM([static __thread int var;], [return var;])],
+          [ovs_cv___thread=yes],
+          [ovs_cv___thread=no])])
+     if test $ovs_cv___thread = yes; then
+       AC_DEFINE([HAVE___THREAD], [1],
+                 [Define to 1 if the C compiler and linker supports the
+                  GCC __thread extenions.])
+     fi
+   fi])
