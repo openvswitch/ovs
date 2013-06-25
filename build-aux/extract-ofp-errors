@@ -199,7 +199,7 @@ def extract_vendor_ids(fn):
             fatal("%s: duplicate vendor id for vendors %s and %s"
                   % (id_, vendor_reverse_map[id_], name))
         vendor_reverse_map[id_] = name
-    
+
 def extract_ofp_errors(fn):
     error_types = {}
 
