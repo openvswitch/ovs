@@ -787,7 +787,6 @@ flow_mask_hash_fields(struct flow_wildcards *wc, enum nx_hash_fields fields)
     case NX_HASH_FIELDS_SYMMETRIC_L4:
         memset(&wc->masks.dl_src, 0xff, sizeof wc->masks.dl_src);
         memset(&wc->masks.dl_dst, 0xff, sizeof wc->masks.dl_dst);
-        memset(&wc->masks.dl_type, 0xff, sizeof wc->masks.dl_type);
         memset(&wc->masks.nw_proto, 0xff, sizeof wc->masks.nw_proto);
         memset(&wc->masks.nw_src, 0xff, sizeof wc->masks.nw_src);
         memset(&wc->masks.nw_dst, 0xff, sizeof wc->masks.nw_dst);

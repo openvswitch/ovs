@@ -582,7 +582,6 @@ cfm_should_process_flow(const struct cfm *cfm, const struct flow *flow,
                         struct flow_wildcards *wc)
 {
     memset(&wc->masks.dl_dst, 0xff, sizeof wc->masks.dl_dst);
-    memset(&wc->masks.dl_type, 0xff, sizeof wc->masks.dl_type);
     if (cfm->check_tnl_key) {
         memset(&wc->masks.tunnel.tun_id, 0xff, sizeof wc->masks.tunnel.tun_id);
     }

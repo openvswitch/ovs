@@ -54,7 +54,6 @@ struct netflow {
 void
 netflow_mask_wc(struct flow_wildcards *wc)
 {
-    memset(&wc->masks.dl_type, 0xff, sizeof wc->masks.dl_type);
     memset(&wc->masks.nw_proto, 0xff, sizeof wc->masks.nw_proto);
     memset(&wc->masks.nw_src, 0xff, sizeof wc->masks.nw_src);
     memset(&wc->masks.nw_dst, 0xff, sizeof wc->masks.nw_dst);
