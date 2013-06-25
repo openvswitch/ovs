@@ -38,7 +38,7 @@ m4_define([STRIP_DURATION], [[sed 's/\bduration=[0-9.]*s/duration=?s/']])
 m4_define([STRIP_USED], [[sed 's/used:[0-9]\.[0-9]*/used:0.0/']])
 m4_define([TESTABLE_LOG], [-vPATTERN:ANY:'%c|%p|%m'])
 
-# OVS_VSWITCHD_START([vsctl-args], [vsctl-output])
+# OVS_VSWITCHD_START([vsctl-args], [vsctl-output], [=override])
 #
 # Creates a database and starts ovsdb-server, starts ovs-vswitchd
 # connected to that database, calls ovs-vsctl to create a bridge named
@@ -46,6 +46,11 @@ m4_define([TESTABLE_LOG], [-vPATTERN:ANY:'%c|%p|%m'])
 # commands to ovs-vsctl.  If 'vsctl-args' causes ovs-vsctl to provide
 # output (e.g. because it includes "create" commands) then 'vsctl-output'
 # specifies the expected output after filtering through uuidfilt.pl.
+#
+# If a test needs to use "system" devices (as dummies), then specify
+# =override (literally) as the third argument.  Otherwise, system devices
+# won't work at all (which makes sense because tests should not access a
+# system's real Ethernet devices).
 m4_define([OVS_VSWITCHD_START],
   [OVS_RUNDIR=`pwd`; export OVS_RUNDIR
    OVS_LOGDIR=`pwd`; export OVS_LOGDIR
@@ -68,7 +73,7 @@ m4_define([OVS_VSWITCHD_START],
    AT_CHECK([ovs-vsctl --no-wait init])
 
    dnl Start ovs-vswitchd.
-   AT_CHECK([ovs-vswitchd --detach --no-chdir --pidfile --enable-dummy --disable-system --log-file -vvconn -vofproto_dpif], [0], [], [stderr])
+   AT_CHECK([ovs-vswitchd --detach --no-chdir --pidfile --enable-dummy$3 --disable-system --log-file -vvconn -vofproto_dpif], [0], [], [stderr])
    AT_CAPTURE_FILE([ovs-vswitchd.log])
    AT_CHECK([[sed < stderr '
 /vlog|INFO|opened log file/d

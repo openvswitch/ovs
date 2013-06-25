@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010, 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2010, 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,5 +33,6 @@ dummy_enable(bool override)
     netdev_dummy_register(override);
     dpif_dummy_register(override);
     timeval_dummy_register();
+    vlandev_dummy_enable();
 }
 

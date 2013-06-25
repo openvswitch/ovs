@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010, 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2010, 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,5 +26,6 @@ void dummy_enable(bool override);
 void dpif_dummy_register(bool override);
 void netdev_dummy_register(bool override);
 void timeval_dummy_register(void);
+void vlandev_dummy_enable(void);
 
 #endif /* dummy.h */

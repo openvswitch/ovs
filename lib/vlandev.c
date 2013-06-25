@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 Nicira, Inc.
+ * Copyright (c) 2011, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,14 +19,146 @@
 #include "vlandev.h"
 
 #include <errno.h>
+#include <net/if.h>
 #include <sys/ioctl.h>
 #include <sys/stat.h>
 
+#include "dummy.h"
 #include "hash.h"
 #include "shash.h"
 #include "vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(vlandev);
+
+/* A vlandev implementation. */
+struct vlandev_class {
+    int (*vd_refresh)(void);
+    int (*vd_add)(const char *real_dev, int vid);
+    int (*vd_del)(const char *vlan_dev);
+};
+
+#ifdef LINUX_DATAPATH
+static const struct vlandev_class vlandev_linux_class;
+#endif
+static const struct vlandev_class vlandev_stub_class;
+static const struct vlandev_class vlandev_dummy_class;
+
+/* The in-use vlandev implementation. */
+static const struct vlandev_class *vd_class;
+
+/* Maps from a VLAN device name (e.g. "eth0.10") to struct vlan_dev. */
+static struct shash vlan_devs = SHASH_INITIALIZER(&vlan_devs);
+
+/* Maps from a VLAN real device name (e.g. "eth0") to struct vlan_real_dev. */
+static struct shash vlan_real_devs = SHASH_INITIALIZER(&vlan_real_devs);
+
+static int vlandev_add__(const char *vlan_dev, const char *real_dev, int vid);
+static int vlandev_del__(const char *vlan_dev);
+static void vlandev_clear__(void);
+
+static const struct vlandev_class *
+vlandev_get_class(void)
+{
+    if (!vd_class) {
+#ifdef LINUX_DATAPATH
+        vd_class = &vlandev_linux_class;
+#else
+        vd_class = &vlandev_stub_class;
+#endif
+    }
+    return vd_class;
+}
+
+/* On Linux, the default implementation of VLAN devices creates and destroys
+ * Linux VLAN devices.  On other OSess, the default implementation is a
+ * nonfunctional stub.  In either case, this function replaces this default
+ * implementation by a "dummy" implementation that simply reports back whatever
+ * the client sets up with vlandev_add() and vlandev_del().
+ *
+ * Don't call this function directly; use dummy_enable() from dummy.h. */
+void
+vlandev_dummy_enable(void)
+{
+    if (vd_class != &vlandev_dummy_class) {
+        vd_class = &vlandev_dummy_class;
+        vlandev_clear__();
+    }
+}
+
+/* Creates a new VLAN device for VLAN 'vid' on top of real Ethernet device
+ * 'real_dev'.  Returns 0 if successful, otherwise a positive errno value.  On
+ * OSes other than Linux, in the absence of dummies (see
+ * vlandev_dummy_enable()), this always fails.
+ *
+ * The name of the new VLAN device is not easily predictable, because Linux
+ * provides multiple naming schemes, does not allow the client to specify a
+ * name, and does not directly report the new VLAN device's name.  Use
+ * vlandev_refresh() then vlandev_get_name() to find out the new VLAN device's
+ * name,. */
+int
+vlandev_add(const char *real_dev, int vid)
+{
+    return vlandev_get_class()->vd_add(real_dev, vid);
+}
+
+/* Deletes the VLAN device named 'vlan_dev'.  Returns 0 if successful,
+ * otherwise a positive errno value.  On OSes other than Linux, in the absence
+ * of dummies (see vlandev_dummy_enable()), this always fails. */
+int
+vlandev_del(const char *vlan_dev)
+{
+    return vlandev_get_class()->vd_del(vlan_dev);
+}
+
+/* Refreshes the cache of real device to VLAN device mappings reported by
+ * vlandev_get_real_devs() and vlandev_get_name().  Without calling this
+ * function, changes made by vlandev_add() and vlandev_del() may not be
+ * reflected by vlandev_get_real_devs() and vlandev_get_name() output. */
+int
+vlandev_refresh(void)
+{
+    const struct vlandev_class *class = vlandev_get_class();
+    return class->vd_refresh ? class->vd_refresh() : 0;
+}
+
+/* Returns a shash mapping from the name of real Ethernet devices used as the
+ * basis of VLAN devices to struct vlan_real_devs.  The caller must not modify
+ * or free anything in the returned shash.
+ *
+ * Changes made by vlandev_add() and vlandev_del() may not be reflected in this
+ * function's output without an intervening call to vlandev_refresh(). */
+struct shash *
+vlandev_get_real_devs(void)
+{
+    return &vlan_real_devs;
+}
+
+/* Returns the name of the VLAN device for VLAN 'vid' on top of
+ * 'real_dev_name', or NULL if there is no such VLAN device.
+ *
+ * Changes made by vlandev_add() and vlandev_del() may not be reflected in this
+ * function's output without an intervening call to vlandev_refresh(). */
+const char *
+vlandev_get_name(const char *real_dev_name, int vid)
+{
+    const struct vlan_real_dev *real_dev;
+
+    real_dev = shash_find_data(&vlan_real_devs, real_dev_name);
+    if (real_dev) {
+        const struct vlan_dev *vlan_dev;
+
+        HMAP_FOR_EACH_WITH_HASH (vlan_dev, hmap_node, hash_int(vid, 0),
+                                 &real_dev->vlan_devs) {
+            if (vlan_dev->vid == vid) {
+                return vlan_dev->name;
+            }
+        }
+    }
+
+    return NULL;
+}
+
+/* The Linux vlandev implementation. */
 
 #ifdef LINUX_DATAPATH
 #include "rtnetlink-link.h"
@@ -35,8 +167,6 @@ VLOG_DEFINE_THIS_MODULE(vlandev);
 #include "netdev-linux.h"
 
 static struct nln_notifier *vlan_cache_notifier;
-static struct shash vlan_devs = SHASH_INITIALIZER(&vlan_devs);
-static struct shash vlan_real_devs = SHASH_INITIALIZER(&vlan_real_devs);
 static bool cache_valid;
 
 static void
@@ -46,11 +176,10 @@ vlan_cache_cb(const struct rtnetlink_link_change *change OVS_UNUSED,
     cache_valid = false;
 }
 
-int
-vlandev_refresh(void)
+static int
+vlandev_linux_refresh(void)
 {
     const char *fn = "/proc/net/vlan/config";
-    struct shash_node *node;
     char line[128];
     FILE *stream;
 
@@ -66,17 +195,7 @@ vlandev_refresh(void)
         return 0;
     }
 
-    /* Free old cache.
-     *
-     * The 'name' members point to strings owned by the "shash"es so we do not
-     * free them ourselves. */
-    shash_clear_free_data(&vlan_devs);
-    SHASH_FOR_EACH (node, &vlan_real_devs) {
-        struct vlan_real_dev *vrd = node->data;
-
-        hmap_destroy(&vrd->vlan_devs);
-    }
-    shash_clear_free_data(&vlan_real_devs);
+    vlandev_clear__();
 
     /* Repopulate cache. */
     stream = fopen(fn, "r");
@@ -101,58 +220,15 @@ vlandev_refresh(void)
         char vlan_dev[16], real_dev[16];
         int vid;
 
-        if (sscanf(line, "%15[^ |] | %d | %15s", vlan_dev, &vid, real_dev) == 3
-            && vid >= 0 && vid <= 4095
-            && !shash_find(&vlan_devs, vlan_dev)) {
-            struct vlan_real_dev *vrd;
-            struct vlan_dev *vd;
-
-            vrd = shash_find_data(&vlan_real_devs, real_dev);
-            if (!vrd) {
-                vrd = xmalloc(sizeof *vrd);
-                vrd->name = xstrdup(real_dev);
-                hmap_init(&vrd->vlan_devs);
-                shash_add_nocopy(&vlan_real_devs, vrd->name, vrd);
-            }
-
-            vd = xmalloc(sizeof *vd);
-            hmap_insert(&vrd->vlan_devs, &vd->hmap_node, hash_int(vid, 0));
-            vd->name = xstrdup(vlan_dev);
-            vd->vid = vid;
-            vd->real_dev = vrd;
-            shash_add_nocopy(&vlan_devs, vd->name, vd);
+        if (sscanf(line, "%15[^ |] | %d | %15s",
+                   vlan_dev, &vid, real_dev) == 3) {
+            vlandev_add__(vlan_dev, real_dev, vid);
         }
     }
     fclose(stream);
 
     cache_valid = true;
     return 0;
-}
-
-struct shash *
-vlandev_get_real_devs(void)
-{
-    return &vlan_real_devs;
-}
-
-const char *
-vlandev_get_name(const char *real_dev_name, int vid)
-{
-    const struct vlan_real_dev *real_dev;
-
-    real_dev = shash_find_data(&vlan_real_devs, real_dev_name);
-    if (real_dev) {
-        const struct vlan_dev *vlan_dev;
-
-        HMAP_FOR_EACH_WITH_HASH (vlan_dev, hmap_node, hash_int(vid, 0),
-                                 &real_dev->vlan_devs) {
-            if (vlan_dev->vid == vid) {
-                return vlan_dev->name;
-            }
-        }
-    }
-
-    return NULL;
 }
 
 static int
@@ -179,8 +255,8 @@ do_vlan_ioctl(const char *netdev_name, struct vlan_ioctl_args *via,
     return error;
 }
 
-int
-vlandev_add(const char *real_dev, int vid)
+static int
+vlandev_linux_add(const char *real_dev, int vid)
 {
     struct vlan_ioctl_args via;
     int error;
@@ -195,8 +271,8 @@ vlandev_add(const char *real_dev, int vid)
     return error;
 }
 
-int
-vlandev_del(const char *vlan_dev)
+static int
+vlandev_linux_del(const char *vlan_dev)
 {
     struct vlan_ioctl_args via;
     int error;
@@ -208,40 +284,134 @@ vlandev_del(const char *vlan_dev)
     }
     return error;
 }
-#else  /* !LINUX_DATAPATH */
-/* Stubs. */
 
-int
-vlandev_refresh(void)
+static const struct vlandev_class vlandev_linux_class = {
+    vlandev_linux_refresh,
+    vlandev_linux_add,
+    vlandev_linux_del
+};
+#endif
+
+/* Stub implementation. */
+
+static int
+vlandev_stub_add(const char *real_dev OVS_UNUSED, int vid OVS_UNUSED)
 {
+    VLOG_ERR("not supported on non-Linux platform");
+    return EOPNOTSUPP;
+}
+
+static int
+vlandev_stub_del(const char *vlan_dev OVS_UNUSED)
+{
+    VLOG_ERR("not supported on non-Linux platform");
+    return EOPNOTSUPP;
+}
+
+static const struct vlandev_class vlandev_stub_class = {
+    NULL,                       /* vd_refresh */
+    vlandev_stub_add,
+    vlandev_stub_del
+};
+
+/* Dummy implementation. */
+
+static int
+vlandev_dummy_add(const char *real_dev, int vid)
+{
+    char name[IFNAMSIZ];
+
+    if (snprintf(name, sizeof name, "%s.%d", real_dev, vid) >= sizeof name) {
+        return ENAMETOOLONG;
+    }
+    return vlandev_add__(name, real_dev, vid);
+}
+
+static int
+vlandev_dummy_del(const char *vlan_dev)
+{
+    return vlandev_del__(vlan_dev);
+}
+
+static const struct vlandev_class vlandev_dummy_class = {
+    NULL,                       /* vd_refresh */
+    vlandev_dummy_add,
+    vlandev_dummy_del
+};
+
+static int
+vlandev_add__(const char *vlan_dev, const char *real_dev, int vid)
+{
+    uint32_t vid_hash = hash_int(vid, 0);
+    struct vlan_real_dev *vrd;
+    struct vlan_dev *vd;
+
+    if (vid < 0 || vid > 4095) {
+        return EINVAL;
+    } else if (shash_find(&vlan_devs, vlan_dev)) {
+        return EEXIST;
+    }
+
+    vrd = shash_find_data(&vlan_real_devs, real_dev);
+    if (!vrd) {
+        vrd = xmalloc(sizeof *vrd);
+        vrd->name = xstrdup(real_dev);
+        hmap_init(&vrd->vlan_devs);
+        shash_add_nocopy(&vlan_real_devs, vrd->name, vrd);
+    } else {
+        HMAP_FOR_EACH_WITH_HASH (vd, hmap_node, vid_hash, &vrd->vlan_devs) {
+            if (vd->vid == vid) {
+                return EEXIST;
+            }
+        }
+    }
+
+    vd = xmalloc(sizeof *vd);
+    hmap_insert(&vrd->vlan_devs, &vd->hmap_node, vid_hash);
+    vd->name = xstrdup(vlan_dev);
+    vd->vid = vid;
+    vd->real_dev = vrd;
+    shash_add_nocopy(&vlan_devs, vd->name, vd);
+
     return 0;
 }
 
-struct shash *
-vlandev_get_real_devs(void)
+static int
+vlandev_del__(const char *vlan_dev)
 {
-    static struct shash vlan_real_devs = SHASH_INITIALIZER(&vlan_real_devs);
+    struct shash_node *vd_node = shash_find(&vlan_devs, vlan_dev);
+    if (!vd_node) {
+        struct vlan_dev *vd = vd_node->data;
+        struct vlan_real_dev *vrd = vd->real_dev;
 
-    return &vlan_real_devs;
+        hmap_remove(&vrd->vlan_devs, &vd->hmap_node);
+        if (hmap_is_empty(&vrd->vlan_devs)) {
+            shash_find_and_delete_assert(&vlan_real_devs, vrd->name);
+            free(vrd);
+        }
+
+        shash_delete(&vlan_devs, vd_node);
+        free(vd);
+
+        return 0;
+    } else {
+        return ENOENT;
+    }
 }
 
-const char *
-vlandev_get_name(const char *real_dev_name OVS_UNUSED, int vid OVS_UNUSED)
+/* Clear 'vlan_devs' and 'vlan_real_devs' in preparation for repopulating. */
+static void
+vlandev_clear__(void)
 {
-    return NULL;
-}
+    /* We do not free the 'name' members of struct vlan_dev and struct
+     * vlan_real_dev, because the "shash"es own them.. */
+    struct shash_node *node;
 
-int
-vlandev_add(const char *real_dev OVS_UNUSED, int vid OVS_UNUSED)
-{
-    VLOG_ERR("not supported on non-Linux platform");
-    return EOPNOTSUPP;
-}
+    shash_clear_free_data(&vlan_devs);
+    SHASH_FOR_EACH (node, &vlan_real_devs) {
+        struct vlan_real_dev *vrd = node->data;
 
-int
-vlandev_del(const char *vlan_dev OVS_UNUSED)
-{
-    VLOG_ERR("not supported on non-Linux platform");
-    return EOPNOTSUPP;
+        hmap_destroy(&vrd->vlan_devs);
+    }
+    shash_clear_free_data(&vlan_real_devs);
 }
-#endif

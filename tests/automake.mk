@@ -37,6 +37,7 @@ TESTSUITE_AT = \
 	tests/reconnect.at \
 	tests/ovs-vswitchd.at \
 	tests/ofproto-dpif.at \
+	tests/vlan-splinters.at \
 	tests/ofproto-macros.at \
 	tests/ofproto.at \
 	tests/ovsdb.at \
