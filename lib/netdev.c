@@ -277,14 +277,17 @@ netdev_open(const char *name, const char *type, struct netdev **netdevp)
     return 0;
 }
 
-/* Returns a reference to 'netdev_' for the caller to own. */
+/* Returns a reference to 'netdev_' for the caller to own. Returns null if
+ * 'netdev_' is null. */
 struct netdev *
 netdev_ref(const struct netdev *netdev_)
 {
     struct netdev *netdev = CONST_CAST(struct netdev *, netdev_);
 
-    ovs_assert(netdev->ref_cnt > 0);
-    netdev->ref_cnt++;
+    if (netdev) {
+        ovs_assert(netdev->ref_cnt > 0);
+        netdev->ref_cnt++;
+    }
     return netdev;
 }
 
