@@ -63,6 +63,10 @@ static long long int boot_time;
  * LLONG_MAX). */
 static long long int deadline = LLONG_MAX;
 
+/* Monotonic time, in milliseconds, at which the last call to time_poll() woke
+ * up. */
+DEFINE_PER_THREAD_DATA(long long int, last_wakeup, 0);
+
 static void set_up_timer(void);
 static void set_up_signal(int flags);
 static void sigalrm_handler(int);
@@ -151,6 +155,7 @@ set_up_timer(void)
 void
 time_postfork(void)
 {
+    assert_single_threaded();
     time_init();
     set_up_timer();
 }
@@ -288,15 +293,16 @@ int
 time_poll(struct pollfd *pollfds, int n_pollfds, long long int timeout_when,
           int *elapsed)
 {
-    static long long int last_wakeup = 0;
+    long long int *last_wakeup = last_wakeup_get();
     long long int start;
     sigset_t oldsigs;
     bool blocked;
     int retval;
 
+    time_init();
     time_refresh();
-    if (last_wakeup) {
-        log_poll_interval(last_wakeup);
+    if (*last_wakeup) {
+        log_poll_interval(*last_wakeup);
     }
     coverage_clear();
     start = time_msec();
@@ -342,9 +348,9 @@ time_poll(struct pollfd *pollfds, int n_pollfds, long long int timeout_when,
     if (blocked) {
         unblock_sigalrm(&oldsigs);
     }
-    last_wakeup = time_msec();
+    *last_wakeup = time_msec();
     refresh_rusage();
-    *elapsed = last_wakeup - start;
+    *elapsed = *last_wakeup - start;
     return retval;
 }
 
@@ -479,37 +485,66 @@ struct cpu_usage {
     unsigned long long int cpu; /* Total user+system CPU usage when sampled. */
 };
 
-static struct rusage recent_rusage;
-static struct cpu_usage older = { LLONG_MIN, 0 };
-static struct cpu_usage newer = { LLONG_MIN, 0 };
-static int cpu_usage = -1;
+struct cpu_tracker {
+    struct cpu_usage older;
+    struct cpu_usage newer;
+    int cpu_usage;
+
+    struct rusage recent_rusage;
+};
+DEFINE_PER_THREAD_MALLOCED_DATA(struct cpu_tracker *, cpu_tracker_var);
+
+static struct cpu_tracker *
+get_cpu_tracker(void)
+{
+    struct cpu_tracker *t = cpu_tracker_var_get();
+    if (!t) {
+        t = xzalloc(sizeof *t);
+        t->older.when = LLONG_MIN;
+        t->newer.when = LLONG_MIN;
+        cpu_tracker_var_set_unsafe(t);
+    }
+    return t;
+}
 
 static struct rusage *
 get_recent_rusage(void)
 {
-    return &recent_rusage;
+    return &get_cpu_tracker()->recent_rusage;
+}
+
+static int
+getrusage_thread(struct rusage *rusage OVS_UNUSED)
+{
+#ifdef RUSAGE_THREAD
+    return getrusage(RUSAGE_THREAD, rusage);
+#else
+    errno = EINVAL;
+    return -1;
+#endif
 }
 
 static void
 refresh_rusage(void)
 {
-    long long int now;
+    struct cpu_tracker *t = get_cpu_tracker();
+    struct rusage *recent_rusage = &t->recent_rusage;
 
-    now = time_msec();
-    getrusage(RUSAGE_SELF, &recent_rusage);
+    if (!getrusage_thread(recent_rusage)) {
+        long long int now = time_msec();
+        if (now >= t->newer.when + 3 * 1000) {
+            t->older = t->newer;
+            t->newer.when = now;
+            t->newer.cpu = (timeval_to_msec(&recent_rusage->ru_utime) +
+                            timeval_to_msec(&recent_rusage->ru_stime));
 
-    if (now >= newer.when + 3 * 1000) {
-        older = newer;
-        newer.when = now;
-        newer.cpu = (timeval_to_msec(&recent_rusage.ru_utime) +
-                     timeval_to_msec(&recent_rusage.ru_stime));
-
-        if (older.when != LLONG_MIN && newer.cpu > older.cpu) {
-            unsigned int dividend = newer.cpu - older.cpu;
-            unsigned int divisor = (newer.when - older.when) / 100;
-            cpu_usage = divisor > 0 ? dividend / divisor : -1;
-        } else {
-            cpu_usage = -1;
+            if (t->older.when != LLONG_MIN && t->newer.cpu > t->older.cpu) {
+                unsigned int dividend = t->newer.cpu - t->older.cpu;
+                unsigned int divisor = (t->newer.when - t->older.when) / 100;
+                t->cpu_usage = divisor > 0 ? dividend / divisor : -1;
+            } else {
+                t->cpu_usage = -1;
+            }
         }
     }
 }
@@ -521,7 +556,7 @@ refresh_rusage(void)
 int
 get_cpu_usage(void)
 {
-    return cpu_usage;
+    return get_cpu_tracker()->cpu_usage;
 }
 
 /* Unixctl interface. */
