@@ -21,6 +21,7 @@
 #include "hindex.h"
 #include <string.h>
 #include "hash.h"
+#include "random.h"
 #include "util.h"
 
 #undef NDEBUG
@@ -108,7 +109,7 @@ static void
 shuffle(int *p, size_t n)
 {
     for (; n > 1; n--, p++) {
-        int *q = &p[rand() % n];
+        int *q = &p[random_range(n)];
         int tmp = *p;
         *p = *q;
         *q = tmp;

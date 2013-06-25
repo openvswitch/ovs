@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -94,7 +94,7 @@ static void
 shuffle(unsigned int *p, size_t n)
 {
     for (; n > 1; n--, p++) {
-        unsigned int *q = &p[rand() % n];
+        unsigned int *q = &p[random_range(n)];
         unsigned int tmp = *p;
         *p = *q;
         *q = tmp;
@@ -297,7 +297,7 @@ test_bitwise_is_all_zeros(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 
             /* Change a random 0-bit into a 1-bit. */
             do {
-                bit = htonll(UINT64_C(1) << (random_uint32() % 64));
+                bit = htonll(UINT64_C(1) << (random_range(64)));
             } while (x & bit);
             x |= bit;
 

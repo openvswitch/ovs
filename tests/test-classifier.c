@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,6 +34,7 @@
 #include "flow.h"
 #include "ofp-util.h"
 #include "packets.h"
+#include "random.h"
 #include "unaligned.h"
 
 #undef NDEBUG
@@ -405,7 +406,7 @@ compare_classifiers(struct classifier *cls, struct tcls *tcls)
         struct flow flow;
         unsigned int x;
 
-        x = rand () % N_FLOW_VALUES;
+        x = random_range(N_FLOW_VALUES);
         memset(&flow, 0, sizeof flow);
         flow.nw_src = nw_src_values[get_value(&x, N_NW_SRC_VALUES)];
         flow.nw_dst = nw_dst_values[get_value(&x, N_NW_DST_VALUES)];
@@ -581,7 +582,7 @@ static void
 shuffle(unsigned int *p, size_t n)
 {
     for (; n > 1; n--, p++) {
-        unsigned int *q = &p[rand() % n];
+        unsigned int *q = &p[random_range(n)];
         unsigned int tmp = *p;
         *p = *q;
         *q = tmp;
@@ -592,7 +593,7 @@ static void
 shuffle_u32s(uint32_t *p, size_t n)
 {
     for (; n > 1; n--, p++) {
-        uint32_t *q = &p[rand() % n];
+        uint32_t *q = &p[random_range(n)];
         uint32_t tmp = *p;
         *p = *q;
         *q = tmp;
@@ -881,7 +882,7 @@ test_many_rules_in_one_table(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
         int i;
 
         do {
-            wcf = rand() & ((1u << CLS_N_FIELDS) - 1);
+            wcf = random_uint32() & ((1u << CLS_N_FIELDS) - 1);
             value_mask = ~wcf & ((1u << CLS_N_FIELDS) - 1);
         } while ((1 << count_ones(value_mask)) < N_RULES);
 
@@ -889,10 +890,10 @@ test_many_rules_in_one_table(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
         tcls_init(&tcls);
 
         for (i = 0; i < N_RULES; i++) {
-            unsigned int priority = rand();
+            unsigned int priority = random_uint32();
 
             do {
-                value_pats[i] = rand() & value_mask;
+                value_pats[i] = random_uint32() & value_mask;
             } while (array_contains(value_pats, i, value_pats[i]));
 
             rules[i] = make_rule(wcf, priority, value_pats[i]);
@@ -930,7 +931,7 @@ test_many_rules_in_n_tables(int n_tables)
     assert(n_tables < 10);
     for (i = 0; i < n_tables; i++) {
         do {
-            wcfs[i] = rand() & ((1u << CLS_N_FIELDS) - 1);
+            wcfs[i] = random_uint32() & ((1u << CLS_N_FIELDS) - 1);
         } while (array_contains(wcfs, i, wcfs[i]));
     }
 
@@ -939,7 +940,7 @@ test_many_rules_in_n_tables(int n_tables)
         struct classifier cls;
         struct tcls tcls;
 
-        srand(iteration);
+        random_set_seed(iteration + 1);
         for (i = 0; i < MAX_RULES; i++) {
             priorities[i] = i * 129;
         }
@@ -951,8 +952,8 @@ test_many_rules_in_n_tables(int n_tables)
         for (i = 0; i < MAX_RULES; i++) {
             struct test_rule *rule;
             unsigned int priority = priorities[i];
-            int wcf = wcfs[rand() % n_tables];
-            int value_pat = rand() & ((1u << CLS_N_FIELDS) - 1);
+            int wcf = wcfs[random_range(n_tables)];
+            int value_pat = random_uint32() & ((1u << CLS_N_FIELDS) - 1);
             rule = make_rule(wcf, priority, value_pat);
             tcls_insert(&tcls, rule);
             classifier_insert(&cls, &rule->cls_rule);
@@ -965,7 +966,7 @@ test_many_rules_in_n_tables(int n_tables)
             struct test_rule *target;
             struct cls_cursor cursor;
 
-            target = clone_rule(tcls.rules[rand() % tcls.n_rules]);
+            target = clone_rule(tcls.rules[random_range(tcls.n_rules)]);
 
             cls_cursor_init(&cursor, &cls, &target->cls_rule);
             CLS_CURSOR_FOR_EACH_SAFE (rule, next_rule, cls_rule, &cursor) {
@@ -1004,7 +1005,7 @@ random_value(void)
         { 0xffffffff, 0xaaaaaaaa, 0x55555555, 0x80000000,
           0x00000001, 0xface0000, 0x00d00d1e, 0xdeadbeef };
 
-    return values[random_uint32() % ARRAY_SIZE(values)];
+    return values[random_range(ARRAY_SIZE(values))];
 }
 
 static bool

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@
 #include "hmap.h"
 #include <string.h>
 #include "hash.h"
+#include "random.h"
 #include "util.h"
 
 #undef NDEBUG
@@ -108,7 +109,7 @@ static void
 shuffle(int *p, size_t n)
 {
     for (; n > 1; n--, p++) {
-        int *q = &p[rand() % n];
+        int *q = &p[random_range(n)];
         int tmp = *p;
         *p = *q;
         *q = tmp;
