@@ -5174,6 +5174,7 @@ rule_dpif_lookup_in_table(struct ofproto_dpif *ofproto,
     }
 
     if (wc) {
+        memset(&wc->masks.dl_type, 0xff, sizeof wc->masks.dl_type);
         wc->masks.nw_frag |= FLOW_NW_FRAG_MASK;
     }
 

@@ -548,7 +548,6 @@ xlate_normal(struct xlate_ctx *ctx)
     ctx->xout->has_normal = true;
 
     /* Check the dl_type, since we may check for gratuituous ARP. */
-    memset(&wc->masks.dl_type, 0xff, sizeof wc->masks.dl_type);
     memset(&wc->masks.dl_src, 0xff, sizeof wc->masks.dl_src);
     memset(&wc->masks.dl_dst, 0xff, sizeof wc->masks.dl_dst);
     wc->masks.vlan_tci |= htons(VLAN_VID_MASK | VLAN_CFI);
@@ -813,7 +812,6 @@ process_special(struct xlate_ctx *ctx, const struct flow *flow,
         return SLOW_BFD;
     } else if (ofport->bundle && ofport->bundle->lacp
                && flow->dl_type == htons(ETH_TYPE_LACP)) {
-        memset(&wc->masks.dl_type, 0xff, sizeof wc->masks.dl_type);
         if (packet) {
             lacp_process_packet(ofport->bundle->lacp, ofport, packet);
         }
@@ -1147,7 +1145,6 @@ compose_mpls_push_action(struct xlate_ctx *ctx, ovs_be16 eth_type)
 
     ovs_assert(eth_type_mpls(eth_type));
 
-    memset(&wc->masks.dl_type, 0xff, sizeof wc->masks.dl_type);
     memset(&wc->masks.mpls_lse, 0xff, sizeof wc->masks.mpls_lse);
     memset(&wc->masks.mpls_depth, 0xff, sizeof wc->masks.mpls_depth);
 
@@ -1182,7 +1179,6 @@ compose_mpls_pop_action(struct xlate_ctx *ctx, ovs_be16 eth_type)
     ovs_assert(eth_type_mpls(ctx->xin->flow.dl_type));
     ovs_assert(!eth_type_mpls(eth_type));
 
-    memset(&wc->masks.dl_type, 0xff, sizeof wc->masks.dl_type);
     memset(&wc->masks.mpls_lse, 0xff, sizeof wc->masks.mpls_lse);
     memset(&wc->masks.mpls_depth, 0xff, sizeof wc->masks.mpls_depth);
 
@@ -1239,7 +1235,6 @@ compose_dec_mpls_ttl_action(struct xlate_ctx *ctx)
     uint8_t ttl = mpls_lse_to_ttl(flow->mpls_lse);
     struct flow_wildcards *wc = &ctx->xout->wc;
 
-    memset(&wc->masks.dl_type, 0xff, sizeof wc->masks.dl_type);
     memset(&wc->masks.mpls_lse, 0xff, sizeof wc->masks.mpls_lse);
 
     if (!eth_type_mpls(flow->dl_type)) {
@@ -1594,14 +1589,12 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
             break;
 
         case OFPACT_SET_IPV4_SRC:
-            memset(&wc->masks.dl_type, 0xff, sizeof wc->masks.dl_type);
             if (flow->dl_type == htons(ETH_TYPE_IP)) {
                 flow->nw_src = ofpact_get_SET_IPV4_SRC(a)->ipv4;
             }
             break;
 
         case OFPACT_SET_IPV4_DST:
-            memset(&wc->masks.dl_type, 0xff, sizeof wc->masks.dl_type);
             if (flow->dl_type == htons(ETH_TYPE_IP)) {
                 flow->nw_dst = ofpact_get_SET_IPV4_DST(a)->ipv4;
             }
@@ -1609,7 +1602,6 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
 
         case OFPACT_SET_IPV4_DSCP:
             /* OpenFlow 1.0 only supports IPv4. */
-            memset(&wc->masks.dl_type, 0xff, sizeof wc->masks.dl_type);
             if (flow->dl_type == htons(ETH_TYPE_IP)) {
                 flow->nw_tos &= ~IP_DSCP_MASK;
                 flow->nw_tos |= ofpact_get_SET_IPV4_DSCP(a)->dscp;
@@ -1617,7 +1609,6 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
             break;
 
         case OFPACT_SET_L4_SRC_PORT:
-            memset(&wc->masks.dl_type, 0xff, sizeof wc->masks.dl_type);
             memset(&wc->masks.nw_proto, 0xff, sizeof wc->masks.nw_proto);
             if (is_ip_any(flow)) {
                 flow->tp_src = htons(ofpact_get_SET_L4_SRC_PORT(a)->port);
@@ -1625,7 +1616,6 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
             break;
 
         case OFPACT_SET_L4_DST_PORT:
-            memset(&wc->masks.dl_type, 0xff, sizeof wc->masks.dl_type);
             memset(&wc->masks.nw_proto, 0xff, sizeof wc->masks.nw_proto);
             if (is_ip_any(flow)) {
                 flow->tp_dst = htons(ofpact_get_SET_L4_DST_PORT(a)->port);
@@ -1687,7 +1677,6 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
             break;
 
         case OFPACT_DEC_TTL:
-            memset(&wc->masks.dl_type, 0xff, sizeof wc->masks.dl_type);
             if (compose_dec_ttl(ctx, ofpact_get_DEC_TTL(a))) {
                 goto out;
             }
@@ -1719,7 +1708,6 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
             break;
 
         case OFPACT_FIN_TIMEOUT:
-            memset(&wc->masks.dl_type, 0xff, sizeof wc->masks.dl_type);
             memset(&wc->masks.nw_proto, 0xff, sizeof wc->masks.nw_proto);
             ctx->xout->has_fin_timeout = true;
             xlate_fin_timeout(ctx, ofpact_get_FIN_TIMEOUT(a));
@@ -1908,6 +1896,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
     flow_wildcards_init_catchall(wc);
     memset(&wc->masks.in_port, 0xff, sizeof wc->masks.in_port);
     memset(&wc->masks.skb_priority, 0xff, sizeof wc->masks.skb_priority);
+    memset(&wc->masks.dl_type, 0xff, sizeof wc->masks.dl_type);
     wc->masks.nw_frag |= FLOW_NW_FRAG_MASK;
 
     if (tnl_port_should_receive(&ctx.xin->flow)) {
