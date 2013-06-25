@@ -209,15 +209,15 @@ Prerequisites section, follow the procedure below to build.
 6. Run "make install" to install the executables and manpages into the
    running system, by default under /usr/local.
 
-7. If you built kernel modules, you may load them with "insmod", e.g.:
+7. If you built kernel modules, you may install and load them, e.g.:
 
-      % insmod datapath/linux/openvswitch.ko
+      % make modules_install
+      % /sbin/modprobe openvswitch 
 
-   You may need to specify a full path to insmod, e.g. /sbin/insmod.
    To verify that the modules have been loaded, run "/sbin/lsmod" and
    check that openvswitch is listed.
 
-   If the "insmod" operation fails, look at the last few kernel log
+   If the "modprobe" operation fails, look at the last few kernel log
    messages (e.g. with "dmesg | tail"):
 
       - The message "openvswitch: exports duplicate symbol
@@ -263,11 +263,6 @@ Prerequisites section, follow the procedure below to build.
    of earlier kernels, do not need this and do not have this parameter. If
    you do not understand what this means or do not know if your driver
    will work, do not set this.
-
-   Once you verify that the kernel modules load properly, you should
-   install them:
-
-      % make modules_install
 
 8. Initialize the configuration database using ovsdb-tool, e.g.:
 
