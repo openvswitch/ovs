@@ -92,6 +92,7 @@ struct datapath {
 /**
  * struct ovs_skb_cb - OVS data in skb CB
  * @flow: The flow associated with this packet.  May be %NULL if no flow.
+ * @pkt_key: The flow information extracted from the packet.  Must be nonnull.
  * @tun_key: Key for the tunnel that encapsulated this packet. NULL if the
  * packet is not being tunneled.
  * @ip_summed: Consistently stores L4 checksumming status across different
@@ -104,6 +105,7 @@ struct datapath {
  */
 struct ovs_skb_cb {
 	struct sw_flow		*flow;
+	struct sw_flow_key	*pkt_key;
 	struct ovs_key_ipv4_tunnel  *tun_key;
 #ifdef NEED_CSUM_NORMALIZE
 	enum csum_type		ip_summed;
