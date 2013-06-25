@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,8 @@
 #include <sys/time.h>
 
 #include "entropy.h"
+#include "hash.h"
+#include "ovs-thread.h"
 #include "timeval.h"
 #include "util.h"
 
@@ -37,21 +39,25 @@
  * cryptographic-quality randomness. */
 
 /* Current random state. */
-static uint32_t seed;
+DEFINE_PER_THREAD_DATA(uint32_t, seed, 0);
 
 static uint32_t random_next(void);
 
 void
 random_init(void)
 {
-    while (!seed) {
+    uint32_t *seedp = seed_get();
+    while (!*seedp) {
         struct timeval tv;
         uint32_t entropy;
+        pthread_t self;
 
         xgettimeofday(&tv);
         get_entropy_or_die(&entropy, 4);
+        self = pthread_self();
 
-        seed = tv.tv_sec ^ tv.tv_usec ^ entropy;
+        *seedp = (tv.tv_sec ^ tv.tv_usec ^ entropy
+                  ^ hash_bytes(&self, sizeof self, 0));
     }
 }
 
@@ -59,7 +65,7 @@ void
 random_set_seed(uint32_t seed_)
 {
     ovs_assert(seed_);
-    seed = seed_;
+    *seed_get() = seed_;
 }
 
 void
@@ -120,9 +126,11 @@ random_range(int max)
 static uint32_t
 random_next(void)
 {
-    seed ^= seed << 13;
-    seed ^= seed >> 17;
-    seed ^= seed << 5;
+    uint32_t *seedp = seed_get_unsafe();
 
-    return seed;
+    *seedp ^= *seedp << 13;
+    *seedp ^= *seedp >> 17;
+    *seedp ^= *seedp << 5;
+
+    return *seedp;
 }
