@@ -256,9 +256,12 @@ tnl_port_send(const struct tnl_port *tnl_port, struct flow *flow,
         wc->masks.nw_tos = 0xff;
         flow->tunnel.ip_tos = flow->nw_tos & IP_DSCP_MASK;
     } else {
-        /* ECN fields are always inherited. */
-        wc->masks.nw_tos |= IP_ECN_MASK;
         flow->tunnel.ip_tos = cfg->tos;
+    }
+
+    /* ECN fields are always inherited. */
+    if (is_ip_any(flow)) {
+        wc->masks.nw_tos |= IP_ECN_MASK;
     }
 
     if ((flow->nw_tos & IP_ECN_MASK) == IP_ECN_CE) {
