@@ -12,8 +12,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License. */
 
-#ifndef OFPROT_DPIF_XLATE_H
-#define OFPROT_DPIF_XLATE_H 1
+#ifndef OFPROTO_DPIF_XLATE_H
+#define OFPROTO_DPIF_XLATE_H 1
 
 #include "flow.h"
 #include "meta-flow.h"

@@ -18,6 +18,7 @@
 #include <stdint.h>
 
 #include "hmapx.h"
+#include "odp-util.h"
 #include "ofproto/ofproto-provider.h"
 #include "ovs-thread.h"
 #include "timer.h"
@@ -28,6 +29,34 @@ union user_action_cookie;
 struct ofproto_dpif;
 struct ofport_dpif;
 struct dpif_backer;
+
+/* Ofproto-dpif -- DPIF based ofproto implementation.
+ *
+ * Ofproto-dpif provides an ofproto implementation for those platforms which
+ * implement the netdev and dpif interface defined in netdev.h and dpif.h.  The
+ * most important of which is the Linux Kernel Module (dpif-linux), but
+ * alternatives are supported such as a userspace only implementation
+ * (dpif-netdev), and a dummy implementation used for unit testing.
+ *
+ * Ofproto-dpif is divided into three major chunks.
+ *
+ * - ofproto-dpif.c
+ *   The main ofproto-dpif module is responsible for implementing the
+ *   provider interface, installing and removing datapath flows, maintaining
+ *   packet statistics, running protocols (BFD, LACP, STP, etc), and
+ *   configuring relevant submodules.
+ *
+ * - ofproto-dpif-upcall.c
+ *   Ofproto-dpif-upcall is responsible for retrieving upcalls from the kernel,
+ *   processing miss upcalls, and handing more complex ones up to the main
+ *   ofproto-dpif module.  Miss upcall processing boils down to figuring out
+ *   what each packet's actions are, executing them (i.e. asking the kernel to
+ *   forward it), and handing it up to ofproto-dpif to decided whether or not
+ *   to install a kernel flow.
+ *
+ * - ofproto-dpif-xlate.c
+ *   Ofproto-dpif-xlate is responsible for translating translating OpenFlow
+ *   actions into datapath actions. */
 
 struct rule_dpif {
     struct rule up;

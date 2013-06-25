@@ -30,6 +30,8 @@ ofproto_libofproto_a_SOURCES = \
 	ofproto/ofproto-dpif-mirror.h \
 	ofproto/ofproto-dpif-sflow.c \
 	ofproto/ofproto-dpif-sflow.h \
+	ofproto/ofproto-dpif-upcall.c \
+	ofproto/ofproto-dpif-upcall.h \
 	ofproto/ofproto-dpif-xlate.c \
 	ofproto/ofproto-dpif-xlate.h \
 	ofproto/ofproto-provider.h \
