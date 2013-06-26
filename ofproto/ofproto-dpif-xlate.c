@@ -1839,6 +1839,22 @@ xlate_out_copy(struct xlate_out *dst, const struct xlate_out *src)
                src->odp_actions.size);
 }
 
+static bool
+actions_output_to_local_port(const struct xlate_ctx *ctx)
+{
+    odp_port_t local_odp_port = ofp_port_to_odp_port(ctx->ofproto, OFPP_LOCAL);
+    const struct nlattr *a;
+    unsigned int left;
+
+    NL_ATTR_FOR_EACH_UNSAFE (a, left, ctx->xout->odp_actions.data,
+                             ctx->xout->odp_actions.size) {
+        if (nl_attr_type(a) == OVS_ACTION_ATTR_OUTPUT
+            && nl_attr_get_odp_port(a) == local_odp_port) {
+            return true;
+        }
+    }
+    return false;
+}
 
 /* Translates the 'ofpacts_len' bytes of "struct ofpacts" starting at 'ofpacts'
  * into datapath actions in 'odp_actions', using 'ctx'. */
@@ -1972,7 +1988,6 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
     } else {
         static struct vlog_rate_limit trace_rl = VLOG_RATE_LIMIT_INIT(1, 1);
         size_t sample_actions_len;
-        odp_port_t local_odp_port;
 
         if (flow->in_port.ofp_port
             != vsp_realdev_to_vlandev(ctx.ofproto, flow->in_port.ofp_port,
@@ -2009,11 +2024,9 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
             }
         }
 
-        local_odp_port = ofp_port_to_odp_port(ctx.ofproto, OFPP_LOCAL);
         if (connmgr_has_in_band(ctx.ofproto->up.connmgr)
-            && !in_band_rule_check(flow, local_odp_port,
-                                   ctx.xout->odp_actions.data,
-                                   ctx.xout->odp_actions.size)) {
+            && in_band_must_output_to_local_port(flow)
+            && !actions_output_to_local_port(&ctx)) {
             compose_output_action(&ctx, OFPP_LOCAL);
         }
         if (ctx.ofproto->has_mirrors) {

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -222,31 +222,16 @@ refresh_local(struct in_band *ib)
     return true;
 }
 
-/* Returns true if the rule that would match 'flow' with 'actions' is
- * allowed to be set up in the datapath. */
+/* Returns true if packets in 'flow' should be directed to the local port.
+ * (This keeps the flow table from preventing DHCP replies from being seen by
+ * the local port.) */
 bool
-in_band_rule_check(const struct flow *flow, odp_port_t local_odp_port,
-                   const struct nlattr *actions, size_t actions_len)
+in_band_must_output_to_local_port(const struct flow *flow)
 {
-    /* Don't allow flows that would prevent DHCP replies from being seen
-     * by the local port. */
-    if (flow->dl_type == htons(ETH_TYPE_IP)
+    return (flow->dl_type == htons(ETH_TYPE_IP)
             && flow->nw_proto == IPPROTO_UDP
             && flow->tp_src == htons(DHCP_SERVER_PORT)
-            && flow->tp_dst == htons(DHCP_CLIENT_PORT)) {
-        const struct nlattr *a;
-        unsigned int left;
-
-        NL_ATTR_FOR_EACH_UNSAFE (a, left, actions, actions_len) {
-            if (nl_attr_type(a) == OVS_ACTION_ATTR_OUTPUT
-                && nl_attr_get_odp_port(a) == local_odp_port) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    return true;
+            && flow->tp_dst == htons(DHCP_CLIENT_PORT));
 }
 
 static void
