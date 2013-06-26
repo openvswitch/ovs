@@ -198,7 +198,8 @@ static bool rule_is_modifiable(const struct rule *);
 static enum ofperr add_flow(struct ofproto *, struct ofconn *,
                             const struct ofputil_flow_mod *,
                             const struct ofp_header *);
-static void delete_flow__(struct rule *, struct ofopgroup *);
+static void delete_flow__(struct rule *, struct ofopgroup *,
+                          enum ofp_flow_removed_reason);
 static bool handle_openflow(struct ofconn *, const struct ofpbuf *);
 static enum ofperr handle_flow_mod__(struct ofproto *, struct ofconn *,
                                      const struct ofputil_flow_mod *,
@@ -3346,7 +3347,7 @@ add_flow(struct ofproto *ofproto, struct ofconn *ofconn,
             op->group->n_running--;
             ofoperation_destroy(rule->pending);
         } else if (evict) {
-            delete_flow__(evict, group);
+            delete_flow__(evict, group, OFPRR_EVICTION);
         }
         ofopgroup_submit(group);
     }
@@ -3483,13 +3484,14 @@ modify_flow_strict(struct ofproto *ofproto, struct ofconn *ofconn,
 /* OFPFC_DELETE implementation. */
 
 static void
-delete_flow__(struct rule *rule, struct ofopgroup *group)
+delete_flow__(struct rule *rule, struct ofopgroup *group,
+              enum ofp_flow_removed_reason reason)
 {
     struct ofproto *ofproto = rule->ofproto;
 
-    ofproto_rule_send_removed(rule, OFPRR_DELETE);
+    ofproto_rule_send_removed(rule, reason);
 
-    ofoperation_create(group, rule, OFOPERATION_DELETE, OFPRR_DELETE);
+    ofoperation_create(group, rule, OFOPERATION_DELETE, reason);
     oftable_remove_rule(rule);
     ofproto->ofproto_class->rule_destruct(rule);
 }
@@ -3499,14 +3501,15 @@ delete_flow__(struct rule *rule, struct ofopgroup *group)
  * Returns 0 on success, otherwise an OpenFlow error code. */
 static enum ofperr
 delete_flows__(struct ofproto *ofproto, struct ofconn *ofconn,
-               const struct ofp_header *request, struct list *rules)
+               const struct ofp_header *request, struct list *rules,
+               enum ofp_flow_removed_reason reason)
 {
     struct rule *rule, *next;
     struct ofopgroup *group;
 
     group = ofopgroup_create(ofproto, ofconn, request, UINT32_MAX);
     LIST_FOR_EACH_SAFE (rule, next, ofproto_node, rules) {
-        delete_flow__(rule, group);
+        delete_flow__(rule, group, reason);
     }
     ofopgroup_submit(group);
 
@@ -3527,7 +3530,7 @@ delete_flows_loose(struct ofproto *ofproto, struct ofconn *ofconn,
                                 fm->out_port, &rules);
     return (error ? error
             : !list_is_empty(&rules) ? delete_flows__(ofproto, ofconn, request,
-                                                      &rules)
+                                                      &rules, OFPRR_DELETE)
             : 0);
 }
 
@@ -3545,7 +3548,8 @@ delete_flow_strict(struct ofproto *ofproto, struct ofconn *ofconn,
                                  fm->out_port, &rules);
     return (error ? error
             : list_is_singleton(&rules) ? delete_flows__(ofproto, ofconn,
-                                                         request, &rules)
+                                                         request, &rules,
+                                                         OFPRR_DELETE)
             : 0);
 }
 
