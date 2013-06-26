@@ -816,11 +816,8 @@ bridge_configure_flow_miss_model(const char *opt)
     if (opt) {
         if (strcmp(opt, "with-facets")) {
             model = OFPROTO_HANDLE_MISS_WITH_FACETS;
-            VLOG_INFO("Handling all flow misses by creating facets.\n");
-        }
-        if (strcmp(opt, "without-facets")) {
+        } else if (strcmp(opt, "without-facets")) {
             model = OFPROTO_HANDLE_MISS_WITHOUT_FACETS;
-            VLOG_INFO("Handling all flow misses without creating facets.\n");
         }
     }
 
