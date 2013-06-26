@@ -1558,6 +1558,7 @@ int ovs_match_from_nlattrs(struct sw_flow_match *match,
 		if ((mask_attrs & 1ULL << OVS_KEY_ATTR_ENCAP) && encap_valid) {
 			__be16 eth_type = 0;
 
+			mask_attrs &= ~(1ULL << OVS_KEY_ATTR_ENCAP);
 			if (a[OVS_KEY_ATTR_ETHERTYPE])
 				eth_type = nla_get_be16(a[OVS_KEY_ATTR_ETHERTYPE]);
 			if (eth_type == htons(0xffff)) {
