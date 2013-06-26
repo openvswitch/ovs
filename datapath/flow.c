@@ -1327,8 +1327,9 @@ static int ovs_key_from_nlattrs(struct sw_flow_match *match,  u64 attrs,
 		__be16 tci;
 
 		tci = nla_get_be16(a[OVS_KEY_ATTR_VLAN]);
-		if (!is_mask && (tci & htons(VLAN_TAG_PRESENT)))
-			return -EINVAL;
+		if (!is_mask)
+			if (!(tci & htons(VLAN_TAG_PRESENT)))
+				return -EINVAL;
 
 		SW_FLOW_KEY_PUT(match, eth.tci, tci, is_mask);
 		attrs &= ~(1ULL << OVS_KEY_ATTR_VLAN);
