@@ -238,6 +238,10 @@ struct rule {
  * ofproto-dpif implementation */
 extern unsigned flow_eviction_threshold;
 
+/* Determines which model to use for handling misses in the ofproto-dpif
+ * implementation */
+extern enum ofproto_flow_miss_model flow_miss_model;
+
 static inline struct rule *
 rule_from_cls_rule(const struct cls_rule *cls_rule)
 {

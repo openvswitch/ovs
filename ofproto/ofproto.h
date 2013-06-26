@@ -216,6 +216,13 @@ int ofproto_port_dump_done(struct ofproto_port_dump *);
 #define OFPROTO_FLOW_EVICTION_THRESHOLD_DEFAULT  2500
 #define OFPROTO_FLOW_EVICTION_THRESHOLD_MIN 100
 
+/* How flow misses should be handled in ofproto-dpif */
+enum ofproto_flow_miss_model {
+    OFPROTO_HANDLE_MISS_AUTO,           /* Based on flow eviction threshold. */
+    OFPROTO_HANDLE_MISS_WITH_FACETS,    /* Always create facets. */
+    OFPROTO_HANDLE_MISS_WITHOUT_FACETS  /* Always handle without facets.*/
+};
+
 const char *ofproto_port_open_type(const char *datapath_type,
                                    const char *port_type);
 int ofproto_port_add(struct ofproto *, struct netdev *, ofp_port_t *ofp_portp);
@@ -237,6 +244,7 @@ void ofproto_set_extra_in_band_remotes(struct ofproto *,
                                        const struct sockaddr_in *, size_t n);
 void ofproto_set_in_band_queue(struct ofproto *, int queue_id);
 void ofproto_set_flow_eviction_threshold(unsigned threshold);
+void ofproto_set_flow_miss_model(unsigned model);
 void ofproto_set_forward_bpdu(struct ofproto *, bool forward_bpdu);
 void ofproto_set_mac_table_config(struct ofproto *, unsigned idle_time,
                                   size_t max_entries);

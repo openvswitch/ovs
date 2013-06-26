@@ -3361,6 +3361,15 @@ flow_miss_should_make_facet(struct flow_miss *miss, struct flow_wildcards *wc)
     struct dpif_backer *backer = miss->ofproto->backer;
     uint32_t hash;
 
+    switch (flow_miss_model) {
+    case OFPROTO_HANDLE_MISS_AUTO:
+        break;
+    case OFPROTO_HANDLE_MISS_WITH_FACETS:
+        return true;
+    case OFPROTO_HANDLE_MISS_WITHOUT_FACETS:
+        return false;
+    }
+
     if (!backer->governor) {
         size_t n_subfacets;
 

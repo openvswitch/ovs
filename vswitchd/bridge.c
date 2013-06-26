@@ -196,6 +196,7 @@ static size_t bridge_get_controllers(const struct bridge *br,
 static void bridge_add_del_ports(struct bridge *,
                                  const unsigned long int *splinter_vlans);
 static void bridge_refresh_ofp_port(struct bridge *);
+static void bridge_configure_flow_miss_model(const char *opt);
 static void bridge_configure_datapath_id(struct bridge *);
 static void bridge_configure_netflow(struct bridge *);
 static void bridge_configure_forward_bpdu(struct bridge *);
@@ -498,6 +499,9 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
     ofproto_set_flow_eviction_threshold(
         smap_get_int(&ovs_cfg->other_config, "flow-eviction-threshold",
                      OFPROTO_FLOW_EVICTION_THRESHOLD_DEFAULT));
+
+    bridge_configure_flow_miss_model(smap_get(&ovs_cfg->other_config,
+                                              "force-miss-model"));
 
     /* Destroy "struct bridge"s, "struct port"s, and "struct iface"s according
      * to 'ovs_cfg' while update the "if_cfg_queue", with only very minimal
@@ -802,6 +806,25 @@ port_configure(struct port *port)
     free(s.slaves);
     free(s.trunks);
     free(s.lacp_slaves);
+}
+
+static void
+bridge_configure_flow_miss_model(const char *opt)
+{
+    enum ofproto_flow_miss_model model = OFPROTO_HANDLE_MISS_AUTO;
+
+    if (opt) {
+        if (strcmp(opt, "with-facets")) {
+            model = OFPROTO_HANDLE_MISS_WITH_FACETS;
+            VLOG_INFO("Handling all flow misses by creating facets.\n");
+        }
+        if (strcmp(opt, "without-facets")) {
+            model = OFPROTO_HANDLE_MISS_WITHOUT_FACETS;
+            VLOG_INFO("Handling all flow misses without creating facets.\n");
+        }
+    }
+
+    ofproto_set_flow_miss_model(model);
 }
 
 /* Pick local port hardware address and datapath ID for 'br'. */
