@@ -113,7 +113,7 @@ multipath_execute(const struct ofpact_multipath *mp, struct flow *flow,
     uint16_t link = multipath_algorithm(hash, mp->algorithm,
                                         mp->max_link + 1, mp->arg);
 
-    flow_mask_hash_fields(wc, mp->fields);
+    flow_mask_hash_fields(flow, wc, mp->fields);
     nxm_reg_load(&mp->dst, link, flow);
 }
 
