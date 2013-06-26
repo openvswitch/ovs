@@ -286,10 +286,10 @@ any managers specified in the database itself, and to use the SSL
 configuration in the database:
 
       % ovsdb-server --remote=punix:/usr/local/var/run/openvswitch/db.sock \
-                     --remote=db:Open_vSwitch,manager_options \
-                     --private-key=db:SSL,private_key \
-                     --certificate=db:SSL,certificate \
-                     --bootstrap-ca-cert=db:SSL,ca_cert \
+                     --remote=db:Open_vSwitch,Open_vSwitch,manager_options \
+                     --private-key=db:Open_vSwitch,SSL,private_key \
+                     --certificate=db:Open_vSwitch,SSL,certificate \
+                     --bootstrap-ca-cert=db:Open_vSwitch,SSL,ca_cert \
                      --pidfile --detach
 
 (If you built Open vSwitch without SSL support, then omit
