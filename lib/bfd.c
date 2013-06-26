@@ -782,7 +782,7 @@ generate_discriminator(void)
     while (!disc) {
         struct bfd *bfd;
 
-        /* 'disc' is by defnition random, so there's no reason to waste time
+        /* 'disc' is by definition random, so there's no reason to waste time
          * hashing it. */
         disc = random_uint32();
         HMAP_FOR_EACH_IN_BUCKET (bfd, node, disc, &all_bfds) {
