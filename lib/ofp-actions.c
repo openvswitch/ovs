@@ -1289,10 +1289,16 @@ ofpact_check__(const struct ofpact *a, struct flow *flow, ofp_port_t max_ports)
 
     case OFPACT_CLEAR_ACTIONS:
     case OFPACT_WRITE_METADATA:
-    case OFPACT_METER:
     case OFPACT_GOTO_TABLE:
         return 0;
 
+    case OFPACT_METER: {
+        uint32_t mid = ofpact_get_METER(a)->meter_id;
+        if (mid == 0 || mid > OFPM13_MAX) {
+            return OFPERR_OFPMMFC_INVALID_METER;
+        }
+        return 0;
+    }
     default:
         NOT_REACHED();
     }

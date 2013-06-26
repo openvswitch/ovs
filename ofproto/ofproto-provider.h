@@ -35,6 +35,7 @@ struct match;
 struct ofpact;
 struct ofputil_flow_mod;
 struct bfd_cfg;
+struct meter;
 
 /* An OpenFlow switch.
  *
@@ -75,6 +76,13 @@ struct ofproto {
     /* Optimisation for flow expiry.
      * These flows should all be present in tables. */
     struct list expirable;      /* Expirable 'struct rule"s in all tables. */
+
+    /* Meter table.
+     * OpenFlow meters start at 1.  To avoid confusion we leave the first
+     * pointer in the array un-used, and index directly with the OpenFlow
+     * meter_id. */
+    struct ofputil_meter_features meter_features;
+    struct meter **meters; /* 'meter_features.max_meter' + 1 pointers. */
 
     /* OpenFlow connections. */
     struct connmgr *connmgr;
@@ -223,6 +231,9 @@ struct rule {
 
     struct ofpact *ofpacts;      /* Sequence of "struct ofpacts". */
     unsigned int ofpacts_len;    /* Size of 'ofpacts', in bytes. */
+
+    uint32_t meter_id;           /* Non-zero OF meter_id, or zero. */
+    struct list meter_list_node; /* In owning meter's 'rules' list. */
 
     /* Flow monitors. */
     enum nx_flow_monitor_flags monitor_flags;
@@ -1321,10 +1332,52 @@ struct ofproto_class {
      * If 'realdev_ofp_port' is zero, then this function deconfigures 'ofport'
      * as a VLAN splinter port.
      *
-     * This function should be NULL if a an implementation does not support
-     * it. */
+     * This function should be NULL if an implementation does not support it.
+     */
     int (*set_realdev)(struct ofport *ofport,
                        ofp_port_t realdev_ofp_port, int vid);
+
+/* ## ------------------------ ## */
+/* ## OpenFlow meter functions ## */
+/* ## ------------------------ ## */
+
+    /* These functions should be NULL if an implementation does not support
+     * them.  They must be all null or all non-null.. */
+
+    /* Initializes 'features' to describe the metering features supported by
+     * 'ofproto'. */
+    void (*meter_get_features)(const struct ofproto *ofproto,
+                               struct ofputil_meter_features *features);
+
+    /* If '*id' is UINT32_MAX, adds a new meter with the given 'config'.  On
+     * success the function must store a provider meter ID other than
+     * UINT32_MAX in '*id'.  All further references to the meter will be made
+     * with the returned provider meter id rather than the OpenFlow meter id.
+     * The caller does not try to interpret the provider meter id, giving the
+     * implementation the freedom to either use the OpenFlow meter_id value
+     * provided in the meter configuration, or any other value suitable for the
+     * implementation.
+     *
+     * If '*id' is a value other than UINT32_MAX, modifies the existing meter
+     * with that meter provider ID to have configuration 'config'.  On failure,
+     * the existing meter configuration is left intact.  Regardless of success,
+     * any change to '*id' updates the provider meter id used for this
+     * meter. */
+    enum ofperr (*meter_set)(struct ofproto *ofproto, ofproto_meter_id *id,
+                             const struct ofputil_meter_config *config);
+
+    /* Gets the meter and meter band packet and byte counts for maximum of
+     * 'stats->n_bands' bands for the meter with provider ID 'id' within
+     * 'ofproto'.  The caller fills in the other stats values.  The band stats
+     * are copied to memory at 'stats->bands' provided by the caller.  The
+     * number of returned band stats is returned in 'stats->n_bands'. */
+    enum ofperr (*meter_get)(const struct ofproto *ofproto,
+                             ofproto_meter_id id,
+                             struct ofputil_meter_stats *stats);
+
+    /* Deletes a meter, making the 'ofproto_meter_id' invalid for any
+     * further calls. */
+    void (*meter_del)(struct ofproto *, ofproto_meter_id);
 };
 
 extern const struct ofproto_class ofproto_dpif_class;

@@ -6830,4 +6830,8 @@ const struct ofproto_class ofproto_dpif_class = {
     forward_bpdu_changed,
     set_mac_table_config,
     set_realdev,
+    NULL,                       /* meter_get_features */
+    NULL,                       /* meter_set */
+    NULL,                       /* meter_get */
+    NULL,                       /* meter_del */
 };
