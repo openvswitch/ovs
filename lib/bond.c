@@ -1375,12 +1375,12 @@ choose_output_slave(const struct bond *bond, const struct flow *flow,
             return NULL;
         }
         if (wc) {
-            flow_mask_hash_fields(wc, NX_HASH_FIELDS_SYMMETRIC_L4);
+            flow_mask_hash_fields(flow, wc, NX_HASH_FIELDS_SYMMETRIC_L4);
         }
         /* Fall Through. */
     case BM_SLB:
         if (wc) {
-            flow_mask_hash_fields(wc, NX_HASH_FIELDS_ETH_SRC);
+            flow_mask_hash_fields(flow, wc, NX_HASH_FIELDS_ETH_SRC);
         }
         e = lookup_bond_entry(bond, flow, vlan);
         if (!e->slave || !e->slave->enabled) {

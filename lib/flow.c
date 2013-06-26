@@ -777,7 +777,8 @@ flow_hash_symmetric_l4(const struct flow *flow, uint32_t basis)
 
 /* Masks the fields in 'wc' that are used by the flow hash 'fields'. */
 void
-flow_mask_hash_fields(struct flow_wildcards *wc, enum nx_hash_fields fields)
+flow_mask_hash_fields(const struct flow *flow, struct flow_wildcards *wc,
+                      enum nx_hash_fields fields)
 {
     switch (fields) {
     case NX_HASH_FIELDS_ETH_SRC:
@@ -787,11 +788,18 @@ flow_mask_hash_fields(struct flow_wildcards *wc, enum nx_hash_fields fields)
     case NX_HASH_FIELDS_SYMMETRIC_L4:
         memset(&wc->masks.dl_src, 0xff, sizeof wc->masks.dl_src);
         memset(&wc->masks.dl_dst, 0xff, sizeof wc->masks.dl_dst);
-        memset(&wc->masks.nw_proto, 0xff, sizeof wc->masks.nw_proto);
-        memset(&wc->masks.nw_src, 0xff, sizeof wc->masks.nw_src);
-        memset(&wc->masks.nw_dst, 0xff, sizeof wc->masks.nw_dst);
-        memset(&wc->masks.tp_src, 0xff, sizeof wc->masks.tp_src);
-        memset(&wc->masks.tp_dst, 0xff, sizeof wc->masks.tp_dst);
+        if (flow->dl_type == htons(ETH_TYPE_IP)) {
+            memset(&wc->masks.nw_src, 0xff, sizeof wc->masks.nw_src);
+            memset(&wc->masks.nw_dst, 0xff, sizeof wc->masks.nw_dst);
+        } else {
+            memset(&wc->masks.ipv6_src, 0xff, sizeof wc->masks.ipv6_src);
+            memset(&wc->masks.ipv6_dst, 0xff, sizeof wc->masks.ipv6_dst);
+        }
+        if (is_ip_any(flow)) {
+            memset(&wc->masks.nw_proto, 0xff, sizeof wc->masks.nw_proto);
+            memset(&wc->masks.tp_src, 0xff, sizeof wc->masks.tp_src);
+            memset(&wc->masks.tp_dst, 0xff, sizeof wc->masks.tp_dst);
+        }
         wc->masks.vlan_tci |= htons(VLAN_VID_MASK | VLAN_CFI);
         break;
 

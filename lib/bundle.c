@@ -60,7 +60,7 @@ execute_hrw(const struct ofpact_bundle *bundle,
     int best, i;
 
     if (bundle->n_slaves > 1) {
-        flow_mask_hash_fields(wc, bundle->fields);
+        flow_mask_hash_fields(flow, wc, bundle->fields);
     }
 
     flow_hash = flow_hash_fields(flow, bundle->fields, bundle->basis);
