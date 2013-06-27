@@ -548,7 +548,6 @@ xlate_normal(struct xlate_ctx *ctx)
 
     ctx->xout->has_normal = true;
 
-    /* Check the dl_type, since we may check for gratuituous ARP. */
     memset(&wc->masks.dl_src, 0xff, sizeof wc->masks.dl_src);
     memset(&wc->masks.dl_dst, 0xff, sizeof wc->masks.dl_dst);
     wc->masks.vlan_tci |= htons(VLAN_VID_MASK | VLAN_CFI);
