@@ -646,19 +646,10 @@ enum {
 #undef DEFINE_INST
 };
 
-
-static inline bool
-ofpact_is_instruction(const struct ofpact *a)
-{
-    /* XXX Write-Actions */
-    return a->type == OFPACT_CLEAR_ACTIONS
-        || a->type == OFPACT_METER
-        || a->type == OFPACT_WRITE_METADATA
-        || a->type == OFPACT_GOTO_TABLE;
-}
-
 const char *ovs_instruction_name_from_type(enum ovs_instruction_type type);
 int ovs_instruction_type_from_name(const char *name);
+enum ovs_instruction_type ovs_instruction_type_from_ofpact_type(
+    enum ofpact_type);
 
 void ofpact_set_field_init(struct ofpact_reg_load *load,
                            const struct mf_field *mf, const void *src);

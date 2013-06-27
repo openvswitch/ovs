@@ -931,6 +931,58 @@ ovs_instruction_type_from_name(const char *name)
     return -1;
 }
 
+enum ovs_instruction_type
+ovs_instruction_type_from_ofpact_type(enum ofpact_type type)
+{
+    switch (type) {
+    case OFPACT_METER:
+        return OVSINST_OFPIT13_METER;
+    case OFPACT_CLEAR_ACTIONS:
+        return OVSINST_OFPIT11_CLEAR_ACTIONS;
+    case OFPACT_WRITE_METADATA:
+        return OVSINST_OFPIT11_WRITE_METADATA;
+    case OFPACT_GOTO_TABLE:
+        return OVSINST_OFPIT11_GOTO_TABLE;
+    case OFPACT_OUTPUT:
+    case OFPACT_CONTROLLER:
+    case OFPACT_ENQUEUE:
+    case OFPACT_OUTPUT_REG:
+    case OFPACT_BUNDLE:
+    case OFPACT_SET_VLAN_VID:
+    case OFPACT_SET_VLAN_PCP:
+    case OFPACT_STRIP_VLAN:
+    case OFPACT_PUSH_VLAN:
+    case OFPACT_SET_ETH_SRC:
+    case OFPACT_SET_ETH_DST:
+    case OFPACT_SET_IPV4_SRC:
+    case OFPACT_SET_IPV4_DST:
+    case OFPACT_SET_IPV4_DSCP:
+    case OFPACT_SET_L4_SRC_PORT:
+    case OFPACT_SET_L4_DST_PORT:
+    case OFPACT_REG_MOVE:
+    case OFPACT_REG_LOAD:
+    case OFPACT_STACK_PUSH:
+    case OFPACT_STACK_POP:
+    case OFPACT_DEC_TTL:
+    case OFPACT_SET_MPLS_TTL:
+    case OFPACT_DEC_MPLS_TTL:
+    case OFPACT_PUSH_MPLS:
+    case OFPACT_POP_MPLS:
+    case OFPACT_SET_TUNNEL:
+    case OFPACT_SET_QUEUE:
+    case OFPACT_POP_QUEUE:
+    case OFPACT_FIN_TIMEOUT:
+    case OFPACT_RESUBMIT:
+    case OFPACT_LEARN:
+    case OFPACT_MULTIPATH:
+    case OFPACT_NOTE:
+    case OFPACT_EXIT:
+    case OFPACT_SAMPLE:
+    default:
+        return OVSINST_OFPIT11_APPLY_ACTIONS;
+    }
+}
+
 static inline struct ofp11_instruction *
 instruction_next(const struct ofp11_instruction *inst)
 {
@@ -1281,18 +1333,7 @@ ofpacts_verify(const struct ofpact ofpacts[], size_t ofpacts_len)
     OFPACT_FOR_EACH (a, ofpacts, ofpacts_len) {
         enum ovs_instruction_type next;
 
-        if (a->type == OFPACT_METER) {
-            next = OVSINST_OFPIT13_METER;
-        } else if (a->type == OFPACT_CLEAR_ACTIONS) {
-            next = OVSINST_OFPIT11_CLEAR_ACTIONS;
-        } else if (a->type == OFPACT_WRITE_METADATA) {
-            next = OVSINST_OFPIT11_WRITE_METADATA;
-        } else if (a->type == OFPACT_GOTO_TABLE) {
-            next = OVSINST_OFPIT11_GOTO_TABLE;
-        } else {
-            next = OVSINST_OFPIT11_APPLY_ACTIONS;
-        }
-
+        next = ovs_instruction_type_from_ofpact_type(a->type);
         if (inst != OVSINST_OFPIT11_APPLY_ACTIONS && next <= inst) {
             const char *name = ovs_instruction_name_from_type(inst);
             const char *next_name = ovs_instruction_name_from_type(next);
@@ -1892,17 +1933,20 @@ ofpacts_put_openflow11_instructions(const struct ofpact ofpacts[],
     const struct ofpact *a;
 
     OFPACT_FOR_EACH (a, ofpacts, ofpacts_len) {
-        /* XXX Write-Actions */
-
-        if (a->type == OFPACT_CLEAR_ACTIONS) {
+        switch (ovs_instruction_type_from_ofpact_type(a->type)) {
+        case OVSINST_OFPIT11_CLEAR_ACTIONS:
             instruction_put_OFPIT11_CLEAR_ACTIONS(openflow);
-        } else if (a->type == OFPACT_GOTO_TABLE) {
-            struct ofp11_instruction_goto_table *oigt;
+            break;
 
+        case OVSINST_OFPIT11_GOTO_TABLE: {
+            struct ofp11_instruction_goto_table *oigt;
             oigt = instruction_put_OFPIT11_GOTO_TABLE(openflow);
             oigt->table_id = ofpact_get_GOTO_TABLE(a)->table_id;
             memset(oigt->pad, 0, sizeof oigt->pad);
-        } else if (a->type == OFPACT_WRITE_METADATA) {
+            break;
+        }
+
+        case OVSINST_OFPIT11_WRITE_METADATA: {
             const struct ofpact_metadata *om;
             struct ofp11_instruction_write_metadata *oiwm;
 
@@ -1910,15 +1954,20 @@ ofpacts_put_openflow11_instructions(const struct ofpact ofpacts[],
             oiwm = instruction_put_OFPIT11_WRITE_METADATA(openflow);
             oiwm->metadata = om->metadata;
             oiwm->metadata_mask = om->mask;
-        } else if (a->type == OFPACT_METER) {
+            break;
+        }
+
+        case OVSINST_OFPIT13_METER: {
             const struct ofpact_meter *om;
             struct ofp13_instruction_meter *oim;
 
             om = ofpact_get_METER(a);
             oim = instruction_put_OFPIT13_METER(openflow);
             oim->meter_id = htonl(om->meter_id);
-        } else if (!ofpact_is_instruction(a)) {
-            /* Apply-actions */
+            break;
+        }
+
+        case OVSINST_OFPIT11_APPLY_ACTIONS: {
             const size_t ofs = openflow->size;
             const size_t ofpacts_len_left =
                 (uint8_t*)ofpact_end(ofpacts, ofpacts_len) - (uint8_t*)a;
@@ -1927,7 +1976,8 @@ ofpacts_put_openflow11_instructions(const struct ofpact ofpacts[],
 
             instruction_put_OFPIT11_APPLY_ACTIONS(openflow);
             OFPACT_FOR_EACH(action, a, ofpacts_len_left) {
-                if (ofpact_is_instruction(action)) {
+                if (ovs_instruction_type_from_ofpact_type(action->type)
+                    != OVSINST_OFPIT11_APPLY_ACTIONS) {
                     break;
                 }
                 ofpact_to_openflow11(action, openflow);
@@ -1935,6 +1985,11 @@ ofpacts_put_openflow11_instructions(const struct ofpact ofpacts[],
             }
             ofpacts_update_instruction_actions(openflow, ofs);
             a = processed;
+            break;
+        }
+
+        case OVSINST_OFPIT11_WRITE_ACTIONS:
+            NOT_REACHED();
         }
     }
 }
