@@ -2930,8 +2930,8 @@ handle_table_stats_request(struct ofconn *ofconn,
         ots[i].apply_actions = htonl(OFPAT11_OUTPUT);
         ots[i].write_setfields = htonll(OFPXMT13_MASK);
         ots[i].apply_setfields = htonll(OFPXMT13_MASK);
-        ots[i].metadata_match = htonll(UINT64_MAX);
-        ots[i].metadata_write = htonll(UINT64_MAX);
+        ots[i].metadata_match = OVS_BE64_MAX;
+        ots[i].metadata_write = OVS_BE64_MAX;
         ots[i].instructions = htonl(OFPIT11_ALL);
         ots[i].config = htonl(OFPTC11_TABLE_MISS_MASK);
         ots[i].max_entries = htonl(1000000); /* An arbitrary big number. */
@@ -3278,7 +3278,7 @@ collect_rules_loose(struct ofproto *ofproto,
         goto exit;
     }
 
-    if (criteria->cookie_mask == htonll(UINT64_MAX)) {
+    if (criteria->cookie_mask == OVS_BE64_MAX) {
         struct rule *rule;
 
         HINDEX_FOR_EACH_WITH_HASH (rule, cookie_node,
@@ -3339,7 +3339,7 @@ collect_rules_strict(struct ofproto *ofproto,
         goto exit;
     }
 
-    if (criteria->cookie_mask == htonll(UINT64_MAX)) {
+    if (criteria->cookie_mask == OVS_BE64_MAX) {
         struct rule *rule;
 
         HINDEX_FOR_EACH_WITH_HASH (rule, cookie_node,
@@ -3982,7 +3982,7 @@ modify_flows__(struct ofproto *ofproto, struct ofconn *ofconn,
 
         op = ofoperation_create(group, rule, type, 0);
 
-        if (fm->modify_cookie && fm->new_cookie != htonll(UINT64_MAX)) {
+        if (fm->modify_cookie && fm->new_cookie != OVS_BE64_MAX) {
             ofproto_rule_change_cookie(ofproto, rule, fm->new_cookie);
         }
         if (type == OFOPERATION_REPLACE) {
@@ -4029,7 +4029,7 @@ modify_flows_add(struct ofproto *ofproto, struct ofconn *ofconn,
                  struct ofputil_flow_mod *fm, const struct ofp_header *request)
     OVS_REQUIRES(ofproto_mutex)
 {
-    if (fm->cookie_mask != htonll(0) || fm->new_cookie == htonll(UINT64_MAX)) {
+    if (fm->cookie_mask != htonll(0) || fm->new_cookie == OVS_BE64_MAX) {
         return 0;
     }
     return add_flow(ofproto, ofconn, fm, request);

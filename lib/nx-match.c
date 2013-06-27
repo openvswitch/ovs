@@ -183,7 +183,7 @@ nx_pull_raw(const uint8_t *p, unsigned int match_len, bool strict,
                 if (NXM_HASMASK(header)) {
                     memcpy(cookie_mask, p + 4 + width, width);
                 } else {
-                    *cookie_mask = htonll(UINT64_MAX);
+                    *cookie_mask = OVS_BE64_MAX;
                 }
                 error = 0;
             }
@@ -361,7 +361,7 @@ nxm_put_16m(struct ofpbuf *b, uint32_t header, ovs_be16 value, ovs_be16 mask)
     case 0:
         break;
 
-    case CONSTANT_HTONS(UINT16_MAX):
+    case OVS_BE16_MAX:
         nxm_put_16(b, header, value);
         break;
 
@@ -393,7 +393,7 @@ nxm_put_32m(struct ofpbuf *b, uint32_t header, ovs_be32 value, ovs_be32 mask)
     case 0:
         break;
 
-    case CONSTANT_HTONL(UINT32_MAX):
+    case OVS_BE32_MAX:
         nxm_put_32(b, header, value);
         break;
 
@@ -425,7 +425,7 @@ nxm_put_64m(struct ofpbuf *b, uint32_t header, ovs_be64 value, ovs_be64 mask)
     case 0:
         break;
 
-    case CONSTANT_HTONLL(UINT64_MAX):
+    case OVS_BE64_MAX:
         nxm_put_64(b, header, value);
         break;
 

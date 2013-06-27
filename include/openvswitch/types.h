@@ -38,6 +38,10 @@
 typedef __be16 ovs_be16;
 typedef __be32 ovs_be32;
 typedef __be64 ovs_be64;
+
+#define OVS_BE16_MAX ((OVS_FORCE ovs_be16) 0xffff)
+#define OVS_BE32_MAX ((OVS_FORCE ovs_be32) 0xffffffff)
+#define OVS_BE64_MAX ((OVS_FORCE ovs_be64) 0xffffffffffffffffULL)
 
 /* These types help with a few funny situations:
  *

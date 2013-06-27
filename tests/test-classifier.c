@@ -528,29 +528,29 @@ make_rule(int wc_fields, unsigned int priority, int value_pat)
                values[f_idx][value_idx], f->len);
 
         if (f_idx == CLS_F_IDX_NW_SRC) {
-            match.wc.masks.nw_src = htonl(UINT32_MAX);
+            match.wc.masks.nw_src = OVS_BE32_MAX;
         } else if (f_idx == CLS_F_IDX_NW_DST) {
-            match.wc.masks.nw_dst = htonl(UINT32_MAX);
+            match.wc.masks.nw_dst = OVS_BE32_MAX;
         } else if (f_idx == CLS_F_IDX_TP_SRC) {
-            match.wc.masks.tp_src = htons(UINT16_MAX);
+            match.wc.masks.tp_src = OVS_BE16_MAX;
         } else if (f_idx == CLS_F_IDX_TP_DST) {
-            match.wc.masks.tp_dst = htons(UINT16_MAX);
+            match.wc.masks.tp_dst = OVS_BE16_MAX;
         } else if (f_idx == CLS_F_IDX_DL_SRC) {
             memset(match.wc.masks.dl_src, 0xff, ETH_ADDR_LEN);
         } else if (f_idx == CLS_F_IDX_DL_DST) {
             memset(match.wc.masks.dl_dst, 0xff, ETH_ADDR_LEN);
         } else if (f_idx == CLS_F_IDX_VLAN_TCI) {
-            match.wc.masks.vlan_tci = htons(UINT16_MAX);
+            match.wc.masks.vlan_tci = OVS_BE16_MAX;
         } else if (f_idx == CLS_F_IDX_TUN_ID) {
-            match.wc.masks.tunnel.tun_id = htonll(UINT64_MAX);
+            match.wc.masks.tunnel.tun_id = OVS_BE64_MAX;
         } else if (f_idx == CLS_F_IDX_METADATA) {
-            match.wc.masks.metadata = htonll(UINT64_MAX);
+            match.wc.masks.metadata = OVS_BE64_MAX;
         } else if (f_idx == CLS_F_IDX_NW_DSCP) {
             match.wc.masks.nw_tos |= IP_DSCP_MASK;
         } else if (f_idx == CLS_F_IDX_NW_PROTO) {
             match.wc.masks.nw_proto = UINT8_MAX;
         } else if (f_idx == CLS_F_IDX_DL_TYPE) {
-            match.wc.masks.dl_type = htons(UINT16_MAX);
+            match.wc.masks.dl_type = OVS_BE16_MAX;
         } else if (f_idx == CLS_F_IDX_IN_PORT) {
             match.wc.masks.in_port.ofp_port = u16_to_ofp(UINT16_MAX);
         } else {

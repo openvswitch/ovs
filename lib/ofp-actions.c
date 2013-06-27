@@ -2428,7 +2428,7 @@ ofpact_format(const struct ofpact *a, struct ds *s)
                       ovs_instruction_name_from_type(
                           OVSINST_OFPIT11_WRITE_METADATA),
                       ntohll(metadata->metadata));
-        if (metadata->mask != htonll(UINT64_MAX)) {
+        if (metadata->mask != OVS_BE64_MAX) {
             ds_put_format(s, "/%#"PRIx64, ntohll(metadata->mask));
         }
         break;

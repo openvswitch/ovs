@@ -1735,7 +1735,7 @@ parse_odp_key_mask_attr(const char *s, const struct simap *port_names,
                                   (pcp << VLAN_PCP_SHIFT) |
                                   VLAN_CFI));
             if (mask) {
-                nl_msg_put_be16(mask, OVS_KEY_ATTR_VLAN, htons(UINT16_MAX));
+                nl_msg_put_be16(mask, OVS_KEY_ATTR_VLAN, OVS_BE16_MAX);
             }
             return n;
         } else if (mask && (sscanf(s, "vlan(vid=%"SCNi16"/%"SCNi16",pcp=%i/%i,cfi=%i/%i)%n",
@@ -1756,7 +1756,7 @@ parse_odp_key_mask_attr(const char *s, const struct simap *port_names,
                                   (pcp << VLAN_PCP_SHIFT) |
                                   (cfi ? VLAN_CFI : 0)));
             if (mask) {
-                nl_msg_put_be16(mask, OVS_KEY_ATTR_VLAN, htons(UINT16_MAX));
+                nl_msg_put_be16(mask, OVS_KEY_ATTR_VLAN, OVS_BE16_MAX);
             }
             return n;
         }
@@ -1777,8 +1777,7 @@ parse_odp_key_mask_attr(const char *s, const struct simap *port_names,
         } else if (sscanf(s, "eth_type(%i)%n", &eth_type, &n) > 0 && n > 0) {
             nl_msg_put_be16(key, OVS_KEY_ATTR_ETHERTYPE, htons(eth_type));
             if (mask) {
-                nl_msg_put_be16(mask, OVS_KEY_ATTR_ETHERTYPE,
-                                htons(UINT16_MAX));
+                nl_msg_put_be16(mask, OVS_KEY_ATTR_ETHERTYPE, OVS_BE16_MAX);
             }
             return n;
         }
@@ -1813,7 +1812,7 @@ parse_odp_key_mask_attr(const char *s, const struct simap *port_names,
             if (mask) {
                 mpls = nl_msg_put_unspec_uninit(mask, OVS_KEY_ATTR_MPLS,
                                             sizeof *mpls);
-                mpls->mpls_lse = htonl(UINT32_MAX);
+                mpls->mpls_lse = OVS_BE32_MAX;
             }
             return n;
         }
@@ -2434,7 +2433,7 @@ odp_flow_key_from_flow__(struct ofpbuf *buf, const struct flow *data,
 
     if (flow->vlan_tci != htons(0) || flow->dl_type == htons(ETH_TYPE_VLAN)) {
         if (is_mask) {
-            nl_msg_put_be16(buf, OVS_KEY_ATTR_ETHERTYPE, htons(UINT16_MAX));
+            nl_msg_put_be16(buf, OVS_KEY_ATTR_ETHERTYPE, OVS_BE16_MAX);
         } else {
             nl_msg_put_be16(buf, OVS_KEY_ATTR_ETHERTYPE, htons(ETH_TYPE_VLAN));
         }
@@ -2460,7 +2459,7 @@ odp_flow_key_from_flow__(struct ofpbuf *buf, const struct flow *data,
          *                    802.3 SNAP packet with valid eth_type).
          */
         if (is_mask) {
-            nl_msg_put_be16(buf, OVS_KEY_ATTR_ETHERTYPE, htons(UINT16_MAX));
+            nl_msg_put_be16(buf, OVS_KEY_ATTR_ETHERTYPE, OVS_BE16_MAX);
         }
         goto unencap;
     }

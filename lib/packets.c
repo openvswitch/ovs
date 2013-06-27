@@ -459,7 +459,7 @@ void
 ip_format_masked(ovs_be32 ip, ovs_be32 mask, struct ds *s)
 {
     ds_put_format(s, IP_FMT, IP_ARGS(ip));
-    if (mask != htonl(UINT32_MAX)) {
+    if (mask != OVS_BE32_MAX) {
         if (ip_is_cidr(mask)) {
             ds_put_format(s, "/%d", ip_count_cidr_bits(mask));
         } else {

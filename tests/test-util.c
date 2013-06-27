@@ -319,7 +319,7 @@ test_bitwise_one(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
             ovs_be64 expect;
 
             if (n_bits == 64) {
-                expect = htonll(UINT64_MAX);
+                expect = OVS_BE64_MAX;
             } else {
                 uint64_t mask = (UINT64_C(1) << n_bits) - 1;
                 expect = orig_dst | htonll(mask << dst_ofs);

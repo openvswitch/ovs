@@ -181,7 +181,7 @@ match_set_reg_masked(struct match *match, unsigned int reg_idx,
 void
 match_set_metadata(struct match *match, ovs_be64 metadata)
 {
-    match_set_metadata_masked(match, metadata, htonll(UINT64_MAX));
+    match_set_metadata_masked(match, metadata, OVS_BE64_MAX);
 }
 
 void
@@ -195,7 +195,7 @@ match_set_metadata_masked(struct match *match,
 void
 match_set_tun_id(struct match *match, ovs_be64 tun_id)
 {
-    match_set_tun_id_masked(match, tun_id, htonll(UINT64_MAX));
+    match_set_tun_id_masked(match, tun_id, OVS_BE64_MAX);
 }
 
 void
@@ -208,7 +208,7 @@ match_set_tun_id_masked(struct match *match, ovs_be64 tun_id, ovs_be64 mask)
 void
 match_set_tun_src(struct match *match, ovs_be32 src)
 {
-    match_set_tun_src_masked(match, src, htonl(UINT32_MAX));
+    match_set_tun_src_masked(match, src, OVS_BE32_MAX);
 }
 
 void
@@ -221,7 +221,7 @@ match_set_tun_src_masked(struct match *match, ovs_be32 src, ovs_be32 mask)
 void
 match_set_tun_dst(struct match *match, ovs_be32 dst)
 {
-    match_set_tun_dst_masked(match, dst, htonl(UINT32_MAX));
+    match_set_tun_dst_masked(match, dst, OVS_BE32_MAX);
 }
 
 void
@@ -300,7 +300,7 @@ match_set_pkt_mark_masked(struct match *match, uint32_t pkt_mark, uint32_t mask)
 void
 match_set_dl_type(struct match *match, ovs_be16 dl_type)
 {
-    match->wc.masks.dl_type = htons(UINT16_MAX);
+    match->wc.masks.dl_type = OVS_BE16_MAX;
     match->flow.dl_type = dl_type;
 }
 
@@ -411,7 +411,7 @@ match_set_dl_vlan(struct match *match, ovs_be16 dl_vlan)
 {
     flow_set_dl_vlan(&match->flow, dl_vlan);
     if (dl_vlan == htons(OFP10_VLAN_NONE)) {
-        match->wc.masks.vlan_tci = htons(UINT16_MAX);
+        match->wc.masks.vlan_tci = OVS_BE16_MAX;
     } else {
         match->wc.masks.vlan_tci |= htons(VLAN_VID_MASK | VLAN_CFI);
     }
@@ -518,7 +518,7 @@ match_set_mpls_bos(struct match *match, uint8_t mpls_bos)
 void
 match_set_tp_src(struct match *match, ovs_be16 tp_src)
 {
-    match_set_tp_src_masked(match, tp_src, htons(UINT16_MAX));
+    match_set_tp_src_masked(match, tp_src, OVS_BE16_MAX);
 }
 
 void
@@ -531,7 +531,7 @@ match_set_tp_src_masked(struct match *match, ovs_be16 port, ovs_be16 mask)
 void
 match_set_tp_dst(struct match *match, ovs_be16 tp_dst)
 {
-    match_set_tp_dst_masked(match, tp_dst, htons(UINT16_MAX));
+    match_set_tp_dst_masked(match, tp_dst, OVS_BE16_MAX);
 }
 
 void
@@ -552,7 +552,7 @@ void
 match_set_nw_src(struct match *match, ovs_be32 nw_src)
 {
     match->flow.nw_src = nw_src;
-    match->wc.masks.nw_src = htonl(UINT32_MAX);
+    match->wc.masks.nw_src = OVS_BE32_MAX;
 }
 
 void
@@ -567,7 +567,7 @@ void
 match_set_nw_dst(struct match *match, ovs_be32 nw_dst)
 {
     match->flow.nw_dst = nw_dst;
-    match->wc.masks.nw_dst = htonl(UINT32_MAX);
+    match->wc.masks.nw_dst = OVS_BE32_MAX;
 }
 
 void
@@ -692,7 +692,7 @@ match_set_ipv6_dst_masked(struct match *match, const struct in6_addr *dst,
 void
 match_set_ipv6_label(struct match *match, ovs_be32 ipv6_label)
 {
-    match->wc.masks.ipv6_label = htonl(UINT32_MAX);
+    match->wc.masks.ipv6_label = OVS_BE32_MAX;
     match->flow.ipv6_label = ipv6_label;
 }
 
@@ -779,7 +779,7 @@ format_be16_masked(struct ds *s, const char *name,
 {
     if (mask != htons(0)) {
         ds_put_format(s, "%s=", name);
-        if (mask == htons(UINT16_MAX)) {
+        if (mask == OVS_BE16_MAX) {
             ds_put_format(s, "%"PRIu16, ntohs(value));
         } else {
             ds_put_format(s, "0x%"PRIx16"/0x%"PRIx16,
@@ -798,7 +798,7 @@ format_flow_tunnel(struct ds *s, const struct match *match)
     switch (wc->masks.tunnel.tun_id) {
     case 0:
         break;
-    case CONSTANT_HTONLL(UINT64_MAX):
+    case OVS_BE64_MAX:
         ds_put_format(s, "tun_id=%#"PRIx64",", ntohll(tnl->tun_id));
         break;
     default:
@@ -926,7 +926,7 @@ match_format(const struct match *match, struct ds *s, unsigned int priority)
     switch (wc->masks.metadata) {
     case 0:
         break;
-    case CONSTANT_HTONLL(UINT64_MAX):
+    case OVS_BE64_MAX:
         ds_put_format(s, "metadata=%#"PRIx64",", ntohll(f->metadata));
         break;
     default:
@@ -972,7 +972,7 @@ match_format(const struct match *match, struct ds *s, unsigned int priority)
         format_ipv6_netmask(s, "ipv6_src", &f->ipv6_src, &wc->masks.ipv6_src);
         format_ipv6_netmask(s, "ipv6_dst", &f->ipv6_dst, &wc->masks.ipv6_dst);
         if (wc->masks.ipv6_label) {
-            if (wc->masks.ipv6_label == htonl(UINT32_MAX)) {
+            if (wc->masks.ipv6_label == OVS_BE32_MAX) {
                 ds_put_format(s, "ipv6_label=0x%05"PRIx32",",
                               ntohl(f->ipv6_label));
             } else {
