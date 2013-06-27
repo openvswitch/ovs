@@ -914,13 +914,13 @@ OVS_INSTRUCTIONS
 };
 
 const char *
-ofpact_instruction_name_from_type(enum ovs_instruction_type type)
+ovs_instruction_name_from_type(enum ovs_instruction_type type)
 {
     return inst_info[type].name;
 }
 
 int
-ofpact_instruction_type_from_name(const char *name)
+ovs_instruction_type_from_name(const char *name)
 {
     const struct instruction_type_info *p;
     for (p = inst_info; p < &inst_info[ARRAY_SIZE(inst_info)]; p++) {
@@ -1294,8 +1294,8 @@ ofpacts_verify(const struct ofpact ofpacts[], size_t ofpacts_len)
         }
 
         if (inst != OVSINST_OFPIT11_APPLY_ACTIONS && next <= inst) {
-            const char *name = ofpact_instruction_name_from_type(inst);
-            const char *next_name = ofpact_instruction_name_from_type(next);
+            const char *name = ovs_instruction_name_from_type(inst);
+            const char *next_name = ovs_instruction_name_from_type(next);
 
             if (next == inst) {
                 VLOG_WARN("duplicate %s instruction not allowed, for OpenFlow "
@@ -2292,14 +2292,14 @@ ofpact_format(const struct ofpact *a, struct ds *s)
 
     case OFPACT_CLEAR_ACTIONS:
         ds_put_format(s, "%s",
-                      ofpact_instruction_name_from_type(
+                      ovs_instruction_name_from_type(
                           OVSINST_OFPIT11_CLEAR_ACTIONS));
         break;
 
     case OFPACT_WRITE_METADATA:
         metadata = ofpact_get_WRITE_METADATA(a);
         ds_put_format(s, "%s:%#"PRIx64,
-                      ofpact_instruction_name_from_type(
+                      ovs_instruction_name_from_type(
                           OVSINST_OFPIT11_WRITE_METADATA),
                       ntohll(metadata->metadata));
         if (metadata->mask != htonll(UINT64_MAX)) {
@@ -2309,14 +2309,14 @@ ofpact_format(const struct ofpact *a, struct ds *s)
 
     case OFPACT_GOTO_TABLE:
         ds_put_format(s, "%s:%"PRIu8,
-                      ofpact_instruction_name_from_type(
+                      ovs_instruction_name_from_type(
                           OVSINST_OFPIT11_GOTO_TABLE),
                       ofpact_get_GOTO_TABLE(a)->table_id);
         break;
 
     case OFPACT_METER:
         ds_put_format(s, "%s:%"PRIu32,
-                      ofpact_instruction_name_from_type(OVSINST_OFPIT13_METER),
+                      ovs_instruction_name_from_type(OVSINST_OFPIT13_METER),
                       ofpact_get_METER(a)->meter_id);
         break;
     }

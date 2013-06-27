@@ -743,7 +743,7 @@ str_to_inst_ofpacts(char *str, struct ofpbuf *ofpacts)
 
     pos = str;
     while (ofputil_parse_key_value(&pos, &inst, &arg)) {
-        type = ofpact_instruction_type_from_name(inst);
+        type = ovs_instruction_type_from_name(inst);
         if (type < 0) {
             if (!str_to_ofpact__(pos, inst, arg, ofpacts, n_actions)) {
                 break;

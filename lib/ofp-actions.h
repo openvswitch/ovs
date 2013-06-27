@@ -657,8 +657,8 @@ ofpact_is_instruction(const struct ofpact *a)
         || a->type == OFPACT_GOTO_TABLE;
 }
 
-const char *ofpact_instruction_name_from_type(enum ovs_instruction_type type);
-int ofpact_instruction_type_from_name(const char *name);
+const char *ovs_instruction_name_from_type(enum ovs_instruction_type type);
+int ovs_instruction_type_from_name(const char *name);
 
 void ofpact_set_field_init(struct ofpact_reg_load *load,
                            const struct mf_field *mf, const void *src);
