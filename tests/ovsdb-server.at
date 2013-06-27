@@ -164,6 +164,127 @@ AT_CHECK(
 OVSDB_SERVER_SHUTDOWN
 AT_CLEANUP
 
+AT_SETUP([ovsdb-server/add-db and remove-db])
+AT_KEYWORDS([ovsdb server positive])
+ON_EXIT([kill `cat ovsdb-server.pid`])
+OVS_RUNDIR=`pwd`; export OVS_RUNDIR
+OVS_LOGDIR=`pwd`; export OVS_LOGDIR
+ordinal_schema > schema1
+constraint_schema > schema2
+AT_CHECK([ovsdb-tool create db1 schema1], [0], [ignore], [ignore])
+AT_CHECK([ovsdb-tool create db2 schema2], [0], [ignore], [ignore])
+
+# Start ovsdb-server with just a single database - db1.
+AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --remote=punix:socket db1], [0])
+AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/list-dbs],
+  [0], [ordinals
+])
+
+# Add the second database.
+AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/add-db db2], [0])
+AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/list-dbs],
+  [0], [constraints
+ordinals
+])
+
+# The databases are responsive.
+AT_CHECK([ovsdb-client list-tables unix:socket constraints], [0], [ignore], [ignore])
+AT_CHECK([ovsdb-client list-tables unix:socket ordinals], [0], [ignore], [ignore])
+
+# Add an already added database.
+AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/add-db db2], 2, [], [stderr])
+AT_CHECK([sed 's/(.*)/(...)/' stderr], [0],
+  [I/O error: db2: failed to lock lockfile (...)
+ovs-appctl: ovsdb-server: server returned an error
+])
+
+# Add a non-existing database.
+AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/add-db db3], 2, [], [stderr])
+AT_CHECK([sed 's/(.*)/(...)/' stderr], [0],
+  [I/O error: open: db3 failed (...)
+ovs-appctl: ovsdb-server: server returned an error
+])
+
+# Add a remote through a db path in db1.
+AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/add-remote db:ordinals,ordinals,name], [0])
+AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/list-remotes],
+  [0], [db:ordinals,ordinals,name
+punix:socket
+])
+
+# Removing db1 has no effect on its remote.
+AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/remove-db ordinals], [0])
+AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/list-dbs],
+  [0], [constraints
+])
+AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/list-remotes],
+  [0], [db:ordinals,ordinals,name
+punix:socket
+])
+AT_CHECK([ovsdb-client list-tables unix:socket ordinals], [1], [ignore], [ignore])
+
+# Remove db2.
+AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/remove-db constraints], [0])
+AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/list-dbs],
+  [0], [])
+AT_CHECK([ovsdb-client list-tables unix:socket constraints], [1], [ignore], [ignore])
+
+# Remove a non-existent database.
+AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/remove-db ordinals], [2],
+  [], [Failed to find the database.
+ovs-appctl: ovsdb-server: server returned an error
+])
+AT_CLEANUP
+
+AT_SETUP([ovsdb-server/add-db and remove-db with --monitor])
+AT_KEYWORDS([ovsdb server positive])
+# Start ovsdb-server, initially with one db.
+OVS_RUNDIR=`pwd`; export OVS_RUNDIR
+OVS_LOGDIR=`pwd`; export OVS_LOGDIR
+ordinal_schema > schema
+AT_CHECK([ovsdb-tool create db1 schema], [0], [ignore], [ignore])
+ON_EXIT([kill `cat *.pid`])
+AT_CHECK([ovsdb-server -v -vvlog:off --monitor --detach --no-chdir --pidfile --log-file db1])
+
+# Add the second database.
+constraint_schema > schema2
+AT_CHECK([ovsdb-tool create db2 schema2], [0], [ignore], [ignore])
+AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/add-db db2], [0])
+AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/list-dbs],
+  [0], [constraints
+ordinals
+])
+
+# Kill the daemon process, making it look like a segfault,
+# and wait for a new daemon process to get spawned.
+cp ovsdb-server.pid old.pid
+AT_CHECK([kill -SEGV `cat ovsdb-server.pid`])
+OVS_WAIT_WHILE([kill -0 `cat old.pid`])
+OVS_WAIT_UNTIL(
+  [test -s ovsdb-server.pid && test `cat ovsdb-server.pid` != `cat old.pid`])
+AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/list-dbs],
+  [0], [constraints
+ordinals
+])
+
+# Remove the recently added database.
+AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/remove-db constraints])
+AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/list-dbs],
+  [0], [ordinals
+])
+
+# Kill the daemon process, making it look like a segfault,
+# and wait for a new daemon process to get spawned.
+cp ovsdb-server.pid old.pid
+AT_CHECK([kill -SEGV `cat ovsdb-server.pid`])
+OVS_WAIT_WHILE([kill -0 `cat old.pid`])
+OVS_WAIT_UNTIL(
+  [test -s ovsdb-server.pid && test `cat ovsdb-server.pid` != `cat old.pid`])
+AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/list-dbs],
+  [0], [ordinals
+])
+AT_CLEANUP
+
 AT_SETUP([--remote=db: implementation])
 AT_KEYWORDS([ovsdb server positive])
 OVS_RUNDIR=`pwd`; export OVS_RUNDIR

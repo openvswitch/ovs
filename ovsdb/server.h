@@ -83,6 +83,7 @@ struct ovsdb_server {
 
 void ovsdb_server_init(struct ovsdb_server *);
 bool ovsdb_server_add_db(struct ovsdb_server *, struct ovsdb *);
+bool ovsdb_server_remove_db(struct ovsdb_server *, struct ovsdb *);
 void ovsdb_server_destroy(struct ovsdb_server *);
 
 struct ovsdb_lock_waiter *ovsdb_server_lock(struct ovsdb_server *,

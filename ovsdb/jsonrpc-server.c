@@ -129,7 +129,34 @@ ovsdb_jsonrpc_server_create(void)
 bool
 ovsdb_jsonrpc_server_add_db(struct ovsdb_jsonrpc_server *svr, struct ovsdb *db)
 {
+    /* The OVSDB protocol doesn't have a way to notify a client that a
+     * database has been added.  If some client tried to use the database
+     * that we're adding and failed, then forcing it to reconnect seems like
+     * a reasonable way to make it try again.
+     *
+     * If this is too big of a hammer in practice, we could be more selective,
+     * e.g. disconnect only connections that actually tried to use a database
+     * with 'db''s name. */
+    ovsdb_jsonrpc_server_reconnect(svr);
+
     return ovsdb_server_add_db(&svr->up, db);
+}
+
+/* Removes 'db' from the set of databases served out by 'svr'.  Returns
+ * true if successful, false if there is no database associated with 'db'. */
+bool
+ovsdb_jsonrpc_server_remove_db(struct ovsdb_jsonrpc_server *svr,
+                               struct ovsdb *db)
+{
+    /* There might be pointers to 'db' from 'svr', such as monitors or
+     * outstanding transactions.  Disconnect all JSON-RPC connections to avoid
+     * accesses to freed memory.
+     *
+     * If this is too big of a hammer in practice, we could be more selective,
+     * e.g. disconnect only connections that actually reference 'db'. */
+    ovsdb_jsonrpc_server_reconnect(svr);
+
+    return ovsdb_server_remove_db(&svr->up, db);
 }
 
 void

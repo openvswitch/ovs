@@ -150,6 +150,29 @@ not list remotes added indirectly because they were read from the
 database by configuring a
 \fBdb:\fIdb\fB,\fItable\fB,\fIcolumn\fR remote.
 .
+.IP "\fBovsdb\-server/add\-db \fIdatabase\fR"
+Adds the \fIdatabase\fR to the running \fBovsdb\-server\fR.  The database
+file must already have been created and initialized using, for example,
+\fBovsdb\-tool create\fR.
+.
+.IP "\fBovsdb\-server/remove\-db \fIdatabase\fR"
+Removes \fIdatabase\fR from the running \fBovsdb\-server\fR.  \fIdatabase\fR
+must be a database name as listed by \fBovsdb-server/list\-dbs\fR.
+.IP
+If a remote has been configured that points to the specified
+\fIdatabase\fR (e.g. \fB\-\-remote=db:\fIdatabase\fB,\fR... on the
+command line), then it will be disabled until another database with
+the same name is added again (with \fBovsdb\-server/add\-db\fR).
+.IP
+Any public key infrastructure options specified through this database
+(e.g. \fB\-\-private\-key=db:\fIdatabase,\fR... on the command line)
+will be disabled until another database with the same name is added
+again (with \fBovsdb\-server/add\-db\fR).
+.
+.IP "\fBovsdb\-server/list\-dbs"
+Outputs a list of the currently configured databases added either through
+the command line or through the \fBovsdb\-server/add\-db\fR command.
+.
 .so lib/vlog-unixctl.man
 .so lib/memory-unixctl.man
 .so lib/coverage-unixctl.man
