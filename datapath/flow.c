@@ -1308,6 +1308,7 @@ static int ovs_key_from_nlattrs(struct sw_flow_match *match,  u64 attrs,
 		const struct nlattr **a, bool is_mask)
 {
 	int err;
+	u64 orig_attrs = attrs;
 
 	err = metadata_from_nlattrs(match, &attrs, a, is_mask);
 	if (err)
@@ -1422,10 +1423,17 @@ static int ovs_key_from_nlattrs(struct sw_flow_match *match,  u64 attrs,
 		const struct ovs_key_tcp *tcp_key;
 
 		tcp_key = nla_data(a[OVS_KEY_ATTR_TCP]);
-		SW_FLOW_KEY_PUT(match, ipv4.tp.src,
-				tcp_key->tcp_src, is_mask);
-		SW_FLOW_KEY_PUT(match, ipv4.tp.dst,
-				tcp_key->tcp_dst, is_mask);
+		if (orig_attrs & (1ULL << OVS_KEY_ATTR_IPV4)) {
+			SW_FLOW_KEY_PUT(match, ipv4.tp.src,
+					tcp_key->tcp_src, is_mask);
+			SW_FLOW_KEY_PUT(match, ipv4.tp.dst,
+					tcp_key->tcp_dst, is_mask);
+		} else {
+			SW_FLOW_KEY_PUT(match, ipv6.tp.src,
+					tcp_key->tcp_src, is_mask);
+			SW_FLOW_KEY_PUT(match, ipv6.tp.dst,
+					tcp_key->tcp_dst, is_mask);
+		}
 		attrs &= ~(1ULL << OVS_KEY_ATTR_TCP);
 	}
 
@@ -1433,10 +1441,17 @@ static int ovs_key_from_nlattrs(struct sw_flow_match *match,  u64 attrs,
 		const struct ovs_key_udp *udp_key;
 
 		udp_key = nla_data(a[OVS_KEY_ATTR_UDP]);
-		SW_FLOW_KEY_PUT(match, ipv4.tp.src,
-				udp_key->udp_src, is_mask);
-		SW_FLOW_KEY_PUT(match, ipv4.tp.dst,
-				udp_key->udp_dst, is_mask);
+		if (orig_attrs & (1ULL << OVS_KEY_ATTR_IPV4)) {
+			SW_FLOW_KEY_PUT(match, ipv4.tp.src,
+					udp_key->udp_src, is_mask);
+			SW_FLOW_KEY_PUT(match, ipv4.tp.dst,
+					udp_key->udp_dst, is_mask);
+		} else {
+			SW_FLOW_KEY_PUT(match, ipv6.tp.src,
+					udp_key->udp_src, is_mask);
+			SW_FLOW_KEY_PUT(match, ipv6.tp.dst,
+					udp_key->udp_dst, is_mask);
+		}
 		attrs &= ~(1ULL << OVS_KEY_ATTR_UDP);
 	}
 
