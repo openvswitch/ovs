@@ -1652,20 +1652,20 @@ AT_CHECK([ovs-ofctl ofp-print "\
 04 13 00 90 00 00 00 02 00 09 00 00 00 00 00 00 \
 00 00 00 01 00 48 00 00 00 00 00 00 00 00 00 05 \
 00 00 00 00 00 00 10 00 00 00 00 00 00 02 30 00 \
-00 00 01 8a 9a 6e 23 44 \
+00 00 01 8a 0a 6e 23 44 \
 00 00 00 00 00 00 00 7e 00 00 00 00 00 00 34 33 \
 00 00 00 00 00 00 00 e7 00 00 00 00 00 00 94 2e \
 00 00 00 02 00 38 00 00 00 00 00 00 00 00 00 02 \
 00 00 00 00 00 00 02 00 00 00 00 00 00 00 30 00 \
-00 00 01 87 9a 23 6e 44 \
+00 00 01 87 0a 23 6e 44 \
 00 00 00 00 00 00 00 2a 00 00 00 00 00 00 04 33 \
 "], [0], [dnl
 OFPST_METER reply (OF1.3) (xid=0x2):
-meter:1 flow_count:5 packet_in_count:4096 byte_in_count:143360 duration:394.2590909252s bands:
+meter:1 flow_count:5 packet_in_count:4096 byte_in_count:143360 duration:394.174990148s bands:
 0: packet_count:126 byte_count:13363
 1: packet_count:231 byte_count:37934
 
-meter:2 flow_count:2 packet_in_count:512 byte_in_count:12288 duration:391.2586013252s bands:
+meter:2 flow_count:2 packet_in_count:512 byte_in_count:12288 duration:391.170094148s bands:
 0: packet_count:42 byte_count:1075
 ])
 AT_CLEANUP

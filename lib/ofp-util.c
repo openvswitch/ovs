@@ -1646,7 +1646,7 @@ ofputil_pull_bands(struct ofpbuf *msg, size_t len, uint16_t *n_bands,
 
     while (len >= sizeof (struct ofp13_meter_band_drop)) {
         size_t ombh_len = ntohs(ombh->len);
-        /* All supported band types have the same length */
+        /* All supported band types have the same length. */
         if (ombh_len != sizeof (struct ofp13_meter_band_drop)) {
             return OFPERR_OFPBRC_BAD_LEN;
         }
@@ -1693,8 +1693,7 @@ ofputil_decode_meter_mod(const struct ofp_header *oh,
         mm->meter.flags = ntohs(omm->flags);
         mm->meter.bands = bands->data;
 
-        error = ofputil_pull_bands(&b, b.size, &mm->meter.n_bands,
-                                   bands);
+        error = ofputil_pull_bands(&b, b.size, &mm->meter.n_bands, bands);
         if (error) {
             return error;
         }
@@ -1748,7 +1747,7 @@ ofputil_put_bands(uint16_t n_bands, const struct ofputil_meter_band *mb,
     uint16_t n = 0;
 
     for (n = 0; n < n_bands; ++n) {
-        /* Currently all band types have same size */
+        /* Currently all band types have same size. */
         struct ofp13_meter_band_dscp_remark *ombh;
         size_t ombh_len = sizeof *ombh;
 
@@ -1842,8 +1841,9 @@ ofputil_decode_meter_config(struct ofpbuf *msg,
 
     omc = ofpbuf_try_pull(msg, sizeof *omc);
     if (!omc) {
-        VLOG_WARN_RL(&bad_ofmsg_rl, "OFPMP_METER_CONFIG reply has %zu "
-                     "leftover bytes at end", msg->size);
+        VLOG_WARN_RL(&bad_ofmsg_rl,
+                     "OFPMP_METER_CONFIG reply has %zu leftover bytes at end",
+                     msg->size);
         return OFPERR_OFPBRC_BAD_LEN;
     }
 
@@ -1868,12 +1868,15 @@ ofputil_pull_band_stats(struct ofpbuf *msg, size_t len, uint16_t *n_bands,
     struct ofputil_meter_band_stats *mbs;
     uint16_t n, i;
 
+    ombs = ofpbuf_try_pull(msg, len);
+    if (!ombs) {
+        return OFPERR_OFPBRC_BAD_LEN;
+    }
+
     n = len / sizeof *ombs;
     if (len != n * sizeof *ombs) {
         return OFPERR_OFPBRC_BAD_LEN;
     }
-
-    ombs = ofpbuf_pull(msg, len);
 
     mbs = ofpbuf_put_uninit(bands, len);
 
@@ -1901,7 +1904,6 @@ ofputil_decode_meter_stats(struct ofpbuf *msg,
                            struct ofpbuf *bands)
 {
     const struct ofp13_meter_stats *oms;
-    uint16_t len;
     enum ofperr err;
 
     /* Pull OpenFlow headers for the first call. */
@@ -1915,15 +1917,15 @@ ofputil_decode_meter_stats(struct ofpbuf *msg,
 
     oms = ofpbuf_try_pull(msg, sizeof *oms);
     if (!oms) {
-        VLOG_WARN_RL(&bad_ofmsg_rl, "OFPMP_METER reply has %zu leftover "
-                     "bytes at end", msg->size);
+        VLOG_WARN_RL(&bad_ofmsg_rl,
+                     "OFPMP_METER reply has %zu leftover bytes at end",
+                     msg->size);
         return OFPERR_OFPBRC_BAD_LEN;
     }
-    len = ntohs(oms->len);
-    len -= sizeof *oms;
 
     ofpbuf_clear(bands);
-    err = ofputil_pull_band_stats(msg, len, &ms->n_bands, bands);
+    err = ofputil_pull_band_stats(msg, ntohs(oms->len) - sizeof *oms,
+                                  &ms->n_bands, bands);
     if (err) {
         return err;
     }
