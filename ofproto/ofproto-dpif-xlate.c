@@ -1902,7 +1902,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
         memset(&wc->masks.tunnel, 0xff, sizeof wc->masks.tunnel);
     }
     if (xin->ofproto->netflow) {
-        netflow_mask_wc(wc);
+        netflow_mask_wc(flow, wc);
     }
 
     ctx.xout->tags = 0;

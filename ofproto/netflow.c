@@ -52,8 +52,11 @@ struct netflow {
 };
 
 void
-netflow_mask_wc(struct flow_wildcards *wc)
+netflow_mask_wc(struct flow *flow, struct flow_wildcards *wc)
 {
+    if (flow->dl_type != htons(ETH_TYPE_IP)) {
+        return;
+    }
     memset(&wc->masks.nw_proto, 0xff, sizeof wc->masks.nw_proto);
     memset(&wc->masks.nw_src, 0xff, sizeof wc->masks.nw_src);
     memset(&wc->masks.nw_dst, 0xff, sizeof wc->masks.nw_dst);
