@@ -64,7 +64,7 @@ void netflow_expire(struct netflow *, struct netflow_flow *,
 bool netflow_run(struct netflow *);
 void netflow_wait(struct netflow *);
 
-void netflow_mask_wc(struct flow_wildcards *);
+void netflow_mask_wc(struct flow *, struct flow_wildcards *);
 
 void netflow_flow_init(struct netflow_flow *);
 void netflow_flow_clear(struct netflow_flow *);

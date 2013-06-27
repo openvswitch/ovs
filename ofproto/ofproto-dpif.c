@@ -7121,7 +7121,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
 
     /* Disable most wildcarding for NetFlow. */
     if (xin->ofproto->netflow) {
-        netflow_mask_wc(wc);
+        netflow_mask_wc(&ctx.xin->flow, wc);
     }
 
     ctx.xout->tags = 0;
