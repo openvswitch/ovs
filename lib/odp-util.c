@@ -1063,7 +1063,7 @@ format_odp_key_attr(const struct nlattr *a, const struct nlattr *ma,
                               vlan_tci_to_vid(vlan_tci),
                               vlan_tci_to_vid(mask),
                               vlan_tci_to_pcp(vlan_tci),
-                              vlan_tci_to_vid(mask),
+                              vlan_tci_to_pcp(mask),
                               vlan_tci_to_cfi(vlan_tci),
                               vlan_tci_to_cfi(mask));
             } else {
