@@ -88,6 +88,7 @@ in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x1234/0xff
 in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x0800),ipv4(src=35.8.2.41/255.255.255.0,dst=172.16.0.20/255.255.255.0,proto=5/0xf0,tos=0x80/0xf0,ttl=128/0xf0,frag=no/0xf0)
 in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x0800),ipv4(src=35.8.2.41,dst=172.16.0.20,proto=6,tos=0,ttl=128,frag=no),tcp(src=80/0xff00,dst=8080/0xff)
 in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x0800),ipv4(src=35.8.2.41,dst=172.16.0.20,proto=17,tos=0,ttl=128,frag=no),udp(src=81/0xff00,dst=6632/0xff)
+in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x0800),ipv4(src=35.8.2.41,dst=172.16.0.20,proto=17,tos=0,ttl=128,frag=no),udp(src=81/0,dst=6632/0)
 in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x0800),ipv4(src=35.8.2.41,dst=172.16.0.20,proto=1,tos=0,ttl=128,frag=no),icmp(type=1/0xf0,code=2/0xff)
 in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x86dd),ipv6(src=::1/::255,dst=::2/::255,label=0/0xf0,proto=10/0xf0,tclass=0x70/0xf0,hlimit=128/0xf0,frag=no/0xf0)
 in_port(1),eth(src=00:01:02:03:04:05,dst=10:11:12:13:14:15),eth_type(0x86dd),ipv6(src=::1,dst=::2,label=0,proto=6,tclass=0,hlimit=128,frag=no),tcp(src=80/0xff00,dst=8080/0xff)

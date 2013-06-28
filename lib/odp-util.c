@@ -930,10 +930,9 @@ format_odp_key_attr(const struct nlattr *a, const struct nlattr *ma,
     struct flow_tnl tun_key;
     enum ovs_key_attr attr = nl_attr_type(a);
     int expected_len;
+    bool is_exact;
 
-    if (ma && odp_mask_attr_is_exact(ma)) {
-        ma = NULL;
-    }
+    is_exact = ma ? odp_mask_attr_is_exact(ma) : true;
 
     ds_put_cstr(ds, ovs_key_attr_to_string(attr));
 
@@ -977,7 +976,7 @@ format_odp_key_attr(const struct nlattr *a, const struct nlattr *ma,
     case OVS_KEY_ATTR_PRIORITY:
     case OVS_KEY_ATTR_SKB_MARK:
         ds_put_format(ds, "%#"PRIx32, nl_attr_get_u32(a));
-        if (ma) {
+        if (!is_exact) {
             ds_put_format(ds, "/%#"PRIx32, nl_attr_get_u32(ma));
         }
         break;
@@ -986,7 +985,7 @@ format_odp_key_attr(const struct nlattr *a, const struct nlattr *ma,
         memset(&tun_key, 0, sizeof tun_key);
         if (tun_key_from_attr(a, &tun_key) == ODP_FIT_ERROR) {
             ds_put_format(ds, "error");
-        } else if (ma) {
+        } else if (!is_exact) {
             struct flow_tnl tun_mask;
 
             memset(&tun_mask, 0, sizeof tun_mask);
@@ -1025,13 +1024,13 @@ format_odp_key_attr(const struct nlattr *a, const struct nlattr *ma,
 
     case OVS_KEY_ATTR_IN_PORT:
         ds_put_format(ds, "%"PRIu32, nl_attr_get_u32(a));
-        if (ma) {
+        if (!is_exact) {
             ds_put_format(ds, "/%#"PRIx32, nl_attr_get_u32(ma));
         }
         break;
 
     case OVS_KEY_ATTR_ETHERNET:
-        if (ma) {
+        if (!is_exact) {
             const struct ovs_key_ethernet *eth_mask = nl_attr_get(ma);
             const struct ovs_key_ethernet *eth_key = nl_attr_get(a);
 
@@ -1053,7 +1052,7 @@ format_odp_key_attr(const struct nlattr *a, const struct nlattr *ma,
     case OVS_KEY_ATTR_VLAN:
         {
             ovs_be16 vlan_tci = nl_attr_get_be16(a);
-            if (ma) {
+            if (!is_exact) {
                 ovs_be16 mask = nl_attr_get_be16(ma);
                 ds_put_format(ds, "vid=%"PRIu16"/%"PRIx16",pcp=%d/0x%x,cfi=%d/%d",
                               vlan_tci_to_vid(vlan_tci),
@@ -1071,7 +1070,7 @@ format_odp_key_attr(const struct nlattr *a, const struct nlattr *ma,
     case OVS_KEY_ATTR_MPLS: {
         const struct ovs_key_mpls *mpls_key = nl_attr_get(a);
         const struct ovs_key_mpls *mpls_mask = NULL;
-        if (ma) {
+        if (!is_exact) {
             mpls_mask = nl_attr_get(ma);
         }
         format_mpls(ds, mpls_key, mpls_mask);
@@ -1080,13 +1079,13 @@ format_odp_key_attr(const struct nlattr *a, const struct nlattr *ma,
 
     case OVS_KEY_ATTR_ETHERTYPE:
         ds_put_format(ds, "0x%04"PRIx16, ntohs(nl_attr_get_be16(a)));
-        if (ma) {
+        if (!is_exact) {
             ds_put_format(ds, "/0x%04"PRIx16, ntohs(nl_attr_get_be16(ma)));
         }
         break;
 
     case OVS_KEY_ATTR_IPV4:
-        if (ma) {
+        if (!is_exact) {
             const struct ovs_key_ipv4 *ipv4_key = nl_attr_get(a);
             const struct ovs_key_ipv4 *ipv4_mask = nl_attr_get(ma);
 
@@ -1116,7 +1115,7 @@ format_odp_key_attr(const struct nlattr *a, const struct nlattr *ma,
         break;
 
     case OVS_KEY_ATTR_IPV6:
-        if (ma) {
+        if (!is_exact) {
             const struct ovs_key_ipv6 *ipv6_key, *ipv6_mask;
             char src_str[INET6_ADDRSTRLEN];
             char dst_str[INET6_ADDRSTRLEN];
@@ -1161,7 +1160,7 @@ format_odp_key_attr(const struct nlattr *a, const struct nlattr *ma,
         break;
 
     case OVS_KEY_ATTR_TCP:
-        if (ma) {
+        if (!is_exact) {
             const struct ovs_key_tcp *tcp_mask = nl_attr_get(ma);
             const struct ovs_key_tcp *tcp_key = nl_attr_get(a);
 
@@ -1178,7 +1177,7 @@ format_odp_key_attr(const struct nlattr *a, const struct nlattr *ma,
         break;
 
     case OVS_KEY_ATTR_UDP:
-        if (ma) {
+        if (!is_exact) {
             const struct ovs_key_udp *udp_mask = nl_attr_get(ma);
             const struct ovs_key_udp *udp_key = nl_attr_get(a);
 
@@ -1195,7 +1194,7 @@ format_odp_key_attr(const struct nlattr *a, const struct nlattr *ma,
         break;
 
     case OVS_KEY_ATTR_ICMP:
-        if (ma) {
+        if (!is_exact) {
             const struct ovs_key_icmp *icmp_mask = nl_attr_get(ma);
             const struct ovs_key_icmp *icmp_key = nl_attr_get(a);
 
@@ -1211,7 +1210,7 @@ format_odp_key_attr(const struct nlattr *a, const struct nlattr *ma,
         break;
 
     case OVS_KEY_ATTR_ICMPV6:
-        if (ma) {
+        if (!is_exact) {
             const struct ovs_key_icmpv6 *icmpv6_mask = nl_attr_get(ma);
             const struct ovs_key_icmpv6 *icmpv6_key = nl_attr_get(a);
 
@@ -1227,7 +1226,7 @@ format_odp_key_attr(const struct nlattr *a, const struct nlattr *ma,
         break;
 
     case OVS_KEY_ATTR_ARP:
-        if (ma) {
+        if (!is_exact) {
             const struct ovs_key_arp *arp_mask = nl_attr_get(ma);
             const struct ovs_key_arp *arp_key = nl_attr_get(a);
 
@@ -1257,15 +1256,17 @@ format_odp_key_attr(const struct nlattr *a, const struct nlattr *ma,
         break;
 
     case OVS_KEY_ATTR_ND: {
-        const struct ovs_key_nd *nd_key, *nd_mask;
+        const struct ovs_key_nd *nd_key, *nd_mask = NULL;
         char target[INET6_ADDRSTRLEN];
 
         nd_key = nl_attr_get(a);
-        nd_mask = ma ? nl_attr_get(ma) : NULL;
+        if (!is_exact) {
+            nd_mask = nl_attr_get(ma);
+        }
 
         inet_ntop(AF_INET6, nd_key->nd_target, target, sizeof target);
         ds_put_format(ds, "target=%s", target);
-        if (nd_mask) {
+        if (!is_exact) {
             inet_ntop(AF_INET6, nd_mask->nd_target, target, sizeof target);
             ds_put_format(ds, "/%s", target);
         }
@@ -1273,7 +1274,7 @@ format_odp_key_attr(const struct nlattr *a, const struct nlattr *ma,
         if (!eth_addr_is_zero(nd_key->nd_sll)) {
             ds_put_format(ds, ",sll="ETH_ADDR_FMT,
                           ETH_ADDR_ARGS(nd_key->nd_sll));
-            if (nd_mask) {
+            if (!is_exact) {
                 ds_put_format(ds, "/"ETH_ADDR_FMT,
                               ETH_ADDR_ARGS(nd_mask->nd_sll));
             }
@@ -1281,7 +1282,7 @@ format_odp_key_attr(const struct nlattr *a, const struct nlattr *ma,
         if (!eth_addr_is_zero(nd_key->nd_tll)) {
             ds_put_format(ds, ",tll="ETH_ADDR_FMT,
                           ETH_ADDR_ARGS(nd_key->nd_tll));
-            if (nd_mask) {
+            if (!is_exact) {
                 ds_put_format(ds, "/"ETH_ADDR_FMT,
                               ETH_ADDR_ARGS(nd_mask->nd_tll));
             }
@@ -1293,13 +1294,36 @@ format_odp_key_attr(const struct nlattr *a, const struct nlattr *ma,
     case __OVS_KEY_ATTR_MAX:
     default:
         format_generic_odp_key(a, ds);
-        if (ma) {
+        if (!is_exact) {
             ds_put_char(ds, '/');
             format_generic_odp_key(ma, ds);
         }
         break;
     }
     ds_put_char(ds, ')');
+}
+
+static struct nlattr *
+generate_all_wildcard_mask(struct ofpbuf *ofp, const struct nlattr *key)
+{
+    const struct nlattr *a;
+    unsigned int left;
+    int type = nl_attr_type(key);
+    int size = nl_attr_get_size(key);
+
+    if (odp_flow_key_attr_len(type) >=0) {
+        memset(nl_msg_put_unspec_uninit(ofp, type, size), 0, size);
+    } else {
+        size_t nested_mask;
+
+        nested_mask = nl_msg_start_nested(ofp, type);
+        NL_ATTR_FOR_EACH(a, left, key, nl_attr_get_size(key)) {
+            generate_all_wildcard_mask(ofp, nl_attr_get(a));
+        }
+        nl_msg_end_nested(ofp, nested_mask);
+    }
+
+    return ofp->base;
 }
 
 /* Appends to 'ds' a string representation of the 'key_len' bytes of
@@ -1315,7 +1339,9 @@ odp_flow_format(const struct nlattr *key, size_t key_len,
         unsigned int left;
         bool has_ethtype_key = false;
         const struct nlattr *ma = NULL;
+        struct ofpbuf ofp;
 
+        ofpbuf_init(&ofp, 100);
         NL_ATTR_FOR_EACH (a, left, key, key_len) {
             if (a != key) {
                 ds_put_char(ds, ',');
@@ -1325,9 +1351,15 @@ odp_flow_format(const struct nlattr *key, size_t key_len,
             }
             if (mask && mask_len) {
                 ma = nl_attr_find__(mask, mask_len, nl_attr_type(a));
+                if (!ma) {
+                    ma = generate_all_wildcard_mask(&ofp, a);
+                }
             }
             format_odp_key_attr(a, ma, ds);
+            ofpbuf_clear(&ofp);
         }
+        ofpbuf_uninit(&ofp);
+
         if (left) {
             int i;
             
@@ -1361,23 +1393,51 @@ odp_flow_key_format(const struct nlattr *key,
     odp_flow_format(key, key_len, NULL, 0, ds);
 }
 
+static void
+put_nd(struct ovs_key_nd* nd_key, const uint8_t *nd_sll,
+       const uint8_t *nd_tll, struct ofpbuf *key)
+{
+    if (nd_sll) {
+        memcpy(nd_key->nd_sll, nd_sll, ETH_ADDR_LEN);
+    }
+
+    if (nd_tll) {
+        memcpy(nd_key->nd_tll, nd_tll, ETH_ADDR_LEN);
+    }
+
+    nl_msg_put_unspec(key, OVS_KEY_ATTR_ND, nd_key, sizeof *nd_key);
+}
+
 static int
-put_nd_key(int n, const char *nd_target_s,
-           const uint8_t *nd_sll, const uint8_t *nd_tll, struct ofpbuf *key)
+put_nd_key(int n, const char *nd_target_s, const uint8_t *nd_sll,
+           const uint8_t *nd_tll, struct ofpbuf *key)
 {
     struct ovs_key_nd nd_key;
 
     memset(&nd_key, 0, sizeof nd_key);
+
     if (inet_pton(AF_INET6, nd_target_s, nd_key.nd_target) != 1) {
         return -EINVAL;
     }
-    if (nd_sll) {
-        memcpy(nd_key.nd_sll, nd_sll, ETH_ADDR_LEN);
+
+    put_nd(&nd_key, nd_sll, nd_tll, key);
+    return n;
+}
+
+static int
+put_nd_mask(int n, const char *nd_target_s,
+           const uint8_t *nd_sll, const uint8_t *nd_tll, struct ofpbuf *mask)
+{
+    struct ovs_key_nd nd_mask;
+
+    memset(&nd_mask, 0xff, sizeof nd_mask);
+
+    if (strlen(nd_target_s) != 0 &&
+            inet_pton(AF_INET6, nd_target_s, nd_mask.nd_target) != 1) {
+        return -EINVAL;
     }
-    if (nd_tll) {
-        memcpy(nd_key.nd_tll, nd_tll, ETH_ADDR_LEN);
-    }
-    nl_msg_put_unspec(key, OVS_KEY_ATTR_ND, &nd_key, sizeof nd_key);
+
+    put_nd(&nd_mask, nd_sll, nd_tll, mask);
     return n;
 }
 
@@ -2092,19 +2152,19 @@ parse_odp_key_mask_attr(const char *s, const struct simap *port_names,
         uint8_t nd_tll_mask[ETH_ADDR_LEN];
         int n = -1;
 
-        memset(&nd_target_mask_s[0], 0xff, sizeof nd_target_s);
-        memset(&nd_sll_mask[0], 0xff, sizeof nd_sll);
-        memset(&nd_tll_mask [0], 0xff, sizeof nd_tll);
+        nd_target_mask_s[0] = 0;
+        memset(nd_sll_mask, 0xff, sizeof nd_sll_mask);
+        memset(nd_tll_mask, 0xff, sizeof nd_tll_mask);
 
         if (mask && sscanf(s, "nd(target="IPV6_SCAN_FMT"/"IPV6_SCAN_FMT")%n",
                    nd_target_s, nd_target_mask_s, &n) > 0 && n > 0) {
                 put_nd_key(n, nd_target_s, NULL, NULL, key);
-                put_nd_key(n, nd_target_mask_s, NULL, NULL, mask);
+                put_nd_mask(n, nd_target_mask_s, NULL, NULL, mask);
         } else if (sscanf(s, "nd(target="IPV6_SCAN_FMT")%n",
                    nd_target_s, &n) > 0 && n > 0) {
                 put_nd_key(n, nd_target_s, NULL, NULL, key);
                 if (mask) {
-                    put_nd_key(n, nd_target_mask_s, NULL, NULL, mask);
+                    put_nd_mask(n, nd_target_mask_s, NULL, NULL, mask);
                 }
         } else if (mask && sscanf(s, "nd(target="IPV6_SCAN_FMT"/"IPV6_SCAN_FMT
                          ",sll="ETH_ADDR_SCAN_FMT"/"ETH_ADDR_SCAN_FMT")%n",
@@ -2112,13 +2172,13 @@ parse_odp_key_mask_attr(const char *s, const struct simap *port_names,
                    ETH_ADDR_SCAN_ARGS(nd_sll),
                    ETH_ADDR_SCAN_ARGS(nd_sll_mask), &n) > 0 && n > 0) {
             put_nd_key(n, nd_target_s, nd_sll, NULL, key);
-            put_nd_key(n, nd_target_mask_s, nd_sll_mask, NULL, mask);
+            put_nd_mask(n, nd_target_mask_s, nd_sll_mask, NULL, mask);
         } else if (sscanf(s, "nd(target="IPV6_SCAN_FMT",sll="ETH_ADDR_SCAN_FMT")%n",
                    nd_target_s, ETH_ADDR_SCAN_ARGS(nd_sll), &n) > 0
             && n > 0) {
             put_nd_key(n, nd_target_s, nd_sll, NULL, key);
             if (mask) {
-                put_nd_key(n, nd_target_mask_s, nd_sll_mask, NULL, mask);
+                put_nd_mask(n, nd_target_mask_s, nd_sll_mask, NULL, mask);
             }
         } else if (mask && sscanf(s, "nd(target="IPV6_SCAN_FMT"/"IPV6_SCAN_FMT
                          ",tll="ETH_ADDR_SCAN_FMT"/"ETH_ADDR_SCAN_FMT")%n",
@@ -2126,13 +2186,13 @@ parse_odp_key_mask_attr(const char *s, const struct simap *port_names,
                    ETH_ADDR_SCAN_ARGS(nd_tll),
                    ETH_ADDR_SCAN_ARGS(nd_tll_mask), &n) > 0 && n > 0) {
             put_nd_key(n, nd_target_s, NULL, nd_tll, key);
-            put_nd_key(n, nd_target_mask_s, NULL, nd_tll_mask, mask);
+            put_nd_mask(n, nd_target_mask_s, NULL, nd_tll_mask, mask);
         } else if (sscanf(s, "nd(target="IPV6_SCAN_FMT",tll="ETH_ADDR_SCAN_FMT")%n",
                    nd_target_s, ETH_ADDR_SCAN_ARGS(nd_tll), &n) > 0
             && n > 0) {
             put_nd_key(n, nd_target_s, NULL, nd_tll, key);
             if (mask) {
-                put_nd_key(n, nd_target_mask_s, NULL, nd_tll_mask, mask);
+                put_nd_mask(n, nd_target_mask_s, NULL, nd_tll_mask, mask);
             }
         } else if (mask && sscanf(s, "nd(target="IPV6_SCAN_FMT"/"IPV6_SCAN_FMT
                    ",sll="ETH_ADDR_SCAN_FMT"/"ETH_ADDR_SCAN_FMT","
@@ -2143,7 +2203,7 @@ parse_odp_key_mask_attr(const char *s, const struct simap *port_names,
                    &n) > 0
             && n > 0) {
             put_nd_key(n, nd_target_s, nd_sll, nd_tll, key);
-            put_nd_key(n, nd_target_mask_s, nd_sll_mask, nd_tll_mask, mask);
+            put_nd_mask(n, nd_target_mask_s, nd_sll_mask, nd_tll_mask, mask);
         } else if (sscanf(s, "nd(target="IPV6_SCAN_FMT",sll="ETH_ADDR_SCAN_FMT","
                    "tll="ETH_ADDR_SCAN_FMT")%n",
                    nd_target_s, ETH_ADDR_SCAN_ARGS(nd_sll),
@@ -2151,7 +2211,8 @@ parse_odp_key_mask_attr(const char *s, const struct simap *port_names,
             && n > 0) {
             put_nd_key(n, nd_target_s, nd_sll, nd_tll, key);
             if (mask) {
-                put_nd_key(n, nd_target_mask_s, nd_sll_mask, nd_tll_mask, mask);
+                put_nd_mask(n, nd_target_mask_s,
+                            nd_sll_mask, nd_tll_mask, mask);
             }
         }
 
