@@ -2142,14 +2142,14 @@ ofp_to_string__(const struct ofp_header *oh, enum ofpraw raw,
     case OFPTYPE_QUEUE_GET_CONFIG_REPLY:
     case OFPTYPE_GET_ASYNC_REQUEST:
     case OFPTYPE_GET_ASYNC_REPLY:
-    case OFPTYPE_GROUP_REQUEST:
-    case OFPTYPE_GROUP_REPLY:
-    case OFPTYPE_GROUP_DESC_REQUEST:
-    case OFPTYPE_GROUP_DESC_REPLY:
-    case OFPTYPE_GROUP_FEATURES_REQUEST:
-    case OFPTYPE_GROUP_FEATURES_REPLY:
-    case OFPTYPE_TABLE_FEATURES_REQUEST:
-    case OFPTYPE_TABLE_FEATURES_REPLY:
+    case OFPTYPE_GROUP_STATS_REQUEST:
+    case OFPTYPE_GROUP_STATS_REPLY:
+    case OFPTYPE_GROUP_DESC_STATS_REQUEST:
+    case OFPTYPE_GROUP_DESC_STATS_REPLY:
+    case OFPTYPE_GROUP_FEATURES_STATS_REQUEST:
+    case OFPTYPE_GROUP_FEATURES_STATS_REPLY:
+    case OFPTYPE_TABLE_FEATURES_STATS_REQUEST:
+    case OFPTYPE_TABLE_FEATURES_STATS_REPLY:
         ofp_print_not_implemented(string);
         break;
 
@@ -2218,30 +2218,30 @@ ofp_to_string__(const struct ofp_header *oh, enum ofpraw raw,
         ofp_print_role_message(string, oh);
         break;
 
-    case OFPTYPE_METER_REQUEST:
-    case OFPTYPE_METER_CONFIG_REQUEST:
+    case OFPTYPE_METER_STATS_REQUEST:
+    case OFPTYPE_METER_CONFIG_STATS_REQUEST:
         ofp_print_stats_request(string, oh);
         ofp_print_meter_stats_request(string, oh);
         break;
 
-    case OFPTYPE_METER_REPLY:
+    case OFPTYPE_METER_STATS_REPLY:
         ofp_print_stats_reply(string, oh);
         ofp_print_meter_stats_reply(string, oh);
         break;
 
-    case OFPTYPE_METER_CONFIG_REPLY:
+    case OFPTYPE_METER_CONFIG_STATS_REPLY:
         ofp_print_stats_reply(string, oh);
         ofp_print_meter_config_reply(string, oh);
         break;
 
-    case OFPTYPE_METER_FEATURES_REPLY:
+    case OFPTYPE_METER_FEATURES_STATS_REPLY:
         ofp_print_stats_reply(string, oh);
         ofp_print_meter_features_reply(string, oh);
         break;
 
     case OFPTYPE_DESC_STATS_REQUEST:
     case OFPTYPE_PORT_DESC_STATS_REQUEST:
-    case OFPTYPE_METER_FEATURES_REQUEST:
+    case OFPTYPE_METER_FEATURES_STATS_REQUEST:
         ofp_print_stats_request(string, oh);
         break;
 
