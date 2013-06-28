@@ -1,5 +1,107 @@
 AT_BANNER([ovs-ofctl])
 
+AT_SETUP([ovs-ofctl parse-flows choice of protocol])
+# This doesn't cover some potential vlan_tci test cases.
+for test_case in \
+    'tun_id=0                                    NXM,OXM' \
+    'tun_src=1.2.3.4                             NXM,OXM' \
+    'tun_dst=1.2.3.4                             NXM,OXM' \
+    'tun_flags=0                                 none' \
+    'tun_tos=0                                   none' \
+    'tun_ttl=0                                   none' \
+    'metadata=0                                  NXM,OXM' \
+    'in_port=1                                   any' \
+    'skb_priority=0                              none' \
+    'skb_mark=1                                  none' \
+    'reg0=0                                      NXM,OXM' \
+    'reg1=1                                      NXM,OXM' \
+    'reg2=2                                      NXM,OXM' \
+    'reg3=3                                      NXM,OXM' \
+    'reg4=4                                      NXM,OXM' \
+    'reg5=5                                      NXM,OXM' \
+    'reg6=6                                      NXM,OXM' \
+    'reg7=7                                      NXM,OXM' \
+    'dl_src=00:11:22:33:44:55                    any' \
+    'dl_src=00:11:22:33:44:55/00:ff:ff:ff:ff:ff  NXM,OXM' \
+    'dl_dst=00:11:22:33:44:55                    any' \
+    'dl_dst=00:11:22:33:44:55/00:ff:ff:ff:ff:ff  NXM,OXM' \
+    'dl_type=0x1234                              any' \
+    'dl_type=0x0800                              any' \
+    'dl_type=0x0806                              any' \
+    'dl_type=0x86dd                              any' \
+    'vlan_tci=0                                  any' \
+    'vlan_tci=0x1009                             any' \
+    'dl_vlan=9                                   any' \
+    'vlan_vid=11                                 any' \
+    'dl_vlan_pcp=6                               any' \
+    'vlan_pcp=5                                  any' \
+    'mpls,mpls_label=5                           NXM,OXM' \
+    'mpls,mpls_tc=1                              NXM,OXM' \
+    'mpls,mpls_bos=0                             NXM,OXM' \
+    'ip,ip_src=1.2.3.4                           any' \
+    'ip,ip_src=192.168.0.0/24                    any' \
+    'ip,ip_src=192.0.168.0/255.0.255.0           NXM,OXM' \
+    'ip,ip_dst=1.2.3.4                           any' \
+    'ip,ip_dst=192.168.0.0/24                    any' \
+    'ip,ip_dst=192.0.168.0/255.0.255.0           NXM,OXM' \
+    'ipv6,ipv6_src=::1                           NXM,OXM' \
+    'ipv6,ipv6_dst=::1                           NXM,OXM' \
+    'ipv6,ipv6_label=5                           NXM,OXM' \
+    'ip,nw_proto=1                               any' \
+    'ipv6,nw_proto=1                             NXM,OXM' \
+    'ip,nw_tos=0xf0                              any' \
+    'ipv6,nw_tos=0xf0                            NXM,OXM' \
+    'ip,nw_tos_shifted=0x3c                      any' \
+    'ipv6,nw_tos_shifted=0x3c                    NXM,OXM' \
+    'ip,nw_ecn=1                                 NXM,OXM' \
+    'ipv6,nw_ecn=1                               NXM,OXM' \
+    'ip,nw_ttl=5                                 NXM,OXM' \
+    'ipv6,nw_ttl=5                               NXM,OXM' \
+    'ip,ip_frag=no                               NXM,OXM' \
+    'ipv6,ip_frag=no                             NXM,OXM' \
+    'arp,arp_op=0                                any' \
+    'arp,arp_spa=1.2.3.4                         any' \
+    'arp,arp_tpa=1.2.3.4                         any' \
+    'arp,arp_sha=00:11:22:33:44:55               NXM,OXM' \
+    'arp,arp_tha=00:11:22:33:44:55               NXM,OXM' \
+    'tcp,tcp_src=80                              any' \
+    'tcp,tcp_src=0x1000/0x1000                   NXM,OXM' \
+    'tcp6,tcp_src=80                             NXM,OXM' \
+    'tcp6,tcp_src=0x1000/0x1000                  NXM,OXM' \
+    'tcp,tcp_dst=80                              any' \
+    'tcp,tcp_dst=0x1000/0x1000                   NXM,OXM' \
+    'tcp6,tcp_dst=80                             NXM,OXM' \
+    'tcp6,tcp_dst=0x1000/0x1000                  NXM,OXM' \
+    'udp,udp_src=80                              any' \
+    'udp,udp_src=0x1000/0x1000                   NXM,OXM' \
+    'udp6,udp_src=80                             NXM,OXM' \
+    'udp6,udp_src=0x1000/0x1000                  NXM,OXM' \
+    'udp,udp_dst=80                              any' \
+    'udp,udp_dst=0x1000/0x1000                   NXM,OXM' \
+    'udp6,udp_dst=80                             NXM,OXM' \
+    'udp6,udp_dst=0x1000/0x1000                  NXM,OXM' \
+    'icmp,icmp_type=1                            any' \
+    'icmp,icmp_type=1                            any' \
+    'icmp6,icmpv6_type=1                         NXM,OXM' \
+    'icmp6,icmpv6_code=2                         NXM,OXM'
+do
+    set $test_case
+    echo
+    echo "### test case: '$1' should have usable protocols '$2'"
+    if test "$2" = none; then
+      AT_CHECK([ovs-ofctl parse-flow "$1,actions=drop"], [1],
+               [usable protocols: none
+],
+               [ovs-ofctl: no usable protocol
+])
+    else
+      AT_CHECK_UNQUOTED([ovs-ofctl parse-flow "$1,actions=drop" | sed 1q], [0],
+                        [usable protocols: $2
+])
+    fi
+done
+AT_CLEANUP
+
 AT_SETUP([ovs-ofctl parse-flows (OpenFlow 1.0)])
 AT_DATA([flows.txt], [[
 # comment
@@ -51,7 +153,7 @@ actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_
 AT_CHECK([ovs-ofctl --protocols OpenFlow12 parse-flows flows.txt
 ], [0], [stdout])
 AT_CHECK([[sed 's/ (xid=0x[0-9a-fA-F]*)//' stdout]], [0],
-[[usable protocols: NXM,OXM
+[[usable protocols: any
 chosen protocol: OXM-OpenFlow12
 OFPT_FLOW_MOD (OF1.2): ADD table:255 tcp,tp_src=123 actions=FLOOD
 OFPT_FLOW_MOD (OF1.2): ADD table:255 in_port=LOCAL,dl_vlan=9,dl_src=00:0a:e4:25:6b:b0 actions=drop

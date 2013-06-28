@@ -1086,8 +1086,19 @@ ofputil_usable_protocols(const struct match *match)
             | OFPUTIL_P_OF13_OXM;
     }
 
-    /* NXM and OXM support matching IPv6 traffic. */
-    if (match->flow.dl_type == htons(ETH_TYPE_IPV6)) {
+    /* NXM and OXM support matching L3 and L4 fields within IPv6.
+     *
+     * (arp_sha, arp_tha, nw_frag, and nw_ttl are covered elsewhere so they
+     * don't need to be included in this test too.) */
+    if (match->flow.dl_type == htons(ETH_TYPE_IPV6)
+        && (!ipv6_mask_is_any(&wc->masks.ipv6_src)
+            || !ipv6_mask_is_any(&wc->masks.ipv6_dst)
+            || !ipv6_mask_is_any(&wc->masks.nd_target)
+            || wc->masks.ipv6_label
+            || wc->masks.tp_src
+            || wc->masks.tp_dst
+            || wc->masks.nw_proto
+            || wc->masks.nw_tos)) {
         return OFPUTIL_P_OF10_NXM_ANY | OFPUTIL_P_OF12_OXM
             | OFPUTIL_P_OF13_OXM;
     }
@@ -1108,12 +1119,6 @@ ofputil_usable_protocols(const struct match *match)
 
     /* NXM and OXM support matching fragments. */
     if (wc->masks.nw_frag) {
-        return OFPUTIL_P_OF10_NXM_ANY | OFPUTIL_P_OF12_OXM
-            | OFPUTIL_P_OF13_OXM;
-    }
-
-    /* NXM and OXM support matching IPv6 flow label. */
-    if (wc->masks.ipv6_label) {
         return OFPUTIL_P_OF10_NXM_ANY | OFPUTIL_P_OF12_OXM
             | OFPUTIL_P_OF13_OXM;
     }
