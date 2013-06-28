@@ -2285,7 +2285,11 @@ odp_flow_key_from_flow__(struct ofpbuf *buf, const struct flow *data,
     memcpy(eth_key->eth_dst, data->dl_dst, ETH_ADDR_LEN);
 
     if (flow->vlan_tci != htons(0) || flow->dl_type == htons(ETH_TYPE_VLAN)) {
-        nl_msg_put_be16(buf, OVS_KEY_ATTR_ETHERTYPE, htons(ETH_TYPE_VLAN));
+        if (is_mask) {
+            nl_msg_put_be16(buf, OVS_KEY_ATTR_ETHERTYPE, htons(UINT16_MAX));
+        } else {
+            nl_msg_put_be16(buf, OVS_KEY_ATTR_ETHERTYPE, htons(ETH_TYPE_VLAN));
+        }
         nl_msg_put_be16(buf, OVS_KEY_ATTR_VLAN, data->vlan_tci);
         encap = nl_msg_start_nested(buf, OVS_KEY_ATTR_ENCAP);
         if (flow->vlan_tci == htons(0)) {
