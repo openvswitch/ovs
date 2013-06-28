@@ -425,3 +425,24 @@ static thread_local int var;], [return var;])],
                   GCC __thread extenions.])
      fi
    fi])
+
+dnl OVS_CHECK_ATOMIC_ALWAYS_LOCK_FREE(SIZE)
+dnl
+dnl Checks __atomic_always_lock_free(SIZE, 0)
+AC_DEFUN([OVS_CHECK_ATOMIC_ALWAYS_LOCK_FREE], 
+  [AC_CACHE_CHECK(
+    [value of __atomic_always_lock_free($1)],
+    [ovs_cv_atomic_always_lock_free_$1],
+    [AC_COMPUTE_INT(
+        [ovs_cv_atomic_always_lock_free_$1],
+        [__atomic_always_lock_free($1, 0)],
+        [],
+        [ovs_cv_atomic_always_lock_free_$1=unsupported])])
+   if test ovs_cv_atomic_always_lock_free_$1 != unsupported; then
+     AC_DEFINE_UNQUOTED(
+       [ATOMIC_ALWAYS_LOCK_FREE_$1B],
+       [$ovs_cv_atomic_always_lock_free_$1],
+       [If the C compiler is GCC 4.7 or later, define to the return value of
+        __atomic_always_lock_free($1, 0).  If the C compiler is not GCC or is
+        an older version of GCC, the value does not matter.])
+   fi])

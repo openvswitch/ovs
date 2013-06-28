@@ -121,6 +121,13 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/ofp-version-opt.c \
 	lib/ofpbuf.c \
 	lib/ofpbuf.h \
+	lib/ovs-atomic-c11.h \
+	lib/ovs-atomic-gcc4+.c \
+	lib/ovs-atomic-gcc4+.h \
+	lib/ovs-atomic-gcc4.7+.h \
+	lib/ovs-atomic-pthreads.c \
+	lib/ovs-atomic-pthreads.h \
+	lib/ovs-atomic.h \
 	lib/ovs-thread.c \
 	lib/ovs-thread.h \
 	lib/ovsdb-data.c \

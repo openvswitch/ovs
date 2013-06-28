@@ -98,6 +98,7 @@ valgrind_wrappers = \
 	tests/valgrind/ovsdb-server \
 	tests/valgrind/ovsdb-tool \
 	tests/valgrind/test-aes128 \
+	tests/valgrind/test-atomic \
 	tests/valgrind/test-bundle \
 	tests/valgrind/test-byte-order \
 	tests/valgrind/test-classifier \
@@ -175,6 +176,10 @@ $(srcdir)/package.m4: $(top_srcdir)/configure.ac
 noinst_PROGRAMS += tests/test-aes128
 tests_test_aes128_SOURCES = tests/test-aes128.c
 tests_test_aes128_LDADD = lib/libopenvswitch.a $(SSL_LIBS)
+
+noinst_PROGRAMS += tests/test-atomic
+tests_test_atomic_SOURCES = tests/test-atomic.c
+tests_test_atomic_LDADD = lib/libopenvswitch.a $(SSL_LIBS)
 
 noinst_PROGRAMS += tests/test-bundle
 tests_test_bundle_SOURCES = tests/test-bundle.c
