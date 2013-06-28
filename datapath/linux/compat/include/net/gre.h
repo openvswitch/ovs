@@ -4,10 +4,10 @@
 #include <linux/skbuff.h>
 #include <net/ip_tunnels.h>
 
-#if LINUX_VERSION_CODE > KERNEL_VERSION(2,6,37)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,37)
 #include_next <net/gre.h>
 
-#else /* LINUX_VERSION_CODE <= KERNEL_VERSION(2,6,37) */
+#else /* LINUX_VERSION_CODE < KERNEL_VERSION(2,6,37) */
 
 #define GREPROTO_CISCO		0
 #define GREPROTO_MAX		2
