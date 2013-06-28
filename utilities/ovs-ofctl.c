@@ -2637,9 +2637,15 @@ ofctl_parse_ofp11_instructions(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
         /* Convert to ofpacts. */
         ofpbuf_init(&ofpacts, 0);
         size = of11_in.size;
-        error = ofpacts_pull_openflow11_instructions(
-            &of11_in, of11_in.size, table_id ? atoi(table_id) : 0,
-            &ofpacts);
+        error = ofpacts_pull_openflow11_instructions(&of11_in, of11_in.size,
+                                                     &ofpacts);
+        if (!error) {
+            /* Verify actions. */
+            struct flow flow;
+            memset(&flow, 0, sizeof flow);
+            error = ofpacts_check(ofpacts.data, ofpacts.size, &flow, OFPP_MAX,
+                                  table_id ? atoi(table_id) : 0);
+        }
         if (error) {
             printf("bad OF1.1 instructions: %s\n\n", ofperr_get_name(error));
             ofpbuf_uninit(&ofpacts);

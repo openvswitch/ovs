@@ -1397,7 +1397,7 @@ int ofproto_class_unregister(const struct ofproto_class *);
 enum { OFPROTO_POSTPONE = 1 << 16 };
 BUILD_ASSERT_DECL(OFPROTO_POSTPONE < OFPERR_OFS);
 
-int ofproto_flow_mod(struct ofproto *, const struct ofputil_flow_mod *);
+int ofproto_flow_mod(struct ofproto *, struct ofputil_flow_mod *);
 void ofproto_add_flow(struct ofproto *, const struct match *,
                       unsigned int priority,
                       const struct ofpact *ofpacts, size_t ofpacts_len);

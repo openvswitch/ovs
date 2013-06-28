@@ -1016,7 +1016,7 @@ parse_ofp_str(struct ofputil_flow_mod *fm, int command, const char *str_,
         fm->ofpacts = ofpbuf_steal_data(&ofpacts);
 
         err = ofpacts_check(fm->ofpacts, fm->ofpacts_len, &fm->match.flow,
-                            OFPP_MAX);
+                            OFPP_MAX, 0);
         if (err) {
             exit(EXIT_FAILURE);
         }

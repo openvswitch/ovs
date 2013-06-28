@@ -1103,7 +1103,6 @@ ofpacts_pull_openflow11_actions(struct ofpbuf *openflow,
 enum ofperr
 ofpacts_pull_openflow11_instructions(struct ofpbuf *openflow,
                                      unsigned int instructions_len,
-                                     uint8_t table_id,
                                      struct ofpbuf *ofpacts)
 {
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
@@ -1181,10 +1180,6 @@ ofpacts_pull_openflow11_instructions(struct ofpbuf *openflow,
 
         oigt = instruction_get_OFPIT11_GOTO_TABLE(
             insts[OVSINST_OFPIT11_GOTO_TABLE]);
-        if (table_id >= oigt->table_id) {
-            error = OFPERR_OFPBRC_BAD_TABLE_ID;
-            goto exit;
-        }
         ogt = ofpact_put_GOTO_TABLE(ofpacts);
         ogt->table_id = oigt->table_id;
     }
@@ -1204,7 +1199,8 @@ exit:
 
 /* May modify flow->dl_type, caller must restore it. */
 static enum ofperr
-ofpact_check__(const struct ofpact *a, struct flow *flow, ofp_port_t max_ports)
+ofpact_check__(const struct ofpact *a, struct flow *flow, ofp_port_t max_ports,
+               uint8_t table_id)
 {
     const struct ofpact_enqueue *enqueue;
 
@@ -1289,7 +1285,6 @@ ofpact_check__(const struct ofpact *a, struct flow *flow, ofp_port_t max_ports)
 
     case OFPACT_CLEAR_ACTIONS:
     case OFPACT_WRITE_METADATA:
-    case OFPACT_GOTO_TABLE:
         return 0;
 
     case OFPACT_METER: {
@@ -1299,6 +1294,13 @@ ofpact_check__(const struct ofpact *a, struct flow *flow, ofp_port_t max_ports)
         }
         return 0;
     }
+
+    case OFPACT_GOTO_TABLE:
+        if (ofpact_get_GOTO_TABLE(a)->table_id <= table_id) {
+            return OFPERR_OFPBRC_BAD_TABLE_ID;
+        }
+        return 0;
+
     default:
         NOT_REACHED();
     }
@@ -1311,14 +1313,14 @@ ofpact_check__(const struct ofpact *a, struct flow *flow, ofp_port_t max_ports)
  * May temporarily modify 'flow', but restores the changes before returning. */
 enum ofperr
 ofpacts_check(const struct ofpact ofpacts[], size_t ofpacts_len,
-              struct flow *flow, ofp_port_t max_ports)
+              struct flow *flow, ofp_port_t max_ports, uint8_t table_id)
 {
     const struct ofpact *a;
     ovs_be16 dl_type = flow->dl_type;
     enum ofperr error = 0;
 
     OFPACT_FOR_EACH (a, ofpacts, ofpacts_len) {
-        error = ofpact_check__(a, flow, max_ports);
+        error = ofpact_check__(a, flow, max_ports, table_id);
         if (error) {
             break;
         }

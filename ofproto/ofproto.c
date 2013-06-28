@@ -197,13 +197,13 @@ static bool rule_is_modifiable(const struct rule *);
 
 /* OpenFlow. */
 static enum ofperr add_flow(struct ofproto *, struct ofconn *,
-                            const struct ofputil_flow_mod *,
+                            struct ofputil_flow_mod *,
                             const struct ofp_header *);
 static void delete_flow__(struct rule *, struct ofopgroup *,
                           enum ofp_flow_removed_reason);
 static bool handle_openflow(struct ofconn *, const struct ofpbuf *);
 static enum ofperr handle_flow_mod__(struct ofproto *, struct ofconn *,
-                                     const struct ofputil_flow_mod *,
+                                     struct ofputil_flow_mod *,
                                      const struct ofp_header *);
 static void calc_duration(long long int start, long long int now,
                           uint32_t *sec, uint32_t *nsec);
@@ -1629,7 +1629,7 @@ ofproto_add_flow(struct ofproto *ofproto, const struct match *match,
  *
  * This is a helper function for in-band control and fail-open. */
 int
-ofproto_flow_mod(struct ofproto *ofproto, const struct ofputil_flow_mod *fm)
+ofproto_flow_mod(struct ofproto *ofproto, struct ofputil_flow_mod *fm)
 {
     return handle_flow_mod__(ofproto, NULL, fm, NULL);
 }
@@ -2404,19 +2404,20 @@ find_meter(const struct ofpact ofpacts[], size_t ofpacts_len)
     return 0;
 }
 
-/* Checks that the 'ofpacts_len' bytes of actions in 'ofpacts' are
- * appropriate for a packet with the prerequisites satisfied by 'flow'.
+/* Checks that the 'ofpacts_len' bytes of actions in 'ofpacts' are appropriate
+ * for a packet with the prerequisites satisfied by 'flow' in table 'table_id'.
  * 'flow' may be temporarily modified, but is restored at return.
  */
 static enum ofperr
 ofproto_check_ofpacts(struct ofproto *ofproto,
                       const struct ofpact ofpacts[], size_t ofpacts_len,
-                      struct flow *flow)
+                      struct flow *flow, uint8_t table_id)
 {
     enum ofperr error;
     uint32_t mid;
 
-    error = ofpacts_check(ofpacts, ofpacts_len, flow, ofproto->max_ports);
+    error = ofpacts_check(ofpacts, ofpacts_len, flow, ofproto->max_ports,
+                          table_id);
     if (error) {
         return error;
     }
@@ -2474,7 +2475,7 @@ handle_packet_out(struct ofconn *ofconn, const struct ofp_header *oh)
     /* Verify actions against packet, then send packet if successful. */
     in_port_.ofp_port = po.in_port;
     flow_extract(payload, 0, 0, NULL, &in_port_, &flow);
-    error = ofproto_check_ofpacts(p, po.ofpacts, po.ofpacts_len, &flow);
+    error = ofproto_check_ofpacts(p, po.ofpacts, po.ofpacts_len, &flow, 0);
     if (!error) {
         error = p->ofproto_class->packet_out(p, payload, &flow,
                                              po.ofpacts, po.ofpacts_len);
@@ -3284,7 +3285,7 @@ is_flow_deletion_pending(const struct ofproto *ofproto,
  * if any. */
 static enum ofperr
 add_flow(struct ofproto *ofproto, struct ofconn *ofconn,
-         const struct ofputil_flow_mod *fm, const struct ofp_header *request)
+         struct ofputil_flow_mod *fm, const struct ofp_header *request)
 {
     struct oftable *table;
     struct ofopgroup *group;
@@ -3321,6 +3322,13 @@ add_flow(struct ofproto *ofproto, struct ofconn *ofconn,
 
     if (table->flags & OFTABLE_READONLY) {
         return OFPERR_OFPBRC_EPERM;
+    }
+
+    /* Verify actions. */
+    error = ofproto_check_ofpacts(ofproto, fm->ofpacts, fm->ofpacts_len,
+                                  &fm->match.flow, table_id);
+    if (error) {
+        return error;
     }
 
     /* Allocate new rule and initialize classifier rule. */
@@ -3433,8 +3441,7 @@ exit:
  * Returns 0 on success, otherwise an OpenFlow error code. */
 static enum ofperr
 modify_flows__(struct ofproto *ofproto, struct ofconn *ofconn,
-               const struct ofputil_flow_mod *fm,
-               const struct ofp_header *request,
+               struct ofputil_flow_mod *fm, const struct ofp_header *request,
                struct list *rules)
 {
     struct ofopgroup *group;
@@ -3454,6 +3461,13 @@ modify_flows__(struct ofproto *ofproto, struct ofconn *ofconn,
             error = 0;
         } else {
             continue;
+        }
+
+        /* Verify actions. */
+        error = ofpacts_check(fm->ofpacts, fm->ofpacts_len, &fm->match.flow,
+                              ofproto->max_ports, rule->table_id);
+        if (error) {
+            return error;
         }
 
         actions_changed = !ofpacts_equal(fm->ofpacts, fm->ofpacts_len,
@@ -3483,8 +3497,7 @@ modify_flows__(struct ofproto *ofproto, struct ofconn *ofconn,
 
 static enum ofperr
 modify_flows_add(struct ofproto *ofproto, struct ofconn *ofconn,
-                 const struct ofputil_flow_mod *fm,
-                 const struct ofp_header *request)
+                 struct ofputil_flow_mod *fm, const struct ofp_header *request)
 {
     if (fm->cookie_mask != htonll(0) || fm->new_cookie == htonll(UINT64_MAX)) {
         return 0;
@@ -3499,7 +3512,7 @@ modify_flows_add(struct ofproto *ofproto, struct ofconn *ofconn,
  * if any. */
 static enum ofperr
 modify_flows_loose(struct ofproto *ofproto, struct ofconn *ofconn,
-                   const struct ofputil_flow_mod *fm,
+                   struct ofputil_flow_mod *fm,
                    const struct ofp_header *request)
 {
     struct list rules;
@@ -3524,7 +3537,7 @@ modify_flows_loose(struct ofproto *ofproto, struct ofconn *ofconn,
  * if any. */
 static enum ofperr
 modify_flow_strict(struct ofproto *ofproto, struct ofconn *ofconn,
-                   const struct ofputil_flow_mod *fm,
+                   struct ofputil_flow_mod *fm,
                    const struct ofp_header *request)
 {
     struct list rules;
@@ -3700,11 +3713,6 @@ handle_flow_mod(struct ofconn *ofconn, const struct ofp_header *oh)
     error = ofputil_decode_flow_mod(&fm, oh, ofconn_get_protocol(ofconn),
                                     &ofpacts);
     if (!error) {
-        error = ofproto_check_ofpacts(ofproto, fm.ofpacts, fm.ofpacts_len,
-                                      &fm.match.flow);
-    }
-
-    if (!error) {
         error = handle_flow_mod__(ofproto, ofconn, &fm, oh);
     }
     if (error) {
@@ -3745,8 +3753,7 @@ exit:
 
 static enum ofperr
 handle_flow_mod__(struct ofproto *ofproto, struct ofconn *ofconn,
-                  const struct ofputil_flow_mod *fm,
-                  const struct ofp_header *oh)
+                  struct ofputil_flow_mod *fm, const struct ofp_header *oh)
 {
     if (ofproto->n_pending >= 50) {
         ovs_assert(!list_is_empty(&ofproto->pending));
