@@ -5911,7 +5911,7 @@ ofproto_unixctl_trace(struct unixctl_conn *conn, int argc, const char *argv[],
 {
     const struct dpif_backer *backer;
     struct ofproto_dpif *ofproto;
-    struct ofpbuf odp_key;
+    struct ofpbuf odp_key, odp_mask;
     struct ofpbuf *packet;
     struct ds result;
     struct flow flow;
@@ -5921,6 +5921,7 @@ ofproto_unixctl_trace(struct unixctl_conn *conn, int argc, const char *argv[],
     backer = NULL;
     ds_init(&result);
     ofpbuf_init(&odp_key, 0);
+    ofpbuf_init(&odp_mask, 0);
 
     /* Handle "-generate" or a hex string as the last argument. */
     if (!strcmp(argv[argc - 1], "-generate")) {
@@ -5941,7 +5942,7 @@ ofproto_unixctl_trace(struct unixctl_conn *conn, int argc, const char *argv[],
      * bridge is specified. If function odp_flow_key_from_string()
      * returns 0, the flow is a odp_flow. If function
      * parse_ofp_exact_flow() returns 0, the flow is a br_flow. */
-    if (!odp_flow_from_string(argv[argc - 1], NULL, &odp_key, NULL)) {
+    if (!odp_flow_from_string(argv[argc - 1], NULL, &odp_key, &odp_mask)) {
         /* If the odp_flow is the second argument,
          * the datapath name is the first argument. */
         if (argc == 3) {
@@ -6021,6 +6022,7 @@ exit:
     ds_destroy(&result);
     ofpbuf_delete(packet);
     ofpbuf_uninit(&odp_key);
+    ofpbuf_uninit(&odp_mask);
 }
 
 void
