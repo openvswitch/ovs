@@ -8240,7 +8240,7 @@ ofproto_unixctl_trace(struct unixctl_conn *conn, int argc, const char *argv[],
 {
     const char *dpname = argv[1];
     struct ofproto_dpif *ofproto;
-    struct ofpbuf odp_key;
+    struct ofpbuf odp_key, odp_mask;
     struct ofpbuf *packet;
     struct initial_vals initial_vals;
     struct ds result;
@@ -8250,6 +8250,7 @@ ofproto_unixctl_trace(struct unixctl_conn *conn, int argc, const char *argv[],
     packet = NULL;
     ofpbuf_init(&odp_key, 0);
     ds_init(&result);
+    ofpbuf_init(&odp_mask, 0);
 
     ofproto = ofproto_dpif_lookup(dpname);
     if (!ofproto) {
@@ -8277,7 +8278,7 @@ ofproto_unixctl_trace(struct unixctl_conn *conn, int argc, const char *argv[],
 
             /* Convert string to datapath key. */
             ofpbuf_init(&odp_key, 0);
-            error = odp_flow_from_string(flow_s, NULL, &odp_key, NULL);
+            error = odp_flow_from_string(flow_s, NULL, &odp_key, &odp_mask);
             if (error) {
                 unixctl_command_reply_error(conn, "Bad flow syntax");
                 goto exit;
@@ -8352,6 +8353,7 @@ exit:
     ds_destroy(&result);
     ofpbuf_delete(packet);
     ofpbuf_uninit(&odp_key);
+    ofpbuf_uninit(&odp_mask);
 }
 
 static void
