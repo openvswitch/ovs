@@ -795,7 +795,7 @@ flow_mask_hash_fields(const struct flow *flow, struct flow_wildcards *wc,
         if (flow->dl_type == htons(ETH_TYPE_IP)) {
             memset(&wc->masks.nw_src, 0xff, sizeof wc->masks.nw_src);
             memset(&wc->masks.nw_dst, 0xff, sizeof wc->masks.nw_dst);
-        } else {
+        } else if (flow->dl_type == htons(ETH_TYPE_IPV6)) {
             memset(&wc->masks.ipv6_src, 0xff, sizeof wc->masks.ipv6_src);
             memset(&wc->masks.ipv6_dst, 0xff, sizeof wc->masks.ipv6_dst);
         }
