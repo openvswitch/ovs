@@ -181,6 +181,7 @@ struct bfd {
     long long int detect_time;    /* RFC 5880 6.8.4 Detection time. */
 
     int ref_cnt;
+    int forwarding_override;      /* Manual override of 'forwarding' status. */
 };
 
 static bool bfd_in_poll(const struct bfd *);
@@ -196,6 +197,9 @@ static uint32_t generate_discriminator(void);
 static void bfd_put_details(struct ds *, const struct bfd *);
 static void bfd_unixctl_show(struct unixctl_conn *, int argc,
                              const char *argv[], void *aux OVS_UNUSED);
+static void bfd_unixctl_set_forwarding_override(struct unixctl_conn *,
+                                                int argc, const char *argv[],
+                                                void *aux OVS_UNUSED);
 static void log_msg(enum vlog_level, const struct msg *, const char *message,
                     const struct bfd *);
 
@@ -207,6 +211,10 @@ static struct hmap all_bfds = HMAP_INITIALIZER(&all_bfds);
 bool
 bfd_forwarding(const struct bfd *bfd)
 {
+    if (bfd->forwarding_override != -1) {
+        return bfd->forwarding_override == 1;
+    }
+
     return bfd->state == STATE_UP
         && bfd->rmt_diag != DIAG_PATH_DOWN
         && bfd->rmt_diag != DIAG_CPATH_DOWN
@@ -246,6 +254,9 @@ bfd_configure(struct bfd *bfd, const char *name,
     if (!init) {
         unixctl_command_register("bfd/show", "[interface]", 0, 1,
                                  bfd_unixctl_show, NULL);
+        unixctl_command_register("bfd/set-forwarding",
+                                 "[interface] normal|false|true", 1, 2,
+                                 bfd_unixctl_set_forwarding_override, NULL);
         init = true;
     }
 
@@ -257,6 +268,7 @@ bfd_configure(struct bfd *bfd, const char *name,
     if (!bfd) {
         bfd = xzalloc(sizeof *bfd);
         bfd->name = xstrdup(name);
+        bfd->forwarding_override = -1;
         bfd->disc = generate_discriminator();
         hmap_insert(&all_bfds, &bfd->node, bfd->disc);
 
@@ -896,4 +908,40 @@ bfd_unixctl_show(struct unixctl_conn *conn, int argc, const char *argv[],
     }
     unixctl_command_reply(conn, ds_cstr(&ds));
     ds_destroy(&ds);
+}
+
+
+static void
+bfd_unixctl_set_forwarding_override(struct unixctl_conn *conn, int argc,
+                                    const char *argv[], void *aux OVS_UNUSED)
+{
+    const char *forward_str = argv[argc - 1];
+    int forwarding_override;
+    struct bfd *bfd;
+
+    if (!strcasecmp("true", forward_str)) {
+        forwarding_override = 1;
+    } else if (!strcasecmp("false", forward_str)) {
+        forwarding_override = 0;
+    } else if (!strcasecmp("normal", forward_str)) {
+        forwarding_override = -1;
+    } else {
+        unixctl_command_reply_error(conn, "unknown fault string");
+        return;
+    }
+
+    if (argc > 2) {
+        bfd = bfd_find_by_name(argv[1]);
+        if (!bfd) {
+            unixctl_command_reply_error(conn, "no such BFD object");
+            return;
+        }
+        bfd->forwarding_override = forwarding_override;
+    } else {
+        HMAP_FOR_EACH (bfd, node, &all_bfds) {
+            bfd->forwarding_override = forwarding_override;
+        }
+    }
+
+    unixctl_command_reply(conn, "OK");
 }
