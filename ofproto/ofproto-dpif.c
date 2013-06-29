@@ -404,6 +404,10 @@ static void update_moving_averages(struct dpif_backer *backer);
  * for debugging the asynchronous flow_mod implementation.) */
 static bool clogged;
 
+/* By default, flows in the datapath are wildcarded (megaflows).  They
+ * may be disabled with the "ovs-appctl dpif/disable-megaflows" command. */
+static bool enable_megaflows = true;
+
 /* All existing ofproto_dpif instances, indexed by ->up.name. */
 static struct hmap all_ofproto_dpifs = HMAP_INITIALIZER(&all_ofproto_dpifs);
 
@@ -3476,8 +3480,10 @@ handle_flow_miss_with_facet(struct flow_miss *miss, struct facet *facet,
         subfacet->path = want_path;
 
         ofpbuf_use_stack(&op->mask, &op->maskbuf, sizeof op->maskbuf);
-        odp_flow_key_from_mask(&op->mask, &facet->xout.wc.masks,
-                               &miss->flow, UINT32_MAX);
+        if (enable_megaflows) {
+            odp_flow_key_from_mask(&op->mask, &facet->xout.wc.masks,
+                                   &miss->flow, UINT32_MAX);
+        }
 
         op->xout_garbage = false;
         op->dpif_op.type = DPIF_OP_FLOW_PUT;
@@ -5064,8 +5070,10 @@ subfacet_install(struct subfacet *subfacet, const struct ofpbuf *odp_actions,
     }
 
     ofpbuf_use_stack(&mask, &maskbuf, sizeof maskbuf);
-    odp_flow_key_from_mask(&mask, &facet->xout.wc.masks,
-                           &facet->flow, UINT32_MAX);
+    if (enable_megaflows) {
+        odp_flow_key_from_mask(&mask, &facet->xout.wc.masks,
+                               &facet->flow, UINT32_MAX);
+    }
 
     ret = dpif_flow_put(subfacet->backer->dpif, flags, subfacet->key,
                         subfacet->key_len,  mask.data, mask.size,
@@ -6388,6 +6396,48 @@ ofproto_unixctl_dpif_dump_megaflows(struct unixctl_conn *conn,
     ds_destroy(&ds);
 }
 
+/* Disable using the megaflows.
+ *
+ * This command is only needed for advanced debugging, so it's not
+ * documented in the man page. */
+static void
+ofproto_unixctl_dpif_disable_megaflows(struct unixctl_conn *conn,
+                                       int argc OVS_UNUSED,
+                                       const char *argv[] OVS_UNUSED,
+                                       void *aux OVS_UNUSED)
+{
+    struct ofproto_dpif *ofproto;
+
+    enable_megaflows = false;
+
+    HMAP_FOR_EACH (ofproto, all_ofproto_dpifs_node, &all_ofproto_dpifs) {
+        flush(&ofproto->up);
+    }
+
+    unixctl_command_reply(conn, "megaflows disabled");
+}
+
+/* Re-enable using megaflows.
+ *
+ * This command is only needed for advanced debugging, so it's not
+ * documented in the man page. */
+static void
+ofproto_unixctl_dpif_enable_megaflows(struct unixctl_conn *conn,
+                                      int argc OVS_UNUSED,
+                                      const char *argv[] OVS_UNUSED,
+                                      void *aux OVS_UNUSED)
+{
+    struct ofproto_dpif *ofproto;
+
+    enable_megaflows = true;
+
+    HMAP_FOR_EACH (ofproto, all_ofproto_dpifs_node, &all_ofproto_dpifs) {
+        flush(&ofproto->up);
+    }
+
+    unixctl_command_reply(conn, "megaflows enabled");
+}
+
 static void
 ofproto_unixctl_dpif_dump_flows(struct unixctl_conn *conn,
                                 int argc OVS_UNUSED, const char *argv[],
@@ -6501,6 +6551,10 @@ ofproto_dpif_unixctl_init(void)
                              ofproto_unixctl_dpif_del_flows, NULL);
     unixctl_command_register("dpif/dump-megaflows", "bridge", 1, 1,
                              ofproto_unixctl_dpif_dump_megaflows, NULL);
+    unixctl_command_register("dpif/disable-megaflows", "", 0, 0,
+                             ofproto_unixctl_dpif_disable_megaflows, NULL);
+    unixctl_command_register("dpif/enable-megaflows", "", 0, 0,
+                             ofproto_unixctl_dpif_enable_megaflows, NULL);
 }
 
 /* Linux VLAN device support (e.g. "eth0.10" for VLAN 10.)
