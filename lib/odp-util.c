@@ -2369,7 +2369,7 @@ odp_flow_key_from_flow__(struct ofpbuf *buf, const struct flow *data,
          *                    802.3 SNAP packet with valid eth_type).
          */
         if (is_mask) {
-            nl_msg_put_be16(buf, OVS_KEY_ATTR_ETHERTYPE, data->dl_type);
+            nl_msg_put_be16(buf, OVS_KEY_ATTR_ETHERTYPE, htons(UINT16_MAX));
         }
         goto unencap;
     }
