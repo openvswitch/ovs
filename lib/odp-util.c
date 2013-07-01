@@ -1054,7 +1054,7 @@ format_odp_key_attr(const struct nlattr *a, const struct nlattr *ma,
             ovs_be16 vlan_tci = nl_attr_get_be16(a);
             if (!is_exact) {
                 ovs_be16 mask = nl_attr_get_be16(ma);
-                ds_put_format(ds, "vid=%"PRIu16"/%"PRIx16",pcp=%d/0x%x,cfi=%d/%d",
+                ds_put_format(ds, "vid=%"PRIu16"/0x%"PRIx16",pcp=%d/0x%x,cfi=%d/%d",
                               vlan_tci_to_vid(vlan_tci),
                               vlan_tci_to_vid(mask),
                               vlan_tci_to_pcp(vlan_tci),
