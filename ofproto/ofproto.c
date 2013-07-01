@@ -213,6 +213,7 @@ static uint64_t pick_datapath_id(const struct ofproto *);
 static uint64_t pick_fallback_dpid(void);
 static void ofproto_destroy__(struct ofproto *);
 static void update_mtu(struct ofproto *, struct ofport *);
+static void meter_delete(struct ofproto *, uint32_t first, uint32_t last);
 
 /* unixctl. */
 static void ofproto_unixctl_init(void);
@@ -1084,6 +1085,11 @@ ofproto_destroy__(struct ofproto *ofproto)
 
     ovs_assert(list_is_empty(&ofproto->pending));
     ovs_assert(!ofproto->n_pending);
+
+    if (ofproto->meters) {
+        meter_delete(ofproto, 1, ofproto->meter_features.max_meters);
+        free(ofproto->meters);
+    }
 
     connmgr_destroy(ofproto->connmgr);
 
@@ -4255,6 +4261,22 @@ meter_create(const struct ofputil_meter_config *config,
     return meter;
 }
 
+static void
+meter_delete(struct ofproto *ofproto, uint32_t first, uint32_t last)
+{
+    uint32_t mid;
+    for (mid = first; mid <= last; ++mid) {
+        struct meter *meter = ofproto->meters[mid];
+        if (meter) {
+            ofproto->meters[mid] = NULL;
+            ofproto->ofproto_class->meter_del(ofproto,
+                                              meter->provider_meter_id);
+            free(meter->bands);
+            free(meter);
+        }
+    }
+}
+
 static enum ofperr
 handle_add_meter(struct ofproto *ofproto, struct ofputil_meter_mod *mm)
 {
@@ -4335,16 +4357,7 @@ handle_delete_meter(struct ofconn *ofconn, const struct ofp_header *oh,
     }
 
     /* Delete the meters. */
-    for (meter_id = first; meter_id <= last; ++meter_id) {
-        struct meter *meter = ofproto->meters[meter_id];
-        if (meter) {
-            ofproto->meters[meter_id] = NULL;
-            ofproto->ofproto_class->meter_del(ofproto,
-                                              meter->provider_meter_id);
-            free(meter->bands);
-            free(meter);
-        }
-    }
+    meter_delete(ofproto, first, last);
 
     return 0;
 }
