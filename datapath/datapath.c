@@ -2459,6 +2459,8 @@ static struct pernet_operations ovs_net_ops = {
 	.size = sizeof(struct ovs_net),
 };
 
+DEFINE_COMPAT_PNET_REG_FUNC(device);
+
 static int __init dp_init(void)
 {
 	int err;

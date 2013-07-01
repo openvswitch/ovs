@@ -64,20 +64,58 @@ static inline struct net *read_pnet(struct net * const *pnet)
 #endif /* 2.6.29 */
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,33)
-#define pernet_operations rpl_pernet_operations
-struct pernet_operations {
+struct rpl_pernet_operations {
 	int (*init)(struct net *net);
 	void (*exit)(struct net *net);
 	int *id;
 	size_t size;
+	struct pernet_operations ops;
 };
-
-extern int rpl_register_pernet_gen_device(struct rpl_pernet_operations *ops);
-extern void rpl_unregister_pernet_gen_device(struct rpl_pernet_operations *ops);
+#define pernet_operations rpl_pernet_operations
 
 #define register_pernet_device rpl_register_pernet_gen_device
 #define unregister_pernet_device rpl_unregister_pernet_gen_device
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,32)
+extern int rpl_register_pernet_gen_device(struct rpl_pernet_operations *ops);
+extern void rpl_unregister_pernet_gen_device(struct rpl_pernet_operations *ops);
+
+#else /* for 2.6.32* */
+
+int __net_init compat_init_net(struct net *net, struct rpl_pernet_operations *pnet);
+void __net_exit compat_exit_net(struct net *net, struct rpl_pernet_operations *pnet);
+
+#define DEFINE_COMPAT_PNET_REG_FUNC(TYPE)					\
+									\
+static struct rpl_pernet_operations *pnet_gen_##TYPE;			\
+static int __net_init compat_init_net_gen_##TYPE(struct net *net)	\
+{									\
+	return compat_init_net(net, pnet_gen_##TYPE);			\
+}									\
+									\
+static void __net_exit compat_exit_net_gen_##TYPE(struct net *net)	\
+{									\
+	compat_exit_net(net, pnet_gen_##TYPE);				\
+}									\
+									\
+static int __net_init rpl_register_pernet_gen_##TYPE(struct rpl_pernet_operations *rpl_pnet)	\
+{										\
+	pnet_gen_##TYPE = rpl_pnet;						\
+	rpl_pnet->ops.init = compat_init_net_gen_##TYPE;			\
+	rpl_pnet->ops.exit = compat_exit_net_gen_##TYPE;			\
+	return register_pernet_gen_##TYPE(pnet_gen_##TYPE->id, &rpl_pnet->ops); \
+}											\
+											\
+static void __net_exit rpl_unregister_pernet_gen_##TYPE(struct rpl_pernet_operations *rpl_pnet)		\
+{											\
+	unregister_pernet_gen_##TYPE(*pnet_gen_##TYPE->id, &rpl_pnet->ops);		\
+}
+#endif
+#endif /* 2.6.33 */
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,32) || \
+    LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,33)
+#define DEFINE_COMPAT_PNET_REG_FUNC(TYPE)
 #endif /* 2.6.33 */
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,32)
