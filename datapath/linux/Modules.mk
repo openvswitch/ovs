@@ -3,6 +3,7 @@ openvswitch_sources += \
 	linux/compat/dev-openvswitch.c \
 	linux/compat/exthdrs_core.c \
 	linux/compat/flex_array.c \
+	linux/compat/flow_dissector.c \
 	linux/compat/gre.c \
 	linux/compat/gso.c \
 	linux/compat/genetlink-openvswitch.c \
@@ -14,6 +15,7 @@ openvswitch_sources += \
 	linux/compat/reciprocal_div.c \
 	linux/compat/skbuff-openvswitch.c \
 	linux/compat/time.c	\
+	linux/compat/vxlan.c	\
 	linux/compat/workqueue.c
 openvswitch_headers += \
 	linux/compat/gso.h \
@@ -65,6 +67,7 @@ openvswitch_headers += \
 	linux/compat/include/linux/workqueue.h \
 	linux/compat/include/net/checksum.h \
 	linux/compat/include/net/dst.h \
+	linux/compat/include/net/flow_keys.h \
 	linux/compat/include/net/genetlink.h \
 	linux/compat/include/net/gre.h \
 	linux/compat/include/net/inet_frag.h \
@@ -76,4 +79,5 @@ openvswitch_headers += \
 	linux/compat/include/net/protocol.h \
 	linux/compat/include/net/route.h \
 	linux/compat/include/net/sock.h \
-	linux/compat/include/net/netns/generic.h
+	linux/compat/include/net/netns/generic.h \
+	linux/compat/include/net/vxlan.h

@@ -100,4 +100,10 @@ static inline void skb_set_mark(struct sk_buff *skb, u32 mark)
 #define rt_dst(rt) (rt->u.dst)
 #endif
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,33)
+#define inet_sport(sk)	(inet_sk(sk)->sport)
+#else
+#define inet_sport(sk)	(inet_sk(sk)->inet_sport)
+#endif
+
 #endif /* compat.h */

@@ -251,4 +251,26 @@ static inline void skb_reset_mac_len(struct sk_buff *skb)
 	skb->mac_len = skb->network_header - skb->mac_header;
 }
 #endif
+
+static inline int skb_unclone(struct sk_buff *skb, gfp_t pri)
+{
+	might_sleep_if(pri & __GFP_WAIT);
+
+	if (skb_cloned(skb))
+		return pskb_expand_head(skb, 0, 0, pri);
+
+	return 0;
+}
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,37)
+extern u32 __skb_get_rxhash(struct sk_buff *skb);
+static inline __u32 skb_get_rxhash(struct sk_buff *skb)
+{
+#if LINUX_VERSION_CODE > KERNEL_VERSION(2,6,34)
+	if (!skb->rxhash)
+#endif
+	return __skb_get_rxhash(skb);
+}
+#endif
+
 #endif
