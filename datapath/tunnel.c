@@ -186,7 +186,9 @@ u16 ovs_tnl_get_src_port(struct sk_buff *skb)
 	int low;
 	int high;
 	unsigned int range;
-	u32 hash = OVS_CB(skb)->flow->hash;
+	struct sw_flow_key *pkt_key = OVS_CB(skb)->pkt_key;
+	u32 hash = jhash2((const u32 *)pkt_key,
+			  sizeof(*pkt_key) / sizeof(u32), 0);
 
 	inet_get_local_port_range(&low, &high);
 	range = (high - low) + 1;
