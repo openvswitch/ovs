@@ -197,7 +197,7 @@ netdev_bsd_init(void)
     af_link_sock = socket(AF_LINK, SOCK_DGRAM, 0);
     status = af_link_sock >= 0 ? 0 : errno;
     if (status) {
-        VLOG_ERR("failed to create link socket: %s", Ovs_strerror(status));
+        VLOG_ERR("failed to create link socket: %s", ovs_strerror(status));
         close(af_inet_sock);
         af_inet_sock = -1;
     }
