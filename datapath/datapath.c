@@ -1357,8 +1357,10 @@ static int ovs_flow_cmd_new_or_set(struct sk_buff *skb, struct genl_info *info)
 
 		/* The unmasked key has to be the same for flow updates. */
 		error = -EINVAL;
-		if (!ovs_flow_cmp_unmasked_key(flow, &key, match.range.end))
+		if (!ovs_flow_cmp_unmasked_key(flow, &key, match.range.end)) {
+			OVS_NLERR("Flow modification message rejected, unmasked key does not match.\n");
 			goto err_unlock_ovs;
+		}
 
 		/* Update actions. */
 		old_acts = ovsl_dereference(flow->sf_acts);
@@ -1406,8 +1408,10 @@ static int ovs_flow_cmd_get(struct sk_buff *skb, struct genl_info *info)
 	struct sw_flow_match match;
 	int err;
 
-	if (!a[OVS_FLOW_ATTR_KEY])
+	if (!a[OVS_FLOW_ATTR_KEY]) {
+		OVS_NLERR("Flow get message rejected, Key attribute missing.\n");
 		return -EINVAL;
+	}
 
 	ovs_match_init(&match, &key, NULL);
 	err = ovs_match_from_nlattrs(&match, a[OVS_FLOW_ATTR_KEY], NULL);
