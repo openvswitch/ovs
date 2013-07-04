@@ -9,6 +9,7 @@
 /ovs-pki.log
 /pki/
 /test-aes128
+/test-atomic
 /test-bundle
 /test-byte-order
 /test-classifier
