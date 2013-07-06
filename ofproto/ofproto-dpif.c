@@ -771,12 +771,12 @@ type_run(const char *type)
             }
 
             xlate_ofproto_set(ofproto, ofproto->up.name, ofproto->ml,
-                              ofproto->mbridge, ofproto->sflow,
-                              ofproto->ipfix, ofproto->up.frag_handling,
+                              ofproto->stp, ofproto->mbridge,
+                              ofproto->sflow, ofproto->ipfix,
+                              ofproto->up.frag_handling,
                               ofproto->up.forward_bpdu,
                               connmgr_has_in_band(ofproto->up.connmgr),
-                              ofproto->netflow != NULL,
-                              ofproto->stp != NULL);
+                              ofproto->netflow != NULL);
 
             HMAP_FOR_EACH (bundle, hmap_node, &ofproto->bundles) {
                 xlate_bundle_set(ofproto, bundle, bundle->name,
@@ -787,12 +787,15 @@ type_run(const char *type)
             }
 
             HMAP_FOR_EACH (ofport, up.hmap_node, &ofproto->up.ports) {
+                int stp_port = ofport->stp_port
+                    ? stp_port_no(ofport->stp_port)
+                    : 0;
                 xlate_ofport_set(ofproto, ofport->bundle, ofport,
                                  ofport->up.ofp_port, ofport->odp_port,
                                  ofport->up.netdev, ofport->cfm,
-                                 ofport->bfd, ofport->peer,
-                                 ofport->up.pp.config, ofport->stp_state,
-                                 ofport->is_tunnel, ofport->may_enable);
+                                 ofport->bfd, ofport->peer, stp_port,
+                                 ofport->up.pp.config, ofport->is_tunnel,
+                                 ofport->may_enable);
             }
 
             cls_cursor_init(&cursor, &ofproto->facets, NULL);
@@ -2173,39 +2176,6 @@ stp_wait(struct ofproto_dpif *ofproto)
 {
     if (ofproto->stp) {
         poll_timer_wait(1000);
-    }
-}
-
-/* Returns true if STP should process 'flow'.  Sets fields in 'wc' that
- * were used to make the determination.*/
-bool
-stp_should_process_flow(const struct flow *flow, struct flow_wildcards *wc)
-{
-    memset(&wc->masks.dl_dst, 0xff, sizeof wc->masks.dl_dst);
-    return eth_addr_equals(flow->dl_dst, eth_addr_stp);
-}
-
-void
-stp_process_packet(const struct ofport_dpif *ofport,
-                   const struct ofpbuf *packet)
-{
-    struct ofpbuf payload = *packet;
-    struct eth_header *eth = payload.data;
-    struct stp_port *sp = ofport->stp_port;
-
-    /* Sink packets on ports that have STP disabled when the bridge has
-     * STP enabled. */
-    if (!sp || stp_port_get_state(sp) == STP_DISABLED) {
-        return;
-    }
-
-    /* Trim off padding on payload. */
-    if (payload.size > ntohs(eth->eth_type) + ETH_HEADER_LEN) {
-        payload.size = ntohs(eth->eth_type) + ETH_HEADER_LEN;
-    }
-
-    if (ofpbuf_try_pull(&payload, ETH_HEADER_LEN + LLC_HEADER_LEN)) {
-        stp_received_bpdu(sp, payload.data, payload.size);
     }
 }
 

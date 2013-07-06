@@ -110,10 +110,10 @@ struct xlate_in {
 };
 
 void xlate_ofproto_set(struct ofproto_dpif *, const char *name,
-                       const struct mac_learning *, const struct mbridge *,
-                       const struct dpif_sflow *, const struct dpif_ipfix *,
-                       enum ofp_config_flags, bool forward_bpdu,
-                       bool has_in_band, bool has_netflow, bool has_stp);
+                       const struct mac_learning *, struct stp *,
+                       const struct mbridge *, const struct dpif_sflow *,
+                       const struct dpif_ipfix *, enum ofp_config_flags,
+                       bool forward_bpdu, bool has_in_band, bool has_netflow);
 void xlate_remove_ofproto(struct ofproto_dpif *);
 
 void xlate_bundle_set(struct ofproto_dpif *, struct ofbundle *,
@@ -127,8 +127,8 @@ void xlate_ofport_set(struct ofproto_dpif *, struct ofbundle *,
                       struct ofport_dpif *, ofp_port_t, odp_port_t,
                       const struct netdev *, const struct cfm *,
                       const struct bfd *, struct ofport_dpif *peer,
-                      enum ofputil_port_config, enum stp_state, bool is_tunnel,
-                      bool may_enable);
+                      int stp_port_no, enum ofputil_port_config,
+                      bool is_tunnel, bool may_enable);
 void xlate_ofport_remove(struct ofport_dpif *);
 
 void xlate_actions(struct xlate_in *, struct xlate_out *);

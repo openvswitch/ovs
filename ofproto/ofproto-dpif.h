@@ -69,10 +69,6 @@ size_t put_userspace_action(const struct ofproto_dpif *,
                             const union user_action_cookie *,
                             const size_t cookie_size);
 
-bool stp_should_process_flow(const struct flow *, struct flow_wildcards *);
-void stp_process_packet(const struct ofport_dpif *,
-                        const struct ofpbuf *packet);
-
 bool ofproto_has_vlan_splinters(const struct ofproto_dpif *);
 ofp_port_t vsp_realdev_to_vlandev(const struct ofproto_dpif *,
                                   ofp_port_t realdev_ofp_port,

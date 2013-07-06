@@ -65,9 +65,9 @@ struct xbridge {
     struct mbridge *mbridge;      /* Mirroring. */
     struct dpif_sflow *sflow;     /* SFlow handle, or null. */
     struct dpif_ipfix *ipfix;     /* Ipfix handle, or null. */
+    struct stp *stp;              /* STP or null if disabled. */
 
     enum ofp_config_flags frag;   /* Fragmentation handling. */
-    bool has_stp;                 /* Bridge runs stp? */
     bool has_netflow;             /* Bridge runs netflow? */
     bool has_in_band;             /* Bridge has in band control? */
     bool forward_bpdu;            /* Bridge forwards STP BPDUs? */
@@ -112,7 +112,7 @@ struct xport {
     struct xport *peer;              /* Patch port peer or null. */
 
     enum ofputil_port_config config; /* OpenFlow port configuration. */
-    enum stp_state stp_state;        /* STP_DISABLED if STP not in use. */
+    int stp_port_no;                 /* STP port number or 0 if not in use. */
 
     bool may_enable;                 /* May be enabled in bonds. */
     bool is_tunnel;                  /* Is a tunnel port. */
@@ -190,11 +190,11 @@ static struct xport *get_ofp_port(const struct xbridge *, ofp_port_t ofp_port);
 
 void
 xlate_ofproto_set(struct ofproto_dpif *ofproto, const char *name,
-                  const struct mac_learning *ml, const struct mbridge *mbridge,
+                  const struct mac_learning *ml, struct stp *stp,
+                  const struct mbridge *mbridge,
                   const struct dpif_sflow *sflow,
                   const struct dpif_ipfix *ipfix, enum ofp_config_flags frag,
-                  bool forward_bpdu, bool has_in_band, bool has_netflow,
-                  bool has_stp)
+                  bool forward_bpdu, bool has_in_band, bool has_netflow)
 {
     struct xbridge *xbridge = xbridge_lookup(ofproto);
 
@@ -227,13 +227,17 @@ xlate_ofproto_set(struct ofproto_dpif *ofproto, const char *name,
         xbridge->ipfix = dpif_ipfix_ref(ipfix);
     }
 
+    if (xbridge->stp != stp) {
+        stp_unref(xbridge->stp);
+        xbridge->stp = stp_ref(stp);
+    }
+
     free(xbridge->name);
     xbridge->name = xstrdup(name);
 
     xbridge->forward_bpdu = forward_bpdu;
     xbridge->has_in_band = has_in_band;
     xbridge->has_netflow = has_netflow;
-    xbridge->has_stp = has_stp;
     xbridge->frag = frag;
 }
 
@@ -330,8 +334,9 @@ xlate_ofport_set(struct ofproto_dpif *ofproto, struct ofbundle *ofbundle,
                  struct ofport_dpif *ofport, ofp_port_t ofp_port,
                  odp_port_t odp_port, const struct netdev *netdev,
                  const struct cfm *cfm, const struct bfd *bfd,
-                 struct ofport_dpif *peer, enum ofputil_port_config config,
-                 enum stp_state stp_state, bool is_tunnel, bool may_enable)
+                 struct ofport_dpif *peer, int stp_port_no,
+                 enum ofputil_port_config config, bool is_tunnel,
+                 bool may_enable)
 {
     struct xport *xport = xport_lookup(ofport);
 
@@ -349,7 +354,7 @@ xlate_ofport_set(struct ofproto_dpif *ofproto, struct ofbundle *ofbundle,
     ovs_assert(xport->ofp_port == ofp_port);
 
     xport->config = config;
-    xport->stp_state = stp_state;
+    xport->stp_port_no = stp_port_no;
     xport->is_tunnel = is_tunnel;
     xport->may_enable = may_enable;
     xport->odp_port = odp_port;
@@ -453,6 +458,61 @@ xport_lookup(struct ofport_dpif *ofport)
         }
     }
     return NULL;
+}
+
+
+static enum stp_state
+xport_stp_learn_state(const struct xport *xport)
+{
+    enum stp_state stp_state = xport->xbridge->stp && xport->stp_port_no
+        ? stp_port_get_state(stp_get_port(xport->xbridge->stp,
+                                          xport->stp_port_no))
+        : STP_DISABLED;
+    return stp_learn_in_state(stp_state);
+}
+
+static bool
+xport_stp_forward_state(const struct xport *xport)
+{
+    enum stp_state stp_state = xport->xbridge->stp && xport->stp_port_no
+        ? stp_port_get_state(stp_get_port(xport->xbridge->stp,
+                                          xport->stp_port_no))
+        : STP_DISABLED;
+    return stp_forward_in_state(stp_state);
+}
+
+/* Returns true if STP should process 'flow'.  Sets fields in 'wc' that
+ * were used to make the determination.*/
+static bool
+stp_should_process_flow(const struct flow *flow, struct flow_wildcards *wc)
+{
+    memset(&wc->masks.dl_dst, 0xff, sizeof wc->masks.dl_dst);
+    return eth_addr_equals(flow->dl_dst, eth_addr_stp);
+}
+
+static void
+stp_process_packet(const struct xport *xport, const struct ofpbuf *packet)
+{
+    struct ofpbuf payload = *packet;
+    struct eth_header *eth = payload.data;
+    struct stp_port *sp = xport->xbridge->stp && xport->stp_port_no
+        ? stp_get_port(xport->xbridge->stp, xport->stp_port_no)
+        : NULL;
+
+    /* Sink packets on ports that have STP disabled when the bridge has
+     * STP enabled. */
+    if (!sp || stp_port_get_state(sp) == STP_DISABLED) {
+        return;
+    }
+
+    /* Trim off padding on payload. */
+    if (payload.size > ntohs(eth->eth_type) + ETH_HEADER_LEN) {
+        payload.size = ntohs(eth->eth_type) + ETH_HEADER_LEN;
+    }
+
+    if (ofpbuf_try_pull(&payload, ETH_HEADER_LEN + LLC_HEADER_LEN)) {
+        stp_received_bpdu(sp, payload.data, payload.size);
+    }
 }
 
 static struct xport *
@@ -1213,9 +1273,9 @@ process_special(struct xlate_ctx *ctx, const struct flow *flow,
             lacp_process_packet(xport->xbundle->lacp, xport->ofport, packet);
         }
         return SLOW_LACP;
-    } else if (xbridge->has_stp && stp_should_process_flow(flow, wc)) {
+    } else if (xbridge->stp && stp_should_process_flow(flow, wc)) {
         if (packet) {
-            stp_process_packet(xport->ofport, packet);
+            stp_process_packet(xport, packet);
         }
         return SLOW_STP;
     } else {
@@ -1246,7 +1306,7 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
     } else if (xport->config & OFPUTIL_PC_NO_FWD) {
         xlate_report(ctx, "OFPPC_NO_FWD set, skipping output");
         return;
-    } else if (check_stp && !stp_forward_in_state(xport->stp_state)) {
+    } else if (check_stp && !xport_stp_forward_state(xport)) {
         xlate_report(ctx, "STP not in forwarding state, skipping output");
         return;
     }
@@ -1272,7 +1332,7 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
         if (special) {
             ctx->xout->slow = special;
         } else if (may_receive(peer, ctx)) {
-            if (stp_forward_in_state(peer->stp_state)) {
+            if (xport_stp_forward_state(peer)) {
                 xlate_table_action(ctx, flow->in_port.ofp_port, 0, true);
             } else {
                 /* Forwarding is disabled by STP.  Let OFPP_NORMAL and the
@@ -1880,8 +1940,7 @@ may_receive(const struct xport *xport, struct xlate_ctx *ctx)
      * disabled.  If just learning is enabled, we need to have
      * OFPP_NORMAL and the learning action have a look at the packet
      * before we can drop it. */
-    if (!stp_forward_in_state(xport->stp_state)
-        && !stp_learn_in_state(xport->stp_state)) {
+    if (!xport_stp_forward_state(xport) && !xport_stp_learn_state(xport)) {
         return false;
     }
 
@@ -2372,7 +2431,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
 
             /* We've let OFPP_NORMAL and the learning action look at the
              * packet, so drop it now if forwarding is disabled. */
-            if (in_port && !stp_forward_in_state(in_port->stp_state)) {
+            if (in_port && !xport_stp_forward_state(in_port)) {
                 ctx.xout->odp_actions.size = sample_actions_len;
             }
         }
