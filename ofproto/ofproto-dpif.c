@@ -298,7 +298,9 @@ struct ofport_dpif {
     enum stp_state stp_state;   /* Always STP_DISABLED if STP not in use. */
     long long int stp_state_entered;
 
-    struct hmap priorities;     /* Map of attached 'priority_to_dscp's. */
+    /* Queue to DSCP mapping. */
+    struct ofproto_port_queue *qdscp;
+    size_t n_qdscp;
 
     /* Linux VLAN device support (e.g. "eth0.10" for VLAN 10.)
      *
@@ -308,16 +310,6 @@ struct ofport_dpif {
      * widespread use, we will delete these interfaces. */
     ofp_port_t realdev_ofp_port;
     int vlandev_vid;
-};
-
-/* Node in 'ofport_dpif''s 'priorities' map.  Used to maintain a map from
- * 'priority' (the datapath's term for QoS queue) to the dscp bits which all
- * traffic egressing the 'ofport' with that priority should be marked with. */
-struct priority_to_dscp {
-    struct hmap_node hmap_node; /* Node in 'ofport_dpif''s 'priorities' map. */
-    uint32_t priority;          /* Priority of this queue (see struct flow). */
-
-    uint8_t dscp;               /* DSCP bits to mark outgoing traffic with. */
 };
 
 /* Linux VLAN device support (e.g. "eth0.10" for VLAN 10.)
@@ -355,7 +347,6 @@ static void port_run_fast(struct ofport_dpif *);
 static void port_wait(struct ofport_dpif *);
 static int set_bfd(struct ofport *, const struct smap *);
 static int set_cfm(struct ofport *, const struct cfm_settings *);
-static void ofport_clear_priorities(struct ofport_dpif *);
 static void ofport_update_peer(struct ofport_dpif *);
 static void run_fast_rl(void);
 
@@ -794,6 +785,7 @@ type_run(const char *type)
                                  ofport->up.ofp_port, ofport->odp_port,
                                  ofport->up.netdev, ofport->cfm,
                                  ofport->bfd, ofport->peer, stp_port,
+                                 ofport->qdscp, ofport->n_qdscp,
                                  ofport->up.pp.config, ofport->is_tunnel,
                                  ofport->may_enable);
             }
@@ -1688,7 +1680,8 @@ port_construct(struct ofport *port_)
     port->stp_state = STP_DISABLED;
     port->is_tunnel = false;
     port->peer = NULL;
-    hmap_init(&port->priorities);
+    port->qdscp = NULL;
+    port->n_qdscp = 0;
     port->realdev_ofp_port = 0;
     port->vlandev_vid = 0;
     port->carrier_seq = netdev_get_carrier_resets(netdev);
@@ -1782,8 +1775,7 @@ port_destruct(struct ofport *port_)
         dpif_sflow_del_port(ofproto->sflow, port->odp_port);
     }
 
-    ofport_clear_priorities(port);
-    hmap_destroy(&port->priorities);
+    free(port->qdscp);
 }
 
 static void
@@ -2186,87 +2178,23 @@ ofproto_dpif_queue_to_priority(const struct ofproto_dpif *ofproto,
     return dpif_queue_to_priority(ofproto->backer->dpif, queue_id, priority);
 }
 
-static struct priority_to_dscp *
-get_priority(const struct ofport_dpif *ofport, uint32_t priority)
-{
-    struct priority_to_dscp *pdscp;
-    uint32_t hash;
-
-    hash = hash_int(priority, 0);
-    HMAP_FOR_EACH_IN_BUCKET (pdscp, hmap_node, hash, &ofport->priorities) {
-        if (pdscp->priority == priority) {
-            return pdscp;
-        }
-    }
-    return NULL;
-}
-
-bool
-ofproto_dpif_dscp_from_priority(const struct ofport_dpif *ofport,
-                                uint32_t priority, uint8_t *dscp)
-{
-    struct priority_to_dscp *pdscp = get_priority(ofport, priority);
-    *dscp = pdscp ? pdscp->dscp : 0;
-    return pdscp != NULL;
-}
-
-static void
-ofport_clear_priorities(struct ofport_dpif *ofport)
-{
-    struct priority_to_dscp *pdscp, *next;
-
-    HMAP_FOR_EACH_SAFE (pdscp, next, hmap_node, &ofport->priorities) {
-        hmap_remove(&ofport->priorities, &pdscp->hmap_node);
-        free(pdscp);
-    }
-}
-
 static int
-set_queues(struct ofport *ofport_,
-           const struct ofproto_port_queue *qdscp_list,
+set_queues(struct ofport *ofport_, const struct ofproto_port_queue *qdscp,
            size_t n_qdscp)
 {
     struct ofport_dpif *ofport = ofport_dpif_cast(ofport_);
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofport->up.ofproto);
-    struct hmap new = HMAP_INITIALIZER(&new);
-    size_t i;
 
-    for (i = 0; i < n_qdscp; i++) {
-        struct priority_to_dscp *pdscp;
-        uint32_t priority;
-        uint8_t dscp;
-
-        dscp = (qdscp_list[i].dscp << 2) & IP_DSCP_MASK;
-        if (dpif_queue_to_priority(ofproto->backer->dpif, qdscp_list[i].queue,
-                                   &priority)) {
-            continue;
-        }
-
-        pdscp = get_priority(ofport, priority);
-        if (pdscp) {
-            hmap_remove(&ofport->priorities, &pdscp->hmap_node);
-        } else {
-            pdscp = xmalloc(sizeof *pdscp);
-            pdscp->priority = priority;
-            pdscp->dscp = dscp;
-            ofproto->backer->need_revalidate = REV_RECONFIGURE;
-        }
-
-        if (pdscp->dscp != dscp) {
-            pdscp->dscp = dscp;
-            ofproto->backer->need_revalidate = REV_RECONFIGURE;
-        }
-
-        hmap_insert(&new, &pdscp->hmap_node, hash_int(pdscp->priority, 0));
-    }
-
-    if (!hmap_is_empty(&ofport->priorities)) {
-        ofport_clear_priorities(ofport);
+    if (ofport->n_qdscp != n_qdscp
+        || (n_qdscp && memcmp(ofport->qdscp, qdscp,
+                              n_qdscp * sizeof *qdscp))) {
         ofproto->backer->need_revalidate = REV_RECONFIGURE;
+        free(ofport->qdscp);
+        ofport->qdscp = n_qdscp
+            ? xmemdup(qdscp, n_qdscp * sizeof *qdscp)
+            : NULL;
+        ofport->n_qdscp = n_qdscp;
     }
-
-    hmap_swap(&new, &ofport->priorities);
-    hmap_destroy(&new);
 
     return 0;
 }

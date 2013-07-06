@@ -114,6 +114,8 @@ struct xport {
     enum ofputil_port_config config; /* OpenFlow port configuration. */
     int stp_port_no;                 /* STP port number or 0 if not in use. */
 
+    struct hmap skb_priorities;      /* Map of 'skb_priority_to_dscp's. */
+
     bool may_enable;                 /* May be enabled in bonds. */
     bool is_tunnel;                  /* Is a tunnel port. */
 
@@ -164,6 +166,16 @@ struct xlate_ctx {
  * The bundle's name and vlan mode are initialized in lookup_input_bundle() */
 static struct xbundle ofpp_none_bundle;
 
+/* Node in 'xport''s 'skb_priorities' map.  Used to maintain a map from
+ * 'priority' (the datapath's term for QoS queue) to the dscp bits which all
+ * traffic egressing the 'ofport' with that priority should be marked with. */
+struct skb_priority_to_dscp {
+    struct hmap_node hmap_node; /* Node in 'ofport_dpif''s 'skb_priorities'. */
+    uint32_t skb_priority;      /* Priority of this queue (see struct flow). */
+
+    uint8_t dscp;               /* DSCP bits to mark outgoing traffic with. */
+};
+
 static struct hmap xbridges = HMAP_INITIALIZER(&xbridges);
 static struct hmap xbundles = HMAP_INITIALIZER(&xbundles);
 static struct hmap xports = HMAP_INITIALIZER(&xports);
@@ -187,6 +199,11 @@ static struct xbridge *xbridge_lookup(const struct ofproto_dpif *);
 static struct xbundle *xbundle_lookup(const struct ofbundle *);
 static struct xport *xport_lookup(struct ofport_dpif *);
 static struct xport *get_ofp_port(const struct xbridge *, ofp_port_t ofp_port);
+static struct skb_priority_to_dscp *get_skb_priority(const struct xport *,
+                                                     uint32_t skb_priority);
+static void clear_skb_priorities(struct xport *);
+static bool dscp_from_skb_priority(const struct xport *, uint32_t skb_priority,
+                                   uint8_t *dscp);
 
 void
 xlate_ofproto_set(struct ofproto_dpif *ofproto, const char *name,
@@ -335,10 +352,12 @@ xlate_ofport_set(struct ofproto_dpif *ofproto, struct ofbundle *ofbundle,
                  odp_port_t odp_port, const struct netdev *netdev,
                  const struct cfm *cfm, const struct bfd *bfd,
                  struct ofport_dpif *peer, int stp_port_no,
+                 const struct ofproto_port_queue *qdscp_list, size_t n_qdscp,
                  enum ofputil_port_config config, bool is_tunnel,
                  bool may_enable)
 {
     struct xport *xport = xport_lookup(ofport);
+    size_t i;
 
     if (!xport) {
         xport = xzalloc(sizeof *xport);
@@ -346,6 +365,7 @@ xlate_ofport_set(struct ofproto_dpif *ofproto, struct ofbundle *ofbundle,
         xport->xbridge = xbridge_lookup(ofproto);
         xport->ofp_port = ofp_port;
 
+        hmap_init(&xport->skb_priorities);
         hmap_insert(&xports, &xport->hmap_node, hash_pointer(ofport, 0));
         hmap_insert(&xport->xbridge->xports, &xport->ofp_node,
                     hash_ofp_port(xport->ofp_port));
@@ -389,6 +409,24 @@ xlate_ofport_set(struct ofproto_dpif *ofproto, struct ofbundle *ofbundle,
     if (xport->xbundle) {
         list_insert(&xport->xbundle->xports, &xport->bundle_node);
     }
+
+    clear_skb_priorities(xport);
+    for (i = 0; i < n_qdscp; i++) {
+        struct skb_priority_to_dscp *pdscp;
+        uint32_t skb_priority;
+
+        if (ofproto_dpif_queue_to_priority(xport->xbridge->ofproto,
+                                           qdscp_list[i].queue,
+                                           &skb_priority)) {
+            continue;
+        }
+
+        pdscp = xmalloc(sizeof *pdscp);
+        pdscp->skb_priority = skb_priority;
+        pdscp->dscp = (qdscp_list[i].dscp << 2) & IP_DSCP_MASK;
+        hmap_insert(&xport->skb_priorities, &pdscp->hmap_node,
+                    hash_int(pdscp->skb_priority, 0));
+    }
 }
 
 void
@@ -408,6 +446,9 @@ xlate_ofport_remove(struct ofport_dpif *ofport)
     if (xport->xbundle) {
         list_remove(&xport->bundle_node);
     }
+
+    clear_skb_priorities(xport);
+    hmap_destroy(&xport->skb_priorities);
 
     hmap_remove(&xports, &xport->hmap_node);
     hmap_remove(&xport->xbridge->xports, &xport->ofp_node);
@@ -1362,8 +1403,7 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
     flow_skb_mark = flow->skb_mark;
     flow_nw_tos = flow->nw_tos;
 
-    if (ofproto_dpif_dscp_from_priority(xport->ofport, flow->skb_priority,
-                                        &dscp)) {
+    if (dscp_from_skb_priority(xport, flow->skb_priority, &dscp)) {
         wc->masks.nw_tos |= IP_ECN_MASK;
         flow->nw_tos &= ~IP_DSCP_MASK;
         flow->nw_tos |= dscp;
@@ -2261,6 +2301,41 @@ xlate_out_copy(struct xlate_out *dst, const struct xlate_out *src)
                src->odp_actions.size);
 }
 
+static struct skb_priority_to_dscp *
+get_skb_priority(const struct xport *xport, uint32_t skb_priority)
+{
+    struct skb_priority_to_dscp *pdscp;
+    uint32_t hash;
+
+    hash = hash_int(skb_priority, 0);
+    HMAP_FOR_EACH_IN_BUCKET (pdscp, hmap_node, hash, &xport->skb_priorities) {
+        if (pdscp->skb_priority == skb_priority) {
+            return pdscp;
+        }
+    }
+    return NULL;
+}
+
+static bool
+dscp_from_skb_priority(const struct xport *xport, uint32_t skb_priority,
+                       uint8_t *dscp)
+{
+    struct skb_priority_to_dscp *pdscp = get_skb_priority(xport, skb_priority);
+    *dscp = pdscp ? pdscp->dscp : 0;
+    return pdscp != NULL;
+}
+
+static void
+clear_skb_priorities(struct xport *xport)
+{
+    struct skb_priority_to_dscp *pdscp, *next;
+
+    HMAP_FOR_EACH_SAFE (pdscp, next, hmap_node, &xport->skb_priorities) {
+        hmap_remove(&xport->skb_priorities, &pdscp->hmap_node);
+        free(pdscp);
+    }
+}
+
 static bool
 actions_output_to_local_port(const struct xlate_ctx *ctx)
 {

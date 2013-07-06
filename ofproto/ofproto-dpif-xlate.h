@@ -127,8 +127,9 @@ void xlate_ofport_set(struct ofproto_dpif *, struct ofbundle *,
                       struct ofport_dpif *, ofp_port_t, odp_port_t,
                       const struct netdev *, const struct cfm *,
                       const struct bfd *, struct ofport_dpif *peer,
-                      int stp_port_no, enum ofputil_port_config,
-                      bool is_tunnel, bool may_enable);
+                      int stp_port_no, const struct ofproto_port_queue *qdscp,
+                      size_t n_qdscp, enum ofputil_port_config, bool is_tunnel,
+                      bool may_enable);
 void xlate_ofport_remove(struct ofport_dpif *);
 
 void xlate_actions(struct xlate_in *, struct xlate_out *);

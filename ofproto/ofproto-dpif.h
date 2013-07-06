@@ -74,8 +74,6 @@ ofp_port_t vsp_realdev_to_vlandev(const struct ofproto_dpif *,
                                   ofp_port_t realdev_ofp_port,
                                   ovs_be16 vlan_tci);
 
-bool ofproto_dpif_dscp_from_priority(const struct ofport_dpif *,
-                                     uint32_t priority, uint8_t *dscp);
 int ofproto_dpif_queue_to_priority(const struct ofproto_dpif *,
                                    uint32_t queue_id, uint32_t *priority);
 
