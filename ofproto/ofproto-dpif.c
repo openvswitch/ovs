@@ -782,7 +782,8 @@ type_run(const char *type)
                 continue;
             }
 
-            xlate_ofproto_set(ofproto, ofproto->up.name, ofproto->ml,
+            xlate_ofproto_set(ofproto, ofproto->up.name,
+                              ofproto->backer->dpif, ofproto->ml,
                               ofproto->stp, ofproto->mbridge,
                               ofproto->sflow, ofproto->ipfix,
                               ofproto->up.frag_handling,
@@ -2230,13 +2231,6 @@ stp_wait(struct ofproto_dpif *ofproto)
     }
 }
 
-int
-ofproto_dpif_queue_to_priority(const struct ofproto_dpif *ofproto,
-                               uint32_t queue_id, uint32_t *priority)
-{
-    return dpif_queue_to_priority(ofproto->backer->dpif, queue_id, priority);
-}
-
 static int
 set_queues(struct ofport *ofport_, const struct ofproto_port_queue *qdscp,
            size_t n_qdscp)
@@ -5382,27 +5376,15 @@ compose_slow_path(const struct ofproto_dpif *ofproto, const struct flow *flow,
                                          ODPP_NONE);
         odp_put_userspace_action(pid, &cookie, sizeof cookie.slow_path, &buf);
     } else {
-        put_userspace_action(ofproto, &buf, flow, &cookie,
-                             sizeof cookie.slow_path);
+        odp_port_t odp_port;
+        uint32_t pid;
+
+        odp_port = ofp_port_to_odp_port(ofproto, flow->in_port.ofp_port);
+        pid = dpif_port_get_pid(ofproto->backer->dpif, odp_port);
+        odp_put_userspace_action(pid, &cookie, sizeof cookie.slow_path, &buf);
     }
     *actionsp = buf.data;
     *actions_lenp = buf.size;
-}
-
-size_t
-put_userspace_action(const struct ofproto_dpif *ofproto,
-                     struct ofpbuf *odp_actions,
-                     const struct flow *flow,
-                     const union user_action_cookie *cookie,
-                     const size_t cookie_size)
-{
-    uint32_t pid;
-
-    pid = dpif_port_get_pid(ofproto->backer->dpif,
-                            ofp_port_to_odp_port(ofproto,
-                                                 flow->in_port.ofp_port));
-
-    return odp_put_userspace_action(pid, cookie, cookie_size, odp_actions);
 }
 
 static bool

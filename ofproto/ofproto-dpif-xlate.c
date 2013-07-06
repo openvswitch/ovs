@@ -61,6 +61,7 @@ struct xbridge {
     struct hmap xports;           /* Indexed by ofp_port. */
 
     char *name;                   /* Name used in log messages. */
+    struct dpif *dpif;            /* Datapath interface. */
     struct mac_learning *ml;      /* Mac learning handle. */
     struct mbridge *mbridge;      /* Mirroring. */
     struct dpif_sflow *sflow;     /* SFlow handle, or null. */
@@ -206,8 +207,8 @@ static bool dscp_from_skb_priority(const struct xport *, uint32_t skb_priority,
 
 void
 xlate_ofproto_set(struct ofproto_dpif *ofproto, const char *name,
-                  const struct mac_learning *ml, struct stp *stp,
-                  const struct mbridge *mbridge,
+                  struct dpif *dpif, const struct mac_learning *ml,
+                  struct stp *stp, const struct mbridge *mbridge,
                   const struct dpif_sflow *sflow,
                   const struct dpif_ipfix *ipfix, enum ofp_config_flags frag,
                   bool forward_bpdu, bool has_in_band, bool has_netflow)
@@ -251,6 +252,7 @@ xlate_ofproto_set(struct ofproto_dpif *ofproto, const char *name,
     free(xbridge->name);
     xbridge->name = xstrdup(name);
 
+    xbridge->dpif = dpif;
     xbridge->forward_bpdu = forward_bpdu;
     xbridge->has_in_band = has_in_band;
     xbridge->has_netflow = has_netflow;
@@ -414,9 +416,8 @@ xlate_ofport_set(struct ofproto_dpif *ofproto, struct ofbundle *ofbundle,
         struct skb_priority_to_dscp *pdscp;
         uint32_t skb_priority;
 
-        if (ofproto_dpif_queue_to_priority(xport->xbridge->ofproto,
-                                           qdscp_list[i].queue,
-                                           &skb_priority)) {
+        if (dpif_queue_to_priority(xport->xbridge->dpif, qdscp_list[i].queue,
+                                   &skb_priority)) {
             continue;
         }
 
@@ -1137,15 +1138,19 @@ compose_sample_action(const struct xbridge *xbridge,
                       const size_t cookie_size)
 {
     size_t sample_offset, actions_offset;
+    odp_port_t odp_port;
     int cookie_offset;
+    uint32_t pid;
 
     sample_offset = nl_msg_start_nested(odp_actions, OVS_ACTION_ATTR_SAMPLE);
 
     nl_msg_put_u32(odp_actions, OVS_SAMPLE_ATTR_PROBABILITY, probability);
 
     actions_offset = nl_msg_start_nested(odp_actions, OVS_SAMPLE_ATTR_ACTIONS);
-    cookie_offset = put_userspace_action(xbridge->ofproto, odp_actions, flow,
-                                         cookie, cookie_size);
+
+    odp_port = ofp_port_to_odp_port(xbridge, flow->in_port.ofp_port);
+    pid = dpif_port_get_pid(xbridge->dpif, odp_port);
+    cookie_offset = odp_put_userspace_action(pid, cookie, cookie_size, odp_actions);
 
     nl_msg_end_nested(odp_actions, actions_offset);
     nl_msg_end_nested(odp_actions, sample_offset);
@@ -1810,8 +1815,7 @@ xlate_enqueue_action(struct xlate_ctx *ctx,
     int error;
 
     /* Translate queue to priority. */
-    error = ofproto_dpif_queue_to_priority(ctx->xbridge->ofproto, queue_id,
-                                           &priority);
+    error = dpif_queue_to_priority(ctx->xbridge->dpif, queue_id, &priority);
     if (error) {
         /* Fall back to ordinary output action. */
         xlate_output_action(ctx, enqueue->port, 0, false);
@@ -1844,8 +1848,7 @@ xlate_set_queue_action(struct xlate_ctx *ctx, uint32_t queue_id)
 {
     uint32_t skb_priority;
 
-    if (!ofproto_dpif_queue_to_priority(ctx->xbridge->ofproto, queue_id,
-                                        &skb_priority)) {
+    if (!dpif_queue_to_priority(ctx->xbridge->dpif, queue_id, &skb_priority)) {
         ctx->xin->flow.skb_priority = skb_priority;
     } else {
         /* Couldn't translate queue to a priority.  Nothing to do.  A warning

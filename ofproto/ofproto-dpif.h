@@ -61,18 +61,10 @@ struct rule_dpif *rule_dpif_miss_rule(struct ofproto_dpif *ofproto,
 
 void rule_credit_stats(struct rule_dpif *, const struct dpif_flow_stats *);
 
-size_t put_userspace_action(const struct ofproto_dpif *,
-                            struct ofpbuf *odp_actions, const struct flow *,
-                            const union user_action_cookie *,
-                            const size_t cookie_size);
-
 bool ofproto_has_vlan_splinters(const struct ofproto_dpif *);
 ofp_port_t vsp_realdev_to_vlandev(const struct ofproto_dpif *,
                                   ofp_port_t realdev_ofp_port,
                                   ovs_be16 vlan_tci);
-
-int ofproto_dpif_queue_to_priority(const struct ofproto_dpif *,
-                                   uint32_t queue_id, uint32_t *priority);
 
 void ofproto_dpif_send_packet_in(struct ofproto_dpif *,
                                  struct ofputil_packet_in *pin);

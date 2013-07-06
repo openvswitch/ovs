@@ -24,6 +24,7 @@
 
 struct bfd;
 struct bond;
+struct dpif;
 struct lacp;
 struct dpif_ipfix;
 struct dpif_sflow;
@@ -110,10 +111,11 @@ struct xlate_in {
 };
 
 void xlate_ofproto_set(struct ofproto_dpif *, const char *name,
-                       const struct mac_learning *, struct stp *,
-                       const struct mbridge *, const struct dpif_sflow *,
-                       const struct dpif_ipfix *, enum ofp_config_flags,
-                       bool forward_bpdu, bool has_in_band, bool has_netflow);
+                       struct dpif *, const struct mac_learning *,
+                       struct stp *, const struct mbridge *,
+                       const struct dpif_sflow *, const struct dpif_ipfix *,
+                       enum ofp_config_flags, bool forward_bpdu,
+                       bool has_in_band, bool has_netflow);
 void xlate_remove_ofproto(struct ofproto_dpif *);
 
 void xlate_bundle_set(struct ofproto_dpif *, struct ofbundle *,
