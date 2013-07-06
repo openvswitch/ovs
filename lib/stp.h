@@ -60,7 +60,8 @@ struct stp *stp_create(const char *name, stp_identifier bridge_id,
                        void (*send_bpdu)(struct ofpbuf *bpdu, int port_no,
                                          void *aux),
                        void *aux);
-void stp_destroy(struct stp *);
+struct stp *stp_ref(const struct stp *);
+void stp_unref(struct stp *);
 void stp_tick(struct stp *, int ms);
 void stp_set_bridge_id(struct stp *, stp_identifier bridge_id);
 void stp_set_bridge_priority(struct stp *, uint16_t new_priority);

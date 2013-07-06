@@ -2042,7 +2042,7 @@ set_stp(struct ofproto *ofproto_, const struct ofproto_stp_settings *s)
             set_stp_port(ofport, NULL);
         }
 
-        stp_destroy(ofproto->stp);
+        stp_unref(ofproto->stp);
         ofproto->stp = NULL;
     }
 

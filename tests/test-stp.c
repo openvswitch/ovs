@@ -661,7 +661,7 @@ main(int argc, char *argv[])
     }
     for (i = 0; i < tc->n_bridges; i++) {
         struct bridge *bridge = tc->bridges[i];
-        stp_destroy(bridge->stp);
+        stp_unref(bridge->stp);
         free(bridge);
     }
     free(tc);
