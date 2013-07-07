@@ -23,6 +23,7 @@ scripts_DATA += utilities/ovs-lib
 EXTRA_DIST += \
 	utilities/ovs-check-dead-ifs.in \
 	utilities/ovs-ctl.in \
+	utilities/ovs-dev.py \
 	utilities/ovs-l3ping.in \
 	utilities/ovs-lib.in \
 	utilities/ovs-parse-backtrace.in \

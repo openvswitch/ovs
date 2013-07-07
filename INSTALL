@@ -107,6 +107,8 @@ installing the following to obtain better warnings:
 
     - GNU make.
 
+Also, you may find the ovs-dev script found in utilities/ovs-dev.py useful.
+
 Installation Requirements
 -------------------------
 
