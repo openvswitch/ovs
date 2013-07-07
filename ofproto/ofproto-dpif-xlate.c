@@ -195,6 +195,7 @@ add_mirror_actions(struct xlate_ctx *ctx, const struct flow *orig_flow)
                          "%s, which is reserved exclusively for mirroring",
                          ctx->ofproto->up.name, in_bundle->name);
         }
+        ofpbuf_clear(&ctx->xout->odp_actions);
         return;
     }
 
@@ -2008,10 +2009,12 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
             && !actions_output_to_local_port(&ctx)) {
             compose_output_action(&ctx, OFPP_LOCAL);
         }
+
+        fix_sflow_action(&ctx);
+
         if (mbridge_has_mirrors(ctx.ofproto->mbridge)) {
             add_mirror_actions(&ctx, &orig_flow);
         }
-        fix_sflow_action(&ctx);
     }
 
     ofpbuf_uninit(&ctx.stack);
