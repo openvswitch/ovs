@@ -234,6 +234,13 @@ AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/remove-db ordinals], [2],
   [], [Failed to find the database.
 ovs-appctl: ovsdb-server: server returned an error
 ])
+
+# Add a removed database.
+AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/add-db db2], [0])
+AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/list-dbs],
+  [0], [constraints
+])
+AT_CHECK([ovsdb-client list-tables unix:socket constraints], [0], [ignore], [ignore])
 AT_CLEANUP
 
 AT_SETUP([ovsdb-server/add-db and remove-db with --monitor])
