@@ -2021,9 +2021,12 @@ cmd_del_port(struct vsctl_context *ctx)
 
     vsctl_context_populate_cache(ctx);
     if (find_bridge(ctx, target, false)) {
-        vsctl_fatal("cannot delete port %s because it is the local port "
-                    "for bridge %s (deleting this port requires deleting "
-                    "the entire bridge)", target, target);
+        if (must_exist) {
+            vsctl_fatal("cannot delete port %s because it is the local port "
+                        "for bridge %s (deleting this port requires deleting "
+                        "the entire bridge)", target, target);
+        }
+        port = NULL;
     } else if (!with_iface) {
         port = find_port(ctx, target, must_exist);
     } else {

@@ -327,6 +327,8 @@ AT_CHECK([RUN_OVS_VSCTL([del-port a])], [1], [],
   [ovs-vsctl: cannot delete port a because it is the local port for bridge a (deleting this port requires deleting the entire bridge)
 ],
   [OVS_VSCTL_CLEANUP])
+AT_CHECK([RUN_OVS_VSCTL([--if-exists del-port a])], [0], [], [],
+  [OVS_VSCTL_CLEANUP])
 AT_CHECK([RUN_OVS_VSCTL([--may-exist add-port a b1])], [1], [],
   [ovs-vsctl: "--may-exist add-port a b1" but b1 is actually attached to bridge b
 ],
