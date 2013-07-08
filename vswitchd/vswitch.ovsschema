@@ -1,6 +1,6 @@
 {"name": "Open_vSwitch",
- "version": "7.2.0",
- "cksum": "543912409 19436",
+ "version": "7.2.1",
+ "cksum": "707387125 19667",
  "tables": {
    "Open_vSwitch": {
      "columns": {
@@ -185,6 +185,14 @@
        "mac": {
          "type": {"key": {"type": "string"},
                   "min": 0, "max": 1}},
+       "ifindex": {
+         "type": {
+           "key": {"type": "integer",
+                   "minInteger": 0,
+                   "maxInteger": 4294967295},
+           "min": 0,
+           "max": 1},
+         "ephemeral": true},
        "external_ids": {
          "type": {"key": "string", "value": "string", "min": 0, "max": "unlimited"}},
        "ofport": {

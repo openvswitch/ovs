@@ -4,6 +4,8 @@ post-v1.11.0
       * New support for matching outer source and destination IP address
         of tunneled packets, for tunnel ports configured with the newly
 	added "remote_ip=flow" and "local_ip=flow" options.
+    - The Interface table in the database has a new "ifindex" column to
+      report the interface's OS-assigned ifindex.
     - New "check-oftest" Makefile target for running OFTest against Open
       vSwitch.  See README-OFTest for details.
     - The flow eviction threshold has been moved to the Open_vSwitch table.

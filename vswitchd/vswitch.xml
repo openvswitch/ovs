@@ -1208,6 +1208,12 @@
         on a host.
       </column>
 
+      <column name="ifindex">
+        A positive interface index as defined for SNMP MIB-II in RFCs 1213 and
+        2863, if the interface has one, otherwise 0.  The ifindex is useful for
+        seamless integration with protocols such as SNMP and sFlow.
+      </column>
+
       <column name="mac_in_use">
         The MAC address in use by this interface.
       </column>
