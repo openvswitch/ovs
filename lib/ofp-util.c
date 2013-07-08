@@ -547,6 +547,71 @@ ofputil_match_to_ofp11_match(const struct match *match,
     ofmatch->wildcards = htonl(wc);
 }
 
+/* Returns the "typical" length of a match for 'protocol', for use in
+ * estimating space to preallocate. */
+int
+ofputil_match_typical_len(enum ofputil_protocol protocol)
+{
+    switch (protocol) {
+    case OFPUTIL_P_OF10_STD:
+    case OFPUTIL_P_OF10_STD_TID:
+        return sizeof(struct ofp10_match);
+
+    case OFPUTIL_P_OF10_NXM:
+    case OFPUTIL_P_OF10_NXM_TID:
+        return NXM_TYPICAL_LEN;
+
+    case OFPUTIL_P_OF11_STD:
+        return sizeof(struct ofp11_match);
+
+    case OFPUTIL_P_OF12_OXM:
+    case OFPUTIL_P_OF13_OXM:
+        return NXM_TYPICAL_LEN;
+
+    default:
+        NOT_REACHED();
+    }
+}
+
+/* Appends to 'b' an struct ofp11_match_header followed by a match that
+ * expresses 'match' properly for 'protocol', plus enough zero bytes to pad the
+ * data appended out to a multiple of 8.  'protocol' must be one that is usable
+ * in OpenFlow 1.1 or later.
+ *
+ * This function can cause 'b''s data to be reallocated.
+ *
+ * Returns the number of bytes appended to 'b', excluding the padding.  Never
+ * returns zero. */
+int
+ofputil_put_ofp11_match(struct ofpbuf *b, const struct match *match,
+                        enum ofputil_protocol protocol)
+{
+    switch (protocol) {
+    case OFPUTIL_P_OF10_STD:
+    case OFPUTIL_P_OF10_STD_TID:
+    case OFPUTIL_P_OF10_NXM:
+    case OFPUTIL_P_OF10_NXM_TID:
+        NOT_REACHED();
+
+    case OFPUTIL_P_OF11_STD: {
+        struct ofp11_match *om;
+
+        /* Make sure that no padding is needed. */
+        BUILD_ASSERT_DECL(sizeof *om % 8 == 0);
+
+        om = ofpbuf_put_uninit(b, sizeof *om);
+        ofputil_match_to_ofp11_match(match, om);
+        return sizeof *om;
+    }
+
+    case OFPUTIL_P_OF12_OXM:
+    case OFPUTIL_P_OF13_OXM:
+        return oxm_put_match(b, match);
+    }
+
+    NOT_REACHED();
+}
+
 /* Given a 'dl_type' value in the format used in struct flow, returns the
  * corresponding 'dl_type' value for use in an ofp10_match or ofp11_match
  * structure. */
@@ -589,6 +654,7 @@ static const struct proto_abbrev proto_abbrevs[] = {
 enum ofputil_protocol ofputil_flow_dump_protocols[] = {
     OFPUTIL_P_OF13_OXM,
     OFPUTIL_P_OF12_OXM,
+    OFPUTIL_P_OF11_STD,
     OFPUTIL_P_OF10_NXM,
     OFPUTIL_P_OF10_STD,
 };
@@ -604,11 +670,12 @@ ofputil_protocols_from_ofp_version(enum ofp_version version)
     switch (version) {
     case OFP10_VERSION:
         return OFPUTIL_P_OF10_STD_ANY | OFPUTIL_P_OF10_NXM_ANY;
+    case OFP11_VERSION:
+        return OFPUTIL_P_OF11_STD;
     case OFP12_VERSION:
         return OFPUTIL_P_OF12_OXM;
     case OFP13_VERSION:
         return OFPUTIL_P_OF13_OXM;
-    case OFP11_VERSION:
     default:
         return 0;
     }
@@ -636,6 +703,8 @@ ofputil_protocol_to_ofp_version(enum ofputil_protocol protocol)
     case OFPUTIL_P_OF10_NXM:
     case OFPUTIL_P_OF10_NXM_TID:
         return OFP10_VERSION;
+    case OFPUTIL_P_OF11_STD:
+        return OFP11_VERSION;
     case OFPUTIL_P_OF12_OXM:
         return OFP12_VERSION;
     case OFPUTIL_P_OF13_OXM:
@@ -707,6 +776,9 @@ ofputil_protocol_set_tid(enum ofputil_protocol protocol, bool enable)
     case OFPUTIL_P_OF10_NXM_TID:
         return enable ? OFPUTIL_P_OF10_NXM_TID : OFPUTIL_P_OF10_NXM;
 
+    case OFPUTIL_P_OF11_STD:
+        return OFPUTIL_P_OF11_STD;
+
     case OFPUTIL_P_OF12_OXM:
         return OFPUTIL_P_OF12_OXM;
 
@@ -744,6 +816,9 @@ ofputil_protocol_set_base(enum ofputil_protocol cur,
     case OFPUTIL_P_OF10_NXM_TID:
         return ofputil_protocol_set_tid(OFPUTIL_P_OF10_NXM, tid);
 
+    case OFPUTIL_P_OF11_STD:
+        return ofputil_protocol_set_tid(OFPUTIL_P_OF11_STD, tid);
+
     case OFPUTIL_P_OF12_OXM:
         return ofputil_protocol_set_tid(OFPUTIL_P_OF12_OXM, tid);
 
@@ -777,6 +852,9 @@ ofputil_protocol_to_string(enum ofputil_protocol protocol)
 
     case OFPUTIL_P_OF10_STD_TID:
         return "OpenFlow10+table_id";
+
+    case OFPUTIL_P_OF11_STD:
+        return "OpenFlow11";
 
     case OFPUTIL_P_OF12_OXM:
         return "OXM-OpenFlow12";
@@ -1364,9 +1442,10 @@ ofputil_encode_set_protocol(enum ofputil_protocol current,
         case OFPUTIL_P_OF10_STD:
             return ofputil_encode_nx_set_flow_format(NXFF_OPENFLOW10);
 
+        case OFPUTIL_P_OF11_STD:
         case OFPUTIL_P_OF12_OXM:
         case OFPUTIL_P_OF13_OXM:
-            /* There are only one of each OpenFlow 1.2+ protocols and we already
+            /* There is only one variant of each OpenFlow 1.1+ protocol, and we
              * verified above that we're not trying to change versions. */
             NOT_REACHED();
 
@@ -1514,7 +1593,14 @@ ofputil_decode_flow_mod(struct ofputil_flow_mod *fm,
 
         /* Translate the message. */
         fm->priority = ntohs(ofm->priority);
-        if (ofm->command == OFPFC_ADD) {
+        if (ofm->command == OFPFC_ADD
+            || (oh->version == OFP11_VERSION
+                && (ofm->command == OFPFC_MODIFY ||
+                    ofm->command == OFPFC_MODIFY_STRICT)
+                && ofm->cookie_mask == htonll(0))) {
+            /* In OpenFlow 1.1 only, a "modify" or "modify-strict" that does
+             * not match on the cookie is treated as an "add" if there is no
+             * match. */
             fm->cookie = htonll(0);
             fm->cookie_mask = htonll(0);
             fm->new_cookie = ofm->cookie;
@@ -1569,7 +1655,6 @@ ofputil_decode_flow_mod(struct ofputil_flow_mod *fm,
             fm->cookie = htonll(0);
             fm->cookie_mask = htonll(0);
             fm->new_cookie = ofm->cookie;
-            fm->modify_cookie = fm->new_cookie != htonll(UINT64_MAX);
             fm->idle_timeout = ntohs(ofm->idle_timeout);
             fm->hard_timeout = ntohs(ofm->hard_timeout);
             fm->buffer_id = ntohl(ofm->buffer_id);
@@ -1601,7 +1686,6 @@ ofputil_decode_flow_mod(struct ofputil_flow_mod *fm,
             }
             fm->priority = ntohs(nfm->priority);
             fm->new_cookie = nfm->cookie;
-            fm->modify_cookie = fm->new_cookie != htonll(UINT64_MAX);
             fm->idle_timeout = ntohs(nfm->idle_timeout);
             fm->hard_timeout = ntohs(nfm->hard_timeout);
             fm->buffer_id = ntohl(nfm->buffer_id);
@@ -1623,6 +1707,7 @@ ofputil_decode_flow_mod(struct ofputil_flow_mod *fm,
                     : OFPERR_OFPFMFC_TABLE_FULL);
         }
 
+        fm->modify_cookie = fm->new_cookie != htonll(UINT64_MAX);
         if (protocol & OFPUTIL_P_TID) {
             fm->command = command & 0xff;
             fm->table_id = command >> 8;
@@ -2020,15 +2105,22 @@ ofputil_encode_flow_mod(const struct ofputil_flow_mod *fm,
     struct ofpbuf *msg;
 
     switch (protocol) {
+    case OFPUTIL_P_OF11_STD:
     case OFPUTIL_P_OF12_OXM:
     case OFPUTIL_P_OF13_OXM: {
         struct ofp11_flow_mod *ofm;
+        int tailroom;
 
+        tailroom = ofputil_match_typical_len(protocol) + fm->ofpacts_len;
         msg = ofpraw_alloc(OFPRAW_OFPT11_FLOW_MOD,
                            ofputil_protocol_to_ofp_version(protocol),
-                           NXM_TYPICAL_LEN + fm->ofpacts_len);
+                           tailroom);
         ofm = ofpbuf_put_zeros(msg, sizeof *ofm);
-        if (fm->command == OFPFC_ADD) {
+        if ((protocol == OFPUTIL_P_OF11_STD
+             && (fm->command == OFPFC_MODIFY ||
+                 fm->command == OFPFC_MODIFY_STRICT)
+             && fm->cookie_mask == htonll(0))
+            || fm->command == OFPFC_ADD) {
             ofm->cookie = fm->new_cookie;
         } else {
             ofm->cookie = fm->cookie;
@@ -2043,7 +2135,7 @@ ofputil_encode_flow_mod(const struct ofputil_flow_mod *fm,
         ofm->out_port = ofputil_port_to_ofp11(fm->out_port);
         ofm->out_group = htonl(OFPG11_ANY);
         ofm->flags = htons(fm->flags);
-        oxm_put_match(msg, &fm->match);
+        ofputil_put_ofp11_match(msg, &fm->match, protocol);
         ofpacts_put_openflow11_instructions(fm->ofpacts, fm->ofpacts_len, msg);
         break;
     }
@@ -2122,8 +2214,10 @@ ofputil_flow_mod_usable_protocols(const struct ofputil_flow_mod *fms,
 
         /* Matching of the cookie is only supported through NXM or OF1.1+. */
         if (fm->cookie_mask != htonll(0)) {
-            usable_protocols &= OFPUTIL_P_OF10_NXM_ANY | OFPUTIL_P_OF12_OXM
-                | OFPUTIL_P_OF13_OXM;
+            usable_protocols &= (OFPUTIL_P_OF10_NXM_ANY
+                                 | OFPUTIL_P_OF11_STD
+                                 | OFPUTIL_P_OF12_OXM
+                                 | OFPUTIL_P_OF13_OXM);
         }
     }
 
@@ -2243,6 +2337,7 @@ ofputil_encode_flow_stats_request(const struct ofputil_flow_stats_request *fsr,
     enum ofpraw raw;
 
     switch (protocol) {
+    case OFPUTIL_P_OF11_STD:
     case OFPUTIL_P_OF12_OXM:
     case OFPUTIL_P_OF13_OXM: {
         struct ofp11_flow_stats_request *ofsr;
@@ -2251,14 +2346,14 @@ ofputil_encode_flow_stats_request(const struct ofputil_flow_stats_request *fsr,
                ? OFPRAW_OFPST11_AGGREGATE_REQUEST
                : OFPRAW_OFPST11_FLOW_REQUEST);
         msg = ofpraw_alloc(raw, ofputil_protocol_to_ofp_version(protocol),
-			   NXM_TYPICAL_LEN);
+                           ofputil_match_typical_len(protocol));
         ofsr = ofpbuf_put_zeros(msg, sizeof *ofsr);
         ofsr->table_id = fsr->table_id;
         ofsr->out_port = ofputil_port_to_ofp11(fsr->out_port);
         ofsr->out_group = htonl(OFPG11_ANY);
         ofsr->cookie = fsr->cookie;
         ofsr->cookie_mask = fsr->cookie_mask;
-        oxm_put_match(msg, &fsr->match);
+        ofputil_put_ofp11_match(msg, &fsr->match, protocol);
         break;
     }
 
@@ -2734,13 +2829,15 @@ ofputil_encode_flow_removed(const struct ofputil_flow_removed *fr,
     struct ofpbuf *msg;
 
     switch (protocol) {
+    case OFPUTIL_P_OF11_STD:
     case OFPUTIL_P_OF12_OXM:
     case OFPUTIL_P_OF13_OXM: {
         struct ofp12_flow_removed *ofr;
 
         msg = ofpraw_alloc_xid(OFPRAW_OFPT11_FLOW_REMOVED,
                                ofputil_protocol_to_ofp_version(protocol),
-                               htonl(0), NXM_TYPICAL_LEN);
+                               htonl(0),
+                               ofputil_match_typical_len(protocol));
         ofr = ofpbuf_put_zeros(msg, sizeof *ofr);
         ofr->cookie = fr->cookie;
         ofr->priority = htons(fr->priority);
@@ -2752,7 +2849,7 @@ ofputil_encode_flow_removed(const struct ofputil_flow_removed *fr,
         ofr->hard_timeout = htons(fr->hard_timeout);
         ofr->packet_count = htonll(fr->packet_count);
         ofr->byte_count = htonll(fr->byte_count);
-        oxm_put_match(msg, &fr->match);
+        ofputil_put_ofp11_match(msg, &fr->match, protocol);
         break;
     }
 

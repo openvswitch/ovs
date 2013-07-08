@@ -934,22 +934,26 @@ A: Open vSwitch 1.9 and earlier support only OpenFlow 1.0 (plus
    extensions that bring in many of the features from later versions
    of OpenFlow).
 
-   Open vSwitch versions 1.10 and later will have experimental support
-   for OpenFlow 1.2 and 1.3.  On these versions of Open vSwitch, the
-   following command enables OpenFlow 1.0, 1.2, and 1.3 on bridge br0:
+   Open vSwitch 1.10 and later have experimental support for OpenFlow
+   1.2 and 1.3.  On these versions of Open vSwitch, the following
+   command enables OpenFlow 1.0, 1.2, and 1.3 on bridge br0:
 
        ovs-vsctl set bridge br0 protocols=OpenFlow10,OpenFlow12,OpenFlow13
+
+   Open vSwitch version 1.12 and later will have experimental support
+   for OpenFlow 1.1, 1.2, and 1.3.  On these versions of Open vSwitch,
+   the following command enables OpenFlow 1.0, 1.1, 1.2, and 1.3 on
+   bridge br0:
+
+       ovs-vsctl set bridge br0 protocols=OpenFlow10,OpenFlow11,OpenFlow12,OpenFlow13
 
    Use the -O option to enable support for later versions of OpenFlow
    in ovs-ofctl.  For example:
 
        ovs-ofctl -O OpenFlow13 dump-flows br0
 
-   Support for OpenFlow 1.1 is incomplete enough that it cannot yet be
-   enabled, even experimentally.
-
-   Support for OpenFlow 1.2 and 1.3 is still incomplete.  Work to be
-   done is tracked in OPENFLOW-1.1+ in the Open vSwitch source tree
+   Support for OpenFlow 1.1, 1.2, and 1.3 is still incomplete.  Work
+   to be done is tracked in OPENFLOW-1.1+ in the Open vSwitch sources
    (also via http://openvswitch.org/development/openflow-1-x-plan/).
    When support for a given OpenFlow version is solidly implemented,
    Open vSwitch will enable that version by default.

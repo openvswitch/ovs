@@ -700,6 +700,26 @@ ofp_util|INFO|post: arp,in_port=1,vlan_tci=0x0000,dl_src=50:54:00:00:00:06,dl_ds
 AT_CLEANUP
 
 # The flow is formatted with cls_rule_format() for the low-verbosity case.
+AT_SETUP([OFPT_FLOW_MOD - OF1.1 - low verbosity])
+AT_KEYWORDS([ofp-print])
+AT_CHECK([ovs-ofctl '-vPATTERN:console:%c|%p|%m' ofp-print "\
+020e 0090 01020304 \
+da1aa3e035d87158 ffffffffffffffff \
+02 01 003c 0078 9c40 ffffffff ffffffff ffffffff 0003 \
+0000 \
+\
+0000 0058 00000000 000003f7 \
+000000000000ffffffffffff 000000000000ffffffffffff \
+0000 00 00 0806 00 00 c0a88000000000ff 00000000ffffffff 0000 0000 \
+00000000 00 000000 0000000000000000ffffffffffffffff \
+\
+0001 0008 03 000000 \
+" 2], [0], [dnl
+OFPT_FLOW_MOD (OF1.1) (xid=0x1020304): MOD table:2 priority=40000,arp,arp_spa=192.168.128.0/24 cookie:0xda1aa3e035d87158/0xffffffffffffffff idle:60 hard:120 send_flow_rem check_overlap actions=goto_table:3
+])
+AT_CLEANUP
+
+# The flow is formatted with cls_rule_format() for the low-verbosity case.
 AT_SETUP([OFPT_FLOW_MOD - OF1.2 - low verbosity])
 AT_KEYWORDS([ofp-print])
 AT_CHECK([ovs-ofctl '-vPATTERN:console:%c|%p|%m' ofp-print "\
