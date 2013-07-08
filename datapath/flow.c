@@ -1197,14 +1197,14 @@ int ipv4_tun_from_nlattr(const struct nlattr *attr,
 		};
 
 		if (type > OVS_TUNNEL_KEY_ATTR_MAX) {
-			OVS_NLERR("Unknown IPv4 tunnel attribute (type=%d, max=%d)\n",
+			OVS_NLERR("Unknown IPv4 tunnel attribute (type=%d, max=%d).\n",
 			type, OVS_TUNNEL_KEY_ATTR_MAX);
 			return -EINVAL;
 		}
 
 		if (ovs_tunnel_key_lens[type] != nla_len(a)) {
 			OVS_NLERR("IPv4 tunnel attribute type has unexpected "
-				  " legnth (type=%d, length=%d, expected=%d.)\n",
+				  " legnth (type=%d, length=%d, expected=%d).\n",
 				  type, nla_len(a), ovs_tunnel_key_lens[type]);
 			return -EINVAL;
 		}
