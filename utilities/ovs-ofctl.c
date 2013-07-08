@@ -866,8 +866,14 @@ prepare_dump_flows(int argc, char *argv[], bool aggregate,
     enum ofputil_protocol usable_protocols, protocol;
     struct ofputil_flow_stats_request fsr;
     struct vconn *vconn;
+    char *error;
 
-    parse_ofp_flow_stats_request_str(&fsr, aggregate, argc > 2 ? argv[2] : "");
+    error = parse_ofp_flow_stats_request_str(&fsr, aggregate,
+                                             argc > 2 ? argv[2] : "");
+    if (error) {
+        ovs_fatal(0, "%s", error);
+    }
+
     usable_protocols = ofputil_flow_stats_request_usable_protocols(&fsr);
 
     protocol = open_vconn(argv[1], &vconn);
@@ -1087,8 +1093,12 @@ ofctl_flow_mod_file(int argc OVS_UNUSED, char *argv[], uint16_t command)
 {
     struct ofputil_flow_mod *fms = NULL;
     size_t n_fms = 0;
+    char *error;
 
-    parse_ofp_flow_mod_file(argv[2], command, &fms, &n_fms);
+    error = parse_ofp_flow_mod_file(argv[2], command, &fms, &n_fms);
+    if (error) {
+        ovs_fatal(0, "%s", error);
+    }
     ofctl_flow_mod__(argv[1], fms, n_fms);
     free(fms);
 }
@@ -1100,7 +1110,12 @@ ofctl_flow_mod(int argc, char *argv[], uint16_t command)
         ofctl_flow_mod_file(argc, argv, command);
     } else {
         struct ofputil_flow_mod fm;
-        parse_ofp_flow_mod_str(&fm, argc > 2 ? argv[2] : "", command, false);
+        char *error;
+
+        error = parse_ofp_flow_mod_str(&fm, argc > 2 ? argv[2] : "", command);
+        if (error) {
+            ovs_fatal(0, "%s", error);
+        }
         ofctl_flow_mod__(argv[1], &fm, 1);
     }
 }
@@ -1439,8 +1454,12 @@ ofctl_monitor(int argc, char *argv[])
         } else if (!strncmp(arg, "watch:", 6)) {
             struct ofputil_flow_monitor_request fmr;
             struct ofpbuf *msg;
+            char *error;
 
-            parse_flow_monitor_request(&fmr, arg + 6);
+            error = parse_flow_monitor_request(&fmr, arg + 6);
+            if (error) {
+                ovs_fatal(0, "%s", error);
+            }
 
             msg = ofpbuf_new(0);
             ofputil_append_flow_monitor_request(&fmr, msg);
@@ -1538,10 +1557,14 @@ ofctl_packet_out(int argc, char *argv[])
     struct ofputil_packet_out po;
     struct ofpbuf ofpacts;
     struct vconn *vconn;
+    char *error;
     int i;
 
     ofpbuf_init(&ofpacts, 64);
-    parse_ofpacts(argv[3], &ofpacts);
+    error = parse_ofpacts(argv[3], &ofpacts);
+    if (error) {
+        ovs_fatal(0, "%s", error);
+    }
 
     po.buffer_id = UINT32_MAX;
     po.in_port = str_to_port_no(argv[1], argv[2]);
@@ -1905,6 +1928,7 @@ static enum ofputil_protocol
 read_flows_from_file(const char *filename, struct classifier *cls, int index)
 {
     enum ofputil_protocol usable_protocols;
+    int line_number;
     struct ds s;
     FILE *file;
 
@@ -1915,11 +1939,16 @@ read_flows_from_file(const char *filename, struct classifier *cls, int index)
 
     ds_init(&s);
     usable_protocols = OFPUTIL_P_ANY;
-    while (!ds_get_preprocessed_line(&s, file)) {
+    line_number = 0;
+    while (!ds_get_preprocessed_line(&s, file, &line_number)) {
         struct fte_version *version;
         struct ofputil_flow_mod fm;
+        char *error;
 
-        parse_ofp_str(&fm, OFPFC_ADD, ds_cstr(&s), true);
+        error = parse_ofp_str(&fm, OFPFC_ADD, ds_cstr(&s));
+        if (error) {
+            ovs_fatal(0, "%s:%d: %s", filename, line_number, error);
+        }
 
         version = xmalloc(sizeof *version);
         version->cookie = fm.new_cookie;
@@ -2232,8 +2261,12 @@ static void
 ofctl_parse_flow(int argc OVS_UNUSED, char *argv[])
 {
     struct ofputil_flow_mod fm;
+    char *error;
 
-    parse_ofp_flow_mod_str(&fm, argv[1], OFPFC_ADD, false);
+    error = parse_ofp_flow_mod_str(&fm, argv[1], OFPFC_ADD);
+    if (error) {
+        ovs_fatal(0, "%s", error);
+    }
     ofctl_parse_flows__(&fm, 1);
 }
 
@@ -2244,8 +2277,12 @@ ofctl_parse_flows(int argc OVS_UNUSED, char *argv[])
 {
     struct ofputil_flow_mod *fms = NULL;
     size_t n_fms = 0;
+    char *error;
 
-    parse_ofp_flow_mod_file(argv[1], OFPFC_ADD, &fms, &n_fms);
+    error = parse_ofp_flow_mod_file(argv[1], OFPFC_ADD, &fms, &n_fms);
+    if (error) {
+        ovs_fatal(0, "%s", error);
+    }
     ofctl_parse_flows__(fms, n_fms);
     free(fms);
 }
@@ -2367,7 +2404,7 @@ ofctl_parse_ofp10_actions(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
     struct ds in;
 
     ds_init(&in);
-    while (!ds_get_preprocessed_line(&in, stdin)) {
+    while (!ds_get_preprocessed_line(&in, stdin, NULL)) {
         struct ofpbuf of10_out;
         struct ofpbuf of10_in;
         struct ofpbuf ofpacts;
@@ -2431,7 +2468,7 @@ ofctl_parse_ofp10_match(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 
     ds_init(&in);
     ds_init(&expout);
-    while (!ds_get_preprocessed_line(&in, stdin)) {
+    while (!ds_get_preprocessed_line(&in, stdin, NULL)) {
         struct ofpbuf match_in, match_expout;
         struct ofp10_match match_out;
         struct ofp10_match match_normal;
@@ -2503,7 +2540,7 @@ ofctl_parse_ofp11_match(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
     struct ds in;
 
     ds_init(&in);
-    while (!ds_get_preprocessed_line(&in, stdin)) {
+    while (!ds_get_preprocessed_line(&in, stdin, NULL)) {
         struct ofpbuf match_in;
         struct ofp11_match match_out;
         struct match match;
@@ -2552,7 +2589,7 @@ ofctl_parse_ofp11_actions(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
     struct ds in;
 
     ds_init(&in);
-    while (!ds_get_preprocessed_line(&in, stdin)) {
+    while (!ds_get_preprocessed_line(&in, stdin, NULL)) {
         struct ofpbuf of11_out;
         struct ofpbuf of11_in;
         struct ofpbuf ofpacts;
@@ -2610,7 +2647,7 @@ ofctl_parse_ofp11_instructions(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
     struct ds in;
 
     ds_init(&in);
-    while (!ds_get_preprocessed_line(&in, stdin)) {
+    while (!ds_get_preprocessed_line(&in, stdin, NULL)) {
         struct ofpbuf of11_out;
         struct ofpbuf of11_in;
         struct ofpbuf ofpacts;
@@ -2699,6 +2736,7 @@ ofctl_check_vlan(int argc OVS_UNUSED, char *argv[])
     struct match of11_match;
 
     enum ofperr error;
+    char *error_s;
 
     match_init_catchall(&match);
     match.flow.vlan_tci = htons(strtoul(argv[1], NULL, 16));
@@ -2708,7 +2746,10 @@ ofctl_check_vlan(int argc OVS_UNUSED, char *argv[])
     string_s = match_to_string(&match, OFP_DEFAULT_PRIORITY);
     printf("%s -> ", string_s);
     fflush(stdout);
-    parse_ofp_str(&fm, -1, string_s, false);
+    error_s = parse_ofp_str(&fm, -1, string_s);
+    if (error_s) {
+        ovs_fatal(0, "%s", error_s);
+    }
     printf("%04"PRIx16"/%04"PRIx16"\n",
            ntohs(fm.match.flow.vlan_tci),
            ntohs(fm.match.wc.masks.vlan_tci));

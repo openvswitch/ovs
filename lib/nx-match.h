@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010, 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2010, 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@
 #include <stdint.h>
 #include <sys/types.h>
 #include <netinet/in.h>
+#include "compiler.h"
 #include "flow.h"
 #include "ofp-errors.h"
 #include "openvswitch/types.h"
@@ -57,8 +58,10 @@ char *oxm_match_to_string(const uint8_t *, unsigned int match_len);
 int nx_match_from_string(const char *, struct ofpbuf *);
 int oxm_match_from_string(const char *, struct ofpbuf *);
 
-void nxm_parse_reg_move(struct ofpact_reg_move *, const char *);
-void nxm_parse_reg_load(struct ofpact_reg_load *, const char *);
+char *nxm_parse_reg_move(struct ofpact_reg_move *, const char *)
+    WARN_UNUSED_RESULT;
+char *nxm_parse_reg_load(struct ofpact_reg_load *, const char *)
+    WARN_UNUSED_RESULT;
 
 void nxm_format_reg_move(const struct ofpact_reg_move *, struct ds *);
 void nxm_format_reg_load(const struct ofpact_reg_load *, struct ds *);
@@ -86,7 +89,8 @@ void nxm_execute_reg_load(const struct ofpact_reg_load *, struct flow *);
 void nxm_reg_load(const struct mf_subfield *, uint64_t src_data,
                   struct flow *);
 
-void nxm_parse_stack_action(struct ofpact_stack *, const char *);
+char *nxm_parse_stack_action(struct ofpact_stack *, const char *)
+    WARN_UNUSED_RESULT;
 
 void nxm_format_stack_push(const struct ofpact_stack *, struct ds *);
 void nxm_format_stack_pop(const struct ofpact_stack *, struct ds *);

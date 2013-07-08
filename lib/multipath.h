@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010, 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2010, 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
 #define MULTIPATH_H 1
 
 #include <stdint.h>
+#include "compiler.h"
 #include "ofp-errors.h"
 
 struct ds;
@@ -42,7 +43,8 @@ void multipath_to_nxast(const struct ofpact_multipath *,
 void multipath_execute(const struct ofpact_multipath *, struct flow *,
                        struct flow_wildcards *);
 
-void multipath_parse(struct ofpact_multipath *, const char *);
+char *multipath_parse(struct ofpact_multipath *, const char *)
+    WARN_UNUSED_RESULT;
 void multipath_format(const struct ofpact_multipath *, struct ds *);
 
 #endif /* multipath.h */

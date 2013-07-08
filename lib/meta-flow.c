@@ -2641,7 +2641,7 @@ mf_parse_subfield_name(const char *name, int name_len, bool *wild)
  * bit indexes.  "..end" may be omitted to indicate a single bit.  "start..end"
  * may both be omitted (the [] are still required) to indicate an entire
  * field. */
-char *
+char * WARN_UNUSED_RESULT
 mf_parse_subfield__(struct mf_subfield *sf, const char **sp)
 {
     const struct mf_field *field;
@@ -2696,24 +2696,23 @@ mf_parse_subfield__(struct mf_subfield *sf, const char **sp)
     return NULL;
 }
 
-/* Parses a subfield from the beginning of 's' into 'sf'.  Returns the first
- * byte in 's' following the parsed string.
- *
- * Exits with an error message if 's' has incorrect syntax.
+/* Parses a subfield from the entirety of 's' into 'sf'.  Returns NULL if
+ * successful, otherwise a malloc()'d string describing the error.  The caller
+ * is responsible for freeing the returned string.
  *
  * The syntax parsed from 's' takes the form "header[start..end]" where
  * 'header' is the name of an NXM field and 'start' and 'end' are (inclusive)
  * bit indexes.  "..end" may be omitted to indicate a single bit.  "start..end"
  * may both be omitted (the [] are still required) to indicate an entire
  * field.  */
-const char *
+char * WARN_UNUSED_RESULT
 mf_parse_subfield(struct mf_subfield *sf, const char *s)
 {
-    char *msg = mf_parse_subfield__(sf, &s);
-    if (msg) {
-        ovs_fatal(0, "%s", msg);
+    char *error = mf_parse_subfield__(sf, &s);
+    if (!error && s[0]) {
+        error = xstrdup("unexpected input following field syntax");
     }
-    return s;
+    return error;
 }
 
 void

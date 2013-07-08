@@ -238,13 +238,20 @@ ds_get_line(struct ds *ds, FILE *file)
  * Deletes comments introduced by "#" and skips lines that contains only white
  * space (after deleting comments).
  *
+ * If 'line_numberp' is nonnull, increments '*line_numberp' by the number of
+ * lines read from 'file'.
+ *
  * Returns 0 if successful, EOF if no non-blank line was found. */
 int
-ds_get_preprocessed_line(struct ds *ds, FILE *file)
+ds_get_preprocessed_line(struct ds *ds, FILE *file, int *line_numberp)
 {
     while (!ds_get_line(ds, file)) {
         char *line = ds_cstr(ds);
         char *comment;
+
+        if (line_numberp) {
+            ++*line_numberp;
+        }
 
         /* Delete comments. */
         comment = strchr(line, '#');

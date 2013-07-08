@@ -58,7 +58,7 @@ void ds_put_printable(struct ds *, const char *, size_t);
 void ds_put_hex_dump(struct ds *ds, const void *buf_, size_t size,
                      uintptr_t ofs, bool ascii);
 int ds_get_line(struct ds *, FILE *);
-int ds_get_preprocessed_line(struct ds *, FILE *);
+int ds_get_preprocessed_line(struct ds *, FILE *, int *line_number);
 int ds_get_test_line(struct ds *, FILE *);
 
 void ds_put_strftime(struct ds *, const char *template, time_t when, bool utc)

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010, 2012 Nicira, Inc.
+ * Copyright (c) 2010, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,6 +35,7 @@ main(int argc, char *argv[])
     enum { MP_MAX_LINKS = 63 };
     struct ofpact_multipath mp;
     bool ok = true;
+    char *error;
     int n;
 
     set_program_name(argv[0]);
@@ -44,7 +45,11 @@ main(int argc, char *argv[])
         ovs_fatal(0, "usage: %s multipath_action", program_name);
     }
 
-    multipath_parse(&mp, argv[1]);
+    error = multipath_parse(&mp, argv[1]);
+    if (error) {
+        ovs_fatal(0, "%s", error);
+    }
+
     for (n = 1; n <= MP_MAX_LINKS; n++) {
         enum { N_FLOWS = 65536 };
         double disruption, perfect, distribution;

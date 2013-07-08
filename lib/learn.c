@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -390,13 +390,16 @@ learn_mask(const struct ofpact_learn *learn, struct flow_wildcards *wc)
     }
 }
 
-static void
+/* Returns NULL if successful, otherwise a malloc()'d string describing the
+ * error.  The caller is responsible for freeing the returned string. */
+static char * WARN_UNUSED_RESULT
 learn_parse_load_immediate(const char *s, struct ofpact_learn_spec *spec)
 {
     const char *full_s = s;
     const char *arrow = strstr(s, "->");
     struct mf_subfield dst;
     union mf_subvalue imm;
+    char *error;
 
     memset(&imm, 0, sizeof imm);
     if (s[0] == '0' && (s[1] == 'x' || s[1] == 'X') && arrow) {
@@ -408,7 +411,7 @@ learn_parse_load_immediate(const char *s, struct ofpact_learn_spec *spec)
         for (i = 0; i < n; i++) {
             int hexit = hexit_value(in[-i]);
             if (hexit < 0) {
-                ovs_fatal(0, "%s: bad hex digit in value", full_s);
+                return xasprintf("%s: bad hex digit in value", full_s);
             }
             out[-(i / 2)] |= i % 2 ? hexit << 4 : hexit;
         }
@@ -418,19 +421,19 @@ learn_parse_load_immediate(const char *s, struct ofpact_learn_spec *spec)
     }
 
     if (strncmp(s, "->", 2)) {
-        ovs_fatal(0, "%s: missing `->' following value", full_s);
+        return xasprintf("%s: missing `->' following value", full_s);
     }
     s += 2;
 
-    s = mf_parse_subfield(&dst, s);
-    if (*s != '\0') {
-        ovs_fatal(0, "%s: trailing garbage following destination", full_s);
+    error = mf_parse_subfield(&dst, s);
+    if (error) {
+        return error;
     }
 
     if (!bitwise_is_all_zeros(&imm, sizeof imm, dst.n_bits,
                               (8 * sizeof imm) - dst.n_bits)) {
-        ovs_fatal(0, "%s: value does not fit into %u bits",
-                  full_s, dst.n_bits);
+        return xasprintf("%s: value does not fit into %u bits",
+                         full_s, dst.n_bits);
     }
 
     spec->n_bits = dst.n_bits;
@@ -438,9 +441,12 @@ learn_parse_load_immediate(const char *s, struct ofpact_learn_spec *spec)
     spec->src_imm = imm;
     spec->dst_type = NX_LEARN_DST_LOAD;
     spec->dst = dst;
+    return NULL;
 }
 
-static void
+/* Returns NULL if successful, otherwise a malloc()'d string describing the
+ * error.  The caller is responsible for freeing the returned string. */
+static char * WARN_UNUSED_RESULT
 learn_parse_spec(const char *orig, char *name, char *value,
                  struct ofpact_learn_spec *spec)
 {
@@ -451,7 +457,7 @@ learn_parse_spec(const char *orig, char *name, char *value,
 
         error = mf_parse_value(dst, value, &imm);
         if (error) {
-            ovs_fatal(0, "%s", error);
+            return error;
         }
 
         spec->n_bits = dst->n_bits;
@@ -465,21 +471,23 @@ learn_parse_spec(const char *orig, char *name, char *value,
         spec->dst.n_bits = dst->n_bits;
     } else if (strchr(name, '[')) {
         /* Parse destination and check prerequisites. */
-        if (mf_parse_subfield(&spec->dst, name)[0] != '\0') {
-            ovs_fatal(0, "%s: syntax error after NXM field name `%s'",
-                      orig, name);
+        char *error;
+
+        error = mf_parse_subfield(&spec->dst, name);
+        if (error) {
+            return error;
         }
 
         /* Parse source and check prerequisites. */
         if (value[0] != '\0') {
-            if (mf_parse_subfield(&spec->src, value)[0] != '\0') {
-                ovs_fatal(0, "%s: syntax error after NXM field name `%s'",
-                          orig, value);
+            error = mf_parse_subfield(&spec->src, value);
+            if (error) {
+                return error;
             }
             if (spec->src.n_bits != spec->dst.n_bits) {
-                ovs_fatal(0, "%s: bit widths of %s (%u) and %s (%u) differ",
-                          orig, name, spec->src.n_bits, value,
-                          spec->dst.n_bits);
+                return xasprintf("%s: bit widths of %s (%u) and %s (%u) "
+                                 "differ", orig, name, spec->src.n_bits, value,
+                                 spec->dst.n_bits);
             }
         } else {
             spec->src = spec->dst;
@@ -490,11 +498,18 @@ learn_parse_spec(const char *orig, char *name, char *value,
         spec->dst_type = NX_LEARN_DST_MATCH;
     } else if (!strcmp(name, "load")) {
         if (value[strcspn(value, "[-")] == '-') {
-            learn_parse_load_immediate(value, spec);
+            char *error = learn_parse_load_immediate(value, spec);
+            if (error) {
+                return error;
+            }
         } else {
             struct ofpact_reg_move move;
+            char *error;
 
-            nxm_parse_reg_move(&move, value);
+            error = nxm_parse_reg_move(&move, value);
+            if (error) {
+                return error;
+            }
 
             spec->n_bits = move.src.n_bits;
             spec->src_type = NX_LEARN_SRC_FIELD;
@@ -503,38 +518,29 @@ learn_parse_spec(const char *orig, char *name, char *value,
             spec->dst = move.dst;
         }
     } else if (!strcmp(name, "output")) {
-        if (mf_parse_subfield(&spec->src, value)[0] != '\0') {
-            ovs_fatal(0, "%s: syntax error after NXM field name `%s'",
-                      orig, name);
+        char *error = mf_parse_subfield(&spec->src, value);
+        if (error) {
+            return error;
         }
 
         spec->n_bits = spec->src.n_bits;
         spec->src_type = NX_LEARN_SRC_FIELD;
         spec->dst_type = NX_LEARN_DST_OUTPUT;
     } else {
-        ovs_fatal(0, "%s: unknown keyword %s", orig, name);
+        return xasprintf("%s: unknown keyword %s", orig, name);
     }
+
+    return NULL;
 }
 
-/* Parses 'arg' as a set of arguments to the "learn" action and appends a
- * matching OFPACT_LEARN action to 'ofpacts'.  ovs-ofctl(8) describes the
- * format parsed.
- *
- * Prints an error on stderr and aborts the program if 'arg' syntax is invalid.
- *
- * If 'flow' is nonnull, then it should be the flow from a struct match that is
- * the matching rule for the learning action.  This helps to better validate
- * the action's arguments.
- *
- * Modifies 'arg'. */
-void
-learn_parse(char *arg, struct ofpbuf *ofpacts)
+/* Returns NULL if successful, otherwise a malloc()'d string describing the
+ * error.  The caller is responsible for freeing the returned string. */
+static char * WARN_UNUSED_RESULT
+learn_parse__(char *orig, char *arg, struct ofpbuf *ofpacts)
 {
-    char *orig = xstrdup(arg);
-    char *name, *value;
-
     struct ofpact_learn *learn;
     struct match match;
+    char *name, *value;
 
     learn = ofpact_put_LEARN(ofpacts);
     learn->idle_timeout = OFP_FLOW_PERMANENT;
@@ -547,8 +553,8 @@ learn_parse(char *arg, struct ofpbuf *ofpacts)
         if (!strcmp(name, "table")) {
             learn->table_id = atoi(value);
             if (learn->table_id == 255) {
-                ovs_fatal(0, "%s: table id 255 not valid for `learn' action",
-                          orig);
+                return xasprintf("%s: table id 255 not valid for `learn' "
+                                 "action", orig);
             }
         } else if (!strcmp(name, "priority")) {
             learn->priority = atoi(value);
@@ -564,12 +570,16 @@ learn_parse(char *arg, struct ofpbuf *ofpacts)
             learn->cookie = strtoull(value, NULL, 0);
         } else {
             struct ofpact_learn_spec *spec;
+            char *error;
 
             spec = ofpbuf_put_zeros(ofpacts, sizeof *spec);
             learn = ofpacts->l2;
             learn->n_specs++;
 
-            learn_parse_spec(orig, name, value, spec);
+            error = learn_parse_spec(orig, name, value, spec);
+            if (error) {
+                return error;
+            }
 
             /* Update 'match' to allow for satisfying destination
              * prerequisites. */
@@ -581,7 +591,28 @@ learn_parse(char *arg, struct ofpbuf *ofpacts)
     }
     ofpact_update_len(ofpacts, &learn->ofpact);
 
+    return NULL;
+}
+
+/* Parses 'arg' as a set of arguments to the "learn" action and appends a
+ * matching OFPACT_LEARN action to 'ofpacts'.  ovs-ofctl(8) describes the
+ * format parsed.
+ *
+ * Returns NULL if successful, otherwise a malloc()'d string describing the
+ * error.  The caller is responsible for freeing the returned string.
+ *
+ * If 'flow' is nonnull, then it should be the flow from a struct match that is
+ * the matching rule for the learning action.  This helps to better validate
+ * the action's arguments.
+ *
+ * Modifies 'arg'. */
+char * WARN_UNUSED_RESULT
+learn_parse(char *arg, struct ofpbuf *ofpacts)
+{
+    char *orig = xstrdup(arg);
+    char *error = learn_parse__(orig, arg, ofpacts);
     free(orig);
+    return error;
 }
 
 /* Appends a description of 'learn' to 's', in the format that ovs-ofctl(8)

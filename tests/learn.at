@@ -75,11 +75,13 @@ AT_CHECK([[ovs-ofctl parse-flow 'actions=learn(load:5->NXM_OF_IP_DST[])']],
   [1], [], [stderr])
 AT_CHECK([sed -e 's/.*|meta_flow|WARN|//' < stderr], [0],
   [[destination field ip_dst lacks correct prerequisites
+ovs-ofctl: actions are invalid with specified match (OFPBAC_BAD_ARGUMENT)
 ]], [[]])
 AT_CHECK([[ovs-ofctl parse-flow 'actions=learn(load:NXM_OF_IP_DST[]->NXM_NX_REG1[])']],
   [1], [], [stderr])
 AT_CHECK([sed -e 's/.*|meta_flow|WARN|//' < stderr], [0],
   [[source field ip_dst lacks correct prerequisites
+ovs-ofctl: actions are invalid with specified match (OFPBAC_BAD_ARGUMENT)
 ]])
 AT_CLEANUP
 

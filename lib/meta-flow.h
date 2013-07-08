@@ -360,8 +360,10 @@ uint64_t mf_get_subfield(const struct mf_subfield *, const struct flow *);
 
 
 void mf_format_subfield(const struct mf_subfield *, struct ds *);
-char *mf_parse_subfield__(struct mf_subfield *sf, const char **s);
-const char *mf_parse_subfield(struct mf_subfield *, const char *);
+char *mf_parse_subfield__(struct mf_subfield *sf, const char **s)
+    WARN_UNUSED_RESULT;
+char *mf_parse_subfield(struct mf_subfield *, const char *s)
+    WARN_UNUSED_RESULT;
 
 enum ofperr mf_check_src(const struct mf_subfield *, const struct flow *);
 enum ofperr mf_check_dst(const struct mf_subfield *, const struct flow *);

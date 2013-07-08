@@ -41,88 +41,142 @@
 
 VLOG_DEFINE_THIS_MODULE(ofp_parse);
 
-static void ofp_fatal(const char *flow, bool verbose, const char *format, ...)
-    NO_RETURN;
-
-static uint8_t
-str_to_u8(const char *str, const char *name)
+/* Parses 'str' as an 8-bit unsigned integer into '*valuep'.
+ *
+ * 'name' describes the value parsed in an error message, if any.
+ *
+ * Returns NULL if successful, otherwise a malloc()'d string describing the
+ * error.  The caller is responsible for freeing the returned string. */
+static char * WARN_UNUSED_RESULT
+str_to_u8(const char *str, const char *name, uint8_t *valuep)
 {
     int value;
 
-    if (!str_to_int(str, 10, &value) || value < 0 || value > 255) {
-        ovs_fatal(0, "invalid %s \"%s\"", name, str);
+    if (!str_to_int(str, 0, &value) || value < 0 || value > 255) {
+        return xasprintf("invalid %s \"%s\"", name, str);
     }
-    return value;
+    *valuep = value;
+    return NULL;
 }
 
-static uint16_t
-str_to_u16(const char *str, const char *name)
+/* Parses 'str' as a 16-bit unsigned integer into '*valuep'.
+ *
+ * 'name' describes the value parsed in an error message, if any.
+ *
+ * Returns NULL if successful, otherwise a malloc()'d string describing the
+ * error.  The caller is responsible for freeing the returned string. */
+static char * WARN_UNUSED_RESULT
+str_to_u16(const char *str, const char *name, uint16_t *valuep)
 {
     int value;
 
     if (!str_to_int(str, 0, &value) || value < 0 || value > 65535) {
-        ovs_fatal(0, "invalid %s \"%s\"", name, str);
+        return xasprintf("invalid %s \"%s\"", name, str);
     }
-    return value;
+    *valuep = value;
+    return NULL;
 }
 
-static uint32_t
-str_to_u32(const char *str)
+/* Parses 'str' as a 32-bit unsigned integer into '*valuep'.
+ *
+ * Returns NULL if successful, otherwise a malloc()'d string describing the
+ * error.  The caller is responsible for freeing the returned string. */
+static char * WARN_UNUSED_RESULT
+str_to_u32(const char *str, uint32_t *valuep)
 {
     char *tail;
     uint32_t value;
 
     if (!str[0]) {
-        ovs_fatal(0, "missing required numeric argument");
+        return xstrdup("missing required numeric argument");
     }
 
     errno = 0;
     value = strtoul(str, &tail, 0);
     if (errno == EINVAL || errno == ERANGE || *tail) {
-        ovs_fatal(0, "invalid numeric format %s", str);
+        return xasprintf("invalid numeric format %s", str);
     }
-    return value;
+    *valuep = value;
+    return NULL;
 }
 
-static uint64_t
-str_to_u64(const char *str)
+/* Parses 'str' as an 64-bit unsigned integer into '*valuep'.
+ *
+ * Returns NULL if successful, otherwise a malloc()'d string describing the
+ * error.  The caller is responsible for freeing the returned string. */
+static char * WARN_UNUSED_RESULT
+str_to_u64(const char *str, uint64_t *valuep)
 {
     char *tail;
     uint64_t value;
 
     if (!str[0]) {
-        ovs_fatal(0, "missing required numeric argument");
+        return xstrdup("missing required numeric argument");
     }
 
     errno = 0;
     value = strtoull(str, &tail, 0);
     if (errno == EINVAL || errno == ERANGE || *tail) {
-        ovs_fatal(0, "invalid numeric format %s", str);
+        return xasprintf("invalid numeric format %s", str);
     }
-    return value;
+    *valuep = value;
+    return NULL;
 }
 
-static void
+/* Parses 'str' as an 64-bit unsigned integer in network byte order into
+ * '*valuep'.
+ *
+ * Returns NULL if successful, otherwise a malloc()'d string describing the
+ * error.  The caller is responsible for freeing the returned string. */
+static char * WARN_UNUSED_RESULT
+str_to_be64(const char *str, ovs_be64 *valuep)
+{
+    uint64_t value;
+    char *error;
+
+    error = str_to_u64(str, &value);
+    if (!error) {
+        *valuep = htonll(value);
+    }
+    return error;
+}
+
+/* Parses 'str' as an Ethernet address into 'mac'.
+ *
+ * Returns NULL if successful, otherwise a malloc()'d string describing the
+ * error.  The caller is responsible for freeing the returned string. */
+static char * WARN_UNUSED_RESULT
 str_to_mac(const char *str, uint8_t mac[6])
 {
     if (sscanf(str, ETH_ADDR_SCAN_FMT, ETH_ADDR_SCAN_ARGS(mac))
         != ETH_ADDR_SCAN_COUNT) {
-        ovs_fatal(0, "invalid mac address %s", str);
+        return xasprintf("invalid mac address %s", str);
     }
+    return NULL;
 }
 
-static void
+/* Parses 'str' as an IP address into '*ip'.
+ *
+ * Returns NULL if successful, otherwise a malloc()'d string describing the
+ * error.  The caller is responsible for freeing the returned string. */
+static char * WARN_UNUSED_RESULT
 str_to_ip(const char *str, ovs_be32 *ip)
 {
     struct in_addr in_addr;
 
     if (lookup_ip(str, &in_addr)) {
-        ovs_fatal(0, "%s: could not convert to IP address", str);
+        return xasprintf("%s: could not convert to IP address", str);
     }
     *ip = in_addr.s_addr;
+    return NULL;
 }
 
-static void
+/* Parses 'arg' as the argument to an "enqueue" action, and appends such an
+ * action to 'ofpacts'.
+ *
+ * Returns NULL if successful, otherwise a malloc()'d string describing the
+ * error.  The caller is responsible for freeing the returned string. */
+static char * WARN_UNUSED_RESULT
 parse_enqueue(char *arg, struct ofpbuf *ofpacts)
 {
     char *sp = NULL;
@@ -131,33 +185,48 @@ parse_enqueue(char *arg, struct ofpbuf *ofpacts)
     struct ofpact_enqueue *enqueue;
 
     if (port == NULL || queue == NULL) {
-        ovs_fatal(0, "\"enqueue\" syntax is \"enqueue:PORT:QUEUE\"");
+        return xstrdup("\"enqueue\" syntax is \"enqueue:PORT:QUEUE\"");
     }
 
     enqueue = ofpact_put_ENQUEUE(ofpacts);
-    enqueue->port = u16_to_ofp(str_to_u32(port));
-    enqueue->queue = str_to_u32(queue);
+    if (!ofputil_port_from_string(port, &enqueue->port)) {
+        return xasprintf("%s: enqueue to unknown port", port);
+    }
+    return str_to_u32(queue, &enqueue->queue);
 }
 
-static void
-parse_output(char *arg, struct ofpbuf *ofpacts)
+/* Parses 'arg' as the argument to an "output" action, and appends such an
+ * action to 'ofpacts'.
+ *
+ * Returns NULL if successful, otherwise a malloc()'d string describing the
+ * error.  The caller is responsible for freeing the returned string. */
+static char * WARN_UNUSED_RESULT
+parse_output(const char *arg, struct ofpbuf *ofpacts)
 {
     if (strchr(arg, '[')) {
         struct ofpact_output_reg *output_reg;
 
         output_reg = ofpact_put_OUTPUT_REG(ofpacts);
-        mf_parse_subfield(&output_reg->src, arg);
         output_reg->max_len = UINT16_MAX;
+        return mf_parse_subfield(&output_reg->src, arg);
     } else {
         struct ofpact_output *output;
 
         output = ofpact_put_OUTPUT(ofpacts);
-        output->port = u16_to_ofp(str_to_u32(arg));
         output->max_len = output->port == OFPP_CONTROLLER ? UINT16_MAX : 0;
+        if (!ofputil_port_from_string(arg, &output->port)) {
+            return xasprintf("%s: output to unknown port", arg);
+        }
+        return NULL;
     }
 }
 
-static void
+/* Parses 'arg' as the argument to an "resubmit" action, and appends such an
+ * action to 'ofpacts'.
+ *
+ * Returns NULL if successful, otherwise a malloc()'d string describing the
+ * error.  The caller is responsible for freeing the returned string. */
+static char * WARN_UNUSED_RESULT
 parse_resubmit(char *arg, struct ofpbuf *ofpacts)
 {
     struct ofpact_resubmit *resubmit;
@@ -168,22 +237,39 @@ parse_resubmit(char *arg, struct ofpbuf *ofpacts)
     in_port_s = strsep(&arg, ",");
     if (in_port_s && in_port_s[0]) {
         if (!ofputil_port_from_string(in_port_s, &resubmit->in_port)) {
-            ovs_fatal(0, "%s: resubmit to unknown port", in_port_s);
+            return xasprintf("%s: resubmit to unknown port", in_port_s);
         }
     } else {
         resubmit->in_port = OFPP_IN_PORT;
     }
 
     table_s = strsep(&arg, ",");
-    resubmit->table_id = table_s && table_s[0] ? str_to_u32(table_s) : 255;
+    if (table_s && table_s[0]) {
+        uint32_t table_id;
+        char *error;
+
+        error = str_to_u32(table_s, &table_id);
+        if (error) {
+            return error;
+        }
+        resubmit->table_id = table_id;
+    } else {
+        resubmit->table_id = 255;
+    }
 
     if (resubmit->in_port == OFPP_IN_PORT && resubmit->table_id == 255) {
-        ovs_fatal(0, "at least one \"in_port\" or \"table\" must be specified "
-                  " on resubmit");
+        return xstrdup("at least one \"in_port\" or \"table\" must be "
+                       "specified  on resubmit");
     }
+    return NULL;
 }
 
-static void
+/* Parses 'arg' as the argument to a "note" action, and appends such an action
+ * to 'ofpacts'.
+ *
+ * Returns NULL if successful, otherwise a malloc()'d string describing the
+ * error.  The caller is responsible for freeing the returned string. */
+static char * WARN_UNUSED_RESULT
 parse_note(const char *arg, struct ofpbuf *ofpacts)
 {
     struct ofpact_note *note;
@@ -202,7 +288,7 @@ parse_note(const char *arg, struct ofpbuf *ofpacts)
 
         byte = hexits_value(arg, 2, &ok);
         if (!ok) {
-            ovs_fatal(0, "bad hex digit in `note' argument");
+            return xstrdup("bad hex digit in `note' argument");
         }
         ofpbuf_put(ofpacts, &byte, 1);
 
@@ -212,26 +298,45 @@ parse_note(const char *arg, struct ofpbuf *ofpacts)
         arg += 2;
     }
     ofpact_update_len(ofpacts, &note->ofpact);
+    return NULL;
 }
 
-static void
+/* Parses 'arg' as the argument to a "fin_timeout" action, and appends such an
+ * action to 'ofpacts'.
+ *
+ * Returns NULL if successful, otherwise a malloc()'d string describing the
+ * error.  The caller is responsible for freeing the returned string. */
+static char * WARN_UNUSED_RESULT
 parse_fin_timeout(struct ofpbuf *b, char *arg)
 {
     struct ofpact_fin_timeout *oft = ofpact_put_FIN_TIMEOUT(b);
     char *key, *value;
 
     while (ofputil_parse_key_value(&arg, &key, &value)) {
+        char *error;
+
         if (!strcmp(key, "idle_timeout")) {
-            oft->fin_idle_timeout = str_to_u16(value, key);
+            error =  str_to_u16(value, key, &oft->fin_idle_timeout);
         } else if (!strcmp(key, "hard_timeout")) {
-            oft->fin_hard_timeout = str_to_u16(value, key);
+            error = str_to_u16(value, key, &oft->fin_hard_timeout);
         } else {
-            ovs_fatal(0, "invalid key '%s' in 'fin_timeout' argument", key);
+            error = xasprintf("invalid key '%s' in 'fin_timeout' argument",
+                              key);
+        }
+
+        if (error) {
+            return error;
         }
     }
+    return NULL;
 }
 
-static void
+/* Parses 'arg' as the argument to a "controller" action, and appends such an
+ * action to 'ofpacts'.
+ *
+ * Returns NULL if successful, otherwise a malloc()'d string describing the
+ * error.  The caller is responsible for freeing the returned string. */
+static char * WARN_UNUSED_RESULT
 parse_controller(struct ofpbuf *b, char *arg)
 {
     enum ofp_packet_in_reason reason = OFPR_ACTION;
@@ -241,22 +346,31 @@ parse_controller(struct ofpbuf *b, char *arg)
     if (!arg[0]) {
         /* Use defaults. */
     } else if (strspn(arg, "0123456789") == strlen(arg)) {
-        max_len = str_to_u16(arg, "max_len");
+        char *error = str_to_u16(arg, "max_len", &max_len);
+        if (error) {
+            return error;
+        }
     } else {
         char *name, *value;
 
         while (ofputil_parse_key_value(&arg, &name, &value)) {
             if (!strcmp(name, "reason")) {
                 if (!ofputil_packet_in_reason_from_string(value, &reason)) {
-                    ovs_fatal(0, "unknown reason \"%s\"", value);
+                    return xasprintf("unknown reason \"%s\"", value);
                 }
             } else if (!strcmp(name, "max_len")) {
-                max_len = str_to_u16(value, "max_len");
+                char *error = str_to_u16(value, "max_len", &max_len);
+                if (error) {
+                    return error;
+                }
             } else if (!strcmp(name, "id")) {
-                controller_id = str_to_u16(value, "id");
+                char *error = str_to_u16(value, "id", &controller_id);
+                if (error) {
+                    return error;
+                }
             } else {
-                ovs_fatal(0, "unknown key \"%s\" parsing controller action",
-                          name);
+                return xasprintf("unknown key \"%s\" parsing controller "
+                                 "action", name);
             }
         }
     }
@@ -275,6 +389,8 @@ parse_controller(struct ofpbuf *b, char *arg)
         controller->reason = reason;
         controller->controller_id = controller_id;
     }
+
+    return NULL;
 }
 
 static void
@@ -290,7 +406,12 @@ parse_noargs_dec_ttl(struct ofpbuf *b)
     ofpact_update_len(b, &ids->ofpact);
 }
 
-static void
+/* Parses 'arg' as the argument to a "dec_ttl" action, and appends such an
+ * action to 'ofpacts'.
+ *
+ * Returns NULL if successful, otherwise a malloc()'d string describing the
+ * error.  The caller is responsible for freeing the returned string. */
+static char * WARN_UNUSED_RESULT
 parse_dec_ttl(struct ofpbuf *b, char *arg)
 {
     if (*arg == '\0') {
@@ -310,68 +431,99 @@ parse_dec_ttl(struct ofpbuf *b, char *arg)
             ids->n_controllers++;
         }
         if (!ids->n_controllers) {
-            ovs_fatal(0, "dec_ttl_cnt_ids: expected at least one controller "
-                      "id.");
+            return xstrdup("dec_ttl_cnt_ids: expected at least one controller "
+                           "id.");
         }
         ofpact_update_len(b, &ids->ofpact);
     }
+    return NULL;
 }
 
-static void
+/* Parses 'arg' as the argument to a "set_mpls_ttl" action, and appends such an
+ * action to 'ofpacts'.
+ *
+ * Returns NULL if successful, otherwise a malloc()'d string describing the
+ * error.  The caller is responsible for freeing the returned string. */
+static char * WARN_UNUSED_RESULT
 parse_set_mpls_ttl(struct ofpbuf *b, const char *arg)
 {
     struct ofpact_mpls_ttl *mpls_ttl = ofpact_put_SET_MPLS_TTL(b);
 
     if (*arg == '\0') {
-        ovs_fatal(0, "parse_set_mpls_ttl: expected ttl.");
+        return xstrdup("parse_set_mpls_ttl: expected ttl.");
     }
 
     mpls_ttl->ttl = atoi(arg);
+    return NULL;
 }
 
-static void
-set_field_parse(const char *arg, struct ofpbuf *ofpacts)
+/* Parses a "set_field" action with argument 'arg', appending the parsed
+ * action to 'ofpacts'.
+ *
+ * Returns NULL if successful, otherwise a malloc()'d string describing the
+ * error.  The caller is responsible for freeing the returned string. */
+static char * WARN_UNUSED_RESULT
+set_field_parse__(char *arg, struct ofpbuf *ofpacts)
 {
-    char *orig = xstrdup(arg);
     struct ofpact_reg_load *load = ofpact_put_REG_LOAD(ofpacts);
     char *value;
     char *delim;
     char *key;
     const struct mf_field *mf;
-    const char *error;
+    char *error;
     union mf_value mf_value;
 
-    value = orig;
-    delim = strstr(orig, "->");
+    value = arg;
+    delim = strstr(arg, "->");
     if (!delim) {
-        ovs_fatal(0, "%s: missing `->'", orig);
+        return xasprintf("%s: missing `->'", arg);
     }
     if (strlen(delim) <= strlen("->")) {
-        ovs_fatal(0, "%s: missing field name following `->'", orig);
+        return xasprintf("%s: missing field name following `->'", arg);
     }
 
     key = delim + strlen("->");
     mf = mf_from_name(key);
     if (!mf) {
-        ovs_fatal(0, "%s is not valid oxm field name", key);
+        return xasprintf("%s is not a valid OXM field name", key);
     }
     if (!mf->writable) {
-        ovs_fatal(0, "%s is not allowed to set", key);
+        return xasprintf("%s is read-only", key);
     }
 
     delim[0] = '\0';
     error = mf_parse_value(mf, value, &mf_value);
     if (error) {
-        ovs_fatal(0, "%s", error);
+        return error;
     }
     if (!mf_is_value_valid(mf, &mf_value)) {
-        ovs_fatal(0, "%s is not valid valid for field %s", value, key);
+        return xasprintf("%s is not a valid value for field %s", value, key);
     }
     ofpact_set_field_init(load, mf, &mf_value);
-    free(orig);
+
+    return NULL;
 }
 
-static void
+/* Parses 'arg' as the argument to a "set_field" action, and appends such an
+ * action to 'ofpacts'.
+ *
+ * Returns NULL if successful, otherwise a malloc()'d string describing the
+ * error.  The caller is responsible for freeing the returned string. */
+static char * WARN_UNUSED_RESULT
+set_field_parse(const char *arg, struct ofpbuf *ofpacts)
+{
+    char *copy = xstrdup(arg);
+    char *error = set_field_parse__(copy, ofpacts);
+    free(copy);
+    return error;
+}
+
+/* Parses 'arg' as the argument to a "write_metadata" instruction, and appends
+ * such an action to 'ofpacts'.
+ *
+ * Returns NULL if successful, otherwise a malloc()'d string describing the
+ * error.  The caller is responsible for freeing the returned string. */
+static char * WARN_UNUSED_RESULT
 parse_metadata(struct ofpbuf *b, char *arg)
 {
     struct ofpact_metadata *om;
@@ -380,51 +532,73 @@ parse_metadata(struct ofpbuf *b, char *arg)
     om = ofpact_put_WRITE_METADATA(b);
 
     if (mask) {
+        char *error;
+
         *mask = '\0';
-        om->mask = htonll(str_to_u64(mask + 1));
+        error = str_to_be64(mask + 1, &om->mask);
+        if (error) {
+            return error;
+        }
     } else {
         om->mask = htonll(UINT64_MAX);
     }
 
-    om->metadata = htonll(str_to_u64(arg));
+    return str_to_be64(arg, &om->metadata);
 }
 
-static void
+/* Parses 'arg' as the argument to a "sample" action, and appends such an
+ * action to 'ofpacts'.
+ *
+ * Returns NULL if successful, otherwise a malloc()'d string describing the
+ * error.  The caller is responsible for freeing the returned string. */
+static char * WARN_UNUSED_RESULT
 parse_sample(struct ofpbuf *b, char *arg)
 {
     struct ofpact_sample *os = ofpact_put_SAMPLE(b);
     char *key, *value;
 
     while (ofputil_parse_key_value(&arg, &key, &value)) {
+        char *error = NULL;
+
         if (!strcmp(key, "probability")) {
-            os->probability = str_to_u16(value, "probability");
-            if (os->probability == 0) {
-                ovs_fatal(0, "invalid probability value \"%s\"", value);
+            error = str_to_u16(value, "probability", &os->probability);
+            if (!error && os->probability == 0) {
+                error = xasprintf("invalid probability value \"%s\"", value);
             }
         } else if (!strcmp(key, "collector_set_id")) {
-            os->collector_set_id = str_to_u32(value);
+            error = str_to_u32(value, &os->collector_set_id);
         } else if (!strcmp(key, "obs_domain_id")) {
-            os->obs_domain_id = str_to_u32(value);
+            error = str_to_u32(value, &os->obs_domain_id);
         } else if (!strcmp(key, "obs_point_id")) {
-            os->obs_point_id = str_to_u32(value);
+            error = str_to_u32(value, &os->obs_point_id);
         } else {
-            ovs_fatal(0, "invalid key \"%s\" in \"sample\" argument",
-                      key);
+            error = xasprintf("invalid key \"%s\" in \"sample\" argument",
+                              key);
+        }
+        if (error) {
+            return error;
         }
     }
     if (os->probability == 0) {
-        ovs_fatal(0, "non-zero \"probability\" must be specified on sample");
+        return xstrdup("non-zero \"probability\" must be specified on sample");
     }
+    return NULL;
 }
 
-static void
+/* Parses 'arg' as the argument to action 'code', and appends such an action to
+ * 'ofpacts'.
+ *
+ * Returns NULL if successful, otherwise a malloc()'d string describing the
+ * error.  The caller is responsible for freeing the returned string. */
+static char * WARN_UNUSED_RESULT
 parse_named_action(enum ofputil_action_code code,
                    char *arg, struct ofpbuf *ofpacts)
 {
+    size_t orig_size = ofpacts->size;
     struct ofpact_tunnel *tunnel;
-    uint16_t vid;
+    char *error = NULL;
     uint16_t ethertype;
-    ovs_be32 ip;
+    uint16_t vid;
     uint8_t pcp;
     uint8_t tos;
 
@@ -434,30 +608,37 @@ parse_named_action(enum ofputil_action_code code,
 
     case OFPUTIL_OFPAT10_OUTPUT:
     case OFPUTIL_OFPAT11_OUTPUT:
-        parse_output(arg, ofpacts);
+        error = parse_output(arg, ofpacts);
         break;
 
     case OFPUTIL_OFPAT10_SET_VLAN_VID:
     case OFPUTIL_OFPAT11_SET_VLAN_VID:
-        vid = str_to_u32(arg);
+        error = str_to_u16(arg, "VLAN VID", &vid);
+        if (error) {
+            return error;
+        }
+
         if (vid & ~VLAN_VID_MASK) {
-            ovs_fatal(0, "%s: not a valid VLAN VID", arg);
+            return xasprintf("%s: not a valid VLAN VID", arg);
         }
         ofpact_put_SET_VLAN_VID(ofpacts)->vlan_vid = vid;
         break;
 
     case OFPUTIL_OFPAT10_SET_VLAN_PCP:
     case OFPUTIL_OFPAT11_SET_VLAN_PCP:
-        pcp = str_to_u32(arg);
+        error = str_to_u8(arg, "VLAN PCP", &pcp);
+        if (error) {
+            return error;
+        }
+
         if (pcp & ~7) {
-            ovs_fatal(0, "%s: not a valid VLAN PCP", arg);
+            return xasprintf("%s: not a valid VLAN PCP", arg);
         }
         ofpact_put_SET_VLAN_PCP(ofpacts)->vlan_pcp = pcp;
         break;
 
     case OFPUTIL_OFPAT12_SET_FIELD:
-        set_field_parse(arg, ofpacts);
-        break;
+        return set_field_parse(arg, ofpacts);
 
     case OFPUTIL_OFPAT10_STRIP_VLAN:
     case OFPUTIL_OFPAT11_POP_VLAN:
@@ -465,46 +646,52 @@ parse_named_action(enum ofputil_action_code code,
         break;
 
     case OFPUTIL_OFPAT11_PUSH_VLAN:
-        ethertype = str_to_u16(arg, "ethertype");
+        error = str_to_u16(arg, "ethertype", &ethertype);
+        if (error) {
+            return error;
+        }
+
         if (ethertype != ETH_TYPE_VLAN_8021Q) {
             /* XXX ETH_TYPE_VLAN_8021AD case isn't supported */
-            ovs_fatal(0, "%s: not a valid VLAN ethertype", arg);
+            return xasprintf("%s: not a valid VLAN ethertype", arg);
         }
+
         ofpact_put_PUSH_VLAN(ofpacts);
         break;
 
     case OFPUTIL_OFPAT11_SET_QUEUE:
-        ofpact_put_SET_QUEUE(ofpacts)->queue_id = str_to_u32(arg);
+        error = str_to_u32(arg, &ofpact_put_SET_QUEUE(ofpacts)->queue_id);
         break;
-
 
     case OFPUTIL_OFPAT10_SET_DL_SRC:
     case OFPUTIL_OFPAT11_SET_DL_SRC:
-        str_to_mac(arg, ofpact_put_SET_ETH_SRC(ofpacts)->mac);
+        error = str_to_mac(arg, ofpact_put_SET_ETH_SRC(ofpacts)->mac);
         break;
 
     case OFPUTIL_OFPAT10_SET_DL_DST:
     case OFPUTIL_OFPAT11_SET_DL_DST:
-        str_to_mac(arg, ofpact_put_SET_ETH_DST(ofpacts)->mac);
+        error = str_to_mac(arg, ofpact_put_SET_ETH_DST(ofpacts)->mac);
         break;
 
     case OFPUTIL_OFPAT10_SET_NW_SRC:
     case OFPUTIL_OFPAT11_SET_NW_SRC:
-        str_to_ip(arg, &ip);
-        ofpact_put_SET_IPV4_SRC(ofpacts)->ipv4 = ip;
+        error = str_to_ip(arg, &ofpact_put_SET_IPV4_SRC(ofpacts)->ipv4);
         break;
 
     case OFPUTIL_OFPAT10_SET_NW_DST:
     case OFPUTIL_OFPAT11_SET_NW_DST:
-        str_to_ip(arg, &ip);
-        ofpact_put_SET_IPV4_DST(ofpacts)->ipv4 = ip;
+        error = str_to_ip(arg, &ofpact_put_SET_IPV4_DST(ofpacts)->ipv4);
         break;
 
     case OFPUTIL_OFPAT10_SET_NW_TOS:
     case OFPUTIL_OFPAT11_SET_NW_TOS:
-        tos = str_to_u32(arg);
+        error = str_to_u8(arg, "TOS", &tos);
+        if (error) {
+            return error;
+        }
+
         if (tos & ~IP_DSCP_MASK) {
-            ovs_fatal(0, "%s: not a valid TOS", arg);
+            return xasprintf("%s: not a valid TOS", arg);
         }
         ofpact_put_SET_IPV4_DSCP(ofpacts)->dscp = tos;
         break;
@@ -514,35 +701,37 @@ parse_named_action(enum ofputil_action_code code,
 
     case OFPUTIL_OFPAT10_SET_TP_SRC:
     case OFPUTIL_OFPAT11_SET_TP_SRC:
-        ofpact_put_SET_L4_SRC_PORT(ofpacts)->port = str_to_u32(arg);
+        error = str_to_u16(arg, "source port",
+                           &ofpact_put_SET_L4_SRC_PORT(ofpacts)->port);
         break;
 
     case OFPUTIL_OFPAT10_SET_TP_DST:
     case OFPUTIL_OFPAT11_SET_TP_DST:
-        ofpact_put_SET_L4_DST_PORT(ofpacts)->port = str_to_u32(arg);
+        error = str_to_u16(arg, "destination port",
+                           &ofpact_put_SET_L4_DST_PORT(ofpacts)->port);
         break;
 
     case OFPUTIL_OFPAT10_ENQUEUE:
-        parse_enqueue(arg, ofpacts);
+        error = parse_enqueue(arg, ofpacts);
         break;
 
     case OFPUTIL_NXAST_RESUBMIT:
-        parse_resubmit(arg, ofpacts);
+        error = parse_resubmit(arg, ofpacts);
         break;
 
     case OFPUTIL_NXAST_SET_TUNNEL:
     case OFPUTIL_NXAST_SET_TUNNEL64:
         tunnel = ofpact_put_SET_TUNNEL(ofpacts);
         tunnel->ofpact.compat = code;
-        tunnel->tun_id = str_to_u64(arg);
+        error = str_to_u64(arg, &tunnel->tun_id);
         break;
 
     case OFPUTIL_NXAST_WRITE_METADATA:
-        parse_metadata(ofpacts, arg);
+        error = parse_metadata(ofpacts, arg);
         break;
 
     case OFPUTIL_NXAST_SET_QUEUE:
-        ofpact_put_SET_QUEUE(ofpacts)->queue_id = str_to_u32(arg);
+        error = str_to_u32(arg, &ofpact_put_SET_QUEUE(ofpacts)->queue_id);
         break;
 
     case OFPUTIL_NXAST_POP_QUEUE:
@@ -550,27 +739,27 @@ parse_named_action(enum ofputil_action_code code,
         break;
 
     case OFPUTIL_NXAST_REG_MOVE:
-        nxm_parse_reg_move(ofpact_put_REG_MOVE(ofpacts), arg);
+        error = nxm_parse_reg_move(ofpact_put_REG_MOVE(ofpacts), arg);
         break;
 
     case OFPUTIL_NXAST_REG_LOAD:
-        nxm_parse_reg_load(ofpact_put_REG_LOAD(ofpacts), arg);
+        error = nxm_parse_reg_load(ofpact_put_REG_LOAD(ofpacts), arg);
         break;
 
     case OFPUTIL_NXAST_NOTE:
-        parse_note(arg, ofpacts);
+        error = parse_note(arg, ofpacts);
         break;
 
     case OFPUTIL_NXAST_MULTIPATH:
-        multipath_parse(ofpact_put_MULTIPATH(ofpacts), arg);
+        error = multipath_parse(ofpact_put_MULTIPATH(ofpacts), arg);
         break;
 
     case OFPUTIL_NXAST_BUNDLE:
-        bundle_parse(arg, ofpacts);
+        error = bundle_parse(arg, ofpacts);
         break;
 
     case OFPUTIL_NXAST_BUNDLE_LOAD:
-        bundle_parse_load(arg, ofpacts);
+        error = bundle_parse_load(arg, ofpacts);
         break;
 
     case OFPUTIL_NXAST_RESUBMIT_TABLE:
@@ -579,7 +768,7 @@ parse_named_action(enum ofputil_action_code code,
         NOT_REACHED();
 
     case OFPUTIL_NXAST_LEARN:
-        learn_parse(arg, ofpacts);
+        error = learn_parse(arg, ofpacts);
         break;
 
     case OFPUTIL_NXAST_EXIT:
@@ -587,12 +776,12 @@ parse_named_action(enum ofputil_action_code code,
         break;
 
     case OFPUTIL_NXAST_DEC_TTL:
-        parse_dec_ttl(ofpacts, arg);
+        error = parse_dec_ttl(ofpacts, arg);
         break;
 
     case OFPUTIL_NXAST_SET_MPLS_TTL:
     case OFPUTIL_OFPAT11_SET_MPLS_TTL:
-        parse_set_mpls_ttl(ofpacts, arg);
+        error = parse_set_mpls_ttl(ofpacts, arg);
         break;
 
     case OFPUTIL_OFPAT11_DEC_MPLS_TTL:
@@ -601,69 +790,90 @@ parse_named_action(enum ofputil_action_code code,
         break;
 
     case OFPUTIL_NXAST_FIN_TIMEOUT:
-        parse_fin_timeout(ofpacts, arg);
+        error = parse_fin_timeout(ofpacts, arg);
         break;
 
     case OFPUTIL_NXAST_CONTROLLER:
-        parse_controller(ofpacts, arg);
+        error = parse_controller(ofpacts, arg);
         break;
 
     case OFPUTIL_OFPAT11_PUSH_MPLS:
     case OFPUTIL_NXAST_PUSH_MPLS:
-        ofpact_put_PUSH_MPLS(ofpacts)->ethertype =
-            htons(str_to_u16(arg, "push_mpls"));
+        error = str_to_u16(arg, "push_mpls", &ethertype);
+        if (!error) {
+            ofpact_put_PUSH_MPLS(ofpacts)->ethertype = htons(ethertype);
+        }
         break;
 
     case OFPUTIL_OFPAT11_POP_MPLS:
     case OFPUTIL_NXAST_POP_MPLS:
-        ofpact_put_POP_MPLS(ofpacts)->ethertype =
-            htons(str_to_u16(arg, "pop_mpls"));
+        error = str_to_u16(arg, "pop_mpls", &ethertype);
+        if (!error) {
+            ofpact_put_POP_MPLS(ofpacts)->ethertype = htons(ethertype);
+        }
         break;
 
     case OFPUTIL_NXAST_STACK_PUSH:
-        nxm_parse_stack_action(ofpact_put_STACK_PUSH(ofpacts), arg);
+        error = nxm_parse_stack_action(ofpact_put_STACK_PUSH(ofpacts), arg);
         break;
     case OFPUTIL_NXAST_STACK_POP:
-        nxm_parse_stack_action(ofpact_put_STACK_POP(ofpacts), arg);
+        error = nxm_parse_stack_action(ofpact_put_STACK_POP(ofpacts), arg);
         break;
 
     case OFPUTIL_NXAST_SAMPLE:
-        parse_sample(ofpacts, arg);
+        error = parse_sample(ofpacts, arg);
         break;
     }
+
+    if (error) {
+        ofpacts->size = orig_size;
+    }
+    return error;
 }
 
-static bool
+/* Parses action 'act', with argument 'arg', and appends a parsed version to
+ * 'ofpacts'.
+ *
+ * 'n_actions' specifies the number of actions already parsed (for proper
+ * handling of "drop" actions).
+ *
+ * Returns NULL if successful, otherwise a malloc()'d string describing the
+ * error.  The caller is responsible for freeing the returned string. */
+static char * WARN_UNUSED_RESULT
 str_to_ofpact__(char *pos, char *act, char *arg,
                 struct ofpbuf *ofpacts, int n_actions)
 {
     int code = ofputil_action_code_from_name(act);
     if (code >= 0) {
-        parse_named_action(code, arg, ofpacts);
+        return parse_named_action(code, arg, ofpacts);
     } else if (!strcasecmp(act, "drop")) {
         if (n_actions) {
-            ovs_fatal(0, "Drop actions must not be preceded by other "
-                      "actions");
+            return xstrdup("Drop actions must not be preceded by other "
+                           "actions");
         } else if (ofputil_parse_key_value(&pos, &act, &arg)) {
-            ovs_fatal(0, "Drop actions must not be followed by other "
-                      "actions");
+            return xstrdup("Drop actions must not be followed by other "
+                           "actions");
         }
-        return false;
     } else {
         ofp_port_t port;
         if (ofputil_port_from_string(act, &port)) {
             ofpact_put_OUTPUT(ofpacts)->port = port;
         } else {
-            ovs_fatal(0, "Unknown action: %s", act);
+            return xasprintf("Unknown action: %s", act);
         }
     }
 
-    return true;
+    return NULL;
 }
 
-static void
+/* Parses 'str' as a series of actions, and appends them to 'ofpacts'.
+ *
+ * Returns NULL if successful, otherwise a malloc()'d string describing the
+ * error.  The caller is responsible for freeing the returned string. */
+static char * WARN_UNUSED_RESULT
 str_to_ofpacts(char *str, struct ofpbuf *ofpacts)
 {
+    size_t orig_size = ofpacts->size;
     char *pos, *act, *arg;
     enum ofperr error;
     int n_actions;
@@ -671,24 +881,34 @@ str_to_ofpacts(char *str, struct ofpbuf *ofpacts)
     pos = str;
     n_actions = 0;
     while (ofputil_parse_key_value(&pos, &act, &arg)) {
-        if (!str_to_ofpact__(pos, act, arg, ofpacts, n_actions)) {
-            break;
+        char *error = str_to_ofpact__(pos, act, arg, ofpacts, n_actions);
+        if (error) {
+            ofpacts->size = orig_size;
+            return error;
         }
         n_actions++;
     }
 
     error = ofpacts_verify(ofpacts->data, ofpacts->size);
     if (error) {
-        ovs_fatal(0, "Incorrect action ordering");
+        ofpacts->size = orig_size;
+        return xstrdup("Incorrect action ordering");
     }
 
     ofpact_pad(ofpacts);
+    return NULL;
 }
 
-static void
+/* Parses 'arg' as the argument to instruction 'type', and appends such an
+ * instruction to 'ofpacts'.
+ *
+ * Returns NULL if successful, otherwise a malloc()'d string describing the
+ * error.  The caller is responsible for freeing the returned string. */
+static char * WARN_UNUSED_RESULT
 parse_named_instruction(enum ovs_instruction_type type,
                         char *arg, struct ofpbuf *ofpacts)
 {
+    char *error_s = NULL;
     enum ofperr error;
 
     switch (type) {
@@ -698,7 +918,7 @@ parse_named_instruction(enum ovs_instruction_type type,
 
     case OVSINST_OFPIT11_WRITE_ACTIONS:
         /* XXX */
-        ovs_fatal(0, "instruction write-actions is not supported yet");
+        error_s = xstrdup("instruction write-actions is not supported yet");
         break;
 
     case OVSINST_OFPIT11_CLEAR_ACTIONS:
@@ -706,35 +926,45 @@ parse_named_instruction(enum ovs_instruction_type type,
         break;
 
     case OVSINST_OFPIT13_METER:
-        ofpact_put_METER(ofpacts)->meter_id = str_to_u32(arg);
+        error_s = str_to_u32(arg, &ofpact_put_METER(ofpacts)->meter_id);
         break;
 
     case OVSINST_OFPIT11_WRITE_METADATA:
-        parse_metadata(ofpacts, arg);
+        error_s = parse_metadata(ofpacts, arg);
         break;
 
     case OVSINST_OFPIT11_GOTO_TABLE: {
         struct ofpact_goto_table *ogt = ofpact_put_GOTO_TABLE(ofpacts);
         char *table_s = strsep(&arg, ",");
         if (!table_s || !table_s[0]) {
-            ovs_fatal(0, "instruction goto-table needs table id");
+            return xstrdup("instruction goto-table needs table id");
         }
-        ogt->table_id = str_to_u8(table_s, "table");
+        error_s = str_to_u8(table_s, "table", &ogt->table_id);
         break;
     }
+    }
+
+    if (error_s) {
+        return error_s;
     }
 
     /* If write_metadata is specified as an action AND an instruction, ofpacts
        could be invalid. */
     error = ofpacts_verify(ofpacts->data, ofpacts->size);
     if (error) {
-        ovs_fatal(0, "Incorrect instruction ordering");
+        return xstrdup("Incorrect instruction ordering");
     }
+    return NULL;
 }
 
-static void
+/* Parses 'str' as a series of instructions, and appends them to 'ofpacts'.
+ *
+ * Returns NULL if successful, otherwise a malloc()'d string describing the
+ * error.  The caller is responsible for freeing the returned string. */
+static char * WARN_UNUSED_RESULT
 str_to_inst_ofpacts(char *str, struct ofpbuf *ofpacts)
 {
+    size_t orig_size = ofpacts->size;
     char *pos, *inst, *arg;
     int type;
     const char *prev_inst = NULL;
@@ -745,8 +975,10 @@ str_to_inst_ofpacts(char *str, struct ofpbuf *ofpacts)
     while (ofputil_parse_key_value(&pos, &inst, &arg)) {
         type = ovs_instruction_type_from_name(inst);
         if (type < 0) {
-            if (!str_to_ofpact__(pos, inst, arg, ofpacts, n_actions)) {
-                break;
+            char *error = str_to_ofpact__(pos, inst, arg, ofpacts, n_actions);
+            if (error) {
+                ofpacts->size = orig_size;
+                return error;
             }
 
             type = OVSINST_OFPIT11_APPLY_ACTIONS;
@@ -755,19 +987,26 @@ str_to_inst_ofpacts(char *str, struct ofpbuf *ofpacts)
                 continue;
             }
         } else if (type == OVSINST_OFPIT11_APPLY_ACTIONS) {
-            ovs_fatal(0, "%s isn't supported. Just write actions then "
-                      "it is interpreted as apply_actions", inst);
+            ofpacts->size = orig_size;
+            return xasprintf("%s isn't supported. Just write actions then "
+                             "it is interpreted as apply_actions", inst);
         } else {
-            parse_named_instruction(type, arg, ofpacts);
+            char *error = parse_named_instruction(type, arg, ofpacts);
+            if (error) {
+                ofpacts->size = orig_size;
+                return error;
+            }
         }
 
-        if (type == prev_type) {
-            ovs_fatal(0, "instruction can be specified at most once: %s",
-                      inst);
-        }
         if (type <= prev_type) {
-            ovs_fatal(0, "Instruction %s must be specified before %s",
-                      inst, prev_inst);
+            ofpacts->size = orig_size;
+            if (type == prev_type) {
+                return xasprintf("instruction %s may be specified only once",
+                                 inst);
+            } else {
+                return xasprintf("instruction %s must be specified before %s",
+                                 inst, prev_inst);
+            }
         }
 
         prev_inst = inst;
@@ -775,6 +1014,8 @@ str_to_inst_ofpacts(char *str, struct ofpbuf *ofpacts)
         n_actions++;
     }
     ofpact_pad(ofpacts);
+
+    return NULL;
 }
 
 struct protocol {
@@ -813,44 +1054,26 @@ parse_protocol(const char *name, const struct protocol **p_out)
     return false;
 }
 
-static void
-ofp_fatal(const char *flow, bool verbose, const char *format, ...)
-{
-    va_list args;
-
-    if (verbose) {
-        fprintf(stderr, "%s:\n", flow);
-    }
-
-    va_start(args, format);
-    ovs_fatal_valist(0, format, args);
-}
-
-static void
+/* Parses 's' as the (possibly masked) value of field 'mf', and updates
+ * 'match' appropriately.
+ *
+ * Returns NULL if successful, otherwise a malloc()'d string describing the
+ * error.  The caller is responsible for freeing the returned string. */
+static char * WARN_UNUSED_RESULT
 parse_field(const struct mf_field *mf, const char *s, struct match *match)
 {
     union mf_value value, mask;
     char *error;
 
     error = mf_parse(mf, s, &value, &mask);
-    if (error) {
-        ovs_fatal(0, "%s", error);
+    if (!error) {
+        mf_set(mf, &value, &mask, match);
     }
-
-    mf_set(mf, &value, &mask, match);
+    return error;
 }
 
-/* Convert 'str_' (as described in the Flow Syntax section of the ovs-ofctl man
- * page) into 'fm' for sending the specified flow_mod 'command' to a switch.
- * If 'actions' is specified, an action must be in 'string' and may be expanded
- * or reallocated.
- *
- * To parse syntax for an OFPT_FLOW_MOD (or NXT_FLOW_MOD), use an OFPFC_*
- * constant for 'command'.  To parse syntax for an OFPST_FLOW or
- * OFPST_AGGREGATE (or NXST_FLOW or NXST_AGGREGATE), use -1 for 'command'. */
-void
-parse_ofp_str(struct ofputil_flow_mod *fm, int command, const char *str_,
-              bool verbose)
+static char * WARN_UNUSED_RESULT
+parse_ofp_str__(struct ofputil_flow_mod *fm, int command, char *string)
 {
     enum {
         F_OUT_PORT = 1 << 0,
@@ -859,7 +1082,6 @@ parse_ofp_str(struct ofputil_flow_mod *fm, int command, const char *str_,
         F_PRIORITY = 1 << 4,
         F_FLAGS = 1 << 5,
     } fields;
-    char *string = xstrdup(str_);
     char *save_ptr = NULL;
     char *act_str = NULL;
     char *name;
@@ -913,13 +1135,13 @@ parse_ofp_str(struct ofputil_flow_mod *fm, int command, const char *str_,
     if (fields & F_ACTIONS) {
         act_str = strstr(string, "action");
         if (!act_str) {
-            ofp_fatal(str_, verbose, "must specify an action");
+            return xstrdup("must specify an action");
         }
         *act_str = '\0';
 
         act_str = strchr(act_str + 1, '=');
         if (!act_str) {
-            ofp_fatal(str_, verbose, "must specify an action");
+            return xstrdup("must specify an action");
         }
 
         act_str++;
@@ -927,6 +1149,7 @@ parse_ofp_str(struct ofputil_flow_mod *fm, int command, const char *str_,
     for (name = strtok_r(string, "=, \t\r\n", &save_ptr); name;
          name = strtok_r(NULL, "=, \t\r\n", &save_ptr)) {
         const struct protocol *p;
+        char *error = NULL;
 
         if (parse_protocol(name, &p)) {
             match_set_dl_type(&fm->match, htons(p->dl_type));
@@ -948,44 +1171,50 @@ parse_ofp_str(struct ofputil_flow_mod *fm, int command, const char *str_,
 
             value = strtok_r(NULL, ", \t\r\n", &save_ptr);
             if (!value) {
-                ofp_fatal(str_, verbose, "field %s missing value", name);
+                return xasprintf("field %s missing value", name);
             }
 
             if (!strcmp(name, "table")) {
-                fm->table_id = str_to_u8(value, name);
+                error = str_to_u8(value, "table", &fm->table_id);
             } else if (!strcmp(name, "out_port")) {
                 if (!ofputil_port_from_string(value, &fm->out_port)) {
-                    ofp_fatal(str_, verbose, "%s is not a valid OpenFlow port",
-                              name);
+                    error = xasprintf("%s is not a valid OpenFlow port",
+                                      value);
                 }
             } else if (fields & F_PRIORITY && !strcmp(name, "priority")) {
-                fm->priority = str_to_u16(value, name);
+                uint16_t priority;
+
+                error = str_to_u16(value, name, &priority);
+                fm->priority = priority;
             } else if (fields & F_TIMEOUT && !strcmp(name, "idle_timeout")) {
-                fm->idle_timeout = str_to_u16(value, name);
+                error = str_to_u16(value, name, &fm->idle_timeout);
             } else if (fields & F_TIMEOUT && !strcmp(name, "hard_timeout")) {
-                fm->hard_timeout = str_to_u16(value, name);
+                error = str_to_u16(value, name, &fm->hard_timeout);
             } else if (!strcmp(name, "cookie")) {
                 char *mask = strchr(value, '/');
 
                 if (mask) {
                     /* A mask means we're searching for a cookie. */
                     if (command == OFPFC_ADD) {
-                        ofp_fatal(str_, verbose, "flow additions cannot use "
-                                  "a cookie mask");
+                        return xstrdup("flow additions cannot use "
+                                       "a cookie mask");
                     }
                     *mask = '\0';
-                    fm->cookie = htonll(str_to_u64(value));
-                    fm->cookie_mask = htonll(str_to_u64(mask+1));
+                    error = str_to_be64(value, &fm->cookie);
+                    if (error) {
+                        return error;
+                    }
+                    error = str_to_be64(mask + 1, &fm->cookie_mask);
                 } else {
                     /* No mask means that the cookie is being set. */
                     if (command != OFPFC_ADD && command != OFPFC_MODIFY
-                            && command != OFPFC_MODIFY_STRICT) {
-                        ofp_fatal(str_, verbose, "cannot set cookie");
+                        && command != OFPFC_MODIFY_STRICT) {
+                        return xstrdup("cannot set cookie");
                     }
-                    fm->new_cookie = htonll(str_to_u64(value));
+                    error = str_to_be64(value, &fm->new_cookie);
                 }
             } else if (mf_from_name(name)) {
-                parse_field(mf_from_name(name), value, &fm->match);
+                error = parse_field(mf_from_name(name), value, &fm->match);
             } else if (!strcmp(name, "duration")
                        || !strcmp(name, "n_packets")
                        || !strcmp(name, "n_bytes")
@@ -995,12 +1224,16 @@ parse_ofp_str(struct ofputil_flow_mod *fm, int command, const char *str_,
                  * "ovs-ofctl dump-flows" back into commands that parse
                  * flows. */
             } else {
-                ofp_fatal(str_, verbose, "unknown keyword %s", name);
+                error = xasprintf("unknown keyword %s", name);
+            }
+
+            if (error) {
+                return error;
             }
         }
     }
     if (!fm->cookie_mask && fm->new_cookie == htonll(UINT64_MAX)
-            && (command == OFPFC_MODIFY || command == OFPFC_MODIFY_STRICT)) {
+        && (command == OFPFC_MODIFY || command == OFPFC_MODIFY_STRICT)) {
         /* On modifies without a mask, we are supposed to add a flow if
          * one does not exist.  If a cookie wasn't been specified, use a
          * default of zero. */
@@ -1008,40 +1241,69 @@ parse_ofp_str(struct ofputil_flow_mod *fm, int command, const char *str_,
     }
     if (fields & F_ACTIONS) {
         struct ofpbuf ofpacts;
-        enum ofperr err;
+        char *error;
 
         ofpbuf_init(&ofpacts, 32);
-        str_to_inst_ofpacts(act_str, &ofpacts);
-        fm->ofpacts_len = ofpacts.size;
-        fm->ofpacts = ofpbuf_steal_data(&ofpacts);
+        error = str_to_inst_ofpacts(act_str, &ofpacts);
+        if (!error) {
+            enum ofperr err;
 
-        err = ofpacts_check(fm->ofpacts, fm->ofpacts_len, &fm->match.flow,
-                            OFPP_MAX, 0);
-        if (err) {
-            exit(EXIT_FAILURE);
+            err = ofpacts_check(ofpacts.data, ofpacts.size, &fm->match.flow,
+                                OFPP_MAX, 0);
+            if (err) {
+                error = xasprintf("actions are invalid with specified match "
+                                  "(%s)", ofperr_to_string(err));
+            }
+        }
+        if (error) {
+            ofpbuf_uninit(&ofpacts);
+            return error;
         }
 
+        fm->ofpacts_len = ofpacts.size;
+        fm->ofpacts = ofpbuf_steal_data(&ofpacts);
     } else {
         fm->ofpacts_len = 0;
         fm->ofpacts = NULL;
     }
 
-    free(string);
+    return NULL;
 }
 
 /* Convert 'str_' (as described in the Flow Syntax section of the ovs-ofctl man
- * page) into 'mm' for sending the specified meter_mod 'command' to a switch.
- */
-void
-parse_ofp_meter_mod_str(struct ofputil_meter_mod *mm, const char *str_,
-                        int command, bool verbose)
+ * page) into 'fm' for sending the specified flow_mod 'command' to a switch.
+ *
+ * To parse syntax for an OFPT_FLOW_MOD (or NXT_FLOW_MOD), use an OFPFC_*
+ * constant for 'command'.  To parse syntax for an OFPST_FLOW or
+ * OFPST_AGGREGATE (or NXST_FLOW or NXST_AGGREGATE), use -1 for 'command'.
+ *
+ * Returns NULL if successful, otherwise a malloc()'d string describing the
+ * error.  The caller is responsible for freeing the returned string. */
+char * WARN_UNUSED_RESULT
+parse_ofp_str(struct ofputil_flow_mod *fm, int command, const char *str_)
+{
+    char *string = xstrdup(str_);
+    char *error;
+
+    error = parse_ofp_str__(fm, command, string);
+    if (error) {
+        fm->ofpacts = NULL;
+        fm->ofpacts_len = 0;
+    }
+
+    free(string);
+    return error;
+}
+
+static char * WARN_UNUSED_RESULT
+parse_ofp_meter_mod_str__(struct ofputil_meter_mod *mm, char *string,
+                          struct ofpbuf *bands, int command)
 {
     enum {
         F_METER = 1 << 0,
         F_FLAGS = 1 << 1,
         F_BANDS = 1 << 2,
     } fields;
-    char *string = xstrdup(str_);
     char *save_ptr = NULL;
     char *band_str = NULL;
     char *name;
@@ -1073,13 +1335,13 @@ parse_ofp_meter_mod_str(struct ofputil_meter_mod *mm, const char *str_,
     if (fields & F_BANDS) {
         band_str = strstr(string, "band");
         if (!band_str) {
-            ofp_fatal(str_, verbose, "must specify bands");
+            return xstrdup("must specify bands");
         }
         *band_str = '\0';
 
         band_str = strchr(band_str + 1, '=');
         if (!band_str) {
-            ofp_fatal(str_, verbose, "must specify bands");
+            return xstrdup("must specify bands");
         }
 
         band_str++;
@@ -1100,7 +1362,7 @@ parse_ofp_meter_mod_str(struct ofputil_meter_mod *mm, const char *str_,
 
             value = strtok_r(NULL, ", \t\r\n", &save_ptr);
             if (!value) {
-                ofp_fatal(str_, verbose, "field %s missing value", name);
+                return xasprintf("field %s missing value", name);
             }
 
             if (!strcmp(name, "meter")) {
@@ -1111,31 +1373,30 @@ parse_ofp_meter_mod_str(struct ofputil_meter_mod *mm, const char *str_,
                 } else if (!strcmp(value, "slowpath")) {
                     mm->meter.meter_id = OFPM13_SLOWPATH;
                 } else {
-                    mm->meter.meter_id = str_to_u32(value);
+                    char *error = str_to_u32(value, &mm->meter.meter_id);
+                    if (error) {
+                        return error;
+                    }
                     if (mm->meter.meter_id > OFPM13_MAX) {
-                        ofp_fatal(str_, verbose, "invalid value for %s", name);
+                        return xasprintf("invalid value for %s", name);
                     }
                 }
             } else {
-                ofp_fatal(str_, verbose, "unknown keyword %s", name);
+                return xasprintf("unknown keyword %s", name);
             }
         }
     }
     if (fields & F_METER && !mm->meter.meter_id) {
-        ofp_fatal(str_, verbose, "must specify 'meter'");
+        return xstrdup("must specify 'meter'");
     }
     if (fields & F_FLAGS && !mm->meter.flags) {
-        ofp_fatal(str_, verbose,
-                  "meter must specify either 'kbps' or 'pktps'");
+        return xstrdup("meter must specify either 'kbps' or 'pktps'");
     }
 
     if (fields & F_BANDS) {
-        struct ofpbuf bands;
         uint16_t n_bands = 0;
         struct ofputil_meter_band *band = NULL;
         int i;
-
-        ofpbuf_init(&bands, 64);
 
         for (name = strtok_r(band_str, "=, \t\r\n", &save_ptr); name;
              name = strtok_r(NULL, "=, \t\r\n", &save_ptr)) {
@@ -1144,12 +1405,12 @@ parse_ofp_meter_mod_str(struct ofputil_meter_mod *mm, const char *str_,
 
             value = strtok_r(NULL, ", \t\r\n", &save_ptr);
             if (!value) {
-                ofp_fatal(str_, verbose, "field %s missing value", name);
+                return xasprintf("field %s missing value", name);
             }
 
             if (!strcmp(name, "type")) {
                 /* Start a new band */
-                band = ofpbuf_put_zeros(&bands, sizeof *band);
+                band = ofpbuf_put_zeros(bands, sizeof *band);
                 n_bands++;
 
                 if (!strcmp(value, "drop")) {
@@ -1157,59 +1418,66 @@ parse_ofp_meter_mod_str(struct ofputil_meter_mod *mm, const char *str_,
                 } else if (!strcmp(value, "dscp_remark")) {
                     band->type = OFPMBT13_DSCP_REMARK;
                 } else {
-                    ofp_fatal(str_, verbose, "field %s unknown value %s", name,
-                              value);
+                    return xasprintf("field %s unknown value %s", name, value);
                 }
             } else if (!band || !band->type) {
-                ofp_fatal(str_, verbose,
-                          "band must start with the 'type' keyword");
+                return xstrdup("band must start with the 'type' keyword");
             } else if (!strcmp(name, "rate")) {
-                band->rate = str_to_u32(value);
+                char *error = str_to_u32(value, &band->rate);
+                if (error) {
+                    return error;
+                }
             } else if (!strcmp(name, "burst_size")) {
-                band->burst_size = str_to_u32(value);
+                char *error = str_to_u32(value, &band->burst_size);
+                if (error) {
+                    return error;
+                }
             } else if (!strcmp(name, "prec_level")) {
-                band->prec_level = str_to_u8(value, name);
+                char *error = str_to_u8(value, name, &band->prec_level);
+                if (error) {
+                    return error;
+                }
             } else {
-                ofp_fatal(str_, verbose, "unknown keyword %s", name);
+                return xasprintf("unknown keyword %s", name);
             }
         }
         /* validate bands */
         if (!n_bands) {
-            ofp_fatal(str_, verbose, "meter must have bands");
+            return xstrdup("meter must have bands");
         }
 
         mm->meter.n_bands = n_bands;
-        mm->meter.bands = ofpbuf_steal_data(&bands);
+        mm->meter.bands = ofpbuf_steal_data(bands);
 
         for (i = 0; i < n_bands; ++i) {
             band = &mm->meter.bands[i];
 
             if (!band->type) {
-                ofp_fatal(str_, verbose, "band must have 'type'");
+                return xstrdup("band must have 'type'");
             }
             if (band->type == OFPMBT13_DSCP_REMARK) {
                 if (!band->prec_level) {
-                    ofp_fatal(str_, verbose, "'dscp_remark' band must have"
-                              " 'prec_level'");
+                    return xstrdup("'dscp_remark' band must have"
+                                   " 'prec_level'");
                 }
             } else {
                 if (band->prec_level) {
-                    ofp_fatal(str_, verbose, "Only 'dscp_remark' band may have"
-                              " 'prec_level'");
+                    return xstrdup("Only 'dscp_remark' band may have"
+                                   " 'prec_level'");
                 }
             }
             if (!band->rate) {
-                ofp_fatal(str_, verbose, "band must have 'rate'");
+                return xstrdup("band must have 'rate'");
             }
             if (mm->meter.flags & OFPMF13_BURST) {
                 if (!band->burst_size) {
-                    ofp_fatal(str_, verbose, "band must have 'burst_size' "
-                              "when 'burst' flag is set");
+                    return xstrdup("band must have 'burst_size' "
+                                   "when 'burst' flag is set");
                 }
             } else {
                 if (band->burst_size) {
-                    ofp_fatal(str_, verbose, "band may have 'burst_size' only "
-                              "when 'burst' flag is set");
+                    return xstrdup("band may have 'burst_size' only "
+                                   "when 'burst' flag is set");
                 }
             }
         }
@@ -1218,18 +1486,39 @@ parse_ofp_meter_mod_str(struct ofputil_meter_mod *mm, const char *str_,
         mm->meter.bands = NULL;
     }
 
-    free(string);
+    return NULL;
 }
 
-/* Convert 'str_' (as described in the documentation for the "monitor" command
- * in the ovs-ofctl man page) into 'fmr'. */
-void
-parse_flow_monitor_request(struct ofputil_flow_monitor_request *fmr,
-                           const char *str_)
+/* Convert 'str_' (as described in the Flow Syntax section of the ovs-ofctl man
+ * page) into 'mm' for sending the specified meter_mod 'command' to a switch.
+ *
+ * Returns NULL if successful, otherwise a malloc()'d string describing the
+ * error.  The caller is responsible for freeing the returned string. */
+char * WARN_UNUSED_RESULT
+parse_ofp_meter_mod_str(struct ofputil_meter_mod *mm, const char *str_,
+                        int command)
+{
+    struct ofpbuf bands;
+    char *string;
+    char *error;
+
+    ofpbuf_init(&bands, 64);
+    string = xstrdup(str_);
+
+    error = parse_ofp_meter_mod_str__(mm, string, &bands, command);
+
+    free(string);
+    ofpbuf_uninit(&bands);
+
+    return error;
+}
+
+static char * WARN_UNUSED_RESULT
+parse_flow_monitor_request__(struct ofputil_flow_monitor_request *fmr,
+                             const char *str_, char *string)
 {
     static uint32_t id;
 
-    char *string = xstrdup(str_);
     char *save_ptr = NULL;
     char *name;
 
@@ -1266,95 +1555,162 @@ parse_flow_monitor_request(struct ofputil_flow_monitor_request *fmr,
 
             value = strtok_r(NULL, ", \t\r\n", &save_ptr);
             if (!value) {
-                ovs_fatal(0, "%s: field %s missing value", str_, name);
+                return xasprintf("%s: field %s missing value", str_, name);
             }
 
             if (!strcmp(name, "table")) {
-                fmr->table_id = str_to_u8(value, name);
+                char *error = str_to_u8(value, "table", &fmr->table_id);
+                if (error) {
+                    return error;
+                }
             } else if (!strcmp(name, "out_port")) {
                 fmr->out_port = u16_to_ofp(atoi(value));
             } else if (mf_from_name(name)) {
-                parse_field(mf_from_name(name), value, &fmr->match);
+                char *error;
+
+                error = parse_field(mf_from_name(name), value, &fmr->match);
+                if (error) {
+                    return error;
+                }
             } else {
-                ovs_fatal(0, "%s: unknown keyword %s", str_, name);
+                return xasprintf("%s: unknown keyword %s", str_, name);
             }
         }
     }
+    return NULL;
+}
+
+/* Convert 'str_' (as described in the documentation for the "monitor" command
+ * in the ovs-ofctl man page) into 'fmr'.
+ *
+ * Returns NULL if successful, otherwise a malloc()'d string describing the
+ * error.  The caller is responsible for freeing the returned string. */
+char * WARN_UNUSED_RESULT
+parse_flow_monitor_request(struct ofputil_flow_monitor_request *fmr,
+                           const char *str_)
+{
+    char *string = xstrdup(str_);
+    char *error = parse_flow_monitor_request__(fmr, str_, string);
     free(string);
+    return error;
 }
 
 /* Parses 's' as a set of OpenFlow actions and appends the actions to
  * 'actions'.
  *
- * Prints an error on stderr and aborts the program if 's' syntax is
- * invalid. */
-void
+ * Returns NULL if successful, otherwise a malloc()'d string describing the
+ * error.  The caller is responsible for freeing the returned string. */
+char * WARN_UNUSED_RESULT
 parse_ofpacts(const char *s_, struct ofpbuf *ofpacts)
 {
     char *s = xstrdup(s_);
-    str_to_ofpacts(s, ofpacts);
+    char *error = str_to_ofpacts(s, ofpacts);
     free(s);
+
+    return error;
 }
 
 /* Parses 'string' as an OFPT_FLOW_MOD or NXT_FLOW_MOD with command 'command'
- * (one of OFPFC_*) into 'fm'. */
-void
+ * (one of OFPFC_*) into 'fm'.
+ *
+ * Returns NULL if successful, otherwise a malloc()'d string describing the
+ * error.  The caller is responsible for freeing the returned string. */
+char * WARN_UNUSED_RESULT
 parse_ofp_flow_mod_str(struct ofputil_flow_mod *fm, const char *string,
-                       uint16_t command, bool verbose)
+                       uint16_t command)
 {
-    struct match match_copy;
+    char *error = parse_ofp_str(fm, command, string);
+    if (!error) {
+        /* Normalize a copy of the match.  This ensures that non-normalized
+         * flows get logged but doesn't affect what gets sent to the switch, so
+         * that the switch can do whatever it likes with the flow. */
+        struct match match_copy = fm->match;
+        ofputil_normalize_match(&match_copy);
+    }
 
-    parse_ofp_str(fm, command, string, verbose);
-
-    /* Normalize a copy of the match.  This ensures that non-normalized flows
-     * get logged but doesn't affect what gets sent to the switch, so that the
-     * switch can do whatever it likes with the flow. */
-    match_copy = fm->match;
-    ofputil_normalize_match(&match_copy);
+    return error;
 }
 
-void
+/* Opens file 'file_name' and reads each line as a flow_mod of the specified
+ * type (one of OFPFC_*).  Stores each flow_mod in '*fm', an array allocated
+ * on the caller's behalf, and the number of flow_mods in '*n_fms'.
+ *
+ * Returns NULL if successful, otherwise a malloc()'d string describing the
+ * error.  The caller is responsible for freeing the returned string. */
+char * WARN_UNUSED_RESULT
 parse_ofp_flow_mod_file(const char *file_name, uint16_t command,
                         struct ofputil_flow_mod **fms, size_t *n_fms)
 {
     size_t allocated_fms;
+    int line_number;
     FILE *stream;
     struct ds s;
 
+    *fms = NULL;
+    *n_fms = 0;
+
     stream = !strcmp(file_name, "-") ? stdin : fopen(file_name, "r");
     if (stream == NULL) {
-        ovs_fatal(errno, "%s: open", file_name);
+        return xasprintf("%s: open failed (%s)",
+                         file_name, ovs_strerror(errno));
     }
 
     allocated_fms = *n_fms;
     ds_init(&s);
-    while (!ds_get_preprocessed_line(&s, stream)) {
+    line_number = 0;
+    while (!ds_get_preprocessed_line(&s, stream, &line_number)) {
+        char *error;
+
         if (*n_fms >= allocated_fms) {
             *fms = x2nrealloc(*fms, &allocated_fms, sizeof **fms);
         }
-        parse_ofp_flow_mod_str(&(*fms)[*n_fms], ds_cstr(&s), command, false);
+        error = parse_ofp_flow_mod_str(&(*fms)[*n_fms], ds_cstr(&s), command);
+        if (error) {
+            size_t i;
+
+            for (i = 0; i < *n_fms; i++) {
+                free((*fms)[i].ofpacts);
+            }
+            free(*fms);
+            *fms = NULL;
+            *n_fms = 0;
+
+            ds_destroy(&s);
+            if (stream != stdin) {
+                fclose(stream);
+            }
+
+            return xasprintf("%s:%d: %s", file_name, line_number, error);
+        }
         *n_fms += 1;
     }
-    ds_destroy(&s);
 
+    ds_destroy(&s);
     if (stream != stdin) {
         fclose(stream);
     }
+    return NULL;
 }
 
-void
+char * WARN_UNUSED_RESULT
 parse_ofp_flow_stats_request_str(struct ofputil_flow_stats_request *fsr,
                                  bool aggregate, const char *string)
 {
     struct ofputil_flow_mod fm;
+    char *error;
 
-    parse_ofp_str(&fm, -1, string, false);
+    error = parse_ofp_str(&fm, -1, string);
+    if (error) {
+        return error;
+    }
+
     fsr->aggregate = aggregate;
     fsr->cookie = fm.cookie;
     fsr->cookie_mask = fm.cookie_mask;
     fsr->match = fm.match;
     fsr->out_port = fm.out_port;
     fsr->table_id = fm.table_id;
+    return NULL;
 }
 
 /* Parses a specification of a flow from 's' into 'flow'.  's' must take the

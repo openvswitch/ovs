@@ -166,7 +166,7 @@ AT_SETUP([ofproto-dpif - DSCP])
 OVS_VSWITCHD_START([add-port br0 p1 -- set Interface p1 type=dummy])
 ADD_OF_PORTS([br0], [9])
 AT_DATA([flows.txt], [dnl
-actions=output:65534,enqueue:1:1,enqueue:1:2,enqueue:1:2,enqueue:1:1,output:1,mod_nw_tos:0,output:1,output:65534
+actions=output:LOCAL,enqueue:1:1,enqueue:1:2,enqueue:1:2,enqueue:1:1,output:1,mod_nw_tos:0,output:1,output:LOCAL
 ])
 AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 AT_CHECK([ovs-vsctl -- \
@@ -197,8 +197,8 @@ AT_DATA([flows.txt], [dnl
 in_port=local actions=local,flood
 in_port=1 actions=flood
 in_port=2 actions=all
-in_port=3 actions=output:65534,output:1,output:2,output:3,output:4,output:5,output:6,output:7
-in_port=4 actions=enqueue:65534:1,enqueue:1:1,enqueue:2:1,enqueue:3:2,enqueue:4:1,enqueue:5:1,enqueue:6:1,enqueue:7:1
+in_port=3 actions=output:LOCAL,output:1,output:2,output:3,output:4,output:5,output:6,output:7
+in_port=4 actions=enqueue:LOCAL:1,enqueue:1:1,enqueue:2:1,enqueue:3:2,enqueue:4:1,enqueue:5:1,enqueue:6:1,enqueue:7:1
 ])
 AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 AT_CHECK([ovs-ofctl mod-port br0 5 noforward])

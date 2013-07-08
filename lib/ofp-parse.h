@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010, 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2010, 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
+#include "compiler.h"
 
 struct flow;
 struct ofpbuf;
@@ -30,26 +31,31 @@ struct ofputil_flow_monitor_request;
 struct ofputil_flow_stats_request;
 struct ofputil_meter_mod;
 
-void parse_ofp_str(struct ofputil_flow_mod *, int command, const char *str_,
-                   bool verbose);
+char *parse_ofp_str(struct ofputil_flow_mod *, int command, const char *str_)
+    WARN_UNUSED_RESULT;
 
-void parse_ofp_flow_mod_str(struct ofputil_flow_mod *, const char *string,
-                            uint16_t command, bool verbose);
-void parse_ofp_flow_mod_file(const char *file_name, uint16_t command,
-                             struct ofputil_flow_mod **fms, size_t *n_fms);
+char *parse_ofp_flow_mod_str(struct ofputil_flow_mod *, const char *string,
+                            uint16_t command)
+    WARN_UNUSED_RESULT;
+char *parse_ofp_flow_mod_file(const char *file_name, uint16_t command,
+                              struct ofputil_flow_mod **fms, size_t *n_fms)
+    WARN_UNUSED_RESULT;
 
-void parse_ofp_flow_stats_request_str(struct ofputil_flow_stats_request *,
-                                      bool aggregate, const char *string);
+char *parse_ofp_flow_stats_request_str(struct ofputil_flow_stats_request *,
+                                       bool aggregate, const char *string)
+    WARN_UNUSED_RESULT;
 
-
-void parse_ofpacts(const char *, struct ofpbuf *ofpacts);
+char *parse_ofpacts(const char *, struct ofpbuf *ofpacts)
+    WARN_UNUSED_RESULT;
 
 char *parse_ofp_exact_flow(struct flow *, const char *);
 
-void parse_ofp_meter_mod_str(struct ofputil_meter_mod *, const char *string,
-			      int command, bool verbose);
+char *parse_ofp_meter_mod_str(struct ofputil_meter_mod *, const char *string,
+			      int command)
+    WARN_UNUSED_RESULT;
 
-void parse_flow_monitor_request(struct ofputil_flow_monitor_request *,
-                                const char *);
+char *parse_flow_monitor_request(struct ofputil_flow_monitor_request *,
+                                const char *)
+    WARN_UNUSED_RESULT;
 
 #endif /* ofp-parse.h */

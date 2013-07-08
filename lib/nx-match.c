@@ -1004,50 +1004,67 @@ oxm_match_from_string(const char *s, struct ofpbuf *b)
     return match_len;
 }
 
-void
+/* Parses 's' as a "move" action, in the form described in ovs-ofctl(8), into
+ * '*move'.
+ *
+ * Returns NULL if successful, otherwise a malloc()'d string describing the
+ * error.  The caller is responsible for freeing the returned string. */
+char * WARN_UNUSED_RESULT
 nxm_parse_reg_move(struct ofpact_reg_move *move, const char *s)
 {
     const char *full_s = s;
+    char *error;
 
-    s = mf_parse_subfield(&move->src, s);
+    error = mf_parse_subfield__(&move->src, &s);
+    if (error) {
+        return error;
+    }
     if (strncmp(s, "->", 2)) {
-        ovs_fatal(0, "%s: missing `->' following source", full_s);
+        return xasprintf("%s: missing `->' following source", full_s);
     }
     s += 2;
-    s = mf_parse_subfield(&move->dst, s);
-    if (*s != '\0') {
-        ovs_fatal(0, "%s: trailing garbage following destination", full_s);
+    error = mf_parse_subfield(&move->dst, s);
+    if (error) {
+        return error;
     }
 
     if (move->src.n_bits != move->dst.n_bits) {
-        ovs_fatal(0, "%s: source field is %d bits wide but destination is "
-                  "%d bits wide", full_s,
-                  move->src.n_bits, move->dst.n_bits);
+        return xasprintf("%s: source field is %d bits wide but destination is "
+                         "%d bits wide", full_s,
+                         move->src.n_bits, move->dst.n_bits);
     }
+    return NULL;
 }
 
-void
+/* Parses 's' as a "load" action, in the form described in ovs-ofctl(8), into
+ * '*load'.
+ *
+ * Returns NULL if successful, otherwise a malloc()'d string describing the
+ * error.  The caller is responsible for freeing the returned string. */
+char * WARN_UNUSED_RESULT
 nxm_parse_reg_load(struct ofpact_reg_load *load, const char *s)
 {
     const char *full_s = s;
     uint64_t value = strtoull(s, (char **) &s, 0);
+    char *error;
 
     if (strncmp(s, "->", 2)) {
-        ovs_fatal(0, "%s: missing `->' following value", full_s);
+        return xasprintf("%s: missing `->' following value", full_s);
     }
     s += 2;
-    s = mf_parse_subfield(&load->dst, s);
-    if (*s != '\0') {
-        ovs_fatal(0, "%s: trailing garbage following destination", full_s);
+    error = mf_parse_subfield(&load->dst, s);
+    if (error) {
+        return error;
     }
 
     if (load->dst.n_bits < 64 && (value >> load->dst.n_bits) != 0) {
-        ovs_fatal(0, "%s: value %"PRIu64" does not fit into %d bits",
-                  full_s, value, load->dst.n_bits);
+        return xasprintf("%s: value %"PRIu64" does not fit into %d bits",
+                         full_s, value, load->dst.n_bits);
     }
 
     load->subvalue.be64[0] = htonll(0);
     load->subvalue.be64[1] = htonll(value);
+    return NULL;
 }
 
 /* nxm_format_reg_move(), nxm_format_reg_load(). */
@@ -1316,13 +1333,27 @@ nxm_reg_load(const struct mf_subfield *dst, uint64_t src_data,
 }
 
 /* nxm_parse_stack_action, works for both push() and pop(). */
-void
+
+/* Parses 's' as a "push" or "pop" action, in the form described in
+ * ovs-ofctl(8), into '*stack_action'.
+ *
+ * Returns NULL if successful, otherwise a malloc()'d string describing the
+ * error.  The caller is responsible for freeing the returned string. */
+char * WARN_UNUSED_RESULT
 nxm_parse_stack_action(struct ofpact_stack *stack_action, const char *s)
 {
-    s = mf_parse_subfield(&stack_action->subfield, s);
-    if (*s != '\0') {
-        ovs_fatal(0, "%s: trailing garbage following push or pop", s);
+    char *error;
+
+    error = mf_parse_subfield__(&stack_action->subfield, &s);
+    if (error) {
+        return error;
     }
+
+    if (*s != '\0') {
+        return xasprintf("%s: trailing garbage following push or pop", s);
+    }
+
+    return NULL;
 }
 
 void

@@ -1,4 +1,4 @@
-/* Copyright (c) 2011, 2012 Nicira, Inc.
+/* Copyright (c) 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -71,9 +71,14 @@ parse_bundle_actions(char *actions)
     struct ofpact_bundle *bundle;
     struct ofpbuf ofpacts;
     struct ofpact *action;
+    char *error;
 
     ofpbuf_init(&ofpacts, 0);
-    bundle_parse_load(actions, &ofpacts);
+    error = bundle_parse_load(actions, &ofpacts);
+    if (error) {
+        ovs_fatal(0, "%s", error);
+    }
+
     action = ofpacts.data;
     bundle = ofpact_get_BUNDLE(xmemdup(action, action->len));
     ofpbuf_uninit(&ofpacts);

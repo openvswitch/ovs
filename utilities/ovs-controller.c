@@ -278,6 +278,7 @@ parse_options(int argc, char *argv[])
 
     for (;;) {
         int indexptr;
+        char *error;
         int c;
 
         c = getopt_long(argc, argv, short_options, long_options, &indexptr);
@@ -327,8 +328,11 @@ parse_options(int argc, char *argv[])
             break;
 
         case OPT_WITH_FLOWS:
-            parse_ofp_flow_mod_file(optarg, OFPFC_ADD, &default_flows,
-                                    &n_default_flows);
+            error = parse_ofp_flow_mod_file(optarg, OFPFC_ADD, &default_flows,
+                                            &n_default_flows);
+            if (error) {
+                ovs_fatal(0, "%s", error);
+            }
             break;
 
         case OPT_UNIXCTL:
