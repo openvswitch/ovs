@@ -33,6 +33,12 @@ int pthread_rwlock_unlock(pthread_rwlock_t *rwlock) OVS_RELEASES(rwlock);
 int pthread_cond_wait(pthread_cond_t *, pthread_mutex_t *mutex)
     OVS_MUST_HOLD(mutex);
 
+/* Sparse complains about the proper PTHREAD_MUTEX_INITIALIZER definition.
+ * Luckily, it's not a real compiler so we can overwrite it with something
+ * simple. */
+#undef PTHREAD_MUTEX_INITIALIZER
+#define PTHREAD_MUTEX_INITIALIZER {}
+
 #define pthread_mutex_trylock(MUTEX)                    \
     ({                                                  \
         int retval = pthread_mutex_trylock(mutex);      \
