@@ -36,7 +36,7 @@
 
 #include "gso.h"
 
-static __be16 skb_network_protocol(struct sk_buff *skb)
+static __be16 __skb_network_protocol(struct sk_buff *skb)
 {
 	__be16 type = skb->protocol;
 	int vlan_depth = ETH_HLEN;
@@ -68,7 +68,7 @@ static struct sk_buff *tnl_skb_gso_segment(struct sk_buff *skb,
 
 	/* setup whole inner packet to get protocol. */
 	__skb_pull(skb, mac_offset);
-	skb->protocol = skb_network_protocol(skb);
+	skb->protocol = __skb_network_protocol(skb);
 
 	/* setup l3 packet to gso, to get around segmentation bug on older kernel.*/
 	__skb_pull(skb, (pkt_hlen - mac_offset));
