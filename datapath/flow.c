@@ -1258,7 +1258,7 @@ int ipv4_tun_from_nlattr(const struct nlattr *attr,
 	}
 
 	if (!ttl) {
-		OVS_NLERR("IPv4 tunnel TTL is zero.\n");
+		OVS_NLERR("IPv4 tunnel TTL not specified.\n");
 		return -EINVAL;
 	}
 
