@@ -225,7 +225,10 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
   OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [dev_get_stats])
   OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [dev_get_by_index_rcu])
   OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [__skb_gso_segment])
+  OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [skb_gso_segment])
   OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [can_checksum_protocol])
+  OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [netif_skb_features])
+  OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [netif_needs_gso])
 
   OVS_GREP_IFELSE([$KSRC/include/linux/rcupdate.h], [rcu_read_lock_held], [],
                   [OVS_GREP_IFELSE([$KSRC/include/linux/rtnetlink.h],
