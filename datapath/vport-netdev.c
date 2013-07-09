@@ -45,12 +45,6 @@ MODULE_PARM_DESC(vlan_tso, "Enable TSO for VLAN packets");
 #define vlan_tso true
 #endif
 
-#ifdef HAVE_RHEL_OVS_HOOK
-static atomic_t nr_bridges = ATOMIC_INIT(0);
-
-extern struct sk_buff *(*openvswitch_handle_frame_hook)(struct sk_buff *skb);
-#endif
-
 static void netdev_port_receive(struct vport *vport, struct sk_buff *skb);
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,39)
@@ -171,16 +165,10 @@ static struct vport *netdev_create(const struct vport_parms *parms)
 	}
 
 	rtnl_lock();
-#ifdef HAVE_RHEL_OVS_HOOK
-	rcu_assign_pointer(netdev_vport->dev->ax25_ptr, vport);
-	atomic_inc(&nr_bridges);
-	rcu_assign_pointer(openvswitch_handle_frame_hook, netdev_frame_hook);
-#else
 	err = netdev_rx_handler_register(netdev_vport->dev, netdev_frame_hook,
 					 vport);
 	if (err)
 		goto error_unlock;
-#endif
 
 	dev_set_promiscuity(netdev_vport->dev, 1);
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,24)
@@ -192,9 +180,7 @@ static struct vport *netdev_create(const struct vport_parms *parms)
 	netdev_init();
 	return vport;
 
-#ifndef HAVE_RHEL_OVS_HOOK
 error_unlock:
-#endif
 	rtnl_unlock();
 error_put:
 	dev_put(netdev_vport->dev);
@@ -209,12 +195,6 @@ static void free_port_rcu(struct rcu_head *rcu)
 	struct netdev_vport *netdev_vport = container_of(rcu,
 					struct netdev_vport, rcu);
 
-#ifdef HAVE_RHEL_OVS_HOOK
-	rcu_assign_pointer(netdev_vport->dev->ax25_ptr, NULL);
-
-	if (atomic_dec_and_test(&nr_bridges))
-		rcu_assign_pointer(openvswitch_handle_frame_hook, NULL);
-#endif
 	dev_put(netdev_vport->dev);
 	ovs_vport_free(vport_from_priv(netdev_vport));
 }
