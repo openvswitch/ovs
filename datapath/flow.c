@@ -1287,8 +1287,7 @@ int ipv4_tun_to_nlattr(struct sk_buff *skb,
 	if (output->ipv4_tos &&
 		nla_put_u8(skb, OVS_TUNNEL_KEY_ATTR_TOS, output->ipv4_tos))
 		return -EMSGSIZE;
-	if (output->ipv4_ttl &&
-		nla_put_u8(skb, OVS_TUNNEL_KEY_ATTR_TTL, output->ipv4_ttl))
+	if (nla_put_u8(skb, OVS_TUNNEL_KEY_ATTR_TTL, output->ipv4_ttl))
 		return -EMSGSIZE;
 	if ((output->tun_flags & OVS_TNL_F_DONT_FRAGMENT) &&
 		nla_put_flag(skb, OVS_TUNNEL_KEY_ATTR_DONT_FRAGMENT))
