@@ -571,16 +571,6 @@ vlog_init(void)
                              vlog_unixctl_reopen, NULL);
 }
 
-/* Closes the logging subsystem. */
-void
-vlog_exit(void)
-{
-    if (vlog_inited) {
-        closelog();
-        vlog_inited = false;
-    }
-}
-
 /* Print the current logging level for each module. */
 char *
 vlog_get_levels(void)

@@ -132,7 +132,6 @@ int vlog_reopen_log_file(void);
 
 /* Initialization. */
 void vlog_init(void);
-void vlog_exit(void);
 
 /* Functions for actual logging. */
 void vlog(const struct vlog_module *, enum vlog_level, const char *format, ...)
