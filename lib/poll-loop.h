@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,14 +16,20 @@
 
 /* High-level wrapper around the "poll" system call.
  *
- * Intended usage is for the program's main loop to go about its business
+ * The intended usage is for each thread's main loop to go about its business
  * servicing whatever events it needs to.  Then, when it runs out of immediate
  * tasks, it calls each subordinate module's "wait" function, which in turn
  * calls one (or more) of the functions poll_fd_wait(), poll_immediate_wake(),
  * and poll_timer_wait() to register to be awakened when the appropriate event
  * occurs.  Then the main loop calls poll_block(), which blocks until one of
- * the registered events happens. */
-
+ * the registered events happens.
+ *
+ *
+ * Thread-safety
+ * =============
+ *
+ * The poll set is per-thread, so all functions in this module are thread-safe.
+ */
 #ifndef POLL_LOOP_H
 #define POLL_LOOP_H 1
 
