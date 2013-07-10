@@ -127,7 +127,6 @@ void vlog_set_verbosity(const char *arg);
 
 /* Configuring log facilities. */
 void vlog_set_pattern(enum vlog_facility, const char *pattern);
-const char *vlog_get_log_file(void);
 int vlog_set_log_file(const char *file_name);
 int vlog_reopen_log_file(void);
 

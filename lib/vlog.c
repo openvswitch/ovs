@@ -268,16 +268,6 @@ vlog_set_pattern(enum vlog_facility facility, const char *pattern)
     }
 }
 
-/* Returns the name of the log file used by VLF_FILE, or a null pointer if no
- * log file has been set.  (A non-null return value does not assert that the
- * named log file is in use: if vlog_set_log_file() or vlog_reopen_log_file()
- * fails, it still sets the log file name.) */
-const char *
-vlog_get_log_file(void)
-{
-    return log_file_name;
-}
-
 /* Sets the name of the log file used by VLF_FILE to 'file_name', or to the
  * default file name if 'file_name' is null.  Returns 0 if successful,
  * otherwise a positive errno value. */
