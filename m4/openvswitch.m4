@@ -446,3 +446,8 @@ AC_DEFUN([OVS_CHECK_ATOMIC_ALWAYS_LOCK_FREE],
         __atomic_always_lock_free($1, 0).  If the C compiler is not GCC or is
         an older version of GCC, the value does not matter.])
    fi])
+
+dnl OVS_CHECK_POSIX_AIO
+AC_DEFUN([OVS_CHECK_POSIX_AIO],
+  [AC_SEARCH_LIBS([aio_write], [rt])
+   AM_CONDITIONAL([HAVE_POSIX_AIO], [test "$ac_cv_search_aio_write" != no])])
