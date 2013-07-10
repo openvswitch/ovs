@@ -40,7 +40,7 @@ struct poll_waiter;
  *
  * The poll_loop logs the 'where' argument to each function at "debug" level
  * when an event causes a wakeup.  Ordinarily, it is automatically filled in
- * with the location in the source of the call, and caller should therefore
+ * with the location in the source of the call, and the caller should therefore
  * omit it.  But, if the function you are implementing is very generic, so that
  * its location in the source would not be very helpful for debugging, you can
  * avoid the macro expansion and pass a different argument, e.g.:
