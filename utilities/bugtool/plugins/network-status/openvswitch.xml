@@ -28,4 +28,5 @@
   <command label="ovs-ofctl-show" filters="ovs">/usr/share/openvswitch/scripts/ovs-bugtool-ovs-ofctl-show</command>
   <command label="ovs-ofctl-dump-flows" filters="ovs">/usr/share/openvswitch/scripts/ovs-bugtool-ovs-ofctl-dump-flows</command>
   <command label="ovs-appctl-dpif" filters="ovs">/usr/share/openvswitch/scripts/ovs-bugtool-ovs-appctl-dpif</command>
+  <command label="ovs-appctl-list-dbs" filters="ovs">/usr/share/openvswitch/scripts/ovs-bugtool-list-dbs</command>
 </collect>

@@ -83,6 +83,7 @@ debugging.  The sources for the extensions are in
 
             * ovs-bugtool-cfm-show
             * ovs-bugtool-lacp-show
+            * ovs-bugtool-list-dbs
             * ovs-bugtool-ovsdb-dump
             * ovs-bugtool-tc-class-show
             * ovs-bugtool-bond-show
@@ -118,6 +119,10 @@ scripts are located in ../utilities/bugtool:
     ovs-bugtool-lacp-show
 
         Script to dump detailed LACP information for all enabled ports.
+
+    ovs-bugtool-list-dbs
+
+        Script to list the databases controlled by ovsdb-server.
 
     ovs-bugtool-ovsdb-dump
 
