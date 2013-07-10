@@ -182,8 +182,6 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/stream-unix.c \
 	lib/stream.c \
 	lib/stream.h \
-	lib/stress.c \
-	lib/stress.h \
 	lib/string.c \
 	lib/string.h \
 	lib/svec.c \
@@ -306,7 +304,6 @@ MAN_FRAGMENTS += \
 	lib/ssl-peer-ca-cert.man \
 	lib/ssl.man \
 	lib/ssl-syn.man \
-	lib/stress-unixctl.man \
 	lib/table.man \
 	lib/unixctl.man \
 	lib/unixctl-syn.man \
@@ -382,11 +379,6 @@ lib/coverage.$(OBJEXT): lib/coverage.def
 lib/coverage.def: $(DIST_SOURCES)
 	sed -n 's|^COVERAGE_DEFINE(\([_a-zA-Z0-9]\{1,\}\)).*$$|COVERAGE_COUNTER(\1)|p' $(all_sources) | LC_ALL=C sort -u > $@
 CLEANFILES += lib/coverage.def
-
-lib/stress.$(OBJEXT): lib/stress.def
-lib/stress.def: $(DIST_SOURCES)
-	sed -n '/^STRESS_OPTION(/,/);$$/{s/);$$/)/;p}' $(all_sources) > $@
-CLEANFILES += lib/stress.def
 
 lib/vlog.$(OBJEXT): lib/vlog-modules.def
 lib/vlog-modules.def: $(DIST_SOURCES)

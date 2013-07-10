@@ -42,7 +42,6 @@ ovsdb/ovsdb-server.1: \
 	lib/ssl-bootstrap.man \
 	lib/ssl-syn.man \
 	lib/ssl.man \
-	lib/stress-unixctl.man \
 	lib/unixctl-syn.man \
 	lib/unixctl.man \
 	lib/vlog-syn.man \
@@ -61,7 +60,6 @@ lib/ssl-bootstrap-syn.man:
 lib/ssl-bootstrap.man:
 lib/ssl-syn.man:
 lib/ssl.man:
-lib/stress-unixctl.man:
 lib/unixctl-syn.man:
 lib/unixctl.man:
 lib/vlog-syn.man:
@@ -232,7 +230,6 @@ vswitchd/ovs-vswitchd.8: \
 	lib/memory-unixctl.man \
 	lib/ssl-bootstrap.man \
 	lib/ssl.man \
-	lib/stress-unixctl.man \
 	lib/vlog-unixctl.man \
 	lib/vlog.man \
 	ofproto/ofproto-dpif-unixctl.man \
@@ -246,7 +243,6 @@ lib/daemon.man:
 lib/memory-unixctl.man:
 lib/ssl-bootstrap.man:
 lib/ssl.man:
-lib/stress-unixctl.man:
 lib/vlog-unixctl.man:
 lib/vlog.man:
 ofproto/ofproto-dpif-unixctl.man:

@@ -26,7 +26,6 @@
 #include "fatal-signal.h"
 #include "poll-loop.h"
 #include "socket-util.h"
-#include "stress.h"
 #include "util.h"
 #include "stream-provider.h"
 #include "stream.h"
@@ -89,37 +88,21 @@ fd_connect(struct stream *stream)
     return check_connection_completion(s->fd);
 }
 
-STRESS_OPTION(
-    stream_flaky_recv, "simulate failure of fd stream recvs",
-    100, 0, -1, 0);
-
 static ssize_t
 fd_recv(struct stream *stream, void *buffer, size_t n)
 {
     struct stream_fd *s = stream_fd_cast(stream);
     ssize_t retval;
 
-    if (STRESS(stream_flaky_recv)) {
-        return -EIO;
-    }
-
     retval = read(s->fd, buffer, n);
     return retval >= 0 ? retval : -errno;
 }
-
-STRESS_OPTION(
-    stream_flaky_send, "simulate failure of fd stream sends",
-    100, 0, -1, 0);
 
 static ssize_t
 fd_send(struct stream *stream, const void *buffer, size_t n)
 {
     struct stream_fd *s = stream_fd_cast(stream);
     ssize_t retval;
-
-    if (STRESS(stream_flaky_send)) {
-        return -EIO;
-    }
 
     retval = write(s->fd, buffer, n);
     return (retval > 0 ? retval

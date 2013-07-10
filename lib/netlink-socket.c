@@ -31,7 +31,6 @@
 #include "ofpbuf.h"
 #include "poll-loop.h"
 #include "socket-util.h"
-#include "stress.h"
 #include "util.h"
 #include "vlog.h"
 
@@ -309,15 +308,6 @@ nl_sock_send_seq(struct nl_sock *sock, const struct ofpbuf *msg,
     return nl_sock_send__(sock, msg, nlmsg_seq, wait);
 }
 
-/* This stress option is useful for testing that OVS properly tolerates
- * -ENOBUFS on NetLink sockets.  Such errors are unavoidable because they can
- * occur if the kernel cannot temporarily allocate enough GFP_ATOMIC memory to
- * reply to a request.  They can also occur if messages arrive on a multicast
- * channel faster than OVS can process them. */
-STRESS_OPTION(
-    netlink_overflow, "simulate netlink socket receive buffer overflow",
-    5, 1, -1, 100);
-
 static int
 nl_sock_recv__(struct nl_sock *sock, struct ofpbuf *buf, bool wait)
 {
@@ -371,10 +361,6 @@ nl_sock_recv__(struct nl_sock *sock, struct ofpbuf *buf, bool wait)
         VLOG_ERR_RL(&rl, "received invalid nlmsg (%zd bytes < %zu)",
                     retval, sizeof *nlmsghdr);
         return EPROTO;
-    }
-
-    if (STRESS(netlink_overflow)) {
-        return ENOBUFS;
     }
 
     buf->size = MIN(retval, buf->allocated);

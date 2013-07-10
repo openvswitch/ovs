@@ -208,7 +208,6 @@ enabled.
 .so lib/vlog-unixctl.man
 .so lib/memory-unixctl.man
 .so lib/coverage-unixctl.man
-.so lib/stress-unixctl.man
 .
 .SH "OPENFLOW IMPLEMENTATION"
 .

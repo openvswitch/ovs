@@ -42,7 +42,6 @@
 #include "simap.h"
 #include "stream-ssl.h"
 #include "stream.h"
-#include "stress.h"
 #include "svec.h"
 #include "timeval.h"
 #include "unixctl.h"
@@ -74,7 +73,6 @@ main(int argc, char *argv[])
 
     proctitle_init(argc, argv);
     set_program_name(argv[0]);
-    stress_init_command();
     remote = parse_options(argc, argv, &unixctl_path);
     signal(SIGPIPE, SIG_IGN);
     sighup = signal_register(SIGHUP);

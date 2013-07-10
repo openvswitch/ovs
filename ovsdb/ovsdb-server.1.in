@@ -176,7 +176,6 @@ the command line or through the \fBovsdb\-server/add\-db\fR command.
 .so lib/vlog-unixctl.man
 .so lib/memory-unixctl.man
 .so lib/coverage-unixctl.man
-.so lib/stress-unixctl.man
 .SH "SEE ALSO"
 .
 .BR ovsdb\-tool (1).
