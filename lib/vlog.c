@@ -28,6 +28,7 @@
 #include <syslog.h>
 #include <time.h>
 #include <unistd.h>
+#include "async-append.h"
 #include "coverage.h"
 #include "dirs.h"
 #include "dynamic-string.h"
@@ -95,6 +96,7 @@ static struct facility facilities[VLF_N_FACILITIES] = {
 /* VLF_FILE configuration. */
 static char *log_file_name;
 static int log_fd = -1;
+static struct async_append *log_writer;
 
 /* vlog initialized? */
 static bool vlog_inited;
@@ -281,6 +283,10 @@ vlog_set_log_file(const char *file_name)
     /* Close old log file. */
     if (log_fd >= 0) {
         VLOG_INFO("closing log file");
+
+        async_append_destroy(log_writer);
+        log_writer = NULL;
+
         close(log_fd);
         log_fd = -1;
     }
@@ -307,6 +313,7 @@ vlog_set_log_file(const char *file_name)
                   log_file_name, ovs_strerror(errno));
         error = errno;
     } else {
+        log_writer = async_append_create(log_fd);
         VLOG_INFO("opened log file %s", log_file_name);
         error = 0;
     }
@@ -786,7 +793,10 @@ vlog_valist(const struct vlog_module *module, enum vlog_level level,
             format_log_message(module, level, VLF_FILE, msg_num,
                                message, args, &s);
             ds_put_char(&s, '\n');
-            ignore(write(log_fd, s.string, s.length));
+            async_append_write(log_writer, s.string, s.length);
+            if (level == VLL_EMER) {
+                async_append_flush(log_writer);
+            }
         }
 
         ds_destroy(&s);

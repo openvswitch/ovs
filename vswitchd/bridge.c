@@ -18,6 +18,7 @@
 #include <errno.h>
 #include <inttypes.h>
 #include <stdlib.h>
+#include "async-append.h"
 #include "bfd.h"
 #include "bitmap.h"
 #include "bond.h"
@@ -2443,6 +2444,8 @@ bridge_run(void)
             /* ovs-vswitchd has completed initialization, so allow the
              * process that forked us to exit successfully. */
             daemonize_complete();
+
+            async_append_enable();
 
             VLOG_INFO_ONCE("%s (Open vSwitch) %s", program_name, VERSION);
         }
