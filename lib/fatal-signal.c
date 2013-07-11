@@ -42,9 +42,6 @@ VLOG_DEFINE_THIS_MODULE(fatal_signal);
 /* Signals to catch. */
 static const int fatal_signals[] = { SIGTERM, SIGINT, SIGHUP, SIGALRM };
 
-/* Signals to catch as a sigset_t. */
-static sigset_t fatal_signal_set;
-
 /* Hooks to call upon catching a signal */
 struct hook {
     void (*hook_cb)(void *aux);
@@ -75,12 +72,10 @@ fatal_signal_init(void)
 
         xpipe_nonblocking(signal_fds);
 
-        sigemptyset(&fatal_signal_set);
         for (i = 0; i < ARRAY_SIZE(fatal_signals); i++) {
             int sig_nr = fatal_signals[i];
             struct sigaction old_sa;
 
-            sigaddset(&fatal_signal_set, sig_nr);
             xsigaction(sig_nr, NULL, &old_sa);
             if (old_sa.sa_handler == SIG_DFL
                 && signal(sig_nr, fatal_signal_handler) == SIG_ERR) {
