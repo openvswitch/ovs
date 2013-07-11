@@ -237,13 +237,12 @@ We believe these limits to be accurate as of this writing.  These
 limits assume the use of the Linux kernel datapath.
 .
 .IP \(bu
-Approximately 256 bridges given the allowance of 5,000 file
-descriptors that \fBovs\-ctl\fR(8) configures.  (\fBovs\-vswitchd\fR
-requires 17 file descriptors per datapath.)
-.
-.IP \(bu
-65,280 ports per bridge.  Performance will degrade beyond 1,024 ports
-per bridge due to fixed hash table sizing.
+\fBovs\-vswitchd\fR started through \fBovs\-ctl\fR(8) provides a limit of 5000
+file descriptors.  The limits on the number of bridges and ports is decided by
+the availability of file descriptors.  With the Linux kernel datapath, creation
+of a single bridge consumes 3 file descriptors and adding a port consumes
+1 file descriptor.  Performance will degrade beyond 1,024 ports per bridge due
+to fixed hash table sizing.  Other platforms may have different limitations.
 .
 .IP \(bu
 2,048 MAC learning entries per bridge, by default.  (This is
