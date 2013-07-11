@@ -396,6 +396,7 @@ get_value(unsigned int *x, unsigned n_values)
 
 static void
 compare_classifiers(struct classifier *cls, struct tcls *tcls)
+    OVS_REQ_RDLOCK(cls->rwlock)
 {
     static const int confidence = 500;
     unsigned int i;
@@ -444,17 +445,19 @@ destroy_classifier(struct classifier *cls)
     struct test_rule *rule, *next_rule;
     struct cls_cursor cursor;
 
+    ovs_rwlock_wrlock(&cls->rwlock);
     cls_cursor_init(&cursor, cls, NULL);
     CLS_CURSOR_FOR_EACH_SAFE (rule, next_rule, cls_rule, &cursor) {
         classifier_remove(cls, &rule->cls_rule);
         free_rule(rule);
     }
+    ovs_rwlock_unlock(&cls->rwlock);
     classifier_destroy(cls);
 }
 
 static void
-check_tables(const struct classifier *cls,
-             int n_tables, int n_rules, int n_dups)
+check_tables(const struct classifier *cls, int n_tables, int n_rules,
+             int n_dups) OVS_REQ_RDLOCK(cls->rwlock)
 {
     const struct cls_table *table;
     struct test_rule *test_rule;
@@ -610,10 +613,12 @@ test_empty(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
     struct tcls tcls;
 
     classifier_init(&cls);
+    ovs_rwlock_rdlock(&cls.rwlock);
     tcls_init(&tcls);
     assert(classifier_is_empty(&cls));
     assert(tcls_is_empty(&tcls));
     compare_classifiers(&cls, &tcls);
+    ovs_rwlock_unlock(&cls.rwlock);
     classifier_destroy(&cls);
     tcls_destroy(&tcls);
 }
@@ -640,6 +645,7 @@ test_single_rule(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
                          hash_bytes(&wc_fields, sizeof wc_fields, 0), 0);
 
         classifier_init(&cls);
+        ovs_rwlock_wrlock(&cls.rwlock);
         tcls_init(&tcls);
 
         tcls_rule = tcls_insert(&tcls, rule);
@@ -654,6 +660,7 @@ test_single_rule(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
         compare_classifiers(&cls, &tcls);
 
         free_rule(rule);
+        ovs_rwlock_unlock(&cls.rwlock);
         classifier_destroy(&cls);
         tcls_destroy(&tcls);
     }
@@ -677,6 +684,7 @@ test_rule_replacement(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
         rule2->aux += 5;
 
         classifier_init(&cls);
+        ovs_rwlock_wrlock(&cls.rwlock);
         tcls_init(&tcls);
         tcls_insert(&tcls, rule1);
         classifier_insert(&cls, &rule1->cls_rule);
@@ -692,6 +700,7 @@ test_rule_replacement(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
         check_tables(&cls, 1, 1, 0);
         compare_classifiers(&cls, &tcls);
         tcls_destroy(&tcls);
+        ovs_rwlock_unlock(&cls.rwlock);
         destroy_classifier(&cls);
     }
 }
@@ -787,6 +796,7 @@ test_many_rules_in_one_list (int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
             }
 
             classifier_init(&cls);
+            ovs_rwlock_wrlock(&cls.rwlock);
             tcls_init(&tcls);
 
             for (i = 0; i < ARRAY_SIZE(ops); i++) {
@@ -825,6 +835,7 @@ test_many_rules_in_one_list (int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
                 compare_classifiers(&cls, &tcls);
             }
 
+            ovs_rwlock_unlock(&cls.rwlock);
             classifier_destroy(&cls);
             tcls_destroy(&tcls);
 
@@ -887,6 +898,7 @@ test_many_rules_in_one_table(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
         } while ((1 << count_ones(value_mask)) < N_RULES);
 
         classifier_init(&cls);
+        ovs_rwlock_wrlock(&cls.rwlock);
         tcls_init(&tcls);
 
         for (i = 0; i < N_RULES; i++) {
@@ -913,6 +925,7 @@ test_many_rules_in_one_table(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
             compare_classifiers(&cls, &tcls);
         }
 
+        ovs_rwlock_unlock(&cls.rwlock);
         classifier_destroy(&cls);
         tcls_destroy(&tcls);
     }
@@ -947,6 +960,7 @@ test_many_rules_in_n_tables(int n_tables)
         shuffle(priorities, ARRAY_SIZE(priorities));
 
         classifier_init(&cls);
+        ovs_rwlock_wrlock(&cls.rwlock);
         tcls_init(&tcls);
 
         for (i = 0; i < MAX_RULES; i++) {
@@ -979,6 +993,7 @@ test_many_rules_in_n_tables(int n_tables)
             free_rule(target);
         }
 
+        ovs_rwlock_unlock(&cls.rwlock);
         destroy_classifier(&cls);
         tcls_destroy(&tcls);
     }

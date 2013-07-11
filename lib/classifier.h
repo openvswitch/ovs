@@ -24,7 +24,14 @@
  *              a hash map from fixed field values to "struct cls_rule",
  *                      which can contain a list of otherwise identical rules
  *                      with lower priorities.
- */
+ *
+ * Thread-safety
+ * =============
+ *
+ * When locked properly, the classifier is thread safe as long as the following
+ * conditions are satisfied.
+ * - Only the main thread calls functions requiring a write lock.
+ * - Only the main thread is allowed to iterate over rules. */
 
 #include "flow.h"
 #include "hmap.h"
@@ -32,6 +39,8 @@
 #include "match.h"
 #include "openflow/nicira-ext.h"
 #include "openflow/openflow.h"
+#include "ovs-thread.h"
+#include "util.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -42,6 +51,7 @@ struct classifier {
     int n_rules;                /* Total number of rules. */
     struct hmap tables;         /* Contains "struct cls_table"s.  */
     struct list tables_priority; /* Tables in descending priority order */
+    struct ovs_rwlock rwlock;
 };
 
 /* A set of rules that all have the same fields wildcarded. */
@@ -88,26 +98,35 @@ bool cls_rule_is_catchall(const struct cls_rule *);
 bool cls_rule_is_loose_match(const struct cls_rule *rule,
                              const struct minimatch *criteria);
 
-void classifier_init(struct classifier *);
+void classifier_init(struct classifier *cls);
 void classifier_destroy(struct classifier *);
-bool classifier_is_empty(const struct classifier *);
-int classifier_count(const struct classifier *);
-void classifier_insert(struct classifier *, struct cls_rule *);
-struct cls_rule *classifier_replace(struct classifier *, struct cls_rule *);
-void classifier_remove(struct classifier *, struct cls_rule *);
-struct cls_rule *classifier_lookup(const struct classifier *,
+bool classifier_is_empty(const struct classifier *cls)
+    OVS_REQ_RDLOCK(cls->rwlock);
+int classifier_count(const struct classifier *cls)
+    OVS_REQ_RDLOCK(cls->rwlock);
+void classifier_insert(struct classifier *cls, struct cls_rule *)
+    OVS_REQ_WRLOCK(cls->rwlock);
+struct cls_rule *classifier_replace(struct classifier *cls, struct cls_rule *)
+    OVS_REQ_WRLOCK(cls->rwlock);
+void classifier_remove(struct classifier *cls, struct cls_rule *)
+    OVS_REQ_WRLOCK(cls->rwlock);
+struct cls_rule *classifier_lookup(const struct classifier *cls,
                                    const struct flow *,
-                                   struct flow_wildcards *);
-bool classifier_rule_overlaps(const struct classifier *,
-                              const struct cls_rule *);
+                                   struct flow_wildcards *)
+    OVS_REQ_RDLOCK(cls->rwlock);
+bool classifier_rule_overlaps(const struct classifier *cls,
+                              const struct cls_rule *)
+    OVS_REQ_RDLOCK(cls->rwlock);
 
 typedef void cls_cb_func(struct cls_rule *, void *aux);
 
-struct cls_rule *classifier_find_rule_exactly(const struct classifier *,
-                                              const struct cls_rule *);
-struct cls_rule *classifier_find_match_exactly(const struct classifier *,
+struct cls_rule *classifier_find_rule_exactly(const struct classifier *cls,
+                                              const struct cls_rule *)
+    OVS_REQ_RDLOCK(cls->rwlock);
+struct cls_rule *classifier_find_match_exactly(const struct classifier *cls,
                                                const struct match *,
-                                               unsigned int priority);
+                                               unsigned int priority)
+    OVS_REQ_RDLOCK(cls->rwlock);
 
 /* Iteration. */
 
@@ -117,10 +136,10 @@ struct cls_cursor {
     const struct cls_rule *target;
 };
 
-void cls_cursor_init(struct cls_cursor *, const struct classifier *,
-                     const struct cls_rule *match);
-struct cls_rule *cls_cursor_first(struct cls_cursor *);
-struct cls_rule *cls_cursor_next(struct cls_cursor *, struct cls_rule *);
+void cls_cursor_init(struct cls_cursor *cursor, const struct classifier *cls,
+                     const struct cls_rule *match) OVS_REQ_RDLOCK(cls->rwlock);
+struct cls_rule *cls_cursor_first(struct cls_cursor *cursor);
+struct cls_rule *cls_cursor_next(struct cls_cursor *cursor, struct cls_rule *);
 
 #define CLS_CURSOR_FOR_EACH(RULE, MEMBER, CURSOR)                       \
     for (ASSIGN_CONTAINER(RULE, cls_cursor_first(CURSOR), MEMBER);      \

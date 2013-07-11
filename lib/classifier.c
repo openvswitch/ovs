@@ -25,6 +25,7 @@
 #include "odp-util.h"
 #include "ofp-util.h"
 #include "packets.h"
+#include "ovs-thread.h"
 
 static struct cls_table *find_table(const struct classifier *,
                                     const struct minimask *);
@@ -143,6 +144,7 @@ classifier_init(struct classifier *cls)
     cls->n_rules = 0;
     hmap_init(&cls->tables);
     list_init(&cls->tables_priority);
+    ovs_rwlock_init(&cls->rwlock);
 }
 
 /* Destroys 'cls'.  Rules within 'cls', if any, are not freed; this is the
@@ -157,6 +159,7 @@ classifier_destroy(struct classifier *cls)
             destroy_table(cls, table);
         }
         hmap_destroy(&cls->tables);
+        ovs_rwlock_destroy(&cls->rwlock);
     }
 }
 

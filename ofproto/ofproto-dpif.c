@@ -831,7 +831,11 @@ type_run(const char *type)
             }
             ovs_rwlock_unlock(&xlate_rwlock);
 
+            /* Only ofproto-dpif cares about the facet classifier so we just
+             * lock cls_cursor_init() to appease the thread safety analysis. */
+            ovs_rwlock_rdlock(&ofproto->facets.rwlock);
             cls_cursor_init(&cursor, &ofproto->facets, NULL);
+            ovs_rwlock_unlock(&ofproto->facets.rwlock);
             CLS_CURSOR_FOR_EACH_SAFE (facet, next, cr, &cursor) {
                 facet_revalidate(facet);
                 run_fast_rl();
@@ -1457,10 +1461,12 @@ destruct(struct ofproto *ofproto_)
     OFPROTO_FOR_EACH_TABLE (table, &ofproto->up) {
         struct cls_cursor cursor;
 
+        ovs_rwlock_wrlock(&table->cls.rwlock);
         cls_cursor_init(&cursor, &table->cls, NULL);
         CLS_CURSOR_FOR_EACH_SAFE (rule, next_rule, up.cr, &cursor) {
-            ofproto_rule_destroy(&rule->up);
+            ofproto_rule_destroy(&ofproto->up, &table->cls, &rule->up);
         }
+        ovs_rwlock_unlock(&table->cls.rwlock);
     }
 
     ovs_mutex_lock(&ofproto->flow_mod_mutex);
@@ -1621,6 +1627,7 @@ run(struct ofproto *ofproto_)
     ovs_rwlock_unlock(&ofproto->ml->rwlock);
 
     /* Check the consistency of a random facet, to aid debugging. */
+    ovs_rwlock_rdlock(&ofproto->facets.rwlock);
     if (time_msec() >= ofproto->consistency_rl
         && !classifier_is_empty(&ofproto->facets)
         && !ofproto->backer->need_revalidate) {
@@ -1640,6 +1647,7 @@ run(struct ofproto *ofproto_)
             ofproto->backer->need_revalidate = REV_INCONSISTENCY;
         }
     }
+    ovs_rwlock_unlock(&ofproto->facets.rwlock);
 
     return 0;
 }
@@ -1692,12 +1700,16 @@ get_memory_usage(const struct ofproto *ofproto_, struct simap *usage)
     size_t n_subfacets = 0;
     struct facet *facet;
 
+    ovs_rwlock_rdlock(&ofproto->facets.rwlock);
     simap_increase(usage, "facets", classifier_count(&ofproto->facets));
+    ovs_rwlock_unlock(&ofproto->facets.rwlock);
 
+    ovs_rwlock_rdlock(&ofproto->facets.rwlock);
     cls_cursor_init(&cursor, &ofproto->facets, NULL);
     CLS_CURSOR_FOR_EACH (facet, cr, &cursor) {
         n_subfacets += list_size(&facet->subfacets);
     }
+    ovs_rwlock_unlock(&ofproto->facets.rwlock);
     simap_increase(usage, "subfacets", n_subfacets);
 }
 
@@ -4372,7 +4384,9 @@ facet_create(const struct flow_miss *miss, struct rule_dpif *rule,
 
     match_init(&match, &facet->flow, &facet->xout.wc);
     cls_rule_init(&facet->cr, &match, OFP_DEFAULT_PRIORITY);
+    ovs_rwlock_wrlock(&ofproto->facets.rwlock);
     classifier_insert(&ofproto->facets, &facet->cr);
+    ovs_rwlock_unlock(&ofproto->facets.rwlock);
 
     facet->nf_flow.output_iface = facet->xout.nf_output_iface;
     facet->fail_open = rule->up.cr.priority == FAIL_OPEN_PRIORITY;
@@ -4440,7 +4454,9 @@ facet_remove(struct facet *facet)
                         &facet->subfacets) {
         subfacet_destroy__(subfacet);
     }
+    ovs_rwlock_wrlock(&facet->ofproto->facets.rwlock);
     classifier_remove(&facet->ofproto->facets, &facet->cr);
+    ovs_rwlock_unlock(&facet->ofproto->facets.rwlock);
     cls_rule_destroy(&facet->cr);
     facet_free(facet);
 }
@@ -4584,7 +4600,11 @@ facet_flush_stats(struct facet *facet)
 static struct facet *
 facet_find(struct ofproto_dpif *ofproto, const struct flow *flow)
 {
-    struct cls_rule *cr = classifier_lookup(&ofproto->facets, flow, NULL);
+    struct cls_rule *cr;
+
+    ovs_rwlock_rdlock(&ofproto->facets.rwlock);
+    cr = classifier_lookup(&ofproto->facets, flow, NULL);
+    ovs_rwlock_unlock(&ofproto->facets.rwlock);
     return cr ? CONTAINER_OF(cr, struct facet, cr) : NULL;
 }
 
@@ -4829,6 +4849,7 @@ push_all_stats__(bool run_fast)
         struct cls_cursor cursor;
         struct facet *facet;
 
+        ovs_rwlock_rdlock(&ofproto->facets.rwlock);
         cls_cursor_init(&cursor, &ofproto->facets, NULL);
         CLS_CURSOR_FOR_EACH (facet, cr, &cursor) {
             facet_push_stats(facet, false);
@@ -4836,6 +4857,7 @@ push_all_stats__(bool run_fast)
                 run_fast_rl();
             }
         }
+        ovs_rwlock_unlock(&ofproto->facets.rwlock);
     }
 
     rl = time_msec() + 100;
@@ -5156,14 +5178,18 @@ rule_dpif_lookup_in_table(struct ofproto_dpif *ofproto,
         struct flow ofpc_normal_flow = *flow;
         ofpc_normal_flow.tp_src = htons(0);
         ofpc_normal_flow.tp_dst = htons(0);
+        ovs_rwlock_rdlock(&cls->rwlock);
         cls_rule = classifier_lookup(cls, &ofpc_normal_flow, wc);
+        ovs_rwlock_unlock(&cls->rwlock);
     } else if (frag && ofproto->up.frag_handling == OFPC_FRAG_DROP) {
         cls_rule = &ofproto->drop_frags_rule->up.cr;
         if (wc) {
             flow_wildcards_init_exact(wc);
         }
     } else {
+        ovs_rwlock_rdlock(&cls->rwlock);
         cls_rule = classifier_lookup(cls, flow, wc);
+        ovs_rwlock_unlock(&cls->rwlock);
     }
     return rule_dpif_cast(rule_from_cls_rule(cls_rule));
 }
@@ -5491,10 +5517,12 @@ send_netflow_active_timeouts(struct ofproto_dpif *ofproto)
     struct cls_cursor cursor;
     struct facet *facet;
 
+    ovs_rwlock_rdlock(&ofproto->facets.rwlock);
     cls_cursor_init(&cursor, &ofproto->facets, NULL);
     CLS_CURSOR_FOR_EACH (facet, cr, &cursor) {
         send_active_timeout(ofproto, facet);
     }
+    ovs_rwlock_unlock(&ofproto->facets.rwlock);
 }
 
 static struct ofproto_dpif *
@@ -5893,12 +5921,14 @@ ofproto_dpif_self_check__(struct ofproto_dpif *ofproto, struct ds *reply)
     int errors;
 
     errors = 0;
+    ovs_rwlock_rdlock(&ofproto->facets.rwlock);
     cls_cursor_init(&cursor, &ofproto->facets, NULL);
     CLS_CURSOR_FOR_EACH (facet, cr, &cursor) {
         if (!facet_check_consistency(facet)) {
             errors++;
         }
     }
+    ovs_rwlock_unlock(&ofproto->facets.rwlock);
     if (errors) {
         ofproto->backer->need_revalidate = REV_INCONSISTENCY;
     }
@@ -6119,6 +6149,7 @@ ofproto_unixctl_dpif_dump_megaflows(struct unixctl_conn *conn,
         return;
     }
 
+    ovs_rwlock_rdlock(&ofproto->facets.rwlock);
     cls_cursor_init(&cursor, &ofproto->facets, NULL);
     CLS_CURSOR_FOR_EACH (facet, cr, &cursor) {
         cls_rule_format(&facet->cr, &ds);
@@ -6141,6 +6172,7 @@ ofproto_unixctl_dpif_dump_megaflows(struct unixctl_conn *conn,
         }
         ds_put_cstr(&ds, "\n");
     }
+    ovs_rwlock_unlock(&ofproto->facets.rwlock);
 
     ds_chomp(&ds, '\n');
     unixctl_command_reply(conn, ds_cstr(&ds));

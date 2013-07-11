@@ -266,7 +266,8 @@ rule_from_cls_rule(const struct cls_rule *cls_rule)
 
 void ofproto_rule_update_used(struct rule *, long long int used);
 void ofproto_rule_expire(struct rule *, uint8_t reason);
-void ofproto_rule_destroy(struct rule *);
+void ofproto_rule_destroy(struct ofproto *, struct classifier *cls,
+                          struct rule *) OVS_REQ_WRLOCK(cls->rwlock);
 
 bool ofproto_rule_has_out_port(const struct rule *, ofp_port_t out_port);
 
