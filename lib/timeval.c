@@ -207,7 +207,7 @@ static void
 refresh_wall(void)
 {
     time_init();
-    clock_gettime(CLOCK_REALTIME, &wall_time);
+    xclock_gettime(CLOCK_REALTIME, &wall_time);
     wall_tick = false;
 }
 
@@ -218,7 +218,7 @@ refresh_monotonic(void)
 
     if (!time_stopped) {
         if (monotonic_clock == CLOCK_MONOTONIC) {
-            clock_gettime(monotonic_clock, &monotonic_time);
+            xclock_gettime(monotonic_clock, &monotonic_time);
         } else {
             refresh_wall_if_ticked();
             monotonic_time = wall_time;
@@ -457,6 +457,16 @@ xgettimeofday(struct timeval *tv)
 {
     if (gettimeofday(tv, NULL) == -1) {
         VLOG_FATAL("gettimeofday failed (%s)", ovs_strerror(errno));
+    }
+}
+
+void
+xclock_gettime(clock_t id, struct timespec *ts)
+{
+    if (clock_gettime(id, ts) == -1) {
+        /* It seems like a bad idea to try to use vlog here because it is
+         * likely to try to check the current time. */
+        ovs_abort(errno, "xclock_gettime() failed");
     }
 }
 
