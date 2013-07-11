@@ -1847,7 +1847,7 @@
             times the expected reception rate, will signal a connectivity
             fault.  In the case of a unidirectional connectivity issue, the
             system not receiving BFD control messages will signal the problem
-            to its peer in the messages is transmists.
+            to its peer in the messages it transmits.
         </p>
 
         <p>
