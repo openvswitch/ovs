@@ -237,7 +237,7 @@ We believe these limits to be accurate as of this writing.  These
 limits assume the use of the Linux kernel datapath.
 .
 .IP \(bu
-\fBovs\-vswitchd\fR started through \fBovs\-ctl\fR(8) provides a limit of 5000
+\fBovs\-vswitchd\fR started through \fBovs\-ctl\fR(8) provides a limit of 7500
 file descriptors.  The limits on the number of bridges and ports is decided by
 the availability of file descriptors.  With the Linux kernel datapath, creation
 of a single bridge consumes 3 file descriptors and adding a port consumes
