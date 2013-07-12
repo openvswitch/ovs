@@ -36,15 +36,6 @@
 #include "util.h"
 #include "vlog.h"
 
-/* backtrace() from <execinfo.h> is really useful, but it is not signal safe
- * everywhere, such as on x86-64.  */
-#if HAVE_BACKTRACE && !defined __x86_64__
-#  define USE_BACKTRACE 1
-#  include <execinfo.h>
-#else
-#  define USE_BACKTRACE 0
-#endif
-
 VLOG_DEFINE_THIS_MODULE(timeval);
 
 /* The clock to use for measuring time intervals.  This is CLOCK_MONOTONIC by
@@ -73,19 +64,6 @@ static bool time_stopped;           /* Disables real-time updates, if true. */
 /* Time in milliseconds at which to die with SIGALRM (if not LLONG_MAX). */
 static long long int deadline = LLONG_MAX;
 
-struct trace {
-    void *backtrace[32]; /* Populated by backtrace(). */
-    size_t n_frames;     /* Number of frames in 'backtrace'. */
-
-    /* format_backtraces() helper data. */
-    struct hmap_node node;
-    size_t count;
-};
-
-#define MAX_TRACES 50
-static struct trace traces[MAX_TRACES];
-static size_t trace_head = 0;
-
 static void set_up_timer(void);
 static void set_up_signal(int flags);
 static void sigalrm_handler(int);
@@ -98,21 +76,6 @@ static struct rusage *get_recent_rusage(void);
 static void refresh_rusage(void);
 static void timespec_add(struct timespec *sum,
                          const struct timespec *a, const struct timespec *b);
-static unixctl_cb_func backtrace_cb;
-
-#if !USE_BACKTRACE
-static int
-backtrace(void **buffer OVS_UNUSED, int size OVS_UNUSED)
-{
-    NOT_REACHED();
-}
-
-static char **
-backtrace_symbols(void *const *buffer OVS_UNUSED, int size OVS_UNUSED)
-{
-    NOT_REACHED();
-}
-#endif  /* !USE_BACKTRACE */
 
 /* Initializes the timetracking module, if not already initialized. */
 static void
@@ -124,22 +87,6 @@ time_init(void)
         return;
     }
     inited = true;
-
-    /* The implementation of backtrace() in glibc does some one time
-     * initialization which is not signal safe.  This can cause deadlocks if
-     * run from the signal handler.  As a workaround, force the initialization
-     * to happen here. */
-    if (USE_BACKTRACE) {
-        void *bt[1];
-
-        backtrace(bt, ARRAY_SIZE(bt));
-    }
-
-    memset(traces, 0, sizeof traces);
-
-    if (USE_BACKTRACE && CACHE_TIME) {
-        unixctl_command_register("backtrace", "", 0, 0, backtrace_cb, NULL);
-    }
 
     coverage_init();
 
@@ -390,14 +337,6 @@ sigalrm_handler(int sig_nr OVS_UNUSED)
 {
     wall_tick = true;
     monotonic_tick = true;
-
-    if (USE_BACKTRACE && CACHE_TIME) {
-        struct trace *trace = &traces[trace_head];
-
-        trace->n_frames = backtrace(trace->backtrace,
-                                    ARRAY_SIZE(trace->backtrace));
-        trace_head = (trace_head + 1) % MAX_TRACES;
-    }
 }
 
 static void
@@ -583,89 +522,6 @@ get_cpu_usage(void)
 {
     return cpu_usage;
 }
-
-static uint32_t
-hash_trace(struct trace *trace)
-{
-    return hash_bytes(trace->backtrace,
-                      trace->n_frames * sizeof *trace->backtrace, 0);
-}
-
-static struct trace *
-trace_map_lookup(struct hmap *trace_map, struct trace *key)
-{
-    struct trace *value;
-
-    HMAP_FOR_EACH_WITH_HASH (value, node, hash_trace(key), trace_map) {
-        if (key->n_frames == value->n_frames
-            && !memcmp(key->backtrace, value->backtrace,
-                       key->n_frames * sizeof *key->backtrace)) {
-            return value;
-        }
-    }
-    return NULL;
-}
-
-/*  Appends a string to 'ds' representing backtraces recorded at regular
- *  intervals in the recent past.  This information can be used to get a sense
- *  of what the process has been spending the majority of time doing.  Will
- *  ommit any backtraces which have not occurred at least 'min_count' times. */
-void
-format_backtraces(struct ds *ds, size_t min_count)
-{
-    time_init();
-
-    if (USE_BACKTRACE && CACHE_TIME) {
-        struct hmap trace_map = HMAP_INITIALIZER(&trace_map);
-        struct trace *trace, *next;
-        sigset_t oldsigs;
-        size_t i;
-
-        block_sigalrm(&oldsigs);
-
-        for (i = 0; i < MAX_TRACES; i++) {
-            struct trace *trace = &traces[i];
-            struct trace *map_trace;
-
-            if (!trace->n_frames) {
-                continue;
-            }
-
-            map_trace = trace_map_lookup(&trace_map, trace);
-            if (map_trace) {
-                map_trace->count++;
-            } else {
-                hmap_insert(&trace_map, &trace->node, hash_trace(trace));
-                trace->count = 1;
-            }
-        }
-
-        HMAP_FOR_EACH_SAFE (trace, next, node, &trace_map) {
-            char **frame_strs;
-            size_t j;
-
-            hmap_remove(&trace_map, &trace->node);
-
-            if (trace->count < min_count) {
-                continue;
-            }
-
-            frame_strs = backtrace_symbols(trace->backtrace, trace->n_frames);
-
-            ds_put_format(ds, "Count %zu\n", trace->count);
-            for (j = 0; j < trace->n_frames; j++) {
-                ds_put_format(ds, "%s\n", frame_strs[j]);
-            }
-            ds_put_cstr(ds, "\n");
-
-            free(frame_strs);
-        }
-        hmap_destroy(&trace_map);
-
-        ds_chomp(ds, '\n');
-        unblock_sigalrm(&oldsigs);
-    }
-}
 
 /* Unixctl interface. */
 
@@ -703,19 +559,6 @@ timeval_warp_cb(struct unixctl_conn *conn,
     timespec_add(&warp_offset, &warp_offset, &ts);
     timespec_add(&monotonic_time, &monotonic_time, &ts);
     unixctl_command_reply(conn, "warped");
-}
-
-static void
-backtrace_cb(struct unixctl_conn *conn,
-             int argc OVS_UNUSED, const char *argv[] OVS_UNUSED,
-             void *aux OVS_UNUSED)
-{
-    struct ds ds = DS_EMPTY_INITIALIZER;
-
-    ovs_assert(USE_BACKTRACE && CACHE_TIME);
-    format_backtraces(&ds, 0);
-    unixctl_command_reply(conn, ds_cstr(&ds));
-    ds_destroy(&ds);
 }
 
 void

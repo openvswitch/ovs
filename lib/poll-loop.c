@@ -156,7 +156,6 @@ poll_immediate_wake(const char *where)
 static void
 log_wakeup(const char *where, const struct pollfd *pollfd, int timeout)
 {
-    static struct vlog_rate_limit trace_rl = VLOG_RATE_LIMIT_INIT(1, 1);
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(10, 10);
     enum vlog_level level;
     int cpu_usage;
@@ -200,11 +199,6 @@ log_wakeup(const char *where, const struct pollfd *pollfd, int timeout)
     }
     if (cpu_usage >= 0) {
         ds_put_format(&s, " (%d%% CPU usage)", cpu_usage);
-
-        if (!vlog_should_drop(THIS_MODULE, level, &trace_rl)) {
-            ds_put_char(&s, '\n');
-            format_backtraces(&s, 2);
-        }
     }
     VLOG(level, "%s", ds_cstr(&s));
     ds_destroy(&s);

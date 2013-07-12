@@ -76,7 +76,6 @@ void xgettimeofday(struct timeval *);
 void xclock_gettime(clock_t, struct timespec *);
 
 int get_cpu_usage(void);
-void format_backtraces(struct ds *, size_t min_count);
 
 long long int time_boot_msec(void);
 
