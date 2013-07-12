@@ -173,7 +173,7 @@ static void do_setup(struct net_device *netdev)
 	netdev->hard_start_xmit = internal_dev_xmit;
 	netdev->open = internal_dev_open;
 	netdev->stop = internal_dev_stop;
-	netdev->set_mac_address = internal_dev_mac_addr;
+	netdev->set_mac_address = eth_mac_addr;
 	netdev->change_mtu = internal_dev_change_mtu;
 #endif
 
