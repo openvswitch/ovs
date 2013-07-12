@@ -1897,11 +1897,8 @@ static void
 xlate_learn_action(struct xlate_ctx *ctx,
                    const struct ofpact_learn *learn)
 {
-    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
-    struct ofputil_flow_mod fm;
-    uint64_t ofpacts_stub[1024 / 8];
+    struct ofputil_flow_mod *fm;
     struct ofpbuf ofpacts;
-    int error;
 
     ctx->xout->has_learn = true;
 
@@ -1911,16 +1908,11 @@ xlate_learn_action(struct xlate_ctx *ctx,
         return;
     }
 
-    ofpbuf_use_stack(&ofpacts, ofpacts_stub, sizeof ofpacts_stub);
-    learn_execute(learn, &ctx->xin->flow, &fm, &ofpacts);
+    fm = xmalloc(sizeof *fm);
+    ofpbuf_init(&ofpacts, 0);
+    learn_execute(learn, &ctx->xin->flow, fm, &ofpacts);
 
-    error = ofproto_dpif_flow_mod(ctx->xbridge->ofproto, &fm);
-    if (error && !VLOG_DROP_WARN(&rl)) {
-        VLOG_WARN("learning action failed to modify flow table (%s)",
-                  ofperr_get_name(error));
-    }
-
-    ofpbuf_uninit(&ofpacts);
+    ofproto_dpif_flow_mod(ctx->xbridge->ofproto, fm);
 }
 
 /* Reduces '*timeout' to no more than 'max'.  A value of zero in either case

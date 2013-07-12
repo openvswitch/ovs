@@ -71,6 +71,7 @@ COVERAGE_DEFINE(facet_revalidate);
 COVERAGE_DEFINE(facet_unexpected);
 COVERAGE_DEFINE(facet_suppress);
 COVERAGE_DEFINE(subfacet_install_fail);
+COVERAGE_DEFINE(flow_mod_overflow);
 
 /* Number of implemented OpenFlow tables. */
 enum { N_TABLES = 255 };
@@ -349,6 +350,7 @@ static int set_bfd(struct ofport *, const struct smap *);
 static int set_cfm(struct ofport *, const struct cfm_settings *);
 static void ofport_update_peer(struct ofport_dpif *);
 static void run_fast_rl(void);
+static int run_fast(struct ofproto *);
 
 struct dpif_completion {
     struct list list_node;
@@ -494,6 +496,11 @@ struct ofproto_dpif {
     /* Per ofproto's dpif stats. */
     uint64_t n_hit;
     uint64_t n_missed;
+
+    /* Work queues. */
+    struct ovs_mutex flow_mod_mutex;
+    struct list flow_mods OVS_GUARDED;
+    size_t n_flow_mods OVS_GUARDED;
 };
 
 /* Defer flow mod completion until "ovs-appctl ofproto/unclog"?  (Useful only
@@ -538,11 +545,23 @@ static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 /* Initial mappings of port to bridge mappings. */
 static struct shash init_ofp_ports = SHASH_INITIALIZER(&init_ofp_ports);
 
-int
+/* Executes and takes ownership of 'fm'. */
+void
 ofproto_dpif_flow_mod(struct ofproto_dpif *ofproto,
                       struct ofputil_flow_mod *fm)
 {
-    return ofproto_flow_mod(&ofproto->up, fm);
+    ovs_mutex_lock(&ofproto->flow_mod_mutex);
+    if (ofproto->n_flow_mods > 1024) {
+        ovs_mutex_unlock(&ofproto->flow_mod_mutex);
+        COVERAGE_INC(flow_mod_overflow);
+        free(fm->ofpacts);
+        free(fm);
+        return;
+    }
+
+    list_push_back(&ofproto->flow_mods, &fm->list_node);
+    ofproto->n_flow_mods++;
+    ovs_mutex_unlock(&ofproto->flow_mod_mutex);
 }
 
 void
@@ -1010,13 +1029,9 @@ run_fast_rl(void)
 
     if (time_msec() >= port_rl) {
         struct ofproto_dpif *ofproto;
-        struct ofport_dpif *ofport;
 
         HMAP_FOR_EACH (ofproto, all_ofproto_dpifs_node, &all_ofproto_dpifs) {
-
-            HMAP_FOR_EACH (ofport, up.hmap_node, &ofproto->up.ports) {
-                port_run_fast(ofport);
-            }
+            run_fast(&ofproto->up);
         }
         port_rl = time_msec() + 200;
     }
@@ -1258,6 +1273,12 @@ construct(struct ofproto *ofproto_)
 
     list_init(&ofproto->completions);
 
+    ovs_mutex_init(&ofproto->flow_mod_mutex, PTHREAD_MUTEX_NORMAL);
+    ovs_mutex_lock(&ofproto->flow_mod_mutex);
+    list_init(&ofproto->flow_mods);
+    ofproto->n_flow_mods = 0;
+    ovs_mutex_unlock(&ofproto->flow_mod_mutex);
+
     ofproto_dpif_unixctl_init();
 
     hmap_init(&ofproto->vlandev_map);
@@ -1388,6 +1409,7 @@ destruct(struct ofproto *ofproto_)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
     struct rule_dpif *rule, *next_rule;
+    struct ofputil_flow_mod *fm, *next_fm;
     struct oftable *table;
 
     ofproto->backer->need_revalidate = REV_RECONFIGURE;
@@ -1404,6 +1426,16 @@ destruct(struct ofproto *ofproto_)
             ofproto_rule_destroy(&rule->up);
         }
     }
+
+    ovs_mutex_lock(&ofproto->flow_mod_mutex);
+    LIST_FOR_EACH_SAFE (fm, next_fm, list_node, &ofproto->flow_mods) {
+        list_remove(&fm->list_node);
+        ofproto->n_flow_mods--;
+        free(fm->ofpacts);
+        free(fm);
+    }
+    ovs_mutex_unlock(&ofproto->flow_mod_mutex);
+    ovs_mutex_destroy(&ofproto->flow_mod_mutex);
 
     mbridge_unref(ofproto->mbridge);
 
@@ -1428,12 +1460,37 @@ static int
 run_fast(struct ofproto *ofproto_)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
+    struct ofputil_flow_mod *fm, *next;
     struct ofport_dpif *ofport;
+    struct list flow_mods;
 
     /* Do not perform any periodic activity required by 'ofproto' while
      * waiting for flow restore to complete. */
     if (ofproto_get_flow_restore_wait()) {
         return 0;
+    }
+
+    ovs_mutex_lock(&ofproto->flow_mod_mutex);
+    if (ofproto->n_flow_mods) {
+        flow_mods = ofproto->flow_mods;
+        list_moved(&flow_mods);
+        list_init(&ofproto->flow_mods);
+        ofproto->n_flow_mods = 0;
+    } else {
+        list_init(&flow_mods);
+    }
+    ovs_mutex_unlock(&ofproto->flow_mod_mutex);
+
+    LIST_FOR_EACH_SAFE (fm, next, list_node, &flow_mods) {
+        int error = ofproto_flow_mod(&ofproto->up, fm);
+        if (error && !VLOG_DROP_WARN(&rl)) {
+            VLOG_WARN("learning action failed to modify flow table (%s)",
+                      ofperr_get_name(error));
+        }
+
+        list_remove(&fm->list_node);
+        free(fm->ofpacts);
+        free(fm);
     }
 
     HMAP_FOR_EACH (ofport, up.hmap_node, &ofproto->up.ports) {

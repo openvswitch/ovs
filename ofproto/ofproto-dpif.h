@@ -79,6 +79,6 @@ int ofproto_dpif_queue_to_priority(const struct ofproto_dpif *,
 
 void ofproto_dpif_send_packet_in(struct ofproto_dpif *,
                                  struct ofputil_packet_in *pin);
-int ofproto_dpif_flow_mod(struct ofproto_dpif *, struct ofputil_flow_mod *);
+void ofproto_dpif_flow_mod(struct ofproto_dpif *, struct ofputil_flow_mod *);
 
 #endif /* ofproto-dpif.h */

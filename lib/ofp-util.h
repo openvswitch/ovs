@@ -212,6 +212,8 @@ struct ofpbuf *ofputil_make_flow_mod_table_id(bool flow_mod_table_id);
  * The handling of cookies across multiple versions of OpenFlow is a bit
  * confusing.  See DESIGN for the details. */
 struct ofputil_flow_mod {
+    struct list list_node;    /* For queuing flow_mods. */
+
     struct match match;
     unsigned int priority;
 
