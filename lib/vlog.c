@@ -665,6 +665,7 @@ format_log_message(const struct vlog_module *module, enum vlog_level level,
 
     ds_clear(s);
     for (p = facilities[facility].pattern; *p != '\0'; ) {
+        const char *subprogram_name;
         enum { LEFT, RIGHT } justify = RIGHT;
         int pad = '0';
         size_t length, field, used;
@@ -732,9 +733,11 @@ format_log_message(const struct vlog_module *module, enum vlog_level level,
             ds_put_format(s, "%lld", time_msec() - time_boot_msec());
             break;
         case 't':
+            subprogram_name = get_subprogram_name();
             ds_put_cstr(s, subprogram_name[0] ? subprogram_name : "main");
             break;
         case 'T':
+            subprogram_name = get_subprogram_name();
             if (subprogram_name[0]) {
                 ds_put_format(s, "(%s)", subprogram_name);
             }

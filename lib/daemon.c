@@ -400,7 +400,7 @@ monitor_daemon(pid_t daemon_pid)
     char *status_msg;
     int crashes;
 
-    subprogram_name = "monitor";
+    set_subprogram_name("monitor");
     status_msg = xstrdup("healthy");
     last_restart = TIME_MIN;
     crashes = 0;
@@ -470,7 +470,7 @@ monitor_daemon(pid_t daemon_pid)
 
     /* Running in new daemon process. */
     proctitle_restore();
-    subprogram_name = "";
+    set_subprogram_name("");
 }
 
 /* Close standard file descriptors (except any that the client has requested we

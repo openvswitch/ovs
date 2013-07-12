@@ -362,7 +362,7 @@ worker_main(int fd)
 
     server_sock = fd;
 
-    subprogram_name = "worker";
+    set_subprogram_name("worker");
     proctitle_set("worker process for pid %lu", (unsigned long int) getppid());
     VLOG_INFO("worker process started");
 

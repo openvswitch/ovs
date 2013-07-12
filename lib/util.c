@@ -38,9 +38,9 @@ COVERAGE_DEFINE(util_xalloc);
 /* argv[0] without directory names. */
 const char *program_name;
 
-/* Ordinarily "" but set to "monitor" for a monitor process or "worker" for a
- * worker process. */
-const char *subprogram_name = "";
+/* Name for the currently running thread or process, for log messages, process
+ * listings, and debuggers. */
+DEFINE_PER_THREAD_MALLOCED_DATA(char *, subprogram_name);
 
 /* --version option output. */
 static char *program_version;
@@ -281,6 +281,7 @@ ovs_error(int err_no, const char *format, ...)
 void
 ovs_error_valist(int err_no, const char *format, va_list args)
 {
+    const char *subprogram_name = get_subprogram_name();
     int save_errno = errno;
 
     if (subprogram_name[0]) {
@@ -383,6 +384,22 @@ set_program_name__(const char *argv0, const char *version, const char *date,
                                     "Compiled %s %s\n",
                                     program_name, version, date, time);
     }
+}
+
+/* Returns the name of the currently running thread or process. */
+const char *
+get_subprogram_name(void)
+{
+    const char *name = subprogram_name_get();
+    return name ? name : "";
+}
+
+/* Sets 'name' as the name of the currently running thread or process.  (This
+ * appears in log messages.) */
+void
+set_subprogram_name(const char *name)
+{
+    free(subprogram_name_set(xstrdup(name)));
 }
 
 /* Returns a pointer to a string describing the program version.  The

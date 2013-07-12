@@ -86,7 +86,6 @@ void ovs_assert_failure(const char *, const char *, const char *) NO_RETURN;
      (TYPE) (POINTER))
 
 extern const char *program_name;
-extern const char *subprogram_name;
 
 /* Returns the number of elements in ARRAY. */
 #define ARRAY_SIZE(ARRAY) (sizeof ARRAY / sizeof *ARRAY)
@@ -183,6 +182,9 @@ void set_program_name__(const char *name, const char *version,
                         const char *date, const char *time);
 #define set_program_name(name) \
         set_program_name__(name, VERSION, __DATE__, __TIME__)
+
+const char *get_subprogram_name(void);
+void set_subprogram_name(const char *name);
 
 const char *get_program_version(void);
 void ovs_print_version(uint8_t min_ofp, uint8_t max_ofp);
