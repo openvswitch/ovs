@@ -4160,6 +4160,18 @@ handle_miss_upcalls(struct dpif_backer *backer, struct dpif_upcall *upcalls,
 
             COVERAGE_INC(subfacet_install_fail);
 
+            /* Zero-out subfacet counters when installation failed, but
+             * datapath reported hits.  This should not happen and
+             * indicates a bug, since if the datapath flow exists, we
+             * should not be attempting to create a new subfacet.  A
+             * buggy datapath could trigger this, so just zero out the
+             * counters and log an error. */
+            if (subfacet->dp_packet_count || subfacet->dp_byte_count) {
+                VLOG_ERR_RL(&rl, "failed to install subfacet for which "
+                            "datapath reported hits");
+                subfacet->dp_packet_count = subfacet->dp_byte_count = 0;
+            }
+
             subfacet->path = SF_NOT_INSTALLED;
         }
 
