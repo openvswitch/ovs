@@ -175,6 +175,7 @@ systemctl start openvswitch.service
 %doc /usr/share/man/man8/ovs-test.8.gz
 %doc /usr/share/man/man8/ovs-l3ping.8.gz
 /var/lib/openvswitch
+/var/log/openvswitch
 /usr/share/openvswitch/scripts/ovs-ctl
 %exclude /etc/openvswitch
 %exclude /usr/bin/ovs-benchmark
