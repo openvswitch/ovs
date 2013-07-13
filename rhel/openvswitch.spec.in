@@ -155,3 +155,4 @@ exit 0
 /usr/share/doc/openvswitch-%{version}/FAQ
 /usr/share/doc/openvswitch-%{version}/README.RHEL
 /var/lib/openvswitch
+/var/log/openvswitch
