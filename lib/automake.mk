@@ -71,6 +71,8 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/jsonrpc.h \
 	lib/lacp.c \
 	lib/lacp.h \
+	lib/latch.c \
+	lib/latch.h \
 	lib/learn.c \
 	lib/learn.h \
 	lib/learning-switch.c \
