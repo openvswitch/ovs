@@ -22,7 +22,7 @@
 #define TEST_ATOMIC_TYPE(ATOMIC_TYPE, BASE_TYPE)        \
     {                                                   \
         ATOMIC_TYPE x = ATOMIC_VAR_INIT(1);             \
-        BASE_TYPE value;                                \
+        BASE_TYPE value, orig;                          \
                                                         \
         atomic_read(&x, &value);                        \
         ovs_assert(value == 1);                         \
@@ -34,6 +34,31 @@
         atomic_init(&x, 3);                             \
         atomic_read(&x, &value);                        \
         ovs_assert(value == 3);                         \
+                                                        \
+        atomic_add(&x, 1, &orig);                       \
+        ovs_assert(orig == 3);                          \
+        atomic_read(&x, &value);                        \
+        ovs_assert(value == 4);                         \
+                                                        \
+        atomic_sub(&x, 2, &orig);                       \
+        ovs_assert(orig == 4);                          \
+        atomic_read(&x, &value);                        \
+        ovs_assert(value == 2);                         \
+                                                        \
+        atomic_or(&x, 6, &orig);                        \
+        ovs_assert(orig == 2);                          \
+        atomic_read(&x, &value);                        \
+        ovs_assert(value == 6);                         \
+                                                        \
+        atomic_and(&x, 10, &orig);                      \
+        ovs_assert(orig == 6);                          \
+        atomic_read(&x, &value);                        \
+        ovs_assert(value == 2);                         \
+                                                        \
+        atomic_xor(&x, 10, &orig);                      \
+        ovs_assert(orig == 2);                          \
+        atomic_read(&x, &value);                        \
+        ovs_assert(value == 8);                         \
     }
 
 int
