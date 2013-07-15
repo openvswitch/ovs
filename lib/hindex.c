@@ -287,6 +287,19 @@ hindex_node_with_hash(const struct hindex *hindex, size_t hash)
     return node;
 }
 
+/* Returns the head node in 'hindex' with the given 'hash'.  'hindex' must
+ * contain a head node with the given hash. */
+static struct hindex_node *
+hindex_head_node(const struct hindex *hindex, size_t hash)
+{
+    struct hindex_node *node = hindex->buckets[hash & hindex->mask];
+
+    while (node->hash != hash) {
+        node = node->d;
+    }
+    return node;
+}
+
 static struct hindex_node *
 hindex_next__(const struct hindex *hindex, size_t start)
 {
@@ -312,13 +325,23 @@ hindex_first(const struct hindex *hindex)
  * null pointer if 'node' is the last node in 'hindex'.
  *
  * If the hash index has been reallocated since 'node' was visited, some nodes
- * may be skipped or visited twice.  (Removing 'node' from the hash index does
- * not prevent calling this function, since node->next is preserved, although
- * freeing 'node' of course does.) */
+ * may be skipped or visited twice. */
 struct hindex_node *
 hindex_next(const struct hindex *hindex, const struct hindex_node *node)
 {
-    return (node->s ? node->s
-            : node->d && node->d->hash != node->hash ? node->d
-            : hindex_next__(hindex, (node->hash & hindex->mask) + 1));
+    struct hindex_node *head;
+
+    /* If there's a node with the same hash, return it. */
+    if (node->s) {
+        return node->s;
+    }
+
+    /* If there's another node in the same bucket, return it. */
+    head = hindex_head_node(hindex, node->hash);
+    if (head->d) {
+        return head->d;
+    }
+
+    /* Return the first node in the next (or later) bucket. */
+    return hindex_next__(hindex, (node->hash & hindex->mask) + 1);
 }

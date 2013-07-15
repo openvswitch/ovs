@@ -178,6 +178,12 @@ mod2_hash(int value)
     return value % 2;
 }
 
+static size_t
+multipart_hash(int value)
+{
+    return (mod4_hash(value) << 16) | (constant_hash(value) & 0xFFFF);
+}
+
 /* Tests basic hindex insertion and deletion. */
 static void
 test_hindex_insert_delete(hash_func *hash)
@@ -298,6 +304,7 @@ run_test(void (*function)(hash_func *))
         mod4_hash,
         mod3_hash,
         mod2_hash,
+        multipart_hash,
     };
     size_t i;
 
