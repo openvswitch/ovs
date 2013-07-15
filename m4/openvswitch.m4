@@ -426,6 +426,78 @@ static thread_local int var;], [return var;])],
      fi
    fi])
 
+dnl OVS_CHECK_GCC4_ATOMICS
+dnl
+dnl Checks whether the compiler and linker support GCC 4.0+ atomic built-ins.
+dnl A compile-time only check is not enough because the compiler defers
+dnl unimplemented built-ins to libgcc, which sometimes also lacks
+dnl implementations.
+AC_DEFUN([OVS_CHECK_GCC4_ATOMICS],
+  [AC_CACHE_CHECK(
+     [whether $CC supports GCC 4.0+ atomic built-ins],
+     [ovs_cv_gcc4_atomics],
+     [AC_LINK_IFELSE(
+        [AC_LANG_PROGRAM([[#include <stdlib.h>
+
+#define ovs_assert(expr) if (!(expr)) abort();
+#define TEST_ATOMIC_TYPE(TYPE)                  \
+    {                                           \
+        TYPE x = 1;                             \
+        TYPE orig;                              \
+                                                \
+        __sync_synchronize();                   \
+        ovs_assert(x == 1);                     \
+                                                \
+        __sync_synchronize();                   \
+        x = 3;                                  \
+        __sync_synchronize();                   \
+        ovs_assert(x == 3);                     \
+                                                \
+        orig = __sync_fetch_and_add(&x, 1);     \
+        ovs_assert(orig == 3);                  \
+        __sync_synchronize();                   \
+        ovs_assert(x == 4);                     \
+                                                \
+        orig = __sync_fetch_and_sub(&x, 2);     \
+        ovs_assert(orig == 4);                  \
+        __sync_synchronize();                   \
+        ovs_assert(x == 2);                     \
+                                                \
+        orig = __sync_fetch_and_or(&x, 6);      \
+        ovs_assert(orig == 2);                  \
+        __sync_synchronize();                   \
+        ovs_assert(x == 6);                     \
+                                                \
+        orig = __sync_fetch_and_and(&x, 10);    \
+        ovs_assert(orig == 6);                  \
+        __sync_synchronize();                   \
+        ovs_assert(x == 2);                     \
+                                                \
+        orig = __sync_fetch_and_xor(&x, 10);    \
+        ovs_assert(orig == 2);                  \
+        __sync_synchronize();                   \
+        ovs_assert(x == 8);                     \
+    }]], [dnl
+TEST_ATOMIC_TYPE(char);
+TEST_ATOMIC_TYPE(unsigned char);
+TEST_ATOMIC_TYPE(signed char);
+TEST_ATOMIC_TYPE(short);
+TEST_ATOMIC_TYPE(unsigned short);
+TEST_ATOMIC_TYPE(int);
+TEST_ATOMIC_TYPE(unsigned int);
+TEST_ATOMIC_TYPE(long int);
+TEST_ATOMIC_TYPE(unsigned long int);
+TEST_ATOMIC_TYPE(long long int);
+TEST_ATOMIC_TYPE(unsigned long long int);
+])],
+        [ovs_cv_gcc4_atomics=yes],
+        [ovs_cv_gcc4_atomics=no])])
+   if test $ovs_cv_gcc4_atomics = yes; then
+     AC_DEFINE([HAVE_GCC4_ATOMICS], [1],
+               [Define to 1 if the C compiler and linker supports the GCC 4.0+
+                atomic built-ins.])
+   fi])
+
 dnl OVS_CHECK_ATOMIC_ALWAYS_LOCK_FREE(SIZE)
 dnl
 dnl Checks __atomic_always_lock_free(SIZE, 0)
