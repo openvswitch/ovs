@@ -88,8 +88,8 @@ struct vlog_module {
 #if USE_LINKER_SECTIONS
 #define VLOG_DEFINE_MODULE(MODULE)                                      \
         VLOG_DEFINE_MODULE__(MODULE)                                    \
-        extern struct vlog_module *vlog_module_ptr_##MODULE;            \
-        struct vlog_module *vlog_module_ptr_##MODULE                    \
+        extern struct vlog_module *const vlog_module_ptr_##MODULE;      \
+        struct vlog_module *const vlog_module_ptr_##MODULE              \
             __attribute__((section("vlog_modules"))) = &VLM_##MODULE
 #else
 #define VLOG_DEFINE_MODULE(MODULE) extern struct vlog_module VLM_##MODULE
