@@ -1890,6 +1890,12 @@
           <code>false</code>.
       </column>
 
+      <column name="bfd" key="check_tnl_key" type='{"type": "boolean"}'>
+          When set to true, Check Tunnel Key will make BFD only accept control
+          messages with an <code>in_key</code> of zero. Defaults to
+          <code>false</code>.
+      </column>
+
       <column name="bfd_status" key="state"
           type='{"type": "string",
           "enum": ["set", ["admin_down", "down", "init", "up"]]}'>

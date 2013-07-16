@@ -1193,7 +1193,7 @@ process_special(struct xlate_ctx *ctx, const struct flow *flow,
             cfm_process_heartbeat(xport->cfm, packet);
         }
         return SLOW_CFM;
-    } else if (xport->bfd && bfd_should_process_flow(flow, wc)) {
+    } else if (xport->bfd && bfd_should_process_flow(xport->bfd, flow, wc)) {
         if (packet) {
             bfd_process_packet(xport->bfd, flow, packet);
         }

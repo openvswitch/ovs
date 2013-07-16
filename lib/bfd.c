@@ -58,10 +58,6 @@ VLOG_DEFINE_THIS_MODULE(bfd);
  *
  * - Set TOS/PCP on inner BFD frame, and outer tunnel header when encapped.
  *
- * - CFM "check_tnl_key" option equivalent.
- *
- * - CFM "fault override" equivalent.
- *
  * - Sending BFD messages should be in its own thread/process.
  *
  * - Scale testing.  How does it operate when there are large number of bfd
@@ -182,6 +178,7 @@ struct bfd {
 
     int ref_cnt;
     int forwarding_override;      /* Manual override of 'forwarding' status. */
+    bool check_tnl_key;           /* Verify tunnel key of inbound packets? */
 };
 
 static bool bfd_in_poll(const struct bfd *);
@@ -287,6 +284,7 @@ bfd_configure(struct bfd *bfd, const char *name,
         bfd_set_state(bfd, STATE_DOWN, DIAG_NONE);
     }
 
+    bfd->check_tnl_key = smap_get_bool(cfg, "check_tnl_key", false);
     min_tx = smap_get_int(cfg, "min_tx", 100);
     min_tx = MAX(min_tx, 100);
     if (bfd->cfg_min_tx != min_tx) {
@@ -449,13 +447,18 @@ bfd_put_packet(struct bfd *bfd, struct ofpbuf *p,
 }
 
 bool
-bfd_should_process_flow(const struct flow *flow, struct flow_wildcards *wc)
+bfd_should_process_flow(const struct bfd *bfd, const struct flow *flow,
+                        struct flow_wildcards *wc)
 {
     memset(&wc->masks.nw_proto, 0xff, sizeof wc->masks.nw_proto);
     memset(&wc->masks.tp_dst, 0xff, sizeof wc->masks.tp_dst);
+    if (bfd->check_tnl_key) {
+        memset(&wc->masks.tunnel.tun_id, 0xff, sizeof wc->masks.tunnel.tun_id);
+    }
     return (flow->dl_type == htons(ETH_TYPE_IP)
             && flow->nw_proto == IPPROTO_UDP
-            && flow->tp_dst == htons(3784));
+            && flow->tp_dst == htons(3784)
+            && (!bfd->check_tnl_key || flow->tunnel.tun_id == htonl(0)));
 }
 
 void
