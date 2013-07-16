@@ -1246,7 +1246,7 @@ static int ovs_flow_cmd_new_or_set(struct sk_buff *skb, struct genl_info *info)
 {
 	struct nlattr **a = info->attrs;
 	struct ovs_header *ovs_header = info->userhdr;
-	struct sw_flow_key key;
+	struct sw_flow_key key, masked_key;
 	struct sw_flow *flow = NULL;
 	struct sw_flow_mask mask;
 	struct sk_buff *reply;
@@ -1274,9 +1274,13 @@ static int ovs_flow_cmd_new_or_set(struct sk_buff *skb, struct genl_info *info)
 		if (IS_ERR(acts))
 			goto error;
 
-		error = validate_and_copy_actions(a[OVS_FLOW_ATTR_ACTIONS], &key,  0, &acts);
-		if (error)
+		ovs_flow_key_mask(&masked_key, &key, &mask);
+		error = validate_and_copy_actions(a[OVS_FLOW_ATTR_ACTIONS],
+						  &masked_key, 0, &acts);
+		if (error) {
+			OVS_NLERR("Flow actions may not be safe on all matching packets.\n");
 			goto err_kfree;
+		}
 	} else if (info->genlhdr->cmd == OVS_FLOW_CMD_NEW) {
 		error = -EINVAL;
 		goto error;
@@ -1319,6 +1323,9 @@ static int ovs_flow_cmd_new_or_set(struct sk_buff *skb, struct genl_info *info)
 		}
 		clear_stats(flow);
 
+		flow->key = masked_key;
+		flow->unmasked_key = key;
+
 		/* Make sure mask is unique in the system */
 		mask_p = ovs_sw_flow_mask_find(table, &mask);
 		if (!mask_p) {
@@ -1336,7 +1343,7 @@ static int ovs_flow_cmd_new_or_set(struct sk_buff *skb, struct genl_info *info)
 		rcu_assign_pointer(flow->sf_acts, acts);
 
 		/* Put flow in bucket. */
-		ovs_flow_insert(table, flow, &key, match.range.end);
+		ovs_flow_insert(table, flow);
 
 		reply = ovs_flow_cmd_build_info(flow, dp, info->snd_portid,
 						info->snd_seq, OVS_FLOW_CMD_NEW);

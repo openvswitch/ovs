@@ -349,9 +349,8 @@ static bool icmp6hdr_ok(struct sk_buff *skb)
 				  sizeof(struct icmp6hdr));
 }
 
-static void flow_key_mask(struct sw_flow_key *dst,
-			  const struct sw_flow_key *src,
-			  const struct sw_flow_mask *mask)
+void ovs_flow_key_mask(struct sw_flow_key *dst, const struct sw_flow_key *src,
+		       const struct sw_flow_mask *mask)
 {
 	u8 *m = (u8 *)&mask->key + mask->range.start;
 	u8 *s = (u8 *)src + mask->range.start;
@@ -1043,7 +1042,7 @@ static struct sw_flow *ovs_masked_flow_lookup(struct flow_table *table,
 	u32 hash;
 	struct sw_flow_key masked_key;
 
-	flow_key_mask(&masked_key, flow_key, mask);
+	ovs_flow_key_mask(&masked_key, flow_key, mask);
 	hash = ovs_flow_hash(&masked_key, key_start, key_len);
 	head = find_bucket(table, hash);
 	hlist_for_each_entry_rcu(flow, head, hash_node[table->node_ver]) {
@@ -1069,11 +1068,8 @@ struct sw_flow *ovs_flow_lookup(struct flow_table *tbl,
 }
 
 
-void ovs_flow_insert(struct flow_table *table, struct sw_flow *flow,
-			 const struct sw_flow_key *key, int key_len)
+void ovs_flow_insert(struct flow_table *table, struct sw_flow *flow)
 {
-	flow->unmasked_key = *key;
-	flow_key_mask(&flow->key, &flow->unmasked_key, ovsl_dereference(flow->mask));
 	flow->hash = ovs_flow_hash(&flow->key,
 			ovsl_dereference(flow->mask)->range.start,
 			ovsl_dereference(flow->mask)->range.end);
