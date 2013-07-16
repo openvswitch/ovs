@@ -41,18 +41,13 @@ COVERAGE_DEFINE(poll_zero_timeout);
 
 /* An event that will wake the following call to poll_block(). */
 struct poll_waiter {
-    /* Set when the waiter is created. */
-    struct list node;           /* Element in global waiters list. */
-    int fd;                     /* File descriptor. */
-    short int events;           /* Events to wait for (POLLIN, POLLOUT). */
     const char *where;          /* Where the waiter was created. */
-
-    /* Set only when poll_block() is called. */
-    struct pollfd *pollfd;      /* Pointer to element of the pollfds array. */
 };
 
 /* All active poll waiters. */
-static struct list waiters = LIST_INITIALIZER(&waiters);
+static struct poll_waiter *waiters;
+static struct pollfd *pollfds;
+static size_t n_waiters, allocated_waiters;
 
 /* Time at which to wake up the next call to poll_block(), in milliseconds as
  * returned by time_msec(), LLONG_MIN to wake up immediately, or LLONG_MAX to
@@ -62,8 +57,7 @@ static long long int timeout_when = LLONG_MAX;
 /* Location where waiter created. */
 static const char *timeout_where;
 
-static struct poll_waiter *new_waiter(int fd, short int events,
-                                      const char *where);
+static void new_waiter(int fd, short int events, const char *where);
 
 /* Registers 'fd' as waiting for the specified 'events' (which should be POLLIN
  * or POLLOUT or POLLIN | POLLOUT).  The following call to poll_block() will
@@ -75,11 +69,11 @@ static struct poll_waiter *new_waiter(int fd, short int events,
  *
  * Ordinarily the 'where' argument is supplied automatically; see poll-loop.h
  * for more information. */
-struct poll_waiter *
+void
 poll_fd_wait(int fd, short int events, const char *where)
 {
     COVERAGE_INC(poll_fd_wait);
-    return new_waiter(fd, events, where);
+    new_waiter(fd, events, where);
 }
 
 /* Causes the following call to poll_block() to block for no more than 'msec'
@@ -210,11 +204,6 @@ log_wakeup(const char *where, const struct pollfd *pollfd, int timeout)
 void
 poll_block(void)
 {
-    static struct pollfd *pollfds;
-    static size_t max_pollfds;
-
-    struct poll_waiter *pw, *next;
-    int n_waiters, n_pollfds;
     int elapsed;
     int retval;
 
@@ -222,70 +211,45 @@ poll_block(void)
      * poll_block. */
     fatal_signal_wait();
 
-    n_waiters = list_size(&waiters);
-    if (max_pollfds < n_waiters) {
-        max_pollfds = n_waiters;
-        pollfds = xrealloc(pollfds, max_pollfds * sizeof *pollfds);
-    }
-
-    n_pollfds = 0;
-    LIST_FOR_EACH (pw, node, &waiters) {
-        pw->pollfd = &pollfds[n_pollfds];
-        pollfds[n_pollfds].fd = pw->fd;
-        pollfds[n_pollfds].events = pw->events;
-        pollfds[n_pollfds].revents = 0;
-        n_pollfds++;
-    }
-
     if (timeout_when == LLONG_MIN) {
         COVERAGE_INC(poll_zero_timeout);
     }
-    retval = time_poll(pollfds, n_pollfds, timeout_when, &elapsed);
+    retval = time_poll(pollfds, n_waiters, timeout_when, &elapsed);
     if (retval < 0) {
         static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
         VLOG_ERR_RL(&rl, "poll: %s", ovs_strerror(-retval));
     } else if (!retval) {
         log_wakeup(timeout_where, NULL, elapsed);
-    }
+    } else if (get_cpu_usage() > 50 || VLOG_IS_DBG_ENABLED()) {
+        size_t i;
 
-    LIST_FOR_EACH_SAFE (pw, next, node, &waiters) {
-        if (pw->pollfd->revents) {
-            log_wakeup(pw->where, pw->pollfd, 0);
+        for (i = 0; i < n_waiters; i++) {
+            if (pollfds[i].revents) {
+                log_wakeup(waiters[i].where, &pollfds[i], 0);
+            }
         }
-        poll_cancel(pw);
     }
 
     timeout_when = LLONG_MAX;
     timeout_where = NULL;
+    n_waiters = 0;
 
     /* Handle any pending signals before doing anything else. */
     fatal_signal_run();
 }
-
-/* Cancels the file descriptor event registered with poll_fd_wait() using 'pw',
- * the struct poll_waiter returned by that function.
- *
- * An event registered with poll_fd_wait() may be canceled from its time of
- * registration until the next call to poll_block().  At that point, the event
- * is automatically canceled by the system and its poll_waiter is freed. */
-void
-poll_cancel(struct poll_waiter *pw)
-{
-    if (pw) {
-        list_remove(&pw->node);
-        free(pw);
-    }
-}
 
-/* Creates and returns a new poll_waiter for 'fd' and 'events'. */
-static struct poll_waiter *
+/* Creates a new poll_waiter for 'fd' and 'events', recording 'where' as the
+ * location where the event was registered. */
+static void
 new_waiter(int fd, short int events, const char *where)
 {
-    struct poll_waiter *waiter = xzalloc(sizeof *waiter);
-    ovs_assert(fd >= 0);
-    waiter->fd = fd;
-    waiter->events = events;
-    waiter->where = where;
-    list_push_back(&waiters, &waiter->node);
-    return waiter;
+    if (n_waiters >= allocated_waiters) {
+        waiters = x2nrealloc(waiters, &allocated_waiters, sizeof *waiters);
+        pollfds = xrealloc(pollfds, allocated_waiters * sizeof *pollfds);
+    }
+
+    waiters[n_waiters].where = where;
+    pollfds[n_waiters].fd = fd;
+    pollfds[n_waiters].events = events;
+    n_waiters++;
 }

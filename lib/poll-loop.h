@@ -34,7 +34,6 @@
 extern "C" {
 #endif
 
-struct poll_waiter;
 
 /* Schedule events to wake up the following poll_block().
  *
@@ -47,7 +46,7 @@ struct poll_waiter;
  *      (poll_fd_wait)(fd, events, where);
  * See timer_wait() for an example.
  */
-struct poll_waiter *poll_fd_wait(int fd, short int events, const char *where);
+void poll_fd_wait(int fd, short int events, const char *where);
 #define poll_fd_wait(fd, events) poll_fd_wait(fd, events, SOURCE_LOCATOR)
 
 void poll_timer_wait(long long int msec, const char *where);
@@ -61,9 +60,6 @@ void poll_immediate_wake(const char *where);
 
 /* Wait until an event occurs. */
 void poll_block(void);
-
-/* Cancel a file descriptor callback or event. */
-void poll_cancel(struct poll_waiter *);
 
 #ifdef  __cplusplus
 }
