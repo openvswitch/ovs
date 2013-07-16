@@ -216,9 +216,8 @@ void ovs_flow_tbl_destroy(struct flow_table *table, bool deferred);
 struct flow_table *ovs_flow_tbl_alloc(int new_size);
 struct flow_table *ovs_flow_tbl_expand(struct flow_table *table);
 struct flow_table *ovs_flow_tbl_rehash(struct flow_table *table);
-void ovs_flow_insert(struct flow_table *table, struct sw_flow *flow,
-		const struct sw_flow_key *key, int key_len);
 
+void ovs_flow_insert(struct flow_table *table, struct sw_flow *flow);
 void ovs_flow_remove(struct flow_table *table, struct sw_flow *flow);
 
 struct sw_flow *ovs_flow_dump_next(struct flow_table *table, u32 *bucket, u32 *idx);
@@ -258,4 +257,6 @@ void ovs_sw_flow_mask_del_ref(struct sw_flow_mask *, bool deferred);
 void ovs_sw_flow_mask_insert(struct flow_table *, struct sw_flow_mask *);
 struct sw_flow_mask *ovs_sw_flow_mask_find(const struct flow_table *,
 		const struct sw_flow_mask *);
+void ovs_flow_key_mask(struct sw_flow_key *dst, const struct sw_flow_key *src,
+		       const struct sw_flow_mask *mask);
 #endif /* flow.h */
