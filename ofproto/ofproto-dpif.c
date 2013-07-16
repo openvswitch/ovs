@@ -3395,11 +3395,7 @@ handle_flow_miss_with_facet(struct flow_miss *miss, struct facet *facet,
     struct subfacet *subfacet;
     struct ofpbuf *packet;
 
-    subfacet = subfacet_create(facet, miss, now);
     want_path = facet->xout.slow ? SF_SLOW_PATH : SF_FAST_PATH;
-    if (stats) {
-        subfacet_update_stats(subfacet, stats);
-    }
 
     LIST_FOR_EACH (packet, list_node, &miss->packets) {
         struct flow_miss_op *op = &ops[*n_ops];
@@ -3424,6 +3420,27 @@ handle_flow_miss_with_facet(struct flow_miss *miss, struct facet *facet,
             execute->actions_len = facet->xout.odp_actions.size;
             (*n_ops)++;
         }
+    }
+
+    /* Don't install the flow if it's the result of the "userspace"
+     * action for an already installed facet.  This can occur when a
+     * datapath flow with wildcards has a "userspace" action and flows
+     * sent to userspace result in a different subfacet, which will then
+     * be rejected as overlapping by the datapath. */
+    if (miss->upcall_type == DPIF_UC_ACTION
+        && !list_is_empty(&facet->subfacets)) {
+        if (stats) {
+            facet->used = MAX(facet->used, stats->used);
+            facet->packet_count += stats->n_packets;
+            facet->byte_count += stats->n_bytes;
+            facet->tcp_flags |= stats->tcp_flags;
+        }
+        return;
+    }
+
+    subfacet = subfacet_create(facet, miss, now);
+    if (stats) {
+        subfacet_update_stats(subfacet, stats);
     }
 
     if (miss->upcall_type == DPIF_UC_MISS || subfacet->path != want_path) {
