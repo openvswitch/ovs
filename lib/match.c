@@ -111,21 +111,22 @@ match_wc_init(struct match *match, const struct flow *flow)
     if (is_ip_any(flow)) {
         memset(&wc->masks.nw_tos, 0xff, sizeof wc->masks.nw_tos);
         memset(&wc->masks.nw_ttl, 0xff, sizeof wc->masks.nw_ttl);
-    }
 
-    if (flow->nw_frag) {
-        memset(&wc->masks.nw_frag, 0xff, sizeof wc->masks.nw_frag);
-    }
+        if (flow->nw_frag) {
+            memset(&wc->masks.nw_frag, 0xff, sizeof wc->masks.nw_frag);
+        }
 
-    if (flow->nw_proto == IPPROTO_ICMP || flow->nw_proto == IPPROTO_ICMPV6 ||
-        (flow->tp_src || flow->tp_dst)) {
-        memset(&wc->masks.tp_src, 0xff, sizeof wc->masks.tp_src);
-        memset(&wc->masks.tp_dst, 0xff, sizeof wc->masks.tp_dst);
-    }
+        if (flow->nw_proto == IPPROTO_ICMP ||
+            flow->nw_proto == IPPROTO_ICMPV6 ||
+            (flow->tp_src || flow->tp_dst)) {
+            memset(&wc->masks.tp_src, 0xff, sizeof wc->masks.tp_src);
+            memset(&wc->masks.tp_dst, 0xff, sizeof wc->masks.tp_dst);
+        }
 
-    if (flow->nw_proto == IPPROTO_ICMPV6) {
-        memset(&wc->masks.arp_sha, 0xff, sizeof wc->masks.arp_sha);
-        memset(&wc->masks.arp_tha, 0xff, sizeof wc->masks.arp_tha);
+        if (flow->nw_proto == IPPROTO_ICMPV6) {
+            memset(&wc->masks.arp_sha, 0xff, sizeof wc->masks.arp_sha);
+            memset(&wc->masks.arp_tha, 0xff, sizeof wc->masks.arp_tha);
+        }
     }
 
     return;
