@@ -1512,12 +1512,12 @@ AT_CHECK([ovs-ofctl ofp-print "\
 00 00 00 00 00 00 00 00 00 00 00 00 \
 "], [0], [dnl
 OFPST_QUEUE reply (xid=0x1): 6 queues
-  port 3 queue 1: bytes=302, pkts=1, errors=0
-  port 3 queue 2: bytes=0, pkts=0, errors=0
-  port 2 queue 1: bytes=2100, pkts=20, errors=0
-  port 2 queue 2: bytes=0, pkts=0, errors=0
-  port 1 queue 1: bytes=0, pkts=0, errors=0
-  port 1 queue 2: bytes=0, pkts=0, errors=0
+  port 3 queue 1: bytes=302, pkts=1, errors=0, duration=?
+  port 3 queue 2: bytes=0, pkts=0, errors=0, duration=?
+  port 2 queue 1: bytes=2100, pkts=20, errors=0, duration=?
+  port 2 queue 2: bytes=0, pkts=0, errors=0, duration=?
+  port 1 queue 1: bytes=0, pkts=0, errors=0, duration=?
+  port 1 queue 2: bytes=0, pkts=0, errors=0, duration=?
 ])
 AT_CLEANUP
 
@@ -1546,12 +1546,12 @@ AT_CHECK([ovs-ofctl ofp-print "\
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 \
 "], [0], [dnl
 OFPST_QUEUE reply (OF1.1) (xid=0x1): 6 queues
-  port 3 queue 1: bytes=302, pkts=1, errors=0
-  port 3 queue 2: bytes=0, pkts=0, errors=0
-  port 2 queue 1: bytes=2100, pkts=20, errors=0
-  port 2 queue 2: bytes=0, pkts=0, errors=0
-  port 1 queue 1: bytes=0, pkts=0, errors=0
-  port 1 queue 2: bytes=0, pkts=0, errors=0
+  port 3 queue 1: bytes=302, pkts=1, errors=0, duration=?
+  port 3 queue 2: bytes=0, pkts=0, errors=0, duration=?
+  port 2 queue 1: bytes=2100, pkts=20, errors=0, duration=?
+  port 2 queue 2: bytes=0, pkts=0, errors=0, duration=?
+  port 1 queue 1: bytes=0, pkts=0, errors=0, duration=?
+  port 1 queue 2: bytes=0, pkts=0, errors=0, duration=?
 ])
 AT_CLEANUP
 
@@ -1573,12 +1573,14 @@ AT_CHECK([ovs-ofctl ofp-print "\
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 \
 "], [0], [dnl
 OFPST_QUEUE reply (OF1.2) (xid=0x1): 6 queues
-  port 3 queue 1: bytes=302, pkts=1, errors=0
-  port 3 queue 2: bytes=0, pkts=0, errors=0
-  port 2 queue 1: bytes=2100, pkts=20, errors=0
-  port 2 queue 2: bytes=0, pkts=0, errors=0
-  port 1 queue 1: bytes=0, pkts=0, errors=0
-  port 1 queue 2: bytes=0, pkts=0, errors=0
+  port 3 queue 1: bytes=302, pkts=1, errors=0, duration=?
+  port 3 queue 2: bytes=0, pkts=0, errors=0, duration=?
+  port 2 queue 1: bytes=2100, pkts=20, errors=0, duration=?
+  port 2 queue 2: bytes=0, pkts=0, errors=0, duration=?
+  port 1 queue 1: bytes=0, pkts=0, errors=0, duration=?
+  port 1 queue 2: bytes=0, pkts=0, errors=0, duration=?
+])
+AT_CLEANUP
 
 AT_SETUP([OFPST_QUEUE reply - OF1.3])
 AT_KEYWORDS([ofp-print OFPT_STATS_REPLY])
@@ -1604,12 +1606,12 @@ AT_CHECK([ovs-ofctl ofp-print "\
 ff ff ff ff ff ff ff ff \
 "], [0], [dnl
 OFPST_QUEUE reply (OF1.3) (xid=0x1): 6 queues
-  port 3 queue 1: bytes=302, pkts=1, errors=0
-  port 3 queue 2: bytes=0, pkts=0, errors=0
-  port 2 queue 1: bytes=2100, pkts=20, errors=0
-  port 2 queue 2: bytes=0, pkts=0, errors=0
-  port 1 queue 1: bytes=0, pkts=0, errors=0
-  port 1 queue 2: bytes=0, pkts=0, errors=0
+  port 3 queue 1: bytes=302, pkts=1, errors=0, duration=100.5s
+  port 3 queue 2: bytes=0, pkts=0, errors=0, duration=100.5s
+  port 2 queue 1: bytes=2100, pkts=20, errors=0, duration=100.5s
+  port 2 queue 2: bytes=0, pkts=0, errors=0, duration=100.5s
+  port 1 queue 1: bytes=0, pkts=0, errors=0, duration=100.5s
+  port 1 queue 2: bytes=0, pkts=0, errors=0, duration=?
 ])
 AT_CLEANUP
 

@@ -5401,9 +5401,10 @@ ofputil_queue_stats_from_ofp10(struct ofputil_queue_stats *oqs,
 {
     oqs->port_no = u16_to_ofp(ntohs(qs10->port_no));
     oqs->queue_id = ntohl(qs10->queue_id);
-    oqs->stats.tx_bytes = ntohll(get_32aligned_be64(&qs10->tx_bytes));
-    oqs->stats.tx_packets = ntohll(get_32aligned_be64(&qs10->tx_packets));
-    oqs->stats.tx_errors = ntohll(get_32aligned_be64(&qs10->tx_errors));
+    oqs->tx_bytes = ntohll(get_32aligned_be64(&qs10->tx_bytes));
+    oqs->tx_packets = ntohll(get_32aligned_be64(&qs10->tx_packets));
+    oqs->tx_errors = ntohll(get_32aligned_be64(&qs10->tx_errors));
+    oqs->duration_sec = oqs->duration_nsec = UINT32_MAX;
 
     return 0;
 }
@@ -5420,9 +5421,10 @@ ofputil_queue_stats_from_ofp11(struct ofputil_queue_stats *oqs,
     }
 
     oqs->queue_id = ntohl(qs11->queue_id);
-    oqs->stats.tx_bytes = ntohll(qs11->tx_bytes);
-    oqs->stats.tx_packets = ntohll(qs11->tx_packets);
-    oqs->stats.tx_errors = ntohll(qs11->tx_errors);
+    oqs->tx_bytes = ntohll(qs11->tx_bytes);
+    oqs->tx_packets = ntohll(qs11->tx_packets);
+    oqs->tx_errors = ntohll(qs11->tx_errors);
+    oqs->duration_sec = oqs->duration_nsec = UINT32_MAX;
 
     return 0;
 }
@@ -5431,11 +5433,10 @@ static enum ofperr
 ofputil_queue_stats_from_ofp13(struct ofputil_queue_stats *oqs,
                                const struct ofp13_queue_stats *qs13)
 {
-    enum ofperr error
-        = ofputil_queue_stats_from_ofp11(oqs, &qs13->qs);
+    enum ofperr error = ofputil_queue_stats_from_ofp11(oqs, &qs13->qs);
     if (!error) {
-        /* FIXME: Get qs13->duration_sec and qs13->duration_nsec,
-         * Add to netdev_queue_stats? */
+        oqs->duration_sec = ntohl(qs13->duration_sec);
+        oqs->duration_nsec = ntohl(qs13->duration_nsec);
     }
 
     return error;
@@ -5507,9 +5508,9 @@ ofputil_queue_stats_to_ofp10(const struct ofputil_queue_stats *oqs,
     qs10->port_no = htons(ofp_to_u16(oqs->port_no));
     memset(qs10->pad, 0, sizeof qs10->pad);
     qs10->queue_id = htonl(oqs->queue_id);
-    put_32aligned_be64(&qs10->tx_bytes, htonll(oqs->stats.tx_bytes));
-    put_32aligned_be64(&qs10->tx_packets, htonll(oqs->stats.tx_packets));
-    put_32aligned_be64(&qs10->tx_errors, htonll(oqs->stats.tx_errors));
+    put_32aligned_be64(&qs10->tx_bytes, htonll(oqs->tx_bytes));
+    put_32aligned_be64(&qs10->tx_packets, htonll(oqs->tx_packets));
+    put_32aligned_be64(&qs10->tx_errors, htonll(oqs->tx_errors));
 }
 
 static void
@@ -5518,9 +5519,9 @@ ofputil_queue_stats_to_ofp11(const struct ofputil_queue_stats *oqs,
 {
     qs11->port_no = ofputil_port_to_ofp11(oqs->port_no);
     qs11->queue_id = htonl(oqs->queue_id);
-    qs11->tx_bytes = htonll(oqs->stats.tx_bytes);
-    qs11->tx_packets = htonll(oqs->stats.tx_packets);
-    qs11->tx_errors = htonll(oqs->stats.tx_errors);
+    qs11->tx_bytes = htonll(oqs->tx_bytes);
+    qs11->tx_packets = htonll(oqs->tx_packets);
+    qs11->tx_errors = htonll(oqs->tx_errors);
 }
 
 static void
@@ -5528,10 +5529,13 @@ ofputil_queue_stats_to_ofp13(const struct ofputil_queue_stats *oqs,
                              struct ofp13_queue_stats *qs13)
 {
     ofputil_queue_stats_to_ofp11(oqs, &qs13->qs);
-    /* OF 1.3 adds duration fields */
-    /* FIXME: Need to implement queue alive duration (sec + nsec) */
-    qs13->duration_sec = htonl(~0);
-    qs13->duration_nsec = htonl(~0);
+    if (oqs->duration_sec != UINT32_MAX) {
+        qs13->duration_sec = htonl(oqs->duration_sec);
+        qs13->duration_nsec = htonl(oqs->duration_nsec);
+    } else {
+        qs13->duration_sec = htonl(UINT32_MAX);
+        qs13->duration_nsec = htonl(UINT32_MAX);
+    }
 }
 
 /* Encode a queue stat for 'oqs' and append it to 'replies'. */

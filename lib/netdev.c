@@ -1246,7 +1246,8 @@ netdev_delete_queue(struct netdev *netdev, unsigned int queue_id)
 /* Obtains statistics about 'queue_id' on 'netdev'.  On success, returns 0 and
  * fills 'stats' with the queue's statistics; individual members of 'stats' may
  * be set to all-1-bits if the statistic is unavailable.  On failure, returns a
- * positive errno value and fills 'stats' with all-1-bits. */
+ * positive errno value and fills 'stats' with values indicating unsupported
+ * statistics. */
 int
 netdev_get_queue_stats(const struct netdev *netdev, unsigned int queue_id,
                        struct netdev_queue_stats *stats)
@@ -1258,7 +1259,10 @@ netdev_get_queue_stats(const struct netdev *netdev, unsigned int queue_id,
               ? class->get_queue_stats(netdev, queue_id, stats)
               : EOPNOTSUPP);
     if (retval) {
-        memset(stats, 0xff, sizeof *stats);
+        stats->tx_bytes = UINT64_MAX;
+        stats->tx_packets = UINT64_MAX;
+        stats->tx_errors = UINT64_MAX;
+        stats->created = LLONG_MIN;
     }
     return retval;
 }

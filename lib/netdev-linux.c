@@ -148,6 +148,7 @@ struct tc {
 struct tc_queue {
     struct hmap_node hmap_node; /* In struct tc's "queues" hmap. */
     unsigned int queue_id;      /* OpenFlow queue ID. */
+    long long int created;      /* Time queue was created, in msecs. */
 };
 
 /* A particular kind of traffic control.  Each implementation generally maps to
@@ -1998,9 +1999,11 @@ netdev_linux_get_queue_stats(const struct netdev *netdev_,
         return EOPNOTSUPP;
     } else {
         const struct tc_queue *queue = tc_find_queue(netdev_, queue_id);
-        return (queue
-                ? netdev->tc->ops->class_get_stats(netdev_, queue, stats)
-                : ENOENT);
+        if (!queue) {
+            return ENOENT;
+        }
+        stats->created = queue->created;
+        return netdev->tc->ops->class_get_stats(netdev_, queue, stats);
     }
 }
 
@@ -2807,6 +2810,7 @@ htb_update_queue__(struct netdev *netdev, unsigned int queue_id,
         hcp = xmalloc(sizeof *hcp);
         queue = &hcp->tc_queue;
         queue->queue_id = queue_id;
+        queue->created = time_msec();
         hmap_insert(&htb->tc.queues, &queue->hmap_node, hash);
     }
 
@@ -3040,6 +3044,7 @@ hfsc_update_queue__(struct netdev *netdev, unsigned int queue_id,
         hcp             = xmalloc(sizeof *hcp);
         queue           = &hcp->tc_queue;
         queue->queue_id = queue_id;
+        queue->created  = time_msec();
         hmap_insert(&hfsc->tc.queues, &queue->hmap_node, hash);
     }
 

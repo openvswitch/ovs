@@ -227,6 +227,9 @@ struct netdev_queue_stats {
     uint64_t tx_bytes;
     uint64_t tx_packets;
     uint64_t tx_errors;
+
+    /* Time at which the queue was created, in msecs, LLONG_MIN if unknown. */
+    long long int created;
 };
 
 int netdev_set_policing(struct netdev *, uint32_t kbits_rate,

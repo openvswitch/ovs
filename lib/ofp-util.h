@@ -832,7 +832,15 @@ ofputil_encode_queue_stats_request(enum ofp_version ofp_version,
 struct ofputil_queue_stats {
     ofp_port_t port_no;
     uint32_t queue_id;
-    struct netdev_queue_stats stats;
+
+    /* Values of unsupported statistics are set to all-1-bits (UINT64_MAX). */
+    uint64_t tx_bytes;
+    uint64_t tx_packets;
+    uint64_t tx_errors;
+
+    /* UINT32_MAX if unknown. */
+    uint32_t duration_sec;
+    uint32_t duration_nsec;
 };
 
 size_t ofputil_count_queue_stats(const struct ofp_header *);

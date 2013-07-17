@@ -1737,9 +1737,17 @@ ofp_print_ofpst_queue_reply(struct ds *string, const struct ofp_header *oh,
         ofp_print_queue_name(string, qs.queue_id);
         ds_put_cstr(string, ": ");
 
-        print_port_stat(string, "bytes=", qs.stats.tx_bytes, 1);
-        print_port_stat(string, "pkts=", qs.stats.tx_packets, 1);
-        print_port_stat(string, "errors=", qs.stats.tx_errors, 0);
+        print_port_stat(string, "bytes=", qs.tx_bytes, 1);
+        print_port_stat(string, "pkts=", qs.tx_packets, 1);
+        print_port_stat(string, "errors=", qs.tx_errors, 1);
+
+        ds_put_cstr(string, "duration=");
+        if (qs.duration_sec != UINT32_MAX) {
+            ofp_print_duration(string, qs.duration_sec, qs.duration_nsec);
+        } else {
+            ds_put_char(string, '?');
+        }
+        ds_put_char(string, '\n');
     }
 }
 

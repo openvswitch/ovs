@@ -3170,18 +3170,26 @@ handle_aggregate_stats_request(struct ofconn *ofconn,
 struct queue_stats_cbdata {
     struct ofport *ofport;
     struct list replies;
+    long long int now;
 };
 
 static void
 put_queue_stats(struct queue_stats_cbdata *cbdata, uint32_t queue_id,
                 const struct netdev_queue_stats *stats)
 {
+    struct ofputil_queue_stats oqs;
 
-    struct ofputil_queue_stats oqs = {
-        .port_no = cbdata->ofport->pp.port_no,
-        .queue_id = queue_id,
-        .stats = *stats,
-    };
+    oqs.port_no = cbdata->ofport->pp.port_no;
+    oqs.queue_id = queue_id;
+    oqs.tx_bytes = stats->tx_bytes;
+    oqs.tx_packets = stats->tx_packets;
+    oqs.tx_errors = stats->tx_errors;
+    if (stats->created != LLONG_MIN) {
+        calc_duration(stats->created, cbdata->now,
+                      &oqs.duration_sec, &oqs.duration_nsec);
+    } else {
+        oqs.duration_sec = oqs.duration_nsec = UINT32_MAX;
+    }
     ofputil_append_queue_stat(&cbdata->replies, &oqs);
 }
 
@@ -3228,6 +3236,7 @@ handle_queue_stats_request(struct ofconn *ofconn,
     COVERAGE_INC(ofproto_queue_req);
 
     ofpmp_init(&cbdata.replies, rq);
+    cbdata.now = time_msec();
 
     error = ofputil_decode_queue_stats_request(rq, &oqsr);
     if (error) {
