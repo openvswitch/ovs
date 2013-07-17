@@ -8833,8 +8833,17 @@ ofproto_unixctl_dpif_dump_flows(struct unixctl_conn *conn,
 
     HMAP_FOR_EACH (subfacet, hmap_node, &ofproto->subfacets) {
         struct facet *facet = subfacet->facet;
+        struct odputil_keybuf maskbuf;
+        struct ofpbuf mask;
 
-        odp_flow_key_format(subfacet->key, subfacet->key_len, &ds);
+        ofpbuf_use_stack(&mask, &maskbuf, sizeof maskbuf);
+        if (enable_megaflows) {
+            odp_flow_key_from_mask(&mask, &facet->xout.wc.masks,
+                                   &facet->flow, UINT32_MAX);
+        }
+
+        odp_flow_format(subfacet->key, subfacet->key_len,
+                        mask.data, mask.size, &ds);
 
         ds_put_format(&ds, ", packets:%"PRIu64", bytes:%"PRIu64", used:",
                       subfacet->dp_packet_count, subfacet->dp_byte_count);
