@@ -93,4 +93,10 @@
 #define OVS_PACKED_ENUM
 #endif
 
+#ifndef _MSC_VER
+#define OVS_PACKED(DECL) DECL __attribute__((__packed__))
+#else
+#define OVS_PACKED(DECL) __pragma(pack(push, 1)) DECL __pragma(pack(pop))
+#endif
+
 #endif /* compiler.h */

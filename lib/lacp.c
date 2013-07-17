@@ -47,6 +47,7 @@ VLOG_DEFINE_THIS_MODULE(lacp);
 #define LACP_RX_MULTIPLIER 3    /* Multiply by TX rate to get RX rate. */
 
 #define LACP_INFO_LEN 15
+OVS_PACKED(
 struct lacp_info {
     ovs_be16 sys_priority;            /* System priority. */
     uint8_t sys_id[ETH_ADDR_LEN];     /* System ID. */
@@ -54,10 +55,11 @@ struct lacp_info {
     ovs_be16 port_priority;           /* Port priority. */
     ovs_be16 port_id;                 /* Port ID. */
     uint8_t state;                    /* State mask.  See LACP_STATE macros. */
-} __attribute__((packed));
+});
 BUILD_ASSERT_DECL(LACP_INFO_LEN == sizeof(struct lacp_info));
 
 #define LACP_PDU_LEN 110
+OVS_PACKED(
 struct lacp_pdu {
     uint8_t subtype;          /* Always 1. */
     uint8_t version;          /* Always 1. */
@@ -76,7 +78,7 @@ struct lacp_pdu {
     uint8_t collector_len;    /* Always 16. */
     ovs_be16 collector_delay; /* Maximum collector delay. Set to UINT16_MAX. */
     uint8_t z3[64];           /* Combination of several fields.  Always 0. */
-} __attribute__((packed));
+});
 BUILD_ASSERT_DECL(LACP_PDU_LEN == sizeof(struct lacp_pdu));
 
 /* Implementation. */

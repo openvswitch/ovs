@@ -217,11 +217,12 @@ static inline bool eth_type_mpls(ovs_be16 eth_type)
 #define ETH_TOTAL_MIN (ETH_HEADER_LEN + ETH_PAYLOAD_MIN)
 #define ETH_TOTAL_MAX (ETH_HEADER_LEN + ETH_PAYLOAD_MAX)
 #define ETH_VLAN_TOTAL_MAX (ETH_HEADER_LEN + VLAN_HEADER_LEN + ETH_PAYLOAD_MAX)
+OVS_PACKED(
 struct eth_header {
     uint8_t eth_dst[ETH_ADDR_LEN];
     uint8_t eth_src[ETH_ADDR_LEN];
     ovs_be16 eth_type;
-} __attribute__((packed));
+});
 BUILD_ASSERT_DECL(ETH_HEADER_LEN == sizeof(struct eth_header));
 
 #define LLC_DSAP_SNAP 0xaa
@@ -229,27 +230,30 @@ BUILD_ASSERT_DECL(ETH_HEADER_LEN == sizeof(struct eth_header));
 #define LLC_CNTL_SNAP 3
 
 #define LLC_HEADER_LEN 3
+OVS_PACKED(
 struct llc_header {
     uint8_t llc_dsap;
     uint8_t llc_ssap;
     uint8_t llc_cntl;
-} __attribute__((packed));
+});
 BUILD_ASSERT_DECL(LLC_HEADER_LEN == sizeof(struct llc_header));
 
 #define SNAP_ORG_ETHERNET "\0\0" /* The compiler adds a null byte, so
                                     sizeof(SNAP_ORG_ETHERNET) == 3. */
 #define SNAP_HEADER_LEN 5
+OVS_PACKED(
 struct snap_header {
     uint8_t snap_org[3];
     ovs_be16 snap_type;
-} __attribute__((packed));
+});
 BUILD_ASSERT_DECL(SNAP_HEADER_LEN == sizeof(struct snap_header));
 
 #define LLC_SNAP_HEADER_LEN (LLC_HEADER_LEN + SNAP_HEADER_LEN)
+OVS_PACKED(
 struct llc_snap_header {
     struct llc_header llc;
     struct snap_header snap;
-} __attribute__((packed));
+});
 BUILD_ASSERT_DECL(LLC_SNAP_HEADER_LEN == sizeof(struct llc_snap_header));
 
 #define VLAN_VID_MASK 0x0fff
@@ -293,13 +297,14 @@ struct vlan_header {
 BUILD_ASSERT_DECL(VLAN_HEADER_LEN == sizeof(struct vlan_header));
 
 #define VLAN_ETH_HEADER_LEN (ETH_HEADER_LEN + VLAN_HEADER_LEN)
+OVS_PACKED(
 struct vlan_eth_header {
     uint8_t veth_dst[ETH_ADDR_LEN];
     uint8_t veth_src[ETH_ADDR_LEN];
     ovs_be16 veth_type;         /* Always htons(ETH_TYPE_VLAN). */
     ovs_be16 veth_tci;          /* Lowest 12 bits are VLAN ID. */
     ovs_be16 veth_next_type;
-} __attribute__((packed));
+});
 BUILD_ASSERT_DECL(VLAN_ETH_HEADER_LEN == sizeof(struct vlan_eth_header));
 
 /* MPLS related definitions */
@@ -503,6 +508,7 @@ BUILD_ASSERT_DECL(TCP_HEADER_LEN == sizeof(struct tcp_header));
 #define ARP_OP_RARP 3
 
 #define ARP_ETH_HEADER_LEN 28
+OVS_PACKED(
 struct arp_eth_header {
     /* Generic members. */
     ovs_be16 ar_hrd;           /* Hardware type. */
@@ -516,7 +522,7 @@ struct arp_eth_header {
     ovs_be32 ar_spa;           /* Sender protocol address. */
     uint8_t ar_tha[ETH_ADDR_LEN]; /* Target hardware address. */
     ovs_be32 ar_tpa;           /* Target protocol address. */
-} __attribute__((packed));
+});
 BUILD_ASSERT_DECL(ARP_ETH_HEADER_LEN == sizeof(struct arp_eth_header));
 
 /* The IPv6 flow label is in the lower 20 bits of the first 32-bit word. */

@@ -61,6 +61,8 @@ static const uint8_t eth_addr_ccm_x[6] = {
 #define CCM_OPCODE 1 /* CFM message opcode meaning CCM. */
 #define CCM_RDI_MASK 0x80
 #define CFM_HEALTH_INTERVAL 6
+
+OVS_PACKED(
 struct ccm {
     uint8_t mdlevel_version; /* MD Level and Version */
     uint8_t opcode;
@@ -78,7 +80,7 @@ struct ccm {
 
     /* TLV space. */
     uint8_t end_tlv;
-} __attribute__((packed));
+});
 BUILD_ASSERT_DECL(CCM_LEN == sizeof(struct ccm));
 
 struct cfm {

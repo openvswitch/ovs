@@ -73,23 +73,25 @@ struct dpif_ipfix {
 #define IPFIX_TEMPLATE_INTERVAL 600
 
 /* Cf. IETF RFC 5101 Section 3.1. */
+OVS_PACKED(
 struct ipfix_header {
     ovs_be16 version;  /* IPFIX_VERSION. */
     ovs_be16 length;  /* Length in bytes including this header. */
     ovs_be32 export_time;  /* Seconds since the epoch. */
     ovs_be32 seq_number;  /* Message sequence number. */
     ovs_be32 obs_domain_id;  /* Observation Domain ID. */
-} __attribute__((packed));
+});
 BUILD_ASSERT_DECL(sizeof(struct ipfix_header) == 16);
 
 #define IPFIX_SET_ID_TEMPLATE 2
 #define IPFIX_SET_ID_OPTION_TEMPLATE 3
 
 /* Cf. IETF RFC 5101 Section 3.3.2. */
+OVS_PACKED(
 struct ipfix_set_header {
     ovs_be16 set_id;  /* IPFIX_SET_ID_* or valid template ID for Data Sets. */
     ovs_be16 length;  /* Length of the set in bytes including header. */
-} __attribute__((packed));
+});
 BUILD_ASSERT_DECL(sizeof(struct ipfix_set_header) == 4);
 
 /* Alternatives for templates at each layer.  A template is defined by
@@ -115,10 +117,11 @@ enum ipfix_proto_l4 {
 #define IPFIX_TEMPLATE_ID_MIN 256
 
 /* Cf. IETF RFC 5101 Section 3.4.1. */
+OVS_PACKED(
 struct ipfix_template_record_header {
     ovs_be16 template_id;
     ovs_be16 field_count;
-} __attribute__((packed));
+});
 BUILD_ASSERT_DECL(sizeof(struct ipfix_template_record_header) == 4);
 
 enum ipfix_entity_id {
@@ -131,14 +134,16 @@ enum ipfix_entity_size {
 #include "ofproto/ipfix-entities.def"
 };
 
+OVS_PACKED(
 struct ipfix_template_field_specifier {
     ovs_be16 element_id;  /* IPFIX_ENTITY_ID_*. */
     ovs_be16 field_length;  /* Length of the field's value, in bytes. */
     /* No Enterprise ID, since only standard element IDs are specified. */
-} __attribute__((packed));
+});
 BUILD_ASSERT_DECL(sizeof(struct ipfix_template_field_specifier) == 4);
 
 /* Part of data record for common metadata and Ethernet entities. */
+OVS_PACKED(
 struct ipfix_data_record_common {
     ovs_be32 observation_point_id;  /* OBSERVATION_POINT_ID */
     ovs_be64 packet_delta_count;  /* PACKET_DELTA_COUNT */
@@ -148,18 +153,20 @@ struct ipfix_data_record_common {
     ovs_be16 ethernet_type;  /* ETHERNET_TYPE */
     ovs_be16 ethernet_total_length;  /* ETHERNET_TOTAL_LENGTH */
     uint8_t ethernet_header_length;  /* ETHERNET_HEADER_LENGTH */
-} __attribute__((packed));
+});
 BUILD_ASSERT_DECL(sizeof(struct ipfix_data_record_common) == 37);
 
 /* Part of data record for VLAN entities. */
+OVS_PACKED(
 struct ipfix_data_record_vlan {
     ovs_be16 vlan_id;  /* VLAN_ID */
     ovs_be16 dot1q_vlan_id;  /* DOT1Q_VLAN_ID */
     uint8_t dot1q_priority;  /* DOT1Q_PRIORITY */
-} __attribute__((packed));
+});
 BUILD_ASSERT_DECL(sizeof(struct ipfix_data_record_vlan) == 5);
 
 /* Part of data record for IP entities. */
+OVS_PACKED(
 struct ipfix_data_record_ip {
     uint8_t ip_version;  /* IP_VERSION */
     uint8_t ip_ttl;  /* IP_TTL */
@@ -167,29 +174,32 @@ struct ipfix_data_record_ip {
     uint8_t ip_diff_serv_code_point;  /* IP_DIFF_SERV_CODE_POINT */
     uint8_t ip_precedence;  /* IP_PRECEDENCE */
     uint8_t ip_class_of_service;  /* IP_CLASS_OF_SERVICE */
-} __attribute__((packed));
+});
 BUILD_ASSERT_DECL(sizeof(struct ipfix_data_record_ip) == 6);
 
 /* Part of data record for IPv4 entities. */
+OVS_PACKED(
 struct ipfix_data_record_ipv4 {
     ovs_be32 source_ipv4_address;  /* SOURCE_IPV4_ADDRESS */
     ovs_be32 destination_ipv4_address;  /* DESTINATION_IPV4_ADDRESS */
-} __attribute__((packed));
+});
 BUILD_ASSERT_DECL(sizeof(struct ipfix_data_record_ipv4) == 8);
 
 /* Part of data record for IPv4 entities. */
+OVS_PACKED(
 struct ipfix_data_record_ipv6 {
     uint8_t source_ipv6_address[16];  /* SOURCE_IPV6_ADDRESS */
     uint8_t destination_ipv6_address[16];  /* DESTINATION_IPV6_ADDRESS */
     ovs_be32 flow_label_ipv6;  /* FLOW_LABEL_IPV6 */
-} __attribute__((packed));
+});
 BUILD_ASSERT_DECL(sizeof(struct ipfix_data_record_ipv6) == 36);
 
 /* Part of data record for TCP/UDP entities. */
+OVS_PACKED(
 struct ipfix_data_record_tcpudp {
     ovs_be16 source_transport_port;  /* SOURCE_TRANSPORT_PORT */
     ovs_be16 destination_transport_port;  /* DESTINATION_TRANSPORT_PORT */
-} __attribute__((packed));
+});
 BUILD_ASSERT_DECL(sizeof(struct ipfix_data_record_tcpudp) == 4);
 
 static bool
