@@ -17,6 +17,15 @@
 #ifndef VLOG_H
 #define VLOG_H 1
 
+/* Logging.
+ *
+ *
+ * Thread-safety
+ * =============
+ *
+ * Fully thread safe.
+ */
+
 #include <limits.h>
 #include <stdarg.h>
 #include <stdbool.h>
