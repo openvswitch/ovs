@@ -82,10 +82,6 @@ BUILD_ASSERT_DECL(N_TABLES >= 2 && N_TABLES <= 255);
 struct flow_miss;
 struct facet;
 
-static struct rule_dpif *rule_dpif_lookup(struct ofproto_dpif *,
-                                          const struct flow *,
-                                          struct flow_wildcards *wc);
-
 static void rule_get_stats(struct rule *, uint64_t *packets, uint64_t *bytes);
 
 struct ofbundle {
@@ -1387,9 +1383,12 @@ add_internal_flow(struct ofproto_dpif *ofproto, int id,
         return error;
     }
 
-    *rulep = rule_dpif_lookup_in_table(ofproto, &fm.match.flow, NULL,
-                                       TBL_INTERNAL);
-    ovs_assert(*rulep != NULL);
+    if (rule_dpif_lookup_in_table(ofproto, &fm.match.flow, NULL, TBL_INTERNAL,
+                                  rulep)) {
+        ovs_rwlock_unlock(&(*rulep)->up.evict);
+    } else {
+        NOT_REACHED();
+    }
 
     return 0;
 }
@@ -3506,9 +3505,10 @@ handle_flow_miss_with_facet(struct flow_miss *miss, struct facet *facet,
             struct rule_dpif *rule;
             struct xlate_in xin;
 
-            rule = rule_dpif_lookup(facet->ofproto, &facet->flow, NULL);
+            rule_dpif_lookup(facet->ofproto, &facet->flow, NULL, &rule);
             xlate_in_init(&xin, facet->ofproto, &miss->flow, rule, 0, packet);
             xlate_actions_for_side_effects(&xin);
+            rule_release(rule);
         }
 
         if (facet->xout.odp_actions.size) {
@@ -3605,7 +3605,7 @@ handle_flow_miss(struct flow_miss *miss, struct flow_miss_op *ops,
         struct xlate_in xin;
 
         flow_wildcards_init_catchall(&wc);
-        rule = rule_dpif_lookup(ofproto, &miss->flow, &wc);
+        rule_dpif_lookup(ofproto, &miss->flow, &wc, &rule);
         rule_credit_stats(rule, stats);
 
         xlate_in_init(&xin, ofproto, &miss->flow, rule, stats->tcp_flags,
@@ -3623,10 +3623,12 @@ handle_flow_miss(struct flow_miss *miss, struct flow_miss_op *ops,
         if (miss->key_fitness == ODP_FIT_TOO_LITTLE
             || !flow_miss_should_make_facet(miss, &xout.wc)) {
             handle_flow_miss_without_facet(rule, &xout, miss, ops, n_ops);
+            rule_release(rule);
             return;
         }
 
         facet = facet_create(miss, rule, &xout, stats);
+        rule_release(rule);
         stats = NULL;
     }
     handle_flow_miss_with_facet(miss, facet, now, stats, ops, n_ops);
@@ -4342,10 +4344,12 @@ rule_expire(struct rule_dpif *rule)
         return;
     }
 
-    COVERAGE_INC(ofproto_dpif_expired);
+    if (!ovs_rwlock_trywrlock(&rule->up.evict)) {
+        COVERAGE_INC(ofproto_dpif_expired);
 
-    /* Get rid of the rule. */
-    ofproto_rule_expire(&rule->up, reason);
+        /* Get rid of the rule. */
+        ofproto_rule_expire(&rule->up, reason);
+    }
 }
 
 /* Facets. */
@@ -4542,16 +4546,19 @@ facet_is_controller_flow(struct facet *facet)
 {
     if (facet) {
         struct ofproto_dpif *ofproto = facet->ofproto;
-        const struct rule_dpif *rule = rule_dpif_lookup(ofproto, &facet->flow,
-                                                        NULL);
-        const struct ofpact *ofpacts = rule->up.ofpacts;
-        size_t ofpacts_len = rule->up.ofpacts_len;
+        const struct ofpact *ofpacts;
+        struct rule_dpif *rule;
+        size_t ofpacts_len;
+        bool is_controller;
 
-        if (ofpacts_len > 0 &&
-            ofpacts->type == OFPACT_CONTROLLER &&
-            ofpact_next(ofpacts) >= ofpact_end(ofpacts, ofpacts_len)) {
-            return true;
-        }
+        rule_dpif_lookup(ofproto, &facet->flow, NULL, &rule);
+        ofpacts_len = rule->up.ofpacts_len;
+        ofpacts = rule->up.ofpacts;
+        is_controller = ofpacts_len > 0
+            && ofpacts->type == OFPACT_CONTROLLER
+            && ofpact_next(ofpacts) >= ofpact_end(ofpacts, ofpacts_len);
+        rule_release(rule);
+        return is_controller;
     }
     return false;
 }
@@ -4641,9 +4648,10 @@ facet_check_consistency(struct facet *facet)
     bool ok, fail_open;
 
     /* Check the datapath actions for consistency. */
-    rule = rule_dpif_lookup(facet->ofproto, &facet->flow, NULL);
+    rule_dpif_lookup(facet->ofproto, &facet->flow, NULL, &rule);
     xlate_in_init(&xin, facet->ofproto, &facet->flow, rule, 0, NULL);
     xlate_actions(&xin, &xout);
+    rule_release(rule);
 
     fail_open = rule->up.cr.priority == FAIL_OPEN_PRIORITY;
     ok = ofpbuf_equal(&facet->xout.odp_actions, &xout.odp_actions)
@@ -4724,7 +4732,7 @@ facet_revalidate(struct facet *facet)
     }
 
     flow_wildcards_init_catchall(&wc);
-    new_rule = rule_dpif_lookup(ofproto, &facet->flow, &wc);
+    rule_dpif_lookup(ofproto, &facet->flow, &wc, &new_rule);
 
     /* Calculate new datapath actions.
      *
@@ -4747,6 +4755,7 @@ facet_revalidate(struct facet *facet)
         || memcmp(&facet->xout.wc, &xout.wc, sizeof xout.wc)) {
         facet_remove(facet);
         xlate_out_uninit(&xout);
+        rule_release(new_rule);
         return false;
     }
 
@@ -4779,6 +4788,7 @@ facet_revalidate(struct facet *facet)
     facet->fail_open = new_rule->up.cr.priority == FAIL_OPEN_PRIORITY;
 
     xlate_out_uninit(&xout);
+    rule_release(new_rule);
     return true;
 }
 
@@ -4821,7 +4831,7 @@ facet_push_stats(struct facet *facet, bool may_learn)
             netdev_vport_inc_rx(in_port->up.netdev, &stats);
         }
 
-        rule = rule_dpif_lookup(ofproto, &facet->flow, NULL);
+        rule_dpif_lookup(ofproto, &facet->flow, NULL, &rule);
         rule_credit_stats(rule, &stats);
         netflow_flow_update_time(ofproto->netflow, &facet->nf_flow,
                                  facet->used);
@@ -4834,6 +4844,7 @@ facet_push_stats(struct facet *facet, bool may_learn)
         xin.resubmit_stats = &stats;
         xin.may_learn = may_learn;
         xlate_actions_for_side_effects(&xin);
+        rule_release(rule);
     }
 }
 
@@ -5134,16 +5145,14 @@ subfacet_update_stats(struct subfacet *subfacet,
 
 /* Lookup 'flow' in 'ofproto''s classifier.  If 'wc' is non-null, sets
  * the fields that were relevant as part of the lookup. */
-static struct rule_dpif *
+void
 rule_dpif_lookup(struct ofproto_dpif *ofproto, const struct flow *flow,
-                 struct flow_wildcards *wc)
+                 struct flow_wildcards *wc, struct rule_dpif **rule)
 {
     struct ofport_dpif *port;
-    struct rule_dpif *rule;
 
-    rule = rule_dpif_lookup_in_table(ofproto, flow, wc, 0);
-    if (rule) {
-        return rule;
+    if (rule_dpif_lookup_in_table(ofproto, flow, wc, 0, rule)) {
+        return;
     }
     port = get_ofp_port(ofproto, flow->in_port.ofp_port);
     if (!port) {
@@ -5151,21 +5160,23 @@ rule_dpif_lookup(struct ofproto_dpif *ofproto, const struct flow *flow,
                      flow->in_port.ofp_port);
     }
 
-    return choose_miss_rule(port ? port->up.pp.config : 0, ofproto->miss_rule,
-                            ofproto->no_packet_in_rule);
+    *rule = choose_miss_rule(port ? port->up.pp.config : 0, ofproto->miss_rule,
+                             ofproto->no_packet_in_rule);
+    ovs_rwlock_rdlock(&(*rule)->up.evict);
 }
 
-struct rule_dpif *
+bool
 rule_dpif_lookup_in_table(struct ofproto_dpif *ofproto,
                           const struct flow *flow, struct flow_wildcards *wc,
-                          uint8_t table_id)
+                          uint8_t table_id, struct rule_dpif **rule)
 {
     struct cls_rule *cls_rule;
     struct classifier *cls;
     bool frag;
 
+    *rule = NULL;
     if (table_id >= N_TABLES) {
-        return NULL;
+        return false;
     }
 
     if (wc) {
@@ -5174,26 +5185,32 @@ rule_dpif_lookup_in_table(struct ofproto_dpif *ofproto,
     }
 
     cls = &ofproto->up.tables[table_id].cls;
+    ovs_rwlock_rdlock(&cls->rwlock);
     frag = (flow->nw_frag & FLOW_NW_FRAG_ANY) != 0;
     if (frag && ofproto->up.frag_handling == OFPC_FRAG_NORMAL) {
         /* We must pretend that transport ports are unavailable. */
         struct flow ofpc_normal_flow = *flow;
         ofpc_normal_flow.tp_src = htons(0);
         ofpc_normal_flow.tp_dst = htons(0);
-        ovs_rwlock_rdlock(&cls->rwlock);
         cls_rule = classifier_lookup(cls, &ofpc_normal_flow, wc);
-        ovs_rwlock_unlock(&cls->rwlock);
     } else if (frag && ofproto->up.frag_handling == OFPC_FRAG_DROP) {
         cls_rule = &ofproto->drop_frags_rule->up.cr;
         if (wc) {
             flow_wildcards_init_exact(wc);
         }
     } else {
-        ovs_rwlock_rdlock(&cls->rwlock);
         cls_rule = classifier_lookup(cls, flow, wc);
-        ovs_rwlock_unlock(&cls->rwlock);
     }
-    return rule_dpif_cast(rule_from_cls_rule(cls_rule));
+
+    *rule = rule_dpif_cast(rule_from_cls_rule(cls_rule));
+    if (*rule && ovs_rwlock_tryrdlock(&(*rule)->up.evict)) {
+        /* The rule is in the process of being removed.  Best we can do is
+         * pretend it isn't there. */
+        *rule = NULL;
+    }
+    ovs_rwlock_unlock(&cls->rwlock);
+
+    return *rule != NULL;
 }
 
 /* Given a port configuration (specified as zero if there's no port), chooses
@@ -5204,6 +5221,14 @@ choose_miss_rule(enum ofputil_port_config config, struct rule_dpif *miss_rule,
                  struct rule_dpif *no_packet_in_rule)
 {
     return config & OFPUTIL_PC_NO_PACKET_IN ? no_packet_in_rule : miss_rule;
+}
+
+void
+rule_release(struct rule_dpif *rule)
+{
+    if (rule) {
+        ovs_rwlock_unlock(&rule->up.evict);
+    }
 }
 
 static void
@@ -5825,7 +5850,7 @@ ofproto_trace(struct ofproto_dpif *ofproto, const struct flow *flow,
     flow_format(ds, flow);
     ds_put_char(ds, '\n');
 
-    rule = rule_dpif_lookup(ofproto, flow, NULL);
+    rule_dpif_lookup(ofproto, flow, NULL, &rule);
 
     trace_format_rule(ds, 0, rule);
     if (rule == ofproto->miss_rule) {
@@ -5895,6 +5920,8 @@ ofproto_trace(struct ofproto_dpif *ofproto, const struct flow *flow,
 
         xlate_out_uninit(&trace.xout);
     }
+
+    rule_release(rule);
 }
 
 static void

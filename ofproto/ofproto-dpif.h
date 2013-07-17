@@ -55,10 +55,16 @@ static inline struct rule_dpif *rule_dpif_cast(const struct rule *rule)
     return rule ? CONTAINER_OF(rule, struct rule_dpif, up) : NULL;
 }
 
-struct rule_dpif *rule_dpif_lookup_in_table(struct ofproto_dpif *,
-                                            const struct flow *,
-                                            struct flow_wildcards *,
-                                            uint8_t table_id);
+void rule_dpif_lookup(struct ofproto_dpif *, const struct flow *,
+                      struct flow_wildcards *, struct rule_dpif **rule)
+    OVS_ACQ_RDLOCK((*rule)->up.evict);
+
+bool rule_dpif_lookup_in_table(struct ofproto_dpif *, const struct flow *,
+                               struct flow_wildcards *, uint8_t table_id,
+                               struct rule_dpif **rule)
+    OVS_ACQ_RDLOCK((*rule)->up.evict);
+
+void rule_release(struct rule_dpif *rule) OVS_RELEASES(rule->up.evict);
 
 void rule_credit_stats(struct rule_dpif *, const struct dpif_flow_stats *);
 

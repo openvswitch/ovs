@@ -1660,34 +1660,6 @@ compose_output_action(struct xlate_ctx *ctx, ofp_port_t ofp_port)
     compose_output_action__(ctx, ofp_port, true);
 }
 
-/* Common rule processing in one place to avoid duplicating code. */
-static struct rule_dpif *
-ctx_rule_hooks(struct xlate_ctx *ctx, struct rule_dpif *rule,
-               bool may_packet_in)
-{
-    if (ctx->xin->resubmit_hook) {
-        ctx->xin->resubmit_hook(ctx->xin, rule, ctx->recurse);
-    }
-    if (rule == NULL && may_packet_in) {
-        struct xport *xport;
-
-        /* XXX
-         * check if table configuration flags
-         * OFPTC_TABLE_MISS_CONTROLLER, default.
-         * OFPTC_TABLE_MISS_CONTINUE,
-         * OFPTC_TABLE_MISS_DROP
-         * When OF1.0, OFPTC_TABLE_MISS_CONTINUE is used. What to do? */
-        xport = get_ofp_port(ctx->xbridge, ctx->xin->flow.in_port.ofp_port);
-        rule = choose_miss_rule(xport ? xport->config : 0,
-                                ctx->xbridge->miss_rule,
-                                ctx->xbridge->no_packet_in_rule);
-    }
-    if (rule && ctx->xin->resubmit_stats) {
-        rule_credit_stats(rule, ctx->xin->resubmit_stats);
-    }
-    return rule;
-}
-
 static void
 xlate_table_action(struct xlate_ctx *ctx,
                    ofp_port_t in_port, uint8_t table_id, bool may_packet_in)
@@ -1701,15 +1673,39 @@ xlate_table_action(struct xlate_ctx *ctx,
 
         /* Look up a flow with 'in_port' as the input port. */
         ctx->xin->flow.in_port.ofp_port = in_port;
-        rule = rule_dpif_lookup_in_table(ctx->xbridge->ofproto,
-                                         &ctx->xin->flow, &ctx->xout->wc,
-                                         table_id);
+        rule_dpif_lookup_in_table(ctx->xbridge->ofproto, &ctx->xin->flow,
+                                  &ctx->xout->wc, table_id, &rule);
 
         /* Restore the original input port.  Otherwise OFPP_NORMAL and
          * OFPP_IN_PORT will have surprising behavior. */
         ctx->xin->flow.in_port.ofp_port = old_in_port;
 
-        rule = ctx_rule_hooks(ctx, rule, may_packet_in);
+        if (ctx->xin->resubmit_hook) {
+            ctx->xin->resubmit_hook(ctx->xin, rule, ctx->recurse);
+        }
+
+        if (rule == NULL && may_packet_in) {
+            struct xport *xport;
+
+            /* Makes clang's thread safety analysis happy. */
+            rule_release(rule);
+
+            /* XXX
+             * check if table configuration flags
+             * OFPTC_TABLE_MISS_CONTROLLER, default.
+             * OFPTC_TABLE_MISS_CONTINUE,
+             * OFPTC_TABLE_MISS_DROP
+             * When OF1.0, OFPTC_TABLE_MISS_CONTINUE is used. What to do? */
+            xport = get_ofp_port(ctx->xbridge, ctx->xin->flow.in_port.ofp_port);
+            rule = choose_miss_rule(xport ? xport->config : 0,
+                                    ctx->xbridge->miss_rule,
+                                    ctx->xbridge->no_packet_in_rule);
+            ovs_rwlock_rdlock(&rule->up.evict);
+        }
+
+        if (rule && ctx->xin->resubmit_stats) {
+            rule_credit_stats(rule, ctx->xin->resubmit_stats);
+        }
 
         if (rule) {
             struct rule_dpif *old_rule = ctx->rule;
@@ -1720,6 +1716,7 @@ xlate_table_action(struct xlate_ctx *ctx,
             ctx->rule = old_rule;
             ctx->recurse--;
         }
+        rule_release(rule);
 
         ctx->table_id = old_table_id;
     } else {
@@ -2198,14 +2195,7 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
 {
     struct flow_wildcards *wc = &ctx->xout->wc;
     struct flow *flow = &ctx->xin->flow;
-    bool was_evictable = true;
     const struct ofpact *a;
-
-    if (ctx->rule) {
-        /* Don't let the rule we're working on get evicted underneath us. */
-        was_evictable = ctx->rule->up.evictable;
-        ctx->rule->up.evictable = false;
-    }
 
     OFPACT_FOR_EACH (a, ofpacts, ofpacts_len) {
         struct ofpact_controller *controller;
@@ -2352,20 +2342,20 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
         case OFPACT_SET_MPLS_TTL:
             if (compose_set_mpls_ttl_action(ctx,
                                             ofpact_get_SET_MPLS_TTL(a)->ttl)) {
-                goto out;
+                return;
             }
             break;
 
         case OFPACT_DEC_MPLS_TTL:
             if (compose_dec_mpls_ttl_action(ctx)) {
-                goto out;
+                return;
             }
             break;
 
         case OFPACT_DEC_TTL:
             wc->masks.nw_ttl = 0xff;
             if (compose_dec_ttl(ctx, ofpact_get_DEC_TTL(a))) {
-                goto out;
+                return;
             }
             break;
 
@@ -2431,11 +2421,6 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
             xlate_sample_action(ctx, ofpact_get_SAMPLE(a));
             break;
         }
-    }
-
-out:
-    if (ctx->rule) {
-        ctx->rule->up.evictable = was_evictable;
     }
 }
 

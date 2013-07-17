@@ -230,9 +230,17 @@ struct rule {
     uint16_t idle_timeout OVS_GUARDED; /* In seconds from ->used. */
 
     /* Eviction groups. */
-    bool evictable;              /* If false, prevents eviction. */
     struct heap_node evg_node;   /* In eviction_group's "rules" heap. */
     struct eviction_group *eviction_group; /* NULL if not in any group. */
+
+    /* The evict lock is used to prevent rules from being evicted while child
+     * threads are using them to xlate flows.  A read lock means the rule is
+     * currently being used.  A write lock means the rule is in the process of
+     * being evicted and should be considered gone.  A rule will not be evicted
+     * unless both its own and its classifiers write locks are held.
+     * Therefore, while holding a classifier readlock, one can be assured that
+     * even write locked rules are safe. */
+    struct ovs_rwlock evict;
 
     struct ofpact *ofpacts;      /* Sequence of "struct ofpacts". */
     unsigned int ofpacts_len;    /* Size of 'ofpacts', in bytes. */
@@ -265,7 +273,8 @@ rule_from_cls_rule(const struct cls_rule *cls_rule)
 }
 
 void ofproto_rule_update_used(struct rule *, long long int used);
-void ofproto_rule_expire(struct rule *, uint8_t reason);
+void ofproto_rule_expire(struct rule *rule, uint8_t reason)
+    OVS_RELEASES(rule->evict);
 void ofproto_rule_destroy(struct ofproto *, struct classifier *cls,
                           struct rule *) OVS_REQ_WRLOCK(cls->rwlock);
 

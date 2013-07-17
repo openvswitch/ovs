@@ -152,10 +152,10 @@ static void oftable_enable_eviction(struct oftable *,
                                     const struct mf_subfield *fields,
                                     size_t n_fields);
 
-static void oftable_remove_rule(struct rule *);
+static void oftable_remove_rule(struct rule *rule) OVS_RELEASES(rule->evict);
 static void oftable_remove_rule__(struct ofproto *ofproto,
                                   struct classifier *cls, struct rule *rule)
-    OVS_REQ_WRLOCK(cls->rwlock);
+    OVS_REQ_WRLOCK(cls->rwlock) OVS_RELEASES(rule->evict);
 static struct rule *oftable_replace_rule(struct rule *);
 static void oftable_substitute_rule(struct rule *old, struct rule *new);
 
@@ -181,7 +181,8 @@ struct eviction_group {
     struct heap rules;          /* Contains "struct rule"s. */
 };
 
-static struct rule *choose_rule_to_evict(struct oftable *);
+static bool choose_rule_to_evict(struct oftable *table, struct rule **rulep)
+    OVS_TRY_WRLOCK(true, (*rulep)->evict);
 static void ofproto_evict(struct ofproto *);
 static uint32_t rule_eviction_priority(struct rule *);
 
@@ -202,8 +203,9 @@ static bool rule_is_modifiable(const struct rule *);
 static enum ofperr add_flow(struct ofproto *, struct ofconn *,
                             struct ofputil_flow_mod *,
                             const struct ofp_header *);
-static void delete_flow__(struct rule *, struct ofopgroup *,
-                          enum ofp_flow_removed_reason);
+static void delete_flow__(struct rule *rule, struct ofopgroup *,
+                          enum ofp_flow_removed_reason)
+    OVS_RELEASES(rule->evict);
 static bool handle_openflow(struct ofconn *, const struct ofpbuf *);
 static enum ofperr handle_flow_mod__(struct ofproto *, struct ofconn *,
                                      struct ofputil_flow_mod *,
@@ -1077,6 +1079,7 @@ ofproto_flush__(struct ofproto *ofproto)
             if (!rule->pending) {
                 ofoperation_create(group, rule, OFOPERATION_DELETE,
                                    OFPRR_DELETE);
+                ovs_rwlock_wrlock(&rule->evict);
                 oftable_remove_rule__(ofproto, &table->cls, rule);
                 ofproto->ofproto_class->rule_destruct(rule);
             }
@@ -1678,6 +1681,7 @@ ofproto_delete_flow(struct ofproto *ofproto,
         /* Initiate deletion -> success. */
         struct ofopgroup *group = ofopgroup_create_unattached(ofproto);
         ofoperation_create(group, rule, OFOPERATION_DELETE, OFPRR_DELETE);
+        ovs_rwlock_wrlock(&rule->evict);
         oftable_remove_rule(rule);
         ofproto->ofproto_class->rule_destruct(rule);
         ofopgroup_submit(group);
@@ -2181,6 +2185,7 @@ ofproto_rule_destroy__(struct rule *rule)
         cls_rule_destroy(&rule->cr);
         free(rule->ofpacts);
         ovs_mutex_destroy(&rule->timeout_mutex);
+        ovs_rwlock_destroy(&rule->evict);
         rule->ofproto->ofproto_class->rule_dealloc(rule);
     }
 }
@@ -2198,7 +2203,11 @@ ofproto_rule_destroy(struct ofproto *ofproto, struct classifier *cls,
                      struct rule *rule) OVS_REQ_WRLOCK(cls->rwlock)
 {
     ovs_assert(!rule->pending);
-    oftable_remove_rule__(ofproto, cls, rule);
+    if (!ovs_rwlock_trywrlock(&rule->evict)) {
+        oftable_remove_rule__(ofproto, cls, rule);
+    } else {
+        NOT_REACHED();
+    }
     ofproto_rule_destroy__(rule);
 }
 
@@ -3423,12 +3432,12 @@ add_flow(struct ofproto *ofproto, struct ofconn *ofconn,
     rule->ofpacts_len = fm->ofpacts_len;
     rule->meter_id = find_meter(rule->ofpacts, rule->ofpacts_len);
     list_init(&rule->meter_list_node);
-    rule->evictable = true;
     rule->eviction_group = NULL;
     list_init(&rule->expirable);
     rule->monitor_flags = 0;
     rule->add_seqno = 0;
     rule->modify_seqno = 0;
+    ovs_rwlock_init(&rule->evict);
 
     /* Insert new rule. */
     victim = oftable_replace_rule(rule);
@@ -3445,18 +3454,17 @@ add_flow(struct ofproto *ofproto, struct ofconn *ofconn,
         n_rules = classifier_count(&table->cls);
         ovs_rwlock_unlock(&table->cls.rwlock);
         if (n_rules > table->max_flows) {
-            bool was_evictable;
-
-            was_evictable = rule->evictable;
-            rule->evictable = false;
-            evict = choose_rule_to_evict(table);
-            rule->evictable = was_evictable;
-
-            if (!evict) {
+            ovs_rwlock_rdlock(&rule->evict);
+            if (choose_rule_to_evict(table, &evict)) {
+                ovs_rwlock_unlock(&rule->evict);
+                ovs_rwlock_unlock(&evict->evict);
+                if (evict->pending) {
+                    error = OFPROTO_POSTPONE;
+                    goto exit;
+                }
+            } else {
+                ovs_rwlock_unlock(&rule->evict);
                 error = OFPERR_OFPFMFC_TABLE_FULL;
-                goto exit;
-            } else if (evict->pending) {
-                error = OFPROTO_POSTPONE;
                 goto exit;
             }
         } else {
@@ -3472,6 +3480,13 @@ add_flow(struct ofproto *ofproto, struct ofconn *ofconn,
             op->group->n_running--;
             ofoperation_destroy(rule->pending);
         } else if (evict) {
+            /* It would be better if we maintained the lock we took in
+             * choose_rule_to_evict() earlier, but that confuses the thread
+             * safety analysis, and this code is fragile enough that we really
+             * need it.  In the worst case, we'll have to block a little while
+             * before we perform the eviction, which doesn't seem like a big
+             * problem. */
+            ovs_rwlock_wrlock(&evict->evict);
             delete_flow__(evict, group, OFPRR_EVICTION);
         }
         ofopgroup_submit(group);
@@ -3642,6 +3657,7 @@ delete_flows__(struct ofproto *ofproto, struct ofconn *ofconn,
 
     group = ofopgroup_create(ofproto, ofconn, request, UINT32_MAX);
     LIST_FOR_EACH_SAFE (rule, next, ofproto_node, rules) {
+        ovs_rwlock_wrlock(&rule->evict);
         delete_flow__(rule, group, reason);
     }
     ofopgroup_submit(group);
@@ -5065,17 +5081,18 @@ pick_fallback_dpid(void)
 
 /* Table overflow policy. */
 
-/* Chooses and returns a rule to evict from 'table'.  Returns NULL if the table
- * is not configured to evict rules or if the table contains no evictable
- * rules.  (Rules with 'evictable' set to false or with no timeouts are not
- * evictable.) */
-static struct rule *
-choose_rule_to_evict(struct oftable *table)
+/* Chooses and updates 'rulep' with a rule to evict from 'table'.  Sets 'rulep'
+ * to NULL if the table is not configured to evict rules or if the table
+ * contains no evictable rules.  (Rules with a readlock on their evict rwlock,
+ * or with no timeouts are not evictable.) */
+static bool
+choose_rule_to_evict(struct oftable *table, struct rule **rulep)
 {
     struct eviction_group *evg;
 
+    *rulep = NULL;
     if (!table->eviction_fields) {
-        return NULL;
+        return false;
     }
 
     /* In the common case, the outer and inner loops here will each be entered
@@ -5094,13 +5111,14 @@ choose_rule_to_evict(struct oftable *table)
         struct rule *rule;
 
         HEAP_FOR_EACH (rule, evg_node, &evg->rules) {
-            if (rule->evictable) {
-                return rule;
+            if (!ovs_rwlock_trywrlock(&rule->evict)) {
+                *rulep = rule;
+                return true;
             }
         }
     }
 
-    return NULL;
+    return false;
 }
 
 /* Searches 'ofproto' for tables that have more flows than their configured
@@ -5129,8 +5147,12 @@ ofproto_evict(struct ofproto *ofproto)
                 break;
             }
 
-            rule = choose_rule_to_evict(table);
-            if (!rule || rule->pending) {
+            if (!choose_rule_to_evict(table, &rule)) {
+                break;
+            }
+
+            if (rule->pending) {
+                ovs_rwlock_unlock(&rule->evict);
                 break;
             }
 
@@ -5518,6 +5540,7 @@ oftable_substitute_rule(struct rule *old, struct rule *new)
     if (new) {
         oftable_replace_rule(new);
     } else {
+        ovs_rwlock_wrlock(&old->evict);
         oftable_remove_rule(old);
     }
 }
