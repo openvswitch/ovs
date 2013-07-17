@@ -1835,6 +1835,10 @@ xlate_fin_timeout(struct xlate_ctx *ctx,
     if (ctx->xin->tcp_flags & (TCP_FIN | TCP_RST) && ctx->rule) {
         struct rule_dpif *rule = ctx->rule;
 
+         if (list_is_empty(&rule->up.expirable)) {
+             list_insert(&rule->up.ofproto->expirable, &rule->up.expirable);
+         }
+
         reduce_timeout(oft->fin_idle_timeout, &rule->up.idle_timeout);
         reduce_timeout(oft->fin_hard_timeout, &rule->up.hard_timeout);
     }
