@@ -1579,6 +1579,37 @@ OFPST_QUEUE reply (OF1.2) (xid=0x1): 6 queues
   port 2 queue 2: bytes=0, pkts=0, errors=0
   port 1 queue 1: bytes=0, pkts=0, errors=0
   port 1 queue 2: bytes=0, pkts=0, errors=0
+
+AT_SETUP([OFPST_QUEUE reply - OF1.3])
+AT_KEYWORDS([ofp-print OFPT_STATS_REPLY])
+AT_CHECK([ovs-ofctl ofp-print "\
+04 13 01 00 00 00 00 01 00 05 00 00 00 00 00 00 \
+00 00 00 03 00 00 00 01 00 00 00 00 00 00 01 2e \
+00 00 00 00 00 00 00 01 00 00 00 00 00 00 00 00 \
+00 00 00 64 1d cd 65 00 \
+00 00 00 03 00 00 00 02 00 00 00 00 00 00 00 00 \
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 \
+00 00 00 64 1d cd 65 00 \
+00 00 00 02 00 00 00 01 00 00 00 00 00 00 08 34 \
+00 00 00 00 00 00 00 14 00 00 00 00 00 00 00 00 \
+00 00 00 64 1d cd 65 00 \
+00 00 00 02 00 00 00 02 00 00 00 00 00 00 00 00 \
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 \
+00 00 00 64 1d cd 65 00 \
+00 00 00 01 00 00 00 01 00 00 00 00 00 00 00 00 \
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 \
+00 00 00 64 1d cd 65 00 \
+00 00 00 01 00 00 00 02 00 00 00 00 00 00 00 00 \
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 \
+ff ff ff ff ff ff ff ff \
+"], [0], [dnl
+OFPST_QUEUE reply (OF1.3) (xid=0x1): 6 queues
+  port 3 queue 1: bytes=302, pkts=1, errors=0
+  port 3 queue 2: bytes=0, pkts=0, errors=0
+  port 2 queue 1: bytes=2100, pkts=20, errors=0
+  port 2 queue 2: bytes=0, pkts=0, errors=0
+  port 1 queue 1: bytes=0, pkts=0, errors=0
+  port 1 queue 2: bytes=0, pkts=0, errors=0
 ])
 AT_CLEANUP
 

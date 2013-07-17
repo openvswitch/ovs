@@ -5184,6 +5184,21 @@ ofputil_port_stats_from_ofp13(struct ofputil_port_stats *ops,
     return error;
 }
 
+static size_t
+ofputil_get_port_stats_size(enum ofp_version ofp_version)
+{
+    switch (ofp_version) {
+    case OFP10_VERSION:
+        return sizeof(struct ofp10_port_stats);
+    case OFP11_VERSION:
+    case OFP12_VERSION:
+        return sizeof(struct ofp11_port_stats);
+    case OFP13_VERSION:
+        return sizeof(struct ofp13_port_stats);
+    default:
+        NOT_REACHED();
+    }
+}
 
 /* Returns the number of port stats elements in OFPTYPE_PORT_STATS_REPLY
  * message 'oh'. */
@@ -5195,9 +5210,7 @@ ofputil_count_port_stats(const struct ofp_header *oh)
     ofpbuf_use_const(&b, oh, ntohs(oh->length));
     ofpraw_pull_assert(&b);
 
-    BUILD_ASSERT(sizeof(struct ofp10_port_stats) ==
-                 sizeof(struct ofp11_port_stats));
-    return b.size / sizeof(struct ofp10_port_stats);
+    return b.size / ofputil_get_port_stats_size(oh->version);
 }
 
 /* Converts an OFPST_PORT_STATS reply in 'msg' into an abstract
@@ -5353,6 +5366,22 @@ ofputil_encode_queue_stats_request(enum ofp_version ofp_version,
     return request;
 }
 
+static size_t
+ofputil_get_queue_stats_size(enum ofp_version ofp_version)
+{
+    switch (ofp_version) {
+    case OFP10_VERSION:
+        return sizeof(struct ofp10_queue_stats);
+    case OFP11_VERSION:
+    case OFP12_VERSION:
+        return sizeof(struct ofp11_queue_stats);
+    case OFP13_VERSION:
+        return sizeof(struct ofp13_queue_stats);
+    default:
+        NOT_REACHED();
+    }
+}
+
 /* Returns the number of queue stats elements in OFPTYPE_QUEUE_STATS_REPLY
  * message 'oh'. */
 size_t
@@ -5363,9 +5392,7 @@ ofputil_count_queue_stats(const struct ofp_header *oh)
     ofpbuf_use_const(&b, oh, ntohs(oh->length));
     ofpraw_pull_assert(&b);
 
-    BUILD_ASSERT(sizeof(struct ofp10_queue_stats) ==
-                 sizeof(struct ofp11_queue_stats));
-    return b.size / sizeof(struct ofp10_queue_stats);
+    return b.size / ofputil_get_queue_stats_size(oh->version);
 }
 
 static enum ofperr
