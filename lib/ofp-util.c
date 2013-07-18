@@ -1372,7 +1372,7 @@ ofputil_decode_hello(const struct ofp_header *oh, uint32_t *allowed_versions)
 
 /* Returns true if 'allowed_versions' needs to be accompanied by a version
  * bitmap to be correctly expressed in an OFPT_HELLO message. */
-static inline bool
+static bool
 should_send_version_bitmap(uint32_t allowed_versions)
 {
     return !is_pow2((allowed_versions >> 1) + 1);
