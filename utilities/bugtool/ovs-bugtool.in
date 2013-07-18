@@ -149,7 +149,6 @@ NETSTAT = 'netstat'
 OVS_DPCTL = 'ovs-dpctl'
 OVS_OFCTL = 'ovs-ofctl'
 OVS_VSCTL = 'ovs-vsctl'
-OVS_APPCTL = 'ovs-appctl'
 PS = 'ps'
 ROUTE = 'route'
 RPM = 'rpm'
@@ -577,16 +576,6 @@ exclude those logs from the archive.
         cmd_output(CAP_NETWORK_STATUS, [OVS_DPCTL, 'show', '-s'])
         for d in dp_list():
             cmd_output(CAP_NETWORK_STATUS, [OVS_DPCTL, 'dump-flows', d])
-        try:
-            vspidfile = open(OPENVSWITCH_VSWITCHD_PID)
-            vspid = int(vspidfile.readline().strip())
-            vspidfile.close()
-            for b in bond_list(vspid):
-                cmd_output(CAP_NETWORK_STATUS,
-                           [OVS_APPCTL, '-t', '@RUNDIR@/ovs-vswitchd.%s.ctl' % vspid, '-e' 'bond/show %s' % b],
-                           'ovs-appctl-bond-show-%s.out' % b)
-        except e:
-            pass
 
     cmd_output(CAP_PROCESS_LIST, [PS, 'wwwaxf', '-eo', 'pid,tty,stat,time,nice,psr,pcpu,pmem,nwchan,wchan:25,args'], label='process-tree')
     func_output(CAP_PROCESS_LIST, 'fd_usage', fd_usage)
@@ -745,17 +734,6 @@ def dp_list():
 
     if not procs[0].timed_out:
         return output.getvalue().splitlines()
-    return []
-
-def bond_list(pid):
-    output = StringIO.StringIO()
-    procs = [ProcOutput([OVS_APPCTL, '-t', '@RUNDIR@/ovs-vswitchd.%s.ctl' % pid, '-e' 'bond/list'], caps[CAP_NETWORK_STATUS][MAX_TIME], output)]
-
-    run_procs([procs])
-
-    if not procs[0].timed_out:
-        bonds = output.getvalue().splitlines()[1:]
-        return [x.split('\t')[1] for x in bonds]
     return []
 
 def fd_usage(cap):
