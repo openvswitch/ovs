@@ -607,17 +607,41 @@ nl_attr_get_nested(const struct nlattr *nla, struct ofpbuf *nested)
     ofpbuf_use_const(nested, nl_attr_get(nla), nl_attr_get_size(nla));
 }
 
-/* Default minimum and maximum payload sizes for each type of attribute. */
-static const size_t attr_len_range[][2] = {
-    [0 ... N_NL_ATTR_TYPES - 1] = { 0, SIZE_MAX },
-    [NL_A_U8] = { 1, 1 },
-    [NL_A_U16] = { 2, 2 },
-    [NL_A_U32] = { 4, 4 },
-    [NL_A_U64] = { 8, 8 },
-    [NL_A_STRING] = { 1, SIZE_MAX },
-    [NL_A_FLAG] = { 0, SIZE_MAX },
-    [NL_A_NESTED] = { 0, SIZE_MAX },
-};
+/* Default minimum payload size for each type of attribute. */
+static size_t
+min_attr_len(enum nl_attr_type type)
+{
+    switch (type) {
+    case NL_A_NO_ATTR: return 0;
+    case NL_A_UNSPEC: return 0;
+    case NL_A_U8: return 1;
+    case NL_A_U16: return 2;
+    case NL_A_U32: return 4;
+    case NL_A_U64: return 8;
+    case NL_A_STRING: return 1;
+    case NL_A_FLAG: return 0;
+    case NL_A_NESTED: return 0;
+    case N_NL_ATTR_TYPES: default: NOT_REACHED();
+    }
+}
+
+/* Default maximum payload size for each type of attribute. */
+static size_t
+max_attr_len(enum nl_attr_type type)
+{
+    switch (type) {
+    case NL_A_NO_ATTR: return SIZE_MAX;
+    case NL_A_UNSPEC: return SIZE_MAX;
+    case NL_A_U8: return 1;
+    case NL_A_U16: return 2;
+    case NL_A_U32: return 4;
+    case NL_A_U64: return 8;
+    case NL_A_STRING: return SIZE_MAX;
+    case NL_A_FLAG: return SIZE_MAX;
+    case NL_A_NESTED: return SIZE_MAX;
+    case N_NL_ATTR_TYPES: default: NOT_REACHED();
+    }
+}
 
 bool
 nl_attr_validate(const struct nlattr *nla, const struct nl_policy *policy)
@@ -634,11 +658,11 @@ nl_attr_validate(const struct nlattr *nla, const struct nl_policy *policy)
     /* Figure out min and max length. */
     min_len = policy->min_len;
     if (!min_len) {
-        min_len = attr_len_range[policy->type][0];
+        min_len = min_attr_len(policy->type);
     }
     max_len = policy->max_len;
     if (!max_len) {
-        max_len = attr_len_range[policy->type][1];
+        max_len = max_attr_len(policy->type);
     }
 
     /* Verify length. */
