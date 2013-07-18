@@ -835,10 +835,8 @@ netdev_rx_linux_recv(struct netdev_rx *rx_, void *data, size_t size)
                   : recv(rx->fd, data, size, MSG_TRUNC));
     } while (retval < 0 && errno == EINTR);
 
-    if (retval > size) {
-        return -EMSGSIZE;
-    } else if (retval >= 0) {
-        return retval;
+    if (retval >= 0) {
+        return retval > size ? -EMSGSIZE : retval;
     } else {
         if (errno != EAGAIN) {
             VLOG_WARN_RL(&rl, "error receiving Ethernet packet on %s: %s",
