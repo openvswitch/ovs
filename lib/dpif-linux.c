@@ -646,7 +646,7 @@ dpif_linux_get_max_ports(const struct dpif *dpif OVS_UNUSED)
 static uint32_t
 dpif_linux_port_get_pid(const struct dpif *dpif_, odp_port_t port_no)
 {
-    struct dpif_linux *dpif = dpif_linux_cast(dpif_);
+    const struct dpif_linux *dpif = dpif_linux_cast(dpif_);
     uint32_t port_idx = odp_to_u32(port_no);
 
     if (dpif->epoll_fd < 0) {
@@ -662,7 +662,7 @@ dpif_linux_port_get_pid(const struct dpif *dpif_, odp_port_t port_no)
 static int
 dpif_linux_flow_flush(struct dpif *dpif_)
 {
-    struct dpif_linux *dpif = dpif_linux_cast(dpif_);
+    const struct dpif_linux *dpif = dpif_linux_cast(dpif_);
     struct dpif_linux_flow flow;
 
     dpif_linux_flow_init(&flow);
@@ -678,7 +678,7 @@ struct dpif_linux_port_state {
 static int
 dpif_linux_port_dump_start(const struct dpif *dpif_, void **statep)
 {
-    struct dpif_linux *dpif = dpif_linux_cast(dpif_);
+    const struct dpif_linux *dpif = dpif_linux_cast(dpif_);
     struct dpif_linux_port_state *state;
     struct dpif_linux_vport request;
     struct ofpbuf *buf;
@@ -751,7 +751,7 @@ dpif_linux_port_poll(const struct dpif *dpif_, char **devnamep)
 static void
 dpif_linux_port_poll_wait(const struct dpif *dpif_)
 {
-    struct dpif_linux *dpif = dpif_linux_cast(dpif_);
+    const struct dpif_linux *dpif = dpif_linux_cast(dpif_);
     if (!sset_is_empty(&dpif->changed_ports) || dpif->change_error) {
         poll_immediate_wake();
     }
@@ -762,7 +762,7 @@ dpif_linux_flow_get__(const struct dpif *dpif_,
                       const struct nlattr *key, size_t key_len,
                       struct dpif_linux_flow *reply, struct ofpbuf **bufp)
 {
-    struct dpif_linux *dpif = dpif_linux_cast(dpif_);
+    const struct dpif_linux *dpif = dpif_linux_cast(dpif_);
     struct dpif_linux_flow request;
 
     dpif_linux_flow_init(&request);
@@ -804,7 +804,7 @@ dpif_linux_init_flow_put(struct dpif *dpif_, const struct dpif_flow_put *put,
 {
     static const struct nlattr dummy_action;
 
-    struct dpif_linux *dpif = dpif_linux_cast(dpif_);
+    const struct dpif_linux *dpif = dpif_linux_cast(dpif_);
 
     dpif_linux_flow_init(request);
     request->cmd = (put->flags & DPIF_FP_CREATE
@@ -847,7 +847,7 @@ static void
 dpif_linux_init_flow_del(struct dpif *dpif_, const struct dpif_flow_del *del,
                          struct dpif_linux_flow *request)
 {
-    struct dpif_linux *dpif = dpif_linux_cast(dpif_);
+    const struct dpif_linux *dpif = dpif_linux_cast(dpif_);
 
     dpif_linux_flow_init(request);
     request->cmd = OVS_FLOW_CMD_DEL;
@@ -884,7 +884,7 @@ struct dpif_linux_flow_state {
 static int
 dpif_linux_flow_dump_start(const struct dpif *dpif_, void **statep)
 {
-    struct dpif_linux *dpif = dpif_linux_cast(dpif_);
+    const struct dpif_linux *dpif = dpif_linux_cast(dpif_);
     struct dpif_linux_flow_state *state;
     struct dpif_linux_flow request;
     struct ofpbuf *buf;
@@ -1013,7 +1013,7 @@ dpif_linux_execute__(int dp_ifindex, const struct dpif_execute *execute)
 static int
 dpif_linux_execute(struct dpif *dpif_, const struct dpif_execute *execute)
 {
-    struct dpif_linux *dpif = dpif_linux_cast(dpif_);
+    const struct dpif_linux *dpif = dpif_linux_cast(dpif_);
 
     return dpif_linux_execute__(dpif->dp_ifindex, execute);
 }
@@ -1023,7 +1023,7 @@ dpif_linux_execute(struct dpif *dpif_, const struct dpif_execute *execute)
 static void
 dpif_linux_operate__(struct dpif *dpif_, struct dpif_op **ops, size_t n_ops)
 {
-    struct dpif_linux *dpif = dpif_linux_cast(dpif_);
+    const struct dpif_linux *dpif = dpif_linux_cast(dpif_);
 
     struct op_auxdata {
         struct nl_transaction txn;
@@ -1374,7 +1374,7 @@ dpif_linux_recv(struct dpif *dpif_, struct dpif_upcall *upcall,
 static void
 dpif_linux_recv_wait(struct dpif *dpif_)
 {
-    struct dpif_linux *dpif = dpif_linux_cast(dpif_);
+    const struct dpif_linux *dpif = dpif_linux_cast(dpif_);
 
     if (dpif->epoll_fd < 0) {
        return;
