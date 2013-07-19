@@ -110,6 +110,15 @@ Causes \fBovs\-vswitchd\fR to gracefully terminate.
 .IP "\fBqos/show\fR \fIinterface\fR"
 Queries the kernel for Quality of Service configuration and statistics
 associated with the given \fIinterface\fR.
+.IP "\fBbfd/show\fR [\fIinterface\fR]"
+Displays detailed information about Bidirectional Forwarding Detection
+configured on \fIinterface\fR.  If \fIinterface\fR is not specified,
+then displays detailed information about all interfaces with BFD
+enabled.
+.IP "\fBbfd/set-forwarding\fR [\fIinterface\fR] \fIstatus\fR"
+Force the fault status of the BFD module on \fIinterface\fR (or all
+interfaces if none is given) to be \fIstatus\fR.  \fIstatus\fR can be
+"true", "false", or "normal" which reverts to the standard behavior.
 .IP "\fBcfm/show\fR [\fIinterface\fR]"
 Displays detailed information about Connectivity Fault Management
 configured on \fIinterface\fR.  If \fIinterface\fR is not specified,
