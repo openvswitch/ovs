@@ -195,8 +195,10 @@ bond_ref(const struct bond *bond_)
 {
     struct bond *bond = CONST_CAST(struct bond *, bond_);
 
-    ovs_assert(bond->ref_cnt > 0);
-    bond->ref_cnt++;
+    if (bond) {
+        ovs_assert(bond->ref_cnt > 0);
+        bond->ref_cnt++;
+    }
     return bond;
 }
 
