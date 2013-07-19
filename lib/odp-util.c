@@ -144,8 +144,9 @@ static void
 format_odp_sample_action(struct ds *ds, const struct nlattr *attr)
 {
     static const struct nl_policy ovs_sample_policy[] = {
-        [OVS_SAMPLE_ATTR_PROBABILITY] = { .type = NL_A_U32 },
-        [OVS_SAMPLE_ATTR_ACTIONS] = { .type = NL_A_NESTED }
+        { NL_A_NO_ATTR, 0, 0, false }, /* OVS_SAMPLE_ATTR_UNSPEC */
+        { NL_A_U32, 0, 0, false },     /* OVS_SAMPLE_ATTR_PROBABILITY */
+        { NL_A_NESTED, 0, 0, false },  /* OVS_SAMPLE_ATTR_ACTIONS */
     };
     struct nlattr *a[ARRAY_SIZE(ovs_sample_policy)];
     double percentage;
@@ -259,9 +260,9 @@ static void
 format_odp_userspace_action(struct ds *ds, const struct nlattr *attr)
 {
     static const struct nl_policy ovs_userspace_policy[] = {
-        [OVS_USERSPACE_ATTR_PID] = { .type = NL_A_U32 },
-        [OVS_USERSPACE_ATTR_USERDATA] = { .type = NL_A_UNSPEC,
-                                          .optional = true },
+        { NL_A_NO_ATTR, 0, 0, false }, /* OVS_USERSPACE_ATTR_UNSPEC */
+        { NL_A_U32, 0, 0, false },     /* OVS_USERSPACE_ATTR_PID */
+        { NL_A_UNSPEC, 0, 0, true },   /* OVS_USERSPACE_ATTR_USERDATA */
     };
     struct nlattr *a[ARRAY_SIZE(ovs_userspace_policy)];
     const struct nlattr *userdata_attr;

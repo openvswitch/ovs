@@ -69,7 +69,7 @@ static bool timestamp;
 /* Format for table output. */
 static struct table_style table_style = TABLE_STYLE_DEFAULT;
 
-static const struct ovsdb_client_command all_commands[];
+static const struct ovsdb_client_command *get_all_commands(void);
 
 static void usage(void) NO_RETURN;
 static void parse_options(int argc, char *argv[]);
@@ -92,7 +92,7 @@ main(int argc, char *argv[])
         ovs_fatal(0, "missing command name; use --help for help");
     }
 
-    for (command = all_commands; ; command++) {
+    for (command = get_all_commands(); ; command++) {
         if (!command->name) {
             VLOG_FATAL("unknown command '%s'; use --help for help",
                        argv[optind]);
@@ -997,3 +997,8 @@ static const struct ovsdb_client_command all_commands[] = {
 
     { NULL,                 0,             0, 0,       NULL },
 };
+
+static const struct ovsdb_client_command *get_all_commands(void)
+{
+    return all_commands;
+}

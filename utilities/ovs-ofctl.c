@@ -98,7 +98,7 @@ struct sort_criterion {
 static struct sort_criterion *criteria;
 static size_t n_criteria, allocated_criteria;
 
-static const struct command all_commands[];
+static const struct command *get_all_commands(void);
 
 static void usage(void) NO_RETURN;
 static void parse_options(int argc, char *argv[]);
@@ -113,7 +113,7 @@ main(int argc, char *argv[])
     set_program_name(argv[0]);
     parse_options(argc, argv);
     signal(SIGPIPE, SIG_IGN);
-    run_command(argc - optind, argv + optind, all_commands);
+    run_command(argc - optind, argv + optind, get_all_commands());
     return 0;
 }
 
@@ -2956,3 +2956,8 @@ static const struct command all_commands[] = {
 
     { NULL, 0, 0, NULL },
 };
+
+static const struct command *get_all_commands(void)
+{
+    return all_commands;
+}

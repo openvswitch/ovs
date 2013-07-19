@@ -160,11 +160,9 @@ struct xlate_ctx {
  * it did not arrive on a "real" port.  'ofpp_none_bundle' exists for
  * when an input bundle is needed for validation (e.g., mirroring or
  * OFPP_NORMAL processing).  It is not connected to an 'ofproto' or have
- * any 'port' structs, so care must be taken when dealing with it. */
-static struct xbundle ofpp_none_bundle = {
-    .name      = "OFPP_NONE",
-    .vlan_mode = PORT_VLAN_TRUNK
-};
+ * any 'port' structs, so care must be taken when dealing with it.
+ * The bundle's name and vlan mode are initialized in lookup_input_bundle() */
+static struct xbundle ofpp_none_bundle;
 
 static struct hmap xbridges = HMAP_INITIALIZER(&xbridges);
 static struct hmap xbundles = HMAP_INITIALIZER(&xbundles);
@@ -530,6 +528,8 @@ lookup_input_bundle(const struct xbridge *xbridge, ofp_port_t in_port,
     /* Special-case OFPP_NONE, which a controller may use as the ingress
      * port for traffic that it is sourcing. */
     if (in_port == OFPP_NONE) {
+        ofpp_none_bundle.name = "OFPP_NONE";
+        ofpp_none_bundle.vlan_mode = PORT_VLAN_TRUNK;
         return &ofpp_none_bundle;
     }
 

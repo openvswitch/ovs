@@ -128,7 +128,7 @@ static bool retry;
 static struct table_style table_style = TABLE_STYLE_DEFAULT;
 
 /* All supported commands. */
-static const struct vsctl_command_syntax all_commands[];
+static const struct vsctl_command_syntax *get_all_commands(void);
 
 /* The IDL we're using and the current transaction, if any.
  * This is for use by vsctl_exit() only, to allow it to clean up.
@@ -302,7 +302,7 @@ parse_options(int argc, char *argv[], struct shash *local_options)
     options = xmemdup(global_long_options, sizeof global_long_options);
     allocated_options = ARRAY_SIZE(global_long_options);
     n_options = n_global_long_options;
-    for (p = all_commands; p->name; p++) {
+    for (p = get_all_commands(); p->name; p++) {
         if (p->options[0]) {
             char *save_ptr = NULL;
             char *name;
@@ -568,7 +568,7 @@ find_command(const char *name)
     if (shash_is_empty(&commands)) {
         const struct vsctl_command_syntax *p;
 
-        for (p = all_commands; p->name; p++) {
+        for (p = get_all_commands(); p->name; p++) {
             shash_add_assert(&commands, p->name, p);
         }
     }
@@ -4228,3 +4228,7 @@ static const struct vsctl_command_syntax all_commands[] = {
     {NULL, 0, 0, NULL, NULL, NULL, NULL, RO},
 };
 
+static const struct vsctl_command_syntax *get_all_commands(void)
+{
+    return all_commands;
+}

@@ -49,7 +49,7 @@ static double max_rate;
 
 static double timeout;
 
-static const struct command all_commands[];
+static const struct command *get_all_commands(void);
 
 static void parse_options(int argc, char *argv[]);
 static void usage(void);
@@ -72,7 +72,7 @@ main(int argc, char *argv[])
     set_program_name(argv[0]);
     vlog_set_levels(NULL, VLF_ANY_FACILITY, VLL_EMER);
     parse_options(argc, argv);
-    run_command(argc - optind, argv + optind, all_commands);
+    run_command(argc - optind, argv + optind, get_all_commands());
     return 0;
 }
 
@@ -617,3 +617,8 @@ static const struct command all_commands[] = {
     { "help", 0, 0, cmd_help },
     { NULL, 0, 0, NULL },
 };
+
+static const struct command *get_all_commands(void)
+{
+  return all_commands;
+}
