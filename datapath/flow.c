@@ -1048,7 +1048,8 @@ static struct sw_flow *ovs_masked_flow_lookup(struct flow_table *table,
 	hash = ovs_flow_hash(&masked_key, key_start, key_len);
 	head = find_bucket(table, hash);
 	hlist_for_each_entry_rcu(flow, head, hash_node[table->node_ver]) {
-		if (__flow_cmp_key(flow, &masked_key, key_start, key_len))
+		if (flow->mask == mask &&
+		    __flow_cmp_key(flow, &masked_key, key_start, key_len))
 			return flow;
 	}
 	return NULL;
