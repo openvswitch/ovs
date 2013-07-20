@@ -16,6 +16,7 @@
 #include "bfd.h"
 
 #include <arpa/inet.h>
+#include <netinet/ip.h>
 
 #include "byte-order.h"
 #include "csum.h"
@@ -56,9 +57,7 @@ VLOG_DEFINE_THIS_MODULE(bfd);
  *
  * - Unit tests.
  *
- * - BFD show into ovs-bugtool.
- *
- * - Set TOS/PCP on inner BFD frame, and outer tunnel header when encapped.
+ * - Set TOS/PCP on the outer tunnel header when encapped.
  *
  * - Sending BFD messages should be in its own thread/process.
  *
@@ -437,7 +436,8 @@ bfd_put_packet(struct bfd *bfd, struct ofpbuf *p,
     ip = ofpbuf_put_zeros(p, sizeof *ip);
     ip->ip_ihl_ver = IP_IHL_VER(5, 4);
     ip->ip_tot_len = htons(sizeof *ip + sizeof *udp + sizeof *msg);
-    ip->ip_ttl = 255;
+    ip->ip_ttl = MAXTTL;
+    ip->ip_tos = IPTOS_LOWDELAY | IPTOS_THROUGHPUT;
     ip->ip_proto = IPPROTO_UDP;
     ip->ip_src = htonl(0xA9FE0100); /* 169.254.1.0 Link Local. */
     ip->ip_dst = htonl(0xA9FE0101); /* 169.254.1.1 Link Local. */
