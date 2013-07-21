@@ -55,6 +55,8 @@ VLOG_DEFINE_THIS_MODULE(ofproto_dpif_xlate);
  * flow translation. */
 #define MAX_RESUBMIT_RECURSION 64
 
+struct ovs_rwlock xlate_rwlock = OVS_RWLOCK_INITIALIZER;
+
 struct xbridge {
     struct hmap_node hmap_node;   /* Node in global 'xbridges' map. */
     struct ofproto_dpif *ofproto; /* Key in global 'xbridges' map. */
@@ -502,6 +504,7 @@ xlate_receive(const struct dpif_backer *backer, struct ofpbuf *packet,
     const struct xport *xport;
     int error = ENODEV;
 
+    ovs_rwlock_rdlock(&xlate_rwlock);
     fitness = odp_flow_key_to_flow(key, key_len, flow);
     if (fitness == ODP_FIT_ERROR) {
         error = EINVAL;
@@ -553,6 +556,7 @@ exit:
     if (fitnessp) {
         *fitnessp = fitness;
     }
+    ovs_rwlock_unlock(&xlate_rwlock);
     return error;
 }
 
@@ -2495,6 +2499,8 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
 
     COVERAGE_INC(xlate_actions);
 
+    ovs_rwlock_rdlock(&xlate_rwlock);
+
     /* Flow initialization rules:
      * - 'base_flow' must match the kernel's view of the packet at the
      *   time that action processing starts.  'flow' represents any
@@ -2530,7 +2536,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
 
     ctx.xbridge = xbridge_lookup(xin->ofproto);
     if (!ctx.xbridge) {
-        return;
+        goto out;
     }
 
     ctx.rule = xin->rule;
@@ -2587,7 +2593,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
             break;
 
         case OFPC_FRAG_DROP:
-            return;
+            goto out;
 
         case OFPC_FRAG_REASM:
             NOT_REACHED();
@@ -2648,4 +2654,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
      * use non-header fields as part of the cache. */
     memset(&wc->masks.metadata, 0, sizeof wc->masks.metadata);
     memset(&wc->masks.regs, 0, sizeof wc->masks.regs);
+
+out:
+    ovs_rwlock_unlock(&xlate_rwlock);
 }

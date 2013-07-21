@@ -798,6 +798,7 @@ type_run(const char *type)
                 continue;
             }
 
+            ovs_rwlock_wrlock(&xlate_rwlock);
             xlate_ofproto_set(ofproto, ofproto->up.name,
                               ofproto->backer->dpif, ofproto->miss_rule,
                               ofproto->no_packet_in_rule, ofproto->ml,
@@ -828,6 +829,7 @@ type_run(const char *type)
                                  ofport->up.pp.config, ofport->is_tunnel,
                                  ofport->may_enable);
             }
+            ovs_rwlock_unlock(&xlate_rwlock);
 
             cls_cursor_init(&cursor, &ofproto->facets, NULL);
             CLS_CURSOR_FOR_EACH_SAFE (facet, next, cr, &cursor) {
@@ -1445,7 +1447,9 @@ destruct(struct ofproto *ofproto_)
     struct oftable *table;
 
     ofproto->backer->need_revalidate = REV_RECONFIGURE;
+    ovs_rwlock_wrlock(&xlate_rwlock);
     xlate_remove_ofproto(ofproto);
+    ovs_rwlock_unlock(&xlate_rwlock);
 
     hmap_remove(&all_ofproto_dpifs, &ofproto->all_ofproto_dpifs_node);
     complete_operations(ofproto);
@@ -1864,7 +1868,9 @@ port_destruct(struct ofport *port_)
     const char *dp_port_name;
 
     ofproto->backer->need_revalidate = REV_RECONFIGURE;
+    ovs_rwlock_wrlock(&xlate_rwlock);
     xlate_ofport_remove(port);
+    ovs_rwlock_unlock(&xlate_rwlock);
 
     dp_port_name = netdev_vport_get_dpif_port(port->up.netdev, namebuf,
                                               sizeof namebuf);
@@ -2455,7 +2461,9 @@ bundle_destroy(struct ofbundle *bundle)
     ofproto = bundle->ofproto;
     mbridge_unregister_bundle(ofproto->mbridge, bundle->aux);
 
+    ovs_rwlock_wrlock(&xlate_rwlock);
     xlate_bundle_remove(bundle);
+    ovs_rwlock_unlock(&xlate_rwlock);
 
     LIST_FOR_EACH_SAFE (port, next_port, bundle_node, &bundle->ports) {
         bundle_del_port(port);

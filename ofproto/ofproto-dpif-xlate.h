@@ -110,22 +110,24 @@ struct xlate_in {
     const struct dpif_flow_stats *resubmit_stats;
 };
 
+extern struct ovs_rwlock xlate_rwlock;
+
 void xlate_ofproto_set(struct ofproto_dpif *, const char *name,
                        struct dpif *, struct rule_dpif *miss_rule,
                        struct rule_dpif *no_packet_in_rule,
                        const struct mac_learning *, struct stp *,
                        const struct mbridge *, const struct dpif_sflow *,
                        const struct dpif_ipfix *, enum ofp_config_flags,
-                       bool forward_bpdu, bool has_in_band, bool has_netflow);
-
-void xlate_remove_ofproto(struct ofproto_dpif *);
+                       bool forward_bpdu, bool has_in_band, bool has_netflow)
+    OVS_REQ_WRLOCK(xlate_rwlock);
+void xlate_remove_ofproto(struct ofproto_dpif *) OVS_REQ_WRLOCK(xlate_rwlock);
 
 void xlate_bundle_set(struct ofproto_dpif *, struct ofbundle *,
                       const char *name, enum port_vlan_mode, int vlan,
                       unsigned long *trunks, bool use_priority_tags,
                       const struct bond *, const struct lacp *,
-                      bool floodable);
-void xlate_bundle_remove(struct ofbundle *);
+                      bool floodable) OVS_REQ_WRLOCK(xlate_rwlock);
+void xlate_bundle_remove(struct ofbundle *) OVS_REQ_WRLOCK(xlate_rwlock);
 
 void xlate_ofport_set(struct ofproto_dpif *, struct ofbundle *,
                       struct ofport_dpif *, ofp_port_t, odp_port_t,
@@ -133,15 +135,17 @@ void xlate_ofport_set(struct ofproto_dpif *, struct ofbundle *,
                       const struct bfd *, struct ofport_dpif *peer,
                       int stp_port_no, const struct ofproto_port_queue *qdscp,
                       size_t n_qdscp, enum ofputil_port_config, bool is_tunnel,
-                      bool may_enable);
-void xlate_ofport_remove(struct ofport_dpif *);
+                      bool may_enable) OVS_REQ_WRLOCK(xlate_rwlock);
+void xlate_ofport_remove(struct ofport_dpif *) OVS_REQ_WRLOCK(xlate_rwlock);
 
 int xlate_receive(const struct dpif_backer *, struct ofpbuf *packet,
                   const struct nlattr *key, size_t key_len,
                   struct flow *, enum odp_key_fitness *,
-                  struct ofproto_dpif **, odp_port_t *odp_in_port);
+                  struct ofproto_dpif **, odp_port_t *odp_in_port)
+    OVS_EXCLUDED(xlate_rwlock);
 
-void xlate_actions(struct xlate_in *, struct xlate_out *);
+void xlate_actions(struct xlate_in *, struct xlate_out *)
+    OVS_EXCLUDED(xlate_rwlock);
 void xlate_in_init(struct xlate_in *, struct ofproto_dpif *,
                    const struct flow *, struct rule_dpif *,
                    uint8_t tcp_flags, const struct ofpbuf *packet);
