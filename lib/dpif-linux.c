@@ -148,26 +148,26 @@ struct dpif_linux {
     int event_offset;           /* Offset into 'epoll_events'. */
 
     /* Change notification. */
-    struct sset changed_ports;  /* Ports that have changed. */
-    struct nln_notifier *port_notifier;
-    bool change_error;
+    struct nl_sock *port_notifier; /* vport multicast group subscriber. */
 };
 
 static struct vlog_rate_limit error_rl = VLOG_RATE_LIMIT_INIT(9999, 5);
 
-/* Generic Netlink family numbers for OVS. */
+/* Generic Netlink family numbers for OVS.
+ *
+ * Initialized by dpif_linux_init(). */
 static int ovs_datapath_family;
 static int ovs_vport_family;
 static int ovs_flow_family;
 static int ovs_packet_family;
 
-/* Generic Netlink socket. */
-static struct nln *nln = NULL;
+/* Generic Netlink multicast groups for OVS.
+ *
+ * Initialized by dpif_linux_init(). */
+static unsigned int ovs_vport_mcgroup;
 
 static int dpif_linux_init(void);
-static void open_dpif(const struct dpif_linux_dp *, struct dpif **);
-static bool dpif_linux_nln_parse(struct ofpbuf *, void *);
-static void dpif_linux_port_changed(const void *vport, void *dpif);
+static int open_dpif(const struct dpif_linux_dp *, struct dpif **);
 static uint32_t dpif_linux_port_get_pid(const struct dpif *,
                                         odp_port_t port_no);
 
@@ -235,27 +235,27 @@ dpif_linux_open(const struct dpif_class *class OVS_UNUSED, const char *name,
         return error;
     }
 
-    open_dpif(&dp, dpifp);
+    error = open_dpif(&dp, dpifp);
     ofpbuf_delete(buf);
-    return 0;
+    return error;
 }
 
-static void
+static int
 open_dpif(const struct dpif_linux_dp *dp, struct dpif **dpifp)
 {
     struct dpif_linux *dpif;
 
     dpif = xzalloc(sizeof *dpif);
-    dpif->port_notifier = nln_notifier_create(nln, dpif_linux_port_changed,
-                                              dpif);
+    dpif->port_notifier = NULL;
     dpif->epoll_fd = -1;
 
     dpif_init(&dpif->dpif, &dpif_linux_class, dp->name,
               dp->dp_ifindex, dp->dp_ifindex);
 
     dpif->dp_ifindex = dp->dp_ifindex;
-    sset_init(&dpif->changed_ports);
     *dpifp = &dpif->dpif;
+
+    return 0;
 }
 
 static void
@@ -374,9 +374,8 @@ dpif_linux_close(struct dpif *dpif_)
 {
     struct dpif_linux *dpif = dpif_linux_cast(dpif_);
 
-    nln_notifier_destroy(dpif->port_notifier);
+    nl_sock_destroy(dpif->port_notifier);
     destroy_channels(dpif);
-    sset_destroy(&dpif->changed_ports);
     free(dpif);
 }
 
@@ -390,22 +389,6 @@ dpif_linux_destroy(struct dpif *dpif_)
     dp.cmd = OVS_DP_CMD_DEL;
     dp.dp_ifindex = dpif->dp_ifindex;
     return dpif_linux_dp_transact(&dp, NULL, NULL);
-}
-
-static void
-dpif_linux_run(struct dpif *dpif_ OVS_UNUSED)
-{
-    if (nln) {
-        nln_run(nln);
-    }
-}
-
-static void
-dpif_linux_wait(struct dpif *dpif OVS_UNUSED)
-{
-    if (nln) {
-        nln_wait(nln);
-    }
 }
 
 static int
@@ -736,15 +719,61 @@ dpif_linux_port_poll(const struct dpif *dpif_, char **devnamep)
 {
     struct dpif_linux *dpif = dpif_linux_cast(dpif_);
 
-    if (dpif->change_error) {
-        dpif->change_error = false;
-        sset_clear(&dpif->changed_ports);
+    /* Lazily create the Netlink socket to listen for notifications. */
+    if (!dpif->port_notifier) {
+        struct nl_sock *sock;
+        int error;
+
+        error = nl_sock_create(NETLINK_GENERIC, &sock);
+        if (error) {
+            return error;
+        }
+
+        error = nl_sock_join_mcgroup(sock, ovs_vport_mcgroup);
+        if (error) {
+            nl_sock_destroy(sock);
+            return error;
+        }
+        dpif->port_notifier = sock;
+
+        /* We have no idea of the current state so report that everything
+         * changed. */
         return ENOBUFS;
-    } else if (!sset_is_empty(&dpif->changed_ports)) {
-        *devnamep = sset_pop(&dpif->changed_ports);
-        return 0;
-    } else {
-        return EAGAIN;
+    }
+
+    for (;;) {
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+        uint64_t buf_stub[4096 / 8];
+        struct ofpbuf buf;
+        int error;
+
+        ofpbuf_use_stub(&buf, buf_stub, sizeof buf_stub);
+        error = nl_sock_recv(dpif->port_notifier, &buf, false);
+        if (!error) {
+            struct dpif_linux_vport vport;
+
+            error = dpif_linux_vport_from_ofpbuf(&vport, &buf);
+            if (!error) {
+                if (vport.dp_ifindex == dpif->dp_ifindex
+                    && (vport.cmd == OVS_VPORT_CMD_NEW
+                        || vport.cmd == OVS_VPORT_CMD_DEL
+                        || vport.cmd == OVS_VPORT_CMD_SET)) {
+                    VLOG_DBG("port_changed: dpif:%s vport:%s cmd:%"PRIu8,
+                             dpif->dpif.full_name, vport.name, vport.cmd);
+                    *devnamep = xstrdup(vport.name);
+                    return 0;
+                } else {
+                    continue;
+                }
+            }
+        } else if (error == EAGAIN) {
+            return EAGAIN;
+        }
+
+        VLOG_WARN_RL(&rl, "error reading or parsing netlink (%s)",
+                     ovs_strerror(error));
+        nl_sock_drain(dpif->port_notifier);
+        return ENOBUFS;
     }
 }
 
@@ -752,7 +781,10 @@ static void
 dpif_linux_port_poll_wait(const struct dpif *dpif_)
 {
     const struct dpif_linux *dpif = dpif_linux_cast(dpif_);
-    if (!sset_is_empty(&dpif->changed_ports) || dpif->change_error) {
+
+    if (dpif->port_notifier) {
+        nl_sock_wait(dpif->port_notifier, POLLIN);
+    } else {
         poll_immediate_wake();
     }
 }
@@ -1407,8 +1439,8 @@ const struct dpif_class dpif_linux_class = {
     dpif_linux_open,
     dpif_linux_close,
     dpif_linux_destroy,
-    dpif_linux_run,
-    dpif_linux_wait,
+    NULL,                       /* run */
+    NULL,                       /* wait */
     dpif_linux_get_stats,
     dpif_linux_port_add,
     dpif_linux_port_del,
@@ -1444,8 +1476,6 @@ dpif_linux_init(void)
     static int error;
 
     if (ovsthread_once_start(&once)) {
-        unsigned int ovs_vport_mcgroup;
-
         error = nl_lookup_genl_family(OVS_DATAPATH_FAMILY,
                                       &ovs_datapath_family);
         if (error) {
@@ -1467,11 +1497,6 @@ dpif_linux_init(void)
             error = nl_lookup_genl_mcgroup(OVS_VPORT_FAMILY, OVS_VPORT_MCGROUP,
                                            &ovs_vport_mcgroup,
                                            OVS_VPORT_MCGROUP_FALLBACK_ID);
-        }
-        if (!error) {
-            static struct dpif_linux_vport vport;
-            nln = nln_create(NETLINK_GENERIC, ovs_vport_mcgroup,
-                             dpif_linux_nln_parse, &vport);
         }
 
         ovsthread_once_done(&once);
@@ -1496,33 +1521,6 @@ dpif_linux_is_internal_device(const char *name)
     }
 
     return reply.type == OVS_VPORT_TYPE_INTERNAL;
-}
-
-static bool
-dpif_linux_nln_parse(struct ofpbuf *buf, void *vport_)
-{
-    struct dpif_linux_vport *vport = vport_;
-    return dpif_linux_vport_from_ofpbuf(vport, buf) == 0;
-}
-
-static void
-dpif_linux_port_changed(const void *vport_, void *dpif_)
-{
-    const struct dpif_linux_vport *vport = vport_;
-    struct dpif_linux *dpif = dpif_;
-
-    if (vport) {
-        if (vport->dp_ifindex == dpif->dp_ifindex
-            && (vport->cmd == OVS_VPORT_CMD_NEW
-                || vport->cmd == OVS_VPORT_CMD_DEL
-                || vport->cmd == OVS_VPORT_CMD_SET)) {
-            VLOG_DBG("port_changed: dpif:%s vport:%s cmd:%"PRIu8,
-                     dpif->dpif.full_name, vport->name, vport->cmd);
-            sset_add(&dpif->changed_ports, vport->name);
-        }
-    } else {
-        dpif->change_error = true;
-    }
 }
 
 /* Parses the contents of 'buf', which contains a "struct ovs_header" followed
