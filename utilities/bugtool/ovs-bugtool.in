@@ -242,7 +242,7 @@ cap(CAP_LOSETUP_A,           PII_MAYBE,                 max_size=KB, max_time=5)
 cap(CAP_MULTIPATH,           PII_MAYBE,                 max_size=20*KB,
     max_time=10)
 cap(CAP_NETWORK_CONFIG,      PII_IF_CUSTOMIZED,
-                                        min_size=0,     max_size=40*KB)
+                                        min_size=0,     max_size=5*MB)
 cap(CAP_NETWORK_INFO,        PII_YES,                   max_size=50*MB,
     max_time=30)
 cap(CAP_NETWORK_STATUS,      PII_YES,                   max_size=-1,
@@ -544,6 +544,8 @@ exclude those logs from the archive.
     tree_output(CAP_NETWORK_CONFIG, SYSCONFIG_NETWORK_SCRIPTS, ROUTE_RE)
     file_output(CAP_NETWORK_CONFIG, [SYSCONFIG_NETWORK, RESOLV_CONF, NSSWITCH_CONF, HOSTS])
     file_output(CAP_NETWORK_CONFIG, [NTP_CONF, IPTABLES_CONFIG, HOSTS_ALLOW, HOSTS_DENY])
+    file_output(CAP_NETWORK_CONFIG, [OPENVSWITCH_DEFAULT_SWITCH,
+                OPENVSWITCH_SYSCONFIG_SWITCH, OPENVSWITCH_DEFAULT_CONTROLLER])
 
     cmd_output(CAP_NETWORK_INFO, [IFCONFIG, '-a'])
     cmd_output(CAP_NETWORK_INFO, [ROUTE, '-n'])
