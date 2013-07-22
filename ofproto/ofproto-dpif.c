@@ -1497,7 +1497,9 @@ run(struct ofproto *ofproto_)
 
     if (mbridge_need_revalidate(ofproto->mbridge)) {
         ofproto->backer->need_revalidate = REV_RECONFIGURE;
+        ovs_rwlock_wrlock(&ofproto->ml->rwlock);
         mac_learning_flush(ofproto->ml, NULL);
+        ovs_rwlock_unlock(&ofproto->ml->rwlock);
     }
 
     /* Do not perform any periodic activity below required by 'ofproto' while
@@ -1528,7 +1530,9 @@ run(struct ofproto *ofproto_)
     }
 
     stp_run(ofproto);
+    ovs_rwlock_wrlock(&ofproto->ml->rwlock);
     mac_learning_run(ofproto->ml, &ofproto->backer->revalidate_set);
+    ovs_rwlock_unlock(&ofproto->ml->rwlock);
 
     /* Check the consistency of a random facet, to aid debugging. */
     if (time_msec() >= ofproto->consistency_rl
@@ -1589,7 +1593,9 @@ wait(struct ofproto *ofproto_)
     if (ofproto->netflow) {
         netflow_wait(ofproto->netflow);
     }
+    ovs_rwlock_rdlock(&ofproto->ml->rwlock);
     mac_learning_wait(ofproto->ml);
+    ovs_rwlock_unlock(&ofproto->ml->rwlock);
     stp_wait(ofproto);
     if (ofproto->backer->need_revalidate) {
         /* Shouldn't happen, but if it does just go around again. */
@@ -2088,8 +2094,10 @@ update_stp_port_state(struct ofport_dpif *ofport)
         if (stp_learn_in_state(ofport->stp_state)
                 != stp_learn_in_state(state)) {
             /* xxx Learning action flows should also be flushed. */
+            ovs_rwlock_wrlock(&ofproto->ml->rwlock);
             mac_learning_flush(ofproto->ml,
                                &ofproto->backer->revalidate_set);
+            ovs_rwlock_unlock(&ofproto->ml->rwlock);
         }
         fwd_change = stp_forward_in_state(ofport->stp_state)
                         != stp_forward_in_state(state);
@@ -2194,7 +2202,9 @@ stp_run(struct ofproto_dpif *ofproto)
         }
 
         if (stp_check_and_reset_fdb_flush(ofproto->stp)) {
+            ovs_rwlock_wrlock(&ofproto->ml->rwlock);
             mac_learning_flush(ofproto->ml, &ofproto->backer->revalidate_set);
+            ovs_rwlock_unlock(&ofproto->ml->rwlock);
         }
     }
 }
@@ -2351,6 +2361,7 @@ bundle_flush_macs(struct ofbundle *bundle, bool all_ofprotos)
     struct mac_entry *mac, *next_mac;
 
     ofproto->backer->need_revalidate = REV_RECONFIGURE;
+    ovs_rwlock_wrlock(&ml->rwlock);
     LIST_FOR_EACH_SAFE (mac, next_mac, lru_node, &ml->lrus) {
         if (mac->port.p == bundle) {
             if (all_ofprotos) {
@@ -2360,11 +2371,13 @@ bundle_flush_macs(struct ofbundle *bundle, bool all_ofprotos)
                     if (o != ofproto) {
                         struct mac_entry *e;
 
+                        ovs_rwlock_wrlock(&o->ml->rwlock);
                         e = mac_learning_lookup(o->ml, mac->mac, mac->vlan,
                                                 NULL);
                         if (e) {
                             mac_learning_expire(o->ml, e);
                         }
+                        ovs_rwlock_unlock(&o->ml->rwlock);
                     }
                 }
             }
@@ -2372,6 +2385,7 @@ bundle_flush_macs(struct ofbundle *bundle, bool all_ofprotos)
             mac_learning_expire(ml, mac);
         }
     }
+    ovs_rwlock_unlock(&ml->rwlock);
 }
 
 static struct ofbundle *
@@ -2715,6 +2729,7 @@ bundle_send_learning_packets(struct ofbundle *bundle)
     struct mac_entry *e;
 
     error = n_packets = n_errors = 0;
+    ovs_rwlock_rdlock(&ofproto->ml->rwlock);
     LIST_FOR_EACH (e, lru_node, &ofproto->ml->lrus) {
         if (e->port.p != bundle) {
             struct ofpbuf *learning_packet;
@@ -2737,6 +2752,7 @@ bundle_send_learning_packets(struct ofbundle *bundle)
             n_packets++;
         }
     }
+    ovs_rwlock_unlock(&ofproto->ml->rwlock);
 
     if (n_errors) {
         static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
@@ -2829,9 +2845,11 @@ static int
 set_flood_vlans(struct ofproto *ofproto_, unsigned long *flood_vlans)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
+    ovs_rwlock_wrlock(&ofproto->ml->rwlock);
     if (mac_learning_set_flood_vlans(ofproto->ml, flood_vlans)) {
         mac_learning_flush(ofproto->ml, &ofproto->backer->revalidate_set);
     }
+    ovs_rwlock_unlock(&ofproto->ml->rwlock);
     return 0;
 }
 
@@ -2855,8 +2873,10 @@ set_mac_table_config(struct ofproto *ofproto_, unsigned int idle_time,
                      size_t max_entries)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
+    ovs_rwlock_wrlock(&ofproto->ml->rwlock);
     mac_learning_set_idle_time(ofproto->ml, idle_time);
     mac_learning_set_max_entries(ofproto->ml, max_entries);
+    ovs_rwlock_unlock(&ofproto->ml->rwlock);
 }
 
 /* Ports. */
@@ -5762,10 +5782,14 @@ ofproto_unixctl_fdb_flush(struct unixctl_conn *conn, int argc,
             unixctl_command_reply_error(conn, "no such bridge");
             return;
         }
+        ovs_rwlock_wrlock(&ofproto->ml->rwlock);
         mac_learning_flush(ofproto->ml, &ofproto->backer->revalidate_set);
+        ovs_rwlock_unlock(&ofproto->ml->rwlock);
     } else {
         HMAP_FOR_EACH (ofproto, all_ofproto_dpifs_node, &all_ofproto_dpifs) {
+            ovs_rwlock_wrlock(&ofproto->ml->rwlock);
             mac_learning_flush(ofproto->ml, &ofproto->backer->revalidate_set);
+            ovs_rwlock_unlock(&ofproto->ml->rwlock);
         }
     }
 
@@ -5794,6 +5818,7 @@ ofproto_unixctl_fdb_show(struct unixctl_conn *conn, int argc OVS_UNUSED,
     }
 
     ds_put_cstr(&ds, " port  VLAN  MAC                Age\n");
+    ovs_rwlock_rdlock(&ofproto->ml->rwlock);
     LIST_FOR_EACH (e, lru_node, &ofproto->ml->lrus) {
         struct ofbundle *bundle = e->port.p;
         char name[OFP_MAX_PORT_NAME_LEN];
@@ -5804,6 +5829,7 @@ ofproto_unixctl_fdb_show(struct unixctl_conn *conn, int argc OVS_UNUSED,
                       name, e->vlan, ETH_ADDR_ARGS(e->mac),
                       mac_entry_age(ofproto->ml, e));
     }
+    ovs_rwlock_unlock(&ofproto->ml->rwlock);
     unixctl_command_reply(conn, ds_cstr(&ds));
     ds_destroy(&ds);
 }

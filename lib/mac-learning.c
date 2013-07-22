@@ -90,6 +90,7 @@ mac_entry_lookup(const struct mac_learning *ml,
  * and return false. */
 static bool
 get_lru(struct mac_learning *ml, struct mac_entry **e)
+    OVS_REQ_RDLOCK(ml->rwlock)
 {
     if (!list_is_empty(&ml->lrus)) {
         *e = mac_entry_from_lru_node(ml->lrus.next);
@@ -124,7 +125,8 @@ mac_learning_create(unsigned int idle_time)
     ml->idle_time = normalize_idle_time(idle_time);
     ml->max_entries = MAC_DEFAULT_MAX;
     tag_set_init(&ml->tags);
-    ml->ref_cnt = 1;
+    atomic_init(&ml->ref_cnt, 1);
+    ovs_rwlock_init(&ml->rwlock);
     return ml;
 }
 
@@ -133,8 +135,9 @@ mac_learning_ref(const struct mac_learning *ml_)
 {
     struct mac_learning *ml = CONST_CAST(struct mac_learning *, ml_);
     if (ml) {
-        ovs_assert(ml->ref_cnt > 0);
-        ml->ref_cnt++;
+        int orig;
+        atomic_add(&ml->ref_cnt, 1, &orig);
+        ovs_assert(orig > 0);
     }
     return ml;
 }
@@ -143,12 +146,15 @@ mac_learning_ref(const struct mac_learning *ml_)
 void
 mac_learning_unref(struct mac_learning *ml)
 {
+    int orig;
+
     if (!ml) {
         return;
     }
 
-    ovs_assert(ml->ref_cnt > 0);
-    if (!--ml->ref_cnt) {
+    atomic_sub(&ml->ref_cnt, 1, &orig);
+    ovs_assert(orig > 0);
+    if (orig == 1) {
         struct mac_entry *e, *next;
 
         HMAP_FOR_EACH_SAFE (e, next, hmap_node, &ml->table) {
@@ -158,6 +164,7 @@ mac_learning_unref(struct mac_learning *ml)
         hmap_destroy(&ml->table);
 
         bitmap_free(ml->flood_vlans);
+        ovs_rwlock_destroy(&ml->rwlock);
         free(ml);
     }
 }

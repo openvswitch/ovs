@@ -20,6 +20,8 @@
 #include <time.h>
 #include "hmap.h"
 #include "list.h"
+#include "ovs-atomic.h"
+#include "ovs-thread.h"
 #include "packets.h"
 #include "tag.h"
 #include "timeval.h"
@@ -36,24 +38,26 @@ struct mac_learning;
  * relearning based on a reflection from a bond slave. */
 #define MAC_GRAT_ARP_LOCK_TIME 5
 
-/* A MAC learning table entry. */
+/* A MAC learning table entry.
+ * Guarded by owning 'mac_learning''s rwlock */
 struct mac_entry {
     struct hmap_node hmap_node; /* Node in a mac_learning hmap. */
-    struct list lru_node;       /* Element in 'lrus' list. */
     time_t expires;             /* Expiration time. */
     time_t grat_arp_lock;       /* Gratuitous ARP lock expiration time. */
     uint8_t mac[ETH_ADDR_LEN];  /* Known MAC address. */
     uint16_t vlan;              /* VLAN tag. */
     tag_type tag;               /* Tag for this learning entry. */
 
+    /* The following are marked guarded to prevent users from iterating over or
+     * accessing a mac_entry without hodling the parent mac_learning rwlock. */
+    struct list lru_node OVS_GUARDED; /* Element in 'lrus' list. */
+
     /* Learned port. */
     union {
         void *p;
         ofp_port_t ofp_port;
-    } port;
+    } port OVS_GUARDED;
 };
-
-int mac_entry_age(const struct mac_learning *, const struct mac_entry *);
 
 /* Returns true if mac_learning_insert() just created 'mac' and the caller has
  * not yet properly initialized it. */
@@ -79,46 +83,62 @@ static inline bool mac_entry_is_grat_arp_locked(const struct mac_entry *mac)
 /* MAC learning table. */
 struct mac_learning {
     struct hmap table;          /* Learning table. */
-    struct list lrus;           /* In-use entries, least recently used at the
-                                   front, most recently used at the back. */
+    struct list lrus OVS_GUARDED; /* In-use entries, least recently used at the
+                                     front, most recently used at the back. */
     uint32_t secret;            /* Secret for randomizing hash table. */
     unsigned long *flood_vlans; /* Bitmap of learning disabled VLANs. */
     unsigned int idle_time;     /* Max age before deleting an entry. */
     size_t max_entries;         /* Max number of learned MACs. */
     struct tag_set tags;        /* Tags which have changed. */
-    int ref_cnt;
+    atomic_int ref_cnt;
+    struct ovs_rwlock rwlock;
 };
+
+int mac_entry_age(const struct mac_learning *ml, const struct mac_entry *e)
+    OVS_REQ_RDLOCK(ml->rwlock);
 
 /* Basics. */
 struct mac_learning *mac_learning_create(unsigned int idle_time);
 struct mac_learning *mac_learning_ref(const struct mac_learning *);
 void mac_learning_unref(struct mac_learning *);
 
-void mac_learning_run(struct mac_learning *, struct tag_set *);
-void mac_learning_wait(struct mac_learning *);
+void mac_learning_run(struct mac_learning *ml, struct tag_set *)
+    OVS_REQ_WRLOCK(ml->rwlock);
+void mac_learning_wait(struct mac_learning *ml)
+    OVS_REQ_RDLOCK(ml->rwlock);
 
 /* Configuration. */
-bool mac_learning_set_flood_vlans(struct mac_learning *,
-                                  const unsigned long *bitmap);
-void mac_learning_set_idle_time(struct mac_learning *, unsigned int idle_time);
-void mac_learning_set_max_entries(struct mac_learning *, size_t max_entries);
+bool mac_learning_set_flood_vlans(struct mac_learning *ml,
+                                  const unsigned long *bitmap)
+    OVS_REQ_WRLOCK(ml->rwlock);
+void mac_learning_set_idle_time(struct mac_learning *ml,
+                                unsigned int idle_time)
+    OVS_REQ_WRLOCK(ml->rwlock);
+void mac_learning_set_max_entries(struct mac_learning *ml, size_t max_entries)
+    OVS_REQ_WRLOCK(ml->rwlock);
 
 /* Learning. */
-bool mac_learning_may_learn(const struct mac_learning *,
+bool mac_learning_may_learn(const struct mac_learning *ml,
                             const uint8_t src_mac[ETH_ADDR_LEN],
-                            uint16_t vlan);
-struct mac_entry *mac_learning_insert(struct mac_learning *,
+                            uint16_t vlan)
+    OVS_REQ_RDLOCK(ml->rwlock);
+struct mac_entry *mac_learning_insert(struct mac_learning *ml,
                                       const uint8_t src[ETH_ADDR_LEN],
-                                      uint16_t vlan);
-void mac_learning_changed(struct mac_learning *, struct mac_entry *);
+                                      uint16_t vlan)
+    OVS_REQ_WRLOCK(ml->rwlock);
+void mac_learning_changed(struct mac_learning *ml, struct mac_entry *e)
+    OVS_REQ_WRLOCK(ml->rwlock);
 
 /* Lookup. */
-struct mac_entry *mac_learning_lookup(const struct mac_learning *,
+struct mac_entry *mac_learning_lookup(const struct mac_learning *ml,
                                       const uint8_t dst[ETH_ADDR_LEN],
-                                      uint16_t vlan, tag_type *);
+                                      uint16_t vlan, tag_type *)
+    OVS_REQ_RDLOCK(ml->rwlock);
 
 /* Flushing. */
-void mac_learning_expire(struct mac_learning *, struct mac_entry *);
-void mac_learning_flush(struct mac_learning *, struct tag_set *);
+void mac_learning_expire(struct mac_learning *ml, struct mac_entry *e)
+    OVS_REQ_WRLOCK(ml->rwlock);
+void mac_learning_flush(struct mac_learning *ml, struct tag_set *)
+    OVS_REQ_WRLOCK(ml->rwlock);
 
 #endif /* mac-learning.h */

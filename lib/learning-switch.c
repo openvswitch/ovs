@@ -251,7 +251,9 @@ lswitch_run(struct lswitch *sw)
     int i;
 
     if (sw->ml) {
+        ovs_rwlock_wrlock(&sw->ml->rwlock);
         mac_learning_run(sw->ml, NULL);
+        ovs_rwlock_unlock(&sw->ml->rwlock);
     }
 
     rconn_run(sw->rconn);
@@ -283,7 +285,9 @@ void
 lswitch_wait(struct lswitch *sw)
 {
     if (sw->ml) {
+        ovs_rwlock_rdlock(&sw->ml->rwlock);
         mac_learning_wait(sw->ml);
+        ovs_rwlock_unlock(&sw->ml->rwlock);
     }
     rconn_run_wait(sw->rconn);
     rconn_recv_wait(sw->rconn);
@@ -472,6 +476,7 @@ lswitch_choose_destination(struct lswitch *sw, const struct flow *flow)
     ofp_port_t out_port;
 
     /* Learn the source MAC. */
+    ovs_rwlock_wrlock(&sw->ml->rwlock);
     if (mac_learning_may_learn(sw->ml, flow->dl_src, 0)) {
         struct mac_entry *mac = mac_learning_insert(sw->ml, flow->dl_src, 0);
         if (mac_entry_is_new(mac)
@@ -484,6 +489,7 @@ lswitch_choose_destination(struct lswitch *sw, const struct flow *flow)
             mac_learning_changed(sw->ml, mac);
         }
     }
+    ovs_rwlock_unlock(&sw->ml->rwlock);
 
     /* Drop frames for reserved multicast addresses. */
     if (eth_addr_is_reserved(flow->dl_dst)) {
@@ -494,14 +500,17 @@ lswitch_choose_destination(struct lswitch *sw, const struct flow *flow)
     if (sw->ml) {
         struct mac_entry *mac;
 
+        ovs_rwlock_rdlock(&sw->ml->rwlock);
         mac = mac_learning_lookup(sw->ml, flow->dl_dst, 0, NULL);
         if (mac) {
             out_port = mac->port.ofp_port;
             if (out_port == flow->in_port.ofp_port) {
                 /* Don't send a packet back out its input port. */
+                ovs_rwlock_unlock(&sw->ml->rwlock);
                 return OFPP_NONE;
             }
         }
+        ovs_rwlock_unlock(&sw->ml->rwlock);
     }
 
     /* Check if we need to use "NORMAL" action. */

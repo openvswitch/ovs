@@ -837,8 +837,9 @@ update_learning_table(const struct xbridge *xbridge,
         return;
     }
 
+    ovs_rwlock_wrlock(&xbridge->ml->rwlock);
     if (!mac_learning_may_learn(xbridge->ml, flow->dl_src, vlan)) {
-        return;
+        goto out;
     }
 
     mac = mac_learning_insert(xbridge->ml, flow->dl_src, vlan);
@@ -848,7 +849,7 @@ update_learning_table(const struct xbridge *xbridge,
         if (!in_xbundle->bond) {
             mac_entry_set_grat_arp_lock(mac);
         } else if (mac_entry_is_grat_arp_locked(mac)) {
-            return;
+            goto out;
         }
     }
 
@@ -864,6 +865,8 @@ update_learning_table(const struct xbridge *xbridge,
         mac->port.p = in_xbundle->ofbundle;
         mac_learning_changed(xbridge->ml, mac);
     }
+out:
+    ovs_rwlock_unlock(&xbridge->ml->rwlock);
 }
 
 /* Determines whether packets in 'flow' within 'xbridge' should be forwarded or
@@ -908,14 +911,17 @@ is_admissible(struct xlate_ctx *ctx, struct xport *in_port,
             return false;
 
         case BV_DROP_IF_MOVED:
+            ovs_rwlock_rdlock(&xbridge->ml->rwlock);
             mac = mac_learning_lookup(xbridge->ml, flow->dl_src, vlan, NULL);
             if (mac && mac->port.p != in_xbundle->ofbundle &&
                 (!is_gratuitous_arp(flow, &ctx->xout->wc)
                  || mac_entry_is_grat_arp_locked(mac))) {
+                ovs_rwlock_unlock(&xbridge->ml->rwlock);
                 xlate_report(ctx, "SLB bond thinks this packet looped back, "
                             "dropping");
                 return false;
             }
+            ovs_rwlock_unlock(&xbridge->ml->rwlock);
             break;
         }
     }
@@ -991,6 +997,7 @@ xlate_normal(struct xlate_ctx *ctx)
     }
 
     /* Determine output bundle. */
+    ovs_rwlock_rdlock(&ctx->xbridge->ml->rwlock);
     mac = mac_learning_lookup(ctx->xbridge->ml, flow->dl_dst, vlan,
                               &ctx->xout->tags);
     if (mac) {
@@ -1017,6 +1024,7 @@ xlate_normal(struct xlate_ctx *ctx)
         }
         ctx->xout->nf_output_iface = NF_OUT_FLOOD;
     }
+    ovs_rwlock_unlock(&ctx->xbridge->ml->rwlock);
 }
 
 /* Compose SAMPLE action for sFlow or IPFIX.  The given probability is
