@@ -70,12 +70,12 @@ struct sset_node *sset_at_position(const struct sset *,
 /* Iteration macros. */
 #define SSET_FOR_EACH(NAME, SSET)               \
     for ((NAME) = SSET_FIRST(SSET);             \
-         SSET_NODE_FROM_NAME(NAME) != NULL;     \
+         NAME != NULL;                          \
          (NAME) = SSET_NEXT(SSET, NAME))
 
 #define SSET_FOR_EACH_SAFE(NAME, NEXT, SSET)        \
     for ((NAME) = SSET_FIRST(SSET);                 \
-         (SSET_NODE_FROM_NAME(NAME) != NULL         \
+         (NAME != NULL                              \
           ? (NEXT) = SSET_NEXT(SSET, NAME), true    \
           : false);                                 \
          (NAME) = (NEXT))
@@ -87,7 +87,9 @@ const char **sset_sort(const struct sset *);
 #define SSET_NODE_FROM_HMAP_NODE(HMAP_NODE) \
     CONTAINER_OF(HMAP_NODE, struct sset_node, hmap_node)
 #define SSET_NAME_FROM_HMAP_NODE(HMAP_NODE) \
-    (CONST_CAST(const char *, (SSET_NODE_FROM_HMAP_NODE(HMAP_NODE)->name)))
+    HMAP_NODE == NULL                       \
+    ? NULL                                  \
+    : (CONST_CAST(const char *, (SSET_NODE_FROM_HMAP_NODE(HMAP_NODE)->name)))
 #define SSET_NODE_FROM_NAME(NAME) CONTAINER_OF(NAME, struct sset_node, name)
 #define SSET_FIRST(SSET) SSET_NAME_FROM_HMAP_NODE(hmap_first(&(SSET)->map))
 #define SSET_NEXT(SSET, NAME)                                           \

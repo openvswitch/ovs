@@ -129,7 +129,7 @@ void hindex_remove(struct hindex *, struct hindex_node *);
  */
 #define HINDEX_FOR_EACH_WITH_HASH(NODE, MEMBER, HASH, HINDEX)               \
     for (ASSIGN_CONTAINER(NODE, hindex_node_with_hash(HINDEX, HASH), MEMBER); \
-         &(NODE)->MEMBER != NULL;                                       \
+         NODE != OBJECT_CONTAINING(NULL, NODE, MEMBER);                     \
          ASSIGN_CONTAINER(NODE, (NODE)->MEMBER.s, MEMBER))
 
 struct hindex_node *hindex_node_with_hash(const struct hindex *, size_t hash);
@@ -139,14 +139,14 @@ struct hindex_node *hindex_node_with_hash(const struct hindex *, size_t hash);
 /* Iterates through every node in HINDEX. */
 #define HINDEX_FOR_EACH(NODE, MEMBER, HINDEX)                           \
     for (ASSIGN_CONTAINER(NODE, hindex_first(HINDEX), MEMBER);          \
-         &(NODE)->MEMBER != NULL;                                       \
+         NODE != OBJECT_CONTAINING(NULL, NODE, MEMBER);                 \
          ASSIGN_CONTAINER(NODE, hindex_next(HINDEX, &(NODE)->MEMBER), MEMBER))
 
 /* Safe when NODE may be freed (not needed when NODE may be removed from the
  * hash index but its members remain accessible and intact). */
 #define HINDEX_FOR_EACH_SAFE(NODE, NEXT, MEMBER, HINDEX)                \
     for (ASSIGN_CONTAINER(NODE, hindex_first(HINDEX), MEMBER);          \
-         (&(NODE)->MEMBER != NULL                                       \
+         (NODE != OBJECT_CONTAINING(NULL, NODE, MEMBER)                 \
           ? ASSIGN_CONTAINER(NEXT, hindex_next(HINDEX, &(NODE)->MEMBER), MEMBER) \
           : 0);                                                         \
          (NODE) = (NEXT))
