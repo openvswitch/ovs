@@ -638,8 +638,7 @@ void ovs_flow_free(struct sw_flow *flow, bool deferred)
 	if (!flow)
 		return;
 
-	ovs_sw_flow_mask_del_ref((struct sw_flow_mask __force *)flow->mask,
-				 deferred);
+	ovs_sw_flow_mask_del_ref(flow->mask, deferred);
 
 	if (deferred)
 		call_rcu(&flow->rcu, rcu_free_flow_callback);
@@ -1073,9 +1072,8 @@ struct sw_flow *ovs_flow_lookup(struct flow_table *tbl,
 
 void ovs_flow_insert(struct flow_table *table, struct sw_flow *flow)
 {
-	flow->hash = ovs_flow_hash(&flow->key,
-			ovsl_dereference(flow->mask)->range.start,
-			ovsl_dereference(flow->mask)->range.end);
+	flow->hash = ovs_flow_hash(&flow->key, flow->mask->range.start,
+			flow->mask->range.end);
 	__tbl_insert(table, flow);
 }
 
