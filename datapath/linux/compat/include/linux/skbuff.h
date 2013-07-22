@@ -252,6 +252,7 @@ static inline void skb_reset_mac_len(struct sk_buff *skb)
 }
 #endif
 
+#ifndef HAVE_SKB_UNCLONE
 static inline int skb_unclone(struct sk_buff *skb, gfp_t pri)
 {
 	might_sleep_if(pri & __GFP_WAIT);
@@ -261,6 +262,7 @@ static inline int skb_unclone(struct sk_buff *skb, gfp_t pri)
 
 	return 0;
 }
+#endif
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,37)
 extern u32 __skb_get_rxhash(struct sk_buff *skb);
