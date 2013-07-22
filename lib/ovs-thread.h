@@ -58,6 +58,7 @@
  * abort on any other error. */
 
 void xpthread_mutex_init(pthread_mutex_t *, pthread_mutexattr_t *);
+void xpthread_mutex_destroy(pthread_mutex_t *);
 void xpthread_mutex_lock(pthread_mutex_t *mutex) OVS_ACQUIRES(mutex);
 void xpthread_mutex_unlock(pthread_mutex_t *mutex) OVS_RELEASES(mutex);
 int xpthread_mutex_trylock(pthread_mutex_t *);
@@ -68,6 +69,7 @@ void xpthread_mutexattr_settype(pthread_mutexattr_t *, int type);
 void xpthread_mutexattr_gettype(pthread_mutexattr_t *, int *typep);
 
 void xpthread_rwlock_init(pthread_rwlock_t *, pthread_rwlockattr_t *);
+void xpthread_rwlock_destroy(pthread_rwlock_t *);
 void xpthread_rwlock_rdlock(pthread_rwlock_t *rwlock) OVS_ACQUIRES(rwlock);
 void xpthread_rwlock_wrlock(pthread_rwlock_t *rwlock) OVS_ACQUIRES(rwlock);
 void xpthread_rwlock_unlock(pthread_rwlock_t *rwlock) OVS_RELEASES(rwlock);
@@ -75,6 +77,7 @@ int xpthread_rwlock_tryrdlock(pthread_rwlock_t *);
 int xpthread_rwlock_trywrlock(pthread_rwlock_t *);
 
 void xpthread_cond_init(pthread_cond_t *, pthread_condattr_t *);
+void xpthread_cond_destroy(pthread_cond_t *);
 void xpthread_cond_signal(pthread_cond_t *);
 void xpthread_cond_broadcast(pthread_cond_t *);
 void xpthread_cond_wait(pthread_cond_t *, pthread_mutex_t *mutex)
