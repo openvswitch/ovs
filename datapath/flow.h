@@ -123,7 +123,7 @@ struct sw_flow {
 
 	struct sw_flow_key key;
 	struct sw_flow_key unmasked_key;
-	struct sw_flow_mask __rcu *mask;
+	struct sw_flow_mask *mask;
 	struct sw_flow_actions __rcu *sf_acts;
 
 	spinlock_t lock;	/* Lock for values below. */

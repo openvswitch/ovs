@@ -1157,8 +1157,7 @@ static int ovs_flow_cmd_fill_info(struct sw_flow *flow, struct datapath *dp,
 	if (!nla)
 		goto nla_put_failure;
 
-	err = ovs_flow_to_nlattrs(&flow->key,
-			&ovsl_dereference(flow->mask)->key, skb);
+	err = ovs_flow_to_nlattrs(&flow->key, &flow->mask->key, skb);
 	if (err)
 		goto error;
 
@@ -1339,7 +1338,7 @@ static int ovs_flow_cmd_new_or_set(struct sk_buff *skb, struct genl_info *info)
 		}
 
 		ovs_sw_flow_mask_add_ref(mask_p);
-		rcu_assign_pointer(flow->mask, mask_p);
+		flow->mask = mask_p;
 		rcu_assign_pointer(flow->sf_acts, acts);
 
 		/* Put flow in bucket. */
