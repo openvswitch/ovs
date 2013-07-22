@@ -400,7 +400,10 @@ xlate_ofport_remove(struct ofport_dpif *ofport)
         xport->peer = NULL;
     }
 
-    list_remove(&xport->bundle_node);
+    if (xport->xbundle) {
+        list_remove(&xport->bundle_node);
+    }
+
     hmap_remove(&xports, &xport->hmap_node);
     hmap_remove(&xport->xbridge->xports, &xport->ofp_node);
 
