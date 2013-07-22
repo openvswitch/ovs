@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012 Nicira, Inc.
+ * Copyright (c) 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -69,13 +69,13 @@ void heap_rebuild(struct heap *);
 #define HEAP_FOR_EACH(NODE, MEMBER, HEAP)                           \
     for (((HEAP)->n > 0                                             \
           ? ASSIGN_CONTAINER(NODE, (HEAP)->array[1], MEMBER)        \
-          : ((NODE) = NULL, 1));                                    \
+          : ((NODE) = NULL, (void) 0));                               \
          (NODE) != NULL;                                            \
          ((NODE)->MEMBER.idx < (HEAP)->n                            \
           ? ASSIGN_CONTAINER(NODE,                                  \
                              (HEAP)->array[(NODE)->MEMBER.idx + 1], \
                              MEMBER)                                \
-          : ((NODE) = NULL, 1)))
+          : ((NODE) = NULL, (void) 0)))
 
 /* Returns the index of the node that is the parent of the node with the given
  * 'idx' within a heap. */

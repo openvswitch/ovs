@@ -146,7 +146,7 @@ bool hmap_contains(const struct hmap *, const struct hmap_node *);
 #define HMAP_FOR_EACH_SAFE(NODE, NEXT, MEMBER, HMAP)                    \
     for (ASSIGN_CONTAINER(NODE, hmap_first(HMAP), MEMBER);              \
          (NODE != OBJECT_CONTAINING(NULL, NODE, MEMBER)                  \
-          ? ASSIGN_CONTAINER(NEXT, hmap_next(HMAP, &(NODE)->MEMBER), MEMBER) \
+          ? ASSIGN_CONTAINER(NEXT, hmap_next(HMAP, &(NODE)->MEMBER), MEMBER), 1 \
           : 0);                                                         \
          (NODE) = (NEXT))
 

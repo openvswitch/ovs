@@ -72,11 +72,11 @@ bool list_is_short(const struct list *);
     for (ASSIGN_CONTAINER(ITER, (ITER)->MEMBER.prev, MEMBER);           \
          &(ITER)->MEMBER != (LIST);                                     \
          ASSIGN_CONTAINER(ITER, (ITER)->MEMBER.prev, MEMBER))
-#define LIST_FOR_EACH_SAFE(ITER, NEXT, MEMBER, LIST)            \
-    for (ASSIGN_CONTAINER(ITER, (LIST)->next, MEMBER);          \
-         (&(ITER)->MEMBER != (LIST)                             \
-          ? ASSIGN_CONTAINER(NEXT, (ITER)->MEMBER.next, MEMBER) \
-          : 0);                                                 \
+#define LIST_FOR_EACH_SAFE(ITER, NEXT, MEMBER, LIST)               \
+    for (ASSIGN_CONTAINER(ITER, (LIST)->next, MEMBER);             \
+         (&(ITER)->MEMBER != (LIST)                                \
+          ? ASSIGN_CONTAINER(NEXT, (ITER)->MEMBER.next, MEMBER), 1 \
+          : 0);                                                    \
          (ITER) = (NEXT))
 
 #endif /* list.h */

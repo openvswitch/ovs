@@ -189,9 +189,9 @@ is_pow2(uintmax_t x)
  * that that OBJECT points to, assigns the address of the outer object to
  * OBJECT, which must be an lvalue.
  *
- * Evaluates to 1. */
+ * Evaluates to (void) 0 as the result is not to be used. */
 #define ASSIGN_CONTAINER(OBJECT, POINTER, MEMBER) \
-    ((OBJECT) = OBJECT_CONTAINING(POINTER, OBJECT, MEMBER), 1)
+    ((OBJECT) = OBJECT_CONTAINING(POINTER, OBJECT, MEMBER), (void) 0)
 
 #ifdef  __cplusplus
 extern "C" {

@@ -147,7 +147,7 @@ struct hindex_node *hindex_node_with_hash(const struct hindex *, size_t hash);
 #define HINDEX_FOR_EACH_SAFE(NODE, NEXT, MEMBER, HINDEX)                \
     for (ASSIGN_CONTAINER(NODE, hindex_first(HINDEX), MEMBER);          \
          (NODE != OBJECT_CONTAINING(NULL, NODE, MEMBER)                 \
-          ? ASSIGN_CONTAINER(NEXT, hindex_next(HINDEX, &(NODE)->MEMBER), MEMBER) \
+          ? ASSIGN_CONTAINER(NEXT, hindex_next(HINDEX, &(NODE)->MEMBER), MEMBER), 1 \
           : 0);                                                         \
          (NODE) = (NEXT))
 
