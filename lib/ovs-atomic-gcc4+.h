@@ -117,7 +117,7 @@ typedef enum {
     __builtin_choose_expr(                                              \
         __builtin_types_compatible_p(typeof(OBJECT), struct locked_uint64), \
         (THEN), (ELSE))
-#define AS_LOCKED_UINT64(OBJECT) ((struct locked_uint64 *) (OBJECT))
+#define AS_LOCKED_UINT64(OBJECT) ((struct locked_uint64 *) (void *) (OBJECT))
 #define AS_UINT64(OBJECT) ((uint64_t *) (OBJECT))
 struct locked_uint64 {
     uint64_t value;
@@ -135,7 +135,7 @@ uint64_t locked_uint64_and(struct locked_uint64 *, uint64_t arg);
     __builtin_choose_expr(                                              \
         __builtin_types_compatible_p(typeof(OBJECT), struct locked_int64), \
         (THEN), (ELSE))
-#define AS_LOCKED_INT64(OBJECT) ((struct locked_int64 *) (OBJECT))
+#define AS_LOCKED_INT64(OBJECT) ((struct locked_int64 *) (void *) (OBJECT))
 #define AS_INT64(OBJECT) ((int64_t *) (OBJECT))
 struct locked_int64 {
     int64_t value;

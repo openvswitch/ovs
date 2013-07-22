@@ -29,15 +29,15 @@ hash_3words(uint32_t a, uint32_t b, uint32_t c)
 uint32_t
 hash_bytes(const void *p_, size_t n, uint32_t basis)
 {
-    const uint8_t *p = p_;
+    const uint32_t *p = p_;
     size_t orig_n = n;
     uint32_t hash;
 
     hash = basis;
     while (n >= 4) {
-        hash = mhash_add(hash, get_unaligned_u32((const uint32_t *) p));
+        hash = mhash_add(hash, get_unaligned_u32(p));
         n -= 4;
-        p += 4;
+        p += 1;
     }
 
     if (n) {

@@ -4550,7 +4550,8 @@ netdev_linux_get_ipv4(const struct netdev *netdev, struct in_addr *ip,
     ifr.ifr_addr.sa_family = AF_INET;
     error = netdev_linux_do_ioctl(netdev_get_name(netdev), &ifr, cmd, cmd_name);
     if (!error) {
-        const struct sockaddr_in *sin = (struct sockaddr_in *) &ifr.ifr_addr;
+        const struct sockaddr_in *sin = ALIGNED_CAST(struct sockaddr_in *,
+                                                     &ifr.ifr_addr);
         *ip = sin->sin_addr;
     }
     return error;

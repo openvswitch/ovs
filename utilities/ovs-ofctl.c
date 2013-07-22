@@ -2335,7 +2335,7 @@ ofctl_parse_nxm__(bool oxm)
             ofpbuf_init(&nx_match, 0);
             if (oxm) {
                 match_len = oxm_put_match(&nx_match, &match);
-                out = oxm_match_to_string(nx_match.data, match_len);
+                out = oxm_match_to_string(&nx_match, match_len);
             } else {
                 match_len = nx_put_match(&nx_match, &match,
                                          cookie, cookie_mask);
@@ -2775,7 +2775,7 @@ ofctl_check_vlan(int argc OVS_UNUSED, char *argv[])
     /* Convert to and from OXM. */
     ofpbuf_init(&nxm, 0);
     nxm_match_len = oxm_put_match(&nxm, &match);
-    nxm_s = oxm_match_to_string(nxm.data, nxm_match_len);
+    nxm_s = oxm_match_to_string(&nxm, nxm_match_len);
     error = oxm_pull_match(&nxm, &nxm_match);
     printf("OXM: %s -> ", nxm_s);
     if (error) {

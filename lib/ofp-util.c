@@ -1293,7 +1293,7 @@ ofputil_decode_hello_bitmap(const struct ofp_hello_elem_header *oheh,
                             uint32_t *allowed_versionsp)
 {
     uint16_t bitmap_len = ntohs(oheh->length) - sizeof *oheh;
-    const ovs_be32 *bitmap = (const ovs_be32 *) (oheh + 1);
+    const ovs_be32 *bitmap = ALIGNED_CAST(const ovs_be32 *, oheh + 1);
     uint32_t allowed_versions;
 
     if (!bitmap_len || bitmap_len % sizeof *bitmap) {
@@ -1397,7 +1397,7 @@ ofputil_encode_hello(uint32_t allowed_versions)
         oheh = ofpbuf_put_zeros(msg, ROUND_UP(map_len + sizeof *oheh, 8));
         oheh->type = htons(OFPHET_VERSIONBITMAP);
         oheh->length = htons(map_len + sizeof *oheh);
-        *(ovs_be32 *)(oheh + 1) = htonl(allowed_versions);
+        *ALIGNED_CAST(ovs_be32 *, oheh + 1) = htonl(allowed_versions);
 
         ofpmsg_update_length(msg);
     }
@@ -1750,7 +1750,8 @@ ofputil_pull_bands(struct ofpbuf *msg, size_t len, uint16_t *n_bands,
             ((struct ofp13_meter_band_dscp_remark *)ombh)->prec_level : 0;
         n++;
         len -= ombh_len;
-        ombh = (struct ofp13_meter_band_header *)(((char *)ombh) + ombh_len);
+        ombh = ALIGNED_CAST(struct ofp13_meter_band_header *,
+                            (char *) ombh + ombh_len);
     }
     if (len) {
         return OFPERR_OFPBRC_BAD_LEN;

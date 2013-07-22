@@ -744,7 +744,7 @@ oxm_put_match(struct ofpbuf *b, const struct match *match)
     match_len = nx_put_raw(b, true, match, cookie, cookie_mask) + sizeof *omh;
     ofpbuf_put_zeros(b, ROUND_UP(match_len, 8) - match_len);
 
-    omh = (struct ofp11_match_header *)((char *)b->data + start_len);
+    omh = ofpbuf_at(b, start_len, sizeof *omh);
     omh->type = htons(OFPMT_OXM);
     omh->length = htons(match_len);
 
@@ -807,9 +807,9 @@ nx_match_to_string(const uint8_t *p, unsigned int match_len)
 }
 
 char *
-oxm_match_to_string(const uint8_t *p, unsigned int match_len)
+oxm_match_to_string(const struct ofpbuf *p, unsigned int match_len)
 {
-    const struct ofp11_match_header *omh = (struct ofp11_match_header *)p;
+    const struct ofp11_match_header *omh = p->data;
     uint16_t match_len_;
     struct ds s;
 
@@ -837,7 +837,8 @@ oxm_match_to_string(const uint8_t *p, unsigned int match_len)
         goto err;
     }
 
-    return nx_match_to_string(p + sizeof *omh, match_len - sizeof *omh);
+    return nx_match_to_string(ofpbuf_at(p, sizeof *omh, 0),
+                              match_len - sizeof *omh);
 
 err:
     return ds_steal_cstr(&s);
@@ -997,7 +998,7 @@ oxm_match_from_string(const char *s, struct ofpbuf *b)
     match_len = nx_match_from_string_raw(s, b) + sizeof *omh;
     ofpbuf_put_zeros(b, ROUND_UP(match_len, 8) - match_len);
 
-    omh = (struct ofp11_match_header *)((char *)b->data + start_len);
+    omh = ofpbuf_at(b, start_len, sizeof *omh);
     omh->type = htons(OFPMT_OXM);
     omh->length = htons(match_len);
 

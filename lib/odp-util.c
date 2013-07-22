@@ -2512,7 +2512,8 @@ uint32_t
 odp_flow_key_hash(const struct nlattr *key, size_t key_len)
 {
     BUILD_ASSERT_DECL(!(NLA_ALIGNTO % sizeof(uint32_t)));
-    return hash_words((const uint32_t *) key, key_len / sizeof(uint32_t), 0);
+    return hash_words(ALIGNED_CAST(const uint32_t *, key),
+                      key_len / sizeof(uint32_t), 0);
 }
 
 static void

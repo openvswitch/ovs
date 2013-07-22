@@ -201,7 +201,8 @@ lookup_hostname(const char *host_name, struct in_addr *addr)
 
     switch (getaddrinfo(host_name, NULL, &hints, &result)) {
     case 0:
-        *addr = ((struct sockaddr_in *) result->ai_addr)->sin_addr;
+        *addr = ALIGNED_CAST(struct sockaddr_in *,
+                             result->ai_addr)->sin_addr;
         freeaddrinfo(result);
         return 0;
 
@@ -1326,7 +1327,7 @@ recv_data_and_fds(int sock,
             goto error;
         } else {
             size_t n_fds = (p->cmsg_len - CMSG_LEN(0)) / sizeof *fds;
-            const int *fds_data = (const int *) CMSG_DATA(p);
+            const int *fds_data = ALIGNED_CAST(const int *, CMSG_DATA(p));
 
             ovs_assert(n_fds > 0);
             if (n_fds > SOUTIL_MAX_FDS) {

@@ -711,8 +711,7 @@ nl_policy_parse(const struct ofpbuf *msg, size_t nla_offset,
         return false;
     }
 
-    NL_ATTR_FOR_EACH (nla, left,
-                      (struct nlattr *) ((char *) msg->data + nla_offset),
+    NL_ATTR_FOR_EACH (nla, left, ofpbuf_at(msg, nla_offset, 0),
                       msg->size - nla_offset)
     {
         uint16_t type = nl_attr_type(nla);
@@ -777,8 +776,7 @@ nl_attr_find__(const struct nlattr *attrs, size_t size, uint16_t type)
 const struct nlattr *
 nl_attr_find(const struct ofpbuf *buf, size_t hdr_len, uint16_t type)
 {
-    const uint8_t *start = (const uint8_t *) buf->data + hdr_len;
-    return nl_attr_find__((const struct nlattr *) start, buf->size - hdr_len,
+    return nl_attr_find__(ofpbuf_at(buf, hdr_len, 0), buf->size - hdr_len,
                           type);
 }
 

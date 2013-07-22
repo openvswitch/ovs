@@ -336,7 +336,7 @@ ofpact_from_nxast(const union ofp_action *a, enum ofputil_action_code code,
         break;
 
     case OFPUTIL_NXAST_WRITE_METADATA:
-        nawm = (const struct nx_action_write_metadata *) a;
+        nawm = ALIGNED_CAST(const struct nx_action_write_metadata *, a);
         error = metadata_from_nxast(nawm, out);
         break;
 
@@ -356,7 +356,7 @@ ofpact_from_nxast(const union ofp_action *a, enum ofputil_action_code code,
 
     case OFPUTIL_NXAST_REG_LOAD:
         error = nxm_reg_load_from_openflow(
-            (const struct nx_action_reg_load *) a, out);
+            ALIGNED_CAST(const struct nx_action_reg_load *, a), out);
         break;
 
     case OFPUTIL_NXAST_STACK_PUSH:
@@ -375,7 +375,7 @@ ofpact_from_nxast(const union ofp_action *a, enum ofputil_action_code code,
         break;
 
     case OFPUTIL_NXAST_SET_TUNNEL64:
-        nast64 = (const struct nx_action_set_tunnel64 *) a;
+        nast64 = ALIGNED_CAST(const struct nx_action_set_tunnel64 *, a);
         tunnel = ofpact_put_SET_TUNNEL(out);
         tunnel->ofpact.compat = code;
         tunnel->tun_id = ntohll(nast64->tun_id);
@@ -402,7 +402,8 @@ ofpact_from_nxast(const union ofp_action *a, enum ofputil_action_code code,
         break;
 
     case OFPUTIL_NXAST_LEARN:
-        error = learn_from_openflow((const struct nx_action_learn *) a, out);
+        error = learn_from_openflow(
+            ALIGNED_CAST(const struct nx_action_learn *, a), out);
         break;
 
     case OFPUTIL_NXAST_EXIT:
@@ -881,7 +882,7 @@ ofpacts_from_openflow11(const union ofp_action *in, size_t n_in,
     instruction_get_##ENUM(const struct ofp11_instruction *inst)\
     {                                                           \
         ovs_assert(inst->type == htons(ENUM));                  \
-        return (struct STRUCT *)inst;                           \
+        return ALIGNED_CAST(struct STRUCT *, inst);             \
     }                                                           \
                                                                 \
     static inline void                                          \
@@ -1070,10 +1071,10 @@ decode_openflow11_instructions(const struct ofp11_instruction insts[],
 
 static void
 get_actions_from_instruction(const struct ofp11_instruction *inst,
-                         const union ofp_action **actions,
-                         size_t *n_actions)
+                             const union ofp_action **actions,
+                             size_t *n_actions)
 {
-    *actions = (const union ofp_action *) (inst + 1);
+    *actions = ALIGNED_CAST(const union ofp_action *, inst + 1);
     *n_actions = (ntohs(inst->len) - sizeof *inst) / OFP11_INSTRUCTION_ALIGN;
 }
 
@@ -1140,8 +1141,8 @@ ofpacts_pull_openflow11_instructions(struct ofpbuf *openflow,
         const struct ofp13_instruction_meter *oim;
         struct ofpact_meter *om;
 
-        oim = (const struct ofp13_instruction_meter *)
-            insts[OVSINST_OFPIT13_METER];
+        oim = ALIGNED_CAST(const struct ofp13_instruction_meter *,
+                           insts[OVSINST_OFPIT13_METER]);
 
         om = ofpact_put_METER(ofpacts);
         om->meter_id = ntohl(oim->meter_id);
@@ -1167,8 +1168,8 @@ ofpacts_pull_openflow11_instructions(struct ofpbuf *openflow,
         const struct ofp11_instruction_write_metadata *oiwm;
         struct ofpact_metadata *om;
 
-        oiwm = (const struct ofp11_instruction_write_metadata *)
-            insts[OVSINST_OFPIT11_WRITE_METADATA];
+        oiwm = ALIGNED_CAST(const struct ofp11_instruction_write_metadata *,
+                            insts[OVSINST_OFPIT11_WRITE_METADATA]);
 
         om = ofpact_put_WRITE_METADATA(ofpacts);
         om->metadata = oiwm->metadata;
@@ -1436,7 +1437,7 @@ ofpact_note_to_nxast(const struct ofpact_note *note, struct ofpbuf *out)
     if (remainder) {
         ofpbuf_put_zeros(out, OFP_ACTION_ALIGN - remainder);
     }
-    nan = (struct nx_action_note *)((char *)out->data + start_ofs);
+    nan = ofpbuf_at(out, start_ofs, sizeof *nan);
     nan->len = htons(out->size - start_ofs);
 }
 

@@ -193,6 +193,10 @@ is_pow2(uintmax_t x)
 #define ASSIGN_CONTAINER(OBJECT, POINTER, MEMBER) \
     ((OBJECT) = OBJECT_CONTAINING(POINTER, OBJECT, MEMBER), (void) 0)
 
+/* Given ATTR, and TYPE, cast the ATTR to TYPE by first casting ATTR to
+ * (void *). This is to suppress the alignment warning issued by clang. */
+#define ALIGNED_CAST(TYPE, ATTR) ((TYPE) (void *) (ATTR))
+
 #ifdef  __cplusplus
 extern "C" {
 #endif

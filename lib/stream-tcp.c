@@ -130,7 +130,8 @@ static int
 ptcp_accept(int fd, const struct sockaddr *sa, size_t sa_len,
             struct stream **streamp)
 {
-    const struct sockaddr_in *sin = (const struct sockaddr_in *) sa;
+    const struct sockaddr_in *sin = ALIGNED_CAST(const struct sockaddr_in *,
+                                                 sa);
     char name[128];
 
     if (sa_len == sizeof(struct sockaddr_in) && sin->sin_family == AF_INET) {

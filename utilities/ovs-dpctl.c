@@ -997,7 +997,8 @@ sort_output_actions(struct nlattr *actions, size_t length)
     }
     if (first_output) {
         uint8_t *end = (uint8_t *) actions + length;
-        sort_output_actions__(first_output, (struct nlattr *) end);
+        sort_output_actions__(first_output,
+                              ALIGNED_CAST(struct nlattr *, end));
     }
 }
 

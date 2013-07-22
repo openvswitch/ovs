@@ -250,7 +250,8 @@ set_ethertype(struct ofpbuf *packet, ovs_be16 eth_type)
 
     if (eh->eth_type == htons(ETH_TYPE_VLAN)) {
         ovs_be16 *p;
-        p = (ovs_be16 *)((char *)(packet->l2_5 ? packet->l2_5 : packet->l3) - 2);
+        p = ALIGNED_CAST(ovs_be16 *,
+                (char *)(packet->l2_5 ? packet->l2_5 : packet->l3) - 2);
         *p = eth_type;
     } else {
         eh->eth_type = eth_type;
@@ -670,7 +671,7 @@ packet_rh_present(struct ofpbuf *packet)
     if (remaining < sizeof *nh) {
         return false;
     }
-    nh = (struct ip6_hdr *)data;
+    nh = ALIGNED_CAST(struct ip6_hdr *, data);
     data += sizeof *nh;
     remaining -= sizeof *nh;
     nexthdr = nh->ip6_nxt;
@@ -706,7 +707,8 @@ packet_rh_present(struct ofpbuf *packet)
             nexthdr = ext_hdr->ip6e_nxt;
             len = (ext_hdr->ip6e_len + 2) * 4;
         } else if (nexthdr == IPPROTO_FRAGMENT) {
-            const struct ip6_frag *frag_hdr = (struct ip6_frag *)data;
+            const struct ip6_frag *frag_hdr = ALIGNED_CAST(struct ip6_frag *,
+                                                           data);
 
             nexthdr = frag_hdr->ip6f_nxt;
             len = sizeof *frag_hdr;

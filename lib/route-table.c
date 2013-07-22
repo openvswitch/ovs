@@ -270,7 +270,7 @@ route_table_parse(struct ofpbuf *buf, struct route_table_msg *change)
         const struct nlmsghdr *nlmsg;
 
         nlmsg = buf->data;
-        rtm = (const struct rtmsg *) ((const char *) buf->data + NLMSG_HDRLEN);
+        rtm = ofpbuf_at(buf, NLMSG_HDRLEN, sizeof *rtm);
 
         if (rtm->rtm_family != AF_INET) {
             VLOG_DBG_RL(&rl, "received non AF_INET rtnetlink route message");

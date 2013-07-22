@@ -54,7 +54,7 @@ int nx_put_match(struct ofpbuf *, const struct match *,
 int oxm_put_match(struct ofpbuf *, const struct match *);
 
 char *nx_match_to_string(const uint8_t *, unsigned int match_len);
-char *oxm_match_to_string(const uint8_t *, unsigned int match_len);
+char *oxm_match_to_string(const struct ofpbuf *, unsigned int match_len);
 int nx_match_from_string(const char *, struct ofpbuf *);
 int oxm_match_from_string(const char *, struct ofpbuf *);
 
