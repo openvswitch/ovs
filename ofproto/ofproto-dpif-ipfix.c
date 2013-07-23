@@ -33,6 +33,7 @@
 VLOG_DEFINE_THIS_MODULE(ipfix);
 
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+static struct ovs_mutex mutex = OVS_MUTEX_INITIALIZER;
 
 /* Cf. IETF RFC 5101 Section 10.3.4. */
 #define IPFIX_DEFAULT_COLLECTOR_PORT 4739
@@ -62,7 +63,7 @@ struct dpif_ipfix_flow_exporter_map_node {
 struct dpif_ipfix {
     struct dpif_ipfix_bridge_exporter bridge_exporter;
     struct hmap flow_exporter_map;  /* dpif_ipfix_flow_exporter_map_nodes. */
-    int ref_cnt;
+    atomic_int ref_cnt;
 };
 
 #define IPFIX_VERSION 0x000a
@@ -411,13 +412,14 @@ dpif_ipfix_set_options(
     struct dpif_ipfix *di,
     const struct ofproto_ipfix_bridge_exporter_options *bridge_exporter_options,
     const struct ofproto_ipfix_flow_exporter_options *flow_exporters_options,
-    size_t n_flow_exporters_options)
+    size_t n_flow_exporters_options) OVS_EXCLUDED(mutex)
 {
     int i;
     struct ofproto_ipfix_flow_exporter_options *options;
     struct dpif_ipfix_flow_exporter_map_node *node, *next;
     size_t n_broken_flow_exporters_options = 0;
 
+    ovs_mutex_lock(&mutex);
     dpif_ipfix_bridge_exporter_set_options(&di->bridge_exporter,
                                            bridge_exporter_options);
 
@@ -466,6 +468,7 @@ dpif_ipfix_set_options(
 
     ovs_assert(hmap_count(&di->flow_exporter_map) ==
                (n_flow_exporters_options - n_broken_flow_exporters_options));
+    ovs_mutex_unlock(&mutex);
 }
 
 struct dpif_ipfix *
@@ -475,7 +478,7 @@ dpif_ipfix_create(void)
     di = xzalloc(sizeof *di);
     dpif_ipfix_exporter_clear(&di->bridge_exporter.exporter);
     hmap_init(&di->flow_exporter_map);
-    di->ref_cnt = 1;
+    atomic_init(&di->ref_cnt, 1);
     return di;
 }
 
@@ -484,20 +487,26 @@ dpif_ipfix_ref(const struct dpif_ipfix *di_)
 {
     struct dpif_ipfix *di = CONST_CAST(struct dpif_ipfix *, di_);
     if (di) {
-        ovs_assert(di->ref_cnt > 0);
-        di->ref_cnt++;
+        int orig;
+        atomic_add(&di->ref_cnt, 1, &orig);
+        ovs_assert(orig > 0);
     }
     return di;
 }
 
 uint32_t
 dpif_ipfix_get_bridge_exporter_probability(const struct dpif_ipfix *di)
+    OVS_EXCLUDED(mutex)
 {
-    return di->bridge_exporter.probability;
+    uint32_t ret;
+    ovs_mutex_lock(&mutex);
+    ret = di->bridge_exporter.probability;
+    ovs_mutex_unlock(&mutex);
+    return ret;
 }
 
 static void
-dpif_ipfix_clear(struct dpif_ipfix *di)
+dpif_ipfix_clear(struct dpif_ipfix *di) OVS_REQ_WRLOCK(mutex)
 {
     struct dpif_ipfix_flow_exporter_map_node *node, *next;
 
@@ -511,17 +520,22 @@ dpif_ipfix_clear(struct dpif_ipfix *di)
 }
 
 void
-dpif_ipfix_unref(struct dpif_ipfix *di)
+dpif_ipfix_unref(struct dpif_ipfix *di) OVS_EXCLUDED(mutex)
 {
+    int orig;
+
     if (!di) {
         return;
     }
 
-    ovs_assert(di->ref_cnt > 0);
-    if (!--di->ref_cnt) {
+    atomic_sub(&di->ref_cnt, 1, &orig);
+    ovs_assert(orig > 0);
+    if (orig == 1) {
+        ovs_mutex_lock(&mutex);
         dpif_ipfix_clear(di);
         hmap_destroy(&di->flow_exporter_map);
         free(di);
+        ovs_mutex_unlock(&mutex);
     }
 }
 
@@ -842,35 +856,37 @@ dpif_ipfix_sample(struct dpif_ipfix_exporter *exporter,
 
 void
 dpif_ipfix_bridge_sample(struct dpif_ipfix *di, struct ofpbuf *packet,
-                         const struct flow *flow)
+                         const struct flow *flow) OVS_EXCLUDED(mutex)
 {
+    uint64_t packet_delta_count;
+
+    ovs_mutex_lock(&mutex);
     /* Use the sampling probability as an approximation of the number
      * of matched packets. */
-    uint64_t packet_delta_count = UINT32_MAX / di->bridge_exporter.probability;
-
+    packet_delta_count = UINT32_MAX / di->bridge_exporter.probability;
     dpif_ipfix_sample(&di->bridge_exporter.exporter, packet, flow,
                       packet_delta_count,
                       di->bridge_exporter.options->obs_domain_id,
                       di->bridge_exporter.options->obs_point_id);
+    ovs_mutex_unlock(&mutex);
 }
 
 void
 dpif_ipfix_flow_sample(struct dpif_ipfix *di, struct ofpbuf *packet,
                        const struct flow *flow, uint32_t collector_set_id,
                        uint16_t probability, uint32_t obs_domain_id,
-                       uint32_t obs_point_id)
+                       uint32_t obs_point_id) OVS_EXCLUDED(mutex)
 {
     struct dpif_ipfix_flow_exporter_map_node *node;
     /* Use the sampling probability as an approximation of the number
      * of matched packets. */
     uint64_t packet_delta_count = USHRT_MAX / probability;
 
+    ovs_mutex_lock(&mutex);
     node = dpif_ipfix_find_flow_exporter_map_node(di, collector_set_id);
-
-    if (!node) {
-        return;
+    if (node) {
+        dpif_ipfix_sample(&node->exporter.exporter, packet, flow,
+                          packet_delta_count, obs_domain_id, obs_point_id);
     }
-
-    dpif_ipfix_sample(&node->exporter.exporter, packet, flow,
-                      packet_delta_count, obs_domain_id, obs_point_id);
+    ovs_mutex_unlock(&mutex);
 }
