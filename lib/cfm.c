@@ -91,8 +91,6 @@ struct cfm {
     uint64_t rx_packets;        /* Packets received by 'netdev'. */
 
     uint64_t mpid;
-    bool check_tnl_key;    /* Verify the tunnel key of inbound packets? */
-    bool extended;         /* Extended mode. */
     bool demand;           /* Demand mode. */
     bool booted;           /* A full fault interval has occurred. */
     enum cfm_fault_reason fault;  /* Connectivity fault status. */
@@ -128,7 +126,9 @@ struct cfm {
                                  recomputed. */
     long long int last_tx;    /* Last CCM transmission time. */
 
-    int ref_cnt;
+    atomic_bool check_tnl_key; /* Verify the tunnel key of inbound packets? */
+    atomic_bool extended;      /* Extended mode. */
+    atomic_int ref_cnt;
 };
 
 /* Remote MPs represent foreign network entities that are configured to have
@@ -147,13 +147,16 @@ struct remote_mp {
 };
 
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(20, 30);
-static struct hmap all_cfms = HMAP_INITIALIZER(&all_cfms);
+
+static struct ovs_mutex mutex = OVS_MUTEX_INITIALIZER;
+static struct hmap all_cfms__ = HMAP_INITIALIZER(&all_cfms__);
+static struct hmap *const all_cfms OVS_GUARDED_BY(mutex) = &all_cfms__;
 
 static unixctl_cb_func cfm_unixctl_show;
 static unixctl_cb_func cfm_unixctl_set_fault;
 
 static uint64_t
-cfm_rx_packets(const struct cfm *cfm)
+cfm_rx_packets(const struct cfm *cfm) OVS_REQ_WRLOCK(mutex)
 {
     struct netdev_stats stats;
 
@@ -167,12 +170,15 @@ cfm_rx_packets(const struct cfm *cfm)
 static const uint8_t *
 cfm_ccm_addr(const struct cfm *cfm)
 {
-    return cfm->extended ? eth_addr_ccm_x : eth_addr_ccm;
+    bool extended;
+    atomic_read(&cfm->extended, &extended);
+    return extended ? eth_addr_ccm_x : eth_addr_ccm;
 }
 
 /* Returns the string representation of the given cfm_fault_reason 'reason'. */
 const char *
-cfm_fault_reason_to_str(int reason) {
+cfm_fault_reason_to_str(int reason)
+{
     switch (reason) {
 #define CFM_FAULT_REASON(NAME, STR) case CFM_FAULT_##NAME: return #STR;
         CFM_FAULT_REASONS
@@ -198,7 +204,7 @@ ds_put_cfm_fault(struct ds *ds, int fault)
 }
 
 static void
-cfm_generate_maid(struct cfm *cfm)
+cfm_generate_maid(struct cfm *cfm) OVS_REQ_WRLOCK(mutex)
 {
     const char *ovs_md_name = "ovs";
     const char *ovs_ma_name = "ovs";
@@ -241,7 +247,7 @@ ccm_interval_to_ms(uint8_t interval)
 }
 
 static long long int
-cfm_fault_interval(struct cfm *cfm)
+cfm_fault_interval(struct cfm *cfm) OVS_REQ_WRLOCK(mutex)
 {
     /* According to the 802.1ag specification we should assume every other MP
      * with the same MAID has the same transmission interval that we have.  If
@@ -283,7 +289,7 @@ cfm_is_valid_mpid(bool extended, uint64_t mpid)
 }
 
 static struct remote_mp *
-lookup_remote_mp(const struct cfm *cfm, uint64_t mpid)
+lookup_remote_mp(const struct cfm *cfm, uint64_t mpid) OVS_REQ_WRLOCK(mutex)
 {
     struct remote_mp *rmp;
 
@@ -308,7 +314,7 @@ cfm_init(void)
 /* Allocates a 'cfm' object called 'name'.  'cfm' should be initialized by
  * cfm_configure() before use. */
 struct cfm *
-cfm_create(const struct netdev *netdev)
+cfm_create(const struct netdev *netdev) OVS_EXCLUDED(mutex)
 {
     struct cfm *cfm;
 
@@ -316,29 +322,40 @@ cfm_create(const struct netdev *netdev)
     cfm->netdev = netdev_ref(netdev);
     cfm->name = netdev_get_name(cfm->netdev);
     hmap_init(&cfm->remote_mps);
-    cfm_generate_maid(cfm);
-    hmap_insert(&all_cfms, &cfm->hmap_node, hash_string(cfm->name, 0));
     cfm->remote_opup = true;
     cfm->fault_override = -1;
     cfm->health = -1;
     cfm->last_tx = 0;
-    cfm->ref_cnt = 1;
+    atomic_init(&cfm->extended, false);
+    atomic_init(&cfm->check_tnl_key, false);
+    atomic_init(&cfm->ref_cnt, 1);
+
+    ovs_mutex_lock(&mutex);
+    cfm_generate_maid(cfm);
+    hmap_insert(all_cfms, &cfm->hmap_node, hash_string(cfm->name, 0));
+    ovs_mutex_unlock(&mutex);
     return cfm;
 }
 
 void
-cfm_unref(struct cfm *cfm)
+cfm_unref(struct cfm *cfm) OVS_EXCLUDED(mutex)
 {
     struct remote_mp *rmp, *rmp_next;
+    int orig;
 
     if (!cfm) {
         return;
     }
 
-    ovs_assert(cfm->ref_cnt);
-    if (--cfm->ref_cnt) {
+    atomic_sub(&cfm->ref_cnt, 1, &orig);
+    ovs_assert(orig > 0);
+    if (orig != 1) {
         return;
     }
+
+    ovs_mutex_lock(&mutex);
+    hmap_remove(all_cfms, &cfm->hmap_node);
+    ovs_mutex_unlock(&mutex);
 
     HMAP_FOR_EACH_SAFE (rmp, rmp_next, node, &cfm->remote_mps) {
         hmap_remove(&cfm->remote_mps, &rmp->node);
@@ -346,7 +363,6 @@ cfm_unref(struct cfm *cfm)
     }
 
     hmap_destroy(&cfm->remote_mps);
-    hmap_remove(&all_cfms, &cfm->hmap_node);
     netdev_close(cfm->netdev);
     free(cfm->rmps_array);
     free(cfm);
@@ -357,16 +373,18 @@ cfm_ref(const struct cfm *cfm_)
 {
     struct cfm *cfm = CONST_CAST(struct cfm *, cfm_);
     if (cfm) {
-        ovs_assert(cfm->ref_cnt > 0);
-        cfm->ref_cnt++;
+        int orig;
+        atomic_add(&cfm->ref_cnt, 1, &orig);
+        ovs_assert(orig > 0);
     }
     return cfm;
 }
 
 /* Should be run periodically to update fault statistics messages. */
 void
-cfm_run(struct cfm *cfm)
+cfm_run(struct cfm *cfm) OVS_EXCLUDED(mutex)
 {
+    ovs_mutex_lock(&mutex);
     if (timer_expired(&cfm->fault_timer)) {
         long long int interval = cfm_fault_interval(cfm);
         struct remote_mp *rmp, *rmp_next;
@@ -461,25 +479,33 @@ cfm_run(struct cfm *cfm)
         timer_set_duration(&cfm->fault_timer, interval);
         VLOG_DBG("%s: new fault interval", cfm->name);
     }
+    ovs_mutex_unlock(&mutex);
 }
 
 /* Should be run periodically to check if the CFM module has a CCM message it
  * wishes to send. */
 bool
-cfm_should_send_ccm(struct cfm *cfm)
+cfm_should_send_ccm(struct cfm *cfm) OVS_EXCLUDED(mutex)
 {
-    return timer_expired(&cfm->tx_timer);
+    bool ret;
+
+    ovs_mutex_lock(&mutex);
+    ret = timer_expired(&cfm->tx_timer);
+    ovs_mutex_unlock(&mutex);
+    return ret;
 }
 
 /* Composes a CCM message into 'packet'.  Messages generated with this function
  * should be sent whenever cfm_should_send_ccm() indicates. */
 void
 cfm_compose_ccm(struct cfm *cfm, struct ofpbuf *packet,
-                uint8_t eth_src[ETH_ADDR_LEN])
+                uint8_t eth_src[ETH_ADDR_LEN]) OVS_EXCLUDED(mutex)
 {
     uint16_t ccm_vlan;
     struct ccm *ccm;
+    bool extended;
 
+    ovs_mutex_lock(&mutex);
     timer_set_duration(&cfm->tx_timer, cfm->ccm_interval_ms);
     eth_compose(packet, cfm_ccm_addr(cfm), eth_src, ETH_TYPE_CFM, sizeof *ccm);
 
@@ -503,7 +529,8 @@ cfm_compose_ccm(struct cfm *cfm, struct ofpbuf *packet,
     memset(ccm->zero, 0, sizeof ccm->zero);
     ccm->end_tlv = 0;
 
-    if (cfm->extended) {
+    atomic_read(&cfm->extended, &extended);
+    if (extended) {
         ccm->mpid = htons(hash_mpid(cfm->mpid));
         ccm->mpid64 = htonll(cfm->mpid);
         ccm->opdown = !cfm->opup;
@@ -514,7 +541,7 @@ cfm_compose_ccm(struct cfm *cfm, struct ofpbuf *packet,
     }
 
     if (cfm->ccm_interval == 0) {
-        ovs_assert(cfm->extended);
+        ovs_assert(extended);
         ccm->interval_ms_x = htons(cfm->ccm_interval_ms);
     } else {
         ccm->interval_ms_x = htons(0);
@@ -533,18 +560,22 @@ cfm_compose_ccm(struct cfm *cfm, struct ofpbuf *packet,
         }
     }
     cfm->last_tx = time_msec();
+    ovs_mutex_unlock(&mutex);
 }
 
 void
-cfm_wait(struct cfm *cfm)
+cfm_wait(struct cfm *cfm) OVS_EXCLUDED(mutex)
 {
+    ovs_mutex_lock(&mutex);
     timer_wait(&cfm->tx_timer);
     timer_wait(&cfm->fault_timer);
+    ovs_mutex_unlock(&mutex);
 }
 
 /* Configures 'cfm' with settings from 's'. */
 bool
 cfm_configure(struct cfm *cfm, const struct cfm_settings *s)
+    OVS_EXCLUDED(mutex)
 {
     uint8_t interval;
     int interval_ms;
@@ -553,21 +584,23 @@ cfm_configure(struct cfm *cfm, const struct cfm_settings *s)
         return false;
     }
 
+    ovs_mutex_lock(&mutex);
     cfm->mpid = s->mpid;
-    cfm->check_tnl_key = s->check_tnl_key;
-    cfm->extended = s->extended;
     cfm->opup = s->opup;
     interval = ms_to_ccm_interval(s->interval);
     interval_ms = ccm_interval_to_ms(interval);
 
+    atomic_store(&cfm->check_tnl_key, s->check_tnl_key);
+    atomic_store(&cfm->extended, s->extended);
+
     cfm->ccm_vlan = s->ccm_vlan;
     cfm->ccm_pcp = s->ccm_pcp & (VLAN_PCP_MASK >> VLAN_PCP_SHIFT);
-    if (cfm->extended && interval_ms != s->interval) {
+    if (s->extended && interval_ms != s->interval) {
         interval = 0;
         interval_ms = MIN(s->interval, UINT16_MAX);
     }
 
-    if (cfm->extended && s->demand) {
+    if (s->extended && s->demand) {
         interval_ms = MAX(interval_ms, 500);
         if (!cfm->demand) {
             cfm->demand = true;
@@ -585,17 +618,21 @@ cfm_configure(struct cfm *cfm, const struct cfm_settings *s)
         timer_set_duration(&cfm->fault_timer, cfm_fault_interval(cfm));
     }
 
+    ovs_mutex_unlock(&mutex);
     return true;
 }
 
 /* Must be called when the netdev owned by 'cfm' should change. */
 void
 cfm_set_netdev(struct cfm *cfm, const struct netdev *netdev)
+    OVS_EXCLUDED(mutex)
 {
+    ovs_mutex_lock(&mutex);
     if (cfm->netdev != netdev) {
         netdev_close(cfm->netdev);
         cfm->netdev = netdev_ref(netdev);
     }
+    ovs_mutex_unlock(&mutex);
 }
 
 /* Returns true if 'cfm' should process packets from 'flow'.  Sets
@@ -604,13 +641,16 @@ bool
 cfm_should_process_flow(const struct cfm *cfm, const struct flow *flow,
                         struct flow_wildcards *wc)
 {
+    bool check_tnl_key;
+
+    atomic_read(&cfm->check_tnl_key, &check_tnl_key);
     memset(&wc->masks.dl_dst, 0xff, sizeof wc->masks.dl_dst);
-    if (cfm->check_tnl_key) {
+    if (check_tnl_key) {
         memset(&wc->masks.tunnel.tun_id, 0xff, sizeof wc->masks.tunnel.tun_id);
     }
     return (ntohs(flow->dl_type) == ETH_TYPE_CFM
             && eth_addr_equals(flow->dl_dst, cfm_ccm_addr(cfm))
-            && (!cfm->check_tnl_key || flow->tunnel.tun_id == htonll(0)));
+            && (!check_tnl_key || flow->tunnel.tun_id == htonll(0)));
 }
 
 /* Updates internal statistics relevant to packet 'p'.  Should be called on
@@ -618,9 +658,12 @@ cfm_should_process_flow(const struct cfm *cfm, const struct flow *flow,
  * cfm_should_process_flow. */
 void
 cfm_process_heartbeat(struct cfm *cfm, const struct ofpbuf *p)
+    OVS_EXCLUDED(mutex)
 {
     struct ccm *ccm;
     struct eth_header *eth;
+
+    ovs_mutex_lock(&mutex);
 
     eth = p->l2;
     ccm = ofpbuf_at(p, (uint8_t *)p->l3 - (uint8_t *)p->data, CCM_ACCEPT_LEN);
@@ -628,13 +671,13 @@ cfm_process_heartbeat(struct cfm *cfm, const struct ofpbuf *p)
     if (!ccm) {
         VLOG_INFO_RL(&rl, "%s: Received an unparseable 802.1ag CCM heartbeat.",
                      cfm->name);
-        return;
+        goto out;
     }
 
     if (ccm->opcode != CCM_OPCODE) {
         VLOG_INFO_RL(&rl, "%s: Received an unsupported 802.1ag message. "
                      "(opcode %u)", cfm->name, ccm->opcode);
-        return;
+        goto out;
     }
 
     /* According to the 802.1ag specification, reception of a CCM with an
@@ -659,9 +702,11 @@ cfm_process_heartbeat(struct cfm *cfm, const struct ofpbuf *p)
         uint64_t ccm_mpid;
         uint32_t ccm_seq;
         bool ccm_opdown;
+        bool extended;
         enum cfm_fault_reason cfm_fault = 0;
 
-        if (cfm->extended) {
+        atomic_read(&cfm->extended, &extended);
+        if (extended) {
             ccm_mpid = ntohll(ccm->mpid64);
             ccm_opdown = ccm->opdown;
         } else {
@@ -677,7 +722,7 @@ cfm_process_heartbeat(struct cfm *cfm, const struct ofpbuf *p)
                          ccm_interval, ccm_mpid);
         }
 
-        if (cfm->extended && ccm_interval == 0
+        if (extended && ccm_interval == 0
             && ccm_interval_ms_x != cfm->ccm_interval_ms) {
             cfm_fault |= CFM_FAULT_INTERVAL;
             VLOG_WARN_RL(&rl, "%s: received a CCM with an unexpected extended"
@@ -734,18 +779,32 @@ cfm_process_heartbeat(struct cfm *cfm, const struct ofpbuf *p)
             rmp->last_rx = time_msec();
         }
     }
+
+out:
+    ovs_mutex_unlock(&mutex);
+}
+
+static int
+cfm_get_fault__(const struct cfm *cfm) OVS_REQ_WRLOCK(mutex)
+{
+    if (cfm->fault_override >= 0) {
+        return cfm->fault_override ? CFM_FAULT_OVERRIDE : 0;
+    }
+    return cfm->fault;
 }
 
 /* Gets the fault status of 'cfm'.  Returns a bit mask of 'cfm_fault_reason's
  * indicating the cause of the connectivity fault, or zero if there is no
  * fault. */
 int
-cfm_get_fault(const struct cfm *cfm)
+cfm_get_fault(const struct cfm *cfm) OVS_EXCLUDED(mutex)
 {
-    if (cfm->fault_override >= 0) {
-        return cfm->fault_override ? CFM_FAULT_OVERRIDE : 0;
-    }
-    return cfm->fault;
+    int fault;
+
+    ovs_mutex_lock(&mutex);
+    fault = cfm_get_fault__(cfm);
+    ovs_mutex_unlock(&mutex);
+    return fault;
 }
 
 /* Gets the health of 'cfm'.  Returns an integer between 0 and 100 indicating
@@ -754,9 +813,14 @@ cfm_get_fault(const struct cfm *cfm)
  * returns 0 if there are no remote_mpids, and returns -1 if there are more
  * than 1 remote_mpids. */
 int
-cfm_get_health(const struct cfm *cfm)
+cfm_get_health(const struct cfm *cfm) OVS_EXCLUDED(mutex)
 {
-    return cfm->health;
+    int health;
+
+    ovs_mutex_lock(&mutex);
+    health = cfm->health;
+    ovs_mutex_unlock(&mutex);
+    return health;
 }
 
 /* Gets the operational state of 'cfm'.  'cfm' is considered operationally down
@@ -765,32 +829,38 @@ cfm_get_health(const struct cfm *cfm)
  * 'cfm' is operationally down, or -1 if 'cfm' has no operational state
  * (because it isn't in extended mode). */
 int
-cfm_get_opup(const struct cfm *cfm)
+cfm_get_opup(const struct cfm *cfm) OVS_EXCLUDED(mutex)
 {
-    if (cfm->extended) {
-        return cfm->remote_opup;
-    } else {
-        return -1;
-    }
+    bool extended;
+    int opup;
+
+    ovs_mutex_lock(&mutex);
+    atomic_read(&cfm->extended, &extended);
+    opup = extended ? cfm->remote_opup : -1;
+    ovs_mutex_unlock(&mutex);
+
+    return opup;
 }
 
 /* Populates 'rmps' with an array of remote maintenance points reachable by
  * 'cfm'. The number of remote maintenance points is written to 'n_rmps'.
  * 'cfm' retains ownership of the array written to 'rmps' */
 void
-cfm_get_remote_mpids(const struct cfm *cfm, const uint64_t **rmps,
-                     size_t *n_rmps)
+cfm_get_remote_mpids(const struct cfm *cfm, uint64_t **rmps, size_t *n_rmps)
+    OVS_EXCLUDED(mutex)
 {
-    *rmps = cfm->rmps_array;
+    ovs_mutex_lock(&mutex);
+    *rmps = xmemdup(cfm->rmps_array, cfm->rmps_array_len);
     *n_rmps = cfm->rmps_array_len;
+    ovs_mutex_unlock(&mutex);
 }
 
 static struct cfm *
-cfm_find(const char *name)
+cfm_find(const char *name) OVS_REQ_WRLOCK(&mutex)
 {
     struct cfm *cfm;
 
-    HMAP_FOR_EACH_WITH_HASH (cfm, hmap_node, hash_string(name, 0), &all_cfms) {
+    HMAP_FOR_EACH_WITH_HASH (cfm, hmap_node, hash_string(name, 0), all_cfms) {
         if (!strcmp(cfm->name, name)) {
             return cfm;
         }
@@ -799,17 +869,20 @@ cfm_find(const char *name)
 }
 
 static void
-cfm_print_details(struct ds *ds, const struct cfm *cfm)
+cfm_print_details(struct ds *ds, const struct cfm *cfm) OVS_REQ_WRLOCK(&mutex)
 {
     struct remote_mp *rmp;
+    bool extended;
     int fault;
+
+    atomic_read(&cfm->extended, &extended);
 
     ds_put_format(ds, "---- %s ----\n", cfm->name);
     ds_put_format(ds, "MPID %"PRIu64":%s%s\n", cfm->mpid,
-                  cfm->extended ? " extended" : "",
+                  extended ? " extended" : "",
                   cfm->fault_override >= 0 ? " fault_override" : "");
 
-    fault = cfm_get_fault(cfm);
+    fault = cfm_get_fault__(cfm);
     if (fault) {
         ds_put_cstr(ds, "\tfault: ");
         ds_put_cfm_fault(ds, fault);
@@ -840,36 +913,40 @@ cfm_print_details(struct ds *ds, const struct cfm *cfm)
 
 static void
 cfm_unixctl_show(struct unixctl_conn *conn, int argc, const char *argv[],
-                 void *aux OVS_UNUSED)
+                 void *aux OVS_UNUSED) OVS_EXCLUDED(mutex)
 {
     struct ds ds = DS_EMPTY_INITIALIZER;
     const struct cfm *cfm;
 
+    ovs_mutex_lock(&mutex);
     if (argc > 1) {
         cfm = cfm_find(argv[1]);
         if (!cfm) {
             unixctl_command_reply_error(conn, "no such CFM object");
-            return;
+            goto out;
         }
         cfm_print_details(&ds, cfm);
     } else {
-        HMAP_FOR_EACH (cfm, hmap_node, &all_cfms) {
+        HMAP_FOR_EACH (cfm, hmap_node, all_cfms) {
             cfm_print_details(&ds, cfm);
         }
     }
 
     unixctl_command_reply(conn, ds_cstr(&ds));
     ds_destroy(&ds);
+out:
+    ovs_mutex_unlock(&mutex);
 }
 
 static void
 cfm_unixctl_set_fault(struct unixctl_conn *conn, int argc, const char *argv[],
-                      void *aux OVS_UNUSED)
+                      void *aux OVS_UNUSED) OVS_EXCLUDED(mutex)
 {
     const char *fault_str = argv[argc - 1];
     int fault_override;
     struct cfm *cfm;
 
+    ovs_mutex_lock(&mutex);
     if (!strcasecmp("true", fault_str)) {
         fault_override = 1;
     } else if (!strcasecmp("false", fault_str)) {
@@ -878,21 +955,24 @@ cfm_unixctl_set_fault(struct unixctl_conn *conn, int argc, const char *argv[],
         fault_override = -1;
     } else {
         unixctl_command_reply_error(conn, "unknown fault string");
-        return;
+        goto out;
     }
 
     if (argc > 2) {
         cfm = cfm_find(argv[1]);
         if (!cfm) {
             unixctl_command_reply_error(conn, "no such CFM object");
-            return;
+            goto out;
         }
         cfm->fault_override = fault_override;
     } else {
-        HMAP_FOR_EACH (cfm, hmap_node, &all_cfms) {
+        HMAP_FOR_EACH (cfm, hmap_node, all_cfms) {
             cfm->fault_override = fault_override;
         }
     }
 
     unixctl_command_reply(conn, "OK");
+
+out:
+    ovs_mutex_unlock(&mutex);
 }

@@ -80,8 +80,7 @@ void cfm_process_heartbeat(struct cfm *, const struct ofpbuf *packet);
 int cfm_get_fault(const struct cfm *);
 int cfm_get_health(const struct cfm *);
 int cfm_get_opup(const struct cfm *);
-void cfm_get_remote_mpids(const struct cfm *, const uint64_t **rmps,
-                          size_t *n_rmps);
+void cfm_get_remote_mpids(const struct cfm *, uint64_t **rmps, size_t *n_rmps);
 const char *cfm_fault_reason_to_str(int fault);
 
 #endif /* cfm.h */

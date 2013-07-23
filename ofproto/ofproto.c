@@ -3094,8 +3094,7 @@ ofproto_get_netflow_ids(const struct ofproto *ofproto,
  * Returns false if the port did not have CFM configured, in which case
  * '*status' is indeterminate.
  *
- * The caller must provide and owns '*status', but it does not own and must not
- * modify or free the array returned in 'status->rmps'. */
+ * The caller must provide and owns '*status', and must free 'status->rmps'. */
 bool
 ofproto_port_get_cfm_status(const struct ofproto *ofproto, ofp_port_t ofp_port,
                             struct ofproto_cfm_status *status)

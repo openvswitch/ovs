@@ -1915,6 +1915,8 @@ iface_refresh_cfm_stats(struct iface *iface)
         } else {
             ovsrec_interface_set_cfm_health(cfg, NULL, 0);
         }
+
+        free(status.rmps);
     }
 }
 
