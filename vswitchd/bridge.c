@@ -3702,10 +3702,10 @@ collect_splinter_vlans(const struct ovsrec_open_vswitch *ovs_cfg)
                 if (!netdev_open(vlan_dev->name, "system", &netdev)) {
                     if (!netdev_get_in4(netdev, NULL, NULL) ||
                         !netdev_get_in6(netdev, NULL)) {
-                        vlandev_del(vlan_dev->name);
-                    } else {
                         /* It has an IP address configured, so we don't own
                          * it.  Don't delete it. */
+                    } else {
+                        vlandev_del(vlan_dev->name);
                     }
                     netdev_close(netdev);
                 }
