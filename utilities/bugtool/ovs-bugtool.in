@@ -113,6 +113,7 @@ OPENVSWITCH_DEFAULT_SWITCH = '/etc/default/openvswitch-switch' # Debian
 OPENVSWITCH_SYSCONFIG_SWITCH = '/etc/sysconfig/openvswitch'    # RHEL
 OPENVSWITCH_DEFAULT_CONTROLLER = '/etc/default/openvswitch-controller'
 OPENVSWITCH_CONF_DB = '@DBDIR@/conf.db'
+OPENVSWITCH_COMPACT_DB = '@DBDIR@/bugtool-compact-conf.db'
 OPENVSWITCH_VSWITCHD_PID = '@RUNDIR@/ovs-vswitchd.pid'
 VAR_LOG_DIR = '/var/log/'
 VAR_LOG_CORE_DIR = '/var/log/core'
@@ -543,7 +544,6 @@ exclude those logs from the archive.
     tree_output(CAP_NETWORK_CONFIG, SYSCONFIG_NETWORK_SCRIPTS, ROUTE_RE)
     file_output(CAP_NETWORK_CONFIG, [SYSCONFIG_NETWORK, RESOLV_CONF, NSSWITCH_CONF, HOSTS])
     file_output(CAP_NETWORK_CONFIG, [NTP_CONF, IPTABLES_CONFIG, HOSTS_ALLOW, HOSTS_DENY])
-    file_output(CAP_NETWORK_CONFIG, [OPENVSWITCH_CONF_DB])
 
     cmd_output(CAP_NETWORK_INFO, [IFCONFIG, '-a'])
     cmd_output(CAP_NETWORK_INFO, [ROUTE, '-n'])
@@ -575,6 +575,8 @@ exclude those logs from the archive.
     tree_output(CAP_NETWORK_INFO, PROC_NET_VLAN_DIR)
     cmd_output(CAP_NETWORK_INFO, [TC, '-s', 'qdisc'])
     file_output(CAP_NETWORK_INFO, [PROC_NET_SOFTNET_STAT])
+
+    collect_ovsdb()
     if os.path.exists(OPENVSWITCH_VSWITCHD_PID):
         cmd_output(CAP_NETWORK_STATUS, [OVS_DPCTL, 'show', '-s'])
         for d in dp_list():
@@ -679,6 +681,8 @@ exclude those logs from the archive.
         for c in caps.keys():
             print >>sys.stderr, "    %s (%d, %d)" % (c, caps[c][MAX_SIZE],
                                                      cap_sizes[c])
+
+    cleanup_ovsdb()
     return 0
 
 def dump_scsi_hosts(cap):
@@ -738,6 +742,36 @@ def dp_list():
     if not procs[0].timed_out:
         return output.getvalue().splitlines()
     return []
+
+def collect_ovsdb():
+    if not os.path.isfile(OPENVSWITCH_CONF_DB):
+        return
+
+    max_size = 10*MB
+
+    try:
+        if os.path.getsize(OPENVSWITCH_CONF_DB) > max_size:
+            if os.path.isfile(OPENVSWITCH_COMPACT_DB):
+                os.unlink(OPENVSWITCH_COMPACT_DB)
+
+            output = StringIO.StringIO()
+            max_time = 5
+            procs = [ProcOutput(['ovsdb-tool', 'compact',
+                                OPENVSWITCH_CONF_DB, OPENVSWITCH_COMPACT_DB],
+                                max_time, output)]
+            run_procs([procs])
+            file_output(CAP_NETWORK_STATUS, [OPENVSWITCH_COMPACT_DB])
+        else:
+            file_output(CAP_NETWORK_STATUS, [OPENVSWITCH_CONF_DB])
+    except OSError, e:
+        return
+
+def cleanup_ovsdb():
+    try:
+        if os.path.isfile(OPENVSWITCH_COMPACT_DB):
+            os.unlink(OPENVSWITCH_COMPACT_DB)
+    except:
+        return
 
 def fd_usage(cap):
     output = ''
