@@ -53,25 +53,36 @@ struct tnl_port {
     struct tnl_match match;
 };
 
-static struct hmap tnl_match_map = HMAP_INITIALIZER(&tnl_match_map);
-static struct hmap ofport_map = HMAP_INITIALIZER(&ofport_map);
+static struct ovs_rwlock rwlock = OVS_RWLOCK_INITIALIZER;
+
+static struct hmap tnl_match_map__ = HMAP_INITIALIZER(&tnl_match_map__);
+static struct hmap *tnl_match_map OVS_GUARDED_BY(rwlock) = &tnl_match_map__;
+
+static struct hmap ofport_map__ = HMAP_INITIALIZER(&ofport_map__);
+static struct hmap *ofport_map OVS_GUARDED_BY(rwlock) = &ofport_map__;
 
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 static struct vlog_rate_limit dbg_rl = VLOG_RATE_LIMIT_INIT(60, 60);
 
-static struct tnl_port *tnl_find(struct tnl_match *);
-static struct tnl_port *tnl_find_exact(struct tnl_match *);
-static struct tnl_port *tnl_find_ofport(const struct ofport_dpif *);
+static struct tnl_port *tnl_find(struct tnl_match *) OVS_REQ_RDLOCK(&rwlock);
+static struct tnl_port *tnl_find_exact(struct tnl_match *)
+    OVS_REQ_RDLOCK(&rwlock);
+static struct tnl_port *tnl_find_ofport(const struct ofport_dpif *)
+    OVS_REQ_RDLOCK(&rwlock);
 
 static uint32_t tnl_hash(struct tnl_match *);
 static void tnl_match_fmt(const struct tnl_match *, struct ds *);
-static char *tnl_port_fmt(const struct tnl_port *);
-static void tnl_port_mod_log(const struct tnl_port *, const char *action);
-static const char *tnl_port_get_name(const struct tnl_port *);
+static char *tnl_port_fmt(const struct tnl_port *) OVS_REQ_RDLOCK(&rwlock);
+static void tnl_port_mod_log(const struct tnl_port *, const char *action)
+    OVS_REQ_RDLOCK(&rwlock);
+static const char *tnl_port_get_name(const struct tnl_port *)
+    OVS_REQ_RDLOCK(&rwlock);
+static void tnl_port_del__(const struct ofport_dpif *) OVS_REQ_WRLOCK(&rwlock);
 
 static bool
 tnl_port_add__(const struct ofport_dpif *ofport, const struct netdev *netdev,
                odp_port_t odp_port, bool warn)
+    OVS_REQ_WRLOCK(&rwlock)
 {
     const struct netdev_tunnel_config *cfg;
     struct tnl_port *existing_port;
@@ -108,8 +119,8 @@ tnl_port_add__(const struct ofport_dpif *ofport, const struct netdev *netdev,
         return false;
     }
 
-    hmap_insert(&ofport_map, &tnl_port->ofport_node, hash_pointer(ofport, 0));
-    hmap_insert(&tnl_match_map, &tnl_port->match_node,
+    hmap_insert(ofport_map, &tnl_port->ofport_node, hash_pointer(ofport, 0));
+    hmap_insert(tnl_match_map, &tnl_port->match_node,
                 tnl_hash(&tnl_port->match));
     tnl_port_mod_log(tnl_port, "adding");
     return true;
@@ -120,9 +131,11 @@ tnl_port_add__(const struct ofport_dpif *ofport, const struct netdev *netdev,
  * tunnel. */
 void
 tnl_port_add(const struct ofport_dpif *ofport, const struct netdev *netdev,
-             odp_port_t odp_port)
+             odp_port_t odp_port) OVS_EXCLUDED(rwlock)
 {
+    ovs_rwlock_wrlock(&rwlock);
     tnl_port_add__(ofport, netdev, odp_port, true);
+    ovs_rwlock_unlock(&rwlock);
 }
 
 /* Checks if the tunnel represented by 'ofport' reconfiguration due to changes
@@ -132,35 +145,53 @@ tnl_port_add(const struct ofport_dpif *ofport, const struct netdev *netdev,
 bool
 tnl_port_reconfigure(const struct ofport_dpif *ofport,
                      const struct netdev *netdev, odp_port_t odp_port)
+    OVS_EXCLUDED(rwlock)
 {
-    struct tnl_port *tnl_port = tnl_find_ofport(ofport);
+    struct tnl_port *tnl_port;
+    bool changed = false;
 
+    ovs_rwlock_wrlock(&rwlock);
+    tnl_port = tnl_find_ofport(ofport);
     if (!tnl_port) {
-        return tnl_port_add__(ofport, netdev, odp_port, false);
+        changed = tnl_port_add__(ofport, netdev, odp_port, false);
     } else if (tnl_port->netdev != netdev
                || tnl_port->match.odp_port != odp_port
                || tnl_port->netdev_seq != netdev_change_seq(netdev)) {
         VLOG_DBG("reconfiguring %s", tnl_port_get_name(tnl_port));
-        tnl_port_del(ofport);
-        tnl_port_add(ofport, netdev, odp_port);
-        return true;
+        tnl_port_del__(ofport);
+        tnl_port_add__(ofport, netdev, odp_port, true);
+        changed = true;
     }
-    return false;
+    ovs_rwlock_unlock(&rwlock);
+    return changed;
+}
+
+static void
+tnl_port_del__(const struct ofport_dpif *ofport) OVS_REQ_WRLOCK(rwlock)
+{
+    struct tnl_port *tnl_port;
+
+    if (!ofport) {
+        return;
+    }
+
+    tnl_port = tnl_find_ofport(ofport);
+    if (tnl_port) {
+        tnl_port_mod_log(tnl_port, "removing");
+        hmap_remove(tnl_match_map, &tnl_port->match_node);
+        hmap_remove(ofport_map, &tnl_port->ofport_node);
+        netdev_close(tnl_port->netdev);
+        free(tnl_port);
+    }
 }
 
 /* Removes 'ofport' from the module. */
 void
-tnl_port_del(const struct ofport_dpif *ofport)
+tnl_port_del(const struct ofport_dpif *ofport) OVS_EXCLUDED(rwlock)
 {
-    struct tnl_port *tnl_port = ofport ? tnl_find_ofport(ofport) : NULL;
-
-    if (tnl_port) {
-        tnl_port_mod_log(tnl_port, "removing");
-        hmap_remove(&tnl_match_map, &tnl_port->match_node);
-        hmap_remove(&ofport_map, &tnl_port->ofport_node);
-        netdev_close(tnl_port->netdev);
-        free(tnl_port);
-    }
+    ovs_rwlock_wrlock(&rwlock);
+    tnl_port_del__(ofport);
+    ovs_rwlock_unlock(&rwlock);
 }
 
 /* Looks in the table of tunnels for a tunnel matching the metadata in 'flow'.
@@ -170,9 +201,10 @@ tnl_port_del(const struct ofport_dpif *ofport)
  * Callers should verify that 'flow' needs to be received by calling
  * tnl_port_should_receive() before this function. */
 const struct ofport_dpif *
-tnl_port_receive(const struct flow *flow)
+tnl_port_receive(const struct flow *flow) OVS_EXCLUDED(rwlock)
 {
     char *pre_flow_str = NULL;
+    const struct ofport_dpif *ofport;
     struct tnl_port *tnl_port;
     struct tnl_match match;
 
@@ -183,14 +215,16 @@ tnl_port_receive(const struct flow *flow)
     match.in_key = flow->tunnel.tun_id;
     match.skb_mark = flow->skb_mark;
 
+    ovs_rwlock_rdlock(&rwlock);
     tnl_port = tnl_find(&match);
+    ofport = tnl_port ? tnl_port->ofport : NULL;
     if (!tnl_port) {
         struct ds ds = DS_EMPTY_INITIALIZER;
 
         tnl_match_fmt(&match, &ds);
         VLOG_WARN_RL(&rl, "receive tunnel port not found (%s)", ds_cstr(&ds));
         ds_destroy(&ds);
-        return NULL;
+        goto out;
     }
 
     if (!VLOG_DROP_DBG(&dbg_rl)) {
@@ -209,7 +243,10 @@ tnl_port_receive(const struct flow *flow)
         free(pre_flow_str);
         free(post_flow_str);
     }
-    return tnl_port->ofport;
+
+out:
+    ovs_rwlock_unlock(&rwlock);
+    return ofport;
 }
 
 /* Given that 'flow' should be output to the ofport corresponding to
@@ -218,14 +255,18 @@ tnl_port_receive(const struct flow *flow)
  * shouldn't occur. */
 odp_port_t
 tnl_port_send(const struct ofport_dpif *ofport, struct flow *flow,
-              struct flow_wildcards *wc)
+              struct flow_wildcards *wc) OVS_EXCLUDED(rwlock)
 {
-    struct tnl_port *tnl_port = tnl_find_ofport(ofport);
     const struct netdev_tunnel_config *cfg;
+    struct tnl_port *tnl_port;
     char *pre_flow_str = NULL;
+    odp_port_t out_port;
 
+    ovs_rwlock_rdlock(&rwlock);
+    tnl_port = tnl_find_ofport(ofport);
+    out_port = tnl_port ? tnl_port->match.odp_port : ODPP_NONE;
     if (!tnl_port) {
-        return ODPP_NONE;
+        goto out;
     }
 
     cfg = netdev_get_tunnel_config(tnl_port->netdev);
@@ -289,7 +330,9 @@ tnl_port_send(const struct ofport_dpif *ofport, struct flow *flow,
         free(post_flow_str);
     }
 
-    return tnl_port->match.odp_port;
+out:
+    ovs_rwlock_unlock(&rwlock);
+    return out_port;
 }
 
 static uint32_t
@@ -300,12 +343,12 @@ tnl_hash(struct tnl_match *match)
 }
 
 static struct tnl_port *
-tnl_find_ofport(const struct ofport_dpif *ofport)
+tnl_find_ofport(const struct ofport_dpif *ofport) OVS_REQ_RDLOCK(rwlock)
 {
     struct tnl_port *tnl_port;
 
     HMAP_FOR_EACH_IN_BUCKET (tnl_port, ofport_node, hash_pointer(ofport, 0),
-                             &ofport_map) {
+                             ofport_map) {
         if (tnl_port->ofport == ofport) {
             return tnl_port;
         }
@@ -314,12 +357,12 @@ tnl_find_ofport(const struct ofport_dpif *ofport)
 }
 
 static struct tnl_port *
-tnl_find_exact(struct tnl_match *match)
+tnl_find_exact(struct tnl_match *match) OVS_REQ_RDLOCK(rwlock)
 {
     struct tnl_port *tnl_port;
 
     HMAP_FOR_EACH_WITH_HASH (tnl_port, match_node, tnl_hash(match),
-                             &tnl_match_map) {
+                             tnl_match_map) {
         if (!memcmp(match, &tnl_port->match, sizeof *match)) {
             return tnl_port;
         }
@@ -328,7 +371,7 @@ tnl_find_exact(struct tnl_match *match)
 }
 
 static struct tnl_port *
-tnl_find(struct tnl_match *match_)
+tnl_find(struct tnl_match *match_) OVS_REQ_RDLOCK(rwlock)
 {
     struct tnl_match match = *match_;
     struct tnl_port *tnl_port;
@@ -383,6 +426,7 @@ tnl_find(struct tnl_match *match_)
 
 static void
 tnl_match_fmt(const struct tnl_match *match, struct ds *ds)
+    OVS_REQ_RDLOCK(rwlock)
 {
     if (!match->ip_dst_flow) {
         ds_put_format(ds, IP_FMT"->"IP_FMT, IP_ARGS(match->ip_src),
@@ -405,6 +449,7 @@ tnl_match_fmt(const struct tnl_match *match, struct ds *ds)
 
 static void
 tnl_port_mod_log(const struct tnl_port *tnl_port, const char *action)
+    OVS_REQ_RDLOCK(rwlock)
 {
     if (VLOG_IS_DBG_ENABLED()) {
         struct ds ds = DS_EMPTY_INITIALIZER;
@@ -417,7 +462,7 @@ tnl_port_mod_log(const struct tnl_port *tnl_port, const char *action)
 }
 
 static char *
-tnl_port_fmt(const struct tnl_port *tnl_port)
+tnl_port_fmt(const struct tnl_port *tnl_port) OVS_REQ_RDLOCK(rwlock)
 {
     const struct netdev_tunnel_config *cfg =
         netdev_get_tunnel_config(tnl_port->netdev);
@@ -467,7 +512,7 @@ tnl_port_fmt(const struct tnl_port *tnl_port)
 }
 
 static const char *
-tnl_port_get_name(const struct tnl_port *tnl_port)
+tnl_port_get_name(const struct tnl_port *tnl_port) OVS_REQ_RDLOCK(rwlock)
 {
     return netdev_get_name(tnl_port->netdev);
 }
