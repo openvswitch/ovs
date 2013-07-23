@@ -140,6 +140,7 @@ struct dpif_linux {
     int dp_ifindex;
 
     /* Upcall messages. */
+    pthread_mutex_t upcall_lock;
     int uc_array_size;          /* Size of 'channels' and 'epoll_events'. */
     struct dpif_channel *channels;
     struct epoll_event *epoll_events;
@@ -247,6 +248,7 @@ open_dpif(const struct dpif_linux_dp *dp, struct dpif **dpifp)
 
     dpif = xzalloc(sizeof *dpif);
     dpif->port_notifier = NULL;
+    xpthread_mutex_init(&dpif->upcall_lock, NULL);
     dpif->epoll_fd = -1;
 
     dpif_init(&dpif->dpif, &dpif_linux_class, dp->name,
@@ -276,6 +278,8 @@ destroy_channels(struct dpif_linux *dpif)
             continue;
         }
 
+        epoll_ctl(dpif->epoll_fd, EPOLL_CTL_DEL, nl_sock_fd(ch->sock), NULL);
+
         /* Turn off upcalls. */
         dpif_linux_vport_init(&vport_request);
         vport_request.cmd = OVS_VPORT_CMD_SET;
@@ -295,8 +299,8 @@ destroy_channels(struct dpif_linux *dpif)
     dpif->epoll_events = NULL;
     dpif->n_events = dpif->event_offset = 0;
 
-    close(dpif->epoll_fd);
-    dpif->epoll_fd = -1;
+    /* Don't close dpif->epoll_fd since that would cause other threads that
+     * call dpif_recv_wait(dpif) to wait on an arbitrary fd or a closed fd. */
 }
 
 static int
@@ -376,6 +380,10 @@ dpif_linux_close(struct dpif *dpif_)
 
     nl_sock_destroy(dpif->port_notifier);
     destroy_channels(dpif);
+    if (dpif->epoll_fd >= 0) {
+        close(dpif->epoll_fd);
+    }
+    xpthread_mutex_destroy(&dpif->upcall_lock);
     free(dpif);
 }
 
@@ -466,8 +474,8 @@ netdev_to_ovs_vport_type(const struct netdev *netdev)
 }
 
 static int
-dpif_linux_port_add(struct dpif *dpif_, struct netdev *netdev,
-                    odp_port_t *port_nop)
+dpif_linux_port_add__(struct dpif *dpif_, struct netdev *netdev,
+                      odp_port_t *port_nop)
 {
     struct dpif_linux *dpif = dpif_linux_cast(dpif_);
     const struct netdev_tunnel_config *tnl_cfg;
@@ -558,7 +566,21 @@ dpif_linux_port_add(struct dpif *dpif_, struct netdev *netdev,
 }
 
 static int
-dpif_linux_port_del(struct dpif *dpif_, odp_port_t port_no)
+dpif_linux_port_add(struct dpif *dpif_, struct netdev *netdev,
+                    odp_port_t *port_nop)
+{
+    struct dpif_linux *dpif = dpif_linux_cast(dpif_);
+    int error;
+
+    xpthread_mutex_lock(&dpif->upcall_lock);
+    error = dpif_linux_port_add__(dpif_, netdev, port_nop);
+    xpthread_mutex_unlock(&dpif->upcall_lock);
+
+    return error;
+}
+
+static int
+dpif_linux_port_del__(struct dpif *dpif_, odp_port_t port_no)
 {
     struct dpif_linux *dpif = dpif_linux_cast(dpif_);
     struct dpif_linux_vport vport;
@@ -571,6 +593,19 @@ dpif_linux_port_del(struct dpif *dpif_, odp_port_t port_no)
     error = dpif_linux_vport_transact(&vport, NULL, NULL);
 
     del_channel(dpif, port_no);
+
+    return error;
+}
+
+static int
+dpif_linux_port_del(struct dpif *dpif_, odp_port_t port_no)
+{
+    struct dpif_linux *dpif = dpif_linux_cast(dpif_);
+    int error;
+
+    xpthread_mutex_lock(&dpif->upcall_lock);
+    error = dpif_linux_port_del__(dpif_, port_no);
+    xpthread_mutex_unlock(&dpif->upcall_lock);
 
     return error;
 }
@@ -629,17 +664,20 @@ dpif_linux_get_max_ports(const struct dpif *dpif OVS_UNUSED)
 static uint32_t
 dpif_linux_port_get_pid(const struct dpif *dpif_, odp_port_t port_no)
 {
-    const struct dpif_linux *dpif = dpif_linux_cast(dpif_);
+    struct dpif_linux *dpif = dpif_linux_cast(dpif_);
     uint32_t port_idx = odp_to_u32(port_no);
+    uint32_t pid = 0;
 
-    if (dpif->epoll_fd < 0) {
-        return 0;
-    } else {
+    xpthread_mutex_lock(&dpif->upcall_lock);
+    if (dpif->epoll_fd >= 0) {
         /* The ODPP_NONE "reserved" port number uses the "ovs-system"'s
          * channel, since it is not heavily loaded. */
         uint32_t idx = port_idx >= dpif->uc_array_size ? 0 : port_idx;
-        return nl_sock_pid(dpif->channels[idx].sock);
+        pid = nl_sock_pid(dpif->channels[idx].sock);
     }
+    xpthread_mutex_unlock(&dpif->upcall_lock);
+
+    return pid;
 }
 
 static int
@@ -1195,7 +1233,7 @@ dpif_linux_operate(struct dpif *dpif, struct dpif_op **ops, size_t n_ops)
 }
 
 static int
-dpif_linux_recv_set(struct dpif *dpif_, bool enable)
+dpif_linux_recv_set__(struct dpif *dpif_, bool enable)
 {
     struct dpif_linux *dpif = dpif_linux_cast(dpif_);
 
@@ -1209,9 +1247,11 @@ dpif_linux_recv_set(struct dpif *dpif_, bool enable)
         struct dpif_port_dump port_dump;
         struct dpif_port port;
 
-        dpif->epoll_fd = epoll_create(10);
         if (dpif->epoll_fd < 0) {
-            return errno;
+            dpif->epoll_fd = epoll_create(10);
+            if (dpif->epoll_fd < 0) {
+                return errno;
+            }
         }
 
         DPIF_PORT_FOR_EACH (&port, &port_dump, &dpif->dpif) {
@@ -1262,6 +1302,19 @@ dpif_linux_recv_set(struct dpif *dpif_, bool enable)
     }
 
     return 0;
+}
+
+static int
+dpif_linux_recv_set(struct dpif *dpif_, bool enable)
+{
+    struct dpif_linux *dpif = dpif_linux_cast(dpif_);
+    int error;
+
+    xpthread_mutex_lock(&dpif->upcall_lock);
+    error = dpif_linux_recv_set__(dpif_, enable);
+    xpthread_mutex_unlock(&dpif->upcall_lock);
+
+    return error;
 }
 
 static int
@@ -1332,8 +1385,8 @@ parse_odp_packet(struct ofpbuf *buf, struct dpif_upcall *upcall,
 }
 
 static int
-dpif_linux_recv(struct dpif *dpif_, struct dpif_upcall *upcall,
-                struct ofpbuf *buf)
+dpif_linux_recv__(struct dpif *dpif_, struct dpif_upcall *upcall,
+                  struct ofpbuf *buf)
 {
     struct dpif_linux *dpif = dpif_linux_cast(dpif_);
     int read_tries = 0;
@@ -1403,33 +1456,49 @@ dpif_linux_recv(struct dpif *dpif_, struct dpif_upcall *upcall,
     return EAGAIN;
 }
 
+static int
+dpif_linux_recv(struct dpif *dpif_, struct dpif_upcall *upcall,
+                struct ofpbuf *buf)
+{
+    struct dpif_linux *dpif = dpif_linux_cast(dpif_);
+    int error;
+
+    xpthread_mutex_lock(&dpif->upcall_lock);
+    error = dpif_linux_recv__(dpif_, upcall, buf);
+    xpthread_mutex_unlock(&dpif->upcall_lock);
+
+    return error;
+}
+
 static void
 dpif_linux_recv_wait(struct dpif *dpif_)
 {
-    const struct dpif_linux *dpif = dpif_linux_cast(dpif_);
+    struct dpif_linux *dpif = dpif_linux_cast(dpif_);
 
-    if (dpif->epoll_fd < 0) {
-       return;
+    xpthread_mutex_lock(&dpif->upcall_lock);
+    if (dpif->epoll_fd >= 0) {
+        poll_fd_wait(dpif->epoll_fd, POLLIN);
     }
-
-    poll_fd_wait(dpif->epoll_fd, POLLIN);
+    xpthread_mutex_unlock(&dpif->upcall_lock);
 }
 
 static void
 dpif_linux_recv_purge(struct dpif *dpif_)
 {
     struct dpif_linux *dpif = dpif_linux_cast(dpif_);
-    struct dpif_channel *ch;
 
-    if (dpif->epoll_fd < 0) {
-       return;
-    }
+    xpthread_mutex_lock(&dpif->upcall_lock);
+    if (dpif->epoll_fd >= 0) {
+        struct dpif_channel *ch;
 
-    for (ch = dpif->channels; ch < &dpif->channels[dpif->uc_array_size]; ch++) {
-        if (ch->sock) {
-            nl_sock_drain(ch->sock);
+        for (ch = dpif->channels; ch < &dpif->channels[dpif->uc_array_size];
+             ch++) {
+            if (ch->sock) {
+                nl_sock_drain(ch->sock);
+            }
         }
     }
+    xpthread_mutex_unlock(&dpif->upcall_lock);
 }
 
 const struct dpif_class dpif_linux_class = {
