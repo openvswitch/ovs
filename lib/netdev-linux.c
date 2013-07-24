@@ -384,7 +384,6 @@ struct netdev_linux {
     enum netdev_features current;    /* Cached from ETHTOOL_GSET. */
     enum netdev_features advertised; /* Cached from ETHTOOL_GSET. */
     enum netdev_features supported;  /* Cached from ETHTOOL_GSET. */
-    enum netdev_features peer;       /* Cached from ETHTOOL_GSET. */
 
     struct ethtool_drvinfo drvinfo;  /* Cached from ETHTOOL_GDRVINFO. */
     struct tc *tc;
@@ -1632,18 +1631,14 @@ netdev_linux_read_features(struct netdev_linux *netdev)
         netdev->current |= NETDEV_F_AUTONEG;
     }
 
-    /* Peer advertisements. */
-    netdev->peer = 0;                  /* XXX */
-
 out:
     netdev->cache_valid |= VALID_FEATURES;
     netdev->get_features_error = error;
 }
 
-/* Stores the features supported by 'netdev' into each of '*current',
- * '*advertised', '*supported', and '*peer' that are non-null.  Each value is a
- * bitmap of NETDEV_* bits.  Returns 0 if successful, otherwise a positive
- * errno value. */
+/* Stores the features supported by 'netdev' into of '*current', '*advertised',
+ * '*supported', and '*peer'.  Each value is a bitmap of NETDEV_* bits.
+ * Returns 0 if successful, otherwise a positive errno value. */
 static int
 netdev_linux_get_features(const struct netdev *netdev_,
                           enum netdev_features *current,
@@ -1659,7 +1654,7 @@ netdev_linux_get_features(const struct netdev *netdev_,
         *current = netdev->current;
         *advertised = netdev->advertised;
         *supported = netdev->supported;
-        *peer = netdev->peer;
+        *peer = 0;              /* XXX */
     }
     return netdev->get_features_error;
 }
