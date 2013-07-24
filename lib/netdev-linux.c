@@ -355,7 +355,6 @@ static int tc_calc_buffer(unsigned int Bps, int mtu, uint64_t burst_bytes);
 struct netdev_linux {
     struct netdev up;
 
-    struct shash_node *shash_node;
     unsigned int cache_valid;
     unsigned int change_seq;
 
