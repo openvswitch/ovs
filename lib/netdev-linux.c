@@ -1424,8 +1424,7 @@ netdev_linux_get_stats(const struct netdev *netdev_,
 /* Retrieves current device stats for 'netdev-tap' netdev or
  * netdev-internal. */
 static int
-netdev_tap_get_stats(const struct netdev *netdev_,
-                        struct netdev_stats *stats)
+netdev_tap_get_stats(const struct netdev *netdev_, struct netdev_stats *stats)
 {
     struct netdev_linux *netdev = netdev_linux_cast(netdev_);
     struct netdev_stats dev_stats;

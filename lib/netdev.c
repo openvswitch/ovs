@@ -926,8 +926,7 @@ netdev_arp_lookup(const struct netdev *netdev,
                   ovs_be32 ip, uint8_t mac[ETH_ADDR_LEN])
 {
     int error = (netdev->netdev_class->arp_lookup
-                 ? netdev->netdev_class->arp_lookup(netdev,
-                        ip, mac)
+                 ? netdev->netdev_class->arp_lookup(netdev, ip, mac)
                  : EOPNOTSUPP);
     if (error) {
         memset(mac, 0, ETH_ADDR_LEN);
@@ -952,8 +951,7 @@ netdev_get_carrier(const struct netdev *netdev)
         return true;
     }
 
-    error = netdev->netdev_class->get_carrier(netdev,
-                                                              &carrier);
+    error = netdev->netdev_class->get_carrier(netdev, &carrier);
     if (error) {
         VLOG_DBG("%s: failed to get network device carrier status, assuming "
                  "down: %s", netdev_get_name(netdev), ovs_strerror(error));
