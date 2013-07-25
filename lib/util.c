@@ -395,11 +395,17 @@ get_subprogram_name(void)
 }
 
 /* Sets 'name' as the name of the currently running thread or process.  (This
- * appears in log messages.) */
+ * appears in log messages and may also be visible in system process listings
+ * and debuggers.) */
 void
 set_subprogram_name(const char *name)
 {
     free(subprogram_name_set(xstrdup(name)));
+#if HAVE_PTHREAD_SETNAME_NP
+    pthread_setname_np(pthread_self(), name);
+#elif HAVE_PTHREAD_SET_NAME_NP
+    pthread_set_name_np(pthread_self(), name);
+#endif
 }
 
 /* Returns a pointer to a string describing the program version.  The
