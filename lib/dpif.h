@@ -317,6 +317,24 @@
  *      location.
  *
  *    - Adding and removing ports to achieve a new configuration.
+ *
+ *
+ * Thread-safety
+ * =============
+ *
+ * Most of the dpif functions are fully thread-safe: they may be called from
+ * any number of threads on the same or different dpif objects.  The exceptions
+ * are:
+ *
+ *    - dpif_port_poll() and dpif_port_poll_wait() are conditionally
+ *      thread-safe: they may be called from different threads only on
+ *      different dpif objects.
+ *
+ *    - Functions that operate on struct dpif_port_dump or struct
+ *      dpif_flow_dump are conditionally thread-safe with respect to those
+ *      objects.  That is, one may dump ports or flows from any number of
+ *      threads at once, but each thread must use its own struct dpif_port_dump
+ *      or dpif_flow_dump.
  */
 #ifndef DPIF_H
 #define DPIF_H 1

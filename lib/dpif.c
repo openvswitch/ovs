@@ -70,6 +70,9 @@ struct registered_dpif_class {
 static struct shash dpif_classes = SHASH_INITIALIZER(&dpif_classes);
 static struct sset dpif_blacklist = SSET_INITIALIZER(&dpif_blacklist);
 
+/* Protects 'dpif_classes', including the refcount, and 'dpif_blacklist'. */
+static pthread_mutex_t dpif_mutex = PTHREAD_MUTEX_INITIALIZER;
+
 /* Rate limit for individual messages going to or from the datapath, output at
  * DBG level.  This is very high because, if these are enabled, it is because
  * we really need to see them. */
@@ -109,10 +112,8 @@ dp_initialize(void)
     }
 }
 
-/* Registers a new datapath provider.  After successful registration, new
- * datapaths of that type can be opened using dpif_open(). */
-int
-dp_register_provider(const struct dpif_class *new_class)
+static int
+dp_register_provider__(const struct dpif_class *new_class)
 {
     struct registered_dpif_class *registered_class;
 
@@ -137,11 +138,25 @@ dp_register_provider(const struct dpif_class *new_class)
     return 0;
 }
 
+/* Registers a new datapath provider.  After successful registration, new
+ * datapaths of that type can be opened using dpif_open(). */
+int
+dp_register_provider(const struct dpif_class *new_class)
+{
+    int error;
+
+    xpthread_mutex_lock(&dpif_mutex);
+    error = dp_register_provider__(new_class);
+    xpthread_mutex_unlock(&dpif_mutex);
+
+    return error;
+}
+
 /* Unregisters a datapath provider.  'type' must have been previously
  * registered and not currently be in use by any dpifs.  After unregistration
  * new datapaths of that type cannot be opened using dpif_open(). */
-int
-dp_unregister_provider(const char *type)
+static int
+dp_unregister_provider__(const char *type)
 {
     struct shash_node *node;
     struct registered_dpif_class *registered_class;
@@ -165,12 +180,31 @@ dp_unregister_provider(const char *type)
     return 0;
 }
 
+/* Unregisters a datapath provider.  'type' must have been previously
+ * registered and not currently be in use by any dpifs.  After unregistration
+ * new datapaths of that type cannot be opened using dpif_open(). */
+int
+dp_unregister_provider(const char *type)
+{
+    int error;
+
+    dp_initialize();
+
+    xpthread_mutex_lock(&dpif_mutex);
+    error = dp_unregister_provider__(type);
+    xpthread_mutex_unlock(&dpif_mutex);
+
+    return error;
+}
+
 /* Blacklists a provider.  Causes future calls of dp_register_provider() with
  * a dpif_class which implements 'type' to fail. */
 void
 dp_blacklist_provider(const char *type)
 {
+    xpthread_mutex_lock(&dpif_mutex);
     sset_add(&dpif_blacklist, type);
+    xpthread_mutex_unlock(&dpif_mutex);
 }
 
 /* Clears 'types' and enumerates the types of all currently registered datapath
@@ -183,10 +217,36 @@ dp_enumerate_types(struct sset *types)
     dp_initialize();
     sset_clear(types);
 
+    xpthread_mutex_lock(&dpif_mutex);
     SHASH_FOR_EACH(node, &dpif_classes) {
         const struct registered_dpif_class *registered_class = node->data;
         sset_add(types, registered_class->dpif_class->type);
     }
+    xpthread_mutex_unlock(&dpif_mutex);
+}
+
+static void
+dp_class_unref(struct registered_dpif_class *rc)
+{
+    xpthread_mutex_lock(&dpif_mutex);
+    ovs_assert(rc->refcount);
+    rc->refcount--;
+    xpthread_mutex_unlock(&dpif_mutex);
+}
+
+static struct registered_dpif_class *
+dp_class_lookup(const char *type)
+{
+    struct registered_dpif_class *rc;
+
+    xpthread_mutex_lock(&dpif_mutex);
+    rc = shash_find_data(&dpif_classes, type);
+    if (rc) {
+        rc->refcount++;
+    }
+    xpthread_mutex_unlock(&dpif_mutex);
+
+    return rc;
 }
 
 /* Clears 'names' and enumerates the names of all known created datapaths with
@@ -198,14 +258,14 @@ dp_enumerate_types(struct sset *types)
 int
 dp_enumerate_names(const char *type, struct sset *names)
 {
-    const struct registered_dpif_class *registered_class;
+    struct registered_dpif_class *registered_class;
     const struct dpif_class *dpif_class;
     int error;
 
     dp_initialize();
     sset_clear(names);
 
-    registered_class = shash_find_data(&dpif_classes, type);
+    registered_class = dp_class_lookup(type);
     if (!registered_class) {
         VLOG_WARN("could not enumerate unknown type: %s", type);
         return EAFNOSUPPORT;
@@ -213,11 +273,11 @@ dp_enumerate_names(const char *type, struct sset *names)
 
     dpif_class = registered_class->dpif_class;
     error = dpif_class->enumerate ? dpif_class->enumerate(names) : 0;
-
     if (error) {
         VLOG_WARN("failed to enumerate %s datapaths: %s", dpif_class->type,
                    ovs_strerror(error));
     }
+    dp_class_unref(registered_class);
 
     return error;
 }
@@ -253,8 +313,7 @@ do_open(const char *name, const char *type, bool create, struct dpif **dpifp)
     dp_initialize();
 
     type = dpif_normalize_type(type);
-
-    registered_class = shash_find_data(&dpif_classes, type);
+    registered_class = dp_class_lookup(type);
     if (!registered_class) {
         VLOG_WARN("could not create datapath %s of unknown type %s", name,
                   type);
@@ -266,7 +325,8 @@ do_open(const char *name, const char *type, bool create, struct dpif **dpifp)
                                                name, create, &dpif);
     if (!error) {
         ovs_assert(dpif->dpif_class == registered_class->dpif_class);
-        registered_class->refcount++;
+    } else {
+        dp_class_unref(registered_class);
     }
 
 exit:
@@ -326,15 +386,11 @@ void
 dpif_close(struct dpif *dpif)
 {
     if (dpif) {
-        struct registered_dpif_class *registered_class;
+        struct registered_dpif_class *rc;
 
-        registered_class = shash_find_data(&dpif_classes,
-                dpif->dpif_class->type);
-        ovs_assert(registered_class);
-        ovs_assert(registered_class->refcount);
-
-        registered_class->refcount--;
+        rc = shash_find_data(&dpif_classes, dpif->dpif_class->type);
         dpif_uninit(dpif, true);
+        dp_class_unref(rc);
     }
 }
 
@@ -421,18 +477,18 @@ dpif_get_dp_stats(const struct dpif *dpif, struct dpif_dp_stats *stats)
 const char *
 dpif_port_open_type(const char *datapath_type, const char *port_type)
 {
-    struct registered_dpif_class *registered_class;
+    struct registered_dpif_class *rc;
 
     datapath_type = dpif_normalize_type(datapath_type);
 
-    registered_class = shash_find_data(&dpif_classes, datapath_type);
-    if (!registered_class
-            || !registered_class->dpif_class->port_open_type) {
-        return port_type;
+    xpthread_mutex_lock(&dpif_mutex);
+    rc = shash_find_data(&dpif_classes, datapath_type);
+    if (rc && rc->dpif_class->port_open_type) {
+        port_type = rc->dpif_class->port_open_type(rc->dpif_class, port_type);
     }
+    xpthread_mutex_unlock(&dpif_mutex);
 
-    return registered_class->dpif_class->port_open_type(
-                          registered_class->dpif_class, port_type);
+    return port_type;
 }
 
 /* Attempts to add 'netdev' as a port on 'dpif'.  If 'port_nop' is
