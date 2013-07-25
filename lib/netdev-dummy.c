@@ -60,6 +60,8 @@ struct netdev_dummy {
     struct list rxes;           /* List of child "netdev_rx_dummy"s. */
 };
 
+static const struct netdev_class dummy_class;
+
 /* Max 'recv_queue_len' in struct netdev_dummy. */
 #define NETDEV_DUMMY_MAX_QUEUE 100
 
@@ -70,8 +72,6 @@ struct netdev_rx_dummy {
     int recv_queue_len;         /* list_size(&recv_queue). */
     bool listening;
 };
-
-static struct shash dummy_netdevs = SHASH_INITIALIZER(&dummy_netdevs);
 
 static const struct netdev_rx_class netdev_rx_dummy_class;
 
@@ -106,8 +106,11 @@ netdev_rx_dummy_cast(const struct netdev_rx *rx)
 static void
 netdev_dummy_run(void)
 {
+    struct shash dummy_netdevs;
     struct shash_node *node;
 
+    shash_init(&dummy_netdevs);
+    netdev_get_devices(&dummy_class, &dummy_netdevs);
     SHASH_FOR_EACH (node, &dummy_netdevs) {
         struct netdev_dummy *dev = node->data;
         size_t i;
@@ -202,7 +205,10 @@ netdev_dummy_run(void)
                 dev->streams[i] = dev->streams[--dev->n_streams];
             }
         }
+
+        netdev_close(&dev->up);
     }
+    shash_destroy(&dummy_netdevs);
 }
 
 static void
@@ -216,8 +222,11 @@ dummy_stream_close(struct dummy_stream *s)
 static void
 netdev_dummy_wait(void)
 {
+    struct shash dummy_netdevs;
     struct shash_node *node;
 
+    shash_init(&dummy_netdevs);
+    netdev_get_devices(&dummy_class, &dummy_netdevs);
     SHASH_FOR_EACH (node, &dummy_netdevs) {
         struct netdev_dummy *dev = node->data;
         size_t i;
@@ -234,7 +243,9 @@ netdev_dummy_wait(void)
             }
             stream_recv_wait(s->stream);
         }
+        netdev_close(&dev->up);
     }
+    shash_destroy(&dummy_netdevs);
 }
 
 static int
@@ -265,8 +276,6 @@ netdev_dummy_create(const struct netdev_class *class, const char *name,
 
     list_init(&netdev->rxes);
 
-    shash_add(&dummy_netdevs, name, netdev);
-
     *netdevp = &netdev->up;
 
     return 0;
@@ -278,8 +287,6 @@ netdev_dummy_destroy(struct netdev *netdev_)
     struct netdev_dummy *netdev = netdev_dummy_cast(netdev_);
     size_t i;
 
-    shash_find_and_delete(&dummy_netdevs,
-                          netdev_get_name(netdev_));
     pstream_close(netdev->pstream);
     for (i = 0; i < netdev->n_streams; i++) {
         dummy_stream_close(&netdev->streams[i]);
@@ -677,13 +684,15 @@ netdev_dummy_receive(struct unixctl_conn *conn,
                      int argc, const char *argv[], void *aux OVS_UNUSED)
 {
     struct netdev_dummy *dummy_dev;
+    struct netdev *netdev;
     int i;
 
-    dummy_dev = shash_find_data(&dummy_netdevs, argv[1]);
-    if (!dummy_dev) {
+    netdev = netdev_from_name(argv[1]);
+    if (!netdev || !is_dummy_class(netdev->netdev_class)) {
         unixctl_command_reply_error(conn, "no such dummy netdev");
-        return;
+        goto exit;
     }
+    dummy_dev = netdev_dummy_cast(netdev);
 
     for (i = 2; i < argc; i++) {
         struct ofpbuf *packet;
@@ -691,7 +700,7 @@ netdev_dummy_receive(struct unixctl_conn *conn,
         packet = eth_from_packet_or_flow(argv[i]);
         if (!packet) {
             unixctl_command_reply_error(conn, "bad packet syntax");
-            return;
+            goto exit;
         }
 
         dummy_dev->stats.rx_packets++;
@@ -701,6 +710,9 @@ netdev_dummy_receive(struct unixctl_conn *conn,
     }
 
     unixctl_command_reply(conn, NULL);
+
+exit:
+    netdev_close(netdev);
 }
 
 static void
@@ -731,21 +743,29 @@ netdev_dummy_set_admin_state(struct unixctl_conn *conn, int argc,
     }
 
     if (argc > 2) {
-        struct netdev_dummy *dummy_dev;
+        struct netdev *netdev = netdev_from_name(argv[1]);
+        if (netdev && is_dummy_class(netdev->netdev_class)) {
+            struct netdev_dummy *dummy_dev = netdev_dummy_cast(netdev);
 
-        dummy_dev = shash_find_data(&dummy_netdevs, argv[1]);
-        if (dummy_dev) {
             netdev_dummy_set_admin_state__(dummy_dev, up);
+            netdev_close(netdev);
         } else {
             unixctl_command_reply_error(conn, "Unknown Dummy Interface");
+            netdev_close(netdev);
             return;
         }
     } else {
+        struct shash dummy_netdevs;
         struct shash_node *node;
 
+        shash_init(&dummy_netdevs);
+        netdev_get_devices(&dummy_class, &dummy_netdevs);
         SHASH_FOR_EACH (node, &dummy_netdevs) {
-            netdev_dummy_set_admin_state__(node->data, up);
+            struct netdev *netdev = node->data;
+            netdev_dummy_set_admin_state__(netdev_dummy_cast(netdev), up);
+            netdev_close(netdev);
         }
+        shash_destroy(&dummy_netdevs);
     }
     unixctl_command_reply(conn, "OK");
 }
