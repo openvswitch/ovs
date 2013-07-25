@@ -1312,12 +1312,9 @@ netdev_bsd_get_next_hop(const struct in_addr *host OVS_UNUSED,
             if ((i == RTA_IFP) && sa->sa_family == AF_LINK) {
                 const struct sockaddr_dl * const sdl =
                   (const struct sockaddr_dl *)sa;
-                const size_t nlen = sdl->sdl_nlen;
-                char * const kernel_name = xmalloc(nlen + 1);
-                const char *name;
+                char *kernel_name;
 
-                memcpy(kernel_name, sdl->sdl_data, nlen);
-                kernel_name[nlen] = 0;
+                kernel_name = xmemdup0(sdl->sdl_data, sdl->sdl_nlen);
                 name = netdev_bsd_convert_kernel_name_to_ovs_name(kernel_name);
                 if (name == NULL) {
                     ifname = xstrdup(kernel_name);
