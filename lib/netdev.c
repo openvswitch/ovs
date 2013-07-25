@@ -1395,8 +1395,8 @@ netdev_from_name(const char *name)
 
 /* Fills 'device_list' with devices that match 'netdev_class'.
  *
- * The caller is responsible for initializing and destroying 'device_list'
- * but the contained netdevs must not be freed. */
+ * The caller is responsible for initializing and destroying 'device_list' and
+ * must close each device on the list. */
 void
 netdev_get_devices(const struct netdev_class *netdev_class,
                    struct shash *device_list)
@@ -1406,6 +1406,7 @@ netdev_get_devices(const struct netdev_class *netdev_class,
         struct netdev *dev = node->data;
 
         if (dev->netdev_class == netdev_class) {
+            dev->ref_cnt++;
             shash_add(device_list, node->name, node->data);
         }
     }

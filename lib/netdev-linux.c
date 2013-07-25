@@ -555,6 +555,7 @@ netdev_linux_cache_cb(const struct rtnetlink_link_change *change,
 
             get_flags(&dev->up, &flags);
             netdev_linux_changed(dev, flags, 0);
+            netdev_close(netdev);
         }
         shash_destroy(&device_shash);
     }
@@ -1180,6 +1181,7 @@ netdev_linux_miimon_run(void)
         bool miimon;
 
         if (dev->miimon_interval <= 0 || !timer_expired(&dev->miimon_timer)) {
+            netdev_close(netdev);
             continue;
         }
 
@@ -1190,6 +1192,7 @@ netdev_linux_miimon_run(void)
         }
 
         timer_set_duration(&dev->miimon_timer, dev->miimon_interval);
+        netdev_close(netdev);
     }
 
     shash_destroy(&device_shash);
@@ -1210,6 +1213,7 @@ netdev_linux_miimon_wait(void)
         if (dev->miimon_interval > 0) {
             timer_wait(&dev->miimon_timer);
         }
+        netdev_close(netdev);
     }
     shash_destroy(&device_shash);
 }

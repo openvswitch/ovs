@@ -255,6 +255,7 @@ netdev_bsd_cache_cb(const struct rtbsd_change *change,
                 dev->cache_valid = 0;
                 netdev_bsd_changed(dev);
             }
+            netdev_close(base_dev);
         }
     } else {
         /*
@@ -271,6 +272,7 @@ netdev_bsd_cache_cb(const struct rtbsd_change *change,
             dev = netdev_bsd_cast(netdev);
             dev->cache_valid = 0;
             netdev_bsd_changed(dev);
+            netdev_close(netdev);
         }
         shash_destroy(&device_shash);
     }
@@ -1200,9 +1202,10 @@ netdev_bsd_get_in6(const struct netdev *netdev_, struct in6_addr *in6)
 }
 
 #if defined(__NetBSD__)
-static struct netdev *
-find_netdev_by_kernel_name(const char *kernel_name)
+static char *
+netdev_bsd_kernel_name_to_ovs_name(const char *kernel_name)
 {
+    char *ovs_name = NULL;
     struct shash device_shash;
     struct shash_node *node;
 
@@ -1213,24 +1216,14 @@ find_netdev_by_kernel_name(const char *kernel_name)
         struct netdev_bsd * const dev = netdev_bsd_cast(netdev);
 
         if (!strcmp(dev->kernel_name, kernel_name)) {
-            shash_destroy(&device_shash);
-            return &dev->up;
+            free(ovs_name);
+            ovs_name = xstrdup(netdev_get_name(&dev->up));
         }
+        netdev_close(netdev);
     }
     shash_destroy(&device_shash);
-    return NULL;
-}
 
-static const char *
-netdev_bsd_convert_kernel_name_to_ovs_name(const char *kernel_name)
-{
-    const struct netdev * const netdev =
-      find_netdev_by_kernel_name(kernel_name);
-
-    if (netdev == NULL) {
-        return NULL;
-    }
-    return netdev_get_name(netdev);
+    return ovs_name ? ovs_name : xstrdup(kernel_name);
 }
 #endif
 
@@ -1315,12 +1308,7 @@ netdev_bsd_get_next_hop(const struct in_addr *host OVS_UNUSED,
                 char *kernel_name;
 
                 kernel_name = xmemdup0(sdl->sdl_data, sdl->sdl_nlen);
-                name = netdev_bsd_convert_kernel_name_to_ovs_name(kernel_name);
-                if (name == NULL) {
-                    ifname = xstrdup(kernel_name);
-                } else {
-                    ifname = xstrdup(name);
-                }
+                ifname = netdev_bsd_kernel_name_to_ovs_name(kernel_name);
                 free(kernel_name);
             }
             RT_ADVANCE(cp, sa);
