@@ -363,14 +363,14 @@ netdev_bsd_create_tap(const struct netdev_class *class, const char *name,
     if (netdev->tap_fd < 0) {
         error = errno;
         VLOG_WARN("opening \"/dev/tap\" failed: %s", ovs_strerror(error));
-        goto error_undef_notifier;
+        goto error_unref_notifier;
     }
 
     /* Retrieve tap name (e.g. tap0) */
     if (ioctl(netdev->tap_fd, TAPGIFNAME, &ifr) == -1) {
         /* XXX Need to destroy the device? */
         error = errno;
-        goto error_undef_notifier;
+        goto error_unref_notifier;
     }
 
     /* Change the name of the tap device */
@@ -379,7 +379,7 @@ netdev_bsd_create_tap(const struct netdev_class *class, const char *name,
     if (ioctl(af_inet_sock, SIOCSIFNAME, &ifr) == -1) {
         error = errno;
         destroy_tap(netdev->tap_fd, ifr.ifr_name);
-        goto error_undef_notifier;
+        goto error_unref_notifier;
     }
     kernel_name = xstrdup(name);
 #else
@@ -394,7 +394,7 @@ netdev_bsd_create_tap(const struct netdev_class *class, const char *name,
     error = set_nonblocking(netdev->tap_fd);
     if (error) {
         destroy_tap(netdev->tap_fd, kernel_name);
-        goto error_undef_notifier;
+        goto error_unref_notifier;
     }
 
     /* Turn device UP */
@@ -403,7 +403,7 @@ netdev_bsd_create_tap(const struct netdev_class *class, const char *name,
     if (ioctl(af_inet_sock, SIOCSIFFLAGS, &ifr) == -1) {
         error = errno;
         destroy_tap(netdev->tap_fd, kernel_name);
-        goto error_undef_notifier;
+        goto error_unref_notifier;
     }
 
     /* initialize the device structure and
@@ -414,7 +414,7 @@ netdev_bsd_create_tap(const struct netdev_class *class, const char *name,
 
     return 0;
 
-error_undef_notifier:
+error_unref_notifier:
     cache_notifier_unref();
 error:
     free(netdev);
