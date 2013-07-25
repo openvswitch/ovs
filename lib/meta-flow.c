@@ -2117,20 +2117,25 @@ mf_from_ethernet_string(const struct mf_field *mf, const char *s,
                         uint8_t mac[ETH_ADDR_LEN],
                         uint8_t mask[ETH_ADDR_LEN])
 {
+    int n;
+
     ovs_assert(mf->n_bytes == ETH_ADDR_LEN);
 
-    switch (sscanf(s, ETH_ADDR_SCAN_FMT"/"ETH_ADDR_SCAN_FMT,
-                   ETH_ADDR_SCAN_ARGS(mac), ETH_ADDR_SCAN_ARGS(mask))){
-    case ETH_ADDR_SCAN_COUNT * 2:
-        return NULL;
-
-    case ETH_ADDR_SCAN_COUNT:
+    n = -1;
+    if (sscanf(s, ETH_ADDR_SCAN_FMT"%n", ETH_ADDR_SCAN_ARGS(mac), &n) > 0
+        && n == strlen(s)) {
         memset(mask, 0xff, ETH_ADDR_LEN);
         return NULL;
-
-    default:
-        return xasprintf("%s: invalid Ethernet address", s);
     }
+
+    n = -1;
+    if (sscanf(s, ETH_ADDR_SCAN_FMT"/"ETH_ADDR_SCAN_FMT"%n",
+               ETH_ADDR_SCAN_ARGS(mac), ETH_ADDR_SCAN_ARGS(mask), &n) > 0
+        && n == strlen(s)) {
+        return NULL;
+    }
+
+    return xasprintf("%s: invalid Ethernet address", s);
 }
 
 static char *
