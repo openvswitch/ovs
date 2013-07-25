@@ -370,6 +370,7 @@ netdev_bsd_create_tap(const struct netdev_class *class, const char *name,
     if (ioctl(netdev->tap_fd, TAPGIFNAME, &ifr) == -1) {
         /* XXX Need to destroy the device? */
         error = errno;
+        close(netdev->tap_fd);
         goto error_unref_notifier;
     }
 
