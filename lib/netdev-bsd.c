@@ -323,6 +323,7 @@ netdev_bsd_create_system(const struct netdev_class *class, const char *name,
     /* Verify that the netdev really exists by attempting to read its flags */
     error = netdev_get_flags(&netdev->up, &flags);
     if (error == ENXIO) {
+        free(netdev->kernel_name);
         netdev_uninit(&netdev->up, false);
         free(netdev);
         cache_notifier_unref();
