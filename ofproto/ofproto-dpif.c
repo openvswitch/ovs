@@ -484,8 +484,9 @@ struct ofproto_dpif {
     long long int stp_last_tick;
 
     /* VLAN splinters. */
-    struct hmap realdev_vid_map; /* (realdev,vid) -> vlandev. */
-    struct hmap vlandev_map;     /* vlandev -> (realdev,vid). */
+    struct ovs_mutex vsp_mutex;
+    struct hmap realdev_vid_map OVS_GUARDED; /* (realdev,vid) -> vlandev. */
+    struct hmap vlandev_map OVS_GUARDED;     /* vlandev -> (realdev,vid). */
 
     /* Ports. */
     struct sset ports;             /* Set of standard port names. */
@@ -1270,6 +1271,7 @@ construct(struct ofproto *ofproto_)
     ofproto->ml = mac_learning_create(MAC_ENTRY_DEFAULT_IDLE_TIME);
     ofproto->mbridge = mbridge_create();
     ofproto->has_bonded_bundles = false;
+    ovs_mutex_init(&ofproto->vsp_mutex, PTHREAD_MUTEX_NORMAL);
 
     classifier_init(&ofproto->facets);
     ofproto->consistency_rl = LLONG_MIN;
@@ -1455,6 +1457,8 @@ destruct(struct ofproto *ofproto_)
     sset_destroy(&ofproto->ports);
     sset_destroy(&ofproto->ghost_ports);
     sset_destroy(&ofproto->port_poll_set);
+
+    ovs_mutex_destroy(&ofproto->vsp_mutex);
 
     close_dpif_backer(ofproto->backer);
 }
@@ -6381,20 +6385,20 @@ hash_realdev_vid(ofp_port_t realdev_ofp_port, int vid)
 
 bool
 ofproto_has_vlan_splinters(const struct ofproto_dpif *ofproto)
+    OVS_EXCLUDED(ofproto->vsp_mutex)
 {
-    return !hmap_is_empty(&ofproto->realdev_vid_map);
+    bool ret;
+
+    ovs_mutex_lock(&ofproto->vsp_mutex);
+    ret = !hmap_is_empty(&ofproto->realdev_vid_map);
+    ovs_mutex_unlock(&ofproto->vsp_mutex);
+    return ret;
 }
 
-/* Returns the OFP port number of the Linux VLAN device that corresponds to
- * 'vlan_tci' on the network device with port number 'realdev_ofp_port' in
- * 'struct ofport_dpif'.  For example, given 'realdev_ofp_port' of eth0 and
- * 'vlan_tci' 9, it would return the port number of eth0.9.
- *
- * Unless VLAN splinters are enabled for port 'realdev_ofp_port', this
- * function just returns its 'realdev_ofp_port' argument. */
-ofp_port_t
-vsp_realdev_to_vlandev(const struct ofproto_dpif *ofproto,
-                       ofp_port_t realdev_ofp_port, ovs_be16 vlan_tci)
+static ofp_port_t
+vsp_realdev_to_vlandev__(const struct ofproto_dpif *ofproto,
+                         ofp_port_t realdev_ofp_port, ovs_be16 vlan_tci)
+    OVS_REQUIRES(ofproto->vsp_mutex)
 {
     if (!hmap_is_empty(&ofproto->realdev_vid_map)) {
         int vid = vlan_tci_to_vid(vlan_tci);
@@ -6410,6 +6414,26 @@ vsp_realdev_to_vlandev(const struct ofproto_dpif *ofproto,
         }
     }
     return realdev_ofp_port;
+}
+
+/* Returns the OFP port number of the Linux VLAN device that corresponds to
+ * 'vlan_tci' on the network device with port number 'realdev_ofp_port' in
+ * 'struct ofport_dpif'.  For example, given 'realdev_ofp_port' of eth0 and
+ * 'vlan_tci' 9, it would return the port number of eth0.9.
+ *
+ * Unless VLAN splinters are enabled for port 'realdev_ofp_port', this
+ * function just returns its 'realdev_ofp_port' argument. */
+ofp_port_t
+vsp_realdev_to_vlandev(const struct ofproto_dpif *ofproto,
+                       ofp_port_t realdev_ofp_port, ovs_be16 vlan_tci)
+    OVS_EXCLUDED(ofproto->vsp_mutex)
+{
+    ofp_port_t ret;
+
+    ovs_mutex_lock(&ofproto->vsp_mutex);
+    ret = vsp_realdev_to_vlandev__(ofproto, realdev_ofp_port, vlan_tci);
+    ovs_mutex_unlock(&ofproto->vsp_mutex);
+    return ret;
 }
 
 static struct vlan_splinter *
@@ -6440,6 +6464,7 @@ vlandev_find(const struct ofproto_dpif *ofproto, ofp_port_t vlandev_ofp_port)
 static ofp_port_t
 vsp_vlandev_to_realdev(const struct ofproto_dpif *ofproto,
                        ofp_port_t vlandev_ofp_port, int *vid)
+    OVS_REQ_WRLOCK(ofproto->vsp_mutex)
 {
     if (!hmap_is_empty(&ofproto->vlandev_map)) {
         const struct vlan_splinter *vsp;
@@ -6463,11 +6488,14 @@ vsp_vlandev_to_realdev(const struct ofproto_dpif *ofproto,
  * making any changes. */
 static bool
 vsp_adjust_flow(const struct ofproto_dpif *ofproto, struct flow *flow)
+    OVS_EXCLUDED(ofproto->vsp_mutex)
 {
     ofp_port_t realdev;
     int vid;
 
+    ovs_mutex_lock(&ofproto->vsp_mutex);
     realdev = vsp_vlandev_to_realdev(ofproto, flow->in_port.ofp_port, &vid);
+    ovs_mutex_unlock(&ofproto->vsp_mutex);
     if (!realdev) {
         return false;
     }
@@ -6485,6 +6513,7 @@ vsp_remove(struct ofport_dpif *port)
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(port->up.ofproto);
     struct vlan_splinter *vsp;
 
+    ovs_mutex_lock(&ofproto->vsp_mutex);
     vsp = vlandev_find(ofproto, port->up.ofp_port);
     if (vsp) {
         hmap_remove(&ofproto->vlandev_map, &vsp->vlandev_node);
@@ -6495,6 +6524,7 @@ vsp_remove(struct ofport_dpif *port)
     } else {
         VLOG_ERR("missing vlan device record");
     }
+    ovs_mutex_unlock(&ofproto->vsp_mutex);
 }
 
 static void
@@ -6502,24 +6532,27 @@ vsp_add(struct ofport_dpif *port, ofp_port_t realdev_ofp_port, int vid)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(port->up.ofproto);
 
+    ovs_mutex_lock(&ofproto->vsp_mutex);
     if (!vsp_vlandev_to_realdev(ofproto, port->up.ofp_port, NULL)
-        && (vsp_realdev_to_vlandev(ofproto, realdev_ofp_port, htons(vid))
+        && (vsp_realdev_to_vlandev__(ofproto, realdev_ofp_port, htons(vid))
             == realdev_ofp_port)) {
         struct vlan_splinter *vsp;
 
         vsp = xmalloc(sizeof *vsp);
-        hmap_insert(&ofproto->vlandev_map, &vsp->vlandev_node,
-                    hash_ofp_port(port->up.ofp_port));
-        hmap_insert(&ofproto->realdev_vid_map, &vsp->realdev_vid_node,
-                    hash_realdev_vid(realdev_ofp_port, vid));
         vsp->realdev_ofp_port = realdev_ofp_port;
         vsp->vlandev_ofp_port = port->up.ofp_port;
         vsp->vid = vid;
 
         port->realdev_ofp_port = realdev_ofp_port;
+
+        hmap_insert(&ofproto->vlandev_map, &vsp->vlandev_node,
+                    hash_ofp_port(port->up.ofp_port));
+        hmap_insert(&ofproto->realdev_vid_map, &vsp->realdev_vid_node,
+                    hash_realdev_vid(realdev_ofp_port, vid));
     } else {
         VLOG_ERR("duplicate vlan device record");
     }
+    ovs_mutex_unlock(&ofproto->vsp_mutex);
 }
 
 static odp_port_t
