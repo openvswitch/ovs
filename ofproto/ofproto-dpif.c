@@ -799,7 +799,8 @@ type_run(const char *type)
             }
 
             xlate_ofproto_set(ofproto, ofproto->up.name,
-                              ofproto->backer->dpif, ofproto->ml,
+                              ofproto->backer->dpif, ofproto->miss_rule,
+                              ofproto->no_packet_in_rule, ofproto->ml,
                               ofproto->stp, ofproto->mbridge,
                               ofproto->sflow, ofproto->ipfix,
                               ofproto->up.frag_handling,
@@ -5105,14 +5106,21 @@ static struct rule_dpif *
 rule_dpif_lookup(struct ofproto_dpif *ofproto, const struct flow *flow,
                  struct flow_wildcards *wc)
 {
+    struct ofport_dpif *port;
     struct rule_dpif *rule;
 
     rule = rule_dpif_lookup_in_table(ofproto, flow, wc, 0);
     if (rule) {
         return rule;
     }
+    port = get_ofp_port(ofproto, flow->in_port.ofp_port);
+    if (!port) {
+        VLOG_WARN_RL(&rl, "packet-in on unknown OpenFlow port %"PRIu16,
+                     flow->in_port.ofp_port);
+    }
 
-    return rule_dpif_miss_rule(ofproto, flow);
+    return choose_miss_rule(port ? port->up.pp.config : 0, ofproto->miss_rule,
+                            ofproto->no_packet_in_rule);
 }
 
 struct rule_dpif *
@@ -5152,22 +5160,14 @@ rule_dpif_lookup_in_table(struct ofproto_dpif *ofproto,
     return rule_dpif_cast(rule_from_cls_rule(cls_rule));
 }
 
+/* Given a port configuration (specified as zero if there's no port), chooses
+ * which of 'miss_rule' and 'no_packet_in_rule' should be used in case of a
+ * flow table miss. */
 struct rule_dpif *
-rule_dpif_miss_rule(struct ofproto_dpif *ofproto, const struct flow *flow)
+choose_miss_rule(enum ofputil_port_config config, struct rule_dpif *miss_rule,
+                 struct rule_dpif *no_packet_in_rule)
 {
-    struct ofport_dpif *port;
-
-    port = get_ofp_port(ofproto, flow->in_port.ofp_port);
-    if (!port) {
-        VLOG_WARN_RL(&rl, "packet-in on unknown OpenFlow port %"PRIu16,
-                     flow->in_port.ofp_port);
-        return ofproto->miss_rule;
-    }
-
-    if (port->up.pp.config & OFPUTIL_PC_NO_PACKET_IN) {
-        return ofproto->no_packet_in_rule;
-    }
-    return ofproto->miss_rule;
+    return config & OFPUTIL_PC_NO_PACKET_IN ? no_packet_in_rule : miss_rule;
 }
 
 static void

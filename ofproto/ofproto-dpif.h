@@ -22,6 +22,7 @@
 #include "ovs-thread.h"
 #include "timer.h"
 #include "util.h"
+#include "ovs-thread.h"
 
 union user_action_cookie;
 struct ofproto_dpif;
@@ -59,10 +60,11 @@ struct rule_dpif *rule_dpif_lookup_in_table(struct ofproto_dpif *,
                                             struct flow_wildcards *,
                                             uint8_t table_id);
 
-struct rule_dpif *rule_dpif_miss_rule(struct ofproto_dpif *ofproto,
-                                      const struct flow *);
-
 void rule_credit_stats(struct rule_dpif *, const struct dpif_flow_stats *);
+
+struct rule_dpif *choose_miss_rule(enum ofputil_port_config,
+                                   struct rule_dpif *miss_rule,
+                                   struct rule_dpif *no_packet_in_rule);
 
 bool ofproto_has_vlan_splinters(const struct ofproto_dpif *);
 ofp_port_t vsp_realdev_to_vlandev(const struct ofproto_dpif *,

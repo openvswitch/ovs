@@ -70,6 +70,10 @@ struct xbridge {
     struct dpif_ipfix *ipfix;     /* Ipfix handle, or null. */
     struct stp *stp;              /* STP or null if disabled. */
 
+    /* Special rules installed by ofproto-dpif. */
+    struct rule_dpif *miss_rule;
+    struct rule_dpif *no_packet_in_rule;
+
     enum ofp_config_flags frag;   /* Fragmentation handling. */
     bool has_netflow;             /* Bridge runs netflow? */
     bool has_in_band;             /* Bridge has in band control? */
@@ -209,8 +213,10 @@ static bool dscp_from_skb_priority(const struct xport *, uint32_t skb_priority,
 
 void
 xlate_ofproto_set(struct ofproto_dpif *ofproto, const char *name,
-                  struct dpif *dpif, const struct mac_learning *ml,
-                  struct stp *stp, const struct mbridge *mbridge,
+                  struct dpif *dpif, struct rule_dpif *miss_rule,
+                  struct rule_dpif *no_packet_in_rule,
+                  const struct mac_learning *ml, struct stp *stp,
+                  const struct mbridge *mbridge,
                   const struct dpif_sflow *sflow,
                   const struct dpif_ipfix *ipfix, enum ofp_config_flags frag,
                   bool forward_bpdu, bool has_in_band, bool has_netflow)
@@ -259,6 +265,8 @@ xlate_ofproto_set(struct ofproto_dpif *ofproto, const char *name,
     xbridge->has_in_band = has_in_band;
     xbridge->has_netflow = has_netflow;
     xbridge->frag = frag;
+    xbridge->miss_rule = miss_rule;
+    xbridge->no_packet_in_rule = no_packet_in_rule;
 }
 
 void
@@ -1586,14 +1594,18 @@ ctx_rule_hooks(struct xlate_ctx *ctx, struct rule_dpif *rule,
         ctx->xin->resubmit_hook(ctx->xin, rule, ctx->recurse);
     }
     if (rule == NULL && may_packet_in) {
+        struct xport *xport;
+
         /* XXX
          * check if table configuration flags
          * OFPTC_TABLE_MISS_CONTROLLER, default.
          * OFPTC_TABLE_MISS_CONTINUE,
          * OFPTC_TABLE_MISS_DROP
-         * When OF1.0, OFPTC_TABLE_MISS_CONTINUE is used. What to do?
-         */
-        rule = rule_dpif_miss_rule(ctx->xbridge->ofproto, &ctx->xin->flow);
+         * When OF1.0, OFPTC_TABLE_MISS_CONTINUE is used. What to do? */
+        xport = get_ofp_port(ctx->xbridge, ctx->xin->flow.in_port.ofp_port);
+        rule = choose_miss_rule(xport ? xport->config : 0,
+                                ctx->xbridge->miss_rule,
+                                ctx->xbridge->no_packet_in_rule);
     }
     if (rule && ctx->xin->resubmit_stats) {
         rule_credit_stats(rule, ctx->xin->resubmit_stats);
