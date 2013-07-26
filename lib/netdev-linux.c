@@ -650,6 +650,7 @@ netdev_linux_create_tap(const struct netdev_class *class OVS_UNUSED,
     int error;
 
     netdev = xzalloc(sizeof *netdev);
+    netdev->change_seq = 1;
     state = &netdev->state.tap;
 
     error = cache_notifier_ref();
