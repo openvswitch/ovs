@@ -1386,11 +1386,18 @@ netdev_get_class(const struct netdev *netdev)
 
 /* Returns the netdev with 'name' or NULL if there is none.
  *
- * The caller must not free the returned value. */
+ * The caller must free the returned netdev with netdev_close(). */
 struct netdev *
 netdev_from_name(const char *name)
 {
-    return shash_find_data(&netdev_shash, name);
+    struct netdev *netdev;
+
+    netdev = shash_find_data(&netdev_shash, name);
+    if (netdev) {
+        netdev_ref(netdev);
+    }
+
+    return netdev;
 }
 
 /* Fills 'device_list' with devices that match 'netdev_class'.
@@ -1415,8 +1422,10 @@ netdev_get_devices(const struct netdev_class *netdev_class,
 const char *
 netdev_get_type_from_name(const char *name)
 {
-    const struct netdev *dev = netdev_from_name(name);
-    return dev ? netdev_get_type(dev) : NULL;
+    struct netdev *dev = netdev_from_name(name);
+    const char *type = dev ? netdev_get_type(dev) : NULL;
+    netdev_close(dev);
+    return type;
 }
 
 void

@@ -541,6 +541,7 @@ netdev_linux_cache_cb(const struct rtnetlink_link_change *change,
         struct netdev *base_dev = netdev_from_name(change->ifname);
         if (base_dev && is_netdev_linux_class(netdev_get_class(base_dev))) {
             netdev_linux_update(netdev_linux_cast(base_dev), change);
+            netdev_close(base_dev);
         }
     } else {
         struct shash device_shash;
