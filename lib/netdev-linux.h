@@ -24,8 +24,6 @@
  * Linux-specific code. */
 
 struct netdev;
-struct netdev_stats;
-struct rtnl_link_stats;
 
 int netdev_linux_ethtool_set_flag(struct netdev *netdev, uint32_t flag,
                                   const char *flag_name, bool enable);
