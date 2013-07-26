@@ -120,10 +120,6 @@ enum {
     VALID_DRVINFO           = 1 << 7,
     VALID_FEATURES          = 1 << 8,
 };
-
-struct tap_state {
-    int fd;
-};
 
 /* Traffic control. */
 
@@ -394,9 +390,8 @@ struct netdev_linux {
     struct ethtool_drvinfo drvinfo;  /* Cached from ETHTOOL_GDRVINFO. */
     struct tc *tc;
 
-    union {
-        struct tap_state tap;
-    } state;
+    /* For devices of class netdev_tap_class only. */
+    int tap_fd;
 };
 
 struct netdev_rx_linux {
@@ -645,14 +640,12 @@ netdev_linux_create_tap(const struct netdev_class *class OVS_UNUSED,
                         const char *name, struct netdev **netdevp)
 {
     struct netdev_linux *netdev;
-    struct tap_state *state;
     static const char tap_dev[] = "/dev/net/tun";
     struct ifreq ifr;
     int error;
 
     netdev = xzalloc(sizeof *netdev);
     netdev->change_seq = 1;
-    state = &netdev->state.tap;
 
     error = cache_notifier_ref();
     if (error) {
@@ -660,8 +653,8 @@ netdev_linux_create_tap(const struct netdev_class *class OVS_UNUSED,
     }
 
     /* Open tap device. */
-    state->fd = open(tap_dev, O_RDWR);
-    if (state->fd < 0) {
+    netdev->tap_fd = open(tap_dev, O_RDWR);
+    if (netdev->tap_fd < 0) {
         error = errno;
         VLOG_WARN("opening \"%s\" failed: %s", tap_dev, ovs_strerror(error));
         goto error_unref_notifier;
@@ -670,7 +663,7 @@ netdev_linux_create_tap(const struct netdev_class *class OVS_UNUSED,
     /* Create tap device. */
     ifr.ifr_flags = IFF_TAP | IFF_NO_PI;
     ovs_strzcpy(ifr.ifr_name, name, sizeof ifr.ifr_name);
-    if (ioctl(state->fd, TUNSETIFF, &ifr) == -1) {
+    if (ioctl(netdev->tap_fd, TUNSETIFF, &ifr) == -1) {
         VLOG_WARN("%s: creating tap device failed: %s", name,
                   ovs_strerror(errno));
         error = errno;
@@ -678,7 +671,7 @@ netdev_linux_create_tap(const struct netdev_class *class OVS_UNUSED,
     }
 
     /* Make non-blocking. */
-    error = set_nonblocking(state->fd);
+    error = set_nonblocking(netdev->tap_fd);
     if (error) {
         goto error_close;
     }
@@ -688,7 +681,7 @@ netdev_linux_create_tap(const struct netdev_class *class OVS_UNUSED,
     return 0;
 
 error_close:
-    close(state->fd);
+    close(netdev->tap_fd);
 error_unref_notifier:
     cache_notifier_unref();
 error:
@@ -696,17 +689,6 @@ error:
     return error;
 }
 
-static void
-destroy_tap(struct netdev_linux *netdev)
-{
-    struct tap_state *state = &netdev->state.tap;
-
-    if (state->fd >= 0) {
-        close(state->fd);
-    }
-}
-
-/* Destroys the netdev device 'netdev_'. */
 static void
 netdev_linux_destroy(struct netdev *netdev_)
 {
@@ -716,8 +698,10 @@ netdev_linux_destroy(struct netdev *netdev_)
         netdev->tc->ops->tc_destroy(netdev->tc);
     }
 
-    if (netdev_get_class(netdev_) == &netdev_tap_class) {
-        destroy_tap(netdev);
+    if (netdev_get_class(netdev_) == &netdev_tap_class
+        && netdev->tap_fd >= 0)
+    {
+        close(netdev->tap_fd);
     }
     free(netdev);
 
@@ -734,7 +718,7 @@ netdev_linux_rx_open(struct netdev *netdev_, struct netdev_rx **rxp)
     int fd;
 
     if (is_tap) {
-        fd = netdev->state.tap.fd;
+        fd = netdev->tap_fd;
     } else {
         struct sockaddr_ll sll;
         int ifindex;
@@ -924,7 +908,7 @@ netdev_linux_send(struct netdev *netdev_, const void *data, size_t size)
              * because we attach a socket filter to the rx socket. */
             struct netdev_linux *netdev = netdev_linux_cast(netdev_);
 
-            retval = write(netdev->state.tap.fd, data, size);
+            retval = write(netdev->tap_fd, data, size);
         }
 
         if (retval < 0) {
