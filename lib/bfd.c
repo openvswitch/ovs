@@ -28,6 +28,7 @@
 #include "netlink.h"
 #include "odp-util.h"
 #include "ofpbuf.h"
+#include "ovs-thread.h"
 #include "openvswitch/types.h"
 #include "packets.h"
 #include "poll-loop.h"
@@ -177,54 +178,63 @@ struct bfd {
     long long int next_tx;        /* Next TX time. */
     long long int detect_time;    /* RFC 5880 6.8.4 Detection time. */
 
-    int ref_cnt;
     int forwarding_override;      /* Manual override of 'forwarding' status. */
-    bool check_tnl_key;           /* Verify tunnel key of inbound packets? */
+
+    atomic_bool check_tnl_key;    /* Verify tunnel key of inbound packets? */
+    atomic_int ref_cnt;
 };
 
-static bool bfd_in_poll(const struct bfd *);
-static void bfd_poll(struct bfd *bfd);
-static const char *bfd_diag_str(enum diag);
-static const char *bfd_state_str(enum state);
-static long long int bfd_min_tx(const struct bfd *);
-static long long int bfd_tx_interval(const struct bfd *);
-static long long int bfd_rx_interval(const struct bfd *);
-static void bfd_set_next_tx(struct bfd *);
-static void bfd_set_state(struct bfd *, enum state, enum diag);
-static uint32_t generate_discriminator(void);
-static void bfd_put_details(struct ds *, const struct bfd *);
+static struct ovs_mutex mutex = OVS_MUTEX_INITIALIZER;
+static struct hmap all_bfds__ = HMAP_INITIALIZER(&all_bfds__);
+static struct hmap *const all_bfds OVS_GUARDED_BY(mutex) = &all_bfds__;
+
+static bool bfd_forwarding__(const struct bfd *) OVS_REQ_WRLOCK(mutex);
+static bool bfd_in_poll(const struct bfd *) OVS_REQ_WRLOCK(&mutex);
+static void bfd_poll(struct bfd *bfd) OVS_REQ_WRLOCK(&mutex);
+static const char *bfd_diag_str(enum diag) OVS_REQ_WRLOCK(&mutex);
+static const char *bfd_state_str(enum state) OVS_REQ_WRLOCK(&mutex);
+static long long int bfd_min_tx(const struct bfd *) OVS_REQ_WRLOCK(&mutex);
+static long long int bfd_tx_interval(const struct bfd *)
+    OVS_REQ_WRLOCK(&mutex);
+static long long int bfd_rx_interval(const struct bfd *)
+    OVS_REQ_WRLOCK(&mutex);
+static void bfd_set_next_tx(struct bfd *) OVS_REQ_WRLOCK(&mutex);
+static void bfd_set_state(struct bfd *, enum state, enum diag)
+    OVS_REQ_WRLOCK(&mutex);
+static uint32_t generate_discriminator(void) OVS_REQ_WRLOCK(&mutex);
+static void bfd_put_details(struct ds *, const struct bfd *)
+    OVS_REQ_WRLOCK(&mutex);
 static void bfd_unixctl_show(struct unixctl_conn *, int argc,
                              const char *argv[], void *aux OVS_UNUSED);
 static void bfd_unixctl_set_forwarding_override(struct unixctl_conn *,
                                                 int argc, const char *argv[],
                                                 void *aux OVS_UNUSED);
 static void log_msg(enum vlog_level, const struct msg *, const char *message,
-                    const struct bfd *);
+                    const struct bfd *) OVS_REQ_WRLOCK(&mutex);
 
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(20, 20);
-static struct hmap all_bfds = HMAP_INITIALIZER(&all_bfds);
 
 /* Returns true if the interface on which 'bfd' is running may be used to
  * forward traffic according to the BFD session state. */
 bool
-bfd_forwarding(const struct bfd *bfd)
+bfd_forwarding(const struct bfd *bfd) OVS_EXCLUDED(mutex)
 {
-    if (bfd->forwarding_override != -1) {
-        return bfd->forwarding_override == 1;
-    }
+    bool ret;
 
-    return bfd->state == STATE_UP
-        && bfd->rmt_diag != DIAG_PATH_DOWN
-        && bfd->rmt_diag != DIAG_CPATH_DOWN
-        && bfd->rmt_diag != DIAG_RCPATH_DOWN;
+    ovs_mutex_lock(&mutex);
+    ret = bfd_forwarding__(bfd);
+    ovs_mutex_unlock(&mutex);
+    return ret;
 }
 
 /* Returns a 'smap' of key value pairs representing the status of 'bfd'
  * intended for the OVS database. */
 void
 bfd_get_status(const struct bfd *bfd, struct smap *smap)
+    OVS_EXCLUDED(mutex)
 {
-    smap_add(smap, "forwarding", bfd_forwarding(bfd) ? "true" : "false");
+    ovs_mutex_lock(&mutex);
+    smap_add(smap, "forwarding", bfd_forwarding__(bfd)? "true" : "false");
     smap_add(smap, "state", bfd_state_str(bfd->state));
     smap_add(smap, "diagnostic", bfd_diag_str(bfd->diag));
 
@@ -232,6 +242,7 @@ bfd_get_status(const struct bfd *bfd, struct smap *smap)
         smap_add(smap, "remote_state", bfd_state_str(bfd->rmt_state));
         smap_add(smap, "remote_diagnostic", bfd_diag_str(bfd->rmt_diag));
     }
+    ovs_mutex_unlock(&mutex);
 }
 
 /* Initializes, destroys, or reconfigures the BFD session 'bfd' (named 'name'),
@@ -240,22 +251,22 @@ bfd_get_status(const struct bfd *bfd, struct smap *smap)
  * handle for the session, or NULL if BFD is not enabled according to 'cfg'.
  * Also returns NULL if cfg is NULL. */
 struct bfd *
-bfd_configure(struct bfd *bfd, const char *name,
-              const struct smap *cfg)
+bfd_configure(struct bfd *bfd, const char *name, const struct smap *cfg)
+    OVS_EXCLUDED(mutex)
 {
-    static uint16_t udp_src = 0;
-    static bool init = false;
+    static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
+    static atomic_uint16_t udp_src = ATOMIC_VAR_INIT(0);
 
     long long int min_tx, min_rx;
     bool cpath_down;
 
-    if (!init) {
+    if (ovsthread_once_start(&once)) {
         unixctl_command_register("bfd/show", "[interface]", 0, 1,
                                  bfd_unixctl_show, NULL);
         unixctl_command_register("bfd/set-forwarding",
                                  "[interface] normal|false|true", 1, 2,
                                  bfd_unixctl_set_forwarding_override, NULL);
-        init = true;
+        ovsthread_once_done(&once);
     }
 
     if (!cfg || !smap_get_bool(cfg, "enable", false)) {
@@ -263,29 +274,32 @@ bfd_configure(struct bfd *bfd, const char *name,
         return NULL;
     }
 
+    ovs_mutex_lock(&mutex);
     if (!bfd) {
         bfd = xzalloc(sizeof *bfd);
         bfd->name = xstrdup(name);
         bfd->forwarding_override = -1;
         bfd->disc = generate_discriminator();
-        hmap_insert(&all_bfds, &bfd->node, bfd->disc);
+        hmap_insert(all_bfds, &bfd->node, bfd->disc);
 
         bfd->diag = DIAG_NONE;
         bfd->min_tx = 1000;
         bfd->mult = 3;
-        bfd->ref_cnt = 1;
+        atomic_init(&bfd->ref_cnt, 1);
 
         /* RFC 5881 section 4
          * The source port MUST be in the range 49152 through 65535.  The same
          * UDP source port number MUST be used for all BFD Control packets
          * associated with a particular session.  The source port number SHOULD
          * be unique among all BFD sessions on the system. */
-        bfd->udp_src = (udp_src++ % 16384) + 49152;
+        atomic_add(&udp_src, 1, &bfd->udp_src);
+        bfd->udp_src = (bfd->udp_src % 16384) + 49152;
 
         bfd_set_state(bfd, STATE_DOWN, DIAG_NONE);
     }
 
-    bfd->check_tnl_key = smap_get_bool(cfg, "check_tnl_key", false);
+    atomic_store(&bfd->check_tnl_key,
+                 smap_get_bool(cfg, "check_tnl_key", false));
     min_tx = smap_get_int(cfg, "min_tx", 100);
     min_tx = MAX(min_tx, 100);
     if (bfd->cfg_min_tx != min_tx) {
@@ -316,6 +330,7 @@ bfd_configure(struct bfd *bfd, const char *name,
         }
         bfd_poll(bfd);
     }
+    ovs_mutex_unlock(&mutex);
     return bfd;
 }
 
@@ -324,28 +339,35 @@ bfd_ref(const struct bfd *bfd_)
 {
     struct bfd *bfd = CONST_CAST(struct bfd *, bfd_);
     if (bfd) {
-        ovs_assert(bfd->ref_cnt > 0);
-        bfd->ref_cnt++;
+        int orig;
+        atomic_add(&bfd->ref_cnt, 1, &orig);
+        ovs_assert(orig > 0);
     }
     return bfd;
 }
 
 void
-bfd_unref(struct bfd *bfd)
+bfd_unref(struct bfd *bfd) OVS_EXCLUDED(mutex)
 {
     if (bfd) {
-        ovs_assert(bfd->ref_cnt > 0);
-        if (!--bfd->ref_cnt) {
-            hmap_remove(&all_bfds, &bfd->node);
+        int orig;
+
+        atomic_sub(&bfd->ref_cnt, 1, &orig);
+        ovs_assert(orig > 0);
+        if (orig == 1) {
+            ovs_mutex_lock(&mutex);
+            hmap_remove(all_bfds, &bfd->node);
             free(bfd->name);
             free(bfd);
+            ovs_mutex_unlock(&mutex);
         }
     }
 }
 
 void
-bfd_wait(const struct bfd *bfd)
+bfd_wait(const struct bfd *bfd) OVS_EXCLUDED(mutex)
 {
+    ovs_mutex_lock(&mutex);
     if (bfd->flags & FLAG_FINAL) {
         poll_immediate_wake();
     }
@@ -354,11 +376,13 @@ bfd_wait(const struct bfd *bfd)
     if (bfd->state > STATE_DOWN) {
         poll_timer_wait_until(bfd->detect_time);
     }
+    ovs_mutex_unlock(&mutex);
 }
 
 void
-bfd_run(struct bfd *bfd)
+bfd_run(struct bfd *bfd) OVS_EXCLUDED(mutex)
 {
+    ovs_mutex_lock(&mutex);
     if (bfd->state > STATE_DOWN && time_msec() >= bfd->detect_time) {
         bfd_set_state(bfd, STATE_DOWN, DIAG_EXPIRED);
     }
@@ -366,17 +390,22 @@ bfd_run(struct bfd *bfd)
     if (bfd->min_tx != bfd->cfg_min_tx || bfd->min_rx != bfd->cfg_min_rx) {
         bfd_poll(bfd);
     }
+    ovs_mutex_unlock(&mutex);
 }
 
 bool
-bfd_should_send_packet(const struct bfd *bfd)
+bfd_should_send_packet(const struct bfd *bfd) OVS_EXCLUDED(mutex)
 {
-    return bfd->flags & FLAG_FINAL || time_msec() >= bfd->next_tx;
+    bool ret;
+    ovs_mutex_lock(&mutex);
+    ret = bfd->flags & FLAG_FINAL || time_msec() >= bfd->next_tx;
+    ovs_mutex_unlock(&mutex);
+    return ret;
 }
 
 void
 bfd_put_packet(struct bfd *bfd, struct ofpbuf *p,
-               uint8_t eth_src[ETH_ADDR_LEN])
+               uint8_t eth_src[ETH_ADDR_LEN]) OVS_EXCLUDED(mutex)
 {
     long long int min_tx, min_rx;
     struct udp_header *udp;
@@ -384,6 +413,7 @@ bfd_put_packet(struct bfd *bfd, struct ofpbuf *p,
     struct ip_header *ip;
     struct msg *msg;
 
+    ovs_mutex_lock(&mutex);
     if (bfd->next_tx) {
         long long int delay = time_msec() - bfd->next_tx;
         long long int interval = bfd_tx_interval(bfd);
@@ -445,26 +475,31 @@ bfd_put_packet(struct bfd *bfd, struct ofpbuf *p,
 
     bfd->last_tx = time_msec();
     bfd_set_next_tx(bfd);
+    ovs_mutex_unlock(&mutex);
 }
 
 bool
 bfd_should_process_flow(const struct bfd *bfd, const struct flow *flow,
                         struct flow_wildcards *wc)
 {
+    bool check_tnl_key;
+
     memset(&wc->masks.nw_proto, 0xff, sizeof wc->masks.nw_proto);
     memset(&wc->masks.tp_dst, 0xff, sizeof wc->masks.tp_dst);
-    if (bfd->check_tnl_key) {
+
+    atomic_read(&bfd->check_tnl_key, &check_tnl_key);
+    if (check_tnl_key) {
         memset(&wc->masks.tunnel.tun_id, 0xff, sizeof wc->masks.tunnel.tun_id);
     }
     return (flow->dl_type == htons(ETH_TYPE_IP)
             && flow->nw_proto == IPPROTO_UDP
             && flow->tp_dst == htons(3784)
-            && (!bfd->check_tnl_key || flow->tunnel.tun_id == htonll(0)));
+            && (check_tnl_key || flow->tunnel.tun_id == htonll(0)));
 }
 
 void
 bfd_process_packet(struct bfd *bfd, const struct flow *flow,
-                   const struct ofpbuf *p)
+                   const struct ofpbuf *p) OVS_EXCLUDED(mutex)
 {
     uint32_t rmt_min_rx, pkt_your_disc;
     enum state rmt_state;
@@ -474,16 +509,17 @@ bfd_process_packet(struct bfd *bfd, const struct flow *flow,
 
     /* This function is designed to follow section RFC 5880 6.8.6 closely. */
 
+    ovs_mutex_lock(&mutex);
     if (flow->nw_ttl != 255) {
         /* XXX Should drop in the kernel to prevent DOS. */
-        return;
+        goto out;
     }
 
     msg = ofpbuf_at(p, (uint8_t *)p->l7 - (uint8_t *)p->data, BFD_PACKET_LEN);
     if (!msg) {
         VLOG_INFO_RL(&rl, "%s: Received unparseable BFD control message.",
                      bfd->name);
-        return;
+        goto out;
     }
 
     /* RFC 5880 Section 6.8.6
@@ -503,7 +539,7 @@ bfd_process_packet(struct bfd *bfd, const struct flow *flow,
 
     if (version != BFD_VERSION) {
         log_msg(VLL_WARN, msg, "Incorrect version", bfd);
-        return;
+        goto out;
     }
 
     /* Technically this should happen after the length check. We don't support
@@ -511,29 +547,29 @@ bfd_process_packet(struct bfd *bfd, const struct flow *flow,
     if (flags & FLAG_AUTH) {
         log_msg(VLL_WARN, msg, "Authenticated control message with"
                    " authentication disabled", bfd);
-        return;
+        goto out;
     }
 
     if (msg->length != BFD_PACKET_LEN) {
         log_msg(VLL_WARN, msg, "Unexpected length", bfd);
         if (msg->length < BFD_PACKET_LEN) {
-            return;
+            goto out;
         }
     }
 
     if (!msg->mult) {
         log_msg(VLL_WARN, msg, "Zero multiplier", bfd);
-        return;
+        goto out;
     }
 
     if (flags & FLAG_MULTIPOINT) {
         log_msg(VLL_WARN, msg, "Unsupported multipoint flag", bfd);
-        return;
+        goto out;
     }
 
     if (!msg->my_disc) {
         log_msg(VLL_WARN, msg, "NULL my_disc", bfd);
-        return;
+        goto out;
     }
 
     pkt_your_disc = ntohl(msg->your_disc);
@@ -545,11 +581,11 @@ bfd_process_packet(struct bfd *bfd, const struct flow *flow,
          * well, so in this respect, we are not compliant. */
        if (pkt_your_disc != bfd->disc) {
            log_msg(VLL_WARN, msg, "Incorrect your_disc", bfd);
-           return;
+           goto out;
        }
     } else if (rmt_state > STATE_DOWN) {
         log_msg(VLL_WARN, msg, "Null your_disc", bfd);
-        return;
+        goto out;
     }
 
     bfd->rmt_disc = ntohl(msg->my_disc);
@@ -586,7 +622,7 @@ bfd_process_packet(struct bfd *bfd, const struct flow *flow,
 
     if (bfd->state == STATE_ADMIN_DOWN) {
         VLOG_DBG_RL(&rl, "Administratively down, dropping control message.");
-        return;
+        goto out;
     }
 
     if (rmt_state == STATE_ADMIN_DOWN) {
@@ -619,17 +655,33 @@ bfd_process_packet(struct bfd *bfd, const struct flow *flow,
         }
     }
     /* XXX: RFC 5880 Section 6.8.6 Demand mode related calculations here. */
+
+out:
+    ovs_mutex_unlock(&mutex);
 }
 
+static bool
+bfd_forwarding__(const struct bfd *bfd) OVS_REQ_WRLOCK(mutex)
+{
+    if (bfd->forwarding_override != -1) {
+        return bfd->forwarding_override == 1;
+    }
+
+    return bfd->state == STATE_UP
+        && bfd->rmt_diag != DIAG_PATH_DOWN
+        && bfd->rmt_diag != DIAG_CPATH_DOWN
+        && bfd->rmt_diag != DIAG_RCPATH_DOWN;
+}
+
 /* Helpers. */
 static bool
-bfd_in_poll(const struct bfd *bfd)
+bfd_in_poll(const struct bfd *bfd) OVS_REQ_WRLOCK(mutex)
 {
     return (bfd->flags & FLAG_POLL) != 0;
 }
 
 static void
-bfd_poll(struct bfd *bfd)
+bfd_poll(struct bfd *bfd) OVS_REQ_WRLOCK(mutex)
 {
     if (bfd->state > STATE_DOWN && !bfd_in_poll(bfd)
         && !(bfd->flags & FLAG_FINAL)) {
@@ -642,7 +694,7 @@ bfd_poll(struct bfd *bfd)
 }
 
 static long long int
-bfd_min_tx(const struct bfd *bfd)
+bfd_min_tx(const struct bfd *bfd) OVS_REQ_WRLOCK(mutex)
 {
     /* RFC 5880 Section 6.8.3
      * When bfd.SessionState is not Up, the system MUST set
@@ -654,20 +706,20 @@ bfd_min_tx(const struct bfd *bfd)
 }
 
 static long long int
-bfd_tx_interval(const struct bfd *bfd)
+bfd_tx_interval(const struct bfd *bfd) OVS_REQ_WRLOCK(mutex)
 {
     long long int interval = bfd_min_tx(bfd);
     return MAX(interval, bfd->rmt_min_rx);
 }
 
 static long long int
-bfd_rx_interval(const struct bfd *bfd)
+bfd_rx_interval(const struct bfd *bfd) OVS_REQ_WRLOCK(mutex)
 {
     return MAX(bfd->min_rx, bfd->rmt_min_tx);
 }
 
 static void
-bfd_set_next_tx(struct bfd *bfd)
+bfd_set_next_tx(struct bfd *bfd) OVS_REQ_WRLOCK(mutex)
 {
     long long int interval = bfd_tx_interval(bfd);
     interval -= interval * random_range(26) / 100;
@@ -743,7 +795,7 @@ bfd_diag_str(enum diag diag) {
 
 static void
 log_msg(enum vlog_level level, const struct msg *p, const char *message,
-        const struct bfd *bfd)
+        const struct bfd *bfd) OVS_REQ_WRLOCK(mutex)
 {
     struct ds ds = DS_EMPTY_INITIALIZER;
 
@@ -775,6 +827,7 @@ log_msg(enum vlog_level level, const struct msg *p, const char *message,
 
 static void
 bfd_set_state(struct bfd *bfd, enum state state, enum diag diag)
+    OVS_REQ_WRLOCK(mutex)
 {
     if (diag == DIAG_NONE && bfd->cpath_down) {
         diag = DIAG_CPATH_DOWN;
@@ -824,7 +877,7 @@ generate_discriminator(void)
         /* 'disc' is by definition random, so there's no reason to waste time
          * hashing it. */
         disc = random_uint32();
-        HMAP_FOR_EACH_IN_BUCKET (bfd, node, disc, &all_bfds) {
+        HMAP_FOR_EACH_IN_BUCKET (bfd, node, disc, all_bfds) {
             if (bfd->disc == disc) {
                 disc = 0;
                 break;
@@ -836,11 +889,11 @@ generate_discriminator(void)
 }
 
 static struct bfd *
-bfd_find_by_name(const char *name)
+bfd_find_by_name(const char *name) OVS_REQ_WRLOCK(mutex)
 {
     struct bfd *bfd;
 
-    HMAP_FOR_EACH (bfd, node, &all_bfds) {
+    HMAP_FOR_EACH (bfd, node, all_bfds) {
         if (!strcmp(bfd->name, name)) {
             return bfd;
         }
@@ -849,10 +902,10 @@ bfd_find_by_name(const char *name)
 }
 
 static void
-bfd_put_details(struct ds *ds, const struct bfd *bfd)
+bfd_put_details(struct ds *ds, const struct bfd *bfd) OVS_REQ_WRLOCK(mutex)
 {
     ds_put_format(ds, "\tForwarding: %s\n",
-                  bfd_forwarding(bfd) ? "true" : "false");
+                  bfd_forwarding__(bfd) ? "true" : "false");
     ds_put_format(ds, "\tDetect Multiplier: %d\n", bfd->mult);
     ds_put_format(ds, "\tConcatenated Path Down: %s\n",
                   bfd->cpath_down ? "true" : "false");
@@ -892,37 +945,43 @@ bfd_put_details(struct ds *ds, const struct bfd *bfd)
 
 static void
 bfd_unixctl_show(struct unixctl_conn *conn, int argc, const char *argv[],
-                 void *aux OVS_UNUSED)
+                 void *aux OVS_UNUSED) OVS_EXCLUDED(mutex)
 {
     struct ds ds = DS_EMPTY_INITIALIZER;
     struct bfd *bfd;
 
+    ovs_mutex_lock(&mutex);
     if (argc > 1) {
         bfd = bfd_find_by_name(argv[1]);
         if (!bfd) {
             unixctl_command_reply_error(conn, "no such bfd object");
-            return;
+            goto out;
         }
         bfd_put_details(&ds, bfd);
     } else {
-        HMAP_FOR_EACH (bfd, node, &all_bfds) {
+        HMAP_FOR_EACH (bfd, node, all_bfds) {
             ds_put_format(&ds, "---- %s ----\n", bfd->name);
             bfd_put_details(&ds, bfd);
         }
     }
     unixctl_command_reply(conn, ds_cstr(&ds));
     ds_destroy(&ds);
+
+out:
+    ovs_mutex_unlock(&mutex);
 }
 
 
 static void
 bfd_unixctl_set_forwarding_override(struct unixctl_conn *conn, int argc,
                                     const char *argv[], void *aux OVS_UNUSED)
+    OVS_EXCLUDED(mutex)
 {
     const char *forward_str = argv[argc - 1];
     int forwarding_override;
     struct bfd *bfd;
 
+    ovs_mutex_lock(&mutex);
     if (!strcasecmp("true", forward_str)) {
         forwarding_override = 1;
     } else if (!strcasecmp("false", forward_str)) {
@@ -931,21 +990,24 @@ bfd_unixctl_set_forwarding_override(struct unixctl_conn *conn, int argc,
         forwarding_override = -1;
     } else {
         unixctl_command_reply_error(conn, "unknown fault string");
-        return;
+        goto out;
     }
 
     if (argc > 2) {
         bfd = bfd_find_by_name(argv[1]);
         if (!bfd) {
             unixctl_command_reply_error(conn, "no such BFD object");
-            return;
+            goto out;
         }
         bfd->forwarding_override = forwarding_override;
     } else {
-        HMAP_FOR_EACH (bfd, node, &all_bfds) {
+        HMAP_FOR_EACH (bfd, node, all_bfds) {
             bfd->forwarding_override = forwarding_override;
         }
     }
 
     unixctl_command_reply(conn, "OK");
+
+out:
+    ovs_mutex_unlock(&mutex);
 }
