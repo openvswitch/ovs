@@ -537,7 +537,6 @@ static void
 netdev_linux_cache_cb(const struct rtnetlink_link_change *change,
                       void *aux OVS_UNUSED)
 {
-    struct netdev_linux *dev;
     if (change) {
         struct netdev *base_dev = netdev_from_name(change->ifname);
         if (base_dev && is_netdev_linux_class(netdev_get_class(base_dev))) {
@@ -551,9 +550,8 @@ netdev_linux_cache_cb(const struct rtnetlink_link_change *change,
         netdev_get_devices(&netdev_linux_class, &device_shash);
         SHASH_FOR_EACH (node, &device_shash) {
             struct netdev *netdev = node->data;
+            struct netdev_linux *dev = netdev_linux_cast(netdev);
             unsigned int flags;
-
-            dev = netdev_linux_cast(netdev);
 
             get_flags(&dev->up, &flags);
             netdev_linux_changed(dev, flags, 0);
