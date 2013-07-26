@@ -672,19 +672,21 @@ netdev_linux_create_tap(const struct netdev_class *class OVS_UNUSED,
         VLOG_WARN("%s: creating tap device failed: %s", name,
                   ovs_strerror(errno));
         error = errno;
-        goto error_unref_notifier;
+        goto error_close;
     }
 
     /* Make non-blocking. */
     error = set_nonblocking(state->fd);
     if (error) {
-        goto error_unref_notifier;
+        goto error_close;
     }
 
     netdev_init(&netdev->up, name, &netdev_tap_class);
     *netdevp = &netdev->up;
     return 0;
 
+error_close:
+    close(state->fd);
 error_unref_notifier:
     cache_notifier_unref();
 error:
