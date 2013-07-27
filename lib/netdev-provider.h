@@ -50,12 +50,6 @@ struct netdev *netdev_from_name(const char *name);
 void netdev_get_devices(const struct netdev_class *,
                         struct shash *device_list);
 
-static inline void netdev_assert_class(const struct netdev *netdev,
-                                           const struct netdev_class *class_)
-{
-    ovs_assert(netdev->netdev_class == class_);
-}
-
 /* Network device class structure, to be defined by each implementation of a
  * network device.
  *
