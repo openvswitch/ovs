@@ -67,6 +67,7 @@ EOF
 m4_include([tests/ovsdb-macros.at])
 m4_include([tests/ofproto-macros.at])
 
+m4_include([tests/bfd.at])
 m4_include([tests/lacp.at])
 m4_include([tests/library.at])
 m4_include([tests/heap.at])
