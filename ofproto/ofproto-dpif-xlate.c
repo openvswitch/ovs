@@ -1927,7 +1927,6 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
         ctx->rule->up.evictable = false;
     }
 
- do_xlate_actions_again:
     OFPACT_FOR_EACH (a, ofpacts, ofpacts_len) {
         struct ofpact_controller *controller;
         const struct ofpact_metadata *metadata;
@@ -2128,35 +2127,10 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
         case OFPACT_GOTO_TABLE: {
             /* It is assumed that goto-table is the last action. */
             struct ofpact_goto_table *ogt = ofpact_get_GOTO_TABLE(a);
-            struct rule_dpif *rule;
 
             ovs_assert(ctx->table_id < ogt->table_id);
-
-            ctx->table_id = ogt->table_id;
-
-            /* Look up a flow from the new table. */
-            rule = rule_dpif_lookup_in_table(ctx->xbridge->ofproto, flow, wc,
-                                             ctx->table_id);
-
-            ctx->xout->tags |= calculate_flow_tag(ctx->xbridge->ofproto,
-                                                  &ctx->xin->flow,
-                                                  ctx->table_id, rule);
-
-            rule = ctx_rule_hooks(ctx, rule, true);
-
-            if (rule) {
-                if (ctx->rule) {
-                    ctx->rule->up.evictable = was_evictable;
-                }
-                ctx->rule = rule;
-                was_evictable = rule->up.evictable;
-                rule->up.evictable = false;
-
-                /* Tail recursion removal. */
-                ofpacts = rule->up.ofpacts;
-                ofpacts_len = rule->up.ofpacts_len;
-                goto do_xlate_actions_again;
-            }
+            xlate_table_action(ctx, ctx->xin->flow.in_port.ofp_port,
+                               ogt->table_id, true);
             break;
         }
 

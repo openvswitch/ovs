@@ -24,8 +24,8 @@ AT_SETUP([ofproto-dpif - goto table])
 OVS_VSWITCHD_START
 ADD_OF_PORTS([br0], [1], [10], [11])
 echo "table=0 in_port=1 actions=output(10),goto_table(1)" > flows.txt
-for i in `seq 1 252`; do echo "table=$i actions=goto_table($(($i+1)))"; done >> flows.txt
-echo "table=253 actions=output(11)" >> flows.txt
+for i in `seq 1 63`; do echo "table=$i actions=goto_table($(($i+1)))"; done >> flows.txt
+echo "table=64 actions=output(11)" >> flows.txt
 AT_CHECK([ovs-ofctl -O OpenFlow12 add-flows br0 flows.txt])
 AT_CHECK([ovs-appctl ofproto/trace br0 'in_port=1,dl_src=50:54:00:00:00:05,dl_dst=50:54:00:00:00:07,dl_type=0x0800,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_proto=1,nw_tos=0,nw_ttl=128,icmp_type=8,icmp_code=0'], [0], [stdout])
 AT_CHECK([tail -1 stdout], [0],
