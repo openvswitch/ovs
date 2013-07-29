@@ -36,7 +36,7 @@ bool latch_poll(struct latch *);
 void latch_set(struct latch *);
 
 bool latch_is_set(const struct latch *);
-void latch_wait(const struct latch *, const char *where);
-#define latch_wait(latch) latch_wait(latch, SOURCE_LOCATOR)
+void latch_wait_at(const struct latch *, const char *where);
+#define latch_wait(latch) latch_wait_at(latch, SOURCE_LOCATOR)
 
 #endif /* latch.h */

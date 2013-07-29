@@ -75,9 +75,13 @@ latch_is_set(const struct latch *latch)
     return pfd.revents & POLLIN;
 }
 
-/* Causes the next poll_block() to wake up when 'latch' is set. */
+/* Causes the next poll_block() to wake up when 'latch' is set.
+ *
+ * ('where' is used in debug logging.  Commonly one would use latch_wait() to
+ * automatically provide the caller's source file and line number for
+ * 'where'.) */
 void
-(latch_wait)(const struct latch *latch, const char *where)
+latch_wait_at(const struct latch *latch, const char *where)
 {
-    (poll_fd_wait)(latch->fds[0], POLLIN, where);
+    poll_fd_wait_at(latch->fds[0], POLLIN, where);
 }

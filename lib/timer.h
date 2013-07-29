@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 Nicira, Inc.
+ * Copyright (c) 2011, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,8 +27,8 @@ struct timer {
 };
 
 long long int timer_msecs_until_expired(const struct timer *);
-void timer_wait(const struct timer *, const char *where);
-#define timer_wait(timer) timer_wait(timer, SOURCE_LOCATOR)
+void timer_wait_at(const struct timer *, const char *where);
+#define timer_wait(timer) timer_wait_at(timer, SOURCE_LOCATOR)
 
 /* Causes 'timer' to expire when 'duration' milliseconds have passed.
  *

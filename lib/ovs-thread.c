@@ -136,9 +136,13 @@ ovsthread_once_done(struct ovsthread_once *once)
 }
 
 /* Asserts that the process has not yet created any threads (beyond the initial
- * thread).  */
+ * thread).
+ *
+ * ('where' is used in logging.  Commonly one would use
+ * assert_single_threaded() to automatically provide the caller's source file
+ * and line number for 'where'.) */
 void
-(assert_single_threaded)(const char *where)
+assert_single_threaded_at(const char *where)
 {
     if (multithreaded) {
         VLOG_FATAL("%s: attempted operation not allowed when multithreaded",
@@ -148,9 +152,13 @@ void
 
 /* Forks the current process (checking that this is allowed).  Aborts with
  * VLOG_FATAL if fork() returns an error, and otherwise returns the value
- * returned by fork().  */
+ * returned by fork().
+ *
+ * ('where' is used in logging.  Commonly one would use xfork() to
+ * automatically provide the caller's source file and line number for
+ * 'where'.) */
 pid_t
-(xfork)(const char *where)
+xfork_at(const char *where)
 {
     pid_t pid;
 

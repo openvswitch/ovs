@@ -377,11 +377,11 @@ ovsthread_once_start(struct ovsthread_once *once)
     ((ONCE)->done ? false : ({ OVS_ACQUIRE(ONCE); true; }))
 #endif
 
-void assert_single_threaded(const char *where);
-#define assert_single_threaded() assert_single_threaded(SOURCE_LOCATOR)
+void assert_single_threaded_at(const char *where);
+#define assert_single_threaded() assert_single_threaded_at(SOURCE_LOCATOR)
 
-pid_t xfork(const char *where);
-#define xfork() xfork(SOURCE_LOCATOR)
+pid_t xfork_at(const char *where);
+#define xfork() xfork_at(SOURCE_LOCATOR)
 
 void forbid_forking(const char *reason);
 bool may_fork(void);

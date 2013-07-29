@@ -30,11 +30,6 @@
 #include "timeval.h"
 #include "vlog.h"
 
-#undef poll_fd_wait
-#undef poll_timer_wait
-#undef poll_timer_wait_until
-#undef poll_immediate_wake
-
 VLOG_DEFINE_THIS_MODULE(poll_loop);
 
 COVERAGE_DEFINE(poll_fd_wait);
@@ -63,10 +58,11 @@ static struct poll_loop *poll_loop(void);
  * is affected.  The event will need to be re-registered after poll_block() is
  * called if it is to persist.
  *
- * Ordinarily the 'where' argument is supplied automatically; see poll-loop.h
- * for more information. */
+ * ('where' is used in debug logging.  Commonly one would use poll_fd_wait() to
+ * automatically provide the caller's source file and line number for
+ * 'where'.) */
 void
-poll_fd_wait(int fd, short int events, const char *where)
+poll_fd_wait_at(int fd, short int events, const char *where)
 {
     struct poll_loop *loop = poll_loop();
 
@@ -93,10 +89,11 @@ poll_fd_wait(int fd, short int events, const char *where)
  * is affected.  The timer will need to be re-registered after poll_block() is
  * called if it is to persist.
  *
- * Ordinarily the 'where' argument is supplied automatically; see poll-loop.h
- * for more information. */
+ * ('where' is used in debug logging.  Commonly one would use poll_timer_wait()
+ * to automatically provide the caller's source file and line number for
+ * 'where'.) */
 void
-poll_timer_wait(long long int msec, const char *where)
+poll_timer_wait_at(long long int msec, const char *where)
 {
     long long int now = time_msec();
     long long int when;
@@ -112,7 +109,7 @@ poll_timer_wait(long long int msec, const char *where)
         when = LLONG_MAX;
     }
 
-    poll_timer_wait_until(when, where);
+    poll_timer_wait_until_at(when, where);
 }
 
 /* Causes the following call to poll_block() to wake up when the current time,
@@ -124,10 +121,11 @@ poll_timer_wait(long long int msec, const char *where)
  * is affected.  The timer will need to be re-registered after poll_block() is
  * called if it is to persist.
  *
- * Ordinarily the 'where' argument is supplied automatically; see poll-loop.h
- * for more information. */
+ * ('where' is used in debug logging.  Commonly one would use
+ * poll_timer_wait_until() to automatically provide the caller's source file
+ * and line number for 'where'.) */
 void
-poll_timer_wait_until(long long int when, const char *where)
+poll_timer_wait_until_at(long long int when, const char *where)
 {
     struct poll_loop *loop = poll_loop();
     if (when < loop->timeout_when) {
@@ -139,12 +137,13 @@ poll_timer_wait_until(long long int when, const char *where)
 /* Causes the following call to poll_block() to wake up immediately, without
  * blocking.
  *
- * Ordinarily the 'where' argument is supplied automatically; see poll-loop.h
- * for more information. */
+ * ('where' is used in debug logging.  Commonly one would use
+ * poll_immediate_wake() to automatically provide the caller's source file and
+ * line number for 'where'.) */
 void
-poll_immediate_wake(const char *where)
+poll_immediate_wake_at(const char *where)
 {
-    poll_timer_wait(0, where);
+    poll_timer_wait_at(0, where);
 }
 
 /* Logs, if appropriate, that the poll loop was awakened by an event

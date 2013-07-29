@@ -352,7 +352,7 @@ void
 jsonrpc_recv_wait(struct jsonrpc *rpc)
 {
     if (rpc->status || rpc->received || !byteq_is_empty(&rpc->input)) {
-        (poll_immediate_wake)(rpc->name);
+        poll_immediate_wake_at(rpc->name);
     } else {
         stream_recv_wait(rpc->stream);
     }
