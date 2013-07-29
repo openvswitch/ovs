@@ -112,7 +112,7 @@ static int gre_rcv(struct sk_buff *skb,
 		return PACKET_REJECT;
 
 	key = key_to_tunnel_id(tpi->key, tpi->seq);
-	tnl_tun_key_init(&tun_key, ip_hdr(skb), key, filter_tnl_flags(tpi->flags));
+	ovs_flow_tun_key_init(&tun_key, ip_hdr(skb), key, filter_tnl_flags(tpi->flags));
 
 	ovs_vport_receive(vport, skb, &tun_key);
 	return PACKET_RCVD;

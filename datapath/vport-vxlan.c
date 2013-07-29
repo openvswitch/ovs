@@ -73,7 +73,7 @@ static int vxlan_rcv(struct vxlan_handler *vh, struct sk_buff *skb, __be32 vx_vn
 	/* Save outer tunnel values */
 	iph = ip_hdr(skb);
 	key = cpu_to_be64(ntohl(vx_vni) >> 8);
-	tnl_tun_key_init(&tun_key, iph, key, TUNNEL_KEY);
+	ovs_flow_tun_key_init(&tun_key, iph, key, TUNNEL_KEY);
 
 	ovs_vport_receive(vport, skb, &tun_key);
 	return PACKET_RCVD;

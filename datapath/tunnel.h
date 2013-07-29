@@ -41,20 +41,4 @@ int ovs_tnl_send(struct vport *vport, struct sk_buff *skb,
 void ovs_tnl_rcv(struct vport *vport, struct sk_buff *skb,
 		 struct ovs_key_ipv4_tunnel *tun_key);
 
-static inline void tnl_tun_key_init(struct ovs_key_ipv4_tunnel *tun_key,
-					 const struct iphdr *iph, __be64 tun_id,
-					 __be16 tun_flags)
-{
-	tun_key->tun_id = tun_id;
-	tun_key->ipv4_src = iph->saddr;
-	tun_key->ipv4_dst = iph->daddr;
-	tun_key->ipv4_tos = iph->tos;
-	tun_key->ipv4_ttl = iph->ttl;
-	tun_key->tun_flags = tun_flags;
-
-	/* clear struct padding. */
-	memset((unsigned char*) tun_key + OVS_TUNNEL_KEY_SIZE, 0,
-	       sizeof(*tun_key) - OVS_TUNNEL_KEY_SIZE);
-}
-
 #endif /* TUNNEL_H */
