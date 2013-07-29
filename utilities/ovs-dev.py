@@ -173,7 +173,9 @@ def run():
     if options.gdb:
         cmd = ["gdb", "--args"] + cmd
     elif options.valgrind:
-        cmd = ["valgrind", "--track-origins=yes"] + cmd
+        cmd = ["valgrind", "--track-origins=yes",
+               "--suppressions=%s/tests/glibc.supp" % OVS_SRC,
+               "--suppressions=%s/tests/openssl.supp" % OVS_SRC] + cmd
     else:
         cmd = ["sudo"] + cmd
         opts = opts + ["-vconsole:off", "--detach"]
