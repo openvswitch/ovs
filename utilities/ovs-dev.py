@@ -26,7 +26,7 @@ OVS_SRC = HOME + "/ovs"
 ROOT = HOME + "/root"
 PATH = "%(ovs)s/utilities:%(ovs)s/ovsdb:%(ovs)s/vswitchd" % {"ovs": OVS_SRC}
 
-ENV["CFLAGS"] = "-g -O0 -Wall -Wextra -Wno-deprecated-declarations"
+ENV["CFLAGS"] = "-g -O0"
 ENV["PATH"] = PATH + ":" + ENV["PATH"]
 
 options = None
