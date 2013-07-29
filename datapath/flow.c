@@ -82,8 +82,9 @@ static void update_range__(struct sw_flow_match *match,
 	do { \
 		update_range__(match, offsetof(struct sw_flow_key, field),  \
 				     sizeof((match)->key->field), is_mask); \
-		if (is_mask && match->mask != NULL) {                       \
-			(match)->mask->key.field = value;		    \
+		if (is_mask) {						    \
+			if ((match)->mask)				    \
+				(match)->mask->key.field = value;	    \
 		} else {                                                    \
 			(match)->key->field = value;		            \
 		}                                                           \
@@ -93,8 +94,9 @@ static void update_range__(struct sw_flow_match *match,
 	do { \
 		update_range__(match, offsetof(struct sw_flow_key, field),  \
 				len, is_mask);                              \
-		if (is_mask && match->mask != NULL) {                       \
-			memcpy(&(match)->mask->key.field, value_p, len);    \
+		if (is_mask) {						    \
+			if ((match)->mask)				    \
+				memcpy(&(match)->mask->key.field, value_p, len);\
 		} else {                                                    \
 			memcpy(&(match)->key->field, value_p, len);         \
 		}                                                           \
