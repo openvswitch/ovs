@@ -52,6 +52,7 @@
 #include "shash.h"
 #include "sset.h"
 #include "timeval.h"
+#include "unixctl.h"
 #include "util.h"
 #include "vlog.h"
 
@@ -1328,6 +1329,41 @@ const struct dpif_class dpif_netdev_class = {
 };
 
 static void
+dpif_dummy_change_port_number(struct unixctl_conn *conn, int argc OVS_UNUSED,
+                              const char *argv[], void *aux OVS_UNUSED)
+{
+    struct dp_netdev_port *port;
+    struct dp_netdev *dp;
+    int port_no;
+
+    dp = shash_find_data(&dp_netdevs, argv[1]);
+    if (!dp || !dpif_netdev_class_is_dummy(dp->class)) {
+        unixctl_command_reply_error(conn, "unknown datapath or not a dummy");
+        return;
+    }
+
+    if (get_port_by_name(dp, argv[2], &port)) {
+        unixctl_command_reply_error(conn, "unknown port");
+        return;
+    }
+
+    port_no = atoi(argv[3]);
+    if (port_no <= 0 || port_no >= MAX_PORTS) {
+        unixctl_command_reply_error(conn, "bad port number");
+        return;
+    }
+    if (dp->ports[port_no]) {
+        unixctl_command_reply_error(conn, "port number already in use");
+        return;
+    }
+    dp->ports[odp_to_u32(port->port_no)] = NULL;
+    dp->ports[port_no] = port;
+    port->port_no = u32_to_odp(port_no);
+    dp->serial++;
+    unixctl_command_reply(conn, NULL);
+}
+
+static void
 dpif_dummy_register__(const char *type)
 {
     struct dpif_class *class;
@@ -1356,4 +1392,8 @@ dpif_dummy_register(bool override)
     }
 
     dpif_dummy_register__("dummy");
+
+    unixctl_command_register("dpif-dummy/change-port-number",
+                             "DP PORT NEW-NUMBER",
+                             3, 3, dpif_dummy_change_port_number, NULL);
 }

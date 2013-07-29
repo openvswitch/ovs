@@ -2632,3 +2632,24 @@ skb_priority=0,icmp,in_port=1,nw_src=10.0.0.4,nw_dst=10.0.0.3,nw_tos=0,nw_ecn=0,
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
+
+AT_SETUP([ofproto-dpif - datapath port number change])
+OVS_VSWITCHD_START([set Bridge br0 fail-mode=standalone])
+ADD_OF_PORTS([br0], 1)
+
+# Trace a flow that should output to p1.
+AT_CHECK([ovs-appctl ofproto/trace br0 in_port=LOCAL,dl_src=10:20:30:40:50:60],
+  [0], [stdout])
+AT_CHECK([tail -1 stdout], [0], [Datapath actions: 1
+])
+
+# Change p1's port number to 5.
+AT_CHECK([ovs-appctl dpif-dummy/change-port-number ovs-dummy p1 5])
+
+# Trace a flow that should output to p1 in its new location.
+AT_CHECK([ovs-appctl ofproto/trace br0 in_port=LOCAL,dl_src=10:20:30:40:50:60],
+  [0], [stdout])
+AT_CHECK([tail -1 stdout], [0], [Datapath actions: 5
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP

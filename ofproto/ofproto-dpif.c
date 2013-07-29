@@ -950,6 +950,24 @@ process_dpif_port_change(struct dpif_backer *backer, const char *devname)
         /* The port was added, but we don't know with which
          * ofproto we should associate it.  Delete it. */
         dpif_port_del(backer->dpif, port.port_no);
+    } else {
+        struct ofport_dpif *ofport;
+
+        ofport = ofport_dpif_cast(shash_find_data(
+                                      &ofproto->up.port_by_name, devname));
+        if (ofport
+            && ofport->odp_port != port.port_no
+            && !odp_port_to_ofport(backer, port.port_no))
+        {
+            /* 'ofport''s datapath port number has changed from
+             * 'ofport->odp_port' to 'port.port_no'.  Update our internal data
+             * structures to match. */
+            hmap_remove(&backer->odp_to_ofport_map, &ofport->odp_port_node);
+            ofport->odp_port = port.port_no;
+            hmap_insert(&backer->odp_to_ofport_map, &ofport->odp_port_node,
+                        hash_odp_port(port.port_no));
+            backer->need_revalidate = REV_RECONFIGURE;
+        }
     }
     dpif_port_destroy(&port);
 }
