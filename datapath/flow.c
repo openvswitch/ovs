@@ -1363,15 +1363,19 @@ static int ovs_key_from_nlattrs(struct sw_flow_match *match,  u64 attrs,
 		__be16 tci;
 
 		tci = nla_get_be16(a[OVS_KEY_ATTR_VLAN]);
-		if (!is_mask)
-			if (!(tci & htons(VLAN_TAG_PRESENT))) {
+		if (!(tci & htons(VLAN_TAG_PRESENT))) {
+			if (is_mask)
+				OVS_NLERR("VLAN TCI mask does not have exact match for VLAN_TAG_PRESENT bit.\n");
+			else
 				OVS_NLERR("VLAN TCI does not have VLAN_TAG_PRESENT bit set.\n");
-				return -EINVAL;
-			}
+
+			return -EINVAL;
+		}
 
 		SW_FLOW_KEY_PUT(match, eth.tci, tci, is_mask);
 		attrs &= ~(1ULL << OVS_KEY_ATTR_VLAN);
-	}
+	} else if (!is_mask)
+		SW_FLOW_KEY_PUT(match, eth.tci, htons(0xffff), true);
 
 	if (attrs & (1ULL << OVS_KEY_ATTR_ETHERTYPE)) {
 		__be16 eth_type;
