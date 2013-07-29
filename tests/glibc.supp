@@ -11,6 +11,7 @@
    timer_create
    Memcheck:Param
    timer_create(evp)
-   fun:timer_create
+   ...
+   fun:set_up_timer
 }
 
