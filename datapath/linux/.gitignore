@@ -14,6 +14,7 @@
 /exthdrs_core.c
 /flex_array.c
 /flow.c
+/flow_dissector.c
 /genetlink-openvswitch.c
 /genl_exec.c
 /gre.c
@@ -42,4 +43,5 @@
 /vport-patch.c
 /vport-vxlan.c
 /vport.c
+/vxlan.c
 /workqueue.c
