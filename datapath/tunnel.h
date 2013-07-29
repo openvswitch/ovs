@@ -26,10 +26,6 @@
 #include "flow.h"
 #include "vport.h"
 
-struct rtable *find_route(struct net *net,
-			  __be32 *saddr, __be32 daddr, u8 ipproto,
-			  u8 tos, u32 skb_mark);
-
 u16 ovs_tnl_get_src_port(struct sk_buff *skb);
 
 int ovs_tnl_send(struct vport *vport, struct sk_buff *skb,
