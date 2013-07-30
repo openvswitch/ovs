@@ -351,7 +351,7 @@ netdev_rx_dummy_recv(struct netdev_rx *rx_, void *buffer, size_t size)
 {
     struct netdev_rx_dummy *rx = netdev_rx_dummy_cast(rx_);
     struct ofpbuf *packet;
-    size_t packet_size;
+    int retval;
 
     if (list_is_empty(&rx->recv_queue)) {
         return -EAGAIN;
@@ -359,15 +359,15 @@ netdev_rx_dummy_recv(struct netdev_rx *rx_, void *buffer, size_t size)
 
     packet = ofpbuf_from_list(list_pop_front(&rx->recv_queue));
     rx->recv_queue_len--;
-    if (packet->size > size) {
-        return -EMSGSIZE;
+    if (packet->size <= size) {
+        memcpy(buffer, packet->data, packet->size);
+        retval = packet->size;
+    } else {
+        retval = -EMSGSIZE;
     }
-    packet_size = packet->size;
-
-    memcpy(buffer, packet->data, packet->size);
     ofpbuf_delete(packet);
 
-    return packet_size;
+    return retval;
 }
 
 static void
