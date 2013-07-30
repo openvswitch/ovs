@@ -265,7 +265,7 @@ def docsToNroff(schemaFile, xmlFile, erFile, title=None):
     # Putting '\" p as the first line tells "man" that the manpage
     # needs to be preprocessed by "pic".
     s = r''''\" p
-.TH @VERSION@ 5 "%s" "Open vSwitch" "Open vSwitch Manual"
+.TH "%s" 5 @VERSION@ "Open vSwitch" "Open vSwitch Manual"
 .\" -*- nroff -*-
 .de TQ
 .  br
@@ -281,7 +281,7 @@ def docsToNroff(schemaFile, xmlFile, erFile, title=None):
 .SH NAME
 %s \- %s database schema
 .PP
-''' % (title, textToNroff(title), schema.name)
+''' % (title, textToNroff(schema.name), schema.name)
 
     tables = ""
     introNodes = []
@@ -392,7 +392,7 @@ if __name__ == "__main__":
             sys.exit(1)
 
         # XXX we should warn about undocumented tables or columns
-        s = docsToNroff(args[0], args[1], er_diagram)
+        s = docsToNroff(args[0], args[1], er_diagram, title)
         for line in s.split("\n"):
             line = line.strip()
             if len(line):
