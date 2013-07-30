@@ -3832,7 +3832,7 @@ handle_flow_miss_with_facet(struct flow_miss *miss, struct facet *facet,
         op->xout_garbage = false;
         op->dpif_op.type = DPIF_OP_FLOW_PUT;
         op->subfacet = subfacet;
-        put->flags = DPIF_FP_CREATE | DPIF_FP_MODIFY;
+        put->flags = DPIF_FP_CREATE;
         put->key = miss->key;
         put->key_len = miss->key_len;
         put->mask = op->mask.data;
@@ -5446,7 +5446,8 @@ subfacet_install(struct subfacet *subfacet, const struct ofpbuf *odp_actions,
     enum dpif_flow_put_flags flags;
     int ret;
 
-    flags = DPIF_FP_CREATE | DPIF_FP_MODIFY;
+    flags = subfacet->path == SF_NOT_INSTALLED ? DPIF_FP_CREATE
+                                               : DPIF_FP_MODIFY;
     if (stats) {
         flags |= DPIF_FP_ZERO_STATS;
     }
