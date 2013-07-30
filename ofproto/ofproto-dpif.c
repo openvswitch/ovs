@@ -4116,15 +4116,20 @@ handle_miss_upcalls(struct dpif_backer *backer, struct dpif_upcall *upcalls,
 
             drop_key = drop_key_lookup(backer, upcall->key, upcall->key_len);
             if (!drop_key) {
-                drop_key = xmalloc(sizeof *drop_key);
-                drop_key->key = xmemdup(upcall->key, upcall->key_len);
-                drop_key->key_len = upcall->key_len;
+                int ret;
+                ret = dpif_flow_put(backer->dpif,
+                                    DPIF_FP_CREATE | DPIF_FP_MODIFY,
+                                    upcall->key, upcall->key_len,
+                                    NULL, 0, NULL, 0, NULL);
 
-                hmap_insert(&backer->drop_keys, &drop_key->hmap_node,
-                            hash_bytes(drop_key->key, drop_key->key_len, 0));
-                dpif_flow_put(backer->dpif, DPIF_FP_CREATE | DPIF_FP_MODIFY,
-                              drop_key->key, drop_key->key_len,
-                              NULL, 0, NULL, 0, NULL);
+                if (!ret) {
+                    drop_key = xmalloc(sizeof *drop_key);
+                    drop_key->key = xmemdup(upcall->key, upcall->key_len);
+                    drop_key->key_len = upcall->key_len;
+
+                    hmap_insert(&backer->drop_keys, &drop_key->hmap_node,
+                                hash_bytes(drop_key->key, drop_key->key_len, 0));
+                }
             }
             continue;
         }
