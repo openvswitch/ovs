@@ -82,10 +82,15 @@ struct vlog_module *vlog_modules[] = {
 #define n_vlog_modules ARRAY_SIZE(vlog_modules)
 #endif
 
+/* Protects the 'pattern' in all "struct facility"s, so that a race between
+ * changing and reading the pattern does not cause an access to freed
+ * memory. */
+static struct ovs_rwlock pattern_rwlock = OVS_RWLOCK_INITIALIZER;
+
 /* Information about each facility. */
 struct facility {
     const char *name;           /* Name. */
-    char *pattern;              /* Current pattern (see 'pattern_rwlock'). */
+    char *pattern OVS_GUARDED_BY(pattern_rwlock); /* Current pattern. */
     bool default_pattern;       /* Whether current pattern is the default. */
 };
 static struct facility facilities[VLF_N_FACILITIES] = {
@@ -94,11 +99,6 @@ static struct facility facilities[VLF_N_FACILITIES] = {
 #undef VLOG_FACILITY
 };
 
-/* Protects the 'pattern' in all "struct facility"s, so that a race between
- * changing and reading the pattern does not cause an access to freed
- * memory. */
-static pthread_rwlock_t pattern_rwlock = PTHREAD_RWLOCK_INITIALIZER;
-
 /* Sequence number for the message currently being composed. */
 DEFINE_PER_THREAD_DATA(unsigned int, msg_num, 0);
 
@@ -106,15 +106,15 @@ DEFINE_PER_THREAD_DATA(unsigned int, msg_num, 0);
  *
  * All of the following is protected by 'log_file_mutex', which nests inside
  * pattern_rwlock. */
-static pthread_mutex_t log_file_mutex = PTHREAD_ADAPTIVE_MUTEX_INITIALIZER;
-static char *log_file_name;
-static int log_fd = -1;
-static struct async_append *log_writer;
+static struct ovs_mutex log_file_mutex = OVS_ADAPTIVE_MUTEX_INITIALIZER;
+static char *log_file_name OVS_GUARDED_BY(log_file_mutex);
+static int log_fd OVS_GUARDED_BY(log_file_mutex) = -1;
+static struct async_append *log_writer OVS_GUARDED_BY(log_file_mutex);
 
 static void format_log_message(const struct vlog_module *, enum vlog_level,
                                enum vlog_facility,
                                const char *message, va_list, struct ds *)
-    PRINTF_FORMAT(4, 0);
+    PRINTF_FORMAT(4, 0) OVS_REQ_RDLOCK(&pattern_rwlock);
 
 /* Searches the 'n_names' in 'names'.  Returns the index of a match for
  * 'target', or 'n_names' if no name matches. */
@@ -201,8 +201,8 @@ vlog_get_level(const struct vlog_module *module, enum vlog_facility facility)
     return module->levels[facility];
 }
 
-static void OVS_MUST_HOLD(log_file_mutex)
-update_min_level(struct vlog_module *module)
+static void
+update_min_level(struct vlog_module *module) OVS_REQUIRES(&log_file_mutex)
 {
     enum vlog_facility facility;
 
@@ -224,7 +224,7 @@ set_facility_level(enum vlog_facility facility, struct vlog_module *module,
     assert(facility >= 0 && facility < VLF_N_FACILITIES);
     assert(level < VLL_N_LEVELS);
 
-    xpthread_mutex_lock(&log_file_mutex);
+    ovs_mutex_lock(&log_file_mutex);
     if (!module) {
         struct vlog_module **mp;
 
@@ -236,7 +236,7 @@ set_facility_level(enum vlog_facility facility, struct vlog_module *module,
         module->levels[facility] = level;
         update_min_level(module);
     }
-    xpthread_mutex_unlock(&log_file_mutex);
+    ovs_mutex_unlock(&log_file_mutex);
 }
 
 /* Sets the logging level for the given 'module' and 'facility' to 'level'.  A
@@ -261,14 +261,14 @@ do_set_pattern(enum vlog_facility facility, const char *pattern)
 {
     struct facility *f = &facilities[facility];
 
-    xpthread_rwlock_wrlock(&pattern_rwlock);
+    ovs_rwlock_wrlock(&pattern_rwlock);
     if (!f->default_pattern) {
         free(f->pattern);
     } else {
         f->default_pattern = false;
     }
     f->pattern = xstrdup(pattern);
-    xpthread_rwlock_unlock(&pattern_rwlock);
+    ovs_rwlock_unlock(&pattern_rwlock);
 }
 
 /* Sets the pattern for the given 'facility' to 'pattern'. */
@@ -297,6 +297,7 @@ vlog_set_log_file(const char *file_name)
     struct stat new_stat;
     int new_log_fd;
     bool same_file;
+    bool log_close;
 
     /* Open new log file. */
     new_log_file_name = (file_name
@@ -311,14 +312,14 @@ vlog_set_log_file(const char *file_name)
     }
 
     /* If the new log file is the same one we already have open, bail out. */
-    xpthread_mutex_lock(&log_file_mutex);
+    ovs_mutex_lock(&log_file_mutex);
     same_file = (log_fd >= 0
                  && new_log_fd >= 0
                  && !fstat(log_fd, &old_stat)
                  && !fstat(new_log_fd, &new_stat)
                  && old_stat.st_dev == new_stat.st_dev
                  && old_stat.st_ino == new_stat.st_ino);
-    xpthread_mutex_unlock(&log_file_mutex);
+    ovs_mutex_unlock(&log_file_mutex);
     if (same_file) {
         close(new_log_fd);
         free(new_log_file_name);
@@ -326,12 +327,15 @@ vlog_set_log_file(const char *file_name)
     }
 
     /* Log closing old log file (we can't log while holding log_file_mutex). */
-    if (log_fd >= 0) {
+    ovs_mutex_lock(&log_file_mutex);
+    log_close = log_fd >= 0;
+    ovs_mutex_unlock(&log_file_mutex);
+    if (log_close) {
         VLOG_INFO("closing log file");
     }
 
     /* Close old log file, if any, and install new one. */
-    xpthread_mutex_lock(&log_file_mutex);
+    ovs_mutex_lock(&log_file_mutex);
     if (log_fd >= 0) {
         free(log_file_name);
         close(log_fd);
@@ -345,7 +349,7 @@ vlog_set_log_file(const char *file_name)
     for (mp = vlog_modules; mp < &vlog_modules[n_vlog_modules]; mp++) {
         update_min_level(*mp);
     }
-    xpthread_mutex_unlock(&log_file_mutex);
+    ovs_mutex_unlock(&log_file_mutex);
 
     /* Log opening new log file (we can't log while holding log_file_mutex). */
     VLOG_INFO("opened log file %s", new_log_file_name);
@@ -362,9 +366,9 @@ vlog_reopen_log_file(void)
 {
     char *fn;
 
-    xpthread_mutex_lock(&log_file_mutex);
+    ovs_mutex_lock(&log_file_mutex);
     fn = log_file_name ? xstrdup(log_file_name) : NULL;
-    xpthread_mutex_unlock(&log_file_mutex);
+    ovs_mutex_unlock(&log_file_mutex);
 
     if (fn) {
         int error = vlog_set_log_file(fn);
@@ -504,7 +508,13 @@ static void
 vlog_unixctl_reopen(struct unixctl_conn *conn, int argc OVS_UNUSED,
                     const char *argv[] OVS_UNUSED, void *aux OVS_UNUSED)
 {
-    if (log_file_name) {
+    bool has_log_file;
+
+    ovs_mutex_lock(&log_file_mutex);
+    has_log_file = log_file_name != NULL;
+    ovs_mutex_unlock(&log_file_mutex);
+
+    if (has_log_file) {
         int error = vlog_reopen_log_file();
         if (error) {
             unixctl_command_reply_error(conn, ovs_strerror(errno));
@@ -786,7 +796,11 @@ vlog_valist(const struct vlog_module *module, enum vlog_level level,
 {
     bool log_to_console = module->levels[VLF_CONSOLE] >= level;
     bool log_to_syslog = module->levels[VLF_SYSLOG] >= level;
-    bool log_to_file = module->levels[VLF_FILE] >= level && log_fd >= 0;
+    bool log_to_file;
+
+    ovs_mutex_lock(&log_file_mutex);
+    log_to_file = module->levels[VLF_FILE] >= level && log_fd >= 0;
+    ovs_mutex_unlock(&log_file_mutex);
     if (log_to_console || log_to_syslog || log_to_file) {
         int save_errno = errno;
         struct ds s;
@@ -797,7 +811,7 @@ vlog_valist(const struct vlog_module *module, enum vlog_level level,
         ds_reserve(&s, 1024);
         ++*msg_num_get();
 
-        xpthread_rwlock_rdlock(&pattern_rwlock);
+        ovs_rwlock_rdlock(&pattern_rwlock);
         if (log_to_console) {
             format_log_message(module, level, VLF_CONSOLE, message, args, &s);
             ds_put_char(&s, '\n');
@@ -820,16 +834,16 @@ vlog_valist(const struct vlog_module *module, enum vlog_level level,
             format_log_message(module, level, VLF_FILE, message, args, &s);
             ds_put_char(&s, '\n');
 
-            xpthread_mutex_lock(&log_file_mutex);
+            ovs_mutex_lock(&log_file_mutex);
             if (log_fd >= 0) {
                 async_append_write(log_writer, s.string, s.length);
                 if (level == VLL_EMER) {
                     async_append_flush(log_writer);
                 }
             }
-            xpthread_mutex_unlock(&log_file_mutex);
+            ovs_mutex_unlock(&log_file_mutex);
         }
-        xpthread_rwlock_unlock(&pattern_rwlock);
+        ovs_rwlock_unlock(&pattern_rwlock);
 
         ds_destroy(&s);
         errno = save_errno;
@@ -929,7 +943,7 @@ vlog_should_drop(const struct vlog_module *module, enum vlog_level level,
         return true;
     }
 
-    xpthread_mutex_lock(&rl->mutex);
+    ovs_mutex_lock(&rl->mutex);
     if (!token_bucket_withdraw(&rl->token_bucket, VLOG_MSG_TOKENS)) {
         time_t now = time_now();
         if (!rl->n_dropped) {
@@ -937,19 +951,19 @@ vlog_should_drop(const struct vlog_module *module, enum vlog_level level,
         }
         rl->last_dropped = now;
         rl->n_dropped++;
-        xpthread_mutex_unlock(&rl->mutex);
+        ovs_mutex_unlock(&rl->mutex);
         return true;
     }
 
     if (!rl->n_dropped) {
-        xpthread_mutex_unlock(&rl->mutex);
+        ovs_mutex_unlock(&rl->mutex);
     } else {
         time_t now = time_now();
         unsigned int n_dropped = rl->n_dropped;
         unsigned int first_dropped_elapsed = now - rl->first_dropped;
         unsigned int last_dropped_elapsed = now - rl->last_dropped;
         rl->n_dropped = 0;
-        xpthread_mutex_unlock(&rl->mutex);
+        ovs_mutex_unlock(&rl->mutex);
 
         vlog(module, level,
              "Dropped %u log messages in last %u seconds (most recently, "

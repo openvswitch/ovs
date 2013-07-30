@@ -71,7 +71,7 @@ static struct shash dpif_classes = SHASH_INITIALIZER(&dpif_classes);
 static struct sset dpif_blacklist = SSET_INITIALIZER(&dpif_blacklist);
 
 /* Protects 'dpif_classes', including the refcount, and 'dpif_blacklist'. */
-static pthread_mutex_t dpif_mutex = PTHREAD_MUTEX_INITIALIZER;
+static struct ovs_mutex dpif_mutex = OVS_MUTEX_INITIALIZER;
 
 /* Rate limit for individual messages going to or from the datapath, output at
  * DBG level.  This is very high because, if these are enabled, it is because
@@ -145,9 +145,9 @@ dp_register_provider(const struct dpif_class *new_class)
 {
     int error;
 
-    xpthread_mutex_lock(&dpif_mutex);
+    ovs_mutex_lock(&dpif_mutex);
     error = dp_register_provider__(new_class);
-    xpthread_mutex_unlock(&dpif_mutex);
+    ovs_mutex_unlock(&dpif_mutex);
 
     return error;
 }
@@ -190,9 +190,9 @@ dp_unregister_provider(const char *type)
 
     dp_initialize();
 
-    xpthread_mutex_lock(&dpif_mutex);
+    ovs_mutex_lock(&dpif_mutex);
     error = dp_unregister_provider__(type);
-    xpthread_mutex_unlock(&dpif_mutex);
+    ovs_mutex_unlock(&dpif_mutex);
 
     return error;
 }
@@ -202,9 +202,9 @@ dp_unregister_provider(const char *type)
 void
 dp_blacklist_provider(const char *type)
 {
-    xpthread_mutex_lock(&dpif_mutex);
+    ovs_mutex_lock(&dpif_mutex);
     sset_add(&dpif_blacklist, type);
-    xpthread_mutex_unlock(&dpif_mutex);
+    ovs_mutex_unlock(&dpif_mutex);
 }
 
 /* Clears 'types' and enumerates the types of all currently registered datapath
@@ -217,21 +217,21 @@ dp_enumerate_types(struct sset *types)
     dp_initialize();
     sset_clear(types);
 
-    xpthread_mutex_lock(&dpif_mutex);
+    ovs_mutex_lock(&dpif_mutex);
     SHASH_FOR_EACH(node, &dpif_classes) {
         const struct registered_dpif_class *registered_class = node->data;
         sset_add(types, registered_class->dpif_class->type);
     }
-    xpthread_mutex_unlock(&dpif_mutex);
+    ovs_mutex_unlock(&dpif_mutex);
 }
 
 static void
 dp_class_unref(struct registered_dpif_class *rc)
 {
-    xpthread_mutex_lock(&dpif_mutex);
+    ovs_mutex_lock(&dpif_mutex);
     ovs_assert(rc->refcount);
     rc->refcount--;
-    xpthread_mutex_unlock(&dpif_mutex);
+    ovs_mutex_unlock(&dpif_mutex);
 }
 
 static struct registered_dpif_class *
@@ -239,12 +239,12 @@ dp_class_lookup(const char *type)
 {
     struct registered_dpif_class *rc;
 
-    xpthread_mutex_lock(&dpif_mutex);
+    ovs_mutex_lock(&dpif_mutex);
     rc = shash_find_data(&dpif_classes, type);
     if (rc) {
         rc->refcount++;
     }
-    xpthread_mutex_unlock(&dpif_mutex);
+    ovs_mutex_unlock(&dpif_mutex);
 
     return rc;
 }
@@ -481,12 +481,12 @@ dpif_port_open_type(const char *datapath_type, const char *port_type)
 
     datapath_type = dpif_normalize_type(datapath_type);
 
-    xpthread_mutex_lock(&dpif_mutex);
+    ovs_mutex_lock(&dpif_mutex);
     rc = shash_find_data(&dpif_classes, datapath_type);
     if (rc && rc->dpif_class->port_open_type) {
         port_type = rc->dpif_class->port_open_type(rc->dpif_class, port_type);
     }
-    xpthread_mutex_unlock(&dpif_mutex);
+    ovs_mutex_unlock(&dpif_mutex);
 
     return port_type;
 }

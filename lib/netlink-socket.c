@@ -1012,8 +1012,8 @@ struct nl_pool {
     int n;
 };
 
-static struct nl_pool pools[MAX_LINKS];
-static pthread_mutex_t pool_mutex = PTHREAD_ADAPTIVE_MUTEX_INITIALIZER;
+static struct ovs_mutex pool_mutex = OVS_ADAPTIVE_MUTEX_INITIALIZER;
+static struct nl_pool pools[MAX_LINKS] OVS_GUARDED_BY(pool_mutex);
 
 static int
 nl_pool_alloc(int protocol, struct nl_sock **sockp)
@@ -1023,12 +1023,12 @@ nl_pool_alloc(int protocol, struct nl_sock **sockp)
 
     ovs_assert(protocol >= 0 && protocol < ARRAY_SIZE(pools));
 
-    xpthread_mutex_lock(&pool_mutex);
+    ovs_mutex_lock(&pool_mutex);
     pool = &pools[protocol];
     if (pool->n > 0) {
         sock = pool->socks[--pool->n];
     }
-    xpthread_mutex_unlock(&pool_mutex);
+    ovs_mutex_unlock(&pool_mutex);
 
     if (sock) {
         *sockp = sock;
@@ -1044,12 +1044,12 @@ nl_pool_release(struct nl_sock *sock)
     if (sock) {
         struct nl_pool *pool = &pools[sock->protocol];
 
-        xpthread_mutex_lock(&pool_mutex);
+        ovs_mutex_lock(&pool_mutex);
         if (pool->n < ARRAY_SIZE(pool->socks)) {
             pool->socks[pool->n++] = sock;
             sock = NULL;
         }
-        xpthread_mutex_unlock(&pool_mutex);
+        ovs_mutex_unlock(&pool_mutex);
 
         nl_sock_destroy(sock);
     }

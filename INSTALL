@@ -28,6 +28,11 @@ you will need the following software:
       libssl is installed, then Open vSwitch will automatically build
       with support for it.
 
+    - clang, from LLVM, is optional. It provides useful static semantic
+      analyzer and thread-safety check. clang version must be 3.4 or
+      later. For Ubuntu, there are nightly built packages available on
+      clang's website.
+
 To compile the kernel module on Linux, you must also install the
 following.  If you cannot build or install the kernel module, you may
 use the userspace-only implementation, at a cost in performance.  The
@@ -107,6 +112,8 @@ installing the following to obtain better warnings:
 
     - GNU make.
 
+    - clang, version 3.4 or later
+
 Also, you may find the ovs-dev script found in utilities/ovs-dev.py useful.
 
 Installation Requirements
@@ -172,6 +179,10 @@ Prerequisites section, follow the procedure below to build.
    programs, also specify it on the configure command line, like so:
 
       % ./configure CC=gcc-4.2
+
+   To use 'clang' compiler:
+
+      % ./configure CC=clang
 
    To build the Linux kernel module, so that you can run the
    kernel-based switch, pass the location of the kernel build

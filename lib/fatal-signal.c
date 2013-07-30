@@ -57,7 +57,7 @@ static size_t n_hooks;
 static int signal_fds[2];
 static volatile sig_atomic_t stored_sig_nr = SIG_ATOMIC_MAX;
 
-static pthread_mutex_t mutex;
+static struct ovs_mutex mutex;
 
 static void atexit_handler(void);
 static void call_hooks(int sig_nr);
@@ -72,17 +72,12 @@ fatal_signal_init(void)
     static bool inited = false;
 
     if (!inited) {
-        pthread_mutexattr_t attr;
         size_t i;
 
         assert_single_threaded();
         inited = true;
 
-        xpthread_mutexattr_init(&attr);
-        xpthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
-        xpthread_mutex_init(&mutex, &attr);
-        xpthread_mutexattr_destroy(&attr);
-
+        ovs_mutex_init(&mutex, PTHREAD_MUTEX_RECURSIVE);
         xpipe_nonblocking(signal_fds);
 
         for (i = 0; i < ARRAY_SIZE(fatal_signals); i++) {
@@ -119,14 +114,14 @@ fatal_signal_add_hook(void (*hook_cb)(void *aux), void (*cancel_cb)(void *aux),
 {
     fatal_signal_init();
 
-    xpthread_mutex_lock(&mutex);
+    ovs_mutex_lock(&mutex);
     ovs_assert(n_hooks < MAX_HOOKS);
     hooks[n_hooks].hook_cb = hook_cb;
     hooks[n_hooks].cancel_cb = cancel_cb;
     hooks[n_hooks].aux = aux;
     hooks[n_hooks].run_at_exit = run_at_exit;
     n_hooks++;
-    xpthread_mutex_unlock(&mutex);
+    ovs_mutex_unlock(&mutex);
 }
 
 /* Handles fatal signal number 'sig_nr'.
@@ -167,7 +162,7 @@ fatal_signal_run(void)
     if (sig_nr != SIG_ATOMIC_MAX) {
         char namebuf[SIGNAL_NAME_BUFSIZE];
 
-        xpthread_mutex_lock(&mutex);
+        ovs_mutex_lock(&mutex);
 
         VLOG_WARN("terminating with signal %d (%s)",
                   (int)sig_nr, signal_name(sig_nr, namebuf, sizeof namebuf));
@@ -178,7 +173,7 @@ fatal_signal_run(void)
         signal(sig_nr, SIG_DFL);
         raise(sig_nr);
 
-        xpthread_mutex_unlock(&mutex);
+        ovs_mutex_unlock(&mutex);
         NOT_REACHED();
     }
 }
@@ -232,14 +227,14 @@ fatal_signal_add_file_to_unlink(const char *file)
 {
     fatal_signal_init();
 
-    xpthread_mutex_lock(&mutex);
+    ovs_mutex_lock(&mutex);
     if (!added_hook) {
         added_hook = true;
         fatal_signal_add_hook(unlink_files, cancel_files, NULL, true);
     }
 
     sset_add(&files, file);
-    xpthread_mutex_unlock(&mutex);
+    ovs_mutex_unlock(&mutex);
 }
 
 /* Unregisters 'file' from being unlinked when the program terminates via
@@ -249,9 +244,9 @@ fatal_signal_remove_file_to_unlink(const char *file)
 {
     fatal_signal_init();
 
-    xpthread_mutex_lock(&mutex);
+    ovs_mutex_lock(&mutex);
     sset_find_and_delete(&files, file);
-    xpthread_mutex_unlock(&mutex);
+    ovs_mutex_unlock(&mutex);
 }
 
 /* Like fatal_signal_remove_file_to_unlink(), but also unlinks 'file'.
@@ -263,7 +258,7 @@ fatal_signal_unlink_file_now(const char *file)
 
     fatal_signal_init();
 
-    xpthread_mutex_lock(&mutex);
+    ovs_mutex_lock(&mutex);
 
     error = unlink(file) ? errno : 0;
     if (error) {
@@ -272,7 +267,7 @@ fatal_signal_unlink_file_now(const char *file)
 
     fatal_signal_remove_file_to_unlink(file);
 
-    xpthread_mutex_unlock(&mutex);
+    ovs_mutex_unlock(&mutex);
 
     return error;
 }

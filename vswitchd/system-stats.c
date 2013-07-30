@@ -506,12 +506,12 @@ get_filesys_stats(struct smap *stats OVS_UNUSED)
 
 #define SYSTEM_STATS_INTERVAL (5 * 1000) /* In milliseconds. */
 
-static pthread_mutex_t mutex = PTHREAD_ADAPTIVE_MUTEX_INITIALIZER;
+static struct ovs_mutex mutex = OVS_ADAPTIVE_MUTEX_INITIALIZER;
 static pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
-static struct latch latch;
+static struct latch latch OVS_GUARDED_BY(mutex);
 static bool enabled;
-static bool started;
-static struct smap *system_stats;
+static bool started OVS_GUARDED_BY(mutex);
+static struct smap *system_stats OVS_GUARDED_BY(mutex);
 
 static void *system_stats_thread_func(void *);
 static void discard_stats(void);
@@ -521,7 +521,7 @@ void
 system_stats_enable(bool enable)
 {
     if (enabled != enable) {
-        xpthread_mutex_lock(&mutex);
+        ovs_mutex_lock(&mutex);
         if (enable) {
             if (!started) {
                 xpthread_create(NULL, NULL, system_stats_thread_func, NULL);
@@ -532,7 +532,7 @@ system_stats_enable(bool enable)
             xpthread_cond_signal(&cond);
         }
         enabled = enable;
-        xpthread_mutex_unlock(&mutex);
+        ovs_mutex_unlock(&mutex);
     }
 }
 
@@ -549,7 +549,7 @@ system_stats_run(void)
 {
     struct smap *stats = NULL;
 
-    xpthread_mutex_lock(&mutex);
+    ovs_mutex_lock(&mutex);
     if (system_stats) {
         latch_poll(&latch);
 
@@ -560,7 +560,7 @@ system_stats_run(void)
             discard_stats();
         }
     }
-    xpthread_mutex_unlock(&mutex);
+    ovs_mutex_unlock(&mutex);
 
     return stats;
 }
@@ -576,7 +576,7 @@ system_stats_wait(void)
 }
 
 static void
-discard_stats(void)
+discard_stats(void) OVS_REQUIRES(&mutex)
 {
     if (system_stats) {
         smap_destroy(system_stats);
@@ -594,11 +594,11 @@ system_stats_thread_func(void *arg OVS_UNUSED)
         long long int next_refresh;
         struct smap *stats;
 
-        xpthread_mutex_lock(&mutex);
+        ovs_mutex_lock(&mutex);
         while (!enabled) {
-            xpthread_cond_wait(&cond, &mutex);
+            ovs_mutex_cond_wait(&cond, &mutex);
         }
-        xpthread_mutex_unlock(&mutex);
+        ovs_mutex_unlock(&mutex);
 
         stats = xmalloc(sizeof *stats);
         smap_init(stats);
@@ -608,11 +608,11 @@ system_stats_thread_func(void *arg OVS_UNUSED)
         get_process_stats(stats);
         get_filesys_stats(stats);
 
-        xpthread_mutex_lock(&mutex);
+        ovs_mutex_lock(&mutex);
         discard_stats();
         system_stats = stats;
         latch_set(&latch);
-        xpthread_mutex_unlock(&mutex);
+        ovs_mutex_unlock(&mutex);
 
         next_refresh = time_msec() + SYSTEM_STATS_INTERVAL;
         do {

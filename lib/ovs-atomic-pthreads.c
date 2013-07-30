@@ -26,10 +26,10 @@ atomic_flag_test_and_set(volatile atomic_flag *flag_)
     atomic_flag *flag = CONST_CAST(atomic_flag *, flag_);
     bool old_value;
 
-    xpthread_mutex_lock(&flag->mutex);
+    ovs_mutex_lock(&flag->mutex);
     old_value = flag->b;
     flag->b = true;
-    xpthread_mutex_unlock(&flag->mutex);
+    ovs_mutex_unlock(&flag->mutex);
 
     return old_value;
 }
@@ -46,9 +46,9 @@ atomic_flag_clear(volatile atomic_flag *flag_)
 {
     atomic_flag *flag = CONST_CAST(atomic_flag *, flag_);
 
-    xpthread_mutex_lock(&flag->mutex);
+    ovs_mutex_lock(&flag->mutex);
     flag->b = false;
-    xpthread_mutex_unlock(&flag->mutex);
+    ovs_mutex_unlock(&flag->mutex);
 }
 
 void

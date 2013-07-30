@@ -81,19 +81,19 @@ uuid_init(void)
 void
 uuid_generate(struct uuid *uuid)
 {
-    static pthread_mutex_t mutex = PTHREAD_ADAPTIVE_MUTEX_INITIALIZER;
+    static struct ovs_mutex mutex = OVS_ADAPTIVE_MUTEX_INITIALIZER;
     uint64_t copy[2];
 
     uuid_init();
 
     /* Copy out the counter's current value, then increment it. */
-    xpthread_mutex_lock(&mutex);
+    ovs_mutex_lock(&mutex);
     copy[0] = counter[0];
     copy[1] = counter[1];
     if (++counter[1] == 0) {
         counter[0]++;
     }
-    xpthread_mutex_unlock(&mutex);
+    ovs_mutex_unlock(&mutex);
 
     /* AES output is exactly 16 bytes, so we encrypt directly into 'uuid'. */
     aes128_encrypt(&key, copy, uuid);

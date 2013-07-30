@@ -41,7 +41,7 @@ VLOG_DEFINE_THIS_MODULE(timeval);
 
 struct clock {
     clockid_t id;               /* CLOCK_MONOTONIC or CLOCK_REALTIME. */
-    pthread_rwlock_t rwlock;    /* Mutual exclusion for 'cache'. */
+    struct ovs_rwlock rwlock;   /* Mutual exclusion for 'cache'. */
 
     /* Features for use by unit tests.  Protected by 'rwlock'. */
     struct timespec warp;       /* Offset added for unit tests. */
@@ -83,7 +83,7 @@ init_clock(struct clock *c, clockid_t id)
 {
     memset(c, 0, sizeof *c);
     c->id = id;
-    xpthread_rwlock_init(&c->rwlock, NULL);
+    ovs_rwlock_init(&c->rwlock);
     xclock_gettime(c->id, &c->cache);
 }
 
@@ -178,21 +178,21 @@ time_timespec__(struct clock *c, struct timespec *ts)
     for (;;) {
         /* Use the cached time by preference, but fall through if there's been
          * a clock tick.  */
-        xpthread_rwlock_rdlock(&c->rwlock);
+        ovs_rwlock_rdlock(&c->rwlock);
         if (c->stopped || !c->tick) {
             timespec_add(ts, &c->cache, &c->warp);
-            xpthread_rwlock_unlock(&c->rwlock);
+            ovs_rwlock_unlock(&c->rwlock);
             return;
         }
-        xpthread_rwlock_unlock(&c->rwlock);
+        ovs_rwlock_unlock(&c->rwlock);
 
         /* Refresh the cache. */
-        xpthread_rwlock_wrlock(&c->rwlock);
+        ovs_rwlock_wrlock(&c->rwlock);
         if (c->tick) {
             c->tick = false;
             xclock_gettime(c->id, &c->cache);
         }
-        xpthread_rwlock_unlock(&c->rwlock);
+        ovs_rwlock_unlock(&c->rwlock);
     }
 }
 
@@ -568,9 +568,9 @@ timeval_stop_cb(struct unixctl_conn *conn,
                  int argc OVS_UNUSED, const char *argv[] OVS_UNUSED,
                  void *aux OVS_UNUSED)
 {
-    xpthread_rwlock_wrlock(&monotonic_clock.rwlock);
+    ovs_rwlock_wrlock(&monotonic_clock.rwlock);
     monotonic_clock.stopped = true;
-    xpthread_rwlock_unlock(&monotonic_clock.rwlock);
+    ovs_rwlock_unlock(&monotonic_clock.rwlock);
 
     unixctl_command_reply(conn, NULL);
 }
@@ -596,9 +596,9 @@ timeval_warp_cb(struct unixctl_conn *conn,
     ts.tv_sec = msecs / 1000;
     ts.tv_nsec = (msecs % 1000) * 1000 * 1000;
 
-    xpthread_rwlock_wrlock(&monotonic_clock.rwlock);
+    ovs_rwlock_wrlock(&monotonic_clock.rwlock);
     timespec_add(&monotonic_clock.warp, &monotonic_clock.warp, &ts);
-    xpthread_rwlock_unlock(&monotonic_clock.rwlock);
+    ovs_rwlock_unlock(&monotonic_clock.rwlock);
 
     unixctl_command_reply(conn, "warped");
 }

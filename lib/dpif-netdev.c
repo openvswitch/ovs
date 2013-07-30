@@ -141,7 +141,7 @@ struct dpif_netdev {
 static struct shash dp_netdevs = SHASH_INITIALIZER(&dp_netdevs);
 
 /* Global lock for all data. */
-static pthread_mutex_t dp_netdev_mutex = PTHREAD_MUTEX_INITIALIZER;
+static struct ovs_mutex dp_netdev_mutex = OVS_MUTEX_INITIALIZER;
 
 static int get_port_by_number(struct dp_netdev *, odp_port_t port_no,
                               struct dp_netdev_port **portp);
@@ -184,11 +184,11 @@ dpif_netdev_enumerate(struct sset *all_dps)
 {
     struct shash_node *node;
 
-    xpthread_mutex_lock(&dp_netdev_mutex);
+    ovs_mutex_lock(&dp_netdev_mutex);
     SHASH_FOR_EACH(node, &dp_netdevs) {
         sset_add(all_dps, node->name);
     }
-    xpthread_mutex_unlock(&dp_netdev_mutex);
+    ovs_mutex_unlock(&dp_netdev_mutex);
 
     return 0;
 }
@@ -302,7 +302,7 @@ dpif_netdev_open(const struct dpif_class *class, const char *name,
     struct dp_netdev *dp;
     int error;
 
-    xpthread_mutex_lock(&dp_netdev_mutex);
+    ovs_mutex_lock(&dp_netdev_mutex);
     dp = shash_find_data(&dp_netdevs, name);
     if (!dp) {
         error = create ? create_dp_netdev(name, class, &dp) : ENODEV;
@@ -314,7 +314,7 @@ dpif_netdev_open(const struct dpif_class *class, const char *name,
     if (!error) {
         *dpifp = create_dpif_netdev(dp);
     }
-    xpthread_mutex_unlock(&dp_netdev_mutex);
+    ovs_mutex_unlock(&dp_netdev_mutex);
 
     return error;
 }
@@ -354,7 +354,7 @@ dpif_netdev_close(struct dpif *dpif)
 {
     struct dp_netdev *dp = get_dp_netdev(dpif);
 
-    xpthread_mutex_lock(&dp_netdev_mutex);
+    ovs_mutex_lock(&dp_netdev_mutex);
 
     ovs_assert(dp->open_cnt > 0);
     if (--dp->open_cnt == 0 && dp->destroyed) {
@@ -363,7 +363,7 @@ dpif_netdev_close(struct dpif *dpif)
     }
     free(dpif);
 
-    xpthread_mutex_unlock(&dp_netdev_mutex);
+    ovs_mutex_unlock(&dp_netdev_mutex);
 }
 
 static int
@@ -371,9 +371,9 @@ dpif_netdev_destroy(struct dpif *dpif)
 {
     struct dp_netdev *dp = get_dp_netdev(dpif);
 
-    xpthread_mutex_lock(&dp_netdev_mutex);
+    ovs_mutex_lock(&dp_netdev_mutex);
     dp->destroyed = true;
-    xpthread_mutex_unlock(&dp_netdev_mutex);
+    ovs_mutex_unlock(&dp_netdev_mutex);
 
     return 0;
 }
@@ -383,12 +383,12 @@ dpif_netdev_get_stats(const struct dpif *dpif, struct dpif_dp_stats *stats)
 {
     struct dp_netdev *dp = get_dp_netdev(dpif);
 
-    xpthread_mutex_lock(&dp_netdev_mutex);
+    ovs_mutex_lock(&dp_netdev_mutex);
     stats->n_flows = hmap_count(&dp->flow_table);
     stats->n_hit = dp->n_hit;
     stats->n_missed = dp->n_missed;
     stats->n_lost = dp->n_lost;
-    xpthread_mutex_unlock(&dp_netdev_mutex);
+    ovs_mutex_unlock(&dp_netdev_mutex);
 
     return 0;
 }
@@ -461,7 +461,7 @@ dpif_netdev_port_add(struct dpif *dpif, struct netdev *netdev,
     odp_port_t port_no;
     int error;
 
-    xpthread_mutex_lock(&dp_netdev_mutex);
+    ovs_mutex_lock(&dp_netdev_mutex);
     dpif_port = netdev_vport_get_dpif_port(netdev, namebuf, sizeof namebuf);
     if (*port_nop != ODPP_NONE) {
         uint32_t port_idx = odp_to_u32(*port_nop);
@@ -481,7 +481,7 @@ dpif_netdev_port_add(struct dpif *dpif, struct netdev *netdev,
         *port_nop = port_no;
         error = do_add_port(dp, dpif_port, netdev_get_type(netdev), port_no);
     }
-    xpthread_mutex_unlock(&dp_netdev_mutex);
+    ovs_mutex_unlock(&dp_netdev_mutex);
 
     return error;
 }
@@ -492,9 +492,9 @@ dpif_netdev_port_del(struct dpif *dpif, odp_port_t port_no)
     struct dp_netdev *dp = get_dp_netdev(dpif);
     int error;
 
-    xpthread_mutex_lock(&dp_netdev_mutex);
+    ovs_mutex_lock(&dp_netdev_mutex);
     error = port_no == ODPP_LOCAL ? EINVAL : do_del_port(dp, port_no);
-    xpthread_mutex_unlock(&dp_netdev_mutex);
+    ovs_mutex_unlock(&dp_netdev_mutex);
 
     return error;
 }
@@ -574,12 +574,12 @@ dpif_netdev_port_query_by_number(const struct dpif *dpif, odp_port_t port_no,
     struct dp_netdev_port *port;
     int error;
 
-    xpthread_mutex_lock(&dp_netdev_mutex);
+    ovs_mutex_lock(&dp_netdev_mutex);
     error = get_port_by_number(dp, port_no, &port);
     if (!error && dpif_port) {
         answer_port_query(port, dpif_port);
     }
-    xpthread_mutex_unlock(&dp_netdev_mutex);
+    ovs_mutex_unlock(&dp_netdev_mutex);
 
     return error;
 }
@@ -592,12 +592,12 @@ dpif_netdev_port_query_by_name(const struct dpif *dpif, const char *devname,
     struct dp_netdev_port *port;
     int error;
 
-    xpthread_mutex_lock(&dp_netdev_mutex);
+    ovs_mutex_lock(&dp_netdev_mutex);
     error = get_port_by_name(dp, devname, &port);
     if (!error && dpif_port) {
         answer_port_query(port, dpif_port);
     }
-    xpthread_mutex_unlock(&dp_netdev_mutex);
+    ovs_mutex_unlock(&dp_netdev_mutex);
 
     return error;
 }
@@ -631,9 +631,9 @@ dpif_netdev_flow_flush(struct dpif *dpif)
 {
     struct dp_netdev *dp = get_dp_netdev(dpif);
 
-    xpthread_mutex_lock(&dp_netdev_mutex);
+    ovs_mutex_lock(&dp_netdev_mutex);
     dp_netdev_flow_flush(dp);
-    xpthread_mutex_unlock(&dp_netdev_mutex);
+    ovs_mutex_unlock(&dp_netdev_mutex);
 
     return 0;
 }
@@ -658,7 +658,7 @@ dpif_netdev_port_dump_next(const struct dpif *dpif, void *state_,
     struct dp_netdev *dp = get_dp_netdev(dpif);
     uint32_t port_idx;
 
-    xpthread_mutex_lock(&dp_netdev_mutex);
+    ovs_mutex_lock(&dp_netdev_mutex);
     for (port_idx = odp_to_u32(state->port_no);
          port_idx < MAX_PORTS; port_idx++) {
         struct dp_netdev_port *port = dp->ports[port_idx];
@@ -669,12 +669,12 @@ dpif_netdev_port_dump_next(const struct dpif *dpif, void *state_,
             dpif_port->type = port->type;
             dpif_port->port_no = port->port_no;
             state->port_no = u32_to_odp(port_idx + 1);
-            xpthread_mutex_unlock(&dp_netdev_mutex);
+            ovs_mutex_unlock(&dp_netdev_mutex);
 
             return 0;
         }
     }
-    xpthread_mutex_unlock(&dp_netdev_mutex);
+    ovs_mutex_unlock(&dp_netdev_mutex);
 
     return EOF;
 }
@@ -694,14 +694,14 @@ dpif_netdev_port_poll(const struct dpif *dpif_, char **devnamep OVS_UNUSED)
     struct dpif_netdev *dpif = dpif_netdev_cast(dpif_);
     int error;
 
-    xpthread_mutex_lock(&dp_netdev_mutex);
+    ovs_mutex_lock(&dp_netdev_mutex);
     if (dpif->dp_serial != dpif->dp->serial) {
         dpif->dp_serial = dpif->dp->serial;
         error = ENOBUFS;
     } else {
         error = EAGAIN;
     }
-    xpthread_mutex_unlock(&dp_netdev_mutex);
+    ovs_mutex_unlock(&dp_netdev_mutex);
 
     return error;
 }
@@ -715,11 +715,11 @@ dpif_netdev_port_poll_wait(const struct dpif *dpif_)
      * function and the poll_block() in one thread and a change in
      * dpif->dp->serial in another thread. */
 
-    xpthread_mutex_lock(&dp_netdev_mutex);
+    ovs_mutex_lock(&dp_netdev_mutex);
     if (dpif->dp_serial != dpif->dp->serial) {
         poll_immediate_wake();
     }
-    xpthread_mutex_unlock(&dp_netdev_mutex);
+    ovs_mutex_unlock(&dp_netdev_mutex);
 }
 
 static struct dp_netdev_flow *
@@ -792,7 +792,7 @@ dpif_netdev_flow_get(const struct dpif *dpif,
         return error;
     }
 
-    xpthread_mutex_lock(&dp_netdev_mutex);
+    ovs_mutex_lock(&dp_netdev_mutex);
     flow = dp_netdev_lookup_flow(dp, &key);
     if (flow) {
         if (stats) {
@@ -804,7 +804,7 @@ dpif_netdev_flow_get(const struct dpif *dpif,
     } else {
         error = ENOENT;
     }
-    xpthread_mutex_unlock(&dp_netdev_mutex);
+    ovs_mutex_unlock(&dp_netdev_mutex);
 
     return error;
 }
@@ -861,7 +861,7 @@ dpif_netdev_flow_put(struct dpif *dpif, const struct dpif_flow_put *put)
         return error;
     }
 
-    xpthread_mutex_lock(&dp_netdev_mutex);
+    ovs_mutex_lock(&dp_netdev_mutex);
     flow = dp_netdev_lookup_flow(dp, &key);
     if (!flow) {
         if (put->flags & DPIF_FP_CREATE) {
@@ -892,7 +892,7 @@ dpif_netdev_flow_put(struct dpif *dpif, const struct dpif_flow_put *put)
             error = EEXIST;
         }
     }
-    xpthread_mutex_unlock(&dp_netdev_mutex);
+    ovs_mutex_unlock(&dp_netdev_mutex);
 
     return error;
 }
@@ -910,7 +910,7 @@ dpif_netdev_flow_del(struct dpif *dpif, const struct dpif_flow_del *del)
         return error;
     }
 
-    xpthread_mutex_lock(&dp_netdev_mutex);
+    ovs_mutex_lock(&dp_netdev_mutex);
     flow = dp_netdev_lookup_flow(dp, &key);
     if (flow) {
         if (del->stats) {
@@ -920,7 +920,7 @@ dpif_netdev_flow_del(struct dpif *dpif, const struct dpif_flow_del *del)
     } else {
         error = ENOENT;
     }
-    xpthread_mutex_unlock(&dp_netdev_mutex);
+    ovs_mutex_unlock(&dp_netdev_mutex);
 
     return error;
 }
@@ -957,10 +957,10 @@ dpif_netdev_flow_dump_next(const struct dpif *dpif, void *state_,
     struct dp_netdev_flow *flow;
     struct hmap_node *node;
 
-    xpthread_mutex_lock(&dp_netdev_mutex);
+    ovs_mutex_lock(&dp_netdev_mutex);
     node = hmap_at_position(&dp->flow_table, &state->bucket, &state->offset);
     if (!node) {
-        xpthread_mutex_unlock(&dp_netdev_mutex);
+        ovs_mutex_unlock(&dp_netdev_mutex);
         return EOF;
     }
 
@@ -994,7 +994,7 @@ dpif_netdev_flow_dump_next(const struct dpif *dpif, void *state_,
         *stats = &state->stats;
     }
 
-    xpthread_mutex_unlock(&dp_netdev_mutex);
+    ovs_mutex_unlock(&dp_netdev_mutex);
     return 0;
 }
 
@@ -1030,10 +1030,10 @@ dpif_netdev_execute(struct dpif *dpif, const struct dpif_execute *execute)
     error = dpif_netdev_flow_from_nlattrs(execute->key, execute->key_len,
                                           &key);
     if (!error) {
-        xpthread_mutex_lock(&dp_netdev_mutex);
+        ovs_mutex_lock(&dp_netdev_mutex);
         dp_netdev_execute_actions(dp, &copy, &key,
                                   execute->actions, execute->actions_len);
-        xpthread_mutex_unlock(&dp_netdev_mutex);
+        ovs_mutex_unlock(&dp_netdev_mutex);
     }
 
     ofpbuf_uninit(&copy);
@@ -1076,7 +1076,7 @@ dpif_netdev_recv(struct dpif *dpif, struct dpif_upcall *upcall,
     struct dp_netdev_queue *q;
     int error;
 
-    xpthread_mutex_lock(&dp_netdev_mutex);
+    ovs_mutex_lock(&dp_netdev_mutex);
     q = find_nonempty_queue(dpif);
     if (q) {
         struct dp_netdev_upcall *u = &q->upcalls[q->tail++ & QUEUE_MASK];
@@ -1091,7 +1091,7 @@ dpif_netdev_recv(struct dpif *dpif, struct dpif_upcall *upcall,
     } else {
         error = EAGAIN;
     }
-    xpthread_mutex_unlock(&dp_netdev_mutex);
+    ovs_mutex_unlock(&dp_netdev_mutex);
 
     return error;
 }
@@ -1103,20 +1103,20 @@ dpif_netdev_recv_wait(struct dpif *dpif)
      * function and the poll_block() in one thread and a packet being queued in
      * another thread. */
 
-    xpthread_mutex_lock(&dp_netdev_mutex);
+    ovs_mutex_lock(&dp_netdev_mutex);
     if (find_nonempty_queue(dpif)) {
         poll_immediate_wake();
     }
-    xpthread_mutex_unlock(&dp_netdev_mutex);
+    ovs_mutex_unlock(&dp_netdev_mutex);
 }
 
 static void
 dpif_netdev_recv_purge(struct dpif *dpif)
 {
     struct dpif_netdev *dpif_netdev = dpif_netdev_cast(dpif);
-    xpthread_mutex_lock(&dp_netdev_mutex);
+    ovs_mutex_lock(&dp_netdev_mutex);
     dp_netdev_purge_queues(dpif_netdev->dp);
-    xpthread_mutex_unlock(&dp_netdev_mutex);
+    ovs_mutex_unlock(&dp_netdev_mutex);
 }
 
 static void
@@ -1161,7 +1161,7 @@ dpif_netdev_run(struct dpif *dpif)
     struct dp_netdev *dp;
     struct ofpbuf packet;
 
-    xpthread_mutex_lock(&dp_netdev_mutex);
+    ovs_mutex_lock(&dp_netdev_mutex);
     dp = get_dp_netdev(dpif);
     ofpbuf_init(&packet,
                 DP_NETDEV_HEADROOM + VLAN_ETH_HEADER_LEN + dp->max_mtu);
@@ -1184,7 +1184,7 @@ dpif_netdev_run(struct dpif *dpif)
         }
     }
     ofpbuf_uninit(&packet);
-    xpthread_mutex_unlock(&dp_netdev_mutex);
+    ovs_mutex_unlock(&dp_netdev_mutex);
 }
 
 static void
@@ -1205,13 +1205,13 @@ dpif_netdev_wait(struct dpif *dpif)
      *     - In the dpif_port_remove() case, A might wake up spuriously, but
      *       that is harmless. */
 
-    xpthread_mutex_lock(&dp_netdev_mutex);
+    ovs_mutex_lock(&dp_netdev_mutex);
     LIST_FOR_EACH (port, node, &get_dp_netdev(dpif)->port_list) {
         if (port->rx) {
             netdev_rx_wait(port->rx);
         }
     }
-    xpthread_mutex_unlock(&dp_netdev_mutex);
+    ovs_mutex_unlock(&dp_netdev_mutex);
 }
 
 static void

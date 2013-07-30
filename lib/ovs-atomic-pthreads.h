@@ -144,7 +144,7 @@ atomic_signal_fence(memory_order order OVS_UNUSED)
 
 typedef struct {
     bool b;
-    pthread_mutex_t mutex;
+    struct ovs_mutex mutex;
 } atomic_flag;
 #define ATOMIC_FLAG_INIT { false, PTHREAD_MUTEX_INITIALIZER }
 

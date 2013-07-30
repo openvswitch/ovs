@@ -110,14 +110,10 @@ static enum ofperr ofpraw_from_ofphdrs(enum ofpraw *, const struct ofphdrs *);
 static ovs_be32
 alloc_xid(void)
 {
-    static uint32_t next_xid = 1;
-    static pthread_mutex_t mutex = PTHREAD_ADAPTIVE_MUTEX_INITIALIZER;
+    static atomic_uint32_t next_xid = ATOMIC_VAR_INIT(1);
     uint32_t xid;
 
-    xpthread_mutex_lock(&mutex);
-    xid = next_xid++;
-    xpthread_mutex_unlock(&mutex);
-
+    atomic_add(&next_xid, 1, &xid);
     return htonl(xid);
 }
 

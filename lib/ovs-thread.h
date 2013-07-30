@@ -23,65 +23,118 @@
 #include "ovs-atomic.h"
 #include "util.h"
 
-/* glibc has some non-portable mutex types and initializers:
- *
- *    - PTHREAD_MUTEX_ADAPTIVE_NP is a mutex type that works as a spinlock that
- *      falls back to a mutex after spinning for some number of iterations.
- *
- *    - PTHREAD_ERRORCHECK_MUTEX_INITIALIZER_NP is a non-portable initializer
- *      for an error-checking mutex.
- *
- * We use these definitions to fall back to PTHREAD_MUTEX_NORMAL instead in
- * these cases.
- *
- * (glibc has other non-portable initializers, but we can't reasonably
- * substitute for them here.) */
-#ifdef PTHREAD_ADAPTIVE_MUTEX_INITIALIZER_NP
-#define PTHREAD_MUTEX_ADAPTIVE PTHREAD_MUTEX_ADAPTIVE_NP
-#define PTHREAD_ADAPTIVE_MUTEX_INITIALIZER \
-    PTHREAD_ADAPTIVE_MUTEX_INITIALIZER_NP
-#else
-#define PTHREAD_MUTEX_ADAPTIVE PTHREAD_MUTEX_NORMAL
-#define PTHREAD_ADAPTIVE_MUTEX_INITIALIZER PTHREAD_MUTEX_INITIALIZER
-#endif
 
-#ifdef PTHREAD_ERRORCHECK_MUTEX_INITIALIZER_NP
-#define PTHREAD_ERRORCHECK_MUTEX_INITIALIZER \
-    PTHREAD_ERRORCHECK_MUTEX_INITIALIZER_NP
+/* Mutex. */
+struct OVS_LOCKABLE ovs_mutex {
+    pthread_mutex_t lock;
+    const char *where;
+};
+
+/* "struct ovs_mutex" initializers:
+ *
+ *    - OVS_MUTEX_INITIALIZER: common case.
+ *
+ *    - OVS_ADAPTIVE_MUTEX_INITIALIZER for a mutex that spins briefly then goes
+ *      to sleeps after some number of iterations.
+ *
+ *    - OVS_ERRORCHECK_MUTEX_INITIALIZER for a mutex that is used for
+ *      error-checking. */
+#define OVS_MUTEX_INITIALIZER { PTHREAD_MUTEX_INITIALIZER, NULL }
+#ifdef PTHREAD_ADAPTIVE_MUTEX_INITIALIZER_NP
+#define OVS_ADAPTIVE_MUTEX_INITIALIZER \
+    { PTHREAD_ADAPTIVE_MUTEX_INITIALIZER_NP, NULL }
 #else
-#define PTHREAD_ERRORCHECK_MUTEX_INITIALIZER PTHREAD_MUTEX_INITIALIZER
+#define OVS_ADAPTIVE_MUTEX_INITIALIZER OVS_MUTEX_INITIALIZER
+#endif
+#ifdef PTHREAD_ERRORCHECK_MUTEX_INITIALIZER_NP
+#define OVS_ERRORCHECK_MUTEX_INITIALIZER \
+    { PTHREAD_ERRORCHECK_MUTEX_INITIALIZER_NP, NULL }
+#else
+#define OVS_ERRORCHECK_MUTEX_INITIALIZER OVS_MUTEX_INITIALIZER
 #endif
 
-/* Simple wrappers for pthreads functions.  Most of these functions abort the
- * process with an error message on any error.  The *_trylock() functions are
- * exceptions: they pass through a 0 or EBUSY return value to the caller and
- * abort on any other error. */
+/* Mutex types, suitable for use with pthread_mutexattr_settype().
+ * There is only one nonstandard type:
+ *
+ *    - PTHREAD_MUTEX_ADAPTIVE_NP, the type used for
+ *      OVS_ADAPTIVE_MUTEX_INITIALIZER. */
+#ifdef PTHREAD_ADAPTIVE_MUTEX_INITIALIZER_NP
+#define OVS_MUTEX_ADAPTIVE PTHREAD_MUTEX_ADAPTIVE_NP
+#else
+#define OVS_MUTEX_ADAPTIVE PTHREAD_MUTEX_NORMAL
+#endif
 
-void xpthread_mutex_init(pthread_mutex_t *, pthread_mutexattr_t *);
-void xpthread_mutex_destroy(pthread_mutex_t *);
-void xpthread_mutex_lock(pthread_mutex_t *mutex) OVS_ACQUIRES(mutex);
-void xpthread_mutex_unlock(pthread_mutex_t *mutex) OVS_RELEASES(mutex);
-int xpthread_mutex_trylock(pthread_mutex_t *);
+/* ovs_mutex functions analogous to pthread_mutex_*() functions.
+ *
+ * Most of these functions abort the process with an error message on any
+ * error.  ovs_mutex_trylock() is an exception: it passes through a 0 or EBUSY
+ * return value to the caller and aborts on any other error. */
+void ovs_mutex_init(const struct ovs_mutex *, int type);
+void ovs_mutex_destroy(const struct ovs_mutex *);
+void ovs_mutex_unlock(const struct ovs_mutex *mutex) OVS_RELEASES(mutex);
+void ovs_mutex_lock_at(const struct ovs_mutex *mutex, const char *where)
+    OVS_ACQUIRES(mutex);
+#define ovs_mutex_lock(mutex) \
+        ovs_mutex_lock_at(mutex, SOURCE_LOCATOR)
 
+int ovs_mutex_trylock_at(const struct ovs_mutex *mutex, const char *where)
+    OVS_TRY_LOCK(0, mutex);
+#define ovs_mutex_trylock(mutex) \
+        ovs_mutex_trylock_at(mutex, SOURCE_LOCATOR)
+
+void ovs_mutex_cond_wait(pthread_cond_t *, const struct ovs_mutex *);
+
+/* Wrappers for pthread_mutexattr_*() that abort the process on any error. */
 void xpthread_mutexattr_init(pthread_mutexattr_t *);
 void xpthread_mutexattr_destroy(pthread_mutexattr_t *);
 void xpthread_mutexattr_settype(pthread_mutexattr_t *, int type);
 void xpthread_mutexattr_gettype(pthread_mutexattr_t *, int *typep);
 
-void xpthread_rwlock_init(pthread_rwlock_t *, pthread_rwlockattr_t *);
-void xpthread_rwlock_destroy(pthread_rwlock_t *);
-void xpthread_rwlock_rdlock(pthread_rwlock_t *rwlock) OVS_ACQUIRES(rwlock);
-void xpthread_rwlock_wrlock(pthread_rwlock_t *rwlock) OVS_ACQUIRES(rwlock);
-void xpthread_rwlock_unlock(pthread_rwlock_t *rwlock) OVS_RELEASES(rwlock);
-int xpthread_rwlock_tryrdlock(pthread_rwlock_t *);
-int xpthread_rwlock_trywrlock(pthread_rwlock_t *);
+/* Read-write lock. */
+struct OVS_LOCKABLE ovs_rwlock {
+    pthread_rwlock_t lock;
+    const char *where;
+};
 
+/* Initializer. */
+#define OVS_RWLOCK_INITIALIZER { PTHREAD_RWLOCK_INITIALIZER, NULL }
+
+/* ovs_rwlock functions analogous to pthread_rwlock_*() functions.
+ *
+ * Most of these functions abort the process with an error message on any
+ * error.  The "trylock" functions are exception: they pass through a 0 or
+ * EBUSY return value to the caller and abort on any other error. */
+void ovs_rwlock_init(const struct ovs_rwlock *);
+void ovs_rwlock_destroy(const struct ovs_rwlock *);
+void ovs_rwlock_unlock(const struct ovs_rwlock *rwlock) OVS_RELEASES(rwlock);
+
+void ovs_rwlock_wrlock_at(const struct ovs_rwlock *rwlock, const char *where)
+    OVS_ACQ_WRLOCK(rwlock);
+#define ovs_rwlock_wrlock(rwlock) \
+        ovs_rwlock_wrlock_at(rwlock, SOURCE_LOCATOR);
+
+int ovs_rwlock_trywrlock_at(const struct ovs_rwlock *rwlock, const char *where)
+    OVS_TRY_WRLOCK(0, rwlock);
+#define ovs_rwlock_trywrlock(rwlock) \
+    ovs_rwlock_trywrlock_at(rwlock, SOURCE_LOCATOR)
+
+void ovs_rwlock_rdlock_at(const struct ovs_rwlock *rwlock, const char *where)
+    OVS_ACQ_RDLOCK(rwlock);
+#define ovs_rwlock_rdlock(rwlock) \
+        ovs_rwlock_rdlock_at(rwlock, SOURCE_LOCATOR);
+
+int ovs_rwlock_tryrdlock_at(const struct ovs_rwlock *rwlock, const char *where)
+    OVS_TRY_RDLOCK(0, rwlock);
+#define ovs_rwlock_tryrdlock(rwlock) \
+        ovs_rwlock_tryrdlock_at(rwlock, SOURCE_LOCATOR)
+
+/* Wrappers for xpthread_cond_*() that abort the process on any error.
+ *
+ * Use ovs_mutex_cond_wait() to wait for a condition. */
 void xpthread_cond_init(pthread_cond_t *, pthread_condattr_t *);
 void xpthread_cond_destroy(pthread_cond_t *);
 void xpthread_cond_signal(pthread_cond_t *);
 void xpthread_cond_broadcast(pthread_cond_t *);
-void xpthread_cond_wait(pthread_cond_t *, pthread_mutex_t *mutex)
-    OVS_MUST_HOLD(mutex);
 
 #ifdef __CHECKER__
 /* Replace these functions by the macros already defined in the <pthread.h>
@@ -335,19 +388,22 @@ void xpthread_create(pthread_t *, pthread_attr_t *, void *(*)(void *), void *);
 
 struct ovsthread_once {
     atomic_bool done;
-    pthread_mutex_t mutex;
+    struct ovs_mutex mutex;
 };
 
 #define OVSTHREAD_ONCE_INITIALIZER              \
     {                                           \
         ATOMIC_VAR_INIT(false),                 \
-        PTHREAD_ADAPTIVE_MUTEX_INITIALIZER,     \
+        OVS_ADAPTIVE_MUTEX_INITIALIZER,         \
     }
 
-static inline bool ovsthread_once_start(struct ovsthread_once *);
-void ovsthread_once_done(struct ovsthread_once *once) OVS_RELEASES(once);
+static inline bool ovsthread_once_start(struct ovsthread_once *once)
+    OVS_TRY_LOCK(true, &once->mutex);
+void ovsthread_once_done(struct ovsthread_once *once)
+    OVS_RELEASES(&once->mutex);
 
-bool ovsthread_once_start__(struct ovsthread_once *);
+bool ovsthread_once_start__(struct ovsthread_once *once)
+    OVS_TRY_LOCK(false, &once->mutex);
 
 static inline bool
 ovsthread_once_is_done__(const struct ovsthread_once *once)
@@ -374,7 +430,7 @@ ovsthread_once_start(struct ovsthread_once *once)
 
 #ifdef __CHECKER__
 #define ovsthread_once_start(ONCE) \
-    ((ONCE)->done ? false : ({ OVS_ACQUIRE(ONCE); true; }))
+    ((ONCE)->done ? false : ({ OVS_MACRO_LOCK((&ONCE->mutex)); true; }))
 #endif
 
 void assert_single_threaded_at(const char *where);

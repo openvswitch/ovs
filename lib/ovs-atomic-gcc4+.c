@@ -20,7 +20,7 @@
 #include "ovs-thread.h"
 
 #if OVS_ATOMIC_GCC4P_IMPL
-static pthread_mutex_t mutex = PTHREAD_ADAPTIVE_MUTEX_INITIALIZER;
+static struct ovs_mutex mutex = OVS_ADAPTIVE_MUTEX_INITIALIZER;
 
 #define DEFINE_LOCKED_OP(TYPE, NAME, OPERATOR)                          \
     TYPE##_t                                                            \
@@ -28,10 +28,10 @@ static pthread_mutex_t mutex = PTHREAD_ADAPTIVE_MUTEX_INITIALIZER;
     {                                                                   \
         TYPE##_t old_value;                                             \
                                                                         \
-        xpthread_mutex_lock(&mutex);                                    \
+        ovs_mutex_lock(&mutex);                                         \
         old_value = u->value;                                           \
         u->value OPERATOR arg;                                          \
-        xpthread_mutex_unlock(&mutex);                                  \
+        ovs_mutex_unlock(&mutex);                                       \
                                                                         \
         return old_value;                                               \
     }
@@ -42,9 +42,9 @@ static pthread_mutex_t mutex = PTHREAD_ADAPTIVE_MUTEX_INITIALIZER;
     {                                                                   \
         TYPE##_t value;                                                 \
                                                                         \
-        xpthread_mutex_lock(&mutex);                                    \
+        ovs_mutex_lock(&mutex);                                         \
         value = u->value;                                               \
-        xpthread_mutex_unlock(&mutex);                                  \
+        ovs_mutex_unlock(&mutex);                                       \
                                                                         \
         return value;                                                   \
     }                                                                   \
@@ -52,9 +52,9 @@ static pthread_mutex_t mutex = PTHREAD_ADAPTIVE_MUTEX_INITIALIZER;
     void                                                                \
     locked_##TYPE##_store(struct locked_##TYPE *u, TYPE##_t value)      \
     {                                                                   \
-        xpthread_mutex_lock(&mutex);                                    \
+        ovs_mutex_lock(&mutex);                                         \
         u->value = value;                                               \
-        xpthread_mutex_unlock(&mutex);                                  \
+        ovs_mutex_unlock(&mutex);                                       \
     }                                                                   \
     DEFINE_LOCKED_OP(TYPE, add, +=);                                    \
     DEFINE_LOCKED_OP(TYPE, sub, -=);                                    \

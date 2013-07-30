@@ -140,7 +140,7 @@ struct dpif_linux {
     int dp_ifindex;
 
     /* Upcall messages. */
-    pthread_mutex_t upcall_lock;
+    struct ovs_mutex upcall_lock;
     int uc_array_size;          /* Size of 'channels' and 'epoll_events'. */
     struct dpif_channel *channels;
     struct epoll_event *epoll_events;
@@ -248,7 +248,7 @@ open_dpif(const struct dpif_linux_dp *dp, struct dpif **dpifp)
 
     dpif = xzalloc(sizeof *dpif);
     dpif->port_notifier = NULL;
-    xpthread_mutex_init(&dpif->upcall_lock, NULL);
+    ovs_mutex_init(&dpif->upcall_lock, PTHREAD_MUTEX_DEFAULT);
     dpif->epoll_fd = -1;
 
     dpif_init(&dpif->dpif, &dpif_linux_class, dp->name,
@@ -383,7 +383,7 @@ dpif_linux_close(struct dpif *dpif_)
     if (dpif->epoll_fd >= 0) {
         close(dpif->epoll_fd);
     }
-    xpthread_mutex_destroy(&dpif->upcall_lock);
+    ovs_mutex_destroy(&dpif->upcall_lock);
     free(dpif);
 }
 
@@ -572,9 +572,9 @@ dpif_linux_port_add(struct dpif *dpif_, struct netdev *netdev,
     struct dpif_linux *dpif = dpif_linux_cast(dpif_);
     int error;
 
-    xpthread_mutex_lock(&dpif->upcall_lock);
+    ovs_mutex_lock(&dpif->upcall_lock);
     error = dpif_linux_port_add__(dpif_, netdev, port_nop);
-    xpthread_mutex_unlock(&dpif->upcall_lock);
+    ovs_mutex_unlock(&dpif->upcall_lock);
 
     return error;
 }
@@ -603,9 +603,9 @@ dpif_linux_port_del(struct dpif *dpif_, odp_port_t port_no)
     struct dpif_linux *dpif = dpif_linux_cast(dpif_);
     int error;
 
-    xpthread_mutex_lock(&dpif->upcall_lock);
+    ovs_mutex_lock(&dpif->upcall_lock);
     error = dpif_linux_port_del__(dpif_, port_no);
-    xpthread_mutex_unlock(&dpif->upcall_lock);
+    ovs_mutex_unlock(&dpif->upcall_lock);
 
     return error;
 }
@@ -668,14 +668,14 @@ dpif_linux_port_get_pid(const struct dpif *dpif_, odp_port_t port_no)
     uint32_t port_idx = odp_to_u32(port_no);
     uint32_t pid = 0;
 
-    xpthread_mutex_lock(&dpif->upcall_lock);
+    ovs_mutex_lock(&dpif->upcall_lock);
     if (dpif->epoll_fd >= 0) {
         /* The ODPP_NONE "reserved" port number uses the "ovs-system"'s
          * channel, since it is not heavily loaded. */
         uint32_t idx = port_idx >= dpif->uc_array_size ? 0 : port_idx;
         pid = nl_sock_pid(dpif->channels[idx].sock);
     }
-    xpthread_mutex_unlock(&dpif->upcall_lock);
+    ovs_mutex_unlock(&dpif->upcall_lock);
 
     return pid;
 }
@@ -1310,9 +1310,9 @@ dpif_linux_recv_set(struct dpif *dpif_, bool enable)
     struct dpif_linux *dpif = dpif_linux_cast(dpif_);
     int error;
 
-    xpthread_mutex_lock(&dpif->upcall_lock);
+    ovs_mutex_lock(&dpif->upcall_lock);
     error = dpif_linux_recv_set__(dpif_, enable);
-    xpthread_mutex_unlock(&dpif->upcall_lock);
+    ovs_mutex_unlock(&dpif->upcall_lock);
 
     return error;
 }
@@ -1463,9 +1463,9 @@ dpif_linux_recv(struct dpif *dpif_, struct dpif_upcall *upcall,
     struct dpif_linux *dpif = dpif_linux_cast(dpif_);
     int error;
 
-    xpthread_mutex_lock(&dpif->upcall_lock);
+    ovs_mutex_lock(&dpif->upcall_lock);
     error = dpif_linux_recv__(dpif_, upcall, buf);
-    xpthread_mutex_unlock(&dpif->upcall_lock);
+    ovs_mutex_unlock(&dpif->upcall_lock);
 
     return error;
 }
@@ -1475,11 +1475,11 @@ dpif_linux_recv_wait(struct dpif *dpif_)
 {
     struct dpif_linux *dpif = dpif_linux_cast(dpif_);
 
-    xpthread_mutex_lock(&dpif->upcall_lock);
+    ovs_mutex_lock(&dpif->upcall_lock);
     if (dpif->epoll_fd >= 0) {
         poll_fd_wait(dpif->epoll_fd, POLLIN);
     }
-    xpthread_mutex_unlock(&dpif->upcall_lock);
+    ovs_mutex_unlock(&dpif->upcall_lock);
 }
 
 static void
@@ -1487,7 +1487,7 @@ dpif_linux_recv_purge(struct dpif *dpif_)
 {
     struct dpif_linux *dpif = dpif_linux_cast(dpif_);
 
-    xpthread_mutex_lock(&dpif->upcall_lock);
+    ovs_mutex_lock(&dpif->upcall_lock);
     if (dpif->epoll_fd >= 0) {
         struct dpif_channel *ch;
 
@@ -1498,7 +1498,7 @@ dpif_linux_recv_purge(struct dpif *dpif_)
             }
         }
     }
-    xpthread_mutex_unlock(&dpif->upcall_lock);
+    ovs_mutex_unlock(&dpif->upcall_lock);
 }
 
 const struct dpif_class dpif_linux_class = {

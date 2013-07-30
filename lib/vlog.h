@@ -104,7 +104,7 @@ struct vlog_rate_limit {
     time_t first_dropped;       /* Time first message was dropped. */
     time_t last_dropped;        /* Time of most recent message drop. */
     unsigned int n_dropped;     /* Number of messages dropped. */
-    pthread_mutex_t mutex;      /* Mutual exclusion for rate limit. */
+    struct ovs_mutex mutex;     /* Mutual exclusion for rate limit. */
 };
 
 /* Number of tokens to emit a message.  We add 'rate' tokens per millisecond,
@@ -119,7 +119,7 @@ struct vlog_rate_limit {
             0,                              /* first_dropped */         \
             0,                              /* last_dropped */          \
             0,                              /* n_dropped */             \
-            PTHREAD_ADAPTIVE_MUTEX_INITIALIZER /* mutex */              \
+            OVS_ADAPTIVE_MUTEX_INITIALIZER  /* mutex */                 \
         }
 
 /* Configuring how each module logs messages. */
