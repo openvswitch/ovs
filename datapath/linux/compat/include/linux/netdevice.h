@@ -188,4 +188,19 @@ static inline struct sk_buff *__skb_gso_segment(struct sk_buff *skb,
 	return skb_gso_segment(skb, features);
 }
 #endif
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,9,0)
+static inline int netdev_master_upper_dev_link(struct net_device *dev,
+					       struct net_device *upper_dev)
+{
+	return netdev_set_master(dev, upper_dev);
+}
+
+static inline void netdev_upper_dev_unlink(struct net_device *dev,
+					   struct net_device *upper_dev)
+{
+	netdev_set_master(dev, NULL);
+}
+#endif
+
 #endif
