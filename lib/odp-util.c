@@ -2306,6 +2306,17 @@ ovs_to_odp_frag(uint8_t nw_frag)
           : OVS_FRAG_TYPE_LATER);
 }
 
+static uint8_t
+ovs_to_odp_frag_mask(uint8_t nw_frag_mask)
+{
+    uint8_t frag_mask = ~(OVS_FRAG_TYPE_FIRST | OVS_FRAG_TYPE_LATER);
+
+    frag_mask |= (nw_frag_mask & FLOW_NW_FRAG_ANY) ? OVS_FRAG_TYPE_FIRST : 0;
+    frag_mask |= (nw_frag_mask & FLOW_NW_FRAG_LATER) ? OVS_FRAG_TYPE_LATER : 0;
+
+    return frag_mask;
+}
+
 static void
 odp_flow_key_from_flow__(struct ofpbuf *buf, const struct flow *data,
                          const struct flow *flow, uint32_t odp_in_port)
@@ -2386,7 +2397,8 @@ odp_flow_key_from_flow__(struct ofpbuf *buf, const struct flow *data,
         ipv4_key->ipv4_proto = data->nw_proto;
         ipv4_key->ipv4_tos = data->nw_tos;
         ipv4_key->ipv4_ttl = data->nw_ttl;
-        ipv4_key->ipv4_frag = ovs_to_odp_frag(data->nw_frag);
+        ipv4_key->ipv4_frag = is_mask ? ovs_to_odp_frag_mask(data->nw_frag)
+                                      : ovs_to_odp_frag(data->nw_frag);
     } else if (flow->dl_type == htons(ETH_TYPE_IPV6)) {
         struct ovs_key_ipv6 *ipv6_key;
 
@@ -2398,7 +2410,8 @@ odp_flow_key_from_flow__(struct ofpbuf *buf, const struct flow *data,
         ipv6_key->ipv6_proto = data->nw_proto;
         ipv6_key->ipv6_tclass = data->nw_tos;
         ipv6_key->ipv6_hlimit = data->nw_ttl;
-        ipv6_key->ipv6_frag = ovs_to_odp_frag(flow->nw_frag);
+        ipv6_key->ipv6_frag = is_mask ? ovs_to_odp_frag_mask(data->nw_frag)
+                                      : ovs_to_odp_frag(data->nw_frag);
     } else if (flow->dl_type == htons(ETH_TYPE_ARP) ||
                flow->dl_type == htons(ETH_TYPE_RARP)) {
         struct ovs_key_arp *arp_key;
