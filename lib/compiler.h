@@ -114,7 +114,7 @@
 #define OVS_GUARDED __attribute__((guarded_var))
 #define OVS_GUARDED_BY(...) __attribute__((guarded_by(__VA_ARGS__)))
 #define OVS_RELEASES(...) __attribute__((unlock_function(__VA_ARGS__)))
-#define OVS_LOCKS_EXCLUDED(...) __attribute__((locks_excluded(__VA_ARGS__)))
+#define OVS_EXCLUDED(...) __attribute__((locks_excluded(__VA_ARGS__)))
 #elif __CHECKER__
 /* "sparse" annotations for mutexes and mutex-like constructs.
  *
@@ -134,6 +134,7 @@
 #define OVS_TRY_LOCK(REVAL, ...)
 #define OVS_GUARDED
 #define OVS_GUARDED_BY(...)
+#define OVS_EXCLUDED(...)
 #define OVS_RELEASES(...)   __attribute__((context(MUTEX, 1, 0)))
 #define OVS_MACRO_LOCK(...) __context__(MUTEX, 0, 1)
 #define OVS_MACRO_RELEASE(...) __context__(MUTEX, 1, 0)
@@ -150,6 +151,7 @@
 #define OVS_TRY_LOCK(...)
 #define OVS_GUARDED
 #define OVS_GUARDED_BY(...)
+#define OVS_EXCLUDED(...)
 #define OVS_RELEASES(...)
 #define OVS_MACRO_LOCK(...)
 #define OVS_MACRO_RELEASE(...)
