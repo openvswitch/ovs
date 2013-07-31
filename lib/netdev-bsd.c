@@ -83,6 +83,7 @@ struct netdev_bsd {
     int ifindex;
     uint8_t etheraddr[ETH_ADDR_LEN];
     struct in_addr in4;
+    struct in_addr netmask;
     struct in6_addr in6;
     int mtu;
     int carrier;
@@ -1098,8 +1099,8 @@ cleanup:
 }
 
 /*
- * If 'netdev' has an assigned IPv4 address, sets '*in4' to that address (if
- * 'in4' is non-null) and returns true.  Otherwise, returns false.
+ * If 'netdev' has an assigned IPv4 address, sets '*in4' to that address and
+ * '*netmask' to its netmask and returns true.  Otherwise, returns false.
  */
 static int
 netdev_bsd_get_in4(const struct netdev *netdev_, struct in_addr *in4,
@@ -1121,15 +1122,16 @@ netdev_bsd_get_in4(const struct netdev *netdev_, struct in_addr *in4,
 
         sin = (struct sockaddr_in *) &ifr.ifr_addr;
         netdev->in4 = sin->sin_addr;
-        netdev->cache_valid |= VALID_IN4;
         error = netdev_bsd_do_ioctl(netdev_get_kernel_name(netdev_), &ifr,
                                     SIOCGIFNETMASK, "SIOCGIFNETMASK");
         if (error) {
             return error;
         }
-        *netmask = ((struct sockaddr_in*)&ifr.ifr_addr)->sin_addr;
+        netdev->netmask = sin->sin_addr;
+        netdev->cache_valid |= VALID_IN4;
     }
     *in4 = netdev->in4;
+    *netmask = netdev->netmask;
 
     return in4->s_addr == INADDR_ANY ? EADDRNOTAVAIL : 0;
 }
@@ -1148,11 +1150,14 @@ netdev_bsd_set_in4(struct netdev *netdev_, struct in_addr addr,
 
     error = do_set_addr(netdev_, SIOCSIFADDR, "SIOCSIFADDR", addr);
     if (!error) {
-        netdev->cache_valid |= VALID_IN4;
-        netdev->in4 = addr;
         if (addr.s_addr != INADDR_ANY) {
             error = do_set_addr(netdev_, SIOCSIFNETMASK,
                                 "SIOCSIFNETMASK", mask);
+            if (!error) {
+                netdev->cache_valid |= VALID_IN4;
+                netdev->in4 = addr;
+                netdev->netmask = mask;
+            }
         }
         netdev_bsd_changed(netdev);
     }
