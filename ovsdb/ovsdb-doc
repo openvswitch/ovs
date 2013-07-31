@@ -1,4 +1,4 @@
-#! @PYTHON@
+#! /usr/bin/python
 
 from datetime import date
 import getopt
@@ -251,7 +251,7 @@ def tableToNroff(schema, tableXml):
     s += body
     return s
 
-def docsToNroff(schemaFile, xmlFile, erFile, title=None):
+def docsToNroff(schemaFile, xmlFile, erFile, title=None, version=None):
     schema = ovs.db.schema.DbSchema.from_json(ovs.json.from_file(schemaFile))
     doc = xml.dom.minidom.parse(xmlFile).documentElement
 
@@ -262,10 +262,13 @@ def docsToNroff(schemaFile, xmlFile, erFile, title=None):
     if title == None:
         title = schema.name
 
+    if version == None:
+        version = "UNKNOWN"
+
     # Putting '\" p as the first line tells "man" that the manpage
     # needs to be preprocessed by "pic".
     s = r''''\" p
-.TH "%s" 5 @VERSION@ "Open vSwitch" "Open vSwitch Manual"
+.TH "%s" 5 "%s" "Open vSwitch" "Open vSwitch Manual"
 .\" -*- nroff -*-
 .de TQ
 .  br
@@ -281,7 +284,7 @@ def docsToNroff(schemaFile, xmlFile, erFile, title=None):
 .SH NAME
 %s \- %s database schema
 .PP
-''' % (title, textToNroff(schema.name), schema.name)
+''' % (title, version, textToNroff(schema.name), schema.name)
 
     tables = ""
     introNodes = []
@@ -357,8 +360,8 @@ where SCHEMA is an OVSDB schema in JSON format
 The following options are also available:
   --er-diagram=DIAGRAM.PIC    include E-R diagram from DIAGRAM.PIC
   --title=TITLE               use TITLE as title instead of schema name
-  -h, --help                  display this help message
-  -V, --version               display version information\
+  --version=VERSION           use VERSION to display on document footer
+  -h, --help                  display this help message\
 """ % {'argv0': argv0}
     sys.exit(0)
 
@@ -367,22 +370,23 @@ if __name__ == "__main__":
         try:
             options, args = getopt.gnu_getopt(sys.argv[1:], 'hV',
                                               ['er-diagram=', 'title=',
-                                               'help', 'version'])
+                                               'version=', 'help'])
         except getopt.GetoptError, geo:
             sys.stderr.write("%s: %s\n" % (argv0, geo.msg))
             sys.exit(1)
 
         er_diagram = None
         title = None
+        version = None
         for key, value in options:
             if key == '--er-diagram':
                 er_diagram = value
             elif key == '--title':
                 title = value
+            elif key == '--version':
+                version = value
             elif key in ['-h', '--help']:
                 usage()
-            elif key in ['-V', '--version']:
-                print "ovsdb-doc (Open vSwitch) @VERSION@"
             else:
                 sys.exit(0)
 
@@ -392,7 +396,7 @@ if __name__ == "__main__":
             sys.exit(1)
 
         # XXX we should warn about undocumented tables or columns
-        s = docsToNroff(args[0], args[1], er_diagram, title)
+        s = docsToNroff(args[0], args[1], er_diagram, title, version)
         for line in s.split("\n"):
             line = line.strip()
             if len(line):

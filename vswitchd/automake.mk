@@ -57,6 +57,7 @@ EXTRA_DIST += vswitchd/vswitch.gv vswitchd/vswitch.pic
 
 # vswitch schema documentation
 EXTRA_DIST += vswitchd/vswitch.xml
+DISTCLEANFILES += $(srcdir)/vswitchd/ovs-vswitchd.conf.db.5
 dist_man_MANS += vswitchd/ovs-vswitchd.conf.db.5
 $(srcdir)/vswitchd/ovs-vswitchd.conf.db.5: \
 	ovsdb/ovsdb-doc vswitchd/vswitch.xml vswitchd/vswitch.ovsschema \
@@ -64,6 +65,7 @@ $(srcdir)/vswitchd/ovs-vswitchd.conf.db.5: \
 	$(OVSDB_DOC) \
 		--title="ovs-vswitchd.conf.db" \
 		--er-diagram=$(srcdir)/vswitchd/vswitch.pic \
+		--version=$(VERSION) \
 		$(srcdir)/vswitchd/vswitch.ovsschema \
 		$(srcdir)/vswitchd/vswitch.xml > $@.tmp
 	mv $@.tmp $@
