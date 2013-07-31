@@ -1694,8 +1694,7 @@ int ovs_flow_to_nlattrs(const struct sw_flow_key *swkey,
 	struct ovs_key_ethernet *eth_key;
 	struct nlattr *nla, *encap;
 
-	if (output->phy.priority &&
-		nla_put_u32(skb, OVS_KEY_ATTR_PRIORITY, output->phy.priority))
+	if (nla_put_u32(skb, OVS_KEY_ATTR_PRIORITY, output->phy.priority))
 		goto nla_put_failure;
 
 	if (swkey->tun_key.ipv4_dst &&
@@ -1715,8 +1714,7 @@ int ovs_flow_to_nlattrs(const struct sw_flow_key *swkey,
 			goto nla_put_failure;
 	}
 
-	if (output->phy.skb_mark &&
-		nla_put_u32(skb, OVS_KEY_ATTR_SKB_MARK, output->phy.skb_mark))
+	if (nla_put_u32(skb, OVS_KEY_ATTR_SKB_MARK, output->phy.skb_mark))
 		goto nla_put_failure;
 
 	nla = nla_reserve(skb, OVS_KEY_ATTR_ETHERNET, sizeof(*eth_key));
