@@ -65,6 +65,7 @@ static struct sk_buff *tnl_skb_gso_segment(struct sk_buff *skb,
 	struct sk_buff *skb1 = skb;
 	struct sk_buff *segs;
 	__be16 proto = skb->protocol;
+	char cb[sizeof(skb->cb)];
 
 	/* setup whole inner packet to get protocol. */
 	__skb_pull(skb, mac_offset);
@@ -75,6 +76,10 @@ static struct sk_buff *tnl_skb_gso_segment(struct sk_buff *skb,
 	skb_reset_mac_header(skb);
 	skb_reset_network_header(skb);
 	skb_reset_transport_header(skb);
+
+	/* From 3.9 kernel skb->cb is used by skb gso. Therefore
+	 * make copy of it to restore it back. */
+	memcpy(cb, skb->cb, sizeof(cb));
 
 	segs = __skb_gso_segment(skb, 0, tx_path);
 	if (!segs || IS_ERR(segs))
@@ -89,6 +94,7 @@ static struct sk_buff *tnl_skb_gso_segment(struct sk_buff *skb,
 		skb->mac_len = 0;
 
 		memcpy(ip_hdr(skb), iph, pkt_hlen);
+		memcpy(skb->cb, cb, sizeof(cb));
 		if (OVS_GSO_CB(skb)->fix_segment)
 			OVS_GSO_CB(skb)->fix_segment(skb);
 

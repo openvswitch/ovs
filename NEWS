@@ -19,6 +19,7 @@ v1.12.0 - xx xxx xxxx
       through database paths (e.g. Private key option with the database name
       should look like "--private-key=db:Open_vSwitch,SSL,private_key").
     - Added ovs-dev.py, a utility script helpful for Open vSwitch developers.
+    - Support for Linux kernels up to 3.9
 
 
 v1.11.0 - xx xxx xxxx

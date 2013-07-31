@@ -144,6 +144,9 @@ static struct sk_buff *handle_offloads(struct sk_buff *skb)
 
 	if (skb_is_gso(skb)) {
 		struct sk_buff *nskb;
+		char cb[sizeof(skb->cb)];
+
+		memcpy(cb, skb->cb, sizeof(cb));
 
 		nskb = __skb_gso_segment(skb, 0, false);
 		if (IS_ERR(nskb)) {
@@ -153,6 +156,10 @@ static struct sk_buff *handle_offloads(struct sk_buff *skb)
 
 		consume_skb(skb);
 		skb = nskb;
+		while (nskb) {
+			memcpy(nskb->cb, cb, sizeof(cb));
+			nskb = nskb->next;
+		}
 	} else if (get_ip_summed(skb) == OVS_CSUM_PARTIAL) {
 		/* Pages aren't locked and could change at any time.
 		 * If this happens after we compute the checksum, the
