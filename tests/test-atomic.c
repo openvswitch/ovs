@@ -61,6 +61,16 @@
         ovs_assert(value == 8);                         \
     }
 
+static void
+test_atomic_flag(void)
+{
+    atomic_flag flag = ATOMIC_FLAG_INIT;
+    ovs_assert(atomic_flag_test_and_set(&flag) == false);
+    ovs_assert(flag.b == true);
+    atomic_flag_clear(&flag);
+    ovs_assert(flag.b == false);
+}
+
 int
 main(void)
 {
@@ -89,6 +99,8 @@ main(void)
     TEST_ATOMIC_TYPE(atomic_int32_t, int32_t);
     TEST_ATOMIC_TYPE(atomic_uint64_t, uint64_t);
     TEST_ATOMIC_TYPE(atomic_int64_t, int64_t);
+
+    test_atomic_flag();
 
     return 0;
 }

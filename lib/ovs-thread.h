@@ -84,6 +84,11 @@ int ovs_mutex_trylock_at(const struct ovs_mutex *mutex, const char *where)
 
 void ovs_mutex_cond_wait(pthread_cond_t *, const struct ovs_mutex *);
 
+/* Wrappers for pthread_mutex_*() that abort the process on any error.
+ * This is still needed when ovs-atomic-pthreads.h is used. */
+void xpthread_mutex_lock(pthread_mutex_t *mutex);
+void xpthread_mutex_unlock(pthread_mutex_t *mutex);
+
 /* Wrappers for pthread_mutexattr_*() that abort the process on any error. */
 void xpthread_mutexattr_init(pthread_mutexattr_t *);
 void xpthread_mutexattr_destroy(pthread_mutexattr_t *);
