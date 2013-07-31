@@ -413,17 +413,17 @@ set_tunnel_config(struct netdev *dev_, const struct smap *args)
     }
 
     if (tnl_cfg.ipsec) {
-        static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+        static struct ovs_mutex mutex = OVS_MUTEX_INITIALIZER;
         static pid_t pid = 0;
 
-        pthread_mutex_lock(&mutex);
+        ovs_mutex_lock(&mutex);
         if (pid <= 0) {
             char *file_name = xasprintf("%s/%s", ovs_rundir(),
                                         "ovs-monitor-ipsec.pid");
             pid = read_pidfile(file_name);
             free(file_name);
         }
-        pthread_mutex_unlock(&mutex);
+        ovs_mutex_unlock(&mutex);
 
         if (pid < 0) {
             VLOG_ERR("%s: IPsec requires the ovs-monitor-ipsec daemon",
