@@ -31,7 +31,7 @@ void netdev_vport_patch_register(void);
 
 bool netdev_vport_is_patch(const struct netdev *);
 
-const char *netdev_vport_patch_peer(const struct netdev *netdev);
+char *netdev_vport_patch_peer(const struct netdev *netdev);
 
 void netdev_vport_inc_rx(const struct netdev *,
                          const struct dpif_flow_stats *);

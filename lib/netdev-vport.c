@@ -553,12 +553,23 @@ get_tunnel_config(const struct netdev *dev, struct smap *args)
 
 /* Code specific to patch ports. */
 
-const char *
-netdev_vport_patch_peer(const struct netdev *netdev)
+/* If 'netdev' is a patch port, returns the name of its peer as a malloc()'d
+ * string that the caller must free.
+ *
+ * If 'netdev' is not a patch port, returns NULL. */
+char *
+netdev_vport_patch_peer(const struct netdev *netdev_)
 {
-    return (netdev_vport_is_patch(netdev)
-            ? netdev_vport_cast(netdev)->peer
-            : NULL);
+    char *peer = NULL;
+
+    if (netdev_vport_is_patch(netdev_)) {
+        struct netdev_vport *netdev = netdev_vport_cast(netdev_);
+        if (netdev->peer) {
+            peer = xstrdup(netdev->peer);
+        }
+    }
+
+    return peer;
 }
 
 void

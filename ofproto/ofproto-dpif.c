@@ -2905,7 +2905,7 @@ ofport_update_peer(struct ofport_dpif *ofport)
 {
     const struct ofproto_dpif *ofproto;
     struct dpif_backer *backer;
-    const char *peer_name;
+    char *peer_name;
 
     if (!netdev_vport_is_patch(ofport->up.netdev)) {
         return;
@@ -2927,7 +2927,7 @@ ofport_update_peer(struct ofport_dpif *ofport)
     HMAP_FOR_EACH (ofproto, all_ofproto_dpifs_node, &all_ofproto_dpifs) {
         struct ofport *peer_ofport;
         struct ofport_dpif *peer;
-        const char *peer_peer;
+        char *peer_peer;
 
         if (ofproto->backer != backer) {
             continue;
@@ -2945,9 +2945,11 @@ ofport_update_peer(struct ofport_dpif *ofport)
             ofport->peer = peer;
             ofport->peer->peer = ofport;
         }
+        free(peer_peer);
 
-        return;
+        break;
     }
+    free(peer_name);
 }
 
 static void
