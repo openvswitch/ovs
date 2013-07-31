@@ -388,7 +388,7 @@ bfd_put_packet(struct bfd *bfd, struct ofpbuf *p,
         long long int delay = time_msec() - bfd->next_tx;
         long long int interval = bfd_tx_interval(bfd);
         if (delay > interval * 3 / 2) {
-            VLOG_WARN("%s: long delay of %lldms (expected %lldms) sending BFD"
+            VLOG_INFO("%s: long delay of %lldms (expected %lldms) sending BFD"
                       " control message", bfd->name, delay, interval);
         }
     }
