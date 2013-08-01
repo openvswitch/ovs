@@ -518,7 +518,8 @@ older compilers:
 
   As a matter of style, avoid // comments.
 
-  Avoid using GCC extensions unless you also add a fallback for
-non-GCC compilers.  You can, however, use GCC extensions and C99
-features in code that compiles only on GNU/Linux (such as
-lib/netdev-linux.c), because GCC is the system compiler there.
+  Avoid using GCC or Clang extensions unless you also add a fallback
+for other compilers.  You can, however, use C99 features or GCC
+extensions also supported by Clang in code that compiles only on
+GNU/Linux (such as lib/netdev-linux.c), because GCC is the system
+compiler there.
