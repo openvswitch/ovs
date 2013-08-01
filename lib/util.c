@@ -401,8 +401,10 @@ void
 set_subprogram_name(const char *name)
 {
     free(subprogram_name_set(xstrdup(name)));
-#if HAVE_PTHREAD_SETNAME_NP
+#if HAVE_GLIBC_PTHREAD_SETNAME_NP
     pthread_setname_np(pthread_self(), name);
+#elif HAVE_NETBSD_PTHREAD_SETNAME_NP
+    pthread_setname_np(pthread_self(), "%s", name);
 #elif HAVE_PTHREAD_SET_NAME_NP
     pthread_set_name_np(pthread_self(), name);
 #endif

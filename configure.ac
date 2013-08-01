@@ -64,8 +64,7 @@ AC_CHECK_DECLS([sys_siglist], [], [], [[#include <signal.h>]])
 AC_CHECK_MEMBERS([struct stat.st_mtim.tv_nsec, struct stat.st_mtimensec],
   [], [], [[#include <sys/stat.h>]])
 AC_CHECK_MEMBERS([struct ifreq.ifr_flagshigh], [], [], [[#include <net/if.h>]])
-AC_CHECK_FUNCS([mlockall strnlen getloadavg statvfs getmntent_r \
-  pthread_setname_np pthread_set_name_np])
+AC_CHECK_FUNCS([mlockall strnlen getloadavg statvfs getmntent_r])
 AC_CHECK_HEADERS([mntent.h sys/statvfs.h linux/types.h linux/if_ether.h stdatomic.h])
 AC_CHECK_HEADERS([net/if_mib.h], [], [], [[#include <sys/types.h>
 #include <net/if.h>]])
@@ -89,6 +88,7 @@ OVS_CHECK_ATOMIC_ALWAYS_LOCK_FREE(2)
 OVS_CHECK_ATOMIC_ALWAYS_LOCK_FREE(4)
 OVS_CHECK_ATOMIC_ALWAYS_LOCK_FREE(8)
 OVS_CHECK_POSIX_AIO
+OVS_CHECK_PTHREAD_SET_NAME
 
 OVS_ENABLE_OPTION([-Wall])
 OVS_ENABLE_OPTION([-Wextra])

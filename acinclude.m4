@@ -527,3 +527,50 @@ AC_DEFUN([OVS_ENABLE_SPARSE],
      [if test $ovs_cv_gnu_make_if = yes; then
         CC='$(if $(C),REAL_CC="'"$CC"'" CHECK="$(SPARSE) -I $(top_srcdir)/include/sparse $(SPARSEFLAGS) $(SPARSE_EXTRA_INCLUDES) " cgcc $(CGCCFLAGS),'"$CC"')'
       fi])])
+
+dnl OVS_PTHREAD_SET_NAME
+dnl
+dnl This checks for three known variants of pthreads functions for setting
+dnl the name of the current thread:
+dnl
+dnl   glibc: int pthread_setname_np(pthread_t, const char *name);
+dnl   NetBSD: int pthread_setname_np(pthread_t, const char *format, void *arg);
+dnl   FreeBSD: int pthread_set_name_np(pthread_t, const char *name);
+dnl
+dnl For glibc and FreeBSD, the arguments are just a thread and its name.  For
+dnl NetBSD, 'format' is a printf() format string and 'arg' is an argument to
+dnl provide to it.
+dnl
+dnl This macro defines:
+dnl
+dnl    glibc: HAVE_GLIBC_PTHREAD_SETNAME_NP
+dnl    NetBSD: HAVE_NETBSD_PTHREAD_SETNAME_NP
+dnl    FreeBSD: HAVE_PTHREAD_SET_NAME_NP
+AC_DEFUN([OVS_CHECK_PTHREAD_SET_NAME],
+  [AC_CHECK_FUNCS([pthread_set_name_np])
+   if test $ac_cv_func_pthread_set_name_np != yes; then
+     AC_CACHE_CHECK(
+       [for pthread_setname_np() variant],
+       [ovs_cv_pthread_setname_np],
+       [AC_LINK_IFELSE(
+	 [AC_LANG_PROGRAM([#include <pthread.h>
+  ], [pthread_setname_np(pthread_self(), "name");])],
+	 [ovs_cv_pthread_setname_np=glibc],
+         [AC_LINK_IFELSE(
+	   [AC_LANG_PROGRAM([#include <pthread.h>
+], [pthread_setname_np(pthread_self(), "%s", "name");])],
+           [ovs_cv_pthread_setname_np=netbsd],
+	   [ovs_cv_pthread_setname_np=none])])])
+     case $ovs_cv_pthread_setname_np in # (
+       glibc)
+	  AC_DEFINE(
+	    [HAVE_GLIBC_PTHREAD_SETNAME_NP], [1],
+	    [Define to 1 if pthread_setname_np() is available and takes 2 parameters (like glibc).])
+	  ;; # (
+       netbsd)
+	  AC_DEFINE(
+	    [HAVE_NETBSD_PTHREAD_SETNAME_NP], [1],
+	    [Define to 1 if pthread_setname_np() is available and takes 3 parameters (like NetBSD).])
+	  ;;
+     esac
+   fi])
