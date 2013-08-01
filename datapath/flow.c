@@ -135,6 +135,9 @@ static bool ovs_match_validate(const struct sw_flow_match *match,
 			| (1ULL << OVS_KEY_ATTR_ARP)
 			| (1ULL << OVS_KEY_ATTR_ND));
 
+	/* Tunnel mask is always allowed. */
+	mask_allowed |= (1ULL << OVS_KEY_ATTR_TUNNEL);
+
 	if (match->key->phy.in_port == DP_MAX_PORTS &&
 	    match->mask && (match->mask->key.phy.in_port == 0xffff))
 		mask_allowed |= (1ULL << OVS_KEY_ATTR_IN_PORT);
