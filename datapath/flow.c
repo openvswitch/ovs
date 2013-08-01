@@ -137,11 +137,8 @@ static bool ovs_match_validate(const struct sw_flow_match *match,
 
 	/* Always allowed mask fields. */
 	mask_allowed |= ((1ULL << OVS_KEY_ATTR_TUNNEL)
-		       | (1ULL << OVS_KEY_ATTR_IN_PORT));
-
-	if (match->key->eth.type == htons(ETH_P_802_2) &&
-	    match->mask && (match->mask->key.eth.type == htons(0xffff)))
-		mask_allowed |= (1ULL << OVS_KEY_ATTR_ETHERTYPE);
+		       | (1ULL << OVS_KEY_ATTR_IN_PORT)
+		       | (11ULL << OVS_KEY_ATTR_ETHERTYPE));
 
 	/* Check key attributes. */
 	if (match->key->eth.type == htons(ETH_P_ARP)
@@ -1386,7 +1383,10 @@ static int ovs_key_from_nlattrs(struct sw_flow_match *match,  u64 attrs,
 		__be16 eth_type;
 
 		eth_type = nla_get_be16(a[OVS_KEY_ATTR_ETHERTYPE]);
-		if (!is_mask && ntohs(eth_type) < ETH_P_802_3_MIN) {
+		if (is_mask) {
+			/* Always exact match EtherType. */
+			eth_type = htons(0xffff);
+		} else if (ntohs(eth_type) < ETH_P_802_3_MIN) {
 			OVS_NLERR("EtherType is less than mimimum (type=%x, min=%x).\n",
 					ntohs(eth_type), ETH_P_802_3_MIN);
 			return -EINVAL;
