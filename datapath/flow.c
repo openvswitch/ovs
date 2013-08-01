@@ -135,12 +135,9 @@ static bool ovs_match_validate(const struct sw_flow_match *match,
 			| (1ULL << OVS_KEY_ATTR_ARP)
 			| (1ULL << OVS_KEY_ATTR_ND));
 
-	/* Tunnel mask is always allowed. */
-	mask_allowed |= (1ULL << OVS_KEY_ATTR_TUNNEL);
-
-	if (match->key->phy.in_port == DP_MAX_PORTS &&
-	    match->mask && (match->mask->key.phy.in_port == 0xffff))
-		mask_allowed |= (1ULL << OVS_KEY_ATTR_IN_PORT);
+	/* Always allowed mask fields. */
+	mask_allowed |= ((1ULL << OVS_KEY_ATTR_TUNNEL)
+		       | (1ULL << OVS_KEY_ATTR_IN_PORT));
 
 	if (match->key->eth.type == htons(ETH_P_802_2) &&
 	    match->mask && (match->mask->key.eth.type == htons(0xffff)))
@@ -1313,8 +1310,11 @@ static int metadata_from_nlattrs(struct sw_flow_match *match,  u64 *attrs,
 	if (*attrs & (1ULL << OVS_KEY_ATTR_IN_PORT)) {
 		u32 in_port = nla_get_u32(a[OVS_KEY_ATTR_IN_PORT]);
 
-		if (!is_mask && in_port >= DP_MAX_PORTS)
+		if (is_mask)
+			in_port = 0xffffffff; /* Always exact match in_port. */
+		else if (in_port >= DP_MAX_PORTS)
 			return -EINVAL;
+
 		SW_FLOW_KEY_PUT(match, phy.in_port, in_port, is_mask);
 		*attrs &= ~(1ULL << OVS_KEY_ATTR_IN_PORT);
 	} else if (!is_mask) {
