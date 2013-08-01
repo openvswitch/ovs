@@ -35,7 +35,6 @@ AT_CHECK([ovs-appctl bfd/show $1 | sed -n '/RX Interval/p'],[0],
 ])
 ])
 AT_SETUP([bfd - basic config on different bridges])
-ovs-appctl time/stop
 #Create 2 bridges connected by patch ports and enable BFD
 OVS_VSWITCHD_START(
    [add-br br1 -- \
@@ -47,6 +46,7 @@ OVS_VSWITCHD_START(
        options:peer=p1 -- \
     set Interface p0 bfd:enable=true -- \
     set Interface p1 bfd:enable=true ])
+ovs-appctl time/stop
 for i in `seq 0 40`; do ovs-appctl time/warp 100; done
 
 #Verify that BFD has been enabled on both interfaces.
@@ -82,7 +82,6 @@ AT_SETUP([bfd - Verify tunnel down detection])
 #interfaces in br-bfd0 and br-bfd1. When br-sw is dropping all packets, BFD should detect
 # that the tunnel is down, and come back up when br-sw is working fine.
 
-ovs-appctl time/stop
 OVS_VSWITCHD_START(
    [add-br br-bfd0 -- \
        set bridge br-bfd0 datapath-type=dummy \
@@ -102,6 +101,7 @@ OVS_VSWITCHD_START(
     add-port br-bfd0 p0 -- set Interface p0 type=patch \
        options:peer=p0-sw bfd:enable=true --])
 
+ovs-appctl time/stop
 
 #Create 2 bridges connected by patch ports and enable BFD
 
@@ -158,12 +158,11 @@ AT_CLEANUP
 
 AT_SETUP([bfd - concatenated path down])
 #Create 2 bridges connected by patch ports and enable BFD
-ovs-appctl time/stop
 OVS_VSWITCHD_START()
+ovs-appctl time/stop
 AT_CHECK([ ovs-vsctl -- add-br br1 -- \
            set bridge br1 datapath-type=dummy \
            other-config:hwaddr=aa:55:aa:56:00:00 ])
-ovs-appctl time/stop
 AT_CHECK([ ovs-vsctl -- add-port br1 p1 -- set Interface p1 type=patch \
            options:peer=p0 ])
 AT_CHECK([ ovs-vsctl -- add-port br0 p0 -- set Interface p0 type=patch \
@@ -186,9 +185,8 @@ AT_CLEANUP
 
 AT_SETUP([bfd - Edit the Min Tx/Rx values])
 #Create 2 bridges connected by patch ports and enable BFD
-ovs-appctl time/stop
-ovs-appctl vlog/set bfd:dbg
 OVS_VSWITCHD_START()
+ovs-appctl time/stop
 AT_CHECK([ ovs-vsctl -- add-br br1 -- \
            set bridge br1 datapath-type=dummy ])
 AT_CHECK([ ovs-vsctl -- add-port br1 p1 -- set Interface p1 type=patch \
@@ -197,7 +195,7 @@ AT_CHECK([ ovs-vsctl -- add-port br0 p0 -- set Interface p0 type=patch \
            options:peer=p1 ])
 AT_CHECK([ ovs-vsctl -- set interface p0 bfd:enable=true ])
 AT_CHECK([ ovs-vsctl -- set interface p1 bfd:enable=true ])
-for i in `seq 0 20`; do ovs-appctl time/warp 100; done
+for i in `seq 0 30`; do ovs-appctl time/warp 100; done
 #Verify that BFD has been enabled on both interfaces.
 BFD_CHECK([p1], [true], [false], [none], [up], [No Diagnostic], [none], [up], [No Diagnostic])
 BFD_CHECK([p0], [true], [false], [none], [up], [No Diagnostic], [none], [up], [No Diagnostic])
