@@ -1248,14 +1248,16 @@ int ipv4_tun_from_nlattr(const struct nlattr *attr,
 		return -EINVAL;
 	}
 
-	if (!match->key->tun_key.ipv4_dst) {
-		OVS_NLERR("IPv4 tunnel destination address is zero.\n");
-		return -EINVAL;
-	}
+	if (!is_mask) {
+		if (!match->key->tun_key.ipv4_dst) {
+			OVS_NLERR("IPv4 tunnel destination address is zero.\n");
+			return -EINVAL;
+		}
 
-	if (!ttl) {
-		OVS_NLERR("IPv4 tunnel TTL not specified.\n");
-		return -EINVAL;
+		if (!ttl) {
+			OVS_NLERR("IPv4 tunnel TTL not specified.\n");
+			return -EINVAL;
+		}
 	}
 
 	return 0;
@@ -1701,7 +1703,7 @@ int ovs_flow_to_nlattrs(const struct sw_flow_key *swkey,
 	if (nla_put_u32(skb, OVS_KEY_ATTR_PRIORITY, output->phy.priority))
 		goto nla_put_failure;
 
-	if (swkey->tun_key.ipv4_dst &&
+	if ((swkey->tun_key.ipv4_dst || is_mask) &&
 	    ipv4_tun_to_nlattr(skb, &swkey->tun_key, &output->tun_key))
 		goto nla_put_failure;
 

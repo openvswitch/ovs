@@ -2338,7 +2338,7 @@ odp_flow_key_from_flow__(struct ofpbuf *buf, const struct flow *data,
         nl_msg_put_u32(buf, OVS_KEY_ATTR_PRIORITY, data->skb_priority);
     }
 
-    if (flow->tunnel.ip_dst) {
+    if (flow->tunnel.ip_dst || is_mask) {
         tun_key_to_attr(buf, &data->tunnel);
     }
 
