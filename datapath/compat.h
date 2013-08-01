@@ -61,6 +61,13 @@ static inline void skb_clear_rxhash(struct sk_buff *skb)
 #define SET_NETNSOK    .netnsok = true,
 #endif
 
+#ifdef HAVE_PARALLEL_OPS
+#define SET_PARALLEL_OPS	.parallel_ops = true,
+#else
+#define SET_PARALLEL_OPS
+#endif
+
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,20)
 #ifdef CONFIG_NETFILTER
 static inline u32 skb_get_mark(struct sk_buff *skb)
