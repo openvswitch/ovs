@@ -799,19 +799,21 @@ dpif_linux_port_poll(const struct dpif *dpif_, char **devnamep)
                     VLOG_DBG("port_changed: dpif:%s vport:%s cmd:%"PRIu8,
                              dpif->dpif.full_name, vport.name, vport.cmd);
                     *devnamep = xstrdup(vport.name);
+                    ofpbuf_uninit(&buf);
                     return 0;
-                } else {
-                    continue;
                 }
             }
-        } else if (error == EAGAIN) {
-            return EAGAIN;
+        } else if (error != EAGAIN) {
+            VLOG_WARN_RL(&rl, "error reading or parsing netlink (%s)",
+                         ovs_strerror(error));
+            nl_sock_drain(dpif->port_notifier);
+            error = ENOBUFS;
         }
 
-        VLOG_WARN_RL(&rl, "error reading or parsing netlink (%s)",
-                     ovs_strerror(error));
-        nl_sock_drain(dpif->port_notifier);
-        return ENOBUFS;
+        ofpbuf_uninit(&buf);
+        if (error) {
+            return error;
+        }
     }
 }
 
