@@ -59,9 +59,6 @@ struct rule_dpif *rule_dpif_lookup_in_table(struct ofproto_dpif *,
                                             struct flow_wildcards *,
                                             uint8_t table_id);
 
-tag_type rule_calculate_tag(const struct flow *flow, const struct minimask *,
-                            uint32_t secret);
-
 struct rule_dpif *rule_dpif_miss_rule(struct ofproto_dpif *ofproto,
                                       const struct flow *);
 

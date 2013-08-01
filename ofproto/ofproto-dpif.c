@@ -86,6 +86,8 @@ static struct rule_dpif *rule_dpif_lookup(struct ofproto_dpif *,
 
 static void rule_get_stats(struct rule *, uint64_t *packets, uint64_t *bytes);
 static void rule_invalidate(const struct rule_dpif *);
+static tag_type rule_calculate_tag(const struct flow *,
+                                   const struct minimask *, uint32_t secret);
 
 struct ofbundle {
     struct hmap_node hmap_node; /* In struct ofproto's "bundles" hmap. */
@@ -5550,7 +5552,7 @@ calculate_flow_tag(struct ofproto_dpif *ofproto, const struct flow *flow,
 
 /* Calculates the tag to use for 'flow' and mask 'mask' when it is inserted
  * into an OpenFlow table with the given 'basis'. */
-tag_type
+static tag_type
 rule_calculate_tag(const struct flow *flow, const struct minimask *mask,
                    uint32_t secret)
 {
