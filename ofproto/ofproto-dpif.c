@@ -7164,6 +7164,9 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
 
     if (tnl_port_should_receive(&ctx.xin->flow)) {
         memset(&wc->masks.tunnel, 0xff, sizeof wc->masks.tunnel);
+        /* skb_mark is currently used only by tunnels but that will likely
+         * change in the future. */
+        memset(&wc->masks.skb_mark, 0xff, sizeof wc->masks.skb_mark);
     }
 
     /* Disable most wildcarding for NetFlow. */
