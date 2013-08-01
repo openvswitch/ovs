@@ -1694,6 +1694,7 @@ int ovs_flow_to_nlattrs(const struct sw_flow_key *swkey,
 {
 	struct ovs_key_ethernet *eth_key;
 	struct nlattr *nla, *encap;
+	bool is_mask = (swkey != output);
 
 	if (nla_put_u32(skb, OVS_KEY_ATTR_PRIORITY, output->phy.priority))
 		goto nla_put_failure;
@@ -1703,12 +1704,12 @@ int ovs_flow_to_nlattrs(const struct sw_flow_key *swkey,
 		goto nla_put_failure;
 
 	if (swkey->phy.in_port == DP_MAX_PORTS) {
-		if ((swkey != output) && (output->phy.in_port == 0xffff))
+		if (is_mask && (output->phy.in_port == 0xffff))
 			if (nla_put_u32(skb, OVS_KEY_ATTR_IN_PORT, 0xffffffff))
 				goto nla_put_failure;
 	} else {
 		u16 upper_u16;
-		upper_u16 = (swkey == output) ? 0 : 0xffff;
+		upper_u16 = !is_mask ? 0 : 0xffff;
 
 		if (nla_put_u32(skb, OVS_KEY_ATTR_IN_PORT,
 				(upper_u16 << 16) | output->phy.in_port))
@@ -1728,7 +1729,7 @@ int ovs_flow_to_nlattrs(const struct sw_flow_key *swkey,
 
 	if (swkey->eth.tci || swkey->eth.type == htons(ETH_P_8021Q)) {
 		__be16 eth_type;
-		eth_type = (swkey == output) ? htons(ETH_P_8021Q) : htons(0xffff) ;
+		eth_type = !is_mask ? htons(ETH_P_8021Q) : htons(0xffff);
 		if (nla_put_be16(skb, OVS_KEY_ATTR_ETHERTYPE, eth_type) ||
 		    nla_put_be16(skb, OVS_KEY_ATTR_VLAN, output->eth.tci))
 			goto nla_put_failure;
@@ -1745,7 +1746,7 @@ int ovs_flow_to_nlattrs(const struct sw_flow_key *swkey,
 		 * 0xffff in the mask attribute.  Ethertype can also
 		 * be wildcarded.
 		 */
-		if (swkey != output && output->eth.type)
+		if (is_mask && output->eth.type)
 			if (nla_put_be16(skb, OVS_KEY_ATTR_ETHERTYPE,
 						output->eth.type))
 				goto nla_put_failure;
