@@ -501,25 +501,26 @@ xport_lookup(struct ofport_dpif *ofport)
     return NULL;
 }
 
+static struct stp_port *
+xport_get_stp_port(const struct xport *xport)
+{
+    return xport->xbridge->stp && xport->stp_port_no
+        ? stp_get_port(xport->xbridge->stp, xport->stp_port_no)
+        : NULL;
+}
 
 static enum stp_state
 xport_stp_learn_state(const struct xport *xport)
 {
-    enum stp_state stp_state = xport->xbridge->stp && xport->stp_port_no
-        ? stp_port_get_state(stp_get_port(xport->xbridge->stp,
-                                          xport->stp_port_no))
-        : STP_DISABLED;
-    return stp_learn_in_state(stp_state);
+    struct stp_port *sp = xport_get_stp_port(xport);
+    return stp_learn_in_state(sp ? stp_port_get_state(sp) : STP_DISABLED);
 }
 
 static bool
 xport_stp_forward_state(const struct xport *xport)
 {
-    enum stp_state stp_state = xport->xbridge->stp && xport->stp_port_no
-        ? stp_port_get_state(stp_get_port(xport->xbridge->stp,
-                                          xport->stp_port_no))
-        : STP_DISABLED;
-    return stp_forward_in_state(stp_state);
+    struct stp_port *sp = xport_get_stp_port(xport);
+    return stp_forward_in_state(sp ? stp_port_get_state(sp) : STP_DISABLED);
 }
 
 /* Returns true if STP should process 'flow'.  Sets fields in 'wc' that
@@ -534,11 +535,9 @@ stp_should_process_flow(const struct flow *flow, struct flow_wildcards *wc)
 static void
 stp_process_packet(const struct xport *xport, const struct ofpbuf *packet)
 {
+    struct stp_port *sp = xport_get_stp_port(xport);
     struct ofpbuf payload = *packet;
     struct eth_header *eth = payload.data;
-    struct stp_port *sp = xport->xbridge->stp && xport->stp_port_no
-        ? stp_get_port(xport->xbridge->stp, xport->stp_port_no)
-        : NULL;
 
     /* Sink packets on ports that have STP disabled when the bridge has
      * STP enabled. */
