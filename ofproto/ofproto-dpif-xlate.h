@@ -134,6 +134,11 @@ void xlate_ofport_set(struct ofproto_dpif *, struct ofbundle *,
                       bool may_enable);
 void xlate_ofport_remove(struct ofport_dpif *);
 
+int xlate_receive(const struct dpif_backer *, struct ofpbuf *packet,
+                  const struct nlattr *key, size_t key_len,
+                  struct flow *, enum odp_key_fitness *,
+                  struct ofproto_dpif **, odp_port_t *odp_in_port);
+
 void xlate_actions(struct xlate_in *, struct xlate_out *);
 void xlate_in_init(struct xlate_in *, struct ofproto_dpif *,
                    const struct flow *, struct rule_dpif *,
@@ -141,5 +146,4 @@ void xlate_in_init(struct xlate_in *, struct ofproto_dpif *,
 void xlate_out_uninit(struct xlate_out *);
 void xlate_actions_for_side_effects(struct xlate_in *);
 void xlate_out_copy(struct xlate_out *dst, const struct xlate_out *src);
-
 #endif /* ofproto-dpif-xlate.h */

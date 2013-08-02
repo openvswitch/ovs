@@ -327,7 +327,6 @@ struct vlan_splinter {
     int vid;
 };
 
-static bool vsp_adjust_flow(const struct ofproto_dpif *, struct flow *);
 static void vsp_remove(struct ofport_dpif *);
 static void vsp_add(struct ofport_dpif *, ofp_port_t realdev_ofp_port, int vid);
 
@@ -402,7 +401,9 @@ struct dpif_backer {
     int refcount;
     struct dpif *dpif;
     struct timer next_expiration;
-    struct hmap odp_to_ofport_map; /* ODP port to ofport mapping. */
+
+    struct ovs_rwlock odp_to_ofport_lock;
+    struct hmap odp_to_ofport_map OVS_GUARDED; /* ODP port to ofport map. */
 
     struct simap tnl_backers;      /* Set of dpif ports backing tunnels. */
 
@@ -446,8 +447,6 @@ struct dpif_backer {
 static struct shash all_dpif_backers = SHASH_INITIALIZER(&all_dpif_backers);
 
 static void drop_key_clear(struct dpif_backer *);
-static struct ofport_dpif *
-odp_port_to_ofport(const struct dpif_backer *, odp_port_t odp_port);
 static void update_moving_averages(struct dpif_backer *backer);
 
 struct ofproto_dpif {
@@ -955,10 +954,12 @@ process_dpif_port_change(struct dpif_backer *backer, const char *devname)
             /* 'ofport''s datapath port number has changed from
              * 'ofport->odp_port' to 'port.port_no'.  Update our internal data
              * structures to match. */
+            ovs_rwlock_wrlock(&backer->odp_to_ofport_lock);
             hmap_remove(&backer->odp_to_ofport_map, &ofport->odp_port_node);
             ofport->odp_port = port.port_no;
             hmap_insert(&backer->odp_to_ofport_map, &ofport->odp_port_node,
                         hash_odp_port(port.port_no));
+            ovs_rwlock_unlock(&backer->odp_to_ofport_lock);
             backer->need_revalidate = REV_RECONFIGURE;
         }
     }
@@ -1110,6 +1111,7 @@ close_dpif_backer(struct dpif_backer *backer)
     hmap_destroy(&backer->drop_keys);
 
     simap_destroy(&backer->tnl_backers);
+    ovs_rwlock_destroy(&backer->odp_to_ofport_lock);
     hmap_destroy(&backer->odp_to_ofport_map);
     node = shash_find(&all_dpif_backers, backer->type);
     free(backer->type);
@@ -1188,6 +1190,7 @@ open_dpif_backer(const char *type, struct dpif_backer **backerp)
     backer->governor = NULL;
     backer->refcount = 1;
     hmap_init(&backer->odp_to_ofport_map);
+    ovs_rwlock_init(&backer->odp_to_ofport_lock);
     hmap_init(&backer->drop_keys);
     hmap_init(&backer->subfacets);
     timer_set_duration(&backer->next_expiration, 1000);
@@ -1784,8 +1787,10 @@ port_construct(struct ofport *port_)
             return EBUSY;
         }
 
+        ovs_rwlock_wrlock(&ofproto->backer->odp_to_ofport_lock);
         hmap_insert(&ofproto->backer->odp_to_ofport_map, &port->odp_port_node,
                     hash_odp_port(port->odp_port));
+        ovs_rwlock_unlock(&ofproto->backer->odp_to_ofport_lock);
     }
     dpif_port_destroy(&dpif_port);
 
@@ -1826,7 +1831,9 @@ port_destruct(struct ofport *port_)
     }
 
     if (port->odp_port != ODPP_NONE && !port->is_tunnel) {
+        ovs_rwlock_wrlock(&ofproto->backer->odp_to_ofport_lock);
         hmap_remove(&ofproto->backer->odp_to_ofport_map, &port->odp_port_node);
+        ovs_rwlock_unlock(&ofproto->backer->odp_to_ofport_lock);
     }
 
     tnl_port_del(port);
@@ -3591,98 +3598,6 @@ drop_key_clear(struct dpif_backer *backer)
     }
 }
 
-/* Given a datpath, packet, and flow metadata ('backer', 'packet', and 'key'
- * respectively), populates 'flow' with the result of odp_flow_key_to_flow().
- * Optionally, if nonnull, populates 'fitnessp' with the fitness of 'flow' as
- * returned by odp_flow_key_to_flow().  Also, optionally populates 'ofproto'
- * with the ofproto_dpif, and 'odp_in_port' with the datapath in_port, that
- * 'packet' ingressed.
- *
- * If 'ofproto' is nonnull, requires 'flow''s in_port to exist.  Otherwise sets
- * 'flow''s in_port to OFPP_NONE.
- *
- * This function does post-processing on data returned from
- * odp_flow_key_to_flow() to help make VLAN splinters transparent to the rest
- * of the upcall processing logic.  In particular, if the extracted in_port is
- * a VLAN splinter port, it replaces flow->in_port by the "real" port, sets
- * flow->vlan_tci correctly for the VLAN of the VLAN splinter port, and pushes
- * a VLAN header onto 'packet' (if it is nonnull).
- *
- * Similarly, this function also includes some logic to help with tunnels.  It
- * may modify 'flow' as necessary to make the tunneling implementation
- * transparent to the upcall processing logic.
- *
- * Returns 0 if successful, ENODEV if the parsed flow has no associated ofport,
- * or some other positive errno if there are other problems. */
-static int
-ofproto_receive(const struct dpif_backer *backer, struct ofpbuf *packet,
-                const struct nlattr *key, size_t key_len,
-                struct flow *flow, enum odp_key_fitness *fitnessp,
-                struct ofproto_dpif **ofproto, odp_port_t *odp_in_port)
-{
-    const struct ofport_dpif *port;
-    enum odp_key_fitness fitness;
-    int error = ENODEV;
-
-    fitness = odp_flow_key_to_flow(key, key_len, flow);
-    if (fitness == ODP_FIT_ERROR) {
-        error = EINVAL;
-        goto exit;
-    }
-
-    if (odp_in_port) {
-        *odp_in_port = flow->in_port.odp_port;
-    }
-
-    port = (tnl_port_should_receive(flow)
-            ? tnl_port_receive(flow)
-            : odp_port_to_ofport(backer, flow->in_port.odp_port));
-    flow->in_port.ofp_port = port ? port->up.ofp_port : OFPP_NONE;
-    if (!port) {
-        goto exit;
-    }
-
-    /* XXX: Since the tunnel module is not scoped per backer, for a tunnel port
-     * it's theoretically possible that we'll receive an ofport belonging to an
-     * entirely different datapath.  In practice, this can't happen because no
-     * platforms has two separate datapaths which each support tunneling. */
-    ovs_assert(ofproto_dpif_cast(port->up.ofproto)->backer == backer);
-
-    if (vsp_adjust_flow(ofproto_dpif_cast(port->up.ofproto), flow)) {
-        if (packet) {
-            /* Make the packet resemble the flow, so that it gets sent to
-             * an OpenFlow controller properly, so that it looks correct
-             * for sFlow, and so that flow_extract() will get the correct
-             * vlan_tci if it is called on 'packet'.
-             *
-             * The allocated space inside 'packet' probably also contains
-             * 'key', that is, both 'packet' and 'key' are probably part of
-             * a struct dpif_upcall (see the large comment on that
-             * structure definition), so pushing data on 'packet' is in
-             * general not a good idea since it could overwrite 'key' or
-             * free it as a side effect.  However, it's OK in this special
-             * case because we know that 'packet' is inside a Netlink
-             * attribute: pushing 4 bytes will just overwrite the 4-byte
-             * "struct nlattr", which is fine since we don't need that
-             * header anymore. */
-            eth_push_vlan(packet, flow->vlan_tci);
-        }
-        /* We can't reproduce 'key' from 'flow'. */
-        fitness = fitness == ODP_FIT_PERFECT ? ODP_FIT_TOO_MUCH : fitness;
-    }
-    error = 0;
-
-    if (ofproto) {
-        *ofproto = ofproto_dpif_cast(port->up.ofproto);
-    }
-
-exit:
-    if (fitnessp) {
-        *fitnessp = fitness;
-    }
-    return error;
-}
-
 static void
 handle_miss_upcalls(struct dpif_backer *backer, struct dpif_upcall *upcalls,
                     size_t n_upcalls)
@@ -3717,9 +3632,9 @@ handle_miss_upcalls(struct dpif_backer *backer, struct dpif_upcall *upcalls,
         uint32_t hash;
         int error;
 
-        error = ofproto_receive(backer, upcall->packet, upcall->key,
-                                upcall->key_len, &flow, &miss->key_fitness,
-                                &ofproto, &odp_in_port);
+        error = xlate_receive(backer, upcall->packet, upcall->key,
+                              upcall->key_len, &flow, &miss->key_fitness,
+                              &ofproto, &odp_in_port);
         if (error == ENODEV) {
             struct drop_key *drop_key;
 
@@ -3885,8 +3800,8 @@ handle_sflow_upcall(struct dpif_backer *backer,
     struct flow flow;
     odp_port_t odp_in_port;
 
-    if (ofproto_receive(backer, upcall->packet, upcall->key, upcall->key_len,
-                        &flow, NULL, &ofproto, &odp_in_port)
+    if (xlate_receive(backer, upcall->packet, upcall->key, upcall->key_len,
+                      &flow, NULL, &ofproto, &odp_in_port)
         || !ofproto->sflow) {
         return;
     }
@@ -3905,8 +3820,8 @@ handle_flow_sample_upcall(struct dpif_backer *backer,
     union user_action_cookie cookie;
     struct flow flow;
 
-    if (ofproto_receive(backer, upcall->packet, upcall->key, upcall->key_len,
-                        &flow, NULL, &ofproto, NULL)
+    if (xlate_receive(backer, upcall->packet, upcall->key, upcall->key_len,
+                      &flow, NULL, &ofproto, NULL)
         || !ofproto->ipfix) {
         return;
     }
@@ -3930,8 +3845,8 @@ handle_ipfix_upcall(struct dpif_backer *backer,
     struct ofproto_dpif *ofproto;
     struct flow flow;
 
-    if (ofproto_receive(backer, upcall->packet, upcall->key, upcall->key_len,
-                        &flow, NULL, &ofproto, NULL)
+    if (xlate_receive(backer, upcall->packet, upcall->key, upcall->key_len,
+                      &flow, NULL, &ofproto, NULL)
         || !ofproto->ipfix) {
         return;
     }
@@ -4685,7 +4600,7 @@ facet_check_consistency(struct facet *facet)
  *     where it is and recompiles its actions anyway.
  *
  *   - If any of 'facet''s subfacets correspond to a new flow according to
- *     ofproto_receive(), 'facet' is removed.
+ *     xlate_receive(), 'facet' is removed.
  *
  *   Returns true if 'facet' is still valid.  False if 'facet' was removed. */
 static bool
@@ -4708,9 +4623,9 @@ facet_revalidate(struct facet *facet)
         struct flow recv_flow;
         int error;
 
-        error = ofproto_receive(ofproto->backer, NULL, subfacet->key,
-                                subfacet->key_len, &recv_flow, NULL,
-                                &recv_ofproto, NULL);
+        error = xlate_receive(ofproto->backer, NULL, subfacet->key,
+                              subfacet->key_len, &recv_flow, NULL,
+                              &recv_ofproto, NULL);
         if (error
             || recv_ofproto != ofproto
             || facet != facet_find(ofproto, &recv_flow)) {
@@ -5752,10 +5667,8 @@ ofproto_unixctl_trace(struct unixctl_conn *conn, int argc, const char *argv[],
             backer = node->data;
         }
 
-        /* Extract the ofproto_dpif object from the ofproto_receive()
-         * function. */
-        if (ofproto_receive(backer, NULL, odp_key.data,
-                            odp_key.size, &flow, NULL, &ofproto, NULL)) {
+        if (xlate_receive(backer, NULL, odp_key.data, odp_key.size, &flow,
+                          NULL, &ofproto, NULL)) {
             unixctl_command_reply_error(conn, "Invalid datapath flow");
             goto exit;
         }
@@ -6486,7 +6399,7 @@ vsp_vlandev_to_realdev(const struct ofproto_dpif *ofproto,
  * 'flow->vlan_tci' to the VLAN VID, and returns true.  Otherwise (which is
  * always the case unless VLAN splinters are enabled), returns false without
  * making any changes. */
-static bool
+bool
 vsp_adjust_flow(const struct ofproto_dpif *ofproto, struct flow *flow)
     OVS_EXCLUDED(ofproto->vsp_mutex)
 {
@@ -6562,18 +6475,21 @@ ofp_port_to_odp_port(const struct ofproto_dpif *ofproto, ofp_port_t ofp_port)
     return ofport ? ofport->odp_port : ODPP_NONE;
 }
 
-static struct ofport_dpif *
+struct ofport_dpif *
 odp_port_to_ofport(const struct dpif_backer *backer, odp_port_t odp_port)
 {
     struct ofport_dpif *port;
 
+    ovs_rwlock_rdlock(&backer->odp_to_ofport_lock);
     HMAP_FOR_EACH_IN_BUCKET (port, odp_port_node, hash_odp_port(odp_port),
                              &backer->odp_to_ofport_map) {
         if (port->odp_port == odp_port) {
+            ovs_rwlock_unlock(&backer->odp_to_ofport_lock);
             return port;
         }
     }
 
+    ovs_rwlock_unlock(&backer->odp_to_ofport_lock);
     return NULL;
 }
 

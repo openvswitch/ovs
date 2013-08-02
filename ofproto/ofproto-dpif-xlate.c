@@ -16,6 +16,8 @@
 
 #include "ofproto/ofproto-dpif-xlate.h"
 
+#include <errno.h>
+
 #include "bfd.h"
 #include "bitmap.h"
 #include "bond.h"
@@ -457,6 +459,93 @@ xlate_ofport_remove(struct ofport_dpif *ofport)
     cfm_unref(xport->cfm);
     bfd_unref(xport->bfd);
     free(xport);
+}
+
+/* Given a datpath, packet, and flow metadata ('backer', 'packet', and 'key'
+ * respectively), populates 'flow' with the result of odp_flow_key_to_flow().
+ * Optionally, if nonnull, populates 'fitnessp' with the fitness of 'flow' as
+ * returned by odp_flow_key_to_flow().  Also, optionally populates 'ofproto'
+ * with the ofproto_dpif, and 'odp_in_port' with the datapath in_port, that
+ * 'packet' ingressed.
+ *
+ * If 'ofproto' is nonnull, requires 'flow''s in_port to exist.  Otherwise sets
+ * 'flow''s in_port to OFPP_NONE.
+ *
+ * This function does post-processing on data returned from
+ * odp_flow_key_to_flow() to help make VLAN splinters transparent to the rest
+ * of the upcall processing logic.  In particular, if the extracted in_port is
+ * a VLAN splinter port, it replaces flow->in_port by the "real" port, sets
+ * flow->vlan_tci correctly for the VLAN of the VLAN splinter port, and pushes
+ * a VLAN header onto 'packet' (if it is nonnull).
+ *
+ * Similarly, this function also includes some logic to help with tunnels.  It
+ * may modify 'flow' as necessary to make the tunneling implementation
+ * transparent to the upcall processing logic.
+ *
+ * Returns 0 if successful, ENODEV if the parsed flow has no associated ofport,
+ * or some other positive errno if there are other problems. */
+int
+xlate_receive(const struct dpif_backer *backer, struct ofpbuf *packet,
+              const struct nlattr *key, size_t key_len,
+              struct flow *flow, enum odp_key_fitness *fitnessp,
+              struct ofproto_dpif **ofproto, odp_port_t *odp_in_port)
+{
+    enum odp_key_fitness fitness;
+    const struct xport *xport;
+    int error = ENODEV;
+
+    fitness = odp_flow_key_to_flow(key, key_len, flow);
+    if (fitness == ODP_FIT_ERROR) {
+        error = EINVAL;
+        goto exit;
+    }
+
+    if (odp_in_port) {
+        *odp_in_port = flow->in_port.odp_port;
+    }
+
+    xport = xport_lookup(tnl_port_should_receive(flow)
+            ? tnl_port_receive(flow)
+            : odp_port_to_ofport(backer, flow->in_port.odp_port));
+
+    flow->in_port.ofp_port = xport ? xport->ofp_port : OFPP_NONE;
+    if (!xport) {
+        goto exit;
+    }
+
+    if (vsp_adjust_flow(xport->xbridge->ofproto, flow)) {
+        if (packet) {
+            /* Make the packet resemble the flow, so that it gets sent to
+             * an OpenFlow controller properly, so that it looks correct
+             * for sFlow, and so that flow_extract() will get the correct
+             * vlan_tci if it is called on 'packet'.
+             *
+             * The allocated space inside 'packet' probably also contains
+             * 'key', that is, both 'packet' and 'key' are probably part of
+             * a struct dpif_upcall (see the large comment on that
+             * structure definition), so pushing data on 'packet' is in
+             * general not a good idea since it could overwrite 'key' or
+             * free it as a side effect.  However, it's OK in this special
+             * case because we know that 'packet' is inside a Netlink
+             * attribute: pushing 4 bytes will just overwrite the 4-byte
+             * "struct nlattr", which is fine since we don't need that
+             * header anymore. */
+            eth_push_vlan(packet, flow->vlan_tci);
+        }
+        /* We can't reproduce 'key' from 'flow'. */
+        fitness = fitness == ODP_FIT_PERFECT ? ODP_FIT_TOO_MUCH : fitness;
+    }
+    error = 0;
+
+    if (ofproto) {
+        *ofproto = xport->xbridge->ofproto;
+    }
+
+exit:
+    if (fitnessp) {
+        *fitnessp = fitness;
+    }
+    return error;
 }
 
 static struct xbridge *

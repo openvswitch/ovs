@@ -26,6 +26,7 @@
 union user_action_cookie;
 struct ofproto_dpif;
 struct ofport_dpif;
+struct dpif_backer;
 
 struct rule_dpif {
     struct rule up;
@@ -67,9 +68,12 @@ bool ofproto_has_vlan_splinters(const struct ofproto_dpif *);
 ofp_port_t vsp_realdev_to_vlandev(const struct ofproto_dpif *,
                                   ofp_port_t realdev_ofp_port,
                                   ovs_be16 vlan_tci);
+bool vsp_adjust_flow(const struct ofproto_dpif *, struct flow *);
 
 void ofproto_dpif_send_packet_in(struct ofproto_dpif *,
                                  struct ofputil_packet_in *pin);
 void ofproto_dpif_flow_mod(struct ofproto_dpif *, struct ofputil_flow_mod *);
+
+struct ofport_dpif *odp_port_to_ofport(const struct dpif_backer *, odp_port_t);
 
 #endif /* ofproto-dpif.h */
