@@ -61,9 +61,6 @@ struct rule_dpif *rule_dpif_miss_rule(struct ofproto_dpif *ofproto,
 
 void rule_credit_stats(struct rule_dpif *, const struct dpif_flow_stats *);
 
-void ofproto_trace(struct ofproto_dpif *, const struct flow *,
-                   const struct ofpbuf *packet, struct ds *);
-
 size_t put_userspace_action(const struct ofproto_dpif *,
                             struct ofpbuf *odp_actions, const struct flow *,
                             const union user_action_cookie *,

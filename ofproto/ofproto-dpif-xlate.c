@@ -149,7 +149,6 @@ struct xlate_ctx {
     struct rule_dpif *rule;
 
     int recurse;                /* Recursion level, via xlate_table_action. */
-    bool max_resubmit_trigger;  /* Recursed too deeply during translation. */
     uint32_t orig_skb_priority; /* Priority when packet arrived. */
     uint8_t table_id;           /* OpenFlow table ID where flow was found. */
     uint32_t sflow_n_outputs;   /* Number of output ports. */
@@ -1535,7 +1534,6 @@ xlate_table_action(struct xlate_ctx *ctx,
 
         VLOG_ERR_RL(&recurse_rl, "resubmit actions recursed over %d times",
                     MAX_RESUBMIT_RECURSION);
-        ctx->max_resubmit_trigger = true;
     }
 }
 
@@ -2364,11 +2362,6 @@ actions_output_to_local_port(const struct xlate_ctx *ctx)
 void
 xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
 {
-    /* Normally false.  Set to true if we ever hit MAX_RESUBMIT_RECURSION, so
-     * that in the future we always keep a copy of the original flow for
-     * tracing purposes. */
-    static bool hit_resubmit_limit;
-
     struct flow_wildcards *wc = &xout->wc;
     struct flow *flow = &xin->flow;
 
@@ -2442,7 +2435,6 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
     }
 
     ctx.recurse = 0;
-    ctx.max_resubmit_trigger = false;
     ctx.orig_skb_priority = flow->skb_priority;
     ctx.table_id = 0;
     ctx.exit = false;
@@ -2459,7 +2451,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
 
     ofpbuf_use_stub(&ctx.stack, ctx.init_stack, sizeof ctx.init_stack);
 
-    if (mbridge_has_mirrors(ctx.xbridge->mbridge) || hit_resubmit_limit) {
+    if (mbridge_has_mirrors(ctx.xbridge->mbridge)) {
         /* Do this conditionally because the copy is expensive enough that it
          * shows up in profiles. */
         orig_flow = *flow;
@@ -2493,7 +2485,6 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
     if (special) {
         ctx.xout->slow = special;
     } else {
-        static struct vlog_rate_limit trace_rl = VLOG_RATE_LIMIT_INIT(1, 1);
         size_t sample_actions_len;
 
         if (flow->in_port.ofp_port
@@ -2514,22 +2505,6 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
              * packet, so drop it now if forwarding is disabled. */
             if (in_port && !xport_stp_forward_state(in_port)) {
                 ctx.xout->odp_actions.size = sample_actions_len;
-            }
-        }
-
-        if (ctx.max_resubmit_trigger && !ctx.xin->resubmit_hook) {
-            if (!hit_resubmit_limit) {
-                /* We didn't record the original flow.  Make sure we do from
-                 * now on. */
-                hit_resubmit_limit = true;
-            } else if (!VLOG_DROP_ERR(&trace_rl)) {
-                struct ds ds = DS_EMPTY_INITIALIZER;
-
-                ofproto_trace(ctx.xbridge->ofproto, &orig_flow,
-                              ctx.xin->packet, &ds);
-                VLOG_ERR("Trace triggered by excessive resubmit "
-                         "recursion:\n%s", ds_cstr(&ds));
-                ds_destroy(&ds);
             }
         }
 

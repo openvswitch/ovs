@@ -525,6 +525,8 @@ ofproto_dpif_cast(const struct ofproto *ofproto)
 
 static struct ofport_dpif *get_ofp_port(const struct ofproto_dpif *ofproto,
                                         ofp_port_t ofp_port);
+static void ofproto_trace(struct ofproto_dpif *, const struct flow *,
+                          const struct ofpbuf *packet, struct ds *);
 
 /* Upcalls. */
 #define FLOW_MISS_MAX_BATCH 50
@@ -5809,7 +5811,7 @@ exit:
     ofpbuf_uninit(&odp_mask);
 }
 
-void
+static void
 ofproto_trace(struct ofproto_dpif *ofproto, const struct flow *flow,
               const struct ofpbuf *packet, struct ds *ds)
 {
