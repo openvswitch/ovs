@@ -252,7 +252,7 @@ lswitch_run(struct lswitch *sw)
 
     if (sw->ml) {
         ovs_rwlock_wrlock(&sw->ml->rwlock);
-        mac_learning_run(sw->ml, NULL);
+        mac_learning_run(sw->ml);
         ovs_rwlock_unlock(&sw->ml->rwlock);
     }
 
@@ -479,14 +479,13 @@ lswitch_choose_destination(struct lswitch *sw, const struct flow *flow)
     ovs_rwlock_wrlock(&sw->ml->rwlock);
     if (mac_learning_may_learn(sw->ml, flow->dl_src, 0)) {
         struct mac_entry *mac = mac_learning_insert(sw->ml, flow->dl_src, 0);
-        if (mac_entry_is_new(mac)
-            || mac->port.ofp_port != flow->in_port.ofp_port) {
+        if (mac->port.ofp_port != flow->in_port.ofp_port) {
             VLOG_DBG_RL(&rl, "%016llx: learned that "ETH_ADDR_FMT" is on "
                         "port %"PRIu16, sw->datapath_id,
                         ETH_ADDR_ARGS(flow->dl_src), flow->in_port.ofp_port);
 
             mac->port.ofp_port = flow->in_port.ofp_port;
-            mac_learning_changed(sw->ml, mac);
+            mac_learning_changed(sw->ml);
         }
     }
     ovs_rwlock_unlock(&sw->ml->rwlock);
@@ -501,7 +500,7 @@ lswitch_choose_destination(struct lswitch *sw, const struct flow *flow)
         struct mac_entry *mac;
 
         ovs_rwlock_rdlock(&sw->ml->rwlock);
-        mac = mac_learning_lookup(sw->ml, flow->dl_dst, 0, NULL);
+        mac = mac_learning_lookup(sw->ml, flow->dl_dst, 0);
         if (mac) {
             out_port = mac->port.ofp_port;
             if (out_port == flow->in_port.ofp_port) {

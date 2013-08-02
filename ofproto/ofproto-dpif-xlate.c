@@ -853,7 +853,7 @@ update_learning_table(const struct xbridge *xbridge,
         }
     }
 
-    if (mac_entry_is_new(mac) || mac->port.p != in_xbundle->ofbundle) {
+    if (mac->port.p != in_xbundle->ofbundle) {
         /* The log messages here could actually be useful in debugging,
          * so keep the rate limit relatively high. */
         static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(30, 300);
@@ -863,7 +863,7 @@ update_learning_table(const struct xbridge *xbridge,
                     in_xbundle->name, vlan);
 
         mac->port.p = in_xbundle->ofbundle;
-        mac_learning_changed(xbridge->ml, mac);
+        mac_learning_changed(xbridge->ml);
     }
 out:
     ovs_rwlock_unlock(&xbridge->ml->rwlock);
@@ -912,7 +912,7 @@ is_admissible(struct xlate_ctx *ctx, struct xport *in_port,
 
         case BV_DROP_IF_MOVED:
             ovs_rwlock_rdlock(&xbridge->ml->rwlock);
-            mac = mac_learning_lookup(xbridge->ml, flow->dl_src, vlan, NULL);
+            mac = mac_learning_lookup(xbridge->ml, flow->dl_src, vlan);
             if (mac && mac->port.p != in_xbundle->ofbundle &&
                 (!is_gratuitous_arp(flow, &ctx->xout->wc)
                  || mac_entry_is_grat_arp_locked(mac))) {
@@ -998,8 +998,7 @@ xlate_normal(struct xlate_ctx *ctx)
 
     /* Determine output bundle. */
     ovs_rwlock_rdlock(&ctx->xbridge->ml->rwlock);
-    mac = mac_learning_lookup(ctx->xbridge->ml, flow->dl_dst, vlan,
-                              &ctx->xout->tags);
+    mac = mac_learning_lookup(ctx->xbridge->ml, flow->dl_dst, vlan);
     if (mac) {
         struct xbundle *mac_xbundle = xbundle_lookup(mac->port.p);
         if (mac_xbundle && mac_xbundle != in_xbundle) {

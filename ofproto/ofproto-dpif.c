@@ -392,12 +392,14 @@ enum revalidate_reason {
     REV_STP,                   /* Spanning tree protocol port status change. */
     REV_PORT_TOGGLED,          /* Port enabled or disabled by CFM, LACP, ...*/
     REV_FLOW_TABLE,            /* Flow table changed. */
+    REV_MAC_LEARNING,          /* Mac learning changed. */
     REV_INCONSISTENCY          /* Facet self-check failed. */
 };
 COVERAGE_DEFINE(rev_reconfigure);
 COVERAGE_DEFINE(rev_stp);
 COVERAGE_DEFINE(rev_port_toggled);
 COVERAGE_DEFINE(rev_flow_table);
+COVERAGE_DEFINE(rev_mac_learning);
 COVERAGE_DEFINE(rev_inconsistency);
 
 /* Drop keys are odp flow keys which have drop flows installed in the kernel.
@@ -768,6 +770,7 @@ type_run(const char *type)
         case REV_STP:           COVERAGE_INC(rev_stp);           break;
         case REV_PORT_TOGGLED:  COVERAGE_INC(rev_port_toggled);  break;
         case REV_FLOW_TABLE:    COVERAGE_INC(rev_flow_table);    break;
+        case REV_MAC_LEARNING:  COVERAGE_INC(rev_mac_learning);  break;
         case REV_INCONSISTENCY: COVERAGE_INC(rev_inconsistency); break;
         }
 
@@ -1500,7 +1503,7 @@ run(struct ofproto *ofproto_)
     if (mbridge_need_revalidate(ofproto->mbridge)) {
         ofproto->backer->need_revalidate = REV_RECONFIGURE;
         ovs_rwlock_wrlock(&ofproto->ml->rwlock);
-        mac_learning_flush(ofproto->ml, NULL);
+        mac_learning_flush(ofproto->ml);
         ovs_rwlock_unlock(&ofproto->ml->rwlock);
     }
 
@@ -1533,7 +1536,9 @@ run(struct ofproto *ofproto_)
 
     stp_run(ofproto);
     ovs_rwlock_wrlock(&ofproto->ml->rwlock);
-    mac_learning_run(ofproto->ml, &ofproto->backer->revalidate_set);
+    if (mac_learning_run(ofproto->ml)) {
+        ofproto->backer->need_revalidate = REV_MAC_LEARNING;
+    }
     ovs_rwlock_unlock(&ofproto->ml->rwlock);
 
     /* Check the consistency of a random facet, to aid debugging. */
@@ -2097,8 +2102,7 @@ update_stp_port_state(struct ofport_dpif *ofport)
                 != stp_learn_in_state(state)) {
             /* xxx Learning action flows should also be flushed. */
             ovs_rwlock_wrlock(&ofproto->ml->rwlock);
-            mac_learning_flush(ofproto->ml,
-                               &ofproto->backer->revalidate_set);
+            mac_learning_flush(ofproto->ml);
             ovs_rwlock_unlock(&ofproto->ml->rwlock);
         }
         fwd_change = stp_forward_in_state(ofport->stp_state)
@@ -2205,7 +2209,7 @@ stp_run(struct ofproto_dpif *ofproto)
 
         if (stp_check_and_reset_fdb_flush(ofproto->stp)) {
             ovs_rwlock_wrlock(&ofproto->ml->rwlock);
-            mac_learning_flush(ofproto->ml, &ofproto->backer->revalidate_set);
+            mac_learning_flush(ofproto->ml);
             ovs_rwlock_unlock(&ofproto->ml->rwlock);
         }
     }
@@ -2374,8 +2378,7 @@ bundle_flush_macs(struct ofbundle *bundle, bool all_ofprotos)
                         struct mac_entry *e;
 
                         ovs_rwlock_wrlock(&o->ml->rwlock);
-                        e = mac_learning_lookup(o->ml, mac->mac, mac->vlan,
-                                                NULL);
+                        e = mac_learning_lookup(o->ml, mac->mac, mac->vlan);
                         if (e) {
                             mac_learning_expire(o->ml, e);
                         }
@@ -2849,7 +2852,7 @@ set_flood_vlans(struct ofproto *ofproto_, unsigned long *flood_vlans)
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
     ovs_rwlock_wrlock(&ofproto->ml->rwlock);
     if (mac_learning_set_flood_vlans(ofproto->ml, flood_vlans)) {
-        mac_learning_flush(ofproto->ml, &ofproto->backer->revalidate_set);
+        mac_learning_flush(ofproto->ml);
     }
     ovs_rwlock_unlock(&ofproto->ml->rwlock);
     return 0;
@@ -5785,12 +5788,12 @@ ofproto_unixctl_fdb_flush(struct unixctl_conn *conn, int argc,
             return;
         }
         ovs_rwlock_wrlock(&ofproto->ml->rwlock);
-        mac_learning_flush(ofproto->ml, &ofproto->backer->revalidate_set);
+        mac_learning_flush(ofproto->ml);
         ovs_rwlock_unlock(&ofproto->ml->rwlock);
     } else {
         HMAP_FOR_EACH (ofproto, all_ofproto_dpifs_node, &all_ofproto_dpifs) {
             ovs_rwlock_wrlock(&ofproto->ml->rwlock);
-            mac_learning_flush(ofproto->ml, &ofproto->backer->revalidate_set);
+            mac_learning_flush(ofproto->ml);
             ovs_rwlock_unlock(&ofproto->ml->rwlock);
         }
     }
