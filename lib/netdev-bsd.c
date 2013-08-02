@@ -267,7 +267,8 @@ netdev_bsd_cache_cb(const struct rtbsd_change *change,
         shash_init(&device_shash);
         netdev_get_devices(&netdev_bsd_class, &device_shash);
         SHASH_FOR_EACH (node, &device_shash) {
-            dev = node->data;
+            struct netdev *netdev = node->data;
+            dev = netdev_bsd_cast(netdev);
             dev->cache_valid = 0;
             netdev_bsd_changed(dev);
         }
@@ -1208,7 +1209,8 @@ find_netdev_by_kernel_name(const char *kernel_name)
     shash_init(&device_shash);
     netdev_get_devices(&netdev_tap_class, &device_shash);
     SHASH_FOR_EACH(node, &device_shash) {
-        struct netdev_bsd * const dev = node->data;
+        struct netdev *netdev = node->data;
+        struct netdev_bsd * const dev = netdev_bsd_cast(netdev);
 
         if (!strcmp(dev->kernel_name, kernel_name)) {
             shash_destroy(&device_shash);
