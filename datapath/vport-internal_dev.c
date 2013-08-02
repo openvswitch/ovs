@@ -22,6 +22,7 @@
 #include <linux/netdevice.h>
 #include <linux/etherdevice.h>
 #include <linux/ethtool.h>
+#include <linux/netdev_features.h>
 #include <linux/skbuff.h>
 #include <linux/version.h>
 
@@ -188,7 +189,7 @@ static void do_setup(struct net_device *netdev)
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,27)
 	netdev->vlan_features = netdev->features;
-	netdev->features |= NETIF_F_HW_VLAN_TX;
+	netdev->features |= NETIF_F_HW_VLAN_CTAG_TX;
 #endif
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,39)

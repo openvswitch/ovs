@@ -5,6 +5,7 @@
 #include <linux/version.h>
 #include_next <linux/if_vlan.h>
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,10,0)
 /*
  * The behavior of __vlan_put_tag() has changed over time:
  *
@@ -19,8 +20,9 @@
  * to avoid the need to guess whether the version in the kernel tree is
  * acceptable.
  */
-#define __vlan_put_tag rpl_vlan_put_tag
-static inline struct sk_buff *__vlan_put_tag(struct sk_buff *skb, u16 vlan_tci)
+#define __vlan_put_tag(skb, proto, tag)  rpl__vlan_put_tag(skb, tag)
+
+static inline struct sk_buff *rpl__vlan_put_tag(struct sk_buff *skb, u16 vlan_tci)
 {
 	struct vlan_ethhdr *veth;
 
@@ -45,6 +47,16 @@ static inline struct sk_buff *__vlan_put_tag(struct sk_buff *skb, u16 vlan_tci)
 	return skb;
 }
 
+static inline struct sk_buff *rpl___vlan_hwaccel_put_tag(struct sk_buff *skb,
+						     __be16 vlan_proto,
+						     u16 vlan_tci)
+{
+	return __vlan_hwaccel_put_tag(skb, vlan_tci);
+}
+
+#define __vlan_hwaccel_put_tag rpl___vlan_hwaccel_put_tag
+
+#endif
 
 /* All of these were introduced in a single commit preceding 2.6.33, so
  * presumably all of them or none of them are present. */

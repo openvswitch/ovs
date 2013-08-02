@@ -340,7 +340,7 @@ static int netdev_send(struct vport *vport, struct sk_buff *skb)
 				nskb = skb->next;
 				skb->next = NULL;
 
-				skb = __vlan_put_tag(skb, vlan_tx_tag_get(skb));
+				skb = __vlan_put_tag(skb, skb->vlan_proto, vlan_tx_tag_get(skb));
 				if (likely(skb)) {
 					len += skb->len;
 					vlan_set_tci(skb, 0);
@@ -354,7 +354,7 @@ static int netdev_send(struct vport *vport, struct sk_buff *skb)
 		}
 
 tag:
-		skb = __vlan_put_tag(skb, vlan_tx_tag_get(skb));
+		skb = __vlan_put_tag(skb, skb->vlan_proto, vlan_tx_tag_get(skb));
 		if (unlikely(!skb))
 			return 0;
 		vlan_set_tci(skb, 0);

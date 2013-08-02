@@ -63,7 +63,7 @@
 #include "vport-netdev.h"
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,18) || \
-    LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0)
+    LINUX_VERSION_CODE >= KERNEL_VERSION(3,11,0)
 #error Kernels before 2.6.18 or after 3.9 are not supported by this version of Open vSwitch.
 #endif
 

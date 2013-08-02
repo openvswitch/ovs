@@ -21,40 +21,12 @@ int gre_del_protocol(const struct gre_protocol *proto, u8 version);
 
 #endif
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,10,0)
 struct gre_base_hdr {
 	__be16 flags;
 	__be16 protocol;
 };
 #define GRE_HEADER_SECTION 4
-
-#define MAX_GRE_PROTO_PRIORITY 255
-struct gre_cisco_protocol {
-	int (*handler)(struct sk_buff *skb, const struct tnl_ptk_info *tpi);
-	u8 priority;
-};
-
-#define gre_build_header rpl_gre_build_header
-void gre_build_header(struct sk_buff *skb, const struct tnl_ptk_info *tpi,
-		      int hdr_len);
-
-#define gre_handle_offloads rpl_gre_handle_offloads
-struct sk_buff *gre_handle_offloads(struct sk_buff *skb, bool gre_csum);
-
-int gre_cisco_register(struct gre_cisco_protocol *proto);
-int gre_cisco_unregister(struct gre_cisco_protocol *proto);
-
-static inline int ip_gre_calc_hlen(__be16 o_flags)
-{
-	int addend = 4;
-
-	if (o_flags & TUNNEL_CSUM)
-		addend += 4;
-	if (o_flags & TUNNEL_KEY)
-		addend += 4;
-	if (o_flags & TUNNEL_SEQ)
-		addend += 4;
-	return addend;
-}
 
 static inline __be16 gre_flags_to_tnl_flags(__be16 flags)
 {
@@ -99,4 +71,36 @@ static inline __be16 tnl_flags_to_gre_flags(__be16 tflags)
 
 	return flags;
 }
+#endif /* LINUX_VERSION_CODE < KERNEL_VERSION(3,10,0) */
+
+#define MAX_GRE_PROTO_PRIORITY 255
+struct gre_cisco_protocol {
+	int (*handler)(struct sk_buff *skb, const struct tnl_ptk_info *tpi);
+	u8 priority;
+};
+
+int gre_cisco_register(struct gre_cisco_protocol *proto);
+int gre_cisco_unregister(struct gre_cisco_protocol *proto);
+
+#define gre_build_header rpl_gre_build_header
+void gre_build_header(struct sk_buff *skb, const struct tnl_ptk_info *tpi,
+		      int hdr_len);
+
+#define gre_handle_offloads rpl_gre_handle_offloads
+struct sk_buff *gre_handle_offloads(struct sk_buff *skb, bool gre_csum);
+
+static inline int ip_gre_calc_hlen(__be16 o_flags)
+{
+	int addend = 4;
+
+	if (o_flags & TUNNEL_CSUM)
+		addend += 4;
+	if (o_flags & TUNNEL_KEY)
+		addend += 4;
+	if (o_flags & TUNNEL_SEQ)
+		addend += 4;
+	return addend;
+}
+
+
 #endif

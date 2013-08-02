@@ -89,7 +89,7 @@ static inline int vlan_deaccel_tag(struct sk_buff *skb)
 	if (!vlan_tx_tag_present(skb))
 		return 0;
 
-	skb = __vlan_put_tag(skb, vlan_tx_tag_get(skb));
+	skb = __vlan_put_tag(skb, skb->vlan_proto, vlan_tx_tag_get(skb));
 	if (unlikely(!skb))
 		return -ENOMEM;
 
