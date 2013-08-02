@@ -191,8 +191,6 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/svec.h \
 	lib/table.c \
 	lib/table.h \
-	lib/tag.c \
-	lib/tag.h \
 	lib/timer.c \
 	lib/timer.h \
 	lib/timeval.c \

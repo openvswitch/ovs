@@ -1414,10 +1414,6 @@ xlate_table_action(struct xlate_ctx *ctx,
                                          &ctx->xin->flow, &ctx->xout->wc,
                                          table_id);
 
-        ctx->xout->tags |= calculate_flow_tag(ctx->xbridge->ofproto,
-                                              &ctx->xin->flow, ctx->table_id,
-                                              rule);
-
         /* Restore the original input port.  Otherwise OFPP_NORMAL and
          * OFPP_IN_PORT will have surprising behavior. */
         ctx->xin->flow.in_port.ofp_port = old_in_port;
@@ -2193,7 +2189,6 @@ void
 xlate_out_copy(struct xlate_out *dst, const struct xlate_out *src)
 {
     dst->wc = src->wc;
-    dst->tags = src->tags;
     dst->slow = src->slow;
     dst->has_learn = src->has_learn;
     dst->has_normal = src->has_normal;
@@ -2269,7 +2264,6 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
 
     ctx.xin = xin;
     ctx.xout = xout;
-    ctx.xout->tags = 0;
     ctx.xout->slow = 0;
     ctx.xout->has_learn = false;
     ctx.xout->has_normal = false;

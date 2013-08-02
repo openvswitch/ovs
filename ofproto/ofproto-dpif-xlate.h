@@ -21,7 +21,6 @@
 #include "ofpbuf.h"
 #include "ofproto-dpif-mirror.h"
 #include "ofproto-dpif.h"
-#include "tag.h"
 
 struct bfd;
 struct bond;
@@ -40,7 +39,6 @@ struct xlate_out {
      * set. */
     struct flow_wildcards wc;
 
-    tag_type tags;              /* Tags associated with actions. */
     enum slow_path_reason slow; /* 0 if fast path may be used. */
     bool has_learn;             /* Actions include NXAST_LEARN? */
     bool has_normal;            /* Actions output to OFPP_NORMAL? */

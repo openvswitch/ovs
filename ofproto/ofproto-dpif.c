@@ -85,9 +85,6 @@ static struct rule_dpif *rule_dpif_lookup(struct ofproto_dpif *,
                                           struct flow_wildcards *wc);
 
 static void rule_get_stats(struct rule *, uint64_t *packets, uint64_t *bytes);
-static void rule_invalidate(const struct rule_dpif *);
-static tag_type rule_calculate_tag(const struct flow *,
-                                   const struct minimask *, uint32_t secret);
 
 struct ofbundle {
     struct hmap_node hmap_node; /* In struct ofproto's "bundles" hmap. */
@@ -291,7 +288,6 @@ struct ofport_dpif {
     struct list bundle_node;    /* In struct ofbundle's "ports" list. */
     struct cfm *cfm;            /* Connectivity Fault Management, if any. */
     struct bfd *bfd;            /* BFD, if any. */
-    tag_type tag;               /* Tag associated with this port. */
     bool may_enable;            /* May be enabled in bonds. */
     bool is_tunnel;             /* This port is a tunnel. */
     long long int carrier_seq;  /* Carrier status changes. */
@@ -368,17 +364,6 @@ struct dpif_completion {
     struct ofoperation *op;
 };
 
-/* Extra information about a classifier table.
- * Currently used just for optimized flow revalidation. */
-struct table_dpif {
-    /* If either of these is nonnull, then this table has a form that allows
-     * flows to be tagged to avoid revalidating most flows for the most common
-     * kinds of flow table changes. */
-    struct cls_table *catchall_table; /* Table that wildcards all fields. */
-    struct cls_table *other_table;    /* Table with any other wildcard set. */
-    uint32_t basis;                   /* Keeps each table's tags separate. */
-};
-
 /* Reasons that we might need to revalidate every facet, and corresponding
  * coverage counters.
  *
@@ -430,7 +415,6 @@ struct dpif_backer {
 
     /* Facet revalidation flags applying to facets which use this backer. */
     enum revalidate_reason need_revalidate; /* Revalidate every facet. */
-    struct tag_set revalidate_set; /* Revalidate only matching facets. */
 
     struct hmap drop_keys; /* Set of dropped odp keys. */
     bool recv_set_enable; /* Enables or disables receiving packets. */
@@ -495,9 +479,6 @@ struct ofproto_dpif {
     /* Facets. */
     struct classifier facets;     /* Contains 'struct facet's. */
     long long int consistency_rl;
-
-    /* Revalidation. */
-    struct table_dpif tables[N_TABLES];
 
     /* Support for debugging async flow mods. */
     struct list completions;
@@ -706,10 +687,7 @@ type_run(const char *type)
         backer->need_revalidate = REV_RECONFIGURE;
     }
 
-    if (backer->need_revalidate
-        || !tag_set_is_empty(&backer->revalidate_set)) {
-        struct tag_set revalidate_set = backer->revalidate_set;
-        bool need_revalidate = backer->need_revalidate;
+    if (backer->need_revalidate) {
         struct ofproto_dpif *ofproto;
         struct simap_node *node;
         struct simap tmp_backers;
@@ -776,62 +754,51 @@ type_run(const char *type)
         case REV_MAC_LEARNING:  COVERAGE_INC(rev_mac_learning);  break;
         case REV_INCONSISTENCY: COVERAGE_INC(rev_inconsistency); break;
         }
-
-        if (backer->need_revalidate) {
-            /* Clear the drop_keys in case we should now be accepting some
-             * formerly dropped flows. */
-            drop_key_clear(backer);
-        }
-
-        /* Clear the revalidation flags. */
-        tag_set_init(&backer->revalidate_set);
         backer->need_revalidate = 0;
+
+        /* Clear the drop_keys in case we should now be accepting some
+         * formerly dropped flows. */
+        drop_key_clear(backer);
 
         HMAP_FOR_EACH (ofproto, all_ofproto_dpifs_node, &all_ofproto_dpifs) {
             struct facet *facet, *next;
+            struct ofport_dpif *ofport;
             struct cls_cursor cursor;
+            struct ofbundle *bundle;
 
             if (ofproto->backer != backer) {
                 continue;
             }
 
-            if (need_revalidate) {
-                struct ofport_dpif *ofport;
-                struct ofbundle *bundle;
+            xlate_ofproto_set(ofproto, ofproto->up.name, ofproto->ml,
+                              ofproto->mbridge, ofproto->sflow,
+                              ofproto->ipfix, ofproto->up.frag_handling,
+                              ofproto->up.forward_bpdu,
+                              connmgr_has_in_band(ofproto->up.connmgr),
+                              ofproto->netflow != NULL,
+                              ofproto->stp != NULL);
 
-                xlate_ofproto_set(ofproto, ofproto->up.name, ofproto->ml,
-                                  ofproto->mbridge, ofproto->sflow,
-                                  ofproto->ipfix, ofproto->up.frag_handling,
-                                  ofproto->up.forward_bpdu,
-                                  connmgr_has_in_band(ofproto->up.connmgr),
-                                  ofproto->netflow != NULL,
-                                  ofproto->stp != NULL);
+            HMAP_FOR_EACH (bundle, hmap_node, &ofproto->bundles) {
+                xlate_bundle_set(ofproto, bundle, bundle->name,
+                                 bundle->vlan_mode, bundle->vlan,
+                                 bundle->trunks, bundle->use_priority_tags,
+                                 bundle->bond, bundle->lacp,
+                                 bundle->floodable);
+            }
 
-                HMAP_FOR_EACH (bundle, hmap_node, &ofproto->bundles) {
-                    xlate_bundle_set(ofproto, bundle, bundle->name,
-                                     bundle->vlan_mode, bundle->vlan,
-                                     bundle->trunks, bundle->use_priority_tags,
-                                     bundle->bond, bundle->lacp,
-                                     bundle->floodable);
-                }
-
-                HMAP_FOR_EACH (ofport, up.hmap_node, &ofproto->up.ports) {
-                    xlate_ofport_set(ofproto, ofport->bundle, ofport,
-                                     ofport->up.ofp_port, ofport->odp_port,
-                                     ofport->up.netdev, ofport->cfm,
-                                     ofport->bfd, ofport->peer,
-                                     ofport->up.pp.config, ofport->stp_state,
-                                     ofport->is_tunnel, ofport->may_enable);
-                }
+            HMAP_FOR_EACH (ofport, up.hmap_node, &ofproto->up.ports) {
+                xlate_ofport_set(ofproto, ofport->bundle, ofport,
+                                 ofport->up.ofp_port, ofport->odp_port,
+                                 ofport->up.netdev, ofport->cfm,
+                                 ofport->bfd, ofport->peer,
+                                 ofport->up.pp.config, ofport->stp_state,
+                                 ofport->is_tunnel, ofport->may_enable);
             }
 
             cls_cursor_init(&cursor, &ofproto->facets, NULL);
             CLS_CURSOR_FOR_EACH_SAFE (facet, next, cr, &cursor) {
-                if (need_revalidate
-                    || tag_set_intersects(&revalidate_set, facet->xout.tags)) {
-                    facet_revalidate(facet);
-                    run_fast_rl();
-                }
+                facet_revalidate(facet);
+                run_fast_rl();
             }
         }
     }
@@ -1212,7 +1179,6 @@ open_dpif_backer(const char *type, struct dpif_backer **backerp)
     timer_set_duration(&backer->next_expiration, 1000);
     backer->need_revalidate = 0;
     simap_init(&backer->tnl_backers);
-    tag_set_init(&backer->revalidate_set);
     backer->recv_set_enable = !ofproto_get_flow_restore_wait();
     *backerp = backer;
 
@@ -1273,7 +1239,6 @@ construct(struct ofproto *ofproto_)
     struct shash_node *node, *next;
     odp_port_t max_ports;
     int error;
-    int i;
 
     error = open_dpif_backer(ofproto->up.type, &ofproto->backer);
     if (error) {
@@ -1295,14 +1260,6 @@ construct(struct ofproto *ofproto_)
 
     classifier_init(&ofproto->facets);
     ofproto->consistency_rl = LLONG_MIN;
-
-    for (i = 0; i < N_TABLES; i++) {
-        struct table_dpif *table = &ofproto->tables[i];
-
-        table->catchall_table = NULL;
-        table->other_table = NULL;
-        table->basis = random_uint32();
-    }
 
     list_init(&ofproto->completions);
 
@@ -1560,11 +1517,8 @@ run(struct ofproto *ofproto_)
                           hmap_node);
         facet = CONTAINER_OF(cr, struct facet, cr);
 
-        if (!tag_set_intersects(&ofproto->backer->revalidate_set,
-                                facet->xout.tags)) {
-            if (!facet_check_consistency(facet)) {
-                ofproto->backer->need_revalidate = REV_INCONSISTENCY;
-            }
+        if (!facet_check_consistency(facet)) {
+            ofproto->backer->need_revalidate = REV_INCONSISTENCY;
         }
     }
 
@@ -1590,9 +1544,6 @@ wait(struct ofproto *ofproto_)
     dpif_recv_wait(ofproto->backer->dpif);
     if (ofproto->sflow) {
         dpif_sflow_wait(ofproto->sflow);
-    }
-    if (!tag_set_is_empty(&ofproto->backer->revalidate_set)) {
-        poll_immediate_wake();
     }
     HMAP_FOR_EACH (ofport, up.hmap_node, &ofproto->up.ports) {
         port_wait(ofport);
@@ -1729,7 +1680,6 @@ port_construct(struct ofport *port_)
     port->bundle = NULL;
     port->cfm = NULL;
     port->bfd = NULL;
-    port->tag = tag_create_random();
     port->may_enable = true;
     port->stp_port = NULL;
     port->stp_state = STP_DISABLED;
@@ -4712,9 +4662,7 @@ facet_lookup_valid(struct ofproto_dpif *ofproto, const struct flow *flow)
 
     facet = facet_find(ofproto, flow);
     if (facet
-        && (ofproto->backer->need_revalidate
-            || tag_set_intersects(&ofproto->backer->revalidate_set,
-                                  facet->xout.tags))
+        && ofproto->backer->need_revalidate
         && !facet_revalidate(facet)) {
         return NULL;
     }
@@ -4861,7 +4809,6 @@ facet_revalidate(struct facet *facet)
     }
 
     /* Update 'facet' now that we've taken care of all the old state. */
-    facet->xout.tags = xout.tags;
     facet->xout.slow = xout.slow;
     facet->xout.has_learn = xout.has_learn;
     facet->xout.has_normal = xout.has_normal;
@@ -5298,7 +5245,7 @@ complete_operation(struct rule_dpif *rule)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(rule->up.ofproto);
 
-    rule_invalidate(rule);
+    ofproto->backer->need_revalidate = REV_FLOW_TABLE;
     if (clogged) {
         struct dpif_completion *c = xmalloc(sizeof *c);
         c->op = rule->up.pending;
@@ -5326,27 +5273,8 @@ static enum ofperr
 rule_construct(struct rule *rule_)
 {
     struct rule_dpif *rule = rule_dpif_cast(rule_);
-    struct ofproto_dpif *ofproto = ofproto_dpif_cast(rule->up.ofproto);
-    struct rule_dpif *victim;
-    uint8_t table_id;
-
     rule->packet_count = 0;
     rule->byte_count = 0;
-
-    table_id = rule->up.table_id;
-    victim = rule_dpif_cast(ofoperation_get_victim(rule->up.pending));
-    if (victim) {
-        rule->tag = victim->tag;
-    } else if (table_id == 0) {
-        rule->tag = 0;
-    } else {
-        struct flow flow;
-
-        miniflow_expand(&rule->up.cr.match.flow, &flow);
-        rule->tag = rule_calculate_tag(&flow, &rule->up.cr.match.mask,
-                                       ofproto->tables[table_id].basis);
-    }
-
     complete_operation(rule);
     return 0;
 }
@@ -5518,136 +5446,6 @@ put_userspace_action(const struct ofproto_dpif *ofproto,
                                                  flow->in_port.ofp_port));
 
     return odp_put_userspace_action(pid, cookie, cookie_size, odp_actions);
-}
-
-tag_type
-calculate_flow_tag(struct ofproto_dpif *ofproto, const struct flow *flow,
-                   uint8_t table_id, struct rule_dpif *rule)
-{
-    if (table_id > 0 && table_id < N_TABLES) {
-        struct table_dpif *table = &ofproto->tables[table_id];
-        if (table->other_table) {
-            return (rule && rule->tag
-                    ? rule->tag
-                    : rule_calculate_tag(flow, &table->other_table->mask,
-                                         table->basis));
-        }
-    }
-
-    return 0;
-}
-
-/* Optimized flow revalidation.
- *
- * It's a difficult problem, in general, to tell which facets need to have
- * their actions recalculated whenever the OpenFlow flow table changes.  We
- * don't try to solve that general problem: for most kinds of OpenFlow flow
- * table changes, we recalculate the actions for every facet.  This is
- * relatively expensive, but it's good enough if the OpenFlow flow table
- * doesn't change very often.
- *
- * However, we can expect one particular kind of OpenFlow flow table change to
- * happen frequently: changes caused by MAC learning.  To avoid wasting a lot
- * of CPU on revalidating every facet whenever MAC learning modifies the flow
- * table, we add a special case that applies to flow tables in which every rule
- * has the same form (that is, the same wildcards), except that the table is
- * also allowed to have a single "catch-all" flow that matches all packets.  We
- * optimize this case by tagging all of the facets that resubmit into the table
- * and invalidating the same tag whenever a flow changes in that table.  The
- * end result is that we revalidate just the facets that need it (and sometimes
- * a few more, but not all of the facets or even all of the facets that
- * resubmit to the table modified by MAC learning). */
-
-/* Calculates the tag to use for 'flow' and mask 'mask' when it is inserted
- * into an OpenFlow table with the given 'basis'. */
-static tag_type
-rule_calculate_tag(const struct flow *flow, const struct minimask *mask,
-                   uint32_t secret)
-{
-    if (minimask_is_catchall(mask)) {
-        return 0;
-    } else {
-        uint32_t hash = flow_hash_in_minimask(flow, mask, secret);
-        return tag_create_deterministic(hash);
-    }
-}
-
-/* Following a change to OpenFlow table 'table_id' in 'ofproto', update the
- * taggability of that table.
- *
- * This function must be called after *each* change to a flow table.  If you
- * skip calling it on some changes then the pointer comparisons at the end can
- * be invalid if you get unlucky.  For example, if a flow removal causes a
- * cls_table to be destroyed and then a flow insertion causes a cls_table with
- * different wildcards to be created with the same address, then this function
- * will incorrectly skip revalidation. */
-static void
-table_update_taggable(struct ofproto_dpif *ofproto, uint8_t table_id)
-{
-    struct table_dpif *table = &ofproto->tables[table_id];
-    const struct oftable *oftable = &ofproto->up.tables[table_id];
-    struct cls_table *catchall, *other;
-    struct cls_table *t;
-
-    catchall = other = NULL;
-
-    switch (hmap_count(&oftable->cls.tables)) {
-    case 0:
-        /* We could tag this OpenFlow table but it would make the logic a
-         * little harder and it's a corner case that doesn't seem worth it
-         * yet. */
-        break;
-
-    case 1:
-    case 2:
-        HMAP_FOR_EACH (t, hmap_node, &oftable->cls.tables) {
-            if (cls_table_is_catchall(t)) {
-                catchall = t;
-            } else if (!other) {
-                other = t;
-            } else {
-                /* Indicate that we can't tag this by setting both tables to
-                 * NULL.  (We know that 'catchall' is already NULL.) */
-                other = NULL;
-            }
-        }
-        break;
-
-    default:
-        /* Can't tag this table. */
-        break;
-    }
-
-    if (table->catchall_table != catchall || table->other_table != other) {
-        table->catchall_table = catchall;
-        table->other_table = other;
-        ofproto->backer->need_revalidate = REV_FLOW_TABLE;
-    }
-}
-
-/* Given 'rule' that has changed in some way (either it is a rule being
- * inserted, a rule being deleted, or a rule whose actions are being
- * modified), marks facets for revalidation to ensure that packets will be
- * forwarded correctly according to the new state of the flow table.
- *
- * This function must be called after *each* change to a flow table.  See
- * the comment on table_update_taggable() for more information. */
-static void
-rule_invalidate(const struct rule_dpif *rule)
-{
-    struct ofproto_dpif *ofproto = ofproto_dpif_cast(rule->up.ofproto);
-
-    table_update_taggable(ofproto, rule->up.table_id);
-
-    if (!ofproto->backer->need_revalidate) {
-        struct table_dpif *table = &ofproto->tables[rule->up.table_id];
-
-        if (table->other_table && rule->tag) {
-            tag_set_add(&ofproto->backer->revalidate_set, rule->tag);
-        } else {
-            ofproto->backer->need_revalidate = REV_FLOW_TABLE;
-        }
-    }
 }
 
 static bool

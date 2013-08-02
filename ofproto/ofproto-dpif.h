@@ -19,7 +19,6 @@
 
 #include "hmapx.h"
 #include "ofproto/ofproto-provider.h"
-#include "tag.h"
 #include "timer.h"
 #include "util.h"
 
@@ -45,8 +44,6 @@ struct rule_dpif {
      */
     uint64_t packet_count;       /* Number of packets received. */
     uint64_t byte_count;         /* Number of bytes received. */
-
-    tag_type tag;                /* Caches rule_calculate_tag() result. */
 };
 
 static inline struct rule_dpif *rule_dpif_cast(const struct rule *rule)
@@ -85,8 +82,6 @@ bool ofproto_dpif_dscp_from_priority(const struct ofport_dpif *,
                                      uint32_t priority, uint8_t *dscp);
 int ofproto_dpif_queue_to_priority(const struct ofproto_dpif *,
                                    uint32_t queue_id, uint32_t *priority);
-tag_type calculate_flow_tag(struct ofproto_dpif *, const struct flow *,
-                            uint8_t table_id, struct rule_dpif *);
 
 void ofproto_dpif_send_packet_in(struct ofproto_dpif *,
                                  struct ofputil_packet_in *pin);

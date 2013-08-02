@@ -27,7 +27,6 @@
 #include "netflow.h"
 #include "sset.h"
 #include "stp.h"
-#include "tag.h"
 
 #ifdef  __cplusplus
 extern "C" {
