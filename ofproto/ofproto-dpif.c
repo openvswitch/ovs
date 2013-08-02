@@ -390,6 +390,7 @@ struct table_dpif {
 enum revalidate_reason {
     REV_RECONFIGURE = 1,       /* Switch configuration changed. */
     REV_STP,                   /* Spanning tree protocol port status change. */
+    REV_BOND,                  /* Bonding changed. */
     REV_PORT_TOGGLED,          /* Port enabled or disabled by CFM, LACP, ...*/
     REV_FLOW_TABLE,            /* Flow table changed. */
     REV_MAC_LEARNING,          /* Mac learning changed. */
@@ -397,6 +398,7 @@ enum revalidate_reason {
 };
 COVERAGE_DEFINE(rev_reconfigure);
 COVERAGE_DEFINE(rev_stp);
+COVERAGE_DEFINE(rev_bond);
 COVERAGE_DEFINE(rev_port_toggled);
 COVERAGE_DEFINE(rev_flow_table);
 COVERAGE_DEFINE(rev_mac_learning);
@@ -768,6 +770,7 @@ type_run(const char *type)
         switch (backer->need_revalidate) {
         case REV_RECONFIGURE:   COVERAGE_INC(rev_reconfigure);   break;
         case REV_STP:           COVERAGE_INC(rev_stp);           break;
+        case REV_BOND:          COVERAGE_INC(rev_bond);          break;
         case REV_PORT_TOGGLED:  COVERAGE_INC(rev_port_toggled);  break;
         case REV_FLOW_TABLE:    COVERAGE_INC(rev_flow_table);    break;
         case REV_MAC_LEARNING:  COVERAGE_INC(rev_mac_learning);  break;
@@ -2783,8 +2786,10 @@ bundle_run(struct ofbundle *bundle)
             bond_slave_set_may_enable(bundle->bond, port, port->may_enable);
         }
 
-        bond_run(bundle->bond, &bundle->ofproto->backer->revalidate_set,
-                 lacp_status(bundle->lacp));
+        if (bond_run(bundle->bond, lacp_status(bundle->lacp))) {
+            bundle->ofproto->backer->need_revalidate = REV_BOND;
+        }
+
         if (bond_should_send_learning_packets(bundle->bond)) {
             bundle_send_learning_packets(bundle);
         }
@@ -4163,7 +4168,7 @@ expire(struct dpif_backer *backer)
 
             HMAP_FOR_EACH (bundle, hmap_node, &ofproto->bundles) {
                 if (bundle->bond) {
-                    bond_rebalance(bundle->bond, &backer->revalidate_set);
+                    bond_rebalance(bundle->bond);
                 }
             }
         }

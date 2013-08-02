@@ -773,8 +773,7 @@ output_normal(struct xlate_ctx *ctx, const struct xbundle *out_xbundle,
         struct ofport_dpif *ofport;
 
         ofport = bond_choose_output_slave(out_xbundle->bond, &ctx->xin->flow,
-                                          &ctx->xout->wc, vid,
-                                          &ctx->xout->tags);
+                                          &ctx->xout->wc, vid);
         xport = ofport ? xport_lookup(ofport) : NULL;
 
         if (!xport) {
@@ -902,7 +901,7 @@ is_admissible(struct xlate_ctx *ctx, struct xport *in_port,
         struct mac_entry *mac;
 
         switch (bond_check_admissibility(in_xbundle->bond, in_port->ofport,
-                                         flow->dl_dst, &ctx->xout->tags)) {
+                                         flow->dl_dst)) {
         case BV_ACCEPT:
             break;
 
