@@ -557,9 +557,10 @@ netdev_linux_cache_cb(const struct rtnetlink_link_change *change,
         shash_init(&device_shash);
         netdev_get_devices(&netdev_linux_class, &device_shash);
         SHASH_FOR_EACH (node, &device_shash) {
+            struct netdev *netdev = node->data;
             unsigned int flags;
 
-            dev = node->data;
+            dev = netdev_linux_cast(netdev);
 
             get_flags(&dev->up, &flags);
             netdev_linux_changed(dev, flags, 0);
@@ -1194,7 +1195,8 @@ netdev_linux_miimon_run(void)
     shash_init(&device_shash);
     netdev_get_devices(&netdev_linux_class, &device_shash);
     SHASH_FOR_EACH (node, &device_shash) {
-        struct netdev_linux *dev = node->data;
+        struct netdev *netdev = node->data;
+        struct netdev_linux *dev = netdev_linux_cast(netdev);
         bool miimon;
 
         if (dev->miimon_interval <= 0 || !timer_expired(&dev->miimon_timer)) {
@@ -1222,7 +1224,8 @@ netdev_linux_miimon_wait(void)
     shash_init(&device_shash);
     netdev_get_devices(&netdev_linux_class, &device_shash);
     SHASH_FOR_EACH (node, &device_shash) {
-        struct netdev_linux *dev = node->data;
+        struct netdev *netdev = node->data;
+        struct netdev_linux *dev = netdev_linux_cast(netdev);
 
         if (dev->miimon_interval > 0) {
             timer_wait(&dev->miimon_timer);
