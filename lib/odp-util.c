@@ -2329,17 +2329,13 @@ odp_flow_key_from_flow__(struct ofpbuf *buf, const struct flow *data,
      * treat 'data' as a mask. */
     is_mask = (data != flow);
 
-    if (flow->skb_priority) {
-        nl_msg_put_u32(buf, OVS_KEY_ATTR_PRIORITY, data->skb_priority);
-    }
+    nl_msg_put_u32(buf, OVS_KEY_ATTR_PRIORITY, data->skb_priority);
 
     if (flow->tunnel.ip_dst || is_mask) {
         tun_key_to_attr(buf, &data->tunnel);
     }
 
-    if (flow->skb_mark) {
-        nl_msg_put_u32(buf, OVS_KEY_ATTR_SKB_MARK, data->skb_mark);
-    }
+    nl_msg_put_u32(buf, OVS_KEY_ATTR_SKB_MARK, data->skb_mark);
 
     /* Add an ingress port attribute if this is a mask or 'odp_in_port'
      * is not the magical value "OVSP_NONE". */
