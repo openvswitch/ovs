@@ -4864,9 +4864,11 @@ push_all_stats(void)
 void
 rule_credit_stats(struct rule_dpif *rule, const struct dpif_flow_stats *stats)
 {
+    ovs_mutex_lock(&rule->stats_mutex);
     rule->packet_count += stats->n_packets;
     rule->byte_count += stats->n_bytes;
     ofproto_rule_update_used(&rule->up, stats->used);
+    ovs_mutex_unlock(&rule->stats_mutex);
 }
 
 /* Subfacets. */
@@ -5224,16 +5226,21 @@ static enum ofperr
 rule_construct(struct rule *rule_)
 {
     struct rule_dpif *rule = rule_dpif_cast(rule_);
+    ovs_mutex_init(&rule->stats_mutex, PTHREAD_MUTEX_NORMAL);
+    ovs_mutex_lock(&rule->stats_mutex);
     rule->packet_count = 0;
     rule->byte_count = 0;
+    ovs_mutex_unlock(&rule->stats_mutex);
     complete_operation(rule);
     return 0;
 }
 
 static void
-rule_destruct(struct rule *rule)
+rule_destruct(struct rule *rule_)
 {
-    complete_operation(rule_dpif_cast(rule));
+    struct rule_dpif *rule = rule_dpif_cast(rule_);
+    complete_operation(rule);
+    ovs_mutex_destroy(&rule->stats_mutex);
 }
 
 static void
@@ -5249,8 +5256,10 @@ rule_get_stats(struct rule *rule_, uint64_t *packets, uint64_t *bytes)
 
     /* Start from historical data for 'rule' itself that are no longer tracked
      * in facets.  This counts, for example, facets that have expired. */
+    ovs_mutex_lock(&rule->stats_mutex);
     *packets = rule->packet_count;
     *bytes = rule->byte_count;
+    ovs_mutex_unlock(&rule->stats_mutex);
 }
 
 static void

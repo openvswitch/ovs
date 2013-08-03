@@ -19,6 +19,7 @@
 
 #include "hmapx.h"
 #include "ofproto/ofproto-provider.h"
+#include "ovs-thread.h"
 #include "timer.h"
 #include "util.h"
 
@@ -42,8 +43,9 @@ struct rule_dpif {
      *     packet_count or byte_count member or that can be obtained from the
      *     datapath by, e.g., dpif_flow_get() for any subfacet.
      */
-    uint64_t packet_count;       /* Number of packets received. */
-    uint64_t byte_count;         /* Number of bytes received. */
+    struct ovs_mutex stats_mutex;
+    uint64_t packet_count OVS_GUARDED;  /* Number of packets received. */
+    uint64_t byte_count OVS_GUARDED;    /* Number of bytes received. */
 };
 
 static inline struct rule_dpif *rule_dpif_cast(const struct rule *rule)
