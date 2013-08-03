@@ -1896,6 +1896,15 @@
           <code>false</code>.
       </column>
 
+      <column name="bfd" key="bfd_dst_mac">
+        An Ethernet address in the form
+        <var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>
+        to set the destination mac address of the bfd packet. If this
+        field is set, it is assumed that all the bfd packets destined to this
+        interface also has the same destination mac address. If not set, a
+        default value of <code>00:23:20:00:00:01</code> is used.
+      </column>
+
       <column name="bfd_status" key="state"
           type='{"type": "string",
           "enum": ["set", ["admin_down", "down", "init", "up"]]}'>

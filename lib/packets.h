@@ -44,6 +44,9 @@ static const uint8_t eth_addr_stp[ETH_ADDR_LEN] OVS_UNUSED
 static const uint8_t eth_addr_lacp[ETH_ADDR_LEN] OVS_UNUSED
     = { 0x01, 0x80, 0xC2, 0x00, 0x00, 0x02 };
 
+static const uint8_t eth_addr_bfd[ETH_ADDR_LEN] OVS_UNUSED
+    = { 0x00, 0x23, 0x20, 0x00, 0x00, 0x01 };
+
 static inline bool eth_addr_is_broadcast(const uint8_t ea[6])
 {
     return (ea[0] & ea[1] & ea[2] & ea[3] & ea[4] & ea[5]) == 0xff;

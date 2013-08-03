@@ -160,6 +160,9 @@ struct bfd {
 
     uint32_t rmt_disc;            /* bfd.RemoteDiscr. */
 
+    uint8_t eth_dst[ETH_ADDR_LEN];/* Ethernet destination address. */
+    bool eth_dst_set;             /* 'eth_dst' set through database. */
+
     uint16_t udp_src;             /* UDP source port. */
 
     /* All timers in milliseconds. */
@@ -258,6 +261,8 @@ bfd_configure(struct bfd *bfd, const char *name, const struct smap *cfg)
 
     long long int min_tx, min_rx;
     bool cpath_down;
+    const char *hwaddr;
+    uint8_t ea[ETH_ADDR_LEN];
 
     if (ovsthread_once_start(&once)) {
         unixctl_command_register("bfd/show", "[interface]", 0, 1,
@@ -295,6 +300,8 @@ bfd_configure(struct bfd *bfd, const char *name, const struct smap *cfg)
         bfd->udp_src = (bfd->udp_src % 16384) + 49152;
 
         bfd_set_state(bfd, STATE_DOWN, DIAG_NONE);
+
+        memcpy(bfd->eth_dst, eth_addr_bfd, ETH_ADDR_LEN);
     }
 
     atomic_store(&bfd->check_tnl_key,
@@ -329,6 +336,16 @@ bfd_configure(struct bfd *bfd, const char *name, const struct smap *cfg)
         }
         bfd_poll(bfd);
     }
+
+    hwaddr = smap_get(cfg, "bfd_dst_mac");
+    if (hwaddr && eth_addr_from_string(hwaddr, ea) && !eth_addr_is_zero(ea)) {
+        memcpy(bfd->eth_dst, ea, ETH_ADDR_LEN);
+        bfd->eth_dst_set = true;
+    } else if (bfd->eth_dst_set) {
+        memcpy(bfd->eth_dst, eth_addr_bfd, ETH_ADDR_LEN);
+        bfd->eth_dst_set = false;
+    }
+
     ovs_mutex_unlock(&mutex);
     return bfd;
 }
@@ -429,8 +446,8 @@ bfd_put_packet(struct bfd *bfd, struct ofpbuf *p,
 
     ofpbuf_reserve(p, 2); /* Properly align after the ethernet header. */
     eth = ofpbuf_put_uninit(p, sizeof *eth);
-    memcpy(eth->eth_dst, eth_addr_broadcast, ETH_ADDR_LEN);
     memcpy(eth->eth_src, eth_src, ETH_ADDR_LEN);
+    memcpy(eth->eth_dst, bfd->eth_dst, ETH_ADDR_LEN);
     eth->eth_type = htons(ETH_TYPE_IP);
 
     ip = ofpbuf_put_zeros(p, sizeof *ip);
@@ -483,6 +500,10 @@ bfd_should_process_flow(const struct bfd *bfd, const struct flow *flow,
                         struct flow_wildcards *wc)
 {
     bool check_tnl_key;
+    memset(&wc->masks.dl_dst, 0xff, sizeof wc->masks.dl_dst);
+    if (bfd->eth_dst_set && memcmp(bfd->eth_dst, flow->dl_dst, ETH_ADDR_LEN)) {
+        return false;
+    }
 
     memset(&wc->masks.nw_proto, 0xff, sizeof wc->masks.nw_proto);
     memset(&wc->masks.tp_dst, 0xff, sizeof wc->masks.tp_dst);
@@ -493,7 +514,7 @@ bfd_should_process_flow(const struct bfd *bfd, const struct flow *flow,
     }
     return (flow->dl_type == htons(ETH_TYPE_IP)
             && flow->nw_proto == IPPROTO_UDP
-            && flow->tp_dst == htons(3784)
+            && flow->tp_dst == htons(BFD_DEST_PORT)
             && (check_tnl_key || flow->tunnel.tun_id == htonll(0)));
 }
 
