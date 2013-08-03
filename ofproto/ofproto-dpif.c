@@ -6509,6 +6509,7 @@ execute_set_mpls_ttl_action(struct xlate_ctx *ctx, uint8_t ttl)
         return true;
     }
 
+    ctx->xout->wc.masks.mpls_lse |= htonl(MPLS_TTL_MASK);
     set_mpls_lse_ttl(&ctx->xin->flow.mpls_lse, ttl);
     return false;
 }
@@ -6684,7 +6685,7 @@ xlate_bundle_action(struct xlate_ctx *ctx,
     port = bundle_execute(bundle, &ctx->xin->flow, &ctx->xout->wc,
                           slave_enabled_cb, ctx->ofproto);
     if (bundle->dst.field) {
-        nxm_reg_load(&bundle->dst, port, &ctx->xin->flow);
+        nxm_reg_load(&bundle->dst, port, &ctx->xin->flow, &ctx->xout->wc);
     } else {
         xlate_output_action(ctx, port, 0, false);
     }
@@ -6808,6 +6809,7 @@ static void
 do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
                  struct xlate_ctx *ctx)
 {
+    struct flow_wildcards *wc = &ctx->xout->wc;
     bool was_evictable = true;
     const struct ofpact *a;
 
@@ -6844,6 +6846,7 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
             break;
 
         case OFPACT_SET_VLAN_VID:
+            wc->masks.vlan_tci |= htons(VLAN_VID_MASK | VLAN_CFI);
             ctx->xin->flow.vlan_tci &= ~htons(VLAN_VID_MASK);
             ctx->xin->flow.vlan_tci |=
                 (htons(ofpact_get_SET_VLAN_VID(a)->vlan_vid)
@@ -6851,6 +6854,7 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
             break;
 
         case OFPACT_SET_VLAN_PCP:
+            wc->masks.vlan_tci |= htons(VLAN_PCP_MASK | VLAN_CFI);
             ctx->xin->flow.vlan_tci &= ~htons(VLAN_PCP_MASK);
             ctx->xin->flow.vlan_tci |=
                 htons((ofpact_get_SET_VLAN_PCP(a)->vlan_pcp << VLAN_PCP_SHIFT)
@@ -6858,37 +6862,44 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
             break;
 
         case OFPACT_STRIP_VLAN:
+            memset(&wc->masks.vlan_tci, 0xff, sizeof wc->masks.vlan_tci);
             ctx->xin->flow.vlan_tci = htons(0);
             break;
 
         case OFPACT_PUSH_VLAN:
             /* XXX 802.1AD(QinQ) */
+            memset(&wc->masks.vlan_tci, 0xff, sizeof wc->masks.vlan_tci);
             ctx->xin->flow.vlan_tci = htons(VLAN_CFI);
             break;
 
         case OFPACT_SET_ETH_SRC:
+            memset(&wc->masks.dl_src, 0xff, sizeof wc->masks.dl_src);
             memcpy(ctx->xin->flow.dl_src, ofpact_get_SET_ETH_SRC(a)->mac,
                    ETH_ADDR_LEN);
             break;
 
         case OFPACT_SET_ETH_DST:
+            memset(&wc->masks.dl_dst, 0xff, sizeof wc->masks.dl_dst);
             memcpy(ctx->xin->flow.dl_dst, ofpact_get_SET_ETH_DST(a)->mac,
                    ETH_ADDR_LEN);
             break;
 
         case OFPACT_SET_IPV4_SRC:
+            memset(&wc->masks.nw_src, 0xff, sizeof wc->masks.nw_src);
             if (ctx->xin->flow.dl_type == htons(ETH_TYPE_IP)) {
                 ctx->xin->flow.nw_src = ofpact_get_SET_IPV4_SRC(a)->ipv4;
             }
             break;
 
         case OFPACT_SET_IPV4_DST:
+            memset(&wc->masks.nw_dst, 0xff, sizeof wc->masks.nw_dst);
             if (ctx->xin->flow.dl_type == htons(ETH_TYPE_IP)) {
                 ctx->xin->flow.nw_dst = ofpact_get_SET_IPV4_DST(a)->ipv4;
             }
             break;
 
         case OFPACT_SET_IPV4_DSCP:
+            wc->masks.nw_tos |= IP_DSCP_MASK;
             /* OpenFlow 1.0 only supports IPv4. */
             if (ctx->xin->flow.dl_type == htons(ETH_TYPE_IP)) {
                 ctx->xin->flow.nw_tos &= ~IP_DSCP_MASK;
@@ -6897,8 +6908,8 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
             break;
 
         case OFPACT_SET_L4_SRC_PORT:
-            memset(&ctx->xout->wc.masks.nw_proto, 0xff,
-                    sizeof ctx->xout->wc.masks.nw_proto);
+            memset(&wc->masks.nw_proto, 0xff, sizeof wc->masks.nw_proto);
+            memset(&wc->masks.tp_src, 0xff, sizeof wc->masks.tp_src);
             if (is_ip_any(&ctx->xin->flow)) {
                 ctx->xin->flow.tp_src =
                     htons(ofpact_get_SET_L4_SRC_PORT(a)->port);
@@ -6906,8 +6917,8 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
             break;
 
         case OFPACT_SET_L4_DST_PORT:
-            memset(&ctx->xout->wc.masks.nw_proto, 0xff,
-                    sizeof ctx->xout->wc.masks.nw_proto);
+            memset(&wc->masks.nw_proto, 0xff, sizeof wc->masks.nw_proto);
+            memset(&wc->masks.tp_dst, 0xff, sizeof wc->masks.tp_dst);
             if (is_ip_any(&ctx->xin->flow)) {
                 ctx->xin->flow.tp_dst =
                     htons(ofpact_get_SET_L4_DST_PORT(a)->port);
@@ -6932,8 +6943,7 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
             break;
 
         case OFPACT_REG_MOVE:
-            nxm_execute_reg_move(ofpact_get_REG_MOVE(a), &ctx->xin->flow,
-                                 &ctx->xout->wc);
+            nxm_execute_reg_move(ofpact_get_REG_MOVE(a), &ctx->xin->flow, wc);
             break;
 
         case OFPACT_REG_LOAD:
@@ -6942,12 +6952,12 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
 
         case OFPACT_STACK_PUSH:
             nxm_execute_stack_push(ofpact_get_STACK_PUSH(a), &ctx->xin->flow,
-                                   &ctx->xout->wc, &ctx->stack);
+                                   wc, &ctx->stack);
             break;
 
         case OFPACT_STACK_POP:
             nxm_execute_stack_pop(ofpact_get_STACK_POP(a), &ctx->xin->flow,
-                                  &ctx->stack);
+                                  wc, &ctx->stack);
             break;
 
         case OFPACT_PUSH_MPLS:
@@ -6972,6 +6982,7 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
             break;
 
         case OFPACT_DEC_TTL:
+            wc->masks.nw_ttl = 0xff;
             if (compose_dec_ttl(ctx, ofpact_get_DEC_TTL(a))) {
                 goto out;
             }
@@ -6982,8 +6993,7 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
             break;
 
         case OFPACT_MULTIPATH:
-            multipath_execute(ofpact_get_MULTIPATH(a), &ctx->xin->flow,
-                              &ctx->xout->wc);
+            multipath_execute(ofpact_get_MULTIPATH(a), &ctx->xin->flow, wc);
             break;
 
         case OFPACT_BUNDLE:
@@ -7004,8 +7014,7 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
             break;
 
         case OFPACT_FIN_TIMEOUT:
-            memset(&ctx->xout->wc.masks.nw_proto, 0xff,
-                   sizeof ctx->xout->wc.masks.nw_proto);
+            memset(&wc->masks.nw_proto, 0xff, sizeof wc->masks.nw_proto);
             ctx->xout->has_fin_timeout = true;
             xlate_fin_timeout(ctx, ofpact_get_FIN_TIMEOUT(a));
             break;

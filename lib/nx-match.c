@@ -1291,6 +1291,7 @@ nxm_execute_reg_move(const struct ofpact_reg_move *move,
     union mf_value dst_value;
 
     memset(&mask_value, 0xff, sizeof mask_value);
+    mf_write_subfield_flow(&move->dst, &mask_value, &wc->masks);
     mf_write_subfield_flow(&move->src, &mask_value, &wc->masks);
 
     mf_get_value(move->dst.field, flow, &dst_value);
@@ -1309,10 +1310,14 @@ nxm_execute_reg_load(const struct ofpact_reg_load *load, struct flow *flow)
 
 void
 nxm_reg_load(const struct mf_subfield *dst, uint64_t src_data,
-             struct flow *flow)
+             struct flow *flow, struct flow_wildcards *wc)
 {
     union mf_subvalue src_subvalue;
+    union mf_subvalue mask_value;
     ovs_be64 src_data_be = htonll(src_data);
+
+    memset(&mask_value, 0xff, sizeof mask_value);
+    mf_write_subfield_flow(dst, &mask_value, &wc->masks);
 
     bitwise_copy(&src_data_be, sizeof src_data_be, 0,
                  &src_subvalue, sizeof src_subvalue, 0,
@@ -1452,7 +1457,8 @@ nxm_execute_stack_push(const struct ofpact_stack *push,
 
 void
 nxm_execute_stack_pop(const struct ofpact_stack *pop,
-                      struct flow *flow, struct ofpbuf *stack)
+                      struct flow *flow, struct flow_wildcards *wc,
+                      struct ofpbuf *stack)
 {
     union mf_subvalue *src_value;
 
@@ -1460,6 +1466,10 @@ nxm_execute_stack_pop(const struct ofpact_stack *pop,
 
     /* Only pop if stack is not empty. Otherwise, give warning. */
     if (src_value) {
+        union mf_subvalue mask_value;
+
+        memset(&mask_value, 0xff, sizeof mask_value);
+        mf_write_subfield_flow(&pop->subfield, &mask_value, &wc->masks);
         mf_write_subfield_flow(&pop->subfield, src_value, flow);
     } else {
         if (!VLOG_DROP_WARN(&rl)) {
