@@ -350,6 +350,8 @@ cfm_run(struct cfm *cfm)
         struct remote_mp *rmp, *rmp_next;
         bool old_cfm_fault = cfm->fault;
         bool demand_override;
+        bool rmp_set_opup = false;
+        bool rmp_set_opdown = false;
 
         cfm->fault = cfm->recv_fault;
         cfm->recv_fault = 0;
@@ -359,7 +361,6 @@ cfm_run(struct cfm *cfm)
         cfm->rmps_array = xmalloc(hmap_count(&cfm->remote_mps) *
                                   sizeof *cfm->rmps_array);
 
-        cfm->remote_opup = true;
         if (cfm->health_interval == CFM_HEALTH_INTERVAL) {
             /* Calculate the cfm health of the interface.  If the number of
              * remote_mpids of a cfm interface is > 1, the cfm health is
@@ -411,12 +412,21 @@ cfm_run(struct cfm *cfm)
             } else {
                 rmp->recv = false;
 
-                if (!rmp->opup) {
-                    cfm->remote_opup = rmp->opup;
+                if (rmp->opup) {
+                    rmp_set_opup = true;
+                } else {
+                    rmp_set_opdown = true;
                 }
 
                 cfm->rmps_array[cfm->rmps_array_len++] = rmp->mpid;
             }
+        }
+
+        if (rmp_set_opdown) {
+            cfm->remote_opup = false;
+        }
+        else if (rmp_set_opup) {
+            cfm->remote_opup = true;
         }
 
         if (hmap_is_empty(&cfm->remote_mps)) {
