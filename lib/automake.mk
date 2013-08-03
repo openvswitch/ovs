@@ -261,7 +261,7 @@ endif
 if HAVE_POSIX_AIO
 lib_libopenvswitch_a_SOURCES += lib/async-append-aio.c
 else
-lib_libopenvswitch_a_SOURCES += lib/async-append-sync.c
+lib_libopenvswitch_a_SOURCES += lib/async-append-null.c
 endif
 
 if ESX

@@ -50,16 +50,6 @@ struct async_append {
     struct byteq byteq;
 };
 
-static bool async_append_enabled;
-
-void
-async_append_enable(void)
-{
-    assert_single_threaded();
-    forbid_forking("async i/o enabled");
-    async_append_enabled = true;
-}
-
 struct async_append *
 async_append_create(int fd)
 {
@@ -127,11 +117,6 @@ void
 async_append_write(struct async_append *ap, const void *data_, size_t size)
 {
     const uint8_t *data = data_;
-
-    if (!async_append_enabled) {
-        ignore(write(ap->fd, data, size));
-        return;
-    }
 
     while (size > 0) {
         struct aiocb *aiocb;

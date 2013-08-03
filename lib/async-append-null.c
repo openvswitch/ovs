@@ -15,8 +15,8 @@
 
 #include <config.h>
 
-/* This implementation of the async-append.h interface uses ordinary
- * synchronous I/O, so it should be portable everywhere. */
+/* This is a null implementation of the asynchronous I/O interface for systems
+ * that don't have a form of asynchronous I/O. */
 
 #include "async-append.h"
 
@@ -25,38 +25,27 @@
 
 #include "util.h"
 
-struct async_append {
-    int fd;
-};
-
-void
-async_append_enable(void)
-{
-    /* Nothing to do. */
-}
-
 struct async_append *
-async_append_create(int fd)
+async_append_create(int fd OVS_UNUSED)
 {
-    struct async_append *ap = xmalloc(sizeof *ap);
-    ap->fd = fd;
-    return ap;
+    return NULL;
 }
 
 void
 async_append_destroy(struct async_append *ap)
 {
-    free(ap);
+    ovs_assert(ap == NULL);
 }
 
 void
-async_append_write(struct async_append *ap, const void *data, size_t size)
+async_append_write(struct async_append *ap OVS_UNUSED,
+                   const void *data OVS_UNUSED, size_t size OVS_UNUSED)
 {
-    ignore(write(ap->fd, data, size));
+    NOT_REACHED();
 }
 
 void
 async_append_flush(struct async_append *ap OVS_UNUSED)
 {
-    /* Nothing to do. */
+    NOT_REACHED();
 }

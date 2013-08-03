@@ -2447,7 +2447,7 @@ bridge_run(void)
              * process that forked us to exit successfully. */
             daemonize_complete();
 
-            async_append_enable();
+            vlog_enable_async();
 
             VLOG_INFO_ONCE("%s (Open vSwitch) %s", program_name, VERSION);
         }

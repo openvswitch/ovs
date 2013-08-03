@@ -110,6 +110,7 @@ static struct ovs_mutex log_file_mutex = OVS_ADAPTIVE_MUTEX_INITIALIZER;
 static char *log_file_name OVS_GUARDED_BY(log_file_mutex);
 static int log_fd OVS_GUARDED_BY(log_file_mutex) = -1;
 static struct async_append *log_writer OVS_GUARDED_BY(log_file_mutex);
+static bool log_async OVS_GUARDED_BY(log_file_mutex);
 
 static void format_log_message(const struct vlog_module *, enum vlog_level,
                                enum vlog_facility,
@@ -344,7 +345,9 @@ vlog_set_log_file(const char *file_name)
 
     log_file_name = xstrdup(new_log_file_name);
     log_fd = new_log_fd;
-    log_writer = async_append_create(new_log_fd);
+    if (log_async) {
+        log_writer = async_append_create(new_log_fd);
+    }
 
     for (mp = vlog_modules; mp < &vlog_modules[n_vlog_modules]; mp++) {
         update_min_level(*mp);
@@ -617,6 +620,22 @@ vlog_init(void)
     pthread_once(&once, vlog_init__);
 }
 
+/* Enables VLF_FILE log output to be written asynchronously to disk.
+ * Asynchronous file writes avoid blocking the process in the case of a busy
+ * disk, but on the other hand they are less robust: there is a chance that the
+ * write will not make it to the log file if the process crashes soon after the
+ * log call. */
+void
+vlog_enable_async(void)
+{
+    ovs_mutex_lock(&log_file_mutex);
+    log_async = true;
+    if (log_fd >= 0 && !log_writer) {
+        log_writer = async_append_create(log_fd);
+    }
+    ovs_mutex_unlock(&log_file_mutex);
+}
+
 /* Print the current logging level for each module. */
 char *
 vlog_get_levels(void)
@@ -836,9 +855,13 @@ vlog_valist(const struct vlog_module *module, enum vlog_level level,
 
             ovs_mutex_lock(&log_file_mutex);
             if (log_fd >= 0) {
-                async_append_write(log_writer, s.string, s.length);
-                if (level == VLL_EMER) {
-                    async_append_flush(log_writer);
+                if (log_writer) {
+                    async_append_write(log_writer, s.string, s.length);
+                    if (level == VLL_EMER) {
+                        async_append_flush(log_writer);
+                    }
+                } else {
+                    ignore(write(log_fd, s.string, s.length));
                 }
             }
             ovs_mutex_unlock(&log_file_mutex);

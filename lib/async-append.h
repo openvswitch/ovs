@@ -32,24 +32,10 @@
  * Only a single thread may use a given 'struct async_append' at one time.
  */
 
-/* Enables using asynchronous I/O.  Some implementations may treat this as a
- * no-op.
- *
- * Before this function is called, the POSIX aio implementation uses ordinary
- * synchronous I/O because some POSIX aio libraries actually use threads
- * internally, which has enough cost and robustness implications that it's
- * better to use asynchronous I/O only when it has real expected benefits.
- *
- * Must be called while the process is still single-threaded.  May forbid the
- * process from subsequently forking. */
-void async_append_enable(void);
-
 /* Creates and returns a new asynchronous appender for file descriptor 'fd',
- * which the caller must have opened in append mode (O_APPEND).
- *
- * This function must always succeed.  If the system is for some reason unable
- * to support asynchronous I/O on 'fd' then the library must fall back to
- * syncrhonous I/O. */
+ * which the caller must have opened in append mode (O_APPEND).  If the system
+ * is for some reason unable to support asynchronous I/O on 'fd' this function
+ * may return NULL. */
 struct async_append *async_append_create(int fd);
 
 /* Destroys 'ap', without closing its underlying file descriptor. */
