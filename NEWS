@@ -45,6 +45,7 @@ v1.11.0 - xx xxx xxxx
         in_port to some unused value, such as OFPP_NONE.)
     - ovs-dpctl:
       * New debugging commands "add-flow", "mod-flow", "del-flow".
+      * "dump-flows" now has a -m option to increase output verbosity.
     - In dpif-based bridges, cache action translations, which can improve
       flow set up performance by 80% with a complicated flow table.
     - New syslog format, prefixed with "ovs|", to be easier to filter.

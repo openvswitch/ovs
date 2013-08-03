@@ -51,7 +51,8 @@ static const char *delimiters = ", \t\r\n";
 static int parse_odp_key_mask_attr(const char *, const struct simap *port_names,
                               struct ofpbuf *, struct ofpbuf *);
 static void format_odp_key_attr(const struct nlattr *a,
-                                const struct nlattr *ma, struct ds *ds);
+                                const struct nlattr *ma, struct ds *ds,
+                                bool verbose);
 
 /* Returns one the following for the action with the given OVS_ACTION_ATTR_*
  * 'type':
@@ -399,7 +400,7 @@ format_odp_action(struct ds *ds, const struct nlattr *a)
         break;
     case OVS_ACTION_ATTR_SET:
         ds_put_cstr(ds, "set(");
-        format_odp_key_attr(nl_attr_get(a), NULL, ds);
+        format_odp_key_attr(nl_attr_get(a), NULL, ds, true);
         ds_put_cstr(ds, ")");
         break;
     case OVS_ACTION_ATTR_PUSH_VLAN:
@@ -898,6 +899,12 @@ tun_key_to_attr(struct ofpbuf *a, const struct flow_tnl *tun_key)
 }
 
 static bool
+odp_mask_attr_is_wildcard(const struct nlattr *ma)
+{
+    return is_all_zeros(nl_attr_get(ma), nl_attr_get_size(ma));
+}
+
+static bool
 odp_mask_attr_is_exact(const struct nlattr *ma)
 {
     bool is_exact = false;
@@ -929,7 +936,7 @@ odp_mask_attr_is_exact(const struct nlattr *ma)
 
 static void
 format_odp_key_attr(const struct nlattr *a, const struct nlattr *ma,
-                    struct ds *ds)
+                    struct ds *ds, bool verbose)
 {
     struct flow_tnl tun_key;
     enum ovs_key_attr attr = nl_attr_type(a);
@@ -972,9 +979,10 @@ format_odp_key_attr(const struct nlattr *a, const struct nlattr *ma,
     case OVS_KEY_ATTR_ENCAP:
         if (ma && nl_attr_get_size(ma) && nl_attr_get_size(a)) {
             odp_flow_format(nl_attr_get(a), nl_attr_get_size(a),
-                            nl_attr_get(ma), nl_attr_get_size(ma), ds);
+                            nl_attr_get(ma), nl_attr_get_size(ma), ds, verbose);
         } else if (nl_attr_get_size(a)) {
-            odp_flow_format(nl_attr_get(a), nl_attr_get_size(a), NULL, 0, ds);
+            odp_flow_format(nl_attr_get(a), nl_attr_get_size(a), NULL, 0, ds,
+                            verbose);
         }
         break;
 
@@ -1337,7 +1345,7 @@ generate_all_wildcard_mask(struct ofpbuf *ofp, const struct nlattr *key)
 void
 odp_flow_format(const struct nlattr *key, size_t key_len,
                 const struct nlattr *mask, size_t mask_len,
-                struct ds *ds)
+                struct ds *ds, bool verbose)
 {
     if (key_len) {
         const struct nlattr *a;
@@ -1345,22 +1353,35 @@ odp_flow_format(const struct nlattr *key, size_t key_len,
         bool has_ethtype_key = false;
         const struct nlattr *ma = NULL;
         struct ofpbuf ofp;
+        bool first_field = true;
 
         ofpbuf_init(&ofp, 100);
         NL_ATTR_FOR_EACH (a, left, key, key_len) {
-            if (a != key) {
-                ds_put_char(ds, ',');
-            }
-            if (nl_attr_type(a) == OVS_KEY_ATTR_ETHERTYPE) {
+            bool is_nested_attr;
+            bool is_wildcard = false;
+            int attr_type = nl_attr_type(a);
+
+            if (attr_type == OVS_KEY_ATTR_ETHERTYPE) {
                 has_ethtype_key = true;
             }
+
+            is_nested_attr = (odp_flow_key_attr_len(attr_type) == -2);
+
             if (mask && mask_len) {
                 ma = nl_attr_find__(mask, mask_len, nl_attr_type(a));
-                if (!ma) {
+                is_wildcard = ma ? odp_mask_attr_is_wildcard(ma) : true;
+            }
+
+            if (verbose || !is_wildcard  || is_nested_attr) {
+                if (is_wildcard && !ma) {
                     ma = generate_all_wildcard_mask(&ofp, a);
                 }
+                if (!first_field) {
+                    ds_put_char(ds, ',');
+                }
+                format_odp_key_attr(a, ma, ds, verbose);
+                first_field = false;
             }
-            format_odp_key_attr(a, ma, ds);
             ofpbuf_clear(&ofp);
         }
         ofpbuf_uninit(&ofp);
@@ -1395,7 +1416,7 @@ void
 odp_flow_key_format(const struct nlattr *key,
                     size_t key_len, struct ds *ds)
 {
-    odp_flow_format(key, key_len, NULL, 0, ds);
+    odp_flow_format(key, key_len, NULL, 0, ds, true);
 }
 
 static void

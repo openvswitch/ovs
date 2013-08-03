@@ -118,9 +118,11 @@ exactly one datapath exists, in which case that datapath is the
 default.  When multiple datapaths exist, then a datapath name is
 required.
 .
-.IP "\fBdump\-flows\fR [\fIdp\fR]"
-Prints to the console all flow entries in datapath \fIdp\fR's
-flow table.
+.IP "[\fB\-m \fR| \fB\-\-more\fR] \fBdump\-flows\fR [\fIdp\fR]"
+Prints to the console all flow entries in datapath \fIdp\fR's flow
+table.  Without \fB\-m\fR or \fB\-\-more\fR, output omits match fields
+that a flow wildcards entirely; with \fB\-m\fR or \fB\-\-more\fR,
+output includes all wildcarded fields.
 .
 .IP "\fBadd\-flow\fR [\fIdp\fR] \fIflow actions\fR"
 .IQ "[\fB\-\-clear\fR] [\fB\-\-may-create\fR] [\fB\-s\fR | \fB\-\-statistics\fR] \fBmod\-flow\fR [\fIdp\fR] \fIflow actions\fR"
@@ -158,6 +160,10 @@ Deletes all flow entries from datapath \fIdp\fR's flow table.
 .IQ "\fB\-\-statistics\fR"
 Causes the \fBshow\fR command to print packet and byte counters for
 each port within the datapaths that it shows.
+.
+.IP "\fB\-m\fR"
+.IQ "\fB\-\-more\fR"
+Increases the verbosity of \fBdump\-flows\fR output.
 .
 .IP "\fB\-t\fR"
 .IQ "\fB\-\-timeout=\fIsecs\fR"

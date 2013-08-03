@@ -94,7 +94,7 @@ enum odp_key_fitness odp_tun_key_from_attr(const struct nlattr *,
 
 void odp_flow_format(const struct nlattr *key, size_t key_len,
                      const struct nlattr *mask, size_t mask_len,
-                     struct ds *);
+                     struct ds *, bool verbose);
 void odp_flow_key_format(const struct nlattr *, size_t, struct ds *);
 int odp_flow_from_string(const char *s,
                          const struct simap *port_names,

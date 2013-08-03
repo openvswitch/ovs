@@ -182,6 +182,8 @@ usage(void)
     vlog_usage();
     printf("\nOptions for show and mod-flow:\n"
            "  -s,  --statistics           print statistics for port or flow\n"
+           "\nOptions for dump-flows:\n"
+           "  -m, --more                  increase verbosity of output\n"
            "\nOptions for mod-flow:\n"
            "  --may-create                create flow if it doesn't exist\n"
            "  --clear                     reset existing stats to zero\n"
@@ -761,7 +763,7 @@ dpctl_dump_flows(int argc, char *argv[])
                                &mask, &mask_len,
                                &actions, &actions_len, &stats)) {
         ds_clear(&ds);
-        odp_flow_format(key, key_len, mask, mask_len, &ds);
+        odp_flow_format(key, key_len, mask, mask_len, &ds, verbosity);
         ds_put_cstr(&ds, ", ");
 
         dpif_flow_stats_format(stats, &ds);
@@ -1050,7 +1052,7 @@ dpctl_normalize_actions(int argc, char *argv[])
         "odp_flow_key_from_string");
 
     ds_clear(&s);
-    odp_flow_format(keybuf.data, keybuf.size, NULL, 0, &s);
+    odp_flow_format(keybuf.data, keybuf.size, NULL, 0, &s, verbosity);
     printf("input flow: %s\n", ds_cstr(&s));
 
     run(odp_flow_key_to_flow(keybuf.data, keybuf.size, &flow),

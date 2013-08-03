@@ -86,7 +86,7 @@ parse_keys(bool wc_keys)
         ds_init(&out);
         if (wc_keys) {
             odp_flow_format(odp_key.data, odp_key.size,
-                            odp_mask.data, odp_mask.size, &out);
+                            odp_mask.data, odp_mask.size, &out, false);
         } else {
             odp_flow_key_format(odp_key.data, odp_key.size, &out);
         }

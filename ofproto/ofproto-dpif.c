@@ -6248,7 +6248,7 @@ ofproto_unixctl_dpif_dump_flows(struct unixctl_conn *conn,
         }
 
         odp_flow_format(subfacet->key, subfacet->key_len,
-                        mask.data, mask.size, &ds);
+                        mask.data, mask.size, &ds, false);
 
         ds_put_format(&ds, ", packets:%"PRIu64", bytes:%"PRIu64", used:",
                       subfacet->dp_packet_count, subfacet->dp_byte_count);
