@@ -71,6 +71,7 @@ COVERAGE_DEFINE(facet_revalidate);
 COVERAGE_DEFINE(facet_unexpected);
 COVERAGE_DEFINE(facet_suppress);
 COVERAGE_DEFINE(subfacet_install_fail);
+COVERAGE_DEFINE(packet_in_overflow);
 COVERAGE_DEFINE(flow_mod_overflow);
 
 /* Number of implemented OpenFlow tables. */
@@ -501,6 +502,10 @@ struct ofproto_dpif {
     struct ovs_mutex flow_mod_mutex;
     struct list flow_mods OVS_GUARDED;
     size_t n_flow_mods OVS_GUARDED;
+
+    struct ovs_mutex pin_mutex;
+    struct list pins OVS_GUARDED;
+    size_t n_pins OVS_GUARDED;
 };
 
 /* Defer flow mod completion until "ovs-appctl ofproto/unclog"?  (Useful only
@@ -570,7 +575,18 @@ void
 ofproto_dpif_send_packet_in(struct ofproto_dpif *ofproto,
                             struct ofputil_packet_in *pin)
 {
-    connmgr_send_packet_in(ofproto->up.connmgr, pin);
+    ovs_mutex_lock(&ofproto->pin_mutex);
+    if (ofproto->n_pins > 1024) {
+        ovs_mutex_unlock(&ofproto->pin_mutex);
+        COVERAGE_INC(packet_in_overflow);
+        free(CONST_CAST(void *, pin->packet));
+        free(pin);
+        return;
+    }
+
+    list_push_back(&ofproto->pins, &pin->list_node);
+    ofproto->n_pins++;
+    ovs_mutex_unlock(&ofproto->pin_mutex);
 }
 
 /* Factory functions. */
@@ -1287,6 +1303,12 @@ construct(struct ofproto *ofproto_)
     ofproto->n_flow_mods = 0;
     ovs_mutex_unlock(&ofproto->flow_mod_mutex);
 
+    ovs_mutex_init(&ofproto->pin_mutex, PTHREAD_MUTEX_NORMAL);
+    ovs_mutex_lock(&ofproto->pin_mutex);
+    list_init(&ofproto->pins);
+    ofproto->n_pins = 0;
+    ovs_mutex_unlock(&ofproto->pin_mutex);
+
     ofproto_dpif_unixctl_init();
 
     hmap_init(&ofproto->vlandev_map);
@@ -1417,6 +1439,7 @@ destruct(struct ofproto *ofproto_)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
     struct rule_dpif *rule, *next_rule;
+    struct ofputil_flow_mod *pin, *next_pin;
     struct ofputil_flow_mod *fm, *next_fm;
     struct oftable *table;
 
@@ -1445,6 +1468,16 @@ destruct(struct ofproto *ofproto_)
     ovs_mutex_unlock(&ofproto->flow_mod_mutex);
     ovs_mutex_destroy(&ofproto->flow_mod_mutex);
 
+    ovs_mutex_lock(&ofproto->pin_mutex);
+    LIST_FOR_EACH_SAFE (pin, next_pin, list_node, &ofproto->pins) {
+        list_remove(&pin->list_node);
+        ofproto->n_pins--;
+        free(pin->ofpacts);
+        free(pin);
+    }
+    ovs_mutex_unlock(&ofproto->pin_mutex);
+    ovs_mutex_destroy(&ofproto->pin_mutex);
+
     mbridge_unref(ofproto->mbridge);
 
     netflow_destroy(ofproto->netflow);
@@ -1470,9 +1503,10 @@ static int
 run_fast(struct ofproto *ofproto_)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
-    struct ofputil_flow_mod *fm, *next;
+    struct ofputil_packet_in *pin, *next_pin;
+    struct ofputil_flow_mod *fm, *next_fm;
+    struct list flow_mods, pins;
     struct ofport_dpif *ofport;
-    struct list flow_mods;
 
     /* Do not perform any periodic activity required by 'ofproto' while
      * waiting for flow restore to complete. */
@@ -1491,7 +1525,7 @@ run_fast(struct ofproto *ofproto_)
     }
     ovs_mutex_unlock(&ofproto->flow_mod_mutex);
 
-    LIST_FOR_EACH_SAFE (fm, next, list_node, &flow_mods) {
+    LIST_FOR_EACH_SAFE (fm, next_fm, list_node, &flow_mods) {
         int error = ofproto_flow_mod(&ofproto->up, fm);
         if (error && !VLOG_DROP_WARN(&rl)) {
             VLOG_WARN("learning action failed to modify flow table (%s)",
@@ -1501,6 +1535,24 @@ run_fast(struct ofproto *ofproto_)
         list_remove(&fm->list_node);
         free(fm->ofpacts);
         free(fm);
+    }
+
+    ovs_mutex_lock(&ofproto->pin_mutex);
+    if (ofproto->n_pins) {
+        pins = ofproto->pins;
+        list_moved(&pins);
+        list_init(&ofproto->pins);
+        ofproto->n_pins = 0;
+    } else {
+        list_init(&pins);
+    }
+    ovs_mutex_unlock(&ofproto->pin_mutex);
+
+    LIST_FOR_EACH_SAFE (pin, next_pin, list_node, &pins) {
+        connmgr_send_packet_in(ofproto->up.connmgr, pin);
+        list_remove(&pin->list_node);
+        free(CONST_CAST(void *, pin->packet));
+        free(pin);
     }
 
     HMAP_FOR_EACH (ofport, up.hmap_node, &ofproto->up.ports) {

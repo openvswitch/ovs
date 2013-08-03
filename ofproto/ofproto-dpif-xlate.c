@@ -1688,7 +1688,7 @@ execute_controller_action(struct xlate_ctx *ctx, int len,
                           enum ofp_packet_in_reason reason,
                           uint16_t controller_id)
 {
-    struct ofputil_packet_in pin;
+    struct ofputil_packet_in *pin;
     struct ofpbuf *packet;
     struct flow key;
 
@@ -1710,17 +1710,18 @@ execute_controller_action(struct xlate_ctx *ctx, int len,
     odp_execute_actions(NULL, packet, &key, ctx->xout->odp_actions.data,
                         ctx->xout->odp_actions.size, NULL, NULL);
 
-    pin.packet = packet->data;
-    pin.packet_len = packet->size;
-    pin.reason = reason;
-    pin.controller_id = controller_id;
-    pin.table_id = ctx->table_id;
-    pin.cookie = ctx->rule ? ctx->rule->up.flow_cookie : 0;
+    pin = xmalloc(sizeof *pin);
+    pin->packet_len = packet->size;
+    pin->packet = ofpbuf_steal_data(packet);
+    pin->reason = reason;
+    pin->controller_id = controller_id;
+    pin->table_id = ctx->table_id;
+    pin->cookie = ctx->rule ? ctx->rule->up.flow_cookie : 0;
 
-    pin.send_len = len;
-    flow_get_metadata(&ctx->xin->flow, &pin.fmd);
+    pin->send_len = len;
+    flow_get_metadata(&ctx->xin->flow, &pin->fmd);
 
-    ofproto_dpif_send_packet_in(ctx->xbridge->ofproto, &pin);
+    ofproto_dpif_send_packet_in(ctx->xbridge->ofproto, pin);
     ofpbuf_delete(packet);
 }
 
