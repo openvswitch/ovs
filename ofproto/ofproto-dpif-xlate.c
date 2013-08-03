@@ -197,7 +197,7 @@ static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 
 static struct xbridge *xbridge_lookup(const struct ofproto_dpif *);
 static struct xbundle *xbundle_lookup(const struct ofbundle *);
-static struct xport *xport_lookup(struct ofport_dpif *);
+static struct xport *xport_lookup(const struct ofport_dpif *);
 static struct xport *get_ofp_port(const struct xbridge *, ofp_port_t ofp_port);
 static struct skb_priority_to_dscp *get_skb_priority(const struct xport *,
                                                      uint32_t skb_priority);
@@ -398,7 +398,7 @@ xlate_ofport_set(struct ofproto_dpif *ofproto, struct ofbundle *ofbundle,
     if (xport->peer) {
         xport->peer->peer = NULL;
     }
-    xport->peer = peer ? xport_lookup(peer) : NULL;
+    xport->peer = xport_lookup(peer);
     if (xport->peer) {
         xport->peer->peer = xport;
     }
@@ -406,7 +406,7 @@ xlate_ofport_set(struct ofproto_dpif *ofproto, struct ofbundle *ofbundle,
     if (xport->xbundle) {
         list_remove(&xport->bundle_node);
     }
-    xport->xbundle = ofbundle ? xbundle_lookup(ofbundle) : NULL;
+    xport->xbundle = xbundle_lookup(ofbundle);
     if (xport->xbundle) {
         list_insert(&xport->xbundle->xports, &xport->bundle_node);
     }
@@ -464,6 +464,10 @@ xbridge_lookup(const struct ofproto_dpif *ofproto)
 {
     struct xbridge *xbridge;
 
+    if (!ofproto) {
+        return NULL;
+    }
+
     HMAP_FOR_EACH_IN_BUCKET (xbridge, hmap_node, hash_pointer(ofproto, 0),
                              &xbridges) {
         if (xbridge->ofproto == ofproto) {
@@ -478,6 +482,10 @@ xbundle_lookup(const struct ofbundle *ofbundle)
 {
     struct xbundle *xbundle;
 
+    if (!ofbundle) {
+        return NULL;
+    }
+
     HMAP_FOR_EACH_IN_BUCKET (xbundle, hmap_node, hash_pointer(ofbundle, 0),
                              &xbundles) {
         if (xbundle->ofbundle == ofbundle) {
@@ -488,9 +496,13 @@ xbundle_lookup(const struct ofbundle *ofbundle)
 }
 
 static struct xport *
-xport_lookup(struct ofport_dpif *ofport)
+xport_lookup(const struct ofport_dpif *ofport)
 {
     struct xport *xport;
+
+    if (!ofport) {
+        return NULL;
+    }
 
     HMAP_FOR_EACH_IN_BUCKET (xport, hmap_node, hash_pointer(ofport, 0),
                              &xports) {
@@ -874,7 +886,7 @@ output_normal(struct xlate_ctx *ctx, const struct xbundle *out_xbundle,
 
         ofport = bond_choose_output_slave(out_xbundle->bond, &ctx->xin->flow,
                                           &ctx->xout->wc, vid);
-        xport = ofport ? xport_lookup(ofport) : NULL;
+        xport = xport_lookup(ofport);
 
         if (!xport) {
             /* No slaves enabled, so drop packet. */
