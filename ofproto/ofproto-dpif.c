@@ -3817,7 +3817,7 @@ handle_flow_miss_with_facet(struct flow_miss *miss, struct facet *facet,
         subfacet_update_stats(subfacet, stats);
     }
 
-    if (miss->upcall_type == DPIF_UC_MISS || subfacet->path != want_path) {
+    if (subfacet->path != want_path) {
         struct flow_miss_op *op = &ops[(*n_ops)++];
         struct dpif_flow_put *put = &op->dpif_op.u.flow_put;
 
