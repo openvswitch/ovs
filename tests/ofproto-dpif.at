@@ -2249,6 +2249,9 @@ AT_BANNER([ofproto-dpif -- megaflows])
 
 # Strips out uninteresting parts of megaflow output, as well as parts
 # that vary from one run to another (e.g., timing and bond actions).
+m4_define([STRIP_USED], [[sed '
+    s/used:[0-9]*\.[0-9]*/used:0.0/
+' | sort]])
 m4_define([STRIP_XOUT], [[sed '
     s/used:[0-9]*\.[0-9]*/used:0.0/
     s/Datapath actions:.*/Datapath actions: <del>/
@@ -2629,6 +2632,32 @@ AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:
 AT_CHECK([ovs-appctl dpif/dump-megaflows br0 | STRIP_XOUT], [0], [dnl
 skb_priority=0,icmp,in_port=1,nw_src=10.0.0.2,nw_frag=no, n_subfacets:1, used:0.0s, Datapath actions: <del>
 skb_priority=0,icmp,in_port=1,nw_src=10.0.0.4,nw_dst=10.0.0.3,nw_tos=0,nw_ecn=0,nw_ttl=64, n_subfacets:1, used:0.0s, Datapath actions: <del>
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto-dpif megaflow - set dl_dst])
+OVS_VSWITCHD_START
+ADD_OF_PORTS([br0], [1], [2])
+AT_DATA([flows.txt], [dnl
+table=0 in_port=1 actions=mod_dl_dst(50:54:00:00:00:0a),output(2)
+])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
+dnl The megaflows do not match the same fields, since the first packet
+dnl is essentially a no-op.  (The new destination MAC is the same as the
+dnl original.) The ofproto-dpif library un-wildcards the destination MAC
+dnl so that a packet that doesn't need its MAC address changed doesn't
+dnl hide one that does.  Since the first entry doesn't need to change,
+dnl only the destination MAC address is matched (as decided by
+dnl ofproto-dpif).  The second entry actually updates the destination
+dnl MAC, so both the source and destination MAC addresses are
+dnl un-wildcarded, since the ODP commit functions update both the source
+dnl and destination MAC addresses.
+AT_CHECK([ovs-appctl dpif/dump-megaflows br0 | STRIP_USED], [0], [dnl
+skb_priority=0,ip,in_port=1,dl_dst=50:54:00:00:00:0a,nw_frag=no, n_subfacets:1, used:0.0s, Datapath actions: 2
+skb_priority=0,ip,in_port=1,dl_src=50:54:00:00:00:0b,dl_dst=50:54:00:00:00:0c,nw_frag=no, n_subfacets:1, used:0.0s, Datapath actions: set(eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0a)),2
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP

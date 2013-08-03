@@ -87,7 +87,7 @@ void nxm_execute_reg_move(const struct ofpact_reg_move *, struct flow *,
                           struct flow_wildcards *);
 void nxm_execute_reg_load(const struct ofpact_reg_load *, struct flow *);
 void nxm_reg_load(const struct mf_subfield *, uint64_t src_data,
-                  struct flow *);
+                  struct flow *, struct flow_wildcards *);
 
 char *nxm_parse_stack_action(struct ofpact_stack *, const char *)
     WARN_UNUSED_RESULT;
@@ -113,7 +113,8 @@ void nxm_execute_stack_push(const struct ofpact_stack *,
                             const struct flow *, struct flow_wildcards *,
                             struct ofpbuf *);
 void nxm_execute_stack_pop(const struct ofpact_stack *,
-                            struct flow *, struct ofpbuf *);
+                            struct flow *, struct flow_wildcards *,
+                            struct ofpbuf *);
 
 int nxm_field_bytes(uint32_t header);
 int nxm_field_bits(uint32_t header);

@@ -114,7 +114,7 @@ multipath_execute(const struct ofpact_multipath *mp, struct flow *flow,
                                         mp->max_link + 1, mp->arg);
 
     flow_mask_hash_fields(flow, wc, mp->fields);
-    nxm_reg_load(&mp->dst, link, flow);
+    nxm_reg_load(&mp->dst, link, flow, wc);
 }
 
 static uint16_t

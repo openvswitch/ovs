@@ -1708,6 +1708,7 @@ compose_set_mpls_ttl_action(struct xlate_ctx *ctx, uint8_t ttl)
         return true;
     }
 
+    ctx->xout->wc.masks.mpls_lse |= htonl(MPLS_TTL_MASK);
     set_mpls_lse_ttl(&ctx->xin->flow.mpls_lse, ttl);
     return false;
 }
@@ -1887,7 +1888,8 @@ xlate_bundle_action(struct xlate_ctx *ctx,
                           slave_enabled_cb,
                           CONST_CAST(struct xbridge *, ctx->xbridge));
     if (bundle->dst.field) {
-        nxm_reg_load(&bundle->dst, ofp_to_u16(port), &ctx->xin->flow);
+        nxm_reg_load(&bundle->dst, ofp_to_u16(port), &ctx->xin->flow,
+                     &ctx->xout->wc);
     } else {
         xlate_output_action(ctx, port, 0, false);
     }
@@ -2038,12 +2040,14 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
             break;
 
         case OFPACT_SET_VLAN_VID:
+            wc->masks.vlan_tci |= htons(VLAN_VID_MASK | VLAN_CFI);
             flow->vlan_tci &= ~htons(VLAN_VID_MASK);
             flow->vlan_tci |= (htons(ofpact_get_SET_VLAN_VID(a)->vlan_vid)
                                | htons(VLAN_CFI));
             break;
 
         case OFPACT_SET_VLAN_PCP:
+            wc->masks.vlan_tci |= htons(VLAN_PCP_MASK | VLAN_CFI);
             flow->vlan_tci &= ~htons(VLAN_PCP_MASK);
             flow->vlan_tci |=
                 htons((ofpact_get_SET_VLAN_PCP(a)->vlan_pcp << VLAN_PCP_SHIFT)
@@ -2051,35 +2055,42 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
             break;
 
         case OFPACT_STRIP_VLAN:
+            memset(&wc->masks.vlan_tci, 0xff, sizeof wc->masks.vlan_tci);
             flow->vlan_tci = htons(0);
             break;
 
         case OFPACT_PUSH_VLAN:
             /* XXX 802.1AD(QinQ) */
+            memset(&wc->masks.vlan_tci, 0xff, sizeof wc->masks.vlan_tci);
             flow->vlan_tci = htons(VLAN_CFI);
             break;
 
         case OFPACT_SET_ETH_SRC:
+            memset(&wc->masks.dl_src, 0xff, sizeof wc->masks.dl_src);
             memcpy(flow->dl_src, ofpact_get_SET_ETH_SRC(a)->mac, ETH_ADDR_LEN);
             break;
 
         case OFPACT_SET_ETH_DST:
+            memset(&wc->masks.dl_dst, 0xff, sizeof wc->masks.dl_dst);
             memcpy(flow->dl_dst, ofpact_get_SET_ETH_DST(a)->mac, ETH_ADDR_LEN);
             break;
 
         case OFPACT_SET_IPV4_SRC:
+            memset(&wc->masks.nw_src, 0xff, sizeof wc->masks.nw_src);
             if (flow->dl_type == htons(ETH_TYPE_IP)) {
                 flow->nw_src = ofpact_get_SET_IPV4_SRC(a)->ipv4;
             }
             break;
 
         case OFPACT_SET_IPV4_DST:
+            memset(&wc->masks.nw_dst, 0xff, sizeof wc->masks.nw_dst);
             if (flow->dl_type == htons(ETH_TYPE_IP)) {
                 flow->nw_dst = ofpact_get_SET_IPV4_DST(a)->ipv4;
             }
             break;
 
         case OFPACT_SET_IPV4_DSCP:
+            wc->masks.nw_tos |= IP_DSCP_MASK;
             /* OpenFlow 1.0 only supports IPv4. */
             if (flow->dl_type == htons(ETH_TYPE_IP)) {
                 flow->nw_tos &= ~IP_DSCP_MASK;
@@ -2089,6 +2100,7 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
 
         case OFPACT_SET_L4_SRC_PORT:
             memset(&wc->masks.nw_proto, 0xff, sizeof wc->masks.nw_proto);
+            memset(&wc->masks.tp_src, 0xff, sizeof wc->masks.tp_src);
             if (is_ip_any(flow)) {
                 flow->tp_src = htons(ofpact_get_SET_L4_SRC_PORT(a)->port);
             }
@@ -2096,6 +2108,7 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
 
         case OFPACT_SET_L4_DST_PORT:
             memset(&wc->masks.nw_proto, 0xff, sizeof wc->masks.nw_proto);
+            memset(&wc->masks.tp_dst, 0xff, sizeof wc->masks.tp_dst);
             if (is_ip_any(flow)) {
                 flow->tp_dst = htons(ofpact_get_SET_L4_DST_PORT(a)->port);
             }
@@ -2131,7 +2144,8 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
             break;
 
         case OFPACT_STACK_POP:
-            nxm_execute_stack_pop(ofpact_get_STACK_POP(a), flow, &ctx->stack);
+            nxm_execute_stack_pop(ofpact_get_STACK_POP(a), flow, wc,
+                                  &ctx->stack);
             break;
 
         case OFPACT_PUSH_MPLS:
@@ -2156,6 +2170,7 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
             break;
 
         case OFPACT_DEC_TTL:
+            wc->masks.nw_ttl = 0xff;
             if (compose_dec_ttl(ctx, ofpact_get_DEC_TTL(a))) {
                 goto out;
             }
