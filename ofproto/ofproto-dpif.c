@@ -5432,12 +5432,14 @@ ofproto_trace(struct ofproto_dpif *ofproto, const struct flow *flow,
               const struct ofpbuf *packet, struct ds *ds)
 {
     struct rule_dpif *rule;
+    struct flow_wildcards wc;
 
     ds_put_cstr(ds, "Flow: ");
     flow_format(ds, flow);
     ds_put_char(ds, '\n');
 
-    rule_dpif_lookup(ofproto, flow, NULL, &rule);
+    flow_wildcards_init_catchall(&wc);
+    rule_dpif_lookup(ofproto, flow, &wc, &rule);
 
     trace_format_rule(ds, 0, rule);
     if (rule == ofproto->miss_rule) {
@@ -5467,6 +5469,7 @@ ofproto_trace(struct ofproto_dpif *ofproto, const struct flow *flow,
         trace.xin.report_hook = trace_report;
 
         xlate_actions(&trace.xin, &trace.xout);
+        flow_wildcards_or(&trace.xout.wc, &trace.xout.wc, &wc);
 
         ds_put_char(ds, '\n');
         trace_format_flow(ds, 0, "Final flow", &trace);
