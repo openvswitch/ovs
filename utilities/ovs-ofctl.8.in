@@ -370,6 +370,14 @@ response.  Reports the total time required.  This is a measure of the
 maximum bandwidth to \fItarget\fR for round-trips of \fIn\fR-byte
 messages.
 .
+.SS "Other Commands"
+.
+.IP "\fBofp\-parse\fR \fIfile\fR"
+Reads \fIfile\fR (or \fBstdin\fR if \fIfile\fR is \fB\-\fR) as a
+series of OpenFlow messages in the binary format used on an OpenFlow
+connection, and prints them to the console.  This can be useful for
+printing OpenFlow messages captured from a TCP stream.
+.
 .SS "Flow Syntax"
 .PP
 Some \fBovs\-ofctl\fR commands accept an argument that describes a flow or

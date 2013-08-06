@@ -20,6 +20,8 @@ v1.12.0 - xx xxx xxxx
       should look like "--private-key=db:Open_vSwitch,SSL,private_key").
     - Added ovs-dev.py, a utility script helpful for Open vSwitch developers.
     - Support for Linux kernels up to 3.9
+    - ovs-ofctl:
+      * New "ofp-parse" for printing OpenFlow messages read from a file.
 
 
 v1.11.0 - xx xxx xxxx

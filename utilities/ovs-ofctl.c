@@ -305,7 +305,9 @@ usage(void)
            "  probe TARGET                probe whether TARGET is up\n"
            "  ping TARGET [N]             latency of N-byte echos\n"
            "  benchmark TARGET N COUNT    bandwidth of COUNT N-byte echos\n"
-           "where SWITCH or TARGET is an active OpenFlow connection method.\n",
+           "SWITCH or TARGET is an active OpenFlow connection method.\n"
+           "\nOther commands:\n"
+           "  ofp-parse FILE              print messages read from FILE\n",
            program_name, program_name);
     vconn_usage(true, false, false);
     daemon_usage();
@@ -1697,6 +1699,56 @@ ofctl_set_frags(int argc OVS_UNUSED, char *argv[])
 }
 
 static void
+ofctl_ofp_parse(int argc OVS_UNUSED, char *argv[])
+{
+    const char *filename = argv[1];
+    struct ofpbuf b;
+    FILE *file;
+
+    file = !strcmp(filename, "-") ? stdin : fopen(filename, "r");
+    if (file == NULL) {
+        ovs_fatal(errno, "%s: open", filename);
+    }
+
+    ofpbuf_init(&b, 65536);
+    for (;;) {
+        struct ofp_header *oh;
+        size_t length, tail_len;
+        void *tail;
+        size_t n;
+
+        ofpbuf_clear(&b);
+        oh = ofpbuf_put_uninit(&b, sizeof *oh);
+        n = fread(oh, 1, sizeof *oh, file);
+        if (n == 0) {
+            break;
+        } else if (n < sizeof *oh) {
+            ovs_fatal(0, "%s: unexpected end of file mid-message", filename);
+        }
+
+        length = ntohs(oh->length);
+        if (length < sizeof *oh) {
+            ovs_fatal(0, "%s: %zu-byte message is too short for OpenFlow",
+                      filename, length);
+        }
+
+        tail_len = length - sizeof *oh;
+        tail = ofpbuf_put_uninit(&b, tail_len);
+        n = fread(tail, 1, tail_len, file);
+        if (n < tail_len) {
+            ovs_fatal(0, "%s: unexpected end of file mid-message", filename);
+        }
+
+        ofp_print(stdout, b.data, b.size, verbosity + 2);
+    }
+    ofpbuf_uninit(&b);
+
+    if (file != stdin) {
+        fclose(file);
+    }
+}
+
+static void
 ofctl_ping(int argc, char *argv[])
 {
     size_t max_payload = 65535 - sizeof(struct ofp_header);
@@ -2932,6 +2984,7 @@ static const struct command all_commands[] = {
     { "mod-port", 3, 3, ofctl_mod_port },
     { "get-frags", 1, 1, ofctl_get_frags },
     { "set-frags", 2, 2, ofctl_set_frags },
+    { "ofp-parse", 1, 1, ofctl_ofp_parse },
     { "probe", 1, 1, ofctl_probe },
     { "ping", 1, 2, ofctl_ping },
     { "benchmark", 3, 3, ofctl_benchmark },

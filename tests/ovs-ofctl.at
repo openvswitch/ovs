@@ -2272,3 +2272,21 @@ AT_CHECK([ovs-ofctl -F oxm -O openflow13], [1], [],
   [ovs-ofctl: missing command name; use --help for help
 ])
 AT_CLEANUP
+
+AT_SETUP([ovs-ofctl ofp-parse])
+# Test the echo request/reply messages (0 payload).
+AT_CHECK([printf '\1\2\0\10\0\0\0\0\1\3\0\10\0\0\0\0' > binary_ofp_msg])
+AT_CHECK([ovs-ofctl ofp-parse binary_ofp_msg], [0], [dnl
+OFPT_ECHO_REQUEST (xid=0x0): 0 bytes of payload
+OFPT_ECHO_REPLY (xid=0x0): 0 bytes of payload
+])
+
+# Test the hello (xid:1 3-byte payload).
+AT_CHECK([printf '\1\0\0\13\0\0\0\1\101\102\103' > binary_ofp_msg])
+AT_CHECK([ovs-ofctl ofp-parse - < binary_ofp_msg], [0], [dnl
+OFPT_HELLO (xid=0x1):
+ version bitmap: 0x01
+ unknown data in hello:
+00000000  01 00 00 0b 00 00 00 01-41 42 43                |........ABC     |
+])
+AT_CLEANUP
