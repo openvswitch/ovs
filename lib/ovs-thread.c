@@ -169,18 +169,49 @@ ovs_mutex_cond_wait(pthread_cond_t *cond, const struct ovs_mutex *mutex_)
         ovs_abort(error, "pthread_cond_wait failed");
     }
 }
+
+DEFINE_EXTERN_PER_THREAD_DATA(ovsthread_id, 0);
+
+struct ovsthread_aux {
+    void *(*start)(void *);
+    void *arg;
+};
+
+static void *
+ovsthread_wrapper(void *aux_)
+{
+    static atomic_uint next_id = ATOMIC_VAR_INIT(1);
+
+    struct ovsthread_aux *auxp = aux_;
+    struct ovsthread_aux aux;
+    unsigned int id;
+
+    atomic_add(&next_id, 1, &id);
+    *ovsthread_id_get() = id;
+
+    aux = *auxp;
+    free(auxp);
+
+    return aux.start(aux.arg);
+}
 
 void
 xpthread_create(pthread_t *threadp, pthread_attr_t *attr,
                 void *(*start)(void *), void *arg)
 {
+    struct ovsthread_aux *aux;
     pthread_t thread;
     int error;
 
     forbid_forking("multiple threads exist");
     multithreaded = true;
 
-    error = pthread_create(threadp ? threadp : &thread, attr, start, arg);
+    aux = xmalloc(sizeof *aux);
+    aux->start = start;
+    aux->arg = arg;
+
+    error = pthread_create(threadp ? threadp : &thread, attr,
+                           ovsthread_wrapper, aux);
     if (error) {
         ovs_abort(error, "pthread_create failed");
     }

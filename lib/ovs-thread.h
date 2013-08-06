@@ -501,6 +501,23 @@ ovsthread_once_start(struct ovsthread_once *once)
     ((ONCE)->done ? false : ({ OVS_MACRO_LOCK((&ONCE->mutex)); true; }))
 #endif
 
+/* Thread ID.
+ *
+ * pthread_t isn't so nice for some purposes.  Its size and representation are
+ * implementation dependent, which means that there is no way to hash it.
+ * This thread ID avoids the problem.
+ */
+
+DECLARE_EXTERN_PER_THREAD_DATA(unsigned int, ovsthread_id);
+
+/* Returns a per-thread identifier unique within the lifetime of the
+ * process. */
+static inline unsigned int
+ovsthread_id_self(void)
+{
+    return *ovsthread_id_get();
+}
+
 void assert_single_threaded_at(const char *where);
 #define assert_single_threaded() assert_single_threaded_at(SOURCE_LOCATOR)
 
