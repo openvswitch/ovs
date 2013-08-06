@@ -1631,7 +1631,6 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
             out_port = ofp_port_to_odp_port(ctx->xbridge, vlandev_port);
             flow->vlan_tci = htons(0);
         }
-        flow->pkt_mark &= ~IPSEC_MARK;
     }
 
     if (out_port != ODPP_NONE) {
