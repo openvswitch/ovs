@@ -249,6 +249,44 @@ out:
     return ofport;
 }
 
+static bool
+tnl_ecn_ok(const struct flow *base_flow, struct flow *flow)
+{
+    if (is_ip_any(base_flow)
+        && (flow->tunnel.ip_tos & IP_ECN_MASK) == IP_ECN_CE) {
+        if ((base_flow->nw_tos & IP_ECN_MASK) == IP_ECN_NOT_ECT) {
+            VLOG_WARN_RL(&rl, "dropping tunnel packet marked ECN CE"
+                         " but is not ECN capable");
+            return false;
+        } else {
+            /* Set the ECN CE value in the tunneled packet. */
+            flow->nw_tos |= IP_ECN_CE;
+        }
+    }
+
+    return true;
+}
+
+/* Should be called at the beginning of action translation to initialize
+ * wildcards and perform any actions based on receiving on tunnel port.
+ *
+ * Returns false if the packet must be dropped. */
+bool
+tnl_xlate_init(const struct flow *base_flow, struct flow *flow,
+               struct flow_wildcards *wc)
+{
+    if (tnl_port_should_receive(flow)) {
+        memset(&wc->masks.tunnel, 0xff, sizeof wc->masks.tunnel);
+        memset(&wc->masks.pkt_mark, 0xff, sizeof wc->masks.pkt_mark);
+
+        if (!tnl_ecn_ok(base_flow, flow)) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 /* Given that 'flow' should be output to the ofport corresponding to
  * 'tnl_port', updates 'flow''s tunnel headers and returns the actual datapath
  * port that the output should happen on.  May return ODPP_NONE if the output

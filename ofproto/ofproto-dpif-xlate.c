@@ -201,8 +201,6 @@ static void output_normal(struct xlate_ctx *, const struct xbundle *,
                           uint16_t vlan);
 static void compose_output_action(struct xlate_ctx *, ofp_port_t ofp_port);
 
-static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
-
 static struct xbridge *xbridge_lookup(const struct ofproto_dpif *);
 static struct xbundle *xbundle_lookup(const struct ofbundle *);
 static struct xport *xport_lookup(const struct ofport_dpif *);
@@ -2171,24 +2169,6 @@ may_receive(const struct xport *xport, struct xlate_ctx *ctx)
     return true;
 }
 
-static bool
-tunnel_ecn_ok(struct xlate_ctx *ctx)
-{
-    if (is_ip_any(&ctx->base_flow)
-        && (ctx->xin->flow.tunnel.ip_tos & IP_ECN_MASK) == IP_ECN_CE) {
-        if ((ctx->base_flow.nw_tos & IP_ECN_MASK) == IP_ECN_NOT_ECT) {
-            VLOG_WARN_RL(&rl, "dropping tunnel packet marked ECN CE"
-                         " but is not ECN capable");
-            return false;
-        } else {
-            /* Set the ECN CE value in the tunneled packet. */
-            ctx->xin->flow.nw_tos |= IP_ECN_CE;
-        }
-    }
-
-    return true;
-}
-
 static void
 do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
                  struct xlate_ctx *ctx)
@@ -2552,6 +2532,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
     struct flow orig_flow;
     struct xlate_ctx ctx;
     size_t ofpacts_len;
+    bool tnl_may_send;
 
     COVERAGE_INC(xlate_actions);
 
@@ -2607,12 +2588,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
     memset(&wc->masks.dl_type, 0xff, sizeof wc->masks.dl_type);
     wc->masks.nw_frag |= FLOW_NW_FRAG_MASK;
 
-    if (tnl_port_should_receive(&ctx.xin->flow)) {
-        memset(&wc->masks.tunnel, 0xff, sizeof wc->masks.tunnel);
-        /* pkt_mark is currently used only by tunnels but that will likely
-         * change in the future. */
-        memset(&wc->masks.pkt_mark, 0xff, sizeof wc->masks.pkt_mark);
-    }
+    tnl_may_send = tnl_xlate_init(&ctx.base_flow, flow, wc);
     if (ctx.xbridge->has_netflow) {
         netflow_mask_wc(flow, wc);
     }
@@ -2681,7 +2657,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
         add_ipfix_action(&ctx);
         sample_actions_len = ctx.xout->odp_actions.size;
 
-        if (tunnel_ecn_ok(&ctx) && (!in_port || may_receive(in_port, &ctx))) {
+        if (tnl_may_send && (!in_port || may_receive(in_port, &ctx))) {
             do_xlate_actions(ofpacts, ofpacts_len, &ctx);
 
             /* We've let OFPP_NORMAL and the learning action look at the

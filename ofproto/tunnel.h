@@ -39,6 +39,8 @@ void tnl_port_add(const struct ofport_dpif *, const struct netdev *,
 void tnl_port_del(const struct ofport_dpif *);
 
 const struct ofport_dpif *tnl_port_receive(const struct flow *);
+bool tnl_xlate_init(const struct flow *base_flow, struct flow *flow,
+                    struct flow_wildcards *);
 odp_port_t tnl_port_send(const struct ofport_dpif *, struct flow *,
                          struct flow_wildcards *wc);
 
