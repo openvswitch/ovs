@@ -153,6 +153,7 @@ void xpthread_cond_broadcast(pthread_cond_t *);
 #endif
 
 void xpthread_key_create(pthread_key_t *, void (*destructor)(void *));
+void xpthread_setspecific(pthread_key_t, const void *);
 
 void xpthread_create(pthread_t *, pthread_attr_t *, void *(*)(void *), void *);
 
@@ -277,7 +278,7 @@ void xpthread_create(pthread_t *, pthread_attr_t *, void *(*)(void *), void *);
                                                                         \
             value = xmalloc(sizeof *value);                             \
             *value = initial_value;                                     \
-            pthread_setspecific(NAME##_key, value);                     \
+            xpthread_setspecific(NAME##_key, value);                    \
         }                                                               \
         return value;                                                   \
     }
@@ -348,7 +349,7 @@ void xpthread_create(pthread_t *, pthread_attr_t *, void *(*)(void *), void *);
     NAME##_set_unsafe(TYPE value)                       \
     {                                                   \
         TYPE old_value = NAME##_get_unsafe();           \
-        pthread_setspecific(NAME##_key, value);         \
+        xpthread_setspecific(NAME##_key, value);        \
         return old_value;                               \
     }                                                   \
                                                         \

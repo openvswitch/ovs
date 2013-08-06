@@ -275,7 +275,7 @@ poll_loop(void)
     loop = pthread_getspecific(key);
     if (!loop) {
         loop = xzalloc(sizeof *loop);
-        pthread_setspecific(key, loop);
+        xpthread_setspecific(key, loop);
     }
     return loop;
 }

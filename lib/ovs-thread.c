@@ -128,6 +128,7 @@ XPTHREAD_FUNC1(pthread_cond_broadcast, pthread_cond_t *);
 
 typedef void destructor_func(void *);
 XPTHREAD_FUNC2(pthread_key_create, pthread_key_t *, destructor_func *);
+XPTHREAD_FUNC2(pthread_setspecific, pthread_key_t, const void *);
 
 void
 ovs_mutex_init(const struct ovs_mutex *l_, int type)
