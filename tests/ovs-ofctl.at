@@ -12,7 +12,7 @@ for test_case in \
     'metadata=0                                  NXM,OXM' \
     'in_port=1                                   any' \
     'skb_priority=0                              none' \
-    'skb_mark=1                                  none' \
+    'pkt_mark=1                                  none' \
     'reg0=0                                      NXM,OXM' \
     'reg1=1                                      NXM,OXM' \
     'reg2=2                                      NXM,OXM' \
@@ -180,9 +180,9 @@ AT_CHECK([ovs-ofctl parse-flows flows.txt
 AT_CLEANUP
 
 
-AT_SETUP([ovs-ofctl parse-flows (skb_mark and skb_priority)])
+AT_SETUP([ovs-ofctl parse-flows (pkt_mark and skb_priority)])
 AT_DATA([flows.txt], [[
-skb_mark=0x12345678,skb_priority=0x12341234,tcp,tp_src=123,actions=flood
+pkt_mark=0x12345678,skb_priority=0x12341234,tcp,tp_src=123,actions=flood
 ]])
 
 AT_CHECK([ovs-ofctl parse-flows flows.txt

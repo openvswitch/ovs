@@ -166,7 +166,7 @@ static void dp_netdev_execute_actions(struct dp_netdev *,
 static void dp_netdev_port_input(struct dp_netdev *dp,
                                  struct dp_netdev_port *port,
                                  struct ofpbuf *packet, uint32_t skb_priority,
-                                 uint32_t skb_mark, const struct flow_tnl *tnl);
+                                 uint32_t pkt_mark, const struct flow_tnl *tnl);
 
 static struct dpif_netdev *
 dpif_netdev_cast(const struct dpif *dpif)
@@ -1135,7 +1135,7 @@ dp_netdev_flow_used(struct dp_netdev_flow *flow, const struct ofpbuf *packet)
 static void
 dp_netdev_port_input(struct dp_netdev *dp, struct dp_netdev_port *port,
                      struct ofpbuf *packet, uint32_t skb_priority,
-                     uint32_t skb_mark, const struct flow_tnl *tnl)
+                     uint32_t pkt_mark, const struct flow_tnl *tnl)
 {
     struct dp_netdev_flow *flow;
     struct flow key;
@@ -1145,7 +1145,7 @@ dp_netdev_port_input(struct dp_netdev *dp, struct dp_netdev_port *port,
         return;
     }
     in_port_.odp_port = port->port_no;
-    flow_extract(packet, skb_priority, skb_mark, tnl, &in_port_, &key);
+    flow_extract(packet, skb_priority, pkt_mark, tnl, &in_port_, &key);
     flow = dp_netdev_lookup_flow(dp, &key);
     if (flow) {
         dp_netdev_flow_used(flow, packet);

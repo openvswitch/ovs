@@ -1519,7 +1519,7 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
     struct flow_wildcards *wc = &ctx->xout->wc;
     struct flow *flow = &ctx->xin->flow;
     ovs_be16 flow_vlan_tci;
-    uint32_t flow_skb_mark;
+    uint32_t flow_pkt_mark;
     uint8_t flow_nw_tos;
     odp_port_t out_port, odp_port;
     uint8_t dscp;
@@ -1587,7 +1587,7 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
     }
 
     flow_vlan_tci = flow->vlan_tci;
-    flow_skb_mark = flow->skb_mark;
+    flow_pkt_mark = flow->pkt_mark;
     flow_nw_tos = flow->nw_tos;
 
     if (dscp_from_skb_priority(xport, flow->skb_priority, &dscp)) {
@@ -1633,7 +1633,7 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
             out_port = ofp_port_to_odp_port(ctx->xbridge, vlandev_port);
             flow->vlan_tci = htons(0);
         }
-        flow->skb_mark &= ~IPSEC_MARK;
+        flow->pkt_mark &= ~IPSEC_MARK;
     }
 
     if (out_port != ODPP_NONE) {
@@ -1650,7 +1650,7 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
  out:
     /* Restore flow */
     flow->vlan_tci = flow_vlan_tci;
-    flow->skb_mark = flow_skb_mark;
+    flow->pkt_mark = flow_pkt_mark;
     flow->nw_tos = flow_nw_tos;
 }
 
@@ -1785,7 +1785,7 @@ execute_controller_action(struct xlate_ctx *ctx, int len,
     packet = ofpbuf_clone(ctx->xin->packet);
 
     key.skb_priority = 0;
-    key.skb_mark = 0;
+    key.pkt_mark = 0;
     memset(&key.tunnel, 0, sizeof key.tunnel);
 
     commit_odp_actions(&ctx->xin->flow, &ctx->base_flow,
@@ -2609,9 +2609,9 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
 
     if (tnl_port_should_receive(&ctx.xin->flow)) {
         memset(&wc->masks.tunnel, 0xff, sizeof wc->masks.tunnel);
-        /* skb_mark is currently used only by tunnels but that will likely
+        /* pkt_mark is currently used only by tunnels but that will likely
          * change in the future. */
-        memset(&wc->masks.skb_mark, 0xff, sizeof wc->masks.skb_mark);
+        memset(&wc->masks.pkt_mark, 0xff, sizeof wc->masks.pkt_mark);
     }
     if (ctx.xbridge->has_netflow) {
         netflow_mask_wc(flow, wc);

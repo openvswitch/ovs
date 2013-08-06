@@ -65,7 +65,7 @@ odp_execute_set_action(struct ofpbuf *packet, const struct nlattr *a,
         break;
 
     case OVS_KEY_ATTR_SKB_MARK:
-        flow->skb_mark = nl_attr_get_u32(a);
+        flow->pkt_mark = nl_attr_get_u32(a);
         break;
 
     case OVS_KEY_ATTR_ETHERNET:

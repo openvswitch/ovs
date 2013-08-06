@@ -181,7 +181,7 @@ size_t odp_put_userspace_action(uint32_t pid,
                                 struct ofpbuf *odp_actions);
 void odp_put_tunnel_action(const struct flow_tnl *tunnel,
                            struct ofpbuf *odp_actions);
-void odp_put_skb_mark_action(const uint32_t skb_mark,
+void odp_put_pkt_mark_action(const uint32_t pkt_mark,
                              struct ofpbuf *odp_actions);
 
 /* Reasons why a subfacet might not be fast-pathable. */

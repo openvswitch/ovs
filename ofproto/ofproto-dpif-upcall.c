@@ -767,7 +767,7 @@ handle_miss_upcalls(struct udpif *udpif, struct list *upcalls)
             continue;
         }
 
-        flow_extract(dupcall->packet, flow.skb_priority, flow.skb_mark,
+        flow_extract(dupcall->packet, flow.skb_priority, flow.pkt_mark,
                      &flow.tunnel, &flow.in_port, &miss->flow);
 
         /* Add other packets to a to-do list. */

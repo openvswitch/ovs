@@ -36,7 +36,7 @@ struct tnl_match {
     ovs_be32 ip_src;
     ovs_be32 ip_dst;
     odp_port_t odp_port;
-    uint32_t skb_mark;
+    uint32_t pkt_mark;
     bool in_key_flow;
     bool ip_src_flow;
     bool ip_dst_flow;
@@ -101,7 +101,7 @@ tnl_port_add__(const struct ofport_dpif *ofport, const struct netdev *netdev,
     tnl_port->match.ip_dst = cfg->ip_dst;
     tnl_port->match.ip_src_flow = cfg->ip_src_flow;
     tnl_port->match.ip_dst_flow = cfg->ip_dst_flow;
-    tnl_port->match.skb_mark = cfg->ipsec ? IPSEC_MARK : 0;
+    tnl_port->match.pkt_mark = cfg->ipsec ? IPSEC_MARK : 0;
     tnl_port->match.in_key_flow = cfg->in_key_flow;
     tnl_port->match.odp_port = odp_port;
 
@@ -213,7 +213,7 @@ tnl_port_receive(const struct flow *flow) OVS_EXCLUDED(rwlock)
     match.ip_src = flow->tunnel.ip_dst;
     match.ip_dst = flow->tunnel.ip_src;
     match.in_key = flow->tunnel.tun_id;
-    match.skb_mark = flow->skb_mark;
+    match.pkt_mark = flow->pkt_mark;
 
     ovs_rwlock_rdlock(&rwlock);
     tnl_port = tnl_find(&match);
@@ -282,7 +282,7 @@ tnl_port_send(const struct ofport_dpif *ofport, struct flow *flow,
     if (!cfg->ip_dst_flow) {
         flow->tunnel.ip_dst = tnl_port->match.ip_dst;
     }
-    flow->skb_mark = tnl_port->match.skb_mark;
+    flow->pkt_mark = tnl_port->match.pkt_mark;
 
     if (!cfg->out_key_flow) {
         flow->tunnel.tun_id = cfg->out_key;
@@ -444,7 +444,7 @@ tnl_match_fmt(const struct tnl_match *match, struct ds *ds)
     }
 
     ds_put_format(ds, ", dp port=%"PRIu32, match->odp_port);
-    ds_put_format(ds, ", skb mark=%"PRIu32, match->skb_mark);
+    ds_put_format(ds, ", pkt mark=%"PRIu32, match->pkt_mark);
 }
 
 static void

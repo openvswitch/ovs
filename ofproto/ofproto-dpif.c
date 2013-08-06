@@ -5413,7 +5413,7 @@ ofproto_unixctl_trace(struct unixctl_conn *conn, int argc, const char *argv[],
 
             /* Use the metadata from the flow and the packet argument
              * to reconstruct the flow. */
-            flow_extract(packet, flow.skb_priority, flow.skb_mark, NULL,
+            flow_extract(packet, flow.skb_priority, flow.pkt_mark, NULL,
                          &in_port_, &flow);
         }
     }

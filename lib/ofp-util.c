@@ -1134,8 +1134,8 @@ ofputil_usable_protocols(const struct match *match)
         return OFPUTIL_P_NONE;
     }
 
-    /* skb_mark and skb_priority can't be sent in a flow_mod */
-    if (wc->masks.skb_mark || wc->masks.skb_priority) {
+    /* pkt_mark and skb_priority can't be sent in a flow_mod */
+    if (wc->masks.pkt_mark || wc->masks.skb_priority) {
         return OFPUTIL_P_NONE;
     }
 

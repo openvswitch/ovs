@@ -356,7 +356,7 @@ invalid:
  *      present and has a correct length, and otherwise NULL.
  */
 void
-flow_extract(struct ofpbuf *packet, uint32_t skb_priority, uint32_t skb_mark,
+flow_extract(struct ofpbuf *packet, uint32_t skb_priority, uint32_t pkt_mark,
              const struct flow_tnl *tnl, const union flow_in_port *in_port,
              struct flow *flow)
 {
@@ -375,7 +375,7 @@ flow_extract(struct ofpbuf *packet, uint32_t skb_priority, uint32_t skb_mark,
         flow->in_port = *in_port;
     }
     flow->skb_priority = skb_priority;
-    flow->skb_mark = skb_mark;
+    flow->pkt_mark = pkt_mark;
 
     packet->l2   = b.data;
     packet->l2_5 = NULL;

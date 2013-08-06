@@ -2361,7 +2361,7 @@ odp_flow_key_from_flow__(struct ofpbuf *buf, const struct flow *data,
         tun_key_to_attr(buf, &data->tunnel);
     }
 
-    nl_msg_put_u32(buf, OVS_KEY_ATTR_SKB_MARK, data->skb_mark);
+    nl_msg_put_u32(buf, OVS_KEY_ATTR_SKB_MARK, data->pkt_mark);
 
     /* Add an ingress port attribute if this is a mask or 'odp_in_port'
      * is not the magical value "ODPP_NONE". */
@@ -2932,7 +2932,7 @@ odp_flow_key_to_flow(const struct nlattr *key, size_t key_len,
     }
 
     if (present_attrs & (UINT64_C(1) << OVS_KEY_ATTR_SKB_MARK)) {
-        flow->skb_mark = nl_attr_get_u32(attrs[OVS_KEY_ATTR_SKB_MARK]);
+        flow->pkt_mark = nl_attr_get_u32(attrs[OVS_KEY_ATTR_SKB_MARK]);
         expected_attrs |= UINT64_C(1) << OVS_KEY_ATTR_SKB_MARK;
     }
 
@@ -3044,11 +3044,11 @@ commit_set_action(struct ofpbuf *odp_actions, enum ovs_key_attr key_type,
 }
 
 void
-odp_put_skb_mark_action(const uint32_t skb_mark,
+odp_put_pkt_mark_action(const uint32_t pkt_mark,
                         struct ofpbuf *odp_actions)
 {
-    commit_set_action(odp_actions, OVS_KEY_ATTR_SKB_MARK, &skb_mark,
-                      sizeof(skb_mark));
+    commit_set_action(odp_actions, OVS_KEY_ATTR_SKB_MARK, &pkt_mark,
+                      sizeof(pkt_mark));
 }
 
 /* If any of the flow key data that ODP actions can modify are different in
@@ -3306,18 +3306,18 @@ commit_set_priority_action(const struct flow *flow, struct flow *base,
 }
 
 static void
-commit_set_skb_mark_action(const struct flow *flow, struct flow *base,
+commit_set_pkt_mark_action(const struct flow *flow, struct flow *base,
                            struct ofpbuf *odp_actions,
                            struct flow_wildcards *wc)
 {
-    if (base->skb_mark == flow->skb_mark) {
+    if (base->pkt_mark == flow->pkt_mark) {
         return;
     }
 
-    memset(&wc->masks.skb_mark, 0xff, sizeof wc->masks.skb_mark);
-    base->skb_mark = flow->skb_mark;
+    memset(&wc->masks.pkt_mark, 0xff, sizeof wc->masks.pkt_mark);
+    base->pkt_mark = flow->pkt_mark;
 
-    odp_put_skb_mark_action(base->skb_mark, odp_actions);
+    odp_put_pkt_mark_action(base->pkt_mark, odp_actions);
 }
 /* If any of the flow key data that ODP actions can modify are different in
  * 'base' and 'flow', appends ODP actions to 'odp_actions' that change the flow
@@ -3339,5 +3339,5 @@ commit_odp_actions(const struct flow *flow, struct flow *base,
      */
     commit_mpls_action(flow, base, odp_actions, wc);
     commit_set_priority_action(flow, base, odp_actions, wc);
-    commit_set_skb_mark_action(flow, base, odp_actions, wc);
+    commit_set_pkt_mark_action(flow, base, odp_actions, wc);
 }
