@@ -156,6 +156,7 @@ void xpthread_key_create(pthread_key_t *, void (*destructor)(void *));
 void xpthread_setspecific(pthread_key_t, const void *);
 
 void xpthread_create(pthread_t *, pthread_attr_t *, void *(*)(void *), void *);
+void xpthread_join(pthread_t, void **);
 
 /* Per-thread data.
  *
