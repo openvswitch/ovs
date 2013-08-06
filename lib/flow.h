@@ -128,6 +128,7 @@ struct flow_metadata {
     ovs_be32 tun_dst;                /* Tunnel outer IPv4 dst addr */
     ovs_be64 metadata;               /* OpenFlow 1.1+ metadata field. */
     uint32_t regs[FLOW_N_REGS];      /* Registers. */
+    uint32_t pkt_mark;               /* Packet mark. */
     ofp_port_t in_port;              /* OpenFlow port or zero. */
 };
 

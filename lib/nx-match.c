@@ -693,6 +693,10 @@ nx_put_raw(struct ofpbuf *b, bool oxm, const struct match *match,
                     htonl(flow->regs[i]), htonl(match->wc.masks.regs[i]));
     }
 
+    /* Mark. */
+    nxm_put_32m(b, NXM_NX_PKT_MARK, htonl(flow->pkt_mark),
+                htonl(match->wc.masks.pkt_mark));
+
     /* OpenFlow 1.1+ Metadata. */
     nxm_put_64m(b, OXM_OF_METADATA, flow->metadata, match->wc.masks.metadata);
 

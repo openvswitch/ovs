@@ -1134,9 +1134,15 @@ ofputil_usable_protocols(const struct match *match)
         return OFPUTIL_P_NONE;
     }
 
-    /* pkt_mark and skb_priority can't be sent in a flow_mod */
-    if (wc->masks.pkt_mark || wc->masks.skb_priority) {
+    /* skb_priority can't be sent in a flow_mod */
+    if (wc->masks.skb_priority) {
         return OFPUTIL_P_NONE;
+    }
+
+    /* NXM and OXM support pkt_mark */
+    if (wc->masks.pkt_mark) {
+        return OFPUTIL_P_OF10_NXM_ANY | OFPUTIL_P_OF12_OXM
+            | OFPUTIL_P_OF13_OXM;
     }
 
     /* NXM, OXM, and OF1.1 support bitwise matching on ethernet addresses. */
@@ -2917,6 +2923,7 @@ ofputil_decode_packet_in_finish(struct ofputil_packet_in *pin,
     pin->fmd.tun_dst = match->flow.tunnel.ip_dst;
     pin->fmd.metadata = match->flow.metadata;
     memcpy(pin->fmd.regs, match->flow.regs, sizeof pin->fmd.regs);
+    pin->fmd.pkt_mark = match->flow.pkt_mark;
 }
 
 enum ofperr
@@ -3029,6 +3036,10 @@ ofputil_packet_in_to_match(const struct ofputil_packet_in *pin,
         if (pin->fmd.regs[i]) {
             match_set_reg(match, i, pin->fmd.regs[i]);
         }
+    }
+
+    if (pin->fmd.pkt_mark != 0) {
+        match_set_pkt_mark(match, pin->fmd.pkt_mark);
     }
 
     match_set_in_port(match, pin->fmd.in_port);

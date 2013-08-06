@@ -500,6 +500,7 @@ flow_get_metadata(const struct flow *flow, struct flow_metadata *fmd)
     fmd->tun_dst = flow->tunnel.ip_dst;
     fmd->metadata = flow->metadata;
     memcpy(fmd->regs, flow->regs, sizeof fmd->regs);
+    fmd->pkt_mark = flow->pkt_mark;
     fmd->in_port = flow->in_port.ofp_port;
 }
 

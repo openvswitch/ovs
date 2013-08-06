@@ -477,6 +477,7 @@ OFP_ASSERT(sizeof(struct nx_action_pop_queue) == 16);
  *   - NXM_NX_ND_SLL
  *   - NXM_NX_ND_TLL
  *   - NXM_NX_REG(idx) for idx in the switch's accepted range.
+ *   - NXM_NX_PKT_MARK
  *   - NXM_NX_TUN_IPV4_SRC
  *   - NXM_NX_TUN_IPV4_DST
  *
@@ -497,6 +498,8 @@ OFP_ASSERT(sizeof(struct nx_action_pop_queue) == 16);
  *   - NXM_OF_IN_PORT
  *
  *   - NXM_NX_REG(idx) for idx in the switch's accepted range.
+ *
+ *   - NXM_NX_PKT_MARK
  *
  *   - NXM_OF_VLAN_TCI.  Modifying this field's value has side effects on the
  *     packet's 802.1Q header.  Setting a value with CFI=0 removes the 802.1Q
@@ -1765,6 +1768,20 @@ OFP_ASSERT(sizeof(struct nx_action_output_reg) == 24);
 #define NXM_NX_TUN_IPV4_SRC_W NXM_HEADER_W(0x0001, 31, 4)
 #define NXM_NX_TUN_IPV4_DST   NXM_HEADER  (0x0001, 32, 4)
 #define NXM_NX_TUN_IPV4_DST_W NXM_HEADER_W(0x0001, 32, 4)
+
+/* Metadata marked onto the packet in a system-dependent manner.
+ *
+ * The packet mark may be used to carry contextual information
+ * to other parts of the system outside of Open vSwitch. As a
+ * result, the semantics depend on system in use.
+ *
+ * Prereqs: None.
+ *
+ * Format: 32-bit integer in network byte order.
+ *
+ * Masking: Fully maskable. */
+#define NXM_NX_PKT_MARK   NXM_HEADER  (0x0001, 33, 4)
+#define NXM_NX_PKT_MARK_W NXM_HEADER_W(0x0001, 33, 4)
 
 /* ## --------------------- ## */
 /* ## Requests and replies. ## */

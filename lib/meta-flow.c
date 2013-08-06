@@ -139,12 +139,12 @@ static const struct mf_field mf_fields[MFF_N_IDS] = {
     }, {
         MFF_PKT_MARK, "pkt_mark", NULL,
         MF_FIELD_SIZES(be32),
-        MFM_NONE,
+        MFM_FULLY,
         MFS_HEXADECIMAL,
         MFP_NONE,
-        false,
-        0, NULL,
-        0, NULL,
+        true,
+        NXM_NX_PKT_MARK, "NXM_NX_PKT_MARK",
+        NXM_NX_PKT_MARK, "NXM_NX_PKT_MARK",
     },
 
 #define REGISTER(IDX)                           \
@@ -1780,7 +1780,6 @@ mf_set(const struct mf_field *mf,
     switch (mf->id) {
     case MFF_IN_PORT:
     case MFF_IN_PORT_OXM:
-    case MFF_PKT_MARK:
     case MFF_SKB_PRIORITY:
     case MFF_ETH_TYPE:
     case MFF_DL_VLAN:
@@ -1827,6 +1826,11 @@ mf_set(const struct mf_field *mf,
     CASE_MFF_REGS:
         match_set_reg_masked(match, mf->id - MFF_REG0,
                              ntohl(value->be32), ntohl(mask->be32));
+        break;
+
+    case MFF_PKT_MARK:
+        match_set_pkt_mark_masked(match, ntohl(value->be32),
+                                  ntohl(mask->be32));
         break;
 
     case MFF_ETH_DST:

@@ -10,6 +10,9 @@ v1.12.0 - xx xxx xxxx
       * New support for matching outer source and destination IP address
         of tunneled packets, for tunnel ports configured with the newly
         added "remote_ip=flow" and "local_ip=flow" options.
+      * Support for matching on metadata 'pkt_mark' for interacting with
+        other system components. On Linux this corresponds to the skb
+        mark.
     - The Interface table in the database has a new "ifindex" column to
       report the interface's OS-assigned ifindex.
     - New "check-oftest" Makefile target for running OFTest against Open
