@@ -26,6 +26,7 @@
 #include "fatal-signal.h"
 #include "list.h"
 #include "ovs-thread.h"
+#include "seq.h"
 #include "socket-util.h"
 #include "timeval.h"
 #include "vlog.h"
@@ -248,6 +249,8 @@ poll_block(void)
 
     /* Handle any pending signals before doing anything else. */
     fatal_signal_run();
+
+    seq_woke();
 }
 
 static void

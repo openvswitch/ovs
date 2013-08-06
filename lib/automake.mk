@@ -159,6 +159,8 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/reconnect.c \
 	lib/reconnect.h \
 	lib/sat-math.h \
+	lib/seq.c \
+	lib/seq.h \
 	lib/sha1.c \
 	lib/sha1.h \
 	lib/shash.c \
