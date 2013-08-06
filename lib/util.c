@@ -46,7 +46,9 @@ DEFINE_PER_THREAD_MALLOCED_DATA(char *, subprogram_name);
 static char *program_version;
 
 /* Buffer used by ovs_strerror(). */
-DEFINE_PER_THREAD_DATA(struct { char s[128]; }, strerror_buffer, { "" });
+DEFINE_STATIC_PER_THREAD_DATA(struct { char s[128]; },
+                              strerror_buffer,
+                              { "" });
 
 void
 ovs_assert_failure(const char *where, const char *function,

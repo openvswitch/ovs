@@ -39,7 +39,7 @@
  * cryptographic-quality randomness. */
 
 /* Current random state. */
-DEFINE_PER_THREAD_DATA(uint32_t, seed, 0);
+DEFINE_STATIC_PER_THREAD_DATA(uint32_t, seed, 0);
 
 static uint32_t random_next(void);
 

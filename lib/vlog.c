@@ -100,7 +100,7 @@ static struct facility facilities[VLF_N_FACILITIES] = {
 };
 
 /* Sequence number for the message currently being composed. */
-DEFINE_PER_THREAD_DATA(unsigned int, msg_num, 0);
+DEFINE_STATIC_PER_THREAD_DATA(unsigned int, msg_num, 0);
 
 /* VLF_FILE configuration.
  *

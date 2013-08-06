@@ -65,7 +65,7 @@ static long long int deadline = LLONG_MAX;
 
 /* Monotonic time, in milliseconds, at which the last call to time_poll() woke
  * up. */
-DEFINE_PER_THREAD_DATA(long long int, last_wakeup, 0);
+DEFINE_STATIC_PER_THREAD_DATA(long long int, last_wakeup, 0);
 
 static void set_up_timer(void);
 static void set_up_signal(int flags);
