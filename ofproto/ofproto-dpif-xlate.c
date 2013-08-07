@@ -1037,21 +1037,67 @@ is_gratuitous_arp(const struct flow *flow, struct flow_wildcards *wc)
     }
 }
 
-static void
-update_learning_table(const struct xbridge *xbridge,
-                      const struct flow *flow, struct flow_wildcards *wc,
-                      int vlan, struct xbundle *in_xbundle)
+/* Checks whether a MAC learning update is necessary for MAC learning table
+ * 'ml' given that a packet matching 'flow' was received  on 'in_xbundle' in
+ * 'vlan'.
+ *
+ * Most packets processed through the MAC learning table do not actually
+ * change it in any way.  This function requires only a read lock on the MAC
+ * learning table, so it is much cheaper in this common case.
+ *
+ * Keep the code here synchronized with that in update_learning_table__()
+ * below. */
+static bool
+is_mac_learning_update_needed(const struct mac_learning *ml,
+                              const struct flow *flow,
+                              struct flow_wildcards *wc,
+                              int vlan, struct xbundle *in_xbundle)
+    OVS_REQ_RDLOCK(ml->rwlock)
 {
     struct mac_entry *mac;
 
-    /* Don't learn the OFPP_NONE port. */
-    if (in_xbundle == &ofpp_none_bundle) {
-        return;
+    if (!mac_learning_may_learn(ml, flow->dl_src, vlan)) {
+        return false;
     }
 
-    ovs_rwlock_wrlock(&xbridge->ml->rwlock);
+    mac = mac_learning_lookup(ml, flow->dl_src, vlan);
+    if (!mac || mac_entry_age(ml, mac)) {
+        return true;
+    }
+
+    if (is_gratuitous_arp(flow, wc)) {
+        /* We don't want to learn from gratuitous ARP packets that are
+         * reflected back over bond slaves so we lock the learning table. */
+        if (!in_xbundle->bond) {
+            return true;
+        } else if (mac_entry_is_grat_arp_locked(mac)) {
+            return false;
+        }
+    }
+
+    return mac->port.p != in_xbundle->ofbundle;
+}
+
+
+/* Updates MAC learning table 'ml' given that a packet matching 'flow' was
+ * received on 'in_xbundle' in 'vlan'.
+ *
+ * This code repeats all the checks in is_mac_learning_update_needed() because
+ * the lock was released between there and here and thus the MAC learning state
+ * could have changed.
+ *
+ * Keep the code here synchronized with that in is_mac_learning_update_needed()
+ * above. */
+static void
+update_learning_table__(const struct xbridge *xbridge,
+                        const struct flow *flow, struct flow_wildcards *wc,
+                        int vlan, struct xbundle *in_xbundle)
+    OVS_REQ_WRLOCK(xbridge->ml->rwlock)
+{
+    struct mac_entry *mac;
+
     if (!mac_learning_may_learn(xbridge->ml, flow->dl_src, vlan)) {
-        goto out;
+        return;
     }
 
     mac = mac_learning_insert(xbridge->ml, flow->dl_src, vlan);
@@ -1061,7 +1107,7 @@ update_learning_table(const struct xbridge *xbridge,
         if (!in_xbundle->bond) {
             mac_entry_set_grat_arp_lock(mac);
         } else if (mac_entry_is_grat_arp_locked(mac)) {
-            goto out;
+            return;
         }
     }
 
@@ -1069,6 +1115,7 @@ update_learning_table(const struct xbridge *xbridge,
         /* The log messages here could actually be useful in debugging,
          * so keep the rate limit relatively high. */
         static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(30, 300);
+
         VLOG_DBG_RL(&rl, "bridge %s: learned that "ETH_ADDR_FMT" is "
                     "on port %s in VLAN %d",
                     xbridge->name, ETH_ADDR_ARGS(flow->dl_src),
@@ -1077,8 +1124,32 @@ update_learning_table(const struct xbridge *xbridge,
         mac->port.p = in_xbundle->ofbundle;
         mac_learning_changed(xbridge->ml);
     }
-out:
+}
+
+static void
+update_learning_table(const struct xbridge *xbridge,
+                      const struct flow *flow, struct flow_wildcards *wc,
+                      int vlan, struct xbundle *in_xbundle)
+{
+    bool need_update;
+
+    /* Don't learn the OFPP_NONE port. */
+    if (in_xbundle == &ofpp_none_bundle) {
+        return;
+    }
+
+    /* First try the common case: no change to MAC learning table. */
+    ovs_rwlock_rdlock(&xbridge->ml->rwlock);
+    need_update = is_mac_learning_update_needed(xbridge->ml, flow, wc, vlan,
+                                                in_xbundle);
     ovs_rwlock_unlock(&xbridge->ml->rwlock);
+
+    if (need_update) {
+        /* Slow path: MAC learning table might need an update. */
+        ovs_rwlock_wrlock(&xbridge->ml->rwlock);
+        update_learning_table__(xbridge, flow, wc, vlan, in_xbundle);
+        ovs_rwlock_unlock(&xbridge->ml->rwlock);
+    }
 }
 
 /* Determines whether packets in 'flow' within 'xbridge' should be forwarded or
