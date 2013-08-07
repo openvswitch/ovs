@@ -2165,6 +2165,7 @@ ofproto_rule_destroy__(struct rule *rule)
     if (rule) {
         cls_rule_destroy(&rule->cr);
         free(rule->ofpacts);
+        ovs_mutex_destroy(&rule->timeout_mutex);
         rule->ofproto->ofproto_class->rule_dealloc(rule);
     }
 }
@@ -3019,8 +3020,6 @@ handle_flow_stats_request(struct ofconn *ofconn,
         fs.cookie = rule->flow_cookie;
         fs.table_id = rule->table_id;
         calc_duration(rule->created, now, &fs.duration_sec, &fs.duration_nsec);
-        fs.idle_timeout = rule->idle_timeout;
-        fs.hard_timeout = rule->hard_timeout;
         fs.idle_age = age_secs(now - rule->used);
         fs.hard_age = age_secs(now - rule->modified);
         ofproto->ofproto_class->rule_get_stats(rule, &fs.packet_count,
@@ -3028,6 +3027,12 @@ handle_flow_stats_request(struct ofconn *ofconn,
         fs.ofpacts = rule->ofpacts;
         fs.ofpacts_len = rule->ofpacts_len;
         fs.flags = 0;
+
+        ovs_mutex_lock(&rule->timeout_mutex);
+        fs.idle_timeout = rule->idle_timeout;
+        fs.hard_timeout = rule->hard_timeout;
+        ovs_mutex_unlock(&rule->timeout_mutex);
+
         if (rule->send_flow_removed) {
             fs.flags |= OFPFF_SEND_FLOW_REM;
             /* FIXME: Implement OF 1.3 flags OFPFF13_NO_PKT_COUNTS
@@ -3375,8 +3380,13 @@ add_flow(struct ofproto *ofproto, struct ofconn *ofconn,
     rule->pending = NULL;
     rule->flow_cookie = fm->new_cookie;
     rule->created = rule->modified = rule->used = time_msec();
+
+    ovs_mutex_init(&rule->timeout_mutex, OVS_MUTEX_ADAPTIVE);
+    ovs_mutex_lock(&rule->timeout_mutex);
     rule->idle_timeout = fm->idle_timeout;
     rule->hard_timeout = fm->hard_timeout;
+    ovs_mutex_unlock(&rule->timeout_mutex);
+
     rule->table_id = table - ofproto->tables;
     rule->send_flow_removed = (fm->flags & OFPFF_SEND_FLOW_REM) != 0;
     /* FIXME: Implement OF 1.3 flags OFPFF13_NO_PKT_COUNTS
@@ -3660,8 +3670,10 @@ ofproto_rule_send_removed(struct rule *rule, uint8_t reason)
     fr.table_id = rule->table_id;
     calc_duration(rule->created, time_msec(),
                   &fr.duration_sec, &fr.duration_nsec);
+    ovs_mutex_lock(&rule->timeout_mutex);
     fr.idle_timeout = rule->idle_timeout;
     fr.hard_timeout = rule->hard_timeout;
+    ovs_mutex_unlock(&rule->timeout_mutex);
     rule->ofproto->ofproto_class->rule_get_stats(rule, &fr.packet_count,
                                                  &fr.byte_count);
 
@@ -3967,8 +3979,10 @@ ofproto_compose_flow_refresh_update(const struct rule *rule,
     fu.event = (flags & (NXFMF_INITIAL | NXFMF_ADD)
                 ? NXFME_ADDED : NXFME_MODIFIED);
     fu.reason = 0;
+    ovs_mutex_lock(&rule->timeout_mutex);
     fu.idle_timeout = rule->idle_timeout;
     fu.hard_timeout = rule->hard_timeout;
+    ovs_mutex_unlock(&rule->timeout_mutex);
     fu.table_id = rule->table_id;
     fu.cookie = rule->flow_cookie;
     minimatch_expand(&rule->cr.match, &match);
@@ -5218,6 +5232,7 @@ rule_eviction_priority(struct rule *rule)
     uint32_t expiration_offset;
 
     /* Calculate time of expiration. */
+    ovs_mutex_lock(&rule->timeout_mutex);
     hard_expiration = (rule->hard_timeout
                        ? rule->modified + rule->hard_timeout * 1000
                        : LLONG_MAX);
@@ -5225,6 +5240,7 @@ rule_eviction_priority(struct rule *rule)
                        ? rule->used + rule->idle_timeout * 1000
                        : LLONG_MAX);
     expiration = MIN(hard_expiration, idle_expiration);
+    ovs_mutex_unlock(&rule->timeout_mutex);
     if (expiration == LLONG_MAX) {
         return 0;
     }
@@ -5251,9 +5267,13 @@ eviction_group_add_rule(struct rule *rule)
 {
     struct ofproto *ofproto = rule->ofproto;
     struct oftable *table = &ofproto->tables[rule->table_id];
+    bool has_timeout;
 
-    if (table->eviction_fields
-        && (rule->hard_timeout || rule->idle_timeout)) {
+    ovs_mutex_lock(&rule->timeout_mutex);
+    has_timeout = rule->hard_timeout || rule->idle_timeout;
+    ovs_mutex_unlock(&rule->timeout_mutex);
+
+    if (table->eviction_fields && has_timeout) {
         struct eviction_group *evg;
 
         evg = eviction_group_find(table, eviction_group_hash_rule(rule));
@@ -5398,7 +5418,11 @@ oftable_replace_rule(struct rule *rule)
     struct ofproto *ofproto = rule->ofproto;
     struct oftable *table = &ofproto->tables[rule->table_id];
     struct rule *victim;
-    bool may_expire = rule->hard_timeout || rule->idle_timeout;
+    bool may_expire;
+
+    ovs_mutex_lock(&rule->timeout_mutex);
+    may_expire = rule->hard_timeout || rule->idle_timeout;
+    ovs_mutex_unlock(&rule->timeout_mutex);
 
     if (may_expire) {
         list_insert(&ofproto->expirable, &rule->expirable);

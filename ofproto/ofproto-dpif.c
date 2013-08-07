@@ -4293,6 +4293,7 @@ expire_subfacets(struct dpif_backer *backer, int dp_max_idle)
 static void
 rule_expire(struct rule_dpif *rule)
 {
+    uint16_t idle_timeout, hard_timeout;
     long long int now;
     uint8_t reason;
 
@@ -4301,13 +4302,16 @@ rule_expire(struct rule_dpif *rule)
         return;
     }
 
+    ovs_mutex_lock(&rule->up.timeout_mutex);
+    hard_timeout = rule->up.hard_timeout;
+    idle_timeout = rule->up.idle_timeout;
+    ovs_mutex_unlock(&rule->up.timeout_mutex);
+
     /* Has 'rule' expired? */
     now = time_msec();
-    if (rule->up.hard_timeout
-        && now > rule->up.modified + rule->up.hard_timeout * 1000) {
+    if (hard_timeout && now > rule->up.modified + hard_timeout * 1000) {
         reason = OFPRR_HARD_TIMEOUT;
-    } else if (rule->up.idle_timeout
-               && now > rule->up.used + rule->up.idle_timeout * 1000) {
+    } else if (idle_timeout && now > rule->up.used + idle_timeout * 1000) {
         reason = OFPRR_IDLE_TIMEOUT;
     } else {
         return;

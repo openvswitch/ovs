@@ -1882,13 +1882,17 @@ ofmonitor_report(struct connmgr *mgr, struct rule *rule,
 
                 fu.event = event;
                 fu.reason = event == NXFME_DELETED ? reason : 0;
-                fu.idle_timeout = rule->idle_timeout;
-                fu.hard_timeout = rule->hard_timeout;
                 fu.table_id = rule->table_id;
                 fu.cookie = rule->flow_cookie;
                 minimatch_expand(&rule->cr.match, &match);
                 fu.match = &match;
                 fu.priority = rule->cr.priority;
+
+                ovs_mutex_lock(&rule->timeout_mutex);
+                fu.idle_timeout = rule->idle_timeout;
+                fu.hard_timeout = rule->hard_timeout;
+                ovs_mutex_unlock(&rule->timeout_mutex);
+
                 if (flags & NXFMF_ACTIONS) {
                     fu.ofpacts = rule->ofpacts;
                     fu.ofpacts_len = rule->ofpacts_len;

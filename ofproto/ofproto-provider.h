@@ -19,7 +19,6 @@
 
 /* Definitions for use within ofproto. */
 
-#include "ofproto/ofproto.h"
 #include "cfm.h"
 #include "classifier.h"
 #include "heap.h"
@@ -27,6 +26,8 @@
 #include "list.h"
 #include "ofp-errors.h"
 #include "ofp-util.h"
+#include "ofproto/ofproto.h"
+#include "ovs-thread.h"
 #include "shash.h"
 #include "simap.h"
 #include "timeval.h"
@@ -219,10 +220,12 @@ struct rule {
     long long int created;       /* Creation time. */
     long long int modified;      /* Time of last modification. */
     long long int used;          /* Last use; time created if never used. */
-    uint16_t hard_timeout;       /* In seconds from ->modified. */
-    uint16_t idle_timeout;       /* In seconds from ->used. */
     uint8_t table_id;            /* Index in ofproto's 'tables' array. */
     bool send_flow_removed;      /* Send a flow removed message? */
+
+    struct ovs_mutex timeout_mutex;
+    uint16_t hard_timeout OVS_GUARDED; /* In seconds from ->modified. */
+    uint16_t idle_timeout OVS_GUARDED; /* In seconds from ->used. */
 
     /* Eviction groups. */
     bool evictable;              /* If false, prevents eviction. */
