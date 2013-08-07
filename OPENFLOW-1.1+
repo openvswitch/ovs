@@ -55,31 +55,65 @@ The list of remaining work items for OpenFlow 1.1 is below.  It is
 probably incomplete.
 
     * Implement Write-Actions instruction.
+      [required for 1.1+]
 
     * The new in_phy_port field in OFPT_PACKET_IN needs some kind of
       implementation.  It has a sensible interpretation for tunnels
       but in general the physical port is not in the datapath for OVS
       so the value is not necessarily meaningful.  We might have to
       just fix it as the same as in_port.
+      [required for OF1.1; optional for OF1.2+]
 
-    * OFPT_TABLE_MOD stats.  This is new in OF1.1, so we need to
+    * OFPT_TABLE_MOD message.  This is new in OF1.1, so we need to
       implement it.  It should be implemented so that the default OVS
       behavior does not change.
+      [required for OF1.1 and OF1.2]
+
+    * Flow table stats (OFPST_TABLE).
+
+        * Reference count (active entries)
+          [implemented]
+          [required for OF1.1 and OF1.2]
+
+        * Packet Lookups
+          [required for OF1.1; optional for OF1.2]
+
+        * Packet Matches
+          [required for OF1.1; optional for OF1.2]
 
     * MPLS.  Simon Horman maintains a patch series that adds this
       feature.  This is partially merged.
+      [optional for OF1.1+]
 
     * SCTP.  Joe Stringer maintains a patch series that adds this
       feature.  It has received review comments that need to be
       addressed before it is merged.
+      [optional for OF1.1+]
 
     * Match and set double-tagged VLANs (QinQ).  This requires kernel
       work for reasonable performance.
+      [optional for OF1.1+]
 
     * VLANs tagged with 88a8 Ethertype.  This requires kernel work for
       reasonable performance.
+      [required for OF1.1+]
 
     * Groups.
+
+        * Type all
+          [required for OF1.1+]
+
+        * Type select
+          [optional for OF1.1+]
+
+        * Type indirect
+          [required for OF1.1+]
+
+        * Type fast failover
+          [optional for OF1.1+]
+
+        * Statistics
+          [optional for OF1.1+]
 
 OpenFlow 1.2
 ------------
@@ -91,10 +125,13 @@ end of the OF1.2 spec.  I didn't compare the specs carefully yet.)
     * OFPT_FLOW_MOD:
 
         * New flag OFPFF_RESET_COUNTS.
+          [required for OF1.2+]
 
         * Add ability to delete flow in all tables.
+          [required for OF1.2+]
 
         * Update DESIGN to describe OF1.2 behavior also.
+          [required for OF1.2+]
 
 OpenFlow 1.3
 ------------
@@ -104,47 +141,63 @@ following additional work.  (This is based on the change log at the
 end of the OF1.3 spec, reusing most of the section titles directly.  I
 didn't compare the specs carefully yet.)
 
+    * Send errors for unsupported multipart requests.
+      [required for OF1.3+]
+
     * Add support for multipart requests.
+      [optional for OF1.3+]
 
     * Add OFPMP_TABLE_FEATURES statistics.
+      [optional for OF1.3+]
 
     * More flexible table miss support.
+      [required for OF1.3+]
 
     * IPv6 extension header handling support.  Fully implementing this
       requires kernel support.  This likely will take some careful and
       probably time-consuming design work.  The actual coding, once
       that is all done, is probably 2 or 3 days work.
+      [optional for OF1.3+]
 
     * Per-flow meters.  Similar to IPv6 extension headers in kernel
       and design requirements.  Might be politically difficult to add
       directly to the kernel module, since its functionality overlaps
       with tc.  Ideally, therefore, we could implement these somehow
       with tc, but I haven't investigated whether that makes sense.
+      [optional for OF1.3+]
 
     * Per-connection event filtering.  OF1.3 adopted Open vSwitch's
       existing design for this feature so implementation should be
       easy.
+      [required for OF1.3+]
 
-    * Auxiliary connections.  These are optional, so a minimal
-      implementation would not need them.  An implementation in
-      generic code might be a week's worth of work.  The value of an
-      implementation in generic code is questionable, though, since
-      much of the benefit of axuiliary connections is supposed to be
-      to take advantage of hardware support.  (We could make the
-      kernel module somehow send packets across the auxiliary
-      connections directly, for some kind of "hardware" support, if we
-      judged it useful enough.)
+    * Auxiliary connections.  An implementation in generic code might
+      be a week's worth of work.  The value of an implementation in
+      generic code is questionable, though, since much of the benefit
+      of axuiliary connections is supposed to be to take advantage of
+      hardware support.  (We could make the kernel module somehow
+      send packets across the auxiliary connections directly, for
+      some kind of "hardware" support, if we judged it useful enough.)
+      [optional for OF1.3+]
 
     * MPLS BoS matching.  (Included in Simon's MPLS series?)
+      [optional for OF1.3+]
 
     * Provider Backbone Bridge tagging.  I don't plan to implement
       this (but we'd accept an implementation).
+      [optional for OF1.3+]
 
     * Rework tag order.  I'm not sure whether we need to do anything
-      for this.
+      for this. Part of MPLS patchset by Simon Horman.
+      [required for v1.3+]
 
     * On-demand flow counters.  I think this might be a real
       optimization in some cases for the software switch.
+      [optional for OF1.3+]
+
+    * Duration Statistics
+      - New for Per Port, Per Queue, Per Group
+      [required for v1.3+]
 
 How to contribute
 -----------------
