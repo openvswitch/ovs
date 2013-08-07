@@ -49,6 +49,7 @@
 #include "packets.h"
 #include "poll-loop.h"
 #include "random.h"
+#include "seq.h"
 #include "shash.h"
 #include "sset.h"
 #include "timeval.h"
@@ -92,6 +93,7 @@ struct dp_netdev {
 
     struct dp_netdev_queue queues[N_QUEUES];
     struct hmap flow_table;     /* Flow table. */
+    struct seq *queue_seq;      /* Incremented whenever a packet is queued. */
 
     /* Statistics. */
     long long int n_hit;        /* Number of flow table matches. */
@@ -101,7 +103,7 @@ struct dp_netdev {
     /* Ports. */
     struct dp_netdev_port *ports[MAX_PORTS];
     struct list port_list;
-    unsigned int serial;
+    struct seq *port_seq;       /* Incremented whenever a port changes. */
 };
 
 /* A port in a netdev-based datapath. */
@@ -134,7 +136,7 @@ struct dp_netdev_flow {
 struct dpif_netdev {
     struct dpif dpif;
     struct dp_netdev *dp;
-    unsigned int dp_serial;
+    uint64_t last_port_seq;
 };
 
 /* All netdev-based datapaths. */
@@ -218,7 +220,7 @@ create_dpif_netdev(struct dp_netdev *dp)
     dpif = xmalloc(sizeof *dpif);
     dpif_init(&dpif->dpif, dp->class, dp->name, netflow_id >> 8, netflow_id);
     dpif->dp = dp;
-    dpif->dp_serial = dp->serial;
+    dpif->last_port_seq = seq_read(dp->port_seq);
 
     return &dpif->dpif;
 }
@@ -280,8 +282,10 @@ create_dp_netdev(const char *name, const struct dpif_class *class,
     for (i = 0; i < N_QUEUES; i++) {
         dp->queues[i].head = dp->queues[i].tail = 0;
     }
+    dp->queue_seq = seq_create();
     hmap_init(&dp->flow_table);
     list_init(&dp->port_list);
+    dp->port_seq = seq_create();
 
     error = do_add_port(dp, name, "internal", ODPP_LOCAL);
     if (error) {
@@ -344,7 +348,9 @@ dp_netdev_free(struct dp_netdev *dp)
         do_del_port(dp, port->port_no);
     }
     dp_netdev_purge_queues(dp);
+    seq_destroy(dp->queue_seq);
     hmap_destroy(&dp->flow_table);
+    seq_destroy(dp->port_seq);
     free(dp->name);
     free(dp);
 }
@@ -446,7 +452,7 @@ do_add_port(struct dp_netdev *dp, const char *devname, const char *type,
 
     list_push_back(&dp->port_list, &port->node);
     dp->ports[odp_to_u32(port_no)] = port;
-    dp->serial++;
+    seq_change(dp->port_seq);
 
     return 0;
 }
@@ -546,7 +552,7 @@ do_del_port(struct dp_netdev *dp, odp_port_t port_no)
 
     list_remove(&port->node);
     dp->ports[odp_to_u32(port_no)] = NULL;
-    dp->serial++;
+    seq_change(dp->port_seq);
 
     netdev_close(port->netdev);
     netdev_restore_flags(port->sf);
@@ -692,11 +698,13 @@ static int
 dpif_netdev_port_poll(const struct dpif *dpif_, char **devnamep OVS_UNUSED)
 {
     struct dpif_netdev *dpif = dpif_netdev_cast(dpif_);
+    uint64_t new_port_seq;
     int error;
 
     ovs_mutex_lock(&dp_netdev_mutex);
-    if (dpif->dp_serial != dpif->dp->serial) {
-        dpif->dp_serial = dpif->dp->serial;
+    new_port_seq = seq_read(dpif->dp->port_seq);
+    if (dpif->last_port_seq != new_port_seq) {
+        dpif->last_port_seq = new_port_seq;
         error = ENOBUFS;
     } else {
         error = EAGAIN;
@@ -711,14 +719,8 @@ dpif_netdev_port_poll_wait(const struct dpif *dpif_)
 {
     struct dpif_netdev *dpif = dpif_netdev_cast(dpif_);
 
-    /* XXX In a multithreaded process, there is a race window between this
-     * function and the poll_block() in one thread and a change in
-     * dpif->dp->serial in another thread. */
-
     ovs_mutex_lock(&dp_netdev_mutex);
-    if (dpif->dp_serial != dpif->dp->serial) {
-        poll_immediate_wake();
-    }
+    seq_wait(dpif->dp->port_seq, dpif->last_port_seq);
     ovs_mutex_unlock(&dp_netdev_mutex);
 }
 
@@ -1099,13 +1101,15 @@ dpif_netdev_recv(struct dpif *dpif, struct dpif_upcall *upcall,
 static void
 dpif_netdev_recv_wait(struct dpif *dpif)
 {
-    /* XXX In a multithreaded process, there is a race window between this
-     * function and the poll_block() in one thread and a packet being queued in
-     * another thread. */
+    struct dp_netdev *dp = get_dp_netdev(dpif);
+    uint64_t seq;
 
     ovs_mutex_lock(&dp_netdev_mutex);
+    seq = seq_read(dp->queue_seq);
     if (find_nonempty_queue(dpif)) {
         poll_immediate_wake();
+    } else {
+        seq_wait(dp->queue_seq, seq);
     }
     ovs_mutex_unlock(&dp_netdev_mutex);
 }
@@ -1266,6 +1270,8 @@ dp_netdev_output_userspace(struct dp_netdev *dp, const struct ofpbuf *packet,
         buf->size = packet->size;
         upcall->packet = buf;
 
+        seq_change(dp->queue_seq);
+
         return 0;
     } else {
         dp->n_lost++;
@@ -1359,7 +1365,7 @@ dpif_dummy_change_port_number(struct unixctl_conn *conn, int argc OVS_UNUSED,
     dp->ports[odp_to_u32(port->port_no)] = NULL;
     dp->ports[port_no] = port;
     port->port_no = u32_to_odp(port_no);
-    dp->serial++;
+    seq_change(dp->port_seq);
     unixctl_command_reply(conn, NULL);
 }
 
