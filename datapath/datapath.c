@@ -624,7 +624,7 @@ static int validate_and_copy_set_tun(const struct nlattr *attr,
 	int err, start;
 
 	ovs_match_init(&match, &key, NULL);
-	err = ipv4_tun_from_nlattr(nla_data(attr), &match, false);
+	err = ovs_ipv4_tun_from_nlattr(nla_data(attr), &match, false);
 	if (err)
 		return err;
 
@@ -1065,8 +1065,8 @@ static int set_action_to_attr(const struct nlattr *a, struct sk_buff *skb)
 		if (!start)
 			return -EMSGSIZE;
 
-		err = ipv4_tun_to_nlattr(skb,
-				nla_data(ovs_key), nla_data(ovs_key));
+		err = ovs_ipv4_tun_to_nlattr(skb, nla_data(ovs_key),
+					     nla_data(ovs_key));
 		if (err)
 			return err;
 		nla_nest_end(skb, start);

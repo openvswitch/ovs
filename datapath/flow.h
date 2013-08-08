@@ -222,11 +222,11 @@ void ovs_flow_remove(struct flow_table *table, struct sw_flow *flow);
 
 struct sw_flow *ovs_flow_dump_next(struct flow_table *table, u32 *bucket, u32 *idx);
 extern const int ovs_key_lens[OVS_KEY_ATTR_MAX + 1];
-int ipv4_tun_from_nlattr(const struct nlattr *attr,
-			 struct sw_flow_match *match, bool is_mask);
-int ipv4_tun_to_nlattr(struct sk_buff *skb,
-			const struct ovs_key_ipv4_tunnel *tun_key,
-			const struct ovs_key_ipv4_tunnel *output);
+int ovs_ipv4_tun_from_nlattr(const struct nlattr *attr,
+			     struct sw_flow_match *match, bool is_mask);
+int ovs_ipv4_tun_to_nlattr(struct sk_buff *skb,
+			   const struct ovs_key_ipv4_tunnel *tun_key,
+			   const struct ovs_key_ipv4_tunnel *output);
 
 bool ovs_flow_cmp_unmasked_key(const struct sw_flow *flow,
 		const struct sw_flow_key *key, int key_len);

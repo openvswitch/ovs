@@ -1174,8 +1174,8 @@ static int parse_flow_nlattrs(const struct nlattr *attr,
 	return __parse_flow_nlattrs(attr, a, attrsp, false);
 }
 
-int ipv4_tun_from_nlattr(const struct nlattr *attr,
-			 struct sw_flow_match *match, bool is_mask)
+int ovs_ipv4_tun_from_nlattr(const struct nlattr *attr,
+			     struct sw_flow_match *match, bool is_mask)
 {
 	struct nlattr *a;
 	int rem;
@@ -1263,9 +1263,9 @@ int ipv4_tun_from_nlattr(const struct nlattr *attr,
 	return 0;
 }
 
-int ipv4_tun_to_nlattr(struct sk_buff *skb,
-			const struct ovs_key_ipv4_tunnel *tun_key,
-			const struct ovs_key_ipv4_tunnel *output)
+int ovs_ipv4_tun_to_nlattr(struct sk_buff *skb,
+			   const struct ovs_key_ipv4_tunnel *tun_key,
+			   const struct ovs_key_ipv4_tunnel *output)
 {
 	struct nlattr *nla;
 
@@ -1334,7 +1334,7 @@ static int metadata_from_nlattrs(struct sw_flow_match *match,  u64 *attrs,
 		*attrs &= ~(1ULL << OVS_KEY_ATTR_SKB_MARK);
 	}
 	if (*attrs & (1ULL << OVS_KEY_ATTR_TUNNEL)) {
-		if (ipv4_tun_from_nlattr(a[OVS_KEY_ATTR_TUNNEL], match,
+		if (ovs_ipv4_tun_from_nlattr(a[OVS_KEY_ATTR_TUNNEL], match,
 					is_mask))
 			return -EINVAL;
 		*attrs &= ~(1ULL << OVS_KEY_ATTR_TUNNEL);
@@ -1704,7 +1704,7 @@ int ovs_flow_to_nlattrs(const struct sw_flow_key *swkey,
 		goto nla_put_failure;
 
 	if ((swkey->tun_key.ipv4_dst || is_mask) &&
-	    ipv4_tun_to_nlattr(skb, &swkey->tun_key, &output->tun_key))
+	    ovs_ipv4_tun_to_nlattr(skb, &swkey->tun_key, &output->tun_key))
 		goto nla_put_failure;
 
 	if (swkey->phy.in_port == DP_MAX_PORTS) {
