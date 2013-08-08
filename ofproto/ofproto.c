@@ -430,6 +430,7 @@ ofproto_create(const char *datapath_name, const char *datapath_type,
     ofproto->n_tables = 0;
     hindex_init(&ofproto->cookies);
     list_init(&ofproto->expirable);
+    ovs_mutex_init(&ofproto->expirable_mutex, PTHREAD_MUTEX_RECURSIVE);
     ofproto->connmgr = connmgr_create(ofproto, datapath_name, datapath_name);
     ofproto->state = S_OPENFLOW;
     list_init(&ofproto->pending);
@@ -1115,6 +1116,7 @@ ofproto_destroy__(struct ofproto *ofproto)
 
     free(ofproto->vlan_bitmap);
 
+    ovs_mutex_destroy(&ofproto->expirable_mutex);
     ofproto->ofproto_class->dealloc(ofproto);
 }
 
@@ -5401,9 +5403,11 @@ oftable_remove_rule(struct rule *rule)
     }
     cookies_remove(ofproto, rule);
     eviction_group_remove_rule(rule);
+    ovs_mutex_lock(&ofproto->expirable_mutex);
     if (!list_is_empty(&rule->expirable)) {
         list_remove(&rule->expirable);
     }
+    ovs_mutex_unlock(&ofproto->expirable_mutex);
     if (!list_is_empty(&rule->meter_list_node)) {
         list_remove(&rule->meter_list_node);
     }
@@ -5425,7 +5429,9 @@ oftable_replace_rule(struct rule *rule)
     ovs_mutex_unlock(&rule->timeout_mutex);
 
     if (may_expire) {
+        ovs_mutex_lock(&ofproto->expirable_mutex);
         list_insert(&ofproto->expirable, &rule->expirable);
+        ovs_mutex_unlock(&ofproto->expirable_mutex);
     }
     cookies_insert(ofproto, rule);
     if (rule->meter_id) {
@@ -5439,9 +5445,11 @@ oftable_replace_rule(struct rule *rule)
         }
         cookies_remove(ofproto, victim);
 
+        ovs_mutex_lock(&ofproto->expirable_mutex);
         if (!list_is_empty(&victim->expirable)) {
             list_remove(&victim->expirable);
         }
+        ovs_mutex_unlock(&ofproto->expirable_mutex);
         eviction_group_remove_rule(victim);
     }
     eviction_group_add_rule(rule);

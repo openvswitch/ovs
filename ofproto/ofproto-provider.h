@@ -76,7 +76,9 @@ struct ofproto {
 
     /* Optimisation for flow expiry.
      * These flows should all be present in tables. */
-    struct list expirable;      /* Expirable 'struct rule"s in all tables. */
+    struct ovs_mutex expirable_mutex;
+    struct list expirable OVS_GUARDED; /* Expirable 'struct rule"s in all
+                                          tables. */
 
     /* Meter table.
      * OpenFlow meters start at 1.  To avoid confusion we leave the first

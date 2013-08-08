@@ -2036,14 +2036,16 @@ xlate_fin_timeout(struct xlate_ctx *ctx,
     if (ctx->xin->tcp_flags & (TCP_FIN | TCP_RST) && ctx->rule) {
         struct rule_dpif *rule = ctx->rule;
 
-         if (list_is_empty(&rule->up.expirable)) {
-             list_insert(&rule->up.ofproto->expirable, &rule->up.expirable);
-         }
+        ovs_mutex_lock(&rule->up.ofproto->expirable_mutex);
+        if (list_is_empty(&rule->up.expirable)) {
+            list_insert(&rule->up.ofproto->expirable, &rule->up.expirable);
+        }
+        ovs_mutex_unlock(&rule->up.ofproto->expirable_mutex);
 
-         ovs_mutex_lock(&rule->up.timeout_mutex);
-         reduce_timeout(oft->fin_idle_timeout, &rule->up.idle_timeout);
-         reduce_timeout(oft->fin_hard_timeout, &rule->up.hard_timeout);
-         ovs_mutex_unlock(&rule->up.timeout_mutex);
+        ovs_mutex_lock(&rule->up.timeout_mutex);
+        reduce_timeout(oft->fin_idle_timeout, &rule->up.idle_timeout);
+        reduce_timeout(oft->fin_hard_timeout, &rule->up.hard_timeout);
+        ovs_mutex_unlock(&rule->up.timeout_mutex);
     }
 }
 
