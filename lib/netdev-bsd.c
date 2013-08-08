@@ -50,6 +50,7 @@
 #include "fatal-signal.h"
 #include "ofpbuf.h"
 #include "openflow/openflow.h"
+#include "ovs-thread.h"
 #include "packets.h"
 #include "poll-loop.h"
 #include "socket-util.h"
@@ -107,11 +108,6 @@ enum {
     VALID_CARRIER = 1 << 5
 };
 
-#if defined(__NetBSD__)
-/* AF_LINK socket used for netdev_bsd_get_stats and set_etheraddr */
-static int af_link_sock = -1;
-#endif /* defined(__NetBSD__) */
-
 #define PCAP_SNAPLEN 2048
 
 
@@ -144,12 +140,16 @@ static int get_ifindex(const struct netdev *, int *ifindexp);
 static int ifr_get_flags(const struct ifreq *);
 static void ifr_set_flags(struct ifreq *, int flags);
 
-static int netdev_bsd_init(void);
+#ifdef __NetBSD__
+static int af_link_ioctl(int command, const void *arg);
+#endif
+
+static void netdev_bsd_run(void);
 
 static bool
 is_netdev_bsd_class(const struct netdev_class *netdev_class)
 {
-    return netdev_class->init == netdev_bsd_init;
+    return netdev_class->run == netdev_bsd_run;
 }
 
 static struct netdev_bsd *
@@ -170,29 +170,6 @@ static const char *
 netdev_get_kernel_name(const struct netdev *netdev)
 {
     return netdev_bsd_cast(netdev)->kernel_name;
-}
-
-/* Initialize the AF_INET socket used for ioctl operations */
-static int
-netdev_bsd_init(void)
-{
-#if defined(__NetBSD__)
-    static int status = -1;
-
-    if (status >= 0) {  /* already initialized */
-        return status;
-    }
-
-    af_link_sock = socket(AF_LINK, SOCK_DGRAM, 0);
-    status = af_link_sock >= 0 ? 0 : errno;
-    if (status) {
-        VLOG_ERR("failed to create link socket: %s", ovs_strerror(status));
-    }
-
-    return status;
-#else
-    return 0;
-#endif /* defined(__NetBSD__) */
 }
 
 /*
@@ -931,19 +908,16 @@ netdev_bsd_get_stats(const struct netdev *netdev_, struct netdev_stats *stats)
     return 0;
 #elif defined(__NetBSD__)
     struct ifdatareq ifdr;
-    int saved_errno;
-    int ret;
+    int error;
 
     memset(&ifdr, 0, sizeof(ifdr));
     strncpy(ifdr.ifdr_name, netdev_get_kernel_name(netdev_),
             sizeof(ifdr.ifdr_name));
-    ret = ioctl(af_link_sock, SIOCGIFDATA, &ifdr);
-    saved_errno = errno;
-    if (ret == -1) {
-        return saved_errno;
+    error = af_link_ioctl(SIOCGIFDATA, &ifdr);
+    if (!error) {
+        convert_stats(stats, &ifdr.ifdr_data);
     }
-    convert_stats(stats, &ifdr.ifdr_data);
-    return 0;
+    return error;
 #else
 #error not implemented
 #endif
@@ -1402,7 +1376,7 @@ netdev_bsd_change_seq(const struct netdev *netdev)
 const struct netdev_class netdev_bsd_class = {
     "system",
 
-    netdev_bsd_init,
+    NULL, /* init */
     netdev_bsd_run,
     netdev_bsd_wait,
     netdev_bsd_create_system,
@@ -1457,7 +1431,7 @@ const struct netdev_class netdev_bsd_class = {
 const struct netdev_class netdev_tap_class = {
     "tap",
 
-    netdev_bsd_init,
+    NULL, /* init */
     netdev_bsd_run,
     netdev_bsd_wait,
     netdev_bsd_create_tap,
@@ -1625,7 +1599,7 @@ set_etheraddr(const char *netdev_name OVS_UNUSED, int hwaddr_family OVS_UNUSED,
     struct if_laddrreq req;
     struct sockaddr_dl *sdl;
     struct sockaddr_storage oldaddr;
-    int ret;
+    int error;
 
     /*
      * get the old address, add new one, and then remove old one.
@@ -1641,9 +1615,10 @@ set_etheraddr(const char *netdev_name OVS_UNUSED, int hwaddr_family OVS_UNUSED,
     req.addr.ss_family = hwaddr_family;
     sdl = (struct sockaddr_dl *)&req.addr;
     sdl->sdl_alen = hwaddr_len;
-    ret = ioctl(af_link_sock, SIOCGLIFADDR, &req);
-    if (ret == -1) {
-        return errno;
+
+    error = af_link_ioctl(SIOCGLIFADDR, &req);
+    if (error) {
+        return error;
     }
     if (!memcmp(&sdl->sdl_data[sdl->sdl_nlen], mac, hwaddr_len)) {
         return 0;
@@ -1658,19 +1633,15 @@ set_etheraddr(const char *netdev_name OVS_UNUSED, int hwaddr_family OVS_UNUSED,
     sdl->sdl_alen = hwaddr_len;
     sdl->sdl_family = hwaddr_family;
     memcpy(sdl->sdl_data, mac, hwaddr_len);
-    ret = ioctl(af_link_sock, SIOCALIFADDR, &req);
-    if (ret == -1) {
-        return errno;
+    error = af_link_ioctl(SIOCALIFADDR, &req);
+    if (error) {
+        return error;
     }
 
     memset(&req, 0, sizeof(req));
     strncpy(req.iflr_name, netdev_name, sizeof(req.iflr_name));
     req.addr = oldaddr;
-    ret = ioctl(af_link_sock, SIOCDLIFADDR, &req);
-    if (ret == -1) {
-        return errno;
-    }
-    return 0;
+    return af_link_ioctl(SIOCDLIFADDR, &req);
 #else
 #error not implemented
 #endif
@@ -1693,4 +1664,26 @@ ifr_set_flags(struct ifreq *ifr, int flags)
 #ifdef HAVE_STRUCT_IFREQ_IFR_FLAGSHIGH
     ifr->ifr_flagshigh = flags >> 16;
 #endif
+}
+
+/* Calls ioctl() on an AF_LINK sock, passing the specified 'command' and
+ * 'arg'.  Returns 0 if successful, otherwise a positive errno value. */
+int
+af_link_ioctl(int command, const void *arg)
+{
+    static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
+    static int sock;
+
+    if (ovsthread_once_start(&once)) {
+        sock = socket(AF_LINK, SOCK_DGRAM, 0);
+        if (sock < 0) {
+            sock = -errno;
+            VLOG_ERR("failed to create link socket: %s", ovs_strerror(errno));
+        }
+        ovsthread_once_done(&once);
+    }
+
+    return (sock < 0 ? -sock
+            : ioctl(sock, command, arg) == -1 ? errno
+            : 0);
 }
