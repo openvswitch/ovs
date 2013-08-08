@@ -1493,7 +1493,7 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
         }
 
         ctx->xin->flow = old_flow;
-        ctx->xbridge = xport->xbundle->xbridge;
+        ctx->xbridge = xport->xbridge;
 
         if (ctx->xin->resubmit_stats) {
             netdev_vport_inc_tx(xport->netdev, ctx->xin->resubmit_stats);
