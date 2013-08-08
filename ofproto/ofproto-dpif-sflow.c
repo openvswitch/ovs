@@ -146,7 +146,7 @@ sflow_agent_send_packet_cb(void *ds_, SFLAgent *agent OVS_UNUSED,
 
 static struct dpif_sflow_port *
 dpif_sflow_find_port(const struct dpif_sflow *ds, odp_port_t odp_port)
-    OVS_REQ_WRLOCK(&mutex)
+    OVS_REQUIRES(&mutex)
 {
     struct dpif_sflow_port *dsp;
 
@@ -162,7 +162,7 @@ dpif_sflow_find_port(const struct dpif_sflow *ds, odp_port_t odp_port)
 static void
 sflow_agent_get_counters(void *ds_, SFLPoller *poller,
                          SFL_COUNTERS_SAMPLE_TYPE *cs)
-    OVS_REQ_WRLOCK(&mutex)
+    OVS_REQUIRES(&mutex)
 {
     struct dpif_sflow *ds = ds_;
     SFLCounters_sample_element elem;
@@ -276,7 +276,7 @@ success:
 }
 
 static void
-dpif_sflow_clear__(struct dpif_sflow *ds) OVS_REQ_WRLOCK(mutex)
+dpif_sflow_clear__(struct dpif_sflow *ds) OVS_REQUIRES(mutex)
 {
     if (ds->sflow_agent) {
         sfl_agent_release(ds->sflow_agent);
@@ -382,7 +382,7 @@ dpif_sflow_unref(struct dpif_sflow *ds) OVS_EXCLUDED(mutex)
 
 static void
 dpif_sflow_add_poller(struct dpif_sflow *ds, struct dpif_sflow_port *dsp)
-    OVS_REQ_WRLOCK(mutex)
+    OVS_REQUIRES(mutex)
 {
     SFLPoller *poller = sfl_agent_addPoller(ds->sflow_agent, &dsp->dsi, ds,
                                             sflow_agent_get_counters);
@@ -426,7 +426,7 @@ out:
 
 static void
 dpif_sflow_del_port__(struct dpif_sflow *ds, struct dpif_sflow_port *dsp)
-    OVS_REQ_WRLOCK(mutex)
+    OVS_REQUIRES(mutex)
 {
     if (ds->sflow_agent) {
         sfl_agent_removePoller(ds->sflow_agent, &dsp->dsi);

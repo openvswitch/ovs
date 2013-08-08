@@ -6475,7 +6475,7 @@ vlandev_find(const struct ofproto_dpif *ofproto, ofp_port_t vlandev_ofp_port)
 static ofp_port_t
 vsp_vlandev_to_realdev(const struct ofproto_dpif *ofproto,
                        ofp_port_t vlandev_ofp_port, int *vid)
-    OVS_REQ_WRLOCK(ofproto->vsp_mutex)
+    OVS_REQUIRES(ofproto->vsp_mutex)
 {
     if (!hmap_is_empty(&ofproto->vlandev_map)) {
         const struct vlan_splinter *vsp;

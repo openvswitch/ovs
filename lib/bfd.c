@@ -191,29 +191,29 @@ static struct ovs_mutex mutex = OVS_MUTEX_INITIALIZER;
 static struct hmap all_bfds__ = HMAP_INITIALIZER(&all_bfds__);
 static struct hmap *const all_bfds OVS_GUARDED_BY(mutex) = &all_bfds__;
 
-static bool bfd_forwarding__(const struct bfd *) OVS_REQ_WRLOCK(mutex);
-static bool bfd_in_poll(const struct bfd *) OVS_REQ_WRLOCK(&mutex);
-static void bfd_poll(struct bfd *bfd) OVS_REQ_WRLOCK(&mutex);
-static const char *bfd_diag_str(enum diag) OVS_REQ_WRLOCK(&mutex);
-static const char *bfd_state_str(enum state) OVS_REQ_WRLOCK(&mutex);
-static long long int bfd_min_tx(const struct bfd *) OVS_REQ_WRLOCK(&mutex);
+static bool bfd_forwarding__(const struct bfd *) OVS_REQUIRES(mutex);
+static bool bfd_in_poll(const struct bfd *) OVS_REQUIRES(&mutex);
+static void bfd_poll(struct bfd *bfd) OVS_REQUIRES(&mutex);
+static const char *bfd_diag_str(enum diag) OVS_REQUIRES(&mutex);
+static const char *bfd_state_str(enum state) OVS_REQUIRES(&mutex);
+static long long int bfd_min_tx(const struct bfd *) OVS_REQUIRES(&mutex);
 static long long int bfd_tx_interval(const struct bfd *)
-    OVS_REQ_WRLOCK(&mutex);
+    OVS_REQUIRES(&mutex);
 static long long int bfd_rx_interval(const struct bfd *)
-    OVS_REQ_WRLOCK(&mutex);
-static void bfd_set_next_tx(struct bfd *) OVS_REQ_WRLOCK(&mutex);
+    OVS_REQUIRES(&mutex);
+static void bfd_set_next_tx(struct bfd *) OVS_REQUIRES(&mutex);
 static void bfd_set_state(struct bfd *, enum state, enum diag)
-    OVS_REQ_WRLOCK(&mutex);
-static uint32_t generate_discriminator(void) OVS_REQ_WRLOCK(&mutex);
+    OVS_REQUIRES(&mutex);
+static uint32_t generate_discriminator(void) OVS_REQUIRES(&mutex);
 static void bfd_put_details(struct ds *, const struct bfd *)
-    OVS_REQ_WRLOCK(&mutex);
+    OVS_REQUIRES(&mutex);
 static void bfd_unixctl_show(struct unixctl_conn *, int argc,
                              const char *argv[], void *aux OVS_UNUSED);
 static void bfd_unixctl_set_forwarding_override(struct unixctl_conn *,
                                                 int argc, const char *argv[],
                                                 void *aux OVS_UNUSED);
 static void log_msg(enum vlog_level, const struct msg *, const char *message,
-                    const struct bfd *) OVS_REQ_WRLOCK(&mutex);
+                    const struct bfd *) OVS_REQUIRES(&mutex);
 
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(20, 20);
 
@@ -683,7 +683,7 @@ out:
 }
 
 static bool
-bfd_forwarding__(const struct bfd *bfd) OVS_REQ_WRLOCK(mutex)
+bfd_forwarding__(const struct bfd *bfd) OVS_REQUIRES(mutex)
 {
     if (bfd->forwarding_override != -1) {
         return bfd->forwarding_override == 1;
@@ -697,13 +697,13 @@ bfd_forwarding__(const struct bfd *bfd) OVS_REQ_WRLOCK(mutex)
 
 /* Helpers. */
 static bool
-bfd_in_poll(const struct bfd *bfd) OVS_REQ_WRLOCK(mutex)
+bfd_in_poll(const struct bfd *bfd) OVS_REQUIRES(mutex)
 {
     return (bfd->flags & FLAG_POLL) != 0;
 }
 
 static void
-bfd_poll(struct bfd *bfd) OVS_REQ_WRLOCK(mutex)
+bfd_poll(struct bfd *bfd) OVS_REQUIRES(mutex)
 {
     if (bfd->state > STATE_DOWN && !bfd_in_poll(bfd)
         && !(bfd->flags & FLAG_FINAL)) {
@@ -716,7 +716,7 @@ bfd_poll(struct bfd *bfd) OVS_REQ_WRLOCK(mutex)
 }
 
 static long long int
-bfd_min_tx(const struct bfd *bfd) OVS_REQ_WRLOCK(mutex)
+bfd_min_tx(const struct bfd *bfd) OVS_REQUIRES(mutex)
 {
     /* RFC 5880 Section 6.8.3
      * When bfd.SessionState is not Up, the system MUST set
@@ -728,20 +728,20 @@ bfd_min_tx(const struct bfd *bfd) OVS_REQ_WRLOCK(mutex)
 }
 
 static long long int
-bfd_tx_interval(const struct bfd *bfd) OVS_REQ_WRLOCK(mutex)
+bfd_tx_interval(const struct bfd *bfd) OVS_REQUIRES(mutex)
 {
     long long int interval = bfd_min_tx(bfd);
     return MAX(interval, bfd->rmt_min_rx);
 }
 
 static long long int
-bfd_rx_interval(const struct bfd *bfd) OVS_REQ_WRLOCK(mutex)
+bfd_rx_interval(const struct bfd *bfd) OVS_REQUIRES(mutex)
 {
     return MAX(bfd->min_rx, bfd->rmt_min_tx);
 }
 
 static void
-bfd_set_next_tx(struct bfd *bfd) OVS_REQ_WRLOCK(mutex)
+bfd_set_next_tx(struct bfd *bfd) OVS_REQUIRES(mutex)
 {
     long long int interval = bfd_tx_interval(bfd);
     interval -= interval * random_range(26) / 100;
@@ -817,7 +817,7 @@ bfd_diag_str(enum diag diag) {
 
 static void
 log_msg(enum vlog_level level, const struct msg *p, const char *message,
-        const struct bfd *bfd) OVS_REQ_WRLOCK(mutex)
+        const struct bfd *bfd) OVS_REQUIRES(mutex)
 {
     struct ds ds = DS_EMPTY_INITIALIZER;
 
@@ -849,7 +849,7 @@ log_msg(enum vlog_level level, const struct msg *p, const char *message,
 
 static void
 bfd_set_state(struct bfd *bfd, enum state state, enum diag diag)
-    OVS_REQ_WRLOCK(mutex)
+    OVS_REQUIRES(mutex)
 {
     if (diag == DIAG_NONE && bfd->cpath_down) {
         diag = DIAG_CPATH_DOWN;
@@ -911,7 +911,7 @@ generate_discriminator(void)
 }
 
 static struct bfd *
-bfd_find_by_name(const char *name) OVS_REQ_WRLOCK(mutex)
+bfd_find_by_name(const char *name) OVS_REQUIRES(mutex)
 {
     struct bfd *bfd;
 
@@ -924,7 +924,7 @@ bfd_find_by_name(const char *name) OVS_REQ_WRLOCK(mutex)
 }
 
 static void
-bfd_put_details(struct ds *ds, const struct bfd *bfd) OVS_REQ_WRLOCK(mutex)
+bfd_put_details(struct ds *ds, const struct bfd *bfd) OVS_REQUIRES(mutex)
 {
     ds_put_format(ds, "\tForwarding: %s\n",
                   bfd_forwarding__(bfd) ? "true" : "false");

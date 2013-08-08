@@ -156,7 +156,7 @@ static unixctl_cb_func cfm_unixctl_show;
 static unixctl_cb_func cfm_unixctl_set_fault;
 
 static uint64_t
-cfm_rx_packets(const struct cfm *cfm) OVS_REQ_WRLOCK(mutex)
+cfm_rx_packets(const struct cfm *cfm) OVS_REQUIRES(mutex)
 {
     struct netdev_stats stats;
 
@@ -204,7 +204,7 @@ ds_put_cfm_fault(struct ds *ds, int fault)
 }
 
 static void
-cfm_generate_maid(struct cfm *cfm) OVS_REQ_WRLOCK(mutex)
+cfm_generate_maid(struct cfm *cfm) OVS_REQUIRES(mutex)
 {
     const char *ovs_md_name = "ovs";
     const char *ovs_ma_name = "ovs";
@@ -247,7 +247,7 @@ ccm_interval_to_ms(uint8_t interval)
 }
 
 static long long int
-cfm_fault_interval(struct cfm *cfm) OVS_REQ_WRLOCK(mutex)
+cfm_fault_interval(struct cfm *cfm) OVS_REQUIRES(mutex)
 {
     /* According to the 802.1ag specification we should assume every other MP
      * with the same MAID has the same transmission interval that we have.  If
@@ -289,7 +289,7 @@ cfm_is_valid_mpid(bool extended, uint64_t mpid)
 }
 
 static struct remote_mp *
-lookup_remote_mp(const struct cfm *cfm, uint64_t mpid) OVS_REQ_WRLOCK(mutex)
+lookup_remote_mp(const struct cfm *cfm, uint64_t mpid) OVS_REQUIRES(mutex)
 {
     struct remote_mp *rmp;
 
@@ -795,7 +795,7 @@ out:
 }
 
 static int
-cfm_get_fault__(const struct cfm *cfm) OVS_REQ_WRLOCK(mutex)
+cfm_get_fault__(const struct cfm *cfm) OVS_REQUIRES(mutex)
 {
     if (cfm->fault_override >= 0) {
         return cfm->fault_override ? CFM_FAULT_OVERRIDE : 0;
@@ -866,7 +866,7 @@ cfm_get_remote_mpids(const struct cfm *cfm, uint64_t **rmps, size_t *n_rmps)
 }
 
 static struct cfm *
-cfm_find(const char *name) OVS_REQ_WRLOCK(&mutex)
+cfm_find(const char *name) OVS_REQUIRES(&mutex)
 {
     struct cfm *cfm;
 
@@ -879,7 +879,7 @@ cfm_find(const char *name) OVS_REQ_WRLOCK(&mutex)
 }
 
 static void
-cfm_print_details(struct ds *ds, const struct cfm *cfm) OVS_REQ_WRLOCK(&mutex)
+cfm_print_details(struct ds *ds, const struct cfm *cfm) OVS_REQUIRES(&mutex)
 {
     struct remote_mp *rmp;
     bool extended;

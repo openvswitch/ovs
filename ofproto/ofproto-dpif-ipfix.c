@@ -506,7 +506,7 @@ dpif_ipfix_get_bridge_exporter_probability(const struct dpif_ipfix *di)
 }
 
 static void
-dpif_ipfix_clear(struct dpif_ipfix *di) OVS_REQ_WRLOCK(mutex)
+dpif_ipfix_clear(struct dpif_ipfix *di) OVS_REQUIRES(mutex)
 {
     struct dpif_ipfix_flow_exporter_map_node *node, *next;
 
