@@ -298,6 +298,21 @@ the name of each enum.  For example:
     };
 
 
+THREAD SAFETY ANNOTATIONS
+
+  Use the macros in lib/compiler.h to annotate locking requirements.
+For example:
+
+    static struct ovs_mutex mutex = OVS_MUTEX_INITIALIZER;
+    static struct ovs_rwlock rwlock = OVS_RWLOCK_INITIALIZER;
+
+    void function_require_plain_mutex(void) OVS_REQUIRES(mutex);
+    void function_require_rwlock(void) OVS_REQ_RDLOCK(rwlock);
+
+  Pass lock objects, not their addresses, to the annotation macros.
+(Thus we have OVS_REQUIRES(mutex) above, not OVS_REQUIRES(&mutex).)
+
+
 SOURCE FILES
 
   Each source file should state its license in a comment at the very
