@@ -576,7 +576,7 @@ system_stats_wait(void)
 }
 
 static void
-discard_stats(void) OVS_REQUIRES(&mutex)
+discard_stats(void) OVS_REQUIRES(mutex)
 {
     if (system_stats) {
         smap_destroy(system_stats);

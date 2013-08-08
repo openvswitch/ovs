@@ -64,25 +64,25 @@ static struct hmap *ofport_map OVS_GUARDED_BY(rwlock) = &ofport_map__;
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 static struct vlog_rate_limit dbg_rl = VLOG_RATE_LIMIT_INIT(60, 60);
 
-static struct tnl_port *tnl_find(struct tnl_match *) OVS_REQ_RDLOCK(&rwlock);
+static struct tnl_port *tnl_find(struct tnl_match *) OVS_REQ_RDLOCK(rwlock);
 static struct tnl_port *tnl_find_exact(struct tnl_match *)
-    OVS_REQ_RDLOCK(&rwlock);
+    OVS_REQ_RDLOCK(rwlock);
 static struct tnl_port *tnl_find_ofport(const struct ofport_dpif *)
-    OVS_REQ_RDLOCK(&rwlock);
+    OVS_REQ_RDLOCK(rwlock);
 
 static uint32_t tnl_hash(struct tnl_match *);
 static void tnl_match_fmt(const struct tnl_match *, struct ds *);
-static char *tnl_port_fmt(const struct tnl_port *) OVS_REQ_RDLOCK(&rwlock);
+static char *tnl_port_fmt(const struct tnl_port *) OVS_REQ_RDLOCK(rwlock);
 static void tnl_port_mod_log(const struct tnl_port *, const char *action)
-    OVS_REQ_RDLOCK(&rwlock);
+    OVS_REQ_RDLOCK(rwlock);
 static const char *tnl_port_get_name(const struct tnl_port *)
-    OVS_REQ_RDLOCK(&rwlock);
-static void tnl_port_del__(const struct ofport_dpif *) OVS_REQ_WRLOCK(&rwlock);
+    OVS_REQ_RDLOCK(rwlock);
+static void tnl_port_del__(const struct ofport_dpif *) OVS_REQ_WRLOCK(rwlock);
 
 static bool
 tnl_port_add__(const struct ofport_dpif *ofport, const struct netdev *netdev,
                odp_port_t odp_port, bool warn)
-    OVS_REQ_WRLOCK(&rwlock)
+    OVS_REQ_WRLOCK(rwlock)
 {
     const struct netdev_tunnel_config *cfg;
     struct tnl_port *existing_port;

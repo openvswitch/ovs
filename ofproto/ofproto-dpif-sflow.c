@@ -146,7 +146,7 @@ sflow_agent_send_packet_cb(void *ds_, SFLAgent *agent OVS_UNUSED,
 
 static struct dpif_sflow_port *
 dpif_sflow_find_port(const struct dpif_sflow *ds, odp_port_t odp_port)
-    OVS_REQUIRES(&mutex)
+    OVS_REQUIRES(mutex)
 {
     struct dpif_sflow_port *dsp;
 
@@ -162,7 +162,7 @@ dpif_sflow_find_port(const struct dpif_sflow *ds, odp_port_t odp_port)
 static void
 sflow_agent_get_counters(void *ds_, SFLPoller *poller,
                          SFL_COUNTERS_SAMPLE_TYPE *cs)
-    OVS_REQUIRES(&mutex)
+    OVS_REQUIRES(mutex)
 {
     struct dpif_sflow *ds = ds_;
     SFLCounters_sample_element elem;

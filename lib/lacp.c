@@ -778,7 +778,7 @@ info_tx_equal(struct lacp_info *a, struct lacp_info *b)
 }
 
 static struct lacp *
-lacp_find(const char *name) OVS_REQUIRES(&mutex)
+lacp_find(const char *name) OVS_REQUIRES(mutex)
 {
     struct lacp *lacp;
 
@@ -828,7 +828,7 @@ ds_put_lacp_state(struct ds *ds, uint8_t state)
 }
 
 static void
-lacp_print_details(struct ds *ds, struct lacp *lacp) OVS_REQUIRES(&mutex)
+lacp_print_details(struct ds *ds, struct lacp *lacp) OVS_REQUIRES(mutex)
 {
     struct shash slave_shash = SHASH_INITIALIZER(&slave_shash);
     const struct shash_node **sorted_slaves = NULL;

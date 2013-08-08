@@ -192,28 +192,28 @@ static struct hmap all_bfds__ = HMAP_INITIALIZER(&all_bfds__);
 static struct hmap *const all_bfds OVS_GUARDED_BY(mutex) = &all_bfds__;
 
 static bool bfd_forwarding__(const struct bfd *) OVS_REQUIRES(mutex);
-static bool bfd_in_poll(const struct bfd *) OVS_REQUIRES(&mutex);
-static void bfd_poll(struct bfd *bfd) OVS_REQUIRES(&mutex);
-static const char *bfd_diag_str(enum diag) OVS_REQUIRES(&mutex);
-static const char *bfd_state_str(enum state) OVS_REQUIRES(&mutex);
-static long long int bfd_min_tx(const struct bfd *) OVS_REQUIRES(&mutex);
+static bool bfd_in_poll(const struct bfd *) OVS_REQUIRES(mutex);
+static void bfd_poll(struct bfd *bfd) OVS_REQUIRES(mutex);
+static const char *bfd_diag_str(enum diag) OVS_REQUIRES(mutex);
+static const char *bfd_state_str(enum state) OVS_REQUIRES(mutex);
+static long long int bfd_min_tx(const struct bfd *) OVS_REQUIRES(mutex);
 static long long int bfd_tx_interval(const struct bfd *)
-    OVS_REQUIRES(&mutex);
+    OVS_REQUIRES(mutex);
 static long long int bfd_rx_interval(const struct bfd *)
-    OVS_REQUIRES(&mutex);
-static void bfd_set_next_tx(struct bfd *) OVS_REQUIRES(&mutex);
+    OVS_REQUIRES(mutex);
+static void bfd_set_next_tx(struct bfd *) OVS_REQUIRES(mutex);
 static void bfd_set_state(struct bfd *, enum state, enum diag)
-    OVS_REQUIRES(&mutex);
-static uint32_t generate_discriminator(void) OVS_REQUIRES(&mutex);
+    OVS_REQUIRES(mutex);
+static uint32_t generate_discriminator(void) OVS_REQUIRES(mutex);
 static void bfd_put_details(struct ds *, const struct bfd *)
-    OVS_REQUIRES(&mutex);
+    OVS_REQUIRES(mutex);
 static void bfd_unixctl_show(struct unixctl_conn *, int argc,
                              const char *argv[], void *aux OVS_UNUSED);
 static void bfd_unixctl_set_forwarding_override(struct unixctl_conn *,
                                                 int argc, const char *argv[],
                                                 void *aux OVS_UNUSED);
 static void log_msg(enum vlog_level, const struct msg *, const char *message,
-                    const struct bfd *) OVS_REQUIRES(&mutex);
+                    const struct bfd *) OVS_REQUIRES(mutex);
 
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(20, 20);
 

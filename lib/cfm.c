@@ -866,7 +866,7 @@ cfm_get_remote_mpids(const struct cfm *cfm, uint64_t **rmps, size_t *n_rmps)
 }
 
 static struct cfm *
-cfm_find(const char *name) OVS_REQUIRES(&mutex)
+cfm_find(const char *name) OVS_REQUIRES(mutex)
 {
     struct cfm *cfm;
 
@@ -879,7 +879,7 @@ cfm_find(const char *name) OVS_REQUIRES(&mutex)
 }
 
 static void
-cfm_print_details(struct ds *ds, const struct cfm *cfm) OVS_REQUIRES(&mutex)
+cfm_print_details(struct ds *ds, const struct cfm *cfm) OVS_REQUIRES(mutex)
 {
     struct remote_mp *rmp;
     bool extended;
