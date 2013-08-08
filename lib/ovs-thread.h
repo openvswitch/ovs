@@ -116,7 +116,7 @@ void ovs_rwlock_unlock(const struct ovs_rwlock *rwlock) OVS_RELEASES(rwlock);
 void ovs_rwlock_wrlock_at(const struct ovs_rwlock *rwlock, const char *where)
     OVS_ACQ_WRLOCK(rwlock);
 #define ovs_rwlock_wrlock(rwlock) \
-        ovs_rwlock_wrlock_at(rwlock, SOURCE_LOCATOR);
+        ovs_rwlock_wrlock_at(rwlock, SOURCE_LOCATOR)
 
 int ovs_rwlock_trywrlock_at(const struct ovs_rwlock *rwlock, const char *where)
     OVS_TRY_WRLOCK(0, rwlock);
@@ -126,7 +126,7 @@ int ovs_rwlock_trywrlock_at(const struct ovs_rwlock *rwlock, const char *where)
 void ovs_rwlock_rdlock_at(const struct ovs_rwlock *rwlock, const char *where)
     OVS_ACQ_RDLOCK(rwlock);
 #define ovs_rwlock_rdlock(rwlock) \
-        ovs_rwlock_rdlock_at(rwlock, SOURCE_LOCATOR);
+        ovs_rwlock_rdlock_at(rwlock, SOURCE_LOCATOR)
 
 int ovs_rwlock_tryrdlock_at(const struct ovs_rwlock *rwlock, const char *where)
     OVS_TRY_RDLOCK(0, rwlock);
