@@ -65,6 +65,16 @@
  *      while the specific MUTEX is held.
  *
  *
+ * On a variable A of mutex type:
+ *
+ *    - OVS_ACQ_BEFORE(B), where B is a mutex or a comma-separated list of
+ *      mutexes, declare that if both A and B are acquired at the same time,
+ *      then A must be acquired before B.  That is, B nests inside A.
+ *
+ *    - OVS_ACQ_AFTER(B) is the opposite of OVS_ACQ_BEFORE(B), that is, it
+ *      declares that A nests inside B.
+ *
+ *
  * On a function, the following attributes apply to mutexes:
  *
  *    - OVS_ACQUIRES(MUTEX) indicate that the function must be called without
@@ -83,6 +93,7 @@
  *
  *    - OVS_LOCKS_EXCLUDED(MUTEX) indicates that the function may only be
  *      called when MUTEX is not held.
+ *
  *
  * The following variants, with the same syntax, apply to reader-writer locks:
  *
@@ -115,6 +126,8 @@
 #define OVS_GUARDED_BY(...) __attribute__((guarded_by(__VA_ARGS__)))
 #define OVS_RELEASES(...) __attribute__((unlock_function(__VA_ARGS__)))
 #define OVS_EXCLUDED(...) __attribute__((locks_excluded(__VA_ARGS__)))
+#define OVS_ACQ_BEFORE(...) __attribute__((acquired_before(__VA_ARGS__)))
+#define OVS_ACQ_AFTER(...) __attribute__((acquired_after(__VA_ARGS__)))
 #elif __CHECKER__
 /* "sparse" annotations for mutexes and mutex-like constructs.
  *
@@ -136,6 +149,8 @@
 #define OVS_GUARDED_BY(...)
 #define OVS_EXCLUDED(...)
 #define OVS_RELEASES(...)   __attribute__((context(MUTEX, 1, 0)))
+#define OVS_ACQ_BEFORE(...)
+#define OVS_ACQ_AFTER(...)
 #define OVS_MACRO_LOCK(...) __context__(MUTEX, 0, 1)
 #define OVS_MACRO_RELEASE(...) __context__(MUTEX, 1, 0)
 #else
@@ -153,6 +168,8 @@
 #define OVS_GUARDED_BY(...)
 #define OVS_EXCLUDED(...)
 #define OVS_RELEASES(...)
+#define OVS_ACQ_BEFORE(...)
+#define OVS_ACQ_AFTER(...)
 #define OVS_MACRO_LOCK(...)
 #define OVS_MACRO_RELEASE(...)
 #endif
