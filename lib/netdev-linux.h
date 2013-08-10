@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 Nicira, Inc.
+ * Copyright (c) 2011, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,6 +27,5 @@ struct netdev;
 
 int netdev_linux_ethtool_set_flag(struct netdev *netdev, uint32_t flag,
                                   const char *flag_name, bool enable);
-int netdev_linux_get_af_inet_sock(void);
 
 #endif /* netdev-linux.h */

@@ -26,6 +26,7 @@
 #include "dummy.h"
 #include "hash.h"
 #include "shash.h"
+#include "socket-util.h"
 #include "vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(vlandev);
@@ -237,17 +238,11 @@ do_vlan_ioctl(const char *netdev_name, struct vlan_ioctl_args *via,
 {
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
     int error;
-    int sock;
 
     via->cmd = cmd;
     ovs_strlcpy(via->device1, netdev_name, sizeof via->device1);
 
-    sock = netdev_linux_get_af_inet_sock();
-    if (sock < 0) {
-        return -sock;
-    }
-
-    error = ioctl(sock, SIOCSIFVLAN, via) < 0 ? errno : 0;
+    error = af_inet_ioctl(SIOCSIFVLAN, via);
     if (error) {
         VLOG_WARN_RL(&rl, "%s: VLAN ioctl %s failed (%s)",
                      netdev_name, cmd_name, ovs_strerror(error));

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -96,5 +96,11 @@ int send_iovec_and_fds_fully_block(int sock,
 int recv_data_and_fds(int sock,
                       void *data, size_t size,
                       int fds[SOUTIL_MAX_FDS], size_t *n_fdsp);
+
+/* Helpers for calling ioctl() on an AF_INET socket. */
+struct ifreq;
+int af_inet_ioctl(unsigned long int command, const void *arg);
+int af_inet_ifreq_ioctl(const char *name, struct ifreq *,
+                        unsigned long int cmd, const char *cmd_name);
 
 #endif /* socket-util.h */

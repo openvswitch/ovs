@@ -26,6 +26,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/ioctl.h>
 #include <sys/resource.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
@@ -1353,3 +1354,42 @@ error:
     *n_fdsp = 0;
     return EPROTO;
 }
+
+/* Calls ioctl() on an AF_INET sock, passing the specified 'command' and
+ * 'arg'.  Returns 0 if successful, otherwise a positive errno value. */
+int
+af_inet_ioctl(unsigned long int command, const void *arg)
+{
+    static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
+    static int sock;
+
+    if (ovsthread_once_start(&once)) {
+        sock = socket(AF_INET, SOCK_DGRAM, 0);
+        if (sock < 0) {
+            sock = -errno;
+            VLOG_ERR("failed to create inet socket: %s", ovs_strerror(errno));
+        }
+        ovsthread_once_done(&once);
+    }
+
+    return (sock < 0 ? -sock
+            : ioctl(sock, command, arg) == -1 ? errno
+            : 0);
+}
+
+int
+af_inet_ifreq_ioctl(const char *name, struct ifreq *ifr, unsigned long int cmd,
+                    const char *cmd_name)
+{
+    int error;
+
+    ovs_strzcpy(ifr->ifr_name, name, sizeof ifr->ifr_name);
+    error = af_inet_ioctl(cmd, ifr);
+    if (error) {
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
+        VLOG_DBG_RL(&rl, "%s: ioctl(%s) failed: %s", name, cmd_name,
+                    ovs_strerror(error));
+    }
+    return error;
+}
+

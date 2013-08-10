@@ -107,9 +107,6 @@ enum {
     VALID_CARRIER = 1 << 5
 };
 
-/* An AF_INET socket (used for ioctl operations). */
-static int af_inet_sock = -1;
-
 #if defined(__NetBSD__)
 /* AF_LINK socket used for netdev_bsd_get_stats and set_etheraddr */
 static int af_link_sock = -1;
@@ -133,8 +130,6 @@ static int cache_notifier_refcount;
 
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
 
-static int netdev_bsd_do_ioctl(const char *, struct ifreq *, unsigned long cmd,
-                               const char *cmd_name);
 static void destroy_tap(int fd, const char *name);
 static int get_flags(const struct netdev *, int *flagsp);
 static int set_flags(const char *, int flags);
@@ -181,30 +176,23 @@ netdev_get_kernel_name(const struct netdev *netdev)
 static int
 netdev_bsd_init(void)
 {
+#if defined(__NetBSD__)
     static int status = -1;
 
     if (status >= 0) {  /* already initialized */
         return status;
     }
 
-    af_inet_sock = socket(AF_INET, SOCK_DGRAM, 0);
-    status = af_inet_sock >= 0 ? 0 : errno;
-    if (status) {
-        VLOG_ERR("failed to create inet socket: %s", ovs_strerror(status));
-        return status;
-    }
-
-#if defined(__NetBSD__)
     af_link_sock = socket(AF_LINK, SOCK_DGRAM, 0);
     status = af_link_sock >= 0 ? 0 : errno;
     if (status) {
         VLOG_ERR("failed to create link socket: %s", ovs_strerror(status));
-        close(af_inet_sock);
-        af_inet_sock = -1;
     }
-#endif /* defined(__NetBSD__) */
 
     return status;
+#else
+    return 0;
+#endif /* defined(__NetBSD__) */
 }
 
 /*
@@ -381,8 +369,8 @@ netdev_bsd_create_tap(const struct netdev_class *class, const char *name,
     /* Change the name of the tap device */
 #if defined(SIOCSIFNAME)
     ifr.ifr_data = (void *)name;
-    if (ioctl(af_inet_sock, SIOCSIFNAME, &ifr) == -1) {
-        error = errno;
+    error = af_inet_ioctl(SIOCSIFNAME, &ifr);
+    if (error) {
         destroy_tap(netdev->tap_fd, ifr.ifr_name);
         goto error_unref_notifier;
     }
@@ -405,8 +393,8 @@ netdev_bsd_create_tap(const struct netdev_class *class, const char *name,
     /* Turn device UP */
     ifr_set_flags(&ifr, IFF_UP);
     strncpy(ifr.ifr_name, kernel_name, sizeof ifr.ifr_name);
-    if (ioctl(af_inet_sock, SIOCSIFFLAGS, &ifr) == -1) {
-        error = errno;
+    error = af_inet_ioctl(SIOCSIFFLAGS, &ifr);
+    if (error) {
         destroy_tap(netdev->tap_fd, kernel_name);
         goto error_unref_notifier;
     }
@@ -815,7 +803,7 @@ netdev_bsd_get_mtu(const struct netdev *netdev_, int *mtup)
         struct ifreq ifr;
         int error;
 
-        error = netdev_bsd_do_ioctl(netdev_get_kernel_name(netdev_), &ifr,
+        error = af_inet_ifreq_ioctl(netdev_get_kernel_name(netdev_), &ifr,
                                     SIOCGIFMTU, "SIOCGIFMTU");
         if (error) {
             return error;
@@ -844,15 +832,17 @@ netdev_bsd_get_carrier(const struct netdev *netdev_, bool *carrier)
 
     if (!(netdev->cache_valid & VALID_CARRIER)) {
         struct ifmediareq ifmr;
+        int error;
 
         memset(&ifmr, 0, sizeof(ifmr));
         strncpy(ifmr.ifm_name, netdev_get_kernel_name(netdev_),
                 sizeof ifmr.ifm_name);
 
-        if (ioctl(af_inet_sock, SIOCGIFMEDIA, &ifmr) == -1) {
+        error = af_inet_ioctl(SIOCGIFMEDIA, &ifmr);
+        if (error) {
             VLOG_DBG_RL(&rl, "%s: ioctl(SIOCGIFMEDIA) failed: %s",
-                        netdev_get_name(netdev_), ovs_strerror(errno));
-            return errno;
+                        netdev_get_name(netdev_), ovs_strerror(error));
+            return error;
         }
 
         netdev->carrier = (ifmr.ifm_status & IFM_ACTIVE) == IFM_ACTIVE;
@@ -1057,10 +1047,11 @@ netdev_bsd_get_features(const struct netdev *netdev,
     /* We make two SIOCGIFMEDIA ioctl calls.  The first to determine the
      * number of supported modes, and a second with a buffer to retrieve
      * them. */
-    if (ioctl(af_inet_sock, SIOCGIFMEDIA, &ifmr) == -1) {
+    error = af_inet_ioctl(SIOCGIFMEDIA, &ifmr);
+    if (error) {
         VLOG_DBG_RL(&rl, "%s: ioctl(SIOCGIFMEDIA) failed: %s",
-                    netdev_get_name(netdev), ovs_strerror(errno));
-        return errno;
+                    netdev_get_name(netdev), ovs_strerror(error));
+        return error;
     }
 
     media_list = xcalloc(ifmr.ifm_count, sizeof(int));
@@ -1073,10 +1064,10 @@ netdev_bsd_get_features(const struct netdev *netdev,
         goto cleanup;
     }
 
-    if (ioctl(af_inet_sock, SIOCGIFMEDIA, &ifmr) == -1) {
+    error = af_inet_ioctl(SIOCGIFMEDIA, &ifmr);
+    if (error) {
         VLOG_DBG_RL(&rl, "%s: ioctl(SIOCGIFMEDIA) failed: %s",
-                    netdev_get_name(netdev), ovs_strerror(errno));
-        error = errno;
+                    netdev_get_name(netdev), ovs_strerror(error));
         goto cleanup;
     }
 
@@ -1117,7 +1108,7 @@ netdev_bsd_get_in4(const struct netdev *netdev_, struct in_addr *in4,
         int error;
 
         ifr.ifr_addr.sa_family = AF_INET;
-        error = netdev_bsd_do_ioctl(netdev_get_kernel_name(netdev_), &ifr,
+        error = af_inet_ifreq_ioctl(netdev_get_kernel_name(netdev_), &ifr,
                                     SIOCGIFADDR, "SIOCGIFADDR");
         if (error) {
             return error;
@@ -1125,7 +1116,7 @@ netdev_bsd_get_in4(const struct netdev *netdev_, struct in_addr *in4,
 
         sin = (struct sockaddr_in *) &ifr.ifr_addr;
         netdev->in4 = sin->sin_addr;
-        error = netdev_bsd_do_ioctl(netdev_get_kernel_name(netdev_), &ifr,
+        error = af_inet_ifreq_ioctl(netdev_get_kernel_name(netdev_), &ifr,
                                     SIOCGIFNETMASK, "SIOCGIFNETMASK");
         if (error) {
             return error;
@@ -1348,7 +1339,7 @@ do_set_addr(struct netdev *netdev,
 {
     struct ifreq ifr;
     make_in4_sockaddr(&ifr.ifr_addr, addr);
-    return netdev_bsd_do_ioctl(netdev_get_kernel_name(netdev), &ifr, ioctl_nr,
+    return af_inet_ifreq_ioctl(netdev_get_kernel_name(netdev), &ifr, ioctl_nr,
                                ioctl_name);
 }
 
@@ -1534,7 +1525,7 @@ destroy_tap(int fd, const char *name)
     close(fd);
     strcpy(ifr.ifr_name, name);
     /* XXX What to do if this call fails? */
-    ioctl(af_inet_sock, SIOCIFDESTROY, &ifr);
+    af_inet_ioctl(SIOCIFDESTROY, &ifr);
 }
 
 static int
@@ -1543,7 +1534,7 @@ get_flags(const struct netdev *netdev, int *flags)
     struct ifreq ifr;
     int error;
 
-    error = netdev_bsd_do_ioctl(netdev_get_kernel_name(netdev), &ifr,
+    error = af_inet_ifreq_ioctl(netdev_get_kernel_name(netdev), &ifr,
                                 SIOCGIFFLAGS, "SIOCGIFFLAGS");
 
     *flags = ifr_get_flags(&ifr);
@@ -1558,7 +1549,7 @@ set_flags(const char *name, int flags)
 
     ifr_set_flags(&ifr, flags);
 
-    return netdev_bsd_do_ioctl(name, &ifr, SIOCSIFFLAGS, "SIOCSIFFLAGS");
+    return af_inet_ifreq_ioctl(name, &ifr, SIOCSIFFLAGS, "SIOCSIFFLAGS");
 }
 
 static int
@@ -1616,16 +1607,18 @@ set_etheraddr(const char *netdev_name OVS_UNUSED, int hwaddr_family OVS_UNUSED,
 {
 #if defined(__FreeBSD__)
     struct ifreq ifr;
+    int error;
 
     memset(&ifr, 0, sizeof ifr);
     strncpy(ifr.ifr_name, netdev_name, sizeof ifr.ifr_name);
     ifr.ifr_addr.sa_family = hwaddr_family;
     ifr.ifr_addr.sa_len = hwaddr_len;
     memcpy(ifr.ifr_addr.sa_data, mac, hwaddr_len);
-    if (ioctl(af_inet_sock, SIOCSIFLLADDR, &ifr) < 0) {
+    error = af_inet_ioctl(SIOCSIFLLADDR, &ifr);
+    if (error) {
         VLOG_ERR("ioctl(SIOCSIFLLADDR) on %s device failed: %s",
-                 netdev_name, ovs_strerror(errno));
-        return errno;
+                 netdev_name, ovs_strerror(error));
+        return error;
     }
     return 0;
 #elif defined(__NetBSD__)
@@ -1681,19 +1674,6 @@ set_etheraddr(const char *netdev_name OVS_UNUSED, int hwaddr_family OVS_UNUSED,
 #else
 #error not implemented
 #endif
-}
-
-static int
-netdev_bsd_do_ioctl(const char *name, struct ifreq *ifr, unsigned long cmd,
-                    const char *cmd_name)
-{
-    strncpy(ifr->ifr_name, name, sizeof ifr->ifr_name);
-    if (ioctl(af_inet_sock, cmd, ifr) == -1) {
-        VLOG_DBG_RL(&rl, "%s: ioctl(%s) failed: %s", name, cmd_name,
-                    ovs_strerror(errno));
-        return errno;
-    }
-    return 0;
 }
 
 static int

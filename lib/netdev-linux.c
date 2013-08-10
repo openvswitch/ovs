@@ -400,19 +400,14 @@ struct netdev_rx_linux {
 
 static const struct netdev_rx_class netdev_rx_linux_class;
 
-/* Sockets used for ioctl operations. */
-static int af_inet_sock = -1;   /* AF_INET, SOCK_DGRAM. */
-
 /* This is set pretty low because we probably won't learn anything from the
  * additional log messages. */
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
 
-static int netdev_linux_init(void);
+static void netdev_linux_run(void);
 
 static int netdev_linux_do_ethtool(const char *name, struct ethtool_cmd *,
                                    int cmd, const char *cmd_name);
-static int netdev_linux_do_ioctl(const char *name, struct ifreq *, int cmd,
-                                 const char *cmd_name);
 static int netdev_linux_get_ipv4(const struct netdev *, struct in_addr *,
                                  int cmd, const char *cmd_name);
 static int get_flags(const struct netdev *, unsigned int *flags);
@@ -433,7 +428,7 @@ static void netdev_linux_miimon_wait(void);
 static bool
 is_netdev_linux_class(const struct netdev_class *netdev_class)
 {
-    return netdev_class->init == netdev_linux_init;
+    return netdev_class->run == netdev_linux_run;
 }
 
 static bool
@@ -457,21 +452,6 @@ netdev_rx_linux_cast(const struct netdev_rx *rx)
     return CONTAINER_OF(rx, struct netdev_rx_linux, up);
 }
 
-static int
-netdev_linux_init(void)
-{
-    static int status = -1;
-    if (status < 0) {
-        /* Create AF_INET socket. */
-        af_inet_sock = socket(AF_INET, SOCK_DGRAM, 0);
-        status = af_inet_sock >= 0 ? 0 : errno;
-        if (status) {
-            VLOG_ERR("failed to create inet socket: %s", ovs_strerror(status));
-        }
-    }
-    return status;
-}
-
 static void
 netdev_linux_run(void)
 {
@@ -721,13 +701,15 @@ netdev_linux_rx_open(struct netdev *netdev_, struct netdev_rx **rxp)
         struct sockaddr_ll sll;
         int ifindex;
         /* Result of tcpdump -dd inbound */
-        static struct sock_filter filt[] = {
+        static const struct sock_filter filt[] = {
             { 0x28, 0, 0, 0xfffff004 }, /* ldh [0] */
             { 0x15, 0, 1, 0x00000004 }, /* jeq #4     jt 2  jf 3 */
             { 0x6, 0, 0, 0x00000000 },  /* ret #0 */
             { 0x6, 0, 0, 0x0000ffff }   /* ret #65535 */
         };
-        static struct sock_fprog fprog = { ARRAY_SIZE(filt), filt };
+        static const struct sock_fprog fprog = {
+            ARRAY_SIZE(filt), (struct sock_filter *) filt
+        };
 
         /* Create file descriptor. */
         fd = socket(PF_PACKET, SOCK_RAW, 0);
@@ -766,7 +748,7 @@ netdev_linux_rx_open(struct netdev *netdev_, struct netdev_rx **rxp)
                            sizeof fprog);
         if (error) {
             error = errno;
-            VLOG_ERR("%s: failed attach filter (%s)",
+            VLOG_ERR("%s: failed to attach filter (%s)",
                      netdev_get_name(netdev_), ovs_strerror(error));
             goto error;
         }
@@ -834,8 +816,8 @@ netdev_rx_linux_drain(struct netdev_rx *rx_)
     struct netdev_rx_linux *rx = netdev_rx_linux_cast(rx_);
     if (rx->is_tap) {
         struct ifreq ifr;
-        int error = netdev_linux_do_ioctl(netdev_rx_get_name(rx_), &ifr,
-                                          SIOCGIFTXQLEN, "SIOCGIFTXQLEN");
+        int error = af_inet_ifreq_ioctl(netdev_rx_get_name(rx_), &ifr,
+                                        SIOCGIFTXQLEN, "SIOCGIFTXQLEN");
         if (error) {
             return error;
         }
@@ -1019,8 +1001,8 @@ netdev_linux_get_mtu(const struct netdev *netdev_, int *mtup)
         struct ifreq ifr;
         int error;
 
-        error = netdev_linux_do_ioctl(netdev_get_name(netdev_), &ifr,
-                                      SIOCGIFMTU, "SIOCGIFMTU");
+        error = af_inet_ifreq_ioctl(netdev_get_name(netdev_), &ifr,
+                                    SIOCGIFMTU, "SIOCGIFMTU");
 
         netdev->netdev_mtu_error = error;
         netdev->mtu = ifr.ifr_mtu;
@@ -1053,8 +1035,8 @@ netdev_linux_set_mtu(const struct netdev *netdev_, int mtu)
         netdev->cache_valid &= ~VALID_MTU;
     }
     ifr.ifr_mtu = mtu;
-    error = netdev_linux_do_ioctl(netdev_get_name(netdev_), &ifr,
-                                  SIOCSIFMTU, "SIOCSIFMTU");
+    error = af_inet_ifreq_ioctl(netdev_get_name(netdev_), &ifr,
+                                SIOCSIFMTU, "SIOCSIFMTU");
     if (!error || error == ENODEV) {
         netdev->netdev_mtu_error = error;
         netdev->mtu = ifr.ifr_mtu;
@@ -1103,7 +1085,7 @@ netdev_linux_do_miimon(const char *name, int cmd, const char *cmd_name,
 
     memset(&ifr, 0, sizeof ifr);
     memcpy(&ifr.ifr_data, data, sizeof *data);
-    error = netdev_linux_do_ioctl(name, &ifr, cmd, cmd_name);
+    error = af_inet_ifreq_ioctl(name, &ifr, cmd, cmd_name);
     memcpy(data, &ifr.ifr_data, sizeof *data);
 
     return error;
@@ -2191,11 +2173,10 @@ do_set_addr(struct netdev *netdev,
             int ioctl_nr, const char *ioctl_name, struct in_addr addr)
 {
     struct ifreq ifr;
-    ovs_strzcpy(ifr.ifr_name, netdev_get_name(netdev), sizeof ifr.ifr_name);
-    make_in4_sockaddr(&ifr.ifr_addr, addr);
 
-    return netdev_linux_do_ioctl(netdev_get_name(netdev), &ifr, ioctl_nr,
-                                 ioctl_name);
+    make_in4_sockaddr(&ifr.ifr_addr, addr);
+    return af_inet_ifreq_ioctl(netdev_get_name(netdev), &ifr, ioctl_nr,
+                               ioctl_name);
 }
 
 /* Adds 'router' as a default IP gateway. */
@@ -2211,7 +2192,7 @@ netdev_linux_add_router(struct netdev *netdev OVS_UNUSED, struct in_addr router)
     make_in4_sockaddr(&rt.rt_gateway, router);
     make_in4_sockaddr(&rt.rt_genmask, any);
     rt.rt_flags = RTF_UP | RTF_GATEWAY;
-    error = ioctl(af_inet_sock, SIOCADDRT, &rt) < 0 ? errno : 0;
+    error = af_inet_ioctl(SIOCADDRT, &rt);
     if (error) {
         VLOG_WARN("ioctl(SIOCADDRT): %s", ovs_strerror(error));
     }
@@ -2337,7 +2318,7 @@ netdev_linux_arp_lookup(const struct netdev *netdev,
     r.arp_flags = 0;
     ovs_strzcpy(r.arp_dev, netdev_get_name(netdev), sizeof r.arp_dev);
     COVERAGE_INC(netdev_arp_lookup);
-    retval = ioctl(af_inet_sock, SIOCGARP, &r) < 0 ? errno : 0;
+    retval = af_inet_ioctl(SIOCGARP, &r);
     if (!retval) {
         memcpy(mac, r.arp_ha.sa_data, ETH_ADDR_LEN);
     } else if (retval != ENXIO) {
@@ -2403,7 +2384,7 @@ netdev_linux_change_seq(const struct netdev *netdev)
 {                                                               \
     NAME,                                                       \
                                                                 \
-    netdev_linux_init,                                          \
+    NULL,                                                       \
     netdev_linux_run,                                           \
     netdev_linux_wait,                                          \
                                                                 \
@@ -4193,14 +4174,6 @@ tc_calc_buffer(unsigned int Bps, int mtu, uint64_t burst_bytes)
 
 /* Linux-only functions declared in netdev-linux.h  */
 
-/* Returns a fd for an AF_INET socket or a negative errno value. */
-int
-netdev_linux_get_af_inet_sock(void)
-{
-    int error = netdev_linux_init();
-    return error ? -error : af_inet_sock;
-}
-
 /* Modifies the 'flag' bit in ethtool's flags field for 'netdev'.  If
  * 'enable' is true, the bit is set.  Otherwise, it is cleared. */
 int
@@ -4393,8 +4366,7 @@ get_flags(const struct netdev *dev, unsigned int *flags)
     int error;
 
     *flags = 0;
-    error = netdev_linux_do_ioctl(dev->name, &ifr, SIOCGIFFLAGS,
-                                  "SIOCGIFFLAGS");
+    error = af_inet_ifreq_ioctl(dev->name, &ifr, SIOCGIFFLAGS, "SIOCGIFFLAGS");
     if (!error) {
         *flags = ifr.ifr_flags;
     }
@@ -4407,20 +4379,23 @@ set_flags(const char *name, unsigned int flags)
     struct ifreq ifr;
 
     ifr.ifr_flags = flags;
-    return netdev_linux_do_ioctl(name, &ifr, SIOCSIFFLAGS, "SIOCSIFFLAGS");
+    return af_inet_ifreq_ioctl(name, &ifr, SIOCSIFFLAGS, "SIOCSIFFLAGS");
 }
 
 static int
 do_get_ifindex(const char *netdev_name)
 {
     struct ifreq ifr;
+    int error;
 
     ovs_strzcpy(ifr.ifr_name, netdev_name, sizeof ifr.ifr_name);
     COVERAGE_INC(netdev_get_ifindex);
-    if (ioctl(af_inet_sock, SIOCGIFINDEX, &ifr) < 0) {
+
+    error = af_inet_ioctl(SIOCGIFINDEX, &ifr);
+    if (error) {
         VLOG_WARN_RL(&rl, "ioctl(SIOCGIFINDEX) on %s device failed: %s",
-                     netdev_name, ovs_strerror(errno));
-        return -errno;
+                     netdev_name, ovs_strerror(error));
+        return -error;
     }
     return ifr.ifr_ifindex;
 }
@@ -4452,18 +4427,20 @@ get_etheraddr(const char *netdev_name, uint8_t ea[ETH_ADDR_LEN])
 {
     struct ifreq ifr;
     int hwaddr_family;
+    int error;
 
     memset(&ifr, 0, sizeof ifr);
     ovs_strzcpy(ifr.ifr_name, netdev_name, sizeof ifr.ifr_name);
     COVERAGE_INC(netdev_get_hwaddr);
-    if (ioctl(af_inet_sock, SIOCGIFHWADDR, &ifr) < 0) {
+    error = af_inet_ioctl(SIOCGIFHWADDR, &ifr);
+    if (error) {
         /* ENODEV probably means that a vif disappeared asynchronously and
          * hasn't been removed from the database yet, so reduce the log level
          * to INFO for that case. */
-        VLOG(errno == ENODEV ? VLL_INFO : VLL_ERR,
+        VLOG(error == ENODEV ? VLL_INFO : VLL_ERR,
              "ioctl(SIOCGIFHWADDR) on %s device failed: %s",
-             netdev_name, ovs_strerror(errno));
-        return errno;
+             netdev_name, ovs_strerror(error));
+        return error;
     }
     hwaddr_family = ifr.ifr_hwaddr.sa_family;
     if (hwaddr_family != AF_UNSPEC && hwaddr_family != ARPHRD_ETHER) {
@@ -4479,18 +4456,19 @@ set_etheraddr(const char *netdev_name,
               const uint8_t mac[ETH_ADDR_LEN])
 {
     struct ifreq ifr;
+    int error;
 
     memset(&ifr, 0, sizeof ifr);
     ovs_strzcpy(ifr.ifr_name, netdev_name, sizeof ifr.ifr_name);
     ifr.ifr_hwaddr.sa_family = ARPHRD_ETHER;
     memcpy(ifr.ifr_hwaddr.sa_data, mac, ETH_ADDR_LEN);
     COVERAGE_INC(netdev_set_hwaddr);
-    if (ioctl(af_inet_sock, SIOCSIFHWADDR, &ifr) < 0) {
+    error = af_inet_ioctl(SIOCSIFHWADDR, &ifr);
+    if (error) {
         VLOG_ERR("ioctl(SIOCSIFHWADDR) on %s device failed: %s",
-                 netdev_name, ovs_strerror(errno));
-        return errno;
+                 netdev_name, ovs_strerror(error));
     }
-    return 0;
+    return error;
 }
 
 static int
@@ -4498,37 +4476,24 @@ netdev_linux_do_ethtool(const char *name, struct ethtool_cmd *ecmd,
                         int cmd, const char *cmd_name)
 {
     struct ifreq ifr;
+    int error;
 
     memset(&ifr, 0, sizeof ifr);
     ovs_strzcpy(ifr.ifr_name, name, sizeof ifr.ifr_name);
     ifr.ifr_data = (caddr_t) ecmd;
 
     ecmd->cmd = cmd;
-    if (ioctl(af_inet_sock, SIOCETHTOOL, &ifr) == 0) {
-        return 0;
-    } else {
-        if (errno != EOPNOTSUPP) {
+    error = af_inet_ioctl(SIOCETHTOOL, &ifr);
+    if (error) {
+        if (error != EOPNOTSUPP) {
             VLOG_WARN_RL(&rl, "ethtool command %s on network device %s "
-                         "failed: %s", cmd_name, name, ovs_strerror(errno));
+                         "failed: %s", cmd_name, name, ovs_strerror(error));
         } else {
             /* The device doesn't support this operation.  That's pretty
              * common, so there's no point in logging anything. */
         }
-        return errno;
     }
-}
-
-static int
-netdev_linux_do_ioctl(const char *name, struct ifreq *ifr, int cmd,
-                      const char *cmd_name)
-{
-    ovs_strzcpy(ifr->ifr_name, name, sizeof ifr->ifr_name);
-    if (ioctl(af_inet_sock, cmd, ifr) == -1) {
-        VLOG_DBG_RL(&rl, "%s: ioctl(%s) failed: %s", name, cmd_name,
-                     ovs_strerror(errno));
-        return errno;
-    }
-    return 0;
+    return error;
 }
 
 static int
@@ -4539,7 +4504,7 @@ netdev_linux_get_ipv4(const struct netdev *netdev, struct in_addr *ip,
     int error;
 
     ifr.ifr_addr.sa_family = AF_INET;
-    error = netdev_linux_do_ioctl(netdev_get_name(netdev), &ifr, cmd, cmd_name);
+    error = af_inet_ifreq_ioctl(netdev_get_name(netdev), &ifr, cmd, cmd_name);
     if (!error) {
         const struct sockaddr_in *sin = ALIGNED_CAST(struct sockaddr_in *,
                                                      &ifr.ifr_addr);
