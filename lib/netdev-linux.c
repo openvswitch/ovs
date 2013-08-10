@@ -106,9 +106,6 @@ COVERAGE_DEFINE(netdev_set_ethtool);
 #define TC_RTAB_SIZE 1024
 #endif
 
-static struct nln_notifier *netdev_linux_cache_notifier = NULL;
-static int cache_notifier_refcount;
-
 enum {
     VALID_IFINDEX           = 1 << 0,
     VALID_ETHERADDR         = 1 << 1,
@@ -450,18 +447,103 @@ netdev_rx_linux_cast(const struct netdev_rx *rx)
     return CONTAINER_OF(rx, struct netdev_rx_linux, up);
 }
 
+static void netdev_linux_update(struct netdev_linux *netdev,
+                                const struct rtnetlink_link_change *);
+static void netdev_linux_changed(struct netdev_linux *netdev,
+                                 unsigned int ifi_flags, unsigned int mask);
+
+/* Returns a NETLINK_ROUTE socket listening for RTNLGRP_LINK changes, or NULL
+ * if no such socket could be created. */
+static struct nl_sock *
+netdev_linux_notify_sock(void)
+{
+    static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
+    static struct nl_sock *sock;
+
+    if (ovsthread_once_start(&once)) {
+        int error;
+
+        error = nl_sock_create(NETLINK_ROUTE, &sock);
+        if (!error) {
+            error = nl_sock_join_mcgroup(sock, RTNLGRP_LINK);
+            if (error) {
+                nl_sock_destroy(sock);
+                sock = NULL;
+            }
+        }
+        ovsthread_once_done(&once);
+    }
+
+    return sock;
+}
+
 static void
 netdev_linux_run(void)
 {
-    rtnetlink_link_run();
+    struct nl_sock *sock;
+    int error;
+
     netdev_linux_miimon_run();
+
+    sock = netdev_linux_notify_sock();
+    if (!sock) {
+        return;
+    }
+
+    do {
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+        uint64_t buf_stub[4096 / 8];
+        struct ofpbuf buf;
+
+        ofpbuf_use_stub(&buf, buf_stub, sizeof buf_stub);
+        error = nl_sock_recv(sock, &buf, false);
+        if (!error) {
+            struct rtnetlink_link_change change;
+
+            if (rtnetlink_link_parse(&buf, &change)) {
+                struct netdev *netdev_ = netdev_from_name(change.ifname);
+                if (netdev_ && is_netdev_linux_class(netdev_->netdev_class)) {
+                    struct netdev_linux *netdev = netdev_linux_cast(netdev_);
+                    netdev_linux_update(netdev, &change);
+                    netdev_close(netdev_);
+                }
+            }
+        } else if (error == ENOBUFS) {
+            struct shash device_shash;
+            struct shash_node *node;
+
+            nl_sock_drain(sock);
+
+            shash_init(&device_shash);
+            netdev_get_devices(&netdev_linux_class, &device_shash);
+            SHASH_FOR_EACH (node, &device_shash) {
+                struct netdev *netdev_ = node->data;
+                struct netdev_linux *netdev = netdev_linux_cast(netdev_);
+                unsigned int flags;
+
+                get_flags(netdev_, &flags);
+                netdev_linux_changed(netdev, flags, 0);
+                netdev_close(netdev_);
+            }
+            shash_destroy(&device_shash);
+        } else if (error != EAGAIN) {
+            VLOG_WARN_RL(&rl, "error reading or parsing netlink (%s)",
+                         ovs_strerror(error));
+        }
+        ofpbuf_uninit(&buf);
+    } while (!error);
 }
 
 static void
 netdev_linux_wait(void)
 {
-    rtnetlink_link_wait();
+    struct nl_sock *sock;
+
     netdev_linux_miimon_wait();
+    sock = netdev_linux_notify_sock();
+    if (sock) {
+        nl_sock_wait(sock, POLLIN);
+    }
 }
 
 static void
@@ -511,64 +593,6 @@ netdev_linux_update(struct netdev_linux *dev,
     }
 }
 
-static void
-netdev_linux_cache_cb(const struct rtnetlink_link_change *change,
-                      void *aux OVS_UNUSED)
-{
-    if (change) {
-        struct netdev *base_dev = netdev_from_name(change->ifname);
-        if (base_dev && is_netdev_linux_class(netdev_get_class(base_dev))) {
-            netdev_linux_update(netdev_linux_cast(base_dev), change);
-            netdev_close(base_dev);
-        }
-    } else {
-        struct shash device_shash;
-        struct shash_node *node;
-
-        shash_init(&device_shash);
-        netdev_get_devices(&netdev_linux_class, &device_shash);
-        SHASH_FOR_EACH (node, &device_shash) {
-            struct netdev *netdev = node->data;
-            struct netdev_linux *dev = netdev_linux_cast(netdev);
-            unsigned int flags;
-
-            get_flags(&dev->up, &flags);
-            netdev_linux_changed(dev, flags, 0);
-            netdev_close(netdev);
-        }
-        shash_destroy(&device_shash);
-    }
-}
-
-static int
-cache_notifier_ref(void)
-{
-    if (!cache_notifier_refcount) {
-        ovs_assert(!netdev_linux_cache_notifier);
-
-        netdev_linux_cache_notifier =
-            rtnetlink_link_notifier_create(netdev_linux_cache_cb, NULL);
-
-        if (!netdev_linux_cache_notifier) {
-            return EINVAL;
-        }
-    }
-    cache_notifier_refcount++;
-
-    return 0;
-}
-
-static void
-cache_notifier_unref(void)
-{
-    ovs_assert(cache_notifier_refcount > 0);
-    if (!--cache_notifier_refcount) {
-        ovs_assert(netdev_linux_cache_notifier);
-        rtnetlink_link_notifier_destroy(netdev_linux_cache_notifier);
-        netdev_linux_cache_notifier = NULL;
-    }
-}
-
 static struct netdev *
 netdev_linux_alloc(void)
 {
@@ -576,12 +600,10 @@ netdev_linux_alloc(void)
     return &netdev->up;
 }
 
-static int
+static void
 netdev_linux_common_construct(struct netdev_linux *netdev)
 {
     netdev->change_seq = 1;
-
-    return cache_notifier_ref();
 }
 
 /* Creates system and internal devices. */
@@ -591,16 +613,12 @@ netdev_linux_construct(struct netdev *netdev_)
     struct netdev_linux *netdev = netdev_linux_cast(netdev_);
     int error;
 
-    error = netdev_linux_common_construct(netdev);
-    if (error) {
-        return error;
-    }
+    netdev_linux_common_construct(netdev);
 
     error = get_flags(&netdev->up, &netdev->ifi_flags);
     if (error == ENODEV) {
         if (netdev->up.netdev_class != &netdev_internal_class) {
             /* The device does not exist, so don't allow it to be opened. */
-            cache_notifier_unref();
             return ENODEV;
         } else {
             /* "Internal" netdevs have to be created as netdev objects before
@@ -628,17 +646,14 @@ netdev_linux_construct_tap(struct netdev *netdev_)
     struct ifreq ifr;
     int error;
 
-    error = netdev_linux_common_construct(netdev);
-    if (error) {
-        goto error;
-    }
+    netdev_linux_common_construct(netdev);
 
     /* Open tap device. */
     netdev->tap_fd = open(tap_dev, O_RDWR);
     if (netdev->tap_fd < 0) {
         error = errno;
         VLOG_WARN("opening \"%s\" failed: %s", tap_dev, ovs_strerror(error));
-        goto error_unref_notifier;
+        return error;
     }
 
     /* Create tap device. */
@@ -661,9 +676,6 @@ netdev_linux_construct_tap(struct netdev *netdev_)
 
 error_close:
     close(netdev->tap_fd);
-error_unref_notifier:
-    cache_notifier_unref();
-error:
     return error;
 }
 
@@ -681,8 +693,6 @@ netdev_linux_destruct(struct netdev *netdev_)
     {
         close(netdev->tap_fd);
     }
-
-    cache_notifier_unref();
 }
 
 static void
