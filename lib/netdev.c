@@ -56,10 +56,31 @@ struct netdev_saved_flags {
     enum netdev_flags saved_values;
 };
 
-static struct shash netdev_classes = SHASH_INITIALIZER(&netdev_classes);
+/* Protects 'netdev_shash' and the mutable members of struct netdev. */
+static struct ovs_mutex netdev_mutex = OVS_MUTEX_INITIALIZER;
 
 /* All created network devices. */
-static struct shash netdev_shash = SHASH_INITIALIZER(&netdev_shash);
+static struct shash netdev_shash OVS_GUARDED_BY(netdev_mutex)
+    = SHASH_INITIALIZER(&netdev_shash);
+
+/* Protects 'netdev_classes' against insertions or deletions.
+ *
+ * This is not an rwlock for performance reasons but to allow recursive
+ * acquisition when calling into providers.  For example, netdev_run() calls
+ * into provider 'run' functions, which might reasonably want to call one of
+ * the netdev functions that takes netdev_class_rwlock read-only. */
+static struct ovs_rwlock netdev_class_rwlock OVS_ACQ_BEFORE(netdev_mutex)
+    = OVS_RWLOCK_INITIALIZER;
+
+/* Contains 'struct netdev_registered_class'es. */
+static struct hmap netdev_classes OVS_GUARDED_BY(netdev_class_rwlock)
+    = HMAP_INITIALIZER(&netdev_classes);
+
+struct netdev_registered_class {
+    struct hmap_node hmap_node; /* In 'netdev_classes', by class->type. */
+    const struct netdev_class *class;
+    atomic_int ref_cnt;         /* Number of 'struct netdev's of this class. */
+};
 
 /* This is set pretty low because we probably won't learn anything from the
  * additional log messages. */
@@ -70,12 +91,11 @@ void update_device_args(struct netdev *, const struct shash *args);
 
 static void
 netdev_initialize(void)
+    OVS_EXCLUDED(netdev_class_rwlock, netdev_mutex)
 {
-    static bool inited;
+    static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
 
-    if (!inited) {
-        inited = true;
-
+    if (ovsthread_once_start(&once)) {
         fatal_signal_add_hook(restore_all_flags, NULL, NULL, true);
         netdev_vport_patch_register();
 
@@ -89,6 +109,8 @@ netdev_initialize(void)
         netdev_register_provider(&netdev_tap_class);
         netdev_register_provider(&netdev_bsd_class);
 #endif
+
+        ovsthread_once_done(&once);
     }
 }
 
@@ -98,14 +120,15 @@ netdev_initialize(void)
  * main poll loop. */
 void
 netdev_run(void)
+    OVS_EXCLUDED(netdev_class_rwlock, netdev_mutex)
 {
-    struct shash_node *node;
-    SHASH_FOR_EACH(node, &netdev_classes) {
-        const struct netdev_class *netdev_class = node->data;
-        if (netdev_class->run) {
-            netdev_class->run();
-        }
+    struct netdev_registered_class *rc;
+
+    ovs_rwlock_rdlock(&netdev_class_rwlock);
+    HMAP_FOR_EACH (rc, hmap_node, &netdev_classes) {
+        rc->class->run();
     }
+    ovs_rwlock_unlock(&netdev_class_rwlock);
 }
 
 /* Arranges for poll_block() to wake up when netdev_run() needs to be called.
@@ -114,39 +137,63 @@ netdev_run(void)
  * main poll loop. */
 void
 netdev_wait(void)
+    OVS_EXCLUDED(netdev_class_rwlock, netdev_mutex)
 {
-    struct shash_node *node;
-    SHASH_FOR_EACH(node, &netdev_classes) {
-        const struct netdev_class *netdev_class = node->data;
-        if (netdev_class->wait) {
-            netdev_class->wait();
+    struct netdev_registered_class *rc;
+
+    ovs_rwlock_rdlock(&netdev_class_rwlock);
+    HMAP_FOR_EACH (rc, hmap_node, &netdev_classes) {
+        rc->class->wait();
+    }
+    ovs_rwlock_unlock(&netdev_class_rwlock);
+}
+
+static struct netdev_registered_class *
+netdev_lookup_class(const char *type)
+    OVS_REQ_RDLOCK(netdev_class_rwlock)
+{
+    struct netdev_registered_class *rc;
+
+    HMAP_FOR_EACH_WITH_HASH (rc, hmap_node, hash_string(type, 0),
+                             &netdev_classes) {
+        if (!strcmp(type, rc->class->type)) {
+            return rc;
         }
     }
+    return NULL;
 }
 
 /* Initializes and registers a new netdev provider.  After successful
  * registration, new netdevs of that type can be opened using netdev_open(). */
 int
 netdev_register_provider(const struct netdev_class *new_class)
+    OVS_EXCLUDED(netdev_class_rwlock, netdev_mutex)
 {
-    if (shash_find(&netdev_classes, new_class->type)) {
+    int error;
+
+    ovs_rwlock_wrlock(&netdev_class_rwlock);
+    if (netdev_lookup_class(new_class->type)) {
         VLOG_WARN("attempted to register duplicate netdev provider: %s",
                    new_class->type);
-        return EEXIST;
-    }
+        error = EEXIST;
+    } else {
+        error = new_class->init ? new_class->init() : 0;
+        if (!error) {
+            struct netdev_registered_class *rc;
 
-    if (new_class->init) {
-        int error = new_class->init();
-        if (error) {
+            rc = xmalloc(sizeof *rc);
+            hmap_insert(&netdev_classes, &rc->hmap_node,
+                        hash_string(new_class->type, 0));
+            rc->class = new_class;
+            atomic_init(&rc->ref_cnt, 0);
+        } else {
             VLOG_ERR("failed to initialize %s network device class: %s",
                      new_class->type, ovs_strerror(error));
-            return error;
         }
     }
+    ovs_rwlock_unlock(&netdev_class_rwlock);
 
-    shash_add(&netdev_classes, new_class->type, new_class);
-
-    return 0;
+    return error;
 }
 
 /* Unregisters a netdev provider.  'type' must have been previously
@@ -154,51 +201,52 @@ netdev_register_provider(const struct netdev_class *new_class)
  * new netdevs of that type cannot be opened using netdev_open(). */
 int
 netdev_unregister_provider(const char *type)
+    OVS_EXCLUDED(netdev_class_rwlock, netdev_mutex)
 {
-    struct shash_node *del_node, *netdev_node;
+    struct netdev_registered_class *rc;
+    int error;
 
-    del_node = shash_find(&netdev_classes, type);
-    if (!del_node) {
+    ovs_rwlock_wrlock(&netdev_class_rwlock);
+    rc = netdev_lookup_class(type);
+    if (!rc) {
         VLOG_WARN("attempted to unregister a netdev provider that is not "
                   "registered: %s", type);
-        return EAFNOSUPPORT;
-    }
+        error = EAFNOSUPPORT;
+    } else {
+        int ref_cnt;
 
-    SHASH_FOR_EACH (netdev_node, &netdev_shash) {
-        struct netdev *netdev = netdev_node->data;
-        if (!strcmp(netdev->netdev_class->type, type)) {
+        atomic_read(&rc->ref_cnt, &ref_cnt);
+        if (!ref_cnt) {
+            hmap_remove(&netdev_classes, &rc->hmap_node);
+            free(rc);
+            error = 0;
+        } else {
             VLOG_WARN("attempted to unregister in use netdev provider: %s",
                       type);
-            return EBUSY;
+            error = EBUSY;
         }
     }
+    ovs_rwlock_unlock(&netdev_class_rwlock);
 
-    shash_delete(&netdev_classes, del_node);
-
-    return 0;
-}
-
-const struct netdev_class *
-netdev_lookup_provider(const char *type)
-{
-    netdev_initialize();
-    return shash_find_data(&netdev_classes, type && type[0] ? type : "system");
+    return error;
 }
 
 /* Clears 'types' and enumerates the types of all currently registered netdev
  * providers into it.  The caller must first initialize the sset. */
 void
 netdev_enumerate_types(struct sset *types)
+    OVS_EXCLUDED(netdev_mutex)
 {
-    struct shash_node *node;
+    struct netdev_registered_class *rc;
 
     netdev_initialize();
     sset_clear(types);
 
-    SHASH_FOR_EACH(node, &netdev_classes) {
-        const struct netdev_class *netdev_class = node->data;
-        sset_add(types, netdev_class->type);
+    ovs_rwlock_rdlock(&netdev_class_rwlock);
+    HMAP_FOR_EACH (rc, hmap_node, &netdev_classes) {
+        sset_add(types, rc->class->type);
     }
+    ovs_rwlock_unlock(&netdev_class_rwlock);
 }
 
 /* Check that the network device name is not the same as any of the registered
@@ -208,17 +256,21 @@ netdev_enumerate_types(struct sset *types)
  * Returns true if there is a name conflict, false otherwise. */
 bool
 netdev_is_reserved_name(const char *name)
+    OVS_EXCLUDED(netdev_mutex)
 {
-    struct shash_node *node;
+    struct netdev_registered_class *rc;
 
     netdev_initialize();
-    SHASH_FOR_EACH (node, &netdev_classes) {
-        const char *dpif_port;
-        dpif_port = netdev_vport_class_get_dpif_port(node->data);
+
+    ovs_rwlock_rdlock(&netdev_class_rwlock);
+    HMAP_FOR_EACH (rc, hmap_node, &netdev_classes) {
+        const char *dpif_port = netdev_vport_class_get_dpif_port(rc->class);
         if (dpif_port && !strcmp(dpif_port, name)) {
+            ovs_rwlock_unlock(&netdev_class_rwlock);
             return true;
         }
     }
+    ovs_rwlock_unlock(&netdev_class_rwlock);
 
     if (!strncmp(name, "ovs-", 4)) {
         struct sset types;
@@ -247,29 +299,36 @@ netdev_is_reserved_name(const char *name)
  * before they can be used. */
 int
 netdev_open(const char *name, const char *type, struct netdev **netdevp)
+    OVS_EXCLUDED(netdev_mutex)
 {
     struct netdev *netdev;
     int error;
 
     netdev_initialize();
 
+    ovs_rwlock_rdlock(&netdev_class_rwlock);
+    ovs_mutex_lock(&netdev_mutex);
     netdev = shash_find_data(&netdev_shash, name);
     if (!netdev) {
-        const struct netdev_class *class;
+        struct netdev_registered_class *rc;
 
-        class = netdev_lookup_provider(type);
-        if (class) {
-            netdev = class->alloc();
+        rc = netdev_lookup_class(type && type[0] ? type : "system");
+        if (rc) {
+            netdev = rc->class->alloc();
             if (netdev) {
                 memset(netdev, 0, sizeof *netdev);
-                netdev->netdev_class = class;
+                netdev->netdev_class = rc->class;
                 netdev->name = xstrdup(name);
                 netdev->node = shash_add(&netdev_shash, name, netdev);
                 list_init(&netdev->saved_flags_list);
 
-                error = class->construct(netdev);
-                if (error) {
-                    class->dealloc(netdev);
+                error = rc->class->construct(netdev);
+                if (!error) {
+                    int old_ref_cnt;
+
+                    atomic_add(&rc->ref_cnt, 1, &old_ref_cnt);
+                } else {
+                    rc->class->dealloc(netdev);
                 }
             } else {
                 error = ENOMEM;
@@ -282,6 +341,9 @@ netdev_open(const char *name, const char *type, struct netdev **netdevp)
     } else {
         error = 0;
     }
+
+    ovs_mutex_unlock(&netdev_mutex);
+    ovs_rwlock_unlock(&netdev_class_rwlock);
 
     if (!error) {
         netdev->ref_cnt++;
@@ -296,12 +358,15 @@ netdev_open(const char *name, const char *type, struct netdev **netdevp)
  * 'netdev_' is null. */
 struct netdev *
 netdev_ref(const struct netdev *netdev_)
+    OVS_EXCLUDED(netdev_mutex)
 {
     struct netdev *netdev = CONST_CAST(struct netdev *, netdev_);
 
     if (netdev) {
+        ovs_mutex_lock(&netdev_mutex);
         ovs_assert(netdev->ref_cnt > 0);
         netdev->ref_cnt++;
+        ovs_mutex_unlock(&netdev_mutex);
     }
     return netdev;
 }
@@ -310,9 +375,10 @@ netdev_ref(const struct netdev *netdev_)
  * or NULL if none are needed. */
 int
 netdev_set_config(struct netdev *netdev, const struct smap *args)
+    OVS_EXCLUDED(netdev_mutex)
 {
     if (netdev->netdev_class->set_config) {
-        struct smap no_args = SMAP_INITIALIZER(&no_args);
+        const struct smap no_args = SMAP_INITIALIZER(&no_args);
         return netdev->netdev_class->set_config(netdev,
                                                 args ? args : &no_args);
     } else if (args && !smap_is_empty(args)) {
@@ -332,6 +398,7 @@ netdev_set_config(struct netdev *netdev, const struct smap *args)
  * smap_destroy(). */
 int
 netdev_get_config(const struct netdev *netdev, struct smap *args)
+    OVS_EXCLUDED(netdev_mutex)
 {
     int error;
 
@@ -350,6 +417,7 @@ netdev_get_config(const struct netdev *netdev, struct smap *args)
 
 const struct netdev_tunnel_config *
 netdev_get_tunnel_config(const struct netdev *netdev)
+    OVS_EXCLUDED(netdev_mutex)
 {
     if (netdev->netdev_class->get_tunnel_config) {
         return netdev->netdev_class->get_tunnel_config(netdev);
@@ -360,22 +428,38 @@ netdev_get_tunnel_config(const struct netdev *netdev)
 
 static void
 netdev_unref(struct netdev *dev)
+    OVS_RELEASES(netdev_mutex)
 {
     ovs_assert(dev->ref_cnt);
     if (!--dev->ref_cnt) {
+        const struct netdev_class *class = dev->netdev_class;
+        struct netdev_registered_class *rc;
+        int old_ref_cnt;
+
         dev->netdev_class->destruct(dev);
 
         shash_delete(&netdev_shash, dev->node);
         free(dev->name);
         dev->netdev_class->dealloc(dev);
+        ovs_mutex_unlock(&netdev_mutex);
+
+        ovs_rwlock_rdlock(&netdev_class_rwlock);
+        rc = netdev_lookup_class(class->type);
+        atomic_sub(&rc->ref_cnt, 1, &old_ref_cnt);
+        ovs_assert(old_ref_cnt > 0);
+        ovs_rwlock_unlock(&netdev_class_rwlock);
+    } else {
+        ovs_mutex_unlock(&netdev_mutex);
     }
 }
 
 /* Closes and destroys 'netdev'. */
 void
 netdev_close(struct netdev *netdev)
+    OVS_EXCLUDED(netdev_mutex)
 {
     if (netdev) {
+        ovs_mutex_lock(&netdev_mutex);
         netdev_unref(netdev);
     }
 }
@@ -401,6 +485,7 @@ netdev_parse_name(const char *netdev_name_, char **name, char **type)
 
 int
 netdev_rx_open(struct netdev *netdev, struct netdev_rx **rxp)
+    OVS_EXCLUDED(netdev_mutex)
 {
     int error;
 
@@ -410,7 +495,10 @@ netdev_rx_open(struct netdev *netdev, struct netdev_rx **rxp)
             rx->netdev = netdev;
             error = netdev->netdev_class->rx_construct(rx);
             if (!error) {
+                ovs_mutex_lock(&netdev_mutex);
                 netdev->ref_cnt++;
+                ovs_mutex_unlock(&netdev_mutex);
+
                 *rxp = rx;
                 return 0;
             }
@@ -428,6 +516,7 @@ netdev_rx_open(struct netdev *netdev, struct netdev_rx **rxp)
 
 void
 netdev_rx_close(struct netdev_rx *rx)
+    OVS_EXCLUDED(netdev_mutex)
 {
     if (rx) {
         struct netdev *netdev = rx->netdev;
@@ -847,6 +936,7 @@ static int
 do_update_flags(struct netdev *netdev, enum netdev_flags off,
                 enum netdev_flags on, enum netdev_flags *old_flagsp,
                 struct netdev_saved_flags **sfp)
+    OVS_EXCLUDED(netdev_mutex)
 {
     struct netdev_saved_flags *sf = NULL;
     enum netdev_flags old_flags;
@@ -863,6 +953,7 @@ do_update_flags(struct netdev *netdev, enum netdev_flags off,
         enum netdev_flags new_flags = (old_flags & ~off) | on;
         enum netdev_flags changed_flags = old_flags ^ new_flags;
         if (changed_flags) {
+            ovs_mutex_lock(&netdev_mutex);
             *sfp = sf = xmalloc(sizeof *sf);
             sf->netdev = netdev;
             list_push_front(&netdev->saved_flags_list, &sf->node);
@@ -870,6 +961,7 @@ do_update_flags(struct netdev *netdev, enum netdev_flags off,
             sf->saved_values = changed_flags & new_flags;
 
             netdev->ref_cnt++;
+            ovs_mutex_unlock(&netdev_mutex);
         }
     }
 
@@ -933,6 +1025,7 @@ netdev_turn_flags_off(struct netdev *netdev, enum netdev_flags flags,
  * Does nothing if 'sf' is NULL. */
 void
 netdev_restore_flags(struct netdev_saved_flags *sf)
+    OVS_EXCLUDED(netdev_mutex)
 {
     if (sf) {
         struct netdev *netdev = sf->netdev;
@@ -942,9 +1035,10 @@ netdev_restore_flags(struct netdev_saved_flags *sf)
                                            sf->saved_flags & sf->saved_values,
                                            sf->saved_flags & ~sf->saved_values,
                                            &old_flags);
+
+        ovs_mutex_lock(&netdev_mutex);
         list_remove(&sf->node);
         free(sf);
-
         netdev_unref(netdev);
     }
 }
@@ -1379,13 +1473,16 @@ netdev_get_class(const struct netdev *netdev)
  * The caller must free the returned netdev with netdev_close(). */
 struct netdev *
 netdev_from_name(const char *name)
+    OVS_EXCLUDED(netdev_mutex)
 {
     struct netdev *netdev;
 
+    ovs_mutex_lock(&netdev_mutex);
     netdev = shash_find_data(&netdev_shash, name);
     if (netdev) {
-        netdev_ref(netdev);
+        netdev->ref_cnt++;
     }
+    ovs_mutex_unlock(&netdev_mutex);
 
     return netdev;
 }
@@ -1397,8 +1494,11 @@ netdev_from_name(const char *name)
 void
 netdev_get_devices(const struct netdev_class *netdev_class,
                    struct shash *device_list)
+    OVS_EXCLUDED(netdev_mutex)
 {
     struct shash_node *node;
+
+    ovs_mutex_lock(&netdev_mutex);
     SHASH_FOR_EACH (node, &netdev_shash) {
         struct netdev *dev = node->data;
 
@@ -1407,6 +1507,7 @@ netdev_get_devices(const struct netdev_class *netdev_class,
             shash_add(device_list, node->name, node->data);
         }
     }
+    ovs_mutex_unlock(&netdev_mutex);
 }
 
 const char *

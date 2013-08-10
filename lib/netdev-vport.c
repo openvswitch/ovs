@@ -48,6 +48,10 @@ VLOG_DEFINE_THIS_MODULE(netdev_vport);
 
 struct netdev_vport {
     struct netdev up;
+
+    /* Protects all members below. */
+    struct ovs_mutex mutex;
+
     unsigned int change_seq;
     uint8_t etheraddr[ETH_ADDR_LEN];
     struct netdev_stats stats;
@@ -65,9 +69,10 @@ struct vport_class {
 };
 
 static int netdev_vport_construct(struct netdev *);
-static int get_patch_config(const struct netdev *, struct smap *args);
+static int get_patch_config(const struct netdev *netdev, struct smap *args);
 static int get_tunnel_config(const struct netdev *, struct smap *args);
-static void netdev_vport_poll_notify(struct netdev_vport *);
+static void netdev_vport_poll_notify(struct netdev_vport *netdev)
+    OVS_REQUIRES(netdev->mutex);
 
 static bool
 is_vport_class(const struct netdev_class *class)
@@ -166,6 +171,7 @@ netdev_vport_construct(struct netdev *netdev_)
 {
     struct netdev_vport *netdev = netdev_vport_cast(netdev_);
 
+    ovs_mutex_init(&netdev->mutex, PTHREAD_MUTEX_NORMAL);
     netdev->change_seq = 1;
     eth_addr_random(netdev->etheraddr);
 
@@ -181,6 +187,7 @@ netdev_vport_destruct(struct netdev *netdev_)
 
     route_table_unregister();
     free(netdev->peer);
+    ovs_mutex_destroy(&netdev->mutex);
 }
 
 static void
@@ -195,26 +202,39 @@ netdev_vport_set_etheraddr(struct netdev *netdev_,
                            const uint8_t mac[ETH_ADDR_LEN])
 {
     struct netdev_vport *netdev = netdev_vport_cast(netdev_);
+
+    ovs_mutex_lock(&netdev->mutex);
     memcpy(netdev->etheraddr, mac, ETH_ADDR_LEN);
     netdev_vport_poll_notify(netdev);
+    ovs_mutex_unlock(&netdev->mutex);
+
     return 0;
 }
 
 static int
-netdev_vport_get_etheraddr(const struct netdev *netdev,
+netdev_vport_get_etheraddr(const struct netdev *netdev_,
                            uint8_t mac[ETH_ADDR_LEN])
 {
-    memcpy(mac, netdev_vport_cast(netdev)->etheraddr, ETH_ADDR_LEN);
+    struct netdev_vport *netdev = netdev_vport_cast(netdev_);
+
+    ovs_mutex_lock(&netdev->mutex);
+    memcpy(mac, netdev->etheraddr, ETH_ADDR_LEN);
+    ovs_mutex_unlock(&netdev->mutex);
+
     return 0;
 }
 
 static int
-tunnel_get_status(const struct netdev *netdev, struct smap *smap)
+tunnel_get_status(const struct netdev *netdev_, struct smap *smap)
 {
+    struct netdev_vport *netdev = netdev_vport_cast(netdev_);
     char iface[IFNAMSIZ];
     ovs_be32 route;
 
-    route = netdev_vport_cast(netdev)->tnl_cfg.ip_dst;
+    ovs_mutex_lock(&netdev->mutex);
+    route = netdev->tnl_cfg.ip_dst;
+    ovs_mutex_unlock(&netdev->mutex);
+
     if (route_table_get_name(route, iface)) {
         struct netdev *egress_netdev;
 
@@ -473,8 +493,10 @@ set_tunnel_config(struct netdev *dev_, const struct smap *args)
                                &tnl_cfg.out_key_present,
                                &tnl_cfg.out_key_flow);
 
+    ovs_mutex_lock(&dev->mutex);
     dev->tnl_cfg = tnl_cfg;
     netdev_vport_poll_notify(dev);
+    ovs_mutex_unlock(&dev->mutex);
 
     return 0;
 }
@@ -482,56 +504,60 @@ set_tunnel_config(struct netdev *dev_, const struct smap *args)
 static int
 get_tunnel_config(const struct netdev *dev, struct smap *args)
 {
-    const struct netdev_tunnel_config *tnl_cfg =
-        &netdev_vport_cast(dev)->tnl_cfg;
+    struct netdev_vport *netdev = netdev_vport_cast(dev);
+    struct netdev_tunnel_config tnl_cfg;
 
-    if (tnl_cfg->ip_dst) {
-        smap_add_format(args, "remote_ip", IP_FMT, IP_ARGS(tnl_cfg->ip_dst));
-    } else if (tnl_cfg->ip_dst_flow) {
+    ovs_mutex_lock(&netdev->mutex);
+    tnl_cfg = netdev->tnl_cfg;
+    ovs_mutex_unlock(&netdev->mutex);
+
+    if (tnl_cfg.ip_dst) {
+        smap_add_format(args, "remote_ip", IP_FMT, IP_ARGS(tnl_cfg.ip_dst));
+    } else if (tnl_cfg.ip_dst_flow) {
         smap_add(args, "remote_ip", "flow");
     }
 
-    if (tnl_cfg->ip_src) {
-        smap_add_format(args, "local_ip", IP_FMT, IP_ARGS(tnl_cfg->ip_src));
-    } else if (tnl_cfg->ip_src_flow) {
+    if (tnl_cfg.ip_src) {
+        smap_add_format(args, "local_ip", IP_FMT, IP_ARGS(tnl_cfg.ip_src));
+    } else if (tnl_cfg.ip_src_flow) {
         smap_add(args, "local_ip", "flow");
     }
 
-    if (tnl_cfg->in_key_flow && tnl_cfg->out_key_flow) {
+    if (tnl_cfg.in_key_flow && tnl_cfg.out_key_flow) {
         smap_add(args, "key", "flow");
-    } else if (tnl_cfg->in_key_present && tnl_cfg->out_key_present
-               && tnl_cfg->in_key == tnl_cfg->out_key) {
-        smap_add_format(args, "key", "%"PRIu64, ntohll(tnl_cfg->in_key));
+    } else if (tnl_cfg.in_key_present && tnl_cfg.out_key_present
+               && tnl_cfg.in_key == tnl_cfg.out_key) {
+        smap_add_format(args, "key", "%"PRIu64, ntohll(tnl_cfg.in_key));
     } else {
-        if (tnl_cfg->in_key_flow) {
+        if (tnl_cfg.in_key_flow) {
             smap_add(args, "in_key", "flow");
-        } else if (tnl_cfg->in_key_present) {
+        } else if (tnl_cfg.in_key_present) {
             smap_add_format(args, "in_key", "%"PRIu64,
-                            ntohll(tnl_cfg->in_key));
+                            ntohll(tnl_cfg.in_key));
         }
 
-        if (tnl_cfg->out_key_flow) {
+        if (tnl_cfg.out_key_flow) {
             smap_add(args, "out_key", "flow");
-        } else if (tnl_cfg->out_key_present) {
+        } else if (tnl_cfg.out_key_present) {
             smap_add_format(args, "out_key", "%"PRIu64,
-                            ntohll(tnl_cfg->out_key));
+                            ntohll(tnl_cfg.out_key));
         }
     }
 
-    if (tnl_cfg->ttl_inherit) {
+    if (tnl_cfg.ttl_inherit) {
         smap_add(args, "ttl", "inherit");
-    } else if (tnl_cfg->ttl != DEFAULT_TTL) {
-        smap_add_format(args, "ttl", "%"PRIu8, tnl_cfg->ttl);
+    } else if (tnl_cfg.ttl != DEFAULT_TTL) {
+        smap_add_format(args, "ttl", "%"PRIu8, tnl_cfg.ttl);
     }
 
-    if (tnl_cfg->tos_inherit) {
+    if (tnl_cfg.tos_inherit) {
         smap_add(args, "tos", "inherit");
-    } else if (tnl_cfg->tos) {
-        smap_add_format(args, "tos", "0x%x", tnl_cfg->tos);
+    } else if (tnl_cfg.tos) {
+        smap_add_format(args, "tos", "0x%x", tnl_cfg.tos);
     }
 
-    if (tnl_cfg->dst_port) {
-        uint16_t dst_port = ntohs(tnl_cfg->dst_port);
+    if (tnl_cfg.dst_port) {
+        uint16_t dst_port = ntohs(tnl_cfg.dst_port);
         const char *type = netdev_get_type(dev);
 
         if ((!strcmp("vxlan", type) && dst_port != VXLAN_DST_PORT) ||
@@ -540,11 +566,11 @@ get_tunnel_config(const struct netdev *dev, struct smap *args)
         }
     }
 
-    if (tnl_cfg->csum) {
+    if (tnl_cfg.csum) {
         smap_add(args, "csum", "true");
     }
 
-    if (!tnl_cfg->dont_fragment) {
+    if (!tnl_cfg.dont_fragment) {
         smap_add(args, "df_default", "false");
     }
 
@@ -564,9 +590,12 @@ netdev_vport_patch_peer(const struct netdev *netdev_)
 
     if (netdev_vport_is_patch(netdev_)) {
         struct netdev_vport *netdev = netdev_vport_cast(netdev_);
+
+        ovs_mutex_lock(&netdev->mutex);
         if (netdev->peer) {
             peer = xstrdup(netdev->peer);
         }
+        ovs_mutex_unlock(&netdev->mutex);
     }
 
     return peer;
@@ -578,8 +607,11 @@ netdev_vport_inc_rx(const struct netdev *netdev,
 {
     if (is_vport_class(netdev_get_class(netdev))) {
         struct netdev_vport *dev = netdev_vport_cast(netdev);
+
+        ovs_mutex_lock(&dev->mutex);
         dev->stats.rx_packets += stats->n_packets;
         dev->stats.rx_bytes += stats->n_bytes;
+        ovs_mutex_unlock(&dev->mutex);
     }
 }
 
@@ -589,8 +621,11 @@ netdev_vport_inc_tx(const struct netdev *netdev,
 {
     if (is_vport_class(netdev_get_class(netdev))) {
         struct netdev_vport *dev = netdev_vport_cast(netdev);
+
+        ovs_mutex_lock(&dev->mutex);
         dev->stats.tx_packets += stats->n_packets;
         dev->stats.tx_bytes += stats->n_bytes;
+        ovs_mutex_unlock(&dev->mutex);
     }
 }
 
@@ -599,9 +634,12 @@ get_patch_config(const struct netdev *dev_, struct smap *args)
 {
     struct netdev_vport *dev = netdev_vport_cast(dev_);
 
+    ovs_mutex_lock(&dev->mutex);
     if (dev->peer) {
         smap_add(args, "peer", dev->peer);
     }
+    ovs_mutex_unlock(&dev->mutex);
+
     return 0;
 }
 
@@ -628,9 +666,12 @@ set_patch_config(struct netdev *dev_, const struct smap *args)
         return EINVAL;
     }
 
+    ovs_mutex_lock(&dev->mutex);
     free(dev->peer);
     dev->peer = xstrdup(peer);
     netdev_vport_poll_notify(dev);
+    ovs_mutex_unlock(&dev->mutex);
+
     return 0;
 }
 
@@ -638,7 +679,11 @@ static int
 get_stats(const struct netdev *netdev, struct netdev_stats *stats)
 {
     struct netdev_vport *dev = netdev_vport_cast(netdev);
-    memcpy(stats, &dev->stats, sizeof *stats);
+
+    ovs_mutex_lock(&dev->mutex);
+    *stats = dev->stats;
+    ovs_mutex_unlock(&dev->mutex);
+
     return 0;
 }
 
@@ -723,15 +768,15 @@ netdev_vport_tunnel_register(void)
         TUNNEL_CLASS("vxlan", "vxlan_system"),
         TUNNEL_CLASS("lisp", "lisp_system")
     };
-    static bool inited;
+    static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
 
-    int i;
+    if (ovsthread_once_start(&once)) {
+        int i;
 
-    if (!inited) {
-        inited = true;
         for (i = 0; i < ARRAY_SIZE(vport_classes); i++) {
             netdev_register_provider(&vport_classes[i].netdev_class);
         }
+        ovsthread_once_done(&once);
     }
 }
 

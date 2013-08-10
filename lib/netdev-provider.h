@@ -33,9 +33,12 @@ extern "C" {
  * Network device implementations may read these members but should not modify
  * them. */
 struct netdev {
+    /* The following do not change during the lifetime of a struct netdev. */
     char *name;                         /* Name of network device. */
     const struct netdev_class *netdev_class; /* Functions to control
                                                 this device. */
+
+    /* The following are protected by 'netdev_mutex' (internal to netdev.c). */
     int ref_cnt;                        /* Times this devices was opened. */
     struct shash_node *node;            /* Pointer to element in global map. */
     struct list saved_flags_list; /* Contains "struct netdev_saved_flags". */
@@ -636,7 +639,6 @@ struct netdev_class {
 
 int netdev_register_provider(const struct netdev_class *);
 int netdev_unregister_provider(const char *type);
-const struct netdev_class *netdev_lookup_provider(const char *type);
 
 extern const struct netdev_class netdev_linux_class;
 extern const struct netdev_class netdev_internal_class;

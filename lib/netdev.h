@@ -31,7 +31,23 @@ extern "C" {
  * Every port on a switch must have a corresponding netdev that must minimally
  * support a few operations, such as the ability to read the netdev's MTU.
  * The PORTING file at the top of the source tree has more information in the
- * "Writing a netdev Provider" section. */
+ * "Writing a netdev Provider" section.
+ *
+ * Thread-safety
+ * =============
+ *
+ * Most of the netdev functions are fully thread-safe: they may be called from
+ * any number of threads on the same or different netdev objects.  The
+ * exceptions are:
+ *
+ *    netdev_rx_recv()
+ *    netdev_rx_wait()
+ *    netdev_rx_drain()
+ *
+ *      These functions are conditionally thread-safe: they may be called from
+ *      different threads only on different netdev_rx objects.  (The client may
+ *      create multiple netdev_rx objects for a single netdev and access each
+ *      of those from a different thread.) */
 
 struct netdev;
 struct netdev_class;

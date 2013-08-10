@@ -76,6 +76,13 @@ struct netdev_rx_bsd {
 
 struct netdev_bsd {
     struct netdev up;
+
+    /* Never changes after initialization. */
+    char *kernel_name;
+
+    /* Protects all members below. */
+    struct ovs_mutex mutex;
+
     unsigned int cache_valid;
     unsigned int change_seq;
 
@@ -92,8 +99,6 @@ struct netdev_bsd {
     /* Used for sending packets on non-tap devices. */
     pcap_t *pcap;
     int fd;
-
-    char *kernel_name;
 };
 
 
@@ -286,6 +291,7 @@ netdev_bsd_construct_system(struct netdev *netdev_)
         return error;
     }
 
+    ovs_mutex_init(&netdev->mutex, PTHREAD_MUTEX_NORMAL);
     netdev->change_seq = 1;
     netdev->tap_fd = -1;
     netdev->kernel_name = xstrdup(netdev_->name);
@@ -319,6 +325,7 @@ netdev_bsd_construct_tap(struct netdev *netdev_)
 
     /* Create a tap device by opening /dev/tap.  The TAPGIFNAME ioctl is used
      * to retrieve the name of the tap device. */
+    ovs_mutex_init(&netdev->mutex, PTHREAD_MUTEX_NORMAL);
     netdev->tap_fd = open("/dev/tap", O_RDWR);
     netdev->change_seq = 1;
     if (netdev->tap_fd < 0) {
@@ -373,6 +380,7 @@ netdev_bsd_construct_tap(struct netdev *netdev_)
     return 0;
 
 error_unref_notifier:
+    ovs_mutex_destroy(&netdev->mutex);
     cache_notifier_unref();
 error:
     free(kernel_name);
@@ -393,6 +401,7 @@ netdev_bsd_destruct(struct netdev *netdev_)
         pcap_close(netdev->pcap);
     }
     free(netdev->kernel_name);
+    ovs_mutex_destroy(&netdev->mutex);
 }
 
 static void
@@ -485,21 +494,23 @@ netdev_bsd_rx_construct(struct netdev_rx *rx_)
     struct netdev_rx_bsd *rx = netdev_rx_bsd_cast(rx_);
     struct netdev *netdev_ = rx->up.netdev;
     struct netdev_bsd *netdev = netdev_bsd_cast(netdev_);
+    int error;
 
     if (!strcmp(netdev_get_type(netdev_), "tap")) {
         rx->pcap_handle = NULL;
         rx->fd = netdev->tap_fd;
+        error = 0;
     } else {
-        int error = netdev_bsd_open_pcap(netdev_get_kernel_name(netdev_),
-                                         &rx->pcap_handle, &rx->fd);
-        if (error) {
-            return error;
+        ovs_mutex_lock(&netdev->mutex);
+        error = netdev_bsd_open_pcap(netdev_get_kernel_name(netdev_),
+                                     &rx->pcap_handle, &rx->fd);
+        if (!error) {
+            netdev_bsd_changed(netdev);
         }
-
-        netdev_bsd_changed(netdev);
+        ovs_mutex_unlock(&netdev->mutex);
     }
 
-    return 0;
+    return error;
 }
 
 static void
@@ -662,15 +673,16 @@ netdev_bsd_send(struct netdev *netdev_, const void *data, size_t size)
 {
     struct netdev_bsd *dev = netdev_bsd_cast(netdev_);
     const char *name = netdev_get_name(netdev_);
+    int error;
 
+    ovs_mutex_lock(&dev->mutex);
     if (dev->tap_fd < 0 && !dev->pcap) {
-        int error = netdev_bsd_open_pcap(name, &dev->pcap, &dev->fd);
-        if (error) {
-            return error;
-        }
+        error = netdev_bsd_open_pcap(name, &dev->pcap, &dev->fd);
+    } else {
+        error = 0;
     }
 
-    for (;;) {
+    while (!error) {
         ssize_t retval;
         if (dev->tap_fd >= 0) {
             retval = write(dev->tap_fd, data, size);
@@ -680,19 +692,24 @@ netdev_bsd_send(struct netdev *netdev_, const void *data, size_t size)
         if (retval < 0) {
             if (errno == EINTR) {
                 continue;
-            } else if (errno != EAGAIN) {
-                VLOG_WARN_RL(&rl, "error sending Ethernet packet on %s: %s",
-                             name, ovs_strerror(errno));
+            } else {
+                error = errno;
+                if (error != EAGAIN) {
+                    VLOG_WARN_RL(&rl, "error sending Ethernet packet on %s: "
+                                 "%s", name, ovs_strerror(error));
+                }
             }
-            return errno;
         } else if (retval != size) {
             VLOG_WARN_RL(&rl, "sent partial Ethernet packet (%zd bytes of "
                          "%zu) on %s", retval, size, name);
-           return EMSGSIZE;
+            error = EMSGSIZE;
         } else {
-            return 0;
+            break;
         }
     }
+
+    ovs_mutex_unlock(&dev->mutex);
+    return error;
 }
 
 /*
@@ -705,6 +722,7 @@ netdev_bsd_send_wait(struct netdev *netdev_)
 {
     struct netdev_bsd *dev = netdev_bsd_cast(netdev_);
 
+    ovs_mutex_lock(&dev->mutex);
     if (dev->tap_fd >= 0) {
         /* TAP device always accepts packets. */
         poll_immediate_wake();
@@ -714,6 +732,7 @@ netdev_bsd_send_wait(struct netdev *netdev_)
         /* We haven't even tried to send a packet yet. */
         poll_immediate_wake();
     }
+    ovs_mutex_unlock(&dev->mutex);
 }
 
 /*
@@ -725,8 +744,9 @@ netdev_bsd_set_etheraddr(struct netdev *netdev_,
                          const uint8_t mac[ETH_ADDR_LEN])
 {
     struct netdev_bsd *netdev = netdev_bsd_cast(netdev_);
-    int error;
+    int error = 0;
 
+    ovs_mutex_lock(&netdev->mutex);
     if (!(netdev->cache_valid & VALID_ETHERADDR)
         || !eth_addr_equals(netdev->etheraddr, mac)) {
         error = set_etheraddr(netdev_get_kernel_name(netdev_), AF_LINK,
@@ -736,9 +756,9 @@ netdev_bsd_set_etheraddr(struct netdev *netdev_,
             memcpy(netdev->etheraddr, mac, ETH_ADDR_LEN);
             netdev_bsd_changed(netdev);
         }
-    } else {
-        error = 0;
     }
+    ovs_mutex_unlock(&netdev->mutex);
+
     return error;
 }
 
@@ -751,18 +771,22 @@ netdev_bsd_get_etheraddr(const struct netdev *netdev_,
                          uint8_t mac[ETH_ADDR_LEN])
 {
     struct netdev_bsd *netdev = netdev_bsd_cast(netdev_);
+    int error = 0;
 
+    ovs_mutex_lock(&netdev->mutex);
     if (!(netdev->cache_valid & VALID_ETHERADDR)) {
-        int error = get_etheraddr(netdev_get_kernel_name(netdev_),
-                                  netdev->etheraddr);
-        if (error) {
-            return error;
+        error = get_etheraddr(netdev_get_kernel_name(netdev_),
+                              netdev->etheraddr);
+        if (!error) {
+            netdev->cache_valid |= VALID_ETHERADDR;
         }
-        netdev->cache_valid |= VALID_ETHERADDR;
     }
-    memcpy(mac, netdev->etheraddr, ETH_ADDR_LEN);
+    if (!error) {
+        memcpy(mac, netdev->etheraddr, ETH_ADDR_LEN);
+    }
+    ovs_mutex_unlock(&netdev->mutex);
 
-    return 0;
+    return error;
 }
 
 /*
@@ -774,30 +798,37 @@ static int
 netdev_bsd_get_mtu(const struct netdev *netdev_, int *mtup)
 {
     struct netdev_bsd *netdev = netdev_bsd_cast(netdev_);
+    int error = 0;
 
+    ovs_mutex_lock(&netdev->mutex);
     if (!(netdev->cache_valid & VALID_MTU)) {
         struct ifreq ifr;
-        int error;
 
         error = af_inet_ifreq_ioctl(netdev_get_kernel_name(netdev_), &ifr,
                                     SIOCGIFMTU, "SIOCGIFMTU");
-        if (error) {
-            return error;
+        if (!error) {
+            netdev->mtu = ifr.ifr_mtu;
+            netdev->cache_valid |= VALID_MTU;
         }
-        netdev->mtu = ifr.ifr_mtu;
-        netdev->cache_valid |= VALID_MTU;
     }
+    if (!error) {
+        *mtup = netdev->mtu;
+    }
+    ovs_mutex_unlock(&netdev->mutex);
 
-    *mtup = netdev->mtu;
     return 0;
 }
 
 static int
-netdev_bsd_get_ifindex(const struct netdev *netdev)
+netdev_bsd_get_ifindex(const struct netdev *netdev_)
 {
+    struct netdev_bsd *netdev = netdev_bsd_cast(netdev_);
     int ifindex, error;
 
-    error = get_ifindex(netdev, &ifindex);
+    ovs_mutex_lock(&netdev->mutex);
+    error = get_ifindex(netdev_, &ifindex);
+    ovs_mutex_unlock(&netdev->mutex);
+
     return error ? -error : ifindex;
 }
 
@@ -805,34 +836,37 @@ static int
 netdev_bsd_get_carrier(const struct netdev *netdev_, bool *carrier)
 {
     struct netdev_bsd *netdev = netdev_bsd_cast(netdev_);
+    int error = 0;
 
+    ovs_mutex_lock(&netdev->mutex);
     if (!(netdev->cache_valid & VALID_CARRIER)) {
         struct ifmediareq ifmr;
-        int error;
 
         memset(&ifmr, 0, sizeof(ifmr));
         strncpy(ifmr.ifm_name, netdev_get_kernel_name(netdev_),
                 sizeof ifmr.ifm_name);
 
         error = af_inet_ioctl(SIOCGIFMEDIA, &ifmr);
-        if (error) {
+        if (!error) {
+            netdev->carrier = (ifmr.ifm_status & IFM_ACTIVE) == IFM_ACTIVE;
+            netdev->cache_valid |= VALID_CARRIER;
+
+            /* If the interface doesn't report whether the media is active,
+             * just assume it is active. */
+            if ((ifmr.ifm_status & IFM_AVALID) == 0) {
+                netdev->carrier = true;
+            }
+        } else {
             VLOG_DBG_RL(&rl, "%s: ioctl(SIOCGIFMEDIA) failed: %s",
                         netdev_get_name(netdev_), ovs_strerror(error));
-            return error;
-        }
-
-        netdev->carrier = (ifmr.ifm_status & IFM_ACTIVE) == IFM_ACTIVE;
-        netdev->cache_valid |= VALID_CARRIER;
-
-        /* If the interface doesn't report whether the media is active,
-         * just assume it is active. */
-        if ((ifmr.ifm_status & IFM_AVALID) == 0) {
-            netdev->carrier = true;
         }
     }
-    *carrier = netdev->carrier;
+    if (!error) {
+        *carrier = netdev->carrier;
+    }
+    ovs_mutex_unlock(&netdev->mutex);
 
-    return 0;
+    return error;
 }
 
 static void
@@ -1074,33 +1108,35 @@ netdev_bsd_get_in4(const struct netdev *netdev_, struct in_addr *in4,
                    struct in_addr *netmask)
 {
     struct netdev_bsd *netdev = netdev_bsd_cast(netdev_);
+    int error = 0;
 
+    ovs_mutex_lock(&netdev->mutex);
     if (!(netdev->cache_valid & VALID_IN4)) {
-        const struct sockaddr_in *sin;
         struct ifreq ifr;
-        int error;
 
         ifr.ifr_addr.sa_family = AF_INET;
         error = af_inet_ifreq_ioctl(netdev_get_kernel_name(netdev_), &ifr,
                                     SIOCGIFADDR, "SIOCGIFADDR");
-        if (error) {
-            return error;
-        }
+        if (!error) {
+            const struct sockaddr_in *sin;
 
-        sin = (struct sockaddr_in *) &ifr.ifr_addr;
-        netdev->in4 = sin->sin_addr;
-        error = af_inet_ifreq_ioctl(netdev_get_kernel_name(netdev_), &ifr,
-                                    SIOCGIFNETMASK, "SIOCGIFNETMASK");
-        if (error) {
-            return error;
+            sin = (struct sockaddr_in *) &ifr.ifr_addr;
+            netdev->in4 = sin->sin_addr;
+            netdev->cache_valid |= VALID_IN4;
+            error = af_inet_ifreq_ioctl(netdev_get_kernel_name(netdev_), &ifr,
+                                        SIOCGIFNETMASK, "SIOCGIFNETMASK");
+            if (!error) {
+                *netmask = sin->sin_addr;
+            }
         }
-        netdev->netmask = sin->sin_addr;
-        netdev->cache_valid |= VALID_IN4;
     }
-    *in4 = netdev->in4;
-    *netmask = netdev->netmask;
+    if (!error) {
+        *in4 = netdev->in4;
+        *netmask = netdev->netmask;
+    }
+    ovs_mutex_unlock(&netdev->mutex);
 
-    return in4->s_addr == INADDR_ANY ? EADDRNOTAVAIL : 0;
+    return error ? error : in4->s_addr == INADDR_ANY ? EADDRNOTAVAIL : 0;
 }
 
 /*
@@ -1115,6 +1151,7 @@ netdev_bsd_set_in4(struct netdev *netdev_, struct in_addr addr,
     struct netdev_bsd *netdev = netdev_bsd_cast(netdev_);
     int error;
 
+    ovs_mutex_lock(&netdev->mutex);
     error = do_set_addr(netdev_, SIOCSIFADDR, "SIOCSIFADDR", addr);
     if (!error) {
         if (addr.s_addr != INADDR_ANY) {
@@ -1128,6 +1165,8 @@ netdev_bsd_set_in4(struct netdev *netdev_, struct in_addr addr,
         }
         netdev_bsd_changed(netdev);
     }
+    ovs_mutex_unlock(&netdev->mutex);
+
     return error;
 }
 
