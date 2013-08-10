@@ -513,9 +513,8 @@ netdev_linux_run(void)
                     ovs_mutex_lock(&netdev->mutex);
                     netdev_linux_update(netdev, &change);
                     ovs_mutex_unlock(&netdev->mutex);
-
-                    netdev_close(netdev_);
                 }
+                netdev_close(netdev_);
             }
         } else if (error == ENOBUFS) {
             struct shash device_shash;
