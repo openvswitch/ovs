@@ -64,8 +64,7 @@ struct vport_class {
     struct netdev_class netdev_class;
 };
 
-static int netdev_vport_create(const struct netdev_class *, const char *,
-                               struct netdev **);
+static int netdev_vport_construct(struct netdev *);
 static int get_patch_config(const struct netdev *, struct smap *args);
 static int get_tunnel_config(const struct netdev *, struct smap *args);
 static void netdev_vport_poll_notify(struct netdev_vport *);
@@ -73,7 +72,7 @@ static void netdev_vport_poll_notify(struct netdev_vport *);
 static bool
 is_vport_class(const struct netdev_class *class)
 {
-    return class->create == netdev_vport_create;
+    return class->construct == netdev_vport_construct;
 }
 
 static const struct vport_class *
@@ -155,30 +154,39 @@ netdev_vport_get_dpif_port_strdup(const struct netdev *netdev)
                                               sizeof namebuf));
 }
 
-static int
-netdev_vport_create(const struct netdev_class *netdev_class, const char *name,
-                    struct netdev **netdevp)
+static struct netdev *
+netdev_vport_alloc(void)
 {
-    struct netdev_vport *dev;
+    struct netdev_vport *netdev = xzalloc(sizeof *netdev);
+    return &netdev->up;
+}
 
-    dev = xzalloc(sizeof *dev);
-    netdev_init(&dev->up, name, netdev_class);
-    dev->change_seq = 1;
-    eth_addr_random(dev->etheraddr);
+static int
+netdev_vport_construct(struct netdev *netdev_)
+{
+    struct netdev_vport *netdev = netdev_vport_cast(netdev_);
 
-    *netdevp = &dev->up;
+    netdev->change_seq = 1;
+    eth_addr_random(netdev->etheraddr);
+
     route_table_register();
 
     return 0;
 }
 
 static void
-netdev_vport_destroy(struct netdev *netdev_)
+netdev_vport_destruct(struct netdev *netdev_)
 {
     struct netdev_vport *netdev = netdev_vport_cast(netdev_);
 
     route_table_unregister();
     free(netdev->peer);
+}
+
+static void
+netdev_vport_dealloc(struct netdev *netdev_)
+{
+    struct netdev_vport *netdev = netdev_vport_cast(netdev_);
     free(netdev);
 }
 
@@ -629,13 +637,13 @@ get_stats(const struct netdev *netdev, struct netdev_stats *stats)
     netdev_vport_run,                                       \
     netdev_vport_wait,                                      \
                                                             \
-    netdev_vport_create,                                    \
-    netdev_vport_destroy,                                   \
+    netdev_vport_alloc,                                     \
+    netdev_vport_construct,                                 \
+    netdev_vport_destruct,                                  \
+    netdev_vport_dealloc,                                   \
     GET_CONFIG,                                             \
     SET_CONFIG,                                             \
     GET_TUNNEL_CONFIG,                                      \
-                                                            \
-    NULL,                       /* rx_open */               \
                                                             \
     NULL,                       /* send */                  \
     NULL,                       /* send_wait */             \
@@ -676,7 +684,15 @@ get_stats(const struct netdev *netdev, struct netdev_stats *stats)
                                                             \
     netdev_vport_update_flags,                              \
                                                             \
-    netdev_vport_change_seq
+    netdev_vport_change_seq,                                \
+                                                            \
+    NULL,                   /* rx_alloc */                  \
+    NULL,                   /* rx_construct */              \
+    NULL,                   /* rx_destruct */               \
+    NULL,                   /* rx_dealloc */                \
+    NULL,                   /* rx_recv */                   \
+    NULL,                   /* rx_wait */                   \
+    NULL,                   /* rx_drain */
 
 #define TUNNEL_CLASS(NAME, DPIF_PORT)                       \
     { DPIF_PORT,                                            \

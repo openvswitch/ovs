@@ -251,7 +251,6 @@ netdev_open(const char *name, const char *type, struct netdev **netdevp)
     struct netdev *netdev;
     int error;
 
-    *netdevp = NULL;
     netdev_initialize();
 
     netdev = shash_find_data(&netdev_shash, name);
@@ -259,22 +258,38 @@ netdev_open(const char *name, const char *type, struct netdev **netdevp)
         const struct netdev_class *class;
 
         class = netdev_lookup_provider(type);
-        if (!class) {
+        if (class) {
+            netdev = class->alloc();
+            if (netdev) {
+                memset(netdev, 0, sizeof *netdev);
+                netdev->netdev_class = class;
+                netdev->name = xstrdup(name);
+                netdev->node = shash_add(&netdev_shash, name, netdev);
+                list_init(&netdev->saved_flags_list);
+
+                error = class->construct(netdev);
+                if (error) {
+                    class->dealloc(netdev);
+                }
+            } else {
+                error = ENOMEM;
+            }
+        } else {
             VLOG_WARN("could not create netdev %s of unknown type %s",
                       name, type);
-            return EAFNOSUPPORT;
+            error = EAFNOSUPPORT;
         }
-        error = class->create(class, name, &netdev);
-        if (error) {
-            return error;
-        }
-        ovs_assert(netdev->netdev_class == class);
-
+    } else {
+        error = 0;
     }
-    netdev->ref_cnt++;
 
-    *netdevp = netdev;
-    return 0;
+    if (!error) {
+        netdev->ref_cnt++;
+        *netdevp = netdev;
+    } else {
+        *netdevp = NULL;
+    }
+    return error;
 }
 
 /* Returns a reference to 'netdev_' for the caller to own. Returns null if
@@ -348,7 +363,11 @@ netdev_unref(struct netdev *dev)
 {
     ovs_assert(dev->ref_cnt);
     if (!--dev->ref_cnt) {
-        netdev_uninit(dev, true);
+        dev->netdev_class->destruct(dev);
+
+        shash_delete(&netdev_shash, dev->node);
+        free(dev->name);
+        dev->netdev_class->dealloc(dev);
     }
 }
 
@@ -385,15 +404,25 @@ netdev_rx_open(struct netdev *netdev, struct netdev_rx **rxp)
 {
     int error;
 
-    error = (netdev->netdev_class->rx_open
-             ? netdev->netdev_class->rx_open(netdev, rxp)
-             : EOPNOTSUPP);
-    if (!error) {
-        ovs_assert((*rxp)->netdev == netdev);
-        netdev->ref_cnt++;
+    if (netdev->netdev_class->rx_alloc) {
+        struct netdev_rx *rx = netdev->netdev_class->rx_alloc();
+        if (rx) {
+            rx->netdev = netdev;
+            error = netdev->netdev_class->rx_construct(rx);
+            if (!error) {
+                netdev->ref_cnt++;
+                *rxp = rx;
+                return 0;
+            }
+            netdev->netdev_class->rx_dealloc(rx);
+        } else {
+            error = ENOMEM;
+        }
     } else {
-        *rxp = NULL;
+        error = EOPNOTSUPP;
     }
+
+    *rxp = NULL;
     return error;
 }
 
@@ -401,10 +430,10 @@ void
 netdev_rx_close(struct netdev_rx *rx)
 {
     if (rx) {
-        struct netdev *dev = rx->netdev;
-
-        rx->rx_class->destroy(rx);
-        netdev_unref(dev);
+        struct netdev *netdev = rx->netdev;
+        netdev->netdev_class->rx_destruct(rx);
+        netdev->netdev_class->rx_dealloc(rx);
+        netdev_close(netdev);
     }
 }
 
@@ -416,7 +445,8 @@ netdev_rx_recv(struct netdev_rx *rx, struct ofpbuf *buffer)
     ovs_assert(buffer->size == 0);
     ovs_assert(ofpbuf_tailroom(buffer) >= ETH_TOTAL_MIN);
 
-    retval = rx->rx_class->recv(rx, buffer->data, ofpbuf_tailroom(buffer));
+    retval = rx->netdev->netdev_class->rx_recv(rx, buffer->data,
+                                               ofpbuf_tailroom(buffer));
     if (retval >= 0) {
         COVERAGE_INC(netdev_received);
         buffer->size += retval;
@@ -432,13 +462,15 @@ netdev_rx_recv(struct netdev_rx *rx, struct ofpbuf *buffer)
 void
 netdev_rx_wait(struct netdev_rx *rx)
 {
-    rx->rx_class->wait(rx);
+    rx->netdev->netdev_class->rx_wait(rx);
 }
 
 int
 netdev_rx_drain(struct netdev_rx *rx)
 {
-    return rx->rx_class->drain ? rx->rx_class->drain(rx) : 0;
+    return (rx->netdev->netdev_class->rx_drain
+            ? rx->netdev->netdev_class->rx_drain(rx)
+            : 0);
 }
 
 /* Sends 'buffer' on 'netdev'.  Returns 0 if successful, otherwise a positive
@@ -1326,48 +1358,6 @@ netdev_change_seq(const struct netdev *netdev)
     return netdev->netdev_class->change_seq(netdev);
 }
 
-/* Initializes 'netdev' as a netdev device named 'name' of the specified
- * 'netdev_class'.  This function is ordinarily called from a netdev provider's
- * 'create' function.
- *
- * This function adds 'netdev' to a netdev-owned shash, so it is very important
- * that 'netdev' only be freed after calling netdev_uninit().  */
-void
-netdev_init(struct netdev *netdev, const char *name,
-            const struct netdev_class *netdev_class)
-{
-    ovs_assert(!shash_find(&netdev_shash, name));
-
-    memset(netdev, 0, sizeof *netdev);
-    netdev->netdev_class = netdev_class;
-    netdev->name = xstrdup(name);
-    netdev->node = shash_add(&netdev_shash, name, netdev);
-    list_init(&netdev->saved_flags_list);
-}
-
-/* Undoes the results of initialization.
- *
- * Normally this function does not need to be called as netdev_close has
- * the same effect when the refcount drops to zero.
- * However, it may be called by providers due to an error on creation
- * that occurs after initialization.  It this case netdev_close() would
- * never be called. */
-void
-netdev_uninit(struct netdev *netdev, bool destroy)
-{
-    char *name = netdev->name;
-
-    ovs_assert(!netdev->ref_cnt);
-    ovs_assert(list_is_empty(&netdev->saved_flags_list));
-
-    shash_delete(&netdev_shash, netdev->node);
-
-    if (destroy) {
-        netdev->netdev_class->destroy(netdev);
-    }
-    free(name);
-}
-
 /* Returns the class type of 'netdev'.
  *
  * The caller must not free the returned value. */
@@ -1428,21 +1418,6 @@ netdev_get_type_from_name(const char *name)
     return type;
 }
 
-void
-netdev_rx_init(struct netdev_rx *rx, struct netdev *netdev,
-               const struct netdev_rx_class *class)
-{
-    ovs_assert(netdev->ref_cnt > 0);
-    rx->rx_class = class;
-    rx->netdev = netdev;
-}
-
-void
-netdev_rx_uninit(struct netdev_rx *rx OVS_UNUSED)
-{
-    /* Nothing to do. */
-}
-
 struct netdev *
 netdev_rx_get_netdev(const struct netdev_rx *rx)
 {

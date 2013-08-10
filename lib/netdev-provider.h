@@ -30,7 +30,8 @@ extern "C" {
 
 /* A network device (e.g. an Ethernet device).
  *
- * Network device implementations should treat this structure as opaque. */
+ * Network device implementations may read these members but should not modify
+ * them. */
 struct netdev {
     char *name;                         /* Name of network device. */
     const struct netdev_class *netdev_class; /* Functions to control
@@ -40,9 +41,6 @@ struct netdev {
     struct list saved_flags_list; /* Contains "struct netdev_saved_flags". */
 };
 
-void netdev_init(struct netdev *, const char *name,
-                 const struct netdev_class *);
-void netdev_uninit(struct netdev *, bool destroy);
 const char *netdev_get_type(const struct netdev *);
 const struct netdev_class *netdev_get_class(const struct netdev *);
 const char *netdev_get_name(const struct netdev *);
@@ -50,11 +48,104 @@ struct netdev *netdev_from_name(const char *name);
 void netdev_get_devices(const struct netdev_class *,
                         struct shash *device_list);
 
+/* A data structure for capturing packets received by a network device.
+ *
+ * Network device implementations may read these members but should not modify
+ * them.
+ *
+ * None of these members change during the lifetime of a struct netdev_rx. */
+struct netdev_rx {
+    struct netdev *netdev;      /* Owns a reference to the netdev. */
+};
+
+struct netdev *netdev_rx_get_netdev(const struct netdev_rx *);
+
 /* Network device class structure, to be defined by each implementation of a
  * network device.
  *
  * These functions return 0 if successful or a positive errno value on failure,
- * except where otherwise noted. */
+ * except where otherwise noted.
+ *
+ *
+ * Data Structures
+ * ===============
+ *
+ * These functions work primarily with two different kinds of data structures:
+ *
+ *   - "struct netdev", which represents a network device.
+ *
+ *   - "struct netdev_rx", which represents a handle for capturing packets
+ *     received on a network device
+ *
+ * Each of these data structures contains all of the implementation-independent
+ * generic state for the respective concept, called the "base" state.  None of
+ * them contains any extra space for implementations to use.  Instead, each
+ * implementation is expected to declare its own data structure that contains
+ * an instance of the generic data structure plus additional
+ * implementation-specific members, called the "derived" state.  The
+ * implementation can use casts or (preferably) the CONTAINER_OF macro to
+ * obtain access to derived state given only a pointer to the embedded generic
+ * data structure.
+ *
+ *
+ * Life Cycle
+ * ==========
+ *
+ * Four stylized functions accompany each of these data structures:
+ *
+ *            "alloc"       "construct"       "destruct"       "dealloc"
+ *            ------------  ----------------  ---------------  --------------
+ * netdev     ->alloc       ->construct       ->destruct       ->dealloc
+ * netdev_rx  ->rx_alloc    ->rx_construct    ->rx_destruct    ->rx_dealloc
+ *
+ * Any instance of a given data structure goes through the following life
+ * cycle:
+ *
+ *   1. The client calls the "alloc" function to obtain raw memory.  If "alloc"
+ *      fails, skip all the other steps.
+ *
+ *   2. The client initializes all of the data structure's base state.  If this
+ *      fails, skip to step 7.
+ *
+ *   3. The client calls the "construct" function.  The implementation
+ *      initializes derived state.  It may refer to the already-initialized
+ *      base state.  If "construct" fails, skip to step 6.
+ *
+ *   4. The data structure is now initialized and in use.
+ *
+ *   5. When the data structure is no longer needed, the client calls the
+ *      "destruct" function.  The implementation uninitializes derived state.
+ *      The base state has not been uninitialized yet, so the implementation
+ *      may still refer to it.
+ *
+ *   6. The client uninitializes all of the data structure's base state.
+ *
+ *   7. The client calls the "dealloc" to free the raw memory.  The
+ *      implementation must not refer to base or derived state in the data
+ *      structure, because it has already been uninitialized.
+ *
+ * Each "alloc" function allocates and returns a new instance of the respective
+ * data structure.  The "alloc" function is not given any information about the
+ * use of the new data structure, so it cannot perform much initialization.
+ * Its purpose is just to ensure that the new data structure has enough room
+ * for base and derived state.  It may return a null pointer if memory is not
+ * available, in which case none of the other functions is called.
+ *
+ * Each "construct" function initializes derived state in its respective data
+ * structure.  When "construct" is called, all of the base state has already
+ * been initialized, so the "construct" function may refer to it.  The
+ * "construct" function is allowed to fail, in which case the client calls the
+ * "dealloc" function (but not the "destruct" function).
+ *
+ * Each "destruct" function uninitializes and frees derived state in its
+ * respective data structure.  When "destruct" is called, the base state has
+ * not yet been uninitialized, so the "destruct" function may refer to it.  The
+ * "destruct" function is not allowed to fail.
+ *
+ * Each "dealloc" function frees raw memory that was allocated by the the
+ * "alloc" function.  The memory's base and derived members might not have ever
+ * been initialized (but if "construct" returned successfully, then it has been
+ * "destruct"ed already).  The "dealloc" function is not allowed to fail. */
 struct netdev_class {
     /* Type of netdevs in this class, e.g. "system", "tap", "gre", etc.
      *
@@ -63,6 +154,10 @@ struct netdev_class {
      * The "system" type corresponds to an existing network device on
      * the system. */
     const char *type;
+
+/* ## ------------------- ## */
+/* ## Top-Level Functions ## */
+/* ## ------------------- ## */
 
     /* Called when the netdev provider is registered, typically at program
      * startup.  Returning an error from this function will prevent any network
@@ -83,18 +178,16 @@ struct netdev_class {
      * needed here. */
     void (*wait)(void);
 
-    /* Attempts to create a network device named 'name' in 'netdev_class'.  On
-     * success sets 'netdevp' to the newly created device. */
-    int (*create)(const struct netdev_class *netdev_class, const char *name,
-                  struct netdev **netdevp);
+/* ## ---------------- ## */
+/* ## netdev Functions ## */
+/* ## ---------------- ## */
 
-    /* Destroys 'netdev'.
-     *
-     * Netdev devices maintain a reference count that is incremented on
-     * netdev_open() and decremented on netdev_close().  If 'netdev'
-     * has a non-zero reference count, then this function will not be
-     * called. */
-    void (*destroy)(struct netdev *netdev);
+    /* Life-cycle functions for a netdev.  See the large comment above on
+     * struct netdev_class. */
+    struct netdev *(*alloc)(void);
+    int (*construct)(struct netdev *);
+    void (*destruct)(struct netdev *);
+    void (*dealloc)(struct netdev *);
 
     /* Fetches the device 'netdev''s configuration, storing it in 'args'.
      * The caller owns 'args' and pre-initializes it to an empty smap.
@@ -115,18 +208,6 @@ struct netdev_class {
      * If this function would always return null, it may be null instead. */
     const struct netdev_tunnel_config *
         (*get_tunnel_config)(const struct netdev *netdev);
-
-    /* Attempts to open a netdev_rx for receiving packets from 'netdev'.
-     * Returns 0 if successful, otherwise a positive errno value.  Returns
-     * EOPNOTSUPP to indicate that the network device does not implement packet
-     * reception through this interface.  This function may be set to null if
-     * it would always return EOPNOTSUPP anyhow.  (This will prevent the
-     * network device from being usefully used by the netdev-based "userspace
-     * datapath".)
-     *
-     * On success, the implementation must set '*rxp' to a 'netdev_rx' for
-     * 'netdev' that it has already initialized (with netdev_rx_init()). */
-    int (*rx_open)(struct netdev *netdev, struct netdev_rx **rxp);
 
     /* Sends the 'size'-byte packet in 'buffer' on 'netdev'.  Returns 0 if
      * successful, otherwise a positive errno value.  Returns EAGAIN without
@@ -518,25 +599,20 @@ struct netdev_class {
      * returned sequence number is allowed to change even when 'netdev' doesn't
      * change, although implementations should try to avoid this. */
     unsigned int (*change_seq)(const struct netdev *netdev);
-};
-
-/* A data structure for capturing packets received by a network device.
- *
- * This structure should be treated as opaque by network device
- * implementations. */
-struct netdev_rx {
-    const struct netdev_rx_class *rx_class;
-    struct netdev *netdev;
-};
 
-void netdev_rx_init(struct netdev_rx *, struct netdev *,
-                    const struct netdev_rx_class *);
-void netdev_rx_uninit(struct netdev_rx *);
-struct netdev *netdev_rx_get_netdev(const struct netdev_rx *);
+/* ## ------------------- ## */
+/* ## netdev_rx Functions ## */
+/* ## ------------------- ## */
 
-struct netdev_rx_class {
-    /* Destroys 'rx'. */
-    void (*destroy)(struct netdev_rx *rx);
+/* If a particular netdev class does not support receiving packets, all these
+ * function pointers must be NULL. */
+
+    /* Life-cycle functions for a netdev_rx.  See the large comment above on
+     * struct netdev_class. */
+    struct netdev_rx *(*rx_alloc)(void);
+    int (*rx_construct)(struct netdev_rx *);
+    void (*rx_destruct)(struct netdev_rx *);
+    void (*rx_dealloc)(struct netdev_rx *);
 
     /* Attempts to receive a packet from 'rx' into the 'size' bytes in
      * 'buffer'.  If successful, returns the number of bytes in the received
@@ -544,23 +620,19 @@ struct netdev_rx_class {
      * if no packet is ready to be received.
      *
      * Must return -EMSGSIZE, and discard the packet, if the received packet
-     * is longer than 'size' bytes. */
-    int (*recv)(struct netdev_rx *rx, void *buffer, size_t size);
+     * is longer than 'size' bytes.
+     *
+     * Specify NULL if this */
+    int (*rx_recv)(struct netdev_rx *rx, void *buffer, size_t size);
 
     /* Registers with the poll loop to wake up from the next call to
      * poll_block() when a packet is ready to be received with netdev_rx_recv()
      * on 'rx'. */
-    void (*wait)(struct netdev_rx *rx);
+    void (*rx_wait)(struct netdev_rx *rx);
 
     /* Discards all packets waiting to be received from 'rx'. */
-    int (*drain)(struct netdev_rx *rx);
+    int (*rx_drain)(struct netdev_rx *rx);
 };
-
-static inline void netdev_rx_assert_class(const struct netdev_rx *rx,
-                                          const struct netdev_rx_class *class_)
-{
-    ovs_assert(rx->rx_class == class_);
-}
 
 int netdev_register_provider(const struct netdev_class *);
 int netdev_unregister_provider(const char *type);

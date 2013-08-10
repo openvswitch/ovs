@@ -73,11 +73,8 @@ struct netdev_rx_dummy {
     bool listening;
 };
 
-static const struct netdev_rx_class netdev_rx_dummy_class;
-
 static unixctl_cb_func netdev_dummy_set_admin_state;
-static int netdev_dummy_create(const struct netdev_class *, const char *,
-                               struct netdev **);
+static int netdev_dummy_construct(struct netdev *);
 static void netdev_dummy_poll_notify(struct netdev_dummy *);
 static void netdev_dummy_queue_packet(struct netdev_dummy *, struct ofpbuf *);
 
@@ -86,7 +83,7 @@ static void dummy_stream_close(struct dummy_stream *);
 static bool
 is_dummy_class(const struct netdev_class *class)
 {
-    return class->create == netdev_dummy_create;
+    return class->construct == netdev_dummy_construct;
 }
 
 static struct netdev_dummy *
@@ -99,7 +96,7 @@ netdev_dummy_cast(const struct netdev *netdev)
 static struct netdev_rx_dummy *
 netdev_rx_dummy_cast(const struct netdev_rx *rx)
 {
-    netdev_rx_assert_class(rx, &netdev_rx_dummy_class);
+    ovs_assert(is_dummy_class(netdev_get_class(rx->netdev)));
     return CONTAINER_OF(rx, struct netdev_rx_dummy, up);
 }
 
@@ -248,17 +245,21 @@ netdev_dummy_wait(void)
     shash_destroy(&dummy_netdevs);
 }
 
+static struct netdev *
+netdev_dummy_alloc(void)
+{
+    struct netdev_dummy *netdev = xzalloc(sizeof *netdev);
+    return &netdev->up;
+}
+
 static int
-netdev_dummy_create(const struct netdev_class *class, const char *name,
-                    struct netdev **netdevp)
+netdev_dummy_construct(struct netdev *netdev_)
 {
     static atomic_uint next_n = ATOMIC_VAR_INIT(0xaa550000);
-    struct netdev_dummy *netdev;
+    struct netdev_dummy *netdev = netdev_dummy_cast(netdev_);
     unsigned int n;
 
     atomic_add(&next_n, 1, &n);
-    netdev = xzalloc(sizeof *netdev);
-    netdev_init(&netdev->up, name, class);
     netdev->hwaddr[0] = 0xaa;
     netdev->hwaddr[1] = 0x55;
     netdev->hwaddr[2] = n >> 24;
@@ -276,13 +277,11 @@ netdev_dummy_create(const struct netdev_class *class, const char *name,
 
     list_init(&netdev->rxes);
 
-    *netdevp = &netdev->up;
-
     return 0;
 }
 
 static void
-netdev_dummy_destroy(struct netdev *netdev_)
+netdev_dummy_destruct(struct netdev *netdev_)
 {
     struct netdev_dummy *netdev = netdev_dummy_cast(netdev_);
     size_t i;
@@ -292,6 +291,13 @@ netdev_dummy_destroy(struct netdev *netdev_)
         dummy_stream_close(&netdev->streams[i]);
     }
     free(netdev->streams);
+}
+
+static void
+netdev_dummy_dealloc(struct netdev *netdev_)
+{
+    struct netdev_dummy *netdev = netdev_dummy_cast(netdev_);
+
     free(netdev);
 }
 
@@ -337,24 +343,45 @@ netdev_dummy_set_config(struct netdev *netdev_, const struct smap *args)
     return 0;
 }
 
-static int
-netdev_dummy_rx_open(struct netdev *netdev_, struct netdev_rx **rxp)
+static struct netdev_rx *
+netdev_dummy_rx_alloc(void)
 {
-    struct netdev_dummy *netdev = netdev_dummy_cast(netdev_);
-    struct netdev_rx_dummy *rx;
+    struct netdev_rx_dummy *rx = xzalloc(sizeof *rx);
+    return &rx->up;
+}
 
-    rx = xmalloc(sizeof *rx);
-    netdev_rx_init(&rx->up, &netdev->up, &netdev_rx_dummy_class);
+static int
+netdev_dummy_rx_construct(struct netdev_rx *rx_)
+{
+    struct netdev_rx_dummy *rx = netdev_rx_dummy_cast(rx_);
+    struct netdev_dummy *netdev = netdev_dummy_cast(rx->up.netdev);
+
     list_push_back(&netdev->rxes, &rx->node);
     list_init(&rx->recv_queue);
     rx->recv_queue_len = 0;
 
-    *rxp = &rx->up;
     return 0;
 }
 
+static void
+netdev_dummy_rx_destruct(struct netdev_rx *rx_)
+{
+    struct netdev_rx_dummy *rx = netdev_rx_dummy_cast(rx_);
+
+    list_remove(&rx->node);
+    ofpbuf_list_delete(&rx->recv_queue);
+}
+
+static void
+netdev_dummy_rx_dealloc(struct netdev_rx *rx_)
+{
+    struct netdev_rx_dummy *rx = netdev_rx_dummy_cast(rx_);
+
+    free(rx);
+}
+
 static int
-netdev_rx_dummy_recv(struct netdev_rx *rx_, void *buffer, size_t size)
+netdev_dummy_rx_recv(struct netdev_rx *rx_, void *buffer, size_t size)
 {
     struct netdev_rx_dummy *rx = netdev_rx_dummy_cast(rx_);
     struct ofpbuf *packet;
@@ -378,16 +405,7 @@ netdev_rx_dummy_recv(struct netdev_rx *rx_, void *buffer, size_t size)
 }
 
 static void
-netdev_rx_dummy_destroy(struct netdev_rx *rx_)
-{
-    struct netdev_rx_dummy *rx = netdev_rx_dummy_cast(rx_);
-    list_remove(&rx->node);
-    ofpbuf_list_delete(&rx->recv_queue);
-    free(rx);
-}
-
-static void
-netdev_rx_dummy_wait(struct netdev_rx *rx_)
+netdev_dummy_rx_wait(struct netdev_rx *rx_)
 {
     struct netdev_rx_dummy *rx = netdev_rx_dummy_cast(rx_);
     if (!list_is_empty(&rx->recv_queue)) {
@@ -396,7 +414,7 @@ netdev_rx_dummy_wait(struct netdev_rx *rx_)
 }
 
 static int
-netdev_rx_dummy_drain(struct netdev_rx *rx_)
+netdev_dummy_rx_drain(struct netdev_rx *rx_)
 {
     struct netdev_rx_dummy *rx = netdev_rx_dummy_cast(rx_);
     ofpbuf_list_delete(&rx->recv_queue);
@@ -554,13 +572,13 @@ static const struct netdev_class dummy_class = {
     netdev_dummy_run,
     netdev_dummy_wait,
 
-    netdev_dummy_create,
-    netdev_dummy_destroy,
+    netdev_dummy_alloc,
+    netdev_dummy_construct,
+    netdev_dummy_destruct,
+    netdev_dummy_dealloc,
     netdev_dummy_get_config,
     netdev_dummy_set_config,
     NULL,                       /* get_tunnel_config */
-
-    netdev_dummy_rx_open,
 
     netdev_dummy_send,          /* send */
     NULL,                       /* send_wait */
@@ -601,14 +619,15 @@ static const struct netdev_class dummy_class = {
 
     netdev_dummy_update_flags,
 
-    netdev_dummy_change_seq
-};
+    netdev_dummy_change_seq,
 
-static const struct netdev_rx_class netdev_rx_dummy_class = {
-    netdev_rx_dummy_destroy,
-    netdev_rx_dummy_recv,
-    netdev_rx_dummy_wait,
-    netdev_rx_dummy_drain,
+    netdev_dummy_rx_alloc,
+    netdev_dummy_rx_construct,
+    netdev_dummy_rx_destruct,
+    netdev_dummy_rx_dealloc,
+    netdev_dummy_rx_recv,
+    netdev_dummy_rx_wait,
+    netdev_dummy_rx_drain,
 };
 
 static struct ofpbuf *

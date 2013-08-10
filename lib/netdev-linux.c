@@ -398,8 +398,6 @@ struct netdev_rx_linux {
     int fd;
 };
 
-static const struct netdev_rx_class netdev_rx_linux_class;
-
 /* This is set pretty low because we probably won't learn anything from the
  * additional log messages. */
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
@@ -448,7 +446,7 @@ netdev_linux_cast(const struct netdev *netdev)
 static struct netdev_rx_linux *
 netdev_rx_linux_cast(const struct netdev_rx *rx)
 {
-    netdev_rx_assert_class(rx, &netdev_rx_linux_class);
+    ovs_assert(is_netdev_linux_class(netdev_get_class(rx->netdev)));
     return CONTAINER_OF(rx, struct netdev_rx_linux, up);
 }
 
@@ -571,29 +569,38 @@ cache_notifier_unref(void)
     }
 }
 
+static struct netdev *
+netdev_linux_alloc(void)
+{
+    struct netdev_linux *netdev = xzalloc(sizeof *netdev);
+    return &netdev->up;
+}
+
+static int
+netdev_linux_common_construct(struct netdev_linux *netdev)
+{
+    netdev->change_seq = 1;
+
+    return cache_notifier_ref();
+}
+
 /* Creates system and internal devices. */
 static int
-netdev_linux_create(const struct netdev_class *class, const char *name,
-                    struct netdev **netdevp)
+netdev_linux_construct(struct netdev *netdev_)
 {
-    struct netdev_linux *netdev;
+    struct netdev_linux *netdev = netdev_linux_cast(netdev_);
     int error;
 
-    error = cache_notifier_ref();
+    error = netdev_linux_common_construct(netdev);
     if (error) {
         return error;
     }
 
-    netdev = xzalloc(sizeof *netdev);
-    netdev->change_seq = 1;
-    netdev_init(&netdev->up, name, class);
     error = get_flags(&netdev->up, &netdev->ifi_flags);
     if (error == ENODEV) {
-        if (class != &netdev_internal_class) {
+        if (netdev->up.netdev_class != &netdev_internal_class) {
             /* The device does not exist, so don't allow it to be opened. */
-            netdev_uninit(&netdev->up, false);
             cache_notifier_unref();
-            free(netdev);
             return ENODEV;
         } else {
             /* "Internal" netdevs have to be created as netdev objects before
@@ -603,7 +610,6 @@ netdev_linux_create(const struct netdev_class *class, const char *name,
         }
     }
 
-    *netdevp = &netdev->up;
     return 0;
 }
 
@@ -614,18 +620,15 @@ netdev_linux_create(const struct netdev_class *class, const char *name,
  * buffers, across all readers.  Therefore once data is read it will
  * be unavailable to other reads for tap devices. */
 static int
-netdev_linux_create_tap(const struct netdev_class *class OVS_UNUSED,
-                        const char *name, struct netdev **netdevp)
+netdev_linux_construct_tap(struct netdev *netdev_)
 {
-    struct netdev_linux *netdev;
+    struct netdev_linux *netdev = netdev_linux_cast(netdev_);
     static const char tap_dev[] = "/dev/net/tun";
+    const char *name = netdev_->name;
     struct ifreq ifr;
     int error;
 
-    netdev = xzalloc(sizeof *netdev);
-    netdev->change_seq = 1;
-
-    error = cache_notifier_ref();
+    error = netdev_linux_common_construct(netdev);
     if (error) {
         goto error;
     }
@@ -654,8 +657,6 @@ netdev_linux_create_tap(const struct netdev_class *class OVS_UNUSED,
         goto error_close;
     }
 
-    netdev_init(&netdev->up, name, &netdev_tap_class);
-    *netdevp = &netdev->up;
     return 0;
 
 error_close:
@@ -663,12 +664,11 @@ error_close:
 error_unref_notifier:
     cache_notifier_unref();
 error:
-    free(netdev);
     return error;
 }
 
 static void
-netdev_linux_destroy(struct netdev *netdev_)
+netdev_linux_destruct(struct netdev *netdev_)
 {
     struct netdev_linux *netdev = netdev_linux_cast(netdev_);
 
@@ -681,22 +681,35 @@ netdev_linux_destroy(struct netdev *netdev_)
     {
         close(netdev->tap_fd);
     }
-    free(netdev);
 
     cache_notifier_unref();
 }
 
-static int
-netdev_linux_rx_open(struct netdev *netdev_, struct netdev_rx **rxp)
+static void
+netdev_linux_dealloc(struct netdev *netdev_)
 {
     struct netdev_linux *netdev = netdev_linux_cast(netdev_);
-    bool is_tap = is_tap_netdev(netdev_);
-    struct netdev_rx_linux *rx;
-    int error;
-    int fd;
+    free(netdev);
+}
 
-    if (is_tap) {
-        fd = netdev->tap_fd;
+static struct netdev_rx *
+netdev_linux_rx_alloc(void)
+{
+    struct netdev_rx_linux *rx = xzalloc(sizeof *rx);
+    return &rx->up;
+}
+
+static int
+netdev_linux_rx_construct(struct netdev_rx *rx_)
+{
+    struct netdev_rx_linux *rx = netdev_rx_linux_cast(rx_);
+    struct netdev *netdev_ = rx->up.netdev;
+    struct netdev_linux *netdev = netdev_linux_cast(netdev_);
+    int error;
+
+    rx->is_tap = is_tap_netdev(netdev_);
+    if (rx->is_tap) {
+        rx->fd = netdev->tap_fd;
     } else {
         struct sockaddr_ll sll;
         int ifindex;
@@ -712,15 +725,15 @@ netdev_linux_rx_open(struct netdev *netdev_, struct netdev_rx **rxp)
         };
 
         /* Create file descriptor. */
-        fd = socket(PF_PACKET, SOCK_RAW, 0);
-        if (fd < 0) {
+        rx->fd = socket(PF_PACKET, SOCK_RAW, 0);
+        if (rx->fd < 0) {
             error = errno;
             VLOG_ERR("failed to create raw socket (%s)", ovs_strerror(error));
             goto error;
         }
 
         /* Set non-blocking mode. */
-        error = set_nonblocking(fd);
+        error = set_nonblocking(rx->fd);
         if (error) {
             goto error;
         }
@@ -736,7 +749,7 @@ netdev_linux_rx_open(struct netdev *netdev_, struct netdev_rx **rxp)
         sll.sll_family = AF_PACKET;
         sll.sll_ifindex = ifindex;
         sll.sll_protocol = (OVS_FORCE unsigned short int) htons(ETH_P_ALL);
-        if (bind(fd, (struct sockaddr *) &sll, sizeof sll) < 0) {
+        if (bind(rx->fd, (struct sockaddr *) &sll, sizeof sll) < 0) {
             error = errno;
             VLOG_ERR("%s: failed to bind raw socket (%s)",
                      netdev_get_name(netdev_), ovs_strerror(error));
@@ -744,7 +757,7 @@ netdev_linux_rx_open(struct netdev *netdev_, struct netdev_rx **rxp)
         }
 
         /* Filter for only inbound packets. */
-        error = setsockopt(fd, SOL_SOCKET, SO_ATTACH_FILTER, &fprog,
+        error = setsockopt(rx->fd, SOL_SOCKET, SO_ATTACH_FILTER, &fprog,
                            sizeof fprog);
         if (error) {
             error = errno;
@@ -754,34 +767,35 @@ netdev_linux_rx_open(struct netdev *netdev_, struct netdev_rx **rxp)
         }
     }
 
-    rx = xmalloc(sizeof *rx);
-    netdev_rx_init(&rx->up, netdev_, &netdev_rx_linux_class);
-    rx->is_tap = is_tap;
-    rx->fd = fd;
-
-    *rxp = &rx->up;
     return 0;
 
 error:
-    if (fd >= 0) {
-        close(fd);
+    if (rx->fd >= 0) {
+        close(rx->fd);
     }
     return error;
 }
 
 static void
-netdev_rx_linux_destroy(struct netdev_rx *rx_)
+netdev_linux_rx_destruct(struct netdev_rx *rx_)
 {
     struct netdev_rx_linux *rx = netdev_rx_linux_cast(rx_);
 
     if (!rx->is_tap) {
         close(rx->fd);
     }
+}
+
+static void
+netdev_linux_rx_dealloc(struct netdev_rx *rx_)
+{
+    struct netdev_rx_linux *rx = netdev_rx_linux_cast(rx_);
+
     free(rx);
 }
 
 static int
-netdev_rx_linux_recv(struct netdev_rx *rx_, void *data, size_t size)
+netdev_linux_rx_recv(struct netdev_rx *rx_, void *data, size_t size)
 {
     struct netdev_rx_linux *rx = netdev_rx_linux_cast(rx_);
     ssize_t retval;
@@ -804,14 +818,14 @@ netdev_rx_linux_recv(struct netdev_rx *rx_, void *data, size_t size)
 }
 
 static void
-netdev_rx_linux_wait(struct netdev_rx *rx_)
+netdev_linux_rx_wait(struct netdev_rx *rx_)
 {
     struct netdev_rx_linux *rx = netdev_rx_linux_cast(rx_);
     poll_fd_wait(rx->fd, POLLIN);
 }
 
 static int
-netdev_rx_linux_drain(struct netdev_rx *rx_)
+netdev_linux_rx_drain(struct netdev_rx *rx_)
 {
     struct netdev_rx_linux *rx = netdev_rx_linux_cast(rx_);
     if (rx->is_tap) {
@@ -2379,7 +2393,7 @@ netdev_linux_change_seq(const struct netdev *netdev)
     return netdev_linux_cast(netdev)->change_seq;
 }
 
-#define NETDEV_LINUX_CLASS(NAME, CREATE, GET_STATS, SET_STATS,  \
+#define NETDEV_LINUX_CLASS(NAME, CONSTRUCT, GET_STATS, SET_STATS,  \
                            GET_FEATURES, GET_STATUS)            \
 {                                                               \
     NAME,                                                       \
@@ -2388,13 +2402,13 @@ netdev_linux_change_seq(const struct netdev *netdev)
     netdev_linux_run,                                           \
     netdev_linux_wait,                                          \
                                                                 \
-    CREATE,                                                     \
-    netdev_linux_destroy,                                       \
+    netdev_linux_alloc,                                         \
+    CONSTRUCT,                                                  \
+    netdev_linux_destruct,                                      \
+    netdev_linux_dealloc,                                       \
     NULL,                       /* get_config */                \
     NULL,                       /* set_config */                \
     NULL,                       /* get_tunnel_config */         \
-                                                                \
-    netdev_linux_rx_open,                                       \
                                                                 \
     netdev_linux_send,                                          \
     netdev_linux_send_wait,                                     \
@@ -2435,13 +2449,21 @@ netdev_linux_change_seq(const struct netdev *netdev)
                                                                 \
     netdev_linux_update_flags,                                  \
                                                                 \
-    netdev_linux_change_seq                                     \
+    netdev_linux_change_seq,                                    \
+                                                                \
+    netdev_linux_rx_alloc,                                      \
+    netdev_linux_rx_construct,                                  \
+    netdev_linux_rx_destruct,                                   \
+    netdev_linux_rx_dealloc,                                    \
+    netdev_linux_rx_recv,                                       \
+    netdev_linux_rx_wait,                                       \
+    netdev_linux_rx_drain,                                      \
 }
 
 const struct netdev_class netdev_linux_class =
     NETDEV_LINUX_CLASS(
         "system",
-        netdev_linux_create,
+        netdev_linux_construct,
         netdev_linux_get_stats,
         NULL,                    /* set_stats */
         netdev_linux_get_features,
@@ -2450,7 +2472,7 @@ const struct netdev_class netdev_linux_class =
 const struct netdev_class netdev_tap_class =
     NETDEV_LINUX_CLASS(
         "tap",
-        netdev_linux_create_tap,
+        netdev_linux_construct_tap,
         netdev_tap_get_stats,
         NULL,                   /* set_stats */
         netdev_linux_get_features,
@@ -2459,18 +2481,11 @@ const struct netdev_class netdev_tap_class =
 const struct netdev_class netdev_internal_class =
     NETDEV_LINUX_CLASS(
         "internal",
-        netdev_linux_create,
+        netdev_linux_construct,
         netdev_internal_get_stats,
         netdev_internal_set_stats,
         NULL,                  /* get_features */
         netdev_internal_get_status);
-
-static const struct netdev_rx_class netdev_rx_linux_class = {
-    netdev_rx_linux_destroy,
-    netdev_rx_linux_recv,
-    netdev_rx_linux_wait,
-    netdev_rx_linux_drain,
-};
 
 /* HTB traffic control class. */
 
