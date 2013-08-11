@@ -328,6 +328,9 @@ netdev_open(const char *name, const char *type, struct netdev **netdevp)
 
                     atomic_add(&rc->ref_cnt, 1, &old_ref_cnt);
                 } else {
+                    free(netdev->name);
+                    ovs_assert(list_is_empty(&netdev->saved_flags_list));
+                    shash_delete(&netdev_shash, netdev->node);
                     rc->class->dealloc(netdev);
                 }
             } else {
