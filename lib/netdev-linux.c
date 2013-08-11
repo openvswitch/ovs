@@ -410,6 +410,9 @@ static int netdev_linux_get_ipv4(const struct netdev *, struct in_addr *,
                                  int cmd, const char *cmd_name);
 static int get_flags(const struct netdev *, unsigned int *flags);
 static int set_flags(const char *, unsigned int flags);
+static int update_flags(struct netdev_linux *netdev, enum netdev_flags off,
+                        enum netdev_flags on, enum netdev_flags *old_flagsp)
+    OVS_REQUIRES(netdev->mutex);
 static int do_get_ifindex(const char *netdev_name);
 static int get_ifindex(const struct netdev *, int *ifindexp);
 static int do_set_addr(struct netdev *netdev,
@@ -979,7 +982,7 @@ netdev_linux_set_etheraddr(struct netdev *netdev_,
                            const uint8_t mac[ETH_ADDR_LEN])
 {
     struct netdev_linux *netdev = netdev_linux_cast(netdev_);
-    struct netdev_saved_flags *sf = NULL;
+    enum netdev_flags old_flags = 0;
     int error;
 
     ovs_mutex_lock(&netdev->mutex);
@@ -994,7 +997,7 @@ netdev_linux_set_etheraddr(struct netdev *netdev_,
 
     /* Tap devices must be brought down before setting the address. */
     if (is_tap_netdev(netdev_)) {
-        netdev_turn_flags_off(netdev_, NETDEV_UP, &sf);
+        update_flags(netdev, NETDEV_UP, 0, &old_flags);
     }
     error = set_etheraddr(netdev_get_name(netdev_), mac);
     if (!error || error == ENODEV) {
@@ -1005,7 +1008,9 @@ netdev_linux_set_etheraddr(struct netdev *netdev_,
         }
     }
 
-    netdev_restore_flags(sf);
+    if (is_tap_netdev(netdev_) && old_flags & NETDEV_UP) {
+        update_flags(netdev, 0, NETDEV_UP, &old_flags);
+    }
 
 exit:
     ovs_mutex_unlock(&netdev->mutex);
@@ -2478,21 +2483,33 @@ iff_to_nd_flags(int iff)
 }
 
 static int
-netdev_linux_update_flags(struct netdev *netdev_, enum netdev_flags off,
-                          enum netdev_flags on, enum netdev_flags *old_flagsp)
+update_flags(struct netdev_linux *netdev, enum netdev_flags off,
+             enum netdev_flags on, enum netdev_flags *old_flagsp)
+    OVS_REQUIRES(netdev->mutex)
 {
-    struct netdev_linux *netdev = netdev_linux_cast(netdev_);
     int old_flags, new_flags;
     int error = 0;
 
-    ovs_mutex_lock(&netdev->mutex);
     old_flags = netdev->ifi_flags;
     *old_flagsp = iff_to_nd_flags(old_flags);
     new_flags = (old_flags & ~nd_to_iff_flags(off)) | nd_to_iff_flags(on);
     if (new_flags != old_flags) {
-        error = set_flags(netdev_get_name(netdev_), new_flags);
-        get_flags(netdev_, &netdev->ifi_flags);
+        error = set_flags(netdev_get_name(&netdev->up), new_flags);
+        get_flags(&netdev->up, &netdev->ifi_flags);
     }
+
+    return error;
+}
+
+static int
+netdev_linux_update_flags(struct netdev *netdev_, enum netdev_flags off,
+                          enum netdev_flags on, enum netdev_flags *old_flagsp)
+{
+    struct netdev_linux *netdev = netdev_linux_cast(netdev_);
+    int error;
+
+    ovs_mutex_lock(&netdev->mutex);
+    error = update_flags(netdev, off, on, old_flagsp);
     ovs_mutex_unlock(&netdev->mutex);
 
     return error;
