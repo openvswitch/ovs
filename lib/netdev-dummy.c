@@ -327,12 +327,15 @@ netdev_dummy_get_config(const struct netdev *netdev_, struct smap *args)
 {
     struct netdev_dummy *netdev = netdev_dummy_cast(netdev_);
 
+    ovs_mutex_lock(&netdev->mutex);
     if (netdev->ifindex >= 0) {
         smap_add_format(args, "ifindex", "%d", netdev->ifindex);
     }
     if (netdev->pstream) {
         smap_add(args, "pstream", pstream_get_name(netdev->pstream));
     }
+    ovs_mutex_unlock(&netdev->mutex);
+
     return 0;
 }
 
