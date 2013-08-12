@@ -661,11 +661,14 @@ bond_choose_output_slave(struct bond *bond, const struct flow *flow,
                          struct flow_wildcards *wc, uint16_t vlan)
 {
     struct bond_slave *slave;
+    void *aux;
 
     ovs_rwlock_rdlock(&rwlock);
     slave = choose_output_slave(bond, flow, wc, vlan);
+    aux = slave ? slave->aux : NULL;
     ovs_rwlock_unlock(&rwlock);
-    return slave;
+
+    return aux;
 }
 
 /* Rebalancing. */
