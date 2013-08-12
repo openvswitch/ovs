@@ -106,7 +106,11 @@ seq_change(struct seq *seq)
     ovs_mutex_unlock(&seq_mutex);
 }
 
-/* Returns 'seq''s current sequence number (which could change immediately). */
+/* Returns 'seq''s current sequence number (which could change immediately).
+ *
+ * seq_read() and seq_wait() can be used together to yield a race-free wakeup
+ * when an object changes, even without an ability to lock the object.  See
+ * Usage in seq.h for details. */
 uint64_t
 seq_read(const struct seq *seq)
     OVS_EXCLUDED(seq_mutex)
@@ -156,7 +160,11 @@ seq_wait__(struct seq *seq, uint64_t value)
 
 /* Causes the following poll_block() to wake up when 'seq''s sequence number
  * changes from 'value'.  (If 'seq''s sequence number isn't 'value', then
- * poll_block() won't block at all.) */
+ * poll_block() won't block at all.)
+ *
+ * seq_read() and seq_wait() can be used together to yield a race-free wakeup
+ * when an object changes, even without an ability to lock the object.  See
+ * Usage in seq.h for details. */
 void
 seq_wait(const struct seq *seq_, uint64_t value)
     OVS_EXCLUDED(seq_mutex)

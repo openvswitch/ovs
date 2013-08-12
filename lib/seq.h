@@ -20,7 +20,7 @@
 /* Thread-safe, pollable sequence number.
  *
  *
- * Background
+ * Motivation
  * ==========
  *
  * It is sometimes desirable to take an action whenever an object changes.
@@ -64,6 +64,44 @@
  *    }
  *    seq_wait(seq, new_seq);
  *    poll_block();
+ *
+ *
+ * Alternate Usage
+ * ===============
+ *
+ * struct seq can also be used as a sort of pollable condition variable.
+ * Suppose that we want a thread to process items in a queue, and thus to be
+ * able to wake up whenever the queue is nonempty.  This requires a lock to
+ * protect the queue and a seq to signal that the queue has become nonempty,
+ * e.g.:
+ *
+ *    struct ovs_mutex mutex;
+ *    struct list queue OVS_GUARDED_BY(mutex);
+ *    struct seq nonempty_seq;
+ *
+ * To add an element to the queue:
+ *
+ *    ovs_mutex_lock(&mutex);
+ *    list_push_back(&queue, ...element...);
+ *    if (list_is_singleton(&queue)) {   // The 'if' test here is optional.
+ *        seq_change(&nonempty_seq);
+ *    }
+ *    ovs_mutex_unlock(&mutex);
+ *
+ * To wait for the queue to become nonempty:
+ *
+ *    ovs_mutex_lock(&mutex);
+ *    if (list_is_empty(&queue)) {
+ *        seq_wait(&nonempty_seq, seq_read(&nonempty_seq));
+ *    } else {
+ *        poll_immediate_wake();
+ *    }
+ *    ovs_mutex_unlock(&mutex);
+ *
+ * (In the above code 'mutex' prevents the queue from changing between
+ * seq_read() and seq_wait().  Otherwise, it would be necessary to seq_read(),
+ * check for a nonempty queue, and then seq_wait() on the previously read
+ * sequence number, as under Usage above.)
  *
  *
  * Thread-safety
