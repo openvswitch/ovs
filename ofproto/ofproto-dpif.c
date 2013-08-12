@@ -4756,6 +4756,7 @@ bool
 rule_dpif_lookup_in_table(struct ofproto_dpif *ofproto,
                           const struct flow *flow, struct flow_wildcards *wc,
                           uint8_t table_id, struct rule_dpif **rule)
+    OVS_ACQ_RDLOCK((*rule)->up.evict)
 {
     struct cls_rule *cls_rule;
     struct classifier *cls;

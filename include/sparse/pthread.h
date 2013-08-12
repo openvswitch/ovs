@@ -21,18 +21,6 @@
 /* Get actual <pthread.h> definitions for us to annotate and build on. */
 #include_next <pthread.h>
 
-#include "compiler.h"
-
-int pthread_mutex_lock(pthread_mutex_t *mutex) OVS_ACQUIRES(mutex);
-int pthread_mutex_unlock(pthread_mutex_t *mutex) OVS_RELEASES(mutex);
-
-int pthread_rwlock_rdlock(pthread_rwlock_t *rwlock) OVS_ACQ_RDLOCK(rwlock);
-int pthread_rwlock_wrlock(pthread_rwlock_t *rwlock) OVS_ACQ_WRLOCK(rwlock);
-int pthread_rwlock_unlock(pthread_rwlock_t *rwlock) OVS_RELEASES(rwlock);
-
-int pthread_cond_wait(pthread_cond_t *, pthread_mutex_t *mutex)
-    OVS_REQUIRES(mutex);
-
 /* Sparse complains about the proper PTHREAD_*_INITIALIZER definitions.
  * Luckily, it's not a real compiler so we can overwrite it with something
  * simple. */
@@ -47,29 +35,3 @@ int pthread_cond_wait(pthread_cond_t *, pthread_mutex_t *mutex)
 
 #undef PTHREAD_ERRORCHECK_MUTEX_INITIALIZER_NP
 #define PTHREAD_ERRORCHECK_MUTEX_INITIALIZER_NP {}
-
-#define pthread_mutex_trylock(MUTEX)                    \
-    ({                                                  \
-        int retval = pthread_mutex_trylock(mutex);      \
-        if (!retval) {                                  \
-            OVS_MACRO_LOCK(MUTEX);                      \
-        }                                               \
-        retval;                                         \
-    })
-
-#define pthread_rwlock_tryrdlock(RWLOCK)                \
-    ({                                                  \
-        int retval = pthread_rwlock_tryrdlock(rwlock);  \
-        if (!retval) {                                  \
-            OVS_MACRO_LOCK(RWLOCK);                     \
-        }                                               \
-        retval;                                         \
-    })
-#define pthread_rwlock_trywrlock(RWLOCK)                \
-    ({                                                  \
-        int retval = pthread_rwlock_trywrlock(rwlock);  \
-        if (!retval) {                                  \
-            OVS_MACRO_LOCK(RWLOCK);                     \
-        }                                               \
-        retval;                                         \
-    })

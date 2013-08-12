@@ -128,32 +128,7 @@
 #define OVS_EXCLUDED(...) __attribute__((locks_excluded(__VA_ARGS__)))
 #define OVS_ACQ_BEFORE(...) __attribute__((acquired_before(__VA_ARGS__)))
 #define OVS_ACQ_AFTER(...) __attribute__((acquired_after(__VA_ARGS__)))
-#elif __CHECKER__
-/* "sparse" annotations for mutexes and mutex-like constructs.
- *
- * Change the thread-safety check annotations to use "context" attribute.
- *
- * OVS_MACRO_LOCK and OVS_MACRO_RELEASE are suitable for use within macros,
- * where there is no function prototype to annotate. */
-#define OVS_LOCKABLE
-#define OVS_REQ_RDLOCK(...) __attribute__((context(MUTEX, 1, 1)))
-#define OVS_ACQ_RDLOCK(...) __attribute__((context(MUTEX, 0, 1)))
-#define OVS_REQ_WRLOCK(...) __attribute__((context(MUTEX, 1, 1)))
-#define OVS_ACQ_WRLOCK(...) __attribute__((context(MUTEX, 0, 1)))
-#define OVS_REQUIRES(...)   __attribute__((context(MUTEX, 1, 1)))
-#define OVS_ACQUIRES(...)   __attribute__((context(MUTEX, 0, 1)))
-#define OVS_TRY_WRLOCK(RETVAL, ...)
-#define OVS_TRY_RDLOCK(RETVAL, ...)
-#define OVS_TRY_LOCK(REVAL, ...)
-#define OVS_GUARDED
-#define OVS_GUARDED_BY(...)
-#define OVS_EXCLUDED(...)
-#define OVS_RELEASES(...)   __attribute__((context(MUTEX, 1, 0)))
-#define OVS_ACQ_BEFORE(...)
-#define OVS_ACQ_AFTER(...)
-#define OVS_MACRO_LOCK(...) __context__(MUTEX, 0, 1)
-#define OVS_MACRO_RELEASE(...) __context__(MUTEX, 1, 0)
-#else
+#else  /* not Clang */
 #define OVS_LOCKABLE
 #define OVS_REQ_RDLOCK(...)
 #define OVS_ACQ_RDLOCK(...)
@@ -170,8 +145,6 @@
 #define OVS_RELEASES(...)
 #define OVS_ACQ_BEFORE(...)
 #define OVS_ACQ_AFTER(...)
-#define OVS_MACRO_LOCK(...)
-#define OVS_MACRO_RELEASE(...)
 #endif
 
 /* ISO C says that a C implementation may choose any integer type for an enum

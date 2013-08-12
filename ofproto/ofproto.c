@@ -5459,7 +5459,8 @@ oftable_enable_eviction(struct oftable *table,
 /* Removes 'rule' from the oftable that contains it. */
 static void
 oftable_remove_rule__(struct ofproto *ofproto, struct classifier *cls,
-                      struct rule *rule) OVS_REQ_WRLOCK(cls->rwlock)
+                      struct rule *rule)
+    OVS_REQ_WRLOCK(cls->rwlock) OVS_RELEASES(rule->evict)
 {
     classifier_remove(cls, &rule->cr);
     if (rule->meter_id) {

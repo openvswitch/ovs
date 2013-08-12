@@ -496,11 +496,6 @@ ovsthread_once_start(struct ovsthread_once *once)
     return OVS_UNLIKELY(!ovsthread_once_is_done__(once)
                         && !ovsthread_once_start__(once));
 }
-
-#ifdef __CHECKER__
-#define ovsthread_once_start(ONCE) \
-    ((ONCE)->done ? false : ({ OVS_MACRO_LOCK((&ONCE->mutex)); true; }))
-#endif
 
 /* Thread ID.
  *
