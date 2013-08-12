@@ -123,6 +123,9 @@ udpif_create(struct dpif_backer *backer, struct dpif *dpif)
     list_init(&udpif->upcalls);
     list_init(&udpif->fmbs);
     atomic_init(&udpif->reval_seq, 0);
+    ovs_mutex_init(&udpif->drop_key_mutex, PTHREAD_MUTEX_NORMAL);
+    ovs_mutex_init(&udpif->upcall_mutex, PTHREAD_MUTEX_NORMAL);
+    ovs_mutex_init(&udpif->fmb_mutex, PTHREAD_MUTEX_NORMAL);
 
     return udpif;
 }
