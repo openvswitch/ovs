@@ -133,7 +133,7 @@ static void destroy_tap(int fd, const char *name);
 static int get_flags(const struct netdev *, int *flagsp);
 static int set_flags(const char *, int flags);
 static int do_set_addr(struct netdev *netdev,
-                       int ioctl_nr, const char *ioctl_name,
+                       unsigned long ioctl_nr, const char *ioctl_name,
                        struct in_addr addr);
 static int get_etheraddr(const char *netdev_name, uint8_t ea[ETH_ADDR_LEN]);
 static int set_etheraddr(const char *netdev_name, int hwaddr_family,
@@ -144,7 +144,7 @@ static int ifr_get_flags(const struct ifreq *);
 static void ifr_set_flags(struct ifreq *, int flags);
 
 #ifdef __NetBSD__
-static int af_link_ioctl(int command, const void *arg);
+static int af_link_ioctl(unsigned long command, const void *arg);
 #endif
 
 static void netdev_bsd_run(void);
@@ -1347,7 +1347,8 @@ make_in4_sockaddr(struct sockaddr *sa, struct in_addr addr)
 
 static int
 do_set_addr(struct netdev *netdev,
-            int ioctl_nr, const char *ioctl_name, struct in_addr addr)
+            unsigned long ioctl_nr, const char *ioctl_name,
+            struct in_addr addr)
 {
     struct ifreq ifr;
     make_in4_sockaddr(&ifr.ifr_addr, addr);
@@ -1716,7 +1717,7 @@ ifr_set_flags(struct ifreq *ifr, int flags)
 /* Calls ioctl() on an AF_LINK sock, passing the specified 'command' and
  * 'arg'.  Returns 0 if successful, otherwise a positive errno value. */
 int
-af_link_ioctl(int command, const void *arg)
+af_link_ioctl(unsigned long command, const void *arg)
 {
     static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
     static int sock;
