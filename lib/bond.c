@@ -475,7 +475,7 @@ bond_wait(struct bond *bond)
         poll_timer_wait_until(bond->next_fake_iface_update);
     }
 
-    if (!bond->bond_revalidate) {
+    if (bond->bond_revalidate) {
         poll_immediate_wake();
     }
     ovs_rwlock_unlock(&rwlock);
