@@ -547,7 +547,7 @@ recv_upcalls(struct udpif *udpif)
                     || type == OVS_KEY_ATTR_UDP) {
                     if (nl_attr_get_size(nla) == 4) {
                         ovs_be32 attr = nl_attr_get_be32(nla);
-                        hash = mhash_add(hash, (uint32_t) attr);
+                        hash = mhash_add(hash, (OVS_FORCE uint32_t) attr);
                         n_bytes += 4;
                     } else {
                         VLOG_WARN("Netlink attribute with incorrect size.");
