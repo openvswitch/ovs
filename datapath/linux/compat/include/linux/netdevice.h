@@ -190,16 +190,21 @@ static inline struct sk_buff *__skb_gso_segment(struct sk_buff *skb,
 #endif
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3,9,0)
+
+/* XEN dom0 networking assumes dev->master is bond device
+ * and it tries to access bond private structure from dev->master
+ * ptr on receive path. This causes panic. Therefore it is better
+ * not to backport this API.
+ **/
 static inline int netdev_master_upper_dev_link(struct net_device *dev,
 					       struct net_device *upper_dev)
 {
-	return netdev_set_master(dev, upper_dev);
+	return 0;
 }
 
 static inline void netdev_upper_dev_unlink(struct net_device *dev,
 					   struct net_device *upper_dev)
 {
-	netdev_set_master(dev, NULL);
 }
 #endif
 
