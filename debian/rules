@@ -39,6 +39,7 @@ configure-stamp:
 		test -e Makefile || \
 		../configure --prefix=/usr --localstatedir=/var --enable-ssl \
 			--sysconfdir=/etc CFLAGS="$(CFLAGS)" \
+			$(shell dpkg-buildflags --export=configure) \
 			$(DATAPATH_CONFIGURE_OPTS))
 	touch configure-stamp
 
