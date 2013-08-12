@@ -1087,7 +1087,7 @@ be specified as a name used for matching.  (This is similar to
 Open Flow 1.2 and above.)
 .
 .IP
-Example: \fBset_field:fe80:0123:4567:890a:a6ba:dbff:fefe:59fa\->ipv6_src\fR
+Example: \fBset_field:00:11:22:33:44:55->eth_src\fR.
 .
 .IP "\fBmultipath(\fIfields\fB, \fIbasis\fB, \fIalgorithm\fB, \fIn_links\fB, \fIarg\fB, \fIdst\fB[\fIstart\fB..\fIend\fB])\fR"
 Hashes \fIfields\fR using \fIbasis\fR as a universal hash parameter,
