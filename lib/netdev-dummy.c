@@ -44,11 +44,21 @@ struct dummy_stream {
     struct list txq;
 };
 
+/* Protects 'dummy_list'. */
+static struct ovs_mutex dummy_list_mutex = OVS_MUTEX_INITIALIZER;
+
+/* Contains all 'struct dummy_dev's. */
+static struct list dummy_list OVS_GUARDED_BY(dummy_list_mutex)
+    = LIST_INITIALIZER(&dummy_list);
+
 struct netdev_dummy {
     struct netdev up;
 
+    /* In dummy_list. */
+    struct list list_node OVS_GUARDED_BY(dummy_list_mutex);
+
     /* Protects all members below. */
-    struct ovs_mutex mutex;
+    struct ovs_mutex mutex OVS_ACQ_AFTER(dummy_list_mutex);
 
     uint8_t hwaddr[ETH_ADDR_LEN];
     int mtu;
@@ -63,8 +73,6 @@ struct netdev_dummy {
 
     struct list rxes;           /* List of child "netdev_rx_dummy"s. */
 };
-
-static const struct netdev_class dummy_class;
 
 /* Max 'recv_queue_len' in struct netdev_dummy. */
 #define NETDEV_DUMMY_MAX_QUEUE 100
@@ -108,13 +116,10 @@ netdev_rx_dummy_cast(const struct netdev_rx *rx)
 static void
 netdev_dummy_run(void)
 {
-    struct shash dummy_netdevs;
-    struct shash_node *node;
+    struct netdev_dummy *dev;
 
-    shash_init(&dummy_netdevs);
-    netdev_get_devices(&dummy_class, &dummy_netdevs);
-    SHASH_FOR_EACH (node, &dummy_netdevs) {
-        struct netdev_dummy *dev = node->data;
+    ovs_mutex_lock(&dummy_list_mutex);
+    LIST_FOR_EACH (dev, list_node, &dummy_list) {
         size_t i;
 
         ovs_mutex_lock(&dev->mutex);
@@ -211,9 +216,8 @@ netdev_dummy_run(void)
         }
 
         ovs_mutex_unlock(&dev->mutex);
-        netdev_close(&dev->up);
     }
-    shash_destroy(&dummy_netdevs);
+    ovs_mutex_unlock(&dummy_list_mutex);
 }
 
 static void
@@ -227,13 +231,10 @@ dummy_stream_close(struct dummy_stream *s)
 static void
 netdev_dummy_wait(void)
 {
-    struct shash dummy_netdevs;
-    struct shash_node *node;
+    struct netdev_dummy *dev;
 
-    shash_init(&dummy_netdevs);
-    netdev_get_devices(&dummy_class, &dummy_netdevs);
-    SHASH_FOR_EACH (node, &dummy_netdevs) {
-        struct netdev_dummy *dev = node->data;
+    ovs_mutex_lock(&dummy_list_mutex);
+    LIST_FOR_EACH (dev, list_node, &dummy_list) {
         size_t i;
 
         ovs_mutex_lock(&dev->mutex);
@@ -250,9 +251,8 @@ netdev_dummy_wait(void)
             stream_recv_wait(s->stream);
         }
         ovs_mutex_unlock(&dev->mutex);
-        netdev_close(&dev->up);
     }
-    shash_destroy(&dummy_netdevs);
+    ovs_mutex_unlock(&dummy_list_mutex);
 }
 
 static struct netdev *
@@ -289,6 +289,10 @@ netdev_dummy_construct(struct netdev *netdev_)
 
     list_init(&netdev->rxes);
 
+    ovs_mutex_lock(&dummy_list_mutex);
+    list_push_back(&dummy_list, &netdev->list_node);
+    ovs_mutex_unlock(&dummy_list_mutex);
+
     return 0;
 }
 
@@ -297,6 +301,10 @@ netdev_dummy_destruct(struct netdev *netdev_)
 {
     struct netdev_dummy *netdev = netdev_dummy_cast(netdev_);
     size_t i;
+
+    ovs_mutex_lock(&dummy_list_mutex);
+    list_remove(&netdev->list_node);
+    ovs_mutex_unlock(&dummy_list_mutex);
 
     pstream_close(netdev->pstream);
     for (i = 0; i < netdev->n_streams; i++) {
@@ -863,22 +871,15 @@ netdev_dummy_set_admin_state(struct unixctl_conn *conn, int argc,
             return;
         }
     } else {
-        struct shash dummy_netdevs;
-        struct shash_node *node;
+        struct netdev_dummy *netdev;
 
-        shash_init(&dummy_netdevs);
-        netdev_get_devices(&dummy_class, &dummy_netdevs);
-        SHASH_FOR_EACH (node, &dummy_netdevs) {
-            struct netdev *netdev_ = node->data;
-            struct netdev_dummy *netdev = netdev_dummy_cast(netdev_);
-
+        ovs_mutex_lock(&dummy_list_mutex);
+        LIST_FOR_EACH (netdev, list_node, &dummy_list) {
             ovs_mutex_lock(&netdev->mutex);
             netdev_dummy_set_admin_state__(netdev, up);
             ovs_mutex_unlock(&netdev->mutex);
-
-            netdev_close(netdev_);
         }
-        shash_destroy(&dummy_netdevs);
+        ovs_mutex_unlock(&dummy_list_mutex);
     }
     unixctl_command_reply(conn, "OK");
 }
