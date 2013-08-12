@@ -5475,6 +5475,7 @@ oftable_remove_rule__(struct ofproto *ofproto, struct classifier *cls,
     if (!list_is_empty(&rule->meter_list_node)) {
         list_remove(&rule->meter_list_node);
     }
+    ovs_rwlock_unlock(&rule->evict);
 }
 
 static void
