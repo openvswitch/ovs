@@ -467,12 +467,12 @@ struct ovsthread_once {
     }
 
 static inline bool ovsthread_once_start(struct ovsthread_once *once)
-    OVS_TRY_LOCK(true, &once->mutex);
+    OVS_TRY_LOCK(true, once->mutex);
 void ovsthread_once_done(struct ovsthread_once *once)
-    OVS_RELEASES(&once->mutex);
+    OVS_RELEASES(once->mutex);
 
 bool ovsthread_once_start__(struct ovsthread_once *once)
-    OVS_TRY_LOCK(false, &once->mutex);
+    OVS_TRY_LOCK(false, once->mutex);
 
 static inline bool
 ovsthread_once_is_done__(const struct ovsthread_once *once)
