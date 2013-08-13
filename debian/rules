@@ -28,6 +28,12 @@ else
 CFLAGS += -O2
 endif
 
+# Old versions of dpkg-buildflags do not understand --export=configure.
+# When dpkg-buildflags does not understand an option, it prints its full
+# --help output on stdout, so we have to avoid that here.
+buildflags := $(shell if dpkg-buildflags --export=configure >/dev/null 2>&1; \
+	              then dpkg-buildflags --export=configure; fi)
+
 configure: configure-stamp
 configure-stamp:
 	dh_testdir
@@ -39,8 +45,7 @@ configure-stamp:
 		test -e Makefile || \
 		../configure --prefix=/usr --localstatedir=/var --enable-ssl \
 			--sysconfdir=/etc CFLAGS="$(CFLAGS)" \
-			$(shell dpkg-buildflags --export=configure) \
-			$(DATAPATH_CONFIGURE_OPTS))
+			$(buildflags) $(DATAPATH_CONFIGURE_OPTS))
 	touch configure-stamp
 
 #Architecture 
