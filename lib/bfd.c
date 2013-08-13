@@ -782,6 +782,8 @@ bfd_flag_str(enum flags flags)
         ds_put_cstr(&ds, "poll ");
     }
 
+    /* Do not copy the trailing whitespace. */
+    ds_chomp(&ds, ' ');
     ovs_strlcpy(flag_str, ds_cstr(&ds), sizeof flag_str);
     ds_destroy(&ds);
     return flag_str;
