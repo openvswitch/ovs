@@ -261,6 +261,7 @@ bfd_configure(struct bfd *bfd, const char *name, const struct smap *cfg)
     static atomic_uint16_t udp_src = ATOMIC_VAR_INIT(0);
 
     long long int min_tx, min_rx;
+    bool need_poll = false;
     bool cpath_down;
     const char *hwaddr;
     uint8_t ea[ETH_ADDR_LEN];
@@ -315,7 +316,7 @@ bfd_configure(struct bfd *bfd, const char *name, const struct smap *cfg)
             || (!bfd_in_poll(bfd) && bfd->cfg_min_tx < bfd->min_tx)) {
             bfd->min_tx = bfd->cfg_min_tx;
         }
-        bfd_poll(bfd);
+        need_poll = true;
     }
 
     min_rx = smap_get_int(cfg, "min_rx", 1000);
@@ -326,7 +327,7 @@ bfd_configure(struct bfd *bfd, const char *name, const struct smap *cfg)
             || (!bfd_in_poll(bfd) && bfd->cfg_min_rx > bfd->min_rx)) {
             bfd->min_rx = bfd->cfg_min_rx;
         }
-        bfd_poll(bfd);
+        need_poll = true;
     }
 
     cpath_down = smap_get_bool(cfg, "cpath_down", false);
@@ -335,7 +336,7 @@ bfd_configure(struct bfd *bfd, const char *name, const struct smap *cfg)
         if (bfd->diag == DIAG_NONE || bfd->diag == DIAG_CPATH_DOWN) {
             bfd_set_state(bfd, bfd->state, DIAG_NONE);
         }
-        bfd_poll(bfd);
+        need_poll = true;
     }
 
     hwaddr = smap_get(cfg, "bfd_dst_mac");
@@ -347,6 +348,9 @@ bfd_configure(struct bfd *bfd, const char *name, const struct smap *cfg)
         bfd->eth_dst_set = false;
     }
 
+    if (need_poll) {
+        bfd_poll(bfd);
+    }
     ovs_mutex_unlock(&mutex);
     return bfd;
 }
