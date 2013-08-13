@@ -42,6 +42,8 @@
 #include <sys/sysctl.h>
 #if defined(__NetBSD__)
 #include <net/route.h>
+#include <netinet/in.h>
+#include <netinet/if_inarp.h>
 #endif
 
 #include "rtbsd.h"
@@ -1332,6 +1334,63 @@ netdev_bsd_get_next_hop(const struct in_addr *host OVS_UNUSED,
 #endif
 }
 
+static int
+netdev_bsd_arp_lookup(const struct netdev *netdev OVS_UNUSED,
+                      ovs_be32 ip OVS_UNUSED,
+		      uint8_t mac[ETH_ADDR_LEN] OVS_UNUSED)
+{
+#if defined(__NetBSD__)
+    const struct rt_msghdr *rtm;
+    size_t needed;
+    char *buf;
+    const char *cp;
+    const char *ep;
+    int mib[6];
+    int error;
+
+    buf = NULL;
+    mib[0] = CTL_NET;
+    mib[1] = PF_ROUTE;
+    mib[2] = 0;
+    mib[3] = AF_INET;
+    mib[4] = NET_RT_FLAGS;
+    mib[5] = RTF_LLINFO;
+    if (sysctl(mib, 6, NULL, &needed, NULL, 0) == -1) {
+        error = errno;
+        goto error;
+    }
+    buf = xmalloc(needed);
+    if (sysctl(mib, 6, buf, &needed, NULL, 0) == -1) {
+        error = errno;
+        goto error;
+    }
+    ep = buf + needed;
+    for (cp = buf; cp < ep; cp += rtm->rtm_msglen) {
+        const struct sockaddr_inarp *sina;
+        const struct sockaddr_dl *sdl;
+
+        rtm = (const void *)cp;
+        sina = (const void *)(rtm + 1);
+        if (ip != sina->sin_addr.s_addr) {
+            continue;
+        }
+        sdl = (const void *)
+           ((const char *)(const void *)sina + RT_ROUNDUP(sina->sin_len));
+        if (sdl->sdl_alen == ETH_ADDR_LEN) {
+            memcpy(mac, &sdl->sdl_data[sdl->sdl_nlen], ETH_ADDR_LEN);
+            error = 0;
+            goto error;
+        }
+    }
+    error = ENXIO;
+error:
+    free(buf);
+    return error;
+#else
+    return EOPNOTSUPP;
+#endif
+}
+
 static void
 make_in4_sockaddr(struct sockaddr *sa, struct in_addr addr)
 {
@@ -1460,7 +1519,7 @@ const struct netdev_class netdev_bsd_class = {
     NULL, /* add_router */
     netdev_bsd_get_next_hop,
     NULL, /* get_status */
-    NULL, /* arp_lookup */
+    netdev_bsd_arp_lookup, /* arp_lookup */
 
     netdev_bsd_update_flags,
 
@@ -1523,7 +1582,7 @@ const struct netdev_class netdev_tap_class = {
     NULL, /* add_router */
     netdev_bsd_get_next_hop,
     NULL, /* get_status */
-    NULL, /* arp_lookup */
+    netdev_bsd_arp_lookup, /* arp_lookup */
 
     netdev_bsd_update_flags,
 
