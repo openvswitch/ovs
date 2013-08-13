@@ -2581,8 +2581,15 @@ AT_DATA([flows.txt], [dnl
 table=0 in_port=1 actions=load:2->NXM_NX_REG0[[0..15]],learn(table=1,priority=65535,NXM_OF_ETH_SRC[[]],NXM_OF_VLAN_TCI[[0..11]],output:NXM_NX_REG0[[0..15]]),output:2
 ])
 AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
-AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
-AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
+# We send each packet twice because the first packet in each flow causes the
+# flow table to change and thus revalidations, which (depending on timing)
+# can keep a megaflow from being installed.  The revalidations are done by
+# the second iteration, allowing the flows to be installed.
+for i in 1 2; do
+    AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
+    AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
+    ovs-appctl time/warp 100
+done
 dnl The original flow is missing due to a revalidation.
 AT_CHECK([ovs-appctl dpif/dump-megaflows br0 | STRIP_XOUT], [0], [dnl
 skb_priority=0,ip,in_port=1,vlan_tci=0x0000/0x0fff,dl_src=50:54:00:00:00:09,nw_frag=no, n_subfacets:1, used:0.0s, Datapath actions: <del>
