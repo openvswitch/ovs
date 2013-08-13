@@ -18,6 +18,8 @@
 
 #include <linux/netdevice.h>
 #include <net/genetlink.h>
+#include <net/net_namespace.h>
+#include <net/netns/generic.h>
 
 #include "datapath.h"
 #include "vport-internal_dev.h"

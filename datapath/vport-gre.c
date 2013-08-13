@@ -35,9 +35,10 @@
 #include <linux/kernel.h>
 #include <linux/workqueue.h>
 #include <linux/rculist.h>
+#include <net/net_namespace.h>
+#include <net/netns/generic.h>
 #include <net/route.h>
 #include <net/xfrm.h>
-
 
 #include <net/icmp.h>
 #include <net/ip.h>
@@ -46,7 +47,6 @@
 #include <net/protocol.h>
 
 #include "datapath.h"
-#include "tunnel.h"
 #include "vport.h"
 
 /* Returns the least-significant 32 bits of a __be64. */

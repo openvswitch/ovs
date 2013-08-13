@@ -58,7 +58,6 @@
 #include "datapath.h"
 #include "flow.h"
 #include "vlan.h"
-#include "tunnel.h"
 #include "vport-internal_dev.h"
 #include "vport-netdev.h"
 

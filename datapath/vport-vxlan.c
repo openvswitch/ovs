@@ -42,7 +42,6 @@
 #include <net/vxlan.h>
 
 #include "datapath.h"
-#include "tunnel.h"
 #include "vport.h"
 
 #define OVS_VXLAN_RCV_PRIORITY		8

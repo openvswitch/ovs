@@ -29,7 +29,6 @@
 #include "checksum.h"
 #include "compat.h"
 #include "flow.h"
-#include "tunnel.h"
 #include "vlan.h"
 #include "vport.h"
 

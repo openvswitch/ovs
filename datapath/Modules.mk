@@ -12,7 +12,6 @@ openvswitch_sources = \
 	datapath.c \
 	dp_notify.c \
 	flow.c \
-	tunnel.c \
 	vlan.c \
 	vport.c \
 	vport-gre.c \
@@ -26,7 +25,6 @@ openvswitch_headers = \
 	compat.h \
 	datapath.h \
 	flow.h \
-	tunnel.h \
 	vlan.h \
 	vport.h \
 	vport-internal_dev.h \
