@@ -291,12 +291,14 @@ AT_CHECK([[ovs-ofctl add-flow br0 'actions=load:3->NXM_NX_REG0[0..15],learn(tabl
 # Trace some packets arriving.  The particular packets don't matter.
 for i in 1 2 3 4 5 6 7 8 9 10; do
     ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=9)'
+    ovs-appctl time/warp 10
 done
 
 # Check for the learning entry.
+ovs-appctl time/warp 1000
 AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | sort], [0],
 [[ n_packets=1, n_bytes=60, actions=load:0x3->NXM_NX_REG0[0..15],learn(table=0,priority=65535,NXM_OF_ETH_SRC[],NXM_OF_VLAN_TCI[0..11],output:NXM_NX_REG0[0..15]),output:2
- priority=65535,vlan_tci=0x0000/0x0fff,dl_src=50:54:00:00:00:05 actions=output:3
+ n_packets=9, n_bytes=540, priority=65535,vlan_tci=0x0000/0x0fff,dl_src=50:54:00:00:00:05 actions=output:3
 NXST_FLOW reply:
 ]])
 
