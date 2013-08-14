@@ -2272,8 +2272,7 @@ ofoperation_has_out_port(const struct ofoperation *op, ofp_port_t out_port)
 }
 
 /* Executes the actions indicated by 'rule' on 'packet' and credits 'rule''s
- * statistics appropriately.  'packet' must have at least sizeof(struct
- * ofp10_packet_in) bytes of headroom.
+ * statistics appropriately.
  *
  * 'packet' doesn't necessarily have to match 'rule'.  'rule' will be credited
  * with statistics for 'packet' either way.
@@ -2284,8 +2283,6 @@ rule_execute(struct rule *rule, ofp_port_t in_port, struct ofpbuf *packet)
 {
     struct flow flow;
     union flow_in_port in_port_;
-
-    ovs_assert(ofpbuf_headroom(packet) >= sizeof(struct ofp10_packet_in));
 
     in_port_.ofp_port = in_port;
     flow_extract(packet, 0, 0, NULL, &in_port_, &flow);
