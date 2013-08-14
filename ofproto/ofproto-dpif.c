@@ -2525,7 +2525,7 @@ bundle_add_port(struct ofbundle *bundle, uint32_t ofp_port,
     if (port->bundle != bundle) {
         bundle->ofproto->backer->need_revalidate = REV_RECONFIGURE;
         if (port->bundle) {
-            bundle_del_port(port);
+            bundle_remove(&port->up);
         }
 
         port->bundle = bundle;
