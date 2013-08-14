@@ -98,7 +98,7 @@ static inline int netdev_rx_handler_register(struct net_device *dev,
 #ifdef HAVE_RHEL_OVS_HOOK
 	rcu_assign_pointer(dev->ax25_ptr, rx_handler_data);
 	nr_bridges++;
-	rcu_assign_pointer(openvswitch_handle_frame_hook, rx_handler_data);
+	rcu_assign_pointer(openvswitch_handle_frame_hook, rx_handler);
 #else
 	if (dev->br_port)
 		return -EBUSY;
