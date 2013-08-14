@@ -516,7 +516,7 @@ bfd_should_process_flow(const struct bfd *bfd, const struct flow *flow,
     return (flow->dl_type == htons(ETH_TYPE_IP)
             && flow->nw_proto == IPPROTO_UDP
             && flow->tp_dst == htons(BFD_DEST_PORT)
-            && (check_tnl_key || flow->tunnel.tun_id == htonll(0)));
+            && (!check_tnl_key || flow->tunnel.tun_id == htonll(0)));
 }
 
 void
