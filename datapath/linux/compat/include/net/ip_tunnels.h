@@ -31,20 +31,6 @@ struct tnl_ptk_info {
 #define PACKET_RCVD	0
 #define PACKET_REJECT	1
 
-static inline void tunnel_ip_select_ident(struct sk_buff *skb,
-					  const struct iphdr  *old_iph,
-					  struct dst_entry *dst)
-{
-	struct iphdr *iph = ip_hdr(skb);
-
-	/* Use inner packet iph-id if possible. */
-	if (skb->protocol == htons(ETH_P_IP) && old_iph->id)
-		iph->id = old_iph->id;
-	else
-		__ip_select_ident(iph, dst,
-				(skb_shinfo(skb)->gso_segs ?: 1) - 1);
-}
-
 int iptunnel_xmit(struct net *net, struct rtable *rt,
 		  struct sk_buff *skb,
 		  __be32 src, __be32 dst, __u8 proto,
