@@ -429,7 +429,7 @@ void vxlan_handler_put(struct vxlan_handler *vh)
 		queue_work(&vh->del_work);
 }
 
-static __net_init int vxlan_init_net(struct net *net)
+static int vxlan_init_net(struct net *net)
 {
 	struct vxlan_net *vn = net_generic(net, vxlan_net_id);
 	unsigned int h;

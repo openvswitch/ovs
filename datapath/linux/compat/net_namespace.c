@@ -8,7 +8,7 @@
 static int net_assign_generic(struct net *net, int id, void *data);
 #endif
 
-int __net_init compat_init_net(struct net *net, struct rpl_pernet_operations *pnet)
+int compat_init_net(struct net *net, struct rpl_pernet_operations *pnet)
 {
 	int err;
 	void *ovs_net = kzalloc(pnet->size, GFP_KERNEL);
@@ -32,7 +32,7 @@ err:
 	return err;
 }
 
-void __net_exit compat_exit_net(struct net *net, struct rpl_pernet_operations *pnet)
+void compat_exit_net(struct net *net, struct rpl_pernet_operations *pnet)
 {
 	void *ovs_net = net_generic(net, *pnet->id);
 

@@ -82,23 +82,23 @@ extern void rpl_unregister_pernet_gen_device(struct rpl_pernet_operations *ops);
 
 #else /* for 2.6.32* */
 
-int __net_init compat_init_net(struct net *net, struct rpl_pernet_operations *pnet);
-void __net_exit compat_exit_net(struct net *net, struct rpl_pernet_operations *pnet);
+int compat_init_net(struct net *net, struct rpl_pernet_operations *pnet);
+void compat_exit_net(struct net *net, struct rpl_pernet_operations *pnet);
 
 #define DEFINE_COMPAT_PNET_REG_FUNC(TYPE)					\
 									\
 static struct rpl_pernet_operations *pnet_gen_##TYPE;			\
-static int __net_init compat_init_net_gen_##TYPE(struct net *net)	\
+static int compat_init_net_gen_##TYPE(struct net *net)	\
 {									\
 	return compat_init_net(net, pnet_gen_##TYPE);			\
 }									\
 									\
-static void __net_exit compat_exit_net_gen_##TYPE(struct net *net)	\
+static void compat_exit_net_gen_##TYPE(struct net *net)	\
 {									\
 	compat_exit_net(net, pnet_gen_##TYPE);				\
 }									\
 									\
-static int __net_init rpl_register_pernet_gen_##TYPE(struct rpl_pernet_operations *rpl_pnet)	\
+static int rpl_register_pernet_gen_##TYPE(struct rpl_pernet_operations *rpl_pnet)	\
 {										\
 	pnet_gen_##TYPE = rpl_pnet;						\
 	rpl_pnet->ops.init = compat_init_net_gen_##TYPE;			\
@@ -106,7 +106,7 @@ static int __net_init rpl_register_pernet_gen_##TYPE(struct rpl_pernet_operation
 	return register_pernet_gen_##TYPE(pnet_gen_##TYPE->id, &rpl_pnet->ops); \
 }											\
 											\
-static void __net_exit rpl_unregister_pernet_gen_##TYPE(struct rpl_pernet_operations *rpl_pnet)		\
+static void rpl_unregister_pernet_gen_##TYPE(struct rpl_pernet_operations *rpl_pnet)		\
 {											\
 	unregister_pernet_gen_##TYPE(*pnet_gen_##TYPE->id, &rpl_pnet->ops);		\
 }
