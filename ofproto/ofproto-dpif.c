@@ -1051,6 +1051,8 @@ type_wait(const char *type)
     }
 
     timer_wait(&backer->next_expiration);
+    dpif_wait(backer->dpif);
+    udpif_wait(backer->udpif);
 }
 
 /* Basic life-cycle. */
@@ -1625,8 +1627,6 @@ wait(struct ofproto *ofproto_)
         return;
     }
 
-    dpif_wait(ofproto->backer->dpif);
-    udpif_wait(ofproto->backer->udpif);
     if (ofproto->sflow) {
         dpif_sflow_wait(ofproto->sflow);
     }
