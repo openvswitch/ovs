@@ -39,6 +39,7 @@
 #include "random.h"
 #include "smap.h"
 #include "timeval.h"
+#include "unaligned.h"
 #include "unixctl.h"
 #include "util.h"
 #include "vlog.h"
@@ -536,8 +537,9 @@ bfd_put_packet(struct bfd *bfd, struct ofpbuf *p,
     ip->ip_ttl = MAXTTL;
     ip->ip_tos = IPTOS_LOWDELAY | IPTOS_THROUGHPUT;
     ip->ip_proto = IPPROTO_UDP;
-    ip->ip_src = htonl(0xA9FE0100); /* 169.254.1.0 Link Local. */
-    ip->ip_dst = htonl(0xA9FE0101); /* 169.254.1.1 Link Local. */
+    /* Use link local addresses: */
+    put_16aligned_be32(&ip->ip_src, htonl(0xA9FE0100)); /* 169.254.1.0. */
+    put_16aligned_be32(&ip->ip_dst, htonl(0xA9FE0101)); /* 169.254.1.1. */
     ip->ip_csum = csum(ip, sizeof *ip);
 
     udp = ofpbuf_put_zeros(p, sizeof *udp);

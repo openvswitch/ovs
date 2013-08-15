@@ -29,6 +29,7 @@
 #include "dynamic-string.h"
 #include "ofpbuf.h"
 #include "ovs-thread.h"
+#include "unaligned.h"
 
 const struct in6_addr in6addr_exact = IN6ADDR_EXACT_INIT;
 
@@ -166,9 +167,9 @@ compose_rarp(struct ofpbuf *b, const uint8_t eth_src[ETH_ADDR_LEN])
     arp->ar_pln = sizeof arp->ar_spa;
     arp->ar_op = htons(ARP_OP_RARP);
     memcpy(arp->ar_sha, eth_src, ETH_ADDR_LEN);
-    arp->ar_spa = htonl(0);
+    put_16aligned_be32(&arp->ar_spa, htonl(0));
     memcpy(arp->ar_tha, eth_src, ETH_ADDR_LEN);
-    arp->ar_tpa = htonl(0);
+    put_16aligned_be32(&arp->ar_tpa, htonl(0));
 }
 
 /* Insert VLAN header according to given TCI. Packet passed must be Ethernet
@@ -632,26 +633,28 @@ eth_compose(struct ofpbuf *b, const uint8_t eth_dst[ETH_ADDR_LEN],
 }
 
 static void
-packet_set_ipv4_addr(struct ofpbuf *packet, ovs_be32 *addr, ovs_be32 new_addr)
+packet_set_ipv4_addr(struct ofpbuf *packet,
+                     ovs_16aligned_be32 *addr, ovs_be32 new_addr)
 {
     struct ip_header *nh = packet->l3;
+    ovs_be32 old_addr = get_16aligned_be32(addr);
 
     if (nh->ip_proto == IPPROTO_TCP && packet->l7) {
         struct tcp_header *th = packet->l4;
 
-        th->tcp_csum = recalc_csum32(th->tcp_csum, *addr, new_addr);
+        th->tcp_csum = recalc_csum32(th->tcp_csum, old_addr, new_addr);
     } else if (nh->ip_proto == IPPROTO_UDP && packet->l7) {
         struct udp_header *uh = packet->l4;
 
         if (uh->udp_csum) {
-            uh->udp_csum = recalc_csum32(uh->udp_csum, *addr, new_addr);
+            uh->udp_csum = recalc_csum32(uh->udp_csum, old_addr, new_addr);
             if (!uh->udp_csum) {
                 uh->udp_csum = htons(0xffff);
             }
         }
     }
-    nh->ip_csum = recalc_csum32(nh->ip_csum, *addr, new_addr);
-    *addr = new_addr;
+    nh->ip_csum = recalc_csum32(nh->ip_csum, old_addr, new_addr);
+    put_16aligned_be32(addr, new_addr);
 }
 
 /* Returns true, if packet contains at least one routing header where
@@ -792,11 +795,11 @@ packet_set_ipv4(struct ofpbuf *packet, ovs_be32 src, ovs_be32 dst,
 {
     struct ip_header *nh = packet->l3;
 
-    if (nh->ip_src != src) {
+    if (get_16aligned_be32(&nh->ip_src) != src) {
         packet_set_ipv4_addr(packet, &nh->ip_src, src);
     }
 
-    if (nh->ip_dst != dst) {
+    if (get_16aligned_be32(&nh->ip_dst) != dst) {
         packet_set_ipv4_addr(packet, &nh->ip_dst, dst);
     }
 

@@ -446,8 +446,8 @@ struct ip_header {
     uint8_t ip_ttl;
     uint8_t ip_proto;
     ovs_be16 ip_csum;
-    ovs_be32 ip_src;
-    ovs_be32 ip_dst;
+    ovs_16aligned_be32 ip_src;
+    ovs_16aligned_be32 ip_dst;
 };
 BUILD_ASSERT_DECL(IP_HEADER_LEN == sizeof(struct ip_header));
 
@@ -465,7 +465,7 @@ struct icmp_header {
             ovs_be16 empty;
             ovs_be16 mtu;
         } frag;
-        ovs_be32 gateway;
+        ovs_16aligned_be32 gateway;
     } icmp_fields;
     uint8_t icmp_data[0];
 };
@@ -504,8 +504,8 @@ BUILD_ASSERT_DECL(UDP_HEADER_LEN == sizeof(struct udp_header));
 struct tcp_header {
     ovs_be16 tcp_src;
     ovs_be16 tcp_dst;
-    ovs_be32 tcp_seq;
-    ovs_be32 tcp_ack;
+    ovs_16aligned_be32 tcp_seq;
+    ovs_16aligned_be32 tcp_ack;
     ovs_be16 tcp_ctl;
     ovs_be16 tcp_winsz;
     ovs_be16 tcp_csum;
@@ -520,7 +520,6 @@ BUILD_ASSERT_DECL(TCP_HEADER_LEN == sizeof(struct tcp_header));
 #define ARP_OP_RARP 3
 
 #define ARP_ETH_HEADER_LEN 28
-OVS_PACKED(
 struct arp_eth_header {
     /* Generic members. */
     ovs_be16 ar_hrd;           /* Hardware type. */
@@ -531,10 +530,10 @@ struct arp_eth_header {
 
     /* Ethernet+IPv4 specific members. */
     uint8_t ar_sha[ETH_ADDR_LEN]; /* Sender hardware address. */
-    ovs_be32 ar_spa;           /* Sender protocol address. */
+    ovs_16aligned_be32 ar_spa;           /* Sender protocol address. */
     uint8_t ar_tha[ETH_ADDR_LEN]; /* Target hardware address. */
-    ovs_be32 ar_tpa;           /* Target protocol address. */
-});
+    ovs_16aligned_be32 ar_tpa;           /* Target protocol address. */
+};
 BUILD_ASSERT_DECL(ARP_ETH_HEADER_LEN == sizeof(struct arp_eth_header));
 
 /* The IPv6 flow label is in the lower 20 bits of the first 32-bit word. */
