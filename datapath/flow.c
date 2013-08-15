@@ -1636,26 +1636,37 @@ int ovs_match_from_nlattrs(struct sw_flow_match *match,
 	if (err)
 		return err;
 
-	if (key_attrs & 1ULL << OVS_KEY_ATTR_ENCAP) {
+	if ((key_attrs & (1ULL << OVS_KEY_ATTR_ETHERNET)) &&
+	    (key_attrs & (1ULL << OVS_KEY_ATTR_ETHERTYPE)) &&
+	    (nla_get_be16(a[OVS_KEY_ATTR_ETHERTYPE]) == htons(ETH_P_8021Q))) {
+		__be16 tci;
+
+		if (!((key_attrs & (1ULL << OVS_KEY_ATTR_VLAN)) &&
+		      (key_attrs & (1ULL << OVS_KEY_ATTR_ETHERTYPE)) &&
+		      (key_attrs & (1ULL << OVS_KEY_ATTR_ENCAP)))) {
+			OVS_NLERR("Invalid Vlan frame.\n");
+			return -EINVAL;
+		}
+
+		key_attrs &= ~(1ULL << OVS_KEY_ATTR_ETHERTYPE);
+		tci = nla_get_be16(a[OVS_KEY_ATTR_VLAN]);
 		encap = a[OVS_KEY_ATTR_ENCAP];
 		key_attrs &= ~(1ULL << OVS_KEY_ATTR_ENCAP);
-		if (nla_len(encap)) {
-			__be16 eth_type = 0; /* ETH_P_8021Q */
+		encap_valid = true;
 
-			if (a[OVS_KEY_ATTR_ETHERTYPE])
-				eth_type = nla_get_be16(a[OVS_KEY_ATTR_ETHERTYPE]);
-
-			if  ((eth_type == htons(ETH_P_8021Q)) && (a[OVS_KEY_ATTR_VLAN])) {
-				encap_valid = true;
-				key_attrs &= ~(1ULL << OVS_KEY_ATTR_ETHERTYPE);
-				err = parse_flow_nlattrs(encap, a, &key_attrs);
-			} else {
-				OVS_NLERR("Encap attribute is set for a non-VLAN frame.\n");
-				err = -EINVAL;
-			}
-
+		if (tci & htons(VLAN_TAG_PRESENT)) {
+			err = parse_flow_nlattrs(encap, a, &key_attrs);
 			if (err)
 				return err;
+		} else if (!tci) {
+			/* Corner case for truncated 802.1Q header. */
+			if (nla_len(encap)) {
+				OVS_NLERR("Truncated 802.1Q header has non-zero encap attribute.\n");
+				return -EINVAL;
+			}
+		} else {
+			OVS_NLERR("Encap attribute is set for a non-VLAN frame.\n");
+			return  -EINVAL;
 		}
 	}
 
@@ -1668,25 +1679,36 @@ int ovs_match_from_nlattrs(struct sw_flow_match *match,
 		if (err)
 			return err;
 
-		if ((mask_attrs & 1ULL << OVS_KEY_ATTR_ENCAP) && encap_valid) {
+		if (mask_attrs & 1ULL << OVS_KEY_ATTR_ENCAP)  {
 			__be16 eth_type = 0;
+			__be16 tci = 0;
+
+			if (!encap_valid) {
+				OVS_NLERR("Encap mask attribute is set for non-VLAN frame.\n");
+				return  -EINVAL;
+			}
 
 			mask_attrs &= ~(1ULL << OVS_KEY_ATTR_ENCAP);
 			if (a[OVS_KEY_ATTR_ETHERTYPE])
 				eth_type = nla_get_be16(a[OVS_KEY_ATTR_ETHERTYPE]);
+
 			if (eth_type == htons(0xffff)) {
 				mask_attrs &= ~(1ULL << OVS_KEY_ATTR_ETHERTYPE);
 				encap = a[OVS_KEY_ATTR_ENCAP];
 				err = parse_flow_mask_nlattrs(encap, a, &mask_attrs);
 			} else {
-				OVS_NLERR("VLAN frames must have an exact match"
-					 " on the TPID (mask=%x).\n",
-					 ntohs(eth_type));
-				err = -EINVAL;
+				OVS_NLERR("VLAN frames must have an exact match on the TPID (mask=%x).\n",
+						ntohs(eth_type));
+				return -EINVAL;
 			}
 
-			if (err)
-				return err;
+			if (a[OVS_KEY_ATTR_VLAN])
+				tci = nla_get_be16(a[OVS_KEY_ATTR_VLAN]);
+
+			if (!(tci & htons(VLAN_TAG_PRESENT))) {
+				OVS_NLERR("VLAN tag present bit must have an exact match (tci_mask=%x).\n", ntohs(tci));
+				return -EINVAL;
+			}
 		}
 
 		err = ovs_key_from_nlattrs(match, mask_attrs, a, true);
