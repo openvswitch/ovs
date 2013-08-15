@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -116,14 +116,15 @@ recalc_csum32(ovs_be16 old_csum, ovs_be32 old_u32, ovs_be32 new_u32)
  * contained 'old_csum' and in which a field that contained 'old_u32[4]' was
  * changed to contain 'new_u32[4]'. */
 ovs_be16
-recalc_csum128(ovs_be16 old_csum, ovs_be32 old_u32[4],
+recalc_csum128(ovs_be16 old_csum, ovs_16aligned_be32 old_u32[4],
                const ovs_be32 new_u32[4])
 {
     ovs_be16 new_csum = old_csum;
     int i;
 
     for (i = 0; i < 4; ++i) {
-        new_csum = recalc_csum32(new_csum, old_u32[i], new_u32[i]);
+        new_csum = recalc_csum32(new_csum,
+                                 get_16aligned_be32(&old_u32[i]), new_u32[i]);
     }
     return new_csum;
 }

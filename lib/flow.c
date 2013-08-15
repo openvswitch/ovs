@@ -164,7 +164,7 @@ parse_ethertype(struct ofpbuf *b)
 static int
 parse_ipv6(struct ofpbuf *packet, struct flow *flow)
 {
-    const struct ip6_hdr *nh;
+    const struct ovs_16aligned_ip6_hdr *nh;
     ovs_be32 tc_flow;
     int nexthdr;
 
@@ -175,10 +175,10 @@ parse_ipv6(struct ofpbuf *packet, struct flow *flow)
 
     nexthdr = nh->ip6_nxt;
 
-    flow->ipv6_src = nh->ip6_src;
-    flow->ipv6_dst = nh->ip6_dst;
+    memcpy(&flow->ipv6_src, &nh->ip6_src, sizeof flow->ipv6_src);
+    memcpy(&flow->ipv6_dst, &nh->ip6_dst, sizeof flow->ipv6_dst);
 
-    tc_flow = get_unaligned_be32(&nh->ip6_flow);
+    tc_flow = get_16aligned_be32(&nh->ip6_flow);
     flow->nw_tos = ntohl(tc_flow) >> 20;
     flow->ipv6_label = tc_flow & htonl(IPV6_LABEL_MASK);
     flow->nw_ttl = nh->ip6_hlim;
@@ -226,7 +226,7 @@ parse_ipv6(struct ofpbuf *packet, struct flow *flow)
                return EINVAL;
             }
         } else if (nexthdr == IPPROTO_FRAGMENT) {
-            const struct ip6_frag *frag_hdr = packet->data;
+            const struct ovs_16aligned_ip6_frag *frag_hdr = packet->data;
 
             nexthdr = frag_hdr->ip6f_nxt;
             if (!ofpbuf_try_pull(packet, sizeof *frag_hdr)) {

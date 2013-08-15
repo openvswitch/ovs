@@ -28,7 +28,7 @@ uint32_t csum_continue(uint32_t partial, const void *, size_t);
 ovs_be16 csum_finish(uint32_t partial);
 ovs_be16 recalc_csum16(ovs_be16 old_csum, ovs_be16 old_u16, ovs_be16 new_u16);
 ovs_be16 recalc_csum32(ovs_be16 old_csum, ovs_be32 old_u32, ovs_be32 new_u32);
-ovs_be16 recalc_csum128(ovs_be16 old_csum, ovs_be32 old_u32[4],
+ovs_be16 recalc_csum128(ovs_be16 old_csum, ovs_16aligned_be32 old_u32[4],
                         const ovs_be32 new_u32[4]);
 
 #endif /* csum.h */
