@@ -262,6 +262,10 @@ struct rule {
  * ofproto-dpif implementation */
 extern unsigned flow_eviction_threshold;
 
+/* Number of upcall handler threads. Only affects the ofproto-dpif
+ * implementation. */
+extern unsigned n_handler_threads;
+
 /* Determines which model to use for handling misses in the ofproto-dpif
  * implementation */
 extern enum ofproto_flow_miss_model flow_miss_model;

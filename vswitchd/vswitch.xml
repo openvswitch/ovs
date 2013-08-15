@@ -158,6 +158,22 @@
           </dl>
         </p>
       </column>
+
+      <column name="other_config" key="n-handler-threads"
+              type='{"type": "integer", "minInteger": 1}'>
+        <p>
+          Specifies the number of threads for software datapaths to use for
+          handling new flows.  The default is one less than the number of
+          online CPU cores (but at least 1).
+        </p>
+        <p>
+          This configuration is per datapath.  If you have more than one
+          software datapath (e.g. some <code>system</code> bridges and some
+          <code>netdev</code> bridges), then the total number of threads is
+          <code>n-handler-threads</code> times the number of software
+          datapaths.
+        </p>
+      </column>
     </group>
 
     <group title="Status">

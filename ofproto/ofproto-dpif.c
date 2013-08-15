@@ -75,8 +75,6 @@ COVERAGE_DEFINE(subfacet_install_fail);
 COVERAGE_DEFINE(packet_in_overflow);
 COVERAGE_DEFINE(flow_mod_overflow);
 
-#define N_THREADS 16
-
 /* Number of implemented OpenFlow tables. */
 enum { N_TABLES = 255 };
 enum { TBL_INTERNAL = N_TABLES - 1 };    /* Used for internal hidden rules. */
@@ -431,6 +429,9 @@ struct dpif_backer {
     /* Number of subfacets added or deleted from 'created' to 'last_minute.' */
     unsigned long long int total_subfacet_add_count;
     unsigned long long int total_subfacet_del_count;
+
+    /* Number of upcall handling threads. */
+    unsigned int n_handler_threads;
 };
 
 /* All existing ofproto_backer instances, indexed by ofproto->up.type. */
@@ -700,9 +701,18 @@ type_run(const char *type)
             VLOG_ERR("Failed to enable receiving packets in dpif.");
             return error;
         }
-        udpif_recv_set(backer->udpif, N_THREADS, backer->recv_set_enable);
+        udpif_recv_set(backer->udpif, n_handler_threads,
+                       backer->recv_set_enable);
         dpif_flow_flush(backer->dpif);
         backer->need_revalidate = REV_RECONFIGURE;
+    }
+
+    /* If the n_handler_threads is reconfigured, call udpif_recv_set()
+     * to reset the handler threads. */
+    if (backer->n_handler_threads != n_handler_threads) {
+        udpif_recv_set(backer->udpif, n_handler_threads,
+                       backer->recv_set_enable);
+        backer->n_handler_threads = n_handler_threads;
     }
 
     if (backer->need_revalidate) {
@@ -1211,7 +1221,9 @@ open_dpif_backer(const char *type, struct dpif_backer **backerp)
         close_dpif_backer(backer);
         return error;
     }
-    udpif_recv_set(backer->udpif, N_THREADS, backer->recv_set_enable);
+    udpif_recv_set(backer->udpif, n_handler_threads,
+                   backer->recv_set_enable);
+    backer->n_handler_threads = n_handler_threads;
 
     backer->max_n_subfacet = 0;
     backer->created = time_msec();

@@ -21,6 +21,7 @@
 #include <inttypes.h>
 #include <stdbool.h>
 #include <stdlib.h>
+#include <unistd.h>
 #include "bitmap.h"
 #include "byte-order.h"
 #include "classifier.h"
@@ -229,6 +230,7 @@ static size_t n_ofproto_classes;
 static size_t allocated_ofproto_classes;
 
 unsigned flow_eviction_threshold = OFPROTO_FLOW_EVICTION_THRESHOLD_DEFAULT;
+unsigned n_handler_threads;
 enum ofproto_flow_miss_model flow_miss_model = OFPROTO_HANDLE_MISS_AUTO;
 
 /* Map from datapath name to struct ofproto, for use by unixctl commands. */
@@ -625,6 +627,18 @@ ofproto_set_mac_table_config(struct ofproto *ofproto, unsigned idle_time,
     if (ofproto->ofproto_class->set_mac_table_config) {
         ofproto->ofproto_class->set_mac_table_config(ofproto, idle_time,
                                                      max_entries);
+    }
+}
+
+/* Sets number of upcall handler threads.  The default is
+ * (number of online cores - 1). */
+void
+ofproto_set_n_handler_threads(unsigned limit)
+{
+    if (limit) {
+        n_handler_threads = limit;
+    } else {
+        n_handler_threads = MAX(1, sysconf(_SC_NPROCESSORS_ONLN) - 1);
     }
 }
 
