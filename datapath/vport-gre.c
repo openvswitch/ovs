@@ -335,17 +335,19 @@ static __be32 be64_get_high32(__be64 x)
 
 static int gre64_send(struct vport *vport, struct sk_buff *skb)
 {
-	int hlen;
+	int hlen = GRE_HEADER_SECTION +		/* GRE Hdr */
+		   GRE_HEADER_SECTION +		/* GRE Key */
+		   GRE_HEADER_SECTION;		/* GRE SEQ */
 	__be32 seq;
 
 	if (unlikely(!OVS_CB(skb)->tun_key))
 		return -EINVAL;
 
-	hlen = ip_gre_calc_hlen(OVS_CB(skb)->tun_key->tun_flags)
-	       + GRE_HEADER_SECTION;
+	if (OVS_CB(skb)->tun_key->tun_flags & TUNNEL_CSUM)
+		hlen += GRE_HEADER_SECTION;
 
 	seq = be64_get_high32(OVS_CB(skb)->tun_key->tun_id);
-	return __send(vport, skb, hlen, seq, TUNNEL_SEQ);
+	return __send(vport, skb, hlen, seq, (TUNNEL_KEY|TUNNEL_SEQ));
 }
 
 const struct vport_ops ovs_gre64_vport_ops = {
