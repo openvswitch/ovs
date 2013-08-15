@@ -431,6 +431,38 @@ struct arp_eth_header {
 };
 BUILD_ASSERT_DECL(ARP_ETH_HEADER_LEN == sizeof(struct arp_eth_header));
 
+/* Like struct in6_addr, but whereas that struct requires 32-bit alignment on
+ * most implementations, this one only requires 16-bit alignment. */
+union ovs_16aligned_in6_addr {
+    ovs_be16 be16[8];
+    ovs_16aligned_be32 be32[4];
+};
+
+/* Like struct in6_hdr, but whereas that struct requires 32-bit alignment, this
+ * one only requires 16-bit alignment. */
+struct ovs_16aligned_ip6_hdr {
+    union {
+        struct ovs_16aligned_ip6_hdrctl {
+            ovs_16aligned_be32 ip6_un1_flow;
+            ovs_be16 ip6_un1_plen;
+            uint8_t ip6_un1_nxt;
+            uint8_t ip6_un1_hlim;
+        } ip6_un1;
+        uint8_t ip6_un2_vfc;
+    } ip6_ctlun;
+    union ovs_16aligned_in6_addr ip6_src;
+    union ovs_16aligned_in6_addr ip6_dst;
+};
+
+/* Like struct in6_frag, but whereas that struct requires 32-bit alignment,
+ * this one only requires 16-bit alignment. */
+struct ovs_16aligned_ip6_frag {
+    uint8_t ip6f_nxt;
+    uint8_t ip6f_reserved;
+    ovs_be16 ip6f_offlg;
+    ovs_16aligned_be32 ip6f_ident;
+};
+
 /* The IPv6 flow label is in the lower 20 bits of the first 32-bit word. */
 #define IPV6_LABEL_MASK 0x000fffff
 

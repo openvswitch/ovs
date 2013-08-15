@@ -483,7 +483,7 @@ packet_set_ipv4_addr(struct ofpbuf *packet,
 static bool
 packet_rh_present(struct ofpbuf *packet)
 {
-    const struct ip6_hdr *nh;
+    const struct ovs_16aligned_ip6_hdr *nh;
     int nexthdr;
     size_t len;
     size_t remaining;
@@ -494,7 +494,7 @@ packet_rh_present(struct ofpbuf *packet)
     if (remaining < sizeof *nh) {
         return false;
     }
-    nh = (struct ip6_hdr *)data;
+    nh = (struct ovs_16aligned_ip6_hdr *)data;
     data += sizeof *nh;
     remaining -= sizeof *nh;
     nexthdr = nh->ip6_nxt;
@@ -530,7 +530,8 @@ packet_rh_present(struct ofpbuf *packet)
             nexthdr = ext_hdr->ip6e_nxt;
             len = (ext_hdr->ip6e_len + 2) * 4;
         } else if (nexthdr == IPPROTO_FRAGMENT) {
-            const struct ip6_frag *frag_hdr = (struct ip6_frag *)data;
+            const struct ovs_16aligned_ip6_frag *frag_hdr
+                = (struct ovs_16aligned_ip6_frag *)data;
 
             nexthdr = frag_hdr->ip6f_nxt;
             len = sizeof *frag_hdr;
@@ -562,7 +563,7 @@ packet_rh_present(struct ofpbuf *packet)
 
 static void
 packet_update_csum128(struct ofpbuf *packet, uint8_t proto,
-                     ovs_be32 addr[4], const ovs_be32 new_addr[4])
+                     ovs_16aligned_be32 addr[4], const ovs_be32 new_addr[4])
 {
     if (proto == IPPROTO_TCP && packet->l7) {
         struct tcp_header *th = packet->l4;
@@ -582,25 +583,29 @@ packet_update_csum128(struct ofpbuf *packet, uint8_t proto,
 
 static void
 packet_set_ipv6_addr(struct ofpbuf *packet, uint8_t proto,
-                     struct in6_addr *addr, const ovs_be32 new_addr[4],
+                     ovs_16aligned_be32 *addr, const ovs_be32 new_addr[4],
                      bool recalculate_csum)
 {
     if (recalculate_csum) {
-        packet_update_csum128(packet, proto, (ovs_be32 *)addr, new_addr);
+        packet_update_csum128(packet, proto, addr, new_addr);
     }
     memcpy(addr, new_addr, sizeof(*addr));
 }
 
 static void
-packet_set_ipv6_flow_label(ovs_be32 *flow_label, ovs_be32 flow_key)
+packet_set_ipv6_flow_label(ovs_16aligned_be32 *flow_label, ovs_be32 flow_key)
 {
-    *flow_label = (*flow_label & htonl(~IPV6_LABEL_MASK)) | flow_key;
+    ovs_be32 old_label = get_16aligned_be32(flow_label);
+    ovs_be32 new_label = (old_label & htonl(~IPV6_LABEL_MASK)) | flow_key;
+    put_16aligned_be32(flow_label, new_label);
 }
 
 static void
-packet_set_ipv6_tc(ovs_be32 *flow_label, uint8_t tc)
+packet_set_ipv6_tc(ovs_16aligned_be32 *flow_label, uint8_t tc)
 {
-    *flow_label = (*flow_label & htonl(0xF00FFFFF)) | htonl(tc << 20);
+    ovs_be32 old_label = get_16aligned_be32(flow_label);
+    ovs_be32 new_label = (old_label & htonl(0xF00FFFFF)) | htonl(tc << 20);
+    put_16aligned_be32(flow_label, new_label);
 }
 
 /* Modifies the IPv4 header fields of 'packet' to be consistent with 'src',
@@ -647,14 +652,14 @@ packet_set_ipv6(struct ofpbuf *packet, uint8_t proto, const ovs_be32 src[4],
                 const ovs_be32 dst[4], uint8_t key_tc, ovs_be32 key_fl,
                 uint8_t key_hl)
 {
-    struct ip6_hdr *nh = packet->l3;
+    struct ovs_16aligned_ip6_hdr *nh = packet->l3;
 
     if (memcmp(&nh->ip6_src, src, sizeof(ovs_be32[4]))) {
-        packet_set_ipv6_addr(packet, proto, &nh->ip6_src, src, true);
+        packet_set_ipv6_addr(packet, proto, nh->ip6_src.be32, src, true);
     }
 
     if (memcmp(&nh->ip6_dst, dst, sizeof(ovs_be32[4]))) {
-        packet_set_ipv6_addr(packet, proto, &nh->ip6_dst, dst,
+        packet_set_ipv6_addr(packet, proto, nh->ip6_dst.be32, dst,
                              !packet_rh_present(packet));
     }
 
