@@ -39,10 +39,38 @@ typedef __be16 ovs_be16;
 typedef __be32 ovs_be32;
 typedef __be64 ovs_be64;
 
-/* Netlink and OpenFlow both contain 64-bit values that are only guaranteed to
- * be aligned on 32-bit boundaries.  These types help.
+/* These types help with a few funny situations:
+ *
+ *   - The Ethernet header is 14 bytes long, which misaligns everything after
+ *     that.  One can put 2 "shim" bytes before the Ethernet header, but this
+ *     helps only if there is exactly one Ethernet header.  If there are two,
+ *     as with GRE and VXLAN (and if the inner header doesn't use this
+ *     trick--GRE and VXLAN don't) then you have the choice of aligning the
+ *     inner data or the outer data.  So it seems better to treat 32-bit fields
+ *     in protocol headers as aligned only on 16-bit boundaries.
+ *
+ *   - ARP headers contain misaligned 32-bit fields.
+ *
+ *   - Netlink and OpenFlow contain 64-bit values that are only guaranteed to
+ *     be aligned on 32-bit boundaries.
  *
  * lib/unaligned.h has helper functions for accessing these. */
+
+/* A 32-bit value, in host byte order, that is only aligned on a 16-bit
+ * boundary.  */
+typedef struct {
+#ifdef WORDS_BIGENDIAN
+        uint16_t hi, lo;
+#else
+        uint16_t lo, hi;
+#endif
+} ovs_16aligned_u32;
+
+/* A 32-bit value, in network byte order, that is only aligned on a 16-bit
+ * boundary. */
+typedef struct {
+        ovs_be16 hi, lo;
+} ovs_16aligned_be32;
 
 /* A 64-bit value, in host byte order, that is only aligned on a 32-bit
  * boundary.  */
