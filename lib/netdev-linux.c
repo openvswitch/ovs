@@ -1041,6 +1041,28 @@ netdev_linux_get_etheraddr(const struct netdev *netdev_,
     return error;
 }
 
+static int
+netdev_linux_get_mtu__(struct netdev_linux *netdev, int *mtup)
+{
+    int error;
+
+    if (!(netdev->cache_valid & VALID_MTU)) {
+        struct ifreq ifr;
+
+        netdev->netdev_mtu_error = af_inet_ifreq_ioctl(
+            netdev_get_name(&netdev->up), &ifr, SIOCGIFMTU, "SIOCGIFMTU");
+        netdev->mtu = ifr.ifr_mtu;
+        netdev->cache_valid |= VALID_MTU;
+    }
+
+    error = netdev->netdev_mtu_error;
+    if (!error) {
+        *mtup = netdev->mtu;
+    }
+
+    return error;
+}
+
 /* Returns the maximum size of transmitted (and received) packets on 'netdev',
  * in bytes, not including the hardware header; thus, this is typically 1500
  * bytes for Ethernet devices. */
@@ -1051,19 +1073,7 @@ netdev_linux_get_mtu(const struct netdev *netdev_, int *mtup)
     int error;
 
     ovs_mutex_lock(&netdev->mutex);
-    if (!(netdev->cache_valid & VALID_MTU)) {
-        struct ifreq ifr;
-
-        netdev->netdev_mtu_error = af_inet_ifreq_ioctl(
-            netdev_get_name(netdev_), &ifr, SIOCGIFMTU, "SIOCGIFMTU");
-        netdev->mtu = ifr.ifr_mtu;
-        netdev->cache_valid |= VALID_MTU;
-    }
-
-    error = netdev->netdev_mtu_error;
-    if (!error) {
-        *mtup = netdev->mtu;
-    }
+    error = netdev_linux_get_mtu__(netdev, mtup);
     ovs_mutex_unlock(&netdev->mutex);
 
     return error;
@@ -1562,7 +1572,6 @@ netdev_internal_set_stats(struct netdev *netdev,
 
 static void
 netdev_linux_read_features(struct netdev_linux *netdev)
-    OVS_REQUIRES(netdev->mutex)
 {
     struct ethtool_cmd ecmd;
     uint32_t speed;
@@ -2707,7 +2716,7 @@ htb_setup_class__(struct netdev *netdev, unsigned int handle,
     int error;
     int mtu;
 
-    error = netdev_get_mtu(netdev, &mtu);
+    error = netdev_linux_get_mtu__(netdev_linux_cast(netdev), &mtu);
     if (error) {
         VLOG_WARN_RL(&rl, "cannot set up HTB on device %s that lacks MTU",
                      netdev_get_name(netdev));
@@ -2803,9 +2812,10 @@ htb_parse_tcmsg__(struct ofpbuf *tcmsg, unsigned int *queue_id,
 }
 
 static void
-htb_parse_qdisc_details__(struct netdev *netdev,
+htb_parse_qdisc_details__(struct netdev *netdev_,
                           const struct smap *details, struct htb_class *hc)
 {
+    struct netdev_linux *netdev = netdev_linux_cast(netdev_);
     const char *max_rate_s;
 
     max_rate_s = smap_get(details, "max-rate");
@@ -2813,7 +2823,8 @@ htb_parse_qdisc_details__(struct netdev *netdev,
     if (!hc->max_rate) {
         enum netdev_features current;
 
-        netdev_get_features(netdev, &current, NULL, NULL, NULL);
+        netdev_linux_read_features(netdev);
+        current = !netdev->get_features_error ? netdev->current : 0;
         hc->max_rate = netdev_features_to_bps(current, 100 * 1000 * 1000) / 8;
     }
     hc->min_rate = hc->max_rate;
@@ -2832,7 +2843,7 @@ htb_parse_class_details__(struct netdev *netdev,
     const char *priority_s = smap_get(details, "priority");
     int mtu, error;
 
-    error = netdev_get_mtu(netdev, &mtu);
+    error = netdev_linux_get_mtu__(netdev_linux_cast(netdev), &mtu);
     if (error) {
         VLOG_WARN_RL(&rl, "cannot parse HTB class on device %s that lacks MTU",
                      netdev_get_name(netdev));
@@ -3280,9 +3291,10 @@ hfsc_query_class__(const struct netdev *netdev, unsigned int handle,
 }
 
 static void
-hfsc_parse_qdisc_details__(struct netdev *netdev, const struct smap *details,
+hfsc_parse_qdisc_details__(struct netdev *netdev_, const struct smap *details,
                            struct hfsc_class *class)
 {
+    struct netdev_linux *netdev = netdev_linux_cast(netdev_);
     uint32_t max_rate;
     const char *max_rate_s;
 
@@ -3292,7 +3304,8 @@ hfsc_parse_qdisc_details__(struct netdev *netdev, const struct smap *details,
     if (!max_rate) {
         enum netdev_features current;
 
-        netdev_get_features(netdev, &current, NULL, NULL, NULL);
+        netdev_linux_read_features(netdev);
+        current = !netdev->get_features_error ? netdev->current : 0;
         max_rate = netdev_features_to_bps(current, 100 * 1000 * 1000) / 8;
     }
 
