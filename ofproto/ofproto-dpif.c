@@ -1418,7 +1418,7 @@ destruct(struct ofproto *ofproto_)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
     struct rule_dpif *rule, *next_rule;
-    struct ofputil_flow_mod *pin, *next_pin;
+    struct ofputil_packet_in *pin, *next_pin;
     struct ofputil_flow_mod *fm, *next_fm;
     struct oftable *table;
 
@@ -1455,7 +1455,7 @@ destruct(struct ofproto *ofproto_)
     LIST_FOR_EACH_SAFE (pin, next_pin, list_node, &ofproto->pins) {
         list_remove(&pin->list_node);
         ofproto->n_pins--;
-        free(pin->ofpacts);
+        free(CONST_CAST(void *, pin->packet));
         free(pin);
     }
     ovs_mutex_unlock(&ofproto->pin_mutex);
