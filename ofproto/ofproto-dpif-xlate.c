@@ -289,6 +289,12 @@ xlate_remove_ofproto(struct ofproto_dpif *ofproto)
     }
 
     hmap_remove(&xbridges, &xbridge->hmap_node);
+    mac_learning_unref(xbridge->ml);
+    mbridge_unref(xbridge->mbridge);
+    dpif_sflow_unref(xbridge->sflow);
+    dpif_ipfix_unref(xbridge->ipfix);
+    stp_unref(xbridge->stp);
+    hmap_destroy(&xbridge->xports);
     free(xbridge->name);
     free(xbridge);
 }
