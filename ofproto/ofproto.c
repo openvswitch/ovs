@@ -3359,7 +3359,6 @@ add_flow(struct ofproto *ofproto, struct ofconn *ofconn,
     struct rule *victim;
     struct rule *rule;
     uint8_t table_id;
-    bool overlaps;
     int error;
 
     error = check_table_id(ofproto, fm->table_id);
@@ -3416,13 +3415,18 @@ add_flow(struct ofproto *ofproto, struct ofconn *ofconn,
     }
 
     /* Check for overlap, if requested. */
-    ovs_rwlock_rdlock(&table->cls.rwlock);
-    overlaps = classifier_rule_overlaps(&table->cls, &rule->cr);
-    ovs_rwlock_unlock(&table->cls.rwlock);
-    if (fm->flags & OFPFF_CHECK_OVERLAP && overlaps) {
-        cls_rule_destroy(&rule->cr);
-        ofproto->ofproto_class->rule_dealloc(rule);
-        return OFPERR_OFPFMFC_OVERLAP;
+    if (fm->flags & OFPFF_CHECK_OVERLAP) {
+        bool overlaps;
+
+        ovs_rwlock_rdlock(&table->cls.rwlock);
+        overlaps = classifier_rule_overlaps(&table->cls, &rule->cr);
+        ovs_rwlock_unlock(&table->cls.rwlock);
+
+        if (overlaps) {
+            cls_rule_destroy(&rule->cr);
+            ofproto->ofproto_class->rule_dealloc(rule);
+            return OFPERR_OFPFMFC_OVERLAP;
+        }
     }
 
     /* FIXME: Implement OFPFF12_RESET_COUNTS */
