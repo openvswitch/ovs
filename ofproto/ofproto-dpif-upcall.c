@@ -639,25 +639,28 @@ execute_flow_miss(struct flow_miss *miss, struct dpif_op *ops, size_t *n_ops)
     flow_wildcards_or(&miss->xout.wc, &miss->xout.wc, &wc);
 
     if (rule->up.cr.priority == FAIL_OPEN_PRIORITY) {
-        struct ofputil_packet_in pin;
+        LIST_FOR_EACH (packet, list_node, &miss->packets) {
+            struct ofputil_packet_in *pin;
 
-        /* Extra-special case for fail-open mode.
-         *
-         * We are in fail-open mode and the packet matched the fail-open
-         * rule, but we are connected to a controller too.  We should send
-         * the packet up to the controller in the hope that it will try to
-         * set up a flow and thereby allow us to exit fail-open.
-         *
-         * See the top-level comment in fail-open.c for more information. */
-        pin.packet = packet->data;
-        pin.packet_len = packet->size;
-        pin.reason = OFPR_NO_MATCH;
-        pin.controller_id = 0;
-        pin.table_id = 0;
-        pin.cookie = 0;
-        pin.send_len = 0; /* Not used for flow table misses. */
-        flow_get_metadata(&miss->flow, &pin.fmd);
-        ofproto_dpif_send_packet_in(ofproto, &pin);
+            /* Extra-special case for fail-open mode.
+             *
+             * We are in fail-open mode and the packet matched the fail-open
+             * rule, but we are connected to a controller too.  We should send
+             * the packet up to the controller in the hope that it will try to
+             * set up a flow and thereby allow us to exit fail-open.
+             *
+             * See the top-level comment in fail-open.c for more information. */
+            pin = xmalloc(sizeof(*pin));
+            pin->packet = xmemdup(packet->data, packet->size);
+            pin->packet_len = packet->size;
+            pin->reason = OFPR_NO_MATCH;
+            pin->controller_id = 0;
+            pin->table_id = 0;
+            pin->cookie = 0;
+            pin->send_len = 0; /* Not used for flow table misses. */
+            flow_get_metadata(&miss->flow, &pin->fmd);
+            ofproto_dpif_send_packet_in(ofproto, pin);
+        }
     }
 
     if (miss->xout.slow) {

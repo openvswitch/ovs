@@ -560,6 +560,8 @@ ofproto_dpif_flow_mod(struct ofproto_dpif *ofproto,
     ovs_mutex_unlock(&ofproto->flow_mod_mutex);
 }
 
+/* Appends 'pin' to the queue of "packet ins" to be sent to the controller.
+ * Takes ownership of 'pin' and pin->packet. */
 void
 ofproto_dpif_send_packet_in(struct ofproto_dpif *ofproto,
                             struct ofputil_packet_in *pin)
