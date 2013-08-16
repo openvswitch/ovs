@@ -15,6 +15,7 @@
 #include <config.h>
 #include "bfd.h"
 
+#include <sys/types.h>
 #include <arpa/inet.h>
 #include <netinet/in_systm.h>
 #include <netinet/ip.h>
