@@ -148,6 +148,7 @@ seq_wait__(struct seq *seq, uint64_t value)
     waiter = xmalloc(sizeof *waiter);
     waiter->seq = seq;
     hmap_insert(&seq->waiters, &waiter->hmap_node, hash);
+    waiter->ovsthread_id = id;
     waiter->value = value;
     waiter->thread = seq_thread_get();
     list_push_back(&waiter->thread->waiters, &waiter->list_node);
