@@ -60,18 +60,18 @@ struct netdev_dummy {
     /* Protects all members below. */
     struct ovs_mutex mutex OVS_ACQ_AFTER(dummy_list_mutex);
 
-    uint8_t hwaddr[ETH_ADDR_LEN];
-    int mtu;
-    struct netdev_stats stats;
-    enum netdev_flags flags;
-    unsigned int change_seq;
-    int ifindex;
+    uint8_t hwaddr[ETH_ADDR_LEN] OVS_GUARDED;
+    int mtu OVS_GUARDED;
+    struct netdev_stats stats OVS_GUARDED;
+    enum netdev_flags flags OVS_GUARDED;
+    unsigned int change_seq OVS_GUARDED;
+    int ifindex OVS_GUARDED;
 
-    struct pstream *pstream;
-    struct dummy_stream *streams;
-    size_t n_streams;
+    struct pstream *pstream OVS_GUARDED;
+    struct dummy_stream *streams OVS_GUARDED;
+    size_t n_streams OVS_GUARDED;
 
-    struct list rxes;           /* List of child "netdev_rx_dummy"s. */
+    struct list rxes OVS_GUARDED; /* List of child "netdev_rx_dummy"s. */
 };
 
 /* Max 'recv_queue_len' in struct netdev_dummy. */
@@ -272,6 +272,7 @@ netdev_dummy_construct(struct netdev *netdev_)
     atomic_add(&next_n, 1, &n);
 
     ovs_mutex_init(&netdev->mutex, PTHREAD_MUTEX_NORMAL);
+    ovs_mutex_lock(&netdev->mutex);
     netdev->hwaddr[0] = 0xaa;
     netdev->hwaddr[1] = 0x55;
     netdev->hwaddr[2] = n >> 24;
@@ -288,6 +289,7 @@ netdev_dummy_construct(struct netdev *netdev_)
     netdev->n_streams = 0;
 
     list_init(&netdev->rxes);
+    ovs_mutex_unlock(&netdev->mutex);
 
     ovs_mutex_lock(&dummy_list_mutex);
     list_push_back(&dummy_list, &netdev->list_node);
@@ -306,11 +308,13 @@ netdev_dummy_destruct(struct netdev *netdev_)
     list_remove(&netdev->list_node);
     ovs_mutex_unlock(&dummy_list_mutex);
 
+    ovs_mutex_lock(&netdev->mutex);
     pstream_close(netdev->pstream);
     for (i = 0; i < netdev->n_streams; i++) {
         dummy_stream_close(&netdev->streams[i]);
     }
     free(netdev->streams);
+    ovs_mutex_unlock(&netdev->mutex);
     ovs_mutex_destroy(&netdev->mutex);
 }
 
@@ -483,7 +487,10 @@ netdev_dummy_send(struct netdev *netdev, const void *buffer, size_t size)
         const struct eth_header *eth = buffer;
         int max_size;
 
+        ovs_mutex_lock(&dev->mutex);
         max_size = dev->mtu + ETH_HEADER_LEN;
+        ovs_mutex_unlock(&dev->mutex);
+
         if (eth->eth_type == htons(ETH_TYPE_VLAN)) {
             max_size += VLAN_HEADER_LEN;
         }
