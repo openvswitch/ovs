@@ -66,9 +66,9 @@ test_atomic_flag(void)
 {
     atomic_flag flag = ATOMIC_FLAG_INIT;
     ovs_assert(atomic_flag_test_and_set(&flag) == false);
-    ovs_assert(flag.b == true);
+    ovs_assert(atomic_flag_test_and_set(&flag) == true);
     atomic_flag_clear(&flag);
-    ovs_assert(flag.b == false);
+    ovs_assert(atomic_flag_test_and_set(&flag) == false);
 }
 
 int
