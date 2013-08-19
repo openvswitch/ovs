@@ -2103,6 +2103,10 @@ init_ports(struct ofproto *p)
             netdev = ofport_open(p, &ofproto_port, &pp);
             if (netdev) {
                 ofport_install(p, netdev, &pp);
+                if (ofproto_port.ofp_port < p->max_ports) {
+                    p->alloc_port_no = MAX(p->alloc_port_no,
+                                           ofproto_port.ofp_port);
+                }
             }
         }
     }
