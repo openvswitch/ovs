@@ -1202,7 +1202,7 @@ int ovs_ipv4_tun_from_nlattr(const struct nlattr *attr,
 
 		if (ovs_tunnel_key_lens[type] != nla_len(a)) {
 			OVS_NLERR("IPv4 tunnel attribute type has unexpected "
-				  " legnth (type=%d, length=%d, expected=%d).\n",
+				  " length (type=%d, length=%d, expected=%d).\n",
 				  type, nla_len(a), ovs_tunnel_key_lens[type]);
 			return -EINVAL;
 		}
@@ -1389,7 +1389,7 @@ static int ovs_key_from_nlattrs(struct sw_flow_match *match,  u64 attrs,
 			/* Always exact match EtherType. */
 			eth_type = htons(0xffff);
 		} else if (ntohs(eth_type) < ETH_P_802_3_MIN) {
-			OVS_NLERR("EtherType is less than mimimum (type=%x, min=%x).\n",
+			OVS_NLERR("EtherType is less than minimum (type=%x, min=%x).\n",
 					ntohs(eth_type), ETH_P_802_3_MIN);
 			return -EINVAL;
 		}
