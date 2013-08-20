@@ -20,9 +20,9 @@ AT_CHECK([ovs-appctl bfd/show $1 | sed -e '/Time:/d' | sed -e '/Discriminator/d'
 m4_define([BFD_CHECK_TX], [
 AT_CHECK([ovs-appctl bfd/show $1 | sed -n '/TX Interval/p'],[0],
 [dnl
-	TX Interval: Approx 1000ms
-	Local Minimum TX Interval: $2
-	Remote Minimum TX Interval: $3
+	TX Interval: Approx $2
+	Local Minimum TX Interval: $3
+	Remote Minimum TX Interval: $4
 ])
 ])
 
@@ -30,8 +30,8 @@ m4_define([BFD_CHECK_RX], [
 AT_CHECK([ovs-appctl bfd/show $1 | sed -n '/RX Interval/p'],[0],
 [dnl
 	RX Interval: Approx $2
-	Local Minimum RX Interval: $2
-	Remote Minimum RX Interval: $3
+	Local Minimum RX Interval: $3
+	Remote Minimum RX Interval: $4
 ])
 ])
 AT_SETUP([bfd - basic config on different bridges])
@@ -202,14 +202,14 @@ BFD_CHECK([p0], [true], [false], [none], [up], [No Diagnostic], [none], [up], [N
 #Edit the min Tx value.
 AT_CHECK([ovs-vsctl set interface p0 bfd:min_tx=200])
 for i in `seq 0 20`; do ovs-appctl time/warp 100; done
-BFD_CHECK_TX([p0], [200ms], [100ms])
-BFD_CHECK_TX([p1], [100ms], [200ms])
+BFD_CHECK_TX([p0], [1000ms], [200ms], [100ms])
+BFD_CHECK_TX([p1], [1000ms], [100ms], [200ms])
 
 #Edit the min Rx value.
 AT_CHECK([ovs-vsctl set interface p1 bfd:min_rx=300])
 for i in `seq 0 20`; do ovs-appctl time/warp 100; done
-BFD_CHECK_RX([p1], [300ms], [1000ms])
-BFD_CHECK_RX([p0], [1000ms], [300ms])
+BFD_CHECK_RX([p1], [300ms], [300ms], [1000ms])
+BFD_CHECK_RX([p0], [1000ms], [1000ms], [300ms])
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -244,6 +244,267 @@ AT_CHECK([tail -2 stdout], [0], [dnl
 This flow is handled by the userspace slow path because it:
 	- Consists of BFD packets.
 ], [])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+# Tests below are for bfd decay features.
+AT_SETUP([bfd - bfd decay])
+OVS_VSWITCHD_START([add-br br1 -- set bridge br1 datapath-type=dummy -- \
+                    add-port br1 p1 -- set Interface p1 type=patch \
+                    options:peer=p0 ofport_request=2 -- \
+                    add-port br0 p0 -- set Interface p0 type=patch \
+                    options:peer=p1 ofport_request=1 -- \
+                    set Interface p0 bfd:enable=true bfd:min_tx=300 bfd:min_rx=300 bfd:decay_min_rx=3000 -- \
+                    set Interface p1 bfd:enable=true bfd:min_tx=500 bfd:min_rx=500])
+
+ovs-appctl time/stop
+
+# wait for local session state to go from down to up.
+for i in `seq 0 2`; do ovs-appctl time/warp 500; done
+BFD_CHECK([p0], [true], [false], [none], [up], [No Diagnostic], [none], [init], [No Diagnostic])
+
+
+# Test-1 BFD decay: decay to decay_min_rx
+# bfd:decay_min_rx is set to 3000ms after the local state of p0 goes up,
+# so for the first 2500ms, there should be no change.
+for i in `seq 0 3`; do ovs-appctl time/warp 500; done
+BFD_CHECK([p0], [true], [false], [none], [up], [No Diagnostic], [none], [up], [No Diagnostic])
+BFD_CHECK_TX([p0], [500ms], [300ms], [500ms])
+BFD_CHECK_RX([p0], [500ms], [300ms], [500ms])
+
+# advance the clock by 500ms.
+ovs-appctl time/warp 500
+# now at 3000ms, min_rx should decay to 3000ms and there should be
+# poll sequence flags.
+BFD_CHECK([p0], [true], [false], [none], [up], [No Diagnostic], [final], [up], [No Diagnostic])
+BFD_CHECK([p1], [true], [false], [none], [up], [No Diagnostic], [poll], [up], [No Diagnostic])
+BFD_CHECK_TX([p0], [500ms], [300ms], [500ms])
+BFD_CHECK_RX([p0], [3000ms], [3000ms], [500ms])
+
+# since the tx_min of p0 is still 500ms, after 500ms from decay,
+# the control message will be sent from p0 to p1, and p1 'flag'
+# will go back to none.
+ovs-appctl time/warp 500
+BFD_CHECK([p1], [true], [false], [none], [up], [No Diagnostic], [none], [up], [No Diagnostic])
+
+# the rx_min of p0 is 3000ms now, and p1 will send next control message
+# 3000ms after decay. so, advance clock by 2500ms to make that happen.
+for i in `seq 0 4`; do ovs-appctl time/warp 500; done
+BFD_CHECK([p0], [true], [false], [none], [up], [No Diagnostic], [none], [up], [No Diagnostic])
+BFD_CHECK_TX([p0], [500ms], [300ms], [500ms])
+BFD_CHECK_RX([p0], [3000ms], [3000ms], [500ms])
+# End of Test-1 ###############################################################
+
+
+# Test-2 BFD decay: go back to cfg_min_rx when there is traffic
+# receive packet at 1/100ms rate for 3000ms.
+for i in `seq 0 30`
+do
+    ovs-appctl time/warp 100
+    AT_CHECK([ovs-ofctl packet-out br1 3 2  "90e2ba01475000101856b2e80806000108000604000100101856b2e80202020300000000000002020202"],
+             [0], [stdout], [])
+done
+# after a decay interval (3000ms), the p0 min_rx will go back to
+# cfg_min_rx. there should be poll sequence flags.
+BFD_CHECK([p0], [true], [false], [none], [up], [No Diagnostic], [final], [up], [No Diagnostic])
+BFD_CHECK([p1], [true], [false], [none], [up], [No Diagnostic], [poll], [up], [No Diagnostic])
+BFD_CHECK_TX([p0], [500ms], [300ms], [500ms])
+BFD_CHECK_RX([p0], [500ms], [300ms], [500ms])
+
+# 500ms later, both direction will send control messages,
+# and their 'flag' will go back to none.
+ovs-appctl time/warp 500
+BFD_CHECK([p0], [true], [false], [none], [up], [No Diagnostic], [none], [up], [No Diagnostic])
+BFD_CHECK([p1], [true], [false], [none], [up], [No Diagnostic], [none], [up], [No Diagnostic])
+BFD_CHECK_TX([p0], [500ms], [300ms], [500ms])
+BFD_CHECK_RX([p0], [500ms], [300ms], [500ms])
+# End of Test-2 ###############################################################
+
+
+# Test-3 BFD decay: go back to cfg_min_rx when decay_min_rx is changed
+# advance the clock by 2500ms to 3000m after restore of
+# min_rx. p0 is decayed, and there should be the poll sequence flags.
+for i in `seq 0 4`; do ovs-appctl time/warp 500; done
+BFD_CHECK([p0], [true], [false], [none], [up], [No Diagnostic], [final], [up], [No Diagnostic])
+BFD_CHECK([p1], [true], [false], [none], [up], [No Diagnostic], [poll], [up], [No Diagnostic])
+BFD_CHECK_TX([p0], [500ms], [300ms], [500ms])
+BFD_CHECK_RX([p0], [3000ms], [3000ms], [500ms])
+
+# advance the clock, to make 'flag' go back to none.
+for i in `seq 0 5`; do ovs-appctl time/warp 500; done
+BFD_CHECK([p0], [true], [false], [none], [up], [No Diagnostic], [none], [up], [No Diagnostic])
+BFD_CHECK([p1], [true], [false], [none], [up], [No Diagnostic], [none], [up], [No Diagnostic])
+
+# change decay_min_rx to 1000ms.
+# for decay_min_rx < 2000ms, the decay detection time is set to 2000ms.
+# this should firstly reset the min_rx and start poll sequence.
+AT_CHECK([ovs-vsctl set Interface p0 bfd:decay_min_rx=1000])
+BFD_CHECK([p0], [true], [false], [none], [up], [No Diagnostic], [final], [up], [No Diagnostic])
+BFD_CHECK([p1], [true], [false], [none], [up], [No Diagnostic], [poll], [up], [No Diagnostic])
+BFD_CHECK_TX([p0], [500ms], [300ms], [500ms])
+BFD_CHECK_RX([p0], [500ms], [300ms], [500ms])
+
+# for the following 1500ms, there should be no decay,
+# since the decay_detect_time is set to 2000ms.
+for i in `seq 0 2`
+do
+    ovs-appctl time/warp 500
+    BFD_CHECK([p0], [true], [false], [none], [up], [No Diagnostic], [none], [up], [No Diagnostic])
+    BFD_CHECK([p1], [true], [false], [none], [up], [No Diagnostic], [none], [up], [No Diagnostic])
+    BFD_CHECK_TX([p0], [500ms], [300ms], [500ms])
+    BFD_CHECK_RX([p0], [500ms], [300ms], [500ms])
+done
+
+ovs-appctl time/warp 500
+# at 2000ms, decay should happen and there should be the poll sequence flags.
+BFD_CHECK([p0], [true], [false], [none], [up], [No Diagnostic], [final], [up], [No Diagnostic])
+BFD_CHECK([p1], [true], [false], [none], [up], [No Diagnostic], [poll], [up], [No Diagnostic])
+BFD_CHECK_TX([p0], [500ms], [300ms], [500ms])
+BFD_CHECK_RX([p0], [1000ms], [1000ms], [500ms])
+# advance the clock, so 'flag' go back to none.
+for i in `seq 0 4`; do ovs-appctl time/warp 500; done
+# End of Test-3 ###############################################################
+
+
+# Test-4 BFD decay: set min_rx to 800ms.
+# this should firstly reset the min_rx and then re-decay to 1000ms.
+AT_CHECK([ovs-vsctl set Interface p0 bfd:min_rx=800])
+BFD_CHECK([p0], [true], [false], [none], [up], [No Diagnostic], [final], [up], [No Diagnostic])
+BFD_CHECK([p1], [true], [false], [none], [up], [No Diagnostic], [poll], [up], [No Diagnostic])
+BFD_CHECK_TX([p0], [500ms], [300ms], [500ms])
+BFD_CHECK_RX([p0], [800ms], [800ms], [500ms])
+
+# for the following 1600ms, there should be no decay,
+# since the decay detection time is set to 2000ms.
+for i in `seq 0 1`
+do
+    ovs-appctl time/warp 800
+    BFD_CHECK([p0], [true], [false], [none], [up], [No Diagnostic], [none], [up], [No Diagnostic])
+    BFD_CHECK([p1], [true], [false], [none], [up], [No Diagnostic], [none], [up], [No Diagnostic])
+    BFD_CHECK_TX([p0], [500ms], [300ms], [500ms])
+    BFD_CHECK_RX([p0], [800ms], [800ms], [500ms])
+done
+
+ovs-appctl time/warp 400
+# at 2000ms, decay should happen and there should be the poll sequence flags.
+BFD_CHECK([p0], [true], [false], [none], [up], [No Diagnostic], [final], [up], [No Diagnostic])
+BFD_CHECK([p1], [true], [false], [none], [up], [No Diagnostic], [poll], [up], [No Diagnostic])
+BFD_CHECK_TX([p0], [500ms], [300ms], [500ms])
+BFD_CHECK_RX([p0], [1000ms], [1000ms], [500ms])
+# advance the clock, so 'flag' go back to none.
+for i in `seq 0 4`; do ovs-appctl time/warp 500; done
+# End of Test-4 ###############################################################
+
+
+# Test-5 BFD decay: set min_rx to 300ms and decay_min_rx to 5000ms together.
+AT_CHECK([ovs-vsctl set Interface p0 bfd:min_rx=300 bfd:decay_min_rx=5000])
+BFD_CHECK([p0], [true], [false], [none], [up], [No Diagnostic], [final], [up], [No Diagnostic])
+BFD_CHECK([p1], [true], [false], [none], [up], [No Diagnostic], [poll], [up], [No Diagnostic])
+BFD_CHECK_TX([p0], [500ms], [300ms], [500ms])
+BFD_CHECK_RX([p0], [500ms], [300ms], [500ms])
+
+# for decay_min_rx > 2000ms, the decay detection time is set to
+# decay_min_rx (5000ms).
+# for the following 4500ms, there should be no decay,
+# since the decay detection time is set to 5000ms.
+for i in `seq 0 8`
+do
+    ovs-appctl time/warp 500
+    BFD_CHECK([p0], [true], [false], [none], [up], [No Diagnostic], [none], [up], [No Diagnostic])
+    BFD_CHECK([p1], [true], [false], [none], [up], [No Diagnostic], [none], [up], [No Diagnostic])
+    BFD_CHECK_TX([p0], [500ms], [300ms], [500ms])
+    BFD_CHECK_RX([p0], [500ms], [300ms], [500ms])
+done
+
+ovs-appctl time/warp 500
+# at 5000ms, decay should happen and there should be the poll sequence flags.
+BFD_CHECK([p0], [true], [false], [none], [up], [No Diagnostic], [final], [up], [No Diagnostic])
+BFD_CHECK([p1], [true], [false], [none], [up], [No Diagnostic], [poll], [up], [No Diagnostic])
+BFD_CHECK_TX([p0], [500ms], [300ms], [500ms])
+BFD_CHECK_RX([p0], [5000ms], [5000ms], [500ms])
+# advance the clock, to make 'flag' go back to none.
+for i in `seq 0 9`; do ovs-appctl time/warp 500; done
+# End of Test-5 ###############################################################
+
+
+# Test-6 BFD decay: set decay_min_rx to 0 to disable bfd decay.
+AT_CHECK([ovs-vsctl set Interface p0 bfd:decay_min_rx=0])
+# min_rx is reset, and there should be the poll sequence flags.
+BFD_CHECK([p0], [true], [false], [none], [up], [No Diagnostic], [final], [up], [No Diagnostic])
+BFD_CHECK([p1], [true], [false], [none], [up], [No Diagnostic], [poll], [up], [No Diagnostic])
+BFD_CHECK_TX([p0], [500ms], [300ms], [500ms])
+BFD_CHECK_RX([p0], [500ms], [300ms], [500ms])
+for i in `seq 0 20`
+do
+    ovs-appctl time/warp 500
+    BFD_CHECK([p0], [true], [false], [none], [up], [No Diagnostic], [none], [up], [No Diagnostic])
+    BFD_CHECK([p1], [true], [false], [none], [up], [No Diagnostic], [none], [up], [No Diagnostic])
+    BFD_CHECK_TX([p0], [500ms], [300ms], [500ms])
+    BFD_CHECK_RX([p0], [500ms], [300ms], [500ms])
+done
+# End of Test-6 ################################################################
+
+
+# Test-7 BFD decay: rmt_min_tx is greater than decay_min_rx
+AT_CHECK([ovs-vsctl set Interface p0 bfd:decay_min_rx=3000 -- set interface p1 bfd:min_tx=5000])
+# there will be poll sequences from both sides. and it is hard to determine the
+# order. so just skip 10000ms and check the RX/TX. at that time, p0 should be in decay already.
+for i in `seq 0 19`; do echo $i; ovs-appctl bfd/show; ovs-appctl time/warp 500; done
+BFD_CHECK([p0], [true], [false], [none], [up], [No Diagnostic], [none], [up], [No Diagnostic])
+BFD_CHECK([p1], [true], [false], [none], [up], [No Diagnostic], [none], [up], [No Diagnostic])
+BFD_CHECK_TX([p0], [500ms], [300ms], [5000ms])
+BFD_CHECK_RX([p0], [5000ms], [3000ms], [500ms])
+# then, there should be no change of status,
+for i in `seq 0 9`
+do
+    ovs-appctl time/warp 500
+    BFD_CHECK([p0], [true], [false], [none], [up], [No Diagnostic], [none], [up], [No Diagnostic])
+    BFD_CHECK([p1], [true], [false], [none], [up], [No Diagnostic], [none], [up], [No Diagnostic])
+    BFD_CHECK_TX([p0], [500ms], [300ms], [5000ms])
+    BFD_CHECK_RX([p0], [5000ms], [3000ms], [500ms])
+done
+# reset the p1's min_tx to 500ms.
+AT_CHECK([ovs-vsctl set Interface p1 bfd:min_tx=500])
+# check the poll sequence. since p0 has been in decay, now the RX will show 3000ms.
+BFD_CHECK([p1], [true], [false], [none], [up], [No Diagnostic], [final], [up], [No Diagnostic])
+BFD_CHECK([p0], [true], [false], [none], [up], [No Diagnostic], [poll], [up], [No Diagnostic])
+BFD_CHECK_TX([p0], [500ms], [300ms], [500ms])
+BFD_CHECK_RX([p0], [3000ms], [3000ms], [500ms])
+# advance the clock by 3000ms, at that time, p1 will send the control packets.
+# then there will be no poll flags.
+for i in `seq 0 5`; do ovs-appctl time/warp 500; done
+BFD_CHECK([p0], [true], [false], [none], [up], [No Diagnostic], [none], [up], [No Diagnostic])
+BFD_CHECK([p1], [true], [false], [none], [up], [No Diagnostic], [none], [up], [No Diagnostic])
+BFD_CHECK_TX([p0], [500ms], [300ms], [500ms])
+BFD_CHECK_RX([p0], [3000ms], [3000ms], [500ms])
+# End of Test-7 ###############################################################
+
+
+# Test-8 BFD decay: state up->down->up.
+# turn bfd off on p1
+AT_CHECK([ovs-vsctl set Interface p1 bfd:enable=false])
+
+# check the state change of bfd on p0. After 9000 ms (3 min_rx intervals)
+for i in `seq 0 8`; do ovs-appctl time/warp 1000; done
+BFD_CHECK([p0], [false], [false], [none], [down], [Control Detection Time Expired], [none], [down], [No Diagnostic])
+BFD_CHECK_TX([p0], [1000ms], [1000ms], [0ms])
+BFD_CHECK_RX([p0], [300ms], [300ms], [1ms])
+
+# resume the bfd on p1. the bfd should not go to decay mode direclty.
+AT_CHECK([ovs-vsctl set Interface p1 bfd:enable=true])
+for i in `seq 0 1`; do ovs-appctl time/warp 500; done
+BFD_CHECK([p0], [true], [false], [none], [up], [Control Detection Time Expired], [none], [up], [No Diagnostic])
+BFD_CHECK_TX([p0], [500ms], [300ms], [500ms])
+BFD_CHECK_RX([p0], [500ms], [300ms], [500ms])
+
+# since the decay_min_rx is still 3000ms, so after 3000ms, there should be the decay and poll sequence.
+for i in `seq 0 5`; do ovs-appctl time/warp 500; done
+BFD_CHECK([p0], [true], [false], [none], [up], [Control Detection Time Expired], [final], [up], [No Diagnostic])
+BFD_CHECK([p1], [true], [false], [none], [up], [No Diagnostic], [poll], [up], [Control Detection Time Expired])
+BFD_CHECK_TX([p0], [500ms], [300ms], [500ms])
+BFD_CHECK_RX([p0], [3000ms], [3000ms], [500ms])
+# End of Test-8 ################################################################
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP

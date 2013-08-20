@@ -1905,6 +1905,10 @@ port_modified(struct ofport *port_)
         cfm_set_netdev(port->cfm, port->up.netdev);
     }
 
+    if (port->bfd) {
+        bfd_set_netdev(port->bfd, port->up.netdev);
+    }
+
     if (port->is_tunnel && tnl_port_reconfigure(port, port->up.netdev,
                                                 port->odp_port)) {
         ofproto_dpif_cast(port->up.ofproto)->backer->need_revalidate =
@@ -2039,7 +2043,8 @@ set_bfd(struct ofport *ofport_, const struct smap *cfg)
     struct bfd *old;
 
     old = ofport->bfd;
-    ofport->bfd = bfd_configure(old, netdev_get_name(ofport->up.netdev), cfg);
+    ofport->bfd = bfd_configure(old, netdev_get_name(ofport->up.netdev),
+                                cfg, ofport->up.netdev);
     if (ofport->bfd != old) {
         ofproto->backer->need_revalidate = REV_RECONFIGURE;
     }

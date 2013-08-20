@@ -28,6 +28,7 @@
 #include "hash.h"
 #include "hmap.h"
 #include "list.h"
+#include "netdev.h"
 #include "netlink.h"
 #include "odp-util.h"
 #include "ofpbuf.h"
@@ -151,6 +152,9 @@ struct bfd {
     bool cpath_down;              /* Concatenated Path Down. */
     uint8_t mult;                 /* bfd.DetectMult. */
 
+    struct netdev *netdev;
+    uint64_t rx_packets;          /* Packets received by 'netdev'. */
+
     enum state state;             /* bfd.SessionState. */
     enum state rmt_state;         /* bfd.RemoteSessionState. */
 
@@ -186,6 +190,14 @@ struct bfd {
 
     atomic_bool check_tnl_key;    /* Verify tunnel key of inbound packets? */
     atomic_int ref_cnt;
+
+    /* BFD decay related variables. */
+    bool in_decay;                /* True when bfd is in decay. */
+    int decay_min_rx;             /* min_rx is set to decay_min_rx when */
+                                  /* in decay. */
+    int decay_rx_ctl;             /* Count bfd packets received within decay */
+                                  /* detect interval. */
+    long long int decay_detect_time; /* Decay detection time. */
 };
 
 static struct ovs_mutex mutex = OVS_MUTEX_INITIALIZER;
@@ -208,6 +220,9 @@ static void bfd_set_state(struct bfd *, enum state, enum diag)
 static uint32_t generate_discriminator(void) OVS_REQUIRES(mutex);
 static void bfd_put_details(struct ds *, const struct bfd *)
     OVS_REQUIRES(mutex);
+static uint64_t bfd_rx_packets(const struct bfd *) OVS_REQUIRES(mutex);
+static void bfd_try_decay(struct bfd *) OVS_REQUIRES(mutex);
+static void bfd_decay_update(struct bfd *) OVS_REQUIRES(mutex);
 static void bfd_unixctl_show(struct unixctl_conn *, int argc,
                              const char *argv[], void *aux OVS_UNUSED);
 static void bfd_unixctl_set_forwarding_override(struct unixctl_conn *,
@@ -255,14 +270,16 @@ bfd_get_status(const struct bfd *bfd, struct smap *smap)
  * handle for the session, or NULL if BFD is not enabled according to 'cfg'.
  * Also returns NULL if cfg is NULL. */
 struct bfd *
-bfd_configure(struct bfd *bfd, const char *name, const struct smap *cfg)
-    OVS_EXCLUDED(mutex)
+bfd_configure(struct bfd *bfd, const char *name, const struct smap *cfg,
+              struct netdev *netdev) OVS_EXCLUDED(mutex)
 {
     static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
     static atomic_uint16_t udp_src = ATOMIC_VAR_INIT(0);
 
+    int decay_min_rx;
     long long int min_tx, min_rx;
     bool need_poll = false;
+    bool cfg_min_rx_changed = false;
     bool cpath_down;
     const char *hwaddr;
     uint8_t ea[ETH_ADDR_LEN];
@@ -293,6 +310,8 @@ bfd_configure(struct bfd *bfd, const char *name, const struct smap *cfg)
         bfd->min_tx = 1000;
         bfd->mult = 3;
         atomic_init(&bfd->ref_cnt, 1);
+        bfd->netdev = netdev_ref(netdev);
+        bfd->in_decay = false;
 
         /* RFC 5881 section 4
          * The source port MUST be in the range 49152 through 65535.  The same
@@ -328,6 +347,22 @@ bfd_configure(struct bfd *bfd, const char *name, const struct smap *cfg)
             || (!bfd_in_poll(bfd) && bfd->cfg_min_rx > bfd->min_rx)) {
             bfd->min_rx = bfd->cfg_min_rx;
         }
+        cfg_min_rx_changed = true;
+        need_poll = true;
+    }
+
+    decay_min_rx = smap_get_int(cfg, "decay_min_rx", 0);
+    if (bfd->decay_min_rx != decay_min_rx || cfg_min_rx_changed) {
+        if (decay_min_rx > 0 && decay_min_rx < bfd->cfg_min_rx) {
+            VLOG_WARN("%s: decay_min_rx cannot be less than %lld ms",
+                      bfd->name, bfd->cfg_min_rx);
+            bfd->decay_min_rx = 0;
+        } else {
+            bfd->decay_min_rx = decay_min_rx;
+        }
+        /* Resets decay. */
+        bfd->in_decay = false;
+        bfd_decay_update(bfd);
         need_poll = true;
     }
 
@@ -379,6 +414,7 @@ bfd_unref(struct bfd *bfd) OVS_EXCLUDED(mutex)
         if (orig == 1) {
             ovs_mutex_lock(&mutex);
             hmap_remove(all_bfds, &bfd->node);
+            netdev_close(bfd->netdev);
             free(bfd->name);
             free(bfd);
             ovs_mutex_unlock(&mutex);
@@ -404,12 +440,27 @@ bfd_wait(const struct bfd *bfd) OVS_EXCLUDED(mutex)
 void
 bfd_run(struct bfd *bfd) OVS_EXCLUDED(mutex)
 {
+    long long int now;
+    bool old_in_decay;
+
     ovs_mutex_lock(&mutex);
-    if (bfd->state > STATE_DOWN && time_msec() >= bfd->detect_time) {
+    now = time_msec();
+    old_in_decay = bfd->in_decay;
+
+    if (bfd->state > STATE_DOWN && now >= bfd->detect_time) {
         bfd_set_state(bfd, STATE_DOWN, DIAG_EXPIRED);
     }
 
-    if (bfd->min_tx != bfd->cfg_min_tx || bfd->min_rx != bfd->cfg_min_rx) {
+    /* Decay may only happen when state is STATE_UP, bfd->decay_min_rx is
+     * configured, and decay_detect_time is reached. */
+    if (bfd->state == STATE_UP && bfd->decay_min_rx > 0
+        && now >= bfd->decay_detect_time) {
+        bfd_try_decay(bfd);
+    }
+
+    if (bfd->min_tx != bfd->cfg_min_tx
+        || (bfd->min_rx != bfd->cfg_min_rx && bfd->min_rx != bfd->decay_min_rx)
+        || bfd->in_decay != old_in_decay) {
         bfd_poll(bfd);
     }
     ovs_mutex_unlock(&mutex);
@@ -537,6 +588,9 @@ bfd_process_packet(struct bfd *bfd, const struct flow *flow,
     /* This function is designed to follow section RFC 5880 6.8.6 closely. */
 
     ovs_mutex_lock(&mutex);
+    /* Increments the decay rx counter. */
+    bfd->decay_rx_ctl++;
+
     if (flow->nw_ttl != 255) {
         /* XXX Should drop in the kernel to prevent DOS. */
         goto out;
@@ -686,6 +740,23 @@ bfd_process_packet(struct bfd *bfd, const struct flow *flow,
 out:
     ovs_mutex_unlock(&mutex);
 }
+
+/* Must be called when the netdev owned by 'bfd' should change. */
+void
+bfd_set_netdev(struct bfd *bfd, const struct netdev *netdev)
+    OVS_EXCLUDED(mutex)
+{
+    ovs_mutex_lock(&mutex);
+    if (bfd->netdev != netdev) {
+        netdev_close(bfd->netdev);
+        bfd->netdev = netdev_ref(netdev);
+        if (bfd->decay_min_rx) {
+            bfd_decay_update(bfd);
+        }
+    }
+    ovs_mutex_unlock(&mutex);
+}
+
 
 static bool
 bfd_forwarding__(const struct bfd *bfd) OVS_REQUIRES(mutex)
@@ -713,7 +784,7 @@ bfd_poll(struct bfd *bfd) OVS_REQUIRES(mutex)
     if (bfd->state > STATE_DOWN && !bfd_in_poll(bfd)
         && !(bfd->flags & FLAG_FINAL)) {
         bfd->poll_min_tx = bfd->cfg_min_tx;
-        bfd->poll_min_rx = bfd->cfg_min_rx;
+        bfd->poll_min_rx = bfd->in_decay ? bfd->decay_min_rx : bfd->cfg_min_rx;
         bfd->flags |= FLAG_POLL;
         bfd->next_tx = 0;
         VLOG_INFO_RL(&rl, "%s: Initiating poll sequence", bfd->name);
@@ -886,8 +957,61 @@ bfd_set_state(struct bfd *bfd, enum state state, enum diag diag)
             bfd->rmt_flags = 0;
             bfd->rmt_disc = 0;
             bfd->rmt_min_tx = 0;
+            /* Resets the min_rx if in_decay. */
+            if (bfd->in_decay) {
+                bfd->min_rx = bfd->cfg_min_rx;
+                bfd->in_decay = false;
+            }
+        }
+        /* Resets the decay when state changes to STATE_UP
+         * and decay_min_rx is configured. */
+        if (bfd->state == STATE_UP && bfd->decay_min_rx) {
+            bfd_decay_update(bfd);
         }
     }
+}
+
+static uint64_t
+bfd_rx_packets(const struct bfd *bfd) OVS_REQUIRES(mutex)
+{
+    struct netdev_stats stats;
+
+    if (!netdev_get_stats(bfd->netdev, &stats)) {
+        return stats.rx_packets;
+    } else {
+        return 0;
+    }
+}
+
+/* Decays the bfd->min_rx to bfd->decay_min_rx when 'diff' is less than
+ * the 'expect' value. */
+static void
+bfd_try_decay(struct bfd *bfd) OVS_REQUIRES(mutex)
+{
+    int64_t diff, expect;
+
+    /* The 'diff' is the difference between current interface rx_packets
+     * stats and last-time check.  The 'expect' is the recorded number of
+     * bfd control packets received within an approximately decay_min_rx
+     * (2000 ms if decay_min_rx is less than 2000 ms) interval.
+     *
+     * Since the update of rx_packets stats at interface happens
+     * asynchronously to the bfd_rx_packets() function, the 'diff' value
+     * can be jittered.  Thusly, we double the decay_rx_ctl to provide
+     * more wiggle room. */
+    diff = bfd_rx_packets(bfd) - bfd->rx_packets;
+    expect = 2 * MAX(bfd->decay_rx_ctl, 1);
+    bfd->in_decay = diff <= expect ? true : false;
+    bfd_decay_update(bfd);
+}
+
+/* Updates the rx_packets, decay_rx_ctl and decay_detect_time. */
+static void
+bfd_decay_update(struct bfd * bfd) OVS_REQUIRES(mutex)
+{
+    bfd->rx_packets = bfd_rx_packets(bfd);
+    bfd->decay_rx_ctl = 0;
+    bfd->decay_detect_time = MAX(bfd->decay_min_rx, 2000) + time_msec();
 }
 
 static uint32_t

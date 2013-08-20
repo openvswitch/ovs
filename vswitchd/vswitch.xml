@@ -1896,6 +1896,16 @@
           specified.  Defaults to <code>100</code>.
       </column>
 
+      <column name="bfd" key="decay_min_rx" type='{"type": "integer"}'>
+          <code>decay_min_rx</code> is used to set the <code>min_rx</code>,
+          when there is no obvious incoming data traffic at the interface.
+          It cannot be set less than the <code>min_rx</code>. The decay feature
+          is disabled by setting the <code>decay_min_rx</code> to 0. And the
+          feature is reset everytime itself or <code>min_rx</code> is
+          reconfigured.
+      </column>
+
+
       <column name="bfd" key="cpath_down" type='{"type": "boolean"}'>
           Concatenated path down may be used when the local system should not
           have traffic forwarded to it for some reason other than a connectivty
