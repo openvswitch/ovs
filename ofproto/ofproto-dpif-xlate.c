@@ -2524,7 +2524,10 @@ actions_output_to_local_port(const struct xlate_ctx *ctx)
 }
 
 /* Translates the 'ofpacts_len' bytes of "struct ofpacts" starting at 'ofpacts'
- * into datapath actions in 'odp_actions', using 'ctx'. */
+ * into datapath actions in 'odp_actions', using 'ctx'.
+ *
+ * The caller must take responsibility for eventually freeing 'xout', with
+ * xlate_out_uninit(). */
 void
 xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
 {
