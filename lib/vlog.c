@@ -74,6 +74,7 @@ extern struct vlog_module *__stop_vlog_modules[];
 #include "vlog-modules.def"
 #undef VLOG_MODULE
 
+extern struct vlog_module *vlog_modules[];
 struct vlog_module *vlog_modules[] = {
 #define VLOG_MODULE(NAME) &VLM_##NAME,
 #include "vlog-modules.def"
