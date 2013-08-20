@@ -799,7 +799,6 @@ invalid:
  * Ethernet header
  * @in_port: port number on which @skb was received.
  * @key: output flow key
- * @key_lenp: length of output flow key
  *
  * The caller must ensure that skb->len >= ETH_HLEN.
  *
