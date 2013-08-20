@@ -211,14 +211,13 @@ static void lisp_build_header(const struct vport *vport,
  *
  * @vport: port this packet was received on
  * @skb: received packet
- * @tos: ToS from encapsulating IP packet, used to copy ECN bits
+ * @tun_key: tunnel that carried packet
  *
  * Must be called with rcu_read_lock.
  *
  * Packets received by this function are in the following state:
  * - skb->data points to the inner Ethernet header.
  * - The inner Ethernet header is in the linear data area.
- * - skb->csum does not include the inner Ethernet header.
  * - The layer pointers are undefined.
  */
 static void ovs_tnl_rcv(struct vport *vport, struct sk_buff *skb,
