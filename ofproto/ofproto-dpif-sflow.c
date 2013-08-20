@@ -280,6 +280,7 @@ dpif_sflow_clear__(struct dpif_sflow *ds) OVS_REQUIRES(mutex)
 {
     if (ds->sflow_agent) {
         sfl_agent_release(ds->sflow_agent);
+        free(ds->sflow_agent);
         ds->sflow_agent = NULL;
     }
     collectors_destroy(ds->collectors);
