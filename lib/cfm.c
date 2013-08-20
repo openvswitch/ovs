@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010, 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2010, 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -168,7 +168,7 @@ cfm_rx_packets(const struct cfm *cfm) OVS_REQUIRES(mutex)
 }
 
 static const uint8_t *
-cfm_ccm_addr(const struct cfm *cfm)
+cfm_ccm_addr(struct cfm *cfm)
 {
     bool extended;
     atomic_read(&cfm->extended, &extended);
@@ -648,9 +648,10 @@ cfm_set_netdev(struct cfm *cfm, const struct netdev *netdev)
 /* Returns true if 'cfm' should process packets from 'flow'.  Sets
  * fields in 'wc' that were used to make the determination. */
 bool
-cfm_should_process_flow(const struct cfm *cfm, const struct flow *flow,
+cfm_should_process_flow(const struct cfm *cfm_, const struct flow *flow,
                         struct flow_wildcards *wc)
 {
+    struct cfm *cfm = CONST_CAST(struct cfm *, cfm_);
     bool check_tnl_key;
 
     atomic_read(&cfm->check_tnl_key, &check_tnl_key);
@@ -839,8 +840,9 @@ cfm_get_health(const struct cfm *cfm) OVS_EXCLUDED(mutex)
  * 'cfm' is operationally down, or -1 if 'cfm' has no operational state
  * (because it isn't in extended mode). */
 int
-cfm_get_opup(const struct cfm *cfm) OVS_EXCLUDED(mutex)
+cfm_get_opup(const struct cfm *cfm_) OVS_EXCLUDED(mutex)
 {
+    struct cfm *cfm = CONST_CAST(struct cfm *, cfm_);
     bool extended;
     int opup;
 
@@ -879,7 +881,7 @@ cfm_find(const char *name) OVS_REQUIRES(mutex)
 }
 
 static void
-cfm_print_details(struct ds *ds, const struct cfm *cfm) OVS_REQUIRES(mutex)
+cfm_print_details(struct ds *ds, struct cfm *cfm) OVS_REQUIRES(mutex)
 {
     struct remote_mp *rmp;
     bool extended;
@@ -926,7 +928,7 @@ cfm_unixctl_show(struct unixctl_conn *conn, int argc, const char *argv[],
                  void *aux OVS_UNUSED) OVS_EXCLUDED(mutex)
 {
     struct ds ds = DS_EMPTY_INITIALIZER;
-    const struct cfm *cfm;
+    struct cfm *cfm;
 
     ovs_mutex_lock(&mutex);
     if (argc > 1) {

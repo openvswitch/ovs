@@ -449,7 +449,7 @@ bool ovsthread_once_start__(struct ovsthread_once *once)
     OVS_TRY_LOCK(false, once->mutex);
 
 static inline bool
-ovsthread_once_is_done__(const struct ovsthread_once *once)
+ovsthread_once_is_done__(struct ovsthread_once *once)
 {
     bool done;
 

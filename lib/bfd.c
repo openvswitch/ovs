@@ -553,10 +553,12 @@ bfd_put_packet(struct bfd *bfd, struct ofpbuf *p,
 }
 
 bool
-bfd_should_process_flow(const struct bfd *bfd, const struct flow *flow,
+bfd_should_process_flow(const struct bfd *bfd_, const struct flow *flow,
                         struct flow_wildcards *wc)
 {
+    struct bfd *bfd = CONST_CAST(struct bfd *, bfd_);
     bool check_tnl_key;
+
     memset(&wc->masks.dl_dst, 0xff, sizeof wc->masks.dl_dst);
     if (bfd->eth_dst_set && memcmp(bfd->eth_dst, flow->dl_dst, ETH_ADDR_LEN)) {
         return false;
