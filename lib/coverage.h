@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,33 +27,55 @@
  * for traditional coverage instrumentation with e.g. "gcov", but it is still
  * a useful debugging tool. */
 
+#include "ovs-thread.h"
 #include "vlog.h"
 
 /* A coverage counter. */
 struct coverage_counter {
-    const char *name;           /* Textual name. */
-    unsigned int count;         /* Count within the current epoch. */
-    unsigned long long int total; /* Total count over all epochs. */
+    const char *const name;            /* Textual name. */
+    unsigned int (*const count)(void); /* Gets, zeros this thread's count. */
+    unsigned long long int total;      /* Total count. */
 };
 
 /* Defines COUNTER.  There must be exactly one such definition at file scope
  * within a program. */
 #if USE_LINKER_SECTIONS
 #define COVERAGE_DEFINE(COUNTER)                                        \
-        COVERAGE_DEFINE__(COUNTER);                                     \
+        DEFINE_STATIC_PER_THREAD_DATA(unsigned int,                     \
+                                      counter_##COUNTER, 0);            \
+        static unsigned int COUNTER##_count(void)                       \
+        {                                                               \
+            unsigned int *countp = counter_##COUNTER##_get();           \
+            unsigned int count = *countp;                               \
+            *countp = 0;                                                \
+            return count;                                               \
+        }                                                               \
+        static inline void COUNTER##_add(unsigned int n)                \
+        {                                                               \
+            *counter_##COUNTER##_get() += n;                            \
+        }                                                               \
+        extern struct coverage_counter counter_##COUNTER;               \
+        struct coverage_counter counter_##COUNTER                       \
+            = { #COUNTER, COUNTER##_count, 0 };                         \
         extern struct coverage_counter *counter_ptr_##COUNTER;          \
         struct coverage_counter *counter_ptr_##COUNTER                  \
             __attribute__((section("coverage"))) = &counter_##COUNTER
 #else
-#define COVERAGE_DEFINE(MODULE) \
-        extern struct coverage_counter counter_##MODULE
+#define COVERAGE_DEFINE(COUNTER)                                        \
+        DECLARE_EXTERN_PER_THREAD_DATA(unsigned int,                    \
+                                       counter_##COUNTER);              \
+        static inline void COUNTER##_add(unsigned int n)                \
+        {                                                               \
+            *counter_##COUNTER##_get() += n;                            \
+        }                                                               \
+        extern struct coverage_counter counter_##COUNTER
 #endif
 
 /* Adds 1 to COUNTER. */
-#define COVERAGE_INC(COUNTER) counter_##COUNTER.count++;
+#define COVERAGE_INC(COUNTER) COVERAGE_ADD(COUNTER, 1)
 
 /* Adds AMOUNT to COUNTER. */
-#define COVERAGE_ADD(COUNTER, AMOUNT) counter_##COUNTER.count += (AMOUNT);
+#define COVERAGE_ADD(COUNTER, AMOUNT) COUNTER##_add(AMOUNT)
 
 void coverage_init(void);
 void coverage_log(void);
@@ -61,7 +83,5 @@ void coverage_clear(void);
 
 /* Implementation detail. */
 #define COVERAGE_DEFINE__(COUNTER)                              \
-        extern struct coverage_counter counter_##COUNTER;       \
-        struct coverage_counter counter_##COUNTER = { #COUNTER, 0, 0 }
 
 #endif /* coverage.h */
