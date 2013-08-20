@@ -119,7 +119,7 @@ struct vlog_rate_limit {
             0,                              /* first_dropped */         \
             0,                              /* last_dropped */          \
             0,                              /* n_dropped */             \
-            OVS_ADAPTIVE_MUTEX_INITIALIZER  /* mutex */                 \
+            OVS_MUTEX_INITIALIZER           /* mutex */                 \
         }
 
 /* Configuring how each module logs messages. */

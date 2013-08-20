@@ -437,7 +437,7 @@ ofproto_create(const char *datapath_name, const char *datapath_type,
     ofproto->n_tables = 0;
     hindex_init(&ofproto->cookies);
     list_init(&ofproto->expirable);
-    ovs_mutex_init(&ofproto->expirable_mutex, PTHREAD_MUTEX_RECURSIVE);
+    ovs_mutex_init_recursive(&ofproto->expirable_mutex);
     ofproto->connmgr = connmgr_create(ofproto, datapath_name, datapath_name);
     ofproto->state = S_OPENFLOW;
     list_init(&ofproto->pending);
@@ -3436,7 +3436,7 @@ add_flow(struct ofproto *ofproto, struct ofconn *ofconn,
     rule->flow_cookie = fm->new_cookie;
     rule->created = rule->modified = rule->used = time_msec();
 
-    ovs_mutex_init(&rule->timeout_mutex, OVS_MUTEX_ADAPTIVE);
+    ovs_mutex_init(&rule->timeout_mutex);
     ovs_mutex_lock(&rule->timeout_mutex);
     rule->idle_timeout = fm->idle_timeout;
     rule->hard_timeout = fm->hard_timeout;

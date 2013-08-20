@@ -81,7 +81,7 @@ uuid_init(void)
 void
 uuid_generate(struct uuid *uuid)
 {
-    static struct ovs_mutex mutex = OVS_ADAPTIVE_MUTEX_INITIALIZER;
+    static struct ovs_mutex mutex = OVS_MUTEX_INITIALIZER;
     uint64_t copy[2];
 
     uuid_init();

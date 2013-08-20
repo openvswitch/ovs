@@ -1,4 +1,4 @@
-/* Copyright (c) 2011, 2012 Nicira, Inc.
+/* Copyright (c) 2011, 2012, 2013 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -207,7 +207,7 @@ lacp_create(void) OVS_EXCLUDED(mutex)
     struct lacp *lacp;
 
     if (ovsthread_once_start(&once)) {
-        ovs_mutex_init(&mutex, PTHREAD_MUTEX_RECURSIVE);
+        ovs_mutex_init_recursive(&mutex);
         ovsthread_once_done(&once);
     }
 

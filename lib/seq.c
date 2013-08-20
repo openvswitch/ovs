@@ -52,7 +52,7 @@ struct seq_thread {
     bool waiting OVS_GUARDED;        /* True if latch_wait() already called. */
 };
 
-static struct ovs_mutex seq_mutex = OVS_ADAPTIVE_MUTEX_INITIALIZER;
+static struct ovs_mutex seq_mutex = OVS_MUTEX_INITIALIZER;
 
 static uint64_t seq_next OVS_GUARDED_BY(seq_mutex) = 1;
 

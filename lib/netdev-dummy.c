@@ -271,7 +271,7 @@ netdev_dummy_construct(struct netdev *netdev_)
 
     atomic_add(&next_n, 1, &n);
 
-    ovs_mutex_init(&netdev->mutex, PTHREAD_MUTEX_NORMAL);
+    ovs_mutex_init(&netdev->mutex);
     ovs_mutex_lock(&netdev->mutex);
     netdev->hwaddr[0] = 0xaa;
     netdev->hwaddr[1] = 0x55;

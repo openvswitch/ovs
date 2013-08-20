@@ -20,7 +20,7 @@
 #include "ovs-thread.h"
 
 #if OVS_ATOMIC_GCC4P_IMPL
-static struct ovs_mutex mutex = OVS_ADAPTIVE_MUTEX_INITIALIZER;
+static struct ovs_mutex mutex = OVS_MUTEX_INITIALIZER;
 
 #define DEFINE_LOCKED_OP(TYPE, NAME, OPERATOR)                          \
     TYPE##_t                                                            \

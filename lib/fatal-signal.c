@@ -77,7 +77,7 @@ fatal_signal_init(void)
         assert_single_threaded();
         inited = true;
 
-        ovs_mutex_init(&mutex, PTHREAD_MUTEX_RECURSIVE);
+        ovs_mutex_init_recursive(&mutex);
         xpipe_nonblocking(signal_fds);
 
         for (i = 0; i < ARRAY_SIZE(fatal_signals); i++) {

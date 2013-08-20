@@ -318,7 +318,7 @@ dpif_sflow_create(void)
     struct dpif_sflow *ds;
 
     if (ovsthread_once_start(&once)) {
-        ovs_mutex_init(&mutex, PTHREAD_MUTEX_RECURSIVE);
+        ovs_mutex_init_recursive(&mutex);
         ovsthread_once_done(&once);
     }
 

@@ -619,7 +619,7 @@ netdev_linux_alloc(void)
 static void
 netdev_linux_common_construct(struct netdev_linux *netdev)
 {
-    ovs_mutex_init(&netdev->mutex, PTHREAD_MUTEX_NORMAL);
+    ovs_mutex_init(&netdev->mutex);
     netdev->change_seq = 1;
 }
 

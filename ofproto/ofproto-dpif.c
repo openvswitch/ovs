@@ -1268,20 +1268,20 @@ construct(struct ofproto *ofproto_)
     ofproto->ml = mac_learning_create(MAC_ENTRY_DEFAULT_IDLE_TIME);
     ofproto->mbridge = mbridge_create();
     ofproto->has_bonded_bundles = false;
-    ovs_mutex_init(&ofproto->vsp_mutex, PTHREAD_MUTEX_NORMAL);
+    ovs_mutex_init(&ofproto->vsp_mutex);
 
     classifier_init(&ofproto->facets);
     ofproto->consistency_rl = LLONG_MIN;
 
     list_init(&ofproto->completions);
 
-    ovs_mutex_init(&ofproto->flow_mod_mutex, PTHREAD_MUTEX_NORMAL);
+    ovs_mutex_init(&ofproto->flow_mod_mutex);
     ovs_mutex_lock(&ofproto->flow_mod_mutex);
     list_init(&ofproto->flow_mods);
     ofproto->n_flow_mods = 0;
     ovs_mutex_unlock(&ofproto->flow_mod_mutex);
 
-    ovs_mutex_init(&ofproto->pin_mutex, PTHREAD_MUTEX_NORMAL);
+    ovs_mutex_init(&ofproto->pin_mutex);
     ovs_mutex_lock(&ofproto->pin_mutex);
     list_init(&ofproto->pins);
     ofproto->n_pins = 0;
@@ -4866,7 +4866,7 @@ static enum ofperr
 rule_construct(struct rule *rule_)
 {
     struct rule_dpif *rule = rule_dpif_cast(rule_);
-    ovs_mutex_init(&rule->stats_mutex, PTHREAD_MUTEX_NORMAL);
+    ovs_mutex_init(&rule->stats_mutex);
     ovs_mutex_lock(&rule->stats_mutex);
     rule->packet_count = 0;
     rule->byte_count = 0;

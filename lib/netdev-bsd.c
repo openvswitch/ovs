@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 Gaetano Catalli.
+ * Copyright (c) 2011, 2013 Gaetano Catalli.
  * Copyright (c) 2013 YAMAMOTO Takashi.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -293,7 +293,7 @@ netdev_bsd_construct_system(struct netdev *netdev_)
         return error;
     }
 
-    ovs_mutex_init(&netdev->mutex, PTHREAD_MUTEX_NORMAL);
+    ovs_mutex_init(&netdev->mutex);
     netdev->change_seq = 1;
     netdev->tap_fd = -1;
     netdev->kernel_name = xstrdup(netdev_->name);
@@ -327,7 +327,7 @@ netdev_bsd_construct_tap(struct netdev *netdev_)
 
     /* Create a tap device by opening /dev/tap.  The TAPGIFNAME ioctl is used
      * to retrieve the name of the tap device. */
-    ovs_mutex_init(&netdev->mutex, PTHREAD_MUTEX_NORMAL);
+    ovs_mutex_init(&netdev->mutex);
     netdev->tap_fd = open("/dev/tap", O_RDWR);
     netdev->change_seq = 1;
     if (netdev->tap_fd < 0) {

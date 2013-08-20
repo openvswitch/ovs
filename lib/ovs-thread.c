@@ -132,8 +132,8 @@ typedef void destructor_func(void *);
 XPTHREAD_FUNC2(pthread_key_create, pthread_key_t *, destructor_func *);
 XPTHREAD_FUNC2(pthread_setspecific, pthread_key_t, const void *);
 
-void
-ovs_mutex_init(const struct ovs_mutex *l_, int type)
+static void
+ovs_mutex_init__(const struct ovs_mutex *l_, int type)
 {
     struct ovs_mutex *l = CONST_CAST(struct ovs_mutex *, l_);
     pthread_mutexattr_t attr;
@@ -147,6 +147,20 @@ ovs_mutex_init(const struct ovs_mutex *l_, int type)
         ovs_abort(error, "pthread_mutex_init failed");
     }
     xpthread_mutexattr_destroy(&attr);
+}
+
+/* Initializes 'mutex' as a normal (non-recursive) mutex. */
+void
+ovs_mutex_init(const struct ovs_mutex *mutex)
+{
+    ovs_mutex_init__(mutex, PTHREAD_MUTEX_ERRORCHECK);
+}
+
+/* Initializes 'mutex' as a recursive mutex. */
+void
+ovs_mutex_init_recursive(const struct ovs_mutex *mutex)
+{
+    ovs_mutex_init__(mutex, PTHREAD_MUTEX_RECURSIVE);
 }
 
 void

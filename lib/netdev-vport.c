@@ -171,7 +171,7 @@ netdev_vport_construct(struct netdev *netdev_)
 {
     struct netdev_vport *netdev = netdev_vport_cast(netdev_);
 
-    ovs_mutex_init(&netdev->mutex, PTHREAD_MUTEX_NORMAL);
+    ovs_mutex_init(&netdev->mutex);
     netdev->change_seq = 1;
     eth_addr_random(netdev->etheraddr);
 

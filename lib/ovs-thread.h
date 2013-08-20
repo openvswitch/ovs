@@ -30,38 +30,11 @@ struct OVS_LOCKABLE ovs_mutex {
     const char *where;
 };
 
-/* "struct ovs_mutex" initializers:
- *
- *    - OVS_MUTEX_INITIALIZER: common case.
- *
- *    - OVS_ADAPTIVE_MUTEX_INITIALIZER for a mutex that spins briefly then goes
- *      to sleeps after some number of iterations.
- *
- *    - OVS_ERRORCHECK_MUTEX_INITIALIZER for a mutex that is used for
- *      error-checking. */
-#define OVS_MUTEX_INITIALIZER { PTHREAD_MUTEX_INITIALIZER, NULL }
-#ifdef PTHREAD_ADAPTIVE_MUTEX_INITIALIZER_NP
-#define OVS_ADAPTIVE_MUTEX_INITIALIZER \
-    { PTHREAD_ADAPTIVE_MUTEX_INITIALIZER_NP, NULL }
-#else
-#define OVS_ADAPTIVE_MUTEX_INITIALIZER OVS_MUTEX_INITIALIZER
-#endif
+/* "struct ovs_mutex" initializer. */
 #ifdef PTHREAD_ERRORCHECK_MUTEX_INITIALIZER_NP
-#define OVS_ERRORCHECK_MUTEX_INITIALIZER \
-    { PTHREAD_ERRORCHECK_MUTEX_INITIALIZER_NP, NULL }
+#define OVS_MUTEX_INITIALIZER { PTHREAD_ERRORCHECK_MUTEX_INITIALIZER_NP, NULL }
 #else
-#define OVS_ERRORCHECK_MUTEX_INITIALIZER OVS_MUTEX_INITIALIZER
-#endif
-
-/* Mutex types, suitable for use with pthread_mutexattr_settype().
- * There is only one nonstandard type:
- *
- *    - PTHREAD_MUTEX_ADAPTIVE_NP, the type used for
- *      OVS_ADAPTIVE_MUTEX_INITIALIZER. */
-#ifdef PTHREAD_ADAPTIVE_MUTEX_INITIALIZER_NP
-#define OVS_MUTEX_ADAPTIVE PTHREAD_MUTEX_ADAPTIVE_NP
-#else
-#define OVS_MUTEX_ADAPTIVE PTHREAD_MUTEX_NORMAL
+#define OVS_MUTEX_INITIALIZER { PTHREAD_MUTEX_INITIALIZER, NULL }
 #endif
 
 /* ovs_mutex functions analogous to pthread_mutex_*() functions.
@@ -69,7 +42,8 @@ struct OVS_LOCKABLE ovs_mutex {
  * Most of these functions abort the process with an error message on any
  * error.  ovs_mutex_trylock() is an exception: it passes through a 0 or EBUSY
  * return value to the caller and aborts on any other error. */
-void ovs_mutex_init(const struct ovs_mutex *, int type);
+void ovs_mutex_init(const struct ovs_mutex *);
+void ovs_mutex_init_recursive(const struct ovs_mutex *);
 void ovs_mutex_destroy(const struct ovs_mutex *);
 void ovs_mutex_unlock(const struct ovs_mutex *mutex) OVS_RELEASES(mutex);
 void ovs_mutex_lock_at(const struct ovs_mutex *mutex, const char *where)
@@ -463,7 +437,7 @@ struct ovsthread_once {
 #define OVSTHREAD_ONCE_INITIALIZER              \
     {                                           \
         ATOMIC_VAR_INIT(false),                 \
-        OVS_ADAPTIVE_MUTEX_INITIALIZER,         \
+        OVS_MUTEX_INITIALIZER,                  \
     }
 
 static inline bool ovsthread_once_start(struct ovsthread_once *once)

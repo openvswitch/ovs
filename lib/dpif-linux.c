@@ -248,7 +248,7 @@ open_dpif(const struct dpif_linux_dp *dp, struct dpif **dpifp)
 
     dpif = xzalloc(sizeof *dpif);
     dpif->port_notifier = NULL;
-    ovs_mutex_init(&dpif->upcall_lock, PTHREAD_MUTEX_DEFAULT);
+    ovs_mutex_init(&dpif->upcall_lock);
     dpif->epoll_fd = -1;
 
     dpif_init(&dpif->dpif, &dpif_linux_class, dp->name,

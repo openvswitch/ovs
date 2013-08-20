@@ -506,7 +506,7 @@ get_filesys_stats(struct smap *stats OVS_UNUSED)
 
 #define SYSTEM_STATS_INTERVAL (5 * 1000) /* In milliseconds. */
 
-static struct ovs_mutex mutex = OVS_ADAPTIVE_MUTEX_INITIALIZER;
+static struct ovs_mutex mutex = OVS_MUTEX_INITIALIZER;
 static pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
 static struct latch latch OVS_GUARDED_BY(mutex);
 static bool enabled;

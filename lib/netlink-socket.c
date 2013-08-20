@@ -1012,7 +1012,7 @@ struct nl_pool {
     int n;
 };
 
-static struct ovs_mutex pool_mutex = OVS_ADAPTIVE_MUTEX_INITIALIZER;
+static struct ovs_mutex pool_mutex = OVS_MUTEX_INITIALIZER;
 static struct nl_pool pools[MAX_LINKS] OVS_GUARDED_BY(pool_mutex);
 
 static int

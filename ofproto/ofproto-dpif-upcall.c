@@ -123,9 +123,9 @@ udpif_create(struct dpif_backer *backer, struct dpif *dpif)
     list_init(&udpif->upcalls);
     list_init(&udpif->fmbs);
     atomic_init(&udpif->reval_seq, 0);
-    ovs_mutex_init(&udpif->drop_key_mutex, PTHREAD_MUTEX_NORMAL);
-    ovs_mutex_init(&udpif->upcall_mutex, PTHREAD_MUTEX_NORMAL);
-    ovs_mutex_init(&udpif->fmb_mutex, PTHREAD_MUTEX_NORMAL);
+    ovs_mutex_init(&udpif->drop_key_mutex);
+    ovs_mutex_init(&udpif->upcall_mutex);
+    ovs_mutex_init(&udpif->fmb_mutex);
 
     return udpif;
 }
@@ -219,7 +219,7 @@ udpif_recv_set(struct udpif *udpif, size_t n_handlers, bool enable)
             handler->udpif = udpif;
             list_init(&handler->upcalls);
             xpthread_cond_init(&handler->wake_cond, NULL);
-            ovs_mutex_init(&handler->mutex, PTHREAD_MUTEX_NORMAL);
+            ovs_mutex_init(&handler->mutex);
             xpthread_create(&handler->thread, NULL, udpif_miss_handler, handler);
         }
         xpthread_create(&udpif->dispatcher, NULL, udpif_dispatcher, udpif);
