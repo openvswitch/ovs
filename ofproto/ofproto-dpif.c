@@ -1585,6 +1585,9 @@ run(struct ofproto *ofproto_)
     if (ofproto->sflow) {
         dpif_sflow_run(ofproto->sflow);
     }
+    if (ofproto->ipfix) {
+        dpif_ipfix_run(ofproto->ipfix);
+    }
 
     HMAP_FOR_EACH (ofport, up.hmap_node, &ofproto->up.ports) {
         port_run(ofport);
@@ -1643,6 +1646,9 @@ wait(struct ofproto *ofproto_)
 
     if (ofproto->sflow) {
         dpif_sflow_wait(ofproto->sflow);
+    }
+    if (ofproto->ipfix) {
+        dpif_ipfix_wait(ofproto->ipfix);
     }
     HMAP_FOR_EACH (ofport, up.hmap_node, &ofproto->up.ports) {
         port_wait(ofport);
@@ -1973,20 +1979,25 @@ set_ipfix(
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
     struct dpif_ipfix *di = ofproto->ipfix;
+    bool has_options = bridge_exporter_options || flow_exporters_options;
 
-    if (bridge_exporter_options || flow_exporters_options) {
-        if (!di) {
-            di = ofproto->ipfix = dpif_ipfix_create();
-        }
+    if (has_options && !di) {
+        di = ofproto->ipfix = dpif_ipfix_create();
+    }
+
+    if (di) {
+        /* Call set_options in any case to cleanly flush the flow
+         * caches in the last exporters that are to be destroyed. */
         dpif_ipfix_set_options(
             di, bridge_exporter_options, flow_exporters_options,
             n_flow_exporters_options);
-    } else {
-        if (di) {
+
+        if (!has_options) {
             dpif_ipfix_unref(di);
             ofproto->ipfix = NULL;
         }
     }
+
     return 0;
 }
 

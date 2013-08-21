@@ -3513,6 +3513,18 @@
       referenced from a <ref table="Flow_Sample_Collector_Set"/>.
     </column>
 
+    <column name="cache_active_timeout">
+      The maximum period in seconds for which an IPFIX flow record is
+      cached and aggregated before being sent.  If not specified,
+      defaults to 0.  If 0, caching is disabled.
+    </column>
+
+    <column name="cache_max_flows">
+      The maximum number of IPFIX flow records that can be cached at a
+      time.  If not specified, defaults to 0.  If 0, caching is
+      disabled.
+    </column>
+
     <group title="Common Columns">
       The overall purpose of these columns is described under <code>Common
       Columns</code> at the beginning of this document.

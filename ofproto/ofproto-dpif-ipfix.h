@@ -41,4 +41,7 @@ void dpif_ipfix_flow_sample(struct dpif_ipfix *, struct ofpbuf *,
                             const struct flow *, uint32_t, uint16_t, uint32_t,
                             uint32_t);
 
+void dpif_ipfix_run(struct dpif_ipfix *);
+void dpif_ipfix_wait(struct dpif_ipfix *);
+
 #endif /* ofproto/ofproto-dpif-ipfix.h */

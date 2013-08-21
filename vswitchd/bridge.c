@@ -1025,6 +1025,12 @@ bridge_configure_ipfix(struct bridge *br)
         if (be_cfg->obs_point_id) {
             be_opts.obs_point_id = *be_cfg->obs_point_id;
         }
+        if (be_cfg->cache_active_timeout) {
+            be_opts.cache_active_timeout = *be_cfg->cache_active_timeout;
+        }
+        if (be_cfg->cache_max_flows) {
+            be_opts.cache_max_flows = *be_cfg->cache_max_flows;
+        }
     }
 
     if (n_fe_opts > 0) {
@@ -1037,6 +1043,10 @@ bridge_configure_ipfix(struct bridge *br)
                 sset_init(&opts->targets);
                 sset_add_array(&opts->targets, fe_cfg->ipfix->targets,
                                fe_cfg->ipfix->n_targets);
+                opts->cache_active_timeout = fe_cfg->ipfix->cache_active_timeout
+                    ? *fe_cfg->ipfix->cache_active_timeout : 0;
+                opts->cache_max_flows = fe_cfg->ipfix->cache_max_flows
+                    ? *fe_cfg->ipfix->cache_max_flows : 0;
                 opts++;
             }
         }

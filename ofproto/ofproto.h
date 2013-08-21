@@ -76,11 +76,15 @@ struct ofproto_ipfix_bridge_exporter_options {
     uint32_t sampling_rate;
     uint32_t obs_domain_id;  /* Bridge-wide Observation Domain ID. */
     uint32_t obs_point_id;  /* Bridge-wide Observation Point ID. */
+    uint32_t cache_active_timeout;
+    uint32_t cache_max_flows;
 };
 
 struct ofproto_ipfix_flow_exporter_options {
     uint32_t collector_set_id;
     struct sset targets;
+    uint32_t cache_active_timeout;
+    uint32_t cache_max_flows;
 };
 
 struct ofproto_stp_settings {

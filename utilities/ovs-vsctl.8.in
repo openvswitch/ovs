@@ -942,11 +942,12 @@ Deconfigure sFlow from \fBbr0\fR, which also destroys the sFlow record
 .PP
 Configure bridge \fBbr0\fR to send one IPFIX flow record per packet
 sample to UDP port 4739 on host 192.168.0.34, with Observation Domain
-ID 123 and Observation Point ID 456:
+ID 123 and Observation Point ID 456, a flow cache active timeout of 1
+minute (60 seconds), and a maximum flow cache size of 13 flows:
 .IP
 .B "ovs\-vsctl \-\- set Bridge br0 ipfix=@i \(rs"
 .IP
-.B "\-\- \-\-id=@i create IPFIX targets=\(rs\(dq192.168.0.34:4739\(rs\(dq obs_domain_id=123 obs_point_id=456"
+.B "\-\- \-\-id=@i create IPFIX targets=\(rs\(dq192.168.0.34:4739\(rs\(dq obs_domain_id=123 obs_point_id=456 cache_active_timeout=60 cache_max_flows=13"
 .PP
 Deconfigure the IPFIX settings from \fBbr0\fR, which also destroys the
 IPFIX record (since it is now unreferenced):

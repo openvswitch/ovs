@@ -1,6 +1,6 @@
 {"name": "Open_vSwitch",
  "version": "7.3.0",
- "cksum": "1081379034 19765",
+ "cksum": "2483452374 20182",
  "tables": {
    "Open_vSwitch": {
      "columns": {
@@ -419,6 +419,16 @@
                           "maxInteger": 4294967295},
                   "min": 0, "max": 1}},
        "obs_point_id": {
+         "type": {"key": {"type": "integer",
+                          "minInteger": 0,
+                          "maxInteger": 4294967295},
+                  "min": 0, "max": 1}},
+       "cache_active_timeout": {
+         "type": {"key": {"type": "integer",
+                          "minInteger": 0,
+                          "maxInteger": 4200},
+                  "min": 0, "max": 1}},
+       "cache_max_flows": {
          "type": {"key": {"type": "integer",
                           "minInteger": 0,
                           "maxInteger": 4294967295},
