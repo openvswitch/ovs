@@ -47,6 +47,7 @@ static bool multithreaded;
     void \
     ovs_##TYPE##_##FUN##_at(const struct ovs_##TYPE *l_, \
                             const char *where) \
+        OVS_NO_THREAD_SAFETY_ANALYSIS \
     { \
         struct ovs_##TYPE *l = CONST_CAST(struct ovs_##TYPE *, l_); \
         int error = pthread_##TYPE##_##FUN(&l->lock); \
@@ -63,6 +64,7 @@ LOCK_FUNCTION(rwlock, wrlock);
     int \
     ovs_##TYPE##_##FUN##_at(const struct ovs_##TYPE *l_, \
                             const char *where) \
+        OVS_NO_THREAD_SAFETY_ANALYSIS \
     { \
         struct ovs_##TYPE *l = CONST_CAST(struct ovs_##TYPE *, l_); \
         int error = pthread_##TYPE##_##FUN(&l->lock); \
@@ -81,6 +83,7 @@ TRY_LOCK_FUNCTION(rwlock, trywrlock);
 #define UNLOCK_FUNCTION(TYPE, FUN) \
     void \
     ovs_##TYPE##_##FUN(const struct ovs_##TYPE *l_) \
+        OVS_NO_THREAD_SAFETY_ANALYSIS \
     { \
         struct ovs_##TYPE *l = CONST_CAST(struct ovs_##TYPE *, l_); \
         int error; \

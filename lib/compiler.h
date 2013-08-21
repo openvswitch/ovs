@@ -128,6 +128,8 @@
 #define OVS_EXCLUDED(...) __attribute__((locks_excluded(__VA_ARGS__)))
 #define OVS_ACQ_BEFORE(...) __attribute__((acquired_before(__VA_ARGS__)))
 #define OVS_ACQ_AFTER(...) __attribute__((acquired_after(__VA_ARGS__)))
+#define OVS_NO_THREAD_SAFETY_ANALYSIS \
+    __attribute__((no_thread_safety_analysis))
 #else  /* not Clang */
 #define OVS_LOCKABLE
 #define OVS_REQ_RDLOCK(...)
@@ -145,6 +147,7 @@
 #define OVS_RELEASES(...)
 #define OVS_ACQ_BEFORE(...)
 #define OVS_ACQ_AFTER(...)
+#define OVS_NO_THREAD_SAFETY_ANALYSIS
 #endif
 
 /* ISO C says that a C implementation may choose any integer type for an enum
