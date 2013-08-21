@@ -1670,7 +1670,7 @@ AT_SETUP([OFPST_METER_FEATURES reply - OF1.3])
 AT_KEYWORDS([ofp-print OFPT_STATS_REPLY])
 AT_CHECK([ovs-ofctl ofp-print "\
 04 13 00 20 00 00 00 02 00 0b 00 00 00 00 00 00 \
-00 01 00 00 00 00 00 03 00 00 00 0F 10 02 00 00 \
+00 01 00 00 00 00 00 06 00 00 00 0F 10 02 00 00 \
 "], [0], [dnl
 OFPST_METER_FEATURES reply (OF1.3) (xid=0x2):
 max_meter:65536 max_bands:16 max_color:2

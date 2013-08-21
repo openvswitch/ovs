@@ -1106,13 +1106,9 @@ ofputil_meter_capabilities_to_name(uint32_t bit)
 static const char *
 ofputil_meter_band_types_to_name(uint32_t bit)
 {
-    /*
-     * Note: Meter band types start from 1.  We assume that the lowest bit
-     * in the band_types corresponds to DROP band type (1).
-     */
     switch (bit) {
-    case 1 << (OFPMBT13_DROP - 1):          return "drop";
-    case 1 << (OFPMBT13_DSCP_REMARK - 1):   return "dscp_remark";
+    case 1 << OFPMBT13_DROP:          return "drop";
+    case 1 << OFPMBT13_DSCP_REMARK:   return "dscp_remark";
     }
 
     return NULL;
