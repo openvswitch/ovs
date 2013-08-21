@@ -66,7 +66,7 @@ struct upcall {
     /* Raw upcall plus data for keeping track of the memory backing it. */
     struct dpif_upcall dpif_upcall; /* As returned by dpif_recv() */
     struct ofpbuf upcall_buf;       /* Owns some data in 'dpif_upcall'. */
-    uint64_t upcall_stub[256 / 8];  /* Buffer to reduce need for malloc(). */
+    uint64_t upcall_stub[512 / 8];  /* Buffer to reduce need for malloc(). */
 };
 
 struct upcall *upcall_next(struct udpif *);
