@@ -5128,7 +5128,7 @@ choose_rule_to_evict(struct oftable *table, struct rule **rulep)
      *     group has no evictable rules.
      *
      *   - The outer loop can exit only if table's 'max_flows' is all filled up
-     *     by unevictable rules'. */
+     *     by unevictable rules. */
     HEAP_FOR_EACH (evg, size_node, &table->eviction_groups_by_size) {
         struct rule *rule;
 
