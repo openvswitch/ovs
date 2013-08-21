@@ -2957,6 +2957,8 @@ port_run(struct ofport_dpif *ofport)
     long long int carrier_seq = netdev_get_carrier_resets(ofport->up.netdev);
     bool carrier_changed = carrier_seq != ofport->carrier_seq;
     bool enable = netdev_get_carrier(ofport->up.netdev);
+    bool cfm_enable = false;
+    bool bfd_enable = false;
 
     ofport->carrier_seq = carrier_seq;
 
@@ -2966,16 +2968,20 @@ port_run(struct ofport_dpif *ofport)
         int cfm_opup = cfm_get_opup(ofport->cfm);
 
         cfm_run(ofport->cfm);
-        enable = enable && !cfm_get_fault(ofport->cfm);
+        cfm_enable = !cfm_get_fault(ofport->cfm);
 
         if (cfm_opup >= 0) {
-            enable = enable && cfm_opup;
+            cfm_enable = cfm_enable && cfm_opup;
         }
     }
 
     if (ofport->bfd) {
         bfd_run(ofport->bfd);
-        enable = enable && bfd_forwarding(ofport->bfd);
+        bfd_enable = bfd_forwarding(ofport->bfd);
+    }
+
+    if (ofport->bfd || ofport->cfm) {
+        enable = enable && (cfm_enable || bfd_enable);
     }
 
     if (ofport->bundle) {

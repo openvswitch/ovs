@@ -2689,3 +2689,84 @@ AT_CHECK([tail -1 stdout], [0], [Datapath actions: 5
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
+
+# Tests the bundling with various bfd and cfm configurations.
+AT_SETUP([ofproto - bundle with variable bfd/cfm config])
+OVS_VSWITCHD_START([add-br br1 -- set bridge br1 datapath-type=dummy -- \
+                    add-bond br0 br0bond p0 p2 bond-mode=active-backup -- \
+                    add-bond br1 br1bond p1 p3 bond-mode=active-backup -- \
+                    set Interface p1 type=patch options:peer=p0 ofport_request=2 -- \
+                    set Interface p3 type=patch options:peer=p2 ofport_request=4 -- \
+                    set Interface p0 type=patch options:peer=p1 ofport_request=1 -- \
+                    set Interface p2 type=patch options:peer=p3 ofport_request=3 -- \
+                    set Interface p0 bfd:enable=true bfd:min_tx=300 bfd:min_rx=300 -- \
+                    set Interface p0 cfm_mpid=1 -- \
+                    set Interface p1 bfd:enable=true bfd:min_tx=500 bfd:min_rx=500])
+
+ovs-appctl time/stop
+# advance the clock to stablize everything.
+for i in `seq 0 49`; do ovs-appctl time/warp 100; done
+# cfm/show should show 'recv' fault.
+AT_CHECK([ovs-appctl cfm/show | sed -n '/^.*fault:.*/p'], [0], [dnl
+	fault: recv
+])
+# bfd/show should show 'up'.
+AT_CHECK([ovs-appctl bfd/show | sed -n '/^.*Session State:.*/p'], [0], [dnl
+	Local Session State: up
+	Remote Session State: up
+	Local Session State: up
+	Remote Session State: up
+])
+# bond/show should show 'may-enable: true' for all slaves.
+AT_CHECK([ovs-appctl bond/show | sed -n '/^.*may_enable:.*/p'], [0], [dnl
+	may_enable: true
+	may_enable: true
+	may_enable: true
+	may_enable: true
+])
+
+# now disable the bfd on p1.
+AT_CHECK([ovs-vsctl set Interface p1 bfd:enable=false])
+# advance the clock to stablize everything.
+for i in `seq 0 49`; do ovs-appctl time/warp 100; done
+# cfm/show should show 'recv' fault.
+AT_CHECK([ovs-appctl cfm/show | sed -n '/^.*fault:.*/p'], [0], [dnl
+	fault: recv
+])
+# bfd/show should show 'down'.
+AT_CHECK([ovs-appctl bfd/show | sed -n '/^.*Session State:.*/p'], [0], [dnl
+	Local Session State: down
+	Remote Session State: down
+])
+# bond/show should show 'may-enable: false' for p0.
+AT_CHECK([ovs-appctl bond/show | sed -n '/^.*may_enable:.*/p'], [0], [dnl
+	may_enable: false
+	may_enable: true
+	may_enable: true
+	may_enable: true
+])
+
+# now enable the bfd on p1 and disable bfd on p0.
+AT_CHECK([ovs-vsctl set Interface p1 bfd:enable=true])
+AT_CHECK([ovs-vsctl set Interface p0 bfd:enable=false])
+# advance the clock to stablize everything.
+for i in `seq 0 49`; do ovs-appctl time/warp 100; done
+# cfm/show should show 'recv' fault.
+AT_CHECK([ovs-appctl cfm/show | sed -n '/^.*fault:.*/p'], [0], [dnl
+	fault: recv
+])
+# bfd/show should show 'down'.
+AT_CHECK([ovs-appctl bfd/show | sed -n '/^.*Session State:.*/p'], [0], [dnl
+	Local Session State: down
+	Remote Session State: down
+])
+# bond/show should show 'may-enable: false' for p0 and p1.
+AT_CHECK([ovs-appctl bond/show | sed -n '/^.*may_enable:.*/p'], [0], [dnl
+	may_enable: false
+	may_enable: true
+	may_enable: false
+	may_enable: true
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
