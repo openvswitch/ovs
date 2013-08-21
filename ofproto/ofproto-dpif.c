@@ -4849,6 +4849,7 @@ choose_miss_rule(enum ofputil_port_config config, struct rule_dpif *miss_rule,
 
 void
 rule_release(struct rule_dpif *rule)
+    OVS_NO_THREAD_SAFETY_ANALYSIS
 {
     if (rule) {
         ovs_rwlock_unlock(&rule->up.evict);
